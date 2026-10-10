@@ -65,8 +65,8 @@ a loud part; the limiter, trim, PAN and stereo lines kept), `mod.c` (CC 2 / 4 / 
 additions: FM6's deep pages and patch blob, the FM6 patch store `fm6_ustore.c` (one blob per user slot, storage objects
 `OBJ_PROJECT0 + 1, + 2`, backup ids 10 and 11), included by `upreset.c` as `va_store.c` is; `fm6_store.c` after
 `cr_ui.c`. Felucca's own unit (`felucca.c`) is no longer kept building against this platform (its web editor's FM6
-protocol, `editor_fm6.c`, and its backup of the FM6 bank expect Felucca's layouts); `tests/run_tests.sh` reports
-which of its suites break (docs/FM6.md).
+protocol, `editor_fm6.c`, and its backup of the FM6 bank expect Felucca's layouts); `tests/run_tests.sh` tests them
+as they behave on this platform and passes (docs/FM6.md, "Tests").
 
 **Melodee's CZ-1 (2026-10-07, docs/CZ1.md).** Engine 14 (`ENGI_CZ`, `FELUCCA_CZ` 1 in this unit, default 0): native
 Casio CZ-1 tones (`eng_cz.c`, `cz_native.c`, `cz_patch.h`, `cz_edit.h`, `cz_legacy.h`), Casio's 64 tones

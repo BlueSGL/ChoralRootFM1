@@ -51,6 +51,11 @@
 #                   (no playback): the descriptors in each presentation, routing, packing, the ring against drift.
 # web (web/test_web.mjs): the editor protocol against its mock device, whose tables must equal the
 #                   firmware's (tests/descdump.c -> build/host/desc.json), the package builder, the updater.
+# Transporter (tests/transporter_shim_test.py): tools/transporter's stand-ins for the FM-1 Transporter's fm1_ota / fm1fw:
+#                   the review gate before a write, on synthetic packages and build/choralroot.fwsc.
+# Felucca's editor (tests/editor_test.c, tests/backup_test.c: editor.c, editor_fm6.c, editor_backup.c) is not in
+#                   ChoralRoot's unit; it is tested as it behaves on this platform (docs/FM6.md "Tests"). ChoralRoot's
+#                   backup and FM6: tests/cr_backup_test.c, tests/cr_fm6_test.c (tests/run_cr_tests.sh).
 # PHYS (tests/phys_test.c): stability over the whole parameter and pitch range, the worst-case cost against
 #                   the heaviest factory preset, demos in build/phys_demo/; tests/phys_ref.cpp compares the
 #                   fixed-point models with DaisySP's float originals when DaisySP is there (DAISYSP=path).
@@ -71,14 +76,52 @@
 #                   macros, Dexed's 16 voices, the cost per voice; demos in build/fm6_demo/.
 # Change baseline entries only for reviewed, intentional differences in sound or cost;
 # retain every unaffected golden / CPU / target entry. VERBOSE=1: every render.
+#
+# The verdict is the last line, always: "ALL HOST TESTS PASSED" (exit 0) or "HOST TESTS FAILED" (exit 1), with the
+# sections that failed and the ones skipped listed above it. A test that fails is counted and the suite goes on to the
+# next: run, missing and the descdump line are the only places where a failure does not end the script. Anything else
+# that fails (a test that does not compile, a generator, a missing build) ends the suite there (set -e: the script has
+# no pipes or subshells for it to miss), and the EXIT trap still prints the verdict, so a run that stopped early
+# cannot read as one that has only the failures printed so far. A skipped section needs a tool that is optional
+# (node, DaisySP, Pillow) and is named again above the verdict.
 set -e
+NL='
+'
+fail=0
+failed=
+skipped=
+section="(the start)"
+ended=0
+verdict() {
+    rc=$?
+    trap - EXIT
+    if [ "$ended" -ne 1 ]; then
+        echo "== the suite stopped (status $rc) in or after: $section"
+        fail=1
+    fi
+    [ -z "$skipped" ] || echo "== skipped:$skipped"
+    [ -z "$failed" ] || echo "== failed:$failed"
+    if [ "$fail" -eq 0 ]; then echo "ALL HOST TESTS PASSED"; exit 0; fi
+    echo "HOST TESTS FAILED"
+    exit 1
+}
+trap verdict EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+run() { section=$1; echo "== $1"; shift; "$@" || { fail=1; failed="$failed$NL   $section"; }; }
+skip() { echo "== skip $1"; skipped="$skipped$NL   $1"; }
+missing() { echo "== $1"; fail=1; failed="$failed$NL   $1"; }
+
 export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"
 cd "$(dirname "$0")/.."
+# Pillow finds Homebrew's libraqm (the text spacing reference: the font's kerning). macOS strips DYLD_* from the
+# environment of /bin/sh, so an exported value does not reach this script: set it here (as build.sh does).
+if [ "$(uname -s)" = Darwin ] && [ -z "$DYLD_FALLBACK_LIBRARY_PATH" ] && [ -f /opt/homebrew/lib/libraqm.dylib ]; then
+    export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
+fi
 OUT=build/host
 mkdir -p "$OUT"
 CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
-fail=0
-run() { echo "== $1"; shift; "$@" || fail=1; }
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
@@ -95,7 +138,10 @@ run "TRS MIDI parser" "$OUT/midi_uart_test"
 $CC -std=gnu11 -o "$OUT/cr_usbaudio_test" tests/cr_usbaudio_test.c
 run "USB audio: descriptors, routing, packing, clock drift and recovery" "$OUT/cr_usbaudio_test"
 
-[ -f build/choralroot.fwsc ] || { echo "run ./build.sh first"; exit 1; }
+# the build's outputs the sections below read: without one of them a section would have nothing to test
+for f in build/choralroot.fwsc build/choralroot.dis build/gen/felucca_tables.h build/gen/ui_fonts.h; do
+    [ -f "$f" ] || { echo "== no $f: run ./build.sh first"; exit 1; }
+done
 
 $CC -DOWN_PKG=1 -o "$OUT/ota_test" tests/ota_test.c
 run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/choralroot.fwsc
@@ -144,6 +190,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     if python3 -c "import PIL" 2>/dev/null; then
         run "text spacing: glyph gaps against the font's own (16x supersampled), S M <= 0.25 px, L <= 0.5 px" \
             python3 tests/text_spacing_test.py build/gen/ui_fonts.h
+    else
+        skip "text spacing (python3 has no Pillow)"
     fi
     $CC -O1 -w -Ibuild/gen -o "$OUT/settings_test" tests/settings_test.c
     run "settings: PER1..PER4 migration, palette ids and preference preservation" "$OUT/settings_test"
@@ -153,7 +201,11 @@ if [ -f build/gen/felucca_tables.h ]; then
     mkdir -p build/ui_new/ppm build/ui_slot
     run "UI renders: layout lint (every screen and palette, every page, engine and column value), MONO gray, draw cost" \
         "$OUT/ui_render" build/ui_new build/ui_slot
-    if python3 -c "import PIL" 2>/dev/null; then python3 tests/ui_render.py build/ui_new build/ui_slot; fi
+    if python3 -c "import PIL" 2>/dev/null; then
+        run "UI renders: the PNGs (build/ui_new, build/ui_slot)" python3 tests/ui_render.py build/ui_new build/ui_slot
+    else
+        skip "the PNGs of the UI renders (python3 has no Pillow)"
+    fi
     $CC -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -o "$OUT/ui_test_fm4" tests/ui_test.c -lm
     run "UI built with FELUCCA_FM4=1 (DIGITAL, kept in the tree): its OP pages, EDIT cycle, algorithm charts" "$OUT/ui_test_fm4"
     $CC -O1 -w -DFELUCCA_FM4=1 -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/ui_render_fm4" tests/ui_render.c -lm
@@ -184,8 +236,9 @@ if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/regress" tests/regress.c -lm
     run "regression: golden renders, health, voices, CPU budget" "$OUT/regress" tests/golden.txt tests/cpu_baseline.txt
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/descdump" tests/descdump.c -lm
-    echo "== parameter and engine tables as JSON (for the editor mock test)"
-    "$OUT/descdump" > "$OUT/desc.json" || fail=1
+    section="parameter and engine tables as JSON (for the editor mock test)"
+    echo "== $section"
+    "$OUT/descdump" > "$OUT/desc.json" || { fail=1; failed="$failed$NL   $section"; }
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/phys_test" tests/phys_test.c -lm
     mkdir -p build/phys_demo
     run "PHYS: stability C-1..G9 over the parameter corners, worst-case cost against PHASE WIRE, demos" "$OUT/phys_test" build/phys_demo
@@ -198,7 +251,7 @@ if [ -f build/gen/felucca_tables.h ]; then
             "$D/Dynamics/crossfade.cpp" "$OUT/phys_fixed.o"
         run "PHYS: the fixed-point models against DaisySP's float originals (mode frequencies, decays, Svf)" "$OUT/phys_ref"
     else
-        echo "== skip PHYS reference test (no DaisySP: set DAISYSP to a checkout)"
+        skip "PHYS reference test (no DaisySP: set DAISYSP to a checkout)"
     fi
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/drum_test" tests/drum_test.c -lm
     mkdir -p build/drum_demo
@@ -218,11 +271,10 @@ if [ -f build/gen/felucca_tables.h ]; then
         run "SLICE: tables, onsets, reverse, keys, modes, MAN slices and their store, demos" "$OUT/slice_test" \
             build/slice_demo/loop build/slice_demo
     else
-        echo "== SLICE: build/ was made with FELUCCA_SLICE=0 (no BREAK); run ./build.sh without it first"
-        fail=1
+        missing "SLICE: build/ was made with FELUCCA_SLICE=0 (no BREAK); run ./build.sh without it first"
     fi
-else
-    echo "== skip hostsim (run ./build.sh once)"
+else                                                 # (not reached: the build's outputs are checked above)
+    missing "no build/gen/felucca_tables.h: the engine, UI, format and editor tests did not run (run ./build.sh)"
 fi
 
 run "regression: target cost of the render loops (pi32v2 disassembly)" python3 tests/target_budget.py \
@@ -230,18 +282,19 @@ run "regression: target cost of the render loops (pi32v2 disassembly)" python3 t
 
 run "installer CLI (fm1_install.py) against a simulated FM-1" python3 tests/install_test.py
 
+run "FM-1 Transporter stand-ins (tools/transporter: fm1_ota, fm1fw): the review gate on synthetic packages and this build" \
+    python3 tests/transporter_shim_test.py
+
 if command -v node >/dev/null 2>&1; then
     run "web pages: editor protocol + samples, package builder, update protocol" node web/test_web.mjs
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
-    if [ -f web/test_installer.mjs ]; then
-        run "web installer: the page against a simulated FM-1 (node, no browser)" node web/test_installer.mjs
-    fi
+    run "web installer: the page against a simulated FM-1 (node, no browser)" node web/test_installer.mjs
     run "web sounds: slots as files, bindings, .syx" node web/test_sounds.mjs
     run "web device manager: pools, place / keep / swap / undo, loops, packs (simulated FM-1)" node web/test_manager.mjs
 else
-    echo "== skip web tests (no node)"
+    skip "web tests: editor, backup, installer, sounds, device manager (no node)"
 fi
 
 run "site: make_site.py into build/site, every internal link resolves" python3 tests/site_test.py
 
-[ $fail -eq 0 ] && echo "ALL HOST TESTS PASSED" || { echo "HOST TESTS FAILED"; exit 1; }
+ended=1                                              # (the verdict is the EXIT trap's: verdict, above)

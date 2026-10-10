@@ -144,6 +144,12 @@ DIGITAL conversion), the chord keys, the modulation matrix, the FX layer, the re
 and swing. With `DAISYSP` pointing at a DaisySP checkout, the PHYS models are also compared with
 their floating-point originals; without it that test is skipped.
 
+The last line is the verdict: `ALL HOST TESTS PASSED` (exit 0) or `HOST TESTS FAILED` (exit 1), with the
+sections that failed and the ones skipped (an optional tool missing: node, DaisySP) listed above it. A
+failing test is counted and the suite goes on; a test that does not compile, or a missing build, ends
+the suite there, also with `HOST TESTS FAILED`. The text spacing check needs Pillow's Raqm layout (the
+font's kerning, as the build does); the script sets `DYLD_FALLBACK_LIBRARY_PATH` itself on macOS.
+
 The regression suite (`tests/regress.c`) renders every engine and preset and compares a
 hash of each render with `tests/golden.txt`; it also checks levels, voices and the CPU
 cost (`tests/cpu_baseline.txt`, `tests/target_budget.txt`). After an intended change of

@@ -369,19 +369,27 @@ static int fm6_patches(void)
     bad += check("FM6_PUT bank B5, then GET: stored in range (a level of 120 -> 99)", host_wire[7] == 0 &&
                  host_wire[8 + 14] == 99 && !memcmp(host_wire + 8 + 118, "MY PATCH  ", 10) && fm6_bank_used(4));
     n = request(ED_FM6_LIST, a, 0);
-    {   /* factory 8, bank 27, then used + name per slot */
-        uint32_t p = 7, k, ok = host_wire[5] == FM6_NFACTORY && host_wire[6] == FM6_BANK_N, named = 0;
+    {   /* factory 8, bank 32, then used + name per slot: the counts the reply announces and that many entries, to the
+         * frame's F7. (Felucca's test expected FM6_NSLOT entries, PTCH's range: the same number when PTCH was F1..F8,
+         * B1..B27. With Melodee's FM6, docs/FM6.md, PTCH is F1..F24, B1..B32; this protocol, which ChoralRoot's unit
+         * does not answer, lists Felucca's eight and the bank. PTCH's own range: tests/cr_fm6_test.c.) */
+        uint32_t p = 7, k, ok = host_wire[5] == FM6_NFACTORY && host_wire[6] == FM6_BANK_N, named = 0, nused = 0;
         for (k = 0; k < FM6_NFACTORY + FM6_BANK_N && p < n; k++) {
             uint32_t used = host_wire[p++];
             if (k == FM6_NFACTORY + 4u) named = used && !memcmp(host_wire + p, "MY PATCH", 9);
-            if (k < FM6_NFACTORY) ok &= used == 1u;
+            if (k < FM6_NFACTORY) ok &= used == 1u && host_wire[p] != 0;
+            else nused += used;
             while (host_wire[p]) p++;
             p++;
         }
-        bad += check("FM6_LIST: 8 factory names, the bank's used slots by name", ok && named && k == FM6_NSLOT);
+        bad += check("FM6_LIST: 8 factory names, the bank's 32 slots, the used one (B5) by name",
+                     ok && named && nused == 1u && FM6_NFACTORY == 8u && FM6_BANK_N == 32u &&
+                     k == FM6_NFACTORY + FM6_BANK_N && p == n - 1u && host_wire[p] == 0xF7);
     }
+    /* PTCH B5: the bank's slots follow the 24 factory patches (FM6_NFAC: Felucca's F1..F8, Melodee's F9..F24), so
+     * B5 is PTCH 28 (Felucca's numbering, 8 + 4, is F13 now) */
     trk[1].eng_req = ENGI_FM6;
-    trk[1].p[P_E7] = FM6_NFACTORY + 4;
+    trk[1].p[P_E7] = FM6_NFAC + 4;
     fm6_poll();
     bad += check("PTCH B5 loads the bank patch into the track", !memcmp(fm6_patch[1] + FP_NAME, "MY PATCH  ", 10));
     a[0] = 4;

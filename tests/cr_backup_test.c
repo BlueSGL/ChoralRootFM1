@@ -425,7 +425,9 @@ int main(void)
         o = find(ref, nref, 8);
         memcpy(bad, o->bytes, o->size);
         bad[12] = 200;                               /* a function setting out of its range */
-        CHECK(t_put(8, bad, o->size) == 2, "an FM6 bank with a bad function setting: rc 2");
+        CHECK(t_put(8, bad, o->size) == 2 && emu_stalls == erases && fm6_bank.used == 5u &&
+              !memcmp(&fm6_bank, o->bytes, sizeof fm6_bank),
+              "an FM6 bank with a bad function setting: rc 2, nothing written, the bank kept");
         o = find(ref, nref, 10);
         memcpy(bad, o->bytes, o->size);
         bad[16 + 3 * FM6_BLOB + 112] = 0;            /* slot 4's blob: its magic */
@@ -507,8 +509,20 @@ int main(void)
         CHECK(t_put_begin(32, 4096, 0) == 1 && t_put_begin(33, 0, 0) == 1 && t_put_begin(34, 0, 0) == 1,
               "Felucca: ids 32..34 (sample slots) refused (rc 1)");
         CHECK(t_smp(11, 0) == -1 && t_smp(14, 0) == -1 && t_smp(11, 2) == -1, "SMP_BEGIN / SMP_ERASE: no reply (no SAMPLE engine)");
-        CHECK(t_put(6, find(ref, nref, 6)->bytes, sizeof(up_bank_t)) == 0 && t_put(8, find(ref, nref, 8)->bytes, sizeof(fm6_bank_t)) == 0,
-              "Felucca: user preset banks and the FM6 bank restore");
+        {   /* (the parts' PTCH slots as they are, around the PUT: a part on a bank patch, B3, forgets its slot, so
+             * fm6_poll loads the restored patch; one on a factory patch keeps it. Felucca's tests/backup_test.c checked
+             * this of editor_backup.c, which cannot stage today's bank) */
+            uint8_t s0 = fm6_slot[0], s1 = fm6_slot[1];
+            fm6_slot[0] = 3;
+            fm6_slot[1] = (uint8_t)(FM6_NFAC + 2u);
+            CHECK(t_put(6, find(ref, nref, 6)->bytes, sizeof(up_bank_t)) == 0 && t_put(8, find(ref, nref, 8)->bytes, sizeof(fm6_bank_t)) == 0,
+                  "Felucca: user preset banks and the FM6 bank restore");
+            CHECK(fm6_bank.used == 5u && !memcmp(&fm6_bank, find(ref, nref, 8)->bytes, sizeof fm6_bank) &&
+                  fm6_slot[0] == 3u && fm6_slot[1] == 0xFFu,
+                  "the FM6 bank restored: the mirror is the bank, a part on a bank patch reloads, one on a factory patch stays");
+            fm6_slot[0] = s0;
+            fm6_slot[1] = s1;
+        }
         {   /* Felucca 1.0's FM6 bank (27 unpacked records, version 1): taken, imported at the next boot */
             static uint8_t fel[16 + 27 * 128];
             uint8_t v1[FP_SIZE + 1u], rec[FM6_PACKED];

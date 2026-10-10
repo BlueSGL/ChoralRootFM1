@@ -625,7 +625,7 @@ Objects (Felucca's ids where Felucca has the same object; 9..21 and 40..49 are C
 | --- | --- | --- |
 | 1 | settings: Felucca's record (`settings_persist.c` PER5) with ChoralRoot's block (`cr_settings.h`, 192 bytes) at its end | 764, or 0 if never saved |
 | 6, 7 | user sound banks (slots 1..16, 17..32), Felucca's layout | 3080, or 0 if empty |
-| 8 | the FM6 patch bank, Felucca's layout | 3472, or 0 if empty |
+| 8 | the FM6 patch bank (`fm6_bank.c`: Melodee's 32 slots; a PUT also takes Felucca 1.0's 27-slot bank, 3472 bytes, and Melodee's earlier one, 3588, converted as at power-on) | 3612, or 0 if empty |
 | 9 | the VA patch store (`va_store.c`: one patch per user slot) | 3536 (version 3), or 0 |
 | 10, 11 | the FM6 patch store (`fm6_ustore.c`: user slots 1..16, 17..32) | 2064, or 0 |
 | 12, 13 | the CZ-1 tone store (`cz_ustore.c`: user slots 1..16, 17..32, docs/CZ1.md) | 2320, or 0 |

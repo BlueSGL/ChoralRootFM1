@@ -122,8 +122,12 @@ if real.exists():
     check("build/choralroot.fwsc flash.bin at 0x400, logical[0x400:0x410] == image0[:16]",
           rf.entries[0]["data_off"] == 0x400 and rf.raw[0x400:0x410] == i0[:16])
     check("build/choralroot.fwsc image0[0x4000:0x4010] is code, not erased", i0[0x4000:0x4010] != b"\xff" * 16)
+else:
+    print("skip: build/choralroot.fwsc missing (run ./build.sh): the built package is not reviewed")
 
 V15 = ROOT.parent / "MVaveOfficial" / "V15-FM-1.fwsc"
+if not V15.exists():
+    print("skip: ../MVaveOfficial/V15-FM-1.fwsc missing: rule 1 (the official V15) is not checked on the real file")
 if V15.exists():
     ok, out = review(str(V15))
     check("real V15-FM-1.fwsc accepted under rule 1, file sha256 noted",
