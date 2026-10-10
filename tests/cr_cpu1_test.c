@@ -9,7 +9,11 @@
  * 2. the budgets: with core 1 alive 8 + 8 VA voices sound (parts 0 and 1, 16 units each), none given up; with one
  *    core 8 in all (the shared 16), the rest given up;
  * 3. the fail-safes: a job that never answers -> core 0 renders part 1 itself in that block (the same samples as
- *    one core), c1 "gave up", the shared budget back; core 1 not answering at start -> "failed", one core. */
+ *    one core), c1 "gave up", the shared budget back; core 1 not answering at start -> "failed", one core;
+ * 4. reliability (after Melodee PR 21, docs/DUALCORE.md): core 1's mailbox validation (hal/fm1_cpu1.h fm1_c1_poll: a
+ *    wrong sequence or check word, a null fn: refused, counted, never run), the escalation (cr_cpu1.h: the first
+ *    misread asks for the rails' boost and keeps core 1, a second after the boost gives up; a fault or a stall gives
+ *    up at once), the rails' steps on a mock P33 (hal/fm1_power.h: one step a write, never lower). */
 #define CR_CPU1 1
 #define FELUCCA_UAC 1                   /* the USB capture's six channels (fx.c ua_stage) hashed too */
 #ifndef FELUCCA_VA
@@ -30,6 +34,26 @@
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
+
+/* the device's mailbox and its validation (hal/fm1_cpu1.h), alone on the host */
+#define FM1_CPU1_LOGIC_ONLY 1
+#define FM1_C1_SYNC() ((void)0)
+#define FM1_C1_TEXT
+#include "../firmware/hal/fm1_cpu1.h"
+/* the rails (hal/fm1_power.h) on a mock P33: the registers, every write logged */
+#define FM1_POWER_MOCK 1
+static uint8_t p33[256];
+static uint8_t p33_log[64][2];
+static uint32_t p33_writes, p33_delays;
+static uint8_t fm1_p33_read(uint32_t a) { return p33[a & 255u]; }
+static void fm1_p33_write(uint32_t a, uint8_t d)
+{
+    if (p33_writes < 64u) { p33_log[p33_writes][0] = (uint8_t)a; p33_log[p33_writes][1] = d; }
+    p33_writes++;
+    p33[a & 255u] = d;
+}
+static void fm1_delay_us(uint32_t us) { (void)us; p33_delays++; }
+#include "../firmware/hal/fm1_power.h"
 
 static int fails, checks;
 #define CHECK(c, ...)                                                   \
@@ -164,6 +188,153 @@ static void budget(uint8_t c1, uint32_t *n0, uint32_t *n1)
     *n1 = sounding_of(1);
 }
 
+/* ---- 4. reliability ---- */
+static uint32_t ran_n, ran_arg;
+static void job_count(uint32_t a) { ran_n++; ran_arg = a; }
+static void mailbox(void)
+{
+    uint32_t done = fm1_c1_done, r0;
+    CHECK(fm1_c1_fn == fm1_c1_idle && fm1_c1_fn, "the mailbox at rest holds the idle stub, not null");
+    CHECK(fm1_c1_poll(&done) == 0 && !fm1_c1_rejected, "at rest: nothing run, nothing refused");
+    fm1_c1_post(job_count, 7u);
+    CHECK(fm1_c1_poll(&done) == 1 && ran_n == 1u && ran_arg == 7u && fm1_c1_done == fm1_c1_job && done == fm1_c1_job,
+          "the next request with its check word: run once");
+    CHECK(fm1_c1_poll(&done) == 0 && ran_n == 1u, "run once only");
+    r0 = fm1_c1_rejected;
+    fm1_c1_job = done + 0x00200000u;                 /* the sequence misread (as Melodee measured: 0x00200000) */
+    CHECK(fm1_c1_poll(&done) == -1 && ran_n == 1u && fm1_c1_rejected == r0 + 1u && fm1_c1_misread == done + 0x00200000u,
+          "a wrong sequence: refused, counted, not run");
+    fm1_c1_job = done + 1u;                          /* a plausible sequence, the last check word: refused */
+    CHECK(fm1_c1_poll(&done) == -1 && ran_n == 1u && fm1_c1_rejected == r0 + 2u, "a stale check word: refused");
+    fm1_c1_job = done;
+    fm1_c1_post(job_count, 9u);
+    fm1_c1_chk ^= 0x00200000u;                       /* the check word misread */
+    CHECK(fm1_c1_poll(&done) == -1 && ran_n == 1u && fm1_c1_rejected == r0 + 3u, "a wrong check word: refused");
+    fm1_c1_chk ^= 0x00200000u;
+    fm1_c1_arg = 8u;                                 /* the argument misread */
+    CHECK(fm1_c1_poll(&done) == -1 && ran_n == 1u && fm1_c1_rejected == r0 + 4u, "a wrong argument: refused");
+    fm1_c1_arg = 9u;
+    CHECK(fm1_c1_poll(&done) == 1 && ran_n == 2u && ran_arg == 9u, "the same request read right: run");
+    {   /* a null fn with a check word that matches it: still never called */
+        uint32_t seq = done + 1u;
+        fm1_c1_fn = 0;
+        fm1_c1_arg = 0;
+        fm1_c1_chk = FM1_C1_CHECK(0, 0u, seq);
+        fm1_c1_job = seq;
+        CHECK(fm1_c1_poll(&done) == -1 && fm1_c1_rejected == r0 + 5u && done == seq - 1u, "a null job: refused");
+        fm1_c1_job = done;
+        fm1_c1_fn = fm1_c1_idle;
+    }
+    printf("  mailbox: the next request with its check word runs once; a wrong sequence, check word or argument, a null\n"
+           "  fn: refused and counted (%u), never run\n", (unsigned)fm1_c1_rejected);
+}
+
+static void esc_reset(void)
+{
+    cr_dbg.c1_escalated = 0;
+    cr_c1_forgiven = 0;
+    cr_c1_test_rejected = cr_c1_test_faults = 0;
+    cr_c1_test_hang = 0;
+}
+static void escalation(void)
+{
+    /* the state machine */
+    esc_reset();
+    CHECK(cr_c1_assess(0, 0, 0) == 0 && !cr_dbg.c1_escalated, "healthy: nothing");
+    CHECK(cr_c1_assess(3, 0, 0) == 0 && cr_dbg.c1_escalated == 1u, "a first misread: the boost asked for, core 1 kept");
+    CHECK(cr_c1_assess(9, 0, 0) == 0, "more misreads before the boost is applied: the same event");
+    cr_c1_test_rejected = 9;
+    cr_c1_supply_poll();
+    CHECK(cr_dbg.c1_escalated == 2u && cr_c1_forgiven == 9u && cr_dbg.rail_now[0] == 15u && cr_dbg.rail_now[1] == 5u,
+          "the main loop applies the boost: SYSVDD 15, VDC14 5 (%u, %u)", cr_dbg.rail_now[0], cr_dbg.rail_now[1]);
+    CHECK(cr_c1_assess(9, 0, 0) == 0, "after the boost, the forgiven count: kept");
+    CHECK(cr_c1_assess(10, 0, 0) == -1, "a second misread after the boost: give up");
+    esc_reset();
+    CHECK(cr_c1_assess(0, 1, 0) == -1 && cr_dbg.c1_escalated == 1u, "a fault: give up (and the boost)");
+    esc_reset();
+    CHECK(cr_c1_assess(0, 0, 1) == -1 && cr_dbg.c1_escalated == 1u, "a stall: give up (and the boost)");
+
+    /* through the audio blocks (fx.c mix_parts_split): a misread keeps core 1, a second after the boost gives up */
+    esc_reset();
+    setup(0, 0);
+    cr_dbg.c1 = C1_OK;
+    trk_note_on(&trk[1], 36, 100);
+    cr_c1_test_rejected = 1;
+    blocks(1);
+    CHECK(cr_dbg.c1 == C1_OK && cr_dbg.c1_escalated == 1u, "a first misread: c1 %s, escalated %u", cr_c1_name(),
+          cr_dbg.c1_escalated);
+    cr_c1_supply_poll();
+    blocks(2);
+    CHECK(cr_dbg.c1 == C1_OK && cr_dbg.c1_escalated == 2u, "after the boost: c1 %s", cr_c1_name());
+    cr_c1_test_rejected = 2;
+    blocks(1);
+    CHECK(cr_dbg.c1 == C1_GAVE_UP && !cr_dualcore_active(), "a second misread: c1 %s", cr_c1_name());
+    /* a fault mid-job: core 0 renders part 1, gave up, the boost asked for */
+    esc_reset();
+    cr_dbg.c1 = C1_OK;
+    blocks(1);
+    cr_c1_test_faults = 1;
+    blocks(1);
+    CHECK(cr_dbg.c1 == C1_GAVE_UP && cr_dbg.c1_escalated == 1u, "a fault: c1 %s, escalated %u", cr_c1_name(),
+          cr_dbg.c1_escalated);
+    /* a stall: the same */
+    esc_reset();
+    cr_dbg.c1 = C1_OK;
+    cr_c1_test_hang = 1;
+    blocks(1);
+    CHECK(cr_dbg.c1 == C1_GAVE_UP && cr_dbg.c1_escalated == 1u, "a stall: c1 %s", cr_c1_name());
+    esc_reset();
+    printf("  escalation: a first misread -> the boost asked for, core 1 kept, applied by the main loop (SYSVDD 15,\n"
+           "  VDC14 5); a second -> \"gave up\"; a fault or a stall -> \"gave up\" and the boost\n");
+
+    /* the boot: Dual Core Off keeps the boot loader's rails; On raises them before core 1 starts */
+    cr_dbg.rail_now[0] = cr_dbg.rail_now[1] = 0;
+    cr_c1_off = 1;
+    cr_c1_boot();
+    CHECK(cr_dbg.c1 == C1_OFF && cr_dbg.rail_boot[0] == 11u && cr_dbg.rail_now[0] == 11u && cr_dbg.rail_now[1] == 3u,
+          "Dual Core Off: the boot loader's rails (%u, %u)", cr_dbg.rail_now[0], cr_dbg.rail_now[1]);
+    cr_c1_off = 0;
+    cr_c1_boot();
+    CHECK(cr_dbg.c1 == C1_OK && cr_dbg.rail_boot[0] == 11u && cr_dbg.rail_boot[1] == 3u && cr_dbg.rail_now[0] == 14u &&
+          cr_dbg.rail_now[1] == 4u, "Dual Core On: the rails 14, 4 (%u, %u)", cr_dbg.rail_now[0], cr_dbg.rail_now[1]);
+    printf("  boot: Dual Core Off keeps SYSVDD 11 / VDC14 3; On raises them to 14 / 4 before core 1 starts\n");
+}
+
+static void rails(void)
+{
+    uint32_t i, ok = 1;
+    memset(p33, 0, sizeof p33);
+    p33[0x09] = 0xA0u | 11u;                        /* SYSVDD 11 with other bits in the register */
+    p33[0x06] = 0x58u | 3u;                         /* VDC14 3 */
+    p33[0x05] = 4u;
+    fm1_power_init();
+    CHECK(fm1_power.boot[FM1_RAIL_SYSVDD] == 11u && fm1_power.boot[FM1_RAIL_VDC14] == 3u && fm1_power.boot[FM1_RAIL_VDDIO] == 4u,
+          "the boot levels recorded");
+    CHECK(p33[0x09] == (0xA0u | 14u) && p33[0x06] == (0x58u | 4u) && p33[0x05] == 4u, "init: SYSVDD 14, VDC14 4, the other bits kept");
+    CHECK(p33_writes == 4u && p33_log[0][0] == 0x06u && p33_log[1][0] == 0x09u, "VDC14 first, then SYSVDD: 1 + 3 writes (%u)",
+          (unsigned)p33_writes);
+    for (i = 1; i < 4u; i++)
+        ok &= (p33_log[i][1] & 15u) == 11u + i;
+    CHECK(ok && p33_delays >= 4u, "SYSVDD one step a write (12, 13, 14), 100 us apart");
+    p33_writes = 0;
+    CHECK(fm1_power_step(FM1_RAIL_SYSVDD, 15u) == 1 && p33_writes == 1u && (p33[0x09] & 15u) == 15u, "one step per call");
+    CHECK(fm1_power_step(FM1_RAIL_SYSVDD, 15u) == 0 && p33_writes == 1u, "at the level: no write");
+    CHECK(fm1_power_step(FM1_RAIL_SYSVDD, 12u) == 0 && (p33[0x09] & 15u) == 15u && p33_writes == 1u, "never lowers");
+    fm1_power_raise(FM1_RAIL_SYSVDD, 9u);
+    CHECK((p33[0x09] & 15u) == 15u && p33_writes == 1u, "raise to a lower level: nothing");
+    fm1_power_raise(FM1_RAIL_SYSVDD, 40u);
+    CHECK((p33[0x09] & 15u) == 15u, "clamped to the field");
+    fm1_power_boost();
+    CHECK((p33[0x06] & 7u) == 5u && (p33[0x09] & 15u) == 15u && fm1_power.now[FM1_RAIL_VDC14] == 5u, "the boost: VDC14 5");
+    fm1_power.recorded = 0;
+    p33[0x09] = 15u;                                /* a boot loader that left it higher: kept */
+    p33[0x06] = 6u;
+    p33_writes = 0;
+    fm1_power_init();
+    CHECK(p33_writes == 0u && p33[0x09] == 15u && p33[0x06] == 6u, "init never lowers a higher boot level");
+    printf("  rails (mock P33): init VDC14 3 -> 4 then SYSVDD 11 -> 14, a step a write, other bits kept; never lower\n");
+}
+
 int main(void)
 {
     uint32_t a, b, n0, n1;
@@ -215,6 +386,9 @@ int main(void)
         CHECK(cr_dbg.c1 == C1_OK && cr_dualcore_active(), "an answer at start: c1 %s", cr_c1_name());
         printf("  start: no answer -> \"failed\" (one core), an answer -> \"ok\"\n");
     }
+    mailbox();
+    escalation();
+    rails();
     printf("cr_cpu1: %d checks, %d failed\n", checks, fails);
     return fails != 0;
 }

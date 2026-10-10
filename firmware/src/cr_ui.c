@@ -4249,6 +4249,16 @@ static void cu_view_screen(cr_screen_t *s)
                 cu_int(b, (int32_t)cr_dbg.c1_stack, 0, sizeof b);
                 cu_cat(s->lines[3].t, b, sizeof s->lines[3].t);
             }
+            if (cr_dbg.c1 == C1_OK || cr_dbg.c1 == C1_GAVE_UP) {   /* misreads core 1 refused (docs/DUALCORE.md) */
+                cu_cat(s->lines[3].t, " \267 rej ", sizeof s->lines[3].t);
+                cu_int(b, (int32_t)cr_c1_rejected(), 0, sizeof b);
+                cu_cat(s->lines[3].t, b, sizeof s->lines[3].t);
+                if (cr_c1_faults()) {
+                    cu_cat(s->lines[3].t, " \267 flt ", sizeof s->lines[3].t);
+                    cu_int(b, (int32_t)cr_c1_faults(), 0, sizeof b);
+                    cu_cat(s->lines[3].t, b, sizeof s->lines[3].t);
+                }
+            }
             s->lines[4].t[0] = 0;
             for (k = 0; k < CRP_N; k++) {
                 if (k == CRP_WAIT && cr_dbg.c1 != C1_OK)

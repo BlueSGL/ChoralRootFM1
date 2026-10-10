@@ -47,7 +47,7 @@
 #define CRB_HDR0 0x7Du
 #define CRB_HDR1 0x46u
 #define CRB_HDR2 0x4Cu
-enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN };
+enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST };
 #define CRB_LOOP0 40u                                /* loop slot k: id 40 + k */
 #define CRB_VA 9u
 #define CRB_FM6S 10u                                 /* 10, 11: the FM6 patch store's halves */
@@ -476,6 +476,13 @@ static void crb_debug(void)
 #endif
     v[k++] = cr_dbg.c1;
     v[k++] = cr_dbg.c1_jobs;
+    v[k++] = cr_c1_rejected();                       /* core 1's misreads, refused (docs/DUALCORE.md "Reliability") */
+    v[k++] = cr_c1_faults();                         /* faults about core 1, caught */
+    v[k++] = cr_dbg.c1_escalated ? 1u : 0u;          /* the core rails' boost asked for / applied */
+    v[k++] = cr_dbg.rail_boot[0];                    /* SYSVDD: the boot loader's, now (11 1.26 V, 14 1.35 V, 15 1.38 V) */
+    v[k++] = cr_dbg.rail_now[0];
+    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 4 1.45 V, 5 1.50 V) */
+    v[k++] = cr_dbg.rail_now[1];
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.avg_us[i];
 #if FELUCCA_UAC
@@ -546,6 +553,76 @@ static void crb_debug(void)
         crb_u32(v[i]);
 }
 
+/* ------------------------------------------------------------------ CORE1_TEST --- */
+/* 75 CORE1_TEST op [args] -> op, rc, count, count x u32 (crb_u32); a CR_CORE1_TEST build only (tools/core1_fault_test.py;
+ * any other build answers the single byte 127: unsupported). After Melodee PR 21's editor command 79 (Kerem Kilic /
+ * Melodee, GPL-3.0). ops: 0 report; 1 a misread (the sequence read as +0x00200000 for 1 ms, as an affected unit
+ * reads it); 2 a null job at rest (fn 0 and the next sequence for 1 ms: the idle crash Melodee decoded); 3 a stall (a
+ * job that never returns: the 8 ms wait); 4 a fault on core 1 (a job that calls address 0); 5 the rails; 6 rail a[1]
+ * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD never below 6). rc: 0 done, 1 refused (core 1 not running for
+ * 1..4, a level out of range for 6). Values: c1 state, jobs, rejected, faults, stalls, escalated, SYSVDD boot / now,
+ * VDC14 boot / now (the registers), the fault's core / DBG_MSG / pc / rets / EMU_MSG, the last misread, audio halves,
+ * the injection's time in us */
+#if CR_CPU1 && CR_CORE1_TEST && defined(FM1_HAVE_CPU1)
+static void crb_core1_test(const uint8_t *a, uint32_t na)
+{
+    uint32_t op = na ? a[0] : 0u, rc = 0, waited = 0, v[18], i;
+    if (op >= 1u && op <= 4u && cr_dbg.c1 != C1_OK) {
+        rc = 1;
+    } else if (op >= 1u && op <= 4u) {
+        uint32_t t0 = fm1_ticks();
+        fm1_irq_off();                               /* the audio ISR neither hands over nor checks meanwhile */
+        if (op <= 2u) {
+            fm1_c1_test_misread(op == 2u);
+            (void)cr_c1_check();
+        } else if (cr_c1_run(op == 3u ? fm1_c1_test_stall : fm1_c1_test_fault, 0)) {
+            rc = cr_c1_wait() ? 0u : 2u;             /* 2: it "finished" (it should not) */
+        }
+        waited = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
+        fm1_irq_on();                                /* (an exception held while masked is taken here) */
+        fm1_delay_us(2000);
+    } else if (op == 6u) {
+        fm1_irq_off();
+        rc = na == 3u ? (uint32_t)fm1_power_goto(a[1], a[2]) : 1u;
+        fm1_irq_on();
+        cr_rails_now();
+    } else if (op != 0u && op != 5u) {
+        rc = 1;
+    }
+    v[0] = cr_dbg.c1;
+    v[1] = cr_dbg.c1_jobs;
+    v[2] = fm1_c1_rejected;
+    v[3] = fm1_c1_fault.count;
+    v[4] = fm1_c1_stalls;
+    v[5] = cr_dbg.c1_escalated;
+    fm1_irq_off();
+    v[6] = fm1_power.boot[FM1_RAIL_SYSVDD];
+    v[7] = fm1_power_get(FM1_RAIL_SYSVDD);
+    v[8] = fm1_power.boot[FM1_RAIL_VDC14];
+    v[9] = fm1_power_get(FM1_RAIL_VDC14);
+    fm1_irq_on();
+    v[10] = fm1_c1_fault.cpu;
+    v[11] = fm1_c1_fault.dbg;
+    v[12] = fm1_c1_fault.pc;
+    v[13] = fm1_c1_fault.rets;
+    v[14] = fm1_c1_fault.emu;
+    v[15] = fm1_c1_misread;
+#ifdef DBG_MAGIC
+    v[16] = felucca_dbg.halves;
+#else
+    v[16] = 0;
+#endif
+    v[17] = waited;
+    crb_b(op);
+    crb_b(rc);
+    crb_b(18);
+    for (i = 0; i < 18u; i++)
+        crb_u32(v[i]);
+}
+#else
+static void crb_core1_test(const uint8_t *a, uint32_t na) { (void)a; (void)na; crb_b(127); }   /* unsupported */
+#endif
+
 /* ------------------------------------------------------------------ the dispatcher --- */
 /* f: the bytes between F0 and F7 (7D 46 4C cmd args); 1 = answered */
 static int crb_handle(const uint8_t *f, uint32_t n)
@@ -605,6 +682,9 @@ static int crb_handle(const uint8_t *f, uint32_t n)
             return 0;
         cu_screen_sysex(a[0]);
         crb_b(0);
+        break;
+    case CRB_CORE1_TEST:                             /* (a test build's; else "unsupported") */
+        crb_core1_test(a, na);
         break;
     case CRB_RESTART:
         if (na)

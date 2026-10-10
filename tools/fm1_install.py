@@ -452,6 +452,8 @@ BK_DEBUG = 73                                     # read-only counters (cr_backu
 BK_SCREEN = 74                                    # the screen off (0) / on (1) (cr_backup.c, cr_ui.c), --screen
 DEBUG_NAMES = ["ms", "halves", "max_us", "late", "nested", "timer_irqs", "ui_frames", "last_us",
                "cpu_avg_us", "cpu_max_us", "cpu_max_all_us", "cpu_halves", "c1_state", "c1_jobs",
+               "c1_rejected", "c1_faults", "c1_escalated", "rail_sysvdd_boot", "rail_sysvdd_now", "rail_vdc14_boot",
+               "rail_vdc14_now",
                "st_tick_us", "st_part0_us", "st_part1_us", "st_fx_us", "st_master_us", "st_wait_us",
                "ua_cap_alt", "ua_stage_on", "ua_cap_ready", "ua_tx_packets", "ua_underruns", "ua_overruns", "ua_fill",
                "ua_fill_q8", "ua_missed_frames", "ua_poll_max_us", "ua_service_max_us", "ua_svc_t5", "ua_svc_isr",

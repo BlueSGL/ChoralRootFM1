@@ -248,7 +248,9 @@ static void fm1_main(void)
     cr_dbg.prof_on = 1;                                 /* the ISR's stage profile (cr_cpu1.h) */
     if (!cr_safe)                                       /* the second core: at power-on, before the audio and the
                                                          * timers (started later it does not reach its entry: fm1-x0x,
-                                                         * Melodee); no answer in 20 ms: one core (docs/DUALCORE.md) */
+                                                         * Melodee); no answer in 20 ms: one core (docs/DUALCORE.md).
+                                                         * With Dual Core On the core rails go up first, IRQs still
+                                                         * off (hal/fm1_power.h, after Melodee PR 21) */
         cr_c1_boot();
 #endif
     CR_STAGE(BS_AUDIO);
@@ -280,6 +282,10 @@ static void fm1_main(void)
         if (ua_off_apply(fm1_ms))                       /* Options > USB Record: the host re-reads (a second off
                                                          * the bus; the setting is saved as any other, cr_settings.c) */
             ui_message("USB RECONNECTING");
+#endif
+#if CR_CPU1
+        cr_c1_supply_poll();                            /* core 1 misread, faulted or stalled: the core rails' boost
+                                                         * (cr_cpu1.h; P33 is the main loop's) */
 #endif
         if (fm1_ms > BG_SETTLE_MS && bootguard.pending)  /* a crash or hang in the first 30 s counts */
             bootguard_settled(&bootguard);              /* (SAFE MODE stays for this session: cr_safe) */

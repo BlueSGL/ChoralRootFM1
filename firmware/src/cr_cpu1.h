@@ -11,6 +11,13 @@
  *     order of one core, so the samples are one core's bit for bit;
  *   a job not done in 8 ms (fm1_cpu1_wait): core 1 held for the session, core 0 renders part 1 itself,
  *     cr_dbg.c1 = C1_GAVE_UP, the shared budget again.
+ * Reliability (docs/DUALCORE.md, after Melodee PR 21 "fix(dual-core): raise the core supply and survive CPU1
+ * misreads, faults and stalls", Kerem Kilic / Melodee, GPL-3.0): with Dual Core On the core rails go up at power-on
+ * (hal/fm1_power.h: SYSVDD 14 = 1.35 V, VDC14 4 = 1.45 V) before core 1 starts; core 1 runs only a request it read
+ * right (hal/fm1_cpu1.h fm1_c1_poll; a misread is counted, never run); a fault about core 1 holds it and core 0 goes
+ * on (fm1_c1_fault_c). The escalation (cr_c1_assess): the first misread, fault or stall asks for the rails' boost
+ * (SYSVDD 15 = 1.38 V, VDC14 5 = 1.50 V), applied by the main loop (cr_c1_supply_poll: P33 is not IRQ-safe); after
+ * a misread core 1 keeps working; a misread after the boost, or any fault or stall: C1_GAVE_UP.
  * While core 1 is alive (C1_OK) each of parts 0 and 1 has its own budget of VBUDGET units (voice.c voices_busy).
  * CR_CPU1 0 (felucca.c, tests/hostsim.c, tests/regress.c): none of this, the code as before. The emulator builds it
  * with 1 and a stub core that runs the job at once, when handed (before part 0: the split must not depend on the
@@ -19,6 +26,10 @@
 #include <stdint.h>
 #ifndef CR_CPU1
 #define CR_CPU1 0
+#endif
+#ifndef CR_CORE1_TEST
+#define CR_CORE1_TEST 0                  /* 1: SysEx 75 CORE1_TEST injects core 1 failures (tools/core1_fault_test.py,
+                                          * cr_backup.c); a test build only, never a release */
 #endif
 
 enum { C1_OFF, C1_OK, C1_FAILED, C1_GAVE_UP };
@@ -33,6 +44,8 @@ typedef struct {
     uint32_t c1_jobs;                /* jobs core 1 rendered */
     uint32_t c1_stack;               /* bytes of core 1's stack used at most (its "C1MK" fill, cr_c1_stack_used) */
     uint32_t c1_start_us;            /* how long core 1 took to answer at power-on */
+    uint8_t c1_escalated;            /* 0; 1 the rails' boost asked for (the first misread, fault or stall); 2 applied */
+    uint8_t rail_boot[2], rail_now[2];   /* SYSVDD, VDC14 levels: the boot loader's, now (hal/fm1_power.h; host 11, 3) */
     uint32_t mark;                   /* the last stage mark (prof units) */
     uint32_t cur[CRP_N];             /* this half buffer's stages (prof units, its blocks summed) */
     uint32_t win_sum[CRP_N], win_max[CRP_N], win_n;   /* the window being filled */
@@ -52,7 +65,29 @@ static const char *const CRP_NAME[CRP_N] = {"tick", "part0", "part1", "fx", "mas
 #define CR_PROF_PER_US FM1_TICKS_PER_US   /* TIMER4 ticks (24 MHz) */
 static inline uint32_t cr_prof_now(void) { return fm1_ticks(); }
 static int cr_c1_run(void (*fn)(uint32_t), uint32_t arg) { return fm1_cpu1_run(fn, arg); }
-static int cr_c1_wait(void) { return fm1_cpu1_wait(); }
+static int cr_c1_wait_core(void) { return fm1_cpu1_wait(); }
+static void cr_c1_hold(void) { fm1_cpu1_hold(); }
+static inline uint32_t cr_c1_rejected(void) { return fm1_c1_rejected; }
+static inline uint32_t cr_c1_faults(void) { return fm1_c1_fault.count; }
+static void cr_rails_record(void)                   /* the boot loader's levels (P33 reads only) */
+{
+    fm1_power_record();
+    cr_dbg.rail_boot[0] = fm1_power.boot[FM1_RAIL_SYSVDD];
+    cr_dbg.rail_boot[1] = fm1_power.boot[FM1_RAIL_VDC14];
+}
+static void cr_rails_now(void)
+{
+    cr_dbg.rail_now[0] = fm1_power.now[FM1_RAIL_SYSVDD];
+    cr_dbg.rail_now[1] = fm1_power.now[FM1_RAIL_VDC14];
+}
+static void cr_rails_init(void) { fm1_power_init(); cr_rails_now(); }       /* IRQs off: power-on */
+static void cr_rails_boost(void)                    /* the main loop */
+{
+    fm1_irq_off();
+    fm1_power_boost();
+    fm1_irq_on();
+    cr_rails_now();
+}
 static uint32_t cr_c1_stack_used(void)              /* the C1MK fill: the deepest word core 1's usp reached */
 {
     uint32_t i = 0;
@@ -69,6 +104,8 @@ static uint32_t cr_c1_stack_used(void)              /* the C1MK fill: the deepes
 static uint8_t cr_c1_test_hang;      /* tests: the next jobs never answer (cr_c1_wait times out) */
 static uint8_t cr_c1_test_nostart;   /* tests: core 1 does not answer at start */
 static uint8_t cr_c1_test_late;      /* tests: the job runs at the wait (after part 0), not when handed (before it) */
+static uint32_t cr_c1_test_rejected; /* tests: core 1's misread count (the device's fm1_c1_rejected) */
+static uint32_t cr_c1_test_faults;   /* tests: faults about core 1 (the device's fm1_c1_fault.count) */
 static void (*cr_c1_fn)(uint32_t);
 static uint32_t cr_c1_arg;
 static inline uint32_t cr_prof_now(void)
@@ -88,15 +125,28 @@ static int cr_c1_run(void (*fn)(uint32_t), uint32_t arg)
         fn(arg);
     return 1;
 }
-static int cr_c1_wait(void)
+static int cr_c1_wait_core(void)
 {
+    if (cr_c1_test_faults)
+        return -2;
     if (cr_c1_test_hang)
         return -1;
     if (cr_c1_test_late)
         cr_c1_fn(cr_c1_arg);
     return 0;
 }
+static void cr_c1_hold(void) {}
+static inline uint32_t cr_c1_rejected(void) { return cr_c1_test_rejected; }
+static inline uint32_t cr_c1_faults(void) { return cr_c1_test_faults; }
 static uint32_t cr_c1_stack_used(void) { return 0; }
+/* the rails on the host: P33 reads the boot loader's defaults (SYSVDD 11, VDC14 3) */
+static void cr_rails_record(void) { cr_dbg.rail_boot[0] = cr_dbg.rail_now[0] = 11; cr_dbg.rail_boot[1] = cr_dbg.rail_now[1] = 3; }
+static void cr_rails_init(void)
+{
+    if (cr_dbg.rail_now[0] < 14u) cr_dbg.rail_now[0] = 14;
+    if (cr_dbg.rail_now[1] < 4u) cr_dbg.rail_now[1] = 4;
+}
+static void cr_rails_boost(void) { cr_dbg.rail_now[0] = 15; cr_dbg.rail_now[1] = 5; }
 #endif
 
 /* a stage's time without the reading of the clock (the host's counter costs ~6.6 k instructions a reading: measured
@@ -115,6 +165,63 @@ static void cr_prof_calibrate(void)
     cr_prof_cost = best == 0xFFFFFFFFu ? 0u : best;
 }
 static inline int cr_dualcore_active(void) { return cr_dbg.c1 == C1_OK; }
+
+/* ------------------------------------------------ the escalation (after Melodee PR 21) --- */
+static uint32_t cr_c1_forgiven;      /* misreads seen up to the boost's application: forgiven */
+/* core 0 (the audio ISR): what core 1's counters say. 0 = keep core 1, -1 = give it up. The first misread asks for
+ * the boost and keeps core 1 (misreads until the main loop applies it are the same event); a misread after it, or
+ * any fault or stall, gives up (and asks for the boost too: core 0 runs on alone at the higher rail) */
+static int cr_c1_assess(uint32_t rejected, uint32_t faults, int stalled)
+{
+    if (faults || stalled) {
+        if (!cr_dbg.c1_escalated)
+            cr_dbg.c1_escalated = 1;
+        return -1;
+    }
+    if (rejected <= cr_c1_forgiven)
+        return 0;
+    if (!cr_dbg.c1_escalated) {
+        cr_dbg.c1_escalated = 1;
+        return 0;
+    }
+    return cr_dbg.c1_escalated == 1u ? 0 : -1;
+}
+static void cr_c1_give_up(void)
+{
+    cr_c1_hold();
+    cr_dbg.c1 = C1_GAVE_UP;
+}
+/* each block before the hand-over (fx.c): 1 = core 1 may take it */
+static int cr_c1_check(void)
+{
+    if (cr_dbg.c1 != C1_OK)
+        return 0;
+    if (cr_c1_assess(cr_c1_rejected(), cr_c1_faults(), 0) < 0) {
+        cr_c1_give_up();
+        return 0;
+    }
+    return 1;
+}
+/* the wait (fx.c): 0 = done; else core 1 is held for good (a stall or a fault), C1_GAVE_UP, the boost asked for */
+static int cr_c1_wait(void)
+{
+    int rc = cr_c1_wait_core();
+    if (rc) {
+        (void)cr_c1_assess(cr_c1_rejected(), cr_c1_faults(), rc == -1);
+        cr_c1_give_up();
+    }
+    return rc;
+}
+/* the main loop: apply a boost the audio ISR asked for (P33 is the main loop's; IRQs off for a step or two, 100 us
+ * each). The misreads seen until now are forgiven: the next one gives core 1 up */
+static void cr_c1_supply_poll(void)
+{
+    if (cr_dbg.c1_escalated != 1u)
+        return;
+    cr_rails_boost();
+    cr_c1_forgiven = cr_c1_rejected();
+    cr_dbg.c1_escalated = 2;
+}
 /* this block: part 1 renders as core 1's job (its own scratch where an engine has shared scratch: fm6_core.c) */
 static volatile uint8_t cr_c1_split;
 #define CR_C1_IDX(t) (cr_c1_split && (t) == &trk[1])
@@ -129,10 +236,13 @@ static volatile uint8_t cr_c1_split;
 static void cr_c1_boot(void)
 {
     int rc;
-    if (cr_c1_off) {                                    /* Options > Dual Core Off: one core this session */
+    cr_rails_record();                                  /* (the boot loader's levels, reported either way) */
+    if (cr_c1_off) {                                    /* Options > Dual Core Off: one core this session, the boot
+                                                         * loader's rails (the stock behaviour) */
         cr_dbg.c1 = C1_OFF;
         return;
     }
+    cr_rails_init();                                    /* the core rails up before core 1 starts (IRQs off) */
 #ifdef FM1_HAVE_CPU1
     {
     uint32_t t0 = fm1_ticks();
@@ -195,6 +305,9 @@ static void cr_prof_window(void)
 #define cr_prof_window() ((void)0)
 #define cr_c1_boot() ((void)0)
 #define cr_c1_stack_used() 0u
+#define cr_c1_supply_poll() ((void)0)
+#define cr_c1_rejected() 0u
+#define cr_c1_faults() 0u
 #endif
 
 /* GEEK OUT's / the console's word for core 1 */

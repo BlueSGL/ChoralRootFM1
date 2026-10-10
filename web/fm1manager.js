@@ -8,7 +8,7 @@
 // No DOM: the page (manager.html) draws, this decides. Every name here is unique across fm1backup.js / fm1sounds.js:
 // make_site.py inlines the three into one script.
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
-import { SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx } from "./fm1sounds.js";
+import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx } from "./fm1sounds.js";
 
 // the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14)
 export const MANAGER_ENGINES = [12, 15, 13, 14, 2, 3, 5, 6, 7, 9, 11];
@@ -27,7 +27,7 @@ export const poolLabel = (engine, pos) => `${ENGINE_NAMES[engine]} ${String(pos)
 // (each replaced by the first user slot bound to it: overwritten), then the added user sounds in slot order.
 // row: {pos, name, type: "init" | "factory" | "user", engine, f (factory index or -1), slot (0: none), label,
 //       overwrites (the factory name a user row replaces, or null), kind (patch kind), patch (stored or not)}
-export function managerPools(objs) {
+export function managerPools(objs, opts = {}) {
   const { slots } = parseSoundObjects(objs), out = {};
   for (const e of MANAGER_ENGINES) {
     const names = FACTORY_PRESETS[e] || [], f0 = FACTORY_FIRST[e] || 0, kind = patchKindOf(e);
@@ -40,6 +40,8 @@ export function managerPools(objs) {
     for (const s of slots)
       if (s.used && s.added && poolOf(s.engine) === e)
         rows.push({ pos: rows.length, name: s.name, type: "user", engine: e, f: -1, slot: s.slot, label: s.label, overwrites: null, kind: s.kind, patch: !!s.patch, recEngine: s.engine });
+    if (opts.empty !== false && slots.some((x) => !x.used))   // "Place here": a new added sound's place, while a slot is free
+      rows.push({ pos: rows.length, name: "", type: "empty", engine: e, f: -1, slot: 0, label: "", overwrites: null, kind, patch: false });
     out[e] = rows;
   }
   return out;
@@ -63,9 +65,14 @@ const mgMerge = (objs, res) => { const m = new Map(objs); for (const [id, b] of 
 // binding); otherwise (INIT, another pool, nothing selected) the next free slot as an added sound.
 // -> {changed, objs, slot, where: "new" | "over-factory" | "over-user"}
 export function managerPlace(objs, sound, target = null) {
-  if (!sound || !(sound.record instanceof Uint8Array)) sound = readSoundFile(sound);
+  if (!sound || !(sound.record instanceof Uint8Array)) sound = { ...readSoundFile(sound), file: sound };
   const pool = poolOf(sound.engine);
   let slot, f = -1, where = "new";
+  const file = sound.file || null;
+  if (!target && file && file.factory && file.engine === pool && Number.isInteger(file.position)) {   // a kept factory preset: back to its place
+    const r = managerPools(objs, { empty: false })[pool][file.position];
+    if (r && r.type !== "init") target = r;
+  }
   if (target && target.engine === pool && target.type === "user") { slot = target.slot; f = target.f; where = "over-user"; }
   else {
     slot = firstFreeSlot(objs);
@@ -75,13 +82,18 @@ export function managerPlace(objs, sound, target = null) {
   const res = placeSound(objs, slot, sound, f), m = mgMerge(objs, res);
   return { ...mgResult(new Map(objs), m), slot, where };
 }
-// several sounds (a pack): each as a new added sound; stops at the last free slot (-> placed, skipped counts)
+// several sounds (a pack): each as a new sound (added, or back over its factory position when the file names one); stops at the last free slot (-> placed, skipped counts)
 export function managerPlaceAll(objs, sounds) {
   let m = new Map(objs), placed = 0;
   for (const s of sounds) {
     const slot = firstFreeSlot(m);
     if (!slot) break;
-    m = mgMerge(m, placeSound(m, slot, s, -1)); placed++;
+    let f = -1;                                         // a kept overwrite / factory preset: back to its position when free
+    if (s && Number.isInteger(s.position) && s.engine !== undefined) {
+      const r = managerPools(m, { empty: false })[poolOf(s.engine)]?.[s.position];
+      if (r && r.type === "factory") f = r.f;
+    }
+    m = mgMerge(m, placeSound(m, slot, s, f)); placed++;
   }
   return { ...mgResult(new Map(objs), m), placed, skipped: sounds.length - placed };
 }
@@ -105,10 +117,57 @@ export const managerDelete = (objs, row) => {
   return mgResult(new Map(objs), mgMerge(objs, deleteSound(objs, row.slot)));
 };
 // Keep: a user row as a choralroot-sound file
+// Keep: a user row as a choralroot-sound file; a factory row as its pack entry (opts.packs: {engine: [file]} in the
+// factory order), marked factory: true with its engine and position (a later Place puts it back there by default)
 export const managerKeep = (objs, row, opts = {}) => {
-  if (row.type !== "user") throw new Error("Keep takes a user sound (the factory sounds are in the packs)");
-  return exportSound(objs, row.slot, opts);
+  if (row.type === "factory") return factorySoundFile(opts.packs, row.engine, row.pos);
+  if (row.type !== "user") throw new Error("Keep takes a user sound or a factory preset");
+  const file = exportSound(objs, row.slot, opts);
+  if (row.f >= 0) { file.factory = false; file.position = row.pos; }
+  return file;
 };
+export function factorySoundFile(packs, engine, pos) {
+  const list = packs && packs[engine], f = list && list[pos - 1];
+  if (!f) throw new Error(`No factory pack entry for ${poolLabel(engine, pos)}`);
+  return { ...f, factory: true, engine, position: pos };
+}
+// the packs' files by engine: [{engine, sounds}] or pack objects -> {engine: [file]}
+export function factoryFiles(packList) {
+  const out = {};
+  for (const p of packList) if (p && p.engine !== undefined) out[p.engine] = p.sounds;
+  return out;
+}
+// used user slots
+export const usedSlots = (objs) => parseSoundObjects(objs).slots.filter((x) => x.used).length;
+// several files -> one choralroot-pack (the site's format)
+export function makePack(files, { name = "My sounds", author = "", created = new Date().toISOString() } = {}) {
+  if (!files.length) throw new Error("Nothing selected to save");
+  const sounds = files.map((f) => { readSoundFile(f); return f; });
+  return { format: PACK_FORMAT, version: 1, name, author, created, licence: null, sounds };
+}
+export const packFileName = (name, created = new Date()) =>
+  `choralroot-pack-${String(name).replace(/[^A-Za-z0-9-]/g, "_")}-${created.toISOString().slice(0, 10).replace(/-/g, "")}.json`;
+// every user record on the device as one pack (pool order: engine by engine)
+export function userSoundsPack(objs, opts = {}) {
+  const pools = managerPools(objs, { empty: false }), files = [];
+  for (const e of MANAGER_ENGINES) for (const r of pools[e]) if (r.type === "user") files.push(managerKeep(objs, r, opts));
+  return makePack(files, { name: "User sounds", ...opts });
+}
+// a library sound file renamed (the 12-character rule): a new file object
+export function renameSoundFile(file, name) {
+  if (!nameValid(name)) throw new Error("A name is 1 to 12 characters (ASCII letters, digits, symbols, spaces)");
+  const s = readSoundFile(file), rec = s.record.slice();
+  rec.fill(0, 4, 16); for (let i = 0; i < name.length; i++) rec[4 + i] = name.charCodeAt(i);
+  return { ...file, name, record: mgB64(rec) };
+}
+// drag and drop within a pool: from row -> to row (both of one engine). Two user rows: their slots' sounds exchange
+// (an added onto an added: the pool order follows the slot order); a user row onto a factory row: bound there (its
+// old place freed); a factory row onto a user row: the same, as Swap does
+export function managerDrop(objs, from, to) {
+  if (from.engine !== to.engine) throw new Error("Drag within one engine's pool");
+  if (from === to || (from.pos === to.pos)) return { changed: [], objs };
+  return managerSwap(objs, from, to);
+}
 
 // ---- loops: a slot as a file, a file into a slot, delete, swap
 export function keepLoop(objs, slot, { firmware = null, created } = {}) {
@@ -283,6 +342,11 @@ export class LibraryStore {
     if (this.db) return this.tx("readwrite", (s) => s.add(clean));
     const key = this.next++; this.mem.set(key, { ...clean, key }); return key;
   }
+  async put(item) {                                   // an item changed in place (renamed): its key kept
+    await this.open();
+    if (this.db) return this.tx("readwrite", (s) => s.put(item));
+    this.mem.set(item.key, { ...item }); return item.key;
+  }
   async remove(key) { await this.open(); if (this.db) return this.tx("readwrite", (s) => s.delete(key)); this.mem.delete(key); }
 }
 
@@ -313,7 +377,7 @@ const mgSimSound = (tpl, engine, name, patch = null) => {
   const record = mgUnB64(SOUND_TEMPLATES[tpl]); record[2] = engine;
   return { record, name, engine, kind: patchKindOf(engine), patch };
 };
-export function simObjects() {
+export function simObjects(count = 6) {
   let m = new Map(MANAGER_IDS.map((id) => [id, mgEmpty()]));
   const czTone = Uint8Array.from({ length: 144 }, (_, i) => (i * 7) & 127);
   const put = (slot, s, f) => { m = mgMerge(m, placeSound(m, slot, s, f)); };
@@ -323,6 +387,11 @@ export function simObjects() {
   put(5, mgSimSound("fm6", 12, "BELL TOO"), -1);
   put(6, mgSimSound("fm6", 2, "PHASE BOW"), 0);          // overwrites PHASE 01 BRASS
   put(9, mgSimSound("cz", 14, "CZ BASS 2", czTone), 13); // overwrites CZ-1 13 SYNTH.BASS
+  const fillEngines = [12, 13, 15, 2, 3, 5, 6, 7, 9, 11];
+  for (let k = 0; parseSoundObjects(m).slots.filter((x) => x.used).length < count; k++) {
+    const e = fillEngines[k % fillEngines.length];
+    put(firstFreeSlot(m), mgSimSound(e === 14 ? "cz" : "fm6", e, `USER ${String(k + 1).padStart(2, "0")}`), -1);
+  }
   m.set(40, makeLoopRecord({ bars: 4, layers: 3, events: 24 }));
   m.set(43, makeLoopRecord({ sig: 1, bars: 2, layers: 1, events: 6 }));
   return m;

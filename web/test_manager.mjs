@@ -17,7 +17,7 @@ import vm from "node:vm";
 import { captureBackup, loopHeader } from "./fm1backup.js";
 import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObjects, recordValid } from "./fm1sounds.js";
 import {
-  MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
+  managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
   libraryItemsFromFile, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH,
 } from "./fm1manager.js";
@@ -28,9 +28,10 @@ const HERE = new URL(".", import.meta.url).pathname;
 const sameObjs = (a, b) => [...a.keys()].every((id) => { const x = a.get(id), y = b.get(id) || new Uint8Array(0); return x.length === y.length && x.every((v, i) => v === y[i]); });
 const names = (rows) => rows.map((r) => `${r.pos}:${r.name}:${r.type}${r.slot ? ":U" + r.slot : ""}`);
 
+const P = (o) => managerPools(o, { empty: false });   // (the pools without the "Place here" row)
 /* ------------------------------------------------------------- the pools --- */
 const objs0 = simObjects();
-const pools = managerPools(objs0);
+const pools = P(objs0);
 ok(MANAGER_ENGINES.every((e) => pools[e] && pools[e][0].type === "init" && pools[e][0].pos === 0), "pools: every engine's pool starts with 00 INIT");
 ok(MANAGER_ENGINES.every((e) => pools[e].filter((r) => r.type !== "init" && r.f >= 0).length === FACTORY_PRESETS[e].length - FACTORY_FIRST[e]),
   "pools: the factory positions of each engine (CZ-1 without INIT TONE)");
@@ -71,28 +72,28 @@ for (const p of packIdx) packs[p.engine] = await loadPack(async (url) => JSON.pa
 const vaPad = packs[13][0], fmBass = packs[12][2], czBrass = packs[14][0];
 
 await step("place new: a VA pack sound with nothing selected -> U04, added to VA", managerPlace(s.objs, vaPad.file, null), (o) => {
-  const r = managerPools(o)[13].at(-1); return r.slot === 4 && r.name === "LUSH PAD" && r.f === -1;
+  const r = P(o)[13].at(-1); return r.slot === 4 && r.name === "LUSH PAD" && r.f === -1;
 });
-await step("place over factory: FM BASS onto FM6 04 BRASS -> U07 bound to BRASS", managerPlace(s.objs, fmBass.file, managerPools(s.objs)[12][4]), (o) => {
-  const r = managerPools(o)[12][4]; return r.type === "user" && r.slot === 7 && r.name === "FM BASS" && r.overwrites === "BRASS";
+await step("place over factory: FM BASS onto FM6 04 BRASS -> U07 bound to BRASS", managerPlace(s.objs, fmBass.file, P(s.objs)[12][4]), (o) => {
+  const r = P(o)[12][4]; return r.type === "user" && r.slot === 7 && r.name === "FM BASS" && r.overwrites === "BRASS";
 });
-await step("place over user: a CZ-1 sound onto CZ-1 13 (U09) -> U09 replaced, still over SYNTH.BASS", managerPlace(s.objs, czBrass.file, managerPools(s.objs)[14][13]), (o) => {
-  const r = managerPools(o)[14][13]; return r.slot === 9 && r.name === "BRASS 1" && r.overwrites === "SYNTH.BASS";
+await step("place over user: a CZ-1 sound onto CZ-1 13 (U09) -> U09 replaced, still over SYNTH.BASS", managerPlace(s.objs, czBrass.file, P(s.objs)[14][13]), (o) => {
+  const r = P(o)[14][13]; return r.slot === 9 && r.name === "BRASS 1" && r.overwrites === "SYNTH.BASS";
 });
-await step("place of another engine: a CZ-1 sound with FM6 02 selected -> its own pool, added", managerPlace(s.objs, packs[14][5].file, managerPools(s.objs)[12][2]), (o) => {
-  const p = managerPools(o); return p[14].at(-1).name === packs[14][5].name && p[14].at(-1).f === -1 && p[12][2].name === "MY TINE";
+await step("place of another engine: a CZ-1 sound with FM6 02 selected -> its own pool, added", managerPlace(s.objs, packs[14][5].file, P(s.objs)[12][2]), (o) => {
+  const p = P(o); return p[14].at(-1).name === packs[14][5].name && p[14].at(-1).f === -1 && p[12][2].name === "MY TINE";
 });
-const keep = managerKeep(s.objs, managerPools(s.objs)[12][2], { firmware: "ChoralRoot 0.15" });
+const keep = managerKeep(s.objs, P(s.objs)[12][2], { firmware: "ChoralRoot 0.15" });
 ok(readSoundFile(keep).name === "MY TINE" && keep.binding && keep.binding.overwrites === 2, "keep: FM6 02 -> a choralroot-sound file (binding FM6 02)");
-await step("swap two user sounds: FM6 02 (U01) and FM6 26 (U05) exchange places", managerSwap(s.objs, managerPools(s.objs)[12][2], managerPools(s.objs)[12].find((r) => r.slot === 5)), (o) => {
-  const p = managerPools(o)[12]; return p[2].name === "BELL TOO" && p[2].overwrites === "FM BELL" && p.at(-1).name === "MY TINE";
+await step("swap two user sounds: FM6 02 (U01) and FM6 26 (U05) exchange places", managerSwap(s.objs, P(s.objs)[12][2], P(s.objs)[12].find((r) => r.slot === 5)), (o) => {
+  const p = P(o)[12]; return p[2].name === "BELL TOO" && p[2].overwrites === "FM BELL" && p.at(-1).name === "MY TINE";
 });
-await step("swap a user sound with a factory preset: the added MY TINE onto FM6 06 MARIMBA", managerSwap(s.objs, managerPools(s.objs)[12].at(-1), managerPools(s.objs)[12][6]), (o) => {
-  const p = managerPools(o)[12]; return p[6].name === "MY TINE" && p[6].overwrites === "MARIMBA" && p.length === 26;
+await step("swap a user sound with a factory preset: the added MY TINE onto FM6 06 MARIMBA", managerSwap(s.objs, P(s.objs)[12].at(-1), P(s.objs)[12][6]), (o) => {
+  const p = P(o)[12]; return p[6].name === "MY TINE" && p[6].overwrites === "MARIMBA" && p.length === 26;
 });
-await step("rename: FM6 06 -> SOFT TINE", managerRename(s.objs, managerPools(s.objs)[12][6], "SOFT TINE"), (o) => managerPools(o)[12][6].name === "SOFT TINE");
-await step("delete an overwriting sound: FM6 06 resets to MARIMBA", managerDelete(s.objs, managerPools(s.objs)[12][6]), (o) => {
-  const r = managerPools(o)[12][6]; return r.type === "factory" && r.name === "MARIMBA";
+await step("rename: FM6 06 -> SOFT TINE", managerRename(s.objs, P(s.objs)[12][6], "SOFT TINE"), (o) => P(o)[12][6].name === "SOFT TINE");
+await step("delete an overwriting sound: FM6 06 resets to MARIMBA", managerDelete(s.objs, P(s.objs)[12][6]), (o) => {
+  const r = P(o)[12][6]; return r.type === "factory" && r.name === "MARIMBA";
 });
 await step("loops: the kept loop placed into slot 2", placeLoop(s.objs, 2, lf), (o) => managerLoops(o)[1].used && managerLoops(o)[1].header.nev === 24);
 await step("loops: swap slots 1 and 4", swapLoops(s.objs, 1, 4), (o) => managerLoops(o)[0].header.sigName === "3/4" && managerLoops(o)[3].header.bars === 4);
@@ -107,7 +108,7 @@ ok(fullErr && /All 32 user slots/.test(fullErr.message), "place new with 32 slot
 // busy: a write while the loop plays is refused, nothing kept for undo
 sim.playing = true;
 const depth = s.history.length;
-let busy = null; try { await s.apply(managerRename(s.objs, managerPools(s.objs)[12][2], "BUSY")); } catch (e) { busy = e; }
+let busy = null; try { await s.apply(managerRename(s.objs, P(s.objs)[12][2], "BUSY")); } catch (e) { busy = e; }
 ok(busy && busy.rc === 3 && /Stop the loop on the FM-1 first/.test(writeErrorText(busy)) && s.history.length === depth, "busy (rc 3): refused, \"Stop the loop on the FM-1 first\", no undo step");
 sim.playing = false;
 
@@ -119,8 +120,46 @@ for (let k = snaps.length - 2; k >= 0; k--) {
 }
 ok(undoOk && !s.canUndo && sameObjs(objs0, sim.objs), `undo: ${snaps.length - 1} steps undone one by one, the FM-1 back to its first state`);
 const s2 = new ManagerSession(makeSimFM1().request); await s2.read();
-for (let k = 0; k < UNDO_DEPTH + 3; k++) await s2.apply(managerRename(s2.objs, managerPools(s2.objs)[12][2], `N${k}`));
+for (let k = 0; k < UNDO_DEPTH + 3; k++) await s2.apply(managerRename(s2.objs, P(s2.objs)[12][2], `N${k}`));
 ok(s2.history.length === UNDO_DEPTH, `undo: at most ${UNDO_DEPTH} steps kept`);
+
+/* ------------------------------------- capacity, packs of one's own, factory keep, reorder --- */
+const fpacks = factoryFiles(MANAGER_ENGINES.map((e) => ({ engine: e, sounds: packs[e].map((it) => it.file) })));
+const o30 = simObjects(30);
+ok(usedSlots(o30) === 30 && MANAGER_ENGINES.every((e) => managerPools(o30)[e].at(-1).type === "empty"), "capacity: the 30-sound simulator; every pool ends with an empty \"Place here\" row");
+const fit = managerPlaceAll(o30, packs[13].slice(0, 5).map((it) => it.file));
+ok(fit.placed === 2 && fit.skipped === 3 && usedSlots(fit.objs) === 32, "capacity: Place all 5 into 2 free slots -> 2 placed, 3 did not fit");
+let capErr = null; try { managerPlace(fit.objs, packs[2][0].file, managerPools(fit.objs)[2][2]); } catch (e) { capErr = e; }
+ok(MANAGER_ENGINES.every((e) => managerPools(fit.objs)[e].at(-1).type !== "empty") && capErr && /All 32 user slots/.test(capErr.message),
+  "capacity: 32 used -> no empty rows, Place over a factory preset refused (no free slot)");
+ok(managerPlace(o30, packs[2][0].file, managerPools(o30)[2].at(-1)).where === "new", "capacity: Place onto the empty row -> a new added sound");
+const tine = managerKeep(objs0, P(objs0)[12][1], { packs: fpacks });
+ok(tine.factory === true && tine.engine === 12 && tine.position === 1 && readSoundFile(tine).name === "TINE EP", "factory keep: FM6 01 TINE EP -> its pack entry, factory: true, engine 12, position 1");
+const back = managerPlace(objs0, tine, null);
+ok(back.where === "over-factory" && P(back.objs)[12][1].type === "user" && P(back.objs)[12][1].overwrites === "TINE EP", "factory keep: placed with nothing selected -> back over its own position");
+const sel = [P(objs0)[12][1], P(objs0)[12][2], P(objs0)[14][13]].map((r) => managerKeep(objs0, r, { packs: fpacks }));
+const mine = makePack(sel, { name: "Picks", author: "me", created: "2026-10-10T00:00:00Z" });
+const mineItems = libraryItemsFromFile(packFileName("Picks"), JSON.stringify(mine));
+ok(mine.format === "choralroot-pack" && mineItems.length === 3 && mineItems.map((i) => i.name).join() === "TINE EP,MY TINE,CZ BASS 2", "pack: three selected rows (factory + user) saved as ONE pack, read back as 3 items");
+const all6 = userSoundsPack(objs0, { created: "2026-10-10T00:00:00Z" });
+const blank = new Map([...objs0.keys()].map((id) => [id, new Uint8Array(0)]));
+const reloaded = managerPlaceAll(blank, libraryItemsFromFile("u.json", JSON.stringify(all6)).map((i) => i.file));
+ok(all6.sounds.length === 6 && reloaded.placed === 6 && P(reloaded.objs)[12][2].name === "MY TINE" && P(reloaded.objs)[14][13].name === "CZ BASS 2",
+  "pack: Save all user sounds -> 6 in one file; loaded back, overwrites return to their positions");
+let rn = renameSoundFile(tine, "MY EP"); let longErr = null; try { renameSoundFile(tine, "THIRTEEN CHAR"); } catch (e) { longErr = e; }
+ok(readSoundFile(rn).name === "MY EP" && longErr, "library rename: a file renamed (12-character rule)");
+const two = managerPlace(objs0, packs[12][3].file, null).objs;          // FM6: U04 BRASS (added), U05 BELL TOO (added)
+const pre = P(two)[12], a1 = pre.findIndex((r) => r.slot === 4), a2 = pre.findIndex((r) => r.slot === 5);
+const d1 = managerDrop(two, pre[a2], pre[a1]).objs;
+ok(P(d1)[12][a1].name === "BELL TOO" && P(d1)[12][a1].slot === 4 && P(d1)[12][a2].name === "BRASS", "reorder: an added sound dragged onto another -> their slots swap, the order follows");
+const d2 = managerDrop(objs0, P(objs0)[12][2], P(objs0)[12][5]).objs;
+ok(P(d2)[12][5].name === "MY TINE" && P(d2)[12][5].overwrites === "FM PAD" && P(d2)[12][2].type === "factory", "reorder: a user sound dragged onto a factory position -> bound there, its old place back to factory");
+const d3 = managerDrop(objs0, P(objs0)[12][7], P(objs0)[12].at(-1)).objs;
+ok(P(d3)[12][7].name === "BELL TOO" && P(d3)[12][7].overwrites === "FM ORGAN", "reorder: a factory row dragged onto an added sound -> the sound takes that position");
+const st2 = new LibraryStore(null); const k2 = await st2.add(items0()); const it2 = (await st2.all())[0];
+await st2.put({ ...it2, name: "MY EP", file: rn }); 
+ok((await st2.all())[0].name === "MY EP" && (await st2.all()).length === 1, "library rename: This browser's entry renamed in place");
+function items0() { return libraryItemsFromFile("k.json", JSON.stringify(tine))[0]; }
 
 /* ---------------------------------------------------------- the library --- */
 const items = libraryItemsFromFile("k.json", JSON.stringify(keep));
