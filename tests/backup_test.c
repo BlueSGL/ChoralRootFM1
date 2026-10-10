@@ -308,9 +308,10 @@ int main(void)
         bad += check("GET reads the FM6 bank to its end (past the 3584 bytes of the staging scratch)",
                      get(8, sizeof bk - sizeof tail, sizeof tail) == 0 &&
                      ed_unpack7(rep + 9, rep_n - 9u, tail, sizeof tail) == sizeof tail &&
-                     !memcmp(tail, (const uint8_t *)&bk + sizeof bk - sizeof tail, sizeof tail) && tail[sizeof tail - 1u]);
+                     !memcmp(tail, (const uint8_t *)&bk + sizeof bk - sizeof tail, sizeof tail) &&
+                     tail[sizeof tail - 1u]);
         before = erases;
-        bad += check("an FM6 bank PUT is refused at its begin (1: larger than the scratch), nothing written, the bank kept",
+        bad += check("an FM6 bank PUT is refused at its begin (1: over the scratch), nothing written, the bank kept",
                      sizeof bk > ED_BK_MAX && put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 1u &&
                      put_chunk(8, 0, (const uint8_t *)&bk, 256) == 5u && erases == before &&
                      st_load(OBJ_FM6BANK, &got, sizeof got) < 0 && !memcmp(&fm6_bank, &bk, sizeof bk));

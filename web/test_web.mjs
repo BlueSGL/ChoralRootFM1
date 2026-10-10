@@ -1137,7 +1137,7 @@ function samplesMatch() {
 
 /* ------------------------------------------------------- packages: JS == Python --- */
 async function packages() {
-  const pkg = join(HERE, "../build/choralroot.fwsc");      /* (build/felucca.fwsc until the fork: never there, always skipped) */
+  const pkg = join(HERE, "../build/choralroot.fwsc");      /* (Felucca's build/felucca.fwsc: never there, skipped) */
   if (!existsSync(pkg)) {
     console.log("packages: skipped (run ./build.sh first)");
     return;
