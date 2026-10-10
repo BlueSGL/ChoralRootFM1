@@ -167,15 +167,21 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/host/emu --no-midi --demo --qu
 
 ## Not done / stubbed
 
-- Flash is RAM only (`FELUCCA_FLASH 0`): SAVE and user presets do not persist across runs.
-- The CPU meter reads ~0 %: the Mac renders a block in a few tens of us against the device's budget.
+- The flash is a file (`FELUCCA_FLASH 1` on `emu_hal_fw.h`'s NOR image; docs/SETTINGS.md "The emulator's flash"):
+  settings, user sounds and loops persist across runs on the same `--flash` file (windowed runs:
+  `build/emu/flash.bin` unless another is given). A headless run without `--flash`, and any run with `--no-flash`,
+  is RAM only: nothing persists.
+- The CPU meter reads ~0 %: the Mac renders a block in a few tens of us against the device's budget (headless runs
+  print a device estimate from the host's instruction count instead: above, and `perf.sh`).
 - ChoralRoot's roles of the printed buttons: F6 (SEL) = KEY, F9 (EDIT) = EDIT, F5 FX, F7 (ENV) BASS, F8 (LFO)
   LATCH, F10 (GLO) OPT, `9` (ARP) PERF, `0` (SEQ) METRO, `-` (PLAY) LOOP, `=` REC; B3 (Tab) = LOCK.
-  A layer button held 300 ms locks its layer open: scripts close it with `btn OCT-` (or `btn HOME`).
+  A layer button held past the hold time (400 ms by default, Options > Hold Time) locks its layer open (SAVE's
+  stays open only while held): scripts close it with `btn OCT-` (or `btn HOME`).
 - Sound editing: F9 (EDIT) tap = the sound editor (F7 held + F9 the bass's), held = the engine picker;
-  `8` (SAVE) = naming (the white roots type, OCT- (`Z`) deletes, OCT+ (`X`) saves). User sounds are RAM only here.
-- ChoralRoot's looper and metronome are not there yet (their screens
-  show; docs/INTEGRATION.md "Status").
+  `8` (SAVE) = the save dialog (Overwrite / Save as new), then naming (the white roots type, D#4 a space, F#4
+  deletes, OCT- (`Z`) cancels, OCT+ (`X`) saves). User sounds go to the flash file (above).
+- ChoralRoot's looper and metronome run as on the device (`cr_loop.c` ticked with the engine, the click mixed in
+  `emu_firmware.h`; docs/LOOPER.md); the loop slots go to the flash file (above).
 
 ## Browser build
 

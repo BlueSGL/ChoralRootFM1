@@ -401,7 +401,7 @@ ok(/<details id="dark">/.test(html) && html.includes('href="https://github.com/Q
    html.includes('href="https://github.com/kurogedelic/FM-1-transporter"') && en.darkTitle === "Device not found?" &&
    /WL82 UBOOT1\.00/.test(en.darkText) && /black/.test(en.darkText), "help: \"Device not found?\": the symptom, the recovery repo, the Transporter");
 ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.test(en.darkRescue) && /boot stub/.test(en.darkRescue) &&
-   /not 0\.16 or older/.test(en.darkRescue), "help: the rescue key (OCT- at power-on), marked as true only from the boot stub on");
+   /from 0\.16 on; 0\.15 and older do not have it/.test(en.darkRescue), "help: the rescue key (OCT- at power-on), marked as true only from the boot stub on (0.16)");
 {
   const refusal = (name) => new Function(`${lib}\nreturn refusalText(${JSON.stringify(name)});`)();
   const over = async (identity, version, { force = false, answer = true, skip = false } = {}) => {

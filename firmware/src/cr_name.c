@@ -4,10 +4,11 @@
  * Upper case, at most 12 characters, the cursor at the end (blinking):
  *   white roots D4..G5  phone style: ABC DEF GHI JKL MNO PQRS TUV WXYZ 0123 4567 89-. ; a tap types the group's
  *                       first character, another tap of the same key within 0.8 s the next one (cycling)
- *   black roots         D#4 a space (the others: nothing)
- *   OCT-                deletes the last character;  KNOB 2: the last character through " A..Z 0..9 -."
- * The name starts as the sound's own, "pristine" (grey): the first letter typed replaces it, OCT- edits it.
- * cr_ui.c opens it on SAVE and owns OCT+ (save), SAVE (cancel) and KNOB 1 (the slot). */
+ *   black roots         D#4 a space, F#4 deletes the last character (the others: nothing)
+ *   KNOB 2              the last character through " A..Z 0..9 -."
+ * The name starts as the sound's own, "pristine" (grey): the first letter typed replaces it, F#4 edits it.
+ * cr_ui.c opens it from SAVE's dialog (Save as new: the next free slot) and owns OCT+ and SAVE (save), OCT- and HOME
+ * (cancel). */
 #define CN_LEN 12u
 #define CN_TAP_MS 800u
 static const char *const CN_GROUP[11] = {"ABC", "DEF", "GHI", "JKL", "MNO", "PQRS", "TUV", "WXYZ", "0123",

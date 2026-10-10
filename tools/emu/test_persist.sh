@@ -123,6 +123,22 @@ grep -q '^picker: open part 0 .* roots play' "$OUT/persist_roots_2.log" && ! gre
     ok "roots run 2: the picker's roots still play after a relaunch (D4 sounded, no engine switch): $OUT/persist_roots.ppm" \
     || bad "roots run 2: $(grep '^picker: open' "$OUT/persist_roots_2.log")"
 
+# Options > Hold Time alone (Felucca's HOLD, the record's `bold`: outside ChoralRoot's block, watched by the poll as
+# cr_settings.c crs_hold_seen): run 1 sets 600 ms and nothing else, saved once; run 2 (the same file) opens Options on
+# Hold Time: 600 ms on every frame (the UI log's item / value), nothing saved again
+HFLASH=$OUT/persist_hold_flash.bin
+rm -f "$HFLASH" "$OUT"/persist_hold_1.log "$OUT"/persist_hold_2.log
+EMU_UI_LOG=0 "$EMU" --headless --flash "$HFLASH" --script "$S/persist_hold_set.txt" >"$OUT/persist_hold_1.log" 2>&1 || bad "Hold Time run 1: exit status"
+EMU_UI_LOG=0 "$EMU" --headless --flash "$HFLASH" --script "$S/persist_hold_check.txt" >"$OUT/persist_hold_2.log" 2>&1 || bad "Hold Time run 2: exit status"
+ht() { LC_ALL=C sed -n "s/.*item 'Hold Time' value '\([0-9]* ms\)'.*/\1/p" "$1" | sort -u | tr '\n' ' '; }
+hs() { LC_ALL=C grep -ao 'settings saves [0-9]* (record: [a-z]*)' "$1"; }
+[ "$(ht "$OUT/persist_hold_1.log")" = "400 ms 600 ms " ] && [ "$(hs "$OUT/persist_hold_1.log")" = "settings saves 1 (record: defaults)" ] &&
+    ok "Hold Time run 1: KNOB 1 +2 on Hold Time, 400 -> 600 ms, and nothing else: saved once" \
+    || bad "Hold Time run 1: '$(ht "$OUT/persist_hold_1.log")', $(hs "$OUT/persist_hold_1.log")"
+[ "$(ht "$OUT/persist_hold_2.log")" = "600 ms " ] && [ "$(hs "$OUT/persist_hold_2.log")" = "settings saves 0 (record: current)" ] &&
+    ok "Hold Time run 2: 600 ms after a relaunch, nothing to save" \
+    || bad "Hold Time run 2: '$(ht "$OUT/persist_hold_2.log")', $(hs "$OUT/persist_hold_2.log")"
+
 # the loop slots (docs/LOOPER.md "Slots and the record"): run 1 (tools/emu/scripts/cr_loop_slots.txt) records into
 # slots 1 and 2 and only switches between them (no SAVE held): each loop is saved to its slot as it is left (or at the
 # stop that cancelled a switch); run 2 (the same file) finds both: slot 1 with its three overdubs (5 events, 4 layers),

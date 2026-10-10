@@ -828,7 +828,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **View** | Chord, Keyboard, Notes, Geek Out, Scope | Chord | the view ([Views](#13-views)) |
 | **Motion** | Full, Calm, Off | Full | screen animation |
 | **LEDs** | Glow, Stock | Glow | Glow: idle keys glow dim, active ones are bright. Stock: the reverse |
-| **Hold Time** | 300, 400, 500, 600 ms | 400 ms | how long a hold is. In 0.16 a change of Hold Time alone is not stored: change another setting after it (one click of SELECT on the view is enough) and both are |
+| **Hold Time** | 300, 400, 500, 600 ms | 400 ms | how long a hold is |
 | **USB Record** | Off, On | On | On: the computer can record the FM-1 ([USB audio recording](#usb-audio-recording)) |
 | **USB Level** | Master, Fixed | Master | Master: the recording follows the MASTER knob. Fixed: it is recorded at full level and MASTER only sets what you hear |
 | **Dual Core** | Off, On | Off | On: the bass plays on the chip's second core (below). Takes effect after a restart |
