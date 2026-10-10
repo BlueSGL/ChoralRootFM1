@@ -40,7 +40,7 @@ the designer resolves in its MOD palette becomes the named colour: THEME red, AC
 | --- | --- | --- |
 | `CR_A_SQUEEZE` | `from`, `name`, `squeeze` | 120 ms: `from` thins to an 8 % column (ease-in, 60 ms), `name` stretches out of it (ease-out, 60 ms); no `from`: stretch only. Multiplies the fit-to-224 px factor and the forced `squeeze` (state 24's frame) |
 | `CR_A_SLIDE` | `slide` (sel came from sel − slide) | 160 ms ease-out: the old item leaves and the new one enters inside the item's box (a reel); vertical or horizontal |
-| `CR_A_FILL` | `pct_from` → `pct` | one stripe every 30 ms |
+| `CR_A_FILL` | `pct_from` → `pct` | one stripe every 30 ms; more than 14 stripes to light (a pool's meter: up to 32): all of them in the 420 ms of 14 |
 | `CR_A_STRIPES` | `phase`, `period_ms` | the bands' phase advances a cycle per `period_ms` (40 px per cycle, as the designer's `phase`) |
 | `CR_A_SWEEP` | — | the bands are swept off to the right, 240 ms each, 40 ms apart (the first chord) |
 

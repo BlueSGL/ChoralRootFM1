@@ -134,6 +134,27 @@ static void render(const cr_screen_t *s, uint32_t t)
     cr_draw(s, t);
 }
 
+/* the meter on screen: its stripes (the runs of ink on the row through their middle) -> *all, the lit ones (in the
+ * panel's colour) returned */
+static uint32_t meter_stripes(const cr_screen_t *s, uint32_t *all)
+{
+    uint32_t y = (uint32_t)(CR_PY0 + cr_ph(s) - 46 + 7), x, lit = 0, n = 0, in = 0, hot = 0;
+    uint16_t bg = swap16(T_BG), on = swap16(cr_rgb(s->col, CR_RED));
+    for (x = 0; x <= 240u; x++) {
+        uint16_t p = x < 240u ? host_screen[y * 240u + x] : bg;
+        if (p != bg) {
+            in = 1;
+            hot |= p == on;
+        } else if (in) {
+            n++;
+            lit += hot;
+            in = hot = 0;
+        }
+    }
+    *all = n;
+    return lit;
+}
+
 static uint32_t mod_index(void)
 {
     uint32_t i;
@@ -278,6 +299,47 @@ int main(int argc, char **argv)
         cr_draw_invalidate();
         cr_draw(&s, 0);
         check("cr_draw_invalidate: all six again", cr_dc.blits == CR_NSTRIP);
+    }
+
+    {   /* a meter's fill (CR_A_FILL): a stripe every CR_FILL_MS; more than CR_FILL_MAX to light: all of them in the
+         * time of CR_FILL_MAX (a pool's meter, at most 32 stripes, is full inside the popup's 900 ms) */
+        cr_screen_t s;
+        uint32_t all, lit[5];
+        cr_screen_clear(&s);
+        s.kind = CR_K_METER;
+        s.batt = 255;
+        s.col = CR_COL_WHITE;
+        s.thick = 14;
+        s.pos = -1;
+        snprintf(s.value, sizeof s.value, "64");
+        s.anim = CR_A_FILL;
+        s.pct = 256;
+        s.segments = 12;                /* a knob's meter: 30 ms a stripe, as ever */
+        render(&s, 12u * CR_FILL_MS - 1u);
+        lit[0] = meter_stripes(&s, &all);
+        render(&s, 12u * CR_FILL_MS);
+        lit[1] = meter_stripes(&s, &all);
+        snprintf(name, sizeof name, "a meter's fill: 12 stripes, one every %u ms (%u lit at %u ms, %u at %u)", CR_FILL_MS,
+                 lit[0], 12u * CR_FILL_MS - 1u, lit[1], 12u * CR_FILL_MS);
+        check(name, lit[0] == 11u && lit[1] == 12u && all == 12u);
+        s.segments = 32;                /* a long pool's last preset */
+        render(&s, CR_FILL_MAX * CR_FILL_MS / 2u);
+        lit[0] = meter_stripes(&s, &all);
+        render(&s, CR_FILL_MAX * CR_FILL_MS - 1u);
+        lit[1] = meter_stripes(&s, &all);
+        render(&s, CR_FILL_MAX * CR_FILL_MS);
+        lit[2] = meter_stripes(&s, &all);
+        s.pct_from = 248;               /* a step from the place before: one stripe, at once */
+        render(&s, CR_FILL_MS);
+        lit[3] = meter_stripes(&s, &all);
+        s.pct_from = 256;               /* back to INIT: emptied in the same time */
+        s.pct = 0;
+        render(&s, CR_FILL_MAX * CR_FILL_MS);
+        lit[4] = meter_stripes(&s, &all);
+        snprintf(name, sizeof name, "32 stripes fill in the %u ms of %u (%u lit halfway, %u at %u ms, %u at %u)",
+                 CR_FILL_MAX * CR_FILL_MS, CR_FILL_MAX, lit[0], lit[1], CR_FILL_MAX * CR_FILL_MS - 1u, lit[2],
+                 CR_FILL_MAX * CR_FILL_MS);
+        check(name, lit[0] == 16u && lit[1] == 31u && lit[2] == 32u && lit[3] == 32u && lit[4] == 0u && all == 32u);
     }
 
     {   /* the corner dial (a loop playing): red in its box in the top line, none in the panel's centre; the downbeat's
