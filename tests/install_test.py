@@ -190,6 +190,8 @@ class BackupSide:
             if cmd >= 13:
                 self.log.append(32 + a[0])
             return [a[0], a[1], a[2], a[3], 0] if cmd == 12 else [a[0], 0]
+        if cmd == I.BK_STUB and getattr(self, "stub", None) is not None and len(a) == 1:
+            return [self.stub(a[0])]
         if cmd == I.BK_DEBUG and getattr(self, "debug", None) is not None and not a:
             return [1, len(self.debug)] + [b for v in self.debug for b in I.bk_u32(v)]
         if cmd == I.BK_SCREEN and self.version.startswith("ChoralRoot") and len(a) == 1 and a[0] <= 1:
@@ -526,9 +528,76 @@ def debug():
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "stub_ms 47" in out and "boot stub v1: booted the app after 47.3 ms; marker ok, staged loader "
        "not checked, rescue attempts before this boot 1, rescue key not held" in out, "--debug: the boot stub's line")
+    ok("event log" not in out, "--debug: a reply that ends with the names (an older firmware): no log, no tail")
     cr.debug[at:at + 5] = [0, 0, 0, 0, 0]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "boot stub: none ran" in out, "--debug: a firmware without the stub says so")
+    # stub version 2: the key samples behind the event log (appended: DEBUG_TAIL), the request bits in the detail
+    cr.debug = [0] * (n + I.DEBUG_LOG) + [0xFFF00000, 0x00000001, 0, 0x000000FF]
+    cr.debug[at:at + 5] = [62, 62400, 2, 1, 0 | 5 << 8 | 0 << 16 | 1 << 24]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "boot stub v2: booted the app after 62.4 ms; marker ok, staged loader not checked, rescue attempts "
+       "before this boot 0, rescue key held" in out and "stub_oct_dn 4293918720 (0xFFF00000)" in out and
+       "rescue key: OCT- closed in 12 of 32 samples (tail 12 of 12), OCT+ 1 (tail 0), idle 0 (tail 0)" in out and
+       "PA in 0x000000FF at the last (PA8 low)" in out, "--debug: stub v2's key samples, in hex and in words")
+    cr.debug[at + 4] = 0 | 0 << 8 | 1 << 26
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "staged loader ok, rescue attempts before this boot 0, rescue key not held (the app asked for the "
+       "test)" in out, "--debug: the test request's answer (the loader's code, the request named)")
+    cr.debug[at + 4] = 0 | 3 << 8 | 1 << 26
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "staged loader not Felucca's" in out, "--debug: a loader the stub would refuse is named")
+
+
+def stub():
+    """--stub test | rescue: 77 STUB, the restart, what comes back (cr_backup.c crb_stub, firmware/stub)"""
+    n = len(I.DEBUG_NAMES)
+    at = I.DEBUG_NAMES.index("stub_ms")
+    keep = I.DELAY["reboot"]
+    I.DELAY["reboot"] = 0.3                        # (the fake restarts 50 ms after its reply)
+    try:
+        cr = BackupSide("ChoralRoot 0.1", I.CR_IDS)
+        cr.debug = [0] * (n + I.DEBUG_LOG) + [0, 0, 0, 0x100]
+        cr.debug[at:at + 5] = [61, 61000, 2, 1, 0 | 0 << 8 | 1 << 26]
+        dev = FakeFM1(b"", identity="FM-1_920", bk=lambda i: None if i.startswith("ota-") else cr)
+
+        def restart(op, back=None):
+            cr.log.append(f"stub {op}")
+            threading.Timer(0.05, dev.boot, back or (("FM-1_920", "FM-1") if op == 1 else
+                                                     ("ota-FM-1_900", "Felucca Update"))).start()
+            return 0
+        cr.stub = restart
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc == 0 and cr.log == ["stub 1"] and bytes([0xF0, 0x7D, 0x46, 0x4C, 77, 1, 0xF7]) in dev.sent and
+           "stub test: accepted" in out and "boot stub v2: booted the app after 61.0 ms; marker ok, staged loader ok" in out
+           and "(the app asked for the test)" in out and "rescue key: OCT- closed in 0 of 32 samples" in out and
+           "stub_ms 61" in out and "halves" not in out, "--stub test: 77 STUB 1, the restart, the stub's lines only")
+        cr.log.clear()
+        rc, out, err = cli(["--stub", "rescue"], dev)
+        ok(rc == 0 and cr.log == ["stub 2"] and bytes([0xF0, 0x7D, 0x46, 0x4C, 77, 2, 0xF7]) in dev.sent and
+           "update mode: ota-FM-1_900" in out and "switch the FM-1 off and on" in out and "install a package" in out,
+           "--stub rescue: 77 STUB 2, update mode reported, how to leave it")
+        dev.boot("FM-1_920", "FM-1")
+        cr.stub = lambda op: restart(op, ("FM-1_920", "FM-1"))
+        rc, out, err = cli(["--stub", "rescue"], dev)
+        ok(rc != 0 and "not in update mode" in err, "--stub rescue, the firmware comes back instead: an error")
+        dev.boot("FM-1_920", "FM-1")
+        cr.stub = lambda op: 3
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc != 0 and "busy" in err, "--stub while EDIT is open: busy, named")
+        cr.stub = lambda op: 127
+        rc, out, err = cli(["--stub", "rescue"], dev)
+        ok(rc != 0 and "no boot stub of version 2" in err, "--stub on a firmware whose stub is older: refused (127)")
+        rc, out, err = cli(["--stub", "test"], FakeFM1(b"", identity="FM-1_910",
+                                                       bk=lambda _i: BackupSide("FELUCCA 1.0", I.FELUCCA_IDS)))
+        ok(rc != 0 and "no answer" in err, "--stub on Felucca: an error")
+        try:
+            cli(["--stub", "test", "--info"], dev)
+            ok(False, "--stub with --info refused")
+        except SystemExit:
+            ok(True, "--stub with --info refused")
+    finally:
+        I.DELAY["reboot"] = keep
 
 
 def screen():
@@ -986,6 +1055,7 @@ wire()
 backups()
 screen()
 debug()
+stub()
 select()
 sounds()
 syx()

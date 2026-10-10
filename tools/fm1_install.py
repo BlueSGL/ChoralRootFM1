@@ -13,6 +13,10 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py FM-1.fwsc            (the official V15 file: back to the stock firmware)
   fm1_install.py --info [--port NAME]
   fm1_install.py --debug              (ChoralRoot: the device's diagnostic counters, read-only; docs/USB-AUDIO.md)
+  fm1_install.py --stub test|rescue   (ChoralRoot with the boot stub, docs/BOOT-SAFETY.md. test: restart once with
+                                       the stub's loader check on, then print the stub's --debug lines. rescue: restart
+                                       into update mode as OCT- at power-on does; leave it by installing a package,
+                                       or by switching the FM-1 off and on)
   fm1_install.py --screen off|on      (ChoralRoot: the screen off until --screen on or a key, button or knob on the
                                        unit; MIDI in does not wake it: tests over MIDI keep it dark)
   fm1_install.py --backup FILE        (save what is stored on the FM-1: settings, user sounds, loops, samples ...)
@@ -460,6 +464,9 @@ BK_INFO, BK_LIST, BK_GET, BK_PUT, BK_RESTART = 1, 65, 66, 67, 72
 BK_DEBUG = 73                                     # read-only counters (cr_backup.c crb_debug), --debug
 BK_SCREEN = 74                                    # the screen off (0) / on (1) (cr_backup.c, cr_ui.c), --screen
 BK_SELECT = 76                                    # a part to an engine and pool position, live (cr_backup.c), --select
+BK_STUB = 77                                      # a request to the boot stub and a restart (cr_backup.c crb_stub), --stub
+STUB_RC = {1: "bad request", 3: "busy: close EDIT / SAVE on the FM-1, stop recording the loop",
+           127: "no boot stub of version 2 or later on this firmware"}
 SELECT_RC = {1: "bad part or engine", 2: "bad pool position", 3: "busy: close EDIT / SAVE on the FM-1"}
 DEBUG_NAMES = ["ms", "halves", "max_us", "late", "nested", "timer_irqs", "ui_frames", "last_us",
                "cpu_avg_us", "cpu_max_us", "cpu_max_all_us", "cpu_halves", "c1_state", "c1_jobs",
@@ -1659,8 +1666,112 @@ class Progress:
             self.line = False
 
 
+DEBUG_LOG = 32                                    # after DEBUG_NAMES: the USB recording's event log, 16 pairs
+DEBUG_TAIL = ["stub_oct_dn", "stub_oct_up", "stub_idle", "stub_pa_in"]   # after the log (appended: an older tool
+#                                                   reads what it knows and shows these as two more log lines)
+
+
+def stub_lines(d, out):
+    """the boot stub's mailbox in words (firmware/stub/stub_core.h, docs/BOOT-SAFETY.md)"""
+    if not d.get("stub_ver"):
+        if "stub_ver" in d:
+            print("boot stub: none ran before this boot (a firmware without it, or the emulator)", file=out)
+        return
+    det = d["stub_detail"]
+    mk = ["ok", "bad magic", "bad format", "bad marker CRC", "bad length", "bad body CRC", "not checked"]
+    ld = ["ok", "bad head", "bad inner head", "not Felucca's", "bad blocks", "not checked"]
+
+    def name(t, i):
+        return t[i] if i < len(t) else f"code {i}"
+    req = " (the app asked for the rescue)" if det >> 25 & 1 else " (the app asked for the test)" if det >> 26 & 1 else ""
+    print(f"boot stub v{d['stub_ver']}: {name(['?', 'booted the app', 'loader', 'UBOOT'], d['stub_decision'])} "
+          f"after {d['stub_us'] / 1000:.1f} ms; marker {name(mk, det & 0xFF)}, staged loader "
+          f"{name(ld, det >> 8 & 0xFF)}, rescue attempts before this boot {det >> 16 & 0xFF}, "
+          f"rescue key {'held' if det >> 24 & 1 else 'not held'}{req}", file=out)
+    if "stub_oct_dn" in d and d["stub_ver"] >= 2:
+        def n(v, tail=False):
+            return bin(v >> 20 if tail else v).count("1")
+        dn, up, idle = d["stub_oct_dn"], d["stub_oct_up"], d["stub_idle"]
+        print(f"rescue key: OCT- closed in {n(dn)} of 32 samples (tail {n(dn, True)} of 12), OCT+ {n(up)} "
+              f"(tail {n(up, True)}), idle {n(idle)} (tail {n(idle, True)}); samples 0x{dn:08X} 0x{up:08X} "
+              f"0x{idle:08X} (bit 0 the first, 1.5 ms apart; held = OCT- tail >= 10, the others <= 1); "
+              f"PA in 0x{d['stub_pa_in']:08X} at the last (PA8 {'low' if not d['stub_pa_in'] >> 8 & 1 else 'high'})",
+              file=out)
+
+
+def print_debug(vals, out, stub_only=False):
+    d = dict(zip(DEBUG_NAMES, vals))
+    log = vals[len(DEBUG_NAMES):len(DEBUG_NAMES) + DEBUG_LOG]
+    d.update(zip(DEBUG_TAIL, vals[len(DEBUG_NAMES) + DEBUG_LOG:]))
+    if stub_only:
+        for k in [k for k in d if k.startswith("stub_")]:
+            print(f"{k} {d[k]}" + (f" (0x{d[k]:08X})" if k in DEBUG_TAIL or k == "stub_detail" else ""), file=out)
+        stub_lines(d, out)
+        return
+    for k, v in enumerate(vals[:len(DEBUG_NAMES)]):
+        name = DEBUG_NAMES[k]
+        print(f"{name} {v}" + (f" (0x{v:02X})" if name.startswith("ua_csr") else ""), file=out)
+    for k in DEBUG_TAIL:
+        if k in d:
+            print(f"{k} {d[k]} (0x{d[k]:08X})", file=out)
+    stub_lines(d, out)
+    if d.get("ua_open_close_ms"):
+        print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "
+              f"{d['ua_frames_last_open'] / d['ua_open_close_ms']:.4f} frames/ms", file=out)
+    if log:
+        n = vals[DEBUG_NAMES.index("ua_log_n")]
+        print("event log (oldest first):", file=out)
+        for j in range(0, len(log) - 1, 2):
+            if j // 2 >= 16 - min(n, 16):
+                print("  " + debug_event(log[j], log[j + 1]), file=out)
+
+
+def run_stub(up, what, out):
+    """--stub test | rescue: 77 STUB, then what the restart shows"""
+    dev = up.find()
+    if not dev or dev.id.loader:
+        raise not_found(up)
+    try:
+        r = BackupLink(dev.link).request(BK_STUB, [1 if what == "test" else 2], 1.5)
+    finally:
+        dev.link.close()
+    if len(r) != 1:
+        raise BackupError("unexpected stub reply")
+    if r[0]:
+        raise BackupError(f"stub request refused: {STUB_RC.get(r[0], r[0])}", r[0])
+    print(f"stub {what}: accepted, the FM-1 restarts", file=out)
+    time.sleep(DELAY["reboot"])
+    if what == "rescue":
+        back = up.wait_for(lambda i: True, DELAY["wait_reboot"])
+        if not back:
+            raise InstallError("noreturn", "nothing came back on USB-MIDI: no ota-FM-1 and no FM-1. One long LED flash "
+                                           "and a \"WL82 UBOOT1.00\" disk: the staged loader was refused (switch off "
+                                           "and on to start the firmware). Nothing at all: docs/BOOT-SAFETY.md")
+        back.link.close()
+        if not back.id.loader:
+            raise InstallError("mismatch", f"the FM-1 came back as {back.id.text}, not in update mode: the stub did not "
+                                           "take the request (--debug shows what it saw)")
+        print(f"update mode: {back.id.text}  ({back.name}). To leave it: install a package (fm1_install.py "
+              "PACKAGE.fwsc; the same build writes nothing), or switch the FM-1 off and on", file=out)
+        return 0
+    back = up.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
+    if not back:
+        raise InstallError("noreturn", "the FM-1 did not come back: power-cycle it")
+    try:
+        time.sleep(DELAY["start"])                # (the firmware's first second: USB up before its main loop answers)
+        r = BackupLink(back.link).request(BK_DEBUG, [], 3.0)
+    finally:
+        back.link.close()
+    if not r or r[0] != 1 or len(r) != 2 + 5 * r[1]:
+        raise BackupError("unexpected debug reply")
+    print_debug([bk_r32(r, 2 + 5 * k) for k in range(r[1])], out, stub_only=True)
+    return 0
+
+
 def run(a, backend, out, ask):
     up = Updater(backend, a.port)
+    if getattr(a, "stub", None):
+        return run_stub(up, a.stub, out)
     if sound_op(a):
         return run_sounds(up, a, out, ask)
     if getattr(a, "select", None):
@@ -1702,34 +1813,7 @@ def run(a, backend, out, ask):
             dev.link.close()
         if not r or r[0] != 1 or len(r) != 2 + 5 * r[1]:
             raise BackupError("unexpected debug reply")
-        vals = [bk_r32(r, 2 + 5 * k) for k in range(r[1])]
-        for k, v in enumerate(vals[:len(DEBUG_NAMES)]):
-            name = DEBUG_NAMES[k]
-            print(f"{name} {v}" + (f" (0x{v:02X})" if name.startswith("ua_csr") else ""), file=out)
-        d = dict(zip(DEBUG_NAMES, vals))
-        if d.get("stub_ver"):                     # the boot stub's mailbox (firmware/stub/stub_core.h, docs/BOOT-SAFETY.md)
-            det = d["stub_detail"]
-            mk = ["ok", "bad magic", "bad format", "bad marker CRC", "bad length", "bad body CRC", "not checked"]
-            ld = ["ok", "bad head", "bad inner head", "not Felucca's", "bad blocks", "not checked"]
-
-            def name(t, i):
-                return t[i] if i < len(t) else str(i)
-            print(f"boot stub v{d['stub_ver']}: {name(['?', 'booted the app', 'loader', 'UBOOT'], d['stub_decision'])} "
-                  f"after {d['stub_us'] / 1000:.1f} ms; marker {name(mk, det & 0xFF)}, staged loader "
-                  f"{name(ld, det >> 8 & 0xFF)}, rescue attempts before this boot {det >> 16 & 0xFF}, "
-                  f"rescue key {'held' if det >> 24 else 'not held'}", file=out)
-        elif "stub_ver" in d:
-            print("boot stub: none ran before this boot (a firmware without it, or the emulator)", file=out)
-        if d.get("ua_open_close_ms"):
-            print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "
-                  f"{d['ua_frames_last_open'] / d['ua_open_close_ms']:.4f} frames/ms", file=out)
-        log = vals[len(DEBUG_NAMES):]
-        if log:
-            n = vals[DEBUG_NAMES.index("ua_log_n")]
-            print("event log (oldest first):", file=out)
-            for j in range(0, len(log) - 1, 2):
-                if j // 2 >= 16 - min(n, 16):
-                    print("  " + debug_event(log[j], log[j + 1]), file=out)
+        print_debug([bk_r32(r, 2 + 5 * k) for k in range(r[1])], out)
         return 0
     if a.info:
         dev = up.find()
@@ -1823,6 +1907,10 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     ap.add_argument("--screen", choices=("off", "on"), help="ChoralRoot: switch the screen off (until --screen on or a "
                                                             "key, button or knob on the unit; MIDI in does not wake it) "
                                                             "or on")
+    ap.add_argument("--stub", choices=("test", "rescue"),
+                    help="ChoralRoot with the boot stub (v2): test = restart once with the stub's loader check on and "
+                         "print its --debug lines; rescue = restart into update mode, as OCT- held at power-on (to "
+                         "leave update mode: install a package, or switch the FM-1 off and on)")
     ap.add_argument("--port", metavar="NAME", help="MIDI port to use (part of its name)")
     ap.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     ap.add_argument("--force", action="store_true", help="install a package without the Felucca loader marker, or over a "
@@ -1879,7 +1967,9 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
         ap.error("--screen goes alone")
     if a.select and (a.screen or a.debug or a.info or a.package or a.backup or a.restore or ops):
         ap.error("--select goes alone")
-    if not (a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore or ops):
+    if a.stub and (a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore or ops):
+        ap.error("--stub goes alone")
+    if not (a.stub or a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore or ops):
         ap.error("give a PACKAGE.fwsc, --backup FILE, --restore FILE, --info, --sounds, --screen off|on or --select")
     try:
         if backend is None:

@@ -47,7 +47,8 @@
 #define CRB_HDR0 0x7Du
 #define CRB_HDR1 0x46u
 #define CRB_HDR2 0x4Cu
-enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST, CRB_SELECT };
+enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST, CRB_SELECT,
+       CRB_STUB };
 #define CRB_LOOP0 40u                                /* loop slot k: id 40 + k */
 #define CRB_VA 9u
 #define CRB_FM6S 10u                                 /* 10, 11: the FM6 patch store's halves */
@@ -89,6 +90,7 @@ static struct {
     uint32_t size[CRB_N];                            /* the object's size at LIST */
     uint32_t usb, len, crc, pos, ms, reboot;         /* usb.resets at LIST / begin; the PUT; restart at (ms | 1) */
     uint32_t reloads;                                /* parts reloaded after a PUT (crb_reload; the tests read it) */
+    uint32_t stub;                                   /* 77 STUB: the request the restart at `reboot` leaves for the stub */
 } crb;
 
 /* ------------------------------------------------------------------ the reply --- */
@@ -519,7 +521,8 @@ static uint32_t crb_put(const uint8_t *a, uint32_t n)
 
 /* ------------------------------------------------------------------ DEBUG --- */
 /* 73 DEBUG (read-only, not a backup object: LIST does not name it) -> version 1, count, count x u32 (crb_u32): the
- * device's counters for tools/fm1_install.py --debug, which names them in this order (DEBUG_NAMES there) */
+ * device's counters for tools/fm1_install.py --debug, which names them in this order (DEBUG_NAMES there, the USB
+ * event log's 32 values, then DEBUG_TAIL: values are only ever appended, so an older tool names what it knows) */
 static void crb_debug(void)
 {
     uint32_t v[144], k = 0, i;
@@ -626,10 +629,53 @@ static void crb_debug(void)
         v[k++] = ua_dbg.log[e][1];
     }
 #endif
+#ifdef FM1_HAVE_STUB                                 /* the stub's key samples (version 2 on: words 4..7 of its mailbox) */
+    {
+        uint32_t info = fm1_stub_word(1), ok = info >> 16 == 0x5342u && ((info >> 8) & 0xFFu) >= 2u;
+        for (i = 4; i < 8u; i++)                     /* OCT-, OCT+, no column (bit n = sample n, 1 = closed), PA in */
+            v[k++] = ok ? fm1_stub_word(i) : 0u;
+    }
+#else
+    for (i = 0; i < 4u; i++)
+        v[k++] = 0;
+#endif
     crb_b(1);
     crb_b(k);
     for (i = 0; i < k; i++)
         crb_u32(v[i]);
+}
+
+/* ------------------------------------------------------------------ STUB --- */
+/* 77 STUB op -> rc: a request to the boot stub (firmware/stub/stub_core.h, docs/BOOT-SAFETY.md), left in its rescue
+ * word, and a restart. op 1 TEST: the stub boots as usual and checks the staged loader on the way (73 DEBUG's
+ * stub_detail then carries the loader's code: the rescue's read, without a rescue). op 2 RESCUE: as if OCT- were
+ * held at power-on: the staged loader (update mode, ota-FM-1) if it passes the check, else the ROM's USB boot; left
+ * by an install, or by switching off and on. rc 0 accepted (the restart about 150 ms later, once the reply has
+ * left), 1 a bad op, 3 busy (EDIT or SAVE open, a loop being recorded), 127 no stub of version 2 or later ran
+ * before this boot (the emulator; a firmware started some other way) */
+#define CRB_STUB_REQ_TEST 0x54514552u                /* stub_core.h STUB_REQ_TEST, STUB_REQ_RESCUE (cr_backup_test) */
+#define CRB_STUB_REQ_RESCUE 0x52514552u
+#ifndef CRB_STUB_VER
+#ifdef FM1_HAVE_STUB
+#define CRB_STUB_VER() (fm1_stub_word(1) >> 16 == 0x5342u ? (fm1_stub_word(1) >> 8) & 0xFFu : 0u)
+#define CRB_STUB_GO(w) do { bootguard.pending = 0; usb_detach(); fm1_delay_ms(30); fm1_stub_request(w); } while (0)
+#else
+#define CRB_STUB_VER() 0u
+#define CRB_STUB_GO(w) ((void)(w))
+#endif
+#endif
+static uint32_t crb_stub(uint32_t op)
+{
+    if (CRB_STUB_VER() < 2u)
+        return 127;
+    if (op != 1u && op != 2u)
+        return 1;
+    if (cu.page == PG_EDIT || cu.page == PG_SAVE || cr_snap.lcap != CRL_CAP_NONE || crl_stage_busy)
+        return 3;
+    crb.put = crb.listed = 0;
+    crb.stub = op == 1u ? CRB_STUB_REQ_TEST : CRB_STUB_REQ_RESCUE;
+    crb.reboot = fm1_ms | 1u;                        /* ed_service: once the reply is out */
+    return 0;
 }
 
 /* ------------------------------------------------------------------ CORE1_TEST --- */
@@ -770,11 +816,17 @@ static int crb_handle(const uint8_t *f, uint32_t n)
             return 0;
         crb_b(crb_select(a, na));
         break;
+    case CRB_STUB:                                   /* (the boot stub's test and rescue requests) */
+        if (na != 1u)
+            return 0;
+        crb_b(crb_stub(a[0]));
+        break;
     case CRB_RESTART:
         if (na)
             return 0;
         crb.put = crb.listed = 0;
         crb_b(0);
+        crb.stub = 0;
         crb.reboot = fm1_ms | 1u;                    /* ed_service restarts once the reply is out */
         break;
     default:
@@ -794,8 +846,11 @@ static void ed_service(void)
 {
     const uint8_t *p;
     uint32_t n;
-    if (crb.reboot && fm1_ms - crb.reboot > 150u && so_r == so_w)
+    if (crb.reboot && fm1_ms - crb.reboot > 150u && so_r == so_w) {
+        if (crb.stub)
+            CRB_STUB_GO(crb.stub);                   /* (77 STUB: the request, a core reset; never returns on the unit) */
         CRB_REBOOT();                                /* (the RESTART reply has left) */
+    }
     if (!ota_frame_get(&p, &n) || n < 4u || p[0] != CRB_HDR0 || p[1] != CRB_HDR1 || p[2] != CRB_HDR2)
         return;
     crb_handle(p, n);                                /* (in place: the frame is released after the reply) */

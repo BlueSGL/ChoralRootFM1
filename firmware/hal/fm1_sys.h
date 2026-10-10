@@ -15,8 +15,11 @@
  *   fm1_updata_parm_clear()  zero the record (CRC 0: ignored on a warm reset)
  *   fm1_mailbox_clear()  zero 0x01C7FD80..0x01C7FDFF (boot info, mailbox) at cold start
  *   fm1_mem_readable(a, n) / fm1_peek8(a)   debug reads of RAM / XIP only
- *   fm1_stub_word(i)     the boot stub's four RAM words (firmware/stub/stub.c): 0 the rescue word, 1 info ("SB",
- *                        version, decision), 2 the TIMER4 ticks it took, 3 detail; nothing in the app clears them
+ *   fm1_stub_word(i)     the boot stub's eight RAM words (firmware/stub/stub.c): 0 the rescue word, 1 info ("SB",
+ *                        version, decision), 2 the TIMER4 ticks it took, 3 detail, 4..6 its key samples (OCT-,
+ *                        OCT+, no column), 7 the PA inputs at the last one; nothing in the app clears them
+ *   fm1_stub_request(w)  leave w in the stub's word 0 (stub_core.h STUB_REQ_TEST / STUB_REQ_RESCUE) and restart
+ *                        by a core reset without a record: the SPL boots the app's slot, i.e. the stub
  */
 #pragma once
 #include <stdint.h>
@@ -29,7 +32,7 @@
 #define FM1_PWR_CON (*(volatile uint32_t *)0x10000u)
 #define FM1_UPDATA_PARM ((volatile uint8_t *)0x01C7FD88u)
 #define FM1_UPDATA_PARM_LEN 112u
-#define FM1_STUB_RAM ((const volatile uint32_t *)0x01C7C000u)   /* below NOINIT (app.ld) */
+#define FM1_STUB_RAM ((volatile uint32_t *)0x01C7C000u)   /* 8 words below NOINIT (app.ld) */
 #define FM1_HAVE_STUB 1
 
 static uint32_t fm1_p33_timeouts;
@@ -174,7 +177,20 @@ FM1_INLINE void fm1_mailbox_clear(void)   /* before fm1_guard_enable (it write-p
         *s = 0;
 }
 
-FM1_INLINE uint32_t fm1_stub_word(uint32_t i) { return FM1_STUB_RAM[i & 3u]; }
+FM1_INLINE uint32_t fm1_stub_word(uint32_t i) { return FM1_STUB_RAM[i & 7u]; }
+
+/* as fm1_enter_update, with the record cleared instead of written (the loader's own restart after its write: the
+ * SPL then boots the app's slot) and the request in the stub's word; the caller detaches USB first, as there */
+FM1_INLINE void fm1_stub_request(uint32_t word)
+{
+    __asm__ volatile("cli");
+    if (!(*(volatile uint32_t *)0x1EEE240u & 1u))       /* drop CPU0 write limits, as fm1_enter_uboot */
+        *(volatile uint32_t *)0x1EEE240u = 0xE7u;
+    *(volatile uint32_t *)0x1EEE348u = 0;
+    fm1_updata_parm_clear();
+    FM1_STUB_RAM[0] = word;
+    fm1_core_reset();
+}
 
 /* RAM and the XIP window only: SFR reads can have side effects */
 static int fm1_mem_readable(uint32_t a, uint32_t n)

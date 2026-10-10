@@ -39,7 +39,12 @@ const int8_t emu_keymap[6][EMU_NCOL] = {
 static uint8_t rx[4096];
 static uint32_t rx_n, rx_count;
 #define CRB_SEND(p, n) (memcpy(rx, (p), (n)), rx_n = (n), rx_count++)
+/* 77 STUB (cr_backup.c crb_stub): the boot stub's version as the mailbox would say it, and the restart's request */
+static unsigned t_stub_ver, t_stub_went;
+#define CRB_STUB_VER() t_stub_ver
+#define CRB_STUB_GO(w) (t_stub_went = (w))
 #include "../tools/emu/emu_firmware.h"
+#include "../firmware/stub/stub_core.h"            /* the request words the stub knows */
 
 static int fails, checks;
 #define CHECK(c, ...)                                                   \
@@ -772,10 +777,68 @@ int main(void)
         CHECK(t_put(6, (uint8_t *)&sb, sizeof sb) == 0 && crb.reloads == rl + 1u, "reload: bank 0 PUT: the bass reloads");
     }
 
+    /* ---- DEBUG (73): version 1, a count, count x u32; the stub's key samples are its last four values ---- */
+    t_begin(73);
+    a = t_send(&n);
+    CHECK(a && n >= 2 + 5 * 4 && a[0] == 1 && n == 2u + 5u * a[1], "DEBUG: 1, count, count x u32 (%u values)", a ? a[1] : 0);
+    if (a && n >= 22) {
+        uint32_t k, z = 0;
+        for (k = n - 20; k < n; k++)
+            z |= a[k];
+        CHECK(z == 0, "DEBUG: the tail (the stub's samples) is zero where no stub ran");
+    }
+
+    /* ---- STUB (77): a request to the boot stub and a restart ---- */
+    CHECK(CRB_STUB_REQ_TEST == STUB_REQ_TEST && CRB_STUB_REQ_RESCUE == STUB_REQ_RESCUE &&
+          stub_rescues(CRB_STUB_REQ_TEST) == 0 && stub_rescues(CRB_STUB_REQ_RESCUE) == 0,
+          "STUB: the request words are stub_core.h's, and neither reads as a rescue count");
+    crb.reboot = crb.stub = 0;
+    for (t_stub_ver = 0; t_stub_ver < 2u; t_stub_ver++) {
+        t_begin(77); t_b(1);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 127 && !crb.reboot && !crb.stub, "STUB with stub version %u: 127 (unsupported), no restart", t_stub_ver);
+    }
+    t_stub_ver = 2;
+    t_begin(77); t_b(0);
+    a = t_send(&n);
+    CHECK(a && n == 1 && a[0] == 1 && !crb.reboot, "STUB 0: rc 1 (a bad op)");
+    t_begin(77); t_b(3);
+    a = t_send(&n);
+    CHECK(a && n == 1 && a[0] == 1 && !crb.reboot, "STUB 3: rc 1");
+    t_begin(77);
+    a = t_send(&n);
+    CHECK(!a, "STUB without its op: no reply");
+    cu.page = PG_EDIT;
+    t_begin(77); t_b(2);
+    a = t_send(&n);
+    CHECK(a && n == 1 && a[0] == 3 && !crb.reboot && !crb.stub, "STUB while EDIT is open: rc 3 (busy)");
+    cu.page = PG_SAVE;
+    t_begin(77); t_b(1);
+    a = t_send(&n);
+    CHECK(a && n == 1 && a[0] == 3 && !crb.reboot, "STUB while SAVE is open: rc 3");
+    cu.page = PG_NONE;
+    {
+        uint8_t keep = cr_snap.lcap;
+        cr_snap.lcap = (uint8_t)(CRL_CAP_NONE + 1);
+        t_begin(77); t_b(2);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 3 && !crb.reboot, "STUB while a loop is being recorded: rc 3");
+        cr_snap.lcap = keep;
+    }
+    t_begin(77); t_b(1);
+    a = t_send(&n);
+    CHECK(a && n == 1 && a[0] == 0 && crb.reboot && crb.stub == STUB_REQ_TEST, "STUB 1: rc 0, the restart scheduled with the test request");
+    crb.reboot = crb.stub = 0;
+    t_begin(77); t_b(2);
+    a = t_send(&n);
+    CHECK(a && n == 1 && a[0] == 0 && crb.reboot && crb.stub == STUB_REQ_RESCUE, "STUB 2: rc 0, the rescue request");
+    CHECK(t_stub_went == 0, "STUB: nothing restarts before the reply has left (ed_service)");
+
     /* ---- RESTART ---- */
+    crb.reboot = 0;
     t_begin(72);
     a = t_send(&n);
-    CHECK(a && n == 1 && a[0] == 0 && crb.reboot, "RESTART: rc 0, the restart scheduled");
+    CHECK(a && n == 1 && a[0] == 0 && crb.reboot && !crb.stub, "RESTART: rc 0, the restart scheduled (a plain one: no request left)");
 
     printf("objects: settings %u (PER4 %u), bank %u, FM6 %u, VA %u, FM6 patches 2 x %u, QUAD %u, loop <= %u bytes\n",
            (unsigned)sizeof(persist_t), (unsigned)(sizeof(persist_t) - sizeof(cr_settings_t)), (unsigned)sizeof(up_bank_t),
