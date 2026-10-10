@@ -10,10 +10,13 @@
  * (tools/build.py compares the stub with firmware/stub/stub.lock). No .data, no .bss, no libcalls, no division; the
  * stacks are the app's (app.ld _ustack_top / _sstack_top); interrupts stay off; the second core is never started.
  *
- * RAM the stub owns: 0x01C7C000..0x01C7C00F (app.ld keeps it out of NOINIT; hal/fm1_sys.h fm1_stub_word reads it):
- *   +0  the rescue word (stub_core.h STUB_RSC_MAGIC | attempts): must survive a core reset, the SPL and the loader
+ * RAM the stub owns: 0x01C7C000..0x01C7C01F (app.ld keeps it out of NOINIT; hal/fm1_sys.h fm1_stub_word reads it):
+ *   +0  the rescue word (stub_core.h STUB_RSC_MAGIC | attempts): must survive a core reset, the SPL and the loader;
+ *       or a request the app wrote before a restart (STUB_REQ_TEST / STUB_REQ_RESCUE, hal/fm1_sys.h fm1_stub_request)
  *   +4  info: "SB", the stub's version, its decision        +8  TIMER4 ticks the stub took (24 per us)
- *   +12 detail: marker code, loader code << 8, rescue attempts found << 16, rescue key << 24
+ *   +12 detail: marker code, loader code << 8, rescue attempts found << 16, bit 24 rescue key, 25 / 26 a request
+ *   +16 the 32 key samples with OCT-'s column latched (bit i = sample i, 1 = PA8 low)   +20 with OCT+'s column
+ *   +24 with no column latched   +28 the whole PA input register, OCT-'s column latched, at the last sample
  * Not read: the reset-reason registers (P3_RST_SRC, RST_SRC: the app's boot guard reads them after us, untouched),
  * the settings, any flash data, the app's .noinit. */
 #include <stdint.h>
@@ -136,18 +139,20 @@ static void shw_input_init(void)                     /* fm1_input_init's pins (t
     shw_sr_word(0xFFFFu);
 }
 
-/* one sample: bit0 OCT- (key 0: column 0, row PA8), bit1 OCT+ (key 1: column 1, row PA8), 1 = closed. The column
- * word is fm1_input_scan's, the row read fm1__rows' PA8 bit; the rows settle 100 us (the TIMER5 scan's tick, the
- * pace the unit runs at) */
-static uint32_t shw_keys(void)
+/* one sample: bit0 OCT- (key 0: column 0, row PA8), bit1 OCT+ (key 1: column 1, row PA8), bit2 the same row with
+ * no column latched, 1 = the row low. The column word is fm1_input_scan's, the row read fm1__rows' PA8 bit; the
+ * rows settle 100 us (the TIMER5 scan's tick, the pace the unit runs at). *pa: the PA inputs as read for bit0 */
+static uint32_t shw_keys(uint32_t *pa)
 {
-    uint32_t p, k = 0;
-    for (p = 0; p < 2u; p++) {
-        shw_sr_word(0xFFFFu ^ (1u << p) ^ (1u << (11u + p)));
+    uint32_t p, k = 0, in;
+    for (p = 0; p < 3u; p++) {
+        shw_sr_word(p < 2u ? 0xFFFFu ^ (1u << p) ^ (1u << (11u + p)) : 0xFFFFu);
         shw_delay_us(100);
-        k |= ((~SHW_PR(SHW_PA, SHW_IN) >> 8) & 1u) << p;
+        in = SHW_PR(SHW_PA, SHW_IN);
+        if (!p)
+            *pa = in;
+        k |= ((~in >> 8) & 1u) << p;
     }
-    shw_sr_word(0xFFFFu);
     return k;
 }
 
@@ -237,18 +242,21 @@ static void shw_enter_update(const uint8_t *parm)    /* fm1_enter_update + fm1_c
 
 #define STUB_RAM ((volatile uint32_t *)0x01C7C000u)
 
-static uint32_t stub_key(void)                       /* stub_core.h stub_key_held: ~4 ms without the key, 32 with */
+static uint32_t stub_key(void)                       /* stub_core.h stub_key_held: 32 samples, 48 ms, every boot */
 {
-    uint32_t n, dn = 0, up = 0;
+    uint32_t n, dn = 0, up = 0, idle = 0, pa = 0;
     for (n = 0; n < STUB_KEY_SAMPLES; n++) {
-        uint32_t k = shw_keys();
-        dn += k & 1u;
-        up += k >> 1;
-        if (n + 1u == STUB_KEY_QUICK && !dn)
-            break;
-        shw_delay_us(800);
+        uint32_t k = shw_keys(&pa);
+        dn |= (k & 1u) << n;
+        up |= ((k >> 1) & 1u) << n;
+        idle |= (k >> 2) << n;
+        shw_delay_us(1150);                          /* (a sample: three shifts and settles, ~0.35 ms) */
     }
-    return stub_key_held(n, dn, up);
+    STUB_RAM[4] = dn;
+    STUB_RAM[5] = up;
+    STUB_RAM[6] = idle;
+    STUB_RAM[7] = pa;
+    return stub_key_held(dn, up, idle);
 }
 
 void stub_main(void)

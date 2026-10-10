@@ -60,7 +60,7 @@ SDK_SHA256 = {
 UNIT = "choralroot"                 # firmware/src/UNIT.c; outputs build/UNIT.{bin,elf,dis,fwsc}
 PRODUCT = "FM-1_920"                # package identity (ChoralRoot: constant, releases too)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/choralroot.c)
-XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = fm1pkg_make.BODY_MAX, 96 * 1024, 0x54000, 0x3D40   # firmware/app.ld
+XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = fm1pkg_make.BODY_MAX, 96 * 1024, 0x54000, 0x3D30   # firmware/app.ld
 
 
 def toolchain():

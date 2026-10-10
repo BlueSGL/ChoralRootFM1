@@ -22,10 +22,15 @@
  *   app's step 1 writes, then a core reset: the SPL runs the loader); a second arrival without a boot in between
  *   (the rescue word, RAM that survives a warm reset), or no valid loader -> STUB_UBOOT (the ROM's USB boot).
  * Strict: no valid marker, no boot. The rescue key is OCT- alone held at power-on (with OCT+ it is the app's
- * calibration gesture). */
+ * calibration gesture).
+ *
+ * Version 2 (version 1 did not see the key on the unit: it sampled for 3 ms right after the SPL's jump and gave up
+ * when OCT- read open in the first four samples): the key is sampled through a fixed window on every boot and
+ * judged by its tail (stub_key_held), the samples go to the mailbox, and the running app can ask through the rescue
+ * word for the loader check on a normal boot (STUB_REQ_TEST) or for the rescue itself (STUB_REQ_RESCUE). */
 #ifndef STUB_CORE_H
 #define STUB_CORE_H
-#define STUB_VERSION 1                   /* in the stub's header (crt0_stub.S: no C suffix) and the RAM mailbox */
+#define STUB_VERSION 2                   /* in the stub's header (crt0_stub.S: no C suffix) and the RAM mailbox */
 #ifndef __ASSEMBLER__
 #include <stdint.h>
 
@@ -42,6 +47,9 @@
 #define STUB_PARM_LEN 112u               /* the UPDATA_PARM record (hal/fm1_sys.h FM1_UPDATA_PARM_LEN) */
 
 #define STUB_RSC_MAGIC 0x52534300u       /* the rescue word: "RSC" in bits 8..31, the attempts in bits 0..7 */
+#define STUB_REQ_TEST 0x54514552u        /* .. or a request the app left there before a restart ("REQT"): boot as
+                                          * usual, and check the staged loader on the way (the detail's loader code) */
+#define STUB_REQ_RESCUE 0x52514552u      /* .. ("REQR"): as if the rescue key were held */
 #define STUB_INFO_MAGIC 0x53420000u      /* the mailbox's info word: "SB", the version, the decision */
 
 enum { STUB_BOOT = 1, STUB_LOADER = 2, STUB_UBOOT = 3 };
@@ -195,13 +203,24 @@ static uint32_t stub_rescues(uint32_t word)
     return (word & 0xFFFFFF00u) == STUB_RSC_MAGIC ? word & 0xFFu : 0u;
 }
 
-/* the rescue key from n samples about 1 ms apart, dn / up of them with OCT- / OCT+ closed: OCT- through nearly
- * all of a full window and OCT+ in next to none (both: the app's calibration) */
+/* the rescue key from 32 samples about 1.5 ms apart (48 ms, every boot), bit i = sample i, 1 = the row low: dn
+ * with OCT-'s column latched, up with OCT+'s, idle with no column latched (a row stuck low, or the matrix not yet
+ * alive, reads closed there too). Only the tail counts, the last 12 samples (30 ms into the window, 18 ms long):
+ * OCT- closed in at least 10 of them, OCT+ and the idle read in at most 1 each. Whatever the first 20 samples
+ * read, of either polarity, changes nothing: what the pins and the 595 chain do in the first ms after the SPL
+ * is not known (version 1 read OCT- open there with the key held). Both keys: the app's calibration, not ours. */
 #define STUB_KEY_SAMPLES 32u
-#define STUB_KEY_QUICK 4u                /* OCT- open in the first samples: no key, no wait (the normal boot) */
-static uint32_t stub_key_held(uint32_t n, uint32_t dn, uint32_t up)
+#define STUB_KEY_TAIL 12u
+static uint32_t stub_tail(uint32_t bits)
 {
-    return n == STUB_KEY_SAMPLES && dn >= STUB_KEY_SAMPLES - 4u && up < 4u;
+    uint32_t i, n = 0;
+    for (i = STUB_KEY_SAMPLES - STUB_KEY_TAIL; i < STUB_KEY_SAMPLES; i++)
+        n += (bits >> i) & 1u;
+    return n;
+}
+static uint32_t stub_key_held(uint32_t dn, uint32_t up, uint32_t idle)
+{
+    return stub_tail(dn) >= STUB_KEY_TAIL - 2u && stub_tail(up) <= 1u && stub_tail(idle) <= 1u;
 }
 
 typedef struct {
@@ -214,20 +233,28 @@ typedef struct {
     uint32_t decision;                   /* STUB_BOOT / STUB_LOADER / STUB_UBOOT */
     uint32_t mk, ld;                     /* STUB_MK_*, STUB_LD_* */
     uint32_t prev;                       /* the rescue attempts found */
+    uint32_t req;                        /* the app's request found: 0, 1 STUB_REQ_RESCUE, 2 STUB_REQ_TEST */
     uint32_t word;                       /* the rescue word to leave in RAM */
 } stub_result_t;
 
-/* the whole decision; key: stub_key_held's answer; word: the rescue word as found */
+/* the whole decision; key: stub_key_held's answer; word: the rescue word as found (a count, a request, or
+ * anything: power-on RAM is neither) */
 static void stub_decide(const stub_view_t *v, stub_crc_t *k, uint32_t key, uint32_t word, stub_result_t *r)
 {
     r->prev = stub_rescues(word);
+    r->req = word == STUB_REQ_RESCUE ? 1u : word == STUB_REQ_TEST ? 2u : 0u;
     r->ld = STUB_LD_SKIPPED;
     r->mk = STUB_MK_SKIPPED;
-    r->word = 0;                                     /* a boot, or the ROM: the next rescue is a first one again */
-    if (!key) {
+    r->word = 0;                                     /* a boot, or the ROM: the next rescue is a first one again;
+                                                      * a request is answered once */
+    if (!key && r->req != 1u) {
         stub_crc32_init(k);
         r->mk = stub_marker_check(k, v->mark, v->body);
         if (r->mk == STUB_MK_OK) {
+            if (r->req == 2u) {                      /* the test: the rescue's read of the loader, then the boot */
+                STUB_PLAIN_WINDOW();
+                r->ld = stub_loader_check(v->ldr);
+            }
             r->decision = STUB_BOOT;
             return;
         }
@@ -243,11 +270,13 @@ static void stub_decide(const stub_view_t *v, stub_crc_t *k, uint32_t key, uint3
     r->word = STUB_RSC_MAGIC | 1u;
 }
 
-/* the mailbox's words 1 and 3 (hal/fm1_sys.h fm1_stub_word; SysEx 73 DEBUG shows them) */
+/* the mailbox's words 1 and 3 (hal/fm1_sys.h fm1_stub_word; SysEx 73 DEBUG shows them). Detail: the marker's
+ * code, the loader's << 8, the rescue attempts found << 16, bit 24 the rescue key, bit 25 the app asked for the
+ * rescue, bit 26 the app asked for the test */
 static uint32_t stub_info(uint32_t decision) { return STUB_INFO_MAGIC | (uint32_t)STUB_VERSION << 8 | decision; }
 static uint32_t stub_detail(const stub_result_t *r, uint32_t key)
 {
-    return r->mk | r->ld << 8 | r->prev << 16 | key << 24;
+    return r->mk | r->ld << 8 | r->prev << 16 | key << 24 | r->req << 25;
 }
 #endif /* __ASSEMBLER__ */
 #endif

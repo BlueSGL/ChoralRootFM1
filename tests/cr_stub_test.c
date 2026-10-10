@@ -2,7 +2,8 @@
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
 /* Host test of the boot stub's decision (firmware/stub/stub_core.h; the device part is stub.c, the loader's
  * interruption model is tests/ldr_test.c): the CRC-32 against a bit-by-bit reference, the marker (good, bad magic,
- * bad CRC, torn, truncated length, erased sector), the rescue key's vote, the staged loader (good, erased, cut off,
+ * bad CRC, torn, truncated length, erased sector), the rescue key's rule (the tail of the window: early garbage,
+ * bounce, both keys, a stuck row), the app's requests through the rescue word, the staged loader (good, erased, cut off,
  * damaged heads, not ours), the rescue word (0, 1, garbage), the record against ota.c's, the mailbox words. */
 #include <stdio.h>
 #include <stdlib.h>
@@ -196,15 +197,37 @@ int main(void)
         memcpy(mark, good, 20);
     }
 
-    /* the rescue key: n samples, OCT- closed in dn of them, OCT+ in up */
-    CHECK(stub_key_held(STUB_KEY_SAMPLES, STUB_KEY_SAMPLES, 0), "OCT- held throughout");
-    CHECK(stub_key_held(STUB_KEY_SAMPLES, STUB_KEY_SAMPLES - 4u, 3), "a little bounce still counts");
-    CHECK(!stub_key_held(STUB_KEY_SAMPLES, STUB_KEY_SAMPLES - 5u, 0), "OCT- let go early");
-    CHECK(!stub_key_held(STUB_KEY_SAMPLES, STUB_KEY_SAMPLES, STUB_KEY_SAMPLES), "OCT- + OCT+: the app's calibration");
-    CHECK(!stub_key_held(STUB_KEY_SAMPLES, STUB_KEY_SAMPLES, 4), "OCT+ pressed for a moment: not the rescue key");
-    CHECK(!stub_key_held(STUB_KEY_SAMPLES, 0, 0) && !stub_key_held(STUB_KEY_SAMPLES, 0, STUB_KEY_SAMPLES), "no OCT-");
-    CHECK(!stub_key_held(STUB_KEY_QUICK - 1u, 0, 0), "the quick exit: no key");
-    CHECK(!stub_key_held(STUB_KEY_QUICK - 1u, STUB_KEY_QUICK - 1u, 0), "a short window never counts");
+    /* the rescue key (version 2): 32 samples as bits (bit i = sample i, 1 = the row low) with OCT-'s column, OCT+'s
+     * column and no column latched; only the last 12 count: OCT- in >= 10, OCT+ and idle in <= 1 each */
+    {
+        const uint32_t ALL = 0xFFFFFFFFu, TAIL = 0xFFF00000u, HEAD = 0x000FFFFFu;
+        uint32_t t;
+        CHECK(STUB_KEY_SAMPLES == 32u && STUB_KEY_TAIL == 12u && stub_tail(TAIL) == 12u && stub_tail(HEAD) == 0u &&
+              stub_tail(ALL) == 12u && stub_tail(0x80100000u) == 2u, "the tail: samples 20..31");
+        CHECK(stub_key_held(ALL, 0, 0), "OCT- held throughout");
+        CHECK(stub_key_held(TAIL, 0, 0), "OCT- read open for the first 30 ms (what version 1 saw), closed after: held");
+        CHECK(stub_key_held(TAIL & ~0x00500000u, 0, 0), "two bounces in the tail: 10 of 12 still counts");
+        CHECK(!stub_key_held(TAIL & ~0x01500000u, 0, 0), "three: 9 of 12 does not");
+        CHECK(!stub_key_held(HEAD, 0, 0), "OCT- let go before the tail: not held");
+        CHECK(!stub_key_held(0, 0, 0) && !stub_key_held(0, ALL, 0) && !stub_key_held(0, 0, ALL), "no OCT-");
+        CHECK(!stub_key_held(ALL, ALL, 0) && !stub_key_held(TAIL, TAIL, 0), "OCT- + OCT+: the app's calibration");
+        CHECK(stub_key_held(ALL, 0x00100000u, 0), "one OCT+ read in the tail is a glitch");
+        CHECK(!stub_key_held(ALL, 0x00300000u, 0), "two are a key: not the rescue");
+        CHECK(!stub_key_held(ALL, 0, ALL) && !stub_key_held(ALL, ALL, ALL), "the row low with no column latched (stuck): not held");
+        CHECK(stub_key_held(ALL, 0, 0x80000000u) && !stub_key_held(ALL, 0, 0xC0000000u), "idle: one glitch passes, two do not");
+        for (t = 0; t < 4000u; t++) {                /* the first 20 samples, any garbage of either polarity: no effect */
+            uint32_t dn = rnd() << 8 ^ rnd(), up = rnd() << 8 ^ rnd(), idle = rnd() << 8 ^ rnd();
+            uint32_t g1 = (rnd() << 8 ^ rnd()) & HEAD, g2 = (rnd() << 8 ^ rnd()) & HEAD, g3 = (rnd() << 8 ^ rnd()) & HEAD;
+            uint32_t want;
+            if (t & 1u) { dn |= TAIL; up &= HEAD; idle &= HEAD; }          /* half of them held in the tail */
+            if (t % 5u == 0u) { up &= HEAD | 0x00100000u; idle &= HEAD; }
+            want = stub_key_held(dn, up, idle);
+            CHECK(stub_key_held((dn & TAIL) | g1, (up & TAIL) | g2, (idle & TAIL) | g3) == want &&
+                  stub_key_held(dn & TAIL, up & TAIL, idle & TAIL) == want &&
+                  stub_key_held(dn | HEAD, up | HEAD, idle | HEAD) == want, "early samples changed the answer");
+            CHECK(want == (stub_tail(dn) >= 10u && stub_tail(up) <= 1u && stub_tail(idle) <= 1u), "the rule");
+        }
+    }
 
     /* the staged loader */
     n = make_loader(18000u);
@@ -265,7 +288,10 @@ int main(void)
         (void)stub_loader_check(ldr);
     }
 
-    /* the rescue word */
+    /* the rescue word (a count), the app's requests (never a count), garbage */
+    CHECK(STUB_REQ_TEST != STUB_REQ_RESCUE && stub_rescues(STUB_REQ_TEST) == 0 && stub_rescues(STUB_REQ_RESCUE) == 0 &&
+          (STUB_REQ_TEST & 0xFFFFFF00u) != STUB_RSC_MAGIC && (STUB_REQ_RESCUE & 0xFFFFFF00u) != STUB_RSC_MAGIC,
+          "the request words are not rescue counts");
     CHECK(stub_rescues(0) == 0 && stub_rescues(0xFFFFFFFFu) == 0 && stub_rescues(0xA5A5A5A5u) == 0 &&
           stub_rescues(1u) == 0, "garbage (power-on RAM) is not a count");
     CHECK(stub_rescues(STUB_RSC_MAGIC) == 0 && stub_rescues(STUB_RSC_MAGIC | 1u) == 1 &&
@@ -276,7 +302,31 @@ int main(void)
     make_loader(18000u);
     r = run(0, 0xDEADBEEFu);
     CHECK(r.decision == STUB_BOOT && r.mk == STUB_MK_OK && r.ld == STUB_LD_SKIPPED && r.word == 0 && r.prev == 0 &&
-          plain_calls == 0, "marker good, no key: boot (the loader is not looked at, the window untouched)");
+          r.req == 0 && plain_calls == 0, "marker good, no key: boot (the loader is not looked at, the window untouched)");
+    /* the app's requests (SysEx 77 STUB): the test on a boot, the rescue without a key; answered once */
+    r = run(0, STUB_REQ_TEST);
+    CHECK(r.decision == STUB_BOOT && r.mk == STUB_MK_OK && r.ld == STUB_LD_OK && r.word == 0 && r.prev == 0 &&
+          r.req == 2 && plain_calls == 1, "test request: boot, the staged loader checked on the way (ok)");
+    CHECK(stub_detail(&r, 0) == (STUB_MK_OK | (uint32_t)STUB_LD_OK << 8 | 1u << 26), "test request: the detail word");
+    ldr[0x4C] ^= 1u;
+    r = run(0, STUB_REQ_TEST);
+    CHECK(r.decision == STUB_BOOT && r.ld == STUB_LD_NOT_OURS && r.word == 0,
+          "test request, a loader the stub would refuse: still a boot, the code reported");
+    ldr[0x4C] ^= 1u;
+    r = run(0, STUB_REQ_RESCUE);
+    CHECK(r.decision == STUB_LOADER && r.mk == STUB_MK_SKIPPED && r.ld == STUB_LD_OK && r.prev == 0 && r.req == 1 &&
+          r.word == (STUB_RSC_MAGIC | 1u) && plain_calls == 1, "rescue request: the loader, as with the key (one attempt counted)");
+    CHECK(stub_detail(&r, 0) == (STUB_MK_SKIPPED | (uint32_t)STUB_LD_OK << 8 | 1u << 25), "rescue request: the detail word (no key bit)");
+    r = run(0, r.word);
+    CHECK(r.decision == STUB_BOOT && r.prev == 1 && r.req == 0 && r.word == 0,
+          "the boot after it (the marker is good): a normal boot, the request not repeated");
+    r = run(1, STUB_REQ_TEST);
+    CHECK(r.decision == STUB_LOADER && r.req == 2 && r.word == (STUB_RSC_MAGIC | 1u), "the key held over a test request: the rescue");
+    CHECK(stub_detail(&r, 1) == (STUB_MK_SKIPPED | (uint32_t)STUB_LD_OK << 8 | 1u << 24 | 1u << 26), ".. both bits in the detail");
+    r = run(0, STUB_REQ_TEST ^ 1u);
+    CHECK(r.decision == STUB_BOOT && r.req == 0 && r.ld == STUB_LD_SKIPPED && plain_calls == 0, "a word one bit off a request: nothing");
+    r = run(0, STUB_REQ_RESCUE ^ 0x100u);
+    CHECK(r.decision == STUB_BOOT && r.req == 0, "a word one bit off the rescue request: a normal boot");
     r = run(0, STUB_RSC_MAGIC | 1u);
     CHECK(r.decision == STUB_BOOT && r.word == 0 && r.prev == 1, "a boot after a rescue: the count cleared, shown as prev");
     r = run(1, 0);
@@ -306,21 +356,30 @@ int main(void)
     make_marker(BODY_LEN);
     r = run(0, 0);
     CHECK(r.decision == STUB_BOOT, "marker good, no loader, no key: boot (nothing staged)");
+    r = run(0, STUB_REQ_RESCUE);
+    CHECK(r.decision == STUB_UBOOT && r.ld == STUB_LD_HEAD && r.word == 0, "rescue request, no loader: UBOOT");
+    r = run(0, STUB_REQ_TEST);
+    CHECK(r.decision == STUB_BOOT && r.ld == STUB_LD_HEAD, "test request, no loader: boot, 'bad head' reported");
     memset(mark, 0xFF, sizeof mark);
     make_loader(18000u);
     r = run(0, 0);
     CHECK(r.decision == STUB_LOADER && r.mk == STUB_MK_MAGIC, "an erased marker sector: the loader");
     for (i = 0; i < 2000u; i++) {                    /* strict: nothing but STUB_MK_OK without the key boots */
-        uint32_t j, key = rnd() & 1u, word = rnd() & 1u ? STUB_RSC_MAGIC | (rnd() & 3u) : rnd() << 8 ^ rnd();
+        uint32_t j, key = rnd() & 1u, pick = rnd() % 6u;
+        uint32_t word = pick < 2u ? STUB_RSC_MAGIC | (rnd() & 3u) : pick == 2u ? STUB_REQ_TEST : pick == 3u ? STUB_REQ_RESCUE :
+                        rnd() << 8 ^ rnd();
         make_marker(BODY_LEN);
         if (rnd() & 1u)
             for (j = 0; j < 3u; j++)
                 mark[rnd() % 20u] ^= (uint8_t)(1u << (rnd() & 7u));
         r = run(key, word);
         if (r.decision == STUB_BOOT)
-            CHECK(!key && r.mk == STUB_MK_OK && stub_marker_check(&K, mark, body) == STUB_MK_OK, "a boot without a valid marker");
+            CHECK(!key && word != STUB_REQ_RESCUE && r.mk == STUB_MK_OK && stub_marker_check(&K, mark, body) == STUB_MK_OK,
+                  "a boot without a valid marker");
         else
-            CHECK(key || stub_marker_check(&K, mark, body) != STUB_MK_OK, "a rescue with a valid marker and no key");
+            CHECK(key || word == STUB_REQ_RESCUE || stub_marker_check(&K, mark, body) != STUB_MK_OK,
+                  "a rescue with a valid marker, no key and no request");
+        CHECK(r.req == (word == STUB_REQ_RESCUE ? 1u : word == STUB_REQ_TEST ? 2u : 0u) && (!r.req || !r.prev), "the request read");
         CHECK(r.decision != STUB_LOADER || (r.prev == 0 && r.ld == STUB_LD_OK && stub_rescues(r.word) == 1), "the loader only on a first attempt");
         CHECK(r.decision == STUB_LOADER || r.word == 0, "the word cleared on a boot and on UBOOT");
     }
@@ -348,6 +407,7 @@ int main(void)
     r = run(1, 0);
     CHECK(stub_info(STUB_BOOT) == (0x53420000u | (uint32_t)STUB_VERSION << 8 | 1u), "info: SB, version, decision");
     CHECK(stub_detail(&r, 1) == (STUB_MK_SKIPPED | (uint32_t)STUB_LD_OK << 8 | 0u << 16 | 1u << 24), "detail");
+    CHECK(STUB_VERSION == 2, "this is stub version 2 (firmware/stub/stub.lock, docs/BOOT-SAFETY.md)");
     CHECK(STUB_BODY_OFF - 0x4120u == STUB_LEN && STUB_MARK_SEC + 0x1000u - 32u == STUB_MARK_OFF &&
           STUB_BODY_OFF + STUB_BODY_MAX == STUB_MARK_SEC, "the layout's constants agree");
 
