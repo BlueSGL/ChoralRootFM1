@@ -127,10 +127,10 @@ the flash data.
 
 ### Before an install (learned the hard way, 2026-10-07)
 
-The update loader writes the app area sector by sector over USB-MIDI with an 8 s watchdog. Up to and including 0.16
+The update loader writes the app area sector by sector over USB-MIDI with an 8 s watchdog. Up to and including 0.15
 there was no fallback: if the FM-1 reset or dropped off USB mid-write, the app was half old, half new, the SPL jumped
 into it (it checks nothing, and it does not start the loader from the flash record on a cold boot: BOOT-SAFETY.md)
-and the unit was dark. **From the first version with the boot stub on** (docs/BOOT-SAFETY.md "As built") the app's
+and the unit was dark. **From 0.16 on, the first version with the boot stub** (docs/BOOT-SAFETY.md "As built"), the app's
 first sector is a stub that boots only a body the loader has committed, and otherwise hands over to the staged
 loader: an interrupted install comes back in update mode at the next power-on. Not covered: the stub sector's own
 write, which happens once, in the first install of a version with the stub (about 16 page writes out of ~1900), and
@@ -141,8 +141,8 @@ plug it **straight into the computer** with a cable known to carry data (no hub)
 
 ### If an FM-1 is dark (a user's checklist)
 
-**First, on a ChoralRoot with the boot stub** (the release notes say from which version on; never 0.16 or older, and
-never another firmware): switch off, **hold OCT- alone, switch on**. Three short flashes of the key LEDs (the first
+**First, on a ChoralRoot with the boot stub** (from 0.16 on; 0.15 and older do not have it, and
+no other firmware does): switch off, **hold OCT- alone, switch on**. Three short flashes of the key LEDs (the first
 key column), the screen black: the FM-1 is in update mode (`ota-FM-1` on USB-MIDI, "in update mode" in
 `fm1_install.py --info`); open the installer and press Install. A unit whose install was interrupted does this
 without the key; a working unit does it with the key (the firmware keeps the update loader of its last install

@@ -135,6 +135,7 @@ none and keep the title rules:
 | ENV | 1–4 | `edit8`, wide AHDSR of that envelope | A, B | A: Attack · Decay · Sustain · Release (`ENV n`); B: Hold (· Velocity on ENV 1) (`ENV n+`) | `ENV 1 · amp`, `ENV 2 · filter`, `ENV 3 · free` |
 | LFO | 1 | `stack`, 4 rows | LFO 1–4 | Rate · Wave · Depth · Fade | `LFO 1 · A` |
 | LFO | 2 | `stack`, 4 rows | LFO 1–4 | Sync (`LFO SYN`, column n) | `LFO 1 · B` |
+| LFO | 3 | `edit8`, one row | one (the `VOICE` page, the LFO section's last: a page of its own) | Uspread (USPREAD, the unison's stereo spread: docs/VA.md); KNOB 2–4 blank | `VOICE` |
 | MOD | 1 | `stack`, 8 rows, text only | slots 1–8 | Source · Dest · Amount (bipolar) | `MOD 3` |
 | FX | 1 | `edit8`, one row | one | Drive · Chorus · Delay · Reverb (the platform sends) | `FX` |
 | MIX | 1 | `edit8`, two rows | A, B | A: Level · Pan · Voice · Glide; B: Transpose · Detune · Priority · Gl. mode | `MIX` |

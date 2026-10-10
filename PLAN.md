@@ -66,7 +66,7 @@ MIN with a tonic = minor key).
 
 ### Buttons (the Orchid dials' button functions)
 
-The rule for every layer button: **a hold past 300 ms opens its layer and it stays open** after release (the button
+The rule for every layer button: **a hold past 400 ms opens its layer and it stays open** after release (the button
 blinks); **OCT− or HOME closes it**; holding another layer button switches to that layer; a **tap**, inside the
 layer or out, is always the button's on/off action.
 
@@ -74,7 +74,7 @@ layer or out, is always the button's on/off action.
 | --- | --- | --- | --- |
 | SEL | **KEY** | Key Mode on/off (LED lit when on) | key layer, a **knob row** whose band is the keyboard (the tonic lit yellow): root keys = tonic (MIN held too = minor key), KNOB 1–4 = TONIC / SCALE / TRANSPOSE (shift glyph) / SINGLE NOTES as cells, no popups, the turned cell hot |
 | ARP | **PERF** | performance on/off | perform layer: SELECT picks STRUM, STRUM 2, SLOP, ARP, ARP 2, PATTERN, HARP (picked = on); the root keys play the chord, so a mode is heard at once (their LEDs the chord's); KNOB 1–4 = the mode's parameters, a **knob row** (the mode on top, its four parameters as cells: rate / division echoes, direction arrow, range, gate, slop amount bar; no popup, the turned cell hot) |
-| FX | **FX** | the sound's main effect on/off | fx layer, a **knob row**: SELECT picks the effect (the picker on top; the root keys play the chord), KNOB 1–3 its parameters, KNOB 4 the amount, all four shown as cells with their glyphs under it (no popup; the turned cell hot) |
+| FX | **FX** | the effects on/off: all four sends of the chord part (Reverb, Chorus, Delay, Drive) | fx layer, a **knob row**: SELECT picks the effect (the picker on top; the root keys play the chord), KNOB 1–3 its parameters, KNOB 4 the amount, all four shown as cells with their glyphs under it (no popup; the turned cell hot) |
 | ENV | **BASS** | bass on/off | bass layer, a **knob row**: KNOB 1–4 = BEHAVIOUR (Chords Only / Unison / Single Notes / Solo; text) / REGISTER (shift glyph) / SOUND (text) / LEVEL (bar), no popups, the turned cell hot; root keys preview the bass; **BASS held + EDIT** = the bass sound's editor |
 | LFO | **LATCH** | Sticky keys / arp hold on/off | — |
 | GLO | **OPT** | Options menu open/close | held + a knob = that knob's second function (Orchid's press+turn): KNOB 1 split point, SELECT metronome level, ALGORITHM bass volume, **PRESETS the chord part's engine** (a horizontal picker while OPT is held; on release the part lands on its last place in that engine's pool, docs/PRESETS.md). In the editor: SHIFT |
@@ -82,7 +82,7 @@ layer or out, is always the button's on/off action.
 | SAVE | **SAVE** | the save dialog (docs/PRESETS.md): **Overwrite** the current preset (saved at once, its name kept; a factory preset is overwritten by a user record bound to it) or **Save as new** (the pool's next place, then the name typed with the keys); OCT+ / SAVE takes it, OCT− cancels; SAVE held 1 s in the dialog: reset to factory / delete; the same dialog in the editor | save / load / delete loops (Orchid's Loop long press; a plain picker, no ring) |
 | SEQ | **METRO** | metronome / beat on-off (Orchid's BPM press) | metronome layer, a **knob row**: the time signature (4/4 3/4 6/8) over CLICK (KNOB 1, bar) and three empty cells; no popup |
 | PLAY | **LOOP** | play / stop the loop (green LED = playing) | the **PLAY menu** (docs/LOOPER-MODES.md), no ring: PRESETS the slot (a strip of ten), ALGORITHM the record mode (Overwrite Advance Overdub Replace Step), SELECT the length (the middle; the timeline while recording / playing, the step grid in step entry), KNOB 1..4 QUANTIZE (echoes) / COUNT-IN (gate) / LEVEL (bar) / KEYS; KEYS (KNOB 4, GLO tap) = Play (the keys play) or Loops (white roots = slots 1–10, D#4 = CLEAR held 1 s, F#4 = UNDO); no popups; the corner dial in the top line |
-| REC | **REC** | record (count-in, then the sync length) / overdub arm; red LED blinks while recording | undo the last layer |
+| REC | **REC** | record, by the **record mode** (the PLAY menu's ALGORITHM; docs/LOOPER.md "Record modes"): Overwrite (the default) a fresh take (count-in, then the sync length), Advance the same in the next slot when this one has a loop, Overdub / Replace arm a layer over the loop, Step step entry; REC while recording ends it; red LED blinks while recording | undo the last layer |
 | EDIT | **EDIT** | the **sound editor** on the chord sound (EDIT blinks; EDIT tap or HOME leaves; [`docs/EDITOR.md`](docs/EDITOR.md)) | the engine picker (locked open like a layer) |
 | OCT− / OCT+ | octave of the root keys | in layers, menus and dialogs: **back (closes the layer) / OK** (Felucca's convention; OCT+ blinks when it would do something) | **both together: PANIC** (all notes off on every stream, CC 123 on the three channels, octave reset, LOCK latch cleared) |
 
@@ -108,7 +108,7 @@ is displayed permanently for the knobs. In a layer KNOB 1–4 are the layer's; i
 
 ## 4. Interaction grammar
 
-- **Tap = use, hold = open (and it stays), OCT− / HOME = close.** The hold threshold is 300 ms (Felucca
+- **Tap = use, hold = open (and it stays), OCT− / HOME = close.** The hold threshold is 400 ms by default (Felucca
   `HOLD_MS`; Options > Hold Time). A tap is the button's action, always — inside its own layer too. A hold of KEY / PERF / FX / BASS /
   LOOP / METRO opens the layer and **locks it**: it stays after release, the button blinks, until OCT− (back) or HOME
   closes it; holding another layer button switches straight to that layer. A key or knob touched while a button is
@@ -124,8 +124,9 @@ is displayed permanently for the knobs. In a layer KNOB 1–4 are the layer's; i
   sound's engine keeping its envelope and sends, KNOB 1 steps the engine's factory presets, KNOB 2 inits the sound;
   it stays after release (EDIT blinks); EDIT tap, OCT− or HOME closes it (back to the editor view when opened from
   there).
-- **Menus**: OPT tap opens the Options (one setting per screen); SELECT scrolls, KNOB 1 sets, OCT− back, OCT+
-  enters, HOME or OPT leaves.
+- **Menus**: OPT tap opens the Options (one setting per screen); SELECT scrolls, KNOB 1 sets, OCT− or OCT+
+  closes them (except OCT+ on Calibrate, which starts it, and on SAFE MODE's Flash Data, where a second OCT+
+  erases), HOME or OPT leaves.
 - **Popups** (stock FM-1 / Felucca): turning PRESETS or ALGORITHM shows the place in the engine's pool for a second; turning SELECT shows
   the BPM meter; a knob turn shows its meter briefly.
 - **Panic**: OCT− + OCT+ pressed together — a chord nothing else uses, so it can never fire while OPT
@@ -147,7 +148,7 @@ is displayed permanently for the knobs. In a layer KNOB 1–4 are the layer's; i
   firmware updates.
 - **Options** (mock-up state 12, one setting per screen): Play Style (Simple / Advanced / Free), Extension Addition,
   Secret Chords, Velocity, Bass Behaviour, Single Notes, Split Point, MIDI Perform / Bass / Raw Chord channels, Raw
-  Chord Sound, MIDI Clock, View, Motion, LEDs, Hold Time, Version, Calibrate. The metronome and the loop's
+  Chord Sound, MIDI Clock, View, Motion, LEDs, Hold Time, USB Record, USB Level, Dual Core, Version, Calibrate. The metronome and the loop's
   quantization live in their layers (METRO, LOOP); the palette is MOD.
 
 ## 5. Screen
@@ -394,7 +395,7 @@ deliverable, before any hardware milestone, so every screen and gesture is tried
 | M1 | **Chord engine in C** — ported from `d_cr_engine.lua`, host tests green (chord tables, secret chords, KEYMAP, voicing, Simple/Advanced/Free, Extension Addition, note ownership, panic) | the Lua suite's engine cases pass in C | **done** — `cr_engine.c`, `tests/cr_engine_test.c` green |
 | M2 | **Play it** — keybed split (8 chord keys + 18 roots, OCT shift), buttons mapped (§3), roots → CHORD part, KNOB 1 voicing, PRESETS sound, MIDI ch 1/3 out, CHORD view with the big chord name, dial screens, key LEDs = chord notes | Dmaj7 on the speaker and on MIDI, voicing clicks, screen names it | **done** — on the device and the emulator |
 | M3 | **Key Mode + layers** — KEY tap/hold, key layer, Options, VIEW, LATCH, play styles, secret chords scope, Single Notes | mock-up states 5, 6, 12, 17 behave as drawn | **done** (layers as hold-to-show; the lock-on-hold grammar is M7 work below) |
-| M4 | **Performance** — PERF tap/hold, perform layer, KNOB 3, BPM on SELECT, MIDI clock out, 13 patterns | states 7, 8; arps hold tempo, parameters rephase live | **done** — in `cr_engine.c`'s scheduler |
+| M4 | **Performance** — PERF tap/hold, perform layer, KNOB 3, BPM on SELECT, MIDI clock out, 12 patterns | states 7, 8; arps hold tempo, parameters rephase live | **done** — in `cr_engine.c`'s scheduler |
 | M5 | **Bass + FX + editing** — BASS button + layer, BASS part on ALGORITHM, KNOB 2 register, behaviours, FX button + layer, KNOB 4 amount; EDIT pages, engine picker, SAVE to user slots with naming; MIDI in to the parts, CC / program change, clock in; the VA engine | states 14, 15, 16, 22, 23 | **done** — the paged editor (to be replaced by the dense editor below), `cr_bank.c`, `cr_name.c`, `cr_midi.c`, `eng_va.c` + `va_store.c` |
 | M6 | **Looper** — free + 1/2/4/8/16-bar sync with count-in, quantize, overdub/undo/clear, 10 slots, the ring, LOOP / REC transport, SAVE hold | states 9, 10, 11 | **done** — `cr_loop.c` (docs/LOOPER.md) |
 | M7 | **Finish** — views (Keyboard, Notes, Geek Out, Scope), the motion pass, palettes, LED inversion, settings persistence, sound bank, Options complete, **the new interaction grammar** (§3–§4: layers lock on hold, OCT− / HOME close, LOCK on B3, SEL = KEY / EDIT = EDIT), **the dense sound editor** (`cr_edit.c`, docs/EDITOR.md), sticker sheet, web installer page, README/manual | a first public beta (`.fwsc` + installer) | **partly** — done: views, motion, the MOD palette, LEDs (Options > LEDs), settings, Options, calibration, splash, the performance pass. **Building now**: the grammar and the editor. **Open**: the bank chosen by ear on the device, the sticker sheet, the installer page, the README / manual |
