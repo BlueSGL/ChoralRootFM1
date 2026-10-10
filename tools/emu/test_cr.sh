@@ -1125,11 +1125,27 @@ st=$?
 [ $st = 3 ] && has '^boot: UBOOT (ROM boot): reset wdt' "$OUT/cr_safe_uboot.log" &&
     ok "SAFE MODE crashed twice more (failed 4): UBOOT" || bad "uboot: exit $st"
 
-echo "the second core (docs/DUALCORE.md): the bass part's job, GEEK OUT's c1 line, 8 + 1 voices, the fail-safes"
+echo "Options > Dual Core (settings v12): Off on a fresh unit (c1 off, the shared budget); On is the option, at the next power-on"
 c1line() { LC_ALL=C grep -a -o "line3 '[^']*'" "$1" | tail -1; }
 c1gu() { LC_ALL=C grep -a 'voices: given up' "$1" | tail -1 | sed -n 's/.*given up \([0-9]*\).*/\1/p'; }
+EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_dualcore.txt" --wav "$OUT/cr_dualcore_fresh.wav" >"$OUT/cr_dualcore_fresh.log" 2>&1
+l=$(c1line "$OUT/cr_dualcore_fresh.log"); g=$(c1gu "$OUT/cr_dualcore_fresh.log")
+echo "$l" | grep -q "c1 off" && [ "${g:-0}" -ge 1 ] && ok "a fresh unit: $l, one core's shared budget ($g given up)" ||
+    bad "a fresh unit: ${l:-none}, ${g:-?} given up"
+[ -s "$OUT/cr_dualcore_geek.ppm" ] && mv "$OUT/cr_dualcore_geek.ppm" "$OUT/cr_dualcore_geek_off.ppm" || bad "no cr_dualcore_geek.ppm"
+DCON="$OUT/cr_dualcore_on_flash.bin"          # a flash whose settings say Dual Core On, by the Options path: every run
+rm -f "$DCON"                                 # below that is about the second core starts from a copy of it
+EMU_UI_LOG=1 "$EMU" --headless --flash "$DCON" --script "$S/cr_dualcore_on.txt" >"$OUT/cr_dualcore_seed.log" 2>&1
+LC_ALL=C grep -aq "item 'Dual Core' value 'Off'" "$OUT/cr_dualcore_seed.log" &&
+    ok "a fresh unit's Options > Dual Core: Off" || bad "a fresh unit's Dual Core is not Off"
+LC_ALL=C grep -aq "item 'Dual Core' value 'On .* restart'" "$OUT/cr_dualcore_seed.log" &&
+    ok "KNOB 1 +1: On, the value says restart ($OUT/cr_dualcore_opt_on.ppm)" || bad "Dual Core On: no restart note"
+dcflash() { cp "$DCON" "$OUT/cr_dualcore_run_flash.bin"; }   # (a run saves its own settings: a copy each)
+
+echo "the second core (docs/DUALCORE.md), Dual Core On: the bass part's job, GEEK OUT's c1 line, 8 + 1 voices, the fail-safes"
+dcflash
 export EMU_STAGES=1 EMU_UI_LOG=0
-run cr_dualcore --wav "$OUT/cr_dualcore.wav"
+run cr_dualcore --flash "$OUT/cr_dualcore_run_flash.bin" --wav "$OUT/cr_dualcore.wav"
 unset EMU_STAGES EMU_UI_LOG
 [ -s "$OUT/cr_dualcore_geek.ppm" ] && cp "$OUT/cr_dualcore_geek.ppm" "$OUT/cr_dualcore_geek_ok.ppm" || bad "no cr_dualcore_geek.ppm"
 l=$(c1line "$OUT/cr_dualcore.log"); g=$(c1gu "$OUT/cr_dualcore.log")
@@ -1139,20 +1155,25 @@ LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$OUT/cr_dualcore.log" &&
     ok "$(LC_ALL=C grep -a '^cpu: stages' "$OUT/cr_dualcore.log" | cut -c6-)" || bad "no stage profile"
 for m in nostart hang; do
     want="failed"; [ $m = hang ] && want="gave up"
-    EMU_C1=$m EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_dualcore.txt" --wav "$OUT/cr_dualcore_$m.wav" >"$OUT/cr_dualcore_$m.log" 2>&1
+    dcflash
+    EMU_C1=$m EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/cr_dualcore.txt" --wav "$OUT/cr_dualcore_$m.wav" >"$OUT/cr_dualcore_$m.log" 2>&1
     l=$(c1line "$OUT/cr_dualcore_$m.log"); g=$(c1gu "$OUT/cr_dualcore_$m.log")
     echo "$l" | grep -q "c1 $want" && [ "${g:-0}" -ge 1 ] && ok "EMU_C1=$m: $l, one core's shared budget ($g given up)" ||
         bad "EMU_C1=$m: ${l:-none}, ${g:-?} given up"
 done
-EMU_C1=nostart "$EMU" --headless --script "$S/cr_dmaj.txt" --wav "$OUT/cr_dmaj_onecore.wav" >/dev/null 2>&1
-cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_onecore.wav" && ok "cr_dmaj: the split's WAV = one core's, bit for bit" ||
-    bad "cr_dmaj: the split's WAV differs from one core's"
+dcflash
+EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/cr_dmaj.txt" --wav "$OUT/cr_dmaj_dualcore.wav" >"$OUT/cr_dmaj_dualcore.log" 2>&1
+LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$OUT/cr_dmaj_dualcore.log" && cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_dualcore.wav" &&
+    ok "cr_dmaj: the split's WAV (Dual Core On) = one core's (the default), bit for bit" ||
+    bad "cr_dmaj: the split's WAV differs from one core's (or core 1 did not run)"
 cmp -s "$OUT/cr_dualcore_hang.wav" "$OUT/cr_dualcore_nostart.wav" && ok "a hung job from the first block: one core's WAV" ||
     bad "a hung job's WAV differs from one core's"
+cmp -s "$OUT/cr_dualcore_fresh.wav" "$OUT/cr_dualcore_nostart.wav" && ok "Dual Core Off: the WAV of a core 1 that did not start" ||
+    bad "Dual Core Off: the WAV differs from a core 1 that did not start"
 
-echo "Options > Dual Core (settings v11): Off at the next power-on (c1 off, the shared budget), back On (c1 ok)"
+echo "Options > Dual Core back Off at the next power-on (c1 off, the shared budget), On again (c1 ok)"
 DF="$OUT/cr_dualcore_flash.bin"
-rm -f "$DF"
+cp "$DCON" "$DF"
 EMU_UI_LOG=1 "$EMU" --headless --flash "$DF" --script "$S/cr_dualcore_opt.txt" >"$OUT/cr_dualcore_opt.log" 2>&1
 LC_ALL=C grep -aq "item 'Dual Core' value 'Off .* restart'" "$OUT/cr_dualcore_opt.log" &&
     ok "Options > Dual Core Off: the value says restart ($OUT/cr_dualcore_opt.ppm)" || bad "Dual Core Off: no restart note"

@@ -16,8 +16,12 @@
 #       notes one voice): 9 voices, more than one core's shared budget (docs/DUALCORE.md)
 # Every scenario runs twice: as above (the figures), then with EMU_STAGES=1 for the audio ISR's stages (firmware/src/
 # cr_cpu1.h cr_dbg: the engine tick, part 0 (chord), part 1 (bass: what the second core takes over), the rest of the mix
-# and the FX, the master; device us per half, avg / max). The emulator runs the bass job inline: its block is one core's
-# (the device estimate); with core 1 the device's half is about the block less part1, plus the wait.
+# and the FX, the master; device us per half, avg / max).
+# These are one core's: Options > Dual Core is Off by default (settings v12), the budget every user has. Then every
+# scenario again with Dual Core On ("== (x) Dual Core On"): on a copy of a flash whose settings say On (tools/emu/
+# scripts/cr_dualcore_on.txt on a fresh flash file, the Options path): its block, its voices, its stages and whether its
+# WAV is the default's. The emulator runs the bass job inline: its block is one core's there too (the device estimate);
+# with core 1 the device's half is about the block less part1, plus the wait.
 #   (u) USB audio recording (docs/USB-AUDIO.md): the emulator has no USB, so not a scenario but what ChoralRoot In
 #       adds to a half on top of (a)..(g): tests/cr_usbaudio_test.c --bench counts the host instructions of the
 #       capture staging, the master tap and the ring copy (the audio ISR) and of the packets (TIMER5), with emu.c's
@@ -41,6 +45,24 @@ for s in a b c d e f g h i j; do
     python3 tools/emu/wavclicks.py "$OUT/$n.wav" --from 0.4 | tail -1 | sed 's/^/   /'
     EMU_STAGES=1 "$EMU" --headless --script "tools/emu/scripts/$n.txt" >"$OUT/${n}_stages.log" 2>&1
     LC_ALL=C grep -a '^cpu: stages' "$OUT/${n}_stages.log" | sed 's/^cpu: /   /'
+done
+DCON="$OUT/dualcore_on_flash.bin"             # Options > Dual Core On, saved: the flash of the runs below (a copy each)
+rm -f "$DCON"
+"$EMU" --headless --flash "$DCON" --script tools/emu/scripts/cr_dualcore_on.txt >"$OUT/dualcore_on.log" 2>&1 ||
+    { echo "Dual Core On: the Options script failed (see $OUT/dualcore_on.log)"; exit 1; }
+for s in a b c d e f g h i j; do
+    n=perf_$s
+    cp "$DCON" "$OUT/dualcore_run_flash.bin"
+    "$EMU" --headless --flash "$OUT/dualcore_run_flash.bin" --script "tools/emu/scripts/$n.txt" --wav "$OUT/${n}_dc.wav" >"$OUT/${n}_dc.log" 2>&1
+    echo "== ($s) Dual Core On"
+    grep '^cpu: host instructions per 128-frame block' "$OUT/${n}_dc.log" | sed 's/^/   /'
+    grep 'voices: given up' "$OUT/${n}_dc.log" | tail -1 | sed 's/^ */   /'
+    cp "$DCON" "$OUT/dualcore_run_flash.bin"
+    EMU_STAGES=1 "$EMU" --headless --flash "$OUT/dualcore_run_flash.bin" --script "tools/emu/scripts/$n.txt" >"$OUT/${n}_dc_stages.log" 2>&1
+    LC_ALL=C grep -a '^cpu: stages' "$OUT/${n}_dc_stages.log" | sed 's/^cpu: /   /'
+    LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$OUT/${n}_dc_stages.log" || echo "   NO CORE 1: this run was not dual core"
+    cmp -s "$OUT/$n.wav" "$OUT/${n}_dc.wav" && echo "   wav: the default's (one core), bit for bit" ||
+        echo "   wav: differs from the default's (one core)"
 done
 echo "== (u) USB audio recording (estimate: the emulator has no USB)"
 cc -std=gnu11 -O2 -w -o build/host/cr_usbaudio_test tests/cr_usbaudio_test.c && build/host/cr_usbaudio_test --bench | sed 's/^/   /'

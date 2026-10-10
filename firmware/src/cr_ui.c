@@ -457,7 +457,7 @@ static struct {
     uint16_t loop_used;                   /* bit k: slot k holds a loop in flash */
     uint8_t pick_roots;                   /* the engine picker: 1 the white roots choose engines, 0 they play */
     uint8_t usb_in, usb_fixed;            /* Options > USB Record (on: presented to the computer), USB Level */
-    uint8_t dualcore;                     /* Options > Dual Core (v11): 1 On; read at power-on only (cr_c1_off) */
+    uint8_t dualcore;                     /* Options > Dual Core (v12): 1 On; read at power-on only (cr_c1_off) */
 } cs;
 #if CR_HAVE_SETTINGS
 static void cr_settings_load(void);       /* cr_settings.c (included after this file): the record -> the UI */
@@ -4062,9 +4062,10 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, "records master, chord, bass", sizeof s->label);
     else if (cu.opt_sel == O_USB_LEVEL)            /* (the values stay Master / Fixed: the line says what they do) */
         cu_cpy(s->label, cs.usb_fixed ? "record full, MASTER: speaker" : "record level: MASTER knob", sizeof s->label);
-    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: never started / stopped live) */
-        cu_cpy(s->label, cs.dualcore == !cr_c1_off ? (cs.dualcore ? "bass on the second core" : "one core")
-                                                    : "takes effect after a restart", sizeof s->label);
+    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: Off the default, On the option; never started /
+                                                    * stopped live) */
+        cu_cpy(s->label, cs.dualcore != !cr_c1_off ? "takes effect after a restart"
+                         : cs.dualcore ? "bass on the second core" : "On: bass on the second core", sizeof s->label);
 }
 
 /* the sound editor (design/choralroot-fm1-sound-editor-mockups.json): cr_edit.c */
@@ -4782,7 +4783,7 @@ static void cr_ui_init(void)
     cs.loop_level = 100;
     cs.metro_vol = 70;
     cs.pick_roots = 1;
-    cs.dualcore = 1;                              /* Options > Dual Core On (the record's: cr_settings_load) */
+    cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
     cs.usb_in = 1;                                /* (the record's, cr_settings_load; usb.c got it at boot) */
     cu_route();
     cu_set_tempo(cr.bpm ? cr.bpm : 120);

@@ -374,8 +374,15 @@ int main(void)
         printf("  a hung job: core 0 renders part 1, the samples of one core, c1 \"%s\", the shared budget\n",
                cr_c1_name());
     }
-    {   /* core 1 not answering at power-on */
+    {   /* the default (no settings record read: Options > Dual Core Off): core 1 never started */
+        cr_dbg.c1 = C1_OK;
+        cr_c1_boot();
+        CHECK(cr_c1_off == 1u && cr_dbg.c1 == C1_OFF && !cr_dualcore_active(), "the default: c1 %s", cr_c1_name());
+        printf("  start: the default is Dual Core Off: c1 \"%s\" (one core)\n", cr_c1_name());
+    }
+    {   /* Dual Core On: core 1 not answering at power-on */
         cr_dbg.c1 = C1_OFF;
+        cr_c1_off = 0;
         cr_c1_test_nostart = 1;
         cr_c1_boot();
         CHECK(cr_dbg.c1 == C1_FAILED && !cr_dualcore_active(), "no answer at start: c1 %s", cr_c1_name());

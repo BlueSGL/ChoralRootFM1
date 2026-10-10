@@ -475,6 +475,28 @@ int main(void)
         CHECK(st_load(OBJ_SETTINGS, rd, sizeof *rd) == (int)sizeof *rd && rd->magic == PERSIST_MAGIC &&
               rd->panel.magic == PANEL_MAGIC && rd->cr.magic == CRS_MAGIC && rd->cr.bpm == 120,
               "Felucca: stored as PER5, Felucca's fields kept, ChoralRoot's block the defaults");
+        CHECK(!CRS_DUALCORE(&rd->cr), "Felucca: a PER4 record: Dual Core Off (the default)");
+        {   /* a 0.14 / 0.15 backup's settings (ChoralRoot's block v11: bit 6 of view clear = On, the default there, set
+             * = Off): Dual Core Off on 0.16 whatever the bit says, the view and its lock kept; a 0.16 one (v12, set =
+             * On) keeps what it says (cr_settings_import, docs/SETTINGS.md) */
+            static persist_t pv;
+            uint32_t k, h, i;
+            for (k = 0; k < 4u; k++) {               /* v11 bit clear, v11 bit set, v12 On, v12 Off */
+                memcpy(&pv, p0, sizeof pv);
+                pv.cr.view = (uint8_t)(CRS_VIEW_BYTE(2u, 1) | (k == 1u || k == 2u ? 0x40u : 0u));
+                cr_settings_seal(&pv.cr);
+                if (k < 2u) {
+                    pv.cr.version = 11;
+                    for (h = 2166136261u, i = 12; i < CRS_SIZE; i++) { h ^= ((const uint8_t *)&pv.cr)[i]; h *= 16777619u; }
+                    pv.cr.check = h;
+                }
+                CHECK(t_put(1, (const uint8_t *)&pv, sizeof pv) == 0 &&
+                      st_load(OBJ_SETTINGS, rd, sizeof *rd) == (int)sizeof *rd && rd->cr.version == CRS_VERSION &&
+                      CRS_DUALCORE(&rd->cr) == (k == 2u) && CRS_VIEW(&rd->cr) == 2u && CRS_VIEW_LOCK(&rd->cr),
+                      "settings restored (%s, bit 6 %s): Dual Core %s, the view and lock kept", k < 2u ? "v11" : "v12",
+                      k == 1u || k == 2u ? "set" : "clear", k == 2u ? "On" : "Off");
+            }
+        }
         CHECK(t_put_begin(0, 3584, 0) == 1 && t_put_begin(2, 3584, 0) == 1 && t_put_begin(5, 0, 0) == 1,
               "Felucca: ids 0 (the music) and 2..5 (projects) refused (rc 1)");
         CHECK(t_put_begin(32, 4096, 0) == 1 && t_put_begin(33, 0, 0) == 1 && t_put_begin(34, 0, 0) == 1,

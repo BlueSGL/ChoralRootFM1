@@ -1,6 +1,7 @@
 # tools/emu/perf.sh (j): an 8-note VA chord (a C 13th, MIDI) + 4 bass notes on the VA bass (MIDI), held 4 s (docs/DUALCORE.md)
 # (ENSEMBLE STR: C3 E3 G3 Bb3 D4 F4 A4 C5 on the CHORD channel; PUNCH BASS on the BASS channel: the bass part is always
-# MONO (voice mode 1 whatever the preset), so its 4 notes are one voice: 9 voices, 18 units: one core gives one up)
+# MONO (voice mode 1 whatever the preset), so its 4 notes are one voice: 9 voices, 18 units: one core gives one up).
+# perf.sh runs it as it is (Options > Dual Core Off, the default: one given up) and again with Dual Core On (none)
 wait 300
 btn ENV down                  # the bass part's engine (as perf_f): BASS held + EDIT, EDIT held: the engine picker
 wait 50

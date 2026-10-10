@@ -55,9 +55,10 @@ typedef struct {
     uint32_t tot_max[CRP_N], tot_n;
 } cr_dbg_t;
 static cr_dbg_t cr_dbg;
-/* Options > Dual Core Off (settings v11, read by cr_settings_boot before cr_c1_boot): core 1 is never started this
- * power-on, cr_dbg.c1 stays C1_OFF ("c1 off"), the shared budget. A change in Options waits for the next power-on */
-static uint8_t cr_c1_off;
+/* Options > Dual Core Off (settings v12, the default; read by cr_settings_boot before cr_c1_boot): core 1 is never
+ * started this power-on, cr_dbg.c1 stays C1_OFF ("c1 off"), the shared budget. A change in Options waits for the next
+ * power-on. 1 until the record says On: a build without the settings (or a boot that never reads them) is one core */
+static uint8_t cr_c1_off = 1;
 static const char *const CRP_NAME[CRP_N] = {"tick", "part0", "part1", "fx", "master", "wait"};
 
 #if CR_CPU1
