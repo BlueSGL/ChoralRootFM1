@@ -15,7 +15,8 @@
  * defaults, the banks and the FM6 bank as they are (Felucca 1.0's 27-slot FM6 bank too, imported at the next boot),
  * ids 0 / 2..5 / 32..34 refused, the SMP_* commands unanswered; the Sounds (docs/SOUNDS.md): single slots imported,
  * renamed, deleted and replaced by another engine through whole-object PUTs, usable at once (name, engine, patch), a
- * bad blob / bank header refused with nothing written, LIST's sizes and CRCs; SCREEN (74: off / on); RESTART. */
+ * bad blob / bank header refused with nothing written, LIST's sizes and CRCs; SCREEN (74: off / on); SELECT (76: ok, a bad
+ * part / engine / position, busy) and the reload of a playing part after a PUT of its slot (its patch CRC); RESTART. */
 #include <os/lock.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -682,6 +683,71 @@ int main(void)
         t_b(2);
         a = t_send(&n);
         CHECK(!a, "SCREEN 2: no reply");
+    }
+
+    /* ---- SELECT (76) and the reload after a PUT ---- */
+    {
+        static up_bank_t sb;
+        static fm6u_t sf;
+        uint8_t fa[FM6_BLOB], fb2[FM6_BLOB];
+        uint32_t pos, crc0, crc1, rl;
+        memset(emu_flash, 0xFF, sizeof emu_flash);
+        power_on();
+        trk[CR_PART_BASS].eng_req = ENGI_FM6;
+        fm6_load_slot(CR_PART_BASS, 3);
+        fm6_blob_get(&trk[CR_PART_BASS], fa);
+        fm6_load_slot(CR_PART_BASS, 6);
+        fm6_blob_get(&trk[CR_PART_BASS], fb2);
+        CHECK(memcmp(fa, fb2, FM6_BLOB) != 0, "select: two different FM6 blobs");
+        memset(&sb, 0, sizeof sb);
+        sb.magic = UP_BANK_MAGIC; sb.rsize = sizeof(up_rec_t); sb.nslot = UP_PER_BANK;
+        sb.r[4].used = UP_USED; sb.r[4].ver = UP_VER; sb.r[4].engine = ENGI_FM6; sb.r[4].np = P_COUNT;
+        memcpy(sb.r[4].name, "DX UP", 5);
+        for (i = 0; i < P_COUNT; i++) sb.r[4].packed[i] = (uint8_t)(64 + (int)(i % 5));
+        memset(&sf, 0, sizeof sf);
+        sf.magic = FM6U_MAGIC; sf.ver = FM6U_VER; sf.nslot = FM6U_HALF; sf.first = 0; sf.blob = FM6_BLOB; sf.used = 1u << 4;
+        memcpy(sf.b[4], fa, FM6_BLOB);
+        CHECK(t_put(10, (uint8_t *)&sf, sizeof sf) == 0 && t_put(6, (uint8_t *)&sb, sizeof sb) == 0, "select: U05 (FM6) imported");
+        pos = pool_pos_slot(ENGI_FM6, 4);
+        CHECK(pos > 0u && pos < 128u, "select: U05's pool position %u", (unsigned)pos);
+        t_begin(76); t_b(1); t_b(ENGI_FM6); t_b(pos);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 0 && trk[CR_PART_BASS].eng_req == ENGI_FM6 && psnd[1].kind == PK_USER && psnd[1].slot == 4,
+              "SELECT bass FM6 U05: rc 0, the part plays slot 5");
+        crc0 = st_crc32(fm6_patch[CR_PART_BASS], sizeof fm6_patch[0]);
+        t_begin(76); t_b(0); t_b(ENGI_VA); t_b(1);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 0 && trk[CR_PART_CHORD].eng_req == ENGI_VA && psnd[0].kind == PK_FACTORY && psnd[0].fk == 0,
+              "SELECT chord VA position 1: its first factory preset");
+        t_begin(76); t_b(0); t_b(NENGINES + 3u); t_b(1);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 1, "SELECT a bad engine: rc 1");
+        t_begin(76); t_b(2); t_b(ENGI_VA); t_b(1);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 1, "SELECT a bad part: rc 1");
+        t_begin(76); t_b(0); t_b(ENGI_VA); t_b(127); t_b(3);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 2 && trk[CR_PART_CHORD].eng_req == ENGI_VA && psnd[0].fk == 0, "SELECT a bad position: rc 2, nothing changed");
+        cu.page = PG_EDIT;
+        t_begin(76); t_b(0); t_b(ENGI_VA); t_b(2);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 3 && psnd[0].fk == 0, "SELECT while EDIT is open: rc 3 (busy)");
+        cu.page = PG_NONE;
+        t_begin(76); t_b(0); t_b(ENGI_VA);
+        a = t_send(&n);
+        CHECK(!a, "SELECT without its position: no reply");
+        /* the reload: a new patch PUT into the slot the bass plays is heard at once */
+        rl = crb.reloads;
+        memcpy(sf.b[4], fb2, FM6_BLOB);
+        CHECK(t_put(10, (uint8_t *)&sf, sizeof sf) == 0, "reload: FM6 store half 0 PUT (a new patch in U05)");
+        crc1 = st_crc32(fm6_patch[CR_PART_BASS], sizeof fm6_patch[0]);
+        CHECK(crb.reloads == rl + 1u && crc1 != crc0 && psnd[1].kind == PK_USER && psnd[1].slot == 4,
+              "reload: the bass part reloaded U05, its patch CRC changed (%08x -> %08x)", (unsigned)crc0, (unsigned)crc1);
+        rl = crb.reloads;
+        CHECK(t_put(11, (uint8_t *)&sf, 0) == 0 && crb.reloads == rl, "reload: the other half PUT: no reload");
+        rl = crb.reloads;
+        CHECK(t_put(7, 0, 0) == 0 && crb.reloads == rl, "reload: bank 1 PUT (slots 17..32): no reload");
+        CHECK(t_put(6, (uint8_t *)&sb, sizeof sb) == 0 && crb.reloads == rl + 1u, "reload: bank 0 PUT: the bass reloads");
     }
 
     /* ---- RESTART ---- */

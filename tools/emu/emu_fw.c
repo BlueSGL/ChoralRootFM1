@@ -221,6 +221,11 @@ void emu_fw_frame(void)                           /* main.c's loop body (choralr
     if (d > emu_hal.ui_lock_max_us)
         emu_hal.ui_lock_max_us = d;
     cr_ui_draw();
+    if (!usb.sx_on && usb.sx_len >= 6u && usb.sysex[usb.sx_len - 1u] == 0xF7u && usb.sysex[1] == 0x7Du) {
+        crb_handle(usb.sysex + 1, usb.sx_len - 2u);   /* our SysEx (7D 46 4C), as main.c's ed_service: the handler
+                                                       * (scripts' "sysex"); the reply has no transport here */
+        usb.sx_len = 0;
+    }
     if (!cr_safe)
         cr_settings_poll();                       /* main.c's settings_poll: a change saved once things are quiet */
     if (fm1_ms > BG_SETTLE_MS && bootguard.pending)

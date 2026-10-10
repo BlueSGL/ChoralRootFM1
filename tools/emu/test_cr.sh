@@ -1167,6 +1167,14 @@ EMU_UI_LOG=0 "$EMU" --headless --flash "$DF" --script "$S/cr_dualcore.txt" >"$OU
 l=$(c1line "$OUT/cr_dualcore_back.log"); g=$(c1gu "$OUT/cr_dualcore_back.log")
 echo "$l" | grep -q "c1 ok [1-9]" && [ "${g:-x}" = 0 ] && ok "relaunched On: $l, none given up" || bad "relaunched On: ${l:-none}, ${g:-?} given up"
 
+echo "SysEx 76 SELECT: the chord part to CZ-1 position 2, the bass to FM6 position 3, a bad engine refused"
+EMU_UI_LOG=1 "$EMU" --headless --no-flash --script "$S/cr_select.txt" >"$OUT/cr_select.log" 2>&1
+LC_ALL=C grep -aq "select: part 0 engine CZ-1 pos 2" "$OUT/cr_select.log" && ok "SELECT chord CZ-1 2 ($OUT/cr_select.ppm)" ||
+    bad "SELECT chord CZ-1 2: no trace"
+LC_ALL=C grep -aq "select: part 1 engine FM6 pos 3" "$OUT/cr_select.log" && ok "SELECT bass FM6 3" || bad "SELECT bass FM6 3: no trace"
+[ "$(LC_ALL=C grep -ac "^select: " "$OUT/cr_select.log")" = 2 ] && ok "a bad engine: refused (no third load)" ||
+    bad "SELECT: $(LC_ALL=C grep -ac "^select: " "$OUT/cr_select.log") loads, want 2"
+
 echo "determinism"
 mkdir -p "$OUT/cr_again"
 cp "$OUT/cr_dmaj.ppm" "$OUT/cr_again/first.ppm"

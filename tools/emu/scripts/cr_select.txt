@@ -1,0 +1,20 @@
+# ChoralRoot: SysEx 76 SELECT (cr_backup.c crb_select, the device manager's audition; tools/emu/test_cr.sh): the chord
+# part to the CZ-1 (engine 14) pool position 2, the bass part to FM6 (engine 12) position 3, then a bad engine (rc 1:
+# nothing changes); a chord played after each; the trace (EMU_UI_LOG=1) names what loaded
+wait 500
+sysex F07D464C4C000E02F7
+wait 200
+midi 90 3C 64
+wait 300
+midi 80 3C 00
+sysex F07D464C4C010C03F7
+wait 200
+sysex F07D464C4C007F01F7
+wait 200
+midi 90 3C 64
+wait 300
+expect sound
+midi 80 3C 00
+wait 200
+shot build/emu/test/cr_select.ppm
+quit

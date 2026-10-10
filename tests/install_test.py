@@ -193,6 +193,9 @@ class BackupSide:
         if cmd == I.BK_SCREEN and self.version.startswith("ChoralRoot") and len(a) == 1 and a[0] <= 1:
             self.log.append(f"screen {a[0]}")
             return [0]
+        if cmd == I.BK_SELECT and self.version.startswith("ChoralRoot") and len(a) in (3, 4):
+            self.log.append(f"select {a[0]} {a[1]} {a[2] | (a[3] << 7 if len(a) > 3 else 0)}")
+            return [2 if a[2] > 60 else 0]
         if cmd == I.BK_RESTART and self.version.startswith("ChoralRoot"):
             self.restarts += 1
             return [0]
@@ -495,6 +498,18 @@ def backups():
     bad.write_text(json.dumps({**f, "objects": [{**f["objects"][1], "crc": f["objects"][1]["crc"] ^ 1}]}))
     rc, out, err = cli(["--restore", str(bad), "--yes"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: BackupSide("ChoralRoot 0.1", I.CR_IDS)))
     ok(rc == 2 and "damaged" in err, "--restore of a damaged file: exit 2 before any request")
+
+
+def select():
+    cr = BackupSide("ChoralRoot 0.16", I.CR_IDS)
+    dev = FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)
+    rc, out, err = cli(["--select", "1", "12", "3"], dev)
+    ok(rc == 0 and "part 1: engine 12 position 3" in out and cr.log == ["select 1 12 3"] and
+       dev.sent[-1] == bytes([0xF0, 0x7D, 0x46, 0x4C, 76, 1, 12, 3, 0, 0xF7]), "--select 1 12 3: 76 SELECT, rc 0")
+    rc, out, err = cli(["--select", "0", "12", "99"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc != 0 and "bad pool position" in err, "--select a bad position: the rc named")
+    rc, out, err = cli(["--select", "2", "12", "1"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc != 0, "--select part 2: refused before sending")
 
 
 def screen():
@@ -951,6 +966,7 @@ def bindings():
 wire()
 backups()
 screen()
+select()
 sounds()
 syx()
 bindings()

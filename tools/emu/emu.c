@@ -990,6 +990,24 @@ static void load_script(const char *path)
             }
             continue;
         }
+        if (!strcmp(cmd, "sysex")) {              /* sysex F07D464C...F7: one hex word, sent as USB-MIDI SysEx packets */
+            uint8_t sb[47];
+            unsigned nb = 0, i;
+            size_t L = strlen(arg);
+            for (i = 0; i + 1u < L && nb < sizeof sb; i += 2u) {
+                char h[3] = {arg[i], arg[i + 1u], 0}, *e;
+                sb[nb++] = (uint8_t)strtoul(h, &e, 16);
+                if (*e) { nb = 0; break; }
+            }
+            if (nb < 2u || sb[0] != 0xF0u || sb[nb - 1u] != 0xF7u || (L & 1u)) { BAD("sysex: one hex word, F0 .. F7"); continue; }
+            for (i = 0; i < nb; i += 3u) {
+                unsigned k = nb - i < 3u ? nb - i : 3u, cin = i + 3u >= nb ? 4u + k : 4u;   /* (the last: 5, 6, 7) */
+                uint32_t pkt = cin | (uint32_t)sb[i] << 8 | (k > 1u ? (uint32_t)sb[i + 1u] << 16 : 0u) |
+                               (k > 2u ? (uint32_t)sb[i + 2u] << 24 : 0u);
+                sev_add(cur, OP_MIDI, NULL, 0, 0, (int)pkt, NULL);
+            }
+            continue;
+        }
         if (!strcmp(cmd, "master")) { sev_add(cur, OP_MASTER, NULL, 0, 0, atoi(arg), NULL); continue; }
         if (!strcmp(cmd, "expect")) {
             if (!strcmp(arg, "sound") || !strcmp(arg, "silence")) {

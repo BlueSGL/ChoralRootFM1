@@ -109,4 +109,27 @@ docs/SOUNDS.md.
 - **Library:** This browser (IndexedDB "choralroot-manager"; in memory when IndexedDB is unavailable), files (sound
   files, .syx DX7 / Casio, packs, whole backups, loop files), the packs. Loop files: `choralroot-loop` version 1
   (`data` = the slot's record in base64, with `sig`, `len`, `ppqn`, `bars`, `nlayers`, `nev`).
-- Not yet: drag and drop between the panes (Place / Keep buttons only), Melodee's banks as packs, the device run.
+- **Revision 2026-10-10 (after the first device try):** the Library is on the LEFT and the FM-1 on the RIGHT (Place →,
+  ← Keep). Multi-select on both sides (click, shift-click a range, cmd / ctrl-click, Select all). **Rename** on both
+  sides (12 characters): a This browser entry in place, a loaded file in the page, a site pack's row as an editable
+  copy in This browser (`renameSoundFile`, `LibraryStore.put`). **Packs of one's own:** Save selected as a pack and Save
+  all user sounds write ONE `choralroot-pack` file (`makePack` / `userSoundsPack`: name, author, created, sounds);
+  Add files shows a pack as its own source ("File pack: …") and Keep all in this browser keeps a whole source.
+  **Factory rows** can be kept, saved and multi-selected: their file is the factory pack's entry with `factory: true`,
+  `engine`, `position` (`managerKeep` with the packs, `factorySoundFile`); a kept overwrite carries `position` too. Place
+  with nothing selected puts a factory file back over its own position, and Place all puts files with a `position`
+  back over that position when it is still factory. **Drag and drop:** within a pool `managerDrop` (= Swap: two user
+  sounds exchange slots, so two added sounds exchange their order; a user sound onto a factory row binds there and
+  frees its old place; a factory row onto a user row the same); library → FM-1 = Place (onto a row: over it), FM-1 →
+  library = Keep; Loops: drag to swap slots. **Capacity:** "N of 32 user slots used" in the FM-1 header (with the
+  firmware version), an "empty · Place here" row at the end of each pool while a slot is free, Place greys out as "no
+  free slot" when all 32 are used (unless it overwrites a user sound), Place all says how many did not fit. `?sim=1`
+  starts with 30 user sounds (`simObjects(30)`).
+- **Audition by SELECT (2026-10-10, second device try):** selecting a FM-1 row sends SysEx 76 SELECT (part 0 chord /
+  1 with Bass, engine, pool position; rc 0 ok, 1 bad engine, 2 bad position, 3 busy; firmware by another agent), and the
+  status says what plays ("FM6 · 05 FM PAD on the unit"). After a Place / Rename / Swap or drag / Delete the row now at
+  the affected place (by its slot, else its position) is selected again, so a patch placed into the playing slot is
+  heard at once. No answer (an older firmware): the program change of before, with its limitation said. Model:
+  `selectRequest`, `selectOnUnit`, `playingText`; the simulators (fm1manager.js `makeSimFM1`, test_installer.mjs's
+  backup side) answer 76. Row numbers are the unit's: 00 INIT, then 01...
+- Not yet: Melodee's banks as packs, the device run of this revision.

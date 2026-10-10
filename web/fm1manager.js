@@ -359,6 +359,20 @@ export function auditionMessages(row, { bass = false } = {}) {
   if (!row || row.pos === undefined) return [];
   return bass ? [[0xC1, Math.min(127, row.pos + 1)]] : [[0xC0, Math.min(127, row.pos)]];
 }
+// SysEx 76 SELECT (ChoralRoot, firmware in progress 2026-10-10): part (0 chord, 1 bass), engine, pool position -> rc (0 ok,
+// 1 bad engine, 2 bad position, 3 busy): the part switches to that engine and loads the position live. An older firmware
+// does not answer: -> {unsupported: true} (the page falls back to the program change)
+export const SELECT_CMD = 76;
+export const SELECT_RC = { 1: "the FM-1 does not have that engine", 2: "no such position in the pool", 3: "busy: stop the loop on the FM-1" };
+export const selectRequest = (row, { bass = false } = {}) => [SELECT_CMD, [bass ? 1 : 0, row.engine & 127, row.pos & 127]];
+export async function selectOnUnit(request, row, opts = {}) {
+  let a;
+  try { a = await request(selectRequest(row, opts), { timeout: opts.timeout || 600, retries: 0 }); }
+  catch (_) { return { ok: false, unsupported: true }; }
+  const rc = a && a.length ? a[0] : 0;
+  return rc ? { ok: false, rc, error: SELECT_RC[rc] || `rc ${rc}` } : { ok: true };
+}
+export const playingText = (row) => `${ENGINE_NAMES[row.engine]} · ${String(row.pos).padStart(2, "0")} ${row.name} on the unit`;
 export const noteMessage = (on, note, { bass = false, velocity = 100 } = {}) => [(on ? 0x90 : 0x80) | (bass ? 1 : 0), note & 127, on ? velocity : 0];
 export const midiText = (m) => m.map((b) => b.toString(16).toUpperCase().padStart(2, "0")).join(" ");
 
@@ -426,6 +440,14 @@ export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", i
       sim.staged = null; return [op, id, 0];
     }
     if (cmd === 72) return [0];
+    if (cmd === SELECT_CMD && sim.select !== false) {
+      const [part, e, pos] = a, pools = managerPools(sim.objs, { empty: false });
+      if (a.length !== 3 || part > 1) return null;
+      if (!pools[e]) return [1];
+      if (pos >= pools[e].length) return [2];
+      if (sim.playing) return [3];
+      sim.selected = { part, engine: e, pos, name: pools[e][pos].name }; return [0];
+    }
     return null;
   };
   // the request function of BackupConnection / captureBackup: [cmd, args] -> the reply's bytes

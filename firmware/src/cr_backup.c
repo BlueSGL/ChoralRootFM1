@@ -47,7 +47,7 @@
 #define CRB_HDR0 0x7Du
 #define CRB_HDR1 0x46u
 #define CRB_HDR2 0x4Cu
-enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST };
+enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST, CRB_SELECT };
 #define CRB_LOOP0 40u                                /* loop slot k: id 40 + k */
 #define CRB_VA 9u
 #define CRB_FM6S 10u                                 /* 10, 11: the FM6 patch store's halves */
@@ -88,6 +88,7 @@ static struct {
     int8_t copy[CRB_N];                              /* the current copy at LIST (-1: none) */
     uint32_t size[CRB_N];                            /* the object's size at LIST */
     uint32_t usb, len, crc, pos, ms, reboot;         /* usb.resets at LIST / begin; the PUT; restart at (ms | 1) */
+    uint32_t reloads;                                /* parts reloaded after a PUT (crb_reload; the tests read it) */
 } crb;
 
 /* ------------------------------------------------------------------ the reply --- */
@@ -313,6 +314,70 @@ static int crb_size_ok(uint32_t id, uint32_t len)   /* a begin's size for this i
         return !len || (len >= CRL_REC_HDR && len <= CRL_REC_MAX);
     return 0;
 }
+/* after a PUT of the user banks (6, 7) or a patch store (9 VA, 10 11 FM6, 12 13 CZ-1, 22 QUAD), the stores reloaded:
+ * a part playing a slot the object holds (slot k <-> patch k in every store) loads it again from the new data, so a
+ * patch uploaded into the playing slot is heard at once; so does a part on a factory preset a slot now binds (it
+ * plays that record now). A slot emptied under a part: the part keeps its sound (RAM). A slot now of another engine:
+ * the part follows it into that engine's pool */
+static void crb_reload(uint32_t id)
+{
+    uint32_t part, lo = 0, hi = UP_SLOTS;
+    if (id == 6u)
+        hi = UP_PER_BANK;
+    else if (id == 7u)
+        lo = UP_PER_BANK;
+    else if (id == CRB_FM6S + 1u)
+        lo = UP_SLOTS / 2u;
+    else if (id == CRB_FM6S)
+        hi = UP_SLOTS / 2u;
+#if FELUCCA_CZ
+    else if (id == CRB_CZS + 1u)
+        lo = UP_SLOTS / 2u;
+    else if (id == CRB_CZS)
+        hi = UP_SLOTS / 2u;
+#endif
+    else if (id != CRB_VA && !(FELUCCA_QUAD && id == 22u))
+        return;
+    for (part = 0; part < 2u; part++) {
+        uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, k = UP_SLOTS;
+        if (psnd[part].kind == PK_USER)
+            k = psnd[part].slot;
+        else if (psnd[part].kind == PK_FACTORY)
+            k = pool_bound_slot(e, psnd[part].fk);
+        if (k >= UP_SLOTS || k < lo || k >= hi || !up_used(k))
+            continue;
+        e = cb_rec_engine(k);
+        cu_pool_load(part, e, pool_pos_slot(e, k));
+        if (!part)
+            cu_sends_to_fx();
+        crb.reloads++;
+        cu_trace("reload: part %u slot %u %s\n", (unsigned)part, (unsigned)k + 1u, psnd[part].name);
+    }
+}
+
+/* 76 SELECT part engine pos [pos_hi] -> rc: part 0 (chord) / 1 (bass) to engine e and its pool position pos (0 INIT,
+ * 1.. the factory presets, then the added ones: cr_bank.c's pool order, as PRESETS turns), live, as OPT + PRESETS
+ * then PRESETS would (the device manager's audition). rc 0 done, 1 bad part or engine (not a melodic engine shown),
+ * 2 bad position, 3 busy (EDIT or SAVE open: the sound is being edited) */
+static uint32_t crb_select(const uint8_t *a, uint32_t na)
+{
+    uint32_t part = a[0], e = a[1], pos = a[2] | (na > 3u ? (uint32_t)a[3] << 7 : 0u);
+    if (part > 1u || e >= NENGINES || !eng_ok(e) || cu_engine_rank(e) < 0)
+        return 1;
+    if (pos >= pool_count(e))
+        return 2;
+    if (cu.page == PG_EDIT || cu.page == PG_SAVE)
+        return 3;
+    cu_pos_sync();                                   /* (the place in the engine left: remembered, as cu_epk_commit) */
+    cu_pool_load(part, e, pos);
+    if (!part)
+        cu_sends_to_fx();
+    cu_sound_popup((int)part);
+    ui.force = 1;
+    cu_trace("select: part %u engine %s pos %u %s\n", (unsigned)part, ENGINES[e]->name, (unsigned)pos, psnd[part].name);
+    return 0;
+}
+
 static uint32_t crb_commit(void)
 {
     uint8_t *raw = CRB_RAW;
@@ -394,6 +459,7 @@ static uint32_t crb_commit(void)
         if (id >= CRB_CZB && id < CRB_CZB + CZ_BANK_N)
             cz_bank_import(id - CRB_CZB, raw, len);  /* (parts on that bank: its new tones, cz_bank_poll) */
 #endif
+        crb_reload(id);                              /* a part playing a slot written: its new sound, at once */
     }
     ui.force = 1;
     return 0;
@@ -478,10 +544,10 @@ static void crb_debug(void)
     v[k++] = cr_dbg.c1_jobs;
     v[k++] = cr_c1_rejected();                       /* core 1's misreads, refused (docs/DUALCORE.md "Reliability") */
     v[k++] = cr_c1_faults();                         /* faults about core 1, caught */
-    v[k++] = cr_dbg.c1_escalated ? 1u : 0u;          /* the core rails' boost asked for / applied */
-    v[k++] = cr_dbg.rail_boot[0];                    /* SYSVDD: the boot loader's, now (11 1.26 V, 14 1.35 V, 15 1.38 V) */
+    v[k++] = cr_dbg.c1_fallback;                     /* 1: core 1 given up this session (one core since) */
+    v[k++] = cr_dbg.rail_boot[0];                    /* SYSVDD: the boot loader's, now (11 1.26 V, 14 1.35 V) */
     v[k++] = cr_dbg.rail_now[0];
-    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 4 1.45 V, 5 1.50 V) */
+    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 4 1.45 V) */
     v[k++] = cr_dbg.rail_now[1];
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.avg_us[i];
@@ -559,8 +625,8 @@ static void crb_debug(void)
  * Melodee, GPL-3.0). ops: 0 report; 1 a misread (the sequence read as +0x00200000 for 1 ms, as an affected unit
  * reads it); 2 a null job at rest (fn 0 and the next sequence for 1 ms: the idle crash Melodee decoded); 3 a stall (a
  * job that never returns: the 8 ms wait); 4 a fault on core 1 (a job that calls address 0); 5 the rails; 6 rail a[1]
- * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD never below 6). rc: 0 done, 1 refused (core 1 not running for
- * 1..4, a level out of range for 6). Values: c1 state, jobs, rejected, faults, stalls, escalated, SYSVDD boot / now,
+ * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD 6..14, VDC14 0..4: never above the cap). rc: 0 done, 1 refused (core 1 not running for
+ * 1..4, a level out of range for 6). Values: c1 state, jobs, rejected, faults, stalls, fallback, SYSVDD boot / now,
  * VDC14 boot / now (the registers), the fault's core / DBG_MSG / pc / rets / EMU_MSG, the last misread, audio halves,
  * the injection's time in us */
 #if CR_CPU1 && CR_CORE1_TEST && defined(FM1_HAVE_CPU1)
@@ -594,7 +660,7 @@ static void crb_core1_test(const uint8_t *a, uint32_t na)
     v[2] = fm1_c1_rejected;
     v[3] = fm1_c1_fault.count;
     v[4] = fm1_c1_stalls;
-    v[5] = cr_dbg.c1_escalated;
+    v[5] = cr_dbg.c1_fallback;
     fm1_irq_off();
     v[6] = fm1_power.boot[FM1_RAIL_SYSVDD];
     v[7] = fm1_power_get(FM1_RAIL_SYSVDD);
@@ -685,6 +751,11 @@ static int crb_handle(const uint8_t *f, uint32_t n)
         break;
     case CRB_CORE1_TEST:                             /* (a test build's; else "unsupported") */
         crb_core1_test(a, na);
+        break;
+    case CRB_SELECT:                                 /* (the device manager's audition) */
+        if (na != 3u && na != 4u)
+            return 0;
+        crb_b(crb_select(a, na));
         break;
     case CRB_RESTART:
         if (na)

@@ -173,11 +173,14 @@ Anything else is counted (`fm1_c1_rejected`, the last bad sequence in `fm1_c1_mi
 request read wrong is retried on the next look.
 
 **The escalation** (`cr_cpu1.h cr_c1_assess`, `cr_c1_check` before each hand-over, `cr_c1_wait` after):
-- the first misread asks for the boost and keeps core 1 working; the main loop applies it (`cr_c1_supply_poll`,
-  `main.c`; P33 is not IRQ-safe, IRQs off for two 100 us steps): VDC14 5 (1.50 V), SYSVDD 15 (1.38 V, the highest).
-  Misreads until it is applied count as the same event;
-- a misread after the boost, or any fault or stall: core 1 held for good, `c1 gave up`, one core with the shared
-  budget (the existing path), and the boost too (core 0 runs on alone at the higher rail).
+- the first misread (an audio block that finds new ones in `fm1_c1_rejected`: one burst is one event) is counted and
+  core 1 keeps working;
+- a second misread (a later block), or any fault or stall: core 1 held for good, `c1 gave up`, one core with the
+  shared budget (the existing path), `cr_dbg.c1_fallback` 1 for the session (RAM only: nothing goes to the settings).
+**No voltage escalation.** The PR raises SYSVDD to 15 (1.38 V) and VDC14 to 5 (1.50 V) after the first misread; the
+user decided against it after Charles Vestal's review of the PR (device safety): no rail is ever set above 14 / 4
+(1.35 V / 1.45 V, JieLi's own levels for this clock). `fm1_power.h` caps them as hard maxima (`FM1_SYSVDD_MAX`,
+`FM1_VDC14_MAX`), the test build's rail op included.
 The stall timeout stays our 8 ms (the PR uses 10 ms). A faulted or stalled job's block is rendered by core 0 as
 before (core 1 is held first, so nothing races it).
 
@@ -189,19 +192,20 @@ ISR return; core 1 took it itself (`cnum` 1): recorded, it holds itself; core 0'
 Core 0's own bits still give the crash report; so does a 17th fault (a hold that did not take). A build without
 core 1 (CR_CPU1 0) links `fm1_vec.S`'s weak `fm1_c1_fault_c`: the crash report, as before.
 
-**Counters**: `--debug` (`tools/fm1_install.py`, after `c1_jobs`): `c1_rejected`, `c1_faults`, `c1_escalated` (0/1),
+**Counters**: `--debug` (`tools/fm1_install.py`, after `c1_jobs`): `c1_rejected`, `c1_faults`, `c1_fallback` (1: core 1 given up this session),
 `rail_sysvdd_boot`, `rail_sysvdd_now`, `rail_vdc14_boot`, `rail_vdc14_now`. GEEK OUT: `c1 ok 123 · stk 1064 · rej 0`
-(and `· flt n` once there is a fault). Host: rails read 11 / 3 at boot (14 / 4 with Dual Core On).
+(and `· flt n` once there is a fault); given up: `c1 gave up · Options>Dual Core` (the switch; 30 of the
+31 characters a line holds, hence no spaces around `>`). Host: rails read 11 / 3 at boot (14 / 4 with Dual Core On).
 
 **The test build** `CR_CORE1_TEST` (`cr_cpu1.h`, 0 by default; never in a release): SysEx command 75 CORE1_TEST
 (`cr_backup.c`): 0 report, 1 a misread, 2 a null job at rest, 3 a stall, 4 a fault on core 1 (a job that calls
-address 0), 5 the rails, 6 a rail to a level (down too; SYSVDD never below 6). Any other build answers "unsupported"
+address 0), 5 the rails, 6 a rail to a level (down too; SYSVDD 6..14, VDC14 0..4: never above the cap). Any other build answers "unsupported"
 (the byte 127) and `tools/core1_fault_test.py` refuses to run. `build.py` passes no arbitrary defines, so to build it
 set the default in `firmware/src/cr_cpu1.h` to 1 (`#define CR_CORE1_TEST 1`), `./build.sh`, keep the package
 (`build/choralroot-core1test.fwsc`), set it back to 0 and rebuild. The user runs it on the device, not the agents.
 
 Host tests: `tests/cr_cpu1_test.c` section 4 (the mailbox validation; the escalation's states and through the audio
-blocks; the boot rails On / Off; the rails' steps on a mock P33: one step a write, VDC14 first, never lower).
+blocks, the rails never above 14 / 4; the boot rails On / Off; the rails' steps on a mock P33: one step a write, VDC14 first, never lower, capped at 14 / 4).
 
 ### Device checklist (0.16)
 
@@ -210,7 +214,7 @@ blocks; the boot rails On / Off; the rails' steps on a mock P33: one step a writ
    GEEK OUT: `c1 ok <jobs> · stk <n> · rej 0`.
 2. Dual Core Off, power cycle: the rails' now equal their boot levels (11, 3), `c1 off`.
 3. A long chord session (an 8-note chord + bass, 30 minutes or more, USB recording on): `rej` stays 0 (a unit that
-   misreads shows `rej` rising once, then `c1_escalated 1` and SYSVDD 15; tell us), no crash.
+   misreads shows `rej` rising; a second time `c1 gave up · Options>Dual Core`, `c1_fallback 1`; tell us), no crash.
 4. On a `CR_CORE1_TEST` build: `python3 tools/core1_fault_test.py` (misread, null, stall, fault; each restarts the
    FM-1 and waits 31 s): every mode PASS, the audio running throughout, no reset. `python3 tools/core1_fault_test.py
    power` reads the rails. Then flash the release build back.

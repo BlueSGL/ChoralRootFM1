@@ -71,6 +71,14 @@
   .mid { display: flex; flex-direction: column; gap: 10px; padding-top: 110px; }
   .mid button { padding: 14px 6px; font-weight: 900; font-size: 15px; letter-spacing: -0.01em; }
   #place { background: var(--red); color: #fff; } #keep { background: var(--blue); color: #fff; }
+  .sm { padding: 6px 10px; font-weight: 800; font-size: 14px; }
+  .dev-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; padding-right: 14px; }
+  #dev-fw { font-size: 13px; color: var(--dim); font-weight: 700; }
+  .cap { margin-left: auto; font-size: 14px; font-weight: 800; color: var(--green); }
+  .cap.full { color: var(--red); }
+  ol.rows li.empty .nm { color: var(--green); font-weight: 600; font-style: italic; }
+  ol.rows li.drop { outline: 2px solid var(--yellow); outline-offset: -2px; }
+  .pane.drop { outline: 3px dashed var(--yellow); outline-offset: -3px; }
   #place-all { background: var(--dark); font-size: 12px; }
   .bar { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0 0; padding: 12px 0; border-top: 3px solid var(--dark); }
   .bar button { padding: 9px 13px; font-weight: 800; font-size: 14px; }
@@ -115,33 +123,38 @@
   <progress id="bar" max="100" value="0"></progress>
 
   <div class="grid" style="margin-top:14px">
-    <section class="pane" id="left" aria-label="Your FM-1">
-      <h2>Your FM-1</h2>
-      <div class="tabs" id="eng-tabs" role="tablist"></div>
-      <ol class="rows" id="left-rows"></ol>
-    </section>
-    <div class="mid">
-      <button id="place" disabled title="Put the library's sound into the FM-1">← Place</button>
-      <button id="keep" disabled title="Copy the FM-1's sound into This browser">Keep →</button>
-      <button id="place-all" disabled title="Place every sound of the pack as added sounds">Place all</button>
-    </div>
-    <section class="pane" id="right" aria-label="Library" style="--c: var(--blue)">
+    <section class="pane" id="lib" aria-label="Library" style="--c: var(--blue)">
       <h2>Library</h2>
       <div class="lib-head">
         <select id="lib-src" aria-label="Library source"></select>
-        <button id="lib-files" style="padding:6px 10px;font-weight:800;font-size:14px">Add files…</button>
+        <button id="lib-files" class="sm">Add files…</button>
+        <button id="keep-all" class="sm" disabled title="Keep every item of this source in This browser">Keep all in this browser</button>
         <label><input type="checkbox" id="lib-this" checked> this engine only</label>
         <input id="lib-file" type="file" multiple accept=".json,.syx,application/json" hidden>
       </div>
-      <ol class="rows" id="right-rows"></ol>
+      <ol class="rows" id="lib-rows"></ol>
+    </section>
+    <div class="mid">
+      <button id="place" disabled title="Put the library's selected sounds into the FM-1">Place →</button>
+      <button id="keep" disabled title="Copy the FM-1's selected sounds into This browser">← Keep</button>
+      <button id="place-all" disabled title="Place every sound shown, as many as fit">Place all</button>
+    </div>
+    <section class="pane" id="dev" aria-label="Your FM-1">
+      <div class="dev-head"><h2>Your FM-1</h2><span id="dev-fw"></span><span id="cap" class="cap"></span></div>
+      <div class="tabs" id="eng-tabs" role="tablist"></div>
+      <ol class="rows" id="dev-rows"></ol>
     </section>
   </div>
+  <p class="small">Click selects; shift-click a range, cmd / ctrl-click adds one. Drag rows within a pool to reorder (onto another sound: they swap places; onto a factory preset: it takes that place), from the library onto the FM-1 to Place, from the FM-1 onto the library to Keep.</p>
 
   <div class="bar">
+    <button id="sel-all" disabled>Select all</button>
     <button id="rename" disabled>Rename</button>
     <button id="swap" disabled>Swap with…</button>
     <button id="delete" disabled>Delete</button>
     <button id="save-file" disabled>Save as a file</button>
+    <button id="save-pack" disabled>Save selected as a pack</button>
+    <button id="save-users" disabled>Save all user sounds</button>
     <button id="lib-remove" disabled>Remove from library</button>
     <button id="backup" disabled>Back up everything</button>
     <button id="restore" disabled>Install a backup…</button>
@@ -162,7 +175,7 @@
   <details>
     <summary>Device not found?</summary>
     <p class="small">Check the USB cable (a data cable, directly on the computer, not through a hub), close other apps that use MIDI (the editor, a DAW holding the port), switch the FM-1 on: the page connects by itself when the port "ChoralRoot FM-1" appears. The FM-1 must run ChoralRoot (the <a href="index.html">installer</a> puts it on).</p>
-    <p class="small">Auditioning: the FM-1 takes a program change as a position in the pool of the engine it is on now, so selecting a row plays that row when the FM-1 is on the same engine (OPT + PRESETS changes it on the unit). Writes stop the sound for about 45 ms per object; a write while a loop plays is refused: stop the loop on the FM-1 first.</p>
+    <p class="small">Auditioning: selecting a row loads it on the unit (SysEx SELECT: the engine and the position); after a Place, Rename, Swap or Delete the row at that place is loaded again, so a change is heard at once. A firmware without SELECT gets a program change instead, which plays the row only when the unit is already on its engine. Writes stop the sound for about 45 ms per object; a write while a loop plays is refused: stop the loop on the FM-1 first.</p>
     <p class="small">Try the page without a device: <a href="?sim=1">?sim=1</a> (a simulated FM-1; the keyboard shows what it would send).</p>
   </details>
   <footer>
@@ -180,7 +193,9 @@ const PORT = "ChoralRoot FM-1";
 const COLORS = { 12: "#E63829", 15: "#F67918", 13: "#F6B600", 14: "#2950CD", 2: "#29B27B", 3: "#F6F2EE", 5: "#E63829", 6: "#F67918", 7: "#F6B600", 9: "#29B27B", 11: "#9A999A" };
 const colorOf = (e) => COLORS[poolOf(e)] || "#6A696A";
 const TAB0 = (new URLSearchParams(location.search).get("tab") || "").toUpperCase();   // ?tab=loops / ?tab=CZ-1: the tab to open on
-const ui = { tab: TAB0 === "LOOPS" ? "loops" : ENGINE_NAMES.indexOf(TAB0) >= 0 && MANAGER_ENGINES.includes(ENGINE_NAMES.indexOf(TAB0)) ? ENGINE_NAMES.indexOf(TAB0) : 12, left: null, right: null, swapFrom: null, libSrc: "browser", libItems: [], packs: [], busy: false };
+const ui = { tab: TAB0 === "LOOPS" ? "loops" : ENGINE_NAMES.indexOf(TAB0) >= 0 && MANAGER_ENGINES.includes(ENGINE_NAMES.indexOf(TAB0)) ? ENGINE_NAMES.indexOf(TAB0) : 12,
+  dev: { sel: new Set(), anchor: null, primary: null }, lib: { sel: new Set(), anchor: null, primary: null }, focus: "dev",
+  swapFrom: null, libSrc: "browser", libItems: [], packs: [], fileItems: null, filePacks: [], fpacks: {}, busy: false, drag: null };
 let session = null, firmware = "", link = null, output = null, sim = null, store = new LibraryStore();
 
 function say(text, cls = "") { $("status").textContent = text; $("status").className = cls; }
@@ -191,6 +206,8 @@ function download(name, data, type = "application/json") {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 const connected = () => !!session && !!session.objs;
+const freeSlots = () => (connected() ? SOUND_SLOTS - usedSlots(session.objs) : 0);
+const clearSel = (side) => { ui[side] = { sel: new Set(), anchor: null, primary: null }; };
 
 /* ---- MIDI out: the keyboard and the audition (sim: shown only) */
 function sendMidi(bytes) {
@@ -199,50 +216,59 @@ function sendMidi(bytes) {
   try { if (output && output.state !== "disconnected") output.send(bytes); } catch (_) {}
 }
 
-/* ---- the left pane */
+/* ---- the FM-1 pane (right) */
 function renderTabs() {
   const tabs = MANAGER_ENGINES.map((e) => `<button role="tab" data-e="${e}" style="--tc:${colorOf(e)}" aria-selected="${ui.tab === e}">${esc(ENGINE_NAMES[e])}</button>`);
   tabs.push(`<button role="tab" data-e="loops" style="--tc:#F6F2EE" aria-selected="${ui.tab === "loops"}">LOOPS</button>`);
   $("eng-tabs").innerHTML = tabs.join("");
-  $("left").style.setProperty("--c", ui.tab === "loops" ? "var(--cream)" : colorOf(ui.tab));
+  $("dev").style.setProperty("--c", ui.tab === "loops" ? "var(--cream)" : colorOf(ui.tab));
+  const used = connected() ? usedSlots(session.objs) : 0;
+  $("dev-fw").textContent = firmware || "";
+  $("cap").textContent = connected() ? `${used} of ${SOUND_SLOTS} user slots used` : "";
+  $("cap").className = `cap${connected() && used >= SOUND_SLOTS ? " full" : ""}`;
 }
-function leftRows() {
+function devRows() {
   if (!connected()) return [];
   return ui.tab === "loops" ? managerLoops(session.objs) : managerPools(session.objs)[ui.tab];
 }
-function renderLeft() {
+const devSel = () => [...ui.dev.sel].sort((a, b) => a - b).map((i) => devRows()[i]).filter(Boolean);
+const devPrimary = () => (ui.dev.primary == null ? null : devRows()[ui.dev.primary] || null);
+function renderDev() {
   renderTabs();
-  const rows = leftRows();
-  if (!connected()) { $("left-rows").innerHTML = `<li class="empty-note" style="display:block">${SIM ? "Reading the simulated FM-1…" : "Connect the FM-1 (USB) to see its sounds and loops."}</li>`; return; }
+  if (!connected()) { $("dev-rows").innerHTML = `<li class="empty-note" style="display:block">${SIM ? "Reading the simulated FM-1…" : "Connect the FM-1 (USB) to see its sounds and loops."}</li>`; return; }
+  const rows = devRows(), cls = (i) => `${ui.dev.sel.has(i) ? " sel" : ""}`;
   if (ui.tab === "loops") {
-    $("left-rows").innerHTML = rows.map((l, i) =>
-      `<li data-i="${i}" class="${l.used ? "user" : "init"}${ui.left === i ? " sel" : ""}${ui.swapFrom && ui.swapFrom.loop === l.slot ? " swap-src" : ""}">` +
+    $("dev-rows").innerHTML = rows.map((l, i) =>
+      `<li draggable="true" data-i="${i}" class="${l.used ? "user" : "init"}${cls(i)}${ui.swapFrom && ui.swapFrom.loop === l.slot ? " swap-src" : ""}">` +
       `<span class="pos">${String(l.slot).padStart(2, "0")}</span><span class="nm">${l.used ? "holds a loop" : "empty"}</span>` +
       `<span class="meta">${esc(loopSummary(l.header))}</span><span class="badge${l.used ? "" : " empty"}">L${String(l.slot).padStart(2, "0")}</span></li>`).join("");
     return;
   }
-  $("left-rows").innerHTML = rows.map((r, i) =>
-    `<li data-i="${i}" class="${r.type}${ui.left === i ? " sel" : ""}${ui.swapFrom && ui.swapFrom.row && ui.swapFrom.row.engine === r.engine && ui.swapFrom.row.pos === r.pos ? " swap-src" : ""}">` +
-    `<span class="pos">${String(r.pos).padStart(2, "0")}</span>` +
-    `<span class="nm">${esc(r.name)}${r.overwrites ? `<span class="over">over ${esc(r.overwrites)}</span>` : ""}</span>` +
-    `<span class="meta">${r.type === "init" ? "init" : r.type === "factory" ? "factory" : r.kind ? (r.patch ? r.kind + " patch" : "macros") : "macros"}</span>` +
-    `<span class="badge${r.slot ? "" : " empty"}">${r.slot ? esc(r.label) : "—"}</span></li>`).join("");
+  $("dev-rows").innerHTML = rows.map((r, i) => r.type === "empty"
+    ? `<li data-i="${i}" class="empty${cls(i)}"><span class="pos">${String(r.pos).padStart(2, "0")}</span><span class="nm">empty · Place here</span><span class="meta">${freeSlots()} free</span><span class="badge empty">—</span></li>`
+    : `<li draggable="${r.type !== "init"}" data-i="${i}" class="${r.type}${cls(i)}${ui.swapFrom && ui.swapFrom.row && ui.swapFrom.row.engine === r.engine && ui.swapFrom.row.pos === r.pos ? " swap-src" : ""}">` +
+      `<span class="pos">${String(r.pos).padStart(2, "0")}</span>` +
+      `<span class="nm">${esc(r.name)}${r.overwrites ? `<span class="over">over ${esc(r.overwrites)}</span>` : ""}</span>` +
+      `<span class="meta">${r.type === "init" ? "init" : r.type === "factory" ? "factory" : r.kind && r.patch ? r.kind + " patch" : "macros"}</span>` +
+      `<span class="badge${r.slot ? "" : " empty"}">${r.slot ? esc(r.label) : "—"}</span></li>`).join("");
 }
-const selLeft = () => (ui.left == null ? null : leftRows()[ui.left] || null);
 
-/* ---- the library */
+/* ---- the library (left) */
+const srcPack = () => ui.packs.find((p) => p.file === ui.libSrc) || null;
+const srcFilePack = () => ui.filePacks.find((p) => p.id === ui.libSrc) || null;
 async function loadLibrary() {
   try {
     if (ui.libSrc === "browser") ui.libItems = (await store.all()).map((it) => ({ ...it, source: "This browser" }));
     else if (ui.libSrc === "files") ui.libItems = ui.fileItems || [];
+    else if (srcFilePack()) ui.libItems = srcFilePack().items;
     else {
-      const entry = ui.packs.find((p) => p.file === ui.libSrc);
+      const entry = srcPack();
       ui.libItems = entry ? (EMBED_PACKS && EMBED_PACKS.packs[entry.file]
         ? libraryItemsFromFile(entry.file, JSON.stringify(EMBED_PACKS.packs[entry.file]))
         : await loadPack(fetchJson, entry)) : [];
     }
   } catch (e) { ui.libItems = []; say(`Library: ${e.message}`, "err"); }
-  ui.right = null; renderRight(); refresh();
+  clearSel("lib"); renderLib(); refresh();
 }
 const fetchJson = async (url) => { const r = await fetch(url); if (!r.ok) throw new Error(`${url}: HTTP ${r.status}`); return r.json(); };
 function libVisible() {
@@ -250,50 +276,79 @@ function libVisible() {
   return ui.libItems.map((it, i) => ({ it, i })).filter(({ it }) => loops ? it.type === "loop"
     : it.type === "sound" && (!$("lib-this").checked || it.pool === ui.tab));
 }
-function renderRight() {
+const libSel = () => libVisible().filter(({ i }) => ui.lib.sel.has(i)).map(({ it }) => it);
+const libPrimary = () => (ui.lib.primary == null ? null : ui.libItems[ui.lib.primary] || null);
+function renderLib() {
   const vis = libVisible();
   if (!vis.length) {
     const what = ui.tab === "loops" ? "loops" : $("lib-this").checked ? `${ENGINE_NAMES[ui.tab]} sounds` : "sounds";
-    $("right-rows").innerHTML = `<li class="empty-note" style="display:block">No ${esc(what)} here. ${ui.libSrc === "browser" ? "Keep a sound from the FM-1, or add files (sound files, .syx, packs, backups, loop files)." : ""}</li>`;
+    $("lib-rows").innerHTML = `<li class="empty-note" style="display:block">No ${esc(what)} here. ${ui.libSrc === "browser" ? "Keep sounds from the FM-1, or add files (sound files, packs, .syx, backups, loop files)." : ""}</li>`;
     return;
   }
-  $("right-rows").innerHTML = vis.map(({ it, i }, n) => it.type === "loop"
-    ? `<li data-i="${i}" class="user${ui.right === i ? " sel" : ""}"><span class="pos">${String(n + 1).padStart(2, "0")}</span><span class="nm">${esc(it.name)}</span><span class="meta">${esc(loopSummary(it.header))}</span><span class="chip" style="--tc:#F6F2EE">LOOP</span></li>`
-    : `<li data-i="${i}" class="user${ui.right === i ? " sel" : ""}"><span class="pos">${String(n + 1).padStart(2, "0")}</span><span class="nm">${esc(it.name)}</span>` +
-      `<span class="meta">${it.patch ? esc(it.kind) + " patch" : "macros"}</span><span class="chip" style="--tc:${colorOf(it.engine)}">${esc(ENGINE_NAMES[it.engine])}</span></li>`).join("");
+  $("lib-rows").innerHTML = vis.map(({ it, i }, n) => `<li draggable="true" data-i="${i}" class="user${ui.lib.sel.has(i) ? " sel" : ""}"><span class="pos">${String(n + 1).padStart(2, "0")}</span>` +
+    (it.type === "loop"
+      ? `<span class="nm">${esc(it.name)}</span><span class="meta">${esc(loopSummary(it.header))}</span><span class="chip" style="--tc:#F6F2EE">LOOP</span></li>`
+      : `<span class="nm">${esc(it.name)}${it.file && it.file.factory ? `<span class="over">factory ${String(it.file.position).padStart(2, "0")}</span>` : ""}</span>` +
+        `<span class="meta">${it.patch ? esc(it.kind) + " patch" : "macros"}</span><span class="chip" style="--tc:${colorOf(it.engine)}">${esc(ENGINE_NAMES[it.engine])}</span></li>`)).join("");
 }
 function renderSources() {
-  const opts = [`<option value="browser">This browser</option>`, `<option value="files">Files${ui.fileItems ? ` (${ui.fileItems.length})` : ""}</option>`,
-    ...ui.packs.map((p) => `<option value="${esc(p.file)}">Pack: ${esc(p.name)} (${p.count})</option>`)];
+  const opts = [`<option value="browser">This browser</option>`];
+  if (ui.fileItems) opts.push(`<option value="files">Files (${ui.fileItems.length})</option>`);
+  for (const p of ui.filePacks) opts.push(`<option value="${esc(p.id)}">File pack: ${esc(p.name)} (${p.items.length})</option>`);
+  for (const p of ui.packs) opts.push(`<option value="${esc(p.file)}">Pack: ${esc(p.name)} (${p.count})</option>`);
   $("lib-src").innerHTML = opts.join(""); $("lib-src").value = ui.libSrc;
 }
-const selRight = () => (ui.right == null ? null : ui.libItems[ui.right] || null);
+
+/* ---- selection: click, shift-click (a range), cmd / ctrl-click (toggle) */
+function pick(side, i, e, order) {
+  const s = ui[side];
+  if (e.shiftKey && s.anchor != null) {
+    const a = order.indexOf(s.anchor), b = order.indexOf(i);
+    if (!(e.metaKey || e.ctrlKey)) s.sel.clear();
+    for (let k = Math.min(a, b); k <= Math.max(a, b); k++) if (k >= 0) s.sel.add(order[k]);
+  } else if (e.metaKey || e.ctrlKey) { if (s.sel.has(i)) s.sel.delete(i); else s.sel.add(i); s.anchor = i; }
+  else { s.sel = new Set([i]); s.anchor = i; }
+  s.primary = i; ui.focus = side;
+}
 
 /* ---- the buttons' states */
 function refresh() {
-  const c = connected() && !ui.busy, l = selLeft(), r = selRight(), loops = ui.tab === "loops";
-  $("place").disabled = !c || !r || (loops ? r.type !== "loop" || !l : r.type !== "sound");
-  $("place-all").disabled = !c || loops || ui.libSrc === "browser" || !libVisible().length;
-  $("place-all").textContent = `Place all${libVisible().length && !loops ? " " + libVisible().length : ""}`;
-  $("keep").disabled = !c || !l || (loops ? !l.used : l.type !== "user");
-  $("rename").disabled = !c || loops || !l || l.type !== "user";
-  $("swap").disabled = !c || !l || (loops ? false : l.type === "init");
+  const c = connected() && !ui.busy, loops = ui.tab === "loops", d = devSel(), dp = devPrimary(), l = libSel(), lp = libPrimary();
+  const free = freeSlots(), overUser = dp && dp.type === "user" && lp && lp.pool === dp.engine && l.length === 1;
+  const placeOk = c && l.length && (loops ? l.every((x) => x.type === "loop") && dp && l.length === 1 : l.every((x) => x.type === "sound") && (free >= 1 || overUser));
+  $("place").disabled = !placeOk;
+  $("place").textContent = !loops && c && l.length && !free && !overUser ? "no free slot" : l.length > 1 ? `Place ${l.length} →` : "Place →";
+  $("place").title = !loops && c && !free ? "No free slot: delete or overwrite a user sound first" : "Put the library's selected sounds into the FM-1";
+  const vis = libVisible();
+  $("place-all").disabled = !c || loops || !vis.length || !free;
+  $("place-all").textContent = `Place all${vis.length && !loops ? " " + vis.length : ""}`;
+  $("keep").disabled = !c || !d.length || d.some((r) => loops ? !r.used : r.type === "init" || r.type === "empty");
+  $("keep").textContent = d.length > 1 ? `← Keep ${d.length}` : "← Keep";
+  $("keep-all").disabled = ui.libSrc === "browser" || !ui.libItems.length;
+  const onLib = ui.focus === "lib";
+  $("rename").disabled = onLib ? !lp || lp.type !== "sound" : !c || loops || !dp || dp.type !== "user";
+  $("swap").disabled = onLib || !c || !dp || (loops ? false : dp.type === "init" || dp.type === "empty");
   $("swap").textContent = ui.swapFrom ? "Cancel swap" : "Swap with…";
-  $("delete").disabled = !c || !l || (loops ? !l.used : l.type !== "user");
-  $("delete").textContent = !loops && l && l.overwrites ? "Reset to factory" : "Delete";
-  $("save-file").disabled = !(r || (c && l && (loops ? l.used : l.type === "user")));
-  $("lib-remove").disabled = !r || ui.libSrc !== "browser";
+  $("delete").disabled = onLib || !c || !d.length || d.some((r) => loops ? !r.used : r.type !== "user");
+  $("delete").textContent = !loops && d.length === 1 && d[0].overwrites ? "Reset to factory" : d.length > 1 ? `Delete ${d.length}` : "Delete";
+  const fileSel = onLib ? l.length : !loops && d.filter((r) => r.type === "user" || r.type === "factory").length === d.length ? d.length : loops && d.every((r) => r.used) ? d.length : 0;
+  $("save-file").disabled = !fileSel;
+  $("save-pack").disabled = !(onLib ? l.length && l.every((x) => x.type === "sound") : !loops && d.length && d.every((r) => r.type === "user" || r.type === "factory"));
+  $("save-users").disabled = !c || !usedSlots(session.objs);
+  $("sel-all").disabled = onLib ? !vis.length : !c;
+  $("lib-remove").disabled = !l.length || ui.libSrc !== "browser";
   $("backup").disabled = $("restore").disabled = !c;
   $("undo").disabled = !c || !session.canUndo;
   $("undo").textContent = connected() && session.history.length ? `Undo (${session.history.length})` : "Undo";
 }
+const renderAll = () => { renderDev(); renderLib(); refresh(); };
 
 /* ---- connecting */
 async function readDevice(msg = "Reading the FM-1…") {
   ui.busy = true; refresh(); say(msg);
-  try { await session.read(progress); say(`${firmware || "FM-1"} read: ${parseSoundObjects(session.objs).slots.filter((s) => s.used).length} user sounds, ${managerLoops(session.objs).filter((l) => l.used).length} loops.`); }
+  try { await session.read(progress); say(`${firmware || "FM-1"} read: ${usedSlots(session.objs)} user sounds, ${managerLoops(session.objs).filter((l) => l.used).length} loops.`); }
   catch (e) { say(e.message, "err"); }
-  finally { ui.busy = false; progress(0, 0); renderLeft(); refresh(); }
+  finally { ui.busy = false; progress(0, 0); renderAll(); }
 }
 function setConn(state, text) { $("conn").className = `pill ${state}`; $("conn").textContent = text; }
 let midiAccess = null;
@@ -312,7 +367,7 @@ async function attach() {
   if (link) { link.close(); link = null; }
   if (!input || !out) {
     session = null; output = null; firmware = ""; $("fw").textContent = "";
-    setConn("off", "FM-1 not found"); say('Connect the FM-1 over USB: the page waits for the port "ChoralRoot FM-1".'); renderLeft(); refresh(); return;
+    setConn("off", "FM-1 not found"); say('Connect the FM-1 over USB: the page waits for the port "ChoralRoot FM-1".'); renderAll(); return;
   }
   link = new BackupConnection(input, out); output = out;
   const request = (r, o) => link.request(r, o);
@@ -326,7 +381,7 @@ async function attach() {
   await readDevice();
 }
 async function startSim() {
-  sim = makeSimFM1();
+  sim = makeSimFM1(simObjects(30));
   firmware = "ChoralRoot 0.15 (simulated)"; $("fw").textContent = firmware; $("connect").hidden = true;
   setConn("sim", "simulated FM-1"); $("needs").textContent = "Simulator: a pretend FM-1 in this page. Writes change it only until the page reloads.";
   session = new ManagerSession(sim.request);
@@ -334,80 +389,149 @@ async function startSim() {
 }
 
 /* ---- writes: every one through the session (undo kept, read back) */
-async function run(label, res, done) {
+// a row on the unit: SysEx 76 SELECT (part, engine, position); an older firmware (no answer): the program change, which
+// plays the row only when the unit is on its engine
+async function audition(row) {
+  const bass = $("bass").checked;
+  if (ui.selectOk !== false) {
+    $("midi-mon").textContent = `${SIM ? "sent to the simulator" : "sent"}: F0 7D 46 4C ${midiText(selectRequest(row, { bass }).flat())} F7`;
+    const r = await selectOnUnit(session.request, row, { bass });
+    if (r.ok) { ui.playing = { engine: row.engine, pos: row.pos, slot: row.slot }; ui.selectOk = true; say(playingText(row) + (bass ? " (bass)" : "")); return; }
+    if (!r.unsupported) { say(`${poolLabel(row.engine, row.pos)}: ${r.error}`, r.rc === 3 ? "busy" : "err"); return; }
+    ui.selectOk = false;
+  }
+  for (const m of auditionMessages(row, { bass })) sendMidi(m);
+  say(`${poolLabel(row.engine, row.pos)} ${row.name} · program change ${row.pos}: this firmware has no SELECT, so it plays only when the FM-1 is already on ${ENGINE_NAMES[row.engine]}.`);
+}
+// after a write: the row now at the affected place (by slot, else by position; else what was playing) on the unit
+async function reselect(focus) {
+  const f = focus || ui.playing;
+  if (!f || !connected()) return;
+  const rows = managerPools(session.objs, { empty: false })[f.engine] || [];
+  const row = (f.slot && rows.find((r) => r.slot === f.slot)) || rows[Math.min(f.pos ?? 0, rows.length - 1)];
+  if (row) { const msg = $("status").textContent; await audition(row); if (ui.selectOk === false) say(msg); else say(`${msg} ${$("status").textContent}.`); }
+}
+async function run(label, res, done, focus) {
   if (!res.changed.length) { say(`${label}: nothing changed.`); return; }
   ui.busy = true; refresh(); say(`${label}…`);
-  try {
-    await session.apply(res);
-    say(done || `${label}: done.`);
-  } catch (e) { say(`${label}: ${writeErrorText(e)}`, e.rc === 3 ? "busy" : "err"); }
-  finally { ui.busy = false; renderLeft(); refresh(); }
+  try { await session.apply(res); say(done || `${label}: done.`); if (ui.tab !== "loops") await reselect(focus); }
+  catch (e) { say(`${label}: ${writeErrorText(e)}`, e.rc === 3 ? "busy" : "err"); }
+  finally { ui.busy = false; clearSel("dev"); renderAll(); }
 }
 const act = (f) => async () => { try { await f(); } catch (e) { say(e.message, "err"); } };
+const keepOpts = () => ({ firmware, packs: ui.fpacks });
 
-$("place").addEventListener("click", act(async () => {
-  const r = selRight(), l = selLeft();
+// Place: the library's selection into the FM-1; one sound onto a target row (over it), several as new sounds
+async function placeItems(items, target) {
   if (ui.tab === "loops") {
-    if (l.used && !confirm(`Loop slot ${l.slot} holds a loop. Replace it?`)) return;
-    return run(`Place into loop slot ${l.slot}`, placeLoop(session.objs, l.slot, r.file), `Placed into loop slot ${l.slot}.`);
+    const slot = target ? target.slot : (managerLoops(session.objs).find((l) => !l.used) || {}).slot;
+    if (!slot) throw new Error("No empty loop slot: select one to replace");
+    const l = managerLoops(session.objs)[slot - 1];
+    if (l.used && !confirm(`Loop slot ${slot} holds a loop. Replace it?`)) return;
+    return run(`Place into loop slot ${slot}`, placeLoop(session.objs, slot, items[0].file), `Placed into loop slot ${slot}.`);
   }
-  if (l && l.type === "user" && l.engine === r.pool && !confirm(`Replace ${l.label} ${l.name} with ${r.name}?`)) return;
-  const res = managerPlace(session.objs, r.file, l);
-  const where = res.where === "over-factory" ? `over ${poolLabel(r.pool, l.pos)}` : res.where === "over-user" ? `into ${slotLabel(res.slot)}` : `as a new ${ENGINE_NAMES[r.pool]} sound`;
-  if (r.pool !== ui.tab) { ui.tab = r.pool; ui.left = null; }
-  await run(`Place ${r.name}`, res, `Placed ${r.name} ${where} (${slotLabel(res.slot)}).`);
-}));
+  if (items.length > 1) {
+    const res = managerPlaceAll(session.objs, items.map((it) => it.file));
+    return run(`Place ${items.length}`, res, `Placed ${res.placed} sound${res.placed === 1 ? "" : "s"}${res.skipped ? `; ${res.skipped} did not fit (no free slot: delete or overwrite)` : ""}.`);
+  }
+  const r = items[0], t = target && target.type !== "empty" ? target : null;
+  if (t && t.type === "user" && t.engine === r.pool && !confirm(`Replace ${t.label} ${t.name} with ${r.name}?`)) return;
+  const res = managerPlace(session.objs, r.file, t);
+  const where = res.where === "over-factory" ? "over a factory preset" : res.where === "over-user" ? `into ${slotLabel(res.slot)}` : `as a new ${ENGINE_NAMES[r.pool]} sound`;
+  if (r.pool !== ui.tab) ui.tab = r.pool;
+  await run(`Place ${r.name}`, res, `Placed ${r.name} ${where} (${slotLabel(res.slot)}).`, { engine: r.pool, slot: res.slot });
+}
+async function keepRows(rows) {
+  let n = 0;
+  for (const l of rows) {
+    const file = ui.tab === "loops" ? keepLoop(session.objs, l.slot, { firmware }) : managerKeep(session.objs, l, keepOpts());
+    const item = libraryItemsFromFile("kept.json", JSON.stringify(file))[0];
+    if (ui.tab === "loops") item.name = `loop ${l.slot} · ${new Date().toISOString().slice(0, 10)}`;
+    await store.add({ ...item, source: "This browser" }); n++;
+  }
+  say(`Kept ${n} ${ui.tab === "loops" ? "loop" : "sound"}${n === 1 ? "" : "s"} in This browser.`);
+  if (ui.libSrc === "browser") await loadLibrary();
+}
+$("place").addEventListener("click", act(() => placeItems(libSel(), devPrimary())));
 $("place-all").addEventListener("click", act(async () => {
   const items = libVisible().map(({ it }) => it).filter((it) => it.type === "sound");
-  if (!confirm(`Place all ${items.length} sounds as added sounds (into the free user slots)?`)) return;
+  if (!confirm(`Place all ${items.length} sounds? ${freeSlots()} user slots are free; what does not fit is left out.`)) return;
   const res = managerPlaceAll(session.objs, items.map((it) => it.file));
   await run("Place all", res, `Placed ${res.placed} sounds${res.skipped ? `; ${res.skipped} did not fit (32 user slots)` : ""}.`);
 }));
-$("keep").addEventListener("click", act(async () => {
-  const l = selLeft();
-  const file = ui.tab === "loops" ? keepLoop(session.objs, l.slot, { firmware }) : managerKeep(session.objs, l, { firmware });
-  const item = libraryItemsFromFile("kept.json", JSON.stringify(file))[0];
-  if (ui.tab === "loops") item.name = `loop ${l.slot} · ${new Date().toISOString().slice(0, 10)}`;
-  await store.add({ ...item, source: "This browser" });
-  say(`Kept ${ui.tab === "loops" ? `loop slot ${l.slot}` : l.name} in This browser.`);
-  if (ui.libSrc === "browser") await loadLibrary();
+$("keep").addEventListener("click", act(() => keepRows(devSel())));
+$("keep-all").addEventListener("click", act(async () => {
+  for (const it of ui.libItems) await store.add({ ...it, source: "This browser" });
+  say(`${ui.libItems.length} items kept in This browser.`);
 }));
 $("rename").addEventListener("click", act(async () => {
-  const l = selLeft(), name = prompt(`New name for ${l.label} (1 to 12 characters: letters, digits, symbols, spaces)`, l.name);
+  if (ui.focus === "lib") {
+    const it = libPrimary(), name = prompt(`New name for ${it.name} (1 to 12 characters)`, it.name);
+    if (name == null) return;
+    const file = renameSoundFile(it.file, name), next = { ...it, name, file };
+    if (ui.libSrc === "browser") { await store.put(next); say(`Renamed to ${name}.`); }
+    else if (ui.libSrc === "files" || srcFilePack()) { ui.libItems[ui.lib.primary] = next; say(`Renamed to ${name} (in this page: Keep or Save to keep it).`); renderLib(); refresh(); return; }
+    else { await store.add({ ...next, source: "This browser" }); say(`${name}: an editable copy is in This browser (the pack itself stays as it is).`); return; }
+    return loadLibrary();
+  }
+  const l = devPrimary(), name = prompt(`New name for ${l.label} (1 to 12 characters: letters, digits, symbols, spaces)`, l.name);
   if (name == null) return;
   if (!nameValid(name)) { say("A name is 1 to 12 characters (ASCII letters, digits, symbols, spaces).", "err"); return; }
-  await run(`Rename ${l.label}`, managerRename(session.objs, l, name), `${l.label} is now ${name}.`);
+  await run(`Rename ${l.label}`, managerRename(session.objs, l, name), `${l.label} is now ${name}.`, { engine: l.engine, slot: l.slot });
 }));
 $("swap").addEventListener("click", () => {
-  const l = selLeft();
+  const l = devPrimary();
   if (ui.swapFrom) { ui.swapFrom = null; say("Swap cancelled."); }
   else { ui.swapFrom = ui.tab === "loops" ? { loop: l.slot } : { row: l }; say(ui.tab === "loops" ? `Swap loop slot ${l.slot} with… select the other slot.` : `Swap ${l.name} with… select the other row.`); }
-  renderLeft(); refresh();
+  renderDev(); refresh();
 });
-async function finishSwap(target) {
-  const from = ui.swapFrom; ui.swapFrom = null;
+async function swapRows(from, target) {
   try {
     if (from.loop) return await run(`Swap loop slots ${from.loop} and ${target.slot}`, swapLoops(session.objs, from.loop, target.slot));
-    await run(`Swap ${from.row.name} and ${target.name}`, managerSwap(session.objs, from.row, target));
-  } catch (e) { say(e.message, "err"); renderLeft(); refresh(); }
+    await run(`Move ${from.row.name}`, managerDrop(session.objs, from.row, target), null, { engine: target.engine, pos: target.pos });
+  } catch (e) { say(e.message, "err"); renderAll(); }
 }
 $("delete").addEventListener("click", act(async () => {
-  const l = selLeft();
+  const d = devSel();
   if (ui.tab === "loops") {
-    if (!confirm(`Delete the loop in slot ${l.slot}?`)) return;
-    return run(`Delete loop slot ${l.slot}`, deleteLoop(session.objs, l.slot), `Loop slot ${l.slot} is empty.`);
+    if (!confirm(`Delete ${d.length === 1 ? `the loop in slot ${d[0].slot}` : `${d.length} loops`}?`)) return;
+    let m = session.objs; for (const l of d) m = deleteLoop(m, l.slot).objs;
+    return run("Delete loops", { changed: diffOf(session.objs, m), objs: m }, `${d.length} loop slot${d.length === 1 ? "" : "s"} emptied.`);
   }
-  if (!confirm(l.overwrites ? `Delete ${l.label} ${l.name}? ${l.overwrites} comes back.` : `Delete ${l.label} ${l.name}?`)) return;
-  await run(`Delete ${l.label}`, managerDelete(session.objs, l), l.overwrites ? `${l.overwrites} is back.` : `${l.label} is empty.`);
+  if (!confirm(d.length === 1 ? (d[0].overwrites ? `Delete ${d[0].label} ${d[0].name}? ${d[0].overwrites} comes back.` : `Delete ${d[0].label} ${d[0].name}?`) : `Delete ${d.length} user sounds?`)) return;
+  let m = session.objs; for (const r of d) m = managerDelete(m, r).objs;
+  await run("Delete", { changed: diffOf(session.objs, m), objs: m }, d.length === 1 && d[0].overwrites ? `${d[0].overwrites} is back.` : `${d.length} deleted.`, { engine: d[0].engine, pos: d[0].pos });
 }));
+const diffOf = (a, b) => MANAGER_IDS.filter((id) => { const x = a.get(id) || new Uint8Array(0), y = b.get(id) || new Uint8Array(0); return x.length !== y.length || x.some((v, k) => v !== y[k]); })
+  .sort((p, q) => (p >= 40) - (q >= 40) || (p === 6 || p === 7) - (q === 6 || q === 7)).map((id) => ({ id, bytes: b.get(id) }));
+function selectedFiles() {
+  if (ui.focus === "lib") return libSel().map((it) => it.file);
+  return devSel().map((r) => ui.tab === "loops" ? keepLoop(session.objs, r.slot, { firmware }) : managerKeep(session.objs, r, keepOpts()));
+}
+function savePack(files, deflt) {
+  const name = prompt("Name of the pack", deflt);
+  if (name == null) return;
+  const pack = makePack(files, { name: name || deflt, author: "", created: new Date().toISOString() });
+  download(packFileName(pack.name), JSON.stringify(pack, null, 1));
+  say(`Saved ${files.length} sounds as one pack (${pack.name}).`);
+}
 $("save-file").addEventListener("click", act(async () => {
-  const r = selRight(), l = selLeft();
-  if (r) { download(r.type === "loop" ? loopFileName(r.file.slot || 0) : `${SOUND_FORMAT}-${String(r.name).replace(/[^A-Za-z0-9-]/g, "_")}.json`, JSON.stringify(r.file, null, 1)); return; }
-  if (ui.tab === "loops") { download(loopFileName(l.slot), JSON.stringify(keepLoop(session.objs, l.slot, { firmware }), null, 1)); return; }
-  const file = managerKeep(session.objs, l, { firmware });
-  download(soundFileName(l.slot, file.name || ""), JSON.stringify(file, null, 1));
+  const files = selectedFiles();
+  if (files.length > 1 && files.every((f) => f.format === SOUND_FORMAT)) return savePack(files, "My sounds");
+  for (const f of files) download(f.format === LOOP_FORMAT ? loopFileName(f.slot || 0) : `${SOUND_FORMAT}-${String(f.name || "sound").replace(/[^A-Za-z0-9-]/g, "_")}.json`, JSON.stringify(f, null, 1));
 }));
-$("lib-remove").addEventListener("click", act(async () => { const r = selRight(); await store.remove(r.key); say(`Removed ${r.name} from This browser.`); await loadLibrary(); }));
+$("save-pack").addEventListener("click", act(async () => savePack(selectedFiles(), "My sounds")));
+$("save-users").addEventListener("click", act(async () => {
+  const pack = userSoundsPack(session.objs, keepOpts());
+  download(packFileName("user-sounds"), JSON.stringify(pack, null, 1));
+  say(`Saved all ${pack.sounds.length} user sounds in one pack file.`);
+}));
+$("sel-all").addEventListener("click", () => {
+  if (ui.focus === "lib") { const v = libVisible(); ui.lib = { sel: new Set(v.map(({ i }) => i)), anchor: v[0]?.i ?? null, primary: v[0]?.i ?? null }; }
+  else { const rows = devRows(); ui.dev = { sel: new Set(rows.map((r, i) => i).filter((i) => ui.tab === "loops" ? rows[i].used : rows[i].type === "user" || rows[i].type === "factory")), anchor: null, primary: null }; }
+  renderAll();
+});
+$("lib-remove").addEventListener("click", act(async () => { const l = libSel(); for (const r of l) await store.remove(r.key); say(`Removed ${l.length} from This browser.`); await loadLibrary(); }));
 $("backup").addEventListener("click", act(async () => {
   ui.busy = true; refresh(); say("Backing up everything…");
   try { const file = await captureBackup(session.request, firmware.replace(/ \(simulated\)$/, ""), progress); download(backupFileName(file.firmware), JSON.stringify(file)); say("Backup saved."); }
@@ -425,7 +549,7 @@ $("restore-file").addEventListener("change", act(async () => {
     await restartDevice(session.request).catch(() => {});
     session.history = [];
     say(`Backup installed (${r.restored.length} objects). The FM-1 restarts…`);
-    setTimeout(() => (SIM ? readDevice() : null), SIM ? 300 : 0);
+    if (SIM) setTimeout(() => readDevice(), 300);
   } catch (e) { say(`Install a backup: ${writeErrorText(e)}`, e.rc === 3 ? "busy" : "err"); }
   finally { ui.busy = false; progress(0, 0); refresh(); }
 }));
@@ -433,44 +557,75 @@ $("undo").addEventListener("click", act(async () => {
   ui.busy = true; refresh(); say("Undo…");
   try { const ids = await session.undo(); say(`Undone (${ids.map(objectName).join(", ")} written back).`); }
   catch (e) { say(`Undo: ${writeErrorText(e)}`, e.rc === 3 ? "busy" : "err"); }
-  finally { ui.busy = false; renderLeft(); refresh(); }
+  finally { ui.busy = false; clearSel("dev"); renderAll(); }
 }));
 
 /* ---- selection, audition */
 $("eng-tabs").addEventListener("click", (e) => {
   const b = e.target.closest("button"); if (!b) return;
-  ui.tab = b.dataset.e === "loops" ? "loops" : +b.dataset.e; ui.left = null; ui.right = null; ui.swapFrom = null;
-  renderLeft(); renderRight(); refresh();
+  ui.tab = b.dataset.e === "loops" ? "loops" : +b.dataset.e; clearSel("dev"); clearSel("lib"); ui.swapFrom = null;
+  renderAll();
 });
-$("left-rows").addEventListener("click", (e) => {
+$("dev-rows").addEventListener("click", (e) => {
   const li = e.target.closest("li[data-i]"); if (!li) return;
-  const row = leftRows()[+li.dataset.i];
-  if (ui.swapFrom) { finishSwap(row); return; }
-  ui.left = +li.dataset.i; renderLeft(); refresh();
-  if (ui.tab !== "loops") {
-    for (const m of auditionMessages(row, { bass: $("bass").checked })) sendMidi(m);
-    say(`${poolLabel(row.engine, row.pos)} ${row.name}${row.slot ? ` (${row.label})` : ""} · program change ${row.pos}: plays when the FM-1 is on ${ENGINE_NAMES[row.engine]}.`);
+  const i = +li.dataset.i, row = devRows()[i];
+  if (ui.swapFrom) { const from = ui.swapFrom; ui.swapFrom = null; swapRows(from, row); return; }
+  pick("dev", i, e, devRows().map((_, k) => k)); renderDev(); refresh();
+  if (ui.tab !== "loops" && row.type !== "empty" && !e.shiftKey && !e.metaKey && !e.ctrlKey) {
+    audition(row);
   }
 });
-$("right-rows").addEventListener("click", (e) => {
+$("lib-rows").addEventListener("click", (e) => {
   const li = e.target.closest("li[data-i]"); if (!li) return;
-  ui.right = +li.dataset.i; renderRight(); refresh();
+  pick("lib", +li.dataset.i, e, libVisible().map(({ i }) => i)); renderLib(); refresh();
 });
 $("lib-src").addEventListener("change", () => { ui.libSrc = $("lib-src").value; loadLibrary(); });
-$("lib-this").addEventListener("change", () => { ui.right = null; renderRight(); refresh(); });
+$("lib-this").addEventListener("change", () => { clearSel("lib"); renderLib(); refresh(); });
 $("lib-files").addEventListener("click", () => $("lib-file").click());
 $("lib-file").addEventListener("change", act(async () => {
-  const items = [], errs = [];
+  const items = [], errs = []; let pack = null;
   for (const f of $("lib-file").files) {
-    try { items.push(...libraryItemsFromFile(f.name, /\.syx$/i.test(f.name) ? new Uint8Array(await f.arrayBuffer()) : await f.text())); }
-    catch (e) { errs.push(e.message); }
+    try {
+      const content = /\.syx$/i.test(f.name) ? new Uint8Array(await f.arrayBuffer()) : await f.text();
+      const got = libraryItemsFromFile(f.name, content);
+      let j = null; try { j = typeof content === "string" ? JSON.parse(content) : null; } catch (_) {}
+      if (j && j.format === "choralroot-pack") { pack = { id: `filepack:${ui.filePacks.length}`, name: j.name || f.name, items: got }; ui.filePacks.push(pack); }
+      else items.push(...got);
+    } catch (e) { errs.push(e.message); }
   }
   $("lib-file").value = "";
-  ui.fileItems = [...(ui.fileItems || []), ...items]; ui.libSrc = "files"; renderSources();
+  if (items.length) ui.fileItems = [...(ui.fileItems || []), ...items];
+  ui.libSrc = pack ? pack.id : items.length ? "files" : ui.libSrc; renderSources();
   await loadLibrary();
-  say(`${items.length} item${items.length === 1 ? "" : "s"} read${errs.length ? `; ${errs.join("; ")}` : ""}. Keep a sound in This browser by placing it, or Save as a file.`, errs.length ? "err" : "");
+  say(`${items.length + (pack ? pack.items.length : 0)} item(s) read${pack ? ` (pack ${pack.name}: Keep all in this browser keeps it)` : ""}${errs.length ? `; ${errs.join("; ")}` : ""}.`, errs.length ? "err" : "");
 }));
 $("connect").addEventListener("click", () => connectMidi());
+
+/* ---- drag and drop: within the FM-1's pool (reorder / swap), library -> FM-1 (Place), FM-1 -> library (Keep) */
+for (const side of ["dev", "lib"]) {
+  $(`${side}-rows`).addEventListener("dragstart", (e) => {
+    const li = e.target.closest("li[data-i]"); if (!li) return;
+    const i = +li.dataset.i;
+    if (!ui[side].sel.has(i)) { ui[side] = { sel: new Set([i]), anchor: i, primary: i }; }
+    ui.drag = { side, i }; ui.focus = side;
+    e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", `${side}:${i}`);
+  });
+  $(side).addEventListener("dragover", (e) => { if (ui.drag && connected()) { e.preventDefault(); const li = e.target.closest("li[data-i]"); document.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop")); if (li) li.classList.add("drop"); else $(side).classList.add("drop"); } });
+  $(side).addEventListener("dragleave", (e) => { if (e.target === $(side)) $(side).classList.remove("drop"); });
+  $(side).addEventListener("drop", act(async (e) => {
+    e.preventDefault(); document.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop"));
+    const drag = ui.drag; ui.drag = null; if (!drag || ui.busy) return;
+    const li = e.target.closest("li[data-i]"), to = li ? +li.dataset.i : null;
+    if (side === "dev" && drag.side === "lib") return placeItems(libSel(), to == null ? null : devRows()[to]);
+    if (side === "lib" && drag.side === "dev") return keepRows(devSel());
+    if (side === "dev" && to != null && to !== drag.i) {
+      const from = devRows()[drag.i], target = devRows()[to];
+      if (ui.tab === "loops") return swapRows({ loop: from.slot }, target);
+      if (target.type === "init" || target.type === "empty") throw new Error("Drop onto a factory preset or a user sound of this pool");
+      return swapRows({ row: from }, target);
+    }
+  }));
+}
 
 /* ---- the keyboard: two octaves; mouse and the computer keys (the emulator's Ableton layout) */
 const KEYS = "awsedftgyhujkolp;']";
@@ -513,8 +668,11 @@ $("bass").addEventListener("change", () => { for (const key of [...held.keys()])
 
 /* ---- start */
 (async () => {
-  buildKb(); renderLeft(); renderRight(); refresh();
+  buildKb(); renderAll();
   try { ui.packs = EMBED_PACKS ? EMBED_PACKS.index : await loadPackIndex(fetchJson); } catch (_) { ui.packs = []; }
+  try {     // the factory sounds by engine and position (Keep / Save of a factory row)
+    ui.fpacks = factoryFiles(EMBED_PACKS ? Object.values(EMBED_PACKS.packs) : await Promise.all(ui.packs.map((p) => fetchJson(p.url))));
+  } catch (_) { ui.fpacks = {}; }
   renderSources();
   if (SIM) {
     if (ui.packs.length) { ui.libSrc = ui.packs[0].file; renderSources(); }   // (the simulator opens on the first pack)

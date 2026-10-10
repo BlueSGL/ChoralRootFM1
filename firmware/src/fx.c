@@ -544,12 +544,12 @@ static void mix_parts_split(uint32_t n)
     c1_lfo[1] = mulq15(t1->lfo_val, t1->lfo_fade);
     track_lfo_tick(t1);
     cr_c1_split = 1;
-    ran = cr_c1_check() && cr_c1_run(c1_part1_job, n);   /* (a misread past the boost, a fault: given up) */
+    ran = cr_c1_check() && cr_c1_run(c1_part1_job, n);   /* (a second misread, a fault: given up) */
     CR_PROF_SKIP();                                     /* (the host's stub ran it here: counted as part1) */
     nr0 = track_render_x(t0, part_buf, part_side, &part_side_on, n, &c1_lfo[0]);
     CR_PROF(CRP_PART0);
-    if (ran && cr_c1_wait())                            /* 8 ms or a fault: core 1 held for good (C1_GAVE_UP, the
-                                                         * rails' boost asked for), core 0 does it */
+    if (ran && cr_c1_wait())                            /* 8 ms or a fault: core 1 held for good (C1_GAVE_UP),
+                                                         * core 0 does it */
         ran = 0;
     CR_PROF(CRP_WAIT);
     cr_c1_split = 0;

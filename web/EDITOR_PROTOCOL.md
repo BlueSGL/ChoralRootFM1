@@ -615,6 +615,8 @@ each commit, no RESTART.
 | 72 RESTART | — | rc (0); then the device restarts (about 150 ms later, once the reply has left) |
 | 73 DEBUG | — | read-only diagnostics, not a backup object (LIST does not name it): `1, count`, then `count` x u32 (5 x 7 bits each): the audio ISR's and the USB recording's counters and its event log, in the order `tools/fm1_install.py --debug` names them (`DEBUG_NAMES`; firmware `cr_backup.c crb_debug`; docs/USB-AUDIO.md "Reading the counters"). Other clients ignore it |
 | 74 SCREEN | `0` off / `1` on | `0` (rc). The screen off: DISPOFF and the backlight off, nothing drawn, as after 10 minutes without input (docs/INTEGRATION.md section 5); it stays off until `74 SCREEN 1` or a key, button or knob on the unit (which also acts as usual). MIDI in does not wake a screen switched off this way, so a test driving the unit over MIDI keeps it dark. Any other payload: no reply. `tools/fm1_install.py --screen off\|on`; firmware `cr_backup.c` / `cr_ui.c cu_screen_sysex`. Other clients ignore it |
+| 75 CORE1_TEST | `op [args]` | a `CR_CORE1_TEST` test build only (never a release; docs/DUALCORE.md "Reliability"): `op, rc, count`, then `count` x u32 (core 1's state and counters, the rails, the last fault). ops: 0 report, 1 a misread, 2 a null job, 3 a stall, 4 a fault on core 1, 5 the rails, 6 `rail level` (SYSVDD 6..14, VDC14 0..4). Any other build answers the single byte `127` (unsupported). `tools/core1_fault_test.py`. Other clients ignore it |
+| 76 SELECT | `part engine pos [pos_hi]` | `rc`: 0 done, 1 bad part or engine (part 0 chord / 1 bass; a melodic engine the unit shows), 2 bad pool position, 3 busy (EDIT or SAVE open on the unit). Part `part` to engine `engine` and its pool position `pos + 128 x pos_hi` (0 INIT, 1.. the factory presets, then the user's added ones: the order PRESETS turns, `cr_bank.c` pools), live, as OPT + PRESETS then PRESETS would (the device manager's audition). Without its position: no reply. `tools/fm1_install.py --select PART ENGINE POS`; firmware `cr_backup.c crb_select` |
 
 Objects (Felucca's ids where Felucca has the same object; 9..21 and 40..49 are ChoralRoot's):
 
@@ -640,7 +642,10 @@ version 3 or 2 (3536) or version 1 (3344; converted at boot), or 0; 40..49 a loo
 slot). The data is staged in RAM; the commit checks the length, the CRC and the content (the panel table and the
 settings import; a bank's magic, record size and slot count; the FM6 bank's layout and bytes; the VA store's header and
 every patch; the loop record's full unpack) and then writes with storage.c's protocol (the other copy, the header
-last: a torn write leaves the previous copy). The RAM mirrors are reloaded from flash after each commit. Busy
+last: a torn write leaves the previous copy). The RAM mirrors are reloaded from flash after each commit; after a
+commit of a user bank (6, 7) or a patch store (9, 10, 11, 12, 13, 22), a part (chord or bass) playing a slot that
+object holds (slot k is patch k in every store), or a factory preset a slot now binds, loads that slot again at once
+(`cr_backup.c crb_reload`: a DX7 patch uploaded into the playing slot is heard without touching the unit). Busy
 (rc 3): a begin or a commit while a loop plays, records, or a slot load is on its way; the session
 stays, the page waits a second and sends it again ("Stop the loop on the FM-1"). Stale (rc 5): no begin, another id,
 a USB reset, 15 s without a request, or the UI reused the staging buffer (a loop slot loaded or saved meanwhile).

@@ -15,9 +15,9 @@
  * misreads, faults and stalls", Kerem Kilic / Melodee, GPL-3.0): with Dual Core On the core rails go up at power-on
  * (hal/fm1_power.h: SYSVDD 14 = 1.35 V, VDC14 4 = 1.45 V) before core 1 starts; core 1 runs only a request it read
  * right (hal/fm1_cpu1.h fm1_c1_poll; a misread is counted, never run); a fault about core 1 holds it and core 0 goes
- * on (fm1_c1_fault_c). The escalation (cr_c1_assess): the first misread, fault or stall asks for the rails' boost
- * (SYSVDD 15 = 1.38 V, VDC14 5 = 1.50 V), applied by the main loop (cr_c1_supply_poll: P33 is not IRQ-safe); after
- * a misread core 1 keeps working; a misread after the boost, or any fault or stall: C1_GAVE_UP.
+ * on (fm1_c1_fault_c). The escalation (cr_c1_assess): a first misread is counted and core 1 keeps working; a second
+ * misread (a later block that sees new ones), or any fault or stall: C1_GAVE_UP, cr_dbg.c1_fallback = 1. The rails
+ * are never raised past 14 / 4 (the user's decision after Charles Vestal's review of the PR: device safety).
  * While core 1 is alive (C1_OK) each of parts 0 and 1 has its own budget of VBUDGET units (voice.c voices_busy).
  * CR_CPU1 0 (felucca.c, tests/hostsim.c, tests/regress.c): none of this, the code as before. The emulator builds it
  * with 1 and a stub core that runs the job at once, when handed (before part 0: the split must not depend on the
@@ -44,7 +44,8 @@ typedef struct {
     uint32_t c1_jobs;                /* jobs core 1 rendered */
     uint32_t c1_stack;               /* bytes of core 1's stack used at most (its "C1MK" fill, cr_c1_stack_used) */
     uint32_t c1_start_us;            /* how long core 1 took to answer at power-on */
-    uint8_t c1_escalated;            /* 0; 1 the rails' boost asked for (the first misread, fault or stall); 2 applied */
+    uint8_t c1_fallback;             /* 1: core 1 was given up this session (a second misread, a fault, a stall); RAM only */
+    uint8_t c1_misreads;             /* audio blocks that found new misreads (cr_c1_assess): the first is forgiven */
     uint8_t rail_boot[2], rail_now[2];   /* SYSVDD, VDC14 levels: the boot loader's, now (hal/fm1_power.h; host 11, 3) */
     uint32_t mark;                   /* the last stage mark (prof units) */
     uint32_t cur[CRP_N];             /* this half buffer's stages (prof units, its blocks summed) */
@@ -81,13 +82,6 @@ static void cr_rails_now(void)
     cr_dbg.rail_now[1] = fm1_power.now[FM1_RAIL_VDC14];
 }
 static void cr_rails_init(void) { fm1_power_init(); cr_rails_now(); }       /* IRQs off: power-on */
-static void cr_rails_boost(void)                    /* the main loop */
-{
-    fm1_irq_off();
-    fm1_power_boost();
-    fm1_irq_on();
-    cr_rails_now();
-}
 static uint32_t cr_c1_stack_used(void)              /* the C1MK fill: the deepest word core 1's usp reached */
 {
     uint32_t i = 0;
@@ -146,7 +140,6 @@ static void cr_rails_init(void)
     if (cr_dbg.rail_now[0] < 14u) cr_dbg.rail_now[0] = 14;
     if (cr_dbg.rail_now[1] < 4u) cr_dbg.rail_now[1] = 4;
 }
-static void cr_rails_boost(void) { cr_dbg.rail_now[0] = 15; cr_dbg.rail_now[1] = 5; }
 #endif
 
 /* a stage's time without the reading of the clock (the host's counter costs ~6.6 k instructions a reading: measured
@@ -166,30 +159,24 @@ static void cr_prof_calibrate(void)
 }
 static inline int cr_dualcore_active(void) { return cr_dbg.c1 == C1_OK; }
 
-/* ------------------------------------------------ the escalation (after Melodee PR 21) --- */
-static uint32_t cr_c1_forgiven;      /* misreads seen up to the boost's application: forgiven */
-/* core 0 (the audio ISR): what core 1's counters say. 0 = keep core 1, -1 = give it up. The first misread asks for
- * the boost and keeps core 1 (misreads until the main loop applies it are the same event); a misread after it, or
- * any fault or stall, gives up (and asks for the boost too: core 0 runs on alone at the higher rail) */
+/* ------------------------------------------------ the escalation (after Melodee PR 21, no boost) --- */
+static uint32_t cr_c1_seen;          /* core 1's misread count at the last look */
+/* core 0 (the audio ISR): what core 1's counters say. 0 = keep core 1, -1 = give it up. New misreads in a first block:
+ * counted, core 1 kept (one block's burst is one event); new misreads in a later block, or any fault or stall: give up */
 static int cr_c1_assess(uint32_t rejected, uint32_t faults, int stalled)
 {
-    if (faults || stalled) {
-        if (!cr_dbg.c1_escalated)
-            cr_dbg.c1_escalated = 1;
+    if (faults || stalled)
         return -1;
-    }
-    if (rejected <= cr_c1_forgiven)
+    if (rejected == cr_c1_seen)
         return 0;
-    if (!cr_dbg.c1_escalated) {
-        cr_dbg.c1_escalated = 1;
-        return 0;
-    }
-    return cr_dbg.c1_escalated == 1u ? 0 : -1;
+    cr_c1_seen = rejected;
+    return ++cr_dbg.c1_misreads > 1u ? -1 : 0;
 }
 static void cr_c1_give_up(void)
 {
     cr_c1_hold();
     cr_dbg.c1 = C1_GAVE_UP;
+    cr_dbg.c1_fallback = 1;
 }
 /* each block before the hand-over (fx.c): 1 = core 1 may take it */
 static int cr_c1_check(void)
@@ -202,7 +189,7 @@ static int cr_c1_check(void)
     }
     return 1;
 }
-/* the wait (fx.c): 0 = done; else core 1 is held for good (a stall or a fault), C1_GAVE_UP, the boost asked for */
+/* the wait (fx.c): 0 = done; else core 1 is held for good (a stall or a fault), C1_GAVE_UP */
 static int cr_c1_wait(void)
 {
     int rc = cr_c1_wait_core();
@@ -211,16 +198,6 @@ static int cr_c1_wait(void)
         cr_c1_give_up();
     }
     return rc;
-}
-/* the main loop: apply a boost the audio ISR asked for (P33 is the main loop's; IRQs off for a step or two, 100 us
- * each). The misreads seen until now are forgiven: the next one gives core 1 up */
-static void cr_c1_supply_poll(void)
-{
-    if (cr_dbg.c1_escalated != 1u)
-        return;
-    cr_rails_boost();
-    cr_c1_forgiven = cr_c1_rejected();
-    cr_dbg.c1_escalated = 2;
 }
 /* this block: part 1 renders as core 1's job (its own scratch where an engine has shared scratch: fm6_core.c) */
 static volatile uint8_t cr_c1_split;
@@ -305,7 +282,6 @@ static void cr_prof_window(void)
 #define cr_prof_window() ((void)0)
 #define cr_c1_boot() ((void)0)
 #define cr_c1_stack_used() 0u
-#define cr_c1_supply_poll() ((void)0)
 #define cr_c1_rejected() 0u
 #define cr_c1_faults() 0u
 #endif

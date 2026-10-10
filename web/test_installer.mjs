@@ -248,6 +248,7 @@ function backupSide(version, ids, objs = []) {
     }
     if (cmd >= 11 && cmd <= 14) { if (cmd >= 13) b.log.push(32 + a[0]); return cmd === 12 ? [a[0], a[1], a[2], a[3], 0] : [a[0], 0]; }
     if (cmd === 72 && /^ChoralRoot/.test(version)) { b.restarts++; return [0]; }
+    if (cmd === 76 && /^ChoralRoot/.test(version)) { b.selected = a.slice(0, 3); return a.length === 3 && a[0] <= 1 ? [0] : null; }   // SELECT (part, engine, position)
     return null;
   };
   return b;

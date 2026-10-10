@@ -104,7 +104,7 @@ static inline __attribute__((always_inline)) int fm1_c1_poll(uint32_t *done)
 
 #ifndef FM1_CPU1_LOGIC_ONLY
 #define FM1_HAVE_CPU1 1                 /* firmware/src/cr_cpu1.h: the real core, not the host's inline stub */
-#include "fm1_power.h"              /* the core rails (cr_cpu1.h: up before core 1 starts, the escalation) */
+#include "fm1_power.h"              /* the core rails (cr_cpu1.h: up before core 1 starts) */
 
 #define FM1_C1_CON (*(volatile uint32_t *)0x1EEE004u)
 #define FM1_C1_CLK (*(volatile uint32_t *)0x00010008u)

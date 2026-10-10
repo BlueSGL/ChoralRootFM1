@@ -17,7 +17,7 @@ import vm from "node:vm";
 import { captureBackup, loopHeader } from "./fm1backup.js";
 import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObjects, recordValid } from "./fm1sounds.js";
 import {
-  managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
+  selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
   libraryItemsFromFile, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH,
 } from "./fm1manager.js";
@@ -193,12 +193,26 @@ ok(midiText(auditionMessages(fm6[2])[0]) === "C0 02" && midiText(auditionMessage
   "audition: program change of the pool position (bass: channel 2, position + 1)");
 ok(midiText(noteMessage(true, 60)) === "90 3C 64" && midiText(noteMessage(false, 60, { bass: true })) === "81 3C 00", "keyboard: note on ch 1 velocity 100, note off ch 2");
 
+const ssim = makeSimFM1();
+const pad = P(objs0)[12][5];
+ok(midiText(selectRequest(pad)[1]) === "00 0C 05" && midiText(selectRequest(pad, { bass: true })[1]) === "01 0C 05", "select: SysEx 76 part, engine, position (chord 0, bass 1)");
+const sel1 = await selectOnUnit(ssim.request, pad);
+ok(sel1.ok && ssim.selected.engine === 12 && ssim.selected.pos === 5 && playingText(pad) === "FM6 · 05 FM PAD on the unit", "select: the unit switches to FM6 05 FM PAD; the page says what plays");
+ok((await selectOnUnit(ssim.request, { engine: 4, pos: 0 })).rc === 1 && (await selectOnUnit(ssim.request, { engine: 12, pos: 99 })).rc === 2, "select: bad engine rc 1, bad position rc 2");
+ssim.playing = true; const selBusy = await selectOnUnit(ssim.request, pad); ssim.playing = false;
+ok(selBusy.rc === 3, "select: busy rc 3");
+ssim.select = false;
+ok((await selectOnUnit(ssim.request, pad)).unsupported === true, "select: an older firmware (no reply) -> unsupported (the program change fallback)");
+ok(/manager_select|selectOnUnit/.test(readFileSync(join(HERE, "manager.html"), "utf8")) && readFileSync(join(HERE, "manager.html"), "utf8").includes("reselect("), "page: rows select on the unit, writes re-select the affected row");
+
 /* -------------------------------------------------------------- the page --- */
 const html = readFileSync(join(HERE, "manager.html"), "utf8");
 const count = (sub) => html.split(sub).length - 1;
 ok(count("/*LIB*/") === 1 && count("/*PACKS*/null") === 1 && count('<script type="module">') === 1, "page: /*LIB*/ and /*PACKS*/null once, one module script");
-ok(["eng-tabs", "left-rows", "right-rows", "lib-src", "place", "keep", "place-all", "rename", "swap", "delete", "save-file", "backup", "restore", "undo", "kb", "bass"]
+ok(["eng-tabs", "dev-rows", "lib-rows", "cap", "dev-fw", "keep-all", "sel-all", "save-pack", "save-users", "lib-src", "place", "keep", "place-all", "rename", "swap", "delete", "save-file", "backup", "restore", "undo", "kb", "bass"]
   .every((id) => html.includes(`id="${id}"`)), "page: the panes, Place / Keep, the bottom bar, the keyboard");
+ok(html.indexOf('id="lib"') < html.indexOf('id="dev"') && html.includes("Place →") && html.includes("← Keep") && html.includes("draggable") && html.includes("shiftKey") && html.includes("metaKey") && html.includes("simObjects(30)"),
+  "page: Library left, FM-1 right (Place →, ← Keep), multi-select, drag and drop, the 30-sound simulator");
 ok(html.includes('"ChoralRoot FM-1"') && html.includes("onstatechange") && html.includes('get("sim") === "1"'), "page: the port name, hot-plug, ?sim=1");
 ok(!/<link\s/i.test(html) && !/src="http/.test(html), "page: no external assets");
 const strip = (src) => src.replace(/^export\s+/gm, "").replace(/^import .*?;\n/gm, "");

@@ -283,10 +283,6 @@ static void fm1_main(void)
                                                          * the bus; the setting is saved as any other, cr_settings.c) */
             ui_message("USB RECONNECTING");
 #endif
-#if CR_CPU1
-        cr_c1_supply_poll();                            /* core 1 misread, faulted or stalled: the core rails' boost
-                                                         * (cr_cpu1.h; P33 is the main loop's) */
-#endif
         if (fm1_ms > BG_SETTLE_MS && bootguard.pending)  /* a crash or hang in the first 30 s counts */
             bootguard_settled(&bootguard);              /* (SAFE MODE stays for this session: cr_safe) */
         {
