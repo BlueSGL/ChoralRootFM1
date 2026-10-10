@@ -102,14 +102,15 @@ run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/choralroot.fwsc
 
 # the loader, and its interruption model (docs/BOOT-SAFETY.md "As built"): the install cut after every erase and every
 # programmed page, the boot stub's decision on each state, the resume; over a firmware without the stub (the 0.16
-# layout), over the same stub with another body, over the dark unit's state. Then the old order: a package without
+# layout), over the same stub with another body, over the dark unit's state, over an earlier stub (a stub change).
+# Then the old order: a package without
 # the marker written by this loader
-for m in no-stub other-body no-stub-other; do
+for m in no-stub other-body no-stub-other old-stub; do
     python3 tools/make_stub_test_pkg.py "$m" -o "$OUT/stub-test-$m.fwsc" >/dev/null
 done
 $CC -O2 -o "$OUT/ldr_test" tests/ldr_test.c
 run "update loader: no stub -> this build; the interruption model" "$OUT/ldr_test" "$OUT/stub-test-no-stub.fwsc" \
-    build/choralroot.fwsc "$OUT/stub-test-other-body.fwsc" "$OUT/stub-test-no-stub-other.fwsc"
+    build/choralroot.fwsc "$OUT/stub-test-other-body.fwsc" "$OUT/stub-test-no-stub-other.fwsc" "$OUT/stub-test-old-stub.fwsc"
 run "update loader: this build -> a package without the marker (address order)" "$OUT/ldr_test" build/choralroot.fwsc \
     "$OUT/stub-test-no-stub.fwsc"
 

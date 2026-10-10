@@ -3,7 +3,7 @@
 /* Host test of the Felucca update loader (firmware/loader/ldr_core.c): a fake
  * host serves a package over the SysEx protocol, the "device" flash starts as
  * another package's flash.bin (as if that firmware were installed).
- *   ldr_test OLD.fwsc NEW.fwsc [SAME_STUB.fwsc OTHER_OLD.fwsc]
+ *   ldr_test OLD.fwsc NEW.fwsc [SAME_STUB.fwsc OTHER_OLD.fwsc [OLD_STUB.fwsc]]
  *
  * With a NEW that carries ChoralRoot's boot stub and commit marker, the interruption model (docs/BOOT-SAFETY.md
  * "As built"): the install is cut after EVERY flash operation (each erase, each programmed page), the flash as it
@@ -13,6 +13,9 @@
  *                                                             erase and write is the one unprotected window
  *   SAME_STUB (NEW's stub, another body) -> NEW                every later install: no unprotected cut at all
  *   the dark unit of 2026-10-07 (OLD's sectors 0x4000..0x24FFF, then OTHER_OLD's: no stub, half and half) -> NEW
+ *   OLD_STUB (an earlier stub, another body) -> NEW          a release that changes the stub (v1 -> v2): the old
+ *                                                             stub guards up to the sector's erase, the new one
+ *                                                             from its last page on; the window between is the same
  * A cut state is: B the stub boots it, R the stub rescues (the staged loader), O the old firmware still whole (no
  * stub yet, nothing it uses touched), U unprotected (no working stub in sector 0x4000 and not the whole old app). */
 #include <setjmp.h>
@@ -201,7 +204,8 @@ static void restore(const uint8_t *base)
     rx_full = 0;
 }
 
-/* base: the app area before the install; base_stub: it carries NEW's stub (then it must boot); base_whole: without
+/* base: the app area before the install; base_stub: it carries a stub, NEW's or an earlier one (then it must boot,
+ * and its sector is a working stub as long as it is whole: the decision's code is the same); base_whole: without
  * a stub, it is a whole firmware (the SPL boots it); want_u: the unprotected cut points this case may have */
 static int cut_case(const char *name, const uint8_t *base, int base_stub, int base_whole, uint32_t want_u)
 {
@@ -233,7 +237,8 @@ static int cut_case(const char *name, const uint8_t *base, int base_stub, int ba
         ops = 0; cut_at = k;
         if (!setjmp(cut_jmp)) { ldr_session(); bad++; }               /* (it must be cut, not finish) */
         cut_at = 0;
-        stub_here = !memcmp(nor + LDR_STUB_SEC, new_fl + LDR_STUB_SEC, 0x1000);
+        stub_here = !memcmp(nor + LDR_STUB_SEC, new_fl + LDR_STUB_SEC, 0x1000) ||
+                    (base_stub && !memcmp(nor + LDR_STUB_SEC, base + LDR_STUB_SEC, 0x1000));
         if (stub_here) {
             uint32_t d = stub_says(&r);
             st = d == STUB_BOOT ? 3 : 2;
@@ -272,7 +277,7 @@ int main(int argc, char **argv)
     uint8_t *old, head[0x4000];
     uint32_t ofo, nfo;
     int bad = 0, rc;
-    if (argc < 3) { printf("usage: ldr_test OLD.fwsc NEW.fwsc [SAME_STUB.fwsc OTHER_OLD.fwsc]\n"); return 2; }
+    if (argc < 3) { printf("usage: ldr_test OLD.fwsc NEW.fwsc [SAME_STUB.fwsc OTHER_OLD.fwsc [OLD_STUB.fwsc]]\n"); return 2; }
     old = load_logical(argv[1], &olen);
     logical = load_logical(argv[2], &logical_len);
     ofo = flash_off(old);
@@ -390,6 +395,17 @@ int main(int argc, char **argv)
                 stub_result_t r;
                 bad += check("the same cut (33 sectors in) with a stub in place: rescue, the loader",
                              stub_says(&r) == STUB_LOADER && r.mk != STUB_MK_OK);
+            }
+            if (argc >= 6) {                                          /* a stub change: v1 on the unit, v2 in the package */
+                size_t vlen;
+                uint8_t *v1 = load_logical(argv[5], &vlen);
+                uint32_t vfo = flash_off(v1);
+                bad += check("OLD_STUB: a marker, another stub sector, another body",
+                             has_marker(v1 + vfo) && memcmp(v1 + vfo + 0x4000, new_fl + 0x4000, 0x1000) != 0 &&
+                             memcmp(v1 + vfo + 0x5000, new_fl + 0x5000, 0x8C000) != 0);
+                bad += check(".. its directory (0x4000..0x411F) is the new package's: only the stub's bytes differ",
+                             !memcmp(v1 + vfo + 0x4000, new_fl + 0x4000, 0x120));
+                bad += cut_case("an earlier stub (v1) -> this stub", v1 + vfo, 1, 0, 16);
             }
         }
     }
