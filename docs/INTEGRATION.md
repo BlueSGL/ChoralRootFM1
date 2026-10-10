@@ -56,8 +56,9 @@ tables of `tools/gen_tables.py`), with the platform it needs merged into the kep
 part, `NPOLY` 8, `VBUDGET` 16 units: an FM6 voice one, any other two, so the others keep their eight; the `engine_t`
 hooks `alloc legato mono_key post cap units`, `vmod_t.plog`, `voice_was`, `track_t`'s `foot breath porta bend_raw`, the
 `F_OFS F_FMNOTE F_FMFRQ` kinds), `voice.c` (the budget in units, the hooks; ChoralRoot's fade-and-defer steal, `render2`
-and `part_side` kept, an engine with `alloc` steals in place as Dexed does), `engines.c` (`eng_state[NPART]`: PHYS's,
-WHEEL's and FM6's runtime state in one pool union a part, cleared at an engine switch), `fx.c` (Melodee's saturation of
+and `part_side` kept, an engine with `alloc` steals in place as Dexed does), `engines.c` (`eng_state[ENG_STATE_NPART]`: PHYS's,
+WHEEL's and FM6's runtime state in one pool union a part, cleared at an engine switch; the chord and the bass part only
+with `FELUCCA_SEQ 0`, 2 x 12888 B), `fx.c` (Melodee's saturation of
 a loud part; the limiter, trim, PAN and stereo lines kept), `mod.c` (CC 2 / 4 / 5 / 65), `params.c` (the new kinds),
 `usb.c` (DX7 frames to `fm6_sx_byte`, SysEx bytes sent as single-byte packets), `midi_control.c` / `cr_out.c`
 (`bend_raw`). The other engines render bit for bit as before. `FM6_POLY` 8 in this unit (Melodee: 16). ChoralRoot's

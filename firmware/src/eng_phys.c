@@ -94,11 +94,13 @@ static void phys_legacy(int16_t *e)
 
 static phys_slot_t *phys_slot_of(track_t *t, voice_t *v)
 {
+    phys_slot_t *S;
     uint32_t i;
     if (t < &trk[0] || t >= &trk[NPART])
         return 0;
+    S = phys_slots((uint32_t)(t - trk));                /* (0: a part without engine state, engines.c) */
     i = (uint32_t)(v - t->v);
-    return i < PHYS_POLY ? &phys_slots((uint32_t)(t - trk))[i] : 0;
+    return S && i < PHYS_POLY ? &S[i] : 0;
 }
 
 /* a clean state for model md */

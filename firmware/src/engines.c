@@ -44,7 +44,18 @@
  * fades the old one out first, voice.c engine_block), so their states share one block per part, cleared at every
  * switch: an engine finds its state as at power-on (the pool section is zeroed at boot). PHYS's voice slots, WHEEL's
  * part and voices, FM6's 16 voices and controllers. The patch of a part (FM6's, the VA's) is not in here; nor are the
- * states of the engines ChoralRoot does not build (DRUM, GRAIN, SLICE keep their own: Felucca's unit) */
+ * states of the engines ChoralRoot does not build (DRUM, GRAIN, SLICE keep their own: Felucca's unit).
+ * ENG_STATE_NPART: the parts that have one. Felucca's sequencer plays all four; ChoralRoot's units (FELUCCA_SEQ 0)
+ * play the chord part and the bass part only (cr_out.c: midi_event takes parts 0 / 1, cr_route.part is CR_PART_CHORD,
+ * CR_PART_BASS or none), as eng_va.c's VA_NPART and eng_quad.c's QUAD_NPART. A part above them has no state (0, never
+ * another part's): its engine takes no note and does no per-block work, so it is silent; it never gets a note there */
+#ifndef ENG_STATE_NPART
+#if FELUCCA_SEQ
+#define ENG_STATE_NPART NPART
+#else
+#define ENG_STATE_NPART 2u       /* (ChoralRoot: chord, bass; 12.9 KB of pool a part: PHYS's three slots) */
+#endif
+#endif
 static union {
     phys_slot_t phys[PHYS_POLY];
     drw_part_t wheel;
@@ -52,16 +63,20 @@ static union {
 #if FELUCCA_CZ
     cz_part_t cz;                /* CZ-1's voices: six envelopes each, vibrato, noise */
 #endif
-} eng_state[NPART] __attribute__((section(".pool")));
-static phys_slot_t *phys_slots(uint32_t part) { return eng_state[part % NPART].phys; }
-static drw_part_t *drw_of(const track_t *t) { return &eng_state[(uint32_t)(t - trk) % NPART].wheel; }
-static fm6_part_t *fm6_part(uint32_t part) { return &eng_state[part % NPART].fm6; }
+} eng_state[ENG_STATE_NPART] __attribute__((section(".pool")));
+static phys_slot_t *phys_slots(uint32_t part) { return part < ENG_STATE_NPART ? eng_state[part].phys : 0; }
+static drw_part_t *drw_of(const track_t *t)
+{
+    uint32_t part = (uint32_t)(t - trk);
+    return part < ENG_STATE_NPART ? &eng_state[part].wheel : 0;
+}
+static fm6_part_t *fm6_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].fm6 : 0; }
 #if FELUCCA_CZ
-static cz_part_t *cz_part(uint32_t part) { return &eng_state[part % NPART].cz; }
+static cz_part_t *cz_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].cz : 0; }
 #endif
 static void eng_state_clear(uint32_t part)
 {
-    if (part < NPART)
+    if (part < ENG_STATE_NPART)
         memset(&eng_state[part], 0, sizeof eng_state[part]);
 }
 

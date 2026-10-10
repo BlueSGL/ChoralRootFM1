@@ -433,7 +433,8 @@ typedef struct {                                         /* a part's (engines.c 
     fm6_ctl_t pt;
     int32_t dc_x1, dc_y1;                                /* the DC filter: the last input; the last output << 8 */
 } fm6_part_t;
-static fm6_part_t *fm6_part(uint32_t part);             /* engines.c */
+static fm6_part_t *fm6_part(uint32_t part);             /* engines.c (0: a part without one, ENG_STATE_NPART: the
+                                                         * engine's entries below leave it alone, it is silent) */
 #define FM6P(t) fm6_part((uint32_t)((t) - trk))
 #define FM6F(t) fm6_fn[(uint32_t)((t) - trk) % NTRK]   /* the track's function settings */
 
@@ -574,8 +575,11 @@ static int fm6_playing(const track_t *t, uint32_t i)
 static uint32_t fm6_alloc(track_t *t, uint32_t note)
 {
     fm6_part_t *P = FM6P(t);
-    uint32_t k = P->pt.rr % FM6_POLY, best = k, i;
+    uint32_t k, best, i;
     int32_t bs = -1;
+    if (!P)
+        return 0;
+    k = best = P->pt.rr % FM6_POLY;
     for (i = 0; i < FM6_POLY; i++) {                     /* (Dexed's 16; ChoralRoot may cap it: FM6_POLY) */
         int32_t sc = (fm6_playing(t, k) ? 0 : 4) + (t->v[k].gate ? 0 : 2) + (P->v[k].played && t->v[k].note == note);
         if (sc > bs || (sc == bs && t->v[k].age < t->v[best].age)) {
@@ -659,6 +663,8 @@ static void fm6_key(track_t *t, uint32_t note)
     uint32_t i, k, c, l, nt;
     const uint8_t *ed;
     int32_t bs = -1;
+    if (!P)
+        return;
     fm6_sync(t, 0);
     ed = fm6_ed(t);
     k = P->pt.mcur % 16u;
@@ -699,10 +705,14 @@ static void fm6_note_on(track_t *t, voice_t *v)
 {
     fm6_part_t *P = FM6P(t);
     uint32_t k, i, vi = (uint32_t)(v - t->v), note, vel;
-    fm6_voice_t *s = fm6_state(t, v);
+    fm6_voice_t *s;
     const uint8_t *ed;
-    int mono = t->p[P_VOICE] != V_POLY, steal = P->pt.steal || (mono && s->played), ps;
+    int mono = t->p[P_VOICE] != V_POLY, steal, ps;
     int32_t src[6];
+    if (!P)
+        return;
+    s = fm6_state(t, v);
+    steal = P->pt.steal || (mono && s->played);
     P->pt.steal = 0;
     fm6_sync(t, v);
     ed = fm6_ed(t);
@@ -759,8 +769,12 @@ static void fm6_legato(track_t *t, voice_t *v)
 {
     fm6_part_t *P = FM6P(t);
     uint32_t k, c;
-    fm6_voice_t *s = fm6_state(t, v), keep = *s;
+    fm6_voice_t *s, keep;
     const uint8_t *ed;
+    if (!P)
+        return;
+    s = fm6_state(t, v);
+    keep = *s;
     fm6_sync(t, v);
     ed = fm6_ed(t);
     if (!P->pt.mnew) {                                   /* a key-up: the voice keyed for this key */
@@ -783,7 +797,7 @@ static void fm6_legato(track_t *t, voice_t *v)
 /* the voice is over: released, and every output operator's envelope (and the feedback operator's) gone under
  * what any engine renders, for good (voice.c engine_t.done). Dexed keeps computing such a voice; FM6 keeps
  * only its control path running (fm6_ghost) */
-static int fm6_done(track_t *t, voice_t *v) { return fm6_state(t, v)->quiet >= 2u; }
+static int fm6_done(track_t *t, voice_t *v) { return !FM6P(t) || fm6_state(t, v)->quiet >= 2u; }  /* (no state: over) */
 
 /* a new Dexed block: key-up, the envelopes, pitch and gains (Dx7Note::compute), the routing */
 static void fm6_control(track_t *t, voice_t *v, fm6_voice_t *s, const vmod_t *m)
@@ -926,10 +940,13 @@ static uint32_t fm6_units(const track_t *t) { (void)t; return 1u; }   /* a voice
 
 static void fm6_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
-    fm6_voice_t *s = fm6_state(t, v);
+    fm6_voice_t *s;
     fm6_scr_t *S = &fm6_scr[CR_C1_IDX(t)];              /* (core 1's own while it renders part 1: cr_cpu1.h) */
     uint32_t i;
     int32_t k = t->p[P_VOICE] == V_UNISON ? VOICE_FS * 2 / 5 : VOICE_FS;   /* UNISON's voices: about one */
+    if (!FM6P(t))
+        return;
+    s = fm6_state(t, v);
     if (!s->sub)
         fm6_control(t, v, s, m);
     s->sub ^= 1u;
@@ -991,6 +1008,8 @@ static void fm6_sync(track_t *t, const voice_t *self)
 
 static void fm6_block(track_t *t)                        /* per part and block: the patch, controllers, LFO */
 {
+    if (!FM6P(t))
+        return;
     fm6_sync(t, 0);
     fm6_ctl_block(t, fm6_ed(t));
 }
@@ -1001,7 +1020,11 @@ static void fm6_post(track_t *t, int32_t *out, uint32_t n, uint32_t nr)
 {
     fm6_part_t *P = FM6P(t);
     uint32_t i;
-    int32_t x1 = P->dc_x1, y = P->dc_y1;
+    int32_t x1, y;
+    if (!P)
+        return;
+    x1 = P->dc_x1;
+    y = P->dc_y1;
     if (!nr) {
         P->dc_x1 = P->dc_y1 = 0;
         return;

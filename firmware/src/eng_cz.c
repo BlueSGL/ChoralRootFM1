@@ -27,10 +27,11 @@ typedef struct { uint32_t rate[8]; int32_t level[8]; uint8_t sustain, end; } cz_
 typedef struct { int32_t level; uint8_t stage, gate; } cz_env_t;
 typedef struct { cz_env_t eg[2][3]; uint32_t vib_phase, vib_ticks, noise; } cz_voice_t;
 typedef struct { cz_voice_t v[NPOLY]; } cz_part_t;
-static cz_part_t *cz_part(uint32_t part);              /* engines.c: shared runtime pool */
+static cz_part_t *cz_part(uint32_t part);              /* engines.c: shared runtime pool (0: a part without one) */
 static cz_voice_t *cz_voice(track_t *t, voice_t *v)
 {
-    return &cz_part((uint32_t)(t - trk) % NPART)->v[(uint32_t)(v - t->v) % NPOLY];
+    cz_part_t *P = cz_part((uint32_t)(t - trk));
+    return P ? &P->v[(uint32_t)(v - t->v) % NPOLY] : 0;
 }
 
 static int32_t cz_env_tick(cz_env_t *e, const cz_env_def_t *d, uint32_t gate)
@@ -66,6 +67,7 @@ static int32_t cz_env_tick(cz_env_t *e, const cz_env_def_t *d, uint32_t gate)
 static void cz_note_on(track_t *t, voice_t *v)        /* Melodee's phase_note_on */
 {
     cz_voice_t *c = cz_voice(t, v);
+    if (!c) return;                                    /* (no engine state: no voice, engines.c ENG_STATE_NPART) */
     memset(c, 0, sizeof *c);
     for (uint32_t l = 0; l < 2u; l++)
         for (uint32_t e = 0; e < 3u; e++) c->eg[l][e].gate = 1;
@@ -89,6 +91,7 @@ static int cz_native_done(track_t *t, voice_t *v)
     const uint8_t *b = cz_patch[(uint32_t)(t - trk) % NTRK].raw;
     uint32_t ls = b[0] & 3u;
     uint32_t a = ls == 1u ? 1u : 0u, z = ls >= 2u ? 1u : a;
+    if (!c) return 1;
     return c->eg[a][2].stage > (b[CZ_ENV_END[a][2]] & 7u) &&
         c->eg[z][2].stage > (b[CZ_ENV_END[ls == 2u ? 0u : z][2]] & 7u);
 }

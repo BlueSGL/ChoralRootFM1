@@ -121,6 +121,7 @@ static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, i
     uint32_t inc[2], ph[2] = {v->ph[0],v->ph[1]}, tg[2] = {(uint32_t)v->s[0],(uint32_t)v->s[1]};
     int32_t amp[2][2], dc[2] = {v->s[2],v->s[3]}, step[2];
     uint32_t ls = b[0]&3u, first = ls == 1u ? 1u : 0u, last = ls >= 2u ? 1u : first;
+    if (!c) return;                                    /* (a part without engine state: silent) */
     int32_t vib = cz_native_vibrato(c,b), oct = (b[0]>>2) == 1u ? 192 : (b[0]>>2) == 2u ? -192 : 0;
     cz_native_defs(t,v,defs);
     for (uint32_t l=0;l<2u;l++) {

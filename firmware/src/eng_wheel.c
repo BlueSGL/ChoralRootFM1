@@ -114,7 +114,7 @@ typedef struct {                 /* per voice */
 } drw_vc_t;
 
 typedef struct { drw_trk_t t; drw_vc_t v[NPOLY]; } drw_part_t;   /* the part's (engines.c eng_state) */
-static drw_part_t *drw_of(const track_t *t);
+static drw_part_t *drw_of(const track_t *t);                     /* (0: a part without one, silent: ENG_STATE_NPART) */
 
 
 /* the bar level 0..8 of partial k: the registration plus SUB / BODY / TOP */
@@ -128,11 +128,15 @@ static int32_t drw_level(const int16_t *p, uint32_t k)
 /* once per block, before the voices: bar gains, percussion, click, drive, the rotors */
 static void wheel_block(track_t *t)
 {
-    drw_trk_t *T = &drw_of(t)->t;
+    drw_part_t *D = drw_of(t);
+    drw_trk_t *T;
     const int16_t *p = t->p;
     uint32_t k, perc = (uint32_t)p[P_E4] % 7u, rot = (uint32_t)p[P_E7] % 3u;
     int32_t s = 0, lv[DRW_NP];
     uint32_t norm;
+    if (!D)
+        return;
+    T = &D->t;
     for (k = 0; k < DRW_NP; k++) {
         lv[k] = perc && k == DRW_NP - 1u ? 0 : DRW_LV[drw_level(p, k)];   /* PERC on: the 1' bar is off */
         s += lv[k];
@@ -176,7 +180,11 @@ static void wheel_block(track_t *t)
 static void wheel_note_on(track_t *t, voice_t *v)
 {
     uint32_t vi = (uint32_t)(v - t->v) % NPOLY, k, held = 0;
-    drw_vc_t *V = &drw_of(t)->v[vi];
+    drw_part_t *D = drw_of(t);
+    drw_vc_t *V;
+    if (!D)
+        return;
+    V = &D->v[vi];
     for (k = 0; k < NVOICE; k++)                        /* single trigger: another key of the part held? */
         if (&t->v[k] != v && t->v[k].active && t->v[k].gate && t->v[k].stage != 4u)
             held = 1;
@@ -194,10 +202,15 @@ static void wheel_note_on(track_t *t, voice_t *v)
 
 static void wheel_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
-    const drw_trk_t *T = &drw_of(t)->t;
-    drw_vc_t *V = &drw_of(t)->v[(uint32_t)(v - t->v) % NPOLY];
+    drw_part_t *D = drw_of(t);
+    const drw_trk_t *T;
+    drw_vc_t *V;
     int32_t acc[CTL], perc1, clk0, clk1;
     uint32_t i, k;
+    if (!D)
+        return;
+    T = &D->t;
+    V = &D->v[(uint32_t)(v - t->v) % NPOLY];
     if (n > CTL)
         n = CTL;
     for (i = 0; i < n; i++)
