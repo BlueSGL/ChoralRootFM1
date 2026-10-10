@@ -30,7 +30,7 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py --import-syx N FILE [--voice V] [--yes]   (a DX7 voice or bank, or a CZ-1 tone, into slot N)
 
 An install that was interrupted (the cable, the battery): on a ChoralRoot with the boot stub (docs/BOOT-SAFETY.md;
-not 0.16 or older) the FM-1 comes back in update mode at the next power-on (three LED flashes, a black screen): run
+from 0.16 on, 0.15 and older do not have it) the FM-1 comes back in update mode at the next power-on (three LED flashes, a black screen): run
 the install again to finish it. The same on purpose, on a working unit too: hold OCT- alone while switching on,
 three flashes, run the install (or switch off and on: nothing was written). One long flash instead: switch off for
 10 s and try once more. --debug prints a "boot stub" line on a firmware that has it.
@@ -2139,7 +2139,7 @@ def run(a, backend, out, ask):
             print(f"--force: installing over {name} anyway, although it is not supported", file=out)
     print("before writing: the FM-1 must be fully charged (it updates on its battery, and this tool cannot read it), "
           "plugged straight into the computer, and the computer kept awake; an interrupted write can leave it dark "
-          "with no USB device at all (docs/INSTALL-COMPAT.md). With the boot stub on the FM-1 (ChoralRoot after 0.16) "
+          "with no USB device at all (docs/INSTALL-COMPAT.md). With the boot stub on the FM-1 (ChoralRoot from 0.16 on) "
           "an interrupted write is finished by switching the FM-1 on again (or holding OCT- alone while switching on) "
           "and running this install again; the first install of a version with the stub is not yet covered while its "
           "first sector is written", file=out)
