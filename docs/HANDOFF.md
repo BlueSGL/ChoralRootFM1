@@ -52,13 +52,13 @@ Read first, in order: `ChoralRootFM1/PLAN.md` (§3 controls, §4 grammar, §5 sc
 
 ```
 export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
-sh tests/run_cr_tests.sh          # engine 1803, loop 110, settings 84, VA 227364, quad 21178, transpose 24, cpu1 53, backup 138, FM6 30, CZ 33, fm4_div0 5, usbaudio 54, bootguard 94, stub 16143, stub_pkg 265, MIDI 26
+sh tests/run_cr_tests.sh          # engine 1803, loop 110, settings 84, VA 227364, quad 21178, transpose 24, cpu1 53, backup 139, FM6 30, CZ 33, fm4_div0 5, usbaudio 54, bootguard 94, stub 16143, stub_pkg 265, MIDI 26
 sh tests/run_cr_draw.sh           # 88 screens, 0 lint findings
 sh tools/emu/build.sh && sh tools/emu/test_cr.sh && sh tools/emu/test_persist.sh   # PASS / PASS (271 checks)
 sh tools/emu/perf.sh              # scenarios a-h + u: CPU estimate, WAV click analysis
 node web/test_backup.mjs; node web/test_web.mjs; node web/test_sounds.mjs; node web/test_installer.mjs; python3 tests/install_test.py   # sounds 99, installer 101, install (syx too)
 ./build.sh                        # stub line + size line; XIP 76.8 %, RAM 86.1 %, POOL 85.8 % at a7e25bb
-sh tests/run_tests.sh             # Felucca's suite (runs to its end again: ota, ldr, regress 197 goldens, target budget, web, site): known failures only: "text spacing" (font kerning check), Felucca's old 27-slot FM6 editor/backup expectations
+sh tests/run_tests.sh             # Felucca's suite + ota, ldr, regress (197 goldens), target budget, web, site, transporter shim: ends ALL HOST TESTS PASSED, exit 0 (since 2026-10-10: no known failures; it sets DYLD_FALLBACK_LIBRARY_PATH itself; one named skip, the PHYS reference test without DaisySP)
 ```
 
 ## What is done (all on the device, commit 4ec3f42)
