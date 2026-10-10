@@ -127,14 +127,27 @@ the flash data.
 
 ### Before an install (learned the hard way, 2026-10-07)
 
-The update loader writes the app area sector by sector over USB-MIDI with an 8 s watchdog and no fallback that
-survives a warm reset: if the FM-1 resets or drops off USB mid-write, the app is half old, half new, and whether the
-chip comes back as the loader at the next power-on depends on the SPL honouring the flash record (see the case below).
+The update loader writes the app area sector by sector over USB-MIDI with an 8 s watchdog. Up to and including 0.16
+there was no fallback: if the FM-1 reset or dropped off USB mid-write, the app was half old, half new, the SPL jumped
+into it (it checks nothing, and it does not start the loader from the flash record on a cold boot: BOOT-SAFETY.md)
+and the unit was dark. **From the first version with the boot stub on** (docs/BOOT-SAFETY.md "As built") the app's
+first sector is a stub that boots only a body the loader has committed, and otherwise hands over to the staged
+loader: an interrupted install comes back in update mode at the next power-on. Not covered: the stub sector's own
+write, which happens once, in the first install of a version with the stub (about 16 page writes out of ~1900), and
+again only if a release changes the stub (announced in its notes).
 So: **charge the FM-1 fully first** (it runs on its battery while updating; the installers cannot read its battery),
 plug it **straight into the computer** with a cable known to carry data (no hub), keep the computer awake
 (`caffeinate -dimsu` on a Mac), and do not touch the cable until "done" is printed.
 
 ### If an FM-1 is dark (a user's checklist)
+
+**First, on a ChoralRoot with the boot stub** (the release notes say from which version on; never 0.16 or older, and
+never another firmware): switch off, **hold OCT- alone, switch on**. Three short flashes of the key LEDs (the first
+key column), the screen black: the FM-1 is in update mode (`ota-FM-1` on USB-MIDI, "in update mode" in
+`fm1_install.py --info`); run the installer again. A unit whose install was interrupted does this without the key.
+One long flash: no update loader is stored (a working unit erases it at its first start) or a first hand-over did
+not reach it: the FM-1 is the "WL82 UBOOT1.00" disk until the next power cycle (then step 3's Unbricker, or simply
+switch off and on to start the firmware if it was whole). No flash at all: no stub runs; go on below.
 
 0. **If the install was interrupted mid-write** ("the loader was disconnected after N requests") and afterwards the
    computer sees *nothing at all* (no FM-1 port, no `ota-FM-1`, no WL82 disk): this happened on 2026-10-07 to the

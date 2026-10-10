@@ -2,7 +2,7 @@
 
 The user's ask after the dark unit: *there should always be a quick, simple way to get the device back to UBOOT if an
 upload fails*, and the current "hold OCT- and OCT+ for 10 s" is too long. This page is the design; the pieces that
-need the real unit (the dump, two experiments) are marked. Nothing here is implemented yet. **Decided 2026-10-07: wait for the Transporter's dump and the two experiments before building any of it** (the SPL's behaviour may change the design).
+need the real unit (the dump, two experiments) are marked. **Decided 2026-10-07: wait for the Transporter's dump and the two experiments before building any of it** (the SPL's behaviour may change the design). **Built 2026-10-10** after both: the last section, "As built", is what the code does (layout, marker, the maths, the cut-point table, what is still open, the device test plan); the sections before it are the design's history.
 
 ## What we have today, and where it failed
 
@@ -166,3 +166,232 @@ stub's check is what happens *after* the SPL accepts.)
 
 - A second firmware bank (A/B app slots): the flash map has no room for two apps beside the data.
 - Changing the head 0x0000..0x3FFF (SPL, isd_config): never written, by every tool's rule.
+
+## As built (2026-10-10; host-verified, not on a device yet)
+
+Where this section and the older ones above differ, this is what the code does. Sources: `firmware/stub/`
+(`stub_core.h` the decision, portable; `stub.c` the device side; `crt0_stub.S`, `stub.ld`),
+`firmware/loader/ldr_core.c` (the order), `tools/fm1pkg_make.py` (the marker, the compensation), `tools/build.py`
+(`build_stub`), tests `tests/cr_stub_test.c`, `tests/stub_pkg_test.py`, `tests/ldr_test.c`, `tests/ota_test.c`.
+
+### Layout
+
+| flash | XIP | what |
+| --- | --- | --- |
+| 0x0000..0x3FFF | | the head (SPL, isd_config): never written |
+| 0x4000..0x411F | 0x02000000 | the `app_area_head` directory (its block CRC-16, `app.bin`'s CRC-16) |
+| 0x4120..0x4FFF | 0x02000120 | **the stub**: app.bin's first 0xEE0 bytes, where the SPL jumps. 2208 B used (58 %), 0xFF behind |
+| 0x5000..0x90FFF | 0x02001000 | **the body**: the app, linked from 0x02001000 (`app.ld` XIP 0x8C000 = 573440 B; the build is at 76.7 %) |
+| 0x91000..0x91FFF | 0x0208D000 | **the marker's sector**: 0xFF, and in its last 32 bytes (0x91FE0) the marker and the compensation bytes |
+| 0x92000..0x92FFF | | the end of app.bin's slot (0xFF), cfg_tool.bin, the cfg directory: the same bytes in every build |
+| 0xE0000..0xE4FFF | 0x020DC000 | the staged loader (stored plain), the record's flash copy at 0xE4F00 |
+
+`app.bin` in the directory is still the whole slot (0x4120, 0x8DFBC bytes): no tool that reads packages sees a new
+format. `build/choralroot.bin` is app.bin as packed (the stub, then the app); the stub alone is `build/stub/stub.bin`.
+
+RAM: the stub runs on the app's two stacks (0x01C7A000, 0x01C7C000; 4.3 KiB used, the CRC tables) and owns
+**0x01C7C000..0x01C7C00F** (`app.ld` moved NOINIT up by 16 bytes; nothing in the app or the loader writes there):
+
+| word | content |
+| --- | --- |
+| +0 | the rescue word: `0x52534300 \| attempts` ("RSC"); anything else is no count |
+| +4 | info: `0x5342` ("SB"), the stub's version, its decision (1 boot, 2 loader, 3 UBOOT) |
+| +8 | TIMER4 ticks from the stub's start to its decision (24 per us) |
+| +12 | detail: marker code, loader code << 8, rescue attempts found << 16, rescue key << 24 |
+
+The app shows it: SysEx 73 DEBUG values `stub_ms stub_us stub_ver stub_decision stub_detail` (`cr_backup.c`,
+`hal/fm1_sys.h fm1_stub_word`), and `fm1_install.py --debug` prints a line `boot stub v1: booted the app after
+N ms; marker ok, ...`. The entry state the SPL left (icfg, psr, r0, sp, ssp) is saved to STATUS (0x01C07F20..) by the
+stub's crt0 exactly as the app's crt0 did; the app's crt0 no longer writes it.
+
+### The marker
+
+20 bytes at flash 0x91FE0 (plain values; in flash they are SFC-encrypted like the rest of the app area):
+
+| offset | field |
+| --- | --- |
+| +0 | magic 0x4D425243 ("CRBM") |
+| +4 | format 1 |
+| +8 | the body's length from flash 0x5000: a multiple of 4, 4..0x8C000 (the image, not the 0xFF behind it) |
+| +12 | CRC-32 (zlib's) of those bytes |
+| +16 | CRC-32 of the 16 bytes above |
+| +20 | four compensation bytes (not covered, not read by the stub) |
+
+It sits in the sector's last page, which the loader programs last; the rest of the sector is 0xFF. A torn marker page
+fails the marker's own CRC (`cr_stub_test`: 20000 random partial programmings, none accepted).
+
+### The stub's decision (`stub_core.h stub_decide`, the same code on the device and in the tests)
+
+1. The watchdog (8 s, as `fm1_cstart`), TIMER4, the key matrix pins.
+2. The rescue key: OCT- (column 0, row PA8) and OCT+ (column 1) sampled about once a ms. OCT- open in the first 4
+   samples: no key, go on (the normal boot spends 3.3 ms here). Otherwise 32 samples; held = OCT- closed in at
+   least 28 and OCT+ in fewer than 4 (OCT- + OCT+ stays the app's calibration).
+3. No key: the marker (magic, own CRC, format, length), then the CRC-32 of the body through XIP. All good: the
+   rescue word cleared, return to crt0, `goto 0x02001000`. Strict: nothing else boots.
+4. Otherwise rescue. A rescue word that already counts an attempt: **UBOOT** (the word cleared first, so the
+   power-on after the ROM boot starts fresh). Else the plain XIP window is set (as `fl_plain_window_init`) and the
+   staged loader checked: the head `ota_stage_head` wrote (CRC, 0xE0000, 0x41, "LOADER.BIN", the length), the inner
+   head (CRC, load address 0x01C0A800, size), "FELUCCA-LOADER-1" where `ota_stage` looks for it, and the LZ4 block
+   chain from the first block to the stated end with the sizes adding up to the image. Good: the rescue word =
+   1 attempt, three short LED flashes, the record `ota_session` builds (byte-identical: `ota_test`, `cr_stub_test`)
+   written to 0x01C7FD88, core reset: **the SPL runs the loader**. Not good: one long flash, **UBOOT**.
+
+Not checked: the blocks' contents (the package's CRC of the compressed body is not kept in flash, and the image's
+CRC needs the LZ4 decoder). A loader that is whole in structure and bad inside is what the rescue count is for: the
+SPL or the watchdog brings the stub back, and the second arrival is UBOOT. The official loader is refused (it would
+rewrite the head and the stub).
+
+LEDs, no LCD: the first key column's LEDs, 3 x 80 ms before the loader, 1 x 600 ms before UBOOT. The LCD needs
+SPI1, the panel's init and a font: it does not fit comfortably and nothing of it is needed for the rescue.
+
+What the stub does not touch: the reset-reason registers (the boot guard reads them after it, as before:
+`cr_bootguard_test` gained the boot after a rescue), the settings, any flash data, the app's .noinit, the second
+core (the two hold writes of `fm1_core_reset` before a reset, nothing else).
+
+### Sector 0x4000 is the same in every build: the compensation
+
+The sector holds the directory (0x4000..0x411F) and the stub. Two of the directory's fields change with the body:
+`app.bin`'s CRC-16 (over the 0x8DFBC bytes of the slot) and the `app_area_head` block CRC-16 (over the entries, the
+padding to 0x120, app.bin and cfg_tool.bin).
+
+The CRC-16 here (poly 0x1021, init 0, no final xor) is linear over GF(2): for messages of equal length
+`crc(a ^ b) = crc(a) ^ crc(b)`. Writing four bytes `v` at offset `p` of app.bin (zero before) changes the CRC by
+`E(v) = crc(v followed by zeros to the end)`, a linear map of 32 bits to 16. `fm1pkg_make.py compensate` evaluates
+`E` on the 32 basis bits, eliminates, and solves `E(v) = crc(app.bin with v = 0) ^ 0x4352`; so `app.bin`'s CRC-16
+is **0x4352 in every package with a stub**.
+
+One constraint is enough, not two: the block CRC continues from the state after app.bin, and that state is
+`crc(app.bin) ^ (S0 * x^(8 * len) mod P)`, where `S0` is the state after the entries and the padding. The entries
+hold `crc(app.bin)` (now a constant) and constants, so `S0` is a constant, the state after app.bin is a constant,
+and cfg_tool.bin behind it is the same file: the block CRC is a constant too (with the SDK's cfg_tool.bin and the
+stub's layout: the same value for any stub, any body). `fm1pkg_make.py` recomputes all four CRCs of the directory
+bit by bit and stops if one does not hold; `stub_pkg_test.py` builds four bodies and compares the sectors.
+`build.py` prints the sector's hash (`sector 0x4000 ... sha256`): it changes only with the stub (or the SDK files).
+
+The stub is built from `firmware/stub/` alone (its register sequences are copies of the HAL's, each naming its
+source, not includes), so a change elsewhere cannot change it. `firmware/stub/stub.lock` holds the version and hash
+of the stub that ships: `build.py` warns when the built stub differs (a release build stops), because installing
+such a build rewrites sector 0x4000. A deliberate change: bump `STUB_VERSION`, `FM1_STUB_LOCK=update ./build.sh`,
+and say it in the release notes.
+
+### The loader's order (`ldr_core.c`)
+
+For a package with the marker (one extra read finds out):
+
+1. the first time a sector differs from the flash, the marker's sector is erased first (and read back blank; a
+   blank one, as in a resumed install, is left alone). An install of the identical package erases nothing;
+2. sector 0x4000, only if it differs: the package's sector is in RAM before the erase; erase, 16 pages, read back;
+3. the body 0x5000..0x90FFF and 0x92000..0x92FFF, each sector as before (skipped when equal, verified, one retry);
+4. the marker's sector, last.
+
+A package without the marker (never ours from here on) is written in address order as before. The hosts are not
+affected by the order: the web page counts requests; `fm1_install.py` showed the highest address read, which would
+have jumped (the marker probe comes first), and now shows the bytes served. "Do not unplug" is in both already; the
+stub sector's window cannot be told from the host (it is the first second of "writing"), so no extra emphasis was
+added.
+
+### The interruption model (`tests/ldr_test.c`)
+
+The install is cut after every erase and every programmed page; the flash as it stands goes to `stub_decide`
+(marker and body read through the same cipher XIP applies, the staged loader as step 1 leaves it), and the install
+is resumed from that state to a bit-exact end.
+
+| old state -> this build | cut points | rescue | boot | old firmware whole | unprotected |
+| --- | --- | --- | --- | --- | --- |
+| the same stub, another body (every later install) | 1854 | 1853 | 1 (the last) | 0 | **0** |
+| no stub: the 0.16 layout (the first install of a stub) | 1871 | 1853 | 1 (the last) | 1 | **16** (cuts 2..17) |
+| the dark unit: 33 sectors of one firmware, then another's, no stub | 1871 | 1853 | 1 (the last) | 0 | **17** (cuts 1..17) |
+
+The 16: the stub sector's erase and its first 15 pages (the 16th completes the stub: rescue from there on). Cut 1,
+the marker sector's erase, leaves a 0.16 app whole (it does not use that sector); an old firmware that does use it
+has 17. The dark unit's state holds no stub, so no code of ours runs on it and it stays dark until the hardware
+route revives it; the row says what the new loader does once one runs there (it is unprotected until the stub is
+written, as any first install). The same accident with a stub in place (cut 33 sectors in) is a rescue: tested.
+
+In time: a sector erase is about 45 ms typical (400 ms worst) and a page about 1 ms, so the window is roughly
+0.1..0.5 s, once per unit (and once more per stub change), against a write of 1 to 2 minutes.
+
+### Size and time
+
+Stub: 2208 B of 3808 (`build.py` stops above 3552). The loader grew by 435 B (ota.bin 7157 B).
+
+Boot delay (estimate; the device's own figure is `stub_ms`):
+
+- key sampling 3.3 ms (4 samples: 2 x 100 us settle each, 800 us apart);
+- CRC tables 0.1 ms; the body: 439624 B = 109906 words x 21 instructions (the disassembly's loop) = 2.3 M
+  instructions, at the SPL's ~360 MHz and 1 to 2 cycles each: **6 to 13 ms of CPU**;
+- the flash read, which is the unknown: 13738 cache lines of 32 B, each a read through the SFC. Per line about 104
+  clocks in a 4-wire mode, 168 in a 2-wire one, 296 in plain fast read; at 48 MHz that is 2.2 / 3.5 / 6.2 us, so
+  **30 / 48 / 85 ms** for the body (twice that at 24 MHz). Nobody has measured the unit's XIP read rate.
+
+So 40 to 100 ms is the expectation and about 190 ms the worst case of these assumptions. If `stub_ms` is above
+~150, `STUB_BODY_CRC 0` (`stub_core.h`) makes the stub trust the marker alone: the loader's order already makes the
+marker the commit (it is erased before the first write and written after the last verify), the body CRC only adds
+protection against flash that changed by itself. That is a stub change (version 2, sector 0x4000 rewritten once).
+
+### What the stub assumes about the hardware
+
+Each is a copy of code that runs on the unit; the function it was taken from is named in `stub.c`.
+
+| assumption | taken from |
+| --- | --- |
+| P33 access, the watchdog's four writes | `hal/fm1_sys.h fm1__p33_xfer / fm1__p33_op / fm1_wdt_arm(0x0D)`, first thing in `fm1_cstart` |
+| TIMER4 at 24 MHz | `hal/fm1_time.h fm1_time_init` |
+| the key matrix pins, the 595 word, OCT- / OCT+ on columns 0 / 1, row PA8 | `hal/fm1_input.h fm1_input_init, fm1__sr_bits, fm1__sr_latch, fm1__rows, FM1_KEYMAP`; the column word is `fm1_input_scan`'s; the 100 us settle is the TIMER5 scan's tick |
+| LEDs lit with one column latched | `fm1__led_lines`; a column stays lit for the length of a flash erase in the app today (`main.c`, the TIMER5 comment) |
+| the app area reads decrypted through XIP at 0x02000000 + offset - 0x4000 | the app executes there |
+| flash from 0x93000 reads plain after the SFCENC window is set, the cache lines flushed | `hal/fm1_flash.h fl_plain_window_init` (without its cli / sti: interrupts stay off) |
+| the record at 0x01C7FD88 + a core reset starts the staged loader | `fm1_enter_update`, `fm1_core_reset`; every install does it |
+| "usb_update_mode" at 0x01C7FD80 + the P33 reset enters the ROM's UBOOT | `fm1_enter_uboot` |
+| the debug write limits may be on (a warm reset) and are dropped before the mailbox writes | the same two functions |
+| the stacks at 0x01C7A000 / 0x01C7C000 | `crt0.S`, `app.ld` |
+
+**Open, for the device:**
+
+1. **The rescue word at 0x01C7C000 must survive a core reset, the SPL and the loader.** .noinit starts there in
+   every Felucca-family firmware and the boot guard relies on it across resets, but nobody has shown it on a unit
+   for this path. If it does not survive, the stub works except for the rescue count: a hand-over that fails would
+   repeat instead of ending in UBOOT. Step 8 of the plan answers it.
+2. **The hand-over right after a cold boot.** From the app (USB up, clocks set) it works at every install. From the
+   stub, a few ms after the SPL, it is new: does the SPL honour the RAM record then, and does the loader's USB come
+   up? Step 6. If the loader starts and hangs while feeding its watchdog, nothing resets and no count helps: that
+   is the case for the Transporter.
+3. **The XIP read rate** (above): `stub_ms`, steps 1 and 2.
+4. **UBOOT entered this early.** `fm1_cstart` does it at the same point of a boot (the boot guard's fourth failure),
+   but that path has not been seen on a unit either. Step 4.
+5. Entering the app with interrupts off (the stub's cli) instead of whatever icfg the SPL left: the app's crt0 did
+   cli as its third instruction, so nothing should depend on it.
+
+### Device test plan (the orchestrator flashes; the Transporter and a V15 / 0.16 image at hand, a full battery)
+
+"Stop" in any step = no LED flash, no USB device of any kind (FM-1, ota-FM-1, the WL82 disk) 30 s after switching
+on, with and without OCT- held; or a flash pattern that repeats every few seconds for a minute. Then the
+Transporter writes the last good image; note what was seen.
+
+1. **First flash**: `build/choralroot.fwsc` over 0.16 with the normal installer. This is the one install with the
+   unprotected window (its first second of writing). Expect the usual restart into ChoralRoot.
+   `fm1_install.py --debug`: `boot stub v1: booted the app after N ms; marker ok, staged loader not checked, rescue
+   attempts before this boot 0, rescue key not held`. Write N down (open question 3; the user should not notice a
+   longer start than before). Dark instead: stop.
+2. **Cold boot**: off 10 s, on. The same line again; the console's `boot` (or GEEK OUT) says power-on, no SAFE MODE.
+3. **OCT- + OCT+ at power-on**: the calibration, as before.
+4. **The rescue key, no loader stored**: off, hold OCT- alone, on. One long flash (0.6 s), the screen black, the
+   "WL82 UBOOT1.00" disk appears. Off, on without a key: ChoralRoot starts. (It starts with the key held: the key is
+   not read; `--debug`'s "rescue key" says which. Nothing appears: stop.)
+5. **A body the stub refuses**: `python3 tools/make_stub_test_pkg.py bad-marker`, install
+   `build/stub-test-bad-marker.fwsc`. The write runs to 100 %; then three short flashes, the screen black, and the
+   FM-1 is `ota-FM-1` (the installer says it did not come back as FM-1_920: expected; `--info` says update loader).
+   This is the rescue from a warm reset.
+6. **The dark unit's case**: in that state, off 10 s, on, no key. Three flashes, `ota-FM-1` again (open question
+   2). One long flash and the disk instead: the rescue word outlived the 10 s (try 60 s) or the loader check failed.
+   Nothing at all: wait 20 s (the watchdog), then stop.
+7. **The rescue count** (optional): from update mode install bad-marker again. After the write: one long flash, the
+   WL82 disk (the second arrival). Off, on: three flashes, `ota-FM-1`. (Update mode straight after the write
+   instead: the rescue word does not survive; note it, go on.)
+8. **Finish**: from update mode install `build/choralroot.fwsc`. ChoralRoot starts; `--debug` says `rescue attempts
+   before this boot 1` (open question 1 answered yes; 0: no).
+9. **The real thing**: install a build with another body (any later build, the same stub), pull the cable at about
+   30 %, switch off and on: three flashes, `ota-FM-1`, Install again finishes it. With `--debug` afterwards.
+10. **The rescue key with a loader stored** (optional, right after step 5 or 6 instead of installing): OCT- held at
+    power-on gives the same three flashes; `stub_detail`'s key byte is seen only after the next good boot, where it
+    is 0 again, so this step shows no more than 6.
