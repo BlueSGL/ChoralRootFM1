@@ -1,15 +1,26 @@
-# Handoff: ChoralRoot FM-1, state at 2026-10-09
+# Handoff: ChoralRoot FM-1, state at 2026-10-10
 
-**2026-10-09: the user's FM-1 is back** (it was dark, no USB device at all, after an install interrupted at 274 of
-~1167 loader requests on 2026-10-07). Recovered through the FM-1 Transporter (a XIAO RP2040 on the USB data lines):
-official V15 written over the half-written app, then ChoralRoot 0.14 installed normally. The full account is
-`docs/TRANSPORTER-HANDOFF.md` ("Result"); the dump's findings and the decisions they force are in `docs/BOOT-SAFETY.md`
-("What the dump showed"): the SPL does not run the update loader from the flash record on a cold boot, so the boot stub
-is the only power-loss safety and is the next firmware work item (its two remaining experiments are now safe to run
-with the Transporter). The procedure, parts and the automation script live in MvaveFM1Unbricker
-(`TRANSPORTER-GUIDE.md`, `fm1_transporter_recover.py`). The Mac is new (arm64, no Rosetta): the Transporter builds with
-Arm's 14.2 toolchain tarball in `~/arm-gnu-toolchain-14.2`, ChoralRoot under Docker (memory note
-transporter-toolchain-on-this-mac). Rule learned: **a full battery and an awake computer before every install**.
+**Where things stand.** v0.14 and v0.15 are released (2026-10-10). The user's FM-1 is healthy, plugged into the Mac by
+USB, and runs the 0.16 dev build of commit 4c92576 (the rails capped, SELECT, the manager's audition). Everything
+since v0.15 is on main, host-verified and flashed: items 3p..3s below. The user's Fable session ran out of weekly
+usage; this file is the hand-over to an Opus 5.5 session.
+
+**Rules learned this week, on top of the working rules below:** (1) **only Claude flashes the FM-1**; subagents
+never run `tools/fm1_install.py` or the Transporter tools: they build and say "build ready", Claude flashes and
+checks `--info`, one successful `--info` between flashes, never while another session (e.g. the PurpleMonkey one)
+may write the unit; (2) a full battery / USB power and an awake computer before every install; an interrupted
+install bricks the unit (recoverable only with the Transporter: MvaveFM1Unbricker `TRANSPORTER-GUIDE.md`); (3) the
+device can be measured from the Mac without the user: `python3 tools/fm1_install.py --debug` (SysEx 73: 80+ counters
+and the last 16 USB events), `--screen off|on` (74), `--select PART ENGINE POS` (76), `tools/uac_check.py` (records
+ChoralRoot In with ffmpeg while playing chords over MIDI), `tools/core1_fault_test.py` (needs a CR_CORE1_TEST build);
+(4) never raise the core rails above SYSVDD 14 (1.35 V) / VDC14 4 (1.45 V) (the user's decision after Charles Vestal's
+review of Melodee PR 21).
+
+**Next up (the user's order):** (a) try the device manager on the unit with the SELECT firmware (`build/site/webapp/
+installer/manager.html` in Chrome; the live site needs the pages workflow run by hand or the next release); (b) the
+boot stub of docs/BOOT-SAFETY.md (the only remaining way an interrupted install bricks a unit); (c) FM TONE presets by
+ear; (d) the POOL (93.3 %: next the engine-state union sized to the parts that run engines, 12.6 KB each);
+(e) the open items 4..6 below.
 
 Paste this into a new session as the first message.
 
@@ -33,7 +44,7 @@ Read first, in order: `ChoralRootFM1/PLAN.md` (§3 controls, §4 grammar, §5 sc
 - NEVER launch the emulator, a browser window, or any GUI in the foreground; headless only (`build/host/emu --headless --script …`). The designer renders through its dev server in the app's own browser pane (preview tool, launch.json entry `fm1-designer` in the parent folder).
 - Never let two agents run `tools/emu/test_cr.sh` at once (it wipes `build/emu/test`).
 - Commit when a verified batch lands (the user wants frequent commits), push to main; NEVER tag a release yourself: tags are the user's (they said "hold off on tagging until I test"). The release workflow (`.github/workflows/release.yml`) builds on a `v*` tag, publishes the release with `docs/releases/<version>.md` prepended, and refreshes the Pages site.
-- Flash every verified build to the user's FM-1 when it is plugged in: `python3 tools/fm1_install.py build/choralroot.fwsc --yes` (`--info` shows identity FM-1_920 and the version). Docker Desktop must be running for `./build.sh` (ask before starting it). `export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` for the host generators.
+- **Only Claude flashes** (never a subagent). Flash every verified build to the user's FM-1 when it is plugged in and free: `python3 tools/fm1_install.py build/choralroot.fwsc --yes` (`--info` shows identity FM-1_920 and the version). Docker Desktop must be running for `./build.sh` (ask before starting it). `export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` for the host generators.
 - The dcg hook blocks `rm -rf`, `git checkout --`, `git show ref:path > path`, force pushes and history rewrites: move trees aside with `mv`, write files with the Write tool, and give the user the command for anything destructive.
 - The user's taste: one big thing per screen, the 1960s mod look, pickers not lists, stripe meters, role colours (white chords, blue voicing, orange bass, red loop, yellow key, green FX); key LEDs always mean the chord keys' own state; the printed black-key labels are not used.
 
@@ -58,7 +69,7 @@ Released: **v0.15 (2026-10-10)**: https://github.com/Quixotic7/ChoralRootFM1/rel
 
 ## Open items, in the order the user set
 
-1. **The user is testing** CZ-1, SAFE MODE and USB Record in Ableton on the device (it worked before the playback removal; re-check after). Fix what they report; then they tag v0.14.
+1. **Done: v0.14 and v0.15 released 2026-10-10** (the user tagged through Claude on request; the rule "never tag yourself" stands unless the user asks). docs/releases/0.16.md is the next draft (Dual-core hardening, SELECT, the manager).
 2. **The published release bodies** for v0.1/0.11/0.12/0.13 show the generic text (the workflow lacked a checkout in the release job; fixed in `39dbe41`). The user can paste `docs/releases/<v>.md` by hand or `gh release edit`.
 3. **Sounds page: done 2026-10-07** (docs/SOUNDS.md): the installer's Sounds section (`web/fm1sounds.js`) and `fm1_install.py --sounds / --export-sound / --import-sound / --rename-sound / --delete-sound`, no firmware change, verified on the device (the backup protocol ran on hardware for the first time). **.syx export / import done the same day** (SOUNDS.md ".syx export and import": DX7 single voice / bank for FM6, Casio tone dump for CZ-1; the import's record comes from per-engine templates generated by `tests/sound_templates.c`, pinned by `run_cr_tests.sh`'s `--check`), verified on the device. Left: more than 32 slots (SOUNDS.md "Not done": not worth it yet).
 3b. **The loop indicator: done 2026-10-07** (the user chose B, the corner dial, from `design/choralroot-fm1-loop-screens.png`; generator `design/make_loop_mockups.py`): `cr_ui.c cu_dial` / `cu_ring` (the ring only while capturing, in the count-in / undo screens and the L_LOOP / L_SAVE layers; the dial while the loop merely plays, never in the editor or Options), `cr_draw.c cr_dial` in the top-line strip with its own cache key, the right text 22 px left; checks in `tests/cr_draw_test.c` and `tools/emu/scripts/cr_loop_load.txt` / `test_cr.sh`. Nit left: while an overdub is armed the top line does not yet say "Dub 3.2" (mock-up 7; `cu_header` builds "Dub" only once the overdub records). **REC in the dial too: done 2026-10-09** (the user: the ring on REC was "quite invasive", a big circle over every menu): `cu_ring` (the ring under every screen while capturing) is gone; the ring is drawn only on the count-in and undo screens (and calibration); `cu_dial_state` (was `cu_loop_plays`) gives the dial's look, `cr_screen_t.dial_mode` (`CR_DIAL_PLAY / ARMED / REC / OD`) and `dial_dot` (the REC dot, the REC LED's twin via `cu_blink`: lit armed, blinking recording / overdubbing; hashed with the dial: a blink redraws strip 0 only); `cr_dial` draws the track red while the first take records and the dot r 3 in the middle; loop sheet states 9a-9c (the designer's dial `rec` / `dot`), 10 the count-in; fixtures 63-67; `cr_draw_test.c` checks the looks, a lint "on the dial"; `tools/emu/scripts/cr_rec_dial.txt` (shots `cr_rec_armed / rec / od.ppm`) and test_cr.sh's ring / dial checks on the loop shots. The loop sheet's PNG is not re-rendered yet.
