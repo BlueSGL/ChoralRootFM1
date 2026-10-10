@@ -1,7 +1,11 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
-<!-- The landing page and manual of ChoralRoot FM-1. web/make_site.py copies it to the site's root and fills
-     {{VERSION}} {{PKG}} {{PKG_URL}} {{PRODUCT}}; no other templating. The keybed SVGs are plain markup. -->
+<!-- The landing page of ChoralRoot FM-1. web/make_site.py copies it to the site's root and fills
+     {{VERSION}} {{PKG}} {{PKG_URL}} {{PRODUCT}}; no other templating. The keybed SVGs are plain markup.
+     Its content is the short version of docs/MANUAL.md (the reference: every sentence here was read against it,
+     for 0.16); where the manual goes deeper the page links to it on GitHub. Two comments in the Recovery section
+     (interrupted update, rescue key) mark the statements the manual's section 16 still marks as to be confirmed
+     on hardware: remove them together with the manual's. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -67,10 +71,10 @@
       </div>
       <div class="cell">
         <a class="btn b-yellow" href="#playing">Manual</a>
-        <p class="note">Who needs this?</p>
+        <p class="note">Who needs this? The short version starts below; <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md">the full manual</a> has every button, knob and option.</p>
       </div>
     </div>
-    <p>The installer talks to the FM-1 over Web MIDI. The firmware it runs now (stock, Felucca or ChoralRoot) stages the update loader, the loader writes the whole image, then the FM-1 restarts and reports {{PRODUCT}}. Charge the FM-1 fully first: it writes on its battery, and the installer cannot read its charge. Keep the computer awake and do not unplug it while it writes. If the computer side stops, pressing Install again resumes: the FM-1 stays in update mode. If the FM-1 itself resets mid-write (a flat battery), it can come back dark with no USB device at all; the way back is then the FM-1 Transporter (see <a href="https://github.com/Quixotic7/MvaveFM1Unbricker/blob/main/TRANSPORTER-GUIDE.md">the recovery guide</a>).</p>
+    <p>The installer talks to the FM-1 over Web MIDI. The firmware it runs now (stock, Felucca, Melodee or ChoralRoot) stages the update loader, the loader writes the whole image, then the FM-1 restarts and reports {{PRODUCT}}. An update saves a backup first and keeps your settings, sounds and loops. Charge the FM-1 fully first: it writes on its battery, and the installer cannot read its charge. Plug it straight into the computer (no hub), keep the computer awake and leave the cable alone until the installer says Done. If an update is cut off anyway, <a href="#recovery">Recovery</a> has the way back.</p>
     <p>On the command line, from the source: <code class="cmd">pip3 install mido python-rtmidi</code>, then <code class="cmd">python3 tools/fm1_install.py <span class="nw">{{PKG}}</span></code>. <code>--info</code> prints the connected FM-1's identity.</p>
     <nav class="toc" aria-label="Sections">
       <a href="#playing">Playing</a>
@@ -107,60 +111,64 @@
 
     <div class="cols">
       <p><b>Chord types</b> on the black keys F#3 G#3 A#3 C#4: DIM, MIN, MAJ, SUS. <b>Extensions</b> on the white keys F3 G3 A3 C4: 6, m7, M7, 9. Both are momentary; extensions stack.</p>
-      <p><b>Roots</b> on D4 … G5, 18 keys: alone a single note, with a type held (or latched) the chord. OCT− and OCT+ shift them by octaves, −2 … +2.</p>
+      <p><b>Roots</b> on D4 … G5, 18 keys: alone a single note (in Key Mode, the chord the scale puts there), with a type held (or latched) the chord. OCT− and OCT+ shift them by octaves, −2 … +2.</p>
     </div>
 
     <h3>LOCK</h3>
     <p>B3 is LOCK. Tap it on (B3 lit, <code>lock</code> top right on the screen), tap it again off. With LOCK on, the chord keys held are latched when released, so one hand plays roots. Once nothing is held, a type key resets the latch to that type alone, and an extension key toggles its extension in the latched set.</p>
     <p class="example">Hold MIN, release: minor. 6: m6. 9: m6/9. 9 again: m6. MAJ: major, extensions cleared.</p>
-    <p>Two types held together make a <b>Secret Chord</b> (Options &gt; Secret Chords): DIM+SUS a power chord, MAJ+SUS augmented, MIN+SUS [0 3 5].</p>
+    <p>Two types held together make a <b>Secret Chord</b> (Options &gt; Secret Chords, off by default): DIM+SUS a power chord, MAJ+SUS augmented, MIN+SUS [0 3 5].</p>
 
     <h3>Buttons</h3>
     <p class="rule">Tap = use, hold = open, OCT− or HOME = close.</p>
-    <p>A tap is the button's on/off action, always. A hold past 300 ms opens its layer, and the layer stays open after release (the button blinks); holding another layer button switches layer. In a layer the roots and KNOB 1–4 belong to the layer; the chord keys keep their job.</p>
+    <p>A tap is the button's on/off action, always. A hold past 0.4 s (Options &gt; Hold Time) opens its layer, and the layer stays open after release (the button blinks); holding another layer button switches layer. A layer is a picker over a row of four cells: KNOB 1–4, in the knob colours, each with a small picture of its value. The chord keys keep their job.</p>
     <table class="grid">
       <thead><tr><th>Printed</th><th>ChoralRoot</th><th>Tap</th><th>Hold</th></tr></thead>
       <tbody>
-        <tr><td data-l="Printed">SEL</td><td data-l="ChoralRoot"><span class="c-yellow">KEY</span></td><td data-l="Tap">Key Mode on/off</td><td data-l="Hold">the key layer: roots = the tonic (MIN held too = a minor key); KNOB 1–4 = TONIC / SCALE / TRANSPOSE / SINGLE NOTES</td></tr>
-        <tr><td data-l="Printed">ARP</td><td data-l="ChoralRoot">PERF</td><td data-l="Tap">performance on/off</td><td data-l="Hold">the perform layer: white roots D4–C5 = STRUM, STRUM 2, SLOP, ARP, ARP 2, PATTERN, HARP; KNOB 1–4 = the mode's parameters</td></tr>
-        <tr><td data-l="Printed">FX</td><td data-l="ChoralRoot"><span class="c-green">FX</span></td><td data-l="Tap">the sound's main effect on/off</td><td data-l="Hold">the fx layer: white roots pick the effect KNOB 4 rides; KNOB 1–3 its parameters, KNOB 4 the amount</td></tr>
-        <tr><td data-l="Printed">ENV</td><td data-l="ChoralRoot"><span class="c-orange">BASS</span></td><td data-l="Tap">bass on/off</td><td data-l="Hold">the bass layer: KNOB 1–4 = BEHAVIOUR (Chords Only / Unison / Single Notes / Solo) / REGISTER / SOUND / LEVEL; roots preview the bass. BASS held + EDIT = the bass sound's editor</td></tr>
-        <tr><td data-l="Printed">LFO</td><td data-l="ChoralRoot">LATCH</td><td data-l="Tap">sticky keys / arp hold on/off</td><td data-l="Hold">—</td></tr>
-        <tr><td data-l="Printed">GLO</td><td data-l="ChoralRoot">OPT</td><td data-l="Tap">the Options menu open/close</td><td data-l="Hold">held + a knob = the knob's second function: KNOB 1 split point, SELECT metronome level, ALGORITHM bass volume. In the editor: SHIFT</td></tr>
-        <tr><td data-l="Printed">HOME</td><td data-l="ChoralRoot">HOME</td><td data-l="Tap">back to the view from anywhere; tapped again on the view: the next View (CHORD / KEYBOARD / NOTES / GEEK OUT / SCOPE)</td><td data-l="Hold">—</td></tr>
-        <tr><td data-l="Printed">SAVE</td><td data-l="ChoralRoot">SAVE</td><td data-l="Tap">save the sound to one of 32 user slots, named with the keys</td><td data-l="Hold">save / load / delete loops</td></tr>
-        <tr><td data-l="Printed">SEQ</td><td data-l="ChoralRoot">METRO</td><td data-l="Tap">metronome on/off</td><td data-l="Hold">the beat layer: beat and time signature</td></tr>
-        <tr><td data-l="Printed">PLAY</td><td data-l="ChoralRoot"><span class="c-red">LOOP</span></td><td data-l="Tap">play / stop the loop (green LED = playing)</td><td data-l="Hold">the loop layer: white roots = slots 1–10, D#4 = CLEAR (hold 1 s), F#4 = UNDO; KNOB 1–4 = SYNC / QUANTIZE / COUNT-IN / LEVEL; while playing: the Overdub / Pause / Undo / Clear picker</td></tr>
-        <tr><td data-l="Printed">REC</td><td data-l="ChoralRoot"><span class="c-red">REC</span></td><td data-l="Tap">record (count-in, then the sync length) / overdub arm; the red LED blinks while recording</td><td data-l="Hold">undo the last layer</td></tr>
+        <tr><td data-l="Printed">SEL</td><td data-l="ChoralRoot"><span class="c-yellow">KEY</span></td><td data-l="Tap">Key Mode on/off</td><td data-l="Hold">the KEY layer: a root = the tonic (MIN held too = a minor key); KNOB 1–4 = Tonic / Scale / Transpose / Single</td></tr>
+        <tr><td data-l="Printed">ARP</td><td data-l="ChoralRoot">PERF</td><td data-l="Tap">the performance mode on/off</td><td data-l="Hold">the PERF layer: SELECT = the mode (Strum, Strum 2 Octaves, Slop, Arpeggiate, Arp 2 Octaves, Pattern, Harp); KNOB 1–4 = its parameters; the roots play; OCT+ = on/off</td></tr>
+        <tr><td data-l="Printed">FX</td><td data-l="ChoralRoot"><span class="c-green">FX</span></td><td data-l="Tap">the effects on/off</td><td data-l="Hold">the FX layer: SELECT = the effect (Reverb, Chorus, Delay, Drive); KNOB 1–3 = its parameters, KNOB 4 = its amount; the roots play; OCT+ = on/off</td></tr>
+        <tr><td data-l="Printed">ENV</td><td data-l="ChoralRoot"><span class="c-orange">BASS</span></td><td data-l="Tap">bass on/off (off at every power-on)</td><td data-l="Hold">the BASS layer: SELECT or KNOB 1 = Behaviour (Chords Only / Unison Bass / Bass Single Notes / Solo); KNOB 2–4 = Register / Sound / Level. BASS held + EDIT = the bass sound's editor</td></tr>
+        <tr><td data-l="Printed">LFO</td><td data-l="ChoralRoot">LATCH</td><td data-l="Tap">latch on/off: notes sound on until the next ones; it keeps an arpeggio running</td><td data-l="Hold">—</td></tr>
+        <tr><td data-l="Printed">GLO</td><td data-l="ChoralRoot">OPT</td><td data-l="Tap">the Options open/close</td><td data-l="Hold">held + a knob = the knob's second job: PRESETS the chord sound's engine, ALGORITHM bass level, KNOB 1 split point, SELECT metronome level. In the editor: SHIFT</td></tr>
+        <tr><td data-l="Printed">HOME</td><td data-l="ChoralRoot">HOME</td><td data-l="Tap">back to the view from anywhere; on the view: the next view (Chord / Keyboard / Notes / Geek Out / Scope)</td><td data-l="Hold">0.6 s: the view menu: SELECT = the view, KNOB 1 = Lock</td></tr>
+        <tr><td data-l="Printed">SAVE</td><td data-l="ChoralRoot">SAVE</td><td data-l="Tap">the save dialog: Overwrite, or Save as new, named with the keys</td><td data-l="Hold">while held: save / load / delete a loop slot</td></tr>
+        <tr><td data-l="Printed">SEQ</td><td data-l="ChoralRoot">METRO</td><td data-l="Tap">metronome on/off</td><td data-l="Hold">the METRO layer: SELECT = the time signature (4/4, 3/4, 6/8); KNOB 1 = the click's level</td></tr>
+        <tr><td data-l="Printed">PLAY</td><td data-l="ChoralRoot"><span class="c-red">LOOP</span></td><td data-l="Tap">play / stop the loop (green light = it plays); while recording: ends the take</td><td data-l="Hold">the PLAY menu: PRESETS = the slot, 1–10; ALGORITHM = the record mode; SELECT = the length; KNOB 1–4 = Quantize / Count-in / Level / Keys</td></tr>
+        <tr><td data-l="Printed">REC</td><td data-l="ChoralRoot"><span class="c-red">REC</span></td><td data-l="Tap">record, the way the record mode says; again: ends the take. The REC light blinks while recording</td><td data-l="Hold">undo the last layer</td></tr>
         <tr><td data-l="Printed">EDIT</td><td data-l="ChoralRoot">EDIT</td><td data-l="Tap">the sound editor on the chord sound</td><td data-l="Hold">the engine picker</td></tr>
-        <tr><td data-l="Printed">OCT− / OCT+</td><td data-l="ChoralRoot">OCTAVE</td><td data-l="Tap">the octave of the roots; in layers, menus and dialogs: back (closes) / OK</td><td data-l="Hold">both together: PANIC (all notes off on every stream, CC 123 on the three channels, octave reset, LOCK latch cleared)</td></tr>
+        <tr><td data-l="Printed">OCT− / OCT+</td><td data-l="ChoralRoot">OCTAVE</td><td data-l="Tap">the octave of the roots; in layers, menus and dialogs: back (closes) / OK</td><td data-l="Hold">both together: PANIC (every note off, on MIDI too; the octave back to 0, the LOCK latch cleared, LATCH off, the loop stopped)</td></tr>
       </tbody>
     </table>
 
     <h3>Rotaries</h3>
-    <p>No push switches. A knob turn shows its value big for a second.</p>
+    <p>No push switches. A turn of any knob but MASTER shows its value big for a second.</p>
     <table class="grid">
       <thead><tr><th>Printed</th><th>ChoralRoot</th><th>Turn</th><th>OPT held</th></tr></thead>
       <tbody>
         <tr><td data-l="Printed">MASTER</td><td data-l="ChoralRoot">VOLUME</td><td data-l="Turn">the volume (the pot)</td><td data-l="OPT held">—</td></tr>
-        <tr><td data-l="Printed">SELECT</td><td data-l="ChoralRoot">BPM</td><td data-l="Turn">the tempo, 20–300; in menus and pickers: scroll</td><td data-l="OPT held">metronome volume</td></tr>
-        <tr><td data-l="Printed">PRESETS</td><td data-l="ChoralRoot">SOUND</td><td data-l="Turn">browse the chord sound; it loads at once</td><td data-l="OPT held">—</td></tr>
-        <tr><td data-l="Printed">ALGORITHM</td><td data-l="ChoralRoot"><span class="c-orange">BASS SOUND</span></td><td data-l="Turn">browse the bass sound</td><td data-l="OPT held">bass volume</td></tr>
+        <tr><td data-l="Printed">SELECT</td><td data-l="ChoralRoot">BPM</td><td data-l="Turn">the tempo, 20–300; in a layer or a menu: its picker</td><td data-l="OPT held">metronome level</td></tr>
+        <tr><td data-l="Printed">PRESETS</td><td data-l="ChoralRoot">SOUND</td><td data-l="Turn">the chord sound: the next or previous one of its engine; it loads at once</td><td data-l="OPT held">the chord sound's engine</td></tr>
+        <tr><td data-l="Printed">ALGORITHM</td><td data-l="ChoralRoot"><span class="c-orange">BASS SOUND</span></td><td data-l="Turn">the bass sound: off, then the sounds of the bass's engine</td><td data-l="OPT held">bass level</td></tr>
         <tr><td data-l="Printed">KNOB 1</td><td data-l="ChoralRoot"><span class="k-blue">VOICING</span></td><td data-l="Turn">the Orchid's chord voicing: the lowest note up an octave, or the highest down; one click = one note. Never reassigned outside layers and the editor</td><td data-l="OPT held">single-note split point</td></tr>
         <tr><td data-l="Printed">KNOB 2</td><td data-l="ChoralRoot"><span class="c-orange">BASS VOICE</span></td><td data-l="Turn">the bass register, in octaves</td><td data-l="OPT held">—</td></tr>
-        <tr><td data-l="Printed">KNOB 3</td><td data-l="ChoralRoot">PERFORM</td><td data-l="Turn">the selected mode's main parameter: strum speed, slop amount, arp rate, pattern number, harp speed</td><td data-l="OPT held">—</td></tr>
-        <tr><td data-l="Printed">KNOB 4</td><td data-l="ChoralRoot"><span class="c-green">FX</span></td><td data-l="Turn">the amount of the selected effect</td><td data-l="OPT held">—</td></tr>
+        <tr><td data-l="Printed">KNOB 3</td><td data-l="ChoralRoot">PERFORM</td><td data-l="Turn">the performance mode's first parameter: strum rate, slop amount, arp division, pattern, harp rate</td><td data-l="OPT held">—</td></tr>
+        <tr><td data-l="Printed">KNOB 4</td><td data-l="ChoralRoot"><span class="c-green">FX</span></td><td data-l="Turn">the amount of the selected effect (a turn switches the effects on)</td><td data-l="OPT held">—</td></tr>
       </tbody>
     </table>
+
+    <h3>The looper</h3>
+    <p>It records chords, not audio, so a playing loop follows the sound you choose now, the voicing on KNOB 1, the performance mode and the bass. On a new FM-1, tap REC and play: the first chord starts the take, REC or LOOP ends it, and the loop plays at once. The <b>PLAY menu</b> (LOOP held) has ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step) and the length of the next take: Free, or 1, 2, 4, 8 or 16 bars after a count-in. A slot keeps its loop: it is saved when the loop stops, and is still there after switching off. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#10-the-looper">The looper in the manual.</a></p>
 
     <div class="cols">
       <div>
         <h3>Options</h3>
-        <p>OPT tap opens them, one setting per screen. SELECT scrolls, KNOB 1 sets, OCT+ enters, OCT− goes back, HOME or OPT leaves. Play Style (Simple / Advanced / Free), Extension Addition, Secret Chords, Velocity, Bass Behaviour, Single Notes, Split Point, the MIDI Perform / Bass / Raw Chord channels, Raw Chord Sound, MIDI Clock, View, Motion, LEDs, Hold Time, Version, Calibrate.</p>
+        <p>OPT tap opens them, one setting per screen. SELECT steps through the settings, KNOB 1 sets the value, and OPT, HOME or OCT− leaves. Play Style (Simple / Advanced / Free), Extension Addition, Secret Chords, Velocity, Bass Behaviour, Single Notes, Split Point, the MIDI Perform / Bass / Raw Chord channels, Raw Chord Sound, MIDI Clock, View, Motion, LEDs, Hold Time, USB Record, USB Level, Dual Core, Version, Calibrate. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#14-options">The manual</a> says what each one does.</p>
+        <p><b>Dual Core</b> is Off by default in 0.16: one core, as the stock firmware runs. On (after a restart) gives the bass the chip's second core and its own voices; it is the first thing to turn off if an FM-1 ever crashes or resets while playing.</p>
       </div>
       <div>
         <h3>Screen</h3>
-        <p>The chord name fills the screen (the Orchid's naming, squeezed to fit), the voiced notes under it, extensions in <span class="c-orange">orange</span>; <span class="c-yellow">Key: C</span> top left in Key Mode. HOME on the view steps the Views: CHORD, KEYBOARD, NOTES, GEEK OUT, SCOPE. Pickers instead of lists, meters of bold stripes, the loop as a dotted <span class="c-red">red</span> ring. Panic turns the screen red.</p>
+        <p>The chord name fills the screen (the Orchid's naming, squeezed to fit), the voiced notes under it, extensions in <span class="c-orange">orange</span>; <span class="c-yellow">Key: C</span> top left in Key Mode. Five views: Chord, Keyboard, Notes, Geek Out, Scope. HOME on the view steps to the next; HOME held opens the view menu, where Lock keeps a HOME tap from changing it. Pickers instead of lists, meters of bold stripes, a recording or playing loop as a small <span class="c-red">red</span> dial at the right of the top line. Panic turns the screen red.</p>
       </div>
     </div>
   </div>
@@ -176,16 +184,16 @@
       <figcaption>EDIT tapped on WARM PAD, a VA sound. The buttons become OSC FILT ENV LFO / MOD FX MIX and SHIFT; KNOB 1–4 are WAVE LEVEL COARSE FINE of OSC 1; SELECT steps the lane.</figcaption>
     </figure>
     <h3>Groups</h3>
-    <p>The buttons become seven groups. The top row is the signal flow (OSC on the printed FX, FILT on SEL, ENV, LFO), the bottom row the output stage (MOD on SEQ, FX on PLAY, MIX on REC). A group's button opens the group; tapped again, its next screen.</p>
+    <p>The buttons become seven groups. The top row is the signal flow (OSC on the printed FX, FILT on SEL, ENV, LFO), the bottom row the output stage (MOD on SEQ, FX on PLAY, MIX on REC). A group's button opens the group; tapped again, its next screen. Every engine fills the same groups with its own screens; <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#12-the-sound-editor">the manual</a> lists them engine by engine.</p>
 
     <div class="cols cols-fig">
       <div>
         <h3>Lanes</h3>
-        <p>SELECT runs through the lanes. A lane is the four values on KNOB 1–4, always in the same four colours.</p>
+        <p>SELECT runs through the lanes, and on into the group's next screen. A lane is the four values on KNOB 1–4, always in the same four colours.</p>
         <div class="knobs" role="img" aria-label="KNOB 1 blue, KNOB 2 orange, KNOB 3 white, KNOB 4 green">
           <div class="k1">KNOB 1</div><div class="k2">KNOB 2</div><div class="k3">KNOB 3</div><div class="k4">KNOB 4</div>
         </div>
-        <p>A detent is 5 % of the range, an enumeration one step. SHIFT (GLO: a tap latches it, a hold is momentary) makes it one unit a detent.</p>
+        <p>A detent is about 5 % of the range, or one step of a list. SHIFT (GLO: a tap latches it, a hold is momentary) makes it one unit a detent.</p>
       </div>
       <figure class="shot shot-side">
         <img src="img/screen-filter.png" width="240" height="240" alt="the filter screen of WARM PAD: the low-pass curve over cutoff, resonance, filter type and envelope amount">
@@ -194,42 +202,40 @@
     </div>
     <figure class="panel">
       <a href="img/panel-editor-filter.png"><img src="img/panel-editor-filter.png" width="1757" height="1072" loading="lazy" alt="The FM-1 panel in the sound editor's FILT group: KNOB 1–4 labelled CUTOFF, RESO, F.TYPE, ENV AMT, the screen showing the filter curve of WARM PAD"></a>
-      <figcaption>FILT: CUTOFF RESO F.TYPE ENV AMT under the filter curve.</figcaption>
+      <figcaption>FILT: CUTOFF RESO FTYPE ENV AMT under the filter curve.</figcaption>
     </figure>
 
     <h3>The engine picker</h3>
-    <p>EDIT held, or PRESETS turned in the editor, opens it as a preview. The white roots are the engines: FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS and NOISE. KNOB 1 steps the engine's factory presets, KNOB 2 inits the sound. OCT+ or EDIT keeps it; OCT− or HOME cancels, and the sound comes back.</p>
+    <p>EDIT held, or PRESETS turned in the editor, opens it as a preview. The white roots are the engines: FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS and NOISE; SELECT steps through them too. KNOB 1 turns through the engine's presets, KNOB 2 inits the sound, KNOB 4 gives the roots back to playing, to hear it. OCT+ or EDIT keeps it; OCT− or HOME cancels, and the sound comes back.</p>
     <h3>Quick mapping</h3>
     <p>For an engine with a matrix (the VA): ENV held + a knob turned, and the envelope last shown modulates that knob's parameter, the amount on the knob. LFO held + a knob does the same with the LFO. OCT− held + a knob clears the parameter's modulation. A modulated cell carries a small mark in the source's colour.</p>
     <h3>SAVE</h3>
-    <p>SAVE opens the save dialog. KNOB 1 picks the user slot, U01–U32; the white roots type the name, D#4 is a space, F#4 deletes. SAVE again or OCT+ saves, OCT− cancels. SAVE held 1 s on a used slot deletes it. User chord sounds list after the factory bank on PRESETS, user bass sounds on ALGORITHM.</p>
+    <p>SAVE opens the save dialog: <b>Overwrite</b> or <b>Save as new</b>, on KNOB 1 or SELECT. SAVE again or OCT+ takes the choice, OCT− cancels. Overwrite saves at once under the same name, over a factory preset too. Save as new adds the sound at the end of its engine's presets and asks for a name: the white roots type it, D#4 is a space, F#4 deletes. SAVE held 1 s in the dialog offers to delete a sound of yours, or to reset a factory preset you saved over. There is room for 32 saved sounds in all, chord and bass together.</p>
   </div>
 </section>
 
 <section class="sounds" aria-labelledby="sounds">
   <div class="wrap">
     <h2 id="sounds">Sounds</h2>
-    <p class="intro">PRESETS browses the chord sounds, ALGORITHM the bass sounds. Eight voices are shared: a six-note chord plus the bass.</p>
+    <p class="intro">Two sounds at once: the chord sound on PRESETS, the bass sound on ALGORITHM. Each belongs to one of eleven engines, and every engine keeps one pool of presets.</p>
     <div class="cols cols-banks">
       <div>
-        <h3>Chord bank <span class="sub">PRESETS 1–43</span></h3>
+        <h3>FM6's pool <span class="sub">PRESETS 01–25</span></h3>
         <ol class="bank">
-          <li>TINE EP</li><li>FM BELL</li><li>PIANO</li><li>FM PAD</li><li>SOFT PAD</li><li>STRINGS</li><li>PWM STRINGS</li><li>CZ STRINGS</li><li>FULL ORGAN</li><li>GOSPEL ORGAN</li><li>JAZZ ORGAN</li><li>FM ORGAN</li><li>CZ ORGAN</li><li>CHOIR</li><li>CLOUD PAD</li><li>SHIMMER</li><li>SYNTH BRASS</li><li>CZ BRASS</li><li>MARIMBA</li><li>HARP</li><li>KALIMBA</li><li>PLUCK</li><li>FM PLUCK</li><li>SINE KEYS</li>
-          <li class="va">LUSH PAD</li><li class="va">WARM PAD</li><li class="va">GLASS PAD</li><li class="va">SLOW STRINGS</li><li class="va">ENSEMBLE STR</li><li class="va">VA BRASS</li><li class="va">SOFT BRASS</li><li class="va">POLY KEYS</li><li class="va">PWM KEYS</li><li class="va">CLAV</li><li class="va">SOFT LEAD</li><li class="va">HOLLOW</li><li class="va">BELLS</li><li class="va">SWEEP PAD</li><li class="va">SOFT AAH</li><li class="va">ORGANISH</li><li class="va">MORPH PAD</li><li class="va">VINYL KEYS</li><li class="va">WIDE STRINGS</li>
+          <li>TINE EP</li><li>FM BELL</li><li>FM BASS</li><li>BRASS</li><li>FM PAD</li><li>MARIMBA</li><li>FM ORGAN</li><li>FM PLUCK</li><li>DX TINE</li><li>BRASS SECT</li><li>SOLID BASS</li><li>BELLS</li><li>DX MARIMBA</li><li>CLAVINET</li><li>DRAWBARS</li><li>STRINGS</li><li>GLASS PAD</li><li>SYNC LEAD</li><li>HARP</li><li>KALIMBA</li><li>FLUTE</li><li>STEEL DRUM</li><li>SAW BASS</li><li>TUBULAR</li><li>PIANO</li>
         </ol>
-        <p class="small">25–43 are the VA's.</p>
+        <p class="small">Where a new FM-1 starts: FM6, TINE EP.</p>
+        <p>A pool is 00 INIT (the engine's plain starting sound), then its factory presets, then the sounds you saved into it. PRESETS turns through the pool of the chord sound's engine and wraps round; the screen reads <code>FM6 · 02/26</code>. OPT held + PRESETS turns through the engines, and you land on the sound you last used there. ALGORITHM does the same for the bass, with 00 off in front: on a new FM-1 the bass is the VA's DEEP SUB.</p>
       </div>
       <div>
-        <h3>Bass bank <span class="sub c-orange">ALGORITHM 1–12</span></h3>
-        <ol class="bank bank-bass">
-          <li>SUB BASS</li><li>SQUARE BASS</li><li>FM BASS</li><li>FAT BASS</li><li>ACID BASS</li><li>WAVE BASS</li><li>WOW BASS</li><li>PLUCK BASS</li><li>DEEP SUB</li><li>PUNCH BASS</li><li>RUBBER BASS</li><li>SYNC BASS</li>
+        <h3>Engines <span class="sub">OPT + PRESETS</span></h3>
+        <ol class="bank">
+          <li>FM6 · 25</li><li>FM TONE · 16</li><li>VA · 25</li><li>CZ-1 · 64</li><li>PHASE · 6</li><li>LOFI · 5</li><li>VOICE · 4</li><li>TRIO · 5</li><li>WHEEL · 5</li><li>PHYS · 9</li><li>NOISE · 4</li>
         </ol>
-        <p class="small">0 = off.</p>
-        <p>After the banks come 32 user slots, saved with SAVE, then every engine's own factory presets through the engine picker.</p>
+        <p class="small">Each with its number of factory presets.</p>
+        <p>All synthesis: Felucca's PHASE (phase distortion), LOFI, VOICE (formant), TRIO, WHEEL (tonewheel organ), PHYS (modal and string physical models) and NOISE; Melodee's FM6 (six-operator FM that plays DX7 voices) and CZ-1 (Casio's phase distortion, with its 64 tones); and ChoralRoot's VA and FM TONE (four-operator FM). No samples: the firmware leaves out Felucca's SAMPLE, GRAIN and DRUM engines, and since 0.14 its ANALOG. The VA replaces it, and a sound saved on ANALOG loads on the VA.</p>
       </div>
     </div>
-    <h3>Engines</h3>
-    <p>All synthesis: Felucca's FM6 (six-operator FM, msfa), PHASE (phase distortion), LOFI, VOICE (formant), TRIO, WHEEL (tonewheel organ), PHYS (modal and string physical models) and NOISE; Melodee's CZ-1; and ChoralRoot's VA and FM TONE (four-operator FM). No samples: the firmware leaves out Felucca's SAMPLE, GRAIN and DRUM engines, and since 0.14 its ANALOG (the VA replaces it).</p>
     <h3>The VA</h3>
     <p>ChoralRoot's own four-oscillator virtual analog, written for this project in fixed point: four oscillators (basic waves, a morphing wave from sine to pulse, or white / brown / vinyl noise), a state-variable filter that morphs LP → BP → HP → notch with spread and drive, four AHDSR envelopes, four LFOs (free or synced to the tempo) and an eight-slot modulation matrix, in stereo. Every parameter is on the editor's screens, and a patch saves with the sound.</p>
   </div>
@@ -238,28 +244,32 @@
 <section class="midi" aria-labelledby="midi">
   <div class="wrap">
     <h2 id="midi">MIDI</h2>
-    <p class="intro">USB MIDI in and out, TRS MIDI in.</p>
+    <p class="intro">USB MIDI in and out, TRS MIDI in. Over the same USB cable the computer records the FM-1.</p>
     <div class="cols">
       <div>
         <h3>Out</h3>
-        <p>Three streams, each on its own channel and each on or off in Options: performance (the chord as played or performed) on channel 1, bass on channel 2, the raw chord on channel 3 (off by default, as on the Orchid). 24 PPQN clock out (Options &gt; MIDI Clock: Out), with start when the loop starts.</p>
+        <p>Three streams over USB, each with its channel in Options: Perform (the chord as played or performed) on channel 1, Bass on channel 2, and Raw Chord (the plain chord), Off by default: give it a channel of its own (the Orchid uses 3). MIDI clock goes out too (Options &gt; MIDI Clock: Out, the default), with start and stop as the loop starts and stops.</p>
       </div>
       <div>
         <h3>In</h3>
-        <p>Notes on the chord channel play the chord sound directly, with no chord generation, as on the Orchid; notes on the bass channel play the bass sound. CC 7 is the level, CC 91 / 93 / 94 the reverb / chorus / delay sends; program change picks the sound. Clock in syncs the tempo (MIDI Clock: In). SysEx is used for firmware updates.</p>
+        <p>Notes on the Perform channel play the chord sound directly, with no chord generation, as on the Orchid; notes on the Bass channel play the bass sound. CC 7 is the part's level, CC 91 / 93 / 94 its reverb / chorus / delay amounts; program change picks the place in the engine's pool. With MIDI Clock: In, the tempo follows the clock and the loop follows start, continue and stop. SysEx carries updates, backups, the device manager, and DX7 voices and Casio tones into FM6 and CZ-1 sounds.</p>
       </div>
     </div>
-    <p>No Bluetooth: ChoralRoot never turns the radio on.</p>
+    <h3>USB recording</h3>
+    <p>The computer sees an audio input, <b>ChoralRoot In</b>: class compliant, no driver, six channels at 44.1 kHz. Channels 1–2 are the master (what you hear, without the metronome click), 3–4 the chord sound alone and 5–6 the bass sound alone, both before the reverb, chorus and delay. The computer cannot play audio through the FM-1, and there is no Bluetooth MIDI. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#15-midi-and-usb">MIDI and USB in the manual.</a></p>
   </div>
 </section>
 
 <section class="recovery" aria-labelledby="recovery">
   <div class="wrap">
     <h2 id="recovery">Recovery</h2>
-    <p class="intro">The installer's <b>Return to official V15</b> puts M-VAVE's firmware back.</p>
-    <p>Download the official FM-1 V15 firmware (<code>FM-1.fwsc</code>) yourself from <a href="https://www.m-vave.com/download">M-VAVE's downloads page</a> and select it in the installer. The browser checks its size and SHA-256 locally (the file is never uploaded) and installs it the same way. On the command line: <code class="cmd">python3 tools/fm1_install.py <span class="nw">FM-1.fwsc</span></code>.</p>
-    <p>The installer's <b>Back up</b> saves everything stored on the FM-1 (the settings, the 32 user sounds with their patches, the loops, the FM6 patch bank and the CZ-1 banks) to one <code>.json</code> file, and <b>Restore</b> writes it back; Return to official V15 saves one first. Its <b>Sounds</b> section exports, imports and renames single user sounds as files.</p>
-    <p>If an install fails and the FM-1 no longer starts, recovery needs <a href="https://github.com/kurogedelic/FM-1-transporter">FM-1-transporter</a>.</p>
+    <p class="intro">From 0.16 on, ChoralRoot checks at every start that its firmware was written completely. The installer's <b>Return to official V15</b> puts M-VAVE's firmware back.</p>
+    <p><b>If an update is interrupted</b> (the cable, the battery, the computer going to sleep): switch the FM-1 off and on again. Some of the key lights flash three short times and the screen stays black: the FM-1 is in update mode. Open <a href="webapp/installer/">the installer</a> and press Install again; it finishes the write. <!-- CONFIRM: interrupted update (docs/MANUAL.md section 16; BOOT-SAFETY.md device plan, steps 6 to 10) --> If only the computer side stopped while the FM-1 stayed on, it is still in update mode: replug the cable and press Install again. The update <b>to</b> 0.16 from an older version is the last one without this protection during its first second.</p>
+    <p><b>Update mode on purpose:</b> hold OCT− alone while switching on. Three short flashes and a black screen: open the installer and Install, or switch off and on to start ChoralRoot again (nothing was written). The gesture is new in 0.16, and the way the FM-1 reads that key in the first moments after power-on is still being confirmed on hardware: if ChoralRoot simply starts with OCT− held, that is the open point and not a fault of your unit. <!-- CONFIRM: rescue key --> Recovery after an interrupted update does not depend on the key.</p>
+    <p><b>If the FM-1 stays dark</b> (a black screen with a disk named <code>WL82 UBOOT1.00</code> on the computer, or nothing on USB at all): do not format the disk. Follow "If the FM-1 no longer starts" in the <a href="https://github.com/Quixotic7/ChoralRootFM1#install">README</a> and the checklist in <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/INSTALL-COMPAT.md">INSTALL-COMPAT.md</a>, which lead to <a href="https://github.com/Quixotic7/MvaveFM1Unbricker">MvaveFM1Unbricker</a>.</p>
+    <p><b>Back to the stock firmware:</b> download the official FM-1 V15 firmware (<code>FM-1.fwsc</code>) yourself from <a href="https://www.m-vave.com/download">M-VAVE's downloads page</a> and select it in the installer. The browser checks its size and SHA-256 locally (the file is never uploaded), saves a backup first and installs it the same way. On the command line: <code class="cmd">python3 tools/fm1_install.py <span class="nw">FM-1.fwsc</span></code>.</p>
+    <p><b>Back up</b> on the installer page saves everything stored on the FM-1 (the settings, the 32 saved sounds with their patches, the ten loops, the FM6 voice bank and the CZ-1 banks) to one <code>.json</code> file, and <b>Restore</b> writes it back. Single sounds travel as files from its <b>Sounds</b> section, or with the <a href="webapp/installer/manager.html">device manager</a>.</p>
+    <p class="small">SAFE MODE, the panel calibration and one long flash instead of three: <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#16-updating-and-recovery">Updating and recovery in the manual</a>.</p>
   </div>
 </section>
 
@@ -268,11 +278,12 @@
     <h2 id="credits">Credits and licence</h2>
     <p class="intro">ChoralRoot was made by Quixotic7 with the assistance of his AI Overlords: Claude Fable 5.1 and Claude Opus 5.5. ChoralRoot is free, don't like something, feel free to make your own version. ChoralRoot FM-1 is free software under the GNU General Public License, version 3 only: <a href="firmware/LICENSE">LICENSE</a>. The package and this site carry <a href="firmware/LICENSING.md">LICENSING.md</a> and the licence texts in <a href="firmware/LICENSES/">LICENSES</a>.</p>
     <ul class="credit-list">
-      <li><b>Felucca</b> by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com">Hügelton Instruments</a>: the platform, the engines, the installer, the update loader; with its CrispyZebra waveforms (MIT). <a href="https://github.com/hugelton/Felucca">github.com/hugelton/Felucca</a></li>
+      <li><b>Felucca</b> by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com">Hügelton Instruments</a>: the platform, the engines, the installer, the update loader; with its CrispyZebra waveforms (the PHASE engine) and its Fukiai icons (MIT). <a href="https://github.com/hugelton/Felucca">github.com/hugelton/Felucca</a></li>
+      <li><b>Melodee</b> by Kerem Kilic (Ellic Studio), GPL-3.0: the FM6 engine as it plays here (DX7 voices as Dexed renders them), the CZ-1 engine, the USB audio recording, and the work that makes the second core robust. <a href="https://github.com/keremimo/melodee">github.com/keremimo/melodee</a></li>
       <li><b>The chord logic</b> is inspired after the <a href="https://telepathicinstruments.com">Telepathic Instruments</a> Orchid ORC—1 and Quixotic7's prior monome grid iii adaption <a href="https://github.com/Quixotic7/choralroot">choralroot</a>.</li>
       <li><b>Inter Tight</b> by The Inter Project Authors (SIL OFL 1.1, <a href="OFL.txt">OFL.txt</a>): the UI font, and this page's.</li>
       <li><b>DaisySP</b> (Electrosmith, Emilie Gillet) and <b>Rings</b> (Emilie Gillet), MIT: the PHYS engine.</li>
-      <li><b>msfa</b> from Dexed (Google, Pascal Gauthier), Apache-2.0: the FM6 engine.</li>
+      <li><b>msfa</b> (Google, Apache-2.0) and <b>Dexed</b> (Pascal Gauthier, GPL-3.0-or-later): the FM6 engine's synthesis. The <b>MAME uPD933</b> model by Devin Acker (BSD-3-Clause): the CZ-1's. <b>fm1-x0x</b> (GPL-3.0): the second core's bring-up.</li>
       <li><b>JieLi AC79 SDK</b>: the package holds three of its files (uboot.boot, cfg_tool.bin, eq_cfg_hw.bin; JieLi Technology, Apache-2.0). No M-VAVE material.</li>
     </ul>
   </div>
