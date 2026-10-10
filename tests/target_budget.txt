@@ -25,7 +25,7 @@ cz_env_tick 34
 quad_render 67230
 quad_block 37
 fm1_alnk0_irq 46077
-fm1_timer5_irq 50160
+fm1_timer5_irq 60058
 mod_begin 158
 mod_voice 30
 mod_end 7

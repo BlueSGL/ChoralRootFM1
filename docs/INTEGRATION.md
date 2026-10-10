@@ -113,7 +113,8 @@ The package identity becomes `FM-1_920` and the version string `ChoralRoot 0.1`.
 ## 2. Parts and streams (`cr_out.c`)
 
 Felucca has four `track_t` parts sharing a budget of 8 voices (since Melodee's voice model, 16 units: an FM6 voice
-takes one, any other two; FM6 plays up to 8 voices a part here, the other engines their 8 shared). ChoralRoot uses two:
+takes one, any other two; FM6 plays up to 8 voices a part here, the other engines their 8 shared; with Options > Dual
+Core On, Off by default, the bass part has a budget of its own: docs/DUALCORE.md). ChoralRoot uses two:
 
 | part | engine role | fed by |
 | --- | --- | --- |
@@ -406,7 +407,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   register, sound, level), EDIT (the engine picker; KNOB 1 the engine's sounds). Knobs: KNOB 1 voicing, KNOB 2 bass
   voicing, KNOB 3 the mode's main parameter, KNOB 4 FX amount, PRESETS the chord sound (Felucca's factory presets of
   the melodic engines, POLY), ALGORITHM the bass (presets named BASS / ACID; 0 = OFF), SELECT tempo (in a picker:
-  move); OPT + ALGORITHM bass level. Options: a picker of 19 settings (USB Record and USB Level since 0.14, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
+  move); OPT + ALGORITHM bass level. Options: a picker of 19 settings (USB Record and USB Level since 0.14, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, Off by default since 0.16, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
   of section 5 (PANIC / message, knob meter 900 ms, layer, page, Options, the stripes (the splash; the screensaver after 3 min without input; the screen off after 10 min), the View: CHORD,
   KEYBOARD, NOTES, GEEK OUT; perform on never swaps the chosen view: it shows in the PERF LED and the top
   line's right text only); `cr_leds` as section 6.
@@ -618,13 +619,14 @@ sound since power-on:
 | `flash_erases`, `settings_saves` | each erase stops every IRQ for ~45 ms with the audio buffer zeroed | grow only when you save, or when the instrument is quiet |
 | `ui_frame_max_ms`, `ui_frames` | the longest main-loop frame of the second (15 ms nominal; keys are read once a frame) | < 30 |
 | `stage_<s>_avg_us` / `_max_us` | the ISR's stages per half, the last second (`cr_cpu1.h` cr_dbg): `tick` (the engine, the looper, MIDI, the events, voice allocation), `part0` (the chord part's render), `part1` (the bass part's: core 1's job time), `fx` (DIST / level / sends of every part, parts 2..3, the FX buses), `master` (limiter, USB tap, click), `wait` (core 0 waiting for core 1) | their sum ~ `audio_avg_us` |
-| `c1_state`, `c1_jobs`, `c1_stack_bytes`, `c1_start_us` | the second core (docs/DUALCORE.md): 0 off (SAFE MODE), 1 ok, 2 failed at start, 3 gave up on a job; jobs done; its stack's high-water mark of 2816; its start | 1, rising, < 2816 |
+| `c1_state`, `c1_jobs`, `c1_stack_bytes`, `c1_start_us` | the second core (docs/DUALCORE.md): 0 off (Options > Dual Core Off, the default; SAFE MODE), 1 ok, 2 failed at start, 3 gave up on a job; jobs done; its stack's high-water mark of 2816; its start | 0, 0 (Off); 1, rising, < 2816 (On) |
 
 The GEEK OUT view (Options > View) shows the third line `isr <us> · late <n>`: the last second's longest half
 (`audio_max_all_us`) and the overruns since power-on. After a boot that was not clean (a counted crash reset, or SAFE
 MODE) it shows `boot <reason> stage <n>` instead: the reset class and the boot stage the crashed run reached
 (`firmware/src/cr_bootguard.h` names them).
-The fourth line is the second core (docs/DUALCORE.md): `c1 ok <jobs> · stk <bytes>`, `c1 off` (SAFE MODE), `c1 failed`
+The fourth line is the second core (docs/DUALCORE.md): `c1 off` (Options > Dual Core Off, the default; SAFE MODE),
+`c1 ok <jobs> · stk <bytes>` (Dual Core On), `c1 failed`
 (no answer at power-on) or `c1 gave up` (a job took over 8 ms); the fifth the ISR's stages, the last second's average
 in us per half: `t<tick> c<chord> b<bass> f<fx> m<master> w<wait>`.
 

@@ -3,11 +3,15 @@
 **Status: built and host-verified (tests, emulator); not yet tried on hardware** (the FM-1 is bricked; the checklist
 at the end is for when it is back).
 
-The FM-1's chip (JieLi AC79 / WL82) has two pi32v2 cores. ChoralRoot starts the second one at power-on and, in every
-audio block, hands it the BASS part's render (part 1) while core 0 renders the CHORD part (part 0). With core 1
-alive each of the two parts has its own voice budget: 8 voices (16 units: FM6 16) for the chord part and the looper,
-8 for the bass part. There is no setting: if core 1 does not answer, ChoralRoot runs on one core as before, with the
-shared budget of 8 voices.
+**Off by default since 0.16** (the user's decision, 2026-10-10: enough users of other FM-1 firmwares report crashes
+with both cores running). ChoralRoot runs on one core, as the stock firmware does, with the shared budget of 8
+voices, unless **Options > Dual Core** is turned **On** (below); everything else on this page describes that option.
+
+The FM-1's chip (JieLi AC79 / WL82) has two pi32v2 cores. With Dual Core On, ChoralRoot starts the second one at
+power-on and, in every audio block, hands it the BASS part's render (part 1) while core 0 renders the CHORD part
+(part 0). With core 1 alive each of the two parts has its own voice budget: 8 voices (16 units: FM6 16) for the chord
+part and the looper, 8 for the bass part. If core 1 does not answer, ChoralRoot runs on one core, with the shared
+budget of 8 voices, as it does with Dual Core Off.
 
 ## The bring-up (`firmware/hal/fm1_cpu1.{h,S}`)
 
@@ -28,13 +32,14 @@ and JieLi's AC79 SDK `EnableOtherCpu` (Apache-2.0). The registers, as ported:
 `_rt_end = _c1_end`, so main.c's one copy loop and the guard's RAM code window cover both, and `tools/build.py` puts
 `.c1_text` in the image): it reports in (`fm1_c1_alive`), then loops on the job counter forever, from RAM.
 
-Start (`cr_cpu1.h cr_c1_boot`, from `main.c fm1_main`, after the sounds and **before `audio_init` and the timers**:
+Start (Dual Core On only; `cr_cpu1.h cr_c1_boot`, from `main.c fm1_main`, after the sounds and **before `audio_init`
+and the timers**:
 fm1-x0x found that started later it never reaches its entry): the top of RAM unlocked, the PC limits opened
 (`fm1_guard_pc_open`: core 1 boots through the chip's ROM, which they refuse; Melodee's finding), `fm1_cpu1_start`
 (the stack filled with "C1MK", the entry word, the start sequence, then up to 20 ms for `fm1_c1_alive`), the PC limits
 armed again (`fm1_guard_enable(FM1_GUARD_PC)`). No answer: core 1 held, `cr_dbg.c1 = failed`. In SAFE MODE core 1 is
-never started (`c1 off`). The boot breadcrumb `BS_CPU1` ("core 1") is set first, so a hang there shows in the boot
-guard's `prev_stage` and counts as a failed boot.
+never started (`c1 off`), as with Dual Core Off. The boot breadcrumb `BS_CPU1` ("core 1") is set first, so a hang
+there shows in the boot guard's `prev_stage` and counts as a failed boot.
 
 Held before every reset and loader entry (`firmware/hal/fm1_sys.h`): `fm1_reboot` (the crash screen, Options > Flash
 Data, CR_REBOOT), `fm1_enter_uboot` (OCT- + OCT+ 5 s, USB SysEx, the boot guard's UBOOT), `fm1_core_reset` (and so
@@ -90,13 +95,14 @@ updates) only with interrupts off; idle, core 1 runs from RAM. So the flash is n
 With core 1 alive (`cr_dualcore_active()`): part 1 has its own VBUDGET (16 units) and part 0 with parts 2..3 another;
 `voice_room` / `voice_alloc` count and steal only within the part's own budget. The chord part's budget is shared with
 the looper's loop voices, which play on part 0. The bass part is MONO in ChoralRoot (voice mode 1 whatever the preset),
-so its budget matters for MIDI notes and the loop on the BASS channel. With core 1 off, failed or given up: the shared
-16 units of all parts, as before (Felucca, `tests/regress.c`: `CR_CPU1 0`).
+so its budget matters for MIDI notes and the loop on the BASS channel. With core 1 off (the default: Options > Dual
+Core Off), failed or given up: the shared 16 units of all parts, as before (Felucca, `tests/regress.c`: `CR_CPU1 0`).
 
 CPU: on one core (the emulator's inline job) two full budgets could reach about twice the old worst block, but only
 if both parts played 8 voices; with the bass MONO the extra over the old budget is the chord part's 8th voice and the
-bass's own. perf.sh (j) (an 8-note VA 13th + the VA bass, 9 voices, one more than one core's budget): 740 / 1218 us of
-2902 on one core, of which core 1 takes the bass's 46 / 125.
+bass's own. perf.sh (j) (an 8-note VA 13th + the VA bass, 9 voices, one more than one core's budget), Dual Core On:
+740 / 1218 us of 2902 on one core, of which core 1 takes the bass's 46 / 125; Dual Core Off (the default: one of the
+9 voices given up): 682 / 1130.
 
 ## The stage profile (`cr_dbg`, GEEK OUT, console `cpu`, perf.sh)
 
@@ -108,13 +114,30 @@ master, wait, us per half). GEEK OUT's fourth line: `c1 ok <jobs> · stk <bytes>
 the C1MK fill), `c1 off`, `c1 failed`, `c1 gave up`. On the device the stages count TIMER4 ticks; on the emulator
 host instructions (EMU_STAGES=1; the counter's own cost measured and left out; device us = instructions / 259).
 
-perf.sh, 2026-10-09 (device estimate from the emulator, us per 2902 us half, avg / max; one core's block):
+perf.sh, 2026-10-09 (Dual Core On; device estimate from the emulator, us per 2902 us half, avg / max; one core's block):
 
 | scenario | block (one core) | tick | part0 (chord) | part1 (bass) | fx | master |
 | --- | --- | --- | --- | --- | --- | --- |
 | (c) FM PAD chord + DEEP SUB + loop + arp | 814 / 1048 | 7 / 93 | 507 / 781 | 58 / 169 | 142 / 418 | 58 / 127 |
 | (i) (c) on FM TONE STRINGS | 840 / 1075 | 7 / 105 | 534 / 880 | 58 / 177 | 141 / 325 | 58 / 149 |
 | (j) 8-note VA 13th + VA bass (MIDI) | 740 / 1218 | 6 / 57 | 461 / 865 | 46 / 125 | 126 / 259 | 58 / 85 |
+
+perf.sh, 2026-10-10 (0.16: it runs every scenario with Dual Core Off, the default, then again with it On; the block,
+device estimate avg / max us of 2902, and the voices given up over the run):
+
+| scenario | Off (the default): block | given up | On: block | given up | the WAV |
+| --- | --- | --- | --- | --- | --- |
+| (c) FM PAD chord + DEEP SUB + loop + arp | 849 / 1031 | 0 | 850 / 1032 | 0 | the same, bit for bit |
+| (e) (c) + the EDIT knobs | 872 / 1031 | 0 | 873 / 1050 | 0 | the same |
+| (f) 6-note VA chord + VA bass, a chord change | 739 / 1126 | 2 | 753 / 1195 | 1 | differs |
+| (g) 6-note CZ-1 chord + CZ-1 bass, a chord change | 820 / 1253 | 2 | 839 / 1424 | 1 | differs |
+| (i) (c) on FM TONE STRINGS | 750 / 946 | 65 | 813 / 1003 | 51 | differs |
+| (j) 8-note VA 13th + VA bass (MIDI) | 682 / 1130 | 1 | 740 / 1218 | 0 | differs |
+
+(a), (b), (d), (h): the same WAV and the same block within 1 us on average. Where the WAVs differ it is the budget, not
+the rendering: with one shared budget of 8 voices the bass's voice counts against the chord's (in (f), (g) and (i) a
+releasing chord voice is given up a little sooner; in (j) the 9th voice is given up). One core's worst half stays
+under half the budget (43 % in (g)); on the emulator the bass job runs inline, so "On" there is still one core's block.
 
 What this says: ChoralRoot's bass part is MONO, so core 1's job is small (~50-70 us a half on average, up to ~260 in
 (g)); the chord part is the big stage and stays on core 0. The win today is the budget (an 8-note chord and the bass
@@ -123,16 +146,31 @@ would be the next step if the CPU is ever short.
 
 On the device with core 1 the half is about the block less part1, plus the wait.
 
-## Options > Dual Core (0.15)
+## Options > Dual Core (0.15; Off by default since 0.16)
 
-Options > **Dual Core: On / Off** (after USB Level; settings v11, bit 6 of `view`, docs/SETTINGS.md), default On. Why:
-other FM-1 firmwares' dual-core support was reported to crash for some people after playing notes; this keeps a
-per-device way out if ChoralRoot's ever does. `cr_settings_boot` (persist_boot) reads it into `cr_c1_off` before
-`cr_c1_boot`; Off: core 1 is never started, `cr_dbg.c1` stays `C1_OFF` (GEEK OUT `c1 off`, console `c1_state 0`), one
-core with the shared 16-unit budget (an 8-note chord + bass gives up a voice). A change in Options takes effect at the
-**next power-on** (the value reads "Off · restart" / "On · restart", the line under it "takes effect after a restart"):
-core 1 is never started or stopped live. Test: `tools/emu/test_cr.sh` (`cr_dualcore_opt.txt`, a relaunch with
-`cr_dualcore.txt`: `c1 off`, one voice given up; `cr_dualcore_on.txt`, a relaunch: `c1 ok`, none given up).
+Options > **Dual Core: On / Off** (after USB Level; settings v12, bit 6 of `view` set = On, docs/SETTINGS.md),
+**default Off**. Why: other FM-1 firmwares' dual-core support is reported to crash for enough of their users
+(Melodee's investigation, "Reliability" below: the margin varies per chip) that one core, what the stock firmware runs
+and every unit was validated with, is the default; the second core is an option the user turns on. 0.15 had it On by
+default (settings v11, the bit set = Off).
+
+`cr_settings_boot` (persist_boot) reads it into `cr_c1_off` (1 until a record says On) before `cr_c1_boot`. Off: core
+1 is never started, the core rails stay as the boot loader left them, `cr_dbg.c1` stays `C1_OFF` (GEEK OUT `c1 off`,
+console `c1_state 0`), one core with the shared 16-unit budget (an 8-note chord + bass gives up a voice). On: the
+rails go up, core 1 starts, the bass part has its own budget. A change in Options takes effect at the **next
+power-on** (the value reads "On · restart" / "Off · restart", the line under it "takes effect after a restart";
+otherwise that line reads "On: bass on the second core" when Off and "bass on the second core" when On): core 1 is
+never started or stopped live.
+
+**Updating from 0.14 / 0.15**: every settings record older than v12 loads as **Off**, whatever its bit says (a v11
+record's On cannot be told from 0.15's default), and so does a backup made on 0.14 / 0.15 restored on 0.16 (the
+restore runs the same import). Whoever used it turns it on again in Options. A fresh unit, erased flash data, SAFE
+MODE's defaults and a Felucca / Melodee settings record: Off.
+
+Test: `tests/cr_settings_test.c t_dualcore_v12`, `tests/cr_backup_test.c` (a v11 / v12 settings object restored);
+`tools/emu/test_cr.sh`: a fresh flash (`cr_dualcore.txt`: `c1 off`, one voice given up, the WAV of a core 1 that did
+not start; `cr_dualcore_on.txt`: the value "Off", then "On · restart"), then on that flash, relaunched: `c1 ok`, none
+given up; `cr_dualcore_opt.txt` (back Off), a relaunch: `c1 off`; On again, a relaunch: `c1 ok`.
 
 ## The fail-safes
 
@@ -144,8 +182,9 @@ core 1 is never started or stopped live. Test: `tools/emu/test_cr.sh` (`cr_dualc
   error on core 0) no longer resets the chip: core 1 is held, core 0 resumes, `c1 gave up` (0.16: "Reliability").
   Before 0.16 it ended in the crash report and a reset, as any crash.
 - Host tests: `tests/cr_cpu1_test.c` (the split bit for bit for 3 x 3 preset pairs, the job before and after part
-  0; 8 + 8 voices with core 1, 8 without; a job that never answers; no answer at start). The emulator:
-  `EMU_C1=nostart` / `EMU_C1=hang` (`tools/emu/test_cr.sh`, `cr_dualcore.txt`), `EMU_STAGES=1`.
+  0; 8 + 8 voices with core 1, 8 without; a job that never answers; the default: never started; no answer at start).
+  The emulator, on a flash with Dual Core On: `EMU_C1=nostart` / `EMU_C1=hang` (`tools/emu/test_cr.sh`,
+  `cr_dualcore.txt`), `EMU_STAGES=1`.
 
 ## Reliability (0.16, after Melodee PR 21)
 
@@ -163,7 +202,7 @@ bad while both cores run. A healthy unit ran both cores clean down to SYSVDD 6 (
 `fm1_p33_write`: P3_ANA_CON9 SYSVDD 0.93 V + 30 mV a step, CON6 VDC14 1.25 V + 50 mV a step, CON5 VDDIO read only).
 With Dual Core On, `cr_c1_boot` (power-on, IRQs off) records the boot loader's levels, then raises VDC14 to 4
 (1.45 V) and SYSVDD to 14 (1.35 V), a step every 100 us, never lowering, **before** core 1 starts. With Dual Core Off
-(or SAFE MODE) the rails stay as the boot loader left them: the stock behaviour, the safe baseline.
+(the default; or SAFE MODE) the rails stay as the boot loader left them: the stock behaviour, the safe baseline.
 
 **The validation** (`firmware/hal/fm1_cpu1.h fm1_c1_post / fm1_c1_poll`): core 0 writes fn, arg and a check word
 (`FM1_C1_CHECK`: fn ^ arg ^ seq * 0x9E3779B1 ^ a constant), then the sequence number. Core 1 keeps the count of
@@ -209,7 +248,9 @@ blocks, the rails never above 14 / 4; the boot rails On / Off; the rails' steps 
 
 ### Device checklist (0.16)
 
-1. The release build, Options > Dual Core On, power on: `fm1_install.py --debug` shows `rail_sysvdd_boot 11`,
+0. The release build as installed (Dual Core Off, the default; after an update from 0.15 too): `c1 off`, `c1_state 0`,
+   the rails' now equal their boot levels (11, 3); Options > Dual Core reads Off.
+1. Options > Dual Core On ("On · restart"), power cycle: `fm1_install.py --debug` shows `rail_sysvdd_boot 11`,
    `rail_sysvdd_now 14`, `rail_vdc14_boot 3`, `rail_vdc14_now 4`, `c1_state 1`, `c1_rejected 0`, `c1_faults 0`.
    GEEK OUT: `c1 ok <jobs> · stk <n> · rej 0`.
 2. Dual Core Off, power cycle: the rails' now equal their boot levels (11, 3), `c1 off`.
@@ -221,16 +262,18 @@ blocks, the rails never above 14 / 4; the boot rails On / Off; the rails' steps 
 
 ## Hardware checklist (when the FM-1 is back)
 
-1. Flash the build; power on: the splash, sound. GEEK OUT (Options > View): `c1 ok <jobs rising> · stk <n>` (n well
+1. Flash the build, Options > Dual Core On, power cycle: the splash, sound. GEEK OUT (Options > View): `c1 ok <jobs
+   rising> · stk <n>` (n well
    under 2816; fm1-x0x saw 828 for its drums). Console: `cpu` -> `c1_state 1`, `c1_start_us` (a few us .. ms).
 2. Play perf.sh's (c), (i) and (j) by hand (or their scripts' gestures): the console's `cpu` stages and
-   `audio_max_all_us` with core 1 (the default) and, for comparison, a build with `CR_CPU1 0`; note them here.
-3. An 8-note chord + bass notes on the BASS channel: all sound (no voice given up: `voices_given_up` 0).
+   `audio_max_all_us` with Options > Dual Core On and, for comparison, Off (the default); note them here.
+3. An 8-note chord + bass notes on the BASS channel: all sound (no voice given up: `voices_given_up` 0; with Dual
+   Core Off one is given up).
 4. A flash save (SAVE a sound, the settings), a loop slot write: no glitch beyond the known erase silence, no crash.
 5. Reboot paths: Options > Flash Data reboot (SAFE MODE), OCT- + OCT+ 5 s (UBOOT), the installer's update (M-UPGRADE,
    the loader): each must come back cleanly (core 1 held before each).
-6. SAFE MODE (two crash boots): `c1 off`, everything else as before. Options > Dual Core Off, power cycle: `c1 off`,
-   `c1_state 0`; back On, power cycle: `c1 ok`.
+6. SAFE MODE (two crash boots): `c1 off`, everything else as before. Options > Dual Core Off (the default), power
+   cycle: `c1 off`, `c1_state 0`; back On, power cycle: `c1 ok`.
 7. The Transporter dump still works (the boot info / mailbox at the top of RAM are untouched apart from the entry
    word 0x01C7FFF8).
 8. Leave it playing (c) for 10 minutes: `c1` stays `ok`, `audio_late` 0.

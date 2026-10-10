@@ -429,30 +429,65 @@ static void t_view_lock(void)
        "version 8 -> 9: the view kept, unlocked");
 }
 
-/* version 11: Options > Dual Core in bit 6 of view (set = Off), default On; older records On */
-static void t_dualcore_v11(void)
+/* version 12 (0.16): Options > Dual Core in bit 6 of view, set = On, default Off. v11 (0.15) had set = Off and On the
+ * default: every record older than v12 loads Off whatever its bit says; the view and its lock are not touched */
+static void crs_old(cr_settings_t *s, unsigned version)   /* s resealed as a record of an older version */
+{
+    cr_settings_seal(s);
+    s->version = (uint16_t)version;
+    s->check = crs_check(s);
+}
+static void t_dualcore_v12(void)
 {
     cr_settings_t s, r;
-    uint32_t h, i;
+    uint8_t z[CRS_SIZE];
     cr_settings_defaults(&s);
-    ok(CRS_DUALCORE(&s) == 1 && s.view == 0, "v11 defaults: Dual Core On (the view byte 0)");
-    s.view = (uint8_t)(CRS_VIEW_BYTE(3, 1) | CRS_DC_OFF);
+    ok(CRS_DUALCORE(&s) == 0 && s.view == 0, "v12 defaults: Dual Core Off (the view byte 0)");
+    memset(z, 0xFF, sizeof z);                     /* no record: an erased sector, zeros, nothing */
+    ok(cr_settings_import(&r, z, sizeof z) == 0 && !CRS_DUALCORE(&r), "an erased record: defaults, Dual Core Off");
+    memset(z, 0, sizeof z);
+    ok(cr_settings_import(&r, z, sizeof z) == 0 && !CRS_DUALCORE(&r) && cr_settings_import(&r, NULL, 0) == 0 &&
+       !CRS_DUALCORE(&r), "a zeroed record, no record: defaults, Dual Core Off");
+    s.view = (uint8_t)(CRS_VIEW_BYTE(3, 1) | CRS_DC_ON);
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 3 && CRS_VIEW_LOCK(&r),
-       "v11: Dual Core Off kept, with the view and its lock");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_DUALCORE(&r) && CRS_VIEW(&r) == 3 && CRS_VIEW_LOCK(&r),
+       "v12: Dual Core On kept, with the view and its lock");
+    ok(cr_settings_import(&s, &r, sizeof r) == 1 && CRS_DUALCORE(&s) && s.view == r.view, "v12: On round trip");
     s.view = CRS_VIEW_BYTE(2, 0);
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_DUALCORE(&r) && CRS_VIEW(&r) == 2, "v11: Dual Core On kept");
-    s.view = (uint8_t)(CRS_DC_OFF | 0x08u);        /* an unknown bit: the default view byte, so On */
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 2, "v12: Dual Core Off kept");
+    ok(cr_settings_import(&s, &r, sizeof r) == 1 && !CRS_DUALCORE(&s) && s.view == r.view, "v12: Off round trip");
+    s.view = (uint8_t)(CRS_DC_ON | 0x08u);         /* an unknown bit: the default view byte, so Off */
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_DUALCORE(&r) && r.view == 0, "v11: an unknown view bit: defaults (On)");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && !CRS_DUALCORE(&r) && r.view == 0, "v12: an unknown view bit: defaults (Off)");
+    cr_settings_defaults(&s);                      /* a version-11 record, bit 6 clear (0.15's On, its default) */
+    s.view = CRS_VIEW_BYTE(4, 1);
+    crs_old(&s, 11);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 4 && CRS_VIEW_LOCK(&r) &&
+       r.view == CRS_VIEW_BYTE(4, 1) && r.version == CRS_VERSION,
+       "version 11 -> 12, bit 6 clear (0.15's On): Dual Core Off, the view and lock kept");
+    cr_settings_defaults(&s);                      /* a version-11 record, bit 6 set (0.15's Off) */
+    s.view = (uint8_t)(CRS_VIEW_BYTE(3, 1) | 0x40u);
+    crs_old(&s, 11);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 3 && CRS_VIEW_LOCK(&r) &&
+       r.view == CRS_VIEW_BYTE(3, 1) && r.version == CRS_VERSION,
+       "version 11 -> 12, bit 6 set (0.15's Off): Dual Core Off, the view and lock kept");
+    s.view = (uint8_t)(CRS_VIEW_BYTE(1, 0) | 0x40u);
+    crs_old(&s, 11);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_DUALCORE(&r) && r.view == CRS_VIEW_BYTE(1, 0),
+       "version 11 -> 12, bit 6 set, unlocked: Off, the view kept");
+    ok(cr_settings_import(&s, &r, sizeof r) == 1 && !CRS_DUALCORE(&s) && s.view == r.view,
+       "the migrated record read again (v12 now): still Off");
     cr_settings_defaults(&s);                      /* a version-10 record: bit 6 0 */
     s.view = CRS_VIEW_BYTE(4, 1);
-    s.version = 10;
-    for (h = 2166136261u, i = 12; i < CRS_SIZE; i++) { h ^= ((uint8_t *)&s)[i]; h *= 16777619u; }
-    s.check = h;
-    ok(cr_settings_import(&r, &s, sizeof s) == 2 && CRS_DUALCORE(&r) && CRS_VIEW(&r) == 4 && CRS_VIEW_LOCK(&r) &&
-       r.version == CRS_VERSION, "version 10 -> 11: Dual Core On, the view and lock kept");
+    crs_old(&s, 10);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 4 && CRS_VIEW_LOCK(&r) &&
+       r.version == CRS_VERSION, "version 10 -> 12: Dual Core Off, the view and lock kept");
+    cr_settings_defaults(&s);                      /* a version-8 record (before the lock): its view, Off */
+    s.view = 2;
+    crs_old(&s, 8);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 2 && !CRS_VIEW_LOCK(&r),
+       "version 8 -> 12: Dual Core Off, the view kept, unlocked");
 }
 
 int main(void)
@@ -464,7 +499,7 @@ int main(void)
     t_presets();
     t_flash();
     t_loop_rec();
-    t_view_lock(); t_hold_v10(); t_dualcore_v11();
+    t_view_lock(); t_hold_v10(); t_dualcore_v12();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }
