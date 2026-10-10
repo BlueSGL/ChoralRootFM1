@@ -12,7 +12,7 @@ Each file becomes one zone: mono, 22050 Hz, IMA ADPCM (sampleio.py, the same enc
 as the built-in sets and the web editor). ROOT is a MIDI note (default: from the file
 name, C4 = 60, else 60); without LO-HI the zones split the keyboard between their roots.
 A slot holds 80 KiB (about 7 s at 22050 Hz). Protocol: web/EDITOR_PROTOCOL.md, cmds 11..15.
-Needs mido (and a backend such as python-rtmidi) for the device commands.
+Needs python-rtmidi for the device commands.
 """
 import sys
 import time
@@ -20,6 +20,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import sampleio as sio  # noqa: E402
+import fm1_install as fi  # noqa: E402  (the MIDI side: ports in worker processes, every call with a bound)
 
 HDR = [0x7D, 0x46, 0x4C]
 RC = {1: "size", 2: "header", 3: "data CRC", 4: "flash", 5: "zones"}
@@ -37,17 +38,15 @@ def pack7(b):
 
 class Link:
     def __init__(self):
-        try:
-            import mido
-        except ImportError:
-            sys.exit("needs mido: pip install mido python-rtmidi")
-        self.mido = mido
-        outs = [n for n in mido.get_output_names() if "Felucca" in n or "ChoralRoot" in n]
-        ins = [n for n in mido.get_input_names() if "Felucca" in n or "ChoralRoot" in n]
+        up = fi.Updater(fi.MidiBackend())           # (fm1_install.py "MIDI": why not mido, and the bounds)
+        outs = [n for n in up.names(outs=True) if "Felucca" in n or "ChoralRoot" in n]
+        ins = [n for n in up.names() if "Felucca" in n or "ChoralRoot" in n]
         if not outs or not ins:
-            sys.exit("no MIDI port named Felucca: connect the FM-1 (running Felucca) by USB")
-        self.o = mido.open_output(outs[0])
-        self.i = mido.open_input(ins[0])
+            sys.exit("no MIDI port named Felucca: connect the FM-1 (running Felucca) by USB" +
+                     (f" ({up.gave_up} did not return in time)" if up.gave_up else ""))
+        self.link = up.open(ins[0], outs[0])
+        if not self.link:
+            sys.exit(f"{ins[0]} did not open")
         for _ in range(3):                          # the first frame after opening the port can be lost
             try:
                 self.req(1, [], 1.0)
@@ -56,15 +55,13 @@ class Link:
                 pass
 
     def req(self, cmd, args, timeout=3.0):
-        for _ in self.i.iter_pending():
-            pass
-        self.o.send(self.mido.Message("sysex", data=HDR + [cmd] + list(args)))
-        t0 = time.time()
-        while time.time() - t0 < timeout:
-            for m in self.i.iter_pending():
-                if m.type == "sysex" and list(m.data[:4]) == HDR + [cmd]:
-                    return list(m.data[4:])
-            time.sleep(0.002)
+        self.link.drain()
+        self.link.send(bytes([0xF0] + HDR + [cmd] + list(args) + [0xF7]))
+        end = time.monotonic() + timeout
+        while (left := end - time.monotonic()) > 0:
+            p = self.link.read(left)
+            if p and list(p[1:5]) == HDR + [cmd]:
+                return list(p[5:-1])
         raise TimeoutError(f"no reply to cmd {cmd}")
 
 
@@ -131,8 +128,12 @@ def main():
     print(f"\n  {time.time() - t0:.1f} s, end:", "ok" if r[1] == 0 else f"FAILED ({r[1]}, {RC.get(r[1], '?')})")
 
 
-if __name__ == "__main__":
+def run():
     try:
         main()
     except TimeoutError as e:
         sys.exit(f"{e}: is Felucca running, and no other app using its MIDI port?")
+
+
+if __name__ == "__main__":
+    fi.leave(fi.exit_code(run))                     # (the exit codes as before; its MIDI worker ends with it)
