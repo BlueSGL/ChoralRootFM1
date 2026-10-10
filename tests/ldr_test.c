@@ -13,7 +13,7 @@
  *                                                             erase and write is the one unprotected window
  *   SAME_STUB (NEW's stub, another body) -> NEW                every later install: no unprotected cut at all
  *   the dark unit of 2026-10-07 (OLD's sectors 0x4000..0x24FFF, then OTHER_OLD's: no stub, half and half) -> NEW
- *   OLD_STUB (an earlier stub, another body) -> NEW          a release that changes the stub (v1 -> v2): the old
+ *   OLD_STUB (an earlier stub, another body) -> NEW          a build that changes the stub (v2 -> v3): the old
  *                                                             stub guards up to the sector's erase, the new one
  *                                                             from its last page on; the window between is the same
  * A cut state is: B the stub boots it, R the stub rescues (the staged loader), O the old firmware still whole (no
@@ -396,7 +396,7 @@ int main(int argc, char **argv)
                 bad += check("the same cut (33 sectors in) with a stub in place: rescue, the loader",
                              stub_says(&r) == STUB_LOADER && r.mk != STUB_MK_OK);
             }
-            if (argc >= 6) {                                          /* a stub change: v1 on the unit, v2 in the package */
+            if (argc >= 6) {                                          /* a stub change: the unit's version, the next in the package */
                 size_t vlen;
                 uint8_t *v1 = load_logical(argv[5], &vlen);
                 uint32_t vfo = flash_off(v1);
@@ -405,7 +405,7 @@ int main(int argc, char **argv)
                              memcmp(v1 + vfo + 0x5000, new_fl + 0x5000, 0x8C000) != 0);
                 bad += check(".. its directory (0x4000..0x411F) is the new package's: only the stub's bytes differ",
                              !memcmp(v1 + vfo + 0x4000, new_fl + 0x4000, 0x120));
-                bad += cut_case("an earlier stub (v1) -> this stub", v1 + vfo, 1, 0, 16);
+                bad += cut_case("an earlier stub -> this stub", v1 + vfo, 1, 0, 16);
             }
         }
     }

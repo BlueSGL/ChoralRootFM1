@@ -27,10 +27,15 @@
  * Version 2 (version 1 did not see the key on the unit: it sampled for 3 ms right after the SPL's jump and gave up
  * when OCT- read open in the first four samples): the key is sampled through a fixed window on every boot and
  * judged by its tail (stub_key_held), the samples go to the mailbox, and the running app can ask through the rescue
- * word for the loader check on a normal boot (STUB_REQ_TEST) or for the rescue itself (STUB_REQ_RESCUE). */
+ * word for the loader check on a normal boot (STUB_REQ_TEST) or for the rescue itself (STUB_REQ_RESCUE).
+ *
+ * Version 3: the cause was found on the unit. PA2 (the LCD's "backlight" line, active low) is the enable of a rail
+ * that also feeds the 595 chain and the LEDs: with PA2 high, as the SPL leaves it, no key reads closed and no LED
+ * lights. The device side (stub.c) now pulls PA2 low before it samples, as the app's fm1_lcd_hw_init does, and
+ * drives it high again before a hand-over. Nothing in this file changed but the version. */
 #ifndef STUB_CORE_H
 #define STUB_CORE_H
-#define STUB_VERSION 2                   /* in the stub's header (crt0_stub.S: no C suffix) and the RAM mailbox */
+#define STUB_VERSION 3                   /* in the stub's header (crt0_stub.S: no C suffix) and the RAM mailbox */
 #ifndef __ASSEMBLER__
 #include <stdint.h>
 
@@ -207,8 +212,9 @@ static uint32_t stub_rescues(uint32_t word)
  * with OCT-'s column latched, up with OCT+'s, idle with no column latched (a row stuck low, or the matrix not yet
  * alive, reads closed there too). Only the tail counts, the last 12 samples (30 ms into the window, 18 ms long):
  * OCT- closed in at least 10 of them, OCT+ and the idle read in at most 1 each. Whatever the first 20 samples
- * read, of either polarity, changes nothing: what the pins and the 595 chain do in the first ms after the SPL
- * is not known (version 1 read OCT- open there with the key held). Both keys: the app's calibration, not ours. */
+ * read, of either polarity, changes nothing: they are the time the rail behind PA2 has to come up (stub.c
+ * shw_rail; until it is up a held key reads open, as versions 1 and 2 read it throughout). Both keys: the app's
+ * calibration, not ours. */
 #define STUB_KEY_SAMPLES 32u
 #define STUB_KEY_TAIL 12u
 static uint32_t stub_tail(uint32_t bits)
