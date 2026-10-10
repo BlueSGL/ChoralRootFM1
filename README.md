@@ -8,6 +8,9 @@ platform and the engines, and on [choralroot](https://github.com/Quixotic7/chora
 grid version) for the musical engine. Independent of and unaffiliated with Telepathic Instruments
 and M-VAVE.
 
+**The manual:** [docs/MANUAL.md](docs/MANUAL.md) (the first five minutes, every button, knob and Options entry, the
+looper, the sound editor, MIDI and USB, updating and recovery, a quick-reference table).
+
 ## Install
 
 Try it in the browser first: <https://quixotic7.github.io/ChoralRootFM1/emu/> (the same firmware, with sound, no
@@ -16,14 +19,16 @@ FM-1 needed).
 **From the browser:** open the web installer at <https://quixotic7.github.io/ChoralRootFM1/> in Chrome or
 Edge, connect the FM-1 by USB and press Install. Nothing is installed on the computer: the page talks to the
 FM-1 over Web MIDI. Do not unplug while it writes; an interrupted install is resumed by pressing Install again
-(after a power loss too, from the first version with the boot stub on: see "If the FM-1 no longer starts").
+(after a power loss too, from 0.16 on: see "If an install was interrupted").
 Afterwards the FM-1 restarts and reports the identity `FM-1_920`. Before installing, the page saves a backup of what
 is stored on the FM-1 (settings, user sounds, loops, FM6 patches) to a file, and after installing over
 Felucca it offers that backup back; its Back up and Restore buttons do the same at any time.
 
 **Before any install:** charge the FM-1 fully (it updates on its battery), connect it straight to the computer with a
-data cable (no hub), keep the computer awake, and leave the cable alone until the installer prints "done". An update
-interrupted mid-write can leave the FM-1 dark with no USB device at all (docs/INSTALL-COMPAT.md, "Before an install").
+data cable (no hub), keep the computer awake, and leave the cable alone until the installer prints "done". Up to 0.15
+an update interrupted mid-write could leave the FM-1 dark with no USB device at all (docs/INSTALL-COMPAT.md, "Before
+an install"); from 0.16 on it comes back in update mode (below), except during the first second of the install of
+0.16 itself over an older version.
 
 **From the command line:** download `choralroot-X.Y.fwsc` from
 [Releases](https://github.com/Quixotic7/ChoralRootFM1/releases) (`SHA256SUMS` next to it), then
@@ -64,13 +69,16 @@ erases that data and restarts; switching off and on tries the stored data again.
 SAFE MODE, so you can save a backup first. Only if SAFE MODE itself crashes twice does the unit go to update mode
 (ROM boot).
 
-**If an install was interrupted** (ChoralRoot versions that carry the boot stub, docs/BOOT-SAFETY.md: the release
-notes say from which version on; not 0.16 or older): switch the FM-1 on. The key LEDs flash three times, the screen
+**If an install was interrupted** (ChoralRoot 0.16 and later, which carry the boot stub: docs/BOOT-SAFETY.md,
+[docs/releases/0.16.md](docs/releases/0.16.md)): switch the FM-1 on. The key LEDs flash three times, the screen
 stays black and the FM-1 is in update mode: open the installer and press Install, it finishes the write. The same on
 purpose, whatever state the firmware is in: **hold OCT- (alone) while switching on**, three flashes, open the
-installer, Install (or switch off and on to start the firmware again: nothing was written). One long flash instead of
-three: switch off for 10 seconds and try once more; one long flash again means no update loader is stored (it is kept
-from the unit's last install on) and the FM-1 is the USB disk "WL82 UBOOT1.00" until it is switched off and on.
+installer, Install (or switch off and on to start the firmware again: nothing was written). The OCT- gesture is new
+in 0.16 and, as of this writing, its reading of the key at power-on is still being confirmed on hardware.
+<!-- CONFIRM: rescue key -->
+One long flash instead of three: switch off for 10 seconds and try once more; one long flash again means no update
+loader is stored (it is kept from the unit's last install on) and the FM-1 is the USB disk "WL82 UBOOT1.00" until it
+is switched off and on.
 
 **If the FM-1 no longer starts** (black screen, the computer shows a USB disk "WL82 UBOOT1.00"): leave it on for 2
 minutes to see whether it restarts by itself, try holding OCT- and OCT+ while switching on (10 s), and check what the
@@ -82,27 +90,49 @@ Installing firmware is at your own risk.
 
 ## Status
 
-A first public beta (0.1). The instrument plays: the chord block, Key Mode, the performance modes,
-the bass, the views; the sound editor, the looper, MIDI (USB and TRS) and the VA engine are in. The engines, in the
-picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx import, [docs/FM6.md](docs/FM6.md)),
-FM TONE (engine 15, `eng_quad.c`, code name QUAD: four-operator FM in the style of the Digitone, aligned with the
-Digitone manual's algorithms, carrier levels and controls, [docs/QUAD.md](docs/QUAD.md)),
-VA, CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE. (Felucca's ANALOG is
-retired since 0.14: the VA replaces it; an ANALOG sound saved before loads on the VA.) **USB audio recording** (Melodee's,
-class compliant, no driver): the computer records the FM-1 through **ChoralRoot In**: the master, the CHORD part and
-the BASS part as three stereo pairs; Options > USB Record switches it (Off: the serial console instead)
-([docs/USB-AUDIO.md](docs/USB-AUDIO.md)). Open: the
-Orchid parity passes (M8: the secret-chord map, chromatic Key Mode quantization, Key Mode sevenths and the
+A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes of every version). What is in it; the
+[manual](docs/MANUAL.md) says how to play each part:
+
+- **Chords**: the chord block on the keybed (DIM MIN MAJ SUS on the black keys F#3 G#3 A#3 C#4, 6 m7 M7 9 on the
+  white keys F3 G3 A3 C4, B3 = LOCK), roots on D4..G5, voicing on KNOB 1, Key Mode, the Simple / Advanced / Free play
+  styles, secret chords, LATCH.
+- **Layers** that lock open on a hold (KEY, PERF, FX, BASS, METRO, LOOP), each a picker over a row of four knob
+  cells; OCT- or HOME closes them.
+- **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,
+  chorus, delay, drive), a metronome.
+- **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
+  PLAY menu; a loop is saved when it stops ([docs/LOOPER.md](docs/LOOPER.md)).
+- **Eleven engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
+  import, [docs/FM6.md](docs/FM6.md)), FM TONE (engine 15, `eng_quad.c`, code name QUAD: four-operator FM in the style
+  of the Digitone, aligned with the Digitone manual's algorithms, carrier levels and controls,
+  [docs/QUAD.md](docs/QUAD.md)), VA ([docs/VA.md](docs/VA.md)), CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), PHASE,
+  LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE. (Felucca's ANALOG is retired since 0.14: the VA replaces it; an ANALOG sound
+  saved before loads on the VA.) One preset pool per engine (INIT, the factory presets, yours), 32 saved sounds, the
+  sound editor ([docs/PRESETS.md](docs/PRESETS.md), [docs/EDITOR.md](docs/EDITOR.md)).
+- **Views**: Chord, Keyboard, Notes, Geek Out, Scope; Options, one setting per screen.
+- **MIDI**: three streams out over USB (performance on channel 1, bass on 2, the raw chord off by default), MIDI in
+  on the parts (USB and TRS), clock both ways.
+  **USB audio recording** (Melodee's, class compliant, no driver): the computer records the FM-1 through **ChoralRoot
+  In**: the master, the CHORD part and the BASS part as three stereo pairs; Options > USB Record switches it (Off:
+  the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
+- **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.16** ([docs/releases/0.16.md](docs/releases/0.16.md)): Options > Dual Core is Off by default
+  ([docs/DUALCORE.md](docs/DUALCORE.md)); the boot stub, so an interrupted update comes back in update mode
+  ([docs/BOOT-SAFETY.md](docs/BOOT-SAFETY.md)); the device manager auditions sounds on the unit.
+
+Open: the Orchid parity passes (M8: the secret-chord map, chromatic Key Mode quantization, Key Mode sevenths and the
 factory patterns, which ship as labelled fallbacks until they are captured from an Orchid).
 [PLAN.md](PLAN.md) is the plan and the interface specification; [design/](design/) holds the screen and
-panel mock-ups (made with the [ChoralRoot FM-1 designer](../ChoralRootFM1Designer/)).
+panel mock-ups (made with the [ChoralRoot FM-1 designer](https://github.com/Quixotic7/MvaveFM1-Designer)).
 
 ## Layout
 
 | Path | What |
 | --- | --- |
+| `docs/MANUAL.md` | the player's manual (its screenshots: `docs/manual/`) |
 | `PLAN.md` | the plan: controls, interaction grammar, screens, architecture, milestones |
 | `design/` | the mock-ups (`make_mockups.py` generates the JSON; the PNG sheets are its renders) |
+| `docs/` | the design documents (the editor, the engines, the looper, presets, settings, USB audio, boot safety) and `docs/releases/`, the release notes |
 | `docs/INTEGRATION.md` | how the engine, the screens and Felucca's sound are wired together |
 | `firmware/` | the firmware: Felucca's `hal/`, `src/` and `loader/`, plus ChoralRoot's `src/cr_*.c` |
 | `tools/` | Felucca's build, generators, installer; `tools/emu/` the Mac emulator |
