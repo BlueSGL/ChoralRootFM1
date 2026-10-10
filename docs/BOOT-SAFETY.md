@@ -51,6 +51,37 @@ Decisions taken from this:
 - The Transporter's dump is also the test oracle for the loader's host model (`tests/ldr_test.c`): the "33 new, then
   old, nothing torn" state is the fixture the stub must turn into a rescue.
 
+## Experiment 2, answered on the unit (2026-10-10): the SPL verifies nothing over the app body
+
+A package of the 0.16 build with one byte of app.bin's 0xFF padding changed (flash 0x918DC, 0xFF -> 0x00) **after**
+the CRCs were made: the code identical, `app.bin`'s CRC-16 in its directory entry and the `app_area_head` block CRC
+both stale. Installed with the normal installer (neither step 1 nor the loader checks those CRCs: the loader verifies
+each sector against the package). The unit restarted into ChoralRoot after the loader's reset, **and again after a
+power cycle** (the user), core 1 and the rails as usual. So the SPL jumps into the app area without checking the
+body: answer (a) of experiment 2. The dark unit of 2026-10-07 therefore ran its half-new code and hung before the
+guard could act; a stub in the first sector does run on a half-written body, and the design below stands. It also
+means the directory CRCs need not match for the unit to boot (they stay correct all the same: other tools read them).
+
+Experiment 3 (the RAM record after a reset) is what every install already does from the app: `fm1_enter_update`
+writes the record and core-resets, and the SPL starts the loader. The stub hands over the same way; what is new is
+doing it right after a cold boot, which the first stub build shows on the unit (the Transporter at hand).
+
+Revisions to the design below, decided with these answers:
+
+- **The stub is written first, not last**, when it differs from flash: marker erased, stub, body, marker. A new
+  stub over an old body without a marker is a rescue; the old order left the first install (from a firmware without
+  a stub) unprotected until its very end. The only unprotected window is the stub sector's own erase and write.
+- **No "looks like a Felucca entry" rule**: a stub exists only where our loader put it, and our loader always goes
+  on to write the body and the marker, so the stub is strict: no valid marker, no boot.
+- **The marker sits in app.bin's last whole sector** (0x91000..0x91FFF), not 0x92000: that sector also holds
+  cfg_tool.bin and the cfg directory, which must not be erased first.
+- **Sector 0x4000 must be byte-identical from build to build**, or "written only when it differs" is every time:
+  it holds the `app_area_head` directory (0x4000..0x411F) with the two CRCs that change with every build. Four
+  compensation bytes in the marker sector make both CRC-16s come out at fixed values, so the directory is constant
+  and every CRC stays valid.
+- **A rescue that does not reach the loader ends in UBOOT**: the stub counts its rescue attempts in a RAM word that
+  survives a warm reset; a second arrival without a valid marker enters the ROM's UBOOT instead of trying again.
+
 ## The design: a stub that owns the first sector, and a write order that keeps it true
 
 ### 1. A boot stub in sector 0x4000, version-independent
