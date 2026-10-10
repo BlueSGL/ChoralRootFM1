@@ -113,6 +113,7 @@ static void ota_show(uint32_t step, int32_t code) { if (step == 9) last_code = c
 static void ota_commit(const uint8_t *parm) { committed = 1; memcpy(committed_parm, parm, 112); }
 
 #include "../firmware/src/ota.c"
+#include "../firmware/stub/stub_core.h"            /* the boot stub reads what this step leaves (OWN_PKG) */
 
 static uint32_t ota_body_off(void)                  /* ota.bin data + 0x20 in the logical image */
 {
@@ -195,6 +196,28 @@ int main(int argc, char **argv)
                      (p[6] | p[7] << 8) == 0x5441 && ota_rd32(p + 72) == 0xE0000);
         bad += check("nothing written outside 0xE0000..0xE4FFF", bad_erase == 0);
     }
+#ifdef OWN_PKG
+    {   /* the boot stub's view of it (firmware/stub/stub_core.h): the staged loader passes its check, its record is
+         * this one; a staging area cut off or without its head does not pass */
+        static uint8_t keep[0x5000];
+        uint8_t parm[STUB_PARM_LEN];
+        uint32_t len = ota_rd32(nor + 0xE0008);
+        stub_record(parm);
+        bad += check("stub: the staged loader passes its check", stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
+        bad += check("stub: its record == the committed one", !memcmp(parm, committed_parm, 112));
+        memcpy(keep, nor + 0xE0000, sizeof keep);
+        memset(nor + 0xE4000, 0xFF, 0x1000);              /* the loader's finish erases the record's sector */
+        bad += check("stub: .. also after the record's sector is erased", stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
+        memset(nor + 0xE0000 + len - 64u, 0xFF, 64);
+        bad += check("stub: (block contents unchecked: the rescue count covers a bad one)", stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
+        memset(nor + 0xE0000 + len / 2u, 0xFF, 0x5000u - len / 2u);
+        bad += check("stub: erased from half way on -> refused", stub_loader_check(nor + 0xE0000) == STUB_LD_BLOCKS);
+        memcpy(nor + 0xE0000, keep, sizeof keep);
+        memset(nor + 0xE0000, 0xFF, 32);
+        bad += check("stub: no head (staging not finished) -> refused", stub_loader_check(nor + 0xE0000) == STUB_LD_HEAD);
+        memcpy(nor + 0xE0000, keep, sizeof keep);
+    }
+#endif
     /* boot cleanup erases it */
     bad += check("boot cleanup erases the area", ota_boot_cleanup() == 1 && area_erased());
     bad += check("second boot: nothing to do", ota_boot_cleanup() == 0);

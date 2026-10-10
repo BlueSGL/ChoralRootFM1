@@ -106,7 +106,10 @@ void ldr_cstart(void)
 {
     uint32_t *p;
     ldr_record_clear();                             /* first thing: a crash below cannot loop through a
-                                                     * warm reset; resume after power loss uses the flash record */
+                                                     * warm reset. After a power loss the boot stub (firmware/stub)
+                                                     * starts us again: the SPL does not, from the flash record
+                                                     * (docs/BOOT-SAFETY.md). The stub's rescue word (0x01C7C000)
+                                                     * is not ours: left as it is */
     for (p = _bss_start; p < _bss_end; p++)
         *p = 0;
     ldr_main();

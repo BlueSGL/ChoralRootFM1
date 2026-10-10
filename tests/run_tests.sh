@@ -100,10 +100,18 @@ run "USB audio: descriptors, routing, packing, clock drift and recovery" "$OUT/c
 $CC -DOWN_PKG=1 -o "$OUT/ota_test" tests/ota_test.c
 run "M-UPGRADE entry (own loader)" "$OUT/ota_test" build/choralroot.fwsc
 
-head -c 200000 build/choralroot.bin > "$OUT/old_app.bin"
-python3 tools/fm1pkg_make.py "$OUT/old_app.bin" build/loader/ota.bin "$OUT/old.fwsc" >/dev/null
-$CC -o "$OUT/ldr_test" tests/ldr_test.c
-run "update loader: other app -> this build" "$OUT/ldr_test" "$OUT/old.fwsc" build/choralroot.fwsc
+# the loader, and its interruption model (docs/BOOT-SAFETY.md "As built"): the install cut after every erase and every
+# programmed page, the boot stub's decision on each state, the resume; over a firmware without the stub (the 0.16
+# layout), over the same stub with another body, over the dark unit's state. Then the old order: a package without
+# the marker written by this loader
+for m in no-stub other-body no-stub-other; do
+    python3 tools/make_stub_test_pkg.py "$m" -o "$OUT/stub-test-$m.fwsc" >/dev/null
+done
+$CC -O2 -o "$OUT/ldr_test" tests/ldr_test.c
+run "update loader: no stub -> this build; the interruption model" "$OUT/ldr_test" "$OUT/stub-test-no-stub.fwsc" \
+    build/choralroot.fwsc "$OUT/stub-test-other-body.fwsc" "$OUT/stub-test-no-stub-other.fwsc"
+run "update loader: this build -> a package without the marker (address order)" "$OUT/ldr_test" build/choralroot.fwsc \
+    "$OUT/stub-test-no-stub.fwsc"
 
 if [ -f build/gen/felucca_tables.h ]; then
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm

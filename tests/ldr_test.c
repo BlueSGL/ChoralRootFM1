@@ -3,7 +3,19 @@
 /* Host test of the Felucca update loader (firmware/loader/ldr_core.c): a fake
  * host serves a package over the SysEx protocol, the "device" flash starts as
  * another package's flash.bin (as if that firmware were installed).
- *   ldr_test OLD.fwsc NEW.fwsc */
+ *   ldr_test OLD.fwsc NEW.fwsc [SAME_STUB.fwsc OTHER_OLD.fwsc]
+ *
+ * With a NEW that carries ChoralRoot's boot stub and commit marker, the interruption model (docs/BOOT-SAFETY.md
+ * "As built"): the install is cut after EVERY flash operation (each erase, each programmed page), the flash as it
+ * then stands is given to the stub's own decision (firmware/stub/stub_core.h, the code the device runs) as the SPL
+ * would after a power cycle, and the install is resumed from that state to a bit-exact end. Cases:
+ *   OLD without a stub (the 0.16 / Felucca layout) -> NEW      the first install of a stub: its sector's own
+ *                                                             erase and write is the one unprotected window
+ *   SAME_STUB (NEW's stub, another body) -> NEW                every later install: no unprotected cut at all
+ *   the dark unit of 2026-10-07 (OLD's sectors 0x4000..0x24FFF, then OTHER_OLD's: no stub, half and half) -> NEW
+ * A cut state is: B the stub boots it, R the stub rescues (the staged loader), O the old firmware still whole (no
+ * stub yet, nothing it uses touched), U unprotected (no working stub in sector 0x4000 and not the whole old app). */
+#include <setjmp.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +28,15 @@ static uint8_t nor[0x100000], *logical;
 static size_t logical_len;
 static uint8_t rx[1024];
 static uint32_t rx_len, rx_full, now_ms, requests, erases, bad_range, record_cleared, f0_asked;
+static jmp_buf cut_jmp;                             /* the power fails after flash operation number cut_at */
+static uint32_t ops, cut_at, oplog[8192];           /* each operation: its flash offset | 1 for an erase */
+
+static void op_done(uint32_t what)
+{
+    if (ops < sizeof oplog / sizeof oplog[0]) oplog[ops] = what;
+    ops++;
+    if (cut_at && ops == cut_at) longjmp(cut_jmp, 1);
+}
 
 static uint32_t pack7(const uint8_t *in, uint32_t n, uint8_t *out)
 {
@@ -71,7 +92,12 @@ static void ota_frame_done(void) { rx_full = 0; }
 static uint32_t ota_now_ms(void) { return now_ms; }
 static void ota_idle(void) { now_ms++; }
 static int ota_erase(uint32_t off) { (void)off; return -1; }
-static int ota_prog(uint32_t off, const void *p, uint32_t n) { (void)off; (void)p; (void)n; return -1; }
+static int ota_prog(uint32_t off, const void *p, uint32_t n)      /* the staging area only (the fixture below) */
+{
+    if (off < 0xE0000u || off + n > 0xE5000u) return -1;
+    memcpy(nor + off, p, n);
+    return 0;
+}
 static int ota_fread(uint32_t off, void *p, uint32_t n) { memcpy(p, nor + off, n); return 0; }
 static void ota_show(uint32_t step, int32_t code) { (void)step; (void)code; }
 static void ota_commit(const uint8_t *parm) { (void)parm; }
@@ -84,6 +110,7 @@ static int ldr_erase(uint32_t off)
     if (off < 0x4000u) { printf("ERASE IN THE HEAD %#x\n", off); exit(1); }
     erases++;
     memset(nor + off, 0xFF, 0x1000);
+    op_done(off | 1u);
     return 0;
 }
 static int ldr_prog(uint32_t off, const void *p, uint32_t n)
@@ -92,6 +119,7 @@ static int ldr_prog(uint32_t off, const void *p, uint32_t n)
     uint32_t i;
     if (off < 0x4000u || off + n > 0x93000u || ((off & 0xFFu) + n) > 256u) bad_range++;
     for (i = 0; i < n; i++) nor[off + i] &= s[i];
+    op_done(off);
     return 0;
 }
 static void ldr_record_clear(void) { record_cleared++; }
@@ -131,13 +159,120 @@ static uint32_t flash_off(const uint8_t *lg)        /* flash.bin offset in the l
 
 static int check(const char *what, int ok) { printf("%-56s %s\n", what, ok ? "ok" : "FAIL"); return ok ? 0 : 1; }
 
+/* ---- the interruption model ---- */
+#include "../firmware/stub/stub_core.h"
+
+static uint32_t chip_key;
+static const uint8_t *new_fl;                       /* NEW's flash.bin */
+
+static void xip(uint32_t off, void *dst, uint32_t n)        /* the app area as XIP shows it: decrypted */
+{
+    memcpy(dst, nor + off, n);
+    ldr_sfc(dst, n, off - LDR_APP_LO, chip_key);
+}
+
+static int has_marker(const uint8_t *fl)            /* a flash.bin with the stub's marker */
+{
+    uint8_t m[32];
+    memcpy(m, fl + STUB_MARK_OFF, 32);
+    ldr_sfc(m, 32, STUB_MARK_OFF - LDR_APP_LO, chip_key);
+    return ota_rd32(m) == STUB_MARK_MAGIC;
+}
+
+static uint32_t stub_says(stub_result_t *r)         /* the device's stub_decide on the flash as it stands */
+{
+    static uint32_t body[STUB_BODY_MAX / 4u];
+    static stub_crc_t k;
+    uint8_t m[32];
+    stub_view_t v;
+    xip(STUB_MARK_OFF, m, 32);
+    if (stub_rd32(m) == STUB_MARK_MAGIC)            /* (the body is read only behind a marker: decrypt it then) */
+        xip(STUB_BODY_OFF, body, STUB_BODY_MAX);
+    v.mark = m;
+    v.body = body;
+    v.ldr = nor + STUB_LDR_OFF;                     /* stored plain */
+    stub_decide(&v, &k, 0, 0, r);
+    return r->decision;
+}
+
+static void restore(const uint8_t *base)
+{
+    memcpy(nor + LDR_APP_LO, base + LDR_APP_LO, LDR_APP_HI - LDR_APP_LO);
+    rx_full = 0;
+}
+
+/* base: the app area before the install; base_stub: it carries NEW's stub (then it must boot); base_whole: without
+ * a stub, it is a whole firmware (the SPL boots it); want_u: the unprotected cut points this case may have */
+static int cut_case(const char *name, const uint8_t *base, int base_stub, int base_whole, uint32_t want_u)
+{
+    static uint8_t head[0x4000];
+    uint32_t n, k, cnt[4] = {0, 0, 0, 0}, first_u = 0, last_u = 0, stub_done = 0, req, bad = 0, marker_free = 1, i;
+    stub_result_t r;
+    int rc;
+    memcpy(head, nor, sizeof head);
+    {   /* does the old firmware use the marker's sector? (0.16 does not: its app ends far below) */
+        uint8_t sec[0x1000];
+        memcpy(sec, base + STUB_MARK_SEC, sizeof sec);
+        ldr_sfc(sec, sizeof sec, STUB_MARK_SEC - LDR_APP_LO, chip_key);
+        for (i = 0; i < sizeof sec; i++) marker_free &= sec[i] == 0xFF;
+    }
+    restore(base);
+    if (base_stub) bad += stub_says(&r) != STUB_BOOT;                 /* cut 0: the old build boots */
+    ops = 0; cut_at = 0; requests = 0;
+    rc = ldr_session();
+    n = ops; req = requests;
+    bad += rc != 0 || memcmp(nor + LDR_APP_LO, new_fl + LDR_APP_LO, LDR_APP_HI - LDR_APP_LO) != 0;
+    bad += stub_says(&r) != STUB_BOOT || n > sizeof oplog / sizeof oplog[0];
+    for (k = 0; k < n; k++)                                           /* the stub's sector whole from this op on */
+        if (oplog[k] == LDR_STUB_SEC + 0xF00u) stub_done = k + 1u;
+    if (n && oplog[0] != (LDR_MARK_SEC | 1u)) bad++;                  /* the first operation: the marker's erase */
+    if (n && oplog[n - 1u] != LDR_MARK_SEC + 0xF00u) bad++;           /* the last: the marker's page */
+    for (k = 1; k <= n; k++) {
+        int st, stub_here;
+        restore(base);
+        ops = 0; cut_at = k;
+        if (!setjmp(cut_jmp)) { ldr_session(); bad++; }               /* (it must be cut, not finish) */
+        cut_at = 0;
+        stub_here = !memcmp(nor + LDR_STUB_SEC, new_fl + LDR_STUB_SEC, 0x1000);
+        if (stub_here) {
+            uint32_t d = stub_says(&r);
+            st = d == STUB_BOOT ? 3 : 2;
+            bad += d == STUB_UBOOT;                                   /* (the staged loader is there: never) */
+            if (d == STUB_BOOT)                                       /* boot: only the finished image */
+                bad += k != n || memcmp(nor + LDR_APP_LO, new_fl + LDR_APP_LO, LDR_APP_HI - LDR_APP_LO) != 0;
+        } else {
+            int whole = base_whole && marker_free;                    /* the old app, but for a sector it never used */
+            for (i = LDR_APP_LO; whole && i < LDR_APP_HI; i += 0x1000u)
+                whole = i == LDR_MARK_SEC || !memcmp(nor + i, base + i, 0x1000);
+            st = whole ? 0 : 1;
+            if (st == 1) { if (!first_u) first_u = k; last_u = k; }
+            bad += stub_done && k >= stub_done;                       /* no such state once the stub is written */
+        }
+        cnt[st]++;
+        ops = 0;
+        rc = ldr_session();                                           /* resume from the cut state */
+        bad += rc != 0 || memcmp(nor + LDR_APP_LO, new_fl + LDR_APP_LO, LDR_APP_HI - LDR_APP_LO) != 0 ||
+               memcmp(nor, head, sizeof head) != 0;
+    }
+    bad += cnt[1] != want_u || cnt[3] != (n ? 1u : 0u) || bad_range;
+    if (cnt[1]) {                                                     /* the window: nothing but the stub's sector */
+        for (k = first_u; k <= last_u; k++)                           /* (and the marker's erase before it) */
+            bad += (oplog[k - 1u] & ~0xFFFu) != LDR_STUB_SEC && oplog[k - 1u] != (LDR_MARK_SEC | 1u);
+    }
+    printf("  %-34s %5u cut points: %4u rescue, %u boot (the end), %u old firmware whole, %2u UNPROTECTED",
+           name, n, cnt[2], cnt[3], cnt[0], cnt[1]);
+    if (cnt[1]) printf(" (cuts %u..%u)", first_u, last_u);
+    printf("; %u requests  %s\n", req, bad ? "FAIL" : "ok");
+    return bad != 0;
+}
+
 int main(int argc, char **argv)
 {
     size_t olen;
     uint8_t *old, head[0x4000];
     uint32_t ofo, nfo;
     int bad = 0, rc;
-    if (argc < 3) { printf("usage: ldr_test OLD.fwsc NEW.fwsc\n"); return 2; }
+    if (argc < 3) { printf("usage: ldr_test OLD.fwsc NEW.fwsc [SAME_STUB.fwsc OTHER_OLD.fwsc]\n"); return 2; }
     old = load_logical(argv[1], &olen);
     logical = load_logical(argv[2], &logical_len);
     ofo = flash_off(old);
@@ -173,6 +308,62 @@ int main(int argc, char **argv)
         rc = ldr_session();
         bad += check("foreign key / damaged app head refused, nothing erased", rc == -6 && erases == 0);
         logical[nfo + 0x4000 + 5] = save;
+    }
+    /* the interruption model (see the top) */
+    memcpy(nor, old + ofo, 0x93000);
+    new_fl = logical + nfo;
+    if (ldr_chip_key(&chip_key) || !has_marker(new_fl)) {
+        printf("  (the new package has no boot stub marker: written in address order, no interruption model)\n");
+    } else {
+        uint32_t ota_off = 0, ota_len = 0, fo, fl, u_first;
+        static uint8_t hdr[0x400], dark[0x93000];
+        size_t slen, xlen;
+        memset(nor + 0x93000, 0xFF, sizeof nor - 0x93000);
+        rx_full = 0;
+        ota_ufw(hdr, &fo, &fl, &ota_off, &ota_len);                   /* the staged loader, as ota.c's step 1 leaves it */
+        memcpy(nor + 0xE0020, logical + ota_off + 0x20, ota_len - 0x20);
+        ota_stage_head(ota_len - 0x20);
+        bad += check("stub: the staged loader passes its check", stub_loader_check(nor + STUB_LDR_OFF) == STUB_LD_OK);
+        printf("interruption model: a power cut after every erase and every programmed page\n");
+        /* 16 = the stub sector's erase and its first 15 pages; the marker's erase before them leaves a 0.16 app
+         * whole (it does not use that sector); a firmware that does use it has one more */
+        {
+            uint8_t sec[0x1000];
+            uint32_t i, free91 = 1;
+            memcpy(sec, old + ofo + STUB_MARK_SEC, sizeof sec);
+            ldr_sfc(sec, sizeof sec, STUB_MARK_SEC - LDR_APP_LO, chip_key);
+            for (i = 0; i < sizeof sec; i++) free91 &= sec[i] == 0xFF;
+            u_first = free91 ? 16u : 17u;
+        }
+        if (has_marker(old + ofo) && !memcmp(old + ofo + 0x4000, new_fl + 0x4000, 0x1000))
+            bad += cut_case("OLD: same stub -> stub", old + ofo, 1, 0, 0);
+        else
+            bad += cut_case("no stub (0.16 layout) -> stub", old + ofo, 0, 1, u_first);
+        if (argc >= 5) {
+            uint8_t *same = load_logical(argv[3], &slen), *other = load_logical(argv[4], &xlen);
+            uint32_t sfo = flash_off(same), xfo = flash_off(other);
+            bad += check("SAME_STUB carries the new package's stub sector, byte for byte",
+                         has_marker(same + sfo) && !memcmp(same + sfo + 0x4000, new_fl + 0x4000, 0x1000));
+            bad += check(".. and another body", memcmp(same + sfo + 0x5000, new_fl + 0x5000, 0x8C000) != 0);
+            bad += cut_case("same stub, another body -> stub", same + sfo, 1, 0, 0);
+            /* the dark unit: 33 sectors of one firmware without a stub, then another's; nothing torn. No stub is
+             * in it, so no code of ours runs: it stays dark until the hardware route revives it. Under the new
+             * loader (once one runs on it) it is unprotected until the stub's sector is whole, then a rescue */
+            memcpy(dark, other + xfo, sizeof dark);
+            memcpy(dark + 0x4000, old + ofo + 0x4000, 0x21000);
+            bad += check("the dark unit's state holds no stub", memcmp(dark + 0x4000, new_fl + 0x4000, 0x1000) != 0);
+            bad += cut_case("the dark unit (33 new, then old)", dark, 0, 0, 17);
+            /* the same accident with the new loader and a stub in place: cut where that install died */
+            restore(same + sfo);
+            ops = 0; cut_at = 1u + 33u * 17u;
+            if (!setjmp(cut_jmp)) { ldr_session(); bad++; }
+            cut_at = 0;
+            {
+                stub_result_t r;
+                bad += check("the same cut (33 sectors in) with a stub in place: rescue, the loader",
+                             stub_says(&r) == STUB_LOADER && r.mk != STUB_MK_OK);
+            }
+        }
     }
     printf("%s\n", bad ? "LOADER TEST FAILED" : "loader test passed");
     return bad != 0;
