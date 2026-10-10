@@ -51,6 +51,11 @@
 #                   (no playback): the descriptors in each presentation, routing, packing, the ring against drift.
 # web (web/test_web.mjs): the editor protocol against its mock device, whose tables must equal the
 #                   firmware's (tests/descdump.c -> build/host/desc.json), the package builder, the updater.
+# Transporter (tests/transporter_shim_test.py): tools/transporter's stand-ins for the FM-1 Transporter's fm1_ota / fm1fw:
+#                   the review gate before a write, on synthetic packages and build/choralroot.fwsc.
+# Felucca's editor (tests/editor_test.c, tests/backup_test.c: editor.c, editor_fm6.c, editor_backup.c) is not in
+#                   ChoralRoot's unit; it is tested as it behaves on this platform (docs/FM6.md "Tests"). ChoralRoot's
+#                   backup and FM6: tests/cr_backup_test.c, tests/cr_fm6_test.c (tests/run_cr_tests.sh).
 # PHYS (tests/phys_test.c): stability over the whole parameter and pitch range, the worst-case cost against
 #                   the heaviest factory preset, demos in build/phys_demo/; tests/phys_ref.cpp compares the
 #                   fixed-point models with DaisySP's float originals when DaisySP is there (DAISYSP=path).
@@ -74,27 +79,18 @@
 #
 # The verdict is the last line, always: "ALL HOST TESTS PASSED" (exit 0) or "HOST TESTS FAILED" (exit 1), with the
 # sections that failed and the ones skipped listed above it. A test that fails is counted and the suite goes on to the
-# next (run / missing below: the only places where a failure does not end the script). Anything else that fails (a test
-# that does not compile, a generator, a missing build) ends the suite there (set -e: the script has no pipes or
-# subshells for it to miss), and the EXIT trap prints the verdict, so a run that stopped early cannot read as one that
-# has only the failures printed so far. A skipped section needs a tool that is optional (node, DaisySP, Pillow).
+# next: run, missing and the descdump line are the only places where a failure does not end the script. Anything else
+# that fails (a test that does not compile, a generator, a missing build) ends the suite there (set -e: the script has
+# no pipes or subshells for it to miss), and the EXIT trap still prints the verdict, so a run that stopped early
+# cannot read as one that has only the failures printed so far. A skipped section needs a tool that is optional
+# (node, DaisySP, Pillow) and is named again above the verdict.
 set -e
-export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"
-cd "$(dirname "$0")/.."
-# Pillow finds Homebrew's libraqm (the text spacing reference: the font's kerning). macOS strips DYLD_* from the
-# environment of /bin/sh, so an exported value does not reach this script: set it here (as build.sh does).
-if [ "$(uname -s)" = Darwin ] && [ -z "$DYLD_FALLBACK_LIBRARY_PATH" ] && [ -f /opt/homebrew/lib/libraqm.dylib ]; then
-    export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
-fi
-OUT=build/host
-mkdir -p "$OUT"
-CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 NL='
 '
 fail=0
 failed=
 skipped=
-section="(the first test)"
+section="(the start)"
 ended=0
 verdict() {
     rc=$?
@@ -115,6 +111,17 @@ trap 'exit 143' TERM
 run() { section=$1; echo "== $1"; shift; "$@" || { fail=1; failed="$failed$NL   $section"; }; }
 skip() { echo "== skip $1"; skipped="$skipped$NL   $1"; }
 missing() { echo "== $1"; fail=1; failed="$failed$NL   $1"; }
+
+export AC79_SDK="${AC79_SDK:-$HOME/fw-AC79_AIoT_SDK}"
+cd "$(dirname "$0")/.."
+# Pillow finds Homebrew's libraqm (the text spacing reference: the font's kerning). macOS strips DYLD_* from the
+# environment of /bin/sh, so an exported value does not reach this script: set it here (as build.sh does).
+if [ "$(uname -s)" = Darwin ] && [ -z "$DYLD_FALLBACK_LIBRARY_PATH" ] && [ -f /opt/homebrew/lib/libraqm.dylib ]; then
+    export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib
+fi
+OUT=build/host
+mkdir -p "$OUT"
+CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 
 $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"

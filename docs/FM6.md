@@ -181,8 +181,15 @@ store 2 x 2064, the bank 3472 -> 3612; `eng_state` takes no more than PHYS's slo
   in the WAV), the dx band drawn and its segment lit; `fm6_persist_*.txt` (`test_persist.sh`): an edited FM6 sound in
   U01 across a relaunch.
 
-`tests/run_tests.sh` (Felucca's units, every flag at its default) runs to its end; what breaks there is Felucca's web
-editor and backup around FM6, which ChoralRoot does not use: `tests/backup_test.c` (Felucca's `editor_backup.c` stages
-an object in its 3584-byte project scratch: Melodee's 3612-byte bank does not fit), `tests/editor_test.c`'s three FM6
-checks (Felucca's `editor_fm6.c` protocol: 8 factory names, B1..B27) and `web/test_web.mjs`'s mock tables (the editor's
-FM6 presets, PTCH range and bank size are Felucca's). The `text spacing` failure is older than this work.
+`tests/run_tests.sh` (Felucca's units, every flag at its default) passes. Felucca's web editor and its backup, which
+ChoralRoot's unit does not build, are tested there as they behave on this platform:
+
+- `tests/backup_test.c` (Felucca's `editor_backup.c`): the handler stages an object in its 3584-byte project scratch,
+  and Melodee's 3612-byte bank does not fit. It lists and reads the bank (id 8) whole, empties it (an object of length
+  0) and refuses a bank at the begin of its PUT with nothing written; the test checks exactly that. The restore of
+  id 8 is `cr_backup.c`'s (Melodee's layout, Felucca 1.0's 27 slots, a function setting out of range refused and the
+  bank kept, the parts on a bank slot reloaded): `tests/cr_backup_test.c`, `web/test_backup.mjs`.
+- `tests/editor_test.c` (Felucca's `editor_fm6.c`, cmds 68..71): `FM6_LIST` answers Felucca's eight factory names and
+  the 32 bank slots (not F9..F24); a bank slot is PTCH `FM6_NFAC` + n (B5 = 28; Felucca's 8 + n is F13 now).
+- The `text spacing` check (`tests/text_spacing_test.py`) needs Pillow's Raqm layout for its reference (the font's
+  kerning); `run_tests.sh` sets `DYLD_FALLBACK_LIBRARY_PATH` itself on macOS, as `build.sh` does.
