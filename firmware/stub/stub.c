@@ -17,6 +17,9 @@
  *   +12 detail: marker code, loader code << 8, rescue attempts found << 16, bit 24 rescue key, 25 / 26 a request
  *   +16 the 32 key samples with OCT-'s column latched (bit i = sample i, 1 = PA8 low)   +20 with OCT+'s column
  *   +24 with no column latched   +28 the whole PA input register, OCT-'s column latched, at the last sample
+ * The panel rail: PA2 is pulled low before the keys are sampled (shw_rail: the matrix and the LEDs hang on it) and
+ * stays low into the app, which sets it low again in lcd_init; before a hand-over to the loader or the ROM it is
+ * driven high again, the state the SPL leaves it in at power-on.
  * Not read: the reset-reason registers (P3_RST_SRC, RST_SRC: the app's boot guard reads them after us, untouched),
  * the settings, any flash data, the app's .noinit. */
 #include <stdint.h>
@@ -78,6 +81,22 @@ static void shw_delay_us(uint32_t us)                /* fm1_delay_us */
     uint32_t start = SHW_T4_CNT, span = us * SHW_TICKS_PER_US;
     while ((uint32_t)(SHW_T4_CNT - start) < span)
         ;
+}
+
+/* ------------------------------------------------------------------ the panel rail (hal/fm1_lcd_hw.h) --- */
+/* PA2, the LCD's "backlight" line, active low. Found on the unit (2026-10-10): it enables a rail that also feeds
+ * the two 595s and the LEDs. With it high (as the SPL leaves it: stub versions 1 and 2 read PA2 high at boot, and
+ * the app's screen-off, which drives it high, left the unit without keys until it was low again) no key reads
+ * closed and no LED lights. on: fm1_lcd_hw_init's first two lines (low, an output), which the app runs before its
+ * first key scan; off: fm1_lcd_backlight(0), the app's screen-off */
+static void shw_rail(uint32_t on)
+{
+    if (on) {
+        R32(0x50000u) &= ~(1u << 2);                 /* FM1_LCD_PA_OUT &= ~FM1_LCD_BL */
+        R32(0x50008u) &= ~(1u << 2);                 /* FM1_LCD_PA_DIR &= ~FM1_LCD_BL */
+    } else {
+        R32(0x50000u) |= 1u << 2;                    /* FM1_LCD_PA_OUT |= FM1_LCD_BL */
+    }
 }
 
 /* ------------------------------------------------------------------ key matrix, LEDs (hal/fm1_input.h) --- */
@@ -269,6 +288,7 @@ void stub_main(void)
     shw_wdt_arm();                                   /* first, as fm1_cstart: a hang below resets in 8 s */
     shw_time_init();
     t0 = SHW_T4_CNT;
+    shw_rail(1);                                     /* first: the key window's first 30 ms are its time to come up */
     shw_input_init();
     key = stub_key();
     v.mark = (const uint8_t *)SHW_XIP(STUB_MARK_OFF);
@@ -283,9 +303,11 @@ void stub_main(void)
         return;                                      /* crt0_stub.S: the app's entry */
     if (r.decision == STUB_LOADER) {
         shw_blink(3, 80);                            /* three short: update mode follows (ota-FM-1 on USB) */
+        shw_rail(0);                                 /* (the screen dark through update mode, as from a cold boot) */
         stub_record(parm);
         shw_enter_update(parm);
     }
     shw_blink(1, 600);                               /* one long: the ROM's USB boot follows (the WL82 disk) */
+    shw_rail(0);
     shw_enter_uboot();
 }
