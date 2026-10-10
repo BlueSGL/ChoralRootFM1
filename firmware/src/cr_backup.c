@@ -551,6 +551,19 @@ static void crb_debug(void)
     v[k++] = cr_dbg.rail_now[1];
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.avg_us[i];
+#ifdef FM1_HAVE_STUB                                 /* the boot stub's mailbox (firmware/stub/stub.c, docs/BOOT-SAFETY.md) */
+    {
+        uint32_t info = fm1_stub_word(1), ok = info >> 16 == 0x5342u;
+        v[k++] = ok ? fm1_stub_word(2) / (1000u * FM1_TICKS_PER_US) : 0u;   /* stub_ms: the boot's delay */
+        v[k++] = ok ? fm1_stub_word(2) / FM1_TICKS_PER_US : 0u;             /* stub_us */
+        v[k++] = ok ? (info >> 8) & 0xFFu : 0u;      /* stub_ver (0: no stub ran) */
+        v[k++] = ok ? info & 0xFFu : 0u;             /* stub_decision: 1 boot (2 loader, 3 UBOOT never reach here) */
+        v[k++] = ok ? fm1_stub_word(3) : 0u;         /* stub_detail: marker, loader << 8, rescues found << 16, key << 24 */
+    }
+#else
+    for (i = 0; i < 5u; i++)                         /* (the emulator: no stub) */
+        v[k++] = 0;
+#endif
 #if FELUCCA_UAC
     v[k++] = ua.cap_alt;
     v[k++] = ua_stage_on;

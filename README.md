@@ -15,7 +15,8 @@ FM-1 needed).
 
 **From the browser:** open the web installer at <https://quixotic7.github.io/ChoralRootFM1/> in Chrome or
 Edge, connect the FM-1 by USB and press Install. Nothing is installed on the computer: the page talks to the
-FM-1 over Web MIDI. Do not unplug while it writes; an interrupted install is resumed by pressing Install again.
+FM-1 over Web MIDI. Do not unplug while it writes; an interrupted install is resumed by pressing Install again
+(after a power loss too, from the first version with the boot stub on: see "If the FM-1 no longer starts").
 Afterwards the FM-1 restarts and reports the identity `FM-1_920`. Before installing, the page saves a backup of what
 is stored on the FM-1 (settings, user sounds, loops, FM6 patches) to a file, and after installing over
 Felucca it offers that backup back; its Back up and Restore buttons do the same at any time.
@@ -62,6 +63,13 @@ stored in the flash (settings, user sounds, FM6 bank, loops), which stays untouc
 erases that data and restarts; switching off and on tries the stored data again. Installing and Backup still work in
 SAFE MODE, so you can save a backup first. Only if SAFE MODE itself crashes twice does the unit go to update mode
 (ROM boot).
+
+**If an install was interrupted** (ChoralRoot versions that carry the boot stub, docs/BOOT-SAFETY.md: the release
+notes say from which version on; not 0.16 or older): switch the FM-1 on. The key LEDs flash three times, the screen
+stays black and the FM-1 is in update mode: run the installer again and it finishes the write. The same on purpose,
+whatever state the firmware is in: **hold OCT- (alone) while switching on**. One long flash instead of three means no
+update loader is stored (the usual state of a working unit): the FM-1 is then the USB disk "WL82 UBOOT1.00" until it
+is switched off and on again.
 
 **If the FM-1 no longer starts** (black screen, the computer shows a USB disk "WL82 UBOOT1.00"): leave it on for 2
 minutes to see whether it restarts by itself, try holding OCT- and OCT+ while switching on (10 s), and check what the

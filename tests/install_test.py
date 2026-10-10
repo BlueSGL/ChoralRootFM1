@@ -190,6 +190,8 @@ class BackupSide:
             if cmd >= 13:
                 self.log.append(32 + a[0])
             return [a[0], a[1], a[2], a[3], 0] if cmd == 12 else [a[0], 0]
+        if cmd == I.BK_DEBUG and getattr(self, "debug", None) is not None and not a:
+            return [1, len(self.debug)] + [b for v in self.debug for b in I.bk_u32(v)]
         if cmd == I.BK_SCREEN and self.version.startswith("ChoralRoot") and len(a) == 1 and a[0] <= 1:
             self.log.append(f"screen {a[0]}")
             return [0]
@@ -510,6 +512,23 @@ def select():
     ok(rc != 0 and "bad pool position" in err, "--select a bad position: the rc named")
     rc, out, err = cli(["--select", "2", "12", "1"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc != 0, "--select part 2: refused before sending")
+
+
+def debug():
+    """--debug: the counters by name, and the boot stub's mailbox decoded (firmware/stub/stub_core.h)"""
+    n = len(I.DEBUG_NAMES)
+    at = I.DEBUG_NAMES.index("stub_ms")
+    ok(I.DEBUG_NAMES[at:at + 5] == ["stub_ms", "stub_us", "stub_ver", "stub_decision", "stub_detail"] and
+       I.DEBUG_NAMES[at - 1] == "st_wait_us", "--debug: the stub's five values follow the stage times (cr_backup.c)")
+    cr = BackupSide("ChoralRoot 0.1", I.CR_IDS)
+    cr.debug = [0] * n
+    cr.debug[at:at + 5] = [47, 47310, 1, 1, 0 | 5 << 8 | 1 << 16 | 0 << 24]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "stub_ms 47" in out and "boot stub v1: booted the app after 47.3 ms; marker ok, staged loader "
+       "not checked, rescue attempts before this boot 1, rescue key not held" in out, "--debug: the boot stub's line")
+    cr.debug[at:at + 5] = [0, 0, 0, 0, 0]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "boot stub: none ran" in out, "--debug: a firmware without the stub says so")
 
 
 def screen():
@@ -966,6 +985,7 @@ def bindings():
 wire()
 backups()
 screen()
+debug()
 select()
 sounds()
 syx()

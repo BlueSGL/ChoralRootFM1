@@ -122,6 +122,23 @@ int main(void)
         CHECK(m == BOOT_NORMAL && g.failed == 0, "intentional %u: normal", (unsigned)i);
     }
 
+    /* the boot stub (firmware/stub, docs/BOOT-SAFETY.md) reads neither reset register, so the reasons above are
+     * what the app still sees. A rescue ends in core resets (the stub's hand-over to the loader, the loader's own
+     * after the write), possibly with the power-on bit still set: the boot after it is a soft one. It counts once at
+     * most (a record left pending by a session switched off within 30 s), never twice: NORMAL, not SAFE */
+    bootguard_clear(&g);
+    bootguard_step(&g, PWR);                      /* a boot, switched off early: pending stays in RAM */
+    m = bootguard_step(&g, bootguard_reason(BG_P3_POWERON, 0x20u));
+    CHECK(m == BOOT_NORMAL && g.failed == 1 && g.cls == BG_RST_SOFT, "the boot after a rescue: normal (failed %u)",
+          (unsigned)g.failed);
+    bootguard_settled(&g);
+    CHECK(g.failed == 0 && g.pending == 0, ".. and clear after 30 s");
+    bootguard_clear(&g);
+    bootguard_step(&g, PWR);
+    bootguard_intentional(&g);                    /* an install's commit (ota_hw.c), cut later by a power loss */
+    m = bootguard_step(&g, bootguard_reason(BG_P3_POWERON, 0x20u));
+    CHECK(m == BOOT_NORMAL && g.failed == 0 && !g.counted, "the boot after a resumed install: not counted");
+
     /* names */
     CHECK(!strcmp(bootguard_class_name(BG_RST_WDT), "wdt") && !strcmp(bootguard_mode_name(BOOT_SAFE), "safe") &&
           !strcmp(bootguard_stage_name(BS_FM6_BANK), "fm6 bank") && !strcmp(bootguard_stage_name(999), "?"), "names");

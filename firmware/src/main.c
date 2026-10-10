@@ -3,6 +3,11 @@
 /* ChoralRoot FM-1 (Felucca's) boot and main loop: the splash says CHORALROOT and the version; OCT- + OCT+ held at
  * power-on still runs the panel calibration (panel_setup) and saves it (settings_save). Boot order: WDT first, boot-loop guard, fatal vectors,
  * guards; then LCD, input (TIMER5 IRQ, 10 kHz), audio (ALNK0 IRQ).
+ * The boot stub runs before all of this (firmware/stub, docs/BOOT-SAFETY.md: app.bin's first 0xEE0 bytes, where the SPL
+ * jumps): it enters crt0.S only when the loader's commit marker and the body's CRC-32 hold and OCT- alone is not held
+ * (the rescue key: the staged loader, else the ROM's USB boot). It leaves the watchdog armed, TIMER4 running and the
+ * key matrix pins set as fm1_input_init sets them, and it does not read the reset-reason registers: fm1_cstart below
+ * finds them as the SPL left them. OCT- + OCT+ at power-on is not the stub's: the calibration here.
  * The boot guard (cr_bootguard.h): a power-on clears it; a watchdog or soft (crash) reset within 30 s of the boot
  * before counts; 2 in a row -> SAFE MODE (cr_safe: no flash object loaded or saved, factory sounds, no USB audio
  * stream; the installer and OCT- + OCT+ 5 s work), 4 -> UBOOT. Every boot step leaves its number in felucca_dbg.stage
@@ -378,7 +383,7 @@ void fm1_cstart(void)
     fm1_reset_reason();
     p3 = fm1_boot.p3_rst;
     src = fm1_boot.rst_src;
-    wdt = fm1_boot.wdt_con;
+    wdt = fm1_boot.wdt_con;                     /* (as the boot stub armed it, no longer the SPL's: console `boot`) */
     fm1_wdt_arm(0x0D);
     /* the boot guard (cr_bootguard.h): power-on clears it, watchdog / soft resets within 30 s of a boot count;
      * 2 -> SAFE MODE, 4 -> UBOOT (the record cleared: a power cycle leaves ROM boot to a clean guard) */

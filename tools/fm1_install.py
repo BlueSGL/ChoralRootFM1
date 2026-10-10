@@ -25,6 +25,11 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py --export-syx N FILE     (an FM6 voice / CZ-1 tone as .syx: DX7 single voice / Casio tone dump)
   fm1_install.py --import-syx N FILE [--voice V] [--yes]   (a DX7 voice or bank, or a CZ-1 tone, into slot N)
 
+An install that was interrupted (the cable, the battery): on a ChoralRoot with the boot stub (docs/BOOT-SAFETY.md;
+not 0.16 or older) the FM-1 comes back in update mode at the next power-on, or with OCT- held alone while switching
+on (three LED flashes, a black screen): run the install again to finish it. --debug prints a "boot stub" line on a
+firmware that has it.
+
 Backups are web/fm1backup.js's files (JSON, "felucca-backup" version 1), over the same SysEx (web/EDITOR_PROTOCOL.md);
 FILE may be a directory (a dated name: choralroot-backup-YYYYMMDD.json). A restore writes the objects the connected
 firmware lists: a Felucca backup restores its settings, banks, FM6 patches and samples 1-2 on ChoralRoot, and back.
@@ -356,8 +361,10 @@ class Updater:
         return None
 
     def serve(self, link, image, finish, idle, progress):
-        """answer read requests until the device asks for `finish`; -> (served, finished, lost)"""
-        served, last = 0, time.monotonic()
+        """answer read requests until the device asks for `finish`; -> (served, finished, lost).
+        progress(served, sent): the requests answered and the bytes sent so far (not the address: the loader reads
+        the marker's sector out of order, firmware/loader/ldr_core.c)"""
+        served, sent, last = 0, 0, time.monotonic()
         while True:
             pkt = link.read(DELAY["poll"])
             if pkt is None:
@@ -382,7 +389,8 @@ class Updater:
             if not link.send(response(addr, image[addr:addr + n], fl)):
                 return served, False, True
             served += 1
-            progress(served, addr + n)
+            sent += n
+            progress(served, sent)
 
     def check(self, dev, image, step):
         """step 1: the running firmware checks the package and starts the loader"""
@@ -410,7 +418,7 @@ class Updater:
         ota.link.send(UPGRADE)
         time.sleep(DELAY["start"])
         served, finished, lost = self.serve(ota.link, image, FINISH_WRITE, DELAY["idle_write"],
-                                            lambda k, end: step("write", min(99, end * 100 // len(image))))
+                                            lambda k, sent: step("write", min(99, sent * 100 // len(image))))
         ota.link.close()
         if not finished:
             raise InstallError("lost" if lost else "stopped",
@@ -457,6 +465,7 @@ DEBUG_NAMES = ["ms", "halves", "max_us", "late", "nested", "timer_irqs", "ui_fra
                "c1_rejected", "c1_faults", "c1_fallback", "rail_sysvdd_boot", "rail_sysvdd_now", "rail_vdc14_boot",
                "rail_vdc14_now",
                "st_tick_us", "st_part0_us", "st_part1_us", "st_fx_us", "st_master_us", "st_wait_us",
+               "stub_ms", "stub_us", "stub_ver", "stub_decision", "stub_detail",
                "ua_cap_alt", "ua_stage_on", "ua_cap_ready", "ua_tx_packets", "ua_underruns", "ua_overruns", "ua_fill",
                "ua_fill_q8", "ua_missed_frames", "ua_poll_max_us", "ua_service_max_us", "ua_svc_t5", "ua_svc_isr",
                "ua_isr_calls", "ua_isr_gated", "ua_fill_free", "ua_fill_busy", "ua_csr_or", "ua_csr_last", "ua_sofs",
@@ -1697,6 +1706,19 @@ def run(a, backend, out, ask):
             name = DEBUG_NAMES[k]
             print(f"{name} {v}" + (f" (0x{v:02X})" if name.startswith("ua_csr") else ""), file=out)
         d = dict(zip(DEBUG_NAMES, vals))
+        if d.get("stub_ver"):                     # the boot stub's mailbox (firmware/stub/stub_core.h, docs/BOOT-SAFETY.md)
+            det = d["stub_detail"]
+            mk = ["ok", "bad magic", "bad format", "bad marker CRC", "bad length", "bad body CRC", "not checked"]
+            ld = ["ok", "bad head", "bad inner head", "not Felucca's", "bad blocks", "not checked"]
+
+            def name(t, i):
+                return t[i] if i < len(t) else str(i)
+            print(f"boot stub v{d['stub_ver']}: {name(['?', 'booted the app', 'loader', 'UBOOT'], d['stub_decision'])} "
+                  f"after {d['stub_us'] / 1000:.1f} ms; marker {name(mk, det & 0xFF)}, staged loader "
+                  f"{name(ld, det >> 8 & 0xFF)}, rescue attempts before this boot {det >> 16 & 0xFF}, "
+                  f"rescue key {'held' if det >> 24 else 'not held'}", file=out)
+        elif "stub_ver" in d:
+            print("boot stub: none ran before this boot (a firmware without it, or the emulator)", file=out)
         if d.get("ua_open_close_ms"):
             print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "
                   f"{d['ua_frames_last_open'] / d['ua_open_close_ms']:.4f} frames/ms", file=out)
@@ -1745,7 +1767,10 @@ def run(a, backend, out, ask):
             print(f"--force: installing over {name} anyway, although it is not supported", file=out)
     print("before writing: the FM-1 must be fully charged (it updates on its battery, and this tool cannot read it), "
           "plugged straight into the computer, and the computer kept awake; an interrupted write can leave it dark "
-          "with no USB device at all (docs/INSTALL-COMPAT.md)", file=out)
+          "with no USB device at all (docs/INSTALL-COMPAT.md). With the boot stub on the FM-1 (ChoralRoot after 0.16) "
+          "an interrupted write is finished by switching the FM-1 on again (or holding OCT- alone while switching on) "
+          "and running this install again; the first install of a version with the stub is not yet covered while its "
+          "first sector is written", file=out)
     if not a.yes and not ask("Install? Do not unplug the FM-1 while writing. [y/N] "):
         dev.link.close()
         print("cancelled", file=out)
@@ -1866,7 +1891,8 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
         print(f"error: {e}", file=sys.stderr)
         return EXIT.get(e.code, 1)
     except KeyboardInterrupt:
-        print("\ninterrupted: if the FM-1 is in update mode, run the install again to finish", file=sys.stderr)
+        print("\ninterrupted: if the FM-1 is in update mode, run the install again to finish (not in update mode: "
+              "switch it off, hold OCT- alone and switch it on; docs/INSTALL-COMPAT.md)", file=sys.stderr)
         return 130
 
 
