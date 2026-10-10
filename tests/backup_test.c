@@ -230,7 +230,8 @@ int main(void)
                  put_all(1, &ps, sizeof ps, st_crc32(&ps, sizeof ps) ^ 1u) == 2u && erases == before);
 
     /* malformed requests */
-    bad += check("an unknown object id is refused", put_begin(8, sizeof ps, 0) == 1u);
+    bad += check("an unknown object id is refused", put_begin(9, sizeof ps, 0) == 1u);   /* (8 is the FM6 bank now) */
+    bad += check("an FM6 bank of the wrong length is refused", put_begin(8, sizeof ps, 0) == 1u);
     bad += check("a project of the wrong length is refused", put_begin(2, sizeof(project_store_t) - 4u, 0) == 1u);
     bad += check("settings of the wrong length are refused", put_begin(1, sizeof ps + 4u, 0) == 1u);
     bad += check("a chunk without a begin is refused (5)", (ed_bk_put = 0, put_chunk(1, 0, (const uint8_t *)&ps, 16)) == 5u);
@@ -286,25 +287,39 @@ int main(void)
                  proj_import(&proj_scratch, &proj_slot[3], sizeof st) && proj_scratch.t[0].step[0].n == 4u &&
                  proj_scratch.t[0].step[0].note[0] == 127u && proj_scratch.t[0].p[P_E0] ==
                  clamp(3, param_desc_of(trk[0].engine, P_E0)->min, param_desc_of(trk[0].engine, P_E0)->max));
-    {   /* the FM6 patch bank (id 8): restored to flash and RAM, a damaged one refused, listed with its length */
+    {   /* the FM6 patch bank (id 8). Felucca's bank (27 unpacked slots, 3472 bytes) fitted this handler's staging
+         * scratch (ED_BK_MAX: the project store, 3584 bytes); Melodee's (docs/FM6.md: 32 slots 7-bit packed and the
+         * function settings, 3612 bytes) does not: this handler lists, reads and empties the bank and refuses a bank
+         * at the begin of its PUT. ChoralRoot's unit does not build this handler (docs/INTEGRATION.md): its backup is
+         * cr_backup.c, and what was checked here of a restore (a bank into flash and RAM, one with a function setting
+         * out of range refused and the bank kept, the parts on a bank slot reloaded; Felucca 1.0's 27 slots too) is
+         * checked there: tests/cr_backup_test.c (run_cr_tests.sh), web/test_backup.mjs. */
         static fm6_bank_t bk, got;
-        uint8_t rec[FM6_PACKED];
+        static uint8_t tail[64];
         memset(&bk, 0, sizeof bk);                       /* (Melodee's layout: 7-bit packed slots, the functions) */
-        bk.magic = FM6_BANK_MAGIC; bk.ver = FM6_BANK_VER; bk.nslot = FM6_BANK_N; bk.used = 1u << 2;
+        bk.magic = FM6_BANK_MAGIC; bk.ver = FM6_BANK_VER; bk.nslot = FM6_BANK_N; bk.used = 1u << 2 | 1u << 31;
         memcpy(bk.fn, FM6_FNDEF, FM6_NFN);
         fm6_pack7(bk.pk[2], FM6_FACTORY[5], FM6_PACKED);
+        fm6_pack7(bk.pk[31], FM6_FACTORY[1], FM6_PACKED);
+        memcpy(&fm6_bank, &bk, sizeof bk);               /* (the mirror as fm6_bank_boot leaves it) */
+        fm6_bank_check((int)sizeof bk);
+        bad += check("the FM6 bank lists as id 8 with its length (3612) and CRC", list(8, &len, &crc) == 0 &&
+                     len == sizeof bk && len == 3612u && crc == st_crc32(&bk, sizeof bk));
+        bad += check("GET reads the FM6 bank to its end (past the 3584 bytes of the staging scratch)",
+                     get(8, sizeof bk - sizeof tail, sizeof tail) == 0 &&
+                     ed_unpack7(rep + 9, rep_n - 9u, tail, sizeof tail) == sizeof tail &&
+                     !memcmp(tail, (const uint8_t *)&bk + sizeof bk - sizeof tail, sizeof tail) && tail[sizeof tail - 1u]);
+        before = erases;
+        bad += check("an FM6 bank PUT is refused at its begin (1: larger than the scratch), nothing written, the bank kept",
+                     sizeof bk > ED_BK_MAX && put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 1u &&
+                     put_chunk(8, 0, (const uint8_t *)&bk, 256) == 5u && erases == before &&
+                     st_load(OBJ_FM6BANK, &got, sizeof got) < 0 && !memcmp(&fm6_bank, &bk, sizeof bk));
         fm6_slot[0] = 3; fm6_slot[1] = FM6_NFAC + 2u; fm6_slot[2] = 0xFFu; fm6_slot[3] = FM6_NFAC + 9u;
-        bad += check("the FM6 bank (id 8) restores into flash and RAM",
-                     put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 0 && fm6_bank_used(2) && !fm6_bank_used(3) &&
-                     !fm6_bank_get(2, rec) && !memcmp(rec, FM6_FACTORY[5], FM6_PACKED) &&
-                     st_load(OBJ_FM6BANK, &got, sizeof got) == (int)sizeof got && !memcmp(&got, &bk, sizeof bk));
-        bad += check("an FM6 bank restore reloads only the tracks on a bank slot (a factory patch stays)",
+        bad += check("an empty FM6 bank object (length 0) empties the bank in flash and RAM",
+                     put_all(8, 0, 0, st_crc32(0, 0)) == 0 && fm6_bank_valid(&fm6_bank) && !fm6_bank.used &&
+                     !fm6_bank_used(2) && !fm6_bank_used(31) && st_load(OBJ_FM6BANK, &got, sizeof got) == 0);
+        bad += check("an FM6 bank PUT reloads only the tracks on a bank slot (a factory patch stays)",
                      fm6_slot[0] == 3u && fm6_slot[1] == 0xFFu && fm6_slot[2] == 0xFFu && fm6_slot[3] == 0xFFu);
-        bad += check("the FM6 bank lists as id 8 with its length", list(8, &len, &crc) == 0 && len == sizeof bk &&
-                     crc == st_crc32(&bk, sizeof bk));
-        bk.fn[0] = 200;
-        bad += check("an FM6 bank with a function setting out of range is refused (2), the bank kept",
-                     put_all(8, &bk, sizeof bk, st_crc32(&bk, sizeof bk)) == 2u && fm6_bank_used(2));
     }
     memcpy(&st, &proj_slot[2], sizeof st);
     erase_error = 1;

@@ -325,7 +325,8 @@ int main(void)
             for (c = 0; c < FM1_NCOL; c++)
                 pulse_min[c] = ~0u;
             reset();
-            FM1_PR(FM1_PA, FM1_IN) = FM1_PR(FM1_PB, FM1_IN) = 0xFFFFFFFFu;   /* rows open */
+            FM1_PR(FM1_PA, FM1_IN) = 0xFFFFFFFFu;     /* rows open (a statement each: FM1_PR counts the bus time) */
+            FM1_PR(FM1_PB, FM1_IN) = 0xFFFFFFFFu;
             memset(fm1_led, 0, sizeof fm1_led);
             memset(fm1_led_dim, 0, sizeof fm1_led_dim);
             fm1_led[3] = 1u << 2;                     /* lit: column 3 row 2 */

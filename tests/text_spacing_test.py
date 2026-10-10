@@ -12,13 +12,19 @@ the space between two neighbours. Fails when a pair of S or M is off by more tha
 
   text_spacing_test.py [ui_fonts.h] [--png DIR [--tag NAME]] [--rule gfx|rounded] [--no-limit]
   (PNG: the specimen strings x4, gray on black; --rule rounded measures tables made before the phases)
+
+The reference needs Pillow's Raqm layout (libraqm, FriBiDi): the kerning is the font's GPOS, which Pillow's basic
+layout does not apply, so without Raqm every kerned pair ("Te", "Vo", "TA", "AY") would read as an error of its
+kerning (0.9 px in S, 2.5 px in L) against tables that are right. The test fails then, saying so. On macOS:
+brew install libraqm, DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib (tests/run_tests.sh sets it, as build.sh does:
+/bin/sh drops DYLD_* from the environment it was started with).
 """
 import argparse
 import re
 import sys
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, features
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "tools"))
@@ -173,6 +179,10 @@ def main():
                     help="placement: cv_text's (default) or the earlier rounded pen (to measure old tables)")
     a = ap.parse_args()
     RULE[0] = a.rule
+    if not features.check("raqm"):                   # no GPOS kerning in the reference: nothing to measure against
+        print("text spacing: FAIL (no reference: this Pillow has no Raqm layout, so the font's kerning is not in it; "
+              "macOS: brew install libraqm, DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib)")
+        return 1
     faces = parse(a.header)
     spec = {n: (font, px) for n, font, px, *_ in gf.preset("inter-tight")}
     bad = 0
