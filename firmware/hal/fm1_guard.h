@@ -15,7 +15,10 @@
  *                     attached; fm1_guard_unlock_top() reopens it.
  *   bus-invalid       fetch/read/write of unmapped space (NULL page, XIP
  *                     writes) -> DBG_MSG bits 4, 5, 16..21.
- *   PC limit          instruction fetch outside [0x02000120, _etext]
+ *   PC limit          instruction fetch outside [0x02000120, _etext]: app.bin from its first byte, i.e.
+ *                     the boot stub (firmware/stub, 0x02000120..0x02000FFF) and the app behind it; the
+ *                     stub stays inside the window so that no reset path depends on the limits being
+ *                     cleared before it runs
  *                     -> DBG_MSG bit 12.
  */
 #pragma once

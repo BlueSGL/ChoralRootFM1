@@ -6,8 +6,9 @@
   tools/build.py [--release X.Y[-suffix]]
 
 The unit is firmware/src/choralroot.c (ChoralRoot's single compilation unit, a fork of Felucca's felucca.c).
-Outputs in build/: choralroot.bin (app), choralroot.elf, choralroot.dis, loader/ota.bin (update loader),
-choralroot.fwsc (package, identity FM-1_920). A release build (--release X.Y) keeps the identity, sets the
+Outputs in build/: choralroot.bin (app.bin: the boot stub's 0xEE0 bytes, then the app), choralroot.elf,
+choralroot.dis (the app), stub/stub.{bin,elf,dis} (the boot stub, firmware/stub; docs/BOOT-SAFETY.md),
+loader/ota.bin (update loader), choralroot.fwsc (package, identity FM-1_920). A release build (--release X.Y) keeps the identity, sets the
 version string to "ChoralRoot X.Y" and writes choralroot-X.Y.fwsc and a folder release-X.Y/ with the package,
 the app (choralroot-X.Y-app.bin), SHA256SUMS and the licence files (the CC0 sample attribution only for a build with
 FELUCCA_SAMPLE=1: ChoralRoot is all-synth, its image holds no samples).
@@ -34,11 +35,14 @@ FW = SRC / "firmware"
 OUT = SRC / "build"
 GEN = OUT / "gen"
 LDR = OUT / "loader"
+STB = OUT / "stub"
 sys.path.insert(0, str(SRC / "tools"))
 import fm1pkg_make  # noqa: E402
 import lz4blk  # noqa: E402
 
-APP_XIP = 0x02000120                # app.bin offset 0 in the XIP map; the SPL jumps here
+STUB_XIP = 0x02000120               # app.bin offset 0 in the XIP map; the SPL jumps here: the boot stub
+STUB_LEN = fm1pkg_make.STUB_LEN     # 0xEE0: the stub ends at flash 0x5000
+APP_XIP = STUB_XIP + STUB_LEN       # 0x02001000: the app proper (the body), firmware/app.ld
 APP_SLOT = fm1pkg_make.APP_SLOT
 LOADER_LOAD = 0x01C0A800
 LOADER_NAME = b"usb_hid_ota.bin"    # the file name the SPL looks for
@@ -56,7 +60,7 @@ SDK_SHA256 = {
 UNIT = "choralroot"                 # firmware/src/UNIT.c; outputs build/UNIT.{bin,elf,dis,fwsc}
 PRODUCT = "FM-1_920"                # package identity (ChoralRoot: constant, releases too)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/choralroot.c)
-XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = 0x8DFBC, 96 * 1024, 0x54000, 0x3D50   # firmware/app.ld
+XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = fm1pkg_make.BODY_MAX, 96 * 1024, 0x54000, 0x3D40   # firmware/app.ld
 
 
 def toolchain():
@@ -182,9 +186,70 @@ def build_loader():
     return ota
 
 
+# ---- boot stub
+
+def build_stub():
+    """firmware/stub -> app.bin's first STUB_LEN bytes (0xFF padded). Code and constants only, built from its own
+    sources alone, so it is the same bytes in every build: the loader rewrites sector 0x4000 only when it changes
+    (docs/BOOT-SAFETY.md). firmware/stub/stub.lock records the version and hash of the stub that is meant to ship."""
+    STB.mkdir(parents=True, exist_ok=True)
+    src = FW / "stub"
+    tc_all(("cc", "-Ifirmware/stub", "-c", src / "crt0_stub.S", "-o", STB / "crt0_stub.o"),
+           ("cc", *CFLAGS, "-Ifirmware/stub", "-c", src / "stub.c", "-o", STB / "stub.o"))
+    elf = STB / "stub.elf"
+    tc("pi32v2/bin/ld", "--gc-sections", "-e", "_start", "-T", src / "stub.ld",
+       STB / "crt0_stub.o", STB / "stub.o", "-o", elf)
+    (STB / "stub.bin").unlink(missing_ok=True)
+    _, dis, hdr, syms = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, STB / "stub.bin"),
+                               ("common/bin/objdump", "-d", elf),
+                               ("common/bin/objdump", "-h", elf),
+                               ("common/bin/objdump", "-t", elf))
+    (STB / "stub.dis").write_text(dis)
+    img = (STB / "stub.bin").read_bytes()
+    for ln in hdr.splitlines():     # no .data, no .bss: nothing but .text may have a size
+        p = ln.split()
+        if len(p) > 3 and p[0].isdigit() and p[1].startswith(".") and int(p[2], 16) and \
+                p[1] not in (".text", ".shstrtab", ".symtab", ".strtab"):
+            raise SystemExit(f"stub: section {p[1]} holds {int(p[2], 16)} B; the stub is code and constants only")
+    m = re.search(r"^([0-9a-f]+) .*\s_start$", syms, re.M)
+    if not m or int(m.group(1), 16) != STUB_XIP:
+        raise SystemExit(f"stub: _start is not at {STUB_XIP:#x}")
+    if img[:4] != bytes.fromhex("04818000"):
+        raise SystemExit(f"stub: starts with {img[:4].hex()}, not the entry the SPL expects (goto +4; rts)")
+    if not fm1pkg_make.has_stub(img + bytes(STUB_LEN)):
+        raise SystemExit("stub: no CRSTUB signature at offset 8")
+    if not img or len(img) > STUB_LEN - 256:     # keep a margin: a stub that grows to the brim cannot be fixed
+        raise SystemExit(f"stub: {len(img)} B does not fit {STUB_LEN} B with 256 B to spare")
+    for ln in dis.splitlines():     # nothing may call or load an address in the chip ROM (as the app's check)
+        mm = LINE.match(ln)
+        for v in (re.findall(r"= (-?\d+) <|call -?\d+ <[^:>]*: ([0-9a-f]+) >", mm.group(3)) if mm else ()):
+            val = (int(v[0]) & 0xFFFFFFFF) if v[0] else int(v[1], 16) & 0xFFFFFFFF
+            if 0xFFC00000 <= val < 0xFFD00000:
+                raise SystemExit(f"stub: reference to ROM address {val:#010x}")
+    used = len(img)
+    img += b"\xff" * (STUB_LEN - len(img))
+    ver, sha = fm1pkg_make.stub_version(img), hashlib.sha256(img).hexdigest()
+    print(f"stub: {used} B of {STUB_LEN} ({100 * used / STUB_LEN:.1f}%), version {ver}, sha256 {sha[:16]}")
+    lock = src / "stub.lock"
+    want = lock.read_text().split() if lock.exists() else []
+    if want != [str(ver), sha]:
+        if os.environ.get("FM1_STUB_LOCK") == "update":
+            lock.write_text(f"{ver} {sha}\n")
+            print(f"stub: {lock.relative_to(SRC)} updated")
+        else:
+            msg = (f"the boot stub differs from {lock.relative_to(SRC)} ({' '.join(want)[:20] or 'none'}..): installing "
+                   "this build rewrites sector 0x4000, the one window an interruption is not rescued in. If the "
+                   "change is meant: bump STUB_VERSION (firmware/stub/stub_core.h), rebuild with "
+                   "FM1_STUB_LOCK=update, and say so in the release notes")
+            if VERSION:
+                raise SystemExit("build: " + msg)
+            print("WARNING: " + msg)
+    return img
+
+
 # ---- app
 
-def build_app():
+def build_app(stub):
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_ICONS", "FELUCCA_KEYCAPS", "FELUCCA_SLICE",
@@ -244,8 +309,9 @@ def build_app():
             img += b"\xff" * (load - APP_XIP - len(img))
             img += blob
     img += b"\xff" * (-len(img) % 4)
+    img = stub + bytes(img)         # app.bin as it is packed: the stub, then the app from flash 0x5000
     (OUT / f"{UNIT}.bin").write_bytes(img)
-    return bytes(img), syms, dis, rt, hdr
+    return img, syms, dis, rt, hdr
 
 
 def size_line(hdr):
@@ -271,8 +337,8 @@ def check(img, syms, dis, rt):
     m = re.search(r"^([0-9a-f]+) .*\s_start$", syms, re.M)
     if not m or int(m.group(1), 16) != APP_XIP:
         errors.append(f"_start is not at {APP_XIP:#x}")
-    if img[:4] != bytes.fromhex("04818000"):
-        errors.append(f"image starts with {img[:4].hex()}, not the entry stub")
+    if img[STUB_LEN:STUB_LEN + 4] != bytes.fromhex("04818000"):
+        errors.append(f"the app starts with {img[STUB_LEN:STUB_LEN + 4].hex()}, not its entry (goto +4; rts)")
     rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln)]
     if rt_calls:                    # RAM code runs with the flash off: no calls into XIP
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
@@ -286,15 +352,16 @@ def check(img, syms, dis, rt):
             val = (int(v[0]) & 0xFFFFFFFF) if v[0] else int(v[1], 16) & 0xFFFFFFFF
             if 0xFFC00000 <= val < 0xFFD00000:
                 errors.append(f"reference to ROM address {val:#010x}")
-    if len(img) > APP_SLOT:
-        errors.append(f"image {len(img)} B exceeds the app slot")
+    if len(img) - STUB_LEN > XIP_LEN:
+        errors.append(f"the app is {len(img) - STUB_LEN} B, the room below the marker's sector is {XIP_LEN} B")
 
     def sym(name):
         mm = re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M)
         return int(mm.group(1), 16) if mm else 0
     bss = sym("_bss_end") - 0x01C08000
     pool = sym("_pool_end") - sym("_pool_start")
-    notes.append(f"image {len(img)} B; RAM .data+.bss {bss} B of 98304; pool {pool} B of {0x54000}")
+    notes.append(f"image {len(img)} B (stub {STUB_LEN} + app {len(img) - STUB_LEN}); RAM .data+.bss {bss} B of 98304; "
+                 f"pool {pool} B of {0x54000}")
     if bss > 96 * 1024:
         errors.append("RAM region overflow")
     if 0x54000 - pool < 8192:                     # keep >= 8 KiB of the pool spare
@@ -311,6 +378,8 @@ def check(img, syms, dis, rt):
 #  - no inline asm, except the empty compiler barrier RING_PUBLISH() (emits no instruction);
 #  - no HAL register macro (a hal/ #define that is, or expands to, a volatile access).
 # Linker symbols (_bss_start[], _rt_load[], ...) are plain C objects and pass.
+# firmware/stub is not checked: the boot stub carries its own copies of the register sequences it needs, on purpose
+# (stub.c: a HAL change must not change the stub's bytes).
 MMIO_LIT = re.compile(r"\b0x0*(1[0-3][0-9a-f]{3}|4[0-3][0-9a-f]{3}|5[01][0-9a-f]{3}|1ee[0-9a-f]{4}|"
                       r"1c7f[0-9a-f]{3}|20[0-9a-f]{5})u?l?\b", re.I)
 MMIO_CAST = re.compile(r"\(\s*(?:const\s+)?volatile\b[^()]*\*\s*\)(?!\s*&)")
@@ -364,11 +433,12 @@ def main():
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
             print(f"warning: SDK {rel} differs from AC79NN_SDK_V1.2.1; the package will not match the reference")
     OUT.mkdir(parents=True, exist_ok=True)
-    with ThreadPoolExecutor(2) as ex:
-        gen, ldr = ex.submit(generate), ex.submit(build_loader)
+    with ThreadPoolExecutor(3) as ex:
+        gen, ldr, stb = ex.submit(generate), ex.submit(build_loader), ex.submit(build_stub)
         gen.result()
         ota = ldr.result()
-    img, syms, dis, rt, hdr = build_app()
+        stub = stb.result()
+    img, syms, dis, rt, hdr = build_app(stub)
     errors, notes = check(img, syms, dis, rt)
     hal_err = mmio_check()
     errors += hal_err
@@ -381,7 +451,11 @@ def main():
     print(size_line(hdr))
     if errors:
         raise SystemExit("build: checks failed")
-    pkg = fm1pkg_make.ufw(fm1pkg_make.flash_image(img, fm1pkg_make.KEY), ota, PRODUCT)
+    flash = fm1pkg_make.flash_image(img, fm1pkg_make.KEY)
+    pkg = fm1pkg_make.ufw(flash, ota, PRODUCT)
+    print(f"sector 0x4000 (the directory and the stub: constant while the stub is) sha256 "
+          f"{hashlib.sha256(flash[0x4000:0x5000]).hexdigest()[:16]}; marker at 0x91fe0, body "
+          f"{len(img) - STUB_LEN + (-len(img) % 4)} B")
     (OUT / name).write_bytes(pkg)
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"
     att_on = att.exists() and os.environ.get("FELUCCA_SAMPLE") == "1"   # the SAMPLE sets' credit: only when built in

@@ -15,6 +15,8 @@
  *   fm1_updata_parm_clear()  zero the record (CRC 0: ignored on a warm reset)
  *   fm1_mailbox_clear()  zero 0x01C7FD80..0x01C7FDFF (boot info, mailbox) at cold start
  *   fm1_mem_readable(a, n) / fm1_peek8(a)   debug reads of RAM / XIP only
+ *   fm1_stub_word(i)     the boot stub's four RAM words (firmware/stub/stub.c): 0 the rescue word, 1 info ("SB",
+ *                        version, decision), 2 the TIMER4 ticks it took, 3 detail; nothing in the app clears them
  */
 #pragma once
 #include <stdint.h>
@@ -27,6 +29,8 @@
 #define FM1_PWR_CON (*(volatile uint32_t *)0x10000u)
 #define FM1_UPDATA_PARM ((volatile uint8_t *)0x01C7FD88u)
 #define FM1_UPDATA_PARM_LEN 112u
+#define FM1_STUB_RAM ((const volatile uint32_t *)0x01C7C000u)   /* below NOINIT (app.ld) */
+#define FM1_HAVE_STUB 1
 
 static uint32_t fm1_p33_timeouts;
 
@@ -169,6 +173,8 @@ FM1_INLINE void fm1_mailbox_clear(void)   /* before fm1_guard_enable (it write-p
     for (s = (uint32_t *)0x01C7FD80u; s < (uint32_t *)0x01C7FE00u; s++)
         *s = 0;
 }
+
+FM1_INLINE uint32_t fm1_stub_word(uint32_t i) { return FM1_STUB_RAM[i & 3u]; }
 
 /* RAM and the XIP window only: SFR reads can have side effects */
 static int fm1_mem_readable(uint32_t a, uint32_t n)

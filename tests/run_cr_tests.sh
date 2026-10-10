@@ -8,6 +8,12 @@ mkdir -p build/host
 # the boot guard's decision (firmware/src/cr_bootguard.h, main.c fm1_cstart)
 cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_bootguard_test tests/cr_bootguard_test.c
 ./build/host/cr_bootguard_test
+# the boot stub (docs/BOOT-SAFETY.md "As built"): its decision (firmware/stub/stub_core.h: marker, rescue key, staged
+# loader, rescue count; the sanitizers watch its reads), and the package builder's side (the marker, the compensation
+# bytes, sector 0x4000 byte-identical for two bodies). The loader's interruption model: tests/ldr_test.c (run_tests.sh)
+cc -std=c99 -Wall -Wextra -Wno-unused-function -Werror -pedantic -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -o build/host/cr_stub_test tests/cr_stub_test.c
+./build/host/cr_stub_test
+python3 tests/stub_pkg_test.py
 cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_engine_test tests/cr_engine_test.c firmware/src/cr_engine.c
 ./build/host/cr_engine_test
 cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_loop_test tests/cr_loop_test.c firmware/src/cr_loop.c firmware/src/cr_engine.c

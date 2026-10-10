@@ -23,7 +23,8 @@ The build compiles `firmware/src/choralroot.c` (one compilation unit) and makes 
 
 | File | What |
 | --- | --- |
-| `choralroot.bin` | the firmware app |
+| `choralroot.bin` | the firmware app as packed: the boot stub (0xEE0 bytes), then the app |
+| `stub/stub.bin`, `stub/stub.dis` | the boot stub alone (`firmware/stub`, docs/BOOT-SAFETY.md "As built"); `firmware/stub/stub.lock` pins the one that ships |
 | `choralroot.elf`, `choralroot.dis` | the linked app and its disassembly |
 | `loader/ota.bin` | the update loader (Felucca's) |
 | `choralroot.fwsc` | the installable package (app + loader), identity `FM-1_920` |
@@ -36,7 +37,13 @@ size: .text 448672 B, .ram_text 2888 B, .data 296 B, .bss 88336 B; XIP 451856 B 
       RAM 88632 B of 98304 (90.2%), POOL 315400 B of 344064 (91.7%), NOINIT 200 B of 15696 (1.3%)
 ```
 
-XIP is `.text + .ram_text + .data` against the app slot in `firmware/app.ld`; RAM is `.data + .bss` (96 KiB);
+XIP is `.text + .ram_text + .data` against the app's room in `firmware/app.ld` (573440 B since the boot stub: from
+flash 0x5000 to the commit marker's sector at 0x91000; the line above is older). Before it the build prints the boot
+stub's size, version and hash (`stub: 2208 B of 3808 ...`), and a warning when the stub differs from
+`firmware/stub/stub.lock` (a release build stops): installing a build with another stub rewrites flash sector 0x4000,
+the one write an interruption is not rescued in (docs/BOOT-SAFETY.md "As built"). A deliberate stub change: bump
+`STUB_VERSION` in `firmware/stub/stub_core.h`, then `FM1_STUB_LOCK=update ./build.sh`.
+XIP is `.text + .ram_text + .data`; RAM is `.data + .bss` (96 KiB);
 POOL and NOINIT are the big-buffer and reset-surviving regions. The build fails if RAM or POOL overflows or if the
 POOL keeps less than 8 KiB spare.
 
