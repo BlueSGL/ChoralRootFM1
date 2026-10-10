@@ -11,7 +11,8 @@
  * UI's mirror (cr_ui.c's cs):
  *   cr_settings_boot()   persist_boot: the flash object -> Felucca's fields (panel table, HOLD) + our record
  *   cr_settings_load()   the end of cr_ui_init: the record -> engine, routing, the UI mirror, sounds, palette
- *   cr_settings_poll()   every UI frame: a change (captured from the UI) is saved once nothing changed for
+ *   cr_settings_poll()   every UI frame: a change (captured from the UI; and of Felucca's HOLD, which Options >
+ *                        Hold Time sets outside our record: crs_hold_seen) is saved once nothing changed for
  *                        CRS_QUIET_MS and nothing has sounded for CRS_IDLE_MS (crs_sounding: no voice of the parts,
  *                        no chord held or latched, no scheduled note, the master output below -60 dBFS), never
  *                        while a loop plays (CR_SETTINGS_BUSY()), retried after a flash error. A flash erase holds
@@ -365,6 +366,12 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
 
 static persist_t crs_rec;                          /* the last record read or written (Felucca's fields + ours) */
 static cr_settings_t crs_seen;                     /* the last captured state (change detection) */
+static uint8_t crs_hold_seen;                      /* .. and Felucca's HOLD then (panel.c settings_hold, the record's
+                                                    * `bold`): Options > Hold Time sets it, outside our block. The one
+                                                    * field of Felucca's the UI changes with no save call: the panel
+                                                    * table is saved by the calibration (cr_settings_save); the
+                                                    * palette, LOWCUT and Felucca's LEDS have no control here (the
+                                                    * block has ChoralRoot's palette and LEDs) */
 static uint8_t crs_booted, crs_loaded, crs_pending;
 static uint32_t crs_change_ms, crs_retry_ms;
 static int crs_last_rc;                            /* the last import: 1 current, 2 migrated, 0 defaults */
@@ -573,6 +580,7 @@ static void cr_settings_load(void)
     cu_set_tempo(s->bpm);
     crs_loaded = 1;
     crs_capture(&crs_seen);                        /* the state now: nothing to save until it changes */
+    crs_hold_seen = settings_hold;
     crs_change_ms = fm1_ms;
     crs_pending = 0;
 }
@@ -626,8 +634,10 @@ static void cr_settings_poll(void)
     if (crs_sounding())
         crs_loud_ms = fm1_ms;
     crs_capture(&now);
-    if (!cr_settings_equal(&now, &crs_seen)) {
+    if (!cr_settings_equal(&now, &crs_seen) || settings_hold != crs_hold_seen) {   /* (HOLD: crs_write's
+                                                    * settings_export puts it in the record) */
         crs_seen = now;
+        crs_hold_seen = settings_hold;
         crs_change_ms = fm1_ms;
         crs_pending = 1;
         return;
@@ -655,6 +665,7 @@ static void cr_settings_save(void)
     } else {
         crs_capture(&crs_seen);
     }
+    crs_hold_seen = settings_hold;
     crs_pending = 1;
     crs_change_ms = fm1_ms - CRS_QUIET_MS;
     if (!CR_SETTINGS_BUSY() && crs_write() == 0)

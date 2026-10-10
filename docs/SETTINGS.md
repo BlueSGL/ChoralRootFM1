@@ -45,7 +45,7 @@ The block has its own header:
 | sticky | latch | off |
 | bpm | 20..300 | 120 |
 | par[5][11] | per mode, the engine's `CR_PAR_MIN`..`MAX` | design.md §21 (= `cr_init`) |
-| loop_sync, loop_quant, loop_count_in, loop_level | 0..5, 0..5, 0/1, 0..100 | Free, none, off, 100 (the looper is not built yet) |
+| loop_sync, loop_quant, loop_count_in, loop_level | 0..5, 0..5, 0/1, 0..100 | Free, none, **on** (the count-in), 100 (the looper: docs/LOOPER.md) |
 | midi_en[3], midi_ch[3] | per stream MAIN BASS RAW | on, on, **RAW off**; channels 1 / 2 / 3 |
 | clock_mode | Off / **Out** / In | **Out** (Orchid sends clock) |
 | raw_sound | RAW also plays part 0 | off |
@@ -118,10 +118,18 @@ Never reorder or remove a field. A retired field stays in place, unused.
 | --- | --- | --- |
 | `cr_settings_boot()` | `persist_boot` (cr_shim.c), the emulator's `emu_fw_init` | the flash object → Felucca's fields (panel table, palette, HOLD, LEDs) + the block; the USB settings to `usb.c` (`ua_off`) and `fx.c` (`fx_usb_fixed`) through `crs_usb_apply`, before `usb_start` builds the configuration the computer first reads |
 | `cr_settings_load()` | the end of `cr_ui_init` (**patch below**); the emulator calls it after `cr_ui_init` until then | the block → engine (IRQ off), `cr_route`, the UI mirror `cs`, motion, palette, the sounds, tempo |
-| `cr_settings_poll()` | every frame (`main.c` `settings_poll` → cr_shim.c; the emulator's `emu_fw_frame`) | captures the state; a change is written once nothing changed for 1.5 s and nothing has sounded for 1 s (no voice of the parts, no chord held or latched, no scheduled note, the master output under -60 dBFS: a flash erase stops the audio for ~45 ms, docs/INTEGRATION.md Performance), never while a loop plays (`CR_SETTINGS_BUSY()`), retried 1 s after a flash error, and skipped when the bytes are unchanged |
+| `cr_settings_poll()` | every frame (`main.c` `settings_poll` → cr_shim.c; the emulator's `emu_fw_frame`) | captures the state (the block, and Felucca's HOLD beside it: `crs_hold_seen`, below); a change is written once nothing changed for 1.5 s and nothing has sounded for 1 s (no voice of the parts, no chord held or latched, no scheduled note, the master output under -60 dBFS: a flash erase stops the audio for ~45 ms, docs/INTEGRATION.md Performance), never while a loop plays (`CR_SETTINGS_BUSY()`), retried 1 s after a flash error, and skipped when the bytes are unchanged |
 | `cr_settings_save()` | `settings_save` (cr_shim.c): the power-on calibration, Options | save now |
 
-Saving is driven by change detection, so `cr_ui.c` needs no save call at each setting. The only call it needs
+Saving is driven by change detection, so `cr_ui.c` needs no save call at each setting. The poll compares the
+block as captured with the last one seen (`crs_seen`). One setting of the Options lives outside the block: **Hold
+Time** is Felucca's HOLD (`panel.c` `settings_hold`, saved in `bold`), so the poll watches it beside the block
+(`crs_hold_seen`) and a change of Hold Time alone is saved like any other; `crs_write`'s `settings_export` puts it
+in the record. Felucca's other fields need no watch: the panel table is saved by the calibration
+(`cr_settings_save`), and the palette, LOWCUT and Felucca's LEDS have no control in ChoralRoot's UI (its palette and
+LEDs are the block's).
+
+The only call `cr_ui.c` needs
 is the load at init. **The patch for `cr_ui.c`**, at the end of `cr_ui_init()`, after `cu_set_tempo(...)` and
 before `song.grid = 2;`:
 
@@ -174,3 +182,4 @@ read as current, migrated or defaults.
 3. A run without `--flash` reads 120 BPM.
 4. VA: a deep edit saved to U01; the relaunch powers on with U01 and its patch CRC as saved.
 5. The picker's roots: KNOB 4 in the picker sets them to play; the relaunch opens the picker with them playing.
+6. Hold Time alone: Options > Hold Time set to 600 ms and nothing else is saved once; the relaunch reads 600 ms.
