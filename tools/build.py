@@ -179,6 +179,8 @@ def build_loader():
     if not image or len(image) > 0x14000:
         raise SystemExit("loader: image empty or too big")
     ota = ldr_wrap(image)
+    if len(ota) > 0x4000:           # staged at 0xE0000 it must end below the record's sector (0xE4000), which the
+        raise SystemExit(f"loader: ota.bin {len(ota)} B reaches the update record's sector")   # app and loader erase
     (LDR / "ota.bin").write_bytes(ota)
     bss = [int(ln.split()[0], 16) for ln in syms.splitlines() if ln.rstrip().endswith("_bss_end")]
     print(f"loader: image {len(image)} B at {LOADER_LOAD:#x}" + (f", bss end {bss[0]:#x}" if bss else ""))

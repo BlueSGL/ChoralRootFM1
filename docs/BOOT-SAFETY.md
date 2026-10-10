@@ -235,6 +235,8 @@ fails the marker's own CRC (`cr_stub_test`: 20000 random partial programmings, n
    chain from the first block to the stated end with the sizes adding up to the image. Good: the rescue word =
    1 attempt, three short LED flashes, the record `ota_session` builds (byte-identical: `ota_test`, `cr_stub_test`)
    written to 0x01C7FD88, core reset: **the SPL runs the loader**. Not good: one long flash, **UBOOT**.
+   The app keeps that loader staged from boot to boot ("The staging area's life" below), so on a healthy unit
+   the key gives update mode too.
 
 Not checked: the blocks' contents (the package's CRC of the compressed body is not kept in flash, and the image's
 CRC needs the LZ4 decoder). A loader that is whole in structure and bad inside is what the rescue count is for: the
@@ -346,21 +348,49 @@ Each is a copy of code that runs on the unit; the function it was taken from is 
 | the debug write limits may be on (a warm reset) and are dropped before the mailbox writes | the same two functions |
 | the stacks at 0x01C7A000 / 0x01C7C000 | `crt0.S`, `app.ld` |
 
+### The staging area's life (0xE0000..0xE4FFF)
+
+Who writes and erases it, as built (`ota.c`, `ldr_core.c`; nothing else in the firmware, the storage layer
+(`FL_DATA` ends at 0xE0000), SAFE MODE's Flash Data erase, the backup protocol or the installers touches it):
+
+| when | what |
+| --- | --- |
+| step 1 of an install (the running app, `ota_stage`) | once the package's loader is accepted: all five sectors erased, the loader's body written and read back, its head last; then the record's flash copy at 0xE4F00. A package refused before that point leaves the area as it was; a failure after it erases the area |
+| the loader, when its write is done | the record's sector (0xE4000) erased; the loader itself (ours: 7157 B, sectors 0xE0000 and 0xE1000) stays |
+| every boot of the app (`ota_boot_cleanup`, SAFE MODE too) | a loader that is ours and whole (`ota_staged`: the stub's check, kept in step with it by `ota_test` on 20000 damaged copies) **stays**; a record still beside it is erased with its sector, but only if the loader ends below that sector (`build.py` stops a loader over 0x4000 bytes; a longer one keeps its record, on which nothing is known to act). Anything else (the official loader, a torn staging, a record alone) is erased as before |
+| the boot stub | reads only |
+
+So from the first install by a build with this rule, a unit always holds the loader of its last install, and the
+rescue key gives update mode: **OCT- alone at power-on, three flashes, `ota-FM-1`, open the installer, Install**
+(or switch off and on to start the firmware again: nothing was written). The first install of the stub is such an
+install (the loader that ran is the one staged). A unit whose staging area is empty (a stub build from before this
+rule, a failed step 1, the official loader used last) has none until its next install: there the key ends in UBOOT.
+
+A second OCT- start with no boot in between, while the RAM still holds the rescue word (a quick off and on), also
+ends in UBOOT: the stub cannot tell it from a hand-over that failed. Off for 10 s, or one normal start, clears it.
+
+The old comment's reason for erasing ("so the SPL does not re-enter the loader") did not hold: the SPL runs the
+loader from the RAM record after a warm reset only, and every install has booted the new app with the loader still
+staged (the loader's own restart).
+
 **Open, for the device:**
 
 1. **The rescue word at 0x01C7C000 must survive a core reset, the SPL and the loader.** .noinit starts there in
    every Felucca-family firmware and the boot guard relies on it across resets, but nobody has shown it on a unit
    for this path. If it does not survive, the stub works except for the rescue count: a hand-over that fails would
-   repeat instead of ending in UBOOT. Step 8 of the plan answers it.
+   repeat instead of ending in UBOOT. Step 5 of the plan answers it.
 2. **The hand-over right after a cold boot.** From the app (USB up, clocks set) it works at every install. From the
    stub, a few ms after the SPL, it is new: does the SPL honour the RAM record then, and does the loader's USB come
-   up? Step 6. If the loader starts and hangs while feeding its watchdog, nothing resets and no count helps: that
+   up? Step 4. If the loader starts and hangs while feeding its watchdog, nothing resets and no count helps: that
    is the case for the Transporter.
 3. **The XIP read rate** (above): `stub_ms`, steps 1 and 2.
 4. **UBOOT entered this early.** `fm1_cstart` does it at the same point of a boot (the boot guard's fourth failure),
-   but that path has not been seen on a unit either. Step 4.
+   but that path has not been seen on a unit either. Step 8.
 5. Entering the app with interrupts off (the stub's cli) instead of whatever icfg the SPL left: the app's crt0 did
    cli as its third instruction, so nothing should depend on it.
+6. **A cold boot with a loader staged and no record.** Warm, it is every install's restart; cold, the dark unit
+   had both a loader and a record and the SPL still went to the app. A loader alone has not been power-cycled.
+   Step 2.
 
 ### Device test plan (the orchestrator flashes; the Transporter and a V15 / 0.16 image at hand, a full battery)
 
@@ -372,26 +402,29 @@ Transporter writes the last good image; note what was seen.
    unprotected window (its first second of writing). Expect the usual restart into ChoralRoot.
    `fm1_install.py --debug`: `boot stub v1: booted the app after N ms; marker ok, staged loader not checked, rescue
    attempts before this boot 0, rescue key not held`. Write N down (open question 3; the user should not notice a
-   longer start than before). Dark instead: stop.
+   longer start than before). Dark instead: stop. From this boot on the loader that wrote the build stays staged.
 2. **Cold boot**: off 10 s, on. The same line again; the console's `boot` (or GEEK OUT) says power-on, no SAFE MODE.
+   This is also the first cold boot with a loader staged and no record (open question 6). Dark or `ota-FM-1`
+   without a key: note it; `ota-FM-1` can be left by installing, dark is a stop.
 3. **OCT- + OCT+ at power-on**: the calibration, as before.
-4. **The rescue key, no loader stored**: off, hold OCT- alone, on. One long flash (0.6 s), the screen black, the
-   "WL82 UBOOT1.00" disk appears. Off, on without a key: ChoralRoot starts. (It starts with the key held: the key is
-   not read; `--debug`'s "rescue key" says which. Nothing appears: stop.)
-5. **A body the stub refuses**: `python3 tools/make_stub_test_pkg.py bad-marker`, install
+4. **The rescue key on a healthy unit**: off, hold OCT- alone, on. Three short flashes, the screen black, and the
+   FM-1 is `ota-FM-1` (`--info`: update loader). This is the hand-over right after a cold boot (open question 2).
+   Off 10 s, on without a key: ChoralRoot starts, nothing was written. (ChoralRoot starts with the key held: the key
+   is not read. One long flash and the WL82 disk: the staged loader did not pass the check, or was not kept; off and
+   on starts ChoralRoot. Three flashes and then nothing on USB for 30 s: stop.)
+5. **Leaving update mode by installing**: OCT- at power-on again, then Install the same `build/choralroot.fwsc`
+   (the page offers to resume). Nothing differs, so nothing is written; the FM-1 restarts into ChoralRoot and
+   `--debug` says `rescue attempts before this boot 1` (open question 1 answered yes; 0: the word does not survive).
+6. **A body the stub refuses**: `python3 tools/make_stub_test_pkg.py bad-marker`, install
    `build/stub-test-bad-marker.fwsc`. The write runs to 100 %; then three short flashes, the screen black, and the
-   FM-1 is `ota-FM-1` (the installer says it did not come back as FM-1_920: expected; `--info` says update loader).
-   This is the rescue from a warm reset.
-6. **The dark unit's case**: in that state, off 10 s, on, no key. Three flashes, `ota-FM-1` again (open question
-   2). One long flash and the disk instead: the rescue word outlived the 10 s (try 60 s) or the loader check failed.
-   Nothing at all: wait 20 s (the watchdog), then stop.
-7. **The rescue count** (optional): from update mode install bad-marker again. After the write: one long flash, the
-   WL82 disk (the second arrival). Off, on: three flashes, `ota-FM-1`. (Update mode straight after the write
-   instead: the rescue word does not survive; note it, go on.)
-8. **Finish**: from update mode install `build/choralroot.fwsc`. ChoralRoot starts; `--debug` says `rescue attempts
-   before this boot 1` (open question 1 answered yes; 0: no).
-9. **The real thing**: install a build with another body (any later build, the same stub), pull the cable at about
-   30 %, switch off and on: three flashes, `ota-FM-1`, Install again finishes it. With `--debug` afterwards.
-10. **The rescue key with a loader stored** (optional, right after step 5 or 6 instead of installing): OCT- held at
-    power-on gives the same three flashes; `stub_detail`'s key byte is seen only after the next good boot, where it
-    is 0 again, so this step shows no more than 6.
+   FM-1 is `ota-FM-1` (the installer says it did not come back as FM-1_920: expected). The rescue from a warm reset.
+7. **The dark unit's case**: in that state, off 10 s, on, no key. Three flashes, `ota-FM-1` again. One long flash
+   and the disk instead: the rescue word outlived the 10 s (try 60 s). Nothing at all: wait 20 s (the watchdog),
+   then stop.
+8. **The rescue count, and UBOOT**: from update mode install bad-marker again (nothing to write). At the restart:
+   one long flash, the "WL82 UBOOT1.00" disk (the second arrival without a boot; open question 4). Off, on: three
+   flashes, `ota-FM-1`. (Update mode straight after the write instead: the rescue word does not survive; note it.)
+9. **Finish**: from update mode install `build/choralroot.fwsc`. ChoralRoot starts; `--debug` as in step 5.
+10. **The real thing**: install a build with another body (any later build, the same stub), pull the cable at about
+    30 %, switch off and on: three flashes, `ota-FM-1`, Install again finishes it. Then OCT- at power-on once more:
+    still three flashes (the loader of that install is the one kept).

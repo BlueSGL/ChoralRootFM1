@@ -144,10 +144,14 @@ plug it **straight into the computer** with a cable known to carry data (no hub)
 **First, on a ChoralRoot with the boot stub** (the release notes say from which version on; never 0.16 or older, and
 never another firmware): switch off, **hold OCT- alone, switch on**. Three short flashes of the key LEDs (the first
 key column), the screen black: the FM-1 is in update mode (`ota-FM-1` on USB-MIDI, "in update mode" in
-`fm1_install.py --info`); run the installer again. A unit whose install was interrupted does this without the key.
-One long flash: no update loader is stored (a working unit erases it at its first start) or a first hand-over did
-not reach it: the FM-1 is the "WL82 UBOOT1.00" disk until the next power cycle (then step 3's Unbricker, or simply
-switch off and on to start the firmware if it was whole). No flash at all: no stub runs; go on below.
+`fm1_install.py --info`); open the installer and press Install. A unit whose install was interrupted does this
+without the key; a working unit does it with the key (the firmware keeps the update loader of its last install
+stored for this; switching off and on starts the firmware again, nothing was written).
+One long flash: switch off for 10 s and try once more (a second try straight after a first counts as a failed
+hand-over). One long flash again: no update loader is stored (a unit that has not been installed by a version that
+keeps it, or whose last install step was refused half way): the FM-1 is the "WL82 UBOOT1.00" disk until the next
+power cycle (then step 3's Unbricker, or simply switch off and on to start the firmware if it was whole). No flash
+at all: no stub runs; go on below.
 
 0. **If the install was interrupted mid-write** ("the loader was disconnected after N requests") and afterwards the
    computer sees *nothing at all* (no FM-1 port, no `ota-FM-1`, no WL82 disk): this happened on 2026-10-07 to the

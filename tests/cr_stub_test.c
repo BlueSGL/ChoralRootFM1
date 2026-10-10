@@ -305,7 +305,7 @@ int main(void)
     CHECK(r.decision == STUB_UBOOT && r.ld == STUB_LD_HEAD, "key held, no loader: UBOOT");
     make_marker(BODY_LEN);
     r = run(0, 0);
-    CHECK(r.decision == STUB_BOOT, "marker good, no loader, no key: boot (the usual state after an install)");
+    CHECK(r.decision == STUB_BOOT, "marker good, no loader, no key: boot (nothing staged)");
     memset(mark, 0xFF, sizeof mark);
     make_loader(18000u);
     r = run(0, 0);

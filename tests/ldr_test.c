@@ -324,6 +324,34 @@ int main(int argc, char **argv)
         memcpy(nor + 0xE0020, logical + ota_off + 0x20, ota_len - 0x20);
         ota_stage_head(ota_len - 0x20);
         bad += check("stub: the staged loader passes its check", stub_loader_check(nor + STUB_LDR_OFF) == STUB_LD_OK);
+        {   /* the staged loader's life over an install: step 1's record beside it, the loader's write, its finish
+             * (the record's sector erased), the app's first boot (ota.c ota_boot_cleanup): the loader still there */
+            uint8_t r[112] = {0};
+            stub_result_t sr;
+            r[2] = 0x0D; r[3] = 0x5A; r[4] = 0x01; r[5] = 0x5A; r[6] = 0x41; r[7] = 0x54;
+            ota_wr16(r, ota_crc16(r + 2, 78, 0));
+            memcpy(nor + 0xE4F00, r, sizeof r);
+            cut_at = 0;
+            rc = ldr_session();
+            bad += check("install -> boot: the record gone, the staged loader kept and whole",
+                         rc == 0 && nor[0xE4F06] == 0xFF && ota_boot_cleanup() == 0 && ota_staged() &&
+                         stub_loader_check(nor + STUB_LDR_OFF) == STUB_LD_OK);
+            bad += check(".. the stub boots the app", stub_says(&sr) == STUB_BOOT);
+            {
+                static uint32_t body[4];
+                static stub_crc_t k;
+                uint8_t m[32];
+                stub_view_t v;
+                xip(STUB_MARK_OFF, m, 32);
+                v.mark = m; v.body = body; v.ldr = nor + STUB_LDR_OFF;
+                stub_decide(&v, &k, 1, 0, &sr);
+                bad += check(".. with OCT- held: that loader, one attempt counted",
+                             sr.decision == STUB_LOADER && sr.word == (STUB_RSC_MAGIC | 1u));
+                stub_decide(&v, &k, 1, sr.word, &sr);
+                bad += check(".. a second arrival with the key and no boot between: UBOOT", sr.decision == STUB_UBOOT);
+            }
+            memcpy(nor, old + ofo, 0x93000);
+        }
         printf("interruption model: a power cut after every erase and every programmed page\n");
         /* 16 = the stub sector's erase and its first 15 pages; the marker's erase before them leaves a 0.16 app
          * whole (it does not use that sector); a firmware that does use it has one more */

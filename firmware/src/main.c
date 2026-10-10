@@ -234,8 +234,9 @@ static void fm1_main(void)
 #if FELUCCA_OTA
     CR_STAGE(BS_OTA_CLEANUP);
     if (flash_ok)
-        ota_boot_cleanup();                             /* staging area left by an update (also in SAFE MODE: the
-                                                           SPL would re-enter the loader) */
+        ota_boot_cleanup();                             /* the staging area after an update: our loader stays for
+                                                           the boot stub's rescue (OCT- at power-on), a record or
+                                                           anything else goes (ota.c; in SAFE MODE too) */
 #endif
     settings_init();
     CR_STAGE(BS_LCD);

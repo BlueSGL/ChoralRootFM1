@@ -66,10 +66,11 @@ SAFE MODE, so you can save a backup first. Only if SAFE MODE itself crashes twic
 
 **If an install was interrupted** (ChoralRoot versions that carry the boot stub, docs/BOOT-SAFETY.md: the release
 notes say from which version on; not 0.16 or older): switch the FM-1 on. The key LEDs flash three times, the screen
-stays black and the FM-1 is in update mode: run the installer again and it finishes the write. The same on purpose,
-whatever state the firmware is in: **hold OCT- (alone) while switching on**. One long flash instead of three means no
-update loader is stored (the usual state of a working unit): the FM-1 is then the USB disk "WL82 UBOOT1.00" until it
-is switched off and on again.
+stays black and the FM-1 is in update mode: open the installer and press Install, it finishes the write. The same on
+purpose, whatever state the firmware is in: **hold OCT- (alone) while switching on**, three flashes, open the
+installer, Install (or switch off and on to start the firmware again: nothing was written). One long flash instead of
+three: switch off for 10 seconds and try once more; one long flash again means no update loader is stored (it is kept
+from the unit's last install on) and the FM-1 is the USB disk "WL82 UBOOT1.00" until it is switched off and on.
 
 **If the FM-1 no longer starts** (black screen, the computer shows a USB disk "WL82 UBOOT1.00"): leave it on for 2
 minutes to see whether it restarts by itself, try holding OCT- and OCT+ while switching on (10 s), and check what the

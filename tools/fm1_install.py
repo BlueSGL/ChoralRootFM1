@@ -26,9 +26,10 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py --import-syx N FILE [--voice V] [--yes]   (a DX7 voice or bank, or a CZ-1 tone, into slot N)
 
 An install that was interrupted (the cable, the battery): on a ChoralRoot with the boot stub (docs/BOOT-SAFETY.md;
-not 0.16 or older) the FM-1 comes back in update mode at the next power-on, or with OCT- held alone while switching
-on (three LED flashes, a black screen): run the install again to finish it. --debug prints a "boot stub" line on a
-firmware that has it.
+not 0.16 or older) the FM-1 comes back in update mode at the next power-on (three LED flashes, a black screen): run
+the install again to finish it. The same on purpose, on a working unit too: hold OCT- alone while switching on,
+three flashes, run the install (or switch off and on: nothing was written). One long flash instead: switch off for
+10 s and try once more. --debug prints a "boot stub" line on a firmware that has it.
 
 Backups are web/fm1backup.js's files (JSON, "felucca-backup" version 1), over the same SysEx (web/EDITOR_PROTOCOL.md);
 FILE may be a directory (a dated name: choralroot-backup-YYYYMMDD.json). A restore writes the objects the connected

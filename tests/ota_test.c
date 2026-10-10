@@ -197,30 +197,108 @@ int main(int argc, char **argv)
         bad += check("nothing written outside 0xE0000..0xE4FFF", bad_erase == 0);
     }
 #ifdef OWN_PKG
-    {   /* the boot stub's view of it (firmware/stub/stub_core.h): the staged loader passes its check, its record is
-         * this one; a staging area cut off or without its head does not pass */
+    {   /* the staging area's life (ota.c's header; firmware/stub/stub_core.h is the boot stub's view of it): the
+         * staged loader passes the stub's check, the stub's record is the committed one, and the app's boot keeps
+         * the loader for the rescue key, removing only the record */
         static uint8_t keep[0x5000];
         uint8_t parm[STUB_PARM_LEN];
-        uint32_t len = ota_rd32(nor + 0xE0008);
+        uint32_t len = ota_rd32(nor + 0xE0008), k, t, agree = 1, oks = 0;
         stub_record(parm);
         bad += check("stub: the staged loader passes its check", stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
         bad += check("stub: its record == the committed one", !memcmp(parm, committed_parm, 112));
+        bad += check("ota_staged == the stub's answer, the staged length", ota_staged() == len);
+        bad += check("our loader ends below the record's sector", len <= 0x4000);
         memcpy(keep, nor + 0xE0000, sizeof keep);
-        memset(nor + 0xE4000, 0xFF, 0x1000);              /* the loader's finish erases the record's sector */
-        bad += check("stub: .. also after the record's sector is erased", stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
-        memset(nor + 0xE0000 + len - 64u, 0xFF, 64);
-        bad += check("stub: (block contents unchecked: the rescue count covers a bad one)", stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
-        memset(nor + 0xE0000 + len / 2u, 0xFF, 0x5000u - len / 2u);
-        bad += check("stub: erased from half way on -> refused", stub_loader_check(nor + 0xE0000) == STUB_LD_BLOCKS);
+        /* the app's boot with the record still there (the loader never ran): the loader stays, the record goes */
+        bad += check("boot: the loader kept, the record's sector erased (rc 2)",
+                     ota_boot_cleanup() == 2 && !memcmp(nor + 0xE0000, keep, 0x4000) && nor[0xE4F00] == 0xFF &&
+                     nor[0xE4F06] == 0xFF && stub_loader_check(nor + 0xE0000) == STUB_LD_OK && bad_erase == 0);
+        bad += check("second boot: nothing to do, the loader still passes",
+                     ota_boot_cleanup() == 0 && stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
+        /* the next install: step 1 restages over the kept loader */
+        committed = 0;
+        rc = ota_session();
+        bad += check("step 1 over a kept loader: commits, staged again", rc == 0 && committed &&
+                     !memcmp(nor + 0xE0000, keep, sizeof keep));
+        ota_boot_cleanup();
+        /* a package refused before the staging began: the kept loader is still there */
+        corrupt_at = logical + ota_body_off() - 0x20 + 5;
+        committed = 0;
+        rc = ota_session();
+        corrupt_at = NULL;
+        bad += check("a package refused before the erase (-7): the kept loader stays", rc == -7 && !committed &&
+                     stub_loader_check(nor + 0xE0000) == STUB_LD_OK);
+        /* a failure after the erase: nothing staged */
+        {
+            uint32_t total;
+            requests = 0; mute_after = 0xFFFFFFFFu;
+            ota_session();
+            total = requests;
+            ota_boot_cleanup();
+            requests = 0; committed = 0;
+            mute_after = total - 1;
+            rc = ota_session();
+            mute_after = 0xFFFFFFFFu;
+            bad += check("no 'success' over a kept loader: -13, the area erased", rc == -13 && !committed && area_erased());
+        }
+        /* what is not our whole loader goes, as before */
         memcpy(nor + 0xE0000, keep, sizeof keep);
         memset(nor + 0xE0000, 0xFF, 32);
         bad += check("stub: no head (staging not finished) -> refused", stub_loader_check(nor + 0xE0000) == STUB_LD_HEAD);
+        bad += check("boot: a staging without its head is erased (rc 1)", ota_boot_cleanup() == 1 && area_erased());
         memcpy(nor + 0xE0000, keep, sizeof keep);
+        memset(nor + 0xE0000 + len / 2u, 0xFF, 0x4F00u - len / 2u);
+        bad += check("stub: erased from half way on -> refused", stub_loader_check(nor + 0xE0000) == STUB_LD_BLOCKS);
+        bad += check("boot: a torn loader is erased", ota_boot_cleanup() == 1 && area_erased());
+        memcpy(nor + 0xE4F00, keep + 0x4F00, 112);
+        bad += check("boot: a record alone is erased", ota_boot_cleanup() == 1 && area_erased());
+        memcpy(nor + 0xE0000, keep, sizeof keep);
+        nor[0xE004C] = 'X';
+        bad += check("boot: not Felucca's loader is erased", ota_boot_cleanup() == 1 && area_erased());
+        /* a loader that reaches the record's sector (not ours: build.py stops one): the record is left alone */
+        {
+            uint8_t *h = nor + 0xE0000, *in = h + 32;
+            uint32_t p = 0x40, n;
+            for (k = 0; k < 5u; k++) {
+                ota_wr32(h + p, 3900u);
+                ota_wr32(h + p + 4, 4096u);
+                memset(h + p + 8, 0x11 * (int)(k + 1u), 3900);
+                p += 3908u;
+            }
+            memcpy(h + 0x4C, "FELUCCA-LOADER-1", 16);
+            memset(in, 0, 32);
+            ota_wr32(in + 4, 5u * 4096u);
+            ota_wr32(in + 8, 0x01C0A800u);
+            ota_wr16(in, ota_crc16(in + 2, 30, 0));
+            ota_stage_head(p - 32u);
+            memcpy(nor + 0xE4F00, keep + 0x4F00, 112);
+            n = ota_staged();
+            bad += check("a loader into the record's sector: kept, and the record with it (rc 0)",
+                         n == p && n > 0x4000 && stub_loader_check(h) == STUB_LD_OK && ota_boot_cleanup() == 0 &&
+                         !memcmp(nor + 0xE4F00, keep + 0x4F00, 112) && ota_staged() == p);
+        }
+        /* the two checks in step: the same answer on damaged copies of the staged loader */
+        srand(1);
+        for (t = 0; t < 20000u; t++) {
+            memcpy(nor + 0xE0000, keep, sizeof keep);
+            for (k = 0; k < 1u + (uint32_t)rand() % 3u; k++) {
+                uint32_t at = (uint32_t)rand() % (t & 1u ? 0x90u : len + 64u);
+                if (rand() & 3) nor[0xE0000 + at] ^= (uint8_t)(1u << (rand() & 7));
+                else memset(nor + 0xE0000 + at, 0xFF, 0x5000u - at > 600u ? 600u : 0x5000u - at);
+            }
+            k = stub_loader_check(nor + 0xE0000) == STUB_LD_OK;
+            oks += k;
+            agree &= k == (ota_staged() != 0);
+        }
+        printf("  %u of 20000 damaged copies still pass both checks (block contents are not checked)\n", oks);
+        bad += check("ota_staged == stub_loader_check on 20000 damaged copies", agree && oks > 100u && oks < 19000u);
+        memset(nor + 0xE0000, 0xFF, 0x5000);
     }
-#endif
-    /* boot cleanup erases it */
+#else
+    /* boot cleanup erases it (not Felucca's loader) */
     bad += check("boot cleanup erases the area", ota_boot_cleanup() == 1 && area_erased());
     bad += check("second boot: nothing to do", ota_boot_cleanup() == 0);
+#endif
 
     /* host disappears in the middle */
     reset_dev();
