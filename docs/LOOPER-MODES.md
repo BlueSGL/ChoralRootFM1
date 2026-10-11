@@ -6,6 +6,13 @@ taken on the way: Advance overwrites whatever the next slot holds (when the take
 records where it is (no jump: nothing to keep); Step entry is a fresh take (the loop there is replaced at the commit,
 kept when nothing was entered); OCT+ / OCT- step in or out of the menu; PRESETS switches the slot when the knob rests
 (250 ms) while a loop plays.
+**Changed in 0.18 (2026-10-11; docs/LOOPER.md has the menu as built):** SELECT turns the menu's PAGE (page 1: KNOB 1
+Length, KNOB 2 Rate, KNOB 3 Quantize, KNOB 4 Count-in; page 2: KNOB 1 Level); the Keys cell is gone, GLO alone
+toggles the keys (the bottom line says play / loops); EDIT opens the loop editor; Step entry's step is the Quantize
+value (a quarter note when none, not 1/16) and with Length Free the loop is the steps entered, exactly (no rounding to
+a bar); the SAVE layer is gone (SAVE held is the global save: loops are saved by it and by leaving a slot). The text
+below is the design of 2026-10-09, kept as it was approved.
+
 The slot bug (a slot's pattern lost on a switch) is fixed separately: a slot *is* its pattern, leaving a slot saves it
 (docs/LOOPER.md "Slots and the record").
 

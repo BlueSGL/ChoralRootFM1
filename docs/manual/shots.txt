@@ -78,3 +78,51 @@ wait 400
 shot docs/manual/editor-filter.png
 btn HOME
 wait 300
+
+# loop-editor.png: the PLAY menu, Step mode, three chords entered (D, Em, G: Length Free, a quarter note each),
+# Quantize 1/4, EDIT: the loop editor; SELECT +1: step 2; MIN + A4: Am in it; KNOB 2 +1: two cells long
+btn PLAY 600
+wait 400
+knob ALGORITHM +4
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 200
+btn D4 up
+btn A#3 up
+wait 300
+btn G#3 down
+btn E4 down
+wait 200
+btn E4 up
+btn G#3 up
+wait 300
+btn A#3 down
+btn G4 down
+wait 200
+btn G4 up
+btn A#3 up
+wait 300
+btn REC
+wait 1500
+knob KNOB3 +1
+wait 300
+btn EDIT
+wait 400
+knob SELECT +1
+wait 300
+btn G#3 down
+btn A4 down
+wait 300
+btn A4 up
+btn G#3 up
+wait 400
+knob KNOB2 +1
+wait 1350
+shot docs/manual/loop-editor.png
+btn OCT-
+wait 300
+btn OCT-
+wait 300

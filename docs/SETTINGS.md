@@ -6,10 +6,113 @@ now PER5), `tests/cr_settings_test.c`, the emulator's flash in `tools/emu/emu_ha
 and `tools/emu/test_persist.sh`.
 
 Since 0.18 there are two records: the **settings block** (the options: 192 bytes inside Felucca's settings object,
-unchanged in size since 0.1) and the **session** (where the unit was left: both parts' sounds as they are, the
-voicing, the octave, Bass on, LOCK, the FX layer; 1024 bytes in a flash object of its own). Together they make
-"switch off, switch on: exactly where you left off". The inventory of what is kept where is in
+unchanged in size since 0.1) and the **session** (the state of the instrument: both parts' sounds as they are, the
+voicing, the octave, Bass on, LOCK, the FX layer; 1024 bytes in a flash object of its own). **Saving is manual**
+(the owner, 2026-10-11): what the Options menu alone sets is still written by itself; everything else, in either
+record, is written only by the **global save** (SAVE held), and the unit powers on as the last global save left it:
+[Manual and automatic](#manual-and-automatic-018). The inventory of what is kept where is in
 [The session](#the-session-018).
+
+## Manual and automatic (0.18)
+
+"Hold Save button to manually do a global save, instead of trying to auto-save settings at runtime. So if you power
+cycle without global saving it will reset to what it was. You could also hold GLO + save to reload the global
+settings and current preset, which would also make a nice feature for being able to change a bunch of settings then
+quickly revert back or save." (the owner, 2026-10-11)
+
+| gesture | does | the screen |
+| --- | --- | --- |
+| **SAVE held** past the hold time (Options > Hold Time, as the layer buttons), alone | the **global save** (`cr_ui.c cu_gsave` -> `cr_settings_commit` + `cu_loop_write`): the whole settings block, the session, and the loop in RAM if it changed | the message box `saved`, green (a flash error: `save error`, red) |
+| SAVE held while a loop plays or a capture is open (armed, count-in, recording, overdub, step entry) | nothing is written (no flash erase then); the save waits (`cu.gsave_pend`) and happens when the loop has stopped and no capture is open | `saves at stop`, then `saved` at that moment |
+| **OPT (GLO) + SAVE**, both held 1 s (`CU_REVERT_MS`; either one first) | the **revert** (`cu_revert` -> `cr_settings_revert`): what the last global save wrote, applied as a power-on applies it | `reverted`, white |
+| SAVE tapped | the save-preset dialog, as ever (a preset is written at once) | |
+| SAVE held in the naming dialog, 1 s | delete / reset the preset, as ever (no global save there) | |
+| SAVE held + a key, a knob or another button | a combo: nothing (the loop slots' Save / Load / Delete map of 0.17 is gone: `L_SAVE` is retired as `L_RSV6`, the layer numbers stay) | |
+
+No confirm for either ("No confirm, just a message to communicate what happened"). SAFE MODE: `safe mode: no saving`
+/ `safe mode: no revert` (nothing is read or written there). After a backup's settings were restored and before the
+restart: `restored: restart first`.
+
+**Every setting and its side.** Automatic = written by `cr_settings_poll` when the unit is quiet (the rules below,
+unchanged); manual = written only by the global save. The rule for a setting reachable both from the Options and
+from a layer: it goes with the layer (manual).
+
+| setting | where it is set | record | side |
+| --- | --- | --- | --- |
+| Play Style | Options | block `playstyle` | **automatic** |
+| Extension Addition | Options | block `extadd` | **automatic** |
+| Secret Chords | Options | block `secret` | **automatic** |
+| Velocity | Options | block `vel` | **automatic** |
+| MIDI Perform, MIDI Bass, MIDI Raw Chord | Options | block `midi_en[3]`, `midi_ch[3]` | **automatic** |
+| Raw Chord Sound | Options | block `raw_sound` | **automatic** |
+| MIDI Clock | Options | block `clock_mode` | **automatic** |
+| Motion | Options | block `motion` | **automatic** |
+| LEDs | Options | block `leds` | **automatic** |
+| Hold Time | Options | Felucca's `bold` (HOLD), in the same flash object | **automatic** |
+| USB Record, USB Level | Options | block `usb_in`, `usb_level` | **automatic** |
+| Dual Core | Options | block `view` bit 6 | **automatic** |
+| the palette (no control: MOD) | | block `palette` | automatic |
+| the panel calibration | Options > Calibrate, OCT- + OCT+ at power-on | Felucca's `panel` | **automatic** (written by the calibration itself) |
+| Bass Behaviour | Options **and** the BASS layer (SELECT, KNOB 1) | block `bass_mode` | manual |
+| Single Notes | Options **and** the KEY layer (KNOB 4) | block `single` | manual |
+| Split Point | Options **and** OPT + KNOB 1 | block `split_pc` | manual |
+| View | Options **and** HOME (tap, the view menu) | block `view` bits 0..2 | manual |
+| the view's lock | the view menu | block `view` bit 7 | manual |
+| Key Mode, tonic, scale | KEY tap, the KEY layer | block `key_on` bit 0, `tonic`, `scale` | manual |
+| Key plays, Keyboard | the KEY layer's page 2 | block `key_on` bits 1 / 2 | manual |
+| the KEY layer's keys (pick / play) | GLO in the KEY layer | block `loop_rec` bit 5 | manual |
+| Transpose | the KEY layer | block `transpose` | manual |
+| the LOCK layer's two settings | B3 held | block `loop_rec` bits 6 / 7 | manual |
+| Perform on, the mode, its parameters | PERF tap, the PERF layer, KNOB 3 | block `perform_on`, `perform_mode`, `perf_sel`, `par` | manual |
+| LATCH on | LATCH tap | block `sticky` | manual |
+| the tempo | SELECT | block `bpm` | manual |
+| the bass register | KNOB 2, the BASS layer | block `bass_voicing` | manual |
+| each part's chosen sound, each engine's last place | PRESETS, ALGORITHM, the pickers | block `chord_sound`, `bass_sound`, `pool_pos` | manual |
+| FX on | FX tap | block `fx_on` | manual |
+| the looper: Length, Quantize, Count-in, Level, the record mode, the PLAY menu's keys | the PLAY menu | block `loop_sync`, `loop_quant`, `loop_count_in`, `loop_level`, `loop_rec` bits 0..4 | manual |
+| the looper's Rate | the PLAY menu's KNOB 2 | session `loop_rate` | manual |
+| the loop slot selected | the PLAY menu's PRESETS | block `loop_slot` | manual |
+| the metronome: on, time signature, level | METRO tap, the METRO layer, OPT + SELECT | block `metro_on`, `metro_sig`, `metro_vol` | manual |
+| the voicing, the octave | KNOB 1, OCT | session `voicing`, `octave` | manual |
+| Bass on | BASS tap | session `bass_on` | manual |
+| LOCK on, the chord keys it latched | B3 | session `lock`, `latched` | manual |
+| the FX layer: the page picked, the effects' parameters, both parts' sends | the FX layer, KNOB 4, the editors | session `fx` | manual |
+| both parts' sounds as they are (unsaved edits, deep patch, name), their Level and Pan | the editor, the layers | session `part[2]` | manual |
+| the loop in RAM | REC, the editor, clear, undo | its slot's flash record | manual, **and** written when its slot is left (docs/LOOPER.md) |
+| a preset saved (SAVE tap), patches and banks received | | their own flash objects | written at once, as ever |
+
+In the block the automatic fields are 17 bytes and one bit of the 180 after the header (`cr_settings_auto`,
+`tests/cr_settings_test.c t_auto`: every byte is one side or the other).
+
+**How the two sides share one flash object.** The block is one 192-byte record inside one flash object, so an
+automatic write cannot leave the manual fields out: it writes **flash's own block with the automatic fields as they
+are now** (`crs_write(0)`: `crs_rec`, the mirror of what flash holds, with `cr_settings_auto` over it), and the manual
+fields in flash stay what the last global save wrote. The global save writes the block as captured, whole
+(`crs_write(1)`), then the session (`css_write`). The poll starts an automatic write only when an automatic field
+(or Hold Time) changed (`cr_settings_poll`: the last state seen with the Options of now differs from it), so turning
+a manual knob costs no erase, ever.
+
+**The revert** applies `crs_rec` (flash's block) with the Options as they are now over it, reads the session object
+again (`css_read`, the same "does it belong" rule as at power-on), puts both parts and the effects where `cr_ui_init`
+leaves them (`crs_reinit`: an edit not saved is gone), and runs `cr_settings_load`: exactly the power-on path. The UI
+(`cu_revert`) first quiets the unit as PANIC does without its screen (`cu_quiet`: notes off, the loop stopped, LATCH
+off, the octave 0; LOCK off and its latch up), closes every layer, page and dialog (the engine picker's preview and
+the loop editor with them), and afterwards reloads the loop: the slot the block names, from flash, its RAM changes
+dropped (a loop staged by a slot switch while it played is written first: that save is the switch's). A unit that
+never saved reverts to what it powered on as.
+
+**Audio.** A flash erase holds every IRQ for ~45 ms with the audio buffer zeroed (`storage_hw.c st_erase`). The
+global save writes at most three objects, one erase each, back to back (the settings object: 1 erase + 4 page
+programs; the session: 1 + 5; the loop slot: 1 + up to 16) and only those that changed (`crs_write`'s compare,
+`css_write`'s hash, `crl.dirty`): into silence nothing is heard; into a held chord or a tail, one 45 ms hole a
+written object, the sound going on after each (`test_persist.sh` `session_hold.txt`: "audio stalled" in the dump).
+It is not deferred to silence: the owner presses and expects it. It IS deferred while a loop plays or a capture is
+open. The automatic write keeps main's rule: never while anything sounds above the tail floor.
+
+**Power-on**: as the last global save left it, plus the Options as they were when the unit was last quiet. Never
+saved: the defaults. **Migration**: none; what a 0.17 unit or an earlier 0.18 build stored is "the last save".
+`cr_settings_save` (Felucca's `settings_save`: the power-on calibration, a backup's LIST, the update gesture) is the
+automatic part alone: neither a backup nor the update gesture is a global save.
 
 ## Where it lives
 
@@ -138,7 +241,9 @@ with Dual Core Off.
 ## The session (0.18)
 
 "Too much is forgotten at power-off. We should get this to the point where you turn off, turn back on, pick up
-exactly where you left off." (the owner, 2026-10-11)
+exactly where you left off." (the owner, 2026-10-11, the session's first build: written by itself when the unit was
+quiet. The same day's later decision, above: it is written by the global save alone; "0.18" below means "after a
+global save".)
 
 ### The inventory
 
@@ -151,7 +256,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | the panel calibration | yes | yes | Felucca's `panel` in the settings object |
 | Key Mode, tonic, scale, Transpose | yes | yes | block `key_on`, `tonic`, `scale`, `transpose` |
 | the KEY layer: its keys (pick / play), Key plays, Keyboard, Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
-| the KEY layer's page | no | **no, on purpose** | page 1 whenever the layer opens (`cu.kpage`) |
+| the KEY layer's page, the PLAY menu's page | no | **no, on purpose** | page 1 whenever the layer opens (`cu.kpage`, `cu.lpage`) |
 | the performance mode, its parameters, Perform on | yes | yes | block `perform_mode`, `perf_sel`, `par`, `perform_on` |
 | LATCH on | yes | yes | block `sticky` |
 | the chord LATCH was holding, any sounding note | no | **no, on purpose** | |
@@ -173,7 +278,8 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | each part's sound as it is: an edit not saved, the deep patch, the name, "edited", the pool entry | no | **yes** | session `part[0]`, `part[1]` (the edit buffers) |
 | the tempo, the metronome (on, signature, level) | yes | yes | block `bpm`, `metro_*` (a metronome left on clicks at power-on, as before) |
 | the looper's settings, its record mode, the PLAY menu's keys | yes | yes | block `loop_*`, `loop_rec` |
-| the loop slot loaded, the loop in it | yes | yes | block `loop_slot`; the slot's own flash record, written each time a changed loop stops (docs/LOOPER.md) |
+| the looper's Rate | n/a | **yes** | session `loop_rate` |
+| the loop slot loaded, the loop in it | yes | yes | block `loop_slot`; the slot's own flash record, written by the global save and when the slot is left (docs/LOOPER.md; until 2026-10-11: each time a changed loop stopped) |
 | a loop playing | no | **no, on purpose**: the slot is loaded and STOPPED, it never starts by itself | |
 | a take in progress | no | **no, on purpose** | |
 | the view and its lock | yes | yes | block `view` |
@@ -183,8 +289,8 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 
 `tools/emu/test_persist.sh` sets one recognisable state (`session_set.txt`: a loop in slot 3, an unsaved edit on each
 part, Bass on with its Level down, the delay picked and set, Perform on with Arpeggiate, voicing +2, octave -1, LOCK
-with MAJ + M7), relaunches on the same flash file and checks every line of it, that the loop is stopped, that
-nothing sounds, and that nothing is written again.
+with MAJ + M7), checks that 4 s later nothing is in flash, holds SAVE, relaunches on the same flash file and checks
+every line of it, that the loop is stopped, that nothing sounds, and that nothing is written again.
 
 ### The record (`cr_session_t`, `CSS_SIZE` = 1024 bytes)
 
@@ -196,10 +302,11 @@ Header: `magic` `CSS1`, `version` (`CSS_VERSION`, 1), `size`, `check` (FNV-1a ov
 | voicing, octave | -12..12, -2..2 | 0, 0 |
 | bass_on | 0/1 | 0 |
 | lock, latched | 0/1, bit `cr_mod_t` (cleared when `lock` is 0) | off, none |
+| loop_rate | -3..3: the loop's Rate in steps from x1 (x1/4 x1/2 x3/4 **x1** x1.5 x2 x4; `cr_loop.h CRL_NRATE`); the first byte of the old reserve, so a record written before it reads 0 = x1 with no migration | 0 (x1) |
 | fx (`css_fx_t`, 108 bytes) | the FX sub-block, below | nothing stored |
 | part[2] (`css_part_t`, 384 bytes each: chord, bass) | `valid`; `eng`, `preset`, `user`, `trim` (the part's `track_t` fields); `edited`, `kind`, `fk`, `slot`, `name` (the UI's `cu_snd_t`: the pool entry the sound came from); `np` and `p[96]` (the writer's `P_COUNT`, 91 today, and every parameter: the engine's eight, the envelopes, the LFO, the modulation, the sends, **Level and Pan**); `nblob` and `blob[160]` (the engine's deep patch, `ENG_BLOB_MAX`: FM6 128, VA 110, CZ-1 144, FM TONE 80; none on the other engines) | not valid: the pool's sound (the block's `chord_sound` / `bass_sound`) |
 
-**Reserve: 143 bytes of the 1024** (47 after the state, 20 after the FX block, 8 in each part, 60 at the end), 16 of
+**Reserve: 142 bytes of the 1024** (46 after the state, 20 after the FX block, 8 in each part, 60 at the end), 16 of
 the FX block's 24 parameter entries and 5 of a part's 96 parameters; and the object holds 3840 bytes, so `CSS_SIZE`
 itself can grow: the import takes a shorter (older) record over the defaults and a longer (newer) one by its prefix,
 and no other firmware and no tool reads this object.
@@ -271,12 +378,11 @@ last, so a write torn by the power switch leaves the previous session in charge 
   unchanged). A backup holds what you keep (settings, saved sounds, loops), not where the unit happened to be. A
   settings object restored over SysEx empties the session (`cr_backup.c crb_commit`: a zero-length object), so the
   restart comes up on the restored settings alone.
-- **Wear**: a session save is one sector erase and five page programs. It happens at most once per change burst:
-  after 1.5 s without a change and 1 s without a sound, and only if the state differs from what flash holds (a hash
-  compare: a knob turned and turned back writes nothing). The two copies alternate, so a sector is erased every
-  second save. The part is rated for 100 000 erases a sector: 200 000 session saves, which is 50 saves a day for
-  eleven years, or a save every 2.5 s (the fastest the rule allows) for six days without a pause. The settings
-  object's pair has always been under the same rule.
+- **Wear**: a session save is one sector erase and five page programs. It happens only at a global save (SAVE held),
+  and only if the state differs from what flash holds (a hash compare: a save with nothing changed writes nothing).
+  The two copies alternate, so a sector is erased every second save. The part is rated for 100 000 erases a sector:
+  200 000 session saves, which is 50 saves a day for eleven years. The settings object's pair: the same at a global
+  save, plus an automatic write when an Option changed.
 
 ### `bind`: which settings a session belongs to
 
@@ -304,18 +410,15 @@ A session is used at power-on only next to the settings it was written beside:
 
 ### Runtime
 
-`cr_settings_boot` reads the object into the one RAM copy, `css_buf` (1024 bytes in POOL: the session at power-on
-until `cr_settings_load` has applied it, afterwards the scratch the state is captured into; what was last seen and
-what flash holds are kept as two 32-bit hashes, so change detection needs no second and third kilobyte, and RAM
-grows by 32 bytes). `cr_settings_load` applies it once, at power-on, after the block (`css_apply`): the two parts as
+`cr_settings_boot` reads the object (`css_read`) into the one RAM copy, `css_buf` (1024 bytes in POOL: the session at
+power-on, or at a revert, until `cr_settings_load` has applied it, afterwards the scratch the state is captured into
+for a write; what flash holds is kept as a 32-bit hash, so "unchanged: no erase" needs no second kilobyte). `cr_settings_load` applies it once, at power-on, after the block (`css_apply`): the two parts as
 the engine picker's cancel restores a sound (`cu_pick_end`), the FX parameters by tag, the amounts, the voicing and
 Bass on directly in the engine (IRQ off, nothing sounds yet), the octave, LOCK and its latch through the engine's
-queue. `cr_settings_poll` calls `css_poll` every frame: the state is captured every 200 ms (not while the engine
-picker previews a sound) and a change is written under the block's rules (1.5 s without a change, 1 s without a
-sound, no loop playing, no restore pending), 250 ms after the other object's write at the earliest: one erase at a
-time. `cr_settings_save` (the calibration, a backup's LIST, the update gesture) writes it with the block. The
-emulator's dump prints `session: saves N (at power-on: ..) now HASH flash HASH pending P ..`, the FX layer and each
-part's sound.
+queue. The session is captured and written by `cr_settings_commit` (the global save) and by nothing else: until 2026-10-11
+`cr_settings_poll` captured it every 200 ms and wrote a change when the unit was quiet (`css_poll`: gone). The
+emulator's dump prints `session: saves N (at power-on: ..) now HASH flash HASH pending P ..` (pending 1: the state
+differs from flash's, a global save would write it), the FX layer and each part's sound.
 
 ## How to add a field
 
@@ -343,11 +446,13 @@ Never reorder or remove a field. A retired field stays in place, unused.
 | --- | --- | --- |
 | `cr_settings_boot()` | `persist_boot` (cr_shim.c), the emulator's `emu_fw_init` | the flash object → Felucca's fields (panel table, palette, HOLD, LEDs) + the block; the USB settings to `usb.c` (`ua_off`) and `fx.c` (`fx_usb_fixed`) through `crs_usb_apply`, before `usb_start` builds the configuration the computer first reads |
 | `cr_settings_load()` | the end of `cr_ui_init` (**patch below**); the emulator calls it after `cr_ui_init` until then | the block → engine (IRQ off), `cr_route`, the UI mirror `cs`, motion, palette, the sounds, tempo |
-| `cr_settings_poll()` | every frame (`main.c` `settings_poll` → cr_shim.c; the emulator's `emu_fw_frame`) | captures the state (the block, and Felucca's HOLD beside it: `crs_hold_seen`, below); a change is written once nothing changed for 1.5 s and nothing has sounded for 1 s (no voice of the parts, no chord held or latched, no scheduled note, the master output under -60 dBFS: a flash erase stops the audio for ~45 ms, docs/INTEGRATION.md Performance), never while a loop plays (`CR_SETTINGS_BUSY()`), retried 1 s after a flash error, and skipped when the bytes are unchanged |
-| `cr_settings_save()` | `settings_save` (cr_shim.c): the power-on calibration, Options | save now |
+| `cr_settings_poll()` | every frame (`main.c` `settings_poll` → cr_shim.c; the emulator's `emu_fw_frame`) | captures the state (the block, and Felucca's HOLD beside it: `crs_hold_seen`, below); a change **of an automatic field** (`cr_settings_auto`; a manual one alone starts nothing) is written, as flash's block with the automatic fields of now, once nothing changed for 1.5 s and nothing has sounded for 1 s (no voice of the parts, no chord held or latched, no scheduled note, the master output under -60 dBFS: a flash erase stops the audio for ~45 ms, docs/INTEGRATION.md Performance), never while a loop plays (`CR_SETTINGS_BUSY()`), retried 1 s after a flash error, and skipped when the bytes are unchanged |
+| `cr_settings_save()` | `settings_save` (cr_shim.c): the power-on calibration; a backup's LIST; the update gesture | the automatic part now |
+| `cr_settings_commit()` | `cr_ui.c cu_gsave_now` (SAVE held), `cr_settings_reset` | the global save: the whole block and the session, now; 0, or -1 on a flash error |
+| `cr_settings_revert()` | `cr_ui.c cu_revert` (GLO + SAVE) | flash's block (the Options of now over it) and flash's session applied as at power-on |
 | `cr_settings_reset()` | Options > Reset Settings, OCT+ twice (`cr_ui.c cu_reset`) | the defaults: into the block (`cr_settings_factory`), applied (the default sounds, `cr_settings_load` again), saved; 0.18: the session with it (the parts' own parameters, the FX parameters and the effect picked back to `cr_ui_init`'s), so what is saved is a new unit's session |
 
-Saving is driven by change detection, so `cr_ui.c` needs no save call at each setting. The poll compares the
+The automatic saving is driven by change detection, so `cr_ui.c` needs no save call at each Options entry. The poll compares the
 block as captured with the last one seen (`crs_seen`). One setting of the Options lives outside the block: **Hold
 Time** is Felucca's HOLD (`panel.c` `settings_hold`, saved in `bold`), so the poll watches it beside the block
 (`crs_hold_seen`) and a change of Hold Time alone is saved like any other; `crs_write`'s `settings_export` puts it
@@ -390,7 +495,8 @@ calls `cr_settings_load()` only `if (!crs_loaded)`.
   loop in RAM is that slot's, and the loops are not the reset's), Felucca's HOLD to its default, the parts as
   `cr_ui_init` leaves them (TINE EP and DEEP SUB loaded, the part levels, the bass off), `cr_settings_load()` again
   (the block -> the engine, the routing, the UI mirror), the looper's configuration and USB Record re-applied,
-  `cr_settings_save()`. The record then captured is byte for byte a fresh unit's (the emulator dump's
+  `cr_settings_commit()`: the reset resets both sides, the manual and the automatic, and writes at once (it is a
+  deliberate act: no SAVE held is needed after it). The record then captured is byte for byte a fresh unit's (the emulator dump's
   `settings: now` checksum; `test_persist.sh`), and since 0.18 so is the session (`session: .. now`): the parts'
   Level and Pan and every other parameter a sound's load keeps, the effects' parameters, the effect picked, with
   LOCK, the voicing and the octave that `cu_reset` clears, and the bass off. An edit not saved is gone: the one place
@@ -427,7 +533,7 @@ still built RAM-only by `emu_firmware.h`.
 | `--flash PATH` | the image file (default `build/emu/flash.bin` in windowed runs) |
 | (headless) | no file unless `--flash` is given: every scripted run starts fresh and stays deterministic |
 | `--no-flash` | RAM only |
-| `--save-on-exit` | save the settings at exit, without waiting for the 1.5 s quiet time |
+| `--save-on-exit` | save the automatic settings at exit, without waiting for the 1.5 s quiet time (`cr_settings_save`; a global save is a script's `btn SAVE 900`) |
 
 `emu_fw.c` takes these options out of `argv` before `emu.c` parses them; they become `--demo`, which ChoralRoot
 ignores. The dump (F12 / `dump`) prints the flash file, the number of writes and saves, and whether the record
@@ -435,15 +541,22 @@ read as current, migrated or defaults.
 
 `sh tools/emu/test_persist.sh` checks it end to end:
 
-1. SELECT +17 sets 137 BPM; the script waits, quits, and the record is saved once.
+1. SELECT +17 sets 137 BPM, the PLAY menu's mode and keys and Play Style are changed; SAVE held; the record is saved
+   once.
 2. A relaunch on the same file reads 137 BPM. The BPM meter is captured to `build/emu/test/persist_bpm.ppm`.
 3. A run without `--flash` reads 120 BPM.
-4. VA: a deep edit saved to U01; the relaunch powers on with U01 and its patch CRC as saved.
-5. The picker's roots: KNOB 4 in the picker sets them to play; the relaunch opens the picker with them playing.
-6. Hold Time alone: Options > Hold Time set to 600 ms and nothing else is saved once; the relaunch reads 600 ms.
-7. The KEY layer's page 2: Key plays = Notes, Keyboard = Full and Single = Split Bass saved once; the relaunch has
-   them in the UI and in the engine (B3 plays a bass note of the left side, F4 the chord part).
-8. The session (0.18): `session_set.txt` / `session_check.txt`, the inventory's state set and found again after a
-   relaunch, the loop stopped, nothing written again; the same flash with a v14 settings object: the session not
-   applied; `session_storm.txt`: a knob turned for 3 s is ONE write after the quiet time; `session_hold.txt`: no
-   write under a held chord; the reset runs: the session a new unit's.
+4. Manual and automatic (`gsave_none.txt`, `gsave_save.txt`): the tempo, the KEY layer's tonic and an Option changed
+   and NOT saved: after a relaunch the Option is there, the tempo and the key are not; then SAVE held (`saved`), more
+   changes, GLO + SAVE (`reverted`: the tempo, the voicing, Bass on, the chord sound, LATCH back as saved, nothing
+   sounding, the Option untouched), GLO + SAVE let go early (nothing); the relaunch: as saved.
+5. VA / FM6 / CZ-1 / FM TONE: a deep edit saved to U01, SAVE held; the relaunch powers on with U01 and its patch as saved.
+6. Hold Time alone (an Option): set to 600 ms and nothing else: saved once, by itself; the relaunch reads 600 ms.
+7. The KEY layer's keys, the LOCK layer's styles, the KEY layer's page 2: set, SAVE held: saved once; the relaunch has
+   them in the UI and in the engine.
+8. The loops by hand (`loop_persist_stop` / `_save` / `_switch` / `_revert` + `_back`: docs/LOOPER.md).
+9. The session: `session_set.txt` / `session_check.txt`, the inventory's state set, nothing written for 4 s, SAVE
+   held, found again after a relaunch, the loop stopped, nothing written again; the same flash with a v14 settings
+   object: the session not applied; `session_storm.txt`: knobs turned and left alone write nothing, each SAVE held
+   writes what changed, a second one nothing; `session_hold.txt`: SAVE held under a held chord writes at once (the
+   erases' silence in the dump), an Option changed under it waits for silence; the reset runs: the session a new
+   unit's.

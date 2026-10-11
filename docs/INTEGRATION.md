@@ -234,7 +234,7 @@ One scan per UI frame (15 ms) over `fm1_in` + `fm1_input_edges()` + `fm1_enc_tak
 
 ```
 chord keys:   k ∈ {1,3,5,8} → DIM MIN MAJ SUS;  k ∈ {0,2,4,7} → 6 m7 M7 9   (CRE_MOD down / up → cr_mod)
-LOCK:         k = 6 (B3) → LOCK on / off (a tap; lit while on; since 0.18 kept over a power-off with its latch: the session, docs/SETTINGS.md)
+LOCK:         k = 6 (B3) → LOCK on / off (a tap; lit while on; since 0.18 kept with its latch by the global save: the session, docs/SETTINGS.md)
 root keys:    k ≥ 9 → cr_key(c, 53 + k + 12*octave, vel, down)   (vel from Options > Velocity)
 layer open:   k ≥ 9 → the layer's map instead (tonic / mode / slot / effect / engine)
 ```
@@ -306,11 +306,12 @@ OCT+ / EDIT / EDIT held again keep).
 | the view menu (HOME held) | close | close ("ok": the change is live) | close | (HOME tap: close) | close (was: stays) |
 | the engine picker (EDIT held; since 0.18 its roots and chord keys always play, SELECT steps the engines, KNOB 4 has no job) | cancel, close | keep, close | cancel, close | keep, close | keep, close (was: stays) |
 | the LOCK layer (the key B3 held) | close | close | close | LOCK on/off, the layer stays | close |
-| SAVE held (the loop slots, momentary) | — | the picked action (Save / Load / Delete) | — | — | — |
+| the loop editor (EDIT tapped in the PLAY menu; 0.18) | close, back to the PLAY menu | close, back to the PLAY menu | close, back to the PLAY menu | (EDIT tap: close) | EDIT held: close (no engine picker from there) |
+| SAVE held (0.18: no layer, the global save; until 0.17 the loop slots, momentary) | — | — | — | — | the global save, once, at the hold time |
 | Options (OPT tap; not a layer) | close | close; Calibrate: start; SAFE MODE's Flash Data: erase (twice) | close | (OPT tap: close) | — |
 | the save dialog, naming | cancel | take the choice / save; "delete?": yes | cancel | (SAVE tap: as OCT+) | SAVE 1 s: delete / reset |
 
- A layer opened from the sound editor closes back to the editor (OCT− / HOME). SAVE held (the loop slots) is momentary; OPT is the knob shift;
+ A layer opened from the sound editor closes back to the editor (OCT− / HOME). SAVE held is no layer since 0.18 (the global save, `cu_gsave`; GLO + SAVE held 1 s: the revert, `cu_revert`); OPT is the knob shift;
 a button pressed during another's hold is that hold's combo (its release does nothing).
 
 | printed | role | tap | hold (locked open unless noted) |
@@ -320,10 +321,10 @@ a button pressed during another's hold is that hold's combo (its release does no
 | FX | FX | main effect on/off (every part's sends: `fx.c fx_off`) | the knob row: SELECT = the page (Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive: 0.18, docs/FX.md), the roots play; a FX tap in it = on/off (label "fx · on · 1/2" / "· off"), OCT+ closes; KNOB 1–4 the page's cells, KNOB 4 on a first page the chord part's send (on: FX on); no popups, the turned cell hot 800 ms |
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
 | LFO | LATCH | latch on/off (Sticky Keys; also holds a performed arp / pattern after the keys are released: Hold defaults off in every mode, an arp stops when the keys are up; Hold is STRUM's KNOB 4) | — |
-| GLO | OPT | Options (picker pages); in the PLAY menu: its Keys; in the KEY layer: its keys pick / play | shift (momentary): OPT + KNOB 1 split point, + SELECT metronome level, + ALGORITHM bass level; the other knobs keep their job |
+| GLO | OPT | Options (picker pages); in the PLAY menu: its keys play / loops (no Options from there); in the KEY layer: its keys pick / play | + SAVE, both held 1 s: the revert (docs/SETTINGS.md "Manual and automatic"); shift (momentary): OPT + KNOB 1 split point, + SELECT metronome level, + ALGORITHM bass level; the other knobs keep their job |
 | EDIT | EDIT | the sound editor (again: leave; in the engine picker: keep its sound, close it) | the engine picker (a preview: OCT− cancels, OCT+ keeps): SELECT the engine, KNOB 1 its presets, KNOB 2 init; the roots and the chord keys play (0.18: until then the white roots chose the engine unless KNOB 4 set them to play) |
 | HOME | HOME | close the layer / page / menu (the view unchanged); on the view: next View **unless the view is locked** | **600 ms: the view menu** (`L_VIEW`, a picker: Chord · Keyboard · Notes · Geek Out · Scope by SELECT / the white roots, the last line "Lock: On / Off": KNOB 1 or the sixth white root; OCT+ ok, OCT− / HOME back; Settings v9 `view_lock`, the same view as Options > View) |
-| SAVE | SAVE | save sound (naming; in it: save, as OCT+) | save / load / delete loops (momentary, while held; OCT+ does it; a plain picker, no ring) |
+| SAVE | SAVE | save sound (naming; in it: save, as OCT+) | **the global save** (0.18, `cu_gsave`: at the hold time, alone: the settings block, the session and the loop in RAM if they changed; "saved"; while a loop plays or a capture is open: "saves at stop"). GLO + SAVE held 1 s: **the revert** ("reverted"). Until 0.17: save / load / delete loops |
 | SEQ | METRO | metronome on/off | the knob row: the time signature over Click (KNOB 1, hot; no popup) and three empty cells |
 | PLAY | LOOP | play / stop | the knob row, no ring: slots on white roots, D#4 CLEAR (hold), F#4 UNDO; KNOB 1 the length picker, 2–4 Quantize Count-in Level cells (hot, no popups); playing: the action picker, OCT+ does it, Sync dim, the dial |
 | REC | REC | record / overdub arm | undo the last layer (not a layer) |
@@ -572,8 +573,9 @@ exists, its green LED when playing; OPT lit in Options; OCT− lit / OCT+ blinki
 Felucca's settings record (`settings_persist.c`) grows a ChoralRoot block: play style, extension
 addition, secret scope, key mode + tonic + scale, transpose, single notes, velocity, bass
 behaviour + register + sound, perform mode + params, latch, tempo, loop sync/quant/count-in/level,
-MIDI channels/enables/clock mode, view, motion, palette (MOD default), LEDs. Saved on change,
-deferred while a loop plays (Felucca's `settings_poll`). Sounds (docs/PRESETS.md, 2026-10-07): **one editable pool per
+MIDI channels/enables/clock mode, view, motion, palette (MOD default), LEDs. Since 0.18 saving is manual
+(docs/SETTINGS.md "Manual and automatic"): what the Options menu alone sets is saved on change, when the unit is quiet
+and never while a loop plays (Felucca's `settings_poll`); everything else by the global save (SAVE held) alone. Sounds (docs/PRESETS.md, 2026-10-07): **one editable pool per
 engine** (`cr_bank.c`): 00 INIT, the engine's factory presets (each replaced by the user's record bound to it: an
 overwritten factory preset, resettable), then the presets the user added; PRESETS turns the chord part's engine's
 pool, ALGORITHM the bass part's (00 OFF before it), OPT + PRESETS changes the chord part's engine (each part remembers
@@ -779,6 +781,12 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   length, mock-up 8; playing: the action). The loop's sounding notes glow dim on the root keys of their note names (`cr_snap_t.lnote`,
   from the 8 loop voices), the player's stay lit. MIDI Clock Out sends 0xFA when the loop starts playing (LOOP from
   stopped, a take committed) and 0xFC when it stops (`cr_out.c`, the ISR; trace `midi:`).
+  **0.18 (2026-10-11, the owner's three decisions; docs/LOOPER.md, docs/SETTINGS.md):** saving is manual (SAVE held:
+  `cu_gsave` -> `cr_settings_commit` + `cu_loop_write`; GLO + SAVE: `cu_revert` -> `cr_settings_revert`, the slot
+  reloaded); the loop in RAM is written only by that and by leaving its slot (`cu_loop_autosave` is gone, the SAVE-held
+  slot map too); the PLAY menu has two pages on SELECT (Length Rate Quantize Count-in / Level), its keys on GLO alone;
+  the Rate (`cr_loop_set_rate`: the loop's own clock, `crl.t`, runs at 1/4 .. 4 of the tempo's, `crl.rt`); Step entry
+  with Length Free commits the steps exactly; the loop editor (`cr_loop_ed_*`, `cu_ledit_*`: EDIT in the PLAY menu).
 - **Sounds, the naming screen**: SAVE held 1 s on a used slot asks "delete?" (the slot number huge in red, OCT+
   deletes it through `up_put(k, 0)`, OCT- keeps it); saving over the slot the part's sound came from, unedited,
   renames it (`up_rename`, the stored sound kept); else OCT+ overwrites. Its keys: the typing roots lit (D4..G5,
@@ -840,7 +848,10 @@ saves, a cost far above the estimate), the numbers and the owner's open decision
 (9.2 %); `perf.sh` (l): 919 / 1278 us (32 % / 44 %), no half over 80 % anywhere (the worst: (g), 58 %). **On the unit**: `fm1_install.py
 --debug` reads SysEx 78 PEAK (`cr_backup.c crb_peak`, `cr_cpu1.h`): the worst half and each stage's since the last
 read, the late halves and their largest stage, the fx stage's four parts, `flash_holes`. `cr_settings.c
-crs_sounding`: no settings or session write while the output is above -60 dBFS, with no time limit.
+crs_sounding`: no AUTOMATIC settings write while the output is above -60 dBFS, with no time limit. The global save
+(SAVE held, 0.18) is the player's own press and writes at once: an erase (45 ms of silence) an object that changed,
+three at most (the settings object, the session, the loop slot); it waits only for a playing loop or an open capture
+("saves at stop"). `flash_holes` counts those erases too when the output sounds.
 
 ### All-synth (2026-10-07: the dead weight out)
 

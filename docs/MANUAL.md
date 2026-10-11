@@ -145,7 +145,7 @@ Two rows of six, and the two octave buttons.
 | EDIT | **EDIT** | the sound editor | the engine picker |
 | GLO | **OPT** | the Options | with a knob: the knob's second job |
 | HOME | **HOME** | back to the view; on the view: the next view | 0.6 s: the view menu |
-| SAVE | **SAVE** | save the sound | while held: save / load / delete a loop |
+| SAVE | **SAVE** | save the sound | held: **save everything** (`saved`). GLO + SAVE held 1 s: back to the last save (`reverted`) |
 | ARP | **PERF** | performance on / off | the PERF layer |
 | SEQ | **METRO** | metronome on / off | the METRO layer |
 | PLAY | **LOOP** | play / stop the loop | the PLAY menu |
@@ -271,8 +271,8 @@ pressed while the type key is down cancels this (the keys held together latch to
 meanwhile does not. This is always so with LOCK on, whatever the two settings below say. (In Key Mode with Key plays
 set to Chords a lone root is still the scale's chord, with the latched extensions.)
 
-Switching LOCK off, or PANIC, clears what is latched. LOCK and what it latched are remembered when you switch off:
-the FM-1 comes back with the same chord type and extensions lit (new in 0.18). On the Full keyboard (Key Mode,
+Switching LOCK off, or PANIC, clears what is latched. LOCK and what it latched are part of what a global save keeps
+(SAVE held): the FM-1 then comes back with the same chord type and extensions lit (new in 0.18). On the Full keyboard (Key Mode,
 below) there is no LOCK: B3 is a note there.
 
 **The LOCK layer.** Hold B3 past the hold time (a tap is still on / off; a hold does not switch LOCK). The layer
@@ -374,7 +374,7 @@ scale, and nothing sounds. Tap **OPT** (printed GLO) in the layer and the keys *
 the layer: roots, chord keys, LOCK, with their usual lights. Now you can hear the key while KNOB 1 to KNOB 4 change
 the tonic, the scale, the transposition and Single. The top of the layer says which it is (`key · keys pick`,
 `key · keys play`), the footer shows the way to the other, and OPT is lit while the keys play. Tap OPT again for
-pick. The choice is remembered, also after switching off. OPT held with KNOB 1 is still the split point.
+pick. The choice is kept by a global save (SAVE held). OPT held with KNOB 1 is still the split point.
 
 **Single: Full, Split Oct, Split Bass.** Single decides what the keys below the split point do.
 
@@ -414,7 +414,7 @@ nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still sh
 - In the KEY layer with its keys on pick, the keys still pick: a root sets the tonic, MAJ and MIN the scale (B3 does
   nothing there). With the keys on play they are the Full keyboard.
 
-Key plays, Keyboard and Single are remembered, also after switching off.
+Key plays, Keyboard and Single are kept by a global save (SAVE held), like the rest of the KEY layer.
 
 The Geek Out view shows the transposition (`Trans +2`).
 
@@ -462,8 +462,8 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 | PLAY menu | LOOP (PLAY) | see [The looper](#10-the-looper) | play, or pick loop slots | play / stop | close (in step entry: back a step / a rest) |
 
 Three more things open the same way and are described in their own chapters: **EDIT** held is the engine picker
-([Sounds](#11-sounds)), **HOME** held for 0.6 s is the view menu ([Views](#13-views)), and **SAVE** held shows the
-loop slots for as long as you hold it ([The looper](#10-the-looper)).
+([Sounds](#11-sounds)), **HOME** held for 0.6 s is the view menu ([Views](#13-views)), and **SAVE** held is not a layer: it is the global save ([What the FM-1 remembers](#what-the-fm-1-remembers)). (Until 0.17 SAVE held showed the
+loop slots for as long as it was held.)
 
 PRESETS and ALGORITHM keep their jobs in a layer (except in the PLAY menu). The hold time is set in Options > Hold
 Time (300, 400, 500 or 600 ms).
@@ -471,7 +471,7 @@ Time (300, 400, 500 or 600 ms).
 ## 6. Bass
 
 The bass is a second, monophonic part with its own sound. On a new unit it is off; from then on it is **on or
-off as you left it** when you switch on (until 0.17 it was off at every power-on).
+off as it was at your last save** (SAVE held) when you switch on (until 0.17 it was off at every power-on).
 
 - **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/25`), or
   `00 / off`.
@@ -498,7 +498,7 @@ The root keys do not sound while this layer is open, whatever its footer says; c
 | **Bass Single Notes** | plays the root under everything; a single note sounds on the bass alone |
 | **Solo** | only the bass sounds; the chord sound is silent (`Bass Solo` at the top right) |
 
-The same setting is Options > Bass Behaviour. The behaviour, the register and the level are remembered.
+The same setting is Options > Bass Behaviour. The behaviour, the register and the level are kept by a global save (SAVE held).
 
 To edit the bass sound, hold BASS and tap EDIT. To save it, hold BASS and tap SAVE. To change the bass part's
 engine, open the bass sound's editor and hold EDIT there ([Sounds](#11-sounds)).
@@ -554,7 +554,7 @@ The one rule to know: **the effects and their sends belong to the instrument, no
   reverb and delay.
 - Everything else about an effect (the reverb's size and decay, the delay's time and feedback, ...) is set once for
   the whole instrument too.
-- All of it is remembered when you switch off.
+- All of it is kept by a global save (SAVE held): [What the FM-1 remembers](#what-the-fm-1-remembers).
 
 On the panel:
 
@@ -623,10 +623,11 @@ not a different mix.
 A tail dies away evenly, down to nothing; it is never cut. When nothing has been sent into them and their tails are
 over, the reverb and the delay switch themselves off.
 
-One thing follows from long tails: the FM-1 stores your settings when it is quiet (see
-[What the FM-1 remembers](#what-the-fm-1-remembers)), because storing stops the sound for a moment. A reverb that is
-still ringing is not quiet, so **nothing is stored while a tail rings**: with Decay at `Inf` not until you turn it
-down or tap FX off. Let the sound end and wait a few seconds before you switch off.
+One thing follows from long tails. Storing stops the sound for a moment (about a twentieth of a second for each
+thing written). What the FM-1 stores by itself, the Options, it therefore stores only when it is quiet, and a reverb
+that is still ringing is not quiet: with Decay at `Inf` an Option you changed is not stored until you turn Decay down
+or tap FX off. The global save (SAVE held) does not wait: it is your own press, and if a tail is ringing you hear
+one to three short gaps in it ([What the FM-1 remembers](#what-the-fm-1-remembers)).
 
 ## 9. Tempo and metronome
 
@@ -671,7 +672,8 @@ With the settings a new FM-1 has (length Free, mode Overwrite):
 1. Tap REC. REC lights, the top line reads `Rec · Overwrite`, the message says `rec: play to start`.
 2. Play. The first chord starts the take; REC blinks and the top line counts bars and beats (`Rec 2.3`).
 3. Tap REC or LOOP. `loop recorded`: the loop plays at once, at the length you played.
-4. LOOP stops and starts it. When it stops it is saved to its slot (`saved to slot 1`).
+4. LOOP stops and starts it. The loop is in memory now; **hold SAVE** to keep it over a power-off
+   ([Slots and saving](#slots-and-saving)).
 
 Tapping REC again starts over: the loop stops and REC is armed, and the old loop is replaced only when you play the
 first chord. Tap REC once more before that and it is `cancelled`, the old loop intact.
@@ -682,32 +684,46 @@ it carries a red dot while REC is armed (steady) or recording (blinking).
 
 ### The PLAY menu
 
-Hold LOOP. The menu stays open like any layer (OCT-, OCT+, HOME or holding LOOP again closes it), and with Keys set to Play you can keep
+Hold LOOP. The menu stays open like any layer (OCT-, OCT+, HOME or holding LOOP again closes it), and you can keep
 playing and recording with it open.
 
-<img src="manual/play-menu.png" width="240" alt="The PLAY menu: Loop 1, empty; ten slot boxes; the record mode Overwrite; the length Free; cells Quantize, Count-in, Level, Keys">
+<img src="manual/play-menu.png" width="240" alt="The PLAY menu: Loop 1, empty; ten slot boxes; the record mode Overwrite; the length Free; cells Length, Rate, Quantize, Count-in; the bottom line 1/2, keys: play, GLO: loops">
 
 | Control | In the PLAY menu | Default |
 | --- | --- | --- |
-| PRESETS | the **slot**, 1 to 10 (the strip at the top: a filled box holds a loop) | 1 |
+| PRESETS | the **slot**, 1 to 10 (the strip at the top: a filled box holds a loop; a small square in its corner: changes not saved yet) | 1 |
 | ALGORITHM | the **record mode**: Overwrite, Advance, Overdub, Replace, Step | Overwrite |
-| SELECT | the **length** of the next take: Free, 1, 2, 4, 8 or 16 bars | Free |
-| KNOB 1 | **Quantize**: none, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32 | none |
-| KNOB 2 | **Count-in**: On or Off | On |
-| KNOB 3 | **Level**: how loud the loop plays, 0 to 100 (0 mutes it) | 100 |
-| KNOB 4, or OPT tap | **Keys**: Play or Loops (below) | Play |
+| SELECT | the **page**: 1 or 2 (the bottom line shows `1/2` or `2/2`) | 1 |
+| page 1, KNOB 1 | **Length** of the next take: Free, 1, 2, 4, 8 or 16 bars (also shown big in the middle) | Free |
+| page 1, KNOB 2 | **Rate**: x1/4, x1/2, x3/4, x1, x1.5, x2, x4 | x1 |
+| page 1, KNOB 3 | **Quantize**: none, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32 | none |
+| page 1, KNOB 4 | **Count-in**: On or Off | On |
+| page 2, KNOB 1 | **Level**: how loud the loop plays, 0 to 100 (0 mutes it). KNOB 2 to 4 do nothing on this page | 100 |
+| OPT (GLO) tap | **what the keys do** in the menu: play, or the loop shortcuts (below). The bottom line says which. The Options do not open from here | play |
+| EDIT | the **loop editor** ([below](#the-loop-editor)) | |
 
 While a loop records or plays, the middle of the menu is a timeline: the bars, a line of marks for each layer, the
-playhead. All of these settings are remembered.
+playhead. These settings are kept by a global save (SAVE held), like the rest of how the FM-1 is set up to play.
+(Until 0.17 SELECT set the length, Level was on KNOB 3 and the keys' job was also a cell on KNOB 4.)
 
 - **Length.** Free: REC arms, the first chord starts the take, and it is as long as you play. With a number of bars,
   REC starts a one-bar count-in (the screen counts the beats down inside a red ring, with a click), then records
   exactly that many bars and plays by itself. Ending such a take early rounds it up to whole bars.
+- **Rate** makes the loop run faster or slower against the tempo: x2 plays it twice in the time it took to record, x1/2
+  takes twice as long. The loop stays locked to the clock: it does not drift, and a loop that is a whole number of
+  bars long starts on a beat again at x1/2, x1/4, x2 and x4 (at x3/4 and x1.5 its start falls between the beats for some
+  of its rounds, as three against four does). The pitch never changes; the sound, the bass, the performance mode and
+  the effects are the ones of now. **Changing it while the loop plays takes effect when the loop next starts**, so
+  nothing jumps or cuts off in the middle; stopped, it applies at once. The metronome, the count-in and MIDI clock out
+  stay the tempo's. The dial in the top line and the timeline follow the loop's own time. If you record while the
+  rate is not x1, the take is stored so that it plays back, at that rate, exactly as you played it; Length then counts
+  the loop's own bars (at x2, a 4-bar take lasts 2 bars of the metronome).
 - **Count-in** Off skips the count: with a number of bars the take then starts the moment you tap REC.
-- **Quantize** moves the starts of the chords to the nearest grid point when the take ends.
-- **Keys = Loops** turns the root keys into shortcuts while the menu is open (OPT is lit): the white keys D4 to F5 pick
-  slots 1 to 10, D#4 held for a second clears the loop (`hold to clear`, then `loop cleared`), F#4 is undo. With
-  Keys = Play the keys play as usual.
+- **Quantize** moves the starts of the chords to the nearest grid point when the take ends. It is also the size of a
+  step in Step entry and the grid of the loop editor.
+- **The keys.** `keys: play` (the default): the keys play as usual with the menu open. Tap OPT for `keys: loops`
+  (OPT lit): the white keys D4 to F5 pick slots 1 to 10, D#4 held for a second clears the loop (`hold to clear`,
+  then `loop cleared`), F#4 is undo. Tap OPT again to play.
 
 ### Record modes
 
@@ -723,31 +739,82 @@ The record mode decides what a REC tap does when nothing is being recorded.
 
 While an overdub is armed or running the top line reads `Dub 3.2` (`Rep 3.2` for Replace).
 
-**Step entry** writes chords one step at a time, with no clock running. The steps are the Quantize grid (1/16 when
-Quantize is none). The PLAY menu shows the grid and the cursor.
+**Step entry** writes chords one step at a time, with no clock running. A step is as long as the Quantize value (a
+quarter note when Quantize is none; until 0.17 that was 1/16). The PLAY menu shows the grid and the cursor.
 
 - Play a chord and let go of every key: the chord is written at the cursor and the cursor moves on.
 - OCT+ is a rest (the cursor moves on). OCT- goes back one step; nothing is erased.
 - REC finishes and leaves the loop stopped (`steps recorded`); LOOP finishes and plays it.
+- With Length = **Free** the loop is exactly the steps you entered: three chords make a loop three steps long (it is
+  no longer rounded up to a bar). With a Length in bars the loop has that length and the cursor wraps at its end.
 - With LOCK on and a chord latched, letting go of the root does **not** move the cursor, because a chord key still
   counts as down. Use OCT+ to move on after each chord, or enter steps with LOCK off.
 
+### The loop editor
+
+In the PLAY menu, tap **EDIT**. The loop in memory is shown as steps, and you can change it one step at a time. (Outside
+the PLAY menu EDIT is the sound editor, as ever.)
+
+<img src="manual/loop-editor.png" width="240" alt="The loop editor: Edit; a row of four cells, the second outlined; Am, step 2/3; cells Step 2/3, Length 2, Steps 3, Velocity 100">
+
+The grid is the **Quantize** value: each cell of the row is one Quantize step, a bar to a row. A filled cell is one
+where a chord or note starts. A step is one cell, or several when its chord is held over the following cells.
+
+| Control | In the loop editor |
+| --- | --- |
+| SELECT, or KNOB 1 | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/3`, the chord in it, and its cells |
+| the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. The cursor stays on the step; turn SELECT to move on |
+| REC tap | **clears** the selected step (REC does not record here) |
+| KNOB 2 | the step's **Length**, 1 to 16 cells. Every later step moves with it. With Length = Free the loop gets longer or shorter by as much; with a Length in bars the loop keeps its length, and a longer step is refused (`no room in the loop`) if it would push a chord past the end |
+| KNOB 3 | **Steps**: the loop's length, a step a click. Shorter hides the last step, longer brings it back; past what there was, longer adds an empty step |
+| KNOB 4 | the step's **Velocity** |
+| LOOP tap | play / stop, as ever, so you hear the edits in place. The cursor does not follow the playback |
+| REC held | the looper's undo (see below) |
+| OCT-, OCT+, HOME, EDIT (tap or hold) | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it |
+
+Things to know:
+
+- **A loop you played by hand** has its chords wherever you played them. The editor sorts them onto the Quantize grid:
+  a chord belongs to the step it starts in, and it is not moved. With Quantize = none there is no grid to show such a
+  loop on, and the editor does not open: `set Quantize to edit`. Nothing is ever requantised behind your back.
+- **A step shorter than one cell:** choose a finer Quantize first (the step that was 1 cell at 1/4 is 2 cells at 1/8).
+- **An empty step** is always one cell; its Length and Velocity cells show `-`. To make room, lengthen the step before
+  it or add steps at the end with KNOB 3.
+- **A cleared step that was several cells long** becomes that many empty steps.
+- **An empty slot** opens as an empty loop of the set Length (Free: one bar). Leave without entering anything and the
+  slot is empty again.
+- **Split Bass:** a note played on the bass side replaces the step's bass notes only, a chord on the other side only
+  the chords, as when recording.
+- **Steps hidden by KNOB 3** are kept only while the editor is open: when you close it they are gone. A save while it
+  is open writes the loop as it sounds.
+- **Undo.** There is no undo of a single edit. The first edit also folds the loop's layers into one (what a Replace
+  layer had taken out is gone for good), so after an edit REC held says `nothing to undo`. The way back is the last
+  save: **GLO + SAVE** brings the saved loop back. Opening the editor and closing it without an edit changes nothing.
+- Edits are in memory, like everything you record: hold SAVE to keep them.
+- A loop longer than 2048 cells at the current Quantize does not open (`too long: coarser grid`).
+
 ### Slots and saving
 
-There are ten slots. One loop is loaded at a time, and a slot keeps what was recorded in it:
+There are ten slots. One loop is loaded at a time, and it lives in memory: **recording, overdubbing, undoing, clearing
+and editing change the loop in memory, not the slot.** The slot is written in two cases only:
 
-- A loop is saved to its slot **when it stops**, and before you move to another slot. You do not need to save by
-  hand, and the loop is still there after switching off. A loop that is still playing when you switch off loses what
-  changed since it last stopped, so stop it first.
-- Choosing another slot (PRESETS in the PLAY menu, or a white key with Keys = Loops) loads it: at once when the loop
-  is stopped, at the end of the cycle when it plays (`loop 2: next cycle`).
-- Clearing a loop empties its slot.
+- **SAVE held** (the global save, [What the FM-1 remembers](#what-the-fm-1-remembers)): the loop goes to its slot
+  with everything else. The PLAY menu shows a small square in the corner of a slot whose loop has changes not saved
+  yet.
+- **When you move to another slot** (PRESETS in the PLAY menu, a white key with the keys on loops, or REC in
+  Advance mode): the loop you leave is saved to its slot first (`loop 2 · saved 1`), so a slot keeps what was
+  recorded in it. At once when the loop is stopped; when it plays, the switch happens at the end of the cycle
+  (`loop 2: next cycle`) and the loop left is written when the loop next stops.
 
-**SAVE held** (outside the save dialog) shows `Loops` for as long as you hold it, for the rarer jobs: the white keys
-D4 to F5 choose a slot, SELECT or KNOB 1 chooses Save, Load or Delete, and OCT+ does it. Save copies the loop into
-the chosen slot (while the loop plays it is written at the stop). Load of the slot you are on throws away its unsaved
-changes. Delete empties a slot (`stop to delete` while the loop plays); if it is the slot you are on, the loop stays
-loaded until you move to another slot.
+So if you record over a loop you liked, it is not lost: **GLO + SAVE** held for a second brings back the loop as it
+was last saved, and so does switching off and on. And nothing is written while you record or play, so the looper
+never interrupts the sound by itself. (Until 0.17, and in the first 0.18 builds, a loop was saved every time it
+stopped.)
+
+- Clearing a loop and saving (or leaving the slot) empties the slot.
+- SAVE held while a loop plays or a take is open waits: `saves at stop`, and it is written when the loop stops.
+- The SAVE-held `Loops` screen of 0.17 (Save / Load / Delete on the white keys) is gone. To copy nothing is needed
+  any more; to empty a slot, clear its loop and save.
 
 Limits: 512 chords in a loop over at most 32 layers; reaching the limit ends the take (`loop full`).
 
@@ -773,7 +840,7 @@ to one of six engines.
 | **PHYS** | physical models: bars, plates and strings | 9 |
 
 This is the order in which the instrument shows them. Up to 0.17 there were five more, PHASE, LOFI, VOICE, TRIO and
-NOISE; they are retired (see [Sounds from outside](#sounds-from-outside) for what happens to a sound saved on one). At power-on the chord sound is the one you last played (on a
+NOISE; they are retired (see [Sounds from outside](#sounds-from-outside) for what happens to a sound saved on one). At power-on the chord sound is the one of your last global save (on a
 new unit FM6 `TINE EP`), and the bass sound is VA `DEEP SUB` until you choose another.
 
 ### Presets: one pool per engine
@@ -845,12 +912,13 @@ SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does i
 
 There is room for **32 saved sounds** in all, shared by the engines and the two parts (`no free slot` when they are
 used up). A saved sound holds the engine's whole patch, its envelopes and modulation. (It also holds four send values, which are no longer used: the sends are the part's.)
-Changes you have not saved are lost when you load another sound. They are **not** lost when you switch off: each
-part comes back with its sound as you left it, edited or not (new in 0.18). The pool still holds the sound as it
-was saved, so turning PRESETS away and back drops the edit, as before.
+Changes you have not saved are lost when you load another sound. A **global save** (SAVE held) keeps each part's
+sound as it is, edited or not, without making it a preset: the FM-1 comes back with it after a power-off, and GLO +
+SAVE brings it back (new in 0.18). The pool still holds the sound as it was saved as a preset, so turning PRESETS
+away and back drops the edit, as before.
 
 Level and Pan (the editor's MIX group) are the exception: they belong to the part, not to the sound. They stay as
-they are when you change sound, and when you switch off and on.
+they are when you change sound, and a global save keeps them.
 
 ### Sounds from outside
 
@@ -909,7 +977,8 @@ their buttons are the editor's groups.
   right, where you are (`OSC 2 · A`, `ENV 2 · filter`, `MOD 3`).
 - **PRESETS** in the editor opens the engine picker as a preview ([Sounds](#11-sounds)).
 - **SAVE** opens the save dialog for the sound being edited and returns to the editor.
-- A layer opened over the editor (PERF held, EDIT held, HOME held, SAVE held) closes back to the editor.
+- A layer opened over the editor (PERF held, EDIT held, HOME held) closes back to the editor. SAVE held is the
+  global save there too.
 - The editor remembers the group you were in and each group's screen and lane, until you switch off.
 
 Two groups are the same for every engine:
@@ -1066,7 +1135,8 @@ Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the 
 - **What happens to what you were doing:** it ends like a PANIC: every note stops, a playing loop stops (it stays in
   its slot; a take you were recording is dropped), LOCK and LATCH go off, the octave shift and the voicing return to
   0, the bass is off, the parts' Level and Pan and the effects' settings are back at their normal values, and a
-  change to a sound you had not saved is gone. The FM-1 is then as a new unit is, and stays so over a power-off.
+  change to a sound you had not saved is gone. The FM-1 is then as a new unit is, and stays so over a power-off:
+  the reset saves itself, no SAVE held is needed after it.
 - **Dual Core** is the one setting that waits for a restart: if it was On, the message reads
   `settings reset · restart` and the second core keeps running until you switch off and on.
 
@@ -1082,33 +1152,60 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 
 ### What the FM-1 remembers
 
-Switch off, switch on: the FM-1 comes back as you left it (0.18). Everything is stored by itself a moment after the
-instrument falls quiet (about two seconds without a change and without a sound), and never while a loop plays.
-Give the FM-1 a few seconds of silence before you switch off; what you changed in the last moments before the
-switch is the one thing it can miss.
+**Saving is manual** (0.18). The FM-1 comes back, after switching off, as you last **saved** it, not as you left it.
 
-| Back when you switch on | Not brought back, on purpose |
-| --- | --- |
-| everything in Options | notes that were sounding, a chord LATCH was holding |
-| Key Mode, the tonic, the scale, Transpose; the KEY layer's keys (pick or play), Key plays and Keyboard | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
-| the performance mode, its parameters, and whether it is on | a take you were recording |
-| LATCH; **LOCK and what it latched** | an open layer, menu, dialog or the editor: the FM-1 starts on the view |
-| **the voicing on KNOB 1 and the octave shift** | where you were in the editor (it opens where it opens after any power-on) |
-| **the bass being on**, its behaviour, register and **level** | the KEY layer's page (it opens on its first page, always) |
-| **the effects in full**: on or off, the page picked, every cell of the reverb, the chorus and the delay, both parts' sends | |
-| which sounds the two parts play, and each engine's last place | |
-| **each part's sound as you left it, with changes you had not saved**; **the parts' Level and Pan** | |
-| the tempo, the metronome and its time signature | |
-| the looper's settings and its slot; the LOCK layer's two settings | |
-| the view and its lock | |
-| saved sounds; loops (each time a loop stops) | |
+- **Hold SAVE** past the hold time, with no other button: the **global save**. Everything about how the instrument is
+  set up to play is stored as it is now, together with the loop in memory. The screen says `saved` (a green box).
+  There is no question to answer.
+- **Hold OPT (GLO) and SAVE together for a second**: **revert**. The FM-1 goes back to the last global save, as if
+  you had switched it off and on: every note stops and the loop stops, as with PANIC; any layer, menu, dialog or
+  editor closes; then the saved state is there again, the loop of the saved slot included. The screen says
+  `reverted`. No question here either. Use it to try things and take them back: change a handful of settings, an
+  edit, a loop; then either hold SAVE to keep them, or GLO + SAVE to be where you were.
+- **A SAVE tap** is still the save-preset dialog ([Saving](#saving)). Saving a sound as a preset is stored at
+  once, as before, and so is a loop when you move to another slot.
+- **The Options are the exception: they are stored by themselves**, as every setting was until 0.17: a moment after
+  the instrument falls quiet (about two seconds without a change and without a sound), never while a loop plays. So
+  is the panel calibration. A revert does not touch the Options.
 
-The bold lines are new in 0.18. After a PANIC the FM-1 comes back as the PANIC left it (the octave 0, LATCH off,
-nothing latched). Options > Reset Settings clears all of it. A restored backup brings the settings, the saved sounds
-and the loops; it does not carry the bold lines, and after a restore the FM-1 starts from the restored settings
-(the saved sounds, the bass off). Going back to 0.17 and returning: 0.17 does not know the bold lines and starts
-without them, and once it has stored a setting of its own, 0.18 starts from 0.17's settings rather than from an
-older state of its own.
+| A global save keeps (SAVE held) | Stored by itself | Never kept, on purpose |
+| --- | --- | --- |
+| Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, Velocity | notes that were sounding, a chord LATCH was holding |
+| the performance mode, its parameters, and whether it is on | MIDI Perform, MIDI Bass, MIDI Raw Chord, Raw Chord Sound, MIDI Clock | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
+| LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, LEDs, Hold Time | a take you were recording |
+| the voicing on KNOB 1 and the octave shift | USB Record, USB Level, Dual Core | an open layer, menu, dialog or editor: the FM-1 starts on the view |
+| the bass being on, its **behaviour**, register, level, and which sound it plays | the panel calibration | where you were in the editor, the KEY layer's and the PLAY menu's page |
+| the effects in full: on or off, the page picked, every cell of the reverb, the chorus and the delay, both parts' sends | | |
+| which sound each part plays and each engine's last place; **each part's sound as it is, with changes you have not saved as a preset**; the parts' Level and Pan | | |
+| the tempo; the metronome, its time signature and level | | |
+| the looper's settings (Length, **Rate**, Quantize, Count-in, Level, the record mode, what its keys do), the slot, and **the loop in memory** | | |
+| the **view** and its lock | | |
+
+Three settings can be reached both from the Options and from a layer: **Bass Behaviour** (the BASS layer), **Single
+Notes** and **Split Point** (the KEY layer, OPT + KNOB 1), and **View** (HOME, the view menu). They go with the layer:
+they are part of the global save, also when you set them in the Options. Everything else in the Options list is stored
+by itself. Saved presets, loaded patches and banks, and the loops of the other slots are stored when you make them
+and are not part of either column.
+
+**What you hear when you save.** Writing to the FM-1's memory stops the sound for about 45 ms for each thing that is
+written, and the global save writes at most three things: the settings, the state of the instrument (the sounds, the
+effects, the voicing ...), and the loop. Only what changed is written; a save with nothing changed writes nothing.
+In silence you hear nothing. Into a held chord or a ringing tail you hear one to three short gaps, about a twentieth
+of a second each; the sound goes on after them. The FM-1 does not wait for silence, because you pressed and expect it
+saved now. It never writes while a loop plays or a take is open: SAVE held then answers `saves at stop` and the save
+happens when the loop stops. What the FM-1 stores by itself (the Options) still waits for silence, always.
+
+- **A new FM-1**, or one that has never been saved, starts with the defaults.
+- **Options > Reset Settings** resets both columns and stores the result at once: no SAVE held is needed after it.
+- **An FM-1 updated from an earlier 0.18 build or from 0.17**: what it had stored is simply its last save.
+- After a PANIC nothing is stored: a PANIC is not a save.
+- The **update gesture** and a **backup** do not save for you either. Hold SAVE first if what you have set is to
+  survive the update or be in the backup. A backup holds the settings, the saved sounds and the loops; it does not
+  carry the state of the instrument (the voicing, the edited sounds, the effects' cells ...), and after a restore the
+  FM-1 starts from the restored settings (the saved sounds, the bass off).
+- In SAFE MODE nothing is read and nothing is saved (`safe mode: no saving`).
+- Going back to 0.17 and returning: 0.17 does not know the state of the instrument and starts without it, and once it
+  has stored a setting of its own, 0.18 starts from 0.17's settings rather than from an older save of its own.
 
 More: [SETTINGS.md](SETTINGS.md).
 
@@ -1304,17 +1401,21 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | In step entry the cursor does not move on | LOCK is on with a chord latched | OCT+ after each chord, or LOCK off |
 | HOME does not change the view | the view is locked | HOME held, KNOB 1: Lock Off |
 | The tempo moves by itself | MIDI Clock is In | Options > MIDI Clock |
-| My reverb or delay setting is back to what it was | it was changed in the last seconds before switching off, while a loop played, or while a reverb or delay tail was still ringing (nothing is stored while there is sound) | set it again, wait for silence and a few seconds before switching off; with Decay at `Inf`, turn it down or tap FX off first |
+| My reverb or delay setting is back to what it was | it was not saved: since 0.18 the FM-1 comes back as last **saved** | set it again and hold SAVE (`saved`) |
 | The reverb does not stop | Decay is at `Inf`, or very long | turn Decay down (FX layer, Reverb 1, KNOB 3) |
 | The echoes are on one side, then the other | the delay's Mode is Ping-pong | FX layer, Delay 2, KNOB 2: Stereo |
 | The bass has reverb or echo | the bass part has sends of its own | BASS held + EDIT, the FX group; or FX off |
 | A sound I saved with lots of reverb loads dry (or the other way round) | sends are no longer loaded with a sound: they are the part's | set the Send once in the FX layer; it stays for every sound |
 | In the engine picker the white keys no longer choose the engine | they always play now, so that you hear what you turn to | SELECT steps the engines |
 | After updating to 0.18 the reverb and the delay sound different | they are new, and start at their defaults | [FX](#8-fx) |
-| My edit is gone | unsaved changes are lost with the next sound (not at power-off, since 0.18) | SAVE |
+| My edit is gone | unsaved changes are lost with the next sound, and at power-off unless you held SAVE | SAVE tap to make it a preset; SAVE held to keep the part as it is |
 | `no free slot` | all 32 saved sounds are used | delete one (SAVE held in the save dialog), or use the device manager |
-| A setting did not survive switching off | settings are written a moment after the instrument falls quiet, never while a loop plays | stop the loop, wait a second or two |
-| The bass came on by itself at power-on | it was on when you switched off (since 0.18 it comes back) | tap BASS |
+| A setting did not survive switching off | it was not saved: only the Options are stored by themselves (a moment after the instrument falls quiet, never while a loop plays) | hold SAVE before switching off |
+| My loop is gone after switching off | loops are no longer saved when they stop | hold SAVE; moving to another slot also saves the loop you leave |
+| I recorded over a loop I liked | | GLO + SAVE held for a second: the loop as last saved is back (with everything else as last saved) |
+| SAVE held no longer shows the loop slots | it is the global save now | PLAY menu: PRESETS picks the slot; clear + save empties one |
+| `saves at stop` | SAVE was held while a loop played or a take was open: nothing is written then | stop the loop: `saved` |
+| The bass came on by itself at power-on | it was on at your last save (since 0.18 it comes back) | tap BASS, hold SAVE |
 | Every note sounds doubled and louder | Raw Chord Sound is On with no performance mode | Options > Raw Chord Sound: Off |
 | The screen shows the logo, or is black | three minutes, or ten, without input | touch anything |
 | `Safe mode` on the top line | SAFE MODE | see [SAFE MODE](#safe-mode) |
@@ -1338,12 +1439,12 @@ A held layer button opens its layer and it stays; holding the same button again 
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: Keys. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
-| SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | while held: loops: white roots slot · SELECT Save / Load / Delete · OCT+ does it |
+| SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
 | SEQ | METRO | metronome on / off | METRO layer: SELECT time signature · KNOB 1 Click |
-| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT length · KNOB 1 Quantize · 2 Count-in · 3 Level · 4 Keys |
+| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · GLO: its keys play / loops · EDIT: the loop editor (SELECT step · the keys replace it · REC clears it · KNOB 2 its length · 3 the loop's steps · 4 velocity) |
 | REC | REC | record by the record mode; ends a take; cancels when armed | undo the last layer |
 | OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
 | OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |
@@ -1363,7 +1464,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | GLO | SHIFT | latch fine steps | fine steps while held; + EDIT: chord / bass sound |
 | EDIT | EDIT | leave | the engine picker |
 | HOME | HOME | leave | the view menu |
-| SAVE | SAVE | the save dialog | loops, as outside |
+| SAVE | SAVE | the save dialog | the global save, as outside |
 | ARP | PERF | performance on / off | the PERF layer |
 
 SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine picker.
@@ -1391,8 +1492,8 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4 |
 | D4 to G5 | roots |
 | white roots D4 to B4, engine picker | FM6, FM TONE, VA, CZ-1, WHEEL, PHYS |
-| white roots D4 to F5, PLAY menu with Keys = Loops, or SAVE held | loop slots 1 to 10 |
-| D#4, F#4, PLAY menu with Keys = Loops | clear the loop (hold 1 s), undo |
+| white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
+| D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |
 | white roots D4 to A4, then B4, view menu | Chord, Keyboard, Notes, Geek Out, Scope; Lock |
 | white roots, Options | the first eleven settings |
