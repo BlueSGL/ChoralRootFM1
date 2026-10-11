@@ -1538,7 +1538,8 @@ static void cu_panic(void)
     for (k = 0; k < CU_NKEY; k++)                 /* the keys still held end nothing more */
         if (cu.key_note[k] && cu.key_note[k] != 0xFFu)
             cu.key_note[k] = 0xFFu;
-    cs.sticky = 0;                                /* (the engine's panic drops the latch: the LED follows) */
+    cs.sticky = 0;                                /* LATCH off with it (the LED follows); the engine's panic ends */
+    cr_post(CRE_STICKY, 0, 0, 0);                 /* the voices but keeps its Sticky flag: told here */
     cu.msg.until = cu_now() + CR_PANIC_MS;
     cu.msg.big = 1;
     cu.msg.col = CR_COL_RED;
