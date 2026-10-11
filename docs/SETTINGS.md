@@ -138,6 +138,7 @@ Never reorder or remove a field. A retired field stays in place, unused.
 | `cr_settings_load()` | the end of `cr_ui_init` (**patch below**); the emulator calls it after `cr_ui_init` until then | the block → engine (IRQ off), `cr_route`, the UI mirror `cs`, motion, palette, the sounds, tempo |
 | `cr_settings_poll()` | every frame (`main.c` `settings_poll` → cr_shim.c; the emulator's `emu_fw_frame`) | captures the state (the block, and Felucca's HOLD beside it: `crs_hold_seen`, below); a change is written once nothing changed for 1.5 s and nothing has sounded for 1 s (no voice of the parts, no chord held or latched, no scheduled note, the master output under -60 dBFS: a flash erase stops the audio for ~45 ms, docs/INTEGRATION.md Performance), never while a loop plays (`CR_SETTINGS_BUSY()`), retried 1 s after a flash error, and skipped when the bytes are unchanged |
 | `cr_settings_save()` | `settings_save` (cr_shim.c): the power-on calibration, Options | save now |
+| `cr_settings_reset()` | Options > Reset Settings, OCT+ twice (`cr_ui.c cu_reset`) | the defaults: into the block (`cr_settings_factory`), applied (the default sounds, `cr_settings_load` again), saved |
 
 Saving is driven by change detection, so `cr_ui.c` needs no save call at each setting. The poll compares the
 block as captured with the last one seen (`crs_seen`). One setting of the Options lives outside the block: **Hold
@@ -162,6 +163,34 @@ its top: `static void cr_settings_load(void);`. That declaration must sit inside
 The emulator does not define `CR_HAVE_SETTINGS`; there it includes `cr_settings.c` from `emu_fw.c`. Once the
 patch is in, define `CR_HAVE_SETTINGS 1` in `emu_firmware.h` too, or keep the emulator's guard: `emu_fw_init`
 calls `cr_settings_load()` only `if (!crs_loaded)`.
+
+## Defaults, and Options > Reset Settings
+
+"Default" is one thing: `cr_settings_defaults()` (part 1, portable). Three ways lead to it:
+
+- **no usable record at power-on** (`cr_settings_boot`): no settings object (a new unit, erased sectors), an object
+  that is not PER1..PER5, a Felucca / Melodee PER1..PER4 object (`settings_import` zeroes the block), or a block
+  without the `CRS1` magic, cut short, or with a bad checksum: `cr_settings_import` leaves the defaults. Play Style
+  is Simple on every one of them (`tests/cr_settings_test.c t_fresh_playstyle`, `test_persist.sh`: a PER4 object and
+  erased settings sectors made from a flash that had Advanced saved);
+- **SAFE MODE**: the record is not read (the defaults for the session, nothing written); its Options > Flash Data
+  erases the data sectors, the settings among them, and the next power-on is the first case;
+- **Options > Reset Settings** (0.17, the last entry outside SAFE MODE; OCT+ asks, OCT+ again does it; another entry,
+  OCT-, HOME or a closed menu drop the ask, as they now do for Flash Data's): `cu_reset` ends the session as a PANIC
+  does without its screen (`cu_quiet`: notes off, the loop stopped, LATCH off, the octave 0; plus LOCK off and the
+  voicing 0), then `cr_settings_reset()`: `cr_settings_factory(&crs_rec.cr)` (the defaults, keeping `loop_slot`: the
+  loop in RAM is that slot's, and the loops are not the reset's), Felucca's HOLD to its default, the parts as
+  `cr_ui_init` leaves them (TINE EP and DEEP SUB loaded, the part levels, the bass off), `cr_settings_load()` again
+  (the block -> the engine, the routing, the UI mirror), the looper's configuration and USB Record re-applied,
+  `cr_settings_save()`. The record then captured is byte for byte a fresh unit's (the emulator dump's
+  `settings: now` checksum; `test_persist.sh`).
+
+What the reset does not write: the panel table (`persist_t.panel`: `settings_export` writes the table in RAM, as
+every save does), the favourites, and every other flash object (saved sounds, VA / FM6 / CZ / FM TONE patches and
+banks, the loops): `test_persist.sh` compares the flash outside the settings object byte for byte and the panel
+table inside it. Dual Core: Off is saved; `cr_c1_off` is read at power-on only, so a running second core runs until
+the restart (the message says `restart`). In SAFE MODE the entry works on the session only (`ST_BLOCKED`: no write).
+Tests: `tests/cr_settings_test.c t_factory`, `reset_set.txt` / `reset_do.txt` / `reset_check.txt`.
 
 ## Power-on calibration
 

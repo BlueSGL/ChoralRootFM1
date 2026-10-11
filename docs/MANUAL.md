@@ -950,8 +950,31 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **Dual Core** | Off, On | Off | On: the bass plays on the chip's second core (below). Takes effect after a restart |
 | **Version** | | | the firmware's version |
 | **Calibrate** | | | OCT+ starts the panel calibration ([Calibration](#calibration)) |
+| **Reset Settings** | | | OCT+ twice puts every setting back to its default (below) |
 
 In SAFE MODE two more entries appear at the end, Safe Mode and Flash Data ([SAFE MODE](#safe-mode)).
+
+**Reset Settings** is the last entry: turn SELECT to the end of the list. It puts the FM-1 back to the settings a
+new one has, in one step, which is the quick way out when an option you do not remember setting makes it behave
+strangely, and the way to make sure two people are looking at the same instrument. Press **OCT+**: the entry reads
+`OCT+ again: reset`. Press **OCT+** again and it is done: `settings reset` shows, and you are back on the view.
+Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the Options.
+
+- **Reset:** everything in the Options (Play Style back to Simple, Motion, LEDs, Hold Time, the MIDI channels and
+  clock, USB Record and USB Level, Dual Core and the rest), Key Mode with its tonic, scale and Transpose, Single
+  Notes and the split point, the KEY layer's keys, Key plays and Keyboard, the LOCK layer's two settings, the
+  performance mode with all its parameters and whether it is on, LATCH, the effects being on, the tempo, the
+  metronome, the looper's options (length, record mode, quantize, count-in, level, what its keys do), the bass
+  behaviour and register, the view and its lock, and which sound each part plays: the chord part is on TINE EP
+  again, the bass on DEEP SUB, and every engine is back at its first preset.
+- **Kept:** the sounds you saved and every patch and bank you loaded, the loops in their slots and the slot you were
+  on, and the panel calibration. Reset Settings never touches those; SAFE MODE's Flash Data is the entry that erases
+  data, and Calibrate the one that changes the panel table.
+- **What happens to what you were doing:** it ends like a PANIC: every note stops, a playing loop stops (it stays in
+  its slot; a take you were recording is dropped), LOCK and LATCH go off, the octave shift and the voicing return to
+  0, the bass is off as after switching on, and a change to a sound you had not saved is gone.
+- **Dual Core** is the one setting that waits for a restart: if it was On, the message reads
+  `settings reset · restart` and the second core keeps running until you switch off and on.
 
 **Dual Core.** With Dual Core Off, the default in 0.16, ChoralRoot runs on one core as the stock firmware does, and
 the chord and the bass share one budget of voices: a very full chord with the bass can cost a voice. With it On, the
@@ -1153,6 +1176,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | What you see or hear | Likely cause | What to do |
 | --- | --- | --- |
 | Keys or knobs do something unexpected | a layer, the Options or the editor is open (a button blinks, or OPT is lit) | HOME |
+| The FM-1 behaves strangely and you cannot tell which setting it is | some option is not at its default | Options > Reset Settings, OCT+ twice: every setting back to default; your sounds, loops and the calibration stay ([Options](#14-options)) |
 | A layer will not go away | layers stay open by design | OCT- or HOME |
 | Plain root keys play chords | Key Mode is on (KEY lit, `Key: C`) | tap KEY |
 | Chords come out in the wrong key | Transpose is set (Geek Out shows `Trans`) | KEY layer, KNOB 3 back to 0 |

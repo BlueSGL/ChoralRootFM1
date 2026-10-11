@@ -1,0 +1,43 @@
+# test_persist.sh, Options > Reset Settings (the owner, 2026-10-12), run 1 on a fresh flash file: a user sound saved
+# (U01 "ADG", as cr_save.txt), a handful of settings changed and saved (137 BPM, Play Style Advanced, Motion Off, Dual
+# Core On, Hold Time, Key Mode on). Run 2 (reset_do.txt, the same file): the reset. Run 3 (reset_check.txt): still
+# default after a relaunch, U01 still there.
+#   Options: 0 Play Style .. 13 Motion, 15 Hold Time, 18 Dual Core, 19 Version, 20 Calibrate, 21 Reset Settings
+wait 300
+btn SAVE                      # U01 "ADG" from TINE EP
+wait 300
+btn OCT+
+wait 300
+btn D4
+wait 200
+btn E4
+wait 200
+btn F4
+wait 300
+btn OCT+
+wait 1800
+knob SELECT +17               # 137 BPM
+wait 200
+btn GLO                       # Options: Play Style Advanced
+wait 200
+knob KNOB1 +1
+wait 200
+knob SELECT +13               # Motion: Off
+wait 200
+knob KNOB1 +2
+wait 200
+knob SELECT +2                # Hold Time: +1
+wait 200
+knob KNOB1 +1
+wait 200
+knob SELECT +3                # Dual Core: On
+wait 200
+knob KNOB1 +1
+wait 200
+btn GLO
+wait 200
+btn SEL                       # Key Mode on
+wait 200
+wait 2500
+dump                          # 1: changed and saved
+quit

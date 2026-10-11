@@ -473,6 +473,7 @@ static struct {
 #if CR_HAVE_SETTINGS
 static void cr_settings_load(void);       /* cr_settings.c (included after this file): the record -> the UI */
 static void cr_settings_save(void);       /* .. save now (Felucca's settings_save: the panel table too) */
+static void cr_settings_reset(void);      /* .. Options > Reset Settings: the defaults, applied and saved */
 #endif
 static uint8_t cr_restore_lock;            /* cr_backup.c: a settings record was restored into flash; the UI's state is
                                             * older, so no settings save until the restart (RESTART, or a power cycle) */
@@ -666,17 +667,19 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 /* ------------------------------------------------------------- Options --- */
 enum { O_STYLE, O_EXTADD, O_SECRET, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
        O_CLOCK, O_VIEW, O_MOTION, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_DUALCORE, O_VERSION, O_CALIB,
+       O_RESET,                           /* Reset Settings: the last entry of a normal session */
        O_SAFE, O_ERASE,
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
 static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "Velocity",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "LEDs", "Hold Time", "USB Record", "USB Level", "Dual Core", "Version",
-    "Calibrate", "Safe Mode", "Flash Data"};
+    "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
 static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 3, 1, 1, 1,
-                                   0, 0, 0, 0};
+                                   0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
+static uint8_t cu_reset_ask;              /* Options > Reset Settings: OCT+ pressed once (the second resets) */
 
 /* Options > USB Record / USB Level (docs/USB-AUDIO.md; named from the FM-1's side: Record = the computer records
  * the FM-1, the device "ChoralRoot In"): USB Level at once (fx.c), USB Record once the setting has rested 0.6 s
@@ -772,6 +775,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_DUALCORE: cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n); break;
     case O_VERSION: cu_cpy(d, CR_VERSION, n); break;
     case O_CALIB: cu_cpy(d, "OCT+ starts", n); break;
+    case O_RESET: cu_cpy(d, cu_reset_ask ? "OCT+ again: reset" : "all options to default", n); break;
     case O_SAFE: cu_cpy(d, "flash data skipped", n); break;
     case O_ERASE: cu_cpy(d, cu_erase_ask ? "OCT+ again: erase" : "erase and reboot", n); break;
     default: break;
@@ -1573,7 +1577,7 @@ static void cu_loop_frame(void)
 
 /* -------------------------------------------------------------- actions --- */
 static void cu_unlatch(void);
-static void cu_panic(void)
+static void cu_quiet(void)                        /* PANIC without its screen: every note off, the loop stopped */
 {
     uint32_t k;
     cu_unlatch();                                 /* the LOCK latch cleared (LOCK itself stays on) */
@@ -1585,6 +1589,10 @@ static void cu_panic(void)
             cu.key_note[k] = 0xFFu;
     cs.sticky = 0;                                /* LATCH off with it (the LED follows); the engine's panic ends */
     cr_post(CRE_STICKY, 0, 0, 0);                 /* the voices but keeps its Sticky flag: told here */
+}
+static void cu_panic(void)
+{
+    cu_quiet();
     cu.msg.until = cu_now() + CR_PANIC_MS;
     cu.msg.big = 1;
     cu.msg.col = CR_COL_RED;
@@ -1767,6 +1775,27 @@ static void cu_view_menu(void)
 }
 
 static void cu_calib_start(void);
+static void cu_lock_tap(void);
+/* Options > Reset Settings, confirmed (cr_settings.c cr_settings_reset: what is reset and what is kept). The session
+ * ends as a PANIC ends it, without its screen: every note off, a playing loop stopped (kept; a take being recorded
+ * is dropped, as PANIC drops it), LATCH off, the octave and the voicing back to 0; and LOCK off with its latch (LOCK
+ * is not saved: off at power-on). Back on the view, with the message */
+static void cu_reset(void)
+{
+    cu_reset_ask = 0;
+    cu_close_all();
+    if (cu.clock)
+        cu_lock_tap();
+    cu_quiet();
+    cr_post(CRE_VOICING, 0, 0, -(int32_t)cr_snap.voicing);
+#if CR_HAVE_SETTINGS
+    cr_settings_reset();
+#endif
+    cu.opt_sel = O_STYLE;
+    cu_message(cr_c1_off ? "settings reset" : "settings reset \267 restart", CR_COL_GREEN);   /* (Dual Core was On at
+                                                   * this power-on: Off is saved, the core stops at the next) */
+    cu_trace("options: settings reset%s\n", cr_c1_off ? "" : " (Dual Core runs until the restart)");
+}
 static void cu_oct_tap(uint32_t b)
 {
     if (cu.page == PG_SAVE && !cu_layer()) {      /* naming: OCT- deletes, OCT+ saves */
@@ -1789,6 +1818,15 @@ static void cu_oct_tap(uint32_t b)
             return;
         }
         cu_flash_erase();                         /* the second: erase the data objects, reboot (no return) */
+        return;
+    }
+    if (b == B_OCTUP && cu.opt_open && cu.opt_sel == O_RESET && !cu.lock && !cu.page) {
+        if (!cu_reset_ask) {
+            cu_reset_ask = 1;                     /* the first OCT+: "OCT+ again" (OCT-, another entry, leaving the
+                                                   * Options: nothing happens, cu_options_screen / cr_build_screen) */
+            return;
+        }
+        cu_reset();                               /* the second: every option to its default, saved */
         return;
     }
     if (b == B_OCTUP && cu.opt_open && cu.opt_sel == O_CALIB && !cu.lock && !cu.page) {
@@ -4428,12 +4466,16 @@ static void cu_options_screen(cr_screen_t *s)
     s->batt = (uint8_t)cu_batt();                  /* the one page with the battery level */
     if (cu.opt_sel != O_ERASE)
         cu_erase_ask = 0;                          /* (left the entry: the confirmation starts again) */
+    if (cu.opt_sel != O_RESET)
+        cu_reset_ask = 0;
     cu_picker(s, O_NAME, cu_opt_n(), cu.opt_sel, CR_COL_WHITE, "options \267 KNOB 1 sets", "");
     opt_text(cu.opt_sel, s->value, sizeof s->value);
     if (cu.opt_sel == O_SAFE)                      /* "Safe mode: flash data skipped \267 OCT-+OCT+ 5 s: update mode" */
         cu_cpy(s->label, "OCT-+OCT+ 5 s: update mode", sizeof s->label);
     else if (cu.opt_sel == O_ERASE)                /* "Flash data: erase and reboot", OCT+ twice */
         cu_cpy(s->label, cu_erase_ask ? "sounds, loops, settings go" : "OCT+ twice: erase, reboot", sizeof s->label);
+    else if (cu.opt_sel == O_RESET)                /* "Reset Settings: all options to default", OCT+ twice */
+        cu_cpy(s->label, cu_reset_ask ? "sounds, loops, calibration stay" : "OCT+ twice: reset", sizeof s->label);
     else if (cu.opt_sel == O_USB_IN)               /* what each USB entry does, under its value */
         cu_cpy(s->label, "records master, chord, bass", sizeof s->label);
     else if (cu.opt_sel == O_USB_LEVEL)            /* (the values stay Master / Fixed: the line says what they do) */
@@ -4854,6 +4896,8 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
         cu_options_screen(s);
         return;
     }
+    cu_erase_ask = cu_reset_ask = 0;               /* (the Options left with an "OCT+ again" pending: it starts again;
+                                                    * until 2026-10-12 Flash Data's stayed armed behind a closed menu) */
     /* 6. the stripes: nothing touched since power-on (the splash stays; a PANIC's cleared chord no longer brings
      * them back), or the screensaver: no input (a key, a button,
      * a knob, a MIDI message in) for CR_IDLE_MS, 3 minutes; a loop playing alone does not keep the screen awake, and any

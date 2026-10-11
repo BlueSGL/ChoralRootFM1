@@ -1,0 +1,52 @@
+# test_persist.sh, Options > Reset Settings, run 2: reset_set.txt's flash file (a relaunch: the changed settings are
+# the stored ones, Dual Core is running), LOCK on with MAJ latched, then the entry: OCT+ asks, another entry or OCT-
+# cancels, a closed menu forgets the ask, OCT+ twice resets: everything reads default at once (on the view, LOCK
+# off) and is saved; the unit plays on the default sound.
+#   Options: 21 Reset Settings, the last entry (SELECT past the end stops on it)
+wait 500
+dump                          # 1: as stored: Advanced, 137 BPM, Key Mode on, Motion Off, Dual Core On
+btn B3                        # LOCK on, MAJ latched
+wait 200
+btn A#3
+wait 300
+btn GLO
+wait 200
+knob SELECT +30               # past the end: the last entry: Reset Settings
+wait 300
+shot build/emu/test/reset_entry.ppm
+dump                          # 2: entry 21 'Reset Settings', 'all options to default'
+btn OCT+                      # the first OCT+: asks
+wait 300
+shot build/emu/test/reset_ask.ppm
+dump                          # 3: 'OCT+ again: reset'
+knob SELECT -1                # another entry: cancelled
+wait 200
+knob SELECT +1
+wait 200
+dump                          # 4: 'all options to default' again, nothing reset
+btn OCT+                      # asks again ..
+wait 200
+btn OCT-                      # .. OCT-: back out of the Options: cancelled
+wait 300
+dump                          # 5: the Options closed, the settings as they were
+btn GLO                       # the Options again, still on the entry: the "again" is not pending
+wait 300
+dump                          # 6: 'all options to default'
+btn OCT+
+wait 200
+btn OCT+                      # twice: reset
+wait 300
+shot build/emu/test/reset_done.ppm
+dump                          # 7: the defaults, at once: on the view, LOCK off, Key Mode off, 120 BPM
+wait 2500
+dump                          # 8: saved (saved = now)
+btn A#3 down                  # the unit plays: MAJ + D4 on the default sound
+btn D4 down
+wait 400
+expect sound
+dump                          # 9: D on TINE EP
+btn D4 up
+btn A#3 up
+wait 2500
+dump                          # 10: silent
+quit

@@ -128,6 +128,10 @@ typedef struct {
 } cr_settings_out_t;
 
 void cr_settings_defaults(cr_settings_t *s);
+/* Options > Reset Settings: the record back to cr_settings_defaults (the one place the defaults come from: a unit
+ * with no record, SAFE MODE and this), keeping the one field that is the looper's place and not an option: loop_slot
+ * (the loop in RAM belongs to it; the loops are not the reset's). Sealed */
+void cr_settings_factory(cr_settings_t *s);
 /* a stored block (n bytes) -> *s, defaults for what is absent or invalid. 1: current, 2: migrated (older or newer
  * version: the fields it has are kept), 0: invalid (all defaults) */
 int  cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n);

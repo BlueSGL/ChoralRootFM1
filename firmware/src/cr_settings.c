@@ -101,6 +101,15 @@ void cr_settings_defaults(cr_settings_t *s)
     cr_settings_seal(s);
 }
 
+void cr_settings_factory(cr_settings_t *s)
+{
+    uint8_t slot = s->loop_slot;
+    cr_settings_defaults(s);
+    if (slot <= 9u)
+        s->loop_slot = slot;
+    cr_settings_seal(s);
+}
+
 void cr_settings_seal(cr_settings_t *s)
 {
     s->magic = CRS_MAGIC;
@@ -690,5 +699,33 @@ static void cr_settings_save(void)
     crs_change_ms = fm1_ms - CRS_QUIET_MS;
     if (!CR_SETTINGS_BUSY() && crs_write() == 0)
         crs_pending = 0;
+}
+
+/* Options > Reset Settings (the owner, 2026-10-12): every option back to what a new unit has, now and in flash. The
+ * record: cr_settings_factory (cr_settings_defaults: the same defaults as a unit with no record and as SAFE MODE);
+ * Felucca's one field the Options set outside it: HOLD. Then the unit as a power-on leaves it with those settings:
+ * the default sounds on both parts (TINE EP, DEEP SUB; an edit not saved is gone, as at a power-on), their levels,
+ * the bass off, and cr_settings_load again: the record -> the engine, the routing, the UI's mirror. Saved at once
+ * (cr_settings_save: after the loop stops, if one plays: cu_reset stopped it).
+ * NOT touched: the panel calibration (persist_t.panel: settings_export writes the table in RAM, as every save), the
+ * saved sounds and patches (upreset / va / fm6 / cz / quad stores), the loops and the slot selected, Felucca's
+ * favourites. Dual Core: Off is saved; a core that this power-on started runs until the next one (cr_c1_off) */
+static void cr_settings_reset(void)
+{
+    if (!crs_loaded)
+        return;
+    cr_settings_factory(&crs_rec.cr);
+    settings_hold = HOLD_DEF;
+    trk[CR_PART_CHORD].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);   /* (cr_ui_init's) */
+    trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);
+    cu_pool_load(0, ENGI_FM6, cu_pool_find(ENGI_FM6, "TINE EP"));
+    cu_sends_to_fx();
+    cu_pool_load(1, ENGI_VA, cu_pool_find(ENGI_VA, "DEEP SUB"));
+    cs.bass_sound = 0;                             /* ALGORITHM at OFF: the bass off */
+    cs.bass_on = 0;
+    cr_settings_load();
+    cu_loop_conf();                                /* the looper's options and the metronome -> the ISR */
+    cu_usb_apply();                                /* USB Record on again, if it was off (usb.c) */
+    cr_settings_save();
 }
 #endif /* CR_VERSION */

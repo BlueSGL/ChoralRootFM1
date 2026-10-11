@@ -129,6 +129,76 @@ static void t_fresh_playstyle(void)
     ok(rc == 1 && s.playstyle == CR_PS_ADVANCED, "a valid record that says Advanced: Advanced (the stored setting)");
 }
 
+/* Options > Reset Settings (cr_settings_factory): every field of the record back to cr_settings_defaults' value,
+ * whatever it held, but the loop slot (the looper's place, not an option: the loop in RAM is that slot's); what is
+ * applied to an engine that had everything changed is the power-on engine. The record is all the reset writes: the
+ * panel calibration, the sounds and the loops are other objects (the emulator's test: test_persist.sh, the flash
+ * outside the settings object byte for byte, the panel table inside it) */
+static void t_factory(void)
+{
+    cr_settings_t d, s, e;
+    cr_settings_out_t o, od;
+    uint32_t i, diff = 0, k;
+    int m, p;
+    cr_t F;
+    cr_settings_defaults(&d);
+    for (k = 0; k < 3u; k++) {                     /* every byte 0x00, 0xFF, then a valid record with every field set */
+        memset(&s, k == 0u ? 0x00 : 0xFF, sizeof s);
+        if (k == 2u) {
+            cr_settings_defaults(&s);
+            s.playstyle = CR_PS_ADVANCED; s.extadd = 1; s.secret = CR_SECRET_ALL; s.key_on = 7; s.tonic = 9; s.scale = 1;
+            s.transpose = -5; s.single = CR_SINGLE_SPLIT_BASS; s.split_pc = 2; s.vel = 64; s.bass_mode = CR_BASS_SOLO;
+            s.bass_voicing = 2; s.perform_on = 1; s.perform_mode = CR_PM_COUNT - 1; s.perf_sel = 5; s.sticky = 1; s.bpm = 137;
+            for (m = 0; m < CRS_NPM; m++)
+                for (p = 0; p < CRS_NPAR; p++)
+                    s.par[m][p] = (int16_t)(d.par[m][p] + 1);
+            s.loop_sync = 3; s.loop_quant = 4; s.loop_count_in = 0; s.loop_level = 40; s.metro_on = 1; s.metro_sig = 2;
+            s.metro_vol = 10; s.loop_rec = 0xE3; s.pick_roots = 0; s.usb_in = 0; s.usb_level = CRS_USB_FIXED;
+            for (i = 0; i < 3u; i++) { s.midi_en[i] = 1; s.midi_ch[i] = 15; }
+            s.clock_mode = CRS_CLOCK_IN; s.raw_sound = 1; s.view = 0xC2; s.motion = 2; s.leds = 1; s.fx_on = 0;
+            s.palette = 0; s.chord_sound = 0x0C1A; s.bass_sound = 0x0203;
+            for (i = 0; i < (uint32_t)CRS_NENG; i++) { crs_pool_set(&s, 0, i, 20); crs_pool_set(&s, 1, i, 30); }
+            cr_settings_seal(&s);
+        }
+        s.loop_slot = 6;
+        cr_settings_factory(&s);
+        e = d;
+        e.loop_slot = 6;
+        cr_settings_seal(&e);
+        for (i = 0, diff = 0; i < CRS_SIZE; i++)
+            diff += ((const uint8_t *)&s)[i] != ((const uint8_t *)&e)[i];
+        ok(diff == 0 && s.check == e.check && s.playstyle == CR_PS_SIMPLE && s.loop_slot == 6,
+           k == 0u ? "reset: a zeroed record -> the defaults, the loop slot kept"
+           : k == 1u ? "reset: an 0xFF record -> the defaults, the loop slot kept"
+           : "reset: every field changed -> every byte the default's, the loop slot kept, sealed");
+        ok(cr_settings_import(&e, &s, sizeof s) == 1 && cr_settings_equal(&e, &s), "reset: the record imports as current");
+    }
+    s.loop_slot = 200;                             /* (a slot out of range is not kept) */
+    cr_settings_factory(&s);
+    ok(cr_settings_equal(&s, &d), "reset: an invalid loop slot -> the default's");
+    /* applied to an engine with everything changed: the power-on engine (capture = the defaults) */
+    cr_init(&C, &OUT);
+    cr_set_playstyle(&C, CR_PS_FREE); cr_set_ext_addition(&C, CR_EXTADD_PLAY_CHORD); cr_set_secret(&C, CR_SECRET_ALL);
+    cr_set_key(&C, 1, 9, CR_SCALE_MINOR); cr_set_key_plays(&C, 1); cr_set_transpose(&C, 7);
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 3); cr_set_bass_mode(&C, CR_BASS_SOLO); cr_bass_voicing_step(&C, 2);
+    cr_set_bass(&C, 1); cr_set_perform_mode(&C, CR_PM_ARP); cr_set_perform(&C, 1); cr_set_sticky(&C, 1); cr_set_tempo(&C, 77);
+    cr_set_param(&C, CR_PM_ARP, CR_P_RATE, 3);
+    cr_settings_defaults(&s);
+    cr_settings_factory(&s);
+    cr_settings_apply(&s, &C, &o);
+    cr_init(&F, &OUT);
+    cr_settings_apply(&d, &F, &od);
+    e = d;
+    cr_settings_capture(&e, &C, &o);
+    ok(cr_settings_equal(&e, &d), "reset: applied to a changed engine, its capture is the defaults");
+    ok(C.playstyle == F.playstyle && C.extadd == F.extadd && C.secret == F.secret && C.key_on == F.key_on &&
+       C.key_notes == F.key_notes && C.transpose == F.transpose && C.single == F.single && C.split_pc == F.split_pc &&
+       C.bass_mode == F.bass_mode && C.bass_voicing == F.bass_voicing && C.bass_on == F.bass_on &&
+       C.perform_on == F.perform_on && C.perform_mode == F.perform_mode && C.sticky == F.sticky && C.bpm == F.bpm &&
+       C.playstyle == CR_PS_SIMPLE && !memcmp(&o, &od, sizeof o),
+       "reset: .. and it is the engine and the routing of a unit with no record (Play Style Simple)");
+}
+
 static void t_roundtrip(void)
 {
     cr_settings_t s, back, imp;
@@ -675,6 +745,7 @@ int main(void)
 {
     t_defaults();
     t_fresh_playstyle();
+    t_factory();
     t_roundtrip();
     t_corruption();
     t_version();

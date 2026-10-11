@@ -1,0 +1,9 @@
+# test_persist.sh, Options > Reset Settings, run 3 (the flash file reset by reset_do.txt) and, without --flash, the fresh unit
+# it is compared with: the first dump's "settings: now" checksum is the same record. Then PRESETS up to the end of
+# the FM6 pool: the user sound saved before the reset is still there (FM6 26 "ADG")
+wait 500
+dump                          # 1: the defaults
+knob PRESETS +25
+wait 400
+dump                          # 2
+quit

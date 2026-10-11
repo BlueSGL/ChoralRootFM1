@@ -88,6 +88,71 @@ print(n)" "$FLASH" "$P4" "$ER")
     ok "the settings sectors erased (no record): the defaults: Play Style Simple, 120 BPM" \
     || bad "erased settings: style $(st "$OUT/persist_erased.log") bpm $(bpm "$OUT/persist_erased.log")"
 
+# Options > Reset Settings (the owner, 2026-10-12): the last Options entry, OCT+ twice. Run 1 (reset_set.txt, a fresh
+# flash): a user sound saved (U01 ADG), settings changed and saved (Advanced, 137 BPM, Key Mode on, Motion Off, Hold
+# Time, Dual Core On). Run 2 (reset_do.txt, a relaunch): the stored settings are those; the entry asks, cancels (another
+# entry, OCT-, a closed menu), resets on the second OCT+: at once the record a new unit has (the dump's "settings: now"
+# checksum = a fresh unit's, run 3 of above), saved. Run 3 (reset_check.txt, a relaunch): still that, U01 still there.
+# The flash outside the settings object is byte for byte what it was (sounds, patches, loops, banks), and the panel
+# calibration table inside it too
+RF=$OUT/persist_reset_flash.bin
+rm -f "$RF" "$OUT/persist_reset_before.bin" "$OUT"/persist_reset_1.log "$OUT"/persist_reset_2.log "$OUT"/persist_reset_3.log "$OUT"/persist_reset_fresh.log
+"$EMU" --headless --flash "$RF" --script "$S/reset_set.txt" >"$OUT/persist_reset_1.log" 2>&1 || bad "reset run 1: exit status"
+cp "$RF" "$OUT/persist_reset_before.bin"
+"$EMU" --headless --flash "$RF" --script "$S/reset_do.txt" >"$OUT/persist_reset_2.log" 2>&1 || bad "reset run 2: exit status"
+"$EMU" --headless --flash "$RF" --script "$S/reset_check.txt" >"$OUT/persist_reset_3.log" 2>&1 || bad "reset run 3: exit status"
+"$EMU" --headless --script "$S/reset_check.txt" >"$OUT/persist_reset_fresh.log" 2>&1 || bad "reset, the fresh unit: exit status"
+sn() { grep -a '^  settings:' "$1" | sed -n "$2p" | sed -n 's/.*settings: now \([0-9A-F]*\) saved \([0-9A-F]*\) .*/\1 \2/p'; }
+sf() { grep -a '^  settings:' "$1" | sed -n "$2p" | sed -n 's/.* \(style .*\) chord-sound.*/\1/p'; }
+ov() { grep -a '^  options:' "$1" | sed -n "$2p" | sed -n "s/.*options: open \([01]\) entry \([0-9]*\) of \([0-9]*\) '\([^']*\)' value '\(.*\)'$/\1 \2 \4: \5/p"; }
+R1=$OUT/persist_reset_1.log; R2=$OUT/persist_reset_2.log; R3=$OUT/persist_reset_3.log
+fresh=$(sn "$OUT/persist_reset_fresh.log" 1 | cut -d' ' -f1)
+changed=$(sn "$R1" 1)
+grep -aq '^save: part 0 slot U01 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "style 1 extadd 0 key 1 motion 2 leds 0 hold 2 dualcore 1 usb 1/0 view 64" ] &&
+    [ -n "$changed" ] && [ "$changed" = "$(sn "$R2" 1)" ] && [ "$(bpm "$R2")" != "" ] && grep -aq ' bpm 137 ' "$R2" &&
+    ok "reset run 1 / 2: U01 saved; Advanced, 137 BPM, Key Mode on, Motion Off, Hold Time, Dual Core On stored and back after a relaunch" \
+    || bad "reset: the changed settings: $(sf "$R1" 1) / $changed / $(sn "$R2" 1)"
+[ "$(ov "$R2" 2)" = "1 21 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 21 of 22 " "$R2" &&
+    ok "Reset Settings is the last Options entry (22 of 22): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
+[ "$(ov "$R2" 3)" = "1 21 Reset Settings: OCT+ again: reset" ] && [ "$(ov "$R2" 4)" = "1 21 Reset Settings: all options to default" ] &&
+    [ "$(ov "$R2" 5)" = "0 21 Reset Settings: all options to default" ] && [ "$(ov "$R2" 6)" = "1 21 Reset Settings: all options to default" ] &&
+    [ "$(sn "$R2" 3)" = "$changed" ] && [ "$(sn "$R2" 4)" = "$changed" ] && [ "$(sn "$R2" 5)" = "$changed" ] && [ "$(sn "$R2" 6)" = "$changed" ] &&
+    ! grep -a '^options: settings reset' "$R2" | sed -n 2p | grep -q . &&
+    ok "OCT+ asks (OCT+ again); another entry cancels; OCT- leaves and cancels; the menu reopened is not armed; nothing reset: $OUT/reset_ask.ppm" \
+    || bad "the confirm: $(ov "$R2" 3) / $(ov "$R2" 4) / $(ov "$R2" 5) / $(ov "$R2" 6); $(sn "$R2" 6)"
+grep -aq '^options: settings reset (Dual Core runs until the restart)' "$R2" && [ -n "$fresh" ] && [ "$(sn "$R2" 7 | cut -d' ' -f1)" = "$fresh" ] &&
+    [ "$(sf "$R2" 7)" = "style 0 extadd 0 key 0 motion 0 leds 0 hold 1 dualcore 0 usb 1/0 view 0" ] && [ "$(ov "$R2" 7)" = "0 0 Play Style: Simple" ] &&
+    [ "$(grep -a '^  lock: on' "$R2" | sed -n 7p | cut -c1-25)" = "  lock: on 0 latched 00 t" ] && [ "$(grep -a '^  cr: key' "$R2" | sed -n 7p | sed -n 's/.* bpm \([0-9]*\) view \([0-9]\) layer \([0-9]*\) options \([01]\).*/\1 \2 \3 \4/p')" = "120 0 0 0" ] &&
+    ok "OCT+ twice: every setting at once what a new unit has (the record's checksum $fresh = a fresh unit's): Simple, Key off, 120 BPM, Motion Full, Hold 1, Dual Core Off; on the view, LOCK off: $OUT/reset_done.ppm" \
+    || bad "the reset: now $(sn "$R2" 7) want $fresh; $(sf "$R2" 7); $(ov "$R2" 7)"
+[ "$(sn "$R2" 8)" = "$fresh $fresh" ] && grep -aq '^expect sound .*: ok' "$R2" && grep -a '^  part 0:' "$R2" | sed -n 9p | grep -q 'FM6 / TINE EP, voices 3' &&
+    ok "saved (the stored record = the defaults); the unit plays: MAJ + D4 on TINE EP" || bad "after the reset: $(sn "$R2" 8), $(grep -a '^  part 0:' "$R2" | sed -n 9p)"
+b=$(grep -a 'parts busy' "$R2" | tail -1 | sed -n 's/.*parts busy \([0-9]*\).*/\1/p'); [ "${b:-x}" = 0 ] || bad "reset run 2: $b voices still sounding at the end"
+[ "$(sn "$R3" 1)" = "$fresh $fresh" ] && grep -aq 'record: current' "$R3" && [ "$(st "$R3")" = 0 ] && [ "$(bpm "$R3")" = 120 ] &&
+    grep -aq '^sound: part 0 pos 26 ADG' "$R3" &&
+    ok "a relaunch on the same flash: still the defaults (Play Style Simple, 120 BPM); the user sound saved before is still there (FM6 26 ADG)" \
+    || bad "reset run 3: $(sn "$R3" 1) want $fresh; $(grep -a '^sound:' "$R3" | tail -1)"
+kept=$(python3 -c "
+import struct, sys
+a = open(sys.argv[1], 'rb').read(); b = open(sys.argv[2], 'rb').read()
+def newest(d):
+    best = None
+    for o in (0xFC000, 0xFD000):
+        magic, typ, slot, seq, ln = struct.unpack_from('<IHHII', d, o)
+        if magic == 0x554C4546 and d[o + 256:o + 260] == b'5REP' and (best is None or seq > best[0]):
+            best = (seq, d[o + 256:o + 256 + ln])
+    return best[1]
+pa, pb = newest(a), newest(b)
+cr, fav = len(pa) - 192, len(pa) - 192 - 520
+outside = a[:0xFC000] == b[:0xFC000] and a[0xFF000:] == b[0xFF000:]
+panel = pa[16:fav - 4] == pb[16:fav - 4] and len(pa) == len(pb)
+favs = pa[fav:cr] == pb[fav:cr]
+record = pa[cr:] != pb[cr:] and pb[cr:cr + 4] == b'CRS1'
+print(int(outside), int(panel), int(favs), int(record), fav - 4 - 16)" "$OUT/persist_reset_before.bin" "$RF")
+[ "$(echo "$kept" | cut -d' ' -f1-4)" = "1 1 1 1" ] &&
+    ok "the flash: everything outside the settings object byte for byte as before the reset (saved sounds, patches, banks, loops); in it the panel calibration table ($(echo "$kept" | cut -d' ' -f5) B) and the favourites unchanged, the ChoralRoot record rewritten" \
+    || bad "the reset touched more than the record (outside, panel, favourites, record): $kept"
+
 # the VA patch store (firmware/src/va_store.c, docs/VA.md): run 1 edits a VA sound's patch on its deep page and saves
 # it to U01; run 2 (the same file) powers on with U01 (the record's chord sound): the patch's CRC as saved
 VFLASH=$OUT/persist_va_flash.bin

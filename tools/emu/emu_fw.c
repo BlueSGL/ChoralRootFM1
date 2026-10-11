@@ -410,6 +410,22 @@ void emu_fw_dump(void)
     printf("  flash erases with the audio stalled %u (%u blocks of silence, %u ms each erase)\n", (unsigned)emu_stalls,
            (unsigned)emu_stall_blocks_all, (unsigned)EMU_ERASE_MS);
     fm1_irq_on();
+    {   /* the settings as they would be saved now (crs_capture: its own IRQ lock) and as they are in the record last
+         * written; the panel calibration table and HOLD (Felucca's fields of the same flash object) */
+        cr_settings_t t;
+        uint32_t h = 2166136261u, k;
+        crs_capture(&t);
+        for (k = 0; k < sizeof panel; k++) {
+            h ^= ((const uint8_t *)&panel)[k];
+            h *= 16777619u;
+        }
+        printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "
+               "view %u chord-sound %04X slot %u pending %u  panel %08X\n",
+               (unsigned)t.check, (unsigned)crs_rec.cr.check, (unsigned)t.playstyle, (unsigned)t.extadd, (unsigned)t.key_on,
+               (unsigned)t.motion, (unsigned)t.leds, (unsigned)settings_hold, (unsigned)CRS_DUALCORE(&t),
+               (unsigned)t.usb_in, (unsigned)t.usb_level, (unsigned)t.view, (unsigned)t.chord_sound, (unsigned)t.loop_slot,
+               (unsigned)crs_pending, h);
+    }
 }
 
 /* the screen the last UI frame drew (emu.c EMU_UI_LOG): its kind, view, the texts that pick its glyphs, the animation

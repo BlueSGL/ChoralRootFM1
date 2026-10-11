@@ -117,7 +117,10 @@ the splash (`cr_ui.c cu_stripes`, `cr_shim.c cr_splash`), Options > Version (`op
 The emulators build with the same string (`tools/emu/build.sh`, `tools/emu/web/build_web.sh`: choralroot.c's define,
 or `CR_VERSION=X.Y`; `cr_ui.c` refuses to compile without it; `emu_firmware.h` falls back to `"EMU"` for the host
 tests that build that unit, and `tests/cr_backup_test.c` reads it back from INFO). GEEK OUT
-shows no version. Test: `cr_version.txt` in test_cr.sh (the dump's `version:` line: the Options entry's text = the
+shows no version. **Options > Reset Settings** (`O_RESET`, the last entry outside SAFE MODE, 2026-10-12): OCT+ twice
+(`cu_reset_ask`, as Flash Data's `cu_erase_ask`; both are dropped by another entry and, new, by the Options closing:
+`cr_build_screen`), `cu_reset` -> `cr_settings.c cr_settings_reset` (docs/SETTINGS.md "Defaults, and Options > Reset
+Settings": what is reset, what is kept, the session's end). Test: `cr_version.txt` in test_cr.sh (the dump's `version:` line: the Options entry's text = the
 INFO reply's string = choralroot.c's define; no other `"ChoralRoot <digit>` literal in the firmware or the
 emulators). The fixtures that say `ChoralRoot 0.1` (`tests/install_test.py`, `web/test_installer.mjs`) are fake
 units' identities for the installers' tests, not the firmware's version.
