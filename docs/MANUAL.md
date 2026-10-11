@@ -1,6 +1,6 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.16 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
+For ChoralRoot 0.17 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
 
@@ -988,7 +988,7 @@ Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the 
 - **Dual Core** is the one setting that waits for a restart: if it was On, the message reads
   `settings reset · restart` and the second core keeps running until you switch off and on.
 
-**Dual Core.** With Dual Core Off, the default in 0.16, ChoralRoot runs on one core as the stock firmware does, and
+**Dual Core.** With Dual Core Off, the default since 0.16, ChoralRoot runs on one core as the stock firmware does, and
 the chord and the bass share one budget of voices: a very full chord with the bass can cost a voice. With it On, the
 bass part plays on the second core with its own voices, so a full chord and the bass both sound whole. It is off by
 default because firmwares that run both cores are reported to crash on some FM-1s; ChoralRoot raises the core voltage
