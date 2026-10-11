@@ -42,9 +42,11 @@
 #define CU_BIT(b) (1u << (b))
 
 /* layers (a button held): their screens and the job of the root keys and KNOB 1..4 */
-enum { L_NONE, L_KEY, L_PERF, L_FX, L_BASS, L_EDIT, L_SAVE, L_METRO, L_LOOP, L_VIEW, L_LOCK, L_N };   /* L_VIEW: HOME
-                                                   * held; L_LOCK: the key B3 held (no button: NB) */
-static const uint8_t L_BTN[L_N] = {NB, BT_KEY, BT_PERF, BT_FX, BT_BASS, BT_EDIT, BT_SAVE, BT_METRO, BT_LOOP, BT_HOME, NB};
+enum { L_NONE, L_KEY, L_PERF, L_FX, L_BASS, L_EDIT, L_RSV6, L_METRO, L_LOOP, L_VIEW, L_LOCK, L_N };   /* L_VIEW: HOME
+                                                   * held; L_LOCK: the key B3 held (no button: NB); L_RSV6: retired
+                                                   * (until 0.17 SAVE held: the loop slots' Save / Load / Delete map;
+                                                   * SAVE held is the global save now, cu_gsave: the numbers stay) */
+static const uint8_t L_BTN[L_N] = {NB, BT_KEY, BT_PERF, BT_FX, BT_BASS, BT_EDIT, NB, BT_METRO, BT_LOOP, BT_HOME, NB};
 static uint32_t cu_layer_of(uint32_t b)
 {
     uint32_t l;
@@ -459,7 +461,6 @@ static const char *const CU_LOOPLEN[6] = {"Free", "1 bar", "2 bars", "4 bars", "
 static const char *const CU_SIG[CRL_NSIG] = {"4/4", "3/4", "6/8"};
 static const char *const CU_QUANT[CRL_NQUANT] = {"none", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CU_LOOP_MODE[CRL_NMODE] = {"Overwrite", "Advance", "Overdub", "Replace", "Step"};
-static const char *const CU_SAVE_ACT[3] = {"Save", "Load", "Delete"};
 enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_N };
 
 static struct {
@@ -480,7 +481,7 @@ static struct {
     uint8_t split;                        /* Single Notes' split point, pitch class 0..11 */
     uint8_t metro, metro_sig, metro_vol;  /* the click: on, CRL_SIG_*, level 0..100 */
     uint8_t loop_len, loop_quant, loop_count_in, loop_level;   /* SYNC (0 Free, 1..16 bars), QUANT, COUNT-IN, LEVEL */
-    uint8_t loop_slot, loop_target;       /* the slot in RAM (0..9); SAVE held's target */
+    uint8_t loop_slot;                    /* the slot in RAM (0..9) */
     uint8_t loop_mode, loop_keys;         /* the record mode (CRL_MODE_*); the PLAY menu's keys: 0 Play, 1 Loops (v8) */
     uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
                                            * 1 play (roots and chord keys as outside the layer); OPT tapped in the
@@ -492,16 +493,16 @@ static struct {
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
                                            * (0: clears them, today's); the extension keys are pushed as the type
                                            * keys are (0: toggles, today's) */
-    uint8_t save_act;                     /* SAVE held's picker */
-    uint8_t save_pending;                 /* slot + 1: saved once the loop stops (no flash erase while it plays) */
     uint16_t loop_used;                   /* bit k: slot k holds a loop in flash */
     uint8_t usb_in, usb_fixed;            /* Options > USB Record (on: presented to the computer), USB Level */
     uint8_t dualcore;                     /* Options > Dual Core (v12): 1 On; read at power-on only (cr_c1_off) */
 } cs;
 #if CR_HAVE_SETTINGS
 static void cr_settings_load(void);       /* cr_settings.c (included after this file): the record -> the UI */
-static void cr_settings_save(void);       /* .. save now (Felucca's settings_save: the panel table too) */
+static void cr_settings_save(void);       /* .. the automatic part now (Felucca's settings_save: the panel table too) */
 static void cr_settings_reset(void);      /* .. Options > Reset Settings: the defaults, applied and saved */
+static int cr_settings_commit(void);      /* .. the global save (SAVE held): the whole block and the session */
+static void cr_settings_revert(void);     /* .. GLO + SAVE: what the last global save wrote, applied again */
 #endif
 static uint8_t cr_restore_lock;            /* cr_backup.c: a settings record was restored into flash; the UI's state is
                                             * older, so no settings save until the restart (RESTART, or a power cycle) */
@@ -949,6 +950,8 @@ static struct {
                                           /* jump: the meter's bar jumps to the value (no fill: the picker's preview);
                                            * mark: the square after the name (an overwritten factory preset) */
     uint8_t epk_on, epk_rank;             /* OPT held + PRESETS: the engine picker, the engine (ENGINE_ORDER rank) */
+    uint32_t rev_t0;                      /* GLO and SAVE went down together (| 1): held CU_REVERT_MS, the revert */
+    uint8_t gsave_pend;                   /* SAVE held while a loop played or a take was open: saved at the stop */
     struct { uint32_t until; uint8_t big, col; char text[24], label[32]; } msg;   /* big: 1 PANIC, 2 red type */
 } cu;
 
@@ -1131,14 +1134,7 @@ static void ui_say(const char *a, const char *b)
 static void ui_message(const char *s) { cu_message(s, CR_COL_WHITE); }
 
 /* the layer on screen: the open (locked) one, else SAVE's while it is held (momentary) */
-static uint32_t cu_layer(void)
-{
-    if (cu.lock)
-        return cu.lock;
-    if (cu.armed != NB && cu.open && cu_layer_of(cu.armed) == L_SAVE)
-        return L_SAVE;
-    return L_NONE;
-}
+static uint32_t cu_layer(void) { return cu.lock; }
 static int cu_shift(void) { return cu.armed == BT_OPT && ((cu.bheld >> BT_OPT) & 1u); }
 /* the editor's hooks (cr_edit.c defines CR_EDIT_HOOKS with ce_owns / ce_button / ce_leds; CE_TAP CE_HOLD CE_SHIFT) */
 #ifndef CR_EDIT_HOOKS
@@ -1359,21 +1355,19 @@ static int cu_loop_flush(const char *why)
     return 0;
 }
 /* The loop in RAM is about to be replaced by slot k's: what it holds goes to its own slot first, so a slot keeps
- * what was recorded there (docs/LOOPER.md "Slots and the record"). from: the slot it belongs to (cs.loop_slot, or
- * the target of a SAVE held Save still waiting for the stop). Changed since its last save / load (crl.dirty, an
- * overdub in progress, that waiting Save): packed (an overdub in progress ends, as the switch would end it), written
+ * what was recorded there (docs/LOOPER.md "Slots and the record"). from: the slot it belongs to (cs.loop_slot).
+ * Changed since its last save / load (crl.dirty, an
+ * overdub in progress): packed (an overdub in progress ends, as the switch would end it), written
  * now when stopped, staged for the stop while it plays (no flash erase then). One staged earlier and still waiting
  * is written first, whatever plays (a second switch while playing: a hiccup rather than a lost take; and the slot
- * about to be read may be that one). Nothing saved when revert loads from itself again (SAVE held + Load: its changes
+ * about to be read may be that one). Nothing saved when revert loads from itself again (its changes
  * dropped on purpose), in SAFE MODE, after a restore (the flash is newer than the RAM) or without the flash.
  * Returns 1: written now, 0: nothing to write now (or staged), -1: a flash error, the switch refused (the loop stays) */
 static int cu_loop_keep(uint32_t k, uint32_t from, int revert, int play)
 {
-    uint8_t was = cs.save_pending;
-    int need = was || crl.dirty || crl.cap == CRL_CAP_OD || crl.cap == CRL_CAP_STEP;
+    int need = crl.dirty || crl.cap == CRL_CAP_OD || crl.cap == CRL_CAP_STEP;
     if (cu_loop_flush(play ? "a second switch" : "before a load"))
         return -1;
-    cs.save_pending = 0;                           /* (taken over here, or dropped with the loop) */
     if (!need || (revert && k == from) || cr_safe || cr_restore_lock || !crl_fl_ready())
         return 0;
     fm1_irq_off();
@@ -1389,26 +1383,24 @@ static int cu_loop_keep(uint32_t k, uint32_t from, int revert, int play)
         cu_trace("loop: slot %u staged %u bytes, saved at the stop\n", (unsigned)from + 1u, (unsigned)cu_lp.n);
         return 0;
     }
-    if (cu_loop_flush("leaving it")) {
-        cs.save_pending = was;
+    if (cu_loop_flush("leaving it"))
         return -1;
-    }
     return 1;
 }
 /* a slot -> the loop in RAM: now when stopped, at the end of the cycle when playing; the loop being left goes to its
- * own slot first (cu_loop_keep). revert (SAVE held + Load, power-on): the slot in RAM may be loaded again, its
+ * own slot first (cu_loop_keep). revert (power-on, GLO + SAVE): the slot in RAM may be loaded again, its
  * changes dropped; LOOP held + the root of the slot it is on, changed: kept as it is (it is not being left) */
 static int cu_loop_load(uint32_t k, int revert)   /* < 0: refused (the message says why), else cu_loop_keep's */
 {
     int n, ok = 0, play = cu_playing(), kept;
-    uint32_t from = cs.save_pending ? cs.save_pending - 1u : cs.loop_slot;
+    uint32_t from = cs.loop_slot;
     char t[24], nb[4];
     cu_loop_gen++;
     if (crl_stage_busy) {
         cu_message("a slot is on its way", CR_COL_RED);
         return -2;
     }
-    if (!revert && k == from && (crl.dirty || cs.save_pending || crl.cap == CRL_CAP_OD || crl.cap == CRL_CAP_STEP)) {
+    if (!revert && k == from && (crl.dirty || crl.cap == CRL_CAP_OD || crl.cap == CRL_CAP_STEP)) {
         cu_trace("loop: slot %u kept as it is (changed since its save)\n", (unsigned)k + 1u);
         cu_slot_msg("loop ", k, "", CR_COL_RED);
         return -3;
@@ -1439,80 +1431,6 @@ static int cu_loop_load(uint32_t k, int revert)   /* < 0: refused (the message s
     if (kept > 0 || cu_layer() != L_LOOP)          /* (the PLAY menu's strip shows the slot) */
         cu_message(t, kept > 0 ? CR_COL_GREEN : CR_COL_RED);
     return kept;
-}
-static void cu_loop_save_now(uint32_t k)
-{
-    uint32_t n;
-    int rc;
-    cu_loop_flush("before a save");
-    cu_loop_gen++;
-    fm1_irq_off();                                 /* the ISR's loop, packed as it is now */
-    n = cr_loop_pack(&crl.d, cu_loop_buf, sizeof cu_loop_buf);
-    fm1_irq_on();
-    if (!n) {
-        cu_message("no loop to save", CR_COL_RED);
-        return;
-    }
-    rc = crl_fl_save(k, cu_loop_buf, n);
-    cu_trace("loop: save slot %u %u bytes rc %d\n", (unsigned)k + 1u, (unsigned)n, rc);
-    if (rc) {
-        cu_message("save error", CR_COL_RED);
-        return;
-    }
-    fm1_irq_off();
-    crl.dirty = 0;
-    fm1_irq_on();
-    cs.loop_used |= (uint16_t)(1u << k);
-    cs.loop_slot = (uint8_t)k;
-    cu_slot_msg("saved to slot ", k, "", CR_COL_GREEN);
-}
-static void cu_loop_save(uint32_t k)
-{
-    if (!cr_snap.lnev) {
-        cu_message("no loop to save", CR_COL_RED);
-        return;
-    }
-    if (cu_playing()) {                            /* no flash erase while it plays (Felucca: project_save) */
-        cs.save_pending = (uint8_t)(k + 1u);
-        cu_slot_msg("slot ", k, ": saves at stop", CR_COL_RED);
-        return;
-    }
-    cu_loop_save_now(k);
-}
-static void cu_loop_delete(uint32_t k)
-{
-    if (cu_playing()) {
-        cu_message("stop to delete", CR_COL_RED);
-        return;
-    }
-    cu_loop_flush("before a delete");
-    if (crl_fl_delete(k)) {
-        cu_message("delete error", CR_COL_RED);
-        return;
-    }
-    cs.loop_used &= (uint16_t)~(1u << k);
-    if (cs.save_pending == k + 1u)
-        cs.save_pending = 0;
-    if (k == cs.loop_slot) {                       /* the slot in RAM: its loop stays, unsaved (leaving drops it) */
-        fm1_irq_off();
-        crl.dirty = 0;
-        fm1_irq_on();
-    }
-    cu_trace("loop: delete slot %u\n", (unsigned)k + 1u);
-    cu_slot_msg("slot ", k, " deleted", CR_COL_RED);
-}
-static void cu_save_act(void)                      /* SAVE held + OCT+: the action on the target slot */
-{
-    if (cr_safe) {                                 /* SAFE MODE: the slots are neither read nor written */
-        cu_message("safe mode: no saving", CR_COL_RED);
-        return;
-    }
-    if (cs.save_act == 0)
-        cu_loop_save(cs.loop_target);
-    else if (cs.save_act == 1)
-        cu_loop_load(cs.loop_target, 1);           /* (the slot in RAM: reverted to its save) */
-    else
-        cu_loop_delete(cs.loop_target);
 }
 /* the slot the PLAY menu shows: PRESETS' while its switch waits, else the one in RAM */
 static uint32_t cu_lm_slot(void) { return cu_lp.want ? cu_lp.want - 1u : cs.loop_slot; }
@@ -1588,6 +1506,41 @@ static void cu_rec(void)
     }
     cr_post(CRE_LOOP, LP_REC, 0, 0);
 }
+/* THE GLOBAL SAVE (SAVE held past the hold time, alone; the owner, 2026-10-11: "Hold Save button to manually do a
+ * global save, instead of trying to auto-save settings at runtime. So if you power cycle without global saving it will
+ * reset to what it was"): everything about how the instrument is set to play (cr_settings.c cr_settings_commit: the
+ * whole settings block and the session), written now; an object that did not change is not written. No confirm: the
+ * message "saved" (green) says it happened; a flash error: "save error" (red). Never while a loop plays or a take is
+ * open (no flash erase then: the erase stops the audio for ~45 ms an object): "saves at stop", and it is written when
+ * the loop next stops (cu_loop_frame). SAFE MODE, a backup just restored: refused with the reason */
+static void cu_gsave_now(void)
+{
+    int rc = 0;
+    cu.gsave_pend = 0;
+#if CR_HAVE_SETTINGS
+    rc = cr_settings_commit();
+#endif
+    cu_message(rc ? "save error" : "saved", rc ? CR_COL_RED : CR_COL_GREEN);
+    cu_trace("save: global rc %d\n", rc);
+}
+static void cu_gsave(void)
+{
+    if (cr_safe) {
+        cu_message("safe mode: no saving", CR_COL_RED);
+        return;
+    }
+    if (cr_restore_lock) {
+        cu_message("restored: restart first", CR_COL_RED);
+        return;
+    }
+    if (cu_playing() || cr_snap.lcap != CRL_CAP_NONE) {
+        cu.gsave_pend = 1;
+        cu_message("saves at stop", CR_COL_RED);
+        cu_trace("save: global, at the stop\n");
+        return;
+    }
+    cu_gsave_now();
+}
 /* the transport's results (the ISR's CRL_DID_*) as messages; a deferred save once the loop stops */
 static uint32_t cu_did_seen;
 /* the loop in RAM, changed (crl.dirty) and stopped, written to its own slot without a SAVE, so a power-off after a stop
@@ -1604,7 +1557,7 @@ static void cu_loop_autosave(void)
     int stopped_now = was_playing && !cu_playing(), rc;
     was_playing = (uint8_t)cu_playing();
     if (!crl.dirty || cu_playing() || cr_snap.lcap != CRL_CAP_NONE || crl_stage_busy || cu_lp.q || cu_lp.slot ||
-        cs.save_pending || cr_safe || cr_restore_lock || !crl_fl_ready() || k >= CRL_SLOTS)
+        cr_safe || cr_restore_lock || !crl_fl_ready() || k >= CRL_SLOTS)
         return;
     if (!stopped_now && (cr_snap.ci.sounding || (cu.kheld >> CU_ROOT0) || now - cu.last_sound < CU_AUTOSAVE_MS))
         return;
@@ -1689,12 +1642,9 @@ static void cu_loop_frame(void)
         if (cu_loop_flush("at the stop") == 0)
             cu_slot_msg(cu_lp.n ? "saved to slot " : "cleared slot ", k, "", CR_COL_GREEN);
     }
-    if (cs.save_pending && !cu_playing()) {
-        uint32_t k = cs.save_pending - 1u;
-        cs.save_pending = 0;
-        cu_loop_save_now(k);
-    }
     cu_loop_autosave();
+    if (cu.gsave_pend && !cu_playing() && cr_snap.lcap == CRL_CAP_NONE)
+        cu_gsave_now();                            /* SAVE held while it played: now that it stopped */
 }
 
 /* -------------------------------------------------------------- actions --- */
@@ -1733,6 +1683,42 @@ static void cu_layer_close(void)                  /* OCT- in a layer: back (the 
 {
     cu_trace("layer: close %u\n", (unsigned)cu.lock);
     cu.lock = L_NONE;
+}
+
+/* GLO + SAVE held CU_REVERT_MS (the owner, 2026-10-11: "hold GLO + save to reload the global settings and current
+ * preset ... change a bunch of settings then quickly revert back or save"): the unit back to what the last global save
+ * wrote, as a power-on brings it: every note off and the loop stopped as PANIC does (without its screen), any layer,
+ * page or dialog closed (the engine picker: its preview dropped), then flash's settings and session applied
+ * (cr_settings.c cr_settings_revert). No confirm: the message "reverted". The Options are not the revert's (they are
+ * saved by themselves). SAFE MODE (nothing is read there), a backup just restored: refused */
+#define CU_REVERT_MS 1000u
+static void cu_lock_tap(void);
+static void cu_revert(void)
+{
+    if (cr_safe) {
+        cu_message("safe mode: no revert", CR_COL_RED);
+        return;
+    }
+    if (cr_restore_lock) {
+        cu_message("restored: restart first", CR_COL_RED);
+        return;
+    }
+    if (cu.lock == L_EDIT)
+        cu_pick_end(0);
+    cu_close_all();
+    cu.gsave_pend = 0;
+    cu.epk_on = 0;
+    cu.pop.until = 0;
+    if (cu.clock)
+        cu_lock_tap();                            /* LOCK off and its latch up (the session's comes back below) */
+    cu_quiet();
+#if CR_HAVE_SETTINGS
+    cr_settings_revert();
+#endif
+    cr_post(CRE_STICKY, 0, 0, cs.sticky);         /* (after cu_quiet's queued "off": LATCH as saved) */
+    cu_loop_conf();                               /* the looper's settings and the metronome -> the ISR */
+    cu_message("reverted", CR_COL_WHITE);
+    cu_trace("save: reverted\n");
 }
 
 /* PERF tap: perform on / off; FX tap: the effects on / off (with their layer open too: OCT+ there closes the layer as
@@ -1835,9 +1821,6 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
     }
 }
 
-/* the layers that lock open on a hold (SAVE held is momentary: the loop slots while it is held) */
-static int cu_lockable(uint32_t l) { return l && l != L_SAVE; }
-
 static void cu_opened(uint32_t b)                 /* a button held past HOLD (or a combo): its layer / shift */
 {
     uint32_t l = cu_layer_of(b), was = cu.lock;
@@ -1850,7 +1833,7 @@ static void cu_opened(uint32_t b)                 /* a button held past HOLD (or
         cu.page = PG_NONE;
     if (was == L_EDIT && l != L_EDIT)             /* the picker left for another layer: its sound kept */
         cu_pick_end(1);
-    cu.lock = (uint8_t)(cu_lockable(l) ? l : L_NONE);   /* the layer stays open after release */
+    cu.lock = (uint8_t)l;                         /* the layer stays open after release */
     cu_hot.knob = 0;                              /* (a layer opens with no hot cell) */
     if (l == L_KEY && was != L_KEY)               /* the KEY layer opens on its first page */
         cu.kpage = 0;
@@ -1967,9 +1950,7 @@ static void cu_oct_tap(uint32_t b)
         if (l == L_EDIT) {                        /* the engine picker: OCT+ keeps the sound, OCT- cancels */
             cu_pick_end(b == B_OCTUP);
             cu_layer_close();
-        } else if (b == B_OCTUP && l == L_SAVE)   /* SAVE held: the picked action on the slot */
-            cu_save_act();
-        else if (cu.lock)                         /* KEY PERF FX BASS METRO, the PLAY menu (step entry: above), the
+        } else if (cu.lock)                         /* KEY PERF FX BASS METRO, the PLAY menu (step entry: above), the
                                                    * view menu: nothing to confirm, both close (on / off is the
                                                    * layer's own button, tapped) */
             cu_layer_close();
@@ -2434,10 +2415,6 @@ static void cu_layer_pick(uint32_t l, int32_t i)   /* a white root / SELECT: the
             }
         }
         break;
-    case L_SAVE:                                   /* SELECT / KNOB 1: save load delete */
-        if (i < 3)
-            cs.save_act = (uint8_t)i;
-        break;
     case L_METRO:                                  /* the time signature */
         if (i < (int32_t)CRL_NSIG) {
             cs.metro_sig = (uint8_t)i;
@@ -2456,7 +2433,6 @@ static int32_t cu_layer_sel(uint32_t l)
     case L_BASS: return cs.bass_mode;
     case L_EDIT: return cu_engine_rank(cu_edit_trk()->eng_req % NENGINES);
     case L_LOOP: return cs.loop_len;
-    case L_SAVE: return cs.save_act;
     case L_METRO: return cs.metro_sig;
     case L_VIEW: return cs.view;
     default: return 0;
@@ -2471,7 +2447,6 @@ static int32_t cu_layer_count(uint32_t l)
     case L_BASS: return 4;
     case L_EDIT: cu_engine_at(0, &n); return (int32_t)n;
     case L_LOOP: return (int32_t)CRL_NSYNC;
-    case L_SAVE: return 3;
     case L_METRO: return CRL_NSIG;
     case L_VIEW: return V_N;
     default: return 0;
@@ -2525,13 +2500,9 @@ static void cu_layer_key(uint32_t l, uint32_t k)   /* a root key while layer l i
         cr_post(CRE_LOOP, LP_UNDO, 0, 0);
         return;
     }
-    if ((l == L_LOOP || l == L_SAVE) && wi >= 0) { /* the white roots: slots 1..10 */
-        if (wi < (int32_t)CRL_SLOTS) {
-            if (l == L_LOOP)
-                cu_loop_load((uint32_t)wi, 0);
-            else
-                cs.loop_target = (uint8_t)wi;
-        }
+    if (l == L_LOOP && wi >= 0) {                  /* the white roots: slots 1..10 */
+        if (wi < (int32_t)CRL_SLOTS)
+            cu_loop_load((uint32_t)wi, 0);
         return;
     }
     cu_layer_pick(l, wi);
@@ -2686,10 +2657,6 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cu_loop_keys(s > 0);
         }
         cu_hot_set(L_LOOP, knob);                 /* (no popup: the cell turns hot) */
-        break;
-    case L_SAVE:
-        if (knob == 0)
-            cu_layer_pick(L_SAVE, (int32_t)(cs.save_act + 3u + (s > 0 ? 1u : 2u)) % 3);
         break;
     case L_METRO:                                  /* KNOB 1: the click level */
         if (knob == 0) {
@@ -3013,6 +2980,8 @@ static void cu_btn_press(uint32_t b)
     }
     /* another button during a hold: a combo (its release does nothing) */
     cu.swallow |= CU_BIT(b);
+    if ((cu.armed == BT_OPT && b == BT_SAVE) || (cu.armed == BT_SAVE && b == BT_OPT))
+        cu.rev_t0 = cu_now() | 1u;                /* GLO + SAVE: both held CU_REVERT_MS, the revert (cr_ui_input) */
 #if CR_EDIT_HOOKS
     if (cu.page == PG_EDIT && cu.armed == BT_OPT && b == BT_EDIT) {   /* SHIFT + EDIT in the editor: chord / bass */
         cu.combo = 1;
@@ -3481,8 +3450,23 @@ static void cr_ui_input(void)
         else
             cu_view_menu();
     }
+    if (cu.rev_t0) {                               /* GLO + SAVE, both still down: the revert after CU_REVERT_MS */
+        if ((cu.bheld & (CU_BIT(BT_OPT) | CU_BIT(BT_SAVE))) != (CU_BIT(BT_OPT) | CU_BIT(BT_SAVE)))
+            cu.rev_t0 = 0;
+        else if (now - cu.rev_t0 >= CU_REVERT_MS) {
+            cu.rev_t0 = 0;
+            cu_revert();
+        }
+    }
     if (cu.armed != NB && !cu.open && ((cu.bheld >> cu.armed) & 1u) && !(cu.armed == BT_SAVE && cu.page == PG_SAVE) &&
         now - cu.t0 >= (uint32_t)HOLD_MS[settings_hold % 4u]) {
+        if (cu.armed == BT_SAVE) {                 /* SAVE held alone past the hold time: the global save (a key, a
+                                                    * knob or another button touched meanwhile: a combo, nothing).
+                                                    * Its release does nothing. (The naming dialog: SAVE held 1 s asks
+                                                    * to delete, above) */
+            cu.open = 1;
+            cu_gsave();
+        } else
 #if CR_EDIT_HOOKS
         if (cu.page == PG_EDIT && !cu_layer() && ce_owns(cu.armed)) {   /* the editor's: its hold, no layer */
             cu.open = 1;
@@ -3666,13 +3650,13 @@ static void cr_leds(void)
         cu_led(nf, 14u + k, 1);
     }
     /* the roots: a layer's map, or the voiced notes where they sound */
-    if ((l == L_LOOP && cs.loop_keys) || l == L_SAVE) {   /* the slots: lit = a loop, blinking = the one selected (the
-                                                          * PLAY menu with Keys = Play: the keys as on the view) */
-        uint32_t sel = l == L_LOOP ? cu_lm_slot() : cs.loop_target;
+    if (l == L_LOOP && cs.loop_keys) {             /* the slots: lit = a loop, blinking = the one selected (the
+                                                    * PLAY menu with Keys = Play: the keys as on the view) */
+        uint32_t sel = cu_lm_slot();
         for (k = CU_ROOT0; k < CU_NKEY; k++) {
             int32_t wi = cu_white_idx(k);
             if (wi < 0 || wi >= (int32_t)CRL_SLOTS) {
-                if (l == L_LOOP && (k == 10u || k == 13u))   /* CLEAR, UNDO */
+                if (k == 10u || k == 13u)          /* CLEAR, UNDO */
                     cu_led(nl, 14u + k, 1);
                 continue;
             }
@@ -4467,8 +4451,6 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
     static const char *const PERF_ITEMS[7] = {"Strum", "Strum 2 Octaves", "Slop", "Arpeggiate", "Arp 2 Octaves",
                                               "Pattern", "Harp"};
     static const char *const FX_ITEMS[CU_NFX] = {"Reverb", "Chorus", "Delay", "Drive"};
-    static const char *const SLOTS[10] = {"Slot 1", "Slot 2", "Slot 3", "Slot 4", "Slot 5", "Slot 6", "Slot 7",
-                                          "Slot 8", "Slot 9", "Slot 10"};
     const char *eng[NENGINES];
     uint32_t k, n;
     switch (l) {
@@ -4575,15 +4557,6 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         break;
     case L_LOOP:                                   /* the PLAY menu (no ring: a loop running shows the dial) */
         cu_loopmenu(s, cu_now());
-        break;
-    case L_SAVE:                                   /* loops: save / load / delete on the root-chosen slot */
-        cu_picker(s, CU_SAVE_ACT, 3, cs.save_act, CR_COL_RED,
-                  (cs.loop_used >> cs.loop_target) & 1u ? "holds a loop" : "empty",
-                  "");                       /* (a plain picker: no ring; a loop running: the dial) */
-        s->orient = 1;
-        cu_cpy(s->value, SLOTS[cs.loop_target % 10u], sizeof s->value);
-        cu_cpy(s->mid, "Loops", sizeof s->mid);
-        s->mid_col = CR_COL_RED;
         break;
     case L_METRO: {                                /* layers sheet 7: the time signature over Click (KNOB 1) */
         static char seen[48];

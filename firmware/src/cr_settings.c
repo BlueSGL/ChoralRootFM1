@@ -11,18 +11,26 @@
  * UI's mirror (cr_ui.c's cs):
  *   cr_settings_boot()   persist_boot: the flash object -> Felucca's fields (panel table, HOLD) + our record
  *   cr_settings_load()   the end of cr_ui_init: the record -> engine, routing, the UI mirror, sounds, palette
- *   cr_settings_poll()   every UI frame: a change (captured from the UI; and of Felucca's HOLD, which Options >
- *                        Hold Time sets outside our record: crs_hold_seen) is saved once nothing changed for
- *                        CRS_QUIET_MS and nothing has sounded for CRS_IDLE_MS (crs_sounding: no voice of the parts,
- *                        no chord held or latched, no scheduled note, the master output below -60 dBFS), never
- *                        while a loop plays (CR_SETTINGS_BUSY()), retried after a flash error. A flash erase holds
- *                        every IRQ for ~45 ms with the audio buffer zeroed (storage_hw.c st_erase): saved under a
- *                        sounding chord it was a 46 ms hole with a click at each edge (docs/INTEGRATION.md,
- *                        Performance)
- *   cr_settings_save()   save now (still deferred while a loop plays)
+ *   cr_settings_poll()   every UI frame: a change of an AUTOMATIC setting (cr_settings.h cr_settings_auto: what the
+ *                        Options menu alone sets; and Felucca's HOLD, which Options > Hold Time sets outside our
+ *                        record: crs_hold_seen) is saved once nothing changed for CRS_QUIET_MS and nothing has
+ *                        sounded for CRS_IDLE_MS (crs_sounding: no voice of the parts, no chord held or latched, no
+ *                        scheduled note, the master output below -60 dBFS), never while a loop plays
+ *                        (CR_SETTINGS_BUSY()), retried after a flash error. A flash erase holds every IRQ for ~45 ms
+ *                        with the audio buffer zeroed (storage_hw.c st_erase): saved under a sounding chord it was a
+ *                        46 ms hole with a click at each edge (docs/INTEGRATION.md, Performance). What is written:
+ *                        flash's block with the automatic fields as they are now; the MANUAL fields stay what the
+ *                        last global save wrote
+ *   cr_settings_save()   the automatic part now (Felucca's settings_save: the calibration, a backup's LIST, the
+ *                        update gesture), still deferred while a loop plays
+ *   cr_settings_commit() the GLOBAL SAVE (SAVE held, cr_ui.c cu_gsave; Options > Reset Settings): the whole block
+ *                        and the session, now. The only writer of the manual settings and of the session
+ *   cr_settings_revert() GLO + SAVE: flash's block (with the Options as they are now) and flash's session applied
+ *                        again, as a power-on applies them
  * The session (0.18, cr_settings.h cr_session_t: where the unit was left; part 1 has its defaults / import / seal,
  * part 2 its glue, css_*): a flash object of its own (storage.c OBJ_SESSION), read by cr_settings_boot, applied once
- * by cr_settings_load, captured and saved from cr_settings_poll under the same rules.
+ * by cr_settings_load, written by cr_settings_commit alone (until 2026-10-11 the poll wrote it when the unit was
+ * quiet: "switch off, switch on: where you left off"; the owner's rule since: the unit comes back as last SAVED).
  * Nothing here writes flash from the audio ISR. */
 #ifndef CR_ENGINE_H
 #include "cr_engine.h"
@@ -129,6 +137,28 @@ int cr_settings_equal(const cr_settings_t *a, const cr_settings_t *b)
         if (x[i] != y[i])
             return 0;
     return 1;
+}
+
+void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src)
+{
+    uint32_t i;
+    dst->playstyle = src->playstyle;
+    dst->extadd = src->extadd;
+    dst->secret = src->secret;
+    dst->vel = src->vel;
+    for (i = 0; i < 3u; i++) {
+        dst->midi_en[i] = src->midi_en[i];
+        dst->midi_ch[i] = src->midi_ch[i];
+    }
+    dst->clock_mode = src->clock_mode;
+    dst->raw_sound = src->raw_sound;
+    dst->motion = src->motion;
+    dst->leds = src->leds;
+    dst->palette = src->palette;
+    dst->usb_in = src->usb_in;
+    dst->usb_level = src->usb_level;
+    dst->view = (uint8_t)((dst->view & (uint8_t)~CRS_DC_ON) | (src->view & CRS_DC_ON));   /* (Dual Core rides in the
+                                                    * view's byte: the view and its lock are manual) */
 }
 
 /* a field out of range takes its default */
@@ -508,14 +538,13 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
 #ifndef CR_SETTINGS_BUSY
 #define CR_SETTINGS_BUSY() 0                       /* (cr_ui.c defines it: a loop is playing, no flash erase) */
 #endif
-#define CRS_QUIET_MS 1500u                         /* a change is saved once nothing changed for this long */
+#define CRS_QUIET_MS 1500u                         /* an automatic change is saved once nothing changed for this long */
 #define CRS_IDLE_MS 1000u                          /* .. and nothing sounded for this long (crs_sounding) */
 #define CRS_QUIET_PEAK 32                          /* the master output (audio.c scope_buf, Q15): -60 dBFS */
 
 #include "settings_persist.c"                      /* Felucca's record, PER5: its last member is cr_settings_t */
 
-#define CSS_SCAN_MS 200u                           /* the session is looked at this often (css_poll) */
-#define CSS_GAP_MS 250u                            /* .. and two flash writes are at least this far apart */
+#define CSS_GAP_MS 250u                            /* an automatic write waits this long after another object's */
 
 static persist_t crs_rec;                          /* the last record read or written (Felucca's fields + ours) */
 static cr_settings_t crs_seen;                     /* the last captured state (change detection) */
@@ -531,20 +560,20 @@ static uint32_t crs_loud_ms;                       /* the last time something so
 static int crs_last_rc;                            /* the last import: 1 current, 2 migrated, 0 defaults */
 static uint32_t crs_saves;                         /* flash writes done (diagnostics, the emulator) */
 /* the session (cr_settings.h cr_session_t; docs/SETTINGS.md "The session"): ONE copy in RAM, css_buf, in the pool: what
- * flash held at power-on until cr_settings_load applied it, then the scratch the state is captured into; the state
- * last seen and the one flash holds are kept as hashes (cr_session_hash), so that change detection costs no second
- * and third kilobyte */
+ * flash held at power-on (or at a revert) until cr_settings_load applied it, else the scratch the state is captured
+ * into for a write; what flash holds is kept as a hash (cr_session_hash), so that "unchanged: no erase" costs no
+ * second kilobyte */
 typedef char css_fit_ok[P_COUNT <= CSS_NP && ENG_BLOB_MAX <= CSS_BLOB && sizeof psnd[0].name == CSS_NAME &&
                         CR_NMOD <= 8 ? 1 : -1];
 static cr_session_t css_buf __attribute__((section(".pool")));
-static uint32_t css_seen, css_flash;               /* cr_session_hash of the state last captured / in flash (0: none) */
+static uint32_t css_flash;                         /* cr_session_hash of the session in flash (0: none) */
 static uint32_t crs_obj_crc;                       /* the settings object's payload CRC in flash (0: none): the session's
                                                     * `bind` */
-static uint8_t css_have;                           /* power-on: css_buf holds a session to apply (cr_settings_load) */
-static uint8_t css_pending;
+static uint8_t css_have;                           /* power-on, a revert: css_buf holds a session to apply
+                                                    * (cr_settings_load) */
 static int8_t css_last_rc;                         /* the session at power-on: 1 current, 2 migrated, 0 none, -1 one
                                                     * that does not belong to these settings (not applied) */
-static uint32_t css_change_ms, css_scan_ms, css_retry_ms, crs_wr_ms;
+static uint32_t crs_wr_ms;
 static uint32_t css_saves;                         /* flash writes done (diagnostics, the emulator) */
 
 /* the USB settings to usb.c (which devices the host is given; ua_off at boot, usb_start builds the configuration)
@@ -555,6 +584,30 @@ static void crs_usb_apply(const cr_settings_t *s)
 #if FELUCCA_UAC
     ua_off = ua_off_want = s->usb_in ? 0u : UA_OFF_IN;
 #endif
+}
+
+/* the session in flash -> css_buf (css_have: one to apply; css_last_rc, css_flash). Power-on and a revert */
+static void css_read(void)
+{
+    int n = 0;
+    css_have = 0;
+    css_flash = 0;
+    css_last_rc = 0;
+#if FELUCCA_FLASH
+    if (flash_ok && (n = st_load(OBJ_SESSION, &css_buf, sizeof css_buf)) > 0 &&
+        (n = cr_session_import(&css_buf, &css_buf, (uint32_t)n)) != 0) {
+        if (crs_last_rc == 1 || crs_saves || css_buf.bind == crs_obj_crc) {   /* it belongs to these settings
+                                                    * (cr_settings.h; crs_saves: this firmware has written the block
+                                                    * since power-on) */
+            css_have = 1;
+            css_last_rc = (int8_t)n;
+            css_flash = cr_session_hash(&css_buf);
+        } else {
+            css_last_rc = -1;
+        }
+    }
+#endif
+    (void)n;
 }
 
 static void cr_settings_boot(void)                 /* persist_boot (flash_ok known), before settings_init / panel_init */
@@ -574,21 +627,7 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
     crs_last_rc = cr_settings_import(&crs_rec.cr, &crs_rec.cr, sizeof crs_rec.cr);
     crs_usb_apply(&crs_rec.cr);                    /* (before usb_start: the configuration the host first reads) */
     cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off (the default): core 1 not started */
-    css_have = 0;                                  /* the session: read here, applied by cr_settings_load */
-    css_flash = 0;
-    css_last_rc = 0;
-#if FELUCCA_FLASH
-    if (flash_ok && (n = st_load(OBJ_SESSION, &css_buf, sizeof css_buf)) > 0 &&
-        (n = cr_session_import(&css_buf, &css_buf, (uint32_t)n)) != 0) {
-        if (crs_last_rc == 1 || css_buf.bind == crs_obj_crc) {   /* it belongs to these settings (cr_settings.h) */
-            css_have = 1;
-            css_last_rc = (int8_t)n;
-            css_flash = cr_session_hash(&css_buf);
-        } else {
-            css_last_rc = -1;
-        }
-    }
-#endif
+    css_read();                                    /* the session: read here, applied by cr_settings_load */
 }
 
 /* the record's pool_pos slot of the engine of ENGINE_ORDER rank r (cr_settings.h): CRS_NENG = 11 slots, fixed per engine
@@ -875,7 +914,7 @@ static int css_write(void)                         /* the state now -> flash; 0:
         return 0;                                  /* SAFE MODE: the flash untouched */
 #endif
     css_capture(&css_buf);
-    css_seen = h = cr_session_hash(&css_buf);
+    h = cr_session_hash(&css_buf);
     if (h == css_flash)
         return 0;                                  /* unchanged: no erase cycle */
     css_buf.bind = crs_obj_crc;
@@ -887,35 +926,6 @@ static int css_write(void)                         /* the state now -> flash; 0:
     crs_wr_ms = fm1_ms;
 #endif
     return 0;
-}
-
-/* every UI frame, from cr_settings_poll: the state is captured every CSS_SCAN_MS (not while the engine picker
- * previews a sound: cpk) and a change written under the block's rules: nothing changed for CRS_QUIET_MS, nothing
- * sounded for CRS_IDLE_MS, no loop playing, and CSS_GAP_MS after the other object's write (one erase at a time) */
-static void css_poll(void)
-{
-    if ((uint32_t)(fm1_ms - css_scan_ms) >= CSS_SCAN_MS && !cpk.on) {
-        uint32_t h;
-        css_scan_ms = fm1_ms;
-        css_capture(&css_buf);
-        h = cr_session_hash(&css_buf);
-        if (h != css_seen) {
-            css_seen = h;
-            css_change_ms = fm1_ms;
-            css_pending = 1;
-        }
-    }
-    if (!css_pending || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - css_change_ms) < CRS_QUIET_MS ||
-        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS)
-        return;
-    if (css_pending == 2u && (uint32_t)(fm1_ms - css_retry_ms) < 1000u)
-        return;
-    if (css_write() == 0) {
-        css_pending = 0;
-    } else {
-        css_pending = 2;
-        css_retry_ms = fm1_ms;
-    }
 }
 
 /* the end of cr_ui_init: the record -> the engine (directly, IRQ off: nothing sounds yet), the routing, the mirror */
@@ -1001,17 +1011,15 @@ static void cr_settings_load(void)
     cu_post_kbd();                                 /* (the split key's note: the UI's, with its octave) */
     cu_set_tempo(s->bpm);
     crs_loaded = 1;
-    crs_capture(&crs_seen);                        /* the state now: nothing to save until it changes */
-    css_capture(&css_buf);
-    css_seen = cr_session_hash(&css_buf);
-    css_scan_ms = css_change_ms = fm1_ms;
-    css_pending = 0;
+    crs_capture(&crs_seen);                        /* the state now: nothing to save until an Option changes */
     crs_hold_seen = settings_hold;
     crs_change_ms = fm1_ms;
     crs_pending = 0;
 }
 
-static int crs_write(void)                         /* the captured state -> flash; 0: written (or no flash) */
+/* the captured state (crs_seen) -> flash; 0: written (or no flash, or nothing to write). full: the whole block (the
+ * global save); else flash's block with the automatic fields of the captured state: the manual ones stay as last saved */
+static int crs_write(int full)
 {
 #if FELUCCA_FLASH
     persist_t p = crs_rec;
@@ -1022,7 +1030,10 @@ static int crs_write(void)                         /* the captured state -> flas
         return 0;                                  /* SAFE MODE (core.h): kept in RAM only, the flash untouched */
 #endif
     settings_export(&p);                           /* Felucca's fields (panel table, HOLD, LEDs, palette) */
-    p.cr = crs_seen;
+    if (full)
+        p.cr = crs_seen;
+    else
+        cr_settings_auto(&p.cr, &crs_seen);
     cr_settings_seal(&p.cr);
     if (!memcmp(&p, &crs_rec, sizeof p))
         return 0;                                  /* unchanged: no erase cycle */
@@ -1033,7 +1044,11 @@ static int crs_write(void)                         /* the captured state -> flas
     crs_wr_ms = fm1_ms;
     crs_saves++;
 #else
-    crs_rec.cr = crs_seen;
+    if (full)
+        crs_rec.cr = crs_seen;
+    else
+        cr_settings_auto(&crs_rec.cr, &crs_seen);
+    cr_settings_seal(&crs_rec.cr);
 #endif
     return 0;
 }
@@ -1041,10 +1056,11 @@ static int crs_write(void)                         /* the captured state -> flas
 /* something sounds or is about to: a voice of the parts (release tails too), a chord the engine holds or latches,
  * a scheduled note (arp, strum), or the master output (the FX tails) above CRS_QUIET_PEAK over the scope's last
  * 512 samples (~23 ms). No flash erase then: it would cut the audio (see the top). There is no way round it: a
- * reverb at DECAY Inf (cr_fx.c) keeps the output above the floor and so keeps the settings and the session from being
+ * reverb at DECAY Inf (cr_fx.c) keeps the output above the floor and so keeps the automatic settings from being
  * written until it is turned down or the effects are switched off (the first 0.18 build wrote after 30 s anyway: a
  * 46 ms hole in the tail, heard on the unit as a drop-out; 73 DEBUG's flash_holes counts erases into a sounding
- * output: 0 is the rule). What is lost if the power is cut meanwhile: the changes since the last quiet moment */
+ * output: 0 is the rule for the automatic writes; the global save is the player's own press and writes at once).
+ * What is lost if the power is cut meanwhile: the Options changed since the last quiet moment */
 static int crs_sounding(void)
 {
     uint32_t i;
@@ -1065,14 +1081,18 @@ static void cr_settings_poll(void)
         return;
     if (crs_sounding())
         crs_loud_ms = fm1_ms;
-    css_poll();                                    /* the session: its own object, its own pending flag */
     crs_capture(&now);
     if (!cr_settings_equal(&now, &crs_seen) || settings_hold != crs_hold_seen) {   /* (HOLD: crs_write's
                                                     * settings_export puts it in the record) */
+        cr_settings_t was = crs_seen;
+        cr_settings_auto(&was, &now);              /* (the last state with the Options of now: differs = an Option
+                                                    * changed; a manual setting alone starts no write) */
+        if (!cr_settings_equal(&was, &crs_seen) || settings_hold != crs_hold_seen) {
+            crs_change_ms = fm1_ms;
+            crs_pending = 1;
+        }
         crs_seen = now;
         crs_hold_seen = settings_hold;
-        crs_change_ms = fm1_ms;
-        crs_pending = 1;
         return;
     }
     if (!crs_pending || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - crs_change_ms) < CRS_QUIET_MS ||
@@ -1080,7 +1100,7 @@ static void cr_settings_poll(void)
         return;
     if (crs_pending == 2u && (uint32_t)(fm1_ms - crs_retry_ms) < 1000u)
         return;
-    if (crs_write() == 0) {
+    if (crs_write(0) == 0) {
         crs_pending = 0;
     } else {
         crs_pending = 2;                           /* flash error: retry in a second */
@@ -1088,7 +1108,8 @@ static void cr_settings_poll(void)
     }
 }
 
-/* save now (Felucca's settings_save: the calibration, the Options): still not while a loop plays */
+/* the automatic part now (Felucca's settings_save: the power-on calibration; a backup's LIST; the update gesture):
+ * still not while a loop plays. The manual settings and the session are the global save's (cr_settings_commit) */
 static void cr_settings_save(void)
 {
     if (!crs_loaded) {                             /* (power-on calibration: before the UI) */
@@ -1101,32 +1122,37 @@ static void cr_settings_save(void)
     crs_hold_seen = settings_hold;
     crs_pending = 1;
     crs_change_ms = fm1_ms - CRS_QUIET_MS;
-    if (!CR_SETTINGS_BUSY() && crs_write() == 0)
+    if (!CR_SETTINGS_BUSY() && crs_write(0) == 0)
         crs_pending = 0;
-    if (crs_loaded && !CR_SETTINGS_BUSY() && css_write() == 0)   /* the session with it (unchanged: no write) */
-        css_pending = 0;
 }
 
-/* Options > Reset Settings (the owner, 2026-10-12): every option back to what a new unit has, now and in flash. The
- * record: cr_settings_factory (cr_settings_defaults: the same defaults as a unit with no record and as SAFE MODE);
- * Felucca's one field the Options set outside it: HOLD. Then the unit as a power-on leaves it with those settings:
- * the default sounds on both parts (TINE EP, DEEP SUB; an edit not saved is gone: the one place where it is, since
- * 0.18 keeps it over a power-on), their levels and pans, the effects' parameters, the bass off, and cr_settings_load again: the record -> the engine, the routing, the UI's mirror. Saved at once
- * (cr_settings_save: after the loop stops, if one plays: cu_reset stopped it).
- * NOT touched: the panel calibration (persist_t.panel: settings_export writes the table in RAM, as every save), the
- * saved sounds and patches (upreset / va / fm6 / cz / quad stores), the loops and the slot selected, Felucca's
- * favourites. Dual Core: Off is saved; a core that this power-on started runs until the next one (cr_c1_off) */
-static void cr_settings_reset(void)
+/* THE GLOBAL SAVE (the owner, 2026-10-11: "Hold Save button to manually do a global save, instead of trying to
+ * auto-save settings at runtime"): the whole block as it is now and the session, at once, whatever sounds (the
+ * player's own press: cr_ui.c cu_gsave keeps it off a playing loop). An object that did not change is not written
+ * (crs_write's compare, css_write's hash): no erase for it. 0: done, -1: a flash error (what was written stays) */
+static int cr_settings_commit(void)
+{
+    int rc = 0;
+    if (!crs_loaded || cr_restore_lock)            /* (a restore: flash is newer than the RAM until the restart) */
+        return 0;
+    crs_capture(&crs_seen);
+    crs_hold_seen = settings_hold;
+    if (crs_write(1) == 0)
+        crs_pending = 0;
+    else
+        rc = -1;
+    if (css_write() != 0)
+        rc = -1;
+    return rc;
+}
+
+/* both parts and the effects as cr_ui_init leaves them (the default sounds loaded: an edit not saved is gone; the
+ * parts' own parameters, Level and Pan among them; the effects' parameters and the effect picked; the bass off):
+ * what cr_settings_load then puts the block and a session over. Reset Settings and a revert */
+static void crs_reinit(void)
 {
     uint32_t i, k;
-    if (!crs_loaded)
-        return;
-    cr_settings_factory(&crs_rec.cr);
-    settings_hold = HOLD_DEF;
-    for (k = 0; k < 2u; k++)                       /* the session too (0.18): the parts' own parameters (Level, Pan: what
-                                                    * a sound's load keeps), the effects' parameters and the effect
-                                                    * picked, as cr_ui_init leaves them; cu_reset: LOCK, the voicing,
-                                                    * the octave. The session then captured is a new unit's */
+    for (k = 0; k < 2u; k++)
         for (i = 0; i < P_E0; i++)
             trk[k ? CR_PART_BASS : CR_PART_CHORD].p[i] = TP[i].def;
     css_fxg_defaults();
@@ -1137,9 +1163,55 @@ static void cr_settings_reset(void)
     cu_pool_load(1, ENGI_VA, cu_pool_find(ENGI_VA, "DEEP SUB"));
     cs.bass_sound = 0;                             /* ALGORITHM at OFF: the bass off */
     cs.bass_on = 0;
+}
+
+/* Options > Reset Settings (the owner, 2026-10-12): every option back to what a new unit has, now and in flash. The
+ * record: cr_settings_factory (cr_settings_defaults: the same defaults as a unit with no record and as SAFE MODE);
+ * Felucca's one field the Options set outside it: HOLD. Then the unit as a power-on leaves it with those settings:
+ * the default sounds on both parts (TINE EP, DEEP SUB; an edit not saved is gone), their levels and pans, the
+ * effects' parameters, the bass off (crs_reinit), and cr_settings_load again: the record -> the engine, the routing,
+ * the UI's mirror. Both sides, the manual and the automatic, and written at once: it is a deliberate act, no SAVE held
+ * is needed after it (cr_settings_commit; a loop playing: cr_ui.c cu_reset stopped it first).
+ * NOT touched: the panel calibration (persist_t.panel: settings_export writes the table in RAM, as every save), the
+ * saved sounds and patches (upreset / va / fm6 / cz / quad stores), the loops and the slot selected, Felucca's
+ * favourites. Dual Core: Off is saved; a core that this power-on started runs until the next one (cr_c1_off) */
+static void cr_settings_reset(void)
+{
+    if (!crs_loaded)
+        return;
+    cr_settings_factory(&crs_rec.cr);
+    settings_hold = HOLD_DEF;
+    crs_reinit();                                  /* the session too (0.18): cu_reset: LOCK, the voicing, the octave.
+                                                    * The session then captured is a new unit's */
     cr_settings_load();
     cu_loop_conf();                                /* the looper's options and the metronome -> the ISR */
     cu_usb_apply();                                /* USB Record on again, if it was off (usb.c) */
-    cr_settings_save();
+    cr_settings_commit();
+}
+
+/* GLO + SAVE (the owner, 2026-10-11: "reload the global settings and current preset ... change a bunch of settings
+ * then quickly revert back"): what the last global save wrote, applied again as a power-on applies it: flash's block
+ * (crs_rec mirrors it; its automatic fields are the Options as they are now, which are not the revert's) and flash's
+ * session (read again: both parts' sounds as saved there, the voicing, the octave, Bass on, LOCK and its latch, the
+ * FX layer). No session in flash (a unit that never saved): the parts on the block's sounds, the rest at the
+ * defaults, as that unit powers on. cr_ui.c cu_revert quiets the unit first and reloads the loop slot after */
+static void cr_settings_revert(void)
+{
+    cr_settings_t keep, now;
+    if (!crs_loaded)
+        return;
+    crs_capture(&now);
+    keep = crs_rec.cr;
+    cr_settings_auto(&crs_rec.cr, &now);
+    cr_settings_seal(&crs_rec.cr);
+    css_read();
+    crs_reinit();
+    fm1_irq_off();
+    cr_voicing_step(&cr, -(int)cr.voicing);        /* (no session: 0; css_apply sets the session's) */
+    fm1_irq_on();
+    cr_settings_load();
+    crs_rec.cr = keep;                             /* (still what flash holds) */
+    crs_pending = 1;                               /* an Option not written yet: still to write (none: no erase) */
+    crs_change_ms = fm1_ms;
 }
 #endif /* CR_VERSION */

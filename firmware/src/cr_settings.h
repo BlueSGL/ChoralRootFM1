@@ -141,6 +141,14 @@ void cr_settings_factory(cr_settings_t *s);
 int  cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n);
 void cr_settings_seal(cr_settings_t *s);         /* header + checksum, before it is stored */
 int  cr_settings_equal(const cr_settings_t *a, const cr_settings_t *b);   /* the payloads */
+/* Saving is manual since 0.18 (the owner, 2026-10-11; docs/SETTINGS.md "Manual and automatic"): the block holds two
+ * kinds of field. AUTOMATIC: what the Options menu alone sets (Play Style, Extension Addition, Secret Chords, Velocity,
+ * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, Dual Core; the palette, which
+ * has no control), written by itself when the unit is quiet. MANUAL: everything else, how the instrument is set to
+ * play, written only by the global save (SAVE held). cr_settings_auto copies the automatic fields of *src into *dst
+ * and leaves dst's manual ones (not sealed): flash's block with the Options as they are now is what an automatic
+ * write stores, and what a revert (GLO + SAVE) applies */
+void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src);
 /* the pool position of part (0 chord, 1 bass) on the engine of pool_pos slot r (0..CRS_NENG-1) */
 static inline uint8_t crs_pool_get(const cr_settings_t *s, unsigned part, unsigned r)
 {

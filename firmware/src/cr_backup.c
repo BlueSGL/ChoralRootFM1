@@ -408,7 +408,6 @@ static uint32_t crb_commit(void)
                                                       * object, so the restart comes up on the restored settings alone
                                                       * (their sounds, the bass off, voicing 0) */
         css_flash = 0;
-        css_pending = 0;
 #endif
         cr_restore_lock = 1;                         /* no settings save before the restart */
         cu_message("settings restored: restart", CR_COL_GREEN);

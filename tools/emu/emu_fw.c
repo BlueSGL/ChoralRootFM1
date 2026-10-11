@@ -425,7 +425,8 @@ void emu_fw_dump(void)
     printf("  flash: %s, %u writes, settings saves %u (record: %s)\n", emu_flash_path[0] ? emu_flash_path : "RAM only",
            (unsigned)emu_flash_writes, (unsigned)crs_saves, crs_last_rc == 1 ? "current" : crs_last_rc == 2 ? "migrated" : "defaults");
     {   /* the session (cr_settings.c css_*, docs/SETTINGS.md): its saves, what power-on found, the state as it would be
-         * saved now and as flash holds it (cr_session_hash), and the state itself: the FX layer, each part's sound */
+         * saved now and as flash holds it (cr_session_hash; "pending 1": they differ, a global save would write it),
+         * and the state itself: the FX layer, each part's sound */
         static cr_session_t x;
         unsigned k;
         fm1_irq_on();                             /* (css_capture takes the lock itself) */
@@ -434,7 +435,7 @@ void emu_fw_dump(void)
         printf("  session: saves %u (at power-on: %s) now %08X flash %08X pending %u  voicing %d octave %d bass %u lock %u "
                "latched %02X\n", (unsigned)css_saves, css_last_rc == 1 ? "current" : css_last_rc == 2 ? "migrated" :
                css_last_rc < 0 ? "not these settings'" : "none", (unsigned)cr_session_hash(&x), (unsigned)css_flash,
-               (unsigned)css_pending, (int)x.voicing, (int)x.octave, (unsigned)x.bass_on, (unsigned)x.lock, (unsigned)x.latched);
+               (unsigned)(cr_session_hash(&x) != css_flash), (int)x.voicing, (int)x.octave, (unsigned)x.bass_on, (unsigned)x.lock, (unsigned)x.latched);
         printf("  session fx: on %u sel %u (%s %u/%u) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel, CU_FX[cs.fx_sel % CU_NFX].name,
                (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[cu_fx_pg()].of);
         for (k = 0; k < CU_NFX; k++)
