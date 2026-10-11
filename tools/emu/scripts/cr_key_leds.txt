@@ -1,9 +1,18 @@
-# ChoralRoot: Key Mode's lights on the root keys (the owner, 2026-10-11): three levels under "lit". Key Mode off: every
-# root glows (dim). Key Mode on, everywhere the roots play: the notes of the scale glow (dim, fm1_led_dim), the tonic's
+# ChoralRoot: Key Mode's lights on the root keys (the owner, 2026-10-11 / 12): four levels: faint < dim < mid < lit.
+# Key Mode off: the roots are dark (no idle glow) unless they sound; the chord keys and B3 idle at the faint level
+# (under the glow), with Key Mode on too. Key Mode on, everywhere the roots play: the notes of the scale glow (dim, fm1_led_dim), the tonic's
 # keys at the middle level (mid, fm1_led_dim2), the roots out of the scale are dark, a sounding note is lit over it.
-# The dump's "key leds:" line: F3..C4, then D4..G5: 0 off 1 dim 2 mid 3 lit.
+# The dump's "key leds:" line: F3..C4, then D4..G5: 0 off 1 faint 2 dim 3 mid 4 lit.
 wait 300
-dump                          # 1: Key Mode off: 111111111111111111
+expect led D4 off             # Key Mode off: a root has no idle glow,
+expect led G5 off
+expect led F3 faint           # a chord key idles faint (DIM .. 9, B3 = LOCK),
+expect led C4 faint
+expect led B3 faint
+expect led FX on              # the buttons as ever: FX on,
+expect led EDIT dim           # an idle one glows (dim: over the chord keys)
+dump                          # 1: Key Mode off: 111111111 000000000000000000
+shot build/emu/test/cr_key_leds_off.ppm
 btn SEL                       # tap: Key Mode on, C major
 wait 300
 expect led C5 mid             # the tonic
@@ -11,7 +20,7 @@ expect led D4 dim             # a note of the scale
 expect led D#4 off            # out of it
 expect led F#4 off
 expect led B4 dim             # (a white key in C major)
-dump                          # 2: 101101010120101101
+dump                          # 2: 202202020230202202 (the chord keys still 1)
 shot build/emu/test/cr_key_leds_c.ppm
 btn SEL down                  # the layer: the tonic D (KNOB 1), still major
 wait 500
@@ -19,7 +28,7 @@ btn SEL up
 wait 300
 knob KNOB1 +2
 wait 300
-dump                          # 3: in the layer (keys: pick): the same picture: 201011010101201011
+dump                          # 3: in the layer (keys: pick): the same picture: 302022020202302022
 btn OCT-
 wait 300
 expect led D4 mid
@@ -28,7 +37,7 @@ expect led F4 off             # a white key out of D major: dark (it glowed unti
 expect led C5 off
 expect led F#4 dim
 expect led C#5 dim
-dump                          # 4: D major: 201011010101201011
+dump                          # 4: D major: 302022020202302022
 btn SEL down                  # D minor (KNOB 2)
 wait 500
 btn SEL up
@@ -37,7 +46,7 @@ knob KNOB2 +1
 wait 300
 btn OCT-
 wait 300
-dump                          # 5: D minor: 201101011010201101
+dump                          # 5: D minor: 302202022020302202
 btn D4 down                   # a lone root: Dm (D4 F4 A4) lit over the glow
 wait 400
 expect led D4 on
@@ -46,15 +55,15 @@ expect led A4 on
 expect led E4 dim
 expect led D5 mid
 expect led F#4 off
-dump                          # 6: 301301031010201101
+dump                          # 6: 402402042020302202
 shot build/emu/test/cr_key_leds_dm.ppm
 btn D4 up
 wait 300
-btn SEL                       # Key Mode off: every root glows again
+btn SEL                       # Key Mode off: the roots dark again
 wait 300
-expect led D#4 dim
-expect led D4 dim
-dump                          # 7: 111111111111111111
+expect led D#4 off
+expect led D4 off
+dump                          # 7: 000000000000000000
 btn GLO 80                    # Options > LEDs: Stock (two levels: the idle keys lit, the active dark)
 wait 300
 knob SELECT +14
@@ -69,7 +78,7 @@ expect led D4 on
 expect led E4 on
 expect led D#4 off
 expect led F#4 off
-dump                          # 8: Stock: 303303033030303303
+dump                          # 8: Stock: 404404044040404404, the chord keys 444444444
 btn D4 down                   # Stock: the sounding notes are the dark ones (the reverse, as ever)
 wait 400
 expect led D4 off
@@ -77,3 +86,29 @@ expect led E4 on
 btn D4 up
 wait 2500
 dump                          # 9: silent
+btn GLO 80                    # LEDs: Glow again; Key Mode off: a held root is the only root light
+wait 300
+knob KNOB1 -1
+wait 300
+btn GLO 80
+wait 300
+btn SEL
+wait 300
+btn D4 down
+wait 400
+expect led D4 on
+expect led E4 off
+dump                          # 10: 400000000000000000
+btn D4 up
+wait 300
+btn GLO 80                    # Stock, Key Mode off: as it was: every root and chord key lit (idle = lit)
+wait 300
+knob KNOB1 +1
+wait 300
+btn GLO 80
+wait 300
+expect led D4 on
+expect led F3 on
+expect led B3 on
+wait 2500
+dump                          # 11: Stock: 444444444 444444444444444444

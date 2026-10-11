@@ -20,7 +20,7 @@ pa2 high
 wait 100
 shot build/emu/test/cr_pa2_high.ppm         # the backlight off: black, whatever the firmware draws
 dump
-expect led G5 off                            # no glow,
+expect led C4 off                            # no glow (a chord key's faint one),
 expect led FX off                            # no lit button
 key F3 down
 wait 60
@@ -38,7 +38,7 @@ pa2 low
 wait 100
 shot build/emu/test/cr_pa2_low.ppm          # low again: the panel and the LEDs back
 dump
-expect led G5 dim
+expect led C4 faint
 expect led FX on
 key F3 down
 wait 60

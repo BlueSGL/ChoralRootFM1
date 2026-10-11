@@ -140,7 +140,7 @@ btn A3 down
 wait 200
 expect led F3 on
 expect led A3 on
-expect led G3 dim
+expect led G3 off
 dump                          # 30: voices 2
 shot build/emu/test/cr_fullkbd_two.ppm
 btn A3 up

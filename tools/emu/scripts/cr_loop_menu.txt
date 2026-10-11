@@ -29,7 +29,7 @@ shot build/emu/test/cr_lm_2.ppm
 btn GLO
 wait 300
 expect led GLO dim
-expect led D#4 dim
+expect led D#4 off
 knob KNOB4 +1
 wait 200
 expect led GLO on

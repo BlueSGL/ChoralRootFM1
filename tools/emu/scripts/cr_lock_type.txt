@@ -22,7 +22,7 @@ wait 150
 dump                          # 2: 44 (judged at its release)
 btn A#3 up                    # .. off when let go; M7 stays
 wait 200
-expect led A#3 dim            # MAJ: off (the idle glow)
+expect led A#3 faint            # MAJ: off (the idle glow)
 expect led A3 on              # M7: still latched, still lit
 btn D4 down
 wait 300

@@ -203,8 +203,8 @@ p=$(pixel "$OUT/cr_off_logo.ppm" 120 150); set -- $p
     bad "10 min: screen $(scr dark), the panel not black ($(ink "$OUT/cr_off_dark.ppm") bytes above 0)"
 [ "$(scr dark2)" = off ] && [ -n "$(wrs dark)" ] && [ "$(wrs dark)" = "$(wrs dark2)" ] && [ "$(ink "$OUT/cr_off_dark2.ppm")" = 0 ] &&
     ok "no LCD write in the minute after ($(wrs dark) = $(wrs dark2) writes), still black" || bad "LCD writes while off: $(wrs dark) $(wrs dark2)"
-met dark2 'led G5 dim' && met dark2 'led FX on' && met loop 'led GREEN on' && met sx_midi 'led G5 dim' &&
-    ok "the LEDs while it is off: a key's glow, FX lit, PLAY's green LED with the loop" || bad "an LED dark while the screen is off"
+met dark2 'led C4 faint' && met dark2 'led FX on' && met loop 'led GREEN on' && met sx_midi 'led C4 faint' &&
+    ok "the LEDs while it is off: a chord key's faint glow, FX lit, PLAY's green LED with the loop" || bad "an LED dark while the screen is off"
 [ "$(scr key)" = on ] && [ "$(lit "$OUT/cr_off_key.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_key.ppm")" = 0 ] &&
     dmp key '^  part 0:' | grep -q 'voices 3' && met key sound && met key 'led D4 on' &&
     ok "a key: the screen on, the whole view back (no black left), the chord sounding, its LED lit: $OUT/cr_off_key.ppm" ||
@@ -235,13 +235,13 @@ run cr_pa2
 DL="$OUT/cr_pa2.log"; DP=cr_pa2_
 dmp before '^  pa2:' | grep -q 'low.* high for 0 ms' && dmp before '^  part 0:' | grep -q 'voices 3' && [ "$(lit "$OUT/cr_pa2_before.ppm")" -gt 1000 ] &&
     ok "PA2 low: the view on the panel, the chord sounding" || bad "PA2 low: $(dmp before '^  pa2:')"
-dmp high '^  pa2:' | grep -q 'HIGH' && [ "$(ink "$OUT/cr_pa2_high.ppm")" = 0 ] && met high 'led G5 off' && met high 'led FX off' &&
+dmp high '^  pa2:' | grep -q 'HIGH' && [ "$(ink "$OUT/cr_pa2_high.ppm")" = 0 ] && met high 'led C4 off' && met high 'led FX off' &&
     ok "PA2 high: the dump says it, the panel black (the backlight off), no LED lit" || bad "PA2 high: $(dmp high '^  pa2:')"
 dmp dead '^fm1_in:' | grep -q 'notes 0000000 buttons 0000 ' && dmp dead '^  part 0:' | grep -q 'voices 0' &&
     dmp dead '^  cr: key' | grep -q 'voicing 0 ' && met dead silence &&
     ok "PA2 high: a held chord and a knob turn are not read (no key in fm1_in, no voice, voicing 0, silence)" ||
     bad "PA2 high: the matrix still reads ($(dmp dead '^fm1_in:' | cut -c1-40))"
-dmp low '^  pa2:' | grep -q 'low' && [ "$(lit "$OUT/cr_pa2_low.ppm")" -gt 1000 ] && met low 'led G5 dim' && met low 'led FX on' &&
+dmp low '^  pa2:' | grep -q 'low' && [ "$(lit "$OUT/cr_pa2_low.ppm")" -gt 1000 ] && met low 'led C4 faint' && met low 'led FX on' &&
     dmp after '^  part 0:' | grep -q 'voices 3' && met after sound && met after 'led D4 on' &&
     ok "PA2 low again: the panel, the LEDs and the keys back" || bad "PA2 low again: $(dmp low '^  pa2:')"
 silent_end cr_pa2
@@ -837,7 +837,7 @@ a=$(L cr_loop_menu 2); b=$(L cr_loop_menu 3)
 has '^loop: length 3' "$LM" && grep -aq "loopmenu .*title '4 bars'" "$LM" && ok "SELECT +3 in the menu: 4 bars, big in the middle (state 1): $OUT/cr_lm_1.ppm" || bad "the menu's length"
 has 'chord D sounding 1' "$LM" && ok "Keys = Play: MAJ + D4 plays D with the menu open" || bad "Keys = Play: no D"
 has '^loop: keys Loops' "$LM" && has 'expect led GLO on .*: ok' "$LM" && has 'expect led D#4 on .*: ok' "$LM" &&
-    has 'expect led D#4 dim .*: ok' "$LM" && ! has 'expect.*FAILED' "$LM" &&
+    has 'expect led D#4 off .*: ok' "$LM" && ! has 'expect.*FAILED' "$LM" &&
     ok "GLO in the menu: Keys = Loops (GLO lit, the slot map: CLEAR lit; state 2: $OUT/cr_lm_2.ppm), GLO / KNOB 4 back: Play" || bad "the menu's keys: $(grep -a 'expect.*FAILED' "$LM" | head -2)"
 has '^loop: mode Overdub' "$LM" && grep -aq "loopmenu .*item 'Overdub'" "$LM" && ok "ALGORITHM +2: the record mode Overdub (state 3): $OUT/cr_lm_3.ppm" || bad "the mode picker"
 has '^loop: slot 5 turned' "$LM" && grep -aq "loopmenu .*slot 5 jump 0 sub '' right 'empty'" "$LM" &&
@@ -1041,21 +1041,24 @@ ch() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.* chord \(.*\) s
     || bad "the push with a root: $(lt 10) $(ch 10) / $(lt 11)"
 silent_end cr_lock_type
 
-# Key Mode's lights (three levels under lit: fm1_led_dim < fm1_led_dim2 < fm1_led)
+# Key Mode's lights (the key leds: line: 0 off 1 faint 2 dim 3 mid 4 lit; fm1_led_faint < fm1_led_dim < fm1_led_dim2 < fm1_led)
 run cr_key_leds
 L="$OUT/cr_key_leds.log"
 kl() { grep -a '^  key leds:' "$L" | sed -n "$1p" | sed -n 's/.*key leds:\([0-9]*\) \([0-9]*\) .*/\2/p'; }
-[ "$(kl 1)" = 111111111111111111 ] && [ "$(kl 7)" = 111111111111111111 ] &&
-    ok "Key Mode off: every root glows (dim), no scale light" || bad "Key Mode off: $(kl 1) / $(kl 7)"
-[ "$(kl 2)" = 101101010120101101 ] && [ "$(kl 4)" = 201011010101201011 ] && [ "$(kl 5)" = 201101011010201101 ] &&
-    ok "Key Mode on: C major, D major (the tonic changed), D minor: the scale's roots dim, the tonic's mid, the others dark (white keys too): $OUT/cr_key_leds_c.ppm" \
+ck() { grep -a '^  key leds:' "$L" | sed -n "$1p" | sed -n 's/.*key leds:\([0-9]*\) \([0-9]*\) .*/\1/p'; }
+[ "$(kl 1)" = 000000000000000000 ] && [ "$(kl 7)" = 000000000000000000 ] && [ "$(ck 1)" = 111111111 ] && [ "$(kl 10)" = 400000000000000000 ] &&
+    ok "Key Mode off: the roots dark (no idle glow), a held one lit alone; the nine chord keys faint, under the glow: $OUT/cr_key_leds_off.ppm" \
+    || bad "Key Mode off: $(kl 1) / $(kl 7) chord keys $(ck 1) / held $(kl 10)"
+[ "$(kl 2)" = 202202020230202202 ] && [ "$(kl 4)" = 302022020202302022 ] && [ "$(kl 5)" = 302202022020302202 ] && [ "$(ck 2)" = 111111111 ] &&
+    ok "Key Mode on: C major, D major (the tonic changed), D minor: the scale's roots dim, the tonic's mid, the others dark (white keys too), the chord keys faint under them: $OUT/cr_key_leds_c.ppm" \
     || bad "the scale lights: $(kl 2) / $(kl 4) / $(kl 5)"
-[ "$(kl 3)" = 201011010101201011 ] && ok "the KEY layer (keys: pick): the same picture" || bad "the KEY layer's roots: $(kl 3)"
-[ "$(kl 6)" = 301301031010201101 ] &&
+[ "$(kl 3)" = 302022020202302022 ] && ok "the KEY layer (keys: pick): the same picture" || bad "the KEY layer's roots: $(kl 3)"
+[ "$(kl 6)" = 402402042020302202 ] &&
     ok "Dm sounding: its notes lit over the glow, the other D still mid: $OUT/cr_key_leds_dm.ppm" || bad "a sounding chord over the scale: $(kl 6)"
-[ "$(kl 8)" = 303303033030303303 ] && [ "$(grep -c '^expect .*: ok' "$L")" = 25 ] && ! has 'expect.*FAILED' "$L" &&
-    ok "Stock (two levels): the scale's roots lit, the tonic as the rest, the others dark; a sounding note dark" \
-    || bad "Stock / the LED expectations: $(kl 8) $(grep -a 'expect.*FAILED' "$L" | head -3)"
+[ "$(kl 8)" = 404404044040404404 ] && [ "$(ck 8)" = 444444444 ] && [ "$(kl 11)" = 444444444444444444 ] && [ "$(ck 11)" = 444444444 ] &&
+    [ "$(grep -c '^expect .*: ok' "$L")" = 37 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "Stock (two levels, as it was): the scale's roots lit, the tonic as the rest, the others dark; a sounding note dark; Key Mode off: every root and chord key lit" \
+    || bad "Stock / the LED expectations: $(kl 8) $(ck 8) / $(kl 11) $(ck 11) $(grep -a 'expect.*FAILED' "$L" | head -3)"
 silent_end cr_key_leds
 
 # the KEY layer's page 2 (SELECT) and Key plays: Chords / Notes
@@ -1104,9 +1107,9 @@ done
 [ "$(ky 31)" = "0 1 0" ] && [ "$(cv 31 | cut -d'|' -f5)" = " 65" ] && [ "$(ky 32)" = "0 0 0" ] && has '^kbd: knob 1 octave 1' "$L" && [ "$(kb 31)" = "full 0 77 10" ] &&
     ok "KNOB 1 on the view: the octave (+1: F3 plays 65; the read-out says octave; the voicing stays 0; the split key follows): $OUT/cr_fullkbd_octave.ppm" \
     || bad "KNOB 1 = octave: $(ky 31) $(cv 31) / $(ky 32) / $(kb 31)"
-[ "$(kl 33)" = "101010120 101101010120101101" ] && [ "$(cv 35 | cut -d'|' -f1,2)" = "$(cv 34 | cut -d'|' -f1,2)" ] && [ "$(cv 35 | cut -d'|' -f1)" = 0 ] &&
+[ "$(kl 33)" = "202020230 202202020230202202" ] && [ "$(kl 30)" = "400040000 000000000000000000" ] && [ "$(cv 35 | cut -d'|' -f1,2)" = "$(cv 34 | cut -d'|' -f1,2)" ] && [ "$(cv 35 | cut -d'|' -f1)" = 0 ] &&
     [ "$(cv 36 | cut -d'|' -f1,3,5)" = "1|G| 55" ] &&
-    ok "Key Mode on (C major): the scale on all 27 keys (tonic mid, scale dim, the rest dark); F#3 does nothing; G3 plays G, no chord: $OUT/cr_fullkbd_key.ppm" \
+    ok "Key Mode on (C major): the scale on all 27 keys (tonic mid, scale dim, the rest dark; Key Mode off: all 27 dark but the two held); F#3 does nothing; G3 plays G, no chord: $OUT/cr_fullkbd_key.ppm" \
     || bad "Key Mode on the Full keyboard: $(kl 33) / $(cv 34) / $(cv 35) / $(cv 36)"
 [ "$(kb 37)" = "full 2 65 12" ] && [ "$(pv 38 0)" = 0 ] && [ "$(pv 38 1)" = 1 ] && [ "$(pv 39 1)" = 0 ] && [ "$(pv 39 0)" -ge 1 ] && [ "$(cv 38 | cut -d'|' -f5)" = " 64" ] &&
     ok "Split Bass: the split at F4: E4 plays the bass part alone (the Bass off: ignored), F4 the chord part alone: $OUT/cr_fullkbd_splitbass.ppm" \

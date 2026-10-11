@@ -111,7 +111,7 @@ const ledState = (ex, name) => {
   const L = new Uint8Array(ex.memory.buffer, ex.web_leds(), 42);
   const p = PANEL[name];
   const v = name === "GREEN" ? L[41] : p.kind === "key" ? L[p.idx] : L[27 + p.idx];
-  return ["off", "dim", "on"][v];
+  return ["off", "dim", "on", "mid", "faint"][v];
 };
 const fbCopy = (ex) => new Uint16Array(ex.memory.buffer, ex.web_fb(), 240 * 240).slice();
 const fbLit = (fb) => fb.reduce((n, v) => n + (v !== 0), 0);

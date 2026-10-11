@@ -205,19 +205,21 @@ MIDI message wakes it and does its normal job at the same time.
 | LOOP lit, its green light | the slot holds a loop, the loop is playing |
 | OCT- lit, OCT+ blinking | in a layer, menu or dialog: back, OK (where there is nothing to confirm: close) |
 | OCT- or OCT+ lit on the view | the roots are shifted down or up |
-| chord keys | lit while held or latched; B3 lit while LOCK is on. In the KEY layer: MAJ and MIN glow, the selected scale's is lit, the others are dark |
+| chord keys | lit while held or latched; B3 lit while LOCK is on; otherwise a faint glow, the lowest level. In the KEY layer: MAJ and MIN glow, the selected scale's is lit, the others are dark |
 | root keys | the notes of the sounding chord, where they sound; the note a performance mode is playing blinks; a playing loop's notes glow dim. With Key Mode on they show the key (below) |
 
-**Key Mode on the keys.** The key lights have three levels under fully lit. With Key Mode off every root key glows
-at the low level. With Key Mode on the roots show the key, wherever they play (on the views, in the PERF, FX and LOCK
+**Key Mode on the keys.** The key lights have four levels: faint (an idle chord key, B3), low (the glow: a note of
+the scale, an idle button), middle (the tonic) and fully lit. With Key Mode off the root keys are dark: only the notes
+that sound are lit (and a playing loop's notes glow), so the chord keys' faint row is all that shows on an idle
+keyboard; on the Full keyboard all 27 keys are dark until played. With Key Mode on the roots show the key, wherever they play (on the views, in the PERF, FX and LOCK
 layers, in the KEY layer too): the notes of the scale glow at the low level, the tonic's keys at a middle level, the
 roots outside the scale are dark, white or black, and the notes that sound are fully lit over it. So a glance tells
 you that Key Mode is on, which key it is, and where the tonic sits. The layers that use the root keys for something
 else (the loop slots, the pickers, naming, the Options) show their own map instead.
 
 Options > LEDs chooses between Glow (idle keys glow dim, active ones are bright) and Stock (the other way round).
-Stock has two levels only: with Key Mode on, the keys of the scale are lit, the tonic like the rest, and the keys
-outside it are dark.
+Stock has two levels only and is as it always was: idle chord keys and, with Key Mode off, every root key are lit;
+with Key Mode on, the keys of the scale are lit, the tonic like the rest, and the keys outside it are dark.
 
 ## 4. Chords
 

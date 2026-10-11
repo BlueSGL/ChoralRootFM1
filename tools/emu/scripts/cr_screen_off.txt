@@ -25,7 +25,7 @@ dump
 wait 60000
 shot build/emu/test/cr_off_dark2.ppm        # a minute later: black, no LCD write
 dump
-expect led G5 dim                            # the LEDs while off: a key's glow,
+expect led C4 faint                          # the LEDs while off: a chord key's faint glow,
 expect led FX on                             # a lit button (FX is on)
 expect silence
 key F3 down
@@ -86,7 +86,7 @@ wait 4000
 shot build/emu/test/cr_off_sx_midi.ppm      # still black, no LCD write
 dump
 expect sound                                 # the MIDI note sounded (the mark for the key below)
-expect led G5 dim
+expect led C4 faint
 key F3 down
 wait 60
 btn D4 down

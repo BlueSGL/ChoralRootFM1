@@ -192,7 +192,7 @@ WEB_EXPORT const int8_t *web_enc_dir(void) { return emu_hal.enc_dir; }
 WEB_EXPORT uint32_t web_play_green(void) { return emu_hal.led_play_green; }   /* (col << 3) | row */
 
 /* every LED at once: [0..26] note keys, [27..40] buttons in label order, [41] PLAY's green; 0 off 1 dim 2 lit
- * 3 mid (fm1_led_dim2: the middle level, Key Mode's tonic) */
+ * 3 mid (fm1_led_dim2: the middle level, Key Mode's tonic) 4 faint (fm1_led_faint: the idle chord keys) */
 static uint8_t leds[42];
 static int led_of(int id)
 {
@@ -200,7 +200,8 @@ static int led_of(int id)
     for (r = 1; r < 5; r++)
         for (c = 0; c < EMU_NCOL; c++)
             if (emu_keymap[r][c] == id)
-                return (emu_hal.led[c] >> r) & 1u ? 2 : (emu_hal.led_mid[c] >> r) & 1u ? 3 : (emu_hal.led_dim[c] >> r) & 1u ? 1 : 0;
+                return (emu_hal.led[c] >> r) & 1u ? 2 : (emu_hal.led_mid[c] >> r) & 1u ? 3 : (emu_hal.led_dim[c] >> r) & 1u ? 1
+                       : (emu_hal.led_faint[c] >> r) & 1u ? 4 : 0;
     return 0;
 }
 WEB_EXPORT uint8_t *web_leds(void)

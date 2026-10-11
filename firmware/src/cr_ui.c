@@ -3345,7 +3345,10 @@ static void cr_ui_input(void)
 }
 
 /* ------------------------------------------------------------- the LEDs --- */
-/* as ui_input.c ui_leds: the picture built off-line, the glow (fm1_led_dim) first, one byte per column */
+/* as ui_input.c ui_leds: the picture built off-line, the glow (fm1_led_dim) first, one byte per column.
+ * Four levels (hal/fm1_input.h; the owner's "20 / 50 / 75 / 100 %"): faint (nf -> fm1_led_faint: an idle chord key,
+ * B3) < dim (nd -> fm1_led_dim: the glow: an idle button, a note of the scale, a layer's map, a loop's note) < mid
+ * (nm -> fm1_led_dim2: the tonic) < lit (nl, own -> fm1_led) */
 static uint8_t cu_led_pos[41];                     /* (col << 3) | row bit, 0xFF = none (FM1_KEYMAP) */
 #ifndef LED_PLAY_GREEN
 #define LED_PLAY_GREEN ((8u << 3) | 1u)            /* PLAY's green LED (ui_input.c): column 8, row bit 1 */
@@ -3376,6 +3379,7 @@ static int32_t cu_key_of_note(uint32_t note)       /* the root key a note sounds
 static void cr_leds(void)
 {
     uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0}, ld[FM1_NCOL] = {0}, nm[FM1_NCOL] = {0};
+    uint8_t nf[FM1_NCOL] = {0};
     uint32_t k, b, now = cu_now(), blink = (uint32_t)cu_blink(now), l = cu_layer();
     uint32_t full = cs.kbd_full && !cu_key_pick(); /* the Full keyboard: the chord block's nine keys are notes */
     uint32_t key0 = full ? 0u : CU_ROOT0;          /* the first key that plays */
@@ -3387,6 +3391,7 @@ static void cr_leds(void)
         for (k = 0; k < FM1_NCOL; k++) {
             fm1_led_dim[k] = 0;
             fm1_led_dim2[k] = 0;
+            fm1_led_faint[k] = 0;
             fm1_led[k] = nl[k];
         }
         return;
@@ -3434,6 +3439,9 @@ static void cr_leds(void)
     for (b = 0; b < NB; b++)
         cu_led(nd, panel.btn[b], 1);
     /* the chord block: lit while held / latched (LOCK's latch: posted down, so the engine's held); B3 = LOCK, lit on.
+     * Idle (the owner, 2026-10-12): the faint level (nf), under the glow of the scale's notes and of the buttons, so
+     * the chord block reads as one quiet group and what is on in it stands out. Stock (two levels): idle = lit, as
+     * it was (the last loop).
      * In the KEY layer (the one exception to "these LEDs are the chord keys' own state", the owner's, 2026-10-10)
      * they are its scale keys: MAJ and MIN glow at half, the selected scale's at full, the six without a job there
      * dark. Glow: half = fm1_led_dim, full = fm1_led. Stock has two levels only (it lights the idle keys, and a
@@ -3445,7 +3453,7 @@ static void cr_leds(void)
                 continue;
             cu_led(nl, 14u + k, l == L_LOCK ? (int)blink : cu.clock);   /* (its layer open: it blinks, as a layer's
                                                                          * button; the label says on / off) */
-            cu_led(nd, 14u + k, 1);
+            cu_led(nf, 14u + k, 1);
             continue;
         }
         if (cu_key_pick()) {
@@ -3458,7 +3466,7 @@ static void cr_leds(void)
             continue;
         }
         cu_led(nl, 14u + k, (int)((sn->mods_active >> CU_MOD_OF_KEY[k]) & 1u));
-        cu_led(nd, 14u + k, 1);
+        cu_led(nf, 14u + k, 1);
     }
     /* the roots: a layer's map, or the voiced notes where they sound */
     if ((l == L_LOOP && cs.loop_keys) || l == L_SAVE) {   /* the slots: lit = a loop, blinking = the one selected (the
@@ -3525,7 +3533,10 @@ static void cr_leds(void)
             if (q != 0xFF)
                 nl[q >> 3] &= (uint8_t)~(1u << (q & 7u));
         }
-        /* the keys that play. Key Mode off: they all glow (the low level). Key Mode on (the owner, 2026-10-11): the
+        /* the keys that play. Key Mode off (the owner, 2026-10-12): no idle glow at all: dark unless they sound
+         * (nl above) or a loop's note glows on them (ld below); the Full keyboard: all 27 so. Until then they all
+         * glowed (the low level); Stock keeps that (its idle keys lit: its two levels are the stock firmware's
+         * picture, not the glow's). Key Mode on (the owner, 2026-10-11): the
          * key shows on them: a note of the scale glows (low), the tonic's keys at the middle level (fm1_led_dim2),
          * a key out of the scale is dark; a sounding note is lit over it (nl). Until then only the black keys out of
          * the scale went dark: every white key glowed whatever the key. Stock has two levels: below, the scale's
@@ -3533,7 +3544,7 @@ static void cr_leds(void)
         for (k = key0; k < CU_NKEY; k++) {
             uint32_t pc = (53u + k) % 12u;               /* (the octave shift keeps the pitch class) */
             if (!cs.key_on)
-                cu_led(nd, 14u + k, 1);
+                cu_led(nd, 14u + k, (int)cs.leds);
             else if (pc == cs.tonic)
                 cu_led(nm, 14u + k, 1);
             else if ((scale >> pc) & 1u)
@@ -3549,9 +3560,9 @@ static void cr_leds(void)
     }
     for (k = 0; k < FM1_NCOL; k++) {
         if (cs.leds) {                                   /* STOCK: the idle ones lit, the active ones dark (two
-                                                          * levels: the middle one is "idle" too) */
-            nl[k] = (uint8_t)((nd[k] | nm[k]) & ~nl[k]);
-            nd[k] = nm[k] = 0;
+                                                          * levels: the middle and the faint one are "idle" too) */
+            nl[k] = (uint8_t)((nd[k] | nm[k] | nf[k]) & ~nl[k]);
+            nd[k] = nm[k] = nf[k] = 0;
         }
         nl[k] |= own[k];
         nd[k] |= ld[k];
@@ -3561,6 +3572,8 @@ static void cr_leds(void)
         fm1_led_dim[k] = nd[k];
     for (k = 0; k < FM1_NCOL; k++)
         fm1_led_dim2[k] = (uint8_t)(nm[k] & ~nl[k]);
+    for (k = 0; k < FM1_NCOL; k++)
+        fm1_led_faint[k] = (uint8_t)(nf[k] & ~nd[k]);
     for (k = 0; k < FM1_NCOL; k++)
         fm1_led[k] = nl[k];
 }

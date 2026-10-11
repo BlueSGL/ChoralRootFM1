@@ -316,16 +316,20 @@ void emu_fw_dump(void)
     printf("  leds mid:");                          /* the middle level (fm1_led_dim2: Key Mode's tonic) */
     for (c = 0; c < FM1_NCOL; c++)
         printf(" %02X", fm1_led_dim2[c]);
-    printf("\n  key leds:");                        /* per key F3..G5: 0 off, 1 dim, 2 mid, 3 lit */
+    printf("\n  leds faint:");                      /* the faint level (fm1_led_faint: the idle chord keys) */
+    for (c = 0; c < FM1_NCOL; c++)
+        printf(" %02X", fm1_led_faint[c]);
+    printf("\n  key leds:");                        /* per key F3..G5: 0 off, 1 faint, 2 dim, 3 mid, 4 lit */
     for (i = 0; i < 27u; i++) {
         uint32_t r, lv = 0;
         for (c = 0; c < FM1_NCOL; c++)
             for (r = 1; r < 5u; r++)
                 if (FM1_KEYMAP[r][c] == (int8_t)(14u + i))
-                    lv = (fm1_led[c] >> r) & 1u ? 3u : (fm1_led_dim2[c] >> r) & 1u ? 2u : (fm1_led_dim[c] >> r) & 1u ? 1u : 0u;
+                    lv = (fm1_led[c] >> r) & 1u ? 4u : (fm1_led_dim2[c] >> r) & 1u ? 3u : (fm1_led_dim[c] >> r) & 1u ? 2u
+                         : (fm1_led_faint[c] >> r) & 1u ? 1u : 0u;
         printf("%s%u", i == 9u ? " " : "", (unsigned)lv);
     }
-    printf("  (F3..C4 D4..G5: 0 off 1 dim 2 mid 3 lit)\n");
+    printf("  (F3..C4 D4..G5: 0 off 1 faint 2 dim 3 mid 4 lit)\n");
     for (i = 0; i < 2u; i++) {
         uint32_t v, n = 0;
         for (v = 0; v < NVOICE; v++)

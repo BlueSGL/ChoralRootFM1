@@ -300,7 +300,8 @@ static void fine_frame(void)                     /* before each UI frame */
         fine_stage = 0;
     }
 }
-static int led_state(int id)                     /* 0 off, 1 dim, 2 lit, 3 mid (the middle level: dim < mid < lit) */
+static int led_state(int id)                     /* 0 off, 1 dim, 2 lit, 3 mid (the middle level), 4 faint: four
+                                                  * levels, faint < dim < mid < lit (hal/fm1_input.h) */
 {
     uint8_t q = id >= 0 && id < 41 ? led_pos[id] : 0xFF;
     if (q == 0xFF || emu_hal.pa2)                /* (PA2 high: no LED lights, emu_hooks.h) */
@@ -309,8 +310,11 @@ static int led_state(int id)                     /* 0 off, 1 dim, 2 lit, 3 mid (
         return 2;
     if ((emu_hal.led_mid[q >> 3] >> (q & 7)) & 1u)
         return 3;
-    return ((emu_hal.led_dim[q >> 3] >> (q & 7)) & 1u) ? 1 : 0;
+    if ((emu_hal.led_dim[q >> 3] >> (q & 7)) & 1u)
+        return 1;
+    return ((emu_hal.led_faint[q >> 3] >> (q & 7)) & 1u) ? 4 : 0;
 }
+#define LED_ALPHA(lv) ((lv) == 2 ? 1.f : (lv) == 3 ? .68f : (lv) == 4 ? .18f : .38f)
 static int led_green(void)                       /* PLAY's green LED: 1 lit */
 {
     uint8_t q = emu_hal.led_play_green;
@@ -378,7 +382,7 @@ static void draw_key(canvas_t *c, int k)
         rrect(c, (rect_t){cx - 9, r.y + 9, 18, 40}, 9, C_WHITE, .16f);
     rrect(c, (rect_t){cx - 4, r.y + 14, 8, 30}, 4, C_LEDOFF, 1);
     if (lv)
-        rrect(c, (rect_t){cx - 4, r.y + 14, 8, 30}, 4, C_WHITE, lv == 2 ? 1.f : lv == 3 ? .68f : .38f);
+        rrect(c, (rect_t){cx - 4, r.y + 14, 8, 30}, 4, C_WHITE, LED_ALPHA(lv));
     emu_note_name(k, n);
     text(c, cx, r.y + 50, 6.5f, n, 0x8A8A92u, 1);
     if ((h = keymap_hint(KM_KEY, k)) != NULL)
@@ -392,7 +396,7 @@ static void draw_btn(canvas_t *c, int i)
     const char *h = keymap_hint(KM_BTN, i);
     rrect(c, r, oct ? 6 : 5, C_CAP, 1);
     if (lv)
-        rrect(c, r, oct ? 6 : 5, col, lv == 2 ? 1.f : lv == 3 ? .68f : .38f);
+        rrect(c, r, oct ? 6 : 5, col, LED_ALPHA(lv));
     rrect_line(c, r, oct ? 6 : 5, btn_src[i] ? C_HINT : 0x0A0A0Cu, 1, btn_src[i] ? 2 : 1);
     text(c, r.x + r.w / 2, r.y + (oct ? 7.5f : 11), oct ? 6.5f : 7.5f, EMU_BTN_NAME[i], lv == 2 ? 0x111114u : 0xC8C8D0u, 1);
     if (h && !oct)
@@ -659,7 +663,7 @@ static void trace_leds(double now_us)
     static int on = -1;
     static uint8_t seen[2 * EMU_NCOL + EMU_NB];
     uint8_t cur[2 * EMU_NCOL + EMU_NB];
-    int i, n[4] = {0, 0, 0, 0};
+    int i, n[5] = {0, 0, 0, 0, 0};
     if (on < 0)
         on = getenv("EMU_TRACE_LEDS") != NULL;
     if (!on)
@@ -668,6 +672,8 @@ static void trace_leds(double now_us)
     memcpy(cur + EMU_NCOL, emu_hal.led_dim, EMU_NCOL);
     for (i = 0; i < EMU_NCOL; i++)                /* (the middle level: a change of it is a change) */
         cur[EMU_NCOL + i] ^= (uint8_t)(emu_hal.led_mid[i] << 5);
+    for (i = 0; i < EMU_NCOL; i++)                /* (.. and the faint one: bits 1..4 again, rotated) */
+        cur[i] ^= (uint8_t)(emu_hal.led_faint[i] << 4 | emu_hal.led_faint[i] >> 4);
     memcpy(cur + 2 * EMU_NCOL, btn_src, EMU_NB);
     if (!memcmp(cur, seen, sizeof cur) && ust.frames)
         return;
@@ -824,7 +830,7 @@ static int probe_frames;                         /* script `probe N`: the next N
  *   knob NAME +-N           turn a knob N detents (SELECT ALGORITHM PRESETS KNOB1..KNOB4; MASTER: N x 16 ADC)
  *   master ADC              set the MASTER pot (0..1023)
  *   shot NAME|PATH          the LCD: build/emu/NAME.png (+ .ppm headless), or PATH (.ppm or .png)
- *   expect led NAME on|mid|dim|off  check a key's / button's LED now (on = lit; GREEN: PLAY's green LED);
+ *   expect led NAME on|mid|dim|faint|off  check a key's / button's LED now (on = lit; GREEN: PLAY's green LED);
  *                           a failure: exit status 1
  *   expect sound|silence    non-zero samples since the previous "expect sound|silence" (or power-on)
  *   midi HEX [HEX [HEX]]    one MIDI message into the firmware's MIDI in (usb.c's queue, as from USB): "midi B0 07 64";
@@ -1030,9 +1036,9 @@ static void load_script(const char *path)
                 if (!strcasecmp(arg2, "GREEN"))
                     kind = -1;                    /* PLAY's green LED */
                 int lv = !strcmp(arg3, "on") || !strcmp(arg3, "lit") ? 2 : !strcmp(arg3, "dim") ? 1
-                       : !strcmp(arg3, "mid") ? 3 : !strcmp(arg3, "off") ? 0 : -1;
+                       : !strcmp(arg3, "mid") ? 3 : !strcmp(arg3, "faint") ? 4 : !strcmp(arg3, "off") ? 0 : -1;
                 if (lv < 0)
-                    BAD("expect led %s: on, mid, dim or off, not \"%s\"", arg2, arg3);
+                    BAD("expect led %s: on, mid, dim, faint or off, not \"%s\"", arg2, arg3);
                 else {
                     char d[96];
                     snprintf(d, sizeof d, "led %s %s", arg2, arg3);
@@ -1176,7 +1182,7 @@ static void run_script(uint32_t ms)
                    : led_state(e->kind == KM_KEY ? 14 + e->idx : emu_hal.btn_id[e->idx]);
             int ok = lv == e->n;
             printf("expect %s at %u ms: %s (the LED is %s)\n", e->name, (unsigned)ms, ok ? "ok" : "FAILED",
-                   lv == 2 ? "lit" : lv == 3 ? "mid" : lv == 1 ? "dim" : "off");
+                   lv == 2 ? "lit" : lv == 3 ? "mid" : lv == 1 ? "dim" : lv == 4 ? "faint" : "off");
             if (ok) expect_ok++; else expect_fail++;
             break;
         }

@@ -11,8 +11,8 @@ expect led A#3 on
 expect led D4 on
 expect led F#4 on
 expect led A4 on
-expect led E4 dim
-expect led B3 dim                # LOCK off: dim (lit when on)
+expect led E4 off
+expect led B3 faint                # LOCK off: dim (lit when on)
 shot build/emu/test/cr_dmaj.ppm
 dump
 knob KNOB1 +2
@@ -21,7 +21,7 @@ shot build/emu/test/cr_voicing.ppm
 expect led A4 on
 expect led D5 on
 expect led F#5 on
-expect led D4 dim
+expect led D4 off
 dump
 knob KNOB1 -2
 wait 100

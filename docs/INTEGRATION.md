@@ -417,11 +417,24 @@ Priority, top down, first match wins:
 **The hardware's levels** (`hal/fm1_input.h`): lit (the column's whole tick, ~95 us of each 1.1 ms frame), and two
 pulses per frame riding on the 595 shift of the next column: `fm1_led_dim` (`FM1_LED_DIM_NS` 3.2 us, ~1/30 of lit:
 the glow) and, new in 0.17, `fm1_led_dim2` (`FM1_LED_DIM2_NS` 9.6 us, ~1/10 of lit: the middle level; a pulse longer
-than the whole shift is waited out, the tick's one wait). Both widths are tuned there. The emulator: `emu_hal.led_mid`,
-`expect led K mid`, the dump's `leds mid:` and `key leds:` lines.
+than the whole shift is waited out, the tick's one wait) and, under the glow, `fm1_led_faint` (`FM1_LED_FAINT_NS`
+1.3 us, ~1/70 of lit: the idle chord keys; it grows from the floor, the two writes of the lines back to back, one
+bit of the shift at a time, and a target between two reachable widths is dithered frame by frame; console `inp`:
+`faint_pulse_ns`, `faint_bits`: 0 bits with a pulse over the target = the floor is longer than the target). Four
+levels: faint < dim < dim2 < lit; an LED in several bitmaps is the brightest. The three widths are tuned there. The
+emulator: `emu_hal.led_mid` / `led_faint`, `expect led K on|mid|dim|faint|off`, the dump's `leds mid:`, `leds faint:`
+and `key leds:` lines (per key 0 off 1 faint 2 dim 3 mid 4 lit).
+
+Who uses which level (`cr_leds`, Options > LEDs = Glow): **faint** (`nf`): the eight chord keys and B3 when idle
+(not held, not latched, LOCK off); **dim** (`nd`): every idle button, a note of the scale with Key Mode on, the KEY
+layer's MAJ / MIN "half", a layer's map on the roots (PLAY's / SAVE's slots, the list layers' entries, the Options'
+entries, the KEY layer's tonic picker with Key Mode off), a playing loop's notes (`ld`); **mid** (`nm`): the tonic's
+keys; **lit** (`nl`, `own`): what sounds, is held, latched, on or selected. Key Mode off: the roots have no idle
+level at all (dark; the Full keyboard: all 27). Stock: unchanged: `nf`, `nd` and `nm` are all "idle" = lit, and with
+Key Mode off every root is still put in `nd` there (lit, a sounding one dark).
 
 As `ui_input.c: ui_leds` builds `fm1_led` / `fm1_led_dim` per column: every key and button dim
-(the glow) unless Options > LEDs = STOCK; chord keys lit while held/latched (`cr_mod_active`; LOCK's latched keys
+(the glow; the chord keys and B3: faint; the roots with Key Mode off: dark) unless Options > LEDs = STOCK; chord keys lit while held/latched (`cr_mod_active`; LOCK's latched keys
 are posted down, so they are lit); B3 lit while LOCK is on (dim off); **in the KEY layer only** (the owner's
 exception to "the chord keys' LEDs are their own state", 2026-10-10) the chord keys are its scale keys: MAJ and MIN
 at half, the selected scale's at full, the six without a job dark. Glow: half = `fm1_led_dim` (the glow pulse),
@@ -429,8 +442,8 @@ full = `fm1_led`. Stock has no half level (it lights the idle keys and darkens t
 key is lit through `own`): the selected scale's key lit, the other and the six dark (`cr_key_scale.txt`); with the
 layer's keys on play (below, OPT lit) the chord keys and the roots show their own state as on the view;
 root keys lit where the voiced notes sound (engine query), the sounding perform note blinking,
-**Key Mode's lights** (0.17, three levels under lit: `fm1_led_dim` < `fm1_led_dim2` < `fm1_led`): Key Mode off:
-every key that plays glows (dim); on: the scale's notes dim, the tonic's keys at the middle level (`nm` ->
+**Key Mode's lights** (0.17: `fm1_led_dim` < `fm1_led_dim2` < `fm1_led`): Key Mode off:
+every key that plays is dark until it sounds (it glowed dim until 2026-10-12); on: the scale's notes dim, the tonic's keys at the middle level (`nm` ->
 `fm1_led_dim2`), the keys out of the scale dark (until 0.17 only the black ones went dark: the loop skipped
 `cu_black(k)` keys alone, so every white key glowed whatever the key), a sounding note lit over it. Where: the view,
 the editor, and the layers whose roots play (PERF, FX, LOCK, PLAY with Keys = Play, the engine picker with its roots

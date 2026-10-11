@@ -53,7 +53,18 @@
  * has both), after fm1__dim2_k bits dark; fm1__dim2_k follows FM1_LED_DIM2_NS as fm1__dim_k follows FM1_LED_DIM_NS.
  * A dim2 pulse longer than the whole 16-bit shift is waited out (the only wait in the tick: on the columns that
  * have a dim2 LED, by FM1_LED_DIM2_NS less the shift's time at most; console `inp`: dim2_pulse_ns, dim2_bits: 16
- * with a pulse at the target means it waits). The two widths are tuned here and nowhere else.
+ * with a pulse at the target means it waits).
+ * A faint level under the glow (0.17: ChoralRoot's idle chord keys): fm1_led_faint[col], the same pulse again,
+ * shorter: FM1_LED_FAINT_NS. Four levels on every frame: faint < dim < dim2 < lit (an LED in several is the
+ * brightest of them). The lines go lit | faint | dim | dim2 of p, after fm1__faint_k bits the faint ones go dark,
+ * then the dim, then the dim2 as above; fm1__faint_k follows FM1_LED_FAINT_NS as the others follow theirs. The
+ * shortest pulse there is: fm1__faint_k 0, the two writes of the lines back to back (a clock read and the four
+ * register accesses of fm1__led_lines between the edges of PA9 / PA10; the 595's bits have three read-modify-writes
+ * each, so that floor is about a bit's time). From there it grows a bit at a time, and the follower moves a bit up
+ * or down a tick: a target between two reachable widths is dithered between them, frame by frame (910 Hz: no
+ * flicker), a target under the floor stays at the floor (console `inp`: faint_pulse_ns, faint_bits: 0 with a pulse
+ * over the target means the floor is longer than FM1_LED_FAINT_NS; then skip frames, FM1_LED_DIM_DIV's way, for that
+ * bitmap alone). The three widths are tuned here and nowhere else.
  */
 #pragma once
 #include <stdint.h>
@@ -80,6 +91,11 @@
 #define FM1_LED_DIM2_NS 9600u     /* the middle level's pulse per frame (ns): 3 x the dim one, ~1/10 of a lit LED.
                                    * The steps are geometric-ish on purpose (x3, x10): 1/4 and 1/6 of lit read as
                                    * nearly lit (#35), so the middle sits clearly under them and clearly over dim */
+#endif
+#ifndef FM1_LED_FAINT_NS
+#define FM1_LED_FAINT_NS 1300u    /* the faint level's pulse per frame (ns): ~0.4 x the dim one, ~1/70 of a lit LED
+                                   * (the owner's "20 %" under the glow's "50 %", the middle's "75 %": geometric
+                                   * steps again, x2.5, x3, x10) */
 #endif
 #ifndef FM1_LED_DIM_DIV
 #define FM1_LED_DIM_DIV 1u        /* a dim LED: the pulse on 1 frame in DIV (1: every frame, ~910 Hz) */
@@ -130,6 +146,7 @@ static volatile struct {
 static uint8_t fm1_led[FM1_NCOL];
 static uint8_t fm1_led_dim[FM1_NCOL];
 static uint8_t fm1_led_dim2[FM1_NCOL];           /* the middle level (FM1_LED_DIM2_NS) */
+static uint8_t fm1_led_faint[FM1_NCOL];          /* the faint level, under dim (FM1_LED_FAINT_NS) */
 
 /* scan diagnostics (console `inp`, read and cleared by the main loop): the gap between ticks
  * = the on-time of the column lit in it, in TIMER4 ticks (24 MHz) */
@@ -145,6 +162,7 @@ static volatile struct {
     uint32_t kb_n, kb_sum, kb_max, dac_sum, dac_max;
     uint32_t dim_n, dim_sum;     /* the dim pulses and their widths (TIMER4 ticks) */
     uint32_t dim2_n, dim2_sum;   /* .. the middle level's */
+    uint32_t faint_n, faint_sum; /* .. the faint level's */
 } fm1_in_stat;
 
 static void fm1__led_lines(uint32_t rowmask)       /* row bit 1 PA9, 2 PA10, 3 PH6, 4 PH9 */
@@ -345,8 +363,10 @@ static void fm1__frame(void)
 /* one column per call, from a timer ISR (see top) */
 #define FM1__DIM_T ((FM1_LED_DIM_NS * FM1_TICKS_PER_US + 500u) / 1000u)   /* the pulse in TIMER4 ticks */
 #define FM1__DIM2_T ((FM1_LED_DIM2_NS * FM1_TICKS_PER_US + 500u) / 1000u)
+#define FM1__FAINT_T ((FM1_LED_FAINT_NS * FM1_TICKS_PER_US + 500u) / 1000u)
 static uint8_t fm1__tick_col, fm1__dim_k = 16u;   /* the bits of the shift the dim pulse spans (0..16) */
 static uint8_t fm1__dim2_k = 16u;                 /* .. the middle level's */
+static uint8_t fm1__faint_k;                      /* .. the faint level's (from the floor up) */
 #if FM1_LED_DIM_DIV > 1
 static uint8_t fm1__dim_ph;
 #endif
@@ -355,6 +375,7 @@ static void fm1_input_tick(void)
     uint32_t p = fm1__tick_col, n = p + 1u == FM1_NCOL ? 0u : p + 1u;
     uint32_t t0 = fm1_ticks(), g = t0 - fm1_in_stat.last, b = 0;
     uint32_t w = 0xFFFFu ^ (1u << n) ^ (n < 2u ? 1u << (11u + n) : 0u), lit = fm1_led[p], dim = 0, dim2 = 0, k = 0;
+    uint32_t faint = 0;
     fm1__led_lines(0);
     fm1_in_stat.last = t0;
     while (b < FM1_GAP_BINS - 1u && g >= (150u * FM1_TICKS_PER_US << b))
@@ -374,29 +395,46 @@ static void fm1_input_tick(void)
     {
         dim2 = fm1_led_dim2[p] & ~lit;
         dim = fm1_led_dim[p] & ~lit & ~dim2;
+        faint = fm1_led_faint[p] & ~lit & ~dim2 & ~dim;
     }
-    if (dim | dim2) {                              /* the pulses of column p: dim over the first k1 bits of the
-                                                    * shift, dim2 over the first k2 (the 595 still drives column p) */
-        uint32_t t1, d, k1 = dim ? fm1__dim_k : 0u, k2 = dim2 ? fm1__dim2_k : 0u;
-        if (dim2 && k1 > k2)                       /* (never once settled: the middle pulse is the longer) */
+    if (faint | dim | dim2) {                      /* the pulses of column p: faint over the first k0 bits of the
+                                                    * shift, dim over the first k1, dim2 over the first k2 (the 595
+                                                    * still drives column p) */
+        uint32_t t1, d, kk, k0 = faint ? fm1__faint_k : 0u, k1 = dim ? fm1__dim_k : 0u, k2 = dim2 ? fm1__dim2_k : 0u;
+        if (dim2 && k1 > k2)                       /* (never once settled: the longer pulse spans more bits) */
             k1 = k2;
+        if (dim ? k0 > k1 : dim2 && k0 > k2)
+            k0 = dim ? k1 : k2;
         t1 = fm1_ticks();                          /* (before the write: d spans one write and the bits) */
-        fm1__led_lines(lit | dim | dim2);
+        fm1__led_lines(lit | faint | dim | dim2);
+        if (faint) {
+            fm1__sr_bits(w, 0, k0);
+            d = fm1_ticks() - t1;
+            while (k0 == 16u && d < FM1__FAINT_T)  /* only a shift shorter than the pulse waits */
+                d = fm1_ticks() - t1;
+            fm1__led_lines(dim | dim2 ? lit | dim | dim2 : 0u);
+            kk = fm1__faint_k;
+            fm1__faint_k = (uint8_t)(d > FM1__FAINT_T ? (kk ? kk - 1u : 0u) : d < FM1__FAINT_T && kk < 16u ? kk + 1u : kk);
+            fm1_in_stat.faint_n++;
+            fm1_in_stat.faint_sum += d;
+            k = k0;
+        }
         if (dim) {
-            fm1__sr_bits(w, 0, k1);
+            fm1__sr_bits(w, k, k1);
             d = fm1_ticks() - t1;
             while (k1 == 16u && d < FM1__DIM_T)    /* only a shift shorter than the pulse waits */
                 d = fm1_ticks() - t1;
             fm1__led_lines(dim2 ? lit | dim2 : 0u);
-            k = fm1__dim_k;
-            fm1__dim_k = (uint8_t)(d > FM1__DIM_T ? (k ? k - 1u : 0u) : d < FM1__DIM_T && k < 16u ? k + 1u : k);
+            kk = fm1__dim_k;
+            fm1__dim_k = (uint8_t)(d > FM1__DIM_T ? (kk ? kk - 1u : 0u) : d < FM1__DIM_T && kk < 16u ? kk + 1u : kk);
             fm1_in_stat.dim_n++;
             fm1_in_stat.dim_sum += d;
+            k = k1;
         }
         if (dim2) {
-            fm1__sr_bits(w, k1, k2);
+            fm1__sr_bits(w, k, k2);
             d = fm1_ticks() - t1;
-            k = fm1__dim2_k;
+            kk = fm1__dim2_k;
             if (k2 == 16u && d < FM1__DIM2_T) {    /* the whole shift is over and the pulse is not: the rest is
                                                     * waited, and the span stays 16 (the wait's overshoot, a clock
                                                     * read, must not shorten the next pulse to 15 bits unwaited) */
@@ -404,13 +442,13 @@ static void fm1_input_tick(void)
                     d = fm1_ticks() - t1;
                 while (d < FM1__DIM2_T);
             } else {
-                fm1__dim2_k = (uint8_t)(d > FM1__DIM2_T ? (k ? k - 1u : 0u) : d < FM1__DIM2_T && k < 16u ? k + 1u : k);
+                fm1__dim2_k = (uint8_t)(d > FM1__DIM2_T ? (kk ? kk - 1u : 0u) : d < FM1__DIM2_T && kk < 16u ? kk + 1u : kk);
             }
             fm1__led_lines(0);
             fm1_in_stat.dim2_n++;
             fm1_in_stat.dim2_sum += d;
+            k = k2;
         }
-        k = k2 > k1 ? k2 : k1;
     }
     fm1__sr_bits(w, k, 16u);
     fm1__sr_latch();                               /* column n, the lines dark */

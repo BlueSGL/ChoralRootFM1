@@ -455,6 +455,95 @@ int main(void)
                    fm1__dim2_k == 16u ? " (the shift is shorter than the pulse: the rest waited)" : " (no wait)");
         }
         memset(fm1_led_dim2, 0, sizeof fm1_led_dim2);
+        /* the faint level (fm1_led_faint, 0.17): four levels on every frame. Column 2: faint alone; column 3: faint
+         * and dim; column 4: faint, dim and dim2 (all | lit, then dim | dim2 | lit, then dim2 | lit, then dark);
+         * column 5: faint and dim2; column 6: faint on a lit LED (lit wins: no pulse); an LED in faint and dim
+         * (column 3 row 4) is dim. The faint pulse grows from the floor (0 bits of the shift: the two writes back to
+         * back) a bit at a time, so a target between two reachable widths is dithered: its mean within 30 % of
+         * FM1_LED_FAINT_NS or at the floor, every single pulse within a bit's time of the target and under every dim
+         * pulse; the dim and dim2 pulses beside it keep their widths; the lines dark at every latch */
+        for (bi = 0; bi < sizeof BUS / sizeof BUS[0]; bi++) {
+            const uint32_t T0 = (FM1_LED_FAINT_NS * FM1_TICKS_PER_US + 500u) / 1000u;
+            const uint32_t T1 = (FM1_LED_DIM_NS * FM1_TICKS_PER_US + 500u) / 1000u;
+            const uint32_t T2 = (FM1_LED_DIM2_NS * FM1_TICKS_PER_US + 500u) / 1000u;
+            const uint32_t bit = 6u * BUS[bi], floor0 = 4u * BUS[bi] + 1u;   /* a bit: 3 read-modify-writes; the
+                                                                              * floor: the lines' 4 accesses, a clock read */
+            uint32_t t, prev, frames = 400u, bad = 0, n0 = 0;
+            uint32_t w0min = ~0u, w0max = 0, w0sum = 0, w0n = 0, w1min = ~0u, w1max = 0, w2min = ~0u, w2max = 0, mean, want;
+            char what[128];
+            reset();
+            FM1_PR(FM1_PA, FM1_IN) = 0xFFFFFFFFu;
+            FM1_PR(FM1_PB, FM1_IN) = 0xFFFFFFFFu;
+            memset(fm1_led, 0, sizeof fm1_led);
+            memset(fm1_led_dim, 0, sizeof fm1_led_dim);
+            memset(fm1_led_dim2, 0, sizeof fm1_led_dim2);
+            memset(fm1_led_faint, 0, sizeof fm1_led_faint);
+            fm1_led_faint[2] = 1u << 1 | 1u << 3;
+            fm1_led_faint[3] = 1u << 2 | 1u << 4;
+            fm1_led_dim[3] = 1u << 4 | 1u << 1;
+            fm1_led_faint[4] = 1u << 1;
+            fm1_led_dim[4] = 1u << 2;
+            fm1_led_dim2[4] = 1u << 3;
+            fm1_led_faint[5] = 1u << 4;
+            fm1_led_dim2[5] = 1u << 2;
+            fm1_led[6] = 1u << 1;
+            fm1_led_faint[6] = 1u << 1;
+            host_step = 1u;
+            host_bus = BUS[bi];
+            latch_lit = latches = 0;
+            for (t = 0; t < frames * FM1_NCOL; t++) {
+                uint32_t d0, d1, d2, i = 1, lit, settled = t >= 40u * FM1_NCOL;
+                prev = fm1__tick_col;
+                led_nw = 0;
+                fm1_input_tick();
+                lit = fm1_led[prev];
+                d2 = fm1_led_dim2[prev] & ~lit;
+                d1 = fm1_led_dim[prev] & ~lit & ~d2;
+                d0 = fm1_led_faint[prev] & ~lit & ~d2 & ~d1;
+                /* 0 (the key read), [all of p], [faint off], [dim off], [dark], lit of n */
+                bad += led_w[0] != 0u || led_w[led_nw - 1u] != fm1_led[fm1__tick_col];
+                bad += led_nw != 2u + ((d0 | d1 | d2) != 0u) + (d0 != 0u) + (d1 != 0u) + (d2 != 0u);
+                if (!(d0 | d1 | d2) || led_nw > 6u)
+                    continue;
+                bad += led_w[1] != (lit | d0 | d1 | d2);
+                if (d0) {
+                    uint32_t a = led_wt[i + 1u] - led_wt[1];
+                    bad += led_w[i + 1u] != (d1 | d2 ? lit | d1 | d2 : 0u);
+                    n0++;
+                    if (settled) {
+                        w0min = a < w0min ? a : w0min; w0max = a > w0max ? a : w0max;
+                        w0sum += a; w0n++;
+                    }
+                    i++;
+                }
+                if (d1) {
+                    uint32_t a = led_wt[i + 1u] - led_wt[1];
+                    bad += led_w[i + 1u] != (d2 ? lit | d2 : 0u);
+                    if (settled) { w1min = a < w1min ? a : w1min; w1max = a > w1max ? a : w1max; }
+                    i++;
+                }
+                if (d2) {
+                    uint32_t a = led_wt[i + 1u] - led_wt[1];
+                    bad += led_w[i + 1u] != 0u;
+                    if (settled) { w2min = a < w2min ? a : w2min; w2max = a > w2max ? a : w2max; }
+                }
+            }
+            mean = w0n ? w0sum / w0n : 0u;
+            want = floor0 > T0 ? floor0 : T0;         /* (a floor over the target: the pulse stays at the floor) */
+            snprintf(what, sizeof what, "LEDs, bus %u: faint %u..%u ns, mean %u (target %u, a bit %u ns), dim %u..%u, dim2 %u..%u",
+                     (unsigned)host_bus, (unsigned)(w0min * 1000u / FM1_TICKS_PER_US), (unsigned)(w0max * 1000u / FM1_TICKS_PER_US),
+                     (unsigned)(mean * 1000u / FM1_TICKS_PER_US), (unsigned)FM1_LED_FAINT_NS, (unsigned)(bit * 1000u / FM1_TICKS_PER_US),
+                     (unsigned)(w1min * 1000u / FM1_TICKS_PER_US), (unsigned)(w1max * 1000u / FM1_TICKS_PER_US),
+                     (unsigned)(w2min * 1000u / FM1_TICKS_PER_US), (unsigned)(w2max * 1000u / FM1_TICKS_PER_US));
+            check(what, !bad && !latch_lit && latches == frames * FM1_NCOL && n0 == 4u * frames &&
+                  mean * 10u >= want * 7u && mean * 10u <= want * 13u && w0max <= want + bit + 2u && w0min + bit + 2u >= want &&
+                  w0max < w1min && w1min * 10u >= T1 * 7u && w1max * 10u <= T1 * 13u &&
+                  w2min * 10u >= T2 * 7u && w2max * 10u <= T2 * 13u && w2min > w1max);
+            printf("LEDs, bus %u: the faint pulse spans %u bits of the shift (the floor %u ns)\n", (unsigned)host_bus,
+                   (unsigned)fm1__faint_k, (unsigned)(floor0 * 1000u / FM1_TICKS_PER_US));
+        }
+        memset(fm1_led_faint, 0, sizeof fm1_led_faint);
+        memset(fm1_led_dim2, 0, sizeof fm1_led_dim2);
         host_bus = 0;
         host_step = 2400u;
         printf("LEDs: refresh %u Hz lit, %u Hz dim\n", (unsigned)(1000000u / (FM1_NCOL * TICK_US)),

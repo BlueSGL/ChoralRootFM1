@@ -20,8 +20,8 @@ dump                          # 2: key 1 tonic 2
 btn GLO                       # keys: play
 wait 300
 expect led GLO on
-expect led A#3 dim            # the chord keys: their own state again (none held)
-expect led F#3 dim
+expect led A#3 faint            # the chord keys: their own state again (none held)
+expect led F#3 faint
 expect led D4 mid             # the roots: as on the view: Key Mode's lights (D major: the tonic at the middle level,
 expect led E4 dim             # a note of the scale glows,
 expect led D#4 off            # a root out of it is dark)

@@ -103,7 +103,7 @@
     g2.putImageData(img, 0, 0);
     m2.drawImage(lcd, 0, 0);
   };
-  const LEVEL = [0, 0.38, 1, 0.68];   // off, dim, lit, mid (the middle level: Key Mode's tonic)
+  const LEVEL = [0, 0.38, 1, 0.68, 0.18];   // off, dim, lit, mid (Key Mode's tonic), faint (the idle chord keys)
   const drawLeds = (L) => {
     for (let k = 0; k < 27; k++) {
       const e = keyEl[k], v = L[k];

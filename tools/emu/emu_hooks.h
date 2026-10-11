@@ -37,6 +37,7 @@ typedef struct {
     /* firmware -> emulator */
     uint8_t led[EMU_NCOL], led_dim[EMU_NCOL];   /* fm1_led / fm1_led_dim: packed row bits per column */
     uint8_t led_mid[EMU_NCOL];                  /* fm1_led_dim2: the middle level (dim < mid < lit) */
+    uint8_t led_faint[EMU_NCOL];                /* fm1_led_faint: the faint level (faint < dim) */
     uint16_t lcd[EMU_LCD_W * EMU_LCD_H];        /* the panel's RAM, RGB565 as sent (big-endian) */
     volatile uint32_t lcd_writes;               /* bumped by every fill / blit */
     /* PA2 driven high (hal/fm1_lcd_hw.h): on the unit that pin is not the backlight alone, it also keeps the key
