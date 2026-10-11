@@ -4177,11 +4177,58 @@ static void cu_scope(cr_screen_t *s)
         s->wave[i] = (int8_t)(snap[trig + i] * 127 / peak);
 }
 
-static void cu_view_screen(cr_screen_t *s)
+/* the Chord view's content while an arpeggio plays: the arp screen (the chord's name, its notes on a line, the
+ * sounding note hopping along). Only there (the other views are never replaced) and only while the shown chord is
+ * being stepped: Perform on in a clocked mode (Arpeggiate, Arp 2 Octaves, Pattern: cr_snap.perf_step; a strum, a slop
+ * and a harp run once and keep the chord view) from the press to the voice's end (keys up without LATCH / Hold,
+ * Perform off, PANIC, the loop that played it stopped). Options > Motion Off: never (the hop is motion; the plain
+ * chord view). A chord re-fingered within CU_ARP_LINGER_MS keeps the screen (no flash of the chord view between
+ * two chords: the name and the notes of the one just left, no note on its block); Perform off and Motion Off do not
+ * wait, and the PANIC screen outlasts it */
+#define CU_ARP_LINGER_MS 150u
+static int cu_arp_on(uint32_t now)
+{
+    static uint32_t t_step;
+    static uint8_t seen;
+    const cr_snap_t *sn = &cr_snap;
+    uint32_t pm = sn->perform_mode;
+    if (cs.view != V_CHORD || cr_motion == CR_MOTION_OFF || !sn->perform_on || !sn->ci.valid ||
+        (pm != CR_PM_ARP && pm != CR_PM_PATTERN)) {
+        seen = 0;
+        return 0;
+    }
+    if (sn->perf_step && sn->ci.sounding) {
+        seen = 1;
+        t_step = now;
+        return 1;
+    }
+    if (seen && now - t_step < CU_ARP_LINGER_MS)
+        return 1;
+    seen = 0;
+    return 0;
+}
+
+static void cu_view_screen(cr_screen_t *s, uint32_t now)
 {
     const cr_snap_t *sn = &cr_snap;
     const cr_chord_info_t *ci = &sn->ci;
-    /* perform never swaps the chosen view: its state shows in the PERF LED and the top line ("Arp") only */
+    if (cu_arp_on(now)) {
+        uint32_t pm = sn->perform_mode;
+        char v[8], sub[12];
+        int32_t p = CU_PERF_KNOB[pm][0];
+        s->kind = CR_K_ARP;                        /* the arp in motion: the sounding note hops along */
+        cu_name(&s->name, ci);
+        cu_notes(s, ci);
+        s->pos = (int8_t)(sn->perf_step && sn->perf_pos >= 0 && sn->perf_pos < (int)s->n_notes ? sn->perf_pos : -1);
+        s->hop_col = CR_COL_WHITE;
+        cu_param_text((uint32_t)p, cs.par[pm][p], v, sub);
+        cu_cpy(s->line, CU_PERF[cs.perf_sel].short_name, sizeof s->line);
+        s->line[0] = (char)(s->line[0] | 0x20);
+        cu_cat(s->line, " ", sizeof s->line);
+        cu_cat(s->line, p == CR_P_DIV || p == CR_P_PATTERN ? sub : v, sizeof s->line);
+        s->line_col = CR_COL_MID;
+        return;
+    }
     switch (cs.view) {
     case V_SCOPE:                                 /* the sound itself: one bold line, the chord small on top */
         s->kind = CR_K_SCOPE;
@@ -4445,7 +4492,7 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
         return;
     }
     /* 5. the View */
-    cu_view_screen(s);
+    cu_view_screen(s, now);
     cu_dial(s, now);
 }
 
@@ -4489,7 +4536,7 @@ static void cu_animate(cr_screen_t *s, uint32_t now)
     ca.sweeping = 0;
     switch (s->kind) {
     case CR_K_CHORD:
-        if (kind_changed) {
+        if (kind_changed && ca.kind != CR_K_ARP) {
             ca.from = NONAME;
             ca.anim = CR_A_SQUEEZE;
             cr_anim_mark(&cu_anim, now);
@@ -4497,6 +4544,9 @@ static void cu_animate(cr_screen_t *s, uint32_t now)
             ca.from = ca.name;
             ca.anim = CR_A_SQUEEZE;
             cr_anim_mark(&cu_anim, now);
+        } else if (kind_changed) {                 /* the arp stopped: its chord, as it stands (no squeeze) */
+            ca.from = NONAME;
+            ca.anim = 0;
         }
         s->from = ca.from;
         s->anim = ca.anim;

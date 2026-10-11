@@ -107,6 +107,9 @@ through the current voicing, perform mode, bass and transpose.
 - **`cr_mods_held` / `cr_mods_active`**: modifiers held, or latched in a held voice (Advanced / Free).
 - **`cr_perform_pos`**: the shown chord's index of the last performed note. Upper-octave notes fold
   onto their chord tone. This is the hop for the arp view.
+- **`cr_perform_stepping`**: the shown chord's voice runs a clocked performance (Arp / Pattern: its clock is
+  on, a step always queued). 0 for Strum / Slop / Harp (they run once), and once the voice ended (keys up
+  without a latch, Perform off, panic, its loop stopped). The arp view shows while it is 1.
 - **`cr_sounding`, `cr_voices`, `cr_pending`**: diagnostics.
 - **`cr_note_name`**: MIDI 60 = C4.
 - **`cr_pattern_name`**: the pattern names.

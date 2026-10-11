@@ -662,6 +662,7 @@ typedef struct {
     int8_t voicing, bass_voicing;
     int perf_pos;
     uint8_t perf_note;
+    uint8_t perf_step;               /* the shown chord is being arpeggiated (cr_perform_stepping): the arp screen */
     uint16_t scale_mask;
     int voices, pending;
     uint8_t sound[128];              /* bit s: stream s sounds note n (registry) */
@@ -694,6 +695,7 @@ static void cr_snapshot(void)
     cr_snap.voicing = cr.voicing;
     cr_snap.bass_voicing = cr.bass_voicing;
     cr_snap.perf_pos = cr_perform_pos(&cr, &cr_snap.perf_note);
+    cr_snap.perf_step = (uint8_t)cr_perform_stepping(&cr);
     cr_snap.scale_mask = cr_scale_mask(&cr);
     cr_snap.voices = cr_voices(&cr);
     cr_snap.pending = cr_pending(&cr);

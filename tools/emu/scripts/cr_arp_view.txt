@@ -1,0 +1,196 @@
+# ChoralRoot: the arp screen is the Chord view's content while an arpeggio plays (docs/INTEGRATION.md section 5).
+# Arpeggiate picked (PERF held, SELECT +3), OCT- closes. MAJ + D4 held on the Chord view: the arp screen, the sounding
+# note hopping (shots a / b differ); PERF held: the perform layer over it; released: the chord view back. LATCH + the
+# chord released: it keeps hopping; PANIC: the chord view. The Keyboard view with the arp running: unchanged. Options >
+# Motion Off: the plain chord view. Strum: the chord view. A playing loop with no key held: the arp screen; stopped:
+# the chord view. test_cr.sh reads the frames (EMU_UI_LOG=0) between the dumps.
+wait 300
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+knob SELECT +3
+wait 300
+btn OCT-
+wait 300
+dump                          # 1: perform 1 (Arpeggiate), layer 0, view 0
+key F3 down
+wait 40
+btn D4 down
+wait 420
+shot build/emu/test/cr_arp_view_a.ppm
+wait 250
+shot build/emu/test/cr_arp_view_b.ppm
+wait 550
+dump                          # 2: the arp screen, the hop moving
+btn ARP down
+wait 600
+shot build/emu/test/cr_arp_view_layer.ppm
+dump                          # 3: the perform layer (its knob row), the arp still stepping
+btn ARP up
+wait 100
+btn OCT-
+wait 400
+dump                          # 4: the layer closed: the arp screen again
+btn D4 up
+key F3 up
+wait 400
+shot build/emu/test/cr_arp_view_rel.ppm
+dump                          # 5: released: the chord view (D)
+btn LFO
+wait 200
+key F3 down
+wait 40
+btn D4 down
+wait 500
+btn D4 up
+key F3 up
+wait 700
+shot build/emu/test/cr_arp_view_latch_a.ppm
+wait 250
+shot build/emu/test/cr_arp_view_latch_b.ppm
+dump                          # 6: latched: still the arp screen, still hopping
+btn OCT- down
+btn OCT+ down
+wait 200
+btn OCT+ up
+btn OCT- up
+wait 1500
+dump                          # 7: PANIC: the chord view
+btn HOME
+wait 300
+key F3 down
+wait 40
+btn D4 down
+wait 800
+shot build/emu/test/cr_arp_view_kbd.ppm
+dump                          # 8: the Keyboard view, the arp running: unchanged
+btn D4 up
+key F3 up
+wait 300
+btn HOME
+wait 200
+btn HOME
+wait 200
+btn HOME
+wait 200
+btn HOME
+wait 300
+btn GLO 80
+wait 300
+knob SELECT +13               # Options > Motion
+wait 300
+knob KNOB1 +2                 # Full -> Calm -> Off
+wait 300
+btn GLO 80
+wait 400
+dump                          # 9: view 0 again, Motion Off, Options closed
+key F3 down
+wait 40
+btn D4 down
+wait 800
+shot build/emu/test/cr_arp_view_motion_off.ppm
+dump                          # 10: Motion Off: the plain chord view, the arp sounding
+btn D4 up
+key F3 up
+wait 300
+btn GLO 80
+wait 300
+knob KNOB1 -1                 # Calm
+wait 300
+btn GLO 80
+wait 400
+key F3 down
+wait 40
+btn D4 down
+wait 800
+dump                          # 11: Motion Calm: the arp screen
+btn D4 up
+key F3 up
+wait 300
+btn GLO 80
+wait 300
+knob KNOB1 -1                 # Full
+wait 300
+btn GLO 80
+wait 400
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+knob SELECT -3                # Strum
+wait 300
+btn OCT-
+wait 300
+dump                          # 12: Strum picked (mode 0)
+key F3 down
+wait 40
+btn D4 down
+wait 800
+shot build/emu/test/cr_arp_view_strum.ppm
+dump                          # 13: Strum: the chord view, no arp screen in any frame of the press
+btn D4 up
+key F3 up
+wait 300
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+knob SELECT +6                # Harp
+wait 300
+btn OCT-
+wait 300
+dump                          # 14: Harp picked (mode 4)
+key F3 down
+wait 40
+btn D4 down
+wait 800
+dump                          # 15: Harp (one run): the chord view, no arp screen in any frame
+btn D4 up
+key F3 up
+wait 300
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+knob SELECT -1                # Pattern
+wait 300
+btn OCT-
+wait 300
+key F3 down
+wait 40
+btn D4 down
+wait 800
+dump                          # 16: Pattern: the arp screen
+btn D4 up
+key F3 up
+wait 300
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+knob SELECT -2                # Arpeggiate
+wait 300
+btn OCT-
+wait 300
+btn REC                       # a free loop of two chords (D, G), then it plays
+wait 300
+key F3 down
+wait 40
+btn D4 down
+wait 900
+btn D4 up
+btn A4 down
+wait 900
+btn A4 up
+key F3 up
+wait 40
+btn REC
+wait 1500
+shot build/emu/test/cr_arp_view_loop.ppm
+dump                          # 17: the loop plays, no key held: the arp screen
+btn PLAY
+wait 600
+dump                          # 18: the loop stopped: the chord view
+wait 2000
+dump                          # 19: silent

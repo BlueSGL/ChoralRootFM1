@@ -229,6 +229,8 @@ uint8_t cr_mods_held(const cr_t *c);               /* bit m = physically held */
 uint8_t cr_mods_active(const cr_t *c);             /* held, or latched in a held voice (Advanced / Free) */
 int  cr_perform_pos(const cr_t *c, uint8_t *note); /* index into the shown chord's notes of the last
                                                     * performed note (-1: none); *note = its pitch */
+int  cr_perform_stepping(const cr_t *c);           /* the shown chord's voice runs a clocked performance (Arp /
+                                                    * Pattern: a step is always queued), 0 once it stopped */
 int  cr_sounding(const cr_t *c, cr_stream_t s, uint8_t note);   /* registry refcount */
 int  cr_voices(const cr_t *c);                     /* live voices (keyed + pads) */
 int  cr_pending(const cr_t *c);                    /* queued events */

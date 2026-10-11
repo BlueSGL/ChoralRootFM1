@@ -1185,6 +1185,37 @@ int main(int argc, char **argv)
 #undef HS
     }
 
+    {   /* the arp screen (the Chord view while an arpeggio plays): the hop alone moves -> only the strips from the
+         * arc to the notes' line are composed (the name's are not), and the screen is the full draw's */
+        int found = 0;
+        for (k = 0; k < CR_NSCREENS && !found; k++)
+            if (CR_SCREENS[k].kind == CR_K_ARP) {
+                cr_screen_t s = CR_SCREENS[k];
+                int same = 1;
+                uint32_t most = 0, p;
+                found = 1;
+                s.anim = 0;
+                render(&s, 0);
+                for (p = 0; p < 2u * s.n_notes + 1u; p++) {           /* round the notes twice, then none (-1) */
+                    s.pos = (int8_t)(p < 2u * s.n_notes ? (int32_t)((s.pos + 1) % (int32_t)s.n_notes) : -1);
+                    cr_draw(&s, 0);
+                    if (cr_dc.drawn > most) most = cr_dc.drawn;
+                    memcpy(a, host_screen, sizeof a);
+                    render(&s, 0);
+                    same &= !memcmp(a, host_screen, sizeof a);
+                    memcpy(b, host_screen, sizeof b);
+                }
+                snprintf(name, sizeof name, "arp: the hop moves: only its strips composed (%u of %u)", most,
+                         (unsigned)CR_NSTRIP);
+                check(name, most >= 1u && most <= 3u);
+                check("arp: the hop's partial draw equals a full one", same);
+                s.pos = 0;
+                render(&s, 0);
+                check("arp: another note sounding is another screen", memcmp(b, host_screen, sizeof b) != 0);
+            }
+        check("arp: the screen is in the table (the main sheet's arp state)", found);
+    }
+
     {   /* animations: pure and settling */
         int pure = 1, settle = 1, moving = 1;
         for (i = 0; i < CR_NSCREENS; i++) {

@@ -324,7 +324,59 @@ L="$OUT/cr_arp_hold.log"
 fl=$(grep '^ui: frame' "$L" | tail -1)
 case "$fl" in *"keyboard view 1"*"right 'Arp'"*) ok "Keyboard view + PERF on + a chord: the keyboard view stays, the top line says Arp: $OUT/cr_perf_view_kbd.ppm";;
     *) bad "perform swapped the view: $fl";; esac
-grep -q '^ui: frame.*device): arp ' "$L" && bad "an arp screen appeared" || ok "no arp screen in any frame"
+grep '^ui: frame.*device): arp ' "$L" | grep -qv 'device): arp view 0 ' && bad "an arp screen on another view than Chord" ||
+    ok "the arp screen only on the Chord view ($(grep -c '^ui: frame.*device): arp view 0 ' "$L") frames), none on the Keyboard view"
+
+echo "the arp screen: the Chord view's content while an arpeggio plays (the hop), and only then"
+export EMU_UI_LOG=0
+run cr_arp_view
+unset EMU_UI_LOG
+L="$OUT/cr_arp_view.log"
+seg() { awk -v n="$1" '/^fm1_in:/ { d++ } d == n - 1 && /^ui: frame/' "$L"; }   # the frames up to dump N (after dump N - 1)
+knd() { seg "$1" | tail -1 | sed -n 's/.*device): \([a-z0-9]*\) view \([0-9]\) name .\([^|]*\)|.*/\1 \2 \3/p'; }   # the last: "arp 0 D"
+arps() { seg "$1" | grep -c 'device): arp '; }
+hops() { seg "$1" | sed -n 's/.*device): arp .* pos \([0-9][0-9]*\) of .*/\1/p' | sort -u | wc -l | tr -d ' '; }   # the hop's places seen
+md() { grep '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* perform \([0-9]\) mode \([0-9]\) .* view \([0-9]\) layer \([0-9]*\) .*/\1 \2 \3 \4/p'; }
+[ "$(md 1)" = "1 2 0 0" ] && [ "$(knd 2)" = "arp 0 D" ] && [ "$(hops 2)" -ge 3 ] && seg 2 | tail -1 | grep -q "right 'Arp'.* line 'arp 1/8'" &&
+    ok "Chord view + Arpeggiate + D held: the arp screen, the note hopping ($(hops 2) places), the top line Arp, 'arp 1/8': $OUT/cr_arp_view_a.ppm" \
+    || bad "no arp screen: $(md 1) / $(knd 2) / $(hops 2) places"
+differ cr_arp_view_a cr_arp_view_b "a step later the hop is elsewhere"
+seg 2 | grep 'device): arp ' | sed 1d | grep -qv 'blits [0-9]*/[0-3] ' && bad "a hop composed more than its 3 strips" ||
+    ok "a hop composes its strips only (3 of 6: $(seg 2 | grep -c 'blits [0-9]*/3 ') frames; the others nothing)"
+[ "$(knd 3)" = "knobrow 0 " ] && [ "$(md 3)" = "1 2 0 2" ] && [ "$(no 3)" -gt "$(no 2)" ] && [ "$(knd 4)" = "arp 0 D" ] &&
+    ok "PERF held with the arp running: the perform layer (the arp goes on: $(no 2) -> $(no 3) notes), closed: the arp screen: $OUT/cr_arp_view_layer.ppm" \
+    || bad "the layer over the arp screen: $(knd 3) / $(md 3) / $(knd 4)"
+[ "$(knd 5)" = "chord 0 D" ] && [ "$(arps 5)" -le 12 ] &&
+    ok "keys released: the chord view back ($(arps 5) frames of the arp screen left: its 150 ms linger): $OUT/cr_arp_view_rel.ppm" \
+    || bad "released: $(knd 5), $(arps 5) arp frames"
+differ cr_arp_view_a cr_arp_view_rel "the chord view is not the arp screen"
+[ "$(knd 6)" = "arp 0 D" ] && [ "$(hops 6)" -ge 3 ] && [ "$(no 6)" -gt "$(no 5)" ] &&
+    ok "LATCH + the chord released: the arp screen stays, hopping ($(hops 6) places): $OUT/cr_arp_view_latch_a.ppm" || bad "LATCH: $(knd 6) / $(hops 6)"
+differ cr_arp_view_latch_a cr_arp_view_latch_b "latched: a step later the hop is elsewhere"
+[ "$(knd 7)" = "chord 0 " ] && ok "PANIC: the chord view" || bad "PANIC: $(knd 7)"
+[ "$(knd 8)" = "keyboard 1 D" ] && [ "$(arps 8)" = 0 ] && [ "$(no 8)" -gt "$(no 7)" ] &&
+    ok "the Keyboard view with the arp running ($(no 7) -> $(no 8) notes): unchanged, no arp screen: $OUT/cr_arp_view_kbd.ppm" \
+    || bad "the Keyboard view: $(knd 8), $(arps 8) arp frames"
+vc() { grep '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .*/\1/p'; }
+[ "$(vc 9)" = 0 ] && ok "PANIC took LATCH off in the engine too: the chord released after it ends" || bad "after PANIC a released chord still sounds ($(vc 9) voices)"
+[ "$(md 9)" = "1 2 0 0" ] && [ "$(knd 10)" = "chord 0 D" ] && [ "$(arps 10)" = 0 ] && [ "$(no 10)" -gt "$(no 9)" ] &&
+    ok "Options > Motion Off: the plain chord view while the arp plays ($(no 9) -> $(no 10) notes): $OUT/cr_arp_view_motion_off.ppm" \
+    || bad "Motion Off: $(md 9) / $(knd 10), $(arps 10) arp frames"
+[ "$(knd 11)" = "arp 0 D" ] && [ "$(hops 11)" -ge 3 ] && ok "Motion Calm: the arp screen" || bad "Motion Calm: $(knd 11)"
+[ "$(md 12)" = "1 0 0 0" ] && [ "$(knd 13)" = "chord 0 D" ] && [ "$(arps 13)" = 0 ] && [ "$(no 13)" -gt "$(no 12)" ] &&
+    ok "Strum: the chord view, no arp screen in any frame: $OUT/cr_arp_view_strum.ppm" || bad "Strum: $(md 12) / $(knd 13), $(arps 13) arp frames"
+[ "$(md 14)" = "1 4 0 0" ] && [ "$(knd 15)" = "chord 0 D" ] && [ "$(arps 15)" = 0 ] && [ "$(no 15)" -gt "$(no 14)" ] &&
+    ok "Harp (one run): the chord view, no arp screen in any frame" || bad "Harp: $(md 14) / $(knd 15), $(arps 15) arp frames"
+[ "$(md 16)" = "1 3 0 0" ] && [ "$(knd 16)" = "arp 0 D" ] && seg 16 | tail -1 | grep -q " line 'pattern " &&
+    ok "Pattern: the arp screen" || bad "Pattern: $(md 16) / $(knd 16)"
+lp() { grep '^  loop: state' "$L" | sed -n "$1p" | sed -n 's/.*loop: state \([0-9]*\) .*/\1/p'; }
+kd() { grep '^fm1_in:' "$L" | sed -n "$1p" | sed -n 's/^fm1_in: notes \([0-9A-F]*\) .*/\1/p'; }
+case "$(knd 17)" in "arp 0 "?) a17=1;; *) a17=0;; esac
+[ "$a17" = 1 ] && [ "$(kd 17)" = 0000000 ] && [ "$(lp 17)" != "$(lp 18)" ] && [ "$(no 17)" -gt "$(no 16)" ] && [ "$(hops 17)" -ge 3 ] &&
+    ok "a playing loop, no key held: the arp screen follows the loop's chords ($(knd 17)): $OUT/cr_arp_view_loop.ppm" \
+    || bad "the loop's arp: $(knd 17), keys $(kd 17), loop state $(lp 17) -> $(lp 18)"
+case "$(knd 18)" in "chord 0 "?) ok "the loop stopped: the chord view";; *) bad "the loop stopped: $(knd 18)";; esac
+silent_end cr_arp_view
 
 echo "HOME held: the view menu; the view lock; HOME tap at home cycles only unlocked"
 run cr_view_menu

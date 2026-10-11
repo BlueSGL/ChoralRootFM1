@@ -1349,6 +1349,17 @@ int cr_perform_pos(const cr_t *c, uint8_t *note)
     return -1;
 }
 
+/* the shown voice is being arpeggiated: its clock runs (Arp / Pattern; a strum, a slop and a harp run once and
+ * end). True from the press (before the first step, Retrig off) to the voice's end: keys up without a latch,
+ * Perform off, panic, its loop stopped */
+int cr_perform_stepping(const cr_t *c)
+{
+    const cr_voice_t *v;
+    if (c->disp_vi == CR_NONE || !c->perform_on) return 0;
+    v = &c->v[c->disp_vi];
+    return v->used && v->main.live && v->clk.on;
+}
+
 int cr_sounding(const cr_t *c, cr_stream_t s, uint8_t note)
 {
     if ((int)s < 0 || (int)s >= CR_NSTREAM || note > 127) return 0;

@@ -382,6 +382,10 @@ void emu_fw_ui_info(char *buf, uint32_t n)
              (unsigned)s->wv[4], (unsigned)s->lm_mid, (unsigned)s->lm_bars,
              (unsigned)s->lm_free, (unsigned)(s->lm_pos & 0x7FFFu), (unsigned)s->lm_nlane, (unsigned)s->lm_newlane,
              (unsigned)s->lm_slot + 1u, (unsigned)s->lm_jump, s->sub, s->right, (unsigned)s->hot_r, (unsigned)s->hot_c);
+    if (s->kind == CR_K_ARP) {                    /* the arp screen's hop and its rate line (tools/emu/test_cr.sh) */
+        size_t l = strlen(buf);
+        snprintf(buf + l, n - l, " pos %d of %u line '%s'", (int)s->pos, (unsigned)s->n_notes, s->line);
+    }
     if (s->kind == CR_K_GEEK) {                   /* GEEK OUT's status lines (the second core's: tools/emu/test_cr.sh) */
         size_t l = strlen(buf);
         uint32_t i;

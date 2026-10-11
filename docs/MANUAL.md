@@ -415,6 +415,10 @@ performance on), the root keys play so you hear it, KNOB 1 to KNOB 4 are the mod
 Outside the layer **KNOB 3** turns the mode's first parameter (the strum rate, the slop amount, the arp division,
 the pattern, the harp rate). An arpeggio stops when you let go of the keys; switch LATCH on to keep it running.
 
+On the Chord view, while an arpeggio or a pattern is playing, the screen shows it: the chord's name, its notes on a
+line, and the note sounding lifted onto a block that hops from note to note. When the arpeggio stops the chord view
+is back. Strum, Slop and Harp keep the chord view, and so does Options > Motion Off.
+
 ## 8. FX
 
 Four effects: **Reverb**, **Chorus**, **Delay** and **Drive**. Each has an amount, and one of the four is the
@@ -791,7 +795,7 @@ The view is what the screen shows when no layer, menu or editor is open. There a
 
 | View | Shows |
 | --- | --- |
-| **Chord** (default) | the chord name large, the voiced notes under it |
+| **Chord** (default) | the chord name large, the voiced notes under it; while an arpeggio or a pattern plays, the notes on a line with the sounding one hopping along ([Performance modes](#7-performance-modes)) |
 | **Keyboard** | the chord name and a keyboard with the chord's notes lit |
 | **Notes** | the chord name small and the notes as a list |
 | **Geek Out** | the chord, its notes and keyboard, and status lines: voicing and play style, bass and tempo, the audio load, the second core (`c1 off`, `c1 ok ...`), the transposition |
@@ -802,7 +806,7 @@ The view is what the screen shows when no layer, menu or editor is open. There a
   switches **Lock** on and off, OCT+ closes it. With Lock on, a HOME tap never changes the view; it only goes home.
 - Options > View sets the same thing.
 
-Options > Motion (Full, Calm, Off) sets how much the screens animate. The sound editor never animates.
+Options > Motion (Full, Calm, Off) sets how much the screens animate; with Off the Chord view stays as it is while an arpeggio plays. The sound editor never animates. The other four views never change with the performance mode.
 
 ## 14. Options
 

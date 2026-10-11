@@ -2232,6 +2232,7 @@ static struct {
                                                * hot cell, the title line */
     uint16_t ring;                       /* .. which was drawn */
     uint32_t dl;                         /* the corner dial drawn (dial | pulse << 16 | mode << 17 | dot << 20) */
+    int8_t pos;                          /* the arp screen's sounding note drawn (cr_arp_strips) */
     uint32_t lm, lmr;                    /* the loop menu's moving parts (lm_lane .. lm_erase1), .. but lm_pos */
     uint16_t lmpos;                      /* .. lm_pos drawn (the step cursor's old row) */
     uint8_t valid, force;
@@ -2404,14 +2405,25 @@ static uint32_t cr_lm_strips(const cr_screen_t *s, int marks)
     return 0;                                        /* (a big text: none of them is drawn) */
 }
 
+/* the arp screen's hop moved alone (pos: the note on its block, the dotted arc): the rows from the arc's top to the
+ * notes' line (cr_p_arp: by - 70 .. by + 9), not the name's */
+static uint32_t cr_arp_strips(const cr_screen_t *s)
+{
+    int32_t by = CR_PY0 + cr_ph(s) - 46;
+    if (s->kind != CR_K_ARP) return (1u << CR_NSTRIP) - 1u;
+    return cr_strips_of(by - 72, by + 12);
+}
+
 static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
 {
     cr_frame_t fr;
     uint32_t sig, base, k, strips = (1u << CR_NSTRIP) - 1u, row[CR_ED_ROWS], wv, hot;
     uint32_t ttl, ed = s->kind == CR_K_EDIT8 || s->kind == CR_K_STACK, i, j, o;
     /* the struct's bytes but these (offset, size), hashed apart: the ring's fraction, the corner dial's fraction,
-     * pulse, look and REC dot, the editor's parts (its cells, the hot cell, the band's values, its title line) */
-    uint32_t lm, lmr, sk[9][2] = {
+     * pulse, look and REC dot, the editor's parts (its cells, the hot cell, the band's values, its title line), the
+     * arp screen's sounding note */
+    uint32_t lm, lmr, sk[10][2] = {
+        {(uint32_t)__builtin_offsetof(cr_screen_t, pos), sizeof s->pos},
         {(uint32_t)__builtin_offsetof(cr_screen_t, lm_lane), (uint32_t)(__builtin_offsetof(cr_screen_t, lm_used) -
                                                                          __builtin_offsetof(cr_screen_t, lm_lane))},
         {(uint32_t)__builtin_offsetof(cr_screen_t, ring), sizeof s->ring},
@@ -2433,7 +2445,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
                    "lm_lane pos erase0 erase1 used");
     uint32_t dl = (uint32_t)s->dial | (uint32_t)s->dial_pulse << 16 | (uint32_t)s->dial_mode << 17 |
                   (uint32_t)s->dial_dot << 20;
-    for (i = 1; i < 9u; i++)                                     /* (in the struct's order) */
+    for (i = 1; i < 10u; i++)                                    /* (in the struct's order) */
         for (j = i; j && sk[j - 1][0] > sk[j][0]; j--) {
             uint32_t a = sk[j][0], c = sk[j][1];
             sk[j][0] = sk[j - 1][0]; sk[j][1] = sk[j - 1][1];
@@ -2441,7 +2453,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
         }
     cr_frame(s, anim_ms, &fr);
     base = 2166136261u ^ ux.gen;
-    for (i = 0, o = 0; i < 9u; o = sk[i][0] + sk[i][1], i++)
+    for (i = 0, o = 0; i < 10u; o = sk[i][0] + sk[i][1], i++)
         base = cr_hash(base, (const uint8_t *)s + o, sk[i][0] - o);
     base = cr_hash(base, (const uint8_t *)s + o, (uint32_t)sizeof *s - o);
     base = cr_hash(base, &fr, sizeof fr);
@@ -2458,7 +2470,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     hot = (uint32_t)s->hot_r | (uint32_t)s->hot_c << 8 | (uint32_t)s->hot_col << 16;
     sig = cr_hash(cr_hash(cr_hash(cr_hash(cr_hash(cr_hash(base, &s->ring, sizeof s->ring), &dl, sizeof dl), row, sizeof row),
                                   &wv, sizeof wv), &hot, sizeof hot), &ttl, sizeof ttl);
-    sig = cr_hash(sig, &lm, sizeof lm);
+    sig = cr_hash(cr_hash(sig, &lm, sizeof lm), &s->pos, sizeof s->pos);
     cr_dc.blits = cr_dc.drawn = 0;
     if (cr_dc.valid && !cr_dc.force && sig == cr_dc.sig)
         return;                          /* nothing changed: nothing drawn */
@@ -2472,6 +2484,8 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
             strips |= 1u;                                        /* the corner dial (rows 2..22; the REC dot's blink) */
         if (lm != cr_dc.lm)
             strips |= cr_lm_strips(s, lmr != cr_dc.lmr);         /* the loop menu: a playhead, a mark, the cursor */
+        if (s->pos != cr_dc.pos)
+            strips |= cr_arp_strips(s);                          /* the arp screen: the hop moved */
         if (wv != cr_dc.wv || hot != cr_dc.hot)
             strips |= cr_ed_strips(s, row, wv, hot);
         else
@@ -2507,6 +2521,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     cr_dc.lm = lm;
     cr_dc.lmr = lmr;
     cr_dc.lmpos = s->lm_pos;
+    cr_dc.pos = s->pos;
     for (k = 0; k < CR_ED_ROWS; k++)
         cr_dc.row[k] = row[k];
     cr_dc.wv = wv;

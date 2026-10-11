@@ -195,7 +195,7 @@ a button pressed during another's hold is that hold's combo (its release does no
 | printed | role | tap | hold (locked open unless noted) |
 | --- | --- | --- | --- |
 | SEL | KEY | Key Mode on/off | the knob row with the keyboard as its band: roots = tonic (MIN held: minor); KNOB 1–4 Tonic Scale Transpose Single as cells, the turned cell hot |
-| ARP | PERF | performance on/off (LED lit while on, the only indicator: no message; the view never changes, the top line says the mode) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; **OCT+ = on/off** (the label "perform · on" / "· off"); KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms |
+| ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; **OCT+ = on/off** (the label "perform · on" / "· off"); KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms |
 | FX | FX | main effect on/off | the knob row: SELECT = effect, the roots play; **OCT+ = on/off** (label "fx · on" / "· off"); KNOB 1–3 params, KNOB 4 amount (on: FX on); no popups, the turned cell hot 800 ms |
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
 | LFO | LATCH | latch on/off (Sticky Keys; also holds a performed arp / pattern after the keys are released: Hold defaults off in every mode, an arp stops when the keys are up; Hold is STRUM's KNOB 4) | — |
@@ -264,6 +264,27 @@ Priority, top down, first match wins:
 3. an open layer → its screen: KEY, PERF, FX, BASS, LOOP, METRO the `knobrow` (no popup over it: their knob turns never set one; KEY's band the keyboard); SAVE (loops) and the engine picker pickers; EDIT the `params` page
 4. Options → the settings picker
 5. the View: CHORD (`chord` with squeeze + notes line, `Key:` in the top line, `Rec`/loop status in the top line; the ring only for the count-in, the undo screen, recording / overdubbing and calibration; the corner dial (`dial_on`) while the loop merely plays — on every screen with a top line but Options, the LOOP and SAVE layers included), KEYBOARD, NOTES, GEEK OUT, SCOPE (Felucca's scope buffer)
+   - **the arp screen** (`arp`, `cr_draw.c cr_p_arp`: the chord's name, its notes on a line, the sounding note on a
+     block hopping along with a dotted arc to the next, the rate line "arp 1/8" / "pattern alberti") is the **Chord
+     view's content while an arpeggio plays**, and nothing more (`cr_ui.c cu_arp_on`; b25168b had removed it from
+     every view; back 2026-10-10 under this rule). All of: the view is Chord (Keyboard, Notes, Geek Out and Scope are never
+     replaced); Perform is on in a **clocked mode** (Arpeggiate, Arp 2 Octaves, Pattern; Strum, Slop and Harp run once
+     over the chord and keep the chord view); the shown chord's voice is being stepped (`cr_snap.perf_step` =
+     `cr_engine.c cr_perform_stepping`: the displayed voice's clock is on, from the press, before the first step of a
+     Retrig-off arp, to the voice's end); Options > Motion is not Off (Off: no motion at all, so the plain chord view
+     while the arp sounds; Calm shows it: the hop is one frame a step). It ends with the voice: the keys up without
+     LATCH / Hold, Perform off, PANIC, the loop that played it stopped (a playing loop's chords arpeggiate with no key
+     held: the screen follows them; LATCH or Strum-style Hold keeps it). `CU_ARP_LINGER_MS` (150 ms): the screen
+     stays that long after the voice ended, the hop gone (`pos` -1), so a chord re-fingered does not flash the big
+     chord view between two chords; Perform off and Motion Off do not wait. The steps above it (messages, the knob
+     meter, layers, pages, Options, the PLAY menu, the editor) and the stripes / the black screen keep their
+     precedence; the top line is the view's (the mode, `Key: C`, the loop's text and dial). Transitions:
+     `cu_animate` sweeps the idle stripes off for either screen; chord <-> arp is a plain redraw (no squeeze: a chord
+     name that did not change is drawn as it stands when the arp stops; a changed one squeezes from the old); a chord
+     change inside the arp screen redraws the name and the notes at once. The draw cache: `pos` is hashed apart
+     (`cr_draw.c cr_arp_strips`), a hop composes only the strips from the arc to the notes' line (3 of 6, not the
+     name's): tests/cr_draw_test.c "arp: ...". Tests: `cr_arp_view.txt` (test_cr.sh "the arp screen": every case
+     above from the frames between its dumps), `cr_arp_hold.txt`, tests/cr_engine_test.c "stepping: ...".
 6. the splash and the screensaver → `stripes` (the ChoralRoot logo): at power-on (the splash, CR_SPLASH_MS with the
    version, the intro slide once) until the first input; then only as a screensaver after **3 minutes without any
    input** (`CR_IDLE_MS` 180 000, fixed: keys, buttons, knobs and MIDI channel messages in are activity, `cu.last_input`;
@@ -431,8 +452,9 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   the melodic engines, POLY), ALGORITHM the bass (presets named BASS / ACID; 0 = OFF), SELECT tempo (in a picker:
   move); OPT + ALGORITHM bass level. Options: a picker of 19 settings (USB Record and USB Level since 0.14, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, Off by default since 0.16, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
   of section 5 (PANIC / message, knob meter 900 ms, layer, page, Options, the stripes (the splash; the screensaver after 3 min without input; the screen off after 10 min), the View: CHORD,
-  KEYBOARD, NOTES, GEEK OUT; perform on never swaps the chosen view: it shows in the PERF LED and the top
-  line's right text only); `cr_leds` as section 6.
+  KEYBOARD, NOTES, GEEK OUT, SCOPE; perform on never swaps the chosen view: it shows in the PERF LED and the top
+  line's right text, and on the Chord view an arpeggio or a pattern playing shows the arp screen in its place:
+  section 5); `cr_leds` as section 6.
 - **Sounds** (`cr_bank.c`, `cr_pages.c`, `cr_name.c`; section 7, docs/PRESETS.md): PRESETS turns the pool of the
   chord part's engine, ALGORITHM the bass part's (after OFF); OPT + PRESETS the chord part's engine (a horizontal
   picker while OPT is held, applied on release). The meter: the place big, the name (a square after an overwritten
@@ -760,3 +782,14 @@ Host instructions per UI frame, avg / max, before -> after: (a) 0.20 / 2.24 M ->
 -> 0.08 / 2.32 M; (c) 2.41 / 49.98 M -> 0.78 / 3.74 M; (d) 1.02 / 3.22 M -> 1.01 / 2.98 M; (e) 3.06 / 30.45 M ->
 1.74 / 8.81 M (device estimate of the worst: 194 -> 14 ms (c), 117 -> 34 ms (e)). Left in (e)'s worst frame: two
 knob glyphs, the SAW glyph and the column texts.
+
+### The arp screen back on the Chord view (2026-10-10)
+
+Section 5's rule. A hop is one drawn frame a step, three strips of six (`cr_arp_strips`): 0.92 M host instructions
+(3.6 ms device estimate, 1.1 M / 4.3 ms the worst), 1.6 M (6.1 ms) with the loop's dial in the same frame; the
+whole screen (the press, a chord change) 2.0 M (7.6 ms; worst 2.7 M / 10.5 ms), a chord-view redraw 1.1 M avg /
+2.3 M worst; the frames between draw nothing (0.1 ms). Before, with the arp running, the chord view drew nothing at
+all. tools/emu/perf.sh, UI frame avg / max (device estimate), before -> after: (c) 3538 / 15928 us -> 2554 / 15610
+us and (i) 3553 / 15578 -> 2585 / 15578 (the loop's chords under the held one no longer squeeze the big name at
+every change: the arp screen redraws it plain); (a) (b) (d)-(h) (j) unchanged within 1 %. The audio block is
+untouched: (c) 849 us avg / 1031 max of 2902 -> 850 / 1075 (29 % / 37 %), no block over the budget in any scenario.
