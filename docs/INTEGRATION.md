@@ -840,7 +840,14 @@ saves, a cost far above the estimate), the numbers and the owner's open decision
 (9.2 %); `perf.sh` (l): 919 / 1278 us (32 % / 44 %), no half over 80 % anywhere (the worst: (g), 58 %). **On the unit**: `fm1_install.py
 --debug` reads SysEx 78 PEAK (`cr_backup.c crb_peak`, `cr_cpu1.h`): the worst half and each stage's since the last
 read, the late halves and their largest stage, the fx stage's four parts, `flash_holes`. `cr_settings.c
-crs_sounding`: no settings or session write while the output is above -60 dBFS, with no time limit.
+crs_sounding`: no settings or session write while the output is above -60 dBFS, with no time limit. **The third
+build** (the second on the unit: the reverb 331 us a half for an estimate of 116, a pop for every late half):
+`cr_fx.c`'s loops run block-wise, a stage and a line at a time (about 290 us for both effects by the unit's own
+instruction count, `tools/fx_loops.py`; `CR_FX_LITE=1` a lighter reverb); **`audio.c fm1_alnk0_irq` clears the half's
+pending bit before the render** (after it, a late half took the next boundary's interrupt with it and the DAC replayed
+an old half; `CR_ACK_LATE=1` builds the old order); `shed_check` counts how far behind its boundary a half started;
+78 PEAK carries six more values (`stale_halves`, `pk_lag_us`, `pk_wall_us`, `pk_t5_us`, `irq_gap_us`, `irq_gap_pc`:
+`cr_cpu1.h cr_prof_entry`, `cr_prof_t5`, the latter from `main.c`'s TIMER5 with `fm1_irq.h fm1_reti`).
 
 ### All-synth (2026-10-07: the dead weight out)
 

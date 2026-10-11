@@ -11,10 +11,10 @@
  * 12.5 kHz, flat to 9.5 kHz). Either can be built the other way (1 or 2) to compare.
  *
  * THE DELAY (xd_*), in the spirit of the Moog Matriarch's stereo analogue delay: two lines, L and R, of XD_N
- * samples each (0.74 s at the full rate). Each side's read is a four-point cubic (Catmull-Rom) at a position that
- * GLIDES to its target (a lag of ~46 ms, at most half a sample a sample: a new time bends the pitch of what is in
- * the line, as a tape or a BBD clock does, and never clicks) plus the WOW (one slow and one faster sine, the same on
- * both sides so that Spread 0 stays mono). The loop: the read -> a one-pole low-pass (TONE) -> a one-pole low cut
+ * samples each (0.74 s at the full rate). Each side's read is between two samples (linear; at rest the sample
+ * itself) at a position that GLIDES to its target (a lag of ~46 ms, at most half a sample a sample: a new time
+ * bends the pitch of what is in the line, as a tape or a BBD clock does, and never clicks) plus the WOW (one slow
+ * and one faster sine, the same on both sides so that Spread 0 stays mono). The loop: the read -> a one-pole low-pass (TONE) -> a one-pole low cut
  * (40 Hz) -> the feedback gain -> + the input -> a saturator that is a straight line up to half of the line's range
  * and a soft knee above it (xd_sat) -> the line. STEREO: each side feeds itself. PING-PONG: the input goes into L
  * only, L feeds R and R feeds L. SPREAD is R's time as a part of L's (1 .. 1/2 free; 1:1, 3:4, 2:3, 1:2 synced).
@@ -827,6 +827,7 @@ static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int3
     uint32_t i, h = xf_bpm, nh = n >> 1;
     int32_t in_d = 0, in_r = 0, any = 0;
     int32_t *hd = xf.t[0], *hr = xf.t[1], *ol = xf.t[2], *orr = xf.t[3];
+    (void)hd;                                           /* (the delay at the full rate: no half-rate send) */
     int dly, rev;
     for (i = 0; i < XP_N; i++)
         h = h * 31u + (uint16_t)xfp[i];
