@@ -137,9 +137,9 @@ fx parts (device us per half, avg / max): down 12 / 123, delay 121 / 209, reverb
    cache problem; the code is. It executes in place from the SPI flash through a cache, and every block runs the
    engines' code and then the effects': code that has fallen out of the cache is read from the flash again. The
    emulator sees none of that. **`CR_FX_RAM=1 ./build.sh`** places the four per-sample loops (`xf_down`, `xf_up`,
-   `xd_run`, `xr_run`: 2.6 KB) in `.ram_text`, where the flash driver already lives, and calls them through a
-   pointer: no flash read in them. It builds and passes `build.py`'s checks (`.ram_text: 1804 insns, no calls`,
-   RAMTEXT 5612 of 24576); it is **off by default because it has not run on a unit**. It is the first thing to try if
+   `xd_run`, `xr_run`: 2.9 KB) in `.ram_text`, where the flash driver already lives, and calls them through a
+   pointer: no flash read in them. It builds and passes `build.py`'s checks (`.ram_text: 1905 insns, no calls`,
+   RAMTEXT 5904 of 24576); it is **off by default because it has not run on a unit**. It is the first thing to try if
    `fx_*` on the unit are far above the emulator's.
 2. *The compiler.* The unit is built at `-Os`, the emulator at `-O2`.
 3. *Dual Core.* With core 1 rendering the bass, the two cores share the caches and the bus.
