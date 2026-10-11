@@ -36,6 +36,8 @@ enum { CR_K_NONE, CR_K_STRIPES, CR_K_CHORD, CR_K_PICKER, CR_K_METER, CR_K_KEYBOA
 /* CR_K_LOOPMENU's middle (lm_mid) */
 enum { CR_LM_TEXT, CR_LM_TIMELINE, CR_LM_STEPS };
 #define CR_LM_CUR_OFF 0x8000u       /* lm_pos (steps): the cursor's blink, off this frame (the producer's clock) */
+#define CR_LM_PLAY(st) ((uint16_t)((((st) & 63u) + 1u) << 6))   /* lm_pos (steps): the playhead on the page's step st */
+#define CR_LM_PLAYED(pos) ((((uint32_t)(pos) >> 6) & 127u))     /* .. that step + 1 (0: no playhead) */
 
 /* the top line's icon: none = the bare Orchid line (mid at the left in 15 px, right at the right) */
 enum { CR_ICON_NONE, CR_ICON_PLAY, CR_ICON_REC, CR_ICON_LOOP };
@@ -257,14 +259,16 @@ typedef struct {
      * (items / sel / col as a knobrow; the slide), cell[0][0..3] = Quantize Count-in Level Keys (as a knobrow's; hot_r /
      * hot_c), the slot strip above the band, the middle under it: a big text (`title` in title_col, NONE red; `sub`
      * under it) or a timeline or the step grid (`sub` the cursor step's chord at the left under it, `value` the right
-     * text "step 7 \267 bar 1"), `foot` the bottom line (the knob row then 64 px). The top line is the ordinary header.
+     * text "step 7/16"), `foot` the bottom line (the knob row then 64 px). The top line is the ordinary header.
      * lm_lane .. lm_erase1 are hashed apart (cr_draw.c): a playhead, a new mark or the cursor's blink redraws only the
      * middle's strips (the cursor: its row's) */
     uint64_t lm_lane[4];            /* timeline: event marks per lane, 64 columns over the bars shown (64 / lm_bars
                                      * columns a bar); steps: lm_lane[0] = the filled steps of the page, bit s = step s
-                                     * (lm_beats a bar) */
+                                     * (lm_beats a bar), lm_lane[1] = the steps a longer note still sounds in,
+                                     * lm_lane[2] = the steps the cursor step's note sounds on into */
     uint16_t lm_pos;                /* timeline: the playhead, Q8 bars from the left edge (0..lm_bars*256); steps: the
-                                     * cursor's step index on the page (0..63), | CR_LM_CUR_OFF: the cursor not drawn (its blink) */
+                                     * cursor's step index on the page (0..63), | CR_LM_CUR_OFF: the cursor not drawn
+                                     * (its blink), | CR_LM_PLAY(st): the step being played (the loop editor) */
     uint16_t lm_erase0, lm_erase1;  /* Replace: the held span, Q8 bars (both 0: none): the marks of the older lanes in it
                                      * are struck (grey, a red x), on a dark band */
     uint16_t lm_used;               /* slots holding a loop, bit k (0..9) */
@@ -272,8 +276,8 @@ typedef struct {
     uint8_t lm_mid;                 /* CR_LM_TEXT, CR_LM_TIMELINE, CR_LM_STEPS */
     uint8_t lm_bars, lm_beats, lm_free;   /* timeline: bars shown 1..8, beats a bar (0: 4), free = the bars appear as they
                                      * pass (a bar 1/4 of the strip, the current one up to the playhead); steps: the
-                                     * page's bars 1..4 (a row each) and lm_beats the steps a bar (the Quantize grid,
-                                     * 0: 16; lm_bars * steps <= 64) */
+                                     * page's bars 1..4 (a row each) and lm_beats the steps a bar (sixteenths: 16, 12
+                                     * in 3/4 and 6/8; 0: 16; lm_bars * steps <= 64) */
     uint8_t lm_nlane, lm_newlane;   /* lanes in use 0..4 (lane 0 the oldest, dimmer); the take's lane + 1 (bright), 0 none */
     uint8_t lm_dirty;               /* the slot + 1 whose loop has changes not saved yet (0: none): a small mark in its
                                      * cell's corner (saved by the global save or by leaving the slot) */

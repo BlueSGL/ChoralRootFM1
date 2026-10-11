@@ -1,0 +1,374 @@
+# ChoralRoot 0.18: Step entry as a step sequencer (docs/LOOPER.md "Step entry"): a step is a sixteenth, a pattern has
+# 1 .. 64 steps. The PLAY menu open throughout. Chords: MAJ = A#3. From the defaults: Length Free, Quantize none.
+# A. Step (ALGORITHM +4), REC: step 1 (shot). Four chords, every key up between (shot: the cursor on step 5); twelve
+#    more (shot: step 17, the second row).
+# B. MAJ HELD, 47 roots tapped under it (steps 17 .. 63): each root pressed after one was let go is the next step (until
+#    2026-10-12 they all piled on one step: the cursor waited for every key up). MAJ up: the cursor on step 64 (shot).
+# C. The 64th chord; a 65th: refused, "64 steps: full" (shot); OCT+ (a rest): nothing more. REC: a loop of 64 events,
+#    1536 ticks (4 bars). LOOP: the 64 steps play in 8 s at 120 BPM (x1).
+# D. EDIT: the loop editor on the 64 steps (shot: four rows of 16). SELECT +20: step 21; KNOB 2 +15: its note 16 steps
+#    long (shot: the dark cells after it; nothing moved: still 64 events, 1536 ticks). LOOP: the playhead (shots).
+# (written by a generator, the roots a rising pattern over the white keys D4 .. F5)
+wait 300
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+knob ALGORITHM +4
+wait 300
+btn REC
+wait 400
+shot build/emu/test/cr_st_1.ppm               # A: step entry, the cursor on step 1
+dump                          # 1: cap 6, step 0
+btn A#3 down
+btn D4 down
+wait 60
+btn D4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn E4 down
+wait 60
+btn E4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn F4 down
+wait 60
+btn F4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn G4 down
+wait 60
+btn G4 up
+btn A#3 up
+wait 80
+wait 300
+shot build/emu/test/cr_st_5.ppm               # four chords: the cursor on step 5
+dump                          # 2: step 4, 4 events
+btn A#3 down
+btn A4 down
+wait 60
+btn A4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn B4 down
+wait 60
+btn B4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn C5 down
+wait 60
+btn C5 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn D5 down
+wait 60
+btn D5 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn E5 down
+wait 60
+btn E5 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn F5 down
+wait 60
+btn F5 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn D4 down
+wait 60
+btn D4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn E4 down
+wait 60
+btn E4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn F4 down
+wait 60
+btn F4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn G4 down
+wait 60
+btn G4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn A4 down
+wait 60
+btn A4 up
+btn A#3 up
+wait 80
+btn A#3 down
+btn B4 down
+wait 60
+btn B4 up
+btn A#3 up
+wait 80
+wait 300
+shot build/emu/test/cr_st_17.ppm              # sixteen: the cursor on step 17 (row 2)
+dump                          # 3: step 16, 16 events
+btn A#3 down                 # B: MAJ held, the roots tapped under it
+wait 60
+btn C5 down
+wait 60
+btn C5 up
+wait 60
+btn D5 down
+wait 60
+btn D5 up
+wait 60
+btn E5 down
+wait 60
+btn E5 up
+wait 60
+btn F5 down
+wait 60
+btn F5 up
+wait 60
+btn D4 down
+wait 60
+btn D4 up
+wait 60
+btn E4 down
+wait 60
+btn E4 up
+wait 60
+btn F4 down
+wait 60
+btn F4 up
+wait 60
+btn G4 down
+wait 60
+btn G4 up
+wait 60
+btn A4 down
+wait 60
+btn A4 up
+wait 60
+btn B4 down
+wait 60
+btn B4 up
+wait 60
+btn C5 down
+wait 60
+btn C5 up
+wait 60
+btn D5 down
+wait 60
+btn D5 up
+wait 60
+btn E5 down
+wait 60
+btn E5 up
+wait 60
+btn F5 down
+wait 60
+btn F5 up
+wait 60
+btn D4 down
+wait 60
+btn D4 up
+wait 60
+btn E4 down
+wait 60
+btn E4 up
+wait 60
+btn F4 down
+wait 60
+btn F4 up
+wait 60
+btn G4 down
+wait 60
+btn G4 up
+wait 60
+btn A4 down
+wait 60
+btn A4 up
+wait 60
+btn B4 down
+wait 60
+btn B4 up
+wait 60
+btn C5 down
+wait 60
+btn C5 up
+wait 60
+btn D5 down
+wait 60
+btn D5 up
+wait 60
+btn E5 down
+wait 60
+btn E5 up
+wait 60
+btn F5 down
+wait 60
+btn F5 up
+wait 60
+btn D4 down
+wait 60
+btn D4 up
+wait 60
+btn E4 down
+wait 60
+btn E4 up
+wait 60
+btn F4 down
+wait 60
+btn F4 up
+wait 60
+btn G4 down
+wait 60
+btn G4 up
+wait 60
+btn A4 down
+wait 60
+btn A4 up
+wait 60
+btn B4 down
+wait 60
+btn B4 up
+wait 60
+btn C5 down
+wait 60
+btn C5 up
+wait 60
+btn D5 down
+wait 60
+btn D5 up
+wait 60
+btn E5 down
+wait 60
+btn E5 up
+wait 60
+btn F5 down
+wait 60
+btn F5 up
+wait 60
+btn D4 down
+wait 60
+btn D4 up
+wait 60
+btn E4 down
+wait 60
+btn E4 up
+wait 60
+btn F4 down
+wait 60
+btn F4 up
+wait 60
+btn G4 down
+wait 60
+btn G4 up
+wait 60
+btn A4 down
+wait 60
+btn A4 up
+wait 60
+btn B4 down
+wait 60
+btn B4 up
+wait 60
+btn C5 down
+wait 60
+btn C5 up
+wait 60
+btn D5 down
+wait 60
+btn D5 up
+wait 60
+btn E5 down
+wait 60
+btn E5 up
+wait 60
+btn F5 down
+wait 60
+btn F5 up
+wait 60
+btn D4 down
+wait 60
+btn D4 up
+wait 60
+btn E4 down
+wait 60
+btn E4 up
+wait 60
+btn F4 down
+wait 60
+btn F4 up
+wait 60
+dump                          # 4: 63 events, the cursor still on the step just written (62)
+btn A#3 up
+wait 400
+shot build/emu/test/cr_st_64.ppm              # the cursor on step 64
+dump                          # 5: step 63
+btn A#3 down
+btn G4 down
+wait 60
+btn G4 up
+btn A#3 up
+wait 80
+wait 300
+dump                          # 6: 64 events, the cursor past the end (64), steps-used 64
+btn A#3 down
+btn A4 down
+wait 60
+btn A4 up
+btn A#3 up
+wait 80
+wait 200
+shot build/emu/test/cr_st_full.ppm            # C: a 65th: refused
+dump                          # 7: still 64 events, refused 1
+btn OCT+
+wait 200
+dump                          # 8: a rest there: nothing
+wait 1200
+btn REC
+wait 400
+dump                          # 9: 64 events, 1536 ticks, stopped
+btn PLAY
+wait 100
+expect sound
+wait 7800
+dump                          # 10: playing, 63 or 64 played
+wait 300
+btn PLAY
+wait 1500
+btn EDIT                      # D: the editor
+wait 400
+shot build/emu/test/cr_st_ed64.ppm
+dump                          # 11: edit 1
+knob SELECT +20
+wait 200
+knob KNOB2 +15
+wait 400
+shot build/emu/test/cr_st_long.ppm            # step 21's note 16 steps long
+dump                          # 12: long 16, 64 events, 1536
+btn PLAY
+wait 2700
+shot build/emu/test/cr_st_ph1.ppm             # the playhead in row 2
+wait 1000
+shot build/emu/test/cr_st_ph2.ppm
+dump                          # 13: playing in the editor
+btn PLAY
+wait 600
+btn OCT-
+wait 300
+btn OCT-
+wait 2500
+dump

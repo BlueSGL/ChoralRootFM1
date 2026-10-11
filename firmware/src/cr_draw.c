@@ -2084,22 +2084,29 @@ static void cr_lm_timeline(const cr_screen_t *s, uint16_t col)
 }
 
 /* the step grid (FORMAT.md `steps`): a row per bar (four at most), sixteen steps across (2 px more every four); the
- * filled steps (lm_lane[0]) red, the others grey; the cursor (lm_pos) a 2 px red outline in a 1 px background ring,
- * not drawn while CR_LM_CUR_OFF (its blink); `sub` (the step's chord) 15 px under the grid at the left, `value` 12 px
- * grey at the right; lm_steps: the cells after that many are not drawn (the loop editor: the loop ends there) */
+ * filled steps (lm_lane[0]) red, the steps a longer note still sounds in (lm_lane[1]) a dark red, the others grey; the
+ * step being played (CR_LM_PLAYED: the loop editor's playhead) white when filled, light grey when not; the steps the
+ * cursor step's note sounds on into (lm_lane[2]) a 2 px white line along the cell's bottom; the cursor
+ * (lm_pos) a 2 px red outline in a 1 px background ring, not drawn while CR_LM_CUR_OFF (its blink); `sub` (the step's
+ * chord) 15 px under the grid at the left, `value` 12 px grey at the right; lm_steps: the cells after that many are
+ * not drawn (the loop editor: the loop ends there) */
 static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
 {
     int32_t gy = cr_lm_st_y(s), rows = cr_lm_rows(s), per = cr_lm_per(s), cw = cr_lm_cw(per), r, c, H = rows * 9 - 2;
     int32_t ny = gy + H + 16;
-    uint32_t cur = s->lm_pos & 63u;
+    uint32_t cur = s->lm_pos & 63u, ph = CR_LM_PLAYED(s->lm_pos);
     int curon = !(s->lm_pos & CR_LM_CUR_OFF);
+    uint16_t tail = ux_mix(col, T_BG, 62);
     if (cr_in_strip(gy - 4, gy + H + 4))
         for (r = 0; r < rows; r++)
             for (c = 0; c < per; c++) {
                 uint32_t st = (uint32_t)(r * per + c);
                 int32_t xx = cr_lm_st_x(per, c), yy = (gy + r * 9) * 16;
                 if (st > 63u || (s->lm_steps && st >= s->lm_steps)) break;
-                cr_frect(xx, yy, cw, 7 * 16, (s->lm_lane[0] >> st) & 1u ? col : T_LINE);
+                int on = (int)((s->lm_lane[0] >> st) & 1u);
+                cr_frect(xx, yy, cw, 7 * 16, ph == st + 1u ? (on ? T_TEXT : T_MID)
+                                             : on ? col : (s->lm_lane[1] >> st) & 1u ? tail : T_LINE);
+                if ((s->lm_lane[2] >> st) & 1u) cr_frect(xx, yy + 5 * 16, cw, 2 * 16, T_TEXT);
                 if (st == cur && curon) {            /* (the steps after it cover its ring, as the designer's) */
                     cr_srect(xx - 48, yy - 48, cw + 96, 7 * 16 + 96, 16, T_BG);
                     cr_srect(xx - 24, yy - 24, cw + 48, 7 * 16 + 48, 32, col);
@@ -2518,8 +2525,15 @@ static uint32_t cr_lm_strips(const cr_screen_t *s, int marks)
     }
     if (s->lm_mid == CR_LM_STEPS) {
         int32_t gy = cr_lm_st_y(s), per = cr_lm_per(s), r0 = (int32_t)(cr_dc.lmpos & 63u) / per, r1 = (int32_t)(s->lm_pos & 63u) / per;
+        int32_t p0 = (int32_t)CR_LM_PLAYED(cr_dc.lmpos), p1 = (int32_t)CR_LM_PLAYED(s->lm_pos);
+        uint32_t m;
         if (marks) return cr_strips_of(gy - 4, gy + cr_lm_rows(s) * 9 + 2);
-        return cr_strips_of(gy + r0 * 9 - 4, gy + r0 * 9 + 11) | cr_strips_of(gy + r1 * 9 - 4, gy + r1 * 9 + 11);
+        m = cr_strips_of(gy + r0 * 9 - 4, gy + r0 * 9 + 11) | cr_strips_of(gy + r1 * 9 - 4, gy + r1 * 9 + 11);
+        if (p0 != p1) {                              /* the playhead's old and new cells (their rows) */
+            if (p0) m |= cr_strips_of(gy + (p0 - 1) / per * 9, gy + (p0 - 1) / per * 9 + 7);
+            if (p1) m |= cr_strips_of(gy + (p1 - 1) / per * 9, gy + (p1 - 1) / per * 9 + 7);
+        }
+        return m;
     }
     return 0;                                        /* (a big text: none of them is drawn) */
 }

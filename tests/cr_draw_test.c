@@ -1345,8 +1345,8 @@ int main(int argc, char **argv)
         if (ix >= 0 && is >= 0) {
             static const char *const LB1[4] = {"Length", "Rate", "Quantize", "Count-in"};
             static const char *const V1[4] = {"4 bars", "x1.5", "1/16", "On"};
-            static const char *const LBE[4] = {"Step", "Length", "Steps", "Velocity"};
-            static const char *const VE[4] = {"2/3", "2", "3", "100"};
+            static const char *const LBE[4] = {"Step", "Note len", "Steps", "Velocity"};
+            static const char *const VE[4] = {"2/16", "3", "16", "100"};
             cr_screen_t s = CR_SCREENS[ix];
             uint16_t line = swap16(T_LINE);
             uint32_t c;
@@ -1375,13 +1375,16 @@ int main(int argc, char **argv)
             COUNT(n1, 62u, 170u, 240u, 222u, HS(x, y) == swap16(T_TEXT));
             write_ppm(dir, "loopmenu_page2");
             check("loop menu, page 2: Level alone, the other three cells empty", memcmp(a, host_screen, sizeof a) != 0 && n1 < 40u);
-            s = CR_SCREENS[is];                  /* the editor: a 3-step loop at 1/4, step 2 two cells long: 4 cells */
+            s = CR_SCREENS[is];                  /* the editor, a step sequencer: a 16-step pattern, sixteenths: chords
+                                                  * on steps 1 2 5 9 13, step 2's note 3 steps long (it sounds on
+                                                  * into 3 and 4), step 9's 2 (into 10) */
             s.anim = 0;
             s.n_items = 1; s.item0 = 0; s.sel = 0;
             snprintf(s.item[0], sizeof s.item[0], "Edit");
-            s.lm_bars = 1; s.lm_beats = 4; s.lm_lane[0] = 0xBull; s.lm_pos = 1; s.lm_steps = 4; s.lm_dirty = (uint8_t)(s.lm_slot + 1u);
+            s.lm_bars = 1; s.lm_beats = 16; s.lm_lane[0] = 0x1113ull; s.lm_lane[1] = 0x20Cull; s.lm_lane[2] = 0xCull;
+            s.lm_lane[3] = 0; s.lm_pos = 1; s.lm_steps = 16; s.lm_dirty = (uint8_t)(s.lm_slot + 1u);
             snprintf(s.sub, sizeof s.sub, "Am");
-            snprintf(s.value, sizeof s.value, "step 2/3");
+            snprintf(s.value, sizeof s.value, "step 2/16");
             snprintf(s.foot, sizeof s.foot, "SELECT: step \267 REC: clear \267 EDIT: done");
             s.right[0] = 0;
             memset(s.cell, 0, sizeof s.cell);
@@ -1393,16 +1396,59 @@ int main(int argc, char **argv)
             s.cell[0][3].glyph = CR_G_BAR; s.cell[0][3].pct = 200;
             render(&s, 0);
             {
-                int32_t gy = cr_lm_st_y(&s);
+                int32_t gy = cr_lm_st_y(&s), x2 = cr_lm_st_x(16, 2) / 16, x4 = cr_lm_st_x(16, 4) / 16, x8 = cr_lm_st_x(16, 8) / 16;
+                uint16_t tail = swap16(ux_mix(CR_RED, T_BG, 62)), white = swap16(T_TEXT), mid = swap16(T_MID);
+                uint32_t n3, n4, n5, n6;
                 COUNT(n0, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
                 COUNT(n1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == line);
+                COUNT(n3, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == tail);
+                COUNT(n4, (uint32_t)x2, (uint32_t)gy + 5u, (uint32_t)x4, (uint32_t)gy + 7u, HS(x, y) == white);
+                COUNT(n5, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == white);
                 write_ppm(dir, "loopmenu_editor");
-                s.lm_steps = 3;                  /* the loop a cell shorter: the fourth cell is not drawn */
+                snprintf(name, sizeof name, "loop editor: 16 steps: 5 filled (%u red px), 3 a longer note sounds in (%u dark red), 8 "
+                         "empty (%u grey); the selected step's note: a white line along steps 3-4 (%u px, %u in the row)", n0, n3, n1, n4, n5);
+                check(name, n0 > 250u && n3 > 100u && n1 > 400u && n4 >= 30u && n5 == n4);
+                s.lm_steps = 12;                 /* the loop four steps shorter: steps 13 .. 16 are not drawn */
                 render(&s, 0);
                 COUNT(n2, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
-                snprintf(name, sizeof name, "loop editor: the grid is the loop's cells (4: %u red px, %u grey), one fewer when the loop "
-                         "ends a cell earlier (%u red)", n0, n1, n2);
-                check(name, n0 > 600u && n1 > 200u && n2 + 200u < n0);
+                COUNT(n6, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == line);
+                snprintf(name, sizeof name, "loop editor: the grid is the loop's steps: 12 of them: a filled step and 3 empty ones "
+                         "fewer (%u red, %u grey)", n2, n6);
+                check(name, n2 + 40u < n0 && n6 + 120u < n1);
+                s.lm_steps = 16;
+                /* the playhead: the step being played white (filled) or light grey (empty); it alone moving is a
+                 * partial draw, equal to a full one */
+                s.lm_pos = (uint16_t)(1u | CR_LM_PLAY(8));
+                render(&s, 0);
+                COUNT(n2, (uint32_t)x8, (uint32_t)gy, (uint32_t)x8 + 9u, (uint32_t)gy + 7u, HS(x, y) == white);
+                write_ppm(dir, "loopmenu_editor_play");
+                s.lm_pos = (uint16_t)(1u | CR_LM_PLAY(10));
+                cr_draw(&s, 0);
+                COUNT(n3, (uint32_t)x8, (uint32_t)gy, (uint32_t)x8 + 9u, (uint32_t)gy + 7u, HS(x, y) == white);
+                COUNT(n4, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 5u, HS(x, y) == mid);
+                snprintf(name, sizeof name, "loop editor: the playhead: step 9 (filled) white while it plays (%u px, %u after), "
+                         "step 11 (empty) light grey (%u px); %u strip(s) composed", n2, n3, n4, cr_dc.drawn);
+                check(name, n2 > 40u && n3 == 0u && n4 > 40u && cr_dc.drawn >= 1u && cr_dc.drawn <= 2u);
+                memcpy(a, host_screen, sizeof a);
+                render(&s, 0);
+                check("loop editor: the playhead's partial draw equals a full one", !memcmp(a, host_screen, sizeof a));
+                /* 64 steps: four rows of 16; the playhead from row to row */
+                s.lm_bars = 4; s.lm_steps = 64; s.lm_lane[0] = 0x1113111311131113ull; s.lm_lane[1] = 0x020C020C020C020Cull;
+                s.lm_lane[2] = 0xFFFFCull;       /* (step 2's note 20 steps long: into the second row) */
+                snprintf(s.value, sizeof s.value, "step 2/64");
+                s.lm_pos = (uint16_t)(1u | CR_LM_PLAY(15));
+                render(&s, 0);
+                gy = cr_lm_st_y(&s);
+                COUNT(n0, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 34u, HS(x, y) == red);
+                COUNT(n5, 20u, (uint32_t)gy + 9u, 220u, (uint32_t)gy + 16u, HS(x, y) == white);
+                write_ppm(dir, "loopmenu_editor64");
+                s.lm_pos = (uint16_t)(1u | CR_LM_PLAY(16));
+                cr_draw(&s, 0);
+                memcpy(a, host_screen, sizeof a);
+                render(&s, 0);
+                snprintf(name, sizeof name, "loop editor: 64 steps: four rows of 16 (%u red px), the long note's line on into row 2 "
+                         "(%u px); the playhead from row 1 to row 2: the partial draw equals a full one", n0, n5);
+                check(name, n0 > 1000u && n5 >= 60u && !memcmp(a, host_screen, sizeof a));
             }
         }
 #undef COUNT

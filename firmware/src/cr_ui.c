@@ -1515,34 +1515,41 @@ static void cu_rec(void)
     cr_post(CRE_LOOP, LP_REC, 0, 0);
 }
 /* ------------------------------------------------------------------ the loop editor --- */
-/* EDIT in the PLAY menu (the owner, 2026-10-11; docs/LOOPER.md "The loop editor"): the loop in RAM as steps on the
- * Quantize grid (cr_loop.c cr_loop_ed_*: the steps are read from the events, nothing is stored for them). SELECT /
- * KNOB 1: the step cursor (wrapping); a chord or a note played on the keys REPLACES the selected step's notes and
- * sounds (the cursor stays: SELECT moves on); REC clears the step; KNOB 2 its length in grid cells (the later steps
- * move); KNOB 3 the loop's length in steps; KNOB 4 its velocity; LOOP plays / stops as ever; REC held: the looper's
- * undo. OCT- / OCT+ / HOME / EDIT (tapped, or held again) close it, back to the PLAY menu: nothing to confirm, an edit
- * is done when it is made, in RAM, and saved like any loop change (the global save, a slot switch).
+/* EDIT in the PLAY menu (the owner, 2026-10-11; a step sequencer since 2026-10-12: docs/LOOPER.md "The loop editor"):
+ * the loop in RAM as a pattern of sixteenth-note steps (cr_loop.c cr_loop_ed_*: the steps are read from the events,
+ * nothing is stored for them). SELECT / KNOB 1: the step cursor (wrapping); a chord or a note played on the keys
+ * REPLACES the selected step's notes and sounds (the cursor stays: SELECT moves on); REC clears the step; KNOB 2 how
+ * long its notes sound, in steps (1 .. 64: no other step moves); KNOB 3 the loop's length in steps (1 .. 64); KNOB 4
+ * its velocity; LOOP plays / stops as ever; REC held: the looper's undo. OCT- / OCT+ / HOME / EDIT (tapped, or held
+ * again) close it, back to the PLAY menu: nothing to confirm, an edit is done when it is made, in RAM, and saved like
+ * any loop change (the global save, a slot switch).
  * The view: cu_le, rebuilt from the ISR's loop (IRQ off: two passes over <= 512 events) only when its events change
- * (crl.gen) or the cursor moves; the map (cu_le_map, 520 bytes in the pool) is the editor's only buffer */
+ * (crl.gen) or the cursor moves; the map (cu_le_map: the page's 64 steps, 24 bytes) is the editor's only buffer. A
+ * page is the whole bars that fit 64 steps (cu_le_page): a loop longer than that (a long take) is paged by the cursor */
 static crl_edmap_t cu_le_map __attribute__((section(".pool")));
 static struct {
-    uint16_t gen, c0, nstep, idx;                  /* crl.gen then; the cursor's first cell; steps; its number - 1 */
-    uint8_t ok, n, g, cnt, root, qx, vel;          /* its cells; the grid; its events, the last one's chord, the loudest */
+    uint16_t gen, c0, nstep;                       /* crl.gen then; the cursor's step; steps */
+    uint8_t ok, n, cnt, root, qx, vel;             /* its notes' length (steps); its events, the last one's chord, the loudest */
 } cu_le;
+static uint32_t cu_le_per(void)                    /* steps a bar (a row of the grid): 16, 12 in 3/4 and 6/8 */
+{
+    return (cr_snap.lsig % CRL_NSIG == CRL_SIG_44 ? 384u : 288u) / CRL_STEP;
+}
+static uint32_t cu_le_page(void) { return CRL_STEPS / cu_le_per() * cu_le_per(); }   /* 64; 48 */
 static void cu_le_sync(void)
 {
-    uint32_t c0, n, i, t0, t1;
+    uint32_t c0, n, i, t0, t1, pg = cu_le_page();
     if (!cu.ledit || (cu_le.ok && cu_le.gen == crl.gen && cu_le.c0 == cu.le_cell))
         return;
     fm1_irq_off();
-    cr_loop_ed_map(&crl, &cu_le_map);
-    cr_loop_ed_step(&cu_le_map, cu.le_cell < cu_le_map.ncell ? cu.le_cell : cu_le_map.ncell ? cu_le_map.ncell - 1u : 0u,
-                    &c0, &n);
-    cr_loop_ed_cursor(&crl, c0, n);
-    cu_le.g = crl.ed_g;
+    c0 = (crl.d.len + CRL_STEP - 1u) / CRL_STEP;   /* (the loop made shorter under the cursor: its last step) */
+    c0 = cu.le_cell < c0 ? cu.le_cell : c0 ? c0 - 1u : 0u;
+    cr_loop_ed_map(&crl, c0 / pg * pg, &cu_le_map);
+    cr_loop_ed_cursor(&crl, c0);
+    n = cr_loop_ed_nlen(&crl);
     cu_le.cnt = cu_le.vel = 0;
-    t0 = c0 * cu_le.g;
-    t1 = t0 + n * cu_le.g;
+    t0 = c0 * CRL_STEP;
+    t1 = t0 + CRL_STEP;
     for (i = 0; i < crl.d.nev; i++) {
         const crl_ev_t *e = &crl.d.ev[i];
         if ((e->layer & CRL_HID) || e->t < t0 || e->t >= t1)
@@ -1558,10 +1565,9 @@ static void cu_le_sync(void)
     cu.le_cell = cu_le.c0 = (uint16_t)c0;
     cu_le.n = (uint8_t)n;
     cu_le.nstep = cu_le_map.nstep;
-    cu_le.idx = (uint16_t)cr_loop_ed_index(&cu_le_map, c0);
     cu_le.ok = 1;
-    cu_trace("loopedit: step %u/%u cell %u cells %u events %u len %u\n", (unsigned)cu_le.idx + 1u, (unsigned)cu_le.nstep,
-             (unsigned)c0, (unsigned)n, (unsigned)cu_le.cnt, (unsigned)crl.d.len);
+    cu_trace("loopedit: step %u/%u notes %u long %u len %u\n", (unsigned)c0 + 1u, (unsigned)cu_le.nstep,
+             (unsigned)cu_le.cnt, (unsigned)n, (unsigned)crl.d.len);
 }
 static void cu_ledit_open(void)
 {
@@ -1575,10 +1581,9 @@ static void cu_ledit_open(void)
     rc = cr_loop_ed_open(&crl);
     fm1_irq_on();
     cu_trace("loopedit: open rc %d\n", rc);
-    if (rc != CRL_ED_OK) {                         /* (a loop played free: no grid to show it on, and nothing is
-                                                    * requantised behind the player's back) */
-        cu_message(rc == CRL_ED_NOQUANT ? "set Quantize to edit" : rc == CRL_ED_LONG ? "too long: coarser grid"
-                                        : "end the take first", CR_COL_RED);
+    if (rc != CRL_ED_OK) {                         /* (any loop opens, whatever Quantize says: the grid is 1/16 and
+                                                    * nothing is moved until a step is replaced) */
+        cu_message("end the take first", CR_COL_RED);
         return;
     }
     cu.ledit = 1;
@@ -1599,19 +1604,13 @@ static void cu_ledit_close(void)
 }
 static void cu_ledit_move(int32_t s)               /* SELECT / KNOB 1: the cursor, a step a detent, wrapping */
 {
-    uint32_t c0, n;
+    int32_t n, c;
     cu_le_sync();
-    c0 = cu_le.c0;
-    n = cu_le.n;
-    if (!cu_le_map.ncell)
+    n = (int32_t)cu_le.nstep;
+    if (!n)
         return;
-    for (; s > 0; s--) {
-        c0 = c0 + n < cu_le_map.ncell ? c0 + n : 0u;
-        cr_loop_ed_step(&cu_le_map, c0, &c0, &n);
-    }
-    for (; s < 0; s++)
-        cr_loop_ed_step(&cu_le_map, c0 ? c0 - 1u : cu_le_map.ncell - 1u, &c0, &n);
-    cu.le_cell = (uint16_t)c0;
+    c = ((int32_t)cu_le.c0 + s) % n;
+    cu.le_cell = (uint16_t)(c < 0 ? c + n : c);
     cu_le_sync();
 }
 static void cu_ledit_clear(void)                   /* REC: the step's notes go */
@@ -1621,51 +1620,43 @@ static void cu_ledit_clear(void)                   /* REC: the step's notes go *
     fm1_irq_off();
     n = cr_loop_ed_clear(&crl);
     fm1_irq_on();
-    cu_trace("loopedit: clear step %u (%d events)\n", (unsigned)cu_le.idx + 1u, n);
+    cu_trace("loopedit: clear step %u (%d events)\n", (unsigned)cu_le.c0 + 1u, n);
 }
 static void cu_ledit_knob(uint32_t knob, int32_t s)
 {
-    uint32_t g, len, c0, n, nc;
+    uint32_t len, n, nc;
     int ok = 0;
     cu_le_sync();
-    g = cu_le.g ? cu_le.g : CRL_STEP_NONE;
-    nc = cu_le_map.ncell;
+    nc = cu_le.nstep;
     if (knob == 0) {
         cu_ledit_move(s);
-    } else if (knob == 1) {                        /* the step's length, cells (1 .. 16): the later steps move; Length
-                                                    * Free: the loop grows or shrinks with it; a set Length: the loop
-                                                    * keeps it, refused if a note would pass the end */
-        n = (uint32_t)((int32_t)cu_le.n + (s > 0 ? 1 : -1));
+    } else if (knob == 1) {                        /* how long the step's notes sound, steps (1 .. 64): the NOTE's
+                                                    * length: no other step moves, the loop keeps its length; a long
+                                                    * note sounds over the steps after it, which still play */
+        int32_t v = (int32_t)cu_le.n + s;
         if (!cu_le.cnt)
-            return;                                /* (an empty step is one cell: its cell shows "-") */
-        if (n >= 1u && n <= CRL_ED_MAXN && !(s > 0 && !cs.loop_len && nc >= CRL_ED_CELLS)) {
+            return;                                /* (an empty step: its cell shows "-") */
+        n = (uint32_t)(v < 1 ? 1 : v > (int32_t)CRL_STEPS ? (int32_t)CRL_STEPS : v);
+        if (n != cu_le.n) {
             fm1_irq_off();
-            ok = cr_loop_ed_steplen(&crl, n);
+            ok = cr_loop_ed_setnlen(&crl, n);
             fm1_irq_on();
         }
-        if (!ok && n >= 1u && n <= CRL_ED_MAXN)
-            cu_message("no room in the loop", CR_COL_RED);
-        cu_trace("loopedit: knob 2 step length %u %s\n", (unsigned)n, ok ? "ok" : "refused");
-    } else if (knob == 2) {                        /* the loop's length, a step a detent: shorter hides the last step
-                                                    * (kept until the editor closes: longer brings it back), longer
-                                                    * past what there was adds an empty step */
-        len = 0;
+        cu_trace("loopedit: knob 2 note length %u %s\n", (unsigned)n, ok ? "ok" : "refused");
+    } else if (knob == 2) {                        /* the loop's length, a step a detent, 1 .. 64 steps: shorter hides
+                                                    * the last step (kept until the editor closes: longer brings it
+                                                    * back), longer past what there was adds an empty step. A take
+                                                    * longer than 64 steps can be made shorter, not longer */
+        int32_t top = (int32_t)(nc > CRL_STEPS ? nc : CRL_STEPS), v;
         fm1_irq_off();
-        if (s < 0) {
-            cr_loop_ed_step(&cu_le_map, nc ? nc - 1u : 0u, &c0, &n);
-            len = c0 * g;                          /* (0: the only step stays) */
-        } else if (crl.d.len % g) {
-            len = nc * g;                          /* (a loop played to an odd length: its last cell made whole) */
-        } else {
-            n = 1;
-            if (cu_le_map.nall > nc)
-                cr_loop_ed_step(&cu_le_map, nc, &c0, &n);
-            if (nc + n <= CRL_ED_CELLS)
-                len = (nc + n) * g;
-        }
-        if (len)
-            ok = cr_loop_ed_len(&crl, len);
+        v = (int32_t)nc + s - (s > 0 && crl.d.len % CRL_STEP ? 1 : 0);   /* (a loop played to an odd length: its last
+                                                                          * step made whole is the first detent up) */
+        v = v < 1 ? 1 : v > top ? top : v;         /* (the only step stays) */
+        len = (uint32_t)v * CRL_STEP;
+        ok = cr_loop_ed_len(&crl, len);
         fm1_irq_on();
+        if (!ok && s > 0)
+            cu_message("64 steps at most", CR_COL_RED);
         cu_trace("loopedit: knob 3 loop length %u %s\n", (unsigned)len, ok ? "ok" : "refused");
     } else {                                       /* the step's velocity */
         fm1_irq_off();
@@ -1677,14 +1668,14 @@ static void cu_ledit_knob(uint32_t knob, int32_t s)
 }
 static void cu_ledit_cells(cr_screen_t *s)
 {
-    static const char *const LB[4] = {"Step", "Length", "Steps", "Velocity"};
+    static const char *const LB[4] = {"Step", "Note len", "Steps", "Velocity"};
     uint32_t k;
     char b[8];
     for (k = 0; k < 4u; k++) {
         s->cell[0][k].flags = CR_CF_ON;
         cu_cpy(s->cell[0][k].label, LB[k], sizeof s->cell[0][k].label);
     }
-    cu_int(s->cell[0][0].value, (int32_t)cu_le.idx + 1, 0, sizeof s->cell[0][0].value);
+    cu_int(s->cell[0][0].value, (int32_t)cu_le.c0 + 1, 0, sizeof s->cell[0][0].value);
     cu_cat(s->cell[0][0].value, "/", sizeof s->cell[0][0].value);
     cu_int(b, (int32_t)cu_le.nstep, 0, sizeof b);
     cu_cat(s->cell[0][0].value, b, sizeof s->cell[0][0].value);
@@ -1786,6 +1777,8 @@ static int cu_loop_write(void)
 
 static void cu_loop_frame(void)
 {
+    static const uint8_t CRL_BARS_UI[CRL_NSYNC] = {0, 1, 2, 4, 8, 16};
+    static uint8_t step_no;
     static const char *const DID[] = {"", "rec: play to start", "count-in", "recording", "cancelled", "loop recorded",
                                       "overdub armed", "overdub done", "play", "stop", "undo", "loop cleared",
                                       "nothing recorded", "replace armed", "step entry", "steps recorded"};
@@ -1804,6 +1797,10 @@ static void cu_loop_frame(void)
         } else if (d == CRL_DID_NOTHING)
             cu_message(cr_snap.lfull ? "loop full" : cr_snap.lstate == CRL_EMPTY ? "no loop" : "nothing to undo",
                        CR_COL_RED);
+        else if (d == CRL_DID_STEP && crl.step_len && crl.step_len < CRL_BARS_UI[cs.loop_len % CRL_NSYNC] * cr_loop_bar(&crl)) {
+            cu_message(crl.step_len == 1536u ? "Step: 4 bars (64 steps)" : "Step: 5 bars (60 steps)", CR_COL_RED);
+            cu_trace("loop: step entry: the Length cut to %u steps\n", (unsigned)(crl.step_len / CRL_STEP));
+        }                                          /* (a pattern is 64 steps at most: the Length's first whole bars) */
         else if (cu_layer() == L_LOOP && (d == CRL_DID_ARM || d == CRL_DID_OD_ARM || d == CRL_DID_REP_ARM ||
                                           d == CRL_DID_STEP || d == CRL_DID_REC))
             ;                                      /* (the PLAY menu shows these itself: no box over it) */
@@ -1811,6 +1808,13 @@ static void cu_loop_frame(void)
             cu_message(DID[d], d == CRL_DID_PLAY || d == CRL_DID_STOP ? CR_COL_WHITE : CR_COL_RED);
         cu_trace("loop: %s (state %u layers %u events %u len %u)\n", d < sizeof DID / sizeof DID[0] ? DID[d] : "?",
                  (unsigned)crl.state, (unsigned)crl.d.nlayers, (unsigned)crl.d.nev, (unsigned)crl.d.len);
+    }
+    if (cr_snap.lstep_no != step_no) {             /* step entry, Length Free: a chord after the 64th step */
+        step_no = cr_snap.lstep_no;
+        if (cr_snap.lcap == CRL_CAP_STEP) {
+            cu_message("64 steps: full", CR_COL_RED);
+            cu_trace("loop: step refused (64 steps)\n");
+        }
     }
     {                                              /* the ISR's MIDI start / stop (cr_out.c) */
         static uint32_t rt_seen;
@@ -2896,6 +2900,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cr_post(CRE_LOOP, LP_CONF, LC_RATE, cs.loop_rate);
             cu_trace("loop: knob 2 rate %s\n", CU_RATE[cs.loop_rate]);
         } else if (knob == 2) {
+            if (cs.loop_mode % CRL_NMODE == CRL_MODE_STEP) {   /* (the setting is the takes': kept as it is) */
+                cu_message("Step: always 1/16", CR_COL_RED);
+                cu_trace("loop: knob 3 rests (Step: 1/16)\n");
+                break;
+            }
             v = cs.loop_quant + s;
             cs.loop_quant = (uint8_t)(v < 0 ? 0 : v >= (int32_t)CRL_NQUANT ? CRL_NQUANT - 1u : (uint32_t)v);
             cr_post(CRE_LOOP, LP_CONF, LC_QUANT, cs.loop_quant);
@@ -3778,6 +3787,8 @@ static void cr_ui_input(void)
     }
     {                                              /* step entry: every key up (nothing latched) after a chord: the
                                                     * cursor advances (the engine: if a chord was written there) */
+        /* (a root pressed while another key is still down or latched, after a chord was written: the engine moves
+         * on by itself, cr_loop_gesture) */
         static uint8_t down;
         uint8_t dn = (uint8_t)(cu.kheld || (cu.mlatch && !cs.kbd_full));   /* (the Full keyboard: the latch waits) */
         if (cr_snap.lcap == CRL_CAP_STEP && down && !dn) {
@@ -4539,6 +4550,13 @@ static void cu_loop_cells(cr_screen_t *s)
                                                      * 1/4 .. 1/32 the repeats, the spacing growing as before */
     s->cell[0][2].pct = (uint8_t)(q * 255u / (CRL_NQUANT - 1u));
     s->cell[0][2].pct2 = q ? 255u : 0u;
+    if (cs.loop_mode % CRL_NMODE == CRL_MODE_STEP) {   /* Step: its steps are sixteenths whatever Quantize is set to
+                                                     * (a take's grid): the cell says so, dim, and KNOB 3 rests */
+        cu_cpy(s->cell[0][2].value, "1/16", sizeof s->cell[0][2].value);
+        s->cell[0][2].pct = (uint8_t)(4u * 255u / (CRL_NQUANT - 1u));
+        s->cell[0][2].pct2 = 255u;
+        s->cell[0][2].flags = CR_CF_ON | CR_CF_DIM;
+    }
     cu_cpy(s->cell[0][3].value, cs.loop_count_in ? "On" : "Off", sizeof s->cell[0][3].value);
     s->cell[0][3].glyph = CR_G_GATE;
     s->cell[0][3].pct = cs.loop_count_in ? 255 : 26;
@@ -4568,7 +4586,7 @@ static void cu_lm_marks(uint32_t start, uint32_t span, uint32_t mid)   /* window
     off = tot > 4u ? tot - 4u : 0u;                /* more than 4 lanes: the older layers fold into lane 0 */
     fm1_irq_off();
     if (mid == CR_LM_STEPS) {
-        uint32_t g = crl.step_g ? crl.step_g : 24u, cur = (uint32_t)crl.step * g;
+        uint32_t g = CRL_STEP, cur = (uint32_t)crl.step * g;
         for (i = crl.layer_ev0; i < crl.d.nev; i++) {
             const crl_ev_t *e = &crl.d.ev[i];
             uint32_t st = e->t / g;
@@ -4654,24 +4672,30 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         cu_cpy(s->right, "empty", sizeof s->right);
         s->right_col = CR_COL_GREY;
     }
-    if (cu.ledit) {                                /* the loop editor: the loop's cells as the step grid (a bar a row),
-                                                    * the filled ones where a note starts, the cursor on the selected
-                                                    * step; its chord and "step 3/8" under it */
-        uint32_t g = cu_le.g ? cu_le.g : CRL_STEP_NONE, per = bar / g ? bar / g : 1u, pb = 64u / per, tb, first, shown, c;
+    if (cu.ledit) {                                /* the loop editor: the pattern's steps (a bar a row, four rows a
+                                                    * page), filled where a note starts, dim where a long note still
+                                                    * sounds, the cursor on the selected step, the playhead while the
+                                                    * loop plays; its chord and "step 3/16" under it */
+        uint32_t per = cu_le_per(), pg = cu_le_page(), first = cu_le_map.first, n, ph;
         char r[4], q[5], sup[CR_SUP_MAX];
-        pb = pb > 4u ? 4u : pb ? pb : 1u;
-        tb = (cu_le_map.ncell + per - 1u) / per;
-        first = cu_le.c0 / (per * pb) * per * pb;
-        shown = tb > first / per ? tb - first / per : 1u;
-        shown = shown > pb ? pb : shown;
+        n = cu_le_map.nstep > first ? cu_le_map.nstep - first : 0u;
+        n = n > pg ? pg : n;
         s->lm_mid = CR_LM_STEPS;
-        s->lm_bars = (uint8_t)shown;
+        s->lm_bars = (uint8_t)((n + per - 1u) / per ? (n + per - 1u) / per : 1u);
         s->lm_beats = (uint8_t)per;
-        for (c = 0; c < per * shown && c < 64u && first + c < cu_le_map.ncell; c++)
-            if ((cu_le_map.start[(first + c) >> 5] >> ((first + c) & 31u)) & 1u)
-                s->lm_lane[0] |= (uint64_t)1 << c;
-        s->lm_steps = (uint8_t)c;
+        s->lm_lane[0] = cu_le_map.start;
+        s->lm_lane[1] = cu_le_map.tail;
+        if (cu_le.n > 1u) {                        /* the selected step's note: the steps after its own it sounds in */
+            uint32_t a = cu_le.c0 - first + 1u, e = cu_le.c0 - first + cu_le.n;
+            e = e > n ? n : e;
+            if (e > a)
+                s->lm_lane[2] = (e - a >= 64u ? ~(uint64_t)0 : ((uint64_t)1 << (e - a)) - 1u) << a;
+        }
+        s->lm_steps = (uint8_t)n;
         s->lm_pos = (uint16_t)(((cu_le.c0 - first) & 63u) | (cu_blink(now) ? 0u : CR_LM_CUR_OFF));
+        ph = sn->lpos / CRL_STEP;
+        if (sn->lstate == CRL_PLAYING && ph >= first && ph < first + n)
+            s->lm_pos |= CR_LM_PLAY(ph - first);
         if (sn->ci.sounding && !sn->ldisp) {       /* the chord being played, else the one in the step */
             cu_cpy(s->sub, sn->ci.root, sizeof s->sub);
             cu_cat(s->sub, sn->ci.qual, sizeof s->sub);
@@ -4684,34 +4708,42 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         } else
             cu_cpy(s->sub, "-", sizeof s->sub);
         cu_cpy(s->value, "step ", sizeof s->value);
-        cu_int(b, (int32_t)cu_le.idx + 1, 0, sizeof b);
+        cu_int(b, (int32_t)cu_le.c0 + 1, 0, sizeof b);
         cu_cat(s->value, b, sizeof s->value);
         cu_cat(s->value, "/", sizeof s->value);
         cu_int(b, (int32_t)cu_le.nstep, 0, sizeof b);
         cu_cat(s->value, b, sizeof s->value);
+        if (cu_le.nstep > pg) {                    /* (a take longer than a page: which one) */
+            cu_cat(s->value, " \267 p", sizeof s->value);
+            cu_int(b, (int32_t)(first / pg) + 1, 0, sizeof b);
+            cu_cat(s->value, b, sizeof s->value);
+        }
         cu_cpy(s->foot, "SELECT: step \267 REC: clear \267 EDIT: done", sizeof s->foot);
         return;
     }
-    if (cap == CRL_CAP_STEP) {                     /* the step grid: the Quantize grid (none: a quarter note), 4 bars a page */
-        uint32_t g = sn->lstep_g ? sn->lstep_g : CRL_STEP_NONE, per = bar / g, pb = 64u / per, nst, tb, first, shown;
+    if (cap == CRL_CAP_STEP) {                     /* step entry: the pattern's steps, sixteenths, a bar a row, four
+                                                    * rows a page (64 steps: the whole pattern in 4/4). A set Length:
+                                                    * all its steps; Free: the bars reached so far */
+        uint32_t per = bar / CRL_STEP, pg = CRL_STEPS / per * per, nst, first, shown, full;
         char r[4], q[5], sup[CR_SUP_MAX];
-        pb = pb > 4u ? 4u : pb ? pb : 1u;
-        nst = sn->lstep_len ? sn->lstep_len / g : (sn->lstep_end > sn->lstep + 1u ? sn->lstep_end : sn->lstep + 1u);
-        tb = (nst + per - 1u) / per;
-        first = sn->lstep / (per * pb) * per * pb;
-        shown = tb - first / per;
-        shown = shown < 1u ? 1u : shown > pb ? pb : shown;
+        full = !sn->lstep_len && sn->lstep >= CRL_STEPS;   /* (Free: past the 64th: nothing more goes in) */
+        nst = sn->lstep_len ? sn->lstep_len / CRL_STEP : full ? CRL_STEPS
+                            : (sn->lstep_end > sn->lstep + 1u ? sn->lstep_end : sn->lstep + 1u);
+        first = (full ? CRL_STEPS - 1u : sn->lstep) / pg * pg;
+        shown = (nst - first + per - 1u) / per;
+        shown = shown < 1u ? 1u : shown > pg / per ? pg / per : shown;
         cu_lm_marks(first, per * shown, CR_LM_STEPS);
         s->lm_mid = CR_LM_STEPS;
         s->lm_bars = (uint8_t)shown;
         s->lm_beats = (uint8_t)per;
         s->lm_lane[0] = cu_lmc.lane[0];
-        s->lm_pos = (uint16_t)((sn->lstep - first) | (cu_blink(now) ? 0u : CR_LM_CUR_OFF));
+        s->lm_steps = (uint8_t)(sn->lstep_len && nst - first < per * shown ? nst - first : 0u);
+        s->lm_pos = (uint16_t)(((sn->lstep - first) & 63u) | (full || !cu_blink(now) ? CR_LM_CUR_OFF : 0u));
         if (sn->ci.sounding && !sn->ldisp) {       /* the chord being entered, else the one at the cursor */
             cu_cpy(s->sub, sn->ci.root, sizeof s->sub);
             cu_cat(s->sub, sn->ci.qual, sizeof s->sub);
             cu_cat(s->sub, sn->ci.sup, sizeof s->sub);
-        } else if (cu_lmc.cur_ok) {
+        } else if (cu_lmc.cur_ok && !full) {
             cr_chord_name((uint8_t)(cu_lmc.cur_root % 12u), (uint8_t)(cu_lmc.cur_qx >> 4), (uint8_t)(cu_lmc.cur_qx & 15u),
                           r, q, sup);
             cu_cpy(s->sub, r, sizeof s->sub);
@@ -4719,12 +4751,18 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
             cu_cat(s->sub, sup, sizeof s->sub);
         } else
             cu_cpy(s->sub, "-", sizeof s->sub);
-        cu_cpy(s->value, "step ", sizeof s->value);
-        cu_int(b, (int32_t)(sn->lstep % per) + 1, 0, sizeof b);
-        cu_cat(s->value, b, sizeof s->value);
-        cu_cat(s->value, " \267 bar ", sizeof s->value);
-        cu_int(b, (int32_t)(sn->lstep / per) + 1, 0, sizeof b);
-        cu_cat(s->value, b, sizeof s->value);
+        if (full)                                  /* "64 steps \267 full"; "step 5/32" (a set Length); "step 5" (Free) */
+            cu_cpy(s->value, "64 steps \267 full", sizeof s->value);
+        else {
+            cu_cpy(s->value, "step ", sizeof s->value);
+            cu_int(b, (int32_t)sn->lstep + 1, 0, sizeof b);
+            cu_cat(s->value, b, sizeof s->value);
+            if (sn->lstep_len) {
+                cu_cat(s->value, "/", sizeof s->value);
+                cu_int(b, (int32_t)nst, 0, sizeof b);
+                cu_cat(s->value, b, sizeof s->value);
+            }
+        }
         cu_cpy(s->foot, "OCT-: back \267 OCT+: rest \267 REC: done", sizeof s->foot);
         return;
     }

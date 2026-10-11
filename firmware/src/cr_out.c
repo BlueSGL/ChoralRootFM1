@@ -688,6 +688,7 @@ typedef struct {
     /* the PLAY menu's timeline and step grid (cr_ui.c cu_lm_*): the events themselves are read (IRQ off) only when
      * lgen changes */
     uint8_t lrep, lrep_on, lstep_g;  /* the overdub replaces; a gesture of it held; the step grid (ticks) */
+    uint8_t lstep_no;                /* step entry: chords refused so far (a 65th step) */
     uint16_t lgen, lev0, lstep, lstep_end;   /* the events' generation; the take's first event; the cursor; steps used */
     uint32_t lpos, lrep0, lrec_len, lstep_len;   /* playhead (ticks), the held span's start, the synced take, the steps' */
 } cr_snap_t;
@@ -729,6 +730,7 @@ static void cr_snapshot(void)
     cr_snap.lrep = crl.rep;
     cr_snap.lrep_on = (uint8_t)(crl.rep && crl.rep_n && crl.cap == CRL_CAP_OD);
     cr_snap.lstep_g = crl.step_g;
+    cr_snap.lstep_no = crl.step_no;
     cr_snap.lgen = crl.gen;
     cr_snap.lev0 = crl.layer_ev0;
     cr_snap.lstep = crl.step;
