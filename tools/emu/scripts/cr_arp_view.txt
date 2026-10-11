@@ -2,7 +2,7 @@
 # Arpeggiate picked (PERF held, SELECT +3), OCT- closes. MAJ + D4 held on the Chord view: the arp screen, the sounding
 # note hopping (shots a / b differ); PERF held: the perform layer over it; released: the chord view back. LATCH + the
 # chord released: it keeps hopping; PANIC: the chord view. The Keyboard view with the arp running: unchanged. Options >
-# Motion Off: the plain chord view. Strum: the chord view. A playing loop with no key held: the arp screen; stopped:
+# Motion Off: the arp screen too (the hop is not an animation). Strum: the chord view. A playing loop with no key held: the arp screen; stopped:
 # the chord view. test_cr.sh reads the frames (EMU_UI_LOG=0) between the dumps.
 wait 300
 btn ARP down
@@ -90,7 +90,7 @@ wait 40
 btn D4 down
 wait 800
 shot build/emu/test/cr_arp_view_motion_off.ppm
-dump                          # 10: Motion Off: the plain chord view, the arp sounding
+dump                          # 10: Motion Off: the arp screen as well, hopping
 btn D4 up
 key F3 up
 wait 300

@@ -27,6 +27,7 @@ build/host/emu --help          # options and the key map
 | `emu_midi.c` | CoreMIDI: source "ChoralRoot FM-1" (out), destination "ChoralRoot FM-1 In" (in); there is no USB audio (the firmware is built with `FELUCCA_UAC` 0 through `tests/hostsim.c`: Options > USB Record / USB Playback / USB Level are kept and saved, USB Level = Fixed applies, nothing streams; docs/USB-AUDIO.md) |
 | `emu_img.c` | LCD to PNG / PPM |
 | `perf.sh`, `scripts/perf_*.txt`, `wavclicks.py` | the worst cases for the CPU and the pops (docs/INTEGRATION.md, Performance): the audio block's cost and its device estimate, the UI frame's, voices stolen, flash erases, and the WAV checked for jumps, silent holes and clicks |
+| `seed_settings.py` | puts a unit's ChoralRoot settings record (192 bytes of hex, a backup's ChoralRoot block) into a `--flash` file that already holds a settings object, so a headless run starts from the unit's own settings (`python3 tools/emu/seed_settings.py FLASH HEX`; test_cr.sh "the arp screen from the owner's own settings record") |
 | `scripts/`, `test.sh`, `test_cr.sh` | headless scripts and their checks (`sel.txt`, `knobs.txt`, `acceptance.txt`: Felucca's UI, no longer run) |
 
 ## Windowed mode: never in front by default

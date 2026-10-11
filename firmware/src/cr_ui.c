@@ -4181,10 +4181,11 @@ static void cu_scope(cr_screen_t *s)
  * sounding note hopping along). Only there (the other views are never replaced) and only while the shown chord is
  * being stepped: Perform on in a clocked mode (Arpeggiate, Arp 2 Octaves, Pattern: cr_snap.perf_step; a strum, a slop
  * and a harp run once and keep the chord view) from the press to the voice's end (keys up without LATCH / Hold,
- * Perform off, PANIC, the loop that played it stopped). Options > Motion Off: never (the hop is motion; the plain
- * chord view). A chord re-fingered within CU_ARP_LINGER_MS keeps the screen (no flash of the chord view between
- * two chords: the name and the notes of the one just left, no note on its block); Perform off and Motion Off do not
- * wait, and the PANIC screen outlasts it */
+ * Perform off, PANIC, the loop that played it stopped). Options > Motion does not gate it (it did until 2026-10-10:
+ * the owner's unit had Motion Off and showed no arp screen): the hop is the arpeggio's state, redrawn a step at a
+ * time, not a tween; Motion Off only drops the stripes' sweep before it (cu_animate). A chord re-fingered within
+ * CU_ARP_LINGER_MS keeps the screen (no flash of the chord view between two chords: the name and the notes of the one
+ * just left, no note on its block); Perform off does not wait, and the PANIC screen outlasts it */
 #define CU_ARP_LINGER_MS 150u
 static int cu_arp_on(uint32_t now)
 {
@@ -4192,7 +4193,7 @@ static int cu_arp_on(uint32_t now)
     static uint8_t seen;
     const cr_snap_t *sn = &cr_snap;
     uint32_t pm = sn->perform_mode;
-    if (cs.view != V_CHORD || cr_motion == CR_MOTION_OFF || !sn->perform_on || !sn->ci.valid ||
+    if (cs.view != V_CHORD || !sn->perform_on || !sn->ci.valid ||
         (pm != CR_PM_ARP && pm != CR_PM_PATTERN)) {
         seen = 0;
         return 0;

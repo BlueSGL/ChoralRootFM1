@@ -271,12 +271,13 @@ Priority, top down, first match wins:
      replaced); Perform is on in a **clocked mode** (Arpeggiate, Arp 2 Octaves, Pattern; Strum, Slop and Harp run once
      over the chord and keep the chord view); the shown chord's voice is being stepped (`cr_snap.perf_step` =
      `cr_engine.c cr_perform_stepping`: the displayed voice's clock is on, from the press, before the first step of a
-     Retrig-off arp, to the voice's end); Options > Motion is not Off (Off: no motion at all, so the plain chord view
-     while the arp sounds; Calm shows it: the hop is one frame a step). It ends with the voice: the keys up without
+     Retrig-off arp, to the voice's end). Options > Motion does not gate it (until 2026-10-10 Off kept the plain chord
+     view: the owner's unit had Motion Off and he saw no arp screen; the hop is the arpeggio's state, one frame a
+     step, not a tween, so it shows with Full, Calm and Off alike; Off only drops the stripes' sweep). It ends with the voice: the keys up without
      LATCH / Hold, Perform off, PANIC, the loop that played it stopped (a playing loop's chords arpeggiate with no key
      held: the screen follows them; LATCH or Strum-style Hold keeps it). `CU_ARP_LINGER_MS` (150 ms): the screen
      stays that long after the voice ended, the hop gone (`pos` -1), so a chord re-fingered does not flash the big
-     chord view between two chords; Perform off and Motion Off do not wait. The steps above it (messages, the knob
+     chord view between two chords; Perform off does not wait. The steps above it (messages, the knob
      meter, layers, pages, Options, the PLAY menu, the editor) and the stripes / the black screen keep their
      precedence; the top line is the view's (the mode, `Key: C`, the loop's text and dial). Transitions:
      `cu_animate` sweeps the idle stripes off for either screen; chord <-> arp is a plain redraw (no squeeze: a chord
@@ -284,7 +285,8 @@ Priority, top down, first match wins:
      change inside the arp screen redraws the name and the notes at once. The draw cache: `pos` is hashed apart
      (`cr_draw.c cr_arp_strips`), a hop composes only the strips from the arc to the notes' line (3 of 6, not the
      name's): tests/cr_draw_test.c "arp: ...". Tests: `cr_arp_view.txt` (test_cr.sh "the arp screen": every case
-     above from the frames between its dumps), `cr_arp_hold.txt`, tests/cr_engine_test.c "stepping: ...".
+     above from the frames between its dumps), `cr_arp_unit.txt` (the owner's settings record of 2026-10-10 seeded into
+     a flash file by `tools/emu/seed_settings.py`: Key Mode, one root alone, Arpeggiate, Motion Off), `cr_arp_hold.txt`, tests/cr_engine_test.c "stepping: ...".
 6. the splash and the screensaver → `stripes` (the ChoralRoot logo): at power-on (the splash, CR_SPLASH_MS with the
    version, the intro slide once) until the first input; then only as a screensaver after **3 minutes without any
    input** (`CR_IDLE_MS` 180 000, fixed: keys, buttons, knobs and MIDI channel messages in are activity, `cu.last_input`;

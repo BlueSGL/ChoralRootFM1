@@ -359,9 +359,9 @@ differ cr_arp_view_latch_a cr_arp_view_latch_b "latched: a step later the hop is
     || bad "the Keyboard view: $(knd 8), $(arps 8) arp frames"
 vc() { grep '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .*/\1/p'; }
 [ "$(vc 9)" = 0 ] && ok "PANIC took LATCH off in the engine too: the chord released after it ends" || bad "after PANIC a released chord still sounds ($(vc 9) voices)"
-[ "$(md 9)" = "1 2 0 0" ] && [ "$(knd 10)" = "chord 0 D" ] && [ "$(arps 10)" = 0 ] && [ "$(no 10)" -gt "$(no 9)" ] &&
-    ok "Options > Motion Off: the plain chord view while the arp plays ($(no 9) -> $(no 10) notes): $OUT/cr_arp_view_motion_off.ppm" \
-    || bad "Motion Off: $(md 9) / $(knd 10), $(arps 10) arp frames"
+[ "$(md 9)" = "1 2 0 0" ] && [ "$(knd 10)" = "arp 0 D" ] && [ "$(hops 10)" -ge 3 ] && [ "$(no 10)" -gt "$(no 9)" ] &&
+    ok "Options > Motion Off: the arp screen all the same, hopping ($(hops 10) places, $(no 9) -> $(no 10) notes): $OUT/cr_arp_view_motion_off.ppm" \
+    || bad "Motion Off: $(md 9) / $(knd 10), $(hops 10) places"
 [ "$(knd 11)" = "arp 0 D" ] && [ "$(hops 11)" -ge 3 ] && ok "Motion Calm: the arp screen" || bad "Motion Calm: $(knd 11)"
 [ "$(md 12)" = "1 0 0 0" ] && [ "$(knd 13)" = "chord 0 D" ] && [ "$(arps 13)" = 0 ] && [ "$(no 13)" -gt "$(no 12)" ] &&
     ok "Strum: the chord view, no arp screen in any frame: $OUT/cr_arp_view_strum.ppm" || bad "Strum: $(md 12) / $(knd 13), $(arps 13) arp frames"
@@ -377,6 +377,29 @@ case "$(knd 17)" in "arp 0 "?) a17=1;; *) a17=0;; esac
     || bad "the loop's arp: $(knd 17), keys $(kd 17), loop state $(lp 17) -> $(lp 18)"
 case "$(knd 18)" in "chord 0 "?) ok "the loop stopped: the chord view";; *) bad "the loop stopped: $(knd 18)";; esac
 silent_end cr_arp_view
+
+echo "the arp screen from the owner's own settings record (2026-10-10: Key Mode, Arpeggiate, Motion Off)"
+AF="$OUT/cr_arp_unit_flash.bin"
+rm -f "$AF"
+"$EMU" --headless --flash "$AF" --script "$S/persist_set.txt" >"$OUT/cr_arp_unit_seed.log" 2>&1   # a settings object to seed
+python3 tools/emu/seed_settings.py "$AF" 435253310c00c00026aa43ec0000010104010001056400000100020300017800320006000000020064003200010001000000000000002800060000000100640032000100010000000f00000028000800010001000a0032000100010000000000000028000600000001004600320001000100000000000000080006000000030064003200010001000000000000000000016401010000010201000002ff0000010002000d00004606000001010205010001010101010101010001030101010101 >>"$OUT/cr_arp_unit_seed.log" 2>&1 ||
+    bad "the record was not seeded (see $OUT/cr_arp_unit_seed.log)"
+export EMU_UI_LOG=0
+run cr_arp_unit --flash "$AF"
+unset EMU_UI_LOG
+L="$OUT/cr_arp_unit.log"
+ks() { grep '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.*cr: key \([0-9]\) tonic \([0-9]*\) scale \([0-9]\) perform \([0-9]\) mode \([0-9]\) .* view \([0-9]\) layer \([0-9]*\) .*/\1 \2 \3 \4 \5 \6 \7/p'; }
+has '(record: current)' "$L" && [ "$(ks 1)" = "1 4 1 0 2 0 0" ] && grep -q 'style 0 single 1 split 5' "$L" &&
+    ok "the record read as the unit stored it (Key Mode E minor, Split at F, Arpeggiate picked at 1/16, perform off, the Chord view)" \
+    || bad "the seeded record: $(ks 1)"
+[ "$(ks 2)" = "1 4 1 1 2 0 0" ] && [ "$(knd 3)" = "arp 0 D" ] && [ "$(hops 3)" -ge 3 ] && seg 3 | tail -1 | grep -q "right 'Arp'.* line 'arp 1/16'" &&
+    ok "PERF tap, one root alone (the scale's chord), Motion Off: the arp screen, the note hopping ($(hops 3) places): $OUT/cr_arp_unit.ppm" \
+    || bad "no arp screen from the unit's record: $(ks 2) / $(knd 3) / $(hops 3) places"
+[ "$(knd 4)" = "chord 0 D" ] && ok "released: the chord view" || bad "released: $(knd 4)"
+case "$(knd 5)" in "arp 0 "*) [ "$(hops 5)" -ge 3 ] && ok "LATCH, a root tapped: the arp screen stays, hopping ($(hops 5) places)" || bad "LATCH: $(hops 5) places";;
+    *) bad "LATCH: $(knd 5)";; esac
+case "$(knd 6)" in "chord 0 "*) ok "PERF tap (off): the chord view";; *) bad "perform off: $(knd 6)";; esac
+silent_end cr_arp_unit
 
 echo "HOME held: the view menu; the view lock; HOME tap at home cycles only unlocked"
 run cr_view_menu
