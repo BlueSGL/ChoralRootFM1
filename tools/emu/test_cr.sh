@@ -993,6 +993,30 @@ grep 'octave' "$L" | grep -v 'octave 0' | grep -q . && bad "OCT- in a layer move
 grep -q 'fx_on\|layer 4' "$L" && ok "screens: $OUT/cr_lock_fx.ppm, cr_lock_bass.ppm, cr_lock_key.ppm" || bad "no bass layer in the dump"
 differ cr_lock_fx cr_lock_bass "the bass layer replaced the fx layer"
 
+echo "the LOCK layer (B3 held): Type key Clears / Keeps, Ext keys Toggle / Pushed; its open / close gestures"
+run cr_lock_menu
+L="$OUT/cr_lock_menu.log"
+lk() { grep -a '^  lock: on' "$L" | sed -n "$1p" | sed -n 's/.*lock: on \([01]\) latched \(..\) type-key \([a-z]*\) ext-keys \([a-z]*\)$/\1 \2 \3 \4/p'; }
+ll() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* layer \([0-9]*\) .*/\1/p'; }
+[ "$(lk 1)" = "0 00 clears toggle" ] && [ "$(ll 1)" = 10 ] && [ "$(lk 2)" = "1 00 clears toggle" ] && [ "$(ll 2)" = 10 ] && has '^lock: cells Type key Ext keys - -' "$L" &&
+    ok "B3 held: the LOCK layer (Type key / Ext keys, the defaults Clears / Toggle), LOCK not toggled by the hold; a B3 tap in it: LOCK on: $OUT/cr_lock_menu.ppm" \
+    || bad "the LOCK layer: $(lk 1) layer $(ll 1) / $(lk 2) layer $(ll 2)"
+[ "$(lk 3)" = "1 94 clears toggle" ] && has 'chord D6 9 sounding 1' "$L" && has '^expect sound .*: ok' "$L" &&
+    ok "the chord keys and the roots play in the layer: MAJ + 6 + 9 latched, D4: D6 9 sounds" || bad "playing in the LOCK layer: $(lk 3)"
+[ "$(lk 4)" = "1 02 clears toggle" ] && [ "$(lk 5)" = "1 12 clears toggle" ] && [ "$(lk 6)" = "1 02 clears toggle" ] &&
+    ok "Clears + Toggle (as before): MIN clears 6 and 9; 6 on; 6 again off" || bad "Clears + Toggle: $(lk 4) / $(lk 5) / $(lk 6)"
+[ "$(lk 8)" = "1 94 keeps toggle" ] && [ "$(lk 9)" = "1 92 keeps toggle" ] && [ "$(lk 10)" = "1 12 keeps toggle" ] &&
+    ok "Keeps + Toggle: MAJ -> MIN with 6 and 9 latched: they stay; 9 tapped: off: $OUT/cr_lock_menu_keeps.ppm" || bad "Keeps + Toggle: $(lk 8) / $(lk 9) / $(lk 10)"
+[ "$(lk 12)" = "1 22 keeps pushed" ] && [ "$(lk 13)" = "1 92 keeps pushed" ] && [ "$(lk 14)" = "1 82 keeps pushed" ] && [ "$(lk 15)" = "1 84 keeps pushed" ] &&
+    ok "Keeps + Pushed: m7 alone: the set is m7 (the type stays); 6 + 9 together: 6 9; 9 alone: 9; 9 again: still 9; MAJ / MIN change the type only: $OUT/cr_lock_menu_pushed.ppm" \
+    || bad "Keeps + Pushed: $(lk 12) / $(lk 13) / $(lk 14) / $(lk 15)"
+[ "$(lk 17)" = "1 92 clears pushed" ] && [ "$(lk 18)" = "1 04 clears pushed" ] &&
+    ok "Clears + Pushed: 6 + 9 pushed; MAJ alone clears them" || bad "Clears + Pushed: $(lk 17) / $(lk 18)"
+[ "$(ll 7)" = 0 ] && [ "$(ll 8)" = 10 ] && [ "$(ll 11)" = 0 ] && [ "$(ll 16)" = 0 ] && [ "$(lk 16)" = "1 82 keeps pushed" ] && [ "$(ll 19)" = 0 ] && [ "$(lk 20)" = "0 00 clears toggle" ] &&
+    ok "OCT-, OCT+, HOME and B3 held again close the layer; a hold never toggles LOCK; a B3 tap outside: LOCK off, the latch cleared" \
+    || bad "the LOCK layer's gestures: layers $(ll 7) $(ll 8) $(ll 11) $(ll 16) $(ll 19), $(lk 16) / $(lk 20)"
+silent_end cr_lock_menu
+
 echo "user presets: Overwrite, delete, the naming keys"
 run cr_save_del
 has '^save: dialog part 0 ADG (overwrite)' "$OUT/cr_save_del.log" && has '^save: part 0 overwrite slot U01 FM6 26 ADG rc 0' "$OUT/cr_save_del.log" &&

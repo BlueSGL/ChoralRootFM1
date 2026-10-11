@@ -42,8 +42,9 @@
 #define CU_BIT(b) (1u << (b))
 
 /* layers (a button held): their screens and the job of the root keys and KNOB 1..4 */
-enum { L_NONE, L_KEY, L_PERF, L_FX, L_BASS, L_EDIT, L_SAVE, L_METRO, L_LOOP, L_VIEW, L_N };   /* L_VIEW: HOME held */
-static const uint8_t L_BTN[L_N] = {NB, BT_KEY, BT_PERF, BT_FX, BT_BASS, BT_EDIT, BT_SAVE, BT_METRO, BT_LOOP, BT_HOME};
+enum { L_NONE, L_KEY, L_PERF, L_FX, L_BASS, L_EDIT, L_SAVE, L_METRO, L_LOOP, L_VIEW, L_LOCK, L_N };   /* L_VIEW: HOME
+                                                   * held; L_LOCK: the key B3 held (no button: NB) */
+static const uint8_t L_BTN[L_N] = {NB, BT_KEY, BT_PERF, BT_FX, BT_BASS, BT_EDIT, BT_SAVE, BT_METRO, BT_LOOP, BT_HOME, NB};
 static uint32_t cu_layer_of(uint32_t b)
 {
     uint32_t l;
@@ -455,6 +456,9 @@ static struct {
     uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
                                            * 1 play (roots and chord keys as outside the layer); OPT tapped in the
                                            * layer (v13) */
+    uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
+                                           * (0: clears them, today's); the extension keys are pushed as the type
+                                           * keys are (0: toggles, today's) */
     uint8_t save_act;                     /* SAVE held's picker */
     uint8_t save_pending;                 /* slot + 1: saved once the loop stops (no flash erase while it plays) */
     uint16_t loop_used;                   /* bit k: slot k holds a loop in flash */
@@ -795,6 +799,9 @@ static struct {
     uint8_t oct_mod;                      /* OCT- held was a modifier (the editor: + a knob clears its modulation): no tap */
     uint32_t clear_t0;                    /* D#4 down in the loop layer (| 1): CLEAR after 1 s held */
     uint8_t clock;                        /* B3 LOCK: the chord block latches (off at power-on, not saved) */
+    uint8_t b3_pend;                      /* B3 is down and nothing else was pressed since: its release is the LOCK
+                                           * tap, held past the hold time it opens / closes the LOCK layer */
+    uint32_t b3_t0;
     uint16_t kpick;                       /* bit k: chord key k was pressed in the KEY layer as its scale key (MAJ /
                                            * MIN; the others do nothing there): never posted to the engine, its
                                            * release neither latches nor posts (the latch behind the layer is kept) */
@@ -2285,6 +2292,7 @@ static int32_t cu_layer_count(uint32_t l)
  * That is the layer's "keys: pick" (the default). OPT (GLO) tapped in the layer switches to "keys: play" and back
  * (cs.key_play, saved: settings v13): the roots and the chord block play exactly as outside the layer, so the key is
  * heard while KNOB 1..4 change it (as the PLAY menu's Keys, docs/LOOPER-MODES.md) */
+#define CU_KEY_LOCK 6u                             /* B3 */
 #define CU_KEY_MIN 3u                              /* G#3 (CU_MOD_OF_KEY) */
 #define CU_KEY_MAJ 5u                              /* A#3 */
 static int cu_key_pick(void) { return cu_layer() == L_KEY && !cs.key_play; }   /* (keys: play: the chord block's own job) */
@@ -2361,6 +2369,18 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cu_trace("key: knob 4 single %s\n", cs.single ? "split" : "full");
         }
         cu_hot_set(L_KEY, knob);                  /* (no popup: the knob row is the readout, its cell turns hot) */
+        break;
+    case L_LOCK:                                   /* KNOB 1: a type key clears / keeps the latched extensions;
+                                                    * KNOB 2: the extension keys toggle / are pushed */
+        if (knob == 0) {
+            cs.lock_keep = (uint8_t)(s > 0);
+            cu_trace("lock: type key %s\n", cs.lock_keep ? "keeps" : "clears");
+        } else if (knob == 1) {
+            cs.lock_push = (uint8_t)(s > 0);
+            cu_trace("lock: ext keys %s\n", cs.lock_push ? "pushed" : "toggle");
+        } else
+            break;
+        cu_hot_set(L_LOCK, knob);
         break;
     case L_VIEW:                                   /* KNOB 1: the lock */
         if (knob == 0 && cs.view_lock != (uint8_t)(s > 0)) {
@@ -2481,7 +2501,13 @@ static void cu_activity(void)
 /* B3 = LOCK (the chord block's latch mode). A UI-level virtual hold: a latched chord key stays posted down to the
  * engine (CRE_MOD down, no up), so every play style sees it held. LOCK on: the chord keys held are latched when
  * released; with no chord key held, a top-row key (DIM MIN MAJ SUS) resets the latch to that type alone and a
- * bottom-row key (6 m7 M7 9) toggles its extension. LOCK off and PANIC clear the latch. */
+ * bottom-row key (6 m7 M7 9) toggles its extension. LOCK off and PANIC clear the latch.
+ * The LOCK layer (B3 held; the owner, 2026-10-10) has two styles for it, both acting only while LOCK is on:
+ *   Type key  Clears (the above) / Keeps: a type key replaces the latched type and leaves the latched extensions
+ *   Ext keys  Toggle (the above) / Pushed: the extension keys are a set as the type keys are: an extension key
+ *             pressed with no chord key held starts a new set of that key alone (keys pressed while it is held
+ *             join, as ever), the type untouched. Keeps + Pushed: a type key changes the type only, an extension
+ *             key the extensions only */
 #define CU_MOD_TOP ((1u << CR_MOD_DIM) | (1u << CR_MOD_MIN) | (1u << CR_MOD_MAJ) | (1u << CR_MOD_SUS))
 static uint32_t cu_mods_phys(void)                 /* bit cr_mod_t: the chord keys physically held */
 {
@@ -2514,6 +2540,23 @@ static void cu_unlatch(void)                       /* the latched keys not held:
     }
     cu.mkill = 0;
 }
+static void cu_lock_menu(void)                     /* B3 held past the hold time: the LOCK layer, or out of it */
+{
+    if (cu.page == PG_SAVE)                        /* (not over the naming page, as the view menu) */
+        return;
+    if (cu.lock == L_LOCK) {
+        cu_layer_close();
+        return;
+    }
+    if (cu.lock == L_EDIT)
+        cu_pick_end(1);
+    cu.opt_open = 0;
+    if (cu.page != PG_EDIT)
+        cu.page = PG_NONE;
+    cu.lock = L_LOCK;
+    cu_hot.knob = 0;
+    cu_trace("layer: open %u (locked)\n", (unsigned)L_LOCK);
+}
 static void cu_lock_tap(void)                      /* B3 */
 {
     cu.clock ^= 1u;
@@ -2526,18 +2569,27 @@ static void cu_mod_press(uint32_t k)               /* a chord key down (k < CU_R
     uint32_t m = CU_MOD_OF_KEY[k], bit = 1u << m, x;
     uint32_t others = cu_mods_phys() & ~bit;
     if (cu.clock && !others && cu.mlatch) {        /* nothing else held, a latch: reset / toggle */
-        if (bit & CU_MOD_TOP) {
-            for (x = 0; x < CR_NMOD; x++)
-                if (x != m && ((cu.mlatch >> x) & 1u))
-                    cr_post(CRE_MOD, x, 0, 0);
-            cu.mlatch &= (uint8_t)bit;             /* (already down when it was latched) */
-        } else if (cu.mlatch & bit) {
+        uint32_t keep = 0xFFu;
+        if (bit & CU_MOD_TOP)                      /* a type key: the latch is that type alone; "Type key: Keeps"
+                                                    * (cs.lock_keep): the latched extensions stay */
+            keep = bit | (cs.lock_keep ? ~CU_MOD_TOP & 0xFFu : 0u);
+        else if (cs.lock_push)                     /* "Ext keys: Pushed": a new set of extensions, this key alone
+                                                    * (the type stays); keys pressed while it is held join it. No
+                                                    * toggle: the set's own key pressed again leaves that key. With
+                                                    * Keeps nothing but LOCK off / PANIC gets to "no extension" (the
+                                                    * owner's call, 2026-10-10: no extra gesture) */
+            keep = bit | CU_MOD_TOP;
+        else if (cu.mlatch & bit) {                /* Toggle: a latched extension off */
             cu.mlatch &= (uint8_t)~bit;
             cu.mkill |= (uint8_t)bit;
             cr_post(CRE_MOD, m, 0, 0);
             cu_mods_trace();
             return;
         }
+        for (x = 0; x < CR_NMOD; x++)
+            if (((cu.mlatch & ~keep) >> x) & 1u)
+                cr_post(CRE_MOD, x, 0, 0);
+        cu.mlatch &= (uint8_t)keep;                /* (a kept key is already down since it was latched) */
     }
     cr_post(CRE_MOD, m, 0, 1);                     /* (the engine ignores a second down) */
 }
@@ -2561,8 +2613,8 @@ static void cu_mod_release(uint32_t k)
  * plays the preview */
 static int cu_layer_keys(uint32_t l)
 {
-    return l && l != L_PERF && l != L_FX && !(l == L_EDIT && !cs.pick_roots) && !(l == L_LOOP && !cs.loop_keys) &&
-           !(l == L_KEY && cs.key_play);
+    return l && l != L_PERF && l != L_FX && l != L_LOCK && !(l == L_EDIT && !cs.pick_roots) &&
+           !(l == L_LOOP && !cs.loop_keys) && !(l == L_KEY && cs.key_play);
 }   /* (the PLAY menu with Keys = Play, the KEY layer with keys: play: they play, docs/LOOPER-MODES.md) */
 
 static void cu_key_press(uint32_t k)
@@ -2571,10 +2623,18 @@ static void cu_key_press(uint32_t k)
     cu.kheld |= 1u << k;
     cu.last_sound = cu_now();
     cu_activity();
+    if (cu.b3_pend && k != CU_KEY_LOCK) {          /* B3 still down and another key: LOCK's tap now, in the order
+                                                    * played (no layer from this press) */
+        cu.b3_pend = 0;
+        cu_lock_tap();
+    }
+    if (k == CU_KEY_LOCK) {                        /* B3: a tap (its release) toggles LOCK, a hold is its layer */
+        cu.b3_pend = 1;
+        cu.b3_t0 = cu_now();
+        return;
+    }
     if (k < CU_ROOT0) {                            /* the chord block keeps its job in every layer but KEY's, where */
-        if (CU_MOD_OF_KEY[k] == 0xFFu)             /* MAJ / MIN pick the scale (cu_key_scale); B3 is LOCK everywhere */
-            cu_lock_tap();
-        else if (cu_key_pick()) {
+        if (cu_key_pick()) {                       /* MAJ / MIN pick the scale (cu_key_scale); B3 is LOCK everywhere */
             cu.kpick |= (uint16_t)(1u << k);
             cu_key_scale(k);
         } else
@@ -2617,6 +2677,13 @@ static void cu_key_press(uint32_t k)
 static void cu_key_release(uint32_t k)
 {
     cu.kheld &= ~(1u << k);
+    if (k == CU_KEY_LOCK) {
+        if (cu.b3_pend) {                          /* let go before the hold time, nothing else pressed: the tap */
+            cu.b3_pend = 0;
+            cu_lock_tap();
+        }
+        return;
+    }
     if (k < CU_ROOT0) {
         if ((cu.kpick >> k) & 1u)                  /* pressed as the KEY layer's: nothing to end (the layer may be
                                                     * closed by now) */
@@ -2818,7 +2885,7 @@ static void cu_knob(uint32_t role, int32_t s)
         cu_loop_mode_turn(s);
         return;
     }
-    if (l && role == EN_SELECT && l != L_KEY) {    /* a picker: SELECT moves */
+    if (l && role == EN_SELECT && l != L_KEY && l != L_LOCK) {    /* a picker: SELECT moves (KEY, LOCK: the tempo) */
         v = cu_layer_sel(l) + s;
         v = v < 0 ? 0 : v >= cu_layer_count(l) ? cu_layer_count(l) - 1 : v;
         cu_layer_pick(l, v);
@@ -3150,6 +3217,11 @@ static void cr_ui_input(void)
                 cu_key_release(k);
         }
     }
+    if (cu.b3_pend && ((cu.kheld >> CU_KEY_LOCK) & 1u) && now - cu.b3_t0 >= (uint32_t)HOLD_MS[settings_hold % 4u]) {
+        cu.b3_pend = 0;                            /* B3 held alone past the hold time: the LOCK layer (held again
+                                                    * in it: closed); its release does nothing, LOCK as it was */
+        cu_lock_menu();
+    }
     {                                              /* step entry: every key up (nothing latched) after a chord: the
                                                     * cursor advances (the engine: if a chord was written there) */
         static uint8_t down;
@@ -3236,7 +3308,7 @@ static void cr_leds(void)
         if (sn->lstate == CRL_PLAYING)                   /* its green LED while playing */
             nl[LED_PLAY_GREEN >> 3] |= (uint8_t)(1u << (LED_PLAY_GREEN & 7u));
     }
-    if (l) {                                             /* the open layer's button blinks */
+    if (l && L_BTN[l] != NB) {                           /* the open layer's button blinks (LOCK's is a key: below) */
         uint8_t q = cu_led_pos[panel.btn[L_BTN[l]]];
         if (q != 0xFF)
             nl[q >> 3] &= (uint8_t)~(1u << (q & 7u));
@@ -3266,7 +3338,8 @@ static void cr_leds(void)
      * to play (cu_key_pick 0) they are the chord keys' own state again */
     for (k = 0; k < CU_ROOT0; k++) {
         if (CU_MOD_OF_KEY[k] == 0xFFu) {
-            cu_led(nl, 14u + k, cu.clock);
+            cu_led(nl, 14u + k, l == L_LOCK ? (int)blink : cu.clock);   /* (its layer open: it blinks, as a layer's
+                                                                         * button; the label says on / off) */
             cu_led(nd, 14u + k, 1);
             continue;
         }
@@ -4093,6 +4166,22 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         s->orient = 1;
         cu_fx_cells(s);
         cu_row_trace(s, "fx", seen, sizeof seen);
+        break;
+    }
+    case L_LOCK: {                                 /* B3 held: LOCK's two styles, a knob row under its name */
+        static const char *const IT[1] = {"Lock"};
+        static char seen[48];
+        cu_picker(s, IT, 1, 0, CR_COL_WHITE, cu.clock ? "lock \267 on" : "lock \267 off",
+                  "B: on/off \267 OCT-: back \267 HOME: home");
+        s->kind = CR_K_KNOBROW;
+        s->orient = 1;
+        s->cell[0][0].flags = s->cell[0][1].flags = CR_CF_ON;
+        cu_cpy(s->cell[0][0].label, "Type key", sizeof s->cell[0][0].label);
+        cu_cpy(s->cell[0][0].value, cs.lock_keep ? "Keeps" : "Clears", sizeof s->cell[0][0].value);
+        cu_cpy(s->cell[0][1].label, "Ext keys", sizeof s->cell[0][1].label);
+        cu_cpy(s->cell[0][1].value, cs.lock_push ? "Pushed" : "Toggle", sizeof s->cell[0][1].value);
+        cu_hot_row(s, L_LOCK);
+        cu_row_trace(s, "lock", seen, sizeof seen);
         break;
     }
     case L_VIEW: {                                 /* HOME held: the views, the lock as the last line */

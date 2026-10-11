@@ -136,7 +136,7 @@ own clock in ms from power-on; commands run in order and only `wait` (and the ti
 | `expect led NAME on\|dim\|off` | check a key's or button's LED now (`on` = lit); `GREEN` is PLAY's green LED |
 | `expect sound` / `expect silence` | non-zero samples since the previous `expect sound\|silence` (or power-on) |
 | `probe N` | (window) the next N presented frames: each button cap's level read back from the frame, with its LED state (`probe: present ... FX=247/2 SEL=121/1 ...`) |
-| `dump` | print the input state (as F12); its `cr: key` line ends with the KEY layer's keys (`kkeys` 0 pick, 1 play); its `loop:` line also gives the record mode, the PLAY menu's keys, the step cursor and the events a Replace layer hid (`mode keys step hidden`); `lcd:` says whether the UI's screen is off (a black frame) and counts the LCD writes; `pa2:` the PA2 line (below) |
+| `dump` | print the input state (as F12); its `cr: key` line ends with the KEY layer's keys (`kkeys` 0 pick, 1 play); the `lock:` line gives LOCK, the latched chord keys (bits DIM 01 MIN 02 MAJ 04 SUS 08, 6 10, m7 20, M7 40, 9 80) and the LOCK layer's two styles; its `loop:` line also gives the record mode, the PLAY menu's keys, the step cursor and the events a Replace layer hid (`mode keys step hidden`); `lcd:` says whether the UI's screen is off (a black frame) and counts the LCD writes; `pa2:` the PA2 line (below) |
 | `pa2 high` / `pa2 low` | drive the PA2 line by hand (the firmware never raises it): high = the panel black, no LED lit, no key, button or knob read, as on the unit |
 | `rec` | start / stop recording the LCD frames (as Insert) |
 | `quit` | stop here |

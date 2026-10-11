@@ -45,9 +45,13 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
  * play as outside the layer; OPT tapped in the layer). Still no reserve: it rides in this byte, next to the other
  * "what do the keys do in this menu" bit. A firmware older than v13 reads a record with bit 5 set as an unknown bit
  * and gives the whole byte its defaults (Overwrite, Play): its record mode and PLAY-menu keys are then lost on a
- * downgrade, nothing else */
+ * downgrade, nothing else.
+ * v13 also: bits 6 and 7 the LOCK layer's two styles (B3 held): bit 6 "Type key" (0 Clears: a type key clears the
+ * latched extensions, today's; 1 Keeps), bit 7 "Ext keys" (0 Toggle, today's; 1 Pushed). The same downgrade caveat */
 #define CRS_NLOOPMODE 5u
 #define CRS_KEY_PLAY 0x20u
+#define CRS_LOCK_KEEP 0x40u
+#define CRS_LOCK_PUSH 0x80u
 #define CRS_LOOP_MODE(s) ((unsigned)(s)->loop_rec & 15u)
 #define CRS_LOOP_KEYS(s) (((unsigned)(s)->loop_rec >> 4) & 1u)
 #define CRS_KEY_KEYS(s) (((unsigned)(s)->loop_rec & CRS_KEY_PLAY) ? 1u : 0u)

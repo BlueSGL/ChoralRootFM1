@@ -124,6 +124,17 @@ grep -q '^key: keys play' "$OUT/persist_kkeys_1.log" && grep -q "settings saves 
     ok "key-layer keys run 2: still play after a relaunch (the layer open: GLO lit, D4 sounded, the tonic unchanged): $OUT/persist_kkeys.ppm" \
     || bad "key-layer keys run 2: kkeys $(kk "$OUT/persist_kkeys_2.log" 1)"
 
+# LOCK's two styles (Settings v13: bits 6 / 7 of loop_rec): run 1 sets Keeps and Pushed in the LOCK layer (B3 held);
+# run 2 (the same file): they are back
+OFLASH=$OUT/persist_lock_flash.bin
+rm -f "$OFLASH" "$OUT"/persist_lock_1.log "$OUT"/persist_lock_2.log
+"$EMU" --headless --flash "$OFLASH" --script "$S/persist_lock_set.txt" >"$OUT/persist_lock_1.log" 2>&1 || bad "LOCK styles run 1: exit status"
+"$EMU" --headless --flash "$OFLASH" --script "$S/persist_lock_check.txt" >"$OUT/persist_lock_2.log" 2>&1 || bad "LOCK styles run 2: exit status"
+grep -q 'type-key keeps ext-keys pushed' "$OUT/persist_lock_1.log" && grep -q "settings saves 1 " "$OUT/persist_lock_1.log" &&
+    ok "LOCK styles run 1: Type key Keeps, Ext keys Pushed, the settings saved once" || bad "LOCK styles run 1: $(grep '  lock: on' "$OUT/persist_lock_1.log")"
+grep -q 'lock: on 0 latched 00 type-key keeps ext-keys pushed' "$OUT/persist_lock_2.log" && grep -q '(record: current)' "$OUT/persist_lock_2.log" &&
+    ok "LOCK styles run 2: Keeps and Pushed after a relaunch (LOCK itself off at power-on, as ever)" || bad "LOCK styles run 2: $(grep '  lock: on' "$OUT/persist_lock_2.log")"
+
 # the engine picker's roots (Settings pick_roots, docs/SETTINGS.md): run 1 turns them to "play" in the picker (KNOB 4);
 # run 2 (the same file) opens the picker with them playing
 RFLASH=$OUT/persist_roots_flash.bin

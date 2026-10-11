@@ -374,9 +374,9 @@ static void t_loop_rec(void)
     s.loop_rec = 7;                                /* no such mode */
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v8: a mode out of range takes the defaults");
-    s.loop_rec = 0x41;                             /* an unknown bit */
+    s.loop_rec = 0x47;                             /* no such mode, with a v13 bit: the defaults all the same */
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v8: an unknown bit takes the defaults");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v8: a mode out of range with other bits takes the defaults");
     s = d;                                         /* a version-7 record: the byte 0 (rsv_usb), the rest kept */
     s.bpm = 101;
     s.loop_rec = 0x12;                             /* (garbage a v7 writer could not have left: cleared anyway) */
@@ -411,9 +411,18 @@ static void t_key_keys_v13(void)
     s.loop_rec = (uint8_t)(CRS_KEY_PLAY | 7u);     /* no such record mode: the whole byte's defaults (pick too) */
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v13: a mode out of range takes the defaults (pick)");
-    s.loop_rec = (uint8_t)(CRS_KEY_PLAY | 0x80u);  /* an unknown bit */
+    s.loop_rec = (uint8_t)(CRS_LOOP_REC(1u, 1u) | CRS_LOCK_KEEP);   /* LOCK's styles (bits 6, 7), each alone and both */
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v13: an unknown bit takes the defaults (pick)");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == s.loop_rec && (r.loop_rec & CRS_LOCK_KEEP) &&
+       !(r.loop_rec & CRS_LOCK_PUSH) && CRS_LOOP_MODE(&r) == 1 && CRS_LOOP_KEYS(&r) == 1 && !CRS_KEY_KEYS(&r),
+       "v13: LOCK's Type key Keeps round-trip, the byte's other fields kept");
+    s.loop_rec = CRS_LOCK_PUSH;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == CRS_LOCK_PUSH, "v13: LOCK's Ext keys Pushed round-trip");
+    s.loop_rec = (uint8_t)(CRS_LOCK_KEEP | CRS_LOCK_PUSH | CRS_KEY_PLAY | CRS_LOOP_REC(4u, 1u));
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == s.loop_rec, "v13: every bit of the byte set (Step, Loops, play, Keeps, Pushed) round-trip");
+    ok(d.loop_rec == 0, "v13 defaults: LOCK's Type key Clears, Ext keys Toggle (today's behaviour)");
     s = d;                                         /* a version-12 record (0.16): Replace + Loops kept, pick */
     s.bpm = 97;
     s.loop_rec = CRS_LOOP_REC(3u, 1u);
@@ -428,6 +437,12 @@ static void t_key_keys_v13(void)
     s.check = crs_check(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 2 && CRS_KEY_KEYS(&r) == 0 && CRS_LOOP_MODE(&r) == 2,
        "version 12 -> 13: a stray bit 5 cleared (pick), the record mode kept");
+    s.loop_rec = (uint8_t)(CRS_LOOP_REC(2u, 1u) | CRS_LOCK_KEEP | CRS_LOCK_PUSH);   /* .. and stray bits 6 / 7 */
+    cr_settings_seal(&s);
+    s.version = 12;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.loop_rec == CRS_LOOP_REC(2u, 1u),
+       "version 12 -> 13: stray bits 6 / 7 cleared (Clears, Toggle), the record mode and the PLAY menu's keys kept");
 }
 
 /* version 10: every mode's Hold off (an older record's arp Hold 1 cleared) */

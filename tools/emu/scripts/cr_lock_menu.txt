@@ -1,0 +1,122 @@
+# ChoralRoot: the LOCK layer (the owner, 2026-10-10): B3 held past the hold time opens it (a B3 tap is still LOCK on /
+# off, in the layer too; a hold toggles nothing); KNOB 1 "Type key" Clears / Keeps, KNOB 2 "Ext keys" Toggle / Pushed;
+# OCT-, OCT+, HOME and B3 held again close it; the roots and the chord keys play in it.
+#   chord block: F3 6, F#3 DIM, G3 m7, G#3 MIN, A3 M7, A#3 MAJ, B3 LOCK, C4 9, C#4 SUS
+# The four styles, each from MAJ + 6 + 9 latched (the dumps' "lock:" line: latched = bits DIM 01 MIN 02 MAJ 04 SUS 08,
+# 6 10, m7 20, M7 40, 9 80):
+#   Clears + Toggle (today's): MIN: the extensions cleared (02); 6: on (12); 6 again: off (02)
+#   Keeps + Toggle: MIN: 6 and 9 stay (92); 9 tapped: off (12)
+#   Keeps + Pushed: m7 alone: the set is m7 (22), the type stays; 6 + 9 together: the set is 6 9 (92); 9 alone: 9 (82);
+#                   9 again: still 9 (82: no toggle); MAJ: the type alone changes (84); MIN (82)
+#   Clears + Pushed: 6 + 9 (92); MAJ: the extensions cleared (04)
+wait 300
+btn B3 600                    # held: the layer; LOCK not toggled
+wait 300
+expect led OCT- on
+shot build/emu/test/cr_lock_menu.ppm
+dump                          # 1: layer 10, lock off, clears / toggle
+btn B3                        # a tap in the layer: LOCK on
+wait 300
+dump                          # 2: lock on, layer 10
+btn A#3 down                  # MAJ + 6 + 9 pressed together, released: latched (the chord keys keep their job here)
+btn F3 down
+btn C4 down
+wait 100
+btn C4 up
+btn F3 up
+btn A#3 up
+wait 200
+btn D4 down                   # the roots play in the layer
+wait 300
+expect sound
+dump                          # 3: latched 94, D6/9 sounding
+btn D4 up
+wait 200
+btn G#3                       # Clears: MIN alone: the extensions go
+wait 200
+dump                          # 4: 02
+btn F3                        # Toggle: 6 on
+wait 200
+dump                          # 5: 12
+btn F3                        # .. and off
+wait 200
+dump                          # 6: 02
+btn OCT-                      # closes
+wait 300
+dump                          # 7: layer 0
+btn B3 600                    # open again (LOCK stays on: a hold is no tap)
+wait 300
+knob KNOB1 +1                 # Type key: Keeps
+wait 200
+shot build/emu/test/cr_lock_menu_keeps.ppm
+btn A#3 down                  # MAJ first (alone: it replaces MIN), then 6 and 9 join
+wait 50
+btn F3 down
+btn C4 down
+wait 100
+btn C4 up
+btn F3 up
+btn A#3 up
+wait 200
+dump                          # 8: 94 (the type replaced by MAJ, 6 9 joined), keeps / toggle, lock on, layer 10
+btn G#3                       # Keeps: MIN alone: 6 and 9 stay
+wait 200
+dump                          # 9: 92
+btn C4                        # Toggle: 9 off
+wait 200
+dump                          # 10: 12
+btn OCT+                      # closes too (nothing to confirm)
+wait 300
+dump                          # 11: layer 0
+btn B3 600
+wait 300
+knob KNOB2 +1                 # Ext keys: Pushed (with Keeps)
+wait 200
+shot build/emu/test/cr_lock_menu_pushed.ppm
+btn G3                        # m7 alone: a new set, m7 only (6 goes), the type stays
+wait 200
+dump                          # 12: 22
+btn F3 down                   # 6 + 9 together: a new set of both
+wait 50
+btn C4 down
+wait 100
+btn C4 up
+btn F3 up
+wait 200
+dump                          # 13: 92
+btn C4                        # a key of the set alone: the set is that key
+wait 200
+dump                          # 14: 82
+btn C4                        # the set's own key again: it stays (no toggle in Pushed)
+wait 200
+btn A#3                       # Keeps: MAJ changes the type only
+wait 200
+dump                          # 15: 84
+btn G#3                       # .. and MIN
+wait 200
+btn B3 600                    # B3 held again: closed
+wait 300
+dump                          # 16: layer 0, 82, lock still on, keeps / pushed
+btn B3 600
+wait 300
+knob KNOB1 -1                 # Clears + Pushed
+wait 200
+btn F3 down
+wait 50
+btn C4 down
+wait 100
+btn C4 up
+btn F3 up
+wait 200
+dump                          # 17: 92
+btn A#3                       # Clears: MAJ alone: the extensions cleared
+wait 200
+dump                          # 18: 04
+knob KNOB2 -1                 # back to the defaults
+wait 200
+btn HOME                      # HOME closes
+wait 300
+dump                          # 19: layer 0, clears / toggle
+btn B3                        # LOCK off (a tap)
+wait 2500
+dump                          # 20: lock off, latched 00, silent

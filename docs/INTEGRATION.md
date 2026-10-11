@@ -179,7 +179,19 @@ every play style (Simple / Advanced / Free) sees it held. LOCK off: the chord ke
 keys held are latched when released (their LEDs stay lit: the engine's `mods_active`); with no chord key held, a
 top-row key (DIM MIN MAJ SUS) **resets** the latch to that type alone (the others posted up, the extensions
 cleared) and a bottom-row key (6 m7 M7 9) **toggles** its extension (off: posted up at once, its release does
-nothing). Hold MIN, release: Dm on D4; 6: Dm6; 9: Dm6/9; 9 again: Dm6; MAJ: D. LOCK off and PANIC post the
+nothing). Hold MIN, release: Dm on D4; 6: Dm6; 9: Dm6/9; 9 again: Dm6; MAJ: D. **The LOCK layer** (`L_LOCK`, the
+owner, 2026-10-10): B3 held alone past HOLD_MS (`cu.b3_pend`: B3's tap is now its release, or the next key pressed
+while it is down, so the order played is kept; a hold toggles nothing) opens a knob row under "Lock" (label
+"lock · on / off", B3 blinking, footer "B: on/off · OCT-: back · HOME: home"; the roots and the chord keys play
+in it, SELECT stays the tempo; OCT− / OCT+ / HOME / B3 held again close it) with two saved styles (settings v13,
+bits 6 / 7 of `loop_rec`), both acting only while LOCK is on (`cu_mod_press`): **KNOB 1 "Type key" Clears / Keeps**
+(`cs.lock_keep`: a type key pressed alone replaces the latched type and, in Keeps, leaves the latched extensions)
+and **KNOB 2 "Ext keys" Toggle / Pushed** (`cs.lock_push`: an extension key pressed with no chord key held starts
+a new set of that key alone, the type untouched; keys pressed while it is held join, as chord keys always did; no
+toggle, so the set's own key pressed again leaves that key). Keeps + Pushed: a type key changes the type only, an
+extension key the extensions only; "no extension" is then reached only by LOCK off / PANIC (the owner's call: no
+extra gesture). The defaults (Clears, Toggle) are the behaviour above. `cr_lock_menu.txt`, `persist_lock_*.txt`,
+`tests/cr_settings_test.c t_key_keys_v13`. LOCK off and PANIC post the
 latched keys up (`cu_unlatch`). The top line shows a small white `lock` (after the perform mode, the octave and
 Latch). Traces: `lock: on` / `off` / `latched MIN 6 9`, and `chord: Dm6 9` as the sounding chord changes.
 
@@ -204,6 +216,7 @@ OCT+ / EDIT / EDIT held again keep).
 | LOOP (the PLAY menu) | close; step entry: back a step | **close** (was: nothing); step entry: a rest | close | play / stop, the menu stays | close (was: stays) |
 | the view menu (HOME held) | close | close ("ok": the change is live) | close | (HOME tap: close) | close (was: stays) |
 | the engine picker (EDIT held) | cancel, close | keep, close | cancel, close | keep, close | keep, close (was: stays) |
+| the LOCK layer (the key B3 held) | close | close | close | LOCK on/off, the layer stays | close |
 | SAVE held (the loop slots, momentary) | — | the picked action (Save / Load / Delete) | — | — | — |
 | Options (OPT tap; not a layer) | close | close; Calibrate: start; SAFE MODE's Flash Data: erase (twice) | close | (OPT tap: close) | — |
 | the save dialog, naming | cancel | take the choice / save; "delete?": yes | cancel | (SAVE tap: as OCT+) | SAVE 1 s: delete / reset |

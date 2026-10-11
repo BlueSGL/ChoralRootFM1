@@ -118,7 +118,7 @@ after two seconds a countdown starts, see [Power-on and held gestures](#power-on
 | --- | --- | --- |
 | F#3 G#3 A#3 C#4 (black) | **DIM MIN MAJ SUS** | the chord type, while held |
 | F3 G3 A3 C4 (white) | **6 m7 M7 9** | extensions, while held; they stack |
-| B3 | **LOCK** | tap: the chord block latches (lit while on) |
+| B3 | **LOCK** | tap: the chord block latches (lit while on); held: the LOCK layer (how it latches) |
 | D4 to G5 (18 keys) | **roots** | a single note alone, a chord with a chord key held or latched; OCT- / OCT+ shift them by octaves |
 
 ```
@@ -245,6 +245,21 @@ B3 switches LOCK on and off; B3 is lit and `lock` shows at the top right while i
 Example: hold MIN, let go: minor. Tap 6: m6. Tap 9: m6/9. Tap 9 again: m6. Tap MAJ: major, nothing else.
 
 Switching LOCK off, or PANIC, clears what is latched. LOCK is off at power-on.
+
+**The LOCK layer.** Hold B3 past the hold time (a tap is still on / off; a hold does not switch LOCK). The layer
+stays open like the others, B3 blinks, and the top left says `lock · on` or `lock · off`. The keys play as usual
+in it, so you hear what a setting does. OCT-, OCT+, HOME or holding B3 again closes it. Two settings, both
+remembered and both acting only while LOCK is on:
+
+| Knob | Setting | Values |
+| --- | --- | --- |
+| KNOB 1 | **Type key** | `Clears` (default): a type key replaces the latched chord with that type alone, as described above. `Keeps`: a type key changes the type and leaves the latched extensions on, so with 6 and 9 on you can go from MAJ to MIN and keep them |
+| KNOB 2 | **Ext keys** | `Toggle` (default): each extension key switches its extension on or off. `Pushed`: the extension keys work as a set, the way the type keys do. Press one or several together and let go: that is the set. The next extension key you press, with none held, starts a new set of just what you press then |
+
+In Pushed, a second extension key pressed while the first is still down joins the set, and pressing a key of the
+set on its own makes the set that one key. With `Keeps` and `Pushed` together a type key changes only the type and
+an extension key only the extensions; there is then no gesture for "no extension" except switching LOCK off (or
+PANIC), which clears everything latched. With `Clears`, a type key clears the extensions as always.
 
 ### Voicing and octave
 
@@ -893,7 +908,7 @@ FM-1 a second or two of silence before you switch off.
 | LATCH, and the effects being on or off | the voicing on KNOB 1 |
 | the tempo, the metronome and its time signature | the selected effect and the FX layer's KNOB 1 to KNOB 3 |
 | the bass behaviour and register | the parts' Level and Pan, the bass level |
-| the looper's settings and its slot; the KEY layer's keys (pick or play) | changes to a sound you did not save |
+| the looper's settings and its slot; the KEY layer's keys (pick or play); the LOCK layer's two settings | changes to a sound you did not save |
 | which sounds the two parts play, and each engine's last place | where you were in the editor |
 | the view and its lock | |
 | saved sounds; loops (each time a loop stops) | |
@@ -1161,7 +1176,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | --- | --- |
 | F#3 G#3 A#3 C#4 | DIM MIN MAJ SUS |
 | F3 G3 A3 C4 | 6 m7 M7 9 |
-| B3 | LOCK |
+| B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed) |
 | D4 to G5 | roots |
 | white roots D4 to G5, engine picker | FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE |
 | white roots D4 to F5, PLAY menu with Keys = Loops, or SAVE held | loop slots 1 to 10 |

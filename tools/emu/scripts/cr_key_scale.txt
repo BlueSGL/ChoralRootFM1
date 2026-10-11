@@ -2,7 +2,7 @@
 # at the press, with LOCK off or on, and their LEDs show it: both glow, the selected scale's lit, the six chord keys
 # without a job there dark (B3 stays LOCK). Nothing of it reaches the engine or the LOCK latch: MIN latched before
 # the layer is still the only latched key after it, and a root alone then plays the minor chord.
-#   chord block: F3 6, F#3 DIM, G3 M7, G#3 MIN, A3 MAJ7, A#3 MAJ, B3 LOCK, C4 9, C#4 SUS
+#   chord block: F3 6, F#3 DIM, G3 m7, G#3 MIN, A3 M7, A#3 MAJ, B3 LOCK, C4 9, C#4 SUS
 wait 300
 expect led A#3 dim            # the view: the chord keys' own state (none held)
 expect led G#3 dim
