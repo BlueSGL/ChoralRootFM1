@@ -974,8 +974,6 @@ From 0.16 on, ChoralRoot checks at every start that the firmware was written com
 2. Some of the key lights flash **three short times** and the screen stays black. The FM-1 is in update mode.
 3. Open the installer and press **Install** again. It finishes the write.
 
-<!-- CONFIRM: interrupted update (BOOT-SAFETY.md device plan, steps 6 to 10) -->
-
 If the computer side merely stopped while the FM-1 stayed on, the FM-1 is still in update mode: replug the cable and
 press Install again.
 
@@ -990,10 +988,8 @@ because the part that does the checking is itself being written then.
 | **OCT- and OCT+ held while switching on** | the panel calibration (below). Let go as soon as the screen says `let go` |
 | **OCT- and OCT+ held for 5 s while ChoralRoot runs** | after 2 s a red countdown (`update mode: let go to cancel`); at 5 s the FM-1 goes to the chip's own USB boot: a black screen, and the computer shows a disk named `WL82 UBOOT1.00`. The installer cannot use that mode. Switch off and on to start ChoralRoot again |
 
-Holding OCT- alone while switching on is new in 0.16. As of this writing, the way the FM-1 reads that key in the
-first moments after power-on is still being confirmed on hardware, so if ChoralRoot simply starts with OCT- held,
-that is the open point and not a fault of your unit. <!-- CONFIRM: rescue key -->
-Recovery after an interrupted update does not depend on the key.
+Holding OCT- alone while switching on is new in 0.16. Hold it until the lights have flashed. Recovery after an
+interrupted update does not depend on the key.
 
 **One long flash instead of three** means the FM-1 went to the chip's USB boot (the `WL82 UBOOT1.00` disk) instead of
 update mode. Switch it off for 10 seconds and try once more: a second OCT- start straight after a first one ends

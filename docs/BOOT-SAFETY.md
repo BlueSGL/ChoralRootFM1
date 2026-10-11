@@ -480,6 +480,23 @@ bad marker).
    but that path has not been seen on a unit either.
 4. **The LED flashes**: never seen yet (versions 1 and 2 could not light them).
 
+### On the unit, 2026-10-10 (stub v3; the owner at the unit, the orchestrator at the Mac)
+
+- Flash v3 over v2: boots in 60.8 ms, `PA in 0x000001E1` (PA2 low), the three sample words 0 with no key.
+- **OCT- alone at power-on: three short flashes, a black screen, `ota-FM-1_900` ("Felucca Update")**: the key is
+  read with PA2 low, the flashes are visible, and the hand-over works right after a cold boot. Left by installing the
+  same build (nothing written); the next boot reports "rescue attempts before this boot 1".
+- OCT- + OCT+ at power-on: the app's calibration, as before.
+- **The cable pull**: an install of a build with another body (the same stub; 41 sectors differ) was cut by pulling
+  the USB cable at "writing 5 %" (64 requests); the FM-1 switched off and on: three flashes, update mode; the same
+  install run again from there finished it ("ChoralRoot 0.16-pulltest" ran), then the normal build went back on.
+  This is the dark unit's case of 2026-10-07, now a rescue.
+- Done earlier on v2 and not repeated: `--stub test` ("staged loader ok"), `--stub rescue`, the bad-marker package
+  from a warm restart.
+- Not done: the second attempt without a boot in between (one long flash, the ROM's UBOOT), the bad marker followed
+  by a cold boot as its own step (the cable pull covers the cold refusal), the release workflow's native build of
+  the stub against `stub.lock`.
+
 ### Device test plan (the orchestrator flashes; the Transporter and a V15 / 0.16 image at hand, a full battery)
 
 "Stop" in any step = no LED flash, no USB device of any kind (FM-1, ota-FM-1, the WL82 disk) 30 s after switching
