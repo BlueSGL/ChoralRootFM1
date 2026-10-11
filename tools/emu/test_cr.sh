@@ -450,6 +450,24 @@ mt=$(grep -c '^ui: frame.*device): meter ' "$L"); kr=$(grep -c '^ui: frame.*devi
 grep -q '^ui: frame.*device): knobrow .*hot 1\.2$' "$L" && ok "KNOB 3: the Transpose cell hot" || bad "no hot Transpose"
 differ cr_key_row_hot cr_key_row_cool "the hot block gone 900 ms later: $OUT/cr_key_row_hot.ppm"
 differ cr_key_row_minor cr_key_row_e "E4: the lit key moved: $OUT/cr_key_row_e.ppm"
+
+echo "the key layer: MAJ / MIN pick the scale with LOCK off or on, their LEDs show it, the latched chord is kept"
+run cr_key_scale
+L="$OUT/cr_key_scale.log"
+kk() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.*cr: key \([0-9]\) tonic \([0-9]*\) scale \([0-9]\) .* layer \([0-9]*\) .*/\1 \2 \3 \4/p'; }
+[ "$(grep -c '^expect .*: ok' "$L")" = 32 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "the layer's chord-key LEDs: MAJ / MIN at half, the selected scale's lit, the six others dark, B3 LOCK's own; out of the layer the keys' own state; Stock: the selected one lit alone: $OUT/cr_key_scale_minor.ppm" \
+    || bad "the key layer's LEDs: $(grep -a 'expect.*FAILED' "$L" | head -3)"
+[ "$(kk 1)" = "0 0 1 1" ] && [ "$(kk 2)" = "1 4 1 1" ] && [ "$(kk 3)" = "1 4 0 1" ] && [ "$(kk 4)" = "1 5 1 1" ] && [ "$(kk 5)" = "1 5 1 1" ] &&
+    ok "LOCK off: MIN tapped: minor; a root alone: the tonic, the scale kept; MAJ: major; MIN held + a root: minor; DIM and 9 do nothing" \
+    || bad "the scale keys: $(kk 1) / $(kk 2) / $(kk 3) / $(kk 4) / $(kk 5)"
+[ "$(kk 7)" = "1 5 0 1" ] && [ "$(kk 8)" = "1 5 1 1" ] && [ "$(kk 9)" = "1 5 0 0" ] &&
+    ok "LOCK on with MIN latched: MAJ tapped: major, MIN tapped: minor (the owner's case), MAJ held across the layer's end: major" \
+    || bad "the scale keys with LOCK: $(kk 7) / $(kk 8) / $(kk 9)"
+[ "$(grep -a '^lock:' "$L" | sed -n 1,4p | tr '\n' ',')" = "lock: on,lock: latched MIN,lock: latched none,lock: off," ] && has 'chord Dm sounding 1' "$L" &&
+    ok "the latch behind the layer untouched (MIN alone, before and after): a root alone still plays Dm" \
+    || bad "the latch changed in the key layer: $(grep -a '^lock:' "$L" | tr '\n' ' ')"
+silent_end cr_key_scale
 run cr_loop_row
 L="$OUT/cr_loop_row.log"
 has '^loop: cells Quantize Count-in Level Keys' "$L" && ok "LOOP held, stopped: the PLAY menu over Quantize / Count-in / Level / Keys: $OUT/cr_loop_row.ppm" || bad "no loop cells"

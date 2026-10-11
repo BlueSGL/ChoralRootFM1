@@ -790,6 +790,9 @@ static struct {
     uint8_t oct_mod;                      /* OCT- held was a modifier (the editor: + a knob clears its modulation): no tap */
     uint32_t clear_t0;                    /* D#4 down in the loop layer (| 1): CLEAR after 1 s held */
     uint8_t clock;                        /* B3 LOCK: the chord block latches (off at power-on, not saved) */
+    uint16_t kpick;                       /* bit k: chord key k was pressed in the KEY layer as its scale key (MAJ /
+                                           * MIN; the others do nothing there): never posted to the engine, its
+                                           * release neither latches nor posts (the latch behind the layer is kept) */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
     uint8_t key_note[CU_NKEY];            /* root keys: note + 1 sent; 0xFF: the layer's / a picker's */
@@ -2260,14 +2263,38 @@ static int32_t cu_layer_count(uint32_t l)
     }
 }
 
+/* the KEY layer takes the chord block (the one layer where it does not keep its job: the owner's call, 2026-10-10):
+ * MAJ and MIN pick the scale at the press, LOCK on or off, held or tapped; the other six chord keys do nothing there.
+ * None of them reaches the engine or the LOCK latch (cu.kpick), so the chord latched behind the layer is what it was
+ * when the layer closes. B3 stays LOCK. A chord key held since before the layer keeps its own release */
+#define CU_KEY_MIN 3u                              /* G#3 (CU_MOD_OF_KEY) */
+#define CU_KEY_MAJ 5u                              /* A#3 */
+static int cu_key_pick(void) { return cu_layer() == L_KEY; }
+static void cu_key_scale(uint32_t k)               /* a chord key pressed in the KEY layer */
+{
+    if (k != CU_KEY_MIN && k != CU_KEY_MAJ)
+        return;
+    cs.scale = k == CU_KEY_MIN ? CR_SCALE_MINOR : CR_SCALE_MAJOR;
+    cu_post_key();
+    cu_hot_set(L_KEY, 1);                          /* (the Scale cell turns hot, as under KNOB 2) */
+    cu_trace("key: %s scale %s\n", k == CU_KEY_MIN ? "MIN" : "MAJ", cs.scale ? "minor" : "major");
+}
+
 static void cu_layer_key(uint32_t l, uint32_t k)   /* a root key while layer l is open */
 {
     int32_t wi = cu_white_idx(k);
-    if (l == L_KEY) {                              /* the tonic; MIN held: minor */
+    if (l == L_KEY) {                              /* the tonic, Key Mode on; MIN / MAJ held with it: that scale too
+                                                    * (held from before the layer as well); neither: the scale stays
+                                                    * (so MIN tapped, then a root, is a minor key: until 2026-10-10 a
+                                                    * root alone meant major) */
         cs.tonic = (uint8_t)((53u + k) % 12u);
-        cs.scale = (cu.kheld >> 3) & 1u ? CR_SCALE_MINOR : CR_SCALE_MAJOR;
+        if ((cu.kheld >> CU_KEY_MIN) & 1u)
+            cs.scale = CR_SCALE_MINOR;
+        else if ((cu.kheld >> CU_KEY_MAJ) & 1u)
+            cs.scale = CR_SCALE_MAJOR;
         cs.key_on = 1;
         cu_post_key();
+        cu_trace("key: root tonic %s %s\n", CU_NOTE[cs.tonic], cs.scale ? "minor" : "major");
         return;
     }
     if (l == L_LOOP && k == 10u) {                 /* D#4: CLEAR, held 1 s (cu_clear_poll) */
@@ -2442,7 +2469,7 @@ static uint32_t cu_mods_phys(void)                 /* bit cr_mod_t: the chord ke
 {
     uint32_t k, m = 0;
     for (k = 0; k < CU_ROOT0; k++)
-        if (CU_MOD_OF_KEY[k] != 0xFFu && ((cu.kheld >> k) & 1u))
+        if (CU_MOD_OF_KEY[k] != 0xFFu && (((cu.kheld & ~(uint32_t)cu.kpick) >> k) & 1u))   /* (not the KEY layer's) */
             m |= 1u << CU_MOD_OF_KEY[k];
     return m;
 }
@@ -2525,11 +2552,14 @@ static void cu_key_press(uint32_t k)
     cu.kheld |= 1u << k;
     cu.last_sound = cu_now();
     cu_activity();
-    if (k < CU_ROOT0) {                            /* the chord block keeps its job in every layer */
-        if (CU_MOD_OF_KEY[k] != 0xFFu)
-            cu_mod_press(k);
-        else
+    if (k < CU_ROOT0) {                            /* the chord block keeps its job in every layer but KEY's, where */
+        if (CU_MOD_OF_KEY[k] == 0xFFu)             /* MAJ / MIN pick the scale (cu_key_scale); B3 is LOCK everywhere */
             cu_lock_tap();
+        else if (cu_key_pick()) {
+            cu.kpick |= (uint16_t)(1u << k);
+            cu_key_scale(k);
+        } else
+            cu_mod_press(k);
         return;
     }
     l = cu_layer();
@@ -2569,7 +2599,10 @@ static void cu_key_release(uint32_t k)
 {
     cu.kheld &= ~(1u << k);
     if (k < CU_ROOT0) {
-        if (CU_MOD_OF_KEY[k] != 0xFFu)
+        if ((cu.kpick >> k) & 1u)                  /* pressed as the KEY layer's: nothing to end (the layer may be
+                                                    * closed by now) */
+            cu.kpick &= (uint16_t)~(1u << k);
+        else if (CU_MOD_OF_KEY[k] != 0xFFu)
             cu_mod_release(k);
         return;
     }
@@ -3205,11 +3238,24 @@ static void cr_leds(void)
     }
     for (b = 0; b < NB; b++)
         cu_led(nd, panel.btn[b], 1);
-    /* the chord block: lit while held / latched (LOCK's latch: posted down, so the engine's held); B3 = LOCK, lit on */
+    /* the chord block: lit while held / latched (LOCK's latch: posted down, so the engine's held); B3 = LOCK, lit on.
+     * In the KEY layer (the one exception to "these LEDs are the chord keys' own state", the owner's, 2026-10-10)
+     * they are its scale keys: MAJ and MIN glow at half, the selected scale's at full, the six without a job there
+     * dark. Glow: half = fm1_led_dim, full = fm1_led. Stock has two levels only (it lights the idle keys, and a
+     * layer's selected key through `own`): the selected scale's key lit, the other dark */
     for (k = 0; k < CU_ROOT0; k++) {
         if (CU_MOD_OF_KEY[k] == 0xFFu) {
             cu_led(nl, 14u + k, cu.clock);
             cu_led(nd, 14u + k, 1);
+            continue;
+        }
+        if (cu_key_pick()) {
+            if (k == CU_KEY_MIN || k == CU_KEY_MAJ) {
+                if ((k == CU_KEY_MIN) == (cs.scale == CR_SCALE_MINOR))
+                    cu_led(own, 14u + k, 1);
+                else if (!cs.leds)
+                    cu_led(nd, 14u + k, 1);
+            }
             continue;
         }
         cu_led(nl, 14u + k, (int)((sn->mods_active >> CU_MOD_OF_KEY[k]) & 1u));
@@ -3982,7 +4028,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         s->col = CR_COL_YELLOW;
         s->title_col = CR_COL_WHITE;
         cu_cpy(s->label, "key", sizeof s->label);
-        cu_cpy(s->footer, "MIN: minor \267 OCT-: back \267 HOME: home", sizeof s->footer);
+        cu_cpy(s->footer, "MAJ MIN: scale \267 OCT-: back \267 HOME", sizeof s->footer);
         for (k = CU_ROOT0; cs.key_on && k < CU_NKEY; k++)
             if ((53u + k) % 12u == cs.tonic) {
                 s->lit |= 1u << k;

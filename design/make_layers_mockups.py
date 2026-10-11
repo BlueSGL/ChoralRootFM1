@@ -43,38 +43,48 @@ def knobrow(items, sel, col, cells, hot=None, label="", value="", **kw):
 S = []
 KEY_CELLS = [g("Tonic", "C"), g("Scale", "Major"), g("Transpose", "+0", "shift", 0.5), g("Single", "Full")]
 tonics = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+KEY_FOOT = "MAJ MIN: scale · OCT-: back · HOME"                   # cr_ui.c cu_layer_screen (2026-10-10: MAJ / MIN pick
+# the scale in the layer; their LEDs at half, the selected scale's at full, the other chord keys dark: cr_ui.c cr_leds)
+KEY_LEDS = [1] * 27                                              # the glow (make_mockups.py DIM) ..
+for _n in ("F3", "F#3", "G3", "A3", "C4", "C#4"):                # .. but the six chord keys without a job in the layer
+    KEY_LEDS[key_of(_n)] = OFF
+KEY_NOTES = {key_of("A#3"): "MAJ: the scale Major (lit: the selected scale)", key_of("G#3"): "MIN: the scale Minor (half: not selected)"}
 
 # 1, 2 --------------------------------------------------------------- KEY
 S.append(state(
     "1 · KEY · A: the keyboard stays, the knob row under it",
     "KEY held: the keyboard slides up with the tonic lit yellow (today's screen) and the four cells sit under it: TONIC "
     "(text), SCALE (text), TRANSPOSE (the staff-and-square shift glyph, centre = 0), SINGLE NOTES (Full / Split). The "
-    "root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`.",
+    "root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`. "
+    "MAJ and MIN pick the scale (2026-10-10): both glow, the selected scale's key lit, the other chord keys dark.",
+    keys=KEY_LEDS, held=["MAJ"], key_notes=KEY_NOTES,
     lit=["C5"], buttons={"SEL": BLINK}, key_labels={k: name(k)[:-1] for k in ROOTS},
     button_notes={"SEL": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("TONIC", "C"), "KNOB2": ("SCALE", "MAJ"), "KNOB3": ("TRANSPOSE", "+0"), "KNOB4": ("SINGLE NOTES", "FULL")},
     screen=scr(knobrow(tonics, 0, C_KEY, KEY_CELLS, label="key", band="keyboard", lit=[{"k": "C5", "col": C_KEY}]),
-               key="Key: C", foot="MIN: minor · " + LAYER_FOOT, note="A: the keyboard as the band, the tonic lit; the cells under it."),
+               key="Key: C", foot=KEY_FOOT, note="A: the keyboard as the band, the tonic lit; the cells under it."),
 ))
 S.append(state(
     "2 · KEY · B: the plain knob row (the key name big)",
     "The same layer as a plain knob row: the tonic big in yellow with its neighbours (B · C · C#), twelve marks, the "
     "scale as the value line ('major'), the cells under it. Loses the keyboard picture.",
+    keys=KEY_LEDS, held=["MAJ"], key_notes=KEY_NOTES,
     lit=["C5"], buttons={"SEL": BLINK}, key_labels={k: name(k)[:-1] for k in ROOTS},
     button_notes={"SEL": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("TONIC", "C"), "KNOB2": ("SCALE", "MAJ"), "KNOB3": ("TRANSPOSE", "+0"), "KNOB4": ("SINGLE NOTES", "FULL")},
     screen=scr(knobrow(tonics, 0, C_KEY, KEY_CELLS, label="key", value="major"),
-               key="Key: C", foot="MIN: minor · " + LAYER_FOOT, note="B: the key name big over the cells."),
+               key="Key: C", foot=KEY_FOOT, note="B: the key name big over the cells."),
 ))
 S.append(state(
     "3 · KEY · A, TRANSPOSE just turned to +5",
     "KNOB 3 turned: the shift glyph's square climbs (centre = 0, top = +24), the value on a white hot block; no popup.",
+    keys=KEY_LEDS, held=["MAJ"], key_notes=KEY_NOTES,
     lit=["C5"], buttons={"SEL": BLINK}, key_labels={k: name(k)[:-1] for k in ROOTS},
     button_notes={"SEL": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("TONIC", "C"), "KNOB2": ("SCALE", "MAJ"), "KNOB3": ("TRANSPOSE", "+5"), "KNOB4": ("SINGLE NOTES", "FULL")},
     screen=scr(knobrow(tonics, 0, C_KEY, [g("Tonic", "C"), g("Scale", "Major"), g("Transpose", "+5", "shift", 29 / 48), g("Single", "Full")],
                        hot=2, label="key", band="keyboard", lit=[{"k": "C5", "col": C_KEY}]),
-               key="Key: C", foot="MIN: minor · " + LAYER_FOOT, note="A with a hot Transpose cell."),
+               key="Key: C", foot=KEY_FOOT, note="A with a hot Transpose cell."),
 ))
 
 # 4..6 --------------------------------------------------------------- LOOP

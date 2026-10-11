@@ -1,0 +1,114 @@
+# ChoralRoot: the KEY layer's scale keys (the owner, 2026-10-10). In the layer MAJ (A#3) and MIN (G#3) pick the scale
+# at the press, with LOCK off or on, and their LEDs show it: both glow, the selected scale's lit, the six chord keys
+# without a job there dark (B3 stays LOCK). Nothing of it reaches the engine or the LOCK latch: MIN latched before
+# the layer is still the only latched key after it, and a root alone then plays the minor chord.
+#   chord block: F3 6, F#3 DIM, G3 M7, G#3 MIN, A3 MAJ7, A#3 MAJ, B3 LOCK, C4 9, C#4 SUS
+wait 300
+expect led A#3 dim            # the view: the chord keys' own state (none held)
+expect led G#3 dim
+expect led F#3 dim
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+expect led A#3 on             # the layer, Major: MAJ full, MIN half, the others dark
+expect led G#3 dim
+expect led F#3 off
+expect led C#4 off
+expect led F3 off
+expect led B3 dim             # LOCK: its own state
+shot build/emu/test/cr_key_scale_major.ppm
+btn G#3                       # MIN tapped (LOCK off): minor
+wait 300
+expect led G#3 on
+expect led A#3 dim
+shot build/emu/test/cr_key_scale_minor.ppm
+dump                          # 1: scale 1, Key Mode still off (as KNOB 2), layer 1
+btn E4                        # a root alone: the tonic, the scale kept (minor), Key Mode on
+wait 300
+dump                          # 2: key 1 tonic 4 scale 1
+btn A#3                       # MAJ: major
+wait 300
+expect led A#3 on
+expect led G#3 dim
+dump                          # 3: scale 0
+btn G#3 down                  # MIN held + a root: that root in minor (as before)
+wait 60
+btn F4
+wait 100
+btn G#3 up
+wait 300
+dump                          # 4: tonic 5 scale 1
+btn F#3                       # DIM: no job here
+btn C4                        # 9: none either
+wait 300
+dump                          # 5: unchanged; nothing sounded, no chord key reached the engine
+btn OCT-
+wait 300
+expect led G#3 dim            # the view again: the chord keys' own state
+expect led A#3 dim
+expect led F#3 dim
+btn B3                        # LOCK on
+wait 100
+btn G#3                       # MIN tapped: latched
+wait 300
+expect led B3 on
+expect led G#3 on             # latched: lit
+dump                          # 6: (the trace: lock: latched MIN)
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+expect led G#3 on             # the layer: the scale is minor (from above): MIN full, MAJ half
+expect led A#3 dim
+btn A#3                       # LOCK on, MAJ tapped: major (and no latch change)
+wait 300
+expect led A#3 on
+expect led G#3 dim
+dump                          # 7: scale 0
+btn G#3                       # LOCK on, MIN tapped: minor (the owner's case)
+wait 300
+expect led G#3 on
+expect led A#3 dim
+dump                          # 8: scale 1
+btn A#3 down                  # MAJ held across the layer's end: its release does nothing
+wait 100
+btn OCT+
+wait 200
+btn A#3 up
+wait 300
+expect led G#3 on             # out of the layer: MIN latched as it was, MAJ not
+expect led A#3 dim
+dump                          # 9: scale 0 (MAJ's press), layer 0
+btn SEL                       # Key Mode off: the latched type alone decides
+wait 200
+btn D4 down
+wait 500
+dump                          # 10: Dm (the latched MIN), sounding
+btn D4 up
+wait 300
+btn B3                        # LOCK off: the latch cleared
+wait 300
+btn GLO 80                    # Options > LEDs: Stock (two levels: the idle keys lit, the active dark)
+wait 300
+knob SELECT +14
+wait 300
+knob KNOB1 +1
+wait 300
+btn GLO 80
+wait 300
+expect led A#3 on             # Stock on the view: an idle chord key is lit
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+expect led A#3 on             # Stock in the layer (major): the selected scale's key lit, the other and the rest dark
+expect led G#3 off
+expect led F#3 off
+btn G#3
+wait 300
+expect led G#3 on
+expect led A#3 off
+btn OCT-
+wait 2500
+dump                          # 11: silent

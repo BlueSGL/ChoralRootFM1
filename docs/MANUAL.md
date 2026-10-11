@@ -129,7 +129,7 @@ white    6     m7    M7    LOCK  9       D4    E4    F4   ...   G5
 ```
 
 In a layer, a menu or a dialog the root keys may take another job (they pick a slot, type a letter, choose an
-engine). The chord block keeps its job everywhere.
+engine). The chord block keeps its job everywhere but in the KEY layer, where MAJ and MIN pick the scale.
 
 ### The buttons
 
@@ -205,7 +205,7 @@ MIDI message wakes it and does its normal job at the same time.
 | LOOP lit, its green light | the slot holds a loop, the loop is playing |
 | OCT- lit, OCT+ blinking | in a layer, menu or dialog: back, OK (where there is nothing to confirm: close) |
 | OCT- or OCT+ lit on the view | the roots are shifted down or up |
-| chord keys | lit while held or latched; B3 lit while LOCK is on |
+| chord keys | lit while held or latched; B3 lit while LOCK is on. In the KEY layer: MAJ and MIN glow, the selected scale's is lit, the others are dark |
 | root keys | the notes of the sounding chord, where they sound; the note a performance mode is playing blinks; a playing loop's notes glow dim |
 
 With Key Mode on, the black root keys outside the scale go dark. Options > LEDs chooses between Glow (idle keys glow
@@ -293,7 +293,8 @@ Hold KEY to open the **KEY layer**:
 
 | Control | In the KEY layer |
 | --- | --- |
-| any root key | that note becomes the tonic, in major; with MIN held, in minor (`Key: E minor`). Key Mode switches on |
+| any root key | that note becomes the tonic and Key Mode switches on. The scale stays as it is, unless MAJ or MIN is held with the root |
+| MAJ, MIN (the chord keys) | the scale: Major or Minor (`Key: E minor`), at the press, with LOCK on or off. In this layer they are not chord keys: the chord you have latched with LOCK is untouched and is back when the layer closes. The other chord keys do nothing here; B3 is still LOCK |
 | KNOB 1 | Tonic, step by step (Key Mode switches on) |
 | KNOB 2 | Scale: Major or Minor |
 | KNOB 3 | Transpose, -24 to +24 semitones. It moves everything you play from then on, in or out of Key Mode |
@@ -302,6 +303,12 @@ Hold KEY to open the **KEY layer**:
 | OCT-, OCT+, HOME | close the layer |
 
 A quick way to set a key: hold KEY and press a root at once (the layer opens straight away), then OCT- to close it.
+For a minor key press MIN as well, before or after the root.
+
+While the layer is open the chord keys' lights show the scale instead of the chord: MAJ and MIN glow, the one of
+the selected scale is fully lit, and the six chord keys without a job here are dark. (With Options > LEDs set to
+Stock, which has no half level, only the selected scale's key is lit.) Outside the layer the lights mean what they
+always do.
 
 **Single Notes: Split.** With Single set to Split, single notes (not chords) on keys whose note name lies below the
 split point sound an octave lower. The split point is F by default, so C to E are the lowered notes; OPT + KNOB 1 or
@@ -340,7 +347,7 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 - **OCT- is back, OCT+ is confirm.** Where a layer has something to confirm, OCT+ does it (the engine picker's
   sound, the loop slots' Save / Load / Delete, the save dialog). The layers below have nothing to confirm, so there
   OCT+ closes the layer just as OCT- does. On / off is always a tap of the layer's own button.
-- The chord block keeps its job in every layer.
+- The chord block keeps its job in every layer except KEY's, where MAJ and MIN pick the scale.
 
 | Layer | Hold | The picker (SELECT) | The root keys | A tap of its button | OCT- / OCT+ |
 | --- | --- | --- | --- | --- | --- |
@@ -1086,7 +1093,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
 | FX | FX | effects on / off (in its layer too) | FX layer: SELECT effect · KNOB 1-3 parameters · KNOB 4 amount |
-| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic (with MIN: minor) · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single |
+| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: white roots or SELECT engine · KNOB 1 presets · KNOB 2 init · KNOB 4 roots · OCT+ keep · OCT- cancel |

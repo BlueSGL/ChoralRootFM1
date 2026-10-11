@@ -36,18 +36,18 @@
  "states": [
   {
    "name": "1 \u00b7 KEY \u00b7 A: the keyboard stays, the knob row under it",
-   "notes": "KEY held: the keyboard slides up with the tonic lit yellow (today's screen) and the four cells sit under it: TONIC (text), SCALE (text), TRANSPOSE (the staff-and-square shift glyph, centre = 0), SINGLE NOTES (Full / Split). The root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`.",
+   "notes": "KEY held: the keyboard slides up with the tonic lit yellow (today's screen) and the four cells sit under it: TONIC (text), SCALE (text), TRANSPOSE (the staff-and-square shift glyph, centre = 0), SINGLE NOTES (Full / Split). The root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`. MAJ and MIN pick the scale (2026-10-10): both glow, the selected scale's key lit, the other chord keys dark.",
    "export": true,
    "keys": [
+    0,
+    0,
+    0,
     1,
+    0,
+    2,
     1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
+    0,
+    0,
     1,
     1,
     1,
@@ -96,7 +96,10 @@
     "25": "F#",
     "26": "G"
    },
-   "keyNotes": {},
+   "keyNotes": {
+    "5": "MAJ: the scale Major (lit: the selected scale)",
+    "3": "MIN: the scale Minor (half: not selected)"
+   },
    "buttons": {
     "FX": 1,
     "SEL": 3,
@@ -213,7 +216,7 @@
      ]
     },
     "footer": {
-     "text": "MIN: minor \u00b7 OCT-: back \u00b7 HOME: home"
+     "text": "MAJ MIN: scale \u00b7 OCT-: back \u00b7 HOME"
     },
     "note": "A: the keyboard as the band, the tonic lit; the cells under it."
    }
@@ -223,15 +226,15 @@
    "notes": "The same layer as a plain knob row: the tonic big in yellow with its neighbours (B \u00b7 C \u00b7 C#), twelve marks, the scale as the value line ('major'), the cells under it. Loses the keyboard picture.",
    "export": true,
    "keys": [
+    0,
+    0,
+    0,
     1,
+    0,
+    2,
     1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
+    0,
+    0,
     1,
     1,
     1,
@@ -280,7 +283,10 @@
     "25": "F#",
     "26": "G"
    },
-   "keyNotes": {},
+   "keyNotes": {
+    "5": "MAJ: the scale Major (lit: the selected scale)",
+    "3": "MIN: the scale Minor (half: not selected)"
+   },
    "buttons": {
     "FX": 1,
     "SEL": 3,
@@ -390,7 +396,7 @@
      "value": "major"
     },
     "footer": {
-     "text": "MIN: minor \u00b7 OCT-: back \u00b7 HOME: home"
+     "text": "MAJ MIN: scale \u00b7 OCT-: back \u00b7 HOME"
     },
     "note": "B: the key name big over the cells."
    }
@@ -400,15 +406,15 @@
    "notes": "KNOB 3 turned: the shift glyph's square climbs (centre = 0, top = +24), the value on a white hot block; no popup.",
    "export": true,
    "keys": [
+    0,
+    0,
+    0,
     1,
+    0,
+    2,
     1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
-    1,
+    0,
+    0,
     1,
     1,
     1,
@@ -457,7 +463,10 @@
     "25": "F#",
     "26": "G"
    },
-   "keyNotes": {},
+   "keyNotes": {
+    "5": "MAJ: the scale Major (lit: the selected scale)",
+    "3": "MIN: the scale Minor (half: not selected)"
+   },
    "buttons": {
     "FX": 1,
     "SEL": 3,
@@ -574,7 +583,7 @@
      ]
     },
     "footer": {
-     "text": "MIN: minor \u00b7 OCT-: back \u00b7 HOME: home"
+     "text": "MAJ MIN: scale \u00b7 OCT-: back \u00b7 HOME"
     },
     "note": "A with a hot Transpose cell."
    }

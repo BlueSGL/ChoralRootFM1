@@ -213,7 +213,7 @@ a button pressed during another's hold is that hold's combo (its release does no
 
 | printed | role | tap | hold (locked open unless noted) |
 | --- | --- | --- | --- |
-| SEL | KEY | Key Mode on/off | the knob row with the keyboard as its band: roots = tonic (MIN held: minor); KNOB 1–4 Tonic Scale Transpose Single as cells, the turned cell hot |
+| SEL | KEY | Key Mode on/off | the knob row with the keyboard as its band: roots = tonic (Key Mode on; the scale kept unless MAJ / MIN is held with it); **MAJ / MIN = the scale**, at the press, LOCK on or off (`cu_key_scale`: the chord block is the layer's here, `cu.kpick` keeps those presses from the engine and from LOCK's latch, so the latched chord is what it was when the layer closes; the other six chord keys do nothing, B3 stays LOCK); KNOB 1–4 Tonic Scale Transpose Single as cells, the turned cell hot |
 | ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; a PERF tap in it = on/off (the label "perform · on" / "· off"), OCT+ closes; KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms |
 | FX | FX | main effect on/off | the knob row: SELECT = effect, the roots play; a FX tap in it = on/off (label "fx · on" / "· off"), OCT+ closes; KNOB 1–3 params, KNOB 4 amount (on: FX on); no popups, the turned cell hot 800 ms |
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
@@ -353,7 +353,11 @@ Priority, top down, first match wins:
 
 As `ui_input.c: ui_leds` builds `fm1_led` / `fm1_led_dim` per column: every key and button dim
 (the glow) unless Options > LEDs = STOCK; chord keys lit while held/latched (`cr_mod_active`; LOCK's latched keys
-are posted down, so they are lit); B3 lit while LOCK is on (dim off);
+are posted down, so they are lit); B3 lit while LOCK is on (dim off); **in the KEY layer only** (the owner's
+exception to "the chord keys' LEDs are their own state", 2026-10-10) the chord keys are its scale keys: MAJ and MIN
+at half, the selected scale's at full, the six without a job dark. Glow: half = `fm1_led_dim` (the glow pulse),
+full = `fm1_led`. Stock has no half level (it lights the idle keys and darkens the active ones; a layer's selected
+key is lit through `own`): the selected scale's key lit, the other and the six dark (`cr_key_scale.txt`);
 root keys lit where the voiced notes sound (engine query), the sounding perform note blinking,
 black roots off the scale dark in Key Mode, layer maps on the roots while a layer is open; KEY,
 PERF, FX, BASS, LATCH, METRO lit when on; **the open layer's button blinks** (locked after its hold; SAVE while
