@@ -256,10 +256,12 @@ remembered and both acting only while LOCK is on:
 | KNOB 1 | **Type key** | `Clears` (default): a type key replaces the latched chord with that type alone, as described above. `Keeps`: a type key changes the type and leaves the latched extensions on, so with 6 and 9 on you can go from MAJ to MIN and keep them |
 | KNOB 2 | **Ext keys** | `Toggle` (default): each extension key switches its extension on or off. `Pushed`: the extension keys work as a set, the way the type keys do. Press one or several together and let go: that is the set. The next extension key you press, with none held, starts a new set of just what you press then |
 
-In Pushed, a second extension key pressed while the first is still down joins the set, and pressing a key of the
-set on its own makes the set that one key. With `Keeps` and `Pushed` together a type key changes only the type and
-an extension key only the extensions; there is then no gesture for "no extension" except switching LOCK off (or
-PANIC), which clears everything latched. With `Clears`, a type key clears the extensions as always.
+In Pushed, a second extension key pressed while the first is still down joins the set, and with two or more on,
+pressing one of them on its own makes the set that one key. To switch the extensions off, press the only extension
+that is on once more, on its own: it goes off when you let go (it keeps sounding until then, and if you add another
+key while holding it, both stay on). Example: 6: 6 is on. 7: 7 is on, 6 is off. 7 again: nothing is on. 7, and 9
+while holding it: 7 and 9. With `Keeps` and `Pushed` together a type key changes only the type and an extension key
+only the extensions. With `Clears`, a type key clears the extensions as always.
 
 ### Voicing and octave
 

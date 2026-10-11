@@ -805,6 +805,8 @@ static struct {
     uint16_t kpick;                       /* bit k: chord key k was pressed in the KEY layer as its scale key (MAJ /
                                            * MIN; the others do nothing there): never posted to the engine, its
                                            * release neither latches nor posts (the latch behind the layer is kept) */
+    uint8_t mpend;                        /* bit cr_mod_t: Pushed: the only latched extension, pressed again; let
+                                           * go alone it goes off (another extension pressed meanwhile: it stays) */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
     uint8_t key_note[CU_NKEY];            /* root keys: note + 1 sent; 0xFF: the layer's / a picker's */
@@ -2506,8 +2508,9 @@ static void cu_activity(void)
  *   Type key  Clears (the above) / Keeps: a type key replaces the latched type and leaves the latched extensions
  *   Ext keys  Toggle (the above) / Pushed: the extension keys are a set as the type keys are: an extension key
  *             pressed with no chord key held starts a new set of that key alone (keys pressed while it is held
- *             join, as ever), the type untouched. Keeps + Pushed: a type key changes the type only, an extension
- *             key the extensions only */
+ *             join, as ever), the type untouched. One exception: the set is exactly one key and that key is
+ *             pushed again alone: it goes off when let go (the way to no extension). Keeps + Pushed: a type key
+ *             changes the type only, an extension key the extensions only */
 #define CU_MOD_TOP ((1u << CR_MOD_DIM) | (1u << CR_MOD_MIN) | (1u << CR_MOD_MAJ) | (1u << CR_MOD_SUS))
 static uint32_t cu_mods_phys(void)                 /* bit cr_mod_t: the chord keys physically held */
 {
@@ -2538,7 +2541,7 @@ static void cu_unlatch(void)                       /* the latched keys not held:
         cu.mlatch = 0;
         cu_mods_trace();
     }
-    cu.mkill = 0;
+    cu.mkill = cu.mpend = 0;
 }
 static void cu_lock_menu(void)                     /* B3 held past the hold time: the LOCK layer, or out of it */
 {
@@ -2568,18 +2571,23 @@ static void cu_mod_press(uint32_t k)               /* a chord key down (k < CU_R
 {
     uint32_t m = CU_MOD_OF_KEY[k], bit = 1u << m, x;
     uint32_t others = cu_mods_phys() & ~bit;
+    if (!(bit & CU_MOD_TOP) && cu.mpend != bit)    /* a second extension key in the push: no lone repeat any more */
+        cu.mpend = 0;
     if (cu.clock && !others && cu.mlatch) {        /* nothing else held, a latch: reset / toggle */
         uint32_t keep = 0xFFu;
         if (bit & CU_MOD_TOP)                      /* a type key: the latch is that type alone; "Type key: Keeps"
                                                     * (cs.lock_keep): the latched extensions stay */
             keep = bit | (cs.lock_keep ? ~CU_MOD_TOP & 0xFFu : 0u);
-        else if (cs.lock_push)                     /* "Ext keys: Pushed": a new set of extensions, this key alone
-                                                    * (the type stays); keys pressed while it is held join it. No
-                                                    * toggle: the set's own key pressed again leaves that key. With
-                                                    * Keeps nothing but LOCK off / PANIC gets to "no extension" (the
-                                                    * owner's call, 2026-10-10: no extra gesture) */
-            keep = bit | CU_MOD_TOP;
-        else if (cu.mlatch & bit) {                /* Toggle: a latched extension off */
+        else if (cs.lock_push) {                   /* "Ext keys: Pushed": a new set of extensions, this key alone
+                                                    * (the type stays); keys pressed while it is held join it */
+            if ((cu.mlatch & ~CU_MOD_TOP) == bit)  /* .. but the ONLY extension on, pushed again: if it is let go
+                                                    * alone it goes off (cu_mod_release: the one way to "no
+                                                    * extension" in Pushed, the owner's rule); it sounds on until
+                                                    * then, and another extension pressed meanwhile joins it */
+                cu.mpend = (uint8_t)bit;
+            else
+                keep = bit | CU_MOD_TOP;
+        } else if (cu.mlatch & bit) {              /* Toggle: a latched extension off */
             cu.mlatch &= (uint8_t)~bit;
             cu.mkill |= (uint8_t)bit;
             cr_post(CRE_MOD, m, 0, 0);
@@ -2599,6 +2607,15 @@ static void cu_mod_release(uint32_t k)
     if (cu.mkill & bit) {                          /* toggled off by this press */
         cu.mkill &= (uint8_t)~bit;
         return;
+    }
+    if (cu.mpend & bit) {                          /* Pushed: the only extension on was pushed again, alone: off */
+        cu.mpend = 0;
+        if (cu.clock) {
+            cu.mlatch &= (uint8_t)~bit;
+            cr_post(CRE_MOD, m, 0, 0);
+            cu_mods_trace();
+            return;
+        }
     }
     if (cu.clock) {                                /* LOCK: stays down */
         cu.mlatch |= (uint8_t)bit;

@@ -6,8 +6,9 @@
 # 6 10, m7 20, M7 40, 9 80):
 #   Clears + Toggle (today's): MIN: the extensions cleared (02); 6: on (12); 6 again: off (02)
 #   Keeps + Toggle: MIN: 6 and 9 stay (92); 9 tapped: off (12)
-#   Keeps + Pushed: m7 alone: the set is m7 (22), the type stays; 6 + 9 together: the set is 6 9 (92); 9 alone: 9 (82);
-#                   9 again: still 9 (82: no toggle); MAJ: the type alone changes (84); MIN (82)
+#   Keeps + Pushed, the owner's sequence (m7 is his "7"), from MIN + 6 (12): m7: the set is m7 (22); m7 again, alone,
+#                   the only extension on: off (02); m7: on (22); m7 held + 9: both (A2); then m7 alone: m7 (22: two
+#                   were on, so a lone push is the set); 9 alone: 9 (82); MAJ: the type alone changes (84); MIN (82)
 #   Clears + Pushed: 6 + 9 (92); MAJ: the extensions cleared (04)
 wait 300
 btn B3 600                    # held: the layer; LOCK not toggled
@@ -73,30 +74,40 @@ wait 300
 knob KNOB2 +1                 # Ext keys: Pushed (with Keeps)
 wait 200
 shot build/emu/test/cr_lock_menu_pushed.ppm
-btn G3                        # m7 alone: a new set, m7 only (6 goes), the type stays
+btn G3                        # m7 alone ({6} then 7): a new set, m7 only, the type stays
 wait 200
 dump                          # 12: 22
-btn F3 down                   # 6 + 9 together: a new set of both
-wait 50
+btn G3 down                   # m7 again, alone, the only extension on: it sounds on while held ..
+wait 150
+dump                          # 13: 22 still (decided at the release)
+btn G3 up
+wait 200
+dump                          # 14: 02: off, no extension
+btn G3                        # ({} then 7): on
+wait 200
+dump                          # 15: 22
+btn G3 down                   # m7 again, and 9 while it is held: both
+wait 100
 btn C4 down
 wait 100
 btn C4 up
-btn F3 up
+btn G3 up
 wait 200
-dump                          # 13: 92
-btn C4                        # a key of the set alone: the set is that key
+dump                          # 16: A2
+btn G3                        # ({7, 9} then 7 alone): two were on: the set is m7
 wait 200
-dump                          # 14: 82
-btn C4                        # the set's own key again: it stays (no toggle in Pushed)
+dump                          # 17: 22
+btn C4                        # ({7} then 9 alone): 9
 wait 200
+dump                          # 18: 82
 btn A#3                       # Keeps: MAJ changes the type only
 wait 200
-dump                          # 15: 84
+dump                          # 19: 84
 btn G#3                       # .. and MIN
 wait 200
 btn B3 600                    # B3 held again: closed
 wait 300
-dump                          # 16: layer 0, 82, lock still on, keeps / pushed
+dump                          # 20: layer 0, 82, lock still on, keeps / pushed
 btn B3 600
 wait 300
 knob KNOB1 -1                 # Clears + Pushed
@@ -108,15 +119,15 @@ wait 100
 btn C4 up
 btn F3 up
 wait 200
-dump                          # 17: 92
+dump                          # 21: 92
 btn A#3                       # Clears: MAJ alone: the extensions cleared
 wait 200
-dump                          # 18: 04
+dump                          # 22: 04
 knob KNOB2 -1                 # back to the defaults
 wait 200
 btn HOME                      # HOME closes
 wait 300
-dump                          # 19: layer 0, clears / toggle
+dump                          # 23: layer 0, clears / toggle
 btn B3                        # LOCK off (a tap)
 wait 2500
-dump                          # 20: lock off, latched 00, silent
+dump                          # 24: lock off, latched 00, silent

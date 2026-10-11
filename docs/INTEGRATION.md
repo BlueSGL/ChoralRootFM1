@@ -187,10 +187,11 @@ in it, SELECT stays the tempo; OCT− / OCT+ / HOME / B3 held again close it) wi
 bits 6 / 7 of `loop_rec`), both acting only while LOCK is on (`cu_mod_press`): **KNOB 1 "Type key" Clears / Keeps**
 (`cs.lock_keep`: a type key pressed alone replaces the latched type and, in Keeps, leaves the latched extensions)
 and **KNOB 2 "Ext keys" Toggle / Pushed** (`cs.lock_push`: an extension key pressed with no chord key held starts
-a new set of that key alone, the type untouched; keys pressed while it is held join, as chord keys always did; no
-toggle, so the set's own key pressed again leaves that key). Keeps + Pushed: a type key changes the type only, an
-extension key the extensions only; "no extension" is then reached only by LOCK off / PANIC (the owner's call: no
-extra gesture). The defaults (Clears, Toggle) are the behaviour above. `cr_lock_menu.txt`, `persist_lock_*.txt`,
+a new set of that key alone, the type untouched; keys pressed while it is held join, as chord keys always did. The
+owner's one exception: the set is exactly {K} and K is pushed again alone: K goes off, decided at its release
+(`cu.mpend`: K stays down and sounding until then; another extension key pressed meanwhile joins and both stay;
+{7, 9} then 7 alone is {7}, not empty). Keeps + Pushed: a type key changes the type only, an extension key the
+extensions only. The defaults (Clears, Toggle) are the behaviour above. `cr_lock_menu.txt`, `persist_lock_*.txt`,
 `tests/cr_settings_test.c t_key_keys_v13`. LOCK off and PANIC post the
 latched keys up (`cu_unlatch`). The top line shows a small white `lock` (after the perform mode, the octave and
 Latch). Traces: `lock: on` / `off` / `latched MIN 6 9`, and `chord: Dm6 9` as the sounding chord changes.

@@ -1007,14 +1007,17 @@ ll() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* layer \([0-9]*\) 
     ok "Clears + Toggle (as before): MIN clears 6 and 9; 6 on; 6 again off" || bad "Clears + Toggle: $(lk 4) / $(lk 5) / $(lk 6)"
 [ "$(lk 8)" = "1 94 keeps toggle" ] && [ "$(lk 9)" = "1 92 keeps toggle" ] && [ "$(lk 10)" = "1 12 keeps toggle" ] &&
     ok "Keeps + Toggle: MAJ -> MIN with 6 and 9 latched: they stay; 9 tapped: off: $OUT/cr_lock_menu_keeps.ppm" || bad "Keeps + Toggle: $(lk 8) / $(lk 9) / $(lk 10)"
-[ "$(lk 12)" = "1 22 keeps pushed" ] && [ "$(lk 13)" = "1 92 keeps pushed" ] && [ "$(lk 14)" = "1 82 keeps pushed" ] && [ "$(lk 15)" = "1 84 keeps pushed" ] &&
-    ok "Keeps + Pushed: m7 alone: the set is m7 (the type stays); 6 + 9 together: 6 9; 9 alone: 9; 9 again: still 9; MAJ / MIN change the type only: $OUT/cr_lock_menu_pushed.ppm" \
-    || bad "Keeps + Pushed: $(lk 12) / $(lk 13) / $(lk 14) / $(lk 15)"
-[ "$(lk 17)" = "1 92 clears pushed" ] && [ "$(lk 18)" = "1 04 clears pushed" ] &&
-    ok "Clears + Pushed: 6 + 9 pushed; MAJ alone clears them" || bad "Clears + Pushed: $(lk 17) / $(lk 18)"
-[ "$(ll 7)" = 0 ] && [ "$(ll 8)" = 10 ] && [ "$(ll 11)" = 0 ] && [ "$(ll 16)" = 0 ] && [ "$(lk 16)" = "1 82 keeps pushed" ] && [ "$(ll 19)" = 0 ] && [ "$(lk 20)" = "0 00 clears toggle" ] &&
+[ "$(lk 12)" = "1 22 keeps pushed" ] && [ "$(lk 13)" = "1 22 keeps pushed" ] && [ "$(lk 14)" = "1 02 keeps pushed" ] && [ "$(lk 15)" = "1 22 keeps pushed" ] && [ "$(lk 16)" = "1 A2 keeps pushed" ] &&
+    ok "Pushed, the owner's sequence: 6 on, 7: the set is 7; 7 again alone (the only one on): off at its release (on while held); 7: on; 7 held + 9: both: $OUT/cr_lock_menu_pushed.ppm" \
+    || bad "Pushed: $(lk 12) / $(lk 13) / $(lk 14) / $(lk 15) / $(lk 16)"
+[ "$(lk 17)" = "1 22 keeps pushed" ] && [ "$(lk 18)" = "1 82 keeps pushed" ] && [ "$(lk 19)" = "1 84 keeps pushed" ] &&
+    ok "Pushed: 7 and 9 on, 7 alone: the set is 7 (a lone push clears only the one extension on); 9 alone: 9; Keeps: MAJ changes the type only" \
+    || bad "Pushed, two on: $(lk 17) / $(lk 18) / $(lk 19)"
+[ "$(lk 21)" = "1 92 clears pushed" ] && [ "$(lk 22)" = "1 04 clears pushed" ] &&
+    ok "Clears + Pushed: 6 + 9 pushed; MAJ alone clears them" || bad "Clears + Pushed: $(lk 21) / $(lk 22)"
+[ "$(ll 7)" = 0 ] && [ "$(ll 8)" = 10 ] && [ "$(ll 11)" = 0 ] && [ "$(ll 20)" = 0 ] && [ "$(lk 20)" = "1 82 keeps pushed" ] && [ "$(ll 23)" = 0 ] && [ "$(lk 24)" = "0 00 clears toggle" ] &&
     ok "OCT-, OCT+, HOME and B3 held again close the layer; a hold never toggles LOCK; a B3 tap outside: LOCK off, the latch cleared" \
-    || bad "the LOCK layer's gestures: layers $(ll 7) $(ll 8) $(ll 11) $(ll 16) $(ll 19), $(lk 16) / $(lk 20)"
+    || bad "the LOCK layer's gestures: layers $(ll 7) $(ll 8) $(ll 11) $(ll 20) $(ll 23), $(lk 20) / $(lk 24)"
 silent_end cr_lock_menu
 
 echo "user presets: Overwrite, delete, the naming keys"
