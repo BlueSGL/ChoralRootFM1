@@ -849,12 +849,16 @@ static void t_silence(void)
             cr = cost_of(z, s, 20000);
             fx_reset();
             both = cost_of(s, s, 20000);
-            printf("cr_fx:   COST, host instructions a 128-frame half -> device estimate (emu.c: 259 a us; 2902 us a half): off %llu "
-                   "(%.1f us); the delay alone (%s rate) %llu (%.0f us); the reverb alone (%s rate) %llu (%.0f us); both %llu (%.0f us = "
-                   "%.1f %%)\n", (unsigned long long)idle, idle / 259.0, DSD == 1 ? "full" : "half", (unsigned long long)cd, cd / 259.0,
-                   DSR == 1 ? "full" : "half", (unsigned long long)cr, cr / 259.0, (unsigned long long)both, both / 259.0,
-                   both / 259.0 / 29.02);
-            check("the cost: off <= 5 us a half (device estimate)", idle / 259.0 <= 5.0);
+            /* (the host's instructions: a guard against a loop growing, not the unit's time. The unit runs its own
+             * ~205 instructions a microsecond and needs more of them than this host for the same C: docs/FX.md "The
+             * cost on the unit" counts them in build/choralroot.dis, tools/fx_loops.py. emu.c's 259 a us read 1.4 to
+             * 2.9 times low on the first builds' loops, which this host ran eight lines at a time) */
+            printf("cr_fx:   COST, host instructions a 128-frame half (a guard; the unit's time is docs/FX.md's count of its "
+                   "own): off %llu; the delay alone (%s rate) %llu; the reverb alone (%s rate, with its two rate changes) %llu; "
+                   "both %llu\n", (unsigned long long)idle, DSD == 1 ? "full" : "half", (unsigned long long)cd,
+                   DSR == 1 ? "full" : "half", (unsigned long long)cr, (unsigned long long)both);
+            check("the cost: off <= 1300 host instructions a half; the delay <= 24000, the reverb <= 52000 (full rate: twice)",
+                  idle <= 1300u && cd <= 24000u * (DSD == 1 ? 1u : 2u) && cr <= 52000u * (DSR == 1 ? 2u : 1u));
         } else {
             printf("cr_fx:   (no instruction counter on this host: the cost is tools/emu/perf.sh's)\n");
         }
