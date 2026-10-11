@@ -109,9 +109,12 @@ main > section:last-child { padding-bottom: clamp(64px, 9vw, 120px); }
   .shots .shot img { width: 480px; }
 }
 
-/* ---- the four buttons: big flat colour blocks ---- */
+/* ---- the buttons: big flat colour blocks; the device manager's (orange) is a row of its own ---- */
 .buttons { display: grid; gap: 28px; margin: 0 0 44px; }
-@media (min-width: 720px) { .buttons { grid-template-columns: 1fr 1fr; gap: 36px 24px; } }
+@media (min-width: 720px) {
+  .buttons { grid-template-columns: 1fr 1fr; gap: 36px 24px; }
+  .buttons .cell-wide { grid-column: 1 / -1; }
+}
 .btn {
   display: flex; flex-direction: column; justify-content: flex-end;
   min-height: clamp(112px, 15vw, 176px);
@@ -130,12 +133,16 @@ main > section:last-child { padding-bottom: clamp(64px, 9vw, 120px); }
 .b-yellow { background: var(--yellow); color: #080808; }
 .b-green { background: var(--green); color: #080808; }
 .b-green:hover { color: #080808; }
+.b-orange { background: var(--orange); color: #080808; }
+.b-orange:hover { color: #080808; }
 .try { margin: 8px 0 36px; }
-.try .btn { min-height: clamp(112px, 12vw, 156px); }
+.try .btn, .cell-wide .btn { min-height: clamp(112px, 12vw, 156px); }
 .b-yellow:hover { color: #080808; }
 .btn .pkg { display: block; font-size: clamp(16px, 1.7vw, 21px); font-weight: 700; letter-spacing: -0.01em; margin-top: 8px; overflow-wrap: anywhere; }
 .note { margin: 12px 0 0; font-size: 0.95em; }
 .note code { display: inline-block; margin-top: 6px; }
+.note-try { font-size: clamp(19px, 2vw, 23px); font-weight: 800; letter-spacing: -0.015em; }
+.note-try a::after { content: " \2192"; }
 
 .toc { display: flex; flex-wrap: wrap; gap: 8px 22px; margin-top: 36px; padding-top: 18px; border-top: 2px solid var(--dark); font-weight: 700; }
 .toc a { text-decoration: none; color: var(--cream); }
