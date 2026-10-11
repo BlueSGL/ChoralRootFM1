@@ -554,6 +554,18 @@ static void mix_part(track_t *t, uint32_t n)
     mix_part_out(t, part_buf, part_side, part_side_on, nr, n);
 }
 
+/* The parts that sound: Felucca's four; ChoralRoot's units play the chord and the bass part only (engines.c
+ * ENG_STATE_NPART: a part above them has no engine state and takes no note: cr_out.c's midi_event and the engine's
+ * routes are parts 0 / 1), so their matrix, render and mix have nothing to do. What a silent part still does to the
+ * others stays: its LFO's tick (voice.c lfo_rand: part 3's S&H draws from the shared generator, whose sequence the
+ * engines' noise and the notes' RAND follow) and the SLICER's step clock (slicer.c: a stub in the unit). */
+#define MIX_NPART ENG_STATE_NPART
+static void mix_part_idle(track_t *t, uint32_t n)
+{
+    track_lfo_tick(t);
+    slicer_track(t, 0, n);
+}
+
 #if CR_CPU1
 /* ChoralRoot's second core (cr_cpu1.h, docs/DUALCORE.md): part 1's render as core 1's job, into its own buffers.
  * It touches trk[1] (its voices, its LFO's value, its patch, P_E0..7 during an engine fade), its engine's state
@@ -651,8 +663,10 @@ static void mix_block(int32_t *out, uint32_t n)
         i = 2;
     }
 #endif
-    for (; i < NPART; i++)
+    for (; i < MIX_NPART; i++)
         mix_part(&trk[i], n);
+    for (; i < NPART; i++)
+        mix_part_idle(&trk[i], n);
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
     fx_buses(send_c, send_d, send_r, wet, n);
