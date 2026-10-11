@@ -8,10 +8,16 @@ kept when nothing was entered); OCT+ / OCT- step in or out of the menu; PRESETS 
 (250 ms) while a loop plays.
 **Changed in 0.18 (2026-10-11; docs/LOOPER.md has the menu as built):** SELECT turns the menu's PAGE (page 1: KNOB 1
 Length, KNOB 2 Rate, KNOB 3 Quantize, KNOB 4 Count-in; page 2: KNOB 1 Level); the Keys cell is gone, GLO alone
-toggles the keys (the bottom line says play / loops); EDIT opens the loop editor; Step entry's step is the Quantize
-value (a quarter note when none, not 1/16) and with Length Free the loop is the steps entered, exactly (no rounding to
-a bar); the SAVE layer is gone (SAVE held is the global save: loops are saved by it and by leaving a slot). The text
-below is the design of 2026-10-09, kept as it was approved.
+toggles the keys (the bottom line says play / loops); EDIT opens the loop editor; with Length Free a step-entered loop
+is the steps entered, exactly (no rounding to a bar); the SAVE layer is gone (SAVE held is the global save: loops are
+saved by it and by leaving a slot).
+**Step entry and the editor are a step sequencer (2026-10-12; docs/LOOPER.md "Step entry", "The loop editor"):** a
+step is a sixteenth note at Rate x1 whatever Quantize says (the first 0.18 build made it the Quantize value, a quarter
+note when none), a pattern has 1 .. 64 steps (Free: the steps entered; a set Length: its bars, 4 at most), a root
+pressed after one was let go is the next step even while a chord key is held or latched, and in the editor a step's
+length is its note's (nothing else moves). The text below is the design of 2026-10-09, kept as it was approved: where
+it says the grid is the Quantize setting, that the length rounds up to a bar, or that a latched chord stops the
+cursor, the paragraphs above and docs/LOOPER.md are what is built.
 
 The slot bug (a slot's pattern lost on a switch) is fixed separately: a slot *is* its pattern, leaving a slot saves it
 (docs/LOOPER.md "Slots and the record").

@@ -28,9 +28,10 @@
 #define CRL_NEXT_SLOT(k) (((k) + 1u) % CRL_SLOTS)   /* Advance: the slot after k (10 wraps to 1) */
 #define CRL_NRATE 7u             /* the loop's Rate: x1/4 x1/2 x3/4 x1 x1.5 x2 x4 (cr_loop_set_rate) */
 #define CRL_RATE_1 3u            /* .. x1, the default */
-#define CRL_STEP_NONE 96u        /* step entry and the editor with Quantize none: a step is a quarter note */
-#define CRL_ED_CELLS 2048u       /* the loop editor: grid cells at most (128 bars of 1/16) */
-#define CRL_ED_MAXN 16u          /* .. a step's length in cells at most */
+#define CRL_STEP 24u             /* step entry and the loop editor: a step is a sixteenth note of the loop's own time
+                                  * (16 steps a bar of 4/4 at Rate x1; the Rate scales it with the loop). Until
+                                  * 2026-10-12 the step was the Quantize value (a quarter note when none) */
+#define CRL_STEPS 64u            /* a pattern's steps at most: step entry, the editor's Steps; a note's length in steps */
 
 enum { CRL_EMPTY, CRL_STOPPED, CRL_PLAYING };                  /* the loop */
 enum { CRL_CAP_NONE,                                            /* capture */
@@ -91,15 +92,19 @@ typedef struct {
     uint8_t ow;                                /* Overwrite armed over a loop: it is cleared when the take starts */
     uint8_t rep, rep_n;                        /* the overdub replaces (Replace); gestures of it held */
     uint32_t rep0;                             /* the cycle position the held span began at (ticks) */
-    uint16_t step, step_end;                   /* step entry: the cursor; the steps used (Free: the length) */
-    uint8_t step_g, step_w;                    /* the grid (ticks a step); a chord written at the cursor */
-    /* the loop editor (cr_loop_ed_*; docs/LOOPER.md "The loop editor"): on; its grid (ticks a cell); the cursor's
-     * step: its first tick and its cells (the UI's, from cr_loop_ed_map; the operations keep ed_n); the sides (bit 0
-     * chord, bit 1 bass) already replaced by the keys now down; the loop's extent with the steps Loop length hid */
+    uint16_t step, step_end;                   /* step entry: the cursor (Free: CRL_STEPS = past the last step: the
+                                                * pattern is full); the steps used (Free: the length) */
+    uint8_t step_g, step_w;                    /* the grid (ticks a step: CRL_STEP); a chord written at the cursor */
+    uint8_t step_no;                           /* + 1 whenever a chord was refused (Free: a 65th step) */
+    /* the loop editor (cr_loop_ed_*; docs/LOOPER.md "The loop editor"): on; its grid (ticks a step: CRL_STEP); the
+     * cursor's step: its first tick; ed_n: the length, in steps, of the notes the keys now down write (the length the
+     * step's notes had; 1 for an empty step); the sides (bit 0 chord, bit 1 bass) already replaced by the keys now
+     * down; the loop's extent with the steps Loop length hid */
     uint8_t ed, ed_g, ed_n, ed_w;
     uint8_t ed_flat;                           /* .. an edit was made: the loop is one layer */
     uint32_t ed_t0, ed_len;
-    uint32_t step_len;                         /* synced: the length the cursor wraps at (0: Free) */
+    uint32_t step_len;                         /* a set Length: the ticks the cursor wraps at (whole bars, CRL_STEPS
+                                                * steps at most; 0: Free) */
     uint16_t gen;                              /* + 1 whenever the events change (the UI's timeline cache) */
     const crl_data_t *next;                    /* a slot switch waiting for the end of the cycle (0: empty) */
     uint8_t next_on, dirty;                    /* a switch is queued; the content changed since loaded / saved */
@@ -126,6 +131,9 @@ int  cr_loop_undo(cr_loop_t *lp, cr_t *c);     /* REC hold, F#4: the last layer 
 int  cr_loop_clear(cr_loop_t *lp, cr_t *c);    /* D#4 held 1 s */
 enum { CRL_STEP_KEYSUP, CRL_STEP_REST, CRL_STEP_BACK };
 void cr_loop_step(cr_loop_t *lp, int op);      /* step entry: every key up (advances after a chord), OCT+, OCT- */
+uint32_t cr_loop_step_len(const cr_loop_t *lp);   /* the ticks step entry / an empty loop in the editor takes from the
+                                                * Length setting: its bars, the whole bars that fit CRL_STEPS steps at
+                                                * most (4 of 4/4, 5 of 3/4 and 6/8); 0: Free */
 uint32_t cr_loop_pos(const cr_loop_t *lp);     /* the playhead: ticks into the take / the cycle (0 idle) */
 void cr_loop_stop(cr_loop_t *lp, cr_t *c);     /* stop playing (loop voices end), capture ends */
 void cr_loop_panic(cr_loop_t *lp);             /* after cr_panic: stopped, content kept (a fresh take dropped) */
@@ -140,35 +148,34 @@ void cr_loop_metro(cr_loop_t *lp, int on);     /* the click on / off (its grid r
  * rate on one. The count-in and the click stay the tempo's */
 void cr_loop_set_rate(cr_loop_t *lp, int rate);
 
-/* ---- the loop editor (docs/LOOPER.md "The loop editor"). The loop as steps, on a grid of cells (ed_g ticks: the
- * Quantize value, a quarter note for an empty loop with Quantize none): a step is a cell, or a run of cells: a cell
- * where an event starts and the cells after it in which nothing starts and which one of its events covers to their end
- * (CRL_ED_MAXN at most); an event belongs to the step it starts in (its offset in the cell is kept: nothing is
- * requantised). Nothing is stored for it: the steps are read from the events each time (cr_loop_ed_map), the record's
- * format is unchanged. The editor works on what sounds (the live events). Its FIRST EDIT makes the loop one layer
- * (crl_ed_flat: the overdubs merged, what a Replace layer had hidden gone for good), so after an edit there is
- * nothing left for the looper's undo to take: an edit cannot be half undone by removing the layer it happened to
- * touch. Opened and closed without an edit, the loop and its layers are as they were */
-typedef struct {
-    uint32_t start[CRL_ED_CELLS / 32u];        /* bit c: an event starts in cell c */
-    uint32_t cont[CRL_ED_CELLS / 32u];         /* bit c: cell c continues the step before it */
-    uint16_t ncell, nall;                      /* cells in the loop; with the steps hidden beyond its end */
-    uint16_t nstep;                            /* steps in the loop */
+/* ---- the loop editor (docs/LOOPER.md "The loop editor"). The loop as a pattern of steps of CRL_STEP ticks, whatever
+ * made it (step entry, a take played by hand, an older build's step loop): an event belongs to the step it starts in,
+ * and keeps its exact time until that step's notes are replaced (nothing is requantised when the editor opens). A
+ * step's LENGTH is its notes' length (crl_ev_t.dur), never its place: setting it moves no other event; a long note
+ * sounds over the steps after it, which still play (the voices: cr_loop_event's, CR_MAX_LOOPV, the one ending first
+ * taken when all are busy). Nothing is stored for the editor: the steps are read from the events each time
+ * (cr_loop_ed_map), the record's format is unchanged. The editor works on what sounds (the live events). Its FIRST EDIT
+ * makes the loop one layer (crl_ed_flat: the overdubs merged, what a Replace layer had hidden gone for good), so after
+ * an edit there is nothing left for the looper's undo to take. Opened and closed without an edit, the loop and its
+ * layers are as they were. A loop longer than CRL_STEPS steps (a long take) is shown CRL_STEPS (a page) at a time */
+typedef struct {                               /* a page: the CRL_STEPS steps from `first` */
+    uint64_t start;                            /* bit s: an event starts in step first + s */
+    uint64_t tail;                             /* bit s: none starts there, and a note begun earlier sounds through
+                                                * half of it or more */
+    uint16_t first;
+    uint16_t nstep, nall;                      /* steps in the loop; with the steps hidden beyond its end */
 } crl_edmap_t;
-enum { CRL_ED_OK, CRL_ED_BUSY, CRL_ED_NOQUANT, CRL_ED_LONG };
-int  cr_loop_ed_open(cr_loop_t *lp);           /* CRL_ED_*: a capture open; Quantize none on a loop with events; more
-                                                * than CRL_ED_CELLS cells. An empty loop: an empty one of the set
-                                                * Length (Free: a bar) */
+enum { CRL_ED_OK, CRL_ED_BUSY };
+int  cr_loop_ed_open(cr_loop_t *lp);           /* CRL_ED_*: refused while a capture is open. An empty loop: an empty
+                                                * pattern of the set Length (cr_loop_step_len; Free: a bar) */
 void cr_loop_ed_close(cr_loop_t *lp, cr_t *c); /* the steps hidden beyond the end go; no event left: the loop empty */
-void cr_loop_ed_map(const cr_loop_t *lp, crl_edmap_t *m);
-void cr_loop_ed_step(const crl_edmap_t *m, uint32_t cell, uint32_t *c0, uint32_t *n);   /* the step cell is in: its
-                                                * first cell, its cells */
-uint32_t cr_loop_ed_index(const crl_edmap_t *m, uint32_t cell);   /* the steps before cell */
-void cr_loop_ed_cursor(cr_loop_t *lp, uint32_t c0, uint32_t n);   /* the cursor's step (from cr_loop_ed_step) */
+void cr_loop_ed_map(const cr_loop_t *lp, uint32_t first, crl_edmap_t *m);
+void cr_loop_ed_cursor(cr_loop_t *lp, uint32_t step);   /* the cursor's step (0 ..) */
 int  cr_loop_ed_clear(cr_loop_t *lp);          /* the cursor's step: its events go; how many */
-int  cr_loop_ed_steplen(cr_loop_t *lp, uint32_t n);   /* .. n cells long: the later events move; Length Free: the loop's
-                                                * length with them; a set Length: refused (0) if an event would pass
-                                                * the end. An empty step: refused */
+uint32_t cr_loop_ed_nlen(const cr_loop_t *lp); /* .. how long its notes sound, in steps (the longest; a part of a step
+                                                * counts whole; CRL_STEPS at most); 0: no note */
+int  cr_loop_ed_setnlen(cr_loop_t *lp, uint32_t n);   /* .. its notes n steps long (1 .. CRL_STEPS; an off-grid note
+                                                * ends on the grid). Nothing else moves. 0: refused (no note, n) */
 int  cr_loop_ed_len(cr_loop_t *lp, uint32_t len);     /* the loop's length in ticks (the events beyond it are kept,
                                                 * unheard and unsaved, until the editor closes); 0: refused */
 int  cr_loop_ed_vel(cr_loop_t *lp, int delta); /* the step's events' velocity; the highest after, 0: no event */

@@ -1,0 +1,204 @@
+# ChoralRoot 0.18: the two faults of Step entry the owner reported on 2026-10-12, as they reproduce (docs/LOOPER.md
+# "Step entry"). The PLAY menu open throughout. Chords: MAJ = A#3.
+# 1. "With quantize off it is capped to 4 total steps": a step was the Quantize value, a QUARTER note when none: a bar
+#    was four steps, so a 1-bar Length wrapped on the fifth chord and an empty slot's editor had four steps. Now a step
+#    is a sixteenth whatever Quantize says.
+#    A. Length Free, Quantize none: six chords, every key up between: six steps (144 ticks; 576 before).
+#    B. Slot 2, Length 1 bar: six chords: the cursor on step 7 of 16 (before: wrapped at 4, on step 3), a bar (384).
+# 2. "With quantize 16 it only records to the first step": the cursor moved on only when EVERY key was up, so a chord
+#    key kept down between the roots (or latched by LOCK) put every chord on one step. Now a root pressed after one
+#    was let go is the next step.
+#    C. Slot 3, Free, Quantize 1/16 (set in Overwrite: in Step the knob rests): MAJ held, six roots tapped: six steps
+#       (before: 6 events on step 1, a loop of 24 ticks).
+#    D. Slot 4: LOCK on (B3), MAJ latched, four roots tapped: four steps, 96 ticks (before: one step). In Step mode
+#       KNOB 3 says "Step: always 1/16" and leaves Quantize as it is.
+# E. Slot 5, Length 8 bars: REC: "Step: 4 bars (64 steps)": the pattern is the Length's first four bars.
+wait 300
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+knob ALGORITHM +4                 # A: Step, Free, Quantize none
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 150
+btn D4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn E4 down
+wait 150
+btn E4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn G4 down
+wait 150
+btn G4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn A4 down
+wait 150
+btn A4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn C5 down
+wait 150
+btn C5 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn D5 down
+wait 150
+btn D5 up
+btn A#3 up
+wait 300
+dump                              # 1: step 6, 6 events
+btn REC
+wait 400
+dump                              # 2: 6 events, 144 ticks
+knob PRESETS +1                   # B: slot 2, 1 bar
+wait 600
+knob KNOB1 +1
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 150
+btn D4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn E4 down
+wait 150
+btn E4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn G4 down
+wait 150
+btn G4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn A4 down
+wait 150
+btn A4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn C5 down
+wait 150
+btn C5 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn D5 down
+wait 150
+btn D5 up
+btn A#3 up
+wait 300
+shot build/emu/test/cr_sf_bar.ppm         # a bar: 16 steps, six filled, the cursor on 7
+dump                              # 3: step 6 (the seventh), step-len 384
+btn REC
+wait 400
+dump                              # 4: 6 events, 384 ticks
+knob PRESETS +1                   # C: slot 3, Free, Quantize 1/16
+wait 600
+knob KNOB1 -1
+wait 200
+knob ALGORITHM -4
+wait 200
+knob KNOB3 +4
+wait 200
+knob ALGORITHM +4
+wait 300
+btn REC
+wait 300
+btn A#3 down                      # MAJ held throughout
+wait 100
+btn D4 down
+wait 150
+btn D4 up
+wait 150
+btn E4 down
+wait 150
+btn E4 up
+wait 150
+btn G4 down
+wait 150
+btn G4 up
+wait 150
+btn A4 down
+wait 150
+btn A4 up
+wait 150
+btn C5 down
+wait 150
+btn C5 up
+wait 150
+btn D5 down
+wait 150
+btn D5 up
+wait 150
+shot build/emu/test/cr_sf_held.ppm        # six steps filled, the cursor on the sixth while MAJ is down
+dump                              # 5: step 5 (the sixth, just written), 6 events, steps-used 6
+btn A#3 up
+wait 300
+dump                              # 6: every key up: step 6
+btn REC
+wait 400
+dump                              # 7: 6 events, 144 ticks
+knob PRESETS +1                   # D: slot 4, LOCK on, MAJ latched
+wait 600
+knob KNOB3 +1                     # (Step: the knob rests)
+wait 300
+shot build/emu/test/cr_sf_quant.ppm       # "Step: always 1/16"
+wait 1500
+btn B3
+wait 200
+btn A#3
+wait 200
+btn REC
+wait 300
+btn D4 150
+wait 200
+btn E4 150
+wait 200
+btn G4 150
+wait 200
+btn A4 150
+wait 200
+dump                              # 8: step 3 (the fourth), 4 events
+btn REC
+wait 400
+dump                              # 9: 4 events, 96 ticks
+btn B3                            # LOCK off
+wait 300
+btn PLAY
+wait 100
+expect sound
+wait 900
+btn PLAY
+wait 300
+knob PRESETS +1                   # E: slot 5, Length 8 bars: a pattern is 64 steps at most
+wait 1500
+knob KNOB1 +4
+wait 300
+btn REC
+wait 400
+shot build/emu/test/cr_sf_8bars.ppm       # "Step: 4 bars (64 steps)", the grid's four rows
+dump                              # 10: step-len 1536
+btn REC
+wait 1500
+knob KNOB1 -4
+wait 300
+btn OCT-
+wait 2500
+dump

@@ -127,16 +127,42 @@ REC while armed or counting in cancels.
 | **Replace** | a fresh take | arms as Overdub (`crl.rep`); while a gesture of the layer is held the older layers' events whose on-time is reached are hidden instead of played (`crl_fire`), and an older event sounding when a gesture starts is cut there (`crl_cut`: it is hidden and a copy ending there goes into the new layer; its voice ends). Hidden events keep their place (`layer` = `CRL_HID` \| the hiding layer) inside the 512-event cap; undo of that layer (`crl_restore`, by `crl.lev0`, each layer's first event) brings them back whole; the flash record stores only live events |
 | **Step** | step entry (`CRL_CAP_STEP`) | the same (the loop stops first) |
 
-**Step entry**: a step is the Quantize value (none: a quarter note, `CRL_STEP_NONE`; 1/16 until 0.17; `crl.step_g`
-ticks a step); a cursor on step 1. A chord gesture's end
-writes its chord at the cursor, one step long (several gestures before every key is up: all at the cursor); when every
-key is up and nothing is latched (`cu.kheld`, `cu.mlatch`; LOCK keeps the chord block latched) the UI posts
-`LP_STEP KEYSUP` and the cursor advances if a chord was written there; OCT+ = a rest (the cursor advances), OCT- = back
-one step (nothing erased), in or out of the menu. Synced lengths wrap the cursor at the length; Free grows. The steps
-are kept after the loop's events until the commit: REC = they become the loop (the loop there before goes; **Free: the
-length is the steps used, exactly**: "3 chords, the loop should just be 3 steps long", the owner 2026-10-11; until
-then it rounded up to the bar; a set Length: that length, as before), stopped; LOOP = the same and it plays; nothing entered = the loop
-as it was. The chords sound as they are entered (the chord engine plays the keys as always).
+**Step entry** (a step sequencer since 2026-10-12; the owner: "I would expect this system to work more like an
+Elektron sequencer in which you can record up to 64 steps. So at 1x, 16 steps is a bar").
+
+- **The grid.** A step is a **sixteenth note** of the loop's own time (`CRL_STEP`, 24 ticks; `crl.step_g`): 16 steps a
+  bar of 4/4 at Rate x1 (12 in 3/4 and 6/8). The **Rate** scales the pattern with the loop, as it does any loop: x2
+  makes the steps thirty-seconds of the tempo, x1/2 eighths. **Quantize does not set the step**: it is the grid a take
+  played by hand is pulled to. While the record mode is Step its cell reads `1/16`, dim, and KNOB 3 says `Step: always
+  1/16` and leaves the takes' Quantize as it is.
+- **Length.** A pattern has 1 .. 64 steps (`CRL_STEPS`). **Length Free: the loop is the steps entered, exactly** ("3
+  chords, the loop should just be 3 steps long", the owner 2026-10-11), growing to 64; a chord after the 64th is refused
+  (`64 steps: full`; `crl.step_no`), and so is a rest there. **A set Length**: N bars are N x 16 steps and the cursor
+  wraps at the end; a Length longer than a pattern can be gives its first whole bars within 64 steps (8 and 16 bars: 4
+  bars; 3/4 and 6/8: 5 bars, 60 steps) and says so when step entry begins (`Step: 4 bars (64 steps)`;
+  `cr_loop_step_len`). Takes played by hand keep their 8 and 16 bars.
+- **Entering.** The cursor starts on step 1. A chord gesture's end writes its chord, one step long, on **the step the
+  gesture was pressed on**. The cursor moves on a step
+  - when every key is up and nothing is latched, if a chord was written there (`cu.kheld`, `cu.mlatch`: the UI posts
+    `LP_STEP KEYSUP`), and
+  - **when a root is pressed after one was written there and let go**, whatever is still held or latched
+    (`cr_loop_gesture`): the chord key kept down while the roots are tapped under it, or a chord latched by LOCK, gives a
+    step a root. Roots held **together** share the step (a chord over a Split Bass bass note; a second root pressed
+    before the first is let go).
+  OCT+ = a rest (the cursor moves on), OCT- = back one step (nothing erased), in or out of the menu.
+- The steps are kept after the loop's events until the commit: REC = they become the loop (the loop there before
+  goes), stopped; LOOP = the same and it plays; nothing entered = the loop as it was. The chords sound as they are
+  entered (the chord engine plays the keys as always).
+
+**The two faults of the first build (0.18 dev of 2026-10-11), as the owner met them.** (1) "With quantize off it is
+capped to 4 total steps": the step was the Quantize value, and with Quantize none a **quarter note**, so a bar was
+four steps: a 1-bar Length wrapped on the fifth chord, an empty slot opened in the editor had four steps, and the grid
+drew four cells a row. (With Length really on Free the engine did go on: six chords made six quarter-note steps.) (2)
+"With quantize 16 it shows 16 steps but only records to the first step": the cursor moved on **only when every key was
+up**; with the chord key held down between the roots, or a chord latched by LOCK, every chord was written on the same
+step (six events on step 1, a loop one step long); in the editor the cursor does not move by itself at all. Neither
+depended on Quantize beyond the step's size. `tools/emu/scripts/cr_loop_stepfaults.txt` plays both; its checks fail on
+6619937.
 
 ## The PLAY menu (`cr_ui.c cu_loopmenu`, `CR_K_LOOPMENU`)
 
@@ -162,9 +188,10 @@ The middle: **idle / armed** the length big ("4 bars", "Free"; armed Free: "the 
 Advance its message); **recording or playing** the timeline (`lm_*`: the bars with their beat ticks, more than 8: the
 half the playhead is in; recording Free the bars as they pass, the current one at the right, at most 4, the elapsed
 time under it; a lane of marks per layer, at most 4 (older layers fold into lane 0), the take's lane bright, marks of
-the gestures still held where they began; Replace: the held span); **step entry** the step grid (16 a bar at 1/16, at
-most 4 bars a page, 64 steps; the filled steps, the cursor blinking with the REC LED's phase, the cursor step's chord
-under it, "step 7 · bar 1", the foot "OCT-: back · OCT+: rest · REC: done"). The marks are read from the ISR's loop
+the gestures still held where they began; Replace: the held span); **step entry** the step grid (sixteenths, a bar a
+row, four rows: the whole pattern of 64 steps on one screen; a set Length: all its steps, Free: the bars reached so
+far; the filled steps, the cursor blinking with the REC LED's phase, the cursor step's chord under it, "step 7" (Free),
+"step 7/32" (a set Length) or "64 steps · full", the foot "OCT-: back · OCT+: rest · REC: done"). The marks are read from the ISR's loop
 with the IRQ off only when its events (`crl.gen`) or the window change (`cu_lm_marks`). The top line: "Loop 3" and at
 the right "Rec · Overwrite" (armed: the mode; also outside the menu), "Rec 2.4", "Dub 3.2", "Rep 3.2", "Rec · Step",
 "3.2" playing, "empty" for an empty slot.
@@ -222,33 +249,49 @@ ignores them, and nothing is sent out.
 "In the play menu, lets make it so you can press Edit and edit the loop; once in the loop edit mode, you select a
 step and can change: notes by playing new notes which overwrites the notes, step length (default 1, but you can make
 it longer or shorter), loop length in number of steps, and we also need a way to clear a step of notes which could
-be done by pressing REC (which when in the loop editor doesn't do the normal record)."
+be done by pressing REC (which when in the loop editor doesn't do the normal record)." And on the first build
+(2026-10-12): "adjusting a step's length is changing the steps after it, which is weird. I would expect this system to
+work more like an Elektron sequencer".
 
-**The loop as steps, with nothing stored for it.** The grid is cells of the Quantize value (`crl.ed_g` ticks; an
-empty loop with Quantize none: a quarter note). A **step** is a cell, or a run of cells: a cell in which an event
-starts, and the cells after it in which nothing starts and which one of its events covers to their end (16 at most).
-An event belongs to the step it starts in. So a step-entered loop is its steps exactly (each chord a cell long, a rest
-an empty cell), and a loop recorded by playing reads as steps on the grid without one event being moved: its
-offsets inside the cells are kept, **nothing is requantised**. The steps are read from the events each time
-(`cr_loop_ed_map`: two passes over the events, two bitmaps of 2048 cells: 520 bytes in the POOL, the editor's only
-buffer), and **the record's format is unchanged**: a step's length is in `t` and `dur`, which the record always had;
-no new field, no flag, version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr_loop_test.c
-s_edit`: pack / unpack give the same map; `old_unpack_ok`).
+**A step sequencer's view of any loop, with nothing stored for it.** The grid is the sixteenth note of Step entry
+(`CRL_STEP`, 24 ticks, whatever Quantize says), for a pattern entered by steps, a take played by hand, or a step loop
+of the first build (whose steps were the Quantize value: quarter-note steps show as a chord every fourth step, four
+steps long). **An event belongs to the step it starts in.** Nothing is moved when the editor opens: an event that
+starts off the grid keeps its exact time until that step's notes are replaced; opened, looked at and closed, the loop
+is byte for byte what it was. **A step's length is its NOTES' length** (`crl_ev_t.dur`), never its place in time:
+changing it moves no other step and does not change the loop's length. A long note sounds on over the steps after it,
+and those steps still play: the voices are the looper's eight (`CR_MAX_LOOPV`; when all are busy the one that would
+end first is taken), each chord its own voice, so a held chord and the next step's chord sound together as two chords
+played on the keys would. The steps are read from the events each time (`cr_loop_ed_map`: one pass, a page of 64
+steps as two 64-bit maps: 24 bytes in the POOL, the editor's only buffer; 520 bytes before), and **the record's format
+is unchanged**: `t` and `dur` are what the record always had; no new field, no flag, version 1, and 0.14 .. 0.17 read
+an edited loop's record as any other (`tests/cr_loop_test.c s_edit`; `old_unpack_ok`).
 
 | gesture | does |
 | --- | --- |
-| EDIT tap in the PLAY menu | opens it (`cr_loop_ed_open`). Refused: a slot switch on its way (`a slot is on its way`); a capture open (`end the take first`); **Quantize none on a loop with events** (`set Quantize to edit`: a free-timed loop has no grid); more than 2048 cells (`too long: coarser grid`). An empty slot: an empty loop of the set Length (Free: a bar), which is the slot empty again if nothing is entered |
-| SELECT, KNOB 1 | the step cursor, wrapping (`cu_ledit_move`); the grid shows the cells (a bar a row; filled: an event starts there), the cursor on the step's first cell, its chord (the step cursor's name of Step entry: the last event written there) and `step 2/3` under it; the cells Step / Length / Steps / Velocity |
-| the keys | they play, as on the view (auditioned by the chord engine). A gesture's end writes its chord INTO the selected step, replacing its notes: the first key of a new push (no gesture open) clears, the keys of one push add up (`crl_ed_write`, `ed_w`). **By side** (3y9's rule): a bass-side note (Split Bass) replaces the step's bass-side notes, anything else the chord side. The new event starts at the step's first tick and is the step long |
-| | **The cursor stays on the step** (it does not advance as Step entry does): with LOCK on a chord key stays latched, so "every key up" never comes and the cursor would move for some players and not for others; and an editor's step is tried, heard and tried again. SELECT moves on |
-| REC tap | clears the selected step (`cr_loop_ed_clear`): no recording in the editor. A cleared step several cells long becomes that many empty steps |
-| KNOB 2 | the step's length, 1 .. 16 cells (`cr_loop_ed_steplen`): every later event moves by the difference, the step's own events are made to sound to its end. **Length Free: the loop's length changes with it. A set Length (1 .. 16 bars): the loop keeps its length: a shorter step pulls the rest in and leaves empty cells at the end; a longer one is REFUSED (`no room in the loop`) if it would push an event past the end** (nothing is clipped). An empty step is one cell (its cell shows `-`). Shorter than a cell: a finer Quantize first |
-| KNOB 3 | the loop's length in steps (`cr_loop_ed_len`): shorter hides the last step (its events stay in RAM beyond the end, unheard), longer brings it back, and past what there was adds an empty cell. **The hidden steps are deleted when the editor closes**; a save while it is open writes what sounds (`cr_loop_pack` skips events beyond the end). A loop played to a length off the grid: the first step up makes its last cell whole |
+| EDIT tap in the PLAY menu | opens it (`cr_loop_ed_open`), **at any Quantize setting** (the first build refused a loop with Quantize none: `set Quantize to edit`). Refused: a slot switch on its way (`a slot is on its way`); a capture open (`end the take first`). An empty slot: an empty pattern of the set Length (Free: a bar, 16 steps; more than 64 steps: its first whole bars within 64), which is the slot empty again if nothing is entered |
+| SELECT, KNOB 1 | the step cursor, wrapping at the loop's end (`cu_ledit_move`) |
+| the keys | they play, as on the view (auditioned by the chord engine). A gesture's end writes its chord INTO the selected step, replacing its notes: the first key of a new push (no gesture open) clears, the keys of one push add up (`crl_ed_write`, `ed_w`). **By side** (3y9's rule): a bass-side note (Split Bass) replaces the step's bass-side notes, anything else the chord side. The new notes start on the step's tick and are **as long as the step's notes were** (one step on an empty step) |
+| | **The cursor stays on the step** (it does not advance as Step entry does; an Elektron's grid recording stays on the selected trig too): an editor's step is tried, heard and tried again. SELECT moves on |
+| REC tap | clears the selected step (`cr_loop_ed_clear`): no recording in the editor |
+| KNOB 2 | **Note len**: how long the selected step's notes sound, 1 .. 64 steps (`cr_loop_ed_setnlen`; shown: the longest of them, a part of a step counted whole, `cr_loop_ed_nlen`). Whole steps only: the event format could carry a shorter gate, but no control was asked for one. A note played off the grid keeps its start and ends on the grid. Nothing else moves. An empty step has none (`-`). Longer than the loop: it sounds across the loop's start |
+| KNOB 3 | **Steps**: the loop's length, 1 .. 64 steps, a step a detent (`cr_loop_ed_len`): shorter hides the last step (its events stay in RAM beyond the end, unheard), longer brings it back, and past what there was adds an empty step; `64 steps at most`. **The hidden steps are deleted when the editor closes**; a save while it is open writes what sounds (`cr_loop_pack` skips events beyond the end). A loop played to a length off the grid: the first detent up makes its last step whole. A take longer than 64 steps can be made shorter, not longer |
 | KNOB 4 | the step's velocity (the event format's `vel`; the highest of its events shown) |
-| LOOP tap | play / stop from the loop's start, as ever; the cursor does not follow the playback. A length changed under the playhead: the playhead where it is in the new cycle (`crl_ed_renorm`) |
+| LOOP tap | play / stop from the loop's start, as ever; the cursor does not follow the playback, the playhead shows it. A length changed under the playhead: the playhead where it is in the new cycle (`crl_ed_renorm`) |
 | REC held | the looper's undo, as outside (below) |
 | PRESETS, ALGORITHM, GLO | nothing |
 | OCT- / OCT+ / HOME / EDIT tapped / EDIT held again | close it, back to the PLAY menu (`cr_loop_ed_close`): nothing to confirm, an edit is applied when it is made. LOOP held again, another layer, a revert: the menu and the editor close |
+
+**The screen** (`CR_K_LOOPMENU` with `lm_mid = CR_LM_STEPS`, the step grid of Step entry: `cr_draw.c cr_lm_steps`): a
+bar a row, **four rows of 16: all 64 steps at a glance** (3/4 and 6/8: four rows of 12). A step with a note starting
+in it is red; a step a longer note still sounds in (half of it or more) is dark red (`lm_lane[1]`); an empty one grey;
+the grid ends where the loop ends (`lm_steps`). The cursor is the red outline. The steps the **selected** step's note
+sounds on into carry a white line along their bottom (`lm_lane[2]`), so turning KNOB 2 is seen to stretch the note
+over the following steps and to move nothing. While the loop plays, the step being played is white (grey when empty:
+`CR_LM_PLAY` in `lm_pos`; only its rows' strips are redrawn). Under the grid the selected step's chord, big, and `step
+5/16`; the cells Step / Note len / Steps / Velocity. **A take longer than 64 steps is paged**: the cursor walks all its
+steps and the grid shows the 64 the cursor is in (`step 70/128 · p2`); one page was chosen over a scrolling row
+because a pattern fits it whole, and a page turns only for loops no step sequencer made.
 
 **Layers and undo.** The editor works on what sounds (the live events). Its **first edit makes the loop one layer**
 (`crl_ed_flat`: the overdubs merged, the events a Replace layer had hidden removed for good), so after an edit REC
@@ -342,5 +385,5 @@ loop without one is written byte for byte as 0.17 wrote it. The version stays 1 
 ## Caps
 
 512 events per loop (all layers, a Replace layer's hidden events and its cut copies included; 4 KiB in RAM + a 4 KiB staging copy for slot switches; 3.6 KiB record, and
-3664 bytes in the POOL for the loop being left, packed; 520 bytes there for the editor's map: 2048 cells),
-32 layers, 16 open gestures, 8 loop voices, 65535 ticks. Reaching the event cap ends the take ("loop full").
+3664 bytes in the POOL for the loop being left, packed; 24 bytes there for the editor's map: a page of 64 steps),
+32 layers, 16 open gestures, 8 loop voices, 65535 ticks; a step-entered pattern 64 steps. Reaching the event cap ends the take ("loop full").

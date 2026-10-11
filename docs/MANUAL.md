@@ -719,8 +719,9 @@ playhead. These settings are kept by a global save (SAVE held), like the rest of
   rate is not x1, the take is stored so that it plays back, at that rate, exactly as you played it; Length then counts
   the loop's own bars (at x2, a 4-bar take lasts 2 bars of the metronome).
 - **Count-in** Off skips the count: with a number of bars the take then starts the moment you tap REC.
-- **Quantize** moves the starts of the chords to the nearest grid point when the take ends. It is also the size of a
-  step in Step entry and the grid of the loop editor.
+- **Quantize** moves the starts of the chords to the nearest grid point when a take you played ends. It has no part in
+  Step entry or the loop editor, whose steps are always sixteenths: while the record mode is Step the cell reads
+  `1/16`, greyed, and KNOB 3 answers `Step: always 1/16` (your Quantize setting is kept for the other modes).
 - **The keys.** `keys: play` (the default): the keys play as usual with the menu open. Tap OPT for `keys: loops`
   (OPT lit): the white keys D4 to F5 pick slots 1 to 10, D#4 held for a second clears the loop (`hold to clear`,
   then `loop cleared`), F#4 is undo. Tap OPT again to play.
@@ -739,50 +740,70 @@ The record mode decides what a REC tap does when nothing is being recorded.
 
 While an overdub is armed or running the top line reads `Dub 3.2` (`Rep 3.2` for Replace).
 
-**Step entry** writes chords one step at a time, with no clock running. A step is as long as the Quantize value (a
-quarter note when Quantize is none; until 0.17 that was 1/16). The PLAY menu shows the grid and the cursor.
+**Step entry** writes chords one step at a time, with no clock running, the way a step sequencer does. **A step is a
+sixteenth note: 16 steps are a bar** of 4/4 (12 in 3/4 and 6/8), and a pattern has up to **64 steps** (four bars). The
+PLAY menu shows the pattern as rows of 16 steps, the filled ones red, the cursor outlined, and the cursor's step
+number.
 
-- Play a chord and let go of every key: the chord is written at the cursor and the cursor moves on.
+- Play a chord and let go: it is written on the cursor's step, one step long, and the cursor moves on. You hear the
+  chord as you enter it.
+- **Each new root is a new step.** You can keep the chord key (MAJ, MIN, ..) held down and tap one root after another,
+  or latch the chord with LOCK and tap roots: every root you press after letting the last one go takes the next step.
+- Keys held **together** go on one step: a second root pressed while the first is still down, or a bass note under a
+  chord with Split Bass.
 - OCT+ is a rest (the cursor moves on). OCT- goes back one step; nothing is erased.
 - REC finishes and leaves the loop stopped (`steps recorded`); LOOP finishes and plays it.
-- With Length = **Free** the loop is exactly the steps you entered: three chords make a loop three steps long (it is
-  no longer rounded up to a bar). With a Length in bars the loop has that length and the cursor wraps at its end.
-- With LOCK on and a chord latched, letting go of the root does **not** move the cursor, because a chord key still
-  counts as down. Use OCT+ to move on after each chord, or enter steps with LOCK off.
+- With Length = **Free** the loop is exactly the steps you entered: three chords make a loop three steps long, up to
+  64. After the 64th the pattern is full: another chord is refused (`64 steps: full`).
+- With a Length in bars the pattern has that many bars (1 bar = 16 steps, 2 = 32, 4 = 64) and the cursor wraps at its
+  end. A pattern cannot be longer than 64 steps: with Length 8 or 16 bars, step entry uses 4 bars and says so (`Step:
+  4 bars (64 steps)`). Takes you play by hand keep the full 8 or 16 bars.
+- **Rate** scales the pattern like any loop: at x1 a step is a sixteenth, at x2 a thirty-second, at x1/2 an eighth.
+- Quantize does nothing here (see above).
 
 ### The loop editor
 
-In the PLAY menu, tap **EDIT**. The loop in memory is shown as steps, and you can change it one step at a time. (Outside
-the PLAY menu EDIT is the sound editor, as ever.)
+In the PLAY menu, tap **EDIT**. The loop in memory is shown as a pattern of steps, and you can change it one step at a
+time. (Outside the PLAY menu EDIT is the sound editor, as ever.)
 
-<img src="manual/loop-editor.png" width="240" alt="The loop editor: Edit; a row of four cells, the second outlined; Am, step 2/3; cells Step 2/3, Length 2, Steps 3, Velocity 100">
+<img src="manual/loop-editor.png" width="240" alt="The loop editor: Edit; a row of sixteen steps, three red, the second outlined, a white line under the next three; Am, step 2/16; cells Step 2/16, Note len 4, Steps 16, Velocity 100">
 
-The grid is the **Quantize** value: each cell of the row is one Quantize step, a bar to a row. A filled cell is one
-where a chord or note starts. A step is one cell, or several when its chord is held over the following cells.
+The grid is the same as in Step entry: **sixteenth-note steps, 16 to a row, four rows: all 64 steps of a pattern on one
+screen.** A red step has a chord or a note starting in it. A dark red step has nothing starting in it, but a longer
+note from an earlier step is still sounding there. Grey steps are empty. The outlined step is the selected one; its
+chord is named under the grid. While the loop plays, the step being played lights up white.
 
 | Control | In the loop editor |
 | --- | --- |
-| SELECT, or KNOB 1 | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/3`, the chord in it, and its cells |
+| SELECT, or KNOB 1 | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it |
 | the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. The cursor stays on the step; turn SELECT to move on |
 | REC tap | **clears** the selected step (REC does not record here) |
-| KNOB 2 | the step's **Length**, 1 to 16 cells. Every later step moves with it. With Length = Free the loop gets longer or shorter by as much; with a Length in bars the loop keeps its length, and a longer step is refused (`no room in the loop`) if it would push a chord past the end |
-| KNOB 3 | **Steps**: the loop's length, a step a click. Shorter hides the last step, longer brings it back; past what there was, longer adds an empty step |
+| KNOB 2 | **Note len**: how long the selected step's notes sound, 1 to 64 steps. **Nothing else moves**: the other steps stay where they are and the loop keeps its length. A white line under the following steps shows how far the note reaches |
+| KNOB 3 | **Steps**: the loop's length, 1 to 64 steps, a step a click. Shorter hides the last step, longer brings it back; past what there was, longer adds an empty step |
 | KNOB 4 | the step's **Velocity** |
-| LOOP tap | play / stop, as ever, so you hear the edits in place. The cursor does not follow the playback |
+| LOOP tap | play / stop, as ever, so you hear the edits in place. The cursor does not follow the playback; the white step does |
 | REC held | the looper's undo (see below) |
 | OCT-, OCT+, HOME, EDIT (tap or hold) | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it |
 
 Things to know:
 
-- **A loop you played by hand** has its chords wherever you played them. The editor sorts them onto the Quantize grid:
-  a chord belongs to the step it starts in, and it is not moved. With Quantize = none there is no grid to show such a
-  loop on, and the editor does not open: `set Quantize to edit`. Nothing is ever requantised behind your back.
-- **A step shorter than one cell:** choose a finer Quantize first (the step that was 1 cell at 1/4 is 2 cells at 1/8).
-- **An empty step** is always one cell; its Length and Velocity cells show `-`. To make room, lengthen the step before
-  it or add steps at the end with KNOB 3.
-- **A cleared step that was several cells long** becomes that many empty steps.
-- **An empty slot** opens as an empty loop of the set Length (Free: one bar). Leave without entering anything and the
-  slot is empty again.
+- **A long note sounds over the steps after it, and those steps still play.** A chord four steps long with another
+  chord on the next step: both sound together for three steps, as if you had held one and played the other. (The loop
+  plays up to eight chords at once; a ninth takes the place of the one that would end first.) A note longer than the
+  rest of the loop sounds on across the loop's start.
+- **A chord played on a step keeps that step's note length.** Set a step to 4 steps long, then try other chords on it:
+  each is 4 long. On an empty step a chord is 1 step long.
+- **A loop you played by hand** opens too, at any Quantize setting. Its chords are shown on the sixteenth grid: a chord
+  belongs to the step it starts in. **Nothing is moved**: a chord you played a little early or late keeps its exact
+  timing until you replace that step (the new chord starts on the step). Its Note len shows the steps it reaches into
+  (a part of a step counts as one); turning KNOB 2 makes it end on the grid.
+- **A loop longer than 64 steps** (a long take) is shown 64 steps at a time; the cursor walks through all of it and the
+  screen follows (`step 70/128 · p2`). KNOB 3 can make such a loop shorter, not longer.
+- **A step loop made with an earlier 0.18 test build**, whose steps were as long as the Quantize value, plays as it
+  did. Here it shows on the sixteenth grid: quarter-note steps are a chord on every fourth step, 4 steps long.
+- **An empty step**: its Note len and Velocity cells show `-`.
+- **An empty slot** opens as an empty pattern of the set Length (Free: one bar, 16 steps; 8 or 16 bars: 64 steps).
+  Leave without entering anything and the slot is empty again.
 - **Split Bass:** a note played on the bass side replaces the step's bass notes only, a chord on the other side only
   the chords, as when recording.
 - **Steps hidden by KNOB 3** are kept only while the editor is open: when you close it they are gone. A save while it
@@ -791,7 +812,6 @@ Things to know:
   layer had taken out is gone for good), so after an edit REC held says `nothing to undo`. The way back is the last
   save: **GLO + SAVE** brings the saved loop back. Opening the editor and closing it without an edit changes nothing.
 - Edits are in memory, like everything you record: hold SAVE to keep them.
-- A loop longer than 2048 cells at the current Quantize does not open (`too long: coarser grid`).
 
 ### Slots and saving
 
@@ -1398,7 +1418,8 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | The bass layer's keys make no sound | in that layer the white keys pick the behaviour | close the layer to play |
 | The loop plays but is silent | its Level is 0 | PLAY menu, KNOB 3 |
 | REC replaced my loop | the record mode is Overwrite | PLAY menu, ALGORITHM: Overdub. Before the first chord, REC again cancels |
-| In step entry the cursor does not move on | LOCK is on with a chord latched | OCT+ after each chord, or LOCK off |
+| In step entry two notes land on the same step | they were held together | let go of the first before pressing the next; OCT- goes back |
+| Step entry says `64 steps: full` | a pattern has 64 steps at most | REC to finish; OCT- to go back and change a step |
 | HOME does not change the view | the view is locked | HOME held, KNOB 1: Lock Off |
 | The tempo moves by itself | MIDI Clock is In | Options > MIDI Clock |
 | My reverb or delay setting is back to what it was | it was not saved: since 0.18 the FM-1 comes back as last **saved** | set it again and hold SAVE (`saved`) |

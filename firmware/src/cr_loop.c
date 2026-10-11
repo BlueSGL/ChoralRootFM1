@@ -187,6 +187,26 @@ static void crl_start(cr_loop_t *lp, cr_t *c)
 }
 
 /* ------------------------------------------------------------- capture --- */
+/* step entry: the pattern's steps (a set Length: its steps, the cursor wraps there; Free: CRL_STEPS at most) */
+static uint32_t crl_step_n(const cr_loop_t *lp) { return lp->step_len ? lp->step_len / CRL_STEP : CRL_STEPS; }
+
+uint32_t cr_loop_step_len(const cr_loop_t *lp)
+{
+    uint32_t bar = cr_loop_bar(lp), bars = CRL_BARS[lp->sync < CRL_NSYNC ? lp->sync : 1], most = CRL_STEPS * CRL_STEP / bar;
+    return (bars > most ? most : bars) * bar;
+}
+
+/* the cursor moves on a step (a chord entered, a rest): the step it leaves is used. A set Length: it wraps; Free: past
+ * the last of the CRL_STEPS it stops (step == CRL_STEPS: nothing can be entered there) */
+static void crl_step_adv(cr_loop_t *lp)
+{
+    uint32_t nst = crl_step_n(lp), s = lp->step;
+    if (s < nst && s + 1u > lp->step_end) lp->step_end = (uint16_t)(s + 1u);
+    lp->step = (uint16_t)(s + 1u < nst ? s + 1u : lp->step_len ? 0u : nst);
+    lp->step_w = 0;
+    lp->gen++;
+}
+
 static void crl_write(cr_loop_t *lp, uint32_t t0, int16_t root, uint8_t q, uint8_t ext, uint8_t vel)
 {
     crl_ev_t *e;
@@ -201,8 +221,10 @@ static void crl_write(cr_loop_t *lp, uint32_t t0, int16_t root, uint8_t q, uint8
         if ((int32_t)(start - lp->od0) < 0) start = lp->od0;
         r = (int32_t)(start - lp->cyc0) % (int32_t)lp->d.len;
         rel = (uint32_t)(r < 0 ? r + (int32_t)lp->d.len : r);
-    } else if (lp->cap == CRL_CAP_STEP) {                              /* at the cursor, one step long */
-        rel = (uint32_t)lp->step * lp->step_g;
+    } else if (lp->cap == CRL_CAP_STEP) {                              /* at the step it was pressed on (t0: the
+                                                                        * step, cr_loop_gesture), one step long */
+        if (t0 >= crl_step_n(lp)) return;                              /* (Free: past the last step: refused there) */
+        rel = t0 * lp->step_g;
         start = lp->t - lp->step_g;
     } else {
         return;
@@ -211,8 +233,8 @@ static void crl_write(cr_loop_t *lp, uint32_t t0, int16_t root, uint8_t q, uint8
     dur = lp->t - start;
     dur = dur < 1u ? 1u : dur > CRL_MAX_LEN ? CRL_MAX_LEN : dur;
     if (lp->cap == CRL_CAP_STEP) {
-        lp->step_w = 1;
-        if (lp->step + 1u > lp->step_end) lp->step_end = (uint16_t)(lp->step + 1u);
+        if (t0 == lp->step) lp->step_w = 1;
+        if (t0 + 1u > lp->step_end) lp->step_end = (uint16_t)(t0 + 1u);
     }
     lp->gen++;
     e = &lp->d.ev[lp->d.nev++];
@@ -286,6 +308,15 @@ void cr_loop_gesture(cr_loop_t *lp, uint32_t gid, int16_t root, uint8_t q, uint8
         lp->open[k].ext = ext;
         lp->open[k].vel = vel;
         lp->open[k].rep = 0;
+        if (lp->cap == CRL_CAP_STEP) {
+            /* a root pressed after a chord was written here and let go: the next step, whatever is still held or
+             * latched (the chord key kept down between roots, LOCK's latch: the owner's "only records to the first
+             * step", 2026-10-12). Roots held TOGETHER share the step (a chord over a Split Bass bass note). The step
+             * goes with the gesture (t0): one let go late is written where it was pressed */
+            if (lp->step_w) crl_step_adv(lp);
+            lp->open[k].t0 = lp->step;
+            if (lp->step >= crl_step_n(lp)) lp->step_no++;             /* (Free, a 65th: refused, the UI says so) */
+        }
         if (lp->cap == CRL_CAP_ARMED) {                                /* Free: the first chord starts the take */
             crl_take_start(lp);
             lp->cap = CRL_CAP_REC;
@@ -374,10 +405,7 @@ static int crl_step_commit(cr_loop_t *lp, cr_t *c, int play)
     lp->lev0[0] = 0;
     lp->layer_ev0 = 0;
     if (lp->step_len) len = lp->step_len;
-    else {
-        len = (uint32_t)(lp->step_end ? lp->step_end : 1u) * lp->step_g;
-        if (len > CRL_MAX_LEN) len = CRL_MAX_LEN / lp->step_g * lp->step_g;
-    }
+    else len = (uint32_t)(lp->step_end ? lp->step_end : 1u) * lp->step_g;
     lp->d.len = len;
     lp->d.sig = lp->sig;
     lp->dirty = 1;
@@ -527,6 +555,7 @@ void cr_loop_stop(cr_loop_t *lp, cr_t *c)
 int cr_loop_rec(cr_loop_t *lp, cr_t *c)
 {
     int mode = lp->mode < CRL_NMODE ? lp->mode : CRL_MODE_OVERWRITE;
+    uint32_t i;
     switch (lp->cap) {
     case CRL_CAP_NONE:
         if (mode == CRL_MODE_STEP) {                 /* step entry: the loop stops, the cursor on the first step */
@@ -539,9 +568,9 @@ int cr_loop_rec(cr_loop_t *lp, cr_t *c)
             lp->layer_ev0 = lp->d.nev;               /* (entered after the loop's events: it stays until the commit) */
             lp->step = lp->step_end = 0;
             lp->step_w = 0;
-            lp->step_g = CRL_QGRID[lp->quant < CRL_NQUANT ? lp->quant : 0];
-            if (!lp->step_g) lp->step_g = CRL_STEP_NONE;   /* none: a quarter note (1/16 until 0.17) */
-            lp->step_len = lp->sync ? CRL_BARS[lp->sync < CRL_NSYNC ? lp->sync : 1] * cr_loop_bar(lp) : 0u;
+            lp->step_g = CRL_STEP;                   /* a sixteenth, whatever Quantize says (a take's grid, not this) */
+            lp->step_len = lp->sync ? cr_loop_step_len(lp) : 0u;
+            for (i = 0; i < CRL_OPEN; i++) lp->open[i].t0 = 0;   /* (a key held into step entry: the first step) */
             lp->full = lp->d.nev >= CRL_MAX_EV;
             lp->gen++;
             return CRL_DID_STEP;
@@ -723,20 +752,16 @@ void cr_loop_queue(cr_loop_t *lp, cr_t *c, const crl_data_t *d)
 
 void cr_loop_step(cr_loop_t *lp, int op)
 {
-    uint32_t nst, s;
-    if (lp->cap != CRL_CAP_STEP || !lp->step_g) return;
-    nst = lp->step_len ? lp->step_len / lp->step_g : CRL_MAX_LEN / lp->step_g;
-    s = lp->step;
+    uint32_t nst = crl_step_n(lp);
+    if (lp->cap != CRL_CAP_STEP) return;
     if (op == CRL_STEP_KEYSUP && !lp->step_w) return;    /* (no chord written here yet) */
     if (op == CRL_STEP_BACK) {
-        s = s ? s - 1u : lp->step_len ? nst - 1u : 0u;
+        lp->step = (uint16_t)(lp->step ? lp->step - 1u : lp->step_len ? nst - 1u : 0u);
+        lp->step_w = 0;
+        lp->gen++;
     } else {
-        if (s + 1u > lp->step_end) lp->step_end = (uint16_t)(s + 1u);   /* (a rest is a step used) */
-        s = s + 1u < nst ? s + 1u : lp->step_len ? 0u : s;
+        crl_step_adv(lp);                                /* (a rest is a step used) */
     }
-    lp->step = (uint16_t)s;
-    lp->step_w = 0;
-    lp->gen++;
 }
 
 /* ------------------------------------------------------- the loop editor --- */
@@ -791,23 +816,28 @@ static void crl_ed_flat(cr_loop_t *lp)
 }
 
 /* a chord played on the keys: the cursor's step is that chord (its side: a bass-side note replaces the bass-side
- * notes, anything else the chord side: Split Bass's rule, docs/LOOPER.md); the keys of one push add up */
+ * notes, anything else the chord side: Split Bass's rule, docs/LOOPER.md); the keys of one push add up. The new notes
+ * start on the step's tick and are as long as the step's notes were (a step: an empty one) */
 static void crl_ed_write(cr_loop_t *lp, int16_t root, uint8_t q, uint8_t ext, uint8_t vel)
 {
     crl_ev_t *e;
-    uint32_t span = (uint32_t)lp->ed_n * lp->ed_g, side;
+    uint32_t side, n;
     if (q >= CR_Q_COUNT) q = 0;
     side = !q && (ext & CR_GX_BASS) ? 1u : 0u;
-    if (!lp->ed_g || lp->ed_t0 >= lp->d.len) return;
+    if (lp->ed_t0 >= lp->d.len) return;
     crl_ed_flat(lp);
+    if (!lp->ed_w) {
+        n = cr_loop_ed_nlen(lp);
+        lp->ed_n = (uint8_t)(n ? n : 1u);
+    }
     if (!(lp->ed_w & (1u << side))) {
-        crl_ed_kill(lp, lp->ed_t0, lp->ed_t0 + span, (int)side, 0);
+        crl_ed_kill(lp, lp->ed_t0, lp->ed_t0 + CRL_STEP, (int)side, 0);
         lp->ed_w |= (uint8_t)(1u << side);
     }
     if (lp->d.nev >= CRL_MAX_EV) { lp->full = 1; return; }
     e = &lp->d.ev[lp->d.nev++];
     e->t = (uint16_t)lp->ed_t0;
-    e->dur = (uint16_t)(span ? span : 1u);
+    e->dur = (uint16_t)((lp->ed_n ? lp->ed_n : 1u) * CRL_STEP);
     e->root = (uint8_t)(root < 0 ? 0 : root > 127 ? 127 : root);
     e->vel = (uint8_t)(vel ? vel : 1u);
     e->qx = (uint8_t)(q << 4 | (q ? ext & 15u : side ? CRL_X_BASS : 0u));
@@ -818,20 +848,15 @@ static void crl_ed_write(cr_loop_t *lp, int16_t root, uint8_t q, uint8_t ext, ui
 
 int cr_loop_ed_open(cr_loop_t *lp)
 {
-    uint32_t g = CRL_QGRID[lp->quant < CRL_NQUANT ? lp->quant : 0], empty = 1, i;
+    uint32_t empty = 1, i;
     if (lp->cap != CRL_CAP_NONE) return CRL_ED_BUSY;
     for (i = 0; lp->d.len && i < lp->d.nev; i++)
         if (!(lp->d.ev[i].layer & CRL_HID)) empty = 0;
-    if (!g) {
-        if (!empty) return CRL_ED_NOQUANT;           /* a free-timed loop has no grid: nothing is requantised for one */
-        g = CRL_STEP_NONE;
-    }
-    if (!empty && (lp->d.len + g - 1u) / g > CRL_ED_CELLS) return CRL_ED_LONG;
     lp->next_on = 0;                                 /* a queued switch: cancelled, this loop is being edited */
     lp->ed_flat = 0;
-    if (empty) {                                     /* an empty step loop of the set Length (Free: a bar) */
+    if (empty) {                                     /* an empty pattern of the set Length (Free: a bar) */
         crl_drop_take(lp);
-        lp->d.len = (lp->sync ? CRL_BARS[lp->sync < CRL_NSYNC ? lp->sync : 1] : 1u) * cr_loop_bar(lp);
+        lp->d.len = lp->sync ? cr_loop_step_len(lp) : cr_loop_bar(lp);
         lp->d.nlayers = 1;
         lp->d.sig = lp->sig;
         lp->lev0[0] = 0;
@@ -839,7 +864,7 @@ int cr_loop_ed_open(cr_loop_t *lp)
         lp->ed_flat = 1;
     }
     lp->ed = 1;
-    lp->ed_g = (uint8_t)g;
+    lp->ed_g = CRL_STEP;
     lp->ed_len = lp->d.len;
     lp->ed_t0 = 0;
     lp->ed_n = 1;
@@ -864,59 +889,34 @@ void cr_loop_ed_close(cr_loop_t *lp, cr_t *c)
     lp->gen++;
 }
 
-#define CRL_BIT(a, i) (((a)[(i) >> 5] >> ((i) & 31u)) & 1u)
-void cr_loop_ed_map(const cr_loop_t *lp, crl_edmap_t *m)
+void cr_loop_ed_map(const cr_loop_t *lp, uint32_t first, crl_edmap_t *m)
 {
-    uint32_t g = lp->ed_g ? lp->ed_g : CRL_STEP_NONE, ext = lp->ed_len > lp->d.len ? lp->ed_len : lp->d.len, i, j, n;
+    uint32_t ext = lp->ed_len > lp->d.len ? lp->ed_len : lp->d.len, i;
     crl_zero(m, sizeof *m);
-    m->ncell = (uint16_t)((lp->d.len + g - 1u) / g > CRL_ED_CELLS ? CRL_ED_CELLS : (lp->d.len + g - 1u) / g);
-    m->nall = (uint16_t)((ext + g - 1u) / g > CRL_ED_CELLS ? CRL_ED_CELLS : (ext + g - 1u) / g);
+    m->first = (uint16_t)first;
+    m->nstep = (uint16_t)((lp->d.len + CRL_STEP - 1u) / CRL_STEP);
+    m->nall = (uint16_t)((ext + CRL_STEP - 1u) / CRL_STEP);
     for (i = 0; i < lp->d.nev; i++) {
         const crl_ev_t *e = &lp->d.ev[i];
-        uint32_t cell = e->t / g;
-        if (!(e->layer & CRL_HID) && cell < m->nall) m->start[cell >> 5] |= 1u << (cell & 31u);
+        uint32_t s = e->t / CRL_STEP, end = (uint32_t)e->t + e->dur, lim = e->t < lp->d.len ? m->nstep : m->nall, a, b;
+        if (e->layer & CRL_HID) continue;
+        if (s >= first && s < first + CRL_STEPS) m->start |= (uint64_t)1 << (s - first);
+        /* the steps after its own that it sounds through, half or more: [a, b), on this page, up to the loop's end */
+        a = s + 1u > first ? s + 1u : first;
+        b = (end + CRL_STEP / 2u) / CRL_STEP;
+        if (b > first + CRL_STEPS) b = first + CRL_STEPS;
+        if (b > lim) b = lim;
+        if (b > a)
+            m->tail |= (b - a >= 64u ? ~(uint64_t)0 : ((uint64_t)1 << (b - a)) - 1u) << (a - first);
     }
-    for (i = 0; i < lp->d.nev; i++) {                /* the cells an event covers to their end, up to the next start */
-        const crl_ev_t *e = &lp->d.ev[i];
-        uint32_t cell = e->t / g, lim = cell < m->ncell ? m->ncell : m->nall, end = (uint32_t)e->t + e->dur;
-        if ((e->layer & CRL_HID) || cell >= m->nall) continue;
-        for (j = cell + 1u; j < lim && j < cell + CRL_ED_MAXN && !CRL_BIT(m->start, j); j++) {
-            uint32_t ce = (j + 1u) * g;
-            if (ce > (cell < m->ncell ? lp->d.len : ext)) ce = cell < m->ncell ? lp->d.len : ext;
-            if (end < ce) break;
-            m->cont[j >> 5] |= 1u << (j & 31u);
-        }
-    }
-    for (i = n = 0; i < m->ncell; i++)
-        n += !CRL_BIT(m->cont, i);
-    m->nstep = (uint16_t)n;
+    m->tail &= ~m->start;
 }
 
-void cr_loop_ed_step(const crl_edmap_t *m, uint32_t cell, uint32_t *c0, uint32_t *n)
+void cr_loop_ed_cursor(cr_loop_t *lp, uint32_t step)
 {
-    uint32_t lim = cell < m->ncell ? m->ncell : m->nall, k = 1;
-    if (cell >= m->nall) cell = m->nall ? m->nall - 1u : 0u;
-    while (cell && CRL_BIT(m->cont, cell)) cell--;
-    while (cell + k < lim && CRL_BIT(m->cont, cell + k)) k++;
-    *c0 = cell;
-    *n = k;
-}
-
-uint32_t cr_loop_ed_index(const crl_edmap_t *m, uint32_t cell)
-{
-    uint32_t i, n = 0;
-    for (i = 0; i < cell && i < m->nall; i++)
-        n += !CRL_BIT(m->cont, i);
-    return n;
-}
-
-void cr_loop_ed_cursor(cr_loop_t *lp, uint32_t c0, uint32_t n)
-{
-    uint32_t t0 = c0 * (lp->ed_g ? lp->ed_g : CRL_STEP_NONE);
-    n = n < 1u ? 1u : n > CRL_ED_MAXN ? CRL_ED_MAXN : n;
+    uint32_t t0 = step * CRL_STEP;
     if (t0 != lp->ed_t0) lp->ed_w = 0;               /* (another step: the keys still down replace there) */
     lp->ed_t0 = t0;
-    lp->ed_n = (uint8_t)n;
 }
 
 int cr_loop_ed_clear(cr_loop_t *lp)
@@ -924,41 +924,37 @@ int cr_loop_ed_clear(cr_loop_t *lp)
     uint32_t n;
     if (!lp->ed) return 0;
     crl_ed_flat(lp);
-    n = crl_ed_kill(lp, lp->ed_t0, lp->ed_t0 + (uint32_t)lp->ed_n * lp->ed_g, 2, 0);
-    lp->ed_n = 1;                                    /* (its cells are empty steps now) */
+    n = crl_ed_kill(lp, lp->ed_t0, lp->ed_t0 + CRL_STEP, 2, 0);
     lp->ed_w = 0;
     if (n) lp->dirty = 1;
     return (int)n;
 }
 
-int cr_loop_ed_steplen(cr_loop_t *lp, uint32_t n)
+uint32_t cr_loop_ed_nlen(const cr_loop_t *lp)
 {
-    uint32_t g = lp->ed_g, B = lp->ed_t0 + (uint32_t)lp->ed_n * g, i, has = 0;
-    int32_t delta = ((int32_t)n - (int32_t)lp->ed_n) * (int32_t)g;
-    if (!lp->ed || !g || n < 1u || n > CRL_ED_MAXN || n == lp->ed_n) return 0;
+    uint32_t i, top = 0;
     for (i = 0; i < lp->d.nev; i++) {
         const crl_ev_t *e = &lp->d.ev[i];
-        if (e->layer & CRL_HID) continue;
-        if (e->t >= lp->ed_t0 && e->t < B) has = 1;
-        if (lp->sync && delta > 0 && e->t >= B && e->t < lp->d.len && e->t + (uint32_t)delta >= lp->d.len)
-            return 0;                                /* a set Length: no event is pushed past the end */
+        uint32_t n;
+        if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= lp->ed_t0 + CRL_STEP) continue;
+        n = (e->t - lp->ed_t0 + e->dur + CRL_STEP - 1u) / CRL_STEP;
+        if (n > top) top = n;
     }
-    if (!has) return 0;                              /* an empty step is one cell */
-    if ((int32_t)lp->ed_len + delta > (int32_t)CRL_MAX_LEN || (!lp->sync && (int32_t)lp->d.len + delta > (int32_t)CRL_MAX_LEN))
-        return 0;
+    return top > CRL_STEPS ? CRL_STEPS : top;
+}
+
+int cr_loop_ed_setnlen(cr_loop_t *lp, uint32_t n)
+{
+    uint32_t i;
+    if (!lp->ed || n < 1u || n > CRL_STEPS || !cr_loop_ed_nlen(lp)) return 0;
     crl_ed_flat(lp);
     for (i = 0; i < lp->d.nev; i++) {
         crl_ev_t *e = &lp->d.ev[i];
-        if (e->t >= B) e->t = (uint16_t)((int32_t)e->t + delta);          /* the later events move */
-        else if (e->t >= lp->ed_t0) e->dur = (uint16_t)(n * g - (e->t - lp->ed_t0));   /* the step's sound to its end */
+        if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= lp->ed_t0 + CRL_STEP) continue;
+        e->dur = (uint16_t)(n * CRL_STEP - (e->t - lp->ed_t0));   /* (to the grid: n steps from the step's start) */
     }
-    if (!lp->sync) lp->d.len = (uint32_t)((int32_t)lp->d.len + delta);   /* Free: the loop is its steps */
-    lp->ed_len = (uint32_t)((int32_t)lp->ed_len + delta);
-    if (lp->ed_len < lp->d.len) lp->ed_len = lp->d.len;
-    lp->ed_n = (uint8_t)n;
     lp->gen++;
     lp->dirty = 1;
-    crl_ed_renorm(lp);
     return 1;
 }
 
@@ -976,7 +972,7 @@ int cr_loop_ed_len(cr_loop_t *lp, uint32_t len)
 
 int cr_loop_ed_vel(cr_loop_t *lp, int delta)
 {
-    uint32_t i, B = lp->ed_t0 + (uint32_t)lp->ed_n * lp->ed_g;
+    uint32_t i, B = lp->ed_t0 + CRL_STEP;
     int top = 0;
     if (!lp->ed) return 0;
     if (delta) crl_ed_flat(lp);

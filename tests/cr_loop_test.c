@@ -498,18 +498,30 @@ static void step_chord(int note, cr_mod_t m)      /* a chord pressed and release
     step(5);
     cr_loop_step(&L, CRL_STEP_KEYSUP);
 }
+static int step_root(int k) { return 50 + k % 13; }  /* the root entered at step k (no two neighbours alike) */
+static void steps_n(int n)                           /* Step, Length Free: n chords, every key up between; REC */
+{
+    int k;
+    reset();
+    L.mode = CRL_MODE_STEP;
+    cr_loop_rec(&L, &C);
+    for (k = 0; k < n; k++) step_chord(step_root(k), CR_MOD_MAJ);
+}
+/* Step entry as a step sequencer (the owner, 2026-10-12): a step is a sixteenth (CRL_STEP) whatever Quantize says, a
+ * pattern has 1 .. CRL_STEPS steps, a root pressed after one was let go is the next step */
 static void s_step(void)
 {
-    char name[128];
-    uint32_t t[8], e[8], gg[8];
-    int mark;
+    static const int NS[5] = {1, 3, 5, 17, 64};
+    char name[200];
+    uint32_t t[70], e[8], gg[8];
+    int mark, k, i, good, q;
     reset();
     L.mode = CRL_MODE_OVERWRITE;
     take_dga();                                      /* a loop there before: replaced by the steps */
     L.mode = CRL_MODE_STEP;
-    L.quant = 4;                                     /* 1/16 steps (24 ticks) */
+    L.quant = 0;                                     /* Quantize none: the step is a sixteenth all the same */
     ok(cr_loop_rec(&L, &C) == CRL_DID_STEP && L.cap == CRL_CAP_STEP && L.state == CRL_STOPPED && L.step == 0 &&
-       L.step_g == 24, "step: REC while playing stops the loop, step entry at step 1 (1/16)");
+       L.step_g == 24 && CRL_STEP == 24, "step: REC while playing stops the loop, step entry at step 1; a step is a 1/16 (Quantize none)");
     step(200);
     ok(sounding() == 0, "step: the loop stopped");
     step_chord(62, CR_MOD_MAJ);
@@ -538,49 +550,146 @@ static void s_step(void)
        "step: the 4-step loop comes round every 4 steps (500 ms)");
     cr_loop_play(&L, &C);
     step(300);
+    /* the Rate scales the pattern (the Elektron's scale): x2 thirty-seconds, x1/2 eighths */
+    cr_loop_set_rate(&L, 5);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(990);
+    k = ons_of(62, mark, t, 8);
+    i = ons_of(64, mark, e, 8);
+    ok(k == 4 && i >= 1 && near(t[1] - t[0], 250, 6) && near(e[0] - t[0], 62, 6),
+       "step: Rate x2: the 4 steps come round every 250 ms, a step is 62 ms (a 1/32 of the tempo)");
+    cr_loop_play(&L, &C);
+    step(300);
+    cr_loop_set_rate(&L, 1);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(1990);
+    k = ons_of(62, mark, t, 8);
+    i = ons_of(64, mark, e, 8);
+    ok(k == 2 && i >= 1 && near(t[1] - t[0], 1000, 6) && near(e[0] - t[0], 250, 6),
+       "step: Rate x1/2: every 1000 ms, a step is 250 ms (an 1/8)");
+    cr_loop_play(&L, &C);
+    cr_loop_set_rate(&L, CRL_RATE_1);
+    step(300);
     /* nothing entered: the loop as it was; LOOP leaves and plays */
     ok(cr_loop_rec(&L, &C) == CRL_DID_STEP && cr_loop_rec(&L, &C) == CRL_DID_EMPTY_TAKE && L.d.nev == 3 && L.d.len == 96,
        "step: REC REC with nothing entered keeps the loop");
-    /* three chords, Length Free: three steps (the owner, 2026-10-11); Quantize none: a step is a quarter note */
-    L.quant = 0;
-    cr_loop_rec(&L, &C);
-    ok(L.step_g == CRL_STEP_NONE && CRL_STEP_NONE == 96, "step, Quantize none: a step is a quarter note");
+    /* Quantize never sets the step */
+    for (q = 0, good = 1; q < (int)CRL_NQUANT; q++) {
+        reset();
+        L.mode = CRL_MODE_STEP;
+        L.quant = (uint8_t)q;
+        cr_loop_rec(&L, &C);
+        step_chord(62, CR_MOD_MAJ);
+        step_chord(64, CR_MOD_MIN);
+        step_chord(67, CR_MOD_MAJ);
+        cr_loop_rec(&L, &C);
+        good &= L.d.len == 72 && L.d.nev == 3 && L.d.ev[1].t == 24 && L.d.ev[2].t == 48 && L.d.ev[2].dur == 24;
+    }
+    ok(good, "step: at every Quantize setting (none .. 1/32) three chords are three sixteenths (72 ticks), a step long each");
+    /* Length Free: N chords are N steps, up to 64 */
+    for (i = 0; i < 5; i++) {
+        steps_n(NS[i]);
+        cr_loop_rec(&L, &C);
+        for (k = 0, good = 1; k < NS[i]; k++)
+            good &= L.d.ev[k].t == (uint32_t)k * 24u && L.d.ev[k].dur == 24 && L.d.ev[k].root == step_root(k);
+        snprintf(name, sizeof name, "step: Free: %d chords = %d steps (len %u, %u events, each on its own step)", NS[i], NS[i],
+                 (unsigned)L.d.len, (unsigned)L.d.nev);
+        ok(good && L.d.nev == NS[i] && L.d.len == (uint32_t)NS[i] * 24u, name);
+    }
+    /* .. the 64 play back in order, a sixteenth apart, 4 bars round */
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(8100);
+    for (k = 0, good = 1; k < 64; k++) {             /* step k's root sounds at k x 125 ms */
+        int j, hit = 0;
+        for (j = mark; j < nlog; j++)
+            hit |= LOG[j].k == '+' && LOG[j].s == 0 && LOG[j].note == step_root(k) && near(LOG[j].ms - LOG[mark].ms, (uint32_t)k * 125u, 6);
+        good &= hit;
+    }
+    for (k = mark, i = 0, t[0] = 0; k < nlog; k++)   /* the distinct times a note starts */
+        if (LOG[k].k == '+' && LOG[k].s == 0 && (!i || LOG[k].ms != t[0])) { t[0] = LOG[k].ms; i++; }
+    snprintf(name, sizeof name, "step: 64 steps entered play back in order, each 125 ms after the last (%d onsets in 8.1 s: 64 + the loop's start again)", i);
+    ok(good && i == 65 && L.played == 65, name);
+    cr_loop_play(&L, &C);
+    step(300);
+    /* a 65th: refused */
+    steps_n(64);
+    ok(L.step == 64 && L.step_end == 64 && L.d.nev == 64 && L.step_no == 0, "step: after the 64th the cursor is past the end");
     step_chord(62, CR_MOD_MAJ);
-    step_chord(64, CR_MOD_MIN);
-    step_chord(67, CR_MOD_MAJ);
+    ok(L.d.nev == 64 && L.step_no == 1 && L.step == 64, "step: a 65th chord is refused (step_no: the UI's \"64 steps: full\"), nothing written");
+    cr_loop_step(&L, CRL_STEP_REST);
+    ok(L.step == 64 && L.step_end == 64, "step: .. and a rest there does nothing");
+    cr_loop_step(&L, CRL_STEP_BACK);
+    ok(L.step == 63, "step: OCT- from there: back on step 64");
+    step_chord(60, CR_MOD_MIN);
+    ok(L.d.nev == 65 && L.d.ev[64].t == 63u * 24u && L.step == 64, "step: .. where a chord still goes (beside the one there)");
     cr_loop_rec(&L, &C);
-    snprintf(name, sizeof name, "step: 3 chords, Free: the loop is 3 steps long (len %u = 3 x 96), events at 0 96 192, "
-             "a step long each", (unsigned)L.d.len);
-    ok(L.d.len == 288 && L.d.nev == 3 && L.d.ev[0].t == 0 && L.d.ev[1].t == 96 && L.d.ev[2].t == 192 &&
-       L.d.ev[0].dur == 96 && L.d.ev[2].dur == 96, name);
-    L.quant = 2;
+    ok(L.d.len == 1536 && L.d.nev == 65, "step: 64 steps: 1536 ticks, 4 bars of 4/4");
+    /* a root pressed after one was let go is the next step, whatever is still held (the owner's "only records to the
+     * first step": the chord key kept down between the roots) */
+    reset();
+    L.mode = CRL_MODE_STEP;
+    L.quant = 4;
     cr_loop_rec(&L, &C);
-    step_chord(62, CR_MOD_MAJ);
-    step_chord(64, CR_MOD_MIN);
-    step_chord(67, CR_MOD_MAJ);
-    cr_loop_rec(&L, &C);
-    ok(L.d.len == 144 && L.d.ev[2].t == 96, "step: 3 chords at Quantize 1/8: 3 eighths (len 144): the step follows Quantize");
-    /* synced 1 bar: the cursor wraps; two gestures at one step; LOOP leaves and plays */
-    L.sync = 1;
-    L.quant = 2;                                     /* 1/8: 8 steps a bar */
-    cr_loop_rec(&L, &C);
-    ok(L.step_g == 48 && L.step_len == 384, "step, 1 bar at 1/8: 8 steps");
     cr_mod(&C, CR_MOD_MIN, 1);
-    cr_key(&C, 62, 100, 1); step(30); cr_key(&C, 62, 100, 0); step(10);
-    cr_key(&C, 69, 100, 1); step(30); cr_key(&C, 69, 100, 0); step(10);
+    for (k = 0; k < 6; k++) { cr_key(&C, (uint8_t)step_root(k), 100, 1); step(30); cr_key(&C, (uint8_t)step_root(k), 100, 0); step(10); }
+    for (k = 0, good = 1; k < 6; k++) good &= L.d.ev[k].t == (uint32_t)k * 24u;
+    ok(good && L.d.nev == 6 && L.step == 5, "step: the chord key held, six roots tapped under it: six steps (not six chords on step 1)");
     cr_mod(&C, CR_MOD_MIN, 0);
     cr_loop_step(&L, CRL_STEP_KEYSUP);
-    ok(L.d.nev == 5 && L.d.ev[3].t == 0 && L.d.ev[4].t == 0 && L.step == 1, "step: two presses before every key is up: both at step 1");
+    ok(L.step == 6, "step: .. every key up: the cursor moves on once");
+    /* roots held together share a step; one held on is written where it was pressed */
+    cr_key(&C, 62, 100, 1); step(20); cr_key(&C, 69, 100, 1); step(30);
+    cr_key(&C, 62, 100, 0); step(10); cr_key(&C, 69, 100, 0); step(10);
+    ok(L.d.nev == 8 && L.d.ev[6].t == 144 && L.d.ev[7].t == 144 && L.step == 6, "step: two roots held together: both on the step");
+    cr_loop_step(&L, CRL_STEP_KEYSUP);
+    cr_key(&C, 48, 100, 1); step(20);                /* a low key held .. */
+    cr_key(&C, 64, 100, 1); step(20); cr_key(&C, 64, 100, 0); step(10);   /* .. a root over it: the same step */
+    cr_key(&C, 67, 100, 1); step(20); cr_key(&C, 67, 100, 0); step(10);   /* .. the next root: the next step */
+    cr_key(&C, 48, 100, 0); step(10);
+    ok(L.d.nev == 11 && L.d.ev[8].root == 64 && L.d.ev[8].t == 168 && L.d.ev[9].root == 67 && L.d.ev[9].t == 192 &&
+       L.d.ev[10].root == 48 && L.d.ev[10].t == 168 && L.d.ev[10].dur == 24,
+       "step: a key held over two roots: it is written on the step it was pressed on, a step long");
+    cr_loop_rec(&L, &C);
+    ok(L.d.len == 216, "step: .. nine steps used: 216 ticks");
+    /* a set Length: its steps, the cursor wraps; LOOP leaves and plays */
+    reset();
+    L.mode = CRL_MODE_STEP;
+    L.sync = 1;
+    L.quant = 2;                                     /* (1/8: not the step) */
+    cr_loop_rec(&L, &C);
+    ok(L.step_g == 24 && L.step_len == 384, "step, 1 bar: 16 steps");
+    step_chord(62, CR_MOD_MIN);
+    step_chord(69, CR_MOD_MIN);
     cr_loop_step(&L, CRL_STEP_BACK);
     cr_loop_step(&L, CRL_STEP_BACK);
-    ok(L.step == 7, "step, synced: back past step 1 wraps to the bar's last step");
+    cr_loop_step(&L, CRL_STEP_BACK);
+    ok(L.step == 15, "step, a set Length: back past step 1 wraps to the last step (16)");
     cr_loop_step(&L, CRL_STEP_REST);
-    ok(L.step == 0, "step, synced: the cursor wraps at the length");
+    ok(L.step == 0, "step, a set Length: the cursor wraps at the length");
+    for (k = 0; k < 17; k++) cr_loop_step(&L, CRL_STEP_REST);
+    ok(L.step == 1 && L.step_no == 0, "step, a set Length: it goes round (nothing is refused)");
     ok(cr_loop_play(&L, &C) == CRL_DID_PLAY && L.state == CRL_PLAYING && L.d.nev == 2 && L.d.len == 384,
-       "step: a set Length (1 bar) as before: LOOP leaves step entry and plays the steps (2 events, the bar)");
+       "step: a set Length (1 bar): LOOP leaves step entry and plays the steps (2 events, the bar)");
     cr_loop_play(&L, &C);
     step(300);
     ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "step: no stuck, double or stray note");
+    /* a Length longer than a pattern: its first whole bars within 64 steps */
+    for (k = 1, good = 1; k < (int)CRL_NSYNC; k++) {
+        static const uint32_t W44[CRL_NSYNC] = {0, 384, 768, 1536, 1536, 1536}, W34[CRL_NSYNC] = {0, 288, 576, 1152, 1440, 1440};
+        reset();
+        L.mode = CRL_MODE_STEP;
+        L.sync = (uint8_t)k;
+        cr_loop_rec(&L, &C);
+        good &= L.step_len == W44[k] && cr_loop_step_len(&L) == W44[k];
+        cr_loop_rec(&L, &C);
+        L.sig = CRL_SIG_34;
+        cr_loop_rec(&L, &C);
+        good &= L.step_len == W34[k];
+    }
+    ok(good, "step: Length 1 2 4 bars: 16 32 64 steps; 8 and 16 bars: 64 steps (4 bars); 3/4: 12 a bar, 60 steps (5 bars) at most");
 }
 
 /* 0.18: a Split Bass bass-side note is recorded as one and plays on the bass part (crl_ev_t.qx: CRL_X_BASS; the
@@ -965,15 +1074,10 @@ static void s_rate(void)
     ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "rate: no stuck, double or stray note");
 }
 
-/* ---- the loop editor (0.18): the loop as steps, read from its events */
+/* ---- the loop editor (0.18; a step sequencer since 2026-10-12): the loop as sixteenth-note steps, read from its
+ * events; a step's length is its NOTE's length */
 static crl_edmap_t M;
-static void ed_at(uint32_t cell)                     /* the cursor on the step cell is in (as the UI does) */
-{
-    uint32_t c0, n;
-    cr_loop_ed_map(&L, &M);
-    cr_loop_ed_step(&M, cell, &c0, &n);
-    cr_loop_ed_cursor(&L, c0, n);
-}
+static void ed_at(uint32_t st) { cr_loop_ed_cursor(&L, st); }   /* the cursor on step st (0 ..), as the UI does */
 static int live_at(uint32_t t)                       /* live events starting at tick t */
 {
     int i, n = 0;
@@ -987,11 +1091,17 @@ static int root_at(uint32_t t)                       /* the root of the last liv
         if (!(L.d.ev[i].layer & CRL_HID) && L.d.ev[i].t == t) r = L.d.ev[i].root;
     return r;
 }
-static void steps3(void)                             /* D, Em, G entered as quarter-note steps, Length Free */
+static int dur_at(uint32_t t)                        /* .. its length in ticks (-1: none) */
+{
+    int i, r = -1;
+    for (i = 0; i < L.d.nev; i++)
+        if (!(L.d.ev[i].layer & CRL_HID) && L.d.ev[i].t == t) r = L.d.ev[i].dur;
+    return r;
+}
+static void steps3(void)                             /* D, Em, G entered as steps, Length Free: 72 ticks */
 {
     reset();
     L.mode = CRL_MODE_STEP;
-    L.quant = 1;
     cr_loop_rec(&L, &C);
     step_chord(62, CR_MOD_MAJ);
     step_chord(64, CR_MOD_MIN);
@@ -1001,101 +1111,119 @@ static void steps3(void)                             /* D, Em, G entered as quar
 static void s_edit(void)
 {
     static uint8_t buf[CRL_REC_MAX];
-    static crl_data_t back;
-    static cr_loop_t K;
+    static crl_data_t back, was;
     char name[200];
-    uint32_t n, c0, k, i;
+    uint32_t n, k, i, t[8], u[8];
     int mark;
     steps3();
-    ok(cr_loop_ed_open(&L) == CRL_ED_OK && L.ed && L.ed_g == 96 && L.ed_len == 288, "edit: opens on a step loop, the grid the Quantize value (1/4)");
-    cr_loop_ed_map(&L, &M);
-    ok(M.ncell == 3 && M.nstep == 3 && M.start[0] == 7u && M.cont[0] == 0u, "edit: the step loop is its steps exactly: 3 cells, 3 steps");
+    ok(L.quant == 0 && cr_loop_ed_open(&L) == CRL_ED_OK && L.ed && L.ed_g == 24 && L.ed_len == 72,
+       "edit: opens on a step loop with Quantize none: the grid is the sixteenth, always");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.nstep == 3 && M.nall == 3 && M.start == 7u && M.tail == 0u && M.first == 0, "edit: the step loop is its steps exactly: 3 steps, all filled");
     /* a chord played replaces the step, and sounds */
     ed_at(1);
     mark = nlog;
     chord(69, CR_MOD_MIN, 60);
-    ok(L.d.nev == 3 && live_at(96) == 1 && root_at(96) == 69 && root_at(0) == 62 && root_at(192) == 67 && L.dirty,
+    ok(L.d.nev == 3 && live_at(24) == 1 && root_at(24) == 69 && root_at(0) == 62 && root_at(48) == 67 && L.dirty,
        "edit: a chord played replaces the selected step's notes (Em -> Am), the others untouched");
     ok(ons_of(69, mark, &n, 1) == 1, "edit: .. and it sounds (the keys play)");
-    ok(L.ed_t0 == 96, "edit: the cursor stays on the step");
+    ok(L.ed_t0 == 24, "edit: the cursor stays on the step");
     step(50);
     cr_mod(&C, CR_MOD_MAJ, 1);                       /* two roots in one push: both in the step */
     cr_key(&C, 60, 100, 1); step(20); cr_key(&C, 64, 100, 1); step(40);
     cr_key(&C, 60, 100, 0); step(10); cr_key(&C, 64, 100, 0);
     cr_mod(&C, CR_MOD_MAJ, 0);
     step(20);
-    ok(L.d.nev == 4 && live_at(96) == 2, "edit: two roots held together: the old chord goes once, both are in the step");
+    ok(L.d.nev == 4 && live_at(24) == 2, "edit: two roots held together: the old chord goes once, both are in the step");
     chord(65, CR_MOD_MAJ, 60);
     step(20);
-    ok(L.d.nev == 3 && live_at(96) == 1 && root_at(96) == 65, "edit: the next push replaces again");
+    ok(L.d.nev == 3 && live_at(24) == 1 && root_at(24) == 65, "edit: the next push replaces again");
     /* Split Bass: a bass-side note replaces the bass side only */
     cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
     note(62, 60);                                    /* D4: below the split F: the bass side */
     step(20);
-    ok(live_at(96) == 2 && nbass(&L.d) == 1, "edit: a bass-side note joins the step: the chord side is kept (Split Bass's rule)");
+    ok(live_at(24) == 2 && nbass(&L.d) == 1, "edit: a bass-side note joins the step: the chord side is kept (Split Bass's rule)");
     note(60, 60);
     step(20);
-    ok(live_at(96) == 2 && nbass(&L.d) == 1 && root_at(96) == 60, "edit: another bass-side note replaces the bass side alone");
+    ok(live_at(24) == 2 && nbass(&L.d) == 1 && root_at(24) == 60, "edit: another bass-side note replaces the bass side alone");
     chord(69, CR_MOD_MIN, 60);                       /* A4: above the split: the chord side */
     step(20);
-    ok(live_at(96) == 2 && nbass(&L.d) == 1, "edit: a chord replaces the chord side alone");
+    ok(live_at(24) == 2 && nbass(&L.d) == 1, "edit: a chord replaces the chord side alone");
     cr_set_single_notes(&C, CR_SINGLE_FULL, 5);
     /* REC: the step cleared */
     ed_at(1);
-    ok(cr_loop_ed_clear(&L) == 2 && live_at(96) == 0 && L.d.nev == 2, "edit: clear: the step's notes go (both sides)");
-    cr_loop_ed_map(&L, &M);
-    ok(M.nstep == 3 && M.start[0] == 5u, "edit: .. the step stays, empty: still 3 steps");
-    ok(cr_loop_ed_steplen(&L, 2) == 0, "edit: an empty step is one cell: its length is refused");
+    ok(cr_loop_ed_clear(&L) == 2 && live_at(24) == 0 && L.d.nev == 2, "edit: clear: the step's notes go (both sides)");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.nstep == 3 && M.start == 5u && L.d.len == 72, "edit: .. the step stays, empty: still 3 steps");
+    ok(cr_loop_ed_nlen(&L) == 0 && cr_loop_ed_setnlen(&L, 2) == 0, "edit: an empty step has no note length to set");
     chord(64, CR_MOD_MIN, 60);
     step(20);
-    /* the step's length: the later events move, Free: the loop's length follows */
-    ed_at(1);
-    ok(cr_loop_ed_steplen(&L, 3) == 1 && L.d.len == 480 && root_at(384) == 67 && live_at(192) == 0,
-       "edit: step 2 three cells long: the later step moves (G from 192 to 384), Length Free: the loop grows (480)");
-    cr_loop_ed_map(&L, &M);
-    cr_loop_ed_step(&M, 2, &c0, &n);
-    ok(M.ncell == 5 && M.nstep == 3 && c0 == 1 && n == 3 && M.cont[0] == 0xCu, "edit: .. still 3 steps: cells 2 and 3 continue step 2");
-    for (i = k = 0; i < L.d.nev; i++) k += L.d.ev[i].t == 96 && L.d.ev[i].dur == 288;
-    ok(k == 1, "edit: .. its chord sounds to its end (dur 288)");
-    ok(cr_loop_ed_index(&M, 4) == 2, "edit: the step after it is number 3");
-    ed_at(1);
-    ok(cr_loop_ed_steplen(&L, 2) == 1 && L.d.len == 384 && root_at(192 + 96) == 67, "edit: shorter again (2 cells): G back at 288, the loop 384");
-    ok(cr_loop_ed_steplen(&L, 17) == 0 && cr_loop_ed_steplen(&L, 0) == 0, "edit: 1 .. 16 cells");
+    ok(dur_at(24) == 24 && cr_loop_ed_nlen(&L) == 1, "edit: a chord entered on an empty step is one step long");
+    /* the step's length is its NOTE's length: nothing else moves */
+    was = L.d;
+    ok(cr_loop_ed_setnlen(&L, 4) == 1 && cr_loop_ed_nlen(&L) == 4 && dur_at(24) == 96, "edit: note length 4: the step's chord sounds 4 steps (96 ticks)");
+    ok(L.d.len == 72 && L.d.nev == 3 && root_at(0) == 62 && dur_at(0) == 24 && root_at(48) == 67 && dur_at(48) == 24,
+       "edit: .. no other step moved, the loop as long as it was (D at 0, G at 48, 72 ticks)");
+    ok(cr_loop_ed_setnlen(&L, 16) == 1 && dur_at(24) == 384 && root_at(48) == 67 && L.d.len == 72, "edit: note length 16: 384 ticks, still nothing moved");
+    ok(cr_loop_ed_setnlen(&L, 64) == 1 && dur_at(24) == 1536 && cr_loop_ed_nlen(&L) == 64, "edit: note length 64: the longest");
+    ok(cr_loop_ed_setnlen(&L, 65) == 0 && cr_loop_ed_setnlen(&L, 0) == 0 && dur_at(24) == 1536, "edit: 1 .. 64 steps");
+    ok(cr_loop_ed_setnlen(&L, 1) == 1 && dur_at(24) == 24, "edit: note length 1 again");
+    for (i = k = 0; i < L.d.nev; i++)
+        k += L.d.ev[i].t != was.ev[i].t || L.d.ev[i].root != was.ev[i].root || (L.d.ev[i].t != 24 && L.d.ev[i].dur != was.ev[i].dur);
+    ok(k == 0 && L.d.len == was.len && L.d.nev == was.nev, "edit: after 4 / 16 / 64 / 1: every event where and what it was");
+    /* a long note on the page: the steps it sounds on into are marked, the steps there still start */
+    ok(cr_loop_ed_len(&L, 384) == 1 && L.d.len == 384, "edit: the loop 16 steps (Steps)");
+    cr_loop_ed_setnlen(&L, 4);
+    cr_loop_ed_map(&L, 0, &M);
+    snprintf(name, sizeof name, "edit: step 2 four steps long: steps 1-3 start (%X), 4 and 5 are its tail (%X), 16 steps",
+             (unsigned)M.start, (unsigned)M.tail);
+    ok(M.nstep == 16 && M.start == 7u && M.tail == 0x18u, name);
+    chord(61, CR_MOD_MAJ, 60);
+    step(20);
+    ok(root_at(24) == 61 && dur_at(24) == 96 && live_at(24) == 1, "edit: a chord played on a step with a long note keeps the length (4 steps)");
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(1900);
+    { int j, off = -1;                               /* Db (step 2) at 125 ms, off 500 ms later; G (step 3) starts under it */
+      for (j = mark; j < nlog && off < 0; j++)
+          if (LOG[j].k == '-' && LOG[j].s == 0 && LOG[j].note == 61) off = (int)LOG[j].ms;
+      ok(ons_of(61, mark, t, 8) == 1 && ons_of(67, mark, u, 8) == 1 && near(u[0] - t[0], 125, 6) && off > 0 &&
+         near((uint32_t)off - t[0], 500, 6),
+         "edit: playback: the long chord sounds 4 steps (500 ms); the next step's chord starts under it, 125 ms after"); }
+    cr_loop_play(&L, &C);
+    step(700);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "edit: a long note over other steps: no stuck, double or stray note");
+    cr_loop_ed_setnlen(&L, 1);
+    cr_loop_ed_len(&L, 72);
     /* the velocity */
     ed_at(0);
     ok(cr_loop_ed_vel(&L, 0) == 100 && cr_loop_ed_vel(&L, -40) == 60 && L.d.ev[0].vel == 60 && cr_loop_ed_vel(&L, 100) == 127,
        "edit: the step's velocity (100 -> 60 -> 127, clamped)");
-    /* the record carries it: pack / unpack give the same steps; a 0.14 .. 0.17 reader takes the record */
+    /* the record carries it: pack / unpack give the same events; a 0.14 .. 0.17 reader takes the record */
+    ed_at(1);
+    cr_loop_ed_setnlen(&L, 3);
     n = cr_loop_pack(&L.d, buf, sizeof buf);
     ok(n > 0 && buf[7] == 0 && buf[4] == 1 && old_unpack_ok(buf, n), "edit: an edited loop's record: version 1, flags 0, read by 0.14 .. 0.17");
-    ok(cr_loop_unpack(buf, n, &back) == 1 && back.len == 384 && back.nev == L.d.nev, "edit: unpack: the same loop");
-    memset(&K, 0, sizeof K);
-    K.d = back;
-    K.ed_g = 96;
-    K.ed_len = back.len;
-    { static crl_edmap_t M2;
-      cr_loop_ed_map(&L, &M);
-      cr_loop_ed_map(&K, &M2);
-      ok(M2.ncell == 4 && M2.nstep == 3 && !memcmp(&M, &M2, sizeof M),
-         "edit: per-step lengths survive the record with no new field (the steps are read from t and dur)"); }
+    ok(cr_loop_unpack(buf, n, &back) == 1 && back.len == 72 && back.nev == L.d.nev, "edit: unpack: the same loop");
+    for (i = k = 0; i < back.nev; i++) k += back.ev[i].t == 24 && back.ev[i].dur == 72;
+    ok(k == 1, "edit: note lengths survive the record with no new field (they are the events' dur)");
+    cr_loop_ed_setnlen(&L, 1);
     /* the loop's length in steps: shorter hides the last step, longer brings it back; a save writes what sounds */
-    cr_loop_ed_map(&L, &M);
-    cr_loop_ed_step(&M, M.ncell - 1u, &c0, &n);
-    ok(c0 == 3 && cr_loop_ed_len(&L, c0 * 96u) == 1 && L.d.len == 288 && L.d.nev == 3, "edit: loop length -1 step: 288 ticks, the last step's event kept in RAM");
-    cr_loop_ed_map(&L, &M);
-    ok(M.ncell == 3 && M.nall == 4 && M.nstep == 2, "edit: .. 2 steps now, the hidden one known (4 cells in all)");
+    ok(cr_loop_ed_len(&L, 48) == 1 && L.d.len == 48 && L.d.nev == 3, "edit: loop length -1 step: 48 ticks, the last step's event kept in RAM");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.nstep == 2 && M.nall == 16 && M.start == 7u, "edit: .. 2 steps now, the hidden one known");
     n = cr_loop_pack(&L.d, buf, sizeof buf);
-    ok(n > 0 && cr_loop_unpack(buf, n, &back) == 1 && back.len == 288 && back.nev == 2 && old_unpack_ok(buf, n),
+    ok(n > 0 && cr_loop_unpack(buf, n, &back) == 1 && back.len == 48 && back.nev == 2 && old_unpack_ok(buf, n),
        "edit: a save while it is hidden writes what sounds (2 events, a valid record)");
-    ok(cr_loop_ed_len(&L, 384) == 1, "edit: loop length +1 step");
-    cr_loop_ed_map(&L, &M);
-    ok(M.nstep == 3 && root_at(288) == 67, "edit: .. the hidden step is back (G)");
-    ok(cr_loop_ed_len(&L, 480) == 1, "edit: longer than it was: an empty step added");
-    cr_loop_ed_map(&L, &M);
-    ok(M.nstep == 4 && M.ncell == 5 && !((M.start[0] >> 4) & 1u), "edit: .. 4 steps, the new one empty");
-    cr_loop_ed_len(&L, 288);
+    ok(cr_loop_ed_len(&L, 72) == 1, "edit: loop length +1 step");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.nstep == 3 && root_at(48) == 67, "edit: .. the hidden step is back (G)");
+    ok(cr_loop_ed_len(&L, 96) == 1, "edit: longer than it was: an empty step added");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.nstep == 4 && !((M.start >> 3) & 1u), "edit: .. 4 steps, the new one empty");
+    cr_loop_ed_len(&L, 48);
     cr_loop_ed_close(&L, &C);
-    ok(!L.ed && L.d.nev == 2 && L.d.len == 288 && L.state == CRL_STOPPED, "edit: closed with the loop shortened: the hidden step's event is gone for good");
+    ok(!L.ed && L.d.nev == 2 && L.d.len == 48 && L.state == CRL_STOPPED, "edit: closed with the loop shortened: the hidden step's event is gone for good");
     for (i = k = 0; i < L.d.nev; i++) k += L.d.ev[i].t >= L.d.len;
     ok(k == 0, "edit: no event beyond the end outside the editor");
     /* playing while editing: heard in place, nothing stuck */
@@ -1107,62 +1235,93 @@ static void s_edit(void)
     chord(72, CR_MOD_MAJ, 80);
     step(100);
     ed_at(1);
-    cr_loop_ed_steplen(&L, 1);
-    cr_loop_ed_len(&L, 96);                          /* shortened under the playhead */
+    cr_loop_ed_setnlen(&L, 8);                       /* longer than the loop: it sounds across its start */
+    cr_loop_ed_len(&L, 24);                          /* shortened under the playhead */
     step(1500);
     ok(L.state == CRL_PLAYING && ons_of(72, mark, &n, 1) >= 1, "edit: LOOP plays in the editor, the new chord is heard in place");
     cr_loop_play(&L, &C);
-    step(400);
+    step(1400);
     ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "edit: edits under a playing loop: no stuck, double or stray note");
     cr_loop_ed_close(&L, &C);
 
-    /* a set Length: the loop keeps it; a step may not push a note past the end */
-    reset();
-    L.mode = CRL_MODE_STEP;
-    L.quant = 1;
-    L.sync = 1;
-    cr_loop_rec(&L, &C);
-    step_chord(62, CR_MOD_MAJ);
-    step_chord(64, CR_MOD_MIN);
-    step_chord(65, CR_MOD_MAJ);
-    step_chord(67, CR_MOD_MAJ);
-    cr_loop_rec(&L, &C);
-    cr_loop_ed_open(&L);
-    ed_at(0);
-    ok(L.d.len == 384 && cr_loop_ed_steplen(&L, 2) == 0 && root_at(288) == 67 && L.d.len == 384,
-       "edit, Length 1 bar: a longer step would push the last chord past the end: refused, nothing moved");
-    ed_at(3);
-    cr_loop_ed_clear(&L);
-    ed_at(0);
-    ok(cr_loop_ed_steplen(&L, 2) == 1 && L.d.len == 384 && root_at(192) == 64 && root_at(288) == 65,
-       "edit, Length 1 bar: with the last step empty it fits: the others move, the loop is still a bar");
-    cr_loop_ed_close(&L, &C);
-
-    /* a loop played free: the grid is Quantize; none: it does not open, nothing is requantised */
+    /* a loop played by hand, Quantize none: it opens (refused until 2026-10-12), nothing is moved; an event belongs to
+     * the step it starts in and keeps its time until that step is replaced */
     reset();
     L.mode = CRL_MODE_OVERWRITE;
     take_dga();
     cr_loop_play(&L, &C);
     step(300);
-    { uint16_t t0 = L.d.ev[0].t, t1 = L.d.ev[1].t, t2 = L.d.ev[2].t, d1 = L.d.ev[1].dur;
-      L.quant = 0;
-      ok(cr_loop_ed_open(&L) == CRL_ED_NOQUANT && !L.ed, "edit: a played loop with Quantize none: refused (no grid)");
-      L.quant = 1;
-      ok(cr_loop_ed_open(&L) == CRL_ED_OK && L.d.ev[0].t == t0 && L.d.ev[1].t == t1 && L.d.ev[2].t == t2 && L.d.ev[1].dur == d1,
-         "edit: with Quantize 1/4 it opens; no event is moved (nothing requantised)");
-      cr_loop_ed_map(&L, &M);
-      cr_loop_ed_step(&M, 1, &c0, &n);
-      snprintf(name, sizeof name, "edit: D (a beat), G (two beats), Ab: 4 cells, 3 steps, G's step 2 cells (map %X / %X, step %u+%u)",
-               (unsigned)M.start[0], (unsigned)M.cont[0], (unsigned)c0, (unsigned)n);
-      ok(M.ncell == 4 && M.nstep == 3 && M.start[0] == 0xBu && M.cont[0] == 4u && c0 == 1 && n == 2, name); }
+    L.d.ev[1].t = (uint16_t)(L.d.ev[1].t + 5u);      /* (G a little late: off the grid) */
+    was = L.d;
+    L.quant = 0;
+    ok(cr_loop_ed_open(&L) == CRL_ED_OK && L.ed, "edit: a played loop with Quantize none: it opens");
+    ok(!memcmp(&was, &L.d, sizeof(crl_data_t) - sizeof(crl_ev_t) * (CRL_MAX_EV - was.nev)),
+       "edit: .. unchanged: no event moved, nothing requantised");
+    cr_loop_ed_map(&L, 0, &M);
+    { uint64_t want = 0, tail = 0;
+      for (i = 0; i < was.nev; i++) want |= (uint64_t)1 << (was.ev[i].t / 24u);
+      for (i = 0; i < was.nev; i++)
+          for (k = was.ev[i].t / 24u + 1u; k < 16u && (uint32_t)was.ev[i].t + was.ev[i].dur >= k * 24u + 12u; k++) tail |= (uint64_t)1 << k;
+      tail &= ~want;
+      snprintf(name, sizeof name, "edit: D (a beat), G (two beats, late), Ab on the sixteenth grid: 16 steps, starts %X, tails %X",
+               (unsigned)M.start, (unsigned)M.tail);
+      ok(M.nstep == 16 && M.start == want && M.tail == tail && M.start == 0x1011u && (M.tail & 0xF0u) == 0xE0u, name); }
+    ed_at(was.ev[1].t / 24u);
+    ok(cr_loop_ed_nlen(&L) == 8 || cr_loop_ed_nlen(&L) == 9, "edit: G's step: its note about 8 steps long (a part of a step counts whole)");
+    ed_at(8);
+    chord(60, CR_MOD_MAJ, 60);                       /* an empty step filled */
+    step(20);
+    ok(L.d.nev == 4 && root_at(192) == 60 && L.d.ev[0].t == was.ev[0].t && L.d.ev[1].t == was.ev[1].t && L.d.ev[1].dur == was.ev[1].dur &&
+       L.d.ev[2].t == was.ev[2].t && L.d.ev[2].dur == was.ev[2].dur,
+       "edit: a chord entered on another step: the played events keep their exact times and lengths");
+    ed_at(was.ev[1].t / 24u);
+    ok(cr_loop_ed_setnlen(&L, 2) == 1 && L.d.ev[1].t == was.ev[1].t && L.d.ev[1].dur == 48u - was.ev[1].t % 24u,
+       "edit: G's note 2 steps long: it keeps its (late) start and ends on the grid");
+    chord(65, CR_MOD_MAJ, 60);
+    step(20);
+    ok(root_at(was.ev[1].t / 24u * 24u) == 65 && find_ev(67, 1) < 0, "edit: G's step replaced: the new chord starts on the step's tick");
     cr_loop_ed_close(&L, &C);
-    ok(L.d.nev == 3 && L.d.len == 384, "edit: opened and closed: the loop as it was");
+    /* .. opened and closed without an edit: as it was */
+    reset();
+    L.mode = CRL_MODE_OVERWRITE;
+    take_dga();
+    cr_loop_play(&L, &C);
+    step(300);
+    was = L.d;
+    cr_loop_ed_open(&L);
+    ed_at(4);
+    cr_loop_ed_vel(&L, 0);
+    cr_loop_ed_nlen(&L);
+    cr_loop_ed_close(&L, &C);
+    ok(!memcmp(&was, &L.d, sizeof(crl_data_t) - sizeof(crl_ev_t) * (CRL_MAX_EV - was.nev)) && L.d.len == 384,
+       "edit: opened, looked at and closed: the loop as it was");
     L.cap = CRL_CAP_NONE;
     cr_loop_rec(&L, &C);                             /* (armed: a capture is open) */
     ok(cr_loop_ed_open(&L) == CRL_ED_BUSY, "edit: not while a take is armed");
     cr_loop_rec(&L, &C);
 
-    /* layers: what Replace hid goes when the editor opens; the last layer takes the editor's notes; undo holds */
+    /* a take longer than 64 steps: a page at a time */
+    reset();
+    L.sync = 4;                                      /* 8 bars */
+    L.count_in = 0;
+    cr_loop_rec(&L, &C);
+    chord(62, CR_MOD_MAJ, 200);
+    step(8300);                                      /* bar 5, beat 2 */
+    chord(67, CR_MOD_MAJ, 200);
+    step(8000);
+    cr_loop_play(&L, &C);
+    step(300);
+    ok(L.d.len == 3072 && L.d.nev == 2 && cr_loop_ed_open(&L) == CRL_ED_OK, "edit: an 8-bar take (128 steps) opens");
+    cr_loop_ed_map(&L, 0, &M);
+    n = L.d.ev[1].t / 24u;
+    ok(M.nstep == 128 && M.start == 1u && n >= 64u, "edit: .. page 1: steps 1-64 (D on step 1)");
+    cr_loop_ed_map(&L, 64, &M);
+    ok(M.first == 64 && M.start == (uint64_t)1 << (n - 64u), "edit: .. page 2: steps 65-128 (G where it was played)");
+    ed_at(n);
+    ok(cr_loop_ed_nlen(&L) >= 1 && cr_loop_ed_clear(&L) == 1 && L.d.nev == 1, "edit: .. a step of page 2 edited as any other");
+    cr_loop_ed_close(&L, &C);
+
+    /* layers: what Replace hid goes when the editor's first edit is made; undo holds */
     reset();
     take_dga();
     L.mode = CRL_MODE_REPLACE;
@@ -1173,14 +1332,13 @@ static void s_edit(void)
     cr_loop_play(&L, &C);
     step(300);
     for (i = k = 0; i < L.d.nev; i++) k += (L.d.ev[i].layer & CRL_HID) != 0;
-    L.quant = 1;
     { uint32_t nev0 = L.d.nev, live0 = L.d.nev - k;
       ok(k >= 1 && L.d.nlayers == 2 && cr_loop_ed_open(&L) == CRL_ED_OK, "edit: a loop with a Replace layer opens");
       cr_loop_ed_close(&L, &C);
       for (i = n = 0; i < L.d.nev; i++) n += (L.d.ev[i].layer & CRL_HID) != 0;
       ok(n == k && L.d.nev == nev0 && L.d.nlayers == 2, "edit: opened and closed without an edit: the layers and what Replace hid as they were");
       cr_loop_ed_open(&L);
-      ed_at(3);
+      ed_at(14);
       cr_loop_ed_vel(&L, 0);
       ok(L.d.nlayers == 2, "edit: looking (the velocity read) is no edit");
       chord(60, CR_MOD_MAJ, 60);
@@ -1188,29 +1346,67 @@ static void s_edit(void)
       for (i = n = 0; i < L.d.nev; i++) n += (L.d.ev[i].layer & CRL_HID) != 0 || L.d.ev[i].layer != 0;
       snprintf(name, sizeof name, "edit: the first edit makes the loop one layer: what Replace hid is gone (%u live events + the new one = %u)",
                (unsigned)live0, (unsigned)L.d.nev);
-      ok(n == 0 && L.d.nlayers == 1 && L.d.nev >= 1 && L.d.ev[L.d.nev - 1].t == 288, name); }
+      ok(n == 0 && L.d.nlayers == 1 && L.d.nev >= 1 && L.d.ev[L.d.nev - 1].t == 336, name); }
     cr_loop_ed_close(&L, &C);
     ok(cr_loop_undo(&L, &C) == CRL_DID_NOTHING && L.d.nlayers == 1, "edit: REC held (undo) after an edit: nothing to undo");
     n = cr_loop_pack(&L.d, buf, sizeof buf);
     ok(n > 0 && cr_loop_unpack(buf, n, &back) == 1 && back.nlayers == 1, "edit: .. and the loop packs to a valid one-layer record");
 
-    /* an empty loop opens as an empty step loop */
+    /* an empty loop opens as an empty pattern */
     reset();
     L.quant = 0;
-    ok(cr_loop_ed_open(&L) == CRL_ED_OK && L.d.len == 384 && L.ed_g == 96 && L.state == CRL_STOPPED,
-       "edit: an empty slot (Quantize none, Length Free): an empty loop of a bar, quarter-note steps");
-    cr_loop_ed_map(&L, &M);
-    ok(M.ncell == 4 && M.nstep == 4 && M.start[0] == 0, "edit: .. 4 empty steps");
+    ok(cr_loop_ed_open(&L) == CRL_ED_OK && L.d.len == 384 && L.ed_g == 24 && L.state == CRL_STOPPED,
+       "edit: an empty slot (Quantize none, Length Free): an empty pattern of a bar");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.nstep == 16 && M.start == 0 && M.tail == 0, "edit: .. 16 empty steps (4 until 2026-10-12: quarter-note steps)");
     cr_loop_ed_close(&L, &C);
     ok(L.state == CRL_EMPTY && L.d.len == 0 && !L.dirty, "edit: closed with nothing entered: the slot empty again, nothing to save");
     L.sync = 2;
     cr_loop_ed_open(&L);
-    ok(L.d.len == 768, "edit: an empty slot, Length 2 bars: 2 bars");
+    ok(L.d.len == 768, "edit: an empty slot, Length 2 bars: 32 steps");
     ed_at(5);
     chord(62, CR_MOD_MAJ, 60);
     step(20);
     cr_loop_ed_close(&L, &C);
-    ok(L.state == CRL_STOPPED && L.d.nev == 1 && L.d.ev[0].t == 480 && L.dirty, "edit: a chord entered there: a loop (dirty: the global save writes it)");
+    ok(L.state == CRL_STOPPED && L.d.nev == 1 && L.d.ev[0].t == 120 && L.d.ev[0].dur == 24 && L.dirty,
+       "edit: a chord entered there: a loop (dirty: the global save writes it)");
+    reset();
+    L.sync = 5;
+    cr_loop_ed_open(&L);
+    ok(L.d.len == 1536, "edit: an empty slot, Length 16 bars: 64 steps (a pattern's most)");
+    cr_loop_ed_close(&L, &C);
+
+    /* a step loop of 0.18's earlier dev builds (a step = the Quantize value; here none: quarter notes): its record
+     * loads and plays as it did; in the editor it is on the sixteenth grid */
+    reset();
+    memset(&was, 0, sizeof was);
+    was.len = 288;
+    was.nev = 3;
+    was.nlayers = 1;
+    for (i = 0; i < 3; i++) {
+        was.ev[i].t = (uint16_t)(i * 96u);
+        was.ev[i].dur = 96;
+        was.ev[i].root = (uint8_t)(i == 0 ? 62 : i == 1 ? 64 : 67);
+        was.ev[i].vel = 100;
+        was.ev[i].qx = (uint8_t)((i == 1 ? CR_Q_MIN : CR_Q_MAJ) << 4);
+    }
+    n = cr_loop_pack(&was, buf, sizeof buf);
+    ok(n == CRL_REC_HDR + 2u + 21u && cr_loop_unpack(buf, n, &back) == 1, "old step loop: a record of three quarter-note steps loads");
+    cr_loop_set(&L, &C, &back);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(1490);
+    ok(L.d.len == 288 && ons_of(62, mark, t, 8) == 1 && ons_of(64, mark, u, 8) == 1 && near(u[0] - t[0], 500, 6),
+       "old step loop: it plays as it did (a quarter note a step: Em 500 ms after D, 1.5 s round)");
+    cr_loop_play(&L, &C);
+    step(700);
+    ok(cr_loop_ed_open(&L) == CRL_ED_OK, "old step loop: the editor opens on it");
+    cr_loop_ed_map(&L, 0, &M);
+    ed_at(4);
+    ok(M.nstep == 12 && M.start == 0x111u && M.tail == 0xEEEu && cr_loop_ed_nlen(&L) == 4,
+       "old step loop: 12 sixteenth steps, its chords on steps 1, 5, 9, each 4 steps long");
+    cr_loop_ed_close(&L, &C);
+    ok(L.d.nev == 3 && L.d.len == 288 && sounding() == 0 && dup_on == 0 && stray_off == 0, "old step loop: closed: as it was");
 }
 
 int main(void)

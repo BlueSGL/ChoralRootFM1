@@ -382,10 +382,13 @@ void emu_fw_dump(void)
                cr_loop_busy(&cr, 0) + cr_loop_busy(&cr, 1) + cr_loop_busy(&cr, 2),
                (unsigned)cr.playstyle, (unsigned)cr.single, (unsigned)cr.split_pc);
         /* 0.18: the Rate (in force / asked for), the changes not saved yet, the PLAY menu's page, the loop editor (on,
-         * the cursor's first tick and cells, the grid, the extent with the hidden steps), a global save waiting */
-        printf("  loop2: rate %u want %u dirty %u page %u edit %u t0 %u cells %u grid %u ext %u save-pending %u\n",
+         * the cursor's first tick, its notes' length in steps, the grid, the extent with the hidden steps), a global
+         * save waiting; step entry: the steps used, the set Length's ticks (0: Free), chords refused (a 65th) */
+        printf("  loop2: rate %u want %u dirty %u page %u edit %u t0 %u long %u grid %u ext %u save-pending %u "
+               "steps-used %u step-len %u refused %u\n",
                (unsigned)crl.rate, (unsigned)crl.rate_want, (unsigned)crl.dirty, (unsigned)cu.lpage + 1u, (unsigned)crl.ed,
-               (unsigned)crl.ed_t0, (unsigned)crl.ed_n, (unsigned)crl.ed_g, (unsigned)crl.ed_len, (unsigned)cu.gsave_pend);
+               (unsigned)crl.ed_t0, (unsigned)(crl.ed ? cr_loop_ed_nlen(&crl) : 0u), (unsigned)crl.ed_g, (unsigned)crl.ed_len,
+               (unsigned)cu.gsave_pend, (unsigned)crl.step_end, (unsigned)crl.step_len, (unsigned)crl.step_no);
     }
     {   /* the loop's parts (0.18): its voices sounding by part (a recorded Split Bass bass-side note: the bass part),
          * its live events of the bass side, the notes on the engine's main / bass streams (looped and played) */
