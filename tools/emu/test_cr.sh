@@ -507,7 +507,7 @@ run cr_key_play
 L="$OUT/cr_key_play.log"
 kp() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.*cr: key \([0-9]\) tonic \([0-9]*\) .* layer \([0-9]*\) options \([0-9]\) kkeys \([0-9]\)$/\1 \2 \3 \4 \5/p'; }
 sp() { grep -a '^  loop:' "$L" | sed -n "$1p" | sed -n 's/.* split \([0-9]*\)$/\1/p'; }
-[ "$(grep -c '^expect .*: ok' "$L")" = 16 ] && ! has 'expect.*FAILED' "$L" &&
+[ "$(grep -c '^expect .*: ok' "$L")" = 18 ] && ! has 'expect.*FAILED' "$L" &&
     ok "pick: a root is silent; play: GLO lit, the chord keys' and the roots' LEDs their own, MAJ + E4 sounds; pick again: the scale keys' LEDs" \
     || bad "the key layer's keys: $(grep -a 'expect.*FAILED' "$L" | head -3)"
 [ "$(kp 1)" = "0 0 1 0 0" ] && [ "$(kp 2)" = "1 2 1 0 0" ] && [ "$(kp 3)" = "1 2 1 0 1" ] && has '^key: keys play' "$L" &&
@@ -1022,7 +1022,7 @@ silent_end cr_lock_menu
 
 # LOCK, the top row's lone repeat (the owner, 2026-10-11): the only type latched, pushed again alone, goes off at its
 # release (single notes); the latched extensions stay, lit, and apply again with the next type
-echo "LOCK: a type key pushed again goes off"
+echo "LOCK: a type key pushed again goes off; the KEY layer's page 2; Key Mode's lights; the Full keyboard"
 run cr_lock_type
 L="$OUT/cr_lock_type.log"
 lt() { grep -a '^  lock: on' "$L" | sed -n "$1p" | sed -n 's/.*lock: on \([01]\) latched \(..\) .*/\1 \2/p'; }
@@ -1040,6 +1040,83 @@ ch() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.* chord \(.*\) s
     ok "MIN held with a root played in the push: Em while held, off at its release (as the extension rule: a root is not another chord key)" \
     || bad "the push with a root: $(lt 10) $(ch 10) / $(lt 11)"
 silent_end cr_lock_type
+
+# Key Mode's lights (three levels under lit: fm1_led_dim < fm1_led_dim2 < fm1_led)
+run cr_key_leds
+L="$OUT/cr_key_leds.log"
+kl() { grep -a '^  key leds:' "$L" | sed -n "$1p" | sed -n 's/.*key leds:\([0-9]*\) \([0-9]*\) .*/\2/p'; }
+[ "$(kl 1)" = 111111111111111111 ] && [ "$(kl 7)" = 111111111111111111 ] &&
+    ok "Key Mode off: every root glows (dim), no scale light" || bad "Key Mode off: $(kl 1) / $(kl 7)"
+[ "$(kl 2)" = 101101010120101101 ] && [ "$(kl 4)" = 201011010101201011 ] && [ "$(kl 5)" = 201101011010201101 ] &&
+    ok "Key Mode on: C major, D major (the tonic changed), D minor: the scale's roots dim, the tonic's mid, the others dark (white keys too): $OUT/cr_key_leds_c.ppm" \
+    || bad "the scale lights: $(kl 2) / $(kl 4) / $(kl 5)"
+[ "$(kl 3)" = 201011010101201011 ] && ok "the KEY layer (keys: pick): the same picture" || bad "the KEY layer's roots: $(kl 3)"
+[ "$(kl 6)" = 301301031010201101 ] &&
+    ok "Dm sounding: its notes lit over the glow, the other D still mid: $OUT/cr_key_leds_dm.ppm" || bad "a sounding chord over the scale: $(kl 6)"
+[ "$(kl 8)" = 303303033030303303 ] && [ "$(grep -c '^expect .*: ok' "$L")" = 25 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "Stock (two levels): the scale's roots lit, the tonic as the rest, the others dark; a sounding note dark" \
+    || bad "Stock / the LED expectations: $(kl 8) $(grep -a 'expect.*FAILED' "$L" | head -3)"
+silent_end cr_key_leds
+
+# the KEY layer's page 2 (SELECT) and Key plays: Chords / Notes
+run cr_key_page
+L="$OUT/cr_key_page.log"
+kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\) keyboard \([a-z]*\) single \([0-9]\) split-note \([0-9]*\) page \([0-9]\) (engine: notes \([01]\) full \([01]\) single \([0-9]\))$/\1 \2 \3 \5 \6\7\8/p'; }
+cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3|\4|\5/p'; }
+bp() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* bpm \([0-9]*\) .*/\1/p'; }
+[ "$(kb 1)" = "chords chords 0 1 000" ] && [ "$(kb 2)" = "chords chords 0 2 000" ] && [ "$(bp 2)" = 120 ] && [ "$(kb 4)" = "notes chords 0 1 100" ] &&
+    has '^key: cells Key plays Keyboard - -' "$L" && [ "$(grep -ac '^key: page' "$L")" = 3 ] &&
+    ok "KEY held: page 1; SELECT: page 2 (Key plays, Keyboard; the tempo untouched), past the last page: stays; back: page 1: $OUT/cr_key_page2.ppm" \
+    || bad "the page turn: $(kb 1) / $(kb 2) bpm $(bp 2) / $(kb 4)"
+differ cr_key_page1 cr_key_page2 "the two pages differ on screen"
+differ cr_key_page2 cr_key_page2_notes "KNOB 1 on page 2: Key plays Notes: $OUT/cr_key_page2_notes.ppm"
+[ "$(cv 5)" = "0|0||0|" ] && [ "$(cv 6)" = "0|0||0|" ] && [ "$(cv 9)" = "0|4|Em|0| 64 67 71" ] &&
+    ok "Notes, Key Mode on (C major): D#4 does nothing (no voice, no note out, dark), with MIN held neither" \
+    || bad "a root out of the key: $(cv 5) / $(cv 6) / $(cv 9)"
+[ "$(cv 7)" = "1|1|D|1| 62" ] && [ "$(cv 8)" = "1|4|Em|1| 64 67 71" ] &&
+    ok "Notes: D4 is a single note (no scale chord), MIN + E4 is Em: the chord keys as with Key Mode off" || bad "Notes, in the key: $(cv 7) / $(cv 8)"
+[ "$(cv 11)" = "1|7|Dm|1| 62 65 69" ] && [ "$(cv 12 | cut -d'|' -f1,4)" = "1|1" ] && [ "$(kb 11)" = "chords chords 0 2 000" ] &&
+    ok "Chords again: D4 is Dm, D#4 its altered chord" || bad "back to Chords: $(cv 11) / $(cv 12)"
+[ "$(grep -c '^expect .*: ok' "$L")" = 6 ] && ! has 'expect.*FAILED' "$L" && ok "its sound and LED expectations" || bad "cr_key_page expectations"
+silent_end cr_key_page
+
+# the Full keyboard
+run cr_fullkbd
+L="$OUT/cr_fullkbd.log"
+kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\) keyboard \([a-z]*\) single \([0-9]\) split-note \([0-9]*\) page \([0-9]\) (engine: notes \([01]\) full \([01]\) single \([0-9]\))$/\2 \3 \4 \7\8/p'; }
+cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3|\4|\5/p'; }
+lt() { grep -a '^  lock: on' "$L" | sed -n "$1p" | sed -n 's/.*lock: on \([01]\) latched \(..\) .*/\1 \2/p'; }
+pv() { grep -a "^  part $2:" "$L" | sed -n "$1p" | sed -n 's/.* voices \([0-9]*\),.*/\1/p'; }
+kl() { grep -a '^  key leds:' "$L" | sed -n "$1p" | sed -n 's/.*key leds:\([0-9]*\) \([0-9]*\) .*/\1 \2/p'; }
+ky() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* voicing \(-*[0-9]*\) octave \(-*[0-9]*\) .* layer \([0-9]*\) .*/\1 \2 \3/p'; }
+n=0; i=3; note=53
+while [ $i -le 29 ]; do
+    [ "$(cv $i | cut -d'|' -f1,4,5)" = "1|1| $note" ] && n=$((n + 1))
+    i=$((i + 1)); note=$((note + 1))
+done
+[ "$(kb 1)" = "chords 0 65 00" ] && [ "$(kb 2)" = "full 0 65 10" ] && [ $n = 27 ] &&
+    ok "Keyboard = Full (page 2, KNOB 2): the 27 keys F3..G5 are the single notes 53..79, one voice each: $OUT/cr_fullkbd_page2.ppm" \
+    || bad "the Full keyboard: $(kb 1) / $(kb 2), $n of 27 keys chromatic"
+[ "$(cv 9 | cut -d'|' -f3,5)" = "B| 59" ] && [ "$(lt 9)" = "1 44" ] && [ "$(ky 9 | cut -d' ' -f3)" = 0 ] && [ "$(lt 2)" = "1 44" ] &&
+    ok "B3 is a note (B, 59): LOCK not toggled, no LOCK layer however long it is held; the latch behind (MAJ + M7) kept, and ignored: every key a single note" \
+    || bad "B3 on the Full keyboard: $(cv 9) lock $(lt 9) layer $(ky 9)"
+[ "$(cv 30 | cut -d'|' -f1)" = 2 ] && ok "two keys held: two notes, both keys lit: $OUT/cr_fullkbd_two.ppm" || bad "two keys: $(cv 30)"
+[ "$(ky 31)" = "0 1 0" ] && [ "$(cv 31 | cut -d'|' -f5)" = " 65" ] && [ "$(ky 32)" = "0 0 0" ] && has '^kbd: knob 1 octave 1' "$L" && [ "$(kb 31)" = "full 0 77 10" ] &&
+    ok "KNOB 1 on the view: the octave (+1: F3 plays 65; the read-out says octave; the voicing stays 0; the split key follows): $OUT/cr_fullkbd_octave.ppm" \
+    || bad "KNOB 1 = octave: $(ky 31) $(cv 31) / $(ky 32) / $(kb 31)"
+[ "$(kl 33)" = "101010120 101101010120101101" ] && [ "$(cv 35 | cut -d'|' -f1,2)" = "$(cv 34 | cut -d'|' -f1,2)" ] && [ "$(cv 35 | cut -d'|' -f1)" = 0 ] &&
+    [ "$(cv 36 | cut -d'|' -f1,3,5)" = "1|G| 55" ] &&
+    ok "Key Mode on (C major): the scale on all 27 keys (tonic mid, scale dim, the rest dark); F#3 does nothing; G3 plays G, no chord: $OUT/cr_fullkbd_key.ppm" \
+    || bad "Key Mode on the Full keyboard: $(kl 33) / $(cv 34) / $(cv 35) / $(cv 36)"
+[ "$(kb 37)" = "full 2 65 12" ] && [ "$(pv 38 0)" = 0 ] && [ "$(pv 38 1)" = 1 ] && [ "$(pv 39 1)" = 0 ] && [ "$(pv 39 0)" -ge 1 ] && [ "$(cv 38 | cut -d'|' -f5)" = " 64" ] &&
+    ok "Split Bass: the split at F4: E4 plays the bass part alone (the Bass off: ignored), F4 the chord part alone: $OUT/cr_fullkbd_splitbass.ppm" \
+    || bad "Split Bass: $(kb 37), E4 parts $(pv 38 0)/$(pv 38 1), F4 parts $(pv 39 0)/$(pv 39 1)"
+[ "$(kb 40)" = "full 1 65 11" ] && [ "$(cv 40 | cut -d'|' -f5)" = " 52" ] && [ "$(cv 41 | cut -d'|' -f5)" = " 65" ] && [ "$(pv 40 1)" = 0 ] &&
+    ok "Split Oct: E4 sounds an octave lower (52) on the chord part, F4 at pitch (65)" || bad "Split Oct: $(kb 40) $(cv 40) / $(cv 41)"
+[ "$(kb 42)" = "chords 0 65 00" ] && [ "$(lt 42)" = "1 44" ] && [ "$(cv 43 | cut -d'|' -f3,5)" = "DM7| 62 66 69 73" ] &&
+    [ "$(grep -c '^expect .*: ok' "$L")" = 14 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "Keyboard = Chords again: the latch as it was (LOCK on, MAJ + M7 lit), D4 is DM7" || bad "leaving the Full keyboard: $(kb 42) lock $(lt 42) $(cv 43)"
+silent_end cr_fullkbd
 
 echo "user presets: Overwrite, delete, the naming keys"
 run cr_save_del

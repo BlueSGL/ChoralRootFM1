@@ -186,7 +186,7 @@ exact — so the mock-ups are unaffected; THEME serves Felucca's own pages when 
   colour, A H D S R under it; `CR_W_FILTER`: `wv` cut res ftype (0..127) drive, the 2nd-order response of
   the LP / BP / HP mix crossfaded at the FTYPE position (0 LP, 32 BP, 64 HP, 96 NOTCH = LP + HP, back to LP;
   the type word its name, `cr_ftype_name`) sampled at 7 quarter-octave offsets from the cutoff in 32-bit log2 arithmetic, the edges extrapolated, clamped to the band
-  with the crossings: <= 12 segments, over a dashed 0 dB line) over two rows of four `cell`s (each `cr_cell_t` carries its label, value, `CR_CF_*` flags, glyph, pct, pct2, wave: 30 bytes); stack: `head` column headings at y 36 over
+  with the crossings: <= 12 segments, over a dashed 0 dB line) over two rows of four `cell`s (each `cr_cell_t` carries its label, value, `CR_CF_*` flags, glyph, pct, pct2, wave: 32 bytes); stack: `head` column headings at y 36 over
   `n_rows` rows sharing 41..239 with `rlabel`s (N >= 7: text only). The `active` row in the knob colours (blue
   orange white green) with 2 px bars, the others DIM; `hot_r` (row + 1) / `hot_c`: the value on a block of its
   colour. Glyphs (`CR_G_KNOB BAR WAVE SAW SQUARE STEPS DOTS`, a bipolar BAR centre-zero) are the designer's
@@ -297,7 +297,7 @@ exact — so the mock-ups are unaffected; THEME serves Felucca's own pages when 
     0..2, its label fits 116 px, its glyph box doubles, its bar spans both columns in its first column's colour; **the
     cells after it in the row shift a column right**, so cell index != column: `hot_c` is the cell's index, as the
     designer's), `CR_CF_BIPOLAR` (= `CR_CF_BIP`; on a `CR_G_KNOB`: the arc from 12 o'clock to the value, a 1.6 px mark
-    over 12 o'clock). `cr_cell_t` is 30 bytes (label 14 for "Wave · Phase", value 10 for "0.50/1.00", flags 16 bits,
+    over 12 o'clock). `cr_cell_t` is 32 bytes (label 14 for "Wave · Phase", value 12 for "0.50/1.00" and the KEY layer's "Split Bass", flags 16 bits,
     the `wave` byte): + 7 bytes a cell, + 224 bytes a `cr_screen_t` (three in the firmware: `cu_scr` in the POOL, two
     statics).
   - Cache: the bands are hashed with the editor's `wv` as the others (a new algorithm composes strips 0–3 only, the

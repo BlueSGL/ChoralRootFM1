@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 #define CRS_MAGIC 0x31535243u           /* "CRS1" */
-#define CRS_VERSION 13u
+#define CRS_VERSION 14u
 #define CRS_SIZE 192u                   /* bytes, header included; never changes (fields come out of rsv) */
 #define CRS_NPM 5                       /* perform modes (cr_engine.h CR_PM_COUNT) */
 #define CRS_NPAR 11                     /* parameters per mode (CR_P_COUNT) */
@@ -36,6 +36,18 @@
  * whatever its bit says (cr_settings_import). An older firmware reads an On record's view as out of range: Chord */
 #define CRS_DC_ON 0x40u
 #define CRS_DUALCORE(s) (((unsigned)(s)->view & CRS_DC_ON) ? 1u : 0u)
+/* key_on (v14): bit 0 Key Mode on; bit 1 the KEY layer's page 2 "Key plays" (0 Chords, the default; 1 Notes: Key Mode
+ * blocks the roots out of the scale and generates no chord); bit 2 its "Keyboard" (0 Chords, the default; 1 Full: all
+ * 27 keys are single notes). Still no reserve and loop_rec is full: the two ride in Key Mode's own byte, 0 = the
+ * defaults, so every older record reads them off. A firmware older than v14 reads a record with bit 1 or 2 set as
+ * key_on out of range and takes its default: Key Mode off, nothing else (its Single reads 2, Split Bass, the same
+ * way: Full Octave) */
+#define CRS_KEY_NOTES 0x02u
+#define CRS_KBD_FULL 0x04u
+#define CRS_KEY_ON(s) ((unsigned)(s)->key_on & 1u)
+#define CRS_KEY_PLAYS(s) (((unsigned)(s)->key_on & CRS_KEY_NOTES) ? 1u : 0u)
+#define CRS_KEYBOARD(s) (((unsigned)(s)->key_on & CRS_KBD_FULL) ? 1u : 0u)
+#define CRS_KEY_BYTE(on, notes, full) ((uint8_t)(((on) ? 1u : 0u) | ((notes) ? CRS_KEY_NOTES : 0u) | ((full) ? CRS_KBD_FULL : 0u)))
 enum { CRS_CLOCK_OFF, CRS_CLOCK_OUT, CRS_CLOCK_IN };
 enum { CRS_NONE = 0xFF };               /* out part: no part */
 enum { CRS_USB_MASTER, CRS_USB_FIXED };
@@ -64,10 +76,11 @@ typedef struct {
     uint16_t size;                      /* CRS_SIZE of the writer */
     uint32_t check;                     /* FNV-1a over bytes [12, size) */
     /* version 1 */
-    uint8_t playstyle, extadd, secret, key_on;       /* cr_playstyle_t, cr_extadd_t, cr_secret_t, Key Mode */
+    uint8_t playstyle, extadd, secret, key_on;       /* cr_playstyle_t, cr_extadd_t, cr_secret_t, Key Mode (bit 0;
+                                                      * v14: bit 1 Key plays Notes, bit 2 the Full keyboard) */
     uint8_t tonic, scale;                            /* 0..11, cr_scale_t */
     int8_t transpose;                                /* -24..24 */
-    uint8_t single;                                  /* cr_single_t: Full Octave / Split */
+    uint8_t single;                                  /* cr_single_t: Full Octave / Split Oct / (v14) 2 Split Bass */
     uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (0 at power-on); cr_bassmode_t */
     int8_t bass_voicing;                             /* bass register, octaves -2..4 */
     uint8_t perform_on, perform_mode, perf_sel;      /* on, cr_pmode_t, the PERF layer's entry 0..6 (Strum 2 ...) */

@@ -28,16 +28,16 @@ LEDs in `zoom`.
 The block has its own header:
 
 - `magic` `CRS1`
-- `version` (`CRS_VERSION`, currently 13)
+- `version` (`CRS_VERSION`, currently 14)
 - `size` (the writer's `CRS_SIZE`)
 - `check`: FNV-1a over bytes 12..size
 
 | field | range | default |
 | --- | --- | --- |
 | playstyle / extadd / secret | Simple–Free / Add Note, Play Chord / Off, Simple, All | Simple, Add Note, Off |
-| key_on, tonic, scale | 0/1, 0..11, Major/Minor | off, C, Major |
+| key_on, tonic, scale | bit 0 Key Mode 0/1 (**v14: bit 1 the KEY layer's Key plays**, 0 Chords / 1 Notes, `CRS_KEY_NOTES`, `cs.key_notes`; **bit 2 its Keyboard**, 0 Chords / 1 Full, `CRS_KBD_FULL`, `cs.kbd_full`; `CRS_KEY_ON` / `CRS_KEY_PLAYS` / `CRS_KEYBOARD` / `CRS_KEY_BYTE`; a higher bit: the byte's default), 0..11, Major/Minor | off, Chords, Chords, C, Major; a v1..v13 record: its Key Mode, Chords, Chords |
 | transpose | −24..24 | 0 |
-| single, split_pc | Full Octave / Split, 0..11 | Full Octave, F (5) |
+| single, split_pc | 0 Full Octave / 1 Split Oct ("Split" until v14) / **v14: 2 Split Bass**, 0..11 (the Chords layout's split, a pitch class; the Full keyboard splits at F4, fixed, not stored) | Full Octave, F (5) |
 | vel | 1..127 (the keys' velocity) | 100 |
 | bass_on | 0/1 | **0**: the bass is OFF at power-on (it is never saved on) |
 | bass_mode, bass_voicing | Chords Only..Solo, −2..4 octaves | Chords Only, 0 |
@@ -71,8 +71,15 @@ bit, and the LOCK layer's two styles in its bits 6 and 7 (the caveat here: a fir
 with one of the three set for an unknown bit and gives the whole byte its defaults, so after a downgrade with the KEY
 layer's keys left on play, or a LOCK style off its default, the record mode reads Overwrite and the PLAY menu's keys
 Play until they are set again; nothing else is touched. With all three at their defaults an older firmware reads the
-record as before). The byte is full:
-the next field needs a longer record (a new PER magic or
+record as before). The byte is full. v14 (0.17) needed two more bits, for the KEY layer's page 2 (Key plays, Keyboard),
+and a third value of Single: the bits ride in `key_on`'s byte (bits 1 and 2: Key Mode's own byte, where a 0 / 1 flag
+left seven bits unused), 0 = the defaults, and Single's 2 is a new value of an existing byte, so the record did not
+have to grow. The caveat is the same kind: **a firmware older than v14 checks `key_on` and `single` against 0..1**,
+so after a downgrade with Key plays = Notes or Keyboard = Full it reads Key Mode as off (whatever it was), and with
+Single = Split Bass it reads Full Octave; each until set again there, nothing else is touched, and with the three at
+their defaults (and Single Full or Split Oct) an older firmware reads the record as before. Bits 3..7 of `key_on`
+and the upper bits of the other 0 / 1 bytes (`scale`, `sticky`, `raw_sound`, `fx_on`, ...) are what is left for
+flags; a field that needs a byte of its own needs a longer record (a new PER magic or
 a larger `CRS_SIZE` with the import rules for a shorter one).
 
 ### Import rules (`cr_settings_import`)
@@ -102,7 +109,10 @@ v11 → 12 (0.16: Dual Core is Off by default and bit 6 of `view` means On): bit
 whatever it said: **Dual Core Off** (a v11 record's On, bit 6 clear, cannot be told from 0.15's default, and its Off,
 bit 6 set, would read as On); the view (bits 0..2) and its lock (bit 7) are kept. A v12 record keeps what it says;
 v12 → 13 (0.17: the KEY layer's keys in bit 5 of `loop_rec`, LOCK's styles in bits 6 / 7): the three cleared in every
-older record (no writer set them): **pick, Clears, Toggle**, the record mode and the PLAY menu's keys kept (`tests/cr_settings_test.c t_key_keys_v13`). A
+older record (no writer set them): **pick, Clears, Toggle**, the record mode and the PLAY menu's keys kept (`tests/cr_settings_test.c t_key_keys_v13`);
+v13 → 14 (0.17: Key plays and Keyboard in bits 1 / 2 of `key_on`, Single's value 2): an older record's `key_on` is
+its Key Mode alone (1 stays 1, anything else reads off: no older writer set the new bits) and a `single` above 1
+reads Full Octave: **Chords, Chords**, Split kept as Split Oct (`t_page2_v14`). A
 settings object restored from a backup goes through the same import (`cr_backup.c`), so a 0.14 / 0.15 backup restores
 with Dual Core Off.
 
@@ -191,3 +201,5 @@ read as current, migrated or defaults.
 4. VA: a deep edit saved to U01; the relaunch powers on with U01 and its patch CRC as saved.
 5. The picker's roots: KNOB 4 in the picker sets them to play; the relaunch opens the picker with them playing.
 6. Hold Time alone: Options > Hold Time set to 600 ms and nothing else is saved once; the relaunch reads 600 ms.
+7. The KEY layer's page 2: Key plays = Notes, Keyboard = Full and Single = Split Bass saved once; the relaunch has
+   them in the UI and in the engine (B3 plays a bass note of the left side, F4 the chord part).

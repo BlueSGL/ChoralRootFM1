@@ -135,6 +135,22 @@ grep -q 'type-key keeps ext-keys pushed' "$OUT/persist_lock_1.log" && grep -q "s
 grep -q 'lock: on 0 latched 00 type-key keeps ext-keys pushed' "$OUT/persist_lock_2.log" && grep -q '(record: current)' "$OUT/persist_lock_2.log" &&
     ok "LOCK styles run 2: Keeps and Pushed after a relaunch (LOCK itself off at power-on, as ever)" || bad "LOCK styles run 2: $(grep '  lock: on' "$OUT/persist_lock_2.log")"
 
+# the KEY layer's page 2 and Split Bass (Settings v14: bits 1 / 2 of key_on, single = 2): run 1 sets Key plays Notes,
+# Keyboard Full and Single Split Bass; run 2 (the same file): they are back, in the UI and in the engine
+PFLASH=$OUT/persist_page2_flash.bin
+rm -f "$PFLASH" "$OUT"/persist_page2_1.log "$OUT"/persist_page2_2.log
+"$EMU" --headless --flash "$PFLASH" --script "$S/persist_page2_set.txt" >"$OUT/persist_page2_1.log" 2>&1 || bad "KEY page 2 run 1: exit status"
+"$EMU" --headless --flash "$PFLASH" --script "$S/persist_page2_check.txt" >"$OUT/persist_page2_2.log" 2>&1 || bad "KEY page 2 run 2: exit status"
+grep -q 'kbd: plays notes keyboard full single 2 ' "$OUT/persist_page2_1.log" && grep -q "settings saves 1 " "$OUT/persist_page2_1.log" &&
+    ok "KEY page 2 run 1: Key plays Notes, Keyboard Full, Single Split Bass, the settings saved once" || bad "KEY page 2 run 1: $(grep '  kbd:' "$OUT/persist_page2_1.log")"
+[ "$(grep -c 'kbd: plays notes keyboard full single 2 split-note 65 page 1 (engine: notes 1 full 1 single 2)' "$OUT/persist_page2_2.log")" = 3 ] &&
+    grep -q '(record: current)' "$OUT/persist_page2_2.log" &&
+    [ "$(grep '^  part 1:' "$OUT/persist_page2_2.log" | sed -n 2p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 1 ] &&
+    [ "$(grep '^  part 0:' "$OUT/persist_page2_2.log" | sed -n 2p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 0 ] &&
+    [ "$(grep '^  part 1:' "$OUT/persist_page2_2.log" | sed -n 3p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 0 ] &&
+    ok "KEY page 2 run 2: the three back after a relaunch (UI and engine); B3 a bass note of the left side, F4 the chord part" \
+    || bad "KEY page 2 run 2: $(grep '  kbd:' "$OUT/persist_page2_2.log" | head -1)"
+
 # the engine picker's roots (Settings pick_roots, docs/SETTINGS.md): run 1 turns them to "play" in the picker (KNOB 4);
 # run 2 (the same file) opens the picker with them playing
 RFLASH=$OUT/persist_roots_flash.bin

@@ -192,7 +192,14 @@ owner's one exception: the set is exactly {K} and K is pushed again alone: K goe
 (`cu.mpend`: K stays down and sounding until then; another extension key pressed meanwhile joins and both stay;
 {7, 9} then 7 alone is {7}, not empty). Keeps + Pushed: a type key changes the type only, an extension key the
 extensions only. The defaults (Clears, Toggle) are the behaviour above. `cr_lock_menu.txt`, `persist_lock_*.txt`,
-`tests/cr_settings_test.c t_key_keys_v13`. LOCK off and PANIC post the
+`tests/cr_settings_test.c t_key_keys_v13`. **The top row's lone repeat** (the owner, 2026-10-11; always on with LOCK,
+no setting): the latch holds exactly one type and that type key is pressed again with no other chord key held: it goes
+off at its release (`cu.tpend`, as `cu.mpend`: on and sounding until then; any other chord key pressed meanwhile
+cancels it and both latch; a root played meanwhile does not), posted up: no type, the roots play single notes (the
+engine: an extension without a type is a single note, `cr_chord_base`; Key Mode with Key plays Chords still gives
+the scale's chord with them). The latched extensions are NOT cleared: they stay down and lit, and a type key pressed
+when no type is latched joins them, Clears or Keeps (Clears clears them only when a type key replaces another type).
+The screen shows the single note's name (`D`, `D4`); `cr_lock_type.txt`. LOCK off and PANIC post the
 latched keys up (`cu_unlatch`). The top line shows a small white `lock` (after the perform mode, the octave and
 Latch). Traces: `lock: on` / `off` / `latched MIN 6 9`, and `chord: Dm6 9` as the sounding chord changes.
 
@@ -262,7 +269,10 @@ Behaviour (text: Chords / Unison / Single / Solo), Register (shift, -2..4 from `
 popup's number and name, "off"), Level (bar). Traces `perf: cells ...`, `perf: knob Arp division 8`, `bass: cells
 ...`, `bass: knob 4 level 84`; traces `fx: effect Delay`, `fx: cells Time Feedback Colour Amount`,
 `fx: knob 2 Reverb damp 64`. KEY (`cu_key_cells`, `kr_band` 1: the keyboard strip as the band, the tonic lit yellow):
-Tonic (text), Scale (Major / Minor), Transpose (shift, (v + 24) / 48, "+5"), Single (Full / Split). LOOP
+Tonic (text), Scale (Major / Minor), Transpose (shift, (v + 24) / 48, "+5"), Single (Full / Split Oct / Split Bass;
+`cr_cell_t.value` is 12 bytes for it). **SELECT turns the KEY layer's page** (`cu.kpage`, page 1 whenever the layer
+opens; no tempo there; the label ends "· 1/2" / "· 2/2", the footer starts "SELECT: page"): page 2 is Key plays
+(Chords / Notes, KNOB 1) and Keyboard (Chords / Full, KNOB 2), KNOB 3 / 4 free (a dash); below. LOOP
 (`cu_loop_cells`): Sync (range, index / 5, the length; `CR_CF_DIM` while playing), Quantize (echoes, index / 6, pct2
 1.0), Count-in (gate 1.0 / 0.1), Level (bar). METRO: Click (bar, level / 100). Traces `key: cells ...`, `key: knob 3
 transpose 5`, `loop: cells ...`, `loop: knob 2 quantize 1/4`, `metro: knob 1 click 60`. OPT + SELECT outside the
@@ -376,7 +386,39 @@ Priority, top down, first match wins:
    all black, the wake redraws all six strips whole), `tests/cr_draw_test.c` (`cr_draw_black`),
    `tests/install_test.py`.
 
+### Key plays, Keyboard, Split Bass (0.17, the KEY layer's page 2)
+
+- **Key plays** (`cs.key_notes`, `CRE_KEYPLAYS` -> `cr_set_key_plays`): Chords (default) / Notes. Notes: Key Mode on
+  resolves no chord (`crx_build_base` skips the KEYMAP) and `cr_key_ex` drops a press whose pitch class is not in
+  `cr_scale_mask` before anything else: no voice, no note on any stream, no gesture (so no loop event), `phys` not set
+  (its release finds nothing), a latched chord not replaced. Chord keys as with Key Mode off.
+- **Keyboard** (`cs.kbd_full`, `CRE_KEYBOARD` -> `cr_set_keyboard(full, split_note)`): Chords / Full. Full: every
+  key 0..26 posts `CRE_KEY` 53 + k + 12 x octave (`cu_key_press`; `cu.key_note[k]` set says "pressed as a note" to
+  the release and to `cu_mods_phys`); B3 never pends (no LOCK tap, no LOCK layer); the engine marks the voice
+  `CR_Z_FULL`: spec 0 / 0 whatever `mods_down` holds (LOCK's latch stays posted down and is back when the mode is
+  left), no voicing rotation, no Key chord; Key Mode on blocks out-of-scale presses as Notes does. KNOB 1 on the view
+  steps `cu.octave` (popup "octave"). The KEY layer on pick still owns the keys (`cu_key_pick`), B3 inert there.
+  Step entry's "every key up" ignores the latch in this mode.
+- **Single** has three values (`cr_single_t`): Full, Split Oct (`CR_SINGLE_SPLIT`, as before), **Split Bass**
+  (`CR_SINGLE_SPLIT_BASS`): a key below the split is a `CR_Z_BASS` voice: a single note on the BASS stream alone at
+  the played pitch + transpose + 12 x the bass register, whatever Bass on / off says; every other voice plays the
+  chord streams alone and gets no bass (`crx_bass_wanted`, `crx_chord_streams_ok`: Bass on / off and the Behaviour
+  are kept and ignored meanwhile; the header's right text says "Split Bass"). **The split**: in the Chords layout the
+  pitch class `split_pc` for both (Split Oct exactly as before); on the Full keyboard a key, F4 (`CU_SPLIT_FULL`,
+  key 12: F3..E4 left, F4..G5 right), fixed, posted as the MIDI note it plays (`cu_post_kbd`, again at every octave
+  change): Split Oct there lowers the left side an octave (`CR_Z_LOW`).
+- Not built: the looper records a bass-side note as a single-note gesture (its format has no part bit), so a loop
+  plays it back on the chord part. MIDI out: the bass side goes to the BASS stream's channel.
+- Settings v14: bits 1 / 2 of `key_on`, `single` = 2 (docs/SETTINGS.md). Tests: `tests/cr_engine_test.c s_keyplays`,
+  `cr_key_page.txt`, `cr_fullkbd.txt`, `persist_page2_*.txt`, `tests/cr_draw_test.c` (the two pages).
+
 ## 6. LEDs (`cr_leds()`)
+
+**The hardware's levels** (`hal/fm1_input.h`): lit (the column's whole tick, ~95 us of each 1.1 ms frame), and two
+pulses per frame riding on the 595 shift of the next column: `fm1_led_dim` (`FM1_LED_DIM_NS` 3.2 us, ~1/30 of lit:
+the glow) and, new in 0.17, `fm1_led_dim2` (`FM1_LED_DIM2_NS` 9.6 us, ~1/10 of lit: the middle level; a pulse longer
+than the whole shift is waited out, the tick's one wait). Both widths are tuned there. The emulator: `emu_hal.led_mid`,
+`expect led K mid`, the dump's `leds mid:` and `key leds:` lines.
 
 As `ui_input.c: ui_leds` builds `fm1_led` / `fm1_led_dim` per column: every key and button dim
 (the glow) unless Options > LEDs = STOCK; chord keys lit while held/latched (`cr_mod_active`; LOCK's latched keys
@@ -387,7 +429,17 @@ full = `fm1_led`. Stock has no half level (it lights the idle keys and darkens t
 key is lit through `own`): the selected scale's key lit, the other and the six dark (`cr_key_scale.txt`); with the
 layer's keys on play (below, OPT lit) the chord keys and the roots show their own state as on the view;
 root keys lit where the voiced notes sound (engine query), the sounding perform note blinking,
-black roots off the scale dark in Key Mode, layer maps on the roots while a layer is open; KEY,
+**Key Mode's lights** (0.17, three levels under lit: `fm1_led_dim` < `fm1_led_dim2` < `fm1_led`): Key Mode off:
+every key that plays glows (dim); on: the scale's notes dim, the tonic's keys at the middle level (`nm` ->
+`fm1_led_dim2`), the keys out of the scale dark (until 0.17 only the black ones went dark: the loop skipped
+`cu_black(k)` keys alone, so every white key glowed whatever the key), a sounding note lit over it. Where: the view,
+the editor, and the layers whose roots play (PERF, FX, LOCK, PLAY with Keys = Play, the engine picker with its roots
+on play, KEY with keys: play), and the KEY layer on pick (its roots pick a tonic: the same picture; Key Mode off
+there: all dim). Not in the layers with their own map on the roots (PLAY's and SAVE's slots, BASS / METRO / the view
+menu / the engine picker's lists, naming, the Options). Stock (two levels): the scale's keys lit, the tonic as the
+rest, the others dark, a sounding one dark. The Full keyboard: all 27 keys carry that picture and every held key
+that plays is lit; the chord block's LEDs are not drawn. `cr_key_leds.txt`, the dump's `key leds:` line.
+layer maps on the roots while a layer is open; KEY,
 PERF, FX, BASS, LATCH, METRO lit when on; **the open layer's button blinks** (locked after its hold; SAVE while
 held); EDIT blinks while the editor is open; REC blink while recording, lit when armed; PLAY lit when a loop
 exists, its green LED when playing; OPT lit in Options; OCT− lit / OCT+ blinking in layers and pickers.

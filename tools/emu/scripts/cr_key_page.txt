@@ -1,0 +1,85 @@
+# ChoralRoot: the KEY layer's second page and Key plays (the owner, 2026-10-11). KEY (SEL) held: the layer on page 1
+# (Tonic Scale Transpose Single, "1/2"); SELECT turns the page (no tempo change there): page 2: Key plays (KNOB 1:
+# Chords / Notes) and Keyboard (KNOB 2: Chords / Full). Key plays = Notes: Key Mode on generates no chord: a root in
+# the scale plays as with Key Mode off (a single note; with a chord key, that chord), a root out of the scale does
+# nothing (no voice, no note out, no LED).
+wait 300
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+shot build/emu/test/cr_key_page1.ppm
+dump                          # 1: page 1, bpm 120
+knob SELECT +1                # page 2
+wait 300
+shot build/emu/test/cr_key_page2.ppm
+dump                          # 2: page 2, bpm still 120
+knob KNOB1 +1                 # Key plays: Notes
+wait 300
+shot build/emu/test/cr_key_page2_notes.ppm
+dump                          # 3: plays notes
+knob SELECT +1                # the last page: stays
+wait 200
+knob SELECT -1                # page 1 again
+wait 300
+dump                          # 4: page 1
+btn OCT-
+wait 300
+btn SEL                       # tap: Key Mode on, C major
+wait 300
+dump                          # 5: key 1, plays notes, notes-out N
+expect silence
+btn D#4 down                  # out of C major: nothing
+wait 400
+expect silence
+expect led D#4 off
+dump                          # 6: voices 0, notes-out as before, nothing sounding
+btn D#4 up
+wait 200
+btn D4 down                   # in the scale: a single note (with Key plays = Chords: Dm)
+wait 400
+expect sound
+expect led D4 on
+expect led F4 dim             # (no chord: F4 glows as a note of the scale)
+dump                          # 7: chord D, notes 62
+btn D4 up
+wait 300
+btn G#3 down                  # the chord keys as with Key Mode off: MIN + E4 = Em
+wait 40
+btn E4 down
+wait 400
+dump                          # 8: chord Em, notes 64 67 71
+btn E4 up
+btn G#3 up
+wait 300
+btn G#3 down                  # .. and they do not unblock a root out of the scale: MIN + D#4: nothing
+wait 40
+btn D#4 down
+wait 400
+dump                          # 9: voices 0
+btn D#4 up
+btn G#3 up
+wait 300
+btn SEL down                  # Key plays: Chords again (the layer opens on page 1)
+wait 500
+btn SEL up
+wait 300
+dump                          # 10: page 1
+knob SELECT +1
+wait 200
+knob KNOB1 -1
+wait 300
+btn OCT-
+wait 300
+btn D4 down                   # Chords: the lone root is the scale's chord again
+wait 400
+dump                          # 11: chord Dm
+btn D4 up
+wait 200
+btn D#4 down                  # .. and the root out of the key its altered chord (sounds)
+wait 400
+dump                          # 12: a chord sounding
+btn D#4 up
+btn SEL                       # Key Mode off
+wait 2500
+dump                          # 13: silent

@@ -55,7 +55,9 @@ typedef enum { CR_PS_SIMPLE, CR_PS_ADVANCED, CR_PS_FREE } cr_playstyle_t;
 typedef enum { CR_EXTADD_ADD_NOTE, CR_EXTADD_PLAY_CHORD } cr_extadd_t;
 typedef enum { CR_SECRET_OFF, CR_SECRET_SIMPLE, CR_SECRET_ALL } cr_secret_t;
 typedef enum { CR_SCALE_MAJOR, CR_SCALE_MINOR } cr_scale_t;
-typedef enum { CR_SINGLE_FULL, CR_SINGLE_SPLIT } cr_single_t;   /* Single Notes (design.md 8.3) */
+typedef enum { CR_SINGLE_FULL, CR_SINGLE_SPLIT, CR_SINGLE_SPLIT_BASS } cr_single_t;   /* Single Notes (design.md 8.3):
+                                  * Full, Split Oct (below the split an octave lower), Split Bass (below the split key
+                                  * the BASS stream alone, from it up the chord streams alone: cr_set_keyboard) */
 typedef enum { CR_BASS_CHORDS_ONLY, CR_BASS_UNISON, CR_BASS_SINGLE_NOTES, CR_BASS_SOLO } cr_bassmode_t;
 typedef enum { CR_PM_STRUM, CR_PM_SLOP, CR_PM_ARP, CR_PM_PATTERN, CR_PM_HARP } cr_pmode_t;
 #define CR_PM_COUNT 5
@@ -97,6 +99,7 @@ typedef struct {
     uint8_t used, pad;           /* pad: chord-pad slot + 1 (not a keyed voice) */
     uint8_t loop;                /* a loop voice (cr_loop_event): slot + 1 */
     uint8_t key, id, superseded, is_free;
+    uint8_t zone;                /* CR_Z_*: captured at note-on (the Full keyboard, Split Bass's bass side) */
     uint8_t vel, pc, pc_pressed, note_pressed;
     int8_t transpose;            /* captured at note-on */
     uint8_t sq, sx;              /* spec: quality (CR_Q_*) + extension mask, mutated by Advanced/Free */
@@ -112,6 +115,10 @@ typedef struct {
     cr_bown_t bass;
     cr_clk_t clk;
 } cr_voice_t;
+
+#define CR_Z_FULL 1u             /* played on the Full keyboard: a single note, no voicing rotation */
+#define CR_Z_BASS 2u             /* Split Bass, below the split: the BASS stream alone, at the played pitch */
+#define CR_Z_LOW 4u              /* Split Oct on the Full keyboard, below the split key: an octave lower */
 
 typedef struct { uint32_t due; uint8_t kind, owner, vi, note; } cr_ev_t;
 
@@ -129,6 +136,10 @@ typedef struct {
     uint8_t key_on, tonic, scale;
     int8_t transpose;
     uint8_t single, split_pc;        /* Single Notes: Full Octave / Split; keys with pc < split_pc sound an octave lower */
+    uint8_t key_notes;               /* Key plays: 0 Chords (Key Mode resolves chords), 1 Notes (Key Mode only blocks
+                                      * the roots out of the scale) */
+    uint8_t full, split_note;        /* the Full keyboard (every key a single note, the chord block ignored); its
+                                      * split KEY as a MIDI note (Split Oct / Split Bass there) */
     uint8_t bass_on, bass_mode;
     int8_t bass_voicing, voicing;
     uint8_t perform_on, perform_mode, sticky;
@@ -180,6 +191,20 @@ void cr_set_transpose(cr_t *c, int semis);         /* -24..24, new gestures only
 /* Single Notes (design.md 8.3): Split = a single note (no chord quality) whose pressed key's pitch class is below
  * split_pc (0..11, C = 0) sounds an octave lower; chords and the bass are unaffected. New gestures only. */
 void cr_set_single_notes(cr_t *c, cr_single_t mode, int split_pc);
+/* Key plays (the KEY layer's page 2): notes = 1: Key Mode on generates no chord: roots and chord keys behave as with
+ * Key Mode off, but a root whose pitch class is not in the scale does nothing (no voice, no note out, no gesture).
+ * New gestures only. */
+void cr_set_key_plays(cr_t *c, int notes);
+/* Keyboard (page 2): full = 1: every key pressed is a single note of the chord part at its own pitch: the chord
+ * block's state (held or latched in the engine) is ignored and left as it is, the voicing rotation is not applied,
+ * and Key Mode on blocks the notes out of the scale (whatever Key plays says). split_note: the Full keyboard's split
+ * point, a key: the MIDI note that key plays now (the caller follows its octave shift). There Split Oct sounds a key
+ * below it an octave lower and Split Bass plays it on the BASS stream alone. In the Chords layout both keep the
+ * pitch-class rule (split_pc): a root whose pitch class is below it. Split Bass, either layout: the keys below the
+ * split play the BASS stream alone at their pitch (+ the bass register) as single notes, the others the chord
+ * streams alone; Bass on / off and the Bass Behaviour are ignored while it is on (no bass follows anything: it is
+ * played by hand). New gestures only. */
+void cr_set_keyboard(cr_t *c, int full, int split_note);
 void cr_set_bass(cr_t *c, int enabled);
 void cr_set_bass_mode(cr_t *c, cr_bassmode_t m);
 void cr_set_perform(cr_t *c, int enabled);         /* restarts sounding voices, flushes a Hold latch */

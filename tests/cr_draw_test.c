@@ -792,6 +792,66 @@ int main(int argc, char **argv)
         check(name, grey > grey0 + 30u);
     }
 
+    {   /* the KEY layer's two pages (0.17): page 1 with Single = "Split Bass" (the longest value: inside its cell),
+         * page 2: Key plays / Keyboard on KNOB 1 / 2, KNOB 3 / 4 free (a dash each); the label carries the page,
+         * the footer "SELECT: page" */
+        static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
+        static const char *const VA[4] = {"D", "Minor", "+0", "Full"};
+        static uint16_t one[240u * 240u];
+        cr_screen_t s;
+        uint32_t x, y, ry, k, out = 0, in = 0, c01 = 0, c23 = 0;
+        uint16_t bg;
+        cr_screen_clear(&s);
+        s.kind = CR_K_KNOBROW;
+        s.kr_band = 1;
+        s.header = 1;
+        s.orient = 1;
+        s.col = CR_COL_YELLOW;
+        s.title_col = CR_COL_WHITE;
+        snprintf(s.label, sizeof s.label, "key \267 keys pick \267 1/2");
+        snprintf(s.footer, sizeof s.footer, "SELECT: page \267 MAJ MIN: scale \267 GLO: play");
+        s.lit = 1u << 9;
+        s.lit_col[9] = CR_COL_YELLOW;
+        for (k = 0; k < 4u; k++) {
+            s.cell[0][k].flags = CR_CF_ON;
+            snprintf(s.cell[0][k].label, sizeof s.cell[0][k].label, "%s", LB[k]);
+            snprintf(s.cell[0][k].value, sizeof s.cell[0][k].value, "%s", VA[k]);
+        }
+        s.n_rows = 1;
+        ry = (uint32_t)cr_kr_rowy(&s);
+        lint("key_page1", &s);
+        render(&s, 0);
+        memcpy(one, host_screen, sizeof one);
+        snprintf(s.cell[0][3].value, sizeof s.cell[0][3].value, "Split Bass");
+        lint("key_page1_splitbass", &s);
+        render(&s, 0);
+        write_ppm(dir, "key_page1_splitbass");
+        for (y = 0; y < 240u; y++)
+            for (x = 0; x < 240u; x++) {
+                if (host_screen[y * 240u + x] == one[y * 240u + x]) continue;
+                if (x >= 180u && y >= ry) in++; else out++;
+            }
+        snprintf(name, sizeof name, "KEY page 1: \"Split Bass\" changes its own cell only (%u px in it, %u outside)", in, out);
+        check(name, in > 40u && out == 0u && sizeof s.cell[0][3].value > strlen("Split Bass"));
+        for (k = 0; k < 4u; k++)
+            memset(&s.cell[0][k], 0, sizeof s.cell[0][k]);
+        s.cell[0][0].flags = s.cell[0][1].flags = CR_CF_ON;
+        snprintf(s.cell[0][0].label, sizeof s.cell[0][0].label, "Key plays");
+        snprintf(s.cell[0][0].value, sizeof s.cell[0][0].value, "Notes");
+        snprintf(s.cell[0][1].label, sizeof s.cell[0][1].label, "Keyboard");
+        snprintf(s.cell[0][1].value, sizeof s.cell[0][1].value, "Chords");
+        snprintf(s.label, sizeof s.label, "key \267 keys pick \267 2/2");
+        lint("key_page2", &s);
+        render(&s, 0);
+        write_ppm(dir, "key_page2");
+        bg = host_screen[(ry - 4u) * 240u + 2u];
+        for (y = ry; y < 240u && y < ry + 72u; y++)
+            for (x = 0; x < 240u; x++)
+                if (host_screen[y * 240u + x] != bg) { if (x < 120u) c01++; else c23++; }
+        snprintf(name, sizeof name, "KEY page 2: Key plays / Keyboard drawn (%u ink px), KNOB 3 / 4 a dash each (%u)", c01, c23);
+        check(name, c01 > 200u && c23 > 0u && c23 * 4u < c01);
+    }
+
     {   /* QUAD's primitives (docs/QUAD.md, design/choralroot-fm1-quad-mockups.json): the algo band, the ade2 band, the
          * filter's base-width window, the harm / detune / lfowave glyphs, big / ratio / span-2 cells, the bipolar knob */
         uint16_t bg = swap16(T_BG), orange = swap16(CR_NAMED[CR_COL_ORANGE]), blue = swap16(CR_NAMED[CR_COL_BLUE]);

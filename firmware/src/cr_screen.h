@@ -115,14 +115,15 @@ enum { CR_W_NONE, CR_W_ENV, CR_W_FILTER, CR_W_DX, CR_W_CZ,     /* CR_W_DX: a DX7
 typedef struct { char root[4], quality[6], sup[8]; uint8_t col_root, col_quality, col_sup; } cr_name_t;
 typedef struct { char t[6]; uint8_t col, mark; } cr_note_t;                    /* "C#5", its colour, a block under it */
 typedef struct {                                                                /* an editor cell (KNOB 1..4) */
-    char label[14], value[10];      /* label: edit8 only (a stack's columns have headings), "Wave \267 Phase" fits;
-                                     * value: "16.00" fits (a CR_G_RATIO pair's two parts are pct / pct2) */
+    char label[14], value[12];      /* label: edit8 only (a stack's columns have headings), "Wave \267 Phase" fits;
+                                     * value: "16.00" fits (a CR_G_RATIO pair's two parts are pct / pct2), and
+                                     * "Split Bass" (the KEY layer's Single; 10 until 0.17) */
     uint16_t flags;                 /* CR_CF_*, the mark's colour in bits 4..7 */
     uint8_t glyph;                  /* CR_G_* */
     uint8_t pct;                    /* Q8 of 255: the glyph's / bar's fill (square: the duty) */
     uint8_t pct2;                   /* Q8 of 255: a pictogram's second value (echoes: feedback, lfo: depth) */
     uint8_t wave;                   /* CR_G_LFOWAVE: CR_LW_* */
-} cr_cell_t;                        /* 30 bytes, no padding */
+} cr_cell_t;                        /* 32 bytes, no padding */
 typedef struct { char t[32]; uint8_t px, col, bold, center; } cr_line_t;       /* a text line (px 0 = 12) */
 
 typedef struct {

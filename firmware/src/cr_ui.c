@@ -456,6 +456,10 @@ static struct {
     uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
                                            * 1 play (roots and chord keys as outside the layer); OPT tapped in the
                                            * layer (v13) */
+    uint8_t key_notes;                    /* the KEY layer's page 2, Key plays: 0 Chords, 1 Notes (Key Mode blocks the
+                                           * roots out of the scale and generates no chord; v14) */
+    uint8_t kbd_full;                     /* .. Keyboard: 0 Chords (the chord block + 18 roots), 1 Full (27 single-note
+                                           * keys, no chord block, no LOCK; v14) */
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
                                            * (0: clears them, today's); the extension keys are pushed as the type
                                            * keys are (0: toggles, today's) */
@@ -486,7 +490,10 @@ static void cu_pos_sync(void)
 }
 
 static void cu_post_key(void) { cr_post(CRE_KEYMODE, cs.key_on, cs.tonic, cs.scale); }
-static void cu_post_single(void) { cr_post(CRE_SINGLE, cs.single, 0, cs.split); }
+static void cu_post_single(void)
+{
+    cr_post(CRE_SINGLE, cs.single, 0, cs.split);
+}
 static void cu_loop_conf(void)                    /* the looper's settings -> the ISR */
 {
     cr_post(CRE_LOOP, LP_CONF, LC_SYNC, cs.loop_len);
@@ -666,7 +673,7 @@ static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Sec
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "LEDs", "Hold Time", "USB Record", "USB Level", "Dual Core", "Version",
     "Calibrate", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 1, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 3, 1, 1, 1,
                                    0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -748,7 +755,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
     case O_VEL: cu_int(d, v, 0, n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
-    case O_SINGLE: cu_cpy(d, v ? "Split" : "Full Octave", n); break;
+    case O_SINGLE: cu_cpy(d, v == 2 ? "Split Bass" : v ? "Split Oct" : "Full Octave", n); break;
     case O_SPLIT: cu_cpy(d, CU_NOTE[v % 12], n); cu_cat(d, cs.single ? "" : " (Split off)", n); break;
     case O_RAW_SOUND: cu_cpy(d, ONOFF[v & 1], n); break;
     case O_CH_MAIN: case O_CH_BASS: case O_CH_RAW:
@@ -809,9 +816,12 @@ static struct {
                                            * go alone it goes off (another extension pressed meanwhile: it stays) */
     uint8_t tpend;                        /* bit cr_mod_t: LOCK: the only latched type, pressed again; let go alone
                                            * it goes off (another chord key pressed meanwhile: it stays) */
+    uint8_t kpage;                        /* the KEY layer's page (SELECT): 0 Tonic Scale Transpose Single, 1 Key plays
+                                           * Keyboard; the first page whenever the layer opens */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
-    uint8_t key_note[CU_NKEY];            /* root keys: note + 1 sent; 0xFF: the layer's / a picker's */
+    uint8_t key_note[CU_NKEY];            /* root keys (the Full keyboard: every key): note + 1 sent; 0xFF: the
+                                           * layer's / a picker's; 0: not pressed, or pressed as a chord key */
     int8_t octave;
     uint8_t opt_open, opt_sel;
     uint8_t page;                         /* PG_* */
@@ -870,6 +880,21 @@ static void cu_pick_end(int keep);
 static void cu_epk_commit(void);
 static uint32_t cu_layer(void);
 static uint32_t cu_now(void) { return fm1_ms; }
+/* the Full keyboard's split point is a KEY: F4, the second F (key 12: F3..E4 left, F4..G5 right; the owner's,
+ * 2026-10-11), fixed: the stored split point (cs.split, OPT + KNOB 1) is a pitch class and stays the Chords layout's,
+ * untouched (Split Oct and Split Bass there: the roots whose pitch class is below it, in every octave). The engine
+ * takes the key as the MIDI note it plays, so it is posted again when the octave moves */
+#define CU_SPLIT_FULL 12u                         /* F4 */
+static void cu_post_kbd(void)
+{
+    int32_t n = 53 + (int32_t)CU_SPLIT_FULL + 12 * cu.octave;
+    cr_post(CRE_KEYBOARD, cs.kbd_full, 0, n < 0 ? 0 : n > 127 ? 127 : n);
+}
+static uint32_t cu_scale_bits(void)               /* bit pc: in the key (Key Mode's tonic and scale), as cr_scale_mask */
+{
+    uint32_t m = cs.scale ? 0x5ADu : 0xAB5u, t = cs.tonic % 12u;
+    return ((m << t) | (m >> (12u - t))) & 0xFFFu;
+}
 static int cu_blink(uint32_t now) { return ((now / 250u) & 1u) == 0u; }   /* the blinking LEDs' phase (and the dial's dot) */
 
 static void cu_message(const char *t, uint32_t col)
@@ -1554,6 +1579,7 @@ static void cu_panic(void)
     cu_unlatch();                                 /* the LOCK latch cleared (LOCK itself stays on) */
     cr_post(CRE_PANIC, 0, 0, 0);
     cu.octave = 0;
+    cu_post_kbd();
     for (k = 0; k < CU_NKEY; k++)                 /* the keys still held end nothing more */
         if (cu.key_note[k] && cu.key_note[k] != 0xFFu)
             cu.key_note[k] = 0xFFu;
@@ -1696,6 +1722,8 @@ static void cu_opened(uint32_t b)                 /* a button held past HOLD (or
         cu_pick_end(1);
     cu.lock = (uint8_t)(cu_lockable(l) ? l : L_NONE);   /* the layer stays open after release */
     cu_hot.knob = 0;                              /* (a layer opens with no hot cell) */
+    if (l == L_KEY && was != L_KEY)               /* the KEY layer opens on its first page */
+        cu.kpage = 0;
     if (l == L_PERF && was != L_PERF)             /* the perform layer opens on its picker (the mode's name) */
         cu.perf_t0 = cu_now();
     cu_trace("layer: open %u%s\n", (unsigned)l, cu.lock ? " (locked)" : "");
@@ -1793,6 +1821,7 @@ static void cu_oct_tap(uint32_t b)
     }
     cu.octave = (int8_t)(cu.octave + (b == B_OCTUP ? 1 : -1));
     cu.octave = (int8_t)(cu.octave < -2 ? -2 : cu.octave > 2 ? 2 : cu.octave);
+    cu_post_kbd();                                /* (the split key's note moves with it) */
     cu_popup_num(cu.octave, 1, "", "octave", CR_COL_WHITE, -2, 2, 5);
 }
 
@@ -2353,6 +2382,20 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
     int32_t v;
     switch (l) {
     case L_KEY:
+        if (cu.kpage) {                            /* page 2: KEY PLAYS, KEYBOARD (KNOB 3 / 4: nothing there) */
+            if (knob == 0) {
+                cs.key_notes = (uint8_t)(s > 0);
+                cr_post(CRE_KEYPLAYS, 0, 0, cs.key_notes);
+                cu_trace("key: knob 1 key plays %s\n", cs.key_notes ? "notes" : "chords");
+            } else if (knob == 1) {
+                cs.kbd_full = (uint8_t)(s > 0);
+                cu_post_kbd();
+                cu_trace("key: knob 2 keyboard %s\n", cs.kbd_full ? "full" : "chords");
+            } else
+                break;
+            cu_hot_set(L_KEY, knob);
+            break;
+        }
         if (knob == 0) {                           /* TONIC */
             cs.tonic = (uint8_t)((cs.tonic + 12 + s % 12) % 12);
             cs.key_on = 1;
@@ -2367,10 +2410,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cs.transpose = (int8_t)(v < -24 ? -24 : v > 24 ? 24 : v);
             cr_post(CRE_TRANSPOSE, 0, 0, cs.transpose);
             cu_trace("key: knob 3 transpose %d\n", (int)cs.transpose);
-        } else {                                   /* SINGLE NOTES: Full Octave / Split */
-            cs.single = s > 0;
+        } else {                                   /* SINGLE NOTES: Full Octave / Split Oct / Split Bass */
+            v = (int32_t)cs.single + s;
+            cs.single = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
             cu_post_single();
-            cu_trace("key: knob 4 single %s\n", cs.single ? "split" : "full");
+            cu_trace("key: knob 4 single %s\n", cs.single == 2u ? "split bass" : cs.single ? "split" : "full");
         }
         cu_hot_set(L_KEY, knob);                  /* (no popup: the knob row is the readout, its cell turns hot) */
         break;
@@ -2518,7 +2562,8 @@ static uint32_t cu_mods_phys(void)                 /* bit cr_mod_t: the chord ke
 {
     uint32_t k, m = 0;
     for (k = 0; k < CU_ROOT0; k++)
-        if (CU_MOD_OF_KEY[k] != 0xFFu && (((cu.kheld & ~(uint32_t)cu.kpick) >> k) & 1u))   /* (not the KEY layer's) */
+        if (CU_MOD_OF_KEY[k] != 0xFFu && !cu.key_note[k] &&      /* (not the KEY layer's, nor a Full-keyboard note) */
+            (((cu.kheld & ~(uint32_t)cu.kpick) >> k) & 1u))
             m |= 1u << CU_MOD_OF_KEY[k];
     return m;
 }
@@ -2659,12 +2704,16 @@ static void cu_key_press(uint32_t k)
         cu.b3_pend = 0;
         cu_lock_tap();
     }
-    if (k == CU_KEY_LOCK) {                        /* B3: a tap (its release) toggles LOCK, a hold is its layer */
+    if (k == CU_KEY_LOCK && !cs.kbd_full) {        /* B3: a tap (its release) toggles LOCK, a hold is its layer */
         cu.b3_pend = 1;
         cu.b3_t0 = cu_now();
         return;
     }
-    if (k < CU_ROOT0) {                            /* the chord block keeps its job in every layer but KEY's, where */
+    /* the Full keyboard (cs.kbd_full): the nine keys of the chord block are notes as the roots are (below), B3 too: no
+     * chord key, no LOCK, no LOCK layer; the latch behind it (cu.mlatch, down in the engine, which ignores it in this
+     * mode) is what it was when the mode is left. One place keeps them: the KEY layer with its keys on pick, which
+     * owns the keys (MAJ / MIN the scale, a root the tonic; B3 nothing there) */
+    if (k < CU_ROOT0 && (!cs.kbd_full || cu_key_pick())) {   /* the chord block keeps its job in every layer but KEY's, where */
         if (cu_key_pick()) {                       /* MAJ / MIN pick the scale (cu_key_scale); B3 is LOCK everywhere */
             cu.kpick |= (uint16_t)(1u << k);
             cu_key_scale(k);
@@ -2708,14 +2757,14 @@ static void cu_key_press(uint32_t k)
 static void cu_key_release(uint32_t k)
 {
     cu.kheld &= ~(1u << k);
-    if (k == CU_KEY_LOCK) {
+    if (k == CU_KEY_LOCK && !cu.key_note[k] && !((cu.kpick >> k) & 1u)) {
         if (cu.b3_pend) {                          /* let go before the hold time, nothing else pressed: the tap */
             cu.b3_pend = 0;
             cu_lock_tap();
         }
         return;
     }
-    if (k < CU_ROOT0) {
+    if (k < CU_ROOT0 && !cu.key_note[k]) {         /* (pressed as a chord key: not a Full-keyboard note) */
         if ((cu.kpick >> k) & 1u)                  /* pressed as the KEY layer's: nothing to end (the layer may be
                                                     * closed by now) */
             cu.kpick &= (uint16_t)~(1u << k);
@@ -2885,7 +2934,8 @@ static void cu_knob(uint32_t role, int32_t s)
         } else if (role == EN_K1) {                /* the Single Notes split point */
             cs.split = (uint8_t)((cs.split + 12 + s % 12) % 12);
             cu_post_single();
-            cu_popup(CU_NOTE[cs.split], cs.single ? "split" : "split off", "split point", CR_COL_BLUE, cs.split, 0, 11, 12);
+            cu_popup(CU_NOTE[cs.split], cs.kbd_full ? "Full: at F4" : cs.single == 2u ? "split bass" :
+                     cs.single ? "split oct" : "split off", "split point", CR_COL_BLUE, cs.split, 0, 11, 12);
         } else {                                   /* SELECT: the metronome level */
             cu_layer_knob(L_METRO, 0, s);
             if (cu_layer() != L_METRO)             /* (outside the layer: the popup is the readout) */
@@ -2916,7 +2966,16 @@ static void cu_knob(uint32_t role, int32_t s)
         cu_loop_mode_turn(s);
         return;
     }
-    if (l && role == EN_SELECT && l != L_KEY && l != L_LOCK) {    /* a picker: SELECT moves (KEY, LOCK: the tempo) */
+    if (l == L_KEY && role == EN_SELECT) {         /* the KEY layer: SELECT turns its page (no tempo there) */
+        uint32_t pg = s > 0 ? 1u : 0u;
+        if (pg != cu.kpage) {
+            cu.kpage = (uint8_t)pg;
+            cu_hot.knob = 0;
+            cu_trace("key: page %u\n", (unsigned)pg + 1u);
+        }
+        return;
+    }
+    if (l && role == EN_SELECT && l != L_LOCK) {   /* a picker: SELECT moves (LOCK: the tempo; KEY: its page, above) */
         v = cu_layer_sel(l) + s;
         v = v < 0 ? 0 : v >= cu_layer_count(l) ? cu_layer_count(l) - 1 : v;
         cu_layer_pick(l, v);
@@ -2950,6 +3009,15 @@ static void cu_knob(uint32_t role, int32_t s)
     }
     switch (role) {
     case EN_K1:
+        if (cs.kbd_full) {                         /* the Full keyboard: no chord to voice: the octave (as OCT- / OCT+,
+                                                    * a detent an octave); the voicing waits as it was */
+            cu.octave = (int8_t)(cu.octave + (s > 0 ? 1 : -1));
+            cu.octave = (int8_t)(cu.octave < -2 ? -2 : cu.octave > 2 ? 2 : cu.octave);
+            cu_post_kbd();
+            cu_popup_num(cu.octave, 1, "", "octave", CR_COL_WHITE, -2, 2, 5);
+            cu_trace("kbd: knob 1 octave %d\n", (int)cu.octave);
+            break;
+        }
         cr_post(CRE_VOICING, 0, 0, s);
         cu.pop.until = cu_now() + CR_POPUP_MS;
         cu.pop.kind = PU_VOICING;
@@ -3256,7 +3324,7 @@ static void cr_ui_input(void)
     {                                              /* step entry: every key up (nothing latched) after a chord: the
                                                     * cursor advances (the engine: if a chord was written there) */
         static uint8_t down;
-        uint8_t dn = (uint8_t)(cu.kheld || cu.mlatch);
+        uint8_t dn = (uint8_t)(cu.kheld || (cu.mlatch && !cs.kbd_full));   /* (the Full keyboard: the latch waits) */
         if (cr_snap.lcap == CRL_CAP_STEP && down && !dn) {
             cr_post(CRE_LOOP, LP_STEP, 0, CRL_STEP_KEYSUP);
             cu_trace("loop: step keys up\n");
@@ -3302,19 +3370,23 @@ static void cu_led(uint8_t *nl, uint32_t id, int on)
 static int32_t cu_key_of_note(uint32_t note)       /* the root key a note sounds on (OCT shifted), -1 none */
 {
     int32_t k = (int32_t)note - 53 - 12 * cu.octave;
-    return k >= (int32_t)CU_ROOT0 && k < (int32_t)CU_NKEY ? k : -1;
+    return k >= (int32_t)(cs.kbd_full ? 0u : CU_ROOT0) && k < (int32_t)CU_NKEY ? k : -1;
 }
 
 static void cr_leds(void)
 {
-    uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0}, ld[FM1_NCOL] = {0};
+    uint8_t nl[FM1_NCOL] = {0}, nd[FM1_NCOL] = {0}, own[FM1_NCOL] = {0}, ld[FM1_NCOL] = {0}, nm[FM1_NCOL] = {0};
     uint32_t k, b, now = cu_now(), blink = (uint32_t)cu_blink(now), l = cu_layer();
+    uint32_t full = cs.kbd_full && !cu_key_pick(); /* the Full keyboard: the chord block's nine keys are notes */
+    uint32_t key0 = full ? 0u : CU_ROOT0;          /* the first key that plays */
+    uint32_t scale = cs.key_on ? cu_scale_bits() : 0u;
     const cr_snap_t *sn = &cr_snap;
     if (cu.msg.big == 1u && (int32_t)(cu.msg.until - now) > 0) {   /* panic: everything flashes */
         for (k = 0; k < 41u; k++)
             cu_led(nl, k < NB ? panel.btn[k] : k, (int)blink);
         for (k = 0; k < FM1_NCOL; k++) {
             fm1_led_dim[k] = 0;
+            fm1_led_dim2[k] = 0;
             fm1_led[k] = nl[k];
         }
         return;
@@ -3367,8 +3439,10 @@ static void cr_leds(void)
      * dark. Glow: half = fm1_led_dim, full = fm1_led. Stock has two levels only (it lights the idle keys, and a
      * layer's selected key through `own`): the selected scale's key lit, the other dark. With the layer's keys set
      * to play (cu_key_pick 0) they are the chord keys' own state again */
-    for (k = 0; k < CU_ROOT0; k++) {
+    for (k = 0; k < CU_ROOT0 && !full; k++) {      /* (the Full keyboard: they are notes, lit with the roots below) */
         if (CU_MOD_OF_KEY[k] == 0xFFu) {
+            if (cs.kbd_full)                       /* (the KEY layer on pick, the Full keyboard: no LOCK) */
+                continue;
             cu_led(nl, 14u + k, l == L_LOCK ? (int)blink : cu.clock);   /* (its layer open: it blinks, as a layer's
                                                                          * button; the label says on / off) */
             cu_led(nd, 14u + k, 1);
@@ -3408,9 +3482,19 @@ static void cr_leds(void)
             if (wi >= 0 && wi < n)
                 cu_led(wi == sel ? own : nd, 14u + k, 1);
         }
-    } else if (l == L_KEY && !cs.key_play) {             /* (keys: play: the keys as on the view, below) */
-        for (k = CU_ROOT0; k < CU_NKEY; k++)
-            cu_led(cs.key_on && (53u + k) % 12u == cs.tonic ? own : nd, 14u + k, 1);
+    } else if (l == L_KEY && !cs.key_play) {             /* keys: pick: every root picks a tonic. Key Mode off: they
+                                                          * all glow; on: the key as everywhere (below): its notes
+                                                          * glow, the tonic at the middle level (Stock: lit, as a
+                                                          * picker's selection), the roots out of it dark */
+        for (k = CU_ROOT0; k < CU_NKEY; k++) {
+            uint32_t pc = (53u + k) % 12u;
+            if (!cs.key_on)
+                cu_led(nd, 14u + k, 1);
+            else if (pc == cs.tonic)
+                cu_led(cs.leds ? own : nm, 14u + k, 1);
+            else if ((scale >> pc) & 1u)
+                cu_led(nd, 14u + k, 1);
+        }
     } else if (cu.page == PG_SAVE && ce.save_step) {     /* naming: the keys that type lit (the letters, D#4 space) */
         for (k = CU_ROOT0; k < CU_NKEY; k++)
             if (cu_white_idx(k) >= 0 || k == 10u || k == 13u)
@@ -3430,6 +3514,10 @@ static void cr_leds(void)
                 if (kk >= 0)
                     cu_led(nl, 14u + (uint32_t)kk, 1);
             }
+        for (k = 0; full && k < CU_NKEY; k++)            /* the Full keyboard: every key held that plays a note (the
+                                                          * chord shown is the last one only) */
+            if (cu.key_note[k] && cu.key_note[k] != 0xFFu && (!cs.key_on || ((scale >> ((53u + k) % 12u)) & 1u)))
+                cu_led(nl, 14u + k, 1);              /* (Key Mode: a key out of the scale plays nothing: dark) */
         if (sn->perform_on && sn->perf_pos >= 0 && sn->ci.sounding)
             pk = cu_key_of_note(sn->perf_note);
         if (pk >= 0 && !blink) {                         /* the performed note blinks */
@@ -3437,13 +3525,21 @@ static void cr_leds(void)
             if (q != 0xFF)
                 nl[q >> 3] &= (uint8_t)~(1u << (q & 7u));
         }
-        for (k = CU_ROOT0; k < CU_NKEY; k++) {           /* Key Mode: the black roots off the scale dark */
-            uint32_t pc = (uint32_t)(53 + (int32_t)k + 12 * cu.octave + 120) % 12u;
-            if (sn->scale_mask && cu_black(k) && !((sn->scale_mask >> pc) & 1u))
-                continue;
-            cu_led(nd, 14u + k, 1);
+        /* the keys that play. Key Mode off: they all glow (the low level). Key Mode on (the owner, 2026-10-11): the
+         * key shows on them: a note of the scale glows (low), the tonic's keys at the middle level (fm1_led_dim2),
+         * a key out of the scale is dark; a sounding note is lit over it (nl). Until then only the black keys out of
+         * the scale went dark: every white key glowed whatever the key. Stock has two levels: below, the scale's
+         * keys lit (the tonic as the rest), the others dark */
+        for (k = key0; k < CU_NKEY; k++) {
+            uint32_t pc = (53u + k) % 12u;               /* (the octave shift keeps the pitch class) */
+            if (!cs.key_on)
+                cu_led(nd, 14u + k, 1);
+            else if (pc == cs.tonic)
+                cu_led(nm, 14u + k, 1);
+            else if ((scale >> pc) & 1u)
+                cu_led(nd, 14u + k, 1);
         }
-        for (k = CU_ROOT0; k < CU_NKEY; k++) {           /* PLAN 6: the loop's notes glow dim (not the player's) */
+        for (k = key0; k < CU_NKEY; k++) {               /* PLAN 6: the loop's notes glow dim (not the player's) */
             int32_t n = 53 + (int32_t)k + 12 * cu.octave;
             uint8_t q = cu_led_pos[14u + k];
             if (n >= 0 && n < 128 && ((sn->lnote[n >> 3] >> (n & 7)) & 1u) && q != 0xFF &&
@@ -3452,9 +3548,10 @@ static void cr_leds(void)
         }
     }
     for (k = 0; k < FM1_NCOL; k++) {
-        if (cs.leds) {                                   /* STOCK: the idle ones lit, the active ones dark */
-            nl[k] = (uint8_t)(nd[k] & ~nl[k]);
-            nd[k] = 0;
+        if (cs.leds) {                                   /* STOCK: the idle ones lit, the active ones dark (two
+                                                          * levels: the middle one is "idle" too) */
+            nl[k] = (uint8_t)((nd[k] | nm[k]) & ~nl[k]);
+            nd[k] = nm[k] = 0;
         }
         nl[k] |= own[k];
         nd[k] |= ld[k];
@@ -3462,6 +3559,8 @@ static void cr_leds(void)
     }
     for (k = 0; k < FM1_NCOL; k++)
         fm1_led_dim[k] = nd[k];
+    for (k = 0; k < FM1_NCOL; k++)
+        fm1_led_dim2[k] = (uint8_t)(nm[k] & ~nl[k]);
     for (k = 0; k < FM1_NCOL; k++)
         fm1_led[k] = nl[k];
 }
@@ -3538,7 +3637,11 @@ static void cu_header(cr_screen_t *s)
     }
     /* the status (top right), one of: "Bass Solo" (Bass Behaviour Solo with the bass on: the chord part is silent),
      * the perform mode ("Arp"), "Bass" (the bass on), "Oct +1", "Latch", "lock" */
-    if (sn->bass_on && cs.bass_mode == CR_BASS_SOLO) {
+    if (cs.single == CR_SINGLE_SPLIT_BASS && !sn->perform_on) {   /* Split Bass: the bass is played by hand (Bass on /
+                                                    * off and its Behaviour wait, ignored) */
+        cu_cpy(s->right, "Split Bass", sizeof s->right);
+        s->right_col = CR_COL_ORANGE;
+    } else if (sn->bass_on && cs.bass_mode == CR_BASS_SOLO && cs.single != CR_SINGLE_SPLIT_BASS) {
         cu_cpy(s->right, "Bass Solo", sizeof s->right);
         s->right_col = CR_COL_ORANGE;
     } else if (sn->perform_on)
@@ -3551,7 +3654,8 @@ static void cu_header(cr_screen_t *s)
         cu_int(s->right + 4, cu.octave, 1, sizeof s->right - 4u);
     } else if (cs.sticky)
         cu_cpy(s->right, "Latch", sizeof s->right);
-    else if (cu.clock)                            /* LOCK on (mock-up 3): a small white "lock" */
+    else if (cu.clock && !cs.kbd_full)            /* LOCK on (mock-up 3): a small white "lock" (the Full keyboard: no
+                                                   * LOCK there, the latch waits) */
         cu_cpy(s->right, "lock", sizeof s->right);
     /* the looper owns the top line while it runs: "Rec 2.3", "Rec" (the count-in), "Loop 1" */
     if (sn->lcap != CRL_CAP_NONE || sn->lstate == CRL_PLAYING) {
@@ -3918,6 +4022,15 @@ static void cu_key_cells(cr_screen_t *s)
 {
     static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
     uint32_t k;
+    if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard; KNOB 3 / 4 free */
+        s->cell[0][0].flags = s->cell[0][1].flags = CR_CF_ON;
+        cu_cpy(s->cell[0][0].label, "Key plays", sizeof s->cell[0][0].label);
+        cu_cpy(s->cell[0][0].value, cs.key_notes ? "Notes" : "Chords", sizeof s->cell[0][0].value);
+        cu_cpy(s->cell[0][1].label, "Keyboard", sizeof s->cell[0][1].label);
+        cu_cpy(s->cell[0][1].value, cs.kbd_full ? "Full" : "Chords", sizeof s->cell[0][1].value);
+        cu_hot_row(s, L_KEY);
+        return;
+    }
     for (k = 0; k < 4u; k++) {
         s->cell[0][k].flags = CR_CF_ON;
         cu_cpy(s->cell[0][k].label, LB[k], sizeof s->cell[0][k].label);
@@ -3927,7 +4040,8 @@ static void cu_key_cells(cr_screen_t *s)
     cu_int(s->cell[0][2].value, cs.transpose, 1, sizeof s->cell[0][2].value);
     s->cell[0][2].glyph = CR_G_SHIFT;
     s->cell[0][2].pct = (uint8_t)((uint32_t)(cs.transpose + 24) * 255u / 48u);
-    cu_cpy(s->cell[0][3].value, cs.single ? "Split" : "Full", sizeof s->cell[0][3].value);
+    cu_cpy(s->cell[0][3].value, cs.single == 2u ? "Split Bass" : cs.single ? "Split Oct" : "Full",
+           sizeof s->cell[0][3].value);
     cu_hot_row(s, L_KEY);
 }
 /* the PLAY menu's knob row (docs/LOOPER-MODES.md): Quantize (echoes), Count-in (gate: full on, narrow off), Level
@@ -4155,8 +4269,9 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         s->title_col = CR_COL_WHITE;
         cu_cpy(s->label, cs.key_play ? "key \267 keys play" : "key \267 keys pick", sizeof s->label);   /* (as "perform
                                                                                                     * \267 on") */
-        cu_cpy(s->footer, cs.key_play ? "GLO: pick \267 OCT-: back \267 HOME: home"       /* (GLO: to the other) */
-                                      : "MAJ MIN: scale \267 GLO: play \267 OCT-: back", sizeof s->footer);
+        cu_cat(s->label, cu.kpage ? " \267 2/2" : " \267 1/2", sizeof s->label);   /* (the page: SELECT) */
+        cu_cpy(s->footer, cs.key_play ? "SELECT: page \267 GLO: pick \267 OCT-: back"     /* (GLO: to the other) */
+                                      : "SELECT: page \267 MAJ MIN: scale \267 GLO: play", sizeof s->footer);
         for (k = CU_ROOT0; cs.key_on && k < CU_NKEY; k++)
             if ((53u + k) % 12u == cs.tonic) {
                 s->lit |= 1u << k;
@@ -4611,7 +4726,7 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
         cu_calib_screen(s);
         return;
     }
-    if (sn->ci.sounding || (cu.kheld >> CU_ROOT0))
+    if (sn->ci.sounding || (cu.kheld >> (cs.kbd_full ? 0u : CU_ROOT0)))
         cu.last_sound = now;
     if (cr_safe && now - cu_boot_ms < CR_SAFE_MS && !cu.bheld && !cu.kheld) {   /* 0. SAFE MODE, after the boot */
         cu_safe_screen(s);

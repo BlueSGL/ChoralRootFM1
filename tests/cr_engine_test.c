@@ -1688,6 +1688,110 @@ static void cb_gesture(void *ud, uint32_t gid, int16_t root, uint8_t q, uint8_t 
     (void)ud;
     if (ngl < 32) { GL[ngl].gid = gid; GL[ngl].root = root; GL[ngl].q = q; GL[ngl].ext = ext; GL[ngl].vel = vel; GL[ngl].on = on; ngl++; }
 }
+/* 0.17: Key plays Notes, the Full keyboard, Split Bass (the KEY layer's page 2; the owner, 2026-10-11) */
+static void s_keyplays(void)
+{
+    char b[64];
+    fresh("key plays / full keyboard");
+    /* an extension with no type: a plain single note (momentary, and LOCK's latched case: the type pushed off) */
+    MD(CR_MOD_MAJ7); K(50, 1); expect("+50/127", "an extension key alone + a root: a single note (no type, no extension)");
+    R(50, 1); expect("-50", ".. and its off");
+    MD(CR_MOD_MAJ); K(50, 1); on_notes_sorted(b, 0); ok(!strcmp(b, "50 54 57 61"), "the type pushed again with it: Dmaj7");
+    R(50, 1); MU(CR_MOD_MAJ); MU(CR_MOD_MAJ7); clear();
+    /* Key plays: Notes */
+    cr_set_key(&C, 1, 0, CR_SCALE_MAJOR);
+    K(50, 1); on_notes_sorted(b, 0); ok(!strcmp(b, "50 53 57"), "Key plays Chords (the default): D in C major is Dm");
+    R(50, 1); clear();
+    cr_set_key_plays(&C, 1);
+    K(50, 1); expect("+50/127", "Notes: D in C major is a single note");
+    R(50, 1); expect("-50", "Notes: its off");
+    K(51, 1); R(51, 1);
+    ok(nlog == 0 && cr_voices(&C) == 0 && C.phys_n == 0, "Notes: D# (out of C major) does nothing: no note, no voice, no press");
+    MD(CR_MOD_MIN); K(52, 1); on_notes_sorted(b, 0); ok(!strcmp(b, "52 55 59"), "Notes: MIN + E is Em: the chord keys as with Key Mode off");
+    R(52, 1); clear();
+    K(51, 1); ok(nlog == 0 && cr_voices(&C) == 0, "Notes: MIN + D# (out of the key): still nothing");
+    R(51, 1); MU(CR_MOD_MIN); clear();
+    MD(CR_MOD_9); K(50, 1); expect("+50/127", "Notes: an extension alone + a root: a single note (Key Mode gives no type)");
+    R(50, 1); MU(CR_MOD_9); clear();
+    cr_set_sticky(&C, 1);                      /* a blocked key does not replace a latched chord */
+    K(48, 1); R(48, 1); clear();
+    K(51, 1); R(51, 1);
+    ok(nlog == 0 && cr_voices(&C) == 1, "Notes + latch: a blocked root leaves the latched note sounding");
+    cr_set_sticky(&C, 0); clear();
+    cr_set_key(&C, 0, 0, CR_SCALE_MAJOR);
+    K(51, 1); expect("+51/127", "Notes with Key Mode off: every root plays");
+    R(51, 1); clear();
+    cr_set_key_plays(&C, 0);
+    /* the Full keyboard */
+    cr_set_keyboard(&C, 1, 65);
+    MD(CR_MOD_MAJ); MD(CR_MOD_M7);             /* the chord block, held or latched: ignored, and left as it is */
+    K(53, 1); expect("+53/127", "Full: a key is its single note, the chord block ignored");
+    K(59, 2); expect("+59/111", "Full: a second key: a second note (B3 = 59)");
+    R(53, 1); R(59, 2); expect("-53 -59", "Full: their offs");
+    ok(cr_mods_held(&C) == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_M7)), "Full: the chord block's state untouched");
+    cr_voicing_step(&C, 2);
+    K(60, 1); expect("+60/127", "Full: the voicing is not applied (it waits)");
+    cr_voicing_step(&C, 1); ok(nlog == 0, "Full: a voicing step does not re-voice a Full-keyboard note");
+    R(60, 1); clear();
+    cr_voicing_step(&C, -3);
+    cr_set_transpose(&C, 2);
+    K(60, 1); expect("+62/127", "Full: the transpose applies");
+    R(60, 1); clear(); cr_set_transpose(&C, 0);
+    cr_set_key(&C, 1, 0, CR_SCALE_MAJOR);      /* Key Mode on: blocks, whatever Key plays says; no chord */
+    K(54, 1); R(54, 1); ok(nlog == 0 && cr_voices(&C) == 0, "Full + Key Mode: F# (out of C major) does nothing");
+    K(55, 1); expect("+55/127", "Full + Key Mode: G is G, no scale chord");
+    R(55, 1); clear();
+    cr_set_key(&C, 0, 0, CR_SCALE_MAJOR);
+    cr_set_bass(&C, 1); cr_set_bass_mode(&C, CR_BASS_UNISON);   /* the bass follows as it follows a single note */
+    K(60, 1); expect("+60/127 +60/127b", "Full, Bass on (Unison): the bass follows the note");
+    R(60, 1); clear();
+    cr_set_perform(&C, 1); cr_set_perform_mode(&C, CR_PM_ARP);
+    K(60, 1); step(700); ok(count('+', 0) >= 2 && cr_perform_stepping(&C), "Full: the arp steps the played note");
+    R(60, 1); step(400); cr_set_perform(&C, 0); cr_set_perform_mode(&C, CR_PM_STRUM); step(50); clear();
+    /* Split Oct on the Full keyboard: by key (the split key 65), not by pitch class */
+    cr_set_bass(&C, 0);
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT, 5);
+    K(64, 1); expect("+52/127", "Full + Split Oct: E4 (below the split key) an octave lower");
+    R(64, 1); clear();
+    K(65, 1); expect("+65/127", "Full + Split Oct: F4 (the split key) at pitch");
+    R(65, 1); clear();
+    K(72, 1); expect("+72/127", "Full + Split Oct: C5 at pitch (its pitch class is below the split point: not the rule here)");
+    R(72, 1); clear();
+    /* Split Bass on the Full keyboard */
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    K(64, 1); expect("+64/127b", "Full + Split Bass: E4 plays the BASS stream alone (the Bass off)");
+    R(64, 1); expect("-64b", ".. its off");
+    K(65, 1); expect("+65/127", "Full + Split Bass: F4 plays the chord stream alone");
+    R(65, 1); clear();
+    cr_set_bass(&C, 1); cr_set_bass_mode(&C, CR_BASS_UNISON);
+    K(65, 1); expect("+65/127", "Split Bass, Bass on: nothing follows the right side (the bass is played by hand)");
+    R(65, 1); clear();
+    cr_set_bass_mode(&C, CR_BASS_SOLO);
+    K(65, 1); expect("+65/127", "Split Bass: the Bass Behaviour (Solo) is ignored: the right side sounds");
+    R(65, 1); clear();
+    cr_bass_voicing_step(&C, -1);
+    K(64, 1); expect("+52/127b", "Split Bass: the bass register moves the left side");
+    R(64, 1); clear(); cr_bass_voicing_step(&C, 1);
+    cr_set_keyboard(&C, 1, 77);                /* the octave shifted up: the split key's note follows */
+    K(76, 1); expect("+76/127b", "the split key at 77 (OCT+): 76 is the left side");
+    R(76, 1); clear();
+    cr_set_keyboard(&C, 0, 65);
+    /* Split Bass in the Chords layout: by pitch class, as Split Oct there */
+    cr_set_bass(&C, 0); cr_set_bass_mode(&C, CR_BASS_CHORDS_ONLY);
+    K(62, 1); expect("+62/127b", "Chords layout + Split Bass: D4 (pitch class below F) is a bass note, the chord block ignored for it");
+    R(62, 1); clear();
+    K(74, 1); expect("+74/127b", ".. D5 too (a pitch class, in every octave)");
+    R(74, 1); clear();
+    K(65, 1); on_notes_sorted(b, 0); ok(!strcmp(b, "65 69 72 75") && count('+', 1) == 0, "Chords layout + Split Bass: F4 plays its chord (F7, the block still held), no bass");
+    R(65, 1); clear();
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT, 5);
+    MU(CR_MOD_MAJ); MU(CR_MOD_M7);
+    K(62, 1); expect("+50/127", "Chords layout + Split Oct: as before (pitch class below F: an octave lower)");
+    R(62, 1); clear();
+    cr_set_single_notes(&C, CR_SINGLE_FULL, 5);
+    cr_set_single_notes(&C, (cr_single_t)7, 5); ok(C.single == CR_SINGLE_FULL, "a Single out of range: Full Octave");
+}
+
 static void s_loopvoice(void)
 {
     fresh("loop voices");
@@ -1762,7 +1866,7 @@ static void run_suite(uint32_t tick_us, uint32_t base_ms, const char *tag)
     cr_tick(&C, now_ms());
     s_keyboard(); s_sticky(); s_chords(); s_panic(); s_voicing(); s_bass(); s_keymode(); s_pads();
     s_secret(); s_advanced(); s_free(); s_strum(); s_arp(); s_pattern(); s_live(); s_streams();
-    s_bassmodes(); s_transpose(); s_single(); s_loopvoice(); s_queries(); s_limits(); s_torture();
+    s_bassmodes(); s_transpose(); s_single(); s_keyplays(); s_loopvoice(); s_queries(); s_limits(); s_torture();
     fresh("end");
 }
 

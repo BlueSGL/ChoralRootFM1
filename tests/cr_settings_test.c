@@ -446,6 +446,77 @@ static void t_key_keys_v13(void)
 }
 
 /* version 10: every mode's Hold off (an older record's arp Hold 1 cleared) */
+/* version 14 (0.17): the KEY layer's page 2 in key_on's byte (bit 1 Key plays Notes, bit 2 the Full keyboard), Single's
+ * third value (2 Split Bass) */
+static void t_page2_v14(void)
+{
+    cr_settings_t d, s, r;
+    cr_settings_out_t o;
+    cr_t E;
+    unsigned k;
+    cr_settings_defaults(&d);
+    ok(CRS_VERSION >= 14u && d.key_on == 0 && !CRS_KEY_PLAYS(&d) && !CRS_KEYBOARD(&d) && d.single == CR_SINGLE_FULL,
+       "v14 defaults: Key Mode off, Key plays Chords, Keyboard Chords, Single Full Octave");
+    for (k = 0; k < 8u; k++) {                     /* every combination of the three bits */
+        s = d;
+        s.key_on = (uint8_t)k;
+        cr_settings_seal(&s);
+        if (cr_settings_import(&r, &s, sizeof s) != 1 || r.key_on != k || CRS_KEY_ON(&r) != (k & 1u) ||
+            CRS_KEY_PLAYS(&r) != ((k >> 1) & 1u) || CRS_KEYBOARD(&r) != ((k >> 2) & 1u))
+            break;
+    }
+    ok(k == 8u, "v14: Key Mode / Key plays / Keyboard: the eight combinations round-trip");
+    s = d;
+    s.key_on = 8;                                  /* an unknown bit: the byte's defaults */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.key_on == 0, "v14: key_on out of range takes the defaults");
+    s = d;
+    s.single = CR_SINGLE_SPLIT_BASS;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.single == CR_SINGLE_SPLIT_BASS, "v14: Single = Split Bass round-trips");
+    s.single = 3;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.single == CR_SINGLE_FULL, "v14: Single out of range: Full Octave");
+    /* the engine: apply / capture */
+    s = d;
+    s.key_on = CRS_KEY_BYTE(1, 1, 1);
+    s.tonic = 2;
+    s.single = CR_SINGLE_SPLIT_BASS;
+    cr_settings_seal(&s);
+    cr_init(&E, 0);
+    cr_settings_apply(&s, &E, &o);
+    ok(E.key_on == 1 && E.key_notes == 1 && E.full == 1 && E.single == CR_SINGLE_SPLIT_BASS && E.tonic == 2,
+       "v14 apply: Key Mode on, Key plays Notes, the Full keyboard, Split Bass");
+    r = d;
+    cr_settings_capture(&r, &E, &o);
+    ok(r.key_on == s.key_on && r.single == CR_SINGLE_SPLIT_BASS, "v14 capture(apply(s)): the byte and Single back");
+    /* a version-13 record (0.17 before this): Key Mode on kept, the page-2 settings off; its Split kept */
+    s = d;
+    s.key_on = 1;
+    s.single = CR_SINGLE_SPLIT;
+    s.bpm = 97;
+    cr_settings_seal(&s);
+    s.version = 13;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.bpm == 97 && r.key_on == 1 && r.single == CR_SINGLE_SPLIT &&
+       r.version == CRS_VERSION, "version 13 -> 14: Key Mode and Split (Split Oct) kept, Key plays Chords, Keyboard Chords");
+    s.key_on = 6;                                  /* a v13 record with the new bits set (no writer did): off */
+    s.single = 2;
+    cr_settings_seal(&s);
+    s.version = 13;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.key_on == 0 && r.single == CR_SINGLE_FULL,
+       "version 13 -> 14: stray bits there in an older record read as the defaults");
+    /* what an older firmware (CRS_FIX(key_on, 0, 1), CRS_FIX(single, 0, 1)) does with a v14 record is its own code:
+     * key_on > 1 or single > 1 are out of its ranges: Key Mode off, Full Octave, the rest of the record kept
+     * (docs/SETTINGS.md); with the three at their defaults the bytes are what v13 wrote */
+    s = d;
+    s.key_on = 1;
+    s.single = 1;
+    cr_settings_seal(&s);
+    ok(s.key_on <= 1 && s.single <= 1, "v14 with page 2 at its defaults and Single Full / Split Oct: the bytes an older firmware knows");
+}
+
 static void t_hold_v10(void)
 {
     cr_settings_t d, s, r;
@@ -557,7 +628,7 @@ int main(void)
     t_presets();
     t_flash();
     t_loop_rec();
-    t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13();
+    t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13(); t_page2_v14();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

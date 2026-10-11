@@ -161,10 +161,10 @@ None of them can be pressed. A turn (of any knob but MASTER) shows its value lar
 | Knob | Turn | With OPT held |
 | --- | --- | --- |
 | MASTER | the volume | |
-| SELECT | the tempo, 20 to 300 BPM; in a layer or a menu: moves the picker | the metronome's level |
+| SELECT | the tempo, 20 to 300 BPM; in a layer or a menu: moves the picker (the KEY layer: turns its page) | the metronome's level |
 | PRESETS | the chord sound: the next or previous one of its engine | the chord sound's engine |
 | ALGORITHM | the bass sound: off, then the bass engine's sounds | the bass level |
-| KNOB 1 | the chord's voicing | the Single Notes split point |
+| KNOB 1 | the chord's voicing (on the Full keyboard: the octave) | the Single Notes split point |
 | KNOB 2 | the bass register, in octaves | |
 | KNOB 3 | the first parameter of the performance mode | |
 | KNOB 4 | the amount of the selected effect | |
@@ -206,10 +206,18 @@ MIDI message wakes it and does its normal job at the same time.
 | OCT- lit, OCT+ blinking | in a layer, menu or dialog: back, OK (where there is nothing to confirm: close) |
 | OCT- or OCT+ lit on the view | the roots are shifted down or up |
 | chord keys | lit while held or latched; B3 lit while LOCK is on. In the KEY layer: MAJ and MIN glow, the selected scale's is lit, the others are dark |
-| root keys | the notes of the sounding chord, where they sound; the note a performance mode is playing blinks; a playing loop's notes glow dim |
+| root keys | the notes of the sounding chord, where they sound; the note a performance mode is playing blinks; a playing loop's notes glow dim. With Key Mode on they show the key (below) |
 
-With Key Mode on, the black root keys outside the scale go dark. Options > LEDs chooses between Glow (idle keys glow
-dim, active ones are bright) and Stock (the other way round).
+**Key Mode on the keys.** The key lights have three levels under fully lit. With Key Mode off every root key glows
+at the low level. With Key Mode on the roots show the key, wherever they play (on the views, in the PERF, FX and LOCK
+layers, in the KEY layer too): the notes of the scale glow at the low level, the tonic's keys at a middle level, the
+roots outside the scale are dark, white or black, and the notes that sound are fully lit over it. So a glance tells
+you that Key Mode is on, which key it is, and where the tonic sits. The layers that use the root keys for something
+else (the loop slots, the pickers, naming, the Options) show their own map instead.
+
+Options > LEDs chooses between Glow (idle keys glow dim, active ones are bright) and Stock (the other way round).
+Stock has two levels only: with Key Mode on, the keys of the scale are lit, the tonic like the rest, and the keys
+outside it are dark.
 
 ## 4. Chords
 
@@ -244,7 +252,16 @@ B3 switches LOCK on and off; B3 is lit and `lock` shows at the top right while i
 
 Example: hold MIN, let go: minor. Tap 6: m6. Tap 9: m6/9. Tap 9 again: m6. Tap MAJ: major, nothing else.
 
-Switching LOCK off, or PANIC, clears what is latched. LOCK is off at power-on.
+**Back to single notes.** With one type latched, press that same type key again on its own: the type goes off when
+you let go, and the roots play single notes. The extensions you had latched are not cleared: they stay lit, do
+nothing while there is no type, and are back the moment you press a type key again, whichever it is. So with MAJ and
+M7 latched: MAJ again and D4 is a single D with M7 still lit; MAJ once more and D4 is Dmaj7 again. A second chord key
+pressed while the type key is down cancels this (the keys held together latch together, as always); a root played
+meanwhile does not. This is always so with LOCK on, whatever the two settings below say. (In Key Mode with Key plays
+set to Chords a lone root is still the scale's chord, with the latched extensions.)
+
+Switching LOCK off, or PANIC, clears what is latched. LOCK is off at power-on. On the Full keyboard (Key Mode,
+below) there is no LOCK: B3 is a note there.
 
 **The LOCK layer.** Hold B3 past the hold time (a tap is still on / off; a hold does not switch LOCK). The layer
 stays open like the others, B3 blinks, and the top left says `lock · on` or `lock · off`. The keys play as usual
@@ -261,13 +278,14 @@ pressing one of them on its own makes the set that one key. To switch the extens
 that is on once more, on its own: it goes off when you let go (it keeps sounding until then, and if you add another
 key while holding it, both stay on). Example: 6: 6 is on. 7: 7 is on, 6 is off. 7 again: nothing is on. 7, and 9
 while holding it: 7 and 9. With `Keeps` and `Pushed` together a type key changes only the type and an extension key
-only the extensions. With `Clears`, a type key clears the extensions as always.
+only the extensions. With `Clears`, a type key that replaces another type clears the extensions as always; the
+same type pressed again (off, above) and a type pressed when none is latched leave them alone.
 
 ### Voicing and octave
 
 - **KNOB 1** revoices the chord: one click up moves the lowest note up an octave, one click down moves the highest
   note down, from -12 to +12. The screen adds `voicing +2` under the notes. The voicing applies to every chord that
-  follows, and to a playing loop.
+  follows, and to a playing loop. (On the Full keyboard there is no chord to voice: KNOB 1 is the octave there.)
 - **OCT-** and **OCT+** shift the root keys by octaves, from -2 to +2 (`Oct +1` at the top right). A low voicing can
   put chord notes below D4, where no key can light for them; the notes line on the screen always has them.
 
@@ -302,7 +320,8 @@ The small `5` and `add4` are red. Extensions stack on top as usual.
 Tap **KEY** (printed SEL): the KEY light comes on and `Key: C` shows at the top left. Now a root key on its own plays
 the chord that belongs on that note of the scale. In C major: D gives `Dm`, E `Em`, F `F`, G `G`, A `Am`, B `Bdim`.
 A key outside the scale plays a sus chord on a neighbouring scale note (C# in C gives `Csus`). A chord key held
-overrides the scale's choice of type. The black root keys outside the scale go dark.
+overrides the scale's choice of type. The root keys light the key: the scale's notes glow, the tonic's keys are
+brighter, the keys outside the scale are dark ([The lights](#the-lights)).
 
 Hold KEY to open the **KEY layer**:
 
@@ -315,8 +334,10 @@ Hold KEY to open the **KEY layer**:
 | KNOB 1 | Tonic, step by step (Key Mode switches on) |
 | KNOB 2 | Scale: Major or Minor |
 | KNOB 3 | Transpose, -24 to +24 semitones. It moves everything you play from then on, in or out of Key Mode |
-| KNOB 4 | Single: Full or Split (below) |
-| SELECT | the tempo, as outside |
+| KNOB 4 | Single: Full, Split Oct or Split Bass (below) |
+| SELECT | turns the layer's page: page 1 is the four settings above, page 2 has Key plays and Keyboard (below). The top line says `1/2` or `2/2`. SELECT does not change the tempo in this layer |
+| KNOB 1, page 2 | **Key plays**: Chords or Notes |
+| KNOB 2, page 2 | **Keyboard**: Chords or Full |
 | OPT (printed GLO) tap | switches the keys between **pick** and **play** (below). It does not open the Options from here |
 | OCT-, OCT+, HOME, KEY held again | close the layer |
 
@@ -335,9 +356,43 @@ the tonic, the scale, the transposition and Single. The top of the layer says wh
 `key · keys play`), the footer shows the way to the other, and OPT is lit while the keys play. Tap OPT again for
 pick. The choice is remembered, also after switching off. OPT held with KNOB 1 is still the split point.
 
-**Single Notes: Split.** With Single set to Split, single notes (not chords) on keys whose note name lies below the
-split point sound an octave lower. The split point is F by default, so C to E are the lowered notes; OPT + KNOB 1 or
-Options > Split Point moves it.
+**Single: Full, Split Oct, Split Bass.** Single decides what the keys below the split point do.
+
+- `Full`: nothing special.
+- `Split Oct`: single notes (not chords) on keys whose note name lies below the split point sound an octave lower.
+  The split point is F by default, so C to E are the lowered notes, in every octave; OPT + KNOB 1 or Options > Split
+  Point moves it.
+- `Split Bass`: two instruments side by side. The keys below the split point play the **bass part's sound** and
+  nothing else, as single notes at their own pitch (the bass register, KNOB 2 on the view, shifts them by octaves);
+  the other keys play the chord part and nothing else. With the usual keys that means the roots whose note name is
+  below the split point (C to E by default) are bass notes and the others play chords as ever. While Split Bass is
+  on the bass is played by hand: it does not follow the chords, and Bass on / off and the Bass Behaviour are left as
+  they are and ignored until Single is changed back. The top right says `Split Bass`. The bass part is one voice.
+
+**Key plays: Chords or Notes** (page 2, KNOB 1). `Chords` is Key Mode as described above: a lone root plays the
+scale's chord. `Notes` keeps Key Mode as a guide and a guard only: the roots and the chord keys behave exactly as
+with Key Mode off (a lone root is a single note, a chord key gives its chord), but a root outside the scale does
+nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still shows on the root keys.
+
+**Keyboard: Chords or Full** (page 2, KNOB 2). `Chords` is the usual keybed: nine chord keys and eighteen roots.
+`Full` turns all 27 keys, F3 to G5, into an ordinary chromatic keyboard playing single notes of the chord part:
+
+- There are no chord keys and no LOCK: B3 is a note, and holding it does not open the LOCK layer. What you had
+  latched with LOCK is kept untouched and is back, lit, when you return to `Chords`.
+- **KNOB 1** on the view changes the **octave** (the same octave as OCT- and OCT+; the read-out says `octave`),
+  since there is no chord to voice. The voicing you had is kept for the Chords keyboard.
+- With Key Mode off the keyboard is chromatic. With Key Mode on, the notes outside the scale do nothing and the key
+  shows on all 27 keys (Key plays does not matter here: there are no chords to make).
+- The bass, the performance modes (an arpeggio of the notes you hold), the looper and MIDI out follow what you play
+  as they follow a single note.
+- The split is at the **second F**: F3 to E4 is the left side, F4 to G5 the right. `Split Oct` plays the left side
+  an octave lower; `Split Bass` gives the left side to the bass part and the right side to the chord part. This
+  split is fixed on the Full keyboard; the split point you set with OPT + KNOB 1 belongs to the Chords keyboard and
+  is not changed by it.
+- In the KEY layer with its keys on pick, the keys still pick: a root sets the tonic, MAJ and MIN the scale (B3 does
+  nothing there). With the keys on play they are the Full keyboard.
+
+Key plays, Keyboard and Single are remembered, also after switching off.
 
 The Geek Out view shows the transposition (`Trans +2`).
 
@@ -368,7 +423,8 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 - **The knob row.** Under the layer's picker, four cells show what KNOB 1 to KNOB 4 do, in the knob colours (blue,
   orange, white, green), each with a small picture of its value. The cell you just turned lights up. A dash means the
   knob has no job here.
-- **SELECT** moves the picker at the top of the layer (except in the KEY layer, where it stays the tempo).
+- **SELECT** moves the picker at the top of the layer (in the KEY layer it turns the page; in the LOCK layer it stays
+  the tempo).
 - **OCT- is back, OCT+ is confirm.** Where a layer has something to confirm, OCT+ does it (the engine picker's
   sound, the loop slots' Save / Load / Delete, the save dialog). The layers below have nothing to confirm, so there
   OCT+ closes the layer just as OCT- does. On / off is always a tap of the layer's own button.
@@ -868,8 +924,8 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **Secret Chords** | Off, Simple, All | Off | two chord types together make a third chord ([Secret chords](#secret-chords)) |
 | **Velocity** | 1 to 127 | 100 | the velocity of every key, for the sound and for MIDI out |
 | **Bass Behaviour** | Chords Only, Unison Bass, Bass Single Notes, Solo | Chords Only | what the bass plays ([Bass](#6-bass)) |
-| **Single Notes** | Full Octave, Split | Full Octave | Split: single notes below the split point sound an octave lower |
-| **Split Point** | C to B | F | where that split is; reads `(Split off)` while Single Notes is Full Octave |
+| **Single Notes** | Full Octave, Split Oct, Split Bass | Full Octave | Split Oct: single notes below the split point sound an octave lower. Split Bass: the keys below it play the bass part ([Key Mode](#key-mode)) |
+| **Split Point** | C to B | F | where that split is on the Chords keyboard; reads `(Split off)` while Single Notes is Full Octave. The Full keyboard splits at its second F |
 | **MIDI Perform** | Off, ch 1 to ch 16 | ch 1 | the channel the chord sound's notes go out on, and come in on |
 | **MIDI Bass** | Off, ch 1 to ch 16 | ch 2 | the same for the bass |
 | **MIDI Raw Chord** | Off, ch 1 to ch 16 | Off | the channel for the plain chord, without the performance mode. From Off the first step is ch 1; choose a channel of its own (the Orchid uses 3) |
@@ -910,7 +966,7 @@ FM-1 a second or two of silence before you switch off.
 | LATCH, and the effects being on or off | the voicing on KNOB 1 |
 | the tempo, the metronome and its time signature | the selected effect and the FX layer's KNOB 1 to KNOB 3 |
 | the bass behaviour and register | the parts' Level and Pan, the bass level |
-| the looper's settings and its slot; the KEY layer's keys (pick or play); the LOCK layer's two settings | changes to a sound you did not save |
+| the looper's settings and its slot; the KEY layer's keys (pick or play), Key plays and Keyboard; the LOCK layer's two settings | changes to a sound you did not save |
 | which sounds the two parts play, and each engine's last place | where you were in the editor |
 | the view and its lock | |
 | saved sounds; loops (each time a loop stops) | |
@@ -1090,7 +1146,10 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | A layer will not go away | layers stay open by design | OCT- or HOME |
 | Plain root keys play chords | Key Mode is on (KEY lit, `Key: C`) | tap KEY |
 | Chords come out in the wrong key | Transpose is set (Geek Out shows `Trans`) | KEY layer, KNOB 3 back to 0 |
-| Low single notes jump down an octave | Single Notes is Split | KEY layer, KNOB 4: Full |
+| Low single notes jump down an octave | Single Notes is Split Oct | KEY layer, KNOB 4: Full |
+| Some roots play a bass note instead of a chord | Single Notes is Split Bass | KEY layer, KNOB 4: Full |
+| The chord keys play notes, B3 does not lock | Keyboard is Full | KEY layer, SELECT to page 2, KNOB 2: Chords |
+| Some keys do nothing | Key Mode is on with Key plays = Notes, or on the Full keyboard: they are outside the scale | tap KEY, or KEY layer page 2 |
 | Chord keys stay on | LOCK is on (B3 lit) | tap B3 |
 | Notes keep sounding | LATCH is on, or Strum's Hold | tap LATCH; PANIC stops everything |
 | The chord sound is silent, the bass plays | Bass Behaviour is Solo (`Bass Solo`) | BASS layer, another behaviour, or tap BASS |
@@ -1125,7 +1184,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
 | FX | FX | effects on / off (in its layer too) | FX layer: SELECT effect · KNOB 1-3 parameters · KNOB 4 amount |
-| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single · GLO: the keys pick / play |
+| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · GLO: the keys pick / play |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: white roots or SELECT engine · KNOB 1 presets · KNOB 2 init · KNOB 4 roots · OCT+ keep · OCT- cancel |
@@ -1164,10 +1223,10 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | Knob | Turn | OPT + turn | In a layer | In the editor |
 | --- | --- | --- | --- | --- |
 | MASTER | volume | | volume | volume |
-| SELECT | tempo | click level | the layer's picker (KEY layer: tempo) | the lane |
+| SELECT | tempo | click level | the layer's picker (KEY layer: its page; LOCK layer: tempo) | the lane |
 | PRESETS | chord sound | chord engine | chord sound (PLAY menu: slot) | the engine picker |
 | ALGORITHM | bass sound | bass level | bass sound (PLAY menu: record mode) | bass sound |
-| KNOB 1 | voicing | split point | the layer's first cell | the lane's first value |
+| KNOB 1 | voicing (Full keyboard: the octave) | split point | the layer's first cell | the lane's first value |
 | KNOB 2 | bass register | | second cell | second value |
 | KNOB 3 | performance parameter | | third cell | third value |
 | KNOB 4 | FX amount | | fourth cell | fourth value |
@@ -1178,7 +1237,8 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | --- | --- |
 | F#3 G#3 A#3 C#4 | DIM MIN MAJ SUS |
 | F3 G3 A3 C4 | 6 m7 M7 9 |
-| B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed) |
+| B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed). With LOCK on, the only latched type pressed again alone: off (single notes, the extensions kept) |
+| F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4 |
 | D4 to G5 | roots |
 | white roots D4 to G5, engine picker | FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE |
 | white roots D4 to F5, PLAY menu with Keys = Loops, or SAVE held | loop slots 1 to 10 |

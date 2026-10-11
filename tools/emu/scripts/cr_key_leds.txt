@@ -1,0 +1,79 @@
+# ChoralRoot: Key Mode's lights on the root keys (the owner, 2026-10-11): three levels under "lit". Key Mode off: every
+# root glows (dim). Key Mode on, everywhere the roots play: the notes of the scale glow (dim, fm1_led_dim), the tonic's
+# keys at the middle level (mid, fm1_led_dim2), the roots out of the scale are dark, a sounding note is lit over it.
+# The dump's "key leds:" line: F3..C4, then D4..G5: 0 off 1 dim 2 mid 3 lit.
+wait 300
+dump                          # 1: Key Mode off: 111111111111111111
+btn SEL                       # tap: Key Mode on, C major
+wait 300
+expect led C5 mid             # the tonic
+expect led D4 dim             # a note of the scale
+expect led D#4 off            # out of it
+expect led F#4 off
+expect led B4 dim             # (a white key in C major)
+dump                          # 2: 101101010120101101
+shot build/emu/test/cr_key_leds_c.ppm
+btn SEL down                  # the layer: the tonic D (KNOB 1), still major
+wait 500
+btn SEL up
+wait 300
+knob KNOB1 +2
+wait 300
+dump                          # 3: in the layer (keys: pick): the same picture: 201011010101201011
+btn OCT-
+wait 300
+expect led D4 mid
+expect led D5 mid
+expect led F4 off             # a white key out of D major: dark (it glowed until 0.17)
+expect led C5 off
+expect led F#4 dim
+expect led C#5 dim
+dump                          # 4: D major: 201011010101201011
+btn SEL down                  # D minor (KNOB 2)
+wait 500
+btn SEL up
+wait 300
+knob KNOB2 +1
+wait 300
+btn OCT-
+wait 300
+dump                          # 5: D minor: 201101011010201101
+btn D4 down                   # a lone root: Dm (D4 F4 A4) lit over the glow
+wait 400
+expect led D4 on
+expect led F4 on
+expect led A4 on
+expect led E4 dim
+expect led D5 mid
+expect led F#4 off
+dump                          # 6: 301301031010201101
+shot build/emu/test/cr_key_leds_dm.ppm
+btn D4 up
+wait 300
+btn SEL                       # Key Mode off: every root glows again
+wait 300
+expect led D#4 dim
+expect led D4 dim
+dump                          # 7: 111111111111111111
+btn GLO 80                    # Options > LEDs: Stock (two levels: the idle keys lit, the active dark)
+wait 300
+knob SELECT +14
+wait 300
+knob KNOB1 +1
+wait 300
+btn GLO 80
+wait 300
+btn SEL                       # Key Mode on (D minor): the scale's keys lit, the tonic as the rest, the others dark
+wait 300
+expect led D4 on
+expect led E4 on
+expect led D#4 off
+expect led F#4 off
+dump                          # 8: Stock: 303303033030303303
+btn D4 down                   # Stock: the sounding notes are the dark ones (the reverse, as ever)
+wait 400
+expect led D4 off
+expect led E4 on
+btn D4 up
+wait 2500
+dump                          # 9: silent

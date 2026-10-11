@@ -129,11 +129,11 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(playstyle, 0, CR_PS_FREE);
     CRS_FIX(extadd, 0, 1);
     CRS_FIX(secret, 0, CR_SECRET_ALL);
-    CRS_FIX(key_on, 0, 1);
+    CRS_FIX(key_on, 0, 7);                         /* (v14: bit 1 Key plays Notes, bit 2 the Full keyboard) */
     CRS_FIX(tonic, 0, 11);
     CRS_FIX(scale, 0, 1);
     CRS_FIX(transpose, -24, 24);
-    CRS_FIX(single, 0, 1);
+    CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
     CRS_FIX(vel, 1, 127);
     CRS_FIX(bass_on, 0, 1);
@@ -281,6 +281,13 @@ int cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n)
         if (in.version < 13u)                      /* version 13: the KEY layer's keys in bit 5 of loop_rec (no older
                                                     * writer set it: an unknown bit there): pick, the default */
             s->loop_rec &= (uint8_t)~(CRS_KEY_PLAY | CRS_LOCK_KEEP | CRS_LOCK_PUSH);   /* (and LOCK's two styles) */
+        if (in.version < 14u)                      /* version 14: Key plays and Keyboard in bits 1 / 2 of key_on (no
+                                                    * older writer set them; one out of range there read as off): Chords,
+                                                    * Chords; Single's 2 (Split Bass) did not exist: Full Octave */
+        {
+            s->key_on = (uint8_t)(s->key_on == 1u ? 1u : 0u);
+            if (s->single > CR_SINGLE_SPLIT) s->single = CR_SINGLE_FULL;
+        }
     }
     crs_sanitize(s);
     cr_settings_seal(s);
@@ -295,7 +302,9 @@ void cr_settings_apply(const cr_settings_t *s, cr_t *c, cr_settings_out_t *o)
     cr_set_playstyle(c, (cr_playstyle_t)s->playstyle);
     cr_set_ext_addition(c, (cr_extadd_t)s->extadd);
     cr_set_secret(c, (cr_secret_t)s->secret);
-    cr_set_key(c, s->key_on, s->tonic, (cr_scale_t)s->scale);
+    cr_set_key(c, (int)CRS_KEY_ON(s), s->tonic, (cr_scale_t)s->scale);
+    cr_set_key_plays(c, (int)CRS_KEY_PLAYS(s));
+    cr_set_keyboard(c, (int)CRS_KEYBOARD(s), c->split_note);   /* (the split key: the UI's, with its octave) */
     cr_set_transpose(c, s->transpose);
     cr_set_single_notes(c, (cr_single_t)s->single, s->split_pc);
     cr_set_bass_mode(c, (cr_bassmode_t)s->bass_mode);
@@ -330,7 +339,7 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
     s->playstyle = c->playstyle;
     s->extadd = c->extadd;
     s->secret = c->secret;
-    s->key_on = c->key_on;
+    s->key_on = CRS_KEY_BYTE(c->key_on, c->key_notes, c->full);
     s->tonic = c->tonic;
     s->scale = c->scale;
     s->transpose = c->transpose;
@@ -457,7 +466,7 @@ static void crs_capture(cr_settings_t *s)
     s->playstyle = cs.playstyle;
     s->extadd = cs.extadd;
     s->secret = cs.secret;
-    s->key_on = cs.key_on;
+    s->key_on = CRS_KEY_BYTE(cs.key_on, cs.key_notes, cs.kbd_full);
     s->tonic = cs.tonic;
     s->scale = cs.scale;
     s->transpose = cs.transpose;
@@ -523,7 +532,9 @@ static void cr_settings_load(void)
     cs.playstyle = s->playstyle;
     cs.extadd = s->extadd;
     cs.secret = s->secret;
-    cs.key_on = s->key_on;
+    cs.key_on = (uint8_t)CRS_KEY_ON(s);
+    cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
+    cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
     cs.tonic = s->tonic;
     cs.scale = s->scale;
     cs.transpose = s->transpose;
@@ -585,6 +596,7 @@ static void cr_settings_load(void)
         s->bass_sound = CRS_SOUND_DEFAULT;
     cu_pos_sync();
     cu_route();
+    cu_post_kbd();                                 /* (the split key's note: the UI's, with its octave) */
     cu_set_tempo(s->bpm);
     crs_loaded = 1;
     crs_capture(&crs_seen);                        /* the state now: nothing to save until it changes */

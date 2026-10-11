@@ -1,0 +1,15 @@
+# test_persist.sh, KEY page 2 run 2 (the same flash file): at power-on Key plays Notes, Keyboard Full, Single Split Bass,
+# in the UI and in the engine; B3 is a note of the left side (the bass part), F4 one of the right (the chord part)
+wait 500
+dump
+btn B3 down
+wait 300
+dump
+btn B3 up
+wait 2500
+btn F4 down
+wait 300
+dump
+btn F4 up
+wait 300
+quit

@@ -1,0 +1,242 @@
+# ChoralRoot: the Full keyboard (the owner, 2026-10-11): the KEY layer's page 2, Keyboard = Full: all 27 keys F3..G5
+# are single notes of the chord part at their own pitch; no chord key, no LOCK (B3 is a note); KNOB 1 on the view is
+# the octave; Key Mode on blocks the notes out of the scale and lights the scale on all 27 keys; Single: Split Bass:
+# F3..E4 play the bass part alone, F4..G5 the chord part alone (the split at the second F, fixed); Split Oct: F3..E4
+# an octave lower. The LOCK latch made before is untouched when the mode is left.
+wait 300
+btn B3                        # LOCK on, MAJ + M7 latched: the state the mode must give back
+wait 200
+btn A#3 down
+btn A3 down
+wait 100
+btn A3 up
+btn A#3 up
+wait 200
+dump                          # 1: lock on 1 latched 44, keyboard chords
+btn SEL down                  # the KEY layer, page 2, KNOB 2: Keyboard Full
+wait 500
+btn SEL up
+wait 300
+knob SELECT +1
+wait 200
+knob KNOB2 +1
+wait 300
+shot build/emu/test/cr_fullkbd_page2.ppm
+btn OCT-
+wait 300
+dump                          # 2: keyboard full, the latch still 44
+btn F3 down
+wait 150
+dump
+btn F3 up
+btn F#3 down
+wait 150
+dump
+btn F#3 up
+btn G3 down
+wait 150
+dump
+btn G3 up
+btn G#3 down
+wait 150
+dump
+btn G#3 up
+btn A3 down
+wait 150
+dump
+btn A3 up
+btn A#3 down
+wait 150
+dump
+btn A#3 up
+btn B3 down                   # B3: a note (59), LOCK not toggled, no layer however long it is held
+wait 700
+expect led B3 on
+dump                          # 9: notes 59, layer 0, lock on 1 latched 44
+btn B3 up
+btn C4 down
+wait 150
+dump
+btn C4 up
+btn C#4 down
+wait 150
+dump
+btn C#4 up
+btn D4 down
+wait 150
+dump
+btn D4 up
+btn D#4 down
+wait 150
+dump
+btn D#4 up
+btn E4 down
+wait 150
+dump
+btn E4 up
+btn F4 down
+wait 150
+dump
+btn F4 up
+btn F#4 down
+wait 150
+dump
+btn F#4 up
+btn G4 down
+wait 150
+dump
+btn G4 up
+btn G#4 down
+wait 150
+dump
+btn G#4 up
+btn A4 down
+wait 150
+dump
+btn A4 up
+btn A#4 down
+wait 150
+dump
+btn A#4 up
+btn B4 down
+wait 150
+dump
+btn B4 up
+btn C5 down
+wait 150
+dump
+btn C5 up
+btn C#5 down
+wait 150
+dump
+btn C#5 up
+btn D5 down
+wait 150
+dump
+btn D5 up
+btn D#5 down
+wait 150
+dump
+btn D#5 up
+btn E5 down
+wait 150
+dump
+btn E5 up
+btn F5 down
+wait 150
+dump
+btn F5 up
+btn F#5 down
+wait 150
+dump
+btn F#5 up
+btn G5 down
+wait 150
+dump                          # 29: notes 79
+btn G5 up
+wait 300
+btn F3 down                   # two keys held: two notes, both lit
+btn A3 down
+wait 200
+expect led F3 on
+expect led A3 on
+expect led G3 dim
+dump                          # 30: voices 2
+shot build/emu/test/cr_fullkbd_two.ppm
+btn A3 up
+btn F3 up
+wait 300
+knob KNOB1 +1                 # KNOB 1: the octave (the voicing stays 0)
+wait 200
+shot build/emu/test/cr_fullkbd_octave.ppm
+btn F3 down
+wait 200
+dump                          # 31: octave 1, voicing 0, notes 65
+btn F3 up
+knob KNOB1 -1
+wait 300
+dump                          # 32: octave 0
+btn SEL                       # Key Mode on: C major
+wait 300
+expect led C4 mid             # the scale on all 27 keys: the tonic's keys (C4, C5),
+expect led C5 mid
+expect led F3 dim             # the scale's notes,
+expect led B3 dim
+expect led F#3 off            # the others dark
+expect led C#4 off
+dump                          # 33: key leds 101010120 101101010120101101
+shot build/emu/test/cr_fullkbd_key.ppm
+wait 2500
+dump                          # 34: silent before the blocked key
+btn F#3 down                  # out of the scale: nothing
+wait 400
+expect led F#3 off
+dump                          # 35: voices 0, notes-out as 34
+btn F#3 up
+btn G3 down                   # in the scale: its note (no chord: Key Mode makes none here)
+wait 300
+dump                          # 36: chord G notes 55
+btn G3 up
+btn SEL                       # Key Mode off
+wait 300
+btn SEL down                  # Single: Split Bass (page 1, KNOB 4, two detents)
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 +2
+wait 300
+shot build/emu/test/cr_fullkbd_splitbass.ppm
+btn OCT-
+wait 2500
+dump                          # 37: single 2, split-note 65, silent
+btn E4 down                   # the left side: the bass part alone
+wait 300
+dump                          # 38: part 0 voices 0, part 1 voices 1
+btn E4 up
+wait 2500
+btn F4 down                   # the right side: the chord part alone
+wait 300
+dump                          # 39: part 0 voices > 0, part 1 voices 0
+btn F4 up
+wait 2500
+btn SEL down                  # Single: Split Oct
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 -1
+wait 300
+btn OCT-
+wait 300
+btn E4 down                   # the left side an octave lower (E3 = 52), on the chord part
+wait 300
+dump                          # 40: notes 52
+btn E4 up
+btn F4 down                   # the right side at pitch
+wait 300
+dump                          # 41: notes 65
+btn F4 up
+wait 300
+btn SEL down                  # Single: Full, Keyboard: Chords again
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 -1
+wait 200
+knob SELECT +1
+wait 200
+knob KNOB2 -1
+wait 300
+btn OCT-
+wait 300
+dump                          # 42: keyboard chords, lock on 1 latched 44: the latch as it was
+expect led A#3 on             # MAJ and M7: lit again
+expect led A3 on
+expect led B3 on              # LOCK
+btn D4 down                   # .. and it plays: DM7
+wait 300
+dump                          # 43: chord DM7
+btn D4 up
+wait 200
+btn B3                        # LOCK off
+wait 2500
+dump                          # 44: silent

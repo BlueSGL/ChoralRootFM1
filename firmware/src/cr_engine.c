@@ -268,14 +268,16 @@ static void crx_snapshot_spec(const cr_t *c, uint8_t *sq, uint8_t *sx)
 static void crx_build_base(const cr_t *c, cr_voice_t *v)
 {
     int q = v->sq, root = v->note_pressed, pc = v->pc_pressed;
-    if (c->key_on) {
+    if (c->key_on && !c->key_notes && !v->zone) {   /* (Key plays Notes, the Full keyboard, a bass-side key: no chord) */
         int e = CR_KEYMAP[c->scale][crx_mod(v->pc_pressed - c->tonic, 12)], sh = e >> 3;
         if (sh == 1) { root--; pc = crx_mod(pc - 1, 12); }
         else if (sh == 2) { root++; pc = crx_mod(pc + 1, 12); }
         if (!q) q = e & 7;
     }
-    if (!q && c->single == CR_SINGLE_SPLIT && v->pc_pressed < c->split_pc && root >= 12)
-        root -= 12;                  /* Single Notes Split: below the split point, an octave lower */
+    if (!q && root >= 12 && ((v->zone & CR_Z_LOW) ||
+                             (!v->zone && c->single == CR_SINGLE_SPLIT && v->pc_pressed < c->split_pc)))
+        root -= 12;                  /* Single Notes Split Oct: below the split point, an octave lower (the Chords
+                                      * layout: by pitch class; the Full keyboard: the keys below the split key) */
     v->rq = (uint8_t)q;
     v->root = (int16_t)root;
     v->pc = (uint8_t)pc;
@@ -529,6 +531,8 @@ static void crx_start_performance(cr_t *c, int vi)
  * for chords; Unison plays bass for everything at the played pitch. */
 static int crx_chord_streams_ok(const cr_t *c, const cr_voice_t *v)
 {
+    if (v->zone & CR_Z_BASS) return 0;                   /* Split Bass, the bass side: the BASS stream alone */
+    if (c->single == CR_SINGLE_SPLIT_BASS) return 1;     /* .. the Bass Behaviour is ignored meanwhile */
     if (!c->bass_on) return 1;
     if (c->bass_mode == CR_BASS_SOLO) return 0;
     if (c->bass_mode == CR_BASS_SINGLE_NOTES && v->rq == CR_Q_NONE) return 0;
@@ -538,15 +542,17 @@ static int crx_main_ok(const cr_t *c, const cr_voice_t *v) { return c->stream_on
 static int crx_raw_ok(const cr_t *c, const cr_voice_t *v) { return c->stream_on[CR_STREAM_RAW] && crx_chord_streams_ok(c, v); }
 static int crx_bass_wanted(const cr_t *c, const cr_voice_t *v)
 {
+    if (c->single == CR_SINGLE_SPLIT_BASS) return (v->zone & CR_Z_BASS) != 0;   /* played by hand: nothing follows */
     return !(c->bass_mode == CR_BASS_CHORDS_ONLY && v->rq == CR_Q_NONE);
 }
 static int crx_bass_ok(const cr_t *c, const cr_voice_t *v)
 {
+    if (v->zone & CR_Z_BASS) return c->stream_on[CR_STREAM_BASS];   /* (whatever Bass on / off says) */
     return c->bass_on && c->stream_on[CR_STREAM_BASS] && crx_bass_wanted(c, v);
 }
 static int crx_bass_pitch(const cr_t *c, const cr_voice_t *v)
 {
-    if (c->bass_mode == CR_BASS_UNISON) return v->note_pressed + v->transpose + 12 * c->bass_voicing;
+    if (c->bass_mode == CR_BASS_UNISON || (v->zone & CR_Z_BASS)) return v->note_pressed + v->transpose + 12 * c->bass_voicing;
     return (CR_BASS_OCT + c->bass_voicing + 1) * 12 + v->pc + v->transpose;   /* root pc in the bass register */
 }
 static void crx_bass_start(cr_t *c, cr_voice_t *v)
@@ -701,7 +707,8 @@ static int crx_find_voice(const cr_t *c, int key)
 }
 
 /* build, register and sound a voice; bass follows it */
-static int crx_start_voice(cr_t *c, int key, int id, int vel, int pc_pressed, int note_pressed, int sq, int sx, int is_free)
+static int crx_start_voice(cr_t *c, int key, int id, int vel, int pc_pressed, int note_pressed, int sq, int sx, int is_free,
+                           int zone)
 {
     cr_voice_t *v;
     int vi;
@@ -714,10 +721,11 @@ static int crx_start_voice(cr_t *c, int key, int id, int vel, int pc_pressed, in
     v->pc_pressed = (uint8_t)pc_pressed; v->note_pressed = (uint8_t)note_pressed;
     v->transpose = c->transpose;
     v->sq = (uint8_t)sq; v->sx = (uint8_t)sx; v->is_free = (uint8_t)is_free;
+    v->zone = (uint8_t)zone;
     v->serial = ++c->serial;
     v->gid = ++c->gid;
     crx_build_base(c, v);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, c->voicing, v->notes);
+    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, zone ? 0 : c->voicing, v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;
@@ -764,6 +772,7 @@ static void crx_rec_commit(cr_t *c)
 static void crx_bass_sync(cr_t *c, cr_voice_t *v)
 {
     int want;
+    if (v->zone & CR_Z_BASS) return;                            /* (a bass-side key: its note is the bass) */
     if (!c->bass_on || !c->stream_on[CR_STREAM_BASS]) return;   /* bass toggles apply to the next gesture */
     want = crx_bass_wanted(c, v);
     if (want && !v->bass.live) crx_bass_start(c, v);
@@ -776,7 +785,7 @@ static void crx_transform_voice(cr_t *c, int vi, int reattack)
 {
     cr_voice_t *v = &c->v[vi];
     crx_build_base(c, v);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, c->voicing, v->notes);
+    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, v->zone ? 0 : c->voicing, v->notes);
     crx_note_last_chord(c, vi);
     /* Full re-strike (not performing): Chord Type press (reattack) or Play Chord; else Add Note diffs. */
     if (!c->perform_on && (reattack || c->extadd == CR_EXTADD_PLAY_CHORD)) {
@@ -823,7 +832,7 @@ static void crx_modifier_press(cr_t *c, int m)
     for (i = 0; i < CR_MAX_VOICES; i++) {
         cr_voice_t *v = &c->v[i];
         int s;
-        if (!v->used) continue;
+        if (!v->used || v->zone) continue;   /* (a Full-keyboard / bass-side note has no chord to change) */
         /* Advanced/Free: last quality wins (a Chord Type press re-strikes); an extension press TOGGLES */
         if (isq) v->sq = (uint8_t)q;
         else v->sx ^= (uint8_t)xb;
@@ -838,7 +847,7 @@ static void crx_modifier_press(cr_t *c, int m)
         crx_lp_get(c, &lp);
         sq = lp.sq; sx = lp.sx;
         if (isq) sq = q; else sx |= xb;
-        crx_start_voice(c, lp.key, lp.id, lp.vel, lp.pc_pressed, lp.note_pressed, sq, sx, 1);
+        crx_start_voice(c, lp.key, lp.id, lp.vel, lp.pc_pressed, lp.note_pressed, sq, sx, 1, 0);
     }
 }
 
@@ -864,6 +873,7 @@ void cr_init(cr_t *c, const cr_out_t *out)
     c->bpm = 120;
     c->single = CR_SINGLE_FULL;
     c->split_pc = 5;
+    c->split_note = 65;              /* F4: the split key (cr_set_keyboard) */
     c->stream_on[CR_STREAM_MAIN] = 1;
     c->stream_on[CR_STREAM_BASS] = 1;
     c->stream_on[CR_STREAM_RAW] = 0;
@@ -921,6 +931,9 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
     bit = (uint8_t)(1u << id);
     if (down) {
         cr_voice_t *v;
+        /* Key plays Notes / the Full keyboard, Key Mode on: a key out of the scale does nothing at all (its release
+         * finds no press: phys is not set) */
+        if (c->key_on && (c->key_notes || c->full) && !((cr_scale_mask(c) >> (note % 12u)) & 1u)) return;
         /* Once every key of a latched gesture has been lifted, the first press of the next gesture replaces
          * the latched group instead of adding to it. */
         if (cr_latching(c) && c->phys_n == 0) crx_clear_manual_voices(c);
@@ -941,8 +954,15 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
             crx_gesture(c, vi, 1);
         } else {
             uint8_t sq, sx;
+            int zone = c->full ? CR_Z_FULL : 0;
+            /* below the split: the Chords layout by pitch class (split_pc, as Split Oct there), the Full keyboard
+             * by key (split_note) */
+            if (c->single == CR_SINGLE_SPLIT_BASS && (c->full ? note < c->split_note : note % 12 < c->split_pc))
+                zone |= CR_Z_BASS;
+            else if (c->full && c->single == CR_SINGLE_SPLIT && note < c->split_note) zone |= CR_Z_LOW;
             crx_snapshot_spec(c, &sq, &sx);   /* spec captured at note-on */
-            vi = crx_start_voice(c, note, id, vel, note % 12, note, sq, sx, 0);
+            if (zone) sq = sx = 0;            /* the Full keyboard, a bass-side key: a single note */
+            vi = crx_start_voice(c, note, id, vel, note % 12, note, sq, sx, 0, zone);
             if (vi < 0) return;
             c->lp.valid = 1; c->lp.attached = 1; c->lp.vi = (uint8_t)vi; c->lp.serial = c->v[vi].serial;
         }
@@ -993,7 +1013,7 @@ void cr_voicing_step(cr_t *c, int d)
     c->voicing = (int8_t)nv;
     for (i = 0; i < CR_NVOICE; i++) {
         cr_voice_t *v = &c->v[i];
-        if (!v->used) continue;
+        if (!v->used || v->zone) continue;
         crx_hush_voice(c, i);
         v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, nv, v->notes);
         crx_sound_voice(c, i);
@@ -1056,8 +1076,14 @@ void cr_set_key(cr_t *c, int enabled, uint8_t tonic_pc, cr_scale_t scale)
 void cr_set_transpose(cr_t *c, int semis) { c->transpose = (int8_t)crx_clamp(semis, -24, 24); }
 void cr_set_single_notes(cr_t *c, cr_single_t mode, int split_pc)
 {
-    c->single = (uint8_t)(mode == CR_SINGLE_SPLIT);
+    c->single = (uint8_t)((int)mode >= CR_SINGLE_FULL && (int)mode <= CR_SINGLE_SPLIT_BASS ? mode : CR_SINGLE_FULL);
     c->split_pc = (uint8_t)crx_clamp(split_pc, 0, 11);
+}
+void cr_set_key_plays(cr_t *c, int notes) { c->key_notes = (uint8_t)(notes != 0); }
+void cr_set_keyboard(cr_t *c, int full, int split_note)
+{
+    c->full = (uint8_t)(full != 0);
+    c->split_note = (uint8_t)crx_clamp(split_note, 0, 127);
 }
 void cr_set_bass(cr_t *c, int enabled) { c->bass_on = (uint8_t)(enabled != 0); }
 void cr_set_bass_mode(cr_t *c, cr_bassmode_t m) { if ((int)m >= CR_BASS_CHORDS_ONLY && (int)m <= CR_BASS_SOLO) c->bass_mode = (uint8_t)m; }
