@@ -103,7 +103,7 @@
     g2.putImageData(img, 0, 0);
     m2.drawImage(lcd, 0, 0);
   };
-  const LEVEL = [0, 0.38, 1];
+  const LEVEL = [0, 0.38, 1, 0.68];   // off, dim, lit, mid (the middle level: Key Mode's tonic)
   const drawLeds = (L) => {
     for (let k = 0; k < 27; k++) {
       const e = keyEl[k], v = L[k];
@@ -113,8 +113,8 @@
     }
     for (let i = 0; i < 14; i++) {
       const e = btnEl[i], v = L[27 + i];
-      e.cap.setAttribute("fill", v === 2 ? e.col : v === 1 ? mix(e.col, 0.38) : C.cap);
-      e.t.setAttribute("fill", v === 2 ? "#111" : v === 1 ? C.cream : e.tcol);
+      e.cap.setAttribute("fill", v === 2 ? e.col : v === 3 ? mix(e.col, 0.68) : v === 1 ? mix(e.col, 0.38) : C.cap);
+      e.t.setAttribute("fill", v === 2 ? "#111" : v === 1 || v === 3 ? C.cream : e.tcol);
       if (e.ht) e.ht.setAttribute("fill", v === 2 ? "#333" : C.hint);
     }
     btnEl[10].dot.setAttribute("fill", L[41] ? C.green : C.led);

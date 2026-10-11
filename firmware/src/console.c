@@ -312,6 +312,8 @@ static void con_inp(void)
     con_kv("tick_cpu_permille", (int32_t)(win >= 1000u ? fm1_in_stat.cost_sum / (win / 1000u) : 0u));
     con_kv("dim_pulse_ns", (int32_t)(fm1_in_stat.dim_n ? fm1_in_stat.dim_sum / fm1_in_stat.dim_n * 1000u / FM1_TICKS_PER_US : 0u));
     con_kv("dim_bits", (int32_t)fm1__dim_k);
+    con_kv("dim2_pulse_ns", (int32_t)(fm1_in_stat.dim2_n ? fm1_in_stat.dim2_sum / fm1_in_stat.dim2_n * 1000u / FM1_TICKS_PER_US : 0u));
+    con_kv("dim2_bits", (int32_t)fm1__dim2_k);
     con_puts("led_on_permille:");
     for (i = 0; i < FM1_NCOL; i++) {
         con_putc(' ');

@@ -389,6 +389,72 @@ int main(void)
             printf("LEDs, bus %u: the pulse spans %u..%u bits of the shift%s\n", (unsigned)host_bus, (unsigned)kmin,
                    (unsigned)kmax, waits ? " (the shift shorter than the pulse: the rest waited)" : " (no wait)");
         }
+        /* the middle level (fm1_led_dim2, 0.17): three levels on every frame. Column 3: dim2 alone; column 4: a dim
+         * LED and a dim2 one (lit | dim | dim2, then lit | dim2, then dark); column 5: dim alone (as above); column 6:
+         * dim2 on an LED that is also lit (lit wins: no pulse); an LED in dim and dim2 (column 4 row 3) is dim2. The
+         * widths settle to FM1_LED_DIM_NS and FM1_LED_DIM2_NS +-30 % at every bus speed (a shift shorter than the
+         * dim2 pulse: the rest waited), nothing of another column, the lines dark at every latch */
+        for (bi = 0; bi < sizeof BUS / sizeof BUS[0]; bi++) {
+            const uint32_t T1 = (FM1_LED_DIM_NS * FM1_TICKS_PER_US + 500u) / 1000u;
+            const uint32_t T2 = (FM1_LED_DIM2_NS * FM1_TICKS_PER_US + 500u) / 1000u;
+            uint32_t t, prev, frames = 400u, bad = 0, n1 = 0, n2 = 0, n12 = 0;
+            uint32_t w1min = ~0u, w1max = 0, w2min = ~0u, w2max = 0;
+            char what[112];
+            reset();
+            FM1_PR(FM1_PA, FM1_IN) = 0xFFFFFFFFu;
+            FM1_PR(FM1_PB, FM1_IN) = 0xFFFFFFFFu;
+            memset(fm1_led, 0, sizeof fm1_led);
+            memset(fm1_led_dim, 0, sizeof fm1_led_dim);
+            memset(fm1_led_dim2, 0, sizeof fm1_led_dim2);
+            fm1_led_dim2[3] = 1u << 2;
+            fm1_led_dim[4] = 1u << 1 | 1u << 3;
+            fm1_led_dim2[4] = 1u << 3 | 1u << 4;
+            fm1_led_dim[5] = 1u << 2;
+            fm1_led[6] = 1u << 1;
+            fm1_led_dim2[6] = 1u << 1;
+            host_step = 1u;
+            host_bus = BUS[bi];
+            latch_lit = latches = 0;
+            for (t = 0; t < frames * FM1_NCOL; t++) {
+                uint32_t d1, d2, settled = t >= 40u * FM1_NCOL;
+                prev = fm1__tick_col;
+                led_nw = 0;
+                fm1_input_tick();
+                d2 = fm1_led_dim2[prev] & ~fm1_led[prev];
+                d1 = fm1_led_dim[prev] & ~fm1_led[prev] & ~d2;
+                bad += led_w[0] != 0u || led_w[led_nw - 1u] != fm1_led[fm1__tick_col];
+                if (d1 && d2) {                       /* 0, lit | d1 | d2, lit | d2, 0, lit of n */
+                    bad += led_nw != 5u || led_w[1] != (fm1_led[prev] | d1 | d2) || led_w[2] != (fm1_led[prev] | d2) ||
+                           led_w[3] != 0u;
+                    n12++;
+                    if (settled && led_nw == 5u) {
+                        uint32_t a = led_wt[2] - led_wt[1], b = led_wt[3] - led_wt[1];
+                        w1min = a < w1min ? a : w1min; w1max = a > w1max ? a : w1max;
+                        w2min = b < w2min ? b : w2min; w2max = b > w2max ? b : w2max;
+                    }
+                } else if (d1 || d2) {                /* 0, lit | d, 0, lit of n */
+                    bad += led_nw != 4u || led_w[1] != (fm1_led[prev] | d1 | d2) || led_w[2] != 0u;
+                    if (d1) n1++; else n2++;
+                    if (settled && led_nw == 4u) {
+                        uint32_t a = led_wt[2] - led_wt[1];
+                        if (d1) { w1min = a < w1min ? a : w1min; w1max = a > w1max ? a : w1max; }
+                        else { w2min = a < w2min ? a : w2min; w2max = a > w2max ? a : w2max; }
+                    }
+                } else {
+                    bad += led_nw != 2u;
+                }
+            }
+            snprintf(what, sizeof what, "LEDs, bus %u: dim %u..%u ns, dim2 %u..%u ns (targets %u / %u +-30 %%), every frame, own column",
+                     (unsigned)host_bus, (unsigned)(w1min * 1000u / FM1_TICKS_PER_US), (unsigned)(w1max * 1000u / FM1_TICKS_PER_US),
+                     (unsigned)(w2min * 1000u / FM1_TICKS_PER_US), (unsigned)(w2max * 1000u / FM1_TICKS_PER_US),
+                     (unsigned)FM1_LED_DIM_NS, (unsigned)FM1_LED_DIM2_NS);
+            check(what, !bad && !latch_lit && latches == frames * FM1_NCOL && n1 == frames && n2 == frames && n12 == frames &&
+                  w1min * 10u >= T1 * 7u && w1max * 10u <= T1 * 13u && w2min * 10u >= T2 * 7u && w2max * 10u <= T2 * 13u &&
+                  w2min > w1max);
+            printf("LEDs, bus %u: the dim2 pulse spans %u bits of the shift%s\n", (unsigned)host_bus, (unsigned)fm1__dim2_k,
+                   fm1__dim2_k == 16u ? " (the shift is shorter than the pulse: the rest waited)" : " (no wait)");
+        }
+        memset(fm1_led_dim2, 0, sizeof fm1_led_dim2);
         host_bus = 0;
         host_step = 2400u;
         printf("LEDs: refresh %u Hz lit, %u Hz dim\n", (unsigned)(1000000u / (FM1_NCOL * TICK_US)),

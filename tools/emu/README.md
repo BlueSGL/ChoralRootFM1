@@ -50,7 +50,7 @@ points), `--size W,H` the size in points. Nothing is remembered between runs.
 
 The panel is drawn in
 the geometry of `ChoralRootFM1Designer/index.html` (BODY, SCREEN, KEYS, BUTTONS, ENCODERS) with the live
-LEDs: key and button LEDs lit / dim from `fm1_led` / `fm1_led_dim`, REC red, PLAY orange plus its green LED.
+LEDs: key and button LEDs lit / mid / dim from `fm1_led` / `fm1_led_dim2` / `fm1_led_dim` (three levels; `expect led KEY on|mid|dim|off`; the dump prints `leds mid:` and, per key, `key leds:` 0 off 1 dim 2 mid 3 lit), REC red, PLAY orange plus its green LED.
 Keys and buttons are clickable (right-click / ctrl-click latches one down), the knobs turn with the mouse
 wheel over them or a vertical drag; a click selects a knob for Up / Down. At exit it prints the audio block
 render time (avg / max us), the device callback gaps and the UI frame time.

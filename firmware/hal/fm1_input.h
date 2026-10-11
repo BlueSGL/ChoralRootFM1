@@ -47,6 +47,13 @@
  * follows FM1_LED_DIM_NS (one bit up or down a tick: the widths straddle the target by a bit's time). Only
  * if the whole shift were shorter than the pulse would the rest be waited (console `inp`: dim_pulse_ns,
  * dim_bits). An LED in both is fully lit. FM1_LED_DIM_DIV > 1 also skips frames (keep >= 200 Hz).
+ * A middle level (0.17: ChoralRoot's Key Mode, the tonic's keys): fm1_led_dim2[col], the same pulse, longer:
+ * FM1_LED_DIM2_NS. Three levels on every frame: dim < dim2 < lit (an LED in dim and dim2 is dim2; with lit, lit).
+ * It rides on the same shift: the lines go lit | dim | dim2 of p, after fm1__dim_k bits lit | dim2 (when the column
+ * has both), after fm1__dim2_k bits dark; fm1__dim2_k follows FM1_LED_DIM2_NS as fm1__dim_k follows FM1_LED_DIM_NS.
+ * A dim2 pulse longer than the whole 16-bit shift is waited out (the only wait in the tick: on the columns that
+ * have a dim2 LED, by FM1_LED_DIM2_NS less the shift's time at most; console `inp`: dim2_pulse_ns, dim2_bits: 16
+ * with a pulse at the target means it waits). The two widths are tuned here and nowhere else.
  */
 #pragma once
 #include <stdint.h>
@@ -68,6 +75,11 @@
 #define FM1_SETTLE_US 10u
 #ifndef FM1_LED_DIM_NS
 #define FM1_LED_DIM_NS 3200u      /* a dim LED's pulse per frame (ns; a lit one ~95 us): ~1/30 the brightness */
+#endif
+#ifndef FM1_LED_DIM2_NS
+#define FM1_LED_DIM2_NS 9600u     /* the middle level's pulse per frame (ns): 3 x the dim one, ~1/10 of a lit LED.
+                                   * The steps are geometric-ish on purpose (x3, x10): 1/4 and 1/6 of lit read as
+                                   * nearly lit (#35), so the middle sits clearly under them and clearly over dim */
 #endif
 #ifndef FM1_LED_DIM_DIV
 #define FM1_LED_DIM_DIV 1u        /* a dim LED: the pulse on 1 frame in DIV (1: every frame, ~910 Hz) */
@@ -117,6 +129,7 @@ static volatile struct {
 } fm1_in;
 static uint8_t fm1_led[FM1_NCOL];
 static uint8_t fm1_led_dim[FM1_NCOL];
+static uint8_t fm1_led_dim2[FM1_NCOL];           /* the middle level (FM1_LED_DIM2_NS) */
 
 /* scan diagnostics (console `inp`, read and cleared by the main loop): the gap between ticks
  * = the on-time of the column lit in it, in TIMER4 ticks (24 MHz) */
@@ -131,6 +144,7 @@ static volatile struct {
      * the note's first sample leaving the I2S DMA (the half it renders starts one half later) */
     uint32_t kb_n, kb_sum, kb_max, dac_sum, dac_max;
     uint32_t dim_n, dim_sum;     /* the dim pulses and their widths (TIMER4 ticks) */
+    uint32_t dim2_n, dim2_sum;   /* .. the middle level's */
 } fm1_in_stat;
 
 static void fm1__led_lines(uint32_t rowmask)       /* row bit 1 PA9, 2 PA10, 3 PH6, 4 PH9 */
@@ -330,7 +344,9 @@ static void fm1__frame(void)
 
 /* one column per call, from a timer ISR (see top) */
 #define FM1__DIM_T ((FM1_LED_DIM_NS * FM1_TICKS_PER_US + 500u) / 1000u)   /* the pulse in TIMER4 ticks */
+#define FM1__DIM2_T ((FM1_LED_DIM2_NS * FM1_TICKS_PER_US + 500u) / 1000u)
 static uint8_t fm1__tick_col, fm1__dim_k = 16u;   /* the bits of the shift the dim pulse spans (0..16) */
+static uint8_t fm1__dim2_k = 16u;                 /* .. the middle level's */
 #if FM1_LED_DIM_DIV > 1
 static uint8_t fm1__dim_ph;
 #endif
@@ -338,7 +354,7 @@ static void fm1_input_tick(void)
 {
     uint32_t p = fm1__tick_col, n = p + 1u == FM1_NCOL ? 0u : p + 1u;
     uint32_t t0 = fm1_ticks(), g = t0 - fm1_in_stat.last, b = 0;
-    uint32_t w = 0xFFFFu ^ (1u << n) ^ (n < 2u ? 1u << (11u + n) : 0u), lit = fm1_led[p], dim = 0, k = fm1__dim_k;
+    uint32_t w = 0xFFFFu ^ (1u << n) ^ (n < 2u ? 1u << (11u + n) : 0u), lit = fm1_led[p], dim = 0, dim2 = 0, k = 0;
     fm1__led_lines(0);
     fm1_in_stat.last = t0;
     while (b < FM1_GAP_BINS - 1u && g >= (150u * FM1_TICKS_PER_US << b))
@@ -355,21 +371,46 @@ static void fm1_input_tick(void)
         fm1__dim_ph = (uint8_t)(fm1__dim_ph + 1u >= FM1_LED_DIM_DIV ? 0u : fm1__dim_ph + 1u);
     if (!fm1__dim_ph)
 #endif
-        dim = fm1_led_dim[p] & ~lit;
-    if (dim) {                                     /* the dim pulse of column p: over the first k bits */
-        uint32_t t1, d;
+    {
+        dim2 = fm1_led_dim2[p] & ~lit;
+        dim = fm1_led_dim[p] & ~lit & ~dim2;
+    }
+    if (dim | dim2) {                              /* the pulses of column p: dim over the first k1 bits of the
+                                                    * shift, dim2 over the first k2 (the 595 still drives column p) */
+        uint32_t t1, d, k1 = dim ? fm1__dim_k : 0u, k2 = dim2 ? fm1__dim2_k : 0u;
+        if (dim2 && k1 > k2)                       /* (never once settled: the middle pulse is the longer) */
+            k1 = k2;
         t1 = fm1_ticks();                          /* (before the write: d spans one write and the bits) */
-        fm1__led_lines(lit | dim);
-        fm1__sr_bits(w, 0, k);                     /* (the 595 still drives column p) */
-        d = fm1_ticks() - t1;
-        while (k == 16u && d < FM1__DIM_T)         /* only a shift shorter than the pulse waits */
+        fm1__led_lines(lit | dim | dim2);
+        if (dim) {
+            fm1__sr_bits(w, 0, k1);
             d = fm1_ticks() - t1;
-        fm1__led_lines(0);
-        fm1__dim_k = (uint8_t)(d > FM1__DIM_T ? (k ? k - 1u : 0u) : d < FM1__DIM_T && k < 16u ? k + 1u : k);
-        fm1_in_stat.dim_n++;
-        fm1_in_stat.dim_sum += d;
-    } else {
-        k = 0;
+            while (k1 == 16u && d < FM1__DIM_T)    /* only a shift shorter than the pulse waits */
+                d = fm1_ticks() - t1;
+            fm1__led_lines(dim2 ? lit | dim2 : 0u);
+            k = fm1__dim_k;
+            fm1__dim_k = (uint8_t)(d > FM1__DIM_T ? (k ? k - 1u : 0u) : d < FM1__DIM_T && k < 16u ? k + 1u : k);
+            fm1_in_stat.dim_n++;
+            fm1_in_stat.dim_sum += d;
+        }
+        if (dim2) {
+            fm1__sr_bits(w, k1, k2);
+            d = fm1_ticks() - t1;
+            k = fm1__dim2_k;
+            if (k2 == 16u && d < FM1__DIM2_T) {    /* the whole shift is over and the pulse is not: the rest is
+                                                    * waited, and the span stays 16 (the wait's overshoot, a clock
+                                                    * read, must not shorten the next pulse to 15 bits unwaited) */
+                do
+                    d = fm1_ticks() - t1;
+                while (d < FM1__DIM2_T);
+            } else {
+                fm1__dim2_k = (uint8_t)(d > FM1__DIM2_T ? (k ? k - 1u : 0u) : d < FM1__DIM2_T && k < 16u ? k + 1u : k);
+            }
+            fm1__led_lines(0);
+            fm1_in_stat.dim2_n++;
+            fm1_in_stat.dim2_sum += d;
+        }
+        k = k2 > k1 ? k2 : k1;
     }
     fm1__sr_bits(w, k, 16u);
     fm1__sr_latch();                               /* column n, the lines dark */
