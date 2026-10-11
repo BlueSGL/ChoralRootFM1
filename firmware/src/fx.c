@@ -152,73 +152,127 @@ static inline int32_t lowcut1(int32_t x, int32_t *lc, int32_t *err, uint32_t sh)
  * The low-pass has 4 poles (Felucca 1.0.5, #42: with 2, the trapezoid rebuilt the 300 .. 600 Hz of the mix itself,
  * late, and cancelled up to 6 dB of it; now under 0.5 dB) */
 static int32_t sb_lp1, sb_lp2, sb_lp3, sb_lp4, sb_env, sb_h1, sb_h2, sb_hl;
-static inline int32_t spk_bass(int32_t m)
+enum { SB_LP1, SB_LP2, SB_LP3, SB_LP4, SB_ENV, SB_H1, SB_H2, SB_HL, SB_N };   /* (the states above, in a block's copy) */
+static inline int32_t spk_bass(int32_t *sb, int32_t m)
 {
     int32_t a, t, u;
-    sb_lp1 += ((m - sb_lp1) * 692) >> 15;
-    sb_lp2 += ((sb_lp1 - sb_lp2) * 692) >> 15;
-    sb_lp3 += ((sb_lp2 - sb_lp3) * 692) >> 15;
-    sb_lp4 += ((sb_lp3 - sb_lp4) * 692) >> 15;
-    a = sb_lp4 < 0 ? -sb_lp4 : sb_lp4;
-    if (a > sb_env)
-        sb_env += (a - sb_env) >> 2;
-    else if (sb_env > 0)
-        sb_env -= (sb_env >> 11) + 1;
-    t = clamp(sb_lp4 * 8, -sb_env, sb_env);
-    sb_h1 += (t - sb_h1) >> 5;
-    u = t - sb_h1;
-    sb_h2 += (u - sb_h2) >> 5;
-    u -= sb_h2;
-    sb_hl += (u - sb_hl) >> 3;
-    return sb_hl * 3;
+    sb[SB_LP1] += ((m - sb[SB_LP1]) * 692) >> 15;
+    sb[SB_LP2] += ((sb[SB_LP1] - sb[SB_LP2]) * 692) >> 15;
+    sb[SB_LP3] += ((sb[SB_LP2] - sb[SB_LP3]) * 692) >> 15;
+    sb[SB_LP4] += ((sb[SB_LP3] - sb[SB_LP4]) * 692) >> 15;
+    a = sb[SB_LP4] < 0 ? -sb[SB_LP4] : sb[SB_LP4];
+    if (a > sb[SB_ENV])
+        sb[SB_ENV] += (a - sb[SB_ENV]) >> 2;
+    else if (sb[SB_ENV] > 0)
+        sb[SB_ENV] -= (sb[SB_ENV] >> 11) + 1;
+    t = clamp(sb[SB_LP4] * 8, -sb[SB_ENV], sb[SB_ENV]);
+    sb[SB_H1] += (t - sb[SB_H1]) >> 5;
+    u = t - sb[SB_H1];
+    sb[SB_H2] += (u - sb[SB_H2]) >> 5;
+    u -= sb[SB_H2];
+    sb[SB_HL] += (u - sb[SB_HL]) >> 3;
+    return sb[SB_HL] * 3;
 }
 
-static inline void master_out(int32_t *l, int32_t *r)
+/* The master over a block, in place on its frames (o: left, right, ...): the DC blocker, LOWCUT / BASS+, the limiter,
+ * the soft clip. The states are the globals above, held in locals over the block (a call a sample loaded and stored
+ * them every sample); lowcut and smooth are constants where a loop is built for them (master_block), so a sample has
+ * no test of the settings. */
+static inline __attribute__((always_inline)) void master_loop(int32_t *o, uint32_t n, uint32_t lowcut, int smooth)
 {
-    int32_t al, ar, a;
-    *l = dc_block(*l, &dc_l, &dce_l);
-    *r = dc_block(*r, &dc_r, &dce_r);
-    if (fx_lowcut) {                  /* two one-pole high-passes, error feedback as dc_block (the */
-        uint32_t sh = fx_lowcut == 2u ? 5u : 6u;    /* rounded step stopped at |x - lc| < 32: an offset) */
-        int32_t b = fx_lowcut == 2u ? spk_bass((*l + *r) >> 1) : 0;
-        *l = lowcut1(*l, &lc_l1, &lce[0], sh);
-        *l = lowcut1(*l, &lc_l2, &lce[1], sh) + b;
-        *r = lowcut1(*r, &lc_r1, &lce[2], sh);
-        *r = lowcut1(*r, &lc_r2, &lce[3], sh) + b;
-    }
-    al = *l < 0 ? -*l : *l;
-    ar = *r < 0 ? -*r : *r;
-    a = al > ar ? al : ar;
-    if (fx_smooth) {                 /* ChoralRoot: the peak held at once, the gain eased down over ~1.5 ms */
-        int32_t gt;
-        if (a > lim_env)
-            lim_env = a;
-        else if (lim_env > LIM_T)
-            lim_env -= ((lim_env - LIM_T) >> 12) + 1;
-        gt = lim_env > LIM_T ? (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)lim_env) : 32768;
-        if (gt < lim_g)
-            lim_g += (gt - lim_g) >> 6;
-        else
-            lim_g = gt;
-        if (lim_g < 32768) {
-            *l = ((*l >> 4) * lim_g) >> 11;
-            *r = ((*r >> 4) * lim_g) >> 11;
+    int32_t dl = dc_l, el = dce_l, dr = dc_r, er = dce_r, env = lim_env, lg = lim_g;
+    int32_t l1 = lc_l1, l2 = lc_l2, r1 = lc_r1, r2 = lc_r2, e0 = lce[0], e1 = lce[1], e2 = lce[2], e3 = lce[3];
+    int32_t sb[SB_N] = {sb_lp1, sb_lp2, sb_lp3, sb_lp4, sb_env, sb_h1, sb_h2, sb_hl};
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t l = o[2u * i], r = o[2u * i + 1u], al, ar, a;
+        l = dc_block(l, &dl, &el);
+        r = dc_block(r, &dr, &er);
+        if (lowcut) {                 /* two one-pole high-passes, error feedback as dc_block (the */
+            uint32_t sh = lowcut == 2u ? 5u : 6u;       /* rounded step stopped at |x - lc| < 32: an offset) */
+            int32_t b = lowcut == 2u ? spk_bass(sb, (l + r) >> 1) : 0;
+            l = lowcut1(l, &l1, &e0, sh);
+            l = lowcut1(l, &l2, &e1, sh) + b;
+            r = lowcut1(r, &r1, &e2, sh);
+            r = lowcut1(r, &r2, &e3, sh) + b;
         }
-        *l = softclip(*l);
-        *r = softclip(*r);
-        return;
+        al = l < 0 ? -l : l;
+        ar = r < 0 ? -r : r;
+        a = al > ar ? al : ar;
+        if (smooth) {                /* ChoralRoot: the peak held at once, the gain eased down over ~1.5 ms */
+            int32_t gt;
+            if (a > env)
+                env = a;
+            else if (env > LIM_T)
+                env -= ((env - LIM_T) >> 12) + 1;
+            gt = env > LIM_T ? (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)env) : 32768;
+            if (gt < lg)
+                lg += (gt - lg) >> 6;
+            else
+                lg = gt;
+            if (lg < 32768) {
+                l = ((l >> 4) * lg) >> 11;
+                r = ((r >> 4) * lg) >> 11;
+            }
+        } else {
+            if (a > env)
+                env += (a - env) >> 2;
+            else if (env > LIM_T)
+                env -= ((env - LIM_T) >> 12) + 1;
+            if (env > LIM_T) {
+                int32_t g = (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)env);   /* < 32768 */
+                l = ((l >> 4) * g) >> 11;                    /* >> 4 first: |l| may be far above Q15 */
+                r = ((r >> 4) * g) >> 11;
+            }
+        }
+        o[2u * i] = softclip(l);
+        o[2u * i + 1u] = softclip(r);
     }
-    if (a > lim_env)
-        lim_env += (a - lim_env) >> 2;
-    else if (lim_env > LIM_T)
-        lim_env -= ((lim_env - LIM_T) >> 12) + 1;
-    if (lim_env > LIM_T) {
-        int32_t g = (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)lim_env);   /* < 32768 */
-        *l = ((*l >> 4) * g) >> 11;                      /* >> 4 first: |l| may be far above Q15 */
-        *r = ((*r >> 4) * g) >> 11;
+    dc_l = dl;
+    dce_l = el;
+    dc_r = dr;
+    dce_r = er;
+    lim_env = env;
+    lim_g = lg;
+    if (lowcut) {
+        lc_l1 = l1;
+        lc_l2 = l2;
+        lc_r1 = r1;
+        lc_r2 = r2;
+        lce[0] = e0;
+        lce[1] = e1;
+        lce[2] = e2;
+        lce[3] = e3;
     }
-    *l = softclip(*l);
-    *r = softclip(*r);
+    if (lowcut == 2u) {
+        sb_lp1 = sb[SB_LP1];
+        sb_lp2 = sb[SB_LP2];
+        sb_lp3 = sb[SB_LP3];
+        sb_lp4 = sb[SB_LP4];
+        sb_env = sb[SB_ENV];
+        sb_h1 = sb[SB_H1];
+        sb_h2 = sb[SB_H2];
+        sb_hl = sb[SB_HL];
+    }
+}
+static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
+{
+    uint32_t lowcut = fx_lowcut;                        /* (the main loop's: it does not run under this block) */
+    if (fx_smooth) {
+        if (!lowcut)
+            master_loop(o, n, 0u, 1);
+        else if (lowcut == 2u)
+            master_loop(o, n, 2u, 1);
+        else
+            master_loop(o, n, 1u, 1);
+    } else {
+        if (!lowcut)
+            master_loop(o, n, 0u, 0);
+        else if (lowcut == 2u)
+            master_loop(o, n, 2u, 0);
+        else
+            master_loop(o, n, 1u, 0);
+    }
 }
 
 /* length of one division (N_DIV order) in samples at the song tempo */
@@ -649,11 +703,10 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
     }
     perf_block(mix_l, mix_r, n);
     for (i = 0; i < n; i++) {
-        int32_t l = mix_l[i], r = mix_r[i];
-        master_out(&l, &r);
-        out[2u * i] = l;
-        out[2u * i + 1u] = r;
+        out[2u * i] = mix_l[i];
+        out[2u * i + 1u] = mix_r[i];
     }
+    master_block(out, n);
 }
 #endif
 
@@ -704,10 +757,8 @@ static void mix_block(int32_t *out, uint32_t n)
     }
 #endif
     for (i = 0; i < n; i++) {
-        int32_t l = (((mix_l[i] + wet[i]) >> 2) * mg) >> 10;
-        int32_t r = (((mix_r[i] + wet[i]) >> 2) * mg) >> 10;
-        master_out(&l, &r);
-        out[2u * i] = l;
-        out[2u * i + 1u] = r;
+        out[2u * i] = (((mix_l[i] + wet[i]) >> 2) * mg) >> 10;
+        out[2u * i + 1u] = (((mix_r[i] + wet[i]) >> 2) * mg) >> 10;
     }
+    master_block(out, n);
 }
