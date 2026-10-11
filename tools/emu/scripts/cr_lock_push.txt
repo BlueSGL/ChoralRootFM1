@@ -1,0 +1,111 @@
+# ChoralRoot: LOCK with "Ext keys: Pushed" in the three play styles (the owner, 2026-10-12: "the free chord mode on
+# the extension keys using the pushed setting with lock on don't work the same as in simple or advanced and need to
+# be oddly toggled off by pressing twice"). test_cr.sh runs this body six times, behind a preamble it writes: Options >
+# Play Style Simple / Advanced / Free, the LOCK layer's Ext keys = Pushed, Type key = Clears / Keeps, LOCK on.
+#   chord block: F3 6, F#3 DIM, G3 m7 (his "7"), G#3 MIN, A3 M7, A#3 MAJ, B3 LOCK, C4 9, C#4 SUS
+#   the dumps' "lock:" line: latched = bits DIM 01 MIN 02 MAJ 04 SUS 08, 6 10, m7 20, M7 40, 9 80; the "mods:" line:
+#   the engine's keys down, what the chord keys' LEDs show (active), each voice's own type / extensions (q / x; f: a
+#   Free voice, the last chord sounded again while a chord key is held)
+# The latch is the same in every style (the set logic is the UI's): {} -> 7 = {7}; {7} -> 7 alone = {} (at its
+# release); {7} -> 7 + 9 = {7, 9}; {7, 9} -> 7 alone = {7}; {7} -> 9 alone = {9}. What sounds follows the latch:
+# Simple at the next root; Advanced and Free also on the roots held; Free also sounds the last root again as the
+# latched chord for as long as a chord key is held (a lone repeat: the old set until its release).
+# Part A: no root held (the last chord: D)
+btn A#3                       # MAJ
+wait 150
+btn D4 200                    # D: the last chord
+wait 400
+dump                          # 1: 04, silent
+btn F3                        # 6
+wait 300
+dump                          # 2: 14
+btn G3                        # 7: the set is 7
+wait 300
+dump                          # 3: 24
+btn G3 down                   # 7 again, alone: the old set while held (Free: D7 sounds) ..
+wait 200
+dump                          # 4: 24 (decided at the release)
+btn G3 up
+wait 300
+dump                          # 5: 04: off, nothing sounds
+btn G3                        # 7: on
+wait 300
+dump                          # 6: 24
+btn G3 down                   # 7 held + 9: both
+wait 100
+btn C4 down
+wait 150
+dump                          # 7: held (Free: D7 with the 9)
+btn C4 up
+btn G3 up
+wait 300
+dump                          # 8: A4
+btn G3                        # {7, 9}, 7 alone: 7
+wait 300
+dump                          # 9: 24
+btn C4                        # {7}, 9 alone: 9
+wait 300
+dump                          # 10: 84
+btn C4 down                   # 9 again alone: on while held ..
+wait 200
+dump                          # 11: 84
+btn C4 up
+wait 300
+dump                          # 12: 04
+btn D4 down                   # a root now: D (no extension)
+wait 300
+dump                          # 13: D
+btn D4 up
+wait 300
+btn G3                        # 7 on again
+wait 300
+btn A#3 down                  # the top row's lone repeat: MAJ again alone: on while held ..
+wait 200
+dump                          # 14: 24 (Free: D7 sounds while held)
+btn A#3 up
+wait 300
+dump                          # 15: 20: no type, 7 waiting
+btn D4 down                   # a single note
+wait 300
+dump                          # 16: D alone
+btn D4 up
+wait 300
+btn A#3                       # MAJ back, to the 7 waiting there
+wait 300
+dump                          # 17: 24
+# Part B: a root held all along (Advanced and Free: the sounding chord follows the latch; Simple: frozen at note-on)
+btn D4 down
+wait 300
+dump                          # 18: D7
+btn G3                        # 7 alone, the only one on: off at its release
+wait 300
+dump                          # 19: 04 (Advanced / Free: D)
+btn G3                        # 7: on
+wait 300
+dump                          # 20: 24 (D7)
+btn C4                        # 9 alone: the set is 9
+wait 300
+dump                          # 21: 84 (D with the 9)
+btn C4 down                   # 9 held + 7: both
+wait 100
+btn G3 down
+wait 100
+btn G3 up
+btn C4 up
+wait 300
+dump                          # 22: A4 (D7 with the 9)
+btn G3                        # 7 alone: 7
+wait 300
+dump                          # 23: 24 (D7)
+btn A#3                       # MAJ, the only type, alone: off: Advanced / Free: the held root is a single note
+wait 300
+dump                          # 24: 20
+btn A#3                       # MAJ back
+wait 300
+dump                          # 25: 24 (D7)
+btn D4 up
+wait 300
+dump                          # 26: silent, 24
+btn B3                        # LOCK off
+wait 2500
+dump                          # 27: 00, silent

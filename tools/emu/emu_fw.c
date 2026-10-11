@@ -353,6 +353,17 @@ void emu_fw_dump(void)
            (unsigned)cr.single);
     printf("  lock: on %u latched %02X type-key %s ext-keys %s\n", (unsigned)cu.clock, (unsigned)cu.mlatch,
            cs.lock_keep ? "keeps" : "clears", cs.lock_push ? "pushed" : "toggle");   /* (latched: bit cr_mod_t) */
+    {                                               /* the engine's side of the chord keys: down (held or latched),
+                                                     * what the chord keys' LEDs show, the voices' own specs */
+        unsigned v, fr = 0;
+        printf("  mods: down %02X active %02X voices", (unsigned)cr.mods_down, (unsigned)cr_mods_active(&cr));
+        for (v = 0; v < CR_MAX_VOICES; v++)
+            if (cr.v[v].used) {
+                printf(" %u:q%u/x%X%s", (unsigned)cr.v[v].key, (unsigned)cr.v[v].sq, (unsigned)cr.v[v].sx, cr.v[v].is_free ? "f" : "");
+                fr += cr.v[v].is_free;
+            }
+        printf(" free %u\n", fr);
+    }
     printf("  parts busy %u  octave %d master_q12 %u cpu %u%%  midi in %u out %u\n", (unsigned)cr_parts_busy(),
            (int)cu.octave, (unsigned)song.master_q12, (unsigned)(song.cpu_q8 * 100u / 256u),
            (unsigned)(mi_w - mi_r), (unsigned)(mo_w - mo_r));

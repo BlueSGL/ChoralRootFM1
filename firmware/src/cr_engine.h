@@ -156,6 +156,7 @@ typedef struct {
     uint8_t phys[128];               /* physically held root presses: bit id per note */
     uint8_t phys_n;
     uint8_t mods_down, qstack[CR_NMOD], qn;
+    uint8_t lock, mods_touch;                      /* LOCK (cr_mod_lock): the chord keys physically held (cr_mod_touch) */
     cr_voice_t v[CR_NVOICE];         /* [0, CR_MAX_VOICES): keyed voices; then one per pad */
     cr_ev_t ev[CR_MAX_EV];
     uint16_t nev;
@@ -178,6 +179,19 @@ void cr_key(cr_t *c, uint8_t midi_note, uint8_t vel, int down);
  * at the new velocity and the earlier press's release is ignored (design.md 5.3). cr_key uses id 0. */
 void cr_key_ex(cr_t *c, uint8_t midi_note, uint8_t id, uint8_t vel, int down);
 void cr_mod(cr_t *c, cr_mod_t m, int down);        /* the chord block */
+/* LOCK (the UI's latch, cr_ui.c cu_mod_press): the chord keys down are a SET the UI owns: a latched key stays down
+ * here after its release, a key leaves the set by an up. With cr_mod_lock on, the play styles differ only in who
+ * follows the set (not in what a press does to it):
+ *   Simple    the next root (the spec frozen at note-on, as ever)
+ *   Advanced  also the roots held: after every cr_mod / cr_mod_ex(quiet 0) their type and extensions ARE the set (a
+ *             type key down re-strikes, the rest by Extension Addition); no toggling of a voice's own extensions
+ *   Free      as Advanced, and while a chord key is physically held with no root held (cr_mod_touch) the last root
+ *             sounds again as the set's chord; it stops when the last chord key is let go, latched or not
+ * cr_mod_ex(quiet 1): one change of several (the UI replacing the set: the ups, then the down): the voices follow
+ * at the last one, once. cr_mod_touch after the press's cr_mod, before the release's. Lock off: cr_mod as it was. */
+void cr_mod_ex(cr_t *c, cr_mod_t m, int down, int quiet);
+void cr_mod_lock(cr_t *c, int on);
+void cr_mod_touch(cr_t *c, uint8_t held);          /* bit cr_mod_t: the chord keys physically held */
 void cr_voicing_step(cr_t *c, int d);              /* KNOB 1: +1 / -1, clamp -12..12 */
 void cr_bass_voicing_step(cr_t *c, int d);         /* octaves, clamp -2..4 */
 void cr_panic(cr_t *c);

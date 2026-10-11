@@ -761,6 +761,196 @@ static void s_free(void)
     MU(CR_MOD_MAJ);
 }
 
+/* LOCK (cr_mod_lock, the owner's report 2026-10-12): the chord keys down are the UI's set (cr_ui.c cu_mod_press);
+ * the three play styles differ only in who follows it. The calls below are what the UI posts for each gesture:
+ * a set replaced in one push = the ups quiet, then the down; cr_mod_touch after a press's cr_mod, before a
+ * release's. C major: 48 52 55; 6: 57; m7 (the owner's "7"): 58; 9: 62 */
+#define T7 ((uint8_t)(1u << CR_MOD_M7))
+#define T9 ((uint8_t)(1u << CR_MOD_9))
+#define TMAJ ((uint8_t)(1u << CR_MOD_MAJ))
+static void lock_begin(cr_playstyle_t ps, const char *section)
+{
+    fresh(section);
+    cr_set_playstyle(&C, ps);
+    cr_mod_lock(&C, 1);
+    cr_mod_touch(&C, TMAJ); MD(CR_MOD_MAJ); cr_mod_touch(&C, TMAJ);   /* MAJ pushed .. */
+    cr_mod_touch(&C, 0);                                               /* .. and let go: latched (no up) */
+    clear();
+}
+static void s_lock(void)
+{
+    int ps;
+    uint8_t set = (uint8_t)(TMAJ | T7);
+    /* --- a root held: Simple frozen, Advanced / Free follow the set (the bug: the engine's own toggle on top) --- */
+    for (ps = CR_PS_SIMPLE; ps <= CR_PS_FREE; ps++) {
+        static const char *const NM[3] = {"lock, Simple", "lock, Advanced", "lock, Free"};
+        char w[96];
+        int follow = ps != CR_PS_SIMPLE;
+        lock_begin((cr_playstyle_t)ps, NM[ps]);
+        ok(C.lock == 1 && cr_mods_held(&C) == TMAJ, "lock: MAJ latched = down in the engine");
+        K(48, 1); expect("+48/127 +52/127 +55/127", "lock: a root plays the latched type");
+        /* {} -> 7 = {7} */
+        MD(CR_MOD_M7); cr_mod_touch(&C, T7); cr_mod_touch(&C, 0);
+        snprintf(w, sizeof w, "%s, a root held: {} -> 7: %s", NM[ps], follow ? "the 7th added" : "frozen");
+        expect(follow ? "+58/127" : "", w);
+        /* {7} -> 7 alone: the old set while held (a second down), off at its release */
+        MD(CR_MOD_M7); cr_mod_touch(&C, T7);
+        snprintf(w, sizeof w, "%s: {7}, 7 pushed again: nothing while held", NM[ps]);
+        expect("", w);
+        cr_mod_touch(&C, 0); MU(CR_MOD_M7);
+        snprintf(w, sizeof w, "%s: .. off at its release (not toggled back on)", NM[ps]);
+        expect(follow ? "-58" : "", w);
+        ok(cr_mods_active(&C) == TMAJ && cr_mods_held(&C) == TMAJ, "lock: the LEDs = the set");
+        /* {} -> 7 again: on (the owner's "oddly toggled off by pressing twice": it came back off here) */
+        MD(CR_MOD_M7); cr_mod_touch(&C, T7); cr_mod_touch(&C, 0);
+        snprintf(w, sizeof w, "%s: 7 again: on", NM[ps]);
+        expect(follow ? "+58/127" : "", w);
+        ok(cr_mods_active(&C) == set, "lock: the LEDs show MAJ + 7");
+        /* {7} -> 9 alone = {9}: one change (the up quiet, then the down) */
+        cr_mod_ex(&C, CR_MOD_M7, 0, 1); MD(CR_MOD_9); cr_mod_touch(&C, T9); cr_mod_touch(&C, 0);
+        snprintf(w, sizeof w, "%s: {7} -> 9 alone: the 7th off, the 9th on, nothing else", NM[ps]);
+        if (follow)
+            ok(count('+', 0) == 1 && count('-', 0) == 1 && SND[0][62] && !SND[0][58] && SND[0][48] && SND[0][52] && SND[0][55], w);
+        else
+            ok(nlog == 0, w);
+        clear();
+        /* {9} -> 9 held + 7 = {7, 9} */
+        MD(CR_MOD_9); cr_mod_touch(&C, T9); MD(CR_MOD_M7); cr_mod_touch(&C, (uint8_t)(T7 | T9));
+        cr_mod_touch(&C, T9); cr_mod_touch(&C, 0);
+        snprintf(w, sizeof w, "%s: 9 held + 7: both", NM[ps]);
+        expect(follow ? "+58/127" : "", w);
+        /* {7, 9} -> 7 alone = {7} */
+        cr_mod_ex(&C, CR_MOD_9, 0, 1); MD(CR_MOD_M7); cr_mod_touch(&C, T7); cr_mod_touch(&C, 0);
+        snprintf(w, sizeof w, "%s: {7, 9} -> 7 alone: the 9th off", NM[ps]);
+        expect(follow ? "-62" : "", w);
+        /* the top row's lone repeat: MAJ again alone: off at its release: the held root is a single note */
+        MD(CR_MOD_MAJ); cr_mod_touch(&C, TMAJ);
+        snprintf(w, sizeof w, "%s: the only type pushed again: nothing while held", NM[ps]);
+        expect("", w);
+        cr_mod_touch(&C, 0); MU(CR_MOD_MAJ);
+        snprintf(w, sizeof w, "%s: .. no type at its release: %s", NM[ps], follow ? "the root alone (the 7 waits)" : "frozen");
+        if (follow)
+            ok(SND[0][48] && !SND[0][52] && !SND[0][55] && !SND[0][58] && count('+', 0) == 0, w);
+        else
+            ok(nlog == 0, w);
+        clear();
+        /* MAJ back: the type to the extension waiting there: a type key's press re-strikes (Advanced / Free) */
+        MD(CR_MOD_MAJ); cr_mod_touch(&C, TMAJ); cr_mod_touch(&C, 0);
+        snprintf(w, sizeof w, "%s: the type back: C7 %s", NM[ps], follow ? "re-struck" : "(frozen)");
+        if (follow)
+            ok(SND[0][48] && SND[0][52] && SND[0][55] && SND[0][58] && count('+', 0) == 4, w);
+        else
+            ok(nlog == 0, w);
+        clear();
+        /* "Type key: Clears": MIN alone: MAJ and the 7 up (quiet), MIN down: one re-strike of Cm */
+        cr_mod_ex(&C, CR_MOD_MAJ, 0, 1); cr_mod_ex(&C, CR_MOD_M7, 0, 1); MD(CR_MOD_MIN);
+        snprintf(w, sizeof w, "%s: Clears, MIN alone: Cm %s", NM[ps], follow ? "struck once" : "(frozen)");
+        if (follow)
+            ok(SND[0][48] && SND[0][51] && SND[0][55] && !SND[0][52] && !SND[0][58] && count('+', 0) == 3, w);
+        else
+            ok(nlog == 0, w);
+        clear();
+        R(48, 1); step(5);
+        ok(sounding() == 0, "lock: the root's release ends it");
+        clear();
+        K(50, 1);
+        expect("+50/127 +53/127 +57/127", "lock: the next root plays the set (Dm), in every style");
+        R(50, 1);
+        /* LOCK off: the latched keys up as plain releases */
+        cr_mod_lock(&C, 0); MU(CR_MOD_MIN); step(5);
+        ok(sounding() == 0 && cr_mods_held(&C) == 0 && cr_mods_active(&C) == 0, "lock off: nothing down, nothing sounds");
+        clear();
+    }
+    /* --- Extension Addition = Play Chord: a set replaced in one push re-strikes the chord once, not per event --- */
+    lock_begin(CR_PS_ADVANCED, "lock, Play Chord");
+    cr_set_ext_addition(&C, CR_EXTADD_PLAY_CHORD);
+    MD(CR_MOD_M7); K(48, 1); clear();
+    cr_mod_ex(&C, CR_MOD_M7, 0, 1); MD(CR_MOD_9);
+    expect("-48 -52 -55 -58 +48/127 +52/127 +55/127 +62/127", "lock, Play Chord: {7} -> 9 alone: one re-strike with the new set");
+    MD(CR_MOD_9);
+    expect("", "lock, Play Chord: a lone repeat's second down: no re-strike");
+    MU(CR_MOD_9);
+    expect("-48 -52 -55 -62 +48/127 +52/127 +55/127", "lock, Play Chord: its release: the chord again without the 9th");
+    R(48, 1); cr_mod_lock(&C, 0); MU(CR_MOD_MAJ); step(5); clear();
+    cr_set_ext_addition(&C, CR_EXTADD_ADD_NOTE);
+    /* --- Free with no root held: the last root sounds again as the SET's chord while a chord key is physically
+     * held, and stops with the last one let go (a latched key never comes up: it droned on, and its extensions
+     * were the last chord's plus every key pushed since: lp.sx | bit) --- */
+    lock_begin(CR_PS_FREE, "lock, Free, no root");
+    cr_mod_touch(&C, T7); cr_mod_touch(&C, 0);
+    MD(CR_MOD_M7); cr_mod_touch(&C, T7);
+    expect("", "lock, Free: nothing played yet: a chord key sounds nothing");
+    cr_mod_touch(&C, 0);
+    K(48, 1); R(48, 1); step(5); clear();                /* C7: the last root */
+    ok(sounding() == 0, "lock, Free: the root let go: silent, the keys latched or not");
+    /* {7} -> 7 alone: the old set (C7) while held, off at the release, nothing left sounding */
+    MD(CR_MOD_M7); cr_mod_touch(&C, T7);
+    expect("+48/127 +52/127 +55/127 +58/127", "lock, Free: {7}, 7 pushed again: C7 sounds again while it is held (the old set)");
+    cr_mod_touch(&C, 0); MU(CR_MOD_M7); step(5);
+    ok(sounding() == 0 && cr_mods_held(&C) == TMAJ && cr_mods_active(&C) == TMAJ, "lock, Free: .. let go: silent, the 7 off, the LEDs = the set");
+    clear();
+    /* {} -> 7: C7 while held; latched at its release: silent */
+    MD(CR_MOD_M7); cr_mod_touch(&C, T7);
+    expect("+48/127 +52/127 +55/127 +58/127", "lock, Free: 7 again: on: C7 while held");
+    cr_mod_touch(&C, 0); step(5);
+    ok(sounding() == 0 && cr_mods_held(&C) == set && cr_mods_active(&C) == set, "lock, Free: let go: silent (no drone), MAJ + 7 latched");
+    clear();
+    /* {7} -> 9 alone = {9}: C with the 9th, no 7th (not the last chord's extensions plus this one) */
+    cr_mod_ex(&C, CR_MOD_M7, 0, 1); MD(CR_MOD_9); cr_mod_touch(&C, T9);
+    expect("+48/127 +52/127 +55/127 +62/127", "lock, Free: {7} -> 9 alone: C add 9 sounds, the 7th not in it");
+    /* .. 7 joins while 9 is held: {7, 9}: the 7th added to the sounding chord */
+    MD(CR_MOD_M7); cr_mod_touch(&C, (uint8_t)(T7 | T9));
+    expect("+58/127", "lock, Free: 9 held + 7: the 7th joins");
+    cr_mod_touch(&C, T9);
+    expect("", "lock, Free: one of two let go: still held, no change");
+    cr_mod_touch(&C, 0); step(5);
+    ok(sounding() == 0 && cr_mods_held(&C) == (uint8_t)(TMAJ | T7 | T9), "lock, Free: the last one let go: silent, {7, 9} latched");
+    clear();
+    /* "Ext keys: Toggle": a latched extension pressed: off at the press: the chord sounds without it while held */
+    MU(CR_MOD_M7); cr_mod_touch(&C, T7);
+    expect("+48/127 +52/127 +55/127 +62/127", "lock, Free, Toggle: a latched 7 pressed: off at once: C add 9 while held");
+    cr_mod_touch(&C, 0); step(5);
+    ok(sounding() == 0, "lock, Free, Toggle: let go: silent");
+    clear();
+    /* the top row's lone repeat: C add 9 while MAJ is held (the old set), no type after: silent, the 9 waiting */
+    MD(CR_MOD_MAJ); cr_mod_touch(&C, TMAJ);
+    expect("+48/127 +52/127 +55/127 +62/127", "lock, Free: the only type pushed again: the old chord while held");
+    cr_mod_touch(&C, 0); MU(CR_MOD_MAJ); step(5);
+    ok(sounding() == 0 && cr_mods_held(&C) == T9, "lock, Free: .. off at its release: silent, the 9 waits");
+    clear();
+    /* a real root replaces the re-sounded chord, and a chord key pressed under a held root starts no second voice */
+    MD(CR_MOD_MAJ); cr_mod_touch(&C, TMAJ);
+    clear();
+    K(50, 1);
+    ok(SND[0][50] && SND[0][54] && SND[0][57] && SND[0][64] && SND[0][48], "lock, Free: another root while it sounds: D add 9 beside it");
+    cr_mod_touch(&C, 0); step(5);
+    ok(SND[0][50] && !SND[0][48], "lock, Free: the chord key let go: the re-sounded chord ends, the held root stays");
+    clear();
+    MD(CR_MOD_9); cr_mod_touch(&C, T9);
+    expect("", "lock, Free: a chord key pressed with a root held: no second voice");
+    cr_mod_touch(&C, 0);
+    R(50, 1); step(5);
+    ok(sounding() == 0, "lock, Free: the root let go: silent");
+    /* LOCK off while a chord key is held: the old rule again (ends with the last key up) */
+    cr_mod_touch(&C, T9); clear();
+    ok(sounding() > 0, "lock, Free: 9 held: the last chord (D add 9)");
+    cr_mod_lock(&C, 0); MU(CR_MOD_MAJ);
+    ok(sounding() > 0, "lock off with a chord key held: it sounds on while the key is down");
+    MU(CR_MOD_9); step(5);
+    ok(sounding() == 0 && cr_mods_held(&C) == 0, "lock off: the last key up: silent");
+    clear();
+    /* lock off: Advanced's own toggle is untouched (s_advanced / s_free above run with lock off) */
+    cr_set_playstyle(&C, CR_PS_ADVANCED);
+    MD(CR_MOD_MAJ); K(48, 1); clear();
+    TAPM(CR_MOD_6); expect("+57/127", "lock off: Advanced: an extension press toggles on");
+    TAPM(CR_MOD_6); expect("-57", "lock off: .. and off");
+    R(48, 1); MU(CR_MOD_MAJ); step(5); clear();
+    cr_set_playstyle(&C, CR_PS_SIMPLE);
+}
+#undef T7
+#undef T9
+#undef TMAJ
+
 static void s_strum(void)
 {
     int idx[64], n, k;
@@ -1865,7 +2055,7 @@ static void run_suite(uint32_t tick_us, uint32_t base_ms, const char *tag)
     cr_init(&C, &OUT);
     cr_tick(&C, now_ms());
     s_keyboard(); s_sticky(); s_chords(); s_panic(); s_voicing(); s_bass(); s_keymode(); s_pads();
-    s_secret(); s_advanced(); s_free(); s_strum(); s_arp(); s_pattern(); s_live(); s_streams();
+    s_secret(); s_advanced(); s_free(); s_lock(); s_strum(); s_arp(); s_pattern(); s_live(); s_streams();
     s_bassmodes(); s_transpose(); s_single(); s_keyplays(); s_loopvoice(); s_queries(); s_limits(); s_torture();
     fresh("end");
 }

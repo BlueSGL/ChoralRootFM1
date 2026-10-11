@@ -1041,6 +1041,66 @@ ch() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.* chord \(.*\) s
     || bad "the push with a root: $(lt 10) $(ch 10) / $(lt 11)"
 silent_end cr_lock_type
 
+# LOCK in the three play styles (the owner, 2026-10-12: Free + "Ext keys: Pushed" did not behave as Simple / Advanced
+# and had to be "toggled off by pressing twice"): the latch is the same set in every style, the engine's keys down
+# and the chord keys' LEDs are that set, and what sounds follows it: Simple the next root, Advanced / Free the roots
+# held too, Free the last root again while a chord key is held (never after it). cr_lock_push.txt behind a preamble:
+# Play Style x Type key (Clears / Keeps), Ext keys Pushed; cr_lock_tog.txt: Play Style, Ext keys Toggle.
+# A dump's signature: latched/down/active/the voices' own type and extensions (f: Free's re-sounded chord)
+echo "LOCK: Pushed and Toggle mean the same set in Simple, Advanced and Free"
+lp_sig() {
+    grep -a '^  lock: on\|^  mods:' "$1" | paste - - |
+        sed -n 's/.*latched \(..\) .*mods: down \(..\) active \(..\) voices\(.*\) free [0-9]*$/\1\/\2\/\3\/\4/p' |
+        sed 's/\/ /\//; s/ /+/g; s/\/$/\/-/' | tr '\n' ' ' | sed 's/ $//'
+}
+lp_latch() { lp_sig "$1" | tr ' ' '\n' | cut -d/ -f1 | tr '\n' ' '; }
+lp_run() {   # lp_run NAME BODY STYLE PUSHED KEEPS: the preamble (Options > Play Style, the LOCK layer, LOCK on) + the body
+    {
+        printf 'wait 300\nbtn GLO\nwait 200\nknob KNOB1 +%s\nwait 200\nbtn GLO\nwait 200\nbtn B3 600\nwait 300\n' "$3"
+        [ "$4" = 1 ] && printf 'knob KNOB2 +1\nwait 200\n'
+        [ "$5" = 1 ] && printf 'knob KNOB1 +1\nwait 200\n'
+        printf 'btn OCT-\nwait 300\nbtn B3\nwait 200\n'
+        cat "$S/$2.txt"
+    } >"$OUT/$1.txt"
+    "$EMU" --headless --script "$OUT/$1.txt" >"$OUT/$1.log" 2>&1 || bad "$1: exit $?"
+}
+LP0='04/04/04/- 14/14/14/- 24/24/24/- 24/24/24/- 04/04/04/- 24/24/24/- 24/A4/A4/- A4/A4/A4/- 24/24/24/- 84/84/84/- 84/84/84/- 04/04/04/- 04/04/04/62:q3/x0 24/24/24/- 20/20/20/- 20/20/20/62:q0/x2 24/24/24/- 24/24/24/62:q3/x2 04/04/04/62:q3/x2 24/24/24/62:q3/x2 84/84/84/62:q3/x2 A4/A4/A4/62:q3/x2 24/24/24/62:q3/x2 20/20/20/62:q3/x2 24/24/24/62:q3/x2 24/24/24/- 00/00/00/-'
+LP1='04/04/04/- 14/14/14/- 24/24/24/- 24/24/24/- 04/04/04/- 24/24/24/- 24/A4/A4/- A4/A4/A4/- 24/24/24/- 84/84/84/- 84/84/84/- 04/04/04/- 04/04/04/62:q3/x0 24/24/24/- 20/20/20/- 20/20/20/62:q0/x2 24/24/24/- 24/24/24/62:q3/x2 04/04/04/62:q3/x0 24/24/24/62:q3/x2 84/84/84/62:q3/x8 A4/A4/A4/62:q3/xA 24/24/24/62:q3/x2 20/20/20/62:q0/x2 24/24/24/62:q3/x2 24/24/24/- 00/00/00/-'
+LP2='04/04/04/- 14/14/14/- 24/24/24/- 24/24/24/62:q3/x2f 04/04/04/- 24/24/24/- 24/A4/A4/62:q3/xAf A4/A4/A4/- 24/24/24/- 84/84/84/- 84/84/84/62:q3/x8f 04/04/04/- 04/04/04/62:q3/x0 24/24/24/62:q3/x2f 20/20/20/- 20/20/20/62:q0/x2 24/24/24/- 24/24/24/62:q3/x2 04/04/04/62:q3/x0 24/24/24/62:q3/x2 84/84/84/62:q3/x8 A4/A4/A4/62:q3/xA 24/24/24/62:q3/x2 20/20/20/62:q0/x2 24/24/24/62:q3/x2 24/24/24/- 00/00/00/-'
+LT0='34/34/34/- 14/14/14/- 14/14/14/- 14/14/14/62:q3/x1 04/04/04/62:q3/x1 84/84/84/62:q3/x1 04/04/04/62:q3/x1 84/84/84/62:q3/x1 80/80/80/62:q3/x1 82/82/82/62:q3/x1 04/04/04/62:q3/x1 04/04/04/- 04/04/04/62:q3/x0 84/84/84/62:q3/x0 04/04/04/62:q3/x0 00/00/00/-'
+LT1='34/34/34/- 14/14/14/- 14/14/14/- 14/14/14/62:q3/x1 04/04/04/62:q3/x0 84/84/84/62:q3/x8 04/04/04/62:q3/x0 84/84/84/62:q3/x8 80/80/80/62:q0/x8 82/82/82/62:q2/x8 04/04/04/62:q3/x0 04/04/04/- 04/04/04/62:q3/x0 84/84/84/62:q3/x8 04/04/04/62:q3/x0 00/00/00/-'
+LT2='34/34/34/- 14/14/14/62:q3/x1f 14/14/14/- 14/14/14/62:q3/x1 04/04/04/62:q3/x0 84/84/84/62:q3/x8 04/04/04/62:q3/x0 84/84/84/62:q3/x8 80/80/80/62:q0/x8 82/82/82/62:q2/x8 04/04/04/62:q3/x0 04/04/04/- 04/04/04/62:q3/x0 84/84/84/62:q3/x8 04/04/04/62:q3/x0 00/00/00/-'
+for ps in 0 1 2; do
+    eval "want=\$LP$ps"
+    for tk in 0 1; do
+        n=cr_lock_push_${ps}${tk}
+        lp_run $n cr_lock_push $ps 1 $tk
+        got=$(lp_sig "$OUT/$n.log")
+        st=$(sed -n 's/.* style \([0-9]*\) .*/\1/p' "$OUT/$n.log" | tail -1)
+        grep -aq "lock: on 1 latched .. type-key $([ $tk = 1 ] && echo keeps || echo clears) ext-keys pushed" "$OUT/$n.log" && [ "$st" = $ps ] && [ "$got" = "$want" ] &&
+            ok "Pushed, play style $ps, Type key $([ $tk = 1 ] && echo Keeps || echo Clears): 27 dumps: latch, engine, LEDs and voices as specified" \
+            || bad "Pushed, play style $ps (got $st), type key $tk: $got"
+        b=$(last_busy "$OUT/$n.log"); [ "${b:-x}" = 0 ] || bad "$n: ${b:-?} voices still sounding at the end"
+    done
+    eval "want=\$LT$ps"
+    n=cr_lock_tog_$ps
+    lp_run $n cr_lock_tog $ps 0 0
+    got=$(lp_sig "$OUT/$n.log")
+    no() { grep -a '^  cr: voices' "$OUT/$n.log" | sed -n "$1p" | sed -n 's/.* notes-out \([0-9]*\) .*/\1/p'; }
+    [ "$got" = "$want" ] && grep -aq 'ext-keys toggle' "$OUT/$n.log" &&
+        ok "Toggle, play style $ps: 16 dumps: a latched extension pressed once is off (the roots held follow in Advanced / Free)" \
+        || bad "Toggle, play style $ps: $got"
+    if [ $ps != 0 ]; then
+        [ $(($(no 14) - $(no 13))) = 4 ] && [ $(($(no 15) - $(no 14))) = 3 ] &&
+            ok "Extension Addition = Play Chord, play style $ps: the chord struck once per push (4 notes with the 9, 3 without)" \
+            || bad "Play Chord, play style $ps: notes out $(no 13) $(no 14) $(no 15)"
+    fi
+    b=$(last_busy "$OUT/$n.log"); [ "${b:-x}" = 0 ] || bad "$n: ${b:-?} voices still sounding at the end"
+done
+[ "$(lp_latch "$OUT/cr_lock_push_00.log")" = "$(lp_latch "$OUT/cr_lock_push_10.log")" ] && [ "$(lp_latch "$OUT/cr_lock_push_00.log")" = "$(lp_latch "$OUT/cr_lock_push_20.log")" ] &&
+    [ "$(lp_latch "$OUT/cr_lock_tog_0.log")" = "$(lp_latch "$OUT/cr_lock_tog_1.log")" ] && [ "$(lp_latch "$OUT/cr_lock_tog_0.log")" = "$(lp_latch "$OUT/cr_lock_tog_2.log")" ] &&
+    ok "the latch after every gesture is the same in the three play styles (Pushed and Toggle)" || bad "the latch differs between play styles"
+
 # Key Mode's lights (the key leds: line: 0 off 1 faint 2 dim 3 mid 4 lit; fm1_led_faint < fm1_led_dim < fm1_led_dim2 < fm1_led)
 run cr_key_leds
 L="$OUT/cr_key_leds.log"

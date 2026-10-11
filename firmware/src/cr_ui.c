@@ -2556,7 +2556,11 @@ static void cu_activity(void)
  *             pressed with no chord key held starts a new set of that key alone (keys pressed while it is held
  *             join, as ever), the type untouched. One exception: the set is exactly one key and that key is
  *             pushed again alone: it goes off when let go (the way to no extension). Keeps + Pushed: a type key
- *             changes the type only, an extension key the extensions only */
+ *             changes the type only, an extension key the extensions only
+ * The engine (cr_engine.h cr_mod_lock, the owner's report 2026-10-12): with LOCK on the keys posted down are this
+ * latch's set and nothing else: Advanced and Free make the roots held follow it (no toggling of their own on top),
+ * Free sounds the last root again while a chord key is physically held (cu_mod_touch: CRE_MODTOUCH after a press's
+ * events, before a release's). A set replaced in one push goes as one change: the ups quiet, then the down */
 #define CU_MOD_TOP ((1u << CR_MOD_DIM) | (1u << CR_MOD_MIN) | (1u << CR_MOD_MAJ) | (1u << CR_MOD_SUS))
 static uint32_t cu_mods_phys(void)                 /* bit cr_mod_t: the chord keys physically held */
 {
@@ -2577,6 +2581,11 @@ static void cu_mods_trace(void)
             cu_trace(" %s", NM[m]);
     cu_trace("%s\n", cu.mlatch ? "" : " none");
     (void)NM;
+}
+static void cu_mod_touch(void)                     /* LOCK: the chord keys physically held, to the engine */
+{
+    if (cu.clock)
+        cr_post(CRE_MODTOUCH, 0, 0, (int32_t)cu_mods_phys());
 }
 static void cu_unlatch(void)                       /* the latched keys not held: up */
 {
@@ -2610,8 +2619,14 @@ static void cu_lock_menu(void)                     /* B3 held past the hold time
 static void cu_lock_tap(void)                      /* B3 */
 {
     cu.clock ^= 1u;
-    if (!cu.clock)
+    if (!cu.clock) {
+        cr_post(CRE_MODLOCK, 0, 0, 0);             /* (first: the ups are plain releases then: a chord held keeps
+                                                    * its spec in Advanced / Free, as it always did at LOCK off) */
         cu_unlatch();
+    } else {
+        cr_post(CRE_MODLOCK, 0, 0, 1);
+        cu_mod_touch();
+    }
     cu_trace("lock: %s\n", cu.clock ? "on" : "off");
 }
 static void cu_mod_press(uint32_t k)               /* a chord key down (k < CU_ROOT0, not B3) */
@@ -2648,19 +2663,23 @@ static void cu_mod_press(uint32_t k)               /* a chord key down (k < CU_R
             cu.mlatch &= (uint8_t)~bit;
             cu.mkill |= (uint8_t)bit;
             cr_post(CRE_MOD, m, 0, 0);
+            cu_mod_touch();
             cu_mods_trace();
             return;
         }
         for (x = 0; x < CR_NMOD; x++)
             if (((cu.mlatch & ~keep) >> x) & 1u)
-                cr_post(CRE_MOD, x, 0, 0);
+                cr_post(CRE_MOD, x, 1, 0);         /* (quiet: the set changes once, at the down below) */
         cu.mlatch &= (uint8_t)keep;                /* (a kept key is already down since it was latched) */
     }
-    cr_post(CRE_MOD, m, 0, 1);                     /* (the engine ignores a second down) */
+    cr_post(CRE_MOD, m, 0, 1);                     /* (a second down changes nothing; LOCK: the voices follow here) */
+    cu_mod_touch();
 }
 static void cu_mod_release(uint32_t k)
 {
     uint32_t m = CU_MOD_OF_KEY[k], bit = 1u << m;
+    cu_mod_touch();                                /* (first: Free's re-sounded chord ends with the last key held, on
+                                                    * the set it had; then the set changes) */
     if (cu.mkill & bit) {                          /* toggled off by this press */
         cu.mkill &= (uint8_t)~bit;
         return;

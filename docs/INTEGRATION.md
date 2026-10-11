@@ -192,7 +192,22 @@ owner's one exception: the set is exactly {K} and K is pushed again alone: K goe
 (`cu.mpend`: K stays down and sounding until then; another extension key pressed meanwhile joins and both stay;
 {7, 9} then 7 alone is {7}, not empty). Keeps + Pushed: a type key changes the type only, an extension key the
 extensions only. The defaults (Clears, Toggle) are the behaviour above. `cr_lock_menu.txt`, `persist_lock_*.txt`,
-`tests/cr_settings_test.c t_key_keys_v13`. **The top row's lone repeat** (the owner, 2026-10-11; always on with LOCK,
+`tests/cr_settings_test.c t_key_keys_v13`. **The engine under LOCK** (`cr_engine.h cr_mod_lock / cr_mod_ex /
+cr_mod_touch`, 2026-10-12; `CRE_MODLOCK`, `CRE_MOD` with b = quiet, `CRE_MODTOUCH`): the keys posted down are the
+latch's set and the play styles differ only in who follows it. Until then Advanced / Free ran their own extension
+toggle (`crx_modifier_press`: `v->sx ^= bit`, kept after the key's up) on top of the latch: with a root held a
+latched extension's up left it in the voice and the next down toggled it OFF (latch on, sound off: "pressed
+twice"), and Free's re-sounded chord, which ends when no chord key is down, never ended (a latched key is never up)
+and took `lp.sx | bit`, every extension pushed since the last root. Now, with lock on: `cr_mod_ex` only edits
+`mods_down`, then `crx_lock_sync` gives every chord voice the snapshot a new root would get (Advanced / Free; a type
+key's down that changed the type re-strikes, the rest by Extension Addition; one sync per push: the UI posts a
+replaced set as quiet ups, then the down); `cr_mod_touch` (the chord keys physically held, after a press's events,
+before a release's) starts Free's voice on a press with no voice (the last root, the set's spec: a lone repeat
+changes the set only at its release, so it sounds the old set) and ends it when the last key is let go. LOCK off
+(`cu_lock_tap`): `CRE_MODLOCK` 0 first, so the ups are plain releases and a held chord keeps its spec as it always
+did. Lock off, `cr_mod` is what it was (`s_advanced`, `s_free`). Tests: `tests/cr_engine_test.c s_lock`,
+`cr_lock_push.txt` (x 3 play styles x Clears / Keeps) and `cr_lock_tog.txt` (x 3) in test_cr.sh, whose dump line
+`mods:` shows the engine's keys down, the LEDs' set and each voice's own spec. **The top row's lone repeat** (the owner, 2026-10-11; always on with LOCK,
 no setting): the latch holds exactly one type and that type key is pressed again with no other chord key held: it goes
 off at its release (`cu.tpend`, as `cu.mpend`: on and sounding until then; any other chord key pressed meanwhile
 cancels it and both latch; a root played meanwhile does not), posted up: no type, the roots play single notes (the

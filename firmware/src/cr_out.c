@@ -358,7 +358,9 @@ static const cr_out_t CR_OUT = {cr_cb_note_on, cr_cb_note_off, cr_cb_all_off, 0,
 /* UI -> ISR. One producer (the main loop), one consumer (the audio ISR): the index stores are the publication */
 enum {
     CRE_KEY,          /* a: note, b: vel, v: down */
-    CRE_MOD,          /* a: cr_mod_t, v: down */
+    CRE_MOD,          /* a: cr_mod_t, b: 1 = quiet (one of a batch: cr_mod_ex), v: down */
+    CRE_MODLOCK,      /* v: LOCK on (cr_mod_lock) */
+    CRE_MODTOUCH,     /* v: bit cr_mod_t: the chord keys physically held (cr_mod_touch) */
     CRE_VOICING,      /* v: +-steps */
     CRE_BASS_VOICING, /* v: +-steps */
     CRE_PANIC,
@@ -443,7 +445,9 @@ static void cr_apply(const cr_ev_in_t *e)
 {
     switch (e->op) {
     case CRE_KEY: cr_key(&cr, e->a, e->b, e->v); break;
-    case CRE_MOD: cr_mod(&cr, (cr_mod_t)e->a, e->v); break;
+    case CRE_MOD: cr_mod_ex(&cr, (cr_mod_t)e->a, e->v, e->b); break;
+    case CRE_MODLOCK: cr_mod_lock(&cr, e->v); break;
+    case CRE_MODTOUCH: cr_mod_touch(&cr, (uint8_t)e->v); break;
     case CRE_VOICING: cr_voicing_step(&cr, e->v); break;
     case CRE_BASS_VOICING: cr_bass_voicing_step(&cr, e->v); break;
     case CRE_PANIC: cr_panic(&cr); cr_loop_panic(&crl); break;

@@ -858,6 +858,27 @@ static void crx_modifier_release(cr_t *c)
     crx_clear_free_voices(c);
 }
 
+/* LOCK (cr_mod_lock): the chord keys down are the UI's set; Advanced / Free: every chord voice takes it (the type
+ * and the extensions snapshotted as a new root would), re-struck when a type key's press changed its type. No
+ * toggle: the engine's own (crx_modifier_press: v->sx ^= bit, kept after the key's up) ran on top of the latch, so
+ * with a root held a latched extension's second push switched it back ON, and Free's re-sounded chord (never let
+ * go: a latched key is never up) collected every extension ever pushed (lp.sx | bit) */
+static void crx_lock_sync(cr_t *c, int reattack)
+{
+    uint8_t sq, sx;
+    int i;
+    if (c->playstyle == CR_PS_SIMPLE) return;
+    crx_snapshot_spec(c, &sq, &sx);
+    for (i = 0; i < CR_MAX_VOICES; i++) {
+        cr_voice_t *v = &c->v[i];
+        int typed;
+        if (!v->used || v->zone || (v->sq == sq && v->sx == sx)) continue;
+        typed = v->sq != sq;
+        v->sq = sq; v->sx = sx;
+        crx_transform_voice(c, i, reattack && typed);
+    }
+}
+
 /* ================================================================ API === */
 void cr_init(cr_t *c, const cr_out_t *out)
 {
@@ -980,19 +1001,19 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
 
 void cr_key(cr_t *c, uint8_t midi_note, uint8_t vel, int down) { cr_key_ex(c, midi_note, 0, vel, down); }
 
-void cr_mod(cr_t *c, cr_mod_t m, int down)
+void cr_mod_ex(cr_t *c, cr_mod_t m, int down, int quiet)
 {
     int mi = (int)m, i;
     uint8_t bit;
     if (mi < 0 || mi >= CR_NMOD) return;
     bit = (uint8_t)(1u << mi);
     if (down) {
-        if (c->mods_down & bit) return;
-        c->mods_down |= bit;
-        if (mi <= CR_MOD_SUS && c->qn < CR_NMOD) c->qstack[c->qn++] = (uint8_t)(mi + 1);
-        crx_modifier_press(c, mi);
-    } else {
-        if (!(c->mods_down & bit)) return;
+        if (!(c->mods_down & bit)) {
+            c->mods_down |= bit;
+            if (mi <= CR_MOD_SUS && c->qn < CR_NMOD) c->qstack[c->qn++] = (uint8_t)(mi + 1);
+            if (!c->lock) crx_modifier_press(c, mi);
+        }
+    } else if (c->mods_down & bit) {
         c->mods_down &= (uint8_t)~bit;
         if (mi <= CR_MOD_SUS)
             for (i = (int)c->qn - 1; i >= 0; i--)
@@ -1001,7 +1022,42 @@ void cr_mod(cr_t *c, cr_mod_t m, int down)
                     c->qn--;
                     break;
                 }
-        crx_modifier_release(c);
+        if (c->lock) crx_rec_commit(c);
+        else crx_modifier_release(c);
+    }
+    /* LOCK: the voices follow the set, once per change (a second down of a latched key too: the last of a batch) */
+    if (c->lock && !quiet) crx_lock_sync(c, down && mi <= CR_MOD_SUS);
+}
+void cr_mod(cr_t *c, cr_mod_t m, int down) { cr_mod_ex(c, m, down, 0); }
+
+void cr_mod_lock(cr_t *c, int on)
+{
+    on = on != 0;
+    if (c->lock == (uint8_t)on) return;
+    c->lock = (uint8_t)on;
+    c->mods_touch = 0;
+    if (!on && !c->mods_down) crx_clear_free_voices(c);   /* (as crx_modifier_release: no key down any more) */
+}
+
+/* LOCK, Free: a chord key pressed with no voice sounds the last root again as the set's chord (cr_mod before this:
+ * the set is the new one; a lone repeat changes it only at its release: the old set until then); the last chord key
+ * let go ends it (a latched key stays in mods_down: crx_modifier_release's rule never would) */
+void cr_mod_touch(cr_t *c, uint8_t held)
+{
+    uint8_t pressed = (uint8_t)(held & ~c->mods_touch);
+    int i;
+    c->mods_touch = held;
+    if (!c->lock || c->playstyle != CR_PS_FREE) return;
+    if (!held) { crx_clear_free_voices(c); return; }
+    if (!pressed || !c->lp.valid) return;
+    for (i = 0; i < CR_MAX_VOICES; i++)
+        if (c->v[i].used) return;                  /* a root held, or the Free voice already: crx_lock_sync's */
+    {
+        cr_lastplayed_t lp;
+        uint8_t sq, sx;
+        crx_lp_get(c, &lp);
+        crx_snapshot_spec(c, &sq, &sx);
+        crx_start_voice(c, lp.key, lp.id, lp.vel, lp.pc_pressed, lp.note_pressed, sq, sx, 1, 0);
     }
 }
 

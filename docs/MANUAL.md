@@ -304,6 +304,14 @@ Options > Play Style decides what the chord keys do while a root is already down
 Options > Extension Addition matters in Advanced and Free: **Add Note** (default) adds or removes just the
 extension's note while the rest of the chord rings on; **Play Chord** strikes the whole chord again.
 
+**With LOCK on** the chord keys mean the same in all three styles: the lit keys are the chord, and the LOCK layer's
+`Type key` and `Ext keys` settings decide what a press does to them. The styles only differ in what follows the lit
+keys. Simple: the next root you play. Advanced: also the roots you are holding, at once (a key that goes off leaves
+the held chord, a new set replaces the old one, no type lit leaves a single note). Free: the same, and while you
+hold a chord key with no root down, the last root sounds again as the lit chord; it stops when you let go of the
+chord key, lit or not. A key that will go off when you let go (the one lit type or extension pressed again) still
+sounds in that chord until then.
+
 ### Secret chords
 
 Options > Secret Chords: Off (default), Simple (only while Play Style is Simple) or All. When it applies, two types
