@@ -1020,6 +1020,27 @@ ll() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* layer \([0-9]*\) 
     || bad "the LOCK layer's gestures: layers $(ll 7) $(ll 8) $(ll 11) $(ll 20) $(ll 23), $(lk 20) / $(lk 24)"
 silent_end cr_lock_menu
 
+# LOCK, the top row's lone repeat (the owner, 2026-10-11): the only type latched, pushed again alone, goes off at its
+# release (single notes); the latched extensions stay, lit, and apply again with the next type
+echo "LOCK: a type key pushed again goes off"
+run cr_lock_type
+L="$OUT/cr_lock_type.log"
+lt() { grep -a '^  lock: on' "$L" | sed -n "$1p" | sed -n 's/.*lock: on \([01]\) latched \(..\) .*/\1 \2/p'; }
+ch() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.* chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3/p'; }
+[ "$(lt 1)" = "1 44" ] && [ "$(ch 1)" = "DM7|1| 62 66 69 73" ] && [ "$(lt 2)" = "1 44" ] && [ "$(lt 3)" = "1 40" ] && [ "$(ch 3)" = "D|1| 62" ] &&
+    [ "$(grep -c '^expect .*: ok' "$L")" = 2 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "MAJ + M7 latched: DM7; MAJ again alone: on while held, off at its release: D4 is a single note, M7 still latched and lit: $OUT/cr_lock_type_single.ppm" \
+    || bad "the lone type repeat: $(lt 1) $(ch 1) / $(lt 2) / $(lt 3) $(ch 3)"
+[ "$(lt 4)" = "1 44" ] && [ "$(ch 4)" = "DM7|1| 62 66 69 73" ] &&
+    ok "MAJ again: the type back to the extension waiting there: DM7 (Clears: not cleared)" || bad "the type back: $(lt 4) $(ch 4)"
+[ "$(lt 5)" = "1 54" ] && [ "$(lt 6)" = "1 02" ] && [ "$(lt 7)" = "1 00" ] && [ "$(ch 8)" = "E|1| 64" ] && [ "$(lt 9)" = "1 02" ] &&
+    ok "MAJ held + 6: not a lone push, both stay; another type: MIN alone (Clears as before); MIN again: nothing latched, E4 a single note; MIN: on" \
+    || bad "the group / the other type: $(lt 5) / $(lt 6) / $(lt 7) $(ch 8) / $(lt 9)"
+[ "$(lt 10)" = "1 02" ] && [ "$(ch 10)" = "Em|1| 64 67 71" ] && [ "$(lt 11)" = "1 00" ] &&
+    ok "MIN held with a root played in the push: Em while held, off at its release (as the extension rule: a root is not another chord key)" \
+    || bad "the push with a root: $(lt 10) $(ch 10) / $(lt 11)"
+silent_end cr_lock_type
+
 echo "user presets: Overwrite, delete, the naming keys"
 run cr_save_del
 has '^save: dialog part 0 ADG (overwrite)' "$OUT/cr_save_del.log" && has '^save: part 0 overwrite slot U01 FM6 26 ADG rc 0' "$OUT/cr_save_del.log" &&

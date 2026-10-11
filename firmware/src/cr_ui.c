@@ -807,6 +807,8 @@ static struct {
                                            * release neither latches nor posts (the latch behind the layer is kept) */
     uint8_t mpend;                        /* bit cr_mod_t: Pushed: the only latched extension, pressed again; let
                                            * go alone it goes off (another extension pressed meanwhile: it stays) */
+    uint8_t tpend;                        /* bit cr_mod_t: LOCK: the only latched type, pressed again; let go alone
+                                           * it goes off (another chord key pressed meanwhile: it stays) */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
     uint8_t key_note[CU_NKEY];            /* root keys: note + 1 sent; 0xFF: the layer's / a picker's */
@@ -2541,7 +2543,7 @@ static void cu_unlatch(void)                       /* the latched keys not held:
         cu.mlatch = 0;
         cu_mods_trace();
     }
-    cu.mkill = cu.mpend = 0;
+    cu.mkill = cu.mpend = cu.tpend = 0;
 }
 static void cu_lock_menu(void)                     /* B3 held past the hold time: the LOCK layer, or out of it */
 {
@@ -2573,11 +2575,21 @@ static void cu_mod_press(uint32_t k)               /* a chord key down (k < CU_R
     uint32_t others = cu_mods_phys() & ~bit;
     if (!(bit & CU_MOD_TOP) && cu.mpend != bit)    /* a second extension key in the push: no lone repeat any more */
         cu.mpend = 0;
+    if (cu.tpend != bit)                           /* any other chord key in a type key's push: neither */
+        cu.tpend = 0;
     if (cu.clock && !others && cu.mlatch) {        /* nothing else held, a latch: reset / toggle */
         uint32_t keep = 0xFFu;
-        if (bit & CU_MOD_TOP)                      /* a type key: the latch is that type alone; "Type key: Keeps"
-                                                    * (cs.lock_keep): the latched extensions stay */
-            keep = bit | (cs.lock_keep ? ~CU_MOD_TOP & 0xFFu : 0u);
+        if ((bit & CU_MOD_TOP) && (cu.mlatch & CU_MOD_TOP) == bit)   /* the ONLY type on, pushed again: if it is let
+                                                    * go alone it goes off (cu_mod_release: no chord type, the roots
+                                                    * play single notes; the owner's rule, 2026-10-11, whatever the
+                                                    * two styles say). The latched extensions are not touched: they
+                                                    * stay lit, do nothing without a type and apply again with one */
+            cu.tpend = (uint8_t)bit;
+        else if (bit & CU_MOD_TOP)                 /* a type key: the latch is that type alone; "Type key: Keeps"
+                                                    * (cs.lock_keep): the latched extensions stay. No type latched
+                                                    * (it was pushed off): the type comes back to the extensions
+                                                    * waiting there, Clears or Keeps */
+            keep = bit | (cs.lock_keep || !(cu.mlatch & CU_MOD_TOP) ? ~CU_MOD_TOP & 0xFFu : 0u);
         else if (cs.lock_push) {                   /* "Ext keys: Pushed": a new set of extensions, this key alone
                                                     * (the type stays); keys pressed while it is held join it */
             if ((cu.mlatch & ~CU_MOD_TOP) == bit)  /* .. but the ONLY extension on, pushed again: if it is let go
@@ -2608,8 +2620,10 @@ static void cu_mod_release(uint32_t k)
         cu.mkill &= (uint8_t)~bit;
         return;
     }
-    if (cu.mpend & bit) {                          /* Pushed: the only extension on was pushed again, alone: off */
-        cu.mpend = 0;
+    if ((cu.tpend | cu.mpend) & bit) {             /* the only type on (Pushed: the only extension on) was pushed
+                                                    * again, alone: off */
+        cu.mpend &= (uint8_t)~bit;
+        cu.tpend &= (uint8_t)~bit;
         if (cu.clock) {
             cu.mlatch &= (uint8_t)~bit;
             cr_post(CRE_MOD, m, 0, 0);

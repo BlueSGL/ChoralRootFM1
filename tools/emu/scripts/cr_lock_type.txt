@@ -1,0 +1,73 @@
+# ChoralRoot: LOCK, the top row's lone repeat (the owner, 2026-10-11): with LOCK on, the ONLY type latched, pushed again
+# alone, goes off at its release: no chord type, the roots play single notes. The latched extensions are not cleared:
+# they stay latched and lit, do nothing without a type, and apply again when a type is pushed (Clears or Keeps).
+#   chord block: F3 6, F#3 DIM, G3 m7, G#3 MIN, A3 M7, A#3 MAJ, B3 LOCK, C4 9, C#4 SUS
+# The dumps' "lock:" line: latched = bits DIM 01 MIN 02 MAJ 04 SUS 08, 6 10, m7 20, M7 40, 9 80.
+wait 300
+btn B3                        # LOCK on
+wait 200
+btn A#3 down                  # MAJ + M7 together: latched
+btn A3 down
+wait 100
+btn A3 up
+btn A#3 up
+wait 200
+btn D4 down
+wait 300
+dump                          # 1: latched 44, DM7 sounding (62 66 69 73)
+btn D4 up
+wait 200
+btn A#3 down                  # MAJ again, alone: still on while it is held ..
+wait 150
+dump                          # 2: 44 (judged at its release)
+btn A#3 up                    # .. off when let go; M7 stays
+wait 200
+expect led A#3 dim            # MAJ: off (the idle glow)
+expect led A3 on              # M7: still latched, still lit
+btn D4 down
+wait 300
+dump                          # 3: latched 40, a single note: chord D, notes 62
+shot build/emu/test/cr_lock_type_single.ppm
+btn D4 up
+wait 200
+btn A#3                       # MAJ: the type back, to the extension waiting there (Clears: not cleared)
+wait 200
+btn D4 down
+wait 300
+dump                          # 4: latched 44, DM7 again
+btn D4 up
+wait 200
+btn A#3 down                  # MAJ held + 6: not a lone push: both stay, 6 joins
+wait 50
+btn F3 down
+wait 50
+btn F3 up
+btn A#3 up
+wait 200
+dump                          # 5: 54
+btn G#3                       # another type: MIN alone (Clears, as before: the extensions go)
+wait 200
+dump                          # 6: 02
+btn G#3                       # MIN again alone: off: nothing latched
+wait 200
+dump                          # 7: 00
+btn E4 down
+wait 300
+dump                          # 8: a single note E (64)
+btn E4 up
+wait 200
+btn G#3                       # MIN: latched again
+wait 200
+dump                          # 9: 02
+btn G#3 down                  # MIN held with a root played in the push: still "alone" (no other chord key), as the
+wait 50                       # extension rule: off at its release; the chord sounds while it is held
+btn E4 down
+wait 300
+dump                          # 10: 02, Em sounding (64 67 71)
+btn E4 up
+btn G#3 up
+wait 200
+dump                          # 11: 00
+btn B3                        # LOCK off
+wait 2500
+dump                          # 12: silent
