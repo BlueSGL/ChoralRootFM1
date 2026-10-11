@@ -489,15 +489,99 @@ static uint8_t ua_stage_on;
 static inline int16_t ua_sat(int32_t x) { return (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x); }
 #endif
 
+/* A part's block b (sd: its stereo side, when side) at its level into the mix: the peak, the three sends (sg: their
+ * gains, each moving by its dg a sample: ChoralRoot's ramp; Felucca's: the gains, dg 0), the pan, USB audio's tap
+ * (pc). k: the block's values (MX_*). side, sends and tap are constants where a loop is built for them (the
+ * mix_loop_* below): a part that sends nothing has no send in its loop, one that is not recorded no tap. Returns the
+ * peak. */
+enum { MX_LVL, MX_GL, MX_GR, MX_XMAX, MX_PK, MX_SG, MX_DG = MX_SG + 3, MX_N = MX_DG + 3 };
+static inline __attribute__((always_inline)) int32_t mix_part_loop(const int32_t *b, const int32_t *sd, uint32_t n,
+                                                                   const int32_t *k, int16_t *pc, int side, int sends,
+                                                                   int tap)
+{
+    int32_t lvl = k[MX_LVL], gl = k[MX_GL], gr = k[MX_GR], xmax = k[MX_XMAX], pk = k[MX_PK];
+    int32_t s0 = k[MX_SG], s1 = k[MX_SG + 1], s2 = k[MX_SG + 2], d0 = k[MX_DG], d1 = k[MX_DG + 1], d2 = k[MX_DG + 2];
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t x, y = 0, a, l, rr;
+        if (side) {
+            x = ((b[i] >> 2) * lvl) >> 10;
+            y = ((sd[i] >> 2) * lvl) >> 10;
+        } else {
+            /* pre-shift: 8 loud voices; saturate where the level (+7.5 dB) or the pan would overflow (FM6's 16
+             * voices keep Dexed's headroom; Melodee's) */
+            x = clamp(((clamp(b[i], -884000, 884000) >> 2) * lvl) >> 10, -524287, 524287);
+        }
+        a = x < 0 ? -x : x;
+        if (a > pk)
+            pk = a;
+        if (sends) {
+            int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */
+            s0 += d0;
+            if (s0)
+                send_c[i] += mulq15(xs, s0);
+            s1 += d1;
+            if (s1)
+                send_d[i] += mulq15(xs, s1);
+            s2 += d2;
+            if (s2)
+                send_r[i] += mulq15(xs, s2);
+        }
+        if (side) {
+            l = ((x - y) * gl) >> 12;
+            rr = ((x + y) * gr) >> 12;
+        } else {
+            l = (x * gl) >> 12;
+            rr = (x * gr) >> 12;
+        }
+        mix_l[i] += l;
+        mix_r[i] += rr;
+#if FELUCCA_UAC
+        if (tap) {
+            pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
+            pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
+        }
+#endif
+    }
+    (void)pc;
+    (void)tap;
+    return pk;
+}
+/* the loops: a function each (two calls of one function that differ in a constant are folded into one by the
+ * compiler before it inlines, and the constant with them); S: with the side, F: with the sends, U: with USB's tap */
+#define MIX_LOOP_FN(name, side_, sends_, tap_) \
+    static __attribute__((noinline)) int32_t name(const int32_t *b, const int32_t *sd, uint32_t n, const int32_t *k, \
+                                                  int16_t *pc) \
+    { \
+        return mix_part_loop(b, sd, n, k, pc, side_, sends_, tap_); \
+    }
+MIX_LOOP_FN(mix_loop, 0, 0, 0)
+MIX_LOOP_FN(mix_loop_f, 0, 1, 0)
+MIX_LOOP_FN(mix_loop_s, 1, 0, 0)
+MIX_LOOP_FN(mix_loop_sf, 1, 1, 0)
+#if FELUCCA_UAC
+MIX_LOOP_FN(mix_loop_u, 0, 0, 1)
+MIX_LOOP_FN(mix_loop_fu, 0, 1, 1)
+MIX_LOOP_FN(mix_loop_su, 1, 0, 1)
+MIX_LOOP_FN(mix_loop_sfu, 1, 1, 1)
+#else
+#define mix_loop_u mix_loop
+#define mix_loop_fu mix_loop_f
+#define mix_loop_su mix_loop_s
+#define mix_loop_sfu mix_loop_sf
+#endif
+#undef MIX_LOOP_FN
+
 /* one synth part into the dry mix and the sends; a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
 /* (mix_part's second half: the part rendered into b, its side into side when side_on, nr voices) */
 static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on, uint32_t nr, uint32_t n)
 {
     int32_t *sd;
-    uint32_t i;
+    int16_t *pc = 0;
 #if FELUCCA_UAC
-    int16_t *pc = ua_stage_on && (uint32_t)(t - trk) < UA_PART_CAPTURED ? ua_stage + 2u + 2u * (uint32_t)(t - trk) : 0;
+    if (ua_stage_on && (uint32_t)(t - trk) < UA_PART_CAPTURED)
+        pc = ua_stage + 2u + 2u * (uint32_t)(t - trk);
 #endif
     if (nr)
         t->tail = 16;                                   /* blocks of DIST state to run out after the last voice */
@@ -520,25 +604,33 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
 #endif
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
-        int32_t xmax;
+        int32_t xmax, k[MX_N], *g = k + MX_SG, *dg = k + MX_DG;
+        int sends;
+        dg[0] = dg[1] = dg[2] = 0;
 #if CR_FX
-        int32_t *sg = fx_sg[t - trk], dc, dd, dr;
+        int32_t *sg = fx_sg[t - trk];
         if (fx_off)
             c = d = r = 0;
-        dc = (c - sg[0]) >> CTL_LOG2;                   /* (CTL samples a block; the ramp's last fraction: a step of
+        dg[0] = (c - sg[0]) >> CTL_LOG2;                /* (CTL samples a block; the ramp's last fraction: a step of
                                                          * under 32 / 32768) */
-        dd = (d - sg[1]) >> CTL_LOG2;
-        dr = (r - sg[2]) >> CTL_LOG2;
+        dg[1] = (d - sg[1]) >> CTL_LOG2;
+        dg[2] = (r - sg[2]) >> CTL_LOG2;
+        g[0] = sg[0];
+        g[1] = sg[1];
+        g[2] = sg[2];
         xmax = c > sg[0] ? c : sg[0];
         xmax = d > xmax ? d : sg[1] > xmax ? sg[1] : xmax;
         xmax = r > xmax ? r : sg[2] > xmax ? sg[2] : xmax;
         xmax = 0x7FFFFFFF / (xmax | 1);
-#define FX_SEND(bus, k, g_) do { sg[k] += d##g_; if (sg[k]) bus[i] += mulq15(xs, sg[k]); } while (0)
+        sends = (c | d | r | sg[0] | sg[1] | sg[2]) != 0;   /* (all 0: the ramps stay at 0, no bus gets a sample) */
 #define FX_SEND_END() (sg[0] = c, sg[1] = d, sg[2] = r)
 #else
+        g[0] = c;
+        g[1] = d;
+        g[2] = r;
         xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
-#define FX_SEND(bus, k, g_) do { if (g_) bus[i] += mulq15(xs, g_); } while (0)
+        sends = (c | d | r) != 0;
 #define FX_SEND_END() ((void)0)
 #endif
         /* a stereo side (voice.c part_side: VA's SPREAD / USPREAD): DIST works on the mid, the SLICER plays the part
@@ -556,57 +648,19 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
         }
 #endif
-        if (sd) {
-            for (i = 0; i < n; i++) {
-                int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;
-                int32_t xs = clamp(x, -xmax, xmax), y = ((sd[i] >> 2) * lvl) >> 10;
-                if (a > pk)
-                    pk = a;
-                FX_SEND(send_c, 0, c);
-                FX_SEND(send_d, 1, d);
-                FX_SEND(send_r, 2, r);
-                {
-                    int32_t l = ((x - y) * gl) >> 12, rr = ((x + y) * gr) >> 12;
-                    mix_l[i] += l;
-                    mix_r[i] += rr;
-#if FELUCCA_UAC
-                    if (pc) {
-                        pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
-                        pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
-                    }
-#endif
-                }
-            }
-            t->peak = pk;
-            FX_SEND_END();
-            if (MODP(t).on)
-                mod_end(t);
-            return;
-        }
-        for (i = 0; i < n; i++) {
-            /* pre-shift: 8 loud voices; saturate where the level (+7.5 dB) or the pan would overflow (FM6's 16
-             * voices keep Dexed's headroom; Melodee's) */
-            int32_t x = clamp(((clamp(b[i], -884000, 884000) >> 2) * lvl) >> 10, -524287, 524287), a = x < 0 ? -x : x;
-            int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */
-            if (a > pk)
-                pk = a;
-            FX_SEND(send_c, 0, c);
-            FX_SEND(send_d, 1, d);
-            FX_SEND(send_r, 2, r);
-            {
-                int32_t l = (x * gl) >> 12, rr = (x * gr) >> 12;
-                mix_l[i] += l;
-                mix_r[i] += rr;
-#if FELUCCA_UAC
-                if (pc) {
-                    pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
-                    pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
-                }
-#endif
-            }
-        }
+        k[MX_LVL] = lvl;
+        k[MX_GL] = gl;
+        k[MX_GR] = gr;
+        k[MX_XMAX] = xmax;
+        k[MX_PK] = pk;
+        /* the loop of this block: with or without the side, the sends, the tap */
+        if (sd)
+            pk = sends ? (pc ? mix_loop_sfu : mix_loop_sf)(b, sd, n, k, pc) : (pc ? mix_loop_su : mix_loop_s)(b, sd, n, k, pc);
+        else
+            pk = sends ? (pc ? mix_loop_fu : mix_loop_f)(b, sd, n, k, pc) : (pc ? mix_loop_u : mix_loop)(b, sd, n, k, pc);
         t->peak = pk;
         FX_SEND_END();
+#undef FX_SEND_END
     }
     if (MODP(t).on)
         mod_end(t);                                     /* the stored values back */

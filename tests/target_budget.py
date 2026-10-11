@@ -27,6 +27,9 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "quad_render", "quad_block",                        # FM TONE (eng_quad.c, code name QUAD, ChoralRoot): the voice, the part's macros
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
+         "master_block",                                    # the master (fx.c): a loop per LOWCUT / limiter setting
+         "mix_loop", "mix_loop_f", "mix_loop_s", "mix_loop_sf",   # a part into the mix (fx.c mix_part_out): plain, with the
+         "mix_loop_u", "mix_loop_fu", "mix_loop_su", "mix_loop_sfu",   # sends (f), the stereo side (s), USB's tap (u)
          "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
          "rev_room", "rev_spring",                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING (Felucca's: CR_FX 0)
          "xf_block", "xf_down", "xf_up", "xd_run", "xr_run"]   # ChoralRoot's delay and reverb (cr_fx.c, CR_FX 1): the
