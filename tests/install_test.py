@@ -6,8 +6,10 @@ The fake device is the one in web/test_web.mjs: identity on the handshake,
 then "device asks, host answers" reads of the logical image. Run from the repo root:
   python3 tests/install_test.py
 Also checks logical_image/product_of against web/fm1pkg.js (needs node and
-build/choralroot.fwsc, skipped otherwise)."""
+build/choralroot.fwsc, skipped otherwise). stuck() and midi_side(): MIDI calls that never return (a simulated
+backend's; the tool's own worker processes with tests/fake_rtmidi as their rtmidi: no CoreMIDI, no real port)."""
 import io
+import os
 import queue
 import shutil
 import subprocess
@@ -191,9 +193,11 @@ class BackupSide:
                 self.log.append(32 + a[0])
             return [a[0], a[1], a[2], a[3], 0] if cmd == 12 else [a[0], 0]
         if cmd == I.BK_STUB and getattr(self, "stub", None) is not None and len(a) == 1:
-            return [self.stub(a[0])]
+            rc = self.stub(a[0])                  # (None: no answer)
+            return None if rc is None else [rc]
         if cmd == I.BK_DEBUG and getattr(self, "debug", None) is not None and not a:
-            return [1, len(self.debug)] + [b for v in self.debug for b in I.bk_u32(v)]
+            d = self.debug() if callable(self.debug) else self.debug     # (None: no answer)
+            return d and [1, len(d)] + [b for v in d for b in I.bk_u32(v)]
         if cmd == I.BK_SCREEN and self.version.startswith("ChoralRoot") and len(a) == 1 and a[0] <= 1:
             self.log.append(f"screen {a[0]}")
             return [0]
@@ -596,6 +600,50 @@ def stub():
             ok(False, "--stub with --info refused")
         except SystemExit:
             ok(True, "--stub with --info refused")
+
+        # an answer that is not seen does not decide (the unit had taken requests whose answer never came): what
+        # comes back does, by its uptime (DEBUG's first value, ms) and the stub's own words
+        def mute(op, leaves, ms):
+            cr.log.append(f"stub {op}")
+            if leaves:                            # off the bus without a word, back 0.3 s later
+                dev.connected = False
+                threading.Timer(0.3, dev.boot, ("FM-1_920", "FM-1")).start()
+            cr.debug[0] = ms
+        dev.boot("FM-1_920", "FM-1")
+        cr.log.clear()
+        cr.stub = lambda op: mute(op, True, 400)
+        t = time.monotonic()
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc == 0 and cr.log == ["stub 1"] and "no answer was seen (the FM-1 has left the bus)" in out and
+           "boot stub v2: booted the app after 61.0 ms" in out and "(the app asked for the test)" in out and
+           time.monotonic() - t < 1.5, "--stub test, no answer but the FM-1 leaves and comes back just started: the stub's lines, exit 0")
+        cr.stub = lambda op: mute(op, True, 600000)
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc == 4 and "the FM-1 was disconnected" in err, "--stub test, no answer, the FM-1 leaves and is back without a restart (its uptime): exit 4")
+        cr.stub = lambda op: mute(op, False, 600000)
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc == 7 and "no answer to backup command 77" in err and "the FM-1 is still there" in out,
+           "--stub test, no answer and no restart: exit 7 as before")
+        cr.debug[at + 4] = 0
+        cr.stub = lambda op: mute(op, True, 400)
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc == 7 and "its boot stub did not see the test request" in err, "--stub test, no answer, a restart the stub knows nothing of: exit 7")
+        cr.debug[0], cr.debug[at + 4] = 0, 1 << 26
+        vals, asked = cr.debug, []
+
+        def leaves_when_asked():                  # no answer to 77, still there; it leaves as DEBUG is asked, and
+            asked.append(1)                       # is back 0.3 s later, just started
+            if len(asked) == 1:
+                dev.connected = False
+                threading.Timer(0.3, dev.boot, ("FM-1_920", "FM-1")).start()
+                return None
+            return [200] + vals[1:]
+        cr.stub, cr.debug = (lambda op: None), leaves_when_asked
+        rc, out, err = cli(["--stub", "test"], dev)
+        ok(rc == 0 and len(asked) == 2 and "no answer was seen (the FM-1 is still there)" in out and
+           "boot stub v2: booted the app after 61.0 ms" in out,
+           "--stub test, no answer, the FM-1 restarts only when it is asked what it did: looked at again, exit 0")
+        cr.debug = vals
     finally:
         I.DELAY["reboot"] = keep
 
@@ -1051,11 +1099,393 @@ def bindings():
     ok("added" in I.__doc__ and "over FM6 02 FM BELL" in I.__doc__, "binding: --help says what --sounds shows")
 
 
+# ------------------------------------------------ MIDI calls that never return ---
+# fm1_install.py "MIDI": a close, an open or a port list that does not return must not hold the tool. Two levels: a
+# simulated backend whose calls block (bounded(), Link: any backend), and the tool's own backend, its worker
+# processes run with tests/fake_rtmidi's rtmidi, whose calls block with the GIL held as python-rtmidi's do.
+
+class StuckLink(FakeLink):
+    def close(self):                              # never returns
+        threading.Event().wait()
+
+
+class StuckFM1(FakeFM1):
+    """a FakeFM1 with a call that never returns: stuck = "close" (every link's), "open" (after the first `after`
+    opens) or "names" (the port list)"""
+
+    def __init__(self, *a, stuck="close", after=0, **k):
+        super().__init__(*a, **k)
+        self.stuck, self.after, self.opens = stuck, after, 0
+
+    def open(self, in_name, out_name):
+        self.opens += 1
+        if self.stuck == "open" and self.opens > self.after:
+            threading.Event().wait()
+        link = super().open(in_name, out_name)
+        if self.stuck == "close":
+            link.__class__ = StuckLink
+        return link
+
+    def input_names(self):
+        if self.stuck == "names":
+            threading.Event().wait()
+        return super().input_names()
+
+    output_names = input_names
+
+
+def timed(args, dev, **k):
+    t = time.monotonic()
+    rc, out, err = cli(args, dev, **k)
+    return rc, out, err, time.monotonic() - t
+
+
+def stub_debug():
+    """--debug's numbers of a unit whose stub (version 2) has just answered a test request"""
+    at = I.DEBUG_NAMES.index("stub_ms")
+    v = [0] * (len(I.DEBUG_NAMES) + I.DEBUG_LOG) + [0, 0, 0, 0x100]
+    v[at:at + 5] = [61, 61000, 2, 1, 1 << 26]
+    return v
+
+
+def stuck():
+    keep = {k: I.DELAY[k] for k in ("port", "close", "reboot", "wait_reboot")}
+    I.DELAY.update(port=0.4, close=0.2, reboot=0.3, wait_reboot=1)     # (the fake restarts 50 ms after its reply)
+    try:
+        def unit(**k):
+            cr = BackupSide("ChoralRoot 0.17", I.CR_IDS)
+            cr.debug = stub_debug()
+            dev = StuckFM1(b"", identity="FM-1_920", bk=lambda i: None if i.startswith("ota-") else cr, **k)
+            cr.stub = lambda op: threading.Timer(0.05, dev.boot, ("FM-1_920", "FM-1")).start() or 0
+            return dev
+
+        # a close that never returns: waited for at most 2 x DELAY close, then left; the result is the same
+        rc, out, err, dt = timed(["--info"], unit())
+        ok(rc == 0 and "FM-1_920" in out and "ChoralRoot 0.17" in out and dt < 3, f"--info, a close that never returns: the result, exit 0 ({dt:.1f} s)")
+        rc, out, err, dt = timed(["--debug"], unit())
+        ok(rc == 0 and "boot stub v2" in out and dt < 3, f"--debug, a close that never returns: the result, exit 0 ({dt:.1f} s)")
+        dev = unit()
+        rc, out, err, dt = timed(["--stub", "test"], dev)
+        ok(rc == 0 and "stub test: accepted" in out and "boot stub v2: booted the app after 61.0 ms" in out and
+           "(the app asked for the test)" in out and len(dev.links) == 2 and dt < 4,
+           f"--stub test, the closes after the restart and at the end never return: the stub's lines, exit 0 ({dt:.1f} s)")
+        raw = package()
+        p = pkgfile("stuck.fwsc", raw)
+        dev = StuckFM1(I.logical_image(raw))
+        rc, out, err, dt = timed([p, "--yes"], dev)
+        ok(rc == 0 and dev.bad == 0 and "done: the FM-1 runs FM-1_900" in out and dt < 8,
+           f"install, every close never returns (two restarts): done, exit 0 ({dt:.1f} s)")
+        t = time.monotonic()
+        link = I.Link(StuckLink(dev, dev.gen))
+        link.close()
+        d1 = time.monotonic() - t
+        link.close()
+        d2 = time.monotonic() - t - d1
+        ok(0.3 < d1 < 1.5 and d2 < 0.1, f"Link.close: waited for 2 x DELAY close ({d1:.2f} s), once ({d2:.2f} s)")
+
+        # an open, a port list that never returns: the FM-1 is "not found" (3), with what did not return
+        rc, out, err, dt = timed(["--info"], unit(stuck="open"))
+        ok(rc == 3 and "FM-1 not found" in err and "the opening of FM-1 did not return" in err and dt < 4,
+           f"--info, an open that never returns: exit 3, 'FM-1 not found', what did not return ({dt:.1f} s)")
+        rc, out, err, dt = timed(["--info"], unit(stuck="names"))
+        ok(rc == 3 and "FM-1 not found" in err and "the list of the MIDI ports did not return" in err and dt < 5,
+           f"--info, a port list that never returns: exit 3, what did not return ({dt:.1f} s)")
+        rc, out, err, dt = timed([p, "--yes"], StuckFM1(I.logical_image(raw), stuck="open"))
+        ok(rc == 3 and "not found" in err and dt < 4, f"install, an open that never returns: exit 3, nothing sent ({dt:.1f} s)")
+
+        # after a restart: the wait has one bound and says what it waited for
+        rc, out, err, dt = timed(["--stub", "test"], unit(stuck="open", after=1))
+        ok(rc == 5 and "did not come back" in err and "waited 1 s for a MIDI port that answers the identity query" in err
+           and "the opening of FM-1 did not return in time" in err and dt < 6,
+           f"--stub test, every open after the restart never returns: exit 5 after the wait's bound ({dt:.1f} s)")
+        dev = unit()
+        dev.stuck = None
+        dev.bk("FM-1_920").stub = lambda op: threading.Timer(0.05, setattr, (dev, "connected", False)).start() or 0
+        for what, word in (("test", "the FM-1 did not come back"), ("rescue", "nothing came back on USB-MIDI")):
+            dev.boot("FM-1_920", "FM-1")
+            rc, out, err, dt = timed(["--stub", what], dev)
+            ok(rc == 5 and word in err and "waited 1 s for a MIDI port that answers the identity query" in err and
+               "did not return" not in err and 1 < dt < 4,
+               f"--stub {what}, the FM-1 stays away: exit 5 after 1 s, what was waited for ({dt:.1f} s)")
+        dev = StuckFM1(I.logical_image(raw), stuck=None, after_write="FM-1_900")
+        boot = dev.boot
+        dev.boot = lambda identity, name: boot(identity, name) or (setattr(dev, "connected", False) if name == "Felucca" else None)
+        rc, out, err, dt = timed([p, "--yes"], dev)
+        ok(rc == 5 and "the FM-1 did not come back (waited 1 s for a MIDI port that answers the identity query as the "
+           "firmware)" in err and dt < 8, f"install, the FM-1 stays away after the write: exit 5, what was waited for ({dt:.1f} s)")
+        t = time.monotonic()
+        back = I.Updater(unit(stuck="names")).wait_for(lambda i: True, 1.0)
+        dt = time.monotonic() - t
+        ok(back is None and 1.0 <= dt < 3.5, f"wait_for with a port list that never returns: back after its bound ({dt:.1f} s)")
+    finally:
+        I.DELAY.update(keep)
+
+
+def midi_side():
+    """the tool's own backend: workers (fm1_install.py --midi-worker) with tests/fake_rtmidi as their rtmidi"""
+    env = {k: os.environ.get(k) for k in ("PYTHONPATH", "FAKE_RTMIDI", "FAKE_RTMIDI_PIDS", "FAKE_RTMIDI_STATE")}
+    keep = {k: I.DELAY[k] for k in ("port", "close", "stuck", "open", "reboot")}
+    os.environ["PYTHONPATH"] = os.pathsep.join(filter(None, [str(ROOT / "tests" / "fake_rtmidi"), env["PYTHONPATH"]]))
+    I.DELAY.update(close=0.3, stuck=5, open=0.01, reboot=0.05)
+
+    def fresh(knobs=""):                          # a new port-list worker too: it read its knobs at its start
+        os.environ["FAKE_RTMIDI"] = knobs
+        if I.MidiBackend.lister:
+            I.MidiBackend.lister.close()
+        I.MidiBackend.lister = None
+
+    def tool(args, knobs="", port=10.0):
+        fresh(knobs)
+        I.DELAY["port"] = 10.0
+        if "names" not in knobs and "missing" not in knobs:
+            I.MidiBackend().input_names()         # (the port-list worker is up before a short bound counts)
+        I.DELAY["port"] = port
+        return timed(args, None)
+
+    try:
+        fresh()
+        try:
+            names = I.MidiBackend().input_names()
+        except (I.InstallError, OSError) as e:
+            names = str(e)
+        ok(names == ["FM-1 fake"], "MIDI worker: it runs with tests/fake_rtmidi (the port list is the fake's)")
+        if names != ["FM-1 fake"]:                # never a real port: nothing is opened without the fake
+            return
+        rc, out, err, dt = tool(["--info"])
+        ok(rc == 0 and "FM-1_920  [running]  port: FM-1 fake  version: ChoralRoot 0.17" in out and
+           len(I.Worker.live) == 1, f"MIDI worker: --info through a worker (a note behind every reply), its link's worker gone ({dt:.1f} s)")
+        rc, out, err, dt = tool(["--stub", "test"])
+        ok(rc == 0 and "boot stub v2: booted the app after 61.0 ms" in out and "(the app asked for the test)" in out,
+           f"MIDI worker: --stub test through two workers ({dt:.1f} s)")
+
+        o = I.Updater(I.MidiBackend()).open(None, "FM-1 fake")
+        ok(o and o.send(bytes([0x90, 60, 100])) and not o.lost and o.close() is None and len(I.Worker.live) == 1,
+           "MIDI worker: an output alone, a note sent (uac_check.py's use)")
+        os.environ["FAKE_RTMIDI_NAME"] = "ChoralRoot fake"      # fm1_sample_upload.py looks for Felucca / ChoralRoot
+        fresh()
+        try:
+            import fm1_sample_upload as S
+            link = S.Link()
+            r = link.req(1, [])
+            ok(bytes(r[:15]) == b"ChoralRoot 0.17", "MIDI worker: fm1_sample_upload.py's Link: a request and its reply")
+            link.link.close()
+        finally:
+            del os.environ["FAKE_RTMIDI_NAME"]
+            fresh()
+
+        # rtmidi's close never returns and keeps the GIL: the worker cannot answer, it is killed after DELAY close
+        rc, out, err, dt = tool(["--info"], "close")
+        ok(rc == 0 and "FM-1_920  [running]" in out and len(I.Worker.live) == 1 and dt < 8,
+           f"MIDI worker: --info, close_port never returns (GIL held): the result, exit 0, the worker killed ({dt:.1f} s)")
+        rc, out, err, dt = tool(["--stub", "test"], "close")
+        ok(rc == 0 and "boot stub v2: booted the app after 61.0 ms" in out and len(I.Worker.live) == 1 and dt < 10,
+           f"MIDI worker: --stub test, close_port never returns: the stub's lines, exit 0 ({dt:.1f} s)")
+        rc, out, err, dt = tool(["--debug"], "close")
+        ok(rc == 0 and "boot stub v2" in out and "stub_ms 61" in out and dt < 8, f"MIDI worker: --debug, close_port never returns: the result, exit 0 ({dt:.1f} s)")
+
+        # an install through the workers: three links (the firmware, the loader, the new firmware), one worker each
+        raw = package()
+        state = TMP / "fake-fm1"
+        (TMP / "fake-fm1.image").write_bytes(I.logical_image(raw))
+        os.environ["FAKE_RTMIDI_STATE"] = str(state)
+        try:
+            for knobs, what in (("", "install through the workers"), ("close", "install, close_port never returns"),
+                                ("finishgone", "install, the loader's last question comes as it leaves the bus")):
+                state.write_bytes(b"FM-1_920")
+                rc, out, err, dt = tool([pkgfile("worker.fwsc", raw), "--yes"], knobs)
+                ok(rc == 0 and "device:  FM-1_920  (FM-1 fake)  ChoralRoot 0.17" in out and "100%" in out and
+                   "done: the FM-1 runs FM-1_900" in out and state.read_bytes() == b"FM-1_900" and
+                   not (TMP / "fake-fm1.bad").exists() and len(I.Worker.live) == 1 and dt < 15,
+                   f"MIDI worker: {what}: every read answered with the image's bytes, done, exit 0 ({dt:.1f} s)")
+        finally:
+            del os.environ["FAKE_RTMIDI_STATE"]
+
+        # A restart request (FAKE_RTMIDI vanish): the FM-1 answers and leaves the bus 150 ms later, as the firmware
+        # does. The answer is read and the ports are closed by their worker while the FM-1 is still there; an answer
+        # that comes with the leaving is not dropped; one that never comes does not decide; a port whose FM-1 is
+        # gone is closed by its worker all the same (no worker is killed with its ports open).
+        state, log = TMP / "fake-stub", TMP / "fake-stub.log"
+        os.environ["FAKE_RTMIDI_STATE"] = str(state)
+        keep2 = {k: I.DELAY[k] for k in ("reboot", "wait_reboot")}
+        I.DELAY.update(reboot=0.3, wait_reboot=3)   # (the first look after the request: while the FM-1 is away)
+
+        def stubbed(knobs, args=("--stub", "test"), clean=True):
+            for f in TMP.glob("fake-stub*") if clean else ():
+                f.unlink()
+            rc, out, err, dt = tool(list(args), knobs)
+            lg = [ln.split() for ln in (log.read_text() if log.exists() else "").splitlines()]
+            return rc, out, err, dt, [x for x in lg if x[0] == "open"], [x for x in lg if x[0] == "close"], lg
+
+        try:
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish")
+            ok(rc == 0 and "stub test: accepted" in out and "boot stub v2: booted the app" in out and
+               "(the app asked for the test)" in out and len(opens) == 4 and len(closes) == 4 and
+               all(x[3] == "1" for x in closes) and lg[:4] == opens[:2] + closes[:2] and len(I.Worker.live) == 1,
+               f"MIDI worker: --stub test, the FM-1 leaves 150 ms after its answer: read, the ports closed before it is gone ({dt:.1f} s)")
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish,late")
+            ok(rc == 0 and "stub test: accepted" in out and "boot stub v2: booted the app" in out and len(closes) == 4 and
+               [x[3] for x in closes[:2]] == ["0", "0"], "MIDI worker: the answer in rtmidi's queue when the port is found "
+               "gone: handed over before \"lost\", accepted; the ports of the gone FM-1 closed by their worker")
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish,mute")
+            ok(rc == 0 and "no answer was seen (the FM-1 has left the bus)" in out and "boot stub v2: booted the app" in out
+               and "(the app asked for the test)" in out and len(opens) == 4 and len(closes) == 4 and
+               [x[3] for x in closes[:2]] == ["0", "0"],
+               f"MIDI worker: --stub test, the answer never comes, the FM-1 leaves and is back just started: the stub's lines, exit 0 ({dt:.1f} s)")
+            rc, out, err, dt, opens, closes, lg = stubbed("no77")
+            ok(rc == 7 and "no answer to backup command 77" in err and "the FM-1 is still there" in out and
+               len(opens) == len(closes) == 4, "MIDI worker: --stub test on a firmware that does not answer 77 (and "
+               "does not restart): exit 7 as before")
+
+            # the FM-1 does not come back for CoreMIDI although it is on the USB bus: said, with what to do
+            I.DELAY["wait_reboot"] = 1
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish,offline")
+            hint = "FM-1 fake is on the USB bus, but its MIDI port is known to CoreMIDI as offline"
+            ok(rc == 5 and "the FM-1 did not come back" in err and hint in err and "Rescan MIDI" in err and
+               "--rescan-midi" in err and "Felucca Update" not in err and "Some Interface" not in err,
+               f"MIDI worker: after the restart the port stays offline in CoreMIDI, the FM-1 on USB: exit 5, said with the way out ({dt:.1f} s)")
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish,offline", ("--info",), clean=False)
+            ok(rc == 3 and "FM-1 not found" in err and hint in err, "MIDI worker: --info then: exit 3, the same words")
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish,offline", ("--rescan-midi",), clean=False)
+            ok(rc == 0 and "MIDI rescanned. MIDI inputs: FM-1 fake" in out and ["rescan"] in lg,
+               "MIDI worker: --rescan-midi: the worker's rescan, the port is listed again")
+            rc, out, err, dt, opens, closes, lg = stubbed("vanish,offline", ("--info",), clean=False)
+            ok(rc == 0 and "FM-1_920  [running]" in out, "MIDI worker: --info after the rescan: found")
+            try:
+                cli(["--rescan-midi", "--info"], None)
+                ok(False, "--rescan-midi goes alone")
+            except SystemExit as e:
+                ok(e.code == 2, "--rescan-midi goes alone")
+
+            # a worker whose tool goes away, or that is asked to end (SIGTERM), closes its ports first
+            for how in ("stdin", "SIGTERM"):
+                for f in TMP.glob("fake-stub*"):
+                    f.unlink()
+                fresh()
+                w = subprocess.Popen([sys.executable, str(ROOT / "tools" / "fm1_install.py"), "--midi-worker", "5"],
+                                     stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+                w.stdin.write(I.frame(b"o", b'["FM-1 fake", "FM-1 fake"]'))
+                w.stdin.flush()
+                got = w.stdout.read(5)
+                if how == "stdin":
+                    w.stdin.close()
+                else:
+                    w.terminate()
+                try:
+                    w.wait(8)
+                except subprocess.TimeoutExpired:
+                    w.kill()
+                lg = [ln.split()[::2] for ln in (log.read_text() if log.exists() else "").splitlines()]
+                ok(w.returncode == 0 and got == I.frame(b"a") and w.stdout.read() == b"" and
+                   lg == [["open", "in"], ["open", "out"], ["close", "in"], ["close", "out"]],
+                   f"MIDI worker: its tool gone ({how}): it closes its ports and leaves")
+        finally:
+            I.DELAY.update(keep2)
+            del os.environ["FAKE_RTMIDI_STATE"]
+
+        # a worker is started without a fork of the tool (no copy of it, with its command line, before an exec)
+        if getattr(subprocess, "_USE_POSIX_SPAWN", False) and hasattr(subprocess, "_fork_exec"):
+            fork, subprocess._fork_exec = subprocess._fork_exec, None
+            try:
+                fresh()
+                ok(I.MidiBackend().input_names() == ["FM-1 fake"], "MIDI worker: started by posix_spawn, not by fork")
+            except TypeError:
+                ok(False, "MIDI worker: started by posix_spawn, not by fork")
+            finally:
+                subprocess._fork_exec = fork
+
+        # rtmidi's open, its port list never return: exit 3 with what did not return, no worker left in the call
+        rc, out, err, dt = tool(["--info"], "open", port=1.0)
+        ok(rc == 3 and "FM-1 not found" in err and "the opening of FM-1 fake did not return within its bound" in err and
+           len(I.Worker.live) == 1 and dt < 8, f"MIDI worker: --info, open_port never returns: exit 3 'FM-1 not found' ({dt:.1f} s)")
+        rc, out, err, dt = tool(["--info"], "names", port=1.0)
+        ok(rc == 3 and "FM-1 not found" in err and "the list of the MIDI ports did not return" in err and
+           len(I.Worker.live) <= 1 and dt < 8, f"MIDI worker: --info, get_ports never returns: exit 3, what did not return ({dt:.1f} s)")
+        rc, out, err, dt = tool(["--info"], "missing")
+        ok(rc == 2 and "needs python-rtmidi" in err, "MIDI worker: no rtmidi to import: exit 2, what to install")
+
+        # a worker whose tool is gone while it is in a call that never returns ends itself (no GIL needed)
+        fresh("names")
+        w = subprocess.Popen([sys.executable, str(ROOT / "tools" / "fm1_install.py"), "--midi-worker", "0.5"],
+                             stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+        w.stdin.write(I.frame(b"n"))
+        w.stdin.close()
+        try:
+            w.wait(8)
+        except subprocess.TimeoutExpired:
+            w.kill()
+        ok(w.returncode == 1, "MIDI worker: in a call that never returns, its tool gone: it ends itself after `stuck`")
+
+        # the tool as a process: the exit is not held, and no worker outlives it
+        pids = TMP / "worker-pids"
+        os.environ["FAKE_RTMIDI"], os.environ["FAKE_RTMIDI_PIDS"] = "close", str(pids)
+        t = time.monotonic()
+        r = subprocess.run([sys.executable, str(ROOT / "tools" / "fm1_install.py"), "--info"], capture_output=True,
+                           text=True, timeout=60)
+        dt = time.monotonic() - t
+
+        def alive(pid):
+            try:
+                os.kill(pid, 0)
+                return True
+            except ProcessLookupError:
+                return False
+            except PermissionError:
+                return True
+        started = [int(x) for x in pids.read_text().split()] if pids.exists() else []
+        end = time.monotonic() + 3
+        while any(map(alive, started)) and time.monotonic() < end:
+            time.sleep(0.05)
+        ok(r.returncode == 0 and "FM-1_920  [running]" in r.stdout and "ChoralRoot can be installed over" in r.stdout and
+           r.stderr == "" and dt < 20, f"the tool as a process, close_port never returns: its output, exit 0 ({dt:.1f} s)")
+        ok(len(started) == 2 and not any(map(alive, started)), f"... and none of its {len(started)} workers outlives it")
+    finally:
+        fresh()
+        I.DELAY.update(keep)
+        for k, v in env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+
+def exits():
+    """the tool's own process cannot stay behind: leave()'s timer, Watch (fm1_install.py)"""
+    head = "import sys, time\nsys.path.insert(0, %r)\nimport fm1_install as I\n" % str(ROOT / "tools")
+
+    def py(body):
+        t = time.monotonic()
+        r = subprocess.run([sys.executable, "-c", head + body], capture_output=True, text=True, timeout=60)
+        return r, time.monotonic() - t
+    r, dt = py("I.DELAY['exit'] = 0.5\nclass Held:\n    def flush(self):\n        time.sleep(1000)\n"
+               "sys.stdout = Held()\nI.leave(7)\n")
+    ok(r.returncode == 7 and dt < 10, f"leave: an output that is never flushed does not hold the exit, the code is kept ({dt:.1f} s)")
+    r, dt = py("I.DELAY.update(dead=0.5, exit=0.5)\nI.Watch.start()\ntime.sleep(1000)\n")
+    ok(r.returncode == 1 and "no step for 0.5 s: the tool ends itself" in r.stderr and 'File "<string>", line 6' in r.stderr
+       and dt < 10, f"Watch: no step for DELAY dead: the tool ends itself (exit 1) and says where it was ({dt:.1f} s)")
+    r, dt = py("I.DELAY.update(dead=0.4, exit=0.5)\nI.Watch.start()\nfor k in range(10):\n    time.sleep(0.1)\n"
+               "    I.Watch.step()\nimport builtins\nbuiltins.input = lambda p: time.sleep(1.2) or 'y'\n"
+               "print(I.ask_tty('?'), I.Watch.paused)\ntime.sleep(0.2)\nI.leave(3)\n")
+    ok(r.returncode == 3 and r.stdout.split() == ["True", "False"] and r.stderr == "",
+       "Watch: steps keep the tool, a question to the user stops the clock")
+    env = dict(os.environ, PYTHONPATH=str(ROOT / "tests" / "fake_rtmidi"), FAKE_RTMIDI="")
+    w = subprocess.Popen([sys.executable, str(ROOT / "tools" / "fm1_install.py"), "--info", "--port", "no such port"],
+                         stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, env=env)   # (--port: no port is opened)
+    w.stderr.close()
+    try:
+        w.wait(30)
+    except subprocess.TimeoutExpired:
+        w.kill()
+    ok(w.returncode == 3, "an error line that cannot be written (stderr's reader is gone): the exit code is still 3")
+
+
 wire()
+exits()
 backups()
 screen()
 debug()
 stub()
+stuck()
+midi_side()
 select()
 sounds()
 syx()

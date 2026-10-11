@@ -165,6 +165,8 @@ python3 tools/fm1_install.py build/choralroot.fwsc --backup ~/fm1-backups/   # b
 python3 tools/fm1_install.py --info          # identity of the connected FM-1 (FM-1_920 after the install)
 python3 tools/fm1_install.py --backup FILE   # save what is stored on the FM-1 (a directory: a dated file name)
 python3 tools/fm1_install.py --restore FILE  # write a backup back (ChoralRoot restarts afterwards)
+python3 tools/fm1_install.py --rescan-midi   # macOS: the FM-1 is on USB but "not found" (its MIDI port offline in
+                                             # CoreMIDI after a restart; the tool says so): Audio MIDI Setup's Rescan MIDI
 ```
 
 **Backup and restore.** A backup is one JSON file (`choralroot-backup-YYYYMMDD.json`, Felucca's format
