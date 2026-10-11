@@ -31,6 +31,14 @@ cc -std=c99 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_trans_tes
 # the bass part on the second core (firmware/src/cr_cpu1.h, docs/DUALCORE.md): the split bit for bit, the budgets, the fail-safes
 cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cpu1_test tests/cr_cpu1_test.c -lm
 ./build/host/cr_cpu1_test
+# ChoralRoot's delay and reverb (firmware/src/cr_fx.c, docs/FX.md): the coefficients, tempo sync, the half rate's response
+# and noise, every corner stable and ending in exact silence, smooth parameter changes, the level against Felucca's
+# effects, mono, the cost; impulse responses for tools/fx_plots.py into build/fx-review
+mkdir -p build/fx-review
+cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_fx_test tests/cr_fx_test.c -lm
+./build/host/cr_fx_test build/fx-review > build/host/cr_fx_test.log || { cat build/host/cr_fx_test.log; exit 1; }
+grep -c ' ok$' build/host/cr_fx_test.log | sed 's/^/cr_fx_test: /; s/$/ checks ok/'
+tail -1 build/host/cr_fx_test.log
 # backup / restore SysEx (cr_backup.c) on the emulator's firmware build (tools/emu/emu_firmware.h; macOS: os_unfair_lock)
 cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_backup_test tests/cr_backup_test.c -lm
 ./build/host/cr_backup_test

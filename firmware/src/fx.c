@@ -2,10 +2,16 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Effects: per-track DIST insert, then sends into three
  * shared buses (chorus, tempo delay, reverb). Mono buses, stereo dry mix. */
-#define DLY_LEN 65536u           /* 1.49 s: 1/4 at 40 BPM fits */
+#ifndef CR_FX
+#define CR_FX 0                  /* 1 (choralroot.c, the emulator): the delay and the reverb are ChoralRoot's (cr_fx.c,
+                                  * docs/FX.md: a stereo delay and a large reverb at half the rate, their parameters
+                                  * global); 0: Felucca's below, as its golden renders have them */
+#endif
 #define CHO_LEN 2048u
-static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
+#if !CR_FX
+#define DLY_LEN 65536u           /* 1.49 s: 1/4 at 40 BPM fits */
+static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
 static const uint16_t REV_COMB[4] = {1116, 1188, 1277, 1356};
 static const uint16_t REV_AP[2] = {556, 441};
 static int16_t rev_comb[1116 + 1188 + 1277 + 1356] __attribute__((section(".pool")));
@@ -14,6 +20,7 @@ static union {                          /* ROOM's allpasses; SPRING's allpass ch
     int32_t sp[(556 + 441) / 2];
 } rev_u __attribute__((section(".pool")));
 #define rev_ap (rev_u.ap)
+#endif
 static struct {
     uint32_t dly_w, cho_w, cho_ph;
     int32_t dly_lp;
@@ -39,12 +46,14 @@ static struct {
  * on it), plus a second, quieter pickup at three quarters (a shorter spring beside it: denser). SIZE sets
  * the loop's length (30 .. 60 ms) and its decay; DAMP the loop's low-pass. The allpasses' states: 4
  * samples each (int32), in rev_ap's memory. Changing the model fades the old one's block out and clears both buffers. */
+#if !CR_FX
 #define SP_LEN 4096u                     /* the loop's line in rev_comb (4937 samples) */
 #define SP_MASK (SP_LEN - 1u)
 #define SP_N 10u                         /* allpass stages */
 #define SP_A 2867                        /* their coefficient, Q12 (0.7: Q12 keeps (x - o) * a in 32 bits up to
                                           * |x - o| < 749000, far past any peak the chain reaches) */
 _Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (SP_N + 1u), "SPRING in ROOM's buffers");
+#endif
 
 /* DIST: low cut -> drive (1x..8x, exponential) -> asymmetric soft clip
  * (a little bias = even harmonics) -> tone low-pass that closes with drive ->
@@ -82,6 +91,9 @@ static int32_t lim_env = LIM_T;
  * sidebands above 1 kHz, a crackle on held chords, louder with the FX sends. Smoothed (lim_g): -57 dB, the same
  * loudness; the peaks the slower gain lets through (to ~25000) go into the soft clipper's near-linear part */
 static uint8_t fx_smooth;
+#if CR_FX
+static volatile uint8_t fx_off;       /* ChoralRoot's FX tap at off (cr_ui.c cu_fx_apply): no part sends into the buses */
+#endif
 static int32_t lim_g = 32768;
 /* Options > USB Level = Fixed (Felucca 1.0.5's MENU > USB LEVEL FIXED, #42: record over USB with the speaker turned
  * down): the mix goes to master_out at the full MASTER level, USB audio's master pair takes that (choralroot.c's
@@ -211,6 +223,9 @@ static uint32_t div_samples(uint32_t div)
 
 #include "perform.c"                                 /* the FX hold layer's effects (the master) */
 
+#if CR_FX
+#include "cr_fx.c"                                   /* ChoralRoot's delay and reverb (xf_block, after the chorus) */
+#else
 static uint32_t delay_samples(void)
 {
     uint32_t s = div_samples((uint32_t)song.g[G_DTIME]);
@@ -306,17 +321,24 @@ static void rev_clear(void)
     fx.sp_lp = fx.sp_hp = fx.sp_he = 0;
 }
 
+#endif
+
 static int32_t part_buf[CTL];                            /* a part's block (mix_part); the fade of a model change */
 
 /* process the three buses for one block; sends in, wet stereo-equal out */
 static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet,
                      uint32_t n)
 {
-    uint32_t i, dl = delay_samples();
-    int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
-    int32_t dmix = song.g[G_DMIX] * 258;
-    int32_t cdepth = song.g[G_CDEPTH] * 6, rt;
+    uint32_t i;
+    int32_t cdepth = song.g[G_CDEPTH] * 6;
     uint32_t cinc = LFO_INC[song.g[G_CRATE] & 127] / CTL;
+#if CR_FX                                               /* the chorus alone: the delay and the reverb are xf_block's */
+    (void)dly_in;
+    (void)rev_in;
+#else
+    uint32_t dl = delay_samples();
+    int32_t fb = song.g[G_DFDBK] * 230, col = 2000 + song.g[G_DCOLOR] * 240;
+    int32_t dmix = song.g[G_DMIX] * 258, rt;
     if (dl != fx.dly_dl) {                              /* ChoralRoot (fx_smooth): a new delay time crossfades */
         if (fx.dly_dl && fx_smooth) {
             fx.dly_old = fx.dly_xf > DLY_XF / 2u ? fx.dly_old : fx.dly_dl;   /* (mid-fade: the nearer of the two) */
@@ -324,8 +346,12 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         }
         fx.dly_dl = (uint16_t)dl;
     }
+#endif
     for (i = 0; i < n; i++) {
-        int32_t y = 0, x, r;
+        int32_t y = 0, r;
+#if !CR_FX
+        int32_t x;
+#endif
         /* chorus: modulated short delay, 5..15 ms */
         cho_buf[fx.cho_w & (CHO_LEN - 1u)] = (int16_t)clamp(cho_in[i] >> 1, -32768, 32767);
         fx.cho_ph += cinc;
@@ -337,6 +363,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             y += (c0 + (((c1 - c0) * f) >> 8)) << 1;
         }
         fx.cho_w++;
+#if !CR_FX
         /* delay with a low-passed feedback */
         x = dly_buf[(fx.dly_w - dl) & (DLY_LEN - 1u)];
         if (fx.dly_xf) {                                /* from the old tap to the new one, linear */
@@ -349,8 +376,10 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
             (int16_t)clamp((dly_in[i] >> 1) + mulq15(fx.dly_lp, fb), -32768, 32767);
         fx.dly_w++;
         y += mulq15(x << 1, dmix);
+#endif
         wet[i] = y;
     }
+#if !CR_FX
     rt = song.g[G_RTYPE] == 1;
     if (rt != fx.rtype) {                               /* the model changed: the old one's block fades out, */
         int32_t *t = part_buf, g = 65536, d = 65536 / (int32_t)n;   /* its buffers are cleared, the new */
@@ -370,6 +399,7 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
         rev_spring(rev_in, wet, n);
     else
         rev_room(rev_in, wet, n);
+#endif
 }
 
 /* one block of the whole mix (shared with hostsim.c): events -> each part (with its modulation matrix)
@@ -421,7 +451,12 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
 #endif
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
-        int32_t xmax = c > d ? c : d;
+        int32_t xmax;
+#if CR_FX
+        if (fx_off)
+            c = d = r = 0;
+#endif
+        xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
         /* a stereo side (voice.c part_side: VA's SPREAD / USPREAD): DIST works on the mid, the SLICER plays the part
          * mono, the FX layer's mute fades both; the sends take the mid */
@@ -608,6 +643,10 @@ static void mix_block(int32_t *out, uint32_t n)
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
     fx_buses(send_c, send_d, send_r, wet, n);
+#if CR_FX
+    xf_block(send_d, send_r, mix_l, mix_r, n);          /* (cr_fx.c: stereo, into the mix; the FX layer's master
+                                                         * effects and the limiter after it, as the chorus) */
+#endif
     CR_PROF(CRP_FX);
     if (perf) {
         perf_master(out, n);

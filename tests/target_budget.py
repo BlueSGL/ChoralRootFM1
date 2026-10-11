@@ -28,7 +28,10 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
          "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
-         "rev_room", "rev_spring"]                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING
+         "rev_room", "rev_spring",                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING (Felucca's: CR_FX 0)
+         "xf_block", "xf_down", "xf_up", "xd_run", "xr_run"]   # ChoralRoot's delay and reverb (cr_fx.c, CR_FX 1): the
+                                                  # block, the half-band filters (a send down, the wet up), the delay's
+                                                  # loop, the reverb's (xd_run, xr_run: a pass is one half-rate sample)
 # built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,
 # they are skipped; present, checked against these (their budget lines until the engine was retired in 1.0)
 OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_custom": 558,
@@ -38,6 +41,8 @@ OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_
             # .. and without SAMPLE, GRAIN, DRUM (choralroot.c FELUCCA_SAMPLE / GRAIN / DRUM 0: all-synth)
             # .. and without ANALOG (choralroot.c FELUCCA_ANALOG 0, 0.14: the VA replaces it)
             "analog_render": 581,
+            # .. and since 0.18 without Felucca's ROOM / SPRING reverb (choralroot.c CR_FX 1: cr_fx.c's instead)
+            "rev_room": 218, "rev_spring": 126,
             # .. and since 0.18 without PHASE, LOFI, VOICE, TRIO, NOISE (choralroot.c FELUCCA_PHASE / LOFI / VOICE / TRIO /
             # NOISE 0): their budget lines until then
             "phase_render": 77, "lofi_render": 123, "formant_render": 312, "trio_render": 341, "trio_pass": 175,

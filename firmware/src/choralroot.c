@@ -95,6 +95,10 @@
                                   * and at 16 the release tails of perf.sh (c) / (e) cost up to 59 / 62 % of a block
                                   * (8: 40 / 43 %; docs/FM6.md, Polyphony). Still one budget unit a voice */
 #endif
+#ifndef CR_FX
+#define CR_FX 1                  /* the delay and the reverb are ChoralRoot's (cr_fx.c, docs/FX.md: stereo, at half the rate,
+                                  * their parameters global); Felucca's mono delay and ROOM / SPRING are not in the image */
+#endif
 #ifndef CR_CPU1
 #define CR_CPU1 1                /* the bass part's render on the second core (cr_cpu1.h, hal/fm1_cpu1.h, docs/DUALCORE.md):
                                   * started at power-on; if it does not answer, single core with the shared budget */

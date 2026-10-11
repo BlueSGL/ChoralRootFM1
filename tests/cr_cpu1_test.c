@@ -15,6 +15,7 @@
  *    misread is counted and keeps core 1, a second, a fault or a stall gives up), the rails' steps on a mock P33
  *    (hal/fm1_power.h: one step a write, never lower, never above 14 / 4). */
 #define CR_CPU1 1
+#define CR_FX 1                         /* as choralroot.c: ChoralRoot's delay and reverb after the parts (cr_fx.c) */
 #define FELUCCA_UAC 1                   /* the USB capture's six channels (fx.c ua_stage) hashed too */
 #ifndef FELUCCA_VA
 #define FELUCCA_VA 1

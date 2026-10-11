@@ -583,6 +583,10 @@ static void cr_out_init(void)                    /* power-on (the audio ISR may 
     voice_fade_steal = 1;                        /* voice.c: a stolen voice fades out, its new note waits a block */
     fx_smooth = 1;                               /* fx.c: the limiter's gain eased (no audio-rate crackle), the delay's
                                                   * new times crossfaded (no click on a tempo change) */
+#if CR_FX
+    xf_defaults();                               /* cr_fx.c: the delay's and the reverb's parameters (the session's
+                                                  * over them, cr_settings.c css_apply) */
+#endif
     cr_loop_init(&crl);
     crl_stage_busy = 0;
     cr_now_ms = cr_ms_rem = cr_clk_acc = 0;

@@ -57,6 +57,9 @@
 #ifndef FELUCCA_SLICER
 #define FELUCCA_SLICER 1                              /* (as felucca.c; the device unit has it off) */
 #endif
+#ifndef CR_FX
+#define CR_FX 1                                       /* as choralroot.c: ChoralRoot's delay and reverb (cr_fx.c) */
+#endif
 #ifndef CR_CPU1
 #define CR_CPU1 1                                     /* as choralroot.c: the bass part as the second core's job; here the
                                                          * stub core (firmware/src/cr_cpu1.h) runs it when handed */
