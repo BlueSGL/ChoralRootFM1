@@ -119,14 +119,22 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
  * lowest POLY note and MONO / LEGATO / UNISON lead, as the shared budget does. */
 static volatile uint8_t shed_req;
 static uint8_t shed_over;                              /* bit k: the half k halves ago was over 85 % */
+#define HALF_TICKS (HALF_FRAMES * 1000000u / FS * FM1_TICKS_PER_US)   /* a half (2902 us) */
+/* FM1_AUDIO_ACK_LATE 1: the half's pending bit cleared after its render, as every build to 0.18's second did (a
+ * build switch, should a unit want the old order: CR_ACK_LATE=1 ./build.sh). 0: before it, see fm1_alnk0_irq */
+#ifndef FM1_AUDIO_ACK_LATE
+#define FM1_AUDIO_ACK_LATE 0
+#endif
 #define SHED_TICKS ((HALF_FRAMES * 1000000u / FS) * 85u / 100u * FM1_TICKS_PER_US)   /* 85 % of a half */
 static uint32_t shed_count;
 
 /* end of a half: all = its ticks, TIMER5 nested in it included -> the render alone in us. The deadline sees
- * both; shed after 2 overloaded halves in a row (out of line: keeps the ISR's render loops as they were) */
-static __attribute__((noinline)) uint32_t shed_check(uint32_t all)
+ * both, and how far behind its boundary the half started (lag, ChoralRoot: cr_cpu1.h cr_prof_entry; a half that
+ * starts 600 us late and renders 2400 is as late as one of 3000); shed after 2 overloaded halves in a row (out of
+ * line: keeps the ISR's render loops as they were) */
+static __attribute__((noinline)) uint32_t shed_check(uint32_t all, uint32_t lag)
 {
-    shed_over = (uint8_t)(shed_over << 1 | (all > SHED_TICKS));
+    shed_over = (uint8_t)(shed_over << 1 | (all + lag > SHED_TICKS));
     if ((shed_over & 3u) == 3u)
         shed_req = 1;
     return (all - t5_nested_ticks) / FM1_TICKS_PER_US;
@@ -175,8 +183,22 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
     t5_nested_ticks = 0;
     fm1_audio_ack_aux(p);
     if (p & FM1_AUDIO_HALF) {
-        uint32_t half = fm1_audio_free_half(), b, us;
-        int32_t *o = &abuf[half * HALF_WORDS];
+        uint32_t half, b, us, lag, wall;
+        int32_t *o;
+        /* THE PENDING BIT IS CLEARED BEFORE THE RENDER (0.18's third build). Cleared after it, as before, a half
+         * that ended after its boundary took the next boundary's interrupt with it: one bit, set again during the
+         * render, then cleared. Nobody rendered the next half, and the DAC played the one from two halves before
+         * again: 2.9 ms of old sound spliced in, a pop in anything sustained (a reverb tail, a delay's repeats),
+         * once for every half counted late. Cleared here, the boundary that passes during a late render keeps its
+         * interrupt: the ISR runs again as it returns, the late half's last block was written long before the DAC
+         * got to it (the DAC needs block k 726 us x k after the boundary), and nothing is heard until the ISR is
+         * 2.1 ms behind (cr_dbg.stale counts that) */
+#if !FM1_AUDIO_ACK_LATE
+        fm1_audio_ack_half();
+#endif
+        half = fm1_audio_free_half();
+        o = &abuf[half * HALF_WORDS];
+        lag = cr_prof_entry(t0, HALF_TICKS);
         if (shed_req) {
             shed_req = 0;
             shed_voice();
@@ -190,13 +212,16 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
 #endif
             audio_block(o + 2u * b, CTL);
         }
+#if FM1_AUDIO_ACK_LATE
         fm1_audio_ack_half();
+#endif
         cr_prof_half();                                 /* the half's stages (cr_cpu1.h): core 1's wait is in the
                                                          * half's time, so the meter and the shed see it */
         audio_halves++;
         {
             uint32_t all = fm1_ticks() - t0;
-            us = shed_check(all);
+            us = shed_check(all, lag);
+            wall = all;
             if (aw_reset) {                             /* cpu_window took the last second */
                 aw_max_us = aw_sum_us = aw_n = aw_max_all = 0;
                 aw_reset = 0;
@@ -217,9 +242,9 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
         }
         if (fm1_audio_free_half() != half) {
             felucca_dbg.late++;                         /* the DMA moved on while we rendered */
-            cr_prof_whole(us, 1);                       /* (ChoralRoot's worst cases, cr_cpu1.h: which stage) */
+            cr_prof_whole(us, 1, wall, t5_nested_ticks, HALF_TICKS);   /* (ChoralRoot's worst cases, cr_cpu1.h) */
         } else {
-            cr_prof_whole(us, 0);
+            cr_prof_whole(us, 0, wall, t5_nested_ticks, HALF_TICKS);
         }
         felucca_dbg.halves++;
         felucca_dbg.last_us = us;

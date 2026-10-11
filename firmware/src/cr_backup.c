@@ -688,6 +688,13 @@ static void crb_peak(void)
     v[k++] = 0;
     v[k++] = 0;
 #endif
+    /* 0.18's third build: when the ISR got to start (cr_cpu1.h), 30 values */
+    v[k++] = cr_dbg.pk_lat / FM1_TICKS_PER_US;       /* the largest lag of an entry behind its boundary */
+    v[k++] = cr_dbg.pk_wall / FM1_TICKS_PER_US;      /* the largest whole half, TIMER5 nested in it */
+    v[k++] = cr_dbg.pk_t5 / FM1_TICKS_PER_US;        /* .. the most TIMER5 took of one half */
+    v[k++] = cr_dbg.stale;                           /* halves in which the DAC played something old */
+    v[k++] = cr_dbg.pk_t5gap / FM1_TICKS_PER_US;     /* TIMER5's largest gap (100: nothing masked the interrupts) */
+    v[k++] = cr_dbg.pk_t5pc;                         /* .. and where it came back to */
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

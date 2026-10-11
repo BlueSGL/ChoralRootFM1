@@ -268,6 +268,8 @@ def build_app(stub):
         v = os.environ.get(flag)
         if v in ok:
             flags.append(f"-D{flag}={v}")
+    if os.environ.get("CR_ACK_LATE") == "1":      # the audio half's pending bit cleared after the render, as to 0.18's
+        flags.append("-DFM1_AUDIO_ACK_LATE=1")    # second build (firmware/src/audio.c fm1_alnk0_irq)
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')

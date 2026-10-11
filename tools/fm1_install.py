@@ -2137,7 +2137,9 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               "pk_late", "pk_late_stage", "pk_late_us", "pk_halves", "fx_busy_halves",
               "fx_down_avg_us", "fx_down_max_us", "fx_delay_avg_us", "fx_delay_max_us", "fx_reverb_avg_us",
               "fx_reverb_max_us", "fx_up_avg_us", "fx_up_max_us",
-              "flash_erases", "flash_holes", "saves_settings", "saves_session"]
+              "flash_erases", "flash_holes", "saves_settings", "saves_session",
+              # 0.18's third build: when the ISR got to start (firmware/src/cr_cpu1.h cr_prof_entry, cr_prof_t5)
+              "pk_lag_us", "pk_wall_us", "pk_t5_us", "stale_halves", "irq_gap_us", "irq_gap_pc"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 
 
@@ -2187,8 +2189,8 @@ def print_debug(vals, out, stub_only=False, peak=()):
             print(f"{k} {d[k]} (0x{d[k]:08X})", file=out)
     for k in DEBUG_PEAK:
         if k in d:
-            print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else ""),
-                  file=out)
+            print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
+                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else ""), file=out)
     if "pk_block_us" in d and d.get("pk_halves"):
         print(f"worst half since the last --debug: {d['pk_block_us']} us of 2902 ({d['pk_block_us'] * 100 // 2902} %) over "
               f"{d['pk_halves']} halves ({d['pk_halves'] * 128 / 44100:.1f} s); stages tick {d['pk_tick_us']}, part0 "
@@ -2201,6 +2203,13 @@ def print_debug(vals, out, stub_only=False, peak=()):
               f"{d['fx_reverb_avg_us']} / {d['fx_reverb_max_us']}, up {d['fx_up_avg_us']} / {d['fx_up_max_us']}", file=out)
         print(f"flash since power-on: {d['flash_erases']} erases (45 ms of silence each), {d['flash_holes']} of them into a "
               f"sounding output (holes), settings saves {d['saves_settings']}, session saves {d['saves_session']}", file=out)
+    if "stale_halves" in d and d.get("pk_halves"):
+        print(f"the deadline: {d['stale_halves']} halves in which the DAC played something old (the audible ones; a late "
+              f"half alone is not); the ISR started at most {d['pk_lag_us']} us behind its boundary, its longest half "
+              f"took {d['pk_wall_us']} us with TIMER5 nested in it ({d['pk_t5_us']} us of TIMER5 in one half at most)", file=out)
+        print(f"interrupts: TIMER5 (100 us apart) once came {d['irq_gap_us']} us after the one before"
+              + (f": masked for about {d['irq_gap_us'] - 100} us, until 0x{d['irq_gap_pc']:08X} (build/choralroot.dis)"
+                 if d["irq_gap_us"] > 150 else ": nothing masked them for long"), file=out)
     stub_lines(d, out)
     if d.get("ua_open_close_ms"):
         print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "
