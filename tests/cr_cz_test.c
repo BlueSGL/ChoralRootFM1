@@ -160,6 +160,11 @@ int main(void)
     cz_patch_init(raw);
     OK(!memcmp(cz_patch[0].raw, raw, CZ_BYTES), "blob: a bad tone -> the init tone");
 
+    /* ---- the carrier table is the cosine the renderer read per sample ---- */
+    for (k = 0, bad = 0; k < 2048u; k++)
+        bad += CZ_CARRIER[k] != (pd_cos((k << 5) + (k >> 6)) + 32767) >> 1;
+    OK(!bad && NELEM(CZ_CARRIER) == 2048u, "carrier: CZ_CARRIER's 2048 phases are (pd_cos + 32767) >> 1, each");
+
     /* ---- every factory tone renders ---- */
     {
         int32_t pk, mx = 0, mn = 0x7FFFFFFF;

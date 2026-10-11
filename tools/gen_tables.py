@@ -38,7 +38,15 @@ def main(path):
          "#define TABLE_RAM __attribute__((section(\".data.tables\")))   /* RAM, not XIP flash: per-sample lookups */",
          "#endif", ""]
     # (1025 points: SINE[i + 1] needs no wrap; the users mask)
-    L += arr("SINE", "int16_t", [int(round(32767 * math.sin(2 * math.pi * i / 1024))) for i in range(1025)])
+    sine = [int(round(32767 * math.sin(2 * math.pi * i / 1024))) for i in range(1025)]
+    L += arr("SINE", "int16_t", sine)
+    # CZ-1 (cz_native.c cz_native_wave): the chip's carrier at its 2048 phases, (pd_cos((p << 5) + (p >> 6)) + 32767) >> 1
+    # with engines.c's pd_cos and dsp.c's sine_i in integers as the firmware did per sample (tests/cr_cz_test.c compares)
+    def sine_i(ph):
+        i = ph >> 22
+        return sine[i] + (((sine[(i + 1) & 1023] - sine[i]) * ((ph >> 7) & 0x7FFF)) >> 15)
+    L += arr("CZ_CARRIER", "int16_t",
+             [(-sine_i(((((p << 5) + (p >> 6)) & 0xFFFF) << 16) + 0x40000000 & 0xFFFFFFFF) + 32767) >> 1 for p in range(2048)])
     # phase increment for pitch in 1/16 semitone, MIDI 0..127
     inc = []
     for p in range(128 * 16):
