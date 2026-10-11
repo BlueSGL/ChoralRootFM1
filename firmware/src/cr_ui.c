@@ -2834,6 +2834,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             lo = XFP[id].min;
             hi = XFP[id].max;
         }
+        if (c0 == FC_TIME)                        /* Time, synced or free: clockwise is FASTER echoes (a shorter time, a
+                                                   * smaller division; the owner 2026-10-11). The knob alone is
+                                                   * turned round: the stored value, the read-out and the glyph's
+                                                   * spacing are the time's as before */
+            s = -s;
         v = *q + s * (hi - lo > 20 ? 2 : 1);
         *q = (int16_t)(v < lo ? lo : v > hi ? hi : v);
         cu_hot_set(L_FX, knob);

@@ -648,15 +648,19 @@ int main(int argc, char **argv)
             }
         }
         check("pictograms: each draws ink inside its 48 x 36 box and none outside it", inside_all);
-        {   /* room: the far wall's width (from the centre to its left edge on the middle row) shrinks with pct */
-            int32_t w[3], k, x;
+        {   /* room: it opens up with pct (the owner 2026-10-11): on the middle row both the far wall's half width (from
+             * the centre to its left edge) and the mouth's (from the box's left edge inwards to the first ink) grow */
+            int32_t w[3], m[3], k, x;
             for (k = 0; k < 3; k++) {
                 PIC(CR_G_ROOM, k * 127, 128);
                 for (x = BX + BW / 2; x > BX && PX(x, BY + BH / 2) == bg; x--) {}
                 w[k] = BX + BW / 2 - x;
+                for (x = BX; x < BX + BW / 2 && PX(x, BY + BH / 2) == bg; x++) {}
+                m[k] = BX + BW / 2 - x;
             }
-            snprintf(name, sizeof name, "room: the far wall shrinks as SIZE grows (half widths %d %d %d px)", w[0], w[1], w[2]);
-            check(name, w[0] > w[1] && w[1] > w[2]);
+            snprintf(name, sizeof name, "room: opens up as SIZE grows (half widths: the far wall %d %d %d px, the mouth %d %d %d px)",
+                     w[0], w[1], w[2], m[0], m[1], m[2]);
+            check(name, w[0] < w[1] && w[1] < w[2] && m[0] < m[1] && m[1] < m[2] && w[0] >= 4 && w[2] < m[2]);
         }
         {   /* moon: the lit (full colour) pixels grow with pct */
             uint32_t n[3], k, x, y;
