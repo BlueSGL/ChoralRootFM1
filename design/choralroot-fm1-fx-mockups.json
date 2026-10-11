@@ -246,7 +246,7 @@
     },
     "KNOB3": {
      "note": "DECAY",
-     "value": "2.4 S"
+     "value": "3.0 S"
     },
     "KNOB4": {
      "note": "SEND",
@@ -289,9 +289,9 @@
       },
       {
        "label": "Decay",
-       "value": "2.4 s",
+       "value": "3.0 s",
        "glyph": "tail",
-       "pct": 0.378
+       "pct": 0.409
       },
       {
        "label": "Send",
@@ -835,7 +835,7 @@
     },
     "KNOB3": {
      "note": "LOW CUT",
-     "value": "131 HZ"
+     "value": "127 HZ"
     },
     "KNOB4": {
      "note": "WIDTH",
@@ -879,7 +879,7 @@
       },
       {
        "label": "Low cut",
-       "value": "131 Hz",
+       "value": "127 Hz",
        "glyph": "cut",
        "pct": 0.472
       },

@@ -53,7 +53,7 @@ enum { XP_DTIME,                 /* the delay's time, free: 0..127 = 21 .. 1000 
        XP_DSYNC,                 /* 0 free (ms), 1 the tempo's divisions */
        XP_DMODE,                 /* 0 stereo, 1 ping-pong */
        XP_DTONE,                 /* the loop's low-pass: 0..127 = ~400 Hz .. ~9 kHz */
-       XP_DWOW,                  /* the time's wobble: 0..127 = 0 .. 1.8 ms */
+       XP_DWOW,                  /* the time's wobble: 0..127 = 0 .. 2 ms */
        XP_RSIZE,                 /* the lines' lengths: 0..127 = 1/4 .. 1 of XR_LEN */
        XP_RDAMP,                 /* the loop's low-pass: 0 open .. 127 ~600 Hz */
        XP_RDECAY,                /* RT60: 0..126 = 0.3 .. 72 s, 127 "Inf" */

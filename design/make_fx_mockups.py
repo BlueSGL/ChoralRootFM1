@@ -58,9 +58,9 @@ def g(label, value, glyph, pct=None, pct2=None, **kw):
 # (SELECT: Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive); KNOB 4 of an effect's first page is the chord part's
 # SEND into it (what a sound carries). The glyphs tail, pre, cut, width, spread, sync, ping are the firmware's
 # (cr_draw.c cr_picto): the designer does not draw them yet, so the sheet's PNG is stale for these states.
-REVERB_CELLS = [g("Size", "88", "room", 88 / 127), g("Damp", "56", "moon", 1 - 56 / 127), g("Decay", "2.4 s", "tail", 48 / 127),
+REVERB_CELLS = [g("Size", "88", "room", 88 / 127), g("Damp", "56", "moon", 1 - 56 / 127), g("Decay", "3.0 s", "tail", 52 / 127),
                 g("Send", "25", "mix", 0.25)]
-REVERB2_CELLS = [g("Pre-delay", "17 ms", "pre", 16 / 127), g("Mod", "56", "lfo", 0.25, 56 / 127), g("Low cut", "131 Hz", "cut", 60 / 127),
+REVERB2_CELLS = [g("Pre-delay", "17 ms", "pre", 16 / 127), g("Mod", "56", "lfo", 0.25, 56 / 127), g("Low cut", "127 Hz", "cut", 60 / 127),
                  g("Width", "127", "width", 1.0)]
 DELAY_CELLS = [g("Time", "1/8", "echoes", 0.5, 58 / 127), g("Spread", "3:4", "spread", 0.5, 0.5), g("Feedback", "58", "echoes", 0.5, 58 / 127),
                g("Send", "40", "mix", 0.4)]
@@ -92,7 +92,7 @@ S.append(state(
     "Motion: a root or SELECT flips the effect name (the split-flap) and the row's labels and bars change with it, "
     "sliding in from the right; a turned bar fills stripe by stripe.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("SIZE", "88"), "KNOB2": ("DAMP", "56"), "KNOB3": ("DECAY", "2.4 S"), "KNOB4": ("SEND", "25")},
+    encoders={"KNOB1": ("SIZE", "88"), "KNOB2": ("DAMP", "56"), "KNOB3": ("DECAY", "3.0 S"), "KNOB4": ("SEND", "25")},
     screen=scr(knobrow(FX, 0, C_FX, REVERB_CELLS, label="fx · on · 1/2"), foot=FX_FOOT,
                note="the knob row: Reverb big in green over the four cells in the knob colours; the amount green on KNOB 4."),
     chord_block=False,
@@ -137,7 +137,7 @@ S.append(state(
     "the gap, the reverb's wedge), MOD (the lines' slow swing), LOW CUT (the response's corner) and WIDTH (two bars "
     "leaving the centre) on KNOB 4, which is no send here. The label carries the page quietly, as the KEY layer's.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("PRE-DELAY", "17 MS"), "KNOB2": ("MOD", "56"), "KNOB3": ("LOW CUT", "131 HZ"), "KNOB4": ("WIDTH", "127")},
+    encoders={"KNOB1": ("PRE-DELAY", "17 MS"), "KNOB2": ("MOD", "56"), "KNOB3": ("LOW CUT", "127 HZ"), "KNOB4": ("WIDTH", "127")},
     screen=scr(knobrow(FX, 0, C_FX, REVERB2_CELLS, hot=2, label="fx · on · 2/2"), foot=FX_FOOT,
                note="Reverb 2: pre-delay, mod, low cut, width; KNOB 3 just turned (hot)."),
     chord_block=False,
