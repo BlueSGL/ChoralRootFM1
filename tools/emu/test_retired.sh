@@ -53,9 +53,9 @@ has 'record: current' "$OUT/retired_2.log" && ok "run 2: the unit starts, its se
 LC_ALL=C grep -a 'part 0: ' "$OUT/retired_2.log" | head -1 | grep -q 'part 0: FM6 / TINE EP' &&
     ok "run 2: the chord part parked on NOISE comes up on FM6 TINE EP, as a fresh unit" ||
     bad "run 2: the chord part: $(LC_ALL=C grep -a 'part 0: ' "$OUT/retired_2.log" | head -1)"
-has '^load: slot 1 engine 2 (PHASE) retired -> INIT on VA, its sends, ATK, REL' "$OUT/retired_2.log" &&
+has '^load: slot 1 engine 2 (PHASE) retired -> INIT on VA, its ATK, REL' "$OUT/retired_2.log" &&
     has '^sound: part 0 pos 26 ADG' "$OUT/retired_2.log" &&
-    ok "run 2: VA 26 is the PHASE sound ADG: the VA's init sound, a stand-in (its sends, ATK, REL)" ||
+    ok "run 2: VA 26 is the PHASE sound ADG: the VA's init sound, a stand-in (its ATK, REL; the sends are the part's since 0.18)" ||
     bad "run 2: no stand-in: $(LC_ALL=C grep -a '^load:\|^sound: part 0' "$OUT/retired_2.log" | tail -2 | tr '\n' ' ')"
 has '^popup: part 0 26 / ADG / VA ' "$OUT/retired_2.log" && LC_ALL=C grep -a 'part 0: ' "$OUT/retired_2.log" | tail -1 | grep -q 'part 0: VA /' &&
     [ -s "$OUT/retired_standin.ppm" ] &&

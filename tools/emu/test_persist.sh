@@ -254,15 +254,16 @@ grep -q 'kbd: plays notes keyboard full single 2 ' "$OUT/persist_page2_1.log" &&
     ok "KEY page 2 run 2: the three back after a relaunch (UI and engine); B3 a bass note of the left side, F4 the chord part" \
     || bad "KEY page 2 run 2: $(grep '  kbd:' "$OUT/persist_page2_2.log" | head -1)"
 
-# the engine picker's roots (Settings pick_roots, docs/SETTINGS.md): run 1 turns them to "play" in the picker (KNOB 4);
-# run 2 (the same file) opens the picker with them playing
+# the engine picker's roots always play (0.18; until then Settings pick_roots, KNOB 4 in the picker: the byte is
+# reserved now, written 0): run 1 turns KNOB 4 there (nothing) and plays D4; run 2 (the same file) the same
 RFLASH=$OUT/persist_roots_flash.bin
 rm -f "$RFLASH" "$OUT"/persist_roots_1.log "$OUT"/persist_roots_2.log "$OUT"/persist_roots.ppm
 "$EMU" --headless --flash "$RFLASH" --script "$S/persist_roots_set.txt" >"$OUT/persist_roots_1.log" 2>&1 || bad "roots run 1: exit status"
 "$EMU" --headless --flash "$RFLASH" --script "$S/persist_roots_check.txt" >"$OUT/persist_roots_2.log" 2>&1 || bad "roots run 2: exit status"
-grep -q '^picker: roots play' "$OUT/persist_roots_1.log" && grep -q "settings saves 1 " "$OUT/persist_roots_1.log" &&
-    ok "roots run 1: KNOB 4 in the picker: the roots play, saved" || bad "roots run 1: not set / not saved"
-grep -q '^picker: open part 0 .* roots play' "$OUT/persist_roots_2.log" && ! grep -q '^engine: ' "$OUT/persist_roots_2.log" &&
+! grep -q '^picker: roots' "$OUT/persist_roots_1.log" && ! grep -q '^engine: ' "$OUT/persist_roots_1.log" &&
+    grep -q '^expect sound .*: ok' "$OUT/persist_roots_1.log" &&
+    ok "roots run 1: KNOB 4 in the picker does nothing, D4 plays (no engine switch)" || bad "roots run 1: the picker's roots"
+grep -q '^picker: open part 0 ' "$OUT/persist_roots_2.log" && ! grep -q '^engine: ' "$OUT/persist_roots_2.log" &&
     grep -q '^expect sound .*: ok' "$OUT/persist_roots_2.log" &&
     ok "roots run 2: the picker's roots still play after a relaunch (D4 sounded, no engine switch): $OUT/persist_roots.ppm" \
     || bad "roots run 2: $(grep '^picker: open' "$OUT/persist_roots_2.log")"
@@ -354,9 +355,10 @@ sx() { sv "$1" "$2" | cut -d'|' -f"$3"; }
 crl() { dl "$1" 'cr: key' "$2" | sed -n 's/.* perform \([0-9]\) mode \([0-9]\) bass \([0-9]\) (sound \([0-9]*\)) voicing \(-*[0-9]*\) octave \(-*[0-9]*\) .* view \([0-9]\) layer \([0-9]*\) options \([0-9]\).*/perform \1 mode \2 bass \3 sound \4 voicing \5 octave \6 view \7 layer \8 options \9/p'; }
 want_state="voicing 2 octave -1 bass 1 lock 1 latched 44"
 want_cr="perform 1 mode 2 bass 1 sound 18 voicing 2 octave -1 view 0 layer 0 options 0"
-# (the FX block by tag, cr_settings.h CSS_FXP_*: 4, 5 the chorus; 9..17 the delay: 10 its division 6 -> 8 (1/8.), 12 its
-# spread 0 -> 1 (3:4), 13 its feedback 58 -> 52, 15 its mode 1 -> 0 (Stereo), 16 its tone 84 -> 88; 18..24 the reverb)
-want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 37 0 sends 35 45 37 0 par 4=40 5=60 9=80 10=8 11=0 12=1 13=52 14=1 15=0 16=88 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127"
+# (the FX block by tag, cr_settings.h CSS_FXP_*: 4, 5 the chorus; 26..29 the bass part's sends (reverb 10); 25, 10..17
+# the delay: 10 its division 6 -> 8 (1/8.), 12 its spread 0 -> 1 (3:4), 13 its feedback 58 -> 52, 15 its mode 1 -> 0
+# (Stereo), 16 its tone 70 -> 74; 18..24 the reverb; amt: the chord part's sends, the delay's turned 25 -> 37)
+want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 37 0 sends 35 45 37 0 par 4=40 5=60 26=10 27=0 28=0 29=0 25=91 10=8 11=0 12=1 13=52 14=1 15=0 16=74 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127"
 c1=$(dl "$S1" 'session chord:' 2); b1=$(dl "$S1" 'session bass:' 2)
 [ "$(sx "$S1" 2 6)" = "$want_state" ] && [ "$(crl "$S1" 2)" = "$want_cr" ] && [ "$(dl "$S1" 'session fx:' 2)" = "$want_fx" ] &&
     echo "$c1" | grep -q 'FM6 / TINE EP edited 1 kind 1 crc [0-9A-F]* level 92 pan 0' &&
@@ -376,7 +378,7 @@ grep -aq '^session: applied (parts 1 1, voicing 2, octave -1, bass 1, lock 1 lat
     ok "session run 2: both parts' unsaved edits are back, the same patch checksums, 'edited', Level and Pan ($(echo "$c1" | sed 's/.*crc //') / $(echo "$b1" | sed 's/.*crc //'))" \
     || bad "session run 2: the parts: $(dl "$S2" 'session chord:' 1) / $(dl "$S2" 'session bass:' 1) want $c1 / $b1"
 [ "$(dl "$S2" 'session fx:' 1)" = "$want_fx" ] &&
-    ok "session run 2: the FX layer in full: Delay's second page picked, its division (1/8.), spread (3:4), feedback (52), mode (Stereo) and tone (88) as turned, the reverb's as they were, the sends 35 45 37 0 as left (not the preset's again)" \
+    ok "session run 2: the FX layer in full: Delay's second page picked, its division (1/8.), spread (3:4), feedback (52), mode (Stereo) and tone (74) as turned, the reverb's as they were, both parts' sends as left (the chord part's 35 45 37 0, the bass part's reverb 10)" \
     || bad "session run 2: fx: $(dl "$S2" 'session fx:' 1)"
 dl "$S2" 'loop: state' 1 | grep -q 'state 1 cap 0 layers 1 events 2 .* slot 3 played 0 .* used 004 ' &&
     grep -aq '^expect silence at 800 ms: ok' "$S2" && dl "$S2" 'mods: down' 1 | grep -q 'down 44 active 44 voices free' &&

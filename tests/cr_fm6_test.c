@@ -278,7 +278,8 @@ int main(void)
                "an ANALOG record: on the VA with CUT RES ATK carried (MIX: the VA patch's own scale), an added preset of the VA's pool (%d %d %d %d %d, %u %u %u)", t->eng_req, t->p[P_E0], t->p[P_E0 + 1], t->p[P_E0 + 4], t->p[P_E0 + 6], (unsigned)cb_rec_engine(slot), (unsigned)cb_bound(slot), (unsigned)pool_bound_slot(ENGI_VA, 11));
         }
         {   /* a record of an engine retired in 0.18 (PHASE 2, LOFI 3, VOICE 5, TRIO 6, NOISE 11: a 0.17 slot): the VA's
-             * pool, added whatever it binds, the VA's init sound with the record's sends and ATK / REL (a stand-in);
+             * pool, added whatever it binds, the VA's init sound with the record's ATK / REL (a stand-in; its sends are
+             * not loaded: since 0.18 the sends are the part's, here 61 62 63 64 before and after);
              * the record itself untouched. SAMPLE's (4, a Felucca slot): the plain init sound, as before */
             static const uint8_t FIVE[] = {2, 3, 5, 6, 11};
             uint32_t q, good = 0;
@@ -295,25 +296,26 @@ int main(void)
                 pr.note[15] = CB_BIND_MARK;
                 pr.flags[15] = 2;                    /* (its engine's second factory preset then) */
                 up_put(slot, &pr);
+                t->p[P_DIST] = 61; t->p[P_CHOR] = 62; t->p[P_DLY] = 63; t->p[P_REV] = 64;   /* the part's sends */
                 cu_load(t, ENGI_FM6, 0, 0);
                 cu_load_user(t, slot, 0);
                 back = *up_rec(slot);
                 good += !eng_ok(FIVE[q]) && t->eng_req == ENGI_VA && t->p[P_E0] == ENG_VA.edit[0].def &&
-                        t->p[P_E0 + 6] == 31 && t->p[P_E0 + 7] == 77 && t->p[P_DIST] == 5 && t->p[P_CHOR] == 11 &&
-                        t->p[P_DLY] == 22 && t->p[P_REV] == 33 && t->user == slot + 1u &&
+                        t->p[P_E0 + 6] == 31 && t->p[P_E0 + 7] == 77 && t->p[P_DIST] == 61 && t->p[P_CHOR] == 62 &&
+                        t->p[P_DLY] == 63 && t->p[P_REV] == 64 && t->user == slot + 1u &&
                         cb_rec_engine(slot) == ENGI_VA && cb_bound(slot) == PF_NONE &&
                         pool_pos_slot(ENGI_VA, slot) > pool_nf(ENGI_VA) && back.engine == FIVE[q] &&
                         !memcmp(&back, &pr, sizeof pr);
             }
-            OK(good == sizeof FIVE, "a PHASE / LOFI / VOICE / TRIO / NOISE record (retired in 0.18): the VA's init sound with its sends, ATK, REL; an added preset of the VA's pool; the record kept (%u of 5)", (unsigned)good);
+            OK(good == sizeof FIVE, "a PHASE / LOFI / VOICE / TRIO / NOISE record (retired in 0.18): the VA's init sound with its ATK, REL, the part's sends untouched by a factory or a user load; an added preset of the VA's pool; the record kept (%u of 5)", (unsigned)good);
             {
                 up_rec_t sr = *up_rec(slot);
                 sr.engine = 4;
                 up_put(slot, &sr);
                 cu_load(t, ENGI_FM6, 0, 0);
                 cu_load_user(t, slot, 0);
-                OK(t->eng_req == ENGI_VA && t->p[P_E0 + 6] == ENG_VA.edit[6].def && t->p[P_REV] == TP[P_REV].def,
-                   "a SAMPLE record (a Felucca slot): the VA's plain init sound, as before");
+                OK(t->eng_req == ENGI_VA && t->p[P_E0 + 6] == ENG_VA.edit[6].def && t->p[P_REV] == 64,
+                   "a SAMPLE record (a Felucca slot): the VA's plain init sound, as before (the part's sends stay)");
             }
             OK(NENG_SHOWN == 6 && eng_vis(0) == ENGI_FM6 && eng_vis(1) == ENGI_QUAD && eng_vis(2) == ENGI_VA &&
                eng_vis(3) == ENGI_CZ && eng_vis(4) == 7u && eng_vis(5) == ENGI_PHYS,

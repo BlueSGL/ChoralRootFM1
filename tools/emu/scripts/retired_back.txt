@@ -3,7 +3,9 @@
 wait 300
 btn EDIT down
 wait 500
-btn A4
+knob SELECT -12              # the engine picker: to its first engine,
+wait 200
+knob SELECT +4               # then the fifth (SELECT steps the engines; the roots play)
 wait 300
 btn EDIT up
 btn OCT+

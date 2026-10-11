@@ -36,11 +36,14 @@ static int transport_busy(void)                   /* no flash erase while Felucc
     fm1_irq_on();
     return busy;
 }
-/* ui.c param_kept: the part's own parameters, which a sound load leaves (the mix, the arp, the sequencer) */
+/* ui.c param_kept: the part's own parameters, which a sound load leaves (the mix, the arp, the sequencer) and, since
+ * 0.18 (the owner, 2026-10-12: "I don't think we should save the sends with the presets ... I can switch through the
+ * presets and experience the effect on each instrument"), the part's four effect sends (P_DIST P_CHOR P_DLY P_REV):
+ * they are the PART's, as its Level and Pan are; what a preset or a saved sound holds in those fields is not loaded */
 static int param_kept(uint32_t i)
 {
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||
-           (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC;
+           (i >= P_SLCR && i <= P_SLDEPTH) || i == P_CHRD || i == P_VOIC || (i >= P_DIST && i <= P_REV);
 }
 static void load_pat16(track_t *t, const uint8_t *note, const uint8_t *flags) { (void)t; (void)note; (void)flags; }
 static void load_grid16(track_t *t, const uint8_t *hit, const uint8_t *acc) { (void)t; (void)hit; (void)acc; }

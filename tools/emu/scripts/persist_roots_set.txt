@@ -1,9 +1,14 @@
-# test_persist.sh, roots run 1: EDIT held (the engine picker), KNOB 4 +1: its white roots play (Settings pick_roots
-# 0, "picker: roots play"), OCT-; the record saved past the quiet time; quit
+# test_persist.sh, roots run 1: EDIT held (the engine picker), KNOB 4 +1 (nothing since 0.18: the roots always play
+# there; until then it switched them, Settings pick_roots), D4: it sounds, no engine switched; OCT-; quit
 wait 500
 btn EDIT 600
 wait 300
 knob KNOB4 +1
+wait 300
+btn D4 down
+wait 400
+expect sound
+btn D4 up
 wait 300
 btn OCT-
 wait 3000

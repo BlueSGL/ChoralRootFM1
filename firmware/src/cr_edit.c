@@ -1207,7 +1207,8 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
                 cs.fx_on = 1;
                 cu_fx_apply();
             }
-    if (v != v0)
+    if (v != v0 && !(r.a >= P_DIST && r.a <= P_REV))   /* (the FX group's four are the part's sends since 0.18, as the
+                                                        * MIX group's Level and Pan: not an edit of the sound) */
         cu_edited(ce.part);
     cp_value(d, v, b, sizeof b);
     cu_trace("param: part %u %s %s %d -> %d (%s)\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],

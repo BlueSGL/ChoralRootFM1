@@ -1,5 +1,5 @@
-# test_persist.sh, roots run 2 (the same flash file): EDIT held: the picker opens with its roots playing ("picker:
-# open .. roots play"); D4 sounds (no engine switched); OCT-; quit
+# test_persist.sh, roots run 2 (the same flash file): EDIT held: the picker's roots play as ever; D4 sounds (no
+# engine switched); OCT-; quit
 wait 500
 btn EDIT 600
 wait 300

@@ -672,7 +672,8 @@ static void crs_capture(cr_settings_t *s)
     s->loop_slot = cs.loop_slot;
     s->loop_rec = (uint8_t)(CRS_LOOP_REC(cs.loop_mode, cs.loop_keys) | (cs.key_play ? CRS_KEY_PLAY : 0u) |
                             (cs.lock_keep ? CRS_LOCK_KEEP : 0u) | (cs.lock_push ? CRS_LOCK_PUSH : 0u));
-    s->pick_roots = cs.pick_roots;
+    s->pick_roots = 0;                             /* (reserved since 0.18: the engine picker's roots always play; written
+                                                    * as "play", so an older firmware reading this record plays too) */
     s->usb_in = cs.usb_in;
     s->usb_level = cs.usb_fixed;
     s->split_pc = cs.split;
@@ -701,9 +702,10 @@ static void crs_capture(cr_settings_t *s)
 static const uint8_t CSS_FXE[CU_NFX] = {CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE};
 static const uint8_t CSS_FXS[CU_NFXP] = {CSS_FXE_REVERB, CSS_FXE_REVERB2, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DELAY2,
                                          CSS_FXE_DRIVE};
-static const struct { uint8_t tag, x, id; } CSS_FXG[] = {
+static const struct { uint8_t tag, x, id; } CSS_FXG[] = {      /* x: 0 song.g, 1 xfp[], 2 the bass part's p[] */
     {CSS_FXP_CRATE, 0, G_CRATE}, {CSS_FXP_CDEPTH, 0, G_CDEPTH},
-    {CSS_FXP_XD_TIME, 1, XP_DTIME}, {CSS_FXP_XD_DIV, 1, XP_DDIV}, {CSS_FXP_XD_SPREAD, 1, XP_DSPREAD},
+    {CSS_FXP_BS_REV, 2, P_REV}, {CSS_FXP_BS_CHO, 2, P_CHOR}, {CSS_FXP_BS_DLY, 2, P_DLY}, {CSS_FXP_BS_DRIVE, 2, P_DIST},
+    {CSS_FXP_XD_TIME2, 1, XP_DTIME}, {CSS_FXP_XD_DIV, 1, XP_DDIV}, {CSS_FXP_XD_SPREAD, 1, XP_DSPREAD},
     {CSS_FXP_XD_RATIO, 1, XP_DRATIO}, {CSS_FXP_XD_FDBK, 1, XP_DFDBK}, {CSS_FXP_XD_SYNC, 1, XP_DSYNC},
     {CSS_FXP_XD_MODE, 1, XP_DMODE}, {CSS_FXP_XD_TONE, 1, XP_DTONE}, {CSS_FXP_XD_WOW, 1, XP_DWOW},
     {CSS_FXP_XR_SIZE, 1, XP_RSIZE}, {CSS_FXP_XR_DAMP, 1, XP_RDAMP}, {CSS_FXP_XR_DECAY, 1, XP_RDECAY},
@@ -711,11 +713,15 @@ static const struct { uint8_t tag, x, id; } CSS_FXG[] = {
     {CSS_FXP_XR_WIDTH, 1, XP_RWIDTH}};
 _Static_assert(NELEM(CSS_FXG) <= CSS_NFXP, "the FX block holds every global parameter");
 _Static_assert(CSS_FXP_DCOLOR == 8 && CSS_FXP_XD_TIME == 9 && CSS_FXP_XR_SIZE == 18 && CSS_FXP_XR_WIDTH == 24 &&
-               CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5, "the session's FX tags are never renumbered");
-static int16_t *css_fxg_p(uint32_t i) { return CSS_FXG[i].x ? &xfp[CSS_FXG[i].id] : &song.g[CSS_FXG[i].id]; }
+               CSS_FXP_XD_TIME2 == 25 && CSS_FXP_BS_REV == 26 && CSS_FXP_BS_DRIVE == 29 && CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5, "the session's FX tags are never renumbered");
+static int16_t *css_fxg_p(uint32_t i)
+{
+    return CSS_FXG[i].x == 2u ? &trk[CR_PART_BASS].p[CSS_FXG[i].id] : CSS_FXG[i].x ? &xfp[CSS_FXG[i].id] : &song.g[CSS_FXG[i].id];
+}
 static int css_fxg_ok(uint32_t i, int v)
 {
-    return CSS_FXG[i].x ? v >= XFP[CSS_FXG[i].id].min && v <= XFP[CSS_FXG[i].id].max
+    return CSS_FXG[i].x == 2u ? v >= 0 && v <= 127
+         : CSS_FXG[i].x ? v >= XFP[CSS_FXG[i].id].min && v <= XFP[CSS_FXG[i].id].max
                         : v >= GP[CSS_FXG[i].id].min && v <= GP[CSS_FXG[i].id].max;
 }
 static void css_fxg_defaults(void)                 /* a new unit's effects (cr_out.c's and params.c's) */
@@ -725,6 +731,7 @@ static void css_fxg_defaults(void)                 /* a new unit's effects (cr_o
     for (i = 0; i < NELEM(CSS_FXG); i++)
         if (!CSS_FXG[i].x)
             song.g[CSS_FXG[i].id] = GP[CSS_FXG[i].id].def;
+    cu_sends_default();                            /* (the parts' sends: the chord part's amounts, the bass part's) */
 }
 
 /* a part's sound as it is -> its record (as the engine picker's snapshot, cr_ui.c cu_pick_begin) */
@@ -828,9 +835,8 @@ static void css_apply(const cr_session_t *x)
             cs.fx_sel = CU_FXP[i].fx;
             cs.fx_page = CU_FXP[i].page;
         }
-    if (got[0] && cs.fx_on)
-        cu_sends_to_fx();                          /* (the restored sound's own sends; FX off: they are 0 there) */
-    for (i = 0; i < CU_NFX; i++)
+    for (i = 0; i < CU_NFX; i++)                   /* (the chord part's sends; the bass part's: CSS_FXG above, over what
+                                                    * its record held) */
         if (x->fx.amt[CSS_FXE[i]] != CSS_FX_NONE)
             cs.fx_amt[i] = x->fx.amt[CSS_FXE[i]];
     cu_fx_apply();
@@ -959,7 +965,6 @@ static void cr_settings_load(void)
     cs.key_play = (uint8_t)CRS_KEY_KEYS(s);
     cs.lock_keep = (uint8_t)((s->loop_rec & CRS_LOCK_KEEP) != 0);
     cs.lock_push = (uint8_t)((s->loop_rec & CRS_LOCK_PUSH) != 0);
-    cs.pick_roots = s->pick_roots;
     cs.usb_in = s->usb_in;
     cs.usb_fixed = s->usb_level;
     fx_usb_fixed = cs.usb_fixed;                   /* (USB Record: crs_usb_apply at boot, before usb_start) */
@@ -979,9 +984,7 @@ static void cr_settings_load(void)
         cs.pool_pos[0][i] = crs_pool_get(s, 0, (unsigned)k);
         cs.pool_pos[1][i] = crs_pool_get(s, 1, (unsigned)k);
     }
-    if (crs_sound(0, s->chord_sound))              /* the chord part's sound (its own sends become the FX amounts) */
-        cu_sends_to_fx();
-    else
+    if (!crs_sound(0, s->chord_sound))             /* the chord part's sound (the sends are the part's: they stay) */
         s->chord_sound = CRS_SOUND_DEFAULT;
     cs.fx_on = s->fx_on;
     cu_fx_apply();
@@ -1037,22 +1040,16 @@ static int crs_write(void)                         /* the captured state -> flas
 
 /* something sounds or is about to: a voice of the parts (release tails too), a chord the engine holds or latches,
  * a scheduled note (arp, strum), or the master output (the FX tails) above CRS_QUIET_PEAK over the scope's last
- * 512 samples (~23 ms). No flash erase then: it would cut the audio (see the top).
- * The FX tail ALONE holds a save back for CRS_TAIL_MS at most (0.18: the reverb's DECAY goes to 72 s and "Inf", cr_fx.c;
- * with Felucca's 2 s room the tail was always over in time): after that the save goes through it (one 46 ms hole in a
- * tail that has rung for half a minute), or a unit left on a frozen reverb would never save anything. At the
- * reverb's default (3 s) the tail is under the threshold 2 .. 4 s after the last note: no hole */
-#define CRS_TAIL_MS 30000u
-static uint32_t crs_voice_ms;                      /* the last time a voice, a held chord or a scheduled note was there */
+ * 512 samples (~23 ms). No flash erase then: it would cut the audio (see the top). There is no way round it: a
+ * reverb at DECAY Inf (cr_fx.c) keeps the output above the floor and so keeps the settings and the session from being
+ * written until it is turned down or the effects are switched off (the first 0.18 build wrote after 30 s anyway: a
+ * 46 ms hole in the tail, heard on the unit as a drop-out; 73 DEBUG's flash_holes counts erases into a sounding
+ * output: 0 is the rule). What is lost if the power is cut meanwhile: the changes since the last quiet moment */
 static int crs_sounding(void)
 {
     uint32_t i;
-    if (cr_parts_busy() || cr_snap.voices || cr_snap.pending) {
-        crs_voice_ms = fm1_ms;
+    if (cr_parts_busy() || cr_snap.voices || cr_snap.pending)
         return 1;
-    }
-    if ((uint32_t)(fm1_ms - crs_voice_ms) >= CRS_TAIL_MS)
-        return 0;
     for (i = 0; i < SCOPE_N; i++)
         if (scope_buf[i] > CRS_QUIET_PEAK || scope_buf[i] < -CRS_QUIET_PEAK)
             return 1;
@@ -1137,7 +1134,6 @@ static void cr_settings_reset(void)
     trk[CR_PART_CHORD].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);   /* (cr_ui_init's) */
     trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);
     cu_pool_load(0, ENGI_FM6, cu_pool_find(ENGI_FM6, "TINE EP"));
-    cu_sends_to_fx();
     cu_pool_load(1, ENGI_VA, cu_pool_find(ENGI_VA, "DEEP SUB"));
     cs.bass_sound = 0;                             /* ALGORITHM at OFF: the bass off */
     cs.bass_on = 0;

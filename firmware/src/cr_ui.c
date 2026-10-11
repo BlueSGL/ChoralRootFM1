@@ -186,12 +186,12 @@ static const char *cu_preset_name(uint32_t e, uint32_t p)
 }
 static int cu_kept(uint32_t i) { return param_kept(i); }
 
-/* engine e's preset pi into part t, as ui.c set_engine_of + apply_preset_to: the sound only, its sends; the part's
+/* engine e's preset pi into part t, as ui.c set_engine_of + apply_preset_to: the sound only (not its sends: they are
+ * the part's, cu_kept); the part's
  * notes are released (panic_req: cr_out.c events_block, the audio side). bass: P_VOICE MONO, else POLY (a chord on a
  * mono preset) */
 static void cu_load(track_t *t, uint32_t e, uint32_t pi, int bass)
 {
-    static const uint8_t FX_DEF[4] = {0, 24, 28, 36};
     const engine_t *en = ENGINES[e % NENGINES];
     const preset_t *pr;
     uint32_t i;
@@ -215,8 +215,6 @@ static void cu_load(track_t *t, uint32_t e, uint32_t pi, int bass)
     t->p[P_REL] = pr->env[3];
     t->p[P_ED_FLT] = pr->fenv;
     t->p[P_VOICE] = bass ? V_MONO : V_POLY;
-    for (i = 0; i < 4u; i++)
-        t->p[P_DIST + i] = (int16_t)(pr->fx[i] ? pr->fx[i] - 1 : FX_DEF[i]);
     fm6_track_loaded(t);
     panic_req |= (uint8_t)(1u << (uint32_t)(t - trk));
     fm1_irq_on();
@@ -305,7 +303,7 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
         char msg[24];                             /* (cu.msg.text holds 23 characters) */
 #if defined(CR_TRACE) && CR_TRACE
         printf("load: slot %u engine %u%s%s%s retired -> INIT on %s%s\n", (unsigned)k + 1u, (unsigned)r->engine,
-               was ? " (" : "", was ? was : "", was ? ")" : "", en->name, carry ? ", its sends, ATK, REL" : "");
+               was ? " (" : "", was ? was : "", was ? ")" : "", en->name, carry ? ", its ATK, REL" : "");
 #endif
         fm1_irq_off();
         t->eng_req = CB_RETIRED_POOL;
@@ -314,9 +312,8 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
                 t->p[i] = TP[i].def;
         for (i = 0; i < 8u; i++)
             t->p[P_E0 + i] = en->edit[i].def;
-        if (carry) {                              /* a stand-in for a sound of the five: its sends, its ATK / REL */
-            for (i = P_DIST; i <= P_REV; i++)
-                t->p[i] = v[i];
+        if (carry) {                              /* a stand-in for a sound of the five: its ATK / REL (its sends
+                                                   * until the sends became the part's) */
             t->p[P_E0 + 6] = (int16_t)clamp(v[P_ATK], en->edit[6].min, en->edit[6].max);
             t->p[P_E0 + 7] = (int16_t)clamp(v[P_REL], en->edit[7].min, en->edit[7].max);
         }
@@ -498,7 +495,6 @@ static struct {
     uint8_t save_act;                     /* SAVE held's picker */
     uint8_t save_pending;                 /* slot + 1: saved once the loop stops (no flash erase while it plays) */
     uint16_t loop_used;                   /* bit k: slot k holds a loop in flash */
-    uint8_t pick_roots;                   /* the engine picker: 1 the white roots choose engines, 0 they play */
     uint8_t usb_in, usb_fixed;            /* Options > USB Record (on: presented to the computer), USB Level */
     uint8_t dualcore;                     /* Options > Dual Core (v12): 1 On; read at power-on only (cr_c1_off) */
 } cs;
@@ -545,21 +541,34 @@ static void cu_set_tempo(int32_t bpm)
     xf_bpm = cs.bpm;                              /* (the delay's sync, cr_fx.c: the whole range) */
     cr_post(CRE_TEMPO, 0, 0, cs.bpm);
 }
+/* THE SENDS ARE THE PARTS' (0.18, the owner 2026-10-12): each part has its own send into the reverb, the chorus and the
+ * delay, and its drive, set once and kept through every sound and engine change and a power-off. The chord part's:
+ * cs.fx_amt[] (the FX layer's "Send" cells, KNOB 4, CC 91 / 93 / 94; the session's fx.amt[]); the bass part's: its
+ * P_DIST .. P_REV as they stand (its editor's FX group, CC 91 / 93 / 94 on the bass channel; the session's
+ * CSS_FXP_BS_*). No load writes them (cr_bank.c param_kept); a preset's or a saved sound's send fields are ignored
+ * on load and written as the part's on save (the record's format is as it was) */
 static void cu_fx_apply(void)                     /* the sends of part 0: the amounts, or 0 with FX off */
 {
     uint32_t i;
     for (i = 0; i < CU_NFX; i++)
         trk[CR_PART_CHORD].p[CU_FX[i].send] = (int16_t)(cs.fx_on ? cs.fx_amt[i] : 0u);
-    fx_off = !cs.fx_on;                           /* (fx.c: FX off closes every part's sends: the bass part's too, whose
-                                                   * sound keeps its own values) */
+    fx_off = !cs.fx_on;                           /* (fx.c: FX off closes every part's sends: the bass part's too, which
+                                                   * keeps its values) */
 }
-static void cu_sends_to_fx(void)                  /* part 0's own sends become the FX amounts */
+/* a new unit's, and Options > Reset Settings': what the power-on sounds were made with (FM6 TINE EP: reverb 35,
+ * chorus 45, delay 25, no drive; VA DEEP SUB: a little reverb, 10) */
+static void cu_sends_default(void)
 {
+    static const uint8_t DEF[CU_NFX] = {35, 45, 25, 0};          /* CU_FX's order: Reverb, Chorus, Delay, Drive */
     uint32_t i;
-    for (i = 0; i < CU_NFX; i++)
-        cs.fx_amt[i] = (uint8_t)trk[CR_PART_CHORD].p[CU_FX[i].send];
+    for (i = 0; i < CU_NFX; i++) {
+        cs.fx_amt[i] = DEF[i];
+        trk[CR_PART_BASS].p[CU_FX[i].send] = (int16_t)(CU_FX[i].send == P_REV ? 10 : 0);
+    }
     cu_fx_apply();
 }
+static void cu_sends_to_fx(void) { cu_fx_apply(); }   /* (after a load of part 0; until 0.18 its own sends became the
+                                                       * FX amounts here: now the part's stay) */
 
 /* the layers' knob row (cr_screen.h CR_K_KNOBROW: FX, PERF, BASS): the cell just turned stays hot CU_HOT_MS (the
  * editor's CE_HOT_MS) instead of a popup; a layer opened or another item picked clears it */
@@ -654,8 +663,8 @@ static void cu_fx_val(int32_t id, char *out, uint32_t n)
             }
         }
         break;
-    case XP_RPRE: cu_fx_unit(out, (uint32_t)v * 24u * 1000u / XF_FS2, " ms", n); break;
-    case XP_RLOW: cu_fx_unit(out, xf_lowcut_k((uint32_t)v) * 1071u / 10000u, " Hz", n); break;
+    case XP_RPRE: cu_fx_unit(out, xf_pre_ms((uint32_t)v), " ms", n); break;
+    case XP_RLOW: cu_fx_unit(out, xf_lowcut_hz((uint32_t)v), " Hz", n); break;
     default: cu_int(out, v, 0, n); break;
     }
 }
@@ -2117,8 +2126,7 @@ static void cu_pick_begin(void)
     cpk.has_blob = d && d->blob_get && d->blob_set && d->blob_size && d->blob_size <= sizeof cpk.blob;
     if (cpk.has_blob)
         d->blob_get(t, cpk.blob);
-    cu_trace("picker: open part %u %s crc %04x roots %s\n", (unsigned)cpk.part, cpk.snd.name, (unsigned)cu_snd_crc(t),
-             cs.pick_roots ? "engines" : "play");
+    cu_trace("picker: open part %u %s crc %04x\n", (unsigned)cpk.part, cpk.snd.name, (unsigned)cu_snd_crc(t));
 }
 
 /* the preview ends: keep (OCT+, EDIT, another layer) or cancel (OCT-, HOME: the snapshot back) */
@@ -2653,11 +2661,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
         } else if (knob == 1) {                    /* INIT */
             cu_sound_init(ce.part);
             cpk.changed = 1;
-        } else if (knob == 3) {                    /* the white roots: engines <-> play (Settings: pick_roots) */
-            cs.pick_roots ^= 1u;
-            cu_message(cs.pick_roots ? "roots: engines" : "roots: play", CR_COL_WHITE);
-            cu_trace("picker: roots %s\n", cs.pick_roots ? "engines" : "play");
-        }
+        }                                          /* (KNOB 3, KNOB 4: nothing. Until 0.18 KNOB 4 switched the white roots
+                                                    * between choosing engines and playing; the owner, 2026-10-12: "I
+                                                    * don't see any case in which I would want to scroll through presets
+                                                    * and not be able to immediately play them": they always play, SELECT
+                                                    * steps the engines) */
         break;
     case L_LOOP:                                   /* the PLAY menu: QUANTIZE COUNT-IN LEVEL KEYS */
         if (knob == 0) {
@@ -2873,11 +2881,11 @@ static void cu_mod_release(uint32_t k)
 }
 
 /* the root keys belong to layer l (its map), else they play: PERF and FX play the chord so a mode or an effect is
- * heard at once (SELECT picks there: docs/PRESETS.md "Also in this pass"), the engine picker with its roots off
- * plays the preview */
+ * heard at once (SELECT picks there: docs/PRESETS.md "Also in this pass"), the engine picker plays the preview
+ * (always, since 0.18: its roots chose engines until then) */
 static int cu_layer_keys(uint32_t l)
 {
-    return l && l != L_PERF && l != L_FX && l != L_LOCK && !(l == L_EDIT && !cs.pick_roots) &&
+    return l && l != L_PERF && l != L_FX && l != L_LOCK && l != L_EDIT &&
            !(l == L_LOOP && !cs.loop_keys) && !(l == L_KEY && cs.key_play);
 }   /* (the PLAY menu with Keys = Play, the KEY layer with keys: play: they play, docs/LOOPER-MODES.md) */
 
@@ -4560,8 +4568,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
             eng[k] = ENGINES[cu_engine_at(k, 0)]->name;
         cu_picker(s, eng, n, (uint32_t)cu_layer_sel(L_EDIT), ce.part ? CR_COL_ORANGE : CR_COL_WHITE,
                   ce.part ? "bass engine \267 KNOB 1 its presets" : "engine \267 KNOB 1 its presets",
-                  cs.pick_roots ? "roots: engines \267 OCT-: cancel \267 OCT+: ok"
-                                : "roots: play \267 OCT-: cancel \267 OCT+: ok");
+                  "SELECT: engine \267 OCT-: cancel \267 OCT+: ok");
         cu_cpy(s->value, psnd[ce.part].name, sizeof s->value);
         if (psnd[ce.part].edited)
             cu_cat(s->value, "*", sizeof s->value);
@@ -5428,7 +5435,7 @@ static void cr_ui_init(void)
     cu_pool_load(0, ENGI_FM6, cu_pool_find(ENGI_FM6, "TINE EP"));   /* the power-on sounds: FM6 TINE EP, the bass VA
                                                                     * DEEP SUB (ALGORITHM at OFF: BASS tap brings it;
                                                                     * ANALOG SUB BASS until 0.14) */
-    cu_sends_to_fx();
+    cu_sends_default();                           /* (both parts' sends: the session's over them) */
     cu_pool_load(1, ENGI_VA, cu_pool_find(ENGI_VA, "DEEP SUB"));
     ce.page = CP_ENV;
     ce.col = -1;
@@ -5441,7 +5448,6 @@ static void cr_ui_init(void)
     cs.loop_count_in = 1;
     cs.loop_level = 100;
     cs.metro_vol = 70;
-    cs.pick_roots = 1;
     cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
     cs.usb_in = 1;                                /* (the record's, cr_settings_load; usb.c got it at boot) */
     cu_route();

@@ -105,7 +105,8 @@ typedef struct {
     /* version 2 */
     uint8_t metro_on, metro_sig, metro_vol, loop_slot;   /* the click, 4/4 3/4 6/8, its level 0..100, slot 0..9 */
     /* version 3 */
-    uint8_t pick_roots;                              /* the engine picker's white roots: 1 engines, 0 they play */
+    uint8_t pick_roots;                              /* RESERVED since 0.18 (the engine picker's white roots: 1 engines, 0
+                                                      * they play: they always play now; written 0, read and ignored) */
     /* version 4. loop_rec (v8): the looper's record mode and PLAY-menu keys, CRS_LOOP_MODE / CRS_LOOP_KEYS (the last
      * free byte: before v8 it was rsv_usb, v4's usb_out (Options > USB Audio Out, the playback removed in v5: 0
      * since; a 0.14 dev build's version-6 record kept FM TONE's chord place there, read once by the version-7
@@ -190,9 +191,9 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
  * when `version` is not its CSS_FX_VERSION (bump it only if this struct's layout changes). A parameter whose meaning
  * or range changes gets a NEW tag (the old one retired, never reused); room for 24 parameters and 8 effects */
 #define CSS_FX_VERSION 1u
-#define CSS_NFXP 24
+#define CSS_NFXP 24                     /* (22 used) */
 #define CSS_NFXE 8
-#define CSS_FX_NONE 0xFFu               /* amt: not stored (the sound's own send) */
+#define CSS_FX_NONE 0xFFu               /* amt: not stored (the default send) */
 enum { CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE,              /* effect tags (amt's index, sel) */
        CSS_FXE_REVERB2, CSS_FXE_DELAY2 };                                          /* .. sel only (0.18): the effect's
                                                                                     * second page in the FX layer */
@@ -204,7 +205,11 @@ enum { CSS_FXP_NONE, CSS_FXP_RSIZE, CSS_FXP_RDAMP, CSS_FXP_RTYPE, CSS_FXP_CRATE,
        CSS_FXP_XD_TIME, CSS_FXP_XD_DIV, CSS_FXP_XD_SPREAD, CSS_FXP_XD_RATIO, CSS_FXP_XD_FDBK, CSS_FXP_XD_SYNC,
        CSS_FXP_XD_MODE, CSS_FXP_XD_TONE, CSS_FXP_XD_WOW,                           /* 9..17: the delay */
        CSS_FXP_XR_SIZE, CSS_FXP_XR_DAMP, CSS_FXP_XR_DECAY, CSS_FXP_XR_PRE, CSS_FXP_XR_MOD, CSS_FXP_XR_LOW,
-       CSS_FXP_XR_WIDTH };                                                         /* 18..24: the reverb */
+       CSS_FXP_XR_WIDTH,                                                           /* 18..24: the reverb */
+       CSS_FXP_XD_TIME2,                 /* 25: the delay's free time, 16 .. 740 ms (the delay at the full rate: 9's
+                                          * 21 .. 1000 ms is retired with the half-rate line) */
+       CSS_FXP_BS_REV, CSS_FXP_BS_CHO, CSS_FXP_BS_DLY, CSS_FXP_BS_DRIVE };         /* 26..29: the BASS part's sends (the
+                                          * chord part's are amt[]): the sends are the parts', not the sounds' */
 typedef struct { uint8_t tag, rsv; int16_t v; } css_fxp_t;
 typedef struct {
     uint8_t version, n, sel, on_rsv;    /* CSS_FX_VERSION, entries of par[] used, the FX layer's picked effect (its

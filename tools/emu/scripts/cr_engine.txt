@@ -1,11 +1,11 @@
-# ChoralRoot: EDIT held (printed EDIT, locked open: OCT+ keeps, OCT- cancels) + A4 (the fifth white root: WHEEL, of FM6 FM TONE VA CZ-1 WHEEL PHYS;
-# PHASE's until 0.18) switches the chord sound's engine (TINE EP on
-# FM6 -> WHEEL, the envelope and sends kept); KNOB 1 steps its presets; then MAJ + D4 (compared with cr_dmaj.wav)
+# ChoralRoot: EDIT held (printed EDIT, locked open: OCT+ keeps, OCT- cancels) + SELECT +4 (the fifth engine: WHEEL, of FM6 FM TONE VA CZ-1 WHEEL
+# PHYS; until 0.18 the white roots chose the engine there: they play now) switches the chord sound's engine (TINE EP on
+# FM6 -> WHEEL, the part's sends kept); KNOB 1 steps its presets; then MAJ + D4 (compared with cr_dmaj.wav)
 wait 300
 btn EDIT down
 wait 500
 shot build/emu/test/cr_engine_before.ppm
-btn A4
+knob SELECT +4
 wait 300
 shot build/emu/test/cr_engine_switched.ppm
 btn EDIT up

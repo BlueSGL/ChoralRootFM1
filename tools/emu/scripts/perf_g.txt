@@ -7,7 +7,7 @@ btn ENV up
 wait 300
 btn EDIT 600                  # EDIT held: the engine picker (the bass part)
 wait 200
-btn G4                        # the fourth white root: CZ-1 (FM6 FM TONE VA CZ-1)
+knob SELECT +3                # the engine picker: FM6 -> CZ-1 (SELECT steps the engines; the roots play)
 wait 200
 btn OCT+                      # kept
 wait 200

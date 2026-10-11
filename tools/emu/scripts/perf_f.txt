@@ -7,7 +7,7 @@ btn ENV up
 wait 300
 btn EDIT 600                  # EDIT held: the engine picker (the bass part)
 wait 200
-btn F4                        # the third white root: VA (FM6 FM TONE VA)
+knob SELECT +2                # the engine picker: FM6 -> VA (SELECT steps the engines; the roots play)
 wait 200
 btn OCT+                      # kept
 wait 200

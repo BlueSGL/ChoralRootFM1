@@ -27,7 +27,7 @@ btn ENV up
 wait 300
 btn EDIT 600
 wait 200
-btn F4                        # the third white root: VA
+knob SELECT +2                # the engine picker: FM6 -> VA (SELECT steps the engines; the roots play)
 wait 200
 btn OCT+                      # kept
 wait 200

@@ -140,5 +140,5 @@ dump                          # 15: keyboard chords, 2 events, 1 of the bass sid
 wait 500
 dump                          # 16: D plays: chord 0 bass 1, the bass stream 1 note, the main one none
 btn PLAY
-wait 2500
+wait 6000                     # (the settings' save waits for the delay's and the reverb's tail: docs/FX.md)
 dump                          # 17: silent

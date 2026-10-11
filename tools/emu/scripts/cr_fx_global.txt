@@ -1,13 +1,15 @@
-# ChoralRoot: the effects are global, a sound carries its sends (docs/FX.md, the owner's rule of 2026-10-11). In the FX
-# layer the reverb's Size and Decay are turned (KNOB 1 +5, KNOB 3 +4) and the delay's Feedback (Delay 1, KNOB 3 -4);
-# the first dump. Then PRESETS +3 (another factory sound) and the second dump: the effects' parameters are the same
-# values, the sends ("amt") are the new sound's own. FX tapped off, a chord played with the bass on: no part sends
-# (the third dump's "sends" are 0); tapped on again.
+# ChoralRoot: the effects AND the sends are the instrument's, no sound load touches them (docs/FX.md, the owner's rules
+# of 2026-10-11 and -12). In the FX layer the reverb's Send, Size and Decay are turned (KNOB 4 +3, KNOB 1 +5, KNOB 3
+# +4) and the delay's Feedback (Delay 1, KNOB 3 -4); the first dump. Then PRESETS +3 (another factory sound) and OPT +
+# PRESETS +2 (another engine) and the second dump: the effects' parameters and the sends ("amt") are the same values.
+# FX tapped off: no part sends (the third dump's "sends" are 0); tapped on again.
 wait 300
 btn FX down
 wait 500
 btn FX up
 wait 300
+knob KNOB4 +3
+wait 100
 knob KNOB1 +5
 wait 100
 knob KNOB3 +4
@@ -21,6 +23,12 @@ wait 300
 dump
 knob PRESETS +3
 wait 600
+btn GLO down
+wait 100
+knob PRESETS +2               # OPT + PRESETS: the engine (FM6 -> FM TONE -> VA), on OPT's release
+wait 100
+btn GLO up
+wait 1500
 dump
 btn FX
 wait 300

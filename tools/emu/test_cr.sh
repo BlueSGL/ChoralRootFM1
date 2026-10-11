@@ -301,7 +301,7 @@ differ cr_fx_row cr_fx_row_delay "Reverb / Delay rows differ"
 has '^fx: knob 4 Delay send' "$L" && differ cr_fx_row_delay cr_fx_row_amount "KNOB 4: Delay's send cell changed (hot): $OUT/cr_fx_row_amount.ppm"
 differ cr_fx_row_chorus cr_fx_row_drive_off "Drive with FX off (the send reads off): $OUT/cr_fx_row_drive_off.ppm"
 
-echo "the effects are global, a sound carries its sends (docs/FX.md)"
+echo "the effects and the sends are the instrument's: no sound load touches them (docs/FX.md)"
 run cr_fx_global
 L="$OUT/cr_fx_global.log"
 fxl() { grep -a '^  session fx:' "$L" | sed -n "$1p"; }
@@ -311,8 +311,10 @@ fxsnd() { fxl "$1" | sed -n 's/.* sends \([0-9 ]*\) par.*/\1/p'; }
 has '^fx: knob 1 Reverb size 98' "$L" && has '^fx: knob 3 Reverb decay 60' "$L" && has '^fx: knob 3 Delay feedback 50' "$L" &&
     fxpar 1 | grep -q ' 13=50 .* 18=98 .* 20=60 ' &&
     ok "the reverb's Size and Decay and the delay's Feedback turned: in the session's FX block (tags 18, 20, 13)" || bad "the FX parameters: $(fxpar 1)"
-[ -n "$(fxpar 1)" ] && [ "$(fxpar 1)" = "$(fxpar 2)" ] && [ "$(fxamt 1)" != "$(fxamt 2)" ] && [ "$(fxamt 2)" = "$(fxsnd 2)" ] &&
-    ok "PRESETS +3 (another sound): every effect parameter as it was; the sends are the new sound's own ($(fxamt 1) -> $(fxamt 2))" \
+[ -n "$(fxpar 1)" ] && [ "$(fxpar 1)" = "$(fxpar 2)" ] && [ "$(fxamt 1)" = "47 45 25 0" ] && [ "$(fxamt 2)" = "$(fxamt 1)" ] &&
+    [ "$(fxamt 2)" = "$(fxsnd 2)" ] && has '^sound: part 0 pos 4 BRASS' "$L" && has '^sound: part 0 engine VA' "$L" &&
+    fxpar 2 | grep -q ' 26=10 27=0 28=0 29=0 ' &&
+    ok "PRESETS +3 (another sound), OPT + PRESETS +2 (another engine): every effect parameter and the sends as they were ($(fxamt 2); the bass part's: reverb 10)" \
     || bad "a sound load and the effects: par $(fxpar 1) -> $(fxpar 2), amt $(fxamt 1) -> $(fxamt 2), sends $(fxsnd 2)"
 [ "$(fxsnd 3)" = "0 0 0 0" ] && [ "$(fxamt 3)" = "$(fxamt 2)" ] && [ "$(fxsnd 4)" = "$(fxamt 2)" ] && [ "$(fxpar 3)" = "$(fxpar 1)" ] &&
     ok "FX tapped off: the sends closed, the amounts and the effects' parameters kept; on again: the sends back" \
@@ -748,18 +750,18 @@ d=$(grep '^deep: .* CUT ' "$L" | sed -E 's/.* CUT ([0-9]+) -> ([0-9]+).*/\1 \2/'
 echo "EDIT held: the engine picker as a preview (cancel / keep), its roots, PRESETS in the editor"
 run cr_editor_pick --wav "$OUT/cr_editor_pick.wav"
 L="$OUT/cr_editor_pick.log"
-o1=$(sed -n 's/^picker: open part 0 LUSH PAD crc \([0-9a-f]*\) .*/\1/p' "$L" | sed -n 1p)
+o1=$(sed -n 's/^picker: open part 0 LUSH PAD crc \([0-9a-f]*\)$/\1/p' "$L" | sed -n 1p)
 c1=$(sed -n 's/^picker: cancel part 0 -> LUSH PAD crc \([0-9a-f]*\)$/\1/p' "$L" | sed -n 1p)
 has '^preset: part 0 -> VA / ' "$L" && [ -n "$o1" ] && [ "$o1" = "$c1" ] &&
     ok "KNOB 1 previewed a preset, OCT- cancelled: LUSH PAD restored (crc $c1): $OUT/cr_pick_preview.ppm, $OUT/cr_pick_cancel.ppm" \
     || bad "picker cancel: open '$o1' cancel '$c1'"
 cmp -s "$OUT/cr_pick_editor.ppm" "$OUT/cr_pick_cancel.ppm" && ok "OCT-: back in the editor as it was" || bad "not back in the editor: $OUT/cr_pick_cancel.ppm"
 c2=$(sed -n 's/^picker: cancel part 0 -> LUSH PAD crc \([0-9a-f]*\)$/\1/p' "$L" | sed -n 2p)
-has '^picker: roots play' "$L" && has '^expect sound .*: ok' "$L" && has '^picker: roots engines' "$L" &&
+! has '^picker: roots' "$L" && has '^expect sound .*: ok' "$L" && has '^expect silence .*: ok' "$L" &&
     has '^engine: part 0 -> FM6' "$L" && [ "$c2" = "$o1" ] &&
-    ok "KNOB 4: the roots play (D4 sounded, no engine), again: engines (D4: FM6); OCT-: the VA patch back (crc $c2): $OUT/cr_pick_roots_play.ppm" \
+    ok "the picker's roots play (D4 sounded; KNOB 4 changes nothing there since 0.18); SELECT -2: FM6; OCT-: the VA patch back (crc $c2): $OUT/cr_pick_roots_play.ppm" \
     || bad "picker roots / engine cancel (crc '$c2')"
-[ "$(grep -c '^engine: part 0' "$L")" = 1 ] && ok "the roots off: no engine switched by D4" || bad "roots off switched an engine"
+[ "$(grep -c '^engine: part 0' "$L")" = 1 ] && ok "no engine switched by D4 in the picker (one switch: SELECT's)" || bad "a root switched an engine"
 grep '^layer: open 5' "$L" | sed -n 3p | grep -q . && has '^picker: keep part 0 ' "$L" &&
     ok "PRESETS in the editor: the picker previewing the next place of the pool, OCT+ kept it: $OUT/cr_pick_presets.ppm $OUT/cr_pick_kept.ppm" || bad "PRESETS in the editor"
 grep '^picker: keep' "$L" | grep -qv 'LUSH PAD' && ok "kept: $(grep '^picker: keep' "$L" | sed 's/^picker: //')" || bad "kept the old sound"

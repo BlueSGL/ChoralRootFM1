@@ -10,7 +10,7 @@
 wait 300
 btn EDIT down
 wait 400
-btn E4
+knob SELECT +1               # the engine picker: FM6 -> FM TONE (SELECT steps the engines; the roots play)
 wait 300
 btn EDIT up
 btn OCT+                      # the picker stays open after a hold: OCT+ keeps the sound

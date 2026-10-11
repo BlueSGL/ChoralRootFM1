@@ -5,7 +5,7 @@
 wait 300
 btn EDIT down
 wait 500
-btn A4
+knob SELECT +4               # the fifth engine (SELECT steps the engines; the roots play)
 wait 300
 btn EDIT up
 btn OCT+
