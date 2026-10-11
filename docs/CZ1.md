@@ -147,7 +147,9 @@ The fifth chord row is VIBRAPHONE rather than BELLS: BELLS has no DCA sustain an
 estimate, avg / worst block of the 2.9 ms budget): **33 % / 43 %** (VA's (f): 30 % / 39 %; FM PAD (b): ~25 % / 30 %);
 no block over 80 %. Under 60 %: CZ-1 keeps the shared 8 voices (no `poly` cap). `tests/va_levels.c cz`: ~34 % with
 SUB BASS. The host cost (`tests/regress.c`, one part, 8 notes): 1757..2487 instructions a sample (JET ROAR the
-heaviest; the VA's MORPH PAD 2697, FM6's DRAWBARS 1920).
+heaviest; the VA's MORPH PAD 2697, FM6's DRAWBARS 1920). Since 0.18's render (below): 799..1264 (INIT TONE, JET ROAR), 44..57 %
+less for every tone of eight sounding notes; `tests/cpu_baseline.txt` is rewritten (every other entry 32..44 lower: the
+master and the mix; FM6's were stale by ~210 before, not by this).
 
 `./build.sh` (against the same tree with `FELUCCA_CZ=0`): XIP 320348 -> 345472 B (55.1 -> 59.4 %: the 64 tones 9216 B
 and the code); RAM 79512 -> 79640 B (80.9 -> 81.0 %); POOL 303160 -> 311300 B (88.1 -> 90.5 %, +8140: the tone store
