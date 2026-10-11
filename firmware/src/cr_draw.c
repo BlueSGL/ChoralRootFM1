@@ -127,6 +127,8 @@ static void cr_text_fit(int32_t x, int32_t y, const char *s, uint32_t px, int bo
 #define CR_THIN 330                      /* .. the column: 8 % (Q12; cr_gfx.c resamples down to 1/16) */
 #define CR_SLIDE_MS 160u                 /* a picker's slide */
 #define CR_FILL_MS 30u                   /* a meter: a stripe every 30 ms */
+#define CR_FILL_MAX 14u                  /* .. more than 14 to light (a pool's meter: up to 32): all of them in the 420
+                                          * ms of 14, so the last preset's meter is full inside the popup's 900 ms */
 #define CR_INTRO_MS 220u                 /* power-on: each band slides in, 90 ms after the one above */
 #define CR_INTRO_GAP 90u
 #define CR_INTRO_NAME 300u               /* .. the name lands from 300 ms, over 150 ms */
@@ -183,6 +185,8 @@ static void cr_frame(const cr_screen_t *s, uint32_t t, cr_frame_t *fr)
     }
     if (s->kind == CR_K_METER && (s->anim & CR_A_FILL)) {
         uint32_t a = cr_filled(s, s->pct_from), b = fr->filled, n = a < b ? b - a : a - b, done = t / CR_FILL_MS;
+        if (n > CR_FILL_MAX)                                       /* a long way: in the time of CR_FILL_MAX stripes */
+            done = t < CR_FILL_MAX * CR_FILL_MS ? t * n / (CR_FILL_MAX * CR_FILL_MS) : n;
         if (done < n) {
             fr->busy = 1;
             fr->filled = (uint8_t)(a < b ? a + done : a - done);
@@ -2304,6 +2308,16 @@ static void cr_send(uint32_t m, uint32_t y)
 
 /* the next cr_draw draws and blits the whole screen (after something else drew on it, a palette change) */
 static void cr_draw_invalidate(void) { cr_dc.force = 1; }
+
+/* the screen off (cr_ui.c cr_ui_draw): the whole panel black, in one fill (lcd.c: it waits for the last strip's
+ * transfer first, and sends from its own buffer). Black pixels with the backlight on is all the "off" there is: the
+ * backlight's pin also keeps the key matrix alive (hal/fm1_lcd_hw.h). Nothing of the cache holds after it: the next
+ * cr_draw (the wake) draws and blits every strip whole */
+static void cr_draw_black(void)
+{
+    lcd_fill(0, 0, 240, 240, 0);
+    cr_dc.force = 1;
+}
 
 /* the strips (bit k) holding pixels the ring's progress covers at one fraction and not the other (Q8): the band's
  * rows over the angles between the two tips, widened by the samples' reach (cr_ring_draw) and two pixels */

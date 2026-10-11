@@ -74,8 +74,7 @@ SAFE MODE, so you can save a backup first. Only if SAFE MODE itself crashes twic
 stays black and the FM-1 is in update mode: open the installer and press Install, it finishes the write. The same on
 purpose, whatever state the firmware is in: **hold OCT- (alone) while switching on**, three flashes, open the
 installer, Install (or switch off and on to start the firmware again: nothing was written). The OCT- gesture is new
-in 0.16 and, as of this writing, its reading of the key at power-on is still being confirmed on hardware.
-<!-- CONFIRM: rescue key -->
+in 0.16.
 One long flash instead of three: switch off for 10 seconds and try once more; one long flash again means no update
 loader is stored (it is kept from the unit's last install on) and the FM-1 is the USB disk "WL82 UBOOT1.00" until it
 is switched off and on.

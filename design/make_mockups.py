@@ -579,7 +579,7 @@ S.append(state(
     "does the same for the bass part's engine (00 = OFF before its pool). SAVE: Overwrite or Save as new.",
     held=["MAJ"], lit=["E4", "G#4", "B4"],
     encoders=IDLE_ENC | {"PRESETS": "05 FM PAD", "KNOB4": "40"},
-    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "FM6 · 05/26", "col": C_CHORD, "pct": 5 / 26, "segments": 26}, note="PRESETS turned: the place in the engine's pool huge, the preset's name under it, the engine and the place over the pool's size; the stripe meter is the pool."),
+    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "FM6 · 05/25", "col": C_CHORD, "pct": 5 / 25, "segments": 25}, note="PRESETS turned: the place in the engine's pool huge, the preset's name under it, the engine and the place over the number of its presets (INIT, 00, is not counted); the stripe meter is the pool, a stripe per preset."),
 ))
 
 # 19 ------------------------------------------------------------------------------ panic

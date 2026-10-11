@@ -95,6 +95,7 @@ static void emu_fw_exit(void)
 }
 
 #define EMU_RELEASE_MS 9u            /* hal/fm1_input.h: a release needs ~9 ms open (FM1_DEB_RELEASE) */
+static uint32_t emu_pa2_ms;          /* ms PA2 was high since power-on (emu_hooks.h pa2: the matrix dead; the dump) */
 static uint32_t in_btn, in_key;      /* the debounced state the tick delivers */
 static uint32_t btn_ms[32], key_ms[32];/* ms each went down */
 static int32_t master_knob = 512 * 16;
@@ -151,14 +152,19 @@ void emu_fw_init(int demo)
 /* the 1 ms timer: what fm1_timer5_irq / fm1_input_tick give the main loop */
 void emu_fw_tick(uint32_t ms)
 {
-    uint32_t b, k, i, down;
+    uint32_t b, k, i, down, dead;
     fm1_irq_off();
+    dead = emu_hal.pa2;
     if (emu_sim)
         emu_sim_us = ms * 1000u;
     if ((int32_t)(ms - fm1_ms) > 0)
         fm1_ms = ms;
     b = emu_hal.buttons | __atomic_exchange_n(&emu_hal.buttons_tap, 0u, __ATOMIC_SEQ_CST);
     k = emu_hal.keys | __atomic_exchange_n(&emu_hal.keys_tap, 0u, __ATOMIC_SEQ_CST);
+    if (dead) {                                   /* PA2 high (emu_hooks.h): the 595 chain is dead, every row reads */
+        b = k = 0;                                /* open: no key, no button (a held one is let go), no knob step */
+        emu_pa2_ms++;
+    }
     down = b & ~in_btn;
     for (i = 0; i < EMU_NBTN; i++) {
         uint32_t m = 1u << i;
@@ -185,7 +191,7 @@ void emu_fw_tick(uint32_t ms)
     fm1_in.notes = in_key;
     for (i = 0; i < EMU_NENC; i++) {
         int32_t s = __atomic_exchange_n(&emu_hal.enc[i], 0, __ATOMIC_SEQ_CST);
-        if (s)
+        if (s && !dead)
             __atomic_fetch_add(&host_enc[i], s, __ATOMIC_SEQ_CST);
     }
     fm1_irq_on();
@@ -342,8 +348,11 @@ void emu_fw_dump(void)
     printf("  boot: %s reset %s failed %u pending %u prev_stage %u\n", bootguard_mode_name(bootguard.mode),
            bootguard_class_name(bootguard.cls), (unsigned)bootguard.failed, (unsigned)bootguard.pending,
            (unsigned)felucca_dbg.prev_stage);
-    printf("  lcd: screen %s, %u writes, %u on/off commands\n", emu_hal.lcd_dark ? "off" : "on",
-           (unsigned)emu_hal.lcd_writes, (unsigned)emu_hal.lcd_power_cmds);
+    printf("  lcd: screen %s, %u writes\n", cu.screen_off ? "off (a black frame, nothing drawn)" : "on",
+           (unsigned)emu_hal.lcd_writes);        /* (cr_ui.c's screen off: the panel itself stays on and lit) */
+    printf("  pa2: %s, high for %u ms since power-on (hal/fm1_lcd_hw.h)\n",   /* (emu_hooks.h pa2) */
+           emu_hal.pa2 ? "HIGH: the backlight off, no key, button or knob read, no LED lit"
+                       : "low: the backlight, the key matrix and the LEDs alive", (unsigned)emu_pa2_ms);
     printf("  flash: %s, %u writes, settings saves %u (record: %s)\n", emu_flash_path[0] ? emu_flash_path : "RAM only",
            (unsigned)emu_flash_writes, (unsigned)crs_saves, crs_last_rc == 1 ? "current" : crs_last_rc == 2 ? "migrated" : "defaults");
     printf("  voices: given up %u (budget fades + overload sheds %u), own voices taken for a new note %u\n",

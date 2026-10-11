@@ -1,21 +1,25 @@
 # ChoralRoot: presets per engine (docs/PRESETS.md; design/choralroot-fm1-preset-screens.png). tools/emu/test_cr.sh reads
 # the "popup:", "sound:", "engine pick:" and "save:" lines.
 # 1. PRESETS turns inside the chord part's engine's pool only, INIT at 00, wrapping: from TINE EP (FM6 01) -1: 00 INIT,
-#    -1: 25 PIANO (the end), +6: 05 FM PAD ("05" / "FM PAD" / "FM6 . 05/26").
+#    -1: 25 PIANO (the end), +6: 05 FM PAD ("05" / "FM PAD" / "FM6 . 05/25": the pool's 25 presets, INIT not counted).
+#    The meter: a stripe per preset, none lit on INIT, 25 of 25 on PIANO, 5 on FM PAD.
 # 2. OPT held + PRESETS +2 (past FM TONE): the engine picker (VA, "25 presets"); OPT released: VA 01 LUSH PAD; PRESETS +3: VA 04; OPT +
 #    PRESETS -1: FM6, back on 05 FM PAD (remembered per engine); +1: the VA, back on 04; -1: FM6 05 again.
 # 3. SAVE on FM PAD (factory, not edited): the dialog, Save as new by default; OCT+: the naming screen (FM6 26, the
-#    pool's next place); A D G, OCT+: U01, FM6 26; PRESETS -1 +1: 25 PIANO, 26 ADG (the pool has 27 now).
+#    pool's next place); A D G, OCT+: U01, FM6 26; PRESETS -1 +1: 25 PIANO, 26 ADG (the pool has 26 presets now).
 # 4. PRESETS +3: 02 FM BELL; SAVE, KNOB 1 -1: Overwrite, OCT+: a record bound to FM BELL (U02), the number and the
 #    name kept; PRESETS +1 -1: 02 FM BELL with the mark.
 # 5. SAVE, SAVE held 1 s: "reset to factory?", OCT+: U02 deleted, the factory FM BELL back at 02 (no mark).
 # 6. 31 Saves as new fill the 32 slots; the next one: "no free slot".
+# 7. FM6's pool is 57 presets long now, its meter 32 stripes: PRESETS +1: 00 INIT (none lit), +1: 01 (one), -2: 57, the
+#    last (every one), -1: 56 (31: all of them only on the last).
 wait 500
 knob PRESETS -1
 wait 300
 shot build/emu/test/cr_presets_init.ppm
 knob PRESETS -1
-wait 300
+wait 600
+shot build/emu/test/cr_presets_last.ppm
 knob PRESETS +6
 wait 300
 shot build/emu/test/cr_presets_meter.ppm
@@ -64,7 +68,7 @@ wait 1500
 knob PRESETS -1
 wait 300
 knob PRESETS +1
-wait 300
+wait 600
 shot build/emu/test/cr_presets_new.ppm
 knob PRESETS +3
 wait 1500
@@ -350,6 +354,19 @@ btn OCT+
 wait 100
 shot build/emu/test/cr_presets_full.ppm
 btn OCT-
-wait 300
+wait 1500
+knob PRESETS +1
+wait 600
+shot build/emu/test/cr_presets_long_init.ppm
+knob PRESETS +1
+wait 600
+shot build/emu/test/cr_presets_long_first.ppm
+knob PRESETS -2
+wait 600
+shot build/emu/test/cr_presets_long_last.ppm
+knob PRESETS -1
+wait 600
+shot build/emu/test/cr_presets_long_before.ppm
+wait 600
 dump
 quit

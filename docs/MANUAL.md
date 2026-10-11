@@ -94,7 +94,7 @@ change. **OCT-** closes the layer (so does HOME). All the layer buttons work thi
 a hold opens its layer. [Layers](#5-layers) has the rules.
 
 **Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place,
-`02 / FM BELL / FM6 · 02/26`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
+`02 / FM BELL / FM6 · 02/25`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
 (FM6, FM TONE, VA, CZ-1 and seven more). Let go of OPT and the engine you stopped on is loaded.
 
 **Add the bass.** Tap **BASS** (printed ENV). A bass note now plays under every chord, and `Bass` shows at the top
@@ -188,8 +188,9 @@ In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four va
 The battery level shows only on the Options pages, at the top right.
 
 After three minutes without a key, button, knob or incoming MIDI message the logo comes back, and after ten the
-screen switches off (the lights, the looper and MIDI keep running). Any key, button, knob or MIDI message wakes it
-and does its normal job at the same time.
+screen goes black, so that nothing stays on it long enough to leave a mark. Its backlight stays on, so in a dark
+room a black screen may still glow a little. The lights, the looper and MIDI keep running. Any key, button, knob or
+MIDI message wakes it and does its normal job at the same time.
 
 ### The lights
 
@@ -358,7 +359,7 @@ Time (300, 400, 500 or 600 ms).
 
 The bass is a second, monophonic part with its own sound. It is **off every time you switch on**.
 
-- **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/26`), or
+- **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/25`), or
   `00 / off`.
 - **ALGORITHM** turns through off (`00 off`) and then the sounds of the bass part's engine. Its first sound is
   `00 INIT`, the engine's plain starting sound.
@@ -587,11 +588,13 @@ Every engine has one list, its **pool**:
 - then the factory presets;
 - then the sounds you added.
 
-<img src="manual/sound-popup.png" width="240" alt="The sound read-out: 02, FM BELL, FM6 · 02/26">
+<img src="manual/sound-popup.png" width="240" alt="The sound read-out: 02, FM BELL, FM6 · 02/25, two of the 25 stripes lit">
 
 **PRESETS** turns through the pool of the chord sound's engine and wraps round. The read-out is the place, the name,
-and `FM6 · 02/26`: the engine, the place and the size of the pool. A small square after the name marks a factory
-preset you have saved over. **ALGORITHM** does the same for the bass, with `00 off` in front of the pool.
+and `FM6 · 02/25`: the engine, the place and the number of presets in the pool (`00 INIT` is not counted). The
+stripes under it are the presets: none is lit on INIT, all of them on the last preset. A small square after the name
+marks a factory preset you have saved over. **ALGORITHM** does the same for the bass, with `00 off` in front of the
+pool.
 
 **OPT + PRESETS** changes the chord sound's engine: hold OPT, turn PRESETS until the engine you want is in the
 middle (the screen shows how many presets it has), let go. You land on the sound you last used in that engine.
@@ -971,8 +974,6 @@ From 0.16 on, ChoralRoot checks at every start that the firmware was written com
 2. Some of the key lights flash **three short times** and the screen stays black. The FM-1 is in update mode.
 3. Open the installer and press **Install** again. It finishes the write.
 
-<!-- CONFIRM: interrupted update (BOOT-SAFETY.md device plan, steps 6 to 10) -->
-
 If the computer side merely stopped while the FM-1 stayed on, the FM-1 is still in update mode: replug the cable and
 press Install again.
 
@@ -987,10 +988,8 @@ because the part that does the checking is itself being written then.
 | **OCT- and OCT+ held while switching on** | the panel calibration (below). Let go as soon as the screen says `let go` |
 | **OCT- and OCT+ held for 5 s while ChoralRoot runs** | after 2 s a red countdown (`update mode: let go to cancel`); at 5 s the FM-1 goes to the chip's own USB boot: a black screen, and the computer shows a disk named `WL82 UBOOT1.00`. The installer cannot use that mode. Switch off and on to start ChoralRoot again |
 
-Holding OCT- alone while switching on is new in 0.16. As of this writing, the way the FM-1 reads that key in the
-first moments after power-on is still being confirmed on hardware, so if ChoralRoot simply starts with OCT- held,
-that is the open point and not a fault of your unit. <!-- CONFIRM: rescue key -->
-Recovery after an interrupted update does not depend on the key.
+Holding OCT- alone while switching on is new in 0.16. Hold it until the lights have flashed. Recovery after an
+interrupted update does not depend on the key.
 
 **One long flash instead of three** means the FM-1 went to the chip's USB boot (the `WL82 UBOOT1.00` disk) instead of
 update mode. Switch it off for 10 seconds and try once more: a second OCT- start straight after a first one ends
@@ -1062,7 +1061,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | A setting did not survive switching off | settings are written a moment after the instrument falls quiet, never while a loop plays | stop the loop, wait a second or two |
 | The bass level, or a part's Level or Pan, is back to normal | they are not stored | set them again after switching on |
 | Every note sounds doubled and louder | Raw Chord Sound is On with no performance mode | Options > Raw Chord Sound: Off |
-| The screen shows the logo, or is dark | three minutes, or ten, without input | touch anything |
+| The screen shows the logo, or is black | three minutes, or ten, without input | touch anything |
 | `Safe mode` on the top line | SAFE MODE | see [SAFE MODE](#safe-mode) |
 | The computer shows no audio input | USB Record is Off | Options > USB Record: On |
 | The FM-1 drops off USB for a second | USB Record was changed (`USB RECONNECTING`) | wait |

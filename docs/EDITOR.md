@@ -260,7 +260,7 @@ the VA's), the `edited` flag and the pool entry it came from (its place in the p
   the all-synth firmware). A root switches the sound's engine, keeping its envelope and sends;
 - KNOB 1 (and PRESETS) steps the engine's **pool**, the same list PRESETS turns outside the editor (docs/PRESETS.md: 00
   INIT, the factory presets, each replaced by the user's record bound to it, the user's added presets), loaded for
-  preview; the meter is PRESETS' ("05 / FM PAD / FM6 · 05/26"), its bar **jumps** to the value (no fill animation,
+  preview; the meter is PRESETS' ("05 / FM PAD / FM6 · 05/25"), its bar **jumps** to the value (no fill animation,
   that popup only). There are no separate "templates": the factory presets are the pool's;
 - KNOB 2 inits the sound (the pool's 00);
 - **KNOB 4** switches the roots' job: `roots: engines` (they pick engines) or `roots: play` (they play the previewed

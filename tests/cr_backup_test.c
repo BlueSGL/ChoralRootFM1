@@ -682,41 +682,57 @@ int main(void)
 #endif
     }
 
-    /* ---- 74 SCREEN: off until SysEx on or a key / button / knob; MIDI in does not wake it ---- */
+    /* ---- 74 SCREEN: off (one black frame, the backlight on: PA2 is never raised, it also keeps the key matrix alive,
+     * hal/fm1_lcd_hw.h) until SysEx on or a key / button / knob; MIDI in does not wake it ---- */
     {
-        uint32_t w;
+        uint32_t w, i, ink;
+#define T_INK() do { for (i = 0, ink = 0; i < 240u * 240u; i++) ink += emu_hal.lcd[i] != 0; } while (0)
         fm1_ms += 20u;
         cr_ui_draw();
-        CHECK(!emu_hal.lcd_dark, "SCREEN: lit before");
+        T_INK();
+        CHECK(!cu.screen_off && ink > 1000u, "SCREEN: on before");
         t_begin(74);
         t_b(0);
         a = t_send(&n);
         CHECK(a && n == 1 && a[0] == 0, "SCREEN 0: rc 0");
-        cr_ui_draw();
         w = emu_hal.lcd_writes;
-        CHECK(emu_hal.lcd_dark && cu.screen_off, "SCREEN 0: the screen off (DISPOFF, the backlight off)");
+        cr_ui_draw();
+        T_INK();
+        CHECK(cu.screen_off && !ink && emu_hal.lcd_writes == w + 1u,
+              "SCREEN 0: the screen off: one write, every pixel of the panel black (%u not)", (unsigned)ink);
+        CHECK(!emu_hal.pa2, "SCREEN 0: PA2 stays low (the backlight on, the key matrix alive)");
+        w = emu_hal.lcd_writes;
         fm1_ms += 20u;
         cr_in_msg_n++;                               /* a MIDI channel message in */
         cu_midi_poll();
         cr_ui_draw();
-        CHECK(emu_hal.lcd_dark && emu_hal.lcd_writes == w, "SCREEN 0: MIDI in keeps it off, nothing drawn");
+        T_INK();
+        CHECK(cu.screen_off && emu_hal.lcd_writes == w && !ink, "SCREEN 0: MIDI in keeps it off, nothing drawn");
         fm1_ms += 20u;
         cu_activity();                               /* a key, button or knob */
         cr_ui_draw();
-        CHECK(!emu_hal.lcd_dark && emu_hal.lcd_writes > w, "SCREEN 0, then a knob: on, the view redrawn");
+        for (i = 0, ink = 0; i < 240u * 240u; i++)
+            ink += emu_hal.lcd[i] == 0;              /* (a pixel the wake left black: no view has one) */
+        CHECK(!cu.screen_off && emu_hal.lcd_writes == w + CR_NSTRIP && cr_dc.blits == CR_NSTRIP &&
+              cr_dc.drawn == CR_NSTRIP && cr_dc.bytes == 240u * 240u * 2u && !ink,
+              "SCREEN 0, then a knob: on, every strip redrawn whole (%u blits, %u bytes, %u pixels left black)",
+              (unsigned)cr_dc.blits, (unsigned)cr_dc.bytes, (unsigned)ink);
         t_begin(74);
         t_b(0);
         a = t_send(&n);
         fm1_ms += 20u;
         cr_ui_draw();
-        CHECK(emu_hal.lcd_dark, "SCREEN 0 again: off");
+        T_INK();
+        CHECK(cu.screen_off && !ink && !emu_hal.pa2, "SCREEN 0 again: off, black");
         t_begin(74);
         t_b(1);
         a = t_send(&n);
         CHECK(a && n == 1 && a[0] == 0, "SCREEN 1: rc 0");
         fm1_ms += 20u;
         cr_ui_draw();
-        CHECK(!emu_hal.lcd_dark, "SCREEN 1: on");
+        T_INK();
+        CHECK(!cu.screen_off && ink > 1000u && cr_dc.blits == CR_NSTRIP, "SCREEN 1: on, the view redrawn");
+#undef T_INK
         t_begin(74);
         a = t_send(&n);
         CHECK(!a, "SCREEN without its byte: no reply");

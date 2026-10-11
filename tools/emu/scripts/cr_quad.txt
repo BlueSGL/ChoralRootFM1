@@ -1,6 +1,6 @@
 # FM TONE (engine 15, eng_quad.c, code name QUAD; docs/QUAD.md; the user-approved screens
 # design/choralroot-fm1-quad-screens.png): EDIT held + E4 (the second white root: FM6 FM TONE ..) picks FM TONE from the
-# engine picker, OCT+ keeps it (01 EP); PRESETS +2: 03 BASS ("FM TONE . 03/17": the meter, shot); PRESETS -1: 02 BELL; MAJ + D4 held 1.5 s (a chord on QUAD: three voices), released. EDIT: OSC, SYN 1 under
+# engine picker, OCT+ keeps it (01 EP); PRESETS +2: 03 BASS ("FM TONE . 03/16": the meter, shot); PRESETS -1: 02 BELL; MAJ + D4 held 1.5 s (a chord on QUAD: three voices), released. EDIT: OSC, SYN 1 under
 # the algorithm (shot); KNOB 1 +1: BELL's Algo n -> n + 1 (the band redraws: shot); OSC again: SYN 2 (shot); FILT
 # (SEL): FILTER (shot), row B KNOB 3 -3: TYPE OFF (a flat band: shot), +3: LP24 (shot), FILT again: FILTER 2 (shot);
 # ENV: ENV A/B (shot), ENV 2 (row A KNOB 4 +1: PHRT, a text cell), ENV 3 (three cells; KNOB 3 +2: B2 KEY: shot), AMP

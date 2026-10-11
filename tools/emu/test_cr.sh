@@ -8,7 +8,9 @@
 # picks the mode (the roots play there); PRESETS: the sound meter and another timbre; ALGORITHM: the bass on, a bass
 # note on part 1; presets per engine (cr_presets: docs/PRESETS.md);
 # End: PANIC (the red screen); 3 min without input: the stripes (the screensaver), a key dismisses it; 10 min: the
-# screen off (cr_screen_off: a key or a knob wakes it and acts, a loop playing does not keep it on); after every release, parts 0 and 1 silent within 2 s.
+# screen off (cr_screen_off: a black frame with PA2 low, the LEDs lit; a key, a knob or MIDI in wakes it and acts, a
+# loop playing does not keep it on; SysEx 74 SCREEN; cr_pa2: the emulator's PA2 model, high = the key matrix dead);
+# after every release, parts 0 and 1 silent within 2 s.
 # Screenshots: build/emu/test/cr_*.ppm (and the logs).
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -172,27 +174,77 @@ p=$(pixel "$OUT/cr_idle_woke.ppm" 120 150); set -- $p
 [ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 90 ] && bad "a key did not dismiss the screensaver ($p)" \
                                                  || ok "a key: the screensaver gone at once ($OUT/cr_idle_woke.ppm)"
 
-echo "the screen off: the logo at 3 min, the screen off at 10 min; a key / a knob wakes it and acts; a loop is not input"
+echo "the screen off: the logo at 3 min, a black frame at 10 min (the backlight on: PA2 low); a key / a knob / MIDI in wakes it and acts; a loop is not input; SysEx 74 SCREEN"
 run cr_screen_off
 SO="$OUT/cr_screen_off.log"
 lit() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 24 { c++ } END { print c + 0 }'; }   # bytes > 24
+ink() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 0 { c++ } END { print c + 0 }'; }    # bytes > 0 (0: the black frame; a view's background is 8 8 8)
+blk() {          # blk FILE: pixels 0 0 0, what the black frame leaves where the wake did not redraw (a view has none)
+    od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '{ s += $1; if (NR % 3 == 0) { if (!s) c++; s = 0 } } END { print c + 0 }'
+}
+dmp() {          # dmp SHOT PATTERN: log $DL's first line matching PATTERN after the shot $DP SHOT (its dump, its expects)
+    awk -v s="screenshot: build/emu/test/$DP$1.ppm" -v p="$2" 'f && $0 ~ p { print; exit } $0 == s { f = 1 }' "$DL"
+}
+DL=$SO; DP=cr_off_
+scr() { dmp "$1" '^  lcd:' | sed -n 's/.*screen \([a-z]*\).*/\1/p'; }                # on / off
+wrs() { dmp "$1" '^  lcd:' | sed -n 's/.* \([0-9][0-9]*\) writes.*/\1/p'; }         # LCD writes so far
+met() { dmp "$1" "^expect $2" | grep -q ': ok'; }                                    # that shot's next "expect $2" held
+# PA2 is not the backlight alone: high, the key matrix / 595 chain is dead (hal/fm1_lcd_hw.h; the unit, 2026-10-10: the
+# screen off of 0.14 / 0.15 raised it and no key sounded or woke it). The emulator models it (emu_hooks.h pa2)
+nd=$(grep -c '^  pa2: ' "$SO")
+[ "$nd" = 13 ] && [ "$(grep -c '^  pa2: low.* high for 0 ms' "$SO")" = "$nd" ] &&
+    ok "PA2 low in all $nd dumps, never raised: the backlight on, the key matrix, the knobs and the LEDs alive" ||
+    bad "PA2 driven high ($(grep -c '^  pa2: HIGH' "$SO") of $nd dumps): on the unit no key, button, knob or LED works then (hal/fm1_lcd_hw.h)"
 p=$(pixel "$OUT/cr_off_logo.ppm" 120 150); set -- $p
 [ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 90 ] && ok "3 min: the logo ($p): $OUT/cr_off_logo.ppm" || bad "no logo at 3 min ($p)"
-[ "$(lit "$OUT/cr_off_dark.ppm")" = 0 ] && [ "$(lit "$OUT/cr_off_view.ppm")" -gt 1000 ] &&
-    ok "10 min: the screen off, the panel black: $OUT/cr_off_dark.ppm" || bad "10 min: the panel not black ($(lit "$OUT/cr_off_dark.ppm") lit bytes)"
-w=$(grep '^  lcd:' "$SO" | sed -n 's/.*screen \([a-z]*\), \([0-9]*\) writes.*/\1 \2/p')
-set -- $w
-[ "$1" = off ] && [ "$3" = off ] && [ "$2" = "$4" ] && has '^screen: off (idle)' "$SO" &&
-    ok "the backlight off, no LCD write in the minute after ($2 = $4 writes)" || bad "LCD writes while off: $w"
-[ "$5" = on ] && [ "$(lit "$OUT/cr_off_key.ppm")" -gt 1000 ] && ! grep -q 'FAILED' "$SO" &&
-    [ "$(grep -A4 'screenshot: build/emu/test/cr_off_key.ppm' "$SO" | grep -c 'part 0: .*voices 3')" = 1 ] &&
-    ok "a key: the screen on, the view back, the chord sounding: $OUT/cr_off_key.ppm" || bad "a key did not wake it and play ($5)"
-[ "$7" = off ] && [ "$9" = on ] && [ "$(lit "$OUT/cr_off_knob.ppm")" -gt 1000 ] &&
-    [ "$(grep -A8 'screenshot: build/emu/test/cr_off_knob.ppm' "$SO" | grep -c 'voicing 2 ')" = 1 ] &&
-    ok "10 min more: off; a knob turn: on, and KNOB 1 turned (voicing 2): $OUT/cr_off_knob.ppm" || bad "a knob did not wake it / act ($7 $9)"
-[ "$(lit "$OUT/cr_off_loop.ppm")" = 0 ] && [ "${13}" = off ] && grep '^  loop:' "$SO" | tail -1 | grep -q 'state 2 ' &&
-    [ "$(grep -c '^expect sound.*: ok' "$SO")" = 5 ] &&
-    ok "a loop playing alone: the screen off after 10 min, the loop still playing: $OUT/cr_off_loop.ppm" || bad "loop: ${13}"
+[ "$(scr dark)" = off ] && [ "$(ink "$OUT/cr_off_dark.ppm")" = 0 ] && [ "$(lit "$OUT/cr_off_view.ppm")" -gt 1000 ] &&
+    [ "$(blk "$OUT/cr_off_view.ppm")" = 0 ] && has '^screen: off (idle)' "$SO" &&
+    ok "10 min: the screen off: every pixel of the panel black: $OUT/cr_off_dark.ppm" ||
+    bad "10 min: screen $(scr dark), the panel not black ($(ink "$OUT/cr_off_dark.ppm") bytes above 0)"
+[ "$(scr dark2)" = off ] && [ -n "$(wrs dark)" ] && [ "$(wrs dark)" = "$(wrs dark2)" ] && [ "$(ink "$OUT/cr_off_dark2.ppm")" = 0 ] &&
+    ok "no LCD write in the minute after ($(wrs dark) = $(wrs dark2) writes), still black" || bad "LCD writes while off: $(wrs dark) $(wrs dark2)"
+met dark2 'led G5 dim' && met dark2 'led FX on' && met loop 'led GREEN on' && met sx_midi 'led G5 dim' &&
+    ok "the LEDs while it is off: a key's glow, FX lit, PLAY's green LED with the loop" || bad "an LED dark while the screen is off"
+[ "$(scr key)" = on ] && [ "$(lit "$OUT/cr_off_key.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_key.ppm")" = 0 ] &&
+    dmp key '^  part 0:' | grep -q 'voices 3' && met key sound && met key 'led D4 on' &&
+    ok "a key: the screen on, the whole view back (no black left), the chord sounding, its LED lit: $OUT/cr_off_key.ppm" ||
+    bad "a key did not wake it and play (screen $(scr key),$(dmp key '^  part 0:' | sed 's/.*,\( voices [0-9]*\).*/\1/'))"
+[ "$(scr again)" = off ] && [ "$(ink "$OUT/cr_off_again.ppm")" = 0 ] && [ "$(scr knob)" = on ] && [ "$(lit "$OUT/cr_off_knob.ppm")" -gt 1000 ] &&
+    [ "$(blk "$OUT/cr_off_knob.ppm")" = 0 ] && dmp knob '^  cr: key' | grep -q 'voicing 2 ' &&
+    ok "10 min more: off; a knob turn: on, and KNOB 1 turned (voicing 2): $OUT/cr_off_knob.ppm" || bad "a knob did not wake it / act ($(scr again) $(scr knob))"
+[ "$(scr loop)" = off ] && [ "$(ink "$OUT/cr_off_loop.ppm")" = 0 ] && dmp looping '^  loop:' | grep -q 'state 2 ' &&
+    dmp loop '^  loop:' | grep -q 'state 2 ' && met loop sound &&
+    ok "a loop playing alone: the screen off after 10 min, the loop still playing: $OUT/cr_off_loop.ppm" || bad "loop: screen $(scr loop)"
+[ "$(scr midi)" = on ] && [ "$(lit "$OUT/cr_off_midi.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_midi.ppm")" = 0 ] &&
+    ok "MIDI in (a note): the idle screen off ends, the view back: $OUT/cr_off_midi.ppm" || bad "MIDI in did not wake the idle screen off ($(scr midi))"
+[ "$(scr sx)" = off ] && [ "$(ink "$OUT/cr_off_sx.ppm")" = 0 ] && has '^screen: off (sysex)' "$SO" && dmp sx '^  loop:' | grep -q 'state 1 ' &&
+    ok "SysEx 74 SCREEN 0: off at once, the panel black: $OUT/cr_off_sx.ppm" || bad "SCREEN 0: screen $(scr sx)"
+[ "$(scr sx_midi)" = off ] && [ -n "$(wrs sx)" ] && [ "$(wrs sx)" = "$(wrs sx_midi)" ] && [ "$(ink "$OUT/cr_off_sx_midi.ppm")" = 0 ] && met sx_midi sound &&
+    ok "MIDI in while SCREEN 0: the note plays, the screen stays off ($(wrs sx) = $(wrs sx_midi) writes)" ||
+    bad "MIDI in while SCREEN 0: screen $(scr sx_midi), $(wrs sx) $(wrs sx_midi) writes"
+[ "$(scr sx_key)" = on ] && [ "$(lit "$OUT/cr_off_sx_key.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_sx_key.ppm")" = 0 ] &&
+    dmp sx_key '^  part 0:' | grep -q 'voices 3' && met sx_key sound && met sx_key 'led D4 on' &&
+    ok "a key while SCREEN 0: the screen on, the chord sounding, its LED lit: $OUT/cr_off_sx_key.ppm" ||
+    bad "a key did not wake SCREEN 0 and play (screen $(scr sx_key),$(dmp sx_key '^  part 0:' | sed 's/.*,\( voices [0-9]*\).*/\1/'))"
+[ "$(scr sx2)" = off ] && [ "$(ink "$OUT/cr_off_sx2.ppm")" = 0 ] && [ "$(scr sx_on)" = on ] && [ "$(lit "$OUT/cr_off_sx_on.ppm")" -gt 1000 ] &&
+    [ "$(blk "$OUT/cr_off_sx_on.ppm")" = 0 ] &&
+    ok "SCREEN 0 again, then SCREEN 1: off, on: $OUT/cr_off_sx_on.ppm" || bad "SCREEN 1: screen $(scr sx2) $(scr sx_on)"
+
+echo "the emulator's PA2, the model itself (the script drives it high by hand, as the screen off of 0.14 / 0.15 did)"
+run cr_pa2
+DL="$OUT/cr_pa2.log"; DP=cr_pa2_
+dmp before '^  pa2:' | grep -q 'low.* high for 0 ms' && dmp before '^  part 0:' | grep -q 'voices 3' && [ "$(lit "$OUT/cr_pa2_before.ppm")" -gt 1000 ] &&
+    ok "PA2 low: the view on the panel, the chord sounding" || bad "PA2 low: $(dmp before '^  pa2:')"
+dmp high '^  pa2:' | grep -q 'HIGH' && [ "$(ink "$OUT/cr_pa2_high.ppm")" = 0 ] && met high 'led G5 off' && met high 'led FX off' &&
+    ok "PA2 high: the dump says it, the panel black (the backlight off), no LED lit" || bad "PA2 high: $(dmp high '^  pa2:')"
+dmp dead '^fm1_in:' | grep -q 'notes 0000000 buttons 0000 ' && dmp dead '^  part 0:' | grep -q 'voices 0' &&
+    dmp dead '^  cr: key' | grep -q 'voicing 0 ' && met dead silence &&
+    ok "PA2 high: a held chord and a knob turn are not read (no key in fm1_in, no voice, voicing 0, silence)" ||
+    bad "PA2 high: the matrix still reads ($(dmp dead '^fm1_in:' | cut -c1-40))"
+dmp low '^  pa2:' | grep -q 'low' && [ "$(lit "$OUT/cr_pa2_low.ppm")" -gt 1000 ] && met low 'led G5 dim' && met low 'led FX on' &&
+    dmp after '^  part 0:' | grep -q 'voices 3' && met after sound && met after 'led D4 on' &&
+    ok "PA2 low again: the panel, the LEDs and the keys back" || bad "PA2 low again: $(dmp low '^  pa2:')"
+silent_end cr_pa2
 
 echo "the other screens"
 run cr_layers
@@ -794,22 +846,41 @@ echo "presets per engine (docs/PRESETS.md): PRESETS in the engine's pool, OPT + 
 run cr_presets
 PL="$OUT/cr_presets.log"
 pop() { grep -q "^popup: part 0 $1\$" "$PL"; }
-pop '00 / INIT / FM6 · 00/26' && pop '25 / PIANO / FM6 · 25/26' && pop '05 / FM PAD / FM6 · 05/26' &&
-    ok "PRESETS turns inside FM6's pool, INIT at 00, wrapping (00 INIT, 25 PIANO, 05 \"FM PAD\" \"FM6 · 05/26\"): $OUT/cr_presets_init.ppm $OUT/cr_presets_meter.ppm" \
+stripes() {      # stripes FILE: "LIT/ALL", a meter's stripes on row 201 (through their middle, cr_draw.c cr_p_meter:
+                 # a run of ink is a stripe, a bright one is lit)
+    od -An -tu1 -v -j $((15 + 201 * 240 * 3)) -N720 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
+        awk '{ v[n++] = $1 } END { lit = all = run = hot = 0
+               for (i = 0; i <= 240; i++) { s = i < 240 ? v[3*i] + v[3*i+1] + v[3*i+2] : 0
+                   if (s > 90) { run = 1; if (v[3*i] > 180) hot = 1 } else if (run) { all++; lit += hot; run = hot = 0 } }
+               print lit "/" all }'
+}
+pop '00 / INIT / FM6 · 00/25' && pop '25 / PIANO / FM6 · 25/25' && pop '05 / FM PAD / FM6 · 05/25' &&
+    ok "PRESETS turns inside FM6's pool, INIT at 00 and not counted, wrapping (00 INIT, 25 PIANO, 05 \"FM PAD\" \"FM6 · 05/25\"): $OUT/cr_presets_init.ppm $OUT/cr_presets_meter.ppm" \
     || bad "the FM6 pool: $(grep '^popup:' "$PL" | head -3 | tr '\n' ' ')"
+s0=$(stripes "$OUT/cr_presets_init.ppm"); s5=$(stripes "$OUT/cr_presets_meter.ppm"); sl=$(stripes "$OUT/cr_presets_last.ppm")
+[ "$s0" = 0/25 ] && [ "$s5" = 5/25 ] && [ "$sl" = 25/25 ] &&
+    ok "the meter: a stripe per preset (25), none lit on INIT, 5 on 05, every one on 25 PIANO, the last: $OUT/cr_presets_last.ppm" \
+    || bad "the meter's stripes (lit/all): INIT $s0 (0/25), 05 $s5 (5/25), 25 the last $sl (25/25)"
 [ "$(grep -c '^sound: part 0 engine' "$PL")" = 4 ] && has '^engine pick: VA (25 presets)' "$PL" && has '^sound: part 0 engine VA pos 1 LUSH PAD' "$PL" &&
     ok "OPT + PRESETS: the engine picker (VA, 25 presets), OPT released: VA 01 LUSH PAD: $OUT/cr_presets_engine.ppm" || bad "OPT + PRESETS: $(grep '^sound: part 0 engine' "$PL" | head -1)"
 [ "$(grep -c '^sound: part 0 engine FM6 pos 5 FM PAD' "$PL")" = 2 ] && has '^sound: part 0 engine VA pos 4 SLOW STRINGS' "$PL" &&
     ok "each engine remembers its place: FM6 back on 05 FM PAD, the VA on 04 SLOW STRINGS" || bad "the per-engine memory: $(grep '^sound: part 0 engine' "$PL" | tr '\n' ' ')"
 has '^save: dialog part 0 FM PAD (save as new)' "$PL" && has '^save: new part 0 FM6 26 (slot U01)' "$PL" && has '^save: part 0 slot U01 name ADG rc 0' "$PL" &&
-    pop '26 / ADG / FM6 · 26/27' && ok "Save as new: the next place (FM6 26), PRESETS sits on it: $OUT/cr_presets_dialog.ppm $OUT/cr_presets_naming.ppm $OUT/cr_presets_new.ppm" \
-    || bad "Save as new: $(grep '^save:' "$PL" | head -3 | tr '\n' ' ')"
-has '^save: part 0 overwrite slot U02 FM6 02 FM BELL rc 0' "$PL" && pop '02 / FM BELL (mark) / FM6 · 02/27' &&
+    pop '26 / ADG / FM6 · 26/26' && [ "$(stripes "$OUT/cr_presets_new.ppm")" = 26/26 ] &&
+    ok "Save as new: the next place (FM6 26), PRESETS sits on it (26/26, the meter's 26 stripes lit): $OUT/cr_presets_dialog.ppm $OUT/cr_presets_naming.ppm $OUT/cr_presets_new.ppm" \
+    || bad "Save as new: $(grep '^save:' "$PL" | head -3 | tr '\n' ' ') stripes $(stripes "$OUT/cr_presets_new.ppm")"
+has '^save: part 0 overwrite slot U02 FM6 02 FM BELL rc 0' "$PL" && pop '02 / FM BELL (mark) / FM6 · 02/26' &&
     ok "Overwrite on a factory preset: bound in U02, the number and the name kept, the mark: $OUT/cr_presets_overwrite.ppm $OUT/cr_presets_mark.ppm" || bad "Overwrite: $(grep 'overwrite' "$PL")"
-has '^save: reset FM BELL?' "$PL" && has '^save: reset slot U02 rc 0' "$PL" && has '^save: now part 0 FM6 02 FM BELL' "$PL" && pop '02 / FM BELL / FM6 · 02/27' &&
+has '^save: reset FM BELL?' "$PL" && has '^save: reset slot U02 rc 0' "$PL" && has '^save: now part 0 FM6 02 FM BELL' "$PL" && pop '02 / FM BELL / FM6 · 02/26' &&
     ok "SAVE held 1 s: reset to factory?, OCT+: the factory FM BELL back at 02 (no mark): $OUT/cr_presets_reset.ppm $OUT/cr_presets_factory.ppm" || bad "reset: $(grep '^save: reset' "$PL")"
 [ "$(grep -c '^save: part 0 slot U[0-9]* name .* rc 0' "$PL")" = 32 ] && has '^save: no free slot' "$PL" &&
     ok "32 user presets fill the slots; the next Save as new: \"no free slot\": $OUT/cr_presets_full.ppm" || bad "no free slot: $(grep -c 'name .* rc 0' "$PL") saves"
+s0=$(stripes "$OUT/cr_presets_long_init.ppm"); s1=$(stripes "$OUT/cr_presets_long_first.ppm")
+sb=$(stripes "$OUT/cr_presets_long_before.ppm"); sl=$(stripes "$OUT/cr_presets_long_last.ppm")
+pop '00 / INIT / FM6 · 00/57' && pop '01 / TINE EP / FM6 · 01/57' && pop '56 / FM BELL / FM6 · 56/57' && pop '57 / FM BELL / FM6 · 57/57' &&
+    [ "$s0" = 0/32 ] && [ "$s1" = 1/32 ] && [ "$sb" = 31/32 ] && [ "$sl" = 32/32 ] &&
+    ok "a pool longer than the meter (57 presets, 32 stripes): none lit on INIT, one on 01, 31 on 56, every one only on 57, the last: $OUT/cr_presets_long_last.ppm" \
+    || bad "the long pool's stripes (lit/all): INIT $s0 (0/32), 01 $s1 (1/32), 56 $sb (31/32), 57 the last $sl (32/32); $(grep '^popup:' "$PL" | tail -4 | tr '\n' ' ')"
 
 echo "the power-on splash: the idle stripes slide in, the name lands, the version under them"
 run cr_splash
@@ -963,7 +1034,7 @@ run cr_quad --wav "$OUT/cr_quad.wav"
 QL="$OUT/cr_quad.log"
 has '^engine: part 0 -> FM TONE' "$QL" && has 'part 0: FM TONE / EP' "$QL" && ok "EDIT held + E4 (the second white root): FM TONE, 01 EP" ||
     bad "not FM TONE from the picker: $(grep -m1 '^engine:' "$QL")"
-has '^popup: part 0 03 / BASS / FM TONE · 03/17$' "$QL" && ok "PRESETS +2: the pool, FM TONE · 03/17 (INIT + 16 presets): $OUT/cr_quad_pool.ppm" ||
+has '^popup: part 0 03 / BASS / FM TONE · 03/16$' "$QL" && ok "PRESETS +2: the pool, FM TONE · 03/16 (16 presets; INIT, 00, is not counted): $OUT/cr_quad_pool.ppm" ||
     bad "pool: $(grep -m1 '^popup:' "$QL")"
 has 'part 0: FM TONE / BELL, voices 3' "$QL" && has '^expect sound .*: ok' "$QL" && ok "MAJ + D4 on 02 BELL: a chord of three FM TONE voices sounds" ||
     bad "FM TONE chord: $(grep 'part 0: FM TONE / BELL' "$QL" | head -1)"

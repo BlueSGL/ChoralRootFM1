@@ -40,7 +40,7 @@ the designer resolves in its MOD palette becomes the named colour: THEME red, AC
 | --- | --- | --- |
 | `CR_A_SQUEEZE` | `from`, `name`, `squeeze` | 120 ms: `from` thins to an 8 % column (ease-in, 60 ms), `name` stretches out of it (ease-out, 60 ms); no `from`: stretch only. Multiplies the fit-to-224 px factor and the forced `squeeze` (state 24's frame) |
 | `CR_A_SLIDE` | `slide` (sel came from sel − slide) | 160 ms ease-out: the old item leaves and the new one enters inside the item's box (a reel); vertical or horizontal |
-| `CR_A_FILL` | `pct_from` → `pct` | one stripe every 30 ms |
+| `CR_A_FILL` | `pct_from` → `pct` | one stripe every 30 ms; more than 14 stripes to light (a pool's meter: up to 32): all of them in the 420 ms of 14 |
 | `CR_A_STRIPES` | `phase`, `period_ms` | the bands' phase advances a cycle per `period_ms` (40 px per cycle, as the designer's `phase`) |
 | `CR_A_SWEEP` | — | the bands are swept off to the right, 240 ms each, 40 ms apart (the first chord) |
 
@@ -72,6 +72,9 @@ message.
   step grid's (the marks), or the step cursor's old and new rows' strips alone (the cursor moving or blinking:
   usually one strip).
 - `cr_draw_invalidate()`: the next draw blits all six (after Felucca's UI drew, a palette change, power-up).
+- `cr_draw_black()`: the whole panel black in one `lcd_fill`, the cache dropped with it (the screen off after 10
+  minutes without input, `cr_ui.c cr_ui_draw`: black pixels with the backlight on, since the backlight's pin also
+  keeps the key matrix alive, `hal/fm1_lcd_hw.h`); the next draw, the wake's, blits all six whole.
 
 **The ring** (`cr_ring_draw`): its pixels never move, only its colour and fraction change, so the coverage of the
 band is computed once (`cr_ring_build`, from `cr_ui_init`: ~27 ms on the device scale) with `cr_arc`'s own per-pixel

@@ -303,11 +303,16 @@ static void fine_frame(void)                     /* before each UI frame */
 static int led_state(int id)                     /* 0 off, 1 dim, 2 lit */
 {
     uint8_t q = id >= 0 && id < 41 ? led_pos[id] : 0xFF;
-    if (q == 0xFF)
+    if (q == 0xFF || emu_hal.pa2)                /* (PA2 high: no LED lights, emu_hooks.h) */
         return 0;
     if ((emu_hal.led[q >> 3] >> (q & 7)) & 1u)
         return 2;
     return ((emu_hal.led_dim[q >> 3] >> (q & 7)) & 1u) ? 1 : 0;
+}
+static int led_green(void)                       /* PLAY's green LED: 1 lit */
+{
+    uint8_t q = emu_hal.led_play_green;
+    return !emu_hal.pa2 && ((emu_hal.led[q >> 3] >> (q & 7)) & 1u);
 }
 
 /* ================================================================== drawing === */
@@ -392,11 +397,8 @@ static void draw_btn(canvas_t *c, int i)
         text(c, r.x + r.w / 2, r.y + 25, 5, h, lv == 2 ? 0x1E3A26u : C_HINT, .9f);
     else if (h)
         text(c, r.x + r.w / 2, r.y + r.h + 4, 5, h, C_HINT, .9f);
-    if (i == EMU_B_PLAY) {                        /* the green LED */
-        uint8_t q = emu_hal.led_play_green;
-        int on = (emu_hal.led[q >> 3] >> (q & 7)) & 1u;
-        circle(c, r.x + 6, r.y + r.h - 6, 3.2f, on ? C_GREEN : C_LEDOFF, 1);
-    }
+    if (i == EMU_B_PLAY)                          /* the green LED */
+        circle(c, r.x + 6, r.y + r.h - 6, 3.2f, led_green() ? C_GREEN : C_LEDOFF, 1);
 }
 static void draw_knob(canvas_t *c, int i)
 {
@@ -426,10 +428,8 @@ static uint32_t el_sig(int e)
     if (e < EL_KNOB) {
         int i = e - EL_BTN;
         s = (uint32_t)btn_src[i] << 4 | (uint32_t)led_state(emu_hal.btn_id[i]);
-        if (i == EMU_B_PLAY) {
-            uint8_t q = emu_hal.led_play_green;
-            s |= ((emu_hal.led[q >> 3] >> (q & 7)) & 1u) << 3;
-        }
+        if (i == EMU_B_PLAY)
+            s |= (uint32_t)led_green() << 3;
         return s;
     }
     e -= EL_KNOB;
@@ -741,11 +741,12 @@ static void mkdir_parent(const char *path)       /* mkdir -p of the file's direc
             *q = '/';
         }
 }
-/* what the panel shows: its RAM, or black while the screen is off (DISPOFF, the backlight off: emu_hal.lcd_dark) */
+/* what the panel shows: its RAM (the firmware's screen off is a black frame written to it), or black while PA2 is
+ * high (the backlight off: emu_hooks.h pa2, which the firmware never does) */
 static const uint16_t *lcd_shown(void)
 {
     static const uint16_t black[EMU_LCD_W * EMU_LCD_H];
-    return emu_hal.lcd_dark ? black : emu_hal.lcd;
+    return emu_hal.pa2 ? black : emu_hal.lcd;
 }
 /* the LCD to a file: PPM if the name ends in .ppm, else PNG */
 static int write_lcd(const char *path)
@@ -824,11 +825,14 @@ static int probe_frames;                         /* script `probe N`: the next N
  *   expect sound|silence    non-zero samples since the previous "expect sound|silence" (or power-on)
  *   midi HEX [HEX [HEX]]    one MIDI message into the firmware's MIDI in (usb.c's queue, as from USB): "midi B0 07 64";
  *                           "midi F8 xN MS": N clock pulses MS apart (MS may be fractional: 20.833), the clock moves on
+ *   pa2 high|low            drive the PA2 line by hand (emu_hooks.h pa2): high = the backlight off, the key matrix,
+ *                           the knobs and the LEDs dead, as on the unit (the firmware itself never raises it)
  *   dump | rec | window NAME | quit       End's print, F12's LCD recording, a window shot, stop here
  * Also accepted (older scripts): press KEY [MS], tap, hold / down, release / up, turn KNOB N, and a leading
  * "<ms>" for an absolute time ("1200 down A"). Names: a computer key wins for key/press/hold, a panel control
  * for btn; "note:F3" names the note F3. */
-enum { OP_DOWN, OP_UP, OP_TURN, OP_SHOT, OP_WINDOW, OP_DUMP, OP_REC, OP_QUIT, OP_MASTER, OP_EXPECT_LED, OP_EXPECT_SND, OP_MIDI, OP_PROBE };
+enum { OP_DOWN, OP_UP, OP_TURN, OP_SHOT, OP_WINDOW, OP_DUMP, OP_REC, OP_QUIT, OP_MASTER, OP_EXPECT_LED, OP_EXPECT_SND, OP_MIDI, OP_PROBE,
+       OP_PA2 };
 typedef struct { uint32_t ms, seq; int op, kind, idx, n; const keymap_t *km; char name[96]; } sev_t;
 static sev_t *sev;
 static int sev_n, sev_cap, sev_i, quit_req;
@@ -1009,6 +1013,11 @@ static void load_script(const char *path)
             continue;
         }
         if (!strcmp(cmd, "master")) { sev_add(cur, OP_MASTER, NULL, 0, 0, atoi(arg), NULL); continue; }
+        if (!strcmp(cmd, "pa2")) {                /* the PA2 line by hand (emu_hooks.h pa2: the model's own check) */
+            if (strcmp(arg, "high") && strcmp(arg, "low")) { BAD("pa2: high or low"); continue; }
+            sev_add(cur, OP_PA2, NULL, 0, 0, !strcmp(arg, "high"), NULL);
+            continue;
+        }
         if (!strcmp(cmd, "expect")) {
             if (!strcmp(arg, "sound") || !strcmp(arg, "silence")) {
                 sev_add(cur, OP_EXPECT_SND, NULL, 0, 0, !strcmp(arg, "sound"), NULL);
@@ -1135,6 +1144,10 @@ static void run_script(uint32_t ms)
             break;
         case OP_TURN: turn(e->idx, e->n); break;
         case OP_MASTER: emu_hal.master = e->n; break;
+        case OP_PA2:
+            emu_hal.pa2 = (uint8_t)e->n;
+            printf("script: pa2 %s at %u ms\n", e->n ? "high" : "low", (unsigned)ms);
+            break;
         case OP_MIDI:
             if (!emu_fw_midi_in((uint32_t)e->n))
                 printf("script: midi in full at %u ms\n", (unsigned)ms);
@@ -1155,8 +1168,7 @@ static void run_script(uint32_t ms)
         case OP_DUMP: emu_fw_dump(); break;
         case OP_REC: toggle_record(); break;
         case OP_EXPECT_LED: {
-            uint8_t q = emu_hal.led_play_green;
-            int lv = e->kind < 0 ? 2 * ((emu_hal.led[q >> 3] >> (q & 7)) & 1)
+            int lv = e->kind < 0 ? 2 * led_green()
                    : led_state(e->kind == KM_KEY ? 14 + e->idx : emu_hal.btn_id[e->idx]);
             int ok = lv == e->n;
             printf("expect %s at %u ms: %s (the LED is %s)\n", e->name, (unsigned)ms, ok ? "ok" : "FAILED",
@@ -1244,7 +1256,7 @@ static void usage(void)
            "  --script FILE    input from a file (- = stdin), one command a line (tools/emu/README.md):\n"
            "                     key A down | key A up | key A 300 | wait 200 | btn PLAY | btn SEL down |\n"
            "                     knob KNOB1 +3 | master ADC | shot NAME | expect led A on | expect sound |\n"
-           "                     dump | quit\n"
+           "                     pa2 high | dump | quit\n"
            "  --shot PATH      at the end, write the LCD to PATH (.ppm: PPM, else PNG)\n"
            "  --wav FILE       with --headless: write the audio\n"
            "  --demo           load 4 patterns (ACID, PAD, LEAD, BEAT) and press PLAY (Felucca; ChoralRoot: none)\n"
@@ -1281,7 +1293,7 @@ static int out_w, out_h, fr_x, fr_y;            /* renderer output (pixels), the
 static float dpi = 1;
 static uint16_t lcd_rgb[EMU_LCD_W * EMU_LCD_H];
 static uint32_t lcd_seen = 0xFFFFFFFFu;
-static uint8_t lcd_seen_dark;
+static uint8_t lcd_seen_pa2;
 static uint32_t panel_seen = 1;              /* the whole panel to redraw (resize, expose) */
 static int timer_run = 1;
 static uint32_t stall_max;                       /* the main loop's longest pass (ms) */
@@ -1383,10 +1395,10 @@ static void present(void)
         if (ow != out_w || oh != out_h)
             relayout();
     }
-    if (emu_hal.lcd_writes != lcd_seen || emu_hal.lcd_dark != lcd_seen_dark) {   /* (the screen off: black) */
+    if (emu_hal.lcd_writes != lcd_seen || emu_hal.pa2 != lcd_seen_pa2) {   /* (PA2 high: black) */
         const uint16_t *src = lcd_shown();
         lcd_seen = emu_hal.lcd_writes;
-        lcd_seen_dark = emu_hal.lcd_dark;
+        lcd_seen_pa2 = emu_hal.pa2;
         for (i = 0; i < EMU_LCD_W * EMU_LCD_H; i++)
             lcd_rgb[i] = (uint16_t)((src[i] >> 8) | (src[i] << 8));
         SDL_UpdateTexture(t_lcd, NULL, lcd_rgb, EMU_LCD_W * 2);

@@ -78,7 +78,7 @@ grep -q "^deep: part 0 page 1 OP 2 col 0 LEVEL 0 -> " "$OUT/persist_fm6_2.log" &
 # the preset model (docs/PRESETS.md): run 1's SAVE on the edited TINE EP was an Overwrite, a record bound to FM6 01 in
 # U01; run 2: the record's binding survived the relaunch (FM6 01 is U01, with the mark), the chord sound came back
 grep -q '^save: part 0 overwrite slot U01 FM6 01 TINE EP rc 0' "$OUT/persist_fm6_1.log" &&
-    grep -q '^popup: part 0 01 / TINE EP (mark) / FM6 · 01/26$' "$OUT/persist_fm6_2.log" &&
+    grep -q '^popup: part 0 01 / TINE EP (mark) / FM6 · 01/25$' "$OUT/persist_fm6_2.log" &&
     ok "a bound preset after a relaunch: U01 overwrites FM6 01 TINE EP (the mark), the power-on sound" \
     || bad "bound preset: $(grep '^save: part 0' "$OUT/persist_fm6_1.log") / $(grep '^popup:' "$OUT/persist_fm6_2.log" | tail -1)"
 

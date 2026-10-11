@@ -38,8 +38,12 @@ typedef struct {
     uint8_t led[EMU_NCOL], led_dim[EMU_NCOL];   /* fm1_led / fm1_led_dim: packed row bits per column */
     uint16_t lcd[EMU_LCD_W * EMU_LCD_H];        /* the panel's RAM, RGB565 as sent (big-endian) */
     volatile uint32_t lcd_writes;               /* bumped by every fill / blit */
-    volatile uint8_t lcd_dark;                  /* lcd_power(0): DISPOFF + the backlight off (the panel shows black) */
-    volatile uint32_t lcd_power_cmds;           /* DISPOFF / DISPON sent (lcd_power) */
+    /* PA2 driven high (hal/fm1_lcd_hw.h): on the unit that pin is not the backlight alone, it also keeps the key
+     * matrix / 595 chain alive (seen 2026-10-10: the screen off of 0.14 / 0.15 raised it and the unit went deaf). While
+     * set the panel shows black, emu_fw_tick reads no key, button or knob and no LED lights (emu.c), and the dump
+     * says so. Nothing in the firmware raises PA2 any more; a HAL stand-in (emu_hal_fw.h) for code that ever does
+     * must set it, and the script's "pa2 high" sets it by hand (scripts/cr_pa2.txt: the model itself, checked) */
+    volatile uint8_t pa2;
     /* the panel: label -> matrix id (firmware panel.c), role -> matrix encoder and direction */
     uint8_t btn_id[EMU_NB];
     uint8_t enc_id[EMU_NE - 1];
