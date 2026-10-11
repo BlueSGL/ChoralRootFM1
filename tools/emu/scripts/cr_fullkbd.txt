@@ -141,7 +141,11 @@ wait 200
 expect led F3 on
 expect led A3 on
 expect led G3 off
-dump                          # 30: voices 2
+expect led F4 on              # (every key of a sounding note's name: the F and A above too)
+expect led A4 on
+expect led F5 on
+expect led G4 off
+dump                          # 30: voices 2, key leds 400040000 000400040000000400
 shot build/emu/test/cr_fullkbd_two.ppm
 btn A3 up
 btn F3 up

@@ -206,7 +206,7 @@ MIDI message wakes it and does its normal job at the same time.
 | OCT- lit, OCT+ blinking | in a layer, menu or dialog: back, OK (where there is nothing to confirm: close) |
 | OCT- or OCT+ lit on the view | the roots are shifted down or up |
 | chord keys | lit while held or latched; B3 lit while LOCK is on; otherwise a faint glow, the lowest level. In the KEY layer: MAJ and MIN glow, the selected scale's is lit, the others are dark |
-| root keys | the notes of the sounding chord, where they sound; the note a performance mode is playing blinks; a playing loop's notes glow dim. With Key Mode on they show the key (below) |
+| root keys | the notes of the sounding chord, by name: every root key with the name of a note that sounds is lit (a chord with a G in it lights both G keys), wherever on the keyboard the chord is voiced; the note a performance mode is playing blinks, on all its keys; a playing loop's notes glow dim the same way. With Key Mode on they show the key (below) |
 
 **Key Mode on the keys.** The key lights have four levels: faint (an idle chord key, B3), low (the glow: a note of
 the scale, an idle button), middle (the tonic) and fully lit. With Key Mode off the root keys are dark: only the notes
@@ -216,6 +216,14 @@ layers, in the KEY layer too): the notes of the scale glow at the low level, the
 roots outside the scale are dark, white or black, and the notes that sound are fully lit over it. So a glance tells
 you that Key Mode is on, which key it is, and where the tonic sits. The layers that use the root keys for something
 else (the loop slots, the pickers, naming, the Options) show their own map instead.
+
+**The notes that sound.** While a chord sounds, every root key that carries the name of one of its notes is lit: D
+major lights the D, F# and A keys in both octaves (there is one A). The octave does not matter, so a chord that
+KNOB 1 has voiced far up or down, beyond the two octaves of the root keys, still shows on them, and so does a chord
+moved by OCT- / OCT+. The lights show what sounds, not what you press: with Transpose at +5 in the KEY layer, D4
+alone lights the two G keys. The chord keys never light for a note; they keep showing the chord type and LOCK. On
+the Full keyboard all 27 keys are note keys, so every key of that name lights there. The bass part's own note does
+not light the keys.
 
 Options > LEDs chooses between Glow (idle keys glow dim, active ones are bright) and Stock (the other way round).
 Stock has two levels only and is as it always was: idle chord keys and, with Key Mode off, every root key are lit;

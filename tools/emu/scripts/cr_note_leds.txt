@@ -1,0 +1,166 @@
+# ChoralRoot: a sounding note lights every root key of its note name (the owner, 2026-10-11): a chord voiced, transposed
+# or shifted out of the keys' two octaves (D4..G5) still shows, on both octaves' keys; never a chord key. The dump's
+# "key leds:" line: F3..C4 (the chord keys and B3), then D4..G5: 0 off 1 faint 2 dim 3 mid 4 lit. tools/emu/test_cr.sh
+# reads the dumps by number.
+wait 300
+btn A#3 down                  # MAJ + D4: D major (62 66 69)
+wait 60
+btn D4 down
+wait 400
+expect led D4 on
+expect led F#4 on
+expect led A4 on
+expect led D5 on              # the D and F# an octave up: lit too
+expect led F#5 on
+expect led E4 off
+expect led G5 off
+expect led A#3 on             # MAJ, held: its own state
+expect led C4 faint           # the other chord keys and B3: idle (no note name lights them)
+expect led F3 faint
+expect led B3 faint
+dump                          # 1: 111114111 400040040000400040
+knob KNOB1 +8                 # the voicing 8 inversions up: every note above G5
+wait 400
+expect led D4 on
+expect led F#4 on
+expect led A4 on
+expect led D5 on
+expect led F#5 on
+expect led E4 off
+dump                          # 2: notes all > 79, the same lights
+knob KNOB1 -16                # 8 down: every note below D4
+wait 400
+expect led D4 on
+expect led F#4 on
+expect led A4 on
+expect led D5 on
+expect led F#5 on
+expect led E4 off
+dump                          # 3: notes all < 62, the same lights
+knob KNOB1 +8
+wait 200
+btn D4 up
+btn A#3 up
+wait 1200
+dump                          # 4: released: the roots dark
+btn SEL down                  # the KEY layer: Transpose +5 (KNOB 3)
+wait 500
+btn SEL up
+wait 300
+knob KNOB3 +5
+wait 200
+btn OCT-
+wait 300
+btn D4 down                   # D4 alone: a single note, sounding G: the G keys light, the key under the finger does not
+wait 400
+expect led G4 on
+expect led G5 on
+expect led D4 off
+expect led D5 off
+dump                          # 5: notes 67: 000004000000000004
+btn D4 up
+wait 600
+btn A#3 down                  # MAJ + D4: G major (67 71 74): every G, B, D
+wait 60
+btn D4 down
+wait 400
+expect led G4 on
+expect led B4 on
+expect led D5 on
+expect led D4 on
+expect led G5 on
+expect led F#4 off
+expect led A4 off
+dump                          # 6: 400004000400400004
+btn D4 up
+btn A#3 up
+wait 600
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+knob KNOB3 -5
+wait 200
+btn OCT-
+wait 300
+btn OCT+                      # OCT+ twice: D4 plays D6 (86): its two D keys
+wait 100
+btn OCT+
+wait 200
+btn D4 down
+wait 400
+expect led D4 on
+expect led D5 on
+expect led E4 off
+dump                          # 7: notes 86: 400000000000400000
+btn D4 up
+wait 300
+btn OCT-
+wait 100
+btn OCT-
+wait 300
+btn SEL                       # Key Mode on (C major): the scale under a sounding chord
+wait 300
+btn D4 down                   # Dm (62 65 69)
+wait 400
+expect led D4 on
+expect led F4 on
+expect led A4 on
+expect led D5 on
+expect led F5 on
+expect led E4 dim             # the scale's glow,
+expect led C5 mid             # the tonic,
+expect led F#4 off            # out of the key
+dump                          # 8: 402402040230402402
+btn D4 up
+wait 300
+btn SEL
+wait 1500
+btn ARP down                  # the PERF layer: Arpeggiate (SELECT +3), on
+wait 500
+knob SELECT +3
+wait 350
+btn ARP up
+btn OCT-
+wait 200
+btn A#3 down                  # D major arpeggiated: the stepping note's keys blink (both of its name), the rest lit
+wait 60
+btn D4 down
+wait 300
+dump                          # 9..24: 16 dumps 65 ms apart (two blink phases of 250 ms)
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+wait 65
+dump
+btn D4 up
+btn A#3 up
+wait 100
+btn ARP 80                    # Perform off
+wait 2500
+dump                          # 25: silent

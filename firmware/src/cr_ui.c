@@ -3442,11 +3442,7 @@ static void cu_led(uint8_t *nl, uint32_t id, int on)
     if (q != 0xFF && on)
         nl[q >> 3] |= (uint8_t)(1u << (q & 7u));
 }
-static int32_t cu_key_of_note(uint32_t note)       /* the root key a note sounds on (OCT shifted), -1 none */
-{
-    int32_t k = (int32_t)note - 53 - 12 * cu.octave;
-    return k >= (int32_t)(cs.kbd_full ? 0u : CU_ROOT0) && k < (int32_t)CU_NKEY ? k : -1;
-}
+#define CU_KEY_PC(k) ((53u + (k)) % 12u)          /* a key's note name (pitch class; OCT keeps it) */
 
 static void cr_leds(void)
 {
@@ -3586,24 +3582,30 @@ static void cr_leds(void)
                 cu_led(wi == cu.opt_sel ? own : nd, 14u + k, 1);
         }
     } else {
-        uint32_t i;
-        int32_t pk = -1;
+        /* A sounding note lights every key that plays of its note name (the owner, 2026-10-11): a chord voiced,
+         * transposed or shifted out of the keys' two octaves still shows, on both of them. Until then a note lit the
+         * one key of its pitch, so a chord out of range lit nothing. pcs: the note names that sound (bit 0 = C), from
+         * the snapshot's shown chord (ci: the player's last chord as voiced, with the KEY layer's Transpose: what
+         * sounds, not the key under the finger); lpcs: a playing loop's (lnote). The keys that play: the 18 roots,
+         * all 27 on the Full keyboard; never a chord key or B3 in the Chords layout (their LEDs are their own state) */
+        uint32_t i, pcs = 0, lpcs = 0;
         if (sn->ci.sounding && !sn->ldisp)              /* the player's notes (the loop's glow below) */
-            for (i = 0; i < sn->ci.nnotes; i++) {
-                int32_t kk = cu_key_of_note(sn->ci.notes[i]);
-                if (kk >= 0)
-                    cu_led(nl, 14u + (uint32_t)kk, 1);
-            }
+            for (i = 0; i < sn->ci.nnotes; i++)
+                pcs |= 1u << (sn->ci.notes[i] % 12u);
         for (k = 0; full && k < CU_NKEY; k++)            /* the Full keyboard: every key held that plays a note (the
                                                           * chord shown is the last one only) */
-            if (cu.key_note[k] && cu.key_note[k] != 0xFFu && (!cs.key_on || ((scale >> ((53u + k) % 12u)) & 1u)))
-                cu_led(nl, 14u + k, 1);              /* (Key Mode: a key out of the scale plays nothing: dark) */
-        if (sn->perform_on && sn->perf_pos >= 0 && sn->ci.sounding)
-            pk = cu_key_of_note(sn->perf_note);
-        if (pk >= 0 && !blink) {                         /* the performed note blinks */
-            uint8_t q = cu_led_pos[14u + (uint32_t)pk];
-            if (q != 0xFF)
-                nl[q >> 3] &= (uint8_t)~(1u << (q & 7u));
+            if (cu.key_note[k] && cu.key_note[k] != 0xFFu && (!cs.key_on || ((scale >> CU_KEY_PC(k)) & 1u)))
+                pcs |= 1u << ((uint32_t)(cu.key_note[k] - 1 + 48 + cs.transpose) % 12u);
+                                                     /* (Key Mode: a key out of the scale plays nothing: dark) */
+        if (sn->perform_on && sn->perf_pos >= 0 && sn->ci.sounding && !blink)
+            pcs &= ~(1u << (sn->perf_note % 12u));       /* the performed note blinks (on every key of its name) */
+        for (k = key0; k < CU_NKEY; k++)
+            cu_led(nl, 14u + k, (int)((pcs >> CU_KEY_PC(k)) & 1u));
+        for (i = 0; i < 16u; i++) {                      /* (no loop voice sounds: sixteen zero bytes) */
+            uint32_t m = sn->lnote[i], n;
+            for (n = i * 8u; m; m >>= 1, n++)
+                if (m & 1u)
+                    lpcs |= 1u << (n % 12u);
         }
         /* the keys that play. Key Mode off (the owner, 2026-10-12): no idle glow at all: dark unless they sound
          * (nl above) or a loop's note glows on them (ld below); the Full keyboard: all 27 so. Until then they all
@@ -3614,7 +3616,7 @@ static void cr_leds(void)
          * the scale went dark: every white key glowed whatever the key. Stock has two levels: below, the scale's
          * keys lit (the tonic as the rest), the others dark */
         for (k = key0; k < CU_NKEY; k++) {
-            uint32_t pc = (53u + k) % 12u;               /* (the octave shift keeps the pitch class) */
+            uint32_t pc = CU_KEY_PC(k);                  /* (the octave shift keeps the pitch class) */
             if (!cs.key_on)
                 cu_led(nd, 14u + k, (int)cs.leds);
             else if (pc == cs.tonic)
@@ -3622,13 +3624,9 @@ static void cr_leds(void)
             else if ((scale >> pc) & 1u)
                 cu_led(nd, 14u + k, 1);
         }
-        for (k = key0; k < CU_NKEY; k++) {               /* PLAN 6: the loop's notes glow dim (not the player's) */
-            int32_t n = 53 + (int32_t)k + 12 * cu.octave;
-            uint8_t q = cu_led_pos[14u + k];
-            if (n >= 0 && n < 128 && ((sn->lnote[n >> 3] >> (n & 7)) & 1u) && q != 0xFF &&
-                !((nl[q >> 3] >> (q & 7u)) & 1u))
-                cu_led(ld, 14u + k, 1);
-        }
+        for (k = key0; k < CU_NKEY; k++)                 /* PLAN 6: the loop's notes glow dim (not the player's), on
+                                                          * every key of their names too */
+            cu_led(ld, 14u + k, (int)((lpcs & ~pcs) >> CU_KEY_PC(k)) & 1);
     }
     for (k = 0; k < FM1_NCOL; k++) {
         if (cs.leds) {                                   /* STOCK: the idle ones lit, the active ones dark (two

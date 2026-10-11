@@ -1,7 +1,8 @@
 # ChoralRoot: Key Mode's lights on the root keys (the owner, 2026-10-11 / 12): four levels: faint < dim < mid < lit.
 # Key Mode off: the roots are dark (no idle glow) unless they sound; the chord keys and B3 idle at the faint level
 # (under the glow), with Key Mode on too. Key Mode on, everywhere the roots play: the notes of the scale glow (dim, fm1_led_dim), the tonic's
-# keys at the middle level (mid, fm1_led_dim2), the roots out of the scale are dark, a sounding note is lit over it.
+# keys at the middle level (mid, fm1_led_dim2), the roots out of the scale are dark, a sounding note is lit over it
+# (on every root of its name: both D of Dm, the tonic's mid under them).
 # The dump's "key leds:" line: F3..C4, then D4..G5: 0 off 1 faint 2 dim 3 mid 4 lit.
 wait 300
 expect led D4 off             # Key Mode off: a root has no idle glow,
@@ -53,9 +54,9 @@ expect led D4 on
 expect led F4 on
 expect led A4 on
 expect led E4 dim
-expect led D5 mid
+expect led D5 on              # (the other D: lit too, over the tonic's mid)
 expect led F#4 off
-dump                          # 6: 402402042020302202
+dump                          # 6: 402402042020402402
 shot build/emu/test/cr_key_leds_dm.ppm
 btn D4 up
 wait 300
@@ -82,6 +83,8 @@ dump                          # 8: Stock: 404404044040404404, the chord keys 444
 btn D4 down                   # Stock: the sounding notes are the dark ones (the reverse, as ever)
 wait 400
 expect led D4 off
+expect led D5 off             # (every root of a sounding note's name: the same keys as Glow lights)
+expect led F5 off
 expect led E4 on
 btn D4 up
 wait 2500
@@ -98,7 +101,7 @@ btn D4 down
 wait 400
 expect led D4 on
 expect led E4 off
-dump                          # 10: 400000000000000000
+dump                          # 10: 400000000000400000 (the single note D: both D)
 btn D4 up
 wait 300
 btn GLO 80                    # Stock, Key Mode off: as it was: every root and chord key lit (idle = lit)

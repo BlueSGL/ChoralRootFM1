@@ -471,7 +471,24 @@ at half, the selected scale's at full, the six without a job dark. Glow: half = 
 full = `fm1_led`. Stock has no half level (it lights the idle keys and darkens the active ones; a layer's selected
 key is lit through `own`): the selected scale's key lit, the other and the six dark (`cr_key_scale.txt`); with the
 layer's keys on play (below, OPT lit) the chord keys and the roots show their own state as on the view;
-root keys lit where the voiced notes sound (engine query), the sounding perform note blinking,
+**a sounding note lights every key that plays of its note name** (0.17, the owner: "if the chord has a G in it, the
+two G's should light up (don't light up the chord keys)"; until then a note lit the one root key of its pitch, so a
+chord voiced, transposed or shifted out of D4..G5 lit nothing). `cr_leds` builds a 12-bit mask `pcs` of the note names
+that sound from what the snapshot already holds, no new field: `cr_snap.ci.notes` (the shown chord: the player's last
+one, as voiced, with the KEY layer's Transpose: the engine's notes, so what sounds, not the key under the finger;
+only while `ci.sounding` and not a loop voice's, `ldisp`), on the Full keyboard also every held key's note
+(`cu.key_note` + Transpose; Key Mode: not a key out of the scale). Every key that plays (`key0`..: the 18 roots; the
+Full keyboard: all 27) whose name (`CU_KEY_PC`) is in `pcs` is lit (`nl`); a chord key or B3 in the Chords layout
+never is. The performed note (`perf_note`) blinks by name: its bit leaves `pcs` in the blink's dark half, so both
+keys of the stepping note blink and the rest of the chord stays lit. A playing loop's notes (`lnote`, 16 bytes
+scanned, zero bytes skipped) give `lpcs` the same way: the keys of those names glow dim (`ld`) where the player's are
+not lit. Key Mode's scale lights lie under it (`nd` / `nm`: `fm1_led_dim2` is `nm & ~nl`). Stock inverts the same keys.
+Unchanged: which notes count (the shown chord only: an older chord still held with it does not light; the bass
+part's own note never lit and does not; a part's TRANSPOSE on the editor's MIX page is not in the lights, as it is
+not in the note names on screen or in the MIDI out), the layers with a map on the roots, the on-screen keyboard of
+the Keyboard view (exact pitches). Tests: `tools/emu/scripts/cr_note_leds.txt` (D major in both octaves and no chord
+key, KNOB 1 +8 / -8, Transpose +5, OCT+ twice, Key Mode, the arp's blink), `cr_fullkbd.txt` (the Full keyboard),
+`cr_key_leds.txt` (Stock), `cr_loop_glow.txt` (the loop's glow),
 **Key Mode's lights** (0.17: `fm1_led_dim` < `fm1_led_dim2` < `fm1_led`): Key Mode off:
 every key that plays is dark until it sounds (it glowed dim until 2026-10-12); on: the scale's notes dim, the tonic's keys at the middle level (`nm` ->
 `fm1_led_dim2`), the keys out of the scale dark (until 0.17 only the black ones went dark: the loop skipped
@@ -695,7 +712,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   `Loop 1` top lines, REC / LOOP / green LEDs, the metronome click (time signature, level). The count-in is a big
   red countdown (4 3 2 1 springing in, "count-in", the ring drawing itself in; over popups, under PANIC); undo shows
   the layers left huge in red ("layers · undo"); KNOB 1 / SELECT in the LOOP layer move its picker (stopped: the
-  length, mock-up 8; playing: the action). The loop's sounding notes glow dim on their root keys (`cr_snap_t.lnote`,
+  length, mock-up 8; playing: the action). The loop's sounding notes glow dim on the root keys of their note names (`cr_snap_t.lnote`,
   from the 8 loop voices), the player's stay lit. MIDI Clock Out sends 0xFA when the loop starts playing (LOOP from
   stopped, a take committed) and 0xFC when it stops (`cr_out.c`, the ISR; trace `midi:`).
 - **Sounds, the naming screen**: SAVE held 1 s on a used slot asks "delete?" (the slot number huge in red, OCT+

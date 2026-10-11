@@ -1,5 +1,5 @@
-# ChoralRoot: hold MAJ (computer F3 = A#3), press D4 (A) -> D major: sound, the voiced notes' LEDs, the chord
-# screen; KNOB 1 +2: the voicing line; then MAJ + M7 + D4: Dmaj7 (mock-up state 2); everything released: every
+# ChoralRoot: hold MAJ (computer F3 = A#3), press D4 (A) -> D major: sound, the LEDs of its note names (every D, F#
+# and A root: cr_note_leds.txt has the rule's cases), the chord screen; KNOB 1 +2: the voicing line; then MAJ + M7 + D4: Dmaj7 (mock-up state 2); everything released: every
 # part silent within 2 s
 wait 500
 shot build/emu/test/cr_boot.ppm
@@ -11,6 +11,8 @@ expect led A#3 on
 expect led D4 on
 expect led F#4 on
 expect led A4 on
+expect led D5 on                   # (the other D and F#: a note lights every root of its name)
+expect led F#5 on
 expect led E4 off
 expect led B3 faint                # LOCK off: dim (lit when on)
 shot build/emu/test/cr_dmaj.ppm
@@ -21,7 +23,8 @@ shot build/emu/test/cr_voicing.ppm
 expect led A4 on
 expect led D5 on
 expect led F#5 on
-expect led D4 off
+expect led D4 on                   # (A4 D5 F#5 sound: D4 is a D)
+expect led E4 off
 dump
 knob KNOB1 -2
 wait 100
