@@ -404,6 +404,39 @@ case "$(knd 5)" in "arp 0 "*) [ "$(hops 5)" -ge 3 ] && ok "LATCH, a root tapped:
 case "$(knd 6)" in "chord 0 "*) ok "PERF tap (off): the chord view";; *) bad "perform off: $(knd 6)";; esac
 silent_end cr_arp_unit
 
+echo "the perform layer's band: the picker for 2 s after it opens and after SELECT, then the arp while notes are stepped"
+export EMU_UI_LOG=0
+run cr_perf_arp
+unset EMU_UI_LOG
+L="$OUT/cr_perf_arp.log"
+bnd() { seg "$1" | tail -1 | sed -n "s/.*device): knobrow .* item '\\([^']*\\)' .* hot [0-9]\\.[0-9]\\( band arp\\)\\{0,1\\}.*/\\1\\2/p"; }   # "Arpeggiate" (the picker) / "Arpeggiate band arp"
+bas() { seg "$1" | grep -c ' band arp '; }                         # frames of the arp band up to dump N
+pks() { seg "$1" | grep 'device): knobrow ' | grep -vc ' band arp '; }   # .. of the picker
+bhp() { seg "$1" | sed -n 's/.* band arp pos \([0-9][0-9]*\) of .*/\1/p' | sort -u | wc -l | tr -d ' '; }
+[ "$(bnd 1)" = "Arpeggiate" ] && [ "$(bnd 2)" = "Arpeggiate" ] && [ "$(bas 2)" = 0 ] &&
+    ok "PERF held, SELECT +3: the picker (Arpeggiate); nothing playing 2.5 s later: still the picker" || bad "the picker: $(bnd 1) / $(bnd 2), $(bas 2) arp frames"
+[ "$(bnd 3)" = "Arpeggiate band arp" ] && [ "$(bhp 3)" -ge 3 ] && seg 3 | tail -1 | grep -q "name 'D||'.* label 'Arpeggiate . on'" &&
+    ok "MAJ + D4 held: the band is the arp (D, the note hopping: $(bhp 3) places), the mode's name in the label: $OUT/cr_perf_arp_a.ppm" \
+    || bad "no arp band: $(bnd 3), $(bhp 3) places"
+seg 3 | grep ' band arp ' | sed 1d | grep -qv 'blits [0-9]*/[0-2] ' && bad "a hop in the layer composed more than the band's 2 strips" ||
+    ok "a hop composes the band's strips only (2 of 6: $(seg 3 | grep ' band arp ' | grep -c 'blits [0-9]*/2 ') frames; the others nothing): $(seg 3 | grep ' band arp ' | grep 'blits [0-9]*/2 ' | sed -n 's/.*(\([0-9]*\) us device).*/\1/p' | awk '{ s += $1; if ($1 > m) m = $1 } END { printf "%d us avg, %d max (device estimate)", NR ? s / NR : 0, m }')"
+tail -c 82080 "$OUT/cr_perf_arp_a.ppm" >"$OUT/cr_perf_arp_a.row"; tail -c 82080 "$OUT/cr_perf_arp_b.ppm" >"$OUT/cr_perf_arp_b.row"   # rows 126..239
+cmp -s "$OUT/cr_perf_arp_a.row" "$OUT/cr_perf_arp_b.row" && ! cmp -s "$OUT/cr_perf_arp_a.ppm" "$OUT/cr_perf_arp_b.ppm" &&
+    ok "a hop later: the band differs, the knob row's and the footer's pixels are the same" || bad "the knob row changed across a hop (or no hop between the shots)"
+[ "$(pks 4)" = 0 ] && seg 4 | grep -q 'hot 1\.0 band arp ' && [ "$(bnd 4)" = "Arpeggiate band arp" ] &&
+    ok "KNOB 1 in the row: its cell hot, the arp band stays (no picker frame): $OUT/cr_perf_arp_hot.ppm" || bad "a knob of the row: $(pks 4) picker frames, $(bnd 4)"
+[ "$(bnd 5)" = "Arp 2 Octaves" ] && [ "$(bas 5)" -le 2 ] && [ "$(bnd 6)" = "Arp 2 Octaves band arp" ] && seg 6 | tail -1 | grep -q "label 'Arp 2 Octaves . on'" &&
+    ok "SELECT +1 under the playing arp: the picker at once with the new name (Arp 2 Octaves), still there 1.65 s later; past 2 s the arp band again: $OUT/cr_perf_arp_pick.ppm" \
+    || bad "SELECT: $(bnd 5) ($(bas 5) arp frames) / $(bnd 6)"
+[ "$(bnd 7)" = "Arp 2 Octaves" ] && ok "keys up: the picker" || bad "keys up: $(bnd 7)"
+[ "$(bnd 8)" = "Arp 2 Octaves band arp" ] && [ "$(bhp 8)" -ge 3 ] && seg 8 | tail -1 | grep -q "name 'E||'" &&
+    ok "LATCH + a chord tapped: the arp band, hands off ($(bhp 8) places)" || bad "latched: $(bnd 8)"
+[ "$(bnd 9)" = "Arp 2 Octaves" ] && [ "$(seg 9 | tail -60 | grep -c ' band arp ')" = 0 ] && [ "$(bnd 10)" = "Arp 2 Octaves band arp" ] &&
+    ok "the layer opened again over the latched arp: the picker first (its first second: no arp frame), the arp band after 2 s" || bad "reopened: $(bnd 9) / $(bnd 10)"
+[ "$(bnd 11)" = "Arp 2 Octaves band arp" ] && ok "Options > Motion Off: the arp band too (the Chord view's rule)" || bad "Motion Off: $(bnd 11)"
+[ "$(bnd 12)" = "Strum" ] && ok "Strum (runs once): the picker stays" || bad "Strum: $(bnd 12)"
+silent_end cr_perf_arp
+
 echo "HOME held: the view menu; the view lock; HOME tap at home cycles only unlocked"
 run cr_view_menu
 L="$OUT/cr_view_menu.log"

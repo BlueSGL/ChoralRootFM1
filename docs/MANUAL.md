@@ -415,6 +415,13 @@ off; the top right names it. Hold PERF for the **PERF layer**: SELECT picks the 
 performance on), the root keys play so you hear it, KNOB 1 to KNOB 4 are the mode's parameters, and a PERF tap is
 still on / off. OCT-, OCT+, HOME or holding PERF again closes the layer.
 
+While an arpeggio or a pattern is playing, the top half of the PERF layer shows it: the chord's name, its notes on a
+line and the sounding note hopping along, with the mode's name small at the top left (`Arpeggiate · on`). The four
+cells under it stay as they are, and turning KNOB 1 to KNOB 4 does not disturb it. The mode picker always comes
+first: for two seconds after the layer opens, and for two seconds after every turn of SELECT, the top half is the
+picker with the mode's name large, so you can read what you switched to even while LATCH keeps the notes going.
+When nothing is being stepped (no keys held, or Strum, Slop, Harp) the picker stays.
+
 | Mode in the picker | What it does | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- | --- |
 | **Strum**, **Strum 2 Octaves** | the notes one after another | Rate (ms) | Direction | Range (octaves) | Hold |

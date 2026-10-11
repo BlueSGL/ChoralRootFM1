@@ -386,6 +386,10 @@ void emu_fw_ui_info(char *buf, uint32_t n)
         size_t l = strlen(buf);
         snprintf(buf + l, n - l, " pos %d of %u line '%s'", (int)s->pos, (unsigned)s->n_notes, s->line);
     }
+    if (s->kind == CR_K_KNOBROW && s->kr_band == 2u) {   /* the PERF layer's arp band (the picker's lines end at "hot") */
+        size_t l = strlen(buf);
+        snprintf(buf + l, n - l, " band arp pos %d of %u label '%s'", (int)s->pos, (unsigned)s->n_notes, s->label);
+    }
     if (s->kind == CR_K_GEEK) {                   /* GEEK OUT's status lines (the second core's: tools/emu/test_cr.sh) */
         size_t l = strlen(buf);
         uint32_t i;

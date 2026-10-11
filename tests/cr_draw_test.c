@@ -1216,6 +1216,60 @@ int main(int argc, char **argv)
         check("arp: the screen is in the table (the main sheet's arp state)", found);
     }
 
+    {   /* the knob row's arp band (kr_band 2: the PERF layer while notes are stepped): a knob row of the table with a
+         * footer (the fx sheet's), its band the arp of the main sheet's arp state. The hop alone moves: at most the
+         * two strips over the row are composed, the row's pixels (and the footer's) never change, the partial draw is
+         * the full one's; the band differs from the picker's and has ink between the label and the row */
+        int fk = -1, fa = -1;
+        for (k = 0; k < CR_NSCREENS; k++) {
+            if (fk < 0 && CR_SCREENS[k].kind == CR_K_KNOBROW && !CR_SCREENS[k].kr_band && CR_SCREENS[k].footer[0])
+                fk = (int)k;
+            if (fa < 0 && CR_SCREENS[k].kind == CR_K_ARP)
+                fa = (int)k;
+        }
+        check("knob row arp band: a knob row with a footer and the arp state are in the table", fk >= 0 && fa >= 0);
+        if (fk >= 0 && fa >= 0) {
+            cr_screen_t s = CR_SCREENS[fk];
+            uint32_t ry, most = 0, p, i, ink = 0;
+            int same = 1, row = 1;
+            s.anim = 0;
+            render(&s, 0);
+            memcpy(b, host_screen, sizeof b);                         /* the picker band */
+            s.kr_band = 2;
+            s.name = CR_SCREENS[fa].name;
+            s.n_notes = CR_SCREENS[fa].n_notes;
+            memcpy(s.note, CR_SCREENS[fa].note, sizeof s.note);
+            s.hop_col = CR_COL_WHITE;
+            s.pos = 0;
+            ry = (uint32_t)cr_kr_rowy(&s);
+            render(&s, 0);
+            check("knob row arp band: not the picker's band", memcmp(b, host_screen, ry * 240u * sizeof b[0]) != 0);
+            check("knob row arp band: the row and the footer are the picker screen's",
+                  !memcmp(b + ry * 240u, host_screen + ry * 240u, (240u - ry) * 240u * sizeof b[0]));
+            for (i = (CR_PY0 + 16u) * 240u; i < ry * 240u; i++) ink += host_screen[i] != host_screen[0];
+            check("knob row arp band: the name, the notes and the hop are drawn in the band", ink > 400u);
+            memcpy(b, host_screen, sizeof b);
+            for (p = 0; p < 2u * s.n_notes + 1u; p++) {               /* round the notes twice, then none (-1) */
+                s.pos = (int8_t)(p < 2u * s.n_notes ? (int32_t)((s.pos + 1) % (int32_t)s.n_notes) : -1);
+                cr_draw(&s, 0);
+                if (cr_dc.drawn > most) most = cr_dc.drawn;
+                row &= !memcmp(b + ry * 240u, host_screen + ry * 240u, (240u - ry) * 240u * sizeof b[0]);
+                memcpy(a, host_screen, sizeof a);
+                render(&s, 0);
+                same &= !memcmp(a, host_screen, sizeof a);
+            }
+            snprintf(name, sizeof name, "knob row arp band: a hop composes the band's strips only (%u of %u; the row's two never)",
+                     most, (unsigned)CR_NSTRIP);
+            check(name, most >= 1u && most <= 2u && cr_strips_of(CR_KA_BY(&s) - 40, CR_KA_BY(&s) + 14) == 6u);
+            check("knob row arp band: the knob row's pixels are unchanged across the hops", row);
+            check("knob row arp band: the hop's partial draw equals a full one", same);
+            s.hot_r = 1;                                              /* a cell turned under the arp: the row's strips */
+            s.hot_c = 0;
+            cr_draw(&s, 0);
+            check("knob row arp band: a hot cell composes the row's strips (2), not the band's", cr_dc.drawn == 2u);
+        }
+    }
+
     {   /* animations: pure and settling */
         int pure = 1, settle = 1, moving = 1;
         for (i = 0; i < CR_NSCREENS; i++) {

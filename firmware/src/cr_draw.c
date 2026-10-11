@@ -1808,6 +1808,37 @@ static void cr_kr_cells(const cr_screen_t *s, int32_t ry, int32_t rh)
 #undef CR_KY
 }
 
+/* kr_band 2: the arp in the knob row's band (PERF while notes are stepped): cr_p_arp fitted to the 98 px over the
+ * row. The chord's name 20 px under the label (baseline +32), the notes on a line 26 px over the row (13 px, the
+ * rule under them), the sounding one 15 px on its block above the line, the dotted arc to the next. No rate line
+ * (the row's cells say it). The hop's rows are by - 40 .. by + 14 (cr_arp_strips): with a footer rows 60 .. 114,
+ * strips 1 and 2, never the row's (126 ..) */
+#define CR_KA_BY(s) (cr_kr_rowy(s) - 26)
+static void cr_kr_arp(const cr_screen_t *s)
+{
+    int32_t n = s->n_notes, by = CR_KA_BY(s), gap16 = n > 1 ? 200 * 16 / (n - 1) : 0, x0, i, pos = s->pos;
+    if (gap16 > 52 * 16) gap16 = 52 * 16;
+    if (s->name.root[0]) cr_name(&s->name, P8(120), P8(CR_PY0 + 32), 20, 200, 4096);
+    cr_fill(14, by + 11, 212, 2, T_LINE);
+    x0 = 120 * 16 - (n - 1) * gap16 / 2;                            /* Q4 */
+    if (pos >= 0 && pos < n && n > 1) {
+        int32_t xa = x0 + pos * gap16, xb = x0 + ((pos + 1) % n) * gap16;
+        cr_quad(xa, (by - 22) * 16, (xa + xb) / 2, (by - 52) * 16, xb, (by - 2) * 16, 32, 48, 112,
+                cr_rgb(s->hop_col, T_MID));
+    }
+    for (i = 0; i < n; i++) {
+        uint16_t c = cr_rgb(s->note[i].col, CR_WHITE);
+        int32_t x = x0 + i * gap16;
+        if (i == pos) {
+            int32_t w = (cr_tw(s->note[i].t, 15, 1) >> 8) + 14;
+            cv_rrect((x >> 4) - w / 2, by - 22 - 12, w, 24, 3, c, T_BG);
+            cr_text(x << 4, P8(by - 22 + 5), s->note[i].t, 15, 1, CR_C, 4096, T_BG, c, 0);
+        } else {
+            cr_text(x << 4, P8(by + 5), s->note[i].t, 13, 1, CR_C, 4096, c, T_BG, 0);
+        }
+    }
+}
+
 static void cr_p_knobrow(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
 {
     int32_t n = s->n_items, sel = s->sel < n ? s->sel : n - 1, size = s->size ? s->size : 34, ry = cr_kr_rowy(s);
@@ -1820,6 +1851,8 @@ static void cr_p_knobrow(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
         if (s->kr_band == 1u) {                      /* the keyboard (KEY): the 224 px strip, <= 56 px tall, centred */
             int32_t avail = ry - CR_PY0 - 18 - 6, kh = avail < 56 ? avail : 56;
             cr_keyboard(s, CR_PY0 + 18 + (avail - kh) / 2, kh);
+        } else if (s->kr_band == 2u) {               /* the arp (PERF, notes stepping) */
+            cr_kr_arp(s);
         } else if (n > 0) {
             int32_t bw = cr_tw(cr_item(s, sel), (uint32_t)size, 1);
             if (bw > P8(170)) bw = P8(170);
@@ -1827,7 +1860,7 @@ static void cr_p_knobrow(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
             cr_pick_item(s, fr, sel, size, 170, 1, base, top, top + bigh, col);
             cr_pick_marks(n, sel, marks, col);
         }
-        if (s->value[0] && s->kr_band != 1u) cr_text_fit(P8(120), P8(marks + 19), s->value, 13, 1, CR_C, col, T_BG, P8(224));
+        if (s->value[0] && !s->kr_band) cr_text_fit(P8(120), P8(marks + 19), s->value, 13, 1, CR_C, col, T_BG, P8(224));
     }
     cr_kr_cells(s, ry, CR_KR_ROW);
 }
@@ -2410,6 +2443,8 @@ static uint32_t cr_lm_strips(const cr_screen_t *s, int marks)
 static uint32_t cr_arp_strips(const cr_screen_t *s)
 {
     int32_t by = CR_PY0 + cr_ph(s) - 46;
+    if (s->kind == CR_K_KNOBROW && s->kr_band == 2u)             /* the PERF layer's band (cr_kr_arp): not the row's */
+        return cr_strips_of(CR_KA_BY(s) - 40, CR_KA_BY(s) + 14);
     if (s->kind != CR_K_ARP) return (1u << CR_NSTRIP) - 1u;
     return cr_strips_of(by - 72, by + 12);
 }

@@ -199,8 +199,10 @@ typedef struct {
      * `page` right-aligned). No motion: a change is drawn at once (docs/EDITOR.md "Responsiveness").
      * knobrow (a layer): the picker's fields (items, sel, col, label, value; the slide) for the band, cell[0][0..3]
      * the knobs' cells (CR_CF_ON off: a dim dash), hot_r 1 / hot_c the cell just turned, hot_col its block;
-     * kr_band 1: the band is the keyboard instead of the picker (KEY: lit / lit_col / key_label, `label` top left) */
-    uint8_t kr_band;                /* knobrow: 0 the picker, 1 the keyboard */
+     * kr_band 1: the band is the keyboard instead of the picker (KEY: lit / lit_col / key_label, `label` top left);
+     * kr_band 2: the arp (PERF while notes are stepped: name, note[] / n_notes, pos, hop_col as the arp screen's,
+     * fitted to the band; `label` top left) */
+    uint8_t kr_band;                /* knobrow: 0 the picker, 1 the keyboard, 2 the arp */
     char page[16];                  /* edit8 / stack: the title line's right text ("OSC 2 \267 A") */
     cr_cell_t cell[CR_ED_ROWS][4];  /* rows of four cells (edit8: 1..2 rows) */
     char head[4][10];               /* stack: the column headings */

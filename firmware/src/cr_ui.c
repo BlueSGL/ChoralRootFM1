@@ -788,6 +788,8 @@ static struct {
     uint8_t open, combo;                  /* its layer (or shift) is open; something else was touched */
     uint32_t t0;                          /* when it was pressed (fm1_ms) */
     uint8_t lock;                         /* the open layer (locked since its button's hold), L_NONE: none */
+    uint32_t perf_t0;                     /* the PERF layer opened / SELECT turned in it: its picker shows for
+                                           * CU_PERF_PICK_MS from then, before the arp band may (cu_arp_layer) */
     uint32_t swallow;                     /* buttons pressed during another's hold: their release does nothing */
     uint8_t oct_chord;                    /* OCT- and OCT+ were down together (panic): no tap */
     uint8_t oct_mod;                      /* OCT- held was a modifier (the editor: + a knob clears its modulation): no tap */
@@ -1683,6 +1685,8 @@ static void cu_opened(uint32_t b)                 /* a button held past HOLD (or
         cu_pick_end(1);
     cu.lock = (uint8_t)(cu_lockable(l) ? l : L_NONE);   /* the layer stays open after release */
     cu_hot.knob = 0;                              /* (a layer opens with no hot cell) */
+    if (l == L_PERF && was != L_PERF)             /* the perform layer opens on its picker (the mode's name) */
+        cu.perf_t0 = cu_now();
     cu_trace("layer: open %u%s\n", (unsigned)l, cu.lock ? " (locked)" : "");
     if (l == L_EDIT && was != L_EDIT)             /* the engine picker: a preview of the sound as it is now */
         cu_pick_begin();
@@ -2172,6 +2176,8 @@ static void cu_layer_pick(uint32_t l, int32_t i)   /* a white root / SELECT: the
         return;
     switch (l) {
     case L_PERF:
+        cu.perf_t0 = cu_now();                    /* SELECT turned (a detent at the list's end too): the picker, for
+                                                   * CU_PERF_PICK_MS from the last detent */
         if (i < 7) {
             if (cs.perf_sel != (uint8_t)i)
                 cu_hot.knob = 0;                  /* another mode: its row has no hot cell */
@@ -4025,6 +4031,7 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
     }
 }
 
+static int cu_arp_layer(uint32_t now);
 static void cu_layer_screen(cr_screen_t *s, uint32_t l)
 {
     static const char *const PERF_ITEMS[7] = {"Strum", "Strum 2 Octaves", "Slop", "Arpeggiate", "Arp 2 Octaves",
@@ -4062,6 +4069,18 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
                   "SELECT: mode \267 ARP: on/off \267 OCT-: back");
         s->kind = CR_K_KNOBROW;
         s->orient = 1;
+        if (cu_arp_layer(cu_now())) {              /* notes are being stepped and the picker's 2 s are over: the
+                                                    * band is the arp (the chord's name, the hopping note); the mode's
+                                                    * name moves into the label; the knob row as it is */
+            const cr_snap_t *sn = &cr_snap;
+            s->kr_band = 2;
+            cu_name(&s->name, &sn->ci);
+            cu_notes(s, &sn->ci);
+            s->pos = (int8_t)(sn->perf_step && sn->perf_pos >= 0 && sn->perf_pos < (int)s->n_notes ? sn->perf_pos : -1);
+            s->hop_col = CR_COL_WHITE;
+            cu_cpy(s->label, PERF_ITEMS[cs.perf_sel % 7u], sizeof s->label);
+            cu_cat(s->label, " \267 on", sizeof s->label);
+        }
         cu_perf_cells(s);
         cu_row_trace(s, "perf", seen, sizeof seen);
         break;
@@ -4259,26 +4278,39 @@ static void cu_scope(cr_screen_t *s)
  * CU_ARP_LINGER_MS keeps the screen (no flash of the chord view between two chords: the name and the notes of the one
  * just left, no note on its block); Perform off does not wait, and the PANIC screen outlasts it */
 #define CU_ARP_LINGER_MS 150u
-static int cu_arp_on(uint32_t now)
+typedef struct { uint32_t t_step; uint8_t seen; } cu_arp_t;   /* a place that shows the arp: its linger */
+static int cu_arp_run(cu_arp_t *a, uint32_t now, int here)    /* here: the place may show it now */
 {
-    static uint32_t t_step;
-    static uint8_t seen;
     const cr_snap_t *sn = &cr_snap;
     uint32_t pm = sn->perform_mode;
-    if (cs.view != V_CHORD || !sn->perform_on || !sn->ci.valid ||
-        (pm != CR_PM_ARP && pm != CR_PM_PATTERN)) {
-        seen = 0;
+    if (!here || !sn->perform_on || !sn->ci.valid || (pm != CR_PM_ARP && pm != CR_PM_PATTERN)) {
+        a->seen = 0;
         return 0;
     }
     if (sn->perf_step && sn->ci.sounding) {
-        seen = 1;
-        t_step = now;
+        a->seen = 1;
+        a->t_step = now;
         return 1;
     }
-    if (seen && now - t_step < CU_ARP_LINGER_MS)
+    if (a->seen && now - a->t_step < CU_ARP_LINGER_MS)
         return 1;
-    seen = 0;
+    a->seen = 0;
     return 0;
+}
+static int cu_arp_on(uint32_t now)                 /* the Chord view */
+{
+    static cu_arp_t a;
+    return cu_arp_run(&a, now, cs.view == V_CHORD);
+}
+/* the PERF layer's band (the owner, 2026-10-10): the same rule, whatever the view, but the picker comes first: for
+ * CU_PERF_PICK_MS after the layer opened and after every detent of SELECT the band is the mode picker (so a mode
+ * switched under a latched arp is read), then the arp while notes are stepped; not stepping: the picker, as before.
+ * KNOB 1..4 do not bring the picker back (their cells turn hot) */
+#define CU_PERF_PICK_MS 2000u
+static int cu_arp_layer(uint32_t now)
+{
+    static cu_arp_t a;
+    return cu_arp_run(&a, now, now - cu.perf_t0 >= CU_PERF_PICK_MS);
 }
 
 static void cu_view_screen(cr_screen_t *s, uint32_t now)

@@ -214,7 +214,7 @@ a button pressed during another's hold is that hold's combo (its release does no
 | printed | role | tap | hold (locked open unless noted) |
 | --- | --- | --- | --- |
 | SEL | KEY | Key Mode on/off | the knob row with the keyboard as its band: roots = tonic (Key Mode on; the scale kept unless MAJ / MIN is held with it); **MAJ / MIN = the scale**, at the press, LOCK on or off (`cu_key_scale`: the chord block is the layer's here, `cu.kpick` keeps those presses from the engine and from LOCK's latch, so the latched chord is what it was when the layer closes; the other six chord keys do nothing, B3 stays LOCK). That is **keys: pick**, the default; **an OPT (GLO) tap in the layer** switches to **keys: play** and back (`cs.key_play`, settings v13: bit 5 of `loop_rec`; the PLAY menu's Keys is the precedent): the roots and the chord block then play exactly as outside the layer (`cu_layer_keys`, `cu_key_pick`) and their LEDs are their own state again, OPT lit; the label reads "key · keys pick" / "key · keys play", the footer "MAJ MIN: scale · GLO: play · OCT-: back" / "GLO: pick · OCT-: back · HOME: home"; OPT never opens the Options from this layer, OPT held + a knob keeps its second jobs (a combo, no toggle: + KNOB 1 the split point, which belongs to the layer's Single cell); `cr_key_play.txt`, `persist_kkeys_*.txt`; KNOB 1–4 Tonic Scale Transpose Single as cells, the turned cell hot |
-| ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; a PERF tap in it = on/off (the label "perform · on" / "· off"), OCT+ closes; KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms |
+| ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; a PERF tap in it = on/off (the label "perform · on" / "· off"), OCT+ closes; KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms; **the band is the arp while notes are stepped** (section 5, "the PERF layer's band"), the picker for 2 s after the layer opens and after every SELECT detent |
 | FX | FX | main effect on/off | the knob row: SELECT = effect, the roots play; a FX tap in it = on/off (label "fx · on" / "· off"), OCT+ closes; KNOB 1–3 params, KNOB 4 amount (on: FX on); no popups, the turned cell hot 800 ms |
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
 | LFO | LATCH | latch on/off (Sticky Keys; also holds a performed arp / pattern after the keys are released: Hold defaults off in every mode, an arp stops when the keys are up; Hold is STRUM's KNOB 4) | — |
@@ -306,6 +306,19 @@ Priority, top down, first match wins:
      name's): tests/cr_draw_test.c "arp: ...". Tests: `cr_arp_view.txt` (test_cr.sh "the arp screen": every case
      above from the frames between its dumps), `cr_arp_unit.txt` (the owner's settings record of 2026-10-10 seeded into
      a flash file by `tools/emu/seed_settings.py`: Key Mode, one root alone, Arpeggiate, Motion Off), `cr_arp_hold.txt`, tests/cr_engine_test.c "stepping: ...".
+   - **the PERF layer's band** (the owner, 2026-10-10; `cr_ui.c cu_arp_layer`, `cr_draw.c cr_kr_arp`, `kr_band` 2):
+     the perform layer's top half is the arp while notes are stepped, by the arp screen's own rule (`cu_arp_run`:
+     Perform on in a clocked mode, the shown chord's voice stepping, the 150 ms linger; Motion does not gate it)
+     whatever the view, the knob row under it untouched. **The picker comes first**: for `CU_PERF_PICK_MS` (2 s)
+     after the layer opens and after every detent of SELECT (`cu.perf_t0`; a detent at the list's end counts) the
+     band is the mode picker, so a mode switched under a latched arp is read; KNOB 1–4 do not bring it back (their
+     cell turns hot under the arp). The band (98 px over the row, a footer under it): `label` top left carries the
+     mode ("Arpeggiate · on"), the chord's name 20 px (baseline row 60), the notes 13 px on a line 26 px over the
+     row with the rule under them, the sounding one 15 px on its block, the dotted arc; no rate line (the Division
+     cell says it). A hop composes strips 1 and 2 only (rows 60..114; the row starts at 126: `cr_arp_strips`),
+     3.7 ms device estimate a hop (4.1 the worst; the Chord view's hop: 3.6), the frames between draw nothing, as
+     the layer's picker does. Tests: `cr_perf_arp.txt` (test_cr.sh "the perform layer's band"), tests/cr_draw_test.c
+     "knob row arp band: ...". No mock-up: the designer's knobrow has no such band.
 6. the splash and the screensaver → `stripes` (the ChoralRoot logo): at power-on (the splash, CR_SPLASH_MS with the
    version, the intro slide once) until the first input; then only as a screensaver after **3 minutes without any
    input** (`CR_IDLE_MS` 180 000, fixed: keys, buttons, knobs and MIDI channel messages in are activity, `cu.last_input`;

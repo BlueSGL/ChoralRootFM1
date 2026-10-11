@@ -1,0 +1,86 @@
+# ChoralRoot: the PERF layer's top half animates while notes play (the owner, 2026-10-10). PERF held: the layer opens
+# on its picker; SELECT +3: Arpeggiate (on). MAJ + D4 held: the picker stays for 2 s after the last detent of SELECT
+# (the mode's name is read), then the band is the arp: the chord's name, the notes, the sounding one hopping; the knob
+# row under it unchanged (two shots a hop apart: only the band's rows differ). KNOB 1 turned: its cell hot, the arp
+# stays. SELECT +1 (Arp 2 Octaves): the picker at once with the new name, for 2 s, then the arp again. Keys up: the
+# picker. LATCH + a chord tapped: the arp after the 2 s, hands off. OCT- and PERF held again: the picker first, the arp
+# 2 s later. Options > Motion Off: the same (as the Chord view's arp screen). Strum: the picker stays.
+# test_cr.sh reads the frames (EMU_UI_LOG=0) between the dumps.
+wait 300
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+knob SELECT +3
+wait 300
+dump                          # 1: perform 1 (Arpeggiate), layer 2: the picker (nothing plays)
+wait 2500
+dump                          # 2: 2.5 s later, nothing playing: still the picker
+key F3 down
+wait 40
+btn D4 down
+wait 2500
+shot build/emu/test/cr_perf_arp_a.ppm
+wait 250
+shot build/emu/test/cr_perf_arp_b.ppm
+wait 300
+dump                          # 3: the chord held (SELECT's 2 s long over): the arp band, hopping
+knob KNOB1 +1                 # the division: its cell hot, the arp band stays
+wait 200
+shot build/emu/test/cr_perf_arp_hot.ppm
+wait 300
+knob KNOB1 -1
+wait 1200
+dump                          # 4: a knob of the row: no picker in any frame
+knob SELECT +1                # Arp 2 Octaves: the picker at once
+wait 150
+shot build/emu/test/cr_perf_arp_pick.ppm
+wait 1500
+dump                          # 5: 1.65 s after the detent: the picker still, 'Arp 2 Octaves'
+wait 1200
+dump                          # 6: past the 2 s: the arp band again
+btn D4 up
+key F3 up
+wait 600
+dump                          # 7: keys up: the picker
+btn LFO                       # LATCH
+wait 200
+key F3 down
+wait 40
+btn E4 down
+wait 300
+btn E4 up
+key F3 up
+wait 1500
+dump                          # 8: latched, hands off: the arp band
+btn OCT-
+wait 300
+btn ARP down                  # the layer opened again: the picker first ..
+wait 500
+btn ARP up
+wait 1000
+dump                          # 9: 1 s after opening: the picker (the latched arp plays on)
+wait 1500
+dump                          # 10: .. then the arp band
+btn OCT-
+wait 200
+btn GLO 80                    # Options > Motion Off
+wait 300
+knob SELECT +13
+wait 300
+knob KNOB1 +2
+wait 300
+btn GLO 80
+wait 300
+btn ARP down
+wait 500
+btn ARP up
+wait 2500
+dump                          # 11: Motion Off: the arp band too (as the Chord view's)
+knob SELECT -4                # Strum: runs once, no stepping
+wait 2600
+dump                          # 12: Strum: the picker
+btn LFO                       # LATCH off: the chord ends
+btn OCT-
+wait 2500
+dump                          # 13: silent
