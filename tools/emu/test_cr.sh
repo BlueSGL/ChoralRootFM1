@@ -1903,5 +1903,25 @@ p=$(pixel "$OUT/cr_update_panic.ppm" 120 200); set -- $p
 [ "$(uc 6)" = "octave 0 view 0 layer 9 options 0" ] && [ "$(uc 7)" = "octave 0 view 0 layer 0 options 0" ] &&
     ok "HOME alone held: the view menu, as before" || bad "HOME held: $(uc 6) / $(uc 7)"
 
+# ---- the keys while a frame draws (cr_ui.c cr_ui_pump, docs/INTEGRATION.md "Keys while a frame draws") ----
+# cr_keylat.txt: the SCOPE view with a note sounding (six strips every frame), eight keys struck as a frame begins,
+# just past its scan. A frame takes no time by default (the WAV is then the same with and without the pump); with
+# EMU_STRIP_US a strip takes that long on the device's clock: the note-on's way to the engine is a strip's time, a
+# tick and an audio block with the keys read between the strips, the whole redraw without (EMU_PUMP=0: as it was)
+kl() {   # kl STRIP_US PUMP: the log in $OUT/cr_keylat_US_PUMP.log, the WAV beside it
+    EMU_STRIP_US=$1 EMU_PUMP=$2 "$EMU" --headless --script "$S/cr_keylat.txt" --wav "$OUT/cr_keylat_$1_$2.wav" >"$OUT/cr_keylat_$1_$2.log" 2>&1
+}
+klw() { sed -n 's/^keys: 9 note-ons, from the key.s scan to the engine avg [0-9.]* ms, worst \([0-9]*\)\.[0-9] ms.*/\1/p' "$OUT/cr_keylat_$1_$2.log"; }
+kl 0 1; st=$?
+kl 0 0
+[ $st = 0 ] && [ "$(grep -c '^strike: .* a redraw of 6 strips' "$OUT/cr_keylat_0_1.log")" = 8 ] && cmp -s "$OUT/cr_keylat_0_1.wav" "$OUT/cr_keylat_0_0.wav" &&
+    ok "cr_keylat: eight keys struck as a frame of six strips began; with frames that take no time the sound is the same with and without the key pump" \
+    || bad "cr_keylat: exit $st, $(grep -c '^strike: .* a redraw of 6 strips' "$OUT/cr_keylat_0_1.log") strikes into a full redraw, or the WAVs differ"
+kl 2700 1; kl 2700 0; kl 7800 1; kl 7800 0
+a=$(klw 2700 1); b=$(klw 2700 0); c=$(klw 7800 1); d=$(klw 7800 0)
+[ "${a:-99}" -le 5 ] && [ "${b:-0}" -ge 15 ] && [ "${c:-99}" -le 10 ] && [ "${d:-0}" -ge 40 ] &&
+    ok "a key struck while a frame draws: to the engine in $a ms at most with a 16 ms redraw (2.7 ms a strip), $c ms with a 47 ms one; read between frames only (as it was) $b and $d ms" \
+    || bad "the keys while a frame draws: worst ${a:-?} ms (16 ms redraw; <= 5), ${c:-?} ms (47 ms redraw; <= 10); without the pump ${b:-?} (>= 15), ${d:-?} (>= 40)"
+
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

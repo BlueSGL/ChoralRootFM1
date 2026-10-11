@@ -2139,7 +2139,12 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               "fx_reverb_max_us", "fx_up_avg_us", "fx_up_max_us",
               "flash_erases", "flash_holes", "saves_settings", "saves_session",
               # 0.18's third build: when the ISR got to start (firmware/src/cr_cpu1.h cr_prof_entry, cr_prof_t5)
-              "pk_lag_us", "pk_wall_us", "pk_t5_us", "stale_halves", "irq_gap_us", "irq_gap_pc"]
+              "pk_lag_us", "pk_wall_us", "pk_t5_us", "stale_halves", "irq_gap_us", "irq_gap_pc",
+              # the keys' way to the engine (firmware/src/cr_out.c cr_klat, docs/INTEGRATION.md "Keys while a frame
+              # draws"): the note-ons timed; us from the first scan that saw the key closed (its debounce, 1.1 .. 2.2
+              # ms, in it) to the main loop posting the note-on (the longest), and to the audio ISR applying it (the
+              # average, the longest); the sound leaves the DAC one half (2.9 ms) after that
+              "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 
 
@@ -2210,6 +2215,11 @@ def print_debug(vals, out, stub_only=False, peak=()):
         print(f"interrupts: TIMER5 (100 us apart) once came {d['irq_gap_us']} us after the one before"
               + (f": masked for about {d['irq_gap_us'] - 100} us, until 0x{d['irq_gap_pc']:08X} (build/choralroot.dis)"
                  if d["irq_gap_us"] > 150 else ": nothing masked them for long"), file=out)
+    if d.get("key_ons"):
+        print(f"keys: {d['key_ons']} note-ons since the last --debug; from the first closed scan (the debounce, 1.1 to 2.2 "
+              f"ms, in it) the main loop posted one after {d['key_pick_us'] / 1000:.1f} ms at most, the engine had it "
+              f"after {d['key_eng_avg_us'] / 1000:.1f} ms on average, {d['key_eng_us'] / 1000:.1f} ms at most (key_eng_us: "
+              f"a frame's draw no longer adds to it; the sound leaves the DAC 2.9 ms later)", file=out)
     stub_lines(d, out)
     if d.get("ua_open_close_ms"):
         print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "

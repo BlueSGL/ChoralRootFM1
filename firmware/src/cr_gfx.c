@@ -21,6 +21,13 @@ static uint8_t cr_gbuf[CR_GLYPH_MAX] __attribute__((section(".pool")));      /* 
 static const aag_t *cr_gbuf_g;                                                 /* .. which */
 static struct { uint16_t c0, n, w[CR_KMAX]; } cr_cw[256] __attribute__((section(".pool")));
 
+/* The keys while a frame draws (docs/INTEGRATION.md "Keys while a frame draws"): cr_draw_idle is called inside a
+ * redraw, at each glyph, arc and polyline (the costly pieces of a strip) and after each strip (cr_draw.c). 0:
+ * nothing; cr_ui.c cr_ui_draw sets its key pump for the length of its own cr_draw. What it calls must not draw, nor
+ * write the screen model, the canvas, the glyph buffer, the cache or the palette: a redraw reads nothing else */
+static void (*cr_draw_idle)(void);
+#define CR_IDLE() do { if (cr_draw_idle) cr_draw_idle(); } while (0)
+
 static void cr_clip_set(int32_t x0, int32_t y0, int32_t x1, int32_t y1)
 {
     cr_clip.x0 = (int16_t)(x0 < 0 ? 0 : x0);
@@ -284,6 +291,7 @@ static void cr_arc(int32_t cx, int32_t cy, int32_t r, int32_t w, uint32_t a0, ui
     for (j = y0; j < y1; j++)
         for (i = x0; i < x1; i++)
             cr_blend(i, j, c, cr_arc_px(&g, i, j) * 16u);
+    CR_IDLE();
 }
 
 /* a polyline of n points (Q4 pairs), w wide (Q4), round joins and caps; dashes (dash_on of every dash_per Q4 px
@@ -300,6 +308,7 @@ static void cr_poly(const int16_t *p, uint32_t n, int32_t w, int32_t dash_on, in
     int16_t bx0[CR_POLY_MAX], bx1[CR_POLY_MAX], by0[CR_POLY_MAX], by1[CR_POLY_MAX];
     uint8_t row[CR_POLY_MAX], near[CR_POLY_MAX];
     uint32_t k, nrow, nnear, q;
+    CR_IDLE();
     if (n < 2u) return;
     if (n > CR_POLY_MAX) n = CR_POLY_MAX;
     for (k = 0; k < n; k++) {
@@ -608,8 +617,10 @@ static int32_t cr_text_sc(int32_t x, int32_t y, const aafont_t *f, const char *s
         if (g->bw) {
             int32_t gx0 = X >> 8, gy0 = Y >> 8, gx1 = (X + ((g->bw * sx) >> 4) + 255) >> 8;
             int32_t gy1 = (Y + ((g->bh * sy) >> 4) + 255) >> 8;
-            if (gy1 > cr_row0() && gy0 < cr_row1() && gx1 > cr_clip.x0 && gx0 < cr_clip.x1)
+            if (gy1 > cr_row0() && gy0 < cr_row1() && gx1 > cr_clip.x0 && gx0 < cr_clip.x1) {
                 cr_glyph(f, g, X, Y, sx, sy, c);
+                CR_IDLE();
+            }
             gx0 = (X + 128) >> 8;                                       /* the ink box: pixels at least half covered */
             gy0 = (Y + 128) >> 8;
             gx1 = (X + ((g->bw * sx) >> 4) + 128) >> 8;

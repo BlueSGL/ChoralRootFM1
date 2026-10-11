@@ -386,6 +386,50 @@ static cr_ev_in_t cr_evq[CR_EVQ];
 static volatile uint32_t cr_evq_w, cr_evq_r;
 static volatile uint32_t cr_evq_lost;
 
+/* A key's way to the engine, timed (78 PEAK key_ons, key_pick_us, key_eng_avg_us, key_eng_us: cr_backup.c crb_peak;
+ * docs/INTEGRATION.md "Keys while a frame draws"): from the first scan that saw the key closed (hal/fm1_input.h
+ * note_t0: the debounce, 1.1 .. 2.2 ms, is in it) to the main loop posting its note-on (pick), and to the audio ISR
+ * applying it (eng: the voice starts in that block, and leaves the DAC one half, 2.9 ms, later). One key at a time:
+ * the oldest note-on posted and not yet applied (a chord's other keys ride with it), known by its place in the
+ * queue. The ISR's part is one test a block, after its drain loop, and a call without a divide (tests/
+ * target_budget.py): the sum is kept in sixteenths of the ticks */
+#ifndef CR_KLAT_NOW
+#ifdef FM1_TICKS_PER_US
+#define CR_KLAT_NOW() fm1_ticks()
+#define CR_KLAT_US(d) ((d) / FM1_TICKS_PER_US)
+#else
+#define CR_KLAT_NOW() 0u                         /* (a host test without a clock) */
+#define CR_KLAT_US(d) (d)
+#endif
+#endif
+static struct {
+    volatile uint32_t t0, at;                    /* the pending key's first closed scan, its event's cr_evq_w */
+    volatile uint8_t pend;
+    uint32_t pick, eng;                          /* the worst since the last PEAK read (ticks) */
+    uint32_t n, sum;                             /* the note-ons timed, their eng (ticks / 16) */
+} cr_klat;
+#define CR_KLAT_AVG_US() (cr_klat.n ? CR_KLAT_US((cr_klat.sum / cr_klat.n) * 16u) : 0u)
+static void cr_klat_post(uint32_t t0)            /* the main loop, just before it posts a key's CRE_KEY down */
+{
+    uint32_t d = CR_KLAT_NOW() - t0;
+    if (d > cr_klat.pick)
+        cr_klat.pick = d;
+    if (!cr_klat.pend) {
+        cr_klat.t0 = t0;
+        cr_klat.at = cr_evq_w;
+        cr_klat.pend = 1;
+    }
+}
+static __attribute__((noinline)) void cr_klat_applied(void)   /* the audio ISR: the pending key's event applied */
+{
+    uint32_t d = CR_KLAT_NOW() - cr_klat.t0;
+    cr_klat.pend = 0;
+    cr_klat.n++;
+    cr_klat.sum += d >> 4;
+    if (d > cr_klat.eng)
+        cr_klat.eng = d;
+}
+
 static int cr_post(uint32_t op, uint32_t a, uint32_t b, int32_t v)
 {
     cr_ev_in_t *e;
@@ -612,6 +656,8 @@ static void cr_audio_block(uint32_t n)
         cr_apply(&cr_evq[cr_evq_r % CR_EVQ]);
         cr_evq_r++;
     }
+    if (cr_klat.pend && (int32_t)(w - cr_klat.at) > 0)
+        cr_klat_applied();                       /* (78 PEAK key_eng_us: a key's note-on is in the engine) */
     cr_midi_in();
     cr_ms_rem += n * 1000u;                      /* samples -> ms, the remainder kept (no drift) */
     while (cr_ms_rem >= FS) {

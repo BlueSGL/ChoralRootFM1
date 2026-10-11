@@ -2360,6 +2360,9 @@ static struct {
     uint32_t bytes;                      /* .. bytes sent to the LCD (the emulator's log: the SPI time) */
 } cr_dc __attribute__((section(".pool")));        /* (zero-initialised) */
 static uint32_t cr_strip_y;              /* the strip being drawn: its top row */
+#ifndef CR_HOOK_STRIP
+#define CR_HOOK_STRIP() ((void)0)        /* a strip composed and sent (the emulator: its time passes, tools/emu/README.md) */
+#endif
 
 static uint32_t cr_hash(uint32_t h, const void *p, uint32_t n)
 {
@@ -2634,6 +2637,8 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
             cr_send(m, cr_strip_y);
             cr_dc.blits++;
         }
+        CR_HOOK_STRIP();
+        CR_IDLE();                       /* (after each strip: cr_gfx.c cr_draw_idle, the keys) */
     }
     cr_dc.sig = sig;
     cr_dc.base = base;

@@ -27,6 +27,7 @@ build/host/emu --help          # options and the key map
 | `emu_midi.c` | CoreMIDI: source "ChoralRoot FM-1" (out), destination "ChoralRoot FM-1 In" (in); there is no USB audio (the firmware is built with `FELUCCA_UAC` 0 through `tests/hostsim.c`: Options > USB Record / USB Playback / USB Level are kept and saved, USB Level = Fixed applies, nothing streams; docs/USB-AUDIO.md) |
 | `emu_img.c` | LCD to PNG / PPM |
 | `perf.sh`, `scripts/perf_*.txt`, `wavclicks.py` | the worst cases for the CPU and the pops (docs/INTEGRATION.md, Performance): the audio block's cost and its device estimate, the UI frame's, voices stolen, flash erases, and the WAV checked for jumps, silent holes and clicks |
+| `keylat.py`, `scripts/cr_keylat.txt` | a key's way to the engine while the screen draws (below, "A redraw in simulated time"; docs/INTEGRATION.md "Keys while a frame draws"): `keylat.py` strikes 40 keys at random times in a script and prints the latency with the keys read inside the redraw and between frames only (perf.sh's "keys" lines) |
 | `seed_settings.py` | puts a unit's ChoralRoot settings record (192 bytes of hex, a backup's ChoralRoot block) into a `--flash` file that already holds a settings object, so a headless run starts from the unit's own settings (`python3 tools/emu/seed_settings.py FLASH HEX`; test_cr.sh "the arp screen from the owner's own settings record") |
 | `scripts/`, `test.sh`, `test_cr.sh` | headless scripts and their checks (`sel.txt`, `knobs.txt`, `acceptance.txt`: Felucca's UI, no longer run) |
 
@@ -138,6 +139,7 @@ own clock in ms from power-on; commands run in order and only `wait` (and the ti
 | `probe N` | (window) the next N presented frames: each button cap's level read back from the frame, with its LED state (`probe: present ... FX=247/2 SEL=121/1 ...`) |
 | `dump` | print the input state (as F12); its `cr: key` line ends with the KEY layer's keys (`kkeys` 0 pick, 1 play); the `lock:` line gives LOCK, the latched chord keys (bits DIM 01 MIN 02 MAJ 04 SUS 08, 6 10, m7 20, M7 40, 9 80) and the LOCK layer's two styles; its `loop:` line also gives the record mode, the PLAY menu's keys, the step cursor and the events a Replace layer hid (`mode keys step hidden`); `lcd:` says whether the UI's screen is off (a black frame) and counts the LCD writes; `pa2:` the PA2 line (below) |
 | `pa2 high` / `pa2 low` | drive the PA2 line by hand (the firmware never raises it): high = the panel black, no LED lit, no key, button or knob read, as on the unit |
+| `strike KEY [MS]` | (headless) a note key pressed at the worst moment for its latency: as the next UI frame begins, just past its scan; let go MS (default 100) later. Prints the strips that frame's redraw composed (`strike: G4 down at 1805 ms as a frame began: a redraw of 6 strips, over at 1821 ms`). With `EMU_STRIP_US` (below) |
 | `rec` | start / stop recording the LCD frames (as Insert) |
 | `quit` | stop here |
 
@@ -157,6 +159,30 @@ wait 150
 btn D4 up
 wait 100
 expect sound
+```
+
+### A redraw in simulated time
+
+By default a UI frame takes none of the simulated time: the tick, the frame, the audio blocks due, a millisecond at
+a time. So a key never goes down "while the screen draws", and the firmware's key reads inside a redraw
+(`firmware/src/cr_ui.c cr_ui_pump`, docs/INTEGRATION.md "Keys while a frame draws") change nothing: every script's
+LCD and WAV are what they were. Three switches, headless only, for measuring that path:
+
+| environment | what |
+|---|---|
+| `EMU_STRIP_US=N` | every strip a redraw composes takes N us of the device's clock (2700: six strips = 16 ms, the emulator's worst frame; 7800: 47 ms). The milliseconds that pass run inside the frame as the device's interrupts would: the timer's tick, the script (a key goes down mid-frame), the audio blocks due. The main loop's own scan waits for the frame, as on the device; the next frame starts 15 ms after this one began, or at once if it took longer. A strip at a time: the model shows the keys read after each strip, not the reads inside one |
+| `EMU_PUMP=0` | the keys are not read inside a redraw: the firmware as it was before 0.18's key pump, the reference |
+| `EMU_UI_GAP=1` | prints `ui: the longest stretch of a frame with no key read` (host instructions and the device estimate): from a frame's start to the first key read in its redraw, between two reads, from the last to the frame's end. A run apart: each mark is a system call, counted in the frame's instructions |
+
+Every headless run that played a key prints `keys: N note-ons, from the key's scan to the engine avg .. ms, worst ..
+ms (to the main loop's post: worst .. ms); M key scans inside redraws`: the firmware's own counters (the unit's 78
+PEAK `key_*`), from the tick that saw the key down to the audio block that started its note. The emulator's keys
+have no debounce (the unit adds 1.1 to 2.2 ms), and the sound leaves the DAC one half (2.9 ms) later.
+
+```sh
+EMU_STRIP_US=2700 build/host/emu --headless --script tools/emu/scripts/cr_keylat.txt             # worst 4 ms
+EMU_STRIP_US=2700 EMU_PUMP=0 build/host/emu --headless --script tools/emu/scripts/cr_keylat.txt  # worst 19 ms
+python3 tools/emu/keylat.py tools/emu/scripts/perf_d.txt     # 40 keys at random times, both ways, two strip times
 ```
 
 ### test.sh
