@@ -166,6 +166,8 @@ static int st_read(uint32_t off, void *dst, uint32_t n)
  * EMU_ERASE_MS of zero blocks, the firmware's audio ISR not run meanwhile (emu_fw_audio) */
 #define EMU_ERASE_MS 45u
 static uint32_t emu_stall_blocks, emu_stalls, emu_stall_blocks_all;
+static int audio_loud(void);                      /* audio.c (included after this): the output above -60 dBFS */
+static uint32_t st_holes;                         /* .. erases that cut it (audio.c's count on the device) */
 #define st_erases emu_stalls                      /* (storage_hw.c's count: the console, the GEEK OUT view) */
 static int st_erase(uint32_t off)
 {
@@ -174,6 +176,7 @@ static int st_erase(uint32_t off)
         return -8;
     emu_stall_blocks += (EMU_ERASE_MS * 44100u / 1000u + HALF_FRAMES - 1u) / HALF_FRAMES;
     emu_stalls++;
+    st_holes += (uint32_t)audio_loud();
     memset(emu_flash + off, 0xFF, 0x1000u);
     emu_flash_sync(off, 0x1000u);
     return 0;

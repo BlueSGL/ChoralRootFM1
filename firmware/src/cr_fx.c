@@ -563,13 +563,18 @@ static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int3
         return;                                         /* nothing sent, the tails over: nothing runs */
     for (i = 0; i < nh; i++)
         ol[i] = orr[i] = 0;
+    CR_PROFX_START();                                   /* (cr_cpu1.h: the stage's parts, for 73 DEBUG and perf.sh) */
     if (in_d || xf.d_live) {
         xf_down(&xf.dn[0], dly_in, hd, n);
+        CR_PROFX(CRX_DOWN);
         xd_run(hd, ol, orr, nh);
+        CR_PROFX(CRX_DELAY);
     }
     if (in_r || xf.r_live) {
         xf_down(&xf.dn[1], rev_in, hr, n);
+        CR_PROFX(CRX_DOWN);
         xr_run(hr, ol, orr, nh);
+        CR_PROFX(CRX_REVERB);
     }
     for (i = 0; i < nh; i++)
         any |= ol[i] | orr[i];
@@ -580,6 +585,7 @@ static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int3
     if (any || xf.up_live) {
         xf_up(&xf.up[0], ol, ml, nh);
         xf_up(&xf.up[1], orr, mr, nh);
+        CR_PROFX(CRX_UP);
     } else {
         for (i = 0; i < 4u; i++)
             xf.up[0].x[i] = xf.up[0].y[i] = xf.up[1].x[i] = xf.up[1].y[i] = 0;

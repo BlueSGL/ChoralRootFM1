@@ -536,6 +536,17 @@ def debug():
     cr.debug[at:at + 5] = [0, 0, 0, 0, 0]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "boot stub: none ran" in out, "--debug: a firmware without the stub says so")
+    # 0.18: the worst cases behind the tail (DEBUG_PEAK): named, the late half's stage in words, the three lines
+    cr.debug = [0] * (n + I.DEBUG_LOG + len(I.DEBUG_TAIL)) + [2580, 9, 700, 150, 1400, 120, 60, 12, 4, 2950, 34500, 30000,
+                                                              40, 110, 90, 200, 300, 520, 35, 90, 14, 0, 5, 9]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 24 and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
+       "worst half since the last --debug: 2580 us of 2902 (88 %) over 34500 halves" in out and
+       "late 12 (the latest: 2950 us, its largest stage fx)" in out and
+       "down 40 / 110, delay 90 / 200, reverb 300 / 520, up 35 / 90" in out and
+       "14 erases (45 ms of silence each), 0 of them into a sounding output (holes), settings saves 5, session saves 9" in out,
+       "--debug: the worst cases since the last read (DEBUG_PEAK), the fx stage's parts, the flash's holes")
+    cr.debug = [0] * n
     # stub version 2: the key samples behind the event log (appended: DEBUG_TAIL), the request bits in the detail
     cr.debug = [0] * (n + I.DEBUG_LOG) + [0xFFF00000, 0x00000001, 0, 0x000000FF]
     cr.debug[at:at + 5] = [62, 62400, 2, 1, 0 | 5 << 8 | 0 << 16 | 1 << 24]

@@ -2125,6 +2125,18 @@ class Progress:
 DEBUG_LOG = 32                                    # after DEBUG_NAMES: the USB recording's event log, 16 pairs
 DEBUG_TAIL = ["stub_oct_dn", "stub_oct_up", "stub_idle", "stub_pa_in"]   # after the log (appended: an older tool
 #                                                   reads what it knows and shows these as two more log lines)
+# after the tail (0.18, cr_backup.c crb_debug, docs/FX.md "What the unit says"): the audio ISR's WORST CASES since the
+# last --debug (reading clears them: play, read, and the numbers are that stretch's). us of a half buffer (budget
+# 2902): the whole half and each stage; the late halves, the latest one's largest stage and its time; the halves
+# counted; inside the fx stage (over the halves in which the effects ran) the average and the largest of the sends'
+# down-sampler, the delay, the reverb and the wet's up-sampler; then since power-on: flash erases, erases that cut a
+# sounding output (holes: the rule is 0), the settings' and the session's saves
+DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_us", "pk_master_us", "pk_wait_us",
+              "pk_late", "pk_late_stage", "pk_late_us", "pk_halves", "fx_busy_halves",
+              "fx_down_avg_us", "fx_down_max_us", "fx_delay_avg_us", "fx_delay_max_us", "fx_reverb_avg_us",
+              "fx_reverb_max_us", "fx_up_avg_us", "fx_up_max_us",
+              "flash_erases", "flash_holes", "saves_settings", "saves_session"]
+LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 
 
 def stub_lines(d, out):
@@ -2159,6 +2171,8 @@ def print_debug(vals, out, stub_only=False):
     d = dict(zip(DEBUG_NAMES, vals))
     log = vals[len(DEBUG_NAMES):len(DEBUG_NAMES) + DEBUG_LOG]
     d.update(zip(DEBUG_TAIL, vals[len(DEBUG_NAMES) + DEBUG_LOG:]))
+    peak = vals[len(DEBUG_NAMES) + DEBUG_LOG + len(DEBUG_TAIL):]
+    d.update(zip(DEBUG_PEAK, peak))
     if stub_only:
         for k in [k for k in d if k.startswith("stub_")]:
             print(f"{k} {d[k]}" + (f" (0x{d[k]:08X})" if k in DEBUG_TAIL or k == "stub_detail" else ""), file=out)
@@ -2170,6 +2184,22 @@ def print_debug(vals, out, stub_only=False):
     for k in DEBUG_TAIL:
         if k in d:
             print(f"{k} {d[k]} (0x{d[k]:08X})", file=out)
+    for k in DEBUG_PEAK:
+        if k in d:
+            print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else ""),
+                  file=out)
+    if "pk_block_us" in d and d.get("pk_halves"):
+        print(f"worst half since the last --debug: {d['pk_block_us']} us of 2902 ({d['pk_block_us'] * 100 // 2902} %) over "
+              f"{d['pk_halves']} halves ({d['pk_halves'] * 128 / 44100:.1f} s); stages tick {d['pk_tick_us']}, part0 "
+              f"{d['pk_part0_us']}, part1 {d['pk_part1_us']}, fx {d['pk_fx_us']}, master {d['pk_master_us']}, wait "
+              f"{d['pk_wait_us']}; late {d['pk_late']}"
+              + (f" (the latest: {d['pk_late_us']} us, its largest stage {LATE_STAGE[d['pk_late_stage']] if d['pk_late_stage'] < len(LATE_STAGE) else '?'})"
+                 if d["pk_late"] else ""), file=out)
+        print(f"fx stage, avg / max us a half over {d['fx_busy_halves']} halves with the effects running: down "
+              f"{d['fx_down_avg_us']} / {d['fx_down_max_us']}, delay {d['fx_delay_avg_us']} / {d['fx_delay_max_us']}, reverb "
+              f"{d['fx_reverb_avg_us']} / {d['fx_reverb_max_us']}, up {d['fx_up_avg_us']} / {d['fx_up_max_us']}", file=out)
+        print(f"flash since power-on: {d['flash_erases']} erases (45 ms of silence each), {d['flash_holes']} of them into a "
+              f"sounding output (holes), settings saves {d['saves_settings']}, session saves {d['saves_session']}", file=out)
     stub_lines(d, out)
     if d.get("ua_open_close_ms"):
         print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "

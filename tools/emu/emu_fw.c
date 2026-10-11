@@ -538,5 +538,14 @@ void emu_fw_stages(char *buf, uint32_t n)
                                 (double)cr_dbg.tot_sum[k] / cr_dbg.tot_n / CR_PROF_PER_US,
                                 (double)cr_dbg.tot_max[k] / CR_PROF_PER_US);
     if (o < n)
-        snprintf(buf + o, n - o, "; c1 %s, jobs %u", cr_c1_name(), (unsigned)cr_dbg.c1_jobs);
+        o += (uint32_t)snprintf(buf + o, n - o, "; c1 %s, jobs %u", cr_c1_name(), (unsigned)cr_dbg.c1_jobs);
+    /* the fx stage's parts, over the halves in which the effects ran (the unit's 73 DEBUG has the same four) */
+    if (o < n && cr_dbg.x_tot_busy) {
+        o += (uint32_t)snprintf(buf + o, n - o, "\ncpu: fx parts (device us per half, avg / max over %u halves with the "
+                                "effects running): ", (unsigned)cr_dbg.x_tot_busy);
+        for (k = 0; k < CRX_N && o < n; k++)
+            o += (uint32_t)snprintf(buf + o, n - o, "%s%s %.0f / %.0f", k ? ", " : "", CRX_NAME[k],
+                                    (double)cr_dbg.x_tot_sum[k] / cr_dbg.x_tot_busy / CR_PROF_PER_US,
+                                    (double)cr_dbg.x_tot_max[k] / CR_PROF_PER_US);
+    }
 }

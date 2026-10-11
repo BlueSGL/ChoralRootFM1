@@ -536,7 +536,7 @@ static uint32_t crb_put(const uint8_t *a, uint32_t n)
  * event log's 32 values, then DEBUG_TAIL: values are only ever appended, so an older tool names what it knows) */
 static void crb_debug(void)
 {
-    uint32_t v[144], k = 0, i;
+    uint32_t v[192], k = 0, i;
 #ifdef DBG_MAGIC
     v[k++] = fm1_ms;
     v[k++] = felucca_dbg.halves;
@@ -650,6 +650,32 @@ static void crb_debug(void)
     for (i = 0; i < 4u; i++)
         v[k++] = 0;
 #endif
+    /* the worst cases since the last DEBUG read (0.18, cr_cpu1.h; fm1_install.py DEBUG_PEAK): the largest whole half
+     * and each stage's, the late halves and the latest one's largest stage, the fx stage's parts (the average over
+     * the halves in which the effects ran, and the largest), then the flash's: erases, erases that cut a sounding
+     * output (holes: the rule is 0), the settings' and the session's saves. Reading clears the worst cases */
+    v[k++] = cr_dbg.pk_all;
+    for (i = 0; i < CRP_N; i++)
+        v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
+    v[k++] = cr_dbg.late_n;
+    v[k++] = cr_dbg.late_stage;                      /* 0 none; 1 tick 2 part0 3 part1 4 fx 5 master 6 wait */
+    v[k++] = cr_dbg.late_us;
+    v[k++] = cr_dbg.pk_n;
+    v[k++] = cr_dbg.x_busy;
+    for (i = 0; i < CRX_N; i++) {
+        v[k++] = cr_dbg.x_busy ? (uint32_t)(cr_dbg.x_sum[i] / cr_dbg.x_busy) / CR_PROF_PER_US : 0u;
+        v[k++] = cr_dbg.x_pk[i] / CR_PROF_PER_US;
+    }
+    v[k++] = st_erases;
+    v[k++] = st_holes;
+#if CR_HAVE_SETTINGS
+    v[k++] = crs_saves;
+    v[k++] = css_saves;
+#else
+    v[k++] = 0;
+    v[k++] = 0;
+#endif
+    cr_prof_clear();
     crb_b(1);
     crb_b(k);
     for (i = 0; i < k; i++)

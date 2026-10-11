@@ -59,6 +59,17 @@ static void cpu_window(uint32_t now_ms)          /* once per UI frame: a frame's
 #define SCOPE_N 512u
 static int16_t scope_buf[SCOPE_N];
 static uint32_t scope_w;
+/* the output is above -60 dBFS somewhere in the scope's last 23 ms: a flash erase now (storage_hw.c st_erase: 45 ms
+ * of silence) is a HOLE in something audible (st_holes: ChoralRoot's 73 DEBUG; its rule is that there are none) */
+static uint32_t st_holes;
+static int audio_loud(void)
+{
+    uint32_t i;
+    for (i = 0; i < SCOPE_N; i++)
+        if (scope_buf[i] > 32 || scope_buf[i] < -32)
+            return 1;
+    return 0;
+}
 
 #if FELUCCA_UAC
 static void ua_service_paced(uint32_t t0, int from_isr);              /* main.c */
@@ -204,8 +215,12 @@ void fm1_alnk0_irq(void)                       /* via isr_alnk0 (hal/fm1_isr.S) 
             song.cpu_q8 = load / CPU_AVG;
             audio_cpu_rem = load % CPU_AVG;
         }
-        if (fm1_audio_free_half() != half)
+        if (fm1_audio_free_half() != half) {
             felucca_dbg.late++;                         /* the DMA moved on while we rendered */
+            cr_prof_whole(us, 1);                       /* (ChoralRoot's worst cases, cr_cpu1.h: which stage) */
+        } else {
+            cr_prof_whole(us, 0);
+        }
         felucca_dbg.halves++;
         felucca_dbg.last_us = us;
         if (us > felucca_dbg.max_us)

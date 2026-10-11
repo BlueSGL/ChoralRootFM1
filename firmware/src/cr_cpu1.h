@@ -37,6 +37,9 @@ enum { C1_OFF, C1_OK, C1_FAILED, C1_GAVE_UP };
  * part 0's render, part 1's (core 1's job time when it renders it), the rest of the mix (the parts' dist, level,
  * sends, parts 2..3, the FX buses), the master (limiter, the click, the USB tap), core 0's wait for core 1 */
 enum { CRP_TICK, CRP_PART0, CRP_PART1, CRP_FX, CRP_MASTER, CRP_WAIT, CRP_N };
+/* inside the fx stage (cr_fx.c xf_block): the sends' down-sampler, the delay's loop, the reverb's, the wet's
+ * up-sampler */
+enum { CRX_DOWN, CRX_DELAY, CRX_REVERB, CRX_UP, CRX_N };
 typedef struct {
     uint8_t c1;                      /* C1_*: off (CR_CPU1 0, SAFE MODE, Options > Dual Core Off), ok, failed at start, gave up on a job */
     uint8_t win_reset;               /* audio.c cpu_window took the window: the ISR starts a new one */
@@ -53,6 +56,17 @@ typedef struct {
     uint32_t avg_us[CRP_N], max_us[CRP_N];             /* the last full second (console `cpu`, GEEK OUT) */
     uint64_t tot_sum[CRP_N];         /* since power-on (the emulator's summary, tools/emu/perf.sh) */
     uint32_t tot_max[CRP_N], tot_n;
+    /* THE WORST CASES (0.18, docs/FX.md "What the unit says"): since the last 73 DEBUG read (cr_backup.c crb_debug
+     * clears them: play, read, and the numbers are that stretch's) and, for the emulator, since power-on (x_tot_*) */
+    uint32_t pk[CRP_N];              /* each stage's largest half (prof units) */
+    uint32_t pk_all, pk_n;           /* the largest whole half (us: audio.c's measure, TIMER5 nested in it); halves */
+    uint32_t last[CRP_N];            /* the half just rendered */
+    uint32_t late_n, late_stage, late_us;   /* late halves; the latest one's largest stage (CRP_* + 1) and its us */
+    uint32_t xmark, xcur[CRX_N];     /* the fx stage's parts: this half's */
+    uint32_t x_pk[CRX_N], x_busy;    /* .. their largest half, and the halves in which any of them ran */
+    uint64_t x_sum[CRX_N];           /* .. summed over those halves */
+    uint64_t x_tot_sum[CRX_N];
+    uint32_t x_tot_max[CRX_N], x_tot_busy;
 } cr_dbg_t;
 static cr_dbg_t cr_dbg;
 /* Options > Dual Core Off (settings v12, the default; read by cr_settings_boot before cr_c1_boot): core 1 is never
@@ -60,6 +74,7 @@ static cr_dbg_t cr_dbg;
  * power-on. 1 until the record says On: a build without the settings (or a boot that never reads them) is one core */
 static uint8_t cr_c1_off = 1;
 static const char *const CRP_NAME[CRP_N] = {"tick", "part0", "part1", "fx", "master", "wait"};
+static const char *const CRX_NAME[CRX_N] = {"down", "delay", "reverb", "up"};
 
 #if CR_CPU1
 /* ------------------------------------------------ the platform: the core and the clock --- */
@@ -207,6 +222,12 @@ static volatile uint8_t cr_c1_split;
 #define CR_PROF_SKIP() do { if (cr_dbg.prof_on) cr_dbg.mark = cr_prof_now(); } while (0)   /* (not counted) */
 #define CR_PROF(k) do { if (cr_dbg.prof_on) { uint32_t t_ = cr_prof_now(); cr_dbg.cur[k] += cr_prof_less(t_ - cr_dbg.mark); \
                                               cr_dbg.mark = t_; } } while (0)
+/* .. and the fx stage's parts, on their own mark (inside CRP_FX's time: the stage's figure includes them and their
+ * five timer reads a block, on the device ~0.1 us each) */
+#define CR_PROFX_START() do { if (cr_dbg.prof_on) { cr_dbg.xmark = cr_prof_now(); cr_dbg.mark += cr_prof_cost; } } while (0)
+#define CR_PROFX(k) do { if (cr_dbg.prof_on) { uint32_t t_ = cr_prof_now(); cr_dbg.xcur[k] += cr_prof_less(t_ - cr_dbg.xmark); \
+                                               cr_dbg.xmark = t_; cr_dbg.mark += cr_prof_cost; } } while (0)   /* (the
+                                                * host's mark costs 6.6 k instructions: not the outer stage's) */
 
 /* power-on (main.c fm1_main, before audio_init and the timers; not in SAFE MODE): start core 1. It boots through the
  * chip's ROM, which the PC limits refuse, and its entry word is in the top of RAM: both open while it starts.
@@ -256,12 +277,58 @@ static void cr_prof_half(void)
         cr_dbg.tot_sum[k] += c;
         if (c > cr_dbg.tot_max[k])
             cr_dbg.tot_max[k] = c;
+        if (c > cr_dbg.pk[k])
+            cr_dbg.pk[k] = c;
+        cr_dbg.last[k] = c;
         cr_dbg.cur[k] = 0;
+    }
+    if (cr_dbg.xcur[CRX_DOWN] | cr_dbg.xcur[CRX_DELAY] | cr_dbg.xcur[CRX_REVERB] | cr_dbg.xcur[CRX_UP]) {
+        for (k = 0; k < CRX_N; k++) {
+            uint32_t c = cr_dbg.xcur[k];
+            cr_dbg.x_sum[k] += c;
+            cr_dbg.x_tot_sum[k] += c;
+            if (c > cr_dbg.x_pk[k])
+                cr_dbg.x_pk[k] = c;
+            if (c > cr_dbg.x_tot_max[k])
+                cr_dbg.x_tot_max[k] = c;
+            cr_dbg.xcur[k] = 0;
+        }
+        cr_dbg.x_busy++;
+        cr_dbg.x_tot_busy++;
     }
     cr_dbg.win_n++;
     cr_dbg.tot_n++;
 }
 /* the main loop, once a second (audio.c cpu_window): the window closed into avg_us / max_us */
+/* audio.c, after a half: its whole time (us, as felucca_dbg.max_us measures it) and whether the DMA had moved on */
+static void cr_prof_whole(uint32_t us, int late)
+{
+    uint32_t k, m = 0;
+    if (us > cr_dbg.pk_all)
+        cr_dbg.pk_all = us;
+    cr_dbg.pk_n++;
+    if (late) {
+        for (k = 1; k < CRP_N; k++)
+            if (cr_dbg.last[k] > cr_dbg.last[m])
+                m = k;
+        cr_dbg.late_n++;
+        cr_dbg.late_stage = m + 1u;
+        cr_dbg.late_us = us;
+    }
+}
+/* 73 DEBUG has read the worst cases: the next read's are the stretch from here (the main loop; the ISR may be half
+ * way through a half: that half then counts partly, once) */
+static void cr_prof_clear(void)
+{
+    uint32_t k;
+    for (k = 0; k < CRP_N; k++)
+        cr_dbg.pk[k] = 0;
+    for (k = 0; k < CRX_N; k++) {
+        cr_dbg.x_pk[k] = 0;
+        cr_dbg.x_sum[k] = 0;
+    }
+    cr_dbg.pk_all = cr_dbg.pk_n = cr_dbg.late_n = cr_dbg.late_stage = cr_dbg.late_us = cr_dbg.x_busy = 0;
+}
 static void cr_prof_window(void)
 {
     uint32_t k;
@@ -279,7 +346,10 @@ static void cr_prof_window(void)
 #define CR_PROF_START() ((void)0)
 #define CR_PROF(k) ((void)0)
 #define CR_PROF_SKIP() ((void)0)
+#define CR_PROFX_START() ((void)0)
+#define CR_PROFX(k) ((void)0)
 #define cr_prof_half() ((void)0)
+#define cr_prof_whole(us, late) ((void)0)
 #define cr_prof_window() ((void)0)
 #define cr_c1_boot() ((void)0)
 #define cr_c1_stack_used() 0u

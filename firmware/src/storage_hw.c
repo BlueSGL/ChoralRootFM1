@@ -33,6 +33,7 @@ static int st_erase(uint32_t off)
     if (!FL_STORE_OK(off, 0x1000u))
         return -8;
     st_erases++;
+    st_holes += (uint32_t)audio_loud();
     f = irq_save();
     audio_silence();
     rc = FL_FAR(fl_erase4k_ram)(off, &took);

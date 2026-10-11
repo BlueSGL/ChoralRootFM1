@@ -647,7 +647,7 @@ static void print_stats(void)
                (double)ist.ui_sum / (double)ist.ui_n, (unsigned long long)ist.ui_max,
                (double)ist.ui_sum / (double)ist.ui_n / DEV_INSTR_PER_US, (double)ist.ui_max / DEV_INSTR_PER_US);
     {
-        char sb[400];
+        char sb[800];
         emu_fw_stages(sb, sizeof sb);
         if (sb[0])
             printf("cpu: %s\n", sb);
