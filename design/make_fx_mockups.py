@@ -29,7 +29,7 @@ from make_mockups import (state, scr, cell, editor_screen, BUTTON_LABELS, ENCODE
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "choralroot-fm1-fx-mockups.json")
 
-FX = ["Reverb", "Chorus", "Delay", "Drive"]                       # cr_ui.c CU_FX (the white roots D4 E4 F4 G4)
+FX = ["Reverb", "Chorus", "Delay", "Drive"]                       # cr_ui.c CU_FX (SELECT steps their six pages)
 fx_labels = {ROOT_WHITE[i]: n.upper() for i, n in enumerate(FX)}
 FX_FOOT = "SELECT: effect · FX: on/off · OCT-: back"       # cr_ui.c cu_layer_screen (the printed names; OCT+ closes too)
 FX_BTN = {"FX": BLINK}
@@ -54,14 +54,20 @@ def g(label, value, glyph, pct=None, pct2=None, **kw):
     return c
 
 
-REVERB_CELLS = [g("Size", "90", "room", 90 / 127), g("Damp", "60", "moon", 1 - 60 / 127), g("Type", "Room", "room", 0.5),
-                g("Amount", "25", "mix", 0.25)]
-REVERB_SPRING = [g("Size", "90", "room", 90 / 127), g("Damp", "60", "moon", 1 - 60 / 127), g("Type", "Spring", "spring"),
-                 g("Amount", "25", "mix", 0.25)]
-DELAY_CELLS = [g("Time", "1/8", "echoes", 0.45, 0.5), g("Feedback", "60", "echoes", 0.45, 0.5), g("Colour", "70", "moon", 70 / 127),
-               g("Amount", "40", "mix", 0.4)]
-CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), None, g("Amount", "30", "mix", 0.3)]
-DRIVE_CELLS = [None, None, None, g("Amount", "15", "clip", 0.15)]
+# 0.18 (docs/FX.md): the delay and the reverb are new (a stereo delay, a large reverb), global, on two pages each
+# (SELECT: Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive); KNOB 4 of an effect's first page is the chord part's
+# SEND into it (what a sound carries). The glyphs tail, pre, cut, width, spread, sync, ping are the firmware's
+# (cr_draw.c cr_picto): the designer does not draw them yet, so the sheet's PNG is stale for these states.
+REVERB_CELLS = [g("Size", "88", "room", 88 / 127), g("Damp", "56", "moon", 1 - 56 / 127), g("Decay", "2.4 s", "tail", 48 / 127),
+                g("Send", "25", "mix", 0.25)]
+REVERB2_CELLS = [g("Pre-delay", "17 ms", "pre", 16 / 127), g("Mod", "56", "lfo", 0.25, 56 / 127), g("Low cut", "131 Hz", "cut", 60 / 127),
+                 g("Width", "127", "width", 1.0)]
+DELAY_CELLS = [g("Time", "1/8", "echoes", 0.5, 58 / 127), g("Spread", "3:4", "spread", 0.5, 0.5), g("Feedback", "58", "echoes", 0.5, 58 / 127),
+               g("Send", "40", "mix", 0.4)]
+DELAY2_CELLS = [g("Sync", "Tempo", "sync", 1.0), g("Mode", "Ping-pong", "ping", 1.0), g("Tone", "84", "moon", 84 / 127),
+                g("Wow", "24", "lfo", 0.08, 24 / 127)]
+CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), None, g("Send", "30", "mix", 0.3)]
+DRIVE_CELLS = [None, None, None, g("Send", "15", "clip", 0.15)]
 
 # 1 ---------------------------------------------------------------- today
 S.append(state(
@@ -86,8 +92,8 @@ S.append(state(
     "Motion: a root or SELECT flips the effect name (the split-flap) and the row's labels and bars change with it, "
     "sliding in from the right; a turned bar fills stripe by stripe.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("SIZE", "90"), "KNOB2": ("DAMP", "60"), "KNOB3": ("TYPE", "ROOM"), "KNOB4": ("AMOUNT", "25")},
-    screen=scr(knobrow(FX, 0, C_FX, REVERB_CELLS, label="fx"), foot=FX_FOOT,
+    encoders={"KNOB1": ("SIZE", "88"), "KNOB2": ("DAMP", "56"), "KNOB3": ("DECAY", "2.4 S"), "KNOB4": ("SEND", "25")},
+    screen=scr(knobrow(FX, 0, C_FX, REVERB_CELLS, label="fx · on · 1/2"), foot=FX_FOOT,
                note="the knob row: Reverb big in green over the four cells in the knob colours; the amount green on KNOB 4."),
     chord_block=False,
 ))
@@ -97,9 +103,9 @@ S.append(state(
     "Delay selected (F4): TIME / FEEDBACK / COLOUR / AMOUNT. KNOB 2 has just moved: FEEDBACK's value sits on an orange "
     "block for 800 ms (the editor's hot cell), no popup over the screen.",
     keys=[OFF] * 27, lit=["F4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("TIME", "1/8"), "KNOB2": ("FEEDBACK", "60"), "KNOB3": ("COLOUR", "70"), "KNOB4": ("AMOUNT", "40")},
-    screen=scr(knobrow(FX, 2, C_FX, DELAY_CELLS, hot=1, label="fx"), foot=FX_FOOT,
-               note="Delay: the hot cell (FEEDBACK on an orange block) is the only trace of the turn."),
+    encoders={"KNOB1": ("TIME", "1/8"), "KNOB2": ("SPREAD", "3:4"), "KNOB3": ("FEEDBACK", "58"), "KNOB4": ("SEND", "40")},
+    screen=scr(knobrow(FX, 2, C_FX, DELAY_CELLS, hot=1, label="fx · on · 1/2"), foot=FX_FOOT,
+               note="Delay 1: the hot cell (SPREAD on an orange block) is the only trace of the turn."),
     chord_block=False,
 ))
 
@@ -120,19 +126,20 @@ S.append(state(
     "'off' and its bar is empty; a KNOB 4 turn switches it on again (today's rule).",
     keys=[OFF] * 27, lit=["G4"], buttons={"FX": BLINK}, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": "", "KNOB2": "", "KNOB3": "", "KNOB4": ("AMOUNT", "off")},
-    screen=scr(knobrow(FX, 3, C_FX, [None, None, None, g("Amount", "off", "clip", 0.0)], label="fx"), foot=FX_FOOT,
+    screen=scr(knobrow(FX, 3, C_FX, [None, None, None, g("Send", "off", "clip", 0.0)], label="fx · off"), foot=FX_FOOT,
                note="Drive, FX off: the amount cell reads off."),
     chord_block=False,
 ))
 
 S.append(state(
-    "5b · knob row: Reverb, Type = Spring",
-    "TYPE is an enum (Room / Spring), so its cell is a picture of the type rather than a level: the room box for Room, "
-    "a coil for Spring. The other cells keep their pictures.",
+    "5b · knob row: Reverb 2 (SELECT's second page)",
+    "0.18: the reverb is one large space (the Room / Spring type is gone) on two pages. Page 2: PRE-DELAY (a struck bar, "
+    "the gap, the reverb's wedge), MOD (the lines' slow swing), LOW CUT (the response's corner) and WIDTH (two bars "
+    "leaving the centre) on KNOB 4, which is no send here. The label carries the page quietly, as the KEY layer's.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("SIZE", "90"), "KNOB2": ("DAMP", "60"), "KNOB3": ("TYPE", "SPRING"), "KNOB4": ("AMOUNT", "25")},
-    screen=scr(knobrow(FX, 0, C_FX, REVERB_SPRING, hot=2, label="fx"), foot=FX_FOOT,
-               note="Type = Spring: the coil; KNOB 3 just turned (hot)."),
+    encoders={"KNOB1": ("PRE-DELAY", "17 MS"), "KNOB2": ("MOD", "56"), "KNOB3": ("LOW CUT", "131 HZ"), "KNOB4": ("WIDTH", "127")},
+    screen=scr(knobrow(FX, 0, C_FX, REVERB2_CELLS, hot=2, label="fx · on · 2/2"), foot=FX_FOOT,
+               note="Reverb 2: pre-delay, mod, low cut, width; KNOB 3 just turned (hot)."),
     chord_block=False,
 ))
 
@@ -213,6 +220,44 @@ S.append(state(
     screen=scr(knobrow(["Chords Only", "Unison Bass", "Bass Single Notes", "Solo"], 0, C_BASS,
                        [cell("Behaviour", "Chords"), g("Register", "-1", "shift", 1 / 3), cell("Sound", "03 SUB"), g("Level", "80", "bar", 0.8)], label="bass"),
                foot="a root: preview · OCT-: back · HOME", note="the bass layer: behaviour over register, sound and level."),
+    chord_block=False,
+))
+
+# 12..14 ---------------------------------------------------------- 0.18: the delay's second page, the new glyphs
+S.append(state(
+    "12 · knob row: Delay 2 (SELECT's second page)",
+    "0.18: the stereo delay's second page: SYNC (two beamed notes: the tempo's divisions; a clock face: free, in "
+    "milliseconds), MODE (two walls and the repeats: on both at once = Stereo, left right left right = Ping-pong), "
+    "TONE (the loop's low-pass: the moon) and WOW (the time's slow wobble).",
+    keys=[OFF] * 27, lit=["F4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
+    encoders={"KNOB1": ("SYNC", "TEMPO"), "KNOB2": ("MODE", "PING-PONG"), "KNOB3": ("TONE", "84"), "KNOB4": ("WOW", "24")},
+    screen=scr(knobrow(FX, 2, C_FX, DELAY2_CELLS, label="fx · on · 2/2"), foot=FX_FOOT,
+               note="Delay 2: sync, mode, tone, wow."),
+    chord_block=False,
+))
+
+S.append(state(
+    "13 · the 0.18 glyphs change with the value (low row, high row)",
+    "Decay as a struck edge and its falling curve (steep to nearly level), Pre-delay as the gap between the bar and "
+    "the reverb's wedge, Low cut as the corner of the response moving right, Width as two bars leaving the centre.",
+    keys=[OFF] * 27, buttons=FX_BTN, button_notes=FX_NOTE, encoders={},
+    screen=editor_screen({"kind": "edit8", "title": "glyph study", "titleCol": C_FX, "right": "low · high",
+                          "rows": [[g("Decay", "0.4 s", "tail", 0.08), g("Pre-delay", "5 ms", "pre", 0.05), g("Low cut", "24 Hz", "cut", 0.1), g("Width", "20", "width", 0.15)],
+                                   [g("Decay", "38 s", "tail", 0.9), g("Pre-delay", "120 ms", "pre", 0.9), g("Low cut", "430 Hz", "cut", 0.92), g("Width", "120", "width", 0.95)]],
+                          "active": 0}, note="tail, pre, cut and width low (top) and high (bottom)."),
+    chord_block=False,
+))
+
+S.append(state(
+    "14 · the 0.18 glyphs, continued",
+    "Spread as two rows of echoes (the right one's spacing a part of the left one's: equal, then closing up to half), "
+    "Sync as a clock face (free) or two beamed notes (the tempo), Mode as the repeats on both walls (Stereo) or "
+    "alternating (Ping-pong).",
+    keys=[OFF] * 27, buttons=FX_BTN, button_notes=FX_NOTE, encoders={},
+    screen=editor_screen({"kind": "edit8", "title": "glyph study", "titleCol": C_FX, "right": "low · high",
+                          "rows": [[g("Spread", "x1.00", "spread", 0.6, 0.0), g("Sync", "Free", "sync", 0.0), g("Mode", "Stereo", "ping", 0.0), g("Time", "40 ms", "echoes", 0.15, 0.5)],
+                                   [g("Spread", "x0.50", "spread", 0.6, 1.0), g("Sync", "Tempo", "sync", 1.0), g("Mode", "Ping-pong", "ping", 1.0), g("Time", "1/2", "echoes", 0.95, 0.5)]],
+                          "active": 0}, note="spread, sync and mode low (top) and high (bottom)."),
     chord_block=False,
 ))
 

@@ -714,14 +714,6 @@ static void cr_picto(uint32_t g, int32_t x, int32_t y, int32_t w, int32_t h, uin
         cr_poly(p, np, lw, 0, 0, col);
         break;
     }
-    case CR_G_SPRING: {                             /* a coil of 6.5 turns between two short ends */
-        int32_t e = W * 12 / 100, zx0 = x0 + e, zw = W - 2 * e, a = H * 36 / 100;
-        CR_PT(x0, cy); CR_PT(zx0, cy);
-        for (k = 0; k < 13; k++) CR_PT(zx0 + zw * (2 * k + 1) / 26, cy + (k & 1 ? a : -a));
-        CR_PT(zx0 + zw, cy); CR_PT(x1, cy);
-        cr_poly(p, np, lw, 0, 0, col);
-        break;
-    }
     case CR_G_MIX: {                                /* dry (back, outlined) behind wet (front, filled to pct) */
         int32_t s = mn * 72 / 100, off = mn - s, bx = cx - (s + off) / 2, by = cy - (s + off) / 2, fx = bx + off,
                 fy = by + off, fh = s * pct / 256;
@@ -806,6 +798,90 @@ static void cr_picto(uint32_t g, int32_t x, int32_t y, int32_t w, int32_t h, uin
             CR_PT(x0 + W * (k + 1) / 16, cy + JT[k + 1] * a / 256);
         }
         if (np >= 2u) cr_poly(p, np, lw, 0, 0, col);
+        break;
+    }
+    /* the FX layer's (0.18, docs/FX.md): no designer mock-up, drawn here in the same manner (2 px strokes, filled
+     * parts, a 1 px baseline) */
+    case CR_G_TAIL: {                               /* the struck edge and its decay: each twelfth of the box the curve
+                                                     * keeps 0.56 (pct 0: gone in a quarter) .. all (1: level, "Inf") */
+        int32_t d = 2300 + 1796 * pct / 256, hh = H;
+        CR_PT(x0, y1); CR_PT(x0, y0);
+        for (k = 1; k <= 12; k++) {
+            hh = hh * d >> 12;
+            CR_PT(x0 + k * W / 12, y1 - hh);
+        }
+        cr_poly(p, np, lw, 0, 0, col);
+        cr_frect(x0, y1, W, 16, col);
+        break;
+    }
+    case CR_G_PRE: {                                /* a struck bar, the gap (0 .. 55 % of the box), the reverb's wedge */
+        int32_t bw = 48, gx = x0 + bw + 32 + (W * 55 / 100) * pct / 256, top = y1 - H * 8 / 10;
+        cr_frect(x0, y0, bw, H, col);
+        CR_PT(gx, y1); CR_PT(gx, top); CR_PT(x1, y1);
+        cr_poly(p, np, lw, 0, 0, col);
+        cr_frect(x0, y1, W, 16, col);
+        break;
+    }
+    case CR_G_CUT: {                                /* a high-pass response: the corner 25 .. 80 % along the box */
+        int32_t xc = x0 + W * (64 + 141 * pct / 256) / 256, sw = W * 22 / 100, top = y0 + H * 15 / 100;
+        CR_PT(x0, y1); CR_PT(xc - sw, y1); CR_PT(xc, top); CR_PT(x1, top);
+        cr_poly(p, np, lw, 0, 0, col);
+        break;
+    }
+    case CR_G_WIDTH: {                              /* two bars leaving the centre mark, 0 .. the box's sides */
+        int32_t bw = 48, d = (W / 2 - bw / 2) * pct / 256, bh = H * 7 / 10;
+        for (k = y0; k < y1; k += 64)               /* the centre, dashed 1 px (2 on, 2 off) */
+            cr_frect(cx - 8, k, 16, y1 - k < 32 ? y1 - k : 32, col);
+        cr_frect(cx - d - bw / 2, y1 - bh, bw, bh, col);
+        cr_frect(cx + d - bw / 2, y1 - bh, bw, bh, col);
+        cr_frect(x0, y1, W, 16, col);
+        break;
+    }
+    case CR_G_SPREAD: {                             /* two rows of echoes (left over right): the upper one's spacing as
+                                                     * CR_G_ECHOES', the lower one's 1 .. 1/2 of it */
+        int32_t bw = 40, sp = 80 + ((W - bw) / 2 - 80) * pct / 256, rh = H / 2 - 24, r;
+        if (sp < 64) sp = 64;
+        for (r = 0; r < 2; r++) {
+            int32_t by = r ? y1 : y0 + rh, s2 = r ? sp * (512 - pct2) / 512 : sp, bh = rh, bx;
+            if (s2 < 56) s2 = 56;
+            for (bx = x0; bx + bw <= x1 && bh >= 24; bx += s2) {
+                cr_frect(bx, by - bh, bw, bh, col);
+                bh = bh * 3 / 4;
+            }
+            cr_frect(x0, by, W, 16, col);
+        }
+        break;
+    }
+    case CR_G_SYNC: {
+        if (pct < 128) {                            /* free: a clock face, its hands at three o'clock */
+            int32_t r = mn / 2;
+            cr_arc(cx, cy, r, lw, 0, 65536u, 0, 0, 0, col);
+            CR_PT(cx, cy - r * 6 / 10); CR_PT(cx, cy); CR_PT(cx + r * 45 / 100, cy);
+            cr_poly(p, np, lw, 0, 0, col);
+        } else {                                    /* the tempo: two beamed notes */
+            int32_t hr = H * 16 / 100 > 40 ? H * 16 / 100 : 40, dx = mn * 34 / 100, hy = y1 - hr;
+            for (k = -1; k <= 1; k += 2) {
+                int32_t sx = cx + k * dx + hr - lw / 2;
+                cr_disc(cx + k * dx, hy, hr, col);
+                np = 0;
+                CR_PT(sx, hy); CR_PT(sx, y0 + lw);
+                cr_poly(p, np, lw, 0, 0, col);
+            }
+            cr_frect(cx - dx + hr - lw, y0, 2 * dx + lw, 56, col);
+        }
+        break;
+    }
+    case CR_G_PING: {                               /* two walls and four repeats, each 0.7 of the last: on both walls
+                                                     * at once (stereo), or left, right, left, right (ping-pong) */
+        int32_t len = W * 42 / 100;
+        cr_frect(x0, y0, lw, H, col);
+        cr_frect(x1 - lw, y0, lw, H, col);
+        for (k = 0; k < 4; k++) {
+            int32_t yy = y0 + H * (1 + 2 * k) / 8 - lw / 2;
+            if (pct < 128 || !(k & 1)) cr_frect(x0, yy, len, lw, col);
+            if (pct < 128 || (k & 1)) cr_frect(x1 - len, yy, len, lw, col);
+            len = len * 7 / 10;
+        }
         break;
     }
     default: break;

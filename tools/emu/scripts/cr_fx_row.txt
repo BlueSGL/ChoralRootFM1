@@ -1,9 +1,11 @@
-# ChoralRoot: the fx layer is a knob row (cr_screen.h CR_K_KNOBROW): FX held and released locks it open on Reverb
-# (Size / Damp / Type / Amount with their glyphs); KNOB 2 turned: the Damp cell hot (its value on an orange block),
-# no popup (run with EMU_UI_LOG=0: every UI frame stays "knobrow"); 900 ms later the hot block is gone; SELECT +2
-# picks Delay (Time / Feedback / Colour / Amount; the roots play the chord in FX); KNOB 4: the amount cell hot; SELECT
-# -1: Chorus (Rate / Depth / - / Amount); +2: Drive (- - - Amount); D4 + MAJ: the chord sounds in the layer; FX tap:
-# off (the amount reads "off"); OCT- closes the layer.
+# ChoralRoot: the fx layer is a knob row (cr_screen.h CR_K_KNOBROW) of six pages on SELECT (docs/FX.md): FX held and
+# released locks it open on Reverb 1 (Size / Damp / Decay / Send with their glyphs); KNOB 2 turned: the Damp cell hot
+# (its value on an orange block), no popup (run with EMU_UI_LOG=0: every UI frame stays "knobrow"); 900 ms later the
+# hot block is gone; SELECT +1: Reverb 2 (Pre-delay / Mod / Low cut / Width, "2/2" in the label); +2: Delay 1 (Time /
+# Spread / Feedback / Send; the roots play the chord in FX); KNOB 4: the send cell hot; +1: Delay 2 (Sync / Mode /
+# Tone / Wow), KNOB 1 -1: Sync to Free, KNOB 2 -1: Mode to Stereo; -1: Delay 1 again, its Time now in milliseconds;
+# -1: Chorus (Rate / Depth / - / Send); +3: Drive (- - - Send); D4 + MAJ: the chord sounds in the layer; FX tap: off
+# (the send reads "off"); OCT- closes the layer.
 wait 300
 btn FX down
 wait 500
@@ -15,6 +17,9 @@ wait 100
 shot build/emu/test/cr_fx_row_hot.ppm
 wait 900
 shot build/emu/test/cr_fx_row_cool.ppm
+knob SELECT +1
+wait 400
+shot build/emu/test/cr_fx_row_reverb2.ppm
 knob SELECT +2
 wait 400
 shot build/emu/test/cr_fx_row_delay.ppm
@@ -22,10 +27,23 @@ knob KNOB4 +3
 wait 100
 shot build/emu/test/cr_fx_row_amount.ppm
 wait 900
+knob SELECT +1
+wait 400
+shot build/emu/test/cr_fx_row_delay2.ppm
+knob KNOB1 -1
+wait 200
+knob KNOB2 -1
+wait 900
+shot build/emu/test/cr_fx_row_delay2_free.ppm
+knob SELECT -1
+wait 400
+shot build/emu/test/cr_fx_row_delay_free.ppm
+knob KNOB1 +1
+wait 900
 knob SELECT -1
 wait 400
 shot build/emu/test/cr_fx_row_chorus.ppm
-knob SELECT +2
+knob SELECT +3
 wait 400
 key F3 down
 wait 40

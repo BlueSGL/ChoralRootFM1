@@ -339,7 +339,7 @@ grep -q '^loop: auto-save slot 1 32 bytes rc 0 (stopped)' "$OUT/persist_loop_bas
 
 # ---- the session (0.18, docs/SETTINGS.md "The session"): "switch off, switch on: exactly where you left off".
 # Run 1 (session_set.txt, a fresh flash): a loop recorded in slot 3 and stopped, both parts' sounds edited and not
-# saved, Bass on with its Level down, the delay picked and set, Perform on with Arpeggiate, voicing +2, octave -1, LOCK
+# saved, Bass on with its Level down, the delay picked and set (both its pages), Perform on with Arpeggiate, voicing +2, octave -1, LOCK
 # with MAJ + M7 latched. Run 2 (session_check.txt, a relaunch): all of it back at power-on, the loop loaded and
 # stopped, silence; D4 plays the latched Dmaj7 arpeggiated over the bass; nothing is written (the state is the stored)
 SF=$OUT/persist_session_flash.bin
@@ -354,7 +354,9 @@ sx() { sv "$1" "$2" | cut -d'|' -f"$3"; }
 crl() { dl "$1" 'cr: key' "$2" | sed -n 's/.* perform \([0-9]\) mode \([0-9]\) bass \([0-9]\) (sound \([0-9]*\)) voicing \(-*[0-9]*\) octave \(-*[0-9]*\) .* view \([0-9]\) layer \([0-9]*\) options \([0-9]\).*/perform \1 mode \2 bass \3 sound \4 voicing \5 octave \6 view \7 layer \8 options \9/p'; }
 want_state="voicing 2 octave -1 bass 1 lock 1 latched 44"
 want_cr="perform 1 mode 2 bass 1 sound 18 voicing 2 octave -1 view 0 layer 0 options 0"
-want_fx="  session fx: on 1 sel 2 (Delay) amt 35 45 37 0 sends 35 45 37 0 par 1=90 2=60 3=0 4=40 5=60 6=3 7=54 8=70"
+# (the FX block by tag, cr_settings.h CSS_FXP_*: 4, 5 the chorus; 9..17 the delay: 10 its division 6 -> 8 (1/8.), 12 its
+# spread 0 -> 1 (3:4), 13 its feedback 58 -> 52, 15 its mode 1 -> 0 (Stereo), 16 its tone 84 -> 88; 18..24 the reverb)
+want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 37 0 sends 35 45 37 0 par 4=40 5=60 9=80 10=8 11=0 12=1 13=52 14=1 15=0 16=88 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127"
 c1=$(dl "$S1" 'session chord:' 2); b1=$(dl "$S1" 'session bass:' 2)
 [ "$(sx "$S1" 2 6)" = "$want_state" ] && [ "$(crl "$S1" 2)" = "$want_cr" ] && [ "$(dl "$S1" 'session fx:' 2)" = "$want_fx" ] &&
     echo "$c1" | grep -q 'FM6 / TINE EP edited 1 kind 1 crc [0-9A-F]* level 92 pan 0' &&
@@ -374,7 +376,7 @@ grep -aq '^session: applied (parts 1 1, voicing 2, octave -1, bass 1, lock 1 lat
     ok "session run 2: both parts' unsaved edits are back, the same patch checksums, 'edited', Level and Pan ($(echo "$c1" | sed 's/.*crc //') / $(echo "$b1" | sed 's/.*crc //'))" \
     || bad "session run 2: the parts: $(dl "$S2" 'session chord:' 1) / $(dl "$S2" 'session bass:' 1) want $c1 / $b1"
 [ "$(dl "$S2" 'session fx:' 1)" = "$want_fx" ] &&
-    ok "session run 2: the FX layer in full: Delay picked, its time (3) and feedback (54) as turned, the amounts 35 45 37 0 as left (not the preset's again)" \
+    ok "session run 2: the FX layer in full: Delay's second page picked, its division (1/8.), spread (3:4), feedback (52), mode (Stereo) and tone (88) as turned, the reverb's as they were, the sends 35 45 37 0 as left (not the preset's again)" \
     || bad "session run 2: fx: $(dl "$S2" 'session fx:' 1)"
 dl "$S2" 'loop: state' 1 | grep -q 'state 1 cap 0 layers 1 events 2 .* slot 3 played 0 .* used 004 ' &&
     grep -aq '^expect silence at 800 ms: ok' "$S2" && dl "$S2" 'mods: down' 1 | grep -q 'down 44 active 44 voices free' &&

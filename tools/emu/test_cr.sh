@@ -275,7 +275,7 @@ export EMU_UI_LOG=0
 run cr_fx_row
 unset EMU_UI_LOG
 L="$OUT/cr_fx_row.log"
-has '^fx: cells Size Damp Type Amount' "$L" && ok "FX held: Reverb over Size / Damp / Type / Amount: $OUT/cr_fx_row.ppm" || bad "no Reverb cells"
+has '^fx: cells Size Damp Decay Send' "$L" && ok "FX held: Reverb over Size / Damp / Decay / Send: $OUT/cr_fx_row.ppm" || bad "no Reverb cells"
 has '^fx: knob 2 Reverb damp' "$L" && ok "KNOB 2: Reverb's damp ($(grep '^fx: knob 2' "$L" | head -1 | sed 's/^fx: //'))" || bad "KNOB 2: no damp change"
 fr=$(grep -c '^ui: frame' "$L"); kr=$(grep -c '^ui: frame.*device): knobrow ' "$L"); mt=$(grep -c '^ui: frame.*device): meter ' "$L")
 [ "$mt" = 0 ] && [ "$kr" -gt 100 ] && ok "no popup: every frame in the layer a knob row ($kr knobrow frames of $fr, 0 meters)" \
@@ -285,13 +285,38 @@ grep -q '^ui: frame.*device): knobrow .*hot 1\.1$' "$L" && grep -q '^ui: frame.*
 h=$(px_count "$OUT/cr_fx_row_hot.ppm" 64 176 116 196 ink); c=$(px_count "$OUT/cr_fx_row_cool.ppm" 64 176 116 196 ink)
 [ "$h" -gt $((c + 300)) ] && ok "the hot block behind Damp's value ($h ink px), gone 900 ms later ($c): $OUT/cr_fx_row_hot.ppm" \
     || bad "hot block: $h px hot, $c after"
-has '^fx: cells Time Feedback Colour Amount' "$L" && has '^fx: cells Rate Depth - Amount' "$L" && has '^fx: cells - - - Amount' "$L" &&
-    ok "SELECT picks the effect, the cells follow (Delay, Chorus with a dash, Drive the amount only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
+has '^fx: cells Time Spread Feedback Send' "$L" && has '^fx: cells Rate Depth - Send' "$L" && has '^fx: cells - - - Send' "$L" &&
+    ok "SELECT picks the effect, the cells follow (Delay, Chorus with a dash, Drive the send only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
+has '^fx: effect Reverb 2/2' "$L" && has '^fx: cells Pre-delay Mod Low cut Width' "$L" && has '^fx: effect Delay 2/2' "$L" &&
+    has '^fx: cells Sync Mode Tone Wow' "$L" && [ "$(grep -c '^fx: effect' "$L")" = 6 ] &&
+    ok "SELECT steps six pages: Reverb 1, Reverb 2 (Pre-delay / Mod / Low cut / Width), Chorus, Delay 1, Delay 2 (Sync / Mode / Tone / Wow), Drive: $OUT/cr_fx_row_reverb2.ppm, $OUT/cr_fx_row_delay2.ppm" \
+    || bad "the FX layer's pages: $(grep -c '^fx: effect' "$L") page changes"
+differ cr_fx_row cr_fx_row_reverb2 "Reverb 1 / Reverb 2 pages differ"
+differ cr_fx_row_delay cr_fx_row_delay2 "Delay 1 / Delay 2 pages differ"
+has '^fx: knob 1 Delay sync 0' "$L" && has '^fx: knob 2 Delay mode 0' "$L" && differ cr_fx_row_delay2 cr_fx_row_delay2_free "Delay 2: Sync to Free (the clock face), Mode to Stereo: $OUT/cr_fx_row_delay2_free.ppm"
+differ cr_fx_row_amount cr_fx_row_delay_free "Delay 1 with Sync off: Time and Spread are the free ones (milliseconds, a ratio): $OUT/cr_fx_row_delay_free.ppm"
 has '^expect sound .*: ok' "$L" && has '^expect led D4 on .*: ok' "$L" &&
     ok "MAJ + D4 in the fx layer: the chord sounds, its LEDs are the chord's (the roots play there)" || bad "the roots in the fx layer: $(grep '^expect' "$L")"
 differ cr_fx_row cr_fx_row_delay "Reverb / Delay rows differ"
-has '^fx: knob 4 Delay amount' "$L" && differ cr_fx_row_delay cr_fx_row_amount "KNOB 4: Delay's amount cell changed (hot): $OUT/cr_fx_row_amount.ppm"
-differ cr_fx_row_chorus cr_fx_row_drive_off "Drive with FX off (the amount reads off): $OUT/cr_fx_row_drive_off.ppm"
+has '^fx: knob 4 Delay send' "$L" && differ cr_fx_row_delay cr_fx_row_amount "KNOB 4: Delay's send cell changed (hot): $OUT/cr_fx_row_amount.ppm"
+differ cr_fx_row_chorus cr_fx_row_drive_off "Drive with FX off (the send reads off): $OUT/cr_fx_row_drive_off.ppm"
+
+echo "the effects are global, a sound carries its sends (docs/FX.md)"
+run cr_fx_global
+L="$OUT/cr_fx_global.log"
+fxl() { grep -a '^  session fx:' "$L" | sed -n "$1p"; }
+fxpar() { fxl "$1" | sed 's/.* par //'; }
+fxamt() { fxl "$1" | sed -n 's/.* amt \([0-9 ]*\) sends.*/\1/p'; }
+fxsnd() { fxl "$1" | sed -n 's/.* sends \([0-9 ]*\) par.*/\1/p'; }
+has '^fx: knob 1 Reverb size 98' "$L" && has '^fx: knob 3 Reverb decay 60' "$L" && has '^fx: knob 3 Delay feedback 50' "$L" &&
+    fxpar 1 | grep -q ' 13=50 .* 18=98 .* 20=60 ' &&
+    ok "the reverb's Size and Decay and the delay's Feedback turned: in the session's FX block (tags 18, 20, 13)" || bad "the FX parameters: $(fxpar 1)"
+[ -n "$(fxpar 1)" ] && [ "$(fxpar 1)" = "$(fxpar 2)" ] && [ "$(fxamt 1)" != "$(fxamt 2)" ] && [ "$(fxamt 2)" = "$(fxsnd 2)" ] &&
+    ok "PRESETS +3 (another sound): every effect parameter as it was; the sends are the new sound's own ($(fxamt 1) -> $(fxamt 2))" \
+    || bad "a sound load and the effects: par $(fxpar 1) -> $(fxpar 2), amt $(fxamt 1) -> $(fxamt 2), sends $(fxsnd 2)"
+[ "$(fxsnd 3)" = "0 0 0 0" ] && [ "$(fxamt 3)" = "$(fxamt 2)" ] && [ "$(fxsnd 4)" = "$(fxamt 2)" ] && [ "$(fxpar 3)" = "$(fxpar 1)" ] &&
+    ok "FX tapped off: the sends closed, the amounts and the effects' parameters kept; on again: the sends back" \
+    || bad "FX off / on: sends $(fxsnd 3) / $(fxsnd 4), amt $(fxamt 3)"
 
 echo "the perform layer: a knob row (the mode over its four parameters), a turned cell hot, no popup"
 export EMU_UI_LOG=0

@@ -14,6 +14,9 @@
 #   (i) (c) on FM TONE (code name QUAD): a 6-note STRINGS chord (the heaviest FM TONE preset) + the bass + a playing loop + the arp (docs/QUAD.md)
 #   (j) an 8-note VA chord (a C 13th over MIDI, ENSEMBLE STR) + the VA bass (PUNCH BASS: the bass part is MONO, its 4 MIDI
 #       notes one voice): 9 voices, more than one core's shared budget (docs/DUALCORE.md)
+#   (l) (c) with the delay and the reverb fully on (0.18, docs/FX.md): the chord part's sends at 127, Decay 13 s,
+#       Feedback up: the heaviest sound scenario with both effects' loops running in every block (budget: both effects
+#       <= 350 us a block, no block over 80 %)
 # Every scenario runs twice: as above (the figures), then with EMU_STAGES=1 for the audio ISR's stages (firmware/src/
 # cr_cpu1.h cr_dbg: the engine tick, part 0 (chord), part 1 (bass: what the second core takes over), the rest of the mix
 # and the FX, the master; device us per half, avg / max).
@@ -41,10 +44,10 @@ if [ "$EMU" = build/host/emu ] && { [ ! -x "$EMU" ] || [ -n "$(find tools/emu fi
     sh tools/emu/build.sh || { echo "build failed"; exit 1; }
 fi
 mkdir -p "$OUT"
-for s in a b c d e f g h i j; do
+for s in a b c d e f g h i j l; do
     n=perf_$s
     "$EMU" --headless --script "tools/emu/scripts/$n.txt" --wav "$OUT/$n.wav" >"$OUT/$n.log" 2>&1
-    echo "== ($s) $(sed -n '1s/^# tools\/emu\/perf.sh ([a-j]): //p' "tools/emu/scripts/$n.txt")"
+    echo "== ($s) $(sed -n '1s/^# tools\/emu\/perf.sh ([a-l]): //p' "tools/emu/scripts/$n.txt")"
     grep '^audio: [0-9]* blocks\|^cpu:\|^ui:' "$OUT/$n.log" | sed 's/^/   /'
     grep 'voices: given up\|erases with' "$OUT/$n.log" | tail -2 | sed 's/^ */   /'
     python3 tools/emu/wavclicks.py "$OUT/$n.wav" --from 0.4 | tail -1 | sed 's/^/   /'
@@ -55,7 +58,7 @@ DCON="$OUT/dualcore_on_flash.bin"             # Options > Dual Core On, saved: t
 rm -f "$DCON"
 "$EMU" --headless --flash "$DCON" --script tools/emu/scripts/cr_dualcore_on.txt >"$OUT/dualcore_on.log" 2>&1 ||
     { echo "Dual Core On: the Options script failed (see $OUT/dualcore_on.log)"; exit 1; }
-for s in a b c d e f g h i j; do
+for s in a b c d e f g h i j l; do
     n=perf_$s
     cp "$DCON" "$OUT/dualcore_run_flash.bin"
     "$EMU" --headless --flash "$OUT/dualcore_run_flash.bin" --script "tools/emu/scripts/$n.txt" --wav "$OUT/${n}_dc.wav" >"$OUT/${n}_dc.log" 2>&1

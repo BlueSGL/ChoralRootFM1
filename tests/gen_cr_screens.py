@@ -38,8 +38,11 @@ DIAL = {"armed": "ARMED", "rec": "REC", "od": "OD"}         # the corner dial's 
 CELL_GLYPH = {"knob": "KNOB", "bar": "BAR", "wave": "WAVE", "saw": "SAW", "square": "SQUARE", "steps": "STEPS",
               "dots": "DOTS", "morph": "MORPH", "noise": "NOISE",
               # the parameter pictograms (FORMAT.md "cell glyphs")
-              "room": "ROOM", "moon": "MOON", "echoes": "ECHOES", "lfo": "LFO", "clip": "CLIP", "spring": "SPRING",
+              "room": "ROOM", "moon": "MOON", "echoes": "ECHOES", "lfo": "LFO", "clip": "CLIP",
               "mix": "MIX", "gate": "GATE", "range": "RANGE", "arrow": "ARROW", "shift": "SHIFT",
+              # the FX layer's of 0.18 (docs/FX.md: the delay's and the reverb's pages)
+              "tail": "TAIL", "pre": "PRE", "cut": "CUT", "width": "WIDTH", "spread": "SPREAD", "sync": "SYNC",
+              "ping": "PING",
               # QUAD's (design/choralroot-fm1-quad-mockups.json)
               "harm": "HARM", "detune": "DETUNE", "lfowave": "LFOWAVE", "ratio": "RATIO"}
 LFO_WAVE = {"tri": "TRI", "sine": "SINE", "sin": "SINE", "square": "SQUARE", "saw": "SAW", "ramp": "RAMP", "exp": "EXP",
@@ -734,7 +737,7 @@ def editor_states():
 # the knob rows (2 Reverb, 3 Delay hot, 4 Chorus, 5 Drive off, 5b Spring), the glyph studies (6, 7: edit8) and the
 # same grammar on the perform and bass layers (10, 11)
 FX_SRC = ROOT / "design" / "choralroot-fm1-fx-mockups.json"
-FX_PICK = ["2", "3", "4", "5", "5b", "6", "7", "10", "11"]
+FX_PICK = ["2", "3", "4", "5", "5b", "6", "7", "10", "11", "12", "13", "14"]   # 12..14: 0.18's Delay 2 and glyph studies
 
 
 def fx_states():

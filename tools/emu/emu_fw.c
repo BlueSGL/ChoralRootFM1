@@ -435,7 +435,8 @@ void emu_fw_dump(void)
                "latched %02X\n", (unsigned)css_saves, css_last_rc == 1 ? "current" : css_last_rc == 2 ? "migrated" :
                css_last_rc < 0 ? "not these settings'" : "none", (unsigned)cr_session_hash(&x), (unsigned)css_flash,
                (unsigned)css_pending, (int)x.voicing, (int)x.octave, (unsigned)x.bass_on, (unsigned)x.lock, (unsigned)x.latched);
-        printf("  session fx: on %u sel %u (%s) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel, CU_FX[cs.fx_sel % CU_NFX].name);
+        printf("  session fx: on %u sel %u (%s %u/%u) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel, CU_FX[cs.fx_sel % CU_NFX].name,
+               (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[cu_fx_pg()].of);
         for (k = 0; k < CU_NFX; k++)
             printf(" %u", (unsigned)cs.fx_amt[k]);
         printf(" sends");

@@ -694,13 +694,38 @@ static void crs_capture(cr_settings_t *s)
 }
 
 /* ------------------------------------------------------------ the session's glue --- */
-/* the FX layer by tag (cr_settings.h css_fx_t): cr_ui.c CU_FX's effects in its order, and the bus parameters KNOB
- * 1..3 turn. A reworked effect: its new parameters get new CSS_FXP_* tags and a line here; a parameter gone loses its
- * line (its tag stays retired) */
+/* the FX layer by tag (cr_settings.h css_fx_t): cr_ui.c CU_FX's effects in its order, its pages (CU_FXP's order: the
+ * second pages have a tag of their own for `sel`), and the effects' GLOBAL parameters: the chorus's (song.g) and, since
+ * the delay and the reverb are cr_fx.c's (0.18), its xfp[] (x: 1). A reworked effect: its new parameters get new
+ * CSS_FXP_* tags and a line here; a parameter gone loses its line (its tag stays retired) */
 static const uint8_t CSS_FXE[CU_NFX] = {CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE};
-static const struct { uint8_t tag, g; } CSS_FXG[] = {
-    {CSS_FXP_RSIZE, G_RSIZE}, {CSS_FXP_RDAMP, G_RDAMP}, {CSS_FXP_RTYPE, G_RTYPE}, {CSS_FXP_CRATE, G_CRATE},
-    {CSS_FXP_CDEPTH, G_CDEPTH}, {CSS_FXP_DTIME, G_DTIME}, {CSS_FXP_DFDBK, G_DFDBK}, {CSS_FXP_DCOLOR, G_DCOLOR}};
+static const uint8_t CSS_FXS[CU_NFXP] = {CSS_FXE_REVERB, CSS_FXE_REVERB2, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DELAY2,
+                                         CSS_FXE_DRIVE};
+static const struct { uint8_t tag, x, id; } CSS_FXG[] = {
+    {CSS_FXP_CRATE, 0, G_CRATE}, {CSS_FXP_CDEPTH, 0, G_CDEPTH},
+    {CSS_FXP_XD_TIME, 1, XP_DTIME}, {CSS_FXP_XD_DIV, 1, XP_DDIV}, {CSS_FXP_XD_SPREAD, 1, XP_DSPREAD},
+    {CSS_FXP_XD_RATIO, 1, XP_DRATIO}, {CSS_FXP_XD_FDBK, 1, XP_DFDBK}, {CSS_FXP_XD_SYNC, 1, XP_DSYNC},
+    {CSS_FXP_XD_MODE, 1, XP_DMODE}, {CSS_FXP_XD_TONE, 1, XP_DTONE}, {CSS_FXP_XD_WOW, 1, XP_DWOW},
+    {CSS_FXP_XR_SIZE, 1, XP_RSIZE}, {CSS_FXP_XR_DAMP, 1, XP_RDAMP}, {CSS_FXP_XR_DECAY, 1, XP_RDECAY},
+    {CSS_FXP_XR_PRE, 1, XP_RPRE}, {CSS_FXP_XR_MOD, 1, XP_RMOD}, {CSS_FXP_XR_LOW, 1, XP_RLOW},
+    {CSS_FXP_XR_WIDTH, 1, XP_RWIDTH}};
+_Static_assert(NELEM(CSS_FXG) <= CSS_NFXP, "the FX block holds every global parameter");
+_Static_assert(CSS_FXP_DCOLOR == 8 && CSS_FXP_XD_TIME == 9 && CSS_FXP_XR_SIZE == 18 && CSS_FXP_XR_WIDTH == 24 &&
+               CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5, "the session's FX tags are never renumbered");
+static int16_t *css_fxg_p(uint32_t i) { return CSS_FXG[i].x ? &xfp[CSS_FXG[i].id] : &song.g[CSS_FXG[i].id]; }
+static int css_fxg_ok(uint32_t i, int v)
+{
+    return CSS_FXG[i].x ? v >= XFP[CSS_FXG[i].id].min && v <= XFP[CSS_FXG[i].id].max
+                        : v >= GP[CSS_FXG[i].id].min && v <= GP[CSS_FXG[i].id].max;
+}
+static void css_fxg_defaults(void)                 /* a new unit's effects (cr_out.c's and params.c's) */
+{
+    uint32_t i;
+    xf_defaults();
+    for (i = 0; i < NELEM(CSS_FXG); i++)
+        if (!CSS_FXG[i].x)
+            song.g[CSS_FXG[i].id] = GP[CSS_FXG[i].id].def;
+}
 
 /* a part's sound as it is -> its record (as the engine picker's snapshot, cr_ui.c cu_pick_begin) */
 static void css_part_get(uint32_t part, css_part_t *r)
@@ -776,11 +801,11 @@ static void css_capture(cr_session_t *x)
     x->bass_on = cs.bass_on != 0u;
     x->lock = cu.clock != 0u;
     x->latched = x->lock ? cu.mlatch : 0u;
-    x->fx.sel = CSS_FXE[cs.fx_sel % CU_NFX];
+    x->fx.sel = CSS_FXS[cu_fx_pg()];
     for (i = 0; i < CU_NFX; i++)
         x->fx.amt[CSS_FXE[i]] = (uint8_t)(cs.fx_amt[i] & 127u);
     for (i = 0; i < NELEM(CSS_FXG); i++)
-        cr_session_fx_set(x, CSS_FXG[i].tag, song.g[CSS_FXG[i].g]);
+        cr_session_fx_set(x, CSS_FXG[i].tag, *css_fxg_p(i));
     css_part_get(0, &x->part[0]);
     css_part_get(1, &x->part[1]);
     cr_session_seal(x);
@@ -794,12 +819,15 @@ static void css_apply(const cr_session_t *x)
     int v;
     got[0] = (uint32_t)css_part_put(0, &x->part[0]);
     got[1] = (uint32_t)css_part_put(1, &x->part[1]);
-    for (i = 0; i < NELEM(CSS_FXG); i++)
-        if (cr_session_fx_get(x, CSS_FXG[i].tag, &v) && v >= GP[CSS_FXG[i].g].min && v <= GP[CSS_FXG[i].g].max)
-            song.g[CSS_FXG[i].g] = (int16_t)v;
-    for (i = 0; i < CU_NFX; i++)
-        if (CSS_FXE[i] == x->fx.sel)
-            cs.fx_sel = (uint8_t)i;
+    for (i = 0; i < NELEM(CSS_FXG); i++)             /* (a tag not stored, a value out of range: the default stays; a
+                                                    * 0.17 / early 0.18 record's retired tags are not read) */
+        if (cr_session_fx_get(x, CSS_FXG[i].tag, &v) && css_fxg_ok(i, v))
+            *css_fxg_p(i) = (int16_t)v;
+    for (i = 0; i < CU_NFXP; i++)
+        if (CSS_FXS[i] == x->fx.sel) {
+            cs.fx_sel = CU_FXP[i].fx;
+            cs.fx_page = CU_FXP[i].page;
+        }
     if (got[0] && cs.fx_on)
         cu_sends_to_fx();                          /* (the restored sound's own sends; FX off: they are 0 there) */
     for (i = 0; i < CU_NFX; i++)
@@ -1009,12 +1037,22 @@ static int crs_write(void)                         /* the captured state -> flas
 
 /* something sounds or is about to: a voice of the parts (release tails too), a chord the engine holds or latches,
  * a scheduled note (arp, strum), or the master output (the FX tails) above CRS_QUIET_PEAK over the scope's last
- * 512 samples (~23 ms). No flash erase then: it would cut the audio (see the top) */
+ * 512 samples (~23 ms). No flash erase then: it would cut the audio (see the top).
+ * The FX tail ALONE holds a save back for CRS_TAIL_MS at most (0.18: the reverb's DECAY goes to 72 s and "Inf", cr_fx.c;
+ * with Felucca's 2 s room the tail was always over in time): after that the save goes through it (one 46 ms hole in a
+ * tail that has rung for half a minute), or a unit left on a frozen reverb would never save anything. At the
+ * reverb's default (3 s) the tail is under the threshold 2 .. 4 s after the last note: no hole */
+#define CRS_TAIL_MS 30000u
+static uint32_t crs_voice_ms;                      /* the last time a voice, a held chord or a scheduled note was there */
 static int crs_sounding(void)
 {
     uint32_t i;
-    if (cr_parts_busy() || cr_snap.voices || cr_snap.pending)
+    if (cr_parts_busy() || cr_snap.voices || cr_snap.pending) {
+        crs_voice_ms = fm1_ms;
         return 1;
+    }
+    if ((uint32_t)(fm1_ms - crs_voice_ms) >= CRS_TAIL_MS)
+        return 0;
     for (i = 0; i < SCOPE_N; i++)
         if (scope_buf[i] > CRS_QUIET_PEAK || scope_buf[i] < -CRS_QUIET_PEAK)
             return 1;
@@ -1094,9 +1132,8 @@ static void cr_settings_reset(void)
                                                     * the octave. The session then captured is a new unit's */
         for (i = 0; i < P_E0; i++)
             trk[k ? CR_PART_BASS : CR_PART_CHORD].p[i] = TP[i].def;
-    for (i = 0; i < NELEM(CSS_FXG); i++)
-        song.g[CSS_FXG[i].g] = GP[CSS_FXG[i].g].def;
-    cs.fx_sel = 0;
+    css_fxg_defaults();
+    cs.fx_sel = cs.fx_page = 0;
     trk[CR_PART_CHORD].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);   /* (cr_ui_init's) */
     trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);
     cu_pool_load(0, ENGI_FM6, cu_pool_find(ENGI_FM6, "TINE EP"));

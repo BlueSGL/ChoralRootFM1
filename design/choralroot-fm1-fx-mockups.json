@@ -238,18 +238,18 @@
     },
     "KNOB1": {
      "note": "SIZE",
-     "value": "90"
+     "value": "88"
     },
     "KNOB2": {
      "note": "DAMP",
-     "value": "60"
+     "value": "56"
     },
     "KNOB3": {
-     "note": "TYPE",
-     "value": "ROOM"
+     "note": "DECAY",
+     "value": "2.4 S"
     },
     "KNOB4": {
-     "note": "AMOUNT",
+     "note": "SEND",
      "value": "25"
     }
    },
@@ -273,28 +273,28 @@
      ],
      "sel": 0,
      "col": "green",
-     "label": "fx",
+     "label": "fx \u00b7 on \u00b7 1/2",
      "cells": [
       {
        "label": "Size",
-       "value": "90",
+       "value": "88",
        "glyph": "room",
-       "pct": 0.709
+       "pct": 0.693
       },
       {
        "label": "Damp",
-       "value": "60",
+       "value": "56",
        "glyph": "moon",
-       "pct": 0.528
+       "pct": 0.559
       },
       {
-       "label": "Type",
-       "value": "Room",
-       "glyph": "room",
-       "pct": 0.5
+       "label": "Decay",
+       "value": "2.4 s",
+       "glyph": "tail",
+       "pct": 0.378
       },
       {
-       "label": "Amount",
+       "label": "Send",
        "value": "25",
        "glyph": "mix",
        "pct": 0.25
@@ -392,15 +392,15 @@
      "value": "1/8"
     },
     "KNOB2": {
-     "note": "FEEDBACK",
-     "value": "60"
+     "note": "SPREAD",
+     "value": "3:4"
     },
     "KNOB3": {
-     "note": "COLOUR",
-     "value": "70"
+     "note": "FEEDBACK",
+     "value": "58"
     },
     "KNOB4": {
-     "note": "AMOUNT",
+     "note": "SEND",
      "value": "40"
     }
    },
@@ -424,30 +424,31 @@
      ],
      "sel": 2,
      "col": "green",
-     "label": "fx",
+     "label": "fx \u00b7 on \u00b7 1/2",
      "cells": [
       {
        "label": "Time",
        "value": "1/8",
        "glyph": "echoes",
-       "pct": 0.45,
+       "pct": 0.5,
+       "pct2": 0.457
+      },
+      {
+       "label": "Spread",
+       "value": "3:4",
+       "glyph": "spread",
+       "pct": 0.5,
        "pct2": 0.5
       },
       {
        "label": "Feedback",
-       "value": "60",
+       "value": "58",
        "glyph": "echoes",
-       "pct": 0.45,
-       "pct2": 0.5
+       "pct": 0.5,
+       "pct2": 0.457
       },
       {
-       "label": "Colour",
-       "value": "70",
-       "glyph": "moon",
-       "pct": 0.551
-      },
-      {
-       "label": "Amount",
+       "label": "Send",
        "value": "40",
        "glyph": "mix",
        "pct": 0.4
@@ -459,7 +460,7 @@
     "footer": {
      "text": "SELECT: effect \u00b7 FX: on/off \u00b7 OCT-: back"
     },
-    "note": "Delay: the hot cell (FEEDBACK on an orange block) is the only trace of the turn."
+    "note": "Delay 1: the hot cell (SPREAD on an orange block) is the only trace of the turn."
    }
   },
   {
@@ -595,7 +596,7 @@
       },
       null,
       {
-       "label": "Amount",
+       "label": "Send",
        "value": "30",
        "glyph": "mix",
        "pct": 0.3
@@ -725,13 +726,13 @@
      ],
      "sel": 3,
      "col": "green",
-     "label": "fx",
+     "label": "fx \u00b7 off",
      "cells": [
       null,
       null,
       null,
       {
-       "label": "Amount",
+       "label": "Send",
        "value": "off",
        "glyph": "clip",
        "pct": 0.0
@@ -747,8 +748,8 @@
    }
   },
   {
-   "name": "5b \u00b7 knob row: Reverb, Type = Spring",
-   "notes": "TYPE is an enum (Room / Spring), so its cell is a picture of the type rather than a level: the room box for Room, a coil for Spring. The other cells keep their pictures.",
+   "name": "5b \u00b7 knob row: Reverb 2 (SELECT's second page)",
+   "notes": "0.18: the reverb is one large space (the Room / Spring type is gone) on two pages. Page 2: PRE-DELAY (a struck bar, the gap, the reverb's wedge), MOD (the lines' slow swing), LOW CUT (the response's corner) and WIDTH (two bars leaving the centre) on KNOB 4, which is no send here. The label carries the page quietly, as the KEY layer's.",
    "export": true,
    "keys": [
     0,
@@ -825,20 +826,20 @@
      "value": ""
     },
     "KNOB1": {
-     "note": "SIZE",
-     "value": "90"
+     "note": "PRE-DELAY",
+     "value": "17 MS"
     },
     "KNOB2": {
-     "note": "DAMP",
-     "value": "60"
+     "note": "MOD",
+     "value": "56"
     },
     "KNOB3": {
-     "note": "TYPE",
-     "value": "SPRING"
+     "note": "LOW CUT",
+     "value": "131 HZ"
     },
     "KNOB4": {
-     "note": "AMOUNT",
-     "value": "25"
+     "note": "WIDTH",
+     "value": "127"
     }
    },
    "screen": {
@@ -861,30 +862,32 @@
      ],
      "sel": 0,
      "col": "green",
-     "label": "fx",
+     "label": "fx \u00b7 on \u00b7 2/2",
      "cells": [
       {
-       "label": "Size",
-       "value": "90",
-       "glyph": "room",
-       "pct": 0.709
+       "label": "Pre-delay",
+       "value": "17 ms",
+       "glyph": "pre",
+       "pct": 0.126
       },
       {
-       "label": "Damp",
-       "value": "60",
-       "glyph": "moon",
-       "pct": 0.528
+       "label": "Mod",
+       "value": "56",
+       "glyph": "lfo",
+       "pct": 0.25,
+       "pct2": 0.441
       },
       {
-       "label": "Type",
-       "value": "Spring",
-       "glyph": "spring"
+       "label": "Low cut",
+       "value": "131 Hz",
+       "glyph": "cut",
+       "pct": 0.472
       },
       {
-       "label": "Amount",
-       "value": "25",
-       "glyph": "mix",
-       "pct": 0.25
+       "label": "Width",
+       "value": "127",
+       "glyph": "width",
+       "pct": 1.0
       }
      ],
      "hot": 2,
@@ -893,7 +896,7 @@
     "footer": {
      "text": "SELECT: effect \u00b7 FX: on/off \u00b7 OCT-: back"
     },
-    "note": "Type = Spring: the coil; KNOB 3 just turned (hot)."
+    "note": "Reverb 2: pre-delay, mod, low cut, width; KNOB 3 just turned (hot)."
    }
   },
   {
@@ -1771,6 +1774,478 @@
      "text": "a root: preview \u00b7 OCT-: back \u00b7 HOME"
     },
     "note": "the bass layer: behaviour over register, sound and level."
+   }
+  },
+  {
+   "name": "12 \u00b7 knob row: Delay 2 (SELECT's second page)",
+   "notes": "0.18: the stereo delay's second page: SYNC (two beamed notes: the tempo's divisions; a clock face: free, in milliseconds), MODE (two walls and the repeats: on both at once = Stereo, left right left right = Ping-pong), TONE (the loop's low-pass: the moon) and WOW (the time's slow wobble).",
+   "export": true,
+   "keys": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    2,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "keyLabels": {
+    "9": "REVERB",
+    "11": "CHORUS",
+    "12": "DELAY",
+    "14": "DRIVE"
+   },
+   "keyNotes": {},
+   "buttons": {
+    "FX": 3,
+    "SEL": 1,
+    "ENV": 1,
+    "LFO": 1,
+    "EDIT": 1,
+    "GLO": 1,
+    "HOME": 1,
+    "SAVE": 1,
+    "ARP": 1,
+    "SEQ": 1,
+    "PLAY": 1,
+    "REC": 1,
+    "OCT-": 1,
+    "OCT+": 1
+   },
+   "playGreen": 0,
+   "buttonLabels": {},
+   "buttonNotes": {
+    "FX": "blinks: its layer is open (locked since the 300 ms hold); OCT- or HOME closes it, a tap still toggles it"
+   },
+   "encoders": {
+    "MASTER": {
+     "note": "",
+     "value": ""
+    },
+    "SELECT": {
+     "note": "",
+     "value": ""
+    },
+    "PRESETS": {
+     "note": "",
+     "value": ""
+    },
+    "ALGORITHM": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB1": {
+     "note": "SYNC",
+     "value": "TEMPO"
+    },
+    "KNOB2": {
+     "note": "MODE",
+     "value": "PING-PONG"
+    },
+    "KNOB3": {
+     "note": "TONE",
+     "value": "84"
+    },
+    "KNOB4": {
+     "note": "WOW",
+     "value": "24"
+    }
+   },
+   "screen": {
+    "header": {
+     "icon": "none",
+     "bpm": "",
+     "mid": "",
+     "right": "",
+     "batt": false,
+     "usb": false
+    },
+    "cards": null,
+    "panel": {
+     "kind": "knobrow",
+     "items": [
+      "Reverb",
+      "Chorus",
+      "Delay",
+      "Drive"
+     ],
+     "sel": 2,
+     "col": "green",
+     "label": "fx \u00b7 on \u00b7 2/2",
+     "cells": [
+      {
+       "label": "Sync",
+       "value": "Tempo",
+       "glyph": "sync",
+       "pct": 1.0
+      },
+      {
+       "label": "Mode",
+       "value": "Ping-pong",
+       "glyph": "ping",
+       "pct": 1.0
+      },
+      {
+       "label": "Tone",
+       "value": "84",
+       "glyph": "moon",
+       "pct": 0.661
+      },
+      {
+       "label": "Wow",
+       "value": "24",
+       "glyph": "lfo",
+       "pct": 0.08,
+       "pct2": 0.189
+      }
+     ],
+     "hot": null,
+     "value": ""
+    },
+    "footer": {
+     "text": "SELECT: effect \u00b7 FX: on/off \u00b7 OCT-: back"
+    },
+    "note": "Delay 2: sync, mode, tone, wow."
+   }
+  },
+  {
+   "name": "13 \u00b7 the 0.18 glyphs change with the value (low row, high row)",
+   "notes": "Decay as a struck edge and its falling curve (steep to nearly level), Pre-delay as the gap between the bar and the reverb's wedge, Low cut as the corner of the response moving right, Width as two bars leaving the centre.",
+   "export": true,
+   "keys": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "keyLabels": {},
+   "keyNotes": {},
+   "buttons": {
+    "FX": 3,
+    "SEL": 1,
+    "ENV": 1,
+    "LFO": 1,
+    "EDIT": 1,
+    "GLO": 1,
+    "HOME": 1,
+    "SAVE": 1,
+    "ARP": 1,
+    "SEQ": 1,
+    "PLAY": 1,
+    "REC": 1,
+    "OCT-": 1,
+    "OCT+": 1
+   },
+   "playGreen": 0,
+   "buttonLabels": {},
+   "buttonNotes": {
+    "FX": "blinks: its layer is open (locked since the 300 ms hold); OCT- or HOME closes it, a tap still toggles it"
+   },
+   "encoders": {
+    "MASTER": {
+     "note": "",
+     "value": ""
+    },
+    "SELECT": {
+     "note": "",
+     "value": ""
+    },
+    "PRESETS": {
+     "note": "",
+     "value": ""
+    },
+    "ALGORITHM": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB1": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB2": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB3": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB4": {
+     "note": "",
+     "value": ""
+    }
+   },
+   "screen": {
+    "header": null,
+    "cards": null,
+    "panel": {
+     "kind": "edit8",
+     "title": "glyph study",
+     "titleCol": "green",
+     "right": "low \u00b7 high",
+     "rows": [
+      [
+       {
+        "label": "Decay",
+        "value": "0.4 s",
+        "glyph": "tail",
+        "pct": 0.08
+       },
+       {
+        "label": "Pre-delay",
+        "value": "5 ms",
+        "glyph": "pre",
+        "pct": 0.05
+       },
+       {
+        "label": "Low cut",
+        "value": "24 Hz",
+        "glyph": "cut",
+        "pct": 0.1
+       },
+       {
+        "label": "Width",
+        "value": "20",
+        "glyph": "width",
+        "pct": 0.15
+       }
+      ],
+      [
+       {
+        "label": "Decay",
+        "value": "38 s",
+        "glyph": "tail",
+        "pct": 0.9
+       },
+       {
+        "label": "Pre-delay",
+        "value": "120 ms",
+        "glyph": "pre",
+        "pct": 0.9
+       },
+       {
+        "label": "Low cut",
+        "value": "430 Hz",
+        "glyph": "cut",
+        "pct": 0.92
+       },
+       {
+        "label": "Width",
+        "value": "120",
+        "glyph": "width",
+        "pct": 0.95
+       }
+      ]
+     ],
+     "active": 0
+    },
+    "footer": null,
+    "note": "tail, pre, cut and width low (top) and high (bottom)."
+   }
+  },
+  {
+   "name": "14 \u00b7 the 0.18 glyphs, continued",
+   "notes": "Spread as two rows of echoes (the right one's spacing a part of the left one's: equal, then closing up to half), Sync as a clock face (free) or two beamed notes (the tempo), Mode as the repeats on both walls (Stereo) or alternating (Ping-pong).",
+   "export": true,
+   "keys": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "keyLabels": {},
+   "keyNotes": {},
+   "buttons": {
+    "FX": 3,
+    "SEL": 1,
+    "ENV": 1,
+    "LFO": 1,
+    "EDIT": 1,
+    "GLO": 1,
+    "HOME": 1,
+    "SAVE": 1,
+    "ARP": 1,
+    "SEQ": 1,
+    "PLAY": 1,
+    "REC": 1,
+    "OCT-": 1,
+    "OCT+": 1
+   },
+   "playGreen": 0,
+   "buttonLabels": {},
+   "buttonNotes": {
+    "FX": "blinks: its layer is open (locked since the 300 ms hold); OCT- or HOME closes it, a tap still toggles it"
+   },
+   "encoders": {
+    "MASTER": {
+     "note": "",
+     "value": ""
+    },
+    "SELECT": {
+     "note": "",
+     "value": ""
+    },
+    "PRESETS": {
+     "note": "",
+     "value": ""
+    },
+    "ALGORITHM": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB1": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB2": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB3": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB4": {
+     "note": "",
+     "value": ""
+    }
+   },
+   "screen": {
+    "header": null,
+    "cards": null,
+    "panel": {
+     "kind": "edit8",
+     "title": "glyph study",
+     "titleCol": "green",
+     "right": "low \u00b7 high",
+     "rows": [
+      [
+       {
+        "label": "Spread",
+        "value": "x1.00",
+        "glyph": "spread",
+        "pct": 0.6,
+        "pct2": 0.0
+       },
+       {
+        "label": "Sync",
+        "value": "Free",
+        "glyph": "sync",
+        "pct": 0.0
+       },
+       {
+        "label": "Mode",
+        "value": "Stereo",
+        "glyph": "ping",
+        "pct": 0.0
+       },
+       {
+        "label": "Time",
+        "value": "40 ms",
+        "glyph": "echoes",
+        "pct": 0.15,
+        "pct2": 0.5
+       }
+      ],
+      [
+       {
+        "label": "Spread",
+        "value": "x0.50",
+        "glyph": "spread",
+        "pct": 0.6,
+        "pct2": 1.0
+       },
+       {
+        "label": "Sync",
+        "value": "Tempo",
+        "glyph": "sync",
+        "pct": 1.0
+       },
+       {
+        "label": "Mode",
+        "value": "Ping-pong",
+        "glyph": "ping",
+        "pct": 1.0
+       },
+       {
+        "label": "Time",
+        "value": "1/2",
+        "glyph": "echoes",
+        "pct": 0.95,
+        "pct2": 0.5
+       }
+      ]
+     ],
+     "active": 0
+    },
+    "footer": null,
+    "note": "spread, sync and mode low (top) and high (bottom)."
    }
   }
  ]

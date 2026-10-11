@@ -156,5 +156,5 @@ btn PLAY                      # stop before the cycle's end: the switch cancelle
 wait 300
 dump                          # 13: slot 1, 5 events, stopped
 key END 100
-wait 2000
+wait 5000                     # (the settings' save waits for the reverb's and the delay's tail: docs/FX.md)
 dump

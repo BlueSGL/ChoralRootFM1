@@ -435,13 +435,27 @@ static const char *const CU_DIV[CR_DIV_COUNT] = {"2/1", "1/1", "1/2", "1/2T", "1
                                                  "1/16T", "1/32", "1/32T"};
 static const char *const CU_DIR[6] = {"up", "down", "up-down", "down-up", "as played", "random"};
 
-/* FX: the chord part's sends (KNOB 4: the amount) and the shared buses' parameters (KNOB 1..3, song.g) */
-#define CU_NFX 4u
-static const struct { const char *name; uint8_t send; int8_t g[3]; const char *gname[3]; } CU_FX[CU_NFX] = {
-    {"Reverb", P_REV, {G_RSIZE, G_RDAMP, G_RTYPE}, {"size", "damp", "type"}},
-    {"Chorus", P_CHOR, {G_CRATE, G_CDEPTH, -1}, {"rate", "depth", ""}},
-    {"Delay", P_DLY, {G_DTIME, G_DFDBK, G_DCOLOR}, {"time", "feedback", "colour"}},
-    {"Drive", P_DIST, {-1, -1, -1}, {"", "", ""}}};
+/* FX (docs/FX.md): four effects on six pages (SELECT: Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive). A SOUND
+ * carries its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST) and nothing else of the effects: cs.fx_amt[] are the
+ * chord part's, the "Send" cell on KNOB 4 of an effect's first page (every sound load replaces them with the sound's
+ * own; the bass part keeps its sound's). The effects' own parameters are GLOBAL: the delay's and the reverb's are
+ * cr_fx.c's xfp[], the chorus's song.g; the session keeps them (cr_settings.c CSS_FXG) and no sound load touches them */
+#define CU_NFX 4u                         /* the effects (cs.fx_sel, cs.fx_amt) */
+#define CU_NFXP 6u                        /* SELECT's pages */
+/* a cell: an xfp id (cr_fx.c XP_*), FC_G + a song.g id, or one of these */
+enum { FC_NONE = -1, FC_SEND = -2, FC_TIME = -3, FC_SPREAD = -4, FC_G = 64 };   /* TIME, SPREAD: by Sync, the free or
+                                                                                 * the synced parameter */
+static const struct { const char *name; uint8_t send; } CU_FX[CU_NFX] = {
+    {"Reverb", P_REV}, {"Chorus", P_CHOR}, {"Delay", P_DLY}, {"Drive", P_DIST}};
+static const struct { uint8_t fx, page, of; int8_t c[4]; const char *label[4]; } CU_FXP[CU_NFXP] = {
+    {0, 0, 2, {XP_RSIZE, XP_RDAMP, XP_RDECAY, FC_SEND}, {"Size", "Damp", "Decay", "Send"}},
+    {0, 1, 2, {XP_RPRE, XP_RMOD, XP_RLOW, XP_RWIDTH}, {"Pre-delay", "Mod", "Low cut", "Width"}},
+    {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, FC_NONE, FC_SEND}, {"Rate", "Depth", "", "Send"}},
+    {2, 0, 2, {FC_TIME, FC_SPREAD, XP_DFDBK, FC_SEND}, {"Time", "Spread", "Feedback", "Send"}},
+    {2, 1, 2, {XP_DSYNC, XP_DMODE, XP_DTONE, XP_DWOW}, {"Sync", "Mode", "Tone", "Wow"}},
+    {3, 0, 1, {FC_NONE, FC_NONE, FC_NONE, FC_SEND}, {"", "", "", "Send"}}};
+static const char *const CU_XDIV[XF_NDIV] = {"1/32", "1/16T", "1/32.", "1/16", "1/8T", "1/16.", "1/8", "1/4T", "1/8.",
+                                             "1/4", "1/2T", "1/4.", "1/2"};      /* cr_fx.c XF_DIV's order */
 static const char *const CU_BASSMODE[4] = {"Chords Only", "Unison Bass", "Bass Single Notes", "Solo"};
 static const char *const CU_VIEW[5] = {"Chord", "Keyboard", "Notes", "Geek Out", "Scope"};
 static const char *const CU_LOOPLEN[6] = {"Free", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars"};
@@ -458,6 +472,7 @@ static struct {
     uint16_t bpm;
     int16_t par[CR_PM_COUNT][CR_P_COUNT];
     uint8_t fx_on, fx_sel, fx_amt[CU_NFX];
+    uint8_t fx_page;                      /* the effect's page in the FX layer (0, or 1: Reverb 2, Delay 2) */
     uint16_t sound, bass_sound;           /* pool positions: PRESETS (the chord part's), ALGORITHM (0 = OFF, pos + 1) */
     uint8_t pool_pos[2][NENG_SHOWN];      /* per part, per engine (ENGINE_ORDER rank): the pool position last played
                                            * (OPT + PRESETS lands there; Settings v6) */
@@ -526,7 +541,8 @@ static void cu_loop_conf(void)                    /* the looper's settings -> th
 static void cu_set_tempo(int32_t bpm)
 {
     cs.bpm = (uint16_t)(bpm < 20 ? 20 : bpm > 300 ? 300 : bpm);
-    song.g[G_BPM] = (int16_t)(cs.bpm < 40u ? 40u : cs.bpm > 240u ? 240u : cs.bpm);   /* (the delay's sync) */
+    song.g[G_BPM] = (int16_t)(cs.bpm < 40u ? 40u : cs.bpm > 240u ? 240u : cs.bpm);
+    xf_bpm = cs.bpm;                              /* (the delay's sync, cr_fx.c: the whole range) */
     cr_post(CRE_TEMPO, 0, 0, cs.bpm);
 }
 static void cu_fx_apply(void)                     /* the sends of part 0: the amounts, or 0 with FX off */
@@ -534,6 +550,8 @@ static void cu_fx_apply(void)                     /* the sends of part 0: the am
     uint32_t i;
     for (i = 0; i < CU_NFX; i++)
         trk[CR_PART_CHORD].p[CU_FX[i].send] = (int16_t)(cs.fx_on ? cs.fx_amt[i] : 0u);
+    fx_off = !cs.fx_on;                           /* (fx.c: FX off closes every part's sends: the bass part's too, whose
+                                                   * sound keeps its own values) */
 }
 static void cu_sends_to_fx(void)                  /* part 0's own sends become the FX amounts */
 {
@@ -563,51 +581,116 @@ static void cu_hot_row(cr_screen_t *s, uint32_t l)   /* the row's hot cell, if l
         s->hot_c = (uint8_t)k;
     }
 }
-/* a bus parameter's value as the knob row shows it: a name capitalised ("Room", "Spring"; a division as it is:
- * "1/8"), a rate in Hz ("0.80 Hz"), else the number the popup showed ("90") */
-static void cu_fx_val(uint32_t g, char *out, uint32_t n)
+/* the page of the FX layer: cs.fx_sel's, cs.fx_page */
+static uint32_t cu_fx_pg(void)
 {
-    const param_desc_t *d = &GP[g];
-    int32_t v = song.g[g];
-    char val[12];
-    const char *unit;
-    uint32_t i;
-    if (d->fmt != F_ENUM && d->fmt != F_LFOHZ) {
-        cu_int(out, v, 0, n);
-        return;
-    }
-    param_format(d, v, val, &unit);
-    if (val[0] == '.') {                          /* ".80" -> "0.80" */
-        cu_cpy(out, "0", n);
+    uint32_t i, first = 0;
+    for (i = 0; i < CU_NFXP; i++)
+        if (CU_FXP[i].fx == cs.fx_sel % CU_NFX) {
+            if (CU_FXP[i].page == cs.fx_page)
+                return i;
+            if (!CU_FXP[i].page)
+                first = i;
+        }
+    return first;
+}
+/* a cell's parameter: the delay's Time and Spread are the synced or the free one (both kept: Sync changes which) */
+static int32_t cu_fx_id(int32_t c)
+{
+    return c == FC_TIME ? (xfp[XP_DSYNC] ? XP_DDIV : XP_DTIME) : c == FC_SPREAD ? (xfp[XP_DSYNC] ? XP_DRATIO : XP_DSPREAD) : c;
+}
+static void cu_fx_unit(char *out, uint32_t v, const char *unit, uint32_t n)   /* "250 ms" */
+{
+    cu_int(out, (int32_t)v, 0, n);
+    cu_cat(out, unit, n);
+}
+/* a parameter's value as the knob row shows it: its unit where it has one ("250 ms", "1/8.", "2.4 s", "130 Hz",
+ * "0.80 Hz"), a name ("Stereo"), else the number 0..127 */
+static void cu_fx_val(int32_t id, char *out, uint32_t n)
+{
+    static const char *const RATIO[4] = {"1:1", "3:4", "2:3", "1:2"};
+    int32_t v;
+    if (id >= FC_G) {                             /* the chorus's (song.g): rate in Hz, depth a number */
+        const param_desc_t *d = &GP[id - FC_G];
+        char val[12];
+        const char *unit;
+        v = song.g[id - FC_G];
+        if (d->fmt != F_LFOHZ) {
+            cu_int(out, v, 0, n);
+            return;
+        }
+        param_format(d, v, val, &unit);
+        out[0] = 0;
+        if (val[0] == '.')                        /* ".80" -> "0.80" */
+            cu_cpy(out, "0", n);
         cu_cat(out, val, n);
-    } else {
-        cu_cpy(out, val, n);
-    }
-    if (d->fmt == F_ENUM && out[0] >= 'A' && out[0] <= 'Z')
-        for (i = 1; out[i]; i++)
-            if (out[i] >= 'A' && out[i] <= 'Z') out[i] = (char)(out[i] - 'A' + 'a');
-    if (d->fmt == F_LFOHZ) {
         cu_cat(out, " ", n);
         cu_cat(out, unit, n);
+        return;
+    }
+    v = xfp[id];
+    switch (id) {
+    case XP_DTIME: cu_fx_unit(out, xf_ms((uint32_t)v), " ms", n); break;
+    case XP_DDIV: cu_cpy(out, CU_XDIV[(uint32_t)v % XF_NDIV], n); break;
+    case XP_DSPREAD:                              /* R's time as a part of L's: "x1.00" .. "x0.50" */
+        v = ((254 - v) * 100 + 127) / 254;
+        cu_cpy(out, v >= 100 ? "x1." : "x0.", n);
+        cu_2d(out + 3, (uint32_t)(v % 100), n - 3u);
+        break;
+    case XP_DRATIO: cu_cpy(out, RATIO[v & 3], n); break;
+    case XP_DSYNC: cu_cpy(out, v ? "Tempo" : "Free", n); break;
+    case XP_DMODE: cu_cpy(out, v ? "Ping-pong" : "Stereo", n); break;
+    case XP_RDECAY:
+        if (v >= 127) {
+            cu_cpy(out, "Inf", n);
+        } else {
+            uint32_t ms = xf_rt_ms((uint32_t)v);
+            if (ms < 10000u) {                    /* "2.4 s" */
+                cu_int(out, (int32_t)(ms / 1000u), 0, n);
+                cu_cat(out, ".", n);
+                cu_fx_unit(out + 2, ms % 1000u / 100u, " s", n - 2u);
+            } else {
+                cu_fx_unit(out, ms / 1000u, " s", n);
+            }
+        }
+        break;
+    case XP_RPRE: cu_fx_unit(out, (uint32_t)v * 24u * 1000u / XF_FS2, " ms", n); break;
+    case XP_RLOW: cu_fx_unit(out, xf_lowcut_k((uint32_t)v) * 1071u / 10000u, " Hz", n); break;
+    default: cu_int(out, v, 0, n); break;
     }
 }
-/* the glyph and its values (Q8 of 255) for KNOB k of effect e (FORMAT.md "cell glyphs"; docs/INTEGRATION.md 3) */
-static void cu_fx_glyph(uint32_t e, uint32_t k, cr_cell_t *c)
+/* the glyph and its values (Q8 of 255) for cell code c (FORMAT.md "cell glyphs"; docs/INTEGRATION.md 3) */
+static void cu_fx_glyph(int32_t c0, cr_cell_t *c)
 {
-    int32_t g = CU_FX[e].g[k];
-    uint32_t v = g >= 0 ? (uint32_t)(song.g[g] - GP[g].min) : 0u, r = g >= 0 ? (uint32_t)(GP[g].max - GP[g].min) : 1u;
-    uint32_t q = r ? v * 255u / r : 0u;
-    switch (g) {
-    case G_RSIZE: c->glyph = CR_G_ROOM; c->pct = (uint8_t)q; break;
-    case G_RDAMP: c->glyph = CR_G_MOON; c->pct = (uint8_t)(255u - q); break;     /* more damping, darker */
-    case G_RTYPE: c->glyph = song.g[g] ? CR_G_SPRING : CR_G_ROOM; c->pct = 128; break;
-    case G_DCOLOR: c->glyph = CR_G_MOON; c->pct = (uint8_t)q; break;
-    case G_DTIME: case G_DFDBK:                   /* the division's index, the feedback (0..120) */
+    static const uint8_t SPR[4] = {0, 128, 170, 255};   /* the synced spreads as the free one's travel: 1, 3/4, 2/3, 1/2 */
+    int32_t id = cu_fx_id(c0);
+    uint32_t q = id >= FC_G ? (uint32_t)song.g[id - FC_G] * 255u / 127u
+               : (uint32_t)(xfp[id] - XFP[id].min) * 255u / (uint32_t)(XFP[id].max - XFP[id].min);
+    uint32_t tq = xfp[XP_DSYNC] ? (uint32_t)xfp[XP_DDIV] * 255u / (XF_NDIV - 1u) : (uint32_t)xfp[XP_DTIME] * 255u / 127u;
+    c->pct = (uint8_t)q;
+    switch (c0) {
+    case XP_RSIZE: c->glyph = CR_G_ROOM; break;
+    case XP_RDAMP: c->glyph = CR_G_MOON; c->pct = (uint8_t)(255u - q); break;    /* more damping, darker */
+    case XP_RDECAY: c->glyph = CR_G_TAIL; break;
+    case XP_RPRE: c->glyph = CR_G_PRE; break;
+    case XP_RMOD: c->glyph = CR_G_LFO; c->pct = 64; c->pct2 = (uint8_t)q; break;   /* two cycles, the depth */
+    case XP_RLOW: c->glyph = CR_G_CUT; break;
+    case XP_RWIDTH: c->glyph = CR_G_WIDTH; break;
+    case FC_TIME: case XP_DFDBK:                  /* the time (spacing), the feedback (decay) */
         c->glyph = CR_G_ECHOES;
-        c->pct = (uint8_t)((uint32_t)(song.g[G_DTIME] - GP[G_DTIME].min) * 255u / (uint32_t)(GP[G_DTIME].max - GP[G_DTIME].min));
-        c->pct2 = (uint8_t)((uint32_t)song.g[G_DFDBK] * 255u / 120u);
+        c->pct = (uint8_t)tq;
+        c->pct2 = (uint8_t)((uint32_t)xfp[XP_DFDBK] * 255u / 127u);
         break;
-    case G_CRATE: case G_CDEPTH:                  /* rate, depth (0..127) */
+    case FC_SPREAD:                               /* two rows of echoes: L's spacing, R's a part of it */
+        c->glyph = CR_G_SPREAD;
+        c->pct = (uint8_t)tq;
+        c->pct2 = xfp[XP_DSYNC] ? SPR[xfp[XP_DRATIO] & 3] : (uint8_t)((uint32_t)xfp[XP_DSPREAD] * 255u / 127u);
+        break;
+    case XP_DSYNC: c->glyph = CR_G_SYNC; break;   /* notes on a beat, or a clock face */
+    case XP_DMODE: c->glyph = CR_G_PING; break;   /* two straight paths, or one bouncing between the walls */
+    case XP_DTONE: c->glyph = CR_G_MOON; break;
+    case XP_DWOW: c->glyph = CR_G_LFO; c->pct = 20; c->pct2 = (uint8_t)q; break;
+    case FC_G + G_CRATE: case FC_G + G_CDEPTH:    /* rate, depth (0..127) */
         c->glyph = CR_G_LFO;
         c->pct = (uint8_t)((uint32_t)song.g[G_CRATE] * 255u / 127u);
         c->pct2 = (uint8_t)((uint32_t)song.g[G_CDEPTH] * 255u / 127u);
@@ -615,33 +698,30 @@ static void cu_fx_glyph(uint32_t e, uint32_t k, cr_cell_t *c)
     default: break;
     }
 }
-/* the fx layer's cells: KNOB 1..3 the bus parameters of the effect (a missing one: no cell, a dim dash), KNOB 4 the
- * amount (Drive: the clip glyph, the others the dry / wet squares; "off" while FX is off) */
+/* the fx layer's cells: the page's four (a missing one: no cell, a dim dash); "Send" is the chord part's send into
+ * the effect (Drive: its amount, the clip glyph; the others the dry / wet squares; "off" while FX is off) */
 static void cu_fx_cells(cr_screen_t *s)
 {
-    uint32_t e = cs.fx_sel % CU_NFX, k;
-    for (k = 0; k < 3u; k++) {
+    uint32_t pg = cu_fx_pg(), e = CU_FXP[pg].fx, k;
+    for (k = 0; k < 4u; k++) {
         cr_cell_t *c = &s->cell[0][k];
-        int32_t g = CU_FX[e].g[k];
-        if (g < 0)
+        int32_t c0 = CU_FXP[pg].c[k];
+        if (c0 == FC_NONE)
             continue;
         c->flags = CR_CF_ON;
-        cu_cpy(c->label, CU_FX[e].gname[k], sizeof c->label);
-        if (c->label[0] >= 'a' && c->label[0] <= 'z') c->label[0] = (char)(c->label[0] - 'a' + 'A');
-        cu_fx_val((uint32_t)g, c->value, sizeof c->value);
-        cu_fx_glyph(e, k, c);
-    }
-    {
-        cr_cell_t *c = &s->cell[0][3];
-        c->flags = CR_CF_ON;
-        cu_cpy(c->label, "Amount", sizeof c->label);
-        c->glyph = CU_FX[e].send == P_DIST ? CR_G_CLIP : CR_G_MIX;
-        if (cs.fx_on) {
-            cu_2d(c->value, cs.fx_amt[e] * 99u / 127u, sizeof c->value);
-            c->pct = (uint8_t)(cs.fx_amt[e] * 255u / 127u);
-        } else {
-            cu_cpy(c->value, "off", sizeof c->value);
+        cu_cpy(c->label, CU_FXP[pg].label[k], sizeof c->label);
+        if (c0 == FC_SEND) {
+            c->glyph = CU_FX[e].send == P_DIST ? CR_G_CLIP : CR_G_MIX;
+            if (cs.fx_on) {
+                cu_2d(c->value, cs.fx_amt[e] * 99u / 127u, sizeof c->value);
+                c->pct = (uint8_t)(cs.fx_amt[e] * 255u / 127u);
+            } else {
+                cu_cpy(c->value, "off", sizeof c->value);
+            }
+            continue;
         }
+        cu_fx_val(cu_fx_id(c0), c->value, sizeof c->value);
+        cu_fx_glyph(c0, c);
     }
     cu_hot_row(s, L_FX);
 }
@@ -2308,12 +2388,13 @@ static void cu_layer_pick(uint32_t l, int32_t i)   /* a white root / SELECT: the
             cu_trace("view: lock %s\n", cs.view_lock ? "on" : "off");
         }
         break;
-    case L_FX:
-        if (i < (int32_t)CU_NFX) {
-            if (cs.fx_sel != (uint8_t)i)
-                cu_hot.knob = 0;                  /* another effect: its row has no hot cell */
-            cs.fx_sel = (uint8_t)i;
-            cu_trace("fx: effect %s\n", CU_FX[i].name);
+    case L_FX:                                    /* SELECT: a page (Reverb 1, Reverb 2, Chorus, Delay 1, ..) */
+        if (i < (int32_t)CU_NFXP) {
+            if ((int32_t)cu_fx_pg() != i)
+                cu_hot.knob = 0;                  /* another page: its row has no hot cell */
+            cs.fx_sel = CU_FXP[i].fx;
+            cs.fx_page = CU_FXP[i].page;
+            cu_trace("fx: effect %s %u/%u\n", CU_FX[cs.fx_sel].name, (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[i].of);
         }
         break;
     case L_BASS:
@@ -2363,7 +2444,7 @@ static int32_t cu_layer_sel(uint32_t l)
 {
     switch (l) {
     case L_PERF: return cs.perf_sel;
-    case L_FX: return cs.fx_sel;
+    case L_FX: return (int32_t)cu_fx_pg();
     case L_BASS: return cs.bass_mode;
     case L_EDIT: return cu_engine_rank(cu_edit_trk()->eng_req % NENGINES);
     case L_LOOP: return cs.loop_len;
@@ -2378,7 +2459,7 @@ static int32_t cu_layer_count(uint32_t l)
     uint32_t n;
     switch (l) {
     case L_PERF: return 7;
-    case L_FX: return CU_NFX;
+    case L_FX: return CU_NFXP;
     case L_BASS: return 4;
     case L_EDIT: cu_engine_at(0, &n); return (int32_t)n;
     case L_LOOP: return (int32_t)CRL_NSYNC;
@@ -2511,23 +2592,40 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
         cu_param_turn(cu_perf_mode(), CU_PERF_KNOB[cu_perf_mode()][knob], s, 0);
         cu_hot_set(L_PERF, knob);                 /* (no popup: the cell turns hot) */
         break;
-    case L_FX:
-        if (knob == 3) {
+    case L_FX: {
+        uint32_t pg = cu_fx_pg();
+        int32_t c0 = CU_FXP[pg].c[knob & 3u], id = cu_fx_id(c0), lo, hi;
+        int16_t *q;
+        char lb[14];
+        cu_cpy(lb, CU_FXP[pg].label[knob & 3u], sizeof lb);
+        lb[0] = (char)(lb[0] | 0x20);
+        if (c0 == FC_NONE)
+            break;
+        if (c0 == FC_SEND) {
             v = cs.fx_amt[cs.fx_sel] + s * 4;
             cs.fx_amt[cs.fx_sel] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
             cs.fx_on = 1;
             cu_fx_apply();
-            cu_hot_set(L_FX, 3);                    /* (no popup: the knob row is the readout, its cell turns hot) */
-            cu_trace("fx: knob 4 %s amount %u\n", CU_FX[cs.fx_sel].name, (unsigned)cs.fx_amt[cs.fx_sel]);
-        } else if (CU_FX[cs.fx_sel].g[knob] >= 0) {
-            uint32_t g = (uint32_t)CU_FX[cs.fx_sel].g[knob];
-            v = song.g[g] + s * (GP[g].max - GP[g].min > 20 ? 2 : 1);
-            song.g[g] = (int16_t)(v < GP[g].min ? GP[g].min : v > GP[g].max ? GP[g].max : v);
-            cu_hot_set(L_FX, knob);
-            cu_trace("fx: knob %u %s %s %d\n", (unsigned)knob + 1u, CU_FX[cs.fx_sel].name, CU_FX[cs.fx_sel].gname[knob],
-                     (int)song.g[g]);
+            cu_hot_set(L_FX, knob);               /* (no popup: the knob row is the readout, its cell turns hot) */
+            cu_trace("fx: knob %u %s send %u\n", (unsigned)knob + 1u, CU_FX[cs.fx_sel].name, (unsigned)cs.fx_amt[cs.fx_sel]);
+            break;
         }
+        if (id >= FC_G) {                         /* the chorus's (song.g) */
+            q = &song.g[id - FC_G];
+            lo = GP[id - FC_G].min;
+            hi = GP[id - FC_G].max;
+        } else {                                  /* the delay's, the reverb's (cr_fx.c: the audio ISR reads them, a
+                                                   * block at a time, and glides) */
+            q = &xfp[id];
+            lo = XFP[id].min;
+            hi = XFP[id].max;
+        }
+        v = *q + s * (hi - lo > 20 ? 2 : 1);
+        *q = (int16_t)(v < lo ? lo : v > hi ? hi : v);
+        cu_hot_set(L_FX, knob);
+        cu_trace("fx: knob %u %s %s %d\n", (unsigned)knob + 1u, CU_FX[cs.fx_sel].name, lb, (int)*q);
         break;
+    }
     case L_BASS:
         if (knob == 0) {                           /* BEHAVIOUR */
             v = cs.bass_mode + (s > 0 ? 1 : -1);
@@ -4414,6 +4512,8 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         static char seen[48];                      /* (the trace: the row's labels when they change) */
         cu_picker(s, FX_ITEMS, CU_NFX, cs.fx_sel, CR_COL_GREEN, cs.fx_on ? "fx \267 on" : "fx \267 off",
                   "SELECT: effect \267 FX: on/off \267 OCT-: back");
+        if (CU_FXP[cu_fx_pg()].of > 1u)            /* the page, quietly (as the KEY layer's): SELECT steps through both */
+            cu_cat(s->label, cs.fx_page ? " \267 2/2" : " \267 1/2", sizeof s->label);
         s->kind = CR_K_KNOBROW;
         s->orient = 1;
         cu_fx_cells(s);
@@ -5129,6 +5229,7 @@ static void cu_midi_poll(void)
         bpm_n = cr_in_bpm_n;
         cs.bpm = cr_in_bpm;                       /* (the ISR set the engine's: no CRE_TEMPO back) */
         song.g[G_BPM] = (int16_t)(cs.bpm < 40u ? 40u : cs.bpm > 240u ? 240u : cs.bpm);
+        xf_bpm = cs.bpm;                          /* (the synced delay follows the clock: its times glide) */
         cu_trace("bpm: %u (clock in)\n", (unsigned)cs.bpm);
     }
     while (cr_min_take(&a)) {
@@ -5279,6 +5380,7 @@ static void cr_ui_init(void)
     fm6_init();                                   /* every part's FM6 patch: the init voice */
     for (k = 0; k < G_COUNT; k++)
         song.g[k] = GP[k].def;
+    xf_defaults();                                /* cr_fx.c: the delay's and the reverb's (the session's over them) */
     for (k = 0; k < NPART; k++)
         for (m = 0; m < P_E0; m++)
             trk[k].p[m] = TP[m].def;

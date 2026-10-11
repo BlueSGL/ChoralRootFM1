@@ -622,8 +622,11 @@ int main(int argc, char **argv)
          * value the way its picture says */
         static const struct { uint8_t g; const char *name; } G[] = {
             {CR_G_ROOM, "room"}, {CR_G_MOON, "moon"}, {CR_G_ECHOES, "echoes"}, {CR_G_LFO, "lfo"}, {CR_G_CLIP, "clip"},
-            {CR_G_SPRING, "spring"}, {CR_G_MIX, "mix"}, {CR_G_GATE, "gate"}, {CR_G_RANGE, "range"},
-            {CR_G_ARROW, "arrow"}, {CR_G_SHIFT, "shift"}};
+            {CR_G_MIX, "mix"}, {CR_G_GATE, "gate"}, {CR_G_RANGE, "range"},
+            {CR_G_ARROW, "arrow"}, {CR_G_SHIFT, "shift"},
+            /* the FX layer's (0.18, docs/FX.md) */
+            {CR_G_TAIL, "tail"}, {CR_G_PRE, "pre"}, {CR_G_CUT, "cut"}, {CR_G_WIDTH, "width"}, {CR_G_SPREAD, "spread"},
+            {CR_G_SYNC, "sync"}, {CR_G_PING, "ping"}};
         enum { BX = 20, BY = 2, BW = 48, BH = 36 };
         uint32_t gi, inside_all = 1;
         uint16_t ink = swap16(CR_NAMED[CR_COL_GREEN]), bg = swap16(T_BG);
@@ -1082,6 +1085,39 @@ int main(int argc, char **argv)
                 }
             }
             check("harm, detune, lfowave: ink in their box, none outside, a change with pct", ok);
+            {   /* the FX layer's glyphs of 0.18 (docs/FX.md): ink in the box at both ends of the value, none outside,
+                 * and the picture changes with it (pct; SPREAD with pct2 too) */
+                static const struct { uint8_t g; const char *name; } FG[7] = {
+                    {CR_G_TAIL, "tail"}, {CR_G_PRE, "pre"}, {CR_G_CUT, "cut"}, {CR_G_WIDTH, "width"}, {CR_G_SPREAD, "spread"},
+                    {CR_G_SYNC, "sync"}, {CR_G_PING, "ping"}};
+                int fok = 1;
+                for (gi = 0; gi < 7u; gi++) {
+                    uint32_t out, out1, same2 = 0;
+                    GL(FG[gi].g, 0, 0, 0);
+                    COUNT(ink0, 20u, 2u, 68u, 38u, cv_px[y * 240u + x] != bg);
+                    COUNT(out, 0u, 0u, 240u, 40u, cv_px[y * 240u + x] != bg && !(x >= 20u && x < 68u && y >= 2u && y < 38u));
+                    memcpy(g0, cv_px, sizeof g0);
+                    GL(FG[gi].g, 255, 0, 0);
+                    COUNT(ink1, 20u, 2u, 68u, 38u, cv_px[y * 240u + x] != bg);
+                    COUNT(out1, 0u, 0u, 240u, 40u, cv_px[y * 240u + x] != bg && !(x >= 20u && x < 68u && y >= 2u && y < 38u));
+                    if (ink0 < 40u || ink1 < 40u || out || out1 || !memcmp(g0, cv_px, sizeof g0)) {
+                        fok = 0;
+                        fprintf(rep, "fx glyph %s: ink %u / %u, %u / %u outside, %s with pct\n", FG[gi].name, ink0, ink1, out, out1,
+                                memcmp(g0, cv_px, sizeof g0) ? "changes" : "SAME");
+                    }
+                    if (FG[gi].g == CR_G_SPREAD) {              /* the lower row closes up as the spread grows */
+                        GL(CR_G_SPREAD, 128, 0, 0);
+                        memcpy(g0, cv_px, sizeof g0);
+                        memset(&c, 0, sizeof c);
+                        c.flags = CR_CF_ON; c.glyph = CR_G_SPREAD; c.pct = 128; c.pct2 = 255;
+                        cr_cv_begin(); cv_oy = 0; cr_clip_all();
+                        cr_cglyph(&c, 20 * 16, 2 * 16, 48 * 16, 36 * 16, CR_NAMED[CR_COL_GREEN]);
+                        same2 = !memcmp(g0, cv_px, sizeof g0);
+                        if (same2) { fok = 0; fprintf(rep, "fx glyph spread: the same at pct2 0 and 1\n"); }
+                    }
+                }
+                check("tail, pre, cut, width, spread, sync, ping: ink in their box at both ends, none outside, a change with the value", fok);
+            }
             GL(CR_G_DETUNE, 0, 0, 0);                            /* detune at 0: one flat line (2 px + its edges) */
             for (y = 0, w = 0; y < 40u; y++) {
                 uint32_t r = 0;

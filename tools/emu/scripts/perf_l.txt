@@ -1,0 +1,73 @@
+# tools/emu/perf.sh (l): (c) with the delay and the reverb fully on: both sends at 127, Decay 13 s, Feedback up (docs/FX.md)
+# The FX layer first (KNOB 4 on Reverb 1 and Delay 1: the chord part's sends; KNOB 3: Decay, Feedback), then (c) as it is:
+# FM PAD, 200 BPM, the bass (DEEP SUB), a playing loop, the arp, a 6-note E chord held 6 s
+wait 300
+knob PRESETS +4               # FM6 05 FM PAD (first: a sound load brings its own sends)
+wait 200
+btn FX down                   # the FX layer: Reverb 1
+wait 500
+btn FX up
+wait 300
+knob KNOB4 +32                # the reverb's send to 127
+wait 100
+knob KNOB3 +20                # Decay 52 -> 92: 13 s
+wait 100
+knob SELECT +3                # Delay 1
+wait 300
+knob KNOB4 +32                # the delay's send to 127
+wait 100
+knob KNOB3 +20                # Feedback 58 -> 98
+wait 100
+btn OCT-
+wait 300
+knob SELECT +80
+wait 200
+knob ALGORITHM +18            # OFF -> VA 17 DEEP SUB (the bass part's pool, after OFF; ANALOG SUB BASS until 0.14)
+wait 300
+btn REC
+wait 300
+key F3 down
+key 2 down
+key 4 down
+key 5 down
+wait 40
+btn D4 down
+wait 560
+btn D4 up
+btn A4 down
+wait 560
+btn A4 up
+key F3 up
+key 2 up
+key 4 up
+key 5 up
+wait 40
+btn REC
+wait 300
+btn ARP down
+wait 400
+knob SELECT +3                # Arpeggiate (SELECT picks: the roots play in PERF)
+wait 100
+wait 200
+btn ARP up
+btn OCT-                      # the layer stays open after a hold: OCT- closes it
+wait 300
+key F3 down
+key 2 down
+key 4 down
+key 5 down
+wait 40
+btn E4 down
+wait 6000
+dump
+btn E4 up
+key F3 up
+key 2 up
+key 4 up
+key 5 up
+wait 300
+btn PLAY
+wait 300
+btn ARP 80
+wait 1500
+dump

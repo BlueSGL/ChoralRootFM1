@@ -56,7 +56,6 @@ enum { CR_G_NONE, CR_G_KNOB, CR_G_BAR, CR_G_WAVE, CR_G_SAW, CR_G_SQUARE, CR_G_ST
                                      * the one before); pct and pct2 both 0: the baseline alone (no grid) */
        CR_G_LFO,                    /* a sine: pct the rate (1 .. 5 cycles), pct2 the depth (nearly flat .. full) */
        CR_G_CLIP,                   /* one sine cycle driven into a clipper (gain 1 .. 10), dashed clip lines */
-       CR_G_SPRING,                 /* a coil (6.5 zigzag turns between two short ends); pct ignored */
        CR_G_MIX,                    /* dry / wet: an outlined square behind one filled from the bottom to pct */
        CR_G_GATE,                   /* a pulse on a baseline, 10 .. 100 % of the box wide */
        CR_G_RANGE,                  /* a line with end stops, a thick segment over 10 .. 100 % of it */
@@ -72,6 +71,18 @@ enum { CR_G_NONE, CR_G_KNOB, CR_G_BAR, CR_G_WAVE, CR_G_SAW, CR_G_SQUARE, CR_G_ST
        CR_G_RATIO,                  /* not a picture: B1 / B2 drawn as a fraction (numerator over a divider over the
                                      * denominator, 13 px), pct and pct2 the two ratios in quarters (1..255 = 0.25..63.75,
                                      * each "%u.%02u"); pct2 0: the value is drawn as CR_CF_BIG */
+       /* the FX layer's (0.18, docs/FX.md), in cr_picto's manner */
+       CR_G_TAIL,                   /* a reverb's decay: a struck edge and its falling curve, short and steep (pct 0) ..
+                                     * long (1: nearly level, the "Inf" end) */
+       CR_G_PRE,                    /* pre-delay: a struck bar, a gap of pct, then the reverb as a falling wedge */
+       CR_G_CUT,                    /* a low cut: the response rising to its corner (pct: from the left edge to 60 % of the
+                                     * box), level after it */
+       CR_G_WIDTH,                  /* stereo width: two bars moving apart from the centre mark (pct 0: on it) */
+       CR_G_SPREAD,                 /* two rows of echoes: the upper one's spacing pct, the lower one's a part of it
+                                     * (pct2 0: the same .. 1: half) */
+       CR_G_SYNC,                   /* pct < 1/2: a clock face (free: milliseconds); else two notes on a beam (the tempo) */
+       CR_G_PING,                   /* between two walls: pct < 1/2 two level paths (stereo), else one bouncing down
+                                     * from wall to wall (ping-pong) */
        CR_G_N };
 
 /* CR_G_LFOWAVE's wave (cr_cell_t.wave) */
