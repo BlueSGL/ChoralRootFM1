@@ -23,10 +23,13 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "slicer_track",
          "slice_render", "slc_rev",                          # SLICE (eng_slice.c): the render, the reverse windows
          "va_render", "va_block",                            # VA (eng_va.c, ChoralRoot): the voice, the part's LFOs
-         "cz_native_render", "cz_native_wave", "cz_env_tick",   # CZ-1 (cz_native.c, Melodee's): the voice, its wave, envelopes
+         "cz_native_render", "cz_native_line", "cz_native_noise", "cz_env_tick",   # CZ-1 (cz_native.c, Melodee's): the voice, a line's loops (one per wave and window), line 2 with NOISE, envelopes
          "quad_render", "quad_block",                        # FM TONE (eng_quad.c, code name QUAD, ChoralRoot): the voice, the part's macros
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
+         "master_block",                                    # the master (fx.c): a loop per LOWCUT / limiter setting
+         "mix_loop", "mix_loop_f", "mix_loop_s", "mix_loop_sf",   # a part into the mix (fx.c mix_part_out): plain, with the
+         "mix_loop_u", "mix_loop_fu", "mix_loop_su", "mix_loop_sfu",   # sends (f), the stereo side (s), USB's tap (u)
          "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
          "rev_room", "rev_spring",                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING (Felucca's: CR_FX 0)
          "xf_block", "xf_down", "xf_up", "xd_run", "xr_run"]   # ChoralRoot's delay and reverb (cr_fx.c, CR_FX 1): the
@@ -47,6 +50,8 @@ OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_
             # NOISE 0): their budget lines until then
             "phase_render": 77, "lofi_render": 123, "formant_render": 312, "trio_render": 341, "trio_pass": 175,
             "noise_render": 259,
+            # .. and since 0.18 without the FX hold layer (choralroot.c FELUCCA_PERFORM 0): their budget lines until then
+            "perf_begin": 34, "perf_mute": 19, "perf_pre": 27, "perf_block": 813, "perf_master": 31,
             "sample_render": 126, "grain_render": 1731, "grain_block": 139, "drum_render": 86, "dv_metal_run": 26,
             "dv_kick_run": 153, "dv_snare_run": 158, "dv_clap_run": 74, "dv_hat_run": 61, "dv_tom_run": 75,
             "dv_rim_run": 61, "dv_bell_run": 52, "dv_cym_run": 67, "dv_out": 35}

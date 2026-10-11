@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
 /* ChoralRoot FM-1: the screen renderer. cr_draw(s, anim_ms) draws a cr_screen_t (cr_screen.h) on the 240 x 240 LCD
- * through gfx.c's canvas, in six strips of 240 x 40 (gfx.c CV_MAX holds 124 rows), each drawn with cv_oy = -its
+ * through gfx.c's canvas, in six strips of 240 x 40 (gfx.c CV_MAX holds 120 rows: choralroot.c CV_ROWS), each drawn with cv_oy = -its
  * top row so the layout is written in screen coordinates and clipped by the canvas.
  * The layout is the designer's (../ChoralRootFM1Designer/index.html renderScreen, cards and knob cards off): the top
  * line rows 0..27, the panel from row 28 to 198 (a footer line at 226) or to 240, the ring round the edge, the
@@ -2405,7 +2405,7 @@ static void cr_cv_begin(void)
     for (i = 0; i < 240u * CR_STRIP_H; i++) cv_px[i] = c;
 }
 /* the tiles m of the strip at row y to the LCD: their box copied into one of two DMA buffers (cv_px's rows 40..79,
- * 80..119: CV_MAX holds 124) and sent from there, so the next strip is composed while this one goes out (lcd.c
+ * 80..119: CV_MAX holds them, CV_ROWS 120) and sent from there, so the next strip is composed while this one goes out (lcd.c
  * leaves the transfer running; the next blit waits for it, and the buffer it reuses is the one before's) */
 static void cr_send(uint32_t m, uint32_t y)
 {

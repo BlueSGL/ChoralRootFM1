@@ -29,7 +29,8 @@ number is `13 + FELUCCA_SLICE + FELUCCA_VA` = **14** on ChoralRoot (after the VA
 `ENGINES[]` stays append-only, `ENGINE_ORDER` shows it **after the VA** since 0.14 (after PHASE before; the PRESETS
 browse, the engine picker's roots: FM6, FM TONE, VA, CZ-1, WHEEL, PHYS). Its per-voice state (`cz_part_t`: six envelopes, the vibrato, the noise, 8
 voices) is a member of `engines.c`'s `eng_state` union (smaller than FM6's: the union does not grow); the tone of each
-part (`cz_patch[NTRK]`, 4 x 144 bytes) is in the pool.
+part (`cz_patch[NTRK]`, 4 x 144 bytes) is in the pool, and since 0.18 what the renderer builds from it once per tone
+(`cz_defs_`, 2 x 412 bytes: "The render's cost on the unit" below).
 
 EDIT 1 / 2 are Melodee's: **BANK** (A..H) and **PTCH** (0 = INIT, 1..16), TONE fixed at "native" (`P_E7` 2); HOME's
 knobs are BANK, PTCH. Turning BANK / PTCH loads that bank slot's tone (`cz_bank_poll`, the UI frame); an empty slot
@@ -146,12 +147,72 @@ The fifth chord row is VIBRAPHONE rather than BELLS: BELLS has no DCA sustain an
 estimate, avg / worst block of the 2.9 ms budget): **33 % / 43 %** (VA's (f): 30 % / 39 %; FM PAD (b): ~25 % / 30 %);
 no block over 80 %. Under 60 %: CZ-1 keeps the shared 8 voices (no `poly` cap). `tests/va_levels.c cz`: ~34 % with
 SUB BASS. The host cost (`tests/regress.c`, one part, 8 notes): 1757..2487 instructions a sample (JET ROAR the
-heaviest; the VA's MORPH PAD 2697, FM6's DRAWBARS 1920).
+heaviest; the VA's MORPH PAD 2697, FM6's DRAWBARS 1920). Since 0.18's render (below): 799..1264 (INIT TONE, JET ROAR), 44..57 %
+less for every tone of eight sounding notes; `tests/cpu_baseline.txt` is rewritten (every other entry 32..44 lower: the
+master and the mix; FM6's were stale by ~210 before, not by this).
 
 `./build.sh` (against the same tree with `FELUCCA_CZ=0`): XIP 320348 -> 345472 B (55.1 -> 59.4 %: the 64 tones 9216 B
 and the code); RAM 79512 -> 79640 B (80.9 -> 81.0 %); POOL 303160 -> 311300 B (88.1 -> 90.5 %, +8140: the tone store
 2 x 2320, the bank cache 2332, the parts' tones 576, the SysEx buffers 296 + 295; `eng_state` does not grow). The blob
 cap's +32 bytes in `cr_ui.c`'s picker snapshot are in both.
+
+### The render's cost on the unit (0.18)
+
+Measured on the unit (SysEx 78 PEAK `pk_part0_us`), an eight-note CZ-1 chord took 1699..1985 us of the 2902 us half:
+with the 0.18 effects, late halves. Counted in `build/choralroot.dis` (instructions on the usual path over 205 a
+microsecond, the unit's measured rate; jump-table bytes are not instructions), a voice of a two-line tone cost about
+50 800 instructions a half (248 us): 265 a sample and 4 200 a block. It is now about 16 100 (79 us): 91 a sample and
+1 100 a block. Eight voices: about 1 980 us -> 630 us. Every sample is the one it was (below). What changed, in
+`cz_native.c`:
+
+1. **The envelopes' definitions are built once per tone, not per voice and block.** `cz_native_defs` (six envelopes
+   of eight points: a `memset`, a 64-bit multiply and a divide by 44100 a point, a divide by 96 for the DCA: about
+   3 250 instructions a voice a block) wrote them onto the render's stack every time. The rates and targets are the
+   tone's: they live in `engines.c cz_defs_[ENG_STATE_NPART]` (`cz_defs_t`, 412 B a part, 824 B of pool; not in
+   `eng_state`, whose bytes another engine may have left when a part comes to CZ-1 without a clear) and are rebuilt
+   when `eng_cz.c cz_pgen[part]` moved. Every writer of `cz_patch` bumps it after its write, as `fm6_pgen`:
+   `cz_init`, `cz_tone_put` (a preset, a user slot, an engine change, INIT, the picker, the blob: the session's
+   restore and the backup go through `blob_set`), `cz_dset` (the editor), `cz_bank.c cz_bank_poll` (BANK / PTCH),
+   `cz_store.c cz_sx_import` (Casio SysEx). The DCA's key follow depends on the note: a voice's eight key-followed
+   rates a line are in its own state (`cz_voice_t.krate`, in `eng_state`: free), built by `cz_native_krate` when the
+   tone's generation or the voice's note is not the one they were built for (`kgen`, `knote`; `cz_note_on`'s `memset`
+   leaves none). `cz_env_tick` takes the rates as an argument. 1+1' reads line 1's definitions for both lines
+   instead of copying them.
+2. **A line's samples run in a loop built for its wave and window.** `cz_native_wave` was a call a sample and line
+   with a switch on the wave, a switch on the window and an interpolated cosine. Now each line renders its block on
+   its own into a buffer on the stack (a line reads no other; ring modulation and the sum take both afterwards), a
+   cycle at a time: `cz_native_line` picks, by the wave the cycle plays (a line has two, alternating) and the window,
+   one of 43 loops (`cz_native_run`, built with the two as constants: 7 waves x 6 windows, and the silent wave), which
+   runs until the phase wraps or the block ends. The carrier comes from `CZ_CARRIER[2048]` (`tools/gen_tables.py`:
+   `(pd_cos((p << 5) + (p >> 6)) + 32767) >> 1` for the 2048 phases there are, in the same integers;
+   `tests/cr_cz_test.c` compares every entry with the expression). Line 2 with NOISE, whose generator moves the
+   increment every sample, keeps a sample's switches (`cz_native_noise`). A line's loop is 27..42 instructions a
+   sample (34 for the plain cosine-phase waves) where the call and its loop were 110; the mix of the two lines 23.
+   Flash: 10.3 KB (the table 4096 B, in flash as `SINE` is; `ram=True` in `gen_tables.py` would put it in RAM if
+   the unit shows the flash cache in the way).
+3. **The set-up does what the tone needs.** A line the tone does not play (LINE 1 or LINE 2 alone) still ticks its
+   three envelopes: their state is what a LINE change under a held note finds, so skipping them would change that
+   note; its two DCA curves, its velocity and key-follow scaling, its pitch and its phase function are no longer
+   worked out. For a line that plays: the DCA curve (`cz_native_amp`) once when the envelope did not move in the
+   block, the pivot's two divides only when the DCW depth changed (`cz_voice_t.pk`), no multiply by a velocity factor
+   of 1, no divide by a key follow of 0, the ramp's divide by the block as the shift it is.
+
+Not done: skipping a line whose DCA has ended. Ring modulation multiplies the lines and the sum halves them, so an
+ended line still shapes the output through its DC filter's tail (`dc += raw - (dc >> 10)` runs on with the wave at
+full scale: the DCA only scales after it); it is not silent sample for sample until that tail is, and the phase and
+the cycle's toggle would have to be advanced in step for a later note on the same voice (`voice_was`).
+
+A patch write from the main loop that the audio ISR interrupts was always audible for a block as a half-written tone;
+it still is, with the definitions of the tone before it until the generation moves at the end of the write.
+
+**Bit for bit.** `tests/regress.c`'s goldens of INIT TONE and the 64 (unchanged), the emulator's 52 WAVs
+(`test_cr.sh`, `test_persist.sh`, `perf.sh` with and without Dual Core: the same SHA-256 before and after), and a
+comparison of the two source trees built side by side: every tone at three velocities and eight notes with the
+pitch, fine tune, cutoff, shape and amplitude moving every block, held and released; 600 random tones (LINE, octave,
+both waves of both lines, the window, ring and noise, key follow, velocity amounts, detune, the vibrato's wave); the
+whole mix with CZ-1 on both parts while every column of the 37 pages is turned under held notes, LINE and MOD are
+changed under them, other tones and blobs are loaded, with a bend and TUNE: the same hash of every output sample,
+of `cz_native_done` and of the voices' final state.
 
 ## Tests
 
@@ -166,6 +227,8 @@ cap's +32 bytes in `cr_ui.c`'s picker snapshot are in both.
 - `tests/regress.c`: goldens and CPU baselines for INIT TONE and the 64 (additions only; nothing else changed).
 - `tests/target_budget.txt`: `cz_native_render`, `cz_native_wave`, `cz_env_tick` added; the audio ISR's static count
   is 43986 (was 37094: 1880 -> 1882 instructions, the register allocation moved a loop head; its code is the same).
+  0.18: `cz_native_wave` is inlined; `cz_native_line` (its 43 loops; the static measure weighs a loop in a loop four
+  times: 45287) and `cz_native_noise` are watched instead.
 - `tools/emu/scripts/cr_cz.txt` (`test_cr.sh`): CZ BRASS 1, the editor's ENV screen 4 (DCW 1) under the cz band (shot),
   KNOB 1 on DCW 1's L1 (the `deep:` trace, step 1 lit), the chord darker after it (its HF share), the other groups;
   `cz_persist_*.txt` (`test_persist.sh`): an edited CZ-1 sound in U01 across a relaunch; `perf_g.txt` (`perf.sh`).

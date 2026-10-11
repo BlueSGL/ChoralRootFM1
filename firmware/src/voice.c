@@ -669,10 +669,9 @@ static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t 
     const int16_t *p = t->p;
     uint32_t i;
     int32_t lfo = lfo_pre ? *lfo_pre : mulq15(t->lfo_val, t->lfo_fade);
-    /* TUNE in cents: whole 1/16 semitones in the pitch, the rest as a fine factor (no dead zone) */
-    int32_t tune = song.g[G_TUNE] >= 0 ? song.g[G_TUNE] * 16 / 100 : -((-song.g[G_TUNE] * 16 + 99) / 100);
-    int32_t tune_fine = (song.g[G_TUNE] * 16 - tune * 100) * 2367 / 16000;   /* rest, in 1/4096 (1 ct = 2.367) */
-    int32_t bend, bend16, bend_fine;
+    /* TUNE and the bend are worked out for the first voice that sounds (pitch_set: a silent part has no use for
+     * them), and only when they are not 0, where their divides give 0 */
+    int32_t tune = 0, tune_fine = 0, bend, bend16 = 0, bend_fine = 0, pitch_set = 0;
     uint32_t ti = (uint32_t)(t - trk);
     if (ENGINES[eng_idx(t->eng_req)] == &ENG_DRUM) {
         midi_bend_q8[ti] = midi_bend_target[ti] = 0;
@@ -682,8 +681,6 @@ static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t 
         midi_bend_q8[ti] += d > 0 ? (d < 4 ? d : (d + 3) / 4) : (d > -4 ? d : (d - 3) / 4);
     }
     bend = midi_bend_q8[ti];
-    bend16 = bend >= 0 ? bend / 16 : -((-bend + 15) / 16);
-    bend_fine = (bend - bend16 * 16) * 2367 / 2560;
     uint32_t nr = 0, fade = t->xf_on && t->xf;
     int16_t pe_new[8];
     for (i = 0; i < n; i++)
@@ -707,6 +704,18 @@ static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t 
         int32_t env, pitch;
         if (!v->active)
             continue;
+        if (!pitch_set) {
+            int32_t g = song.g[G_TUNE];
+            pitch_set = 1;
+            if (g) {    /* TUNE in cents: whole 1/16 semitones in the pitch, the rest as a fine factor (no dead zone) */
+                tune = g >= 0 ? g * 16 / 100 : -((-g * 16 + 99) / 100);
+                tune_fine = (g * 16 - tune * 100) * 2367 / 16000;   /* rest, in 1/4096 (1 ct = 2.367) */
+            }
+            if (bend) {
+                bend16 = bend >= 0 ? bend / 16 : -((-bend + 15) / 16);
+                bend_fine = (bend - bend16 * 16) * 2367 / 2560;
+            }
+        }
         {
             env = env_tick(t, v);
             if (e->ownenv && v->active) {               /* the engine's envelopes (FM6): they end the voice */

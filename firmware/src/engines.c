@@ -87,6 +87,10 @@ static drw_part_t *drw_of(const track_t *t)
 static fm6_part_t *fm6_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].fm6 : 0; }
 #if FELUCCA_CZ
 static cz_part_t *cz_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].cz : 0; }
+/* CZ-1's envelope definitions of a part's tone (eng_cz.c cz_defs_t, 412 B a part): not in eng_state, where another
+ * engine's bytes could pass for the tone's generation when a part comes to CZ-1 without a clear (power-on's loads) */
+static cz_defs_t cz_defs_[ENG_STATE_NPART] __attribute__((section(".pool")));
+static cz_defs_t *cz_defs(uint32_t part) { return part < ENG_STATE_NPART ? &cz_defs_[part] : 0; }
 #endif
 static void eng_state_clear(uint32_t part)
 {

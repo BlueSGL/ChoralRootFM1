@@ -43,7 +43,11 @@ typedef struct { uint16_t off; uint8_t w; const char *label; } kc_t;
 #define GFX_HOOK_CELL(x0, y0, x1, y1) ((void)0)    /* a cell, card, row or button (cv_rrect): a box touching it lies inside it */
 #endif
 
-#define CV_MAX (240u * 124u)      /* the graph strip is 240 x 124 */
+#ifndef CV_ROWS
+#define CV_ROWS 124u              /* the graph strip is 240 x 124 (Felucca's UI); choralroot.c: 120, cr_draw.c's three
+                                   * strips (cv_begin cuts a taller canvas to what there is) */
+#endif
+#define CV_MAX (240u * CV_ROWS)
 static uint16_t cv_px[CV_MAX] __attribute__((section(".pool")));
 static uint32_t cv_w, cv_h;
 static uint16_t cv_bg;           /* what cv_begin cleared the canvas to */

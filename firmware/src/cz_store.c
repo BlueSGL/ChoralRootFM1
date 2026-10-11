@@ -58,7 +58,7 @@ static int cz_sx_import(uint32_t tr,const uint8_t *b,uint32_t n)
     if(n==256){static const uint8_t kw[]={0,31,44,57,70,83,96,111,146,255};for(uint32_t l=0;l<2;l++){uint32_t o=l*57u;if((data[18+o]&15)>9)return 0;data[16+o]&=15;data[19+o]=kw[data[18+o]&15];for(uint32_t j=20;j<=54;j+=17)data[j+o]|=240;}}
     if(!cz_patch_valid(data))return 0;
     track_t *t=&trk[tr];load_begin(t,UNDO_SOUND);panic_req|=(uint8_t)(1u<<tr);
-    fm1_irq_off();memcpy(cz_patch[tr].raw,data,CZ_BYTES);t->p[P_E0]=t->p[P_E1]=0;t->p[P_E7]=CZ_NATIVE;cz_track_accept(t);fm1_irq_on();load_end(t);sync_reload=1;
+    fm1_irq_off();memcpy(cz_patch[tr].raw,data,CZ_BYTES);cz_pgen[tr]++;t->p[P_E0]=t->p[P_E1]=0;t->p[P_E7]=CZ_NATIVE;cz_track_accept(t);fm1_irq_on();load_end(t);sync_reload=1;
     if(tr<2)cu_edited(tr);                       /* (ChoralRoot: the part's sound, SAVE keeps the tone) */
     ui_message("CZ TONE LOADED");ui.force=1;return 1;
 }

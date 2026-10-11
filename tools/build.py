@@ -291,8 +291,12 @@ def build_app(stub):
         tc("cc", *[f for f in flags if not f.startswith(("-I", "-D", "-W"))], "-c",
            OUT / f"{UNIT}_size.ll", "-o", OUT / f"{UNIT}.o")
     elf = OUT / f"{UNIT}.elf"
-    tc("pi32v2/bin/ld", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o", OUT / "fm1_isr.o",
-       OUT / "fm1_cpu1.o", OUT / f"{UNIT}.o", "-o", elf)
+    # --gc-sections (as the loader and the stub): the functions nothing refers to stay out (-ffunction-sections: the
+    # engine's and the looper's API this unit does not call, fm1_vec.S's weak fault handler when cr_cpu1.h has its
+    # own). app.ld KEEPs crt0, .ram_text and .c1_text; the vector stubs, the ISR wrappers and the second core's entry
+    # are referred to from C (fm1_irq.h, fm1_cpu1.h), so they stay
+    tc("pi32v2/bin/ld", "--gc-sections", "-e", "_start", "-T", FW / "app.ld", OUT / "crt0.o", OUT / "fm1_vec.o",
+       OUT / "fm1_isr.o", OUT / "fm1_cpu1.o", OUT / f"{UNIT}.o", "-o", elf)
     for sect in ("text.bin", "data.bin", "ramtext.bin", "c1text.bin"):
         (OUT / sect).unlink(missing_ok=True)
     *_, syms, dis, rt, hdr = tc_all(("common/bin/objcopy", "-O", "binary", "-j", ".text", elf, OUT / "text.bin"),

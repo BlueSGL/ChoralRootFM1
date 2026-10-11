@@ -7,6 +7,16 @@
                                   * docs/FX.md: a stereo delay and a large reverb at half the rate, their parameters
                                   * global); 0: Felucca's below, as its golden renders have them */
 #endif
+#ifndef FELUCCA_PERFORM
+#define FELUCCA_PERFORM 1        /* 0 (choralroot.c, the emulator): no FX hold layer (perform.c). Its keys are seq.c's
+                                  * (keyboard_block: perf_press) and its knobs, solo and kill ui_layer.c's and
+                                  * ui_input.c's, none of them in a unit without Felucca's sequencer and UI
+                                  * (FELUCCA_SEQ 0): there perf_begin could only ever return 0 and pf.mute stay 0, so
+                                  * the mix is the same without the calls, and perform.c leaves the image */
+#endif
+#if !FELUCCA_PERFORM && defined(FELUCCA_SEQ) && FELUCCA_SEQ
+#error "FELUCCA_PERFORM 0 needs FELUCCA_SEQ 0 (seq.c and ui_layer.c drive perform.c)"
+#endif
 #define CHO_LEN 2048u
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 #if !CR_FX
@@ -142,73 +152,138 @@ static inline int32_t lowcut1(int32_t x, int32_t *lc, int32_t *err, uint32_t sh)
  * The low-pass has 4 poles (Felucca 1.0.5, #42: with 2, the trapezoid rebuilt the 300 .. 600 Hz of the mix itself,
  * late, and cancelled up to 6 dB of it; now under 0.5 dB) */
 static int32_t sb_lp1, sb_lp2, sb_lp3, sb_lp4, sb_env, sb_h1, sb_h2, sb_hl;
-static inline int32_t spk_bass(int32_t m)
+enum { SB_LP1, SB_LP2, SB_LP3, SB_LP4, SB_ENV, SB_H1, SB_H2, SB_HL, SB_N };   /* (the states above, in a block's copy) */
+static inline int32_t spk_bass(int32_t *sb, int32_t m)
 {
     int32_t a, t, u;
-    sb_lp1 += ((m - sb_lp1) * 692) >> 15;
-    sb_lp2 += ((sb_lp1 - sb_lp2) * 692) >> 15;
-    sb_lp3 += ((sb_lp2 - sb_lp3) * 692) >> 15;
-    sb_lp4 += ((sb_lp3 - sb_lp4) * 692) >> 15;
-    a = sb_lp4 < 0 ? -sb_lp4 : sb_lp4;
-    if (a > sb_env)
-        sb_env += (a - sb_env) >> 2;
-    else if (sb_env > 0)
-        sb_env -= (sb_env >> 11) + 1;
-    t = clamp(sb_lp4 * 8, -sb_env, sb_env);
-    sb_h1 += (t - sb_h1) >> 5;
-    u = t - sb_h1;
-    sb_h2 += (u - sb_h2) >> 5;
-    u -= sb_h2;
-    sb_hl += (u - sb_hl) >> 3;
-    return sb_hl * 3;
+    sb[SB_LP1] += ((m - sb[SB_LP1]) * 692) >> 15;
+    sb[SB_LP2] += ((sb[SB_LP1] - sb[SB_LP2]) * 692) >> 15;
+    sb[SB_LP3] += ((sb[SB_LP2] - sb[SB_LP3]) * 692) >> 15;
+    sb[SB_LP4] += ((sb[SB_LP3] - sb[SB_LP4]) * 692) >> 15;
+    a = sb[SB_LP4] < 0 ? -sb[SB_LP4] : sb[SB_LP4];
+    if (a > sb[SB_ENV])
+        sb[SB_ENV] += (a - sb[SB_ENV]) >> 2;
+    else if (sb[SB_ENV] > 0)
+        sb[SB_ENV] -= (sb[SB_ENV] >> 11) + 1;
+    t = clamp(sb[SB_LP4] * 8, -sb[SB_ENV], sb[SB_ENV]);
+    sb[SB_H1] += (t - sb[SB_H1]) >> 5;
+    u = t - sb[SB_H1];
+    sb[SB_H2] += (u - sb[SB_H2]) >> 5;
+    u -= sb[SB_H2];
+    sb[SB_HL] += (u - sb[SB_HL]) >> 3;
+    return sb[SB_HL] * 3;
 }
 
+/* The master over a block, in place on its frames (o: left, right, ...): the DC blocker, LOWCUT / BASS+, the limiter,
+ * the soft clip. The states are the globals above, held in locals over the block (a call a sample loaded and stored
+ * them every sample); lowcut and smooth are constants where a loop is built for them (master_block), so a sample has
+ * no test of the settings. */
+static inline __attribute__((always_inline)) void master_loop(int32_t *o, uint32_t n, uint32_t lowcut, int smooth)
+{
+    int32_t dl = dc_l, el = dce_l, dr = dc_r, er = dce_r, env = lim_env, lg = lim_g;
+    int32_t l1 = lc_l1, l2 = lc_l2, r1 = lc_r1, r2 = lc_r2, e0 = lce[0], e1 = lce[1], e2 = lce[2], e3 = lce[3];
+    int32_t sb[SB_N] = {sb_lp1, sb_lp2, sb_lp3, sb_lp4, sb_env, sb_h1, sb_h2, sb_hl};
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t l = o[2u * i], r = o[2u * i + 1u], al, ar, a;
+        l = dc_block(l, &dl, &el);
+        r = dc_block(r, &dr, &er);
+        if (lowcut) {                 /* two one-pole high-passes, error feedback as dc_block (the */
+            uint32_t sh = lowcut == 2u ? 5u : 6u;       /* rounded step stopped at |x - lc| < 32: an offset) */
+            int32_t b = lowcut == 2u ? spk_bass(sb, (l + r) >> 1) : 0;
+            l = lowcut1(l, &l1, &e0, sh);
+            l = lowcut1(l, &l2, &e1, sh) + b;
+            r = lowcut1(r, &r1, &e2, sh);
+            r = lowcut1(r, &r2, &e3, sh) + b;
+        }
+        al = l < 0 ? -l : l;
+        ar = r < 0 ? -r : r;
+        a = al > ar ? al : ar;
+        if (smooth) {                /* ChoralRoot: the peak held at once, the gain eased down over ~1.5 ms */
+            int32_t gt;
+            if (a > env)
+                env = a;
+            else if (env > LIM_T)
+                env -= ((env - LIM_T) >> 12) + 1;
+            gt = env > LIM_T ? (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)env) : 32768;
+            if (gt < lg)
+                lg += (gt - lg) >> 6;
+            else
+                lg = gt;
+            if (lg < 32768) {
+                l = ((l >> 4) * lg) >> 11;
+                r = ((r >> 4) * lg) >> 11;
+            }
+        } else {
+            if (a > env)
+                env += (a - env) >> 2;
+            else if (env > LIM_T)
+                env -= ((env - LIM_T) >> 12) + 1;
+            if (env > LIM_T) {
+                int32_t g = (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)env);   /* < 32768 */
+                l = ((l >> 4) * g) >> 11;                    /* >> 4 first: |l| may be far above Q15 */
+                r = ((r >> 4) * g) >> 11;
+            }
+        }
+        o[2u * i] = softclip(l);
+        o[2u * i + 1u] = softclip(r);
+    }
+    dc_l = dl;
+    dce_l = el;
+    dc_r = dr;
+    dce_r = er;
+    lim_env = env;
+    lim_g = lg;
+    if (lowcut) {
+        lc_l1 = l1;
+        lc_l2 = l2;
+        lc_r1 = r1;
+        lc_r2 = r2;
+        lce[0] = e0;
+        lce[1] = e1;
+        lce[2] = e2;
+        lce[3] = e3;
+    }
+    if (lowcut == 2u) {
+        sb_lp1 = sb[SB_LP1];
+        sb_lp2 = sb[SB_LP2];
+        sb_lp3 = sb[SB_LP3];
+        sb_lp4 = sb[SB_LP4];
+        sb_env = sb[SB_ENV];
+        sb_h1 = sb[SB_H1];
+        sb_h2 = sb[SB_H2];
+        sb_hl = sb[SB_HL];
+    }
+}
+static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
+{
+    uint32_t lowcut = fx_lowcut;                        /* (the main loop's: it does not run under this block) */
+    if (fx_smooth) {
+        if (!lowcut)
+            master_loop(o, n, 0u, 1);
+        else if (lowcut == 2u)
+            master_loop(o, n, 2u, 1);
+        else
+            master_loop(o, n, 1u, 1);
+    } else {
+        if (!lowcut)
+            master_loop(o, n, 0u, 0);
+        else if (lowcut == 2u)
+            master_loop(o, n, 2u, 0);
+        else
+            master_loop(o, n, 1u, 0);
+    }
+}
+
+/* one frame through the master (tests/speaker_test.c: its response sample by sample) */
 static inline void master_out(int32_t *l, int32_t *r)
 {
-    int32_t al, ar, a;
-    *l = dc_block(*l, &dc_l, &dce_l);
-    *r = dc_block(*r, &dc_r, &dce_r);
-    if (fx_lowcut) {                  /* two one-pole high-passes, error feedback as dc_block (the */
-        uint32_t sh = fx_lowcut == 2u ? 5u : 6u;    /* rounded step stopped at |x - lc| < 32: an offset) */
-        int32_t b = fx_lowcut == 2u ? spk_bass((*l + *r) >> 1) : 0;
-        *l = lowcut1(*l, &lc_l1, &lce[0], sh);
-        *l = lowcut1(*l, &lc_l2, &lce[1], sh) + b;
-        *r = lowcut1(*r, &lc_r1, &lce[2], sh);
-        *r = lowcut1(*r, &lc_r2, &lce[3], sh) + b;
-    }
-    al = *l < 0 ? -*l : *l;
-    ar = *r < 0 ? -*r : *r;
-    a = al > ar ? al : ar;
-    if (fx_smooth) {                 /* ChoralRoot: the peak held at once, the gain eased down over ~1.5 ms */
-        int32_t gt;
-        if (a > lim_env)
-            lim_env = a;
-        else if (lim_env > LIM_T)
-            lim_env -= ((lim_env - LIM_T) >> 12) + 1;
-        gt = lim_env > LIM_T ? (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)lim_env) : 32768;
-        if (gt < lim_g)
-            lim_g += (gt - lim_g) >> 6;
-        else
-            lim_g = gt;
-        if (lim_g < 32768) {
-            *l = ((*l >> 4) * lim_g) >> 11;
-            *r = ((*r >> 4) * lim_g) >> 11;
-        }
-        *l = softclip(*l);
-        *r = softclip(*r);
-        return;
-    }
-    if (a > lim_env)
-        lim_env += (a - lim_env) >> 2;
-    else if (lim_env > LIM_T)
-        lim_env -= ((lim_env - LIM_T) >> 12) + 1;
-    if (lim_env > LIM_T) {
-        int32_t g = (int32_t)(((uint32_t)LIM_T << 15) / (uint32_t)lim_env);   /* < 32768 */
-        *l = ((*l >> 4) * g) >> 11;                      /* >> 4 first: |l| may be far above Q15 */
-        *r = ((*r >> 4) * g) >> 11;
-    }
-    *l = softclip(*l);
-    *r = softclip(*r);
+    int32_t o[2];
+    o[0] = *l;
+    o[1] = *r;
+    master_block(o, 1u);
+    *l = o[0];
+    *r = o[1];
 }
 
 /* length of one division (N_DIV order) in samples at the song tempo */
@@ -224,7 +299,9 @@ static uint32_t div_samples(uint32_t div)
     return div < 6u ? quarter / DIV_DEN[div] : div < 10u ? quarter << (div - 5u) : quarter / DIV_DEN[div % 6u];
 }
 
+#if FELUCCA_PERFORM
 #include "perform.c"                                 /* the FX hold layer's effects (the master) */
+#endif
 
 #if CR_FX
 #include "cr_fx.c"                                   /* ChoralRoot's delay and reverb (xf_block, after the chorus) */
@@ -423,15 +500,99 @@ static uint8_t ua_stage_on;
 static inline int16_t ua_sat(int32_t x) { return (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x); }
 #endif
 
+/* A part's block b (sd: its stereo side, when side) at its level into the mix: the peak, the three sends (sg: their
+ * gains, each moving by its dg a sample: ChoralRoot's ramp; Felucca's: the gains, dg 0), the pan, USB audio's tap
+ * (pc). k: the block's values (MX_*). side, sends and tap are constants where a loop is built for them (the
+ * mix_loop_* below): a part that sends nothing has no send in its loop, one that is not recorded no tap. Returns the
+ * peak. */
+enum { MX_LVL, MX_GL, MX_GR, MX_XMAX, MX_PK, MX_SG, MX_DG = MX_SG + 3, MX_N = MX_DG + 3 };
+static inline __attribute__((always_inline)) int32_t mix_part_loop(const int32_t *b, const int32_t *sd, uint32_t n,
+                                                                   const int32_t *k, int16_t *pc, int side, int sends,
+                                                                   int tap)
+{
+    int32_t lvl = k[MX_LVL], gl = k[MX_GL], gr = k[MX_GR], xmax = k[MX_XMAX], pk = k[MX_PK];
+    int32_t s0 = k[MX_SG], s1 = k[MX_SG + 1], s2 = k[MX_SG + 2], d0 = k[MX_DG], d1 = k[MX_DG + 1], d2 = k[MX_DG + 2];
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        int32_t x, y = 0, a, l, rr;
+        if (side) {
+            x = ((b[i] >> 2) * lvl) >> 10;
+            y = ((sd[i] >> 2) * lvl) >> 10;
+        } else {
+            /* pre-shift: 8 loud voices; saturate where the level (+7.5 dB) or the pan would overflow (FM6's 16
+             * voices keep Dexed's headroom; Melodee's) */
+            x = clamp(((clamp(b[i], -884000, 884000) >> 2) * lvl) >> 10, -524287, 524287);
+        }
+        a = x < 0 ? -x : x;
+        if (a > pk)
+            pk = a;
+        if (sends) {
+            int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */
+            s0 += d0;
+            if (s0)
+                send_c[i] += mulq15(xs, s0);
+            s1 += d1;
+            if (s1)
+                send_d[i] += mulq15(xs, s1);
+            s2 += d2;
+            if (s2)
+                send_r[i] += mulq15(xs, s2);
+        }
+        if (side) {
+            l = ((x - y) * gl) >> 12;
+            rr = ((x + y) * gr) >> 12;
+        } else {
+            l = (x * gl) >> 12;
+            rr = (x * gr) >> 12;
+        }
+        mix_l[i] += l;
+        mix_r[i] += rr;
+#if FELUCCA_UAC
+        if (tap) {
+            pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
+            pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
+        }
+#endif
+    }
+    (void)pc;
+    (void)tap;
+    return pk;
+}
+/* the loops: a function each (two calls of one function that differ in a constant are folded into one by the
+ * compiler before it inlines, and the constant with them); S: with the side, F: with the sends, U: with USB's tap */
+#define MIX_LOOP_FN(name, side_, sends_, tap_) \
+    static __attribute__((noinline)) int32_t name(const int32_t *b, const int32_t *sd, uint32_t n, const int32_t *k, \
+                                                  int16_t *pc) \
+    { \
+        return mix_part_loop(b, sd, n, k, pc, side_, sends_, tap_); \
+    }
+MIX_LOOP_FN(mix_loop, 0, 0, 0)
+MIX_LOOP_FN(mix_loop_f, 0, 1, 0)
+MIX_LOOP_FN(mix_loop_s, 1, 0, 0)
+MIX_LOOP_FN(mix_loop_sf, 1, 1, 0)
+#if FELUCCA_UAC
+MIX_LOOP_FN(mix_loop_u, 0, 0, 1)
+MIX_LOOP_FN(mix_loop_fu, 0, 1, 1)
+MIX_LOOP_FN(mix_loop_su, 1, 0, 1)
+MIX_LOOP_FN(mix_loop_sfu, 1, 1, 1)
+#else
+#define mix_loop_u mix_loop
+#define mix_loop_fu mix_loop_f
+#define mix_loop_su mix_loop_s
+#define mix_loop_sfu mix_loop_sf
+#endif
+#undef MIX_LOOP_FN
+
 /* one synth part into the dry mix and the sends; a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
 /* (mix_part's second half: the part rendered into b, its side into side when side_on, nr voices) */
 static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on, uint32_t nr, uint32_t n)
 {
     int32_t *sd;
-    uint32_t i;
+    int16_t *pc = 0;
 #if FELUCCA_UAC
-    int16_t *pc = ua_stage_on && (uint32_t)(t - trk) < UA_PART_CAPTURED ? ua_stage + 2u + 2u * (uint32_t)(t - trk) : 0;
+    if (ua_stage_on && (uint32_t)(t - trk) < UA_PART_CAPTURED)
+        pc = ua_stage + 2u + 2u * (uint32_t)(t - trk);
 #endif
     if (nr)
         t->tail = 16;                                   /* blocks of DIST state to run out after the last voice */
@@ -454,25 +615,33 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
 #endif
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
-        int32_t xmax;
+        int32_t xmax, k[MX_N], *g = k + MX_SG, *dg = k + MX_DG;
+        int sends;
+        dg[0] = dg[1] = dg[2] = 0;
 #if CR_FX
-        int32_t *sg = fx_sg[t - trk], dc, dd, dr;
+        int32_t *sg = fx_sg[t - trk];
         if (fx_off)
             c = d = r = 0;
-        dc = (c - sg[0]) >> CTL_LOG2;                   /* (CTL samples a block; the ramp's last fraction: a step of
+        dg[0] = (c - sg[0]) >> CTL_LOG2;                /* (CTL samples a block; the ramp's last fraction: a step of
                                                          * under 32 / 32768) */
-        dd = (d - sg[1]) >> CTL_LOG2;
-        dr = (r - sg[2]) >> CTL_LOG2;
+        dg[1] = (d - sg[1]) >> CTL_LOG2;
+        dg[2] = (r - sg[2]) >> CTL_LOG2;
+        g[0] = sg[0];
+        g[1] = sg[1];
+        g[2] = sg[2];
         xmax = c > sg[0] ? c : sg[0];
         xmax = d > xmax ? d : sg[1] > xmax ? sg[1] : xmax;
         xmax = r > xmax ? r : sg[2] > xmax ? sg[2] : xmax;
         xmax = 0x7FFFFFFF / (xmax | 1);
-#define FX_SEND(bus, k, g_) do { sg[k] += d##g_; if (sg[k]) bus[i] += mulq15(xs, sg[k]); } while (0)
+        sends = (c | d | r | sg[0] | sg[1] | sg[2]) != 0;   /* (all 0: the ramps stay at 0, no bus gets a sample) */
 #define FX_SEND_END() (sg[0] = c, sg[1] = d, sg[2] = r)
 #else
+        g[0] = c;
+        g[1] = d;
+        g[2] = r;
         xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
-#define FX_SEND(bus, k, g_) do { if (g_) bus[i] += mulq15(xs, g_); } while (0)
+        sends = (c | d | r) != 0;
 #define FX_SEND_END() ((void)0)
 #endif
         /* a stereo side (voice.c part_side: VA's SPREAD / USPREAD): DIST works on the mid, the SLICER plays the part
@@ -480,6 +649,7 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
         sd = side_on && !t->p[P_SLCR] && !slicer_busy(t) ? side : 0;
         track_dist(t, b, n);
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
+#if FELUCCA_PERFORM
         if ((pf.mute >> (t - trk)) & 1u) {
             if (sd) {
                 int32_t mg = pf.mg[t - trk];
@@ -488,57 +658,20 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
             }
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
         }
-        if (sd) {
-            for (i = 0; i < n; i++) {
-                int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;
-                int32_t xs = clamp(x, -xmax, xmax), y = ((sd[i] >> 2) * lvl) >> 10;
-                if (a > pk)
-                    pk = a;
-                FX_SEND(send_c, 0, c);
-                FX_SEND(send_d, 1, d);
-                FX_SEND(send_r, 2, r);
-                {
-                    int32_t l = ((x - y) * gl) >> 12, rr = ((x + y) * gr) >> 12;
-                    mix_l[i] += l;
-                    mix_r[i] += rr;
-#if FELUCCA_UAC
-                    if (pc) {
-                        pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
-                        pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
-                    }
 #endif
-                }
-            }
-            t->peak = pk;
-            FX_SEND_END();
-            if (MODP(t).on)
-                mod_end(t);
-            return;
-        }
-        for (i = 0; i < n; i++) {
-            /* pre-shift: 8 loud voices; saturate where the level (+7.5 dB) or the pan would overflow (FM6's 16
-             * voices keep Dexed's headroom; Melodee's) */
-            int32_t x = clamp(((clamp(b[i], -884000, 884000) >> 2) * lvl) >> 10, -524287, 524287), a = x < 0 ? -x : x;
-            int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */
-            if (a > pk)
-                pk = a;
-            FX_SEND(send_c, 0, c);
-            FX_SEND(send_d, 1, d);
-            FX_SEND(send_r, 2, r);
-            {
-                int32_t l = (x * gl) >> 12, rr = (x * gr) >> 12;
-                mix_l[i] += l;
-                mix_r[i] += rr;
-#if FELUCCA_UAC
-                if (pc) {
-                    pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
-                    pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
-                }
-#endif
-            }
-        }
+        k[MX_LVL] = lvl;
+        k[MX_GL] = gl;
+        k[MX_GR] = gr;
+        k[MX_XMAX] = xmax;
+        k[MX_PK] = pk;
+        /* the loop of this block: with or without the side, the sends, the tap */
+        if (sd)
+            pk = sends ? (pc ? mix_loop_sfu : mix_loop_sf)(b, sd, n, k, pc) : (pc ? mix_loop_su : mix_loop_s)(b, sd, n, k, pc);
+        else
+            pk = sends ? (pc ? mix_loop_fu : mix_loop_f)(b, sd, n, k, pc) : (pc ? mix_loop_u : mix_loop)(b, sd, n, k, pc);
         t->peak = pk;
         FX_SEND_END();
+#undef FX_SEND_END
     }
     if (MODP(t).on)
         mod_end(t);                                     /* the stored values back */
@@ -552,6 +685,18 @@ static void mix_part(track_t *t, uint32_t n)
     nr = track_render(t, part_buf, n);
     CR_PROF(t == &trk[0] ? CRP_PART0 : t == &trk[1] ? CRP_PART1 : CRP_FX);
     mix_part_out(t, part_buf, part_side, part_side_on, nr, n);
+}
+
+/* The parts that sound: Felucca's four; ChoralRoot's units play the chord and the bass part only (engines.c
+ * ENG_STATE_NPART: a part above them has no engine state and takes no note: cr_out.c's midi_event and the engine's
+ * routes are parts 0 / 1), so their matrix, render and mix have nothing to do. What a silent part still does to the
+ * others stays: its LFO's tick (voice.c lfo_rand: part 3's S&H draws from the shared generator, whose sequence the
+ * engines' noise and the notes' RAND follow) and the SLICER's step clock (slicer.c: a stub in the unit). */
+#define MIX_NPART ENG_STATE_NPART
+static void mix_part_idle(track_t *t, uint32_t n)
+{
+    track_lfo_tick(t);
+    slicer_track(t, 0, n);
 }
 
 #if CR_CPU1
@@ -611,6 +756,7 @@ static void mix_parts_split(uint32_t n)
 }
 #endif
 
+#if FELUCCA_PERFORM
 /* the master with the FX layer's effects between its level and master_out (perform.c) */
 static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
 {
@@ -622,17 +768,19 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
     }
     perf_block(mix_l, mix_r, n);
     for (i = 0; i < n; i++) {
-        int32_t l = mix_l[i], r = mix_r[i];
-        master_out(&l, &r);
-        out[2u * i] = l;
-        out[2u * i + 1u] = r;
+        out[2u * i] = mix_l[i];
+        out[2u * i + 1u] = mix_r[i];
     }
+    master_block(out, n);
 }
+#endif
 
 static void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i;
+#if FELUCCA_PERFORM
     int perf;
+#endif
     int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB Level Fixed: MASTER after) */
 #if FELUCCA_UAC
     if (ua_stage_on)
@@ -642,7 +790,9 @@ static void mix_block(int32_t *out, uint32_t n)
     for (i = 0; i < n; i++)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
     events_block(n);
+#if FELUCCA_PERFORM
     perf = perf_begin(n);                               /* the FX hold layer at work (perform.c) */
+#endif
     CR_PROF(CRP_TICK);                                  /* (the engine tick before it: the mix_block shim) */
     i = 0;
 #if CR_CPU1
@@ -651,25 +801,29 @@ static void mix_block(int32_t *out, uint32_t n)
         i = 2;
     }
 #endif
-    for (; i < NPART; i++)
+    for (; i < MIX_NPART; i++)
         mix_part(&trk[i], n);
+    for (; i < NPART; i++)
+        mix_part_idle(&trk[i], n);
+#if FELUCCA_PERFORM
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
+#endif
     fx_buses(send_c, send_d, send_r, wet, n);
 #if CR_FX
     xf_block(send_d, send_r, mix_l, mix_r, n);          /* (cr_fx.c: stereo, into the mix; the FX layer's master
                                                          * effects and the limiter after it, as the chorus) */
 #endif
     CR_PROF(CRP_FX);
+#if FELUCCA_PERFORM
     if (perf) {
         perf_master(out, n);
         return;
     }
+#endif
     for (i = 0; i < n; i++) {
-        int32_t l = (((mix_l[i] + wet[i]) >> 2) * mg) >> 10;
-        int32_t r = (((mix_r[i] + wet[i]) >> 2) * mg) >> 10;
-        master_out(&l, &r);
-        out[2u * i] = l;
-        out[2u * i + 1u] = r;
+        out[2u * i] = (((mix_l[i] + wet[i]) >> 2) * mg) >> 10;
+        out[2u * i + 1u] = (((mix_r[i] + wet[i]) >> 2) * mg) >> 10;
     }
+    master_block(out, n);
 }

@@ -15,7 +15,7 @@ How the three independent parts become one instrument on Felucca's platform:
 
 `firmware/src/choralroot.c` replaces `felucca.c` as the single compilation unit, in Felucca's
 include order, keeping: the HAL, `libc.c`, `lcd.c`, `gfx.c`, `core.h`, `engines.c`, `params.c`,
-`mod.c`, `voice.c`, `slicer.c`, `fx.c` (with `perform.c`), `usb.c`, `midi_uart.c`, `audio.c`, `panel.c`,
+`mod.c`, `voice.c`, `slicer.c`, `fx.c` (without `perform.c` since 0.18: `FELUCCA_PERFORM 0`), `usb.c`, `midi_uart.c`, `audio.c`, `panel.c`,
 `storage*`, `upreset.c`, `ota*`, `console.c`, `main.c`; dropping Felucca's instrument: `seq.c` with
 `song_chain.c`, `motion.c`, `chord.c`, `midi_control.c`, `midi_clock.c` (`FELUCCA_SEQ 0`), `ui*.c`, `icons.c`
 (`FELUCCA_ICONS 0`), `project.c`, `editor*.c`, `favorites.c`, `ui_name.c` (naming is re-done small in `cr_ui.c`; of
@@ -944,7 +944,7 @@ sound since power-on:
 | `voices_shed` | voices dropped because two halves in a row went over 85 % (`audio.c` shed) | 0 |
 | `flash_erases`, `settings_saves` | each erase stops every IRQ for ~45 ms with the audio buffer zeroed | grow only when you save, or when the instrument is quiet |
 | `ui_frame_max_ms`, `ui_frames` | the longest main-loop frame of the second (15 ms nominal; keys are read once a frame) | < 30 |
-| `stage_<s>_avg_us` / `_max_us` | the ISR's stages per half, the last second (`cr_cpu1.h` cr_dbg): `tick` (the engine, the looper, MIDI, the events, voice allocation), `part0` (the chord part's render), `part1` (the bass part's: core 1's job time), `fx` (DIST / level / sends of every part, parts 2..3, the FX buses), `master` (limiter, USB tap, click), `wait` (core 0 waiting for core 1) | their sum ~ `audio_avg_us` |
+| `stage_<s>_avg_us` / `_max_us` | the ISR's stages per half, the last second (`cr_cpu1.h` cr_dbg): `tick` (the engine, the looper, MIDI, the events, voice allocation), `part0` (the chord part's render), `part1` (the bass part's: core 1's job time), `fx` (DIST / level / sends of the two parts, the idle parts' LFO ticks, the FX buses), `master` (limiter, USB tap, click), `wait` (core 0 waiting for core 1) | their sum ~ `audio_avg_us` |
 | `c1_state`, `c1_jobs`, `c1_stack_bytes`, `c1_start_us` | the second core (docs/DUALCORE.md): 0 off (Options > Dual Core Off, the default; SAFE MODE), 1 ok, 2 failed at start, 3 gave up on a job; jobs done; its stack's high-water mark of 2816; its start | 0, 0 (Off); 1, rising, < 2816 (On) |
 
 The GEEK OUT view (Options > View) shows the third line `isr <us> · late <n>`: the last second's longest half
@@ -1030,6 +1030,74 @@ new chord while the old one is held is retriggered (note-off + note-on in the sa
 Chord Type press re-strikes the chord, an Add Note keeps the shared notes sounding. In `voice.c` a retrigger of a
 sounding note keeps its phases and continues its envelope from the current level (FM6: its gains too), so it does not
 step; only sampled engines restarted their sample (fixed above).
+
+### The audio ISR lighter (0.18, 2026-10-11)
+
+An audit of the ISR for the 0.18 effects (a CZ-1 chord's part read 1699..1985 us of the 2902 us half on the unit).
+Everything here leaves the output sample for sample as it was: `tests/regress.c`'s 197 goldens, the emulator's 52
+WAVs (the same SHA-256 before and after: `test_cr.sh`, `test_persist.sh`, `perf.sh` with and without Dual Core) and a
+side-by-side build of the two trees hashing the whole mix (every engine's presets on both parts, the sends on and
+off and ramping, FX off, pan, LOWCUT off / on / BASS+, both limiters, a bend, TUNE, engine changes under notes; with
+ChoralRoot In recording on and off, its six channels hashed too). The figures are counted in `build/choralroot.dis`
+(instructions on the usual path, over the unit's 205 a microsecond; jump-table bytes are not instructions); the
+emulator's estimate is not a device figure.
+
+| what | before -> after | a half |
+| --- | --- | --- |
+| CZ-1, a two-line voice (docs/CZ1.md) | 50 800 -> 16 100 instructions | 248 -> 79 us a voice; eight: 1 980 -> 630 us |
+| parts 2 and 3 (`fx.c MIX_NPART`) | ~360 -> ~36 a part and block | -12.6 us |
+| `track_render_x`: TUNE and the bend | ~30 a sounding part and block, four divides | -1.2 us |
+| the FX hold layer (`FELUCCA_PERFORM 0`) | ~84 a block | -1.6 us; XIP -5708 B, RAM -268 B |
+| the master (`master_block`) | ~120 -> 97 a sample (LOWCUT off; BASS+ ~249 -> 223) | -14.4 us |
+| the mix of a part without sends (`mix_loop`) | ~42 -> 21 a sample | -13.1 us a part; with sends 61 -> 64, +1.9 us |
+
+- **Parts 2 and 3.** ChoralRoot's units play the chord and the bass part: `cr_out.c`'s `midi_event` and the
+  engine's routes are parts 0 / 1, and a part above `ENG_STATE_NPART` has no engine state. `mix_block` still ran
+  the matrix, `track_render_x` (its divides, two cleared buffers, a scan of 16 voices) and `mix_part_out` for them.
+  They now do `mix_part_idle`: the LFO's tick and the SLICER's step clock (a stub in the unit). The tick stays
+  because `voice.c lfo_rand` draws part 3's S&H value from the shared generator at every LFO cycle, whatever its
+  wave, and the engines' noise and the notes' RAND follow that sequence: without it the mix's hashes differ (PHYS's
+  noise), with it they do not. Felucca (`FELUCCA_SEQ 1`: four parts with state) is as it was.
+- **`track_render_x`** works out TUNE and the bend (six divides) for the first voice that sounds, and not at all
+  when they are 0. The bend's smoothing, the clears, the LFO and the engine's block are where they were.
+- **The FX hold layer** (`perform.c`, Felucca's REPEAT / REVERSE / TAPE STOP ... on the master) could never run
+  here: its keys come from `seq.c` (`keyboard_block`: `kb_layer`, `perf_press`, which also returns at once without
+  the SLICER), its knobs, solo and kill from `ui_layer.c` and `ui_input.c` (`perf_mask`, `kb_mask`, `perf_k`,
+  `perf_solo`, `perf_kill`): none of them is in a `FELUCCA_SEQ 0` unit and no `cr_*.c` names one. So `perf_begin`
+  took its idle path every block and returned 0, `pf.mute` stayed 0. `FELUCCA_PERFORM` (`fx.c`, default 1; 0 in
+  `choralroot.c` and the emulator; an `#error` with `FELUCCA_SEQ 1`) compiles the layer and its four call sites in.
+  Felucca's suite and `tests/perform_test.c` keep it; `tests/target_budget.py` holds its five functions as optional.
+- **The master.** `master_out` was a call a sample that loaded and stored the DC blocker's, the low cut's and the
+  limiter's states and read `fx_lowcut` three times. `master_block` runs the block in place on the output's frames
+  with the states in locals; LOWCUT off / on / BASS+ and the two limiters are six loops, picked once a block
+  (+2.8 KB). `fx_lowcut` is the main loop's, which does not run under the ISR: read once.
+- **The mix.** `mix_part_loop` is built eight times: with or without the stereo side, the sends, USB audio's tap.
+  A part whose three sends and their ramps are 0 (the bass as a rule; every part with FX off) has no send in its
+  loop; the tap's test left the others. Each is a function of its own (`mix_loop`, `_f`, `_s`, `_sf`, `_u`, `_fu`,
+  `_su`, `_sfu`): the compiler folds two calls of one inlined function that differ in a constant back into one loop
+  with the test in it (it did, before they were apart).
+- **RAM and POOL.** The splash (`cr_shim.c cr_splash`) and SAFE MODE's erase screen (`cr_ui.c cu_flash_erase`) each
+  had a static `cr_screen_t` (2436 B); both build on `cu_scr`, the pool's frame the UI clears every time: RAM
+  -4880 B. `gfx.c`'s canvas is `CV_ROWS` rows (124: Felucca's graph strip); `choralroot.c` and the emulator set 120,
+  `cr_draw.c`'s strip and its two DMA buffers (its `_Static_assert`): POOL -1920 B. CZ-1's definitions took 824 B of
+  it.
+- **The link.** The app is linked with `--gc-sections` as the loader and the stub are (`tools/build.py`; `app.ld`
+  KEEPs crt0, `.ram_text`, `.c1_text`). 27 functions nothing refers to leave (`cr_engine.c`'s, `cr_loop.c`'s and
+  `cr_settings.c`'s API this unit does not call: `cr_seed`, `cr_key`, `cr_mod`, `cr_pad_*`, `cr_loop_bar` ...,
+  868 B) and `fm1_vec.S`'s weak `fm1_c1_fault_c`, which `cr_cpu1.h`'s own replaces (8 B): XIP -880 B. Compared with
+  the same objects linked without it, every label that stays is the same instruction for instruction (or the same
+  data but for pointers to the same place), in the same order; the vector stubs (`fm1_fatal_stubs`), the ISR
+  wrappers and `fm1_c1_entry` are named from C (`fm1_irq.h`, `fm1_cpu1.h`) and stay. `.ram_text` is one input
+  section, so its 2888 B do not shrink.
+
+The size line: `XIP 449892 -> 458472 B` (78.5 -> 80.0 %: CZ-1's loops and table +10.3 KB, the master's and the mix's
+loops +4.2 KB, the FX hold layer -5.7 KB, the link -0.9 KB), `RAM 85268 -> 80136 B` (86.7 -> 81.5 %), `POOL 328192
+-> 327096 B` (95.4 -> 95.1 %).
+
+`tools/emu/perf.sh` (g), a six-note CZ STRINGS 2 chord, as a sanity check only: the block 241 294 -> 155 480 host
+instructions on average (-36 %), the worst 409 128 -> 248 000 .. 278 000 (two runs); its `part0` stage 514 -> 220 on
+average. The other scenarios: 7 800 fewer a block (-3 .. -5 %: the master, the mix, the idle parts). (Its script's
+bass lands on PHYS MARIMBA since the engine picker lost five engines: the bass is no CZ-1 voice there.)
 
 ### Fixed: the UI frame with the loop ring
 

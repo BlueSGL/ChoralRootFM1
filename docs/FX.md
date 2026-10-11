@@ -289,6 +289,11 @@ none built (the engine is Melodee's and its samples are checked bit for bit):
 3. A line whose amplitude envelope has ended skipped (its phase advanced in one step): one-line-audible tones halve.
 4. The two lines' loops apart, block-wise, as the effects are now.
 
+Built since (0.18, bit for bit; docs/CZ1.md "The render's cost on the unit"): 2 and 4, taken further (a loop for
+each wave and window, the carrier from a table), and the larger find of the audit that followed: the envelopes'
+definitions were rebuilt for every voice and block. Counted: about 1 980 us -> 630 us for eight voices. 1 is not
+needed for it; 3 cannot be done sample for sample.
+
 ## The delay
 ## The delay
 
