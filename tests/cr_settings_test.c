@@ -77,6 +77,58 @@ static void t_defaults(void)
     ok(cr_settings_equal(&e, &d), "capture of a fresh engine = the defaults");
 }
 
+/* a fresh unit's Play Style (the owner, 2026-10-12: his unit came up Advanced): every way cr_settings_boot can come
+ * without a ChoralRoot record of its own gives the defaults, Simple, in the record and in the engine it is applied
+ * to: no record at all (st_load fails: a zeroed persist_t), erased flash read as a block (0xFF), a Felucca / Melodee
+ * PER1..PER4 record (settings_import zeroes the block), another firmware's bytes where the block would be (no CRS1
+ * magic), a ChoralRoot block cut short or with a bad checksum. Only a valid ChoralRoot record that says Advanced
+ * gives Advanced */
+static void t_fresh_playstyle(void)
+{
+    cr_settings_t s, d, adv;
+    uint8_t blk[CRS_SIZE];
+    uint32_t i;
+    int rc;
+    cr_settings_defaults(&d);
+    cr_settings_defaults(&adv);
+    adv.playstyle = CR_PS_ADVANCED;
+    cr_settings_seal(&adv);
+#define FRESH(what) do { \
+        cr_init(&C, &OUT); \
+        cr_set_playstyle(&C, CR_PS_FREE); \
+        cr_settings_apply(&s, &C, 0); \
+        ok(rc == 0 && s.playstyle == CR_PS_SIMPLE && s.extadd == CR_EXTADD_ADD_NOTE && cr_settings_equal(&s, &d) && \
+           C.playstyle == CR_PS_SIMPLE, what); \
+    } while (0)
+    memset(&s, 0x5A, sizeof s);
+    rc = cr_settings_import(&s, 0, 0);
+    FRESH("fresh: no block: the defaults, Play Style Simple (the engine too)");
+    memset(blk, 0, sizeof blk);                    /* (cr_settings_boot: no record, or PER1..PER4: the block zeroed) */
+    memset(&s, 0x5A, sizeof s);
+    rc = cr_settings_import(&s, blk, sizeof blk);
+    FRESH("fresh: a zeroed block (no record / a Felucca PER4 record): Simple");
+    memcpy(&s, blk, sizeof s);                     /* (.. imported in place, as cr_settings_boot does) */
+    rc = cr_settings_import(&s, &s, sizeof s);
+    FRESH("fresh: a zeroed block imported in place: Simple");
+    memset(blk, 0xFF, sizeof blk);
+    rc = cr_settings_import(&s, blk, sizeof blk);
+    FRESH("fresh: erased flash (0xFF): Simple");
+    for (i = 0; i < sizeof blk; i++)               /* another firmware's data there: every byte 1 (Advanced's value) */
+        blk[i] = 1;
+    rc = cr_settings_import(&s, blk, sizeof blk);
+    FRESH("fresh: another firmware's bytes (no CRS1): Simple");
+    memcpy(blk, &adv, sizeof blk);                 /* a real Advanced record, damaged: not trusted */
+    blk[CRS_SIZE - 1u] ^= 0x40u;
+    rc = cr_settings_import(&s, blk, sizeof blk);
+    FRESH("fresh: an Advanced record with a bad checksum: Simple");
+    memcpy(blk, &adv, sizeof blk);
+    rc = cr_settings_import(&s, blk, CRS_SIZE - 8u);
+    FRESH("fresh: an Advanced record cut short: Simple");
+#undef FRESH
+    rc = cr_settings_import(&s, &adv, sizeof adv);
+    ok(rc == 1 && s.playstyle == CR_PS_ADVANCED, "a valid record that says Advanced: Advanced (the stored setting)");
+}
+
 static void t_roundtrip(void)
 {
     cr_settings_t s, back, imp;
@@ -622,6 +674,7 @@ static void t_dualcore_v12(void)
 int main(void)
 {
     t_defaults();
+    t_fresh_playstyle();
     t_roundtrip();
     t_corruption();
     t_version();

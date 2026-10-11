@@ -1450,8 +1450,9 @@ run cr_safe --flash "$SF" --boot-fail 1 --reset-reason wdt --boot-stage 13 --wav
 L="$OUT/cr_safe.log"
 has '^boot: safe reset wdt failed 2 pending 1 counted 1 prev_stage 13 (fm6 bank)' "$L" &&
     ok "a crash-type reset with one failed boot before: SAFE MODE, breadcrumb 13 (fm6 bank)" || bad "not SAFE: $(grep -m1 '^boot:' "$L")"
-has 'record: defaults' "$L" && has 'bpm 120 ' "$L" && ! has 'bpm 137' "$L" &&
-    ok "the settings record not loaded (defaults: 120 BPM, not the saved 137)" || bad "safe mode loaded the record"
+has 'record: defaults' "$L" && has 'bpm 120 ' "$L" && ! has 'bpm 137' "$L" && has ' style 0 ' "$L" && ! has ' style 1 ' "$L" &&
+    has ' style 1 ' "$OUT/cr_safe_data.log" &&
+    ok "the settings record not loaded (defaults: 120 BPM and Play Style Simple, not the saved 137 and Advanced)" || bad "safe mode loaded the record"
 has 'part 0: FM6 / TINE EP, voices 3' "$L" && has '^expect sound .*: ok' "$L" &&
     ok "plays in SAFE MODE: D major on the factory TINE EP" || bad "no sound in safe mode"
 cmp -s "$SF" "$OUT/cr_safe_flash_before.bin" && ok "the flash untouched by a safe session (no save)" || bad "safe mode wrote the flash"
@@ -1475,7 +1476,8 @@ print(int(all(d[a:a + n * 4096] == b'\xff' * (n * 4096) for a, n in r) and d[:0x
 [ "$ff" = 1 ] && ok "the data regions read erased, the firmware area as before" || bad "flash after the erase"
 "$EMU" --headless --flash "$SF" --script "$S/persist_check.txt" >"$OUT/cr_safe_after.log" 2>&1
 has '^boot: normal reset power-on failed 0' "$OUT/cr_safe_after.log" && has 'bpm 120 ' "$OUT/cr_safe_after.log" &&
-    ok "the next power-on: NORMAL on the erased flash (120 BPM)" || bad "after the erase: $(grep -m1 '^boot:' "$OUT/cr_safe_after.log")"
+    has ' style 0 ' "$OUT/cr_safe_after.log" && ! has ' style 1 ' "$OUT/cr_safe_after.log" &&
+    ok "the next power-on: NORMAL on the erased flash (120 BPM, Play Style Simple: Advanced was saved before)" || bad "after the erase: $(grep -m1 '^boot:' "$OUT/cr_safe_after.log")"
 "$EMU" --headless --script "$S/cr_safe.txt" --boot-fail 1 --reset-reason poweron >"$OUT/cr_safe_pwr.log" 2>&1
 has '^boot: normal reset power-on failed 0 pending 1 counted 0' "$OUT/cr_safe_pwr.log" &&
     ok "a power-on after failed boots: NORMAL, the guard clear" || bad "power-on: $(grep -m1 '^boot:' "$OUT/cr_safe_pwr.log")"

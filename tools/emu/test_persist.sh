@@ -50,6 +50,44 @@ b=$(bpm "$OUT/persist_3.log")
 [ "$b" = 120 ] && ok "run 3: no --flash: a fresh 120 BPM" || bad "run 3: bpm $b"
 [ "$(st "$OUT/persist_3.log")" = 0 ] && ok "run 3: Play Style Simple" || bad "run 3: style $(st "$OUT/persist_3.log")"
 
+# a fresh unit's Play Style (the owner's unit came up Advanced): run 1's flash (Advanced saved in a ChoralRoot record)
+# made into what another firmware leaves: (a) a Felucca / Melodee PER4 settings object, the same fields without
+# ChoralRoot's block (settings_persist.c: magic PER4, 192 bytes shorter), (b) the settings sectors erased (0xFF: no
+# record; what SAFE MODE's Flash Data leaves, test_cr.sh). Both power on with the defaults: Simple, 120 BPM
+P4=$OUT/persist_per4_flash.bin
+ER=$OUT/persist_erased_flash.bin
+rm -f "$P4" "$ER" "$OUT"/persist_per4.log "$OUT"/persist_erased.log
+n4=$(python3 -c "
+import struct, sys, zlib
+b = bytearray(open(sys.argv[1], 'rb').read())
+e = bytearray(b)
+n = 0
+for o in (0xFC000, 0xFD000):
+    magic, typ, slot, seq, ln = struct.unpack_from('<IHHII', b, o)
+    pay = o + 256
+    if magic != 0x554C4546 or b[pay:pay + 4] != b'5REP' or b[pay + ln - 192:pay + ln - 188] != b'CRS1':
+        continue
+    b[pay:pay + 4] = b'4REP'
+    b[pay + ln - 192:pay + ln] = b'\\xff' * 192
+    ln -= 192
+    struct.pack_into('<I', b, o + 12, ln)
+    struct.pack_into('<I', b, o + 16, zlib.crc32(bytes(b[pay:pay + ln])) & 0xFFFFFFFF)
+    struct.pack_into('<I', b, o + 28, zlib.crc32(bytes(b[o:o + 28])) & 0xFFFFFFFF)
+    n += 1
+e[0xFC000:0xFF000] = b'\\xff' * 0x3000
+open(sys.argv[2], 'wb').write(b)
+open(sys.argv[3], 'wb').write(e)
+print(n)" "$FLASH" "$P4" "$ER")
+"$EMU" --headless --flash "$P4" --script "$S/persist_check.txt" >"$OUT/persist_per4.log" 2>&1 || bad "PER4 run: exit status"
+"$EMU" --headless --flash "$ER" --script "$S/persist_check.txt" >"$OUT/persist_erased.log" 2>&1 || bad "erased run: exit status"
+[ "${n4:-0}" -ge 1 ] && [ "$(st "$OUT/persist_per4.log")" = 0 ] && [ "$(bpm "$OUT/persist_per4.log")" = 120 ] &&
+    grep -q "record: defaults" "$OUT/persist_per4.log" &&
+    ok "a Felucca PER4 settings record (no ChoralRoot block, $n4 copies): the defaults: Play Style Simple, 120 BPM" \
+    || bad "PER4 record: $n4 copies, style $(st "$OUT/persist_per4.log") bpm $(bpm "$OUT/persist_per4.log")"
+[ "$(st "$OUT/persist_erased.log")" = 0 ] && [ "$(bpm "$OUT/persist_erased.log")" = 120 ] && grep -q "record: defaults" "$OUT/persist_erased.log" &&
+    ok "the settings sectors erased (no record): the defaults: Play Style Simple, 120 BPM" \
+    || bad "erased settings: style $(st "$OUT/persist_erased.log") bpm $(bpm "$OUT/persist_erased.log")"
+
 # the VA patch store (firmware/src/va_store.c, docs/VA.md): run 1 edits a VA sound's patch on its deep page and saves
 # it to U01; run 2 (the same file) powers on with U01 (the record's chord sound): the patch's CRC as saved
 VFLASH=$OUT/persist_va_flash.bin
