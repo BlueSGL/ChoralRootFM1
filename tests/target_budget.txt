@@ -13,7 +13,7 @@ px_string_run 264
 px_symp_run 252
 va_render 89805
 va_block 108
-cz_native_render 325
+cz_native_render 338
 cz_native_line 45287
 cz_native_noise 134
 cz_env_tick 36

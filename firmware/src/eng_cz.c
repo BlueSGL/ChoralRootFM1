@@ -31,8 +31,11 @@ static void cz_init(void) { for (uint32_t k = 0; k < NTRK; k++) { cz_patch_init(
 typedef struct { uint32_t rate[8]; int32_t level[8]; uint8_t sustain, end; } cz_env_def_t;
 typedef struct { int32_t level; uint8_t stage, gate; } cz_env_t;
 /* krate: the DCA envelopes' rates of this voice (the tone's with the key follow of its note), built for tone
- * generation kgen and note knote (cz_native.c cz_native_krate; cz_note_on's memset: kgen 0, none) */
-typedef struct { cz_env_t eg[2][3]; uint32_t vib_phase, vib_ticks, noise, kgen, knote, krate[2][8]; } cz_voice_t;
+ * generation kgen and note knote (cz_native.c cz_native_krate; cz_note_on's memset: kgen 0, none).
+ * pk: a line's last pivot and the two slopes divided from it (cz_native_pd; 0: none, a pivot is 1..1024) */
+typedef struct {
+    cz_env_t eg[2][3]; uint32_t vib_phase, vib_ticks, noise, kgen, knote, krate[2][8], pk[2][3];
+} cz_voice_t;
 typedef struct { cz_voice_t v[NPOLY]; } cz_part_t;
 /* a part's envelope definitions as its tone gives them (no key follow), built for tone generation gen (0: none) */
 typedef struct { cz_env_def_t d[2][3]; uint32_t gen; } cz_defs_t;

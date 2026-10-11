@@ -70,14 +70,19 @@ static __attribute__((noinline)) int32_t cz_native_amp(int32_t level, uint32_t a
 }
 /* Block-prepared slopes of the chip's 11-bit phase functions. */
 typedef struct { uint32_t wave[2], window, dcw, pivot, k0, k1; } cz_hw_pd_t;
-static __attribute__((noinline)) void cz_native_pd(cz_hw_pd_t *p, uint32_t word, uint32_t dcw)
+/* pk: the voice's pivot and slopes of this line's last block: the two divides only when the DCW depth moved */
+static __attribute__((noinline)) void cz_native_pd(cz_hw_pd_t *p, uint32_t word, uint32_t dcw, uint32_t *pk)
 {
     p->wave[0] = (word >> 13) & 7u;
     p->wave[1] = word & 512u ? (word >> 10) & 7u : p->wave[0];
     p->window = (word >> 6) & 7u; p->dcw = dcw;
     p->pivot = 1024u - dcw;
-    p->k0 = (1024u << 16) / p->pivot;
-    p->k1 = (1024u << 16) / (2048u - p->pivot);
+    if (pk[0] != p->pivot) {
+        pk[0] = p->pivot;
+        pk[1] = (1024u << 16) / p->pivot;
+        pk[2] = (1024u << 16) / (2048u - p->pivot);
+    }
+    p->k0 = pk[1]; p->k1 = pk[2];
 }
 /* One sample of a line: the chip's phase function (wave) and window at pos, the top 11 bits of the phase. The
  * carrier is the generated CZ_CARRIER[phase] = (pd_cos((phase << 5) + (phase >> 6)) + 32767) >> 1 (tools/
@@ -196,25 +201,34 @@ static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, i
     for (uint32_t l=0;l<2u;l++) {
         uint32_t src = ls == 2u ? 0u : l, off = src*57u;             /* (1+1': line 1's definitions for both) */
         const cz_env_def_t *defs = D->d[src];
-        uint32_t av = 15u-(b[20u+off]>>4), al = b[16u+off]>>4;
-        amp[l][0] = cz_native_amp(c->eg[l][2].level,al,av,v->vel);
+        int32_t level = c->eg[l][2].level;
         int32_t pitch = cz_env_tick(&c->eg[l][0],&defs[0],defs[0].rate,v->gate);
         int32_t depth = cz_env_tick(&c->eg[l][1],&defs[1],defs[1].rate,v->gate);
         cz_env_tick(&c->eg[l][2],&defs[2],c->krate[src],v->gate);
-        amp[l][1] = cz_native_amp(c->eg[l][2].level,al,av,v->vel);
-        step[l] = (amp[l][1]-amp[l][0])*256/(int32_t)n;
+        /* A line the tone does not play: its envelopes run on as they did (a LINE change under a held note finds
+         * them where they would be), its level, pitch and phase function are nobody's. */
+        if (l < first || l > last) continue;
+        uint32_t av = 15u-(b[20u+off]>>4), al = b[16u+off]>>4;
+        amp[l][0] = cz_native_amp(level,al,av,v->vel);
+        /* (a DCA that did not move: the same level, no second curve) */
+        amp[l][1] = c->eg[l][2].level == level ? amp[l][0] : cz_native_amp(c->eg[l][2].level,al,av,v->vel);
+        step[l] = (amp[l][1]-amp[l][0])*256;
+        /* (a whole block: the divide by n as the shift it is, towards zero) */
+        step[l] = n == CTL ? (step[l]+((step[l]>>31)&(int32_t)(CTL-1u)))>>CTL_LOG2 : step[l]/(int32_t)n;
         uint32_t pv = 15u-(b[54u+off]>>4), wv = 15u-(b[37u+off]>>4);
-        pitch = mulq16(pitch, (127u*15u-(127u-v->vel)*pv)*65536u/(127u*15u));
-        depth = mulq16(depth, (127u*15u-(127u-v->vel)*wv)*65536u/(127u*15u));
+        /* (no velocity sensitivity: the factor is 65536, the product the value itself) */
+        if (pv) pitch = mulq16(pitch, (127u*15u-(127u-v->vel)*pv)*65536u/(127u*15u));
+        if (wv) depth = mulq16(depth, (127u*15u-(127u-v->vel)*wv)*65536u/(127u*15u));
         uint32_t kf = b[18u+off], kfnote = v->note > 36u ? v->note-36u : 0u;
-        depth = depth*96/(int32_t)(96u+kf*kfnote);
+        /* (no key follow: depth * 96 / 96 is depth while the product fits, so no divide) */
+        if (kf*kfnote || depth > 0x7FFFFFFF/96 || depth < -(0x7FFFFFFF/96)) depth = depth*96/(int32_t)(96u+kf*kfnote);
         int32_t det = l ? ((int32_t)b[3]*16+(b[2]>>2)*16/64)*(b[1] ? -1 : 1) : 0;
         int32_t nt = clamp(m->pitch16+oct+vib+(pitch>>13)+det,0,2047);
         inc[l] = pitch_inc((uint32_t)nt);
         inc[l] += (uint32_t)((int32_t)(inc[l]>>12)*m->fine);
         uint32_t word = (uint32_t)b[14u+off]<<8 | b[15u+off];
         uint32_t dep = (uint32_t)clamp((depth>>14)+((m->cutoff+m->shape-(64<<8))>>5),0,1023);
-        cz_native_pd(&pd[l],word,dep);
+        cz_native_pd(&pd[l],word,dep,c->pk[l]);
     }
     v->s[4] = c->eg[first][2].level >> 9;
     uint32_t modulation = (b[15]>>3)&7u;
