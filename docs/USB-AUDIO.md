@@ -188,7 +188,7 @@ one after a recording; the differences say:
 | --- | --- |
 | `ua_opens`, `ua_open_close_ms` | one open per recording, held for its length (each reopen is a gap in the recording) |
 | `ua_tx_packets` / `ua_open_ms` | ~1 packet a ms while open |
-| `ua_overruns`, `ua_underruns` | 0 after the first open (an over-run: the host stopped reading; an under-run: the ring ran dry) |
+| `ua_overruns`, `ua_underruns` | no under-run (the ring ran dry); an over-run (the host stopped reading) only at a close of the stream: one is counted there, the host stops reading a moment before it closes it |
 | `ua_arm_gap_*` | the gaps between two armed packets: all `< 1.2 ms` but one per open |
 | `ua_pk528`, `ua_pk540`, `ua_pk_other` | ~90 % / ~10 % / 0 (the 44.1 pattern; any other length is a bug) |
 | `ua_first_take_ms` | ~14: the host's first read after an open |
@@ -199,10 +199,29 @@ one after a recording; the differences say:
 ## Measuring the recording on a Mac
 
 `tools/uac_check.py OUT.wav [SECONDS] [--nonotes] [--debug]` records ChoralRoot In with ffmpeg (avfoundation) while
-it plays C-major chords on the FM-1 over USB-MIDI, then prints the WAV's length against the wall time (the
-drain ratio: ~0.93 or more is healthy, ffmpeg's start costs ~1 s), the loud 50 ms windows and every silent gap of
-0.5 s or more while chords were sent; `--debug` adds the device's counters before and after. Needs `ffmpeg` and
-`python-rtmidi`; it never writes the FM-1.
+it plays C-major chords on the FM-1 over USB-MIDI. Its verdict is what the FM-1 itself did during the capture: it
+reads the counters above (SysEx 73 DEBUG) before and after, and prints their difference:
+
+- the opens of the stream: one per recording; each further one is a restart of the stream by the host, a gap;
+- the last whole open's length against the wall time, and the frames sent in it against 44100 Hz x that length
+  (`ua_open_close_ms`, `ua_frames_last_open`): within a fraction of a percent (the host's first read comes ~14 ms
+  after the open; the FM-1's audio clock runs about +0.04 % over 44100);
+- the packets against the USB frames seen while the stream was open (`ua_tx_packets`, `ua_sofs`): one a frame;
+- `ua_overruns`, `ua_underruns`, `ua_missed_frames`. One overrun is counted at each close of the stream, when the
+  host stops reading a moment before it closes it: the tool says so and names what is beyond the closes;
+- the nudges, as the FM-1's audio clock against the computer's USB clock in ppm.
+
+**The WAV's length is not the measure.** ffmpeg's avfoundation capture is itself short: 56.70 s of audio in a 60 s
+capture, from ChoralRoot In and from an unrelated audio interface alike, and 12 % short over an hour on a busy Mac.
+The earlier "drain ratio" (WAV length / wall time) measured ffmpeg, not the unit. The tool now prints the WAV's
+length as what ffmpeg wrote, and keeps the WAV for what it does show: the loud 50 ms windows and every silent gap
+of 0.5 s or more while chords were sent.
+
+The reference, an hour with `--nonotes` on a Mac busy with builds (2026-10-10): 3 597 711 packets for 3 597 791
+SOFs, 0 underruns, 12 overruns / 189 frames (nine in two minutes of heavy host load, three at stream closes),
+`ua_nudges_up` 69 036 = the FM-1's audio clock about +435 ppm against the Mac's USB clock, absorbed by the nudges.
+
+`--debug` adds the counters as read. Needs `ffmpeg` and `python-rtmidi`; it never writes the FM-1.
 
 ## Where it lives
 

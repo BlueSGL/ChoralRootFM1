@@ -553,6 +553,98 @@ def debug():
     ok(rc == 0 and "staged loader not Felucca's" in out, "--debug: a loader the stub would refuse is named")
 
 
+def uac():
+    """tools/uac_check.py: what the unit did during a capture, from two reads of its counters (73 DEBUG). The
+    arithmetic and the words only: nothing is recorded, no port but the simulated FM-1's is opened"""
+    import uac_check as U
+    base = {"ms": 100000, "ua_cap_alt": 0, "ua_opens": 3, "ua_open_ms": 50000, "ua_open_close_ms": 14100,
+            "ua_frames_last_open": 620000, "ua_tx_packets": 49900, "ua_sofs": 50000, "ua_overruns": 3,
+            "ua_underruns": 0, "ua_missed_frames": 0, "ua_nudges_up": 20, "ua_nudges_down": 0}
+    # a clean minute: one open of 60.4 s, a packet a frame but the 28 of the open's start, the close's one overrun
+    frames = round(60372 * 44.1) + 1162
+    after = dict(base, ms=165000, ua_opens=4, ua_open_ms=110400, ua_open_close_ms=60400, ua_frames_last_open=frames,
+                 ua_tx_packets=49900 + 60372, ua_sofs=50000 + 60400, ua_overruns=4, ua_nudges_up=20 + 1162)
+    u = U.unit_delta(base, after)
+    ok(u["opens"] == 1 and u["closes"] == 1 and u["whole"] and u["last_ms"] == 60400 and u["open_ms"] == 60400 and
+       u["frames"] == frames and abs(u["frames_ratio"] - frames / (44100 * 60.4)) < 1e-12 and
+       abs(u["short_ms"] - (60400 - frames / 44.1)) < 1e-6 and u["packets"] == 60372 and u["sofs"] == 60400 and
+       u["overruns"] == 1 and u["overruns_open"] == 0 and u["underruns"] == 0 and u["missed"] == 0 and
+       round(u["ppm"]) == 436, "uac_check: a clean minute: the differences of the counters, the open, the clock in ppm")
+    text = "\n".join(U.unit_report(base, after, 60.0))
+    ok("opens of the stream: 1, closes: 1" in text and "the last whole open: 60.400 s = 1.007 x the 60 s asked" in text
+       and "frames sent in it: 2 663 567 = 60.398 s at 44100 Hz = 0.99997 x its length" in text and
+       "packets: 60 372 for 60 400 USB frames (SOFs) while open: 28 frames without a packet" in text and
+       "overruns: 1   (one is counted at each close of the stream" in text and
+       "1 close here: none more than the closes account for" in text
+       and "underruns: 0, missed frames: 0" in text and "+436 ppm" in text and
+       text.endswith("verdict: the FM-1 sent the stream whole"), "uac_check: a clean minute: its lines, the close's overrun said, the verdict")
+    # the hour of 2026-10-10 (docs/USB-AUDIO.md): 3 597 711 packets for 3 597 791 SOFs, 12 overruns (three at stream
+    # closes), 69 036 nudges up; the open's own figures here are made up to fit
+    hour = {"ms": 3700000, "ua_cap_alt": 0, "ua_opens": 3, "ua_open_ms": 3597800, "ua_open_close_ms": 1500000,
+            "ua_frames_last_open": round(1500000 * 44.1 * 1.000435), "ua_tx_packets": 3597711, "ua_sofs": 3597791,
+            "ua_overruns": 12, "ua_underruns": 0, "ua_missed_frames": 0, "ua_nudges_up": 69036, "ua_nudges_down": 0}
+    u = U.unit_delta({"ms": 1000}, hour)
+    text = "\n".join(U.unit_report({"ms": 1000}, hour, 3600.0))
+    ok(round(u["ppm"]) == 435 and u["sofs"] - u["packets"] == 80 and u["opens"] == 3 and u["closes"] == 3 and
+       u["overruns_open"] == 9 and "3 597 711 for 3 597 791 USB frames" in text and "69 036 up, 0 down" in text and
+       "+435 ppm" in text and "3 closes here: 9 more than the closes account for" in text and
+       "652 ms more than 44100 Hz x its length" in text and
+       "verdict: the host opened the stream 3 times; 9 overruns beyond the closes' (the host did not read for a moment "
+       "while the stream ran)" in text,
+       "uac_check: the reference hour's figures: +435 ppm, 80 frames without a packet, the overruns beyond the closes")
+    # trouble named: an underrun, missed frames, an open that sent too little, an open shorter than the capture
+    bad = dict(after, ua_underruns=1, ua_missed_frames=7, ua_frames_last_open=frames - 44100, ua_open_close_ms=60400)
+    text = "\n".join(U.unit_report(base, bad, 60.0))
+    ok("1 underrun (the ring ran dry)" in text and "7 USB frames missed" in text and "ms of the open without audio sent" in text
+       and "sent the stream whole" not in text, "uac_check: an underrun, missed frames, a second of audio not sent: named in the verdict")
+    text = "\n".join(U.unit_report(base, dict(after, ua_open_close_ms=20000, ua_frames_last_open=882000), 60.0))
+    ok("verdict: the open lasted 20.0 s of the 60 s" in text, "uac_check: an open shorter than the capture is said")
+    # the stream still open after the capture (another program), never opened, the FM-1 restarted meanwhile
+    still = dict(base, ms=165000, ua_cap_alt=1, ua_opens=4, ua_open_ms=110400, ua_frames_this_open=2000000)
+    u = U.unit_delta(base, still)
+    text = "\n".join(U.unit_report(base, still, 60.0))
+    ok(u["opens"] == 1 and u["closes"] == 0 and not u["whole"] and u["frames_ratio"] is None and
+       "still open now" in text and "no whole open to measure" in text and "frames in this open so far: 2 000 000" in text,
+       "uac_check: the stream still open afterwards: no whole open, said (the last one's figures are not taken for it)")
+    text = "\n".join(U.unit_report(base, dict(base, ms=165000), 60.0))
+    ok("opens of the stream: 0, closes: 0" in text and "verdict: the stream was never opened (did ffmpeg find the device?)" in text,
+       "uac_check: no open during the capture: said")
+    u = U.unit_delta(base, dict(after, ms=30000, ua_opens=1, ua_overruns=1, ua_tx_packets=60372, ua_sofs=60400, ua_nudges_up=1162, ua_open_ms=60400))
+    ok(u["restarted"] and u["opens"] == 1 and u["packets"] == 60372 and u["overruns"] == 1,
+       "uac_check: the FM-1 restarted between the reads (its uptime went back): the second read alone counts")
+    # the read itself, through fm1_install's MIDI side (the simulated FM-1): by name; a firmware without the counters
+    n = len(I.DEBUG_NAMES)
+    cr = BackupSide("ChoralRoot 0.17", I.CR_IDS)
+    cr.debug = list(range(n))
+    dev = FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)
+    d, why = U.counters(I.Updater(dev))
+    ok(why is None and d["ua_opens"] == I.DEBUG_NAMES.index("ua_opens") and d["ms"] == 0 and all(x.closed for x in dev.links),
+       "uac_check: the counters read by name through the tool's MIDI side, the link closed")
+    cr.debug = list(range(I.DEBUG_NAMES.index("ua_cap_alt")))
+    d, why = U.counters(I.Updater(FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)))
+    ok(d is None and "no USB recording counters" in why, "uac_check: a firmware whose DEBUG ends before the recording's counters: said")
+    d, why = U.counters(I.Updater(FakeFM1(b"", identity="ota-FM-1_900", name="Felucca Update")))
+    ok(d is None and "update mode" in why, "uac_check: an FM-1 in update mode: no counters, said")
+    dev = FakeFM1(b"", identity="FM-1_920")
+    dev.connected = False
+    d, why = U.counters(I.Updater(dev))
+    ok(d is None and "no FM-1 answers" in why, "uac_check: no FM-1: no counters, said")
+    w = TMP / "uac.wav"
+    import struct
+    import wave
+    with wave.open(str(w), "wb") as f:
+        f.setnchannels(2)
+        f.setsampwidth(2)
+        f.setframerate(44100)
+        tone = struct.pack("<2h", 8000, -8000) * 44100          # 3 s loud, 1 s silent, 2 s loud
+        f.writeframes(tone * 3 + bytes(4 * 44100) + tone * 2)
+    text = "\n".join(U.wav_report(str(w), 9.0, False, 6))
+    ok("what ffmpeg wrote: 6.00 s (2 ch, 44100 Hz) of the 9 s asked = 0.667 (ffmpeg's avfoundation capture is itself short "
+       "by 5 to 12 %: not a measure of the FM-1)" in text and "(start s, length s): [(3.0, 1.0)]" in text and
+       "chords sent: 6" in text, "uac_check: the WAV: its length as what ffmpeg wrote, the silent gap found")
+    ok("no WAV that can be read" in U.wav_report(str(TMP / "none.wav"), 9.0, False, 0)[0], "uac_check: no WAV: said, no traceback")
+
+
 def stub():
     """--stub test | rescue: 77 STUB, the restart, what comes back (cr_backup.c crb_stub, firmware/stub)"""
     n = len(I.DEBUG_NAMES)
@@ -1483,6 +1575,7 @@ exits()
 backups()
 screen()
 debug()
+uac()
 stub()
 stuck()
 midi_side()
