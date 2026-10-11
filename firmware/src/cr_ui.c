@@ -768,12 +768,15 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
 enum { PG_NONE, PG_EDIT, PG_SAVE };
 enum { PU_METER, PU_VOICING, PU_BASS_VOICING };
 /* the screen when idle (no key, button, knob or MIDI channel message in; a loop playing, the arp, the metronome are
- * not input): the logo (the stripes) after CR_IDLE_MS, then the screen off after CR_SCREEN_OFF_MS (DISPOFF and the
- * backlight off, lcd.c lcd_power; no LCD writes while off, the UI keeps ticking: LEDs, looper, MIDI). The panel is a
- * TFT: the backlight off stops the image retention ("burn") and its heat. Any input wakes it, the full view redrawn
- * at once, and acts as usual (a key plays, a knob turns). Fixed: no setting (docs/INTEGRATION.md section 5) */
+ * not input): the logo (the stripes) after CR_IDLE_MS, then the screen off after CR_SCREEN_OFF_MS: one black frame
+ * (cr_draw.c cr_draw_black), then no LCD writes while off; the UI keeps ticking: LEDs, looper, MIDI. The panel is a
+ * TFT: a black frame ends the image retention ("burn"). The backlight stays on, and the panel is not sent DISPOFF:
+ * the backlight's pin, PA2, also keeps the key matrix / 595 chain alive (hal/fm1_lcd_hw.h: the screen off of
+ * 0.14 / 0.15 raised it, and no key, button or knob sounded or woke the unit any more), and what the panel shows
+ * with the display off and the backlight on is not known. Any input wakes it, the full view redrawn at once, and
+ * acts as usual (a key plays, a knob turns). Fixed: no setting (docs/INTEGRATION.md section 5) */
 #define CR_IDLE_MS 180000u                        /* 3 minutes: the logo */
-#define CR_SCREEN_OFF_MS 600000u                  /* 10 minutes: the screen off */
+#define CR_SCREEN_OFF_MS 600000u                  /* 10 minutes: the screen off (black) */
 
 static struct {
     uint32_t bheld;                       /* label bits held, as the scan last saw them */
@@ -797,7 +800,7 @@ static struct {
     uint32_t last_input;                  /* the last key, button, knob or MIDI message in (the screensaver, CR_IDLE_MS) */
     uint32_t last_local;                  /* .. the last key, button or knob (not MIDI: what wakes a SysEx screen off) */
     uint32_t sx_local;                    /* last_local when SysEx 74 switched the screen off */
-    uint8_t screen_off;                   /* the screen is off (lcd_power(0)): nothing drawn */
+    uint8_t screen_off;                   /* the screen is off (a black frame, cr_ui_draw): nothing drawn */
     uint8_t sx_off;                       /* SysEx 74 SCREEN 0: off until SysEx on or a key, button or knob */
     uint32_t home_t0;                     /* HOME pressed (held CU_HOME_HOLD_MS: the view menu) */
     uint8_t home_hold;                    /* .. armed (pressed alone, the menu not opened yet) */
@@ -4657,8 +4660,9 @@ static void cr_ui_frame(void)                      /* after the scan: the engine
     cr_leds();
 }
 
-/* SysEx 74 SCREEN (cr_backup.c): 0 the screen off until SysEx 1 or a key, button or knob (MIDI in does not wake it:
- * a test driving the unit over MIDI keeps it dark); 1 on (as an input: the idle clocks restart) */
+/* SysEx 74 SCREEN (cr_backup.c): 0 the screen off (black, as the idle timer's) until SysEx 1 or a key, button or
+ * knob (MIDI in does not wake it: a test driving the unit over MIDI keeps it black); 1 on (as an input: the idle
+ * clocks restart) */
 static void cu_screen_sysex(int on)
 {
     cu.sx_off = (uint8_t)!on;
@@ -4679,23 +4683,23 @@ static void cr_ui_draw(void)
     if (off) {                                    /* the screen off: the model ticks, nothing is drawn */
         if (!cu.screen_off) {
             cu.screen_off = 1;
-            lcd_sync();                           /* (the last strip's transfer) */
-            lcd_power(0);
+            cr_draw_black();                      /* one black frame. The backlight stays on: its pin (PA2) also
+                                                   * keeps the keys, buttons, knobs and LEDs alive, and they are
+                                                   * what wakes the screen (hal/fm1_lcd_hw.h) */
             cu_trace("screen: off (%s)\n", cu.sx_off ? "sysex" : "idle");
         }
         cu_animate(&cu_scr, now);
         return;
     }
-    if (cu.screen_off) {                          /* woken: the whole view at once (no sweep off the dark logo) */
+    if (cu.screen_off) {                          /* woken: the whole view at once (no sweep off the black logo) */
         if (ca.kind == CR_K_STRIPES)
             ca.kind = CR_K_NONE;
-        cr_draw_invalidate();
+        cr_draw_invalidate();                     /* (every strip, whole, over the black frame) */
     }
     cu_animate(&cu_scr, now);
     cr_draw(&cu_scr, cr_anim_ms(&cu_anim, now));
-    if (cu.screen_off) {                          /* drawn: the backlight and DISPON */
+    if (cu.screen_off) {                          /* drawn */
         cu.screen_off = 0;
-        lcd_power(1);
         cu_trace("screen: on\n");
     }
 }

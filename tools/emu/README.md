@@ -58,6 +58,16 @@ Other options: `--flash PATH` / `--no-flash` / `--save-on-exit` (the flash file:
 `--shot PATH` (the LCD at exit). A flash erase plays as on the device: 45 ms of silence with the audio ISR not run
 (`emu_hal_fw.h` `st_erase`; the dump's `flash erases with the audio stalled` line counts them).
 
+**PA2** (`emu_hooks.h` `emu_hal.pa2`, `firmware/hal/fm1_lcd_hw.h`). On the unit PA2 is not the backlight alone: low,
+the backlight and the key matrix / 595 chain (keys, buttons, knobs, LEDs) are alive; high, all of them are dead (seen
+2026-10-10: the screen off of 0.14 / 0.15 raised it for the backlight, and no key sounded or woke the unit). The
+emulator carries that fact: while `emu_hal.pa2` is set the panel (and every shot) is black, no LED lights, the 1 ms
+tick reads no key, button or knob, and the dump's `pa2:` line says `HIGH` and counts the milliseconds. The firmware
+never drives PA2 high any more (the screen off is a black frame with the backlight on, so a shot of it shows the
+pixels the firmware wrote); a HAL stand-in in `emu_hal_fw.h` for code that ever does must set `emu_hal.pa2`, and
+`test_cr.sh`'s screen-off checks then fail as they do on the 0.14 screen off. `scripts/cr_pa2.txt` checks the
+model itself with the script's `pa2 high`.
+
 ## Key map (physical US-layout positions; `keymap.c`)
 
 Firmware key index = MIDI note - 53 (0 = F3 .. 26 = G5).
@@ -125,7 +135,8 @@ own clock in ms from power-on; commands run in order and only `wait` (and the ti
 | `expect led NAME on\|dim\|off` | check a key's or button's LED now (`on` = lit); `GREEN` is PLAY's green LED |
 | `expect sound` / `expect silence` | non-zero samples since the previous `expect sound\|silence` (or power-on) |
 | `probe N` | (window) the next N presented frames: each button cap's level read back from the frame, with its LED state (`probe: present ... FX=247/2 SEL=121/1 ...`) |
-| `dump` | print the input state (as F12); its `loop:` line also gives the record mode, the PLAY menu's keys, the step cursor and the events a Replace layer hid (`mode keys step hidden`) |
+| `dump` | print the input state (as F12); its `loop:` line also gives the record mode, the PLAY menu's keys, the step cursor and the events a Replace layer hid (`mode keys step hidden`); `lcd:` says whether the UI's screen is off (a black frame) and counts the LCD writes; `pa2:` the PA2 line (below) |
+| `pa2 high` / `pa2 low` | drive the PA2 line by hand (the firmware never raises it): high = the panel black, no LED lit, no key, button or knob read, as on the unit |
 | `rec` | start / stop recording the LCD frames (as Insert) |
 | `quit` | stop here |
 

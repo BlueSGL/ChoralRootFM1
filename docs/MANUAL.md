@@ -188,8 +188,9 @@ In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four va
 The battery level shows only on the Options pages, at the top right.
 
 After three minutes without a key, button, knob or incoming MIDI message the logo comes back, and after ten the
-screen switches off (the lights, the looper and MIDI keep running). Any key, button, knob or MIDI message wakes it
-and does its normal job at the same time.
+screen goes black, so that nothing stays on it long enough to leave a mark. Its backlight stays on, so in a dark
+room a black screen may still glow a little. The lights, the looper and MIDI keep running. Any key, button, knob or
+MIDI message wakes it and does its normal job at the same time.
 
 ### The lights
 
@@ -1062,7 +1063,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | A setting did not survive switching off | settings are written a moment after the instrument falls quiet, never while a loop plays | stop the loop, wait a second or two |
 | The bass level, or a part's Level or Pan, is back to normal | they are not stored | set them again after switching on |
 | Every note sounds doubled and louder | Raw Chord Sound is On with no performance mode | Options > Raw Chord Sound: Off |
-| The screen shows the logo, or is dark | three minutes, or ten, without input | touch anything |
+| The screen shows the logo, or is black | three minutes, or ten, without input | touch anything |
 | `Safe mode` on the top line | SAFE MODE | see [SAFE MODE](#safe-mode) |
 | The computer shows no audio input | USB Record is Off | Options > USB Record: On |
 | The FM-1 drops off USB for a second | USB Record was changed (`USB RECONNECTING`) | wait |

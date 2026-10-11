@@ -1,0 +1,54 @@
+# The emulator's model of PA2 itself (tools/emu/emu_hooks.h pa2; hal/fm1_lcd_hw.h). On the unit PA2 is not the
+# backlight alone: driven high, the key matrix / 595 chain is dead with it (2026-10-10: the screen off of 0.14 / 0.15
+# raised it, and no key sounded or woke the screen). The firmware never raises it any more, so the script does, by
+# hand, what that screen off did: the panel black, no LED lit, a chord and a knob turn not read; low again: all back.
+# This is what makes tools/emu/test_cr.sh's screen off checks fail on a firmware that switches the backlight off.
+wait 300
+key F3 down
+wait 60
+btn D4 down
+wait 300
+shot build/emu/test/cr_pa2_before.ppm       # PA2 low: the chord sounds, its LED lit
+dump
+expect sound
+expect led D4 on
+btn D4 up
+key F3 up
+wait 4000
+expect sound                                 # (the release tail; the mark for the silence below)
+pa2 high
+wait 100
+shot build/emu/test/cr_pa2_high.ppm         # the backlight off: black, whatever the firmware draws
+dump
+expect led G5 off                            # no glow,
+expect led FX off                            # no lit button
+key F3 down
+wait 60
+btn D4 down
+wait 300
+knob KNOB1 +2
+wait 150
+shot build/emu/test/cr_pa2_dead.ppm         # the chord and the knob turn: not read
+dump
+expect silence
+btn D4 up
+key F3 up
+wait 200
+pa2 low
+wait 100
+shot build/emu/test/cr_pa2_low.ppm          # low again: the panel and the LEDs back
+dump
+expect led G5 dim
+expect led FX on
+key F3 down
+wait 60
+btn D4 down
+wait 300
+shot build/emu/test/cr_pa2_after.ppm        # .. and the keys
+dump
+expect sound
+expect led D4 on
+btn D4 up
+key F3 up
+wait 2000
+dump

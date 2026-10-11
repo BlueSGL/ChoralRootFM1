@@ -72,6 +72,9 @@ message.
   step grid's (the marks), or the step cursor's old and new rows' strips alone (the cursor moving or blinking:
   usually one strip).
 - `cr_draw_invalidate()`: the next draw blits all six (after Felucca's UI drew, a palette change, power-up).
+- `cr_draw_black()`: the whole panel black in one `lcd_fill`, the cache dropped with it (the screen off after 10
+  minutes without input, `cr_ui.c cr_ui_draw`: black pixels with the backlight on, since the backlight's pin also
+  keeps the key matrix alive, `hal/fm1_lcd_hw.h`); the next draw, the wake's, blits all six whole.
 
 **The ring** (`cr_ring_draw`): its pixels never move, only its colour and fraction change, so the coverage of the
 band is computed once (`cr_ring_build`, from `cr_ui_init`: ~27 ms on the device scale) with `cr_arc`'s own per-pixel

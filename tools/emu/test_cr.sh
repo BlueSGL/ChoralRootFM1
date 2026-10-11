@@ -8,7 +8,9 @@
 # picks the mode (the roots play there); PRESETS: the sound meter and another timbre; ALGORITHM: the bass on, a bass
 # note on part 1; presets per engine (cr_presets: docs/PRESETS.md);
 # End: PANIC (the red screen); 3 min without input: the stripes (the screensaver), a key dismisses it; 10 min: the
-# screen off (cr_screen_off: a key or a knob wakes it and acts, a loop playing does not keep it on); after every release, parts 0 and 1 silent within 2 s.
+# screen off (cr_screen_off: a black frame with PA2 low, the LEDs lit; a key, a knob or MIDI in wakes it and acts, a
+# loop playing does not keep it on; SysEx 74 SCREEN; cr_pa2: the emulator's PA2 model, high = the key matrix dead);
+# after every release, parts 0 and 1 silent within 2 s.
 # Screenshots: build/emu/test/cr_*.ppm (and the logs).
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
@@ -172,27 +174,77 @@ p=$(pixel "$OUT/cr_idle_woke.ppm" 120 150); set -- $p
 [ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 90 ] && bad "a key did not dismiss the screensaver ($p)" \
                                                  || ok "a key: the screensaver gone at once ($OUT/cr_idle_woke.ppm)"
 
-echo "the screen off: the logo at 3 min, the screen off at 10 min; a key / a knob wakes it and acts; a loop is not input"
+echo "the screen off: the logo at 3 min, a black frame at 10 min (the backlight on: PA2 low); a key / a knob / MIDI in wakes it and acts; a loop is not input; SysEx 74 SCREEN"
 run cr_screen_off
 SO="$OUT/cr_screen_off.log"
 lit() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 24 { c++ } END { print c + 0 }'; }   # bytes > 24
+ink() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '$1 > 0 { c++ } END { print c + 0 }'; }    # bytes > 0 (0: the black frame; a view's background is 8 8 8)
+blk() {          # blk FILE: pixels 0 0 0, what the black frame leaves where the wake did not redraw (a view has none)
+    od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' | awk '{ s += $1; if (NR % 3 == 0) { if (!s) c++; s = 0 } } END { print c + 0 }'
+}
+dmp() {          # dmp SHOT PATTERN: log $DL's first line matching PATTERN after the shot $DP SHOT (its dump, its expects)
+    awk -v s="screenshot: build/emu/test/$DP$1.ppm" -v p="$2" 'f && $0 ~ p { print; exit } $0 == s { f = 1 }' "$DL"
+}
+DL=$SO; DP=cr_off_
+scr() { dmp "$1" '^  lcd:' | sed -n 's/.*screen \([a-z]*\).*/\1/p'; }                # on / off
+wrs() { dmp "$1" '^  lcd:' | sed -n 's/.* \([0-9][0-9]*\) writes.*/\1/p'; }         # LCD writes so far
+met() { dmp "$1" "^expect $2" | grep -q ': ok'; }                                    # that shot's next "expect $2" held
+# PA2 is not the backlight alone: high, the key matrix / 595 chain is dead (hal/fm1_lcd_hw.h; the unit, 2026-10-10: the
+# screen off of 0.14 / 0.15 raised it and no key sounded or woke it). The emulator models it (emu_hooks.h pa2)
+nd=$(grep -c '^  pa2: ' "$SO")
+[ "$nd" = 13 ] && [ "$(grep -c '^  pa2: low.* high for 0 ms' "$SO")" = "$nd" ] &&
+    ok "PA2 low in all $nd dumps, never raised: the backlight on, the key matrix, the knobs and the LEDs alive" ||
+    bad "PA2 driven high ($(grep -c '^  pa2: HIGH' "$SO") of $nd dumps): on the unit no key, button, knob or LED works then (hal/fm1_lcd_hw.h)"
 p=$(pixel "$OUT/cr_off_logo.ppm" 120 150); set -- $p
 [ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 90 ] && ok "3 min: the logo ($p): $OUT/cr_off_logo.ppm" || bad "no logo at 3 min ($p)"
-[ "$(lit "$OUT/cr_off_dark.ppm")" = 0 ] && [ "$(lit "$OUT/cr_off_view.ppm")" -gt 1000 ] &&
-    ok "10 min: the screen off, the panel black: $OUT/cr_off_dark.ppm" || bad "10 min: the panel not black ($(lit "$OUT/cr_off_dark.ppm") lit bytes)"
-w=$(grep '^  lcd:' "$SO" | sed -n 's/.*screen \([a-z]*\), \([0-9]*\) writes.*/\1 \2/p')
-set -- $w
-[ "$1" = off ] && [ "$3" = off ] && [ "$2" = "$4" ] && has '^screen: off (idle)' "$SO" &&
-    ok "the backlight off, no LCD write in the minute after ($2 = $4 writes)" || bad "LCD writes while off: $w"
-[ "$5" = on ] && [ "$(lit "$OUT/cr_off_key.ppm")" -gt 1000 ] && ! grep -q 'FAILED' "$SO" &&
-    [ "$(grep -A4 'screenshot: build/emu/test/cr_off_key.ppm' "$SO" | grep -c 'part 0: .*voices 3')" = 1 ] &&
-    ok "a key: the screen on, the view back, the chord sounding: $OUT/cr_off_key.ppm" || bad "a key did not wake it and play ($5)"
-[ "$7" = off ] && [ "$9" = on ] && [ "$(lit "$OUT/cr_off_knob.ppm")" -gt 1000 ] &&
-    [ "$(grep -A8 'screenshot: build/emu/test/cr_off_knob.ppm' "$SO" | grep -c 'voicing 2 ')" = 1 ] &&
-    ok "10 min more: off; a knob turn: on, and KNOB 1 turned (voicing 2): $OUT/cr_off_knob.ppm" || bad "a knob did not wake it / act ($7 $9)"
-[ "$(lit "$OUT/cr_off_loop.ppm")" = 0 ] && [ "${13}" = off ] && grep '^  loop:' "$SO" | tail -1 | grep -q 'state 2 ' &&
-    [ "$(grep -c '^expect sound.*: ok' "$SO")" = 5 ] &&
-    ok "a loop playing alone: the screen off after 10 min, the loop still playing: $OUT/cr_off_loop.ppm" || bad "loop: ${13}"
+[ "$(scr dark)" = off ] && [ "$(ink "$OUT/cr_off_dark.ppm")" = 0 ] && [ "$(lit "$OUT/cr_off_view.ppm")" -gt 1000 ] &&
+    [ "$(blk "$OUT/cr_off_view.ppm")" = 0 ] && has '^screen: off (idle)' "$SO" &&
+    ok "10 min: the screen off: every pixel of the panel black: $OUT/cr_off_dark.ppm" ||
+    bad "10 min: screen $(scr dark), the panel not black ($(ink "$OUT/cr_off_dark.ppm") bytes above 0)"
+[ "$(scr dark2)" = off ] && [ -n "$(wrs dark)" ] && [ "$(wrs dark)" = "$(wrs dark2)" ] && [ "$(ink "$OUT/cr_off_dark2.ppm")" = 0 ] &&
+    ok "no LCD write in the minute after ($(wrs dark) = $(wrs dark2) writes), still black" || bad "LCD writes while off: $(wrs dark) $(wrs dark2)"
+met dark2 'led G5 dim' && met dark2 'led FX on' && met loop 'led GREEN on' && met sx_midi 'led G5 dim' &&
+    ok "the LEDs while it is off: a key's glow, FX lit, PLAY's green LED with the loop" || bad "an LED dark while the screen is off"
+[ "$(scr key)" = on ] && [ "$(lit "$OUT/cr_off_key.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_key.ppm")" = 0 ] &&
+    dmp key '^  part 0:' | grep -q 'voices 3' && met key sound && met key 'led D4 on' &&
+    ok "a key: the screen on, the whole view back (no black left), the chord sounding, its LED lit: $OUT/cr_off_key.ppm" ||
+    bad "a key did not wake it and play (screen $(scr key),$(dmp key '^  part 0:' | sed 's/.*,\( voices [0-9]*\).*/\1/'))"
+[ "$(scr again)" = off ] && [ "$(ink "$OUT/cr_off_again.ppm")" = 0 ] && [ "$(scr knob)" = on ] && [ "$(lit "$OUT/cr_off_knob.ppm")" -gt 1000 ] &&
+    [ "$(blk "$OUT/cr_off_knob.ppm")" = 0 ] && dmp knob '^  cr: key' | grep -q 'voicing 2 ' &&
+    ok "10 min more: off; a knob turn: on, and KNOB 1 turned (voicing 2): $OUT/cr_off_knob.ppm" || bad "a knob did not wake it / act ($(scr again) $(scr knob))"
+[ "$(scr loop)" = off ] && [ "$(ink "$OUT/cr_off_loop.ppm")" = 0 ] && dmp looping '^  loop:' | grep -q 'state 2 ' &&
+    dmp loop '^  loop:' | grep -q 'state 2 ' && met loop sound &&
+    ok "a loop playing alone: the screen off after 10 min, the loop still playing: $OUT/cr_off_loop.ppm" || bad "loop: screen $(scr loop)"
+[ "$(scr midi)" = on ] && [ "$(lit "$OUT/cr_off_midi.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_midi.ppm")" = 0 ] &&
+    ok "MIDI in (a note): the idle screen off ends, the view back: $OUT/cr_off_midi.ppm" || bad "MIDI in did not wake the idle screen off ($(scr midi))"
+[ "$(scr sx)" = off ] && [ "$(ink "$OUT/cr_off_sx.ppm")" = 0 ] && has '^screen: off (sysex)' "$SO" && dmp sx '^  loop:' | grep -q 'state 1 ' &&
+    ok "SysEx 74 SCREEN 0: off at once, the panel black: $OUT/cr_off_sx.ppm" || bad "SCREEN 0: screen $(scr sx)"
+[ "$(scr sx_midi)" = off ] && [ -n "$(wrs sx)" ] && [ "$(wrs sx)" = "$(wrs sx_midi)" ] && [ "$(ink "$OUT/cr_off_sx_midi.ppm")" = 0 ] && met sx_midi sound &&
+    ok "MIDI in while SCREEN 0: the note plays, the screen stays off ($(wrs sx) = $(wrs sx_midi) writes)" ||
+    bad "MIDI in while SCREEN 0: screen $(scr sx_midi), $(wrs sx) $(wrs sx_midi) writes"
+[ "$(scr sx_key)" = on ] && [ "$(lit "$OUT/cr_off_sx_key.ppm")" -gt 1000 ] && [ "$(blk "$OUT/cr_off_sx_key.ppm")" = 0 ] &&
+    dmp sx_key '^  part 0:' | grep -q 'voices 3' && met sx_key sound && met sx_key 'led D4 on' &&
+    ok "a key while SCREEN 0: the screen on, the chord sounding, its LED lit: $OUT/cr_off_sx_key.ppm" ||
+    bad "a key did not wake SCREEN 0 and play (screen $(scr sx_key),$(dmp sx_key '^  part 0:' | sed 's/.*,\( voices [0-9]*\).*/\1/'))"
+[ "$(scr sx2)" = off ] && [ "$(ink "$OUT/cr_off_sx2.ppm")" = 0 ] && [ "$(scr sx_on)" = on ] && [ "$(lit "$OUT/cr_off_sx_on.ppm")" -gt 1000 ] &&
+    [ "$(blk "$OUT/cr_off_sx_on.ppm")" = 0 ] &&
+    ok "SCREEN 0 again, then SCREEN 1: off, on: $OUT/cr_off_sx_on.ppm" || bad "SCREEN 1: screen $(scr sx2) $(scr sx_on)"
+
+echo "the emulator's PA2, the model itself (the script drives it high by hand, as the screen off of 0.14 / 0.15 did)"
+run cr_pa2
+DL="$OUT/cr_pa2.log"; DP=cr_pa2_
+dmp before '^  pa2:' | grep -q 'low.* high for 0 ms' && dmp before '^  part 0:' | grep -q 'voices 3' && [ "$(lit "$OUT/cr_pa2_before.ppm")" -gt 1000 ] &&
+    ok "PA2 low: the view on the panel, the chord sounding" || bad "PA2 low: $(dmp before '^  pa2:')"
+dmp high '^  pa2:' | grep -q 'HIGH' && [ "$(ink "$OUT/cr_pa2_high.ppm")" = 0 ] && met high 'led G5 off' && met high 'led FX off' &&
+    ok "PA2 high: the dump says it, the panel black (the backlight off), no LED lit" || bad "PA2 high: $(dmp high '^  pa2:')"
+dmp dead '^fm1_in:' | grep -q 'notes 0000000 buttons 0000 ' && dmp dead '^  part 0:' | grep -q 'voices 0' &&
+    dmp dead '^  cr: key' | grep -q 'voicing 0 ' && met dead silence &&
+    ok "PA2 high: a held chord and a knob turn are not read (no key in fm1_in, no voice, voicing 0, silence)" ||
+    bad "PA2 high: the matrix still reads ($(dmp dead '^fm1_in:' | cut -c1-40))"
+dmp low '^  pa2:' | grep -q 'low' && [ "$(lit "$OUT/cr_pa2_low.ppm")" -gt 1000 ] && met low 'led G5 dim' && met low 'led FX on' &&
+    dmp after '^  part 0:' | grep -q 'voices 3' && met after sound && met after 'led D4 on' &&
+    ok "PA2 low again: the panel, the LEDs and the keys back" || bad "PA2 low again: $(dmp low '^  pa2:')"
+silent_end cr_pa2
 
 echo "the other screens"
 run cr_layers
