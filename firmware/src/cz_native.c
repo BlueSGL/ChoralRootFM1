@@ -30,9 +30,10 @@ static int32_t cz_hw_target(uint32_t raw, uint32_t e)
     if (e == 0u) return (int32_t)((raw & 63u) << (raw & 64u ? 18 : 13));
     return (int32_t)(raw << 17); /* DCW: 8 units; DCA: 4 units */
 }
-static __attribute__((noinline)) void cz_native_defs(track_t *t, voice_t *v, cz_env_def_t d[2][3])
+/* The six envelopes of a tone, without the DCA's key follow: the tone alone gives them, so they are built once per
+ * tone change (cz_native_render: eng_cz.c cz_pgen) and not per voice and block. */
+static __attribute__((noinline)) void cz_native_defs(const uint8_t *b, cz_env_def_t d[2][3])
 {
-    const uint8_t *b = cz_patch[(uint32_t)(t - trk) % NTRK].raw;
     for (uint32_t l = 0; l < 2u; l++) for (uint32_t e = 0; e < 3u; e++) {
         cz_env_def_t *p = &d[l][e]; uint32_t base = CZ_ENV_BASE[l][e];
         memset(p, 0, sizeof *p); p->end = b[CZ_ENV_END[l][e]] & 7u; p->sustain = 255;
@@ -41,13 +42,20 @@ static __attribute__((noinline)) void cz_native_defs(track_t *t, voice_t *v, cz_
             p->rate[k] = cz_hw_rate(b[base + 2u*k], e);
             p->level[k] = cz_hw_target(lev, e);
             if ((lev & 128u) && p->sustain == 255u && k < p->end) p->sustain = (uint8_t)k;
-            /* Native DCA key-follow is rate scaling; higher keys run faster.
-             * Keep raw key-follow and velocity bytes intact for recalibration. */
-            if (e == 2u) {
-                uint32_t kf = b[16u + l*57u] & 15u;
-                uint32_t note = v->note > 36u ? v->note - 36u : 0u;
-                p->rate[k] += (uint32_t)(((uint64_t)p->rate[k] * kf * note) / 96u);
-            }
+        }
+    }
+}
+/* Native DCA key-follow is rate scaling; higher keys run faster.
+ * Keep raw key-follow and velocity bytes intact for recalibration.
+ * The DCA rates of a voice: the tone's and the note's, so built once per note (and tone change). */
+static __attribute__((noinline)) void cz_native_krate(const uint8_t *b, cz_env_def_t d[2][3], uint32_t vnote, uint32_t kr[2][8])
+{
+    uint32_t note = vnote > 36u ? vnote - 36u : 0u;
+    for (uint32_t l = 0; l < 2u; l++) {
+        uint32_t kf = b[16u + l*57u] & 15u;
+        for (uint32_t k = 0; k < 8u; k++) {
+            uint32_t r = d[l][2].rate[k];
+            kr[l][k] = r + (uint32_t)(((uint64_t)r * kf * note) / 96u);
         }
     }
 }
@@ -116,22 +124,26 @@ static __attribute__((noinline)) int32_t cz_native_vibrato(cz_voice_t *c, const 
 }
 static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
-    const uint8_t *b = cz_patch[(uint32_t)(t-trk)%NTRK].raw;
-    cz_voice_t *c = cz_voice(t, v); cz_env_def_t defs[2][3]; cz_hw_pd_t pd[2];
+    uint32_t tr = (uint32_t)(t-trk)%NTRK, gen = cz_pgen[tr];
+    const uint8_t *b = cz_patch[tr].raw;
+    cz_voice_t *c = cz_voice(t, v); cz_defs_t *D = cz_defs((uint32_t)(t-trk)); cz_hw_pd_t pd[2];
     uint32_t inc[2], ph[2] = {v->ph[0],v->ph[1]}, tg[2] = {(uint32_t)v->s[0],(uint32_t)v->s[1]};
     int32_t amp[2][2], dc[2] = {v->s[2],v->s[3]}, step[2];
     uint32_t ls = b[0]&3u, first = ls == 1u ? 1u : 0u, last = ls >= 2u ? 1u : first;
     if (!c) return;                                    /* (a part without engine state: silent) */
     int32_t vib = cz_native_vibrato(c,b), oct = (b[0]>>2) == 1u ? 192 : (b[0]>>2) == 2u ? -192 : 0;
-    cz_native_defs(t,v,defs);
+    if (D->gen != gen) { cz_native_defs(b,D->d); D->gen = gen; }          /* the tone changed */
+    if (c->kgen != gen || c->knote != v->note) {                         /* .. or this is another note */
+        cz_native_krate(b,D->d,v->note,c->krate); c->kgen = gen; c->knote = v->note;
+    }
     for (uint32_t l=0;l<2u;l++) {
-        uint32_t src = ls == 2u ? 0u : l, off = src*57u;
-        if (src != l) memcpy(defs[l],defs[src],sizeof defs[l]);
+        uint32_t src = ls == 2u ? 0u : l, off = src*57u;             /* (1+1': line 1's definitions for both) */
+        const cz_env_def_t *defs = D->d[src];
         uint32_t av = 15u-(b[20u+off]>>4), al = b[16u+off]>>4;
         amp[l][0] = cz_native_amp(c->eg[l][2].level,al,av,v->vel);
-        int32_t pitch = cz_env_tick(&c->eg[l][0],&defs[l][0],v->gate);
-        int32_t depth = cz_env_tick(&c->eg[l][1],&defs[l][1],v->gate);
-        cz_env_tick(&c->eg[l][2],&defs[l][2],v->gate);
+        int32_t pitch = cz_env_tick(&c->eg[l][0],&defs[0],defs[0].rate,v->gate);
+        int32_t depth = cz_env_tick(&c->eg[l][1],&defs[1],defs[1].rate,v->gate);
+        cz_env_tick(&c->eg[l][2],&defs[2],c->krate[src],v->gate);
         amp[l][1] = cz_native_amp(c->eg[l][2].level,al,av,v->vel);
         step[l] = (amp[l][1]-amp[l][0])*256/(int32_t)n;
         uint32_t pv = 15u-(b[54u+off]>>4), wv = 15u-(b[37u+off]>>4);

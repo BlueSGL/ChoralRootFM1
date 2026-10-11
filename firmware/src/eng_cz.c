@@ -19,22 +19,33 @@
  * editor pages hold values, not actions (docs/CZ1.md). */
 #include "cz_patch.h"
 static cz_patch_t cz_patch[NTRK] __attribute__((section(".pool")));
-static void cz_init(void) { for (uint32_t k = 0; k < NTRK; k++) cz_patch_init(cz_patch[k].raw); }
+/* +1 after each write of cz_patch[t] (as eng_fm6.c's fm6_pgen; never 0 once cz_init ran): what the renderer built from
+ * the tone (cz_native.c: the envelopes' definitions of a part, a voice's key-followed DCA rates) is rebuilt when it
+ * moved. Every writer bumps it: cz_init, cz_tone_put (the loads, the blob), cz_dset (the editor), cz_bank.c's
+ * cz_bank_poll (BANK / PTCH), cz_store.c's cz_sx_import (Casio SysEx) */
+static volatile uint32_t cz_pgen[NTRK];
+static void cz_init(void) { for (uint32_t k = 0; k < NTRK; k++) { cz_patch_init(cz_patch[k].raw); cz_pgen[k]++; } }
 
 /* Eight rate/target points, with explicit sustain/end. Rates are Q24 per
  * control tick. No exponential asymptote and no extra release after END. */
 typedef struct { uint32_t rate[8]; int32_t level[8]; uint8_t sustain, end; } cz_env_def_t;
 typedef struct { int32_t level; uint8_t stage, gate; } cz_env_t;
-typedef struct { cz_env_t eg[2][3]; uint32_t vib_phase, vib_ticks, noise; } cz_voice_t;
+/* krate: the DCA envelopes' rates of this voice (the tone's with the key follow of its note), built for tone
+ * generation kgen and note knote (cz_native.c cz_native_krate; cz_note_on's memset: kgen 0, none) */
+typedef struct { cz_env_t eg[2][3]; uint32_t vib_phase, vib_ticks, noise, kgen, knote, krate[2][8]; } cz_voice_t;
 typedef struct { cz_voice_t v[NPOLY]; } cz_part_t;
+/* a part's envelope definitions as its tone gives them (no key follow), built for tone generation gen (0: none) */
+typedef struct { cz_env_def_t d[2][3]; uint32_t gen; } cz_defs_t;
 static cz_part_t *cz_part(uint32_t part);              /* engines.c: shared runtime pool (0: a part without one) */
+static cz_defs_t *cz_defs(uint32_t part);              /* engines.c: the part's definitions (0 with cz_part's) */
 static cz_voice_t *cz_voice(track_t *t, voice_t *v)
 {
     cz_part_t *P = cz_part((uint32_t)(t - trk));
     return P ? &P->v[(uint32_t)(v - t->v) % NPOLY] : 0;
 }
 
-static int32_t cz_env_tick(cz_env_t *e, const cz_env_def_t *d, uint32_t gate)
+/* rate_of: the eight rates (d's own, or a voice's key-followed DCA rates: cz_voice_t.krate) */
+static int32_t cz_env_tick(cz_env_t *e, const cz_env_def_t *d, const uint32_t *rate_of, uint32_t gate)
 {
     uint32_t left = 65536u;
     if (e->gate && !gate && d->sustain <= d->end && e->stage <= d->sustain)
@@ -43,7 +54,7 @@ static int32_t cz_env_tick(cz_env_t *e, const cz_env_def_t *d, uint32_t gate)
     /* Carry unused tick time across points, including zero-distance points.
      * A short segment must not acquire an extra 32-sample delay. */
     for (uint32_t k = 0; k < 8u && e->stage <= d->end; k++) {
-        uint32_t st = e->stage, rate = d->rate[st];
+        uint32_t st = e->stage, rate = rate_of[st];
         int32_t target = st == d->end ? 0 : d->level[st];
         int32_t delta = target - e->level;
         uint32_t dist = (uint32_t)(delta < 0 ? -delta : delta);
@@ -113,6 +124,7 @@ static void cz_tone_put(uint32_t tr, const uint8_t *raw)    /* a whole tone into
 {
     tr %= NTRK;
     memcpy(cz_patch[tr].raw, raw, CZ_BYTES);
+    cz_pgen[tr]++;
     RING_PUBLISH();
 }
 
@@ -289,6 +301,7 @@ static void cz_dset(track_t *t, uint32_t page, uint32_t col, int32_t val)
     val = clamp(val, d->min, d->max);
     if (cz_ed_put(tr, (uint32_t)id, (uint32_t)val, raw)) {
         memcpy(cz_patch[tr].raw, raw, 128u);             /* (the synthesis bytes; the name stays) */
+        cz_pgen[tr]++;
         RING_PUBLISH();
     }
 }
