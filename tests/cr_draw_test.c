@@ -29,6 +29,12 @@ static void lcd_blit(uint32_t x, uint32_t y, uint32_t w, uint32_t h, const uint1
     for (j = 0; j < h && y + j < 240u; j++)
         for (i = 0; i < w && x + i < 240u; i++) host_screen[(y + j) * 240u + x + i] = p[j * w + i];
 }
+static void lcd_fill(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint16_t c)   /* (cr_draw_black: the screen off) */
+{
+    uint32_t i, j;
+    for (j = 0; j < h && y + j < 240u; j++)
+        for (i = 0; i < w && x + i < 240u; i++) host_screen[(y + j) * 240u + x + i] = (uint16_t)((c >> 8) | (c << 8));
+}
 
 /* the layout lint's hook: ink boxes in canvas rows; the strip's top row makes them screen rows */
 typedef struct { int16_t x0, y0, x1, y1; uint8_t flags; char s[40]; } tbox_t;
@@ -278,6 +284,20 @@ int main(int argc, char **argv)
         cr_draw_invalidate();
         cr_draw(&s, 0);
         check("cr_draw_invalidate: all six again", cr_dc.blits == CR_NSTRIP);
+        {   /* the screen off (cr_ui.c): the whole panel black; the wake's draw, of the very same screen, puts every
+             * pixel back (a strip or a tile left to the cache would stay black) */
+            static uint16_t before[240 * 240];
+            uint32_t i, ink = 0, left = 0;
+            memcpy(before, host_screen, sizeof before);
+            cr_draw_black();
+            for (i = 0; i < 240u * 240u; i++) ink += host_screen[i] != 0;
+            check("cr_draw_black: every pixel of the panel black", ink == 0);
+            cr_draw(&s, 0);
+            for (i = 0; i < 240u * 240u; i++) left += host_screen[i] == 0;
+            check("the draw after it: all six strips whole (115200 bytes), the screen as before, no pixel left black",
+                  cr_dc.blits == CR_NSTRIP && cr_dc.drawn == CR_NSTRIP && cr_dc.bytes == 240u * 240u * 2u &&
+                  !memcmp(before, host_screen, sizeof before) && left == 0);
+        }
     }
 
     {   /* the corner dial (a loop playing): red in its box in the top line, none in the panel's centre; the downbeat's

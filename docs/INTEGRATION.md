@@ -271,19 +271,41 @@ Priority, top down, first match wins:
    stripes came back 3 s after the last chord stopped sounding (and after every PANIC), which read as the logo popping
    up all the time. Test: `cr_panic.txt` (4 s: no stripes; 3 min: the stripes; a key: gone).
 7. the screen off: after **10 minutes without input** (`CR_SCREEN_OFF_MS` 600 000; both timeouts are constants in
-   `cr_ui.c`, no setting) the screen goes off: DISPOFF (ST7789 0x28) and the backlight off (PA2, `fm1_lcd_backlight`;
-   `lcd.c lcd_power`), and nothing is drawn (no LCD writes: the bus is quiet). The UI keeps ticking: the LEDs, the
-   looper, the arp, the metronome and MIDI go on (none of them is input: a long loop playing alone lets the screen go
-   off, the LEDs show it). The panel is a TFT (IPS), not an OLED: the "burn" is image retention and the backlight's
-   heat, which the backlight off ends. Any key, button, knob or MIDI channel message in wakes it: the whole current
-   view redrawn at once (the strip cache invalidated, no sweep off the logo), the backlight and DISPON; the press or
-   turn that wakes it also acts as usual (a key plays, a knob changes its value: nothing swallowed). The same in SAFE
-   MODE and on the Options pages. A full-screen fill from `main.c` (the crash screen, UBOOT, an update) lights the
-   panel again. **SysEx 74 SCREEN** (`cr_backup.c`, web/EDITOR_PROTOCOL.md; `tools/fm1_install.py --screen off|on`)
-   switches it off by the same path until `SCREEN 1` or a key, button or knob on the unit; MIDI in does not wake a
-   screen switched off this way (a test driving the unit over MIDI keeps it dark). Tests: `cr_screen_off.txt` in
-   `tools/emu/test_cr.sh` (3 min the logo, 10 min black with no LCD write for a minute, a key wakes it and plays, a
-   knob wakes it and turns, a loop alone does not keep it on), `tests/cr_backup_test.c` (SCREEN), `tests/install_test.py`.
+   `cr_ui.c`, no setting) the screen goes black: **one all-black frame** written to the panel (`cr_draw.c
+   cr_draw_black`, a 240 x 240 `lcd_fill`), then nothing is drawn (no LCD writes: the bus is quiet). **The backlight
+   stays on and the panel stays on**: "off" is black pixels, nothing more. The UI keeps ticking: the LEDs, the looper,
+   the arp, the metronome and MIDI go on (none of them is input: a long loop playing alone lets the screen go black,
+   the LEDs show it). The panel is a TFT (IPS), not an OLED: the "burn" is image retention, which a black frame ends
+   (the backlight's heat stays). Any key, button, knob or MIDI channel message in wakes it: the whole current view
+   redrawn at once (the strip cache invalidated: all six strips whole, no sweep off the logo); the press or turn that
+   wakes it also acts as usual (a key plays, a knob changes its value: nothing swallowed). The same in SAFE MODE and
+   on the Options pages. A full-screen fill from `main.c` (the crash screen, UBOOT, an update) draws on the lit panel
+   as always. **SysEx 74 SCREEN** (`cr_backup.c`, web/EDITOR_PROTOCOL.md; `tools/fm1_install.py --screen off|on`)
+   blacks it by the same path until `SCREEN 1` or a key, button or knob on the unit; MIDI in does not wake a screen
+   switched off this way (a test driving the unit over MIDI keeps it black).
+
+   **Why not the backlight: PA2 is not the backlight alone.** 0.14 and 0.15 switched the screen off for real: DISPOFF
+   (ST7789 0x28) and the backlight off, PA2 driven high (`lcd.c lcd_power`, `fm1_lcd_backlight`; both gone). That was
+   verified on the host only. On the unit (2026-10-10) the FM-1 then went deaf: no key made a sound, no key, button
+   or knob woke the screen, and only a `74 SCREEN 1` from the computer brought the screen back, and the keys with it.
+   Independently, the boot stub, which runs before `fm1_lcd_hw_init` has pulled PA2 low, cannot see a held key
+   through the 595 chain, while the app reading the same pins the same way after its LCD init can. So: **PA2 low =
+   the backlight and the key matrix / 595 chain (keys, buttons, knobs, LEDs) alive; PA2 high = both dead** (very
+   likely one enable of the supply that feeds the panel, the 595s and the LEDs). `hal/fm1_lcd_hw.h` drives PA2 low
+   once, in `fm1_lcd_hw_init`, and has no way to raise it; nothing else writes that bit (`hal/fm1_input.h`, the
+   only other writer of PA's OUT and DIR, sets and clears its own bits 1, 3, 4, 9, 10 with read-modify-writes: at
+   its init, then from the timer ISR alone, so no main-loop write of PA is left to race it and no stale PA2 = 1 can
+   come back). DISPOFF is not sent either: what this panel shows with the display off and the
+   backlight on is not known; black pixels are. The emulator carries the fact (`tools/emu/emu_hooks.h` `emu_hal.pa2`:
+   high, the panel is black, no LED lights, no key, button or knob is read, and the dump's `pa2:` line says so), so a
+   screen off that touches PA2 fails `test_cr.sh` as the 0.14 one does.
+
+   Tests: `cr_screen_off.txt` in `tools/emu/test_cr.sh` (3 min the logo; 10 min every pixel black, PA2 low, no LCD
+   write for a minute, the LEDs lit; a key wakes it and plays, a knob wakes it and turns, a loop alone does not keep
+   it on, MIDI in wakes it; SCREEN 0: MIDI in plays and does not wake it, a key does; SCREEN 1; no pixel of the black
+   frame left after a wake), `cr_pa2.txt` (the emulator's PA2 model), `tests/cr_backup_test.c` (SCREEN: one write,
+   all black, the wake redraws all six strips whole), `tests/cr_draw_test.c` (`cr_draw_black`),
+   `tests/install_test.py`.
 
 ## 6. LEDs (`cr_leds()`)
 

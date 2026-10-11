@@ -10,8 +10,9 @@
  *   67 PUT      0 begin (id, size u32, crc u32) / 1 data (id, offset u32, pack7) / 2 commit (id) / 3 abort (id)
  *   72 RESTART  -> rc; the device restarts (everything restored loads from flash)
  *   73 DEBUG    -> version 1, count, count x u32: the diagnostic counters (read-only)
- *   74 SCREEN   0 off / 1 on -> rc 0: the screen off (DISPOFF, the backlight off, nothing drawn) until 1 or a key,
- *               button or knob on the unit (MIDI in does not wake it), as the idle timer's (cr_ui.c cu_screen_sysex)
+ *   74 SCREEN   0 off / 1 on -> rc 0: the screen off (a black frame, the backlight on, nothing drawn) until 1 or a
+ *               key, button or knob on the unit (MIDI in does not wake it), as the idle timer's (cr_ui.c
+ *               cu_screen_sysex)
  *
  * Objects (Felucca's ids where Felucca has them; 9 and 40..49 are ChoralRoot's):
  *   1 settings (persist_t PER5: Felucca's fields + cr_settings_t; a PUT takes PER1..PER5, settings_persist.c migrates)

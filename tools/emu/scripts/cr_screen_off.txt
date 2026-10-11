@@ -1,7 +1,11 @@
 # ChoralRoot: the screen when idle (docs/INTEGRATION.md section 5). A chord, then no input: the view, the logo after
-# 3 min, the screen off after 10 min (DISPOFF + the backlight off: the shot black, no LCD write for a further minute).
-# A key wakes it and plays (the view back, the chord sounding); 10 min more: off again, a knob turn wakes it and
-# changes the value (KNOB 1: voicing 2). A loop playing does not keep it on: off 10 min later, the loop still playing.
+# 3 min, the screen off after 10 min: one black frame, the backlight on (PA2 stays low: it also feeds the key matrix,
+# hal/fm1_lcd_hw.h), no LCD write for a further minute, the LEDs lit as before.
+# A key wakes it and plays (the view back, the chord sounding, its LEDs); 10 min more: off again, a knob turn wakes it
+# and changes the value (KNOB 1: voicing 2). A loop playing does not keep it on: off 10 min later, the loop still
+# playing, PLAY's green LED lit; MIDI in wakes that. SysEx 74 SCREEN 0: off at once; MIDI in plays and does not wake
+# it, a key does (and plays); SCREEN 0 again, SCREEN 1: on.
+# Every dump follows a shot: tools/emu/test_cr.sh reads the dump after each shot's name.
 wait 300
 key F3 down
 wait 60
@@ -16,10 +20,13 @@ expect sound                                 # (the release tail; the mark for t
 wait 176000
 shot build/emu/test/cr_off_logo.ppm         # 3 min without input: the logo
 wait 421000
-shot build/emu/test/cr_off_dark.ppm         # 10 min: the screen off
+shot build/emu/test/cr_off_dark.ppm         # 10 min: the screen off, the panel black
 dump
 wait 60000
-dump                                         # a minute later: no LCD write
+shot build/emu/test/cr_off_dark2.ppm        # a minute later: black, no LCD write
+dump
+expect led G5 dim                            # the LEDs while off: a key's glow,
+expect led FX on                             # a lit button (FX is on)
 expect silence
 key F3 down
 wait 60
@@ -27,11 +34,13 @@ btn D4 down
 wait 200
 shot build/emu/test/cr_off_key.ppm          # a key: the view back at once
 dump
-expect sound
+expect sound                                 # .. and it plays
+expect led D4 on                             # (the sounding note's LED)
 btn D4 up
 key F3 up
 wait 602000
-dump                                         # off again
+shot build/emu/test/cr_off_again.ppm        # off again
+dump
 knob KNOB1 +2
 wait 150
 shot build/emu/test/cr_off_knob.ppm         # a knob: on, and it turned (voicing 2)
@@ -48,9 +57,52 @@ btn A#3 up
 wait 1300
 btn REC
 wait 150
-dump                                         # the loop plays
+shot build/emu/test/cr_off_looping.ppm      # the loop plays
+dump
 expect sound
 wait 601000
 shot build/emu/test/cr_off_loop.ppm         # 10 min of the loop alone: the screen off
 dump
 expect sound                                 # the loop still sounds
+expect led GREEN on                          # PLAY's green LED: the loop, the screen off
+midi 90 3C 64                                # MIDI in (a note): the idle screen off ends
+wait 150
+shot build/emu/test/cr_off_midi.ppm
+dump
+midi 80 3C 00
+wait 300
+btn PLAY                                     # the loop stopped
+wait 4000
+sysex F07D464C4A00F7                         # SysEx 74 SCREEN 0: off
+wait 100
+shot build/emu/test/cr_off_sx.ppm
+dump
+expect sound                                 # (the mark)
+midi 90 3C 64                                # MIDI in while it is off: the note plays, the screen stays off
+wait 300
+midi 80 3C 00
+midi B0 01 40                                # (a controller too)
+wait 4000
+shot build/emu/test/cr_off_sx_midi.ppm      # still black, no LCD write
+dump
+expect sound                                 # the MIDI note sounded (the mark for the key below)
+expect led G5 dim
+key F3 down
+wait 60
+btn D4 down
+wait 200
+shot build/emu/test/cr_off_sx_key.ppm       # a key: on at once
+dump
+expect sound                                 # .. and it plays
+expect led D4 on
+btn D4 up
+key F3 up
+wait 4000
+sysex F07D464C4A00F7                         # SCREEN 0 again
+wait 100
+shot build/emu/test/cr_off_sx2.ppm
+dump
+sysex F07D464C4A01F7                         # SCREEN 1: on
+wait 100
+shot build/emu/test/cr_off_sx_on.ppm
+dump

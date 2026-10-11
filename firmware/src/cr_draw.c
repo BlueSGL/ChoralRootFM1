@@ -2305,6 +2305,16 @@ static void cr_send(uint32_t m, uint32_t y)
 /* the next cr_draw draws and blits the whole screen (after something else drew on it, a palette change) */
 static void cr_draw_invalidate(void) { cr_dc.force = 1; }
 
+/* the screen off (cr_ui.c cr_ui_draw): the whole panel black, in one fill (lcd.c: it waits for the last strip's
+ * transfer first, and sends from its own buffer). Black pixels with the backlight on is all the "off" there is: the
+ * backlight's pin also keeps the key matrix alive (hal/fm1_lcd_hw.h). Nothing of the cache holds after it: the next
+ * cr_draw (the wake) draws and blits every strip whole */
+static void cr_draw_black(void)
+{
+    lcd_fill(0, 0, 240, 240, 0);
+    cr_dc.force = 1;
+}
+
 /* the strips (bit k) holding pixels the ring's progress covers at one fraction and not the other (Q8): the band's
  * rows over the angles between the two tips, widened by the samples' reach (cr_ring_draw) and two pixels */
 static uint32_t cr_ring_strips(uint32_t q0, uint32_t q1)
