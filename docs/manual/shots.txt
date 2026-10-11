@@ -25,6 +25,12 @@ wait 1500
 btn FX 600
 wait 400
 shot docs/manual/layer-fx.png
+# layer-fx-delay.png: SELECT +3 in the layer: the delay's first page (then back, for the shots below)
+knob SELECT +3
+wait 500
+shot docs/manual/layer-fx-delay.png
+knob SELECT -3
+wait 300
 btn OCT-
 wait 400
 

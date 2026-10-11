@@ -238,14 +238,20 @@ exact — so the mock-ups are unaffected; THEME serves Felucca's own pages when 
   editor's (`cr_ed_strips`, `cr_ed_row_strips` row 0 = the row's strips): a knob turn or the hot block coming or going
   composes strips 3–4 only (with a footer), host ~1.0 M instructions a frame while KNOB 1–4 turn every 30 ms
   (`tools/emu/perf.sh` h; a turn's frame <= 3.0 M, ~11.5 ms on the device); a new effect redraws all six.
-- **The pictograms** (`CR_G_ROOM MOON ECHOES LFO CLIP SPRING MIX GATE RANGE ARROW SHIFT`, FORMAT.md "cell glyphs";
+- **The pictograms** (`CR_G_ROOM MOON ECHOES LFO CLIP MIX GATE RANGE ARROW SHIFT`, FORMAT.md "cell glyphs"; SPRING
+  went with the spring reverb in 0.18; the FX layer's seven of 0.18, `CR_G_TAIL PRE CUT WIDTH SPREAD SYNC PING`, are
+  the firmware's own in the same manner (docs/FX.md, cr_screen.h: no designer picture yet);
   `cr_cell_t.pct2` their second value, Q8 of 255): drawn at true size in the glyph box (2 px strokes 2 px inside it,
   not scaled by h / 64 as the params glyphs): room the box (`cr_srect`) and its far wall shrinking 70 → 22 % with four
   corner lines (`cr_poly`); moon a lit part (the right half less / plus an ellipse, `cr_moon_fill`: 4 corner samples a
   pixel, 16 where they disagree) inside a 2 px rim (`cr_arc`); echoes 3 px bars decaying by 0.2 + 0.75 pct2, spaced
   by pct, on a 1 px baseline; lfo 1–5 cycles (<= 44 segments), depth by pct2; clip one cycle at gain 1–10, dashed clip
-  lines past 0.1; spring 13 zigzags; mix an outlined square behind one filled to pct; gate, range, arrow, shift as
-  FORMAT.md. tests/cr_draw_test.c checks each one's ink stays in its box and changes with pct.
+  lines past 0.1; mix an outlined square behind one filled to pct; gate, range, arrow, shift as
+  FORMAT.md; tail a struck edge and its curve (each twelfth keeps 0.56 .. all of the last); pre a bar, a gap of pct, a
+  wedge; cut a response rising to a corner 25 .. 80 % along; width two bars leaving a dashed centre; spread two rows
+  of echoes, the lower one's spacing 1 .. 1/2 of the upper one's (pct2); sync a clock face or two beamed notes; ping two
+  walls and four repeats, on both or alternating. tests/cr_draw_test.c checks each one's ink stays in its box and
+  changes with pct.
 - **QUAD's primitives** (docs/QUAD.md; design/choralroot-fm1-quad-mockups.json, the user-approved sheet
   design/choralroot-fm1-quad-screens.png; the designer's drawWide `algo` / `ade2` / the filter's `bw`, drawPicto `harm`
   `detune` `lfowave`, cellRow's `big`, `ratio`, `span`, the bipolar knob). States 68–76 of `tests/gen_cr_screens.py`

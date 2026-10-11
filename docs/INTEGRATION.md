@@ -215,7 +215,7 @@ Off: ignored) are heard:
   `mod.c`'s MODW / EXPR / AT sources (`mod_midi`), CC 120 all sound off, CC 121 reset controllers (the bend range
   kept), CC 123 all notes off (the pedal honoured). Felucca's chords (CHRD), arpeggiator and live recording were the
   sequencer's and are gone; a MIDI note and the engine's stream share the part's voices as before.
-- CC 7 → the part's LEVEL, CC 91 / 93 / 94 → its reverb / chorus / delay send (part 0's are the FX amounts), program
+- CC 7 → the part's LEVEL, CC 91 / 93 / 94 → its reverb / chorus / delay send (part 0's are the FX layer's "Send" cells), program
   change → the chord sound (its position in the chord part's engine's pool, 0 = INIT) or the bass sound (ALGORITHM's
   position: 0 = off, then the bass part's engine's pool); out of range ignored. The ISR posts these to a small ring (`cr_min_q`) and the UI frame
   (`cu_midi_poll`) applies them with the knob's meter popup.
@@ -317,7 +317,7 @@ a button pressed during another's hold is that hold's combo (its release does no
 | --- | --- | --- | --- |
 | SEL | KEY | Key Mode on/off | the knob row with the keyboard as its band: roots = tonic (Key Mode on; the scale kept unless MAJ / MIN is held with it); **MAJ / MIN = the scale**, at the press, LOCK on or off (`cu_key_scale`: the chord block is the layer's here, `cu.kpick` keeps those presses from the engine and from LOCK's latch, so the latched chord is what it was when the layer closes; the other six chord keys do nothing, B3 stays LOCK). That is **keys: pick**, the default; **an OPT (GLO) tap in the layer** switches to **keys: play** and back (`cs.key_play`, settings v13: bit 5 of `loop_rec`; the PLAY menu's Keys is the precedent): the roots and the chord block then play exactly as outside the layer (`cu_layer_keys`, `cu_key_pick`) and their LEDs are their own state again, OPT lit; the label reads "key · keys pick" / "key · keys play", the footer "MAJ MIN: scale · GLO: play · OCT-: back" / "GLO: pick · OCT-: back · HOME: home"; OPT never opens the Options from this layer, OPT held + a knob keeps its second jobs (a combo, no toggle: + KNOB 1 the split point, which belongs to the layer's Single cell); `cr_key_play.txt`, `persist_kkeys_*.txt`; KNOB 1–4 Tonic Scale Transpose Single as cells, the turned cell hot |
 | ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; a PERF tap in it = on/off (the label "perform · on" / "· off"), OCT+ closes; KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms; **the band is the arp while notes are stepped** (section 5, "the PERF layer's band"), the picker for 2 s after the layer opens and after every SELECT detent |
-| FX | FX | main effect on/off | the knob row: SELECT = effect, the roots play; a FX tap in it = on/off (label "fx · on" / "· off"), OCT+ closes; KNOB 1–3 params, KNOB 4 amount (on: FX on); no popups, the turned cell hot 800 ms |
+| FX | FX | main effect on/off (every part's sends: `fx.c fx_off`) | the knob row: SELECT = the page (Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive: 0.18, docs/FX.md), the roots play; a FX tap in it = on/off (label "fx · on · 1/2" / "· off"), OCT+ closes; KNOB 1–4 the page's cells, KNOB 4 on a first page the chord part's send (on: FX on); no popups, the turned cell hot 800 ms |
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
 | LFO | LATCH | latch on/off (Sticky Keys; also holds a performed arp / pattern after the keys are released: Hold defaults off in every mode, an arp stops when the keys are up; Hold is STRUM's KNOB 4) | — |
 | GLO | OPT | Options (picker pages); in the PLAY menu: its Keys; in the KEY layer: its keys pick / play | shift (momentary): OPT + KNOB 1 split point, + SELECT metronome level, + ALGORITHM bass level; the other knobs keep their job |
@@ -337,11 +337,16 @@ the selected effect's amount, PRESETS → sound ±1 (loads at once, as Felucca's
 ALGORITHM → bass sound ±1 (position 0 = OFF), SELECT → tempo ±1 (in a picker: move; on an
 EDIT page: next page). Every knob turn also sets `ui.popup = {knob, until_ms}` so the view shows
 the knob's meter/dial for 900 ms (§5) — except in the FX layer, a **knob row** (`CR_K_KNOBROW`, `cu_fx_cells`): the
-effect's picker over KNOB 1–4's cells (labels `gname` capitalised: Size Damp Type / Rate Depth / Time Feedback Colour;
-the values as the popup showed them, enums and Hz through `param_format`: "90", "Room", "1/8", "0.80 Hz"; KNOB 4
-"Amount" = `fx_amt * 99 / 127` or "off"); glyphs room (SIZE; TYPE Room), spring (TYPE Spring), moon (DAMP inverted,
-COLOUR), echoes (TIME and FEEDBACK: the division's index, feedback / 120), lfo (RATE and DEPTH), mix (the amount;
-Drive: clip). A turn changes the value as before and marks its cell hot for 800 ms (`cu_hot` {layer, knob, until},
+effect's picker over KNOB 1–4's cells. Since 0.18 (docs/FX.md) the layer has six pages (`CU_FXP`: `cs.fx_sel` the
+effect, `cs.fx_page` its page; SELECT steps them, the label carries "1/2"): Reverb 1 Size Damp Decay Send, Reverb 2
+Pre-delay Mod Low cut Width, Chorus Rate Depth – Send, Delay 1 Time Spread Feedback Send, Delay 2 Sync Mode Tone Wow,
+Drive – – – Send. A cell is a global parameter (`cr_fx.c xfp[]`, or the chorus's `song.g`), or "Send" =
+`fx_amt * 99 / 127` (the chord part's send, the sound's; "off" with FX off); Time and Spread are the synced or the
+free parameter by Sync (`cu_fx_id`). Values with their units (`cu_fx_val`: "250 ms", "1/8.", "3:4", "x0.75",
+"2.4 s", "Inf", "127 Hz", "Tempo", "Ping-pong", "0.80 Hz", else 0..127). Glyphs: room (Size), moon (Damp inverted,
+Tone), tail (Decay), pre (Pre-delay), lfo (Mod, Wow, the chorus's Rate and Depth), cut (Low cut), width, echoes (Time
+and Feedback: the time's position, feedback / 127), spread (two rows), sync (notes / a clock), ping (Mode), mix (a
+send; Drive: clip). A turn changes the value as before and marks its cell hot for 800 ms (`cu_hot` {layer, knob, until},
 cleared when a layer opens or another item is picked). The PERF layer (`cu_perf_cells`) and the BASS layer
 (`cu_bass_cells`) are knob rows the same way: PERF's cells are the mode's `CU_PERF_KNOB` parameters, labelled as the
 popups named them (Rate Division Direction Range Gate Swing Pattern Amount Hold), glyphs echoes (rate, division;
@@ -816,6 +821,21 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   `choralroot-sound` JSON files by rewriting the backup objects 6, 7, 9..13 per slot (the stores first, the bank last);
   no firmware change: `crb_commit` reloads the mirrors (`up_boot`), pinned by `tests/cr_backup_test.c` "sounds: single
   slots through PUT". Verified on the device the same day (an FM6 sound copied to U03, renamed, deleted).
+
+### The effects (0.18, 2026-10-11: a stereo delay, a large reverb, global)
+
+`cr_fx.c` (included by `fx.c` under `CR_FX 1`: `choralroot.c`, `tools/emu/emu_firmware.h`; Felucca's delay and ROOM /
+SPRING stay behind `CR_FX 0` for its own units and goldens). `fx_buses` keeps the chorus; `mix_block` then calls
+`xf_block(send_d, send_r, mix_l, mix_r)`: both sends down to 22.05 kHz, the delay and the reverb there, the stereo wet
+back up into the mix, before the FX layer's master effects and the limiter. A sound carries its sends only; the
+effects' parameters are `xfp[]` (16) and the chorus's two, in the session by tag. `fx_off` (the FX tap) closes every
+part's sends. The tempo for the synced delay is `xf_bpm` (`cu_set_tempo`, `cu_midi_poll`: 20 .. 300 BPM). Both
+effects switch themselves off when their tails are over (a block then costs 2 us). The design, the numbers and the
+owner's open decisions: **docs/FX.md**. Size: XIP 441 988 B (+5 060), RAM 84 916 B (-28), POOL 283 440 B (-12 784:
+60 624 B free). CPU: both on 233 us a block (8.0 %); `perf.sh` (l) (the heaviest scenario with both sends at 127):
+885 / 1388 us (30 % / 48 %), no block over 80 % anywhere (the worst: (j) with Dual Core On, 51 %). `cr_settings.c crs_sounding`: the FX tail alone holds a
+save back for `CRS_TAIL_MS` (30 s) at most. `tests/target_budget.txt` rewritten (the audio ISR 14 607; `xd_run` 531,
+`xr_run` 973, `xf_block` 78, `xf_down` 66, `xf_up` 53).
 
 ### All-synth (2026-10-07: the dead weight out)
 

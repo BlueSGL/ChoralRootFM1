@@ -165,9 +165,9 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | the bass behaviour, the bass register | yes | yes | block `bass_mode`, `bass_voicing` |
 | the bass level (the BASS layer's Level, OPT + ALGORITHM), each part's Level and Pan (MIX) | no ("bass level 102 came back as 92") | **yes** | session `part[k].p[P_LEVEL]`, `p[P_PAN]`: the part's own parameters travel with its record |
 | FX on / off | yes | yes | block `fx_on` |
-| the effect picked in the FX layer | no | **yes** | session `fx.sel` (an effect tag) |
-| the FX layer's KNOB 1..3 (reverb size / damp / type, chorus rate / depth, delay time / feedback / colour) | no | **yes** | session `fx.par[]` (tag, value) |
-| the four FX amounts (KNOB 4) | no (the preset's again) | **yes** | session `fx.amt[]`; live, a sound change still brings the new sound's amounts (the amounts belong to the sound: MANUAL section 8) |
+| the page picked in the FX layer (Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive) | no | **yes** | session `fx.sel` (an effect tag; the second pages have their own) |
+| the effects' own parameters, GLOBAL (the reverb's 7 and the delay's 9: [FX.md](FX.md); the chorus's rate and depth) | no | **yes** | session `fx.par[]` (tag, value) |
+| the chord part's four sends (the FX layer's "Send" cells, KNOB 4) | no (the preset's again) | **yes** | session `fx.amt[]`; live, a sound change still brings the new sound's sends (the sends belong to the sound, the effects to the instrument: MANUAL section 8) |
 | which sound the chord part plays, each engine's last place | yes | yes | block `chord_sound`, `pool_pos` |
 | each part's sound as it is: an edit not saved, the deep patch, the name, "edited", the pool entry | no | **yes** | session `part[0]`, `part[1]` (the edit buffers) |
 | the tempo, the metronome (on, signature, level) | yes | yes | block `bpm`, `metro_*` (a metronome left on clicks at power-on, as before) |
@@ -204,16 +204,43 @@ itself can grow: the import takes a shorter (older) record over the defaults and
 and no other firmware and no tool reads this object.
 
 **The FX sub-block is versioned on its own** (`CSS_FX_VERSION`, 1) and stores by TAG, never by position, so that the
-delay and the reverb can change their parameters without a new record: `sel` is an effect tag (`CSS_FXE_REVERB`,
-`CHORUS`, `DELAY`, `DRIVE`; room for 8), `amt[tag]` that effect's amount (0..127, `CSS_FX_NONE` = not stored: the
-sound's own send), and `par[]` up to 24 pairs of a parameter tag (`CSS_FXP_RSIZE` 1, `RDAMP` 2, `RTYPE` 3, `CRATE` 4,
-`CDEPTH` 5, `DTIME` 6, `DFDBK` 7, `DCOLOR` 8) and its value. The rules, for whoever reworks an effect:
+delay and the reverb can change their parameters without a new record: `sel` is an effect tag (`CSS_FXE_REVERB` 0,
+`CHORUS` 1, `DELAY` 2, `DRIVE` 3, and for the FX layer's second pages `REVERB2` 4, `DELAY2` 5; room for 8), `amt[tag]`
+that effect's send from the chord part (0..127, `CSS_FX_NONE` = not stored: the sound's own send), and `par[]` up to
+24 pairs of a parameter tag and its value. The rules, for whoever reworks an effect:
 
-- a new parameter: a new `CSS_FXP_*` number and a line in `cr_settings.c` `CSS_FXG` (tag -> `G_*`);
+| Tag | Parameter | Range, default | |
+| --- | --- | --- | --- |
+| 1 `RSIZE`, 2 `RDAMP`, 3 `RTYPE` | Felucca's ROOM / SPRING reverb | | **retired** with it (0.18's new reverb): never reused, not read, gone from a record at its next save |
+| 4 `CRATE`, 5 `CDEPTH` | the chorus's rate, depth (`song.g`) | 0..127, 40 / 60 | |
+| 6 `DTIME`, 7 `DFDBK`, 8 `DCOLOR` | Felucca's mono delay | | **retired** with it |
+| 9 `XD_TIME` | the delay's free time (21 .. 1000 ms) | 0..127, 80 | `cr_fx.c XP_DTIME` |
+| 10 `XD_DIV` | .. its synced division (1/32 .. 1/2) | 0..12, 6 (1/8) | `XP_DDIV` |
+| 11 `XD_SPREAD` | .. the free spread (x1.00 .. x0.50) | 0..127, 0 | `XP_DSPREAD` |
+| 12 `XD_RATIO` | .. the synced spread (1:1 3:4 2:3 1:2) | 0..3, 0 | `XP_DRATIO` |
+| 13 `XD_FDBK` | .. feedback | 0..127, 58 | `XP_DFDBK` |
+| 14 `XD_SYNC` | .. Free / Tempo | 0..1, 1 | `XP_DSYNC` |
+| 15 `XD_MODE` | .. Stereo / Ping-pong | 0..1, 1 | `XP_DMODE` |
+| 16 `XD_TONE` | .. the loop's low-pass | 0..127, 84 | `XP_DTONE` |
+| 17 `XD_WOW` | .. the time's wobble | 0..127, 24 | `XP_DWOW` |
+| 18 `XR_SIZE` | the reverb's size | 0..127, 88 | `XP_RSIZE` |
+| 19 `XR_DAMP` | .. damping | 0..127, 56 | `XP_RDAMP` |
+| 20 `XR_DECAY` | .. decay (0.3 .. 72 s, 127 Inf) | 0..127, 52 (3 s) | `XP_RDECAY` |
+| 21 `XR_PRE` | .. pre-delay (0 .. 138 ms) | 0..127, 16 | `XP_RPRE` |
+| 22 `XR_MOD` | .. modulation | 0..127, 56 | `XP_RMOD` |
+| 23 `XR_LOW` | .. low cut (20 .. 500 Hz) | 0..127, 60 | `XP_RLOW` |
+| 24 `XR_WIDTH` | .. width | 0..127, 127 | `XP_RWIDTH` |
+
+18 entries are stored today (24 fit). A session written by 0.17 or by a 0.18 build before the new effects holds
+tags 1..8: the chorus's two are read, the six retired ones are ignored, and the new delay and reverb start at
+their defaults ([FX.md](FX.md), decision 13). `cr_settings.c` has a static assert on the numbers.
+
+- a new parameter: a new `CSS_FXP_*` number and a line in `cr_settings.c` `CSS_FXG` (tag -> `song.g`'s `G_*`, or
+  `cr_fx.c`'s `XP_*` with `x` 1);
 - a parameter whose meaning or range changes: a NEW tag; the old number is retired and never reused;
 - a parameter removed: its line goes, its number stays retired;
 - a reader skips a tag it does not know, keeps its default for a tag it does not find, and for a value outside
-  the parameter's range (`GP[g].min..max`);
+  the parameter's range (`GP[g].min..max`, `XFP[id].min..max`);
 - `CSS_FX_VERSION` goes up only if `css_fx_t`'s layout changes; a reader that sees another version takes the
   defaults for the whole block (the sounds' own sends, the effects' defaults) and keeps the rest of the session.
 
