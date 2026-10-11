@@ -8,14 +8,14 @@
  * summed stereo wet comes back up through one pair of them (xf_up). The filter is a two-path polyphase all-pass
  * (tools/fx_halfband.py: 2 + 2 first-order sections, one multiply each, -54 dB above 12.5 kHz, flat to 9.5 kHz,
  * -3 dB at 11 kHz). What it buys: a second of delay a side in 88 KB (at 44.1 kHz: 176 KB, more than the pool had
- * left), a reverb of 0.74 s of lines in 41 KB, and half the work for both. What it costs: nothing above ~10 kHz in
+ * left), a reverb of 0.71 s of lines in 41 KB, and half the work for both. What it costs: nothing above ~10 kHz in
  * the wet, which a bucket-brigade echo and a large dark hall do not have either. The dry mix is untouched.
  *
  * THE DELAY (xd_*), in the spirit of the Moog Matriarch's stereo analogue delay: two lines, L and R, XD_MAX samples
  * (1.000 s) each. Each side's read is a four-point cubic (Catmull-Rom) at a position that GLIDES to its target (a
  * lag of ~46 ms, at most half a sample a sample: a new time bends the pitch of what is in the line, as a tape or a
  * BBD clock does, and never clicks) plus the WOW (one slow and one faster sine, the same on both sides so that
- * Spread 0 stays mono). The loop: the read -> a one-pole low-pass (TONE) -> a one-pole low cut (~100 Hz) -> the
+ * Spread 0 stays mono). The loop: the read -> a one-pole low-pass (TONE) -> a one-pole low cut (40 Hz) -> the
  * feedback gain -> + the input -> tanh (dsp.c softclip) -> the line: every repeat is darker, thinner in the bass and
  * a little more compressed than the last, and the line cannot clip. STEREO: each side feeds itself. PING-PONG: the
  * input goes into L only, L feeds R and R feeds L. SPREAD is R's time as a part of L's (1 .. 1/2 free; 1:1, 3:4,
@@ -27,12 +27,13 @@
  * Schroeder all-pass diffusers (Schroeder 1962). Per line: a linear-interpolated read at a gliding length (SIZE: a
  * quarter to the whole of XR_LEN; four of the eight also swing on two slow sines, MOD: the tail is chorused and its
  * modes never stand still), a one-pole low-pass (DAMP) and the gain that gives every line the same RT60 (DECAY:
- * 0.3 .. 74 s, the top position "Inf": 1 - 2^-13). The input: a two-pole low cut (LOW CUT, 20 .. 500 Hz) in front
+ * 0.3 .. 72 s, the top position "Inf": 1 - 2^-13). The input: a two-pole low cut (LOW CUT, 20 .. 500 Hz) in front
  * of the pre-delay, scaled by (1 - g^2)^(1/4) so that a long decay does not come out 20 dB louder than a short one.
  * The output: four lines a side with alternating signs, and WIDTH (mid / side).
  * The bound (tests/cr_fx_test.c): the Hadamard matrix times 181 / 512 (< 1 / sqrt 8) is a contraction, each line's
  * gain is <= 32764 / 32768, a one-pole low-pass and a linear interpolation never exceed 1, and every product is
- * rounded TOWARDS ZERO: the loop cannot gain, and what is left of a tail falls to exactly 0.
+ * rounded TOWARDS ZERO (the line's own rounding: XR_RB, below): the loop cannot gain, and what is left of a tail
+ * falls to exactly 0.
  *
  * NOTHING SOUNDS, NOTHING RUNS. Every product rounds towards zero and every one-pole is written y = x + c (y - x), so
  * a silent input leaves the lines at exactly 0 after the tail; a counter per effect (the samples since the last
@@ -41,7 +42,7 @@
  * Fixed point: lines int16, states and sums int32, coefficients Q15 (the half-band's Q11), positions Q8 samples.
  * No division and no 64-bit in the per-sample loops; the coefficients are worked out when a parameter or the tempo
  * changes (xf_coefs: a hash of the parameters, compared every block). Memory, all in .pool: 2 x 22114 x 2 (delay)
- * + 16384 x 2 + 4096 x 2 (reverb) + ~600 B of state = 130 KB; Felucca's pair was 143 KB. */
+ * + 16384 x 2 + 4096 x 2 (reverb) + ~740 B of state = 130 KB; Felucca's pair was 143 KB. */
 
 /* ------------------------------------------------------------- the parameters --- */
 /* global (the session's FX block, cr_settings.h CSS_FXP_*): a sound carries its sends (P_DLY, P_REV) and nothing here */
