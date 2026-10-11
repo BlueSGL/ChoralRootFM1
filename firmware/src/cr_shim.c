@@ -110,7 +110,7 @@ static void cr_splash(void)
     cr_screen_clear(&s);
     cu_stripes(&s);
     s.batt = 255;
-    cu_cpy(s.foot, FELUCCA_VERSION, sizeof s.foot);
+    cu_cpy(s.foot, CR_VERSION, sizeof s.foot);
     s.anim = CR_A_INTRO;
     cr_draw_invalidate();
     for (t = 0; mo != CR_MOTION_OFF && t < CR_SPLASH_PLAY_MS; t += 16u) {

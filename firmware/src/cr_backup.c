@@ -775,7 +775,7 @@ static int crb_handle(const uint8_t *f, uint32_t n)
     crb_n = from;
     switch (cmd) {
     case CRB_INFO: {                                 /* Felucca's INFO layout, no editor: 0 engines, 0 tracks */
-        const char *v = FELUCCA_VERSION;
+        const char *v = CR_VERSION;                  /* (cr_ui.h: the one version string) */
         uint32_t i;
         if (na)
             return 0;

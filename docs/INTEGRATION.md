@@ -108,7 +108,19 @@ Build flags stay Felucca's; `FELUCCA_SLICE=0`, `FELUCCA_SLICER=0`, `FELUCCA_FM4=
 USB audio recording: ChoralRoot In, docs/USB-AUDIO.md), `FELUCCA_UART=1`,
 and the all-synth set `FELUCCA_SEQ=0`, `FELUCCA_SAMPLE=0`, `FELUCCA_GRAIN=0`, `FELUCCA_DRUM=0`, `FELUCCA_ICONS=0`,
 `FELUCCA_KEYCAPS=0` (BUILDING.md).
-The package identity becomes `FM-1_920` and the version string `ChoralRoot 0.1`.
+The package identity becomes `FM-1_920` and the version string `ChoralRoot X.Y`. **The version has one source**:
+`FELUCCA_VERSION` in `firmware/src/choralroot.c` (the dev tree reads as the next tag, `ChoralRoot 0.17`;
+`./build.sh --release X.Y` passes `-DFELUCCA_VERSION="ChoralRoot X.Y"`); `cr_ui.h`'s `CR_VERSION` is that macro (until
+2026-10-12 a literal of its own, `"ChoralRoot 0.1"`, which Options > Version showed on every build). Shown from it:
+the splash (`cr_ui.c cu_stripes`, `cr_shim.c cr_splash`), Options > Version (`opt_text`), the identity over SysEx
+(`cr_backup.c CRB_INFO`: `fm1_install.py --info`, the installer, the device manager), the console (`console.c`).
+The emulators build with the same string (`tools/emu/build.sh`, `tools/emu/web/build_web.sh`: choralroot.c's define,
+or `CR_VERSION=X.Y`; `cr_ui.c` refuses to compile without it; `emu_firmware.h` falls back to `"EMU"` for the host
+tests that build that unit, and `tests/cr_backup_test.c` reads it back from INFO). GEEK OUT
+shows no version. Test: `cr_version.txt` in test_cr.sh (the dump's `version:` line: the Options entry's text = the
+INFO reply's string = choralroot.c's define; no other `"ChoralRoot <digit>` literal in the firmware or the
+emulators). The fixtures that say `ChoralRoot 0.1` (`tests/install_test.py`, `web/test_installer.mjs`) are fake
+units' identities for the installers' tests, not the firmware's version.
 
 ## 2. Parts and streams (`cr_out.c`)
 

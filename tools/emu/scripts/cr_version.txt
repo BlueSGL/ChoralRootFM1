@@ -1,0 +1,13 @@
+# ChoralRoot: Options > Version shows the build's version, the string the unit reports over SysEx (the owner,
+# 2026-10-12: it read "ChoralRoot 0.1" on every build, a literal of its own). The dump's "version:" line: the Options
+# entry's text, the identity (cr_backup.c's INFO reply), the build's FELUCCA_VERSION.
+wait 300
+shot build/emu/test/cr_version_splash.ppm    # the splash: the version under the stripes
+btn GLO                       # Options
+wait 200
+knob SELECT +19               # Version (after Dual Core)
+wait 300
+shot build/emu/test/cr_version.ppm
+dump
+btn GLO
+wait 300

@@ -83,7 +83,9 @@ static void mix_block(int32_t *out, uint32_t n)        /* the audio ISR's block:
 #define FELUCCA_KEYCAPS 0                             /* as choralroot.c: no Felucca keycaps (gfx.c) */
 #endif
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "EMU"
+#define FELUCCA_VERSION "EMU"                         /* the host tests that build this unit (tests/cr_backup_test.c
+                                                         * reads it back from INFO). The emulators pass the firmware's:
+                                                         * tools/emu/build.sh, web/build_web.sh (test_cr.sh checks) */
 #endif
 #include "../../firmware/src/gfx.c"
 #include "../../firmware/src/panel.c"

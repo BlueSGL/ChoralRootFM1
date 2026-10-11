@@ -14,7 +14,12 @@
  * cr_out.c's queue to the audio ISR. */
 #pragma once
 
-#define CR_VERSION "ChoralRoot 0.1"
+/* The version, one source: FELUCCA_VERSION (firmware/src/choralroot.c: the dev tree reads as the next tag;
+ * ./build.sh --release X.Y: "ChoralRoot X.Y"). The splash, Options > Version, the console and the identity over
+ * SysEx (cr_backup.c CRB_INFO: what fm1_install.py --info prints) all show that string. CR_VERSION is its name here
+ * (and the mark of the ChoralRoot unit: cr_settings.c part 2, console.c). Until 2026-10-12 it was a literal of its
+ * own, 0.1, which Options > Version showed on every build. */
+#define CR_VERSION FELUCCA_VERSION
 #define CR_POPUP_MS 900u          /* a knob's meter stays this long after the last turn (INTEGRATION section 5) */
 #define CR_PANIC_MS 1100u         /* the red PANIC screen */
 #define CR_MSG_MS 1200u           /* a message box */

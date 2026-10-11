@@ -3814,7 +3814,7 @@ static void cu_picker(cr_screen_t *s, const char *const *items, uint32_t n, uint
 /* the power-on splash is the idle stripes' first CR_SPLASH_MS: the bands slide in (CR_A_INTRO, unless main.c's
  * splash, cr_shim.c cr_splash, already played it) and the version sits under them */
 #ifndef FELUCCA_VERSION
-#define FELUCCA_VERSION "ChoralRoot 0.1"
+#error "cr_ui.c: FELUCCA_VERSION is the unit's (choralroot.c, tools/emu/build.sh): no version literal here"
 #endif
 #define CR_SPLASH_MS 1500u
 static uint32_t cu_boot_ms;
@@ -3905,7 +3905,7 @@ static void cu_stripes(cr_screen_t *s)
     s->title_col = CR_COL_WHITE;
     s->period_ms = cr_anim_bar_ms(cs.bpm);
     if (cu_now() - cu_boot_ms < CR_SPLASH_MS) {
-        cu_cpy(s->foot, FELUCCA_VERSION, sizeof s->foot);
+        cu_cpy(s->foot, CR_VERSION, sizeof s->foot);
         if (!cu_intro_played)
             s->anim = CR_A_INTRO;
     }

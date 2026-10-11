@@ -59,6 +59,19 @@ px_count() {     # px_count FILE X0 Y0 X1 Y1 red|ink: pixels of the box [X0,X1) 
 }
 differ() { cmp -s "$OUT/$1.ppm" "$OUT/$2.ppm" && bad "$3: $1 = $2" || ok "$3"; }
 
+echo "the version: one string (choralroot.c's FELUCCA_VERSION) in Options > Version, the SysEx identity, the splash"
+run cr_version
+L="$OUT/cr_version.log"
+want=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralroot.c | head -1)
+[ -n "${CR_VERSION:-}" ] && want=$(grep -a -m1 "^  version:" "$L" | sed -n "s/.* build '\(.*\)'$/\1/p")   # (a release build of the emulator)
+vo=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*options '\([^']*\)'.*/\1/p")
+vi=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*identity '\([^']*\)'.*/\1/p")
+[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 19 of 2[0-9] 'Version' value '$want'" "$L" &&
+    ok "Options > Version '$vo' = the identity over SysEx '$vi' = the build's ($want): $OUT/cr_version.ppm" \
+    || bad "the version: Options '$vo', identity '$vi', choralroot.c '$want'"
+lits=$(grep -n '"ChoralRoot [0-9]' firmware/src/*.c firmware/src/*.h firmware/hal/*.h tools/emu/*.c tools/emu/*.h tools/emu/web/*.c 2>/dev/null | grep -v '^firmware/src/choralroot.c:[0-9]*:#define FELUCCA_VERSION ')
+[ -z "$lits" ] && ok "no other version literal in the firmware or the emulators (one #define, firmware/src/choralroot.c)" || bad "a version literal of its own: $lits"
+
 echo "MAJ held + D4: D major"
 run cr_dmaj --wav "$OUT/cr_dmaj.wav"
 nz=$(num "non-silent blocks" "$OUT/cr_dmaj.log")

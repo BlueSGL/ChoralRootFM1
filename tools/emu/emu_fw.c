@@ -379,6 +379,22 @@ void emu_fw_dump(void)
                cr_loop_busy(&cr, 0) + cr_loop_busy(&cr, 1) + cr_loop_busy(&cr, 2),
                (unsigned)cr.playstyle, (unsigned)cr.single, (unsigned)cr.split_pc);
     }
+    {   /* the version, everywhere it shows: Options > Version (opt_text), the identity over SysEx (cr_backup.c's
+         * INFO reply, built by the handler itself: no transport here, CRB_SEND is empty), the splash's foot line */
+        static const uint8_t q[4] = {CRB_HDR0, CRB_HDR1, CRB_HDR2, CRB_INFO};
+        char ov[40], id[40];
+        uint32_t k = 0;
+        opt_text(O_VERSION, ov, sizeof ov);
+        id[0] = 0;
+        if (crb_handle(q, 4))
+            for (; k < sizeof id - 1u && CRB_OUT[5u + k] && CRB_OUT[5u + k] != 0xF7u; k++)
+                id[k] = (char)CRB_OUT[5u + k];
+        id[k] = 0;
+        printf("  version: options '%s' identity '%s' build '%s'\n", ov, id, FELUCCA_VERSION);
+        opt_text(cu.opt_sel, ov, sizeof ov);         /* the Options: the entry selected and its value's text */
+        printf("  options: open %u entry %u of %u '%s' value '%s'\n", (unsigned)cu.opt_open, (unsigned)cu.opt_sel,
+               (unsigned)cu_opt_n(), O_NAME[cu.opt_sel % O_N], ov);
+    }
     printf("  boot: %s reset %s failed %u pending %u prev_stage %u\n", bootguard_mode_name(bootguard.mode),
            bootguard_class_name(bootguard.cls), (unsigned)bootguard.failed, (unsigned)bootguard.pending,
            (unsigned)felucca_dbg.prev_stage);

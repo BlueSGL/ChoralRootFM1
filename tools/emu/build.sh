@@ -22,8 +22,19 @@ CC=${CC:-clang}
 OUT=build/host
 OBJ=build/host/emu_obj
 mkdir -p "$OUT" "$OBJ" build/emu
+# the version the firmware shows: firmware/src/choralroot.c's FELUCCA_VERSION (the device build's default), or
+# CR_VERSION=X.Y as ./build.sh --release X.Y ("ChoralRoot X.Y"); the same rule as tools/emu/web/build_web.sh
+if [ -n "${CR_VERSION:-}" ]; then
+    case "$CR_VERSION" in
+        ChoralRoot*) VER=$CR_VERSION ;;
+        *) VER="ChoralRoot $(printf %s "$CR_VERSION" | tr A-Z a-z)" ;;
+    esac
+else
+    VER=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralroot.c | head -1)
+fi
+[ -n "$VER" ] || { echo "build.sh: no FELUCCA_VERSION in firmware/src/choralroot.c"; exit 1; }
 # the firmware: one unit, as the host tests build it (warnings off: it is the firmware's own code)
-$CC -O2 -w -Ibuild/gen -Ifirmware/src -c tools/emu/emu_fw.c -o "$OBJ/emu_fw.o"
+$CC -O2 -w -Ibuild/gen -Ifirmware/src "-DFELUCCA_VERSION=\"$VER\"" -c tools/emu/emu_fw.c -o "$OBJ/emu_fw.o"
 # the emulator
 for f in emu keymap emu_img; do
     $CC -O2 -Wall -Wextra -Wno-unused-parameter $SDL_CFLAGS -c "tools/emu/$f.c" -o "$OBJ/$f.o"
