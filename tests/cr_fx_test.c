@@ -188,6 +188,10 @@ static void old_run(uint32_t n, gen_t gen, uint32_t which, int32_t *wet)
 }
 
 /* ----------------------------------------------------------------- the tests --- */
+#define DSD CR_FX_DELAY_DS
+#define DSR CR_FX_REVERB_DS
+static const char *sfx = "";                            /* the demos' file suffix (argv[2]: "_full", "_half") */
+
 static void t_maths(void)
 {
     uint32_t y, ok = 1, p;
@@ -197,18 +201,35 @@ static void t_maths(void)
         if (e > worst) worst = e;
     }
     printf("cr_fx:   e^-x: the worst error %.3f %% past 1.5 of 32768\n", worst * 100.0);
-    check("e^-x (the lines' gains) within 1.5 / 32768 + 0.3 % over 0 .. 8", worst < 0.003);
+    check("e^-x (the lines' gains, the filters' coefficients) within 1.5 / 32768 + 0.3 % over 0 .. 8", worst < 0.003);
     for (y = 1; y < 32768u; y += 13u) {
         double want = pow(y / 32768.0, 0.25) * 32768.0, got = xf_isqrt(xf_isqrt(y << 15) << 15);
         if (fabs(got - want) > 3.0 + want * 0.001) ok = 0;
     }
     check("the fourth root (the reverb's input gain against its decay)", ok);
-    ok = xf_ms(0) == 21u && xf_ms(127) == 1000u && xf_rt_ms(0) == 300u && xf_rt_ms(126) > 60000u;
+    ok = xf_ms(0) == 16u && xf_ms(127) <= XD_MS_MAX && xf_ms(127) >= 740u && xf_rt_ms(0) == 300u && xf_rt_ms(126) > 60000u &&
+         xf_lowcut_hz(0) == 20u && xf_lowcut_hz(127) == 500u;
     for (p = 1; p < 128u; p++)
-        if (xf_ms(p) < xf_ms(p - 1u) || xf_rt_ms(p) <= xf_rt_ms(p - 1u) || xf_lowcut_k(p) < xf_lowcut_k(p - 1u)) ok = 0;
-    check("the knobs' curves rise: time 21 .. 1000 ms, decay 0.3 .. 72 s, low cut 20 .. 500 Hz", ok);
+        if (xf_ms(p) < xf_ms(p - 1u) || xf_rt_ms(p) <= xf_rt_ms(p - 1u) || xf_lowcut_hz(p) < xf_lowcut_hz(p - 1u)) ok = 0;
+    printf("cr_fx:   the delay at %u Hz: a line of %u samples, the longest time %u ms; the reverb at %u Hz\n", (unsigned)XD_FS,
+           (unsigned)XD_N, (unsigned)XD_MS_MAX, (unsigned)XR_FS);
+    check("the knobs' curves rise: time 16 ms .. the line, decay 0.3 .. 72 s, low cut 20 .. 500 Hz", ok);
+    {   /* the one-poles' coefficients: the corner where it is asked */
+        double worstk = 0;
+        static const uint32_t HZ[6] = {20, 40, 500, 2000, 8000, 12000};
+        for (p = 0; p < 6u; p++) {
+            double want = (1.0 - exp(-2.0 * M_PI * HZ[p] / XD_FS)) * 32768.0, got = xf_k(HZ[p], XD_FS);
+            if (fabs(got - want) / want > worstk) worstk = fabs(got - want) / want;
+        }
+        check("a one-pole's coefficient for 20 Hz .. 12 kHz within 2 %", worstk < 0.02);
+    }
 }
 
+static void delay_plain(void)                           /* Stereo, no feedback, no wow, Tone open, a short free time */
+{
+    fx_reset();
+    xfp[XP_DMODE] = 0; xfp[XP_DFDBK] = 0; xfp[XP_DWOW] = 0; xfp[XP_DTONE] = 127; xfp[XP_DSYNC] = 0; xfp[XP_DTIME] = 20;
+}
 static void t_sync(void)
 {
     static const uint16_t BPM[] = {20, 60, 90, 100, 120, 121, 140, 174, 240, 300};
@@ -218,24 +239,24 @@ static void t_sync(void)
     for (b = 0; b < sizeof BPM / sizeof BPM[0]; b++)
         for (d = 0; d < XF_NDIV; d++)
             for (q = 0; q < 4u; q++) {
-                double want = 22050.0 * 60.0 / BPM[b] * XF_DIV[d] / 48.0, wr;
+                double want = (double)XD_FS * 60.0 / BPM[b] * XF_DIV[d] / 48.0, wr;
                 fx_reset();
                 xf_bpm = BPM[b];
                 xfp[XP_DSYNC] = 1;
                 xfp[XP_DDIV] = (int16_t)d;
                 xfp[XP_DRATIO] = (int16_t)q;
                 xf_delay_times(&l, &r);
-                while (want > 22050.5) want /= 2.0;
+                while (want > XD_MAX + 0.5) want /= 2.0;
                 wr = want * XF_RATIO[q][0] / XF_RATIO[q][1];
-                if (fabs(l - want) > 0.51 || fabs(r - wr) > 1.01 || l > XD_MAX || r > l) {
+                if (fabs(l - want) > 1.01 || fabs(r - wr) > 1.51 || l > XD_MAX || r > l) {
                     ok = 0;
                     printf("cr_fx:   %u BPM %s ratio %u: %u / %u samples, want %.1f / %.1f\n", BPM[b], DN[d], q, l, r, want, wr);
                 }
                 if (BPM[b] == 120 && (d == 6u || d == 8u || d == 9u) && shown++ < 12u)
-                    printf("cr_fx:   120 BPM %-5s %u:%u  L %5u R %5u half-rate samples (%.1f / %.1f ms)\n", DN[d],
-                           XF_RATIO[q][0], XF_RATIO[q][1], l, r, l / 22.05, r / 22.05);
+                    printf("cr_fx:   120 BPM %-5s %u:%u  L %5u R %5u samples (%.1f / %.1f ms)\n", DN[d], XF_RATIO[q][0],
+                           XF_RATIO[q][1], l, r, l * 1000.0 / XD_FS, r * 1000.0 / XD_FS);
             }
-    check("sync: 10 tempi x 13 divisions x 4 spreads: L within half a sample of the division (halved to fit 1 s), R its part", ok);
+    check("sync: 10 tempi x 13 divisions x 4 spreads: L the division within a sample (halved to fit the line), R its part", ok);
     {   /* the echo is where the table says: an impulse, Stereo, no feedback; the first repeat's peak */
         static const struct { uint16_t bpm, div, ratio; } C[4] = {{120, 6, 0}, {120, 8, 1}, {90, 9, 2}, {140, 3, 3}};
         uint32_t k, i;
@@ -243,26 +264,23 @@ static void t_sync(void)
         for (k = 0; k < 4u; k++) {
             uint32_t pl = 0, pr = 0;
             int32_t ml = 0, mr = 0;
-            fx_reset();
+            delay_plain();
             xf_bpm = C[k].bpm;
+            xfp[XP_DSYNC] = 1;
             xfp[XP_DDIV] = (int16_t)C[k].div;
             xfp[XP_DRATIO] = (int16_t)C[k].ratio;
-            xfp[XP_DMODE] = 0;
-            xfp[XP_DFDBK] = 0;
-            xfp[XP_DWOW] = 0;
-            xfp[XP_DTONE] = 127;
             xf_delay_times(&l, &r);
             run(2u * 44100u, g_imp, 1, 0);
             for (i = 0; i < 2u * 44100u; i++) {
                 if (abs(WL[i]) > ml) ml = abs(WL[i]), pl = i;
                 if (abs(WR[i]) > mr) mr = abs(WR[i]), pr = i;
             }
-            /* (the impulse is at sample 64; the two half-band filters and the loop's low-pass delay it ~6 samples) */
-            if (abs((int32_t)pl - (int32_t)(64u + 2u * l)) > 14 || abs((int32_t)pr - (int32_t)(64u + 2u * r)) > 14) ok = 0;
+            /* (the impulse is at sample 64; at the half rate the two half-band filters delay it a few samples) */
+            if (abs((int32_t)pl - (int32_t)(64u + DSD * l)) > 14 || abs((int32_t)pr - (int32_t)(64u + DSD * r)) > 14) ok = 0;
             printf("cr_fx:   %u BPM %s %u:%u: the echo's peak at %u / %u (the times: %u / %u at 44.1 kHz)\n", C[k].bpm,
-                   DN[C[k].div], XF_RATIO[C[k].ratio][0], XF_RATIO[C[k].ratio][1], pl - 64u, pr - 64u, 2u * l, 2u * r);
+                   DN[C[k].div], XF_RATIO[C[k].ratio][0], XF_RATIO[C[k].ratio][1], pl - 64u, pr - 64u, DSD * l, DSD * r);
         }
-        check("sync: an impulse's first repeat lands on each side's time (within 14 samples: the filters' delay)", ok);
+        check("sync: an impulse's first repeat lands on each side's time (within 14 samples)", ok);
     }
 }
 
@@ -277,21 +295,15 @@ static double tone_amp(const int32_t *x, uint32_t a, uint32_t b, double f)
     }
     return 2.0 * sqrt(s * s + c * c) / (double)(b - a);
 }
-static void t_halfrate(void)
+static void t_band(void)
 {
-    static const double F[] = {50, 100, 200, 1000, 3000, 5000, 7000, 9000, 10000, 11000, 12500, 15000};
-    double ref = 0, g[12], lo = 0, hi = 0;
+    static const double F[] = {50, 100, 200, 1000, 3000, 5000, 7000, 9000, 10000, 12000, 15000, 18000};
+    double ref = 0, g[12], lo = 0, hi = 0, top = DSD == 1 ? 15000 : 9000;
     uint32_t k, n = 44100u, a = 22050u;
-    int ok = 1;
+    char line[160];
     printf("cr_fx:   the delay path (Tone open, no feedback, one repeat), dB re 1 kHz:");
     for (k = 0; k < 12u; k++) {
-        fx_reset();
-        xfp[XP_DMODE] = 0;
-        xfp[XP_DFDBK] = 0;
-        xfp[XP_DWOW] = 0;
-        xfp[XP_DTONE] = 127;
-        xfp[XP_DSYNC] = 0;
-        xfp[XP_DTIME] = 20;
+        delay_plain();
         g_f = F[k];
         g_a = 8000;
         g_len = 0xFFFFFFFFu;
@@ -302,60 +314,131 @@ static void t_halfrate(void)
     for (k = 0; k < 12u; k++) {
         double d = db(g[k] / ref);
         printf(" %g:%.1f", F[k], d);
-        if (F[k] >= 200 && F[k] <= 9000) { if (d < lo) lo = d; if (d > hi) hi = d; }
-        if (F[k] >= 12500 && d > -40) ok = 0;          /* (a send up there comes back as its alias: below) */
+        if (F[k] >= 200 && F[k] <= top) { if (d < lo) lo = d; if (d > hi) hi = d; }
     }
     printf("\n");
-    check("the half rate: 200 Hz .. 9 kHz within +0.5 / -4 dB (Tone's pole at 9 kHz), 12.5 kHz below -40 dB", ok && hi < 0.5 && lo > -4.0);
-    {   /* a 15 kHz send: what folds below 11 kHz (15 kHz would land on 7.05 kHz); loud, to see it at all */
-        double al, in;
+    snprintf(line, sizeof line, "the delay's band: 200 Hz .. %g kHz within +0.5 / -%s dB with Tone open", top / 1000.0,
+             DSD == 1 ? "2.5" : "1.5");
+    check(line, hi < 0.5 && lo > (DSD == 1 ? -2.5 : -1.5));
+    if (DSD == 2) {   /* a 15 kHz send: what folds below 11 kHz (15 kHz would land on 7.05 kHz); loud, to see it at all */
+        double al;
         g_f = 15000;
         g_a = 100000;
-        fx_reset();
-        xfp[XP_DMODE] = 0; xfp[XP_DFDBK] = 0; xfp[XP_DWOW] = 0; xfp[XP_DTONE] = 127; xfp[XP_DSYNC] = 0; xfp[XP_DTIME] = 20;
+        delay_plain();
         run(n, g_sine, 1, 0);
         al = tone_amp(WL, a, n, 22050.0 - 15000.0);
-        in = ref * 100000.0 / 8000.0;                   /* (the line's tanh has that send 1.7 dB down: on the safe side) */
-        printf("cr_fx:   a 15 kHz send leaves %.1f dB at 7.05 kHz (re a 1 kHz send's repeat)\n", db(al / in));
-        check("the half rate: the alias of a 15 kHz send is below -50 dB", db(al / in) < -50.0);
+        printf("cr_fx:   a 15 kHz send leaves %.1f dB at 7.05 kHz (re a 1 kHz send's repeat)\n", db(al / (ref * 100000.0 / 8000.0)));
+        check("the half rate: the alias of a 15 kHz send is below -50 dB", db(al / (ref * 100000.0 / 8000.0)) < -50.0);
     }
-    {   /* noise and distortion: a 1 kHz send at -12 dB of the line (tanh's harmonics) and at -36 dB (the path's noise:
-         * the repeat less its fundamental and harmonics 2 .. 9; whole cycles in the window, so the projections are exact) */
-        static const double LV[2] = {32767.0, 2068.0};  /* (>> 2 at the line: 8192 and 517 of 32767) */
-        static double y[44100];
-        double f0 = 1000.0, nf[2], hd[2];
-        uint32_t i, h, q;
+    {   /* distortion: a 1 kHz send's repeat at -12 dB and at 0 dB of the line (whole cycles in the window) */
+        static const double LV[2] = {16384.0, 65534.0};
+        double hd[2];
+        uint32_t q, h;
         for (q = 0; q < 2u; q++) {
-            double sig, res = 0, e = 0;
-            g_f = f0;
+            double e = 0, sig;
+            delay_plain();
+            g_f = 1000;
             g_a = LV[q];
-            fx_reset();
-            xfp[XP_DMODE] = 0; xfp[XP_DFDBK] = 0; xfp[XP_DWOW] = 0; xfp[XP_DTONE] = 127; xfp[XP_DSYNC] = 0; xfp[XP_DTIME] = 20;
             run(n, g_sine, 1, 0);
-            for (i = a; i < n; i++) y[i] = WL[i];
-            sig = tone_amp(WL, a, n, f0);
-            for (h = 1; h <= 9u; h++) {
-                double sn = 0, c = 0;
-                for (i = a; i < n; i++) {
-                    sn += y[i] * sin(2.0 * M_PI * f0 * h * i / 44100.0);
-                    c += y[i] * cos(2.0 * M_PI * f0 * h * i / 44100.0);
-                }
-                sn *= 2.0 / (n - a);
-                c *= 2.0 / (n - a);
-                if (h > 1u) e += sn * sn + c * c;
-                for (i = a; i < n; i++)
-                    y[i] -= sn * sin(2.0 * M_PI * f0 * h * i / 44100.0) + c * cos(2.0 * M_PI * f0 * h * i / 44100.0);
-            }
-            for (i = a; i < n; i++) res += y[i] * y[i];
-            /* re the line's full scale: a full-scale sine's repeat would be sig * 32767 / (LV / 4) */
-            nf[q] = db(sqrt(res / (n - a)) / (sig * 32767.0 / (LV[q] / 4.0) / sqrt(2.0)));
+            sig = tone_amp(WL, a, n, 1000.0);
+            for (h = 2; h <= 9u; h++) e += pow(tone_amp(WL, a, n, 1000.0 * h), 2);
             hd[q] = db(sqrt(e) / sig);
         }
-        printf("cr_fx:   a 1 kHz send's repeat: at -12 dB of the line harmonics %.1f dB (tanh), at -36 dB %.1f dB; the noise %.1f dB re "
-               "the line's full scale (%.1f dB under the -36 dB sine)\n", hd[0], hd[1], nf[1], nf[1] + 36.0);
-        check("the delay path's noise is 84 dB under the line's full scale; a -36 dB send's harmonics below -50 dB (dsp.c's tanh table)",
-              nf[1] < -84.0 && hd[1] < -50.0);
+        printf("cr_fx:   a 1 kHz send's repeat: harmonics %.1f dB at -12 dB of the line (under the saturator's knee), %.1f dB at "
+               "full scale (in it)\n", hd[0], hd[1]);
+        check("the delay is clean under its knee: a -12 dB repeat's harmonics below -80 dB", hd[0] < -80.0);
     }
+}
+
+/* THE DROP-OUT (the owner, on the unit: "the delay just abruptly drops out even with the feedback turned up ... even
+ * with a short delay time"): a 50 ms burst into the delay, its tail's level in 250 ms windows. A loop that loses
+ * nothing but its gain falls by the same number of dB every window; the first build's fell faster and faster and was
+ * gone at -45 dBFS. Here: from the second window down to -84 dBFS of the output no window falls more than 1.6 x the
+ * tail's own first slope + 1 dB, and the tail is still there when a straight exponential says it should be */
+static double g_bamp = 40000.0;
+static int32_t g_tone_burst(uint32_t i) { return i < 2205u ? (int32_t)(g_bamp * sin(2.0 * M_PI * 440.0 * i / 44100.0)) : 0; }
+static void t_dropout(void)
+{
+    static const struct { const char *name; int16_t time, fb; double amp; uint32_t secs; } C[] = {
+        {"16 ms, feedback 127, a loud burst", 0, 127, 40000.0, 14}, {"16 ms, feedback 127, a quiet burst (-30 dB)", 0, 127, 1265.0, 12},
+        {"16 ms, feedback 118", 0, 118, 40000.0, 8}, {"60 ms, feedback 127, a quiet burst", 40, 127, 1265.0, 30},
+        {"250 ms, feedback 110", 91, 110, 12000.0, 40}, {"the longest time, feedback 120, a quiet burst", 127, 120, 4000.0, 110}};
+    uint32_t c, q;
+    for (c = 0; c < sizeof C / sizeof C[0]; c++) {
+        double lv[440], first = 0, worst = 0, floor_db = -84.0;
+        uint32_t nq = C[c].secs * 4u, n = nq * 11040u, last = 0, ok = 1, q0 = C[c].time >= 100 ? 8u : 1u, per = C[c].time >= 100 ? 8u : 1u;
+        char line[200];
+        fx_reset();
+        xfp[XP_DSYNC] = 0; xfp[XP_DTIME] = C[c].time; xfp[XP_DFDBK] = C[c].fb; xfp[XP_DTONE] = 127; xfp[XP_DWOW] = 0;
+        xfp[XP_DMODE] = 0;
+        g_bamp = C[c].amp;
+        run(n, g_tone_burst, 1, 0);
+        nq /= per;                                       /* (a long time: windows of two seconds hold whole repeats) */
+        for (q = 0; q < nq; q++)
+            lv[q] = db(rms(WL, q * per * 11040u, (q + 1u) * per * 11040u) / 32768.0);
+        (void)q0;
+        first = (lv[1] - lv[5]) / 4.0;
+        for (q = 1; q + 1u < nq && lv[q + 1u] > floor_db; q++) {
+            double fall = lv[q] - lv[q + 1u];
+            if (fall > worst) worst = fall;
+            if (fall > 1.6 * first + 1.0) ok = 0;
+            last = q + 1u;
+        }
+        snprintf(line, sizeof line, "no drop-out: %s: %.1f dB a %s all the way to %.0f dBFS (the steepest %.1f), %.1f s of tail",
+                 C[c].name, first, per == 1u ? "quarter second" : "two seconds", lv[last], worst, (last + 1u) * 0.25 * per);
+        check(line, ok && lv[last] < floor_db + 12.0 && first > 0.05);
+    }
+}
+
+/* THE TAIL'S NOISE: the effect run on a send and on the same send upside down; the two wets are each other's mirror
+ * but for what the rounding adds, so half their sum is the noise (and any limit cycle). In 100 ms windows while the
+ * tail falls from -20 to -80 dBFS: the noise's level, and how far under the tail it is */
+static int32_t g_neg(uint32_t i) { return -g_tone_burst(i); }
+static int32_t g_chord_stab(uint32_t i);
+static int32_t g_chord_neg(uint32_t i);
+static void t_noise(void)
+{
+    static int32_t *al, *ar;
+    uint32_t which, n = 30u * 44100u, i, w;
+    al = malloc(n * sizeof *al);
+    ar = malloc(n * sizeof *ar);
+    for (which = 1; which <= 2u; which++) {
+        double nmax = -200, worst_snr = 200, at20 = 0, at50 = 0, at80 = 0;
+        char line[200];
+        fx_reset();
+        if (which == 1u) { xfp[XP_DFDBK] = 110; xfp[XP_DWOW] = 24; }
+        else { xfp[XP_RDECAY] = 72; }
+        run(n, g_chord_stab, which, 0);
+        memcpy(al, WL, n * sizeof *al);
+        memcpy(ar, WR, n * sizeof *ar);
+        fx_reset();
+        if (which == 1u) { xfp[XP_DFDBK] = 110; xfp[XP_DWOW] = 24; }
+        else { xfp[XP_RDECAY] = 72; }
+        run(n, g_chord_neg, which, 0);
+        for (w = 4; w < n / 4410u; w++) {
+            double s = 0, e = 0, sd, nd;
+            for (i = w * 4410u; i < (w + 1u) * 4410u; i++) {
+                double x = al[i], y = (al[i] + WL[i]) / 2.0;
+                s += x * x;
+                e += y * y;
+            }
+            sd = db(sqrt(s / 4410.0) / 32768.0);
+            nd = db(sqrt(e / 4410.0) / 32768.0);
+            if (sd > -20.0 || sd < -80.0)
+                continue;
+            if (nd > nmax) nmax = nd;
+            if (sd - nd < worst_snr) worst_snr = sd - nd;
+            if (!at20) at20 = nd;
+            if (sd < -50.0 && !at50) at50 = nd;
+            at80 = nd;
+        }
+        snprintf(line, sizeof line, "%s tail from -20 to -80 dBFS: its noise %.0f / %.0f / %.0f dBFS at -20 / -50 / -80 (the loudest "
+                 "%.0f), never less than %.0f dB under the tail", which == 1u ? "the delay's" : "the reverb's", at20, at50, at80, nmax,
+                 worst_snr);
+        check(line, nmax < (which == 1u ? -86.0 : -83.0) && worst_snr > 2.5);
+    }
+    free(al);
+    free(ar);
 }
 
 /* the corners */
@@ -363,18 +446,18 @@ typedef struct { const char *name; int16_t p[XP_N]; uint16_t bpm; } corner_t;
 #define DL(time, div, spr, rat, fb, sync, mode, tone, wow) time, div, spr, rat, fb, sync, mode, tone, wow
 #define RV(size, damp, decay, pre, mod, low, width) size, damp, decay, pre, mod, low, width
 static const corner_t CORNERS[] = {
-    {"defaults", {DL(80, 6, 0, 0, 58, 1, 1, 84, 24), RV(88, 56, 52, 16, 56, 60, 127)}, 120},
-    {"delay: 1 s, feedback max, tone open, wow max, stereo; reverb: size max, decay 126, damp 0, mod max",
+    {"defaults", {DL(91, 6, 0, 0, 58, 1, 1, 70, 24), RV(88, 56, 52, 16, 56, 60, 127)}, 120},
+    {"delay: the longest, feedback max, tone open, wow max, stereo; reverb: size max, decay 126, damp 0, mod max",
      {DL(127, 12, 0, 0, 127, 0, 0, 127, 127), RV(127, 0, 126, 127, 127, 0, 127)}, 120},
-    {"delay: 21 ms, feedback max, tone shut, ping-pong, spread max; reverb: size 0, decay 126, damp max",
+    {"delay: 16 ms, feedback max, tone shut, ping-pong, spread max; reverb: size 0, decay 126, damp max",
      {DL(0, 0, 127, 3, 127, 0, 1, 0, 0), RV(0, 127, 126, 0, 0, 127, 0)}, 120},
     {"delay: synced 1/2 at 20 BPM (folds), ratio 1:2, feedback max, wow max; reverb: decay 0, size max, low cut max",
      {DL(64, 12, 64, 3, 127, 1, 1, 127, 127), RV(127, 64, 0, 127, 127, 127, 64)}, 20},
-    {"delay: synced 1/32 at 300 BPM, feedback max, tone open; reverb: size 0, decay 0, damp 0, mod max",
-     {DL(64, 0, 0, 0, 127, 1, 0, 127, 127), RV(0, 0, 0, 0, 127, 0, 127)}, 300},
+    {"delay: synced 1/32 at 300 BPM, feedback 100, tone open; reverb: size 0, decay 0, damp 0, mod max",
+     {DL(64, 0, 0, 0, 100, 1, 0, 127, 127), RV(0, 0, 0, 0, 127, 0, 127)}, 300},
     {"reverb: decay Inf, size max, damp 0, mod 0 (the frozen hall); delay: feedback 0",
      {DL(80, 6, 0, 0, 0, 1, 1, 84, 0), RV(127, 0, 127, 0, 0, 0, 127)}, 120},
-    {"reverb: decay Inf, size max, damp 0, mod max, pre max; delay: feedback max, 1 s",
+    {"reverb: decay Inf, size max, damp 0, mod max, pre max; delay: feedback max, the longest",
      {DL(127, 12, 0, 0, 127, 0, 1, 127, 127), RV(127, 0, 127, 127, 127, 0, 127)}, 120},
     {"reverb: decay Inf, size 0, damp max, mod max",
      {DL(80, 6, 0, 0, 58, 1, 1, 84, 24), RV(0, 127, 127, 0, 127, 127, 127)}, 120},
@@ -384,10 +467,9 @@ static void t_corners(void)
     uint32_t k, i, n = 60u * 44100u;
     for (k = 0; k < sizeof CORNERS / sizeof CORNERS[0]; k++) {
         const corner_t *c = &CORNERS[k];
-        double pk = 0, mean = 0, r10, r60, last = 0;
+        double pk = 0, mean = 0, r10, r60, step = 0;
         uint32_t zero_from = n, live;
-        int inf = c->p[XP_RDECAY] >= 100 || (c->p[XP_DFDBK] >= 120 && c->p[XP_DTONE] >= 64 && !(c->bpm == 300)), ok;
-                                                        /* (an RT60 of 22 s and more, a long delay at feedback 0.97: not over in 50 s) */
+        int lng = c->p[XP_RDECAY] >= 80 || (c->p[XP_DFDBK] >= 120 && c->p[XP_DTONE] >= 64), ok;
         char line[256];
         fx_reset();
         memcpy(xfp, c->p, sizeof xfp);
@@ -399,25 +481,23 @@ static void t_corners(void)
             if (a > pk) pk = a;
             if (WL[i] | WR[i]) zero_from = n;
             else if (zero_from == n) zero_from = i;
+            if (i >= 5u * 44100u && i < 10u * 44100u && i && fabs((double)WL[i] - WL[i - 1u]) > step) step = fabs((double)WL[i] - WL[i - 1u]);
         }
         for (i = n - 10u * 44100u; i < n; i++) mean += WL[i] + WR[i];
         mean /= 2.0 * 10.0 * 44100.0;
         r10 = rms(WL, 10u * 44100u, 11u * 44100u);
         r60 = rms(WL, 59u * 44100u, 60u * 44100u);
-        last = fabs(mean);
         live = xf.d_live + xf.r_live + xf.up_live;
-        /* the wet is two saturated effects: each at most 65534 a side out of the interpolator's input, and the
-         * half-band's overshoot on top of it */
-        ok = pk <= 65534.0 * 4.7 && (inf ? r60 <= r10 * 1.001 + 1.0 && last < 2.0 + r60 * 0.02
-                                         : zero_from < n && !live);
-        snprintf(line, sizeof line, "stable 60 s: %.72s", c->name);
+        /* each effect's wet is bounded by its saturated lines: the delay's 65534 x 4.1, the reverb's 131068 x 1.2 */
+        ok = pk <= 65534.0 * 4.1 + 131068.0 * 1.3 && (lng ? r60 <= r10 * 1.001 + 1.0 && fabs(mean) < 8.0 + r60 * 0.03
+                                                         : zero_from < n && !live);
+        snprintf(line, sizeof line, "stable 60 s at +36 dB (4 parts' sends at their clamps): %.60s", c->name);
         check(line, ok);
-        if (inf)
+        if (lng)
             printf("cr_fx:   peak %.0f; the wet 1 s after the input %.0f rms, 50 s later %.0f rms (%.1f dB), the last 10 s' mean %.2f\n",
                    pk, r10, r60, db(r60 / (r10 > 1 ? r10 : 1)), mean);
         else
-            printf("cr_fx:   peak %.0f; exactly 0 from %.2f s after the input stopped, both effects off (floor: 0)\n", pk,
-                   zero_from / 44100.0 - 10.0);
+            printf("cr_fx:   peak %.0f; exactly 0 from %.2f s after the input stopped, both effects off\n", pk, zero_from / 44100.0 - 10.0);
     }
 }
 
@@ -441,21 +521,30 @@ static void h_size_sweep(uint32_t i)
 static void t_bound(void)
 {
     uint32_t s, ok = 1;
-    double e0, e, worst = 0;
+    double e0, e = 0, worst = 0, e30 = 0;
     fx_reset();
-    xfp[XP_RDECAY] = 127;
-    xfp[XP_RDAMP] = 0;
-    xfp[XP_RMOD] = 127;
-    xfp[XP_RSIZE] = 127;
-    xfp[XP_RLOW] = 0;
-    g_a = 60000;
+    xfp[XP_RDECAY] = 127; xfp[XP_RDAMP] = 0; xfp[XP_RMOD] = 0; xfp[XP_RSIZE] = 127; xfp[XP_RLOW] = 0;
+    g_a = 30000;
     g_len = 3u * 44100u;
     xs = 99u;
     run(3u * 44100u, g_noise, 2, 0);
+    run(44096u, 0, 2, 0);
     e0 = lines_energy();
+    for (s = 0; s < 30u; s++) {                          /* Mod 0: the frozen hall holds */
+        run(44096u, 0, 2, 0);
+        e = lines_energy();
+        if (e > e0 * 1.02) ok = 0;                       /* (the lines' own rounding: +-0.1 dB) */
+    }
+    e30 = e;
+    printf("cr_fx:   DECAY Inf, MOD 0, no input: the lines' energy after 30 s %.2f dB of its start (1 - 2^-13 a pass: -0.7 dB)\n",
+           10.0 * log10(e30 / e0));
+    check("Inf holds: with Mod 0 the frozen hall loses under 1.5 dB in 30 s, and never gains", ok && e30 > e0 * 0.70);
+    xfp[XP_RMOD] = 127;
     sweep_from = 0;
+    e0 = lines_energy();
+    ok = 1;
     for (s = 0; s < 40u; s++) {
-        run(44100u - 44100u % CTL, 0, 2, s >= 10u && s < 25u ? h_size_sweep : 0);
+        run(44096u, 0, 2, s >= 10u && s < 25u ? h_size_sweep : 0);
         e = lines_energy();
         if (e / e0 > worst) worst = e / e0;
         if (e > e0 * 1.26) ok = 0;                       /* (1 dB: a second's swing of the modulated lines) */
@@ -484,10 +573,11 @@ static double max_step(uint32_t a, uint32_t b, double *d1)
         *d1 = m1;
     return m2 / (m1 > 1.0 ? m1 : 1.0);
 }
-static uint32_t sw_par, sw_lo, sw_hi;
-static void h_sweep(uint32_t i)                         /* a detent every 30 ms, up then down; a toggle every 400 ms */
+static uint32_t sw_par, sw_lo, sw_hi, sw_ms;
+static void h_sweep(uint32_t i)                         /* a detent every sw_ms, up then down; a toggle every 400 ms */
 {
-    uint32_t per = (sw_hi - sw_lo <= 3u ? 400u : 30u) * 44100u / 1000u / CTL * CTL, k;
+    uint32_t per = (sw_hi - sw_lo <= 3u ? 400u : sw_ms) * 44100u / 1000u / CTL * CTL, k;
+    if (per < CTL) per = CTL;
     if (i < sweep_from || (i - sweep_from) % per)
         return;
     k = (i - sweep_from) / per;
@@ -509,15 +599,17 @@ static void h_tempo(uint32_t i)                         /* the tempo 120 -> 60 -
 static void t_smooth(void)
 {
     static const struct { const char *name; uint8_t which, par, lo, hi, sync; } S[] = {
-        {"Time (free, 21 .. 1000 ms)", 1, XP_DTIME, 0, 127, 0}, {"Time (synced divisions)", 1, XP_DDIV, 0, 12, 1},
+        {"Time (free)", 1, XP_DTIME, 0, 127, 0}, {"Time (synced divisions)", 1, XP_DDIV, 0, 12, 1},
         {"Spread (free)", 1, XP_DSPREAD, 0, 127, 0}, {"Spread (synced)", 1, XP_DRATIO, 0, 3, 1},
         {"Sync on / off", 1, XP_DSYNC, 0, 1, 1}, {"Mode stereo / ping-pong", 1, XP_DMODE, 0, 1, 1},
         {"Tone", 1, XP_DTONE, 0, 127, 1}, {"Wow", 1, XP_DWOW, 0, 127, 1}, {"Feedback", 1, XP_DFDBK, 0, 127, 1},
         {"Size", 2, XP_RSIZE, 0, 127, 1}, {"Pre-delay", 2, XP_RPRE, 0, 127, 1}, {"Decay", 2, XP_RDECAY, 0, 127, 1},
         {"Damp", 2, XP_RDAMP, 0, 127, 1}, {"Mod", 2, XP_RMOD, 0, 127, 1}, {"Low cut", 2, XP_RLOW, 0, 127, 1},
         {"Width", 2, XP_RWIDTH, 0, 127, 1}};
-    uint32_t k, n = 12u * 44100u;
-    double base[3] = {0, 0, 0}, d1;
+    static const uint16_t SPEED[3] = {30, 6, 1};        /* ms a detent: a hand, a fast hand, faster than any knob */
+    uint32_t k, n = 12u * 44100u, sp, bad_n = 0;
+    double base[3] = {0, 0, 0}, d1, worst = 0;
+    const char *wname = "";
     g_f = 220.0;
     g_a = 16000.0;
     g_len = 0xFFFFFFFFu;
@@ -528,20 +620,30 @@ static void t_smooth(void)
     }
     printf("cr_fx:   a held 220 Hz send, steady: the wet's largest second difference is %.1f %% (delay), %.1f %% (reverb) of its "
            "largest step\n", base[1] * 100.0, base[2] * 100.0);
-    for (k = 0; k < sizeof S / sizeof S[0]; k++) {
-        double m;
+    for (sp = 0; sp < 3u; sp++)
+        for (k = 0; k < sizeof S / sizeof S[0]; k++) {
+            double m;
+            fx_reset();
+            xfp[XP_DSYNC] = S[k].sync;
+            sw_par = S[k].par;
+            sw_lo = S[k].lo;
+            sw_hi = S[k].hi;
+            sw_ms = SPEED[sp];
+            sweep_from = 2u * 44096u;
+            run(n, g_sine, S[k].which, h_sweep);
+            m = max_step(2u * 44096u, n, &d1);
+            if (m > worst) { worst = m; wname = S[k].name; }
+            if (m > 0.25) {
+                bad_n++;
+                printf("cr_fx:   %s at %u ms a detent: second difference %.1f %% of the largest step (%.0f)\n", S[k].name, SPEED[sp],
+                       m * 100.0, d1);
+            }
+        }
+    {
         char line[200];
-        fx_reset();
-        xfp[XP_DSYNC] = S[k].sync;
-        sw_par = S[k].par;
-        sw_lo = S[k].lo;
-        sw_hi = S[k].hi;
-        sweep_from = 2u * 44096u;
-        run(n, g_sine, S[k].which, h_sweep);
-        m = max_step(2u * 44096u, n, &d1);
-        snprintf(line, sizeof line, "smooth: %s swept under a held tone: second difference %.1f %% of the largest step (%.0f)",
-                 S[k].name, m * 100.0, d1);
-        check(line, m <= 0.25);
+        snprintf(line, sizeof line, "no click: 16 parameters swept under a held tone and its tail at 30, 6 and 1 ms a detent: the "
+                 "worst second difference %.1f %% of the largest step (%s)", worst * 100.0, wname);
+        check(line, !bad_n);
     }
     fx_reset();
     sweep_from = 2u * 44096u;
@@ -549,10 +651,32 @@ static void t_smooth(void)
     {
         double m = max_step(2u * 44096u, n, &d1);
         char line[200];
-        snprintf(line, sizeof line, "smooth: the tempo stepped 120 -> 60 -> 180 BPM under a synced delay: second difference %.1f %%",
+        snprintf(line, sizeof line, "no click: the tempo stepped 120 -> 60 -> 180 BPM under a synced delay: second difference %.1f %%",
                  m * 100.0);
         check(line, m <= 0.25);
     }
+}
+
+/* overdrive: a 220 Hz send 12 dB over full scale into both effects at their defaults: every stage saturates softly
+ * or at a clamp, nothing wraps (a wrap is a step of a whole word: the largest sample step stays a small part of the
+ * peak), and the wet is the same shape upside down for the send upside down */
+static double g_od = 131068.0;
+static int32_t g_over(uint32_t i) { return (int32_t)(g_od * sin(2.0 * M_PI * 220.0 * i / 44100.0)); }
+static void t_overdrive(void)
+{
+    uint32_t i, n = 4u * 44100u;
+    double pk = 0, step = 0;
+    fx_reset();
+    run(n, g_over, 3, 0);
+    for (i = 44100u; i < n; i++) {
+        double a = fabs((double)WL[i]), d = fabs((double)WL[i] - WL[i - 1u]);
+        if (a > pk) pk = a;
+        if (d > step) step = d;
+    }
+    printf("cr_fx:   a 220 Hz send at +12 dB into both: the wet peaks at %.0f (%.1f x full scale), its largest sample step %.0f "
+           "(%.1f %% of the peak)\n", pk, pk / 32768.0, step, step / pk * 100.0);
+    check("overdrive: +12 dB into both effects saturates without a wrap or an edge (the largest step under 12 % of the peak)",
+          pk < 65534.0 * 4.1 + 131068.0 * 1.3 && step < pk * 0.12);
 }
 
 static void t_level(void)
@@ -589,18 +713,12 @@ static void t_level(void)
                      MD[m], 10.0 * log10(en / eo));
             check(line, fabs(10.0 * log10(en / eo)) < 1.0);
         }
-        g_len = 3u * 44100u;
-        old_run(n, g_chord, 1, ow);
-        o = rms(ow, a, b);
-        fx_reset();
-        run(n, g_chord, 1, 0);
-        nw = sqrt((pow(rms(WL, a, b), 2) + pow(rms(WR, a, b), 2)) / 2.0);
-        printf("cr_fx:   a held chord's delay, 1 .. 3 s: Felucca's %.0f rms, the new one %.0f rms a side (%+.2f dB: its repeats overlap "
-               "on one side at a time)\n", o, nw, db(nw / o));
     }
 }
 
 static int32_t g_burst(uint32_t i) { return i < 4410u ? g_chord(i) : 0; }
+static int32_t g_chord_stab(uint32_t i) { g_len = 0xFFFFFFFFu; return i < 22050u ? g_chord(i) : 0; }
+static int32_t g_chord_neg(uint32_t i) { return -g_chord_stab(i); }
 static void t_mono(void)
 {
     uint32_t i, n = 4u * 44100u - (4u * 44100u) % CTL, same = 1;
@@ -650,6 +768,14 @@ static double rt60(uint32_t n)
 }
 static int32_t g_click(uint32_t i) { return i >= 64u && i < 68u ? 120000 : 0; }
 static int32_t g_bang(uint32_t i) { return i < 2205u ? noise(120000) : 0; }   /* 50 ms, the loudest a line takes */
+static uint64_t cost_of(const int32_t *d, const int32_t *r, uint32_t reps)
+{
+    static int32_t ml[CTL], mr[CTL];
+    uint64_t t0 = instr_now();
+    uint32_t j;
+    for (j = 0; j < reps; j++) xf_block(d, r, ml, mr, CTL);
+    return (instr_now() - t0) * 4u / reps;
+}
 static void t_silence(void)
 {
     static const struct { uint8_t decay, size, damp, mod; double lo, hi; } R[] = {   /* (DAMP 0, MOD 0: the gains alone) */
@@ -657,7 +783,6 @@ static void t_silence(void)
         {80, 127, 0, 0, 7.1, 13.0}, {48, 0, 0, 0, 1.78, 3.24}, {48, 127, 0, 0, 1.78, 3.24},
         {48, 88, 56, 56, 1.0, 3.24}, {48, 88, 127, 56, 0.3, 2.4}};
     uint32_t k, n, i, ok = 1;
-    uint64_t t0, t1, t2;
     for (k = 0; k < sizeof R / sizeof R[0]; k++) {
         double t;
         fx_reset();
@@ -668,14 +793,14 @@ static void t_silence(void)
         xfp[XP_RLOW] = 0;
         n = (uint32_t)(xf_rt_ms(R[k].decay) * 1.6 * 44.1) + 2u * 44100u;
         n -= n % CTL;
-        run(n, g_bang, 2, 0);
+        run(n, g_click, 2, 0);
         t = rt60(n);
-        printf("cr_fx:   DECAY %3u (%.1f s), SIZE %3u, DAMP %3u, MOD %3u: RT60 measured %.2f s\n", R[k].decay,
+        printf("cr_fx:   DECAY %3u (%.1f s), SIZE %3u, DAMP %3u, MOD %3u: RT60 of a single click %.2f s\n", R[k].decay,
                xf_rt_ms(R[k].decay) / 1000.0, R[k].size, R[k].damp, R[k].mod, t);
         if (t < R[k].lo || t > R[k].hi) ok = 0;
     }
-    check("the reverb's RT60 is DECAY's (0.3 .. 9.6 s within a factor of 1.35, DAMP and MOD 0) at any SIZE; DAMP shortens it", ok);
-    {   /* every tail ends: DECAY up to 19 s x SIZE x DAMP x MOD, a loud 50 ms burst, then silence for 8 RT60 + 20 s */
+    check("the reverb's RT60 is DECAY's (0.3 .. 9.6 s within a factor of 1.35, DAMP and MOD 0, a click) at any SIZE; DAMP shortens it", ok);
+    {   /* every tail ends: DECAY up to 19 s x SIZE x DAMP x MOD, a loud 50 ms burst, then silence for 10 RT60 + 20 s */
         static const uint8_t DC[4] = {0, 40, 72, 96}, SZ[3] = {0, 64, 127}, DM[2] = {0, 127}, MD[2] = {0, 127};
         uint32_t a, b, c, d, cases = 0, ended = 0;
         double worst = 0;
@@ -689,7 +814,7 @@ static void t_silence(void)
                         xfp[XP_RDAMP] = DM[c];
                         xfp[XP_RMOD] = MD[d];
                         xfp[XP_RLOW] = 0;
-                        n = (uint32_t)(xf_rt_ms(DC[a]) * 8.0 * 44.1) + 20u * 44100u;
+                        n = (uint32_t)(xf_rt_ms(DC[a]) * 10.0 * 44.1) + 20u * 44100u;
                         if (n > MAXS - CTL) n = MAXS - CTL;
                         run(n, g_bang, 2, 0);
                         for (i = n; i > 0u && !(WL[i - 1u] | WR[i - 1u]); i--) {}
@@ -712,19 +837,24 @@ static void t_silence(void)
     check("silence in, silence out: the wet is exactly 0 and both effects are off within 60 s of a stab (defaults)",
           i < n - 44100u && !xf.d_live && !xf.r_live && !xf.up_live);
     {
-        static int32_t z[CTL], ml[CTL], mr[CTL], s[CTL];
-        uint32_t j, reps = 20000;
+        static int32_t z[CTL], s[CTL];
+        uint32_t j;
+        uint64_t idle, cd, cr, both;
         for (j = 0; j < CTL; j++) s[j] = noise(20000);
-        t0 = instr_now();
-        for (j = 0; j < reps; j++) xf_block(z, z, ml, mr, CTL);
-        t1 = instr_now();
-        for (j = 0; j < reps; j++) xf_block(s, s, ml, mr, CTL);
-        t2 = instr_now();
-        if (t0 && t2 > t1) {
-            double idle = (double)(t1 - t0) / reps * 4.0, on = (double)(t2 - t1) / reps * 4.0;
-            printf("cr_fx:   host instructions a 128-frame block: off %.0f (%.1f us on the device), both on %.0f (%.0f us = %.1f %% of "
-                   "2902 us; emu.c's 259 a us)\n", idle, idle / 259.0, on, on / 259.0, on / 259.0 / 29.02);
-            check("the cost: both effects on <= 350 us a block (device estimate), off <= 5 us", on / 259.0 <= 350.0 && idle / 259.0 <= 5.0);
+        idle = cost_of(z, z, 20000);
+        if (idle) {
+            fx_reset();
+            cd = cost_of(s, z, 20000);
+            fx_reset();
+            cr = cost_of(z, s, 20000);
+            fx_reset();
+            both = cost_of(s, s, 20000);
+            printf("cr_fx:   COST, host instructions a 128-frame half -> device estimate (emu.c: 259 a us; 2902 us a half): off %llu "
+                   "(%.1f us); the delay alone (%s rate) %llu (%.0f us); the reverb alone (%s rate) %llu (%.0f us); both %llu (%.0f us = "
+                   "%.1f %%)\n", (unsigned long long)idle, idle / 259.0, DSD == 1 ? "full" : "half", (unsigned long long)cd, cd / 259.0,
+                   DSR == 1 ? "full" : "half", (unsigned long long)cr, cr / 259.0, (unsigned long long)both, both / 259.0,
+                   both / 259.0 / 29.02);
+            check("the cost: off <= 5 us a half (device estimate)", idle / 259.0 <= 5.0);
         } else {
             printf("cr_fx:   (no instruction counter on this host: the cost is tools/emu/perf.sh's)\n");
         }
@@ -735,12 +865,13 @@ static void t_silence(void)
 static void demos(void)
 {
     static const struct { const char *file; int16_t size, decay, damp; uint32_t secs; } IR[] = {
-        {"ir_reverb_small.wav", 20, 32, 40, 4}, {"ir_reverb_default.wav", 88, 48, 56, 8}, {"ir_reverb_large.wav", 127, 80, 30, 20},
-        {"ir_reverb_inf.wav", 127, 127, 20, 30}};
+        {"ir_reverb_small", 20, 32, 40, 4}, {"ir_reverb_default", 88, 52, 56, 8}, {"ir_reverb_large", 127, 80, 30, 20},
+        {"ir_reverb_inf", 127, 127, 20, 30}};
     static const struct { const char *file; int16_t mode, sync, div, ratio, fb; } DL_[] = {
-        {"ir_delay_stereo.wav", 0, 1, 6, 0, 80}, {"ir_delay_pingpong.wav", 1, 1, 6, 0, 80},
-        {"ir_delay_pingpong_dotted.wav", 1, 1, 9, 1, 80}};
+        {"ir_delay_stereo", 0, 1, 6, 0, 80}, {"ir_delay_pingpong", 1, 1, 6, 0, 80},
+        {"ir_delay_pingpong_dotted", 1, 1, 8, 1, 80}};
     uint32_t k, n;
+    char name[96];
     for (k = 0; k < 4u; k++) {
         fx_reset();
         xfp[XP_RSIZE] = IR[k].size;
@@ -748,7 +879,8 @@ static void demos(void)
         xfp[XP_RDAMP] = IR[k].damp;
         n = IR[k].secs * 44100u - (IR[k].secs * 44100u) % CTL;
         run(n, g_click, 2, 0);
-        wav_write(IR[k].file, n, 4.0);
+        snprintf(name, sizeof name, "%s%s.wav", IR[k].file, sfx);
+        wav_write(name, n, 4.0);
     }
     for (k = 0; k < 3u; k++) {
         fx_reset();
@@ -759,23 +891,45 @@ static void demos(void)
         xfp[XP_DFDBK] = DL_[k].fb;
         n = 6u * 44100u - (6u * 44100u) % CTL;
         run(n, g_burst, 1, 0);
-        wav_write(DL_[k].file, n, 1.0);
+        snprintf(name, sizeof name, "%s%s.wav", DL_[k].file, sfx);
+        wav_write(name, n, 1.0);
     }
+    /* the comparison's material (docs/FX.md "Half rate or full"): a bright stab (the chord, 12 harmonics a note) through
+     * each effect alone at its defaults with more feedback / decay */
+    fx_reset();
+    xfp[XP_DFDBK] = 90;
+    xfp[XP_DTONE] = 127;
+    n = 8u * 44100u - (8u * 44100u) % CTL;
+    run(n, g_chord_stab, 1, 0);
+    snprintf(name, sizeof name, "cmp_delay%s.wav", sfx);
+    wav_write(name, n, 1.0);
+    fx_reset();
+    xfp[XP_RDAMP] = 0;
+    xfp[XP_RDECAY] = 64;
+    run(n, g_chord_stab, 2, 0);
+    snprintf(name, sizeof name, "cmp_reverb%s.wav", sfx);
+    wav_write(name, n, 1.0);
 }
 
 int main(int argc, char **argv)
 {
     if (argc > 1)
         outdir = argv[1];
+    if (argc > 2)
+        sfx = argv[2];
     WL = calloc(MAXS, sizeof *WL);
     WR = calloc(MAXS, sizeof *WR);
     if (!WL || !WR)
         return 2;
+    printf("cr_fx: the delay at %s rate, the reverb at %s rate\n", DSD == 1 ? "full" : "half", DSR == 1 ? "full" : "half");
     t_maths();
     t_sync();
-    t_halfrate();
+    t_band();
+    t_dropout();
+    t_noise();
     t_level();
     t_mono();
+    t_overdrive();
     t_smooth();
     t_silence();
     t_bound();

@@ -6,10 +6,10 @@
 
 One D major stab (MAJ + D4, 0.4 s) on the power-on sound (FM6 TINE EP) through each setting below, set in the FX
 layer as a player would (FX held, SELECT, the knobs). 44.1 kHz stereo WAVs:
-  stab_default          the unit as it powers on (the sound's own sends: reverb 35, chorus 45, delay 25)
+  stab_default          the unit as it powers on (the chord part's default sends: reverb 35, chorus 45, delay 25)
   stab_delay_pingpong   the delay alone (send 81): 1/8 at 120 BPM, ping-pong, the defaults
   stab_delay_dotted     .. Stereo, 1/8. left and 3:4 of it right (a dotted eighth against a 9/16), feedback up
-  stab_delay_free       .. free: 321 ms, the right side x0.75, ping-pong, the wow up
+  stab_delay_free       .. free: 356 ms, the right side x0.75, ping-pong, the wow up
   stab_reverb_default   the reverb alone (send 83) at its defaults
   stab_reverb_small     .. Size 20, Decay 1.2 s
   stab_reverb_large     .. Size 127, Decay 9.6 s

@@ -93,6 +93,9 @@ static int32_t lim_env = LIM_T;
 static uint8_t fx_smooth;
 #if CR_FX
 static volatile uint8_t fx_off;       /* ChoralRoot's FX tap at off (cr_ui.c cu_fx_apply): no part sends into the buses */
+static int32_t fx_sg[NPART][3];       /* each part's send gains as the last block left them (Q15: chorus, delay, reverb):
+                                       * a new send, FX on / off, a CC is reached as a ramp over the block, not as a step
+                                       * in what the delay and the reverb are fed (a click at every detent of Send) */
 #endif
 static int32_t lim_g = 32768;
 /* Options > USB Level = Fixed (Felucca 1.0.5's MENU > USB LEVEL FIXED, #42: record over USB with the speaker turned
@@ -453,11 +456,25 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
         int32_t xmax;
 #if CR_FX
+        int32_t *sg = fx_sg[t - trk], dc, dd, dr;
         if (fx_off)
             c = d = r = 0;
-#endif
+        dc = (c - sg[0]) >> CTL_LOG2;                   /* (CTL samples a block; the ramp's last fraction: a step of
+                                                         * under 32 / 32768) */
+        dd = (d - sg[1]) >> CTL_LOG2;
+        dr = (r - sg[2]) >> CTL_LOG2;
+        xmax = c > sg[0] ? c : sg[0];
+        xmax = d > xmax ? d : sg[1] > xmax ? sg[1] : xmax;
+        xmax = r > xmax ? r : sg[2] > xmax ? sg[2] : xmax;
+        xmax = 0x7FFFFFFF / (xmax | 1);
+#define FX_SEND(bus, k, g_) do { sg[k] += d##g_; if (sg[k]) bus[i] += mulq15(xs, sg[k]); } while (0)
+#define FX_SEND_END() (sg[0] = c, sg[1] = d, sg[2] = r)
+#else
         xmax = c > d ? c : d;
         xmax = 0x7FFFFFFF / ((xmax > r ? xmax : r) | 1);   /* sends: loud chords at a high LEVEL */
+#define FX_SEND(bus, k, g_) do { if (g_) bus[i] += mulq15(xs, g_); } while (0)
+#define FX_SEND_END() ((void)0)
+#endif
         /* a stereo side (voice.c part_side: VA's SPREAD / USPREAD): DIST works on the mid, the SLICER plays the part
          * mono, the FX layer's mute fades both; the sends take the mid */
         sd = side_on && !t->p[P_SLCR] && !slicer_busy(t) ? side : 0;
@@ -477,12 +494,9 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
                 int32_t xs = clamp(x, -xmax, xmax), y = ((sd[i] >> 2) * lvl) >> 10;
                 if (a > pk)
                     pk = a;
-                if (c)
-                    send_c[i] += mulq15(xs, c);
-                if (d)
-                    send_d[i] += mulq15(xs, d);
-                if (r)
-                    send_r[i] += mulq15(xs, r);
+                FX_SEND(send_c, 0, c);
+                FX_SEND(send_d, 1, d);
+                FX_SEND(send_r, 2, r);
                 {
                     int32_t l = ((x - y) * gl) >> 12, rr = ((x + y) * gr) >> 12;
                     mix_l[i] += l;
@@ -496,6 +510,7 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
                 }
             }
             t->peak = pk;
+            FX_SEND_END();
             if (MODP(t).on)
                 mod_end(t);
             return;
@@ -507,12 +522,9 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
             int32_t xs = clamp(x, -xmax, xmax);         /* sends: mulq15 would overflow */
             if (a > pk)
                 pk = a;
-            if (c)
-                send_c[i] += mulq15(xs, c);
-            if (d)
-                send_d[i] += mulq15(xs, d);
-            if (r)
-                send_r[i] += mulq15(xs, r);
+            FX_SEND(send_c, 0, c);
+            FX_SEND(send_d, 1, d);
+            FX_SEND(send_r, 2, r);
             {
                 int32_t l = (x * gl) >> 12, rr = (x * gr) >> 12;
                 mix_l[i] += l;
@@ -526,6 +538,7 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
             }
         }
         t->peak = pk;
+        FX_SEND_END();
     }
     if (MODP(t).on)
         mod_end(t);                                     /* the stored values back */
