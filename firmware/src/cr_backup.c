@@ -89,9 +89,13 @@ static struct {
     uint8_t listed, put, id, gen;                    /* a LIST snapshot; a PUT session: its id, cu_loop_gen */
     int8_t copy[CRB_N];                              /* the current copy at LIST (-1: none) */
     uint32_t size[CRB_N];                            /* the object's size at LIST */
-    uint32_t usb, len, crc, pos, ms, reboot;         /* usb.resets at LIST / begin; the PUT; restart at (ms | 1) */
+    uint32_t usb, len, crc, pos, ms;                 /* usb.resets at LIST / begin; the PUT */
     uint32_t reloads;                                /* parts reloaded after a PUT (crb_reload; the tests read it) */
-    uint32_t stub;                                   /* 77 STUB: the request the restart at `reboot` leaves for the stub */
+    uint32_t reboot;                                 /* a restart is owed (72 RESTART, 77 STUB; crb_leave below): 0 none,
+                                                      * 1 asked, 2 its reply marked in the ring, 3 the reply seen taken */
+    uint32_t reboot_ms, mark, gone_ms;               /* fm1_ms at the request; the reply's end (ota_wire_mark); fm1_ms
+                                                      * when the host was seen to have it */
+    uint32_t stub;                                   /* 77 STUB: the request the restart leaves for the stub */
 } crb;
 
 /* ------------------------------------------------------------------ the reply --- */
@@ -651,9 +655,9 @@ static void crb_debug(void)
  * word, and a restart. op 1 TEST: the stub boots as usual and checks the staged loader on the way (73 DEBUG's
  * stub_detail then carries the loader's code: the rescue's read, without a rescue). op 2 RESCUE: as if OCT- were
  * held at power-on: the staged loader (update mode, ota-FM-1) if it passes the check, else the ROM's USB boot; left
- * by an install, or by switching off and on. rc 0 accepted (the restart about 150 ms later, once the reply has
- * left), 1 a bad op, 3 busy (EDIT or SAVE open, a loop being recorded), 127 no stub of version 2 or later ran
- * before this boot (the emulator; a firmware started some other way) */
+ * by an install, or by switching off and on. rc 0 accepted (the restart about 150 ms later, and not before the host
+ * has taken the reply: crb_leave), 1 a bad op, 3 busy (EDIT or SAVE open, a loop being recorded), 127 no stub of
+ * version 2 or later ran before this boot (the emulator; a firmware started some other way) */
 #define CRB_STUB_REQ_TEST 0x54514552u                /* stub_core.h STUB_REQ_TEST, STUB_REQ_RESCUE (cr_backup_test) */
 #define CRB_STUB_REQ_RESCUE 0x52514552u
 #ifndef CRB_STUB_VER
@@ -665,6 +669,17 @@ static void crb_debug(void)
 #define CRB_STUB_GO(w) ((void)(w))
 #endif
 #endif
+/* a restart is owed after this reply (72 RESTART: w 0; 77 STUB: w its request): ed_service does it (crb_leave). Asked
+ * again while one is owed: the newer request says what is left for the stub and which reply is waited for, the
+ * clock stays the first one's (the bound cannot be pushed back) */
+static void crb_reboot_ask(uint32_t w)
+{
+    crb.put = crb.listed = 0;
+    crb.stub = w;
+    if (!crb.reboot)
+        crb.reboot_ms = fm1_ms;
+    crb.reboot = 1;
+}
 static uint32_t crb_stub(uint32_t op)
 {
     if (CRB_STUB_VER() < 2u)
@@ -673,9 +688,7 @@ static uint32_t crb_stub(uint32_t op)
         return 1;
     if (cu.page == PG_EDIT || cu.page == PG_SAVE || cr_snap.lcap != CRL_CAP_NONE || crl_stage_busy)
         return 3;
-    crb.put = crb.listed = 0;
-    crb.stub = op == 1u ? CRB_STUB_REQ_TEST : CRB_STUB_REQ_RESCUE;
-    crb.reboot = fm1_ms | 1u;                        /* ed_service: once the reply is out */
+    crb_reboot_ask(op == 1u ? CRB_STUB_REQ_TEST : CRB_STUB_REQ_RESCUE);
     return 0;
 }
 
@@ -825,10 +838,8 @@ static int crb_handle(const uint8_t *f, uint32_t n)
     case CRB_RESTART:
         if (na)
             return 0;
-        crb.put = crb.listed = 0;
         crb_b(0);
-        crb.stub = 0;
-        crb.reboot = fm1_ms | 1u;                    /* ed_service restarts once the reply is out */
+        crb_reboot_ask(0);                           /* ed_service restarts once the host has the reply (crb_leave) */
         break;
     default:
         return 0;
@@ -842,16 +853,51 @@ static int crb_handle(const uint8_t *f, uint32_t n)
 #define CRB_REBOOT() do { bootguard.pending = 0; usb_detach(); fm1_delay_ms(30); fm1_reboot(); } while (0)
 #endif
 #define CR_BACKUP_SERVICE 1                          /* cr_shim.c: no ed_service stub */
+/* The restart a reply promised (72 RESTART, 77 STUB). usb_detach takes along whatever of the reply the host has not
+ * taken, so the restart waits for the fact, not for a time: the reply's last USB packet taken by the host (usb.c
+ * ota_wire_gone: TXCSR1's TxPktRdy seen clear after it; clock and notes sent behind it are not waited for), then
+ *   CRB_LEAVE_GRACE  5 ms more (ticks of fm1_ms: four whole USB frames at least). A host controller hands a packet
+ *                    it has taken to its driver at its next interrupt, a frame (1 ms) later at most (the frame's end;
+ *                    EHCI and xHCI hold their interrupts back 1 ms by default); our leaving is a port change that
+ *                    must not overtake those bytes on their way up the host's MIDI stack: four frames for the one;
+ *   CRB_LEAVE_MIN    and not before 150 ms from the request, as before and as web/EDITOR_PROTOCOL.md says: the
+ *                    tools close their ports in that time, while the FM-1 is still there (tools/fm1_install.py);
+ *   CRB_LEAVE_MAX    500 ms from the request at the latest, taken or not: a host that has stopped reading (or is
+ *                    gone: no configuration, the SIE silent) does not keep the unit from restarting.
+ * Before (to 0.16): "150 ms from the request and the ring empty", the request's time kept as fm1_ms | 1. On an
+ * even millisecond that is one ahead: the unsigned difference read 0xFFFFFFFF until the next tick, the 150 ms
+ * counted as over, and the unit left as soon as usb_poll had put the reply into the endpoint, before the host's IN
+ * token: the reply lost, the unit restarted all the same. One request in four by its phases (an even millisecond,
+ * and the poll that loads the reply before the next tick: tests/cr_restart_test.c on that code); the unit had
+ * shown 3 in 13 */
+#define CRB_LEAVE_GRACE 5u
+#define CRB_LEAVE_MIN 150u
+#define CRB_LEAVE_MAX 500u
+static void crb_leave(void)
+{
+    uint32_t now = fm1_ms, age = now - crb.reboot_ms;
+    if (crb.reboot == 1u) {                          /* (crb_handle has returned: the reply is in the ring) */
+        crb.mark = ota_wire_mark();
+        crb.reboot = 2;
+    }
+    if (crb.reboot == 2u && ota_wire_gone(crb.mark)) {
+        crb.gone_ms = now;
+        crb.reboot = 3;
+    }
+    if (age < CRB_LEAVE_MAX && (crb.reboot != 3u || age < CRB_LEAVE_MIN || now - crb.gone_ms < CRB_LEAVE_GRACE))
+        return;
+    crb.reboot = 0;                                  /* (once: a host test's hooks return) */
+    if (crb.stub)
+        CRB_STUB_GO(crb.stub);                       /* (77 STUB: the request, a core reset; never returns on the unit) */
+    CRB_REBOOT();
+}
 /* main.c's main loop: our frames (7D 46 4C), anything else stays for ota_service (M-UPGRADE) */
 static void ed_service(void)
 {
     const uint8_t *p;
     uint32_t n;
-    if (crb.reboot && fm1_ms - crb.reboot > 150u && so_r == so_w) {
-        if (crb.stub)
-            CRB_STUB_GO(crb.stub);                   /* (77 STUB: the request, a core reset; never returns on the unit) */
-        CRB_REBOOT();                                /* (the RESTART reply has left) */
-    }
+    if (crb.reboot)
+        crb_leave();
     if (!ota_frame_get(&p, &n) || n < 4u || p[0] != CRB_HDR0 || p[1] != CRB_HDR1 || p[2] != CRB_HDR2)
         return;
     crb_handle(p, n);                                /* (in place: the frame is released after the reply) */

@@ -86,6 +86,19 @@ static volatile uint8_t sx_ready, sx_collect, sx_busy;
 #define SXQ 64u
 static uint32_t sx_out_q[SXQ];
 static volatile uint32_t so_w, so_r;
+#ifdef FELUCCA_LOADER
+#define SX_UNSEEN() 0                               /* (the update loader: Felucca's ep1_tx, byte for byte) */
+#define SX_TAKEN() ((void)0)
+#else
+/* What of the ring the host HAS (ota_wire_gone, below): so_r == so_w only says the ring was drained into EP1 IN's
+ * packet buffer, where the packet waits for the host's IN token. so_gone follows so_r each time ep1_tx sees
+ * TXCSR1's TxPktRdy clear: the SIE clears it when the host has acknowledged the packet. sx_watch: someone asked
+ * (ota_wire_mark), so ep1_tx reads TXCSR1 with nothing to send too, until so_gone has caught up */
+static volatile uint32_t so_gone;
+static volatile uint8_t sx_watch;
+#define SX_UNSEEN() (sx_watch && so_gone != so_r)
+#define SX_TAKEN() (so_gone = so_r)
+#endif
 #endif
 
 /* MIDI rings: 4-byte USB-MIDI event packets */
@@ -819,13 +832,32 @@ static void ota_frame_done(void)
     RING_PUBLISH();                                     /* done with the frame before the ISR may refill it */
     sx_ready = 0;
 }
+#ifndef FELUCCA_LOADER
+/* Main loop: has a SysEx sent reached the host? For a reply that is followed by leaving the bus (cr_backup.c: 72
+ * RESTART, 77 STUB): usb_detach takes along whatever still waits in the endpoint.
+ * ota_wire_mark(): the ring's end now, i.e. the end of what ota_wire_send has queued so far; from here ep1_tx
+ * watches the endpoint (sx_watch: 2 SIE round trips a poll while a SysEx packet is in it and nothing else is to be
+ * sent; never asked, ep1_tx does what it did).
+ * ota_wire_gone(mark): every SysEx event queued before the mark was in a packet the host has taken (so_gone), or a
+ * bus reset dropped it: nothing of it is left to wait for. Notes and clock neither hold this back nor hide it:
+ * SysEx is loaded first whenever the endpoint is free, so_gone moves before the next packet (theirs) is loaded, and
+ * an endpoint that MIDI out never leaves idle is not waited for. A host that does not read: never, the caller's
+ * bound */
+static uint32_t ota_wire_mark(void)
+{
+    sx_watch = 1;
+    RING_PUBLISH();
+    return so_w;
+}
+static int ota_wire_gone(uint32_t mark) { return (int32_t)(so_gone - mark) >= 0; }
+#endif
 #endif
 
 static void ep1_tx(void)
 {
     uint32_t csr, n = 0;
 #if FELUCCA_OTA
-    if (mo_w == mo_r && so_w == so_r)
+    if (mo_w == mo_r && so_w == so_r && !SX_UNSEEN())
         return;
 #else
     if (mo_w == mo_r)
@@ -835,6 +867,11 @@ static void ep1_tx(void)
     csr = sie_rd(S_TXCSR1);
     if (csr & 0x01u)
         return;                                         /* previous packet still pending */
+#if FELUCCA_OTA
+    if (!usb.timeouts)                                  /* (a read that timed out says nothing) */
+        SX_TAKEN();                                     /* the host has taken all that was loaded: before the next
+                                                         * packet, so notes loaded behind a SysEx do not hide it */
+#endif
     if (csr & 0x80u)
         sie_wr(S_TXCSR1, csr & ~0x80u);
 #if FELUCCA_OTA
@@ -970,6 +1007,7 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
         usb.sx_on = 0;
 #if FELUCCA_OTA
         so_r = so_w;
+        SX_TAKEN();                                     /* (dropped: nothing of it is on its way any more) */
         sx_collect = 0;
 #endif
         usb.e0_tx = 0;
