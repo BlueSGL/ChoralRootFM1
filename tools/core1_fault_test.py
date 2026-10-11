@@ -74,13 +74,12 @@ def show(label, r):
 
 def restart(port, settle):
     dev = connect(port)
-    took = False
     try:
-        took = fi.BackupLink(dev.link).request(fi.BK_RESTART, [], 1.5) == [0]
+        fi.BackupLink(dev.link).request(fi.BK_RESTART, [], 1.5)
     except fi.InstallError:
         pass
     finally:
-        dev.link.close(lost=took)           # it restarts: its port is not closed, the link is dropped (fi.Link)
+        dev.link.close()                    # (at once: the FM-1 leaves the bus 150 ms after its answer)
     time.sleep(3)
     end = time.monotonic() + 30
     while True:
