@@ -39,6 +39,21 @@
 #ifndef FELUCCA_ANALOG
 #define FELUCCA_ANALOG 0                              /* as choralroot.c: ANALOG retired (engine 0) */
 #endif
+#ifndef FELUCCA_PHASE
+#define FELUCCA_PHASE 0                               /* as choralroot.c: PHASE, LOFI, VOICE, TRIO, NOISE retired (0.18) */
+#endif
+#ifndef FELUCCA_LOFI
+#define FELUCCA_LOFI 0
+#endif
+#ifndef FELUCCA_VOICE
+#define FELUCCA_VOICE 0
+#endif
+#ifndef FELUCCA_TRIO
+#define FELUCCA_TRIO 0
+#endif
+#ifndef FELUCCA_NOISE
+#define FELUCCA_NOISE 0
+#endif
 #ifndef FELUCCA_SLICER
 #define FELUCCA_SLICER 1                              /* (as felucca.c; the device unit has it off) */
 #endif

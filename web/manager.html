@@ -249,7 +249,7 @@ function renderDev() {
     : `<li draggable="${r.type !== "init"}" data-i="${i}" class="${r.type}${cls(i)}${ui.swapFrom && ui.swapFrom.row && ui.swapFrom.row.engine === r.engine && ui.swapFrom.row.pos === r.pos ? " swap-src" : ""}">` +
       `<span class="pos">${String(r.pos).padStart(2, "0")}</span>` +
       `<span class="nm">${esc(r.name)}${r.overwrites ? `<span class="over">over ${esc(r.overwrites)}</span>` : ""}</span>` +
-      `<span class="meta">${r.type === "init" ? "init" : r.type === "factory" ? "factory" : r.kind && r.patch ? r.kind + " patch" : "macros"}</span>` +
+      `<span class="meta">${r.type === "init" ? "init" : r.type === "factory" ? "factory" : retiredNote(r.recEngine) ? esc(retiredNote(r.recEngine)) : r.kind && r.patch ? r.kind + " patch" : "macros"}</span>` +
       `<span class="badge${r.slot ? "" : " empty"}">${r.slot ? esc(r.label) : "—"}</span></li>`).join("");
 }
 
@@ -289,7 +289,7 @@ function renderLib() {
     (it.type === "loop"
       ? `<span class="nm">${esc(it.name)}</span><span class="meta">${esc(loopSummary(it.header))}</span><span class="chip" style="--tc:#F6F2EE">LOOP</span></li>`
       : `<span class="nm">${esc(it.name)}${it.file && it.file.factory ? `<span class="over">factory ${String(it.file.position).padStart(2, "0")}</span>` : ""}</span>` +
-        `<span class="meta">${it.patch ? esc(it.kind) + " patch" : "macros"}</span><span class="chip" style="--tc:${colorOf(it.engine)}">${esc(ENGINE_NAMES[it.engine])}</span></li>`)).join("");
+        `<span class="meta">${it.patch ? esc(it.kind) + " patch" : "macros"}</span><span class="chip" style="--tc:${colorOf(it.engine)}">${esc(retiredNote(it.engine) || ENGINE_NAMES[it.engine])}</span></li>`)).join("");
 }
 function renderSources() {
   const opts = [`<option value="browser">This browser</option>`];

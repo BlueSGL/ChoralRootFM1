@@ -807,6 +807,72 @@ int main(void)
         CHECK(t_put(6, (uint8_t *)&sb, sizeof sb) == 0 && crb.reloads == rl + 1u, "reload: bank 0 PUT: the bass reloads");
     }
 
+    /* ---- a 0.17 backup with sounds on the engines retired in 0.18 (PHASE 2, LOFI 3, VOICE 5, TRIO 6, NOISE 11): the
+     * bank and the settings restore without error; after the restart the chord part (parked on NOISE) plays FM6's
+     * default, the bass (on LOFI) is the VA's DEEP SUB behind BASS, as on a fresh unit; the records stay in their slots,
+     * added presets of the VA's pool, and load as the VA's init sound (a stand-in) ---- */
+    {
+        static const uint8_t ENG[5] = {2, 3, 5, 6, 11};
+        static const char *const NM[5] = {"PD BRASS", "CHIP LEAD", "AAH", "TRIO PAD", "WIND"};
+        static const char *const WAS[5] = {"PHASE", "LOFI", "VOICE", "TRIO", "NOISE"};
+        static up_bank_t ob;
+        static persist_t pv;
+        uint32_t q, nva, good = 0;
+        int rc;
+        char nm[13], want[40];
+        memset(emu_flash, 0xFF, sizeof emu_flash);   /* a fresh device on 0.18 */
+        power_on();
+        cr_ui_init();
+        nva = pool_count(ENGI_VA);
+        memset(&ob, 0, sizeof ob);
+        ob.magic = UP_BANK_MAGIC; ob.rsize = sizeof(up_rec_t); ob.nslot = UP_PER_BANK;
+        for (q = 0; q < 5u; q++) {                   /* U02..U06: one sound per retired engine, as 0.17's SAVE wrote it */
+            up_rec_t *r = &ob.r[1u + q];
+            r->used = UP_USED; r->ver = UP_VER; r->engine = ENG[q]; r->np = P_COUNT;
+            memcpy(r->name, NM[q], strlen(NM[q]));
+            for (i = 0; i < P_COUNT; i++) r->packed[i] = (uint8_t)(64 + (int)(i % 5));
+            r->note[15] = CB_BIND_MARK;
+            r->flags[15] = (uint8_t)(q == 0u ? 1u : 0u);   /* (PD BRASS: over PHASE 01 BRASS then; the others added) */
+        }
+        crs_capture(&crs_rec.cr);                    /* the settings as this unit has them, then the two parts' sounds */
+        memcpy(&pv, &crs_rec, sizeof pv);
+        CHECK(pv.magic == PERSIST_MAGIC && pv.cr.version == CRS_VERSION, "0.17 backup: a settings record to start from");
+        pv.cr.chord_sound = (uint16_t)(11u << 8 | 2u);   /* the chord part on NOISE 02 */
+        pv.cr.bass_sound = (uint16_t)(3u << 8 | 1u);     /* the bass on LOFI 01 */
+        crs_pool_set(&pv.cr, 0, 3, 4);                   /* slot 3 (PHASE's): its place then, kept as bytes */
+        crs_pool_set(&pv.cr, 0, 10, 2);                  /* slot 10 (NOISE's) */
+        cr_settings_seal(&pv.cr);
+        rc = t_put(6, (uint8_t *)&ob, sizeof ob);
+        CHECK(rc == 0, "0.17 backup: the bank with PHASE LOFI VOICE TRIO NOISE records restores (rc %d)", rc);
+        rc = t_put(1, (const uint8_t *)&pv, sizeof pv);
+        CHECK(rc == 0 && cr_restore_lock, "0.17 backup: the settings with the chord on NOISE, the bass on LOFI restore (rc %d)", rc);
+        cr_restore_lock = 0;                         /* the restart */
+        power_on();
+        cr_ui_init();
+        CHECK(trk[CR_PART_CHORD].eng_req == ENGI_FM6 && !strcmp(psnd[0].name, "TINE EP") && psnd[0].kind == PK_FACTORY,
+              "0.17 backup: after the restart the chord part plays FM6 TINE EP (%u %s)", (unsigned)trk[CR_PART_CHORD].eng_req, psnd[0].name);
+        CHECK(trk[CR_PART_BASS].eng_req == ENGI_VA && !strcmp(psnd[1].name, "DEEP SUB") && !cs.bass_on,
+              "0.17 backup: the bass is the VA's DEEP SUB, off until BASS (%u %s)", (unsigned)trk[CR_PART_BASS].eng_req, psnd[1].name);
+        CHECK(crs_pool_get(&crs_rec.cr, 0, 3) == 4 && crs_pool_get(&crs_rec.cr, 0, 10) == 2,
+              "0.17 backup: the retired engines' pool_pos slots keep their bytes");
+        CHECK(pool_count(ENGI_VA) == nva + 5u, "0.17 backup: five added presets in the VA's pool (%u -> %u)", (unsigned)nva, (unsigned)pool_count(ENGI_VA));
+        for (q = 0; q < 5u; q++) {
+            uint32_t pos = pool_pos_slot(ENGI_VA, 1u + q);
+            pool_name(ENGI_VA, pos, nm);
+            cu_pool_load(0, ENGI_VA, pos);
+            good += up_used(1u + q) && up_rec(1u + q)->engine == ENG[q] && pos == nva + q && !strcmp(nm, NM[q]) &&
+                    cb_bound(1u + q) == PF_NONE && trk[CR_PART_CHORD].eng_req == ENGI_VA && !strcmp(psnd[0].name, NM[q]) &&
+                    psnd[0].kind == PK_USER && psnd[0].slot == 1u + q && trk[CR_PART_CHORD].p[P_E0] == ENG_VA.edit[0].def &&
+                    (snprintf(want, sizeof want, "%s retired: stand-in", WAS[q]), !strcmp(cu.msg.text, want));
+        }
+        CHECK(good == 5u, "0.17 backup: each record in its slot under its name, the VA's init sound when picked, \"<ENGINE> retired: stand-in\" (%u of 5; last message \"%s\")", (unsigned)good, cu.msg.text);
+        CHECK(t_list() == 0 && find(man, nman, 6)->size == sizeof ob && find(man, nman, 6)->crc == st_crc32((uint8_t *)&ob, sizeof ob),
+              "0.17 backup: the bank reads back byte for byte (nothing rewritten, nothing deleted)");
+        t_begin(76); t_b(0); t_b(2); t_b(1);
+        a = t_send(&n);
+        CHECK(a && n == 1 && a[0] == 1, "SELECT a retired engine (PHASE): rc 1");
+    }
+
     /* ---- DEBUG (73): version 1, a count, count x u32; the stub's key samples are its last four values ---- */
     t_begin(73);
     a = t_send(&n);

@@ -16,18 +16,23 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 ## The model
 
 - **A pool per engine.** Each engine's pool starts with **INIT** at position 00 (the engine's init sound, `cu_sound_init`; it cannot be overwritten: Overwrite on it is Save as new), then its factory presets (`engine_t.presets`: FM6 25 (F1..F24, PIANO),
-  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, PHASE 6, LOFI 5, VOICE, TRIO 5, WHEEL 5, PHYS 9,
-  NOISE 4: the picker's order since 0.14) followed by the presets the user added. ANALOG (engine 0, 12 presets) is retired
+  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, WHEEL 5, PHYS 9: the picker's order, six
+  engines since 0.18; PHASE 6, LOFI 5, VOICE 4, TRIO 5 and NOISE 4 came between and after them until then) followed by
+  the presets the user added. ANALOG (engine 0, 12 presets) is retired
   since 0.14 (`FELUCCA_ANALOG` 0): no pool; a user record of ANALOG is an added preset of the VA's pool and plays there
   with its CUT / RES / DRIVE / MIX / DTN, filter envelope and ATK / REL on the VA's macros of the same name (`cr_ui.c`
   `cu_analog_va`; its binding to an ANALOG factory preset is dropped), another retired engine's record (SAMPLE, GRAIN,
-  DRUM) the VA's init sound.
+  DRUM) the VA's init sound. PHASE, LOFI, VOICE, TRIO and NOISE (engines 2, 3, 5, 6, 11) are retired since 0.18
+  (`FELUCCA_PHASE` / `LOFI` / `VOICE` / `TRIO` / `NOISE` 0): no pool; a user record of one is an added preset of the
+  VA's pool under its name (its binding to a factory preset of its engine is dropped) and loads as the VA's init
+  sound with the record's sends (DIST CHO DLY REV) and its envelope's ATK / REL on the VA's macros of that name: a
+  stand-in, with the message `PHASE retired: stand-in` (`cr_ui.c cu_load_user`); the record is not rewritten.
   Every entry is editable: **saving over a factory preset is allowed** and the factory one stays recoverable (reset).
 - **PRESETS turns inside the current engine's pool only** (the chord part's engine; ALGORITHM the bass part's). The
   popup: the number big, the name, `FM6 · 05/25` (the place and the number of presets: 00 = INIT, which is not counted
   as a preset, 01.. the factory presets, then the user's), the stripe meter over the pool; an overwritten factory preset
   carries a small square mark after its name. The meter is a stripe per preset and place k lights k of them: none on
-  INIT, every one on the last preset (`PHASE · 06/06`: six stripes, all lit). A pool of more than 32 presets (the
+  INIT, every one on the last preset (`WHEEL · 05/05`: five stripes, all lit). A pool of more than 32 presets (the
   CZ-1's 64, FM6 with eight added) has 32 stripes: none on INIT, one from preset 01 on, every one only on the last
   (`cr_ui.c` `cu_pool_lit`); since 0.16 (before: INIT was counted, `FM6 · 05/26`, and the last preset left a stripe dark).
   A step moves the stripes from the place shown to the new one, up (lit) or down (darkened), a stripe every 30 ms, more

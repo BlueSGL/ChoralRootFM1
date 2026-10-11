@@ -101,11 +101,12 @@ A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes o
   chorus, delay, drive), a metronome.
 - **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
   PLAY menu; a loop is saved when it stops ([docs/LOOPER.md](docs/LOOPER.md)).
-- **Eleven engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
+- **Six engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
   import, [docs/FM6.md](docs/FM6.md)), FM TONE (engine 15, `eng_quad.c`, code name QUAD: four-operator FM in the style
   of the Digitone, aligned with the Digitone manual's algorithms, carrier levels and controls,
-  [docs/QUAD.md](docs/QUAD.md)), VA ([docs/VA.md](docs/VA.md)), CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), PHASE,
-  LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE. (Felucca's ANALOG is retired since 0.14: the VA replaces it; an ANALOG sound
+  [docs/QUAD.md](docs/QUAD.md)), VA ([docs/VA.md](docs/VA.md)), CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), WHEEL,
+  PHYS. (PHASE, LOFI, VOICE, TRIO and NOISE, Felucca's, are retired since 0.18: a sound saved on one stays in its
+  slot and plays as a stand-in on the VA.) (Felucca's ANALOG is retired since 0.14: the VA replaces it; an ANALOG sound
   saved before loads on the VA.) One preset pool per engine (INIT, the factory presets, yours), 32 saved sounds, the
   sound editor ([docs/PRESETS.md](docs/PRESETS.md), [docs/EDITOR.md](docs/EDITOR.md)).
 - **Views**: Chord, Keyboard, Notes, Geek Out, Scope; Options, one setting per screen.

@@ -3,7 +3,7 @@
 /* Host test of ChoralRoot's CZ-1 (Melodee's engine, docs/CZ1.md) on the firmware as the emulator builds it
  * (tools/emu/emu_firmware.h: hostsim's sound side, the ChoralRoot UI, storage.c on emu_hal_fw.h's RAM NOR):
  *   sh tests/run_cr_tests.sh
- * Checks: the engine's place (14, after PHASE in the picker order), Casio's 64 tones (valid, A-1 BRASS 1 .. H-8
+ * Checks: the engine's place (14, after the VA in the picker order), Casio's 64 tones (valid, A-1 BRASS 1 .. H-8
  * TYPHOON, the PRESETS names); every factory tone through the 144-byte blob and back, a bad blob = the init tone;
  * every factory tone rendered (three notes, velocity 127 and 1, held then released) without overflow and not
  * silent; Casio SysEx: a 144-byte tone dump (7n 30) -> the part's tone -> the dump cz_store.c sends on a send
@@ -346,8 +346,8 @@ int main(void)
         OK(czu_get(slot, b2) == 0 && !memcmp(raw, b2, CZ_BYTES), "store: from flash after a reboot");
         OK(up_store(20, "UPPER") == 0 && czu[1].used == 1u << 4 && st_sector(OBJ_CZSTORE0, 0) == 0x9D000u &&
            st_sector(OBJ_CZSTORE1, 0) == 0xA0000u, "store: U21 in the second object (0x9D000 / 0xA0000)");
-        cu_load(t, 2, 0, 0);                         /* PHASE */
-        up_store(slot, "PHASE NOW");
+        cu_load(t, 7, 0, 0);                         /* WHEEL (PHASE until 0.18: retired) */
+        up_store(slot, "WHEEL NOW");
         OK(czu_get(slot, b2) != 0, "store: another engine's sound over U05 clears its tone");
         up_put(20, 0);
         OK(czu_get(20, b2) != 0 && !czu[1].used, "store: an erased slot clears its tone");

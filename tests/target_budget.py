@@ -38,6 +38,10 @@ OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_
             # .. and without SAMPLE, GRAIN, DRUM (choralroot.c FELUCCA_SAMPLE / GRAIN / DRUM 0: all-synth)
             # .. and without ANALOG (choralroot.c FELUCCA_ANALOG 0, 0.14: the VA replaces it)
             "analog_render": 581,
+            # .. and since 0.18 without PHASE, LOFI, VOICE, TRIO, NOISE (choralroot.c FELUCCA_PHASE / LOFI / VOICE / TRIO /
+            # NOISE 0): their budget lines until then
+            "phase_render": 77, "lofi_render": 123, "formant_render": 312, "trio_render": 341, "trio_pass": 175,
+            "noise_render": 259,
             "sample_render": 126, "grain_render": 1731, "grain_block": 139, "drum_render": 86, "dv_metal_run": 26,
             "dv_kick_run": 153, "dv_snare_run": 158, "dv_clap_run": 74, "dv_hat_run": 61, "dv_tom_run": 75,
             "dv_rim_run": 61, "dv_bell_run": 52, "dv_cym_run": 67, "dv_out": 35}

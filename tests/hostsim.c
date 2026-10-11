@@ -28,6 +28,15 @@
                                   * renders (run_tests.sh) keep it */
 #endif
 #endif
+#if !defined(FELUCCA_PHASE) && defined(FELUCCA_SEQ)
+#if !FELUCCA_SEQ
+#define FELUCCA_PHASE 0          /* .. and since 0.18 PHASE, LOFI, VOICE, TRIO, NOISE (Felucca's renders keep them) */
+#define FELUCCA_LOFI 0
+#define FELUCCA_VOICE 0
+#define FELUCCA_TRIO 0
+#define FELUCCA_NOISE 0
+#endif
+#endif
 #include "felucca_tables.h"
 #include "../firmware/src/libc.c"
 #undef memset

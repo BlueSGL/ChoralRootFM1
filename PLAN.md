@@ -122,7 +122,7 @@ is displayed permanently for the knobs. In a layer KNOB 1–4 are the layer's; i
   upper part of the panel and under it one row of four cells, one per knob, in the knob colours (blue, orange, white,
   green) with a glyph that pictures the value; a turned knob makes its cell hot for 800 ms instead of a popup.
 - **The engine picker locks the same way**: EDIT held = the white root keys are the engines in the firmware's order
-  (since 0.14: FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE: a root each, D4..G5), a root switches the
+  (since 0.18: FM6, FM TONE, VA, CZ-1, WHEEL, PHYS: a root each, D4..B4; 0.14 to 0.17 also PHASE, LOFI, VOICE, TRIO, NOISE, D4..G5), a root switches the
   sound's engine keeping its envelope and sends, KNOB 1 steps the engine's factory presets, KNOB 2 inits the sound;
   it stays after release (EDIT blinks); EDIT tap, OCT− or HOME closes it (back to the editor view when opened from
   there).
@@ -285,17 +285,24 @@ firmware/src/
   choralroot.c      the compilation unit (replaces felucca.c): build options (FELUCCA_SLICE 0, FELUCCA_SLICER 0,
                     FELUCCA_VA 1, FELUCCA_CZ 1, FELUCCA_QUAD 1; all-synth: FELUCCA_SEQ 0, FELUCCA_SAMPLE 0, FELUCCA_GRAIN 0, FELUCCA_DRUM 0,
                     FELUCCA_ANALOG 0 (0.14: the VA replaces ANALOG),
+                    FELUCCA_PHASE 0, FELUCCA_LOFI 0, FELUCCA_VOICE 0, FELUCCA_TRIO 0, FELUCCA_NOISE 0 (0.18),
                     FELUCCA_ICONS 0, FELUCCA_KEYCAPS 0; FM-1_920, "ChoralRoot 0.1"), Felucca's include order
   kept from Felucca (the platform):
     hal/, libc.c, lcd.c, gfx.c (no keycaps), panel.c, usb.c, midi_uart.c, storage.c, storage_hw.c, ota.c, ota_hw.c,
     console.c, main.c, settings_persist.c, upreset.c (32 user sounds)
     engines.c + eng_*.c, dsp.c, voice.c, mod.c, fx.c (+ perform.c), params.c, audio.c, fm6_*.c       the sound:
-                    PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE, FM6, the VA and CZ-1 (14, Melodee's, docs/CZ1.md:
+                    WHEEL, PHYS, FM6, the VA and CZ-1 (14, Melodee's, docs/CZ1.md:
                     eng_cz.c, cz_*.c, Casio's 64 tones, 8 banks, tone SysEx, cz_ustore.c), FM TONE (engine 15,
                     eng_quad.c, code name QUAD, docs/QUAD.md: quad_tables.h, its patch store quad_store.c, backup id
                     22; the Digitone manual's eight algorithms, blob v3 since 2026-10-08); the slots of ANALOG (0, retired in 0.14), DIGITAL (1), SAMPLE (4), GRAIN (8) and DRUM (10) are
                     retired placeholders (engines.c ENG_GONE: never offered; a user sound on ANALOG plays on the VA
-                    with its macros, one on another loads as INIT on the VA)
+                    with its macros, one on another loads as INIT on the VA). Retired in 0.18 (docs/INTEGRATION.md
+                    "0.18: PHASE, LOFI, VOICE, TRIO, NOISE retired"; the sources stay for Felucca's suite):
+                      PHASE (2)   eng_phase.c     retired in 0.18
+                      LOFI (3)    eng_lofi.c      retired in 0.18
+                      VOICE (5)   eng_formant.c   retired in 0.18
+                      TRIO (6)    eng_trio.c      retired in 0.18
+                      NOISE (11)  eng_noise.c     retired in 0.18
     slicer.c        no-op stubs (SLICER off: its 32 KB POOL buffer freed; perform.c's buffer effects off with it);
                     the SLICE engine is off too
   ChoralRoot:

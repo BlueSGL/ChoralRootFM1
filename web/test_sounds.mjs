@@ -8,7 +8,7 @@
 import { CR_BACKUP_IDS, BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc } from "./fm1backup.js";
 import { SOUND_IDS, ENGINE_NAMES, PATCH_SIZE, patchKindOf, parseSoundObjects, exportSound, soundFileName, readSoundFile,
   importSound, renameSound, deleteSound, readSounds, writeSounds, recordValid, SOUND_TEMPLATES, FM6_FN_DEFAULTS, fm6BlobToVced,
-  vcedToFm6Blob, fm6VcedSyx, czToneSyx, parseSyx, soundFromSyx, exportSyx, syxFileName, FACTORY_PRESETS, FACTORY_FIRST,
+  vcedToFm6Blob, fm6VcedSyx, czToneSyx, parseSyx, soundFromSyx, exportSyx, syxFileName, FACTORY_PRESETS, FACTORY_FIRST, engineRetired,
   soundBindings, poolOf } from "./fm1sounds.js";
 import { readFileSync } from "node:fs";
 
@@ -432,7 +432,10 @@ const FX = {
     8: bind(rec(0, "GRID", { ver: 5, seed: 10 }), 1),     // U09 a drum grid record: never bound
     9: bind(rec(13, "VA PAD", { seed: 11 }), 25),         // U10 VA over its last preset, SHIMMER
     10: bind(rec(0, "ANA STR", { seed: 13 }), 12),        // U11 ANALOG (retired in 0.14) over its STRINGS: the VA's
-  };                                                      //     pool, an added preset (not the VA's 12th)
+                                                          //     pool, an added preset (not the VA's 12th)
+    11: bind(rec(2, "PD BRASS", { seed: 14 }), 1),        // U12 PHASE (retired in 0.18) over its BRASS: the VA's pool, added
+    12: rec(11, "WIND", { seed: 15 }),                    // U13 NOISE (retired in 0.18): added
+  };
   b6[2][191] = 4;
   const bo = new Map(source()); bo.set(6, bank(b6));
   const T = parseSoundObjects(bo).slots;
@@ -444,8 +447,14 @@ const FX = {
      "binding: CZ-1 over BRASS 1 = pool 01; INIT TONE and an index past the presets -> added");
   ok(T[7].bound && T[7].bound.label === "FM6 03" && T[7].bound.name === "FM BASS" && T[8].added && T[9].bound.label === "VA 25" &&
      T[9].bound.name === "SHIMMER", "binding: DIGITAL binds in FM6's pool, a grid record never, VA 25 SHIMMER");
-  ok(T[10].used && T[10].bound === null && T[10].added && T[10].engineName === "ANALOG",
+  ok(T[10].used && T[10].bound === null && T[10].added && T[10].engineName === "ANALOG" && T[10].retired,
      "binding: an ANALOG record (retired) binds nothing: an added preset of the VA's pool");
+  ok(Object.keys(FACTORY_PRESETS).join() === "7,9,12,13,14,15" && [2, 3, 5, 6, 11].every((e) => poolOf(e) === 13 && engineRetired(e)) &&
+     [7, 9, 12, 13, 14, 15].every((e) => !engineRetired(e)) && ENGINE_NAMES[2] === "PHASE" && ENGINE_NAMES[11] === "NOISE",
+     "0.18: six engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE retired (the VA's pool), their names kept");
+  ok(T[11].used && T[11].bound === null && T[11].added && T[11].engineName === "PHASE" && T[11].retired && T[12].added && T[12].retired &&
+     !T[0].retired && !T[20].retired && exportSound(bo, 12).engineName === "PHASE" && readSoundFile(exportSound(bo, 12)).engine === 2,
+     "0.18: a PHASE / NOISE record: kept, marked retired, an added preset (the VA's pool), exports and reads as PHASE");
   ok(T.filter((t) => !t.used).every((t) => t.bound === null && !t.added) && soundBindings([null, b6[0], b6[3]]).map((x) => x && x.pos).join() === ",2,",
      "binding: empty slots neither; soundBindings: the first of two wins");
   // the JSON field: written, informative; the record's bytes are the truth

@@ -36,7 +36,8 @@ not edited:
 A retired engine keeps its number (the stores and the protocol hold numbers: `ENGINES[]` is append-only): its slot is
 `engines.c`'s `ENG_GONE` (no DSP, no presets, `eng_ok` false: the pickers and PRESETS never offer it). A user sound
 saved on engine 4, 8 or 10 (a Felucca slot, a restored bank) loads as the INIT sound on the VA under its name, with
-the message "engine retired: init sound" (and the trace line `load: slot N engine E retired -> INIT on VA`). ANALOG
+the message "engine retired: init sound" (one saved on PHASE, LOFI, VOICE, TRIO or NOISE, retired in 0.18: "0.18:
+PHASE, LOFI, VOICE, TRIO, NOISE retired" below) (and the trace line `load: slot N engine E retired -> INIT on VA`). ANALOG
 (engine 0) is retired too since 0.14 (`FELUCCA_ANALOG` 0 here, in the emulator, `tests/regress.c` and ChoralRoot's host
 units through `tests/hostsim.c`; default 1, so Felucca's unit keeps it): its code, presets and pool are out of the
 image; a user sound saved on ANALOG (a 0.13 slot) loads on the VA with its macros carried by name (CUT RES DRIVE MIX
@@ -100,9 +101,59 @@ it (the engine picker, the popups "FM TONE · 03/16", the save page "FM TONE · 
 object 22 "FM TONE patches"); the code name, files, flags and the patch kind `quad` stay. ANALOG retired (above;
 `ENGINES[0]` is `ENG_GONE`, `cr_bank.c`'s ANALOG trim row dropped, `tests/target_budget.txt`'s `analog_render` an
 optional entry). `ENGINE_ORDER`: FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE: eleven engines, a
-white root each in the pickers (D4..G5). The bass at power-on (and for a settings record whose bass was ANALOG's) is VA
+white root each in the pickers (D4..G5); six since 0.18, below. The bass at power-on (and for a settings record whose bass was ANALOG's) is VA
 DEEP SUB. perf.sh (c) / (i) now run on the VA bass DEEP SUB (ALGORITHM +18): (c) ISR 30 / 41 % (device est. avg / max),
 (i) 29 / 42 %, no holes, no clicks, no erase under sound.
+
+**0.18: PHASE, LOFI, VOICE, TRIO, NOISE retired (2026-10-11).** The owner's decision: the five are Felucca's legacy,
+not ChoralRoot's identity, and their flash is wanted elsewhere; PHYS stays for now. Switched off as ANALOG was, a flag
+each, default 1 in `core.h` (Felucca's unit `felucca.c` and its host suite, `tests/regress.c`'s goldens, `phys_test`,
+`noise_test` keep every engine), 0 in `choralroot.c`, `tools/emu/emu_firmware.h`, ChoralRoot's host units through
+`tests/hostsim.c` (`FELUCCA_SEQ 0`) and `tests/cr_cpu1_test.c`; `tools/build.py` passes them from the environment
+(`FELUCCA_TRIO=1 ./build.sh`):
+
+| flag | engine | source (kept in the tree) | XIP it costs (switched back on alone) |
+| --- | --- | --- | --- |
+| `FELUCCA_PHASE` | 2 PHASE | `eng_phase.c` | 1632 B |
+| `FELUCCA_LOFI` | 3 LOFI | `eng_lofi.c` | 2400 B |
+| `FELUCCA_VOICE` | 5 VOICE | `eng_formant.c` | 2836 B |
+| `FELUCCA_TRIO` | 6 TRIO | `eng_trio.c` | 3648 B |
+| `FELUCCA_NOISE` | 11 NOISE | `eng_noise.c` | 2580 B |
+
+Measured with `./build.sh` (before: a0dd291): XIP 446552 -> 433728 B of 573440 (77.9 -> 75.6 %: -12824 B, the five's
+13096 B less the stand-in's code), RAM 84916 -> 84896 B (VOICE's breath-noise seed and alignment), POOL 295200 B
+unchanged: the five kept no state of their own (the voices' common `voice_t`; none of them is in `eng_state`'s
+union, whose size is PHYS's: 3 x 4296 B a part). `engines.c`: the includes, `ENGINES[2 3 5 6 11]` = `ENG_GONE`,
+`ENGINE_ORDER` (shown: **FM6, FM TONE, VA, CZ-1, WHEEL, PHYS**, `NENG_SHOWN` 6, a white root each in the pickers,
+D4..B4), `ENG_RETIRED` (with `ENG_RETIRED_018`, the five's mask), `TRK_DEF` (part 3: FM6 where LOFI PULSE LD was; no
+ChoralRoot part), and what the kept files call of them: `pd_cos` (PHASE's, `cz_native.c`'s carrier) and `ENG_FORMANT`
+(`fx.c c1_split_ok`: the retired slot). `cr_bank.c`: PHASE's and VOICE's `CB_TRIM` rows go with them. Their factory
+presets (24) are in the engine files: out of the image; `web/packs/factory-{phase,lofi,voice,trio,noise}.json` are
+removed (`tools/make_packs.py`: six packs), `tests/target_budget.py`'s entries of their renders are optional. They had
+no editor plan of their own (the platform's one screen a group, which WHEEL and PHYS still use).
+**What a unit with sounds on the five gets** (the owner did not say: built so, flagged in the release notes): nothing
+is deleted or rewritten in flash. A user record of one keeps its slot, name and engine number; `cr_bank.c
+cb_rec_engine` puts it in the VA's pool as an added preset (its binding to a factory preset of its own engine is
+dropped: it replaces no VA preset), and `cr_ui.c cu_load_user` loads the VA's init sound for it, a stand-in, with what
+carries over honestly: the record's sends (DIST CHO DLY REV) and its envelope's ATK / REL on the VA's ATK / REL macros
+(`cu_analog_va`'s mapping of the same two; the engines' own eight macros have no VA meaning and are not mapped; LEVEL
+and PAN are the part's, as for every sound). The message is `PHASE retired: stand-in` (23 characters: `cu.msg.text`
+holds no more; trace `load: slot N engine 2 (PHASE) retired -> INIT on VA, its sends, ATK, REL`). SAMPLE's, GRAIN's
+and DRUM's records load the plain init sound as before. A settings record whose `chord_sound` / `bass_sound` names one
+of the five reads as `CRS_SOUND_DEFAULT` (`cr_settings.c crs_sound`: not a pool today): FM6 TINE EP, the bass VA DEEP
+SUB behind BASS, as a fresh unit. The record's `pool_pos` slots stay fixed per engine (`CRS_NENG` 11, `CRS_SLOT_ENG`:
+3 PHASE, 5 LOFI, 6 VOICE, 7 TRIO, 10 NOISE are reserved: no rank asks for them, `crs_capture` keeps their bytes; no
+version change). SysEx 76 SELECT of one answers rc 1. The clients: `ENGINE_NAMES` keeps the names; `FACTORY_PRESETS`
+(from `tests/sound_templates.c`, the engines with `eng_ok`) loses the five, so `pool_of` / `poolOf` gives the VA's;
+`--sounds` prints `retired` where it prints `patch` (ANALOG's too), the installer page's table `PHASE · retired`, the
+device manager shows six tabs and such a record as a row of the VA's with `PHASE · retired`. A backup made on 0.17
+restores without error (`tests/cr_backup_test.c` "0.17 backup"). Tests: `tests/cr_fm6_test.c` (the five's records,
+the six engines shown), `tools/emu/test_retired.sh` (run by test_cr.sh: a flash written by a build with the five
+switched back on, a user sound on PHASE, the chord part parked on NOISE; today's build starts on TINE EP and shows
+the stand-in; the first build reads the PHASE sound again), `web/test_sounds.mjs`, `web/test_manager.mjs`,
+`tests/install_test.py`. The emulator scripts that named the five: `cr_engine.txt` and `cr_editor_map.txt` (A4, the
+fifth white root: WHEEL now), `cr_editor_steps.txt` / `cr_editor_ref.txt` (the platform editor on WHEEL SOFT FLUTE;
+TRIO CHIP CHOIR before).
 
 Build flags stay Felucca's; `FELUCCA_SLICE=0`, `FELUCCA_SLICER=0`, `FELUCCA_FM4=0`, `FELUCCA_UAC=1` (since 0.14 Melodee's
 USB audio recording: ChoralRoot In, docs/USB-AUDIO.md), `FELUCCA_UART=1`,

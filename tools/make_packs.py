@@ -22,7 +22,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 KIND = {13: "va", 12: "fm6", 14: "cz", 15: "quad"}
-ORDER = [12, 15, 13, 14, 2, 3, 5, 6, 7, 9, 11]          # the picker's order (docs/DEVICE-MANAGER.md)
+ORDER = [12, 15, 13, 14, 7, 9]                         # the picker's order (docs/DEVICE-MANAGER.md; six since 0.18)
 
 
 def slug(name):

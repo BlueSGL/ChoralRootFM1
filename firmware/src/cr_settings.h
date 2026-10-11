@@ -18,7 +18,7 @@
 #define CRS_NPM 5                       /* perform modes (cr_engine.h CR_PM_COUNT) */
 #define CRS_NPAR 11                     /* parameters per mode (CR_P_COUNT) */
 #define CRS_SOUND_DEFAULT 0xFFFFu       /* chord_sound / bass_sound: the UI's own default (FM6 TINE EP, VA DEEP SUB) */
-#define CRS_NENG 11                     /* the engines shown (core.h NENG_SHOWN: cr_settings.c checks), a pool_pos slot each */
+#define CRS_NENG 11                     /* the pool_pos slots, one per engine shown in 0.14 (six shown since 0.18: cr_settings.c) */
 #define CRS_ENG_ANALOG 0u               /* engine numbers the record's migrations know (core.h): ANALOG (retired in 0.14), */
 #define CRS_ENG_QUAD 15u                /* FM TONE (ENGI_QUAD, code name QUAD): pool_pos slot 0 since version 7 */
 #define CRS_POOL_DEFAULT 1u             /* pool_pos: an engine not played yet lands on its first preset */

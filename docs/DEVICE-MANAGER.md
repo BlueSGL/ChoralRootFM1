@@ -27,8 +27,10 @@ of presets per engine (docs/PRESETS.md) and of loops in ten slots (docs/LOOPER.m
 Two panes under a header with the connection state (Web MIDI, "ChoralRoot FM-1"; Chrome / Edge; the installer's
 "Device not found?" text reused), the firmware version read from the device, and the Sounds / Loops tabs.
 
-**Left: Your FM-1.** Tabs per engine in the picker's order (FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO,
-WHEEL, PHYS, NOISE) and a **Loops** tab. An engine tab lists its pool exactly as PRESETS turns through it on the
+**Left: Your FM-1.** Tabs per engine in the picker's order (FM6, FM TONE, VA, CZ-1, WHEEL, PHYS: six since 0.18) and
+a **Loops** tab. A sound saved on a retired engine (PHASE, LOFI, VOICE, TRIO, NOISE since 0.18; ANALOG) is a row of
+the VA's tab, where the FM-1 plays its stand-in, marked `PHASE · retired` in place of the patch kind; Keep gives the
+sound back as it was saved. An engine tab lists its pool exactly as PRESETS turns through it on the
 unit: 00 INIT, then the factory presets (grey, with a mark when a user record overwrites one), then the user's
 added sounds; each row: the position, the name, the engine's patch kind, a slot badge (U01..U32) when it is a user
 record. Selecting a row auditions it (see below). The Loops tab: ten rows, "holds a loop" / "empty", the length
@@ -82,7 +84,7 @@ docs/SOUNDS.md.
   `webapp/installer/manager.html` (the three modules and the packs inlined) and `webapp/installer/packs/`, linked from
   the landing page and the installer's header.
 - **Simulator:** `manager.html?sim=1` runs against `makeSimFM1()` (the backup side of `web/test_installer.mjs`, with six
-  user sounds (FM6 02 and PHASE 01 and CZ-1 13 overwritten, VA / FM6 / CZ-1 added) and loops in slots 1 and 4); writes
+  user sounds (FM6 02 and WHEEL 01 and CZ-1 13 overwritten, VA / FM6 / CZ-1 added) and loops in slots 1 and 4); writes
   change it until the page reloads; it answers busy while `sim.playing`. The keyboard and the audition show what they
   would send.
 - **Connection:** Web MIDI with SysEx, the in and out ports whose name contains "ChoralRoot FM-1"; `onstatechange`
@@ -104,7 +106,7 @@ docs/SOUNDS.md.
 - **Packs:** `tools/make_packs.py` writes `web/packs/factory-<engine>.json` and `index.json` from
   `./build/host/sound_templates --packs` (new in `tests/sound_templates.c`: every factory preset loaded on a part as
   `cu_load` does, stored as `cb_store` would, bound to its own position, with the engine's patch from `blob_preset` /
-  `blob_get`). VA, FM6, CZ-1 and FM TONE carry their patches; PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE are records
+  `blob_get`). VA, FM6, CZ-1 and FM TONE carry their patches; WHEEL and PHYS are records
   (their sound is the record's values). Melodee's CZ-1 banks are not a pack yet.
 - **Library:** This browser (IndexedDB "choralroot-manager"; in memory when IndexedDB is unavailable), files (sound
   files, .syx DX7 / Casio, packs, whole backups, loop files), the packs. Loop files: `choralroot-loop` version 1

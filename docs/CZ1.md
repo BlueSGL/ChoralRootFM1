@@ -27,7 +27,7 @@ Melodee's web-editor side (`editor_cz.c`, commands 75..77) is not ported: Choral
 `FELUCCA_CZ` (core.h, default 0: Felucca's unit; 1 in `choralroot.c`, the emulator and `tests/regress.c`). The engine
 number is `13 + FELUCCA_SLICE + FELUCCA_VA` = **14** on ChoralRoot (after the VA's 13; Melodee numbers it 15):
 `ENGINES[]` stays append-only, `ENGINE_ORDER` shows it **after the VA** since 0.14 (after PHASE before; the PRESETS
-browse, the engine picker's roots: FM6, FM TONE, VA, CZ-1, PHASE, LOFI, ..). Its per-voice state (`cz_part_t`: six envelopes, the vibrato, the noise, 8
+browse, the engine picker's roots: FM6, FM TONE, VA, CZ-1, WHEEL, PHYS). Its per-voice state (`cz_part_t`: six envelopes, the vibrato, the noise, 8
 voices) is a member of `engines.c`'s `eng_state` union (smaller than FM6's: the union does not grow); the tone of each
 part (`cz_patch[NTRK]`, 4 x 144 bytes) is in the pool.
 

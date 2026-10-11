@@ -130,7 +130,7 @@ int main(void)
 
     /* ---- DX7 SysEx: a voice in, the same voice out ---- */
     t->eng_req = ENGI_FM6;
-    trk[1].eng_req = 2;                              /* (PHASE: not FM6) */
+    trk[1].eng_req = 7;                              /* (WHEEL: not FM6) */
     fm6_rom_patch(&FM6_ROM[5], v);                   /* F14 CLAVINET */
     v[FP_ALG] = 12;
     v[5 * FP_OP + FP_OL] = 77;
@@ -256,8 +256,8 @@ int main(void)
         up_boot();
         OK(fm6u_get(slot, b2) == 0 && !memcmp(b, b2, FM6_BLOB), "store: from flash after a reboot");
         OK(up_store(20, "UPPER") == 0 && fm6u[1].used == 1u << 4, "store: U21 in the second object");
-        cu_load(t, 2, 0, 0);                         /* PHASE */
-        up_store(slot, "PHASE NOW");
+        cu_load(t, 7, 0, 0);                         /* WHEEL (PHASE until 0.18: retired) */
+        up_store(slot, "WHEEL NOW");
         OK(fm6u_get(slot, b2) != 0, "store: another engine's sound over U05 clears its blob");
         {   /* an ANALOG record (engine 0, retired in 0.14: a 0.13 slot) bound to its STRINGS: the VA's pool, added,
              * its macros on the VA by name (cr_ui.c cu_analog_va) */
@@ -276,6 +276,48 @@ int main(void)
                t->p[P_E0 + 6] == 7 && cb_rec_engine(slot) == ENGI_VA && cb_bound(slot) == PF_NONE &&
                pool_bound_slot(ENGI_VA, 11) == UP_SLOTS,
                "an ANALOG record: on the VA with CUT RES ATK carried (MIX: the VA patch's own scale), an added preset of the VA's pool (%d %d %d %d %d, %u %u %u)", t->eng_req, t->p[P_E0], t->p[P_E0 + 1], t->p[P_E0 + 4], t->p[P_E0 + 6], (unsigned)cb_rec_engine(slot), (unsigned)cb_bound(slot), (unsigned)pool_bound_slot(ENGI_VA, 11));
+        }
+        {   /* a record of an engine retired in 0.18 (PHASE 2, LOFI 3, VOICE 5, TRIO 6, NOISE 11: a 0.17 slot): the VA's
+             * pool, added whatever it binds, the VA's init sound with the record's sends and ATK / REL (a stand-in);
+             * the record itself untouched. SAMPLE's (4, a Felucca slot): the plain init sound, as before */
+            static const uint8_t FIVE[] = {2, 3, 5, 6, 11};
+            uint32_t q, good = 0;
+            for (q = 0; q < sizeof FIVE; q++) {
+                up_rec_t pr = *up_rec(slot), back;
+                pr.engine = FIVE[q];
+                up_set_value(&pr, P_E0, 99);         /* (the engine's own macro: not the VA's CUT) */
+                up_set_value(&pr, P_ATK, 31);
+                up_set_value(&pr, P_REL, 77);
+                up_set_value(&pr, P_DIST, 5);
+                up_set_value(&pr, P_CHOR, 11);
+                up_set_value(&pr, P_DLY, 22);
+                up_set_value(&pr, P_REV, 33);
+                pr.note[15] = CB_BIND_MARK;
+                pr.flags[15] = 2;                    /* (its engine's second factory preset then) */
+                up_put(slot, &pr);
+                cu_load(t, ENGI_FM6, 0, 0);
+                cu_load_user(t, slot, 0);
+                back = *up_rec(slot);
+                good += !eng_ok(FIVE[q]) && t->eng_req == ENGI_VA && t->p[P_E0] == ENG_VA.edit[0].def &&
+                        t->p[P_E0 + 6] == 31 && t->p[P_E0 + 7] == 77 && t->p[P_DIST] == 5 && t->p[P_CHOR] == 11 &&
+                        t->p[P_DLY] == 22 && t->p[P_REV] == 33 && t->user == slot + 1u &&
+                        cb_rec_engine(slot) == ENGI_VA && cb_bound(slot) == PF_NONE &&
+                        pool_pos_slot(ENGI_VA, slot) > pool_nf(ENGI_VA) && back.engine == FIVE[q] &&
+                        !memcmp(&back, &pr, sizeof pr);
+            }
+            OK(good == sizeof FIVE, "a PHASE / LOFI / VOICE / TRIO / NOISE record (retired in 0.18): the VA's init sound with its sends, ATK, REL; an added preset of the VA's pool; the record kept (%u of 5)", (unsigned)good);
+            {
+                up_rec_t sr = *up_rec(slot);
+                sr.engine = 4;
+                up_put(slot, &sr);
+                cu_load(t, ENGI_FM6, 0, 0);
+                cu_load_user(t, slot, 0);
+                OK(t->eng_req == ENGI_VA && t->p[P_E0 + 6] == ENG_VA.edit[6].def && t->p[P_REV] == TP[P_REV].def,
+                   "a SAMPLE record (a Felucca slot): the VA's plain init sound, as before");
+            }
+            OK(NENG_SHOWN == 6 && eng_vis(0) == ENGI_FM6 && eng_vis(1) == ENGI_QUAD && eng_vis(2) == ENGI_VA &&
+               eng_vis(3) == ENGI_CZ && eng_vis(4) == 7u && eng_vis(5) == ENGI_PHYS,
+               "six engines shown: FM6, FM TONE, VA, CZ-1, WHEEL, PHYS");
         }
         up_put(20, 0);
         OK(fm6u_get(20, b2) != 0 && !fm6u[1].used, "store: an erased slot clears its blob");

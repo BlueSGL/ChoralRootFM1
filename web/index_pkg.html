@@ -323,7 +323,7 @@ function renderSounds() {
   if (!sndTable) return;
   const btn = (s, act, text, on) => `<button data-act="${act}" data-slot="${s.slot}"${on && !writing ? "" : " disabled"}>${text}</button>`;
   $("snd-rows").innerHTML = sndTable.map((s) => `<tr${s.used ? "" : ' class="empty"'}><td class="n">${s.label}</td>` +
-    `<td>${s.used ? esc(s.name) : t("sndEmpty")}</td><td>${s.used ? esc(s.engineName) : ""}</td>` +
+    `<td>${s.used ? esc(s.name) : t("sndEmpty")}</td><td>${s.used ? esc(s.engineName) + (s.retired ? " · retired" : "") : ""}</td>` +
     `<td>${s.used ? (s.patch || (s.kind ? t("sndNoPatch") : "")) : ""}</td>` +
     `<td>${s.bound ? esc(tf("sndOver", { at: s.bound.label, name: s.bound.name })) : s.used ? t("sndAdded") : ""}</td><td class="a">` +
     btn(s, "export", t("sndExport"), s.used) +

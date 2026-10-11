@@ -19,7 +19,7 @@ import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObj
 import {
   selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
-  libraryItemsFromFile, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH,
+  libraryItemsFromFile, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH, retiredNote,
 } from "./fm1manager.js";
 
 let failed = 0;
@@ -40,7 +40,7 @@ ok(fm6[1].type === "factory" && fm6[1].name === "TINE EP" && fm6[2].type === "us
    fm6[2].slot === 1, "pools: FM6 02 is U01 MY TINE over FM BELL (overwritten)");
 ok(fm6.length === 27 && fm6[26].name === "BELL TOO" && fm6[26].slot === 5 && fm6[26].f === -1, "pools: FM6 26 is the added U05 BELL TOO, after the 25 factory");
 ok(pools[14][13].slot === 9 && pools[14][13].overwrites === "SYNTH.BASS" && pools[14].at(-1).name === "CZ GLASS", "pools: CZ-1 13 over SYNTH.BASS, CZ GLASS added at the end");
-ok(pools[13].at(-1).name === "WARM VA" && pools[2][1].name === "PHASE BOW" && pools[2][1].overwrites === "BRASS", "pools: VA's added, PHASE 01 overwritten");
+ok(pools[13].at(-1).name === "WARM VA" && pools[7][1].name === "WHEEL BOW" && pools[7][1].overwrites === "FULL ORGAN", "pools: VA's added, WHEEL 01 overwritten");
 ok(pools.loops === undefined && pools[15].every((r) => r.type !== "user"), "pools: FM TONE has no user sound");
 
 /* ------------------------------------------------------------- the loops --- */
@@ -129,10 +129,10 @@ const o30 = simObjects(30);
 ok(usedSlots(o30) === 30 && MANAGER_ENGINES.every((e) => managerPools(o30)[e].at(-1).type === "empty"), "capacity: the 30-sound simulator; every pool ends with an empty \"Place here\" row");
 const fit = managerPlaceAll(o30, packs[13].slice(0, 5).map((it) => it.file));
 ok(fit.placed === 2 && fit.skipped === 3 && usedSlots(fit.objs) === 32, "capacity: Place all 5 into 2 free slots -> 2 placed, 3 did not fit");
-let capErr = null; try { managerPlace(fit.objs, packs[2][0].file, managerPools(fit.objs)[2][2]); } catch (e) { capErr = e; }
+let capErr = null; try { managerPlace(fit.objs, packs[7][0].file, managerPools(fit.objs)[7][2]); } catch (e) { capErr = e; }
 ok(MANAGER_ENGINES.every((e) => managerPools(fit.objs)[e].at(-1).type !== "empty") && capErr && /All 32 user slots/.test(capErr.message),
   "capacity: 32 used -> no empty rows, Place over a factory preset refused (no free slot)");
-ok(managerPlace(o30, packs[2][0].file, managerPools(o30)[2].at(-1)).where === "new", "capacity: Place onto the empty row -> a new added sound");
+ok(managerPlace(o30, packs[7][0].file, managerPools(o30)[7].at(-1)).where === "new", "capacity: Place onto the empty row -> a new added sound");
 const tine = managerKeep(objs0, P(objs0)[12][1], { packs: fpacks });
 ok(tine.factory === true && tine.engine === 12 && tine.position === 1 && readSoundFile(tine).name === "TINE EP", "factory keep: FM6 01 TINE EP -> its pack entry, factory: true, engine 12, position 1");
 const back = managerPlace(objs0, tine, null);
@@ -185,8 +185,19 @@ ok(packIdx.length === MANAGER_ENGINES.length && packIdx.map((p) => p.engine).joi
 ok(MANAGER_ENGINES.every((e) => packs[e].length === FACTORY_PRESETS[e].length - FACTORY_FIRST[e] &&
    packs[e].every((it, k) => it.name === FACTORY_PRESETS[e][k + FACTORY_FIRST[e]] && it.engine === e && recordValid(readSoundFile(it.file).record))),
   "packs: every pack holds its engine's factory presets, named and valid");
-ok([12, 13, 14, 15].every((e) => packs[e].every((it) => it.patch)) && [2, 3, 5, 6, 7, 9, 11].every((e) => packs[e].every((it) => !it.patch)),
+ok([12, 13, 14, 15].every((e) => packs[e].every((it) => it.patch)) && [7, 9].every((e) => packs[e].every((it) => !it.patch)),
   "packs: VA, FM6, CZ-1 and FM TONE carry their patches; the others are records (macros) only");
+{ // 0.18: PHASE, LOFI, VOICE, TRIO, NOISE retired: no pool, no pack; a record of one is an added row of the VA's pool
+  const old = { record: Uint8Array.from(readSoundFile(packs[7][0].file).record), name: "PD BRASS", engine: 2, kind: null, patch: null };
+  old.record[2] = 2;
+  const withOld = managerPlace(objs0, old, null), row = P(withOld.objs)[13].at(-1);
+  ok(MANAGER_ENGINES.join() === "12,15,13,14,7,9" && [2, 3, 5, 6, 11].every((e) => !(e in pools) && !(e in packs)) && Object.keys(packs).length === 6,
+    "0.18: six engines (FM6, FM TONE, VA, CZ-1, WHEEL, PHYS), six packs");
+  ok(withOld.where === "new" && row.name === "PD BRASS" && row.type === "user" && row.engine === 13 && row.recEngine === 2 && row.f === -1 &&
+     retiredNote(row.recEngine) === "PHASE · retired" && retiredNote(13) === "" && retiredNote(undefined) === "" &&
+     parseSoundObjects(withOld.objs).slots[row.slot - 1].engine === 2 && managerKeep(withOld.objs, row).engineName === "PHASE",
+    "0.18: a PHASE sound: an added row of the VA's pool, \"PHASE · retired\", its record kept (Keep gives the PHASE file back)");
+}
 
 /* ------------------------------------------------------------ audition --- */
 ok(midiText(auditionMessages(fm6[2])[0]) === "C0 02" && midiText(auditionMessages(fm6[2], { bass: true })[0]) === "C1 03",

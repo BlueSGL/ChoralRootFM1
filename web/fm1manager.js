@@ -8,10 +8,11 @@
 // No DOM: the page (manager.html) draws, this decides. Every name here is unique across fm1backup.js / fm1sounds.js:
 // make_site.py inlines the three into one script.
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
-import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx } from "./fm1sounds.js";
+import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx } from "./fm1sounds.js";
 
-// the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14)
-export const MANAGER_ENGINES = [12, 15, 13, 14, 2, 3, 5, 6, 7, 9, 11];
+// the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; six engines since 0.18: PHASE, LOFI, VOICE,
+// TRIO and NOISE retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
+export const MANAGER_ENGINES = [12, 15, 13, 14, 7, 9];
 export const MANAGER_IDS = [...SOUND_IDS, ...CR_LOOP_IDS];
 export const UNDO_DEPTH = 20;
 export const LOOP_FORMAT = "choralroot-loop";
@@ -22,6 +23,8 @@ const mgSame = (a, b) => (a || mgEmpty()).length === (b || mgEmpty()).length && 
 const mgB64 = (bytes) => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
 const mgUnB64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
 export const poolLabel = (engine, pos) => `${ENGINE_NAMES[engine]} ${String(pos).padStart(2, "0")}`;
+// a row's (or a library item's) note when its record is of a retired engine: "PHASE · retired", else ""
+export const retiredNote = (engine) => (engineRetired(engine) ? `${ENGINE_NAMES[engine]} · retired` : "");
 
 // ---- the pools: objs (Map id -> bytes) -> {engine: [row]} in the firmware's order: 00 INIT, the factory presets
 // (each replaced by the first user slot bound to it: overwritten), then the added user sounds in slot order.
@@ -399,9 +402,9 @@ export function simObjects(count = 6) {
   put(2, mgSimSound("cz", 14, "CZ GLASS", czTone), -1);
   put(3, mgSimSound("fm6", 13, "WARM VA"), -1);
   put(5, mgSimSound("fm6", 12, "BELL TOO"), -1);
-  put(6, mgSimSound("fm6", 2, "PHASE BOW"), 0);          // overwrites PHASE 01 BRASS
+  put(6, mgSimSound("fm6", 7, "WHEEL BOW"), 0);          // overwrites WHEEL 01 FULL ORGAN (PHASE 01 BRASS until 0.18)
   put(9, mgSimSound("cz", 14, "CZ BASS 2", czTone), 13); // overwrites CZ-1 13 SYNTH.BASS
-  const fillEngines = [12, 13, 15, 2, 3, 5, 6, 7, 9, 11];
+  const fillEngines = [12, 13, 15, 7, 9];
   for (let k = 0; parseSoundObjects(m).slots.filter((x) => x.used).length < count; k++) {
     const e = fillEngines[k % fillEngines.length];
     put(firstFreeSlot(m), mgSimSound(e === 14 ? "cz" : "fm6", e, `USER ${String(k + 1).padStart(2, "0")}`), -1);

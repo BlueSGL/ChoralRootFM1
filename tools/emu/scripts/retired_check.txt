@@ -1,0 +1,32 @@
+# test_retired.sh, run 2, on today's build with run 1's flash (a user sound on PHASE in U01, the chord part parked on
+# NOISE): the unit starts on FM6's default (TINE EP), MAJ + D4 plays it; OPT held + PRESETS +2: the VA (01 LUSH PAD);
+# PRESETS +25: VA 26, the PHASE sound "ADG" as an added preset: the VA's init sound, a stand-in, with the message
+# "PHASE retired: stand-in"; MAJ + D4 plays it
+wait 500
+dump
+key F3 down
+wait 60
+btn D4 down
+wait 900
+btn D4 up
+key F3 up
+wait 2500
+dump
+btn GLO down
+wait 100
+knob PRESETS +2
+wait 100
+btn GLO up
+wait 600
+knob PRESETS +25
+wait 300
+shot build/emu/test/retired_standin.ppm
+wait 1500
+key F3 down
+wait 60
+btn D4 down
+wait 900
+btn D4 up
+key F3 up
+wait 2500
+dump

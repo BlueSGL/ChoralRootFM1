@@ -429,11 +429,13 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
 
 /* the record's pool_pos slot of the engine of ENGINE_ORDER rank r (cr_settings.h): CRS_NENG = 11 slots, fixed per engine
  * in 0.13's display order, so a 0.13 record means what it meant whatever the order shown today; ANALOG's slot 0 is FM
- * TONE's since version 7 (ANALOG retired, FELUCCA_ANALOG 0). -1: an engine with no slot (none on ChoralRoot) */
+ * TONE's since version 7 (ANALOG retired, FELUCCA_ANALOG 0). PHASE's, LOFI's, VOICE's, TRIO's and NOISE's slots (3, 5, 6, 7,
+ * 10) are reserved since 0.18 (the engines retired: no rank asks for them, the record keeps their bytes). -1: an engine
+ * with no slot (none on ChoralRoot) */
 #if FELUCCA_ANALOG || !FELUCCA_VA || !FELUCCA_CZ || !FELUCCA_QUAD
 #error "cr_settings.c: the record's engine slots are ChoralRoot's (FELUCCA_ANALOG 0, FELUCCA_VA / CZ / QUAD 1)"
 #endif
-typedef char crs_neng_ok[CRS_NENG == NENG_SHOWN && CRS_ENG_QUAD == ENGI_QUAD ? 1 : -1];   /* (one per engine shown) */
+typedef char crs_neng_ok[CRS_NENG >= NENG_SHOWN && CRS_ENG_QUAD == ENGI_QUAD ? 1 : -1];   /* (a slot per engine shown) */
 static const uint8_t CRS_SLOT_ENG[CRS_NENG] = {ENGI_QUAD, ENGI_FM6, ENGI_VA, 2, ENGI_CZ, 3, 5, 6, 7, ENGI_PHYS, 11};
 static int32_t crs_slot(uint32_t r)
 {

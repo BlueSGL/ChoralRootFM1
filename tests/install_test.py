@@ -835,10 +835,10 @@ def sounds():
     ok(rc == 0 and len(lines) == 32 and lines["U01"].split() == ["U01", "MY", "PAD", "VA", "patch", "+"] and
        lines["U02"].split() == ["U02", "TINE", "2", "FM6", "no", "patch", "+"] and
        lines["U03"].split() == ["U03", "ABCDEFGHIJKL", "CZ-1", "patch", "+"] and lines["U04"] == "U04  (empty)" and
-       lines["U05"].split() == ["U05", "WARM", "ANALOG", "+"] and lines["U06"] == "U06  (empty)" and
-       lines["U17"].split() == ["U17", "BELL", "PHASE", "+"] and lines["U20"] == "U20  (empty)" and
+       lines["U05"].split() == ["U05", "WARM", "ANALOG", "retired", "+"] and lines["U06"] == "U06  (empty)" and
+       lines["U17"].split() == ["U17", "BELL", "PHASE", "retired", "+"] and lines["U20"] == "U20  (empty)" and
        len({ln.index(w) for ln, w in ((lines["U01"], "VA"), (lines["U02"], "FM6"), (lines["U03"], "CZ-1"))}) == 1 and
-       not any(isinstance(x, int) for x in side.log), "--sounds: 32 slots, names, engines, patch / no patch, invalid -> (empty)")
+       not any(isinstance(x, int) for x in side.log), "--sounds: 32 slots, names, engines, patch / no patch / retired (ANALOG; PHASE since 0.18), invalid -> (empty)")
 
     rc, out, err = cli(["--export-sound", "1", str(TMP)], dev)
     f1 = TMP / "choralroot-sound-U01-MY_PAD.json"
@@ -1138,6 +1138,9 @@ def bindings():
        ff["14"] == 1 and ff["12"] == 0 and not any(e in fp for e in ("0", "1", "4", "8", "10")) and I.pool_of(1) == 12 and
        I.pool_of(0) == 13 and I.pool_of(8) == 13 and I.pool_of(14) == 14,
        "binding: the factory table (the firmware's, --check), retired engines' pools (ANALOG's: the VA's)")
+    ok(sorted(fp, key=int) == ["7", "9", "12", "13", "14", "15"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 11)) and
+       not any(I.engine_retired(e) for e in (7, 9, 12, 13, 14, 15)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE",
+       "0.18: six engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE retired (the VA's pool), their names kept")
     js = (ROOT / "web" / "fm1sounds.js").read_text()
     jf = re.search(r"^export const FACTORY_PRESETS = (.*);$", js, re.M)
     js1 = re.search(r"^export const FACTORY_FIRST = (.*);$", js, re.M)
@@ -1153,9 +1156,17 @@ def bindings():
             5: bind(sound_rec(14, "OVER INIT", seed=7), 1),      # U06 INIT TONE (the pool's INIT): added
             6: bind(sound_rec(12, "TOO FAR", seed=8), 26),       # U07 past the 25 FM6 presets: added
             7: bind(sound_rec(1, "DIGI", seed=9), 3),            # U08 DIGITAL in FM6's pool, over FM BASS
-            8: bind(sound_rec(0, "GRID", ver=5, seed=10), 1)}    # U09 a drum grid record: never bound
+            8: bind(sound_rec(0, "GRID", ver=5, seed=10), 1),    # U09 a drum grid record: never bound
+            9: bind(sound_rec(2, "PD BRASS", seed=11), 1),       # U10 PHASE (retired in 0.18) over its BRASS: the VA's
+            10: sound_rec(11, "WIND", seed=12)}                  #     pool, added (not the VA's first); U11 NOISE: added
     objs = {6: sound_bank(recs), 7: b"", 9: b"", 10: b"", 11: b"", 12: b"", 13: b""}
     t = I.parse_sound_objects(objs)
+    ok(t[9]["used"] and t[9]["bound"] is None and t[9]["added"] and t[9]["engineName"] == "PHASE" and t[10]["added"] and
+       I.sound_line(t[9]).split() == ["U10", "PD", "BRASS", "PHASE", "retired", "+"] and
+       I.sound_line(t[10]).split() == ["U11", "WIND", "NOISE", "retired", "+"] and
+       I.export_sound(objs, 10, "ChoralRoot 0.18")["engineName"] == "PHASE" and
+       I.read_sound_file(json.dumps(I.export_sound(objs, 10, "ChoralRoot 0.18")))[2] == 2,
+       "0.18: a PHASE / NOISE record: kept, listed 'retired', an added preset (the VA's pool), exports and reads as PHASE")
     b0 = t[0]["bound"]
     ok(b0 and b0["index"] == 1 and b0["pos"] == 2 and b0["label"] == "FM6 02" and b0["name"] == "FM BELL" and not t[0]["added"],
        "binding: a bound FM6 record -> over FM6 02 FM BELL")
@@ -1166,7 +1177,7 @@ def bindings():
        "binding: CZ-1 over BRASS 1 = pool 01, DIGITAL in FM6's pool; empty slots neither")
     ln = I.sound_line(t[0]).split()
     ok(ln == ["U01", "MY", "BELL", "FM6", "no", "patch", "over", "FM6", "02", "FM", "BELL"] and
-       I.sound_line(t[1]).split()[-1] == "+" and I.sound_line(t[8]).split() == ["U09", "GRID", "ANALOG", "+"],
+       I.sound_line(t[1]).split()[-1] == "+" and I.sound_line(t[8]).split() == ["U09", "GRID", "ANALOG", "retired", "+"],
        "binding: --sounds lines: 'over FM6 02 FM BELL' / '+'")
     e1, e2 = I.export_sound(objs, 1, "ChoralRoot 0.14"), I.export_sound(objs, 4, "ChoralRoot 0.14")
     ok(e1["binding"] == {"overwrites": 2, "name": "FM BELL"} and e2["binding"] is None and

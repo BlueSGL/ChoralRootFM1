@@ -229,9 +229,11 @@ static void cu_load(track_t *t, uint32_t e, uint32_t pi, int bass)
 /* user slot k into part t (upreset.c up_load without Felucca's undo / pattern): engine and every parameter but
  * the part's own (param_kept); a chord part plays it POLY when it was saved MONO, a bass part MONO. An ANALOG sound
  * (engine 0, retired in 0.14: a 0.13 slot, a restored bank) loads on the VA with its macros carried by name (cu_analog_va;
- * the VA's init patch under them, eng_va.c va_track_loaded); a sound of another retired engine (SAMPLE 4, GRAIN 8,
- * DRUM 10: a Felucca slot; engines.c ENG_GONE) loads as the VA's init sound. Both under the slot's name, with a
- * message (and a trace line on the emulator) */
+ * the VA's init patch under them, eng_va.c va_track_loaded); a sound of another retired engine (PHASE 2, LOFI 3, VOICE 5,
+ * TRIO 6, NOISE 11, retired in 0.18: a 0.17 slot, a restored bank; SAMPLE 4, GRAIN 8, DRUM 10: a Felucca slot; engines.c
+ * ENG_GONE) loads as the VA's init sound, a stand-in: the five of 0.18 keep the record's sends and its envelope's ATK /
+ * REL on the VA's macros of that name (cu_analog_va's mapping; their other macros have no VA meaning). All under the
+ * slot's name, with a message (and a trace line on the emulator) */
 static void cu_message(const char *t, uint32_t col);
 #if !FELUCCA_ANALOG
 /* ANALOG's values -> the VA's: CUT RES DRV MIX DTN to the VA's macros of the same name, the filter envelope (ENV
@@ -297,8 +299,13 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
 #endif
     if (!eng_ok(r->engine)) {
         const engine_t *en = ENGINES[CB_RETIRED_POOL];
+        const char *was = r->engine == 2u ? "PHASE" : r->engine == 3u ? "LOFI" : r->engine == 5u ? "VOICE" :
+                          r->engine == 6u ? "TRIO" : r->engine == 11u ? "NOISE" : 0;
+        int carry = was && ((ENG_RETIRED_018 >> r->engine) & 1u) && CB_RETIRED_POOL == ENGI_VA;
+        char msg[24];                             /* (cu.msg.text holds 23 characters) */
 #if defined(CR_TRACE) && CR_TRACE
-        printf("load: slot %u engine %u retired -> INIT on %s\n", (unsigned)k + 1u, (unsigned)r->engine, en->name);
+        printf("load: slot %u engine %u%s%s%s retired -> INIT on %s%s\n", (unsigned)k + 1u, (unsigned)r->engine,
+               was ? " (" : "", was ? was : "", was ? ")" : "", en->name, carry ? ", its sends, ATK, REL" : "");
 #endif
         fm1_irq_off();
         t->eng_req = CB_RETIRED_POOL;
@@ -307,11 +314,21 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
                 t->p[i] = TP[i].def;
         for (i = 0; i < 8u; i++)
             t->p[P_E0 + i] = en->edit[i].def;
+        if (carry) {                              /* a stand-in for a sound of the five: its sends, its ATK / REL */
+            for (i = P_DIST; i <= P_REV; i++)
+                t->p[i] = v[i];
+            t->p[P_E0 + 6] = (int16_t)clamp(v[P_ATK], en->edit[6].min, en->edit[6].max);
+            t->p[P_E0 + 7] = (int16_t)clamp(v[P_REL], en->edit[7].min, en->edit[7].max);
+        }
         t->p[P_VOICE] = bass ? V_MONO : V_POLY;
         t->preset = 0;
         fm1_irq_on();
         fm6_track_loaded(t);
-        cu_message("engine retired: init sound", CR_COL_WHITE);
+        if (was && carry) {                       /* "PHASE retired: stand-in" */
+            str_cpy(msg, was, 6);
+            str_cpy(msg + str_len(msg), " retired: stand-in", 19);
+        }
+        cu_message(was && carry ? msg : "engine retired: init sound", CR_COL_WHITE);
     } else {
         fm1_irq_off();
         t->eng_req = r->engine;

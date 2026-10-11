@@ -81,10 +81,14 @@ static void cr_bank_boot(void)                    /* persist_boot (after flash_o
  * switch. The names resolve to the preset index at boot (cb_init), so a reordered engine table cannot trim the wrong
  * sound. (Before docs/PRESETS.md these were the rows of ChoralRoot's curated bank, which is gone.) */
 static const struct { uint8_t engine; const char *preset; int8_t trim; } CB_TRIM[] = {
+#if FELUCCA_PHASE                        /* (PHASE and VOICE: retired in 0.18, their rows with them) */
     {2u, "STRING", -16},                 /* PHASE STRING (the bank's CZ STRINGS) -8 dB */
     {2u, "ORGAN", -16},                  /* PHASE ORGAN (CZ ORGAN) -8 dB */
     {2u, "BRASS", -6},                   /* PHASE BRASS (CZ BRASS) -3 dB */
+#endif
+#if FELUCCA_VOICE
     {5u, "CHOIR AAH", -6},               /* VOICE CHOIR AAH (CHOIR) -3 dB */
+#endif
 #if FELUCCA_CZ
     {ENGI_CZ, "BRASS 1", -10},           /* CZ-1 A-1 -5 dB */
     {ENGI_CZ, "STRINGS 2", -6},          /* CZ-1 A-5 -3 dB */
@@ -122,7 +126,8 @@ static int8_t cb_trim(uint32_t e, uint32_t k)     /* factory preset k of engine 
  * preset of its engine; so is one whose mark names no factory preset of its pool, or one an earlier slot already
  * binds (the first bound slot wins; cb_pool_check reports the duplicate). The record's engine is its pool (a DIGITAL
  * record: FM6's, as it plays; an ANALOG record (engine 0, retired in 0.14): the VA's, where it plays its macros on the
- * VA's init patch; another retired engine's: the VA's, where it loads as INIT: CB_RETIRED_POOL). A record whose engine
+ * VA's init patch; another retired engine's (PHASE, LOFI, VOICE, TRIO, NOISE since 0.18; SAMPLE, GRAIN, DRUM): the VA's,
+ * where it loads as INIT, a stand-in: CB_RETIRED_POOL). A record whose engine
  * is not its pool's binds no factory preset there but a DIGITAL one (an added one: an ANALOG STRINGS overwrite does
  * not replace the VA's twelfth preset). A drum grid record (UP_VER_GRID)
  * keeps lane hits in those bytes: never bound (no DRUM in ChoralRoot). up_valid is unchanged: older firmware reads

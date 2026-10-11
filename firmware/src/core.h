@@ -51,6 +51,22 @@
 #define FELUCCA_ANALOG 1         /* the ANALOG engine (eng_analog.c), engine 0; ChoralRoot: 0, engine 0 retired (the VA
                                   * replaces it: its records load on the VA, cr_ui.c cu_load_user) */
 #endif
+#ifndef FELUCCA_PHASE
+#define FELUCCA_PHASE 1          /* the PHASE engine (eng_phase.c), engine 2; ChoralRoot: 0 since 0.18, engine 2 retired (its
+                                  * records load as the VA's init sound, cr_ui.c cu_load_user; so do the next four's) */
+#endif
+#ifndef FELUCCA_LOFI
+#define FELUCCA_LOFI 1           /* the LOFI engine (eng_lofi.c), engine 3; ChoralRoot: 0, engine 3 retired */
+#endif
+#ifndef FELUCCA_VOICE
+#define FELUCCA_VOICE 1          /* the VOICE engine (eng_formant.c), engine 5; ChoralRoot: 0, engine 5 retired */
+#endif
+#ifndef FELUCCA_TRIO
+#define FELUCCA_TRIO 1           /* the TRIO engine (eng_trio.c), engine 6; ChoralRoot: 0, engine 6 retired */
+#endif
+#ifndef FELUCCA_NOISE
+#define FELUCCA_NOISE 1          /* the NOISE engine (eng_noise.c), engine 11; ChoralRoot: 0, engine 11 retired */
+#endif
 #ifndef FELUCCA_CZ
 #define FELUCCA_CZ 0             /* Melodee's CZ-1 engine (eng_cz.c, docs/CZ1.md): engine 13 + FELUCCA_SLICE + FELUCCA_VA (14 on
                                   * ChoralRoot); Felucca builds without it (choralroot.c, the emulator and tests/regress.c set 1) */
@@ -67,7 +83,8 @@
 #define ENGI_QUAD (13u + FELUCCA_SLICE + FELUCCA_VA + FELUCCA_CZ)   /* engines.c ENGINES[]: 15 on ChoralRoot */
 #endif
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
-#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SAMPLE - !FELUCCA_GRAIN - !FELUCCA_DRUM - !FELUCCA_ANALOG)
+#define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SAMPLE - !FELUCCA_GRAIN - !FELUCCA_DRUM - !FELUCCA_ANALOG - \
+                    !FELUCCA_PHASE - !FELUCCA_LOFI - !FELUCCA_VOICE - !FELUCCA_TRIO - !FELUCCA_NOISE)
                                  /* the engines one can pick: PRESETS, the EDIT layer, the editor, in the display order
                                   * of engines.c ENGINE_ORDER (the retired slots are not among them) */
 #define UP_SLOTS 32u             /* user presets (upreset.c) */

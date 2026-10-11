@@ -1,5 +1,6 @@
-# ChoralRoot: EDIT held (printed EDIT, locked open: OCT+ keeps, OCT- cancels) + A4 (the fifth white root: PHASE) switches the chord sound's engine (TINE EP on
-# FM6 -> PHASE, the envelope and sends kept); KNOB 1 steps its presets; then MAJ + D4 (compared with cr_dmaj.wav)
+# ChoralRoot: EDIT held (printed EDIT, locked open: OCT+ keeps, OCT- cancels) + A4 (the fifth white root: WHEEL, of FM6 FM TONE VA CZ-1 WHEEL PHYS;
+# PHASE's until 0.18) switches the chord sound's engine (TINE EP on
+# FM6 -> WHEEL, the envelope and sends kept); KNOB 1 steps its presets; then MAJ + D4 (compared with cr_dmaj.wav)
 wait 300
 btn EDIT down
 wait 500

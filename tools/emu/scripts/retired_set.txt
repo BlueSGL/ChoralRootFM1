@@ -1,0 +1,32 @@
+# test_retired.sh, run 1, on the pre-cut build (the five engines retired in 0.18 switched back on: what 0.17 had; a
+# fresh flash file): EDIT held + A4 (the fifth white root then: PHASE), OCT+ keeps: the chord part on PHASE 01 BRASS;
+# SAVE, OCT+ (Save as new), D4 E4 F4 type A D G, OCT+: U01 "ADG", a PHASE sound (PHASE 07); OPT held + PRESETS +6
+# (PHASE -> LOFI -> VOICE -> TRIO -> WHEEL -> PHYS -> NOISE): the chord part parked on NOISE; the settings saved
+wait 300
+btn EDIT down
+wait 500
+btn A4
+wait 300
+btn EDIT up
+btn OCT+
+wait 600
+btn SAVE
+wait 300
+btn OCT+
+wait 300
+btn D4
+wait 200
+btn E4
+wait 200
+btn F4
+wait 300
+btn OCT+
+wait 1500
+dump
+btn GLO down
+wait 100
+knob PRESETS +6
+wait 100
+btn GLO up
+wait 3000
+dump

@@ -11,7 +11,8 @@
  * files call of it under the same names: events_block (fx.c, every block: the engine switches, voice.c engine_block,
  * and the releases a sound load asks for, panic_req), midi_event (MIDI in on the CHORD / BASS channels plays parts
  * 1 / 2, INTEGRATION section 2) and the few names upreset.c, main.c and audio.c still use. Dropped engines: SAMPLE,
- * GRAIN, DRUM (retired placeholders keep the engine numbers, engines.c); Felucca's icon atlas and keycaps are not
+ * GRAIN, DRUM, ANALOG, and since 0.18 PHASE, LOFI, VOICE, TRIO, NOISE (retired placeholders keep the engine numbers,
+ * engines.c); Felucca's icon atlas and keycaps are not
  * in the image (FELUCCA_ICONS, FELUCCA_KEYCAPS).
  *
  * Host check (no device toolchain): cc -fsyntax-only -w -Ibuild/gen -Ifirmware/src -Ifirmware/hal
@@ -59,6 +60,22 @@
 #endif
 #ifndef FELUCCA_ANALOG
 #define FELUCCA_ANALOG 0         /* no ANALOG engine (engine 0: a retired slot; the VA replaces it, its records load there) */
+#endif
+#ifndef FELUCCA_PHASE
+#define FELUCCA_PHASE 0          /* no PHASE, LOFI, VOICE, TRIO, NOISE engines since 0.18 (engines 2, 3, 5, 6, 11: retired
+                                  * slots; a record of one loads as the VA's init sound, cr_ui.c cu_load_user) */
+#endif
+#ifndef FELUCCA_LOFI
+#define FELUCCA_LOFI 0
+#endif
+#ifndef FELUCCA_VOICE
+#define FELUCCA_VOICE 0
+#endif
+#ifndef FELUCCA_TRIO
+#define FELUCCA_TRIO 0
+#endif
+#ifndef FELUCCA_NOISE
+#define FELUCCA_NOISE 0
 #endif
 #ifndef FELUCCA_SEQ
 #define FELUCCA_SEQ 0            /* no Felucca sequencer (seq.c and its satellites): cr_out.c's events_block, midi_event */

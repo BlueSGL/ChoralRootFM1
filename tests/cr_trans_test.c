@@ -91,8 +91,9 @@ int main(void)
     track_t *c = &trk[CR_PART_CHORD], *b = &trk[CR_PART_BASS];
     t_tracks_init();
     usb.config = 1;                              /* (the MIDI out queue takes events) */
-    t_preset(c, 2, 0);                           /* PHASE BRASS (ANALOG's SAW LEAD until 0.14: retired, FELUCCA_ANALOG 0) */
-    t_preset(b, 2, 0);
+    t_preset(c, 7, 0);                           /* WHEEL FULL ORGAN (PHASE BRASS until 0.18, ANALOG's SAW LEAD until 0.14:
+                                                  * both retired) */
+    t_preset(b, 7, 0);
     c->p[P_VOICE] = V_POLY;
     b->p[P_VOICE] = V_MONO;
     /* 0: as played */

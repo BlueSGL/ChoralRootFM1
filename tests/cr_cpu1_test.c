@@ -28,6 +28,13 @@
 #ifndef FELUCCA_ANALOG
 #define FELUCCA_ANALOG 0
 #endif
+#ifndef FELUCCA_PHASE
+#define FELUCCA_PHASE 0          /* as choralroot.c since 0.18: PHASE, LOFI, VOICE, TRIO, NOISE retired */
+#define FELUCCA_LOFI 0
+#define FELUCCA_VOICE 0
+#define FELUCCA_TRIO 0
+#define FELUCCA_NOISE 0
+#endif
 #ifndef FM6_POLY
 #define FM6_POLY 8
 #endif

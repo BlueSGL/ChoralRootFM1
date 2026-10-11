@@ -42,7 +42,7 @@ How the manual names things:
 ChoralRoot turns the FM-1 into a chord instrument in the manner of the Telepathic Instruments Orchid. The left end of
 the keybed says what kind of chord you want, the rest of the keybed plays its root, and the instrument builds the
 chord, voices it and writes its name on the screen. Around that it has a bass part that follows the chords,
-performance modes (strum, arpeggio, patterns), effects, a looper that records chords, eleven synth engines with a deep
+performance modes (strum, arpeggio, patterns), effects, a looper that records chords, six synth engines with a deep
 sound editor, MIDI out on three channels and USB audio recording.
 
 What it is not:
@@ -694,7 +694,7 @@ More detail: [LOOPER.md](LOOPER.md), [LOOPER-MODES.md](LOOPER-MODES.md).
 ## 11. Sounds
 
 ChoralRoot plays two sounds at once: the **chord sound** (PRESETS) and the **bass sound** (ALGORITHM). Each belongs
-to one of eleven engines.
+to one of six engines.
 
 ### The engines
 
@@ -704,15 +704,11 @@ to one of eleven engines.
 | **FM TONE** | four-operator FM in the style of the Digitone | 16 |
 | **VA** | ChoralRoot's virtual analog: four oscillators, a morphing filter, four envelopes, four LFOs, a modulation matrix, stereo | 25 |
 | **CZ-1** | Casio CZ-1 phase distortion, with Casio's own 64 tones | 64 |
-| **PHASE** | phase distortion with two lines | 6 |
-| **LOFI** | a chip voice: pulse, triangle, saw, noise and small wave tables | 5 |
-| **VOICE** | a formant oscillator: sung vowels | 4 |
-| **TRIO** | three oscillators with ring modulation and sync into a filter, after early home-computer sound chips | 5 |
 | **WHEEL** | a tonewheel organ with nine drawbars | 5 |
 | **PHYS** | physical models: bars, plates and strings | 9 |
-| **NOISE** | noise sources through a resonant filter | 4 |
 
-This is the order in which the instrument shows them. At power-on the chord sound is the one you last played (on a
+This is the order in which the instrument shows them. Up to 0.17 there were five more, PHASE, LOFI, VOICE, TRIO and
+NOISE; they are retired (see [Sounds from outside](#sounds-from-outside) for what happens to a sound saved on one). At power-on the chord sound is the one you last played (on a
 new unit FM6 `TINE EP`), and the bass sound is VA `DEEP SUB` until you choose another.
 
 ### Presets: one pool per engine
@@ -744,7 +740,7 @@ Hold **EDIT**. The engine picker opens and stays (EDIT blinks). It is a preview:
 
 | Control | In the engine picker |
 | --- | --- |
-| the white root keys D4 to G5 | the eleven engines, in the order of the table above (D4 = FM6 ... G5 = NOISE). The sound moves to that engine and keeps its envelope, effects and mix |
+| the white root keys D4 to B4 | the six engines, in the order of the table above (D4 = FM6 ... B4 = PHYS). The sound moves to that engine and keeps its envelope, effects and mix |
 | SELECT | the same, one engine at a time |
 | KNOB 1 (or PRESETS) | the engine's pool, as PRESETS |
 | KNOB 2 | INIT: the engine's plain starting sound (`init sound`) |
@@ -798,6 +794,11 @@ they are when you change sound, and they are back at their normal values when yo
   [SOUNDS.md](SOUNDS.md)).
 - A sound saved on an older version with the retired ANALOG engine loads on the VA
   (`ANALOG retired: on the VA`).
+- A sound saved on PHASE, LOFI, VOICE, TRIO or NOISE (retired in 0.18) stays in its slot under its name. You find it
+  at the end of the VA's pool. It does not sound as it did: it plays the VA's plain starting sound with its own
+  effect sends, attack and release, and the screen says so (`PHASE retired: stand-in`). Nothing is deleted; the
+  device manager and a backup still hold the sound as it was saved. If the chord or the bass was on one of these
+  engines when you update, it comes up on FM6 `TINE EP` or VA `DEEP SUB`, as on a new unit.
 
 More detail: [PRESETS.md](PRESETS.md).
 
@@ -910,13 +911,13 @@ line then reads `fine · B1`. More: [QUAD.md](QUAD.md) (the engine's working nam
 
 More: [CZ1.md](CZ1.md).
 
-### PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE
+### WHEEL, PHYS
 
-These seven have one screen in each group:
+These two have one screen in each group:
 
 | Group | Holds |
 | --- | --- |
-| OSC | the engine's first four parameters (the screen carries the engine's own title, such as `PHS`) |
+| OSC | the engine's first four parameters (the screen carries the engine's own title, such as `BARS`) |
 | FILT | its second four (again under the engine's own title) |
 | ENV | Attack · Decay · Sustain · Release, under the envelope's shape |
 | LFO | Rate · Wave · Vibrato · Wah |
@@ -1300,7 +1301,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed). With LOCK on, the only latched type pressed again alone: off (single notes, the extensions kept) |
 | F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4 |
 | D4 to G5 | roots |
-| white roots D4 to G5, engine picker | FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE |
+| white roots D4 to B4, engine picker | FM6, FM TONE, VA, CZ-1, WHEEL, PHYS |
 | white roots D4 to F5, PLAY menu with Keys = Loops, or SAVE held | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with Keys = Loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |

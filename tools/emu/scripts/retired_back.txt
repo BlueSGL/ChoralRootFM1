@@ -1,0 +1,13 @@
+# test_retired.sh, run 3, on the pre-cut build again with the flash run 2 left: nothing was rewritten or deleted: EDIT
+# held + A4 (PHASE), OCT+ keeps; PRESETS +6: PHASE 07 is U01 "ADG", a PHASE sound as saved
+wait 300
+btn EDIT down
+wait 500
+btn A4
+wait 300
+btn EDIT up
+btn OCT+
+wait 600
+knob PRESETS +6
+wait 600
+dump

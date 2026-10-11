@@ -667,7 +667,7 @@ has '^mod: clear CUT, 2 slots$' "$L" && has '^expect led OCT- dim .*: ok' "$L" &
 has '^mod: LFO1 -> LVL1 +6 slot 1$' "$L" && ok "on the OSC stack: LFO held + KNOB 2 (Level): LFO1 -> LVL1, its mark: $OUT/cr_map_stack.ppm" || bad "stack mapping"
 has '^mod: ENV1 -> CUT +6 slot 3$' "$L" && has '^mod: ENV1 -> DRIVE +6 slot 8$' "$L" && ok "ENV 1 shown last: ENV held maps ENV1 (CUT .. DRIVE, slots 3..8)" || bad "ENV1 mapping"
 has '^mod: LFO1 -> CUT matrix full$' "$L" && ok "the ninth: \"matrix full\": $OUT/cr_map_full.ppm" || bad "matrix full"
-has '^mod: not modulatable$' "$L" && ok "a platform engine (PHASE): \"not modulatable\"" || bad "not modulatable"
+has '^mod: not modulatable$' "$L" && ok "a platform engine (WHEEL): \"not modulatable\"" || bad "not modulatable"
 export EMU_UI_LOG=5
 run cr_editor_modes --wav "$OUT/cr_editor_modes.wav"
 unset EMU_UI_LOG
@@ -701,16 +701,16 @@ silent_end cr_editor_modes
 run cr_editor_steps --wav "$OUT/cr_editor_steps.wav"
 run cr_editor_ref --wav "$OUT/cr_editor_ref.wav"
 L="$OUT/cr_editor_steps.log"
-has '^param: part 0 ENV DEC 90 -> 96 ' "$L" && ok "a platform engine's ENV: a detent: DEC 90 -> 96 (5% of 0..127): $OUT/cr_editor_p_env.ppm" || bad "coarse step: $(grep -m1 '^param:' "$L")"
-has '^param: part 0 ENV DEC 96 -> 97 ' "$L" && ok "SHIFT held + KNOB 2: DEC 96 -> 97 (fine)" || bad "fine step"
+has '^param: part 0 ENV DEC 64 -> 70 ' "$L" && ok "a platform engine's ENV (WHEEL SOFT FLUTE): a detent: DEC 64 -> 70 (5% of 0..127): $OUT/cr_editor_p_env.ppm" || bad "coarse step: $(grep -m1 '^param:' "$L")"
+has '^param: part 0 ENV DEC 70 -> 71 ' "$L" && ok "SHIFT held + KNOB 2: DEC 70 -> 71 (fine)" || bad "fine step"
 grep '^param: part 0 ENV DEC' "$L" | tail -1 | grep -q -- '-> 127 ' && ok "KNOB 2 +30: DEC clamps at 127" || bad "no clamp at 127"
-has '^param: part 0 ENV ATK 70 -> 112 ' "$L" && ok "KNOB 1 +7 (6 a detent): ATK 70 -> 112" || bad "KNOB 1: ATK not changed"
+has '^param: part 0 ENV ATK 0 -> 42 ' "$L" && ok "KNOB 1 +7 (6 a detent): ATK 0 -> 42" || bad "KNOB 1: ATK not changed"
 grep -q '^split\|split point' "$L" && bad "SHIFT + KNOB reached the split point" || true
 has '^param: part 0 LFO WAVE 0 -> 1 ' "$L" && ok "LFO WAVE steps by one" || bad "WAVE: $(grep 'LFO WAVE' "$L")"
 has '^param: part 0 MOD FLT ' "$L" && ok "the platform MOD (4 slots): KNOB 3 the amount: $OUT/cr_editor_p_mod.ppm" || bad "platform MOD"
 grep '^param: part 0 MIX VCE' "$L" | grep -q -- '\([0-9]*\) -> ' && ok "MIX VOICE: $(grep '^param: part 0 MIX VCE' "$L" | head -1 | sed 's/^param: //')" || bad "no VOICE step"
 cmp -s "$OUT/cr_editor_steps.wav" "$OUT/cr_editor_ref.wav" && bad "the same audio with another envelope" \
-    || ok "the same chord with ATK 112 / DEC 127: the audio differs ($(num "non-zero samples" "$L") / $(num "non-zero samples" "$OUT/cr_editor_ref.log") non-zero samples)"
+    || ok "the same chord with ATK 42 / DEC 127: the audio differs ($(num "non-zero samples" "$L") / $(num "non-zero samples" "$OUT/cr_editor_ref.log") non-zero samples)"
 silent_end cr_editor_steps
 
 echo "Shift + Up / Down: the firmware's fine mode (GLO held around the detent), Page Down to KNOB 1"
@@ -742,9 +742,9 @@ silent_end cr_editor_pick
 
 echo "EDIT held: the engine picker"
 run cr_engine --wav "$OUT/cr_engine.wav"
-has '^engine: part 0 -> PHASE' "$OUT/cr_engine.log" && has 'part 0: PHASE /' "$OUT/cr_engine.log" &&
-    ok "EDIT held + A4: part 0 FM6 -> PHASE: $OUT/cr_engine_switched.ppm" || bad "the engine did not switch"
-has '^preset: part 0 -> PHASE / ' "$OUT/cr_engine.log" && ok "EDIT held + KNOB 1: the next place of the engine's pool" || bad "KNOB 1: no preset step"
+has '^engine: part 0 -> WHEEL' "$OUT/cr_engine.log" && has 'part 0: WHEEL /' "$OUT/cr_engine.log" &&
+    ok "EDIT held + A4 (the fifth of six white roots): part 0 FM6 -> WHEEL: $OUT/cr_engine_switched.ppm" || bad "the engine did not switch"
+has '^preset: part 0 -> WHEEL / ' "$OUT/cr_engine.log" && ok "EDIT held + KNOB 1: the next place of the engine's pool" || bad "KNOB 1: no preset step"
 silent_end cr_engine
 
 echo "SAVE: the dialog, Save as new, naming, the user slot"
@@ -1732,6 +1732,10 @@ LC_ALL=C grep -aq "select: part 0 engine CZ-1 pos 2" "$OUT/cr_select.log" && ok 
 LC_ALL=C grep -aq "select: part 1 engine FM6 pos 3" "$OUT/cr_select.log" && ok "SELECT bass FM6 3" || bad "SELECT bass FM6 3: no trace"
 [ "$(LC_ALL=C grep -ac "^select: " "$OUT/cr_select.log")" = 2 ] && ok "a bad engine: refused (no third load)" ||
     bad "SELECT: $(LC_ALL=C grep -ac "^select: " "$OUT/cr_select.log") loads, want 2"
+
+# 0.18: a 0.17 unit's flash (a user sound on PHASE, the chord part parked on NOISE) on today's build (test_retired.sh)
+sh tools/emu/test_retired.sh >"$OUT/test_retired.log" 2>&1 || fail=1
+LC_ALL=C grep -a '^retired\|^  ok\|^  FAIL' "$OUT/test_retired.log"
 
 echo "determinism"
 mkdir -p "$OUT/cr_again"
