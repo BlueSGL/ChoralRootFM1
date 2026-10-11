@@ -6,6 +6,7 @@ wait 300
 btn GLO
 wait 300
 btn OCT-
+btn SAVE 900                  # SAVE held: the global save (the manual settings are written by it alone, 0.18)
 wait 3000
 dump
 quit

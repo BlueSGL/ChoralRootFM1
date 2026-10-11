@@ -38,6 +38,7 @@ btn GLO
 wait 200
 btn SEL                       # Key Mode on
 wait 200
+btn SAVE 1200                 # SAVE held (past the longer Hold Time): the global save: the tempo and Key Mode with the Options
 wait 2500
 dump                          # 1: changed and saved
 quit

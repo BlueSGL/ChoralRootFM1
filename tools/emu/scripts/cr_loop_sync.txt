@@ -1,12 +1,13 @@
-# ChoralRoot looper, synced: LOOP held, SELECT +2: 2 bars (count-in on); REC: a one-bar count-in (the click, nothing
-# played), then 2 bars recorded: D in bar 1, Am in bar 2; it commits by itself and plays. SAVE held + E4 (slot 2) +
-# OCT+ while playing: saved at stop; LOOP tap stops it -> slot 2 written to the flash file.
+# ChoralRoot looper, synced: LOOP held, KNOB 1 +2: 2 bars (count-in on); REC: a one-bar count-in (the click, nothing
+# played), then 2 bars recorded: D in bar 1, Am in bar 2; it commits by itself and plays. SAVE held while it plays:
+# the global save waits for the stop ("saves at stop": no flash write while a loop plays); LOOP tap stops it -> the
+# settings, the session and slot 1 written to the flash file ("saved").
 wait 300
 btn PLAY down
 wait 400
-knob SELECT +1
+knob KNOB1 +1
 wait 50
-knob SELECT +1
+knob KNOB1 +1
 wait 300
 shot build/emu/test/cr_loop_layer.ppm
 btn PLAY up
@@ -35,16 +36,14 @@ wait 1300
 dump
 wait 400
 btn SAVE down
-wait 400
-btn E4
-wait 100
+wait 600
 shot build/emu/test/cr_loop_save.ppm
-btn OCT+
-wait 100
 btn SAVE up
 wait 300
+dump
 btn PLAY
 wait 300
+shot build/emu/test/cr_loop_saved.ppm
 dump
 wait 2500
 dump

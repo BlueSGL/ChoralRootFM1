@@ -29,7 +29,7 @@
  *   rest stays free (storage.c's map); slot 3's the loops.
  *
  * Reads come from flash (the current copy of each A/B pair, checked at LIST) in 256-byte st_read windows: no RAM
- * copy, the audio keeps running (a loop may play). LIST first saves a pending settings change (cr_settings_save,
+ * copy, the audio keeps running (a loop may play). LIST first saves a pending Options change (cr_settings_save,
  * not while a loop plays). Writes are staged in cr_ui.c's cu_loop_buf (the largest object, a loop record, fits;
  * cu_loop_gen tells when the UI reused it: rc 5) and validated whole before one commit through storage.c's
  * protocol (st_save: the other copy, the header last; a loop: crl_fl_save, the same protocol): a torn write leaves
@@ -235,7 +235,8 @@ static void crb_list(void)
     st_hdr_t h;
 #if CR_HAVE_SETTINGS
     if (crs_loaded && !CR_SETTINGS_BUSY())
-        cr_settings_save();                          /* a change not yet saved goes in first (none: no erase) */
+        cr_settings_save();                          /* an Option not yet saved goes in first (none: no erase). The
+                                                      * manual settings and the session: as last saved (SAVE held), 0.18 */
 #endif
     for (i = 0; i < CRB_N; i++) {
         uint32_t id = CRB_IDS[i];
@@ -661,7 +662,8 @@ static void crb_debug(void)
  * read, and the numbers are that stretch's): the largest whole half and each stage's (us; a half's budget is 2902),
  * the late halves and the latest one's largest stage and time, the halves counted, the fx stage's parts (the average
  * over the halves in which the effects ran, and the largest), then since power-on the flash's: erases, erases that
- * cut a sounding output (holes: the rule is 0), the settings' and the session's saves. A command of its own because
+ * cut a sounding output (holes: 0 is the rule for what the unit writes by itself; a global save, SAVE held, into a
+ * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves. A command of its own because
  * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
 static void crb_peak(void)
 {
@@ -779,7 +781,8 @@ static void cr_update_poll(void)
     CRB_UPDATE_SCREEN(stub ? "UPDATE MODE" : "USB BOOT");
 #if CR_HAVE_SETTINGS
     if (!cr_safe)
-        cr_settings_save();                          /* where the unit was left: back after the update */
+        cr_settings_save();                          /* the Options as they are (automatic); the rest comes back as
+                                                      * last saved: the update is a power cycle, no global save (0.18) */
 #endif
     if (stub)
         CRB_STUB_GO(CRB_STUB_REQ_RESCUE);            /* (never returns on the unit) */

@@ -1,7 +1,7 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-only
 # Headless: settings persist across emulator runs through the file-backed flash (docs/SETTINGS.md).
-#   run 1 (a fresh flash file): SELECT +17 -> 137 BPM, saved 1.5 s later, quit
+#   run 1 (a fresh flash file): SELECT +17 -> 137 BPM, SAVE held: the global save (0.18: saving is manual), quit
 #   run 2 (the same file): the dump says bpm 137; the BPM meter (SELECT +1 -1) is screenshotted:
 #         build/emu/test/persist_bpm.ppm
 #   run 1 also sets Play Style Advanced (Options); run 2: the engine plays Advanced (loaded by cr_ui_init)
@@ -27,7 +27,8 @@ bpm() { sed -n 's/.* bpm \([0-9][0-9]*\) .*/\1/p' "$1" | tail -1; }
 "$EMU" --headless --flash "$FLASH" --script "$S/persist_set.txt" >"$OUT/persist_1.log" 2>&1 || bad "run 1: exit status"
 b=$(bpm "$OUT/persist_1.log")
 [ "$b" = 137 ] && ok "run 1: tempo set to 137" || bad "run 1: bpm $b"
-grep -q "settings saves 1 " "$OUT/persist_1.log" && ok "run 1: the settings were saved once" || bad "run 1: no save"
+grep -q "settings saves 1 " "$OUT/persist_1.log" && grep -q '^save: global rc 0' "$OUT/persist_1.log" &&
+    ok "run 1: SAVE held: the settings were saved once (the tempo, the looper's mode and keys, and the Option with them)" || bad "run 1: no save"
 size=$(wc -c <"$FLASH" 2>/dev/null | tr -d ' ')
 [ "$size" = 1048576 ] && ok "flash file: 1 MiB" || bad "flash file: ${size:-missing}"
 
@@ -49,6 +50,64 @@ grep -q "record: current" "$OUT/persist_2.log" && ok "run 2: the record was read
 b=$(bpm "$OUT/persist_3.log")
 [ "$b" = 120 ] && ok "run 3: no --flash: a fresh 120 BPM" || bad "run 3: bpm $b"
 [ "$(st "$OUT/persist_3.log")" = 0 ] && ok "run 3: Play Style Simple" || bad "run 3: style $(st "$OUT/persist_3.log")"
+
+# ---- saving is manual (0.18, the owner 2026-10-11; docs/SETTINGS.md "Manual and automatic"). gsave_none.txt on a fresh
+# flash: the tempo, the KEY layer's tonic and an Option changed, 5 s, quit with NO SAVE held: the Option is in flash (it
+# is automatic), the tempo and the key are not. gsave_save.txt on that flash: the tempo and the key again, SAVE held:
+# "saved"; more changes, GLO + SAVE held: "reverted": the unit as saved; the relaunch: as saved
+GF=$OUT/persist_gsave_flash.bin
+G1=$OUT/persist_gsave_1.log; G2=$OUT/persist_gsave_2.log; G3=$OUT/persist_gsave_3.log; G4=$OUT/persist_gsave_4.log
+rm -f "$GF" "$G1" "$G2" "$G3" "$G4" "$OUT"/gsave_saved.ppm "$OUT"/gsave_reverted.ppm
+"$EMU" --headless --flash "$GF" --script "$S/gsave_none.txt" >"$G1" 2>&1 || bad "manual run 1: exit status"
+"$EMU" --headless --flash "$GF" --script "$S/persist_check.txt" >"$G2" 2>&1 || bad "manual run 2: exit status"
+"$EMU" --headless --flash "$GF" --script "$S/gsave_save.txt" >"$G3" 2>&1 || bad "manual run 3: exit status"
+"$EMU" --headless --flash "$GF" --script "$S/persist_check.txt" >"$G4" 2>&1 || bad "manual run 4: exit status"
+gk() { grep -a '^  cr: key' "$1" | sed -n "$2p" | sed -n 's/.*cr: key \([0-9]\) tonic \([0-9]*\) .* bass \([0-9]\) .* voicing \(-*[0-9]*\) .* bpm \([0-9]*\) view \([0-9]\) layer \([0-9]*\) options \([0-9]\).*/key \1 tonic \2 bass \3 voicing \4 bpm \5 layer \7 options \8/p'; }
+gs() { grep -a '^  settings:' "$1" | sed -n "$2p" | sed -n 's/.* style \([0-9]\) .* leds \([0-9]\) .*/style \1 leds \2/p'; }
+gw() { grep -a '^  flash:' "$1" | sed -n "$2p" | sed -n 's/.*, \([0-9]*\) writes, settings saves \([0-9]*\) .*/\1 \2/p'; }
+gss() { grep -a '^  session: saves' "$1" | sed -n "$2p" | sed -n 's/.*saves \([0-9]*\) .* pending \([0-9]\) .*/\1 \2/p'; }
+[ "$(gk "$G1" 1)" = "key 1 tonic 2 bass 0 voicing 0 bpm 137 layer 0 options 0" ] && [ "$(gs "$G1" 1)" = "style 1 leds 0" ] &&
+    [ "$(gw "$G1" 1 | cut -d' ' -f2)" = 1 ] && [ "$(gss "$G1" 1 | cut -d' ' -f1)" = 0 ] && ! grep -aq '^save: global' "$G1" &&
+    ok "no SAVE held: 137 BPM, the tonic D (the KEY layer) and Play Style Advanced set; 5 s later the settings object written once (the Option), the session never" \
+    || bad "manual run 1: $(gk "$G1" 1) / $(gs "$G1" 1) / $(gw "$G1" 1) / $(gss "$G1" 1)"
+[ "$(gk "$G2" 1)" = "key 0 tonic 0 bass 0 voicing 0 bpm 120 layer 0 options 0" ] && [ "$(gs "$G2" 1)" = "style 1 leds 0" ] &&
+    grep -aq 'record: current' "$G2" &&
+    ok "a power cycle without a global save: an Options entry (Play Style Advanced) was saved by itself; the tempo (120) and the KEY layer's tonic (Key Mode off) are as last saved: not kept" \
+    || bad "manual run 2: $(gk "$G2" 1) / $(gs "$G2" 1)"
+[ "$(gk "$G3" 1)" = "key 1 tonic 2 bass 0 voicing 0 bpm 137 layer 0 options 0" ] && grep -aq '^save: global rc 0' "$G3" &&
+    [ "$(gss "$G3" 1)" = "1 0" ] && [ "$(gw "$G3" 1 | cut -d' ' -f2)" = 1 ] &&
+    ok "SAVE held past the hold time: the global save: the settings and the session written (no layer opens, no dialog: SAVE still down, layer 0): $OUT/gsave_saved.ppm" \
+    || bad "manual run 3, the save: $(gk "$G3" 1) / $(gss "$G3" 1) / $(gw "$G3" 1)"
+grn() { od -An -tu1 -v -j 15 "$1" | awk '{ for (k = 1; k <= NF; k++) v[n++] = $k }
+     END { c = 0; for (o = 0; o + 2 < n; o += 3) if (v[o] < 100 && v[o+1] > 140 && v[o+2] > 90 && v[o+2] < 160) c++; print c }'; }
+wht() { od -An -tu1 -v -j 15 "$1" | awk '{ for (k = 1; k <= NF; k++) v[n++] = $k }
+     END { c = 0; for (o = 0; o + 2 < n; o += 3) if (v[o] > 230 && v[o+1] > 230 && v[o+2] > 215) c++; print c }'; }
+g=$(grn "$OUT/gsave_saved.ppm"); w=$(wht "$OUT/gsave_reverted.ppm")
+[ "$g" -gt 1000 ] && [ "$w" -gt 2000 ] && ok "the messages: \"saved\" in a green box ($g px), \"reverted\" in a white one ($w px): $OUT/gsave_reverted.ppm" \
+    || bad "the messages: $g green px, $w white px"
+[ "$(gk "$G3" 2)" = "key 1 tonic 2 bass 1 voicing 2 bpm 150 layer 0 options 0" ] && [ "$(gs "$G3" 2)" = "style 1 leds 1" ] &&
+    grep -a '^  part 0:' "$G3" | sed -n 2p | grep -q 'voices [1-9]' &&
+    ok "then changed: 150 BPM, voicing +2, Bass on, another chord sound, LEDs Stock (an Option), a chord latched and sounding" \
+    || bad "manual run 3, the changes: $(gk "$G3" 2) / $(gs "$G3" 2)"
+p2=$(grep -a '^  session chord:' "$G3" | sed -n 2p); p3=$(grep -a '^  session chord:' "$G3" | sed -n 3p); p1=$(grep -a '^  session chord:' "$G3" | sed -n 1p)
+grep -aq '^save: reverted' "$G3" && [ "$(gk "$G3" 3)" = "key 1 tonic 2 bass 0 voicing 0 bpm 137 layer 0 options 0" ] &&
+    [ "$(gs "$G3" 3)" = "style 1 leds 1" ] && [ "$p3" = "$p1" ] && [ "$p2" != "$p1" ] && [ -n "$p1" ] &&
+    grep -a 'parts busy' "$G3" | sed -n 3p | grep -q 'parts busy 0 ' && [ "$(gss "$G3" 3)" = "1 0" ] &&
+    grep -a '^  cr: voices' "$G3" | sed -n 3p | grep -q 'cr: voices 0 pending 0 ' &&
+    ok "GLO + SAVE held 1 s: reverted: 137 BPM, voicing 0, the bass off, the saved chord sound, LATCH off, silence: the state is flash's again (nothing to save); the Option (LEDs Stock) is not the revert's" \
+    || bad "the revert: $(gk "$G3" 3) / $(gs "$G3" 3) / $p3 / $(gss "$G3" 3)"
+[ "$(grep -ac '^expect sound at .*: ok' "$G3")" = 2 ] && [ "$(gk "$G3" 4)" = "key 1 tonic 2 bass 0 voicing 0 bpm 142 layer 0 options 0" ] &&
+    [ "$(grep -ac '^save: reverted' "$G3")" = 1 ] &&
+    ok "after it the unit plays; GLO + SAVE let go after 0.6 s: nothing reverted (142 BPM), no Options, no dialog" \
+    || bad "after the revert: $(gk "$G3" 4)"
+gn() { grep -a '^  settings:' "$1" | sed -n "$2p" | sed -n 's/.*settings: now \([0-9A-F]*\) saved \([0-9A-F]*\) .* pending \([0-9]\) .*/\1 \2 \3/p'; }
+set -- $(gn "$G3" 5)
+[ "$(gw "$G3" 5 | cut -d' ' -f2)" = 2 ] && [ "$(gss "$G3" 5)" = "1 0" ] && [ "${1:-x}" != "${2:-x}" ] && [ "${3:-x}" = 0 ] &&
+    ok "the Option changed meanwhile was written by itself (settings saves 2); the tempo turned after the revert is not (the block as it would be saved differs from flash's, nothing pending)" \
+    || bad "manual run 3, the end: $(gw "$G3" 5) / $(gss "$G3" 5) / $(gn "$G3" 5)"
+[ "$(gk "$G4" 1)" = "key 1 tonic 2 bass 0 voicing 0 bpm 137 layer 0 options 0" ] && [ "$(gs "$G4" 1)" = "style 1 leds 1" ] &&
+    ok "the relaunch: as last SAVED (137 BPM, the tonic D), with the Options as they were left (Advanced, LEDs Stock)" \
+    || bad "manual run 4: $(gk "$G4" 1) / $(gs "$G4" 1)"
 
 # a fresh unit's Play Style (the owner's unit came up Advanced): run 1's flash (Advanced saved in a ChoralRoot record)
 # made into what another firmware leaves: (a) a Felucca / Melodee PER4 settings object, the same fields without
@@ -89,7 +148,7 @@ print(n)" "$FLASH" "$P4" "$ER")
     || bad "erased settings: style $(st "$OUT/persist_erased.log") bpm $(bpm "$OUT/persist_erased.log")"
 
 # Options > Reset Settings (the owner, 2026-10-12): the last Options entry, OCT+ twice. Run 1 (reset_set.txt, a fresh
-# flash): a user sound saved (U01 ADG), settings changed and saved (Advanced, 137 BPM, Key Mode on, Motion Off, Hold
+# flash): a user sound saved (U01 ADG), settings changed and saved (SAVE held: Advanced, 137 BPM, Key Mode on, Motion Off, Hold
 # Time, Dual Core On). Run 2 (reset_do.txt, a relaunch): the stored settings are those; the entry asks, cancels (another
 # entry, OCT-, a closed menu), resets on the second OCT+: at once the record a new unit has (the dump's "settings: now"
 # checksum = a fresh unit's, run 3 of above), saved. Run 3 (reset_check.txt, a relaunch): still that, U01 still there.
@@ -221,7 +280,7 @@ rm -f "$KFLASH" "$OUT"/persist_kkeys_1.log "$OUT"/persist_kkeys_2.log "$OUT"/per
 "$EMU" --headless --flash "$KFLASH" --script "$S/persist_kkeys_check.txt" >"$OUT/persist_kkeys_2.log" 2>&1 || bad "key-layer keys run 2: exit status"
 kk() { sed -n 's/.* kkeys \([0-9]\)$/\1/p' "$1" | sed -n "$2p"; }
 grep -q '^key: keys play' "$OUT/persist_kkeys_1.log" && grep -q "settings saves 1 " "$OUT/persist_kkeys_1.log" && [ "$(kk "$OUT/persist_kkeys_1.log" 1)" = 1 ] &&
-    ok "key-layer keys run 1: GLO in the KEY layer: keys play, the settings saved once" || bad "key-layer keys run 1: $(grep '^key: keys' "$OUT/persist_kkeys_1.log")"
+    ok "key-layer keys run 1: GLO in the KEY layer: keys play; SAVE held: the settings saved once" || bad "key-layer keys run 1: $(grep '^key: keys' "$OUT/persist_kkeys_1.log")"
 [ "$(kk "$OUT/persist_kkeys_2.log" 1)" = 1 ] && grep -q '(record: current)' "$OUT/persist_kkeys_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_kkeys_2.log" &&
     grep -q '^expect led GLO on .*: ok' "$OUT/persist_kkeys_2.log" && ! grep -q 'FAILED' "$OUT/persist_kkeys_2.log" &&
     ok "key-layer keys run 2: still play after a relaunch (the layer open: GLO lit, D4 sounded, the tonic unchanged): $OUT/persist_kkeys.ppm" \
@@ -299,27 +358,56 @@ grep -q '^loop: auto-save slot 1 .* rc 0' "$OUT/persist_loop_1.log" && ! grep -q
     [ "$(lp 3 events)" = 5 ] && [ "$(lp 3 layers)" = 4 ] && [ "$(lp 4 state)" = 2 ] && grep -q '^expect sound .*: ok' "$OUT/persist_loop_2.log" &&
     ok "loop run 2: both slots after a relaunch (used 003): slot 2's take, slot 1 with its overdubs (5 events, 4 layers), playing" \
     || bad "loop run 2: $(grep '^  loop:' "$OUT/persist_loop_2.log" | head -3 | tr '\n' ' ')"
-# the loop written at its stop (no SAVE, no switch; docs/LOOPER.md "Slots and the record"): a take, stopped at once
-# (loop_persist_stop) / left playing 6 s then stopped (loop_persist_play); a relaunch on the same file: the loop is back
+# loops are saved by hand (0.18, the owner 2026-10-11; docs/LOOPER.md "Slots and the record"): the loop in RAM is
+# written to its slot by the global save (SAVE held) and when its slot is left, never at a stop, after a take or when
+# idle. Four runs on one flash file, loop_persist_back.txt after each (what a power cycle brings):
+#   stop:   a take saved (SAVE held), then recorded over and NOT saved     -> the old loop is back (2 events)
+#   save:   recorded over, SAVE held                                        -> the new one (1 event)
+#   switch: recorded over (3 events), slot 2 and back, no SAVE              -> kept (3 events: leaving a slot saves it)
+#   revert: recorded over, GLO + SAVE                                       -> the saved one (3 events), at once
 lv() { echo "$1" | sed -n "s/.* $2 \([0-9A-F]*\) .*/\1/p"; }
-for c in stop play; do
-    PF=$OUT/persist_loop_$c.bin
-    rm -f "$PF" "$OUT"/persist_loop_$c.log "$OUT"/persist_loop_${c}_back.log
-    "$EMU" --headless --flash "$PF" --script "$S/loop_persist_$c.txt" >"$OUT/persist_loop_$c.log" 2>&1 || bad "loop_persist_$c: exit status"
-    "$EMU" --headless --flash "$PF" --script "$S/loop_persist_back.txt" >"$OUT/persist_loop_${c}_back.log" 2>&1 || bad "loop_persist_$c back: exit status"
-    l1=$(grep '^  loop:' "$OUT/persist_loop_$c.log" | sed -n 1p); l2=$(grep '^  loop:' "$OUT/persist_loop_$c.log" | sed -n 2p)
-    b1=$(grep '^  loop:' "$OUT/persist_loop_${c}_back.log" | sed -n 1p); b2=$(grep '^  loop:' "$OUT/persist_loop_${c}_back.log" | sed -n 2p)
-    [ "$(lv "$l1" used)" = 000 ] && [ "$(lv "$l1" state)" = 2 ] && [ "$(lv "$l2" used)" = 001 ] &&
-        grep -q '^loop: auto-save slot 1 [0-9]* bytes rc 0 (stopped)' "$OUT/persist_loop_$c.log" &&
-        ! grep -q '^loop: save slot' "$OUT/persist_loop_$c.log" &&
-        ok "loop_persist_$c: the take written to slot 1 at its stop, no SAVE (used 000 -> 001): $OUT/loop_persist_$c.ppm" \
-        || bad "loop_persist_$c: $l1 / $l2"
-    [ "$(lv "$b1" used)" = 001 ] && [ "$(lv "$b1" slot)" = 1 ] && [ "$(lv "$b1" events)" = 2 ] && [ "$(lv "$b2" state)" = 2 ] &&
-        grep -q '^expect sound .*: ok' "$OUT/persist_loop_${c}_back.log" &&
-        ok "loop_persist_$c relaunched: slot 1 back (2 events) and plays" || bad "loop_persist_$c back: $b1 / $b2"
-done
+PF=$OUT/persist_loop_hand.bin
+rm -f "$PF" "$OUT"/persist_loop_stop.log "$OUT"/persist_loop_save.log "$OUT"/persist_loop_switch.log "$OUT"/persist_loop_revert.log \
+    "$OUT"/persist_loop_*_back.log
+lrun() { "$EMU" --headless --flash "$PF" --script "$S/loop_persist_$1.txt" >"$OUT/persist_loop_$1.log" 2>&1 || bad "loop_persist_$1: exit status"
+         "$EMU" --headless --flash "$PF" --script "$S/loop_persist_back.txt" >"$OUT/persist_loop_$1_back.log" 2>&1 || bad "loop_persist_$1 back: exit status"; }
+ll() { grep -a '^  loop:' "$OUT/persist_loop_$1.log" | sed -n "$2p"; }
+l2() { grep -a '^  loop2:' "$OUT/persist_loop_$1.log" | sed -n "$2p" | sed -n 's/.* dirty \([01]\) .*/\1/p'; }
+lw() { grep -a '^  flash:' "$OUT/persist_loop_$1.log" | sed -n "$2p" | sed -n 's/.*, \([0-9]*\) writes, .*/\1/p'; }
+lrun stop
+[ "$(lv "$(ll stop 1)" used)" = 000 ] && [ "$(lv "$(ll stop 1)" events)" = 2 ] && [ "$(l2 stop 1)" = 1 ] && [ "$(lw stop 1)" = 0 ] &&
+    [ "$(lv "$(ll stop 2)" used)" = 000 ] && [ "$(lw stop 2)" = 0 ] && ! grep -aq '^loop: auto-save' "$OUT/persist_loop_stop.log" &&
+    ok "a take, stopped, 3 s idle: nothing written (0 flash writes: no save at the stop, none when idle), the loop marked not saved" \
+    || bad "loop_persist_stop, before the save: $(ll stop 1) / dirty $(l2 stop 1) / writes $(lw stop 1) $(lw stop 2)"
+[ "$(lv "$(ll stop 3)" used)" = 001 ] && [ "$(l2 stop 3)" = 0 ] && grep -aq '^loop: save slot 1 [0-9]* bytes rc 0' "$OUT/persist_loop_stop.log" &&
+    ok "SAVE held: the loop written to slot 1 with the settings (used 001): $OUT/loop_persist_stop.ppm" || bad "loop_persist_stop, the save: $(ll stop 3)"
+[ "$(lv "$(ll stop 4)" events)" = 1 ] && [ "$(l2 stop 4)" = 1 ] && [ "$(lw stop 4)" = "$(lw stop 3)" ] &&
+    [ "$(grep -ac '^loop: save slot' "$OUT/persist_loop_stop.log")" = 1 ] &&
+    ok "recorded over (1 event), stopped, 3.5 s: not saved, no flash write" || bad "loop_persist_stop, recorded over: $(ll stop 4) / writes $(lw stop 3) -> $(lw stop 4)"
+bk() { grep -a '^  loop:' "$OUT/persist_loop_$1_back.log" | sed -n "$2p"; }
+[ "$(lv "$(bk stop 1)" events)" = 2 ] && [ "$(lv "$(bk stop 1)" state)" = 1 ] && [ "$(lv "$(bk stop 2)" state)" = 2 ] &&
+    grep -q '^expect sound .*: ok' "$OUT/persist_loop_stop_back.log" &&
+    ok "a power cycle without saving: the OLD loop is back (2 events: the one recorded over it is gone) and plays" || bad "loop_persist_stop back: $(bk stop 1)"
+lrun save
+[ "$(lv "$(ll save 1)" events)" = 1 ] && [ "$(l2 save 1)" = 0 ] && [ "$(lv "$(bk save 1)" events)" = 1 ] && [ "$(lv "$(bk save 2)" state)" = 2 ] &&
+    ok "recorded over, SAVE held, a power cycle: the NEW loop (1 event)" || bad "loop_persist_save: $(ll save 1) / $(bk save 1)"
+lrun switch
+[ "$(lv "$(ll switch 1)" events)" = 3 ] && [ "$(l2 switch 1)" = 1 ] && grep -aq '^loop: auto-save slot 1 [0-9]* bytes rc 0 (leaving it)' "$OUT/persist_loop_switch.log" &&
+    ! grep -aq '^loop: save slot' "$OUT/persist_loop_switch.log" && [ "$(lv "$(ll switch 2)" events)" = 3 ] && [ "$(l2 switch 2)" = 0 ] &&
+    [ "$(lv "$(ll switch 2)" slot)" = 1 ] && [ "$(lv "$(bk switch 1)" events)" = 3 ] &&
+    ok "recorded over (3 events), the slot left and come back to, no SAVE held: written when it was left; kept over a power cycle" \
+    || bad "loop_persist_switch: $(ll switch 1) / $(ll switch 2) / $(bk switch 1)"
+cmp -s "$OUT/loop_persist_dirty.ppm" "$OUT/loop_persist_clean.ppm" && bad "the PLAY menu's slot strip: no mark on a loop not saved" ||
+    ok "the PLAY menu's slot strip: a mark on the slot whose loop is not saved, gone once it is: $OUT/loop_persist_dirty.ppm / loop_persist_clean.ppm"
+"$EMU" --headless --flash "$PF" --script "$S/loop_persist_revert.txt" >"$OUT/persist_loop_revert.log" 2>&1 || bad "loop_persist_revert: exit status"
+[ "$(lv "$(ll revert 1)" events)" = 1 ] && [ "$(lv "$(ll revert 1)" state)" = 2 ] && [ "$(l2 revert 1)" = 1 ] &&
+    grep -aq '^save: reverted' "$OUT/persist_loop_revert.log" && [ "$(lv "$(ll revert 2)" events)" = 3 ] && [ "$(lv "$(ll revert 2)" state)" = 1 ] &&
+    [ "$(l2 revert 2)" = 0 ] && grep -a 'parts busy' "$OUT/persist_loop_revert.log" | sed -n 2p | grep -q 'parts busy 0 ' && [ "$(lv "$(ll revert 3)" state)" = 2 ] &&
+    grep -aq '^expect sound at .*: ok' "$OUT/persist_loop_revert.log" && [ "$(lw revert 3)" = 0 ] &&
+    ok "recorded over a saved loop while it plays, GLO + SAVE: the loop stops, the SAVED loop is back (3 events) and plays; no flash write" \
+    || bad "loop_persist_revert: $(ll revert 1) / $(ll revert 2) / $(ll revert 3) / writes $(lw revert 3)"
 # a loop's bass-side notes (Split Bass, 0.18) after a relaunch: cr_loop_bass.txt leaves slot 1 with G major and a
-# bass-side D (written at its stop); loop_bass_persist_check.txt on the same file: the event is still a bass-side one
+# bass-side D (written by its last line: SAVE held); loop_bass_persist_check.txt on the same file: the event is still a bass-side one
 # and plays on the bass part (part 1) with Single = Full
 BF=$OUT/persist_loop_bass.bin
 rm -f "$BF" "$OUT"/persist_loop_bass_1.log "$OUT"/persist_loop_bass_2.log
@@ -329,7 +417,7 @@ bl() { grep '^  loop:' "$OUT/persist_loop_bass_2.log" | sed -n "$1p"; }
 bv() { grep -a '^  loopv:' "$OUT/persist_loop_bass_2.log" | sed -n "$1p" | sed -n 's/.*chord \([0-9]*\) bass \([0-9]*\) bass-side-events \([0-9]*\) stream-notes main \([0-9]*\) bass \([0-9]*\)$/\1 \2 \3 \4 \5/p'; }
 bp() { grep -a "^  part 1:" "$OUT/persist_loop_bass_2.log" | sed -n "$1p" | sed -n 's/.* voices \([0-9]*\),.*/\1/p'; }
 bk() { grep -a '^  kbd:' "$OUT/persist_loop_bass_2.log" | sed -n "$1p" | sed -n 's/.*keyboard \([a-z]*\) single \([0-9]\) .*/\1 \2/p'; }
-grep -q '^loop: auto-save slot 1 32 bytes rc 0 (stopped)' "$OUT/persist_loop_bass_1.log" &&
+grep -q '^loop: save slot 1 32 bytes rc 0' "$OUT/persist_loop_bass_1.log" &&
     [ "$(lv "$(bl 1)" used)" = 001 ] && [ "$(lv "$(bl 1)" events)" = 2 ] && [ "$(bv 1)" = "0 0 1 0 0" ] && [ "$(bk 1)" = "chords 2" ] &&
     ok "loop bass relaunched: slot 1 back with its 2 events, 1 of them bass-side (the record's flag and bit survive the flash)" \
     || bad "loop bass relaunched: $(bl 1) / $(bv 1) / $(bk 1)"
@@ -338,10 +426,11 @@ grep -q '^loop: auto-save slot 1 32 bytes rc 0 (stopped)' "$OUT/persist_loop_bas
     ok "loop bass relaunched, Single = Full: G major on the chord part, the recorded D on the bass part alone; stopped: silent" \
     || bad "loop bass relaunched, playing: $(bk 2) / $(bv 2) / $(bv 3) part 1 $(bp 3)"
 
-# ---- the session (0.18, docs/SETTINGS.md "The session"): "switch off, switch on: exactly where you left off".
+# ---- the session (0.18, docs/SETTINGS.md "The session"): since 2026-10-11 written by the global save alone: the unit
+# comes back as last SAVED.
 # Run 1 (session_set.txt, a fresh flash): a loop recorded in slot 3 and stopped, both parts' sounds edited and not
 # saved, Bass on with its Level down, the delay picked and set (both its pages), Perform on with Arpeggiate, voicing +2, octave -1, LOCK
-# with MAJ + M7 latched. Run 2 (session_check.txt, a relaunch): all of it back at power-on, the loop loaded and
+# with MAJ + M7 latched; 4 s: nothing written; SAVE held: written. Run 2 (session_check.txt, a relaunch): all of it back at power-on, the loop loaded and
 # stopped, silence; D4 plays the latched Dmaj7 arpeggiated over the bass; nothing is written (the state is the stored)
 SF=$OUT/persist_session_flash.bin
 S1=$OUT/persist_session_1.log; S2=$OUT/persist_session_2.log
@@ -366,9 +455,14 @@ c1=$(dl "$S1" 'session chord:' 2); b1=$(dl "$S1" 'session bass:' 2)
     dl "$S1" 'loop: state' 2 | grep -q 'state 1 cap 0 layers 1 events 2 .* slot 3 .* used 004 ' &&
     ok "session run 1: the state set: both sounds edited (not saved), Bass on at level 84, Delay picked and set, Arpeggiate on, voicing +2, octave -1, LOCK with MAJ + M7, a loop in slot 3" \
     || bad "session run 1: $(sx "$S1" 2 6) / $(crl "$S1" 2) / $(dl "$S1" 'session fx:' 2) / $c1 / $b1"
-[ "$(sx "$S1" 2 1)" -ge 1 ] && [ "$(sx "$S1" 2 5)" = 0 ] && [ "$(sx "$S1" 2 3)" = "$(sx "$S1" 2 4)" ] &&
-    dl "$S1" 'settings: now' 2 | grep -q 'pending 0' &&
-    ok "session run 1: written once things were quiet (session saves $(sx "$S1" 2 1); flash = now $(sx "$S1" 2 3))" \
+[ "$(sx "$S1" 1 1)" = 0 ] && [ "$(sx "$S1" 1 5)" = 1 ] && dl "$S1" 'flash:' 1 | grep -q ', 0 writes, settings saves 0 ' &&
+    dl "$S1" 'loop: state' 1 | grep -q ' used 000 ' &&
+    ok "session run 1: 4 s after all of it: nothing written (0 flash writes: no settings, no session, no loop)" \
+    || bad "session run 1: written without a save: $(dl "$S1" 'flash:' 1) / $(sv "$S1" 1)"
+[ "$(sx "$S1" 2 1)" = 1 ] && [ "$(sx "$S1" 2 5)" = 0 ] && [ "$(sx "$S1" 2 3)" = "$(sx "$S1" 2 4)" ] &&
+    dl "$S1" 'settings: now' 2 | grep -q 'pending 0' && dl "$S1" 'flash:' 2 | grep -q 'settings saves 1 ' &&
+    grep -aq '^loop: save slot 3 [0-9]* bytes rc 0' "$S1" &&
+    ok "session run 1: SAVE held: the settings, the session and the loop each written once (flash = now $(sx "$S1" 2 3))" \
     || bad "session run 1: not saved: $(sv "$S1" 2)"
 grep -aq '^session: applied (parts 1 1, voicing 2, octave -1, bass 1, lock 1 latched 44, fx 2)' "$S2" &&
     [ "$(sx "$S2" 1 2)" = current ] && [ "$(sx "$S2" 1 6)" = "$want_state" ] && [ "$(crl "$S2" 1)" = "$want_cr" ] &&
@@ -427,26 +521,35 @@ SL=$OUT/persist_session_old.log
     ok "a settings object rewritten by an older firmware (v14, 99 BPM): its settings load (migrated), the session left beside it is NOT applied (voicing 0, the bass off, LOCK off, the pool's TINE EP)" \
     || bad "session, older settings: bpm $(bpm "$SL") $(sv "$SL" 1) / $(dl "$SL" 'session chord:' 1)"
 
-# the deferred save: no storm while a knob turns (session_storm.txt), never under a sound (session_hold.txt)
+# nothing is written by itself, however long (session_storm.txt); what a save costs and what it sounds like under a
+# held chord, and the automatic part still waiting for silence (session_hold.txt)
 ST=$OUT/persist_session_storm.log; SH=$OUT/persist_session_hold.log
 "$EMU" --headless --script "$S/session_storm.txt" >"$ST" 2>&1 || bad "session storm: exit status"
 "$EMU" --headless --script "$S/session_hold.txt" >"$SH" 2>&1 || bad "session hold: exit status"
 fw() { dl "$1" 'flash:' "$2" | sed -n 's/.*, \([0-9]*\) writes, settings saves \([0-9]*\) .*/\1 \2/p'; }
-[ "$(sx "$ST" 1 1) $(sx "$ST" 1 5)" = "0 1" ] && [ "$(fw "$ST" 1)" = "0 0" ] && [ "$(sx "$ST" 2 1) $(sx "$ST" 2 5)" = "1 0" ] &&
-    [ "$(sx "$ST" 3 1)" = 1 ] && [ "$(fw "$ST" 3)" = "6 0" ] && echo "$(sx "$ST" 3 6)" | grep -q '^voicing 4 ' &&
-    ok "KNOB 1 turned for 3 s (20 detents): no flash write while it turns; ONE session write after the quiet time (1 erase + 5 programs), none after; the settings record never" \
-    || bad "session storm, the voicing: $(sv "$ST" 1) / $(sv "$ST" 2) / $(sv "$ST" 3) / $(fw "$ST" 3)"
-[ "$(sx "$ST" 4 1) $(sx "$ST" 4 5)" = "1 1" ] && [ "$(sx "$ST" 5 1) $(sx "$ST" 5 5)" = "2 0" ] && [ "$(fw "$ST" 5)" = "12 0" ] &&
-    dl "$ST" 'session chord:' 5 | grep -q 'edited 1' &&
-    ok "an editor knob turned for 1.2 s (12 detents): pending while it turns, ONE more write after the quiet time" \
-    || bad "session storm, the edit: $(sv "$ST" 4) / $(sv "$ST" 5) / $(fw "$ST" 5)"
-dl "$ST" 'flash erases' 5 | grep -q 'audio stalled 2 (32 blocks' &&
-    ok "each session save: one sector erase (45 ms, 16 audio blocks of silence into silence), as a settings save" \
-    || bad "session storm: erases: $(dl "$ST" 'flash erases' 5)"
-grep -aq '^expect sound at .*: ok' "$SH" && [ "$(sx "$SH" 1 1) $(sx "$SH" 1 5)" = "0 1" ] && [ "$(fw "$SH" 1)" = "0 0" ] &&
-    [ "$(sx "$SH" 2 1) $(sx "$SH" 2 5)" = "1 0" ] &&
-    ok "a change under a held chord: nothing written while it sounds (3 s), written once after it is let go" \
-    || bad "session hold: $(sv "$SH" 1) / $(sv "$SH" 2)"
+[ "$(sx "$ST" 1 1) $(sx "$ST" 1 5)" = "0 1" ] && [ "$(fw "$ST" 1)" = "0 0" ] && echo "$(sx "$ST" 1 6)" | grep -q '^voicing 4 ' &&
+    ok "KNOB 1 turned for 3 s (20 detents), then 3 s of nothing: no flash write (the state differs from flash until a save)" \
+    || bad "session storm, the voicing: $(sv "$ST" 1) / $(fw "$ST" 1)"
+[ "$(sx "$ST" 2 1) $(sx "$ST" 2 5)" = "1 0" ] && [ "$(fw "$ST" 2)" = "11 1" ] && [ "$(sx "$ST" 3 1)" = 1 ] && [ "$(fw "$ST" 3)" = "11 1" ] &&
+    ok "SAVE held, a new unit's first save: both objects written once (the settings: 1 erase + 4 programs; the session: 1 erase + 5); none after" \
+    || bad "session storm, the save: $(sv "$ST" 2) / $(fw "$ST" 2) / $(fw "$ST" 3)"
+[ "$(sx "$ST" 4 1) $(sx "$ST" 4 5)" = "1 1" ] && [ "$(sx "$ST" 5 1) $(sx "$ST" 5 5)" = "2 0" ] && [ "$(fw "$ST" 5)" = "17 1" ] &&
+    dl "$ST" 'session chord:' 5 | grep -q 'edited 1' && [ "$(fw "$ST" 6)" = "17 1" ] && [ "$(sx "$ST" 6 1)" = 2 ] &&
+    ok "an editor knob turned for 1.2 s, 3 s: not written; SAVE held: ONE object written (the session: the settings block did not change); SAVE held again with nothing changed: no erase at all" \
+    || bad "session storm, the edit: $(sv "$ST" 4) / $(sv "$ST" 5) / $(fw "$ST" 5) / $(fw "$ST" 6)"
+dl "$ST" 'flash erases' 6 | grep -q 'audio stalled 3 (48 blocks' &&
+    ok "each object a save writes: one sector erase (45 ms: 16 audio blocks of silence)" \
+    || bad "session storm: erases: $(dl "$ST" 'flash erases' 6)"
+[ "$(grep -ac '^expect sound at .*: ok' "$SH")" = 3 ] && [ "$(sx "$SH" 1 1) $(sx "$SH" 1 5)" = "0 1" ] && [ "$(fw "$SH" 1)" = "0 0" ] &&
+    ok "a change under a held chord: nothing written (3 s)" || bad "session hold, held: $(sv "$SH" 1) / $(fw "$SH" 1)"
+[ "$(sx "$SH" 2 1) $(sx "$SH" 2 5)" = "1 0" ] && dl "$SH" 'flash erases' 2 | grep -q 'audio stalled 2 (32 blocks' &&
+    ok "SAVE held under the sounding chord: saved at once (the player's own press): an erase an object written (here two, a new unit's first save: 2 x 45 ms of silence in the chord), the chord sounds on" \
+    || bad "session hold, the save: $(sv "$SH" 2) / $(dl "$SH" 'flash erases' 2)"
+[ "$(fw "$SH" 3 | cut -d' ' -f2)" = 1 ] && dl "$SH" 'settings: now' 3 | grep -q 'style 1 .* pending 1 ' &&
+    [ "$(fw "$SH" 4 | cut -d' ' -f2)" = 2 ] && dl "$SH" 'settings: now' 4 | grep -q 'pending 0 ' &&
+    dl "$SH" 'flash erases' 4 | grep -q 'audio stalled 3 (48 blocks' &&
+    ok "an Option changed under the same chord: the automatic write waits (3 s: nothing), written once the chord and its tail are over" \
+    || bad "session hold, the Option: $(fw "$SH" 3) / $(fw "$SH" 4) / $(dl "$SH" 'settings: now' 3)"
 
 # Options > Reset Settings clears the session too (the reset runs above): after the reset the session as it would be
 # saved is a new unit's (the fresh run's), it is in flash, and the relaunch comes up on it

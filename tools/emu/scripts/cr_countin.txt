@@ -1,12 +1,12 @@
 # ChoralRoot looper: the loop-length layer, the count-in, undo (120 BPM, 4/4: a bar = 2 s).
-# LOOP held: the PLAY menu (its middle the length, "Free"); SELECT +1 moves it (Free -> 1 bar, no meter); the
+# LOOP held: the PLAY menu (its middle the length, "Free"); KNOB 1 +1 moves it (Free -> 1 bar, no meter); the
 # mode Overdub (ALGORITHM +2) for the overdub below; REC: the one-bar count-in, 4 3 2 1 huge in red inside the ring; D recorded (the corner dial), the
 # take commits by itself; REC + G overdubbed; REC held: undo, the layers left huge in red inside the ring.
 wait 300
 btn PLAY down
 wait 700
 shot build/emu/test/cr_loop_length.ppm
-knob SELECT +1
+knob KNOB1 +1
 wait 60
 shot build/emu/test/cr_loop_length_slide.ppm
 wait 300

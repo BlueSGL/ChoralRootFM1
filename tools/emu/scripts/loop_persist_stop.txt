@@ -1,6 +1,8 @@
-# The loop survives a power cycle without a SAVE (docs/LOOPER.md "Slots and the record", test_persist.sh): a Free take
-# in slot 1 (D, Em: 2 events), playing; after 400 ms LOOP tap stops it: the changed loop is written to its slot at the
-# stop ("saved to slot 1"). loop_persist_back.txt relaunches on the same flash file: slot 1 is back and plays.
+# Loops are saved by hand (0.18; docs/LOOPER.md "Slots and the record", test_persist.sh). A Free take in slot 1 (D,
+# Em: 2 events), stopped: nothing in the flash (dump 1), 3 s later still nothing (dump 2: no write at a stop, none
+# when idle). SAVE held: written (dump 3: used 001). Then it is recorded over (Overwrite: REC, G, REC: 1 event) and
+# stopped; 3 s: the flash still holds the first loop (dump 4: 1 event in RAM, not saved, no write). Quit: a power
+# cycle without a save. loop_persist_back.txt on the same file: the OLD loop (2 events) is back.
 wait 300
 btn REC
 wait 300
@@ -16,11 +18,29 @@ wait 500
 btn E4 up
 btn G#3 up
 wait 400
-btn REC                       # the take ends: a 1-bar loop, playing (nothing in the flash yet)
+btn REC                       # the take ends: a 1-bar loop, playing
 wait 400
-dump                          # 1: slot 1, 2 events, playing, used 000
-btn PLAY                      # stop: written at the stop
-wait 200
+btn PLAY                      # stop
+wait 300
+dump                          # 1: slot 1, 2 events, stopped, used 000, not saved
+wait 3000
+dump                          # 2: still nothing written
+btn SAVE 900                  # the global save
+wait 300
 shot build/emu/test/loop_persist_stop.ppm
-wait 1000
-dump                          # 2: stopped, used 001
+wait 1500
+dump                          # 3: used 001, saved
+btn REC                       # recorded over (Overwrite)
+wait 300
+btn A#3 down
+btn G4 down
+wait 500
+btn G4 up
+btn A#3 up
+wait 1400
+btn REC
+wait 400
+btn PLAY
+wait 3500
+dump                          # 4: 1 event in RAM, not saved; the flash as at dump 3
+quit

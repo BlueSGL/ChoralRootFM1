@@ -261,7 +261,7 @@ int main(void)
     /* ---- content: settings, both banks, FM6, VA, three loops ---- */
     cs.bpm = 133;
     cs.tonic = 5;
-    cr_settings_save();
+    cr_settings_commit();                            /* (the global save: the tempo and the key are manual settings, 0.18) */
     {
         static up_bank_t b;
         static fm6_bank_t f;
@@ -360,7 +360,7 @@ int main(void)
           "LIST: the sizes (settings PER5, banks, FM6, VA, FM6 patches, loops; empty slots 0)");
     {
         const persist_t *p = (const persist_t *)find(man, nman, 1)->bytes;
-        CHECK(p->magic == PERSIST_MAGIC && p->cr.bpm == 133 && p->cr.tonic == 5, "backup: the settings carry the last change");
+        CHECK(p->magic == PERSIST_MAGIC && p->cr.bpm == 133 && p->cr.tonic == 5, "backup: the settings carry the last global save");
     }
     t_begin(66); t_b(6); t_u32(3000); t_b(200 & 127); t_b(200 >> 7);
     a = t_send(&n);
@@ -400,7 +400,7 @@ int main(void)
                   "restore: a session in flash before the settings are restored");
             css_flash = cr_session_hash(&x);
             rc = t_put(1, find(ref, nref, 1)->bytes, find(ref, nref, 1)->size);
-            CHECK(rc == 0 && st_load(OBJ_SESSION, &x, sizeof x) == 0 && css_flash == 0 && !css_pending,
+            CHECK(rc == 0 && st_load(OBJ_SESSION, &x, sizeof x) == 0 && css_flash == 0,
                   "restore: the settings committed: the session object is empty (the restart comes up on the settings alone)");
             CHECK(crs_obj_crc == st_crc32(&crs_rec, sizeof crs_rec), "restore: the session's binding follows the restored object");
         }

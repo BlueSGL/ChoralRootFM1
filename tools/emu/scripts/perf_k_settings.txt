@@ -1,4 +1,4 @@
-# tools/emu/perf.sh (k), the reference: the same with SELECT +1 (the tempo: a settings change only): one settings save, as in 0.17
+# tools/emu/perf.sh (k), the reference: the same with an Option changed (Options, KNOB 1 +1: Play Style): the automatic part, written by itself once the unit is quiet: one settings save, as in 0.17
 wait 300
 key F3 down
 wait 40
@@ -8,7 +8,11 @@ btn D4 up
 key F3 up
 wait 3000
 dump                          # 1: nothing changed: no save
-knob SELECT +1
-wait 5000
+btn GLO
+wait 200
+knob KNOB1 +1
+wait 200
+btn GLO
+wait 4500
 dump                          # 2: the settings saved once
 quit

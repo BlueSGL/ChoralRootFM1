@@ -409,6 +409,7 @@ static void css_sanitize(cr_session_t *x)
     if (x->bass_on > 1u) x->bass_on = 0;
     if (x->lock > 1u) x->lock = 0;
     if (!x->lock) x->latched = 0;                  /* (the latch belongs to LOCK) */
+    if (x->loop_rate < -3 || x->loop_rate > 3) x->loop_rate = 0;   /* (cr_loop.h CRL_NRATE: x1/4 .. x4 around x1) */
     if (x->fx.version != CSS_FX_VERSION || x->fx.n > (uint32_t)CSS_NFXP)
         css_fx_defaults(&x->fx);                   /* another layout of the FX block: the sounds' own sends, the
                                                     * effects' defaults */
@@ -564,7 +565,7 @@ static uint32_t crs_saves;                         /* flash writes done (diagnos
  * into for a write; what flash holds is kept as a hash (cr_session_hash), so that "unchanged: no erase" costs no
  * second kilobyte */
 typedef char css_fit_ok[P_COUNT <= CSS_NP && ENG_BLOB_MAX <= CSS_BLOB && sizeof psnd[0].name == CSS_NAME &&
-                        CR_NMOD <= 8 ? 1 : -1];
+                        CR_NMOD <= 8 && CRL_NRATE == 7 && CRL_RATE_1 == 3 ? 1 : -1];
 static cr_session_t css_buf __attribute__((section(".pool")));
 static uint32_t css_flash;                         /* cr_session_hash of the session in flash (0: none) */
 static uint32_t crs_obj_crc;                       /* the settings object's payload CRC in flash (0: none): the session's
@@ -847,6 +848,7 @@ static void css_capture(cr_session_t *x)
     x->bass_on = cs.bass_on != 0u;
     x->lock = cu.clock != 0u;
     x->latched = x->lock ? cu.mlatch : 0u;
+    x->loop_rate = (int8_t)((int)cs.loop_rate - (int)CRL_RATE_1);
     x->fx.sel = CSS_FXS[cu_fx_pg()];
     for (i = 0; i < CU_NFX; i++)
         x->fx.amt[CSS_FXE[i]] = (uint8_t)(cs.fx_amt[i] & 127u);
@@ -885,6 +887,7 @@ static void css_apply(const cr_session_t *x)
         cr_set_bass(&cr, 1);
     fm1_irq_on();
     cu.octave = x->octave;                         /* (cu_post_kbd follows: the split key's note moves with it) */
+    cs.loop_rate = (uint8_t)((int)x->loop_rate + (int)CRL_RATE_1);   /* (cu_loop_conf posts it with the looper's) */
     if (x->bass_on) {                              /* v15: the bass comes back on, on its sound (ALGORITHM's place:
                                                     * cu_pos_sync) */
         cs.bass_on = 1;
@@ -1163,6 +1166,7 @@ static void crs_reinit(void)
     cu_pool_load(1, ENGI_VA, cu_pool_find(ENGI_VA, "DEEP SUB"));
     cs.bass_sound = 0;                             /* ALGORITHM at OFF: the bass off */
     cs.bass_on = 0;
+    cs.loop_rate = CRL_RATE_1;                     /* the loop's Rate: x1 */
 }
 
 /* Options > Reset Settings (the owner, 2026-10-12): every option back to what a new unit has, now and in flash. The

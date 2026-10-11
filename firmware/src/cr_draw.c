@@ -2007,6 +2007,8 @@ static void cr_lm_slots(const cr_screen_t *s, uint16_t col)
         }
         cr_text(cx, P8(top + bot) / 2 + (int32_t)npx * 92, nb, npx, 1, CR_C, 4096, full ? T_BG : on ? col : T_DIM,
                 full ? (on ? col : T_DIM) : T_BG, 0);
+        if (s->lm_dirty == i + 1)                    /* not saved yet: a 3 px square in the cell's top right corner */
+            cr_frect((((x16 + w16 + 8) >> 4) - 6) * 16, (top + 3) * 16, 48, 48, full ? T_BG : on ? col : T_DIM);
     }
     if (s->lm_jump && s->lm_jump - 1 != s->lm_slot && s->lm_slot < 10u) {   /* the hop: down, along, up into the target */
         int32_t a = (96 + (int32_t)s->lm_slot * 3696 / 10) + 160, b = (96 + sel * 3696 / 10) + 160, y = bot * 16 + 40;
@@ -2084,7 +2086,7 @@ static void cr_lm_timeline(const cr_screen_t *s, uint16_t col)
 /* the step grid (FORMAT.md `steps`): a row per bar (four at most), sixteen steps across (2 px more every four); the
  * filled steps (lm_lane[0]) red, the others grey; the cursor (lm_pos) a 2 px red outline in a 1 px background ring,
  * not drawn while CR_LM_CUR_OFF (its blink); `sub` (the step's chord) 15 px under the grid at the left, `value` 12 px
- * grey at the right */
+ * grey at the right; lm_steps: the cells after that many are not drawn (the loop editor: the loop ends there) */
 static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
 {
     int32_t gy = cr_lm_st_y(s), rows = cr_lm_rows(s), per = cr_lm_per(s), cw = cr_lm_cw(per), r, c, H = rows * 9 - 2;
@@ -2096,7 +2098,7 @@ static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
             for (c = 0; c < per; c++) {
                 uint32_t st = (uint32_t)(r * per + c);
                 int32_t xx = cr_lm_st_x(per, c), yy = (gy + r * 9) * 16;
-                if (st > 63u) break;
+                if (st > 63u || (s->lm_steps && st >= s->lm_steps)) break;
                 cr_frect(xx, yy, cw, 7 * 16, (s->lm_lane[0] >> st) & 1u ? col : T_LINE);
                 if (st == cur && curon) {            /* (the steps after it cover its ring, as the designer's) */
                     cr_srect(xx - 48, yy - 48, cw + 96, 7 * 16 + 96, 16, T_BG);

@@ -567,16 +567,24 @@ differ cr_key_pick cr_key_play "the label and the footer say pick / play"
 silent_end cr_key_play
 run cr_loop_row
 L="$OUT/cr_loop_row.log"
-has '^loop: cells Quantize Count-in Level Keys' "$L" && ok "LOOP held, stopped: the PLAY menu over Quantize / Count-in / Level / Keys: $OUT/cr_loop_row.ppm" || bad "no loop cells"
-has '^loop: knob 1 quantize' "$L" && has '^loop: knob 2 count-in' "$L" && has '^loop: knob 3 level' "$L" &&
-    ok "KNOB 1..3: quantize, count-in, level" || bad "loop knobs: $(grep '^loop: knob' "$L" | tr '\n' ' ')"
+has '^loop: cells Length Rate Quantize Count-in' "$L" && ok "LOOP held, stopped: the PLAY menu's page 1 over Length / Rate / Quantize / Count-in: $OUT/cr_loop_row.ppm" || bad "no loop cells"
+has '^loop: length 1' "$L" && has '^loop: knob 2 rate x3/4' "$L" && has '^loop: knob 3 quantize 1/4' "$L" && has '^loop: knob 4 count-in off' "$L" &&
+    ok "page 1, KNOB 1..4: length (1 bar), rate (x3/4), quantize (1/4), count-in (off)" || bad "loop knobs: $(grep '^loop: knob\|^loop: length' "$L" | tr '\n' ' ')"
+has '^loop: page 2' "$L" && has '^loop: cells Level - - -' "$L" && has '^loop: knob 1 level 90' "$L" && has '^loop: page 1' "$L" &&
+    [ "$(grep -c '^loop: knob [234] ' "$L")" = 6 ] && grep -a '^  loop2:' "$L" | sed -n 1p | grep -q ' page 2 ' &&
+    ok "SELECT turns the page (not the length): page 2 is Level on KNOB 1, KNOB 2..4 nothing there; SELECT back: page 1: $OUT/cr_loop_row_p2.ppm" \
+    || bad "the PLAY menu's pages: $(grep '^loop: page\|^loop: cells' "$L" | tr '\n' ' ')"
+grep -q "^ui: frame.*device): loopmenu .*foot '1/2 . keys: play . GLO: loops'" "$L" && grep -q "^ui: frame.*device): loopmenu .*foot '2/2 . keys: play . GLO: loops'" "$L" &&
+    ok "the bottom line: the page (1/2, 2/2), what the keys do, what GLO makes them" || bad "the PLAY menu's bottom line: $(grep -o "loopmenu .*foot '[^']*'" "$L" | sed "s/.*foot //" | sort -u | tr '\n' ' ')"
 grep -q '^ui: frame.*device): loopmenu .*hot 1\.0$' "$L" && grep -q '^ui: frame.*device): loopmenu .*hot 1\.1$' "$L" &&
-    grep -q '^ui: frame.*device): loopmenu .*hot 1\.2$' "$L" && ok "the turned cells hot (1, 2, 3)" || bad "loop: no hot cells"
+    grep -q '^ui: frame.*device): loopmenu .*hot 1\.2$' "$L" && grep -q '^ui: frame.*device): loopmenu .*hot 1\.3$' "$L" && ok "the turned cells hot (1, 2, 3, 4)" || bad "loop: no hot cells"
 mt=$(grep -c '^ui: frame.*device): meter ' "$L")
 [ "$mt" = 0 ] && ok "no popup in the PLAY menu" || bad "a popup in the PLAY menu ($mt meters)"
-differ cr_loop_row cr_loop_row_quant "KNOB 1: the quantize cell: $OUT/cr_loop_row_quant.ppm"
-differ cr_loop_row_quant cr_loop_row_countin "KNOB 2: the count-in cell: $OUT/cr_loop_row_countin.ppm"
-differ cr_loop_row_countin cr_loop_row_level "KNOB 3: the level cell: $OUT/cr_loop_row_level.ppm"
+differ cr_loop_row cr_loop_row_len "KNOB 1: the length cell (and the length big in the middle): $OUT/cr_loop_row_len.ppm"
+differ cr_loop_row_len cr_loop_row_rate "KNOB 2: the rate cell: $OUT/cr_loop_row_rate.ppm"
+differ cr_loop_row_rate cr_loop_row_quant "KNOB 3: the quantize cell: $OUT/cr_loop_row_quant.ppm"
+differ cr_loop_row_quant cr_loop_row_countin "KNOB 4: the count-in cell: $OUT/cr_loop_row_countin.ppm"
+differ cr_loop_row_p2 cr_loop_row_level "page 2, KNOB 1: the level cell: $OUT/cr_loop_row_level.ppm"
 grep -q "^ui: frame.*device): loopmenu .* lm 1/1/0/[0-9]* lanes 1/0 " "$L" &&
     ok "LOOP held while it plays: the timeline in the middle (1 bar, 1 lane): $OUT/cr_loop_row_playing.ppm" || bad "no timeline while playing"
 for f in cr_loop_row cr_loop_row_playing; do
@@ -586,7 +594,7 @@ for f in cr_loop_row cr_loop_row_playing; do
     *) [ "$re" = 0 ] && [ "$rd" = 0 ] && ok "stopped: no ring, no dial: $OUT/$f.ppm" || bad "$f: ring band $re, dial $rd";;
     esac
 done
-grep -q '^loop: cells' "$L" && differ cr_loop_row_playing cr_loop_row_playing_level "playing, KNOB 3: the level cell hot: $OUT/cr_loop_row_playing_level.ppm"
+grep -q '^loop: cells' "$L" && differ cr_loop_row_playing cr_loop_row_playing_level "playing, page 2, KNOB 1: the level cell hot: $OUT/cr_loop_row_playing_level.ppm"
 run cr_metro_row
 L="$OUT/cr_metro_row.log"
 has '^metro: cells Click - - -' "$L" && ok "METRO held: the time signature over Click: $OUT/cr_metro_row.ppm" || bad "no metro cells"
@@ -807,19 +815,23 @@ e=$(L cr_loop_free 6); f=$(L cr_loop_free 7); g=$(L cr_loop_free 8)
 [ "$(lf "$g" state)" = 0 ] && [ "$(lf "$g" events)" = 0 ] && ok "LOOP held, GLO (Keys = Loops) + D#4 held 1 s: cleared: $OUT/cr_loop_layer_playing.ppm" || bad "clear: $g"
 silent_end cr_loop_free
 run cr_loop_sync --flash "$OUT/cr_loop_flash.bin"
-a=$(L cr_loop_sync 1); b=$(L cr_loop_sync 2); c=$(L cr_loop_sync 4)
+a=$(L cr_loop_sync 1); b=$(L cr_loop_sync 2); c=$(L cr_loop_sync 4); c3=$(L cr_loop_sync 3)
 [ "$(lf "$a" cap)" = 2 ] && has 'expect sound .*: ok' "$OUT/cr_loop_sync.log" &&
     ok "2 bars synced: REC starts a one-bar count-in, its click audible with nothing played: $OUT/cr_loop_countin.ppm" || bad "count-in: $a"
 [ "$(lf "$b" state)" = 2 ] && [ "$(lf "$b" len)" = 768 ] && [ "$(lf "$b" events)" = 2 ] &&
     ok "it recorded 2 bars (768 ticks) and committed by itself, playing: $OUT/cr_loop_rec.ppm" || bad "sync take: $b"
-has '^loop: save slot 2 ' "$OUT/cr_loop_sync.log" && [ "$(lf "$c" used)" = 002 ] &&
-    ok "SAVE held + E4 + OCT+ while playing: saved to slot 2 at stop: $OUT/cr_loop_save.ppm" || bad "slot 2 not saved"
+has '^save: global, at the stop' "$OUT/cr_loop_sync.log" && [ "$(lf "$c3" used)" = 000 ] && [ "$(lf "$c3" state)" = 2 ] &&
+    grep -a '^  loop2:' "$OUT/cr_loop_sync.log" | sed -n 3p | grep -q 'save-pending 1' &&
+    grep -a '^  flash:' "$OUT/cr_loop_sync.log" | sed -n 3p | grep -q ', 0 writes,' &&
+    has '^loop: save slot 1 ' "$OUT/cr_loop_sync.log" && has '^save: global rc 0' "$OUT/cr_loop_sync.log" && [ "$(lf "$c" used)" = 001 ] &&
+    ok "SAVE held while it plays: \"saves at stop\", nothing written while the loop plays ($OUT/cr_loop_save.ppm); LOOP stops it: saved, slot 1 with it ($OUT/cr_loop_saved.ppm)" \
+    || bad "the global save at the stop: $c3 / $c"
 silent_end cr_loop_sync
 run cr_loop_load --flash "$OUT/cr_loop_flash.bin"
 a=$(L cr_loop_load 1); b=$(L cr_loop_load 2); c=$(L cr_loop_load 4)
-[ "$(lf "$a" slot)" = 2 ] && [ "$(lf "$a" events)" = 2 ] && ok "relaunched with --flash: slot 2 back at power-on" || bad "boot: $a"
+[ "$(lf "$a" slot)" = 1 ] && [ "$(lf "$a" events)" = 2 ] && ok "relaunched with --flash: slot 1 back at power-on" || bad "boot: $a"
 [ "$(lf "$b" state)" = 2 ] && [ "$(lf "$b" len)" = 768 ] && [ "$(lf "$b" played)" -ge 1 ] &&
-    ok "slot 2 in RAM at power-on (the PLAY menu: $OUT/cr_loop_load_menu.ppm), LOOP plays it: $OUT/cr_loop_loaded.ppm" || bad "load / play: $b"
+    ok "slot 1 in RAM at power-on (the PLAY menu: $OUT/cr_loop_load_menu.ppm), LOOP plays it: $OUT/cr_loop_loaded.ppm" || bad "load / play: $b"
 [ "$(lf "$c" state)" = 1 ] && ok "panic: the loop stops, kept" || bad "panic: $c"
 dr=$(px_count "$OUT/cr_loop_dial.ppm" 218 0 240 26 red); cr=$(px_count "$OUT/cr_loop_dial.ppm" 16 40 224 200 red)
 de=$(px_count "$OUT/cr_loop_dial.ppm" 2 60 14 180 ink)
@@ -846,14 +858,15 @@ c=$(L cr_loop_slots 3); d=$(L cr_loop_slots 4); e=$(L cr_loop_slots 5)
     ok "a take in slot 2, LOOP held + PRESETS -1 while it plays: slot 1 back (2 events) playing on; LOOP stops: slot 2 written (used 003)" \
     || bad "the pending save at the stop: $c / $d / $e"
 f=$(L cr_loop_slots 6); g=$(L cr_loop_slots 7); h=$(L cr_loop_slots 8); i=$(L cr_loop_slots 9)
-[ "$(lf "$f" events)" = 3 ] && [ "$(lf "$g" slot)" = 2 ] && [ "$(lf "$g" events)" = 1 ] &&
-    has '^loop: auto-save slot 1 [0-9]* bytes rc 0 (stopped)' "$SL" && [ "$(lf "$h" slot)" = 1 ] &&
+[ "$(lf "$f" events)" = 3 ] && grep -a '^  loop2:' "$SL" | sed -n 6p | grep -q ' dirty 1 ' && [ "$(lf "$g" slot)" = 2 ] && [ "$(lf "$g" events)" = 1 ] &&
+    ! has '^loop: auto-save slot 1 [0-9]* bytes rc 0 (stopped)' "$SL" && ! has '(idle)' "$SL" &&
+    has '^loop: auto-save slot 1 [0-9]* bytes rc 0 (leaving it)' "$SL" && [ "$(lf "$h" slot)" = 1 ] &&
     [ "$(lf "$h" events)" = 3 ] && [ "$(lf "$h" layers)" = 2 ] &&
-    ok "stopped: an overdub on slot 1 written at the stop (no SAVE), PRESETS +1 / -1 brings it back with its 3 events, 2 layers" \
+    ok "stopped: an overdub on slot 1 is NOT written at the stop (not saved, 1 s later); PRESETS +1 leaves the slot: written then; PRESETS -1 brings it back with its 3 events, 2 layers" \
     || bad "switch while stopped: $f / $g / $h"
 gr=$(od -An -tu1 -v -j 15 "$OUT/cr_loop_slots_saved.ppm" | awk '{ for (k = 1; k <= NF; k++) v[n++] = $k }
      END { c = 0; for (o = 0; o + 2 < n; o += 3) if (v[o] < 100 && v[o+1] > 140 && v[o+2] > 90 && v[o+2] < 160) c++; print c }')
-[ "$gr" -gt 1000 ] && ok "the message \"saved to slot 1\" at the stop, in green ($gr px): $OUT/cr_loop_slots_saved.ppm" || bad "no green message ($gr px)"
+[ "$gr" -gt 1000 ] && ok "the message \"loop 2 . saved 1\" when the slot is left, in green ($gr px): $OUT/cr_loop_slots_saved.ppm" || bad "no green message ($gr px)"
 [ "$(lf "$i" state)" = 2 ] && [ $(( $(lf "$i" played) - $(lf "$h" played) )) -ge 3 ] && grep -q '^expect sound .*: ok' "$SL" &&
     [ "$(num "non-silent blocks" "$SL")" -gt 0 ] &&
     ok "LOOP plays slot 1 again: its events sound ($(( $(lf "$i" played) - $(lf "$h" played) )) played in 1.5 s; the WAV: $OUT/cr_loop_slots.wav)" \
@@ -867,7 +880,7 @@ j=$(L cr_loop_slots 10); k=$(L cr_loop_slots 11)
 m=$(L cr_loop_slots 13)
 has '^loop: switch to slot 2 cancelled, slot 1 stays' "$SL" && [ "$(lf "$m" slot)" = 1 ] && [ "$(lf "$m" events)" = 5 ] &&
     [ "$(grep -c '^loop: auto-save slot 1 [0-9]* bytes rc 0 (at the stop)' "$SL")" = 2 ] &&
-    ok "a switch cancelled by a stop before the cycle's end: slot 1 stays selected, its overdub written at the stop (5 events)" \
+    ok "a switch cancelled by a stop before the cycle's end: slot 1 stays selected, the copy staged for the switch written at the stop (5 events)" \
     || bad "cancelled switch: $m"
 silent_end cr_loop_slots
 # a Split Bass bass-side note is recorded as one and plays on the bass part (0.18; docs/LOOPER.md "What is recorded")
@@ -889,10 +902,10 @@ a=$(L cr_loop_bass 2)
     ok "live over the loop: a live C4 with the looped F3 (2 notes on the bass stream); a live F3 held past the looped F3's end still sounds, let go: off; stopped: silent (no stuck voice)" \
     || bad "live bass over a looped bass: $(lvp 6) / $(lvp 7) p1 $(lpv 7 1) / $(lvp 8) / busy $(lbz 9) $(lvp 9)"
 b=$(L cr_loop_bass 10); c=$(L cr_loop_bass 11)
-has '^loop: auto-save slot 1 39 bytes rc 0 (stopped)' "$LB" && [ "$(lf "$b" slot)" = 2 ] && [ "$(lf "$b" events)" = 0 ] && has '^loop: slot 1 loaded' "$LB" &&
+has '^loop: auto-save slot 1 39 bytes rc 0 (leaving it)' "$LB" && [ "$(lf "$b" slot)" = 2 ] && [ "$(lf "$b" events)" = 0 ] && has '^loop: slot 1 loaded' "$LB" &&
     [ "$(lf "$c" slot)" = 1 ] && [ "$(lf "$c" events)" = 3 ] && [ "$(lvp 11)" = "0 0 2 0 0" ] && [ "$(lkb 11)" = "full 0" ] &&
     [ "$(lvp 12)" = "0 1 2 0 1" ] && [ "$(lpv 12 1)" -ge 1 ] && [ "$(lpv 12 0)" = 0 ] && [ "$(lvp 13)" = "1 0 2 1 0" ] && [ "$(lbz 14)" = 0 ] &&
-    ok "slot 1 written at the stop (39 bytes: as big as before), read back from its record after slot 2: 2 bass-side events; Single = Full: F3 on the bass part alone, A4 on the chord part" \
+    ok "slot 1 written as it is left (39 bytes: as big as before), read back from its record after slot 2: 2 bass-side events; Single = Full: F3 on the bass part alone, A4 on the chord part" \
     || bad "the slot's record: $b / $c / $(lvp 11) / $(lvp 12) p0 $(lpv 12 0) p1 $(lpv 12 1) / $(lvp 13)"
 d=$(L cr_loop_bass 15)
 [ "$(lkb 15)" = "chords 2" ] && [ "$(lf "$d" events)" = 2 ] && [ "$(lvp 15)" = "1 0 1 3 0" ] && [ "$(lvp 16)" = "0 1 1 0 1" ] && [ "$(lpv 16 1)" -ge 1 ] &&
@@ -904,11 +917,12 @@ export EMU_UI_LOG=0
 run cr_loop_menu
 LM="$OUT/cr_loop_menu.log"
 a=$(L cr_loop_menu 2); b=$(L cr_loop_menu 3)
-has '^loop: length 3' "$LM" && grep -aq "loopmenu .*title '4 bars'" "$LM" && ok "SELECT +3 in the menu: 4 bars, big in the middle (state 1): $OUT/cr_lm_1.ppm" || bad "the menu's length"
+has '^loop: length 3' "$LM" && grep -aq "loopmenu .*title '4 bars'" "$LM" && ok "KNOB 1 +3 in the menu: 4 bars, big in the middle (state 1): $OUT/cr_lm_1.ppm" || bad "the menu's length"
 has 'chord D sounding 1' "$LM" && ok "Keys = Play: MAJ + D4 plays D with the menu open" || bad "Keys = Play: no D"
 has '^loop: keys Loops' "$LM" && has 'expect led GLO on .*: ok' "$LM" && has 'expect led D#4 on .*: ok' "$LM" &&
     has 'expect led D#4 off .*: ok' "$LM" && ! has 'expect.*FAILED' "$LM" &&
-    ok "GLO in the menu: Keys = Loops (GLO lit, the slot map: CLEAR lit; state 2: $OUT/cr_lm_2.ppm), GLO / KNOB 4 back: Play" || bad "the menu's keys: $(grep -a 'expect.*FAILED' "$LM" | head -2)"
+    [ "$(grep -ac '^loop: keys ' "$LM")" = 2 ] && grep -aq "loopmenu .*foot '1/2 . keys: loops . GLO: play'" "$LM" &&
+    ok "GLO in the menu: Keys = Loops (GLO lit, the slot map: CLEAR lit, the bottom line says so; state 2: $OUT/cr_lm_2.ppm), GLO back: Play; KNOB 4 is no Keys cell any more (GLO alone)" || bad "the menu's keys: $(grep -a 'expect.*FAILED' "$LM" | head -2)"
 has '^loop: mode Overdub' "$LM" && grep -aq "loopmenu .*item 'Overdub'" "$LM" && ok "ALGORITHM +2: the record mode Overdub (state 3): $OUT/cr_lm_3.ppm" || bad "the mode picker"
 has '^loop: slot 5 turned' "$LM" && grep -aq "loopmenu .*slot 5 jump 0 sub '' right 'empty'" "$LM" &&
     ok "PRESETS +4: slot 5 (empty: \"empty\" at the top right; state 4): $OUT/cr_lm_4.ppm" || bad "the slot strip"
@@ -979,13 +993,81 @@ set -- $wv
     ok "the WAV: the steps at their ticks (from $1 s: E4 x$2 at +125 ms, G#4 x$3 at +250 ms, D4 / G#4 x$4 at the start)" \
     || bad "the step loop's WAV: '$wv'"
 silent_end cr_loop_modes
+# 0.18: SAVE held is the global save; the SAVE-held loop map is gone
+run cr_save_hold
+SHL="$OUT/cr_save_hold.log"
+ly() { grep -a '^  cr: key' "$1" | sed -n "$2p" | sed -n 's/.* layer \([0-9]*\) options \([0-9]\).*/\1 \2/p'; }
+l2() { grep -a '^  loop2:' "$1" | sed -n "$2p" | sed -n "s/.* $3 \([0-9]*\).*/\1/p"; }
+a=$(L cr_save_hold 1); b=$(L cr_save_hold 2); c=$(L cr_save_hold 3)
+[ "$(lf "$a" used)" = 000 ] && [ "$(l2 "$SHL" 1 dirty)" = 1 ] && has '^save: global rc 0' "$SHL" && [ "$(lf "$b" used)" = 001 ] && [ "$(l2 "$SHL" 2 dirty)" = 0 ] &&
+    [ "$(ly "$SHL" 2)" = "0 0" ] && has 'expect led D#4 off .*: ok' "$SHL" &&
+    ok "SAVE held past the hold time: the global save (the loop to its slot with it), the message \"saved\"; no layer, no slot map on the roots: $OUT/cr_save_hold.ppm" \
+    || bad "SAVE held: $a / $b / layer $(ly "$SHL" 2)"
+[ "$(lf "$c" slot)" = 1 ] && has 'expect sound .*: ok' "$SHL" && grep -a '^  cr: voices' "$SHL" | sed -n 3p | grep -q 'sounding 1' &&
+    ok "a root pressed with SAVE down plays (it picked a slot until 0.17); the slot stays 1" || bad "SAVE held + a root: $c"
+[ "$(grep -ac '^save: dialog' "$SHL")" = 1 ] && [ "$(grep -ac '^save: global' "$SHL")" = 1 ] && ! cmp -s "$OUT/cr_save_hold_after.ppm" "$OUT/cr_save_tap.ppm" &&
+    ok "SAVE let go after the hold: nothing more; a SAVE tap is still the save-preset dialog: $OUT/cr_save_tap.ppm" || bad "SAVE tap after the hold: $(grep -a '^save:' "$SHL" | tr '\n' ' ')"
+silent_end cr_save_hold
+# 0.18: the loop's Rate
+run cr_loop_rate
+RL="$OUT/cr_loop_rate.log"
+pl() { lf "$(L cr_loop_rate "$1")" played; }
+rt=""; for k in 2 3 4 5 6 7 8; do rt="$rt $(( $(pl $k) - $(pl $((k - 1))) ))"; done
+[ "$rt" = " 1 2 3 4 6 8 16" ] && has '^loop: knob 2 rate x1/4' "$RL" && has '^loop: knob 2 rate x4' "$RL" &&
+    ok "Rate x1/4 x1/2 x3/4 x1 x1.5 x2 x4: a 1-bar loop starts 1 2 3 4 6 8 16 times in 4 bars of the tempo: $OUT/cr_loop_rate_q.ppm, cr_loop_rate_4.ppm" \
+    || bad "the Rate against the clock: starts in 4 bars:$rt (want 1 2 3 4 6 8 16)"
+[ "$(l2 "$RL" 9 rate) $(l2 "$RL" 9 want)" = "3 5" ] && [ "$(l2 "$RL" 10 rate)" = 5 ] && [ $(( $(pl 11) - $(pl 10) )) = 2 ] &&
+    ok "the Rate changed while it plays: x1 until the loop's start, x2 from there (2 starts in the next 1.9 s): never in the middle of a cycle" \
+    || bad "a rate change while playing: $(l2 "$RL" 9 rate)/$(l2 "$RL" 9 want) -> $(l2 "$RL" 10 rate), $(( $(pl 11) - $(pl 10) )) starts"
+silent_end cr_loop_rate
+# 0.18: Step with Length Free; the loop editor
+export EMU_UI_LOG=0
+run cr_loop_edit
+unset EMU_UI_LOG
+EL="$OUT/cr_loop_edit.log"
+e() { L cr_loop_edit "$1"; }
+[ "$(lf "$(e 1)" events)" = 3 ] && [ "$(lf "$(e 1)" len)" = 288 ] && [ "$(lf "$(e 1)" state)" = 1 ] &&
+    ok "Step, Length Free, Quantize none: 3 chords are a loop 3 steps long (288 ticks: 3 quarter notes, not a bar)" || bad "the 3-step loop: $(e 1)"
+has '^loopedit: open rc 2' "$EL" && [ "$(l2 "$EL" 2 edit)" = 0 ] && [ "$(lf "$(e 2)" events)" = 3 ] &&
+    ok "EDIT in the PLAY menu with Quantize none on a loop: refused, \"set Quantize to edit\", the loop untouched: $OUT/cr_le_refused.ppm" || bad "EDIT with Quantize none: $(grep -a '^loopedit: open' "$EL" | head -1)"
+[ "$(l2 "$EL" 3 edit)" = 1 ] && [ "$(l2 "$EL" 3 grid)" = 96 ] && has '^loopedit: step 1/3 cell 0 cells 1 events 1 len 288' "$EL" &&
+    has '^loop: cells Step Length Steps Velocity' "$EL" && [ "$(ly "$EL" 3)" = "8 0" ] &&
+    ok "Quantize 1/4, EDIT: the loop editor on the PLAY menu's screen (Step / Length / Steps / Velocity), step 1 of 3: $OUT/cr_le_1.ppm" || bad "the editor: $(grep -a '^loopedit:' "$EL" | sed -n 2,3p | tr '\n' ' ')"
+has '^loopedit: step 2/3 cell 1 cells 1 events 1 len 288' "$EL" && has 'expect sound .*: ok' "$EL" &&
+    grep -aq "loopmenu .*sub 'Am' " "$EL" && has '^loopedit: knob 2 step length 2 ok' "$EL" && has '^loopedit: step 2/3 cell 1 cells 2 events 1 len 384' "$EL" &&
+    [ "$(lf "$(e 4)" len)" = 384 ] && [ "$(lf "$(e 4)" events)" = 3 ] && has '^loopedit: knob 2 step length 1 ok' "$EL" &&
+    ok "SELECT: step 2; a chord played (Am) replaces the step's notes and sounds; KNOB 2: its length 2 cells: the later step moves, the loop 4 cells (384); back: 288: $OUT/cr_le_2.ppm, cr_le_3.ppm" \
+    || bad "replace / step length: $(e 4) / $(grep -a '^loopedit: knob 2' "$EL" | tr '\n' ' ')"
+has '^loopedit: clear step 3 (1 events)' "$EL" && [ "$(lf "$(e 5)" events)" = 2 ] && [ "$(lf "$(e 5)" cap)" = 0 ] && [ "$(lf "$(e 5)" len)" = 288 ] &&
+    has '^loopedit: step 3/3 cell 2 cells 1 events 0 len 288' "$EL" &&
+    ok "REC in the editor clears the selected step (no recording: no capture opened); the step stays, empty: $OUT/cr_le_4.ppm" || bad "REC in the editor: $(e 5)"
+has '^loopedit: knob 3 loop length 192 ok' "$EL" && [ "$(lf "$(e 6)" len)" = 192 ] && [ "$(l2 "$EL" 6 ext)" = 288 ] &&
+    has '^loopedit: knob 3 loop length 288 ok' "$EL" && has '^loopedit: step 2/2 ' "$EL" &&
+    ok "KNOB 3: the loop 2 steps (192; the third kept behind the end), then 3 again (288), then 2" || bad "loop length: $(e 6) / $(grep -a '^loopedit: knob 3' "$EL" | tr '\n' ' ')"
+has '^loopedit: knob 4 velocity 92' "$EL" && [ "$(lf "$(e 7)" state)" = 2 ] && [ "$(l2 "$EL" 7 edit)" = 1 ] && [ "$(lf "$(e 7)" slot)" = 1 ] &&
+    [ "$(lf "$(e 7)" mode)" = 4 ] && [ "$(lf "$(e 7)" keys)" = 0 ] &&
+    ok "SELECT wraps to step 1; KNOB 4: its velocity (100 -> 92); LOOP plays in the editor; PRESETS, ALGORITHM and GLO do nothing there" \
+    || bad "velocity / play / the other knobs: $(e 7) / $(grep -a '^loopedit: knob 4' "$EL")"
+[ "$(l2 "$EL" 8 edit) $(ly "$EL" 8)" = "0 8 0" ] && [ "$(lf "$(e 8)" events)" = 2 ] && [ "$(lf "$(e 8)" len)" = 192 ] &&
+    [ "$(l2 "$EL" 9 edit) $(ly "$EL" 9)" = "0 8 0" ] && [ "$(l2 "$EL" 10 edit) $(ly "$EL" 10)" = "0 8 0" ] && [ "$(l2 "$EL" 11 edit) $(ly "$EL" 11)" = "0 8 0" ] &&
+    [ "$(l2 "$EL" 12 edit)" = 1 ] && [ "$(l2 "$EL" 13 edit) $(ly "$EL" 13)" = "0 8 0" ] && [ "$(grep -ac '^loopedit: close' "$EL")" -ge 5 ] &&
+    ! has '^picker: open' "$EL" &&
+    ok "OCT-, OCT+, HOME, EDIT held again and EDIT tapped each close the editor, back to the PLAY menu (no engine picker from EDIT held there); the loop as edited (2 events, 192)" \
+    || bad "closing the editor: $(l2 "$EL" 8 edit) $(ly "$EL" 8) / $(l2 "$EL" 9 edit) / $(l2 "$EL" 10 edit) $(ly "$EL" 10) / $(l2 "$EL" 11 edit) $(ly "$EL" 11) / $(l2 "$EL" 12 edit) / $(l2 "$EL" 13 edit)"
+[ "$(lf "$(e 14)" slot)" = 2 ] && [ "$(lf "$(e 14)" events)" = 1 ] && [ "$(l2 "$EL" 14 edit)" = 0 ] && [ "$(grep -ac '^loopedit: open rc 2' "$EL")" = 2 ] &&
+    ok "a loop played free (slot 2, Quantize none): EDIT refuses it too: nothing is requantised" || bad "a free-timed loop: $(e 14)"
+[ "$(lf "$(e 15)" slot)" = 3 ] && [ "$(l2 "$EL" 15 edit)" = 1 ] && [ "$(lf "$(e 15)" len)" = 384 ] && [ "$(lf "$(e 15)" events)" = 0 ] &&
+    [ "$(lf "$(e 16)" state)" = 0 ] && [ "$(lf "$(e 16)" len)" = 0 ] && [ "$(l2 "$EL" 16 dirty)" = 0 ] &&
+    ok "an empty slot: EDIT opens an empty loop of a bar (4 quarter-note steps): $OUT/cr_le_empty.ppm; closed with nothing entered: the slot empty again, nothing to save" \
+    || bad "the editor on an empty slot: $(e 15) / $(e 16)"
+silent_end cr_loop_edit
 "$EMU" --headless --script "$S/cr_loop_free.txt" --wav "$OUT/cr_again/cr_loop_free.wav" >/dev/null 2>&1
 cmp -s "$OUT/cr_loop_free.wav" "$OUT/cr_again/cr_loop_free.wav" && ok "the looper is deterministic (the same audio twice)" || bad "looper audio differs"
 
 echo "the loop-length layer, the count-in, undo"
 run cr_countin
-has '^loop: length 1' "$OUT/cr_countin.log" && ok "LOOP held + SELECT +1: the length (Free -> 1 bar), no meter: $OUT/cr_loop_length_1bar.ppm" \
-    || bad "SELECT in the PLAY menu"
+has '^loop: length 1' "$OUT/cr_countin.log" && ok "LOOP held + KNOB 1 +1: the length (Free -> 1 bar), no meter: $OUT/cr_loop_length_1bar.ppm" \
+    || bad "KNOB 1 in the PLAY menu"
 differ cr_loop_length cr_loop_length_1bar "the length changed: $OUT/cr_loop_length.ppm"
 differ cr_countin_4 cr_countin_3 "the count-in counts down huge in red: $OUT/cr_countin_4.ppm -> cr_countin_3.ppm"
 p=$(pixel "$OUT/cr_countin_4.ppm" 120 130); set -- $p
@@ -1787,8 +1869,9 @@ p=$(pixel "$OUT/cr_update_3.ppm" 40 120); set -- $p
     ! cmp -s "$OUT/cr_update_3.ppm" "$OUT/cr_update_2.ppm" &&
     ok "the countdown screen: red, a digit in its middle, another one a second later: $OUT/cr_update_3.ppm, cr_update_2.ppm" \
     || bad "the countdown screen ($p; $(px_count "$OUT/cr_update_3.ppm" 90 90 150 160 red) red px in the middle)"
-grep -a '^  session: saves' "$U" | sed -n 1p | grep -q 'voicing 2 ' && grep -a '^  flash:' "$U" | sed -n 1p | grep -q ', 6 writes' &&
-    ok "what was changed before it (the voicing) is in flash when the unit leaves" || bad "the session before the update: $(grep -a '^  session: saves' "$U" | sed -n 1p)"
+grep -a '^  session: saves' "$U" | sed -n 1p | grep -q 'saves 0 .* pending 1  voicing 2 ' && ! grep -aq '^save: global' "$U" &&
+    ok "the update gesture is no global save (0.18: saving is manual): what was changed and not saved (the voicing) is not written on the way out" \
+    || bad "the session before the update: $(grep -a '^  session: saves' "$U" | sed -n 1p)"
 "$EMU" --headless --script "$S/cr_update.txt" >"$OUT/cr_update_nostub.log" 2>&1
 st=$?
 [ $st = 0 ] && [ "$(ul "$OUT/cr_update_nostub.log")" = "update: 3 (USB boot)|update: 2 (USB boot)|update: 1 (USB boot)|update: go (no stub: the ROM's USB boot)|update: screen 'USB BOOT'|restart: ROM USB boot (fm1_enter_uboot; guard pending 0)|" ] &&

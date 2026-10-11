@@ -1,0 +1,19 @@
+# test_persist.sh, on loop_persist_stop's flash (slot 1: D, Em saved): recorded over (REC, G, REC: 1 event), stopped,
+# SAVE held: the global save writes the new loop (dump 1). Quit. loop_persist_back.txt: the NEW loop (1 event).
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn G4 down
+wait 500
+btn G4 up
+btn A#3 up
+wait 1400
+btn REC
+wait 400
+btn PLAY
+wait 500
+btn SAVE 900
+wait 1500
+dump                          # 1: 1 event, saved
+quit

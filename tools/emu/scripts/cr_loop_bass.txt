@@ -76,7 +76,7 @@ dump                          # 7: 0.7 s in: the looped F3 ended, the live one s
 btn F3 up
 wait 100
 dump                          # 8: the live F3 let go: the bass stream empty
-btn PLAY                      # stop: written to slot 1
+btn PLAY                      # stop (the loop in RAM: leaving its slot, below, writes it)
 wait 2500
 dump                          # 9: silent (no stuck voice), used 001
 btn PLAY down                 # D: slot 2 (empty) and back: slot 1 read from its record
@@ -140,5 +140,7 @@ dump                          # 15: keyboard chords, 2 events, 1 of the bass sid
 wait 500
 dump                          # 16: D plays: chord 0 bass 1, the bass stream 1 note, the main one none
 btn PLAY
-wait 6000                     # (the settings' save waits for the delay's and the reverb's tail: docs/FX.md)
+wait 3000
+btn SAVE 900                  # SAVE held: the global save: the loop to slot 1 (test_persist.sh relaunches on it)
+wait 3000
 dump                          # 17: silent

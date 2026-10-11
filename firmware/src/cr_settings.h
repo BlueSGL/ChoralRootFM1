@@ -179,7 +179,7 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
  * CR_BLOCK), so the block keeps its size and its layout and an older firmware reads a v15 block as it read v14's.
  * The record has its own header (magic, version, size, check: FNV-1a over [12, size)), the block's import rules (a
  * shorter, older record over the defaults; a longer, newer one by its prefix; anything else: the defaults = the unit as
- * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 143 of them unused today (47 in the
+ * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 142 of them unused today (46 in the
  * state, 20 after the FX block, 8 in each part, 60 at the end).
  * `bind`: the CRC of the settings object in flash when the session was written (0: none). The session is used at
  * power-on if the settings block was read as current (written by a v15 firmware: an older one in between would have
@@ -245,7 +245,10 @@ typedef struct {
     int8_t voicing, octave;             /* KNOB 1 -12..12; OCT -2..2 */
     uint8_t bass_on;                    /* 0/1 (v15: the bass comes back on; until 0.17 it was off at every power-on) */
     uint8_t lock, latched;              /* LOCK on; the chord keys it latched (bit cr_mod_t) */
-    uint8_t rsv[47];
+    int8_t loop_rate;                   /* the loop's Rate (the PLAY menu's KNOB 2), steps from x1: -3 x1/4, -2 x1/2,
+                                         * -1 x3/4, 0 x1, 1 x1.5, 2 x2, 3 x4 (cr_loop.h CRL_NRATE; 0 = the default, so
+                                         * a record written before it reads x1: no migration) */
+    uint8_t rsv[46];
     css_fx_t fx;
     uint8_t rsv_fx[20];
     css_part_t part[2];                 /* chord, bass */

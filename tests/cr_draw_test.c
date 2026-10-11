@@ -1315,6 +1315,96 @@ int main(int argc, char **argv)
             render(&s, 0);
             check("loop menu: the cursor moving rows: the partial draw equals a full one", !memcmp(a, host_screen, sizeof a));
         }
+        /* 0.18. The mark of a loop not saved yet (lm_dirty: the slot + 1): a 3 px square in its cell's top right
+         * corner, in the number's colour: the background's on a filled cell, the cell's on an outlined one */
+        if (ix >= 0) {
+            cr_screen_t s = CR_SCREENS[ix];
+            uint16_t bg = swap16(T_BG);
+            s.anim = 0;
+            render(&s, 0);
+            COUNT(n0, 62u, 31u, 72u, 37u, HS(x, y) == bg);          /* slot 3 (selected, filled): its top right */
+            memcpy(a, host_screen, sizeof a);
+            s.lm_dirty = 3;
+            cr_draw(&s, 0);
+            COUNT(n1, 62u, 31u, 72u, 37u, HS(x, y) == bg);
+            snprintf(name, sizeof name, "loop menu: a loop not saved yet: a mark in its slot's corner (%u -> %u background px there), "
+                     "the strip redrawn (%u)", n0, n1, cr_dc.drawn);
+            check(name, n1 == n0 + 9u && cr_dc.drawn >= 1u && memcmp(a, host_screen, sizeof a) != 0);
+            write_ppm(dir, "loopmenu_dirty");
+            s.lm_dirty = 5;                      /* slot 5 (not selected) */
+            s.lm_used &= (uint16_t)~(1u << 4);
+            render(&s, 0);
+            COUNT(n0, 106u, 35u, 120u, 42u, HS(x, y) == dim);
+            s.lm_dirty = 0;
+            render(&s, 0);
+            COUNT(n1, 106u, 35u, 120u, 42u, HS(x, y) == dim);
+            check("loop menu: the mark on an empty, unselected slot (a cleared loop not saved): dim, as its number", n0 >= n1 + 6u);
+        }
+        /* the PLAY menu's two pages and the loop editor (cr_ui.c cu_loop_cells, cu_ledit_cells, cu_loopmenu): the
+         * bottom line, the cells; the editor's grid ends where the loop ends (lm_steps) */
+        if (ix >= 0 && is >= 0) {
+            static const char *const LB1[4] = {"Length", "Rate", "Quantize", "Count-in"};
+            static const char *const V1[4] = {"4 bars", "x1.5", "1/16", "On"};
+            static const char *const LBE[4] = {"Step", "Length", "Steps", "Velocity"};
+            static const char *const VE[4] = {"2/3", "2", "3", "100"};
+            cr_screen_t s = CR_SCREENS[ix];
+            uint16_t line = swap16(T_LINE);
+            uint32_t c;
+            s.anim = 0;
+            memset(s.cell, 0, sizeof s.cell);
+            for (c = 0; c < 4u; c++) {
+                s.cell[0][c].flags = CR_CF_ON;
+                snprintf(s.cell[0][c].label, sizeof s.cell[0][c].label, "%s", LB1[c]);
+                snprintf(s.cell[0][c].value, sizeof s.cell[0][c].value, "%s", V1[c]);
+            }
+            s.cell[0][2].glyph = CR_G_ECHOES; s.cell[0][2].pct = 170; s.cell[0][2].pct2 = 255;
+            s.cell[0][3].glyph = CR_G_GATE; s.cell[0][3].pct = 255;
+            snprintf(s.foot, sizeof s.foot, "1/2 \267 keys: play \267 GLO: loops");
+            render(&s, 0);
+            COUNT(n0, 20u, 228u, 220u, 240u, HS(x, y) != swap16(T_BG));
+            write_ppm(dir, "loopmenu_page1");
+            check("loop menu, page 1: Length / Rate / Quantize / Count-in over the bottom line (the page, the keys, GLO)", n0 > 100u);
+            memset(s.cell, 0, sizeof s.cell);
+            s.cell[0][0].flags = CR_CF_ON;
+            snprintf(s.cell[0][0].label, sizeof s.cell[0][0].label, "Level");
+            snprintf(s.cell[0][0].value, sizeof s.cell[0][0].value, "100");
+            s.cell[0][0].glyph = CR_G_BAR; s.cell[0][0].pct = 255;
+            snprintf(s.foot, sizeof s.foot, "2/2 \267 keys: play \267 GLO: loops");
+            memcpy(a, host_screen, sizeof a);
+            render(&s, 0);
+            COUNT(n1, 62u, 170u, 240u, 222u, HS(x, y) == swap16(T_TEXT));
+            write_ppm(dir, "loopmenu_page2");
+            check("loop menu, page 2: Level alone, the other three cells empty", memcmp(a, host_screen, sizeof a) != 0 && n1 < 40u);
+            s = CR_SCREENS[is];                  /* the editor: a 3-step loop at 1/4, step 2 two cells long: 4 cells */
+            s.anim = 0;
+            s.n_items = 1; s.item0 = 0; s.sel = 0;
+            snprintf(s.item[0], sizeof s.item[0], "Edit");
+            s.lm_bars = 1; s.lm_beats = 4; s.lm_lane[0] = 0xBull; s.lm_pos = 1; s.lm_steps = 4; s.lm_dirty = (uint8_t)(s.lm_slot + 1u);
+            snprintf(s.sub, sizeof s.sub, "Am");
+            snprintf(s.value, sizeof s.value, "step 2/3");
+            snprintf(s.foot, sizeof s.foot, "SELECT: step \267 REC: clear \267 EDIT: done");
+            s.right[0] = 0;
+            memset(s.cell, 0, sizeof s.cell);
+            for (c = 0; c < 4u; c++) {
+                s.cell[0][c].flags = CR_CF_ON;
+                snprintf(s.cell[0][c].label, sizeof s.cell[0][c].label, "%s", LBE[c]);
+                snprintf(s.cell[0][c].value, sizeof s.cell[0][c].value, "%s", VE[c]);
+            }
+            s.cell[0][3].glyph = CR_G_BAR; s.cell[0][3].pct = 200;
+            render(&s, 0);
+            {
+                int32_t gy = cr_lm_st_y(&s);
+                COUNT(n0, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
+                COUNT(n1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == line);
+                write_ppm(dir, "loopmenu_editor");
+                s.lm_steps = 3;                  /* the loop a cell shorter: the fourth cell is not drawn */
+                render(&s, 0);
+                COUNT(n2, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
+                snprintf(name, sizeof name, "loop editor: the grid is the loop's cells (4: %u red px, %u grey), one fewer when the loop "
+                         "ends a cell earlier (%u red)", n0, n1, n2);
+                check(name, n0 > 600u && n1 > 200u && n2 + 200u < n0);
+            }
+        }
 #undef COUNT
 #undef HS
     }

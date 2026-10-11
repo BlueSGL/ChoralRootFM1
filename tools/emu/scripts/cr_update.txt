@@ -3,7 +3,7 @@
 # to cancel" with a boot stub, EMU_STUB=3; "USB boot: .." without); at 5 s the unit leaves: the stub's RESCUE request
 # (the staged update loader), or the ROM's USB boot when no stub ran. The emulator prints the restart and ends.
 wait 300
-knob KNOB1 +2                 # something to save on the way out (the voicing)
+knob KNOB1 +2                 # something not saved (the voicing): the update is a power cycle, no global save
 wait 200
 btn OCT- down
 btn OCT+ down

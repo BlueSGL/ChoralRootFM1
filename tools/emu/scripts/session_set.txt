@@ -8,7 +8,8 @@
 #   Perform on with Arpeggiate (the PERF layer, SELECT +3);
 #   the voicing +2 (KNOB 1), the octave -1 (OCT-);
 #   LOCK on with MAJ + M7 latched (B3, then A#3 + A3).
-# Then nothing for 4 s: the settings and the session are each written once (dump 2), quit.
+# Then nothing for 4 s: nothing is written (dump 1: saving is manual, 0.18). SAVE held: the settings, the session and
+# the loop are each written once (dump 2), quit.
 wait 300
 btn PLAY down                 # the PLAY menu: slot 3
 wait 400
@@ -33,7 +34,7 @@ btn G#3 up
 wait 400
 btn REC                       # the take ends: a loop, playing
 wait 400
-btn PLAY                      # stopped: written to slot 3
+btn PLAY                      # stopped (in RAM: the global save writes it)
 wait 1200
 btn EDIT                      # the chord sound's editor
 wait 400
@@ -103,7 +104,9 @@ wait 200
 btn A3 up
 btn A#3 up
 wait 300
-dump                          # 1: the state as set, nothing saved yet but the loop
 wait 4000
-dump                          # 2: saved: settings 1, session 1
+dump                          # 1: the state as set, 4 s later: nothing saved
+btn SAVE 900                  # the global save
+wait 1500
+dump                          # 2: saved: settings 1, session 1, the loop in slot 3
 quit

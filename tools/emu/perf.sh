@@ -25,9 +25,9 @@
 # scripts/cr_dualcore_on.txt on a fresh flash file, the Options path): its block, its voices, its stages and whether its
 # WAV is the default's. The emulator runs the bass job inline: its block is one core's there too (the device estimate);
 # with core 1 the device's half is about the block less part1, plus the wait.
-#   (k) the session's save (0.18, docs/SETTINGS.md "The session"): a chord, then a session-only change (the voicing) and
-#       its one deferred write, against the same run with a settings-only change (the tempo) and the settings save
-#       0.17 had: the audio block's worst case (the session is captured in the main loop, every 200 ms: never in the
+#   (k) the global save (0.18, docs/SETTINGS.md "Manual and automatic"): a chord, then a session change (the voicing) and
+#       SAVE held, against the same run with an Option changed (Play Style) and the automatic settings save
+#       0.17 had: the audio block's worst case (the state is captured in the main loop, at the save: never in the
 #       audio ISR), the erases (each holds the ISR 45 ms = 16 blocks, into silence: a save waits for it) and the
 #       flash writes of each save
 #   (u) USB audio recording (docs/USB-AUDIO.md): the emulator has no USB, so not a scenario but what ChoralRoot In
@@ -81,6 +81,6 @@ for n in perf_k_session perf_k_settings; do
 done
 a=$(sed -n 's/^cpu: host instructions per 128-frame block avg [0-9]*, max \([0-9]*\) .*/\1/p' "$OUT/perf_k_session.log")
 b=$(sed -n 's/^cpu: host instructions per 128-frame block avg [0-9]*, max \([0-9]*\) .*/\1/p' "$OUT/perf_k_settings.log")
-echo "   (k) the worst audio block: $a host instructions with a session save, $b with a settings save"
+echo "   (k) the worst audio block: $a host instructions with a global save, $b with an automatic settings save"
 echo "== (u) USB audio recording (estimate: the emulator has no USB)"
 cc -std=gnu11 -O2 -w -o build/host/cr_usbaudio_test tests/cr_usbaudio_test.c && build/host/cr_usbaudio_test --bench | sed 's/^/   /'

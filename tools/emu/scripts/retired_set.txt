@@ -28,5 +28,7 @@ wait 100
 knob PRESETS +6
 wait 100
 btn GLO up
+wait 300
+btn SAVE 900                  # SAVE held: the global save (the part parked on NOISE is a manual setting)
 wait 3000
 dump

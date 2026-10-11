@@ -1,0 +1,39 @@
+# ChoralRoot 0.18: SAVE held is the GLOBAL SAVE; the loop slots' Save / Load / Delete map on the roots is gone
+# (docs/LOOPER.md). A 1-bar loop is recorded in slot 1 and stopped. SAVE held 0.6 s: "saved" (shot), no layer, no
+# picker, the roots not a slot map (D#4 dark); E4 pressed with SAVE still down: it plays (it chose slot 2 until 0.17);
+# SAVE let go: nothing more (no dialog). A SAVE tap: the save-preset dialog, as ever; HOME closes it.
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 500
+btn D4 up
+btn A#3 up
+wait 1500
+btn REC
+wait 300
+btn PLAY
+wait 2500
+dump                          # 1: a loop, stopped, not saved
+btn SAVE down
+wait 600
+shot build/emu/test/cr_save_hold.ppm
+expect led D#4 off
+dump                          # 2: saved; layer 0
+btn E4 down
+wait 300
+expect sound
+dump                          # 3: E4 sounds; still slot 1
+btn E4 up
+wait 100
+btn SAVE up
+wait 1500
+shot build/emu/test/cr_save_hold_after.ppm
+dump                          # 4: the view (no dialog)
+btn SAVE
+wait 500
+shot build/emu/test/cr_save_tap.ppm
+btn HOME
+wait 2500
+dump

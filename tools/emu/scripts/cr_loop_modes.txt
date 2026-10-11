@@ -7,8 +7,9 @@
 # C. 4 bars synced (count-in off): D G Ab F#m one a bar (Overwrite, it commits by itself); Overdub: Bb in bar 2 (two
 #    layers playing: shot); Replace: F held over the start of bar 3 hides Ab (shot while held), REC ends it; REC held:
 #    undo brings Ab back.
-# D. Step (Free, 1/16): REC: step entry; D, Em, Ab (one each, every key up between), OCT+ a rest, OCT- back; REC: a
-#    1-bar loop of 3 events; LOOP plays it (D at 0, Em at 1/16, Ab at 2/16).
+# D. Step (1 bar, Quantize 1/16): REC: step entry; D, Em, Ab (one each, every key up between), OCT+ a rest, OCT- back;
+#    REC: a 1-bar loop of 3 events; LOOP plays it (D at 0, Em at 1/16, Ab at 2/16). (Length Free: the loop is the
+#    steps entered, exactly: cr_loop_edit.txt.)
 wait 300
 btn PLAY down
 wait 500
@@ -64,8 +65,8 @@ dump                                        # 8: slot 2 holds F, playing
 btn PLAY                                    # (a tap: stop)
 wait 300
 knob ALGORITHM -1                           # C: Overwrite, 4 bars, no count-in
-knob SELECT +3
-knob KNOB2 -1
+knob KNOB1 +3
+knob KNOB4 -1
 wait 300
 btn REC                                     # t0: the take, 4 bars
 wait 50
@@ -128,8 +129,9 @@ wait 300
 dump                                        # 13: 2 layers, nothing hidden
 btn PLAY                                    # stop
 wait 300
-knob ALGORITHM +1                           # D: Step, Free, 1/16 (Quantize none)
-knob SELECT -3
+knob ALGORITHM +1                           # D: Step, 1 bar, Quantize 1/16
+knob KNOB1 -2
+knob KNOB3 +4
 wait 300
 btn REC                                     # step entry
 wait 300

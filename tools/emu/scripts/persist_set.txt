@@ -1,14 +1,9 @@
-# test_persist.sh, run 1: change the tempo (SELECT +17: 120 -> 137 BPM) and the Play Style (OPT, KNOB 1 +1 on
-# Play Style: Advanced), the PLAY menu's record mode (ALGORITHM +3: Replace) and keys (GLO: Loops; settings v8), wait
-# past the save delay (1.5 s), quit.
+# test_persist.sh, run 1: change the tempo (SELECT +17: 120 -> 137 BPM), the PLAY menu's record mode (ALGORITHM +3:
+# Replace) and keys (GLO: Loops; settings v8) and the Play Style (OPT, KNOB 1 +1 on Play Style: Advanced); SAVE held:
+# the global save (0.18: the tempo and the looper's settings are manual, written by it alone; it writes the Option
+# with them: one write); quit.
 wait 500
 knob SELECT +17
-wait 200
-btn GLO
-wait 200
-knob KNOB1 +1
-wait 200
-btn GLO
 wait 200
 btn PLAY down
 wait 400
@@ -18,6 +13,14 @@ btn PLAY up
 btn GLO
 wait 100
 btn OCT-
+wait 200
+btn GLO
+wait 200
+knob KNOB1 +1
+wait 200
+btn GLO
+wait 200
+btn SAVE 900                  # the global save
 wait 2500
 dump
 quit

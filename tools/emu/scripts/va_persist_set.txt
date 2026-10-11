@@ -20,6 +20,8 @@ wait 400
 btn SAVE
 wait 400
 btn OCT+
+wait 1500
+btn SAVE 900                  # SAVE held: the global save: U01 is the power-on sound (the chord part's sound is a manual setting, 0.18)
 wait 3500
 dump
 quit

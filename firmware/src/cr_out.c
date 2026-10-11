@@ -379,7 +379,7 @@ enum {
 /* CRE_LOOP's operations */
 enum { LP_REC, LP_PLAY, LP_UNDO, LP_CLEAR, LP_SET, LP_QUEUE, LP_CONF, LP_METRO,
        LP_STEP };                                                /* LP_SET / QUEUE: b 1 = empty; LP_STEP: v CRL_STEP_* */
-enum { LC_SYNC, LC_QUANT, LC_COUNTIN, LC_LEVEL, LC_SIG, LC_VOL, LC_MODE };         /* LP_CONF: b, v */
+enum { LC_SYNC, LC_QUANT, LC_COUNTIN, LC_LEVEL, LC_SIG, LC_VOL, LC_MODE, LC_RATE };   /* LP_CONF: b, v */
 typedef struct { uint8_t op, a, b, rsv; int16_t v; } cr_ev_in_t;
 #define CR_EVQ 128u                              /* a power of two */
 static cr_ev_in_t cr_evq[CR_EVQ];
@@ -434,6 +434,7 @@ static void cr_loop_op(const cr_ev_in_t *e)
         case LC_SIG: if (crl.cap == CRL_CAP_NONE) crl.sig = (uint8_t)(e->v < CRL_NSIG ? e->v : 0); break;
         case LC_VOL: crl.metro_vol = (uint8_t)(e->v > 100 ? 100 : e->v); break;
         case LC_MODE: crl.mode = (uint8_t)(e->v < (int)CRL_NMODE ? e->v : 0); break;
+        case LC_RATE: cr_loop_set_rate(&crl, e->v); break;
         default: break;
         }
         break;

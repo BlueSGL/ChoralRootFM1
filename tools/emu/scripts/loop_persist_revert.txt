@@ -1,0 +1,30 @@
+# test_persist.sh, on the same flash (slot 1: D, Em, A saved): recorded over by accident (REC, F, REC: 1 event),
+# playing (dump 1); GLO + SAVE held 1.2 s: the revert: the loop stops and the SAVED loop is back (dump 2: 3 events,
+# stopped, nothing to save); LOOP plays it (dump 3).
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn F4 down
+wait 500
+btn F4 up
+btn A#3 up
+wait 1400
+btn REC
+wait 600
+dump                          # 1: 1 event, playing, not saved
+btn GLO down
+wait 100
+btn SAVE down
+wait 1300
+btn SAVE up
+btn GLO up
+wait 2500
+dump                          # 2: the saved loop back, stopped, no voice left
+btn PLAY
+wait 1500
+expect sound
+dump                          # 3: it plays
+btn PLAY
+wait 500
+quit

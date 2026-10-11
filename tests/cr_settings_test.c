@@ -820,6 +820,7 @@ static void css_fill(cr_session_t *x)              /* a recognisable session: ev
     x->bind = 0xC0FFEE01u;
     x->voicing = 2; x->octave = -1; x->bass_on = 1; x->lock = 1;
     x->latched = (uint8_t)((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7));
+    x->loop_rate = 2;                              /* x2 */
     x->fx.sel = CSS_FXE_DELAY;
     x->fx.amt[CSS_FXE_REVERB] = 30; x->fx.amt[CSS_FXE_CHORUS] = 0; x->fx.amt[CSS_FXE_DELAY] = 99; x->fx.amt[CSS_FXE_DRIVE] = 127;
     cr_session_fx_set(x, CSS_FXP_DTIME, 5);
@@ -851,15 +852,17 @@ static void t_session(void)
        !SD.bass_on && !SD.lock && !SD.latched && !SD.part[0].valid && !SD.part[1].valid && SD.fx.version == CSS_FX_VERSION &&
        SD.fx.n == 0 && SD.fx.sel == CSS_FXE_REVERB && SD.fx.amt[0] == CSS_FX_NONE && SD.fx.amt[CSS_NFXE - 1] == CSS_FX_NONE,
        "session defaults: nothing stored (the unit as it powered on until 0.17: bass off, voicing 0, the sounds' own sends)");
-    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 143u &&
+    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 142u &&
        CSS_NFXP - 8 == 16 && CSS_NP - 91 == 5,
-       "session: 143 bytes of reserve, 16 free FX parameter entries, 5 free part parameters");
+       "session: 142 bytes of reserve, 16 free FX parameter entries, 5 free part parameters");
+    ok(SD.loop_rate == 0 && (const uint8_t *)&SD.loop_rate - (const uint8_t *)&SD == 21,
+       "session: the loop's Rate, byte 21 (the first of the old reserve), 0 = x1: a record written before it reads x1");
     /* every item round-trips */
     css_fill(&SX);
     rc = cr_session_import(&SR, &SX, sizeof SX);
     ok(rc == 1 && !memcmp(&SR, &SX, sizeof SX), "session: every item round-trips, byte for byte (rc 1)");
-    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 &&
-       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)), "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7");
+    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 && SR.loop_rate == 2 &&
+       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)), "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7, the loop's Rate x2");
     ok(SR.fx.sel == CSS_FXE_DELAY && SR.fx.amt[CSS_FXE_DELAY] == 99 && SR.fx.amt[CSS_FXE_DRIVE] == 127 && SR.fx.n == 3 &&
        cr_session_fx_get(&SR, CSS_FXP_DTIME, &v) && v == 5 && cr_session_fx_get(&SR, CSS_FXP_DFDBK, &v) && v == 77 &&
        cr_session_fx_get(&SR, CSS_FXP_RSIZE, &v) && v == 12 && !cr_session_fx_get(&SR, CSS_FXP_CRATE, &v),
@@ -957,6 +960,13 @@ static void t_session(void)
        SR.fx.amt[CSS_FXE_DELAY] == 99 && SR.part[0].valid && !SR.part[1].valid && SR.lock == 1,
        "session: out-of-range fields take their defaults (a part with too many parameters: no sound stored)");
     css_fill(&SX);
+    SX.loop_rate = 4;
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == 0, "session: a Rate out of range (x1/4 .. x4 = -3 .. 3): x1");
+    SX.loop_rate = -3;
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == -3, "session: Rate x1/4 kept");
+    css_fill(&SX);
     SX.lock = 0;                                   /* a latch without LOCK cannot be */
     cr_session_seal(&SX);
     ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && !SR.lock && !SR.latched, "session: LOCK off: no latched keys");
@@ -999,8 +1009,72 @@ static void t_session_flash(void)
     ok(cr_session_import(&SR, &SR, 0) == 0 && !SR.part[0].valid && !SR.bass_on, ".. the defaults");
 }
 
+/* 0.18, saving is manual (the owner, 2026-10-11): the block's fields are of two kinds. cr_settings_auto copies the
+ * AUTOMATIC ones (what the Options menu alone sets) and leaves the MANUAL ones: flash's block with the Options of now
+ * is what an automatic write stores; every byte of the block is one or the other, never both */
+static void t_auto(void)
+{
+    cr_settings_t d, a, b, m;
+    uint32_t i, nauto = 0, nman = 0, both = 0;
+    int k, p;
+    cr_settings_defaults(&d);
+    a = d;                                         /* a: "flash" (the last global save); b: the state now, every field changed */
+    b = d;
+    b.playstyle = CR_PS_ADVANCED; b.extadd = 1; b.secret = CR_SECRET_ALL; b.vel = 64;
+    for (i = 0; i < 3u; i++) { b.midi_en[i] = (uint8_t)!d.midi_en[i]; b.midi_ch[i] = 9; }
+    b.clock_mode = CRS_CLOCK_IN; b.raw_sound = 1; b.motion = 2; b.leds = 1; b.palette = 3; b.usb_in = 0;
+    b.usb_level = CRS_USB_FIXED;
+    b.view = (uint8_t)(CRS_VIEW_BYTE(3, 1) | CRS_DC_ON);
+    b.key_on = 7; b.tonic = 9; b.scale = 1; b.transpose = -5; b.single = CR_SINGLE_SPLIT_BASS; b.split_pc = 2;
+    b.bass_mode = CR_BASS_SOLO; b.bass_voicing = 2; b.perform_on = 1; b.perform_mode = CR_PM_ARP; b.perf_sel = 4;
+    b.sticky = 1; b.bpm = 137;
+    for (k = 0; k < CRS_NPM; k++)
+        for (p = 0; p < CRS_NPAR; p++)
+            b.par[k][p] = (int16_t)(d.par[k][p] + 1);
+    b.loop_sync = 3; b.loop_quant = 4; b.loop_count_in = 0; b.loop_level = 40; b.metro_on = 1; b.metro_sig = 2;
+    b.metro_vol = 10; b.loop_slot = 6; b.loop_rec = 0xE3; b.fx_on = 0; b.chord_sound = 0x0C1A; b.bass_sound = 0x0203;
+    for (i = 0; i < (uint32_t)CRS_NENG; i++) { crs_pool_set(&b, 0, i, 20); crs_pool_set(&b, 1, i, 30); }
+    m = a;
+    cr_settings_auto(&m, &b);
+    ok(m.playstyle == CR_PS_ADVANCED && m.extadd == 1 && m.secret == CR_SECRET_ALL && m.vel == 64 && m.midi_ch[2] == 9 &&
+       m.midi_en[2] == b.midi_en[2] && m.clock_mode == CRS_CLOCK_IN && m.raw_sound == 1 && m.motion == 2 && m.leds == 1 &&
+       m.usb_in == 0 && m.usb_level == CRS_USB_FIXED && CRS_DUALCORE(&m) == 1,
+       "auto: the Options alone are automatic: Play Style, Extension Addition, Secret Chords, Velocity, the MIDI channels, "
+       "Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, Dual Core");
+    ok(CRS_KEY_ON(&m) == 0 && m.tonic == d.tonic && m.scale == d.scale && m.transpose == 0 && m.single == d.single &&
+       m.split_pc == d.split_pc && m.bass_mode == d.bass_mode && m.bass_voicing == 0 && m.perform_on == 0 &&
+       m.perform_mode == d.perform_mode && m.perf_sel == 0 && m.sticky == 0 && m.bpm == 120 &&
+       m.par[0][0] == d.par[0][0] && m.par[CRS_NPM - 1][CRS_NPAR - 1] == d.par[CRS_NPM - 1][CRS_NPAR - 1],
+       "manual: Key Mode and the KEY layer (tonic, scale, Transpose, Single, the split, Key plays, Keyboard), the bass "
+       "behaviour and register, Perform and its parameters, LATCH, the tempo: left as last saved");
+    ok(m.loop_sync == 0 && m.loop_quant == 0 && m.loop_count_in == 1 && m.loop_level == 100 && m.metro_on == 0 &&
+       m.metro_sig == 0 && m.metro_vol == 70 && m.loop_slot == 0 && m.loop_rec == 0 && m.fx_on == 1 &&
+       m.chord_sound == d.chord_sound && m.bass_sound == d.bass_sound && crs_pool_get(&m, 0, 3) == CRS_POOL_DEFAULT &&
+       crs_pool_get(&m, 1, 10) == CRS_POOL_DEFAULT,
+       "manual: the looper's settings and slot, the record mode and the layers' keys, the metronome, FX on, each "
+       "part's sound and pool places: left as last saved");
+    ok(CRS_VIEW(&m) == 0 && CRS_VIEW_LOCK(&m) == 0, "manual: the view and its lock (Dual Core, in the same byte, is automatic)");
+    for (i = 12; i < CRS_SIZE; i++) {              /* each byte of the block: a's or b's, by one rule */
+        cr_settings_t x, y, z;
+        memset(&x, 0x00, sizeof x);
+        memset(&y, 0xFF, sizeof y);
+        z = x;
+        cr_settings_auto(&z, &y);                  /* 0xFF where automatic */
+        if (((const uint8_t *)&z)[i] == 0xFF) nauto++;
+        else if (((const uint8_t *)&z)[i] == 0x00) nman++;
+        else both++;                               /* (the view's byte: bit 6 alone) */
+    }
+    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6)\n", (unsigned)nauto,
+           (unsigned)nman, (unsigned)both);
+    ok(nauto == 17u && both == 1u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and one bit of the block's 180 are automatic");
+    m = b;
+    cr_settings_auto(&m, &b);
+    ok(!memcmp(&m, &b, sizeof b), "auto: copying a record's own Options into it changes nothing");
+}
+
 int main(void)
 {
+    t_auto();
     t_defaults();
     t_fresh_playstyle();
     t_factory();

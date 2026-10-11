@@ -275,6 +275,10 @@ typedef struct {
                                      * page's bars 1..4 (a row each) and lm_beats the steps a bar (the Quantize grid,
                                      * 0: 16; lm_bars * steps <= 64) */
     uint8_t lm_nlane, lm_newlane;   /* lanes in use 0..4 (lane 0 the oldest, dimmer); the take's lane + 1 (bright), 0 none */
+    uint8_t lm_dirty;               /* the slot + 1 whose loop has changes not saved yet (0: none): a small mark in its
+                                     * cell's corner (saved by the global save or by leaving the slot) */
+    uint8_t lm_steps;               /* steps: the cells of the page that exist (the loop editor: a loop ends inside the
+                                     * page's last bar); 0: all of them */
 } cr_screen_t;
 
 /* the filter's FTYPE position's name (eng_va.c's names): "LP" "BP" "HP" "NOTCH" at 0 32 64 96, "LP>BP" .. "NT>LP"

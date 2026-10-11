@@ -1,6 +1,8 @@
-# test_persist.sh, the session's deferred save: never under a sound. MAJ + D4 held; KNOB 1 +2 (the voicing) while it
-# sounds; 3 s later the chord still sounds: nothing written (dump 1). Let go: written once the tail is over and a
-# second has passed (dump 2).
+# test_persist.sh, saving and sound (0.18). MAJ + D4 held; KNOB 1 +2 (the voicing) while it sounds; 3 s later the
+# chord still sounds: nothing written (dump 1). SAVE held under the chord: the global save writes at once, it is the
+# player's own press (dump 2: session saves 1; the erase's 45 ms of silence is in the dump's "audio stalled" line).
+# An Option changed under the same chord (Options, KNOB 1: Play Style): the automatic part waits, as ever: 3 s later
+# nothing written (dump 3); the chord let go: written once the tail is over (dump 4).
 wait 300
 key F3 down
 wait 40
@@ -9,9 +11,21 @@ wait 300
 knob KNOB1 +2
 wait 3000
 expect sound
-dump                          # 1: held: pending, no write
+dump                          # 1: held: nothing written
+btn SAVE 900                  # the global save, into the sounding chord
+wait 300
+expect sound
+dump                          # 2: written: session saves 1
+btn GLO
+wait 200
+knob KNOB1 +1                 # Play Style: Advanced (an Option: automatic)
+wait 200
+btn GLO
+wait 3000
+expect sound
+dump                          # 3: the chord still sounds: the Option not written yet
 btn D4 up
 key F3 up
-wait 6000
-dump                          # 2: one write
+wait 7000
+dump                          # 4: quiet: written by itself
 quit

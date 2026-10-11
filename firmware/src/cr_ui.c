@@ -10,8 +10,8 @@
  * drawn. The grammar (design/choralroot-fm1-mockups.json, third pass): a layer button (KEY = printed SEL, PERF,
  * FX, BASS, LOOP, METRO; EDIT held = the engine picker) held past HOLD_MS opens its layer and LOCKS it (cu.lock):
  * it stays open after release, its LED blinks, OCT- (back) or HOME closes it, holding another layer button
- * switches to that one, a tap is still the on/off action. SAVE held (the loop slots) and OPT (the knob shift) are
- * momentary. B3 = LOCK, the chord block's latch mode (cu_mod_press: a virtual hold of the latched keys).
+ * switches to that one, a tap is still the on/off action. OPT (the knob shift) is momentary; SAVE held is no layer:
+ * the global save (cu_gsave; GLO + SAVE held: the revert, cu_revert). B3 = LOCK, the chord block's latch mode (cu_mod_press: a virtual hold of the latched keys).
  * Output: events for the engine (cr_out.c cr_post, drained by the audio ISR), Felucca's part parameters (sounds,
  * sends, levels: written as Felucca's UI writes them), fm1_led / fm1_led_dim, and one cr_screen_t per frame for
  * cr_draw.c.
@@ -20,7 +20,8 @@
  * engine's factory presets, each replaced by the user's record bound to it, the presets the user added; the records are
  * upreset.c's 32 slots); OPT + PRESETS changes the chord part's engine; EDIT opens the sound pages (cr_pages.c), EDIT
  * held the engine picker, SAVE the save dialog (Overwrite / Save as new, then the naming screen, cr_name.c).
- * The looper (cr_loop.c, docs/LOOPER.md): LOOP / REC / METRO and their layers, SAVE held (the loop slots in flash),
+ * The looper (cr_loop.c, docs/LOOPER.md): LOOP / REC / METRO and their layers, the loop slots in flash (written by
+ * the global save and by leaving a slot), the loop editor (EDIT in the PLAY menu),
  * the corner dial (the count-in's and undo's ring) and the transport's top line.
  * Included after cr_out.c, cr_anim.c, gfx.c, cr_gfx.c, cr_draw.c, panel.c, cr_bank.c, cr_pages.c and cr_name.c. */
 #include "cr_ui.h"
@@ -461,6 +462,7 @@ static const char *const CU_LOOPLEN[6] = {"Free", "1 bar", "2 bars", "4 bars", "
 static const char *const CU_SIG[CRL_NSIG] = {"4/4", "3/4", "6/8"};
 static const char *const CU_QUANT[CRL_NQUANT] = {"none", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CU_LOOP_MODE[CRL_NMODE] = {"Overwrite", "Advance", "Overdub", "Replace", "Step"};
+static const char *const CU_RATE[CRL_NRATE] = {"x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
 enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_N };
 
 static struct {
@@ -481,6 +483,7 @@ static struct {
     uint8_t split;                        /* Single Notes' split point, pitch class 0..11 */
     uint8_t metro, metro_sig, metro_vol;  /* the click: on, CRL_SIG_*, level 0..100 */
     uint8_t loop_len, loop_quant, loop_count_in, loop_level;   /* SYNC (0 Free, 1..16 bars), QUANT, COUNT-IN, LEVEL */
+    uint8_t loop_rate;                    /* the loop's Rate, 0..CRL_NRATE-1 (x1/4 .. x4; CRL_RATE_1; the session's) */
     uint8_t loop_slot;                    /* the slot in RAM (0..9) */
     uint8_t loop_mode, loop_keys;         /* the record mode (CRL_MODE_*); the PLAY menu's keys: 0 Play, 1 Loops (v8) */
     uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
@@ -534,6 +537,7 @@ static void cu_loop_conf(void)                    /* the looper's settings -> th
     cr_post(CRE_LOOP, LP_CONF, LC_VOL, cs.metro_vol);
     cr_post(CRE_LOOP, LP_METRO, 0, cs.metro);
     cr_post(CRE_LOOP, LP_CONF, LC_MODE, cs.loop_mode);
+    cr_post(CRE_LOOP, LP_CONF, LC_RATE, cs.loop_rate);
 }
 static void cu_set_tempo(int32_t bpm)
 {
@@ -930,6 +934,10 @@ static struct {
                                            * it goes off (another chord key pressed meanwhile: it stays) */
     uint8_t kpage;                        /* the KEY layer's page (SELECT): 0 Tonic Scale Transpose Single, 1 Key plays
                                            * Keyboard; the first page whenever the layer opens */
+    uint8_t lpage;                        /* the PLAY menu's page (SELECT): 0 Length Rate Quantize Count-in, 1 Level;
+                                           * the first page whenever the menu opens */
+    uint8_t ledit;                        /* the loop editor is open (EDIT in the PLAY menu; cu_ledit_*) */
+    uint16_t le_cell;                     /* .. its cursor: the first cell of the selected step */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
     uint8_t key_note[CU_NKEY];            /* root keys (the Full keyboard: every key): note + 1 sent; 0xFF: the
@@ -1198,6 +1206,7 @@ static uint32_t cu_perf_mode(void) { return CU_PERF[cs.perf_sel].mode; }
 #define CRL_FL_BASE 0xC8000u
 #define CRL_FL_TYPE 0x4C30u
 static uint8_t cu_loop_buf[CRL_REC_MAX] __attribute__((aligned(4)));   /* a packed record */
+static void cu_ledit_close(void);
 static uint8_t cu_loop_gen;                        /* + 1 whenever cu_loop_buf is written here (cr_backup.c stages a
                                                     * restore in it between requests: a change ends that restore) */
 /* the loop being left, packed for its own slot (cu_loop_keep): written at once when stopped; while a loop plays (no
@@ -1461,10 +1470,9 @@ static void cu_loop_mode_turn(int32_t s)           /* ALGORITHM in the PLAY menu
     cr_post(CRE_LOOP, LP_CONF, LC_MODE, cs.loop_mode);
     cu_trace("loop: mode %s\n", CU_LOOP_MODE[cs.loop_mode]);
 }
-static void cu_loop_keys(uint32_t v)               /* GLO tapped / KNOB 4 in the PLAY menu: the keys play / the slots */
+static void cu_loop_keys(uint32_t v)               /* GLO tapped in the PLAY menu: the keys play / the slots */
 {
     cs.loop_keys = (uint8_t)(v != 0);
-    cu_hot_set(L_LOOP, 3);
     cu.clear_t0 = 0;
     cu_trace("loop: keys %s\n", cs.loop_keys ? "Loops" : "Play");
 }
@@ -1506,10 +1514,200 @@ static void cu_rec(void)
     }
     cr_post(CRE_LOOP, LP_REC, 0, 0);
 }
+/* ------------------------------------------------------------------ the loop editor --- */
+/* EDIT in the PLAY menu (the owner, 2026-10-11; docs/LOOPER.md "The loop editor"): the loop in RAM as steps on the
+ * Quantize grid (cr_loop.c cr_loop_ed_*: the steps are read from the events, nothing is stored for them). SELECT /
+ * KNOB 1: the step cursor (wrapping); a chord or a note played on the keys REPLACES the selected step's notes and
+ * sounds (the cursor stays: SELECT moves on); REC clears the step; KNOB 2 its length in grid cells (the later steps
+ * move); KNOB 3 the loop's length in steps; KNOB 4 its velocity; LOOP plays / stops as ever; REC held: the looper's
+ * undo. OCT- / OCT+ / HOME / EDIT (tapped, or held again) close it, back to the PLAY menu: nothing to confirm, an edit
+ * is done when it is made, in RAM, and saved like any loop change (the global save, a slot switch).
+ * The view: cu_le, rebuilt from the ISR's loop (IRQ off: two passes over <= 512 events) only when its events change
+ * (crl.gen) or the cursor moves; the map (cu_le_map, 520 bytes in the pool) is the editor's only buffer */
+static crl_edmap_t cu_le_map __attribute__((section(".pool")));
+static struct {
+    uint16_t gen, c0, nstep, idx;                  /* crl.gen then; the cursor's first cell; steps; its number - 1 */
+    uint8_t ok, n, g, cnt, root, qx, vel;          /* its cells; the grid; its events, the last one's chord, the loudest */
+} cu_le;
+static void cu_le_sync(void)
+{
+    uint32_t c0, n, i, t0, t1;
+    if (!cu.ledit || (cu_le.ok && cu_le.gen == crl.gen && cu_le.c0 == cu.le_cell))
+        return;
+    fm1_irq_off();
+    cr_loop_ed_map(&crl, &cu_le_map);
+    cr_loop_ed_step(&cu_le_map, cu.le_cell < cu_le_map.ncell ? cu.le_cell : cu_le_map.ncell ? cu_le_map.ncell - 1u : 0u,
+                    &c0, &n);
+    cr_loop_ed_cursor(&crl, c0, n);
+    cu_le.g = crl.ed_g;
+    cu_le.cnt = cu_le.vel = 0;
+    t0 = c0 * cu_le.g;
+    t1 = t0 + n * cu_le.g;
+    for (i = 0; i < crl.d.nev; i++) {
+        const crl_ev_t *e = &crl.d.ev[i];
+        if ((e->layer & CRL_HID) || e->t < t0 || e->t >= t1)
+            continue;
+        cu_le.cnt = (uint8_t)(cu_le.cnt < 255u ? cu_le.cnt + 1u : 255u);
+        cu_le.root = e->root;                      /* (the last one written there names the step) */
+        cu_le.qx = e->qx;
+        if (e->vel > cu_le.vel)
+            cu_le.vel = e->vel;
+    }
+    cu_le.gen = crl.gen;
+    fm1_irq_on();
+    cu.le_cell = cu_le.c0 = (uint16_t)c0;
+    cu_le.n = (uint8_t)n;
+    cu_le.nstep = cu_le_map.nstep;
+    cu_le.idx = (uint16_t)cr_loop_ed_index(&cu_le_map, c0);
+    cu_le.ok = 1;
+    cu_trace("loopedit: step %u/%u cell %u cells %u events %u len %u\n", (unsigned)cu_le.idx + 1u, (unsigned)cu_le.nstep,
+             (unsigned)c0, (unsigned)n, (unsigned)cu_le.cnt, (unsigned)crl.d.len);
+}
+static void cu_ledit_open(void)
+{
+    int rc;
+    if (crl_stage_busy) {
+        cu_message("a slot is on its way", CR_COL_RED);
+        return;
+    }
+    cu_lp.want = 0;
+    fm1_irq_off();
+    rc = cr_loop_ed_open(&crl);
+    fm1_irq_on();
+    cu_trace("loopedit: open rc %d\n", rc);
+    if (rc != CRL_ED_OK) {                         /* (a loop played free: no grid to show it on, and nothing is
+                                                    * requantised behind the player's back) */
+        cu_message(rc == CRL_ED_NOQUANT ? "set Quantize to edit" : rc == CRL_ED_LONG ? "too long: coarser grid"
+                                        : "end the take first", CR_COL_RED);
+        return;
+    }
+    cu.ledit = 1;
+    cu.le_cell = 0;
+    cu_le.ok = 0;
+    cu_hot.knob = 0;
+}
+static void cu_ledit_close(void)
+{
+    if (!cu.ledit)
+        return;
+    cu.ledit = 0;
+    fm1_irq_off();
+    cr_loop_ed_close(&crl, &cr);
+    fm1_irq_on();
+    cu_hot.knob = 0;
+    cu_trace("loopedit: close (events %u len %u)\n", (unsigned)crl.d.nev, (unsigned)crl.d.len);
+}
+static void cu_ledit_move(int32_t s)               /* SELECT / KNOB 1: the cursor, a step a detent, wrapping */
+{
+    uint32_t c0, n;
+    cu_le_sync();
+    c0 = cu_le.c0;
+    n = cu_le.n;
+    if (!cu_le_map.ncell)
+        return;
+    for (; s > 0; s--) {
+        c0 = c0 + n < cu_le_map.ncell ? c0 + n : 0u;
+        cr_loop_ed_step(&cu_le_map, c0, &c0, &n);
+    }
+    for (; s < 0; s++)
+        cr_loop_ed_step(&cu_le_map, c0 ? c0 - 1u : cu_le_map.ncell - 1u, &c0, &n);
+    cu.le_cell = (uint16_t)c0;
+    cu_le_sync();
+}
+static void cu_ledit_clear(void)                   /* REC: the step's notes go */
+{
+    int n;
+    cu_le_sync();
+    fm1_irq_off();
+    n = cr_loop_ed_clear(&crl);
+    fm1_irq_on();
+    cu_trace("loopedit: clear step %u (%d events)\n", (unsigned)cu_le.idx + 1u, n);
+}
+static void cu_ledit_knob(uint32_t knob, int32_t s)
+{
+    uint32_t g, len, c0, n, nc;
+    int ok = 0;
+    cu_le_sync();
+    g = cu_le.g ? cu_le.g : CRL_STEP_NONE;
+    nc = cu_le_map.ncell;
+    if (knob == 0) {
+        cu_ledit_move(s);
+    } else if (knob == 1) {                        /* the step's length, cells (1 .. 16): the later steps move; Length
+                                                    * Free: the loop grows or shrinks with it; a set Length: the loop
+                                                    * keeps it, refused if a note would pass the end */
+        n = (uint32_t)((int32_t)cu_le.n + (s > 0 ? 1 : -1));
+        if (!cu_le.cnt)
+            return;                                /* (an empty step is one cell: its cell shows "-") */
+        if (n >= 1u && n <= CRL_ED_MAXN && !(s > 0 && !cs.loop_len && nc >= CRL_ED_CELLS)) {
+            fm1_irq_off();
+            ok = cr_loop_ed_steplen(&crl, n);
+            fm1_irq_on();
+        }
+        if (!ok && n >= 1u && n <= CRL_ED_MAXN)
+            cu_message("no room in the loop", CR_COL_RED);
+        cu_trace("loopedit: knob 2 step length %u %s\n", (unsigned)n, ok ? "ok" : "refused");
+    } else if (knob == 2) {                        /* the loop's length, a step a detent: shorter hides the last step
+                                                    * (kept until the editor closes: longer brings it back), longer
+                                                    * past what there was adds an empty step */
+        len = 0;
+        fm1_irq_off();
+        if (s < 0) {
+            cr_loop_ed_step(&cu_le_map, nc ? nc - 1u : 0u, &c0, &n);
+            len = c0 * g;                          /* (0: the only step stays) */
+        } else if (crl.d.len % g) {
+            len = nc * g;                          /* (a loop played to an odd length: its last cell made whole) */
+        } else {
+            n = 1;
+            if (cu_le_map.nall > nc)
+                cr_loop_ed_step(&cu_le_map, nc, &c0, &n);
+            if (nc + n <= CRL_ED_CELLS)
+                len = (nc + n) * g;
+        }
+        if (len)
+            ok = cr_loop_ed_len(&crl, len);
+        fm1_irq_on();
+        cu_trace("loopedit: knob 3 loop length %u %s\n", (unsigned)len, ok ? "ok" : "refused");
+    } else {                                       /* the step's velocity */
+        fm1_irq_off();
+        ok = cr_loop_ed_vel(&crl, (int)s * 4);
+        fm1_irq_on();
+        cu_trace("loopedit: knob 4 velocity %d\n", ok);
+    }
+    cu_hot_set(L_LOOP, knob);
+}
+static void cu_ledit_cells(cr_screen_t *s)
+{
+    static const char *const LB[4] = {"Step", "Length", "Steps", "Velocity"};
+    uint32_t k;
+    char b[8];
+    for (k = 0; k < 4u; k++) {
+        s->cell[0][k].flags = CR_CF_ON;
+        cu_cpy(s->cell[0][k].label, LB[k], sizeof s->cell[0][k].label);
+    }
+    cu_int(s->cell[0][0].value, (int32_t)cu_le.idx + 1, 0, sizeof s->cell[0][0].value);
+    cu_cat(s->cell[0][0].value, "/", sizeof s->cell[0][0].value);
+    cu_int(b, (int32_t)cu_le.nstep, 0, sizeof b);
+    cu_cat(s->cell[0][0].value, b, sizeof s->cell[0][0].value);
+    if (cu_le.cnt) {
+        cu_int(s->cell[0][1].value, cu_le.n, 0, sizeof s->cell[0][1].value);
+        cu_int(s->cell[0][3].value, cu_le.vel, 0, sizeof s->cell[0][3].value);
+        s->cell[0][3].glyph = CR_G_BAR;
+        s->cell[0][3].pct = (uint8_t)(cu_le.vel * 2u);
+    } else {
+        cu_cpy(s->cell[0][1].value, "-", sizeof s->cell[0][1].value);
+        cu_cpy(s->cell[0][3].value, "-", sizeof s->cell[0][3].value);
+        s->cell[0][1].flags = s->cell[0][3].flags = CR_CF_ON | CR_CF_DIM;
+    }
+    cu_int(s->cell[0][2].value, (int32_t)cu_le.nstep, 0, sizeof s->cell[0][2].value);
+    cu_hot_row(s, L_LOOP);
+}
+
+static int cu_loop_write(void);
 /* THE GLOBAL SAVE (SAVE held past the hold time, alone; the owner, 2026-10-11: "Hold Save button to manually do a
  * global save, instead of trying to auto-save settings at runtime. So if you power cycle without global saving it will
  * reset to what it was"): everything about how the instrument is set to play (cr_settings.c cr_settings_commit: the
- * whole settings block and the session), written now; an object that did not change is not written. No confirm: the
+ * whole settings block and the session) and the loop in RAM if it changed (cu_loop_write), written now; an object
+ * that did not change is not written. No confirm: the
  * message "saved" (green) says it happened; a flash error: "save error" (red). Never while a loop plays or a take is
  * open (no flash erase then: the erase stops the audio for ~45 ms an object): "saves at stop", and it is written when
  * the loop next stops (cu_loop_frame). SAFE MODE, a backup just restored: refused with the reason */
@@ -1520,6 +1718,8 @@ static void cu_gsave_now(void)
 #if CR_HAVE_SETTINGS
     rc = cr_settings_commit();
 #endif
+    if (cu_loop_write())
+        rc = -1;
     cu_message(rc ? "save error" : "saved", rc ? CR_COL_RED : CR_COL_GREEN);
     cu_trace("save: global rc %d\n", rc);
 }
@@ -1543,24 +1743,23 @@ static void cu_gsave(void)
 }
 /* the transport's results (the ISR's CRL_DID_*) as messages; a deferred save once the loop stops */
 static uint32_t cu_did_seen;
-/* the loop in RAM, changed (crl.dirty) and stopped, written to its own slot without a SAVE, so a power-off after a stop
- * loses nothing (docs/LOOPER.md "Slots and the record"): at once when it stops (LOOP tap, a panic, MIDI stop; a take /
- * overdub committed while it played is written at that stop), else (a take that ends stopped, Step's commit, an undo
- * or a clear while stopped) after CU_AUTOSAVE_MS with no chord sounding and no key held. Never while it plays (no
- * flash erase then), nor while a capture is open, a switch is on its way, in SAFE MODE, after a restore or without
- * the flash. An empty loop (cleared) deletes its slot's record, as leaving it does. "saved to slot N" only when written */
-#define CU_AUTOSAVE_MS 2000u
-static void cu_loop_autosave(void)
+/* The loop in RAM -> its own slot, if it changed since it was loaded or saved (crl.dirty): the GLOBAL SAVE's part for
+ * the looper (the owner, 2026-10-11: "Only save the loops after we hold save to manual save, thus if I have some loops
+ * recorded that I like and accidentally record over them, I have a way to recover, and also it should make it so you
+ * can record / play a loop with no glitches"). Until then a changed loop was written when it stopped and 2 s after a
+ * change (cu_loop_autosave, 2026-10-09: gone). The loop is written by this and by a slot switch (cu_loop_keep: "if you
+ * switch loop slots, then auto save the loop if it's dirty"), nowhere else: a take, an overdub, an undo, a clear, an
+ * edit stay in RAM, and a power cycle or a revert brings the slot's saved loop back. An empty loop (cleared) deletes
+ * its slot's record. A loop staged by a switch while it played is written first. 0: written or nothing to write,
+ * -1: a flash error */
+static int cu_loop_write(void)
 {
-    static uint8_t was_playing;
-    uint32_t now = cu_now(), k = cs.loop_slot, n;
-    int stopped_now = was_playing && !cu_playing(), rc;
-    was_playing = (uint8_t)cu_playing();
-    if (!crl.dirty || cu_playing() || cr_snap.lcap != CRL_CAP_NONE || crl_stage_busy || cu_lp.q || cu_lp.slot ||
-        cr_safe || cr_restore_lock || !crl_fl_ready() || k >= CRL_SLOTS)
-        return;
-    if (!stopped_now && (cr_snap.ci.sounding || (cu.kheld >> CU_ROOT0) || now - cu.last_sound < CU_AUTOSAVE_MS))
-        return;
+    uint32_t k = cs.loop_slot, n;
+    int rc;
+    if (cu_loop_flush("a global save"))
+        return -1;
+    if (!crl.dirty || crl_stage_busy || cu_lp.q || cr_safe || cr_restore_lock || !crl_fl_ready() || k >= CRL_SLOTS)
+        return 0;
     cu_loop_gen++;
     fm1_irq_off();
     n = cr_loop_pack(&crl.d, cu_loop_buf, sizeof cu_loop_buf);
@@ -1569,23 +1768,20 @@ static void cu_loop_autosave(void)
         fm1_irq_off();
         crl.dirty = 0;
         fm1_irq_on();
-        return;
+        return 0;
     }
     rc = n ? crl_fl_save(k, cu_loop_buf, n) : crl_fl_delete(k);
-    cu_trace("loop: auto-save slot %u %u bytes rc %d (%s)\n", (unsigned)k + 1u, (unsigned)n, rc,
-             stopped_now ? "stopped" : "idle");
+    cu_trace("loop: save slot %u %u bytes rc %d\n", (unsigned)k + 1u, (unsigned)n, rc);
+    if (rc)
+        return -1;
     fm1_irq_off();
-    crl.dirty = 0;                                 /* (an error: not retried every frame; the next change tries again) */
+    crl.dirty = 0;
     fm1_irq_on();
-    if (rc) {
-        cu_message("save error", CR_COL_RED);
-        return;
-    }
     if (n)
         cs.loop_used |= (uint16_t)(1u << k);
     else
         cs.loop_used &= (uint16_t)~(1u << k);
-    cu_slot_msg(n ? "saved to slot " : "cleared slot ", k, "", CR_COL_GREEN);
+    return 0;
 }
 
 static void cu_loop_frame(void)
@@ -1642,7 +1838,8 @@ static void cu_loop_frame(void)
         if (cu_loop_flush("at the stop") == 0)
             cu_slot_msg(cu_lp.n ? "saved to slot " : "cleared slot ", k, "", CR_COL_GREEN);
     }
-    cu_loop_autosave();
+    if (cu.ledit && cu_layer() != L_LOOP)          /* the PLAY menu left by any way: the loop editor with it */
+        cu_ledit_close();
     if (cu.gsave_pend && !cu_playing() && cr_snap.lcap == CRL_CAP_NONE)
         cu_gsave_now();                            /* SAVE held while it played: now that it stopped */
 }
@@ -1689,7 +1886,10 @@ static void cu_layer_close(void)                  /* OCT- in a layer: back (the 
  * preset ... change a bunch of settings then quickly revert back or save"): the unit back to what the last global save
  * wrote, as a power-on brings it: every note off and the loop stopped as PANIC does (without its screen), any layer,
  * page or dialog closed (the engine picker: its preview dropped), then flash's settings and session applied
- * (cr_settings.c cr_settings_revert). No confirm: the message "reverted". The Options are not the revert's (they are
+ * (cr_settings.c cr_settings_revert), then the loop: the slot the settings name (the one selected at that save, as
+ * a power-on) loaded from flash again: what was recorded, overdubbed, cleared or edited since is gone, the saved loop
+ * is back (empty if the slot holds none); a loop staged by a slot switch while it played is written first (that save
+ * is the switch's, not undone). No confirm: the message "reverted". The Options are not the revert's (they are
  * saved by themselves). SAFE MODE (nothing is read there), a backup just restored: refused */
 #define CU_REVERT_MS 1000u
 static void cu_lock_tap(void);
@@ -1705,6 +1905,8 @@ static void cu_revert(void)
     }
     if (cu.lock == L_EDIT)
         cu_pick_end(0);
+    if (cu.ledit)
+        cu_ledit_close();
     cu_close_all();
     cu.gsave_pend = 0;
     cu.epk_on = 0;
@@ -1717,6 +1919,16 @@ static void cu_revert(void)
 #endif
     cr_post(CRE_STICKY, 0, 0, cs.sticky);         /* (after cu_quiet's queued "off": LATCH as saved) */
     cu_loop_conf();                               /* the looper's settings and the metronome -> the ISR */
+    cu_loop_flush("before a revert");             /* (a switch's staged save: written, it is not the revert's) */
+    fm1_irq_off();                                /* the loop: stopped now (the PANIC is still queued), what it holds
+                                                   * dropped, a switch on its way cancelled */
+    cr_loop_stop(&crl, &cr);
+    crl.dirty = 0;
+    crl_stage_busy = 0;
+    fm1_irq_on();
+    cr_snap.lstate = crl.state;
+    cu_lp.q = cu_lp.want = cu_lp.adv_armed = 0;
+    cu_loop_load(cs.loop_slot, 1);
     cu_message("reverted", CR_COL_WHITE);
     cu_trace("save: reverted\n");
 }
@@ -1773,8 +1985,10 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
         cr_post(CRE_STICKY, 0, 0, cs.sticky);
         break;
     case BT_OPT:
-        if (cu.lock == L_LOOP) {                  /* the PLAY menu: GLO toggles its keys (play / the slots) */
-            cu_loop_keys(!cs.loop_keys);
+        if (cu.lock == L_LOOP) {                  /* the PLAY menu: GLO toggles its keys (play / the slots): no
+                                                   * Options from here; the loop editor: the keys play, nothing */
+            if (!cu.ledit)
+                cu_loop_keys(!cs.loop_keys);
             break;
         }
         if (cu.lock == L_KEY) {                   /* the KEY layer: GLO toggles its keys (pick / play): no Options
@@ -1788,6 +2002,13 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
         cu.opt_open ^= 1u;
         break;
     case BT_EDIT:                                 /* the chord sound's editor (BASS held + EDIT: cu_btn_press) */
+        if (cu.lock == L_LOOP) {                  /* the PLAY menu: the loop editor, and out of it */
+            if (cu.ledit)
+                cu_ledit_close();
+            else
+                cu_ledit_open();
+            break;
+        }
         if (cu.lock == L_EDIT) {                  /* the engine picker open: EDIT keeps its sound, closes it */
             cu_pick_end(1);
             cu_layer_close();
@@ -1814,7 +2035,10 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
         cr_post(CRE_LOOP, LP_PLAY, 0, 0);
         break;
     case BT_REC:                                  /* record by the mode / end the take */
-        cu_rec();
+        if (cu.ledit && cu.lock == L_LOOP)        /* the loop editor: REC clears the step (no recording there) */
+            cu_ledit_clear();
+        else
+            cu_rec();
         break;
     default:
         break;
@@ -1837,6 +2061,8 @@ static void cu_opened(uint32_t b)                 /* a button held past HOLD (or
     cu_hot.knob = 0;                              /* (a layer opens with no hot cell) */
     if (l == L_KEY && was != L_KEY)               /* the KEY layer opens on its first page */
         cu.kpage = 0;
+    if (l == L_LOOP && was != L_LOOP)             /* .. the PLAY menu too */
+        cu.lpage = 0;
     if (l == L_PERF && was != L_PERF)             /* the perform layer opens on its picker (the mode's name) */
         cu.perf_t0 = cu_now();
     cu_trace("layer: open %u%s\n", (unsigned)l, cu.lock ? " (locked)" : "");
@@ -1846,6 +2072,10 @@ static void cu_opened(uint32_t b)                 /* a button held past HOLD (or
 
 static void cu_home_tap(void)
 {
+    if (cu.ledit && cu.lock == L_LOOP) {          /* the loop editor: back to the PLAY menu */
+        cu_ledit_close();
+        return;
+    }
     if (cu.lock == L_EDIT)                        /* the engine picker: cancelled, the sound as it was */
         cu_pick_end(0);
     if (cu.lock && cu.page == PG_EDIT) {          /* a layer over the editor: back to the editor */
@@ -1937,6 +2167,11 @@ static void cu_oct_tap(uint32_t b)
     if (b == B_OCTUP && cu.opt_open && cu.opt_sel == O_CALIB && !cu.lock && !cu.page) {
         cu_close_all();
         cu_calib_start();                         /* Options > Calibrate, OCT+: Felucca's HARDWARE CALIBRATION */
+        return;
+    }
+    if (cu.ledit && cu_layer() == L_LOOP) {       /* the loop editor: OCT- / OCT+ close it, back to the PLAY menu
+                                                   * (nothing to confirm: an edit is done when it is made) */
+        cu_ledit_close();
         return;
     }
     if (cr_snap.lcap == CRL_CAP_STEP && (!cu_layer() || cu_layer() == L_LOOP) && !cu.opt_open && cu.page == PG_NONE) {
@@ -2402,7 +2637,7 @@ static void cu_layer_pick(uint32_t l, int32_t i)   /* a white root / SELECT: the
             cu_engine_pick((uint32_t)i);
         }
         break;
-    case L_LOOP:                                   /* SELECT: the length (the next take's) */
+    case L_LOOP:                                   /* KNOB 1: the length (the next take's) */
         if (i < (int32_t)CRL_NSYNC) {
             cs.loop_len = (uint8_t)i;
             cr_post(CRE_LOOP, LP_CONF, LC_SYNC, i);
@@ -2638,23 +2873,37 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                                                     * and not be able to immediately play them": they always play, SELECT
                                                     * steps the engines) */
         break;
-    case L_LOOP:                                   /* the PLAY menu: QUANTIZE COUNT-IN LEVEL KEYS */
-        if (knob == 0) {
-            v = cs.loop_quant + (s > 0 ? 1 : -1);
-            cs.loop_quant = (uint8_t)(v < 0 ? 0 : v >= (int32_t)CRL_NQUANT ? CRL_NQUANT - 1u : (uint32_t)v);
-            cr_post(CRE_LOOP, LP_CONF, LC_QUANT, cs.loop_quant);
-            cu_trace("loop: knob 1 quantize %s\n", CU_QUANT[cs.loop_quant]);
-        } else if (knob == 1) {
-            cs.loop_count_in = s > 0;
-            cr_post(CRE_LOOP, LP_CONF, LC_COUNTIN, cs.loop_count_in);
-            cu_trace("loop: knob 2 count-in %s\n", cs.loop_count_in ? "on" : "off");
-        } else if (knob == 2) {
+    case L_LOOP:                                   /* the PLAY menu. Page 1: LENGTH RATE QUANTIZE COUNT-IN; page 2
+                                                    * (SELECT): LEVEL. The loop editor: STEP, its LENGTH, the loop's
+                                                    * STEPS, the step's VELOCITY */
+        if (cu.ledit) {
+            cu_ledit_knob(knob, s);
+            break;
+        }
+        if (cu.lpage) {
+            if (knob != 0)
+                break;
             v = cs.loop_level + s * 5;
             cs.loop_level = (uint8_t)(v < 0 ? 0 : v > 100 ? 100 : v);
             cr_post(CRE_LOOP, LP_CONF, LC_LEVEL, cs.loop_level);
-            cu_trace("loop: knob 3 level %u\n", (unsigned)cs.loop_level);
+            cu_trace("loop: knob 1 level %u\n", (unsigned)cs.loop_level);
+        } else if (knob == 0) {                    /* the length (the next take's) */
+            v = cs.loop_len + s;
+            cu_layer_pick(L_LOOP, v < 0 ? 0 : v >= (int32_t)CRL_NSYNC ? (int32_t)CRL_NSYNC - 1 : v);
+        } else if (knob == 1) {                    /* the Rate: taken at the loop's start while it plays (cr_loop.c) */
+            v = cs.loop_rate + s;
+            cs.loop_rate = (uint8_t)(v < 0 ? 0 : v >= (int32_t)CRL_NRATE ? CRL_NRATE - 1u : (uint32_t)v);
+            cr_post(CRE_LOOP, LP_CONF, LC_RATE, cs.loop_rate);
+            cu_trace("loop: knob 2 rate %s\n", CU_RATE[cs.loop_rate]);
+        } else if (knob == 2) {
+            v = cs.loop_quant + s;
+            cs.loop_quant = (uint8_t)(v < 0 ? 0 : v >= (int32_t)CRL_NQUANT ? CRL_NQUANT - 1u : (uint32_t)v);
+            cr_post(CRE_LOOP, LP_CONF, LC_QUANT, cs.loop_quant);
+            cu_trace("loop: knob 3 quantize %s\n", CU_QUANT[cs.loop_quant]);
         } else {
-            cu_loop_keys(s > 0);
+            cs.loop_count_in = s > 0;
+            cr_post(CRE_LOOP, LP_CONF, LC_COUNTIN, cs.loop_count_in);
+            cu_trace("loop: knob 4 count-in %s\n", cs.loop_count_in ? "on" : "off");
         }
         cu_hot_set(L_LOOP, knob);                 /* (no popup: the cell turns hot) */
         break;
@@ -2853,8 +3102,8 @@ static void cu_mod_release(uint32_t k)
 static int cu_layer_keys(uint32_t l)
 {
     return l && l != L_PERF && l != L_FX && l != L_LOCK && l != L_EDIT &&
-           !(l == L_LOOP && !cs.loop_keys) && !(l == L_KEY && cs.key_play);
-}   /* (the PLAY menu with Keys = Play, the KEY layer with keys: play: they play, docs/LOOPER-MODES.md) */
+           !(l == L_LOOP && (!cs.loop_keys || cu.ledit)) && !(l == L_KEY && cs.key_play);
+}   /* (the PLAY menu with Keys = Play, the loop editor, the KEY layer with keys: play: they play, docs/LOOPER-MODES.md) */
 
 static void cu_key_press(uint32_t k)
 {
@@ -3129,11 +3378,27 @@ static void cu_knob(uint32_t role, int32_t s)
         return;
     }
     if (l == L_LOOP && role == EN_PRESET) {        /* the PLAY menu: PRESETS the slot, ALGORITHM the record mode */
-        cu_loop_turn(s);
+        if (!cu.ledit)                             /* (the loop editor: neither: it is this loop's) */
+            cu_loop_turn(s);
         return;
     }
     if (l == L_LOOP && role == EN_ALGO) {
-        cu_loop_mode_turn(s);
+        if (!cu.ledit)
+            cu_loop_mode_turn(s);
+        return;
+    }
+    if (l == L_LOOP && role == EN_SELECT) {        /* the PLAY menu: SELECT turns its page (the owner, 2026-10-11: until
+                                                    * then the length, now KNOB 1); the loop editor: the step cursor */
+        uint32_t pg = s > 0 ? 1u : 0u;
+        if (cu.ledit) {
+            cu_ledit_move(s);
+            return;
+        }
+        if (pg != cu.lpage) {
+            cu.lpage = (uint8_t)pg;
+            cu_hot.knob = 0;
+            cu_trace("loop: page %u\n", (unsigned)pg + 1u);
+        }
         return;
     }
     if (l == L_KEY && role == EN_SELECT) {         /* the KEY layer: SELECT turns its page (no tempo there) */
@@ -3438,7 +3703,7 @@ static void cr_ui_input(void)
         }
     }
     if (cu.armed == BT_SAVE && cu.page == PG_SAVE && !cu.open && !cu.combo && ((cu.bheld >> BT_SAVE) & 1u) &&
-        now - cu.t0 >= 1000u) {                    /* naming: SAVE held 1 s asks to delete the slot (no loop layer) */
+        now - cu.t0 >= 1000u) {                    /* naming: SAVE held 1 s asks to delete the slot */
         cu.combo = 1;                              /* (its release: no cancel) */
         cu_save_ask();
     }
@@ -3460,6 +3725,11 @@ static void cr_ui_input(void)
     }
     if (cu.armed != NB && !cu.open && ((cu.bheld >> cu.armed) & 1u) && !(cu.armed == BT_SAVE && cu.page == PG_SAVE) &&
         now - cu.t0 >= (uint32_t)HOLD_MS[settings_hold % 4u]) {
+        if (cu.armed == BT_EDIT && cu.ledit && cu.lock == L_LOOP) {   /* the loop editor: EDIT held again closes
+                                                    * it, as a layer's own button does (no engine picker from there) */
+            cu.open = 1;
+            cu_ledit_close();
+        } else
         if (cu.armed == BT_SAVE) {                 /* SAVE held alone past the hold time: the global save (a key, a
                                                     * knob or another button touched meanwhile: a combo, nothing).
                                                     * Its release does nothing. (The naming dialog: SAVE held 1 s asks
@@ -3583,10 +3853,11 @@ static void cr_leds(void)
     cu_led(nl, panel.btn[BT_FX], cs.fx_on);
     cu_led(nl, panel.btn[BT_BASS], cs.bass_on);
     cu_led(nl, panel.btn[BT_LATCH], cs.sticky || sn->latching);
-    cu_led(nl, panel.btn[BT_OPT], cu.opt_open || cu_shift() || (l == L_LOOP && cs.loop_keys) ||
+    cu_led(nl, panel.btn[BT_OPT], cu.opt_open || cu_shift() || (l == L_LOOP && cs.loop_keys && !cu.ledit) ||
                                       (l == L_KEY && cs.key_play));   /* (the PLAY menu: Keys = Loops; the KEY layer:
                                                                        * keys: play. Lit = not the default) */
-    cu_led(nl, panel.btn[BT_EDIT], cu.page == PG_EDIT && blink);   /* blinks while the editor is open */
+    cu_led(nl, panel.btn[BT_EDIT], (cu.page == PG_EDIT || (cu.ledit && l == L_LOOP)) && blink);   /* blinks while the
+                                                                       * editor is open (the sound's, the loop's) */
     cu_led(nl, panel.btn[BT_SAVE], cu.page == PG_SAVE);
     cu_led(nl, panel.btn[BT_METRO], cs.metro);
     {                                                    /* REC: blinks capturing, lit armed; LOOP: a loop */
@@ -3650,8 +3921,9 @@ static void cr_leds(void)
         cu_led(nf, 14u + k, 1);
     }
     /* the roots: a layer's map, or the voiced notes where they sound */
-    if (l == L_LOOP && cs.loop_keys) {             /* the slots: lit = a loop, blinking = the one selected (the
-                                                    * PLAY menu with Keys = Play: the keys as on the view) */
+    if (l == L_LOOP && cs.loop_keys && !cu.ledit) {   /* the slots: lit = a loop, blinking = the one selected (the
+                                                    * PLAY menu with Keys = Play, the loop editor: the keys as on
+                                                    * the view) */
         uint32_t sel = cu_lm_slot();
         for (k = CU_ROOT0; k < CU_NKEY; k++) {
             int32_t wi = cu_white_idx(k);
@@ -4240,28 +4512,36 @@ static void cu_key_cells(cr_screen_t *s)
            sizeof s->cell[0][3].value);
     cu_hot_row(s, L_KEY);
 }
-/* the PLAY menu's knob row (docs/LOOPER-MODES.md): Quantize (echoes), Count-in (gate: full on, narrow off), Level
- * (bar), Keys (text: Play / Loops). The length is the menu's middle (SELECT) */
+/* the PLAY menu's knob row (docs/LOOPER-MODES.md), two pages (SELECT). Page 1: Length (the next take's: Free, 1 .. 16
+ * bars), Rate (x1/4 .. x4), Quantize (echoes), Count-in (gate: full on, narrow off); page 2: Level (bar), the other
+ * three knobs free. Until 0.17: Quantize Count-in Level Keys, the length on SELECT; Keys is GLO's alone now */
 static void cu_loop_cells(cr_screen_t *s)
 {
-    static const char *const LB[4] = {"Quantize", "Count-in", "Level", "Keys"};
+    static const char *const LB[4] = {"Length", "Rate", "Quantize", "Count-in"};
     uint32_t k, q = cs.loop_quant % CRL_NQUANT;
+    if (cu.lpage) {
+        s->cell[0][0].flags = CR_CF_ON;
+        cu_cpy(s->cell[0][0].label, "Level", sizeof s->cell[0][0].label);
+        cu_int(s->cell[0][0].value, cs.loop_level, 0, sizeof s->cell[0][0].value);
+        s->cell[0][0].glyph = CR_G_BAR;
+        s->cell[0][0].pct = (uint8_t)(cs.loop_level * 255u / 100u);
+        cu_hot_row(s, L_LOOP);
+        return;
+    }
     for (k = 0; k < 4u; k++) {
         s->cell[0][k].flags = CR_CF_ON;
         cu_cpy(s->cell[0][k].label, LB[k], sizeof s->cell[0][k].label);
     }
-    cu_cpy(s->cell[0][0].value, CU_QUANT[q], sizeof s->cell[0][0].value);
-    s->cell[0][0].glyph = CR_G_ECHOES;              /* "none": no grid (pct 0, pct2 0: the baseline alone, cr_draw.c);
+    cu_cpy(s->cell[0][0].value, CU_LOOPLEN[cs.loop_len % CRL_NSYNC], sizeof s->cell[0][0].value);
+    cu_cpy(s->cell[0][1].value, CU_RATE[cs.loop_rate % CRL_NRATE], sizeof s->cell[0][1].value);
+    cu_cpy(s->cell[0][2].value, CU_QUANT[q], sizeof s->cell[0][2].value);
+    s->cell[0][2].glyph = CR_G_ECHOES;              /* "none": no grid (pct 0, pct2 0: the baseline alone, cr_draw.c);
                                                      * 1/4 .. 1/32 the repeats, the spacing growing as before */
-    s->cell[0][0].pct = (uint8_t)(q * 255u / (CRL_NQUANT - 1u));
-    s->cell[0][0].pct2 = q ? 255u : 0u;
-    cu_cpy(s->cell[0][1].value, cs.loop_count_in ? "On" : "Off", sizeof s->cell[0][1].value);
-    s->cell[0][1].glyph = CR_G_GATE;
-    s->cell[0][1].pct = cs.loop_count_in ? 255 : 26;
-    cu_int(s->cell[0][2].value, cs.loop_level, 0, sizeof s->cell[0][2].value);
-    s->cell[0][2].glyph = CR_G_BAR;
-    s->cell[0][2].pct = (uint8_t)(cs.loop_level * 255u / 100u);
-    cu_cpy(s->cell[0][3].value, cs.loop_keys ? "Loops" : "Play", sizeof s->cell[0][3].value);
+    s->cell[0][2].pct = (uint8_t)(q * 255u / (CRL_NQUANT - 1u));
+    s->cell[0][2].pct2 = q ? 255u : 0u;
+    cu_cpy(s->cell[0][3].value, cs.loop_count_in ? "On" : "Off", sizeof s->cell[0][3].value);
+    s->cell[0][3].glyph = CR_G_GATE;
+    s->cell[0][3].pct = cs.loop_count_in ? 255 : 26;
     cu_hot_row(s, L_LOOP);
 }
 
@@ -4341,12 +4621,21 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
     uint32_t sig = sn->lsig % CRL_NSIG, bar = sig == CRL_SIG_44 ? 384u : 288u;
     uint32_t beats = sig == CRL_SIG_44 ? 4u : sig == CRL_SIG_34 ? 3u : 6u, cap = sn->lcap, slot = cu_lm_slot();
     uint32_t cur = 1u << cs.loop_slot;
+    static const char *const ED[1] = {"Edit"};
     char b[12];
-    cu_picker(s, CU_LOOP_MODE, CRL_NMODE, cs.loop_mode % CRL_NMODE, CR_COL_WHITE, "", "");
+    if (cu.ledit)                                  /* the loop editor: its name where the record mode is */
+        cu_picker(s, ED, 1, 0, CR_COL_WHITE, "", "");
+    else
+        cu_picker(s, CU_LOOP_MODE, CRL_NMODE, cs.loop_mode % CRL_NMODE, CR_COL_WHITE, "", "");
     s->kind = CR_K_LOOPMENU;
     s->orient = 1;
-    cu_loop_cells(s);
+    if (cu.ledit) {
+        cu_le_sync();
+        cu_ledit_cells(s);
+    } else
+        cu_loop_cells(s);
     cu_row_trace(s, "loop", seen, sizeof seen);
+    s->lm_dirty = (uint8_t)(sn->ldirty ? cs.loop_slot + 1u : 0u);   /* changes not saved yet (SAVE held saves) */
     s->lm_used = (uint16_t)((cs.loop_used & ~cur) | (sn->lstate != CRL_EMPTY ? cur : 0u));   /* (the slot in RAM: what
                                                                                               * it holds now) */
     s->lm_slot = (uint8_t)slot;
@@ -4365,8 +4654,46 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         cu_cpy(s->right, "empty", sizeof s->right);
         s->right_col = CR_COL_GREY;
     }
-    if (cap == CRL_CAP_STEP) {                     /* the step grid: 16 a bar at 1/16 (the Quantize grid), 4 bars a page */
-        uint32_t g = sn->lstep_g ? sn->lstep_g : 24u, per = bar / g, pb = 64u / per, nst, tb, first, shown;
+    if (cu.ledit) {                                /* the loop editor: the loop's cells as the step grid (a bar a row),
+                                                    * the filled ones where a note starts, the cursor on the selected
+                                                    * step; its chord and "step 3/8" under it */
+        uint32_t g = cu_le.g ? cu_le.g : CRL_STEP_NONE, per = bar / g ? bar / g : 1u, pb = 64u / per, tb, first, shown, c;
+        char r[4], q[5], sup[CR_SUP_MAX];
+        pb = pb > 4u ? 4u : pb ? pb : 1u;
+        tb = (cu_le_map.ncell + per - 1u) / per;
+        first = cu_le.c0 / (per * pb) * per * pb;
+        shown = tb > first / per ? tb - first / per : 1u;
+        shown = shown > pb ? pb : shown;
+        s->lm_mid = CR_LM_STEPS;
+        s->lm_bars = (uint8_t)shown;
+        s->lm_beats = (uint8_t)per;
+        for (c = 0; c < per * shown && c < 64u && first + c < cu_le_map.ncell; c++)
+            if ((cu_le_map.start[(first + c) >> 5] >> ((first + c) & 31u)) & 1u)
+                s->lm_lane[0] |= (uint64_t)1 << c;
+        s->lm_steps = (uint8_t)c;
+        s->lm_pos = (uint16_t)(((cu_le.c0 - first) & 63u) | (cu_blink(now) ? 0u : CR_LM_CUR_OFF));
+        if (sn->ci.sounding && !sn->ldisp) {       /* the chord being played, else the one in the step */
+            cu_cpy(s->sub, sn->ci.root, sizeof s->sub);
+            cu_cat(s->sub, sn->ci.qual, sizeof s->sub);
+            cu_cat(s->sub, sn->ci.sup, sizeof s->sub);
+        } else if (cu_le.cnt) {
+            cr_chord_name((uint8_t)(cu_le.root % 12u), (uint8_t)(cu_le.qx >> 4), (uint8_t)(cu_le.qx & 15u), r, q, sup);
+            cu_cpy(s->sub, r, sizeof s->sub);
+            cu_cat(s->sub, q, sizeof s->sub);
+            cu_cat(s->sub, sup, sizeof s->sub);
+        } else
+            cu_cpy(s->sub, "-", sizeof s->sub);
+        cu_cpy(s->value, "step ", sizeof s->value);
+        cu_int(b, (int32_t)cu_le.idx + 1, 0, sizeof b);
+        cu_cat(s->value, b, sizeof s->value);
+        cu_cat(s->value, "/", sizeof s->value);
+        cu_int(b, (int32_t)cu_le.nstep, 0, sizeof b);
+        cu_cat(s->value, b, sizeof s->value);
+        cu_cpy(s->foot, "SELECT: step \267 REC: clear \267 EDIT: done", sizeof s->foot);
+        return;
+    }
+    if (cap == CRL_CAP_STEP) {                     /* the step grid: the Quantize grid (none: a quarter note), 4 bars a page */
+        uint32_t g = sn->lstep_g ? sn->lstep_g : CRL_STEP_NONE, per = bar / g, pb = 64u / per, nst, tb, first, shown;
         char r[4], q[5], sup[CR_SUP_MAX];
         pb = pb > 4u ? 4u : pb ? pb : 1u;
         nst = sn->lstep_len ? sn->lstep_len / g : (sn->lstep_end > sn->lstep + 1u ? sn->lstep_end : sn->lstep + 1u);
@@ -4399,12 +4726,19 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         cu_int(b, (int32_t)(sn->lstep / per) + 1, 0, sizeof b);
         cu_cat(s->value, b, sizeof s->value);
         cu_cpy(s->foot, "OCT-: back \267 OCT+: rest \267 REC: done", sizeof s->foot);
-    } else if (cap == CRL_CAP_REC || cap == CRL_CAP_OD || cap == CRL_CAP_OD_ARMED || sn->lstate == CRL_PLAYING) {
+        return;
+    }
+    /* the bottom line, as the KEY layer's label and footer: the page (SELECT), what the keys do, what GLO makes them */
+    cu_cpy(s->foot, cu.lpage ? "2/2" : "1/2", sizeof s->foot);
+    cu_cat(s->foot, cs.loop_keys ? " \267 keys: loops \267 GLO: play" : " \267 keys: play \267 GLO: loops", sizeof s->foot);
+    if (cap == CRL_CAP_REC || cap == CRL_CAP_OD || cap == CRL_CAP_OD_ARMED || sn->lstate == CRL_PLAYING) {
         uint32_t pos = sn->lpos, start = 0, shown, len;
         s->lm_mid = CR_LM_TIMELINE;
         s->lm_beats = (uint8_t)beats;
         if (cap == CRL_CAP_REC && !sn->lrec_len) { /* Free, the first take: the bars as they pass, the current one right */
-            uint32_t nb = pos / bar + 1u, ms = pos * 625u / ((cs.bpm ? cs.bpm : 120u) * 1u);   /* (60000 / 96 = 625) */
+            uint32_t nb = pos / bar + 1u, ms = pos * 2500u / ((cs.bpm ? cs.bpm : 120u) * cr_loop_rate_q2(&crl));
+                                                   /* (60000 / 96 = 625 ms a tick at 1 BPM; the loop's ticks run at the
+                                                    * Rate, in quarters) */
             start = (nb > 4u ? nb - 4u : 0u) * bar;
             shown = nb > 4u ? 4u : nb;
             s->lm_free = (uint8_t)(nb > 255u ? 255u : nb);
@@ -5420,6 +5754,7 @@ static void cr_ui_init(void)
     cs.split = cr.split_pc;
     cs.loop_count_in = 1;
     cs.loop_level = 100;
+    cs.loop_rate = CRL_RATE_1;
     cs.metro_vol = 70;
     cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
     cs.usb_in = 1;                                /* (the record's, cr_settings_load; usb.c got it at boot) */

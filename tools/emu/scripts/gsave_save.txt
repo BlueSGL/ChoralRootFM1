@@ -1,0 +1,76 @@
+# test_persist.sh, manual and automatic, run 3 (run 1's flash: Play Style Advanced in it, nothing else): the tempo
+# 137 and the tonic D again; SAVE held 0.9 s: the global save, the message "saved" (shot), dump 1. Then things are
+# changed: the tempo 150 (SELECT +13), the voicing +2 (KNOB 1), Bass on, the chord sound (PRESETS +3), an Option (LEDs:
+# Stock), a chord latched (LATCH, MAJ + D4), and GLO + SAVE held 1.2 s: the revert, the message "reverted" (shot):
+# dump 3: 137 BPM, voicing 0, the bass off, the saved sound, LATCH off and silence; the Option stays as changed (it is
+# not the revert's). D4 plays (dump 3). GLO + SAVE let go early (0.6 s): nothing (dump 4).
+wait 500
+knob SELECT +17
+wait 200
+btn SEL 600
+wait 300
+knob KNOB1 +2
+wait 300
+btn OCT-
+wait 300
+btn SAVE down
+wait 600
+shot build/emu/test/gsave_saved.ppm
+dump                          # 1: saved (SAVE still down: no layer, no dialog)
+btn SAVE up
+wait 1500
+knob SELECT +13               # 150 BPM
+wait 1300
+knob KNOB1 +2                 # the voicing
+wait 1300
+btn ENV                       # Bass on
+wait 1300
+knob PRESETS +3
+wait 1300
+btn GLO                       # Options: LEDs Stock
+wait 200
+knob SELECT +14
+wait 200
+knob KNOB1 +1
+wait 200
+btn GLO
+wait 300
+btn LFO                       # LATCH on, a chord latched and sounding
+wait 200
+btn A#3 down
+btn D4 down
+wait 300
+btn D4 up
+btn A#3 up
+wait 500
+expect sound
+dump                          # 2: changed, sounding
+btn GLO down
+wait 100
+btn SAVE down
+wait 1300
+shot build/emu/test/gsave_reverted.ppm
+btn SAVE up
+btn GLO up
+wait 2500
+dump                          # 3: reverted (no voice left)
+btn A#3 down
+btn D4 down
+wait 400
+expect sound
+btn D4 up
+btn A#3 up
+wait 2500
+knob SELECT +5                # 142 BPM
+wait 1300
+btn GLO down
+wait 100
+btn SAVE down
+wait 600
+btn SAVE up
+btn GLO up
+wait 600
+dump                          # 4: let go before the second: nothing reverted (142), no Options opened
+wait 4000
+dump                          # 5: the Option written by itself meanwhile
+quit
