@@ -666,7 +666,8 @@ static void crx_gesture(cr_t *c, int vi, int on)
 {
     const cr_voice_t *v = &c->v[vi];
     if (!c->out.gesture || !v->used || v->loop) return;
-    c->out.gesture(c->out.ud, v->gid, (int16_t)(v->root + v->transpose), v->rq, v->sx, v->vel, on);
+    c->out.gesture(c->out.ud, v->gid, (int16_t)(v->root + v->transpose), v->rq,
+                   (uint8_t)(v->zone & CR_Z_BASS ? CR_GX_BASS : v->sx), v->vel, on);   /* (a bass-side key: q, sx 0) */
 }
 
 static void crx_kill_voice(cr_t *c, int vi)
@@ -1296,11 +1297,13 @@ int cr_loop_event(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t
     if (lv < 0 || lv >= CR_MAX_LOOPV) return 0;
     if (c->v[vi].used) crx_kill_voice(c, vi);
     if (!on) return 0;
-    if (q >= CR_Q_COUNT) q = CR_Q_NONE;
+    if (q >= CR_Q_COUNT || (ext & CR_GX_BASS)) q = CR_Q_NONE;
     root = (int16_t)crx_clamp(root, 0, 127);
     v = &c->v[vi];
     crx_zero(v, sizeof *v);
     v->used = 1; v->loop = (uint8_t)(lv + 1);
+    if (ext & CR_GX_BASS) { v->zone = CR_Z_BASS; ext = 0; }   /* recorded on the bass side: the bass part's note, as
+                                                              * the key was (crx_bass_pitch: + the register of now) */
     v->vel = (uint8_t)crx_clamp(vel, 1, 127);
     v->note_pressed = (uint8_t)root;
     v->pc = v->pc_pressed = (uint8_t)crx_mod(root, 12);
@@ -1309,7 +1312,7 @@ int cr_loop_event(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t
     v->root = root;
     v->serial = ++c->serial;
     v->nbase = (uint8_t)cr_chord_base(root, q, v->sx, v->base);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, c->voicing, v->notes);
+    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, v->zone ? 0 : c->voicing, v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;

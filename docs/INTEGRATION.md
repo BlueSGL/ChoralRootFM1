@@ -437,8 +437,15 @@ Priority, top down, first match wins:
   pitch class `split_pc` for both (Split Oct exactly as before); on the Full keyboard a key, F4 (`CU_SPLIT_FULL`,
   key 12: F3..E4 left, F4..G5 right), fixed, posted as the MIDI note it plays (`cu_post_kbd`, again at every octave
   change): Split Oct there lowers the left side an octave (`CR_Z_LOW`).
-- Not built: the looper records a bass-side note as a single-note gesture (its format has no part bit), so a loop
-  plays it back on the chord part. MIDI out: the bass side goes to the BASS stream's channel.
+- **In a loop (0.18).** The gesture of a `CR_Z_BASS` voice carries `CR_GX_BASS` in its `ext` (`crx_gesture`); the
+  looper stores it in the event (`crl_ev_t.qx`: a single note's nibble, `CRL_X_BASS`) and plays it with
+  `cr_loop_event(.., ext = CR_GX_BASS, ..)`: a loop voice with `zone = CR_Z_BASS`, so the same three functions route
+  it (`crx_chord_streams_ok` 0, `crx_bass_ok` = the BASS stream on, `crx_bass_pitch` = root + 12 x the bass register
+  of now; no voicing rotation). The side is the one in force when the key went down, never the one at playback;
+  until 0.17 such a note was recorded as a single-note gesture and came back on the chord part. The record:
+  docs/LOOPER.md "What is recorded" and "Slots and the record" (flags byte 7, `CRL_RF_PART`; the size and version
+  unchanged). MIDI out: the bass side, live and looped, goes to the BASS stream's channel. Tests:
+  `tests/cr_loop_test.c s_bass`, `cr_loop_bass.txt`, `loop_bass_persist_check.txt`.
 - Settings v14: bits 1 / 2 of `key_on`, `single` = 2 (docs/SETTINGS.md). Tests: `tests/cr_engine_test.c s_keyplays`,
   `cr_key_page.txt`, `cr_fullkbd.txt`, `persist_page2_*.txt`, `tests/cr_draw_test.c` (the two pages).
 

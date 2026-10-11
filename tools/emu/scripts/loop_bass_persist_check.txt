@@ -1,0 +1,21 @@
+# cr_loop_bass.txt's flash file relaunched (test_persist.sh): slot 1's loop (the Chords layout, Split Bass: G major and
+# a bass-side D) is back in RAM at power-on with its bass-side event; Single = Full, then LOOP: D plays on the bass
+# part (part 1), as it was recorded.
+wait 300
+dump                          # 1: power-on: used 001, slot 1, 2 events, 1 of the bass side, single 2
+btn SEL down                  # Single = Full
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 -2
+wait 300
+btn OCT-
+wait 300
+btn PLAY
+wait 150
+dump                          # 2: single 0; G plays: loop voices chord 1 bass 0
+wait 500
+dump                          # 3: D plays: chord 0 bass 1, part 1 sounds
+btn PLAY
+wait 2500
+dump                          # 4: silent

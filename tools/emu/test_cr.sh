@@ -843,6 +843,35 @@ has '^loop: switch to slot 2 cancelled, slot 1 stays' "$SL" && [ "$(lf "$m" slot
     ok "a switch cancelled by a stop before the cycle's end: slot 1 stays selected, its overdub written at the stop (5 events)" \
     || bad "cancelled switch: $m"
 silent_end cr_loop_slots
+# a Split Bass bass-side note is recorded as one and plays on the bass part (0.18; docs/LOOPER.md "What is recorded")
+run cr_loop_bass
+LB="$OUT/cr_loop_bass.log"
+lvp() { grep -a '^  loopv:' "$LB" | sed -n "$1p" | sed -n 's/.*chord \([0-9]*\) bass \([0-9]*\) bass-side-events \([0-9]*\) stream-notes main \([0-9]*\) bass \([0-9]*\)$/\1 \2 \3 \4 \5/p'; }
+lpv() { grep -a "^  part $2:" "$LB" | sed -n "$1p" | sed -n 's/.* voices \([0-9]*\),.*/\1/p'; }
+lkb() { grep -a '^  kbd:' "$LB" | sed -n "$1p" | sed -n 's/.*keyboard \([a-z]*\) single \([0-9]\) .*/\1 \2/p'; }
+lbz() { grep -a 'parts busy' "$LB" | sed -n "$1p" | sed -n 's/.*parts busy \([0-9]*\).*/\1/p'; }
+a=$(L cr_loop_bass 2)
+[ "$(lkb 1)" = "full 2" ] && [ "$(lf "$a" events)" = 3 ] && [ "$(lf "$a" state)" = 2 ] && [ "$(lvp 2)" = "0 1 2 0 1" ] && [ "$(lpv 2 1)" -ge 1 ] &&
+    [ "$(lvp 3)" = "1 0 2 1 0" ] && [ "$(lpv 3 0)" -ge 1 ] && [ "$(lvp 4)" = "0 1 2 0 1" ] && [ "$(lpv 4 1)" -ge 1 ] &&
+    ok "the Full keyboard + Split Bass: F3 A4 E4 recorded (2 bass-side events); the loop plays F3 and E4 on the bass part alone (part 1, the bass stream), A4 on the chord part" \
+    || bad "a looped bass line: $(lkb 1) / $a / $(lvp 2) p1 $(lpv 2 1) / $(lvp 3) p0 $(lpv 3 0) / $(lvp 4)"
+[ "$(lkb 5)" = "full 0" ] && [ "$(lvp 5)" = "0 1 2 0 1" ] && [ "$(lpv 5 1)" -ge 1 ] &&
+    ok "Single = Full while it plays: the looped F3 still on the bass part (recorded so)" || bad "Single = Full at playback: $(lkb 5) / $(lvp 5) p1 $(lpv 5 1)"
+[ "$(lvp 6)" = "0 1 2 0 2" ] && [ "$(lvp 7)" = "1 0 2 1 1" ] && [ "$(lpv 7 1)" -ge 1 ] && [ "$(lvp 8)" = "1 0 2 1 0" ] && [ "$(lbz 9)" = 0 ] &&
+    [ "$(lvp 9)" = "0 0 2 0 0" ] &&
+    ok "live over the loop: a live C4 with the looped F3 (2 notes on the bass stream); a live F3 held past the looped F3's end still sounds, let go: off; stopped: silent (no stuck voice)" \
+    || bad "live bass over a looped bass: $(lvp 6) / $(lvp 7) p1 $(lpv 7 1) / $(lvp 8) / busy $(lbz 9) $(lvp 9)"
+b=$(L cr_loop_bass 10); c=$(L cr_loop_bass 11)
+has '^loop: auto-save slot 1 39 bytes rc 0 (stopped)' "$LB" && [ "$(lf "$b" slot)" = 2 ] && [ "$(lf "$b" events)" = 0 ] && has '^loop: slot 1 loaded' "$LB" &&
+    [ "$(lf "$c" slot)" = 1 ] && [ "$(lf "$c" events)" = 3 ] && [ "$(lvp 11)" = "0 0 2 0 0" ] && [ "$(lkb 11)" = "full 0" ] &&
+    [ "$(lvp 12)" = "0 1 2 0 1" ] && [ "$(lpv 12 1)" -ge 1 ] && [ "$(lpv 12 0)" = 0 ] && [ "$(lvp 13)" = "1 0 2 1 0" ] && [ "$(lbz 14)" = 0 ] &&
+    ok "slot 1 written at the stop (39 bytes: as big as before), read back from its record after slot 2: 2 bass-side events; Single = Full: F3 on the bass part alone, A4 on the chord part" \
+    || bad "the slot's record: $b / $c / $(lvp 11) / $(lvp 12) p0 $(lpv 12 0) p1 $(lpv 12 1) / $(lvp 13)"
+d=$(L cr_loop_bass 15)
+[ "$(lkb 15)" = "chords 2" ] && [ "$(lf "$d" events)" = 2 ] && [ "$(lvp 15)" = "1 0 1 3 0" ] && [ "$(lvp 16)" = "0 1 1 0 1" ] && [ "$(lpv 16 1)" -ge 1 ] &&
+    ok "the Chords layout + Split Bass (the split point F): G major a chord (3 notes on the main stream), D4 a bass-side note: the loop plays it on the bass part alone" \
+    || bad "the Chords layout: $(lkb 15) / $d / $(lvp 15) / $(lvp 16) p1 $(lpv 16 1)"
+silent_end cr_loop_bass
 # the PLAY menu (docs/LOOPER-MODES.md, design/choralroot-fm1-looper-screens.png): the knobs, GLO, the strip, the modes
 export EMU_UI_LOG=0
 run cr_loop_menu

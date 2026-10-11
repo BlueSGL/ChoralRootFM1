@@ -379,6 +379,24 @@ void emu_fw_dump(void)
                cr_loop_busy(&cr, 0) + cr_loop_busy(&cr, 1) + cr_loop_busy(&cr, 2),
                (unsigned)cr.playstyle, (unsigned)cr.single, (unsigned)cr.split_pc);
     }
+    {   /* the loop's parts (0.18): its voices sounding by part (a recorded Split Bass bass-side note: the bass part),
+         * its live events of the bass side, the notes on the engine's main / bass streams (looped and played) */
+        unsigned k, lc = 0, lb = 0, be = 0, sm = 0, sb = 0;
+        for (k = 0; k < (unsigned)CR_MAX_LOOPV; k++) {
+            const cr_voice_t *v = &cr.v[CR_MAX_VOICES + CR_MAX_PADS + k];
+            if (v->used && (v->zone & CR_Z_BASS))
+                lb++;
+            else if (v->used)
+                lc++;
+        }
+        for (k = 0; k < crl.d.nev; k++)
+            be += !(crl.d.ev[k].layer & CRL_HID) && CRL_EV_BASS(&crl.d.ev[k]);
+        for (k = 0; k < 128u; k++) {
+            sm += cr_sounding(&cr, CR_STREAM_MAIN, (uint8_t)k) != 0;
+            sb += cr_sounding(&cr, CR_STREAM_BASS, (uint8_t)k) != 0;
+        }
+        printf("  loopv: chord %u bass %u bass-side-events %u stream-notes main %u bass %u\n", lc, lb, be, sm, sb);
+    }
     {   /* the version, everywhere it shows: Options > Version (opt_text), the identity over SysEx (cr_backup.c's
          * INFO reply, built by the handler itself: no transport here, CRB_SEND is empty), the splash's foot line */
         static const uint8_t q[4] = {CRB_HDR0, CRB_HDR1, CRB_HDR2, CRB_INFO};

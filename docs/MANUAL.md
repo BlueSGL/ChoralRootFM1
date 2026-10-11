@@ -386,6 +386,8 @@ pick. The choice is remembered, also after switching off. OPT held with KNOB 1 i
   below the split point (C to E by default) are bass notes and the others play chords as ever. While Split Bass is
   on the bass is played by hand: it does not follow the chords, and Bass on / off and the Bass Behaviour are left as
   they are and ignored until Single is changed back. The top right says `Split Bass`. The bass part is one voice.
+  The looper records a bass-side note as a bass note: the loop plays it with the bass sound, also after you change
+  Single ([The looper](#10-the-looper)).
 
 **Key plays: Chords or Notes** (page 2, KNOB 1). `Chords` is Key Mode as described above: a lone root plays the
 scale's chord. `Notes` keeps Key Mode as a guide and a guard only: the roots and the chord keys behave exactly as
@@ -577,6 +579,18 @@ The looper records **what you play on the root keys, as chords**: which root, wh
 does not record audio. When the loop plays, the chords go through the instrument again, so the loop follows the sound
 you choose now, the voicing on KNOB 1, the performance mode and the bass. The tempo changes its speed, never its
 pitch.
+
+**Bass notes played by hand.** With Single = `Split Bass` the keys below the split play the bass part, and the looper
+records them as bass notes: the loop plays them back with the bass sound, and on the bass channel of MIDI out. Which
+side a note is on is decided when you record it and kept with the loop: you can set Single back to Full, move the
+split point or change the keyboard layout while the loop plays, and its bass line stays on the bass and its other
+notes stay on the chord sound. That holds in every record mode, for steps entered in Step mode, after an undo, in a
+saved slot and in a backup. The bass register (KNOB 2 on the view) still moves a looped bass line by octaves, as it
+moves the bass keys; the chord voicing does not touch it. You can play bass by hand over a looped bass line: the
+bass part is one voice, so the note played last is the one you hear. If you turn Split Bass off and switch the bass
+on while such a loop plays, the bass follows the loop's chords and the recorded bass notes play as well, on the
+same single voice. Loops recorded before 0.18 are unchanged: bass-side notes in them were stored as ordinary notes
+and keep the chord sound.
 
 ### Recording and playing
 

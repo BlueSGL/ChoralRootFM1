@@ -255,7 +255,8 @@ export class BackupConnection {
 }
 
 // ---- a loop slot's record (objects 40..49, docs/LOOPER.md "Slots and the record"; firmware cr_loop.c cr_loop_pack):
-// "CRL1", version 1, the time signature (0 4/4, 1 3/4, 2 6/8), the layers, 0, len u32 (ticks), the events u16, ppqn u16,
+// "CRL1", version 1, the time signature (0 4/4, 1 3/4, 2 6/8), the layers, flags (0; 0.18: 1 = it holds bass-side notes;
+// not read here), len u32 (ticks), the events u16, ppqn u16,
 // then per layer its event count u16, then 7 bytes per event. -> null (empty), or the header with the length in bars
 // (cr_loop_bar: 4 quarter notes in 4/4, 3 otherwise) and valid (the header's checks of cr_loop_unpack)
 export const LOOP_MAGIC = 0x314C5243, LOOP_PPQN = 96, LOOP_SIGS = ["4/4", "3/4", "6/8"];

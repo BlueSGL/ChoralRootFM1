@@ -560,11 +560,280 @@ static void s_step(void)
     ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "step: no stuck, double or stray note");
 }
 
+/* 0.18: a Split Bass bass-side note is recorded as one and plays on the bass part (crl_ev_t.qx: CRL_X_BASS; the
+ * record's flags byte CRL_RF_PART) */
+static int ons_s(int s, int note, int from)          /* note-ons of note on stream s since log entry from (-1: any) */
+{
+    int k, n = 0;
+    for (k = from; k < nlog; k++)
+        n += LOG[k].k == '+' && LOG[k].s == s && (note < 0 || LOG[k].note == note);
+    return n;
+}
+static void note(int n, uint32_t hold)               /* a key alone */
+{
+    cr_key(&C, (uint8_t)n, 100, 1);
+    step(hold);
+    cr_key(&C, (uint8_t)n, 100, 0);
+}
+static int nbass(const crl_data_t *d)
+{
+    int i, n = 0;
+    for (i = 0; i < d->nev; i++) n += !(d->ev[i].layer & CRL_HID) && CRL_EV_BASS(&d->ev[i]);
+    return n;
+}
+/* what 0.14 .. 0.17's cr_loop_unpack accepts (its checks, as released): a 0.18 record must pass them */
+static int old_unpack_ok(const uint8_t *b, uint32_t n)
+{
+    uint32_t nl, nev, len, l, cnt = 0, o, i;
+    if (n < 16u || b[0] != 'C' || b[1] != 'R' || b[2] != 'L' || b[3] != '1' || b[4] != 1u || b[5] >= CRL_NSIG ||
+        (b[14] | (uint32_t)b[15] << 8) != CRL_PPQN)
+        return 0;
+    nl = b[6];
+    len = b[8] | (uint32_t)b[9] << 8 | (uint32_t)b[10] << 16 | (uint32_t)b[11] << 24;
+    nev = b[12] | (uint32_t)b[13] << 8;
+    if (!nl || nl > CRL_MAX_LAYERS || !nev || nev > CRL_MAX_EV || !len || len > CRL_MAX_LEN || n < 16u + 2u * nl + 7u * nev)
+        return 0;
+    for (l = 0; l < nl; l++) cnt += b[16u + 2u * l] | (uint32_t)b[17u + 2u * l] << 8;
+    if (cnt != nev) return 0;
+    for (i = 0, o = 16u + 2u * nl; i < nev; i++, o += 7u)
+        if ((b[o] | (uint32_t)b[o + 1] << 8) >= len || !(b[o + 2] | b[o + 3]) || b[o + 4] > 127u || !b[o + 5] ||
+            b[o + 5] > 127u || (b[o + 6] >> 4) >= CR_Q_COUNT)
+            return 0;
+    return 1;
+}
+static void s_bass(void)
+{
+    char name[200];
+    static uint8_t buf[CRL_REC_MAX];
+    static crl_data_t back;
+    uint32_t n, i, o;
+    int mark, c, k;
+    /* the Full keyboard, the split at F4: F3 and G3 on the bass side, C5 above */
+    reset();
+    cr_set_keyboard(&C, 1, 65);
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    mark = nlog;
+    cr_loop_rec(&L, &C);
+    note(53, 500);
+    note(72, 500);
+    note(55, 500);
+    step(500);
+    ok(ons_s(1, 53, mark) == 1 && ons_s(0, 53, mark) == 0 && ons_s(0, 72, mark) == 1,
+       "split bass, live: F3 on the bass stream alone, C5 on the main one");
+    mark = nlog;
+    ok(cr_loop_rec(&L, &C) == CRL_DID_COMMIT && L.d.nev == 3, "split bass: a take of 3 notes");
+    ok(CRL_EV_BASS(&L.d.ev[0]) && L.d.ev[0].root == 53 && L.d.ev[1].qx == 0 && L.d.ev[1].root == 72 &&
+       CRL_EV_BASS(&L.d.ev[2]) && L.d.ev[2].root == 55, "split bass: F3 and G3 recorded as bass-side notes, C5 (above the split) not");
+    step(1990);
+    snprintf(name, sizeof name, "playback: F3 and G3 on the bass stream alone, C5 on the main one (bass %d %d, main %d %d %d)",
+             ons_s(1, 53, mark), ons_s(1, 55, mark), ons_s(0, 53, mark), ons_s(0, 55, mark), ons_s(0, 72, mark));
+    ok(ons_s(1, 53, mark) == 1 && ons_s(1, 55, mark) == 1 && ons_s(1, -1, mark) == 2 && ons_s(0, -1, mark) == 1 &&
+       ons_s(0, 72, mark) == 1, name);
+    /* what was recorded stays on its part, whatever is set at playback */
+    cr_set_single_notes(&C, CR_SINGLE_FULL, 5);
+    mark = nlog;
+    step(2000);
+    ok(ons_s(1, 53, mark) == 1 && ons_s(1, 55, mark) == 1 && ons_s(0, -1, mark) == 1,
+       "Single = Full at playback: the bass-side notes still on the bass part");
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT, 5);
+    cr_set_keyboard(&C, 0, 65);
+    cr_set_bass(&C, 0);
+    mark = nlog;
+    step(2000);
+    ok(ons_s(1, 53, mark) == 1 && ons_s(1, 55, mark) == 1 && ons_s(0, -1, mark) == 1 && ons_s(0, 72, mark) == 1,
+       "Split Oct, the Chords layout, Bass off at playback: the same");
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    cr_set_keyboard(&C, 1, 80);                      /* the split moved above C5 */
+    mark = nlog;
+    step(2000);
+    ok(ons_s(0, 72, mark) == 1 && ons_s(1, 72, mark) == 0,
+       "the split moved above a recorded chord-side note: it stays on the chord part");
+    cr_set_keyboard(&C, 1, 65);
+    /* the bass register of now moves it (as a live bass-side note); the voicing and transpose do not */
+    cr_bass_voicing_step(&C, 1);
+    step(2000);
+    mark = nlog;
+    step(2000);
+    ok(ons_s(1, 65, mark) == 1 && ons_s(1, 67, mark) == 1 && ons_s(1, -1, mark) == 2 && ons_s(0, 65, mark) == 0,
+       "the bass register + 1 at playback: the looped bass notes an octave up");
+    cr_bass_voicing_step(&C, -1);
+    cr_voicing_step(&C, 1);
+    cr_set_transpose(&C, 5);
+    step(2000);
+    mark = nlog;
+    step(2000);
+    ok(ons_s(1, 53, mark) == 1 && ons_s(1, 55, mark) == 1 && ons_s(1, -1, mark) == 2,
+       "voicing + 1 and transpose + 5 at playback: the bass notes as recorded");
+    cr_voicing_step(&C, -1);
+    cr_set_transpose(&C, 0);
+    /* live over the loop, on the one bass part: no stuck note when either ends */
+    until_pos(380);
+    until_pos(10);
+    ok(SND[1][53] == 1, "the looped F3 sounds on the bass stream");
+    cr_key(&C, 50, 100, 1);
+    step(50);
+    ok(SND[1][50] == 1 && SND[1][53] == 1, "a live bass-side D3 over it: both notes on (the part's voice mode decides)");
+    cr_key(&C, 50, 100, 0);
+    step(5);
+    ok(SND[1][50] == 0 && SND[1][53] == 1, "the live note's end ends the live note only");
+    cr_key(&C, 53, 100, 1);                          /* the same pitch: shared (re-struck), the last owner ends it */
+    step(5);
+    ok(cr_sounding(&C, CR_STREAM_BASS, 53) == 2, "a live F3 over the looped F3: one note, two owners");
+    step(600);
+    ok(SND[1][53] == 1 && cr_sounding(&C, CR_STREAM_BASS, 53) == 1, "the loop's F3 ended: the held live one still sounds");
+    cr_key(&C, 53, 100, 0);
+    step(5);
+    ok(SND[1][53] == 0, "the live F3 let go: off");
+    cr_key(&C, 55, 100, 1);                          /* held live across the looped G3's whole length */
+    until_pos(380);
+    ok(SND[1][55] == 1, "a live G3 held through the looped G3: still sounding after the loop's ended");
+    cr_key(&C, 55, 100, 0);
+    cr_loop_play(&L, &C);
+    step(300);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "live over a looped bass: no stuck, double or stray note");
+    /* the other way: a note recorded with Split Bass off is a chord-side note, with Split Bass on at playback too */
+    cr_loop_clear(&L, &C);
+    cr_set_single_notes(&C, CR_SINGLE_FULL, 5);
+    cr_loop_rec(&L, &C);
+    note(53, 500);
+    step(500);
+    cr_loop_rec(&L, &C);
+    ok(L.d.nev == 1 && L.d.ev[0].qx == 0, "Single = Full: F3 recorded as a chord-side note");
+    n = cr_loop_pack(&L.d, buf, sizeof buf);
+    ok(n == CRL_REC_HDR + 2u + 7u && buf[7] == 0, "pack: no bass-side note: the flags byte 0 (the record as 0.17 wrote it)");
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    mark = nlog;
+    step(2000);
+    ok(ons_s(0, 53, mark) >= 1 && ons_s(1, -1, mark) == 0, "Split Bass on at playback: it stays on the chord part");
+    cr_loop_play(&L, &C);
+    step(300);
+
+    /* the Chords layout: the split by pitch class (F): G a chord, D on the bass side */
+    reset();
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    cr_loop_rec(&L, &C);
+    chord(67, CR_MOD_MAJ, 500);
+    note(62, 500);
+    step(1000);
+    mark = nlog;
+    cr_loop_rec(&L, &C);
+    ok(L.d.nev == 2 && (L.d.ev[0].qx >> 4) == CR_Q_MAJ && !CRL_EV_BASS(&L.d.ev[0]) && CRL_EV_BASS(&L.d.ev[1]) &&
+       L.d.ev[1].root == 62, "the Chords layout: G major a chord, D4 (below the split point) a bass-side note");
+    step(1990);
+    ok(ons_s(1, 62, mark) == 1 && ons_s(1, -1, mark) == 1 && ons_s(0, 62, mark) == 0 && ons_s(0, 67, mark) == 1,
+       "playback: D on the bass stream, G major on the main one, nothing follows the chord (Split Bass)");
+    /* Split Bass off at playback, Bass on: the bass follows the looped chord AND the recorded bass notes play */
+    cr_set_single_notes(&C, CR_SINGLE_FULL, 5);
+    cr_set_bass(&C, 1);
+    mark = nlog;
+    step(2000);
+    snprintf(name, sizeof name,
+             "Single = Full + Bass on at playback: the follower's G1 and the recorded D4, both on the bass stream (%d %d of %d)",
+             ons_s(1, 43, mark), ons_s(1, 62, mark), ons_s(1, -1, mark));
+    ok(ons_s(1, 43, mark) == 1 && ons_s(1, 62, mark) == 1 && ons_s(1, -1, mark) == 2 && ons_s(0, 62, mark) == 0, name);
+    cr_set_bass(&C, 0);
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    /* overdub (quantized), undo */
+    L.quant = 2;                                     /* 1/8: 48 ticks */
+    ok(cr_loop_rec(&L, &C) == CRL_DID_OD_ARM, "overdub armed");
+    until_pos(300);
+    note(60, 100);
+    ok(cr_loop_rec(&L, &C) == CRL_DID_OD_END && L.d.nlayers == 2 && L.d.nev == 3 && CRL_EV_BASS(&L.d.ev[2]) &&
+       L.d.ev[2].root == 60 && L.d.ev[2].t == 288 && L.d.ev[2].layer == 1,
+       "overdub: C4 a bass-side note of layer 2, quantized to the 1/8");
+    L.quant = 0;
+    ok(cr_loop_undo(&L, &C) == CRL_DID_UNDO && L.d.nev == 2 && CRL_EV_BASS(&L.d.ev[1]) && !CRL_EV_BASS(&L.d.ev[0]),
+       "undo: the layer goes, the first layer's parts kept");
+    /* Replace: the looped D cut by a bass-side C; the cut copy and the new note are bass-side */
+    L.mode = CRL_MODE_REPLACE;
+    cr_loop_rec(&L, &C);
+    until_pos((uint32_t)L.d.ev[1].t + 40u);
+    note(60, 100);
+    c = -1;
+    for (k = 2; k < L.d.nev; k++) if (L.d.ev[k].root == 62) c = k;
+    ok((L.d.ev[1].layer & CRL_HID) && c >= 2 && CRL_EV_BASS(&L.d.ev[c]) && L.d.ev[c].dur == 40,
+       "replace: the looped D hidden, its cut copy a bass-side note");
+    ok(cr_loop_rec(&L, &C) == CRL_DID_OD_END && L.d.nlayers == 2 && nbass(&L.d) == 2,
+       "replace: 2 layers, the cut D and the new C on the bass side");
+    until_pos(380);
+    mark = nlog;
+    step(2000);
+    ok(ons_s(1, 62, mark) == 1 && ons_s(1, 60, mark) == 1 && ons_s(1, -1, mark) == 2 && ons_s(0, 62, mark) == 0 &&
+       ons_s(0, 60, mark) == 0, "replace: the next cycle plays both on the bass stream");
+    /* the record: the part of every event kept; 0.17 reads it */
+    n = cr_loop_pack(&L.d, buf, sizeof buf);
+    ok(n == CRL_REC_HDR + 2u * 2u + 7u * 3u && buf[4] == 1 && buf[7] == CRL_RF_PART,
+       "pack: version 1, the flags byte says single notes carry their part");
+    ok(old_unpack_ok(buf, n), "pack: 0.14 .. 0.17's unpack accepts the record (it reads neither byte 7 nor a single note's nibble)");
+    ok(cr_loop_unpack(buf, n, &back) == 1 && back.nev == 3 && nbass(&back) == 2, "unpack: 3 events, 2 of them bass-side");
+    for (i = 0, k = 0, c = 1; i < L.d.nev; i++) {
+        if (L.d.ev[i].layer & CRL_HID) continue;
+        c = c && back.ev[k].root == L.d.ev[i].root && back.ev[k].qx == L.d.ev[i].qx && back.ev[k].t == L.d.ev[i].t &&
+            back.ev[k].dur == L.d.ev[i].dur;
+        k++;
+    }
+    ok(c && k == 3, "unpack: every event's root, time, length and part as packed");
+    ok(cr_loop_undo(&L, &C) == CRL_DID_UNDO && L.d.nev == 2 && !(L.d.ev[1].layer & CRL_HID) && CRL_EV_BASS(&L.d.ev[1]),
+       "undo: the whole D back, a bass-side note");
+    cr_loop_play(&L, &C);
+    step(300);
+    /* a slot loaded: plays as recorded, Single = Full now */
+    cr_set_single_notes(&C, CR_SINGLE_FULL, 5);
+    cr_loop_set(&L, &C, &back);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(1990);
+    ok(ons_s(1, 62, mark) == 1 && ons_s(1, 60, mark) == 1 && ons_s(0, 67, mark) == 1 && ons_s(0, 62, mark) == 0,
+       "a loaded slot: its bass-side notes on the bass stream");
+    cr_loop_play(&L, &C);
+    step(300);
+    /* an older record (flags 0): a single note's nibble was the extension keys held, never heard: not a part */
+    buf[7] = 0;
+    ok(cr_loop_unpack(buf, n, &back) == 1 && back.nev == 3 && nbass(&back) == 0 && (back.ev[0].qx >> 4) == CR_Q_MAJ,
+       "unpack, a 0.17 record (flags 0) with the nibble set on single notes: no bass-side note, the chord as it was");
+    cr_loop_set(&L, &C, &back);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(1990);
+    ok(ons_s(1, -1, mark) == 0 && ons_s(0, 62, mark) == 1 && ons_s(0, 60, mark) == 1,
+       "it plays as 0.17 played it: single notes of the chord part");
+    cr_loop_play(&L, &C);
+    step(300);
+    /* a chord's extensions are not the flag's; a single note's other nibble bits are dropped */
+    buf[7] = CRL_RF_PART;
+    o = CRL_REC_HDR + 2u * 2u;
+    buf[o + 6] = (uint8_t)(CR_Q_MIN << 4 | 0x0B);
+    buf[o + 7 + 6] = 0x0E;
+    buf[o + 14 + 6] = 0x0F;
+    ok(cr_loop_unpack(buf, n, &back) == 1 && back.ev[0].qx == (CR_Q_MIN << 4 | 0x0B) && back.ev[1].qx == 0 &&
+       back.ev[2].qx == CRL_X_BASS, "unpack: a chord's extensions kept; a single note: the part bit alone");
+
+    /* step entry: a bass-side key is a bass-side step */
+    reset();
+    cr_set_single_notes(&C, CR_SINGLE_SPLIT_BASS, 5);
+    L.mode = CRL_MODE_STEP;
+    cr_loop_rec(&L, &C);
+    note(62, 60); step(5); cr_loop_step(&L, CRL_STEP_KEYSUP);
+    step_chord(67, CR_MOD_MAJ);
+    note(60, 60); step(5); cr_loop_step(&L, CRL_STEP_KEYSUP);
+    mark = nlog;
+    ok(cr_loop_play(&L, &C) == CRL_DID_PLAY && L.d.nev == 3 && CRL_EV_BASS(&L.d.ev[0]) && L.d.ev[0].t == 0 &&
+       !CRL_EV_BASS(&L.d.ev[1]) && CRL_EV_BASS(&L.d.ev[2]) && L.d.ev[2].t == 48,
+       "step: D and C entered as bass-side steps, G major a chord step");
+    step(1990);
+    ok(ons_s(1, 62, mark) == 1 && ons_s(1, 60, mark) == 1 && ons_s(1, -1, mark) == 2 && ons_s(0, 67, mark) == 1 &&
+       ons_s(0, 62, mark) == 0, "step: the loop plays them on the bass stream");
+    cr_loop_play(&L, &C);
+    step(300);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "split bass loops: no stuck, double or stray note");
+}
+
 int main(void)
 {
     s_overwrite();
     s_replace();
     s_step();
+    s_bass();
     s_free();
     s_sync();
     s_slots();

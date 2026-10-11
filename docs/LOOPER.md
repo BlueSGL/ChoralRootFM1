@@ -14,12 +14,49 @@ A **semantic event** per chord gesture, written when the gesture ends (or when t
 | `dur` | u16 | length in ticks (>= 1) |
 | `root` | u8 | absolute resolved root (transpose and Key Mode applied: the recorded harmony) |
 | `vel` | u8 | 1..127 |
-| `qx` | u8 | quality (CR_Q_*) << 4 \| extension mask (CR_EXT_*) — the *final* chord (Advanced / Free) |
+| `qx` | u8 | quality (CR_Q_*) << 4 \| extension mask (CR_EXT_*) — the *final* chord (Advanced / Free). A single note (quality 0) has no extensions: its low nibble is its **part**, `CRL_X_BASS` (1) = a bass-side note (below) |
 | `layer` | u8 | RAM only (in flash layers are counts): the layer, or `CRL_HID` \| the Replace layer that hid it |
 
 Capture comes from the engine's `cr_out_t.gesture` hook (keyed voices and pads; a same-root retrigger ends one
 gesture and starts another). Playback calls `cr_loop_event(c, lv, root, q, ext, vel, on)`: a resolved chord on one
 of `CR_MAX_LOOPV` (8) loop voices, bypassing the chord-key state machine; voicing, performance, bass apply live.
+
+**Bass-side notes (Single = Split Bass; since 0.18).** A key played on the bass side is recorded as a bass-side note
+and plays back on the bass part: the BASS stream alone (the bass sound, the bass channel on MIDI out), never the
+chord part. Until 0.17 it was recorded as an ordinary single note and came back with the chord sound.
+
+- **Decided when it is recorded, and stored.** The engine knows the side when the key goes down (`cr_key_ex`: the
+  split in force then, the pitch class in the Chords layout, the key on the Full keyboard) and says so in the gesture
+  (`ext | CR_GX_BASS`, with quality and mask 0; `root` = the played pitch + transpose, without the bass register).
+  `crl_write` keeps it as `CRL_X_BASS` in the event's `qx`; `crl_play_ev` hands it back to `cr_loop_event` as
+  `CR_GX_BASS`, which makes the loop voice a `CR_Z_BASS` voice, as the key was. Nothing at playback is consulted:
+  Single (Full, Split Oct, Split Bass), the split point, the layout (Chords / Full), Bass on / off and its Behaviour
+  may all have changed, the note stays on the bass part. The other way too: a note recorded on the chord side (or
+  with Split Bass off) is never moved to the bass part by turning Split Bass on later. The loop is a recording of
+  what was played.
+- **Where the bit lives.** In `qx`, not in `layer`: a single note's extension nibble meant nothing (`cr_chord_base`
+  ignores it), so the event and the record keep their size (8 bytes in RAM, 7 in flash), and every layer operation
+  carries it without knowing: Overwrite, Overdub, Replace's hide and its cut copy (`crl_cut` copies the event),
+  undo's restore, quantize, Step's commit, `cr_loop_pack` / `cr_loop_unpack`, the slot's A/B copies, the pending
+  save, the backup's loop objects (opaque records). `crl_write` now stores 0 in a chord-side single note's nibble
+  (it used to store the extension keys held, which never sounded).
+- **What still applies at playback**, as to a live bass-side key: the **bass register** (BASS layer KNOB 2; KNOB 2 on
+  the view) shifts it by octaves, at once if it sounds; the bass part's sound, level and voice mode; the loop's
+  Level; the BASS stream on / off (off: silent). **What does not**: the chord voicing (KNOB 1) and Transpose (the
+  recorded root is absolute, as for every loop event; the octave the key was played in is in it), the performance
+  mode (a bass-side note is never arpeggiated, live or looped).
+- **Live over a loop.** A looped bass-side note and a live one meet on the bass part. The engine counts owners per
+  note (`crx_note_start`): two different pitches are two notes on the BASS stream and the part's voice mode decides
+  what is heard (the default bass is mono: the last note wins, as with two live notes); the same pitch is re-struck
+  and ends when its last owner ends. Neither end leaves a note stuck (`s_bass`, `cr_loop_bass.txt`).
+- **The bass that follows the chords** (Bass on with a Behaviour, Split Bass off at playback) keeps following the
+  loop's chords, and the recorded bass-side notes play too: both are notes of the one bass part, the last one wins
+  on a mono bass. With Split Bass on at playback nothing follows (as for live chords), so only the recorded bass
+  notes and the ones played by hand use the bass part.
+- **Step entry**: a bass-side key entered as a step is a bass-side step.
+- **Lights and screens**: a looped bass-side note glows dim on the keys of its note name like any loop note (by
+  name, so the bass register does not move it); the PLAY menu's marks, the step grid, the cursor's note name and the
+  corner dial do not show the part (a bass-side step is named by its note, as a single note is).
 
 ## Timing
 
@@ -185,13 +222,27 @@ sample slot 3's 80 KiB (0xC8000..0xDBFFF; ChoralRoot has no SAMPLE engine (`FELU
 sample objects, so nothing else writes it; a Felucca build's `eng_sample.c` ignores non-sample data): slot k copy c at `0xC8000 + (2k + c) * 4 KiB`, header type `0x4C30 + k`. Payload (little-endian):
 
 ```
-0  u32 "CRL1"   4 u8 version 1   5 u8 sig   6 u8 nlayers   7 u8 0
+0  u32 "CRL1"   4 u8 version 1   5 u8 sig   6 u8 nlayers   7 u8 flags (bit 0 CRL_RF_PART; 0 until 0.17)
 8  u32 len (ticks)   12 u16 nev   14 u16 ppqn (96)
 16 nlayers x u16: events per layer, then nev x 7 bytes: t u16, dur u16, root, vel, qx
 ```
 
 Unpack checks everything (magic, version, ppqn, counts, each field's range) and refuses a bad record as empty: a
 newer version or garbage never loads half a loop.
+
+**Byte 7, the flags (0.18).** 0.14 to 0.17 wrote 0 there and never read it. Bit 0, `CRL_RF_PART`: a single note's
+`qx` low nibble is its part (`CRL_X_BASS`). `cr_loop_pack` sets it only when the loop holds a bass-side note, so a
+loop without one is written byte for byte as 0.17 wrote it. The version stays 1 and the record's size is unchanged.
+
+- **An older record in 0.18** (flags 0): loads and plays as before. A single note's nibble there is not a part (it
+  held the extension keys that were down, which never sounded): unpack clears it, so no old loop grows a bass note.
+- **A 0.18 record in 0.14 to 0.17**: accepted whole (its checks do not cover byte 7 or a single note's nibble;
+  `tests/cr_loop_test.c old_unpack_ok` is those checks). The bass-side notes play as single notes of the chord part,
+  which is what 0.17 itself recorded. If that firmware then writes the loop again (a stop after a change, a switch),
+  it writes flags 0 and the bass side is lost for good; a loop only played or left alone keeps its record.
+- **Backup, restore, the device manager, `fm1_install.py`**: a slot is an opaque object (40..49); the firmware
+  validates a restored one with `cr_loop_unpack`, the manager's header line (`loopHeader`: bars, time signature,
+  layers, events) reads neither byte 7 nor the events. A backup taken on 0.18 restores on 0.17 and the other way.
 
 ## Caps
 

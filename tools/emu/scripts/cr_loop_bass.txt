@@ -1,0 +1,144 @@
+# ChoralRoot looper: a Split Bass bass-side note is recorded as one and plays back on the bass part (0.18; docs/LOOPER.md
+# "What is recorded"). 120 BPM, Free takes of one bar (2 s). The dump's "loopv:" line: the loop's voices by part, its
+# bass-side events, the notes on the engine's main / bass streams.
+# A. The Full keyboard, Single = Split Bass (the split at F4): F3 (bass side), A4 (chord side), E4 (bass side), half a
+#    second each; the loop plays: F3 and E4 on the bass part (part 1), A4 on the chord part.
+# B. Single = Full while it plays: the same (what was recorded stays on its part).
+# C. Split Bass again: a live bass-side C4 over the looped F3, then a live F3 held past the looped F3's end: the held
+#    one still sounds; all let go and the loop stopped (written to slot 1): silence.
+# D. Slot 2 and back (slot 1 read from its record), Single = Full: it plays F3 on the bass part again.
+# E. The Chords layout, Single = Split Bass (the split point F, by note name): MAJ + G4 a chord, D4 a bass-side note:
+#    the loop plays G major on the chord part, D on the bass part.
+wait 300
+btn SEL down                  # the KEY layer, page 2, KNOB 2: Keyboard Full
+wait 500
+btn SEL up
+wait 300
+knob SELECT +1
+wait 200
+knob KNOB2 +1
+wait 300
+btn OCT-
+wait 300
+btn SEL down                  # page 1, KNOB 4: Single = Split Bass
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 +2
+wait 300
+btn OCT-
+wait 300
+dump                          # 1: keyboard full, single 2
+btn REC
+wait 300
+btn F3 down                   # A: 0 .. 0.5 s: F3, the bass side
+wait 500
+btn F3 up
+btn A4 down                   # 0.5 .. 1 s: A4, the chord side
+wait 500
+btn A4 up
+btn E4 down                   # 1 .. 1.5 s: E4, the bass side
+wait 500
+btn E4 up
+wait 500
+btn REC                       # the take ends: a 1-bar loop, playing from its start
+wait 150
+dump                          # 2: 3 events, 2 of the bass side; F3 plays: loop voices chord 0 bass 1, part 1 sounds
+wait 500
+dump                          # 3: A4 plays: chord 1 bass 0
+wait 500
+dump                          # 4: E4 plays: chord 0 bass 1
+btn SEL down                  # B: Single = Full while it plays
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 -2
+wait 300
+btn OCT-
+wait 50
+dump                          # 5: single 0; the next cycle's F3 (0.3 s in): chord 0 bass 1
+btn SEL down                  # C: Split Bass again (the live bass side)
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 +2
+wait 300
+btn OCT-
+wait 700                      # the next cycle, 0.1 s in: the looped F3 sounds
+btn C4 down                   # a live bass-side C4 over it
+wait 100
+dump                          # 6: loop voices bass 1, the bass stream holds 2 notes (F3 looped, C4 live)
+btn C4 up
+wait 100
+btn F3 down                   # a live F3 over the looped F3 (0.3 s in), held past its end (0.5 s)
+wait 400
+dump                          # 7: 0.7 s in: the looped F3 ended, the live one still on the bass stream (bass 1); A4 loops
+btn F3 up
+wait 100
+dump                          # 8: the live F3 let go: the bass stream empty
+btn PLAY                      # stop: written to slot 1
+wait 2500
+dump                          # 9: silent (no stuck voice), used 001
+btn PLAY down                 # D: slot 2 (empty) and back: slot 1 read from its record
+wait 400
+knob PRESETS +1
+wait 100
+btn PLAY up
+btn OCT-
+wait 300
+dump                          # 10: slot 2, 0 events
+btn PLAY down
+wait 400
+knob PRESETS -1
+wait 100
+btn PLAY up
+btn OCT-
+wait 300
+btn SEL down                  # Single = Full
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 -2
+wait 300
+btn OCT-
+wait 300
+dump                          # 11: slot 1, 3 events, 2 of the bass side, single 0, stopped
+btn PLAY                      # it plays
+wait 150
+dump                          # 12: F3: chord 0 bass 1, part 1 sounds
+wait 500
+dump                          # 13: A4: chord 1 bass 0
+btn PLAY                      # stop
+wait 2500
+dump                          # 14: silent
+btn SEL down                  # E: Keyboard = Chords, Single = Split Bass (the split point F)
+wait 500
+btn SEL up
+wait 300
+knob KNOB4 +2
+wait 200
+knob SELECT +1
+wait 200
+knob KNOB2 -1
+wait 300
+btn OCT-
+wait 300
+btn REC                       # Overwrite: armed; the first chord starts the take
+wait 300
+btn A#3 down                  # 0 .. 0.5 s: G major (G: above the split point)
+btn G4 down
+wait 500
+btn G4 up
+btn A#3 up
+btn D4 down                   # 0.5 .. 1 s: D4 alone (below the split point): the bass side
+wait 500
+btn D4 up
+wait 1000
+btn REC
+wait 150
+dump                          # 15: keyboard chords, 2 events, 1 of the bass side; G plays: chord 1 bass 0
+wait 500
+dump                          # 16: D plays: chord 0 bass 1, the bass stream 1 note, the main one none
+btn PLAY
+wait 2500
+dump                          # 17: silent

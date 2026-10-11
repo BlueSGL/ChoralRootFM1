@@ -62,7 +62,8 @@ static void crl_play_ev(cr_loop_t *lp, cr_t *c, const crl_ev_t *e, uint32_t idx)
     if (best < 0)                                   /* all busy: the one that would end first */
         for (lv = 0; lv < CR_MAX_LOOPV; lv++)
             if (best < 0 || (int32_t)(lp->pv[lv].off - lp->pv[best].off) < 0) best = lv;
-    cr_loop_event(c, best, e->root, (uint8_t)(e->qx >> 4), (uint8_t)(e->qx & 15u), (uint8_t)vel, 1);
+    cr_loop_event(c, best, e->root, (uint8_t)(e->qx >> 4), (uint8_t)(CRL_EV_BASS(e) ? CR_GX_BASS : e->qx & 15u),
+                  (uint8_t)vel, 1);                 /* (a bass-side note: the bass part, as it was played) */
     lp->pv[best].used = 1;
     lp->pv[best].ev = (uint16_t)idx;
     lp->pv[best].off = lp->t + (e->dur ? e->dur : 1u);
@@ -201,7 +202,9 @@ static void crl_write(cr_loop_t *lp, uint32_t t0, int16_t root, uint8_t q, uint8
     e->dur = (uint16_t)dur;
     e->root = (uint8_t)(root < 0 ? 0 : root > 127 ? 127 : root);
     e->vel = (uint8_t)(vel ? vel : 1u);
-    e->qx = (uint8_t)((q < CR_Q_COUNT ? q : 0u) << 4 | (ext & 15u));
+    if (q >= CR_Q_COUNT) q = 0;
+    /* a single note has no extensions: its nibble is its part (the gesture's CR_GX_BASS: a Split Bass bass-side key) */
+    e->qx = (uint8_t)(q << 4 | (q ? ext & 15u : ext & CR_GX_BASS ? CRL_X_BASS : 0u));
     e->layer = lp->d.nlayers;
     if (lp->d.nev >= CRL_MAX_EV) lp->full = 1;
 }
@@ -733,15 +736,20 @@ static uint32_t crl_get32(const uint8_t *p) { return crl_get16(p) | crl_get16(p 
 
 uint32_t cr_loop_pack(const crl_data_t *d, uint8_t *buf, uint32_t max)
 {
-    uint32_t i, live = 0, n, o;
-    for (i = 0; i < d->nev && i < CRL_MAX_EV; i++) live += !(d->ev[i].layer & CRL_HID);   /* (hidden: not stored) */
+    uint32_t i, live = 0, n, o, part = 0;
+    for (i = 0; i < d->nev && i < CRL_MAX_EV; i++)
+        if (!(d->ev[i].layer & CRL_HID)) {           /* (hidden: not stored) */
+            live++;
+            part |= CRL_EV_BASS(&d->ev[i]);
+        }
     n = CRL_REC_HDR + 2u * d->nlayers + 7u * live;
     if (!d->len || !live || !d->nlayers || d->nlayers > CRL_MAX_LAYERS || d->nev > CRL_MAX_EV || n > max) return 0;
     crl_put32(buf, CRL_REC_MAGIC);
     buf[4] = 1;                                      /* record version */
     buf[5] = d->sig;
     buf[6] = d->nlayers;
-    buf[7] = 0;
+    buf[7] = (uint8_t)(part ? CRL_RF_PART : 0u);     /* flags (0.14 .. 0.17 wrote 0 and never read it: they load this
+                                                      * record, its bass-side notes as chord-side single notes) */
     crl_put32(buf + 8, d->len);
     crl_put16(buf + 12, live);
     crl_put16(buf + 14, CRL_PPQN);
@@ -792,6 +800,9 @@ int cr_loop_unpack(const uint8_t *buf, uint32_t n, crl_data_t *d)
             e->root = buf[o + 4];
             e->vel = buf[o + 5];
             e->qx = buf[o + 6];
+            if (!(e->qx >> 4))                       /* a single note: its part, when the record has one (an older
+                                                      * record's nibble: the extension keys held, never heard) */
+                e->qx = (uint8_t)(buf[7] & CRL_RF_PART ? e->qx & CRL_X_BASS : 0u);
             e->layer = (uint8_t)l;
             if (e->t >= len || !e->dur || e->root > 127u || !e->vel || e->vel > 127u || (e->qx >> 4) >= CR_Q_COUNT) {
                 crl_zero(d, crl_data_size(0));

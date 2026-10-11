@@ -317,5 +317,24 @@ for c in stop play; do
         grep -q '^expect sound .*: ok' "$OUT/persist_loop_${c}_back.log" &&
         ok "loop_persist_$c relaunched: slot 1 back (2 events) and plays" || bad "loop_persist_$c back: $b1 / $b2"
 done
+# a loop's bass-side notes (Split Bass, 0.18) after a relaunch: cr_loop_bass.txt leaves slot 1 with G major and a
+# bass-side D (written at its stop); loop_bass_persist_check.txt on the same file: the event is still a bass-side one
+# and plays on the bass part (part 1) with Single = Full
+BF=$OUT/persist_loop_bass.bin
+rm -f "$BF" "$OUT"/persist_loop_bass_1.log "$OUT"/persist_loop_bass_2.log
+"$EMU" --headless --flash "$BF" --script "$S/cr_loop_bass.txt" >"$OUT/persist_loop_bass_1.log" 2>&1 || bad "loop bass run 1: exit status"
+"$EMU" --headless --flash "$BF" --script "$S/loop_bass_persist_check.txt" >"$OUT/persist_loop_bass_2.log" 2>&1 || bad "loop bass run 2: exit status"
+bl() { grep '^  loop:' "$OUT/persist_loop_bass_2.log" | sed -n "$1p"; }
+bv() { grep -a '^  loopv:' "$OUT/persist_loop_bass_2.log" | sed -n "$1p" | sed -n 's/.*chord \([0-9]*\) bass \([0-9]*\) bass-side-events \([0-9]*\) stream-notes main \([0-9]*\) bass \([0-9]*\)$/\1 \2 \3 \4 \5/p'; }
+bp() { grep -a "^  part 1:" "$OUT/persist_loop_bass_2.log" | sed -n "$1p" | sed -n 's/.* voices \([0-9]*\),.*/\1/p'; }
+bk() { grep -a '^  kbd:' "$OUT/persist_loop_bass_2.log" | sed -n "$1p" | sed -n 's/.*keyboard \([a-z]*\) single \([0-9]\) .*/\1 \2/p'; }
+grep -q '^loop: auto-save slot 1 32 bytes rc 0 (stopped)' "$OUT/persist_loop_bass_1.log" &&
+    [ "$(lv "$(bl 1)" used)" = 001 ] && [ "$(lv "$(bl 1)" events)" = 2 ] && [ "$(bv 1)" = "0 0 1 0 0" ] && [ "$(bk 1)" = "chords 2" ] &&
+    ok "loop bass relaunched: slot 1 back with its 2 events, 1 of them bass-side (the record's flag and bit survive the flash)" \
+    || bad "loop bass relaunched: $(bl 1) / $(bv 1) / $(bk 1)"
+[ "$(bk 2)" = "chords 0" ] && [ "$(bv 2)" = "1 0 1 3 0" ] && [ "$(bv 3)" = "0 1 1 0 1" ] && [ "$(bp 3)" -ge 1 ] &&
+    [ "$(grep 'parts busy' "$OUT/persist_loop_bass_2.log" | tail -1 | sed -n 's/.*parts busy \([0-9]*\).*/\1/p')" = 0 ] &&
+    ok "loop bass relaunched, Single = Full: G major on the chord part, the recorded D on the bass part alone; stopped: silent" \
+    || bad "loop bass relaunched, playing: $(bk 2) / $(bv 2) / $(bv 3) part 1 $(bp 3)"
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail

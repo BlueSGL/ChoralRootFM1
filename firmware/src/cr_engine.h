@@ -37,7 +37,9 @@ typedef struct {
     /* optional (a looper's capture): a played chord gesture began (on = 1) or ended (on = 0). serial names the
      * gesture; root is the absolute resolved root (transpose and Key Mode applied), q / ext the resolved quality
      * and extension mask, as they are at that moment (Advanced / Free: the end carries the final state). Keyed
-     * voices and pads only, never a loop voice. A same-root retrigger ends one gesture and begins another. */
+     * voices and pads only, never a loop voice. A same-root retrigger ends one gesture and begins another.
+     * ext | CR_GX_BASS: a Split Bass bass-side note (q and the mask 0; root: the played pitch + transpose, without
+     * the bass register) */
     void (*gesture)(void *ud, uint32_t serial, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on);
 } cr_out_t;
 
@@ -119,6 +121,8 @@ typedef struct {
 #define CR_Z_FULL 1u             /* played on the Full keyboard: a single note, no voicing rotation */
 #define CR_Z_BASS 2u             /* Split Bass, below the split: the BASS stream alone, at the played pitch */
 #define CR_Z_LOW 4u              /* Split Oct on the Full keyboard, below the split key: an octave lower */
+#define CR_GX_BASS 0x80u         /* out.gesture's and cr_loop_event's ext: the note of the bass part (CR_Z_BASS), not a
+                                  * chord: what a loop records of a bass-side key and plays back */
 
 typedef struct { uint32_t due; uint8_t kind, owner, vi, note; } cr_ev_t;
 
@@ -245,7 +249,10 @@ void cr_pad_set(cr_t *c, int slot, int used, int16_t root, uint8_t q, uint8_t ex
 /* A looper's playback (cr_loop.c): plays a resolved chord as loop voice lv (0..CR_MAX_LOOPV-1), bypassing the
  * chord-key state machine: root is absolute (no transpose, no Key Mode: the recorded harmony), q a CR_Q_* quality
  * (CR_Q_NONE: a single note), ext a CR_EXT_* mask. Voicing, performance and bass apply live, as to a pad. on = 0
- * ends it (an on for a busy lv replaces it). Returns 1 when it sounds. Loop voices never reach out.gesture. */
+ * ends it (an on for a busy lv replaces it). Returns 1 when it sounds. Loop voices never reach out.gesture.
+ * ext & CR_GX_BASS: a recorded bass-side note (Split Bass): the BASS stream alone at root + 12 x the bass register
+ * in force now, whatever Single, the split point, the layout, Bass on / off or its Behaviour say now (q is ignored:
+ * a single note); a root without it is never a bass-side note, with Split Bass on too. */
 int  cr_loop_event(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on);
 int  cr_loop_busy(const cr_t *c, int lv);          /* loop voice lv is sounding (panic clears them all) */
 

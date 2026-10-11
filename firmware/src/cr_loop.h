@@ -45,6 +45,12 @@ typedef struct { uint16_t t, dur; uint8_t root, vel, qx, layer; } crl_ev_t;   /*
                                                                                  * that hid it (undoing that layer brings
                                                                                  * it back; the flash record has only
                                                                                  * the live events) */
+/* The part of a single note (quality 0: it has no extensions, so its ext nibble is free): CRL_X_BASS = played on the
+ * bass side with Single = Split Bass: it plays on the bass part (cr_loop_event's CR_GX_BASS), whatever Single says at
+ * playback. Decided when it is recorded, kept in qx in RAM and in the record: nothing a layer does (Replace's hide and
+ * cut, undo, quantize, Step's commit) touches qx. */
+#define CRL_X_BASS 1u
+#define CRL_EV_BASS(e) (((e)->qx & 0xF0u) == 0u && ((e)->qx & CRL_X_BASS))
 
 typedef struct {                 /* a loop's content: what a slot stores */
     uint32_t len;                /* ticks, 0 = empty */
@@ -124,6 +130,8 @@ int  cr_loop_layers(const cr_loop_t *lp);
  * returns 1 for a valid record (*d filled), 0 otherwise (*d emptied) */
 #define CRL_REC_MAGIC 0x314C5243u              /* "CRL1" */
 #define CRL_REC_HDR 16u
+#define CRL_RF_PART 1u                         /* byte 7 (flags; 0 until 0.17): a single note's ext nibble is its part
+                                                * (CRL_X_BASS). Written only by a loop with a bass-side note */
 #define CRL_REC_MAX (CRL_REC_HDR + 2u * CRL_MAX_LAYERS + 7u * CRL_MAX_EV)
 uint32_t cr_loop_pack(const crl_data_t *d, uint8_t *buf, uint32_t max);
 int  cr_loop_unpack(const uint8_t *buf, uint32_t n, crl_data_t *d);
