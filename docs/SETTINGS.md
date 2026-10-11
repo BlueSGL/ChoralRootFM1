@@ -61,7 +61,7 @@ The block has its own header:
 | chord_sound | v6: the chord part's sound, (engine << 8) \| its pool position (docs/PRESETS.md); 0xFFFF = the UI's default. v1..5: an old list position, read as the default | FM6 TINE EP |
 | bass_sound | v6: the bass part's sound (what BASS tap brings), (engine << 8) \| pool position; 0xFFFF = the UI's default (v1..5: read as the default; v6 on ANALOG, engine 0, retired in 0.14: read as the default) | VA DEEP SUB (ANALOG SUB BASS until 0.14) |
 | metro_on, metro_sig, metro_vol, loop_slot (v2) | the click, 4/4 3/4 6/8, 0..100, 0..9 | off, 4/4, 70, 0 |
-| pick_roots (v3) | the engine picker's white roots: 1 choose engines, 0 play (KNOB 4 in the picker) | **1** (engines) |
+| pick_roots (v3) | RESERVED since 0.18 (it was: the engine picker's white roots, 1 choose engines, 0 play, KNOB 4 in the picker): the roots always play there now; written 0, read and ignored | **1** in a record's defaults (0.17 reads it) |
 | loop_rec (v8; was rsv_usb, v4: usb_out) | v8: the looper's record mode (bits 0..3: 0 Overwrite, 1 Advance, 2 Overdub, 3 Replace, 4 Step; `CRS_LOOP_MODE`) and the PLAY menu's keys (bit 4: 0 Play, 1 Loops; `CRS_LOOP_KEYS`), docs/LOOPER-MODES.md; **v13: bit 5 the KEY layer's keys** (0 pick: a root = the tonic, MAJ / MIN = the scale; 1 play: the keys play as outside the layer; OPT tapped in the layer; `CRS_KEY_PLAY`, `CRS_KEY_KEYS`; the UI's `cs.key_play`); **v13 also: bits 6 and 7 the LOCK layer's styles** (B3 held): bit 6 Type key (0 Clears, 1 Keeps the latched extensions; `CRS_LOCK_KEEP`, `cs.lock_keep`), bit 7 Ext keys (0 Toggle, 1 Pushed; `CRS_LOCK_PUSH`, `cs.lock_push`); a mode out of range: the defaults (every bit of the byte has a job now). Before v8: retired in v5: v4's Options > USB Audio Out (the playback device, removed: docs/USB-AUDIO.md). A 0.14 dev build (still v6) kept the chord part's pool position on FM TONE (engine 15, `eng_quad.c`, code name QUAD) here; v6 → 7 moves it into `pool_pos` slot 0 and clears the byte: 0 since | 0 (Overwrite, Play, pick, Clears, Toggle); a v4 record's byte (1 by default there) is cleared on import; v1..v7 records read 0; a v8..v12 record: its mode and PLAY-menu keys, pick |
 | usb_in (v4) | Options > **USB Record**: ChoralRoot In is presented to the computer (docs/USB-AUDIO.md); Off: the serial console instead | **1** (on); a v1..v3 record takes it (its zero would mean off) |
 | usb_level (v4) | Options > USB Level: `CRS_USB_MASTER` (the recording follows MASTER) / `CRS_USB_FIXED` (recorded at the full level, MASTER after) | Master |
@@ -167,7 +167,8 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | FX on / off | yes | yes | block `fx_on` |
 | the page picked in the FX layer (Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive) | no | **yes** | session `fx.sel` (an effect tag; the second pages have their own) |
 | the effects' own parameters, GLOBAL (the reverb's 7 and the delay's 9: [FX.md](FX.md); the chorus's rate and depth) | no | **yes** | session `fx.par[]` (tag, value) |
-| the chord part's four sends (the FX layer's "Send" cells, KNOB 4) | no (the preset's again) | **yes** | session `fx.amt[]`; live, a sound change still brings the new sound's sends (the sends belong to the sound, the effects to the instrument: MANUAL section 8) |
+| the chord part's four sends (the FX layer's "Send" cells, KNOB 4) | no (the preset's again) | **yes** | session `fx.amt[]`. The sends are the PART's since 0.18: no sound load touches them (MANUAL section 8) |
+| the bass part's four sends (its editor's FX group, CC 91 / 93 / 94 on the bass channel) | no (the bass sound's again) | **yes** | session `fx.par[]`, tags 26..29 |
 | which sound the chord part plays, each engine's last place | yes | yes | block `chord_sound`, `pool_pos` |
 | each part's sound as it is: an edit not saved, the deep patch, the name, "edited", the pool entry | no | **yes** | session `part[0]`, `part[1]` (the edit buffers) |
 | the tempo, the metronome (on, signature, level) | yes | yes | block `bpm`, `metro_*` (a metronome left on clicks at power-on, as before) |
@@ -214,14 +215,14 @@ that effect's send from the chord part (0..127, `CSS_FX_NONE` = not stored: the 
 | 1 `RSIZE`, 2 `RDAMP`, 3 `RTYPE` | Felucca's ROOM / SPRING reverb | | **retired** with it (0.18's new reverb): never reused, not read, gone from a record at its next save |
 | 4 `CRATE`, 5 `CDEPTH` | the chorus's rate, depth (`song.g`) | 0..127, 40 / 60 | |
 | 6 `DTIME`, 7 `DFDBK`, 8 `DCOLOR` | Felucca's mono delay | | **retired** with it |
-| 9 `XD_TIME` | the delay's free time (21 .. 1000 ms) | 0..127, 80 | `cr_fx.c XP_DTIME` |
+| 9 `XD_TIME` | the first 0.18 build's free time (21 .. 1000 ms, the delay at half rate) | | **retired** (25) |
 | 10 `XD_DIV` | .. its synced division (1/32 .. 1/2) | 0..12, 6 (1/8) | `XP_DDIV` |
 | 11 `XD_SPREAD` | .. the free spread (x1.00 .. x0.50) | 0..127, 0 | `XP_DSPREAD` |
 | 12 `XD_RATIO` | .. the synced spread (1:1 3:4 2:3 1:2) | 0..3, 0 | `XP_DRATIO` |
 | 13 `XD_FDBK` | .. feedback | 0..127, 58 | `XP_DFDBK` |
 | 14 `XD_SYNC` | .. Free / Tempo | 0..1, 1 | `XP_DSYNC` |
 | 15 `XD_MODE` | .. Stereo / Ping-pong | 0..1, 1 | `XP_DMODE` |
-| 16 `XD_TONE` | .. the loop's low-pass | 0..127, 84 | `XP_DTONE` |
+| 16 `XD_TONE` | .. the loop's low-pass | 0..127, 70 | `XP_DTONE` |
 | 17 `XD_WOW` | .. the time's wobble | 0..127, 24 | `XP_DWOW` |
 | 18 `XR_SIZE` | the reverb's size | 0..127, 88 | `XP_RSIZE` |
 | 19 `XR_DAMP` | .. damping | 0..127, 56 | `XP_RDAMP` |
@@ -230,8 +231,10 @@ that effect's send from the chord part (0..127, `CSS_FX_NONE` = not stored: the 
 | 22 `XR_MOD` | .. modulation | 0..127, 56 | `XP_RMOD` |
 | 23 `XR_LOW` | .. low cut (20 .. 500 Hz) | 0..127, 60 | `XP_RLOW` |
 | 24 `XR_WIDTH` | .. width | 0..127, 127 | `XP_RWIDTH` |
+| 25 `XD_TIME2` | the delay's free time (16 .. 740 ms: the delay at the full rate) | 0..127, 91 | `XP_DTIME` |
+| 26 `BS_REV`, 27 `BS_CHO`, 28 `BS_DLY`, 29 `BS_DRIVE` | the BASS part's sends (the chord part's are `amt[]`) | 0..127; 10, 0, 0, 0 | `trk[1].p[P_REV ..]` |
 
-18 entries are stored today (24 fit). A session written by 0.17 or by a 0.18 build before the new effects holds
+22 entries are stored today (24 fit). A session written by 0.17 or by a 0.18 build before the new effects holds
 tags 1..8: the chorus's two are read, the six retired ones are ignored, and the new delay and reverb start at
 their defaults ([FX.md](FX.md), decision 13). `cr_settings.c` has a static assert on the numbers.
 

@@ -168,7 +168,7 @@ None of them can be pressed. A turn (of any knob but MASTER) shows its value lar
 | KNOB 1 | the chord's voicing (on the Full keyboard: the octave) | the Single Notes split point |
 | KNOB 2 | the bass register, in octaves | |
 | KNOB 3 | the first parameter of the performance mode | |
-| KNOB 4 | the chord sound's send into the selected effect | |
+| KNOB 4 | the chord part's send into the selected effect | |
 
 In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four values of the active lane.
 
@@ -546,18 +546,20 @@ Four effects: **Reverb**, **Chorus**, **Delay** and **Drive**. The reverb and th
 slow reverb that goes from a hall to a wash that does not end, and a stereo delay with separate times left and
 right that can ping-pong.
 
-The one rule to know: **a sound carries its sends, the effects themselves belong to the instrument.**
+The one rule to know: **the effects and their sends belong to the instrument, not to the sound.**
 
-- A **send** is how much of a sound goes into an effect. Every sound has four: into the reverb, the chorus and the
-  delay, and its drive. Turning PRESETS brings the new sound's sends. Save the sound to keep yours
-  ([Sounds](#11-sounds)).
+- A **send** is how much of a part goes into an effect. The chord part has four: into the reverb, the chorus and the
+  delay, and its drive. The bass part has its own four. You set them once; **turning PRESETS, changing the engine or
+  loading a saved sound never changes them**, so you can step through the sounds and hear each one in the same
+  reverb and delay.
 - Everything else about an effect (the reverb's size and decay, the delay's time and feedback, ...) is set once for
-  the whole instrument. **Changing the sound never changes it**, and it is remembered when you switch off.
+  the whole instrument too.
+- All of it is remembered when you switch off.
 
 On the panel:
 
-- **FX** tap switches the effects on and off: with FX off no sound sends into them, the bass neither.
-- **KNOB 4** is the chord sound's send into the selected effect (turning it switches the effects on).
+- **FX** tap switches the effects on and off: with FX off nothing is sent into them, from the bass neither.
+- **KNOB 4** is the chord part's send into the selected effect (turning it switches the effects on).
 - Hold FX for the **FX layer**. SELECT steps through six pages; the name of the effect is big, the page is in the
   small line above it (`fx · on · 1/2`). KNOB 1 to KNOB 4 turn the four cells, a FX tap is still on / off, and the
   root keys play. OCT-, OCT+, HOME or holding FX again closes the layer.
@@ -571,8 +573,12 @@ On the panel:
 | Delay 2 | Sync | Mode | Tone | Wow |
 | Drive | | | | **Send** (the amount of drive) |
 
-The bass sound has its own four sends in its editor's FX group (BASS held + EDIT, then the FX button); it plays into
-the same reverb and delay as the chords.
+The bass part's four sends are in the bass sound's editor, FX group (BASS held + EDIT, then the FX button); it plays
+into the same reverb and delay as the chords. A new FM-1 has a little reverb on the bass and nothing else. The chord
+sound's editor shows the chord part's sends in its FX group too: the same four values as the FX layer's Send cells.
+
+A saved sound still has four send values inside it (the format has not changed), but they are not used when it is
+loaded.
 
 ### The reverb
 
@@ -580,8 +586,8 @@ the same reverb and delay as the chords.
 | --- | --- |
 | Size | how large the space is: the room grows from a hall to something much larger. Turning it bends the tail's pitch for a moment, then it is still |
 | Damp | how fast the highs die: low = bright, high = dark |
-| Decay | how long the tail lasts: `0.3 s` to `72 s`, and at the very top **`Inf`**: the reverb holds what is in it. Turn it down to let go |
-| Send | the chord sound's send into the reverb |
+| Decay | how long the tail lasts: `0.3 s` to `72 s`, and at the very top **`Inf`**: the reverb holds what is in it (Damp is out of the way then). Turn it down to let go |
+| Send | the chord part's send into the reverb |
 | Pre-delay | the silence before the reverb answers, 0 to 138 ms: keeps the attack of a note clear |
 | Mod | a slow movement inside the tail. With Mod up, a long tail loses its top first; **with Mod at 0, `Inf` holds everything** |
 | Low cut | keeps the bass out of the reverb, 20 to 500 Hz |
@@ -596,17 +602,17 @@ not a different mix.
 
 | Cell | What it does |
 | --- | --- |
-| Time | the time of the left side. Sync on: a note value of the tempo, `1/32` to `1/2`, with dotted (`1/8.`) and triplet (`1/8T`) values. Sync off: 21 to 1000 ms |
+| Time | the time of the left side. Sync on: a note value of the tempo, `1/32` to `1/2`, with dotted (`1/8.`) and triplet (`1/8T`) values. Sync off: 16 to 740 ms |
 | Spread | the right side's time as a part of the left's. Sync on: `1:1`, `3:4`, `2:3`, `1:2` (with Time at 1/4: a dotted 1/8, a triplet, a 1/8 on the right). Sync off: `x1.00` down to `x0.50` |
-| Feedback | how many repeats |
-| Send | the chord sound's send into the delay |
+| Feedback | how many repeats. Each repeat is a fixed part of the one before, down to silence: turned up, a short echo rings for many seconds and a long one for minutes |
+| Send | the chord part's send into the delay |
 | Sync | `Tempo` (the notes) or `Free` (the clock). Synced, it follows SELECT's tempo and a MIDI clock |
 | Mode | `Stereo`: both sides repeat on their own. `Ping-pong`: the repeats cross from left to right and back |
 | Tone | how dark the repeats get: each one is darker than the last |
 | Wow | a slow wobble of the time, as a tape or an old echo has |
 
-- A second a side is the longest time. A note value longer than that at the current tempo plays at half its length
-  (a 1/2 at 100 BPM plays as a 1/4).
+- Three quarters of a second (740 ms) a side is the longest time. A note value longer than that at the current
+  tempo plays at half its length (a 1/4 at 60 BPM plays as a 1/8, a 1/2 at 120 BPM as a 1/4).
 - Changing the time (or the tempo) bends the pitch of the repeats for a moment, as a tape echo does. It does not
   click.
 - With Spread at `1:1` in Stereo mode, left and right are the same: one echo in the middle.
@@ -614,11 +620,13 @@ not a different mix.
 
 ### After the last note
 
-When nothing has been sent into them and their tails are over, the reverb and the delay switch themselves off. One
-thing follows from long tails: the FM-1 stores your settings when it is quiet (see
-[What the FM-1 remembers](#what-the-fm-1-remembers)), and a reverb that is still ringing is not quiet. It waits for
-the tail for up to half a minute; with Decay very long or at `Inf` it then stores anyway, and you may hear one short
-gap in the tail.
+A tail dies away evenly, down to nothing; it is never cut. When nothing has been sent into them and their tails are
+over, the reverb and the delay switch themselves off.
+
+One thing follows from long tails: the FM-1 stores your settings when it is quiet (see
+[What the FM-1 remembers](#what-the-fm-1-remembers)), because storing stops the sound for a moment. A reverb that is
+still ringing is not quiet, so **nothing is stored while a tail rings**: with Decay at `Inf` not until you turn it
+down or tap FX off. Let the sound end and wait a few seconds before you switch off.
 
 ## 9. Tempo and metronome
 
@@ -797,11 +805,10 @@ Hold **EDIT**. The engine picker opens and stays (EDIT blinks). It is a preview:
 
 | Control | In the engine picker |
 | --- | --- |
-| the white root keys D4 to B4 | the six engines, in the order of the table above (D4 = FM6 ... B4 = PHYS). The sound moves to that engine and keeps its envelope, effects and mix |
-| SELECT | the same, one engine at a time |
+| SELECT | the six engines, one at a time, in the order of the table above (FM6 ... PHYS). The sound moves to that engine and keeps its envelope and mix |
 | KNOB 1 (or PRESETS) | the engine's pool, as PRESETS |
 | KNOB 2 | INIT: the engine's plain starting sound (`init sound`) |
-| KNOB 4 | what the root keys do here: `roots: engines` or `roots: play` (to hear the preview). Remembered |
+| the root keys and the chord keys | play, as always: you hear every engine and preset as you turn to it |
 | OCT+, EDIT tap or EDIT held again | keep what you chose |
 | OCT- or HOME | cancel: the sound as it was before |
 
@@ -837,7 +844,7 @@ To **delete** a sound you added, or to **reset** a factory preset you saved over
 SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does it, OCT- keeps it.
 
 There is room for **32 saved sounds** in all, shared by the engines and the two parts (`no free slot` when they are
-used up). A saved sound holds the engine's whole patch, its envelopes and modulation and its four effect sends.
+used up). A saved sound holds the engine's whole patch, its envelopes and modulation. (It also holds four send values, which are no longer used: the sends are the part's.)
 Changes you have not saved are lost when you load another sound. They are **not** lost when you switch off: each
 part comes back with its sound as you left it, edited or not (new in 0.18). The pool still holds the sound as it
 was saved, so turning PRESETS away and back drops the edit, as before.
@@ -855,7 +862,7 @@ they are when you change sound, and when you switch off and on.
   (`ANALOG retired: on the VA`).
 - A sound saved on PHASE, LOFI, VOICE, TRIO or NOISE (retired in 0.18) stays in its slot under its name. You find it
   at the end of the VA's pool. It does not sound as it did: it plays the VA's plain starting sound with its own
-  effect sends, attack and release, and the screen says so (`PHASE retired: stand-in`). Nothing is deleted; the
+  attack and release, and the screen says so (`PHASE retired: stand-in`). Nothing is deleted; the
   device manager and a backup still hold the sound as it was saved. If the chord or the bass was on one of these
   engines when you update, it comes up on FM6 `TINE EP` or VA `DEEP SUB`, as on a new unit.
 
@@ -909,7 +916,7 @@ Two groups are the same for every engine:
 
 | Group | Lanes | KNOB 1 to KNOB 4 |
 | --- | --- | --- |
-| **FX** | one | Drive · Chorus · Delay · Reverb: the sound's four effect sends (its drive, and how much of it goes into the chorus, the delay and the reverb) |
+| **FX** | one | Drive · Chorus · Delay · Reverb: the part's four sends (its drive, and how much of it goes into the chorus, the delay and the reverb). They stay when the sound changes |
 | **MIX** | two | Level · Pan · Voice · Glide, and Trans · Detune · Priority · Gl. mode |
 
 The sections below list what the other groups hold for each engine. They name the screens; for what each parameter
@@ -1088,7 +1095,7 @@ switch is the one thing it can miss.
 | LATCH; **LOCK and what it latched** | an open layer, menu, dialog or the editor: the FM-1 starts on the view |
 | **the voicing on KNOB 1 and the octave shift** | where you were in the editor (it opens where it opens after any power-on) |
 | **the bass being on**, its behaviour, register and **level** | the KEY layer's page (it opens on its first page, always) |
-| **the effects in full**: on or off, the page picked, every cell of the reverb, the chorus and the delay, the four sends | |
+| **the effects in full**: on or off, the page picked, every cell of the reverb, the chorus and the delay, both parts' sends | |
 | which sounds the two parts play, and each engine's last place | |
 | **each part's sound as you left it, with changes you had not saved**; **the parts' Level and Pan** | |
 | the tempo, the metronome and its time signature | |
@@ -1129,7 +1136,7 @@ playing and a stop when it stops. PANIC sends all notes off (CC 123).
 | notes on the MIDI Bass channel | play the bass sound |
 | program change | the sound's place in its engine's pool (chord: 0 = INIT; bass: 0 = off, 1 = INIT, and so on) |
 | CC 7 | the part's level |
-| CC 91, 93, 94 | the part's reverb, chorus and delay sends |
+| CC 91, 93, 94 | the part's reverb, chorus and delay sends (they stay until changed: a program change does not reset them) |
 | CC 64, pitch bend, CC 1, aftertouch | sustain, bend, and the modulation sources of the engines that use them |
 | clock, start, continue, stop | with MIDI Clock set to In: the tempo follows the clock and the loop follows start / continue / stop |
 
@@ -1297,11 +1304,12 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | In step entry the cursor does not move on | LOCK is on with a chord latched | OCT+ after each chord, or LOCK off |
 | HOME does not change the view | the view is locked | HOME held, KNOB 1: Lock Off |
 | The tempo moves by itself | MIDI Clock is In | Options > MIDI Clock |
-| The Send changed after PRESETS | each sound brings its own four sends (the effects' other cells never change with the sound) | save the sound with your sends |
-| My reverb or delay setting is back to what it was | it was changed in the last seconds before switching off, while a loop played, or while a long reverb tail was still ringing | set it again, wait for silence and a few seconds before switching off |
+| My reverb or delay setting is back to what it was | it was changed in the last seconds before switching off, while a loop played, or while a reverb or delay tail was still ringing (nothing is stored while there is sound) | set it again, wait for silence and a few seconds before switching off; with Decay at `Inf`, turn it down or tap FX off first |
 | The reverb does not stop | Decay is at `Inf`, or very long | turn Decay down (FX layer, Reverb 1, KNOB 3) |
 | The echoes are on one side, then the other | the delay's Mode is Ping-pong | FX layer, Delay 2, KNOB 2: Stereo |
-| The bass has reverb or echo | the bass sound has sends of its own | BASS held + EDIT, the FX group; or FX off |
+| The bass has reverb or echo | the bass part has sends of its own | BASS held + EDIT, the FX group; or FX off |
+| A sound I saved with lots of reverb loads dry (or the other way round) | sends are no longer loaded with a sound: they are the part's | set the Send once in the FX layer; it stays for every sound |
+| In the engine picker the white keys no longer choose the engine | they always play now, so that you hear what you turn to | SELECT steps the engines |
 | After updating to 0.18 the reverb and the delay sound different | they are new, and start at their defaults | [FX](#8-fx) |
 | My edit is gone | unsaved changes are lost with the next sound (not at power-off, since 0.18) | SAVE |
 | `no free slot` | all 32 saved sounds are used | delete one (SAVE held in the save dialog), or use the device manager |
@@ -1325,11 +1333,11 @@ A held layer button opens its layer and it stays; holding the same button again 
 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
-| FX | FX | effects on / off (in its layer too) | FX layer: SELECT the page (Reverb 1 · Reverb 2 · Chorus · Delay 1 · Delay 2 · Drive) · KNOB 1-4 its cells (KNOB 4 on a first page: the Send) |
+| FX | FX | effects on / off (in its layer too) | FX layer: SELECT the page (Reverb 1 · Reverb 2 · Chorus · Delay 1 · Delay 2 · Drive) · KNOB 1-4 its cells (KNOB 4 on a first page: the chord part's Send) |
 | SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · GLO: the keys pick / play |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
-| EDIT | EDIT | the sound editor; in it: leave | the engine picker: white roots or SELECT engine · KNOB 1 presets · KNOB 2 init · KNOB 4 roots · OCT+ keep · OCT- cancel |
+| EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
 | GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: Keys. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | while held: loops: white roots slot · SELECT Save / Load / Delete · OCT+ does it |
@@ -1371,7 +1379,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | KNOB 1 | voicing (Full keyboard: the octave) | split point | the layer's first cell | the lane's first value |
 | KNOB 2 | bass register | | second cell | second value |
 | KNOB 3 | performance parameter | | third cell | third value |
-| KNOB 4 | the chord sound's send into the selected effect | | fourth cell | fourth value |
+| KNOB 4 | the chord part's send into the selected effect | | fourth cell | fourth value |
 
 ### Keys
 

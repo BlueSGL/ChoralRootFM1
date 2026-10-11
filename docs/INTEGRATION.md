@@ -304,7 +304,7 @@ OCT+ / EDIT / EDIT held again keep).
 | METRO | close | close | close | the click on/off, the layer stays | close (was: stays) |
 | LOOP (the PLAY menu) | close; step entry: back a step | **close** (was: nothing); step entry: a rest | close | play / stop, the menu stays | close (was: stays) |
 | the view menu (HOME held) | close | close ("ok": the change is live) | close | (HOME tap: close) | close (was: stays) |
-| the engine picker (EDIT held) | cancel, close | keep, close | cancel, close | keep, close | keep, close (was: stays) |
+| the engine picker (EDIT held; since 0.18 its roots and chord keys always play, SELECT steps the engines, KNOB 4 has no job) | cancel, close | keep, close | cancel, close | keep, close | keep, close (was: stays) |
 | the LOCK layer (the key B3 held) | close | close | close | LOCK on/off, the layer stays | close |
 | SAVE held (the loop slots, momentary) | — | the picked action (Save / Load / Delete) | — | — | — |
 | Options (OPT tap; not a layer) | close | close; Calibrate: start; SAFE MODE's Flash Data: erase (twice) | close | (OPT tap: close) | — |
@@ -321,7 +321,7 @@ a button pressed during another's hold is that hold's combo (its release does no
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
 | LFO | LATCH | latch on/off (Sticky Keys; also holds a performed arp / pattern after the keys are released: Hold defaults off in every mode, an arp stops when the keys are up; Hold is STRUM's KNOB 4) | — |
 | GLO | OPT | Options (picker pages); in the PLAY menu: its Keys; in the KEY layer: its keys pick / play | shift (momentary): OPT + KNOB 1 split point, + SELECT metronome level, + ALGORITHM bass level; the other knobs keep their job |
-| EDIT | EDIT | the sound editor (again: leave; in the engine picker: keep its sound, close it) | the engine picker (a preview: OCT− cancels, OCT+ keeps) on the white roots, KNOB 1 its presets, KNOB 2 init, KNOB 4 roots engines / play |
+| EDIT | EDIT | the sound editor (again: leave; in the engine picker: keep its sound, close it) | the engine picker (a preview: OCT− cancels, OCT+ keeps): SELECT the engine, KNOB 1 its presets, KNOB 2 init; the roots and the chord keys play (0.18: until then the white roots chose the engine unless KNOB 4 set them to play) |
 | HOME | HOME | close the layer / page / menu (the view unchanged); on the view: next View **unless the view is locked** | **600 ms: the view menu** (`L_VIEW`, a picker: Chord · Keyboard · Notes · Geek Out · Scope by SELECT / the white roots, the last line "Lock: On / Off": KNOB 1 or the sixth white root; OCT+ ok, OCT− / HOME back; Settings v9 `view_lock`, the same view as Options > View) |
 | SAVE | SAVE | save sound (naming; in it: save, as OCT+) | save / load / delete loops (momentary, while held; OCT+ does it; a plain picker, no ring) |
 | SEQ | METRO | metronome on/off | the knob row: the time signature over Click (KNOB 1, hot; no popup) and three empty cells |
@@ -556,8 +556,8 @@ key, KNOB 1 +8 / -8, Transpose +5, OCT+ twice, Key Mode, the arp's blink), `cr_f
 every key that plays is dark until it sounds (it glowed dim until 2026-10-12); on: the scale's notes dim, the tonic's keys at the middle level (`nm` ->
 `fm1_led_dim2`), the keys out of the scale dark (until 0.17 only the black ones went dark: the loop skipped
 `cu_black(k)` keys alone, so every white key glowed whatever the key), a sounding note lit over it. Where: the view,
-the editor, and the layers whose roots play (PERF, FX, LOCK, PLAY with Keys = Play, the engine picker with its roots
-on play, KEY with keys: play), and the KEY layer on pick (its roots pick a tonic: the same picture; Key Mode off
+the editor, and the layers whose roots play (PERF, FX, LOCK, PLAY with Keys = Play, the engine picker (always, since
+0.18), KEY with keys: play), and the KEY layer on pick (its roots pick a tonic: the same picture; Key Mode off
 there: all dim). Not in the layers with their own map on the roots (PLAY's and SAVE's slots, BASS / METRO / the view
 menu / the engine picker's lists, naming, the Options). Stock (two levels): the scale's keys lit, the tonic as the
 rest, the others dark, a sounding one dark. The Full keyboard: all 27 keys carry that picture and every held key
@@ -717,9 +717,10 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   edits mark the sound `*`. Engines without deep pages: OSC = EDIT 1, FILT = EDIT 2, ENV / LFO / MOD the platform
   pages (FM6: "own envelopes" on ENV). A layer opened over the editor (PERF held, the engine picker) closes back to
   it. **EDIT held** (or PRESETS turned inside the editor): the engine picker as a **preview** of the part's sound
-  (snapshot: every parameter, the engine, the VA patch blob, `edited`, the user slot); the white roots switch the
-  engine (keeping the envelope, filter, LFO, sends and mix), KNOB 1 / PRESETS the engine's pool (the meter
-  jumps, no fill), KNOB 2 init, KNOB 4 the roots' job: engines / play (Settings `pick_roots`); OCT− / HOME cancel (the
+  (snapshot: every parameter, the engine, the VA patch blob, `edited`, the user slot); SELECT switches the
+  engine (keeping the envelope, filter, LFO and mix; until 0.18 the white roots did, unless KNOB 4 set them to play:
+  they always play now, Settings `pick_roots` is reserved), KNOB 1 / PRESETS the engine's pool (the meter
+  jumps, no fill), KNOB 2 init; OCT− / HOME cancel (the
   snapshot back), OCT+ / EDIT keep (a fresh load). Outside the editor PRESETS loads at once. **SAVE tap** (from a
   bass page or BASS held + SAVE: the bass): Overwrite / Save as new (docs/EDITOR.md section 8); Save as new's naming
   page shows the pool's place it takes ("FM6 · 27"), the white roots type
@@ -826,16 +827,20 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
 
 `cr_fx.c` (included by `fx.c` under `CR_FX 1`: `choralroot.c`, `tools/emu/emu_firmware.h`; Felucca's delay and ROOM /
 SPRING stay behind `CR_FX 0` for its own units and goldens). `fx_buses` keeps the chorus; `mix_block` then calls
-`xf_block(send_d, send_r, mix_l, mix_r)`: both sends down to 22.05 kHz, the delay and the reverb there, the stereo wet
-back up into the mix, before the FX layer's master effects and the limiter. A sound carries its sends only; the
-effects' parameters are `xfp[]` (16) and the chorus's two, in the session by tag. `fx_off` (the FX tap) closes every
-part's sends. The tempo for the synced delay is `xf_bpm` (`cu_set_tempo`, `cu_midi_poll`: 20 .. 300 BPM). Both
-effects switch themselves off when their tails are over (a block then costs 2 us). The design, the numbers and the
-owner's open decisions: **docs/FX.md**. Size: XIP 441 988 B (+5 060), RAM 84 916 B (-28), POOL 283 440 B (-12 784:
-60 624 B free). CPU: both on 233 us a block (8.0 %); `perf.sh` (l) (the heaviest scenario with both sends at 127):
-885 / 1388 us (30 % / 48 %), no block over 80 % anywhere (the worst: (j) with Dual Core On, 51 %). `cr_settings.c crs_sounding`: the FX tail alone holds a
-save back for `CRS_TAIL_MS` (30 s) at most. `tests/target_budget.txt` rewritten (the audio ISR 14 607; `xd_run` 531,
-`xr_run` 973, `xf_block` 78, `xf_down` 66, `xf_up` 53).
+`xf_block(send_d, send_r, mix_l, mix_r)`: the delay at 44.1 kHz straight on its send, the reverb at 22.05 kHz between
+half-band filters (`CR_FX_DELAY_DS`, `CR_FX_REVERB_DS`; `CR_FX_RAM=1`: the four loops in `.ram_text`), the stereo wet
+into the mix before the FX layer's master effects and the limiter. **The sends are the parts'** (the owner,
+2026-10-12): `cr_bank.c param_kept` keeps `P_DIST .. P_REV` through every load, the chord part's are `cs.fx_amt[]`,
+the bass part's its `p[]` (session tags 26..29); the effects' parameters are `xfp[]` (16) and the chorus's two, in
+the session by tag. `fx_off` (the FX tap) closes every part's sends; a send is reached as a ramp over a block
+(`fx_sg`). The tempo for the synced delay is `xf_bpm`. Both effects switch themselves off when their tails are over
+(a half then costs 2 us). The second build (the first was heard on the unit: a delay that dropped out, holes cut by
+saves, a cost far above the estimate), the numbers and the owner's open decisions: **docs/FX.md**. Size: XIP
+444 148 B, RAM 85 156 B, POOL 326 316 B (17 748 B free). CPU (the emulator's estimate): both on 267 us a half
+(9.2 %); `perf.sh` (l): 919 / 1278 us (32 % / 44 %), no half over 80 % anywhere (the worst: (g), 58 %). **On the unit**: `fm1_install.py
+--debug` reads SysEx 78 PEAK (`cr_backup.c crb_peak`, `cr_cpu1.h`): the worst half and each stage's since the last
+read, the late halves and their largest stage, the fx stage's four parts, `flash_holes`. `cr_settings.c
+crs_sounding`: no settings or session write while the output is above -60 dBFS, with no time limit.
 
 ### All-synth (2026-10-07: the dead weight out)
 
