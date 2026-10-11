@@ -1,0 +1,17 @@
+# test_persist.sh, key-layer keys run 2 (the same flash file): the dump says kkeys 1 at power-on; KEY held: the layer
+# opens with its keys playing (GLO lit; D4 sounds, the tonic is not moved); OCT-; quit
+wait 500
+dump
+btn SEL 600
+wait 300
+expect led GLO on
+shot build/emu/test/persist_kkeys.ppm
+btn D4 down
+wait 400
+expect sound
+btn D4 up
+wait 300
+btn OCT-
+wait 300
+dump
+quit

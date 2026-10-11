@@ -1,0 +1,11 @@
+# test_persist.sh, key-layer keys run 1: KEY (SEL) held: the KEY layer; GLO: its keys play (Settings v13, bit 5 of
+# loop_rec; "key: keys play"); OCT-; the record saved past the quiet time; quit
+wait 500
+btn SEL 600
+wait 300
+btn GLO
+wait 300
+btn OCT-
+wait 3000
+dump
+quit

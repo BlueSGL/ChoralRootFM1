@@ -110,6 +110,20 @@ grep -q "^deep: part 0 page 0 SYN 1 col 2 RATIO A 3 -> 8 .* edited" "$OUT/persis
 grep -q "^deep: part 0 page 0 SYN 1 col 2 RATIO A 8 -> 9 " "$OUT/persist_quad_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_quad_2.log" &&
     ok "FM TONE run 2: Ratio A is 8 as saved, the sound plays" || bad "FM TONE run 2: $(grep -m1 '^deep:' "$OUT/persist_quad_2.log")"
 
+# the KEY layer's keys (Settings v13: bit 5 of loop_rec, docs/SETTINGS.md): run 1 switches them to play (KEY held, GLO);
+# run 2 (the same file) opens the layer with them playing
+KFLASH=$OUT/persist_kkeys_flash.bin
+rm -f "$KFLASH" "$OUT"/persist_kkeys_1.log "$OUT"/persist_kkeys_2.log "$OUT"/persist_kkeys.ppm
+"$EMU" --headless --flash "$KFLASH" --script "$S/persist_kkeys_set.txt" >"$OUT/persist_kkeys_1.log" 2>&1 || bad "key-layer keys run 1: exit status"
+"$EMU" --headless --flash "$KFLASH" --script "$S/persist_kkeys_check.txt" >"$OUT/persist_kkeys_2.log" 2>&1 || bad "key-layer keys run 2: exit status"
+kk() { sed -n 's/.* kkeys \([0-9]\)$/\1/p' "$1" | sed -n "$2p"; }
+grep -q '^key: keys play' "$OUT/persist_kkeys_1.log" && grep -q "settings saves 1 " "$OUT/persist_kkeys_1.log" && [ "$(kk "$OUT/persist_kkeys_1.log" 1)" = 1 ] &&
+    ok "key-layer keys run 1: GLO in the KEY layer: keys play, the settings saved once" || bad "key-layer keys run 1: $(grep '^key: keys' "$OUT/persist_kkeys_1.log")"
+[ "$(kk "$OUT/persist_kkeys_2.log" 1)" = 1 ] && grep -q '(record: current)' "$OUT/persist_kkeys_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_kkeys_2.log" &&
+    grep -q '^expect led GLO on .*: ok' "$OUT/persist_kkeys_2.log" && ! grep -q 'FAILED' "$OUT/persist_kkeys_2.log" &&
+    ok "key-layer keys run 2: still play after a relaunch (the layer open: GLO lit, D4 sounded, the tonic unchanged): $OUT/persist_kkeys.ppm" \
+    || bad "key-layer keys run 2: kkeys $(kk "$OUT/persist_kkeys_2.log" 1)"
+
 # the engine picker's roots (Settings pick_roots, docs/SETTINGS.md): run 1 turns them to "play" in the picker (KNOB 4);
 # run 2 (the same file) opens the picker with them playing
 RFLASH=$OUT/persist_roots_flash.bin

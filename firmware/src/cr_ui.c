@@ -452,6 +452,9 @@ static struct {
     uint8_t loop_len, loop_quant, loop_count_in, loop_level;   /* SYNC (0 Free, 1..16 bars), QUANT, COUNT-IN, LEVEL */
     uint8_t loop_slot, loop_target;       /* the slot in RAM (0..9); SAVE held's target */
     uint8_t loop_mode, loop_keys;         /* the record mode (CRL_MODE_*); the PLAY menu's keys: 0 Play, 1 Loops (v8) */
+    uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
+                                           * 1 play (roots and chord keys as outside the layer); OPT tapped in the
+                                           * layer (v13) */
     uint8_t save_act;                     /* SAVE held's picker */
     uint8_t save_pending;                 /* slot + 1: saved once the loop stops (no flash erase while it plays) */
     uint16_t loop_used;                   /* bit k: slot k holds a loop in flash */
@@ -1619,6 +1622,12 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
             cu_loop_keys(!cs.loop_keys);
             break;
         }
+        if (cu.lock == L_KEY) {                   /* the KEY layer: GLO toggles its keys (pick / play): no Options
+                                                   * from here (OPT held + a knob keeps its second job: a combo) */
+            cs.key_play ^= 1u;
+            cu_trace("key: keys %s\n", cs.key_play ? "play" : "pick");
+            break;
+        }
         cu.page = PG_NONE;
         cu.lock = L_NONE;
         cu.opt_open ^= 1u;
@@ -2266,10 +2275,13 @@ static int32_t cu_layer_count(uint32_t l)
 /* the KEY layer takes the chord block (the one layer where it does not keep its job: the owner's call, 2026-10-10):
  * MAJ and MIN pick the scale at the press, LOCK on or off, held or tapped; the other six chord keys do nothing there.
  * None of them reaches the engine or the LOCK latch (cu.kpick), so the chord latched behind the layer is what it was
- * when the layer closes. B3 stays LOCK. A chord key held since before the layer keeps its own release */
+ * when the layer closes. B3 stays LOCK. A chord key held since before the layer keeps its own release.
+ * That is the layer's "keys: pick" (the default). OPT (GLO) tapped in the layer switches to "keys: play" and back
+ * (cs.key_play, saved: settings v13): the roots and the chord block play exactly as outside the layer, so the key is
+ * heard while KNOB 1..4 change it (as the PLAY menu's Keys, docs/LOOPER-MODES.md) */
 #define CU_KEY_MIN 3u                              /* G#3 (CU_MOD_OF_KEY) */
 #define CU_KEY_MAJ 5u                              /* A#3 */
-static int cu_key_pick(void) { return cu_layer() == L_KEY; }
+static int cu_key_pick(void) { return cu_layer() == L_KEY && !cs.key_play; }   /* (keys: play: the chord block's own job) */
 static void cu_key_scale(uint32_t k)               /* a chord key pressed in the KEY layer */
 {
     if (k != CU_KEY_MIN && k != CU_KEY_MAJ)
@@ -2543,8 +2555,9 @@ static void cu_mod_release(uint32_t k)
  * plays the preview */
 static int cu_layer_keys(uint32_t l)
 {
-    return l && l != L_PERF && l != L_FX && !(l == L_EDIT && !cs.pick_roots) && !(l == L_LOOP && !cs.loop_keys);
-}   /* (the PLAY menu with Keys = Play: they play, docs/LOOPER-MODES.md) */
+    return l && l != L_PERF && l != L_FX && !(l == L_EDIT && !cs.pick_roots) && !(l == L_LOOP && !cs.loop_keys) &&
+           !(l == L_KEY && cs.key_play);
+}   /* (the PLAY menu with Keys = Play, the KEY layer with keys: play: they play, docs/LOOPER-MODES.md) */
 
 static void cu_key_press(uint32_t k)
 {
@@ -3203,8 +3216,9 @@ static void cr_leds(void)
     cu_led(nl, panel.btn[BT_FX], cs.fx_on);
     cu_led(nl, panel.btn[BT_BASS], cs.bass_on);
     cu_led(nl, panel.btn[BT_LATCH], cs.sticky || sn->latching);
-    cu_led(nl, panel.btn[BT_OPT], cu.opt_open || cu_shift() || (l == L_LOOP && cs.loop_keys));   /* (the PLAY menu:
-                                                                                            * Keys = Loops) */
+    cu_led(nl, panel.btn[BT_OPT], cu.opt_open || cu_shift() || (l == L_LOOP && cs.loop_keys) ||
+                                      (l == L_KEY && cs.key_play));   /* (the PLAY menu: Keys = Loops; the KEY layer:
+                                                                       * keys: play. Lit = not the default) */
     cu_led(nl, panel.btn[BT_EDIT], cu.page == PG_EDIT && blink);   /* blinks while the editor is open */
     cu_led(nl, panel.btn[BT_SAVE], cu.page == PG_SAVE);
     cu_led(nl, panel.btn[BT_METRO], cs.metro);
@@ -3242,7 +3256,8 @@ static void cr_leds(void)
      * In the KEY layer (the one exception to "these LEDs are the chord keys' own state", the owner's, 2026-10-10)
      * they are its scale keys: MAJ and MIN glow at half, the selected scale's at full, the six without a job there
      * dark. Glow: half = fm1_led_dim, full = fm1_led. Stock has two levels only (it lights the idle keys, and a
-     * layer's selected key through `own`): the selected scale's key lit, the other dark */
+     * layer's selected key through `own`): the selected scale's key lit, the other dark. With the layer's keys set
+     * to play (cu_key_pick 0) they are the chord keys' own state again */
     for (k = 0; k < CU_ROOT0; k++) {
         if (CU_MOD_OF_KEY[k] == 0xFFu) {
             cu_led(nl, 14u + k, cu.clock);
@@ -3283,7 +3298,7 @@ static void cr_leds(void)
             if (wi >= 0 && wi < n)
                 cu_led(wi == sel ? own : nd, 14u + k, 1);
         }
-    } else if (l == L_KEY) {
+    } else if (l == L_KEY && !cs.key_play) {             /* (keys: play: the keys as on the view, below) */
         for (k = CU_ROOT0; k < CU_NKEY; k++)
             cu_led(cs.key_on && (53u + k) % 12u == cs.tonic ? own : nd, 14u + k, 1);
     } else if (cu.page == PG_SAVE && ce.save_step) {     /* naming: the keys that type lit (the letters, D#4 space) */
@@ -4027,8 +4042,10 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         s->orient = 1;
         s->col = CR_COL_YELLOW;
         s->title_col = CR_COL_WHITE;
-        cu_cpy(s->label, "key", sizeof s->label);
-        cu_cpy(s->footer, "MAJ MIN: scale \267 OCT-: back \267 HOME", sizeof s->footer);
+        cu_cpy(s->label, cs.key_play ? "key \267 keys play" : "key \267 keys pick", sizeof s->label);   /* (as "perform
+                                                                                                    * \267 on") */
+        cu_cpy(s->footer, cs.key_play ? "GLO: pick \267 OCT-: back \267 HOME: home"       /* (GLO: to the other) */
+                                      : "MAJ MIN: scale \267 GLO: play \267 OCT-: back", sizeof s->footer);
         for (k = CU_ROOT0; cs.key_on && k < CU_NKEY; k++)
             if ((53u + k) % 12u == cs.tonic) {
                 s->lit |= 1u << k;

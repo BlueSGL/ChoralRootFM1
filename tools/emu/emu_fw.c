@@ -326,10 +326,10 @@ void emu_fw_dump(void)
     for (i = 0; i < cr_snap.ci.nnotes; i++)
         printf(" %u", (unsigned)cr_snap.ci.notes[i]);
     printf("\n  cr: key %u tonic %u scale %u perform %u mode %u bass %u (sound %u) voicing %d octave %d bpm %u "
-           "view %u layer %u options %u\n",
+           "view %u layer %u options %u kkeys %u\n",
            (unsigned)cs.key_on, (unsigned)cs.tonic, (unsigned)cs.scale, (unsigned)cr.perform_on,
            (unsigned)cr.perform_mode, (unsigned)cr.bass_on, (unsigned)cs.bass_sound, (int)cr.voicing, (int)cu.octave,
-           (unsigned)cs.bpm, (unsigned)cs.view, (unsigned)cu_layer(), (unsigned)cu.opt_open);
+           (unsigned)cs.bpm, (unsigned)cs.view, (unsigned)cu_layer(), (unsigned)cu.opt_open, (unsigned)cs.key_play);
     printf("  parts busy %u  octave %d master_q12 %u cpu %u%%  midi in %u out %u\n", (unsigned)cr_parts_busy(),
            (int)cu.octave, (unsigned)song.master_q12, (unsigned)(song.cpu_q8 * 100u / 256u),
            (unsigned)(mi_w - mi_r), (unsigned)(mo_w - mo_r));

@@ -171,7 +171,8 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(pick_roots, 0, 1);
     CRS_FIX(usb_in, 0, 1);
     CRS_FIX(usb_level, 0, CRS_USB_FIXED);
-    if ((s->loop_rec & ~0x1Fu) || CRS_LOOP_MODE(s) >= CRS_NLOOPMODE)   /* (an unknown mode or bit: the defaults) */
+    if ((s->loop_rec & ~0x3Fu) || CRS_LOOP_MODE(s) >= CRS_NLOOPMODE)   /* (an unknown mode or bit: the defaults; v13:
+                                                                         * bit 5 the KEY layer's keys) */
         s->loop_rec = d.loop_rec;
     for (i = 0; i < CRS_NENG; i++)                 /* (a pool: INIT + 64 CZ-1 presets + 32 user ones at most) */
         for (m = 0; m < 2; m++)
@@ -277,6 +278,9 @@ int cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n)
                                                     * means On (v11: set = Off, On the default, so its bit cannot
                                                     * tell a chosen On from that default): every older record Off */
             s->view &= (uint8_t)~CRS_DC_ON;
+        if (in.version < 13u)                      /* version 13: the KEY layer's keys in bit 5 of loop_rec (no older
+                                                    * writer set it: an unknown bit there): pick, the default */
+            s->loop_rec &= (uint8_t)~CRS_KEY_PLAY;
     }
     crs_sanitize(s);
     cr_settings_seal(s);
@@ -481,7 +485,7 @@ static void crs_capture(cr_settings_t *s)
     s->metro_sig = cs.metro_sig;
     s->metro_vol = cs.metro_vol;
     s->loop_slot = cs.loop_slot;
-    s->loop_rec = CRS_LOOP_REC(cs.loop_mode, cs.loop_keys);
+    s->loop_rec = (uint8_t)(CRS_LOOP_REC(cs.loop_mode, cs.loop_keys) | (cs.key_play ? CRS_KEY_PLAY : 0u));
     s->pick_roots = cs.pick_roots;
     s->usb_in = cs.usb_in;
     s->usb_level = cs.usb_fixed;
@@ -545,6 +549,7 @@ static void cr_settings_load(void)
     cs.loop_slot = s->loop_slot;
     cs.loop_mode = (uint8_t)CRS_LOOP_MODE(s);
     cs.loop_keys = (uint8_t)CRS_LOOP_KEYS(s);
+    cs.key_play = (uint8_t)CRS_KEY_KEYS(s);
     cs.pick_roots = s->pick_roots;
     cs.usb_in = s->usb_in;
     cs.usb_fixed = s->usb_level;

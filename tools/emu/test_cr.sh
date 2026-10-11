@@ -392,8 +392,8 @@ run cr_arp_unit --flash "$AF"
 unset EMU_UI_LOG
 L="$OUT/cr_arp_unit.log"
 ks() { grep '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.*cr: key \([0-9]\) tonic \([0-9]*\) scale \([0-9]\) perform \([0-9]\) mode \([0-9]\) .* view \([0-9]\) layer \([0-9]*\) .*/\1 \2 \3 \4 \5 \6 \7/p'; }
-has '(record: current)' "$L" && [ "$(ks 1)" = "1 4 1 0 2 0 0" ] && grep -q 'style 0 single 1 split 5' "$L" &&
-    ok "the record read as the unit stored it (Key Mode E minor, Split at F, Arpeggiate picked at 1/16, perform off, the Chord view)" \
+has '(record: migrated)' "$L" && [ "$(ks 1)" = "1 4 1 0 2 0 0" ] && grep -q 'style 0 single 1 split 5' "$L" &&
+    ok "the record (settings v12) read as the unit stored it (Key Mode E minor, Split at F, Arpeggiate picked at 1/16, perform off, the Chord view)" \
     || bad "the seeded record: $(ks 1)"
 [ "$(ks 2)" = "1 4 1 1 2 0 0" ] && [ "$(knd 3)" = "arp 0 D" ] && [ "$(hops 3)" -ge 3 ] && seg 3 | tail -1 | grep -q "right 'Arp'.* line 'arp 1/16'" &&
     ok "PERF tap, one root alone (the scale's chord), Motion Off: the arp screen, the note hopping ($(hops 3) places): $OUT/cr_arp_unit.ppm" \
@@ -468,6 +468,29 @@ kk() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.*cr: key \([0-9]\) 
     ok "the latch behind the layer untouched (MIN alone, before and after): a root alone still plays Dm" \
     || bad "the latch changed in the key layer: $(grep -a '^lock:' "$L" | tr '\n' ' ')"
 silent_end cr_key_scale
+
+echo "the key layer's keys: pick / play, toggled with OPT (GLO) in the layer"
+run cr_key_play
+L="$OUT/cr_key_play.log"
+kp() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.*cr: key \([0-9]\) tonic \([0-9]*\) .* layer \([0-9]*\) options \([0-9]\) kkeys \([0-9]\)$/\1 \2 \3 \4 \5/p'; }
+sp() { grep -a '^  loop:' "$L" | sed -n "$1p" | sed -n 's/.* split \([0-9]*\)$/\1/p'; }
+[ "$(grep -c '^expect .*: ok' "$L")" = 16 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "pick: a root is silent; play: GLO lit, the chord keys' and the roots' LEDs their own, MAJ + E4 sounds; pick again: the scale keys' LEDs" \
+    || bad "the key layer's keys: $(grep -a 'expect.*FAILED' "$L" | head -3)"
+[ "$(kp 1)" = "0 0 1 0 0" ] && [ "$(kp 2)" = "1 2 1 0 0" ] && [ "$(kp 3)" = "1 2 1 0 1" ] && has '^key: keys play' "$L" &&
+    ok "KEY held: keys pick (the default), D4: the tonic; GLO: keys play, the layer stays, no Options: $OUT/cr_key_pick.ppm" \
+    || bad "pick / play: $(kp 1) / $(kp 2) / $(kp 3)"
+grep -a '^  cr: voices' "$L" | sed -n 4p | grep -q 'chord E sounding 1' && [ "$(kp 4)" = "1 2 1 0 1" ] && [ "$(kp 5)" = "1 4 1 0 1" ] &&
+    ok "play: MAJ + E4 is E major with the tonic still D; KNOB 1 turns the tonic while it sounds: $OUT/cr_key_play.ppm" \
+    || bad "playing in the layer: $(kp 4) / $(kp 5)"
+[ "$(sp 5)" = 5 ] && [ "$(sp 6)" = 6 ] && [ "$(kp 6)" = "1 4 1 0 1" ] && [ "$(kp 7)" = "1 4 1 0 0" ] &&
+    ok "OPT held + KNOB 1 in the layer: the split point as outside (a combo: no toggle, no Options); GLO: pick again" \
+    || bad "OPT + KNOB 1: split $(sp 5) -> $(sp 6), $(kp 6) / $(kp 7)"
+[ "$(kp 8)" = "1 4 0 0 1" ] && [ "$(kp 9)" = "1 4 0 1 1" ] && [ "$(kp 10)" = "1 4 0 0 0" ] &&
+    ok "closed with keys play: remembered; outside the layer GLO opens the Options; the layer again: still play" \
+    || bad "after the layer: $(kp 8) / $(kp 9) / $(kp 10)"
+differ cr_key_pick cr_key_play "the label and the footer say pick / play"
+silent_end cr_key_play
 run cr_loop_row
 L="$OUT/cr_loop_row.log"
 has '^loop: cells Quantize Count-in Level Keys' "$L" && ok "LOOP held, stopped: the PLAY menu over Quantize / Count-in / Level / Keys: $OUT/cr_loop_row.ppm" || bad "no loop cells"

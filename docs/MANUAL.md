@@ -199,7 +199,7 @@ MIDI message wakes it and does its normal job at the same time.
 | KEY, PERF, FX, BASS, LATCH, METRO lit | that function is on |
 | a layer button blinking | its layer is open |
 | EDIT blinking | the sound editor (or the engine picker) is open |
-| OPT lit | the Options are open (in the PLAY menu: Keys = Loops; in the editor: SHIFT) |
+| OPT lit | the Options are open (in the PLAY menu: Keys = Loops; in the KEY layer: its keys play; in the editor: SHIFT) |
 | SAVE lit | the save dialog is open |
 | REC lit / blinking | armed / counting in, recording or overdubbing |
 | LOOP lit, its green light | the slot holds a loop, the loop is playing |
@@ -300,7 +300,8 @@ Hold KEY to open the **KEY layer**:
 | KNOB 3 | Transpose, -24 to +24 semitones. It moves everything you play from then on, in or out of Key Mode |
 | KNOB 4 | Single: Full or Split (below) |
 | SELECT | the tempo, as outside |
-| OCT-, OCT+, HOME | close the layer |
+| OPT (printed GLO) tap | switches the keys between **pick** and **play** (below). It does not open the Options from here |
+| OCT-, OCT+, HOME, KEY held again | close the layer |
 
 A quick way to set a key: hold KEY and press a root at once (the layer opens straight away), then OCT- to close it.
 For a minor key press MIN as well, before or after the root.
@@ -309,6 +310,13 @@ While the layer is open the chord keys' lights show the scale instead of the cho
 the selected scale is fully lit, and the six chord keys without a job here are dark. (With Options > LEDs set to
 Stock, which has no half level, only the selected scale's key is lit.) Outside the layer the lights mean what they
 always do.
+
+**Keys: pick or play.** The layer opens with its keys on **pick**: the root keys set the tonic, MAJ and MIN the
+scale, and nothing sounds. Tap **OPT** (printed GLO) in the layer and the keys **play** instead, exactly as outside
+the layer: roots, chord keys, LOCK, with their usual lights. Now you can hear the key while KNOB 1 to KNOB 4 change
+the tonic, the scale, the transposition and Single. The top of the layer says which it is (`key · keys pick`,
+`key · keys play`), the footer shows the way to the other, and OPT is lit while the keys play. Tap OPT again for
+pick. The choice is remembered, also after switching off. OPT held with KNOB 1 is still the split point.
 
 **Single Notes: Split.** With Single set to Split, single notes (not chords) on keys whose note name lies below the
 split point sound an octave lower. The split point is F by default, so C to E are the lowered notes; OPT + KNOB 1 or
@@ -351,7 +359,7 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 
 | Layer | Hold | The picker (SELECT) | The root keys | A tap of its button | OCT- / OCT+ |
 | --- | --- | --- | --- | --- | --- |
-| KEY | KEY (SEL) | a keyboard with the tonic lit | set the tonic | Key Mode on / off | close |
+| KEY | KEY (SEL) | a keyboard with the tonic lit | set the tonic (OPT tap: they play instead) | Key Mode on / off | close |
 | PERF | PERF (ARP) | the performance mode | play as usual | performance on / off | close |
 | FX | FX | the effect | play as usual | effects on / off | close |
 | BASS | BASS (ENV) | the bass behaviour | the white keys D4 E4 F4 G4 pick the behaviour; nothing sounds | bass on / off | close |
@@ -878,7 +886,7 @@ FM-1 a second or two of silence before you switch off.
 | LATCH, and the effects being on or off | the voicing on KNOB 1 |
 | the tempo, the metronome and its time signature | the selected effect and the FX layer's KNOB 1 to KNOB 3 |
 | the bass behaviour and register | the parts' Level and Pan, the bass level |
-| the looper's settings and its slot | changes to a sound you did not save |
+| the looper's settings and its slot; the KEY layer's keys (pick or play) | changes to a sound you did not save |
 | which sounds the two parts play, and each engine's last place | where you were in the editor |
 | the view and its lock | |
 | saved sounds; loops (each time a loop stops) | |
@@ -1093,11 +1101,11 @@ A held layer button opens its layer and it stays; holding the same button again 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
 | FX | FX | effects on / off (in its layer too) | FX layer: SELECT effect · KNOB 1-3 parameters · KNOB 4 amount |
-| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single |
+| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single · GLO: the keys pick / play |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: white roots or SELECT engine · KNOB 1 presets · KNOB 2 init · KNOB 4 roots · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: Keys. In the editor: SHIFT latch | + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: Keys. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | while held: loops: white roots slot · SELECT Save / Load / Delete · OCT+ does it |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |

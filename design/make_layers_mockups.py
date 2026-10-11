@@ -43,7 +43,8 @@ def knobrow(items, sel, col, cells, hot=None, label="", value="", **kw):
 S = []
 KEY_CELLS = [g("Tonic", "C"), g("Scale", "Major"), g("Transpose", "+0", "shift", 0.5), g("Single", "Full")]
 tonics = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
-KEY_FOOT = "MAJ MIN: scale · OCT-: back · HOME"                   # cr_ui.c cu_layer_screen (2026-10-10: MAJ / MIN pick
+KEY_LABEL = "key · keys pick"                                     # (GLO in the layer: "key · keys play", the keys play)
+KEY_FOOT = "MAJ MIN: scale · GLO: play · OCT-: back"              # cr_ui.c cu_layer_screen (2026-10-10: MAJ / MIN pick
 # the scale in the layer; their LEDs at half, the selected scale's at full, the other chord keys dark: cr_ui.c cr_leds)
 KEY_LEDS = [1] * 27                                              # the glow (make_mockups.py DIM) ..
 for _n in ("F3", "F#3", "G3", "A3", "C4", "C#4"):                # .. but the six chord keys without a job in the layer
@@ -56,12 +57,13 @@ S.append(state(
     "KEY held: the keyboard slides up with the tonic lit yellow (today's screen) and the four cells sit under it: TONIC "
     "(text), SCALE (text), TRANSPOSE (the staff-and-square shift glyph, centre = 0), SINGLE NOTES (Full / Split). The "
     "root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`. "
-    "MAJ and MIN pick the scale (2026-10-10): both glow, the selected scale's key lit, the other chord keys dark.",
+    "MAJ and MIN pick the scale (2026-10-10): both glow, the selected scale's key lit, the other chord keys dark. "
+    "GLO tapped here switches the keys to play (the label 'key · keys play', GLO lit, every key as outside the layer).",
     keys=KEY_LEDS, held=["MAJ"], key_notes=KEY_NOTES,
     lit=["C5"], buttons={"SEL": BLINK}, key_labels={k: name(k)[:-1] for k in ROOTS},
     button_notes={"SEL": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("TONIC", "C"), "KNOB2": ("SCALE", "MAJ"), "KNOB3": ("TRANSPOSE", "+0"), "KNOB4": ("SINGLE NOTES", "FULL")},
-    screen=scr(knobrow(tonics, 0, C_KEY, KEY_CELLS, label="key", band="keyboard", lit=[{"k": "C5", "col": C_KEY}]),
+    screen=scr(knobrow(tonics, 0, C_KEY, KEY_CELLS, label=KEY_LABEL, band="keyboard", lit=[{"k": "C5", "col": C_KEY}]),
                key="Key: C", foot=KEY_FOOT, note="A: the keyboard as the band, the tonic lit; the cells under it."),
 ))
 S.append(state(
@@ -72,7 +74,7 @@ S.append(state(
     lit=["C5"], buttons={"SEL": BLINK}, key_labels={k: name(k)[:-1] for k in ROOTS},
     button_notes={"SEL": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("TONIC", "C"), "KNOB2": ("SCALE", "MAJ"), "KNOB3": ("TRANSPOSE", "+0"), "KNOB4": ("SINGLE NOTES", "FULL")},
-    screen=scr(knobrow(tonics, 0, C_KEY, KEY_CELLS, label="key", value="major"),
+    screen=scr(knobrow(tonics, 0, C_KEY, KEY_CELLS, label=KEY_LABEL, value="major"),
                key="Key: C", foot=KEY_FOOT, note="B: the key name big over the cells."),
 ))
 S.append(state(
@@ -83,7 +85,7 @@ S.append(state(
     button_notes={"SEL": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("TONIC", "C"), "KNOB2": ("SCALE", "MAJ"), "KNOB3": ("TRANSPOSE", "+5"), "KNOB4": ("SINGLE NOTES", "FULL")},
     screen=scr(knobrow(tonics, 0, C_KEY, [g("Tonic", "C"), g("Scale", "Major"), g("Transpose", "+5", "shift", 29 / 48), g("Single", "Full")],
-                       hot=2, label="key", band="keyboard", lit=[{"k": "C5", "col": C_KEY}]),
+                       hot=2, label=KEY_LABEL, band="keyboard", lit=[{"k": "C5", "col": C_KEY}]),
                key="Key: C", foot=KEY_FOOT, note="A with a hot Transpose cell."),
 ))
 

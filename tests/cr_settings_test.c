@@ -387,6 +387,49 @@ static void t_loop_rec(void)
        "version 7 -> 8: kept, the record mode Overwrite and the keys Play");
 }
 
+/* version 13: the KEY layer's keys (0 pick, 1 play) in bit 5 of loop_rec, beside the record mode and the PLAY menu's
+ * keys; default pick; an older record's bit 5 (no writer set it) is cleared, the rest of the byte kept */
+static void t_key_keys_v13(void)
+{
+    cr_settings_t d, s, r;
+    cr_settings_defaults(&d);
+    ok(CRS_VERSION >= 13u && d.loop_rec == 0 && CRS_KEY_KEYS(&d) == 0, "v13 defaults: the KEY layer's keys pick");
+    s = d;
+    s.loop_rec = CRS_KEY_PLAY;                     /* play alone */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_KEY_KEYS(&r) == 1 && CRS_LOOP_MODE(&r) == 0 && !CRS_LOOP_KEYS(&r),
+       "v13: keys play round-trip (Overwrite, Play beside it)");
+    ok(cr_settings_import(&s, &r, sizeof r) == 1 && s.loop_rec == CRS_KEY_PLAY, "v13: play, a second round trip");
+    s.loop_rec = (uint8_t)(CRS_LOOP_REC(3u, 1u) | CRS_KEY_PLAY);   /* Replace, Loops, play */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_KEY_KEYS(&r) == 1 && CRS_LOOP_MODE(&r) == 3 && CRS_LOOP_KEYS(&r) == 1,
+       "v13: play with Replace + Loops: the three kept apart");
+    s.loop_rec = CRS_LOOP_REC(3u, 1u);             /* .. and pick with them */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_KEY_KEYS(&r) == 0 && CRS_LOOP_MODE(&r) == 3 && CRS_LOOP_KEYS(&r) == 1,
+       "v13: pick with Replace + Loops");
+    s.loop_rec = (uint8_t)(CRS_KEY_PLAY | 7u);     /* no such record mode: the whole byte's defaults (pick too) */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v13: a mode out of range takes the defaults (pick)");
+    s.loop_rec = (uint8_t)(CRS_KEY_PLAY | 0x80u);  /* an unknown bit */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.loop_rec == 0, "v13: an unknown bit takes the defaults (pick)");
+    s = d;                                         /* a version-12 record (0.16): Replace + Loops kept, pick */
+    s.bpm = 97;
+    s.loop_rec = CRS_LOOP_REC(3u, 1u);
+    cr_settings_seal(&s);
+    s.version = 12;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.bpm == 97 && CRS_KEY_KEYS(&r) == 0 && CRS_LOOP_MODE(&r) == 3 &&
+       CRS_LOOP_KEYS(&r) == 1 && r.version == CRS_VERSION, "version 12 -> 13: the record mode and the PLAY menu's keys kept, the KEY layer's keys pick");
+    s.loop_rec = (uint8_t)(CRS_LOOP_REC(2u, 0u) | CRS_KEY_PLAY);   /* a v12 record with bit 5 set (no writer did) */
+    cr_settings_seal(&s);
+    s.version = 12;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && CRS_KEY_KEYS(&r) == 0 && CRS_LOOP_MODE(&r) == 2,
+       "version 12 -> 13: a stray bit 5 cleared (pick), the record mode kept");
+}
+
 /* version 10: every mode's Hold off (an older record's arp Hold 1 cleared) */
 static void t_hold_v10(void)
 {
@@ -499,7 +542,7 @@ int main(void)
     t_presets();
     t_flash();
     t_loop_rec();
-    t_view_lock(); t_hold_v10(); t_dualcore_v12();
+    t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

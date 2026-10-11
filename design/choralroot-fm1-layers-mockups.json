@@ -36,7 +36,7 @@
  "states": [
   {
    "name": "1 \u00b7 KEY \u00b7 A: the keyboard stays, the knob row under it",
-   "notes": "KEY held: the keyboard slides up with the tonic lit yellow (today's screen) and the four cells sit under it: TONIC (text), SCALE (text), TRANSPOSE (the staff-and-square shift glyph, centre = 0), SINGLE NOTES (Full / Split). The root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`. MAJ and MIN pick the scale (2026-10-10): both glow, the selected scale's key lit, the other chord keys dark.",
+   "notes": "KEY held: the keyboard slides up with the tonic lit yellow (today's screen) and the four cells sit under it: TONIC (text), SCALE (text), TRANSPOSE (the staff-and-square shift glyph, centre = 0), SINGLE NOTES (Full / Split). The root keys pick the tonic, KNOB 1 too. The keyboard is the band: the designer draws it with `band: keyboard`. MAJ and MIN pick the scale (2026-10-10): both glow, the selected scale's key lit, the other chord keys dark. GLO tapped here switches the keys to play (the label 'key \u00b7 keys play', GLO lit, every key as outside the layer).",
    "export": true,
    "keys": [
     0,
@@ -184,7 +184,7 @@
      ],
      "sel": 0,
      "col": "yellow",
-     "label": "key",
+     "label": "key \u00b7 keys pick",
      "cells": [
       {
        "label": "Tonic",
@@ -216,7 +216,7 @@
      ]
     },
     "footer": {
-     "text": "MAJ MIN: scale \u00b7 OCT-: back \u00b7 HOME"
+     "text": "MAJ MIN: scale \u00b7 GLO: play \u00b7 OCT-: back"
     },
     "note": "A: the keyboard as the band, the tonic lit; the cells under it."
    }
@@ -371,7 +371,7 @@
      ],
      "sel": 0,
      "col": "yellow",
-     "label": "key",
+     "label": "key \u00b7 keys pick",
      "cells": [
       {
        "label": "Tonic",
@@ -396,7 +396,7 @@
      "value": "major"
     },
     "footer": {
-     "text": "MAJ MIN: scale \u00b7 OCT-: back \u00b7 HOME"
+     "text": "MAJ MIN: scale \u00b7 GLO: play \u00b7 OCT-: back"
     },
     "note": "B: the key name big over the cells."
    }
@@ -551,7 +551,7 @@
      ],
      "sel": 0,
      "col": "yellow",
-     "label": "key",
+     "label": "key \u00b7 keys pick",
      "cells": [
       {
        "label": "Tonic",
@@ -583,7 +583,7 @@
      ]
     },
     "footer": {
-     "text": "MAJ MIN: scale \u00b7 OCT-: back \u00b7 HOME"
+     "text": "MAJ MIN: scale \u00b7 GLO: play \u00b7 OCT-: back"
     },
     "note": "A with a hot Transpose cell."
    }

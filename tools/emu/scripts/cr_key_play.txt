@@ -1,0 +1,79 @@
+# ChoralRoot: the KEY layer's keys, pick / play (the owner, 2026-10-10; as the PLAY menu's Keys). KEY (SEL) held: the
+# layer, keys: pick (the default): a root is the tonic and nothing sounds. OPT (GLO) tapped in the layer: keys: play
+# (GLO lit, the label "key - keys play"; the Options do not open): the roots and the chord keys play as outside the
+# layer and their LEDs are their own again (MAJ + E4: E major sounds, the tonic unchanged), while KNOB 1 still turns
+# the tonic. OPT held + KNOB 1 is still the split point (a combo: no toggle). GLO again: pick. OCT- closes; outside
+# the layer GLO opens the Options as always.
+wait 300
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+expect led GLO dim
+shot build/emu/test/cr_key_pick.ppm
+dump                          # 1: layer 1, kkeys 0
+expect silence
+btn D4                        # pick: the tonic D, no sound
+wait 300
+expect silence
+dump                          # 2: key 1 tonic 2
+btn GLO                       # keys: play
+wait 300
+expect led GLO on
+expect led A#3 dim            # the chord keys: their own state again (none held)
+expect led F#3 dim
+expect led D4 dim             # the roots: as on the view (no tonic map)
+dump                          # 3: kkeys 1, layer 1, options 0
+btn A#3 down                  # MAJ + E4: E major, as outside the layer
+wait 40
+btn E4 down
+wait 500
+expect sound
+expect led A#3 on             # held: lit
+expect led E4 on              # the chord's notes on the roots
+shot build/emu/test/cr_key_play.ppm
+dump                          # 4: chord E sounding, the tonic still 2 (D), the scale as it was
+knob KNOB1 +2                 # the layer's knobs still work: the tonic D -> E
+wait 300
+dump                          # 5: tonic 4, the chord still sounding
+btn E4 up
+btn A#3 up
+wait 300
+btn GLO down                  # OPT held + KNOB 1: the split point (its second job, kept: no toggle)
+wait 100
+knob KNOB1 +1
+wait 200
+btn GLO up
+wait 1200
+dump                          # 6: split 6 (the loop: line), kkeys 1 still
+btn GLO                       # keys: pick again
+wait 300
+expect led GLO dim
+expect led A#3 on             # the scale keys again (major selected)
+expect led G#3 dim
+expect led F#3 off
+dump                          # 7: kkeys 0
+btn GLO                       # .. and play, left on for the next time
+wait 300
+btn OCT-
+wait 300
+dump                          # 8: layer 0, kkeys 1, options 0
+btn GLO 80                    # outside the layer: the Options
+wait 300
+dump                          # 9: options 1
+btn GLO 80
+wait 300
+btn SEL down                  # the layer again: still keys: play
+wait 500
+btn SEL up
+wait 300
+expect led GLO on
+btn D4 down
+wait 300
+expect sound
+btn D4 up
+btn GLO                       # back to pick (the default) for the end
+wait 200
+btn OCT-
+wait 2500
+dump                          # 10: silent, kkeys 0

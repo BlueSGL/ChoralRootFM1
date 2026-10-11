@@ -13,7 +13,7 @@
 #include <stdint.h>
 
 #define CRS_MAGIC 0x31535243u           /* "CRS1" */
-#define CRS_VERSION 12u
+#define CRS_VERSION 13u
 #define CRS_SIZE 192u                   /* bytes, header included; never changes (fields come out of rsv) */
 #define CRS_NPM 5                       /* perform modes (cr_engine.h CR_PM_COUNT) */
 #define CRS_NPAR 11                     /* parameters per mode (CR_P_COUNT) */
@@ -40,10 +40,17 @@ enum { CRS_CLOCK_OFF, CRS_CLOCK_OUT, CRS_CLOCK_IN };
 enum { CRS_NONE = 0xFF };               /* out part: no part */
 enum { CRS_USB_MASTER, CRS_USB_FIXED };
 /* loop_rec (v8): bits 0..3 the record mode (cr_loop.h CRL_MODE_*: 0 Overwrite .. 4 Step), bit 4 the PLAY menu's keys
- * (0 Play: they play chords, 1 Loops: the slot shortcuts); the other bits 0. 0 = Overwrite, Play (the defaults) */
+ * (0 Play: they play chords, 1 Loops: the slot shortcuts); the other bits 0. 0 = Overwrite, Play (the defaults).
+ * v13: bit 5 the KEY layer's keys (0 pick: a root = the tonic, MAJ / MIN = the scale, the default; 1 play: the keys
+ * play as outside the layer; OPT tapped in the layer). Still no reserve: it rides in this byte, next to the other
+ * "what do the keys do in this menu" bit. A firmware older than v13 reads a record with bit 5 set as an unknown bit
+ * and gives the whole byte its defaults (Overwrite, Play): its record mode and PLAY-menu keys are then lost on a
+ * downgrade, nothing else */
 #define CRS_NLOOPMODE 5u
+#define CRS_KEY_PLAY 0x20u
 #define CRS_LOOP_MODE(s) ((unsigned)(s)->loop_rec & 15u)
 #define CRS_LOOP_KEYS(s) (((unsigned)(s)->loop_rec >> 4) & 1u)
+#define CRS_KEY_KEYS(s) (((unsigned)(s)->loop_rec & CRS_KEY_PLAY) ? 1u : 0u)
 #define CRS_LOOP_REC(mode, keys) ((uint8_t)(((mode) & 15u) | ((keys) & 1u) << 4))  /* usb_level: USB audio follows MASTER / takes the full level (docs/USB-AUDIO.md) */
 
 typedef struct {
@@ -83,7 +90,8 @@ typedef struct {
      * free byte: before v8 it was rsv_usb, v4's usb_out (Options > USB Audio Out, the playback removed in v5: 0
      * since; a 0.14 dev build's version-6 record kept FM TONE's chord place there, read once by the version-7
      * migration, then 0) */
-    uint8_t loop_rec, usb_in, usb_level;             /* (above), Options > USB Record (on), USB Level (CRS_USB_*) */
+    uint8_t loop_rec, usb_in, usb_level;             /* (above; v13: bit 5 the KEY layer's keys, CRS_KEY_KEYS), Options >
+                                                      * USB Record (on), USB Level (CRS_USB_*) */
     /* version 6 */
     uint8_t pool_pos[2][10];                         /* per part (chord, bass), per engine slot 0..9 (slot 10's:
                                                       * pool_pos10_*): the pool position last played there, where
