@@ -709,6 +709,10 @@ stripes under it are the presets: none is lit on INIT, all of them on the last p
 marks a factory preset you have saved over. **ALGORITHM** does the same for the bass, with `00 off` in front of the
 pool.
 
+When you step to another preset the stripes move from where they were: going up, the ones in between light one after
+another; going down, they go out. Only the first read-out after switching on, and the first after changing the engine,
+fills from the left. A long way (from the last preset round to INIT, say) takes under half a second.
+
 **OPT + PRESETS** changes the chord sound's engine: hold OPT, turn PRESETS until the engine you want is in the
 middle (the screen shows how many presets it has), let go. You land on the sound you last used in that engine.
 

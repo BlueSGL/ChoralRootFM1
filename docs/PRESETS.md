@@ -30,6 +30,9 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   INIT, every one on the last preset (`PHASE · 06/06`: six stripes, all lit). A pool of more than 32 presets (the
   CZ-1's 64, FM6 with eight added) has 32 stripes: none on INIT, one from preset 01 on, every one only on the last
   (`cr_ui.c` `cu_pool_lit`); since 0.16 (before: INIT was counted, `FM6 · 05/26`, and the last preset left a stripe dark).
+  A step moves the stripes from the place shown to the new one, up (lit) or down (darkened), a stripe every 30 ms, more
+  than 14 of them in 420 ms (a wrap); the part's first read-out and another engine's fill from none (0.17; before, every
+  step filled from none: docs/INTEGRATION.md section 5, `cu_animate`).
 - **OPT + PRESETS changes the engine** outside the editor (a horizontal picker: the engine big, the pool size as the
   value); the part lands on the preset it last had in that pool (remembered per engine per part; the first preset
   before that). The editor's EDIT-held picker is unchanged (it is the same thing inside the editor).

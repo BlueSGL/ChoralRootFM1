@@ -448,6 +448,14 @@ void emu_fw_ui_info(char *buf, uint32_t n)
              (unsigned)s->wv[4], (unsigned)s->lm_mid, (unsigned)s->lm_bars,
              (unsigned)s->lm_free, (unsigned)(s->lm_pos & 0x7FFFu), (unsigned)s->lm_nlane, (unsigned)s->lm_newlane,
              (unsigned)s->lm_slot + 1u, (unsigned)s->lm_jump, s->sub, s->right, (unsigned)s->hot_r, (unsigned)s->hot_c);
+    if (s->kind == CR_K_METER) {                  /* a meter's stripes in this frame: lit of all, the fill's start and end,
+                                                   * its label (tools/emu/test_cr.sh: the sound read-out's steps) */
+        size_t l = strlen(buf);
+        cr_frame_t fr;
+        cr_frame(s, cr_anim_ms(&cu_anim, cu_now()), &fr);
+        snprintf(buf + l, n - l, " fill %u of %u from %u to %u label '%s'", (unsigned)fr.filled, (unsigned)cr_segs(s),
+                 (unsigned)cr_filled(s, s->pct_from), (unsigned)cr_filled(s, s->pct), s->label);
+    }
     if (s->kind == CR_K_ARP) {                    /* the arp screen's hop and its rate line (tools/emu/test_cr.sh) */
         size_t l = strlen(buf);
         snprintf(buf + l, n - l, " pos %d of %u line '%s'", (int)s->pos, (unsigned)s->n_notes, s->line);

@@ -837,7 +837,8 @@ static struct {
     uint8_t sx_off;                       /* SysEx 74 SCREEN 0: off until SysEx on or a key, button or knob */
     uint32_t home_t0;                     /* HOME pressed (held CU_HOME_HOLD_MS: the view menu) */
     uint8_t home_hold;                    /* .. armed (pressed alone, the menu not opened yet) */
-    struct { uint32_t until; uint8_t kind, col, segs, jump, mark; uint16_t pct; char value[8], sub[12], label[24]; } pop;
+    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool; uint16_t pct; char value[8], sub[12], label[24]; } pop;
+                                          /* pool: CU_POOL_ID of a pool's read-out (0: another meter) */
                                           /* jump: the meter's bar jumps to the value (no fill: the picker's preview);
                                            * mark: the square after the name (an overwritten factory preset) */
     uint8_t epk_on, epk_rank;             /* OPT held + PRESETS: the engine picker, the engine (ENGINE_ORDER rank) */
@@ -917,6 +918,7 @@ static void cu_popup(const char *value, const char *sub, const char *label, uint
     cu.pop.kind = PU_METER;
     cu.pop.jump = 0;
     cu.pop.mark = 0;
+    cu.pop.pool = 0;
     cu_cpy(cu.pop.value, value, sizeof cu.pop.value);
     cu_cpy(cu.pop.sub, sub, sizeof cu.pop.sub);
     cu_cpy(cu.pop.label, label, sizeof cu.pop.label);
@@ -964,11 +966,20 @@ static uint32_t cu_pool_lit(uint32_t pos, uint32_t n, uint32_t segs)
  * overwritten factory preset: a square mark after it), "FM6 \267 05/25" (the engine, the position, the pool's presets:
  * INIT, position 00, is not counted; the bass: in orange, " \267 solo" with Bass Behaviour Solo), a stripe per preset
  * (at most 32; a pool of INIT alone: one, never lit), position k lighting k of them (cu_pool_lit) */
+/* a pool's stripes: one per preset, at most 32; a pool of INIT alone: one */
+static uint32_t cu_pool_segs(uint32_t e)
+{
+    uint32_t n = pool_count(e) - 1u;
+    return n > 32u ? 32u : n ? n : 1u;
+}
+/* which pool a read-out shows (cu.pop.pool, 0: not a pool's meter): the part and its engine. cu_animate moves the
+ * stripes of the same pool from where they stood */
+#define CU_POOL_ID(part, e) (1u + ((part) ? 1u : 0u) + 2u * (e))
 static void cu_pool_popup(uint32_t part, uint32_t pos)
 {
     char b[8], nm[13], lb[24], c[8];
     uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, n = pool_count(e) - 1u;
-    uint32_t segs = n > 32u ? 32u : n ? n : 1u;
+    uint32_t segs = cu_pool_segs(e);
     pool_ent_t en = pool_entry(e, pos);
     cu_2d(b, pos, sizeof b);
     pool_name(e, pos, nm);
@@ -984,15 +995,19 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     cu_popup(b, nm, lb, part ? CR_COL_ORANGE : CR_COL_WHITE, (int32_t)cu_pool_lit(pos, n, segs), 0, (int32_t)segs,
              segs);
     cu.pop.mark = en.kind == PK_USER && en.fk != PF_NONE;
+    cu.pop.pool = (uint8_t)CU_POOL_ID(part, e);
     cu_trace("popup: part %u %s / %s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "");
     cu_trace_txt(lb);
     cu_trace("\n");
 }
-/* PRESETS / ALGORITHM's meter: the part's place in its pool (the bass OFF: "00 off") */
+/* PRESETS / ALGORITHM's meter: the part's place in its pool (the bass OFF: "00 off", its pool's stripes all dark:
+ * the place before its first, so the stripes of the place it left go out and those of the next come on from none) */
 static void cu_sound_popup(int bass)
 {
     if (bass && (!cs.bass_sound || !cs.bass_on)) {   /* (BASS tapped off: its sound kept for the next tap) */
-        cu_popup("00", "off", "bass", CR_COL_ORANGE, 0, 0, 12, 12);
+        uint32_t e = trk[CR_PART_BASS].eng_req % NENGINES, segs = cu_pool_segs(e);
+        cu_popup("00", "off", "bass", CR_COL_ORANGE, 0, 0, (int32_t)segs, segs);
+        cu.pop.pool = (uint8_t)CU_POOL_ID(1u, e);
         cu_trace("popup: part 1 00 / off / bass\n");
         return;
     }
@@ -4921,6 +4936,10 @@ static struct {
     cr_name_t name, from;
     char label[32], value[24];
     uint8_t turn;                                 /* params: ce.turn last seen */
+    uint8_t segs;                                 /* meter: its stripes */
+    uint8_t pool;                                 /* meter: the pool it read out last frame (cu.pop.pool; 0: none) */
+    uint8_t pool_of[2];                           /* .. per part (chord, bass): the pool its read-out last showed */
+    uint16_t pool_pct[2];                         /* .. and the fill it showed (its place) */
 } ca;
 static cr_anim_t cu_anim;
 
@@ -4932,6 +4951,7 @@ static int cu_name_eq(const cr_name_t *a, const cr_name_t *b)
 static void cu_animate(cr_screen_t *s, uint32_t now)
 {
     int kind_changed = s->kind != ca.kind;
+    uint32_t pool = 0;                             /* the pool whose read-out this frame's meter is (0: none) */
     static const cr_name_t NONAME;
     /* the first chord sweeps the idle stripes off, then lands */
     if ((s->kind == CR_K_CHORD || s->kind == CR_K_ARP) && ca.kind == CR_K_STRIPES && cr_motion != CR_MOTION_OFF) {
@@ -4984,7 +5004,36 @@ static void cu_animate(cr_screen_t *s, uint32_t now)
         ca.sel = s->sel;
         break;
     case CR_K_METER:
-        if (kind_changed || !cu_eq(s->label, ca.label)) {
+        pool = cu.pop.kind == PU_METER && (int32_t)(cu.pop.until - now) > 0 ? cu.pop.pool : 0u;
+        if (pool) {                                /* a pool's read-out (cu_pool_popup): its label carries the place,
+                                                    * so the pool tells whether it is the same meter. The same part
+                                                    * and engine as that part's read-out last showed: the stripes
+                                                    * move from where they stand (still on their way: from there; the
+                                                    * read-out shown again: from the place it last showed) to the new
+                                                    * place, up or down. Another engine, or the part's first read-out
+                                                    * since power-on: they fill from none */
+            uint32_t pi = (pool - 1u) & 1u;
+            if (kind_changed || pool != ca.pool || s->pct != ca.pct || !cu_eq(s->value, ca.value)) {
+                if (ca.pool_of[pi] != pool)
+                    ca.pct_from = 0;
+                else if (!kind_changed && pool == ca.pool && ca.segs) {
+                    uint32_t a = ((uint32_t)ca.pct_from * ca.segs + 128u) >> 8;
+                    uint32_t b = ((uint32_t)ca.pct * ca.segs + 128u) >> 8, f = b, to = cr_filled(s, s->pct);
+                    if (ca.anim & CR_A_FILL)
+                        f = cr_fill_at(a, b, cr_anim_ms(&cu_anim, now));
+                    if (f != b && ca.segs == s->segments)   /* still on their way: this step moves one at once, so
+                                                             * a knob turned faster than a stripe every CR_FILL_MS
+                                                             * (every step restarts the fill) is still followed */
+                        f = to > f ? f + 1u : to < f ? f - 1u : f;
+                    ca.pct_from = (uint16_t)(f * 256u / ca.segs);
+                } else
+                    ca.pct_from = ca.pool_pct[pi];
+                ca.anim = CR_A_FILL;
+                cr_anim_mark(&cu_anim, now);
+            }
+            ca.pool_of[pi] = (uint8_t)pool;
+            ca.pool_pct[pi] = s->pct;
+        } else if (kind_changed || ca.pool || !cu_eq(s->label, ca.label)) {
             ca.pct_from = 0;
             ca.anim = CR_A_FILL;
             cr_anim_mark(&cu_anim, now);
@@ -5001,6 +5050,7 @@ static void cu_animate(cr_screen_t *s, uint32_t now)
         s->anim = ca.anim;
         s->size = (uint8_t)cr_spring(92, 104, cu_anim.t0, 240, now);   /* the number springs in */
         ca.pct = s->pct;
+        ca.segs = s->segments;
         break;
     case CR_K_BIG: {                               /* a new number springs in (as the meters') */
         int32_t to = s->size ? s->size : 118;
@@ -5034,6 +5084,7 @@ static void cu_animate(cr_screen_t *s, uint32_t now)
         break;
     }
     ca.kind = s->kind;
+    ca.pool = (uint8_t)pool;
     if (s->kind != CR_K_CHORD)
         ca.name = s->kind == CR_K_ARP ? s->name : NONAME;
     cu_cpy(ca.label, s->label, sizeof ca.label);

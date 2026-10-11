@@ -419,6 +419,44 @@ int main(int argc, char **argv)
                  CR_FILL_MAX * CR_FILL_MS, CR_FILL_MAX, lit[0], lit[1], CR_FILL_MAX * CR_FILL_MS - 1u, lit[2],
                  CR_FILL_MAX * CR_FILL_MS);
         check(name, lit[0] == 16u && lit[1] == 31u && lit[2] == 32u && lit[3] == 32u && lit[4] == 0u && all == 32u);
+        {   /* a step of the sound read-out (cr_ui.c cu_animate: pct_from is the place shown before): only the stripes
+             * between the two places move, never fewer than the lower place lit nor more than the higher; down: they
+             * go dark one by one; a wrap (25 -> none): every frame between, done in the time of CR_FILL_MAX */
+            uint32_t t, lo = 99u, hi = 0u, ok = 1u, f;
+            s.segments = 25;
+            s.pct_from = 5u * 256u / 25u;   /* 05 -> 06 */
+            s.pct = 6u * 256u / 25u;
+            for (t = 0; t <= 4u * CR_FILL_MS; t += 5u) {
+                render(&s, t);
+                f = meter_stripes(&s, &all);
+                lo = f < lo ? f : lo;
+                hi = f > hi ? f : hi;
+                ok &= f == (t < CR_FILL_MS ? 5u : 6u) && cr_anim_busy(&s, t) == (t < CR_FILL_MS);
+            }
+            snprintf(name, sizeof name, "a step up (05 -> 06 of 25): %u..%u stripes lit, the sixth after %u ms", lo, hi,
+                     CR_FILL_MS);
+            check(name, ok && lo == 5u && hi == 6u && all == 25u);
+            s.pct_from = 6u * 256u / 25u;   /* 06 -> 03: 6, 5, 4, 3 */
+            s.pct = 3u * 256u / 25u;
+            for (t = 0, ok = 1u; t <= 5u * CR_FILL_MS; t += 5u) {
+                render(&s, t);
+                f = meter_stripes(&s, &all);
+                ok &= f == (t >= 3u * CR_FILL_MS ? 3u : 6u - t / CR_FILL_MS);
+            }
+            check("a step down (06 -> 03): the stripes go dark one every 30 ms, never more than 6 lit", ok);
+            s.pct_from = 256;               /* the last -> INIT */
+            s.pct = 0;
+            for (t = 0, ok = 1u, hi = 25u; t <= CR_FILL_MAX * CR_FILL_MS; t += 15u) {
+                render(&s, t);
+                f = meter_stripes(&s, &all);
+                ok &= f <= hi;
+                hi = f;
+            }
+            ok &= cr_fill_at(25u, 0u, CR_FILL_MAX * CR_FILL_MS - 1u) == 1u && cr_fill_at(25u, 0u, CR_FILL_MAX * CR_FILL_MS) == 0u &&
+                  cr_fill_at(7u, 7u, 0u) == 7u && cr_fill_at(0u, 14u, 14u * CR_FILL_MS - 1u) == 13u;
+            snprintf(name, sizeof name, "a wrap (25 -> none): darker frame by frame, none lit at %u ms", CR_FILL_MAX * CR_FILL_MS);
+            check(name, ok && hi == 0u);
+        }
     }
 
     {   /* the corner dial (a loop playing): red in its box in the top line, none in the panel's centre; the downbeat's

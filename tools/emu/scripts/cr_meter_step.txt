@@ -1,0 +1,54 @@
+# ChoralRoot: the sound read-out's stripes move from where they stand (the owner, 2026-10-11): a step of PRESETS /
+# ALGORITHM lights or darkens only the stripes between the place shown and the new one; a part's first read-out, and
+# another engine's, fill from none. tools/emu/test_cr.sh (EMU_UI_LOG=0) reads every frame's "fill F of N from A to B"
+# after each "popup:" line, by number.
+wait 500
+knob PRESETS +4               # 1: FM6 01 -> 05: the chord part's first read-out: from none (0..5)
+wait 1500                     # (the read-out gone, 900 ms)
+knob PRESETS +1               # 2: 06: shown again, the same pool: from 5 (never fewer)
+wait 400
+knob PRESETS -1               # 3: 05, the read-out still up: from 6 down (never more)
+wait 1500
+knob PRESETS -5               # 4: 00 INIT: 5 go dark
+wait 600
+knob PRESETS -1               # 5: wraps to 25, the last: 25 to light: in 420 ms
+wait 700
+knob PRESETS +1               # 6: wraps to INIT: 25 to darken: in 420 ms
+wait 1500
+knob PRESETS +3               # 7: 03, from none (INIT's)
+wait 40
+knob PRESETS +1               # 8: 04, 40 ms later: from where the stripes stand (on their way), not from 3 nor from none
+wait 40
+knob PRESETS +1               # 9: 05
+wait 40
+knob PRESETS -3               # 10: 02, turning back mid-way: down from where they stand
+wait 1500
+knob KNOB4 +1                 # (no popup line: the fx amount's meter, another meter between)
+wait 300
+knob PRESETS +1               # 11: 03, after another meter: from 2, the place it last showed
+wait 1500
+btn GLO down                  # OPT + PRESETS +3: CZ-1 (64 presets on 32 stripes), 01
+wait 100
+knob PRESETS +3
+wait 100
+btn GLO up                    # 12: CZ-1 01: another engine: from none
+wait 1500
+knob PRESETS +1               # 13: 02 (one stripe still: 1 + 1 * 31 / 63)
+wait 600
+knob PRESETS +30              # 14: 32: 16 stripes, from 1
+wait 1200
+knob PRESETS +32              # 15: 64, the last: 32, from 16 (16 to light: in 420 ms)
+wait 1200
+knob PRESETS -1               # 16: 63: 31, one goes dark
+wait 1500
+knob ALGORITHM +18            # 17: the bass: VA 17: its first read-out: from none
+wait 1500
+knob ALGORITHM +1             # 18: VA 18: from 17
+wait 1500
+knob ALGORITHM -19            # 19: 00 off: the pool's stripes all go dark, from 18
+wait 1500
+knob ALGORITHM +2             # 20: VA 01 (off, INIT, 01): from none (off: none lit)
+wait 1500
+knob PRESETS -1               # 21: the chord part again (CZ-1 62): from 31, its own place
+wait 1500
+dump

@@ -1243,6 +1243,49 @@ pop '00 / INIT / FM6 · 00/57' && pop '01 / TINE EP / FM6 · 01/57' && pop '56 /
     ok "a pool longer than the meter (57 presets, 32 stripes): none lit on INIT, one on 01, 31 on 56, every one only on 57, the last: $OUT/cr_presets_long_last.ppm" \
     || bad "the long pool's stripes (lit/all): INIT $s0 (0/32), 01 $s1 (1/32), 56 $sb (31/32), 57 the last $sl (32/32); $(grep '^popup:' "$PL" | tail -4 | tr '\n' ' ')"
 
+echo "the sound read-out's stripes move from the place shown, not from none (cr_ui.c cu_animate, cr_draw.c cr_fill_at)"
+export EMU_UI_LOG=0
+run cr_meter_step
+unset EMU_UI_LOG
+ML="$OUT/cr_meter_step.log"
+ms() {           # ms N: "MIN MAX FIRST LAST ALL SETTLED" of the stripes lit in the read-out's frames after the Nth
+                 # "popup:" line (a pool's meter: 25 or 32 stripes; SETTLED: the frame it stood still from), "MONO 0"
+                 # appended when a frame moved against the step's direction
+    grep -a '^popup:\|^ui: frame.*device): meter ' "$ML" | awk -v want="$1" '
+        /^popup:/ { n++; next }
+        n == want && / of (25|32) from / {
+            for (i = 1; i <= NF; i++) if ($i == "fill") { f = $(i+1) + 0; all = $(i+3); to = $(i+7) + 0 }
+            if (!c++) { lo = hi = first = last = f; bad = 0 }
+            if (f < lo) lo = f; if (f > hi) hi = f
+            if (f != last) { settle = c; if ((f > last) != (to > last)) bad = 1 }
+            last = f }
+        END { print lo, hi, first, last, all, settle + 0 (bad ? " MONO 0" : "") }'
+}
+m1=$(ms 1); m2=$(ms 2); m3=$(ms 3)
+[ "${m1% *}" = "0 5 0 5 25" ] && ok "a part's first read-out (FM6 01 -> 05): the stripes fill from none ($m1: min max first last all settled-frame)" || bad "the first read-out: $m1"
+[ "${m2% *}" = "5 6 5 6 25" ] && [ "${m2##* }" -le 4 ] && ok "05 -> 06 (the read-out shown again after it went): no frame with fewer than 5 stripes, the sixth lit by frame ${m2##* } ($m2)" || bad "05 -> 06: $m2 (5 6 5 6 25)"
+[ "${m3% *}" = "5 6 6 5 25" ] && [ "${m3##* }" -le 4 ] && ok "06 -> 05: no frame with more than 6, the sixth dark by frame ${m3##* } ($m3)" || bad "06 -> 05: $m3 (5 6 6 5 25)"
+m4=$(ms 4); m5=$(ms 5); m6=$(ms 6)
+[ "${m4% *}" = "0 5 5 0 25" ] && [ "${m5% *}" = "0 25 0 25 25" ] && [ "${m6% *}" = "0 25 25 0 25" ] && [ "${m5##* }" -le 30 ] && [ "${m6##* }" -le 30 ] &&
+    ok "a wrap: INIT -> 25, the last, lights the 25 in ${m5##* } frames, 25 -> INIT darkens them in ${m6##* } (15 ms a frame: inside 420 ms, cr_draw.c CR_FILL_MAX; the read-out lives 900)" \
+    || bad "the wrap: 05 -> INIT $m4 / INIT -> 25 $m5 / 25 -> INIT $m6"
+m7=$(ms 7); m8=$(ms 8); m9=$(ms 9); m10=$(ms 10); m11=$(ms 11)
+set -- $m8; a8=$3; set -- $m9; a9=$3; set -- $m10
+[ "${a8:-0}" -ge 1 ] && [ "${a9:-0}" -ge "${a8:-9}" ] && [ "$4" = 2 ] && [ "$2" -le 5 ] && [ "$1" = 2 ] && [ "${m11% *}" = "2 3 2 3 25" ] &&
+    ok "turned on while the stripes move (a detent every 40 ms: 03 04 05, back to 02): each step goes on from where they stand ($a8, $a9), never from none; after another meter (the fx amount) 02 -> 03 from 2" \
+    || bad "steps under way: $m7 / $m8 / $m9 / $m10 / after another meter $m11"
+m12=$(ms 12); m13=$(ms 13); m14=$(ms 14); m15=$(ms 15); m16=$(ms 16)
+[ "${m12% *}" = "0 1 0 1 32" ] && [ "${m13% *}" = "1 1 1 1 32" ] && [ "${m14% *}" = "1 16 1 16 32" ] && [ "${m15% *}" = "16 32 16 32 32" ] && [ "${m16% *}" = "31 32 32 31 32" ] &&
+    [ "${m14##* }" -le 30 ] && [ "${m15##* }" -le 30 ] &&
+    ok "another engine (OPT + PRESETS: CZ-1, 64 presets on 32 stripes): from none; then 02 (still one), 32 (1 -> 16), 64 (16 -> 32, in ${m15##* } frames), 63 (one dark)" \
+    || bad "the long pool: $m12 / $m13 / $m14 / $m15 / $m16"
+m17=$(ms 17); m18=$(ms 18); m19=$(ms 19); m20=$(ms 20); m21=$(ms 21)
+[ "${m17% *}" = "0 17 0 17 25" ] && [ "${m18% *}" = "17 18 17 18 25" ] && [ "${m19% *}" = "0 18 18 0 25" ] && [ "${m20% *}" = "0 1 0 1 25" ] && [ "${m21% *}" = "31 31 31 31 32" ] &&
+    ok "the other part (ALGORITHM, the bass): its first read-out from none, 17 -> 18 one stripe, off: its 18 go dark, on again from none; the chord part's read-out then from its own place (31)" \
+    || bad "the bass read-out: $m17 / $m18 / $m19 / $m20 / the chord part again $m21"
+n=0; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20 21; do case "$(ms $i)" in *MONO*) n=$((n + 1));; esac; done
+[ $n = 0 ] && ok "no frame of the 21 read-outs moves against its step (up: only more stripes, down: only fewer)" || bad "$n read-outs with a frame against the step's direction"
+
 echo "the power-on splash: the idle stripes slide in, the name lands, the version under them"
 run cr_splash
 grep -qi 'error' "$OUT/cr_splash.log" && bad "cr_splash: an error in the log" || ok "cr_splash: no error in the log"

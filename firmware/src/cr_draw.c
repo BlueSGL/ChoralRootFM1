@@ -127,8 +127,9 @@ static void cr_text_fit(int32_t x, int32_t y, const char *s, uint32_t px, int bo
 #define CR_THIN 330                      /* .. the column: 8 % (Q12; cr_gfx.c resamples down to 1/16) */
 #define CR_SLIDE_MS 160u                 /* a picker's slide */
 #define CR_FILL_MS 30u                   /* a meter: a stripe every 30 ms */
-#define CR_FILL_MAX 14u                  /* .. more than 14 to light (a pool's meter: up to 32): all of them in the 420
-                                          * ms of 14, so the last preset's meter is full inside the popup's 900 ms */
+#define CR_FILL_MAX 14u                  /* .. more than 14 to light or to darken (a pool's meter: up to 32; a wrap
+                                          * from its last preset to INIT, a long jump): all of them in the 420 ms of
+                                          * 14, so the meter is at its place inside the popup's 900 ms */
 #define CR_INTRO_MS 220u                 /* power-on: each band slides in, 90 ms after the one above */
 #define CR_INTRO_GAP 90u
 #define CR_INTRO_NAME 300u               /* .. the name lands from 300 ms, over 150 ms */
@@ -159,6 +160,17 @@ static uint32_t cr_filled(const cr_screen_t *s, uint32_t pct)
     return (pct * cr_segs(s) + 128u) >> 8;
 }
 
+/* a meter's fill (CR_A_FILL) t ms after it started: the stripes lit on the way from a to b of them, one every
+ * CR_FILL_MS (up: lit, down: darkened); more than CR_FILL_MAX to go: all of them in the time of CR_FILL_MAX. b once
+ * it is there. cr_ui.c cu_animate asks it where a meter stands when its value moves again */
+static uint32_t cr_fill_at(uint32_t a, uint32_t b, uint32_t t)
+{
+    uint32_t n = a < b ? b - a : a - b, done = t / CR_FILL_MS;
+    if (n > CR_FILL_MAX)                                           /* a long way: in the time of CR_FILL_MAX stripes */
+        done = t < CR_FILL_MAX * CR_FILL_MS ? t * n / (CR_FILL_MAX * CR_FILL_MS) : n;
+    return done >= n ? b : a < b ? a + done : a - done;
+}
+
 static void cr_frame(const cr_screen_t *s, uint32_t t, cr_frame_t *fr)
 {
     uint32_t i, k;
@@ -184,13 +196,9 @@ static void cr_frame(const cr_screen_t *s, uint32_t t, cr_frame_t *fr)
         fr->slide = 4096 - cr_ease_out(t, CR_SLIDE_MS);
     }
     if (s->kind == CR_K_METER && (s->anim & CR_A_FILL)) {
-        uint32_t a = cr_filled(s, s->pct_from), b = fr->filled, n = a < b ? b - a : a - b, done = t / CR_FILL_MS;
-        if (n > CR_FILL_MAX)                                       /* a long way: in the time of CR_FILL_MAX stripes */
-            done = t < CR_FILL_MAX * CR_FILL_MS ? t * n / (CR_FILL_MAX * CR_FILL_MS) : n;
-        if (done < n) {
-            fr->busy = 1;
-            fr->filled = (uint8_t)(a < b ? a + done : a - done);
-        }
+        uint32_t b = fr->filled;
+        fr->filled = (uint8_t)cr_fill_at(cr_filled(s, s->pct_from), b, t);
+        fr->busy = fr->filled != b;
     }
     if (s->kind == CR_K_STRIPES) {
         if ((s->anim & CR_A_STRIPES) && s->period_ms) {

@@ -607,6 +607,22 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   chord part's engine, ALGORITHM the bass part's (after OFF); OPT + PRESETS the chord part's engine (a horizontal
   picker while OPT is held, applied on release). The meter: the place big, the name (a square after an overwritten
   factory preset's), "FM6 · 05/25" (the place and the pool's presets, INIT not counted: a stripe per preset).
+  **Its fill goes on from the place shown** (0.17, the owner: "it should just animate from previous index to the
+  current index"; until then every detent filled from none, because the label carries the place and `cu_animate` took a
+  changed label for a new meter). The read-out carries its pool (`cu.pop.pool`, `CU_POOL_ID`: the part and its
+  engine); `cu_animate` keeps, per part, the pool its read-out last showed and the fill (`ca.pool_of`, `ca.pool_pct`).
+  The same pool: `pct_from` is where the stripes stand: mid-fill, the stripe they have reached (`cr_draw.c cr_fill_at`,
+  the function `cr_frame` draws with) and one more towards the new place, so a knob turned faster than a stripe per
+  30 ms is followed although every step restarts the fill; the read-out gone and shown again, or another meter in
+  between: the place it last showed. Up lights the stripes between, down darkens them, at the meters' pace
+  (`CR_FILL_MS` 30 ms a stripe; more than `CR_FILL_MAX` 14 to go, a wrap or a long jump: all in 420 ms, Calm 210 ms,
+  inside the read-out's 900 ms). From none: the part's first read-out since power-on, and another engine's (OPT +
+  PRESETS, the engine picker's landing). The bass OFF (`00 off`) is the place before the pool's
+  first: it has the pool's stripes (it had twelve), all dark, so leaving a preset for OFF darkens its stripes and the
+  next preset fills from none. The engine picker's preview (EDIT held, KNOB 1) still jumps (`cu.pop.jump`) and leaves
+  its place for the next read-out. The other meters keep their rule: the same label, the fill from the value before; a
+  new label, from none. Tests: `tools/emu/scripts/cr_meter_step.txt` (every frame's lit stripes, `EMU_UI_LOG=0`: the
+  emulator's `fill F of N from A to B`), `tests/cr_draw_test.c` (a step up, down, a wrap).
   **EDIT tap**: the sound editor (`cr_edit.c`, docs/EDITOR.md; BASS held + EDIT: the bass sound's, SHIFT + EDIT inside
   switches part). Groups -> screens -> lanes: the function buttons become group buttons (FX = OSC, SEL = FILT, ENV,
   LFO, SEQ = MOD, PLAY = FX sends, REC = MIX; HOME or EDIT leaves); a group's tap opens it, tapped again it cycles its
