@@ -199,10 +199,10 @@ one after a recording; the differences say:
 ## Measuring the recording on a Mac
 
 `tools/uac_check.py OUT.wav [SECONDS] [--nonotes] [--debug]` records ChoralRoot In with ffmpeg (avfoundation) while
-it plays C-major chords on the FM-1 over USB-MIDI, then prints the WAV's length against the wall time (the
+it plays C-major chords on the FM-1 over USB-MIDI (mido), then prints the WAV's length against the wall time (the
 drain ratio: ~0.93 or more is healthy, ffmpeg's start costs ~1 s), the loud 50 ms windows and every silent gap of
-0.5 s or more while chords were sent; `--debug` adds the device's counters before and after. Needs `ffmpeg` and
-`python-rtmidi`; it never writes the FM-1.
+0.5 s or more while chords were sent; `--debug` adds the device's counters before and after. Needs `ffmpeg`, `mido`
+and `python-rtmidi`; it never writes the FM-1.
 
 ## Where it lives
 

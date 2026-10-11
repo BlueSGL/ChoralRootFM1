@@ -10,7 +10,7 @@ usage: tools/uac_check.py OUT.wav [SECONDS] [--nonotes] [--debug] [--device NAME
   --debug     tools/fm1_install.py --debug before and after: the device's counters (ua_opens, tx_packets, ...)
   --device    the capture device's name (default "ChoralRoot In")
 
-Needs ffmpeg (avfoundation) and python-rtmidi. The chords are C major, 0.6 s on and 0.4 s off, to the first
+Needs ffmpeg (avfoundation) and mido + python-rtmidi. The chords are C major, 0.6 s on and 0.4 s off, to the first
 MIDI output whose name contains "ChoralRoot". A healthy run gives a WAV about as long as the wall time (the drain
 ratio ~0.93 or more: ffmpeg's own start costs ~1 s) and no silent gap of 0.5 s or more while notes are sent.
 Nothing here writes the FM-1 (no install, no settings)."""
@@ -24,21 +24,14 @@ import time
 import wave
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, HERE)
-import fm1_install as fi                                # noqa: E402  (the MIDI side: every call of it has a bound)
-
 DEBUG_KEYS = ("ua_opens", "ua_open_ms", "ua_tx_packets", "ua_pk5", "ua_overruns", "ua_underruns", "ua_first_take",
               "ua_open_close", "ua_holds", "ua_missed", "ua_arm_gap", "usb_stalls", "last whole open")
 
 
 def device_debug(label):
+    r = subprocess.run([sys.executable, os.path.join(HERE, "fm1_install.py"), "--debug"], capture_output=True,
+                       text=True, timeout=60)
     print(f"--- --debug {label}")
-    try:
-        r = subprocess.run([sys.executable, os.path.join(HERE, "fm1_install.py"), "--debug"], capture_output=True,
-                           text=True, timeout=60)
-    except subprocess.TimeoutExpired:
-        print("  no result within 60 s")
-        return
     for line in (r.stdout + r.stderr).splitlines():
         if any(k in line for k in DEBUG_KEYS) or line.startswith("error"):
             print("  " + line)
@@ -52,33 +45,28 @@ def main():
     ap.add_argument("--debug", action="store_true")
     ap.add_argument("--device", default="ChoralRoot In")
     a = ap.parse_args()
+    import mido
     secs = a.seconds
     if a.debug:
         device_debug("before")
-    up = fi.Updater(fi.MidiBackend())                    # the port list and the open, each with its bound
-    port_name = next((n for n in up.names(outs=True) if "ChoralRoot" in n), None)
+    port_name = next((n for n in mido.get_output_names() if "ChoralRoot" in n), None)
     if port_name is None and not a.nonotes:
-        sys.exit("no ChoralRoot MIDI output (use --nonotes to record without notes)" +
-                 (f": {up.gave_up} did not return in time" if up.gave_up else ""))
+        sys.exit("no ChoralRoot MIDI output (use --nonotes to record without notes)")
     rec = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "avfoundation", "-i", f":{a.device}",
                             "-t", str(secs), "-ac", "2", "-ar", "44100", a.out])
     time.sleep(2.0)                                      # the stream settles before the notes
     sent = 0
     if not a.nonotes:
-        port = up.open(None, port_name)                  # an output only
-        if not port:
-            rec.kill()
-            sys.exit(f"{port_name} did not open")
-        t0 = time.time()
-        while time.time() - t0 < secs - 3.0:
-            for n in (60, 64, 67):
-                port.send(bytes([0x90, n, 100]))         # note on, channel 1
-            sent += 1
-            time.sleep(0.6)
-            for n in (60, 64, 67):
-                port.send(bytes([0x80, n, 0]))           # note off
-            time.sleep(0.4)
-        port.close()
+        with mido.open_output(port_name) as port:
+            t0 = time.time()
+            while time.time() - t0 < secs - 3.0:
+                for n in (60, 64, 67):
+                    port.send(mido.Message("note_on", note=n, velocity=100, channel=0))
+                sent += 1
+                time.sleep(0.6)
+                for n in (60, 64, 67):
+                    port.send(mido.Message("note_off", note=n, velocity=0, channel=0))
+                time.sleep(0.4)
     rec.wait()
 
     w = wave.open(a.out, "rb")
@@ -112,4 +100,4 @@ def main():
 
 
 if __name__ == "__main__":
-    fi.leave(fi.exit_code(main))                         # (no MIDI worker is left, nothing holds the exit)
+    main()

@@ -49,7 +49,7 @@ engine's pool; --sounds shows "over FM6 02 FM BELL" for it and "+" for a preset 
 file keeps the record's binding (its "binding" field says what it overwrites; the record's bytes are what counts).
 
 If the FM-1 is still in update mode (an earlier install was cut off), the
-install finishes the write. Needs python-rtmidi (pip install python-rtmidi; mido is no longer used).
+install finishes the write. Needs mido with python-rtmidi.
 
 Exit codes: 0 done, 1 cancelled or other error, 2 bad arguments or package,
 3 FM-1 not found, 4 connection lost or the device stopped, 5 timeout (no
@@ -57,20 +57,12 @@ loader / no restart), 6 wrong model, or another identity after the install,
 7 the backup, restore or sound write failed (or the firmware has no backup protocol, or is not ChoralRoot for the
 sounds), 8 the running firmware is one ChoralRoot
 is not installed over (Sloop, the Felucca 0.x betas, unknown ones: docs/INSTALL-COMPAT.md; --force overrides).
-
-No MIDI call can hold the tool: the ports are opened, listed and closed in worker processes, each wait has a bound,
-and a port that does not open, answer or close in time is given up (its worker is killed) with the codes above (3
-not found, 4 lost, 5 no restart) and what was waited for ("MIDI" in the source says why).
 """
 import argparse
 import hashlib
-import json
-import os
 import queue
 import re
-import subprocess
 import sys
-import threading
 import time
 
 HS_QUERY = bytes([0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7])
@@ -87,10 +79,7 @@ PORT_RE = re.compile(r"fm-1|felucca|ota|composite|sinco|usb-midi", re.I)   # nev
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0, "retry": 1.0,
          "poll": 1.0, "hs": 1.0, "info": 1.5, "idle_check": 8.0, "idle_write": 180.0,
-         "wait_loader": 30.0, "wait_reboot": 40.0,
-         "port": 10.0,      # a MIDI worker's answer: the port list, an open (its start included), a send, "is it gone?"
-         "close": 1.0,      # a MIDI worker's close of its ports, and its death once killed
-         "stuck": 30.0}     # a MIDI worker ends itself when a call of its own has not returned in this (above the rest)
+         "wait_loader": 30.0, "wait_reboot": 40.0}
 
 EXIT = {"usage": 2, "badpkg": 2, "badbackup": 2, "notfound": 3, "model": 6, "lost": 4, "stopped": 4, "badreq": 4,
         "nobackup": 7, "backup": 7, "nosounds": 7, "unsupported": 8, "badsound": 2,
@@ -239,196 +228,36 @@ def refusal_text(name):
 
 
 # ------------------------------------------------------------------ MIDI ---
-# The ports are opened by python-rtmidi in worker processes (this file run as --midi-worker): one per link, one that
-# lists the ports; never in the tool's own process. Why (reproduced without an FM-1: a virtual port that sends notes
-# while a mido input on it is closed stops the interpreter within a few closes, with the stack seen on the unit:
-# mido/backends/rtmidi.py _close <- ports.py close):
-#  - python-rtmidi 1.5.8 keeps the GIL through every one of its calls and hands each incoming message to Python on
-#    CoreMIDI's receive thread, which needs the GIL (mido's rtmidi backend always sets that callback). Closing an
-#    input (close_port: MIDIPortDispose) waits until the delivery in progress has returned. A message that arrives
-#    while the port is being closed therefore stops the interpreter for good: the close holds the GIL and waits for
-#    the delivery, the delivery waits for the GIL. No thread of the process runs again, so a close moved to a thread
-#    cannot be given up either (its join never returns).
-#  - the FM-1 sends such a message whenever it plays or sends its clock (Options > MIDI Clock: Out): the notes and
-#    pulses that wait while a SysEx goes out leave in the reply's last USB packet (usb.c ep1_tx), so a long reply
-#    (DEBUG: ~650 bytes, 14 USB packets) very often has one right behind it, and the tool closed right after a reply
-#    (--stub test, --debug, --info). The FM-1's answers to another program on the same port (a browser page) are
-#    such messages too. The update's closes follow one-packet messages, and its loader plays nothing: the install
-#    met this far less often.
-#  - so the worker polls rtmidi's queue (no callback, the clock filtered: nothing of Python runs on CoreMIDI's
-#    thread and the deadlock cannot form), and whatever a CoreMIDI call does, the tool itself only waits on a pipe,
-#    with a bound, and kills the worker that misses it (its ports go with it).
 
-NO_RTMIDI = b"!python-rtmidi"
+class MidoLink:
+    """one MIDI in/out pair with a SysEx queue"""
 
-
-def frame(tag, data=b""):
-    return tag + len(data).to_bytes(4, "little") + bytes(data)
-
-
-def read_frame(rd):
-    """-> (tag, data), or None at the end of the pipe"""
-    h = rd.read(5)
-    d = rd.read(int.from_bytes(h[1:], "little")) if len(h) == 5 else None
-    return None if d is None else (h[:1], d)
-
-
-def midi_worker(stuck):
-    """--midi-worker: the MIDI side of one link, or of the port list (above). Frames (a tag, a 4-byte length, the
-    bytes) on stdin and stdout. In: n the port names, o [input, output] open them, s a message to send, l is the
-    port gone?, c close the ports and leave. Out: a the answer to each command in turn ("!" and a text: it failed),
-    m a SysEx that came in. The end of stdin (the tool is gone) ends the worker; so does, without the GIL
-    (faulthandler's own thread), a command that has not returned after `stuck` seconds: the tool gave up on it long
-    before, and no worker stays behind in a call that does not return."""
-    import faulthandler
-    import signal
-    signal.signal(signal.SIGINT, signal.SIG_IGN)          # ^C is the tool's: it closes or kills its workers
-    try:
-        import rtmidi
-    except ImportError:
-        rtmidi = None
-    rd, wr, cmds, null = sys.stdin.buffer, sys.stdout.buffer, queue.Queue(), open(os.devnull, "w")
-    inp = out = names = None
-
-    def pump():
-        while True:
-            c = read_frame(rd)
-            cmds.put(c)
-            if c is None:
-                return
-
-    def ports(cls):
-        """the port names as a client made for the question sees them (then deleted), as mido listed them: what
-        an FM-1 that left and came back has always been found with"""
-        p = cls()
+    def __init__(self, backend, in_name, out_name):
+        import mido
+        self.backend, self.name, self.mido = backend, in_name, mido
+        self.q = queue.Queue()
+        self.inp = mido.open_input(in_name, callback=self._rx)
         try:
-            return p.get_ports()
-        finally:
-            p.delete()
-
-    def do(tag, data):
-        nonlocal inp, out, names
-        if tag == b"n":
-            return json.dumps([ports(rtmidi.MidiIn), ports(rtmidi.MidiOut)]).encode()
-        if tag == b"o":
-            names = json.loads(data)
-            if names[0] is not None:
-                inp = rtmidi.MidiIn()
-                inp.ignore_types(sysex=False, timing=True, active_sense=True)   # SysEx in; the clock stays out
-                inp.open_port(inp.get_ports().index(names[0]))
-            if names[1] is not None:
-                out = rtmidi.MidiOut()
-                out.open_port(out.get_ports().index(names[1]))
-        elif tag == b"s":
-            out.send_message(data)
-        elif tag == b"l":
-            return b"\0" if (names[0] in ports(rtmidi.MidiIn) if inp else names[1] in ports(rtmidi.MidiOut)) else b"\1"
-        elif tag == b"c":
-            for p in (inp, out):
-                if p:
-                    p.close_port()
-                    p.delete()
-        return b""
-
-    threading.Thread(target=pump, daemon=True).start()
-    try:
-        while True:
-            while inp and (m := inp.get_message()):       # (message, delta): the SysEx on, the notes dropped
-                if m[0][0] == 0xF0:
-                    wr.write(frame(b"m", m[0]))
-                    wr.flush()
-            try:
-                c = cmds.get(timeout=0.001 if inp else None)   # a command at once; else the input again in 1 ms
-            except queue.Empty:
-                continue
-            if c is None:
-                break
-            faulthandler.dump_traceback_later(stuck, exit=True, file=null)
-            try:
-                r = do(*c) if rtmidi else NO_RTMIDI
-            except Exception as e:
-                r = b"!" + str(e).encode()
-            faulthandler.cancel_dump_traceback_later()
-            wr.write(frame(b"a", r))
-            wr.flush()
-            if c[0] == b"c":
-                break
-    except OSError:                                       # the tool closed its end
-        pass
-    os._exit(0)                                           # no destructor of rtmidi runs: the kernel closes the ports
-
-
-class Worker:
-    """a --midi-worker process. ask(): one command -> its answer, or None when it has not come within the bound:
-    the worker is then killed (it is in a call that does not return; its ports go with it) and answers None from
-    then on."""
-    live = []                                     # leave() kills what is left: no worker outlives the tool
-
-    def __init__(self):
-        self.p = subprocess.Popen([sys.executable, os.path.abspath(__file__), "--midi-worker", str(DELAY["stuck"])],
-                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE)
-        self.q, self.ans, self.lock, self.dead = queue.Queue(), queue.Queue(), threading.Lock(), False
-        Worker.live.append(self)
-        threading.Thread(target=self.pump, daemon=True).start()
-
-    def pump(self):
-        while (f := read_frame(self.p.stdout)):
-            (self.q if f[0] == b"m" else self.ans).put(f[1])
-        self.ans.put(None)                        # the worker is gone
-
-    def ask(self, tag, data=b"", secs=None):
-        with self.lock:
-            r = None
-            if not self.dead:
-                try:
-                    self.p.stdin.write(frame(tag, data))
-                    self.p.stdin.flush()
-                    r = self.ans.get(timeout=DELAY["port"] if secs is None else secs)
-                except (OSError, ValueError, queue.Empty):
-                    pass
-            if r is None:
-                self.kill()
-            return r
-
-    def kill(self):
-        self.dead = True
-        if self in Worker.live:
-            Worker.live.remove(self)
-        try:
-            self.p.kill()
-            self.p.wait(DELAY["close"])
-            self.p.stdin.close()
-        except (OSError, ValueError, subprocess.TimeoutExpired):
-            pass
-
-
-def no_rtmidi():
-    return InstallError("usage", "needs python-rtmidi (pip install python-rtmidi)")
-
-
-class MidiLink:
-    """one MIDI in / out pair (either may be None) in its worker; the SysEx that came in as a queue"""
-
-    def __init__(self, in_name, out_name):
-        self.w = Worker()
-        self.q = self.w.q
-        r = self.w.ask(b"o", json.dumps([in_name, out_name]).encode())
-        if r != b"":
-            self.w.kill()
-            if r == NO_RTMIDI:
-                raise no_rtmidi()
-            if r is None:
-                raise TimeoutError(f"opening {in_name or out_name}")
-            raise OSError(r[1:].decode(errors="replace"))
+            self.out = mido.open_output(out_name)
+        except Exception:
+            self.inp.close()
+            raise
         time.sleep(DELAY["open"])   # CoreMIDI may drop a message sent just after opening
+
+    def _rx(self, msg):
+        if msg.type == "sysex":
+            self.q.put(bytes([0xF0, *msg.data, 0xF7]))
 
     @property
     def lost(self):
-        return self.w.ask(b"l") != b"\0"
+        return self.name not in self.backend.input_names()
 
     def send(self, pkt):
-        """any MIDI message (the tool's own are SysEx)"""
-        return self.w.ask(b"s", pkt) == b""
+        try:
+            self.out.send(self.mido.Message("sysex", data=pkt[1:-1]))
+            return True
+        except Exception:
+            return False
 
     def read(self, timeout):
         try:
@@ -441,96 +270,26 @@ class MidiLink:
             self.q.get_nowait()
 
     def close(self):
-        """the worker closes its ports and leaves (CoreMIDI's own way, and before the next open: Windows opens a
-        port once); killed when it has not within the bound"""
-        self.w.ask(b"c", secs=DELAY["close"])
-        self.w.kill()
-
-    def abandon(self):
-        """the link of an FM-1 that is gone or restarting: CoreMIDI is not asked to close its port, the worker is
-        killed"""
-        self.w.kill()
+        for p in (self.inp, self.out):
+            try:
+                p.close()
+            except Exception:
+                pass
 
 
-class MidiBackend:
-    """this computer's MIDI ports (python-rtmidi, in worker processes)"""
-    lister = None                                 # the worker that lists the ports (one for the process)
-
-    def names(self, k):
-        if not MidiBackend.lister or MidiBackend.lister.dead:
-            MidiBackend.lister = Worker()
-        r = MidiBackend.lister.ask(b"n")
-        if r == NO_RTMIDI:
-            raise no_rtmidi()
-        if r is None:
-            raise TimeoutError("the list of the MIDI ports")
-        return [] if r[:1] == b"!" else list(dict.fromkeys(json.loads(r)[k]))
+class MidoBackend:
+    def __init__(self):
+        import mido
+        self.mido = mido
 
     def input_names(self):
-        return self.names(0)
+        return list(dict.fromkeys(self.mido.get_input_names()))
 
     def output_names(self):
-        return self.names(1)
+        return list(dict.fromkeys(self.mido.get_output_names()))
 
     def open(self, in_name, out_name):
-        return MidiLink(in_name, out_name)
-
-
-def bounded(fn, secs):
-    """fn() in a daemon thread, waited for at most secs -> (True, its result), or (False, None) when it has not
-    returned: it is left behind (a daemon thread does not hold the exit, and leave() does not wait for anything).
-    What fn raised is raised here. The tool's own backend keeps its bounds by itself (above); this is for any other
-    (the tests' simulated FM-1, a backend whose calls can be left: python-rtmidi's in this process could not)."""
-    box = []
-
-    def run():
-        try:
-            box.append((fn(), None))
-        except BaseException as e:
-            box.append((None, e))
-    t = threading.Thread(target=run, daemon=True)
-    t.start()
-    t.join(secs)
-    if not box:
-        return False, None
-    if box[0][1] is not None:
-        raise box[0][1]
-    return True, box[0][0]
-
-
-class Link:
-    """a backend's link as the tool uses it: its lost and its close cannot hold the tool, whatever the backend does.
-    close(): waited for at most twice DELAY close, then left behind. A link whose FM-1 is known to be gone (a send
-    failed, lost said so) or restarting (close(lost=True): it took a restart request) is not closed in the
-    foreground at all: the backend's abandon() if it has one, else its close(), not waited for."""
-
-    def __init__(self, link):
-        self.link, self.read, self.drain, self.gone, self.shut = link, link.read, link.drain, False, False
-
-    def send(self, pkt):
-        ok = self.link.send(pkt)
-        self.gone |= not ok
-        return ok
-
-    @property
-    def lost(self):
-        try:
-            done, v = bounded(lambda: self.link.lost, DELAY["port"] + DELAY["close"])
-        except Exception:
-            done, v = False, None
-        self.gone |= not done or bool(v)          # (no answer: gone too)
-        return self.gone
-
-    def close(self, lost=False):
-        if self.shut:
-            return
-        self.shut = True
-        lost = lost or self.gone
-        try:
-            bounded(getattr(self.link, "abandon", self.link.close) if lost else self.link.close,
-                    0 if lost else 2 * DELAY["close"])
-        except Exception:
-            pass
+        return MidoLink(self, in_name, out_name)
 
 
 def pair_output(name, outs):
@@ -570,42 +329,9 @@ class Updater:
     def __init__(self, backend, port=None):
         self.backend = backend
         self.port = port
-        self.gave_up = None                       # the last MIDI call that did not return within its bound
-
-    def names(self, outs=False):
-        """the MIDI inputs (or outputs); none when the backend does not answer within the bound"""
-        try:
-            done, v = bounded(self.backend.output_names if outs else self.backend.input_names,
-                              DELAY["port"] + DELAY["close"])
-        except TimeoutError:
-            done = False
-        if not done:
-            self.gave_up = "the list of the MIDI ports"
-        return v if done else []
-
-    def open(self, name, out):
-        """-> the Link of an input / output pair (either may be None), or None: no such port, or the open did not
-        return within the bound"""
-        try:
-            done, link = bounded(lambda: self.backend.open(name, out), DELAY["port"] + DELAY["open"] + DELAY["close"])
-        except TimeoutError:
-            done = False
-        except InstallError:
-            raise
-        except Exception:
-            return None
-        if not done:
-            self.gave_up = f"the opening of {name or out}"
-        return Link(link) if done else None
-
-    def waited(self, secs, what):
-        """the words of a wait given up: how long, for what, and the MIDI call that did not return, if one"""
-        return (f"waited {secs:g} s for {what}" +
-                (f"; {self.gave_up} did not return in time: replug the FM-1, or restart the computer"
-                 if self.gave_up else ""))
 
     def candidates(self, only_port):
-        names = self.names()
+        names = self.backend.input_names()
         if self.port:
             mine = [n for n in names if self.port.lower() in n.lower()]
             if only_port:
@@ -613,15 +339,16 @@ class Updater:
             return mine + [n for n in names if n not in mine and PORT_RE.search(n)]
         return [n for n in names if PORT_RE.search(n)]
 
-    def find(self, want=None, only_port=True, end=None):
-        """the first matching port that answers the handshake (and want(identity)); no port is tried after `end`"""
-        outs = self.names(outs=True)
-        for name in self.candidates(only_port) if outs else []:   # (no output, or no list in time: nothing to pair)
+    def find(self, want=None, only_port=True):
+        """the first matching port that answers the handshake (and want(identity))"""
+        outs = self.backend.output_names()
+        for name in self.candidates(only_port):
             out = pair_output(name, outs)
-            if not out or (end is not None and time.monotonic() >= end):
+            if not out:
                 continue
-            link = self.open(name, out)
-            if not link:
+            try:
+                link = self.backend.open(name, out)
+            except Exception:
                 continue
             ident = handshake(link, 2)
             if ident and (want is None or want(ident)):
@@ -630,14 +357,12 @@ class Updater:
         return None
 
     def wait_for(self, want, secs):
-        """the FM-1 after a restart, for at most secs (and the try of one port that had begun: every step of it
-        has its own bound) -> Device or None"""
         end = time.monotonic() + secs
         while time.monotonic() < end:
-            dev = self.find(want, only_port=False, end=end)
+            dev = self.find(want, only_port=False)
             if dev:
                 return dev
-            time.sleep(min(DELAY["retry"], max(0, end - time.monotonic())))
+            time.sleep(DELAY["retry"])
         return None
 
     def serve(self, link, image, finish, idle, progress):
@@ -688,8 +413,7 @@ class Updater:
         time.sleep(DELAY["loader"])
         ota = self.wait_for(lambda i: i.loader, DELAY["wait_loader"])
         if not ota:
-            what = self.waited(DELAY["wait_loader"], "a MIDI port that answers the identity query as ota-...")
-            raise InstallError("noloader", f"the update loader did not appear ({what}). Replug the USB cable and "
+            raise InstallError("noloader", "the update loader did not appear. Replug the USB cable and "
                                            "run the install again: the FM-1 stays in update mode until it is done")
         return ota
 
@@ -707,18 +431,12 @@ class Updater:
                                f"{served} requests. Replug the USB cable and run the install again to finish")
         step("write", 100)
 
-    def back(self):
-        """the firmware after a restart -> Device (wait_for's bound), or the error that says what was waited for"""
-        back = self.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
-        if not back:
-            what = self.waited(DELAY["wait_reboot"], "a MIDI port that answers the identity query as the firmware")
-            raise InstallError("noreturn", f"the FM-1 did not come back ({what}): power-cycle it")
-        return back
-
     def verify(self, product, step):
         step("reboot")
         time.sleep(DELAY["reboot"])
-        back = self.back()
+        back = self.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
+        if not back:
+            raise InstallError("noreturn", "the FM-1 did not come back: power-cycle it")
         back.link.close()
         if back.id.text != product:
             raise InstallError("mismatch", f"written, but the FM-1 reports {back.id.text} (expected {product})")
@@ -884,7 +602,7 @@ def family(firmware):
 
 
 class BackupLink:
-    """request / reply over a link (one request at a time, the reply carries the same command)"""
+    """request / reply over a MidoLink (one request at a time, the reply carries the same command)"""
 
     def __init__(self, link):
         self.link = link
@@ -1149,7 +867,6 @@ def run_restore(up, path, out, ask, yes):
         raise InstallError("badbackup", f"cannot read {path}: {e.strerror}")
     objs = read_backup(text)
     bl, (version, fam) = open_backup(up)
-    restarts = False
     try:
         held = [object_name(o["id"]) for o in objs if o["size"]]
         print(f"restore onto {version}: {', '.join(held)}", file=out)
@@ -1162,14 +879,13 @@ def run_restore(up, path, out, ask, yes):
                                         lambda: prog.put("busy: stop the loop on the FM-1"))
         finally:
             prog.end()
-        if fam == "choralroot":                   # (the restart is asked for, its answer waited for 2 s; not the
-            try:                                  # FM-1's return: the next command finds it, or says it is not there)
+        if fam == "choralroot":
+            try:
                 bk_check(bl.request(BK_RESTART, [], 2.0)[0])
-                restarts = True
             except InstallError as e:
                 print(f"restart: {e} (power-cycle the FM-1)", file=out)
     finally:
-        bl.link.close(lost=restarts)              # restarting: its port is not closed, the link is dropped (Link)
+        bl.link.close()
     print(f"restored: {', '.join(map(object_name, restored)) or 'nothing'}", file=out)
     if skipped:
         print(f"not used by {version} (kept in the file): {', '.join(map(object_name, skipped))}", file=out)
@@ -1919,12 +1635,10 @@ def load_package(path, force):
 
 
 def not_found(up):
-    names = up.names()
+    names = up.backend.input_names()
     where = f"no MIDI port matching {up.port!r} answered" if up.port else "FM-1 not found"
-    stuck = (f"\n  {up.gave_up} did not return within its bound ({DELAY['port']:g} s): replug the FM-1, or restart "
-             "the computer") if up.gave_up else ""
     return InstallError("notfound", f"{where} (USB data cable? another app using it?)"
-                        f"\n  MIDI inputs: {', '.join(names) if names else '(none)'}{stuck}")
+                        f"\n  MIDI inputs: {', '.join(names) if names else '(none)'}")
 
 
 class Progress:
@@ -2017,11 +1731,10 @@ def run_stub(up, what, out):
     dev = up.find()
     if not dev or dev.id.loader:
         raise not_found(up)
-    r = None
     try:
         r = BackupLink(dev.link).request(BK_STUB, [1 if what == "test" else 2], 1.5)
-    finally:                                      # accepted: the FM-1 detaches 30 ms after its reply (cr_backup.c
-        dev.link.close(lost=r == [0])             # CRB_STUB_GO): its port is not closed, the link is dropped (Link)
+    finally:
+        dev.link.close()
     if len(r) != 1:
         raise BackupError("unexpected stub reply")
     if r[0]:
@@ -2031,11 +1744,9 @@ def run_stub(up, what, out):
     if what == "rescue":
         back = up.wait_for(lambda i: True, DELAY["wait_reboot"])
         if not back:
-            w = up.waited(DELAY["wait_reboot"], "a MIDI port that answers the identity query")
-            raise InstallError("noreturn", f"nothing came back on USB-MIDI ({w}): no ota-FM-1 and no FM-1. One "
-                                           "long LED flash and a \"WL82 UBOOT1.00\" disk: the staged loader was "
-                                           "refused (switch off and on to start the firmware). Nothing at all: "
-                                           "docs/BOOT-SAFETY.md")
+            raise InstallError("noreturn", "nothing came back on USB-MIDI: no ota-FM-1 and no FM-1. One long LED flash "
+                                           "and a \"WL82 UBOOT1.00\" disk: the staged loader was refused (switch off "
+                                           "and on to start the firmware). Nothing at all: docs/BOOT-SAFETY.md")
         back.link.close()
         if not back.id.loader:
             raise InstallError("mismatch", f"the FM-1 came back as {back.id.text}, not in update mode: the stub did not "
@@ -2043,7 +1754,9 @@ def run_stub(up, what, out):
         print(f"update mode: {back.id.text}  ({back.name}). To leave it: install a package (fm1_install.py "
               "PACKAGE.fwsc; the same build writes nothing), or switch the FM-1 off and on", file=out)
         return 0
-    back = up.back()
+    back = up.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
+    if not back:
+        raise InstallError("noreturn", "the FM-1 did not come back: power-cycle it")
     try:
         time.sleep(DELAY["start"])                # (the firmware's first second: USB up before its main loop answers)
         r = BackupLink(back.link).request(BK_DEBUG, [], 3.0)
@@ -2259,8 +1972,12 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     if not (a.stub or a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore or ops):
         ap.error("give a PACKAGE.fwsc, --backup FILE, --restore FILE, --info, --sounds, --screen off|on or --select")
     try:
-        return run(a, MidiBackend() if backend is None else backend, out, ask)   # (without python-rtmidi: the first
-        #                                                                          listing says so, exit 2)
+        if backend is None:
+            try:
+                backend = MidoBackend()
+            except ImportError:
+                raise InstallError("usage", "needs mido and python-rtmidi (pip install mido python-rtmidi)")
+        return run(a, backend, out, ask)
     except InstallError as e:
         print(f"error: {e}", file=sys.stderr)
         return EXIT.get(e.code, 1)
@@ -2270,43 +1987,5 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
         return 130
 
 
-def exit_code(fn):
-    """fn() -> the exit code: its own, or the one of what it raised (argparse's and sys.exit's SystemExit, a text
-    printed as Python prints it; an InstallError; anything else with its traceback, 1), for leave()"""
-    try:
-        return fn() or 0
-    except SystemExit as e:
-        if e.code is None or isinstance(e.code, int):
-            return e.code or 0
-        print(e.code, file=sys.stderr)
-    except InstallError as e:
-        print(f"error: {e}", file=sys.stderr)
-        return EXIT.get(e.code, 1)
-    except KeyboardInterrupt:
-        print("\ninterrupted", file=sys.stderr)
-        return 130
-    except BaseException:
-        import traceback
-        traceback.print_exc()
-    return 1
-
-
-def leave(rc):
-    """the end of a tool that used the MIDI side: the workers still alive are killed (none outlives the tool), what
-    was printed is flushed, and the process ends at once with rc. Not sys.exit: the interpreter's own shutdown waits
-    for the threads that are not daemons and runs the destructors of what is still open, and neither a thread left
-    behind in a backend's call (bounded()) nor a port's destructor may hold the exit; the exit code is the same."""
-    for w in list(Worker.live):
-        w.kill()
-    for f in (sys.stdout, sys.stderr):
-        try:
-            f.flush()
-        except (OSError, ValueError):
-            pass
-    os._exit(rc)
-
-
 if __name__ == "__main__":
-    if sys.argv[1:2] == ["--midi-worker"]:
-        midi_worker(float(sys.argv[2]))
-    leave(exit_code(main))
+    sys.exit(main())

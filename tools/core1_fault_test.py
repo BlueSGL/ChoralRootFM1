@@ -36,12 +36,10 @@ class Unsupported(SystemExit):
 
 
 def connect(port):
-    up = fi.Updater(fi.MidiBackend(), port)     # (every MIDI call of it has a bound: fm1_install.py "MIDI")
+    up = fi.Updater(fi.MidoBackend(), port)
     dev = up.find()
     if not dev or dev.id.loader:
-        if dev:
-            dev.link.close()
-        raise SystemExit('no running FM-1 found' + (f' ({up.gave_up} did not return in time)' if up.gave_up else ''))
+        raise SystemExit('no running FM-1 found')
     return dev
 
 
@@ -74,13 +72,12 @@ def show(label, r):
 
 def restart(port, settle):
     dev = connect(port)
-    took = False
     try:
-        took = fi.BackupLink(dev.link).request(fi.BK_RESTART, [], 1.5) == [0]
+        fi.BackupLink(dev.link).request(fi.BK_RESTART, [], 1.5)
     except fi.InstallError:
         pass
     finally:
-        dev.link.close(lost=took)           # it restarts: its port is not closed, the link is dropped (fi.Link)
+        dev.link.close()
     time.sleep(3)
     end = time.monotonic() + 30
     while True:
@@ -89,10 +86,9 @@ def restart(port, settle):
             break
         except Unsupported:
             raise
-        except (SystemExit, fi.InstallError, OSError) as e:
+        except (SystemExit, fi.InstallError, OSError):
             if time.monotonic() > end:
-                raise SystemExit(f'the FM-1 did not come back: waited 33 s after RESTART for it to answer command 75 '
-                                 f'(the last try: {e})')
+                raise
             time.sleep(0.5)
     print(f'restarted; waiting {settle:.0f} s for the boot guard')
     time.sleep(settle)
@@ -161,4 +157,4 @@ def main():
 
 
 if __name__ == '__main__':
-    fi.leave(fi.exit_code(main))            # (the exit codes as before; no MIDI worker is left, nothing holds the exit)
+    main()
