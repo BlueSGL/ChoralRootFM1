@@ -3105,6 +3105,9 @@ static int cu_layer_keys(uint32_t l)
            !(l == L_LOOP && (!cs.loop_keys || cu.ledit)) && !(l == L_KEY && cs.key_play);
 }   /* (the PLAY menu with Keys = Play, the loop editor, the KEY layer with keys: play: they play, docs/LOOPER-MODES.md) */
 
+#ifndef CU_KEY_T0
+#define CU_KEY_T0(k) fm1_in.note_t0[k]             /* the first scan that saw key k closed (hal/fm1_input.h) */
+#endif
 static void cu_key_press(uint32_t k)
 {
     uint32_t l;
@@ -3161,6 +3164,7 @@ static void cu_key_press(uint32_t k)
     {
         int32_t n = 53 + (int32_t)k + 12 * cu.octave;
         n = n < 0 ? 0 : n > 127 ? 127 : n;
+        cr_klat_post(CU_KEY_T0(k));                /* (78 PEAK: the key's way to the engine, timed) */
         cr_post(CRE_KEY, (uint32_t)n, cs.vel, 1);
         cu.key_note[k] = (uint8_t)(n + 1);
     }
@@ -3661,6 +3665,76 @@ static void cu_calib_screen(cr_screen_t *s)
     }
 }
 
+/* The note keys' part of the scan: the frame's (cr_ui_input) and the pump's (cr_ui_pump, between the strips of a
+ * redraw). ne: the press edges taken, km: the keys down */
+static void cu_scan_keys(uint32_t ne, uint32_t km)
+{
+    uint32_t k;
+    for (k = 0; k < CU_NKEY; k++) {
+        uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
+        if (was && (e || !is))
+            cu_key_release(k);
+    }
+    for (k = 0; k < CU_NKEY; k++) {
+        uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
+        if (!was && (is || e)) {
+            cu_key_press(k);
+            if (!is)
+                cu_key_release(k);
+        }
+    }
+}
+static void cu_scan_step(void)                     /* step entry: every key up (nothing latched) after a chord: the
+                                                    * cursor advances (the engine: if a chord was written there) */
+{
+    static uint8_t down;
+    uint8_t dn = (uint8_t)(cu.kheld || (cu.mlatch && !cs.kbd_full));   /* (the Full keyboard: the latch waits) */
+    if (cr_snap.lcap == CRL_CAP_STEP && down && !dn) {
+        cr_post(CRE_LOOP, LP_STEP, 0, CRL_STEP_KEYSUP);
+        cu_trace("loop: step keys up\n");
+    }
+    down = dn;
+}
+
+/* The keys while a frame draws (docs/INTEGRATION.md "Keys while a frame draws"). A redraw calls this at each glyph, arc
+ * and polyline it draws and after each strip (cr_gfx.c cr_draw_idle, set by cr_ui_draw for its own cr_draw only): a
+ * key that plays is handed to the engine then, not after the frame. Only that: the note keys' part of the scan, and only while it can do nothing but post
+ * to the engine (cu_key_press: B3's tap, a chord key, a note; cu_key_release). So it stands back, and the frame's
+ * own scan (cr_ui_input, in order, as before) takes everything, whenever
+ *   a button is down, was pressed or let go since the scan, or a hold is armed (the keys may mean a layer's, a
+ *     combo opens a layer: cu_activity, and a button's event comes before a key's);
+ *   the root keys belong to the layer open (cu_layer_keys: they pick, load, save), to the naming page or to Options;
+ *   the panel is being calibrated.
+ * Nothing it calls draws, reads the flash or writes what the frame being drawn reads: cr_draw reads its screen
+ * model (cu_scr, built before it: cr_build_screen, cu_animate), its cache, the canvas, the glyph buffer and the
+ * palette, and the key handlers write none of them (cu, cs and the engine's queue only), so the frame is drawn as
+ * it was built and the next one shows the keys. Not re-entered: cr_draw is not called from here.
+ * With no key gone down or up since the last scan it costs a comparison.
+ * CU_PUMP_BEGIN / END: the emulator's (EMU_PUMP=0: no pump; the CPU lock, as its emu_fw_idle) */
+#ifndef CU_PUMP_BEGIN
+#define CU_PUMP_BEGIN() 1
+#define CU_PUMP_END() ((void)0)
+#endif
+#ifndef CU_BTN_EDGES
+#define CU_BTN_EDGES() (fm1_in.pressed | fm1_in.released)   /* button edges the scan has not taken yet */
+#define CU_KEY_EDGES() fm1_in.notes_pressed                 /* .. note key presses */
+#endif
+static uint32_t cu_pumped;                         /* key scans done inside a redraw (the emulator's "keys:" line) */
+static void cr_ui_pump(void)
+{
+    if (!CU_PUMP_BEGIN())
+        return;
+    if ((fm1_in.notes != cu.kheld || CU_KEY_EDGES()) &&
+        !cc.on && !cc.req && !fm1_in.buttons && !CU_BTN_EDGES() && !cu.bheld && cu.armed == NB &&
+        !cu_layer_keys(cu_layer()) && !(cu.page == PG_SAVE && ce.save_step) && !cu.opt_open) {
+        uint32_t ne = fm1_input_note_edges();
+        cu_scan_keys(ne, fm1_in.notes);
+        cu_scan_step();
+        cu_pumped++;
+    }
+    CU_PUMP_END();
+}
+
 static void fm6_service(void);                     /* fm6_store.c (after this file): DX7 SysEx */
 #if FELUCCA_CZ
 static void cz_service(void);                      /* cz_store.c (after this file): Casio CZ-1 SysEx */
@@ -3668,7 +3742,7 @@ static void cz_service(void);                      /* cz_store.c (after this fil
 static void cr_ui_input(void)
 {
     uint32_t pe = fm1_input_edges(0), ne = fm1_input_note_edges(), bm = fm1_in.buttons, km = fm1_in.notes;
-    uint32_t cur = 0, edg = 0, b, k, now = cu_now();
+    uint32_t cur = 0, edg = 0, b, now = cu_now();
     int32_t s;
     fm6_poll();                                    /* FM6: a sound's PTCH -> its patch (as ui_input.c) */
     fm6_service();                                 /* FM6: a DX7 SysEx frame from USB-MIDI (fm6_store.c) */
@@ -3758,34 +3832,13 @@ static void cr_ui_input(void)
             cu_opened(cu.armed);
         }
     }
-    for (k = 0; k < CU_NKEY; k++) {
-        uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
-        if (was && (e || !is))
-            cu_key_release(k);
-    }
-    for (k = 0; k < CU_NKEY; k++) {
-        uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
-        if (!was && (is || e)) {
-            cu_key_press(k);
-            if (!is)
-                cu_key_release(k);
-        }
-    }
+    cu_scan_keys(ne, km);
     if (cu.b3_pend && ((cu.kheld >> CU_KEY_LOCK) & 1u) && now - cu.b3_t0 >= (uint32_t)HOLD_MS[settings_hold % 4u]) {
         cu.b3_pend = 0;                            /* B3 held alone past the hold time: the LOCK layer (held again
                                                     * in it: closed); its release does nothing, LOCK as it was */
         cu_lock_menu();
     }
-    {                                              /* step entry: every key up (nothing latched) after a chord: the
-                                                    * cursor advances (the engine: if a chord was written there) */
-        static uint8_t down;
-        uint8_t dn = (uint8_t)(cu.kheld || (cu.mlatch && !cs.kbd_full));   /* (the Full keyboard: the latch waits) */
-        if (cr_snap.lcap == CRL_CAP_STEP && down && !dn) {
-            cr_post(CRE_LOOP, LP_STEP, 0, CRL_STEP_KEYSUP);
-            cu_trace("loop: step keys up\n");
-        }
-        down = dn;
-    }
+    cu_scan_step();
     for (b = 0; b < NE; b++)
         if ((s = panel_enc(b)) != 0)
             cu_knob(b, s);
@@ -5665,7 +5718,9 @@ static void cr_ui_draw(void)
         cr_draw_invalidate();                     /* (every strip, whole, over the black frame) */
     }
     cu_animate(&cu_scr, now);
+    cr_draw_idle = cr_ui_pump;                    /* the keys are read between its strips (cr_ui_pump) */
     cr_draw(&cu_scr, cr_anim_ms(&cu_anim, now));
+    cr_draw_idle = 0;
     if (cu.screen_off) {                          /* drawn */
         cu.screen_off = 0;
         cu_trace("screen: on\n");

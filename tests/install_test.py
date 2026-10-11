@@ -551,12 +551,18 @@ def debug():
        "started at most 640 us behind its boundary, its longest half took 3350 us with TIMER5 nested in it (410 us" in out and
        "once came 1130 us after the one before: masked for about 1030 us, until 0x0200B2C4" in out,
        "--debug: when the ISR got to start (PEAK's values 25..30): the stale halves, the lag, TIMER5, the masked stretch")
-    ok(rc == 0 and len(I.DEBUG_PEAK) == 30 and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 34 and "key_ons" not in out and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
        "worst half since the last --debug: 2580 us of 2902 (88 %) over 34500 halves" in out and
        "late 12 (the latest: 2950 us, its largest stage fx)" in out and
        "down 40 / 110, delay 90 / 200, reverb 300 / 520, up 35 / 90" in out and
        "14 erases (45 ms of silence each), 0 of them into a sounding output (holes), settings saves 5, session saves 9" in out,
        "--debug: the worst cases since the last read (78 PEAK, DEBUG_PEAK), the fx stage's parts, the flash's holes")
+    cr.peak += [212, 3100, 2650, 5400]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "key_ons 212" in out and "key_pick_us 3100" in out and "key_eng_avg_us 2650" in out and
+       "key_eng_us 5400" in out and "keys: 212 note-ons since the last --debug" in out and
+       "posted one after 3.1 ms at most, the engine had it after 2.6 ms on average, 5.4 ms at most" in out,
+       "--debug: the keys' way to the engine (PEAK's values 31..34): the note-ons, the main loop's and the engine's times")
     cr.peak = None
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")

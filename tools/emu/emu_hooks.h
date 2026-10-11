@@ -54,6 +54,14 @@ typedef struct {
     uint32_t ui_lock_max_us;                    /* the longest the UI held it (ui_input + ui_leds) */
     uint8_t led_play_green;                     /* (col << 3) | row bit of PLAY's green LED */
     uint8_t ready;
+    /* the keys while a frame draws (README "A redraw in simulated time"; firmware/src/cr_ui.c cr_ui_pump): the
+     * firmware calls strip_done after each strip of a redraw (headless: emu.c moves the device's clock on by a
+     * strip's time, EMU_STRIP_US; 0: nothing) and pump_mark each time it is about to read the keys inside a redraw
+     * (EMU_UI_GAP=1: emu.c measures the stretches between). pump_off (EMU_PUMP=0): the keys are not read there, as
+     * before 0.18: the reference the latency is measured against */
+    void (*strip_done)(void);
+    void (*pump_mark)(void);
+    uint8_t pump_off;
 } emu_hal_t;
 extern emu_hal_t emu_hal;
 
@@ -77,4 +85,9 @@ int emu_fw_midi_out_take(uint32_t *pkt);    /* one USB-MIDI event packet out, 0:
 void emu_fw_dump(void);                     /* print the firmware's input state (F12) */
 void emu_fw_stats(uint32_t *shed, uint32_t *cpu_pct);  /* voices shed on overload, the CPU meter */
 void emu_fw_stages(char *buf, uint32_t n);  /* the audio ISR's stage profile (EMU_STAGES=1), "" = none */
+/* the keys' way to the engine since power-on (firmware/src/cr_out.c cr_klat, the unit's 78 PEAK): v[0] the note-ons
+ * timed, then us from the tick that saw the key down: v[1] the longest to the main loop's post, v[2] the average and
+ * v[3] the longest to the audio block that applied it; v[4] the key scans done inside redraws. Returns the strips
+ * the redraw in progress (or the last one) has composed */
+uint32_t emu_fw_keys(uint32_t v[5]);
 void emu_fw_ui_info(char *buf, uint32_t n);  /* the last UI frame's screen: kind, text, strips (EMU_UI_LOG) */

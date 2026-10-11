@@ -17,6 +17,13 @@
 #   (l) (c) with the delay and the reverb fully on (0.18, docs/FX.md): the chord part's sends at 127, Decay 13 s,
 #       Feedback up: the heaviest sound scenario with both effects' loops running in every block (budget: both effects
 #       <= 350 us a block, no block over 80 %)
+# The heavy scenarios (c, d, e, i, l) also get a "keys" line each (tools/emu/keylat.py, docs/INTEGRATION.md "Keys while
+# a frame draws"): 40 taps of G5 at pseudo-random times while the chord is held, with a redraw's strip taking 2.7 ms of
+# the device's clock (the emulator's worst frame: 16 ms for six strips) and 7.8 ms (2.9 times that: the upper end of the
+# unit's unknown factor): the note-on's way from the key's scan to the engine, average and worst, as the firmware is
+# (the keys read inside the redraw) and with the keys read between frames only (EMU_PUMP=0: as it was); and a third
+# line: the longest stretch of a UI frame of the scenario itself in which no key is read (EMU_UI_GAP=1, the device
+# estimate from the host's instructions), both ways.
 # Every scenario runs twice: as above (the figures), then with EMU_STAGES=1 for the audio ISR's stages (firmware/src/
 # cr_cpu1.h cr_dbg: the engine tick, part 0 (chord), part 1 (bass: what the second core takes over), the rest of the mix
 # and the FX, the master; device us per half, avg / max).
@@ -53,6 +60,7 @@ for s in a b c d e f g h i j l; do
     python3 tools/emu/wavclicks.py "$OUT/$n.wav" --from 0.4 | tail -1 | sed 's/^/   /'
     EMU_STAGES=1 "$EMU" --headless --script "tools/emu/scripts/$n.txt" >"$OUT/${n}_stages.log" 2>&1
     LC_ALL=C grep -a '^cpu: stages\|^cpu: fx parts' "$OUT/${n}_stages.log" | sed 's/^cpu: /   /'
+    case $s in c|d|e|i|l) python3 tools/emu/keylat.py --emu "$EMU" "tools/emu/scripts/$n.txt" ;; esac
 done
 DCON="$OUT/dualcore_on_flash.bin"             # Options > Dual Core On, saved: the flash of the runs below (a copy each)
 rm -f "$DCON"

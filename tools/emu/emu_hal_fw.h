@@ -72,6 +72,26 @@ static uint32_t fm1_input_edges(void *released)
 }
 static uint32_t fm1_input_note_edges(void) { return __atomic_exchange_n(&host_notes, 0u, __ATOMIC_SEQ_CST); }
 static int32_t fm1_enc_take(uint32_t e) { return __atomic_exchange_n(&host_enc[e % 7u], 0, __ATOMIC_SEQ_CST); }
+/* the keys while a frame draws (firmware/src/cr_ui.c cr_ui_pump, cr_out.c cr_klat): the tick that saw key k go down
+ * (hal/fm1_input.h note_t0), the edges not taken yet, and the pump's entry: EMU_PUMP=0: no pump; emu.c's mark (the
+ * longest stretch with no key read, EMU_UI_GAP=1), then the CPU lock as emu_fw_idle takes it. A strip composed and
+ * sent (cr_draw.c CR_HOOK_STRIP): the emulator's clock (emu.c: a strip's time passes, EMU_STRIP_US) */
+static uint32_t emu_key_t0[27];
+#define CU_KEY_T0(k) emu_key_t0[(k) % 27u]
+#define CU_BTN_EDGES() host_pressed
+#define CU_KEY_EDGES() host_notes
+static int emu_pump_begin(void)
+{
+    if (emu_hal.pump_off)
+        return 0;
+    if (emu_hal.pump_mark)
+        emu_hal.pump_mark();
+    fm1_irq_off();
+    return 1;
+}
+#define CU_PUMP_BEGIN() emu_pump_begin()
+#define CU_PUMP_END() fm1_irq_on()
+#define CR_HOOK_STRIP() do { if (emu_hal.strip_done) emu_hal.strip_done(); } while (0)
 
 /* ----------------------------------------------------- display --- */
 /* src/lcd.c's fill and blit on the panel's RAM (emu_hal.lcd): the panel is on and lit from power-on, as on the device

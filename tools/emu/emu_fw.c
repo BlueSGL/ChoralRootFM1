@@ -179,9 +179,11 @@ void emu_fw_tick(uint32_t ms)
     down = k & ~in_key;
     for (i = 0; i < EMU_NKEY; i++) {
         uint32_t m = 1u << i;
-        if (down & m)
+        if (down & m) {
             key_ms[i] = ms;
-        else if ((in_key & m) && !(k & m) && ms - key_ms[i] < EMU_RELEASE_MS)
+            if (i < 27u)
+                emu_key_t0[i] = fm1_ticks();      /* (hal/fm1_input.h note_t0: the scan that saw it closed) */
+        } else if ((in_key & m) && !(k & m) && ms - key_ms[i] < EMU_RELEASE_MS)
             k |= m;
     }
     in_key = k;
@@ -524,6 +526,15 @@ void emu_fw_ui_info(char *buf, uint32_t n)
             l = strlen(buf);
         }
     }
+}
+uint32_t emu_fw_keys(uint32_t v[5])
+{
+    v[0] = cr_klat.n;
+    v[1] = CR_KLAT_US(cr_klat.pick);
+    v[2] = CR_KLAT_AVG_US();
+    v[3] = CR_KLAT_US(cr_klat.eng);
+    v[4] = cu_pumped;
+    return cr_dc.drawn;
 }
 void emu_fw_stats(uint32_t *shed, uint32_t *cpu_pct)
 {

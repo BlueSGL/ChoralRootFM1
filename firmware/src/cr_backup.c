@@ -667,7 +667,7 @@ static void crb_debug(void)
  * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
 static void crb_peak(void)
 {
-    uint32_t v[32], k = 0, i;
+    uint32_t v[36], k = 0, i;
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -696,6 +696,14 @@ static void crb_peak(void)
     v[k++] = cr_dbg.stale;                           /* halves in which the DAC played something old */
     v[k++] = cr_dbg.pk_t5gap / FM1_TICKS_PER_US;     /* TIMER5's largest gap (100: nothing masked the interrupts) */
     v[k++] = cr_dbg.pk_t5pc;                         /* .. and where it came back to */
+    /* the keys' way to the engine (cr_out.c cr_klat; docs/INTEGRATION.md "Keys while a frame draws"), 34 values: the
+     * note-ons timed, then us from the first scan that saw the key closed (its debounce, 1.1 .. 2.2 ms, in it): the
+     * longest until the main loop posted the note-on, the average and the longest until the audio ISR applied it */
+    v[k++] = cr_klat.n;
+    v[k++] = CR_KLAT_US(cr_klat.pick);
+    v[k++] = CR_KLAT_AVG_US();
+    v[k++] = CR_KLAT_US(cr_klat.eng);
+    cr_klat.n = cr_klat.sum = cr_klat.pick = cr_klat.eng = 0;
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

@@ -1,0 +1,36 @@
+# tools/emu/test_cr.sh: a key struck while a frame draws (docs/INTEGRATION.md "Keys while a frame draws").
+# The SCOPE view with a note sounding composes all six strips every frame. "strike" presses a key just after the
+# first strip of the next redraw (the frame's own scan is over: the worst moment for the key). Run with
+# EMU_STRIP_US=N (a strip takes N us of the device's clock: 2700 = the emulator's worst frame, 16 ms; 7000 = a
+# 42 ms frame) and with EMU_PUMP=0 for the firmware as it was: the "keys:" line gives the note-ons' way to the engine
+wait 300
+btn HOME
+wait 100
+btn HOME
+wait 100
+btn HOME
+wait 100
+btn HOME                      # the SCOPE view
+wait 300
+btn D4 down                   # a note: the trace moves, every frame is a full redraw
+wait 500
+strike G4 80
+wait 400
+strike A4 80
+wait 400
+strike C5 80
+wait 400
+strike E4 80
+wait 400
+strike G4 80
+wait 400
+strike A4 80
+wait 400
+strike C5 80
+wait 400
+strike E4 80
+wait 400
+btn D4 up
+wait 400
+expect sound
+dump

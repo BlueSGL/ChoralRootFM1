@@ -1075,3 +1075,89 @@ all. tools/emu/perf.sh, UI frame avg / max (device estimate), before -> after: (
 us and (i) 3553 / 15578 -> 2585 / 15578 (the loop's chords under the held one no longer squeeze the big name at
 every change: the arp screen redraws it plain); (a) (b) (d)-(h) (j) unchanged within 1 %. The audio block is
 untouched: (c) 849 us avg / 1031 max of 2902 -> 850 / 1075 (29 % / 37 %), no block over the budget in any scenario.
+
+### Keys while a frame draws (0.18)
+
+**The path of a key, and where it waited.** The matrix is scanned by TIMER5 (10 kHz, a column a tick, a frame of 11
+columns every 1.1 ms; `hal/fm1_input.h fm1_input_tick`), which outranks the audio ISR and is masked by nothing in
+the draw. A press is debounced there (two frames closed: 1.1 to 2.2 ms after the contact) into `fm1_in.notes` and
+its edge. From there on the key is the main loop's: `cr_ui_input` (cr_ui.c) decides what it means (a note, a chord
+key, B3, a layer's pick, a letter of a name) and posts the engine's event to `cr_evq` (`cr_post`); the audio ISR
+drains the queue before each 32-frame block of the half it renders (`cr_audio_block`), the voice starts in that
+block, and the half leaves the DAC 2.9 ms later.
+
+| stage | time |
+|---|---|
+| contact to the debounced press (TIMER5) | 1.1 .. 2.2 ms |
+| debounced press to the main loop's scan | 0 while the loop idles (it scans continuously for the rest of each 15 ms); **up to the whole pass** while it works: a frame's redraw `T`, a sound's load, a save |
+| posted to applied (the next half's render) | 0 .. 2.9 ms |
+| applied to the DAC | 2.9 ms |
+
+So until 0.18 a key struck just after a frame's scan sounded `8.0 ms + T` after its contact at worst, 4.0 ms at
+best. `T` on the emulator's estimate: 15.6 to 16.3 ms for the worst frames of perf.sh's (c) (d) (e) (i) (l) (a
+whole-screen redraw of six strips), 8.4 to 9.4 ms in the simpler scenarios, 0.4 to 3.6 ms on average. The unit's
+factor on that estimate is not known (1.4 to 2.9 for the audio: docs/FX.md "The cost on the unit"), which puts the
+worst `T` between 16 and 47 ms and the worst key at 24 to 55 ms. The draw itself masks no interrupt (lcd.c, gfx.c,
+cr_gfx.c, cr_draw.c have no interrupt-off section): a long frame cost key latency, never audio.
+
+**What reads the keys now.** `cr_ui_pump` (cr_ui.c), called from inside the redraw through `cr_draw_idle` (cr_gfx.c):
+at each glyph, arc and polyline drawn and after each strip is sent. It runs the note keys' part of the scan
+(`cu_scan_keys`, `cu_scan_step`: the same two functions `cr_ui_input` calls), so a key that plays is posted then.
+With no key gone down or up since the last scan it is one comparison.
+
+**Why the frame cannot be disturbed.** `cr_ui_draw` builds the screen model first (`cr_build_screen`, then
+`cu_animate`, into `cu_scr`), and `cr_draw(&cu_scr, t)` is a function of that model alone: checked, it reads the
+model, its own frame values (`cr_frame`, a local), the strip cache `cr_dc`, the canvas `cv_px` and the glyph
+buffer, the fonts, the palette and `ux.gen`, and nothing of `cu`, `cs`, `ce`, `cr_snap` or the engine (the scope's
+wave, GEEK OUT's lines and the editor's cells are copied into the model). The LEDs are built before the draw
+(`cr_ui_frame`). The pump writes none of what the draw reads: the handlers it can reach write `cu`, `cs` and the
+engine's queue. So the frame on the screen is the one that was built, and the next frame shows the key.
+
+**What it will not do.** The meaning of a key is the UI's state, and most of that code is not re-entrant: a layer's
+key can load a sound from the flash, save, or draw (`cu_flash_erase` calls `cr_draw` itself). So the pump handles a
+key only where `cu_key_press` / `cu_key_release` can do nothing but post to the engine (a note, a chord key with its
+LOCK latch, B3's tap), and stands back, leaving every edge untaken for the frame's own scan, when:
+
+- a button is down, or was pressed or let go since the last scan, or a hold is armed (`fm1_in.buttons`, the edges,
+  `cu.bheld`, `cu.armed`): a button's event comes before a key's, and a key during a hold opens a layer;
+- the root keys belong to the open layer (`cu_layer_keys`: KEY's pick, BASS, METRO, the view menu, the PLAY menu
+  with Keys = Pick), to the naming page or to Options;
+- the panel is being calibrated.
+
+`cr_draw_idle` is set by `cr_ui_draw` around its own `cr_draw` only: the splash's draws, and `cu_flash_erase`'s
+(reached from inside a scan), run without it, so the pump is never entered from a handler.
+
+**Order and grouping.** The engine has no time window for a chord: it takes each event as it comes, and what a
+root plays is the chord keys down at its press. While the loop idles (most of every 15 ms) the keys already reach
+it in the order played, a scan apart. Inside a frame they used to arrive together at its end, the chord keys before
+the roots whatever the order played (the scan's index order); now they arrive as they do everywhere else. The
+debounce (TIMER5) is untouched, and within one scan the order is the same code as before.
+
+**What still waits.** The part of a pass outside the redraw: the frame's own scan and what its handlers do (a sound's
+load: `st_read` masks the interrupts about 0.5 ms a page; a global save's erases, 45 ms each, the audio silent
+anyway), the LEDs and the screen model. The pump is not called there: those run inside the handlers themselves.
+
+**Measured** (the emulator; `tools/emu/README.md` "A redraw in simulated time"):
+
+- The longest stretch of a UI frame in which no key is read (`EMU_UI_GAP=1`, device estimate from the host's
+  instructions): 15.0 to 15.3 ms before (the whole frame; 8.2 to 9.2 ms in (a) (b) (k)), 1.4 to 2.7 ms now (one
+  large glyph, or a strip's hash and blit). With the unit's unknown factor: 2 to 8 ms.
+- `tools/emu/scripts/cr_keylat.txt` (test_cr.sh): eight keys struck as a frame of six strips begins, just past its
+  scan, a strip taking 2.7 ms of the device's clock (a 16 ms redraw): the note-on reached the engine after 17 to
+  19 ms before, 4 ms at most now; with 7.8 ms a strip (47 ms): 49 ms before, 9 ms now. That model moves the clock
+  a strip at a time, so it shows the reads after each strip only: an upper bound.
+- perf.sh's (c) (d) (e) (i) (l) with 40 keys struck at random times (tools/emu/keylat.py; its lines are in
+  perf.sh's output), key's scan to engine, average / worst, before -> after: 16 ms redraws: (c) 2.5 / 14 -> 1.5 / 4
+  ms, (d) 9.7 / 18 -> 1.6 / 4, (e) 1.2 / 6 -> 1.1 / 2, (i) 2.0 / 13 -> 1.2 / 4, (l) 2.0 / 11 -> 1.1 / 4; 47 ms
+  redraws: (c) 12.2 / 43 -> 3.6 / 9, (d) 26.5 / 48 -> 4.3 / 9, (e) 1.2 / 9 -> 1.1 / 2, (i) 12.5 / 44 -> 2.9 / 9, (l)
+  9.6 / 49 -> 3.6 / 9.
+- With frames that take no time (every other headless run) nothing changes: the WAV and the last LCD frame of
+  every script in tools/emu/scripts (139, perf.sh's among them) are the same bit for bit as before. The UI frame's
+  cost did not rise (host instructions, perf.sh: 1.5 to 3.5 % lower in every scenario, the compiler's layout; the
+  pump adds a pointer test a glyph); the audio ISR's static cost 14739 -> 14748 (tests/target_budget.py).
+
+**On the unit**: 78 PEAK (`fm1_install.py --debug`) appends `key_ons`, `key_pick_us`, `key_eng_avg_us`,
+`key_eng_us` (cr_out.c `cr_klat`): the note-ons timed since the last read, and from the first scan that saw the key
+closed (the debounce in it): the longest until the main loop posted the note-on, the average and the longest until
+the audio ISR applied it. Expected: `key_pick_us` 1.1 to 2.2 ms plus the longest stretch above, `key_eng_us` up to
+2.9 ms more; a `key_pick_us` of a frame's length would mean a key waited for a redraw.

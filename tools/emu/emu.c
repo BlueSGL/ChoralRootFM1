@@ -537,6 +537,21 @@ static uint64_t instr_now(void)
 }
 #define DEV_INSTR_PER_US (5882.0 * EMU_BLOCK / BLOCK_US)
 static struct { uint64_t n, sum, max, over, over80; uint64_t ui_n, ui_sum, ui_max; } ist;
+/* EMU_UI_GAP=1: the longest stretch of a UI frame in which the firmware reads no key (host instructions): from the
+ * frame's start to the first key scan inside its redraw, between two of those, from the last one to the frame's end
+ * (cr_ui.c cr_ui_pump; with EMU_PUMP=0 the whole frame). ui_gap_mark: at each of those points. Apart from the
+ * figures' runs: a mark is a system call, counted in the frame's instructions */
+static struct { uint64_t i0, max; } ugap;
+static void ui_gap_mark(void)
+{
+    uint64_t now;
+    if (!ugap.i0)
+        return;
+    now = instr_now();
+    if (now - ugap.i0 > ugap.max)
+        ugap.max = now - ugap.i0;
+    ugap.i0 = now;
+}
 
 static void render_block(int16_t *out)
 {
@@ -646,11 +661,24 @@ static void print_stats(void)
         printf("cpu: host instructions per UI frame avg %.0f, max %llu -> device estimate avg %.0f us, max %.0f us\n",
                (double)ist.ui_sum / (double)ist.ui_n, (unsigned long long)ist.ui_max,
                (double)ist.ui_sum / (double)ist.ui_n / DEV_INSTR_PER_US, (double)ist.ui_max / DEV_INSTR_PER_US);
+    if (ugap.max)
+        printf("ui: the longest stretch of a frame with no key read: %llu host instructions -> device estimate %.0f us "
+               "(EMU_UI_GAP; the keys are %s)\n", (unsigned long long)ugap.max, (double)ugap.max / DEV_INSTR_PER_US,
+               emu_hal.pump_off ? "read between frames only, EMU_PUMP=0" : "read inside a redraw");
     {
         char sb[800];
         emu_fw_stages(sb, sizeof sb);
         if (sb[0])
             printf("cpu: %s\n", sb);
+    }
+    {   /* the keys' way to the engine (cr_out.c cr_klat; the unit's 78 PEAK key_*): from the tick that saw the key
+         * down (the emulator's keys have no debounce: the unit adds 1.1 .. 2.2 ms) */
+        uint32_t v[5];
+        emu_fw_keys(v);
+        if (v[0])
+            printf("keys: %u note-ons, from the key's scan to the engine avg %.1f ms, worst %.1f ms (to the main loop's "
+                   "post: worst %.1f ms); %u key scans inside redraws\n", (unsigned)v[0], v[2] / 1000.0, v[3] / 1000.0,
+                   v[1] / 1000.0, (unsigned)v[4]);
     }
     printf("firmware: voices shed on overload %u, CPU meter %u %%; CPU lock: the UI held it at most %u us, "
            "the audio waited for it at most %u us\n", shed, cpu, emu_hal.ui_lock_max_us, emu_hal.audio_wait_max_us);
@@ -698,8 +726,11 @@ static void ui_frame(double now_us)
     double t0 = perf_us(), d;
     uint64_t i0 = instr_now();
     fine_frame();
+    ugap.i0 = ust.frames > 20u && emu_hal.pump_mark ? i0 : 0u;
     emu_fw_frame();
     d = perf_us() - t0;
+    ui_gap_mark();                                /* (the frame's end: the main loop's own scan is next) */
+    ugap.i0 = 0;
     if (i0 && ust.frames > 20u) {
         uint64_t di = instr_now() - i0;
         ist.ui_n++;
@@ -837,12 +868,16 @@ static int probe_frames;                         /* script `probe N`: the next N
  *                           "midi F8 xN MS": N clock pulses MS apart (MS may be fractional: 20.833), the clock moves on
  *   pa2 high|low            drive the PA2 line by hand (emu_hooks.h pa2): high = the backlight off, the key matrix,
  *                           the knobs and the LEDs dead, as on the unit (the firmware itself never raises it)
+ *   strike KEY [MS]         (headless) a note key pressed at the worst moment for its latency: as the next UI frame
+ *                           begins, after the timer's tick (so the frame's own scan does not see it: the first tick
+ *                           inside the redraw does), let go MS later (default 100); prints the strips that frame's
+ *                           redraw composed. With EMU_STRIP_US (README)
  *   dump | rec | window NAME | quit       End's print, F12's LCD recording, a window shot, stop here
  * Also accepted (older scripts): press KEY [MS], tap, hold / down, release / up, turn KNOB N, and a leading
  * "<ms>" for an absolute time ("1200 down A"). Names: a computer key wins for key/press/hold, a panel control
  * for btn; "note:F3" names the note F3. */
 enum { OP_DOWN, OP_UP, OP_TURN, OP_SHOT, OP_WINDOW, OP_DUMP, OP_REC, OP_QUIT, OP_MASTER, OP_EXPECT_LED, OP_EXPECT_SND, OP_MIDI, OP_PROBE,
-       OP_PA2 };
+       OP_PA2, OP_STRIKE };
 typedef struct { uint32_t ms, seq; int op, kind, idx, n; const keymap_t *km; char name[96]; } sev_t;
 static sev_t *sev;
 static int sev_n, sev_cap, sev_i, quit_req;
@@ -1022,6 +1057,11 @@ static void load_script(const char *path)
             }
             continue;
         }
+        if (!strcmp(cmd, "strike")) {
+            if (!arg[0] || !resolve(arg, &km, &kind, &idx, 1) || kind != KM_KEY) { BAD("strike: a note key (F3 .. G5)"); continue; }
+            sev_add(cur, OP_STRIKE, NULL, kind, idx, (int)parse_dur(arg2, 100u), arg);
+            continue;
+        }
         if (!strcmp(cmd, "master")) { sev_add(cur, OP_MASTER, NULL, 0, 0, atoi(arg), NULL); continue; }
         if (!strcmp(cmd, "pa2")) {                /* the PA2 line by hand (emu_hooks.h pa2: the model's own check) */
             if (strcmp(arg, "high") && strcmp(arg, "low")) { BAD("pa2: high or low"); continue; }
@@ -1136,6 +1176,8 @@ static void key_action(const keymap_t *m, int down, int src)
     }
 }
 
+/* "strike": a key armed for the next UI frame (1), down since strike.at (2); bench presses it */
+static struct { int state, idx, strips; uint32_t hold, at; char name[8]; } strike;
 static void run_script(uint32_t ms)
 {
     while (sev_i < sev_n && sev[sev_i].ms <= ms) {
@@ -1174,6 +1216,13 @@ static void run_script(uint32_t ms)
                 printf("script: no window in --headless\n");
             else
                 probe_frames = e->n;
+            break;
+        case OP_STRIKE:
+            if (!headless) { printf("script: strike needs --headless\n"); break; }
+            strike.state = 1;
+            strike.idx = e->idx;
+            strike.hold = (uint32_t)e->n;
+            snprintf(strike.name, sizeof strike.name, "%s", e->name);
             break;
         case OP_DUMP: emu_fw_dump(); break;
         case OP_REC: toggle_record(); break;
@@ -1215,43 +1264,90 @@ static void wav_header(FILE *f, uint32_t frames)
     s = 4; fwrite(&s, 2, 1, f); s = 16; fwrite(&s, 2, 1, f);
     fwrite("data", 1, 4, f); v = frames * 4; fwrite(&v, 4, 1, f);
 }
+/* A redraw in simulated time (EMU_STRIP_US=N, README): a UI frame takes no time by default; with N, every strip a
+ * redraw composes takes N us of the device's clock. The firmware calls bench_strip after each strip (emu_hal.
+ * strip_done, cr_ui.c cr_ui_pump): the milliseconds that passed run here, inside the frame, as the device's interrupts
+ * would: the timer's tick, the script (a key goes down while the frame draws), the audio blocks due. The main loop's
+ * own scan is not among them: it waits for the frame, which is what the key pump is measured against (EMU_PUMP=0:
+ * no pump, the firmware as it was) */
+static struct { uint32_t ms, strip_us, acc; uint64_t frames_done; double peak, sumsq; } bn;
+static void bench_audio(void)                     /* the audio blocks due at bn.ms */
+{
+    int16_t blk[EMU_BLOCK * 2];
+    while (bn.frames_done + EMU_BLOCK <= (uint64_t)bn.ms * EMU_FS / 1000u) {
+        int i;
+        render_block(blk);
+        for (i = 0; i < EMU_BLOCK * 2; i++) {
+            double v = blk[i] / 32768.0;
+            bn.sumsq += v * v;
+            if (fabs(v) > bn.peak)
+                bn.peak = fabs(v);
+        }
+        if (wav) {
+            fwrite(blk, 4, EMU_BLOCK, wav);
+            wav_frames += EMU_BLOCK;
+        }
+        bn.frames_done += EMU_BLOCK;
+    }
+}
+static void bench_tick(void)                      /* bn.ms begins: the timer, the script */
+{
+    if (strike.state == 2 && bn.ms - strike.at >= strike.hold) {
+        hold_key(strike.idx, SRC_SCRIPT, 0);
+        strike.state = 0;
+    }
+    emu_fw_tick(bn.ms);
+    run_script(bn.ms);
+}
+static void bench_strip(void)
+{
+    for (bn.acc += bn.strip_us; bn.acc >= 1000u; bn.acc -= 1000u) {
+        bench_audio();
+        bn.ms++;
+        bench_tick();
+    }
+}
 static int bench(void)
 {
-    uint32_t ms, end = (uint32_t)lround(opt_bench * 1000), last_frame = 0;
-    uint64_t frames_done = 0;
-    int16_t blk[EMU_BLOCK * 2];
-    double peak = 0, sumsq = 0;
-    for (ms = 0; ms <= end && !quit_req; ms++) {
-        emu_fw_tick(ms);
-        run_script(ms);
-        if (ms == 0 || ms - last_frame >= 15u) {
-            last_frame = ms;
-            ui_frame(ms * 1000.0);
+    uint32_t end = (uint32_t)lround(opt_bench * 1000), last_frame = 0;
+    const char *e = getenv("EMU_STRIP_US");
+    bn.strip_us = e ? (uint32_t)atoi(e) : 0u;
+    e = getenv("EMU_PUMP");
+    emu_hal.pump_off = (uint8_t)(e && !strcmp(e, "0"));
+    emu_hal.strip_done = bench_strip;
+    emu_hal.pump_mark = getenv("EMU_UI_GAP") ? ui_gap_mark : NULL;
+    if (bn.strip_us || emu_hal.pump_off)
+        printf("headless: a redraw's strip takes %u us of the device's clock (EMU_STRIP_US), the keys are %s between "
+               "strips\n", (unsigned)bn.strip_us, emu_hal.pump_off ? "not read (EMU_PUMP=0)" : "read");
+    for (bn.ms = 0; bn.ms <= end && !quit_req; bn.ms++) {
+        bench_tick();
+        if (bn.ms == 0 || bn.ms - last_frame >= 15u) {
+            int struck = strike.state == 1;
+            last_frame = bn.ms;
+            if (struck) {                         /* (this ms's tick is over: the frame's scan reads no key of it) */
+                hold_key(strike.idx, SRC_SCRIPT, 1);
+                strike.state = 2;
+                strike.at = bn.ms;
+            }
+            ui_frame(bn.ms * 1000.0);
+            if (struck) {
+                uint32_t v[5];
+                strike.strips = (int)emu_fw_keys(v);
+                printf("strike: %s down at %u ms as a frame began: a redraw of %d strips, over at %u ms\n", strike.name,
+                       (unsigned)strike.at, strike.strips, (unsigned)bn.ms);
+            }
             if (recording)
                 record_frame();
         } else {
             emu_fw_idle();
         }
-        while (frames_done + EMU_BLOCK <= (uint64_t)ms * EMU_FS / 1000u) {
-            int i;
-            render_block(blk);
-            for (i = 0; i < EMU_BLOCK * 2; i++) {
-                double v = blk[i] / 32768.0;
-                sumsq += v * v;
-                if (fabs(v) > peak)
-                    peak = fabs(v);
-            }
-            if (wav) {
-                fwrite(blk, 4, EMU_BLOCK, wav);
-                wav_frames += EMU_BLOCK;
-            }
-            frames_done += EMU_BLOCK;
-        }
+        bench_audio();
     }
+    emu_hal.strip_done = NULL;
     if (sev_i < sev_n)
         printf("headless: %d script command(s) after %u ms not run (--frames too small)\n", sev_n - sev_i, end);
-    printf("headless: %.1f s simulated, output peak %.3f, rms %.4f\n", ms / 1000.0, peak,
-           frames_done ? sqrt(sumsq / (double)(frames_done * 2)) : 0.0);
+    printf("headless: %.1f s simulated, output peak %.3f, rms %.4f\n", bn.ms / 1000.0, bn.peak,
+           bn.frames_done ? sqrt(bn.sumsq / (double)(bn.frames_done * 2)) : 0.0);
     return 0;
 }
 
