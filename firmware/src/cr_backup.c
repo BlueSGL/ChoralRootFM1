@@ -49,7 +49,7 @@
 #define CRB_HDR1 0x46u
 #define CRB_HDR2 0x4Cu
 enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST, CRB_SELECT,
-       CRB_STUB };
+       CRB_STUB, CRB_PEAK };
 #define CRB_LOOP0 40u                                /* loop slot k: id 40 + k */
 #define CRB_VA 9u
 #define CRB_FM6S 10u                                 /* 10, 11: the FM6 patch store's halves */
@@ -536,7 +536,7 @@ static uint32_t crb_put(const uint8_t *a, uint32_t n)
  * event log's 32 values, then DEBUG_TAIL: values are only ever appended, so an older tool names what it knows) */
 static void crb_debug(void)
 {
-    uint32_t v[192], k = 0, i;
+    uint32_t v[144], k = 0, i;
 #ifdef DBG_MAGIC
     v[k++] = fm1_ms;
     v[k++] = felucca_dbg.halves;
@@ -650,10 +650,23 @@ static void crb_debug(void)
     for (i = 0; i < 4u; i++)
         v[k++] = 0;
 #endif
-    /* the worst cases since the last DEBUG read (0.18, cr_cpu1.h; fm1_install.py DEBUG_PEAK): the largest whole half
-     * and each stage's, the late halves and the latest one's largest stage, the fx stage's parts (the average over
-     * the halves in which the effects ran, and the largest), then the flash's: erases, erases that cut a sounding
-     * output (holes: the rule is 0), the settings' and the session's saves. Reading clears the worst cases */
+    crb_b(1);
+    crb_b(k);
+    for (i = 0; i < k; i++)
+        crb_u32(v[i]);
+}
+
+/* ------------------------------------------------------------------ PEAK --- */
+/* 78 PEAK (read-only; 0.18, cr_cpu1.h; fm1_install.py --debug prints it after 73's, DEBUG_PEAK names the values) ->
+ * version 1, count, count x u32: the audio ISR's WORST CASES since the last PEAK read (reading clears them: play,
+ * read, and the numbers are that stretch's): the largest whole half and each stage's (us; a half's budget is 2902),
+ * the late halves and the latest one's largest stage and time, the halves counted, the fx stage's parts (the average
+ * over the halves in which the effects ran, and the largest), then since power-on the flash's: erases, erases that
+ * cut a sounding output (holes: the rule is 0), the settings' and the session's saves. A command of its own because
+ * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
+static void crb_peak(void)
+{
+    uint32_t v[32], k = 0, i;
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -935,6 +948,11 @@ static int crb_handle(const uint8_t *f, uint32_t n)
         if (na != 3u && na != 4u)
             return 0;
         crb_b(crb_select(a, na));
+        break;
+    case CRB_PEAK:                                   /* (the audio ISR's worst cases since the last read) */
+        if (na)
+            return 0;
+        crb_peak();
         break;
     case CRB_STUB:                                   /* (the boot stub's test and rescue requests) */
         if (na != 1u)

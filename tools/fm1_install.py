@@ -904,6 +904,7 @@ BK_DEBUG = 73                                     # read-only counters (cr_backu
 BK_SCREEN = 74                                    # the screen off (0) / on (1) (cr_backup.c, cr_ui.c), --screen
 BK_SELECT = 76                                    # a part to an engine and pool position, live (cr_backup.c), --select
 BK_STUB = 77                                      # a request to the boot stub and a restart (cr_backup.c crb_stub), --stub
+BK_PEAK = 78                                      # read-only: the audio ISR's worst cases since the last read (crb_peak), --debug
 STUB_RC = {1: "bad request", 3: "busy: close EDIT / SAVE on the FM-1, stop recording the loop",
            127: "no boot stub of version 2 or later on this firmware"}
 SELECT_RC = {1: "bad part or engine", 2: "bad pool position", 3: "busy: close EDIT / SAVE on the FM-1"}
@@ -2125,7 +2126,8 @@ class Progress:
 DEBUG_LOG = 32                                    # after DEBUG_NAMES: the USB recording's event log, 16 pairs
 DEBUG_TAIL = ["stub_oct_dn", "stub_oct_up", "stub_idle", "stub_pa_in"]   # after the log (appended: an older tool
 #                                                   reads what it knows and shows these as two more log lines)
-# after the tail (0.18, cr_backup.c crb_debug, docs/FX.md "What the unit says"): the audio ISR's WORST CASES since the
+# 78 PEAK's values (0.18, cr_backup.c crb_peak, docs/FX.md "What the unit says"; a command of its own: 73 DEBUG's
+# count is one 7-bit byte and it is full at 127 values): the audio ISR's WORST CASES since the
 # last --debug (reading clears them: play, read, and the numbers are that stretch's). us of a half buffer (budget
 # 2902): the whole half and each stage; the late halves, the latest one's largest stage and its time; the halves
 # counted; inside the fx stage (over the halves in which the effects ran) the average and the largest of the sends'
@@ -2167,11 +2169,10 @@ def stub_lines(d, out):
               file=out)
 
 
-def print_debug(vals, out, stub_only=False):
+def print_debug(vals, out, stub_only=False, peak=()):
     d = dict(zip(DEBUG_NAMES, vals))
     log = vals[len(DEBUG_NAMES):len(DEBUG_NAMES) + DEBUG_LOG]
     d.update(zip(DEBUG_TAIL, vals[len(DEBUG_NAMES) + DEBUG_LOG:]))
-    peak = vals[len(DEBUG_NAMES) + DEBUG_LOG + len(DEBUG_TAIL):]
     d.update(zip(DEBUG_PEAK, peak))
     if stub_only:
         for k in [k for k in d if k.startswith("stub_")]:
@@ -2365,13 +2366,19 @@ def run(a, backend, out, ask):
         dev = up.find()
         if not dev or dev.id.loader:
             raise not_found(up)
+        pk = None
         try:
             r = BackupLink(dev.link).request(BK_DEBUG, [], 1.5)
+            try:                                  # (a firmware before 0.18's PEAK: no answer, or "unsupported")
+                pk = BackupLink(dev.link).request(BK_PEAK, [], 1.0)
+            except BackupError:
+                pk = None
         finally:
             dev.link.close()
         if not r or r[0] != 1 or len(r) != 2 + 5 * r[1]:
             raise BackupError("unexpected debug reply")
-        print_debug([bk_r32(r, 2 + 5 * k) for k in range(r[1])], out)
+        peak = [bk_r32(pk, 2 + 5 * k) for k in range(pk[1])] if pk and pk[0] == 1 and len(pk) == 2 + 5 * pk[1] else []
+        print_debug([bk_r32(r, 2 + 5 * k) for k in range(r[1])], out, peak=peak)
         return 0
     if a.info:
         dev = up.find()

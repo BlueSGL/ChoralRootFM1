@@ -198,6 +198,8 @@ class BackupSide:
         if cmd == I.BK_DEBUG and getattr(self, "debug", None) is not None and not a:
             d = self.debug() if callable(self.debug) else self.debug     # (None: no answer)
             return d and [1, len(d)] + [b for v in d for b in I.bk_u32(v)]
+        if cmd == I.BK_PEAK and getattr(self, "peak", None) is not None and not a:
+            return [1, len(self.peak)] + [b for v in self.peak for b in I.bk_u32(v)]
         if cmd == I.BK_SCREEN and self.version.startswith("ChoralRoot") and len(a) == 1 and a[0] <= 1:
             self.log.append(f"screen {a[0]}")
             return [0]
@@ -537,15 +539,18 @@ def debug():
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "boot stub: none ran" in out, "--debug: a firmware without the stub says so")
     # 0.18: the worst cases behind the tail (DEBUG_PEAK): named, the late half's stage in words, the three lines
-    cr.debug = [0] * (n + I.DEBUG_LOG + len(I.DEBUG_TAIL)) + [2580, 9, 700, 150, 1400, 120, 60, 12, 4, 2950, 34500, 30000,
-                                                              40, 110, 90, 200, 300, 520, 35, 90, 14, 0, 5, 9]
+    cr.debug = [0] * (n + I.DEBUG_LOG + len(I.DEBUG_TAIL))
+    cr.peak = [2580, 9, 700, 150, 1400, 120, 60, 12, 4, 2950, 34500, 30000, 40, 110, 90, 200, 300, 520, 35, 90, 14, 0, 5, 9]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and len(I.DEBUG_PEAK) == 24 and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
        "worst half since the last --debug: 2580 us of 2902 (88 %) over 34500 halves" in out and
        "late 12 (the latest: 2950 us, its largest stage fx)" in out and
        "down 40 / 110, delay 90 / 200, reverb 300 / 520, up 35 / 90" in out and
        "14 erases (45 ms of silence each), 0 of them into a sounding output (holes), settings saves 5, session saves 9" in out,
-       "--debug: the worst cases since the last read (DEBUG_PEAK), the fx stage's parts, the flash's holes")
+       "--debug: the worst cases since the last read (78 PEAK, DEBUG_PEAK), the fx stage's parts, the flash's holes")
+    cr.peak = None
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")
     cr.debug = [0] * n
     # stub version 2: the key samples behind the event log (appended: DEBUG_TAIL), the request bits in the detail
     cr.debug = [0] * (n + I.DEBUG_LOG) + [0xFFF00000, 0x00000001, 0, 0x000000FF]

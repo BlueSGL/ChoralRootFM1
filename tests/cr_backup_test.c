@@ -901,6 +901,14 @@ int main(void)
         CHECK(z == 0, "DEBUG: the tail (the stub's samples) is zero where no stub ran");
     }
 
+    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 24 values; DEBUG keeps its 127 ---- */
+    t_begin(78);
+    a = t_send(&n);
+    CHECK(a && a[0] == 1 && a[1] == 24 && n == 2u + 5u * 24u, "PEAK: 1, 24, 24 x u32 (n %u)", (unsigned)n);
+    t_begin(73);
+    a = t_send(&n);
+    CHECK(a && a[1] <= 127 && n == 2u + 5u * a[1], "DEBUG after PEAK: its own values, as before (%u; the device's 127 fill its count byte)", a ? a[1] : 0);
+
     /* ---- STUB (77): a request to the boot stub and a restart ---- */
     CHECK(CRB_STUB_REQ_TEST == STUB_REQ_TEST && CRB_STUB_REQ_RESCUE == STUB_REQ_RESCUE &&
           stub_rescues(CRB_STUB_REQ_TEST) == 0 && stub_rescues(CRB_STUB_REQ_RESCUE) == 0,
