@@ -7,6 +7,16 @@
                                   * docs/FX.md: a stereo delay and a large reverb at half the rate, their parameters
                                   * global); 0: Felucca's below, as its golden renders have them */
 #endif
+#ifndef FELUCCA_PERFORM
+#define FELUCCA_PERFORM 1        /* 0 (choralroot.c, the emulator): no FX hold layer (perform.c). Its keys are seq.c's
+                                  * (keyboard_block: perf_press) and its knobs, solo and kill ui_layer.c's and
+                                  * ui_input.c's, none of them in a unit without Felucca's sequencer and UI
+                                  * (FELUCCA_SEQ 0): there perf_begin could only ever return 0 and pf.mute stay 0, so
+                                  * the mix is the same without the calls, and perform.c leaves the image */
+#endif
+#if !FELUCCA_PERFORM && defined(FELUCCA_SEQ) && FELUCCA_SEQ
+#error "FELUCCA_PERFORM 0 needs FELUCCA_SEQ 0 (seq.c and ui_layer.c drive perform.c)"
+#endif
 #define CHO_LEN 2048u
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
 #if !CR_FX
@@ -224,7 +234,9 @@ static uint32_t div_samples(uint32_t div)
     return div < 6u ? quarter / DIV_DEN[div] : div < 10u ? quarter << (div - 5u) : quarter / DIV_DEN[div % 6u];
 }
 
+#if FELUCCA_PERFORM
 #include "perform.c"                                 /* the FX hold layer's effects (the master) */
+#endif
 
 #if CR_FX
 #include "cr_fx.c"                                   /* ChoralRoot's delay and reverb (xf_block, after the chorus) */
@@ -480,6 +492,7 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
         sd = side_on && !t->p[P_SLCR] && !slicer_busy(t) ? side : 0;
         track_dist(t, b, n);
         slicer_track(t, b, n);                          /* slicer.c: before the level, pan and sends */
+#if FELUCCA_PERFORM
         if ((pf.mute >> (t - trk)) & 1u) {
             if (sd) {
                 int32_t mg = pf.mg[t - trk];
@@ -488,6 +501,7 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
             }
             perf_mute((uint32_t)(t - trk), b, n);       /* perform.c: a black key in the FX layer */
         }
+#endif
         if (sd) {
             for (i = 0; i < n; i++) {
                 int32_t x = ((b[i] >> 2) * lvl) >> 10, a = x < 0 ? -x : x;
@@ -623,6 +637,7 @@ static void mix_parts_split(uint32_t n)
 }
 #endif
 
+#if FELUCCA_PERFORM
 /* the master with the FX layer's effects between its level and master_out (perform.c) */
 static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
 {
@@ -640,11 +655,14 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
         out[2u * i + 1u] = r;
     }
 }
+#endif
 
 static void mix_block(int32_t *out, uint32_t n)
 {
     uint32_t i;
+#if FELUCCA_PERFORM
     int perf;
+#endif
     int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB Level Fixed: MASTER after) */
 #if FELUCCA_UAC
     if (ua_stage_on)
@@ -654,7 +672,9 @@ static void mix_block(int32_t *out, uint32_t n)
     for (i = 0; i < n; i++)
         send_c[i] = send_d[i] = send_r[i] = mix_l[i] = mix_r[i] = 0;
     events_block(n);
+#if FELUCCA_PERFORM
     perf = perf_begin(n);                               /* the FX hold layer at work (perform.c) */
+#endif
     CR_PROF(CRP_TICK);                                  /* (the engine tick before it: the mix_block shim) */
     i = 0;
 #if CR_CPU1
@@ -667,18 +687,22 @@ static void mix_block(int32_t *out, uint32_t n)
         mix_part(&trk[i], n);
     for (; i < NPART; i++)
         mix_part_idle(&trk[i], n);
+#if FELUCCA_PERFORM
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
+#endif
     fx_buses(send_c, send_d, send_r, wet, n);
 #if CR_FX
     xf_block(send_d, send_r, mix_l, mix_r, n);          /* (cr_fx.c: stereo, into the mix; the FX layer's master
                                                          * effects and the limiter after it, as the chorus) */
 #endif
     CR_PROF(CRP_FX);
+#if FELUCCA_PERFORM
     if (perf) {
         perf_master(out, n);
         return;
     }
+#endif
     for (i = 0; i < n; i++) {
         int32_t l = (((mix_l[i] + wet[i]) >> 2) * mg) >> 10;
         int32_t r = (((mix_r[i] + wet[i]) >> 2) * mg) >> 10;

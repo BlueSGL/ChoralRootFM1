@@ -99,6 +99,11 @@
 #define CR_FX 1                  /* the delay and the reverb are ChoralRoot's (cr_fx.c, docs/FX.md: stereo, at half the rate,
                                   * their parameters global); Felucca's mono delay and ROOM / SPRING are not in the image */
 #endif
+#ifndef FELUCCA_PERFORM
+#define FELUCCA_PERFORM 0        /* no FX hold layer (perform.c: REPEAT, REVERSE, TAPE STOP ... on the master): its keys and
+                                  * knobs are Felucca's sequencer's and UI's, which this unit has not (FELUCCA_SEQ 0); the
+                                  * per-block calls and its 5 KB leave the audio ISR (fx.c) */
+#endif
 #ifndef CR_CPU1
 #define CR_CPU1 1                /* the bass part's render on the second core (cr_cpu1.h, hal/fm1_cpu1.h, docs/DUALCORE.md):
                                   * started at power-on; if it does not answer, single core with the shared budget */

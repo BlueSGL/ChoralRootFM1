@@ -24,11 +24,6 @@ fm1_timer5_irq 59310
 mod_begin 167
 mod_voice 30
 mod_end 6
-perf_begin 34
-perf_mute 19
-perf_pre 27
-perf_block 813
-perf_master 31
 xf_block 129
 xf_down 65
 xf_up 49

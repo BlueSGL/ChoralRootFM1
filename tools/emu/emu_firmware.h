@@ -57,6 +57,9 @@
 #ifndef FELUCCA_SLICER
 #define FELUCCA_SLICER 1                              /* (as felucca.c; the device unit has it off) */
 #endif
+#ifndef FELUCCA_PERFORM
+#define FELUCCA_PERFORM 0                             /* as choralroot.c: no FX hold layer (perform.c; fx.c) */
+#endif
 #ifndef CR_FX
 #define CR_FX 1                                       /* as choralroot.c: ChoralRoot's delay and reverb (cr_fx.c) */
 #endif
