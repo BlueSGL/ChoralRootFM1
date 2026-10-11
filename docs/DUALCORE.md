@@ -42,8 +42,9 @@ never started (`c1 off`), as with Dual Core Off. The boot breadcrumb `BS_CPU1` (
 there shows in the boot guard's `prev_stage` and counts as a failed boot.
 
 Held before every reset and loader entry (`firmware/hal/fm1_sys.h`): `fm1_reboot` (the crash screen, Options > Flash
-Data, CR_REBOOT), `fm1_enter_uboot` (OCT- + OCT+ 5 s, USB SysEx, the boot guard's UBOOT), `fm1_core_reset` (and so
-`fm1_enter_update`: the update loader). The loader (`firmware/loader`) never starts it.
+Data, CR_REBOOT), `fm1_enter_uboot` (USB SysEx, the boot guard's UBOOT; until 0.17 OCT- + OCT+ 5 s, since 0.18 the update gesture on a
+unit without a boot stub), `fm1_core_reset` (and so `fm1_enter_update`: the update loader, and `fm1_stub_request`: SysEx
+77 STUB and, since 0.18, the update gesture OCT- + OCT+ + HOME 5 s). The loader (`firmware/loader`) never starts it.
 
 ## Memory (the size line of `./build.sh`)
 
@@ -270,7 +271,7 @@ blocks, the rails never above 14 / 4; the boot rails On / Off; the rails' steps 
 3. An 8-note chord + bass notes on the BASS channel: all sound (no voice given up: `voices_given_up` 0; with Dual
    Core Off one is given up).
 4. A flash save (SAVE a sound, the settings), a loop slot write: no glitch beyond the known erase silence, no crash.
-5. Reboot paths: Options > Flash Data reboot (SAFE MODE), OCT- + OCT+ 5 s (UBOOT), the installer's update (M-UPGRADE,
+5. Reboot paths: Options > Flash Data reboot (SAFE MODE), OCT- + OCT+ + HOME 5 s (0.18: the stub's rescue request; until 0.17 OCT- + OCT+ 5 s, UBOOT), the installer's update (M-UPGRADE,
    the loader): each must come back cleanly (core 1 held before each).
 6. SAFE MODE (two crash boots): `c1 off`, everything else as before. Options > Dual Core Off (the default), power
    cycle: `c1 off`, `c1_state 0`; back On, power cycle: `c1 ok`.

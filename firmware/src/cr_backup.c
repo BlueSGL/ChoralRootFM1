@@ -675,6 +675,80 @@ static void crb_debug(void)
 #define CRB_STUB_GO(w) ((void)(w))
 #endif
 #endif
+/* ---- the update gesture: OCT- + OCT+ + HOME held 5 s (the owner, 2026-10-11: "less accidental" than the two OCT keys
+ * alone, which now do nothing held beyond their PANIC). Every main-loop pass (main.c; the emulator's emu_fw_frame),
+ * SAFE MODE too. From 2 s a countdown over the whole screen; any of the three let go cancels. At 5 s: a pending
+ * settings / session change is saved (the audio is stopped: no click to hide), then
+ *   a boot stub of version 2 or later ran before this boot: its RESCUE request, the restart 77 STUB op 2 asks for
+ *     (CRB_STUB_GO: USB detached, the boot guard told): the stub hands over to the staged update loader (three
+ *     flashes: update mode, what the web installer and tools/fm1_install.py talk to) or, with none staged, to the
+ *     ROM's USB boot (one long flash): the stub's own rule (firmware/stub/stub_core.h);
+ *   no such stub (the firmware was started by another loader): the ROM's USB boot directly, as the gesture did
+ *     until 0.17, and the screen says "USB boot" instead of "update mode".
+ * The buttons are read as main.c read them (fm1_in.buttons through the panel table), not from the UI's scan */
+#ifndef CRB_UPDATE_SCREEN
+#ifdef FM1_HAVE_STUB
+#define CRB_UPDATE_SCREEN(t) do { fm1_audio_stop(); lcd_fill(0, 0, 240, 240, T_BG); \
+                                  draw_text_box(0, 110, 240, &AF_M, (t), T_THEME, 1); } while (0)
+#define CRB_UBOOT_GO() do { usb_detach(); fm1_delay_ms(30); bootguard_intentional(&bootguard); fm1_enter_uboot(); } while (0)
+#else
+#define CRB_UPDATE_SCREEN(t) ((void)(t))
+#define CRB_UBOOT_GO() ((void)0)
+#endif
+#endif
+#define CRB_UPD_SHOW_MS 2000u
+#define CRB_UPD_GO_MS 5000u
+static struct { uint32_t t0; uint8_t left, gone; } crb_upd;
+static void cr_update_poll(void)
+{
+    uint32_t all = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]) | (1u << panel.btn[B_HOME]);
+    uint32_t held = fm1_ms - crb_upd.t0, stub = CRB_STUB_VER() >= 2u;
+    if ((fm1_in.buttons & all) != all) {
+        if (crb_upd.left) {
+            crb_upd.left = 0;
+            ui.uboot = 0;
+            ui.force = 1;                            /* what the countdown covered */
+            cu_message(stub ? "update cancelled" : "USB boot cancelled", CR_COL_WHITE);
+            cu_trace("update: cancelled\n");
+        }
+        crb_upd.gone = 0;
+        crb_upd.t0 = fm1_ms;
+        return;
+    }
+    if (crb_upd.gone || held <= CRB_UPD_SHOW_MS)     /* (gone: a host test's hooks returned; until the keys are let go) */
+        return;
+    if (held < CRB_UPD_GO_MS) {                      /* 3, 2, 1 */
+        uint32_t left = (CRB_UPD_GO_MS - held + 999u) / 1000u;
+        if (left != crb_upd.left) {
+            crb_upd.left = (uint8_t)left;
+            ui.uboot = (uint8_t)left;                /* (Felucca's flag: main.c's breadcrumb of the countdown) */
+            ui.force = 1;
+            cu_trace("update: %u (%s)\n", (unsigned)left, stub ? "update mode" : "USB boot");
+        }
+        cu.msg.until = cu_now() + 100u;              /* the countdown, over everything, redrawn each frame */
+        cu.msg.big = 1;
+        cu.msg.col = CR_COL_RED;
+        cu.msg.text[0] = (char)('0' + left % 10u);
+        cu.msg.text[1] = 0;
+        cu_cpy(cu.msg.label, stub ? "update mode: let go to cancel" : "USB boot: let go to cancel", sizeof cu.msg.label);
+        return;
+    }
+    crb_upd.gone = 1;
+    crb_upd.left = 0;
+    ui.uboot = 0;
+    cu.msg.until = 0;
+    cu_trace("update: go (%s)\n", stub ? "the stub's rescue request" : "no stub: the ROM's USB boot");
+    CRB_UPDATE_SCREEN(stub ? "UPDATE MODE" : "USB BOOT");
+#if CR_HAVE_SETTINGS
+    if (!cr_safe)
+        cr_settings_save();                          /* where the unit was left: back after the update */
+#endif
+    if (stub)
+        CRB_STUB_GO(CRB_STUB_REQ_RESCUE);            /* (never returns on the unit) */
+    else
+        CRB_UBOOT_GO();
+}
+
 /* a restart is owed after this reply (72 RESTART: w 0; 77 STUB: w its request): ed_service does it (crb_leave). Asked
  * again while one is owed: the newer request says what is left for the stub and which reply is waited for, the
  * clock stays the first one's (the bound cannot be pushed back) */

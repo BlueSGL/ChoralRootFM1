@@ -109,9 +109,10 @@ the observed outcome, not a mechanism.
 - **SAFE MODE before ROM boot.** Two failed boots in a row start the firmware without reading any flash object: no
   settings record (defaults), no user sounds, no VA / FM6 stores, no FM6 bank, no loops, and nothing is written (the
   stores stay as they are). The instrument plays its factory sounds; the installer (M-UPGRADE) and the backup's
-  reads work (a backup can be taken before erasing); OCT- + OCT+ held 5 s still enters update mode. The screen says
+  reads work (a backup can be taken before erasing); the update gesture still works (OCT- + OCT+ + HOME held 5 s
+  from 0.18 on, OCT- + OCT+ until 0.17). The screen says
   SAFE MODE with the boot stage the crash reached (`felucca_dbg.stage`, kept in .noinit), the top line "Safe mode",
-  and Options opens on **Safe Mode** ("flash data skipped", "OCT-+OCT+ 5 s: update mode") and **Flash Data**
+  and Options opens on **Safe Mode** ("flash data skipped", "OCT- OCT+ HOME 5 s: update"; until 0.17 "OCT-+OCT+ 5 s: update mode") and **Flash Data**
   ("erase and reboot", OCT+ twice: erases the stores, the FM6 bank, the loops, the user sounds and the settings,
   not the firmware, then reboots normally). A power cycle instead boots normally with the loads; if they crash
   again, the unit comes back to SAFE MODE, not ROM boot.
@@ -172,9 +173,11 @@ at all: no stub runs; go on below.
    backlight or LEDs every few seconds: with this firmware it then settles in SAFE MODE (the yellow screen) after the
    second crash; Options > Flash Data erases what it trips on.
 2. **Hold OCT- and OCT+ while switching on, and keep holding for 10 s.** If the firmware runs, this starts the
-   calibration screen and, 5 s into the main loop, update mode (the countdown, then "UBOOT"): the firmware runs, the
-   install can be repeated. Nothing happening (still black, no disk change) means the firmware does not reach its
-   main loop.
+   calibration screen and, up to 0.17, 5 s into the main loop the countdown, then "UBOOT" (the ROM's USB boot): the
+   firmware runs, the install can be repeated. From 0.18 on the held gesture needs HOME as well (OCT- + OCT+ + HOME,
+   5 s: the countdown, then update mode through the boot stub, where the installer can finish; the ROM's USB boot
+   only on a unit whose stub did not run): hold the three once the calibration screen shows. Nothing happening
+   (still black, no disk change) means the firmware does not reach its main loop.
 3. **Check what the computer sees.** Windows: Device Manager (View > Devices by connection), under Disk drives a
    "WL82 UBOOT1.00" disk = ROM boot (use [MvaveFM1Unbricker](https://github.com/Quixotic7/MvaveFM1Unbricker)); under
    Sound, video and game controllers an "FM-1" = the firmware runs (the web installer can reach it); nothing new on

@@ -1740,5 +1740,52 @@ cp "$OUT/cr_dmaj.ppm" "$OUT/cr_again/first.ppm"
 cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_again/cr_dmaj.wav" && ok "the same audio on a second run" || bad "audio differs"
 cmp -s "$OUT/cr_dmaj.ppm" "$OUT/cr_again/first.ppm" && ok "the same LCD on a second run" || bad "LCD differs"
 
+echo "OCT- + OCT+ + HOME held 5 s: update mode (0.18; the two OCT keys alone: PANIC, nothing more)"
+# cr_backup.c cr_update_poll; the emulator's hooks (emu_firmware.h) print what the unit would do and end the run.
+# EMU_STUB=3: the boot stub ran before this boot, as on a unit installed by 0.16 or later
+U=$OUT/cr_update.log
+EMU_STUB=3 "$EMU" --headless --script "$S/cr_update.txt" >"$U" 2>&1
+st=$?
+ul() { grep -a '^update:\|^restart:' "$1" | tr '\n' '|'; }
+[ $st = 0 ] && [ "$(ul "$U")" = "update: 3 (update mode)|update: 2 (update mode)|update: 1 (update mode)|update: go (the stub's rescue request)|update: screen 'UPDATE MODE'|restart: stub request 52514552 (guard pending 0)|" ] &&
+    ok "the three held 5 s: the countdown 3 2 1, then the boot stub's RESCUE request (52514552, the staged update loader: what SysEx 77 STUB op 2 asks for), the boot guard told" \
+    || bad "the update gesture: exit $st: $(ul "$U")"
+[ "$(grep -ac '^  cr: key' "$U")" = 1 ] && ok "the unit left at 5 s (the script's later dump never ran)" || bad "the unit did not leave: $(grep -ac '^  cr: key' "$U") dumps"
+p=$(pixel "$OUT/cr_update_3.ppm" 40 120); set -- $p
+[ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 100 ] && [ "$(px_count "$OUT/cr_update_3.ppm" 90 90 150 160 red)" -lt 3300 ] &&
+    ! cmp -s "$OUT/cr_update_3.ppm" "$OUT/cr_update_2.ppm" &&
+    ok "the countdown screen: red, a digit in its middle, another one a second later: $OUT/cr_update_3.ppm, cr_update_2.ppm" \
+    || bad "the countdown screen ($p; $(px_count "$OUT/cr_update_3.ppm" 90 90 150 160 red) red px in the middle)"
+grep -a '^  session: saves' "$U" | sed -n 1p | grep -q 'voicing 2 ' && grep -a '^  flash:' "$U" | sed -n 1p | grep -q ', 6 writes' &&
+    ok "what was changed before it (the voicing) is in flash when the unit leaves" || bad "the session before the update: $(grep -a '^  session: saves' "$U" | sed -n 1p)"
+"$EMU" --headless --script "$S/cr_update.txt" >"$OUT/cr_update_nostub.log" 2>&1
+st=$?
+[ $st = 0 ] && [ "$(ul "$OUT/cr_update_nostub.log")" = "update: 3 (USB boot)|update: 2 (USB boot)|update: 1 (USB boot)|update: go (no stub: the ROM's USB boot)|update: screen 'USB BOOT'|restart: ROM USB boot (fm1_enter_uboot; guard pending 0)|" ] &&
+    ok "no boot stub ran before this boot (another loader's install): the screen says USB boot and the unit enters the ROM's, as the gesture did until 0.17" \
+    || bad "the gesture without a stub: exit $st: $(ul "$OUT/cr_update_nostub.log")"
+EMU_STUB=3 "$EMU" --headless --script "$S/cr_update.txt" --boot-fail 1 --reset-reason wdt >"$OUT/cr_update_safe.log" 2>&1
+st=$?
+[ $st = 0 ] && has '^boot: safe ' "$OUT/cr_update_safe.log" && has '^restart: stub request 52514552' "$OUT/cr_update_safe.log" &&
+    grep -a '^  flash:' "$OUT/cr_update_safe.log" | sed -n 1p | grep -q ', 0 writes' &&
+    ok "in SAFE MODE: the same gesture, the same request; nothing written" || bad "the gesture in SAFE MODE: exit $st: $(ul "$OUT/cr_update_safe.log")"
+N=$OUT/cr_update_not.log
+EMU_STUB=3 "$EMU" --headless --script "$S/cr_update_not.txt" >"$N" 2>&1
+st=$?
+uc() { grep -a '^  cr: key' "$N" | sed -n "$1p" | sed -n 's/.* octave \(-*[0-9]*\) .* view \([0-9]\) layer \([0-9]*\) options \([0-9]\).*/octave \1 view \2 layer \3 options \4/p'; }
+[ $st = 0 ] && ! has '^restart:' "$N" && [ "$(grep -ac '^  cr: key' "$N")" = 7 ] && ok "cr_update_not: no restart, the script ran to its end" || bad "cr_update_not: exit $st"
+n1=$(grep -an '^  cr: key' "$N" | sed -n 1p | cut -d: -f1)
+[ -n "$n1" ] && ! sed -n "1,${n1}p" "$N" | grep -aq '^update:' && [ "$(uc 1)" = "octave 0 view 0 layer 0 options 0" ] && [ "$(uc 2)" = "octave 0 view 0 layer 0 options 0" ] &&
+    ok "OCT- + OCT+ alone held 6 s (the gesture until 0.17): no countdown, nothing after their PANIC; let go: no octave step" \
+    || bad "the two OCT keys held: $(sed -n "1,${n1:-1}p" "$N" | grep -a '^update:' | head -1) / $(uc 1) / $(uc 2)"
+p=$(pixel "$OUT/cr_update_panic.ppm" 120 200); set -- $p
+[ "${1:-0}" -gt 180 ] && [ "${2:-255}" -lt 90 ] && ! cmp -s "$OUT/cr_update_panic.ppm" "$OUT/cr_update_two.ppm" &&
+    ok "PANIC as it was: its red screen at the press ($p), gone again while the two are still held" || bad "PANIC at the press ($p)"
+[ "$(ul "$N")" = "update: 3 (update mode)|update: 2 (update mode)|update: cancelled|update: 3 (update mode)|update: 2 (update mode)|update: cancelled|" ] &&
+    [ "$(uc 3)" = "octave 0 view 0 layer 0 options 0" ] && [ "$(uc 4)" = "octave 0 view 0 layer 0 options 0" ] && [ "$(uc 5)" = "octave 0 view 0 layer 0 options 0" ] &&
+    ok "the three let go at 3.9 s (and HOME first, then the OCT keys, 3 s): the countdown ran, cancelled; no HOME tap (the view stays), no view menu, no octave step" \
+    || bad "the cancel: $(ul "$N") / $(uc 3) / $(uc 4) / $(uc 5)"
+[ "$(uc 6)" = "octave 0 view 0 layer 9 options 0" ] && [ "$(uc 7)" = "octave 0 view 0 layer 0 options 0" ] &&
+    ok "HOME alone held: the view menu, as before" || bad "HOME held: $(uc 6) / $(uc 7)"
+
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

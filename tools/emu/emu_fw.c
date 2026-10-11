@@ -232,6 +232,7 @@ void emu_fw_frame(void)                           /* main.c's loop body (choralr
                                                        * (scripts' "sysex"); the reply has no transport here */
         usb.sx_len = 0;
     }
+    cr_update_poll();                             /* main.c: OCT- + OCT+ + HOME held 5 s (cr_backup.c; SAFE MODE too) */
     if (!cr_safe)
         cr_settings_poll();                       /* main.c's settings_poll: a change saved once things are quiet */
     if (fm1_ms > BG_SETTLE_MS && bootguard.pending)

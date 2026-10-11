@@ -1,0 +1,49 @@
+# ChoralRoot: what is NOT the update gesture (0.18). 1: OCT- + OCT+ held 6 s, the gesture until 0.17: PANIC at the
+# press and nothing more (no countdown, no restart; the octave stays 0: no OCT tap at the release). 2: the three held
+# 3.9 s and let go: the countdown ran (3, 2), "update cancelled", the unit plays on: the view is the one it was (HOME's
+# release is no HOME tap), no menu opened (HOME held is no view menu), the octave still 0. 3: HOME down first, then the
+# two OCT keys, 3 s, let go: the same. 4: HOME alone held: the view menu, as ever.
+wait 300
+btn OCT- down
+btn OCT+ down
+wait 200
+shot build/emu/test/cr_update_panic.ppm
+wait 5800
+dump                          # 1: 6 s of the two OCT keys: no countdown
+shot build/emu/test/cr_update_two.ppm
+btn OCT+ up
+btn OCT- up
+wait 2500
+dump                          # 2: let go: the view, octave 0
+btn OCT- down
+btn OCT+ down
+btn HOME down
+wait 3900
+shot build/emu/test/cr_update_cancel_at.ppm
+btn HOME up
+wait 100
+dump                          # 3: cancelled
+btn OCT+ up
+btn OCT- up
+wait 2500
+dump                          # 4: the view as before, no layer, octave 0
+btn HOME down
+wait 100
+btn OCT- down
+btn OCT+ down
+wait 3000
+btn OCT- up
+wait 100
+btn OCT+ up
+btn HOME up
+wait 2500
+dump                          # 5: HOME first: the same, cancelled, the view as before
+btn HOME down
+wait 900
+dump                          # 6: HOME alone held: the view menu (layer 9)
+btn HOME up
+wait 300
+btn OCT-
+wait 300
+dump                          # 7: closed
+quit

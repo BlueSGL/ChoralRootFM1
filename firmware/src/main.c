@@ -305,6 +305,10 @@ static void fm1_main(void)
                 song.master_q12 = (k10 * k10) >> 8;            /* 0 .. ~4096 */
             }
         }
+#if defined(CR_A_STRIPES) && FELUCCA_FLASH           /* (ChoralRoot: cr_backup.c is in the unit) */
+        cr_update_poll();                               /* OCT- + OCT+ + HOME held 5 s: update mode through the boot
+                                                         * stub (cr_backup.c; 0.18: the two OCT keys alone no longer) */
+#else
         {   /* OCT- + OCT+ held 5 s: enter UBOOT with RAM intact (debug / update); a countdown
              * shows from 2 s over the whole screen (the menu and the dialogs too: ui_draw), letting
              * go cancels it */
@@ -333,6 +337,7 @@ static void fm1_main(void)
                 fm1_enter_uboot();
             }
         }
+#endif
 #if FELUCCA_OTA
         ed_service();                                   /* web editor SysEx */
         ota_service();                                  /* M-UPGRADE handshake */

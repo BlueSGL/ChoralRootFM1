@@ -105,8 +105,9 @@ right. ALGORITHM changes the bass sound. Tap BASS again to switch it off.
 loop plays straight away. **LOOP** (printed PLAY) stops and starts it. Play over it, change the sound, turn KNOB 1:
 the loop holds chords, not audio, so it follows. [The looper](#10-the-looper) has the rest.
 
-**If anything hangs.** Press OCT- and OCT+ together and let go: `PANIC`, every note off. (Do not keep the two held:
-after two seconds a countdown starts, see [Power-on and held gestures](#power-on-and-held-gestures).)
+**If anything hangs.** Press OCT- and OCT+ together: `PANIC`, every note off. (Holding the two does nothing more.
+Holding them **with HOME** for five seconds is the way into update mode, see
+[Power-on and held gestures](#power-on-and-held-gestures).)
 
 ## 3. The panel
 
@@ -1164,10 +1165,14 @@ because the part that does the checking is itself being written then.
 | --- | --- |
 | **OCT- alone, held while switching on** | update mode on purpose: three short flashes, black screen. Open the installer and Install, or switch off and on to start ChoralRoot again (nothing was written) |
 | **OCT- and OCT+ held while switching on** | the panel calibration (below). Let go as soon as the screen says `let go` |
-| **OCT- and OCT+ held for 5 s while ChoralRoot runs** | after 2 s a red countdown (`update mode: let go to cancel`); at 5 s the FM-1 goes to the chip's own USB boot: a black screen, and the computer shows a disk named `WL82 UBOOT1.00`. The installer cannot use that mode. Switch off and on to start ChoralRoot again |
+| **OCT-, OCT+ and HOME held for 5 s while ChoralRoot runs** | update mode without switching off (new in 0.18). The two OCT keys do their PANIC first; with all three down, after 2 s a red countdown `3 2 1` (`update mode: let go to cancel`: letting go of any of the three cancels, and nothing else happens), at 5 s three short flashes and a black screen: update mode, the same as OCT- at power-on. Open the installer and Install, or switch off and on to start ChoralRoot again (nothing was written). What you were doing is stored first and is back afterwards |
+| **OCT- and OCT+ held, without HOME** | PANIC when they go down, and nothing more however long you hold them. (Until 0.17 this was the 5 s gesture, and it led to the chip's USB boot, which the installer cannot use; it was too easy to hit) |
 
 Holding OCT- alone while switching on is new in 0.16. Hold it until the lights have flashed. Recovery after an
-interrupted update does not depend on the key.
+interrupted update does not depend on the key. The three-button gesture works in SAFE MODE too. If the countdown
+says `USB boot: let go to cancel` instead, this FM-1's ChoralRoot was not installed by ChoralRoot's own installer
+since 0.16 and has no update loader to hand over to: at 5 s it goes to the chip's USB boot (a black screen, a disk
+named `WL82 UBOOT1.00`, of no use to the installer). Switch off and on, and install the usual way.
 
 **One long flash instead of three** means the FM-1 went to the chip's USB boot (the `WL82 UBOOT1.00` disk) instead of
 update mode. Switch it off for 10 seconds and try once more: a second OCT- start straight after a first one ends
@@ -1247,7 +1252,8 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | `Safe mode` on the top line | SAFE MODE | see [SAFE MODE](#safe-mode) |
 | The computer shows no audio input | USB Record is Off | Options > USB Record: On |
 | The FM-1 drops off USB for a second | USB Record was changed (`USB RECONNECTING`) | wait |
-| The FM-1 became a `WL82 UBOOT1.00` disk | OCT- and OCT+ were held for 5 s | switch off and on |
+| The FM-1 became a `WL82 UBOOT1.00` disk | no update loader is stored on it and update mode was asked for (OCT- at power-on, or OCT- + OCT+ + HOME for 5 s) | switch off and on |
+| The screen went black with three flashes while I played | OCT-, OCT+ and HOME were held for 5 s: update mode | switch off and on; nothing was written |
 | The FM-1 crashes or resets while playing | with Dual Core On, possibly the second core | Options > Dual Core: Off, switch off and on; please report it either way |
 | Buttons or knobs are mixed up | the panel table is wrong | [Calibration](#calibration) |
 
@@ -1273,7 +1279,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | REC | REC | record by the record mode; ends a take; cancels when armed | undo the last layer |
 | OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
 | OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |
-| OCT- + OCT+ | PANIC | all notes off | 5 s: the chip's USB boot (switch off and on to leave) |
+| OCT- + OCT+ | PANIC | all notes off | nothing more; with HOME as well, 5 s: update mode (a countdown from 2 s, let go to cancel) |
 
 ### In the sound editor
 

@@ -572,7 +572,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   the reset reason; a power-on clears it, only watchdog / soft (crash) resets within 30 s of a boot count. Two in a
   row: SAFE MODE (no flash object loaded or saved: factory sounds, default settings, no loops; no USB audio function, the
   serial console presented instead (`usb.c` `usb_cdc_on`, docs/USB-AUDIO.md);
-  the installer, backup reads and OCT- + OCT+ 5 s still work; a yellow SAFE MODE screen with the crash's boot stage,
+  the installer, backup reads and the update gesture (OCT- + OCT+ + HOME 5 s; until 0.17 the two OCT keys) still work; a yellow SAFE MODE screen with the crash's boot stage,
   "Safe mode" on the top line, Options > Safe Mode and Flash Data: erase and reboot, OCT+ twice). SAFE MODE crashing
   twice more: UBOOT, as before. Every boot step sets `felucca_dbg.stage` (console `boot`, GEEK OUT's third line).
   Tests: `tests/cr_bootguard_test.c`; `tools/emu/scripts/cr_safe*.txt` (`--boot-fail`, `--reset-reason`,

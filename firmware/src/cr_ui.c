@@ -2864,10 +2864,15 @@ static void cu_btn_press(uint32_t b)
             cu.oct_chord = 1;
             cu_panic();
         }
+        if ((cu.bheld & octs) == octs && (cu.bheld & CU_BIT(BT_HOME)))
+            cu.swallow |= CU_BIT(BT_HOME);        /* (HOME was down first: the same) */
         return;
     }
     if (b == BT_HOME) {                           /* (its release: home; a held button's release: no tap) */
-        if (cu.armed != NB)
+        if ((cu.bheld & octs) == octs)            /* OCT- + OCT+ + HOME: the update gesture (cr_backup.c
+                                                   * cr_update_poll): no view menu, and its release is no HOME tap */
+            cu.swallow |= CU_BIT(b);
+        else if (cu.armed != NB)
             cu.combo = 1;
         else {                                    /* alone: held CU_HOME_HOLD_MS opens the view menu (cu_scan) */
             cu.home_t0 = cu_now();
@@ -4484,8 +4489,8 @@ static void cu_options_screen(cr_screen_t *s)
         cu_reset_ask = 0;
     cu_picker(s, O_NAME, cu_opt_n(), cu.opt_sel, CR_COL_WHITE, "options \267 KNOB 1 sets", "");
     opt_text(cu.opt_sel, s->value, sizeof s->value);
-    if (cu.opt_sel == O_SAFE)                      /* "Safe mode: flash data skipped \267 OCT-+OCT+ 5 s: update mode" */
-        cu_cpy(s->label, "OCT-+OCT+ 5 s: update mode", sizeof s->label);
+    if (cu.opt_sel == O_SAFE)                      /* "Safe mode: flash data skipped \267 OCT- OCT+ HOME 5 s: update" (0.18) */
+        cu_cpy(s->label, "OCT- OCT+ HOME 5 s: update", sizeof s->label);
     else if (cu.opt_sel == O_ERASE)                /* "Flash data: erase and reboot", OCT+ twice */
         cu_cpy(s->label, cu_erase_ask ? "sounds, loops, settings go" : "OCT+ twice: erase, reboot", sizeof s->label);
     else if (cu.opt_sel == O_RESET)                /* "Reset Settings: all options to default", OCT+ twice */
