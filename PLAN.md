@@ -13,6 +13,10 @@ built now: the new interaction grammar (layers lock on hold, LOCK on B3; §3–�
 (`cr_edit.c`, [`docs/EDITOR.md`](docs/EDITOR.md)), both approved in the mock-ups below. Open in M7: the bank by
 ear, the sticker sheet, the installer page, the README / manual (§8).
 
+**Since then (2026-10-11):** the interaction grammar and the sound editor named above as being built are done, as
+are the installer page, the README and the manual; v0.17 is released and main is the 0.18 dev tree. The current
+state and what is open: [`docs/HANDOFF.md`](docs/HANDOFF.md); the record of the work: `docs/HISTORY.md`.
+
 | Deliverable | Where |
 | --- | --- |
 | this plan | `PLAN.md` |
@@ -286,7 +290,8 @@ firmware/src/
                     FELUCCA_VA 1, FELUCCA_CZ 1, FELUCCA_QUAD 1; all-synth: FELUCCA_SEQ 0, FELUCCA_SAMPLE 0, FELUCCA_GRAIN 0, FELUCCA_DRUM 0,
                     FELUCCA_ANALOG 0 (0.14: the VA replaces ANALOG),
                     FELUCCA_PHASE 0, FELUCCA_LOFI 0, FELUCCA_VOICE 0, FELUCCA_TRIO 0, FELUCCA_NOISE 0 (0.18),
-                    FELUCCA_ICONS 0, FELUCCA_KEYCAPS 0; FM-1_920, "ChoralRoot 0.1"), Felucca's include order
+                    FELUCCA_ICONS 0, FELUCCA_KEYCAPS 0; FM-1_920, the version string `FELUCCA_VERSION`: on main the next
+                    tag's, "ChoralRoot 0.18" now; `./build.sh --release X.Y` sets it), Felucca's include order
   kept from Felucca (the platform):
     hal/, libc.c, lcd.c, gfx.c (no keycaps), panel.c, usb.c, midi_uart.c, storage.c, storage_hw.c, ota.c, ota_hw.c,
     console.c, main.c, settings_persist.c, upreset.c (32 user sounds)
@@ -318,7 +323,7 @@ firmware/src/
     cr_ui.c/.h      the input grammar (taps, locked layers, LOCK, pickers, Options, naming), the view-model
                     (cr_build_screen), the LEDs (cr_leds)
     cr_edit.c       the sound editor (docs/EDITOR.md): sections, rows, banks, page memory, its edit8 / stack
-                    view-models  [being built]
+                    view-models (built: in every release since 0.1)
     cr_pages.c      the parameter catalogue the editor draws from: the platform pages, the engines' EDIT 1/2,
                     deep pages, labels, glyphs, value text
     cr_bank.c       the pools (docs/PRESETS.md: one per engine, INIT, the factory presets each replaced by the

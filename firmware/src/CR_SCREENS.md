@@ -77,8 +77,9 @@ message.
   keeps the key matrix alive, `hal/fm1_lcd_hw.h`); the next draw, the wake's, blits all six whole.
 
 **The ring** (`cr_ring_draw`): its pixels never move, only its colour and fraction change, so the coverage of the
-band is computed once (`cr_ring_build`, from `cr_ui_init`: ~27 ms on the device scale) with `cr_arc`'s own per-pixel
-code (`cr_arc_px`) into the POOL: per row up to two runs of pixels, a byte a pixel (the solid band's and the dotted
+band is computed once, at build time, with `cr_arc`'s own per-pixel code (`cr_arc_px`) into a `const` table in flash
+(since 0.16: `cr_ring_table.h`, generated and checked byte for byte by `tests/cr_draw_test.c`'s `cr_ring_build`;
+`CR_RING_GEN=1 sh tests/run_cr_draw.sh` rewrites it; until 0.15 it was built at boot into the POOL): per row up to two runs of pixels, a byte a pixel (the solid band's and the dotted
 circle's sample counts as one index of the 153 pairs d <= s), 4 232 pixels, 6.1 KB. A frame blends its rows' runs
 from the table; the progress is decided per run from the angles of its end pixels (the angle is monotonic along a
 row): a run well inside the sweep takes the band's coverage, one well outside nothing, and only pixels within

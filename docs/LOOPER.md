@@ -199,7 +199,7 @@ every screen, layer, picker and popup until the take ended): a 16 px dial at the
   REC dot blinking with the REC LED (its 250 ms phase);
 - **overdubbing**: the playing dial with the REC dot blinking.
 
-It shows on the views, the layers (KEY, PERF, FX, BASS, LOOP, SAVE, METRO, the engine picker), the SAVE naming dialog
+It shows on the views, the layers (KEY, PERF, FX, BASS, LOOP, METRO, the engine picker), the SAVE naming dialog
 and the knob popups; not in the sound editor (no top line) nor on the Options pages, where the REC LED and the LOOP
 button's green LED carry it. `tools/emu/scripts/cr_rec_dial.txt` shoots the REC looks (`cr_rec_armed.ppm`,
 `cr_rec_rec.ppm`, `cr_rec_od.ppm`).

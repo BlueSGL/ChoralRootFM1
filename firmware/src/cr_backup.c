@@ -13,8 +13,14 @@
  *   74 SCREEN   0 off / 1 on -> rc 0: the screen off (a black frame, the backlight on, nothing drawn) until 1 or a
  *               key, button or knob on the unit (MIDI in does not wake it), as the idle timer's (cr_ui.c
  *               cu_screen_sysex)
+ *   75 CORE1_TEST  a CR_CORE1_TEST build only (tools/core1_fault_test.py); else "unsupported"
+ *   76 SELECT   part, engine, pos -> rc: a part to an engine's pool position, live (the device manager's audition)
+ *   77 STUB     op 1 test / 2 rescue -> rc: a request to the boot stub, then a restart (docs/BOOT-SAFETY.md)
+ *   78 PEAK     -> version 1, count, count x u32: the audio ISR's worst cases since the last read (read-only; reading
+ *               clears them; docs/FX.md)
+ * (not backup commands, 73..78: they share the transport; each has its own comment below.)
  *
- * Objects (Felucca's ids where Felucca has them; 9 and 40..49 are ChoralRoot's):
+ * Objects (Felucca's ids where Felucca has them: 1, 6, 7, 8; 9..22 and 40..49 are ChoralRoot's):
  *   1 settings (persist_t PER5: Felucca's fields + cr_settings_t; a PUT takes PER1..PER5, settings_persist.c migrates)
  *   6, 7 user sound banks (upreset.c, 2 x 16 records), 8 the FM6 patch bank (fm6_bank.c: Melodee's 32-voice layout;
  *   Felucca 1.0's 27 and Melodee's earlier bank restore too, converted at the next boot as at power-on), 9 the VA patch
@@ -724,8 +730,10 @@ static void crb_peak(void)
 #endif
 /* ---- the update gesture: OCT- + OCT+ + HOME held 5 s (the owner, 2026-10-11: "less accidental" than the two OCT keys
  * alone, which now do nothing held beyond their PANIC). Every main-loop pass (main.c; the emulator's emu_fw_frame),
- * SAFE MODE too. From 2 s a countdown over the whole screen; any of the three let go cancels. At 5 s: a pending
- * settings / session change is saved (the audio is stopped: no click to hide), then
+ * SAFE MODE too. From 2 s a countdown over the whole screen; any of the three let go cancels. At 5 s the audio is
+ * stopped and the automatic part of the settings is written (cr_settings_save: the Options; not in SAFE MODE). The
+ * manual fields, the session and a loop in RAM are NOT saved: the update is a power cycle, they come back as last
+ * saved (SAVE held). Then
  *   a boot stub of version 2 or later ran before this boot: its RESCUE request, the restart 77 STUB op 2 asks for
  *     (CRB_STUB_GO: USB detached, the boot guard told): the stub hands over to the staged update loader (three
  *     flashes: update mode, what the web installer and tools/fm1_install.py talk to) or, with none staged, to the

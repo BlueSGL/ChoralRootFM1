@@ -49,7 +49,7 @@ A bank whose magic, rsize or nslot differ reads as empty on the FM-1 (`up_bank_c
 ```
 0    u8   used     0xA5 when the slot holds a sound; anything else: empty (the FM-1 zeroes a deleted slot)
 1    u8   ver      1..5 (the layout version the FM-1 wrote; 4 = today's)
-2    u8   engine   0..14 (the table below)
+2    u8   engine   0..15 (the table below)
 3    u8   np       the parameter count stored (8..144 for ver >= 4, 8..72 before)
 4    char name[12] ASCII 32..126, zero-padded (no terminator when 12 long); name[0] != 0
 16   u8   packed[144] (ver >= 4: each value + 64, 0..191) / i16 p[72] (ver <= 3)
@@ -57,7 +57,7 @@ A bank whose magic, rsize or nslot differ reads as empty on the FM-1 (`up_bank_c
 176  u8   flags[16]
 ```
 
-A record is **valid** (`up_valid`) when used == 0xA5, 1 <= ver <= 5, engine < 15, 8 <= np <= (ver >= 4 ? 144 : 72),
+A record is **valid** (`up_valid`) when used == 0xA5, 1 <= ver <= 5, engine < 16, 8 <= np <= (ver >= 4 ? 144 : 72),
 name[0] != 0 and, for ver >= 4, every packed[i] for i < np is <= 191. The page and the CLI apply the same test: an
 invalid record reads as an empty slot and is never written.
 

@@ -34,7 +34,7 @@ an install"); from 0.16 on it comes back in update mode (below), except during t
 [Releases](https://github.com/Quixotic7/ChoralRootFM1/releases) (`SHA256SUMS` next to it), then
 
 ```
-pip3 install mido python-rtmidi
+pip3 install python-rtmidi
 python3 tools/fm1_install.py choralroot-X.Y.fwsc --backup .   # back up to ./choralroot-backup-YYYYMMDD.json, install
 python3 tools/fm1_install.py --info          # identity of the connected FM-1 (FM-1_920 after the install)
 python3 tools/fm1_install.py --restore FILE  # a backup back onto the FM-1
@@ -102,7 +102,8 @@ A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes o
 - **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,
   chorus, delay, drive), a metronome.
 - **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
-  PLAY menu; a loop is saved when it stops ([docs/LOOPER.md](docs/LOOPER.md)).
+  PLAY menu; from 0.18 on saving is manual: a loop is written by the global save (SAVE held) or when its slot is
+  left with unsaved changes (up to 0.17: at every stop) ([docs/LOOPER.md](docs/LOOPER.md)).
 - **Six engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
   import, [docs/FM6.md](docs/FM6.md)), FM TONE (engine 15, `eng_quad.c`, code name QUAD: four-operator FM in the style
   of the Digitone, aligned with the Digitone manual's algorithms, carrier levels and controls,

@@ -448,7 +448,7 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 - **SELECT** moves the picker at the top of the layer (in the KEY layer it turns the page; in the LOCK layer it stays
   the tempo).
 - **OCT- is back, OCT+ is confirm.** Where a layer has something to confirm, OCT+ does it (the engine picker's
-  sound, the loop slots' Save / Load / Delete, the save dialog). The layers below have nothing to confirm, so there
+  sound, the save dialog). The layers below have nothing to confirm, so there
   OCT+ closes the layer just as OCT- does. On / off is always a tap of the layer's own button.
 - The chord block keeps its job in every layer except KEY's, where MAJ and MIN pick the scale.
 

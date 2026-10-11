@@ -159,7 +159,7 @@ does the same for the cost files.
 
 ## Install
 
-From the command line (needs `pip3 install mido python-rtmidi`):
+From the command line (needs `pip3 install python-rtmidi`):
 
 ```
 python3 tools/fm1_install.py build/choralroot.fwsc --backup ~/fm1-backups/   # back up first, then install
@@ -207,7 +207,7 @@ return to the official V15 is never refused. `--info` prints the version and the
 Installing firmware is at your own risk. **Recovery.** The boot guard (`firmware/src/cr_bootguard.h`, `main.c`) counts
 only watchdog and soft (crash) resets that come within 30 s of a boot; a power-on clears it. Two in a row start SAFE
 MODE: no flash object is read or written (factory sounds, default settings), the installer, the backup's reads and
-OCT- + OCT+ 5 s (update mode) work, Options > Flash Data erases the data objects (not the firmware) and reboots; a
+OCT- + OCT+ + HOME held 5 s (update mode; until 0.17 the two OCT keys alone) work, Options > Flash Data erases the data objects (not the firmware) and reboots; a
 power cycle tries the stored data again. Four in a row (SAFE MODE crashed twice) enter ROM boot. The console `boot`
 prints the guard, the reset reason and the stage the crash reached. Emulator: `build/host/emu --boot-fail 1
 --reset-reason wdt` starts in SAFE MODE (`tools/emu/test_cr.sh`). If an install fails and the FM-1 no longer starts

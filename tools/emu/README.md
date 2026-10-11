@@ -187,8 +187,8 @@ SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy build/host/emu --no-midi --demo --qu
   print a device estimate from the host's instruction count instead: above, and `perf.sh`).
 - ChoralRoot's roles of the printed buttons: F6 (SEL) = KEY, F9 (EDIT) = EDIT, F5 FX, F7 (ENV) BASS, F8 (LFO)
   LATCH, F10 (GLO) OPT, `9` (ARP) PERF, `0` (SEQ) METRO, `-` (PLAY) LOOP, `=` REC; B3 (Tab) = LOCK.
-  A layer button held past the hold time (400 ms by default, Options > Hold Time) locks its layer open (SAVE's
-  stays open only while held): scripts close it with `btn OCT-` (or `btn HOME`).
+  A layer button held past the hold time (400 ms by default, Options > Hold Time) locks its layer open: scripts
+  close it with `btn OCT-` (or `btn HOME`). SAVE has no layer since 0.18: held, it is the global save (`scripts/cr_save_hold.txt`).
 - Sound editing: F9 (EDIT) tap = the sound editor (F7 held + F9 the bass's), held = the engine picker;
   `8` (SAVE) = the save dialog (Overwrite / Save as new), then naming (the white roots type, D#4 a space, F#4
   deletes, OCT- (`Z`) cancels, OCT+ (`X`) saves). User sounds go to the flash file (above).

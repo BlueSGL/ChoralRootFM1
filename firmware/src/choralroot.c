@@ -96,8 +96,8 @@
                                   * (8: 40 / 43 %; docs/FM6.md, Polyphony). Still one budget unit a voice */
 #endif
 #ifndef CR_FX
-#define CR_FX 1                  /* the delay and the reverb are ChoralRoot's (cr_fx.c, docs/FX.md: stereo, at half the rate,
-                                  * their parameters global); Felucca's mono delay and ROOM / SPRING are not in the image */
+#define CR_FX 1                  /* the delay and the reverb are ChoralRoot's (cr_fx.c, docs/FX.md: stereo, the delay at 44.1 kHz
+                                  * and the reverb at half of it, their parameters global); Felucca's mono delay and ROOM / SPRING are not in the image */
 #endif
 #ifndef CR_CPU1
 #define CR_CPU1 1                /* the bass part's render on the second core (cr_cpu1.h, hal/fm1_cpu1.h, docs/DUALCORE.md):

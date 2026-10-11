@@ -271,9 +271,10 @@ targets (item 1 only partly); the rest are porting choices.
 
 ## Not ported (with reason)
 
-- **The looper** (`d_cr_loop.lua`, design.md §14) is separate work (PLAN `cr_loop.c`). The Lua's
-  `loop_rec_open` / `loop_rec_close` hooks have no equivalent yet. Add a voice open / close callback
-  when `cr_loop.c` lands. `cr_chord_base` and `cr_voice_apply` are exported for its playback.
+- **The looper** (`d_cr_loop.lua`, design.md §14) is not part of the engine: it is `cr_loop.c` (docs/LOOPER.md),
+  which landed with M6. The Lua's `loop_rec_open` / `loop_rec_close` hooks became `cr_out_t.gesture` (a played chord
+  gesture began / ended: `cr_loop_gesture` is its body), and playback goes through `cr_loop_event` (the loop
+  voices). `cr_chord_base` and `cr_voice_apply` are exported for it.
 - **MIDI clock output (0xF8)**: Felucca's `midi_clock.c` sends it. The engine exposes `cr_clock_reset`
   so loop or transport start can align the arp grid.
 - **The keyboard view, KEY-hold tonic selection, parameter editors, LEDs and the log**: grid UI. On the

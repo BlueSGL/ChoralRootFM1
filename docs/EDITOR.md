@@ -37,7 +37,7 @@ shift their octave, OCT− + OCT+ is still panic, PERF works as outside (tap on/
 MASTER is the volume. The chord block still works.
 
 **Layers over the editor.** A layer opened while the editor is open (PERF held: the perform layer; EDIT held: the
-engine picker; SAVE held: the loop slots, momentary) closes back **to the editor, as it was** (group, screen, lane):
+engine picker) closes back **to the editor, as it was** (group, screen, lane):
 OCT− or HOME closes the layer, not the editor. HOME with no layer open still leaves the editor.
 
 ## 3. Navigation: groups → screens → lanes
