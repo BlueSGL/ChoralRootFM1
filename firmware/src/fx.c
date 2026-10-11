@@ -275,6 +275,17 @@ static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
     }
 }
 
+/* one frame through the master (tests/speaker_test.c: its response sample by sample) */
+static inline void master_out(int32_t *l, int32_t *r)
+{
+    int32_t o[2];
+    o[0] = *l;
+    o[1] = *r;
+    master_block(o, 1u);
+    *l = o[0];
+    *r = o[1];
+}
+
 /* length of one division (N_DIV order) in samples at the song tempo */
 static const uint8_t DIV_DEN[6] = {1, 2, 4, 8, 3, 6};    /* original IDs stay fixed; slow rates append */
 static uint32_t midi_beat_samples;                    /* zero until an external clock has a measured tempo */
