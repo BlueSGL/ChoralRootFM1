@@ -1095,7 +1095,8 @@ loops +4.2 KB, the FX hold layer -5.7 KB, the link -0.9 KB), `RAM 85268 -> 80136
 -> 327096 B` (95.4 -> 95.1 %).
 
 `tools/emu/perf.sh` (g), a six-note CZ STRINGS 2 chord, as a sanity check only: the block 241 294 -> 155 480 host
-instructions on average, 409 128 -> 248 319 at the most; its `part0` stage 514 / 866 -> 220 / 405. (Its script's
+instructions on average (-36 %), the worst 409 128 -> 248 000 .. 278 000 (two runs); its `part0` stage 514 -> 220 on
+average. The other scenarios: 7 800 fewer a block (-3 .. -5 %: the master, the mix, the idle parts). (Its script's
 bass lands on PHYS MARIMBA since the engine picker lost five engines: the bass is no CZ-1 voice there.)
 
 ### Fixed: the UI frame with the loop ring
