@@ -31,7 +31,7 @@ OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "choralroot-fm1-f
 
 FX = ["Reverb", "Chorus", "Delay", "Drive"]                       # cr_ui.c CU_FX (the white roots D4 E4 F4 G4)
 fx_labels = {ROOT_WHITE[i]: n.upper() for i, n in enumerate(FX)}
-FX_FOOT = "a root: effect · " + LAYER_FOOT
+FX_FOOT = "SELECT: effect · FX: on/off · OCT-: back"       # cr_ui.c cu_layer_screen (the printed names; OCT+ closes too)
 FX_BTN = {"FX": BLINK}
 FX_NOTE = {"FX": LAYER_BTN_NOTE}
 S = []
@@ -200,7 +200,7 @@ S.append(state(
     key_labels={ROOT_WHITE[i]: m for i, m in enumerate(["STRUM", "STR 2", "SLOP", "ARP", "ARP 2", "PATT", "HARP"])},
     encoders={"KNOB1": ("RATE", "1/8"), "KNOB2": ("ORDER", "UP"), "KNOB3": ("RANGE", "1 OCT"), "KNOB4": ("GATE", "70%")},
     screen=scr(knobrow(perf_modes, 3, "white", [g("Rate", "1/8", "echoes", 0.5, 1.0), g("Order", "Up", "arrow", 0.1), g("Range", "1 oct", "range", 0.33), g("Gate", "70%", "gate", 0.7)], label="perform"),
-               foot="a root: mode · " + LAYER_FOOT, note="the perform layer in the same grammar: the mode over its four parameters."),
+               foot="SELECT: mode · ARP: on/off · OCT-: back", note="the perform layer in the same grammar: the mode over its four parameters."),
     chord_block=False,
 ))
 

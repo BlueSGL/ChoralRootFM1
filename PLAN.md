@@ -67,8 +67,10 @@ MIN with a tonic = minor key).
 ### Buttons (the Orchid dials' button functions)
 
 The rule for every layer button: **a hold past 400 ms opens its layer and it stays open** after release (the button
-blinks); **OCT− or HOME closes it**; holding another layer button switches to that layer; a **tap**, inside the
-layer or out, is always the button's on/off action.
+blinks); **OCT− or HOME closes it**, and so does **holding its own button again**; **OCT+ confirms** where the layer
+has something to confirm (the engine picker's sound, the loop slots' action) and closes it where it has not (KEY,
+PERF, FX, BASS, METRO, the PLAY menu, the view menu); holding another layer button switches to that layer; a **tap**,
+inside the layer or out, is always the button's on/off action.
 
 | Printed | ChoralRoot | Tap | Hold (opens and stays; OCT− / HOME closes) |
 | --- | --- | --- | --- |
@@ -110,8 +112,8 @@ is displayed permanently for the knobs. In a layer KNOB 1–4 are the layer's; i
 
 - **Tap = use, hold = open (and it stays), OCT− / HOME = close.** The hold threshold is 400 ms by default (Felucca
   `HOLD_MS`; Options > Hold Time). A tap is the button's action, always — inside its own layer too. A hold of KEY / PERF / FX / BASS /
-  LOOP / METRO opens the layer and **locks it**: it stays after release, the button blinks, until OCT− (back) or HOME
-  closes it; holding another layer button switches straight to that layer. A key or knob touched while a button is
+  LOOP / METRO opens the layer and **locks it**: it stays after release, the button blinks, until OCT− (back), OCT+
+  (confirm; nothing to confirm in these: it closes too), HOME or the same button held again closes it; holding another layer button switches straight to that layer. A key or knob touched while a button is
   still down makes it a combo (no tap action): OPT + knob, BASS + EDIT, OCT− + OCT+. There is no separate lock
   gesture any more (no HOME + hold, no OPT + FX / PERF, no OPT + KNOB 3).
 - **Layers** (sloop's idiom, made to stay): the root keys and KNOB 1–4 are the layer's, the screen shows the layer's

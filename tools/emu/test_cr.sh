@@ -298,7 +298,7 @@ has '^expect sound .*: ok' "$L" && ok "MAJ + D4 in the perform layer: the chord 
 has '^perf: knob Slop direction' "$L" && ok "KNOB 3 in Slop: its direction" || bad "KNOB 3: no Slop direction"
 differ cr_perf_row cr_perf_row_strum "Arpeggiate / Strum rows differ"
 
-echo "perform on / off: PERF tap, OCT+ in the perform layer; the arp stops when off"
+echo "perform on / off: PERF tap, in the perform layer too (OCT+ closes it); the arp stops when off"
 run cr_perf_toggle
 L="$OUT/cr_perf_toggle.log"
 pc() { grep '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* perform \([0-9]\) .* layer \([0-9]*\) .*/\1 \2/p'; }
@@ -306,12 +306,15 @@ no() { grep '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.* notes-out \([0-9]
 grep -q '^expect led ARP on at [0-9]* ms: ok' "$L" && grep -q '^expect led ARP dim at [0-9]* ms: ok' "$L" && [ "$(pc 1)" = "0 0" ] &&
     ok "PERF tap: perform on (LED lit, no message), tap again: off (LED dim): $OUT/cr_perf_on_msg.ppm" || bad "PERF tap: $(pc 1)"
 [ "$(pc 2)" = "1 2" ] && [ "$(pc 3)" = "0 2" ] && [ "$(pc 4)" = "1 2" ] &&
-    ok "the perform layer: SELECT picks Arpeggiate (on), OCT+ off / on, the layer stays open: $OUT/cr_perf_layer_off.ppm" \
+    ok "the perform layer: SELECT picks Arpeggiate (on), a PERF tap off / on, the layer stays open: $OUT/cr_perf_layer_off.ppm" \
     || bad "the perform layer: $(pc 2) / $(pc 3) / $(pc 4)"
+[ "$(pc 5)" = "1 0" ] && [ "$(pc 6)" = "1 2" ] && [ "$(pc 7)" = "1 0" ] &&
+    ok "OCT+ in the perform layer closes it (perform stays on); PERF held again closes it too (no tap: still on)" \
+    || bad "closing the perform layer: $(pc 5) / $(pc 6) / $(pc 7)"
 differ cr_perf_layer_off cr_perf_layer_on "the layer's label follows on / off"
-[ "$(no 6)" -gt "$(no 5)" ] && [ "$(no 8)" = "$(no 7)" ] && [ "$(pc 7)" = "0 0" ] &&
-    ok "the arp steps while on ($(no 5) -> $(no 6) notes out), PERF tap off: the chord held plain ($(no 7) -> $(no 8))" \
-    || bad "the arp on / off: notes out $(no 5) $(no 6) $(no 7) $(no 8)"
+[ "$(no 9)" -gt "$(no 8)" ] && [ "$(no 11)" = "$(no 10)" ] && [ "$(pc 10)" = "0 0" ] &&
+    ok "the arp steps while on ($(no 8) -> $(no 9) notes out), PERF tap off: the chord held plain ($(no 10) -> $(no 11))" \
+    || bad "the arp on / off: notes out $(no 8) $(no 9) $(no 10) $(no 11)"
 
 echo "the arp's Hold off by default: released keys stop it; LATCH holds it; PANIC stops; perform never swaps the view"
 export EMU_UI_LOG=0
@@ -767,7 +770,11 @@ has '^loop: slot 5 turned' "$LM" && grep -aq "loopmenu .*slot 5 jump 0 sub '' ri
     ok "PRESETS +4: slot 5 (empty: \"empty\" at the top right; state 4): $OUT/cr_lm_4.ppm" || bad "the slot strip"
 [ "$(lf "$a" cap)" = 1 ] && grep -aq "loopmenu .*title 'Free' .*sub 'the first chord starts the take' right 'Rec . Overwrite'" "$LM" &&
     [ "$(lf "$b" cap)" = 0 ] && ok "REC in the menu: armed, \"Rec · Overwrite\" at the top right (state 5: $OUT/cr_lm_5.ppm); REC again: cancelled"     || bad "armed in the menu: $a / $b"
-grep -q 'layer 8' "$LM" && grep -q 'layer 0 options' "$LM" && ok "OCT+ in the menu: nothing; OCT- closes it" || bad "the menu's OCT"
+ly() { grep -a '^  cr: key' "$LM" | sed -n "$1p" | sed -n 's/.* layer \([0-9]*\) .*/\1/p'; }
+[ "$(ly 3)" = 8 ] && [ "$(ly 4)" = 0 ] && [ "$(ly 5)" = 8 ] && [ "$(ly 6)" = 0 ] && ok "OCT- closes the menu, OCT+ closes it too (nothing to confirm)" \
+    || bad "the menu's OCT: layers $(ly 3) $(ly 4) $(ly 5) $(ly 6)"
+[ "$(ly 7)" = 8 ] && [ "$(ly 8)" = 0 ] && [ "$(lf "$(L cr_loop_menu 7)" state)" = "$(lf "$(L cr_loop_menu 8)" state)" ] &&
+    ok "LOOP held again in its menu: closed (no play / stop)" || bad "LOOP held again: layers $(ly 7) $(ly 8)"
 # the record modes
 run cr_loop_modes --wav "$OUT/cr_loop_modes.wav"
 unset EMU_UI_LOG
@@ -900,10 +907,14 @@ silent_end cr_lock
 echo "a layer locks open on a hold; OCT- / HOME close it, another hold switches"
 run cr_layer_lock
 L="$OUT/cr_layer_lock.log"
-[ "$(grep -c '^expect .*: ok' "$L")" = 11 ] && ok "FX held, released: open (OCT- lit); OCT- closed it; BASS held: switched; HOME closed; KEY held, OCT-: closed" \
-    || bad "cr_layer_lock: $(grep -c '^expect .*: ok' "$L") of 11 checks"
-[ "$(grep '^layer:' "$L" | tr '\n' ',')" = "layer: open 3 (locked),layer: close 3,layer: open 3 (locked),layer: open 4 (locked),layer: open 1 (locked),layer: close 1," ] &&
+[ "$(grep -c '^expect .*: ok' "$L")" = 28 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "FX held, released: open (OCT- lit); OCT- closed it; BASS held: switched; HOME closed; KEY held, OCT-: closed" \
+    || bad "cr_layer_lock: $(grep -c '^expect .*: ok' "$L") of 28 checks: $(grep -a 'expect.*FAILED' "$L" | head -3)"
+[ "$(grep '^layer:' "$L" | sed -n 1,6p | tr '\n' ',')" = "layer: open 3 (locked),layer: close 3,layer: open 3 (locked),layer: open 4 (locked),layer: open 1 (locked),layer: close 1," ] &&
     ok "the trace: fx open, closed; fx, bass (switched); key open, closed" || bad "layer trace: $(grep '^layer:' "$L" | tr '\n' ' ')"
+[ "$(grep '^layer:\|^fx: o\|^view: menu\|^picker: [kc]' "$L" | sed 1,7d | sed 's/^picker: \([a-z]*\) .*/picker: \1/; s/^view: menu.*/view: menu/' | tr '\n' ',')" = "layer: open 3 (locked),layer: close 3,layer: open 3 (locked),fx: on,layer: close 3,layer: open 1 (locked),layer: open 1 (locked),layer: close 1,layer: open 4 (locked),layer: close 4,layer: open 7 (locked),layer: close 7,layer: open 5 (locked),picker: keep,layer: close 5,view: menu,layer: close 9," ] &&
+    ok "OCT+ closes the fx layer (no toggle); a FX tap in it still toggles; each layer's own button held again closes it (FX KEY BASS METRO, EDIT: the sound kept, HOME: the view menu); KEY held + a root in the open key layer: a combo, it stays" \
+    || bad "the layers' own buttons: $(grep '^layer:\|^fx: o\|^view: menu\|^picker: [kc]' "$L" | sed 1,7d | tr '\n' ' ')"
 grep 'octave' "$L" | grep -v 'octave 0' | grep -q . && bad "OCT- in a layer moved the octave" || ok "OCT- in a layer: back, the octave untouched"
 grep -q 'fx_on\|layer 4' "$L" && ok "screens: $OUT/cr_lock_fx.ppm, cr_lock_bass.ppm, cr_lock_key.ppm" || bad "no bass layer in the dump"
 differ cr_lock_fx cr_lock_bass "the bass layer replaced the fx layer"

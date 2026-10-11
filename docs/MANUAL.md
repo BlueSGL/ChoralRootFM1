@@ -90,7 +90,7 @@ blinks.
 <img src="manual/layer-fx.png" width="240" alt="The FX layer: Reverb as the picked effect, four cells Size, Damp, Type, Amount in the knob colours">
 
 SELECT picks the effect, KNOB 1 to KNOB 4 turn the four cells under it, and the root keys still play so you hear the
-change. **OCT-** closes the layer (so does HOME). All the layer buttons work this way: a tap is the button's on / off,
+change. **OCT-** closes the layer (so do OCT+, HOME, and holding FX again). All the layer buttons work this way: a tap is the button's on / off,
 a hold opens its layer. [Layers](#5-layers) has the rules.
 
 **Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place,
@@ -183,7 +183,7 @@ In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four va
 - **Knob read-outs** take the whole screen for about a second: the value large, a row of stripes, what it is
   (`120 / bpm`, `+1 / octave`, `34 / reverb`).
 - **Messages** are a box over the screen for about a second (`loop recorded`, `saved FM6 26`, `no free slot`).
-- **The footer** of a layer lists its keys (`SELECT: effect · OCT+: on/off · OCT-: back`).
+- **The footer** of a layer lists its keys (`SELECT: effect · FX: on/off · OCT-: back`; it uses the printed names).
 
 The battery level shows only on the Options pages, at the top right.
 
@@ -203,7 +203,7 @@ MIDI message wakes it and does its normal job at the same time.
 | SAVE lit | the save dialog is open |
 | REC lit / blinking | armed / counting in, recording or overdubbing |
 | LOOP lit, its green light | the slot holds a loop, the loop is playing |
-| OCT- lit, OCT+ blinking | in a layer, menu or dialog: back, OK |
+| OCT- lit, OCT+ blinking | in a layer, menu or dialog: back, OK (where there is nothing to confirm: close) |
 | OCT- or OCT+ lit on the view | the roots are shifted down or up |
 | chord keys | lit while held or latched; B3 lit while LOCK is on |
 | root keys | the notes of the sounding chord, where they sound; the note a performance mode is playing blinks; a playing loop's notes glow dim |
@@ -331,22 +331,25 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 - **Tap = use.** A tap is always the button's on / off action, also while its own layer is open.
 - **Hold = open, and it stays.** Hold the button past the hold time (0.4 s) and its layer opens and stays open after
   you let go. The button blinks. Touching a key or a knob while the button is down opens the layer at once.
-- **OCT- or HOME = close.** Holding another layer button switches straight to that layer.
+- **OCT- or HOME = close.** So does holding the layer's own button again (the way you opened it). Holding another
+  layer button switches straight to that layer.
 - **The knob row.** Under the layer's picker, four cells show what KNOB 1 to KNOB 4 do, in the knob colours (blue,
   orange, white, green), each with a small picture of its value. The cell you just turned lights up. A dash means the
   knob has no job here.
 - **SELECT** moves the picker at the top of the layer (except in the KEY layer, where it stays the tempo).
-- **OCT+** is the layer's OK. What that means is in the table.
+- **OCT- is back, OCT+ is confirm.** Where a layer has something to confirm, OCT+ does it (the engine picker's
+  sound, the loop slots' Save / Load / Delete, the save dialog). The layers below have nothing to confirm, so there
+  OCT+ closes the layer just as OCT- does. On / off is always a tap of the layer's own button.
 - The chord block keeps its job in every layer.
 
-| Layer | Hold | The picker (SELECT) | The root keys | OCT+ |
-| --- | --- | --- | --- | --- |
-| KEY | KEY (SEL) | a keyboard with the tonic lit | set the tonic | closes |
-| PERF | PERF (ARP) | the performance mode | play as usual | performance on / off |
-| FX | FX | the effect | play as usual | effects on / off |
-| BASS | BASS (ENV) | the bass behaviour | the white keys D4 E4 F4 G4 pick the behaviour; nothing sounds | closes |
-| METRO | METRO (SEQ) | the time signature | D4 E4 F4 pick 4/4, 3/4, 6/8 | closes |
-| PLAY menu | LOOP (PLAY) | see [The looper](#10-the-looper) | play, or pick loop slots | nothing (a rest in step entry) |
+| Layer | Hold | The picker (SELECT) | The root keys | A tap of its button | OCT- / OCT+ |
+| --- | --- | --- | --- | --- | --- |
+| KEY | KEY (SEL) | a keyboard with the tonic lit | set the tonic | Key Mode on / off | close |
+| PERF | PERF (ARP) | the performance mode | play as usual | performance on / off | close |
+| FX | FX | the effect | play as usual | effects on / off | close |
+| BASS | BASS (ENV) | the bass behaviour | the white keys D4 E4 F4 G4 pick the behaviour; nothing sounds | bass on / off | close |
+| METRO | METRO (SEQ) | the time signature | D4 E4 F4 pick 4/4, 3/4, 6/8 | metronome on / off | close |
+| PLAY menu | LOOP (PLAY) | see [The looper](#10-the-looper) | play, or pick loop slots | play / stop | close (in step entry: back a step / a rest) |
 
 Three more things open the same way and are described in their own chapters: **EDIT** held is the engine picker
 ([Sounds](#11-sounds)), **HOME** held for 0.6 s is the view menu ([Views](#13-views)), and **SAVE** held shows the
@@ -394,7 +397,8 @@ engine, open the bass sound's editor and hold EDIT there ([Sounds](#11-sounds)).
 
 A performance mode plays the notes of your chord for you. **PERF** (printed ARP) tap switches the chosen mode on and
 off; the top right names it. Hold PERF for the **PERF layer**: SELECT picks the mode (picking one switches the
-performance on), the root keys play so you hear it, KNOB 1 to KNOB 4 are the mode's parameters and OCT+ is on / off.
+performance on), the root keys play so you hear it, KNOB 1 to KNOB 4 are the mode's parameters, and a PERF tap is
+still on / off. OCT-, OCT+, HOME or holding PERF again closes the layer.
 
 | Mode in the picker | What it does | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- | --- |
@@ -427,7 +431,7 @@ selected one.
 - **FX** tap switches all four on and off for the chord sound.
 - **KNOB 4** is the amount of the selected effect (turning it switches the effects on).
 - Hold FX for the **FX layer**: SELECT picks the effect, KNOB 4 is its amount, KNOB 1 to KNOB 3 are its parameters,
-  OCT+ is on / off, and the root keys play.
+  a FX tap is still on / off, and the root keys play. OCT-, OCT+, HOME or holding FX again closes the layer.
 
 | Effect | KNOB 1 | KNOB 2 | KNOB 3 |
 | --- | --- | --- | --- |
@@ -486,7 +490,7 @@ it carries a red dot while REC is armed (steady) or recording (blinking).
 
 ### The PLAY menu
 
-Hold LOOP. The menu stays open like any layer (OCT- or HOME closes it), and with Keys set to Play you can keep
+Hold LOOP. The menu stays open like any layer (OCT-, OCT+, HOME or holding LOOP again closes it), and with Keys set to Play you can keep
 playing and recording with it open.
 
 <img src="manual/play-menu.png" width="240" alt="The PLAY menu: Loop 1, empty; ten slot boxes; the record mode Overwrite; the length Free; cells Quantize, Count-in, Level, Keys">
@@ -614,7 +618,7 @@ Hold **EDIT**. The engine picker opens and stays (EDIT blinks). It is a preview:
 | KNOB 1 (or PRESETS) | the engine's pool, as PRESETS |
 | KNOB 2 | INIT: the engine's plain starting sound (`init sound`) |
 | KNOB 4 | what the root keys do here: `roots: engines` or `roots: play` (to hear the preview). Remembered |
-| OCT+ or EDIT tap | keep what you chose |
+| OCT+, EDIT tap or EDIT held again | keep what you chose |
 | OCT- or HOME | cancel: the sound as it was before |
 
 Held from the view, EDIT picks for the chord sound. For the **bass engine**, open the bass sound's editor first (BASS
@@ -803,7 +807,7 @@ The view is what the screen shows when no layer, menu or editor is open. There a
 
 - **HOME** tap goes back to the view from anywhere. On the view itself it steps to the next view.
 - **HOME held** for 0.6 s opens the view menu: SELECT or the white keys D4 to A4 choose the view, KNOB 1 (or B4)
-  switches **Lock** on and off, OCT+ closes it. With Lock on, a HOME tap never changes the view; it only goes home.
+  switches **Lock** on and off; OCT+, OCT-, HOME or holding HOME again closes it. With Lock on, a HOME tap never changes the view; it only goes home.
 - Options > View sets the same thing.
 
 Options > Motion (Full, Calm, Off) sets how much the screens animate; the hopping note of an arpeggio is not an animation and shows with Off too. The sound editor never animates. The other four views never change with the performance mode.
@@ -1077,9 +1081,11 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 
 ### Buttons
 
+A held layer button opens its layer and it stays; holding the same button again closes it (so do OCT- and HOME).
+
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
-| FX | FX | effects on / off | FX layer: SELECT effect · KNOB 1-3 parameters · KNOB 4 amount · OCT+ on/off |
+| FX | FX | effects on / off (in its layer too) | FX layer: SELECT effect · KNOB 1-3 parameters · KNOB 4 amount |
 | SEL | KEY | Key Mode on / off | KEY layer: a root = tonic (with MIN: minor) · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
@@ -1087,12 +1093,12 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: Keys. In the editor: SHIFT latch | + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | while held: loops: white roots slot · SELECT Save / Load / Delete · OCT+ does it |
-| ARP | PERF | performance on / off | PERF layer: SELECT mode · KNOB 1-4 its parameters · OCT+ on/off |
+| ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
 | SEQ | METRO | metronome on / off | METRO layer: SELECT time signature · KNOB 1 Click |
 | PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT length · KNOB 1 Quantize · 2 Count-in · 3 Level · 4 Keys |
 | REC | REC | record by the record mode; ends a take; cancels when armed | undo the last layer |
-| OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel. In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
-| OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: OK. In step entry: a rest | |
+| OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
+| OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |
 | OCT- + OCT+ | PANIC | all notes off | 5 s: the chip's USB boot (switch off and on to leave) |
 
 ### In the sound editor

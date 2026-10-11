@@ -1560,8 +1560,9 @@ static void cu_layer_close(void)                  /* OCT- in a layer: back (the 
     cu.lock = L_NONE;
 }
 
-/* PERF tap / OCT+ in the perform layer: perform on / off; FX tap / OCT+ in the fx layer: the effects on / off. No
- * message: the PERF / FX LED shows the state (in the layer, its label "perform \267 on" too) */
+/* PERF tap: perform on / off; FX tap: the effects on / off (with their layer open too: OCT+ there closes the layer as
+ * in every layer with nothing to confirm, the owner's rule of 2026-10-10). No message: the PERF / FX LED shows the
+ * state (in the layer, its label "perform \267 on" too) */
 static void cu_perf_toggle(void)
 {
     cs.perform_on ^= 1u;
@@ -1745,20 +1746,17 @@ static void cu_oct_tap(uint32_t b)
         cu_trace("loop: step %s\n", b == B_OCTUP ? "rest" : "back");
         return;
     }
-    if (cu_layer()) {                             /* a layer: OCT+ does SAVE's action, else OK; OCT-: back */
+    if (cu_layer()) {                             /* a layer: OCT- back, OCT+ confirms where there is something to
+                                                   * confirm, else it closes too (the rule for every layer) */
         uint32_t l = cu_layer();
         if (l == L_EDIT) {                        /* the engine picker: OCT+ keeps the sound, OCT- cancels */
             cu_pick_end(b == B_OCTUP);
             cu_layer_close();
-        } else if (b == B_OCTUP && l == L_SAVE)
+        } else if (b == B_OCTUP && l == L_SAVE)   /* SAVE held: the picked action on the slot */
             cu_save_act();
-        else if (b == B_OCTUP && l == L_LOOP)
-            ;
-        else if (b == B_OCTUP && l == L_PERF)     /* the perform layer: OCT+ perform on / off */
-            cu_perf_toggle();
-        else if (b == B_OCTUP && l == L_FX)       /* the fx layer: OCT+ the effects on / off */
-            cu_fx_toggle();                                     /* the PLAY menu: nothing (Pause = LOOP, Undo = REC held) */
-        else if (cu.lock)
+        else if (cu.lock)                         /* KEY PERF FX BASS METRO, the PLAY menu (step entry: above), the
+                                                   * view menu: nothing to confirm, both close (on / off is the
+                                                   * layer's own button, tapped) */
             cu_layer_close();
         return;
     }
@@ -3059,7 +3057,10 @@ static void cr_ui_input(void)
     if (cu.home_hold && !cc.on && ((cu.bheld >> BT_HOME) & 1u) && now - cu.home_t0 >= CU_HOME_HOLD_MS) {
         cu.home_hold = 0;                          /* HOME held: the view menu; its release does nothing */
         cu.swallow |= CU_BIT(BT_HOME);
-        cu_view_menu();
+        if (cu.lock == L_VIEW)                     /* .. held again in its menu: closed (as every layer's button) */
+            cu_layer_close();
+        else
+            cu_view_menu();
     }
     if (cu.armed != NB && !cu.open && ((cu.bheld >> cu.armed) & 1u) && !(cu.armed == BT_SAVE && cu.page == PG_SAVE) &&
         now - cu.t0 >= (uint32_t)HOLD_MS[settings_hold % 4u]) {
@@ -3070,7 +3071,16 @@ static void cr_ui_input(void)
             ce_button(cu.armed, CE_HOLD);
         } else
 #endif
-        {
+        if (cu.lock && cu_layer_of(cu.armed) == cu.lock) {   /* a layer's own button held again past the hold time
+                                                              * (alone: a key or a knob touched meanwhile is a combo in
+                                                              * the layer, cu_activity): the layer closes, as it
+                                                              * opened; the engine picker keeps its sound (as EDIT
+                                                              * tapped). Its release does nothing */
+            cu.open = 1;
+            if (cu.lock == L_EDIT)
+                cu_pick_end(1);
+            cu_layer_close();
+        } else {
             cu.open = 1;
             cu_opened(cu.armed);
         }
@@ -3186,10 +3196,9 @@ static void cr_leds(void)
     if (sn->lcap == CRL_CAP_STEP && (!l || l == L_LOOP) && !cu.opt_open && cu.page == PG_NONE) {
         cu_led(nl, panel.btn[B_OCTDN], 1);               /* step entry: OCT- back, OCT+ a rest */
         cu_led(nl, panel.btn[B_OCTUP], 1);
-    } else if (cu_picker_ctx() || l) {                   /* a picker: OCT- back (lit), OCT+ OK (blinking; the PLAY
-                                                          * menu: none) */
+    } else if (cu_picker_ctx() || l) {                   /* a picker: OCT- back (lit), OCT+ OK / close (blinking) */
         cu_led(nl, panel.btn[B_OCTDN], 1);
-        cu_led(nl, panel.btn[B_OCTUP], l != L_LOOP && blink);
+        cu_led(nl, panel.btn[B_OCTUP], (int)blink);
     } else {
         cu_led(nl, panel.btn[B_OCTDN], cu.octave < 0);
         cu_led(nl, panel.btn[B_OCTUP], cu.octave > 0);
@@ -3987,7 +3996,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
     case L_PERF: {
         static char seen[48];
         cu_picker(s, PERF_ITEMS, 7, cs.perf_sel, CR_COL_WHITE, cs.perform_on ? "perform \267 on" : "perform \267 off",
-                  "SELECT: mode \267 OCT+: on/off \267 OCT-: back");
+                  "SELECT: mode \267 ARP: on/off \267 OCT-: back");
         s->kind = CR_K_KNOBROW;
         s->orient = 1;
         cu_perf_cells(s);
@@ -3997,7 +4006,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
     case L_FX: {                                   /* the knob row: the effect over KNOB 1..4's cells */
         static char seen[48];                      /* (the trace: the row's labels when they change) */
         cu_picker(s, FX_ITEMS, CU_NFX, cs.fx_sel, CR_COL_GREEN, cs.fx_on ? "fx \267 on" : "fx \267 off",
-                  "SELECT: effect \267 OCT+: on/off \267 OCT-: back");
+                  "SELECT: effect \267 FX: on/off \267 OCT-: back");
         s->kind = CR_K_KNOBROW;
         s->orient = 1;
         cu_fx_cells(s);

@@ -3,7 +3,8 @@
 # Keys (KNOB 1..4). SELECT +3: 4 bars (state 1); Keys = Play: MAJ + D4 plays D with the menu open; GLO: Keys = Loops
 # (GLO lit, the slot map: D#4 CLEAR lit; state 2), GLO again: Play; KNOB 4 +1 / -1 the same; ALGORITHM +2: Overdub
 # (state 3), back; PRESETS +4: slot 5, empty (state 4), back; SELECT -3: Free; REC: armed, "Rec · Overwrite" (state 5);
-# REC again: cancelled. OCT+ does nothing in the menu; OCT- closes it.
+# REC again: cancelled. OCT- closes the menu; opened again, OCT+ closes it too (nothing to confirm there outside step
+# entry); opened again, LOOP held again closes it (a LOOP tap in it still plays / stops).
 wait 300
 btn PLAY down
 wait 500
@@ -44,8 +45,6 @@ wait 1300
 shot build/emu/test/cr_lm_4.ppm
 knob PRESETS -4
 wait 300
-btn OCT+                      # nothing: the menu stays
-wait 200
 knob SELECT -3
 wait 300
 btn REC
@@ -58,3 +57,21 @@ dump                          # 3: cancelled
 btn OCT-
 wait 300
 dump                          # 4: the menu closed (layer 0)
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+dump                          # 5: open again (layer 8)
+btn OCT+
+wait 300
+dump                          # 6: OCT+ closed it (layer 0)
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+dump                          # 7: open again
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+dump                          # 8: LOOP held again: closed, the loop state as it was (no tap)

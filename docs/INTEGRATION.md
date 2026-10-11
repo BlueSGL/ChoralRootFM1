@@ -187,16 +187,35 @@ Buttons (`panel.btn[]` ids): **tap** = release < HOLD_MS (300 ms, Felucca's `set
 other button touched meanwhile: always the button's action, also while its own layer is open. **Hold** = past
 HOLD_MS, or a key / knob / button touched meanwhile (a combo, no tap): a layer button opens its layer **and locks
 it** (`cu.lock`): it stays open after release, its LED blinks; **OCT− (back) or HOME closes it** (OCT− in a layer
-is never the octave; OCT+ is OK, or the loop picker's action), holding another layer button switches to that layer.
+is never the octave), **its own button held again past HOLD_MS closes it** (alone: with a key or a knob touched
+meanwhile it is a combo in the layer, which stays), holding another layer button switches to that layer.
+**OCT+ confirms where a layer has something to confirm, and closes it where it has not** (the owner's rule,
+2026-10-10; until then PERF's and FX's OCT+ were on / off and the PLAY menu's did nothing): the table below.
 The lockable layers: KEY, PERF, FX, BASS, LOOP, METRO and the engine picker (EDIT held: a preview, OCT− cancels,
-OCT+ / EDIT keep). A layer opened from the sound editor closes back to the editor (OCT− / HOME). SAVE held (the loop slots) is momentary; OPT is the knob shift;
+OCT+ / EDIT / EDIT held again keep).
+
+| layer | OCT− | OCT+ | HOME | a tap of its button | its button held again |
+| --- | --- | --- | --- | --- | --- |
+| KEY | close | close | close | Key Mode on/off, the layer stays | close (was: stays) |
+| PERF | close | **close** (was: perform on/off) | close | perform on/off, the layer stays | close (was: stays) |
+| FX | close | **close** (was: the effects on/off) | close | the effects on/off, the layer stays | close (was: stays) |
+| BASS | close | close | close | bass on/off, the layer stays | close (was: stays) |
+| METRO | close | close | close | the click on/off, the layer stays | close (was: stays) |
+| LOOP (the PLAY menu) | close; step entry: back a step | **close** (was: nothing); step entry: a rest | close | play / stop, the menu stays | close (was: stays) |
+| the view menu (HOME held) | close | close ("ok": the change is live) | close | (HOME tap: close) | close (was: stays) |
+| the engine picker (EDIT held) | cancel, close | keep, close | cancel, close | keep, close | keep, close (was: stays) |
+| SAVE held (the loop slots, momentary) | — | the picked action (Save / Load / Delete) | — | — | — |
+| Options (OPT tap; not a layer) | close | close; Calibrate: start; SAFE MODE's Flash Data: erase (twice) | close | (OPT tap: close) | — |
+| the save dialog, naming | cancel | take the choice / save; "delete?": yes | cancel | (SAVE tap: as OCT+) | SAVE 1 s: delete / reset |
+
+ A layer opened from the sound editor closes back to the editor (OCT− / HOME). SAVE held (the loop slots) is momentary; OPT is the knob shift;
 a button pressed during another's hold is that hold's combo (its release does nothing).
 
 | printed | role | tap | hold (locked open unless noted) |
 | --- | --- | --- | --- |
 | SEL | KEY | Key Mode on/off | the knob row with the keyboard as its band: roots = tonic (MIN held: minor); KNOB 1–4 Tonic Scale Transpose Single as cells, the turned cell hot |
-| ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; **OCT+ = on/off** (the label "perform · on" / "· off"); KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms |
-| FX | FX | main effect on/off | the knob row: SELECT = effect, the roots play; **OCT+ = on/off** (label "fx · on" / "· off"); KNOB 1–3 params, KNOB 4 amount (on: FX on); no popups, the turned cell hot 800 ms |
+| ARP | PERF | performance on/off (LED lit while on: no message; the top line says the mode; on the Chord view an arpeggio or a pattern playing shows the arp screen, section 5; the other views never change) | the knob row: SELECT = mode (picking one turns it on), the roots play the chord; a PERF tap in it = on/off (the label "perform · on" / "· off"), OCT+ closes; KNOB 1–4 = the mode's params as cells; no popups, the turned cell hot 800 ms |
+| FX | FX | main effect on/off | the knob row: SELECT = effect, the roots play; a FX tap in it = on/off (label "fx · on" / "· off"), OCT+ closes; KNOB 1–3 params, KNOB 4 amount (on: FX on); no popups, the turned cell hot 800 ms |
 | ENV | BASS | bass on/off | the knob row: KNOB 1–4 BEHAVIOUR REGISTER SOUND LEVEL as cells (no popups, the turned cell hot); BASS held + EDIT = the bass sound's editor, + SAVE its saving |
 | LFO | LATCH | latch on/off (Sticky Keys; also holds a performed arp / pattern after the keys are released: Hold defaults off in every mode, an arp stops when the keys are up; Hold is STRUM's KNOB 4) | — |
 | GLO | OPT | Options (picker pages) | shift (momentary): OPT + KNOB 1 split point, + SELECT metronome level, + ALGORITHM bass level; the other knobs keep their job |
@@ -206,9 +225,9 @@ a button pressed during another's hold is that hold's combo (its release does no
 | SEQ | METRO | metronome on/off | the knob row: the time signature over Click (KNOB 1, hot; no popup) and three empty cells |
 | PLAY | LOOP | play / stop | the knob row, no ring: slots on white roots, D#4 CLEAR (hold), F#4 UNDO; KNOB 1 the length picker, 2–4 Quantize Count-in Level cells (hot, no popups); playing: the action picker, OCT+ does it, Sync dim, the dial |
 | REC | REC | record / overdub arm | undo the last layer (not a layer) |
-| OCT−/OCT+ | | octave −2..+2; in a layer or picker: back / OK | **both: PANIC** (the LOCK latch cleared) |
+| OCT−/OCT+ | | octave −2..+2; in a layer or picker: back / confirm (nothing to confirm: close) | **both: PANIC** (the LOCK latch cleared) |
 
-Layer footers read "… · OCT-: back · HOME: home" (PERF / FX: "SELECT: mode · OCT+: on/off · OCT-: back"); the emulator's log has `layer: open N (locked)` / `layer: close N`.
+Layer footers read "… · OCT-: back · HOME: home" (PERF / FX: "SELECT: mode · ARP: on/off · OCT-: back" / "SELECT: effect · FX: on/off · OCT-: back": the printed names); the emulator's log has `layer: open N (locked)` / `layer: close N`.
 
 Knobs (`fm1_enc_take(panel.enc[role])`, one step per detent): KNOB 1 → `cr_voicing_step`,
 KNOB 2 → `cr_bass_voicing_step`, KNOB 3 → the current perform mode's main parameter, KNOB 4 →

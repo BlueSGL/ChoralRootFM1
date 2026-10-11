@@ -2,6 +2,10 @@
 # FX blinking); SELECT picks the effect (the roots play the chord there); OCT- closes it (the octave untouched). FX held again, released; BASS (ENV)
 # held: the bass layer instead; a FX tap inside it: FX off (the layer stays); HOME closes it. KEY (SEL) tapped: Key
 # Mode on; held: the key layer, locked; OCT- closes it.
+# The rule for every layer (2026-10-10): OCT+ closes it where there is nothing to confirm (FX: no toggle any more), a
+# tap of its own button is still the on / off, and its own button held again past the hold time closes it: FX, KEY
+# (KEY held + a root inside the hold is a combo: the layer stays), BASS, METRO, the engine picker (EDIT: its sound
+# kept), the view menu (HOME).
 wait 300
 expect led OCT- dim
 btn FX down
@@ -47,4 +51,80 @@ btn OCT-
 wait 300
 expect led OCT- dim
 expect led SEL on
+dump
+btn FX down
+wait 500
+btn FX up
+wait 300
+expect led OCT- on
+btn OCT+                      # the fx layer: OCT+ closes it, FX as it was (off since the tap above)
+wait 300
+expect led OCT- dim
+expect led FX dim
+btn FX down
+wait 500
+btn FX up
+wait 300
+btn FX                        # a FX tap in its layer: on, the layer stays
+wait 300
+expect led OCT- on
+btn FX down                   # FX held again: closed (no tap: FX stays on)
+wait 500
+btn FX up
+wait 300
+expect led OCT- dim
+expect led FX on
+btn SEL down
+wait 500
+btn SEL up
+wait 300
+btn SEL down                  # KEY held + a root inside the hold time: a combo in the open layer, it stays
+wait 100
+btn E4
+wait 500
+btn SEL up
+wait 300
+expect led OCT- on
+btn SEL down                  # KEY held again, alone: closed, Key Mode as it was (on)
+wait 500
+btn SEL up
+wait 300
+expect led OCT- dim
+expect led SEL on
+btn ENV down
+wait 500
+btn ENV up
+wait 300
+expect led OCT- on
+btn ENV down
+wait 500
+btn ENV up
+wait 300
+expect led OCT- dim
+btn SEQ down
+wait 500
+btn SEQ up
+wait 300
+expect led OCT- on
+btn SEQ down
+wait 500
+btn SEQ up
+wait 300
+expect led OCT- dim
+btn EDIT down
+wait 500
+btn EDIT up
+wait 300
+expect led OCT- on
+btn EDIT down                 # the engine picker: EDIT held again keeps the sound and closes it
+wait 500
+btn EDIT up
+wait 300
+expect led OCT- dim
+btn HOME 800                  # the view menu
+wait 300
+expect led OCT- on
+btn HOME 800                  # HOME held again: closed
+wait 300
+expect led OCT- dim
 dump

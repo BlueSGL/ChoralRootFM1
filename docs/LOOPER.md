@@ -68,8 +68,8 @@ as it was. The chords sound as they are entered (the chord engine plays the keys
 
 ## The PLAY menu (`cr_ui.c cu_loopmenu`, `CR_K_LOOPMENU`)
 
-LOOP held past HOLD_MS opens it and locks it (OCT- / HOME close it; a LOOP tap still plays / stops; OCT+ does nothing
-there, outside step entry). Mock-ups: `design/choralroot-fm1-looper-screens.png` (generator `make_looper_mockups.py`).
+LOOP held past HOLD_MS opens it and locks it (OCT- / OCT+ / HOME / LOOP held again close it; a LOOP tap still plays /
+stops; in step entry OCT+ is a rest and OCT- a step back). Mock-ups: `design/choralroot-fm1-looper-screens.png` (generator `make_looper_mockups.py`).
 
 | control | what |
 | --- | --- |

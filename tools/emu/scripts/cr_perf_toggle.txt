@@ -1,6 +1,7 @@
 # ChoralRoot: perform on / off (docs/INTEGRATION.md). PERF (ARP) tap: perform on, its LED lit (no message), tap
-# again: off, the LED dim. PERF held: the layer; SELECT +3 picks Arpeggiate (on); OCT+ in the layer: off / on (the
-# label "perform - off / on"); OCT- closes it. MAJ + D4 held: the arp steps (notes out climb); PERF tap: off, the
+# again: off, the LED dim. PERF held: the layer; SELECT +3 picks Arpeggiate (on); a PERF tap in the layer: off / on (the
+# label "perform - off / on", the layer stays); OCT+ closes it (as OCT-: nothing to confirm there), perform still on;
+# PERF held: open again; PERF held again: closed. MAJ + D4 held: the arp steps (notes out climb); PERF tap: off, the
 # chord held plain (no more notes out).
 wait 300
 tap ARP
@@ -18,30 +19,42 @@ wait 300
 knob SELECT +3
 wait 300
 dump                          # 2: perform 1 (a mode picked), layer 2
-btn OCT+
+tap ARP
 wait 300
 shot build/emu/test/cr_perf_layer_off.ppm
-dump                          # 3: perform 0 (OCT+ in the layer), the layer still open
-btn OCT+
+dump                          # 3: perform 0 (a PERF tap in the layer), the layer still open
+tap ARP
 wait 300
 shot build/emu/test/cr_perf_layer_on.ppm
 dump                          # 4: perform 1, the layer open
-btn OCT-
+btn OCT+
 wait 300
 expect led ARP on
+dump                          # 5: OCT+ closed the layer (layer 0), perform 1
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+dump                          # 6: open again (layer 2)
+btn ARP down
+wait 500
+btn ARP up
+wait 300
+expect led ARP on
+dump                          # 7: PERF held again: closed, perform still 1 (a hold is no tap)
 key F3 down
 wait 40
 btn D4 down
 wait 1500
-dump                          # 5: the arp stepping: notes out climb
+dump                          # 8: the arp stepping: notes out climb
 wait 1000
-dump                          # 6: more notes out
+dump                          # 9: more notes out
 tap ARP
 wait 300
 expect led ARP dim
-dump                          # 7: perform 0, the chord held plain
+dump                          # 10: perform 0, the chord held plain
 wait 1000
-dump                          # 8: no more notes out
+dump                          # 11: no more notes out
 btn D4 up
 key F3 up
 wait 500
