@@ -108,6 +108,10 @@
 #define CR_CPU1 1                /* the bass part's render on the second core (cr_cpu1.h, hal/fm1_cpu1.h, docs/DUALCORE.md):
                                   * started at power-on; if it does not answer, single core with the shared budget */
 #endif
+#ifndef CV_ROWS
+#define CV_ROWS 120u             /* gfx.c's canvas: cr_draw.c's strip and its two DMA buffers, 3 x 40 rows, are all this
+                                  * unit draws on it (Felucca's graph strip took 124: 1920 B of POOL) */
+#endif
 #ifndef FELUCCA_ICONS
 #define FELUCCA_ICONS 0          /* no Felucca icon atlas (icons.c, ui_icons.h): cr_draw.c draws its header glyphs */
 #endif

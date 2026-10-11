@@ -4287,6 +4287,7 @@ static void cu_safe_screen(cr_screen_t *s)
 #ifndef CR_REBOOT
 #define CR_REBOOT() do { bootguard_settled(&bootguard); usb_detach(); fm1_delay_ms(30); fm1_reboot(); } while (0)
 #endif
+static cr_screen_t cu_scr __attribute__((section(".pool")));   /* (cr_ui_draw's, defined below) */
 static void cu_flash_erase(void)
 {
     static const uint32_t R[][2] = {{0x97000u, 9u}, {CRL_FL_BASE, 2u * CRL_SLOTS}, {0xDC000u, 4u}, {0xFC000u, 3u},
@@ -4297,23 +4298,24 @@ static void cu_flash_erase(void)
                                     {0xB2000u, 4u},    /* (storage.c: OBJ_QUADSTORE, OBJ_SESSION) */
 #endif
     };
-    static cr_screen_t es;                         /* (static: off the stack) */
+    cr_screen_t *es = &cu_scr;                     /* (the frame's screen, in the pool: off the stack and out of
+                                                    * RAM; after this comes the reboot) */
     uint32_t r, k, n = 0, total = 0, bad = 0;
     for (r = 0; r < NELEM(R); r++)
         total += R[r][1];
     for (r = 0; r < NELEM(R); r++)
         for (k = 0; k < R[r][1]; k++) {
             if (!(n % 4u)) {                       /* the progress, every 4 sectors (~180 ms) */
-                cr_screen_clear(&es);
-                es.kind = CR_K_BIG;
-                cu_cpy(es.value, "ERASING", sizeof es.value);
-                es.size = 52;
-                es.block = CR_COL_RED;
-                cu_int(es.sub, (int32_t)(n * 100u / total), 0, sizeof es.sub);
-                cu_cat(es.sub, " %", sizeof es.sub);
-                cu_cpy(es.label, "flash data: do not switch off", sizeof es.label);
+                cr_screen_clear(es);
+                es->kind = CR_K_BIG;
+                cu_cpy(es->value, "ERASING", sizeof es->value);
+                es->size = 52;
+                es->block = CR_COL_RED;
+                cu_int(es->sub, (int32_t)(n * 100u / total), 0, sizeof es->sub);
+                cu_cat(es->sub, " %", sizeof es->sub);
+                cu_cpy(es->label, "flash data: do not switch off", sizeof es->label);
                 cr_draw_invalidate();
-                cr_draw(&es, CR_ANIM_SETTLED);
+                cr_draw(es, CR_ANIM_SETTLED);
             }
             fm1_wdt_feed();
 #if FELUCCA_FLASH

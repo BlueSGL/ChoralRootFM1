@@ -93,7 +93,8 @@ static void ed_service(void) {}        /* (no SysEx service: cr_backup.c's is th
 #define CR_SPLASH_PLAY_MS 480u
 static void cr_splash(void)
 {
-    static cr_screen_t s;                          /* (static: ~1 KB off the boot stack) */
+    cr_screen_t *s = &cu_scr;                      /* (cr_ui.c's frame, in the pool: 2.4 KB off the boot stack and
+                                                    * out of RAM; the UI's first frame clears it) */
     uint32_t t, mo = CR_MOTION_FULL;
 #if CR_HAVE_SETTINGS
     if (crs_booted && crs_rec.cr.motion < CR_MOTION_N)
@@ -101,25 +102,25 @@ static void cr_splash(void)
 #endif
     palette_set(NPALETTES - 1u);                   /* MOD (cr_ui_init sets it again, then the saved one) */
     if (cr_safe) {                                 /* SAFE MODE: its screen (cr_ui.c cu_safe_screen), no slide */
-        cr_screen_clear(&s);
-        cu_safe_screen(&s);
+        cr_screen_clear(s);
+        cu_safe_screen(s);
         cr_draw_invalidate();
-        cr_draw(&s, CR_ANIM_SETTLED);
+        cr_draw(s, CR_ANIM_SETTLED);
         cr_draw_invalidate();
         return;
     }
-    cr_screen_clear(&s);
-    cu_stripes(&s);
-    s.batt = 255;
-    cu_cpy(s.foot, CR_VERSION, sizeof s.foot);
-    s.anim = CR_A_INTRO;
+    cr_screen_clear(s);
+    cu_stripes(s);
+    s->batt = 255;
+    cu_cpy(s->foot, CR_VERSION, sizeof s->foot);
+    s->anim = CR_A_INTRO;
     cr_draw_invalidate();
     for (t = 0; mo != CR_MOTION_OFF && t < CR_SPLASH_PLAY_MS; t += 16u) {
-        cr_draw(&s, mo == CR_MOTION_CALM ? t * 2u : t);
+        cr_draw(s, mo == CR_MOTION_CALM ? t * 2u : t);
         fm1_wdt_feed();
         fm1_delay_ms(16);
     }
-    cr_draw(&s, CR_ANIM_SETTLED);
+    cr_draw(s, CR_ANIM_SETTLED);
     cu_intro_played = 1;
     cr_draw_invalidate();                          /* the UI's first frame draws everything */
 }
