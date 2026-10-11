@@ -1515,10 +1515,10 @@
      "kind": "meter",
      "value": "03",
      "sub": "GLASS EP",
-     "label": "QUAD \u00b7 03/17",
+     "label": "QUAD \u00b7 03/16",
      "col": "white",
-     "pct": 0.17647058823529413,
-     "segments": 17
+     "pct": 0.1875,
+     "segments": 16
     },
     "footer": null,
     "note": "PRESETS on QUAD."

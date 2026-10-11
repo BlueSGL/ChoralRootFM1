@@ -127,6 +127,8 @@ static void cr_text_fit(int32_t x, int32_t y, const char *s, uint32_t px, int bo
 #define CR_THIN 330                      /* .. the column: 8 % (Q12; cr_gfx.c resamples down to 1/16) */
 #define CR_SLIDE_MS 160u                 /* a picker's slide */
 #define CR_FILL_MS 30u                   /* a meter: a stripe every 30 ms */
+#define CR_FILL_MAX 14u                  /* .. more than 14 to light (a pool's meter: up to 32): all of them in the 420
+                                          * ms of 14, so the last preset's meter is full inside the popup's 900 ms */
 #define CR_INTRO_MS 220u                 /* power-on: each band slides in, 90 ms after the one above */
 #define CR_INTRO_GAP 90u
 #define CR_INTRO_NAME 300u               /* .. the name lands from 300 ms, over 150 ms */
@@ -183,6 +185,8 @@ static void cr_frame(const cr_screen_t *s, uint32_t t, cr_frame_t *fr)
     }
     if (s->kind == CR_K_METER && (s->anim & CR_A_FILL)) {
         uint32_t a = cr_filled(s, s->pct_from), b = fr->filled, n = a < b ? b - a : a - b, done = t / CR_FILL_MS;
+        if (n > CR_FILL_MAX)                                       /* a long way: in the time of CR_FILL_MAX stripes */
+            done = t < CR_FILL_MAX * CR_FILL_MS ? t * n / (CR_FILL_MAX * CR_FILL_MS) : n;
         if (done < n) {
             fr->busy = 1;
             fr->filled = (uint8_t)(a < b ? a + done : a - done);

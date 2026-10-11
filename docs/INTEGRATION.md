@@ -96,7 +96,7 @@ ISR and the budget had not been re-recorded since; not QUAD's doing. The other
 engines render bit for bit as before (`tests/golden.txt`: 16 QUAD renders added, none changed).
 
 **0.14: FM TONE, ANALOG retired, the engine order (2026-10-08).** QUAD shows as **FM TONE** everywhere the user sees
-it (the engine picker, the popups "FM TONE · 03/17", the save page "FM TONE · 17", the Sounds page / CLI, backup
+it (the engine picker, the popups "FM TONE · 03/16", the save page "FM TONE · 17", the Sounds page / CLI, backup
 object 22 "FM TONE patches"); the code name, files, flags and the patch kind `quad` stay. ANALOG retired (above;
 `ENGINES[0]` is `ENG_GONE`, `cr_bank.c`'s ANALOG trim row dropped, `tests/target_budget.txt`'s `analog_render` an
 optional entry). `ENGINE_ORDER`: FM6, FM TONE, VA, CZ-1, PHASE, LOFI, VOICE, TRIO, WHEEL, PHYS, NOISE: eleven engines, a
@@ -436,7 +436,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
 - **Sounds** (`cr_bank.c`, `cr_pages.c`, `cr_name.c`; section 7, docs/PRESETS.md): PRESETS turns the pool of the
   chord part's engine, ALGORITHM the bass part's (after OFF); OPT + PRESETS the chord part's engine (a horizontal
   picker while OPT is held, applied on release). The meter: the place big, the name (a square after an overwritten
-  factory preset's), "FM6 · 05/26".
+  factory preset's), "FM6 · 05/25" (the place and the pool's presets, INIT not counted: a stripe per preset).
   **EDIT tap**: the sound editor (`cr_edit.c`, docs/EDITOR.md; BASS held + EDIT: the bass sound's, SHIFT + EDIT inside
   switches part). Groups -> screens -> lanes: the function buttons become group buttons (FX = OSC, SEL = FILT, ENV,
   LFO, SEQ = MOD, PLAY = FX sends, REC = MIX; HOME or EDIT leaves); a group's tap opens it, tapped again it cycles its

@@ -140,6 +140,27 @@ static void render(const cr_screen_t *s, uint32_t t)
     cr_draw(s, t);
 }
 
+/* the meter on screen: its stripes (the runs of ink on the row through their middle) -> *all, the lit ones (in the
+ * panel's colour) returned */
+static uint32_t meter_stripes(const cr_screen_t *s, uint32_t *all)
+{
+    uint32_t y = (uint32_t)(CR_PY0 + cr_ph(s) - 46 + 7), x, lit = 0, n = 0, in = 0, hot = 0;
+    uint16_t bg = swap16(T_BG), on = swap16(cr_rgb(s->col, CR_RED));
+    for (x = 0; x <= 240u; x++) {
+        uint16_t p = x < 240u ? host_screen[y * 240u + x] : bg;
+        if (p != bg) {
+            in = 1;
+            hot |= p == on;
+        } else if (in) {
+            n++;
+            lit += hot;
+            in = hot = 0;
+        }
+    }
+    *all = n;
+    return lit;
+}
+
 static uint32_t mod_index(void)
 {
     uint32_t i;
@@ -298,6 +319,106 @@ int main(int argc, char **argv)
                   cr_dc.blits == CR_NSTRIP && cr_dc.drawn == CR_NSTRIP && cr_dc.bytes == 240u * 240u * 2u &&
                   !memcmp(before, host_screen, sizeof before) && left == 0);
         }
+    }
+
+    {   /* the meters settled: every fixture's stripes are its `segments`, `pct` of them lit. The sound read-out's
+         * (cr_ui.c cu_pool_popup: a stripe per preset; INIT, position 00, is not one): 5 of 25 on FM6's 05 (the preset
+         * sheet's 1), none on INIT, every one on the last preset (pool_init, pool_last: device renders, no mock-up),
+         * one unlit stripe for a pool of INIT alone (not cr_segs' 12 of `segments` 0) */
+        cr_screen_t s;
+        uint32_t all, lit, nm = 0, nbad = 0;
+        int32_t ip = -1;
+        int ok;
+        for (k = 0; k < CR_NSCREENS; k++) {
+            if (CR_SCREENS[k].kind != CR_K_METER || CR_SCREENS[k].ring_on) continue;
+            s = CR_SCREENS[k];
+            s.anim = 0;
+            render(&s, 0);
+            lit = meter_stripes(&s, &all);
+            nm++;
+            if (all != cr_segs(&s) || lit != cr_filled(&s, s.pct)) {
+                nbad++;
+                fprintf(rep, "meter %s: %u of %u stripes lit, not %u of %u\n", CR_SCREEN_SLUGS[k], lit, all,
+                        cr_filled(&s, s.pct), cr_segs(&s));
+            }
+            if (ip < 0 && !strcmp(s.label, "FM6 \267 05/25")) ip = (int32_t)k;
+        }
+        snprintf(name, sizeof name, "the %u meters: as many stripes as segments, pct of them lit", nm);
+        check(name, nm > 0u && nbad == 0u);
+        check("the sound read-out's fixture (FM6 05/25) is in the table", ip >= 0);
+        if (ip >= 0) {
+            s = CR_SCREENS[ip];
+            s.anim = 0;
+            render(&s, 0);
+            lit = meter_stripes(&s, &all);
+            ok = lit == 5u && all == 25u;
+            snprintf(s.value, sizeof s.value, "00");
+            snprintf(s.sub, sizeof s.sub, "INIT");
+            snprintf(s.label, sizeof s.label, "FM6 \267 00/25");
+            s.pct = 0;
+            render(&s, 0);
+            write_ppm(dir, "pool_init");
+            lit = meter_stripes(&s, &all);
+            ok = ok && lit == 0u && all == 25u;
+            snprintf(s.value, sizeof s.value, "25");
+            snprintf(s.sub, sizeof s.sub, "PIANO");
+            snprintf(s.label, sizeof s.label, "FM6 \267 25/25");
+            s.pct = 256;
+            render(&s, 0);
+            write_ppm(dir, "pool_last");
+            lit = meter_stripes(&s, &all);
+            snprintf(name, sizeof name, "a pool's meter: 5 of 25 lit on 05, none on INIT, every one on the last (%u of %u)", lit, all);
+            check(name, ok && lit == 25u && all == 25u);
+            snprintf(s.value, sizeof s.value, "00");
+            snprintf(s.sub, sizeof s.sub, "INIT");
+            snprintf(s.label, sizeof s.label, "FM6 \267 00/00");
+            s.pct = 0;
+            s.segments = 1;
+            render(&s, 0);
+            lit = meter_stripes(&s, &all);
+            check("a pool of INIT alone: one stripe, not lit", lit == 0u && all == 1u);
+        }
+    }
+
+    {   /* a meter's fill (CR_A_FILL): a stripe every CR_FILL_MS; more than CR_FILL_MAX to light: all of them in the
+         * time of CR_FILL_MAX (a pool's meter, at most 32 stripes, is full inside the popup's 900 ms) */
+        cr_screen_t s;
+        uint32_t all, lit[5];
+        cr_screen_clear(&s);
+        s.kind = CR_K_METER;
+        s.batt = 255;
+        s.col = CR_COL_WHITE;
+        s.thick = 14;
+        s.pos = -1;
+        snprintf(s.value, sizeof s.value, "64");
+        s.anim = CR_A_FILL;
+        s.pct = 256;
+        s.segments = 12;                /* a knob's meter: 30 ms a stripe, as ever */
+        render(&s, 12u * CR_FILL_MS - 1u);
+        lit[0] = meter_stripes(&s, &all);
+        render(&s, 12u * CR_FILL_MS);
+        lit[1] = meter_stripes(&s, &all);
+        snprintf(name, sizeof name, "a meter's fill: 12 stripes, one every %u ms (%u lit at %u ms, %u at %u)", CR_FILL_MS,
+                 lit[0], 12u * CR_FILL_MS - 1u, lit[1], 12u * CR_FILL_MS);
+        check(name, lit[0] == 11u && lit[1] == 12u && all == 12u);
+        s.segments = 32;                /* a long pool's last preset */
+        render(&s, CR_FILL_MAX * CR_FILL_MS / 2u);
+        lit[0] = meter_stripes(&s, &all);
+        render(&s, CR_FILL_MAX * CR_FILL_MS - 1u);
+        lit[1] = meter_stripes(&s, &all);
+        render(&s, CR_FILL_MAX * CR_FILL_MS);
+        lit[2] = meter_stripes(&s, &all);
+        s.pct_from = 248;               /* a step from the place before: one stripe, at once */
+        render(&s, CR_FILL_MS);
+        lit[3] = meter_stripes(&s, &all);
+        s.pct_from = 256;               /* back to INIT: emptied in the same time */
+        s.pct = 0;
+        render(&s, CR_FILL_MAX * CR_FILL_MS);
+        lit[4] = meter_stripes(&s, &all);
+        snprintf(name, sizeof name, "32 stripes fill in the %u ms of %u (%u lit halfway, %u at %u ms, %u at %u)",
+                 CR_FILL_MAX * CR_FILL_MS, CR_FILL_MAX, lit[0], lit[1], CR_FILL_MAX * CR_FILL_MS - 1u, lit[2],
+                 CR_FILL_MAX * CR_FILL_MS);
+        check(name, lit[0] == 16u && lit[1] == 31u && lit[2] == 32u && lit[3] == 32u && lit[4] == 0u && all == 32u);
     }
 
     {   /* the corner dial (a loop playing): red in its box in the top line, none in the panel's centre; the downbeat's

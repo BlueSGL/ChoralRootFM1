@@ -846,22 +846,41 @@ echo "presets per engine (docs/PRESETS.md): PRESETS in the engine's pool, OPT + 
 run cr_presets
 PL="$OUT/cr_presets.log"
 pop() { grep -q "^popup: part 0 $1\$" "$PL"; }
-pop '00 / INIT / FM6 · 00/26' && pop '25 / PIANO / FM6 · 25/26' && pop '05 / FM PAD / FM6 · 05/26' &&
-    ok "PRESETS turns inside FM6's pool, INIT at 00, wrapping (00 INIT, 25 PIANO, 05 \"FM PAD\" \"FM6 · 05/26\"): $OUT/cr_presets_init.ppm $OUT/cr_presets_meter.ppm" \
+stripes() {      # stripes FILE: "LIT/ALL", a meter's stripes on row 201 (through their middle, cr_draw.c cr_p_meter:
+                 # a run of ink is a stripe, a bright one is lit)
+    od -An -tu1 -v -j $((15 + 201 * 240 * 3)) -N720 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
+        awk '{ v[n++] = $1 } END { lit = all = run = hot = 0
+               for (i = 0; i <= 240; i++) { s = i < 240 ? v[3*i] + v[3*i+1] + v[3*i+2] : 0
+                   if (s > 90) { run = 1; if (v[3*i] > 180) hot = 1 } else if (run) { all++; lit += hot; run = hot = 0 } }
+               print lit "/" all }'
+}
+pop '00 / INIT / FM6 · 00/25' && pop '25 / PIANO / FM6 · 25/25' && pop '05 / FM PAD / FM6 · 05/25' &&
+    ok "PRESETS turns inside FM6's pool, INIT at 00 and not counted, wrapping (00 INIT, 25 PIANO, 05 \"FM PAD\" \"FM6 · 05/25\"): $OUT/cr_presets_init.ppm $OUT/cr_presets_meter.ppm" \
     || bad "the FM6 pool: $(grep '^popup:' "$PL" | head -3 | tr '\n' ' ')"
+s0=$(stripes "$OUT/cr_presets_init.ppm"); s5=$(stripes "$OUT/cr_presets_meter.ppm"); sl=$(stripes "$OUT/cr_presets_last.ppm")
+[ "$s0" = 0/25 ] && [ "$s5" = 5/25 ] && [ "$sl" = 25/25 ] &&
+    ok "the meter: a stripe per preset (25), none lit on INIT, 5 on 05, every one on 25 PIANO, the last: $OUT/cr_presets_last.ppm" \
+    || bad "the meter's stripes (lit/all): INIT $s0 (0/25), 05 $s5 (5/25), 25 the last $sl (25/25)"
 [ "$(grep -c '^sound: part 0 engine' "$PL")" = 4 ] && has '^engine pick: VA (25 presets)' "$PL" && has '^sound: part 0 engine VA pos 1 LUSH PAD' "$PL" &&
     ok "OPT + PRESETS: the engine picker (VA, 25 presets), OPT released: VA 01 LUSH PAD: $OUT/cr_presets_engine.ppm" || bad "OPT + PRESETS: $(grep '^sound: part 0 engine' "$PL" | head -1)"
 [ "$(grep -c '^sound: part 0 engine FM6 pos 5 FM PAD' "$PL")" = 2 ] && has '^sound: part 0 engine VA pos 4 SLOW STRINGS' "$PL" &&
     ok "each engine remembers its place: FM6 back on 05 FM PAD, the VA on 04 SLOW STRINGS" || bad "the per-engine memory: $(grep '^sound: part 0 engine' "$PL" | tr '\n' ' ')"
 has '^save: dialog part 0 FM PAD (save as new)' "$PL" && has '^save: new part 0 FM6 26 (slot U01)' "$PL" && has '^save: part 0 slot U01 name ADG rc 0' "$PL" &&
-    pop '26 / ADG / FM6 · 26/27' && ok "Save as new: the next place (FM6 26), PRESETS sits on it: $OUT/cr_presets_dialog.ppm $OUT/cr_presets_naming.ppm $OUT/cr_presets_new.ppm" \
-    || bad "Save as new: $(grep '^save:' "$PL" | head -3 | tr '\n' ' ')"
-has '^save: part 0 overwrite slot U02 FM6 02 FM BELL rc 0' "$PL" && pop '02 / FM BELL (mark) / FM6 · 02/27' &&
+    pop '26 / ADG / FM6 · 26/26' && [ "$(stripes "$OUT/cr_presets_new.ppm")" = 26/26 ] &&
+    ok "Save as new: the next place (FM6 26), PRESETS sits on it (26/26, the meter's 26 stripes lit): $OUT/cr_presets_dialog.ppm $OUT/cr_presets_naming.ppm $OUT/cr_presets_new.ppm" \
+    || bad "Save as new: $(grep '^save:' "$PL" | head -3 | tr '\n' ' ') stripes $(stripes "$OUT/cr_presets_new.ppm")"
+has '^save: part 0 overwrite slot U02 FM6 02 FM BELL rc 0' "$PL" && pop '02 / FM BELL (mark) / FM6 · 02/26' &&
     ok "Overwrite on a factory preset: bound in U02, the number and the name kept, the mark: $OUT/cr_presets_overwrite.ppm $OUT/cr_presets_mark.ppm" || bad "Overwrite: $(grep 'overwrite' "$PL")"
-has '^save: reset FM BELL?' "$PL" && has '^save: reset slot U02 rc 0' "$PL" && has '^save: now part 0 FM6 02 FM BELL' "$PL" && pop '02 / FM BELL / FM6 · 02/27' &&
+has '^save: reset FM BELL?' "$PL" && has '^save: reset slot U02 rc 0' "$PL" && has '^save: now part 0 FM6 02 FM BELL' "$PL" && pop '02 / FM BELL / FM6 · 02/26' &&
     ok "SAVE held 1 s: reset to factory?, OCT+: the factory FM BELL back at 02 (no mark): $OUT/cr_presets_reset.ppm $OUT/cr_presets_factory.ppm" || bad "reset: $(grep '^save: reset' "$PL")"
 [ "$(grep -c '^save: part 0 slot U[0-9]* name .* rc 0' "$PL")" = 32 ] && has '^save: no free slot' "$PL" &&
     ok "32 user presets fill the slots; the next Save as new: \"no free slot\": $OUT/cr_presets_full.ppm" || bad "no free slot: $(grep -c 'name .* rc 0' "$PL") saves"
+s0=$(stripes "$OUT/cr_presets_long_init.ppm"); s1=$(stripes "$OUT/cr_presets_long_first.ppm")
+sb=$(stripes "$OUT/cr_presets_long_before.ppm"); sl=$(stripes "$OUT/cr_presets_long_last.ppm")
+pop '00 / INIT / FM6 · 00/57' && pop '01 / TINE EP / FM6 · 01/57' && pop '56 / FM BELL / FM6 · 56/57' && pop '57 / FM BELL / FM6 · 57/57' &&
+    [ "$s0" = 0/32 ] && [ "$s1" = 1/32 ] && [ "$sb" = 31/32 ] && [ "$sl" = 32/32 ] &&
+    ok "a pool longer than the meter (57 presets, 32 stripes): none lit on INIT, one on 01, 31 on 56, every one only on 57, the last: $OUT/cr_presets_long_last.ppm" \
+    || bad "the long pool's stripes (lit/all): INIT $s0 (0/32), 01 $s1 (1/32), 56 $sb (31/32), 57 the last $sl (32/32); $(grep '^popup:' "$PL" | tail -4 | tr '\n' ' ')"
 
 echo "the power-on splash: the idle stripes slide in, the name lands, the version under them"
 run cr_splash
@@ -1015,7 +1034,7 @@ run cr_quad --wav "$OUT/cr_quad.wav"
 QL="$OUT/cr_quad.log"
 has '^engine: part 0 -> FM TONE' "$QL" && has 'part 0: FM TONE / EP' "$QL" && ok "EDIT held + E4 (the second white root): FM TONE, 01 EP" ||
     bad "not FM TONE from the picker: $(grep -m1 '^engine:' "$QL")"
-has '^popup: part 0 03 / BASS / FM TONE · 03/17$' "$QL" && ok "PRESETS +2: the pool, FM TONE · 03/17 (INIT + 16 presets): $OUT/cr_quad_pool.ppm" ||
+has '^popup: part 0 03 / BASS / FM TONE · 03/16$' "$QL" && ok "PRESETS +2: the pool, FM TONE · 03/16 (16 presets; INIT, 00, is not counted): $OUT/cr_quad_pool.ppm" ||
     bad "pool: $(grep -m1 '^popup:' "$QL")"
 has 'part 0: FM TONE / BELL, voices 3' "$QL" && has '^expect sound .*: ok' "$QL" && ok "MAJ + D4 on 02 BELL: a chord of three FM TONE voices sounds" ||
     bad "FM TONE chord: $(grep 'part 0: FM TONE / BELL' "$QL" | head -1)"
