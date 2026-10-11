@@ -1,0 +1,16 @@
+# tools/emu/perf.sh (k), the session's save: a chord held 1.5 s on TINE EP and let go (the audio's cost with the session captured every 200 ms), then KNOB 1 +2 (the voicing: a session change only) and 5 s of nothing: one session save
+# The save waits for the quiet time (1.5 s after the last change, 1 s after the last sound): one sector erase, 45 ms
+# of the audio ISR held (16 blocks of silence into silence), as a settings save (perf_k_settings.txt).
+wait 300
+key F3 down
+wait 40
+btn D4 down
+wait 1500
+btn D4 up
+key F3 up
+wait 3000
+dump                          # 1: nothing changed: no save
+knob KNOB1 +2
+wait 5000
+dump                          # 2: the session saved once
+quit

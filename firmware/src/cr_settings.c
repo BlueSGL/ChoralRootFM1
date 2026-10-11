@@ -20,6 +20,9 @@
  *                        sounding chord it was a 46 ms hole with a click at each edge (docs/INTEGRATION.md,
  *                        Performance)
  *   cr_settings_save()   save now (still deferred while a loop plays)
+ * The session (0.18, cr_settings.h cr_session_t: where the unit was left; part 1 has its defaults / import / seal,
+ * part 2 its glue, css_*): a flash object of its own (storage.c OBJ_SESSION), read by cr_settings_boot, applied once
+ * by cr_settings_load, captured and saved from cr_settings_poll under the same rules.
  * Nothing here writes flash from the audio ISR. */
 #ifndef CR_ENGINE_H
 #include "cr_engine.h"
@@ -72,7 +75,7 @@ void cr_settings_defaults(cr_settings_t *s)
     s->single = CR_SINGLE_FULL;
     s->split_pc = 5;
     s->vel = 100;
-    s->bass_on = 0;                                /* the bass is OFF at power-on */
+    s->bass_on = 0;                                /* (always 0 in the block: Bass on is the session's, cr_settings.h) */
     s->bass_mode = CR_BASS_CHORDS_ONLY;
     s->perform_mode = CR_PM_STRUM;
     s->bpm = 120;
@@ -297,10 +300,135 @@ int cr_settings_import(cr_settings_t *s, const void *blk, uint32_t n)
             s->key_on = (uint8_t)(s->key_on == 1u ? 1u : 0u);
             if (s->single > CR_SINGLE_SPLIT) s->single = CR_SINGLE_FULL;
         }
+        /* version 15 (0.18): no field of the block changed (the session record beside it has what is new); bass_on
+         * was 0 in every older record and stays 0 */
     }
     crs_sanitize(s);
     cr_settings_seal(s);
     return rc;
+}
+
+/* ------------------------------------------------------ the session record --- */
+typedef char css_size_ok[sizeof(cr_session_t) == CSS_SIZE && sizeof(css_fx_t) == 108 && sizeof(css_part_t) == 384 ? 1 : -1];
+static uint32_t css_fnv(const cr_session_t *x, uint32_t from, uint32_t size)
+{
+    const uint8_t *b = (const uint8_t *)x;
+    uint32_t h = 2166136261u, i;
+    for (i = from; i < size; i++) {
+        h ^= b[i];
+        h *= 16777619u;
+    }
+    return h;
+}
+static void css_fx_defaults(css_fx_t *f)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof *f; i++)
+        ((uint8_t *)f)[i] = 0;
+    f->version = CSS_FX_VERSION;
+    f->sel = CSS_FXE_REVERB;
+    for (i = 0; i < (uint32_t)CSS_NFXE; i++)
+        f->amt[i] = CSS_FX_NONE;
+}
+void cr_session_defaults(cr_session_t *x)
+{
+    uint32_t i;
+    for (i = 0; i < sizeof *x; i++)
+        ((uint8_t *)x)[i] = 0;
+    css_fx_defaults(&x->fx);
+    cr_session_seal(x);
+}
+void cr_session_seal(cr_session_t *x)
+{
+    x->magic = CSS_MAGIC;
+    x->version = CSS_VERSION;
+    x->size = CSS_SIZE;
+    x->check = css_fnv(x, CSS_HDR, CSS_SIZE);
+}
+uint32_t cr_session_hash(const cr_session_t *x) { return css_fnv(x, CSS_HDR + 4u, CSS_SIZE); }
+int cr_session_fx_get(const cr_session_t *x, unsigned tag, int *v)
+{
+    uint32_t i;
+    for (i = 0; i < x->fx.n && i < (uint32_t)CSS_NFXP; i++)
+        if (x->fx.par[i].tag == tag) {
+            *v = x->fx.par[i].v;
+            return 1;
+        }
+    return 0;
+}
+int cr_session_fx_set(cr_session_t *x, unsigned tag, int v)
+{
+    uint32_t i;
+    for (i = 0; i < x->fx.n && i < (uint32_t)CSS_NFXP; i++)
+        if (x->fx.par[i].tag == tag)
+            break;
+    if (i >= (uint32_t)CSS_NFXP || !tag || tag > 255u)
+        return 0;
+    x->fx.par[i].tag = (uint8_t)tag;
+    x->fx.par[i].rsv = 0;
+    x->fx.par[i].v = (int16_t)v;
+    if (i == x->fx.n)
+        x->fx.n++;
+    return 1;
+}
+static void css_sanitize(cr_session_t *x)
+{
+    uint32_t k, i;
+    if (x->voicing < -12 || x->voicing > 12) x->voicing = 0;   /* (cr_engine.c CR_VOICE_MIN / MAX: cr_voicing_step clamps) */
+    if (x->octave < -2 || x->octave > 2) x->octave = 0;
+    if (x->bass_on > 1u) x->bass_on = 0;
+    if (x->lock > 1u) x->lock = 0;
+    if (!x->lock) x->latched = 0;                  /* (the latch belongs to LOCK) */
+    if (x->fx.version != CSS_FX_VERSION || x->fx.n > (uint32_t)CSS_NFXP)
+        css_fx_defaults(&x->fx);                   /* another layout of the FX block: the sounds' own sends, the
+                                                    * effects' defaults */
+    for (i = 0; i < (uint32_t)CSS_NFXE; i++)
+        if (x->fx.amt[i] > 127u) x->fx.amt[i] = CSS_FX_NONE;
+    for (k = 0; k < 2u; k++) {
+        css_part_t *r = &x->part[k];
+        if (r->valid != 1u || r->np > (uint32_t)CSS_NP || r->nblob > (uint32_t)CSS_BLOB) {
+            for (i = 0; i < sizeof *r; i++)
+                ((uint8_t *)r)[i] = 0;             /* no sound stored: the pool's (the block's chord_sound / bass_sound) */
+            continue;
+        }
+        r->edited = r->edited != 0u;
+        r->name[CSS_NAME - 1] = 0;
+    }
+}
+int cr_session_import(cr_session_t *x, const void *blk, uint32_t n)
+{
+    struct { uint32_t magic; uint16_t version, size; uint32_t check; } h;
+    const uint8_t *src = (const uint8_t *)blk;
+    uint32_t size, use, hc = 2166136261u, i;
+    if (!blk || n < CSS_HDR + 4u) {
+        cr_session_defaults(x);
+        return 0;
+    }
+    crs_copy(&h, blk, CSS_HDR);
+    size = h.size;
+    if (h.magic == CSS_MAGIC && h.version != 0u && size >= CSS_HDR + 4u && size <= n)
+        for (i = CSS_HDR; i < size; i++) {
+            hc ^= src[i];
+            hc *= 16777619u;
+        }
+    else
+        hc = ~h.check;
+    if (hc != h.check) {                           /* a bad magic / version / size / checksum: nothing stored */
+        cr_session_defaults(x);
+        return 0;
+    }
+    use = size > CSS_SIZE ? CSS_SIZE : size;       /* a newer writer with a longer record: its prefix is ours */
+    if ((const void *)x != blk)                    /* (blk may be x itself, not overlap it otherwise) */
+        crs_copy(x, blk, use);
+    for (i = use; i < CSS_SIZE; i++)               /* an older, shorter record: what it lacks is 0, the default of every
+                                                    * field added after it (another default: a migration line below) */
+        ((uint8_t *)x)[i] = 0;
+    if (use < (uint32_t)((const uint8_t *)&x->fx - (const uint8_t *)x) + (uint32_t)sizeof x->fx)
+        css_fx_defaults(&x->fx);
+    /* version-specific migrations go here, as cr_settings_import's: if (h.version < 2u) x->new_field = ...; */
+    css_sanitize(x);
+    cr_session_seal(x);
+    return h.version == CSS_VERSION && h.size == CSS_SIZE ? 1 : 2;
 }
 
 /* ------------------------------------------------------ engine <-> record --- */
@@ -386,6 +514,9 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
 
 #include "settings_persist.c"                      /* Felucca's record, PER5: its last member is cr_settings_t */
 
+#define CSS_SCAN_MS 200u                           /* the session is looked at this often (css_poll) */
+#define CSS_GAP_MS 250u                            /* .. and two flash writes are at least this far apart */
+
 static persist_t crs_rec;                          /* the last record read or written (Felucca's fields + ours) */
 static cr_settings_t crs_seen;                     /* the last captured state (change detection) */
 static uint8_t crs_hold_seen;                      /* .. and Felucca's HOLD then (panel.c settings_hold, the record's
@@ -396,8 +527,25 @@ static uint8_t crs_hold_seen;                      /* .. and Felucca's HOLD then
                                                     * block has ChoralRoot's palette and LEDs) */
 static uint8_t crs_booted, crs_loaded, crs_pending;
 static uint32_t crs_change_ms, crs_retry_ms;
+static uint32_t crs_loud_ms;                       /* the last time something sounded (crs_sounding, the poll) */
 static int crs_last_rc;                            /* the last import: 1 current, 2 migrated, 0 defaults */
 static uint32_t crs_saves;                         /* flash writes done (diagnostics, the emulator) */
+/* the session (cr_settings.h cr_session_t; docs/SETTINGS.md "The session"): ONE copy in RAM, css_buf, in the pool: what
+ * flash held at power-on until cr_settings_load applied it, then the scratch the state is captured into; the state
+ * last seen and the one flash holds are kept as hashes (cr_session_hash), so that change detection costs no second
+ * and third kilobyte */
+typedef char css_fit_ok[P_COUNT <= CSS_NP && ENG_BLOB_MAX <= CSS_BLOB && sizeof psnd[0].name == CSS_NAME &&
+                        CR_NMOD <= 8 ? 1 : -1];
+static cr_session_t css_buf __attribute__((section(".pool")));
+static uint32_t css_seen, css_flash;               /* cr_session_hash of the state last captured / in flash (0: none) */
+static uint32_t crs_obj_crc;                       /* the settings object's payload CRC in flash (0: none): the session's
+                                                    * `bind` */
+static uint8_t css_have;                           /* power-on: css_buf holds a session to apply (cr_settings_load) */
+static uint8_t css_pending;
+static int8_t css_last_rc;                         /* the session at power-on: 1 current, 2 migrated, 0 none, -1 one
+                                                    * that does not belong to these settings (not applied) */
+static uint32_t css_change_ms, css_scan_ms, css_retry_ms, crs_wr_ms;
+static uint32_t css_saves;                         /* flash writes done (diagnostics, the emulator) */
 
 /* the USB settings to usb.c (which devices the host is given; ua_off at boot, usb_start builds the configuration)
  * and fx.c (USB Level) */
@@ -417,6 +565,7 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
 #if FELUCCA_FLASH
     if (flash_ok)
         n = st_load(OBJ_SETTINGS, &crs_rec, sizeof crs_rec);
+    crs_obj_crc = n > 0 ? st_crc32(&crs_rec, (uint32_t)n) : 0u;   /* (as stored: before the import normalises it) */
 #endif
     if (n <= 0 || !settings_import(&crs_rec, n)) {  /* absent / unknown: defaults, Felucca's fields as they are */
         memset(&crs_rec, 0, sizeof crs_rec);
@@ -425,6 +574,21 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
     crs_last_rc = cr_settings_import(&crs_rec.cr, &crs_rec.cr, sizeof crs_rec.cr);
     crs_usb_apply(&crs_rec.cr);                    /* (before usb_start: the configuration the host first reads) */
     cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off (the default): core 1 not started */
+    css_have = 0;                                  /* the session: read here, applied by cr_settings_load */
+    css_flash = 0;
+    css_last_rc = 0;
+#if FELUCCA_FLASH
+    if (flash_ok && (n = st_load(OBJ_SESSION, &css_buf, sizeof css_buf)) > 0 &&
+        (n = cr_session_import(&css_buf, &css_buf, (uint32_t)n)) != 0) {
+        if (crs_last_rc == 1 || css_buf.bind == crs_obj_crc) {   /* it belongs to these settings (cr_settings.h) */
+            css_have = 1;
+            css_last_rc = (int8_t)n;
+            css_flash = cr_session_hash(&css_buf);
+        } else {
+            css_last_rc = -1;
+        }
+    }
+#endif
 }
 
 /* the record's pool_pos slot of the engine of ENGINE_ORDER rank r (cr_settings.h): CRS_NENG = 11 slots, fixed per engine
@@ -482,7 +646,8 @@ static void crs_capture(cr_settings_t *s)
     s->single = cs.single;
     s->vel = cs.vel;
     s->bass_mode = cs.bass_mode;
-    s->bass_on = 0;                                /* (power-on: the bass is OFF; BASS tap brings bass_sound) */
+    s->bass_on = 0;                                /* (always 0 here: Bass on is the session's, css_capture; an older
+                                                    * firmware would switch the engine's bass on from this byte) */
     s->perform_on = cs.perform_on;
     s->perf_sel = cs.perf_sel;
     s->sticky = cs.sticky;
@@ -524,6 +689,197 @@ static void crs_capture(cr_settings_t *s)
         crs_pool_set(s, 1, (unsigned)k, cs.pool_pos[1][i]);
     }
     cr_settings_seal(s);
+}
+
+/* ------------------------------------------------------------ the session's glue --- */
+/* the FX layer by tag (cr_settings.h css_fx_t): cr_ui.c CU_FX's effects in its order, and the bus parameters KNOB
+ * 1..3 turn. A reworked effect: its new parameters get new CSS_FXP_* tags and a line here; a parameter gone loses its
+ * line (its tag stays retired) */
+static const uint8_t CSS_FXE[CU_NFX] = {CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE};
+static const struct { uint8_t tag, g; } CSS_FXG[] = {
+    {CSS_FXP_RSIZE, G_RSIZE}, {CSS_FXP_RDAMP, G_RDAMP}, {CSS_FXP_RTYPE, G_RTYPE}, {CSS_FXP_CRATE, G_CRATE},
+    {CSS_FXP_CDEPTH, G_CDEPTH}, {CSS_FXP_DTIME, G_DTIME}, {CSS_FXP_DFDBK, G_DFDBK}, {CSS_FXP_DCOLOR, G_DCOLOR}};
+
+/* a part's sound as it is -> its record (as the engine picker's snapshot, cr_ui.c cu_pick_begin) */
+static void css_part_get(uint32_t part, css_part_t *r)
+{
+    const track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
+    const eng_deep_t *d = cp_deep(t);
+    uint32_t i;
+    r->valid = 1;
+    r->eng = t->eng_req;
+    r->preset = t->preset;
+    r->user = t->user;
+    r->trim = t->trim;
+    r->edited = psnd[part].edited != 0u;
+    r->kind = psnd[part].kind;
+    r->fk = psnd[part].fk;
+    r->slot = psnd[part].slot;
+    r->np = P_COUNT;
+    for (i = 0; i < CSS_NAME - 1u && psnd[part].name[i]; i++)
+        r->name[i] = psnd[part].name[i];
+    for (i = 0; i < P_COUNT; i++)
+        r->p[i] = t->p[i];
+    if (d && d->blob_get && d->blob_set && d->blob_size && d->blob_size <= CSS_BLOB) {
+        d->blob_get(t, r->blob);
+        r->nblob = (uint8_t)d->blob_size;
+    }
+}
+/* .. and back (cu_pick_end's restore); 0: not this firmware's (another parameter count, an engine gone or without
+ * this blob, a pool entry that cannot be): the part keeps the sound the block's chord_sound / bass_sound loaded */
+static int css_part_put(uint32_t part, const css_part_t *r)
+{
+    track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
+    const eng_deep_t *d;
+    uint32_t i, e = r->eng;
+    if (!r->valid || r->np != P_COUNT || e >= NENGINES || !cu_engine_melodic(e))
+        return 0;
+    d = ENGINES[e]->deep;
+    if (r->nblob != (d && d->pages && d->npages && d->get && d->set && d->blob_get && d->blob_set &&
+                     d->blob_size <= CSS_BLOB ? d->blob_size : 0u))
+        return 0;
+    if ((r->kind == PK_USER && r->slot >= UP_SLOTS) || r->user > UP_SLOTS ||
+        (r->kind == PK_FACTORY && r->fk >= ENGINES[e]->npresets))
+        return 0;
+    fm1_irq_off();
+    t->eng_req = (uint8_t)e;
+    t->preset = r->preset;
+    t->user = r->user;
+    t->trim = r->trim;
+    for (i = 0; i < P_COUNT; i++)
+        t->p[i] = r->p[i];
+    panic_req |= (uint8_t)(1u << (uint32_t)(t - trk));
+    fm1_irq_on();
+    fm6_track_loaded(t);                           /* (the engine's own state for the sound) */
+    if (r->nblob)
+        d->blob_set(t, r->blob);                   /* the deep patch as it was left */
+    str_cpy(psnd[part].name, r->name, sizeof psnd[0].name);
+    psnd[part].edited = r->edited;
+    psnd[part].kind = r->kind;
+    psnd[part].fk = r->fk;
+    psnd[part].slot = r->slot;
+    t->engine = t->eng_req;                        /* (power-on: no fade) */
+    return 1;
+}
+
+/* the unit's state now -> *x (sealed; `bind` is the writer's: css_write) */
+static void css_capture(cr_session_t *x)
+{
+    uint32_t i;
+    cr_session_defaults(x);
+    fm1_irq_off();
+    x->voicing = cr.voicing;
+    fm1_irq_on();
+    x->octave = cu.octave;
+    x->bass_on = cs.bass_on != 0u;
+    x->lock = cu.clock != 0u;
+    x->latched = x->lock ? cu.mlatch : 0u;
+    x->fx.sel = CSS_FXE[cs.fx_sel % CU_NFX];
+    for (i = 0; i < CU_NFX; i++)
+        x->fx.amt[CSS_FXE[i]] = (uint8_t)(cs.fx_amt[i] & 127u);
+    for (i = 0; i < NELEM(CSS_FXG); i++)
+        cr_session_fx_set(x, CSS_FXG[i].tag, song.g[CSS_FXG[i].g]);
+    css_part_get(0, &x->part[0]);
+    css_part_get(1, &x->part[1]);
+    cr_session_seal(x);
+}
+
+/* power-on (cr_settings_load, once): the session over what the block gave. Nothing sounds yet: the engine's fields
+ * directly (IRQ off), LOCK's latch through the queue as the keys post it */
+static void css_apply(const cr_session_t *x)
+{
+    uint32_t i, m, got[2];
+    int v;
+    got[0] = (uint32_t)css_part_put(0, &x->part[0]);
+    got[1] = (uint32_t)css_part_put(1, &x->part[1]);
+    for (i = 0; i < NELEM(CSS_FXG); i++)
+        if (cr_session_fx_get(x, CSS_FXG[i].tag, &v) && v >= GP[CSS_FXG[i].g].min && v <= GP[CSS_FXG[i].g].max)
+            song.g[CSS_FXG[i].g] = (int16_t)v;
+    for (i = 0; i < CU_NFX; i++)
+        if (CSS_FXE[i] == x->fx.sel)
+            cs.fx_sel = (uint8_t)i;
+    if (got[0] && cs.fx_on)
+        cu_sends_to_fx();                          /* (the restored sound's own sends; FX off: they are 0 there) */
+    for (i = 0; i < CU_NFX; i++)
+        if (x->fx.amt[CSS_FXE[i]] != CSS_FX_NONE)
+            cs.fx_amt[i] = x->fx.amt[CSS_FXE[i]];
+    cu_fx_apply();
+    fm1_irq_off();
+    cr_voicing_step(&cr, x->voicing - cr.voicing);
+    if (x->bass_on)
+        cr_set_bass(&cr, 1);
+    fm1_irq_on();
+    cu.octave = x->octave;                         /* (cu_post_kbd follows: the split key's note moves with it) */
+    if (x->bass_on) {                              /* v15: the bass comes back on, on its sound (ALGORITHM's place:
+                                                    * cu_pos_sync) */
+        cs.bass_on = 1;
+        cs.bass_sound = 1;
+    }
+    if (x->lock) {                                 /* LOCK and the chord keys it held down (cu_lock_tap, cu_mod_release) */
+        cu.clock = 1;
+        cu.mlatch = x->latched;
+        cr_post(CRE_MODLOCK, 0, 0, 1);
+        for (m = 0; m < CR_NMOD; m++)
+            if ((x->latched >> m) & 1u)
+                cr_post(CRE_MOD, m, 0, 1);
+    }
+    cu_trace("session: applied (parts %u %u, voicing %d, octave %d, bass %u, lock %u latched %02X, fx %u)\n",
+             (unsigned)got[0], (unsigned)got[1], (int)x->voicing, (int)x->octave, (unsigned)x->bass_on,
+             (unsigned)x->lock, (unsigned)x->latched, (unsigned)cs.fx_sel);
+}
+
+static int css_write(void)                         /* the state now -> flash; 0: written, or nothing to write */
+{
+#if FELUCCA_FLASH
+    uint32_t h;
+    if (!flash_ok)
+        return 0;
+#ifdef ST_BLOCKED
+    if (ST_BLOCKED())
+        return 0;                                  /* SAFE MODE: the flash untouched */
+#endif
+    css_capture(&css_buf);
+    css_seen = h = cr_session_hash(&css_buf);
+    if (h == css_flash)
+        return 0;                                  /* unchanged: no erase cycle */
+    css_buf.bind = crs_obj_crc;
+    cr_session_seal(&css_buf);
+    if (st_save(OBJ_SESSION, &css_buf, CSS_SIZE) != 0)
+        return -1;
+    css_flash = h;
+    css_saves++;
+    crs_wr_ms = fm1_ms;
+#endif
+    return 0;
+}
+
+/* every UI frame, from cr_settings_poll: the state is captured every CSS_SCAN_MS (not while the engine picker
+ * previews a sound: cpk) and a change written under the block's rules: nothing changed for CRS_QUIET_MS, nothing
+ * sounded for CRS_IDLE_MS, no loop playing, and CSS_GAP_MS after the other object's write (one erase at a time) */
+static void css_poll(void)
+{
+    if ((uint32_t)(fm1_ms - css_scan_ms) >= CSS_SCAN_MS && !cpk.on) {
+        uint32_t h;
+        css_scan_ms = fm1_ms;
+        css_capture(&css_buf);
+        h = cr_session_hash(&css_buf);
+        if (h != css_seen) {
+            css_seen = h;
+            css_change_ms = fm1_ms;
+            css_pending = 1;
+        }
+    }
+    if (!css_pending || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - css_change_ms) < CRS_QUIET_MS ||
+        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS)
+        return;
+    if (css_pending == 2u && (uint32_t)(fm1_ms - css_retry_ms) < 1000u)
+        return;
+    if (css_write() == 0) {
+        css_pending = 0;
+    } else {
+        css_pending = 2;
+        css_retry_ms = fm1_ms;
+    }
 }
 
 /* the end of cr_ui_init: the record -> the engine (directly, IRQ off: nothing sounds yet), the routing, the mirror */
@@ -599,16 +955,24 @@ static void cr_settings_load(void)
         s->chord_sound = CRS_SOUND_DEFAULT;
     cs.fx_on = s->fx_on;
     cu_fx_apply();
-    if (crs_sound(1, s->bass_sound))               /* what BASS tap brings; the bass stays OFF at power-on */
+    if (crs_sound(1, s->bass_sound))               /* what BASS tap brings (Bass on: the session's, css_apply) */
         trk[CR_PART_BASS].engine = trk[CR_PART_BASS].eng_req;
     else
         s->bass_sound = CRS_SOUND_DEFAULT;
+    if (css_have) {                                /* power-on: where the unit was left (the session) */
+        css_have = 0;
+        css_apply(&css_buf);
+    }
     cu_pos_sync();
     cu_route();
     cu_post_kbd();                                 /* (the split key's note: the UI's, with its octave) */
     cu_set_tempo(s->bpm);
     crs_loaded = 1;
     crs_capture(&crs_seen);                        /* the state now: nothing to save until it changes */
+    css_capture(&css_buf);
+    css_seen = cr_session_hash(&css_buf);
+    css_scan_ms = css_change_ms = fm1_ms;
+    css_pending = 0;
     crs_hold_seen = settings_hold;
     crs_change_ms = fm1_ms;
     crs_pending = 0;
@@ -632,6 +996,8 @@ static int crs_write(void)                         /* the captured state -> flas
     if (st_save(OBJ_SETTINGS, &p, sizeof p) != 0)
         return -1;
     crs_rec = p;
+    crs_obj_crc = st_crc32(&p, sizeof p);
+    crs_wr_ms = fm1_ms;
     crs_saves++;
 #else
     crs_rec.cr = crs_seen;
@@ -642,7 +1008,6 @@ static int crs_write(void)                         /* the captured state -> flas
 /* something sounds or is about to: a voice of the parts (release tails too), a chord the engine holds or latches,
  * a scheduled note (arp, strum), or the master output (the FX tails) above CRS_QUIET_PEAK over the scope's last
  * 512 samples (~23 ms). No flash erase then: it would cut the audio (see the top) */
-static uint32_t crs_loud_ms;
 static int crs_sounding(void)
 {
     uint32_t i;
@@ -654,6 +1019,7 @@ static int crs_sounding(void)
     return 0;
 }
 
+
 /* every UI frame (main.c settings_poll) */
 static void cr_settings_poll(void)
 {
@@ -662,6 +1028,7 @@ static void cr_settings_poll(void)
         return;
     if (crs_sounding())
         crs_loud_ms = fm1_ms;
+    css_poll();                                    /* the session: its own object, its own pending flag */
     crs_capture(&now);
     if (!cr_settings_equal(&now, &crs_seen) || settings_hold != crs_hold_seen) {   /* (HOLD: crs_write's
                                                     * settings_export puts it in the record) */
@@ -672,7 +1039,7 @@ static void cr_settings_poll(void)
         return;
     }
     if (!crs_pending || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - crs_change_ms) < CRS_QUIET_MS ||
-        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS)
+        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS)
         return;
     if (crs_pending == 2u && (uint32_t)(fm1_ms - crs_retry_ms) < 1000u)
         return;
@@ -699,23 +1066,35 @@ static void cr_settings_save(void)
     crs_change_ms = fm1_ms - CRS_QUIET_MS;
     if (!CR_SETTINGS_BUSY() && crs_write() == 0)
         crs_pending = 0;
+    if (crs_loaded && !CR_SETTINGS_BUSY() && css_write() == 0)   /* the session with it (unchanged: no write) */
+        css_pending = 0;
 }
 
 /* Options > Reset Settings (the owner, 2026-10-12): every option back to what a new unit has, now and in flash. The
  * record: cr_settings_factory (cr_settings_defaults: the same defaults as a unit with no record and as SAFE MODE);
  * Felucca's one field the Options set outside it: HOLD. Then the unit as a power-on leaves it with those settings:
- * the default sounds on both parts (TINE EP, DEEP SUB; an edit not saved is gone, as at a power-on), their levels,
- * the bass off, and cr_settings_load again: the record -> the engine, the routing, the UI's mirror. Saved at once
+ * the default sounds on both parts (TINE EP, DEEP SUB; an edit not saved is gone: the one place where it is, since
+ * 0.18 keeps it over a power-on), their levels and pans, the effects' parameters, the bass off, and cr_settings_load again: the record -> the engine, the routing, the UI's mirror. Saved at once
  * (cr_settings_save: after the loop stops, if one plays: cu_reset stopped it).
  * NOT touched: the panel calibration (persist_t.panel: settings_export writes the table in RAM, as every save), the
  * saved sounds and patches (upreset / va / fm6 / cz / quad stores), the loops and the slot selected, Felucca's
  * favourites. Dual Core: Off is saved; a core that this power-on started runs until the next one (cr_c1_off) */
 static void cr_settings_reset(void)
 {
+    uint32_t i, k;
     if (!crs_loaded)
         return;
     cr_settings_factory(&crs_rec.cr);
     settings_hold = HOLD_DEF;
+    for (k = 0; k < 2u; k++)                       /* the session too (0.18): the parts' own parameters (Level, Pan: what
+                                                    * a sound's load keeps), the effects' parameters and the effect
+                                                    * picked, as cr_ui_init leaves them; cu_reset: LOCK, the voicing,
+                                                    * the octave. The session then captured is a new unit's */
+        for (i = 0; i < P_E0; i++)
+            trk[k ? CR_PART_BASS : CR_PART_CHORD].p[i] = TP[i].def;
+    for (i = 0; i < NELEM(CSS_FXG); i++)
+        song.g[CSS_FXG[i].g] = GP[CSS_FXG[i].g].def;
+    cs.fx_sel = 0;
     trk[CR_PART_CHORD].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);   /* (cr_ui_init's) */
     trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);
     cu_pool_load(0, ENGI_FM6, cu_pool_find(ENGI_FM6, "TINE EP"));

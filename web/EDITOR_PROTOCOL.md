@@ -652,7 +652,9 @@ stays, the page waits a second and sends it again ("Stop the loop on the FM-1").
 a USB reset, 15 s without a request, or the UI reused the staging buffer (a loop slot loaded or saved meanwhile).
 A restored settings record is not applied live: the device stops saving settings until it restarts (the UI's older
 state would otherwise overwrite it), so a restore ends with `RESTART`. Each commit erases one 4 KiB sector (a loop
-record: one): the sound stops for about 45 ms each time.
+record: one): the sound stops for about 45 ms each time. From ChoralRoot 0.18 on, the commit of a settings record
+(id 1) also empties the device's session (where it was left: docs/SETTINGS.md "The session"; not a backup object, no
+id), a second sector erase, so that the restart comes up on the restored settings alone.
 
 Across firmwares: a restore writes the objects of the file that the connected firmware lists. A Felucca archive on
 ChoralRoot restores 1 (Felucca's fields; ChoralRoot's settings take their defaults), 6, 7, 8; its music (0),

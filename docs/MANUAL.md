@@ -270,7 +270,8 @@ pressed while the type key is down cancels this (the keys held together latch to
 meanwhile does not. This is always so with LOCK on, whatever the two settings below say. (In Key Mode with Key plays
 set to Chords a lone root is still the scale's chord, with the latched extensions.)
 
-Switching LOCK off, or PANIC, clears what is latched. LOCK is off at power-on. On the Full keyboard (Key Mode,
+Switching LOCK off, or PANIC, clears what is latched. LOCK and what it latched are remembered when you switch off:
+the FM-1 comes back with the same chord type and extensions lit (new in 0.18). On the Full keyboard (Key Mode,
 below) there is no LOCK: B3 is a note there.
 
 **The LOCK layer.** Hold B3 past the hold time (a tap is still on / off; a hold does not switch LOCK). The layer
@@ -468,7 +469,8 @@ Time (300, 400, 500 or 600 ms).
 
 ## 6. Bass
 
-The bass is a second, monophonic part with its own sound. It is **off every time you switch on**.
+The bass is a second, monophonic part with its own sound. On a new unit it is off; from then on it is **on or
+off as you left it** when you switch on (until 0.17 it was off at every power-on).
 
 - **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/25`), or
   `00 / off`.
@@ -495,8 +497,7 @@ The root keys do not sound while this layer is open, whatever its footer says; c
 | **Bass Single Notes** | plays the root under everything; a single note sounds on the bass alone |
 | **Solo** | only the bass sounds; the chord sound is silent (`Bass Solo` at the top right) |
 
-The same setting is Options > Bass Behaviour. The behaviour and the register are remembered; the level is not (it is
-back at its normal value when you switch on).
+The same setting is Options > Bass Behaviour. The behaviour, the register and the level are remembered.
 
 To edit the bass sound, hold BASS and tap EDIT. To save it, hold BASS and tap SAVE. To change the bass part's
 engine, open the bass sound's editor and hold EDIT there ([Sounds](#11-sounds)).
@@ -560,8 +561,8 @@ Two things to know:
 - **The amounts belong to the sound.** Every preset brings its own four amounts, so turning PRESETS replaces yours.
   Save the sound to keep them ([Sounds](#11-sounds)). The bass sound has its own four amounts in its editor's FX
   group.
-- **The parameters on KNOB 1 to KNOB 3 are shared** by the whole instrument and are not stored: they are back at
-  their starting values the next time you switch on.
+- **The parameters on KNOB 1 to KNOB 3 are shared** by the whole instrument. They are remembered when you switch
+  off, with the effect you had picked and the four amounts as you left them (new in 0.18).
 
 ## 9. Tempo and metronome
 
@@ -785,10 +786,12 @@ SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does i
 
 There is room for **32 saved sounds** in all, shared by the engines and the two parts (`no free slot` when they are
 used up). A saved sound holds the engine's whole patch, its envelopes and modulation and its four effect amounts.
-Changes you have not saved are lost when you load another sound or switch off.
+Changes you have not saved are lost when you load another sound. They are **not** lost when you switch off: each
+part comes back with its sound as you left it, edited or not (new in 0.18). The pool still holds the sound as it
+was saved, so turning PRESETS away and back drops the edit, as before.
 
 Level and Pan (the editor's MIX group) are the exception: they belong to the part, not to the sound. They stay as
-they are when you change sound, and they are back at their normal values when you switch on.
+they are when you change sound, and when you switch off and on.
 
 ### Sounds from outside
 
@@ -998,7 +1001,8 @@ Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the 
   data, and Calibrate the one that changes the panel table.
 - **What happens to what you were doing:** it ends like a PANIC: every note stops, a playing loop stops (it stays in
   its slot; a take you were recording is dropped), LOCK and LATCH go off, the octave shift and the voicing return to
-  0, the bass is off as after switching on, and a change to a sound you had not saved is gone.
+  0, the bass is off, the parts' Level and Pan and the effects' settings are back at their normal values, and a
+  change to a sound you had not saved is gone. The FM-1 is then as a new unit is, and stays so over a power-off.
 - **Dual Core** is the one setting that waits for a restart: if it was On, the message reads
   `settings reset · restart` and the second core keeps running until you switch off and on.
 
@@ -1014,21 +1018,33 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 
 ### What the FM-1 remembers
 
-Settings are stored by themselves a moment after the instrument falls quiet, and never while a loop plays. Give the
-FM-1 a second or two of silence before you switch off.
+Switch off, switch on: the FM-1 comes back as you left it (0.18). Everything is stored by itself a moment after the
+instrument falls quiet (about two seconds without a change and without a sound), and never while a loop plays.
+Give the FM-1 a few seconds of silence before you switch off; what you changed in the last moments before the
+switch is the one thing it can miss.
 
-| Remembered when you switch off | Not remembered |
+| Back when you switch on | Not brought back, on purpose |
 | --- | --- |
-| everything in Options | the bass being on (it always starts off) |
-| Key Mode, the tonic, the scale, Transpose | LOCK and what it latched |
-| the performance mode, its parameters, and whether it is on | the octave shift |
-| LATCH, and the effects being on or off | the voicing on KNOB 1 |
-| the tempo, the metronome and its time signature | the selected effect and the FX layer's KNOB 1 to KNOB 3 |
-| the bass behaviour and register | the parts' Level and Pan, the bass level |
-| the looper's settings and its slot; the KEY layer's keys (pick or play), Key plays and Keyboard; the LOCK layer's two settings | changes to a sound you did not save |
-| which sounds the two parts play, and each engine's last place | where you were in the editor |
+| everything in Options | notes that were sounding, a chord LATCH was holding |
+| Key Mode, the tonic, the scale, Transpose; the KEY layer's keys (pick or play), Key plays and Keyboard | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
+| the performance mode, its parameters, and whether it is on | a take you were recording |
+| LATCH; **LOCK and what it latched** | an open layer, menu, dialog or the editor: the FM-1 starts on the view |
+| **the voicing on KNOB 1 and the octave shift** | where you were in the editor (it opens where it opens after any power-on) |
+| **the bass being on**, its behaviour, register and **level** | the KEY layer's page (it opens on its first page, always) |
+| **the effects in full**: on or off, the effect picked, KNOB 1 to KNOB 3, the four amounts | |
+| which sounds the two parts play, and each engine's last place | |
+| **each part's sound as you left it, with changes you had not saved**; **the parts' Level and Pan** | |
+| the tempo, the metronome and its time signature | |
+| the looper's settings and its slot; the LOCK layer's two settings | |
 | the view and its lock | |
 | saved sounds; loops (each time a loop stops) | |
+
+The bold lines are new in 0.18. After a PANIC the FM-1 comes back as the PANIC left it (the octave 0, LATCH off,
+nothing latched). Options > Reset Settings clears all of it. A restored backup brings the settings, the saved sounds
+and the loops; it does not carry the bold lines, and after a restore the FM-1 starts from the restored settings
+(the saved sounds, the bass off). Going back to 0.17 and returning: 0.17 does not know the bold lines and starts
+without them, and once it has stored a setting of its own, 0.18 starts from 0.17's settings rather than from an
+older state of its own.
 
 More: [SETTINGS.md](SETTINGS.md).
 
@@ -1213,7 +1229,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | Chord keys stay on | LOCK is on (B3 lit) | tap B3 |
 | Notes keep sounding | LATCH is on, or Strum's Hold | tap LATCH; PANIC stops everything |
 | The chord sound is silent, the bass plays | Bass Behaviour is Solo (`Bass Solo`) | BASS layer, another behaviour, or tap BASS |
-| No bass | the bass is off after every power-on | tap BASS |
+| No bass | the bass is off (a new unit, a reset, or you switched it off) | tap BASS |
 | The bass layer's keys make no sound | in that layer the white keys pick the behaviour | close the layer to play |
 | The loop plays but is silent | its Level is 0 | PLAY menu, KNOB 3 |
 | REC replaced my loop | the record mode is Overwrite | PLAY menu, ALGORITHM: Overdub. Before the first chord, REC again cancels |
@@ -1221,11 +1237,11 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | HOME does not change the view | the view is locked | HOME held, KNOB 1: Lock Off |
 | The tempo moves by itself | MIDI Clock is In | Options > MIDI Clock |
 | The effects settings changed after PRESETS | each sound brings its own amounts | save the sound with your amounts |
-| My reverb type or delay time is back to normal | the effect parameters are not stored | set them again after switching on |
-| My edit is gone | unsaved changes are lost with the next sound or at power-off | SAVE |
+| My reverb type or delay time is back to normal | it was changed in the last two seconds before switching off, or while a loop played | set it again, wait a few seconds before switching off |
+| My edit is gone | unsaved changes are lost with the next sound (not at power-off, since 0.18) | SAVE |
 | `no free slot` | all 32 saved sounds are used | delete one (SAVE held in the save dialog), or use the device manager |
 | A setting did not survive switching off | settings are written a moment after the instrument falls quiet, never while a loop plays | stop the loop, wait a second or two |
-| The bass level, or a part's Level or Pan, is back to normal | they are not stored | set them again after switching on |
+| The bass came on by itself at power-on | it was on when you switched off (since 0.18 it comes back) | tap BASS |
 | Every note sounds doubled and louder | Raw Chord Sound is On with no performance mode | Options > Raw Chord Sound: Off |
 | The screen shows the logo, or is black | three minutes, or ten, without input | touch anything |
 | `Safe mode` on the top line | SAFE MODE | see [SAFE MODE](#safe-mode) |

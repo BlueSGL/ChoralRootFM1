@@ -386,7 +386,19 @@ int main(void)
         }
         CHECK(!rc, "restore: every object accepted (PUT)");
         CHECK(!cr_restore_lock, "restore: no settings lock before the settings");
-        rc = t_put(1, find(ref, nref, 1)->bytes, find(ref, nref, 1)->size);
+        {   /* the session (0.18) belongs to the settings it was written beside: a restored settings object empties it */
+            static cr_session_t x;
+            cr_session_defaults(&x);
+            x.voicing = 5;
+            cr_session_seal(&x);
+            CHECK(st_save(OBJ_SESSION, &x, CSS_SIZE) == 0 && st_load(OBJ_SESSION, &x, sizeof x) == (int)CSS_SIZE,
+                  "restore: a session in flash before the settings are restored");
+            css_flash = cr_session_hash(&x);
+            rc = t_put(1, find(ref, nref, 1)->bytes, find(ref, nref, 1)->size);
+            CHECK(rc == 0 && st_load(OBJ_SESSION, &x, sizeof x) == 0 && css_flash == 0 && !css_pending,
+                  "restore: the settings committed: the session object is empty (the restart comes up on the settings alone)");
+            CHECK(crs_obj_crc == st_crc32(&crs_rec, sizeof crs_rec), "restore: the session's binding follows the restored object");
+        }
         CHECK(rc == 0 && cr_restore_lock && CR_SETTINGS_BUSY(), "restore: settings committed, the settings saves held until the restart");
     }
     CHECK(up_used(3) && up_used(16 + 4) && cs.loop_used == (1u | 1u << 4 | 1u << 9) &&

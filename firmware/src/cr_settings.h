@@ -13,8 +13,9 @@
 #include <stdint.h>
 
 #define CRS_MAGIC 0x31535243u           /* "CRS1" */
-#define CRS_VERSION 14u
-#define CRS_SIZE 192u                   /* bytes, header included; never changes (fields come out of rsv) */
+#define CRS_VERSION 15u                 /* v15 (0.18): the layout of v14, and beside it the session (cr_session_t below) */
+#define CRS_SIZE 192u                   /* bytes, header included; never changes (fields come out of rsv; since v15 what
+                                         * needs room goes into the session record, which has its own size and reserve) */
 #define CRS_NPM 5                       /* perform modes (cr_engine.h CR_PM_COUNT) */
 #define CRS_NPAR 11                     /* parameters per mode (CR_P_COUNT) */
 #define CRS_SOUND_DEFAULT 0xFFFFu       /* chord_sound / bass_sound: the UI's own default (FM6 TINE EP, VA DEEP SUB) */
@@ -81,7 +82,9 @@ typedef struct {
     uint8_t tonic, scale;                            /* 0..11, cr_scale_t */
     int8_t transpose;                                /* -24..24 */
     uint8_t single;                                  /* cr_single_t: Full Octave / Split Oct / (v14) 2 Split Bass */
-    uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (0 at power-on); cr_bassmode_t */
+    uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (always written 0: a firmware
+                                                      * older than v15 turns the engine's bass on from it with its own
+                                                      * UI off; Bass on is the session's since v15); cr_bassmode_t */
     int8_t bass_voicing;                             /* bass register, octaves -2..4 */
     uint8_t perform_on, perform_mode, perf_sel;      /* on, cr_pmode_t, the PERF layer's entry 0..6 (Strum 2 ...) */
     uint8_t sticky, pool_pos10_chord;                /* latch; v6: pool_pos of engine rank 10 for the chord part
@@ -155,6 +158,86 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
     else
         s->pool_pos10_chord = v;
 }
+
+/* ------------------------------------------------------------------ the session (v15, 0.18) --- */
+/* "Switch off, switch on: exactly where you left off" (the owner, 2026-10-11): what the unit was doing that is not
+ * an option of the 192-byte block above: both parts' sounds as they are (the edit buffers: every parameter, the deep
+ * patch, the name and the pool entry, edited or not; the part's Level and Pan are among the parameters), the voicing,
+ * the octave, Bass on, LOCK and its latched chord keys, the FX layer in full. One record, cr_session_t, in a flash
+ * object of its own (storage.c OBJ_SESSION, the A/B pair 0xB4000 / 0xB5000), NOT inside persist_t: a firmware older
+ * than v15 takes a settings object of another size for no record at all (settings_persist.c settings_import, its
+ * panel calibration with it) and the tools know the block as 192 bytes (web/fm1backup.js, tools/fm1_install.py
+ * CR_BLOCK), so the block keeps its size and its layout and an older firmware reads a v15 block as it read v14's.
+ * The record has its own header (magic, version, size, check: FNV-1a over [12, size)), the block's import rules (a
+ * shorter, older record over the defaults; a longer, newer one by its prefix; anything else: the defaults = the unit as
+ * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 143 of them unused today (47 in the
+ * state, 20 after the FX block, 8 in each part, 60 at the end).
+ * `bind`: the CRC of the settings object in flash when the session was written (0: none). The session is used at
+ * power-on if the settings block was read as current (written by a v15 firmware: an older one in between would have
+ * left its own version there) or, with any other block, if the settings object is still the one the session was
+ * written beside: a session left behind by a downgrade, a restore or another firmware's erase is not applied over
+ * settings it does not belong to */
+#define CSS_MAGIC 0x31535343u           /* "CSS1" */
+#define CSS_VERSION 1u
+#define CSS_SIZE 1024u
+#define CSS_HDR 12u
+#define CSS_NP 96                       /* a part's parameters (core.h P_COUNT, 91 today: cr_settings.c checks) */
+#define CSS_BLOB 160                    /* .. its deep patch (core.h ENG_BLOB_MAX) */
+#define CSS_NAME 13                     /* .. its name (cr_ui.c cu_snd_t) */
+/* the FX sub-block, versioned on its own so that the effects can change their parameters without a new record: an
+ * effect and a parameter are stored under a TAG, never by position. A reader skips a tag it does not know, keeps its
+ * default for one it does not find or whose value is out of its range, and takes the defaults for the whole block
+ * when `version` is not its CSS_FX_VERSION (bump it only if this struct's layout changes). A parameter whose meaning
+ * or range changes gets a NEW tag (the old one retired, never reused); room for 24 parameters and 8 effects */
+#define CSS_FX_VERSION 1u
+#define CSS_NFXP 24
+#define CSS_NFXE 8
+#define CSS_FX_NONE 0xFFu               /* amt: not stored (the sound's own send) */
+enum { CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE };            /* effect tags (amt's index, sel) */
+enum { CSS_FXP_NONE, CSS_FXP_RSIZE, CSS_FXP_RDAMP, CSS_FXP_RTYPE, CSS_FXP_CRATE, CSS_FXP_CDEPTH, CSS_FXP_DTIME,
+       CSS_FXP_DFDBK, CSS_FXP_DCOLOR };                                            /* parameter tags (1..255) */
+typedef struct { uint8_t tag, rsv; int16_t v; } css_fxp_t;
+typedef struct {
+    uint8_t version, n, sel, on_rsv;    /* CSS_FX_VERSION, entries of par[] used, the FX layer's picked effect (its
+                                         * tag), 0 (FX on / off is the block's fx_on) */
+    uint8_t amt[CSS_NFXE];              /* per effect tag: KNOB 4's amount 0..127, CSS_FX_NONE */
+    css_fxp_t par[CSS_NFXP];            /* KNOB 1..3's values */
+} css_fx_t;                             /* 108 bytes */
+typedef struct {
+    uint8_t valid;                      /* 1: a sound is stored */
+    uint8_t eng, preset, user;          /* core.h track_t eng_req, preset, user (the slot it is as stored, + 1) */
+    int8_t trim;
+    uint8_t edited, kind, fk, slot;     /* cr_ui.c cu_snd_t: edited since its load; its pool entry */
+    uint8_t np, nblob;                  /* the writer's P_COUNT and the deep patch's size (0: none): a reader with
+                                         * another count, or whose engine has another blob, keeps the pool's sound */
+    char name[CSS_NAME];
+    int16_t p[CSS_NP];
+    uint8_t blob[CSS_BLOB];
+    uint8_t rsv[8];
+} css_part_t;                           /* 384 bytes */
+typedef struct {
+    uint32_t magic;                     /* CSS_MAGIC */
+    uint16_t version, size;             /* CSS_VERSION, CSS_SIZE of the writer */
+    uint32_t check;                     /* FNV-1a over bytes [12, size) */
+    uint32_t bind;                      /* (above; not part of the change detection: cr_session_hash) */
+    int8_t voicing, octave;             /* KNOB 1 -12..12; OCT -2..2 */
+    uint8_t bass_on;                    /* 0/1 (v15: the bass comes back on; until 0.17 it was off at every power-on) */
+    uint8_t lock, latched;              /* LOCK on; the chord keys it latched (bit cr_mod_t) */
+    uint8_t rsv[47];
+    css_fx_t fx;
+    uint8_t rsv_fx[20];
+    css_part_t part[2];                 /* chord, bass */
+    uint8_t rsv_end[60];
+} cr_session_t;
+
+void cr_session_defaults(cr_session_t *x);         /* nothing stored: the unit as it powers on without a session */
+/* a stored record (n bytes) -> *x; 1 current, 2 migrated (older / newer), 0 invalid (the defaults). blk may be x */
+int  cr_session_import(cr_session_t *x, const void *blk, uint32_t n);
+void cr_session_seal(cr_session_t *x);
+uint32_t cr_session_hash(const cr_session_t *x);   /* the state alone (bytes [16, CSS_SIZE)): change detection */
+/* the FX block's entries by tag: 1 found (*v), 0 not stored; set: 0 when the block is full */
+int  cr_session_fx_get(const cr_session_t *x, unsigned tag, int *v);
+int  cr_session_fx_set(cr_session_t *x, unsigned tag, int v);
 
 #ifdef CR_ENGINE_H
 /* the record -> the engine's setters (call with the engine idle / the audio IRQ off) and the routing */
