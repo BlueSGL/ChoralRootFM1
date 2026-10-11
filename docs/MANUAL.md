@@ -94,7 +94,7 @@ change. **OCT-** closes the layer (so does HOME). All the layer buttons work thi
 a hold opens its layer. [Layers](#5-layers) has the rules.
 
 **Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place,
-`02 / FM BELL / FM6 · 02/26`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
+`02 / FM BELL / FM6 · 02/25`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
 (FM6, FM TONE, VA, CZ-1 and seven more). Let go of OPT and the engine you stopped on is loaded.
 
 **Add the bass.** Tap **BASS** (printed ENV). A bass note now plays under every chord, and `Bass` shows at the top
@@ -358,7 +358,7 @@ Time (300, 400, 500 or 600 ms).
 
 The bass is a second, monophonic part with its own sound. It is **off every time you switch on**.
 
-- **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/26`), or
+- **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/25`), or
   `00 / off`.
 - **ALGORITHM** turns through off (`00 off`) and then the sounds of the bass part's engine. Its first sound is
   `00 INIT`, the engine's plain starting sound.
@@ -587,11 +587,13 @@ Every engine has one list, its **pool**:
 - then the factory presets;
 - then the sounds you added.
 
-<img src="manual/sound-popup.png" width="240" alt="The sound read-out: 02, FM BELL, FM6 · 02/26">
+<img src="manual/sound-popup.png" width="240" alt="The sound read-out: 02, FM BELL, FM6 · 02/25, two of the 25 stripes lit">
 
 **PRESETS** turns through the pool of the chord sound's engine and wraps round. The read-out is the place, the name,
-and `FM6 · 02/26`: the engine, the place and the size of the pool. A small square after the name marks a factory
-preset you have saved over. **ALGORITHM** does the same for the bass, with `00 off` in front of the pool.
+and `FM6 · 02/25`: the engine, the place and the number of presets in the pool (`00 INIT` is not counted). The
+stripes under it are the presets: none is lit on INIT, all of them on the last preset. A small square after the name
+marks a factory preset you have saved over. **ALGORITHM** does the same for the bass, with `00 off` in front of the
+pool.
 
 **OPT + PRESETS** changes the chord sound's engine: hold OPT, turn PRESETS until the engine you want is in the
 middle (the screen shows how many presets it has), let go. You land on the sound you last used in that engine.

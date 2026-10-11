@@ -898,13 +898,26 @@ static void cu_trace_txt(const char *t)
     (void)t;
 #endif
 }
+/* the stripes lit at position pos of a pool of n presets drawn as segs stripes: none on INIT (position 0, not a
+ * preset), pos of them, every one on the last preset. A pool longer than its stripes (n > segs = 32): one from preset
+ * 01 on, the rest spread over the presets between, every one only on the last */
+static uint32_t cu_pool_lit(uint32_t pos, uint32_t n, uint32_t segs)
+{
+    if (!pos || !n)
+        return 0u;
+    if (pos >= n)
+        return segs;
+    return 1u + (pos - 1u) * (segs - 1u) / (n - 1u);
+}
 /* a pool's meter (mock-up: design/choralroot-fm1-preset-screens.png 1, 5): the position big ("05"), the name (an
- * overwritten factory preset: a square mark after it), "FM6 \267 05/26" (the engine, the position, the pool's size;
- * the bass: in orange, " \267 solo" with Bass Behaviour Solo), the stripes over the pool (at most 32) */
+ * overwritten factory preset: a square mark after it), "FM6 \267 05/25" (the engine, the position, the pool's presets:
+ * INIT, position 00, is not counted; the bass: in orange, " \267 solo" with Bass Behaviour Solo), a stripe per preset
+ * (at most 32; a pool of INIT alone: one, never lit), position k lighting k of them (cu_pool_lit) */
 static void cu_pool_popup(uint32_t part, uint32_t pos)
 {
     char b[8], nm[13], lb[24], c[8];
-    uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, n = pool_count(e);
+    uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, n = pool_count(e) - 1u;
+    uint32_t segs = n > 32u ? 32u : n ? n : 1u;
     pool_ent_t en = pool_entry(e, pos);
     cu_2d(b, pos, sizeof b);
     pool_name(e, pos, nm);
@@ -917,7 +930,8 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     cu_cat(lb, c, sizeof lb);
     if (part && cs.bass_mode == CR_BASS_SOLO)     /* Bass Behaviour Solo: the chord part is silent while it is on */
         cu_cat(lb, " \267 solo", sizeof lb);
-    cu_popup(b, nm, lb, part ? CR_COL_ORANGE : CR_COL_WHITE, (int32_t)pos, 0, (int32_t)n, n > 32u ? 32u : n);
+    cu_popup(b, nm, lb, part ? CR_COL_ORANGE : CR_COL_WHITE, (int32_t)cu_pool_lit(pos, n, segs), 0, (int32_t)segs,
+             segs);
     cu.pop.mark = en.kind == PK_USER && en.fk != PF_NONE;
     cu_trace("popup: part %u %s / %s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "");
     cu_trace_txt(lb);

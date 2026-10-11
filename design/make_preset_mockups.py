@@ -28,31 +28,31 @@ S = []
 S.append(state(
     "1 · PRESETS turned: the next preset of the current engine",
     "PRESETS steps through the presets of the engine the chord part plays, and nothing else: here FM6, preset 05 of "
-    "26 (00 INIT, 01..24 the factory presets, then the 2 the user saved; INIT cannot be overwritten). The popup: the number big, the name, 'FM6 · 05/26' as the label, the stripe "
-    "meter over the pool. A preset the user overwrote carries a small square mark after its name (state 5). It loads "
+    "25 (01..25 the factory presets, then the ones the user saves; 00 is INIT, the engine's plain sound: it is not counted as a preset and cannot be overwritten). The popup: the number big, the name, 'FM6 · 05/25' as the label, the stripe "
+    "meter over the pool: a stripe per preset, none lit on INIT, every one on the last preset. A preset the user overwrote carries a small square mark after its name (state 5). It loads "
     "at once, as today.",
     held=["MAJ"], lit=["D4", "F#4", "A4"], encoders=IDLE_ENC | {"PRESETS": ("SOUND", "05")},
-    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "FM6 · 05/26", "col": C_CHORD, "pct": 5 / 26, "segments": 26},
-               note="PRESETS: the preset number big, its name, the engine and the place in its pool."),
+    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "FM6 · 05/25", "col": C_CHORD, "pct": 5 / 25, "segments": 25},
+               note="PRESETS: the preset number big, its name, the engine and the place among its presets (INIT, 00, is not counted)."),
 ))
 
 # 2 ---------------------------------------------------------------- OPT + PRESETS: the engine
 S.append(state(
     "2 · OPT held + PRESETS turned: change the engine",
     "OPT (GLO) held while PRESETS turns steps the engine, as a picker: the engine big in white, the neighbours peeking "
-    "(the firmware's order: ANALOG FM6 VA PHASE CZ-1 LOFI VOICE TRIO WHEEL PHYS NOISE), the pool's size under it. "
+    "(the firmware's order: ANALOG FM6 VA PHASE CZ-1 LOFI VOICE TRIO WHEEL PHYS NOISE), the number of its presets under it. "
     "The part switches to that engine's first preset (or the one it was on last in that pool: remembered per engine) "
     "when OPT is released. The editor's EDIT-held picker stays for the editor; this is the quick way outside it.",
     held=["MAJ"], lit=["D4", "F#4", "A4"], buttons={"GLO": LIT}, encoders=IDLE_ENC | {"PRESETS": ("ENGINE", "VA")},
     screen=scr({"kind": "picker", "items": ENGINES, "sel": 2, "label": "engine · OPT + PRESETS", "col": "white", "value": "25 presets", "orient": "h"},
-               note="OPT + PRESETS: the engine picker, horizontal, the pool size as the value."),
+               note="OPT + PRESETS: the engine picker, horizontal, the number of presets as the value."),
 ))
 
 # 3 ---------------------------------------------------------------- SAVE: overwrite or new
 S.append(state(
     "3 · SAVE tapped: overwrite the current preset, or save as new",
     "SAVE tap (on the view or in the editor): two choices, one at a time in the picker: 'Overwrite' (the current "
-    "preset, named under it: FM PAD, factory or not) and 'Save as new' (the pool's next free place, U27 here). OCT+ "
+    "preset, named under it: FM PAD, factory or not) and 'Save as new' (the pool's next free place, 26 here). OCT+ "
     "takes the choice: Overwrite saves at once and keeps the name; Save as new opens the naming screen (state 4). "
     "The default choice is Overwrite when the sound is a user preset or an edited one, Save as new otherwise. OCT- "
     "cancels. SAVE held (loops) is unchanged.",
@@ -66,9 +66,9 @@ S.append(state(
 # 4 ---------------------------------------------------------------- the naming screen (today's)
 S.append(save_state(
     "4 · Save as new: the naming screen",
-    "After 'Save as new': today's naming screen, prefilled with the current name (grey) and the new place (FM6 · 27); "
+    "After 'Save as new': today's naming screen, prefilled with the current name (grey) and the new place (FM6 · 26); "
     "the white roots type, D#4 space, F#4 deletes, KNOB 2 the last letter, SAVE again or OCT+ saves, OCT- cancels.",
-    "FM6 · 27", "WARM EP_",
+    "FM6 · 26", "WARM EP_",
 ))
 
 # 5 ---------------------------------------------------------------- an overwritten factory preset
@@ -77,7 +77,7 @@ S.append(state(
     "The pool is one list: factory preset 02 FM BELL was overwritten by the user; it shows with a small square mark "
     "after the name. Turning PRESETS passes through it like any other. There is no separate user bank.",
     held=["MAJ"], lit=["D4", "F#4", "A4"], encoders=IDLE_ENC | {"PRESETS": ("SOUND", "02")},
-    screen=scr({"kind": "meter", "value": "02", "sub": "MY BELL ▪", "label": "FM6 · 02/26", "col": C_CHORD, "pct": 2 / 26, "segments": 26},
+    screen=scr({"kind": "meter", "value": "02", "sub": "MY BELL ▪", "label": "FM6 · 02/25", "col": C_CHORD, "pct": 2 / 25, "segments": 25},
                note="an overwritten factory preset: the user's name with the square mark."),
 ))
 

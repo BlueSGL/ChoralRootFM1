@@ -778,7 +778,7 @@ def presets_states():
         st = next(x for x in e if str(x.get("name", "")).split(" ", 1)[0] == k)
         st = json.loads(json.dumps(st))
         st["name"] = "PRESETS " + st.get("name", "")
-        if k == "5":                                    # (2 of 26 stripes: filled before the mid frame; settled only)
+        if k == "5":                                    # (2 of 25 stripes: filled before the mid frame; settled only)
             st["screen"]["panel"]["fill"] = False
         out.append(st)
     return out

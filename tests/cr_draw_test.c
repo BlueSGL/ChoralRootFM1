@@ -301,6 +301,65 @@ int main(int argc, char **argv)
         check("cr_draw_invalidate: all six again", cr_dc.blits == CR_NSTRIP);
     }
 
+    {   /* the meters settled: every fixture's stripes are its `segments`, `pct` of them lit. The sound read-out's
+         * (cr_ui.c cu_pool_popup: a stripe per preset; INIT, position 00, is not one): 5 of 25 on FM6's 05 (the preset
+         * sheet's 1), none on INIT, every one on the last preset (pool_init, pool_last: device renders, no mock-up),
+         * one unlit stripe for a pool of INIT alone (not cr_segs' 12 of `segments` 0) */
+        cr_screen_t s;
+        uint32_t all, lit, nm = 0, nbad = 0;
+        int32_t ip = -1;
+        int ok;
+        for (k = 0; k < CR_NSCREENS; k++) {
+            if (CR_SCREENS[k].kind != CR_K_METER || CR_SCREENS[k].ring_on) continue;
+            s = CR_SCREENS[k];
+            s.anim = 0;
+            render(&s, 0);
+            lit = meter_stripes(&s, &all);
+            nm++;
+            if (all != cr_segs(&s) || lit != cr_filled(&s, s.pct)) {
+                nbad++;
+                fprintf(rep, "meter %s: %u of %u stripes lit, not %u of %u\n", CR_SCREEN_SLUGS[k], lit, all,
+                        cr_filled(&s, s.pct), cr_segs(&s));
+            }
+            if (ip < 0 && !strcmp(s.label, "FM6 \267 05/25")) ip = (int32_t)k;
+        }
+        snprintf(name, sizeof name, "the %u meters: as many stripes as segments, pct of them lit", nm);
+        check(name, nm > 0u && nbad == 0u);
+        check("the sound read-out's fixture (FM6 05/25) is in the table", ip >= 0);
+        if (ip >= 0) {
+            s = CR_SCREENS[ip];
+            s.anim = 0;
+            render(&s, 0);
+            lit = meter_stripes(&s, &all);
+            ok = lit == 5u && all == 25u;
+            snprintf(s.value, sizeof s.value, "00");
+            snprintf(s.sub, sizeof s.sub, "INIT");
+            snprintf(s.label, sizeof s.label, "FM6 \267 00/25");
+            s.pct = 0;
+            render(&s, 0);
+            write_ppm(dir, "pool_init");
+            lit = meter_stripes(&s, &all);
+            ok = ok && lit == 0u && all == 25u;
+            snprintf(s.value, sizeof s.value, "25");
+            snprintf(s.sub, sizeof s.sub, "PIANO");
+            snprintf(s.label, sizeof s.label, "FM6 \267 25/25");
+            s.pct = 256;
+            render(&s, 0);
+            write_ppm(dir, "pool_last");
+            lit = meter_stripes(&s, &all);
+            snprintf(name, sizeof name, "a pool's meter: 5 of 25 lit on 05, none on INIT, every one on the last (%u of %u)", lit, all);
+            check(name, ok && lit == 25u && all == 25u);
+            snprintf(s.value, sizeof s.value, "00");
+            snprintf(s.sub, sizeof s.sub, "INIT");
+            snprintf(s.label, sizeof s.label, "FM6 \267 00/00");
+            s.pct = 0;
+            s.segments = 1;
+            render(&s, 0);
+            lit = meter_stripes(&s, &all);
+            check("a pool of INIT alone: one stripe, not lit", lit == 0u && all == 1u);
+        }
+    }
+
     {   /* a meter's fill (CR_A_FILL): a stripe every CR_FILL_MS; more than CR_FILL_MAX to light: all of them in the
          * time of CR_FILL_MAX (a pool's meter, at most 32 stripes, is full inside the popup's 900 ms) */
         cr_screen_t s;

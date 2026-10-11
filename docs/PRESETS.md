@@ -24,8 +24,12 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   DRUM) the VA's init sound.
   Every entry is editable: **saving over a factory preset is allowed** and the factory one stays recoverable (reset).
 - **PRESETS turns inside the current engine's pool only** (the chord part's engine; ALGORITHM the bass part's). The
-  popup: the number big, the name, `FM6 · 05/26` (00 = INIT, 01.. the factory presets, then the user's), the stripe meter over the pool; an overwritten factory preset
-  carries a small square mark after its name.
+  popup: the number big, the name, `FM6 · 05/25` (the place and the number of presets: 00 = INIT, which is not counted
+  as a preset, 01.. the factory presets, then the user's), the stripe meter over the pool; an overwritten factory preset
+  carries a small square mark after its name. The meter is a stripe per preset and place k lights k of them: none on
+  INIT, every one on the last preset (`PHASE · 06/06`: six stripes, all lit). A pool of more than 32 presets (the
+  CZ-1's 64, FM6 with eight added) has 32 stripes: none on INIT, one from preset 01 on, every one only on the last
+  (`cr_ui.c` `cu_pool_lit`); since 0.16 (before: INIT was counted, `FM6 · 05/26`, and the last preset left a stripe dark).
 - **OPT + PRESETS changes the engine** outside the editor (a horizontal picker: the engine big, the pool size as the
   value); the part lands on the preset it last had in that pool (remembered per engine per part; the first preset
   before that). The editor's EDIT-held picker is unchanged (it is the same thing inside the editor).

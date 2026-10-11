@@ -158,7 +158,7 @@ S.append(state(
     "QUAD in the preset model: PRESETS turns inside its pool (00 INIT, the factory presets, yours); OPT + PRESETS "
     "reaches QUAD between FM6 and VA.",
     held=["MAJ"], lit=["D4", "F#4", "A4"], encoders=IDLE_ENC | {"PRESETS": ("SOUND", "03")},
-    screen=scr({"kind": "meter", "value": "03", "sub": "GLASS EP", "label": "QUAD · 03/17", "col": C_CHORD, "pct": 3 / 17, "segments": 17},
+    screen=scr({"kind": "meter", "value": "03", "sub": "GLASS EP", "label": "QUAD · 03/16", "col": C_CHORD, "pct": 3 / 16, "segments": 16},
                note="PRESETS on QUAD."),
 ))
 
