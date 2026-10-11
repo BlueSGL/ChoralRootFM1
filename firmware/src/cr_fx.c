@@ -324,8 +324,11 @@ static inline int32_t xd_read(const int16_t *b, uint32_t w, uint32_t d)
     c = y1 - ym + ((c * f) >> 8);
     return clamp(y0 + ((c * f) >> 9), -32767, 32767);
 }
-#define XD_WET 20230                      /* Q12: the wet's level (tests/cr_fx_test.c: Felucca's delay at its
-                                           * defaults, the same send) */
+/* the wet's level, Q12 (tests/cr_fx_test.c, against Felucca's delay at its defaults and the same send): in Stereo each
+ * side plays a repeat as Felucca's mono delay played it on both (XD_WET / 4 / 4096 = 0.78 of the send, less the loop's filters: Felucca's 0.709); in ping-pong
+ * the repeat is on one side only, so 3 dB up (XD_WET + 256 XD_WPP): the same power in the room */
+#define XD_WET 12800
+#define XD_WPP 21
 static __attribute__((noinline)) void xd_run(const int32_t *in, int32_t *ol, int32_t *orr, uint32_t nh)
 {
     uint32_t w = xf.d_w, j, k;
@@ -371,8 +374,9 @@ static __attribute__((noinline)) void xd_run(const int32_t *in, int32_t *ol, int
         act |= wl | wr | f[0] | f[1];
         if (++w >= XD_N)
             w = 0;
-        ol[j] += (f[0] * XD_WET) >> 12;
-        orr[j] += (f[1] * XD_WET) >> 12;
+        pm = XD_WET + pm * XD_WPP;                      /* (65534 x 18176 < 2^31) */
+        ol[j] += (f[0] * pm) >> 12;
+        orr[j] += (f[1] * pm) >> 12;
     }
     xf.d_w = w;
     if (act)

@@ -13,8 +13,8 @@
  *     an input;
  *  6. smooth changes: Time, Spread, Sync, Mode, Size, Pre-delay swept under a held tone: no sample step above what
  *     the steady signal has;
- *  7. the level: the wet of a held chord at the defaults against Felucca's delay and ROOM at theirs (a copy below),
- *     the same send: within 1 dB;
+ *  7. the level against Felucca's delay and ROOM at their defaults (a copy below), the same send: the reverb's wet
+ *     under a held chord and the delay's first repeat (both sides' energy, Stereo and ping-pong) within 1 dB;
  *  8. mono: Spread 0 in Stereo mode is the same sample left and right; ping-pong's sum has every repeat;
  *  9. silence in, silence out: after the tail both effects switch off (exact zeros) and the block costs almost
  *     nothing; the decay times against the knob;
@@ -569,14 +569,35 @@ static void t_level(void)
     nw = sqrt((pow(rms(WL, a, b), 2) + pow(rms(WR, a, b), 2)) / 2.0);
     printf("cr_fx:   a held chord's reverb, 1 .. 3 s: Felucca's ROOM %.0f rms, the new one %.0f rms a side (%+.2f dB)\n", o, nw, db(nw / o));
     check("level: the reverb's wet at its defaults within 1 dB of ROOM's at its defaults (the same send)", fabs(db(nw / o)) < 1.0);
-    /* the delay */
-    old_run(n, g_chord, 1, ow);
-    o = rms(ow, a, b);
-    fx_reset();
-    run(n, g_chord, 1, 0);
-    nw = sqrt((pow(rms(WL, a, b), 2) + pow(rms(WR, a, b), 2)) / 2.0);
-    printf("cr_fx:   a held chord's delay, 1 .. 3 s: Felucca's %.0f rms, the new one %.0f rms a side (%+.2f dB)\n", o, nw, db(nw / o));
-    check("level: the delay's wet at its defaults within 1 dB of Felucca's at its defaults (the same send)", fabs(db(nw / o)) < 1.0);
+    /* the delay: a repeat's power in the room. Felucca's played each repeat on both sides; Stereo does the same, and
+     * ping-pong plays it on one side 3 dB up. The first repeat of a 10 ms burst of the chord, both sides' energy */
+    {
+        static const char *const MD[2] = {"Stereo", "ping-pong"};
+        uint32_t m, i, dl = 44100u * 60u / 120u / 2u;   /* 1/8 at 120 BPM */
+        double eo = 0, en;
+        g_len = 441u;
+        old_run(n, g_chord, 1, ow);
+        for (i = dl - 100u; i < dl + 1500u; i++) eo += 2.0 * (double)ow[i] * ow[i];
+        for (m = 0; m < 2u; m++) {
+            char line[160];
+            fx_reset();
+            xfp[XP_DMODE] = (int16_t)m;
+            xfp[XP_DWOW] = 0;
+            run(n, g_chord, 1, 0);
+            for (en = 0, i = dl - 100u; i < dl + 1500u; i++) en += (double)WL[i] * WL[i] + (double)WR[i] * WR[i];
+            snprintf(line, sizeof line, "level: the delay's first repeat in %s: %+.2f dB of Felucca's (both sides' energy, the same send)",
+                     MD[m], 10.0 * log10(en / eo));
+            check(line, fabs(10.0 * log10(en / eo)) < 1.0);
+        }
+        g_len = 3u * 44100u;
+        old_run(n, g_chord, 1, ow);
+        o = rms(ow, a, b);
+        fx_reset();
+        run(n, g_chord, 1, 0);
+        nw = sqrt((pow(rms(WL, a, b), 2) + pow(rms(WR, a, b), 2)) / 2.0);
+        printf("cr_fx:   a held chord's delay, 1 .. 3 s: Felucca's %.0f rms, the new one %.0f rms a side (%+.2f dB: its repeats overlap "
+               "on one side at a time)\n", o, nw, db(nw / o));
+    }
 }
 
 static int32_t g_burst(uint32_t i) { return i < 4410u ? g_chord(i) : 0; }
