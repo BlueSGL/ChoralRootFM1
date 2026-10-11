@@ -826,7 +826,8 @@ static struct {
     uint8_t oct_chord;                    /* OCT- and OCT+ were down together (panic): no tap */
     uint8_t oct_mod;                      /* OCT- held was a modifier (the editor: + a knob clears its modulation): no tap */
     uint32_t clear_t0;                    /* D#4 down in the loop layer (| 1): CLEAR after 1 s held */
-    uint8_t clock;                        /* B3 LOCK: the chord block latches (off at power-on, not saved) */
+    uint8_t clock;                        /* B3 LOCK: the chord block latches (0.18: kept over a power-off with
+                                           * mlatch, in the session: cr_settings.c css_capture / css_apply) */
     uint8_t b3_pend;                      /* B3 is down and nothing else was pressed since: its release is the LOCK
                                            * tap, held past the hold time it opens / closes the LOCK layer */
     uint32_t b3_t0;
@@ -1811,7 +1812,7 @@ static void cu_lock_tap(void);
 /* Options > Reset Settings, confirmed (cr_settings.c cr_settings_reset: what is reset and what is kept). The session
  * ends as a PANIC ends it, without its screen: every note off, a playing loop stopped (kept; a take being recorded
  * is dropped, as PANIC drops it), LATCH off, the octave and the voicing back to 0; and LOCK off with its latch (LOCK
- * is not saved: off at power-on). Back on the view, with the message */
+ * and its latch would otherwise come back with the session). Back on the view, with the message */
 static void cu_reset(void)
 {
     cu_reset_ask = 0;
@@ -2880,10 +2881,15 @@ static void cu_btn_press(uint32_t b)
             cu.oct_chord = 1;
             cu_panic();
         }
+        if ((cu.bheld & octs) == octs && (cu.bheld & CU_BIT(BT_HOME)))
+            cu.swallow |= CU_BIT(BT_HOME);        /* (HOME was down first: the same) */
         return;
     }
     if (b == BT_HOME) {                           /* (its release: home; a held button's release: no tap) */
-        if (cu.armed != NB)
+        if ((cu.bheld & octs) == octs)            /* OCT- + OCT+ + HOME: the update gesture (cr_backup.c
+                                                   * cr_update_poll): no view menu, and its release is no HOME tap */
+            cu.swallow |= CU_BIT(b);
+        else if (cu.armed != NB)
             cu.combo = 1;
         else {                                    /* alone: held CU_HOME_HOLD_MS opens the view menu (cu_scan) */
             cu.home_t0 = cu_now();
@@ -3910,12 +3916,12 @@ static void cu_safe_screen(cr_screen_t *s)
 }
 
 /* Options > Flash Data (SAFE MODE, OCT+ twice): erase every data object ChoralRoot keeps (not the firmware, not the
- * update area, not the free sample sectors 0xB4000..0xC7FFF) and reboot; the boot after it loads nothing (an
+ * update area, not the free sample sectors 0xB6000..0xC7FFF) and reboot; the boot after it loads nothing (an
  * erased flash: factory sounds, default settings, calibration from RAM or the default). The regions: the stores and
  * FM6 bank copy A 0x97000..0x9FFFF (storage.c st_sector: VA store, FM6 stores, the project slots, 0x9F000), the loop
  * slots 0xC8000..0xDBFFF (CRL_FL_BASE), the user sound banks 0xDC000..0xDFFFF, the settings A / B and FM6 bank
  * copy B 0xFC000..0xFEFFF; FELUCCA_CZ: the CZ-1 tone store's second half and the eight CZ-1 banks 0xA0000..0xB1FFF;
- * FELUCCA_QUAD: the QUAD patch store 0xB2000..0xB3FFF */
+ * FELUCCA_QUAD: the QUAD patch store 0xB2000..0xB3FFF and the session 0xB4000..0xB5FFF (0.18) */
 #ifndef CR_REBOOT
 #define CR_REBOOT() do { bootguard_settled(&bootguard); usb_detach(); fm1_delay_ms(30); fm1_reboot(); } while (0)
 #endif
@@ -3926,7 +3932,7 @@ static void cu_flash_erase(void)
                                     {0xA0000u, 18u},   /* (storage.c: OBJ_CZSTORE1, OBJ_CZBANK0..+7) */
 #endif
 #if FELUCCA_QUAD
-                                    {0xB2000u, 2u},    /* (storage.c: OBJ_QUADSTORE) */
+                                    {0xB2000u, 4u},    /* (storage.c: OBJ_QUADSTORE, OBJ_SESSION) */
 #endif
     };
     static cr_screen_t es;                         /* (static: off the stack) */
@@ -4500,8 +4506,8 @@ static void cu_options_screen(cr_screen_t *s)
         cu_reset_ask = 0;
     cu_picker(s, O_NAME, cu_opt_n(), cu.opt_sel, CR_COL_WHITE, "options \267 KNOB 1 sets", "");
     opt_text(cu.opt_sel, s->value, sizeof s->value);
-    if (cu.opt_sel == O_SAFE)                      /* "Safe mode: flash data skipped \267 OCT-+OCT+ 5 s: update mode" */
-        cu_cpy(s->label, "OCT-+OCT+ 5 s: update mode", sizeof s->label);
+    if (cu.opt_sel == O_SAFE)                      /* "Safe mode: flash data skipped \267 OCT- OCT+ HOME 5 s: update" (0.18) */
+        cu_cpy(s->label, "OCT- OCT+ HOME 5 s: update", sizeof s->label);
     else if (cu.opt_sel == O_ERASE)                /* "Flash data: erase and reboot", OCT+ twice */
         cu_cpy(s->label, cu_erase_ask ? "sounds, loops, settings go" : "OCT+ twice: erase, reboot", sizeof s->label);
     else if (cu.opt_sel == O_RESET)                /* "Reset Settings: all options to default", OCT+ twice */

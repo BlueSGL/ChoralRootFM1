@@ -234,7 +234,7 @@ One scan per UI frame (15 ms) over `fm1_in` + `fm1_input_edges()` + `fm1_enc_tak
 
 ```
 chord keys:   k ∈ {1,3,5,8} → DIM MIN MAJ SUS;  k ∈ {0,2,4,7} → 6 m7 M7 9   (CRE_MOD down / up → cr_mod)
-LOCK:         k = 6 (B3) → LOCK on / off (a tap; lit while on; off at power-on, not saved)
+LOCK:         k = 6 (B3) → LOCK on / off (a tap; lit while on; since 0.18 kept over a power-off with its latch: the session, docs/SETTINGS.md)
 root keys:    k ≥ 9 → cr_key(c, 53 + k + 12*octave, vel, down)   (vel from Options > Velocity)
 layer open:   k ≥ 9 → the layer's map instead (tonic / mode / slot / effect / engine)
 ```
@@ -623,7 +623,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   the reset reason; a power-on clears it, only watchdog / soft (crash) resets within 30 s of a boot count. Two in a
   row: SAFE MODE (no flash object loaded or saved: factory sounds, default settings, no loops; no USB audio function, the
   serial console presented instead (`usb.c` `usb_cdc_on`, docs/USB-AUDIO.md);
-  the installer, backup reads and OCT- + OCT+ 5 s still work; a yellow SAFE MODE screen with the crash's boot stage,
+  the installer, backup reads and the update gesture (OCT- + OCT+ + HOME 5 s; until 0.17 the two OCT keys) still work; a yellow SAFE MODE screen with the crash's boot stage,
   "Safe mode" on the top line, Options > Safe Mode and Flash Data: erase and reboot, OCT+ twice). SAFE MODE crashing
   twice more: UBOOT, as before. Every boot step sets `felucca_dbg.stage` (console `boot`, GEEK OUT's third line).
   Tests: `tests/cr_bootguard_test.c`; `tools/emu/scripts/cr_safe*.txt` (`--boot-fail`, `--reset-reason`,
@@ -847,7 +847,7 @@ come before B1..B32, docs/FM6.md);
 15 CLOUD PAD and 16 SHIMMER (were GRAIN's) are VA presets 23 / 24 (docs/VA.md). Levels with `tests/va_levels.c`
 (chord alone / with SUB BASS, the share under the limiter): PIANO 0 / 0 %, CLOUD PAD 0 / 1.4 %, SHIMMER 0 / 0 %;
 trims 0. The emulator's `cr_allsynth.txt` plays the three. A user sound on a retired engine loads as INIT on the VA
-(section 1; an ANALOG one with its macros). The flash of user sample slots 1-2 (0xA0000..0xC7FFF): 0xA0000..0xB1FFF holds the CZ-1 tone store's second half and the eight CZ-1 banks (docs/CZ1.md), the rest stays free; slot 3's holds the loops.
+(section 1; an ANALOG one with its macros). The flash of user sample slots 1-2 (0xA0000..0xC7FFF): 0xA0000..0xB1FFF holds the CZ-1 tone store's second half and the eight CZ-1 banks (docs/CZ1.md), 0xB2000 / 0xB3000 FM TONE's patch store, 0xB4000 / 0xB5000 the session (0.18, docs/SETTINGS.md), the rest stays free; slot 3's holds the loops.
 
 ### Stubbed (screens and gestures only; TODO in the code)
 

@@ -1,0 +1,100 @@
+# test_persist.sh, the session, run 1 (a fresh flash file): "switch off, switch on: exactly where you left off"
+# (docs/SETTINGS.md "The session"). A recognisable state, every piece of it something 0.17 forgot at power-off:
+#   a loop recorded in slot 3 (D, Em) and stopped;
+#   the chord part's sound edited and not saved (EDIT, KNOB 2), the bass part's too (BASS held + EDIT, KNOB 2);
+#   Bass on (BASS tap), its Level turned down (the BASS layer's KNOB 4);
+#   the delay picked in the FX layer, its time, feedback and amount turned;
+#   Perform on with Arpeggiate (the PERF layer, SELECT +3);
+#   the voicing +2 (KNOB 1), the octave -1 (OCT-);
+#   LOCK on with MAJ + M7 latched (B3, then A#3 + A3).
+# Then nothing for 4 s: the settings and the session are each written once (dump 2), quit.
+wait 300
+btn PLAY down                 # the PLAY menu: slot 3
+wait 400
+knob PRESETS +2
+wait 300
+btn PLAY up
+btn OCT-
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 500
+btn D4 up
+btn A#3 up
+wait 500
+btn G#3 down
+btn E4 down
+wait 500
+btn E4 up
+btn G#3 up
+wait 400
+btn REC                       # the take ends: a loop, playing
+wait 400
+btn PLAY                      # stopped: written to slot 3
+wait 1200
+btn EDIT                      # the chord sound's editor
+wait 400
+knob KNOB2 +3
+wait 300
+btn HOME
+wait 300
+btn ENV down                  # BASS held + EDIT: the bass sound's
+wait 100
+btn EDIT
+wait 100
+btn ENV up
+wait 400
+knob KNOB2 +3
+wait 300
+btn HOME
+wait 300
+btn ENV                       # BASS tap: the bass on, on the sound just edited
+wait 300
+btn ENV down                  # the BASS layer: KNOB 4, the bass part's Level
+wait 500
+btn ENV up
+wait 300
+knob KNOB4 -4
+wait 300
+btn OCT-
+wait 300
+btn FX down                   # the FX layer: Delay, its time, feedback, amount
+wait 500
+btn FX up
+wait 300
+knob SELECT +2
+wait 300
+knob KNOB1 +2
+wait 200
+knob KNOB2 -3
+wait 200
+knob KNOB4 +3
+wait 300
+btn OCT-
+wait 300
+btn ARP down                  # the PERF layer: Arpeggiate (perform on)
+wait 500
+btn ARP up
+wait 300
+knob SELECT +3
+wait 300
+btn OCT-
+wait 300
+knob KNOB1 +2                 # the voicing
+wait 300
+btn OCT-                      # the octave
+wait 300
+btn B3                        # LOCK; MAJ + M7 held and released: latched
+wait 200
+btn A#3 down
+btn A3 down
+wait 200
+btn A3 up
+btn A#3 up
+wait 300
+dump                          # 1: the state as set, nothing saved yet but the loop
+wait 4000
+dump                          # 2: saved: settings 1, session 1
+quit

@@ -144,13 +144,13 @@ def newest(d):
     return best[1]
 pa, pb = newest(a), newest(b)
 cr, fav = len(pa) - 192, len(pa) - 192 - 520
-outside = a[:0xFC000] == b[:0xFC000] and a[0xFF000:] == b[0xFF000:]
+outside = a[:0xB4000] == b[:0xB4000] and a[0xB6000:0xFC000] == b[0xB6000:0xFC000] and a[0xFF000:] == b[0xFF000:]   # (0xB4000 / 0xB5000: the session, reset with the record, checked below)
 panel = pa[16:fav - 4] == pb[16:fav - 4] and len(pa) == len(pb)
 favs = pa[fav:cr] == pb[fav:cr]
 record = pa[cr:] != pb[cr:] and pb[cr:cr + 4] == b'CRS1'
 print(int(outside), int(panel), int(favs), int(record), fav - 4 - 16)" "$OUT/persist_reset_before.bin" "$RF")
 [ "$(echo "$kept" | cut -d' ' -f1-4)" = "1 1 1 1" ] &&
-    ok "the flash: everything outside the settings object byte for byte as before the reset (saved sounds, patches, banks, loops); in it the panel calibration table ($(echo "$kept" | cut -d' ' -f5) B) and the favourites unchanged, the ChoralRoot record rewritten" \
+    ok "the flash: everything outside the settings object and the session byte for byte as before the reset (saved sounds, patches, banks, loops); in it the panel calibration table ($(echo "$kept" | cut -d' ' -f5) B) and the favourites unchanged, the ChoralRoot record rewritten" \
     || bad "the reset touched more than the record (outside, panel, favourites, record): $kept"
 
 # the VA patch store (firmware/src/va_store.c, docs/VA.md): run 1 edits a VA sound's patch on its deep page and saves
@@ -336,5 +336,120 @@ grep -q '^loop: auto-save slot 1 32 bytes rc 0 (stopped)' "$OUT/persist_loop_bas
     [ "$(grep 'parts busy' "$OUT/persist_loop_bass_2.log" | tail -1 | sed -n 's/.*parts busy \([0-9]*\).*/\1/p')" = 0 ] &&
     ok "loop bass relaunched, Single = Full: G major on the chord part, the recorded D on the bass part alone; stopped: silent" \
     || bad "loop bass relaunched, playing: $(bk 2) / $(bv 2) / $(bv 3) part 1 $(bp 3)"
+
+# ---- the session (0.18, docs/SETTINGS.md "The session"): "switch off, switch on: exactly where you left off".
+# Run 1 (session_set.txt, a fresh flash): a loop recorded in slot 3 and stopped, both parts' sounds edited and not
+# saved, Bass on with its Level down, the delay picked and set, Perform on with Arpeggiate, voicing +2, octave -1, LOCK
+# with MAJ + M7 latched. Run 2 (session_check.txt, a relaunch): all of it back at power-on, the loop loaded and
+# stopped, silence; D4 plays the latched Dmaj7 arpeggiated over the bass; nothing is written (the state is the stored)
+SF=$OUT/persist_session_flash.bin
+S1=$OUT/persist_session_1.log; S2=$OUT/persist_session_2.log
+rm -f "$SF" "$S1" "$S2" "$OUT"/persist_session_*.log "$OUT"/persist_session_*.bin
+"$EMU" --headless --flash "$SF" --script "$S/session_set.txt" >"$S1" 2>&1 || bad "session run 1: exit status"
+"$EMU" --headless --flash "$SF" --script "$S/session_check.txt" >"$S2" 2>&1 || bad "session run 2: exit status"
+# the n-th dump's line of a kind, and a field of the "cr:" line
+dl() { grep -a "^  $2" "$1" | sed -n "$3p"; }
+sv() { dl "$1" 'session: saves' "$2" | sed -n 's/.*saves \([0-9]*\) (at power-on: \([^)]*\)) now \([0-9A-F]*\) flash \([0-9A-F]*\) pending \([0-9]\)  \(.*\)$/\1|\2|\3|\4|\5|\6/p'; }
+sx() { sv "$1" "$2" | cut -d'|' -f"$3"; }
+crl() { dl "$1" 'cr: key' "$2" | sed -n 's/.* perform \([0-9]\) mode \([0-9]\) bass \([0-9]\) (sound \([0-9]*\)) voicing \(-*[0-9]*\) octave \(-*[0-9]*\) .* view \([0-9]\) layer \([0-9]*\) options \([0-9]\).*/perform \1 mode \2 bass \3 sound \4 voicing \5 octave \6 view \7 layer \8 options \9/p'; }
+want_state="voicing 2 octave -1 bass 1 lock 1 latched 44"
+want_cr="perform 1 mode 2 bass 1 sound 18 voicing 2 octave -1 view 0 layer 0 options 0"
+want_fx="  session fx: on 1 sel 2 (Delay) amt 35 45 37 0 sends 35 45 37 0 par 1=90 2=60 3=0 4=40 5=60 6=3 7=54 8=70"
+c1=$(dl "$S1" 'session chord:' 2); b1=$(dl "$S1" 'session bass:' 2)
+[ "$(sx "$S1" 2 6)" = "$want_state" ] && [ "$(crl "$S1" 2)" = "$want_cr" ] && [ "$(dl "$S1" 'session fx:' 2)" = "$want_fx" ] &&
+    echo "$c1" | grep -q 'FM6 / TINE EP edited 1 kind 1 crc [0-9A-F]* level 92 pan 0' &&
+    echo "$b1" | grep -q 'VA / DEEP SUB edited 1 kind 1 crc [0-9A-F]* level 84 pan 0' &&
+    dl "$S1" 'loop: state' 2 | grep -q 'state 1 cap 0 layers 1 events 2 .* slot 3 .* used 004 ' &&
+    ok "session run 1: the state set: both sounds edited (not saved), Bass on at level 84, Delay picked and set, Arpeggiate on, voicing +2, octave -1, LOCK with MAJ + M7, a loop in slot 3" \
+    || bad "session run 1: $(sx "$S1" 2 6) / $(crl "$S1" 2) / $(dl "$S1" 'session fx:' 2) / $c1 / $b1"
+[ "$(sx "$S1" 2 1)" -ge 1 ] && [ "$(sx "$S1" 2 5)" = 0 ] && [ "$(sx "$S1" 2 3)" = "$(sx "$S1" 2 4)" ] &&
+    dl "$S1" 'settings: now' 2 | grep -q 'pending 0' &&
+    ok "session run 1: written once things were quiet (session saves $(sx "$S1" 2 1); flash = now $(sx "$S1" 2 3))" \
+    || bad "session run 1: not saved: $(sv "$S1" 2)"
+grep -aq '^session: applied (parts 1 1, voicing 2, octave -1, bass 1, lock 1 latched 44, fx 2)' "$S2" &&
+    [ "$(sx "$S2" 1 2)" = current ] && [ "$(sx "$S2" 1 6)" = "$want_state" ] && [ "$(crl "$S2" 1)" = "$want_cr" ] &&
+    ok "session run 2 (a relaunch): at power-on voicing +2, octave -1, Bass on (its sound, ALGORITHM's place 18), Perform on with Arpeggiate, LOCK on with MAJ + M7 latched; on the view, nothing open" \
+    || bad "session run 2: $(sv "$S2" 1) / $(crl "$S2" 1)"
+[ "$(dl "$S2" 'session chord:' 1)" = "$c1" ] && [ "$(dl "$S2" 'session bass:' 1)" = "$b1" ] && [ -n "$c1" ] &&
+    ok "session run 2: both parts' unsaved edits are back, the same patch checksums, 'edited', Level and Pan ($(echo "$c1" | sed 's/.*crc //') / $(echo "$b1" | sed 's/.*crc //'))" \
+    || bad "session run 2: the parts: $(dl "$S2" 'session chord:' 1) / $(dl "$S2" 'session bass:' 1) want $c1 / $b1"
+[ "$(dl "$S2" 'session fx:' 1)" = "$want_fx" ] &&
+    ok "session run 2: the FX layer in full: Delay picked, its time (3) and feedback (54) as turned, the amounts 35 45 37 0 as left (not the preset's again)" \
+    || bad "session run 2: fx: $(dl "$S2" 'session fx:' 1)"
+dl "$S2" 'loop: state' 1 | grep -q 'state 1 cap 0 layers 1 events 2 .* slot 3 played 0 .* used 004 ' &&
+    grep -aq '^expect silence at 800 ms: ok' "$S2" && dl "$S2" 'mods: down' 1 | grep -q 'down 44 active 44 voices free' &&
+    [ "$(grep -a 'parts busy' "$S2" | sed -n 1p | sed -n 's/.*parts busy \([0-9]*\).*/\1/p')" = 0 ] &&
+    ok "session run 2: slot 3 is loaded and STOPPED (it never starts by itself), nothing sounds, the latched keys are down in the engine" \
+    || bad "session run 2: the loop / silence: $(dl "$S2" 'loop: state' 1)"
+grep -aq '^expect sound at .*: ok' "$S2" && dl "$S2" 'part 0:' 2 | grep -q 'FM6 / TINE EP, voices [1-9]' &&
+    dl "$S2" 'part 1:' 2 | grep -q 'VA / DEEP SUB, voices 1' && dl "$S2" 'mods: down' 2 | grep -q 'voices 50:q3/x4' &&
+    ok "session run 2: D4 alone plays the latched chord (a major 7th) on the edited TINE EP, the bass under it" \
+    || bad "session run 2: playing: $(dl "$S2" 'part 0:' 2) / $(dl "$S2" 'part 1:' 2) / $(dl "$S2" 'mods: down' 2)"
+[ "$(sx "$S2" 3 1)" = 0 ] && [ "$(sx "$S2" 3 5)" = 0 ] && [ "$(sx "$S2" 3 3)" = "$(sx "$S1" 2 3)" ] &&
+    dl "$S2" 'flash:' 3 | grep -q ', 0 writes, settings saves 0 (record: current)' &&
+    ok "session run 2: nothing written (0 flash writes): what the unit came back as is what was stored ($(sx "$S2" 3 3))" \
+    || bad "session run 2: wrote: $(dl "$S2" 'flash:' 3) / $(sv "$S2" 3)"
+
+# a session that does not belong to the settings is not applied: the flash of the runs above with the settings object
+# as 0.17 would have rewritten it (a v14 block, another tempo: a downgrade and back). Power-on: the settings (99 BPM),
+# none of the session: voicing 0, the bass off, LOCK off, the pool's TINE EP
+SO=$OUT/persist_session_old_flash.bin
+rm -f "$SO"
+python3 -c "
+import struct, sys, zlib
+b = bytearray(open(sys.argv[1], 'rb').read())
+best = None
+for o in (0xFC000, 0xFD000):
+    magic, typ, slot, seq, ln = struct.unpack_from('<IHHII', b, o)
+    if magic == 0x554C4546 and b[o + 256 + ln - 192:o + 256 + ln - 188] == b'CRS1' and (best is None or seq > best[1]):
+        best = (o, seq, ln)
+o, seq, ln = best
+c = o + 256 + ln - 192
+assert struct.unpack_from('<H', b, c + 4)[0] == 15
+struct.pack_into('<H', b, c + 4, 14)             # the block's version
+struct.pack_into('<H', b, c + 30, 99)            # bpm
+h = 2166136261
+for x in b[c + 12:c + 192]:
+    h = ((h ^ x) * 16777619) & 0xFFFFFFFF
+struct.pack_into('<I', b, c + 8, h)
+struct.pack_into('<I', b, o + 16, zlib.crc32(bytes(b[o + 256:o + 256 + ln])) & 0xFFFFFFFF)
+struct.pack_into('<I', b, o + 28, zlib.crc32(bytes(b[o:o + 28])) & 0xFFFFFFFF)
+open(sys.argv[2], 'wb').write(b)" "$SF" "$SO" || bad "session, an older settings object: the flash could not be made"
+SL=$OUT/persist_session_old.log
+"$EMU" --headless --flash "$SO" --script "$S/persist_check.txt" >"$SL" 2>&1 || bad "session, older settings: exit status"
+[ "$(bpm "$SL")" = 99 ] && grep -aq 'record: migrated' "$SL" && [ "$(sx "$SL" 1 2)" = "not these settings'" ] &&
+    [ "$(sx "$SL" 1 6)" = "voicing 0 octave 0 bass 0 lock 0 latched 00" ] && ! grep -aq '^session: applied' "$SL" &&
+    dl "$SL" 'session chord:' 1 | grep -q 'FM6 / TINE EP edited 0 kind 1 crc [0-9A-F]* level 92 pan 0' &&
+    ok "a settings object rewritten by an older firmware (v14, 99 BPM): its settings load (migrated), the session left beside it is NOT applied (voicing 0, the bass off, LOCK off, the pool's TINE EP)" \
+    || bad "session, older settings: bpm $(bpm "$SL") $(sv "$SL" 1) / $(dl "$SL" 'session chord:' 1)"
+
+# the deferred save: no storm while a knob turns (session_storm.txt), never under a sound (session_hold.txt)
+ST=$OUT/persist_session_storm.log; SH=$OUT/persist_session_hold.log
+"$EMU" --headless --script "$S/session_storm.txt" >"$ST" 2>&1 || bad "session storm: exit status"
+"$EMU" --headless --script "$S/session_hold.txt" >"$SH" 2>&1 || bad "session hold: exit status"
+fw() { dl "$1" 'flash:' "$2" | sed -n 's/.*, \([0-9]*\) writes, settings saves \([0-9]*\) .*/\1 \2/p'; }
+[ "$(sx "$ST" 1 1) $(sx "$ST" 1 5)" = "0 1" ] && [ "$(fw "$ST" 1)" = "0 0" ] && [ "$(sx "$ST" 2 1) $(sx "$ST" 2 5)" = "1 0" ] &&
+    [ "$(sx "$ST" 3 1)" = 1 ] && [ "$(fw "$ST" 3)" = "6 0" ] && echo "$(sx "$ST" 3 6)" | grep -q '^voicing 4 ' &&
+    ok "KNOB 1 turned for 3 s (20 detents): no flash write while it turns; ONE session write after the quiet time (1 erase + 5 programs), none after; the settings record never" \
+    || bad "session storm, the voicing: $(sv "$ST" 1) / $(sv "$ST" 2) / $(sv "$ST" 3) / $(fw "$ST" 3)"
+[ "$(sx "$ST" 4 1) $(sx "$ST" 4 5)" = "1 1" ] && [ "$(sx "$ST" 5 1) $(sx "$ST" 5 5)" = "2 0" ] && [ "$(fw "$ST" 5)" = "12 0" ] &&
+    dl "$ST" 'session chord:' 5 | grep -q 'edited 1' &&
+    ok "an editor knob turned for 1.2 s (12 detents): pending while it turns, ONE more write after the quiet time" \
+    || bad "session storm, the edit: $(sv "$ST" 4) / $(sv "$ST" 5) / $(fw "$ST" 5)"
+dl "$ST" 'flash erases' 5 | grep -q 'audio stalled 2 (32 blocks' &&
+    ok "each session save: one sector erase (45 ms, 16 audio blocks of silence into silence), as a settings save" \
+    || bad "session storm: erases: $(dl "$ST" 'flash erases' 5)"
+grep -aq '^expect sound at .*: ok' "$SH" && [ "$(sx "$SH" 1 1) $(sx "$SH" 1 5)" = "0 1" ] && [ "$(fw "$SH" 1)" = "0 0" ] &&
+    [ "$(sx "$SH" 2 1) $(sx "$SH" 2 5)" = "1 0" ] &&
+    ok "a change under a held chord: nothing written while it sounds (3 s), written once after it is let go" \
+    || bad "session hold: $(sv "$SH" 1) / $(sv "$SH" 2)"
+
+# Options > Reset Settings clears the session too (the reset runs above): after the reset the session as it would be
+# saved is a new unit's (the fresh run's), it is in flash, and the relaunch comes up on it
+fs=$(sx "$OUT/persist_reset_fresh.log" 1 3)
+[ -n "$fs" ] && [ "$(sx "$R2" 8 3)" = "$fs" ] && [ "$(sx "$R2" 8 4)" = "$fs" ] && [ "$(sx "$R2" 8 5)" = 0 ] &&
+    [ "$(sx "$R3" 1 3)" = "$fs" ] && [ "$(sx "$R3" 1 2)" = current ] &&
+    ok "Reset Settings: the session too is a new unit's ($fs), in flash, and what the relaunch comes up on" \
+    || bad "reset, the session: fresh $fs, after the reset $(sv "$R2" 8), relaunched $(sv "$R3" 1)"
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail

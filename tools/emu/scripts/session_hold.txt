@@ -1,0 +1,17 @@
+# test_persist.sh, the session's deferred save: never under a sound. MAJ + D4 held; KNOB 1 +2 (the voicing) while it
+# sounds; 3 s later the chord still sounds: nothing written (dump 1). Let go: written once the tail is over and a
+# second has passed (dump 2).
+wait 300
+key F3 down
+wait 40
+btn D4 down
+wait 300
+knob KNOB1 +2
+wait 3000
+expect sound
+dump                          # 1: held: pending, no write
+btn D4 up
+key F3 up
+wait 6000
+dump                          # 2: one write
+quit

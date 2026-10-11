@@ -121,5 +121,17 @@ static void mix_block(int32_t *out, uint32_t n)        /* the audio ISR's block:
 #include "../../firmware/src/cr_settings.c"           /* the settings record (after cr_ui.c and storage.c) */
 #include "../../firmware/src/fm6_store.c"             /* FM6: DX7 SysEx (Melodee's; after cr_ui.c: the editor's part) */
 #include "../../firmware/src/cz_store.c"              /* CZ-1: Casio tone SysEx (Melodee's; after cr_ui.c) */
+/* the update gesture's leaving (cr_backup.c cr_update_poll): the emulator says what the unit would do and ends.
+ * EMU_STUB=N: a boot stub of version N ran before this boot (the unit: 3; unset: none, as a firmware started by
+ * another loader). The host tests that build this unit define their own hooks before it */
+#ifndef CRB_STUB_VER
+#define CRB_STUB_VER() ((unsigned)(getenv("EMU_STUB") ? atoi(getenv("EMU_STUB")) : 0))
+#define CRB_STUB_GO(w) do { bootguard.pending = 0; /* (as the device's: an intentional restart) */ \
+                            printf("restart: stub request %08X (guard pending %u)\n", (unsigned)(w), (unsigned)bootguard.pending); \
+                            fflush(stdout); if ((w) == 0x52514552u) exit(0); } while (0)
+#define CRB_UPDATE_SCREEN(t) printf("update: screen '%s'\n", (t))
+#define CRB_UBOOT_GO() do { bootguard_intentional(&bootguard); printf("restart: ROM USB boot (fm1_enter_uboot; guard pending %u)\n", \
+                                   (unsigned)bootguard.pending); fflush(stdout); exit(0); } while (0)
+#endif
 #include "../../firmware/src/cr_backup.c"             /* backup / restore SysEx (the handler: no transport here;
                                                          * tests/cr_backup_test.c drives it) */

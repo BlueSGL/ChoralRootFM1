@@ -43,6 +43,11 @@ static uint32_t rx_n, rx_count;
 static unsigned t_stub_ver, t_stub_went;
 #define CRB_STUB_VER() t_stub_ver
 #define CRB_STUB_GO(w) (t_stub_went = (w))
+/* the update gesture (cr_backup.c cr_update_poll): the screen it leaves on, the ROM's USB boot when no stub ran */
+static const char *t_upd_screen;
+static unsigned t_uboot_went;
+#define CRB_UPDATE_SCREEN(t) (t_upd_screen = (t))
+#define CRB_UBOOT_GO() (t_uboot_went++)
 #include "../tools/emu/emu_firmware.h"
 #include "../firmware/stub/stub_core.h"            /* the request words the stub knows */
 
@@ -386,7 +391,19 @@ int main(void)
         }
         CHECK(!rc, "restore: every object accepted (PUT)");
         CHECK(!cr_restore_lock, "restore: no settings lock before the settings");
-        rc = t_put(1, find(ref, nref, 1)->bytes, find(ref, nref, 1)->size);
+        {   /* the session (0.18) belongs to the settings it was written beside: a restored settings object empties it */
+            static cr_session_t x;
+            cr_session_defaults(&x);
+            x.voicing = 5;
+            cr_session_seal(&x);
+            CHECK(st_save(OBJ_SESSION, &x, CSS_SIZE) == 0 && st_load(OBJ_SESSION, &x, sizeof x) == (int)CSS_SIZE,
+                  "restore: a session in flash before the settings are restored");
+            css_flash = cr_session_hash(&x);
+            rc = t_put(1, find(ref, nref, 1)->bytes, find(ref, nref, 1)->size);
+            CHECK(rc == 0 && st_load(OBJ_SESSION, &x, sizeof x) == 0 && css_flash == 0 && !css_pending,
+                  "restore: the settings committed: the session object is empty (the restart comes up on the settings alone)");
+            CHECK(crs_obj_crc == st_crc32(&crs_rec, sizeof crs_rec), "restore: the session's binding follows the restored object");
+        }
         CHECK(rc == 0 && cr_restore_lock && CR_SETTINGS_BUSY(), "restore: settings committed, the settings saves held until the restart");
     }
     CHECK(up_used(3) && up_used(16 + 4) && cs.loop_used == (1u | 1u << 4 | 1u << 9) &&
@@ -935,6 +952,85 @@ int main(void)
     t_begin(72);
     a = t_send(&n);
     CHECK(a && n == 1 && a[0] == 0 && crb.reboot && !crb.stub, "RESTART: rc 0, the restart scheduled (a plain one: no request left)");
+
+    /* ---- the update gesture: OCT- + OCT+ + HOME held 5 s (cr_update_poll; main.c's loop calls it every pass) ---- */
+    {
+        uint32_t oct = (1u << panel.btn[B_OCTDN]) | (1u << panel.btn[B_OCTUP]), home = 1u << panel.btn[B_HOME];
+        uint32_t t, saw = 0, keep_lock = cr_restore_lock, keep_safe = cr_safe;
+#define T_HOLD(mask, ms)                                                                  \
+        for (t = 0; t < (ms); t += 10u) {                                                 \
+            fm1_in.buttons = (mask);                                                      \
+            fm1_ms += 10u;                                                                \
+            cr_update_poll();                                                             \
+            if (cu.msg.big && (int32_t)(cu.msg.until - fm1_ms) > 0 && cu.msg.text[0] >= '1' && cu.msg.text[0] <= '3' && !cu.msg.text[1]) \
+                saw |= 1u << (cu.msg.text[0] - '0');                                      \
+        }
+        cr_restore_lock = 1;                         /* (no flash write of this test's own on the way out) */
+        crb.reboot = crb.stub = 0;
+        t_stub_went = 0; t_uboot_went = 0; t_upd_screen = 0;
+        fm1_in.buttons = 0;
+        cr_update_poll();
+        /* two held, the gesture until 0.17: nothing, however long */
+        t_stub_ver = 3;
+        cu.msg.until = 0;
+        T_HOLD(oct, 8000u);
+        CHECK(!t_stub_went && !t_uboot_went && !saw && !ui.uboot && !t_upd_screen,
+              "gesture: OCT- + OCT+ alone held 8 s: no countdown, no restart (PANIC is the UI's, at the press: tools/emu/test_cr.sh)");
+        T_HOLD(oct | home, 1900u);                   /* (HOME joins late: the 5 s count from all three) */
+        CHECK(!saw && !ui.uboot, "gesture: the three held 1.9 s: nothing shown yet");
+        T_HOLD(oct | home, 2000u);                   /* 3.9 s */
+        CHECK(saw == ((1u << 3) | (1u << 2)) && ui.uboot == 2u && !t_stub_went && !strcmp(cu.msg.label, "update mode: let go to cancel"),
+              "gesture: from 2 s the countdown 3, 2 over the screen (\"update mode: let go to cancel\"), saw %x", saw);
+        cu.msg.until = 0;
+        T_HOLD(oct, 30u);                            /* HOME let go at 3.9 s */
+        CHECK(!t_stub_went && !t_uboot_went && !ui.uboot && !strcmp(cu.msg.text, "update cancelled"),
+              "gesture: released at 3.9 s: cancelled (\"%s\"), no restart", cu.msg.text);
+        T_HOLD(oct, 6000u);
+        CHECK(!t_stub_went && !t_uboot_went, "gesture: the two still held after a cancel: nothing");
+        /* the three, 5 s: the stub's rescue request, once */
+        saw = 0;
+        T_HOLD(0u, 20u);
+        T_HOLD(oct | home, 4990u);
+        CHECK(!t_stub_went && saw == 14u, "gesture: at 4.99 s still counting (3, 2, 1 shown and nothing else: %x)", saw);
+        T_HOLD(oct | home, 20u);
+        CHECK(t_stub_went == STUB_REQ_RESCUE && !t_uboot_went && t_upd_screen && !strcmp(t_upd_screen, "UPDATE MODE") && !ui.uboot,
+              "gesture: the three held 5 s: the boot stub's RESCUE request (%08X), the screen says UPDATE MODE", t_stub_went);
+        CHECK(!crb.reboot && !crb.stub, "gesture: not through the SysEx restart (no reply to wait for)");
+        t_stub_went = 0;
+        T_HOLD(oct | home, 9000u);
+        CHECK(!t_stub_went && !t_uboot_went, "gesture: asked once (a hook that returns: nothing more while the keys stay down)");
+        /* any one of the three let go cancels, whichever */
+        for (i = 0; i < 3u; i++) {
+            uint32_t one = i == 0 ? 1u << panel.btn[B_OCTDN] : i == 1u ? 1u << panel.btn[B_OCTUP] : home;
+            T_HOLD(0u, 20u);
+            T_HOLD(oct | home, 4900u);
+            T_HOLD((oct | home) & ~one, 20u);
+            T_HOLD(oct | home, 4900u);               /* pressed again: the 5 s start over */
+            CHECK(!t_stub_went && !t_uboot_went, "gesture: button %u of the three let go at 4.9 s: cancelled, and the count starts over", (unsigned)i);
+        }
+        /* no stub ran before this boot (version 0, and 1: a stub that takes no request): the ROM's USB boot, said so */
+        for (t_stub_ver = 0; t_stub_ver < 2u; t_stub_ver++) {
+            t_upd_screen = 0;
+            T_HOLD(0u, 20u);
+            T_HOLD(oct | home, 3000u);
+            CHECK(!strcmp(cu.msg.label, "USB boot: let go to cancel"), "gesture, stub version %u: the countdown says USB boot", t_stub_ver);
+            T_HOLD(oct | home, 2100u);
+            CHECK(!t_stub_went && t_uboot_went == t_stub_ver + 1u && t_upd_screen && !strcmp(t_upd_screen, "USB BOOT"),
+                  "gesture, stub version %u: the ROM's USB boot (fm1_enter_uboot), the screen says USB BOOT", t_stub_ver);
+        }
+        /* SAFE MODE: the same */
+        t_stub_ver = 3;
+        cr_safe = 1;
+        T_HOLD(0u, 20u);
+        T_HOLD(oct | home, 5020u);
+        CHECK(t_stub_went == STUB_REQ_RESCUE, "gesture in SAFE MODE: the same request");
+        cr_safe = (uint8_t)keep_safe;
+        t_stub_went = 0;
+        fm1_in.buttons = 0;
+        cr_update_poll();
+        cr_restore_lock = (uint8_t)keep_lock;
+#undef T_HOLD
+    }
 
     printf("objects: settings %u (PER4 %u), bank %u, FM6 %u, VA %u, FM6 patches 2 x %u, QUAD %u, loop <= %u bytes\n",
            (unsigned)sizeof(persist_t), (unsigned)(sizeof(persist_t) - sizeof(cr_settings_t)), (unsigned)sizeof(up_bank_t),

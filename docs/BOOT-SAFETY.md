@@ -132,7 +132,7 @@ stub's check is what happens *after* the SPL accepts.)
 | --- | --- | --- |
 | OCT- alone held while switching on | nothing | **rescue** (the stub, before the app): the loader on USB-MIDI, "RESCUE · connect USB · open the installer" on the screen if the LCD init is cheap enough in the stub, else the LEDs only |
 | OCT- + OCT+ held while switching on | calibration | calibration (unchanged, the app's) |
-| OCT- + OCT+ held 5 s in the main loop | countdown, then UBOOT | unchanged as a fallback, but no longer the documented way; the docs say "hold OCT- while switching on" |
+| OCT- + OCT+ held 5 s in the main loop | countdown, then UBOOT | unchanged as a fallback, but no longer the documented way; the docs say "hold OCT- while switching on". **0.18: gone** (the two alone are PANIC only); the held gesture is **OCT- + OCT+ + HOME, 5 s**, and it leaves the stub its RESCUE request (`fm1_stub_request(STUB_REQ_RESCUE)`, the path SysEx 77 STUB op 2 takes): the staged loader, i.e. real update mode, or the ROM's UBOOT if none is staged; `fm1_enter_uboot` directly only when no stub of version 2 or later ran before this boot (`cr_backup.c cr_update_poll`) |
 | the SysEx soft key from the installer | UBOOT | unchanged |
 | the boot guard | 2 crashes -> SAFE MODE, 4 -> UBOOT | unchanged, and now reachable only when the stub has handed over to a valid body |
 

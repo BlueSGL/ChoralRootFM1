@@ -357,7 +357,7 @@ other engine's kind or of an engine the slot is not is simply the file's engine:
 
 ## Not done
 
-- **More than 32 slots.** 152 KiB of flash is free (0xB4000..0xC7FFF; 0xB2000 / 0xB3000 hold the FM TONE store), but the stores are mirrored in the pool
+- **More than 32 slots.** 72 KiB of flash is free (0xB6000..0xC7FFF; 0xB2000 / 0xB3000 hold the FM TONE store, 0xB4000 / 0xB5000 the session since 0.18), but the stores are mirrored in the pool
   (`va_store` 3536, `fm6u` 2 x 2064, `czu` 2 x 2320 bytes) and the banks in RAM (2 x 3080); POOL is at 92 % and RAM at
   80 %. 64 slots would need a second VA store object (64 x 110 bytes exceed one object's 3840-byte payload), new halves
   for FM6 and CZ-1, wider `used` masks, the UI's `U01..U32` picker, new backup ids, and about 12 KB of POOL. Possible

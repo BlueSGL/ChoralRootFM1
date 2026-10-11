@@ -1,0 +1,82 @@
+# test_persist.sh, the session's deferred save: no save storm while a knob turns. KNOB 1 (the voicing) a detent every
+# 150 ms for 3 s (+12, then -8: +4): nothing is written while it turns (dump 1: session saves 0, pending); 3 s of
+# nothing: ONE write (dump 2); 3 s more: still one (dump 3). Then the editor: EDIT, KNOB 2 a detent every 100 ms for
+# 1.2 s, HOME (dump 4: still one); 3 s: two (dump 5). The settings record is never written: none of this is in it.
+wait 300
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 +1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+knob KNOB1 -1
+wait 150
+dump                          # 1: still turning: nothing written
+wait 3000
+dump                          # 2: one write
+wait 3000
+dump                          # 3: still one
+btn EDIT
+wait 300
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+knob KNOB2 +1
+wait 100
+btn HOME
+wait 200
+dump                          # 4: the edit pending, still one write
+wait 3000
+dump                          # 5: two
+quit

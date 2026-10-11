@@ -66,7 +66,7 @@ mirrored in the pool.
 | (FM TONE's patch store: engine 15, `eng_quad.c`, code name QUAD, docs/QUAD.md) | `OBJ_QUADSTORE` = `OBJ_CZBANK0 + 8` | 0xB2000 / 0xB3000 | 22 |
 
 0xA0000..0xB1FFF is the user sample slot 1's flash, unused since the all-synth change (`FELUCCA_SAMPLE` 0; storage.c's
-map); 0xB2000 / 0xB3000 hold FM TONE's patch store (0.14), 0xB4000..0xC7FFF stays free, 0xC8000.. holds the loops. SAFE
+map); 0xB2000 / 0xB3000 hold FM TONE's patch store (0.14), 0xB4000 / 0xB5000 the session (0.18, docs/SETTINGS.md), 0xB6000..0xC7FFF stays free, 0xC8000.. holds the loops. SAFE
 MODE's Flash Data erase covers 0xA0000..0xB3FFF too (`cr_ui.c` `cu_flash_erase`: 56 sectors with FM TONE's pair).
 
 ## The banks (cz_bank.c)

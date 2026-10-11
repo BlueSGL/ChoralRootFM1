@@ -74,7 +74,9 @@ SAFE MODE, so you can save a backup first. Only if SAFE MODE itself crashes twic
 stays black and the FM-1 is in update mode: open the installer and press Install, it finishes the write. The same on
 purpose, whatever state the firmware is in: **hold OCT- (alone) while switching on**, three flashes, open the
 installer, Install (or switch off and on to start the firmware again: nothing was written). The OCT- gesture is new
-in 0.16.
+in 0.16. From 0.18 on, the same without switching off: **hold OCT-, OCT+ and HOME for 5 seconds** while ChoralRoot
+runs (a countdown from 2 s; let go to cancel). The two OCT keys alone are PANIC and nothing else: they no longer
+lead to the chip's USB boot when held.
 One long flash instead of three: switch off for 10 seconds and try once more; one long flash again means no update
 loader is stored (it is kept from the unit's last install on) and the FM-1 is the USB disk "WL82 UBOOT1.00" until it
 is switched off and on.

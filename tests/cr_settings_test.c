@@ -31,6 +31,8 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
     return 0;
 }
 #define __attribute__(x)
+#define FELUCCA_CZ 1                               /* ChoralRoot's object list: the session's object (OBJ_SESSION) */
+#define FELUCCA_QUAD 1
 #include "../firmware/src/storage.c"
 #undef __attribute__
 
@@ -741,6 +743,262 @@ static void t_dualcore_v12(void)
        "version 8 -> 12: Dual Core Off, the view kept, unlocked");
 }
 
+/* ------------------------------------------------------------------ v15 and the session (0.18) --- */
+/* version 15: the block's layout is v14's (an older firmware reads a v15 block as it read v14's; a longer block it
+ * would not read at all: settings_persist.c's exact size); bass_on is always written 0. Migration from v12, v13, v14 */
+static void t_v15(void)
+{
+    cr_settings_t d, s, r;
+    cr_settings_out_t o;
+    cr_t E;
+    uint8_t big[CRS_SIZE + 64];
+    uint32_t h, i;
+    unsigned v;
+    cr_settings_defaults(&d);
+    ok(CRS_VERSION == 15u && CRS_SIZE == 192u && sizeof(cr_settings_t) == 192u && !d.bass_on,
+       "v15: the block is still 192 bytes (0.17 and the tools read it); bass_on 0 by default");
+    for (v = 12u; v <= 14u; v++) {                 /* a record of 0.16 (v12) / 0.17 (v13, v14): every field it has kept */
+        s = d;
+        s.bpm = 97; s.transpose = -3; s.sticky = 1; s.perform_on = 1; s.perform_mode = CR_PM_ARP; s.bass_voicing = 2;
+        s.view = CRS_VIEW_BYTE(3, 1) | CRS_DC_ON; s.metro_on = 1; s.loop_slot = 2; s.chord_sound = 0x0D05; s.fx_on = 0;
+        if (v >= 13u) s.loop_rec = (uint8_t)(CRS_LOOP_REC(2, 1) | CRS_KEY_PLAY | CRS_LOCK_PUSH);
+        else s.loop_rec = CRS_LOOP_REC(2, 1);
+        if (v >= 14u) { s.key_on = CRS_KEY_BYTE(1, 1, 1); s.single = CR_SINGLE_SPLIT_BASS; }
+        else s.key_on = 1;
+        crs_old(&s, v);
+        if (cr_settings_import(&r, &s, sizeof s) != 2 || r.version != 15u || r.size != CRS_SIZE || r.bpm != 97 ||
+            r.transpose != -3 || !r.sticky || !r.perform_on || r.perform_mode != CR_PM_ARP || r.bass_voicing != 2 ||
+            CRS_VIEW(&r) != 3u || !CRS_VIEW_LOCK(&r) || !CRS_DUALCORE(&r) || !r.metro_on || r.loop_slot != 2 ||
+            r.chord_sound != 0x0D05 || r.fx_on || CRS_LOOP_MODE(&r) != 2u || !CRS_LOOP_KEYS(&r) || r.bass_on ||
+            CRS_KEY_KEYS(&r) != (v >= 13u) || ((r.loop_rec & CRS_LOCK_PUSH) != 0) != (v >= 13u) ||
+            r.key_on != (v >= 14u ? CRS_KEY_BYTE(1, 1, 1) : 1u) || r.single != (v >= 14u ? CR_SINGLE_SPLIT_BASS : CR_SINGLE_FULL))
+            break;
+    }
+    ok(v == 15u, "v12, v13, v14 -> v15: migrated (rc 2), every field of the older record kept, resealed v15");
+    /* what 0.17 does with a v15 block: its import takes a newer version of the same size by its fields (the rule
+     * this import has had since v1); modelled here by reading a v16 block of our size */
+    s = d;
+    s.bpm = 141;
+    crs_old(&s, CRS_VERSION + 1u);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.bpm == 141 && r.version == CRS_VERSION,
+       "a too-new block of the same size (0.17 reading v15, v15 reading v16): its fields kept");
+    /* a too-new, longer record: our prefix */
+    cr_settings_defaults(&s);
+    s.bpm = 133; s.vel = 77;
+    memset(big, 0x5A, sizeof big);
+    memcpy(big, &s, sizeof s);
+    ((cr_settings_t *)big)->version = CRS_VERSION + 3;
+    ((cr_settings_t *)big)->size = sizeof big;
+    for (h = 2166136261u, i = 12; i < sizeof big; i++) { h ^= big[i]; h *= 16777619u; }
+    ((cr_settings_t *)big)->check = h;
+    ok(cr_settings_import(&r, big, sizeof big) == 2 && r.bpm == 133 && r.vel == 77 && r.size == CRS_SIZE,
+       "a too-new, longer block: our 192-byte prefix kept");
+    ok(cr_settings_import(&r, big, sizeof big - 1u) == 0 && r.bpm == 120, "a too-new block cut short: the defaults");
+    /* bass_on: the engine's capture never puts it into what an older firmware would switch on (the glue writes 0;
+     * the portable capture reads the engine: a record with it set still applies, as it always did) */
+    cr_init(&E, &OUT);
+    s = d;
+    s.bass_on = 1;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.bass_on == 1, "bass_on = 1 in a block is still in range");
+    cr_settings_apply(&r, &E, &o);
+    ok(E.bass_on == 1, ".. and applies (cr_settings.c's glue writes 0: Bass on is the session's)");
+}
+
+static void css_reseal(uint8_t *b, unsigned version, unsigned size)   /* a session record of another version / size */
+{
+    uint32_t h = 2166136261u, i;
+    ((cr_session_t *)(void *)b)->version = (uint16_t)version;
+    ((cr_session_t *)(void *)b)->size = (uint16_t)size;
+    for (i = 12; i < size; i++) { h ^= b[i]; h *= 16777619u; }
+    ((cr_session_t *)(void *)b)->check = h;
+}
+static void css_fill(cr_session_t *x)              /* a recognisable session: every item set */
+{
+    unsigned k, i;
+    cr_session_defaults(x);
+    x->bind = 0xC0FFEE01u;
+    x->voicing = 2; x->octave = -1; x->bass_on = 1; x->lock = 1;
+    x->latched = (uint8_t)((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7));
+    x->fx.sel = CSS_FXE_DELAY;
+    x->fx.amt[CSS_FXE_REVERB] = 30; x->fx.amt[CSS_FXE_CHORUS] = 0; x->fx.amt[CSS_FXE_DELAY] = 99; x->fx.amt[CSS_FXE_DRIVE] = 127;
+    cr_session_fx_set(x, CSS_FXP_DTIME, 5);
+    cr_session_fx_set(x, CSS_FXP_DFDBK, 77);
+    cr_session_fx_set(x, CSS_FXP_RSIZE, 12);
+    for (k = 0; k < 2u; k++) {
+        css_part_t *r = &x->part[k];
+        r->valid = 1; r->eng = (uint8_t)(k ? 13 : 12); r->preset = (uint8_t)(3 + k); r->user = 0; r->trim = (int8_t)(-2 - (int)k);
+        r->edited = 1; r->kind = 1; r->fk = (uint8_t)(3 + k); r->slot = 0xFF; r->np = 91; r->nblob = (uint8_t)(k ? 110 : 128);
+        strcpy(r->name, k ? "DEEP SUB" : "TINE EP");
+        for (i = 0; i < 91u; i++) r->p[i] = (int16_t)((int)i * 7 - 200 + (int)k);
+        for (i = 0; i < r->nblob; i++) r->blob[i] = (uint8_t)(i * 3u + k);
+    }
+    cr_session_seal(x);
+}
+static cr_session_t SX, SR, SD;
+static uint8_t sbig[CSS_SIZE + 128];
+static void t_session(void)
+{
+    uint32_t i, s;
+    int v = 0, rc;
+    unsigned off_fx = (unsigned)((const uint8_t *)&SX.fx - (const uint8_t *)&SX);
+    unsigned off_part = (unsigned)((const uint8_t *)&SX.part[0] - (const uint8_t *)&SX);
+    /* the record */
+    cr_session_defaults(&SD);
+    ok(sizeof(cr_session_t) == CSS_SIZE && CSS_SIZE == 1024u && CSS_SIZE <= ST_PAYLOAD_MAX,
+       "session: 1024 bytes, a quarter of the object's payload");
+    ok(SD.magic == CSS_MAGIC && SD.version == CSS_VERSION && SD.size == CSS_SIZE && !SD.voicing && !SD.octave &&
+       !SD.bass_on && !SD.lock && !SD.latched && !SD.part[0].valid && !SD.part[1].valid && SD.fx.version == CSS_FX_VERSION &&
+       SD.fx.n == 0 && SD.fx.sel == CSS_FXE_REVERB && SD.fx.amt[0] == CSS_FX_NONE && SD.fx.amt[CSS_NFXE - 1] == CSS_FX_NONE,
+       "session defaults: nothing stored (the unit as it powered on until 0.17: bass off, voicing 0, the sounds' own sends)");
+    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 143u &&
+       CSS_NFXP - 8 == 16 && CSS_NP - 91 == 5,
+       "session: 143 bytes of reserve, 16 free FX parameter entries, 5 free part parameters");
+    /* every item round-trips */
+    css_fill(&SX);
+    rc = cr_session_import(&SR, &SX, sizeof SX);
+    ok(rc == 1 && !memcmp(&SR, &SX, sizeof SX), "session: every item round-trips, byte for byte (rc 1)");
+    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 &&
+       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)), "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7");
+    ok(SR.fx.sel == CSS_FXE_DELAY && SR.fx.amt[CSS_FXE_DELAY] == 99 && SR.fx.amt[CSS_FXE_DRIVE] == 127 && SR.fx.n == 3 &&
+       cr_session_fx_get(&SR, CSS_FXP_DTIME, &v) && v == 5 && cr_session_fx_get(&SR, CSS_FXP_DFDBK, &v) && v == 77 &&
+       cr_session_fx_get(&SR, CSS_FXP_RSIZE, &v) && v == 12 && !cr_session_fx_get(&SR, CSS_FXP_CRATE, &v),
+       "session: the FX block: the effect picked, the amounts, the parameters by tag (one not stored: not found)");
+    ok(SR.part[0].valid && SR.part[0].eng == 12 && SR.part[0].edited && !strcmp(SR.part[0].name, "TINE EP") &&
+       SR.part[0].p[90] == 430 && SR.part[0].blob[127] == (uint8_t)(127 * 3) && SR.part[1].eng == 13 &&
+       !strcmp(SR.part[1].name, "DEEP SUB") && SR.part[1].trim == -3 && SR.part[1].nblob == 110,
+       "session: both parts' edit buffers (parameters, deep patch, name, pool entry, edited)");
+    memcpy(sbig, &SX, sizeof SX);                  /* in place (the flash side imports into the buffer it read) */
+    ok(cr_session_import((cr_session_t *)(void *)sbig, sbig, CSS_SIZE) == 1 && !memcmp(sbig, &SX, CSS_SIZE),
+       "session: imported in place");
+    /* the hash: the state, not the binding */
+    SR = SX;
+    SR.bind = 0x12345678u;
+    cr_session_seal(&SR);
+    ok(cr_session_hash(&SR) == cr_session_hash(&SX) && SR.check != SX.check, "session: `bind` is not part of the change detection");
+    SR.voicing = 3;
+    ok(cr_session_hash(&SR) != cr_session_hash(&SX), "session: a changed item changes the hash");
+    /* invalid: the defaults */
+    ok(cr_session_import(&SR, 0, 0) == 0 && !memcmp(&SR, &SD, sizeof SD), "session: none -> the defaults");
+    ok(cr_session_import(&SR, &SX, 15) == 0 && !memcmp(&SR, &SD, sizeof SD), "session: cut short -> the defaults");
+    for (i = 12; i < CSS_SIZE; i += 37u) {         /* a flipped bit anywhere */
+        memcpy(sbig, &SX, sizeof SX);
+        sbig[i] ^= 0x10u;
+        if (cr_session_import(&SR, sbig, CSS_SIZE) != 0 || memcmp(&SR, &SD, sizeof SD))
+            break;
+    }
+    ok(i >= CSS_SIZE, "session: a flipped bit anywhere -> the defaults");
+    memcpy(sbig, &SX, sizeof SX);
+    sbig[0] ^= 1u;
+    ok(cr_session_import(&SR, sbig, CSS_SIZE) == 0, "session: a bad magic -> the defaults");
+    css_fill(&SX);
+    memcpy(sbig, &SX, sizeof SX);
+    css_reseal(sbig, 0, CSS_SIZE);
+    ok(cr_session_import(&SR, sbig, CSS_SIZE) == 0, "session: version 0 -> the defaults");
+    for (s = 0, i = 0; i < 2000u; i++) {           /* garbage never hangs, never reads as a session */
+        uint32_t k;
+        for (k = 0; k < sizeof sbig; k++) { s = s * 1664525u + 1013904223u; sbig[k] = (uint8_t)(s >> 24); }
+        if (i & 1u) { memcpy(sbig, &SX, 8); }      /* (half of them with a good magic and version) */
+        if (cr_session_import(&SR, sbig, (s >> 8) % (sizeof sbig + 1u)) != 0 || memcmp(&SR, &SD, sizeof SD))
+            break;
+    }
+    ok(i == 2000u, "session: 2000 garbage blocks -> the defaults each time");
+    /* an older, shorter record (a future field appended after it): what it has kept, the rest the defaults */
+    css_fill(&SX);
+    memcpy(sbig, &SX, sizeof SX);
+    css_reseal(sbig, CSS_VERSION, off_part);       /* state + FX, no parts */
+    rc = cr_session_import(&SR, sbig, off_part);
+    ok(rc == 2 && SR.voicing == 2 && SR.lock == 1 && SR.fx.sel == CSS_FXE_DELAY && SR.fx.amt[CSS_FXE_DELAY] == 99 &&
+       !SR.part[0].valid && !SR.part[1].valid && SR.size == CSS_SIZE,
+       "session: a shorter record (no parts): the state and the FX kept, no sound stored (rc 2)");
+    memcpy(sbig, &SX, sizeof SX);
+    css_reseal(sbig, CSS_VERSION, off_fx);         /* the state alone */
+    rc = cr_session_import(&SR, sbig, off_fx);
+    ok(rc == 2 && SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.fx.version == CSS_FX_VERSION &&
+       SR.fx.n == 0 && SR.fx.amt[CSS_FXE_DELAY] == CSS_FX_NONE && SR.fx.sel == CSS_FXE_REVERB,
+       "session: a shorter record (the state alone): the FX block's defaults");
+    /* a too-new record: longer, a higher version: our prefix */
+    memset(sbig, 0xA5, sizeof sbig);
+    memcpy(sbig, &SX, sizeof SX);
+    css_reseal(sbig, CSS_VERSION + 2u, sizeof sbig);
+    rc = cr_session_import(&SR, sbig, sizeof sbig);
+    SX.bind = SR.bind;
+    ok(rc == 2 && SR.version == CSS_VERSION && SR.size == CSS_SIZE && cr_session_hash(&SR) == cr_session_hash(&SX),
+       "session: a too-new, longer record: our prefix, every item (rc 2)");
+    ok(cr_session_import(&SR, sbig, sizeof sbig - 1u) == 0, "session: a too-new record cut short -> the defaults");
+    /* the FX sub-block is versioned on its own: another layout -> its defaults, the rest kept */
+    css_fill(&SX);
+    SX.fx.version = CSS_FX_VERSION + 1u;
+    cr_session_seal(&SX);
+    rc = cr_session_import(&SR, &SX, sizeof SX);
+    ok(rc == 1 && SR.fx.version == CSS_FX_VERSION && SR.fx.n == 0 && SR.fx.amt[CSS_FXE_DELAY] == CSS_FX_NONE &&
+       SR.voicing == 2 && SR.part[0].valid && SR.part[1].valid && SR.lock == 1,
+       "session: an FX block of another version: the FX defaults, everything else kept");
+    /* .. and by tag: a tag this firmware does not know is carried and skipped, a new one finds room, a full block says so */
+    css_fill(&SX);
+    ok(cr_session_fx_set(&SX, 200, -5) && SX.fx.n == 4 && cr_session_fx_get(&SX, 200, &v) && v == -5 &&
+       cr_session_fx_get(&SX, CSS_FXP_DTIME, &v) && v == 5, "session FX: an unknown tag sits beside the known ones");
+    ok(cr_session_fx_set(&SX, CSS_FXP_DTIME, 9) && SX.fx.n == 4 && cr_session_fx_get(&SX, CSS_FXP_DTIME, &v) && v == 9,
+       "session FX: a tag set again replaces its value");
+    for (i = 0; i < 40u; i++)
+        if (!cr_session_fx_set(&SX, 20u + i, (int)i))
+            break;
+    ok(i == CSS_NFXP - 4u && SX.fx.n == CSS_NFXP && !cr_session_fx_set(&SX, 0, 1) && !cr_session_fx_set(&SX, 256, 1),
+       "session FX: 24 parameters fit; a full block, tag 0 and a tag over 255 are refused");
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.fx.n == CSS_NFXP && cr_session_fx_get(&SR, 200, &v) && v == -5,
+       "session FX: a full block round-trips");
+    /* ranges: a field out of range takes its default, the others are kept */
+    css_fill(&SX);
+    SX.voicing = 13; SX.octave = -3; SX.bass_on = 2; SX.fx.amt[CSS_FXE_REVERB] = 128; SX.part[1].np = CSS_NP + 1;
+    cr_session_seal(&SX);
+    rc = cr_session_import(&SR, &SX, sizeof SX);
+    ok(rc == 1 && SR.voicing == 0 && SR.octave == 0 && SR.bass_on == 0 && SR.fx.amt[CSS_FXE_REVERB] == CSS_FX_NONE &&
+       SR.fx.amt[CSS_FXE_DELAY] == 99 && SR.part[0].valid && !SR.part[1].valid && SR.lock == 1,
+       "session: out-of-range fields take their defaults (a part with too many parameters: no sound stored)");
+    css_fill(&SX);
+    SX.lock = 0;                                   /* a latch without LOCK cannot be */
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && !SR.lock && !SR.latched, "session: LOCK off: no latched keys");
+    css_fill(&SX);
+    memset(SX.part[0].name, 'X', sizeof SX.part[0].name);
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && strlen(SR.part[0].name) == CSS_NAME - 1u, "session: a name is always terminated");
+}
+
+/* the session through the flash layer: its own A/B pair (0xB4000 / 0xB5000), beside the settings object */
+static void t_session_flash(void)
+{
+    cr_settings_t s;
+    int n;
+    memset(nor, 0xFF, sizeof nor);
+    ok(st_sector(OBJ_SESSION, 0) == 0xB4000u && st_sector(OBJ_SESSION, 1) == 0xB5000u &&
+       st_sector(OBJ_SETTINGS, 0) == 0xFC000u && st_sector(OBJ_QUADSTORE, 1) == 0xB3000u,
+       "session flash: the pair 0xB4000 / 0xB5000 (the first free sectors after the FM TONE store)");
+    ok(st_load(OBJ_SESSION, &SR, sizeof SR) < 0, "session flash: empty -> none");
+    css_fill(&SX);
+    ok(st_save(OBJ_SESSION, &SX, CSS_SIZE) == 0, "session flash: saved");
+    n = st_load(OBJ_SESSION, &SR, sizeof SR);
+    ok(n == (int)CSS_SIZE && cr_session_import(&SR, &SR, (uint32_t)n) == 1 && !memcmp(&SR, &SX, sizeof SX),
+       "session flash: read back and imported in place, every item");
+    SX.voicing = -4;
+    cr_session_seal(&SX);
+    fail_after = 2;                                /* torn: two payload pages written, no commit record */
+    ok(st_save(OBJ_SESSION, &SX, CSS_SIZE) != 0, "session flash: a torn save fails");
+    fail_after = -1;
+    n = st_load(OBJ_SESSION, &SR, sizeof SR);
+    ok(n == (int)CSS_SIZE && cr_session_import(&SR, &SR, (uint32_t)n) == 1 && SR.voicing == 2,
+       "session flash: after a torn save the previous session is in charge");
+    ok(st_save(OBJ_SESSION, &SX, CSS_SIZE) == 0 && st_load(OBJ_SESSION, &SR, sizeof SR) == (int)CSS_SIZE && SR.voicing == -4,
+       "session flash: the next save wins");
+    cr_settings_defaults(&s);                      /* the settings object is another pair: neither touches the other */
+    ok(st_save(OBJ_SETTINGS, &s, sizeof s) == 0 && st_load(OBJ_SESSION, &SR, sizeof SR) == (int)CSS_SIZE && SR.voicing == -4 &&
+       st_load(OBJ_SETTINGS, &s, sizeof s) == (int)sizeof s, "session flash: independent of the settings object");
+    ok(st_save(OBJ_SESSION, &SX, 0) == 0 && st_load(OBJ_SESSION, &SR, sizeof SR) == 0,
+       "session flash: an empty object (a settings restore clears it): nothing to import");
+    ok(cr_session_import(&SR, &SR, 0) == 0 && !SR.part[0].valid && !SR.bass_on, ".. the defaults");
+}
+
 int main(void)
 {
     t_defaults();
@@ -753,6 +1011,7 @@ int main(void)
     t_flash();
     t_loop_rec();
     t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13(); t_page2_v14();
+    t_v15(); t_session(); t_session_flash();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

@@ -1,0 +1,19 @@
+# ChoralRoot: the update gesture, OCT- + OCT+ + HOME held 5 s (0.18; cr_backup.c cr_update_poll). The two OCT keys
+# down: PANIC, as ever; HOME joins them: from 2 s the countdown over the whole screen (3, 2, 1: "update mode: let go
+# to cancel" with a boot stub, EMU_STUB=3; "USB boot: .." without); at 5 s the unit leaves: the stub's RESCUE request
+# (the staged update loader), or the ROM's USB boot when no stub ran. The emulator prints the restart and ends.
+wait 300
+knob KNOB1 +2                 # something to save on the way out (the voicing)
+wait 200
+btn OCT- down
+btn OCT+ down
+wait 100
+btn HOME down
+wait 2500
+shot build/emu/test/cr_update_3.ppm
+dump                          # 1: the countdown at 3
+wait 1000
+shot build/emu/test/cr_update_2.ppm
+wait 3000                     # (the unit left at 5 s: nothing below runs)
+dump
+quit

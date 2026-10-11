@@ -1,0 +1,15 @@
+# test_persist.sh, the session, run 2 (a relaunch on run 1's flash file): the unit comes back as it was left: dump 1
+# at power-on (nothing touched): both edited sounds, Bass on and its Level, the delay's settings, Perform on with
+# Arpeggiate, the voicing, the octave, LOCK with MAJ + M7 latched, slot 3 loaded and STOPPED; nothing sounds. D4 held:
+# Dmaj7 (the latch), arpeggiated, with the bass: dump 2. Let go, 4 s: nothing was written (the state is the stored one).
+wait 800
+expect silence
+dump                          # 1: as left
+btn D4 down
+wait 900
+expect sound
+dump                          # 2: the latched chord plays, the bass under it
+btn D4 up
+wait 4000
+dump                          # 3: no save: nothing changed
+quit

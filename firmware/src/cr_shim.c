@@ -7,7 +7,8 @@
  *   felucca_init (main.c's power-on) -> track_defaults / set_engine_of / apply_preset_to: the parts get a sound
  *     (Felucca's TRK_DEF; ChoralRoot's own sounds replace them at the first frame); the step / pattern calls: none
  *   the main loop: ui_input -> cr_ui_input (the first call: cr_ui_init, the engine's power-on), ui_leds ->
- *     cr_ui_frame, ui_draw -> cr_ui_draw (the UPDATE MODE countdown of OCT- + OCT+ held: a big message)
+ *     cr_ui_frame, ui_draw -> cr_ui_draw (the update gesture's countdown, OCT- + OCT+ + HOME held, is a big message
+ *     of cr_backup.c cr_update_poll)
  *   persist_boot: the flash part (the user sample sets with FELUCCA_SAMPLE only), the user sounds and the settings
  *     record; settings_save / settings_poll: cr_settings.c; panel_setup: main.c's own (cr_panel_setup); ed_service:
  *     cr_backup.c's (backup and restore over SysEx: Felucca's protocol, a subset; editor.c is dropped) */
@@ -145,12 +146,5 @@ static void ui_draw(void)
         ui.force = 0;
         cr_draw_invalidate();
     }
-    if (ui.uboot) {                    /* OCT- + OCT+ held 2..5 s (main.c): the update countdown */
-        char n[2] = {(char)('0' + ui.uboot % 10u), 0};
-        cu.msg.until = cu_now() + 100u;
-        cu.msg.big = 1;
-        cu_cpy(cu.msg.text, n, sizeof cu.msg.text);
-        cu_cpy(cu.msg.label, "update mode: let go to cancel", sizeof cu.msg.label);
-    }
-    cr_ui_draw();
+    cr_ui_draw();                      /* (the update gesture's countdown: cr_backup.c cr_update_poll's message) */
 }
