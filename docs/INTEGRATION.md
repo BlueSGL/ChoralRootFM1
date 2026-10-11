@@ -851,7 +851,14 @@ read, the late halves and their largest stage, the fx stage's four parts, `flash
 crs_sounding`: no AUTOMATIC settings write while the output is above -60 dBFS, with no time limit. The global save
 (SAVE held, 0.18) is the player's own press and writes at once: an erase (45 ms of silence) an object that changed,
 three at most (the settings object, the session, the loop slot); it waits only for a playing loop or an open capture
-("saves at stop"). `flash_holes` counts those erases too when the output sounds.
+("saves at stop"). `flash_holes` counts those erases too when the output sounds. **The third
+build** (the second on the unit: the reverb 331 us a half for an estimate of 116, a pop for every late half):
+`cr_fx.c`'s loops run block-wise, a stage and a line at a time (about 290 us for both effects by the unit's own
+instruction count, `tools/fx_loops.py`; `CR_FX_LITE=1` a lighter reverb); **`audio.c fm1_alnk0_irq` clears the half's
+pending bit before the render** (after it, a late half took the next boundary's interrupt with it and the DAC replayed
+an old half; `CR_ACK_LATE=1` builds the old order); `shed_check` counts how far behind its boundary a half started;
+78 PEAK carries six more values (`stale_halves`, `pk_lag_us`, `pk_wall_us`, `pk_t5_us`, `irq_gap_us`, `irq_gap_pc`:
+`cr_cpu1.h cr_prof_entry`, `cr_prof_t5`, the latter from `main.c`'s TIMER5 with `fm1_irq.h fm1_reti`).
 
 ### All-synth (2026-10-07: the dead weight out)
 

@@ -263,10 +263,13 @@ def build_app(stub):
             flags.append(f"-D{flag}={v}")
     # the delay's and the reverb's rate (1 full, 2 half) and their loops in RAM (docs/FX.md "Half rate or full"): for
     # the builds that are measured against each other on the unit; unset: firmware/src/cr_fx.c's defaults
-    for flag, ok in (("CR_FX_DELAY_DS", ("1", "2")), ("CR_FX_REVERB_DS", ("1", "2")), ("CR_FX_RAM", ("0", "1"))):
+    for flag, ok in (("CR_FX_DELAY_DS", ("1", "2")), ("CR_FX_REVERB_DS", ("1", "2")), ("CR_FX_RAM", ("0", "1")),
+                     ("CR_FX_LITE", ("0", "1"))):
         v = os.environ.get(flag)
         if v in ok:
             flags.append(f"-D{flag}={v}")
+    if os.environ.get("CR_ACK_LATE") == "1":      # the audio half's pending bit cleared after the render, as to 0.18's
+        flags.append("-DFM1_AUDIO_ACK_LATE=1")    # second build (firmware/src/audio.c fm1_alnk0_irq)
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')

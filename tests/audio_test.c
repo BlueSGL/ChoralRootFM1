@@ -8,14 +8,15 @@
 
 #define FM1_AUDIO_HALF 0x80u
 #define FM1_TICKS_PER_US 1u
-static uint32_t host_clock, host_us, host_half_reads, host_dma_advanced, host_acks, host_nest;
+static uint32_t host_clock, host_us, host_half_reads, host_dma_advanced, host_acks, host_nest, host_ack_reads;
 static uint8_t host_pending;
 static volatile uint32_t t5_nested_ticks;              /* audio.c's: TIMER5 nested in the render (main.c) */
 static uint32_t fm1_ticks(void) { t5_nested_ticks = host_nest; host_clock += host_us; return host_clock; }
 static uint8_t fm1_audio_pending(void) { return host_pending; }
 static void fm1_audio_ack_aux(uint8_t p) { (void)p; }
 static uint32_t fm1_audio_free_half(void) { return host_dma_advanced && host_half_reads++ > 0u; }
-static void fm1_audio_ack_half(void) { host_acks++; }
+static void fm1_audio_ack_half(void) { host_acks++; host_ack_reads = host_half_reads; }   /* (.. and when: how many
+                                                         * looks at the DMA's half this render had taken by then) */
 static void fm1_audio_init(int32_t *b, uint32_t n, void (*isr)(void), uint32_t p)
 { (void)b; (void)n; (void)isr; (void)p; }
 void isr_alnk0(void) {}
@@ -126,6 +127,10 @@ static void dma(void)
     host_half_reads = 0; host_dma_advanced = 1; host_us = 100;
     fm1_alnk0_irq();
     check("DMA advancing during a render is counted once", host_acks == 3u && felucca_dbg.late == 1u && !felucca_dbg.in_audio && !shed_req);
+    /* (cleared after the render, the boundary that passed during it lost its interrupt with the bit: nobody rendered
+     * the next half and the DAC played the one before the last again, a pop for every late half) */
+    check("a half's pending bit is cleared before its render: a late half does not take the next one's interrupt",
+          host_ack_reads == 0u);
     fresh();
     expected = HALF_FRAMES * 1000000u / FS;            /* the half's deadline in us */
     host_us = expected * 90u / 100u; host_nest = expected * 30u / 100u;   /* the render 60 %, TIMER5 nested 30 % */

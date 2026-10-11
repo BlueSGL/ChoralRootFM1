@@ -1667,7 +1667,9 @@ has '^deep: part 0 page 0 SYN 1 col 3 RATIO B 62 -> 81 (3.00/2.00)' "$QL" && ok 
     bad "Shift on RATIO B: $(grep 'RATIO B' "$QL" | sed -n 6p)"
 has '^deep: part 0 page 0 SYN 1 col 3 RATIO B 81 -> 347 (3.00/16.00)' "$QL" && has '^deep: part 0 page 0 SYN 1 col 3 RATIO B 347 -> 5 (3.00/0.25)' "$QL" &&
     ok "Shift + KNOB 4 +-30: B1 stops at 16.00 and 0.25, B2 kept" || bad "B1's ends: $(grep 'RATIO B' "$QL" | tail -2 | tr '\n' ' ')"
-rbn=$(python3 tools/emu/wavpitch.py "$OUT/cr_quad_ratiob.wav")
+# (--floor 0.003: the notes end where their own sound does. At wavpitch's 0.001 the delay's last repeats, which hover
+# at that level, were a fourth "note" of 0.13 s in one build of the effects and not in the next)
+rbn=$(python3 tools/emu/wavpitch.py "$OUT/cr_quad_ratiob.wav" --floor 0.003)
 rbp=$(echo "$rbn" | sed -n 's/.*peak \([0-9.]*\) Hz/\1/p' | tr '\n' ' ')
 rbc=$(echo "$rbn" | sed -n 's/.*cent \([0-9.]*\) Hz.*/\1/p' | tr '\n' ' ')
 python3 -c "import sys; p = [float(x) for x in sys.argv[1:]]; sys.exit(not (len(p) == 3 and abs(p[0] - 262) < 10 and

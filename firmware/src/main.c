@@ -71,6 +71,9 @@ void fm1_timer5_irq(void)
 {
     static uint32_t sub, owed;
     uint32_t t0 = fm1_ticks(), usb_due = sub % 5u == 0u;
+#ifdef FM1_IRQ_TARGET
+    cr_prof_t5(t0, fm1_reti());                 /* (cr_cpu1.h: the longest stretch without this interrupt, and where) */
+#endif
     fm1_timer5_ack();
     felucca_dbg.timer_irqs++;
     fm1_input_tick();

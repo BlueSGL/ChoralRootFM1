@@ -71,6 +71,17 @@ Proved on the host before anything was changed; each has a test now.
    now runs at the full rate (below).
 5. **The cost on the unit was far above the estimate** (below: "What the unit says").
 
+And the second build, on the unit ("The cost on the unit", "Late is not slow"):
+
+6. **The reverb cost three times its estimate** (331 .. 418 us a half for 116), the delay 170 .. 270 for 121. The
+   loops were written a sample at a time, eight lines wide; this host's compiler runs that four lines at once, the
+   unit's one after the other, reloading its states from memory in every sample.
+7. **Every late half was a pop.** The audio ISR cleared the half's pending bit after its render. A render that ended
+   after the boundary cleared the next boundary's interrupt with it: nobody rendered the next half, and the DAC
+   played the half from two halves before again. That is the "buffer that instantly reset". A half was late not
+   because it was slow but because the ISR started late: a flash read or a page program holds every interrupt for
+   about a millisecond, and CZ-1's chords left less than that.
+
 ## The rates: the delay at 44.1 kHz, the reverb at 22.05 kHz
 
 `CR_FX_DELAY_DS` and `CR_FX_REVERB_DS` (1 full, 2 half; `./build.sh` takes them from the environment) choose each
@@ -116,6 +127,10 @@ the numbers are that stretch's):
 | `pk_halves`, `fx_busy_halves` | halves counted; halves in which the effects ran |
 | `fx_down_avg_us` / `_max_us`, `fx_delay_*`, `fx_reverb_*`, `fx_up_*` | inside the fx stage, over `fx_busy_halves`: the sends' down-sampler, the delay, the reverb, the wet's up-sampler |
 | `flash_erases`, `flash_holes`, `saves_settings`, `saves_session` | since power-on: erases (46 ms of silence each), erases into an output above -60 dBFS (the rule: 0), saves |
+| `stale_halves` | **the audible ones**: halves in which the DAC played something old (a boundary nobody served, or a half finished after the DAC had reached it). The rule: 0 |
+| `pk_lag_us` | the furthest the ISR started behind its boundary (an estimate: "Late is not slow") |
+| `pk_wall_us`, `pk_t5_us` | the longest half by the clock, TIMER5 nested in it (`pk_block_us` leaves TIMER5 out), and the most TIMER5 took of one half |
+| `irq_gap_us`, `irq_gap_pc` | TIMER5 comes every 100 us: its longest gap (the interrupts were masked for about that, less 100) and the address it came back to after it (`build/choralroot.dis` names the section) |
 
 The instrumentation is five TIMER4 reads a block. `tools/emu/perf.sh` prints the same four parts ("fx parts"), so the
 two compare line by line. The emulator's, for (l), the heaviest sound with both sends at 127:
@@ -124,43 +139,164 @@ two compare line by line. The emulator's, for (l), the heaviest sound with both 
 fx parts (device us per half, avg / max): down 12 / 123, delay 121 / 209, reverb 116 / 237, up 22 / 67
 ```
 
-**The formula.** With `k = (the unit's fx_delay_avg_us + fx_reverb_avg_us + fx_down_avg_us + fx_up_avg_us) / 271`
-(271: the emulator's four averages above):
+### The cost on the unit
 
-- the reverb at the full rate would cost the unit about `k x 149 us` more a half;
-- the delay at half rate would save about `k x 25 us`;
-- the limit to hold: `pk_block_us` under about 2030 (70 %) with the heaviest sound, single core.
+**The unit runs about 205 of its own instructions a microsecond**, and needs about 1.6 of them where this host needs
+one. Measured, not reasoned: `xf_down` and `xf_up` are straight loops of 65 and 57 instructions a pass
+(`python3 tools/fx_loops.py build/choralroot.dis xf_up xf_down`), 4160 and 7296 instructions a half, and the unit read
+20 and 36 us for them (`fx_down_avg_us`, `fx_up_avg_us`): 208 and 203 a microsecond. The reverb's per-sample loop ran
+about 1050 instructions a pass on the unit (415 in the listing, most of them eight times): 67 000 a half, 331 us.
 
-**Why the estimate is low, as far as reasoning goes** (the counters will say which):
+So the emulator's "259 host instructions a microsecond" was low by a different factor for every stage, and worst
+where the host's compiler turned eight lines into two vector operations:
 
-1. *The code cache.* RAM and POOL are one on-chip SRAM (`app.ld`: 0x01C08000 and 0x01C20000), so the lines are not a
-   cache problem; the code is. It executes in place from the SPI flash through a cache, and every block runs the
-   engines' code and then the effects': code that has fallen out of the cache is read from the flash again. The
-   emulator sees none of that. **`CR_FX_RAM=1 ./build.sh`** places the four per-sample loops (`xf_down`, `xf_up`,
-   `xd_run`, `xr_run`: 2.9 KB) in `.ram_text`, where the flash driver already lives, and calls them through a
-   pointer: no flash read in them. It builds and passes `build.py`'s checks (`.ram_text: 1905 insns, no calls`,
-   RAMTEXT 5904 of 24576); it is **off by default because it has not run on a unit**. It is the first thing to try if
-   `fx_*` on the unit are far above the emulator's.
-2. *The compiler.* The unit is built at `-Os`, the emulator at `-O2`.
-3. *Dual Core.* With core 1 rendering the bass, the two cores share the caches and the bus.
-4. *What nests in the half.* TIMER5 and the USB recording's service run inside it (`ua_overruns 37` on that read: the
-   computer was recording).
-5. *Erases.* A flash erase holds every interrupt for 46 ms: the halves after it are late whatever they cost. With the
-   first build's save rule that was every knob turn under a tail.
+| Stage (second build) | emulator, us a half | the unit, avg / max | factor |
+| --- | --- | --- | --- |
+| down | 12 | 20 / 47 | 1.7 |
+| delay | 121 | 168 / 273 (running) | 1.4 |
+| reverb | 116 | 331 .. 345 / 418 | 2.9 |
+| up | 22 | 36 / 63 | 1.6 |
+| CZ-1's chord, part 0 (perf.sh (g): 446 / 864) | | 1699 .. 1985 at its largest | 2.2 |
 
-**If neither rate fits the real budget**, in this order: `CR_FX_RAM=1`; the delay at half rate (`CR_FX_DELAY_DS=2`);
-a lighter reverb (four lines and two more diffusers: about 60 % of `xr_run`); the effects on the second core when
-Dual Core is on (a design only: the two send buses are complete when the parts are mixed, so core 1 could run
-`xf_block` on a copy of them while core 0 runs the master of the previous block, at the price of one block, 0.7 ms,
-of extra latency on the wet and a second pair of mix buffers; nothing of it is built).
+`CR_FX_RAM=1` changed nothing on the unit (reverb 345 for 331, delay the same): the code cache was not it. It stays a
+build switch, off.
 
+**The cost model that holds**: count the unit's own instructions. `tools/fx_loops.py` lists a function's loops from
+the build's disassembly; times each loop's passes a half, over 205, is its time. The third build's loops, for the
+defaults (wow and Mod on, nothing gliding), a pass being one sample:
+
+| Loop | instructions a pass | passes a half | us |
+| --- | --- | --- | --- |
+| `xf_down` | 65 | 64 | 20 |
+| delay: a side's read and filters, drifting (at rest 17, gliding 40) | 27 x 2 | 128 | |
+| delay: feedback, saturators, writes, the wet | ~57 (87 with both knees) | 128 | |
+| **delay** | **~111** | | **~70** (at rest ~57, gliding or crossing modes ~85 .. 115) |
+| reverb: low cut 30, pre-delay 4, four diffusers 21 + 21 + 21 + 27 | 124 | 64 | |
+| reverb: the lines' reads, four at rest 5 and four swinging 14 | 76 | 64 | |
+| reverb: the output 29, the lines' low-pass and gain 8 x 11, the mix 51 | 168 | 64 | |
+| reverb: the lines' writes 8 x 15 | 120 | 64 | |
+| **reverb** (and ~25 a pass of loop set-up) | **~513** | | **~160** |
+| `xf_up`, two sides | 49 x 2 | 64 | 31 |
+| `xf_block` itself (the parameters' hash, clearing and looking at the half-rate block) | | | ~8 |
+| **both effects** | | | **~290** (second build on the unit: ~560 .. 600) |
+
+These are counts read off the listing, good to about a tenth; **the unit's `fx_*` will say**. The targets were the
+reverb under 150, the delay under 100, the stage's four parts under 300: the delay meets its own, the total is at
+it, **the eight-line reverb is about 10 us over**. What would take it under and was not done because it changes the
+sound: two diffusers instead of four (-42 a pass), two swinging lines instead of four (-18). That is
+**`CR_FX_LITE=1 ./build.sh`**: ~450 a pass, ~140 us, the same lines, lengths, decay and level (the checks all pass;
+its tail is a little less smooth in the first 50 ms and the stereo image moves less). `build/fx-review/*_lite.wav`
+beside the others: both can be heard, on the unit too.
+
+**What was changed, and what it cost in sound** (`python3 tools/fx_cmp.py build/fx-review/round2 build/fx-review`:
+level, residual, third-octave spectrum of the second build's renders against the third's):
+
+| Render | level | residual | widest third-octave gap |
+| --- | --- | --- | --- |
+| `cmp_delay` (a bright stab, the defaults) | -0.01 dB | -43.5 dB | 0.29 dB at 3.2 kHz |
+| `ir_delay_pingpong` | -0.01 dB | -47.1 dB | 0.23 dB at 4 kHz |
+| `cmp_reverb` | 0.00 dB | -38.4 dB | 0.43 dB at 4 kHz |
+| `ir_reverb_default`, `ir_reverb_large` | 0.00 dB | -37 dB, -34 dB | 0.18 dB, 0.06 dB |
+
+- **Block-wise, a stage and a line at a time**: each loop has its few states in registers for the whole block.
+  Every line and every diffuser is longer than a block, so a block's reads never see its own writes: the samples are
+  the per-sample loop's. With Wow 0 the delay is **bit for bit** the second build's; the reverb differs by at most 12
+  units of 32768 (its two gains a line are one multiply now, one rounding instead of two).
+- **The rings are walked in straight pieces**: a pointer and an index, split where the ring wraps, instead of a mask
+  in every sample. `XR_BASE` and `XR_APB` moved to multiples of a block (16 half-rate samples) so that a block's
+  writes never wrap, and a block apart so that no stage reads what the stage before it wrote in the same block.
+- **A line at rest reads its samples**; one that drifts (the wow; MOD: far under a sample a block) reads between the
+  same two samples all block with the fraction a ramp; only a glide (Time, Size) pays for the general read.
+- **The glides and the swings are ramps over a block** (the per-sample lag became its block's step): the same times,
+  no step in the read position.
+- **The delay's moving read is linear** (it was a four-point cubic: 35 instructions a read). Given up: with Wow on,
+  a repeat loses up to 2.4 dB at 10 kHz at the worst fraction (0.6 dB at 5 kHz), on top of what Tone takes; at rest
+  (Wow 0, the time reached) nothing. A tape does the same.
+- **The saturators test once** for "below the knee" and only then do their arithmetic.
+- **`xf_up` keeps its states in registers** (49 instructions a sample for 57); the same in `xf_down` was 67 for 65.
+
+`tests/cr_fx_test.c` still prints the host's instruction count (COST) and now checks it as a guard against a loop
+growing; it is not the unit's time. `tests/target_budget.txt`'s count for `xd_run` and `xr_run` went UP (3738 and
+1974 for 522 and 1075): it weighs an instruction four times for every loop around it, and the loops are nested now
+(a line, a piece of ring, a sample). It is exact from build to build and still catches a loop that grows.
+
+**If the unit still wants less**, in this order: `CR_FX_LITE=1`; the delay at half rate (`CR_FX_DELAY_DS=2`); the
+effects on the second core when Dual Core is on (a design only: the two send buses are complete when the parts are
+mixed, so core 1 could run `xf_block` on a copy of them while core 0 runs the master of the previous block, at the
+price of one block, 0.7 ms, of extra latency on the wet and a second pair of mix buffers; nothing of it is built).
+
+### Late is not slow
+
+The unit counted halves late whose render had finished well inside the budget (`pk_late_us 2687`, and `896` with the
+loops in RAM). `pk_block_us` is the render alone; a half is late when it ENDS after its boundary, and that is the
+render plus TIMER5 nested in it plus however long the ISR had to wait to start.
+
+**What a late half did** (to the second build): `fm1_alnk0_irq` cleared the half's pending bit after its render.
+There is one bit. The boundary that passed during a late render set it again, the ISR cleared it on its way out, and
+that boundary's interrupt was gone: the next half was never rendered, and the DAC played the half it had played two
+halves before. 2.9 ms of old sound spliced into the stream, a jump at both ends: inaudible in a short note, a pop in
+anything that sustains, exactly as loud as the tail it cuts. The effects' state was never torn (the render simply
+went on one half later); the loop's clock slipped 2.9 ms each time.
+
+**What it does now**: the bit is cleared BEFORE the render. A boundary that passes during the render keeps its
+interrupt and the ISR runs again as it returns. The late half itself is not heard: its blocks are written in order
+and the DAC, which starts that half at the boundary, needs block k only 726 us x k later; the ISR must be 2.1 ms
+behind before the DAC overtakes it. A late half only takes time from the next one, and the ISR catches up as long as
+the average half fits. `stale_halves` counts the halves in which the DAC did play something old (by the boundary
+estimate below): that is the number that must be 0, not `pk_late`. `CR_ACK_LATE=1 ./build.sh` builds the old order,
+should a unit need it; `tests/audio_test.c` checks the new one.
+
+**The boundary estimate.** Nobody tells the ISR when its boundary was. `cr_prof_entry` (`cr_cpu1.h`) expects one
+every 69 659 ticks of TIMER4 from the earliest entry it has seen (an entry is never early) and moves the expectation
+up by the smallest lag of every 64 halves, 43 us at most (the two clocks drift). `pk_lag_us` is the largest lag; a lag of a whole
+half or more is a boundary nobody served.
+
+**The shed** (`audio.c shed_check`: two halves in a row above 85 % fade a voice, one more each half while it lasts)
+measured the whole half by the clock, the effects and TIMER5 included: it did count the fx stage. What it did not
+count is the lag: a half that starts 600 us behind and renders 2400 is as late as one of 3000. It adds the lag now
+(on the unit; the emulator's halves come in bursts and have no boundary).
+
+**What masks the interrupts or runs above the audio ISR** (the worst case of each, by reading; `irq_gap_us` and
+`irq_gap_pc` measure the longest on the unit):
+
+| What | How long (read from the code and the flash's data sheet; not measured) | When |
+| --- | --- | --- |
+| a flash erase (`storage_hw.c st_erase`) | 45 ms, the buffer silenced first | a store's sector fills; never into a sounding output for the settings and the session (`flash_holes`) |
+| a flash page program (`fm1_flash.h fl_write`, 256 bytes a go) | ~1 ms each, one after the other with a gap | every save: settings, session, a loop, a user sound |
+| a flash read through the driver (`st_read`, 256 bytes a go) | ~0.5 ms each | loading a stored loop or record |
+| TIMER5, above the audio ISR (the key and LED scan, USB audio's endpoint, the MIDI in): 10 kHz | not known: `pk_t5_us` is its share of the worst half (29 ticks) | always |
+| the USB recording's service inside the ISR, interrupts off (`ua_isr_service`, `ua_audio`) | under 100 us a block | a computer records |
+| the looper's marks (`cr_ui.c cu_lm_marks`), packing a loop (`cr_loop_pack`) | up to ~75 us (512 events) | the loop page redraws; a loop is saved |
+| `cr_snapshot` | ~15 us | every UI frame |
+| a sound loaded into a part (`cu_load` and its kin, `css_part_put`, `cu_pick_end`) | 5 .. 10 us | a preset changes |
+| everything else under `fm1_irq_off` (46 places) | a few instructions | |
+
+The page programs and the reads are the ones that made halves late: a millisecond without interrupts, while a CZ-1
+chord's half took 2.0 .. 2.6 of its 2.9. They cannot be shortened (the code runs from the same flash: while it is
+busy, nothing can run), and with the pending bit cleared first they no longer need to be. Nothing in the effects
+runs with the interrupts off, clears a line, or hashes its state in the ISR beyond the 16 parameters a block.
+
+### CZ-1
+
+Its cost is steady, not a note-on peak: `cz_native_render` runs, for every sample and each of a tone's two lines, a
+call to `cz_native_wave` (two switches, the cosine table) and a 62-instruction loop: about 270 instructions a sample
+for a two-line tone, 34 000 a half, **~170 us a voice a half** and 20 .. 40 more for its three envelopes a line every
+block. Eight voices (its polyphony, `NPOLY`): 1.6 .. 2.0 ms of the 2.9, as the unit read. Options, cheapest first,
+none built (the engine is Melodee's and its samples are checked bit for bit):
+
+1. `CZ_POLY` 6 (a define `eng_cz.c` already honours): 1.5 ms at the most.
+2. `cz_native_wave` inlined, its two switches decided once a block instead of every sample: perhaps a quarter less.
+3. A line whose amplitude envelope has ended skipped (its phase advanced in one step): one-line-audible tones halve.
+4. The two lines' loops apart, block-wise, as the effects are now.
+
+## The delay
 ## The delay
 
 ```
                        +-------------------- feedback (0 .. 0.988, eased) ------------------+
                        v                                                                    |
- in --(+)--> sat --> [ line L, 32768 x int16 ] --> cubic read at tL + wow --> low-pass (Tone) --> low cut 40 Hz --+--> wet L
- in --(+)--> sat --> [ line R, 32768 x int16 ] --> cubic read at tR + wow --> low-pass (Tone) --> low cut 40 Hz --+--> wet R
+ in --(+)--> sat --> [ line L, 32768 x int16 ] --> read at tL + wow --> low-pass (Tone) --> low cut 40 Hz --+--> wet L
+ in --(+)--> sat --> [ line R, 32768 x int16 ] --> read at tR + wow --> low-pass (Tone) --> low cut 40 Hz --+--> wet R
                        ^                                                                    |
                        +--------------------------------------------------------------------+
    Stereo: each side feeds itself, both take the input.
@@ -169,8 +305,9 @@ of extra latency on the wet and a second pair of mix buffers; nothing of it is b
 
 - **Two lines of 32768 samples** at 44.1 kHz (0.743 s), `int16`, in `.pool`: 131 072 B. They hold half the send
   (`XF_IN`): a loud chord's send is about +-40000, so 20000 in the line, as Felucca's delay took it.
-- **The read** is a four-point cubic (Catmull-Rom) at a Q8 position that **glides** to its target: a lag of ~46 ms, at
-  most half a sample a sample. A new time (the knob, the tempo, a MIDI clock, Sync or Spread) bends the pitch of what
+- **The read** is at a Q8 position, between two samples (linear; a four-point cubic to the second build: "The cost on
+  the unit"), that **glides** to its target: a lag of ~46 ms, at most half a sample a sample, a block's part of the
+  way as a ramp. A new time (the knob, the tempo, a MIDI clock, Sync or Spread) bends the pitch of what
   is in the line by at most a fifth up or an octave down for a moment, as a tape or a BBD clock does, and never
   clicks. At rest the position is a whole sample and the read is that sample itself.
 - **The loop**: read -> one-pole low-pass (Tone, 400 Hz .. 22 kHz, an octave every 22 steps; the default, 70, is
@@ -292,40 +429,33 @@ delay's last 0.15 s; with the numbers above it was not taken.
 Size line: XIP 444 148 B (0.17's: 436 928), RAM 85 156 B (84 944), **POOL 326 316 B of 344 064** (296 224):
 17 748 B free.
 
-## CPU (the emulator's estimate; see "What the unit says")
+## CPU
 
-A half is 128 frames, 2902 us.
+A half is 128 frames, 2902 us. The unit's time is "The cost on the unit": about 290 us for both effects. The
+emulator's figures (259 host instructions a microsecond) are 1.2 to 1.7 times low for these loops and 2.2 times low
+for CZ-1; they are good for comparing one build with the next on the same scenario, no more.
 
-| | us a half | of the budget |
+`sh tools/emu/perf.sh`, one core, "fx" the whole stage (the parts' mix into the buses, the chorus, the delay, the
+reverb), the emulator's us:
+
+| Scenario | fx stage avg / max, second build | third |
 | --- | --- | --- |
-| the delay alone (`cr_fx_test`: noise into its send) | 114 | 3.9 % |
-| the reverb alone, with its down- and up-sampler | 155 | 5.3 % |
-| both | 267 | 9.2 % |
-| both off | 2 | 0.1 % |
-| the target | 350 | 12 % |
+| (a) TINE EP chord | 320 / 557 | 267 / 463 |
+| (b) FM PAD chord | 313 / 640 | 261 / 449 |
+| (c) FM PAD + bass + loop + arp | 324 / 574 | 274 / 481 |
+| (f) VA chord + bass | 265 / 558 | 227 / 462 |
+| (g) CZ-1 chord + bass | 266 / 579 | 226 / 485 |
+| (l) (c) with both sends at 127, Decay 13 s, Feedback up | 284 / 701 | 244 / 454 |
 
-`sh tools/emu/perf.sh`, one core, before (0.17's effects, 164bcca) and now; "fx" is the whole stage (the parts' mix into
-the buses, the chorus, the delay, the reverb). Since the sends are the parts', every sound plays into the effects
-(the chord part's defaults), (g) too, which had none:
+```
+fx parts (device us per half, avg / max): down 12 / 71, delay 58 / 145, reverb 126 / 172, up 20 / 79
+```
 
-| Scenario | Half avg / worst before | now | fx stage avg / max before | now |
-| --- | --- | --- | --- | --- |
-| (a) TINE EP chord | 543 / 1145 us (39 %) | 744 / 1167 (40 %) | 126 / 300 | 320 / 557 |
-| (b) FM PAD chord | 673 / 893 (31 %) | 866 / 1163 (40 %) | 123 / 285 | 313 / 640 |
-| (c) FM PAD + bass + loop + arp | 850 / 1165 (40 %) | 1037 / 1319 (45 %) | 140 / 263 | 324 / 574 |
-| (f) VA chord + bass | 739 / 1293 (45 %) | 842 / 1380 (48 %) | 133 / 337 | 265 / 558 |
-| (g) CZ-1 chord + bass | 815 / 1277 (44 %) | 971 / 1683 (58 %) | 126 / 235 | 266 / 579 |
-| (j) 8-note VA chord + bass | 682 / 1143 (39 %) | 788 / 1432 (49 %) | 126 / 260 | 251 / 642 |
-| **(l) (c) with both sends at 127, Decay 13 s, Feedback up** | | **919 / 1278 (44 %)** | | 284 / 701 |
-
-A sound costs about 190 us more a half than with Felucca's effects, on the estimate (6.5 % of the budget). No half
-over 80 % in any scenario, single or dual core (the worst: (g), 58 %; with Dual Core On 57 %). The second core is not used
-for the effects: they run on core 0 after both parts are mixed, exactly where Felucca's ran, and the split render's
-"one core's samples bit for bit" (`tests/cr_cpu1_test.c`, `perf.sh`'s Dual Core runs) holds as before.
-
-`tests/target_budget.txt` (pi32v2 instructions in loops, weighted): `xf_block 128, xf_down 65, xf_up 57, xd_run 522,
-xr_run 1075`; no divide and no call in a loop. A pass of `xd_run` is one sample at 44.1 kHz (246 instructions in
-its loops), a pass of `xr_run` one at 22.05 kHz (415).
+(second build: `down 12 / 123, delay 121 / 209, reverb 116 / 237, up 22 / 67`. The reverb's figure went UP on this
+host, which no longer runs it four lines at a time, while its instructions on the unit halved: the emulator's number
+for a stage was never the unit's.) The second core is not used for the effects: they run on core 0 after both parts
+are mixed, exactly where Felucca's ran, and the split render's "one core's samples bit for bit"
+(`tests/cr_cpu1_test.c`, `perf.sh`'s Dual Core runs) holds as before.
 
 ## The level
 
@@ -368,10 +498,13 @@ went with the spring.
 - **Defaults**: the `XFP[]` table; the sends' in `cr_ui.c cu_sends_default`.
 - **The delay's character**: the 40 Hz low cut and the Tone curve in `xf_coefs`, the feedback's top (`xfp * 255`),
   the glide (`6 + XD_SH` and the clamp of 128), the wow's two rates in `xf_block`, the knee in `xd_sat`.
-- **The reverb's character**: `XR_LEN` (and `XR_BASE`, their running sum + `XR_GUARD` each), `XR_AP`, the diffusers'
+- **The reverb's character**: `XR_LEN` (and `XR_BASE`, their running sum + `XR_GUARD` each, rounded up to a multiple
+  of 16), `XR_AP` (and `XR_APB`: multiples of 16, each 16 clear of the one before; both asserted), the diffusers'
   5 / 8, the two modulation rates in `xf_block`, the Damp curve and the input gain's exponent in `xf_coefs`.
 - **A parameter's range or meaning changes**: a new `CSS_FXP_*` tag (never renumber, never reuse), a line in
   `cr_settings.c CSS_FXG`.
+- **A loop's cost**: `python3 tools/fx_loops.py build/choralroot.dis xd_run xr_run xf_up xf_down xf_block`; the
+  sound against the build before: `python3 tools/fx_cmp.py BEFORE_DIR build/fx-review`.
 - After any of it: `sh tests/run_cr_tests.sh`, `sh tools/emu/perf.sh`, `./build.sh` (the size line), and
   `BUDGET_UPDATE=1 python3 tests/target_budget.py build/choralroot.dis tests/target_budget.txt` if a loop grew on
   purpose.
@@ -382,7 +515,7 @@ went with the spring.
    say otherwise, and both are one build flag.
 2. **0.74 s a side** (a 32768-sample line: what the pool has).
 3. **16-bit lines** for the reverb (32 bits: 48 dB less noise for the delay's last 0.15 s).
-4. **`CR_FX_RAM` is off**: the loops in RAM are built and checked but not run on a unit.
+4. **`CR_FX_RAM` is off**: on the unit it changed nothing (reverb 345 us for 331). Kept as a switch.
 5. **A tail ends at one unit of the line** (-90 dBFS of it), nowhere above.
 6. **"Inf" takes the damping out of the loop.**
 7. **Nothing is saved while a tail rings**, with no time limit: with the reverb frozen, nothing is stored until it is
@@ -403,3 +536,14 @@ went with the spring.
 18. **Felucca's goldens are untouched**: its effects stay in `fx.c` behind `CR_FX 0`.
 19. **The engine picker's KNOB 4 does nothing now** (no parameter there was missing one); the record's `pick_roots`
     byte is reserved and written 0.
+20. **The half's pending bit is cleared before the render** ("Late is not slow"): reasoned from the code and the
+    unit's counters, not run on a unit. `CR_ACK_LATE=1` builds the old order.
+21. **The shed counts how far behind its boundary a half started**, not only how long it took.
+22. **The delay's moving read is linear**, not cubic: up to 2.4 dB less at 10 kHz a repeat with Wow on.
+23. **The glides and the swings step once a block** (as ramps), not once a sample.
+24. **The default build keeps the eight-line reverb with four diffusers**, about 10 us over its 150 us target by the
+    count; `CR_FX_LITE=1` (two diffusers, two swinging lines, ~140 us) is the lighter one to hear beside it.
+25. **`XR_BASE` and `XR_APB` moved** (the lines' and the diffusers' places in their rings; the lengths are the same):
+    nothing is stored that depends on them.
+26. **CZ-1 is as it was**: its options are listed, none built.
+27. **Six more values in SysEx 78 PEAK** (30 for 24); a host that reads 24 sees the same 24.

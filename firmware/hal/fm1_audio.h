@@ -7,8 +7,10 @@
  *   fm1_audio_init(buf, half_words, isr, prio)  codec and ALNK0 bring-up;
  *                         isr = asm wrapper (fm1_isr.S) for FM1_IRQ_ALNK0
  *   in the ISR:   p = fm1_audio_pending();  fm1_audio_ack_aux(p);
- *                 if (p & FM1_AUDIO_HALF) { fill fm1_audio_free_half();
- *                                           fm1_audio_ack_half(); }
+ *                 if (p & FM1_AUDIO_HALF) { fm1_audio_ack_half();
+ *                                           fill fm1_audio_free_half(); }
+ *                 (the acknowledge FIRST: there is one pending bit, and a fill that ends after the next
+ *                 boundary would clear that boundary's interrupt with it: src/audio.c fm1_alnk0_irq)
  *   fm1_audio_stop()      DMA off (crash screen, UBOOT): no looping buzz
  */
 #pragma once

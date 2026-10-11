@@ -542,7 +542,16 @@ def debug():
     cr.debug = [0] * (n + I.DEBUG_LOG + len(I.DEBUG_TAIL))
     cr.peak = [2580, 9, 700, 150, 1400, 120, 60, 12, 4, 2950, 34500, 30000, 40, 110, 90, 200, 300, 520, 35, 90, 14, 0, 5, 9]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
-    ok(rc == 0 and len(I.DEBUG_PEAK) == 24 and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
+    ok(rc == 0 and "pk_block_us 2580" in out and "saves_session 9" in out and "stale_halves" not in out and
+       "the deadline:" not in out, "--debug: a 0.18 of 24 PEAK values: those, and no word about the six it does not send")
+    cr.peak += [640, 3350, 410, 2, 1130, 0x0200B2C4]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "pk_lag_us 640" in out and "irq_gap_pc 33600196 (0x0200B2C4)" in out and
+       "the deadline: 2 halves in which the DAC played something old" in out and
+       "started at most 640 us behind its boundary, its longest half took 3350 us with TIMER5 nested in it (410 us" in out and
+       "once came 1130 us after the one before: masked for about 1030 us, until 0x0200B2C4" in out,
+       "--debug: when the ISR got to start (PEAK's values 25..30): the stale halves, the lag, TIMER5, the masked stretch")
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 30 and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
        "worst half since the last --debug: 2580 us of 2902 (88 %) over 34500 halves" in out and
        "late 12 (the latest: 2950 us, its largest stage fx)" in out and
        "down 40 / 110, delay 90 / 200, reverb 300 / 520, up 35 / 90" in out and

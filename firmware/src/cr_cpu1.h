@@ -67,6 +67,16 @@ typedef struct {
     uint64_t x_sum[CRX_N];           /* .. summed over those halves */
     uint64_t x_tot_sum[CRX_N];
     uint32_t x_tot_max[CRX_N], x_tot_busy;
+    /* WHEN THE ISR GOT TO START (0.18's third build, docs/FX.md "Late is not slow"): a half is late when it ends
+     * after its boundary, and that is its render plus what kept the ISR from starting. All in TIMER4 ticks */
+    uint32_t lat_on, lat_tb, lat_min, lat_n;   /* the boundary estimate (cr_prof_entry) */
+    uint32_t lat;                    /* this half's lag behind its boundary */
+    uint32_t pk_lat, pk_wall, pk_t5; /* the largest lag, whole half (TIMER5 nested in it) and TIMER5 nested in one half */
+    uint32_t stale;                  /* halves in which the DAC played something old: a boundary nobody served (the
+                                      * ISR more than a half behind) or a half finished after the DAC had reached
+                                      * its last block. THE AUDIBLE ONES; a half that is merely late is not */
+    uint32_t t5_last, pk_t5gap, pk_t5pc;   /* TIMER5's largest gap between two entries (100 us when nothing masks
+                                      * the interrupts) and where it came back to after it (main.c) */
 } cr_dbg_t;
 static cr_dbg_t cr_dbg;
 /* Options > Dual Core Off (settings v12, the default; read by cr_settings_boot before cr_c1_boot): core 1 is never
@@ -301,11 +311,19 @@ static void cr_prof_half(void)
 }
 /* the main loop, once a second (audio.c cpu_window): the window closed into avg_us / max_us */
 /* audio.c, after a half: its whole time (us, as felucca_dbg.max_us measures it) and whether the DMA had moved on */
-static void cr_prof_whole(uint32_t us, int late)
+static void cr_prof_whole(uint32_t us, int late, uint32_t all, uint32_t t5, uint32_t per)
 {
     uint32_t k, m = 0;
     if (us > cr_dbg.pk_all)
         cr_dbg.pk_all = us;
+    if (all > cr_dbg.pk_wall)
+        cr_dbg.pk_wall = all;
+    if (t5 > cr_dbg.pk_t5)
+        cr_dbg.pk_t5 = t5;
+    /* the DAC needs block k of the four at the next boundary + k quarters of a half, and block k is written by
+     * lat + (k + 1) quarters of `all`: both straight lines in k, so the first and the last block decide */
+    if (cr_dbg.lat + all / 4u > per || cr_dbg.lat + all > per + per / 4u * 3u)
+        cr_dbg.stale++;
     cr_dbg.pk_n++;
     if (late) {
         for (k = 1; k < CRP_N; k++)
@@ -315,6 +333,67 @@ static void cr_prof_whole(uint32_t us, int late)
         cr_dbg.late_stage = m + 1u;
         cr_dbg.late_us = us;
     }
+}
+/* audio.c, first thing in a half: t0 its entry, per a half in ticks -> its lag behind its boundary. Nobody tells
+ * the ISR when the boundary was, so it is estimated: one every `per` from the earliest entry seen (an entry is never
+ * early), moved up by the smallest lag of every 64 halves, 43 us at most (the two clocks drift, `per` is rounded). A lag of a
+ * whole half or more: that many boundaries went unserved (one pending bit), and the DAC replays what it played two
+ * halves before: stale */
+static uint32_t cr_prof_entry(uint32_t t0, uint32_t per)
+{
+    uint32_t lag;
+    if (!cr_dbg.lat_on) {
+        cr_dbg.lat_on = 1;
+        cr_dbg.lat_tb = t0;
+        cr_dbg.lat_min = 0xFFFFFFFFu;
+        cr_dbg.lat_n = 0;
+    } else {
+        cr_dbg.lat_tb += per;
+    }
+    lag = t0 - cr_dbg.lat_tb;
+    if ((int32_t)lag < 0) {                              /* (before the estimate: the estimate was late) */
+        cr_dbg.lat_tb = t0;
+        lag = 0;
+    }
+    if (lag >= per) {
+        uint32_t k = lag / per;
+        cr_dbg.stale += k;
+        cr_dbg.lat_tb += k * per;
+        lag -= k * per;
+    }
+    if (lag < cr_dbg.lat_min)
+        cr_dbg.lat_min = lag;
+    if (++cr_dbg.lat_n >= 64u) {
+        uint32_t d = cr_dbg.lat_min > 1024u ? 1024u : cr_dbg.lat_min;   /* (at most 43 us a window: the drift is a
+                                                          * few; 64 halves that were ALL behind are an overload, and
+                                                          * its lag is not taken for drift) */
+        cr_dbg.lat_tb += d;
+        lag -= d;
+        cr_dbg.lat_min = 0xFFFFFFFFu;
+        cr_dbg.lat_n = 0;
+    }
+    if (lag > cr_dbg.pk_lat)
+        cr_dbg.pk_lat = lag;
+    cr_dbg.lat = lag;
+#ifdef FM1_IRQ_TARGET
+    return lag;
+#else
+    return 0u;                                           /* (the emulator's halves come when the host's sound card asks
+                                                          * for them, in bursts: no boundary to be behind, and
+                                                          * audio.c's shed must not take the bursts for an overload) */
+#endif
+}
+/* main.c, TIMER5's entry (10 kHz, above everything but a fault): the gap since the last one. 100 us, unless the
+ * interrupts were masked: then the gap is the masked stretch (to the tick: +-100 us) and pc where it ended (the
+ * instruction after the sti: build/choralroot.dis names the section) */
+static inline void cr_prof_t5(uint32_t t0, uint32_t pc)
+{
+    uint32_t gap = t0 - cr_dbg.t5_last;
+    if (cr_dbg.t5_last && gap > cr_dbg.pk_t5gap) {
+        cr_dbg.pk_t5gap = gap;
+        cr_dbg.pk_t5pc = pc;
+    }
+    cr_dbg.t5_last = t0 | 1u;                            /* (never 0: "no entry yet") */
 }
 /* 73 DEBUG has read the worst cases: the next read's are the stretch from here (the main loop; the ISR may be half
  * way through a half: that half then counts partly, once) */
@@ -328,6 +407,7 @@ static void cr_prof_clear(void)
         cr_dbg.x_sum[k] = 0;
     }
     cr_dbg.pk_all = cr_dbg.pk_n = cr_dbg.late_n = cr_dbg.late_stage = cr_dbg.late_us = cr_dbg.x_busy = 0;
+    cr_dbg.pk_lat = cr_dbg.pk_wall = cr_dbg.pk_t5 = cr_dbg.stale = cr_dbg.pk_t5gap = cr_dbg.pk_t5pc = 0;
 }
 static void cr_prof_window(void)
 {
@@ -349,7 +429,9 @@ static void cr_prof_window(void)
 #define CR_PROFX_START() ((void)0)
 #define CR_PROFX(k) ((void)0)
 #define cr_prof_half() ((void)0)
-#define cr_prof_whole(us, late) ((void)0)
+#define cr_prof_whole(us, late, all, t5, per) ((void)0)
+#define cr_prof_entry(t0, per) 0u
+#define cr_prof_t5(t0, pc) ((void)0)
 #define cr_prof_window() ((void)0)
 #define cr_c1_boot() ((void)0)
 #define cr_c1_stack_used() 0u
