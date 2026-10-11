@@ -485,7 +485,8 @@ Priority, top down, first match wins:
   `CR_Z_FULL`: spec 0 / 0 whatever `mods_down` holds (LOCK's latch stays posted down and is back when the mode is
   left), no voicing rotation, no Key chord; Key Mode on blocks out-of-scale presses as Notes does. KNOB 1 on the view
   steps `cu.octave` (popup "octave"). The KEY layer on pick still owns the keys (`cu_key_pick`), B3 inert there.
-  Step entry's "every key up" ignores the latch in this mode.
+  Step entry's "every key up" ignores the latch in this mode (and a root pressed after one was let go is the next
+  step whatever is latched: docs/LOOPER.md "Step entry").
 - **Single** has three values (`cr_single_t`): Full, Split Oct (`CR_SINGLE_SPLIT`, as before), **Split Bass**
   (`CR_SINGLE_SPLIT_BASS`): a key below the split is a `CR_Z_BASS` voice: a single note on the BASS stream alone at
   the played pitch + transpose + 12 x the bass register, whatever Bass on / off says; every other voice plays the
@@ -787,6 +788,8 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   slot map too); the PLAY menu has two pages on SELECT (Length Rate Quantize Count-in / Level), its keys on GLO alone;
   the Rate (`cr_loop_set_rate`: the loop's own clock, `crl.t`, runs at 1/4 .. 4 of the tempo's, `crl.rt`); Step entry
   with Length Free commits the steps exactly; the loop editor (`cr_loop_ed_*`, `cu_ledit_*`: EDIT in the PLAY menu).
+  Both are a step sequencer (2026-10-12): `CRL_STEP` (a sixteenth) and `CRL_STEPS` (64), a step's length its notes'
+  `dur` (docs/LOOPER.md).
 - **Sounds, the naming screen**: SAVE held 1 s on a used slot asks "delete?" (the slot number huge in red, OCT+
   deletes it through `up_put(k, 0)`, OCT- keeps it); saving over the slot the part's sound came from, unedited,
   renames it (`up_rename`, the stored sound kept); else OCT+ overwrites. Its keys: the typing roots lit (D4..G5,
