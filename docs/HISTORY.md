@@ -595,3 +595,19 @@ the published text still begins "ChoralRoot 0.16 (in progress)": edit that line 
 (2026-10-10)**: https://github.com/Quixotic7/ChoralRootFM1/releases/tag/v0.15 (Options > Dual Core) after **v0.14
 (2026-10-10)**: https://github.com/Quixotic7/ChoralRootFM1/releases/tag/v0.14 (docs/releases/0.14.md, 0.15.md). The dev
 version string is now "ChoralRoot 0.18" (choralroot.c); docs/releases/0.18.md is the next draft (not yet created).
+
+## 2026-10-12
+
+3y14. **0.18 dev (flashed; the user to try).** The effects, round 3 (the user: "the reverb and delay are very good"): the
+audio ISR clears the half's pending bit before the render (a late half used to swallow the next boundary's interrupt and
+the DAC replayed an old half: the pops; `CR_ACK_LATE=1` builds the old order), both effects block-wise (counted ~290 us a
+half for both; not yet read on the unit with sound), SysEx 78 PEAK grown (`stale_halves`, `pk_lag_us`, `irq_gap_*`,
+`key_eng_us`...). The Size glyph's room opens up with Size; the delay's Time is faster clockwise. Keys that play are read
+from inside a redraw (`cr_ui_pump` through `cr_draw_idle`). CZ-1's definitions cached per patch and its lines rendered by
+specialised loops (counted 1980 -> 630 us for eight voices, bit-exact), parts 2 and 3 not mixed, Felucca's FX-hold layer
+out (`FELUCCA_PERFORM 0`), the master and mix loops, `--gc-sections`; RAM 81.6 %. **Step mode and the loop editor are a
+step sequencer** (the user: "more like an Elektron"): a step is a sixteenth of the loop's time, 1..64 steps, Free = the
+steps entered, a new root is a new step also with LOCK latched, the editor opens on any loop, KNOB 2 is the note's length
+and moves nothing, four rows of 16 on the screen. HANDOFF.md was split from this file; 19 merged worktrees were removed
+(their branches remain: the hook blocks branch deletion).
+
