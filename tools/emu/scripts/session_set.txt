@@ -62,13 +62,13 @@ knob KNOB4 -4
 wait 300
 btn OCT-
 wait 300
-btn FX down                   # the FX layer: Delay 1, its time (1/8 -> 1/8.), spread (1:1 -> 3:4), feedback, send
-wait 500
+btn FX down                   # the FX layer: Delay 1, its time (1/8 -> 1/8., anticlockwise: slower), spread (1:1 ->
+wait 500                      # 3:4), feedback, send
 btn FX up
 wait 300
 knob SELECT +3
 wait 300
-knob KNOB1 +2
+knob KNOB1 -2
 wait 200
 knob KNOB2 +1
 wait 200

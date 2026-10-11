@@ -602,7 +602,7 @@ not a different mix.
 
 | Cell | What it does |
 | --- | --- |
-| Time | the time of the left side. Sync on: a note value of the tempo, `1/32` to `1/2`, with dotted (`1/8.`) and triplet (`1/8T`) values. Sync off: 16 to 740 ms |
+| Time | the time of the left side. Sync on: a note value of the tempo, `1/32` to `1/2`, with dotted (`1/8.`) and triplet (`1/8T`) values. Sync off: 16 to 740 ms. Clockwise is faster: a shorter time, the echoes closer together (as the cell's picture shows); anticlockwise is slower |
 | Spread | the right side's time as a part of the left's. Sync on: `1:1`, `3:4`, `2:3`, `1:2` (with Time at 1/4: a dotted 1/8, a triplet, a 1/8 on the right). Sync off: `x1.00` down to `x0.50` |
 | Feedback | how many repeats. Each repeat is a fixed part of the one before, down to silence: turned up, a short echo rings for many seconds and a long one for minutes |
 | Send | the chord part's send into the delay |

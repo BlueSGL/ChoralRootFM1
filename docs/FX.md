@@ -321,7 +321,10 @@ none built (the engine is Melodee's and its samples are checked bit for bit):
 - **Time**: Sync on: a division of the tempo, `1/32 1/16T 1/32. 1/16 1/8T 1/16. 1/8 1/4T 1/8. 1/4 1/2T 1/4. 1/2`
   (`XF_DIV`, 48ths of a quarter note; the tempo is `xf_bpm`, the engine's 20 .. 300 BPM, MIDI clock included). A
   division longer than the line plays at half. Sync off: 16 .. 740 ms, exponential over the knob. Both values are
-  kept; Sync chooses.
+  kept; Sync chooses. **KNOB 1 clockwise is faster** (the owner 2026-10-11): a smaller division, fewer milliseconds;
+  `cr_ui.c`'s knob handler turns the detents round for this cell alone. The stored values (`XP_DDIV`'s index,
+  `XP_DTIME`'s 0 .. 127, larger = longer; the session's tags 10 and 25) and the read-out are as they were, and the
+  echoes glyph still spaces its bars by the time, so they close up clockwise.
 - **Spread** is the right side's time as a part of the left's. Sync on: `1:1`, `3:4`, `2:3`, `1:2`. Sync off: `x1.00`
   .. `x0.50`. The right side is always the shorter one, so Time is the longest time and always fits the line.
 - **Wow**: the time's wobble, a 0.33 Hz sine and an eighth as much of a 3.1 Hz one, 0 .. 2 ms. The SAME on both
@@ -487,7 +490,9 @@ SELECT steps six pages; the picker shows the effect, the label the page (`fx · 
 The seven new glyphs (`cr_draw.c cr_picto`: `CR_G_TAIL PRE CUT WIDTH SPREAD SYNC PING`) are drawn in the manner of the
 old ones and have fixtures (`design/make_fx_mockups.py` states 2, 3, 5b, 12, 13, 14; `tests/cr_draw_test.c`). The
 designer app does not draw them yet: `design/choralroot-fm1-fx-screens.png` is stale for those states. `CR_G_SPRING`
-went with the spring.
+went with the spring. The room (`CR_G_ROOM`, Size's alone) opens up with its value since the owner's first try: the
+whole box grows from 55 % to 100 % of the cell's glyph box, its far wall from 50 % to 42 % of it (it used to keep the
+box and shrink the far wall, which read as a room closing in).
 
 ## How to tune
 

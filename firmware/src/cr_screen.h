@@ -50,7 +50,7 @@ enum { CR_G_NONE, CR_G_KNOB, CR_G_BAR, CR_G_WAVE, CR_G_SAW, CR_G_SQUARE, CR_G_ST
        CR_G_NOISE,                  /* a noise: pct 0..84 WHITE (dense jitter), 85..169 BROWN (a wandering line),
                                      * 170..255 VINYL (sparse spikes on a faint line) */
        /* the parameter pictograms (FORMAT.md "cell glyphs"): flat 2 px strokes in the cell colour */
-       CR_G_ROOM,                   /* a room in one-point perspective: the far wall 70 % (pct 0) .. 22 % (1) of the box */
+       CR_G_ROOM,                   /* a room in one-point perspective that opens up with pct: 55 % (pct 0) .. 100 % (1) of the box */
        CR_G_MOON,                   /* a moon phase: lit 8 % (pct 0, a thin crescent) .. full (1) */
        CR_G_ECHOES,                 /* a bar and its repeats: pct the spacing, pct2 the feedback (each 0.2 + 0.75 pct2 of
                                      * the one before); pct and pct2 both 0: the baseline alone (no grid) */

@@ -294,6 +294,19 @@ has '^fx: effect Reverb 2/2' "$L" && has '^fx: cells Pre-delay Mod Low cut Width
 differ cr_fx_row cr_fx_row_reverb2 "Reverb 1 / Reverb 2 pages differ"
 differ cr_fx_row_delay cr_fx_row_delay2 "Delay 1 / Delay 2 pages differ"
 has '^fx: knob 1 Delay sync 0' "$L" && has '^fx: knob 2 Delay mode 0' "$L" && differ cr_fx_row_delay2 cr_fx_row_delay2_free "Delay 2: Sync to Free (the clock face), Mode to Stereo: $OUT/cr_fx_row_delay2_free.ppm"
+# Time's knob: clockwise is FASTER (the traces of KNOB 1 on Delay 1, in order: synced +3, -3, then free +1; the
+# division's index and the free time's 0..127 are the stored values, larger = longer)
+tm=$(sed -n 's/^fx: knob 1 Delay time \([0-9]*\)$/\1/p' "$L" | tr '\n' ' ')
+[ "$tm" = "3 6 89 " ] && ok "Delay's Time: KNOB 1 clockwise is faster (synced 1/8 -> 1/16 and back: division 6 -> 3 -> 6; free 91 -> 89: fewer ms)" \
+    || bad "Delay's Time: KNOB 1 +3, -3 synced and +1 free gave '$tm' (3 6 89)"
+bar2() {   # bar2 FILE: on row 170 (the bars' feet, above the baseline) of the Time cell, the x where the second bar starts
+    od -An -tu1 -v -j $((15 + 170 * 240 * 3)) -N $((60 * 3)) "$1" | awk '
+        { for (i = 1; i <= NF; i++) v[n++] = $i }
+        END { r = 0; for (x = 0; x < 60; x++) { k = v[3*x] + v[3*x+1] + v[3*x+2] > 90; if (k && !on) r++; if (r == 2) { print x; exit } on = k } print 0 }'
+}
+ws=$(bar2 "$OUT/cr_fx_row_amount.ppm"); wf=$(bar2 "$OUT/cr_fx_row_delay_faster.ppm")
+[ "$wf" -gt 0 ] && [ "$wf" -lt "$ws" ] && ok "the Time cell's echoes: closer together three divisions faster (the second bar at x $ws -> $wf): $OUT/cr_fx_row_delay_faster.ppm" \
+    || bad "the Time cell's echoes at 1/8 and 1/16: the second bar at x $ws -> $wf (nearer expected)"
 differ cr_fx_row_amount cr_fx_row_delay_free "Delay 1 with Sync off: Time and Spread are the free ones (milliseconds, a ratio): $OUT/cr_fx_row_delay_free.ppm"
 has '^expect sound .*: ok' "$L" && has '^expect led D4 on .*: ok' "$L" &&
     ok "MAJ + D4 in the fx layer: the chord sounds, its LEDs are the chord's (the roots play there)" || bad "the roots in the fx layer: $(grep '^expect' "$L")"
