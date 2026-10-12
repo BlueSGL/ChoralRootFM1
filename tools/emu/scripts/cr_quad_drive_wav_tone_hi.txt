@@ -1,0 +1,31 @@
+# ChoralRoot: FM TONE's Drive sounds with FX off, another engine's does not (docs/FX.md "FM TONE's Drive"; test_cr.sh
+# compares the four renders cr_quad_drive_wav_{tone,fm6}_{hi,lo}). FM TONE 01 EP: the Sends page's Drive (KNOB 1) to 127,
+# FX tapped off, then MAJ + D4 held 1.5 s.
+wait 300
+btn GLO down
+wait 100
+knob PRESETS +1
+wait 100
+btn GLO up
+wait 1500
+btn FX down
+wait 500
+btn FX up
+wait 400
+knob KNOB1 +22
+wait 300
+knob KNOB1 -0
+wait 600
+btn FX
+wait 300
+btn OCT-
+wait 300
+dump
+key F3 down
+wait 60
+btn D4 down
+wait 1500
+btn D4 up
+key F3 up
+wait 1500
+quit

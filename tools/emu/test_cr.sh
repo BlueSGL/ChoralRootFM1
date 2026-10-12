@@ -370,9 +370,9 @@ has '^send: part 0 Reverb 64 (cc)' "$L" && has '^send: part 1 Reverb 32 (cc)' "$
     [ "$(fxamt 7)" = "64 45 31 12" ] && [ "$(edc 7)" = "$(edc 6)" ] && has '^sound: part 0 pos 2 FM BELL' "$L" &&
     ok "CC 91 on the chord and the bass channel: the editor reads both (reverb 64, the bass part's 32); PRESETS +1: the sends stay" \
     || bad "CC 91 / a sound change: chord '$(edc 6)' -> '$(edc 7)', bass '$(edb 6)'"
-has '^param: part 0 ENV DRIVE 12 -> 24' "$L" && [ "$(fxamt 8)" = "64 45 31 24" ] && [ "$(fxsnd 8)" = "64 45 31 24" ] &&
-    [ "$(fxamt 9)" = "64 45 31 24" ] && [ "$(fxsnd 9)" = "0 0 0 0" ] && cmp -s "$OUT/cr_fx_sends_tone.ppm" "$OUT/cr_fx_sends_tone_off.ppm" &&
-    ok "FM TONE's AMP Drive is the part's drive: turned there (12 -> 24), the FX amount; with FX off its cell reads the same: $OUT/cr_fx_sends_tone.ppm" \
+has '^param: part 0 ENV DRIVE 0 -> 18' "$L" && [ "$(fxamt 8)" = "64 45 31 12" ] && [ "$(fxsnd 8)" = "64 45 31 18" ] &&
+    [ "$(fxamt 9)" = "64 45 31 12" ] && [ "$(fxsnd 9)" = "0 0 0 18" ] && cmp -s "$OUT/cr_fx_sends_tone.ppm" "$OUT/cr_fx_sends_tone_off.ppm" &&
+    ok "FM TONE's AMP Drive is the sound's (01 EP: 0 -> 18): in the track, the part's drive send (12) untouched; FX off: still in the track, its cell reads the same: $OUT/cr_fx_sends_tone.ppm" \
     || bad "FM TONE's Drive: amt $(fxamt 8) sends $(fxsnd 8); FX off: amt $(fxamt 9) sends $(fxsnd 9)"
 [ "$(fxamt 10)" = "35 45 25 0" ] && [ "$(fxsnd 10)" = "35 45 25 0" ] && [ "$(edc 10)" = "DST 0 0% CHO 45 35% DLY 25 20% REV 35 28%" ] &&
     [ "$(edb 10)" = "DST 0 0% CHO 0 0% DLY 0 0% REV 10 8%" ] && fxl 10 | grep -q 'on 1 .*(Sends 1/1)' &&
@@ -422,6 +422,62 @@ bsr() { grep -a '^  editor fx bass:' "$L" | sed -n "$1p" | sed -n 's/.* REV \([0
     [ "$(cel 33 Reverb)" = "0%" ] && [ "$(bsr 33)" = 0 ] && [ "$(pop 34)" = "50% reverb" ] && [ "$(bsr 34)" = 64 ] && [ "$(fxamt 34)" = "0 51 31 12" ] &&
     ok "the bass part's sends read and step the same in its editor (reverb 10: 8%; a detent: 16, 13%; both ends); CC 91 on its channel: the popup 50%, the chord part's untouched" \
     || bad "the bass part's sends: $(cel 30 Reverb) $(bsr 30), $(cel 31 Reverb) $(bsr 31), $(cel 32 Reverb), $(cel 33 Reverb), popup '$(pop 34)' ($(bsr 34))"
+
+echo "FM TONE's Drive is its preset's and sounds with FX off; another engine's is the part's send (docs/FX.md \"FM TONE's Drive\")"
+run cr_quad_drive
+L="$OUT/cr_quad_drive.log"
+drv() { grep -a '^  drive:' "$L" | sed -n "$1p" | sed 's/^  drive: //'; }
+drc() { drv "$1" | sed 's/ | .*//'; }          # the chord part's half
+drb() { drv "$1" | sed 's/.* | //'; }          # the bass part's
+fxl() { grep -a '^  session fx:' "$L" | sed -n "$1p"; }
+fxsnd() { fxl "$1" | sed -n 's/.* sends \([0-9 ]*\) par.*/\1/p'; }
+rd() { grep -a '^  screen reads:' "$L" | sed -n "$1p" | sed 's/.* cells //'; }
+[ "$(drc 1)" = "chord track 12 send 12 edited 0" ] && [ "$(drc 2)" = "chord FM TONE track 0 send 12 edited 0" ] &&
+    [ "$(drc 3)" = "chord FM TONE track 10 send 12 edited 0" ] && [ "$(drc 4)" = "chord FM TONE track 0 send 12 edited 0" ] &&
+    has '^sound: part 0 pos 10 WOBBLE' "$L" && has '^sound: part 0 pos 9 METAL' "$L" &&
+    ok "two FM TONE presets with different Drive: FM6 with the part's send 12 -> 01 EP: 0 -> 10 WOBBLE: 10 -> 09 METAL: 0 (the part's send, 12, waits)" \
+    || bad "FM TONE's presets' Drive: '$(drc 1)' / '$(drc 2)' / '$(drc 3)' / '$(drc 4)'"
+has '^param: part 0 ENV DRIVE 10 -> 28' "$L" && [ "$(drc 5)" = "chord FM TONE track 28 send 12 edited 1" ] && rd 5 | grep -q '1.2:Drive=28$' &&
+    has '^save: part 0 overwrite slot U01 FM TONE 10 WOBBLE rc 0' "$L" && [ "$(drc 6)" = "chord FM TONE track 28 send 12 edited 0" ] &&
+    [ "$(drc 7)" = "chord FM TONE track 0 send 12 edited 0" ] && [ "$(drc 8)" = "chord FM TONE track 28 send 12 edited 0" ] &&
+    ok "the AMP page's Drive (0..127: 10 -> 28) marks the sound edited; saved (U01, over WOBBLE), METAL: 0, back: 28 again: $OUT/cr_quad_drive_amp.ppm" \
+    || bad "edit, save, away and back: '$(drc 5)' / '$(drc 6)' / '$(drc 7)' / '$(drc 8)' ($(rd 5))"
+[ "$(fxsnd 9)" = "0 0 0 28" ] && [ "$(rd 9)" = "0.0:Drive=22% 0.1:Chorus=off 0.2:Delay=off 0.3:Reverb=off" ] &&
+    has '^fx: knob 1 Drive send 34' "$L" && [ "$(drc 10)" = "chord FM TONE track 34 send 12 edited 1" ] && [ "$(fxsnd 10)" = "0 0 0 34" ] &&
+    fxl 10 | grep -q 'fx: on 0 ' && [ "$(rd 10)" = "0.0:Drive=27% 0.1:Chorus=off 0.2:Delay=off 0.3:Reverb=off" ] &&
+    ok "FX off: FM TONE's Drive stays in the track (28, the three sends 0); the Sends page: Drive 22%, the others 'off'; its KNOB 1: 34, the sound edited, FX still off: $OUT/cr_quad_drive_sends_off.ppm" \
+    || bad "FX off on FM TONE: sends '$(fxsnd 9)' cells '$(rd 9)'; turned: '$(drc 10)' sends '$(fxsnd 10)' cells '$(rd 10)'"
+[ "$(drc 11)" = "chord track 0 send 12 edited 0" ] && [ "$(fxsnd 11)" = "0 0 0 0" ] && [ "$(drc 12)" = "chord track 12 send 12 edited 0" ] &&
+    [ "$(drc 13)" = "chord FM TONE track 28 send 12 edited 0" ] &&
+    ok "the engine switched away (the VA), FX off: its drive is the part's send, gated (0); FX on: 12, as before FM TONE; FM TONE again (WOBBLE as saved): 28" \
+    || bad "away and back: '$(drc 11)' ($(fxsnd 11)) / '$(drc 12)' / '$(drc 13)'"
+has '^param: part 1 FX DST 0 -> 18' "$L" && [ "$(drb 14)" = "bass track 18 send 18 edited 0" ] && [ "$(drb 15)" = "bass FM TONE track 0 send 18 edited 0" ] &&
+    [ "$(drb 16)" = "bass FM TONE track 28 send 18 edited 0" ] && [ "$(drb 17)" = "bass FM TONE track 28 send 18 edited 0" ] && fxl 17 | grep -q 'fx: on 0 ' &&
+    has '^param: part 1 ENV DRIVE 28 -> 34' "$L" && [ "$(drb 18)" = "bass FM TONE track 34 send 18 edited 1" ] && [ "$(drb 19)" = "bass track 18 send 18 edited 0" ] &&
+    ok "the bass part: its send 18 on the VA; FM TONE 01 EP: 0; the saved WOBBLE: 28, with FX off too; its AMP Drive: 34, edited; the VA again: 18: $OUT/cr_quad_drive_bass_amp.ppm" \
+    || bad "the bass part: '$(drb 14)' / '$(drb 15)' / '$(drb 16)' / '$(drb 17)' / '$(drb 18)' / '$(drb 19)'"
+has '^picker: open part 0 WOBBLE' "$L" && [ "$(drc 20)" = "chord track 0 send 12 edited 1" ] && has '^picker: cancel part 0 -> WOBBLE' "$L" &&
+    [ "$(drc 21)" = "chord FM TONE track 28 send 12 edited 0" ] &&
+    ok "the picker's preview from FM TONE (FX off): the VA with the part's gated send (0); OCT-: WOBBLE with its Drive 28 again" \
+    || bad "the picker: '$(drc 20)' / '$(drc 21)'"
+for n in tone_hi tone_lo fm6_hi fm6_lo; do run cr_quad_drive_wav_$n --wav "$OUT/cr_quad_drive_wav_$n.wav"; done
+wr=$(python3 - "$OUT/cr_quad_drive_wav_tone_hi.wav" "$OUT/cr_quad_drive_wav_tone_lo.wav" <<'PY'
+import sys, wave, struct, math
+r = []
+for f in sys.argv[1:]:
+    w = wave.open(f); n = w.getnframes()
+    d = struct.unpack('<%dh' % (n * w.getnchannels()), w.readframes(n))
+    r.append(math.sqrt(sum(x * x for x in d) / max(1, len(d))))
+print("%d %d %d" % (r[0], r[1], 100 * r[0] / max(1.0, r[1])))
+PY
+)
+grep -aq '^  drive: chord FM TONE track 127 ' "$OUT/cr_quad_drive_wav_tone_hi.log" && grep -aq '^  drive: chord FM TONE track 0 ' "$OUT/cr_quad_drive_wav_tone_lo.log" &&
+    [ "${wr##* }" -gt 120 ] && ok "heard, FX off: FM TONE 01 EP with Drive 127 against Drive 0, MAJ + D4: RMS ${wr%% *} against $(echo "$wr" | cut -d' ' -f2) (${wr##* } %): $OUT/cr_quad_drive_wav_tone_hi.wav" \
+    || bad "FM TONE's Drive with FX off is not heard: RMS $wr"
+grep -aq '^  drive: chord track 0 send 127 ' "$OUT/cr_quad_drive_wav_fm6_hi.log" && grep -aq '^  drive: chord track 0 send 0 ' "$OUT/cr_quad_drive_wav_fm6_lo.log" &&
+    cmp -s "$OUT/cr_quad_drive_wav_fm6_hi.wav" "$OUT/cr_quad_drive_wav_fm6_lo.wav" &&
+    ok "heard, FX off: FM6 with the part's drive send at 127 and at 0: the same samples (another engine's drive is gated as before)" \
+    || bad "FM6's drive with FX off: the renders differ"
 
 echo "the perform layer: a knob row (the mode over its four parameters), a turned cell hot, no popup"
 export EMU_UI_LOG=0

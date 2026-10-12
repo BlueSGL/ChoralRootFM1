@@ -559,5 +559,37 @@ fs=$(sx "$OUT/persist_reset_fresh.log" 1 3)
     [ "$(sx "$R3" 1 3)" = "$fs" ] && [ "$(sx "$R3" 1 2)" = current ] &&
     ok "Reset Settings: the session too is a new unit's ($fs), in flash, and what the relaunch comes up on" \
     || bad "reset, the session: fresh $fs, after the reset $(sv "$R2" 8), relaunched $(sv "$R3" 1)"
+
+# ---- FM TONE's Drive and the session (docs/FX.md "FM TONE's Drive"). Run 1 (quad_drive_set.txt, a fresh flash): the
+# chord part's drive send 12, then FM TONE WOBBLE with its AMP Drive turned to 28 (saved to no preset); the bass part's
+# send 18, then FM TONE EP with its Drive turned to 24; FX off; SAVE held. Run 2 (quad_drive_check.txt, a relaunch): as
+# saved; a Drive turned and GLO + SAVE: as saved again; both parts to the VA, FX on: the parts' sends; Reset Settings
+QF=$OUT/persist_qdrive_flash.bin
+Q1=$OUT/persist_qdrive_1.log; Q2=$OUT/persist_qdrive_2.log
+rm -f "$QF" "$Q1" "$Q2"
+"$EMU" --headless --flash "$QF" --script "$S/quad_drive_set.txt" >"$Q1" 2>&1 || bad "FM TONE drive run 1: exit status"
+"$EMU" --headless --flash "$QF" --script "$S/quad_drive_check.txt" >"$Q2" 2>&1 || bad "FM TONE drive run 2: exit status"
+qd() { dl "$1" 'drive:' "$2" | sed 's/^  drive: //'; }
+qf() { dl "$1" 'session fx:' "$2" | sed -n 's/^  session fx: on \([01]\) .* amt \([0-9 ]*\) sends \([0-9 ]*\) par.* 29=\([0-9]*\) .*/on \1 amt \2 sends \3 bass-send \4/p'; }
+want_d="chord FM TONE track 28 send 12 edited 1 | bass FM TONE track 24 send 18 edited 1"
+want_f="on 0 amt 35 45 25 12 sends 0 0 0 28 bass-send 18"
+[ "$(qd "$Q1" 1)" = "$want_d" ] && [ "$(qf "$Q1" 1)" = "$want_f" ] && [ "$(sx "$Q1" 1 1)" = 1 ] && [ "$(sx "$Q1" 1 5)" = 0 ] &&
+    ok "FM TONE drive run 1: both parts on FM TONE, their Drives edited (28, 24) and saved to no preset, FX off, the parts' own sends 12 / 18 behind; SAVE held: the session written" \
+    || bad "FM TONE drive run 1: $(qd "$Q1" 1) / $(qf "$Q1" 1) / $(sv "$Q1" 1)"
+[ "$(qd "$Q2" 1)" = "$want_d" ] && [ "$(qf "$Q2" 1)" = "$want_f" ] && [ "$(sx "$Q2" 1 2)" = current ] &&
+    [ "$(sx "$Q2" 1 3)" = "$(sx "$Q1" 1 3)" ] && [ "$(sx "$Q2" 1 5)" = 0 ] &&
+    [ "$(dl "$Q2" 'session chord:' 1)" = "$(dl "$Q1" 'session chord:' 1)" ] && [ "$(dl "$Q2" 'session bass:' 1)" = "$(dl "$Q1" 'session bass:' 1)" ] &&
+    ok "FM TONE drive run 2 (a relaunch): as it sounded when saved: the Drives 28 / 24 with FX off, both sounds still edited, the session's checksum the stored one ($(sx "$Q2" 1 3))" \
+    || bad "FM TONE drive run 2: $(qd "$Q2" 1) / $(qf "$Q2" 1) / $(sv "$Q2" 1)"
+[ "$(qd "$Q2" 2)" = "chord FM TONE track 40 send 12 edited 1 | bass FM TONE track 24 send 18 edited 1" ] && [ "$(sx "$Q2" 2 5)" = 1 ] &&
+    grep -aq '^save: reverted' "$Q2" && [ "$(qd "$Q2" 3)" = "$want_d" ] && [ "$(qf "$Q2" 3)" = "$want_f" ] && [ "$(sx "$Q2" 3 5)" = 0 ] &&
+    ok "a Drive turned (28 -> 40), GLO + SAVE held: the revert: 28 / 24 with FX off again, nothing pending" \
+    || bad "FM TONE drive, the revert: $(qd "$Q2" 2) -> $(qd "$Q2" 3) / $(qf "$Q2" 3)"
+[ "$(qd "$Q2" 4)" = "chord track 12 send 12 edited 0 | bass track 18 send 18 edited 0" ] &&
+    ok "both parts switched to the VA, FX on: the parts' own drive sends as before FM TONE (12, 18), kept by the session beside the sounds' Drives" \
+    || bad "FM TONE drive, the parts' sends after the relaunch: $(qd "$Q2" 4)"
+[ "$(qd "$Q2" 5)" = "chord track 0 send 0 edited 0 | bass track 0 send 0 edited 0" ] && dl "$Q2" 'session chord:' 5 | grep -q 'FM6 / TINE EP edited 0' && dl "$Q2" 'session bass:' 5 | grep -q 'VA / DEEP SUB edited 0' &&
+    ok "Options > Reset Settings from FM TONE on both parts: a new unit's sounds, no drive anywhere" \
+    || bad "FM TONE drive, the reset: $(qd "$Q2" 5) / $(dl "$Q2" 'session chord:' 5)"
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail

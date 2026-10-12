@@ -39,7 +39,9 @@ static int transport_busy(void)                   /* no flash erase while Felucc
 /* ui.c param_kept: the part's own parameters, which a sound load leaves (the mix, the arp, the sequencer) and, since
  * 0.18 (the owner, 2026-10-12: "I don't think we should save the sends with the presets ... I can switch through the
  * presets and experience the effect on each instrument"), the part's four effect sends (P_DIST P_CHOR P_DLY P_REV):
- * they are the PART's, as its Level and Pan are; what a preset or a saved sound holds in those fields is not loaded */
+ * they are the PART's, as its Level and Pan are; what a preset or a saved sound holds in those fields is not loaded.
+ * One exception, the same day ("Digitone presets should save and load the drive level with them"): an FM TONE sound's
+ * P_DIST is its Drive; the load hands it over beside this rule (cr_ui.c cu_drive_load) */
 static int param_kept(uint32_t i)
 {
     return i == P_LEVEL || i == P_PAN || i == P_MUTE || (i >= P_AMODE && i <= P_SGATE) ||

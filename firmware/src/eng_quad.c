@@ -28,7 +28,9 @@
  * are macros into the patch (the SYN 1 page: ALGO RATIO C RATIO A RATIO B | HARM DTUNE FDBK MIX, QUAD_MAC: RATIO B's
  * macro is B2's step, the fast hand; the deep column is the pair B1 x QUAD_NRCB + B2, 0..360); quad_block picks a macro
  * change up, a deep set writes the macro back, as the VA. AMP's PAN and DRIVE are the part's P_PAN and P_DIST (not in
- * the patch: the deep page reads and writes the track parameters).
+ * the patch: the deep page reads and writes the track parameters). The DRIVE is the sound's all the same: a preset's is
+ * its preset_t FX() drive, a user sound's its record's P_DIST field, and ChoralRoot loads, saves and never gates it
+ * (cr_ui.c "FM TONE'S DRIVE IS ITS PRESET'S").
  *
  * State: the patch, the macros as last seen, the part's LFO phases (the pool, as the VA's); per voice a quad_voice_t
  * (the pool: QUAD_NPART x QUAD_POLY). voice_t.s / .ph are not used (engine_t.keep 0): voice.c's retrigger restore of
@@ -144,7 +146,7 @@ static const quad_algo_t QUAD_ALGO[8] = {
 #define QC_NONE {0, 0, 0, 0, 0, 0, 0}
 #define QUAD_X 0xFFu             /* an empty column */
 #define QUAD_XPAN 0xFEu          /* AMP+: the part's P_PAN */
-#define QUAD_XDIST 0xFDu         /* AMP+: the part's P_DIST (DRIVE) */
+#define QUAD_XDIST 0xFDu         /* AMP+: the part's P_DIST (DRIVE: the sound's while the part is on FM TONE) */
 
 static const eng_page_t QUAD_PAGES[] = {
     {"SYN 1", {QC_ALGO, QC_RC, QC_RA, QC_RB}},                              /* 0  OSC */
@@ -496,7 +498,9 @@ static const uint8_t QUADP_NOISE[] = {SYN(7, QRC(4), QRA(4), 4, 4, 0, 0, 120, -6
     ENVB(0, 60, 0, 0), FLT(HP12, 70, 40, 0), AMP(0, 90, 60, 80, 62), 0xFF};
 
 /* {ALGO, RATIO C, RATIO A, RATIO B (B2's step), HARM, DTUNE, FDBK, MIX}: the macros as the patch has them
- * (cr_quad_test checks); env: the amp envelope (QUAD's own: the platform ADSR is not used) */
+ * (cr_quad_test checks); env: the amp envelope (QUAD's own: the platform ADSR is not used). FX(drive, chorus, delay,
+ * reverb): the DRIVE is loaded with the preset (the AMP page's cell; WOBBLE's 10 is the only one above 0); the three
+ * sends are not: they are the part's (cr_bank.c param_kept) */
 static const preset_t QUAD_PRESETS[] = {
     {"EP", {2, QRC(4), QRA(4), QRC(56), 0, 12, 0, -30}, {0, 96, 40, 62}, 0, 0, FX(0, 30, 20, 40), PAT(6)},
     {"BELL", {2, QRC(4), QRA(14), QRC(24), 0, 20, 0, -10}, {0, 106, 0, 100}, 0, 0, FX(0, 20, 35, 60), PAT(7)},
