@@ -790,3 +790,21 @@ Tests: `tests/cr_draw_test.c` (the bar's widths, none elsewhere, the strip's col
 brightness, the ticks, the dim cursor, the voicing and its fit), `tests/cr_loop_test.c` (the map); the manual's two
 editor pictures regenerated. Not tested: the look on the unit's panel (the plum and the dim strips at its gamma and
 viewing angle), 3/4 and 6/8 grids beyond the shared code, the MONO palette.
+
+**2026-10-13, a send's read-out and its step: one (0.18 dev, built, not flashed).** The orchestrator's note to the
+owner: the same send reads "74" on the Reverb page and "75%" on the Sends page (the Send cells, KNOB 4's popup and the
+CC popups read `v * 99 / 127` and stepped 4; the Sends page and the editor read per cent of 127 and stepped 6). The
+owner: "Let's make the old per effect send parameters also show as 0-100% to match the first send page. I agree."
+And: the editor's sends stay bars. Built (docs/FX.md "One read-out, one step"): `cr_ui.c` `cu_send_pct` (per cent of
+127, rounded: `(v * 100 + 63) / 127`), `cu_send_text` ("46%"), `cu_send_step` (6 a detent, fine 1, clamped) and
+`cu_send_popup` (the number over "%", the meter 0..100) are the only read-out and step of a send: the Sends page, the
+Send cells of Reverb 1 / Chorus / Delay 1 / Drive, KNOB 4 of the main view, the CC 91 / 93 / 94 popups of both parts,
+the editor's FX group of both parts (`cr_edit.c ce_text`, `ce_knob`; its look is unchanged: it already read per cent
+and stepped 6, it now does so through the same functions). No knob had an acceleration, so there was none to match.
+The stored value, `cu_fx_apply`, fx.c and cr_fx.c are untouched. Left alone: FM TONE's AMP `Drive` (the part's drive)
+reads the stored 0..127 as the number cell it is on that screen. Tests: `tools/emu/scripts/cr_fx_send_scale.txt`
+(`test_cr.sh`; the emulator's dump got a `screen reads:` line, the last frame's popup and cells, and its `editor fx`
+lines now print the cell's own text); the old scripts' values moved with the step (`cr_fx_sends`: 57 -> 59, 63 -> 65;
+`cr_fx_global`: 47 -> 53; `test_persist.sh`: the delay send 37 -> 43). The mock-ups' Send cells
+(`design/make_fx_mockups.py`) and the manual's `layer-fx.png` and `layer-fx-delay.png` follow. Not tested: the unit
+(nothing was flashed); CC 93 and 94 (the code path is CC 91's); the popup with the MONO palette.

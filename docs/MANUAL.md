@@ -169,7 +169,7 @@ None of them can be pressed. A turn (of any knob but MASTER) shows its value lar
 | KNOB 1 | the chord's voicing (on the Full keyboard: the octave) | the Single Notes split point |
 | KNOB 2 | the bass register, in octaves | |
 | KNOB 3 | the first parameter of the performance mode | |
-| KNOB 4 | the chord part's send into the selected effect | |
+| KNOB 4 | the chord part's send into the selected effect, in per cent | |
 
 In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four values of the active lane.
 
@@ -563,7 +563,8 @@ On the panel:
 
 - **FX** tap switches the effects on and off: with FX off nothing is sent into them, from the bass neither.
 - **KNOB 4** is the chord part's send into the selected effect (turning it switches the effects on). The selected
-  effect is the one whose page the FX layer showed last; the reverb until you pick another.
+  effect is the one whose page the FX layer showed last; the reverb until you pick another. The screen shows the
+  send in per cent, 0 to 100.
 - Hold FX for the **FX layer**. SELECT steps through seven pages; the name of the page is big, an effect's page
   number is in the small line above it (`fx · on · 1/2`). KNOB 1 to KNOB 4 turn the four cells, a FX tap is still
   on / off, and the root keys play. OCT-, OCT+, HOME or holding FX again closes the layer.
@@ -581,7 +582,10 @@ On the panel:
 **Sends**, the first page, is the chord part's four sends side by side: its drive, and how much of it goes into the
 chorus, the delay and the reverb. They are the same four, in the same order and on the same knobs, as the FX group
 of the sound editor ([The sound editor](#12-the-sound-editor)), and each is the same value as the **Send** cell on
-the effect's own page: change it in one place and the others show it at once. A new FM-1 opens the layer on Sends;
+the effect's own page: change it in one place and the others show it at once. **A send reads the same everywhere**:
+in per cent, from `0%` (nothing) to `100%` (all of it), on the Sends page, in a Send cell, in the sound editor, and in
+the large number KNOB 4 or a MIDI controller puts on the screen. One click of a knob is about 5 % in each of these
+places, and both ends are reached exactly. A new FM-1 opens the layer on Sends;
 after that it opens on the page you left it on. While FX is off the four cells read `off`; turning one switches the
 effects on again. In the sound editor the FX group always shows the values that are kept, FX on or off.
 
@@ -1326,7 +1330,7 @@ playing and a stop when it stops. PANIC sends all notes off (CC 123).
 | notes on the MIDI Bass channel | play the bass sound |
 | program change | the sound's place in its engine's pool (chord: 0 = INIT; bass: 0 = off, 1 = INIT, and so on) |
 | CC 7 | the part's level |
-| CC 91, 93, 94 | the part's reverb, chorus and delay sends (they stay until changed: a program change does not reset them) |
+| CC 91, 93, 94 | the part's reverb, chorus and delay sends (they stay until changed: a program change does not reset them). The screen shows the new send in per cent: controller value 127 is 100 % |
 | CC 64, pitch bend, CC 1, aftertouch | sustain, bend, and the modulation sources of the engines that use them |
 | clock, start, continue, stop | with MIDI Clock set to In: the tempo follows the clock and the loop follows start / continue / stop |
 

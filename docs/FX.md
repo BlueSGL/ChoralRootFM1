@@ -33,8 +33,8 @@ through the presets and experience the effect on each instrument."
 | FX on / off | the settings block (`fx_on`) | no |
 
 - **The FX layer's first page, Sends, is the chord part's four** (Drive, Chorus, Delay, Reverb on KNOB 1..4), and
-  **"Send" on KNOB 4 of an effect's own page is the same send** (0..127; the Sends page reads it in per cent as the
-  editor does, a Send cell 0..99). There is no master wet level: the returns are fixed (`XD_WET`, `XR_WET`), matched
+  **"Send" on KNOB 4 of an effect's own page is the same send** (0..127, read in per cent wherever it is shown:
+  "One read-out, one step" below). There is no master wet level: the returns are fixed (`XD_WET`, `XR_WET`), matched
   to the old effects (below).
 - **The bass part's sends** are set in the bass sound's editor, FX group (BASS held + EDIT, then the FX button), and by
   CC 91 / 93 / 94 on the bass channel. Nothing on the main pages sets them, and nothing was added: the FX layer,
@@ -83,6 +83,40 @@ A send turned in either place switches FX on, as before. The audio is untouched:
 Checked by `tools/emu/scripts/cr_fx_sends.txt` (`test_cr.sh`, "a part's send is one value"): the layer to the editor
 and back, FX off, CC 91 on both channels, a sound change, FM TONE's Drive, the revert. The emulator's dump prints the
 editor's FX group as its cells read it (`editor fx chord:` / `bass:`) beside the track's fields.
+
+### One read-out, one step
+
+The owner, 2026-10-13, to the note that the same send read "74" on the Reverb page and "75%" on the Sends page:
+"Let's make the old per effect send parameters also show as 0-100% to match the first send page." Until then the
+Send cells, KNOB 4's popup and the CC popups read `v * 99 / 127` (0..99) and the two knobs stepped 4, while the Sends
+page and the editor read per cent of 127 and stepped 6. Now three functions of `cr_ui.c` are the only read-out and
+the only step a send has:
+
+| | |
+| --- | --- |
+| `cu_send_pct(v)` | `(v * 100 + 63) / 127`: per cent of the stored 0..127, rounded to the nearest (`params.c`'s `F_PCT`, what the editor always showed). 0 is 0 %, 127 is 100 %, and no other value reads either |
+| `cu_send_text(v, ...)` | that number and `%`: "46%" |
+| `cu_send_step(v, s, fine)` | `v + 6 s`, clamped to 0..127 (about 5 % a detent, the editor's `cp_dstep` for a 0..127 range); fine, the editor's SHIFT: `v + s`. Both ends are reached exactly, from anywhere |
+
+| where | reads | steps |
+| --- | --- | --- |
+| the Sends page's four cells; the Send cell of Reverb 1, Chorus, Delay 1 and Drive (`cu_fx_cells`, the `L_FX` knobs) | `cu_send_text` ("off" with FX off) | `cu_send_step` |
+| KNOB 4 of the main view (`EN_K4`) | the popup `cu_send_popup`: the number big over `%`, the meter 0..100 | `cu_send_step` |
+| CC 91 / 93 / 94, either part | `cu_send_popup` (green the chord part's, orange the bass part's) | the CC's value |
+| the editor's FX group, either part (`cr_edit.c ce_text`, `ce_knob`) | `cu_send_text` under its bar | `cu_send_step` |
+
+None of these knobs has an acceleration (`cr_ui.c`'s knob handlers take the detents as they come): a detent is a
+step in each place. The stored value, `cu_fx_apply` and the audio are untouched. Since the step is 6 of 127 and not
+1 %, successive detents from a new unit's reverb send (35) read 28 %, 32 %, 37 %, 42 % .., and a send that has been
+to an end comes back on another lattice (127, 121, 115).
+
+Left as it is: FM TONE's `Drive` on its AMP page (the part's drive, `ce_send_ref`) is a number cell of that engine's
+screen, beside Level and Pan, and reads the stored 0..127 as every cell there does; it steps with `cu_send_step`.
+
+Checked by `tools/emu/scripts/cr_fx_send_scale.txt` (`test_cr.sh`, "a send's read-out and its step are ONE"): the
+reverb send a detent in each place and read in the next (KNOB 4's popup, the Sends page, Reverb 1's Send cell, the
+editor, CC 91), 0 % and 100 % from each, the Send cells of Chorus, Delay 1 and Drive, the bass part's in its editor
+and by CC. The dump's `screen reads:` line prints the last frame's popup and cells, as drawn.
 
 ## What the first build got wrong
 
@@ -538,8 +572,9 @@ each FX, so I think when you enter the FX menu from main the first page should a
 convenience") is the sound editor's FX group on the layer's knob row: the same four, in its order, under its names,
 on its knobs, with its step (6 a detent) and its read-out (per cent). It edits the **chord part's** sends, as every
 Send cell of the layer does; the bass part's stay in the bass sound's editor. The Send cells on KNOB 4 of Reverb 1,
-Chorus, Delay 1 and Drive are still there (the same values, 4 a detent, shown 0..99), and KNOB 4 of the main view is
-still the send of the effect last picked (Reverb while the layer has only shown Sends). While FX is off the four
+Chorus, Delay 1 and Drive are still there (the same values, read and stepped as on the Sends page: "One read-out, one
+step" above), and KNOB 4 of the main view is still the send of the effect last picked (Reverb while the layer has
+only shown Sends). While FX is off the four
 read "off", as a Send cell; turning one switches FX on. Fixture: `design/make_fx_mockups.py` state 15.
 
 The seven new glyphs (`cr_draw.c cr_picto`: `CR_G_TAIL PRE CUT WIDTH SPREAD SYNC PING`) are drawn in the manner of the

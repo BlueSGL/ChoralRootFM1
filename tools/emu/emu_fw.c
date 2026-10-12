@@ -480,14 +480,26 @@ void emu_fw_dump(void)
             for (c = 0; c < 4u; c++) {
                 const track_t *t = &trk[k ? CR_PART_BASS : CR_PART_CHORD];
                 int32_t v = 0;
-                const param_desc_t *d = ce_param(t, ce_r(CE_R_TRK, CP_PAGES[CP_FX].id[c], 0), &v);
+                ce_ref_t r = ce_r(CE_R_TRK, CP_PAGES[CP_FX].id[c], 0);
+                const param_desc_t *d = ce_param(t, r, &v);
                 char b[16];
-                cp_value(d, v, b, sizeof b);
+                ce_text(t, r, d, v, b, sizeof b);  /* (the cell's own text: cr_ui.c cu_send_text) */
                 printf(" %s %d %s", d->label, (int)v, b);
             }
             printf(" track");
             for (c = 0; c < 4u; c++)
                 printf(" %d", (int)trk[k ? CR_PART_BASS : CR_PART_CHORD].p[CP_PAGES[CP_FX].id[c]]);
+            printf("\n");
+        }
+        {   /* what the last frame's screen READS (docs/FX.md "One read-out": a send reads the same wherever it is
+             * shown): a popup's value, its unit line and its label, and the cells that are on, row by row */
+            const cr_screen_t *sc = &cu_scr;
+            unsigned r, c;
+            printf("  screen reads: value '%s' sub '%s' label '%s' cells", sc->value, sc->sub, sc->label);
+            for (r = 0; r < CR_ED_ROWS; r++)
+                for (c = 0; c < 4u; c++)
+                    if (sc->cell[r][c].flags & CR_CF_ON)
+                        printf(" %u.%u:%s=%s", r, c, sc->cell[r][c].label, sc->cell[r][c].value);
             printf("\n");
         }
         for (k = 0; k < 2u; k++)
