@@ -435,19 +435,25 @@ static const char *const CU_DIV[CR_DIV_COUNT] = {"2/1", "1/1", "1/2", "1/2T", "1
                                                  "1/16T", "1/32", "1/32T"};
 static const char *const CU_DIR[6] = {"up", "down", "up-down", "down-up", "as played", "random"};
 
-/* FX (docs/FX.md): four effects on six pages (SELECT: Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive). A SOUND
- * carries its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST) and nothing else of the effects: cs.fx_amt[] are the
- * chord part's, the "Send" cell on KNOB 4 of an effect's first page (every sound load replaces them with the sound's
- * own; the bass part keeps its sound's). The effects' own parameters are GLOBAL: the delay's and the reverb's are
- * cr_fx.c's xfp[], the chorus's song.g; the session keeps them (cr_settings.c CSS_FXG) and no sound load touches them */
+/* FX (docs/FX.md): four effects on seven pages (SELECT: Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive).
+ * A PART has its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST), no sound load touches them: the chord part's are
+ * cs.fx_amt[] (cu_send / cu_send_set below: the ONE value the Sends page, the "Send" cell on KNOB 4 of an effect's
+ * first page, the sound editor's FX group, KNOB 4 of the main view and CC 91 / 93 / 94 read and write), the bass
+ * part's its track's. The effects' own parameters are GLOBAL: the delay's and the reverb's are cr_fx.c's xfp[], the
+ * chorus's song.g; the session keeps them (cr_settings.c CSS_FXG) and no sound load touches them */
 #define CU_NFX 4u                         /* the effects (cs.fx_sel, cs.fx_amt) */
-#define CU_NFXP 6u                        /* SELECT's pages */
+#define CU_NFXP 7u                        /* SELECT's pages */
+#define CU_FXPG_SENDS 2u                  /* cs.fx_page: the Sends page (0, 1: cs.fx_sel's first and second page) */
 /* a cell: an xfp id (cr_fx.c XP_*), FC_G + a song.g id, or one of these */
-enum { FC_NONE = -1, FC_SEND = -2, FC_TIME = -3, FC_SPREAD = -4, FC_G = 64 };   /* TIME, SPREAD: by Sync, the free or
+enum { FC_NONE = -1, FC_SEND = -2, FC_TIME = -3, FC_SPREAD = -4, FC_G = 64,     /* TIME, SPREAD: by Sync, the free or
                                                                                  * the synced parameter */
+       FC_SND0 = -8 };                    /* FC_SND0 - e: the chord part's send into effect e (CU_FX), the Sends page's */
 static const struct { const char *name; uint8_t send; } CU_FX[CU_NFX] = {
     {"Reverb", P_REV}, {"Chorus", P_CHOR}, {"Delay", P_DLY}, {"Drive", P_DIST}};
 static const struct { uint8_t fx, page, of; int8_t c[4]; const char *label[4]; } CU_FXP[CU_NFXP] = {
+    /* the Sends page (0.18, the owner 2026-10-12): the four of the sound editor's FX group, in its order, under its
+     * names, on its knobs (cr_pages.c CP_PAGES[CP_FX]: Drive, Chorus, Delay, Reverb) */
+    {0, CU_FXPG_SENDS, 1, {FC_SND0 - 3, FC_SND0 - 1, FC_SND0 - 2, FC_SND0 - 0}, {"Drive", "Chorus", "Delay", "Reverb"}},
     {0, 0, 2, {XP_RSIZE, XP_RDAMP, XP_RDECAY, FC_SEND}, {"Size", "Damp", "Decay", "Send"}},
     {0, 1, 2, {XP_RPRE, XP_RMOD, XP_RLOW, XP_RWIDTH}, {"Pre-delay", "Mod", "Low cut", "Width"}},
     {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, FC_NONE, FC_SEND}, {"Rate", "Depth", "", "Send"}},
@@ -472,7 +478,9 @@ static struct {
     uint16_t bpm;
     int16_t par[CR_PM_COUNT][CR_P_COUNT];
     uint8_t fx_on, fx_sel, fx_amt[CU_NFX];
-    uint8_t fx_page;                      /* the effect's page in the FX layer (0, or 1: Reverb 2, Delay 2) */
+    uint8_t fx_page;                      /* the effect's page in the FX layer (0, or 1: Reverb 2, Delay 2), or
+                                           * CU_FXPG_SENDS: the Sends page (cs.fx_sel stays the effect last picked:
+                                           * KNOB 4 of the main view is still its send) */
     uint16_t sound, bass_sound;           /* pool positions: PRESETS (the chord part's), ALGORITHM (0 = OFF, pos + 1) */
     uint8_t pool_pos[2][NENG_SHOWN];      /* per part, per engine (ENGINE_ORDER rank): the pool position last played
                                            * (OPT + PRESETS lands there; Settings v6) */
@@ -574,6 +582,38 @@ static void cu_sends_default(void)
 }
 static void cu_sends_to_fx(void) { cu_fx_apply(); }   /* (after a load of part 0; until 0.18 its own sends became the
                                                        * FX amounts here: now the part's stay) */
+/* A PART'S SEND, ONE VALUE (the owner, 2026-10-12: the editor's FX group did not show the chord part's sends as the
+ * FX layer had left them "until I turn them"). The chord part's is cs.fx_amt[]; its track's P_DIST .. P_REV are only
+ * what the audio reads, written by cu_fx_apply alone (the amounts, or 0 with FX off): nothing of the UI reads a send
+ * from there or writes one there. The bass part's is its track's (FX off closes its sends in fx.c, the values stay).
+ * id: P_DIST, P_CHOR, P_DLY or P_REV */
+static int32_t cu_send_ix(uint32_t id)            /* the effect (CU_FX) a send parameter feeds; -1: not a send */
+{
+    uint32_t i;
+    for (i = 0; i < CU_NFX; i++)
+        if (CU_FX[i].send == id)
+            return (int32_t)i;
+    return -1;
+}
+static int32_t cu_send(uint32_t part, uint32_t id)
+{
+    int32_t i = cu_send_ix(id);
+    return !part && i >= 0 ? (int32_t)cs.fx_amt[i] : trk[part ? CR_PART_BASS : CR_PART_CHORD].p[id];
+}
+static void cu_send_set(uint32_t part, uint32_t id, int32_t v)   /* (the chord part's: FX on, as every send turned) */
+{
+    int32_t i = cu_send_ix(id);
+    v = v < 0 ? 0 : v > 127 ? 127 : v;
+    if (!part && i >= 0) {
+        cs.fx_amt[i] = (uint8_t)v;
+        cs.fx_on = 1;
+        cu_fx_apply();
+    } else {
+        fm1_irq_off();
+        trk[part ? CR_PART_BASS : CR_PART_CHORD].p[id] = (int16_t)v;
+        fm1_irq_on();
+    }
+}
 
 /* the layers' knob row (cr_screen.h CR_K_KNOBROW: FX, PERF, BASS): the cell just turned stays hot CU_HOT_MS (the
  * editor's CE_HOT_MS) instead of a popup; a layer opened or another item picked clears it */
@@ -598,8 +638,10 @@ static void cu_hot_row(cr_screen_t *s, uint32_t l)   /* the row's hot cell, if l
 /* the page of the FX layer: cs.fx_sel's, cs.fx_page */
 static uint32_t cu_fx_pg(void)
 {
-    uint32_t i, first = 0;
-    for (i = 0; i < CU_NFXP; i++)
+    uint32_t i, first = 1;
+    if (cs.fx_page == CU_FXPG_SENDS)
+        return 0;
+    for (i = 1; i < CU_NFXP; i++)
         if (CU_FXP[i].fx == cs.fx_sel % CU_NFX) {
             if (CU_FXP[i].page == cs.fx_page)
                 return i;
@@ -712,25 +754,36 @@ static void cu_fx_glyph(int32_t c0, cr_cell_t *c)
     default: break;
     }
 }
+/* the effect a cell of page pg sends into: its "Send" cell's, a cell of the Sends page's; -1: another cell */
+static int32_t cu_fx_send_of(uint32_t pg, int32_t c0)
+{
+    return c0 == FC_SEND ? (int32_t)CU_FXP[pg].fx : c0 <= FC_SND0 && c0 > FC_SND0 - (int32_t)CU_NFX ? FC_SND0 - c0 : -1;
+}
 /* the fx layer's cells: the page's four (a missing one: no cell, a dim dash); "Send" is the chord part's send into
- * the effect (Drive: its amount, the clip glyph; the others the dry / wet squares; "off" while FX is off) */
+ * the effect (Drive: its amount, the clip glyph; the others the dry / wet squares; "off" while FX is off). The Sends
+ * page: the four sends, each read as the sound editor's FX group reads it (cr_pages.c cp_value: "46%") */
 static void cu_fx_cells(cr_screen_t *s)
 {
-    uint32_t pg = cu_fx_pg(), e = CU_FXP[pg].fx, k;
+    uint32_t pg = cu_fx_pg(), k;
     for (k = 0; k < 4u; k++) {
         cr_cell_t *c = &s->cell[0][k];
-        int32_t c0 = CU_FXP[pg].c[k];
+        int32_t c0 = CU_FXP[pg].c[k], e = cu_fx_send_of(pg, c0);
         if (c0 == FC_NONE)
             continue;
         c->flags = CR_CF_ON;
         cu_cpy(c->label, CU_FXP[pg].label[k], sizeof c->label);
-        if (c0 == FC_SEND) {
-            c->glyph = CU_FX[e].send == P_DIST ? CR_G_CLIP : CR_G_MIX;
-            if (cs.fx_on) {
-                cu_2d(c->value, cs.fx_amt[e] * 99u / 127u, sizeof c->value);
-                c->pct = (uint8_t)(cs.fx_amt[e] * 255u / 127u);
-            } else {
+        if (e >= 0) {
+            uint32_t id = CU_FX[e].send;
+            int32_t v = cu_send(0, id);
+            c->glyph = id == P_DIST ? CR_G_CLIP : CR_G_MIX;
+            if (!cs.fx_on) {
                 cu_cpy(c->value, "off", sizeof c->value);
+            } else {
+                if (c0 == FC_SEND)
+                    cu_2d(c->value, (uint32_t)v * 99u / 127u, sizeof c->value);
+                else
+                    cp_value(cp_desc(&trk[CR_PART_CHORD], id), v, c->value, sizeof c->value);
+                c->pct = (uint8_t)((uint32_t)v * 255u / 127u);
             }
             continue;
         }
@@ -2382,6 +2435,7 @@ static void cu_pick_end(int keep)
             cs.fx_on = cpk.fx_on;
             for (i = 0; i < CU_NFX; i++)
                 cs.fx_amt[i] = cpk.fx_amt[i];
+            cu_fx_apply();                        /* (the track's: the amounts' again, whatever the snapshot held) */
         }
         psnd[cpk.part] = cpk.snd;                 /* (its name, edited, its place in the pool) */
         cu_pos_sync();
@@ -2620,8 +2674,12 @@ static void cu_layer_pick(uint32_t l, int32_t i)   /* a white root / SELECT: the
         if (i < (int32_t)CU_NFXP) {
             if ((int32_t)cu_fx_pg() != i)
                 cu_hot.knob = 0;                  /* another page: its row has no hot cell */
-            cs.fx_sel = CU_FXP[i].fx;
             cs.fx_page = CU_FXP[i].page;
+            if (cs.fx_page == CU_FXPG_SENDS) {    /* (the Sends page: cs.fx_sel stays, KNOB 4 of the main view's) */
+                cu_trace("fx: sends\n");
+                break;
+            }
+            cs.fx_sel = CU_FXP[i].fx;
             cu_trace("fx: effect %s %u/%u\n", CU_FX[cs.fx_sel].name, (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[i].of);
         }
         break;
@@ -2812,22 +2870,23 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
         break;
     case L_FX: {
         uint32_t pg = cu_fx_pg();
-        int32_t c0 = CU_FXP[pg].c[knob & 3u], id = cu_fx_id(c0), lo, hi;
+        int32_t c0 = CU_FXP[pg].c[knob & 3u], id, lo, hi, e = cu_fx_send_of(pg, c0);
         int16_t *q;
         char lb[14];
         cu_cpy(lb, CU_FXP[pg].label[knob & 3u], sizeof lb);
         lb[0] = (char)(lb[0] | 0x20);
         if (c0 == FC_NONE)
             break;
-        if (c0 == FC_SEND) {
-            v = cs.fx_amt[cs.fx_sel] + s * 4;
-            cs.fx_amt[cs.fx_sel] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
-            cs.fx_on = 1;
-            cu_fx_apply();
+        if (e >= 0) {                             /* a send: an effect's "Send" cell (4 a detent), a cell of the Sends
+                                                   * page (the sound editor's step for the same knob: cp_dstep) */
+            uint32_t sid = CU_FX[e].send;
+            v = cu_send(0, sid);
+            cu_send_set(0, sid, c0 == FC_SEND ? v + s * 4 : cp_dstep(cp_desc(&trk[CR_PART_CHORD], sid), v, s, 0));
             cu_hot_set(L_FX, knob);               /* (no popup: the knob row is the readout, its cell turns hot) */
-            cu_trace("fx: knob %u %s send %u\n", (unsigned)knob + 1u, CU_FX[cs.fx_sel].name, (unsigned)cs.fx_amt[cs.fx_sel]);
+            cu_trace("fx: knob %u %s send %u\n", (unsigned)knob + 1u, CU_FX[e].name, (unsigned)cu_send(0, sid));
             break;
         }
+        id = cu_fx_id(c0);
         if (id >= FC_G) {                         /* the chorus's (song.g) */
             q = &song.g[id - FC_G];
             lo = GP[id - FC_G].min;
@@ -3484,10 +3543,7 @@ static void cu_knob(uint32_t role, int32_t s)
         cu_param_turn(cu_perf_mode(), CU_PERF_KNOB[cu_perf_mode()][0], s, 1);
         break;
     case EN_K4:
-        v = cs.fx_amt[cs.fx_sel] + s * 4;
-        cs.fx_amt[cs.fx_sel] = (uint8_t)(v < 0 ? 0 : v > 127 ? 127 : v);
-        cs.fx_on = 1;
-        cu_fx_apply();
+        cu_send_set(0, CU_FX[cs.fx_sel].send, cu_send(0, CU_FX[cs.fx_sel].send) + s * 4);
         {
             char lb[24];
             cu_cpy(lb, CU_FX[cs.fx_sel].name, sizeof lb);
@@ -4880,7 +4936,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
 {
     static const char *const PERF_ITEMS[7] = {"Strum", "Strum 2 Octaves", "Slop", "Arpeggiate", "Arp 2 Octaves",
                                               "Pattern", "Harp"};
-    static const char *const FX_ITEMS[CU_NFX] = {"Reverb", "Chorus", "Delay", "Drive"};
+    static const char *const FX_ITEMS[CU_NFX + 1u] = {"Sends", "Reverb", "Chorus", "Delay", "Drive"};
     const char *eng[NENGINES];
     uint32_t k, n;
     switch (l) {
@@ -4930,8 +4986,8 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
     }
     case L_FX: {                                   /* the knob row: the effect over KNOB 1..4's cells */
         static char seen[48];                      /* (the trace: the row's labels when they change) */
-        cu_picker(s, FX_ITEMS, CU_NFX, cs.fx_sel, CR_COL_GREEN, cs.fx_on ? "fx \267 on" : "fx \267 off",
-                  "SELECT: effect \267 FX: on/off \267 OCT-: back");
+        cu_picker(s, FX_ITEMS, CU_NFX + 1u, cs.fx_page == CU_FXPG_SENDS ? 0u : cs.fx_sel % CU_NFX + 1u, CR_COL_GREEN,
+                  cs.fx_on ? "fx \267 on" : "fx \267 off", "SELECT: effect \267 FX: on/off \267 OCT-: back");
         if (CU_FXP[cu_fx_pg()].of > 1u)            /* the page, quietly (as the KEY layer's): SELECT steps through both */
             cu_cat(s->label, cs.fx_page ? " \267 2/2" : " \267 1/2", sizeof s->label);
         s->kind = CR_K_KNOBROW;
@@ -5670,15 +5726,7 @@ static void cu_midi_poll(void)
             for (i = 0; i < CU_NFX; i++)
                 if (CU_FX[i].send == id)
                     break;
-            if (!p && i < CU_NFX) {               /* part 0's sends are the FX amounts */
-                cs.fx_amt[i] = a.v;
-                cs.fx_on = 1;
-                cu_fx_apply();
-            } else {
-                fm1_irq_off();
-                trk[p].p[id] = (int16_t)a.v;
-                fm1_irq_on();
-            }
+            cu_send_set(a.part ? 1u : 0u, id, a.v);   /* (part 0's sends are the FX amounts: cu_send_set) */
             {
                 char lb[24];
                 cu_cpy(lb, i < CU_NFX ? CU_FX[i].name : "send", sizeof lb);
@@ -5824,6 +5872,7 @@ static void cr_ui_init(void)
     cs.ch[CR_STREAM_BASS] = 2;
     cs.ch[CR_STREAM_RAW] = 0;                     /* (Orchid: raw chord off; Options turns it on, channel 3) */
     cs.fx_on = 1;
+    cs.fx_page = CU_FXPG_SENDS;                   /* the FX layer opens on its first page, the Sends */
     cs.view = V_CHORD;
     cu.armed = NB;
     cu.opt_sel = O_STYLE;

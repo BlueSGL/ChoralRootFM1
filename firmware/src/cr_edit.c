@@ -572,12 +572,27 @@ static void ce_view(const track_t *t, uint32_t p, ce_view_t *v)
         v->active = 0;
 }
 
+/* a ref that is one of the part's sends (cr_ui.c cu_send: P_DIST .. P_REV), -1: not one. The FX group's four, and a
+ * deep column an engine maps onto the part's parameter: FM TONE's AMP+ DRIVE is P_DIST (eng_quad.c QUAD_XDIST) */
+static int32_t ce_send_ref(const track_t *t, ce_ref_t r)
+{
+    if (r.k == CE_R_TRK && r.a >= P_DIST && r.a <= P_REV)
+        return (int32_t)r.a;
+#if FELUCCA_QUAD
+    if (r.k == CE_R_DEEP && eng_idx(t->eng_req) == ENGI_QUAD && quad_index(r.a, r.b & 3u) == QUAD_XDIST)
+        return P_DIST;
+#endif
+    (void)t;
+    return -1;
+}
+
 /* the parameter of a ref: its descriptor and value (0: none) */
 static const param_desc_t *ce_param(const track_t *t, ce_ref_t r, int32_t *v)
 {
     const eng_deep_t *d = cp_deep(t);
+    int32_t snd = ce_send_ref(t, r);              /* a send: the part's one value, not the track's copy */
     if (r.k == CE_R_DEEP && d && r.a < d->npages && d->pages[r.a].col[r.b & 3u].label) {
-        *v = d->get(t, r.a, r.b & 3u);
+        *v = snd >= 0 ? cu_send(t == &trk[CR_PART_BASS], (uint32_t)snd) : d->get(t, r.a, r.b & 3u);
         if (d->desc) {                                          /* a mode-dependent label / names (the VA's MORPH) */
             const param_desc_t *m = d->desc(t, r.a, r.b & 3u);
             if (m)
@@ -586,7 +601,7 @@ static const param_desc_t *ce_param(const track_t *t, ce_ref_t r, int32_t *v)
         return &d->pages[r.a].col[r.b & 3u];
     }
     if (r.k == CE_R_TRK && r.a < P_COUNT) {
-        *v = t->p[r.a];
+        *v = snd >= 0 ? cu_send(t == &trk[CR_PART_BASS], (uint32_t)snd) : t->p[r.a];
         return cp_desc(t, r.a);
     }
     return 0;
@@ -1185,7 +1200,7 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
     cx.hot_r = (uint8_t)(vw.active + 1u);
     cx.hot_c = (uint8_t)(knob & 3u);
     cx.hot_t0 = cu_now();
-    if (r.k == CE_R_DEEP) {
+    if (r.k == CE_R_DEEP && ce_send_ref(t, r) < 0) {
         const eng_deep_t *dd = cp_deep(t);
         if (v != v0) {
             dd->set(t, r.a, r.b, v);
@@ -1197,18 +1212,19 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
                  dd->pages[r.a].title, (unsigned)r.b, d->label, (int)v0, (int)v, b, psnd[ce.part].edited ? " edited" : "");
         return;
     }
+    if ((i = (uint32_t)ce_send_ref(t, r)) != (uint32_t)-1) {   /* a send: the part's one value (cr_ui.c cu_send_set:
+                                                    * the chord part's are the FX amounts). The part's since 0.18, as
+                                                    * the MIX group's Level and Pan: not an edit of the sound */
+        cu_send_set(ce.part, i, v);
+        cp_value(d, v, b, sizeof b);
+        cu_trace("param: part %u %s %s %d -> %d (%s)\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],
+                 d->label, (int)v0, (int)v, b);
+        return;
+    }
     fm1_irq_off();
     t->p[r.a] = (int16_t)v;
     fm1_irq_on();
-    if (!ce.part)                                  /* part 0's sends are the FX amounts */
-        for (i = 0; i < CU_NFX; i++)
-            if (CU_FX[i].send == r.a) {
-                cs.fx_amt[i] = (uint8_t)v;
-                cs.fx_on = 1;
-                cu_fx_apply();
-            }
-    if (v != v0 && !(r.a >= P_DIST && r.a <= P_REV))   /* (the FX group's four are the part's sends since 0.18, as the
-                                                        * MIX group's Level and Pan: not an edit of the sound) */
+    if (v != v0)
         cu_edited(ce.part);
     cp_value(d, v, b, sizeof b);
     cu_trace("param: part %u %s %s %d -> %d (%s)\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],

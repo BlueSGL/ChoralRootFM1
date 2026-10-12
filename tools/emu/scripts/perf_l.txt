@@ -4,10 +4,12 @@
 wait 300
 knob PRESETS +4               # FM6 05 FM PAD (first: a sound load brings its own sends)
 wait 200
-btn FX down                   # the FX layer: Reverb 1
+btn FX down                   # the FX layer (it opens on Sends): Reverb 1
 wait 500
 btn FX up
-wait 300
+wait 150
+knob SELECT +1
+wait 150
 knob KNOB4 +32                # the reverb's send to 127
 wait 100
 knob KNOB3 +20                # Decay 52 -> 92: 13 s

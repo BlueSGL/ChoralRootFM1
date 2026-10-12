@@ -270,7 +270,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | the bass behaviour, the bass register | yes | yes | block `bass_mode`, `bass_voicing` |
 | the bass level (the BASS layer's Level, OPT + ALGORITHM), each part's Level and Pan (MIX) | no ("bass level 102 came back as 92") | **yes** | session `part[k].p[P_LEVEL]`, `p[P_PAN]`: the part's own parameters travel with its record |
 | FX on / off | yes | yes | block `fx_on` |
-| the page picked in the FX layer (Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive) | no | **yes** | session `fx.sel` (an effect tag; the second pages have their own) |
+| the page picked in the FX layer (Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive) | no | **yes** | session `fx.sel` (an effect tag; the second pages and Sends have their own) |
 | the effects' own parameters, GLOBAL (the reverb's 7 and the delay's 9: [FX.md](FX.md); the chorus's rate and depth) | no | **yes** | session `fx.par[]` (tag, value) |
 | the chord part's four sends (the FX layer's "Send" cells, KNOB 4) | no (the preset's again) | **yes** | session `fx.amt[]`. The sends are the PART's since 0.18: no sound load touches them (MANUAL section 8) |
 | the bass part's four sends (its editor's FX group, CC 91 / 93 / 94 on the bass channel) | no (the bass sound's again) | **yes** | session `fx.par[]`, tags 26..29 |
@@ -313,7 +313,8 @@ and no other firmware and no tool reads this object.
 
 **The FX sub-block is versioned on its own** (`CSS_FX_VERSION`, 1) and stores by TAG, never by position, so that the
 delay and the reverb can change their parameters without a new record: `sel` is an effect tag (`CSS_FXE_REVERB` 0,
-`CHORUS` 1, `DELAY` 2, `DRIVE` 3, and for the FX layer's second pages `REVERB2` 4, `DELAY2` 5; room for 8), `amt[tag]`
+`CHORUS` 1, `DELAY` 2, `DRIVE` 3, and for the FX layer's second pages `REVERB2` 4, `DELAY2` 5, for its Sends page `SENDS` 6: `sel` only, a reader
+that does not know a tag keeps its default page; room for 8), `amt[tag]`
 that effect's send from the chord part (0..127, `CSS_FX_NONE` = not stored: the sound's own send), and `par[]` up to
 24 pairs of a parameter tag and its value. The rules, for whoever reworks an effect:
 

@@ -740,8 +740,8 @@ static void crs_capture(cr_settings_t *s)
  * the delay and the reverb are cr_fx.c's (0.18), its xfp[] (x: 1). A reworked effect: its new parameters get new
  * CSS_FXP_* tags and a line here; a parameter gone loses its line (its tag stays retired) */
 static const uint8_t CSS_FXE[CU_NFX] = {CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE};
-static const uint8_t CSS_FXS[CU_NFXP] = {CSS_FXE_REVERB, CSS_FXE_REVERB2, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DELAY2,
-                                         CSS_FXE_DRIVE};
+static const uint8_t CSS_FXS[CU_NFXP] = {CSS_FXE_SENDS, CSS_FXE_REVERB, CSS_FXE_REVERB2, CSS_FXE_CHORUS, CSS_FXE_DELAY,
+                                         CSS_FXE_DELAY2, CSS_FXE_DRIVE};   /* CU_FXP's order */
 static const struct { uint8_t tag, x, id; } CSS_FXG[] = {      /* x: 0 song.g, 1 xfp[], 2 the bass part's p[] */
     {CSS_FXP_CRATE, 0, G_CRATE}, {CSS_FXP_CDEPTH, 0, G_CDEPTH},
     {CSS_FXP_BS_REV, 2, P_REV}, {CSS_FXP_BS_CHO, 2, P_CHOR}, {CSS_FXP_BS_DLY, 2, P_DLY}, {CSS_FXP_BS_DRIVE, 2, P_DIST},
@@ -753,7 +753,7 @@ static const struct { uint8_t tag, x, id; } CSS_FXG[] = {      /* x: 0 song.g, 1
     {CSS_FXP_XR_WIDTH, 1, XP_RWIDTH}};
 _Static_assert(NELEM(CSS_FXG) <= CSS_NFXP, "the FX block holds every global parameter");
 _Static_assert(CSS_FXP_DCOLOR == 8 && CSS_FXP_XD_TIME == 9 && CSS_FXP_XR_SIZE == 18 && CSS_FXP_XR_WIDTH == 24 &&
-               CSS_FXP_XD_TIME2 == 25 && CSS_FXP_BS_REV == 26 && CSS_FXP_BS_DRIVE == 29 && CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5, "the session's FX tags are never renumbered");
+               CSS_FXP_XD_TIME2 == 25 && CSS_FXP_BS_REV == 26 && CSS_FXP_BS_DRIVE == 29 && CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5 && CSS_FXE_SENDS == 6, "the session's FX tags are never renumbered");
 static int16_t *css_fxg_p(uint32_t i)
 {
     return CSS_FXG[i].x == 2u ? &trk[CR_PART_BASS].p[CSS_FXG[i].id] : CSS_FXG[i].x ? &xfp[CSS_FXG[i].id] : &song.g[CSS_FXG[i].id];
@@ -872,8 +872,10 @@ static void css_apply(const cr_session_t *x)
         if (cr_session_fx_get(x, CSS_FXG[i].tag, &v) && css_fxg_ok(i, v))
             *css_fxg_p(i) = (int16_t)v;
     for (i = 0; i < CU_NFXP; i++)
-        if (CSS_FXS[i] == x->fx.sel) {
-            cs.fx_sel = CU_FXP[i].fx;
+        if (CSS_FXS[i] == x->fx.sel) {             /* (a tag this firmware does not know: the page stays. A record
+                                                    * from before the Sends page opens on the effect's page it names) */
+            if (CU_FXP[i].page != CU_FXPG_SENDS)
+                cs.fx_sel = CU_FXP[i].fx;
             cs.fx_page = CU_FXP[i].page;
         }
     for (i = 0; i < CU_NFX; i++)                   /* (the chord part's sends; the bass part's: CSS_FXG above, over what
@@ -1159,7 +1161,8 @@ static void crs_reinit(void)
         for (i = 0; i < P_E0; i++)
             trk[k ? CR_PART_BASS : CR_PART_CHORD].p[i] = TP[i].def;
     css_fxg_defaults();
-    cs.fx_sel = cs.fx_page = 0;
+    cs.fx_sel = 0;
+    cs.fx_page = CU_FXPG_SENDS;                    /* (the FX layer's first page: cr_ui_init's) */
     trk[CR_PART_CHORD].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);   /* (cr_ui_init's) */
     trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(TP[P_LEVEL].def - 12);
     cu_pool_load(0, ENGI_FM6, cu_pool_find(ENGI_FM6, "TINE EP"));

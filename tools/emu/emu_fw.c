@@ -446,8 +446,9 @@ void emu_fw_dump(void)
                "latched %02X\n", (unsigned)css_saves, css_last_rc == 1 ? "current" : css_last_rc == 2 ? "migrated" :
                css_last_rc < 0 ? "not these settings'" : "none", (unsigned)cr_session_hash(&x), (unsigned)css_flash,
                (unsigned)(cr_session_hash(&x) != css_flash), (int)x.voicing, (int)x.octave, (unsigned)x.bass_on, (unsigned)x.lock, (unsigned)x.latched);
-        printf("  session fx: on %u sel %u (%s %u/%u) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel, CU_FX[cs.fx_sel % CU_NFX].name,
-               (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[cu_fx_pg()].of);
+        printf("  session fx: on %u sel %u (%s %u/%u) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel,
+               cs.fx_page == CU_FXPG_SENDS ? "Sends" : CU_FX[cs.fx_sel % CU_NFX].name,
+               cs.fx_page == CU_FXPG_SENDS ? 1u : (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[cu_fx_pg()].of);
         for (k = 0; k < CU_NFX; k++)
             printf(" %u", (unsigned)cs.fx_amt[k]);
         printf(" sends");
@@ -457,6 +458,23 @@ void emu_fw_dump(void)
         for (k = 0; k < x.fx.n; k++)
             printf(" %u=%d", (unsigned)x.fx.par[k].tag, (int)x.fx.par[k].v);
         printf("\n");
+        for (k = 0; k < 2u; k++) {                /* the sound editor's FX group as its cells read it (cr_edit.c ce_param:
+                                                   * what the screen shows), beside the track's own (what the audio reads) */
+            unsigned c;
+            printf("  editor fx %s:", k ? "bass" : "chord");
+            for (c = 0; c < 4u; c++) {
+                const track_t *t = &trk[k ? CR_PART_BASS : CR_PART_CHORD];
+                int32_t v = 0;
+                const param_desc_t *d = ce_param(t, ce_r(CE_R_TRK, CP_PAGES[CP_FX].id[c], 0), &v);
+                char b[16];
+                cp_value(d, v, b, sizeof b);
+                printf(" %s %d %s", d->label, (int)v, b);
+            }
+            printf(" track");
+            for (c = 0; c < 4u; c++)
+                printf(" %d", (int)trk[k ? CR_PART_BASS : CR_PART_CHORD].p[CP_PAGES[CP_FX].id[c]]);
+            printf("\n");
+        }
         for (k = 0; k < 2u; k++)
             printf("  session %s: %s / %s edited %u kind %u crc %04X level %d pan %d\n", k ? "bass" : "chord",
                    ENGINES[trk[k].eng_req % NENGINES]->name, psnd[k].name, (unsigned)psnd[k].edited, (unsigned)psnd[k].kind,

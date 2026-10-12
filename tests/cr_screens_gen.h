@@ -2,7 +2,7 @@
  * cr_screen_t (firmware/src/cr_screen.h); `anim` is the animation that leads into the state */
 #pragma once
 
-#define CR_NSCREENS 91u
+#define CR_NSCREENS 92u
 
 static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
     {   /* 1: 1 · idle (CHORD view) */
@@ -730,16 +730,16 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .right_col = CR_COL_WHITE,
         .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
         .kind = CR_K_KNOBROW,
-        .item = {"Reverb", "Chorus", "Delay", "Drive"},
-        .n_items = 4,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
         .item0 = 0,
-        .sel = 0,
+        .sel = 1,
         .orient = 1,
         .col = CR_COL_GREEN,
         .label = "fx \267 on \267 1/2",
         .cell = {{{"Size", "88", CR_CF_ON | CR_CF_PCT, CR_G_ROOM, 177, 128, 0}, {"Damp", "56", CR_CF_ON | CR_CF_PCT, CR_G_MOON, 143, 128, 0}, {"Decay", "3.0 s", CR_CF_ON | CR_CF_PCT, CR_G_TAIL, 105, 128, 0}, {"Send", "25", CR_CF_ON | CR_CF_PCT, CR_G_MIX, 64, 128, 0}}},
         .n_rows = 1,
-        .slide = -1,
+        .slide = 1,
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
@@ -751,10 +751,10 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .right_col = CR_COL_WHITE,
         .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
         .kind = CR_K_KNOBROW,
-        .item = {"Reverb", "Chorus", "Delay", "Drive"},
-        .n_items = 4,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
         .item0 = 0,
-        .sel = 2,
+        .sel = 3,
         .orient = 1,
         .col = CR_COL_GREEN,
         .label = "fx \267 on \267 1/2",
@@ -774,10 +774,10 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .right_col = CR_COL_WHITE,
         .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
         .kind = CR_K_KNOBROW,
-        .item = {"Reverb", "Chorus", "Delay", "Drive"},
-        .n_items = 4,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
         .item0 = 0,
-        .sel = 1,
+        .sel = 2,
         .orient = 1,
         .col = CR_COL_GREEN,
         .label = "fx",
@@ -795,10 +795,10 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .right_col = CR_COL_WHITE,
         .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
         .kind = CR_K_KNOBROW,
-        .item = {"Reverb", "Chorus", "Delay", "Drive"},
-        .n_items = 4,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
         .item0 = 0,
-        .sel = 3,
+        .sel = 4,
         .orient = 1,
         .col = CR_COL_GREEN,
         .label = "fx \267 off",
@@ -816,10 +816,10 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .right_col = CR_COL_WHITE,
         .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
         .kind = CR_K_KNOBROW,
-        .item = {"Reverb", "Chorus", "Delay", "Drive"},
-        .n_items = 4,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
         .item0 = 0,
-        .sel = 0,
+        .sel = 1,
         .orient = 1,
         .col = CR_COL_GREEN,
         .label = "fx \267 on \267 2/2",
@@ -827,7 +827,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .n_rows = 1,
         .hot_r = 1,
         .hot_c = 2,
-        .slide = -1,
+        .slide = 1,
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
@@ -905,10 +905,10 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .right_col = CR_COL_WHITE,
         .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
         .kind = CR_K_KNOBROW,
-        .item = {"Reverb", "Chorus", "Delay", "Drive"},
-        .n_items = 4,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
         .item0 = 0,
-        .sel = 2,
+        .sel = 3,
         .orient = 1,
         .col = CR_COL_GREEN,
         .label = "fx \267 on \267 2/2",
@@ -942,7 +942,28 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 57: LAYERS 1 · KEY · A: the keyboard stays, the knob row under it */
+    {   /* 57: FX 15 · knob row: Sends (the first page) */
+        .header = 1,
+        .icon = CR_ICON_NONE,
+        .batt = 255,
+        .mid_col = CR_COL_WHITE,
+        .right_col = CR_COL_WHITE,
+        .footer = "SELECT: effect \267 FX: on/off \267 OCT-: back",
+        .kind = CR_K_KNOBROW,
+        .item = {"Sends", "Reverb", "Chorus", "Delay", "Drive"},
+        .n_items = 5,
+        .item0 = 0,
+        .sel = 0,
+        .orient = 1,
+        .col = CR_COL_GREEN,
+        .label = "fx \267 on",
+        .cell = {{{"Drive", "9%", CR_CF_ON | CR_CF_PCT, CR_G_CLIP, 24, 128, 0}, {"Chorus", "35%", CR_CF_ON | CR_CF_PCT, CR_G_MIX, 91, 128, 0}, {"Delay", "20%", CR_CF_ON | CR_CF_PCT, CR_G_MIX, 50, 128, 0}, {"Reverb", "28%", CR_CF_ON | CR_CF_PCT, CR_G_MIX, 71, 128, 0}}},
+        .n_rows = 1,
+        .slide = -1,
+        .pos = -1,
+        .anim = CR_A_SLIDE,
+    },
+    {   /* 58: LAYERS 1 · KEY · A: the keyboard stays, the knob row under it */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -966,7 +987,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 58: LAYERS 3 · KEY · A, TRANSPOSE just turned to +5 */
+    {   /* 59: LAYERS 3 · KEY · A, TRANSPOSE just turned to +5 */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -992,7 +1013,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 59: LAYERS 6 · LOOP · B: stopped, no ring (for comparison) */
+    {   /* 60: LAYERS 6 · LOOP · B: stopped, no ring (for comparison) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1013,7 +1034,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 60: LAYERS 7 · METRO · the time signature over the click level */
+    {   /* 61: LAYERS 7 · METRO · the time signature over the click level */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1035,7 +1056,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 61: PRESETS 1 · PRESETS turned: the next preset of the current engine */
+    {   /* 62: PRESETS 1 · PRESETS turned: the next preset of the current engine */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1052,7 +1073,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_FILL,
     },
-    {   /* 62: PRESETS 2 · OPT held + PRESETS turned: change the engine */
+    {   /* 63: PRESETS 2 · OPT held + PRESETS turned: change the engine */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1072,7 +1093,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 63: PRESETS 3 · SAVE tapped: overwrite the current preset, or save as new */
+    {   /* 64: PRESETS 3 · SAVE tapped: overwrite the current preset, or save as new */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1092,7 +1113,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 64: PRESETS 5 · PRESETS on a factory preset the user overwrote */
+    {   /* 65: PRESETS 5 · PRESETS on a factory preset the user overwrote */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1110,7 +1131,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 65: PRESETS 6 · SAVE held 1 s in the dialog: reset to factory (or delete) */
+    {   /* 66: PRESETS 6 · SAVE held 1 s in the dialog: reset to factory (or delete) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1126,7 +1147,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 66: LOOP 7 · overdub armed while playing (REC lit) */
+    {   /* 67: LOOP 7 · overdub armed while playing (REC lit) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1147,7 +1168,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SQUEEZE,
     },
-    {   /* 67: LOOP 9a · REC armed: the dial's REC dot (no loop yet) */
+    {   /* 68: LOOP 9a · REC armed: the dial's REC dot (no loop yet) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1168,7 +1189,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SQUEEZE,
     },
-    {   /* 68: LOOP 9b · recording the first loop: the track red */
+    {   /* 69: LOOP 9b · recording the first loop: the track red */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1188,7 +1209,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 69: LOOP 9c · overdubbing: the playing arc and the REC dot */
+    {   /* 70: LOOP 9c · overdubbing: the playing arc and the REC dot */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1209,7 +1230,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SQUEEZE,
     },
-    {   /* 70: LOOP 10 · the ring stays on the loop's own screens: the count-in */
+    {   /* 71: LOOP 10 · the ring stays on the loop's own screens: the count-in */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1228,7 +1249,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 71: QUAD 1 · QUAD · OSC 1: the SYN1 page under the algorithm diagram */
+    {   /* 72: QUAD 1 · QUAD · OSC 1: the SYN1 page under the algorithm diagram */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"Algo", "3", CR_CF_ON | CR_CF_BIG, CR_G_NONE, 128, 128, 0}, {"Ratio C", "1.00", CR_CF_ON | CR_CF_BIG, CR_G_NONE, 128, 128, 0}, {"Ratio A", "2.00", CR_CF_ON | CR_CF_BIG, CR_G_NONE, 128, 128, 0}, {"Ratio B", "0.50", CR_CF_ON, CR_G_RATIO, 2, 4, 0}}, {{"Harm", "+8", CR_CF_ON | CR_CF_PCT, CR_G_HARM, 167, 128, 0}, {"Dtune", "40", CR_CF_ON | CR_CF_PCT, CR_G_DETUNE, 81, 128, 0}, {"Feedback", "40", CR_CF_ON | CR_CF_PCT, CR_G_BAR, 81, 128, 0}, {"Mix", "+12", CR_CF_ON | CR_CF_PCT | CR_CF_BIP, CR_G_NONE, 152, 128, 0}}},
@@ -1242,7 +1263,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 72: QUAD 2 · QUAD · OSC 2: the ratio offsets of C, A, B1, B2 */
+    {   /* 73: QUAD 2 · QUAD · OSC 2: the ratio offsets of C, A, B1, B2 */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"Offset C", "+0.00", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Offset A", "+0.00", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Offset B1", "+0.00", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Offset B2", "+0.01", CR_CF_ON, CR_G_NONE, 128, 128, 0}}},
@@ -1254,7 +1275,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 73: QUAD 3 · QUAD · ENV 1: the operator envelopes A and B */
+    {   /* 74: QUAD 3 · QUAD · ENV 1: the operator envelopes A and B */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"A Attack", "12", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 26, 128, 0}, {"A Decay", "60", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 120, 128, 0}, {"A End", "20", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 41, 128, 0}, {"A Level", "90", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 182, 128, 0}}, {{"B Attack", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"B Decay", "80", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 161, 128, 0}, {"B End", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"B Level", "70", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 141, 128, 0}}},
@@ -1268,7 +1289,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 74: QUAD 4 · QUAD · ENV 2: delays, trig modes, resets */
+    {   /* 75: QUAD 4 · QUAD · ENV 2: delays, trig modes, resets */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"A Delay", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"A Trig", "On", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"A Reset", "On", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Phase", "All", CR_CF_ON, CR_G_NONE, 128, 128, 0}}, {{"B Delay", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"B Trig", "On", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"B Reset", "Off", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}}},
@@ -1280,7 +1301,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 75: QUAD 5 · QUAD · FILT 1: the multimode filter and its envelope */
+    {   /* 76: QUAD 5 · QUAD · FILT 1: the multimode filter and its envelope */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"Attack", "10", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 20, 128, 0}, {"Decay", "50", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 102, 128, 0}, {"Sustain", "60", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 120, 128, 0}, {"Release", "40", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 79, 128, 0}}, {{"Freq", "2.1k", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 154, 128, 0}, {"Reso", "30", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 61, 128, 0}, {"Type", "LP12", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Env depth", "+24", CR_CF_ON | CR_CF_PCT | CR_CF_BIP, CR_G_NONE, 177, 128, 0}}},
@@ -1294,7 +1315,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 76: QUAD 6 · QUAD · FILT 2: envelope delay, key track, the base-width filter */
+    {   /* 77: QUAD 6 · QUAD · FILT 2: envelope delay, key track, the base-width filter */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"Env delay", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"Key track", "50", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 100, 128, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}}, {{"Base", "20", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 41, 128, 0}, {"Width", "90", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 182, 128, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}}},
@@ -1308,7 +1329,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 77: QUAD 7 · QUAD · AMP: the master envelope */
+    {   /* 78: QUAD 7 · QUAD · AMP: the master envelope */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"Attack", "5", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 10, 128, 0}, {"Decay", "40", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 79, 128, 0}, {"Sustain", "80", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 161, 128, 0}, {"Release", "35", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 72, 128, 0}}, {{"Level", "100", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 202, 128, 0}, {"Pan", "0", CR_CF_ON | CR_CF_PCT | CR_CF_BIP, CR_G_NONE, 128, 128, 0}, {"Drive", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}}},
@@ -1322,7 +1343,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 78: QUAD 8 · QUAD · LFO 1 (LFO 2 and LFO 3 the same, a screen each) */
+    {   /* 79: QUAD 8 · QUAD · LFO 1 (LFO 2 and LFO 3 the same, a screen each) */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"Speed", "+24", CR_CF_ON | CR_CF_PCT | CR_CF_BIP, CR_G_KNOB, 176, 128, 0}, {"Mult", "16", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Fade", "-20", CR_CF_ON | CR_CF_PCT | CR_CF_BIP, CR_G_NONE, 88, 128, 0}, {"Dest", "Harm", CR_CF_ON, CR_G_NONE, 128, 128, 0}}, {{"Wave \267 Phase", "Tri \267 90", CR_CF_ON | CR_CF_PCT | CR_CF_SPAN2, CR_G_LFOWAVE, 64, 128, CR_LW_TRI}, {"Trig", "Free", CR_CF_ON, CR_G_NONE, 128, 128, 0}, {"Depth", "+30", CR_CF_ON | CR_CF_PCT | CR_CF_BIP, CR_G_NONE, 189, 128, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}}},
@@ -1334,7 +1355,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 79: QUAD 10 · QUAD · ENV 3: key scaling of A, B1, B2 */
+    {   /* 80: QUAD 10 · QUAD · ENV 3: key scaling of A, B1, B2 */
         .batt = 255,
         .kind = CR_K_EDIT8,
         .cell = {{{"A Key", "0", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 0, 128, 0}, {"B1 Key", "40", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 81, 128, 0}, {"B2 Key", "20", CR_CF_ON | CR_CF_PCT, CR_G_NONE, 40, 128, 0}, {"", "", 0, CR_G_NONE, 0, 0, 0}}},
@@ -1346,7 +1367,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = 0,
     },
-    {   /* 80: LOOPER 1 · PLAY menu: idle, slot 3, Overwrite, 4 bars (Keys = Play) */
+    {   /* 81: LOOPER 1 · PLAY menu: idle, slot 3, Overwrite, 4 bars (Keys = Play) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1371,7 +1392,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 81: LOOPER 2 · GLO tapped in the menu: Keys = Loops (the slot shortcuts) */
+    {   /* 82: LOOPER 2 · GLO tapped in the menu: Keys = Loops (the slot shortcuts) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1398,7 +1419,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 82: LOOPER 3 · ALGORITHM turned: the record mode on Overdub */
+    {   /* 83: LOOPER 3 · ALGORITHM turned: the record mode on Overdub */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1423,7 +1444,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 83: LOOPER 4 · PRESETS turned: slot 5 (empty) */
+    {   /* 84: LOOPER 4 · PRESETS turned: slot 5 (empty) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1449,7 +1470,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 84: LOOPER 5 · Overwrite, REC tapped (Free): armed */
+    {   /* 85: LOOPER 5 · Overwrite, REC tapped (Free): armed */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1480,7 +1501,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 85: LOOPER 6 · recording the first take (Free), bar 2 */
+    {   /* 86: LOOPER 6 · recording the first take (Free), bar 2 */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1516,7 +1537,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 86: LOOPER 7 · playing: 4 bars, two layers, bar 3 */
+    {   /* 87: LOOPER 7 · playing: 4 bars, two layers, bar 3 */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1547,7 +1568,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 87: LOOPER 8 · Overdub: overdubbing (Am held) */
+    {   /* 88: LOOPER 8 · Overdub: overdubbing (Am held) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1581,7 +1602,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 88: LOOPER 9 · Replace: a chord held over bar 3 (G held) */
+    {   /* 89: LOOPER 9 · Replace: a chord held over bar 3 (G held) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1617,7 +1638,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 89: LOOPER 10 · Advance: REC tapped on slot 3 jumps to slot 4 */
+    {   /* 90: LOOPER 10 · Advance: REC tapped on slot 3 jumps to slot 4 */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1649,7 +1670,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 90: LOOPER 11 · Step: entering Dm7 at step 7 (LOCK held) */
+    {   /* 91: LOOPER 11 · Step: entering Dm7 at step 7 (LOCK held) */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1683,7 +1704,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .pos = -1,
         .anim = CR_A_SLIDE,
     },
-    {   /* 91: LOOPER 12 · Step: every key released, the cursor on step 8 */
+    {   /* 92: LOOPER 12 · Step: every key released, the cursor on step 8 */
         .header = 1,
         .icon = CR_ICON_NONE,
         .batt = 255,
@@ -1775,6 +1796,7 @@ static const char *const CR_SCREEN_NAMES[CR_NSCREENS] = {
     "FX 12 - knob row: Delay 2 (SELECT's second page)",
     "FX 13 - the 0.18 glyphs change with the value (low row, high row)",
     "FX 14 - the 0.18 glyphs, continued",
+    "FX 15 - knob row: Sends (the first page)",
     "LAYERS 1 - KEY - A: the keyboard stays, the knob row under it",
     "LAYERS 3 - KEY - A, TRANSPOSE just turned to +5",
     "LAYERS 6 - LOOP - B: stopped, no ring (for comparison)",
@@ -1868,39 +1890,40 @@ static const char *const CR_SCREEN_SLUGS[CR_NSCREENS] = {
     "54_knob_row_delay_2_select_s",
     "55_the_0_18_glyphs_change_with",
     "56_the_0_18_glyphs_continued",
-    "57_key_a_the_keyboard_stays_the",
-    "58_key_a_transpose_just_turned_to",
-    "59_loop_b_stopped_no_ring_for",
-    "60_metro_the_time_signature_over",
-    "61_presets_turned_the_next_preset",
-    "62_opt_held_presets_turned_change",
-    "63_save_tapped_overwrite_the",
-    "64_presets_on_a_factory_preset",
-    "65_save_held_1_s_in_the_dialog",
-    "66_overdub_armed_while_playing",
-    "67_rec_armed_the_dial_s_rec_dot",
-    "68_recording_the_first_loop_the",
-    "69_overdubbing_the_playing_arc",
-    "70_the_ring_stays_on_the_loop_s",
-    "71_quad_osc_1_the_syn1_page_under",
-    "72_quad_osc_2_the_ratio_offsets",
-    "73_quad_env_1_the_operator",
-    "74_quad_env_2_delays_trig_modes",
-    "75_quad_filt_1_the_multimode",
-    "76_quad_filt_2_envelope_delay_key",
-    "77_quad_amp_the_master_envelope",
-    "78_quad_lfo_1_lfo_2_and_lfo_3_the",
-    "79_quad_env_3_key_scaling_of_a_b1",
-    "80_play_menu_idle_slot_3",
-    "81_glo_tapped_in_the_menu_keys",
-    "82_algorithm_turned_the_record",
-    "83_presets_turned_slot_5_empty",
-    "84_overwrite_rec_tapped_free",
-    "85_recording_the_first_take_free",
-    "86_playing_4_bars_two_layers_bar",
-    "87_overdub_overdubbing_am_held",
-    "88_replace_a_chord_held_over_bar",
-    "89_advance_rec_tapped_on_slot_3",
-    "90_step_entering_dm7_at_step_7",
-    "91_step_every_key_released_the",
+    "57_knob_row_sends_the_first_page",
+    "58_key_a_the_keyboard_stays_the",
+    "59_key_a_transpose_just_turned_to",
+    "60_loop_b_stopped_no_ring_for",
+    "61_metro_the_time_signature_over",
+    "62_presets_turned_the_next_preset",
+    "63_opt_held_presets_turned_change",
+    "64_save_tapped_overwrite_the",
+    "65_presets_on_a_factory_preset",
+    "66_save_held_1_s_in_the_dialog",
+    "67_overdub_armed_while_playing",
+    "68_rec_armed_the_dial_s_rec_dot",
+    "69_recording_the_first_loop_the",
+    "70_overdubbing_the_playing_arc",
+    "71_the_ring_stays_on_the_loop_s",
+    "72_quad_osc_1_the_syn1_page_under",
+    "73_quad_osc_2_the_ratio_offsets",
+    "74_quad_env_1_the_operator",
+    "75_quad_env_2_delays_trig_modes",
+    "76_quad_filt_1_the_multimode",
+    "77_quad_filt_2_envelope_delay_key",
+    "78_quad_amp_the_master_envelope",
+    "79_quad_lfo_1_lfo_2_and_lfo_3_the",
+    "80_quad_env_3_key_scaling_of_a_b1",
+    "81_play_menu_idle_slot_3",
+    "82_glo_tapped_in_the_menu_keys",
+    "83_algorithm_turned_the_record",
+    "84_presets_turned_slot_5_empty",
+    "85_overwrite_rec_tapped_free",
+    "86_recording_the_first_take_free",
+    "87_playing_4_bars_two_layers_bar",
+    "88_overdub_overdubbing_am_held",
+    "89_replace_a_chord_held_over_bar",
+    "90_advance_rec_tapped_on_slot_3",
+    "91_step_entering_dm7_at_step_7",
+    "92_step_every_key_released_the",
 };
