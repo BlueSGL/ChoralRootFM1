@@ -782,13 +782,27 @@ number.
 In the PLAY menu, tap **EDIT**. The loop in memory is shown as a pattern of steps, and you can change it one step at a
 time. (Outside the PLAY menu EDIT is the sound editor, as ever.)
 
-<img src="manual/loop-editor.png" width="240" alt="The loop editor, page Step: a row of sixteen steps, three red, the second outlined, a white line under the next three; Am, step 2/16; cells Note len 4, Steps 16, Chance 100%, Velocity 100">
-<img src="manual/loop-editor-trig.png" width="240" alt="The loop editor, page Trig: the same row, the second step with a notch in its corner; cells Ratchet x2, Condition 1:2, Voicing +2">
+<img src="manual/loop-editor.png" width="240" alt="The loop editor, page Step: a row of sixteen steps, three red, the second outlined, a white bar along its foot and the next three; Am, step 2/16; cells Note len 4, Steps 16, Chance 100%, Velocity 100">
+<img src="manual/loop-editor-trig.png" width="240" alt="The loop editor, page Trig: the same row, the second step with two ticks at its top and a blue strip at its right; Am +2 under the grid; cells Ratchet x2, Condition 1:2, Voicing +2">
 
 The grid is the same as in Step entry: **sixteenth-note steps, 16 to a row, four rows: all 64 steps of a pattern on one
 screen.** A red step has a chord or a note starting in it. A dark red step has nothing starting in it, but a longer
-note from an earlier step is still sounding there. Grey steps are empty. The outlined step is the selected one; its
-chord is named under the grid. While the loop plays, the step being played lights up white.
+note from an earlier step is still sounding there. Grey steps are empty. The outlined step is the selected one (the
+outline pulses, bright and dim); its chord is named under the grid, and if the step has a Voicing of its own, that
+follows the name in blue: `Am +2`. While the loop plays, the step being played lights up white.
+
+What a step shows:
+
+- **The white bar is the selected step's length.** It starts on the selected step and runs along the foot of every
+  step its notes sound in: one step, one cell; four steps, four cells, on into the next row and round the loop's end
+  if the note is that long. A Note len of `1/4`, `1/2` or `3/4` is a bar a quarter, half or three quarters of the cell
+  wide. Only the selected step has a bar. An empty step has none.
+- **The colour is the velocity.** Red is the usual 100. Softer steps go darker and cooler, down to plum; louder ones
+  go lighter, up to peach.
+- **A strip down the right side is the Chance.** Yellow, and dimmer the less likely the step is: bright at 90 %,
+  nearly black at 10 %. At 100 % there is no strip. **If the step has a Condition the strip is blue** (and dimmer with
+  the Chance in the same way).
+- **Small ticks along the top are the Ratchet**: two, three or four of them.
 
 | Control | In the loop editor |
 | --- | --- |
@@ -799,7 +813,7 @@ chord is named under the grid. While the loop plays, the step being played light
 | OCT-, OCT+ | the **octave**, as on the main screen: what you play into a step next is entered there |
 | REC tap | **clears** the selected step, its notes and its settings (REC does not record here) |
 | **Page 1, Step** | |
-| KNOB 1 | **Note len**: how long the selected step's notes sound: `1/4`, `1/2` or `3/4` of a step, then 1 to 64 steps. **Nothing else moves**: the other steps stay where they are and the loop keeps its length. A white line under the following steps shows how far the note reaches |
+| KNOB 1 | **Note len**: how long the selected step's notes sound: `1/4`, `1/2` or `3/4` of a step, then 1 to 64 steps. **Nothing else moves**: the other steps stay where they are and the loop keeps its length. The white bar along the foot of the selected step and the steps after it shows how far the note reaches |
 | KNOB 2 | **Steps**: the loop's length, 1 to 64 steps, a step a click. Shorter hides the last step, longer brings it back; past what there was, longer adds an empty step. **GLO held + KNOB 2** goes straight to the next of 8, 16, 32, 48 and 64 steps (in 3/4 and 6/8: 12, 24, 36, 48) |
 | KNOB 3 | **Chance**: how often the step plays, 100 % down to 10 % |
 | KNOB 4 | the step's **Velocity** |
@@ -812,8 +826,8 @@ chord is named under the grid. While the loop plays, the step being played light
 | HOME, EDIT (tap or hold) | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it |
 
 **Ratchet, Condition, Chance and Voicing belong to the step**: to everything that starts in it, the chord and, with
-Split Bass, the bass note. A step that has a ratchet, a condition or a chance under 100 % shows a small notch in its
-top right corner. An empty step has none of them (the cells show `-`); clearing a step clears them; playing new notes
+Split Bass, the bass note. The grid shows them: ticks for the ratchet, the strip for the chance and the condition, the blue
+number after the chord for the voicing (above). An empty step has none of them (the cells show `-`); clearing a step clears them; playing new notes
 into a step keeps them.
 
 - **Ratchet.** x2, x3 or x4 strikes the step's notes that many times, evenly spaced inside the one step. Each strike

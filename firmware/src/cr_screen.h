@@ -37,6 +37,7 @@ enum { CR_K_NONE, CR_K_STRIPES, CR_K_CHORD, CR_K_PICKER, CR_K_METER, CR_K_KEYBOA
 enum { CR_LM_TEXT, CR_LM_TIMELINE, CR_LM_STEPS };
 #define CR_LM_CUR_OFF 0x8000u       /* lm_pos (steps): the cursor's blink, off this frame (the producer's clock) */
 #define CR_LM_PLAY(st) ((uint16_t)((((st) & 63u) + 1u) << 6))   /* lm_pos (steps): the playhead on the page's step st */
+#define CR_LMC_COND 0x80u           /* lm_cell: the step has a condition */
 #define CR_LM_PLAYED(pos) ((((uint32_t)(pos) >> 6) & 127u))     /* .. that step + 1 (0: no playhead) */
 
 /* the top line's icon: none = the bare Orchid line (mid at the left in 15 px, right at the right) */
@@ -258,15 +259,25 @@ typedef struct {
     /* panel: loopmenu (CR_K_LOOPMENU, the PLAY menu, docs/LOOPER-MODES.md): the knobrow's picker band = the record mode
      * (items / sel / col as a knobrow; the slide), cell[0][0..3] = Quantize Count-in Level Keys (as a knobrow's; hot_r /
      * hot_c), the slot strip above the band, the middle under it: a big text (`title` in title_col, NONE red; `sub`
-     * under it) or a timeline or the step grid (`sub` the cursor step's chord at the left under it, `value` the right
+     * under it) or a timeline or the step grid (`sub` the cursor step's chord at the left under it, and after a tab in `sub` the step's voicing, blue: "Dm7\t+3", `value` the right
      * text "step 7/16"), `foot` the bottom line (the knob row then 64 px). The top line is the ordinary header.
-     * lm_lane .. lm_erase1 are hashed apart (cr_draw.c): a playhead, a new mark or the cursor's blink redraws only the
+     * lm_lane .. lm_erase1 (lm_cell, lm_bar and lm_ed among them) are hashed apart (cr_draw.c): a playhead, a new mark or the cursor's blink redraws only the
      * middle's strips (the cursor: its row's) */
-    uint64_t lm_lane[4];            /* timeline: event marks per lane, 64 columns over the bars shown (64 / lm_bars
-                                     * columns a bar); steps: lm_lane[0] = the filled steps of the page, bit s = step s
-                                     * (lm_beats a bar), lm_lane[1] = the steps a longer note still sounds in,
-                                     * lm_lane[2] = the steps the cursor step's note sounds on into, lm_lane[3] = the
-                                     * steps with a ratchet, a condition or a chance under 100 % (a notch) */
+    uint64_t lm_lane[5];            /* timeline: event marks per lane (0 .. 3), 64 columns over the bars shown (64 /
+                                     * lm_bars columns a bar); steps: lm_lane[0] = the filled steps of the page, bit s =
+                                     * step s (lm_beats a bar), lm_lane[1] = the steps a longer note still sounds in,
+                                     * lm_lane[2] = the steps AFTER the cursor's that its note sounds on into (the white
+                                     * length bar's further cells), lm_lane[3] / [4] = the low / high bit of a step's
+                                     * ratchet (1 .. 3 = x2 .. x4: that many ticks at the cell's top) */
+    uint8_t lm_cell[64];            /* steps: a filled step's look: bits 0-3 its velocity as a level 1 .. 15 (12 = the
+                                     * default 100: the role colour; lower cooler and darker, higher hotter; 0: no
+                                     * velocity given: the role colour), bits 4-6 its chance (0 = 100 %, 1 .. 7 = 90 75
+                                     * 60 50 40 25 10 %), CR_LMC_COND: it has a condition. Chance under 100 %: a yellow
+                                     * strip down the cell's right side, dimmer with the chance; a condition: the strip
+                                     * blue (cr_loop.h crl_edmap_t.cell: the same byte) */
+    uint8_t lm_bar;                 /* steps: the white length bar on the cursor's own cell, in quarters of its width:
+                                     * 0 none (an empty step), 1 .. 3 a part of a step, 4 the whole cell */
+    uint8_t lm_ed;                  /* steps: the loop editor: the cursor's blink is bright / dim, never gone */
     uint16_t lm_pos;                /* timeline: the playhead, Q8 bars from the left edge (0..lm_bars*256); steps: the
                                      * cursor's step index on the page (0..63), | CR_LM_CUR_OFF: the cursor not drawn
                                      * (its blink), | CR_LM_PLAY(st): the step being played (the loop editor) */

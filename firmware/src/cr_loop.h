@@ -188,11 +188,19 @@ typedef struct {                               /* a page: the CRL_STEPS steps fr
     uint64_t start;                            /* bit s: an event starts in step first + s */
     uint64_t tail;                             /* bit s: none starts there, and a note begun earlier sounds through
                                                 * half of it or more */
-    uint64_t trig;                             /* bit s: an event starts there and the step has a ratchet, a
-                                                * condition or a chance under 100 % (the grid's small mark) */
+    uint64_t rat[2];                           /* bits s of rat[0] (low) and rat[1] (high): the step's ratchet, 0 .. 3
+                                                * (off, x2 .. x4), where an event starts (the grid's ticks) */
+    uint8_t cell[CRL_STEPS];                   /* a step an event starts in (else 0): CRL_EC_VEL(the loudest of its
+                                                * events) | its chance << 4 (0 .. 7: CRL_CHANCE_PCT, 0 = 100 %) |
+                                                * CRL_EC_COND when it has a condition (not Always): the grid's colour
+                                                * and strip (cr_screen.h lm_cell: the same byte). A step past the
+                                                * CRL_STEPS the table has (a long take's later pages): the velocity only */
     uint16_t first;
     uint16_t nstep, nall;                      /* steps in the loop; with the steps hidden beyond its end */
 } crl_edmap_t;
+#define CRL_EC_VEL(v) ((v) >= 123u ? 15u : (v) < 6u ? 1u : ((uint32_t)(v) + 12u) / 9u)   /* a velocity 1 .. 127 as 1 .. 15:
+                                                * 12 = the default 100 (96 .. 104), a level every 9 */
+#define CRL_EC_COND 0x80u
 enum { CRL_ED_OK, CRL_ED_BUSY };
 int  cr_loop_ed_open(cr_loop_t *lp);           /* CRL_ED_*: refused while a capture is open. An empty loop: an empty
                                                 * pattern of the set Length (cr_loop_step_len; Free: a bar) */

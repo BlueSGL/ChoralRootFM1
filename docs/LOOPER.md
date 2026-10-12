@@ -299,7 +299,8 @@ changing it moves no other step and does not change the loop's length. A long no
 and those steps still play: the voices are the looper's eight (`CR_MAX_LOOPV`; when all are busy the one that would
 end first is taken), each chord its own voice, so a held chord and the next step's chord sound together as two chords
 played on the keys would. The steps are read from the events each time (`cr_loop_ed_map`: one pass, a page of 64
-steps as three 64-bit maps: 32 bytes in the POOL, the editor's only buffer; 520 bytes before), and **the notes need
+steps as four 64-bit maps and a byte a step, `crl_edmap_t`: 104 bytes in the POOL, the editor's only buffer; 520
+bytes before the maps), and **the notes need
 nothing new in the record**: `t` and `dur` are what the record always had (a part of a step is a `dur` of 6, 12 or 18),
 version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr_loop_test.c s_edit`;
 `old_unpack_ok`). Only a step's ratchet, condition, chance and voicing are stored for the editor (below, and "Byte 7").
@@ -379,13 +380,11 @@ number for each step's roll. `cr_loop_seed` sets it: the same seed and timing gi
 
 **The screen** (`CR_K_LOOPMENU` with `lm_mid = CR_LM_STEPS`, the step grid of Step entry: `cr_draw.c cr_lm_steps`): a
 bar a row, **four rows of 16: all 64 steps at a glance** (3/4 and 6/8: four rows of 12). A step with a note starting
-in it is red (**with a 3 px notch out of its top right corner when it has a ratchet, a condition or a chance under 100 %**:
-`lm_lane[3]`, `crl_edmap_t.trig`); a step a longer note still sounds in (half of it or more) is dark red (`lm_lane[1]`); an empty one grey;
-the grid ends where the loop ends (`lm_steps`). The cursor is the red outline. The steps the **selected** step's note
-sounds on into carry a white line along their bottom (`lm_lane[2]`), so turning KNOB 2 is seen to stretch the note
-over the following steps and to move nothing. While the loop plays, the step being played is white (grey when empty:
+in it is filled, coloured by its velocity (below); a step a longer note still sounds in (half of it or more) is dark red (`lm_lane[1]`); an empty one grey;
+the grid ends where the loop ends (`lm_steps`). The cursor is the red outline; in the editor its blink is bright /
+dim (`lm_ed`), never gone. What a cell carries is under "The grid's cells" below. While the loop plays, the step being played is white (grey when empty:
 `CR_LM_PLAY` in `lm_pos`; only its rows' strips are redrawn). Under the grid the selected step's chord, big, and `step
-5/16`; the cells Note len / Steps / Chance / Velocity (page 1) or Ratchet / Condition / Voicing (page 2); the bottom
+5/16`, and after the chord the step's voicing in blue when it is not Follow (`Dm7 +3`); the cells Note len / Steps / Chance / Velocity (page 1) or Ratchet / Condition / Voicing (page 2); the bottom
 line `1/2 · PRESETS: step · REC: clear · EDIT: done`. **A take longer than 64 steps is paged**: the cursor walks all its
 steps and the grid shows the 64 the cursor is in (`step 70/128 · p2`); one page was chosen over a scrolling row
 because a pattern fits it whole, and a page turns only for loops no step sequencer made.
@@ -400,9 +399,36 @@ an edit, the loop and its layers are untouched.
 
 **Saving**: edits are in RAM and set `crl.dirty`, like a take: the global save and leaving the slot write them.
 
-**Cost**: 32 bytes of POOL (`cu_le_map`; 24 before the notch's map); in RAM the steps' table, 128 bytes in each of the
+**The grid's cells (2026-10-13).** The owner, with the editor on the unit: "there is no white bar on the selected step, so
+when the step length is 2, you just see a white bar on the next step which is confusing and makes you think the next
+step is selected. So we should always put a white bar also on the current selected step, and that bar should also
+become smaller when the step length is below 1 ... The white bars should only render to show length of selected step.
+The color of the steps is good, but I think the color should morph colors based on velocity. Also there's a black box
+that shows when chance is less than 100, I think we should use maybe a yellow color that fades in brightness to black
+(0% chance), and then also extend this box to cover the full vertical drawing of the step. If a condition is enabled,
+render the yellow chance bar now as blue." And: "When selecting a step we should show the voicing number in blue after
+the name of the chord." A cell is 10.25 x 7 px (14.5 in 3/4 and 6/8); on it, drawn in this order (`cr_draw.c
+cr_lm_steps`):
+
+| element | what | data |
+| --- | --- | --- |
+| the fill | **the velocity** (the loudest of the step's events) in 15 levels, one every 9 (`CRL_EC_VEL`): level 12 (96 .. 104, the default 100) is the role red (224, 58, 47), as every step was; below it a straight mix down to a dark plum (96, 40, 128) at 1 .. 5; above it up to a light peach (255, 176, 120) at 123 .. 127. The brightness rises with every level; the plum's hue keeps a soft step apart from the dark red of a sounding-on step | `lm_cell` bits 0-3 (0: no velocity given: the role red, as Step entry's grid) |
+| the strip | the cell's **3 right-hand px over its full 7 px**: **Chance** under 100 %: yellow (242, 183, 5) mixed towards the background by the chance (90 % .. 10 %: seven levels down to nearly black); a **Condition** (not Always): blue (43, 80, 200), full at 100 %, dimmed by the chance in the same way. Chance 100 % and Always: no strip | `lm_cell` bits 4-6 (the chance's index), bit 7 (`CR_LMC_COND`) |
+| the ticks | **Ratchet**: x2, x3, x4 = 2, 3, 4 ticks of 1 x 2 px in the background's colour, 2 px apart along the cell's top from its second px. The fourth sits at the strip's first column when there is a strip (the strip keeps 19 of its 21 px) | `lm_lane[3]` / `[4]` (the ratchet's two bits) |
+| the bar | **the selected step's Note len, and no other step's**: white, 2 px along the cell's foot, from the selected step's own cell (a quarter, half, three quarters of its width for a part of a step, to a whole px: 3, 5, 8 of 10 px) over the cells its note sounds on into, into the next row and across the loop's end. An empty selected step: none | `lm_bar` (quarters, 4 = the cell), `lm_lane[2]` (the further cells) |
+| the cursor | the 2 px outline in a 1 px background ring, role red; the other blink phase the same at half brightness | `lm_pos`, `CR_LM_CUR_OFF`, `lm_ed` |
+| the playhead | the cell white (grey when empty); strip, ticks and bar stay on it | `CR_LM_PLAY` |
+
+A step past the 64th of a long take has no properties: its colour is its velocity's, and it has no strip or ticks.
+The colours are mixed once per palette (`cr_lmc`: 32 colours, 72 bytes of RAM), never per cell or per frame. The
+voicing after the chord: `sub` carries it after a tab (`"Dm7\t+3"`), drawn in the role blue; shown only for a fixed
+voicing on a step that has a chord (a single note or a bass-side note is not voiced; Follow is the default and adds
+nothing). The name gives way to it; with the longest name (`G#madd4 JAZZ -12` beside `step 64/64`) the two gaps
+shrink from 5 and 8 px to 3 and 3 and nothing is cut.
+
+**Cost**: 104 bytes of POOL (`cu_le_map`: 32 before the cells' byte a step; 24 before the notch's map); in RAM the steps' table, 128 bytes in each of the
 two `crl_data_t` (the loop and the staged slot), 64 for the voices' ratchet state and a few bytes of state: 352 in all
-(RAM 80168 -> 80520 B, POOL 326600 -> 326608 B, flash +3520 B on 2026-10-13); no copy of the loop. The UI rebuilds its view only
+(RAM 80168 -> 80520 B, POOL 326600 -> 326608 B, flash +3520 B on 2026-10-13); the grid's cells: POOL 314600 -> 314744 B (the map +72, the screen `cu_scr` +72: `lm_cell`, a fifth lane, `lm_bar`, `lm_ed`), RAM 80532 -> 80612 B (the colours), flash +992 B; no copy of the loop. A frame, on the emulator (estimates, `cr_loop_trig.txt` / `cr_loop_step.txt`, host instructions a UI frame): the average +0.3 % and +0.6 %, the worst frame +0.1 % and +1.6 %. The UI rebuilds its view only
 when the events change (`crl.gen`) or the cursor moves, with the IRQ off for the two passes; the operations run with
 the IRQ off from the UI thread, as `cu_rec`'s stop does.
 

@@ -734,3 +734,29 @@ Options, for the user to choose:
    user slot in the UI, the tools and the sound files. The largest change; it is what the request's wording asks for.
 5. Either of 2 .. 4 **after the mirrors read through XIP** (open item "Memory", 3t): then slots cost flash only.
 
+
+**2026-10-13, the loop editor's grid: what a cell shows (0.18 dev, built, not flashed).** The owner, with the editor on
+the unit: "there is no white bar on the selected step, so when the step length is 2, you just see a white bar on the
+next step which is confusing and makes you think the next step is selected. So we should always put a white bar also
+on the current selected step, and that bar should also become smaller when the step length is below 1, it's a nice
+visual touch. The white bars should only render to show length of selected step. The color of the steps is good, but
+I think the color should morph colors based on velocity. Also there's a black box that shows when chance is less than
+100, I think we should use maybe a yellow color that fades in brightness to black (0% chance), and then also extend
+this box to cover the full vertical drawing of the step. If a condition is enabled, render the yellow chance bar now
+as blue." And: "When selecting a step we should show the voicing number in blue after the name of the chord." Built
+(docs/LOOPER.md "The grid's cells" has the table): the bar begins on the selected step (`lm_bar`: 1 .. 3 quarters of
+the cell, 4 the whole) and runs over `lm_lane[2]`, now across the loop's end too; the fill is the velocity in 15
+levels (plum (96, 40, 128) at the softest, the role red at 96 .. 104, peach (255, 176, 120) at the loudest), mixed
+once per palette; the 3 px notch is a 3 x 7 px strip, yellow dimmed by the chance, blue with a condition; the ratchet
+got its own mark, 2 / 3 / 4 ticks of 1 x 2 px along the top (chosen over the bottom edge, where the bar is); the
+editor's cursor blinks bright / dim instead of on / off (`lm_ed`; Step entry's grid is as it was); the step's fixed
+voicing follows the chord in the role blue (a tab in `sub`; nothing on Follow, which is the default, nor on a step
+without a chord). Data: `crl_edmap_t` lost `trig` and got `rat[2]` and a byte a step (`cell`: the velocity's level,
+the chance, the condition), 32 -> 104 bytes; `cr_screen_t` got `lm_cell[64]`, a fifth lane, `lm_bar`, `lm_ed`, all in
+the part hashed apart, so a cursor move between plain steps still redraws only its rows. POOL 314600 -> 314744 B
+(91.4 -> 91.5 %), RAM 80532 -> 80612 B, flash +992 B. Frame cost on the emulator (estimates): the average UI frame
++0.3 % (`cr_loop_step.txt`) and +0.6 % (`cr_loop_trig.txt`), the worst +0.1 % and +1.6 %; not counted on the unit.
+Tests: `tests/cr_draw_test.c` (the bar's widths, none elsewhere, the strip's colours and height, the velocity's
+brightness, the ticks, the dim cursor, the voicing and its fit), `tests/cr_loop_test.c` (the map); the manual's two
+editor pictures regenerated. Not tested: the look on the unit's panel (the plum and the dim strips at its gamma and
+viewing angle), 3/4 and 6/8 grids beyond the shared code, the MONO palette.
