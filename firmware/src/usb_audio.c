@@ -80,7 +80,7 @@ static void ua_log(uint32_t ms, uint32_t what)
  * streaming interface list is kept as it is (the function goes whole); an absent stream gets UA_NO_IF.
  * UA_OFF_48 (Options > USB Rate 44.1 kHz): the streaming interface as 0.18 had it, byte for byte: the type I format
  * with one sampling frequency (11 bytes for the 14) and the endpoint's wMaxPacketSize 640 (UA_EP_MAXP44); the
- * configuration is then 208 bytes (tests/cr_usbaudio_test.c compares it with a copy of 0.18's) */
+ * configuration is then 208 bytes (tests/cr_usbrate_test.c compares it with a copy of 0.18's) */
 static void ua_cfg_build(void)
 {
     uint32_t i, k, n = 0, nif = 0, skip = 0;

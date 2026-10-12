@@ -158,7 +158,6 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
  * a host that cached one reads the other when the option changes */
 #include "usb_audio_stream.c"
 #define CFG_LEN 211
-#define CFG_LEN44 208                                   /* 0.18's: the format three bytes shorter (one rate) */
 static const uint8_t DEV_DESC[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
                                      FELUCCA_USB_PID >> 8, 0x23, 0x03, 1, 2, 0, 1};   /* misc/IAD, 3.23 */
 static const uint8_t DEV_DESC44[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
