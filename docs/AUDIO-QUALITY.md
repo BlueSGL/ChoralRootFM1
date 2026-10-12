@@ -653,8 +653,9 @@ within **1.2 dB** of it (`CLN_REHOLD`: `env >> 3`; it was 0.3 dB). A **hit**, a 
 envelope (`CLN_HIT`: `env >> 1`), keeps the **40 ms** of the first rounds (`CLN_HOLD_HIT`) until the envelope has
 begun to let go; from then on the long hold applies again. An envelope that stands above a steady sound (a release
 that stopped inside the 1.2 dB) creeps down to it (`CLN_CREEP`: a 1024th of the way for every block whose peak is in
-the window, once the top itself has not come back for 200 ms): about a second, too slow to be a step; a sound whose
-top comes back (a bass note's period, a chord's beat) keeps its gain exactly. The release is unchanged (186 ms).
+the window, once 200 ms of such blocks have gone by without the top itself, a peak within 0.03 dB of the envelope):
+a second or two (a tone 2 dB over after a hit: 0.83 dB above it after 1 s, 0.18 dB after 2.5 s), too slow to be a
+step; a sound whose top comes back (a bass note's period, a chord's beat) keeps its gain exactly. The release is unchanged (186 ms).
 
 **Why not simply a longer hold.** The second round's table said 200 to 500 ms takes 2 to 5 dB off; it also keeps
 the level down after a loud hit for as long as the hold is. Measured on the same mixes through the firmware's own

@@ -339,9 +339,10 @@ static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
 #define CLN_REHOLD 3                    /* a block's peak within env >> CLN_REHOLD (1.2 dB) of the envelope holds it again */
 #endif
 #ifndef CLN_CREEP
-#define CLN_CREEP 10                    /* .. and, once the top itself has not come back for CLN_HOLD, draws the
-                                         * envelope a 1024th of the way down to itself: an envelope held up to 1.2 dB
-                                         * above a steady sound (a release that stopped in the window) comes down to it
+#define CLN_CREEP 10                    /* .. and, once CLN_HOLD samples of such blocks have gone by without the
+                                         * top itself (a peak within 0.03 dB of the envelope), draws the envelope a
+                                         * 1024th of the way down to itself: an envelope held up to 1.2 dB above a
+                                         * steady sound (a release that stopped in the window) comes down to it
                                          * within a second or two, too slowly to be a step; a sound whose top comes
                                          * back (a bass note's period, a chord's beat) keeps its gain exactly */
 #endif
