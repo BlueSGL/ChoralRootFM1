@@ -1018,8 +1018,16 @@ void cr_loop_ed_map(const cr_loop_t *lp, uint32_t first, crl_edmap_t *m)
         uint32_t s = e->t / CRL_STEP, end = (uint32_t)e->t + e->dur, lim = e->t < lp->d.len ? m->nstep : m->nall, a, b;
         if (e->layer & CRL_HID) continue;
         if (s >= first && s < first + CRL_STEPS) {
-            m->start |= (uint64_t)1 << (s - first);
-            if (s < CRL_STEPS && (lp->d.st[s][0] || (lp->d.st[s][1] >> 5))) m->trig |= (uint64_t)1 << (s - first);
+            uint32_t k = s - first, lv = CRL_EC_VEL(e->vel), pr = 0;
+            m->start |= (uint64_t)1 << k;
+            if (s < CRL_STEPS) {                     /* (the step's own: the same for each of its events) */
+                uint32_t a0 = lp->d.st[s][0];
+                pr = (uint32_t)(lp->d.st[s][1] >> 5) << 4 | (a0 >> 2 ? CRL_EC_COND : 0u);
+                m->rat[0] |= (uint64_t)(a0 & 1u) << k;
+                m->rat[1] |= (uint64_t)((a0 >> 1) & 1u) << k;
+            }
+            if (lv < (m->cell[k] & 15u)) lv = m->cell[k] & 15u;
+            m->cell[k] = (uint8_t)(pr | lv);
         }
         /* the steps after its own that it sounds through, half or more: [a, b), on this page, up to the loop's end */
         a = s + 1u > first ? s + 1u : first;

@@ -1414,6 +1414,7 @@ int main(int argc, char **argv)
             snprintf(s.item[1], sizeof s.item[1], "Trig");
             s.lm_bars = 1; s.lm_beats = 16; s.lm_lane[0] = 0x1113ull; s.lm_lane[1] = 0x20Cull; s.lm_lane[2] = 0xCull;
             s.lm_lane[3] = 0; s.lm_pos = 1; s.lm_steps = 16; s.lm_dirty = (uint8_t)(s.lm_slot + 1u);
+            s.lm_bar = 4; s.lm_ed = 1;           /* (the bar begins on the selected step: its whole cell) */
             snprintf(s.sub, sizeof s.sub, "Am");
             snprintf(s.value, sizeof s.value, "step 2/16");
             snprintf(s.foot, sizeof s.foot, "1/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back");
@@ -1428,30 +1429,143 @@ int main(int argc, char **argv)
             s.cell[0][2].glyph = CR_G_BAR; s.cell[0][2].pct = 255;
             render(&s, 0);
             {
-                int32_t gy = cr_lm_st_y(&s), x2 = cr_lm_st_x(16, 2) / 16, x4 = cr_lm_st_x(16, 4) / 16, x8 = cr_lm_st_x(16, 8) / 16;
+                int32_t gy = cr_lm_st_y(&s), x1 = cr_lm_st_x(16, 1) / 16, x4 = cr_lm_st_x(16, 4) / 16, x8 = cr_lm_st_x(16, 8) / 16;
                 uint16_t tail = swap16(ux_mix(CR_RED, T_BG, 62)), white = swap16(T_TEXT), mid = swap16(T_MID);
                 uint32_t n3, n4, n5, n6;
                 COUNT(n0, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
                 COUNT(n1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == line);
                 COUNT(n3, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == tail);
-                COUNT(n4, (uint32_t)x2, (uint32_t)gy + 5u, (uint32_t)x4, (uint32_t)gy + 7u, HS(x, y) == white);
+                COUNT(n4, (uint32_t)x1, (uint32_t)gy + 5u, (uint32_t)x4, (uint32_t)gy + 7u, HS(x, y) == white);
                 COUNT(n5, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == white);
                 write_ppm(dir, "loopmenu_editor");
                 snprintf(name, sizeof name, "loop editor: 16 steps: 5 filled (%u red px), 3 a longer note sounds in (%u dark red), 8 "
-                         "empty (%u grey); the selected step's note: a white line along steps 3-4 (%u px, %u in the row)", n0, n3, n1, n4, n5);
-                check(name, n0 > 250u && n3 > 100u && n1 > 400u && n4 >= 30u && n5 == n4);
-                {   /* steps 5 and 9 have a ratchet, a condition or a chance: a 3 px notch out of the top right
-                     * corner; then the editor's second page (Trig) */
-                    cr_screen_t t2 = s;
-                    uint32_t r1, c2;
-                    s.lm_lane[3] = 0x110ull;
+                         "empty (%u grey); the selected step's note: a white bar along steps 2-4 (%u px, %u in the row)", n0, n3, n1, n4, n5);
+                check(name, n0 > 230u && n3 > 100u && n1 > 400u && n4 >= 48u && n5 == n4);
+                {   /* the selected step's white bar; the velocity's colour; the chance / condition strip; the
+                     * ratchet's ticks; the cursor's dim phase; the step's voicing after its chord; then the editor's
+                     * second page (Trig) */
+                    cr_screen_t t2 = s, e = s;
+                    uint32_t r1, c2, w[6], ok = 1, lu[16], k, q, m1, m2;
+                    int32_t x5 = cr_lm_st_x(16, 4) / 16, x2 = cr_lm_st_x(16, 2) / 16, x3 = cr_lm_st_x(16, 3) / 16;
+                    uint16_t yel = swap16(CR_YELLOW), blu = swap16(CR_NAMED[CR_COL_BLUE]), bg = swap16(T_BG);
+                    static const uint8_t PC[8] = {100, 90, 75, 60, 50, 40, 25, 10}, VL[6] = {20, 50, 80, 100, 115, 127};
+                    /* the bar: 1/4, 1/2, 3/4 of the selected cell, the whole cell, two cells; nowhere else */
+                    e.lm_lane[2] = 0;
+                    for (q = 1; q <= 4u; q++) {
+                        e.lm_bar = (uint8_t)q;
+                        render(&e, 0);
+                        COUNT(w[q], (uint32_t)x1, (uint32_t)gy + 5u, (uint32_t)x2, (uint32_t)gy + 7u, HS(x, y) == white);
+                        COUNT(r1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == white);
+                        ok &= r1 == w[q];
+                        if (q == 2u) write_ppm(dir, "loopmenu_editor_half");
+                    }
+                    e.lm_lane[2] = 4ull;
+                    render(&e, 0);
+                    COUNT(w[5], (uint32_t)x2, (uint32_t)gy + 5u, (uint32_t)x3, (uint32_t)gy + 7u, HS(x, y) == white);
+                    COUNT(r1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == white);
+                    e.lm_lane[2] = 0; e.lm_bar = 0;
+                    render(&e, 0);
+                    COUNT(w[0], 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == white);
+                    snprintf(name, sizeof name, "loop editor: the bar on the selected step: 1/4 1/2 3/4 1 of its cell (%u %u %u %u white px), "
+                             "2 steps: the next cell too (%u px, %u in the row); an empty step: none (%u)", w[1], w[2], w[3], w[4], w[5], r1, w[0]);
+                    check(name, ok && w[1] >= 4u && w[1] < w[2] && w[2] < w[3] && w[3] < w[4] && w[4] >= 18u && w[5] >= 18u &&
+                                r1 == w[4] + w[5] && w[0] == 0u);
+                    /* the cursor's blink in the editor: bright, then dim: never gone; the partial draw = a full one */
+                    e = s;
+                    e.lm_pos |= CR_LM_CUR_OFF;
                     render(&s, 0);
-                    COUNT(r1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
-                    write_ppm(dir, "loopmenu_editor_marks");
-                    snprintf(name, sizeof name, "loop editor: two steps with a ratchet / condition / chance: a 3 x 3 px notch each (%u red px, %u without)", r1, n0);
-                    check(name, n0 == r1 + 18u);
-                    s.lm_lane[3] = 0;
-                    t2.sel = 1; t2.lm_lane[3] = 0x110ull;
+                    cr_draw(&e, 0);
+                    COUNT(r1, (uint32_t)x1 - 3u, (uint32_t)gy - 3u, (uint32_t)x1 + 14u, (uint32_t)gy + 10u, HS(x, y) == swap16(ux_mix(CR_RED, T_BG, 50)));
+                    COUNT(c2, (uint32_t)x1, (uint32_t)gy + 5u, (uint32_t)x2, (uint32_t)gy + 7u, HS(x, y) == white);
+                    memcpy(a, host_screen, sizeof a);
+                    render(&e, 0);
+                    write_ppm(dir, "loopmenu_editor_blink");
+                    snprintf(name, sizeof name, "loop editor: the cursor's other blink phase: a dim outline (%u px) and the bar (%u px) stay; "
+                             "partial = full", r1, c2);
+                    check(name, r1 >= 30u && c2 >= 18u && !memcmp(a, host_screen, sizeof a));
+                    /* the velocity's colour (step 5): 100 and "none given" the role red; brighter with the velocity */
+                    e = s;
+                    for (k = 0; k < 6u; k++) {
+                        uint32_t px;
+                        e.lm_cell[4] = (uint8_t)((VL[k] + 12u) / 9u);
+                        render(&e, 0);
+                        px = swap16(HS(x5 + 4, gy + 3));
+                        lu[k] = (px >> 11) * 54u * 2u + ((px >> 5) & 63u) * 183u + (px & 31u) * 19u * 2u;
+                        if (VL[k] == 100u) ok &= HS(x5 + 4, gy + 3) == red;
+                        if (k) ok &= lu[k] > lu[k - 1u];
+                    }
+                    e.lm_cell[4] = 1;
+                    render(&e, 0);
+                    ok &= HS(x5 + 4, gy + 3) == swap16(CR_LM_SOFT) && HS(x5 + 4, gy + 3) != tail && HS(x5 + 4, gy + 3) != line;
+                    snprintf(name, sizeof name, "loop editor: the velocity colours a step: 20 50 80 100 115 127 brighter each (%u %u %u %u %u %u), "
+                             "100 the role red, the softest a plum (not the tail's dark red)", lu[0], lu[1], lu[2], lu[3], lu[4], lu[5]);
+                    check(name, ok);
+                    /* the strip (step 5): none at 100 %; yellow, dimmer with the chance, the cell's 7 rows; blue with
+                     * a condition */
+                    ok = 1;
+                    for (k = 1; k < 8u; k++) {
+                        uint16_t want = swap16(ux_mix(T_BG, CR_YELLOW, PC[k]));
+                        uint32_t px;
+                        e.lm_cell[4] = (uint8_t)(12u | k << 4);
+                        render(&e, 0);
+                        COUNT(r1, (uint32_t)x5, (uint32_t)gy, (uint32_t)x5 + 11u, (uint32_t)gy + 7u, HS(x, y) == want);
+                        ok &= r1 == 21u;
+                        for (q = 0; q < 7u; q++) ok &= HS(x5 + 8, gy + (int32_t)q) == want;   /* (its full height) */
+                        px = swap16(want);
+                        lu[k] = (px >> 11) * 54u * 2u + ((px >> 5) & 63u) * 183u + (px & 31u) * 19u * 2u;
+                        if (k > 1u) ok &= lu[k] < lu[k - 1u];
+                        ok &= (px >> 11) > (px & 31u) || k == 7u;                            /* (yellow: no blue in it) */
+                        if (k == 4u) write_ppm(dir, "loopmenu_editor_marks");
+                    }
+                    e.lm_cell[4] = (uint8_t)(12u | CR_LMC_COND);
+                    render(&e, 0);
+                    COUNT(m1, (uint32_t)x5, (uint32_t)gy, (uint32_t)x5 + 11u, (uint32_t)gy + 7u, HS(x, y) == blu);
+                    COUNT(r1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == yel);
+                    e.lm_cell[4] = (uint8_t)(12u | CR_LMC_COND | 4u << 4);
+                    render(&e, 0);
+                    COUNT(m2, (uint32_t)x5, (uint32_t)gy, (uint32_t)x5 + 11u, (uint32_t)gy + 7u, HS(x, y) == swap16(ux_mix(T_BG, CR_NAMED[CR_COL_BLUE], 50)));
+                    e.lm_cell[4] = 12;
+                    render(&e, 0);
+                    COUNT(c2, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
+                    snprintf(name, sizeof name, "loop editor: the chance strip: 3 x 7 px, yellow, dimmer at each of 90 .. 10 %%; a condition: "
+                             "blue (%u px; %u at 50 %%, dimmer; %u yellow); 100 %% and Always: none (%u red px, %u before)", m1, m2, r1, c2, n0);
+                    check(name, ok && m1 == 21u && m2 == 21u && r1 == 0u && c2 == n0);
+                    /* the ratchet (step 5): 2, 3, 4 ticks of 1 x 2 px along the top; with a strip beside them */
+                    ok = 1;
+                    for (k = 1; k <= 3u; k++) {
+                        e.lm_lane[3] = (uint64_t)(k & 1u) << 4; e.lm_lane[4] = (uint64_t)(k >> 1) << 4;
+                        e.lm_cell[4] = 12;
+                        render(&e, 0);
+                        COUNT(r1, (uint32_t)x5, (uint32_t)gy, (uint32_t)x5 + 10u, (uint32_t)gy + 7u, HS(x, y) == bg);
+                        ok &= r1 == 2u * (k + 1u);
+                        for (q = 0; q <= k; q++) ok &= HS(x5 + 1 + 2 * (int32_t)q, gy) == bg && HS(x5 + 1 + 2 * (int32_t)q, gy + 1) == bg;
+                        e.lm_cell[4] = (uint8_t)(12u | 2u << 4);
+                        render(&e, 0);
+                        COUNT(r1, (uint32_t)x5, (uint32_t)gy, (uint32_t)x5 + 10u, (uint32_t)gy + 7u, HS(x, y) == bg);
+                        COUNT(m1, (uint32_t)x5, (uint32_t)gy, (uint32_t)x5 + 11u, (uint32_t)gy + 7u, HS(x, y) == swap16(ux_mix(T_BG, CR_YELLOW, 75)));
+                        ok &= r1 == 2u * (k + 1u) && m1 >= 19u;
+                        if (k == 2u) write_ppm(dir, "loopmenu_editor_ratchet");
+                    }
+                    check("loop editor: a ratchet: 2 / 3 / 4 ticks (1 x 2 px) along the cell's top, alone and beside the strip (19 px of it or more)", ok);
+                    /* the step's voicing, blue, after its chord; Follow: nothing; the longest name and -12 fit */
+                    e = s;
+                    render(&e, 0);
+                    COUNT(r1, 20u, (uint32_t)gy + 9u, 150u, (uint32_t)gy + 30u, HS(x, y) == blu);
+                    snprintf(e.sub, sizeof e.sub, "Am\t+3");
+                    render(&e, 0);
+                    COUNT(c2, 20u, (uint32_t)gy + 9u, 150u, (uint32_t)gy + 30u, HS(x, y) == blu);
+                    COUNT(m1, 20u, (uint32_t)gy + 9u, 44u, (uint32_t)gy + 30u, HS(x, y) == blu);
+                    write_ppm(dir, "loopmenu_editor_voicing");
+                    m2 = nell;
+                    snprintf(e.sub, sizeof e.sub, "G#madd4 JAZZ\t-12");
+                    snprintf(e.value, sizeof e.value, "step 64/64");
+                    render(&e, 0);
+                    lint("loopmenu_editor_voicing", &e);
+                    snprintf(name, sizeof name, "loop editor: the step's voicing after its chord, blue (%u px, %u over the name, %u on Follow); "
+                             "'G#madd4 JAZZ -12' beside 'step 64/64': not cut (%u)", c2, m1, r1, nell - m2);
+                    check(name, c2 >= 12u && m1 == 0u && r1 == 0u && nell == m2);
+                    render(&s, 0);
+                    t2.sel = 1; t2.lm_lane[3] = 0x100ull; t2.lm_cell[4] = (uint8_t)(12u | CR_LMC_COND | 3u << 4);
                     snprintf(t2.foot, sizeof t2.foot, "2/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back");
                     memset(t2.cell, 0, sizeof t2.cell);
                     for (c2 = 0; c2 < 3u; c2++) {

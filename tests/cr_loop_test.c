@@ -1901,7 +1901,10 @@ static void s_trig(void)
        cr_loop_ed_setprop(&L, CRL_SP_VOIC, 26) == 0 && cr_loop_ed_setprop(&L, CRL_SP_CHANCE, 8) == 0 &&
        cr_loop_ed_setprop(&L, CRL_SP_RATCH, -1) == 0 && cr_loop_ed_prop(&L, CRL_SP_RATCH) == 2, "props: out of range: refused");
     cr_loop_ed_map(&L, 0, &M);
-    ok(M.trig == 2u, "props: the map marks the step (a ratchet, a condition or a chance)");
+    ok(M.rat[0] == 0u && M.rat[1] == 2u && (M.cell[1] >> 4) == (8u | 3u) && (M.cell[1] & 15u) == CRL_EC_VEL((uint32_t)cr_loop_ed_vel(&L, 0)) && (M.cell[1] & 15u) &&
+       (M.cell[0] & 15u) && !(M.cell[0] >> 4) && !M.cell[3] &&
+       CRL_EC_VEL(100u) == 12u && CRL_EC_VEL(1u) == 1u && CRL_EC_VEL(127u) == 15u && CRL_EC_VEL(20u) == 3u,
+       "props: the map has the step's ratchet (x3), its chance (60 %) and that it has a condition, and its velocity's level");
     chord(69, CR_MOD_MIN, 60);
     step(20);
     ok(root_at(24) == 69 && cr_loop_ed_prop(&L, CRL_SP_RATCH) == 2 && cr_loop_ed_prop(&L, CRL_SP_CHANCE) == 3,

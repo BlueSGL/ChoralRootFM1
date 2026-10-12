@@ -1586,13 +1586,14 @@ static void cu_rec(void)
  * (tapped, or held again) close it, back to the PLAY menu: nothing to confirm, an edit is done when it is made, in
  * RAM, and saved like any loop change (the global save, a slot switch).
  * The view: cu_le, rebuilt from the ISR's loop (IRQ off: two passes over <= 512 events) only when its events change
- * (crl.gen) or the cursor moves; the map (cu_le_map: the page's 64 steps, 24 bytes) is the editor's only buffer. A
+ * (crl.gen) or the cursor moves; the map (cu_le_map: the page's 64 steps, 104 bytes) is the editor's only buffer. A
  * page is the whole bars that fit 64 steps (cu_le_page): a loop longer than that (a long take) is paged by the cursor */
 static crl_edmap_t cu_le_map __attribute__((section(".pool")));
 static struct {
     uint16_t gen, c0, nstep;                       /* crl.gen then; the cursor's step; steps */
     uint8_t ok, n, cnt, root, qx, vel;             /* its notes' length (steps); its events, the last one's chord, the loudest */
     uint8_t nf;                                    /* .. its notes are a part of a step: 1 .. 3 quarters (0: n steps) */
+    uint8_t ch;                                    /* .. one of its events is a chord (a voicing applies to it) */
     int8_t rat, cond, voic, chance;                /* the step's properties (cr_loop_ed_prop; -1: it has none) */
 } cu_le;
 static const char *const CU_LE_COND[CRL_NCOND] = {"Always", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4",
@@ -1613,6 +1614,17 @@ static uint32_t cu_le_per(void)                    /* steps a bar (a row of the 
     return (cr_snap.lsig % CRL_NSIG == CRL_SIG_44 ? 384u : 288u) / CRL_STEP;
 }
 static uint32_t cu_le_page(void) { return CRL_STEPS / cu_le_per() * cu_le_per(); }   /* 64; 48 */
+static uint64_t cu_le_span(uint32_t a, uint32_t e, uint32_t first, uint32_t n)   /* the steps [a, e) as bits of the
+                                                                                 * page's n steps from `first` */
+{
+    a = a > first ? a : first;
+    e = e < first + n ? e : first + n;
+    if (e <= a)
+        return 0;
+    return (e - a >= 64u ? ~(uint64_t)0 : ((uint64_t)1 << (e - a)) - 1u) << (a - first);
+}
+_Static_assert(CRL_EC_COND == CR_LMC_COND && sizeof ((crl_edmap_t *)0)->cell == sizeof ((cr_screen_t *)0)->lm_cell,
+               "crl_edmap_t.cell is cr_screen_t.lm_cell");
 static void cu_le_sync(void)
 {
     uint32_t c0, n, i, t0, t1, pg = cu_le_page();
@@ -1629,7 +1641,7 @@ static void cu_le_sync(void)
     cu_le.cond = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_COND);
     cu_le.voic = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_VOIC);
     cu_le.chance = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_CHANCE);
-    cu_le.cnt = cu_le.vel = 0;
+    cu_le.cnt = cu_le.vel = cu_le.ch = 0;
     t0 = c0 * CRL_STEP;
     t1 = t0 + CRL_STEP;
     for (i = 0; i < crl.d.nev; i++) {
@@ -1639,6 +1651,8 @@ static void cu_le_sync(void)
         cu_le.cnt = (uint8_t)(cu_le.cnt < 255u ? cu_le.cnt + 1u : 255u);
         cu_le.root = e->root;                      /* (the last one written there names the step) */
         cu_le.qx = e->qx;
+        if (e->qx >> 4)
+            cu_le.ch = 1;
         if (e->vel > cu_le.vel)
             cu_le.vel = e->vel;
     }
@@ -5023,12 +5037,19 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         s->lm_beats = (uint8_t)per;
         s->lm_lane[0] = cu_le_map.start;
         s->lm_lane[1] = cu_le_map.tail;
-        s->lm_lane[3] = cu_le_map.trig;            /* (a ratchet, a condition, a chance under 100 %: the small mark) */
-        if (cu_le.n > 1u) {                        /* the selected step's note: the steps after its own it sounds in */
-            uint32_t a = cu_le.c0 - first + 1u, e = cu_le.c0 - first + cu_le.n;
-            e = e > n ? n : e;
-            if (e > a)
-                s->lm_lane[2] = (e - a >= 64u ? ~(uint64_t)0 : ((uint64_t)1 << (e - a)) - 1u) << a;
+        s->lm_lane[3] = cu_le_map.rat[0];          /* (the ratchet's ticks) */
+        s->lm_lane[4] = cu_le_map.rat[1];
+        for (ph = 0; ph < sizeof s->lm_cell; ph++) /* (the velocity's colour, the chance / condition strip) */
+            s->lm_cell[ph] = cu_le_map.cell[ph];
+        s->lm_ed = 1;
+        if (cu_le.cnt) {                           /* the selected step's note: the white bar from its own cell (a part
+                                                    * of it: Note len under a step) over the steps it sounds on into,
+                                                    * across the loop's end as the note does */
+            uint32_t ns = cu_le_map.nstep, e = cu_le.c0 + (cu_le.nf ? 1u : cu_le.n);
+            s->lm_bar = (uint8_t)(cu_le.nf ? cu_le.nf : 4u);
+            s->lm_lane[2] = cu_le_span(cu_le.c0 + 1u, e < ns ? e : ns, first, n);
+            if (e > ns)
+                s->lm_lane[2] |= cu_le_span(0u, e - ns < cu_le.c0 ? e - ns : cu_le.c0, first, n);
         }
         s->lm_steps = (uint8_t)n;
         s->lm_pos = (uint16_t)(((cu_le.c0 - first) & 63u) | (cu_blink(now) ? 0u : CR_LM_CUR_OFF));
@@ -5044,6 +5065,12 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
             cu_cpy(s->sub, r, sizeof s->sub);
             cu_cat(s->sub, q, sizeof s->sub);
             cu_cat(s->sub, sup, sizeof s->sub);
+            if (cu_le.voic > 0 && cu_le.ch) {   /* a fixed voicing, blue after the chord (Follow: nothing; a
+                                                    * single note or a bass-side note is not voiced: nothing) */
+                cu_cat(s->sub, "\t", sizeof s->sub);
+                cu_le_voic_txt(b, sizeof b);
+                cu_cat(s->sub, b, sizeof s->sub);
+            }
         } else
             cu_cpy(s->sub, "-", sizeof s->sub);
         cu_cpy(s->value, "step ", sizeof s->value);

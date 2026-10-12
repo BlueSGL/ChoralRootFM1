@@ -2086,14 +2086,42 @@ static void cr_lm_timeline(const cr_screen_t *s, uint16_t col)
 #undef CR_LX
 }
 
-/* the step grid (FORMAT.md `steps`): a row per bar (four at most), sixteen steps across (2 px more every four); the
- * filled steps (lm_lane[0]) red, the steps a longer note still sounds in (lm_lane[1]) a dark red, the others grey; the
- * step being played (CR_LM_PLAYED: the loop editor's playhead) white when filled, light grey when not; the steps the
- * cursor step's note sounds on into (lm_lane[2]) a 2 px white line along the cell's bottom; the steps with a ratchet,
- * a condition or a chance under 100 % (lm_lane[3], the loop editor) a 3 px notch out of the cell's top right corner; the cursor
- * (lm_pos) a 2 px red outline in a 1 px background ring, not drawn while CR_LM_CUR_OFF (its blink); `sub` (the step's
- * chord) 15 px under the grid at the left, `value` 12 px grey at the right; lm_steps: the cells after that many are
- * not drawn (the loop editor: the loop ends there) */
+/* the step grid (FORMAT.md `steps`): a row per bar (four at most), sixteen steps across (2 px more every four), a
+ * cell 7 px tall. A filled step (lm_lane[0]) is coloured by its velocity (lm_cell bits 0-3, cr_lm_cols: the role
+ * colour `col` at the default 100, towards a dark plum when softer, towards a light peach when louder); the steps a
+ * longer note still sounds in (lm_lane[1]) a dark red, the others grey; the step being played (CR_LM_PLAYED: the loop
+ * editor's playhead) white when filled, light grey when not. On a cell, in this order: the strip (lm_cell's chance
+ * under 100 % or a condition): its 3 right-hand px over the cell's full height, yellow dimmed towards the background
+ * with the chance, blue when the step has a condition; the ratchet (lm_lane[3] / [4]): 2, 3 or 4 ticks, 1 x 2 px in
+ * the background's colour, 2 px apart along the cell's top from its second px; the white LENGTH BAR, 2 px along the
+ * bottom: on the cursor's cell lm_bar quarters of its width, and whole on the cells its note sounds on into
+ * (lm_lane[2]): the selected step's alone. The cursor (lm_pos) a 2 px outline in `col` in a 1 px background ring; its
+ * blink (CR_LM_CUR_OFF): not drawn, or with lm_ed (the loop editor) drawn dim, so the selected step is never
+ * unmarked. `sub` (the step's chord) 15 px under the grid at the left, what follows a tab in it (the step's voicing)
+ * blue after it; `value` 12 px grey at the right; lm_steps: the cells after that many are not drawn (the loop editor:
+ * the loop ends there) */
+#define CR_LM_SOFT CR_RGB(96, 40, 128)   /* the softest step */
+#define CR_LM_HOT CR_RGB(255, 176, 120)  /* the loudest */
+static struct {                          /* the grid's colours, mixed once per palette and role colour (no mixing per
+                                          * cell or per frame): the 16 velocity levels; the strip's 8 chance levels,
+                                          * yellow then blue */
+    uint32_t gen;
+    uint16_t col, ok, vel[16], strip[16];
+} cr_lmc;
+static void cr_lm_cols(uint16_t col)
+{
+    static const uint8_t PCT[8] = {100, 90, 75, 60, 50, 40, 25, 10};   /* (cr_loop.h CRL_CHANCE_PCT) */
+    int32_t k;
+    if (cr_lmc.ok && cr_lmc.gen == ux.gen && cr_lmc.col == col) return;
+    cr_lmc.vel[0] = cr_lmc.vel[12] = col;
+    for (k = 1; k < 12; k++) cr_lmc.vel[k] = ux_mix(CR_LM_SOFT, col, (k - 1) * 100 / 11);
+    for (k = 13; k < 16; k++) cr_lmc.vel[k] = ux_mix(col, CR_LM_HOT, (k - 12) * 100 / 3);
+    for (k = 0; k < 8; k++) {
+        cr_lmc.strip[k] = ux_mix(T_BG, CR_YELLOW, PCT[k]);
+        cr_lmc.strip[8 + k] = ux_mix(T_BG, CR_NAMED[CR_COL_BLUE], PCT[k]);
+    }
+    cr_lmc.gen = ux.gen; cr_lmc.col = col; cr_lmc.ok = 1;
+}
 static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
 {
     int32_t gy = cr_lm_st_y(s), rows = cr_lm_rows(s), per = cr_lm_per(s), cw = cr_lm_cw(per), r, c, H = rows * 9 - 2;
@@ -2101,27 +2129,55 @@ static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
     uint32_t cur = s->lm_pos & 63u, ph = CR_LM_PLAYED(s->lm_pos);
     int curon = !(s->lm_pos & CR_LM_CUR_OFF);
     uint16_t tail = ux_mix(col, T_BG, 62);
-    if (cr_in_strip(gy - 4, gy + H + 4))
+    if (cr_in_strip(gy - 4, gy + H + 4)) {
+        cr_lm_cols(col);
         for (r = 0; r < rows; r++)
             for (c = 0; c < per; c++) {
-                uint32_t st = (uint32_t)(r * per + c);
+                uint32_t st = (uint32_t)(r * per + c), cb, rat, k;
                 int32_t xx = cr_lm_st_x(per, c), yy = (gy + r * 9) * 16;
                 if (st > 63u || (s->lm_steps && st >= s->lm_steps)) break;
                 int on = (int)((s->lm_lane[0] >> st) & 1u);
+                cb = s->lm_cell[st];
+                rat = (uint32_t)((s->lm_lane[3] >> st) & 1u) | (uint32_t)((s->lm_lane[4] >> st) & 1u) << 1;
                 cr_frect(xx, yy, cw, 7 * 16, ph == st + 1u ? (on ? T_TEXT : T_MID)
-                                             : on ? col : (s->lm_lane[1] >> st) & 1u ? tail : T_LINE);
+                                             : on ? cr_lmc.vel[cb & 15u] : (s->lm_lane[1] >> st) & 1u ? tail : T_LINE);
+                if (cb & 0xF0u) {                    /* the strip: whole px, to the cell's right edge */
+                    int32_t x0 = (((xx + cw) >> 4) - 3) * 16;
+                    cr_frect(x0, yy, xx + cw - x0, 7 * 16, cr_lmc.strip[((cb >> 4) & 7u) | (cb & CR_LMC_COND ? 8u : 0u)]);
+                }
+                for (k = 0; rat && k <= rat; k++)    /* the ratchet's ticks: x2 two, x3 three, x4 four */
+                    cr_frect(((xx >> 4) + 1 + 2 * (int32_t)k) * 16, yy, 16, 2 * 16, T_BG);
                 if ((s->lm_lane[2] >> st) & 1u) cr_frect(xx, yy + 5 * 16, cw, 2 * 16, T_TEXT);
-                if ((s->lm_lane[3] >> st) & 1u) cr_frect(xx + cw - 3 * 16, yy, 3 * 16, 3 * 16, T_BG);   /* the notch */
-                if (st == cur && curon) {            /* (the steps after it cover its ring, as the designer's) */
+                if (st == cur && s->lm_bar)          /* the bar begins ON the selected step (a part: to a whole px) */
+                    cr_frect(xx, yy + 5 * 16, s->lm_bar >= 4u ? cw : (((xx + cw * s->lm_bar / 4 + 8) >> 4) << 4) - xx,
+                             2 * 16, T_TEXT);
+                if (st == cur && (curon || s->lm_ed)) {   /* (the steps after it cover its ring, as the designer's) */
                     cr_srect(xx - 48, yy - 48, cw + 96, 7 * 16 + 96, 16, T_BG);
-                    cr_srect(xx - 24, yy - 24, cw + 48, 7 * 16 + 48, 32, col);
+                    cr_srect(xx - 24, yy - 24, cw + 48, 7 * 16 + 48, 32, curon ? col : ux_mix(col, T_BG, 50));
                 }
             }
+    }
     if (!cr_in_strip(ny - 16, ny + 4)) return;
     {
-        int32_t rw = s->value[0] ? cr_tw(s->value, 12, 1) : 0;
+        int32_t rw = s->value[0] ? cr_tw(s->value, 12, 1) : 0, maxw = P8(200 - 8) - rw, vw = 0, g = P8(5), i;
+        char nm[sizeof s->sub];
+        const char *v = "";
+        for (i = 0; s->sub[i] && s->sub[i] != '\t'; i++) nm[i] = s->sub[i];
+        nm[i] = 0;
+        if (s->sub[i] == '\t') v = s->sub + i + 1;
         if (s->value[0]) cr_text(P8(220), P8(ny), s->value, 12, 1, CR_R, 4096, T_MID, T_BG, 0);
-        if (s->sub[0]) cr_text_fit(P8(20), P8(ny), s->sub, 15, 1, CR_L, T_TEXT, T_BG, P8(200 - 8) - rw);
+        if (v[0]) {                                  /* the voicing keeps its room; a long name: the gaps give way
+                                                      * (5 and 8 px to 3 and 3) before the name does */
+            vw = cr_tw(v, 15, 1);
+            if (cr_tw(nm, 15, 1) + g + vw > maxw) { g = P8(3); maxw += P8(5); }
+            vw += g;
+        }
+        if (nm[0]) cr_text_fit(P8(20), P8(ny), nm, 15, 1, CR_L, T_TEXT, T_BG, maxw - vw);
+        if (v[0]) {
+            int32_t nw = cr_tw(nm, 15, 1);
+            if (nw > maxw - vw) nw = maxw - vw;
+            cr_text(P8(20) + nw + g, P8(ny), v, 15, 1, CR_L, 4096, CR_NAMED[CR_COL_BLUE], T_BG, 0);
+        }
     }
 }
 
@@ -2582,10 +2638,12 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     _Static_assert(__builtin_offsetof(cr_screen_t, dial_mode) == __builtin_offsetof(cr_screen_t, dial_pulse) + 1 &&
                    __builtin_offsetof(cr_screen_t, dial_dot) == __builtin_offsetof(cr_screen_t, dial_pulse) + 2,
                    "dial_pulse mode dot");
-    _Static_assert(__builtin_offsetof(cr_screen_t, lm_pos) == __builtin_offsetof(cr_screen_t, lm_lane) + 32 &&
+    _Static_assert(__builtin_offsetof(cr_screen_t, lm_cell) == __builtin_offsetof(cr_screen_t, lm_lane) + 40 &&
+                   __builtin_offsetof(cr_screen_t, lm_bar) == __builtin_offsetof(cr_screen_t, lm_lane) + 104 &&
+                   __builtin_offsetof(cr_screen_t, lm_pos) == __builtin_offsetof(cr_screen_t, lm_lane) + 106 &&
                    __builtin_offsetof(cr_screen_t, lm_erase0) == __builtin_offsetof(cr_screen_t, lm_pos) + 2 &&
                    __builtin_offsetof(cr_screen_t, lm_used) == __builtin_offsetof(cr_screen_t, lm_erase0) + 4,
-                   "lm_lane pos erase0 erase1 used");
+                   "lm_lane cell bar ed pos erase0 erase1 used");
     uint32_t dl = (uint32_t)s->dial | (uint32_t)s->dial_pulse << 16 | (uint32_t)s->dial_mode << 17 |
                   (uint32_t)s->dial_dot << 20;
     for (i = 1; i < 10u; i++)                                    /* (in the struct's order) */
@@ -2603,7 +2661,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     ttl = cr_hash(cr_hash(cr_hash(2166136261u, s->title, sizeof s->title), s->page, sizeof s->page), &s->title_col, 1u);
     if (!ed)                                                     /* (the title line: the editor's top strip only) */
         base = cr_hash(base, &ttl, sizeof ttl);
-    lmr = cr_hash(cr_hash(2166136261u, s->lm_lane, sizeof s->lm_lane), &s->lm_erase0, 4u);
+    lmr = cr_hash(cr_hash(2166136261u, s->lm_lane, 106u), &s->lm_erase0, 4u);   /* (the lanes, lm_cell, lm_bar, lm_ed) */
     lm = cr_hash(lmr, &s->lm_pos, sizeof s->lm_pos);
     if (s->kind != CR_K_LOOPMENU)                                /* (the loop menu's moving parts: its middle only) */
         base = cr_hash(base, &lm, sizeof lm);
