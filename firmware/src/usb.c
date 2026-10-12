@@ -13,7 +13,8 @@
  * FELUCCA_UAC=1 adds Melodee's USB audio recording (usb_audio.c,
  * docs/USB-AUDIO.md): one UAC1 function, the six-channel input device
  * "ChoralRoot In" (EP2 IN: the master, CHORD and BASS, each a stereo pair),
- * 44.1 kHz; Melodee's playback function is not there. Its endpoint is served
+ * 44.1 kHz, or 48 kHz when the host asks (0.19, usb_audio_stream.c: after
+ * SLOOP 2.5 / Felucca 1.1.5); Melodee's playback function is not there. Its endpoint is served
  * from the TIMER5 ISR by elapsed time (ua_service, main.c), nested in the
  * render too; usb_poll never runs nested, so the two never interleave. It can
  * be left out of the configuration (ua_off, Options > USB Record); usb_replug
@@ -143,14 +144,16 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
 #if FELUCCA_UAC
 /* interfaces: 0 audio control, 1 MIDI streaming, then the recording's two (usb_audio_desc.h), or with the console
  * presented (usb_cdc_on) CDC's two instead (CFG_DESC_CDC).
- * bcdDevice (hosts cache descriptors per version): 3.22 ChoralRoot's USB recording (3.20 was the 0.14 dev builds'
- * playback + recording, Melodee's 3.06 has four capture channels: other layouts), 3.21 ChoralRoot's MIDI + console */
+ * bcdDevice (hosts cache descriptors per version): 3.23 ChoralRoot's USB recording at 44.1 and 48 kHz (0.19: the
+ * format's second rate and the endpoint's 688 bytes; as SLOOP 2.5 and Felucca 1.1.5 raised theirs for 48 kHz), 3.22
+ * was the recording at 44.1 kHz only (0.14 .. 0.18), 3.20 the 0.14 dev builds' playback + recording, Melodee's 3.06
+ * has four capture channels: other layouts; 3.21 ChoralRoot's MIDI + console (unchanged) */
 #include "usb_audio_stream.c"
-#define CFG_LEN 208
+#define CFG_LEN 211
 static const uint8_t DEV_DESC[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
-                                     FELUCCA_USB_PID >> 8, 0x22, 0x03, 1, 2, 0, 1};   /* misc/IAD, 3.22 */
+                                     FELUCCA_USB_PID >> 8, 0x23, 0x03, 1, 2, 0, 1};   /* misc/IAD, 3.23 */
 static const uint8_t CFG_DESC[] = {
-    9, 2, CFG_LEN & 0xFF, CFG_LEN >> 8, 4, 1, 0, 0x80, 50,   /* 208 bytes, four interfaces */
+    9, 2, CFG_LEN & 0xFF, CFG_LEN >> 8, 4, 1, 0, 0x80, 50,   /* 211 bytes, four interfaces */
     8, 0x0B, 0, 2, 1, 1, 0, 0,                          /* IAD: MIDI (IF 0-1) */
     9, 4, 0, 0, 0, 1, 1, 0, 0,
     9, 0x24, 1, 0x00, 0x01, 9, 0, 1, 1,

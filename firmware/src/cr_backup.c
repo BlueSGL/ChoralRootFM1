@@ -55,7 +55,7 @@
 #define CRB_HDR1 0x46u
 #define CRB_HDR2 0x4Cu
 enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST, CRB_SELECT,
-       CRB_STUB, CRB_PEAK };
+       CRB_STUB, CRB_PEAK, CRB_USB };
 #define CRB_LOOP0 40u                                /* loop slot k: id 40 + k */
 #define CRB_VA 9u
 #define CRB_FM6S 10u                                 /* 10, 11: the FM6 patch store's halves */
@@ -720,6 +720,36 @@ static void crb_peak(void)
         crb_u32(v[i]);
 }
 
+/* ------------------------------------------------------------------- USB --- */
+/* 79 USB (read-only; 0.19: 73 DEBUG is full) -> version 1, count, count x u32: ChoralRoot In's rate and what 48 kHz
+ * adds to 73's counters, named in this order by tools/fm1_install.py --debug (DEBUG_USB) and read by
+ * tools/uac_check.py; reading clears nothing and values are only ever appended. The rate in force (44100 / 48000) and
+ * the last whole open's (0 before one: what ua_frames_last_open counts frames of), SET_CURs seen and those that
+ * changed the rate, the 48 kHz packets armed by size (48 frames; 47 and 49, the drift's), then the resampler in the
+ * audio ISR: blocks, the recent average and the longest time of one block in us (TIMER5 nested in it included; four
+ * blocks a half), and the largest packet's bytes */
+#if FELUCCA_UAC
+static void crb_usb(void)
+{
+    uint32_t v[12], k = 0, i;
+    v[k++] = ua.r48 ? UA_RATE48 : UA_RATE;
+    v[k++] = !ua_dbg.open_close_ms ? 0u : ua_dbg.rate_last_open ? UA_RATE48 : UA_RATE;
+    v[k++] = ua.rate_sets;
+    v[k++] = ua.rate_changes;
+    v[k++] = ua_dbg.pk576;
+    v[k++] = ua_dbg.pk564;
+    v[k++] = ua_dbg.pk588;
+    v[k++] = ua.rs_blocks;
+    v[k++] = ua.rs_blocks ? ua.rs_ticks / ua.rs_blocks / FM1_TICKS_PER_US : 0u;
+    v[k++] = ua.rs_max_ticks / FM1_TICKS_PER_US;
+    v[k++] = UA_PACKET;
+    crb_b(1);
+    crb_b(k);
+    for (i = 0; i < k; i++)
+        crb_u32(v[i]);
+}
+#endif
+
 /* ------------------------------------------------------------------ STUB --- */
 /* 77 STUB op -> rc: a request to the boot stub (firmware/stub/stub_core.h, docs/BOOT-SAFETY.md), left in its rescue
  * word, and a restart. op 1 TEST: the stub boots as usual and checks the staged loader on the way (73 DEBUG's
@@ -982,6 +1012,13 @@ static int crb_handle(const uint8_t *f, uint32_t n)
             return 0;
         crb_peak();
         break;
+#if FELUCCA_UAC
+    case CRB_USB:                                    /* (ChoralRoot In's rate and its 48 kHz counters) */
+        if (na)
+            return 0;
+        crb_usb();
+        break;
+#endif
     case CRB_STUB:                                   /* (the boot stub's test and rescue requests) */
         if (na != 1u)
             return 0;

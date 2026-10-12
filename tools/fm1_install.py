@@ -905,6 +905,7 @@ BK_SCREEN = 74                                    # the screen off (0) / on (1) 
 BK_SELECT = 76                                    # a part to an engine and pool position, live (cr_backup.c), --select
 BK_STUB = 77                                      # a request to the boot stub and a restart (cr_backup.c crb_stub), --stub
 BK_PEAK = 78                                      # read-only: the audio ISR's worst cases since the last read (crb_peak), --debug
+BK_USB = 79                                       # read-only: ChoralRoot In's rate and its 48 kHz counters (crb_usb), --debug
 STUB_RC = {1: "bad request", 3: "busy: close EDIT / SAVE on the FM-1, stop recording the loop",
            127: "no boot stub of version 2 or later on this firmware"}
 SELECT_RC = {1: "bad part or engine", 2: "bad pool position", 3: "busy: close EDIT / SAVE on the FM-1"}
@@ -2146,6 +2147,13 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # average, the longest); the sound leaves the DAC one half (2.9 ms) after that
               "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
+# 79 USB's values (0.19, cr_backup.c crb_usb, docs/USB-AUDIO.md "48 kHz"; a command of its own because 73 DEBUG is
+# full; reading clears nothing; values are only appended): ChoralRoot In's rate now and in the last whole open (Hz; 0:
+# no open yet), the host's SET_CUR sampling-frequency requests and those that changed the rate, the 48 kHz packets by
+# size (48 frames; 47 and 49: the drift's), the resampler's blocks, its recent average and its longest time for one
+# block of 32 frames in us (four a half; the longest has TIMER5 nested in it), the largest packet in bytes
+DEBUG_USB = ["ua_rate", "ua_rate_last_open", "ua_rate_sets", "ua_rate_changes", "ua_pk576", "ua_pk564", "ua_pk588",
+             "ua_rs_blocks", "ua_rs_avg_us", "ua_rs_max_us", "ua_packet_max"]
 
 
 def stub_lines(d, out):
@@ -2176,11 +2184,12 @@ def stub_lines(d, out):
               file=out)
 
 
-def print_debug(vals, out, stub_only=False, peak=()):
+def print_debug(vals, out, stub_only=False, peak=(), usb=()):
     d = dict(zip(DEBUG_NAMES, vals))
     log = vals[len(DEBUG_NAMES):len(DEBUG_NAMES) + DEBUG_LOG]
     d.update(zip(DEBUG_TAIL, vals[len(DEBUG_NAMES) + DEBUG_LOG:]))
     d.update(zip(DEBUG_PEAK, peak))
+    d.update(zip(DEBUG_USB, usb))
     if stub_only:
         for k in [k for k in d if k.startswith("stub_")]:
             print(f"{k} {d[k]}" + (f" (0x{d[k]:08X})" if k in DEBUG_TAIL or k == "stub_detail" else ""), file=out)
@@ -2196,6 +2205,18 @@ def print_debug(vals, out, stub_only=False, peak=()):
         if k in d:
             print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
                                    f" (0x{d[k]:08X})" if k == "irq_gap_pc" else ""), file=out)
+    for k in DEBUG_USB:
+        if k in d:
+            print(f"{k} {d[k]}", file=out)
+    if "ua_rate_changes" in d:
+        print(f"ChoralRoot In: {d['ua_rate']} Hz now, the last whole open at "
+              f"{d['ua_rate_last_open'] or 'no rate (none yet)'}" + (" Hz" if d["ua_rate_last_open"] else "") +
+              f"; the host set the rate {d['ua_rate_sets']} times ({d['ua_rate_changes']} changes)", file=out)
+        if d.get("ua_rs_blocks"):
+            print(f"48 kHz: packets of 48 / 47 / 49 frames: {d.get('ua_pk576', 0)} / {d.get('ua_pk564', 0)} / "
+                  f"{d.get('ua_pk588', 0)}; the resampler takes {d['ua_rs_avg_us']} us a block on average = "
+                  f"{4 * d['ua_rs_avg_us']} us of a half's 2902 ({4 * d['ua_rs_avg_us'] * 100 / 2902:.1f} %), "
+                  f"{d['ua_rs_max_us']} us at most for one block (TIMER5 nested in it)", file=out)
     if "pk_block_us" in d and d.get("pk_halves"):
         print(f"worst half since the last --debug: {d['pk_block_us']} us of 2902 ({d['pk_block_us'] * 100 // 2902} %) over "
               f"{d['pk_halves']} halves ({d['pk_halves'] * 128 / 44100:.1f} s); stages tick {d['pk_tick_us']}, part0 "
@@ -2223,13 +2244,26 @@ def print_debug(vals, out, stub_only=False, peak=()):
     stub_lines(d, out)
     if d.get("ua_open_close_ms"):
         print(f"last whole open: {d['ua_frames_last_open']} frames in {d['ua_open_close_ms']} ms = "
-              f"{d['ua_frames_last_open'] / d['ua_open_close_ms']:.4f} frames/ms", file=out)
+              f"{d['ua_frames_last_open'] / d['ua_open_close_ms']:.4f} frames/ms" +
+              (f" (at {d['ua_rate_last_open']} Hz: {d['ua_rate_last_open'] / 1000:g} is the rate's)"
+               if d.get("ua_rate_last_open") else ""), file=out)
     if log:
         n = vals[DEBUG_NAMES.index("ua_log_n")]
         print("event log (oldest first):", file=out)
         for j in range(0, len(log) - 1, 2):
             if j // 2 >= 16 - min(n, 16):
                 print("  " + debug_event(log[j], log[j + 1]), file=out)
+
+
+def usb_values(link, timeout=1.0):
+    """79 USB -> {name: value} (DEBUG_USB), or {} from a firmware before 0.19 (no answer, or "unsupported")"""
+    try:
+        r = BackupLink(link).request(BK_USB, [], timeout)
+    except BackupError:
+        return {}
+    if not r or r[0] != 1 or len(r) != 2 + 5 * r[1]:
+        return {}
+    return dict(zip(DEBUG_USB, [bk_r32(r, 2 + 5 * k) for k in range(r[1])]))
 
 
 def debug_values(link, timeout):
@@ -2392,12 +2426,14 @@ def run(a, backend, out, ask):
                 pk = BackupLink(dev.link).request(BK_PEAK, [], 1.0)
             except BackupError:
                 pk = None
+            usb = usb_values(dev.link)            # (0.19: the rate and the 48 kHz counters; {} before)
         finally:
             dev.link.close()
         if not r or r[0] != 1 or len(r) != 2 + 5 * r[1]:
             raise BackupError("unexpected debug reply")
         peak = [bk_r32(pk, 2 + 5 * k) for k in range(pk[1])] if pk and pk[0] == 1 and len(pk) == 2 + 5 * pk[1] else []
-        print_debug([bk_r32(r, 2 + 5 * k) for k in range(r[1])], out, peak=peak)
+        print_debug([bk_r32(r, 2 + 5 * k) for k in range(r[1])], out, peak=peak,
+                    usb=[usb[k] for k in DEBUG_USB if k in usb])
         return 0
     if a.info:
         dev = up.find()

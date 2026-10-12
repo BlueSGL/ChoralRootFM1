@@ -3,12 +3,16 @@
 """Measure ChoralRoot In (the FM-1's USB recording) on a Mac: record it with ffmpeg while MIDI chords play the FM-1,
 and report what the FM-1 itself sent during the capture (docs/USB-AUDIO.md, "Measuring the recording on a Mac").
 
-usage: tools/uac_check.py OUT.wav [SECONDS] [--nonotes] [--debug] [--device NAME]
+usage: tools/uac_check.py OUT.wav [SECONDS] [--nonotes] [--debug] [--device NAME] [--rate 44100|48000]
 
   SECONDS     the capture's wall time (default 14)
   --nonotes   no chords: the stream's behaviour in silence
   --debug     also print the counters as read, before and after (fm1_install.py --debug's names)
   --device    the capture device's name (default "ChoralRoot In")
+  --rate      the rate ChoralRoot In is expected to run at, 44100 or 48000 (0.19: the host chooses; on a Mac it is
+              the Format set for ChoralRoot In in Audio MIDI Setup, which this tool does not change). The WAV is
+              written at that rate, and the verdict says so if the FM-1 streamed at the other. Without it the WAV is
+              44100 Hz as before and whatever rate the FM-1 reports is taken as meant
 
 The measure is the unit's own counters (SysEx 73 DEBUG, read before and after the capture through fm1_install.py's
 MIDI side), not the WAV: ffmpeg's avfoundation capture is itself short (56.70 s of audio in a 60 s capture, from
@@ -18,13 +22,16 @@ length against the wall time measures ffmpeg. What is printed, from the differen
   opens       how often the host opened the stream during the capture (one per recording; each further one is a
               restart of the stream by the host: a gap in the recording)
   the open    the length of the last whole open against the wall time asked, and the frames the FM-1 sent in it
-              against 44100 Hz x that length
+              against its rate x that length: the rate of that open as the FM-1 reports it (SysEx 79 USB:
+              ua_rate_last_open, 44100 or 48000; a firmware before 0.19 does not answer and ran at 44100)
   packets     against the USB frames (SOFs) the FM-1 saw while the stream was open: one a frame
   overruns    the host did not read and the ring ran over. One is counted at each close of the stream too (the
               host stops reading a moment before it closes it): said in the output, not subtracted in silence
   underruns, missed frames   the ring ran dry; USB frames that passed without a service of the endpoint
-  nudges      a 45-frame packet in place of a 44 (or the reverse): the FM-1's audio clock against the computer's
-              USB clock, in ppm
+  nudges      a 45-frame packet in place of a 44 (or the reverse; at 48 kHz a 49 or a 47 in place of a 48): the
+              FM-1's audio clock against the computer's USB clock, in ppm
+  48 kHz      the packets by size (48 frames, and the 47s and 49s of the drift), the SET_CURs the host sent, and
+              what the resampler costs on the unit: us a block, x 4 = of a half's 2902 us
 
 A healthy run: one open as long as the capture, frames within a fraction of a percent of 44100 Hz x its length (the
 host's first read comes ~14 ms after the open, the FM-1's audio clock runs about +0.04 % over 44100), no underrun,
@@ -50,12 +57,14 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import fm1_install as fi                                # noqa: E402  (the MIDI side: every call of it has a bound)
 
-RATE = 44100
-PACKET_FRAMES = 44.1                                    # the packet pattern (usb_audio_stream.c): 44 and 45 frames
+RATE = 44100                                            # the rate of a firmware that does not say (before 0.19)
+RATES = (44100, 48000)
+USB_KEYS = ("ua_rate", "ua_rate_last_open", "ua_rate_sets", "ua_rate_changes", "ua_pk576", "ua_pk564", "ua_pk588",
+            "ua_rs_blocks", "ua_rs_avg_us", "ua_rs_max_us")   # fm1_install.DEBUG_USB (SysEx 79), merged into the read
 RAW_KEYS = ("ms", "ua_cap_alt", "ua_opens", "ua_open_ms", "ua_open_close_ms", "ua_frames_this_open",
             "ua_frames_last_open", "ua_tx_packets", "ua_sofs", "ua_overruns", "ua_underruns", "ua_missed_frames",
             "ua_nudges_up", "ua_nudges_down", "ua_holds", "ua_first_take_ms", "ua_pk528", "ua_pk540", "ua_pk_other",
-            "usb_stalls", "usb_resets")
+            "usb_stalls", "usb_resets") + USB_KEYS
 OPEN_SLACK_MS = 100                                     # an open's own: the first read ~14 ms in, the last before the close
 
 
@@ -75,11 +84,13 @@ def counters(up):
                           (f" ({up.gave_up} did not return in time)" if up.gave_up else ""))
         try:
             vals = fi.debug_values(dev.link, 3.0)
+            usb = fi.usb_values(dev.link)                # (0.19: the rate, the 48 kHz counters; {} before)
         finally:
             dev.link.close()
     except fi.InstallError as e:
         return None, str(e)
     d = dict(zip(fi.DEBUG_NAMES, vals))
+    d.update(usb)
     return (d, None) if "ua_opens" in d else (None, "this firmware has no USB recording counters (73 DEBUG is shorter)")
 
 
@@ -87,8 +98,10 @@ def unit_delta(before, after):
     """what the unit did between two reads of its counters -> a dict of numbers (pure: the tests call it).
     restarted: its uptime went back, so the first read counts for nothing. closes: opens + was open - is open.
     whole: a close fell into the capture, so ua_open_close_ms / ua_frames_last_open are this capture's last open.
-    overruns_open: the overruns beyond one per close (see the module's text). short_ms: the open's length less the
-    frames sent in it at 44100 Hz (negative: more frames than that, the audio clock's +0.04 % over a long open)"""
+    overruns_open: the overruns beyond one per close (see the module's text). rate: the last whole open's rate as
+    the unit reports it (ua_rate_last_open, 0.19), 44100 when it does not; rate_now: ua_rate or None. short_ms: the
+    open's length less the frames sent in it at that rate (negative: more frames than that, the audio clock's
+    +0.04 % over a long open). pk48: the 48 kHz packets (48, 47, 49 frames) in the capture"""
     a = dict(after)
     restarted = a.get("ms", 0) < before.get("ms", 0)
     b = {} if restarted else dict(before)
@@ -102,19 +115,31 @@ def unit_delta(before, after):
     frames = a.get("ua_frames_last_open", 0) if whole else 0
     packets, up_, down = d("ua_tx_packets"), d("ua_nudges_up"), d("ua_nudges_down")
     overruns = d("ua_overruns")
+    rate = a.get("ua_rate_last_open") if whole else None
+    rate = rate if rate in RATES else RATE               # (no word from the unit: the one rate there was)
+    pk48 = (d("ua_pk576"), d("ua_pk564"), d("ua_pk588"))
+    # the packet pattern (usb_audio_stream.c): 44 and 45 frames, 44.1 a packet; at 48 kHz 48. A capture in which the
+    # rate changed has packets of both: the nudges are measured against what was sent
+    per_packet = (44.1 * max(0, packets - sum(pk48)) + 48.0 * sum(pk48)) / packets if packets > 0 else 44.1
     return {"restarted": restarted, "opens": opens, "closes": closes, "was_open": was_open, "is_open": is_open,
-            "whole": whole, "last_ms": last_ms, "open_ms": d("ua_open_ms"), "frames": frames,
-            "frames_ratio": frames / (RATE * last_ms / 1000) if last_ms else None,
-            "short_ms": last_ms - frames * 1000 / RATE if last_ms else None,   # audio at 44100 Hz not sent in the open
+            "whole": whole, "last_ms": last_ms, "open_ms": d("ua_open_ms"), "frames": frames, "rate": rate,
+            "rate_known": "ua_rate" in a, "rate_now": a.get("ua_rate"), "rate_sets": d("ua_rate_sets"),
+            "rate_changes": d("ua_rate_changes"), "pk48": pk48,
+            "rs_avg_us": a.get("ua_rs_avg_us", 0), "rs_max_us": a.get("ua_rs_max_us", 0),
+            "rs_blocks": d("ua_rs_blocks"),
+            "frames_ratio": frames / (rate * last_ms / 1000) if last_ms else None,
+            "short_ms": last_ms - frames * 1000 / rate if last_ms else None,   # audio at the open's rate not sent in it
             "packets": packets, "sofs": d("ua_sofs"), "overruns": overruns,
             "overruns_open": max(0, overruns - max(0, closes)), "underruns": d("ua_underruns"),
             "missed": d("ua_missed_frames"), "nudges_up": up_, "nudges_down": down,
-            "ppm": (up_ - down) / (packets * PACKET_FRAMES) * 1e6 if packets > 0 else None}
+            "ppm": (up_ - down) / (packets * per_packet) * 1e6 if packets > 0 else None}
 
 
-def unit_report(before, after, wall_s):
-    """the verdict's lines: what the FM-1 did during a capture of wall_s seconds (pure: the tests call it)"""
+def unit_report(before, after, wall_s, want_rate=None):
+    """the verdict's lines: what the FM-1 did during a capture of wall_s seconds (pure: the tests call it).
+    want_rate: the rate the capture was meant to run at (--rate), None: whatever the FM-1 reports"""
     u = unit_delta(before, after)
+    rate = u["rate"]
     out = [f"the FM-1 during the capture (its own counters, read before and after; {wall_s:g} s asked of ffmpeg):"]
     odd = []
     if u["restarted"]:
@@ -131,10 +156,18 @@ def unit_report(before, after, wall_s):
     if u["whole"]:
         out.append(f"  the last whole open: {u['last_ms'] / 1000:.3f} s = {u['last_ms'] / 1000 / max(wall_s, 1e-9):.3f} x the "
                    f"{wall_s:g} s asked; open in all: {u['open_ms'] / 1000:.3f} s")
-        out.append(f"  frames sent in it: {num(u['frames'])} = {u['frames'] / RATE:.3f} s at {RATE} Hz = "
+        out.append(f"  frames sent in it: {num(u['frames'])} = {u['frames'] / rate:.3f} s at {rate} Hz = "
                    f"{u['frames_ratio']:.5f} x its length ({abs(u['short_ms']):.0f} ms "
-                   f"{'less' if u['short_ms'] >= 0 else 'more'} than {RATE} Hz x its length; the host's first read comes "
+                   f"{'less' if u['short_ms'] >= 0 else 'more'} than {rate} Hz x its length; the host's first read comes "
                    "~14 ms after the open, the FM-1's audio clock runs ~+0.04 %)")
+        if u["rate_known"]:
+            out.append(f"  the rate of that open, as the FM-1 reports it: {rate} Hz" +
+                       (" (resampled from its 44.1 kHz by the FM-1)" if rate == 48000 else " (its own rate: nothing resampled)"))
+        if want_rate and u["rate_known"] and rate != want_rate:
+            odd.append(f"the FM-1 streamed at {rate} Hz, not the {want_rate} Hz asked for (set ChoralRoot In's format "
+                       "in Audio MIDI Setup)")
+        elif want_rate and not u["rate_known"] and want_rate != RATE:
+            odd.append(f"this firmware does not report a rate (before 0.19: 44100 Hz only), {want_rate} Hz was asked for")
         if u["short_ms"] > OPEN_SLACK_MS:
             odd.append(f"{u['short_ms']:.0f} ms of the open without audio sent")
         if u["opens"] == 1 and u["last_ms"] < 900 * wall_s:
@@ -152,6 +185,16 @@ def unit_report(before, after, wall_s):
                f"a moment before it closes it; {max(0, u['closes'])} close{'s' if u['closes'] != 1 else ''} here: "
                f"{u['overruns_open'] or 'none'} more than the closes account for)")
     out.append(f"  underruns: {u['underruns']}, missed frames: {u['missed']}")
+    if u["rate_known"]:
+        out.append(f"  rate requests from the host (SET_CUR): {u['rate_sets']}, of which changes of the rate: "
+                   f"{u['rate_changes']}; the rate now: {u['rate_now']} Hz")
+        if sum(u["pk48"]):
+            out.append(f"  48 kHz packets: {num(u['pk48'][0])} of 48 frames, {num(u['pk48'][1])} of 47, "
+                       f"{num(u['pk48'][2])} of 49; the resampler: {u['rs_avg_us']} us a block on average = "
+                       f"{4 * u['rs_avg_us']} us of a half's 2902 ({4 * u['rs_avg_us'] * 100 / 2902:.1f} %), "
+                       f"{u['rs_max_us']} us at most (TIMER5 nested in it)")
+        if u["rate_changes"] > 1:
+            odd.append(f"the host changed the rate {u['rate_changes']} times during the capture")
     if u["overruns_open"]:
         odd.append(f"{u['overruns_open']} overrun{'s' if u['overruns_open'] != 1 else ''} beyond the closes' (the host "
                    "did not read for a moment while the stream ran)")
@@ -161,7 +204,8 @@ def unit_report(before, after, wall_s):
         odd.append(f"{u['missed']} USB frame{'s' if u['missed'] != 1 else ''} missed")
     if u["ppm"] is not None:
         out.append(f"  nudges: {num(u['nudges_up'])} up, {num(u['nudges_down'])} down = the FM-1's audio clock "
-                   f"{u['ppm']:+.0f} ppm against the computer's USB clock (absorbed: a 45-frame packet in place of a 44)")
+                   f"{u['ppm']:+.0f} ppm against the computer's USB clock (absorbed: a 45-frame packet in place of a "
+                   "44; at 48 kHz a 49 in place of a 48)")
     out.append("  verdict: " + ("the FM-1 sent the stream whole" if not odd else "; ".join(odd)))
     return out
 
@@ -217,6 +261,7 @@ def main():
     ap.add_argument("--nonotes", action="store_true")
     ap.add_argument("--debug", action="store_true")
     ap.add_argument("--device", default="ChoralRoot In")
+    ap.add_argument("--rate", type=int, choices=RATES, default=None)
     a = ap.parse_args()
     secs = a.seconds
     up = fi.Updater(fi.MidiBackend())                    # the port list and the open, each with its bound
@@ -229,7 +274,7 @@ def main():
                  (f": {up.gave_up} did not return in time" if up.gave_up else ""))
     try:
         rec = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "avfoundation", "-i", f":{a.device}",
-                                "-t", str(secs), "-ac", "2", "-ar", "44100", a.out])
+                                "-t", str(secs), "-ac", "2", "-ar", str(a.rate or RATE), a.out])
     except OSError as e:
         sys.exit(f"ffmpeg did not start: {e}")
     time.sleep(2.0)                                      # the stream settles before the notes
@@ -266,7 +311,7 @@ def main():
         if after is None:
             print(f"the FM-1's counters could not be read after the capture ({why}): no verdict on the FM-1")
         else:
-            print("\n".join(unit_report(before, after, secs)))
+            print("\n".join(unit_report(before, after, secs, a.rate)))
     print("\n".join(wav_report(a.out, secs, a.nonotes, sent)))
     if a.debug:
         raw("before", before)

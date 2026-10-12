@@ -40,7 +40,10 @@
 #   (u) USB audio recording (docs/USB-AUDIO.md): the emulator has no USB, so not a scenario but what ChoralRoot In
 #       adds to a half on top of (a)..(g): tests/cr_usbaudio_test.c --bench counts the host instructions of the
 #       capture staging, the master tap and the ring copy (the audio ISR) and of the packets (TIMER5), with emu.c's
-#       device ratio; the SIE register accesses are not in it
+#       device ratio; the SIE register accesses are not in it. Two lines: the stream at 44.1 kHz, and what 48 kHz
+#       adds (the resampler of six channels in the audio ISR, packets of 48 frames). The unit's own figure for the
+#       resampler is counted from its disassembly (docs/USB-AUDIO.md "48 kHz": about 185 us a half) and read from
+#       the unit (fm1_install.py --debug: ua_rs_avg_us x 4)
 set -u
 ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
@@ -92,3 +95,4 @@ b=$(sed -n 's/^cpu: host instructions per 128-frame block avg [0-9]*, max \([0-9
 echo "   (k) the worst audio block: $a host instructions with a global save, $b with an automatic settings save"
 echo "== (u) USB audio recording (estimate: the emulator has no USB)"
 cc -std=gnu11 -O2 -w -o build/host/cr_usbaudio_test tests/cr_usbaudio_test.c && build/host/cr_usbaudio_test --bench | sed 's/^/   /'
+echo "   (the unit, counted from build/choralroot.dis at 205 instructions a us: 44.1 kHz as before; 48 kHz +185 us a half, docs/USB-AUDIO.md)"
