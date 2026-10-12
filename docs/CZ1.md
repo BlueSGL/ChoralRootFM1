@@ -138,6 +138,13 @@ the limiter, the post-master peak and RMS; trims in 0.5 dB steps):
 | CZ VIBES | F-2 VIBRAPHONE | 0 % -18.7 / -46.8, 0 % -15.3 / -21.4 | (as trim 0) | 0 |
 | CZ BASS (with TINE EP's chord) | B-5 SYNTH.BASS | 0 % -8.6 / -30.2 | (as trim 0) | 0 |
 
+**0.19: no trims.** The engine is 6 dB lower ("Level" below) and `CB_TRIM`'s three CZ-1 rows are gone. The same
+measure after it, trim 0 (alone / with SUB BASS): CZ BRASS 1 0 % -8.5 / -20.2 dB, 0 % -6.9 / -17.8; CZ PIANO 0 %
+-28.7 / -59.0, 0 % -17.5 / -21.4; CZ STRINGS 2 0 % -11.0 / -21.7, 0 % -8.6 / -18.6; CZ PIPE 0 % -7.7 / -20.1, 0 %
+-6.9 / -17.8; CZ VIBES 0 % -24.7 / -52.8, 0 % -16.9 / -21.4; CZ BASS (TINE EP's chord) 0 % -8.4 / -30.4. No row
+reaches the limiter; BRASS 1 is 1 dB and STRINGS 2 3 dB under what they were with their trims, PIPE ORGAN 1 where it
+was. (`tests/va_levels.c cz`, through hostsim's master: Classic.)
+
 The fifth chord row is VIBRAPHONE rather than BELLS: BELLS has no DCA sustain and rings ~21 s after every chord change
 (the voices pile up), VIBRAPHONE decays as a mallet should. PIANO 1 decays too (its RMS over the 5.6 s hold is low).
 
@@ -304,8 +311,8 @@ engine).
 After, the same matrix: **0 gain steps, 0 holes, 0 wraps, 0 jumps in `hold`**; 41 runs of 24 960 keep a jump, all at
 C2 on AFRO PERC (19), SYN DRUMS 2 (13), SYNTH.BASS (4), CELLO (3), CONGA (2): two to six samples of a pulse's own
 edge about 156 samples after a note-on, while the depth runs through its range at the fastest rate. They are in
-main's renders too and are the tone, not a step of a block (inference from their place inside blocks and their
-width; not compared with a CZ-1).
+main's renders too and are the tone, not a step of a block (then an inference from their place inside blocks and
+their width; verified against the waves' definitions in the second round, below).
 
 What changed in the sound. (A): a note struck again while it sounds no longer falls silent and attacks from nothing;
 its level, its timbre and its pitch envelope move from where they are through the tone's steps. A sustained chord
@@ -357,9 +364,131 @@ the same in both builds).
   whose depth is at rest runs the code it ran; its samples can still differ from main's by the DC filter's state
   (`dc`), which carries the attack's history and comes back to within one step of it.
 
+### The second round (2026-10-12): the click that was left, the jumps at C2
+
+**What was asked.** The output chain's round saw "CZ-1 BRASS 1 with the bass, struck again while it sounds: 2 clicks
+to `wavclicks.py` in Clean, the same in f402608's, absent in Classic", and the first round left 41 runs with a jump
+at C2 "believed to be the tones' own edges". Both were followed to the sample.
+
+**The matrix grew** to eight scenarios, 33 280 runs: `restrike` (the emulator script's: held 1.2 s, struck again
+20 ms after its release three times, two changes; `CZ_GAP=MS` sets the release) and `arp-up` (the unit's Arpeggiate
+as it comes: up, sixteenths at 120 BPM, ten passes, each note struck again over its own tail). New in a run's line:
+`click` (wavclicks' measure made two-sided, below), `half` (the hash of "Level"). `CZ_TRACE=A,B` prints every voice's
+block between two samples, `CZ_WHY=J` what every line did at sample J against its wave's definition. The thresholds
+follow the engine's scale, so the counts before and after the trim are of the same steps.
+
+**The two clicks are not a step.** Reproduced to the millisecond in the emulator (BRASS 1, the bass, MASTER at its
+top, the chord let go for 60 ms and struck again: `wavclicks` 2 clicks at 2.3039 and 3.0643 s in a 778a6ad build;
+without the bass the same two, so they are the chord's) and in the host (`CZ_GAP=60 cz_pops one 15 1 6 ..`). At the
+re-strike every line's gain and DCW depth is continuous (`CZ_TRACE`: the DCA goes 43 -> 130 -> 392 -> 1179 -> 3542
+-> 10 632 -> 28 683 of 32 767 over six blocks from where the 60 ms release left it; the depth goes on from 716 of
+1023, where its slower release left it, to 958). The window wavclicks flags is the **first audible window of that
+attack** (third difference 42, against a median of about 1 in the 30 quiet windows before it); the windows after it
+carry the tone's own saw edges at 150 to 215, every cycle, for as long as the note is held. So: BRASS 1's DCA lets
+go in 60 ms and its DCW does not, the note comes back with its wave already bright instead of opening (a fresh
+strike starts the DCW at 0 and takes 40 ms to get there, which is why the first strike is not flagged), and a
+measure that compares a window with the median of its neighbourhood reads the first bright one after a quiet stretch
+as a click. Classic shows the same event at 10 times its neighbourhood instead of 24: under the threshold of 12, not
+absent. It is what fix (A) of the first round does by design (the envelopes go on from their level), and it is what
+the chip does: in Devin Acker's uPD933 model (MAME `upd933.cpp`, the source of `cz_native.c`) a write of an
+envelope's rate and target never touches its current level, which slews from where it is; only a chip reset clears
+it. (Read from the model's source; not compared with a CZ-1.) Nothing was changed for it. **If the bright re-attack
+is not wanted**, the place is `cz_note_on`: start the DCW and pitch envelopes from 0 when the line's DCA is silent
+(a voice that makes no sound has no wave to step); a decision of taste, not built.
+
+**A real step was found on the way: a sounding note struck again at another velocity.** The matrix strikes every
+note of a run at one velocity, so it could not see it. The DCA curve of a level is scaled by the velocity
+(`cz_native_amp`), and a voice that keeps its level over a note-on got the new velocity's gain on the block's first
+sample: a step of the voice's whole sample. `CZ_VEL2=30 cz_pops one 15 4 1 2 60 127 0` (STRINGS 1, the chord struck
+again every 300 ms at 127 and 30 in turn): a gain step of 9496 of 32 767, a jump of 5236 in the dry mix against
+1069 nearby; 43 of the 65 tones step more than 5 % of full scale. On the unit the keys have one velocity, so it
+comes from a loop's step velocities, MIDI in, Pattern's accents, MONO's legato raising a voice's velocity, or a
+LEVEL / V.AMP column turned under a held note (the same arithmetic). **Fixed at the cause**: a line's gain at the
+end of a block is kept (`cz_voice_t.ag`) and is where its next block starts; `cz_note_on` keeps it on a sounding
+voice as it keeps the levels. The gain then moves to the new velocity's across one block (0.7 ms: what every other
+gain of the engine does) and on through the envelope's steps. With the velocity and the tone's level bytes unchanged
+the kept gain is the value the curve gave before, so nothing else moves: the same `half` for all 33 280 runs before
+and after, all 167 emulator WAVs the same. After: 0 of the 65 with a gain step, STRINGS 1's jump gone.
+
+**The jumps at C2 are the waves' own edges: verified.** `tools/cz_pops_why.py` renders every run with a jump again
+with `CZ_WHY` at the jump's sample and sets, for the line with the largest step, the step its wave's definition
+gives between the two samples' phase positions (`cz_native_wave` alone, no state, at that sample's depth and gain)
+beside the step the line made. 79 runs of 33 280 have a jump (the first round's 41 in its six scenarios, 37 in the
+two new ones, one more of BRASS 1 now that it has no trim); **in all 79 the definition gives the step** (within
+15 %; e.g. AFRO PERC: the definition's -14 676, the line's -14 375):
+
+| tone | runs | wave | DCW depth of 1023 | phase positions a sample | samples after the note-on | the step: definition / line |
+| --- | --- | --- | --- | --- | --- | --- |
+| AFRO PERC | 35 | 5 (sine pulse) | 812 .. 943 | 28 .. 42 | 147 .. 165 | 7240 .. 17 106 / 7241 .. 16 984 |
+| SYN DRUMS 2 | 24 | 0 (saw), 5 | 208 .. 943 | 2 .. 35 | 148 .. 267 | 83 .. 13 526 / 77 .. 13 455 |
+| SYNTH.BASS | 8 | 1 (square) | 1010 .. 1013 | 2 | 150 .. 277 | 6157 .. 6594 / 6137 .. 6568 |
+| CONGA | 6 | 1 | 985 .. 997 | 4 .. 5 | 156 .. 159 | 3726 .. 4880 / 3715 .. 4877 |
+| CELLO | 3 | 4 (double sine) | 996 | 8 | 164 | 8899 .. 9294 / 8902 .. 9298 |
+| MALLET LOG | 2 | 1 | 1013 | 2 | 165 | 6877 .. 7402 / 6871 .. 7396 |
+| BRASS 1 | 1 | 5 | 1014 | 3 | 61 | 3980 / 3934 |
+
+They are phase functions squeezed by the depth: wave 5 at depth 936 runs its second half-cosine through 88 of the
+2048 phase positions, which a voice moving 33 positions a sample crosses in three samples; the square at depth 1013
+has 11 positions for its edge. They fall about 150 samples after a note-on because that is where a DCW attack at
+the fastest rate reaches its top (218 of 1023 a block), and they count as jumps because nothing that steep is
+within 600 samples of them yet. Six of them fall on a block's first sample: the definition gives those too (one
+block in 32 would by chance). The chip's 11-bit phase functions make the same edges; not compared with a CZ-1. Left
+as they are.
+
+**The matrix, before (778a6ad) and after both changes**, the same tool and thresholds:
+
+| | hold | retrig | retrig-gap | change | steal | arp | restrike | arp-up |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| runs | 4160 | 4160 | 4160 | 4160 | 4160 | 4160 | 4160 | 4160 |
+| with a wrap, before / after | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| with a gain step > 5 % | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| with a jump (all the waves' own) | 0 / 0 | 4 / 4 | 0 / 0 | 4 / 4 | 8 / 8 | 25 / 26 | 6 / 6 | 31 / 31 |
+| with a hole | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 | 0 / 0 |
+| with a dip (beating; says little) | 255 / 241 | 428 / 427 | 803 / 751 | 329 / 329 | 472 / 447 | 1125 / 1099 | 1137 / 1115 | 418 / 405 |
+| with a two-sided click | 45 / 44 | 455 / 447 | 434 / 431 | 415 / 405 | 204 / 205 | 383 / 384 | 432 / 420 | 300 / 300 |
+
+(The one jump more in `arp` is BRASS 1 without its trim: 5 dB louder against the scaled floor.) The gain step row is
+0 by construction since the fix (a block starts at the gain the last one ended at) and was 0 before at one velocity.
+**The two-sided click** (`clicks()` in `tests/cz_pops.c`: 12 times above the median of the windows before it and of
+those after it, each on its own, and 3 times above the largest window within 1.25 periods of the lowest note) still
+fires in 2636 runs (2668 before): attacks that carry a burst of their own (AFRO PERC 213, CONGA
+191, KOTO 160, SITAR 153, HARPSICHORD 102, RECORDER 78: its line 2's pitch envelope jumps 27 semitones and back in
+four blocks, the chiff; 44 of them in `hold`, where nothing is struck again). It says where to look, not what is
+there; wavclicks' own one-sided measure on the output fires in nearly half of all runs (16 011 before, 15 335 after).
+
+Stage peaks over all runs, before -> after: a line 29 601 -> 29 601 (Q15), a voice's two lines 53 480 -> 53 480, a
+voice into the part 156 672 -> 78 336 (exactly half), the part after LEVEL 116 543 -> 58 271, the dry mix 151 577 ->
+75 787 (4.6 -> 2.3 x full scale at MASTER's top), the output 30 550 -> 24 084. **The master limiter** (hostsim's
+master is Classic, 0.18's, as in the first round) worked in 54.9 % of the runs before (59.8 % of the first round's
+six scenarios, where it was 59 %) and in **6.3 %** after (6.6 %), down to a gain of 0.28 before and 0.55 after.
+Through Options > Output Clean (`CZ_CLEAN=1`, the same 33 280 runs): its limiter works in 56.8 % of the runs before and
+**7.9 %** after, down to 0.26 and 0.52.
+
+**Cost on the unit**, counted in `build/choralroot.dis` against a build of 778a6ad at 205 instructions a
+microsecond. The trim: nothing (every CZ-1 function has the instruction count it had: `cz_native_render` 494; the
+multiply's constant is another). The fix: `cz_native_render` 494 -> 517 instructions; on the usual path (the DCA at
+rest, a kept gain) 9 instructions more a line and block (the kept gain's load, test and store), 72 a voice a half:
+16 240 -> 16 312 (79.2 -> 79.6 us, +0.4 %; eight voices +2.8 us); in a block whose DCA moves one `cz_native_amp`
+fewer (30 instructions and its two divides), about 28 less a line and block. `cz_note_on` 105 -> 115, once a note.
+No instruction was added to a sample's loop. Flash: XIP 480 832 -> 480 720 B (the trims' rows went, the kept gain
+came); RAM and POOL unchanged (`cz_voice_t` 156 -> 164 B inside `eng_state`, which FM6 sizes).
+`tests/target_budget.txt`: `cz_native_render` 360 -> 382 (the static measure).
+
+**What stayed bit for bit.** Against an emulator built from 778a6ad, all 166 scripts with `--wav`, in Clean and
+held at Classic: 161 identical WAVs; the five that differ (`cr_cz`, `cr_cz_pop`, `cr_output_loud`, `cr_select`,
+`perf_g`) are the five that play CZ-1 notes. `tests/regress.c`: the 132 goldens of the other engines unchanged; all
+65 CZ-1 goldens rewritten for the trim, 50 of them again for the fix (its phrase strikes two sounding notes again
+at another velocity, 80 then 105 and 120 then 110; with those two at their first velocities all 197 are the
+trim's).
+
+**Not tested**: nothing on the unit (no flash, no MIDI); no CZ-1 beside it; the velocity step through a loop or
+MIDI in the emulator (its scripts have one velocity: the host test covers it); how the bright re-attack sounds to
+the owner (`../audio-0.19/cz-trim/brass1-bass-restrike-60ms.wav`).
+
 ### Level
 
-The same held 6-note chord (D4 F#4 A4 B4 C#5 E5, velocity 100, LEVEL 92, the sends at 0, `CB_TRIM`'s three trims in),
+As measured in the first round (778a6ad): the same held 6-note chord (D4 F#4 A4 B4 C#5 E5, velocity 100, LEVEL 92,
+the sends at 0, `CB_TRIM`'s three trims in),
 `build/host/cz_pops level`: the part's peak after its level and the dry mix's RMS over 0.3 .. 2.9 s, 0 dB = 32 768
 (full scale at MASTER's top). Sustained sounds only (RMS above -30 dB):
 
@@ -374,12 +503,58 @@ CZ-1 is the outlier: 5.4 dB above the VA at the peak and 3.3 dB in RMS, 6.2 / 4.
 the FM6 rows; 40 of its 65 sounds peak above full scale into the mix (VA 3 of 25, FM TONE 2 of 16), and that is with
 BRASS 1, STRINGS 2 and PIPE ORGAN 1 already trimmed by 5, 3 and 6 dB (+0.6, -0.5, -1.1 dB peak with their trims). The
 loudest: INIT TONE +8.1 / -2.4, STRINGS 1 +4.7 / -6.2, PIPE ORGAN 2 +5.0 / -7.6, ORCHESTRA +5.7 / -8.1, STRINGS 4
-+6.4 / -8.2. The reason is in the last lines of `cz_native_render`: a line is half scale (`(raw - dc) >> 1`) and
-`dsp.c` says such an engine adds its voice `<< 1`; CZ-1 adds it `* 4`, and a ring-modulated voice twice that again
-at its peaks. **A trim of -6 dB for the engine would level it** (median +2.4 -> -3.6 dB peak, -12.3 -> -18.3 dB RMS:
-between the VA and FM TONE): `* 2` for `* 4` in the three sums, or 12 half-dB steps of `track_t.trim` for every CZ-1
-sound; the three `CB_TRIM` rows would then go (they would sit 5, 3 and 6 dB under the rest). Not applied: the master
-is being redone, and every CZ-1 sound's level changes with it.
++6.4 / -8.2. The reason was in the last lines of `cz_native_render`: a line is half scale (`(raw - dc) >> 1`) and
+`dsp.c` says such an engine adds its voice `<< 1`; CZ-1 added it `* 4`, and a ring-modulated voice twice that again
+at its peaks.
+
+**0.19: the engine is 6 dB lower.** `cz_native.c CZ_VOICE_GAIN` 2: the three final sums of `cz_native_render` add
+`voice_amp(..) * 2`. The factor is the last thing done to a voice's sample, so nothing upstream moves: a line, the
+ring product (`mulq15(l0, l1) * 2`), NOISE, the DC filter, `voice_amp`'s ramp and `VOICE_FS`, the velocity and level
+products are the integers they were, and every sample a voice adds to its part is **exactly half** of what it was
+(`out_old == 2 * out_new`: no rounding, the old sum was a multiple of 4). Proven on the matrix below: a hash of every
+sample a CZ-1 voice leaves in its part's sum (`tests/cz_pops.c cz_probe_out`; the earlier tree hashes each sample's
+half and counts the samples without one) is the same for all 33 280 runs between a build of 778a6ad and this tree, no
+sample without an exact half (`tools/cz_pops_report.py --halves`); and in `tests/cr_cz_test.c`, where twice every
+sample of the part's render of INIT TONE and the 64 hashes to what 778a6ad's sample did. After the part's sum the
+mix is not linear to the bit (`(b >> 2) * lvl >> 10`, the limiter): there the change is -6.0 .. -6.1 dB.
+
+`CB_TRIM`'s rows for BRASS 1 (-5 dB), STRINGS 2 (-3 dB) and PIPE ORGAN 1 (-6 dB) are removed ("The bank rows" above:
+0 % under the limiter without them). The same table after both, the same 36 sounds:
+
+| engine | peak, median (range) | RMS, median (range) | velocity 127: peak / RMS | peak over full scale |
+| --- | --- | --- | --- | --- |
+| FM6, VA, FM TONE | as above (not a sample changed) | | | 0 of 5, 3 of 25, 2 of 16 |
+| CZ-1 before (the three trims in) | +2.4 dB (-5.4 .. +8.1) | -12.3 dB (-27.9 .. -2.4) | +3.0 / -11.8 | 40 of 65 |
+| **CZ-1 after (no trim)** | **-3.5 dB** (-11.4 .. +2.1) | **-18.0 dB** (-33.9 .. -8.4) | -2.8 / -17.3 | 3 of 65 |
+
+CZ-1 now sits between the VA (-3.0 / -15.6) and FM TONE (-3.8 / -16.8), above the FM6 rows (-4.7 / -20.4). The
+sounds that had no trim moved by -6.0 .. -6.1 dB in RMS and peak (the 54 that sound through the window); BRASS 1 by -1.0, STRINGS 2 by -3.0, PIPE ORGAN 1
+by 0.0. Sounds more than 4 dB (RMS) from the engine's median of -18.0 dB, for the owner's ear (**no trim applied**):
+
+| sound | RMS (from the median) | peak | a trim that would bring it within 3 dB |
+| --- | --- | --- | --- |
+| INIT TONE | -8.4 (+9.6) | +2.1 | -6.5 dB (-13 steps): one bare cosine a line, nothing to mask it |
+| STRINGS 1 | -12.2 (+5.8) | -1.3 | -3 dB (-6) |
+| BRASS 1 | -12.7 (+5.3) | -0.4 | -2.5 dB (-5): half of the trim it had |
+| PIPE ORGAN 2 | -13.6 (+4.4) | -1.0 | -1.5 dB (-3) |
+| (PIPE ORGAN 1, MOTORCYCLE | -14.0 (+4.0) | -1.1, -1.6 | at the line: none) |
+| HARMONICA, ELEC.BASS 2, SYNTH.LEAD 2 | -22.1, -23.2, -25.9 (-4.1, -5.2, -7.9) | -2.2, -2.3, -0.6 | none: their peaks are already above the median's (narrow pulses) |
+| SWEEP 2, VOICE 2, JET ROAR, ACCORDION | -22.9, -23.3, -25.1, -27.4 (-4.9 .. -9.4) | -9.6, -5.4, -10.9, -9.6 | +2, +2, +4, +6 dB (+4, +4, +8, +12 steps; `track_t.trim` is signed) |
+| ELEC.PIANO, BELLS, SITAR | -30.6, -31.1, -33.9 | -6.2, -3.8, -11.4 | none: they decay over the measured 2.6 s |
+
+What the lower scale changes besides the level, by the code: a user's CZ-1 sound is 6 dB quieter with every other
+(intended: the engine is levelled, LEVEL is the part's and is not touched; the 144-byte tone and the eight banks
+hold tone data only, no level that assumed the old scale); a user record bound to one of the three factory sounds
+loses the trim with it (`cu_pool_load` reads `cb_trim`); the sends, the USB part pair and the part's meter follow the
+part (6 dB lower); DIST on a CZ-1 part is driven 6 dB less (`track_dist` works on the part's sum before LEVEL); the
+part's sum now clamps at 884 000 only above 11 voices' worth (it never did in a run). **One thing is left to
+`cr_settings.c`** (not this change's file): the session record stores `track_t.trim` and `css_part_put` writes it
+back, so a unit switched off with BRASS 1, STRINGS 2 or PIPE ORGAN 1 on a part comes up with the old trim under the
+new scale (5, 3 or 6 dB too quiet) until the sound is picked again; taking the trim from `cb_trim(e, fk)` there
+instead of the record would end it.
+
+Listening files: `../audio-0.19/cz-trim/` (the same chord on FM6, VA, FM TONE and CZ-1 before and after, through
+Output Clean at the power-on MASTER; `README.txt`).
 
 ### The unit: `tools/cz_pop_check.py`
 
@@ -407,7 +582,12 @@ far from the count, above 2000 a late half is near; all clean, and a pop heard i
   first sample; the 65 at C2: no step at a block's edge above twice the largest inside the blocks; `cz_native_pd`'s
   ramp). On main the three checks of the sound fail: 0 of the level kept, 62 of 130 re-strikes step (the worst
   34 552), 11 tones step at a block's edge (the worst 18 024).
-- `tests/cz_pops.c`, `tools/cz_pops_report.py`: the matrix of "Pops" (a tool: `cc` line at its top).
+  0.19, the second round: the level (twice every sample of the part's render of INIT TONE and the 64 is 778a6ad's
+  sample: all 65, and by kind: one line 3, two lines 33, ring modulation 24, NOISE 5); the 65 struck again at another
+  velocity while they sound (127 -> 30, 30 -> 127: no step at the new note's first sample or into the block after;
+  on 778a6ad 25 of 130 step, the worst 11 296); a line's kept gain across a note-on.
+- `tests/cz_pops.c`, `tools/cz_pops_report.py`, `tools/cz_pops_why.py`: the matrix of "Pops" (a tool: `cc` line at its
+  top), its report (`--jumps`, `--halves`), every jump against its wave's definition.
 - `tests/cr_backup_test.c`: 27 objects (12, 13, 14..21 listed; a saved bank and the store round trip).
 - `tests/regress.c`: goldens and CPU baselines for INIT TONE and the 64 (additions only; nothing else changed).
 - `tests/target_budget.txt`: `cz_native_render`, `cz_native_wave`, `cz_env_tick` added; the audio ISR's static count
@@ -419,5 +599,9 @@ far from the count, above 2000 a late half is near; all clean, and a pop heard i
   `cz_persist_*.txt` (`test_persist.sh`): an edited CZ-1 sound in U01 across a relaunch; `perf_g.txt` (`perf.sh`).
   0.19: `cr_cz_pop.txt` (`test_cr.sh`): STRINGS 2 with the CZ-1 bass, the chord struck again three times 20 ms after
   its release and changed twice in one frame; `wavclicks.py` from 3.4 s: 0 jumps, 0 holes, 0 clicks (main: 3 clicks,
-  at the first re-strike and the first change).
+  at the first re-strike and the first change). `cr_cz_brass.txt` (`test_cr.sh`): BRASS 1 with the CZ-1 bass in
+  Output Clean, struck again 60 ms and 20 ms after its release (twice each), then the unit's Arpeggiate for 3 s;
+  `wavclicks.py --both-sides` over the re-strikes: 0 jumps, 0 holes, 0 clicks (its one-sided measure: 2, the two
+  60 ms re-attacks, in 778a6ad as now: "The second round"); the arp: no jump, no hole. This check passes on 778a6ad
+  too: it guards, it does not show the velocity fix (the emulator's scripts strike at one velocity).
 - `web/test_backup.mjs`: ids 12..21, their names.

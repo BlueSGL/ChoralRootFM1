@@ -9,7 +9,7 @@
  * With "fm6": the bank's eight FM6 rows (cr_bank.c, by preset name; docs/FM6.md Levels; FM6_POLY 8 as choralroot.c;
  * PIANO, a preset of ChoralRoot's unit only (FELUCCA_SAMPLE 0), as TINE EP with PIANO's macros and sends):
  *   build/host/va_levels fm6
- * With "cz": the bank's six CZ-1 rows (docs/CZ1.md Levels; their trims as cr_bank.c sets them):
+ * With "cz": the bank's six CZ-1 rows (docs/CZ1.md Levels; no trims since 0.19: the engine is 6 dB lower):
  *   build/host/va_levels cz */
 #define FELUCCA_VA 1
 #define FELUCCA_CZ 1
@@ -133,8 +133,8 @@ int main(int argc, char **argv)
     const engine_t *e = ENGINES[ENGI_VA];
     if (argc > 1 && !strcmp(argv[1], "cz")) {    /* the bank's CZ-1 rows: display name, preset, trim (cr_bank.c) */
         static const struct { const char *row, *pr; int8_t trim; } ROW[] = {
-            {"CZ BRASS 1", "BRASS 1", -10}, {"CZ PIANO", "PIANO 1", 0}, {"CZ STRINGS 2", "STRINGS 2", -6},
-            {"CZ PIPE", "PIPE ORGAN 1", -12}, {"CZ VIBES", "VIBRAPHONE", 0}, {"CZ BASS", "SYNTH.BASS", 0}};
+            {"CZ BRASS 1", "BRASS 1", 0}, {"CZ PIANO", "PIANO 1", 0}, {"CZ STRINGS 2", "STRINGS 2", 0},
+            {"CZ PIPE", "PIPE ORGAN 1", 0}, {"CZ VIBES", "VIBRAPHONE", 0}, {"CZ BASS", "SYNTH.BASS", 0}};
         printf("%-13s %26s | %26s | %s\n", "CZ-1 bank row", "chord alone: lim  pk  rms", "with SUB BASS: lim  pk  rms",
                "CPU with the bass: host instr / sample, device estimate (1.7 % per 100)");
         for (k = 0; k < NELEM(ROW); k++) {

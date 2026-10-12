@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """Host-visible pops in an emulator WAV (build/host/emu --headless --script S --wav W).
 
-  python3 tools/emu/wavclicks.py W.wav [--from S] [--to S] [--ratio R] [--floor F] [-v]
+  python3 tools/emu/wavclicks.py W.wav [--from S] [--to S] [--ratio R] [--floor F] [--both-sides] [-v]
 
 Three checks on the 16-bit stereo output:
   jumps   sample-to-sample steps above 0.5 full scale (a hard discontinuity)
@@ -11,7 +11,10 @@ Three checks on the 16-bit stereo output:
           fast envelope ramp, a phase reset) in 32-frame windows, against the median of the windows around it
           (+-23 ms). A window R times (default 12, ~22 dB) above its neighbourhood and above the floor F (default
           0.002 of full scale, RMS of the third difference) is a click. Musical attacks of bright sounds also rise
-          above the median; read the list with the script's note times.
+          above the median; read the list with the script's note times. --both-sides: the window must be R times
+          above the median of the windows BEFORE it and of those AFTER it, each on its own: the first bright window
+          of an attack after a quiet stretch (loud after it) and the last of a note's end (loud before it) are then
+          not clicks, a burst inside a sound or one louder than the sound it starts still is (docs/CZ1.md "Pops").
 Prints one line per finding (time in s, the 128-frame block, the ratio) and a summary; exit 0 always.
 numpy if it is there, else pure python (slower)."""
 import struct
@@ -41,7 +44,7 @@ def main():
     if not a:
         print(__doc__)
         return 0
-    path, t0, t1, ratio, floor, verbose = a[0], 0.0, 1e9, 12.0, 0.002, False
+    path, t0, t1, ratio, floor, verbose, both = a[0], 0.0, 1e9, 12.0, 0.002, False, False
     i = 1
     while i < len(a):
         if a[i] == "--from": t0 = float(a[i + 1]); i += 2
@@ -49,6 +52,7 @@ def main():
         elif a[i] == "--ratio": ratio = float(a[i + 1]); i += 2
         elif a[i] == "--floor": floor = float(a[i + 1]); i += 2
         elif a[i] == "-v": verbose = True; i += 1
+        elif a[i] == "--both-sides": both = True; i += 1
         else: i += 1
     x, fs = load(path)
     if np is None:
@@ -94,6 +98,9 @@ def main():
             continue
         nb_ = np.concatenate([e[max(0, w - K):max(0, w - 2)], e[w + 3:w + K]])
         med = np.median(nb_) if nb_.size else 0.0
+        if both:
+            b_, a_ = e[max(0, w - K):max(0, w - 2)], e[w + 3:w + K]
+            med = max(np.median(b_) if b_.size else 0.0, np.median(a_) if a_.size else 0.0)
         r = e[w] / max(med, 1e-7)
         if r >= ratio:
             if w - last > 4:

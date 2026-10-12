@@ -35,6 +35,7 @@ typedef struct { int32_t level; uint8_t stage, gate; } cz_env_t;
  * pk: a line's last pivot and the two slopes divided from it (cz_native_pd; 0: none, a pivot is 1..1024) */
 typedef struct {
     cz_env_t eg[2][3]; uint32_t vib_phase, vib_ticks, noise, kgen, knote, krate[2][8], pk[2][3];
+    int32_t ag[2];                                     /* a line's DCA gain at the end of its last block, + 1 (0: none) */
 } cz_voice_t;
 typedef struct { cz_voice_t v[NPOLY]; } cz_part_t;
 /* a part's envelope definitions as its tone gives them (no key follow), built for tone generation gen (0: none) */
@@ -89,6 +90,7 @@ static void cz_note_on(track_t *t, voice_t *v)        /* Melodee's phase_note_on
      * "Pops"; a CZ's envelopes are said to go on from their level too: not checked on one). From 0 the DCA cut the
      * voice's level in one sample and the DCW its wave: a pop, then the attack again (a drop-out). voice_start keeps
      * the phases and this function the DC filters (below) for the same reason. */
+    int32_t ag[2] = {c->ag[0], c->ag[1]};
     memcpy(pk, c->pk, sizeof pk);
     for (uint32_t l = 0; l < 2u; l++)
         for (uint32_t e = 0; e < 3u; e++) lev[l][e] = c->eg[l][e].level;
@@ -98,7 +100,9 @@ static void cz_note_on(track_t *t, voice_t *v)        /* Melodee's phase_note_on
             c->eg[l][e].gate = 1;
             if (voice_was) c->eg[l][e].level = lev[l][e];
         }
-    if (voice_was) memcpy(c->pk, pk, sizeof pk);
+    /* .. and its lines' gains (ag): the new note's velocity is another gain at the same level, which the first block
+     * ramps to (cz_native_render) */
+    if (voice_was) { memcpy(c->pk, pk, sizeof pk); c->ag[0] = ag[0]; c->ag[1] = ag[1]; }
     v->ph[0] = v->ph[1] = v->ph[2] = 0;
     v->s[0] = v->s[1] = v->s[4] = 0;
     if (!voice_was) v->s[2] = v->s[3] = 0;

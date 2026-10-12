@@ -6,7 +6,8 @@
  * Checks: the engine's place (14, after the VA in the picker order), Casio's 64 tones (valid, A-1 BRASS 1 .. H-8
  * TYPHOON, the PRESETS names); every factory tone through the 144-byte blob and back, a bad blob = the init tone;
  * every factory tone rendered (three notes, velocity 127 and 1, held then released) without overflow and not
- * silent; the pops (a sounding note struck again goes on from its level, the DCW depth is ramped across a block: no
+ * silent; the level (0.19: every sample of a part's render exactly half of 778a6ad's); the pops (a sounding note
+ * struck again goes on from its level, at another velocity too; the DCW depth is ramped across a block: no
  * step of the sample at a note-on or at a block's edge, docs/CZ1.md "Pops"); Casio SysEx: a 144-byte tone dump (7n 30) -> the part's tone -> the dump cz_store.c sends on a send
  * request (7n 11 60) identical; a 128-byte (CZ-101) dump gets the CZ-1 defaults; a bad dump is refused; the banks
  * (A..D Casio's, E..H empty; BANK / PTCH load their tone; a bank exported and imported through the backup's objects
@@ -36,6 +37,16 @@ static uint8_t sx_out[600];
 static uint32_t sx_out_n, sx_out_count;
 #define CZ_SEND(p, n) (memcpy(sx_out, (p), (n)), sx_out_n = (n), sx_out_count++)
 #include "../tools/emu/emu_firmware.h"
+
+#ifndef CZ_VOICE_GAIN
+#define CZ_VOICE_GAIN 4                              /* (this file in a tree before 0.19's trim: the constants below) */
+#endif
+/* 778a6ad's hashes of the part's render ("level" in main): INIT TONE and the 64, then by the tone's kind */
+#define CZ_REL_ALL 0x129ea1922121e5c9ull
+#define CZ_REL_ONE 0x3c6b4d6611b03c4aull
+#define CZ_REL_SUM 0x74fea5c4424601beull
+#define CZ_REL_RING 0x82aff32eeb2e1618ull
+#define CZ_REL_NOISE 0xbe66150f3519f1b6ull
 
 static int fails, checks;
 #define CHECK(c, ...)                                                   \
@@ -209,6 +220,61 @@ int main(void)
         bad += CZ_RECIP[k] != (1024u << 16) / k;
     OK(!bad && NELEM(CZ_RECIP) == 2048u, "slopes: CZ_RECIP[x] is (1024 << 16) / x for x = 1 .. 2047");
 
+    /* ---- the level (0.19, docs/CZ1.md "Level"): a voice into its part is exactly half of what it was ---- */
+    {
+        /* INIT TONE and the 64 through the part's own render (track_render: the voices' sum before LEVEL): C4 at
+         * velocity 100, E4 at 127 on another voice 30 blocks later, both let go 30 blocks after, 20 blocks more. The
+         * hash of TWICE every sample (FNV-1a 64 of its four bytes) is the hash 778a6ad gave of the sample itself
+         * (the same lines, built in a tree of that commit: cz_native.c added voice_amp(..) * 4 there): so every
+         * sample is exactly half, of every tone, by its kind: one line, two lines summed, ring modulation, NOISE. */
+        static const uint64_t WAS[5] = {CZ_REL_ALL, CZ_REL_ONE, CZ_REL_SUM, CZ_REL_RING, CZ_REL_NOISE};
+        static const char *const KIND[5] = {"all 65", "one line", "two lines", "ring modulation", "NOISE"};
+        uint8_t eng = t->engine, req = t->eng_req;
+        uint64_t h[5];
+        uint32_t nk[5] = {0, 0, 0, 0, 0}, q, i, bb;
+        int32_t out[CTL], pk = 0;
+        for (q = 0; q < 5u; q++)
+            h[q] = 1469598103934665603ull;
+        for (k = 0; k <= CZ_FACTORY_N; k++) {
+            uint32_t ls, md, kind;
+            pop_start(t, k);
+            ls = cz_patch[0].raw[0] & 3u;
+            md = (cz_patch[0].raw[15] >> 3) & 7u;
+            kind = ls < 2u ? 1u : md == 4u ? 3u : md == 3u ? 4u : 2u;
+            nk[0]++;
+            nk[kind]++;
+            trk_note_on(t, 60, 100);
+            for (bb = 0; bb < 80u; bb++) {
+                if (bb == 30u)
+                    trk_note_on(t, 64, 127);
+                if (bb == 60u) {
+                    trk_note_off(t, 60);
+                    trk_note_off(t, 64);
+                }
+                track_render(t, out, CTL);
+                for (i = 0; i < CTL; i++) {
+                    uint32_t x = (uint32_t)(out[i] * (4 / CZ_VOICE_GAIN)), by;
+                    pk = abs(out[i]) > pk ? abs(out[i]) : pk;
+                    for (by = 0; by < 4u; by++) {
+                        h[0] = (h[0] ^ (uint8_t)(x >> (8u * by))) * 1099511628211ull;
+                        h[kind] = (h[kind] ^ (uint8_t)(x >> (8u * by))) * 1099511628211ull;
+                    }
+                }
+            }
+        }
+        if (getenv("CZ_REL_PRINT"))
+            printf("level: %016llxull %016llxull %016llxull %016llxull %016llxull\n", (unsigned long long)h[0],
+                   (unsigned long long)h[1], (unsigned long long)h[2], (unsigned long long)h[3], (unsigned long long)h[4]);
+        for (q = 0; q < 5u; q++)
+            OK(h[q] == WAS[q] && nk[q], "level: %s (%u tones): twice every sample of the part's render is 778a6ad's sample "
+                                        "(-6.02 dB, a bit's shift)", KIND[q], (unsigned)nk[q]);
+        OK(CZ_VOICE_GAIN == 2 && pk > 0, "level: a voice adds voice_amp() * 2, as dsp.c says of a half-scale "
+                                                          "engine (the loudest sample of those renders %d)", (int)pk);
+        memset(t->v, 0, sizeof t->v);
+        t->engine = eng;
+        t->eng_req = req;
+    }
+
     /* ---- pops (docs/CZ1.md "Pops"): a note struck again goes on from its level; the DCW depth is ramped ---- */
     {
         uint8_t eng = t->engine, req = t->eng_req;
@@ -244,7 +310,7 @@ int main(void)
                 }
                 trk_note_on(t, 48, 127);
                 pop_render(t, 1, &edge1, &in1, &head1);
-                if (edge1 > in0 + in0 / 2 && edge1 > 400) {
+                if (edge1 > in0 + in0 / 2 && edge1 > 100 * CZ_VOICE_GAIN) {
                     fails0++;
                     if (edge1 > worst) {
                         worst = edge1;
@@ -262,7 +328,7 @@ int main(void)
             pop_start(t, k);
             trk_note_on(t, 36, 127);
             pop_render(t, 40, &edge, &in, &head);
-            if (edge > 2 * in && edge > 400) {
+            if (edge > 2 * in && edge > 100 * CZ_VOICE_GAIN) {
                 low++;
                 if (edge > worst) {
                     worst = edge;
@@ -272,6 +338,83 @@ int main(void)
         }
         OK(!low, "pops: INIT TONE and the 64 at C2, the attack's 40 blocks: no step at a block's edge above twice the "
                  "largest inside the blocks (%u tones step; the worst %d, tone %d)", (unsigned)low, (int)worst, (int)wk);
+        /* A sounding note struck again at ANOTHER velocity (0.19's second round): the DCA curve of the same level is
+         * another gain at the new velocity, and the engine put it on the block's first sample: a step of the voice's
+         * whole sample (STRINGS 1 at its sustain, 127 then 30: a third of its level between two samples). The gain
+         * now runs on from where the line's last block ended (cz_voice_t.ag). Every tone, C3 at 127 held 400 ms and
+         * struck again at 30, and 30 then 127: the step at the new note's first sample is at most 1.5 times the
+         * largest of the 100 ms before, and the step into the block after it (the ramp is a block's) at most 1.5
+         * times the largest inside those two blocks. */
+        {
+            uint32_t vfail = 0, dir;
+            int32_t e2, i2, h2;
+            for (k = 0, worst = 0; k <= CZ_FACTORY_N; k++)
+                for (dir = 0; dir < 2u; dir++) {
+                    pop_start(t, k);
+                    trk_note_on(t, 48, dir ? 30 : 127);
+                    pop_render(t, 300u * FS / (1000u * CTL), &edge, &in, &head);
+                    pop_render(t, 100u * FS / (1000u * CTL), &edge, &in0, &head);
+                    in0 = edge > in0 ? edge : in0;
+                    if (dir)                         /* (struck harder: the level it goes to has larger steps of its own) */
+                        in0 = in0 * 127 / 30;
+                    trk_note_on(t, 48, dir ? 127 : 30);
+                    pop_render(t, 1, &edge1, &in1, &head1);
+                    pop_render(t, 1, &e2, &i2, &h2);
+                    i2 = i2 > in1 ? i2 : in1;        /* (the two blocks' own steps: the attack the new note makes) */
+                    i2 = i2 > in0 ? i2 : in0;
+                    if ((edge1 > in0 + in0 / 2 && edge1 > 100 * CZ_VOICE_GAIN) || (e2 > i2 + i2 / 2 && e2 > 100 * CZ_VOICE_GAIN)) {
+                        vfail++;
+                        if (edge1 > worst) {
+                            worst = edge1;
+                            wk = (int32_t)k;
+                        }
+                    }
+                }
+            OK(!vfail, "pops: INIT TONE and the 64, C3 struck again at another velocity while it sounds (127 -> 30, 30 -> "
+                       "127): no step at the new note's first sample or after its first block (%u of 130 step; the worst "
+                       "%d, tone %d)", (unsigned)vfail, (int)worst, (int)wk);
+        }
+        {   /* .. and the gain itself: a voice's line ends a block at the DCA curve of its level and velocity, and the
+             * next block starts there, whatever the velocity is by then (cz_native_render through the probe's eyes:
+             * two blocks of INIT TONE's voice, the velocity changed between them; the first block's samples are the
+             * ones the engine made before, bit for bit: one curve a block, not two) */
+            vmod_t m;
+            voice_t *v = &t->v[0];
+            cz_voice_t *c;
+            int32_t o1[CTL], o2[CTL], want;
+            uint32_t i;
+            pop_start(t, 0);
+            memset(&m, 0, sizeof m);
+            m.amp0 = m.amp1 = 32767;
+            m.shape = 64 << 8;
+            m.pitch16 = 60 * 16;
+            m.inc = pitch_inc(60u * 16u);
+            v->note = 60;
+            v->vel = 127;
+            v->gate = v->active = 1;
+            voice_was = 0;
+            ENG_CZ.note_on(t, v);
+            c = cz_voice(t, v);
+            for (i = 0; i < 40u; i++) {
+                memset(o1, 0, sizeof o1);
+                ENG_CZ.render(t, v, o1, CTL, &m);
+            }
+            want = cz_native_amp(c->eg[0][2].level, cz_patch[0].raw[16] >> 4, 15u - (cz_patch[0].raw[20] >> 4), 127);
+            bad = c->ag[0] != want + 1;
+            v->vel = 20;
+            voice_was = 2;
+            ENG_CZ.note_on(t, v);
+            bad += c->ag[0] != want + 1;             /* (kept across the note-on of a sounding voice) */
+            memset(o2, 0, sizeof o2);
+            ENG_CZ.render(t, v, o2, CTL, &m);
+            want = cz_native_amp(c->eg[0][2].level, cz_patch[0].raw[16] >> 4, 15u - (cz_patch[0].raw[20] >> 4), 20);
+            bad += c->ag[0] != want + 1;
+            voice_was = 0;
+            ENG_CZ.note_on(t, v);
+            bad += c->ag[0] != 0;                    /* (a free voice: none) */
+            OK(!bad, "pops: a line's gain at a block's end is kept for the next block's start (a sounding voice's note-on "
+                     "keeps it, a free voice's clears it)");
+        }
         {   /* cz_native_pd: the ramp starts at the last block's depth and ends at this block's; none when it is the same */
             cz_hw_pd_t pd;
             uint32_t pk[3] = {0, 0, 0};
