@@ -1,6 +1,6 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.17 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
+For ChoralRoot 0.19 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
 
@@ -98,7 +98,7 @@ a hold opens its layer. [Layers](#5-layers) has the rules.
 **Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place:
 the engine in orange (`FM6`), the number big (`02`), the name (`FM BELL`), a stripe for every preset of the engine,
 and `Hold OPT to change engine`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
-(FM6, FM TONE, VA, CZ-1 and seven more). Let go of OPT and the engine you stopped on is loaded.
+(FM6, FM TONE, VA, CZ-1 and WHEEL). Let go of OPT and the engine you stopped on is loaded.
 
 **Add the bass.** Tap **BASS** (printed ENV). A bass note now plays under every chord, and `Bass` shows at the top
 right. ALGORITHM changes the bass sound. Tap BASS again to switch it off.
@@ -567,7 +567,9 @@ is back. Strum, Slop and Harp keep the chord view.
 
 Four effects: **Reverb**, **Chorus**, **Delay** and **Drive**. The reverb and the delay are new in 0.18: a large,
 slow reverb that goes from a hall to a wash that does not end, and a stereo delay with separate times left and
-right that can ping-pong.
+right that can ping-pong. From 0.19 the chorus is stereo too: it comes back as two signals, one for each side,
+moved by the same sweep a quarter turn apart, so on headphones it spreads out instead of sitting in the middle. Its
+Rate, Depth and send are what they were.
 
 The one rule to know: **the effects and their sends belong to the instrument, not to the sound.**
 
@@ -1300,7 +1302,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **USB Level** | Master, Fixed | Master | Master: the recording follows the MASTER knob. Fixed: it is recorded at full level and MASTER only sets what you hear |
 | **USB Rate** | 44.1 kHz, 44.1 + 48 kHz | 44.1 kHz | 44.1 kHz: the computer records at the FM-1's own rate, as in 0.18. 44.1 + 48 kHz: the computer may also choose 48 kHz, which the FM-1 converts for it; that takes some of its processor time while a recording runs ([USB audio recording](#usb-audio-recording)). The FM-1 leaves USB for a second when you change it |
 | **Dual Core** | Off, On | Off | On: the bass plays on the chip's second core (below). Takes effect after a restart |
-| **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder. You can switch while you play to compare |
+| **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder, and everything sounds 0.7 ms later (its limiter looks ahead). You can switch while you play to compare |
 | **Version** | | | the firmware's version |
 | **Calibrate** | | | OCT+ starts the panel calibration ([Calibration](#calibration)) |
 | **Reset Settings** | | | OCT+ twice puts every setting back to its default (below) |
@@ -1440,6 +1442,10 @@ with Options > USB Rate set to `44.1 + 48 kHz` the computer can also run it at 4
 | 1-2 | Master: what you hear, without the metronome click |
 | 3-4 | the chord sound alone, before the reverb, chorus and delay, at half level |
 | 5-6 | the bass sound alone, the same way |
+
+The three pairs line up to the sample. With Options > Output on Clean all three are 0.7 ms later than with Classic
+(Clean's limiter looks ahead), together. Set Output before a take, not during one: the master pair fades over, but
+the chord and bass pairs jump by those 0.7 ms at the switch.
 
 - **44.1 kHz** is the FM-1's own rate: the recording is exactly what the FM-1 made. As the FM-1 comes, it is the
   only rate ChoralRoot In offers (Options > USB Rate: `44.1 kHz`), exactly as in 0.18.
@@ -1699,7 +1705,6 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed). With LOCK on, the only latched type pressed again alone: off (single notes, the extensions kept) |
 | F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4 |
 | D4 to G5 | roots |
-| white roots D4 to A4, engine picker | FM6, FM TONE, VA, CZ-1, WHEEL |
 | white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |

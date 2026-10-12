@@ -91,7 +91,7 @@ Installing firmware is at your own risk.
 
 ## Status
 
-A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes of every version). What is in it; the
+A public beta, at version 0.19 ([docs/releases/](docs/releases/) has the notes of every version). What is in it; the
 [manual](docs/MANUAL.md) says how to play each part:
 
 - **Chords**: the chord block on the keybed (DIM MIN MAJ SUS on the black keys F#3 G#3 A#3 C#4, 6 m7 M7 9 on the
@@ -100,7 +100,7 @@ A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes o
 - **Layers** that lock open on a hold (KEY, PERF, FX, BASS, SEQ for the metronome, LOOP), each a picker over a row of four knob
   cells; OCT- or HOME closes them.
 - **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,
-  chorus, delay, drive), a metronome.
+  a stereo chorus, a stereo delay, drive), a metronome.
 - **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
   PLAY menu; from 0.18 on saving is manual: a loop is written by the global save (SAVE held) or when its slot is
   left with unsaved changes (up to 0.17: at every stop) ([docs/LOOPER.md](docs/LOOPER.md)).
@@ -120,6 +120,11 @@ A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes o
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.19** ([docs/releases/0.19.md](docs/releases/0.19.md)): Options > Output, Clean (the default: a
+  look-ahead limiter as a safety, MASTER last) or Classic (0.18's output stage)
+  ([docs/AUDIO-QUALITY.md](docs/AUDIO-QUALITY.md)); the chorus in stereo; CZ-1 without its pops and 6 dB lower, level
+  with the other engines; USB recording at 48 kHz as an option; the keys play while the Options are open; OPT +
+  PRESETS / ALGORITHM pick the engine in the layers too.
 - **New in 0.16** ([docs/releases/0.16.md](docs/releases/0.16.md)): Options > Dual Core is Off by default
   ([docs/DUALCORE.md](docs/DUALCORE.md)); the boot stub, so an interrupted update comes back in update mode
   ([docs/BOOT-SAFETY.md](docs/BOOT-SAFETY.md)); the device manager auditions sounds on the unit.

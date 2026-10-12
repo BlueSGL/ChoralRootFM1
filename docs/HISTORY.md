@@ -4,10 +4,12 @@ The dated record of the work, moved out of `docs/HANDOFF.md` on 2026-10-11 and k
 included); the current state is in `docs/HANDOFF.md`. Append-only: a new entry goes at the end, under its day's heading,
 and an old entry is never rewritten (a later entry says what changed).
 
-The labels (3b .. 3z, 3y2 .. 3y13, 1 .. 7) are the old hand-over's and other documents cite them. An entry stands under
+The labels (3b .. 3z, 3y2 .. 3y26, 1 .. 7) are the old hand-over's and other documents cite them. An entry stands under
 the day its work was done; one with no date in its text stands under the day it entered the hand-over (by `git log`). An
 entry begun on one day and extended later (3b, 3d, 3n, 3q, 3r, 3s) is kept whole under its first day. "The user" and
-"the owner" are the same person.
+"the owner" are the same person. The 0.18 entries between 3y16 and 3y17, and "the panel pictures", have no label
+and are cited by their titles; 3y17 .. 3y26 are 0.19's, in the order they were committed, and keep the titles in
+their headings because other documents cite those too.
 
 ## 2026-10-07
 
@@ -1034,7 +1036,7 @@ the device.
 
 ## 2026-10-12 (CZ-1's pops)
 
-**The owner: "CZ-1 can pop and dropout when holding chords without FX, I believe it is an engine issue ... probably
+3y18. **The owner: "CZ-1 can pop and dropout when holding chords without FX, I believe it is an engine issue ... probably
 internal clipping."** Looked for in the host render with a new tool (`tests/cz_pops.c`: INIT TONE and the 64 x six
 scenarios x four chords x four roots x two velocities x the CZ-1 bass off / on, 24 960 runs, the sanitizer on every
 int32, the peaks of every stage, each line's gain across block edges, jumps against the signal's own slope, holes).
@@ -1058,7 +1060,7 @@ and what was not tested: docs/CZ1.md "Pops (0.19)". The ten worst, before and af
 
 ## 2026-10-12 (USB recording at 48 kHz)
 
-**0.19 dev (built; not flashed, nothing run on a host).** The owner wants SLOOP 2.5's "USB audio at 48 kHz
+3y19. **0.19 dev (built; not flashed, nothing run on a host).** The owner wants SLOOP 2.5's "USB audio at 48 kHz
 too" (after Felucca 1.1.5) in ChoralRoot, as a compatibility feature: the synth and the headphones stay at 44.1 kHz.
 **Read:** SLOOP's working tree at v2.6 (`firmware/src/usb.c` `FELUCCA_UAC_48K`, `uac_fir.h`, `tools/gen_uac_fir.py`,
 `tests/uac_test.c`). **Not read:** Felucca 1.1.5 itself and SLOOP's v2.4.1..v2.5 diff: the agent's sandbox refuses
@@ -1097,7 +1099,7 @@ on the unit. The test plan is docs/USB-AUDIO.md "The owner's test plan".
 
 ## 2026-10-12 (the look-ahead, Sloop 2.6)
 
-**The owner: the comparison was with Sloop 2.2; its later releases changed the output ("the master limiter looks
+3y20. **The owner: the comparison was with Sloop 2.2; its later releases changed the output ("the master limiter looks
 0.7 ms ahead"), and Felucca has moved to 1.5.1. Redo it, and give Clean a look-ahead limiter.**
 
 - **Sloop 2.6** (read against the first round's copy of 2.2, built on the host with the same harness, its master's
@@ -1144,7 +1146,7 @@ on the unit. The test plan is docs/USB-AUDIO.md "The owner's test plan".
 
 ## 2026-10-12 (the Options leave the keys alone)
 
-**The owner: "The Global settings menu uses the keyboard for shortcuts to settings, but it isn't really helpful, and
+3y21. **The owner: "The Global settings menu uses the keyboard for shortcuts to settings, but it isn't really helpful, and
 also makes it difficult to compare clean and classic, let's make it so the keyboard stays unchanged when entering the
 menu and I can still play notes."**
 
@@ -1179,7 +1181,7 @@ menu and I can still play notes."**
 
 ## 2026-10-12 (48 kHz opt-in; GLO and the two sound knobs; the SEQ layer's mock-up)
 
-**0.19 dev (built; not flashed, nothing run on a host or the unit).** Three decisions of the owner's after the first
+3y22. **0.19 dev (built; not flashed, nothing run on a host or the unit).** Three decisions of the owner's after the first
 48 kHz build was on the unit.
 
 **1. "Make 48 kHz opt-in for now."** The 48 kHz build offered both rates always, on the inference that macOS would
@@ -1313,7 +1315,7 @@ instrument?** (No behaviour changed; docs/USB-AUDIO.md "Does USB recording affec
 
 ## 2026-10-12 (CZ-1's level and the click that was left)
 
-**The owner: "CZ-1 trim sounds good"; and the output round's "CZ-1 BRASS 1 with bass, struck again while sounding,
+3y23. **The owner: "CZ-1 trim sounds good"; and the output round's "CZ-1 BRASS 1 with bass, struck again while sounding,
 shows 2 clicks to `wavclicks.py` in Clean".** Two commits on 778a6ad.
 
 - **The trim.** `cz_native.c CZ_VOICE_GAIN` 2: a voice adds `voice_amp(..) * 2`, not `* 4`. The factor is the last
@@ -1349,7 +1351,7 @@ shows 2 clicks to `wavclicks.py` in Clean".** Two commits on 778a6ad.
 
 ## 2026-10-12 (the third round: the hold, the stereo chorus, the click, MASTER at power-on)
 
-The owner, after hearing the first two rounds of the output chain: dry, little difference between Clean and Classic;
+3y24. The owner, after hearing the first two rounds of the output chain: dry, little difference between Clean and Classic;
 "with very wet FX clean is a definite winner over classic, classic has more crackles and dropouts". His four
 decisions: "Chorus improvements sound good" (stereo); a longer limiter hold in Clean, "probably good to do"; the
 click lined up with Clean, "ok, do it"; Felucca's fix for MASTER at power-on, "yes". Classic stays in for
@@ -1406,7 +1408,7 @@ stereo" the chorus.
 
 ## 2026-10-12 (the session and a removed trim)
 
-**0.19 dev (built; not flashed).** The leftover of "CZ-1's level": `cr_settings.c css_part_put` wrote the session
+3y25. **0.19 dev (built; not flashed).** The leftover of "CZ-1's level": `cr_settings.c css_part_put` wrote the session
 record's `trim` back into `track_t.trim`, so a unit last saved on CZ-1 BRASS 1, STRINGS 2 or PIPE ORGAN 1 (0.18 stored
 -10, -6, -12 half-dB steps for them) would have played 5, 3 or 6 dB too quiet under 0.19 until the sound was picked
 again. Fixed at the cause: a part's trim belongs to its sound in the running firmware's table, not to the session.
@@ -1437,7 +1439,7 @@ again. Fixed at the cause: a part's trim belongs to its sound in the running fir
 
 ## 2026-10-12 (the mock-up sheets, again)
 
-**Pictures only.** All eight `design/make_*.py` run again: no `design/*.json` changed. The designer's `examples/`
+3y26. **Pictures only.** All eight `design/make_*.py` run again: no `design/*.json` changed. The designer's `examples/`
 copies of `choralroot-fm1-layers-mockups.json` and `choralroot-fm1-mockups.json` were older generator outputs and were
 refreshed. Every sheet rendered again (headless Chromium through the designer's `tools/serve.py --out`) and compared
 pixel by pixel. Replaced, each at the size it had: `choralroot-fm1-layers-screens.png` (`export=screens`, 2060 x 1140:

@@ -1,20 +1,21 @@
 # Handoff: ChoralRoot FM-1, the current state
 
-The current state only. What was done, when and why (the lettered items 3b .. 3y13, with the owner's words) is in
+The current state only. What was done, when and why (the lettered items 3b .. 3y26, with the owner's words) is in
 [`HISTORY.md`](HISTORY.md): new work is recorded there, at the end; this file changes only when the state does.
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.18 (`git tag`; v0.18 is the latest, notes in `docs/releases/`). The 0.19 work is the
-dev tree (`FELUCCA_VERSION` "ChoralRoot 0.19" in `firmware/src/choralroot.c`; draft notes `docs/releases/0.19.md`). The
-owner's unit runs the latest verified dev build of main, flashed by the orchestrator: check with
-`python3 tools/fm1_install.py --info`.
+Released: v0.1 and v0.11 .. v0.18, and 0.19 is the release made from this tree: v0.19 is tagged from this commit's
+tree once the owner says so (`git tag` says whether it has been; notes in `docs/releases/`, 0.19's final). The tree
+still reads `FELUCCA_VERSION` "ChoralRoot 0.19" (`firmware/src/choralroot.c`) until the next dev version is set, which
+is the first step of the next cycle together with a new `docs/releases/` file. The owner's unit runs what the
+orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
 
 | folder | what | remote |
 | --- | --- | --- |
-| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1 .. v0.17 |
+| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1 and v0.11 .. v0.18 (v0.19: see above) |
 | `ChoralRootFM1Designer/` | the mock-up designer (MIT); PNG sheets in Git LFS | github.com/Quixotic7/MvaveFM1-Designer |
 | `MvaveFM1Unbricker/` | the recovery tools, `TRANSPORTER-GUIDE.md` | github.com/Quixotic7/MvaveFM1Unbricker |
 | `FM-1-transporter/`, `jl-uboot-tool/`, `MVaveOfficial/`, `Felucca/`, `melodee/`, `sloop-fm1/`, `fm1-x0x/` | upstream tools and references | read-only |
@@ -62,7 +63,18 @@ sh tools/emu/build.sh && sh tools/emu/test_cr.sh && sh tools/emu/test_persist.sh
 sh tools/emu/perf.sh        # estimates only: compare with main's, never quote as the unit's cost
 python3 tests/install_test.py; for t in backup web sounds installer manager; do node web/test_$t.mjs; done
 sh tests/run_tests.sh       # ends ALL HOST TESTS PASSED
+sh tools/emu/test_retired.sh                      # the engines retired in 0.18: a unit that comes with sounds on them
+CR_VERSION=0.19 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
+sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.18 reference build, bit for bit
 ```
+
+- **The browser emulator's test must run before any tag** (`CR_VERSION` is the version being tagged). It needs
+  Emscripten: 6.0.11 is in `~/emsdk` on the owner's Mac and is **not on the PATH**; `tools/emu/web/build_web.sh`
+  sources `~/emsdk/emsdk_env.sh` itself when `emcc` is not found. (Several HISTORY entries of 0.19 say "not run: no
+  emcc": they had not looked there.)
+- **The 0.18 reference build** for `classic_exact.sh` is a `git archive 19b6453` built beside the tree: the four
+  lines are in the script's head and in docs/AUDIO-QUALITY.md "Classic is 0.18's, bit for bit"; "What Classic's
+  guarantee is now" there says what the two parts of the script prove since the stereo chorus.
 
 POOL is the tight resource: read it off the size line.
 
@@ -90,7 +102,10 @@ installed on the owner's Mac.
 4. **Memory**: the store mirrors read through XIP (HISTORY 3t), FM6's tables to flash.
 5. **FM TONE presets by ear** with the owner (docs/QUAD.md).
 6. **The designer**: stale PNG sheets, and the landing page's two editor panel pictures (HISTORY 3x, 3y4, 3y12).
-7. **The v0.16 release page** may still begin "ChoralRoot 0.16 (in progress)": edit it on GitHub.
+7. **The v0.16 and v0.18 release pages** may still begin "ChoralRoot 0.16 (in progress)" / "ChoralRoot 0.18 (in
+   progress)": both tags carry that first line (the files were corrected after the tags: 0.16's in 1056af2, 0.18's
+   with 0.19's notes). Edit the pages on GitHub. The rule since 0.17: the notes' first line is replaced by the
+   release's summary paragraph before the tag, as 0.19's is.
 8. **The MIDI port offline in CoreMIDI** after rapid restarts: cause unknown (HISTORY 3y2).
 9. **The owner's review list** (behaviour, his decision; still true in the code): the BASS layer's footer says "a
    root: preview" but the roots pick the Behaviour silently; BASS + EDIT only with BASS held, not with its layer
@@ -106,54 +121,91 @@ installed on the owner's Mac.
 13. **Hardware checks nobody has done**: the reset-reason bits (console `boot`), SAFE MODE on a real crash, Windows
     enumeration of "ChoralRoot In", the stub's second attempt (one long flash, UBOOT), the dual-core checklist
     (docs/DUALCORE.md), the LED levels' cost (console `inp`).
+14. **The loudness gap to Sloop 2.6** (docs/AUDIO-QUALITY.md "Verdict", "Open questions" 1): at the same MASTER a
+    single note is a median 6.3 dB (Classic) / 8.8 dB (Clean) under Sloop 2.6's, a chord 3.0 / 4.9 dB, the power-on
+    sound 13.8 / 16.2 dB; the loudest chords are level. It is the part LEVEL (92 against 104) and the per-sound
+    trims, which 0.19 did not touch. The owner, for 0.19: **no per-sound loudness matching right now.**
+15. **The make-up switch is unfinished** (`CR_OUT_MAKEUP=1 ./build.sh`, `fx.c CLN_MAKEUP` 5461: Clean's 2.5 dB trim
+    given back in the DAC word's upper 6 dB). Not a release build: with it USB's master pair clips above the Q15
+    sample's full scale in USB Level = Master and the SCOPE view's sample wraps; nobody has heard the unit's
+    headphone and speaker stages up there (docs/AUDIO-QUALITY.md "Proposed, not built in").
+16. **Classic is kept for comparison** (the owner's third-round decision; Clean is the default). Whether it stays is
+    his. Since the stereo chorus it is 0.18 bit for bit only for a sound without a chorus send
+    (docs/AUDIO-QUALITY.md "What Classic's guarantee is now"). Also open there: 32 or 64 samples of look-ahead
+    (`-DCLN_LA_K=2u`).
+17. **USB recording at 48 kHz is untested on phones, Windows and hubs** (docs/USB-AUDIO.md "The owner's test plan":
+    macOS at both rates, a phone, Windows, the heavy case with `--debug`). One observation so far: macOS chose
+    48 kHz unasked, which is why Options > USB Rate is opt-in. After the plan: whether six channels at 48 kHz stay
+    opt-in, get the 16-tap filter, become the default, or 48 kHz is dropped.
+18. **The chorus's Width knob is not wired.** The parameter is there (`xfp[XP_CWIDTH]`: 0 = both sides the left tap,
+    127 = a quarter turn), KNOB 3 of the Chorus page is free; the lines it needs in `cr_ui.c` and `cr_settings.c`
+    are in docs/FX.md "The chorus, stereo". Also not known: whether the unit's own speaker gets the left channel
+    or the sum.
+19. **CZ-1's outlier trims are proposed, not applied** (docs/CZ1.md "Level", the table of sounds more than 4 dB from
+    the engine's median: INIT TONE, STRINGS 1, BRASS 1, PIPE ORGAN 2 down; SWEEP 2, VOICE 2, JET ROAR, ACCORDION
+    up). `CB_TRIM` has no CZ-1 row now. Also the owner's: whether a re-attack should open from a closed DCW when the
+    DCA has let go (`cz_note_on`; not built; `../audio-0.19/cz-trim/brass1-bass-restrike-60ms.wav`).
+20. **`cu_engine_switch` and the trim** (HISTORY 3y25): it sets trim 0 for the engine's first preset where
+    `cu_pool_load` would read the sound's `CB_TRIM` row. No row makes it audible today; it becomes a bug the day an
+    engine's first preset gets a trim (item 19 proposes rows).
+21. **CZ-1's cost on the unit is above the count**: 1066 us measured for the chord part (`pk_part0_us`) against the
+    630 us predicted for eight voices from the listing (docs/CZ1.md "Cost on the unit"; `tools/cz_pop_check.py`
+    calls anything above 1450 far from the count). The difference is not explained.
+22. **USB capture's cost at 44.1 kHz**: about 126 us a half by the listing, and the SIE's waits on top, against
+    `tools/emu/perf.sh`'s estimate of about 30 (scenario (u); docs/USB-AUDIO.md "What it costs" has the table and
+    what to read on the unit: `pk_t5_us` with and without the stream). In the heaviest patches a recording at
+    44.1 kHz can already cost a voice.
+23. **TIMER5's cost, to be read on the unit.** The static budget (`tests/target_budget.py`) failed on the merged
+    tree for `fm1_timer5_irq` without a tick having an instruction more: USB's control code was inlined into the
+    ISR and its branches counted as loops. Since 2489a89 `usb_poll` and its rare events are functions of their own
+    (`usb.c USB_OUTLINE`, `USB_COLD`) and the budget has a line for what a tick runs (4511) and lines for
+    `usb_poll`, `ep1_rx`, `ua_service_paced`, `ua_transmit`; `fm1_alnk0_irq`'s line is the present 16415 (it was
+    44152, from before PHYS left). The script counts loops only: straight-line growth of the scan is not caught by
+    it. By the listing a tick is about 600 instructions with the stream closed (the 595's sixteen bits are 160 of
+    them), about 3 us at 205 a us; the unit's own figure is higher (GPIO writes): `pk_t5_us` read 32 idle on the
+    merged build (a 414 us block, four or five ticks nested: 6 to 8 us a tick), 214 playing and 266 with a 48 kHz
+    recording having run on the builds before. Not read on a build with 2489a89: `pk_t5_us` idle about 32 and
+    playing no higher than 214, `ua_svc_t5` still counting (the endpoint is served from TIMER5), `irq_gap_us` about 340 as before.
 
-### For 0.19
+### 0.19: what shipped (the section that was "For 0.19"; (b) is still CZ-1)
 
-- **(a) Audio quality, GitHub issue 3: built, to be heard** (docs/AUDIO-QUALITY.md; HISTORY 2026-10-12 "the output
-  chain", "the look-ahead, Sloop 2.6" and "the third round"). Options > Output: Classic (0.18's master, bit for bit)
-  / Clean (linear to -2.0 dBFS, a limiter that holds and looks 32 samples ahead: the output 0.73 ms late, no sample
-  over its threshold; MASTER last into the 24-bit word), default Clean in the dev builds. **The third round, built,
-  to be heard** (the owner's four decisions of 2026-10-12): Clean's limiter holds 200 ms (a hit's 40 ms; again within
-  1.2 dB): 2 to 11 dB less left on loud and very wet passages for 0.1 to 0.9 LU, a hit's recovery as it was
-  (`../audio-0.19/hold/`); the chorus returns in stereo, two taps a quarter turn apart, in both Output modes
-  (`../audio-0.19/chorus/`; so Classic is 0.18 bit for bit only without a chorus send: `tools/emu/classic_exact.sh`
-  proves that and, with `EMU_CHORUS=mono`, everything else); the click and the USB part pairs are lined up with
-  Clean; MASTER is read before the audio starts (Felucca 1.1.5's fix). **The owner's**: all four by ear on the unit;
-  whether the chorus gets a Width knob (the parameter is there: docs/FX.md "The chorus, stereo" has the three lines);
-  docs/USB-AUDIO.md does not yet say the part pairs are 0.73 ms late with the master pair in Clean. Felucca's SPEAKER setting left behind by another
-  firmware is held off. The harness is in the tree (`tests/master_measure.c`, `tools/master_*`); the listening files
-  and tables in `../audio-0.19/`. **The owner's decisions**: Output's default for the release; Clean's trim (single
-  notes are 2.4 LU quieter than Classic, loud chords up to 1.4 LU louder) or the make-up build (`CR_OUT_MAKEUP=1
-  ./build.sh`: the DAC word's unused 6 dB, not heard on the unit yet); the part LEVEL / trims against Sloop's (the
-  largest measured difference, untouched); 32 or 64 samples of look-ahead. Measured against **Sloop 2.6** in the second round (its master now looks ahead):
-  Classic is behind it on loud chords, Clean ahead; the level gap is 6.3 dB (Classic) / 8.8 dB (Clean) on a single
-  note, none on the loudest chords. From Felucca 1.0.1 .. 1.5.1 the one fix that was missing on the live path, MASTER
-  read before the audio starts (1.1.5, #137), is in. Listening files: `../audio-0.19/lookahead/`, `hold/`, `chorus/`. Not checked on the unit:
-  anything (the emulator and the host only).
-- **(b) CZ-1: the pops, the level, the click that was left: built, to be heard and read on the unit** (docs/CZ1.md
-  "Pops (0.19)" with "The second round", and "Level"; HISTORY 2026-10-12 "CZ-1's pops" and "CZ-1's level and the
-  click that was left"). The owner's report ("pop and dropout when holding chords without FX ... probably internal
-  clipping") was not clipping: a sounding note struck again cut its own voice, and the DCW depth stepped at a block's
-  edge (abb0b81). Since then: **the engine is 6 dB lower** (the owner: "CZ-1 trim sounds good"; a voice adds `* 2`,
-  every sample exactly half; the three per-sound trims are gone; user CZ-1 sounds are 6 dB quieter with the rest),
-  and **a sounding note struck again at another velocity no longer steps** (a loop's step velocities, MIDI in). The
-  two clicks `wavclicks.py` counted on BRASS 1 struck again are not a step: the first bright window of a re-attack
-  whose DCW is still open, as the chip model does; the 79 jumps left at C2 are the waves' own edges, each checked
-  against its definition. **The owner's**: the level by ear against the other engines (`../audio-0.19/cz-trim/`),
-  the per-sound trims proposed for INIT TONE, STRINGS 1, BRASS 1, PIPE ORGAN 2 and four quiet sounds (none
-  applied), whether a re-attack should open from a closed DCW when the DCA has let go (not built). A session
-  saved on BRASS 1, STRINGS 2 or PIPE ORGAN 1 comes back without the old trim (a part's trim is the table's at a
-  restore, never the record's: `cr_settings.h cr_session_part_trim`). **Not done on the unit**: anything; `python3 tools/cz_pop_check.py --play` (late halves: the third possible cause of
-  the first report) was never run.
-- **(c) WHEEL**: the owner is on the fence about cutting it.
-- **(d) USB recording at 48 kHz: built, nothing run on a host or the unit** (docs/USB-AUDIO.md "48 kHz"; HISTORY
-  2026-10-12). **Opt-in since 2026-10-12: Options > USB Rate, `44.1 kHz` by default** (0.18's descriptors byte for
-  byte, `bcdDevice` 3.22; `44.1 + 48 kHz`: 3.23), because the owner's Mac chose 48 kHz by itself. With it on,
-  ChoralRoot In offers 44.1 and 48 kHz, the host chooses; 44.1 kHz is bit for bit 0.18's. At 48 kHz the
-  six channels are resampled in the audio ISR: about 185 us a half by the listing, which the heaviest CZ-1 patches
-  may not have. **The owner's**: the test plan there (macOS at both rates, a phone, Windows; the heavy case with
-  `--debug`), then whether six channels at 48 kHz stay opt-in, get the 16-tap filter, become the default, or 48 kHz
-  is dropped. The plan has both states of the option now.
+The player's account is `docs/releases/0.19.md`; the record is HISTORY 3y17 .. 3y26. All of it was built and
+verified on the host and in the emulators; what was heard or read on the unit is in HISTORY and in items 21 and 22
+above, not assumed here.
+
+- **(a) The output chain, GitHub issue 3** (docs/AUDIO-QUALITY.md; HISTORY 3y17 "the output chain", 3y20 "the
+  look-ahead, Sloop 2.6", 3y24 "the third round"). Options > Output: **Clean**, the default (linear to -2.0 dBFS; a
+  limiter that looks 32 samples ahead, so the output is 0.73 ms late and no sample leaves it over its threshold,
+  and that holds 200 ms, a hit's 40 ms; MASTER last into the 24-bit word) / **Classic** (0.18's master). Single
+  notes are 2.4 LU quieter in Clean than in Classic, loud chords with the bass up to 1.3 LU louder. Felucca's
+  SPEAKER setting left behind by another firmware is held off. MASTER is read before the audio starts (Felucca
+  1.1.5's fix). The harness is in the tree (`tests/master_measure.c`, `tools/master_*`); the listening files and
+  tables are in `../audio-0.19/` (`lookahead/`, `hold/`, `chorus/`, `cz-trim/`). Open: items 14 .. 16.
+- **(b) CZ-1** (docs/CZ1.md "Pops (0.19)" with "The second round", and "Level"; HISTORY 3y18 "CZ-1's pops", 3y23
+  "CZ-1's level and the click that was left", 3y25 "the session and a removed trim"). The owner's report ("pop and
+  dropout when holding chords without FX ... probably internal clipping") was not clipping: a sounding note struck
+  again cut its own voice, and the DCW depth stepped at a block's edge. Both fixed; **the engine is 6 dB lower**
+  (the owner: "CZ-1 trim sounds good"; a voice adds `* 2`, every sample exactly half; the three per-sound trims are
+  gone; user CZ-1 sounds are 6 dB quieter with the rest); **a sounding note struck again at another velocity no
+  longer steps**; a session saved on BRASS 1, STRINGS 2 or PIPE ORGAN 1 comes back without the old trim
+  (`cr_settings.h cr_session_part_trim`). The two clicks `wavclicks.py` counted on BRASS 1 struck again are not a
+  step, and the 79 jumps left at C2 are the waves' own edges. `python3 tools/cz_pop_check.py --play` reads the
+  unit's late halves, the third possible cause of the first report. Open: items 19 .. 21.
+- **(c) The chorus in stereo** (docs/FX.md "The chorus, stereo"; HISTORY 3y24): two taps a quarter turn apart, in
+  both Output modes. Open: item 18.
+- **(d) The click and the USB part pairs are lined up with Clean** (HISTORY 3y24; docs/USB-AUDIO.md "ChoralRoot
+  In: the channels": the part pairs wait 32 frames in Clean, and a change of Output during a recording moves them
+  by 0.73 ms). The stems' alignment was tested without USB (`tests/cr_align_test.c`): not on a host.
+- **(e) USB recording at 48 kHz, opt-in** (docs/USB-AUDIO.md "48 kHz"; HISTORY 3y19, 3y22): Options > USB Rate,
+  `44.1 kHz` by default (0.18's descriptors byte for byte, `bcdDevice` 3.22) / `44.1 + 48 kHz` (3.23: the host
+  chooses; 44.1 kHz is bit for bit 0.18's). At 48 kHz the six channels are resampled in the audio ISR: about 185 us
+  a half by the listing, which the heaviest CZ-1 patches may not have. The capture is a tap and does not change the
+  sound (HISTORY 3y22, `tests/cr_usbtap_test.c`). Open: items 17 and 22.
+- **(f) The Options leave the keys alone** (HISTORY 3y21): the keys play as on the view; SELECT, KNOB 1 and the
+  buttons are the menu.
+- **(g) GLO + ALGORITHM / GLO + PRESETS pick the engine wherever the knob alone is the part's sound** (HISTORY 3y22;
+  `cr_ui.c cu_epk_ok`; the table in docs/PRESETS.md).
+- **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
 ## Facts that are easy to get wrong
 

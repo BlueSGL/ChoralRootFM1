@@ -11,10 +11,22 @@ Felucca up to 1.5.1: [Sloop 2.6 and Felucca 1.5.1](#sloop-26-and-felucca-151-the
 of the first round no longer holds. Where this document says "Sloop" without a version it is 2.2. The second round
 also gave Clean's limiter its look-ahead: [The look-ahead](#the-look-ahead).
 
+Between the two, **CZ-1 was made 6 dB lower into the mix** and the click the second round saw on it was followed up:
+[CZ-1 level](#cz-1-level-019-after-the-second-round).
+
 **A third round**, the same day, after the owner had heard the first two: Clean's limiter holds longer, the chorus
 returns in stereo, the click and the USB recording's stems are lined up with Clean, MASTER is read before the audio
 starts: [Round 3](#round-3-the-hold-the-chorus-in-stereo-the-click-master-at-power-on). Where the earlier sections
-say "the chorus's return is mono", "hold 40 ms" or "the click is 0.73 ms ahead", they describe the tree before it.
+say "the chorus's return is mono", "hold 40 ms" or "the click is 0.73 ms ahead", they describe the tree before it;
+each such place carries a note in brackets that names the round that superseded it. The measurements of every round
+are kept as they were taken.
+
+**Where things stand at 0.19** (the one summary; the sections below are the record): Options > Output defaults to
+Clean, with Classic kept for comparison. Clean: linear to -2.0 dBFS, a limiter that looks 32 samples (0.73 ms)
+ahead and holds 200 ms (a hit's 40 ms), MASTER last. The chorus is stereo in both modes. The click and the USB part
+pairs are as late as Clean's output. MASTER is read before the audio starts. CZ-1 is 6 dB lower. Not changed: the
+level against Sloop (the owner, 2026-10-12: no per-sound loudness matching right now). Nothing in this document was
+measured on a unit.
 
 Levels are the Q15 sample before the DAC word's `<< 7` unless said otherwise, in dB re 32768; MASTER at its top
 (`master_q12` 4088). "dist" is the harness's measure, explained under [How to measure](#how-to-measure).
@@ -345,12 +357,13 @@ round); nothing upstream helps the limiter, the clip or the level.
   power-on sound 8 to 14 dB quieter, heard as dull. (2) New with 2.6: on full chords with MASTER up, 0.17's limiter
   and tanh put their residue 17 to 26 dB under the 2 .. 8 kHz content where Sloop 2.6 puts 24 to 33 dB: "harsh in
   the mids and highs, bass fine" fits that, on every engine. (3) Mono, and the mono chorus's comb, as before.
-  0.19's Clean answers (2); (1) and the chorus are the open questions below.
+  0.19's Clean answers (2); (1) and the chorus are the open questions below. (The chorus: superseded by the
+  third round, which made it stereo, [The chorus, stereo](#the-chorus-stereo). (1) stays open.)
 
 ## Part 2: the output chain of 0.19, and Options > Output
 
-**Options > Output: Classic / Clean** (the entry after Dual Core; an Option: saved by itself; default Clean in the
-0.19 dev builds). Classic is 0.18's master, bit for bit. Clean is a second chain on the same mix. Switching while
+**Options > Output: Classic / Clean** (the entry after Dual Core; an Option: saved by itself; default Clean: `cr_ui.c`,
+the settings record's cleared bit). Classic is 0.18's master, bit for bit. Clean is a second chain on the same mix. Switching while
 sound plays is click-free: the mix is faded to nothing over 11.6 ms, the chain changes at that zero with its limiter
 at rest, and it fades in again (`fx.c out_fade`).
 
@@ -383,7 +396,7 @@ mix + wet  --x 0.75 (CLN_TRIM), kept in Q17-->  DC blocker  -->  a delay of 32 s
 | MASTER | last, after the knee, into the 24-bit word | the knob turns the level down and nothing else: the limiter's work no longer depends on it, and a low setting keeps the resolution |
 | bits | the chain's samples are Q17 (the two bits Classic's `>> 2` shifts out are kept: the default trim is `x 3`, nothing lost); the DAC word gets the 7 bits under the Q15 sample (`out_frac`, added in `audio.c`) | the buffers are int32 and the DAC takes 24 bits: no dither is needed, the bits are simply not thrown away |
 | LOWCUT / BASS+ | not in the Clean chain | ChoralRoot holds them off (above); if they get a control, they go in |
-| USB audio | the master pair is the Q15 sample as before, taken after the limiter: the same delayed, limited signal the DAC gets. USB Level = Master: after MASTER (as before). Fixed: the full level, taken after the knee and before MASTER (`clean_split`, then `clean_post` in `usb_fixed_dac`); the DAC word is the same either way | against Classic the recording's master pair is 2.5 dB lower on a single note and up to 1.4 dB higher on a loud chord, and peaks at the limiter's ceiling, -2.0 dBFS (Classic's tanh kept it under -3.5 dB; before the look-ahead an overshoot could reach full scale); the two part pairs (pre-master) are unchanged |
+| USB audio | the master pair is the Q15 sample as before, taken after the limiter: the same delayed, limited signal the DAC gets. USB Level = Master: after MASTER (as before). Fixed: the full level, taken after the knee and before MASTER (`clean_split`, then `clean_post` in `usb_fixed_dac`); the DAC word is the same either way | against Classic the recording's master pair is 2.5 dB lower on a single note and up to 1.4 dB higher on a loud chord, and peaks at the limiter's ceiling, -2.0 dBFS (Classic's tanh kept it under -3.5 dB; before the look-ahead an overshoot could reach full scale); the two part pairs (pre-master) are unchanged (superseded by the third round: in Clean they are delayed 32 frames with the master pair, [The click and the recording's stems](#the-click-and-the-recordings-stems)) |
 
 ### Before and after
 
@@ -451,8 +464,8 @@ is down when the peak comes out.
 1. each sample goes through the DC blocker into the delay and the sample that went in 32 earlier comes out; the
    block's peak is kept on the way (one pass, no second look at the delay);
 2. the loudest of this block and the one before it (the one coming out) is the **window maximum**: two numbers, the
-   kept peak of each block. The envelope takes it at once if it is higher, holds 40 ms, releases over 186 ms, as
-   before, and is never let under the window maximum;
+   kept peak of each block. The envelope takes it at once if it is higher, holds 40 ms (superseded by the third
+   round: 200 ms, a hit's 40 ms, [The hold](#the-hold)), releases over 186 ms, as before, and is never let under the window maximum;
 3. the block's gain is `CLN_T / envelope` (one divide, and only in a block where the envelope moved);
 4. the samples coming out are multiplied by a gain that glides in a straight line from the last block's gain to this
    one's, a 32nd of the way a sample (kept at 32 times the gain's resolution: it ends exactly on the target, no
@@ -638,6 +651,34 @@ output chain and for any sound without a chorus send: [What Classic's guarantee 
   if it is adopted). No register, rail or clock is involved; `OUT_SHIFT` and the HAL are untouched.
 - **The HAL's comments** (`hal/fm1_audio.h`: "codec control lines", "24-bit left-justified") are wrong as found
   above; left as they are until the owner says the HAL may be touched for a comment.
+
+## CZ-1 level (0.19, after the second round)
+
+Round 2's note "a CZ-1 click remains in the mix" ([open item 10](#open-questions-and-proposals) below) and the level gap were CZ-1's own and are
+closed in docs/CZ1.md ("Level", "The second round"). What matters to the output chain:
+
+- **CZ-1 is 6 dB lower into the mix.** `cz_native.c` adds a voice `* 2` where it added `* 4` (a half-scale line, as
+  `dsp.c` says of `<< 1`); every sample a voice leaves in its part's sum is exactly half. The same held 6-note chord
+  at LEVEL 92: the part's median peak +2.4 -> -3.5 dB re full scale at MASTER's top, RMS -12.3 -> -18.0 dB (VA -3.0 /
+  -15.6, FM TONE -3.8 / -16.8, FM6 -4.7 / -20.4); 40 -> 3 of 65 sounds peak above full scale. The three per-sound
+  trims (BRASS 1, STRINGS 2, PIPE ORGAN 1) are gone. Every figure this document gives for a CZ-1 render ("CZ-1 BRASS
+  1", `cz-*.wav` in `../audio-0.19/`) is of the old level: BRASS 1 moved by 1 dB only (its -5 dB trim against the
+  engine's -6 dB), any other CZ-1 sound by 6 dB.
+- **The limiter has less to do on CZ-1.** Over the 33 280 runs of `tests/cz_pops.c` (65 sounds, chords of four to six
+  notes, with and without the CZ-1 bass, velocity 100 and 127): Classic's limiter worked in 54.9 % of the runs before
+  and 6.3 % after, its lowest gain 0.28 -> 0.55. Clean's (`CZ_CLEAN=1`): 56.8 % -> 7.9 %, its lowest gain 0.26 -> 0.52. The runs
+  left: INIT TONE most (313 of its 512), then SYNTH.BASS, HARP, SYNTH.LEAD 2, WHISTLE, BRASS 1, STRINGS 1; 48 of the 65
+  sounds have at least one.
+- **The click of item 10 is not a step.** The two `wavclicks.py` counts on BRASS 1 let go for 60 ms and struck again
+  are the first bright window of each re-attack (its DCW is still open when its DCA comes back; the tone's own
+  edges follow at five times that level for as long as the note sounds). Classic shows the same event at 10 times
+  its neighbourhood, under wavclicks' threshold of 12: masked by the count, not removed by the tanh.
+  `wavclicks.py --both-sides` (a burst must stand above the sound before it and the sound after it) counts 0 there and
+  still finds a 30 % gain step put into the same file by hand. `cr_output_loud.txt`'s single strike still sits on
+  Clean's ceiling (peak 25 899, the ceiling 25 898: `test_cr.sh`).
+- **A real step upstream was fixed**: a sounding CZ-1 note struck again at another velocity (not reachable from the
+  emulator's scripts, which strike at one velocity).
+- Listening files, through Clean at the power-on MASTER: `../audio-0.19/cz-trim/`.
 
 ## Round 3: the hold, the chorus in stereo, the click, MASTER at power-on
 
@@ -905,33 +946,42 @@ Counted in `build/choralroot.dis` against 778a6ad's:
   sum?), the click against a note by ear, a USB recording's stems in a DAW, MASTER at power-on with the real ADC.
 - The browser emulator's test (no emcc on this machine): it builds the same `emu_fw.c` and `fx.c`, so its
   comparison with the native emulator holds by construction; its assertions (peak over 300, sound, the notes) do not
-  depend on the chorus's width.
+  depend on the chorus's width. (Superseded at the release: Emscripten 6.0.11 is in `~/emsdk`, not on the PATH;
+  `tools/emu/web/build_web.sh` sources it, and the test, `node tools/emu/web/test_web_emu.mjs`, is run before a
+  tag: docs/HANDOFF.md "Verification".)
 - A Width knob: the parameter is there (`xfp[XP_CWIDTH]`), KNOB 3 of the Chorus page is free, the two lines in
   `cr_ui.c` and the one in `cr_settings.c` are in docs/FX.md; not added here (those files were another agent's).
 - docs/USB-AUDIO.md does not yet say that the part pairs are 0.73 ms late with the master pair in Clean.
+  (Superseded: it does, under "ChoralRoot In: the channels", with what a change of Output does to a running
+  recording's part pairs.)
 
 ## Open questions and proposals
 
 1. **The level against Sloop** is the largest measured difference and 0.19's output chain does not touch it: part
    LEVEL 92 against 104, and trims. Raising LEVEL to 104 on 0.18 would have put the default chord 99 % of the time in
    Classic's limiter (dist -31.9 dB instead of -39.6); with Clean's headroom and the DAC word's 6 dB it becomes
-   possible. A decision about the sounds' levels, by ear.
+   possible. A decision about the sounds' levels, by ear. (The owner, for 0.19: no per-sound loudness matching right
+   now. Open.)
 2. ~~The chorus's return is mono~~: stereo since the third round ([The chorus, stereo](#the-chorus-stereo)). Open:
    a Width knob on the Chorus page's free KNOB 3 (the parameter is there), and what the unit's own speaker gets.
 3. **Output's default for the release** (Classic or Clean), the trim, and the make-up build: after listening.
    And since the second round: 32 or 64 samples of look-ahead. (The limiter's hold: chosen in the third round,
-   [The hold](#the-hold); to be heard: `../audio-0.19/hold/`.)
-8. ~~The click and the USB part pairs are 0.73 ms ahead of Clean's output~~: lined up in the third round.
-9. ~~MASTER at power-on~~ (Felucca 1.1.5, #137): ported in the third round.
-10. **CZ-1 struck again while it sounds** still shows a click to `tools/emu/wavclicks.py` in the mix of
-    `BRASS 1` with the bass (2.30 s and 3.06 s of the script this round first used), before the output chain: in
-    f402608's Clean as in this one, not in Classic (whose tanh rounds it). CZ-1's own item (docs/CZ1.md).
+   [The hold](#the-hold); to be heard: `../audio-0.19/hold/`.) (The default: Clean, with Classic kept for
+   comparison, the owner's third-round decision above. The make-up build is not finished:
+   [Proposed](#proposed-not-built-in).)
 4. **A control for LOWCUT / BASS+** (they are useful on the speaker): none added; the stage is held off.
 5. **The reverb at 22.05 kHz** has no wet above 10 kHz (-12.9 dB against -4.3 dB): 0.18's cost decision
    (docs/FX.md), named here because it is a "top" difference to 0.17 and Sloop.
 6. **The mix's own word length**: `mix_part_loop` shifts each part's sample by 2 before its level (`(b >> 2) * lvl
    >> 10`): the same class of loss as the master had, upstream of it, not measured here.
 7. **The DAC chip** is unidentified. Its marking on the board would settle what filter it has.
+8. ~~The click and the USB part pairs are 0.73 ms ahead of Clean's output~~: lined up in the third round.
+9. ~~MASTER at power-on~~ (Felucca 1.1.5, #137): ported in the third round.
+10. **CZ-1 struck again while it sounds** still shows a click to `tools/emu/wavclicks.py` in the mix of
+    `BRASS 1` with the bass (2.30 s and 3.06 s of the script this round first used), before the output chain: in
+    f402608's Clean as in this one, not in Classic (whose tanh rounds it). CZ-1's own item (docs/CZ1.md).
+    (Superseded: followed to the sample and closed, [CZ-1 level](#cz-1-level-019-after-the-second-round): it is
+    not a step, and Classic does not round it away, it only stays under the tool's threshold.)
 
 ## How to measure
 
@@ -984,34 +1034,6 @@ samples, calls that are not whole blocks; MASTER last, the switch and nothing st
 `sh tests/run_cr_tests.sh`), `tools/emu/scripts/cr_output.txt`, `cr_output_classic.txt` and `cr_output_loud.txt`
 (`tools/emu/test_cr.sh`: Clean is Classic's passage 32 samples late, `tools/emu/wavlag.py`; a loud chord's peak sits
 on the limiter's ceiling), the seeded flash images of `tools/emu/test_persist.sh`, `tools/emu/classic_exact.sh`.
-
-## CZ-1 level (0.19, after the second round)
-
-Round 2's note "a CZ-1 click remains in the mix" (open item 10 above) and the level gap were CZ-1's own and are
-closed in docs/CZ1.md ("Level", "The second round"). What matters to the output chain:
-
-- **CZ-1 is 6 dB lower into the mix.** `cz_native.c` adds a voice `* 2` where it added `* 4` (a half-scale line, as
-  `dsp.c` says of `<< 1`); every sample a voice leaves in its part's sum is exactly half. The same held 6-note chord
-  at LEVEL 92: the part's median peak +2.4 -> -3.5 dB re full scale at MASTER's top, RMS -12.3 -> -18.0 dB (VA -3.0 /
-  -15.6, FM TONE -3.8 / -16.8, FM6 -4.7 / -20.4); 40 -> 3 of 65 sounds peak above full scale. The three per-sound
-  trims (BRASS 1, STRINGS 2, PIPE ORGAN 1) are gone. Every figure this document gives for a CZ-1 render ("CZ-1 BRASS
-  1", `cz-*.wav` in `../audio-0.19/`) is of the old level: BRASS 1 moved by 1 dB only (its -5 dB trim against the
-  engine's -6 dB), any other CZ-1 sound by 6 dB.
-- **The limiter has less to do on CZ-1.** Over the 33 280 runs of `tests/cz_pops.c` (65 sounds, chords of four to six
-  notes, with and without the CZ-1 bass, velocity 100 and 127): Classic's limiter worked in 54.9 % of the runs before
-  and 6.3 % after, its lowest gain 0.28 -> 0.55. Clean's (`CZ_CLEAN=1`): 56.8 % -> 7.9 %, its lowest gain 0.26 -> 0.52. The runs
-  left: INIT TONE most (313 of its 512), then SYNTH.BASS, HARP, SYNTH.LEAD 2, WHISTLE, BRASS 1, STRINGS 1; 48 of the 65
-  sounds have at least one.
-- **The click of item 10 is not a step.** The two `wavclicks.py` counts on BRASS 1 let go for 60 ms and struck again
-  are the first bright window of each re-attack (its DCW is still open when its DCA comes back; the tone's own
-  edges follow at five times that level for as long as the note sounds). Classic shows the same event at 10 times
-  its neighbourhood, under wavclicks' threshold of 12: masked by the count, not removed by the tanh.
-  `wavclicks.py --both-sides` (a burst must stand above the sound before it and the sound after it) counts 0 there and
-  still finds a 30 % gain step put into the same file by hand. `cr_output_loud.txt`'s single strike still sits on
-  Clean's ceiling (peak 25 899, the ceiling 25 898: `test_cr.sh`).
-- **A real step upstream was fixed**: a sounding CZ-1 note struck again at another velocity (not reachable from the
-  emulator's scripts, which strike at one velocity).
-- Listening files, through Clean at the power-on MASTER: `../audio-0.19/cz-trim/`.
 
 Round 3: the hold in `tests/cr_output_test.c`; the chorus in `tests/cr_fx_test.c`; `tests/cr_align_test.c` (the click,
 the stems, MASTER at power-on); `cr_chorus.txt`, `cr_click.txt`, `cr_boot_master.txt` and the two `classic_dry_*.txt`.

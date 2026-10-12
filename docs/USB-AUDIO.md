@@ -38,7 +38,7 @@ Rate `44.1 + 48 kHz`) and 3.21 with the console (below), so a host never reuses 
 
 | Channels | Name | The signal |
 | --- | --- | --- |
-| 1-2 | Master L / R | the master output after the limiter and the speaker EQ (Felucca's LOWCUT / BASS+ when set), as the DAC gets it, **without** the metronome click. Its level follows MASTER, or not (USB Level, below) |
+| 1-2 | Master L / R | the master output after the limiter (and Felucca's speaker EQ, LOWCUT / BASS+, where it runs: ChoralRoot holds it off since 0.19, docs/AUDIO-QUALITY.md "Left behind"), as the DAC gets it, **without** the metronome click. Its level follows MASTER, or not (USB Level, below) |
 | 3-4 | Chord L / R | the CHORD part (part 0: the chord sound, the RAW chord's when it plays part 0) as it goes into the mix: after its DIST, LEVEL, pan and the stereo spread (VA's SPREAD), **before** the sends, the FX buses (chorus, delay, reverb), the FX layer and MASTER; at **half level (−6 dB)** |
 | 5-6 | Bass L / R | the BASS part (part 1), the same way |
 
@@ -46,6 +46,30 @@ The part pairs are dry: the shared FX buses cannot be split by part. They are ta
 be louder than the master's full scale before the limiter (a six-note chord at a high LEVEL reaches about twice the
 limiter's threshold); all channels saturate at 16-bit full scale. Capture is 16 bit only: the mix is 16-bit, and a
 24-bit format would only pad a zero byte (and need 810-byte packets instead of 540; 882 for 588 at 48 kHz).
+
+**With Options > Output on Clean (0.19) all three pairs are 32 frames (0.73 ms) late, together.** Clean's limiter
+looks ahead: its output, and so the master pair, is the mix `CLN_LA` = 32 samples late (docs/AUDIO-QUALITY.md "The
+look-ahead"). The part pairs are taken from the mix, in front of that delay, so in a block that went through Clean
+they wait the same 32 frames in a line of their own (`fx.c ua_parts_late`, called at the end of `mix_block` when
+`ua_stage_on && fx_out_blk`: the two pairs of each staged frame are swapped with the ones staged 32 frames earlier;
+`ua_dl`, 256 bytes of RAM). The three stems of a recording then line up to the sample, as they do in Classic, where
+nothing is delayed and the line is not touched (`tests/cr_align_test.c`: the master pair against the CHORD pair of a
+dry note, lag 0 in both modes; the test stages the frames as `choralroot.c` does, without USB: **not run on a host
+or the unit**). By the code:
+
+- The line is cleared whenever a block is staged through Clean after one that was not (`ua_dl_on`): at the start of
+  a recording made through Clean, **the part pairs' first 32 frames are silence**, as the master pair's are the
+  delay's content.
+- **Switching Output while a recording runs moves the part pairs by 32 frames at the switch.** The master pair is
+  faded to nothing and back by the switch (`fx.c out_fade`, 24 ms); the part pairs are not faded. Classic to Clean:
+  from the first Clean block the part pairs are 32 frames of silence and then go on 32 frames late (a 0.73 ms gap
+  at whatever level the part has there). Clean to Classic: the 32 frames waiting in the line are never sent and the
+  part pairs go on undelayed (0.73 ms of the part skipped: a jump). Either is a step in the CHORD and BASS stems
+  if the part sounds at that moment. Set Output before the take.
+- The delay is in frames of the FM-1's own rate, in front of the 48 kHz resampler: at 48 kHz it is the same
+  0.73 ms.
+- Cost: 14 instructions a frame by the listing, about 9 us a half, only while a computer records through Clean
+  (docs/AUDIO-QUALITY.md "The click and the recording's stems").
 
 Hosts that read UAC1 channel names (the input terminal's `iChannelNames`, strings 4..9) show "Master L" .. "Bass R";
 Windows numbers them 1..6.
@@ -451,6 +475,7 @@ audio path looks at either:
 | `fx.c mix_block` | clears `ua_stage` (192 words) | no: writes the stage only |
 | `fx.c mix_part_out` | picks the loop with the tap (`mix_loop_u`, `_fu`, `_su`, `_sfu`) in place of the one without | no: the same `mix_part_loop` source with `tap` 1, which adds two stores of `ua_sat(l >> 1)`, `ua_sat(rr >> 1)` into the stage after `mix_l` / `mix_r` have been written; the saturation and the -6 dB are on the copy, not on the mix |
 | `fx.c mix_parts_split` (Dual Core On) | calls the same `mix_part_out` for both parts | no (and `c1_split_ok` does not look at USB: the split is the same with and without) |
+| `fx.c mix_block`, Output Clean only | `ua_parts_late`: the stage's two part pairs delayed 32 frames ("ChoralRoot In: the channels" above) | no: reads and writes the stage and its own line only |
 | `choralroot.c mix_block` | copies `out` into the stage's master pair (`ua_sat`), before the click | no: reads `out` |
 | `audio.c audio_block` | at 48 kHz `ua_block48` (reads the stage), then `ua_feed` into the ring with the interrupts off | no: reads the stage |
 | `audio.c ua_isr_service` | serves the endpoint between blocks | no |
@@ -588,6 +613,7 @@ Record Off and read `cpu` and `status` on the console: `audio_max_all_us`, `ua_p
 | capture packets, double-buffered: 2 x 588 B (2 x 540 to 0.18) | RAM (`usb_audio.c` `ua_tx`) | 1176 B |
 | the configuration as sent (`ua_cfg`) | RAM | 211 B |
 | one block's capture frames, 32 x 6 x 16 bit | RAM (`fx.c` `ua_stage`) | 384 B |
+| Output Clean (0.19): the part pairs' delay, 32 frames x 2 pairs x 2 x 16 bit | RAM (`fx.c` `ua_dl`) | 256 B |
 
 Felucca's master-only input (a 2 KiB ring and its packet in RAM) is removed. Removing the playback, measured by
 `./build.sh` against the 0.14 dev build with it: POOL −4,124 B (321,612 → 317,488 B, 92.3 %), RAM −432 B (79,516 →
@@ -702,7 +728,7 @@ SOFs, 0 underruns, 12 overruns / 189 frames (nine in two minutes of heavy host l
 | `firmware/src/usb_audio_desc.h` | the recording function's descriptors |
 | `firmware/src/usb_audio.c` `ua_cfg_build`, `UA_OFF_48` | the configuration as sent: without the recording (USB Record Off), or with 0.18's one-rate format and 640-byte endpoint (USB Rate 44.1 kHz) |
 | `tests/cr_usbrate_test.c`, `tests/cr_usb018_desc.h` | Options > USB Rate: both descriptor sets, 0.18's bytes as stored, the requests, the digest, the replug and its guard |
-| `firmware/src/fx.c` | `ua_stage` and the part captures (`mix_part`), `fx_usb_fixed` / `usb_fixed_dac` (USB Level) |
+| `firmware/src/fx.c` | `ua_stage` and the part captures (`mix_part`), `ua_parts_late` (Output Clean: the part pairs as late as the master pair), `fx_usb_fixed` / `usb_fixed_dac` (USB Level) |
 | `firmware/src/choralroot.c` | the master tap (the `mix_block` shim, before the click) |
 | `firmware/src/audio.c` | USB Level Fixed's DAC scaling, then at 48 kHz `ua_block48` (the resampler, IRQs on), then `ua_feed` with the IRQs off |
 | `firmware/src/cr_backup.c` | SysEx 73 DEBUG's `ua_*` counters; 79 USB (the rate, the 48 kHz counters) |
