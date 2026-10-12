@@ -1,0 +1,195 @@
+# ChoralRoot 0.18: GLO held + REC steps the record mode (the owner, 2026-10-11: "I would also add shortcut for GLO +
+# REC which changes the record mode, cycling through them"). The dump's `mode`: 0 Overwrite, 1 Advance, 2 Overdub,
+# 3 Replace, 4 Step; `cap`: 0 nothing captured.
+# A. The view: five GLO + REC: Advance, Overdub, Replace, Step, Overwrite again (the wrap), each with its message; no
+#    take, no Options (GLO's tap), nothing armed. GLO held past the hold time, then REC: the same.
+# B. REC alone: as ever (Overwrite, Free: armed; REC again: cancelled).
+# C. The PLAY menu: GLO + REC steps it there (its picker follows; the keys' Play / Loops, GLO's tap there, untouched).
+#    The FX layer: the same.
+# D. The loop editor: GLO + REC steps the mode and clears nothing; REC alone there still clears the step.
+# E. The sound editor (GLO is its SHIFT): nothing.
+# F. A take under way: GLO + REC is taken as the PLAY menu's ALGORITHM knob is (no refusal, no message but the mode's):
+#    the take goes on, REC ends it as it began (a loop playing, no slot jump from Advance), and the mode counts from
+#    the next REC. The knob during a take, for comparison.
+wait 300
+dump                              # 1: mode 0, cap 0
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 300
+dump                              # 2: mode 1
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 300
+shot build/emu/test/cr_glo_rec_msg.ppm
+dump                              # 3: mode 2
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 300
+dump                              # 4: mode 3
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 300
+dump                              # 5: mode 4
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 300
+dump                              # 6: mode 0 (the wrap), cap 0, state 0, layer 0, options 0
+btn GLO down
+wait 800
+btn REC
+wait 100
+btn GLO up
+wait 1500
+dump                              # 7: mode 1 (GLO held long first)
+btn GLO down
+wait 50
+btn REC
+wait 50
+btn REC
+wait 50
+btn REC
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 1500
+dump                              # 8: mode 0 (four more under one hold)
+btn REC
+wait 300
+dump                              # 9: REC alone: cap 1 (armed)
+btn REC
+wait 300
+dump                              # 10: cap 0 (cancelled)
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 1500
+shot build/emu/test/cr_glo_rec_menu.ppm
+dump                              # 11: layer 8, mode 1, keys 0
+btn OCT-
+wait 300
+btn FX down
+wait 500
+btn FX up
+wait 300
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 1500
+dump                              # 12: layer 3, mode 2
+btn OCT-
+wait 300
+btn SEQ
+wait 300
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 1500
+dump                              # 13: layer 8, edit 1, mode 3
+btn REC
+wait 300
+dump                              # 14: REC alone in the editor: its clear (the one "loopedit: clear" of the script)
+btn SEQ
+wait 300
+btn SEQ
+wait 300
+btn EDIT
+wait 300
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 600
+dump                              # 15: the sound editor: mode 3 still
+btn EDIT
+wait 300
+btn GLO down
+wait 50
+btn REC
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 1500
+dump                              # 16: mode 0 (Step, Overwrite)
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 600
+dump                              # 17: the take: cap 3
+btn GLO down
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 300
+dump                              # 18: cap 3 still, mode 1 (taken, for the next REC)
+wait 300
+btn D4 up
+btn A#3 up
+wait 300
+btn REC
+wait 300
+dump                              # 19: the take ended as it began: cap 0, state 2 (playing), 1 event, slot 1
+btn PLAY
+wait 300
+btn GLO down
+wait 50
+btn REC
+wait 50
+btn REC
+wait 50
+btn REC
+wait 50
+btn REC
+wait 100
+btn GLO up
+wait 1500
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn F4 down
+wait 600
+knob ALGORITHM +1
+wait 300
+dump                              # 20: the knob during a take: cap 3, mode 1, as GLO + REC (18)
+btn F4 up
+btn A#3 up
+wait 300
+btn REC
+wait 300
+dump                              # 21: cap 0
+btn PLAY
+wait 2000
+dump

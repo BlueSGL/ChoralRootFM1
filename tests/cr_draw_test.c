@@ -341,11 +341,82 @@ int main(int argc, char **argv)
                 fprintf(rep, "meter %s: %u of %u stripes lit, not %u of %u\n", CR_SCREEN_SLUGS[k], lit, all,
                         cr_filled(&s, s.pct), cr_segs(&s));
             }
-            if (ip < 0 && !strcmp(s.label, "FM6 \267 05/25")) ip = (int32_t)k;
+            if (ip < 0 && !strcmp(s.label, "Hold OPT to change engine") && !strcmp(s.value, "05")) ip = (int32_t)k;
         }
         snprintf(name, sizeof name, "the %u meters: as many stripes as segments, pct of them lit", nm);
         check(name, nm > 0u && nbad == 0u);
-        check("the sound read-out's fixture (FM6 05/25) is in the table", ip >= 0);
+        check("the sound read-out's fixture (FM6, 05, Hold OPT to change engine) is in the table", ip >= 0);
+        if (ip >= 0) {
+            /* the read-out on the home pages (0.18; cr_ui.c cu_pool_popup): the engine over the number in orange,
+             * "Hold OPT to change engine" under the stripes, whole (no ellipsis, inside the screen), nothing on
+             * anything else: the chord part's, the bass part's (all orange, its own line, the longest: "FM TONE"
+             * with " . solo"), a user's preset with the mark, the widest number, mid-fill. Elsewhere (no `line`): the
+             * old label, nothing over the number */
+            static const struct { const char *value, *sub, *label, *line; uint8_t col, mark; uint32_t t; const char *slug; } V[] = {
+                {"05", "FM PAD", "Hold OPT to change engine", "FM6", CR_COL_WHITE, 0, 0, "pool_home_chord"},
+                {"05", "FM PAD", "Hold OPT to change engine", "FM6", CR_COL_WHITE, 0, CR_TEST_MID, "pool_home_fill"},
+                {"00", "INIT", "Hold OPT to change engine", "CZ-1", CR_COL_WHITE, 0, 0, "pool_home_init"},
+                {"26", "WWWWWWWWWWWW", "Hold OPT to change engine", "FM TONE", CR_COL_WHITE, 1, 0, "pool_home_user"},
+                {"88", "ADG", "Hold OPT to change engine", "VA", CR_COL_WHITE, 0, 0, "pool_home_standin"},
+                {"17", "DEEP SUB", "BASS + EDIT, hold EDIT: engine", "VA", CR_COL_ORANGE, 0, 0, "pool_home_bass"},
+                {"17", "DEEP SUB", "BASS + EDIT, hold EDIT: engine", "FM TONE \267 solo", CR_COL_ORANGE, 0, 0, "pool_home_bass_solo"},
+            };
+            uint32_t v, j, f0 = nfind, e0 = nell, good = 0;
+            uint16_t org = swap16(cr_rgb(CR_COL_ORANGE, 0)), wht = swap16(cr_rgb(CR_COL_WHITE, 0));
+            for (v = 0; v < sizeof V / sizeof V[0]; v++) {
+                const tbox_t *bl = 0, *bv = 0, *bb = 0;
+                uint32_t no = 0, nw = 0, x, y;
+                s = CR_SCREENS[ip];
+                snprintf(s.value, sizeof s.value, "%s", V[v].value);
+                snprintf(s.sub, sizeof s.sub, "%s", V[v].sub);
+                snprintf(s.label, sizeof s.label, "%s", V[v].label);
+                snprintf(s.line, sizeof s.line, "%s", V[v].line);
+                s.line_col = CR_COL_ORANGE;
+                s.col = V[v].col;
+                s.sub_mark = V[v].mark;
+                s.anim = V[v].t ? CR_A_FILL : 0;
+                s.pct_from = 0;
+                render(&s, V[v].t);
+                write_ppm(dir, V[v].slug);
+                lint(V[v].slug, &s);
+                for (j = 0; j < nbox; j++) {
+                    if (!strcmp(boxes[j].s, V[v].line)) bl = &boxes[j];
+                    if (!strcmp(boxes[j].s, V[v].value)) bv = &boxes[j];
+                    if (!strcmp(boxes[j].s, V[v].label)) bb = &boxes[j];
+                }
+                if (bl)
+                    for (y = (uint32_t)bl->y0; y < (uint32_t)bl->y1; y++)
+                        for (x = (uint32_t)bl->x0; x < (uint32_t)bl->x1; x++) {
+                            no += host_screen[y * 240u + x] == org;
+                            nw += host_screen[y * 240u + x] == wht;
+                        }
+                ok = bl && bv && bb && bl->y1 <= bv->y0 && bl->y0 >= CR_PY0 && no > 20u && nw == 0u &&
+                     !(bl->flags & 1u) && !(bb->flags & 1u) && bb->x0 >= 0 && bb->x1 <= 240 &&
+                     bl->x0 + bl->x1 >= 238 && bl->x0 + bl->x1 <= 242;
+                if (!ok)
+                    fprintf(rep, "pool read-out %s: line %s value %s label %s, %u orange / %u white px in the line\n",
+                            V[v].slug, bl ? "drawn" : "MISSING", bv ? "drawn" : "MISSING", bb ? "drawn" : "MISSING", no, nw);
+                else if (!v)
+                    fprintf(rep, "pool read-out: '%s' (%d,%d)-(%d,%d) over '%s' (%d,%d)-(%d,%d); '%s' (%d,%d)-(%d,%d)\n",
+                            bl->s, bl->x0, bl->y0, bl->x1, bl->y1, bv->s, bv->x0, bv->y0, bv->x1, bv->y1, bb->s, bb->x0,
+                            bb->y0, bb->x1, bb->y1);
+                else if (v == 5u)
+                    fprintf(rep, "pool read-out (bass): '%s' (%d,%d)-(%d,%d)\n", bb->s, bb->x0, bb->y0, bb->x1, bb->y1);
+                good += (uint32_t)ok;
+            }
+            snprintf(name, sizeof name, "the home read-out: the engine over the number in orange, the bottom line whole (%u of %u)",
+                     good, (unsigned)(sizeof V / sizeof V[0]));
+            check(name, good == sizeof V / sizeof V[0] && nfind == f0 && nell == e0);
+            s = CR_SCREENS[ip];
+            s.anim = 0;
+            s.line[0] = 0;
+            snprintf(s.label, sizeof s.label, "FM TONE \267 02/16");
+            render(&s, 0);
+            write_ppm(dir, "pool_picker");
+            for (j = 0, ok = 1; j < nbox; j++)
+                if (boxes[j].y1 <= CR_PY0 + 40 && boxes[j].y0 >= CR_PY0) ok = 0;
+            check("the read-out elsewhere (the picker's preview): nothing over the number", ok);
+        }
         if (ip >= 0) {
             s = CR_SCREENS[ip];
             s.anim = 0;

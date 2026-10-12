@@ -1,0 +1,58 @@
+# ChoralRoot 0.18: the sound read-out on the home pages (the owner, 2026-10-11: "show above the preset number in orange
+# the current engine name. Then at the bottom it currently says 'ENGINE - 20/25', let's change that to say 'Hold OPT
+# to change engine'").
+# A. PRESETS +1 on the view: 02, its name, FM6 over the number, "Hold OPT to change engine" under the stripes (shot at
+#    once: the stripes on their way; then settled).
+# B. PRESETS -2: 00 INIT, the same two lines.
+# C. The text's claim: OPT (GLO) held + PRESETS +1, OPT let go: FM TONE; its read-out says FM TONE over the number.
+# D. ALGORITHM +2: the bass part's (orange): its engine over the number, the bass part's own way under the stripes
+#    (OPT does not reach the bass engine).
+# E. Not on a home page: the sound editor's picker (EDIT, PRESETS +1) keeps "FM TONE . 02/16" and nothing over the
+#    number: OPT + PRESETS does nothing there.
+# F. A user slot: SAVE, OCT+ (Save as new), OCT+: slot 17 of FM TONE; PRESETS -1 +1: its read-out.
+wait 300
+knob PRESETS +1
+wait 20
+shot build/emu/test/cr_pool_hint_anim.ppm
+wait 400
+shot build/emu/test/cr_pool_hint_chord.ppm
+wait 1200
+knob PRESETS -2
+wait 400
+shot build/emu/test/cr_pool_hint_init.ppm
+wait 1200
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 400
+shot build/emu/test/cr_pool_hint_engine.ppm
+dump                              # 1: part 0 on FM TONE
+wait 1200
+knob ALGORITHM +2
+wait 400
+shot build/emu/test/cr_pool_hint_bass.ppm
+wait 1200
+btn EDIT
+wait 300
+knob PRESETS +1
+wait 400
+shot build/emu/test/cr_pool_hint_picker.ppm
+btn EDIT
+wait 300
+btn EDIT
+wait 1200
+btn SAVE
+wait 300
+btn OCT+
+wait 300
+btn OCT+
+wait 1800
+knob PRESETS -1
+wait 300
+knob PRESETS +1
+wait 400
+shot build/emu/test/cr_pool_hint_user.ppm
+wait 1500
+dump

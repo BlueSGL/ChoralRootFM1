@@ -2558,13 +2558,15 @@
      "kind": "meter",
      "value": "05",
      "sub": "FM PAD",
-     "label": "FM6 \u00b7 05/25",
+     "label": "Hold OPT to change engine",
+     "over": "FM6",
+     "overCol": "orange",
      "col": "white",
      "pct": 0.2,
      "segments": 25
     },
     "footer": null,
-    "note": "PRESETS turned: the place in the engine's pool huge, the preset's name under it, the engine and the place over the number of its presets (INIT, 00, is not counted); the stripe meter is the pool, a stripe per preset."
+    "note": "PRESETS turned: the engine in orange over the place in its pool, huge, the preset's name under it; the stripe meter is the pool, a stripe per preset (INIT, 00, is not one); under it the way to another engine."
    }
   },
   {

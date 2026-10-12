@@ -1011,7 +1011,9 @@ static struct {
     uint8_t sx_off;                       /* SysEx 74 SCREEN 0: off until SysEx on or a key, button or knob */
     uint32_t home_t0;                     /* HOME pressed (held CU_HOME_HOLD_MS: the view menu) */
     uint8_t home_hold;                    /* .. armed (pressed alone, the menu not opened yet) */
-    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool; uint16_t pct; char value[8], sub[12], label[24]; } pop;
+    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool; uint16_t pct; char value[8], sub[12], label[32], over[16]; } pop;
+                                          /* over: the line over the value, in orange (a pool's read-out on the home
+                                           * pages: the part's engine) */
                                           /* pool: CU_POOL_ID of a pool's read-out (0: another meter) */
                                           /* jump: the meter's bar jumps to the value (no fill: the picker's preview);
                                            * mark: the square after the name (an overwritten factory preset) */
@@ -1095,6 +1097,7 @@ static void cu_popup(const char *value, const char *sub, const char *label, uint
     cu.pop.jump = 0;
     cu.pop.mark = 0;
     cu.pop.pool = 0;
+    cu.pop.over[0] = 0;
     cu_cpy(cu.pop.value, value, sizeof cu.pop.value);
     cu_cpy(cu.pop.sub, sub, sizeof cu.pop.sub);
     cu_cpy(cu.pop.label, label, sizeof cu.pop.label);
@@ -1139,9 +1142,23 @@ static uint32_t cu_pool_lit(uint32_t pos, uint32_t n, uint32_t segs)
     return 1u + (pos - 1u) * (segs - 1u) / (n - 1u);
 }
 /* a pool's meter (mock-up: design/choralroot-fm1-preset-screens.png 1, 5): the position big ("05"), the name (an
- * overwritten factory preset: a square mark after it), "FM6 \267 05/25" (the engine, the position, the pool's presets:
- * INIT, position 00, is not counted; the bass: in orange, " \267 solo" with Bass Behaviour Solo), a stripe per preset
- * (at most 32; a pool of INIT alone: one, never lit), position k lighting k of them (cu_pool_lit) */
+ * overwritten factory preset: a square mark after it), a stripe per preset (at most 32; a pool of INIT alone: one, never
+ * lit), position k lighting k of them (cu_pool_lit), the bass part's in orange, and two lines that depend on where it
+ * is shown.
+ * On the home pages (cu_pool_home: no layer, not the sound editor, not the save dialog; the owner, 2026-10-11: "show
+ * above the preset number in orange the current engine name. Then at the bottom it currently says 'ENGINE - 20/25',
+ * let's change that to say 'Hold OPT to change engine', the numbers and the bar already communicate how many presets
+ * there are and which one is selected"): the part's engine over the number in orange (the bass with Bass Behaviour
+ * Solo: "VA \267 solo"), and under the stripes the way to another engine: CU_POOL_HINT for the chord part (OPT held +
+ * PRESETS, cu_epk_step, works exactly where cu_pool_home is true), CU_POOL_HINT_BASS for the bass part, whose engine
+ * OPT does not reach (OPT + ALGORITHM is the bass level; its engine: the bass sound's editor, EDIT held there).
+ * Anywhere else (the engine picker's preview, a program change with a layer open): nothing over the number and
+ * "FM6 \267 05/25" under the stripes (the engine, the position, the pool's presets: INIT, position 00, is not counted;
+ * the bass: " \267 solo" after it with Bass Behaviour Solo), as everywhere until 0.18: OPT + PRESETS does nothing there */
+#define CU_POOL_HINT "Hold OPT to change engine"
+#define CU_POOL_HINT_BASS "BASS + EDIT, hold EDIT: engine"
+static uint32_t cu_layer(void);
+static int cu_pool_home(void) { return cu.page != PG_EDIT && cu.page != PG_SAVE && !cu_layer(); }
 /* a pool's stripes: one per preset, at most 32; a pool of INIT alone: one */
 static uint32_t cu_pool_segs(uint32_t e)
 {
@@ -1153,10 +1170,11 @@ static uint32_t cu_pool_segs(uint32_t e)
 #define CU_POOL_ID(part, e) (1u + ((part) ? 1u : 0u) + 2u * (e))
 static void cu_pool_popup(uint32_t part, uint32_t pos)
 {
-    char b[8], nm[13], lb[24], c[8];
+    char b[8], nm[13], lb[24], c[8], ov[16];
     uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, n = pool_count(e) - 1u;
     uint32_t segs = cu_pool_segs(e);
     pool_ent_t en = pool_entry(e, pos);
+    int home = cu_pool_home();
     cu_2d(b, pos, sizeof b);
     pool_name(e, pos, nm);
     cu_cpy(lb, ENGINES[e]->name, sizeof lb);
@@ -1168,13 +1186,23 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     cu_cat(lb, c, sizeof lb);
     if (part && cs.bass_mode == CR_BASS_SOLO)     /* Bass Behaviour Solo: the chord part is silent while it is on */
         cu_cat(lb, " \267 solo", sizeof lb);
-    cu_popup(b, nm, lb, part ? CR_COL_ORANGE : CR_COL_WHITE, (int32_t)cu_pool_lit(pos, n, segs), 0, (int32_t)segs,
-             segs);
+    cu_cpy(ov, ENGINES[e]->name, sizeof ov);
+    if (part && cs.bass_mode == CR_BASS_SOLO)
+        cu_cat(ov, " \267 solo", sizeof ov);
+    cu_popup(b, nm, !home ? lb : part ? CU_POOL_HINT_BASS : CU_POOL_HINT, part ? CR_COL_ORANGE : CR_COL_WHITE,
+             (int32_t)cu_pool_lit(pos, n, segs), 0, (int32_t)segs, segs);
+    if (home)
+        cu_cpy(cu.pop.over, ov, sizeof cu.pop.over);
     cu.pop.mark = en.kind == PK_USER && en.fk != PF_NONE;
     cu.pop.pool = (uint8_t)CU_POOL_ID(part, e);
-    cu_trace("popup: part %u %s / %s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "");
+    cu_trace("popup: part %u %s / %s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "");   /* (the place) */
     cu_trace_txt(lb);
     cu_trace("\n");
+    if (home) {                                    /* .. and the two lines the home pages show instead of it */
+        cu_trace("home read-out: part %u over '", (unsigned)part);
+        cu_trace_txt(cu.pop.over);
+        cu_trace("' line '%s'\n", cu.pop.label);
+    }
 }
 /* PRESETS / ALGORITHM's meter: the part's place in its pool (the bass OFF: "00 off", its pool's stripes all dark:
  * the place before its first, so the stripes of the place it left go out and those of the next come on from none) */
@@ -1527,6 +1555,21 @@ static void cu_loop_mode_turn(int32_t s)           /* ALGORITHM in the PLAY menu
     cs.loop_mode = (uint8_t)(v < 0 ? 0 : v >= (int32_t)CRL_NMODE ? CRL_NMODE - 1u : (uint32_t)v);
     cr_post(CRE_LOOP, LP_CONF, LC_MODE, cs.loop_mode);
     cu_trace("loop: mode %s\n", CU_LOOP_MODE[cs.loop_mode]);
+}
+/* GLO held + REC (the owner, 2026-10-11: "I would also add shortcut for GLO + REC which changes the record mode,
+ * cycling through them"): the next record mode, in the PLAY menu's picker's order, wrapping (the knob stops at the
+ * ends), with its name as a message. It only sets the mode, as the knob does: nothing is armed, started or stopped,
+ * and while something is captured the mode is taken all the same and counts from the next REC with no capture
+ * (cr_loop.c cr_loop_rec reads it only then: the take, the layer, the step entry under way ends as it began) */
+static void cu_rec_mode_next(void)
+{
+    char t[24];
+    cs.loop_mode = (uint8_t)((cs.loop_mode % CRL_NMODE + 1u) % CRL_NMODE);
+    cr_post(CRE_LOOP, LP_CONF, LC_MODE, cs.loop_mode);
+    cu_cpy(t, "Rec: ", sizeof t);
+    cu_cat(t, CU_LOOP_MODE[cs.loop_mode], sizeof t);
+    cu_message(t, CR_COL_WHITE);
+    cu_trace("loop: mode %s (GLO + REC)\n", CU_LOOP_MODE[cs.loop_mode]);
 }
 static void cu_loop_keys(uint32_t v)               /* GLO tapped in the PLAY menu: the keys play / the slots */
 {
@@ -3500,6 +3543,10 @@ static void cu_btn_press(uint32_t b)
     if (cu.armed == BT_OPT && b == BT_METRO && !(cu.page == PG_EDIT && !cu_layer()))
         cu_metro_toggle();                         /* GLO held + SEQ: the click on / off, from anywhere but the sound
                                                     * editor (SHIFT and MOD there) */
+    if (cu.armed == BT_OPT && b == BT_REC && !(cu.page == PG_EDIT && !cu_layer()))
+        cu_rec_mode_next();                        /* GLO held + REC: the next record mode, in the same places (the
+                                                    * loop editor too: no step is cleared). REC is swallowed above:
+                                                    * no take, and REC held is undo only when it is pressed first */
     if (cu.armed == BT_BASS && b == BT_EDIT) {     /* BASS held + EDIT / SAVE: the bass sound's editor, saving */
         cu.lock = L_NONE;
         cu_edit_open(1);
@@ -5726,6 +5773,10 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
         } else {
             cu_meter(s, cu.pop.value, cu.pop.sub, cu.pop.label, cu.pop.col, cu.pop.pct, cu.pop.segs);
             s->sub_mark = cu.pop.mark;
+            if (cu.pop.over[0]) {                  /* a pool's read-out on the home pages: the engine over the number */
+                cu_cpy(s->line, cu.pop.over, sizeof s->line);
+                s->line_col = CR_COL_ORANGE;
+            }
         }
         cu_dial(s, now);
         return;

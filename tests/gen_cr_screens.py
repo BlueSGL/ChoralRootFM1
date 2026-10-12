@@ -241,6 +241,9 @@ def screen(sc, prev_name):
             f.append(f".label = {cstr(p['label'], 32)}")
         if p.get("title"):
             f.append(f".title = {cstr(p['title'], 24)}")
+        if p.get("over"):                              # the line over the value (a pool's read-out: the engine)
+            f.append(f".line = {cstr(p['over'], 32)}")
+            f.append(f".line_col = {col(p.get('overCol'), 'ORANGE')}")
         f.append(f".col = {col(p.get('col'), 'RED')}")
         f.append(f".pct = {q8(p.get('pct') or 0)}")
         f.append(f".segments = {p.get('segments') or 12}")

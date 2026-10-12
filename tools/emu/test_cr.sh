@@ -1252,6 +1252,61 @@ differ cr_seq_p2_off cr_seq_p2_on "the Metronome cell shows On"
     [ "$(grep -ac '^sound: part 0 pos' "$SQ")" = 0 ] &&
     ok "LOOP held in the editor: the PLAY menu (not the view), PRESETS with LOOP still down: its slot (2); a LOOP tap there: the editor stays; the sound never changed" \
     || bad "LOOP held in the editor: $(sq 20) slot $(lf "$(q 20)" slot) / $(sq 21) / $(sq 22) / $(sq 23), $(grep -ac '^sound: part 0 pos' "$SQ") sound change(s)"
+# 0.18: GLO held + REC steps the record mode (the dump's mode: 0 Overwrite 1 Advance 2 Overdub 3 Replace 4 Step)
+export EMU_UI_LOG=0
+run cr_glo_rec
+unset EMU_UI_LOG
+GR="$OUT/cr_glo_rec.log"
+gq() { L cr_glo_rec "$1"; }
+gm() { lf "$(gq "$1")" mode; }
+gc() { lf "$(gq "$1")" cap; }
+gmsg() { grep -aq "msg 'Rec: $1'" "$GR"; }
+[ "$(gm 1) $(gm 2) $(gm 3) $(gm 4) $(gm 5) $(gm 6)" = "0 1 2 3 4 0" ] && gmsg Advance && gmsg Overdub && gmsg Replace && gmsg Step && gmsg Overwrite &&
+    [ "$(gc 2)$(gc 3)$(gc 4)$(gc 5)$(gc 6)" = 00000 ] && [ "$(lf "$(gq 6)" state)" = 0 ] && [ "$(ly "$GR" 6)" = "0 0" ] &&
+    ok "GLO held + REC: Advance, Overdub, Replace, Step, Overwrite again (the wrap), each with its message; nothing armed, no take, no Options: $OUT/cr_glo_rec_msg.ppm" \
+    || bad "GLO + REC's cycle: modes $(gm 1) $(gm 2) $(gm 3) $(gm 4) $(gm 5) $(gm 6), caps $(gc 2)$(gc 3)$(gc 4)$(gc 5)$(gc 6)"
+[ "$(gm 7)" = 1 ] && [ "$(gm 8)" = 0 ] && [ "$(gc 8)" = 0 ] && [ "$(ly "$GR" 8)" = "0 0" ] &&
+    ok "GLO held past the hold time, then REC: the same; four REC under one hold: four steps" || bad "GLO held long + REC: modes $(gm 7) $(gm 8)"
+[ "$(gc 9)" = 1 ] && [ "$(gc 10)" = 0 ] && [ "$(gm 10)" = 0 ] && [ "$(grep -ac '^loop: rec: play to start' "$GR")" = 3 ] &&
+    [ "$(grep -ac '^loop: cancelled' "$GR")" = 1 ] && [ "$(grep -ac '^loop: loop recorded' "$GR")" = 2 ] &&
+    ok "REC alone: as ever (armed, REC again: cancelled); the script's 3 armings, 1 cancel and 2 commits are its 6 REC taps alone, none GLO + REC's" \
+    || bad "REC alone: caps $(gc 9) $(gc 10), $(grep -ac '^loop: rec: play to start' "$GR") armings"
+[ "$(ly "$GR" 11)" = "8 0" ] && [ "$(gm 11)" = 1 ] && [ "$(lf "$(gq 11)" keys)" = 0 ] && grep -aq "loopmenu .*item 'Advance'" "$GR" &&
+    [ "$(ly "$GR" 12)" = "3 0" ] && [ "$(gm 12)" = 2 ] &&
+    ok "in the PLAY menu (its picker follows: Advance; the keys' Play / Loops untouched) and in the FX layer: the same: $OUT/cr_glo_rec_menu.ppm" \
+    || bad "GLO + REC in a layer: $(ly "$GR" 11) mode $(gm 11) keys $(lf "$(gq 11)" keys) / $(ly "$GR" 12) mode $(gm 12)"
+[ "$(l2 "$GR" 13 edit)" = 1 ] && [ "$(gm 13)" = 3 ] && [ "$(l2 "$GR" 14 edit)" = 1 ] && [ "$(gm 14)" = 3 ] && [ "$(grep -ac '^loopedit: clear' "$GR")" = 1 ] &&
+    ok "in the loop editor: the mode steps (Replace), no step cleared; REC alone there: its clear, as before (the script's one)" \
+    || bad "GLO + REC in the loop editor: edit $(l2 "$GR" 13 edit) mode $(gm 13), $(grep -ac '^loopedit: clear' "$GR") clear(s)"
+[ "$(gm 15)" = 3 ] && [ "$(gm 16)" = 0 ] && [ "$(grep -ac '^loop: mode .* (GLO + REC)' "$GR")" = 20 ] &&
+    ok "in the sound editor (GLO is SHIFT there): nothing; the script's 20 steps are its 20 GLO + REC elsewhere" \
+    || bad "GLO + REC in the sound editor: modes $(gm 15) $(gm 16), $(grep -ac '^loop: mode .* (GLO + REC)' "$GR") steps"
+[ "$(gc 17)" = 3 ] && [ "$(gc 18)" = 3 ] && [ "$(gm 18)" = 1 ] && [ "$(gc 19)" = 0 ] && [ "$(lf "$(gq 19)" state)" = 2 ] && [ "$(lf "$(gq 19)" events)" = 1 ] &&
+    [ "$(lf "$(gq 19)" slot)" = 1 ] && [ "$(gc 20)" = 3 ] && [ "$(gm 20)" = 1 ] && [ "$(gc 21)" = 0 ] && [ "$(grep -ac '^loop: mode Advance$' "$GR")" = 1 ] &&
+    ok "during a take: taken as the PLAY menu's ALGORITHM knob is (the take goes on, the mode set for the next REC; REC ends the take as it began: a loop playing on slot 1, no Advance jump)" \
+    || bad "GLO + REC during a take: caps $(gc 17) $(gc 18) $(gc 19), mode $(gm 18); the knob: cap $(gc 20) mode $(gm 20)"
+silent_end cr_glo_rec
+# 0.18: the sound read-out on the home pages: the engine over the number, "Hold OPT to change engine" under the stripes
+export EMU_UI_LOG=0
+run cr_pool_hint
+unset EMU_UI_LOG
+PH="$OUT/cr_pool_hint.log"
+phm() { grep -a '^ui: frame.* meter ' "$PH" | grep -aq "value '$1' .*sub '$2' .*label '$3' over '$4'"; }
+phm 02 'FM BELL' 'Hold OPT to change engine' FM6 && phm 00 INIT 'Hold OPT to change engine' FM6 &&
+    has "^home read-out: part 0 over 'FM6' line 'Hold OPT to change engine'$" "$PH" && has '^popup: part 0 00 / INIT / FM6 · 00/25$' "$PH" &&
+    ok "PRESETS on the view: FM6 over the number, 'Hold OPT to change engine' under the stripes (02 FM BELL, 00 INIT): $OUT/cr_pool_hint_chord.ppm $OUT/cr_pool_hint_init.ppm" \
+    || bad "the home read-out: $(grep -a '^popup:' "$PH" | head -2 | tr '\n' ' ')"
+has '^engine pick: FM TONE' "$PH" && has '^sound: part 0 engine FM TONE pos 1 EP' "$PH" && phm 01 EP 'Hold OPT to change engine' 'FM TONE' &&
+    grep -a 'part 0: ' "$PH" | head -1 | grep -q 'part 0: FM TONE /' &&
+    ok "the text is true: OPT held + PRESETS, OPT let go: the chord part on FM TONE, its read-out names it: $OUT/cr_pool_hint_engine.ppm" || bad "OPT + PRESETS from the view"
+phm 01 'LUSH PAD' 'BASS + EDIT, hold EDIT: engine' VA &&
+    ok "ALGORITHM: the bass part's read-out: its engine over the number, its own way to another under the stripes: $OUT/cr_pool_hint_bass.ppm" || bad "the bass read-out"
+phm 02 BELL 'FM TONE . 02/16' '' && [ "$(grep -ac "^home read-out: part . over " "$PH")" = 6 ] &&
+    ok "the sound editor's picker (no OPT + PRESETS there): the engine and the place as before, nothing over the number: $OUT/cr_pool_hint_picker.ppm" \
+    || bad "the picker's read-out: $(grep -ac "^home read-out: part . over " "$PH") home read-outs of 6"
+has '^save: new part 0 FM TONE 17 (slot U01)' "$PH" && phm 17 BELL 'Hold OPT to change engine' 'FM TONE' &&
+    ok "a user's preset (slot U01, FM TONE 17): the same two lines: $OUT/cr_pool_hint_user.ppm" || bad "a user preset's read-out"
+differ cr_pool_hint_anim cr_pool_hint_chord "the read-out while its stripes fill differs from the settled one (both carry the two lines)"
 # 0.18: a pattern of 64 steps: entered, refused past the 64th, played, edited
 export EMU_UI_LOG=0
 run cr_loop_step

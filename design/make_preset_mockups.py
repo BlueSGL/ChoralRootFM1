@@ -28,12 +28,12 @@ S = []
 S.append(state(
     "1 · PRESETS turned: the next preset of the current engine",
     "PRESETS steps through the presets of the engine the chord part plays, and nothing else: here FM6, preset 05 of "
-    "25 (01..25 the factory presets, then the ones the user saves; 00 is INIT, the engine's plain sound: it is not counted as a preset and cannot be overwritten). The popup: the number big, the name, 'FM6 · 05/25' as the label, the stripe "
+    "25 (01..25 the factory presets, then the ones the user saves; 00 is INIT, the engine's plain sound: it is not counted as a preset and cannot be overwritten). The popup: the engine in orange over the number, the number big, the name, 'Hold OPT to change engine' as the label (until 0.18: 'FM6 · 05/25'; `over` is the line over a meter's value), the stripe "
     "meter over the pool: a stripe per preset, none lit on INIT, every one on the last preset. A preset the user overwrote carries a small square mark after its name (state 5). It loads "
     "at once, as today.",
     held=["MAJ"], lit=["D4", "F#4", "A4"], encoders=IDLE_ENC | {"PRESETS": ("SOUND", "05")},
-    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "FM6 · 05/25", "col": C_CHORD, "pct": 5 / 25, "segments": 25},
-               note="PRESETS: the preset number big, its name, the engine and the place among its presets (INIT, 00, is not counted)."),
+    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "Hold OPT to change engine", "over": "FM6", "overCol": "orange", "col": C_CHORD, "pct": 5 / 25, "segments": 25},
+               note="PRESETS: the engine in orange, the preset number big, its name, the stripes (INIT, 00, is not one), the way to another engine."),
 ))
 
 # 2 ---------------------------------------------------------------- OPT + PRESETS: the engine
@@ -77,7 +77,7 @@ S.append(state(
     "The pool is one list: factory preset 02 FM BELL was overwritten by the user; it shows with a small square mark "
     "after the name. Turning PRESETS passes through it like any other. There is no separate user bank.",
     held=["MAJ"], lit=["D4", "F#4", "A4"], encoders=IDLE_ENC | {"PRESETS": ("SOUND", "02")},
-    screen=scr({"kind": "meter", "value": "02", "sub": "MY BELL ▪", "label": "FM6 · 02/25", "col": C_CHORD, "pct": 2 / 25, "segments": 25},
+    screen=scr({"kind": "meter", "value": "02", "sub": "MY BELL ▪", "label": "Hold OPT to change engine", "over": "FM6", "overCol": "orange", "col": C_CHORD, "pct": 2 / 25, "segments": 25},
                note="an overwritten factory preset: the user's name with the square mark."),
 ))
 
