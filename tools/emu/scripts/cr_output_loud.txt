@@ -1,0 +1,32 @@
+# ChoralRoot 0.19: Options > Output Clean's limiter with its look-ahead (docs/AUDIO-QUALITY.md "The look-ahead") on
+# the loudest thing the instrument plays: MASTER at its top, the chord part on CZ-1 01 BRASS 1, the bass on (ALGORITHM
+# +18: DEEP SUB, as cr_bass.txt), a 6-note chord with the bass held 5 s (the chord's beating brings the peaks). One
+# strike: CZ-1 struck again while it sounds has a click of its own in the mix, before any output chain
+# (docs/HANDOFF.md "For 0.19" (b)), which is not this test's.
+# tools/emu/test_cr.sh: the WAV's peak sits on the limiter's ceiling (26000 of 32768, times MASTER) and no sample is
+# over it, no click; and the same through Classic (EMU_OUTPUT=classic) for the two peaks side by side.
+master 1023
+wait 300
+btn GLO down
+wait 100
+knob PRESETS +3               # OPT + PRESETS: the chord part to the CZ-1 (01 BRASS 1), on OPT's release
+wait 100
+btn GLO up
+wait 300
+knob ALGORITHM +18            # the bass on
+wait 700
+key F3 down
+key 2 down
+key 4 down
+key 5 down
+wait 40
+btn D4 down
+wait 5000
+dump
+btn D4 up
+key F3 up
+key 2 up
+key 4 up
+key 5 up
+wait 2000
+quit

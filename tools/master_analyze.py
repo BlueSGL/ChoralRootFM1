@@ -29,8 +29,13 @@ Columns
                inaudibly) taken out: what is left is the gain's audio-rate movement, the clipper's curve and the
                arithmetic (truncations, the word length at a low MASTER); overall and in four bands (dB relative to
                the whole output)
-  lim, clip    that residual split: the limiter's fast gain movement alone, the clip stage (and arithmetic) alone
+  lim, clip    that residual split: the limiter's fast gain movement alone, the clip stage (and arithmetic) alone.
+               clip is the chain's only non-linear part: lim is a gain that moves (a level change, however fast)
   in-band      dist in each band relative to the output's own content in that band
+  g>1k         the limiter's gain itself: its spectrum above 1 kHz, dB re a gain of 1 (how much of the gain's
+               movement is at audio rate: corners, steps)
+Clean's output is CLN_LA samples late (the limiter's look-ahead); master_measure.c writes the input as late, so the
+records stay sample for sample.
 """
 import sys
 import numpy as np
@@ -151,6 +156,10 @@ def analyze(path, hold_ms=HOLD_MS):
     k4 = ls_gain(y, lim)
     _, st, _, _ = bands_power(y - k4 * lim)
     r["clip_only"] = db(st / yt)
+    gw = (g - g.mean()) * np.hanning(len(g))
+    gp = np.abs(np.fft.rfft(gw)) ** 2
+    gf = np.fft.rfftfreq(len(g), 1 / FS)
+    r["g_hf"] = db(gp[gf >= 1000].sum() / ((np.hanning(len(g)) ** 2).sum() * len(g) / 2))
     r["x"], r["y"], r["k"] = x, y, k2
     return r
 
@@ -167,7 +176,7 @@ def wav(path, x):
 
 HEAD = (f"{'render':38s} {'pk':>6s} {'rms':>6s} {'GR%':>5s} {'GRavg':>6s} {'GRmax':>6s} {'opk':>6s} {'orms':>6s} "
         f"{'LK':>6s} {'fix':>6s} {'dist':>6s} {'<300':>6s} {'-2k':>6s} {'-8k':>6s} {'>8k':>6s} {'lim':>6s} {'clip':>6s}"
-        f"  | out >2k    >5k   >10k | dist in-band: <300    -2k    -8k    >8k")
+        f"  | out >2k    >5k   >10k | dist in-band: <300    -2k    -8k    >8k |   g>1k")
 
 
 def row(p):
@@ -177,7 +186,7 @@ def row(p):
             f"{r['gr_max']:+6.2f} {r['opk']:+6.1f} {r['orms']:+6.1f} {r['lk']:+6.1f} {r['fix']:+6.1f} {r['dist']:+6.1f} "
             + " ".join(f"{v:+6.1f}" for v in r["dist_bands"]) + f" {r['lim_only']:+6.1f} {r['clip_only']:+6.1f}  |   "
             + " ".join(f"{v:+6.1f}" for v in r["above"]) + " |              "
-            + " ".join(f"{v:+6.1f}" for v in r["dist_inband"])), r
+            + " ".join(f"{v:+6.1f}" for v in r["dist_inband"]) + f" | {r['g_hf']:+6.1f}"), r
 
 
 def main():
@@ -189,8 +198,8 @@ def main():
         a = analyze(os.path.join(d, f"{name}.classic.a{att:02d}.i32"))
         b = analyze(os.path.join(d, f"{name}.clean.a{att:02d}.i32"))
         print(f"{name:28s} a{att:02d}  Classic: pk {a['opk']:+6.1f} rms {a['orms']:+6.1f} LK {a['lk']:+6.1f} GR {100 * a['gr_frac']:5.1f} % "
-              f"dist {a['dist']:+6.1f} | Clean: pk {b['opk']:+6.1f} rms {b['orms']:+6.1f} LK {b['lk']:+6.1f} "
-              f"GR {100 * b['gr_frac']:5.1f} % dist {b['dist']:+6.1f} | Clean - Classic: rms {b['orms'] - a['orms']:+5.2f} dB, "
+              f"dist {a['dist']:+6.1f} clip {a['clip_only']:+6.1f} | Clean: pk {b['opk']:+6.1f} rms {b['orms']:+6.1f} LK {b['lk']:+6.1f} "
+              f"GR {100 * b['gr_frac']:5.1f} % dist {b['dist']:+6.1f} clip {b['clip_only']:+6.1f} | Clean - Classic: rms {b['orms'] - a['orms']:+5.2f} dB, "
               f"loudness {b['lk'] - a['lk']:+5.2f} LU")
         return
     if args and args[0] == "--dir":              # --dir DIR: the names that follow are in DIR, patterns allowed
