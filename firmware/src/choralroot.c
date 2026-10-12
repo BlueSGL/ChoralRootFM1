@@ -77,6 +77,10 @@
 #ifndef FELUCCA_NOISE
 #define FELUCCA_NOISE 0
 #endif
+#ifndef FELUCCA_PHYS
+#define FELUCCA_PHYS 0           /* no PHYS engine since 0.18 (engine 9: a retired slot, as the five above; the engine state
+                                  * of a part is FM6's size without its three string slots, engines.c eng_state) */
+#endif
 #ifndef FELUCCA_SEQ
 #define FELUCCA_SEQ 0            /* no Felucca sequencer (seq.c and its satellites): cr_out.c's events_block, midi_event */
 #endif

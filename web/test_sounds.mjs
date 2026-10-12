@@ -449,9 +449,17 @@ const FX = {
      T[9].bound.name === "SHIMMER", "binding: DIGITAL binds in FM6's pool, a grid record never, VA 25 SHIMMER");
   ok(T[10].used && T[10].bound === null && T[10].added && T[10].engineName === "ANALOG" && T[10].retired,
      "binding: an ANALOG record (retired) binds nothing: an added preset of the VA's pool");
-  ok(Object.keys(FACTORY_PRESETS).join() === "7,9,12,13,14,15" && [2, 3, 5, 6, 11].every((e) => poolOf(e) === 13 && engineRetired(e)) &&
-     [7, 9, 12, 13, 14, 15].every((e) => !engineRetired(e)) && ENGINE_NAMES[2] === "PHASE" && ENGINE_NAMES[11] === "NOISE",
-     "0.18: six engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE retired (the VA's pool), their names kept");
+  ok(Object.keys(FACTORY_PRESETS).join() === "7,12,13,14,15" && [2, 3, 5, 6, 9, 11].every((e) => poolOf(e) === 13 && engineRetired(e)) &&
+     [7, 12, 13, 14, 15].every((e) => !engineRetired(e)) && ENGINE_NAMES[2] === "PHASE" && ENGINE_NAMES[11] === "NOISE" && ENGINE_NAMES[9] === "PHYS",
+     "0.18: five engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept");
+  { // a PHYS record bound to PHYS's third preset (a 0.17 slot): kept, retired, added, exports and reads back as PHYS
+    const po = new Map([[6, bank({ 0: bind(rec(9, "MY PLUCK", { seed: 21 }), 3) })], [7, new Uint8Array(0)], [9, new Uint8Array(0)],
+      [10, new Uint8Array(0)], [11, new Uint8Array(0)], [12, new Uint8Array(0)], [13, new Uint8Array(0)]]);
+    const pt = parseSoundObjects(po).slots[0], pf = exportSound(po, 1);
+    ok(pt.used && pt.engine === 9 && pt.engineName === "PHYS" && pt.retired && pt.bound === null && pt.added && pt.kind === null &&
+       pf.engineName === "PHYS" && readSoundFile(pf).engine === 9,
+       "0.18: a PHYS record: kept, marked retired, an added preset (the VA's pool), exports and reads as PHYS");
+  }
   ok(T[11].used && T[11].bound === null && T[11].added && T[11].engineName === "PHASE" && T[11].retired && T[12].added && T[12].retired &&
      !T[0].retired && !T[20].retired && exportSound(bo, 12).engineName === "PHASE" && readSoundFile(exportSound(bo, 12)).engine === 2,
      "0.18: a PHASE / NOISE record: kept, marked retired, an added preset (the VA's pool), exports and reads as PHASE");

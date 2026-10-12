@@ -75,7 +75,8 @@ engine's state (`eng_state[1]`, the engines' per-part arrays, FM6's second scrat
 (`mod_tab[1]`, per part since this change), `c1_buf` / `c1_side`. Not the event queues (`cr_evq`, `cr_min_q`), the
 scope, the FX buffers, the looper or the UI. Shared scratch found and split: FM6's operator buses (`fm6_core.c`),
 the modulation matrix's state (`mod.c`). Blocks that stay on core 0 alone (`c1_split_ok`): PHYS on part 0 (its render
-draws from the shared generator on a model change) and VOICE on both parts (one breath-noise generator).
+draws from the shared generator on a model change) and VOICE on both parts (one breath-noise generator): neither
+engine is in ChoralRoot's image since 0.18 (`FELUCCA_PHYS` / `FELUCCA_VOICE` 0), so every block splits.
 
 What runs where:
 

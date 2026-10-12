@@ -10,9 +10,9 @@
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
 import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx } from "./fm1sounds.js";
 
-// the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; six engines since 0.18: PHASE, LOFI, VOICE,
-// TRIO and NOISE retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
-export const MANAGER_ENGINES = [12, 15, 13, 14, 7, 9];
+// the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; five engines since 0.18: PHASE, LOFI, VOICE,
+// TRIO, NOISE and PHYS retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
+export const MANAGER_ENGINES = [12, 15, 13, 14, 7];
 export const MANAGER_IDS = [...SOUND_IDS, ...CR_LOOP_IDS];
 export const UNDO_DEPTH = 20;
 export const LOOP_FORMAT = "choralroot-loop";
@@ -404,7 +404,7 @@ export function simObjects(count = 6) {
   put(5, mgSimSound("fm6", 12, "BELL TOO"), -1);
   put(6, mgSimSound("fm6", 7, "WHEEL BOW"), 0);          // overwrites WHEEL 01 FULL ORGAN (PHASE 01 BRASS until 0.18)
   put(9, mgSimSound("cz", 14, "CZ BASS 2", czTone), 13); // overwrites CZ-1 13 SYNTH.BASS
-  const fillEngines = [12, 13, 15, 7, 9];
+  const fillEngines = [12, 13, 15, 7];
   for (let k = 0; parseSoundObjects(m).slots.filter((x) => x.used).length < count; k++) {
     const e = fillEngines[k % fillEngines.length];
     put(firstFreeSlot(m), mgSimSound(e === 14 ? "cz" : "fm6", e, `USER ${String(k + 1).padStart(2, "0")}`), -1);

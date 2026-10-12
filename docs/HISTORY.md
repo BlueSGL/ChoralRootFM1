@@ -655,3 +655,62 @@ decision: a Send cell reads 0..99 and steps 4, the Sends page and the editor rea
 "44" on Reverb 1 and "45%" on Sends); with FX off the bass part's drive still sounds while the chord part's does
 not (fx.c gates the three sends, not the drive). `tools/emu/scripts/cr_fx_sends.txt`, the dump's `editor fx` lines,
 `design/make_fx_mockups.py` state 15, the manual's `layer-fx-sends.png`.
+
+3y16. **PHYS retired; the preset slots looked at, not changed: 0.18 dev, 2026-10-13 (built, not flashed).** The user:
+"PHYS isn't the greatest engine and has built in chord modes which conflict with the purpose of ChoralRoot so I think
+we should get rid of it, much of these sounds can be done with FM too. On the fence about removing wheel, keep it for
+now." and "Cut Phys engine." Done as 3y10's five: `FELUCCA_PHYS` 0 in ChoralRoot's units (Felucca's suite keeps it,
+the three files stay in the tree), engine 9 is `ENG_GONE`, shown: FM6, FM TONE, VA, CZ-1, WHEEL. A PHYS user record
+keeps its slot and loads as a stand-in at the end of the VA's pool (`PHYS retired: stand-in`); a part parked on PHYS
+in the settings or the session comes up on its default (FM6 TINE EP, VA DEEP SUB); loops hold no sound; backups
+restore. **It freed 9348 B of flash and 12 008 B of POOL** (94.9 -> 91.4 %: the engine-state union is FM6's size
+now), RAM +12 B. docs/INTEGRATION.md "0.18: PHYS retired".
+
+The second half of the request, "redistribute the preset slots so you can have more presets for FM6, VA, FM-Tone,
+and CZ-1, don't add more preset slots to Wheel, 6 is plenty", **was not built: there is nothing per engine to
+redistribute.** How sounds are organised:
+
+| engine | factory presets (ROM, `engine_t.presets`) | pool positions with INIT | the user's |
+| --- | --- | --- | --- |
+| FM6 | 25 (`eng_fm6.c FM6_PRESETS`: F1..F24 + PIANO) | 26 | any of the 32 shared slots |
+| FM TONE | 16 (`eng_quad.c QUAD_PRESETS`) | 17 | any of the 32 |
+| VA | 25 (`eng_va.c VA_PRESETS`) | 26 | any of the 32 |
+| CZ-1 | 64 (Casio's, `build/gen/melodee_cz1.h`; INIT TONE is the pool's INIT) | 65 | any of the 32 |
+| WHEEL | 5 (`eng_wheel.c WHEEL_PRESETS`) | 6 (the "6" of the request) | any of the 32 |
+
+The factory counts are tables in the firmware's flash, not slots: PHYS's nine free nothing another engine could
+use. What the user saves goes into **32 user slots shared by all engines** (`UP_SLOTS`, `core.h`; `upreset.c`: two
+banks of 16 records of 192 B, A/B at 0xDC000..0xDFFFF, mirrored in RAM, 2 x 3080 B). A slot holds any engine's
+sound: either over a factory preset (it replaces that place in the pool) or added after them, so each of the four
+engines can already grow by up to 32 and WHEEL by as many. The deep patch of slot k is entry k of its engine's
+store, each mirrored in POOL: `va_store.c` (32 x 110 B, one object, 0x97000 / 0x98000), `fm6_ustore.c` (2 x 16 x
+128 B, 0x99000..0x9C000), `cz_ustore.c` (2 x 16 x 144 B, 0x9D000 / 0x9E000 and 0xA0000 / 0xA1000), `quad_store.c`
+(32 x 80 B, 0xB2000 / 0xB3000); WHEEL (and the retired engines) have none. Besides the slots: FM6's patch bank
+B1..B32 (`fm6_bank.c`, backup id 8) and the CZ-1's eight banks of 16 tones (`cz_bank.c`, ids 14..21). Backups carry
+the objects whole (ids 6 / 7 the banks, 9, 10 / 11, 12 / 13, 22 the stores); `web/fm1sounds.js`, `fm1manager.js`
+and `tools/fm1_install.py` hard-code 32 (`SOUND_SLOTS`) and these ids. What limits the count: an object's payload
+(3840 B: the VA's and FM TONE's stores are full at 32, FM6's and the CZ-1's are two objects already), the `used`
+masks (32 bits, 16 a half), the mirrors' POOL and RAM, the 18 free sectors 0xB6000..0xC7FFF; not the index widths
+(a pool position is 8 bits in the settings, a slot 8 bits in the session; loops name no sound) and not the preset
+bar (a stripe per preset up to 32, scaled above: `cu_pool_lit`, unchanged here; the CZ-1's 64 already use it).
+The user's unit (`fm1-backups/fm1-backup-now.json`, 2026-10-10, 0.17): 10 of 32 slots used (5 FM TONE, 4 FM6, 1
+GRAIN record), 22 free.
+
+Options, for the user to choose:
+1. **Nothing** (today): 22 slots free on the user's unit, each open to any of the four engines; deleting a retired
+   engine's stand-in frees its slot. No cost.
+2. **16 more shared slots (U33..U48).** One more object each for the bank, the VA, FM6, the CZ-1 and FM TONE: five
+   A/B pairs = 10 of the 18 free sectors; new backup ids (23..27); the mirrors cost 7456 B of POOL and 3080 B of RAM
+   (or 10.5 KB of POOL), about what PHYS freed; `--sounds`, the installer page and the device manager learn 48. No
+   migration: the old objects keep their format and place, so 0.14 .. 0.17 sounds stay where they are and an old
+   backup restores; a backup of the new build restores on 0.17 for U01..U32 (the tools write what the firmware lists:
+   the new ids are skipped and stay in the file); after a step back to 0.17, U33..U48 stay in flash unseen. "Not for
+   WHEEL" could only be a rule of Save as new (a WHEEL sound takes a free slot of U01..U32): nothing stops a restore
+   or an import placing one. Risk: all five stores, the backup and three clients change shortly before the release.
+3. **32 more (U33..U64)**: eight pairs = 16 of the 18 sectors, about 21 KB of mirrors (14.9 KB POOL + 6.2 KB RAM):
+   more than PHYS freed, and the free flash is spent.
+4. **Slots per engine** (a real split: so many for FM6, FM TONE, VA, CZ-1 each, none for WHEEL): new typed stores (a
+   record and its patch together, e.g. 16 an engine: eight pairs, 16 sectors, 19.7 KB of mirrors), a second kind of
+   user slot in the UI, the tools and the sound files. The largest change; it is what the request's wording asks for.
+5. Either of 2 .. 4 **after the mirrors read through XIP** (open item "Memory", 3t): then slots cost flash only.
+

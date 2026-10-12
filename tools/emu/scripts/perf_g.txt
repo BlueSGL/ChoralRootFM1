@@ -7,7 +7,8 @@ btn ENV up
 wait 300
 btn EDIT 600                  # EDIT held: the engine picker (the bass part)
 wait 200
-knob SELECT +3                # the engine picker: FM6 -> CZ-1 (SELECT steps the engines; the roots play)
+knob SELECT +1                # the engine picker: VA (the bass part's default) -> CZ-1 (SELECT steps the engines; the roots
+                              # play). Until PHYS was retired this was +3 and landed on PHYS; +3 would wrap to FM6 now
 wait 200
 btn OCT+                      # kept
 wait 200

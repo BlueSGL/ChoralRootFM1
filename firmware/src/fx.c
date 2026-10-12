@@ -720,7 +720,11 @@ static void c1_part1_job(uint32_t n)
 static int c1_split_ok(void)
 {
     const engine_t *e0 = ENGINES[trk[0].engine], *e1 = ENGINES[trk[1].engine];
-    return e0 != &ENG_PHYS && !(e0 == &ENG_FORMANT && e1 == &ENG_FORMANT);
+#if FELUCCA_PHYS
+    if (e0 == &ENG_PHYS)
+        return 0;
+#endif                                             /* (ChoralRoot since 0.18: no PHYS, FELUCCA_PHYS 0) */
+    return !(e0 == &ENG_FORMANT && e1 == &ENG_FORMANT);
 }
 /* parts 0 and 1: everything shared first on core 0 (the matrices, the LFOs: their draws from the shared generator in
  * one core's order), part 1 to core 1, part 0 here, then both mixed in one core's order */

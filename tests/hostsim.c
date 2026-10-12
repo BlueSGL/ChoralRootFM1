@@ -37,6 +37,11 @@
 #define FELUCCA_NOISE 0
 #endif
 #endif
+#if !defined(FELUCCA_PHYS) && defined(FELUCCA_SEQ)
+#if !FELUCCA_SEQ
+#define FELUCCA_PHYS 0           /* .. and PHYS (0.18; Felucca's renders keep it) */
+#endif
+#endif
 #include "felucca_tables.h"
 #include "../firmware/src/libc.c"
 #undef memset

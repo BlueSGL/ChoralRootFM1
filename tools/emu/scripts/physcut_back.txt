@@ -1,0 +1,5 @@
+# test_retired.sh, the PHYS runs, run 3, on the pre-cut build again with the flash run 2 left: nothing was rewritten or
+# deleted: at power-on both parts are on PHYS again as run 1 saved them (the chord part on PHYS 10, U01 "ADG", the
+# bass on PHYS 02 MARIMBA)
+wait 500
+dump

@@ -155,6 +155,53 @@ the stand-in; the first build reads the PHASE sound again), `web/test_sounds.mjs
 fifth white root: WHEEL now), `cr_editor_steps.txt` / `cr_editor_ref.txt` (the platform editor on WHEEL SOFT FLUTE;
 TRIO CHIP CHOIR before).
 
+**0.18: PHYS retired (2026-10-13).** The owner: "PHYS isn't the greatest engine and has built in chord modes which
+conflict with the purpose of ChoralRoot so I think we should get rid of it, much of these sounds can be done with FM
+too." The same mechanism as the five: `FELUCCA_PHYS`, default 1 in `core.h` (Felucca's unit, `tests/regress.c`'s PHYS
+goldens, `phys_test`, `phys_ref`, `upreset_test`'s PHYS DRUM records keep the engine), 0 in `choralroot.c`,
+`tools/emu/emu_firmware.h`, `tests/hostsim.c` (`FELUCCA_SEQ 0`) and `tests/cr_cpu1_test.c`; `tools/build.py` passes it
+from the environment (`FELUCCA_PHYS=1 ./build.sh` builds it back in). `eng_phys.c`, `phys_dsp.c` and `phys_symp.c`
+stay in the tree, compiled out. `engines.c`: the include, `ENGINES[9]` = `ENG_GONE`, `ENGINE_ORDER` (shown: **FM6, FM
+TONE, VA, CZ-1, WHEEL**, `NENG_SHOWN` 5, the white roots D4..A4), `ENG_RETIRED_018` (bit 9 with the five's), and
+`eng_state`'s union without `phys_slot_t phys[PHYS_POLY]` (`phys_slots` goes with it). What the kept files called of
+it: `fx.c c1_split_ok` (PHYS on part 0 kept a block on one core: every block splits now) and `upreset.c up_values`
+(`phys_legacy`, a version-1 record's DUST), both under `#if FELUCCA_PHYS`. Nothing else in ChoralRoot's unit named it
+(`project.c` is Felucca's).
+
+Measured with `./build.sh` (before: d013fda): XIP 463496 -> 454148 B of 573440 (80.8 -> 79.2 %: **-9348 B**), POOL
+326608 -> 314600 B of 344064 (94.9 -> 91.4 %: **-12008 B**: the union a part was PHYS's three slots, 3 x 4296 = 12888
+B, and is FM6's `fm6_part_t`, 6884 B, now: 2 x 6004 B), RAM 80520 -> 80532 B (+12 B of `.data`, 81.9 %: nothing of
+PHYS's was in RAM). `tests/target_budget.txt` loses `phys_render` and the six `px_*` lines (optional entries of
+`target_budget.py`, as the five's).
+
+**What a unit with PHYS in use gets: exactly what the five's rules give** (no new code path but the name in the
+message). A user record of PHYS (engine 9) keeps its slot, name and bytes; it is an added preset of the VA's pool
+(`cb_rec_engine`: `CB_RETIRED_POOL`; a binding to a PHYS factory preset is dropped) and `cu_load_user` loads the VA's
+init sound for it with the record's ATK / REL on the VA's macros of that name, `PHYS retired: stand-in` (trace `load:
+slot N engine 9 (PHYS) retired -> INIT on VA, its ATK, REL`; the sends are the part's since the sends became one value
+a part, so a load no longer touches them). A settings record whose `chord_sound` / `bass_sound` names PHYS reads as
+`CRS_SOUND_DEFAULT` (`crs_sound`: `cu_engine_melodic` is 0 for a retired engine): FM6 TINE EP, the bass VA DEEP SUB.
+The session's part records (`css_part_put`) refuse an engine that is not melodic and the part keeps what the settings
+gave it, so a unit switched off with a part on PHYS comes up on the same defaults, the rest of the session applied
+(Bass on, the voicing, the FX). `pool_pos` slot 9 (PHYS's) is reserved, its bytes kept. A loop record holds events,
+no sound: nothing to do. A backup is the same objects (banks, settings): it restores without error with the same
+result. SysEx 76 SELECT of engine 9 answers rc 1. Going back to 0.17 (or a build with `FELUCCA_PHYS=1`): the records
+were not rewritten, PHYS plays them again; the settings and the session name PHYS until the next global save.
+The clients: `FACTORY_PRESETS` (from `tests/sound_templates.c`) loses engine 9, so `pool_of` / `poolOf` gives the
+VA's and `engine_retired` / `engineRetired` is true; `--sounds` and the installer page print `PHYS` and `retired`, the
+device manager has five tabs and five packs (`web/packs/factory-phys.json` removed, `tools/make_packs.py` `ORDER`).
+Tests: `tests/cr_fm6_test.c` (a PHYS record with the five's, the five engines shown, the message),
+`tests/cr_backup_test.c` ("0.17 backup": a PHYS record bound to PHYS 09, the settings with both parts on PHYS, SELECT,
+the session's part records), `tools/emu/test_retired.sh` (the pre-cut build has PHYS back too; "the PHYS runs": both
+parts parked on PHYS, a user sound on it, the settings and the session saved by a build with PHYS; today's build
+starts on TINE EP / DEEP SUB with Bass still on and shows the stand-in; the first build finds both parts on PHYS
+again), `web/test_sounds.mjs`, `web/test_manager.mjs`, `tests/install_test.py`. `tools/emu/scripts/perf_g.txt`: the
+bass part's picker step was `SELECT +3` from the VA, which landed on PHYS (above, "The audio ISR lighter"); it is `+1`
+now, the CZ-1 as its title says, so (g)'s figures are not comparable with those before. The remaining engines' sound
+is untouched: `tests/run_tests.sh`'s goldens and CPU baseline (Felucca's unit, every engine) are unchanged files and
+pass, and the emulator's WAVs of test_cr.sh, test_persist.sh and perf.sh (ChoralRoot's unit) are byte for byte those
+of the commit before, but for the scripts that changed.
+
 Build flags stay Felucca's; `FELUCCA_SLICE=0`, `FELUCCA_SLICER=0`, `FELUCCA_FM4=0`, `FELUCCA_UAC=1` (since 0.14 Melodee's
 USB audio recording: ChoralRoot In, docs/USB-AUDIO.md), `FELUCCA_UART=1`,
 and the all-synth set `FELUCCA_SEQ=0`, `FELUCCA_SAMPLE=0`, `FELUCCA_GRAIN=0`, `FELUCCA_DRUM=0`, `FELUCCA_ICONS=0`,

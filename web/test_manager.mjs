@@ -185,14 +185,23 @@ ok(packIdx.length === MANAGER_ENGINES.length && packIdx.map((p) => p.engine).joi
 ok(MANAGER_ENGINES.every((e) => packs[e].length === FACTORY_PRESETS[e].length - FACTORY_FIRST[e] &&
    packs[e].every((it, k) => it.name === FACTORY_PRESETS[e][k + FACTORY_FIRST[e]] && it.engine === e && recordValid(readSoundFile(it.file).record))),
   "packs: every pack holds its engine's factory presets, named and valid");
-ok([12, 13, 14, 15].every((e) => packs[e].every((it) => it.patch)) && [7, 9].every((e) => packs[e].every((it) => !it.patch)),
+ok([12, 13, 14, 15].every((e) => packs[e].every((it) => it.patch)) && [7].every((e) => packs[e].every((it) => !it.patch)),
   "packs: VA, FM6, CZ-1 and FM TONE carry their patches; the others are records (macros) only");
-{ // 0.18: PHASE, LOFI, VOICE, TRIO, NOISE retired: no pool, no pack; a record of one is an added row of the VA's pool
+{ // 0.18: PHASE, LOFI, VOICE, TRIO, NOISE, then PHYS retired: no pool, no pack; a record of one is an added row of the VA's pool
   const old = { record: Uint8Array.from(readSoundFile(packs[7][0].file).record), name: "PD BRASS", engine: 2, kind: null, patch: null };
   old.record[2] = 2;
   const withOld = managerPlace(objs0, old, null), row = P(withOld.objs)[13].at(-1);
-  ok(MANAGER_ENGINES.join() === "12,15,13,14,7,9" && [2, 3, 5, 6, 11].every((e) => !(e in pools) && !(e in packs)) && Object.keys(packs).length === 6,
-    "0.18: six engines (FM6, FM TONE, VA, CZ-1, WHEEL, PHYS), six packs");
+  ok(MANAGER_ENGINES.join() === "12,15,13,14,7" && [2, 3, 5, 6, 9, 11].every((e) => !(e in pools) && !(e in packs)) && Object.keys(packs).length === 5,
+    "0.18: five engines (FM6, FM TONE, VA, CZ-1, WHEEL), five packs");
+  { // .. and a PHYS sound (a 0.17 slot, an old pack's file): the same
+    const ph = { record: Uint8Array.from(readSoundFile(packs[7][0].file).record), name: "HARP", engine: 9, kind: null, patch: null };
+    ph.record[2] = 9;
+    const withPh = managerPlace(objs0, ph, null), prow = P(withPh.objs)[13].at(-1);
+    ok(withPh.where === "new" && prow.name === "HARP" && prow.engine === 13 && prow.recEngine === 9 && prow.f === -1 &&
+       retiredNote(prow.recEngine) === "PHYS · retired" && parseSoundObjects(withPh.objs).slots[prow.slot - 1].engine === 9 &&
+       managerKeep(withPh.objs, prow).engineName === "PHYS",
+      "0.18: a PHYS sound: an added row of the VA's pool, \"PHYS · retired\", its record kept");
+  }
   ok(withOld.where === "new" && row.name === "PD BRASS" && row.type === "user" && row.engine === 13 && row.recEngine === 2 && row.f === -1 &&
      retiredNote(row.recEngine) === "PHASE · retired" && retiredNote(13) === "" && retiredNote(undefined) === "" &&
      parseSoundObjects(withOld.objs).slots[row.slot - 1].engine === 2 && managerKeep(withOld.objs, row).engineName === "PHASE",

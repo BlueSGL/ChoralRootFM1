@@ -36,13 +36,6 @@
    "engine": 7,
    "count": 5,
    "patches": 0
-  },
-  {
-   "file": "factory-phys.json",
-   "name": "PHYS factory sounds",
-   "engine": 9,
-   "count": 9,
-   "patches": 0
   }
  ]
 }

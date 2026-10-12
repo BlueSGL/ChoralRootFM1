@@ -54,6 +54,9 @@
 #ifndef FELUCCA_NOISE
 #define FELUCCA_NOISE 0
 #endif
+#ifndef FELUCCA_PHYS
+#define FELUCCA_PHYS 0                                /* as choralroot.c: PHYS retired (0.18) */
+#endif
 #ifndef FELUCCA_SLICER
 #define FELUCCA_SLICER 1                              /* (as felucca.c; the device unit has it off) */
 #endif

@@ -83,7 +83,10 @@ installed on the owner's Mac.
    block-wise (docs/FX.md "Late is not slow"); not yet read on the unit: the owner plays CZ-1 with both effects up,
    then `--debug` (PEAK). Switches to hear: `CR_FX_LITE=1`, `CR_ACK_LATE=1` (HISTORY 3y12, 3y13).
 2. **Performance work**, in other worktrees: CZ-1's cost (docs/FX.md "CZ-1"), key polling during redraws.
-3. **PHYS**: keep, "PHYS 2" or cut: the owner's decision (HISTORY 3y10).
+3. **More preset slots for FM6, FM TONE, VA, CZ-1**: asked for with PHYS's cut, not built: the owner's decision
+   (HISTORY 3y16 has the facts and the options). There is no table of slots per engine to redistribute: the 32 user
+   slots are one pool shared by all engines, a slot takes any engine's sound, and the owner's unit used 10 of them
+   on 2026-10-10. More slots mean new flash objects, new backup ids and POOL for their mirrors.
 4. **Memory**: the store mirrors read through XIP (HISTORY 3t), FM6's tables to flash.
 5. **FM TONE presets by ear** with the owner (docs/QUAD.md).
 6. **The designer**: stale PNG sheets, and the landing page's two editor panel pictures (HISTORY 3x, 3y4, 3y12).
@@ -104,11 +107,25 @@ installed on the owner's Mac.
     enumeration of "ChoralRoot In", the stub's second attempt (one long flash, UBOOT), the dual-core checklist
     (docs/DUALCORE.md), the LED levels' cost (console `inp`).
 
+### For 0.19 (tracked, not started)
+
+- **(a) Audio quality, GitHub issue 3.** Measured 2026-10-12: at full Master a 6-note chord with bass sits in the
+  master limiter 100 % of the time, and the master adds about -28 dB of distortion. The full-range tanh `softclip`
+  distorts even below the limiter (Sloop's `knee()` is linear to half scale). Options: a Sloop-style knee; about 6 dB
+  of headroom before the limiter. Data in `../muffled-review/`; the harness is in the worktree
+  `.claude/worktrees/agent-a039dd76d7c85841d` (`tests/master_measure.c`, `tools/master_analyze.py`).
+- **(b) CZ-1 pops and drop-outs on held chords without FX.** The owner, 2026-10-13: believes it is internal clipping
+  in the engine; the other engines are fine.
+- **(c) WHEEL**: the owner is on the fence about cutting it.
+
 ## Facts that are easy to get wrong
 
-- **Engines** (`engines.c`): indices are append-only, 0 .. 15; six are shown, in `ENGINE_ORDER`: FM6 (12), FM TONE
-  (15, code name QUAD), VA (13), CZ-1 (14), WHEEL (7), PHYS (9). Every other slot is `ENG_GONE`; records of retired
-  engines stay and load as stand-ins (docs/PRESETS.md).
+- **Engines** (`engines.c`): indices are append-only, 0 .. 15; five are shown, in `ENGINE_ORDER`: FM6 (12), FM TONE
+  (15, code name QUAD), VA (13), CZ-1 (14), WHEEL (7). Every other slot is `ENG_GONE` (PHYS, 9, since 0.18:
+  `FELUCCA_PHYS` 0, its files kept); records of retired engines stay and load as stand-ins (docs/PRESETS.md).
+- **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, WHEEL 5) + the
+  user's. The user's are the 32 slots of `upreset.c` (`UP_SLOTS`, `core.h`), shared by all engines; a slot's deep
+  patch sits at the same index in its engine's store (`va_store.c`, `fm6_ustore.c`, `cz_ustore.c`, `quad_store.c`).
 - **Flash map**: the comment at the top of `storage.c` owns it. The FM TONE store is 0xB2000 / 0xB3000, the session
   0xB4000 / 0xB5000; 0xB6000 .. 0xC7FFF is free; the loops are 0xC8000 .. 0xDBFFF.
 - **SAFE MODE's Flash Data** erases 58 sectors (`cr_ui.c cu_flash_erase`).

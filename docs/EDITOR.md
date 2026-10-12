@@ -144,11 +144,11 @@ With Sync on, an LFO's Rate reads as a division of the BPM (`1/8`). The VA's EDI
 the deep values are the truth and a deep edit writes the macro back. Unused matrix slots read `–` (the active one
 shows its source, to turn).
 
-### Engines without deep pages (WHEEL, PHYS; until 0.18 also PHASE, LOFI, VOICE, TRIO, NOISE)
+### Engines without deep pages (WHEEL; until 0.18 also PHASE, LOFI, VOICE, TRIO, NOISE, PHYS)
 
 | Group | Screen | Lanes | KNOB 1–4 | Top-right text |
 | --- | --- | --- | --- | --- |
-| OSC | `edit8`, one row | one | EDIT 1: `P_E0`–`P_E3` | the engine's `page_title[0]` (`BARS` on WHEEL, `BODY` on PHYS) |
+| OSC | `edit8`, one row | one | EDIT 1: `P_E0`–`P_E3` | the engine's `page_title[0]` (`BARS` on WHEEL) |
 | FILT | `edit8`, one row | one | EDIT 2: `P_E4`–`P_E7` | `page_title[1]` (`FLT`, `PATCH`) |
 | ENV | `edit8`, one row under the wide AHDSR | one | Attack · Decay · Sustain · Release (`P_ATK P_DEC P_SUS P_REL`) | `ENV` |
 | LFO | `edit8`, one row | one | Rate · Wave · Vibrato · Wah (`P_LRATE P_LWAVE P_LD_PIT P_LD_FLT`) | `LFO` |
@@ -255,8 +255,8 @@ While the editor is open the edit wins over OPT's outside knob functions (split 
 On opening, the picker **snapshots** the part's sound: every parameter, the engine, the deep patch (`deep->blob_get`,
 the VA's), the `edited` flag and the pool entry it came from (its place in the pool). Then, as before:
 
-- the white root keys are the engines in the firmware's order (FM6, FM TONE, VA, CZ-1, WHEEL, PHYS: D4..B4, six
-  engines since 0.18, a root each; PHASE, LOFI, VOICE, TRIO, NOISE (retired in 0.18), ANALOG (retired in 0.14), SAMPLE, GRAIN and DRUM are not in
+- the white root keys are the engines in the firmware's order (FM6, FM TONE, VA, CZ-1, WHEEL: D4..A4, five
+  engines since 0.18, a root each; PHASE, LOFI, VOICE, TRIO, NOISE, PHYS (retired in 0.18), ANALOG (retired in 0.14), SAMPLE, GRAIN and DRUM are not in
   the all-synth firmware). A root switches the sound's engine, keeping its envelope and sends;
 - KNOB 1 (and PRESETS) steps the engine's **pool**, the same list PRESETS turns outside the editor (docs/PRESETS.md: 00
   INIT, the factory presets, each replaced by the user's record bound to it, the user's added presets), loaded for

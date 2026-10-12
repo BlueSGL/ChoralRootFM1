@@ -31,7 +31,7 @@ Melodee's, merged into ChoralRoot's platform (ChoralRoot's additions all kept: t
   MONO hand-over), `post` (the part after its voices: Dexed's DC filter), `cap`, `units`; `vmod_t.plog` (the voice's
   own pitch offset, Q24 octaves, without TUNE and bend); `voice_was`; `track_t` gains `foot`, `breath`, `porta`
   (CC 4, 2, 65; CC 5 sets the portamento time) and `bend_raw` (FM6 bends by its own range); `mono_stack[NVOICE]`.
-- `engines.c` `eng_state[ENG_STATE_NPART]` in the pool: one union a part of PHYS's voice slots, WHEEL's part and voices
+- `engines.c` `eng_state[ENG_STATE_NPART]` in the pool: one union a part of (until 0.18, `FELUCCA_PHYS`) PHYS's voice slots, WHEEL's part and voices
   and FM6's 16 voices and controllers, cleared at every engine switch (`eng_state_clear`). `ENG_STATE_NPART` is `NPART`
   with Felucca's sequencer and 2 in ChoralRoot's units (`FELUCCA_SEQ 0`: only the chord and the bass part ever get a
   note); a part above it has no state and its engine is silent, as the VA's `VA_NPART`. DRUM, GRAIN and SLICE keep their

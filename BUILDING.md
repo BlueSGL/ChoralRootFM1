@@ -114,6 +114,7 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/choralroot.c`;
 | `FELUCCA_GRAIN` | 0 | the GRAIN engine (needs `FELUCCA_SAMPLE`; 27 KB of POOL); ChoralRoot: off, engine 8 retired |
 | `FELUCCA_DRUM` | 0 | the DRUM engine (its kit: 7 KB of POOL); ChoralRoot: off, engine 10 retired |
 | `FELUCCA_PHASE` `FELUCCA_LOFI` `FELUCCA_VOICE` `FELUCCA_TRIO` `FELUCCA_NOISE` | 0 | the PHASE, LOFI, VOICE, TRIO and NOISE engines (1.6 to 3.6 KB of flash each, 12.8 KB together: docs/INTEGRATION.md); ChoralRoot: off since 0.18, engines 2, 3, 5, 6, 11 retired |
+| `FELUCCA_PHYS` | 0 | the PHYS engine (`eng_phys.c`, `phys_dsp.c`, `phys_symp.c`: 9.3 KB of flash, and 12 KB of POOL: its three string slots a part set the size of the engines' state); ChoralRoot: off since 0.18, engine 9 retired (docs/INTEGRATION.md "0.18: PHYS retired") |
 
 ChoralRoot is all-synth: with the defaults the image has no samples and no Felucca sequencer (measured 2026-10-07:
 `.text` 490104 -> 270312 B, `.bss` 90512 -> 72976 B (RAM 92.4 -> 74.5 %), POOL 330116 -> 294740 B (95.9 -> 85.7 %);

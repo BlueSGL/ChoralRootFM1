@@ -69,7 +69,7 @@ without the mark (older firmware, a client's, a restore) is an added preset of i
 factory preset of the engine, or one an earlier slot already binds (the first bound slot wins). The pool of an engine:
 00 INIT, its factory presets (each replaced by the slot bound to it), then the added records in slot order. The pool
 of a record is its engine; a DIGITAL record (1) is in FM6's (and binds there), another retired engine's in the VA's
-(ANALOG, 0, retired in 0.14, plays there with its macros; PHASE LOFI VOICE TRIO NOISE, retired in 0.18, and SAMPLE
+(ANALOG, 0, retired in 0.14, plays there with its macros; PHASE LOFI VOICE TRIO NOISE PHYS, retired in 0.18, and SAMPLE
 GRAIN DRUM as the VA's INIT: a stand-in), never bound; a drum grid
 record (ver 3 or 5) is never bound. Older firmware reads a bound record as an ordinary one (a note 38 on step 16 of a pattern
 it never plays here); `up_valid` is unchanged.
@@ -97,7 +97,7 @@ Engines (`ENGINES[]`, append-only; the retired ones are never produced by this f
 | engine | name | patch kind | engine | name | patch kind |
 | --- | --- | --- | --- | --- | --- |
 | 0 | ANALOG (retired in 0.14: loads on the VA) | – | 8 | GRAIN (retired) | – |
-| 1 | DIGITAL (retired: loads as FM6) | – | 9 | PHYS | – |
+| 1 | DIGITAL (retired: loads as FM6) | – | 9 | PHYS (retired in 0.18) | – |
 | 2 | PHASE (retired in 0.18) | – | 10 | DRUM (retired) | – |
 | 3 | LOFI (retired in 0.18) | – | 11 | NOISE (retired in 0.18) | – |
 | 4 | SAMPLE (retired) | – | 12 | FM6 | `fm6` (128 bytes) |

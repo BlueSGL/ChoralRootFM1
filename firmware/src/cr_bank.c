@@ -129,7 +129,7 @@ static int8_t cb_trim(uint32_t e, uint32_t k)     /* factory preset k of engine 
  * preset of its engine; so is one whose mark names no factory preset of its pool, or one an earlier slot already
  * binds (the first bound slot wins; cb_pool_check reports the duplicate). The record's engine is its pool (a DIGITAL
  * record: FM6's, as it plays; an ANALOG record (engine 0, retired in 0.14): the VA's, where it plays its macros on the
- * VA's init patch; another retired engine's (PHASE, LOFI, VOICE, TRIO, NOISE since 0.18; SAMPLE, GRAIN, DRUM): the VA's,
+ * VA's init patch; another retired engine's (PHASE, LOFI, VOICE, TRIO, NOISE, PHYS since 0.18; SAMPLE, GRAIN, DRUM): the VA's,
  * where it loads as INIT, a stand-in: CB_RETIRED_POOL). A record whose engine
  * is not its pool's binds no factory preset there but a DIGITAL one (an added one: an ANALOG STRINGS overwrite does
  * not replace the VA's twelfth preset). A drum grid record (UP_VER_GRID)
