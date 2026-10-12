@@ -1377,3 +1377,17 @@ again. Fixed at the cause: a part's trim belongs to its sound in the running fir
   BRASS 1 and PIPE ORGAN 1 saved on the two parts, the session's trims set to 0.18's in the flash file
   (`tools/emu/seed_trim.py`), a relaunch and a GLO + SAVE: trim 0 both times (before the fix: -10 / -12 both times);
   the dump prints a `trim:` line. Not run: anything on the device.
+
+## 2026-10-12 (the mock-up sheets, again)
+
+**Pictures only.** All eight `design/make_*.py` run again: no `design/*.json` changed. The designer's `examples/`
+copies of `choralroot-fm1-layers-mockups.json` and `choralroot-fm1-mockups.json` were older generator outputs and were
+refreshed. Every sheet rendered again (headless Chromium through the designer's `tools/serve.py --out`) and compared
+pixel by pixel. Replaced, each at the size it had: `choralroot-fm1-layers-screens.png` (`export=screens`, 2060 x 1140:
+the sheet's title and state 7 say SEQ, its screen has no "Metro" title), `choralroot-fm1-screens.png` (`export=screens`,
+2060 x 3292: state 12, the Options screen, has the foot line `SELECT: move · OCT-: back · HOME`) and
+`choralroot-fm1-panels.png` (`export=plate`, 1908 x 36228: state 12's screen and its longer note); the three were
+copied to the designer's `docs/`. Byte for byte the same as before: `-fx-screens`, `-loop-screens`, `-preset-screens`,
+`-quad-screens`. Left, antialiasing only (no pixel differs by more than 35 / 42 / 54 of 255; 10 / 59 / 117 pixels
+by more than 32): `-looper-screens`, `-sound-editor-screens`, `-sound-editor-panels`. `web/site/img/panel-main.png`
+not touched (its one-state design did not change).
