@@ -906,7 +906,7 @@
   },
   {
    "name": "6 \u00b7 the glyphs change with the value (low row, high row)",
-   "notes": "The pictures are the readout: the same four parameters at a low value (row A, on the knobs) and a high one (row B): the reverb's room deepens as SIZE grows, the moon fills as the damping lifts, the delay's echoes spread with TIME and linger with FEEDBACK, the chorus wave quickens with RATE and swells with DEPTH, the drive's sine squares off. (Drawn with the editor's two-row kind for the comparison only.)",
+   "notes": "The pictures are the readout: the same four parameters at a low value (row A, on the knobs) and a high one (row B): the room's far wall grows with SIZE, the moon fills as the damping lifts, the delay's echoes spread with TIME and linger with FEEDBACK, the chorus wave quickens with RATE and swells with DEPTH, the drive's sine squares off. (Drawn with the editor's two-row kind for the comparison only.)",
    "export": true,
    "keys": [
     0,

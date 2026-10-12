@@ -26,8 +26,10 @@
 #define CRL_NSYNC 6u             /* Free, 1, 2, 4, 8, 16 bars */
 #define CRL_NQUANT 7u            /* none, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32 */
 #define CRL_NEXT_SLOT(k) (((k) + 1u) % CRL_SLOTS)   /* Advance: the slot after k (10 wraps to 1) */
-#define CRL_NRATE 7u             /* the loop's Rate: x1/4 x1/2 x3/4 x1 x1.5 x2 x4 (cr_loop_set_rate) */
-#define CRL_RATE_1 3u            /* .. x1, the default */
+#define CRL_NRATE 11u            /* the loop's Rate: x1/16 x1/12 x1/8 x1/6 x1/4 x1/2 x3/4 x1 x1.5 x2 x4
+                                  * (cr_loop_set_rate; the four slowest since 2026-10-11: at x1/16 a step is a bar) */
+#define CRL_RATE_1 7u            /* .. x1, the default. The session stores the Rate as steps from here (-7 .. 3), so
+                                  * a rate added at either end moves no stored value */
 #define CRL_STEP 24u             /* step entry and the loop editor: a step is a sixteenth note of the loop's own time
                                   * (16 steps a bar of 4/4 at Rate x1; the Rate scales it with the loop). Until
                                   * 2026-10-12 the step was the Quantize value (a quarter note when none) */
@@ -90,12 +92,12 @@ typedef struct {
     uint8_t state, cap, full;
     uint16_t layer_ev0;                        /* the capture layer's first event */
     /* the clocks, from the ms clock: rt, ticks at the engine's BPM (the tempo's: the count-in, the click); t, the
-     * LOOP's ticks: rt scaled by the Rate (crl_tick1: rate quarters of a loop tick each tempo tick, rfrac the
+     * LOOP's ticks: rt scaled by the Rate (crl_tick1: rate 48ths of a loop tick each tempo tick, rfrac the
      * remainder), what every time of the loop's content is in (events, takes, the cycle, the voices' ends) */
     uint32_t t, acc, last_ms;
     uint32_t rt;
     uint8_t clk_on;
-    uint8_t rate, rate_want, rfrac;            /* CRL_NRATE: in force; asked for (taken at the loop's start); 0..3 */
+    uint8_t rate, rate_want, rfrac;            /* CRL_NRATE: in force; asked for (taken at the loop's start); 0..47 */
     uint32_t rrec0, rcyc0;                     /* the take's / the cycle's start in tempo ticks (the click's grid) */
     uint32_t cyc0, scan;                       /* the current cycle's start (abs ticks); next position to play */
     uint32_t rec0, rec_len, cin0, od0, met0;
@@ -165,7 +167,8 @@ void cr_loop_queue(cr_loop_t *lp, cr_t *c, const crl_data_t *d);  /* playing: at
                                                 * An overdub armed or an undo before then cancels it (the loop
                                                 * being edited stays), as a stop or a clear does */
 void cr_loop_metro(cr_loop_t *lp, int on);     /* the click on / off (its grid restarts) */
-/* the Rate (0..CRL_NRATE-1: x1/4 x1/2 x3/4 x1 x1.5 x2 x4): how fast the loop's own time runs against the tempo. Taken
+/* the Rate (0..CRL_NRATE-1: x1/16 x1/12 x1/8 x1/6 x1/4 x1/2 x3/4 x1 x1.5 x2 x4; out of range: x1): how fast the
+ * loop's own time runs against the tempo. Taken
  * at once when nothing plays and no take runs, else at the loop's next start (the end of the cycle): the position
  * never jumps, a sounding note keeps its length in loop time, and a loop whose cycles ended on a beat starts the new
  * rate on one. The count-in and the click stay the tempo's */
@@ -223,7 +226,7 @@ uint32_t cr_loop_beat(const cr_loop_t *lp);
 uint16_t cr_loop_ring(const cr_loop_t *lp);    /* Q8 position on the ring (0 when idle) */
 void cr_loop_where(const cr_loop_t *lp, uint32_t *bar, uint32_t *beat);   /* 1-based; count-in: beats left */
 int  cr_loop_layers(const cr_loop_t *lp);
-uint32_t cr_loop_rate_q2(const cr_loop_t *lp); /* the Rate in force, quarters (1 2 3 4 6 8 16) */
+uint32_t cr_loop_rate_q48(const cr_loop_t *lp);/* the Rate in force, 48ths (3 4 6 8 12 24 36 48 72 96 192) */
 
 /* the slot record (docs/LOOPER.md): little-endian bytes, CRL_REC_MAX at most. pack returns its length; unpack
  * returns 1 for a valid record (*d filled), 0 otherwise (*d emptied) */

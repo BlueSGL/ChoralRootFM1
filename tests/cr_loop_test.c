@@ -551,7 +551,7 @@ static void s_step(void)
     cr_loop_play(&L, &C);
     step(300);
     /* the Rate scales the pattern (the Elektron's scale): x2 thirty-seconds, x1/2 eighths */
-    cr_loop_set_rate(&L, 5);
+    cr_loop_set_rate(&L, CRL_RATE_1 + 2);
     mark = nlog;
     cr_loop_play(&L, &C);
     step(990);
@@ -561,7 +561,7 @@ static void s_step(void)
        "step: Rate x2: the 4 steps come round every 250 ms, a step is 62 ms (a 1/32 of the tempo)");
     cr_loop_play(&L, &C);
     step(300);
-    cr_loop_set_rate(&L, 1);
+    cr_loop_set_rate(&L, CRL_RATE_1 - 2);
     mark = nlog;
     cr_loop_play(&L, &C);
     step(1990);
@@ -965,10 +965,11 @@ static void s_bass(void)
 /* ---- the Rate (0.18): the loop's own time against the tempo */
 static void s_rate(void)
 {
-    static const int WANT[CRL_NRATE] = {1, 2, 3, 4, 6, 8, 16};      /* a 1-bar loop's starts in 4 bars */
-    static const char *const NM[CRL_NRATE] = {"x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
+    /* a 1-bar loop's starts in 48 bars of the tempo (96 s at 120): the Rate in 48ths */
+    static const int WANT[CRL_NRATE] = {3, 4, 6, 8, 12, 24, 36, 48, 72, 96, 192};
+    static const char *const NM[CRL_NRATE] = {"x1/16", "x1/12", "x1/8", "x1/6", "x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
     char name[160];
-    uint32_t t[40];
+    static uint32_t t[256];
     int r, n, mark, good = 1;
     reset();
     L.sync = 1;
@@ -983,14 +984,14 @@ static void s_rate(void)
         cr_loop_set_rate(&L, r);
         mark = nlog;
         cr_loop_play(&L, &C);
-        step(7990);                                  /* 4 bars at 120 */
-        n = ons_of(62, mark, t, 40);
+        step(95990);                                 /* 48 bars at 120 */
+        n = ons_of(62, mark, t, 256);
         cr_loop_play(&L, &C);
         step(600);
-        snprintf(name, sizeof name, "rate %s: the 1-bar loop starts %d times in 4 bars (want %d), evenly (%u ms apart)",
+        snprintf(name, sizeof name, "rate %s: the 1-bar loop starts %d times in 48 bars (want %d), evenly (%u ms apart)",
                  NM[r], n, WANT[r], n > 1 ? (unsigned)(t[1] - t[0]) : 0u);
-        ok(n == WANT[r] && (n < 2 || (near(t[1] - t[0], 8000u / (unsigned)WANT[r], 8) &&
-                                      near(t[n - 1] - t[0], 8000u / (unsigned)WANT[r] * (unsigned)(n - 1), 8))), name);
+        ok(n == WANT[r] && (n < 2 || (near(t[1] - t[0], 96000u / (unsigned)WANT[r], 8) &&
+                                      near(t[n - 1] - t[0], 96000u * (unsigned)(n - 1) / (unsigned)WANT[r], 8))), name);
         good &= sounding() == 0;
     }
     ok(good && dup_on == 0 && stray_off == 0, "rate: every rate stops clean (no stuck, double or stray note)");
@@ -999,11 +1000,11 @@ static void s_rate(void)
     mark = nlog;
     cr_loop_play(&L, &C);
     step(500);
-    cr_loop_set_rate(&L, 5);                         /* x2 asked a beat in */
-    ok(L.rate == CRL_RATE_1 && L.rate_want == 5, "rate: changed while playing: the old rate until the loop's start");
+    cr_loop_set_rate(&L, CRL_RATE_1 + 2);            /* x2 asked a beat in */
+    ok(L.rate == CRL_RATE_1 && L.rate_want == CRL_RATE_1 + 2, "rate: changed while playing: the old rate until the loop's start");
     step(3490);
     n = ons_of(62, mark, t, 40);
-    ok(n == 3 && near(t[1] - t[0], 2000, 6) && near(t[2] - t[1], 1000, 6) && L.rate == 5,
+    ok(n == 3 && near(t[1] - t[0], 2000, 6) && near(t[2] - t[1], 1000, 6) && L.rate == CRL_RATE_1 + 2,
        "rate: x1 -> x2 while playing: the cycle in progress ends at x1 (2 s), the next ones last 1 s: no jump, on the beat");
     cr_loop_play(&L, &C);
     step(400);
@@ -1016,7 +1017,7 @@ static void s_rate(void)
     cr_loop_play(&L, &C);
     cr_loop_metro(&L, 0);
     step(300);
-    cr_loop_set_rate(&L, 2);                         /* x3/4: the loop's start falls off the beat 2 times in 3 */
+    cr_loop_set_rate(&L, CRL_RATE_1 - 1);            /* x3/4: the loop's start falls off the beat 2 times in 3 */
     cr_loop_metro(&L, 1);
     memset(clicks, 0, sizeof clicks);
     cr_loop_play(&L, &C);
@@ -1027,7 +1028,7 @@ static void s_rate(void)
     step(300);
     L.mode = CRL_MODE_OVERWRITE;
     L.count_in = 1;
-    cr_loop_set_rate(&L, 6);                         /* x4 */
+    cr_loop_set_rate(&L, CRL_NRATE - 1);             /* x4 */
     cr_loop_rec(&L, &C);
     step(1990);
     ok(L.cap == CRL_CAP_COUNTIN, "rate x4: the count-in is a bar of the tempo (still counting after 1.99 s)");
@@ -1045,7 +1046,7 @@ static void s_rate(void)
     /* recorded at a rate, played at that rate: what was played */
     reset();
     L.mode = CRL_MODE_OVERWRITE;
-    cr_loop_set_rate(&L, 5);                         /* x2, Free */
+    cr_loop_set_rate(&L, CRL_RATE_1 + 2);            /* x2, Free */
     cr_loop_rec(&L, &C);
     note(62, 200);
     step(300);
@@ -1449,6 +1450,153 @@ static uint32_t run_pass(void)                       /* to the end of the cycle:
         if (lvoices() > lv_top) lv_top = lvoices();
     }
     return L.played - p0;
+}
+/* ---- the slow Rates (2026-10-11: x1/6 x1/8 x1/12 x1/16; at x1/16 a step is a bar of 4/4). Everything of the loop's
+ * content is in the loop's ticks, so a slow rate stretches all of it alike */
+static int offs_of(int note, int from, uint32_t *t, int max)
+{
+    int k, n = 0;
+    for (k = from; k < nlog && n < max; k++)
+        if (LOG[k].k == '-' && LOG[k].s == 0 && LOG[k].note == note) t[n++] = LOG[k].ms;
+    return n;
+}
+static void slow4(void)                              /* 4 steps: C a step long, C# a quarter of its step, D with a
+                                                      * ratchet x4, Eb half its step (no two share a note) */
+{
+    mkloop(4);
+    addev(0, 24, 60, CR_Q_MAJ, 0);
+    addev(24, 6, 61, CR_Q_MAJ, 0);
+    addev(48, 24, 62, CR_Q_MAJ, 0);
+    addev(72, 12, 63, CR_Q_MAJ, 0);
+    setst(2, 3, 0, 0, 0);
+}
+static void s_slow(void)
+{
+    static const struct { int r; uint32_t ms; const char *nm; } R[4] = {    /* a step at 120 BPM */
+        {0, 2000, "x1/16"}, {1, 1500, "x1/12"}, {2, 1000, "x1/8"}, {3, 750, "x1/6"}};
+    char name[240];
+    uint32_t a[8], b[8], c[8], d[8], fa[8], fb[8], fc[8], fd[8], S, bar, beat, rt0;
+    int k, mark, na, nb, nc, nd, good;
+    ok(CRL_NRATE == 11 && CRL_RATE_1 == 7, "slow: eleven rates, x1 the eighth (the session's 0)");
+    for (k = 0; k < 4; k++) {
+        slow4();
+        cr_loop_set_rate(&L, R[k].r);
+        S = R[k].ms;
+        mark = nlog;
+        cr_loop_play(&L, &C);
+        step(4u * S - 10u);                          /* one pass */
+        na = ons_of(60, mark, a, 8); nb = ons_of(61, mark, b, 8); nc = ons_of(62, mark, c, 8); nd = ons_of(63, mark, d, 8);
+        snprintf(name, sizeof name, "slow %s: one pass: a step is %u ms: C at 0, C# at %u, D at %u (a ratchet x4), Eb at %u",
+                 R[k].nm, (unsigned)S, (unsigned)(nb ? b[0] - a[0] : 0), (unsigned)(nc ? c[0] - a[0] : 0), (unsigned)(nd ? d[0] - a[0] : 0));
+        ok(na == 1 && nb == 1 && nc == 4 && nd == 1 && near(b[0] - a[0], S, 8) && near(c[0] - a[0], 2u * S, 8) &&
+           near(d[0] - a[0], 3u * S, 8), name);
+        snprintf(name, sizeof name, "slow %s: the ratchet's four hits are a quarter of the step apart (%u %u %u ms, want %u)",
+                 R[k].nm, (unsigned)(c[1] - c[0]), (unsigned)(c[2] - c[1]), (unsigned)(c[3] - c[2]), (unsigned)(S / 4u));
+        ok(nc == 4 && near(c[1] - c[0], S / 4u, 8) && near(c[2] - c[1], S / 4u, 8) && near(c[3] - c[2], S / 4u, 8), name);
+        step(20);                                    /* the second pass has begun */
+        good = offs_of(60, mark, fa, 8) == 1 && offs_of(61, mark, fb, 8) == 1 && offs_of(62, mark, fc, 8) == 4 &&
+               offs_of(63, mark, fd, 8) == 1;
+        snprintf(name, sizeof name, "slow %s: the lengths: a step %u ms, 1/4 step %u, a ratchet hit %u, 1/2 step %u (want %u %u %u %u)",
+                 R[k].nm, (unsigned)(fa[0] - a[0]), (unsigned)(fb[0] - b[0]), (unsigned)(fc[0] - c[0]), (unsigned)(fd[0] - d[0]),
+                 (unsigned)S, (unsigned)(S / 4u), (unsigned)(S / 4u), (unsigned)(S / 2u));
+        ok(good && near(fa[0] - a[0], S, 8) && near(fb[0] - b[0], S / 4u, 8) && near(fc[0] - c[0], S / 4u, 8) &&
+           near(fd[0] - d[0], S / 2u, 8), name);
+        na = ons_of(60, mark, a, 8);
+        snprintf(name, sizeof name, "slow %s: the 4 steps come round after %u ms", R[k].nm, (unsigned)(na == 2 ? a[1] - a[0] : 0));
+        ok(na == 2 && near(a[1] - a[0], 4u * S, 8), name);
+        cr_loop_stop(&L, &C);
+        step(50);
+        ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "slow: stops clean");
+    }
+    /* 64 steps at x1/16: 64 bars of the tempo a pass (128 s at 120; 24 576 tempo ticks for 1536 of the loop's) */
+    mkloop(64);
+    addev(0, 24, 60, CR_Q_MAJ, 0);
+    addev(63u * 24u, 24, 62, CR_Q_MAJ, 0);
+    cr_loop_set_rate(&L, 0);
+    mark = nlog;
+    rt0 = L.rt;
+    cr_loop_play(&L, &C);
+    step(64000);
+    cr_loop_where(&L, &bar, &beat);
+    snprintf(name, sizeof name, "slow x1/16, 64 steps: half way (64 s): position %u of 1536 (want 768), ring %u (128), bar %u beat %u (3, 1) of the loop",
+             (unsigned)cr_loop_pos(&L), (unsigned)cr_loop_ring(&L), (unsigned)bar, (unsigned)beat);
+    ok(near(cr_loop_pos(&L), 768, 1) && near(cr_loop_ring(&L), 128, 1) && bar == 3 && beat == 1, name);
+    step(63990);
+    na = ons_of(60, mark, a, 8); nc = ons_of(62, mark, c, 8);
+    cr_loop_where(&L, &bar, &beat);
+    snprintf(name, sizeof name, "slow x1/16, 64 steps: the last step starts %u ms in (want 126000), the position %u of 1536, ring %u, bar %u beat %u",
+             (unsigned)(nc ? c[0] - a[0] : 0), (unsigned)cr_loop_pos(&L), (unsigned)cr_loop_ring(&L), (unsigned)bar, (unsigned)beat);
+    ok(na == 1 && nc == 1 && near(c[0] - a[0], 126000, 8) && cr_loop_pos(&L) == 1535 && cr_loop_ring(&L) == 255 && bar == 4 && beat == 4, name);
+    step(128020);
+    na = ons_of(60, mark, a, 8); nc = ons_of(62, mark, c, 8);
+    snprintf(name, sizeof name, "slow x1/16, 64 steps: three starts %u and %u ms apart (want 128000), %u whole loop ticks' tempo ticks for 2 passes (want 49152)",
+             (unsigned)(na == 3 ? a[1] - a[0] : 0), (unsigned)(na == 3 ? a[2] - a[1] : 0), (unsigned)((L.rt - rt0) / 16u * 16u));
+    ok(na == 3 && nc == 2 && near(a[1] - a[0], 128000, 8) && near(a[2] - a[1], 128000, 8) && near(c[1] - c[0], 128000, 8) &&
+       (L.rt - rt0) / 16u * 16u == 49152u && L.rfrac < 48u, name);
+    cr_loop_stop(&L, &C);
+    step(50);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "slow x1/16, 64 steps: stops clean");
+    /* a condition counts the loop's passes, however long one lasts */
+    mkloop(2);
+    addev(0, 24, 60, CR_Q_MAJ, 0);
+    addev(24, 24, 62, CR_Q_MAJ, 0);
+    setst(0, 0, CRL_C_1_2, 0, 0);
+    cr_loop_set_rate(&L, 0);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(15990);                                     /* 4 passes of 4 s */
+    na = ons_of(60, mark, a, 8); nc = ons_of(62, mark, c, 8);
+    ok(na == 2 && nc == 4 && near(a[1] - a[0], 8000, 8) && near(c[1] - c[0], 4000, 8),
+       "slow x1/16: a 1:2 step plays every second pass (8 s apart), the plain step every pass (4 s)");
+    cr_loop_stop(&L, &C);
+    step(50);
+    /* the click stays the tempo's: 4 steps at x1/16 are 4 bars */
+    slow4();
+    cr_loop_set_rate(&L, 0);
+    cr_loop_metro(&L, 1);
+    memset(clicks, 0, sizeof clicks);
+    cr_loop_play(&L, &C);
+    step(15990);
+    snprintf(name, sizeof name, "slow x1/16: the click is the tempo's: %d beats, %d of them a bar's first, in 2 passes of 4 bars (want 32, 8)",
+             clicks[1] + clicks[2], clicks[2]);
+    ok(clicks[1] + clicks[2] == 32 && clicks[2] == 8, name);
+    cr_loop_stop(&L, &C);
+    cr_loop_metro(&L, 0);
+    step(50);
+    /* a take at x1/16: the count-in is a bar of the tempo, a 1-bar take lasts 16, Quantize works on the loop's grid */
+    reset();
+    L.mode = CRL_MODE_OVERWRITE;
+    L.sync = 1;
+    L.count_in = 1;
+    L.quant = 4;                                     /* 1/16 of the loop: a bar of the tempo here */
+    cr_loop_set_rate(&L, 0);
+    cr_loop_rec(&L, &C);
+    step(1990);
+    ok(L.cap == CRL_CAP_COUNTIN, "slow x1/16: the count-in is a bar of the tempo (still counting after 1.99 s)");
+    step(20);
+    ok(L.cap == CRL_CAP_REC, "slow x1/16: .. and the take starts after it");
+    step(7700);                                      /* 7.71 s in: 290 ms before the fifth bar */
+    note(62, 300);
+    step(23000);
+    ok(L.cap == CRL_CAP_REC, "slow x1/16: a 1-bar take is 16 bars of the tempo: still recording at 31 s");
+    step(1100);
+    snprintf(name, sizeof name, "slow x1/16: .. done at 32 s (len %u), the note played 290 ms early is on step 5 (t %u, want 96), %u ticks long",
+             (unsigned)L.d.len, (unsigned)L.d.ev[0].t, (unsigned)L.d.ev[0].dur);
+    ok(L.cap == CRL_CAP_NONE && L.state == CRL_PLAYING && L.d.len == 384 && L.d.nev == 1 && L.d.ev[0].t == 96 && L.d.ev[0].dur >= 1, name);
+    mark = nlog;
+    step(64000);
+    na = ons_of(62, mark, a, 8);
+    ok(na == 2 && near(a[1] - a[0], 32000, 8), "slow x1/16: played back, the note comes round every 32 s");
+    cr_loop_stop(&L, &C);
+    step(50);
+    /* out of range: x1 */
+    cr_loop_set_rate(&L, (int)CRL_NRATE);
+    k = L.rate == CRL_RATE_1;
+    cr_loop_set_rate(&L, -1);
+    ok(k && L.rate == CRL_RATE_1 && cr_loop_rate_q48(&L) == 48, "slow: a rate out of range is x1");
+    cr_loop_set_rate(&L, 0);
+    ok(cr_loop_rate_q48(&L) == 3, "slow: x1/16 is 3 48ths");
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "slow: no stuck, double or stray note");
 }
 /* the record as 0.14 .. 0.17 and main before the steps' properties wrote it (cr_loop_pack then, flags = the part bit) */
 static uint32_t old_pack(const crl_data_t *d, uint8_t *b)
@@ -1873,6 +2021,7 @@ int main(void)
     s_replace();
     s_step();
     s_rate();
+    s_slow();
     s_edit();
     s_trig();
     s_bass();

@@ -548,7 +548,7 @@ S.append(state(
     "Tap FX: the sound's main effect on/off (Orchid's FX Dial default). Hold FX past 300 ms: the fx layer opens and stays "
     "(FX blinks); the white root keys pick the effect (Reverb Chorus Delay Drive), KNOB 1-3 its parameters, KNOB 4 the "
     "amount. The screen is the layer grammar: the effect big in green over one row of four cells in the knob colours, "
-    "each a picture of what the knob does (the room opens up with SIZE, the moon fills as DAMP lifts, the "
+    "each a picture of what the knob does (the room's far wall grows with SIZE, the moon fills as DAMP lifts, the "
     "type's picture, the dry / wet squares); a turned cell sits on a hot block instead of a popup. OCT- or HOME closes it.",
     keys=[OFF] * 27, lit=["D4"], buttons={"FX": BLINK},
     key_labels=fx_labels,

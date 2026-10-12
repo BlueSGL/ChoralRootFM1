@@ -85,17 +85,20 @@ chord part. Until 0.17 it was recorded as an ordinary single note and came back 
 ## The Rate (0.18)
 
 "We should also have the ability to change the rate of the loop so I could make it go faster or slower." The PLAY
-menu's KNOB 2: **x1/4, x1/2, x3/4, x1 (default), x1.5, x2, x4** (`cs.loop_rate`, the session's `loop_rate`: manual,
-kept by the global save; posted as `LC_RATE` -> `cr_loop_set_rate`).
+menu's KNOB 2: **x1/16, x1/12, x1/8, x1/6, x1/4, x1/2, x3/4, x1 (default), x1.5, x2, x4** (`cs.loop_rate`, the
+session's `loop_rate`: manual, kept by the global save; posted as `LC_RATE` -> `cr_loop_set_rate`). The four slowest
+are of 2026-10-11 (the owner: "it would be good to go slower, 1/8, 1/12, 1/16 as it can be nice to make it so each
+step is a whole bar for long loops"; x1/6 is ours, the value between x1/4 and x1/8 as x1/12 is between x1/8 and
+x1/16): see "The slow rates" below.
 
 - **What it scales**: how fast the loop's own time runs against the tempo. `crl_tick1` runs once per tempo tick
-  (`crl.rt`) and advances the loop's clock `crl.t` by the Rate in quarters of a tick (`CRL_RATE_Q2` 1 2 3 4 6 8 16,
-  the remainder kept in `rfrac`): 0, 1, 2 or 4 loop ticks a tempo tick, each with the take's end, the voices' ends
+  (`crl.rt`) and advances the loop's clock `crl.t` by the Rate in 48ths of a tick (`CRL_RATE_Q48` 3 4 6 8 12 24 36 48 72 96 192,
+  the remainder kept in `rfrac`, 0 .. 47; quarters until the slow rates): 0, 1, 2 or 4 loop ticks a tempo tick, each with the take's end, the voices' ends
   and the events due. The loop is derived from the clock, so it cannot drift from it; an event fires on a tempo
   tick, as it always did (5.2 ms at 120 BPM). At x1 the code path is the one there was: one loop tick a tempo tick
   (`tests/cr_loop_test.c`: every scenario older than the Rate passes unchanged).
-- **Locked to the clock**: a loop of whole bars starts on a beat again at x1/4, x1/2, x2 and x4 (4 bars: every 16, 8,
-  2, 1 bars); at x3/4 and x1.5 its length in beats is not whole for most lengths (4 bars: 21.33 and 10.67 beats) and
+- **Locked to the clock**: a loop of whole bars starts on a beat again at x1/16, x1/12, x1/8, x1/6, x1/4, x1/2, x2 and
+  x4 (4 bars: every 64, 48, 32, 24, 16, 8, 2, 1 bars); at x3/4 and x1.5 its length in beats is not whole for most lengths (4 bars: 21.33 and 10.67 beats) and
   its start falls between the beats until the rounds add up (every third one).
 - **A change while it plays is taken at the loop's start** (`rate_want` -> `rate` in `crl_wrap`, the end of the
   cycle), never in the middle: the position does not jump, a sounding note keeps its length in loop time, and a loop
@@ -110,6 +113,38 @@ kept by the global save; posted as `LC_RATE` -> `cr_loop_set_rate`).
 - **The tempo's, not the loop's**: the count-in (one bar of the tempo), the metronome (its grid restarts at the
   loop's start when that start is on one of its beats, always at x1 as before; else it keeps running), MIDI clock out
   (cr_out.c: from the tempo) and 0xFA / 0xFC.
+
+### The slow rates (x1/6, x1/8, x1/12, x1/16)
+
+At x1 a step is a sixteenth and 16 steps are a bar; at x1/16 a step is a whole bar of 4/4, at x1/12 three quarters of
+one (a bar of 3/4), at x1/8 a half note, at x1/6 a dotted quarter. 64 steps at x1/16 are 64 bars.
+
+- **The encoding.** The engine's index is 0 .. `CRL_NRATE` - 1 in the knob's order (x1/16 = 0, x1 = `CRL_RATE_1` = 7,
+  x4 = 10); it is RAM only (`cs.loop_rate`, `LC_RATE`, the emulator dump's `loop2: rate`). What is stored is the
+  session's `loop_rate`, steps from x1: **-7 x1/16, -6 x1/12, -5 x1/8, -4 x1/6**, then as before -3 x1/4, -2 x1/2,
+  -1 x3/4, 0 x1, 1 x1.5, 2 x2, 3 x4. No stored value moved; the record's layout and version are the same.
+- **An older firmware and a new value.** A 0.18 dev build of before reads -7 .. -4 as out of range and takes x1
+  (`cr_session_import`'s clamp, -3 .. 3 there); its next manual save writes x1. The releases up to 0.17 have no
+  session and never read it. The loop slots' record and the backup do not hold the Rate (it is the instrument's, not
+  the loop's), so a slot or a backup moves between builds untouched.
+- **Why nothing else changed.** Everything of the loop's content is in the loop's ticks (`crl.t`): event times and
+  lengths, a ratchet's slices (12, 8, 6 ticks) and gates, a note's part of a step (6, 12, 18 ticks), the cycle and its
+  pass count (the conditions), Quantize's grid, the take's length, the position (`cr_loop_pos`, the ring, bar.beat,
+  the editor's playhead `lpos / CRL_STEP`). A slow rate only makes those ticks come less often: at x1/16 one loop
+  tick every 16 tempo ticks (83 ms at 120 BPM), always on the same tempo ticks (3 divides 48). The tempo's clock
+  (`crl.rt`, u32) counts 24 576 ticks for a 64-step pass at x1/16; it wraps after 259 days at 120 BPM, as before. The
+  free take's clock in the PLAY menu (`m:ss`) is `pos * 30000 / (bpm * q48)`: 1.97e9 at most (`CRL_MAX_LEN`).
+- **What a slow rate costs.** A take played by hand is written with the loop tick's resolution: 83 ms at x1/16 and
+  120 BPM (x1/4: 21 ms, x1: 5 ms), and a key held for less than a tick is one tick long. Steps entered in Step mode
+  or the editor are on the grid and exact. A synced take's Length counts the loop's bars: 1 bar at x1/16 is 16 bars of
+  the metronome.
+- **Not the loop's**: the count-in, the click, MIDI clock out and the arpeggiator (the engine's, on the tempo) do not
+  slow down.
+- Tests: `tests/cr_loop_test.c` `s_rate` (every rate: a 1-bar loop's starts in 48 bars) and `s_slow` (a pass at each
+  slow rate: the steps, a ratchet x4, the 1/4 and 1/2 step lengths, the wrap; 64 steps at x1/16 over two passes with
+  the position, the ring and bar.beat; a 1:2 condition; the click; the count-in, a 1-bar take and Quantize at x1/16);
+  `tests/cr_settings_test.c` (-7 kept, -8 is x1); `tools/emu/scripts/cr_loop_rate.txt` (the knob's slow end, x1/8 and
+  x1/16 against the clock).
 - **Following the loop's time**: the corner dial (`cr_loop_ring`), the top line's bar.beat, the PLAY menu's
   timeline and playhead (`cr_loop_pos`, `cr_loop_where`); a Free take's elapsed time is shown in real seconds.
 
@@ -132,7 +167,7 @@ Elektron sequencer in which you can record up to 64 steps. So at 1x, 16 steps is
 
 - **The grid.** A step is a **sixteenth note** of the loop's own time (`CRL_STEP`, 24 ticks; `crl.step_g`): 16 steps a
   bar of 4/4 at Rate x1 (12 in 3/4 and 6/8). The **Rate** scales the pattern with the loop, as it does any loop: x2
-  makes the steps thirty-seconds of the tempo, x1/2 eighths. **Quantize does not set the step**: it is the grid a take
+  makes the steps thirty-seconds of the tempo, x1/2 eighths, x1/16 whole bars (64 steps: 64 bars). **Quantize does not set the step**: it is the grid a take
   played by hand is pulled to. While the record mode is Step its cell reads `1/16`, dim, and KNOB 3 says `Step: always
   1/16` and leaves the takes' Quantize as it is.
 - **Length.** A pattern has 1 .. 64 steps (`CRL_STEPS`). **Length Free: the loop is the steps entered, exactly** ("3
@@ -175,7 +210,7 @@ stops; in step entry OCT+ is a rest and OCT- a step back). Mock-ups: `design/cho
 | PRESETS | the **slot** (the strip: filled = holds a loop, the selected one red; **a 3 px square in the cell's top right corner = its loop has changes not saved yet**, `lm_dirty`): a switch through `cu_loop_load`, at once when stopped, playing once the knob rests 250 ms (`cu_lp.want`; the strip follows at once) and at the end of the cycle |
 | ALGORITHM | the **record mode** (Overwrite · Advance · Overdub · Replace · Step, the picker band) |
 | SELECT | the **page** (`cu.lpage`, the first whenever the menu opens; the owner 2026-10-11: "turn the select knob to change the page. It currently changes length") |
-| page 1: KNOB 1 / 2 / 3 / 4 | **Length** (Free 1 2 4 8 16 bars; also big in the middle while idle; while the timeline shows, the message "next take: 4 bars") / **Rate** (x1/4 .. x4) / **Quantize** (echoes) / **Count-in** (gate): the cell hot 800 ms, no popup |
+| page 1: KNOB 1 / 2 / 3 / 4 | **Length** (Free 1 2 4 8 16 bars; also big in the middle while idle; while the timeline shows, the message "next take: 4 bars") / **Rate** (x1/16 .. x4) / **Quantize** (echoes) / **Count-in** (gate): the cell hot 800 ms, no popup |
 | page 2: KNOB 1 | **Level** (bar); KNOB 2 .. 4: nothing (empty cells) |
 | GLO tap | **the keys**: play (default) = the roots and the chord block play as on the chord view, so the menu stays open while you play into a take; loops = the slot shortcuts (white roots D4..F5 slots 1..10, D#4 held 1 s clear, F#4 undo) and their LED map, GLO lit. No Options from this menu. The Keys cell of 0.17 (KNOB 4) is gone: "get rid of the Keys / play shortcut and map this to the GLO button like in other pages" |
 | EDIT tap | **the loop editor** (below) |

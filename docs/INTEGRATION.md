@@ -787,7 +787,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   `cu_gsave` -> `cr_settings_commit` + `cu_loop_write`; GLO + SAVE: `cu_revert` -> `cr_settings_revert`, the slot
   reloaded); the loop in RAM is written only by that and by leaving its slot (`cu_loop_autosave` is gone, the SAVE-held
   slot map too); the PLAY menu has two pages on SELECT (Length Rate Quantize Count-in / Level), its keys on GLO alone;
-  the Rate (`cr_loop_set_rate`: the loop's own clock, `crl.t`, runs at 1/4 .. 4 of the tempo's, `crl.rt`); Step entry
+  the Rate (`cr_loop_set_rate`: the loop's own clock, `crl.t`, runs at 1/16 .. 4 of the tempo's, `crl.rt`); Step entry
   with Length Free commits the steps exactly; the loop editor (`cr_loop_ed_*`, `cu_ledit_*`: EDIT in the PLAY menu).
   Both are a step sequencer (2026-10-12): `CRL_STEP` (a sixteenth) and `CRL_STEPS` (64), a step's length its notes'
   `dur` (docs/LOOPER.md).

@@ -243,8 +243,7 @@ exact — so the mock-ups are unaffected; THEME serves Felucca's own pages when 
   went with the spring reverb in 0.18; the FX layer's seven of 0.18, `CR_G_TAIL PRE CUT WIDTH SPREAD SYNC PING`, are
   the firmware's own in the same manner (docs/FX.md, cr_screen.h: no designer picture yet);
   `cr_cell_t.pct2` their second value, Q8 of 255): drawn at true size in the glyph box (2 px strokes 2 px inside it,
-  not scaled by h / 64 as the params glyphs): room a box (`cr_srect`) that opens up with the value, 55 → 100 % of the
-  glyph box about its centre, its far wall 50 → 42 % of it (deeper, and still larger on the screen) with four corner
+  not scaled by h / 64 as the params glyphs): room the box (`cr_srect`, fixed) and its far wall growing 22 → 70 % of it with the value, with four corner
   lines (`cr_poly`); moon a lit part (the right half less / plus an ellipse, `cr_moon_fill`: 4 corner samples a
   pixel, 16 where they disagree) inside a 2 px rim (`cr_arc`); echoes 3 px bars decaying by 0.2 + 0.75 pct2, spaced
   by pct, on a 1 px baseline; lfo 1–5 cycles (<= 44 segments), depth by pct2; clip one cycle at gain 1–10, dashed clip

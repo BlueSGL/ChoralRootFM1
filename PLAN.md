@@ -196,7 +196,7 @@ orange, white, green (KNOB 1–4) whatever they edit.
   choice big in the layer's colour, its neighbours left and right, the square marks) over one row of four knob cells
   in the knob colours (label, a 48 × 36 glyph, the value, a 2 px bar); a missing parameter is a dim dash; the cell
   just turned sits on a hot block (no popup). The glyphs are pictures of the parameter that change with it: a room
-  (reverb size: the room opens up), a moon (damping / tone), echoes (delay time and feedback), an LFO wave (chorus
+  (reverb size: the far wall grows), a moon (damping / tone), echoes (delay time and feedback), an LFO wave (chorus
   rate and depth), a clipped sine (drive), a coil (spring reverb), dry / wet squares (the amount); gate, range, arrow
   and shift picture the other layers' values. Used by every layer: FX, PERF, BASS; KEY (the band is the keyboard with
   the tonic lit yellow, over Tonic / Scale / Transpose / Single); LOOP (the PLAY menu, its own kind: the slot strip, the record

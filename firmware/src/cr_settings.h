@@ -248,7 +248,8 @@ typedef struct {
     int8_t voicing, octave;             /* KNOB 1 -12..12; OCT -2..2 */
     uint8_t bass_on;                    /* 0/1 (v15: the bass comes back on; until 0.17 it was off at every power-on) */
     uint8_t lock, latched;              /* LOCK on; the chord keys it latched (bit cr_mod_t) */
-    int8_t loop_rate;                   /* the loop's Rate (the PLAY menu's KNOB 2), steps from x1: -3 x1/4, -2 x1/2,
+    int8_t loop_rate;                   /* the loop's Rate (the PLAY menu's KNOB 2), steps from x1: -7 x1/16, -6 x1/12,
+                                         * -5 x1/8, -4 x1/6 (those four since 2026-10-11), -3 x1/4, -2 x1/2,
                                          * -1 x3/4, 0 x1, 1 x1.5, 2 x2, 3 x4 (cr_loop.h CRL_NRATE; 0 = the default, so
                                          * a record written before it reads x1: no migration) */
     uint8_t rsv[46];

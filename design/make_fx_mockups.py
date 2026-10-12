@@ -45,7 +45,7 @@ def knobrow(items, sel, col, cells, hot=None, label="", value=""):
 
 # the bespoke glyphs (the designer's FORMAT.md, "cell glyphs"): a parameter is a small picture that changes with its
 # value, in the spirit of Ableton's device pictograms and the reverb UIs in ../UI Inspiration: a room for the reverb's
-# size (the room opens up: the whole box grows), a moon phase for damping / colour (tone), echoes for the delay's time (spacing) and
+# size (the box stays, its far wall grows with the size), a moon phase for damping / colour (tone), echoes for the delay's time (spacing) and
 # feedback (decay), an LFO wave for the chorus (density = rate, height = depth), a sine squaring off for drive, two
 # squares for dry / wet. pct is the value; pct2 a second value the picture needs.
 def g(label, value, glyph, pct=None, pct2=None, **kw):
@@ -152,7 +152,7 @@ S.append(state(
 S.append(state(
     "6 · the glyphs change with the value (low row, high row)",
     "The pictures are the readout: the same four parameters at a low value (row A, on the knobs) and a high one (row B): "
-    "the reverb's room deepens as SIZE grows, the moon fills as the damping lifts, the delay's echoes spread with TIME "
+    "the room's far wall grows with SIZE, the moon fills as the damping lifts, the delay's echoes spread with TIME "
     "and linger with FEEDBACK, the chorus wave quickens with RATE and swells with DEPTH, the drive's sine squares off. "
     "(Drawn with the editor's two-row kind for the comparison only.)",
     keys=[OFF] * 27, buttons=FX_BTN, button_notes=FX_NOTE, encoders={},

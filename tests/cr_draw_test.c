@@ -648,19 +648,23 @@ int main(int argc, char **argv)
             }
         }
         check("pictograms: each draws ink inside its 48 x 36 box and none outside it", inside_all);
-        {   /* room: it opens up with pct (the owner 2026-10-11): on the middle row both the far wall's half width (from
-             * the centre to its left edge) and the mouth's (from the box's left edge inwards to the first ink) grow */
-            int32_t w[3], m[3], k, x;
+        {   /* room: the box is fixed and only the far wall grows with pct (the owner 2026-10-11, the second note): on
+             * the middle row the box's left edge (the first ink from the glyph box's left) stays, the far wall's half
+             * width (from the centre to its left edge) grows, is visible at 0 and never reaches the box (>= 3 px of
+             * background between the two strokes at the largest) */
+            int32_t w[3], m[3], gap[3], k, x;
             for (k = 0; k < 3; k++) {
-                PIC(CR_G_ROOM, k * 127, 128);
+                PIC(CR_G_ROOM, k == 2 ? 255 : k * 127, 128);
                 for (x = BX + BW / 2; x > BX && PX(x, BY + BH / 2) == bg; x--) {}
                 w[k] = BX + BW / 2 - x;
                 for (x = BX; x < BX + BW / 2 && PX(x, BY + BH / 2) == bg; x++) {}
                 m[k] = BX + BW / 2 - x;
+                for (; x < BX + BW / 2 && PX(x, BY + BH / 2) != bg; x++) {}
+                for (gap[k] = 0; x < BX + BW / 2 && PX(x, BY + BH / 2) == bg; x++) gap[k]++;
             }
-            snprintf(name, sizeof name, "room: opens up as SIZE grows (half widths: the far wall %d %d %d px, the mouth %d %d %d px)",
-                     w[0], w[1], w[2], m[0], m[1], m[2]);
-            check(name, w[0] < w[1] && w[1] < w[2] && m[0] < m[1] && m[1] < m[2] && w[0] >= 4 && w[2] < m[2]);
+            snprintf(name, sizeof name, "room: only the far wall grows with SIZE (half widths: the far wall %d %d %d px, the box %d %d %d px, between them %d %d %d px)",
+                     w[0], w[1], w[2], m[0], m[1], m[2], gap[0], gap[1], gap[2]);
+            check(name, w[0] < w[1] && w[1] < w[2] && m[0] == m[1] && m[1] == m[2] && w[0] >= 4 && gap[2] >= 3);
         }
         {   /* moon: the lit (full colour) pixels grow with pct */
             uint32_t n[3], k, x, y;

@@ -655,3 +655,23 @@ decision: a Send cell reads 0..99 and steps 4, the Sends page and the editor rea
 "44" on Reverb 1 and "45%" on Sends); with FX off the bass part's drive still sounds while the chord part's does
 not (fx.c gates the three sends, not the drive). `tools/emu/scripts/cr_fx_sends.txt`, the dump's `editor fx` lines,
 `design/make_fx_mockups.py` state 15, the manual's `layer-fx-sends.png`.
+
+**0.18 dev, 2026-10-11 (not flashed): the Size glyph's inner box; the slow loop Rates.** Two notes from the owner.
+(1) "Reverb size rendering is wrong. Revert that glyph. Currently it's now scaling the whole icon. I don't want that.
+The glyph renders an inner box and outer box like a room, I only want the inner box to change size. The inner box
+should be small when the room size is small and large when the room size is large." `CR_G_ROOM` (`cr_draw.c
+cr_picto`; Size on Reverb 1 is its only user) is the drawing of before `1121f93` again, the box fixed at the glyph
+box, with the far wall's direction turned round: 22 % of the box at Size 0, 70 % at 127 (it was 70 -> 22 % at first,
+then the whole icon 55 -> 100 %). The delay's Time is untouched. `tests/cr_draw_test.c` "room" checks that the box
+does not move, that the far wall grows and that 3 px or more of background stay between them; the manual's
+`layer-fx.png` is new. (2) "Loop Rate is good, but it would be good to go slower, 1/8, 1/12, 1/16 as it can be nice to
+make it so each step is a whole bar for long loops." The Rate has eleven values: x1/16 x1/12 x1/8 x1/6 x1/4 x1/2 x3/4
+x1 x1.5 x2 x4 (x1/6 is ours: the value between x1/4 and x1/8). The loop's clock advances in 48ths of a tick a tempo
+tick (`CRL_RATE_Q48`; quarters before), the engine's index is in the knob's order (x1 = 7), and the session's
+`loop_rate` is steps from x1 as it was, now -7 .. 3: no stored value moved, and a 0.18 dev build of before reads the
+four new ones as x1. Nothing else in the looper changed, because every time of a loop's content is in the loop's own
+ticks (docs/LOOPER.md "The slow rates": what was checked, and the one cost, a hand-played take's resolution of 83 ms
+at x1/16 and 120 BPM). Tests: `cr_loop_test.c` `s_rate` over 48 bars for all eleven and the new `s_slow`,
+`cr_settings_test.c`, `tools/emu/scripts/cr_loop_rate.txt`. Seen on the way: `docs/manual/shots.txt` no longer gives
+the committed `loop-editor.png` / `loop-editor-trig.png` byte for byte (the cursor's blink phase at the shot: main's
+pictures show it off, a run today shows it on); they were left as they are.
