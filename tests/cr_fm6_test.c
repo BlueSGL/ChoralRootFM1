@@ -277,11 +277,11 @@ int main(void)
                pool_bound_slot(ENGI_VA, 11) == UP_SLOTS,
                "an ANALOG record: on the VA with CUT RES ATK carried (MIX: the VA patch's own scale), an added preset of the VA's pool (%d %d %d %d %d, %u %u %u)", t->eng_req, t->p[P_E0], t->p[P_E0 + 1], t->p[P_E0 + 4], t->p[P_E0 + 6], (unsigned)cb_rec_engine(slot), (unsigned)cb_bound(slot), (unsigned)pool_bound_slot(ENGI_VA, 11));
         }
-        {   /* a record of an engine retired in 0.18 (PHASE 2, LOFI 3, VOICE 5, TRIO 6, NOISE 11: a 0.17 slot): the VA's
+        {   /* a record of an engine retired in 0.18 (PHASE 2, LOFI 3, VOICE 5, TRIO 6, NOISE 11, PHYS 9: a 0.17 slot): the VA's
              * pool, added whatever it binds, the VA's init sound with the record's ATK / REL (a stand-in; its sends are
              * not loaded: since 0.18 the sends are the part's, here 61 62 63 64 before and after);
              * the record itself untouched. SAMPLE's (4, a Felucca slot): the plain init sound, as before */
-            static const uint8_t FIVE[] = {2, 3, 5, 6, 11};
+            static const uint8_t FIVE[] = {2, 3, 5, 6, 11, ENGI_PHYS};   /* (six since PHYS went) */
             uint32_t q, good = 0;
             for (q = 0; q < sizeof FIVE; q++) {
                 up_rec_t pr = *up_rec(slot), back;
@@ -307,7 +307,7 @@ int main(void)
                         pool_pos_slot(ENGI_VA, slot) > pool_nf(ENGI_VA) && back.engine == FIVE[q] &&
                         !memcmp(&back, &pr, sizeof pr);
             }
-            OK(good == sizeof FIVE, "a PHASE / LOFI / VOICE / TRIO / NOISE record (retired in 0.18): the VA's init sound with its ATK, REL, the part's sends untouched by a factory or a user load; an added preset of the VA's pool; the record kept (%u of 5)", (unsigned)good);
+            OK(good == sizeof FIVE, "a PHASE / LOFI / VOICE / TRIO / NOISE / PHYS record (retired in 0.18): the VA's init sound with its ATK, REL, the part's sends untouched by a factory or a user load; an added preset of the VA's pool; the record kept (%u of 5)", (unsigned)good);
             {
                 up_rec_t sr = *up_rec(slot);
                 sr.engine = 4;
@@ -317,9 +317,19 @@ int main(void)
                 OK(t->eng_req == ENGI_VA && t->p[P_E0 + 6] == ENG_VA.edit[6].def && t->p[P_REV] == 64,
                    "a SAMPLE record (a Felucca slot): the VA's plain init sound, as before (the part's sends stay)");
             }
-            OK(NENG_SHOWN == 6 && eng_vis(0) == ENGI_FM6 && eng_vis(1) == ENGI_QUAD && eng_vis(2) == ENGI_VA &&
-               eng_vis(3) == ENGI_CZ && eng_vis(4) == 7u && eng_vis(5) == ENGI_PHYS,
-               "six engines shown: FM6, FM TONE, VA, CZ-1, WHEEL, PHYS");
+            OK(NENG_SHOWN == 5 && eng_vis(0) == ENGI_FM6 && eng_vis(1) == ENGI_QUAD && eng_vis(2) == ENGI_VA &&
+               eng_vis(3) == ENGI_CZ && eng_vis(4) == 7u && !eng_ok(ENGI_PHYS) && eng_step(7u, 1) == ENGI_FM6 &&
+               eng_rank(ENGI_PHYS) == 0u && ENGINES[ENGI_PHYS]->npresets == 0u,
+               "five engines shown: FM6, FM TONE, VA, CZ-1, WHEEL (PHYS, engine 9, retired: a silent slot without presets, FM6's place)");
+            {   /* the message a PHYS record's load shows, as the five's */
+                up_rec_t pr = *up_rec(slot);
+                pr.engine = ENGI_PHYS;
+                up_put(slot, &pr);
+                cu_load(t, ENGI_FM6, 0, 0);
+                cu_load_user(t, slot, 0);
+                OK(!strcmp(cu.msg.text, "PHYS retired: stand-in") && t->eng_req == ENGI_VA,
+                   "a PHYS record's load says \"PHYS retired: stand-in\" (\"%s\")", cu.msg.text);
+            }
         }
         up_put(20, 0);
         OK(fm6u_get(20, b2) != 0 && !fm6u[1].used, "store: an erased slot clears its blob");

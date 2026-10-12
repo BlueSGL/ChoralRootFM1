@@ -16,14 +16,14 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 ## The model
 
 - **A pool per engine.** Each engine's pool starts with **INIT** at position 00 (the engine's init sound, `cu_sound_init`; it cannot be overwritten: Overwrite on it is Save as new), then its factory presets (`engine_t.presets`: FM6 25 (F1..F24, PIANO),
-  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, WHEEL 5, PHYS 9: the picker's order, six
-  engines since 0.18; PHASE 6, LOFI 5, VOICE 4, TRIO 5 and NOISE 4 came between and after them until then) followed by
+  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, WHEEL 5: the picker's order, five
+  engines since 0.18; PHASE 6, LOFI 5, VOICE 4, TRIO 5, PHYS 9 and NOISE 4 came between and after them until then) followed by
   the presets the user added. ANALOG (engine 0, 12 presets) is retired
   since 0.14 (`FELUCCA_ANALOG` 0): no pool; a user record of ANALOG is an added preset of the VA's pool and plays there
   with its CUT / RES / DRIVE / MIX / DTN, filter envelope and ATK / REL on the VA's macros of the same name (`cr_ui.c`
   `cu_analog_va`; its binding to an ANALOG factory preset is dropped), another retired engine's record (SAMPLE, GRAIN,
-  DRUM) the VA's init sound. PHASE, LOFI, VOICE, TRIO and NOISE (engines 2, 3, 5, 6, 11) are retired since 0.18
-  (`FELUCCA_PHASE` / `LOFI` / `VOICE` / `TRIO` / `NOISE` 0): no pool; a user record of one is an added preset of the
+  DRUM) the VA's init sound. PHASE, LOFI, VOICE, TRIO, NOISE and PHYS (engines 2, 3, 5, 6, 11, 9) are retired since 0.18
+  (`FELUCCA_PHASE` / `LOFI` / `VOICE` / `TRIO` / `NOISE` / `PHYS` 0): no pool; a user record of one is an added preset of the
   VA's pool under its name (its binding to a factory preset of its engine is dropped) and loads as the VA's init
   sound with the record's sends (DIST CHO DLY REV) and its envelope's ATK / REL on the VA's macros of that name: a
   stand-in, with the message `PHASE retired: stand-in` (`cr_ui.c cu_load_user`); the record is not rewritten.

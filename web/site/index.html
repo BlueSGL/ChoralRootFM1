@@ -210,7 +210,7 @@
     </figure>
 
     <h3>The engine picker</h3>
-    <p>EDIT held, or PRESETS turned in the editor, opens it as a preview. SELECT steps the engines: FM6, FM TONE, VA, CZ-1, WHEEL and PHYS. KNOB 1 turns through the engine's presets, KNOB 2 inits the sound, and the keys play all the while, so you hear each one as you turn to it. OCT+ or EDIT keeps it; OCT− or HOME cancels, and the sound comes back.</p>
+    <p>EDIT held, or PRESETS turned in the editor, opens it as a preview. SELECT steps the engines: FM6, FM TONE, VA, CZ-1 and WHEEL. KNOB 1 turns through the engine's presets, KNOB 2 inits the sound, and the keys play all the while, so you hear each one as you turn to it. OCT+ or EDIT keeps it; OCT− or HOME cancels, and the sound comes back.</p>
     <h3>Quick mapping</h3>
     <p>For an engine with a matrix (the VA): ENV held + a knob turned, and the envelope last shown modulates that knob's parameter, the amount on the knob. LFO held + a knob does the same with the LFO. OCT− held + a knob clears the parameter's modulation. A modulated cell carries a small mark in the source's colour.</p>
     <h3>SAVE</h3>
@@ -221,7 +221,7 @@
 <section class="sounds" aria-labelledby="sounds">
   <div class="wrap">
     <h2 id="sounds">Sounds</h2>
-    <p class="intro">Two sounds at once: the chord sound on PRESETS, the bass sound on ALGORITHM. Each belongs to one of six engines, and every engine keeps one pool of presets.</p>
+    <p class="intro">Two sounds at once: the chord sound on PRESETS, the bass sound on ALGORITHM. Each belongs to one of five engines, and every engine keeps one pool of presets.</p>
     <div class="cols cols-banks">
       <div>
         <h3>FM6's pool <span class="sub">PRESETS 01–25</span></h3>
@@ -234,10 +234,10 @@
       <div>
         <h3>Engines <span class="sub">OPT + PRESETS</span></h3>
         <ol class="bank">
-          <li>FM6 · 25</li><li>FM TONE · 16</li><li>VA · 25</li><li>CZ-1 · 64</li><li>WHEEL · 5</li><li>PHYS · 9</li>
+          <li>FM6 · 25</li><li>FM TONE · 16</li><li>VA · 25</li><li>CZ-1 · 64</li><li>WHEEL · 5</li>
         </ol>
         <p class="small">Each with its number of factory presets.</p>
-        <p>All synthesis: Felucca's WHEEL (tonewheel organ) and PHYS (modal and string physical models); Melodee's FM6 (six-operator FM that plays DX7 voices) and CZ-1 (Casio's phase distortion, with its 64 tones); and ChoralRoot's VA and FM TONE (four-operator FM). No samples: the firmware leaves out Felucca's SAMPLE, GRAIN and DRUM engines, and since 0.14 its ANALOG. The VA replaces it, and a sound saved on ANALOG loads on the VA.</p>
+        <p>All synthesis: Felucca's WHEEL (tonewheel organ); Melodee's FM6 (six-operator FM that plays DX7 voices) and CZ-1 (Casio's phase distortion, with its 64 tones); and ChoralRoot's VA and FM TONE (four-operator FM). No samples: the firmware leaves out Felucca's SAMPLE, GRAIN and DRUM engines, and since 0.14 its ANALOG. The VA replaces it, and a sound saved on ANALOG loads on the VA.</p>
       </div>
     </div>
     <h3>The VA</h3>
@@ -286,7 +286,7 @@
       <li><b>Melodee</b> by Kerem Kilic (Ellic Studio), GPL-3.0: the FM6 engine as it plays here (DX7 voices as Dexed renders them), the CZ-1 engine, the USB audio recording, and the work that makes the second core robust. <a href="https://github.com/keremimo/melodee">github.com/keremimo/melodee</a></li>
       <li><b>The chord logic</b> is inspired after the <a href="https://telepathicinstruments.com">Telepathic Instruments</a> Orchid ORC—1 and Quixotic7's prior monome grid iii adaption <a href="https://github.com/Quixotic7/choralroot">choralroot</a>.</li>
       <li><b>Inter Tight</b> by The Inter Project Authors (SIL OFL 1.1, <a href="OFL.txt">OFL.txt</a>): the UI font, and this page's.</li>
-      <li><b>DaisySP</b> (Electrosmith, Emilie Gillet) and <b>Rings</b> (Emilie Gillet), MIT: the PHYS engine.</li>
+      <li><b>DaisySP</b> (Electrosmith, Emilie Gillet) and <b>Rings</b> (Emilie Gillet), MIT: the PHYS engine, in the source tree; not in the firmware since 0.18.</li>
       <li><b>msfa</b> (Google, Apache-2.0) and <b>Dexed</b> (Pascal Gauthier, GPL-3.0-or-later): the FM6 engine's synthesis. The <b>MAME uPD933</b> model by Devin Acker (BSD-3-Clause): the CZ-1's. <b>fm1-x0x</b> (GPL-3.0): the second core's bring-up.</li>
       <li><b>JieLi AC79 SDK</b>: the package holds three of its files (uboot.boot, cfg_tool.bin, eq_cfg_hw.bin; JieLi Technology, Apache-2.0). No M-VAVE material.</li>
     </ul>

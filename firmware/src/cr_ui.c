@@ -231,8 +231,8 @@ static void cu_load(track_t *t, uint32_t e, uint32_t pi, int bass)
  * the part's own (param_kept); a chord part plays it POLY when it was saved MONO, a bass part MONO. An ANALOG sound
  * (engine 0, retired in 0.14: a 0.13 slot, a restored bank) loads on the VA with its macros carried by name (cu_analog_va;
  * the VA's init patch under them, eng_va.c va_track_loaded); a sound of another retired engine (PHASE 2, LOFI 3, VOICE 5,
- * TRIO 6, NOISE 11, retired in 0.18: a 0.17 slot, a restored bank; SAMPLE 4, GRAIN 8, DRUM 10: a Felucca slot; engines.c
- * ENG_GONE) loads as the VA's init sound, a stand-in: the five of 0.18 keep the record's sends and its envelope's ATK /
+ * TRIO 6, NOISE 11, PHYS 9, retired in 0.18: a 0.17 slot, a restored bank; SAMPLE 4, GRAIN 8, DRUM 10: a Felucca slot; engines.c
+ * ENG_GONE) loads as the VA's init sound, a stand-in: the six of 0.18 keep the record's sends and its envelope's ATK /
  * REL on the VA's macros of that name (cu_analog_va's mapping; their other macros have no VA meaning). All under the
  * slot's name, with a message (and a trace line on the emulator) */
 static void cu_message(const char *t, uint32_t col);
@@ -301,7 +301,7 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
     if (!eng_ok(r->engine)) {
         const engine_t *en = ENGINES[CB_RETIRED_POOL];
         const char *was = r->engine == 2u ? "PHASE" : r->engine == 3u ? "LOFI" : r->engine == 5u ? "VOICE" :
-                          r->engine == 6u ? "TRIO" : r->engine == 11u ? "NOISE" : 0;
+                          r->engine == 6u ? "TRIO" : r->engine == 11u ? "NOISE" : r->engine == ENGI_PHYS ? "PHYS" : 0;
         int carry = was && ((ENG_RETIRED_018 >> r->engine) & 1u) && CB_RETIRED_POOL == ENGI_VA;
         char msg[24];                             /* (cu.msg.text holds 23 characters) */
 #if defined(CR_TRACE) && CR_TRACE

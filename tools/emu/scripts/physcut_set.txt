@@ -1,0 +1,29 @@
+# test_retired.sh, the PHYS runs, run 1, on the pre-cut build (PHYS and the five engines retired in 0.18 switched back
+# on: what 0.17 had; a fresh flash file): SysEx 76 SELECT puts the chord part on PHYS 03 PLUCK (engine 9); SAVE, OCT+
+# (Save as new), D4 E4 F4 type A D G, OCT+: U01 "ADG", a PHYS sound (PHYS 10), which the chord part stays on; ALGORITHM
+# +1 switches the bass on, SELECT puts it on PHYS 02 MARIMBA; SAVE held: the settings (both parts' sounds) and the
+# session (both parts as they are) written with both parts on PHYS
+wait 300
+sysex F07D464C4C000903F7
+wait 400
+btn SAVE
+wait 300
+btn OCT+
+wait 300
+btn D4
+wait 200
+btn E4
+wait 200
+btn F4
+wait 300
+btn OCT+
+wait 1500
+dump
+knob ALGORITHM +1
+wait 300
+sysex F07D464C4C010902F7
+wait 400
+dump
+btn SAVE 900                  # SAVE held: the global save (the settings and the session)
+wait 3000
+dump

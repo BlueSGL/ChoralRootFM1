@@ -3,14 +3,7 @@
 # Rewritten by BUDGET_UPDATE=1.
 wheel_render 266
 wheel_block 101
-phys_render 61
 fm6_render 4364
-px_modal_block 111
-px_modal_run 192
-px_memb_block 106
-px_string_excite 171
-px_string_run 264
-px_symp_run 252
 va_render 89805
 va_block 108
 cz_native_render 338

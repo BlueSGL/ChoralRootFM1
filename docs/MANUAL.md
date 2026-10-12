@@ -42,7 +42,7 @@ How the manual names things:
 ChoralRoot turns the FM-1 into a chord instrument in the manner of the Telepathic Instruments Orchid. The left end of
 the keybed says what kind of chord you want, the rest of the keybed plays its root, and the instrument builds the
 chord, voices it and writes its name on the screen. Around that it has a bass part that follows the chords,
-performance modes (strum, arpeggio, patterns), effects, a looper that records chords, six synth engines with a deep
+performance modes (strum, arpeggio, patterns), effects, a looper that records chords, five synth engines with a deep
 sound editor, MIDI out on three channels and USB audio recording.
 
 What it is not:
@@ -894,7 +894,7 @@ More detail: [LOOPER.md](LOOPER.md), [LOOPER-MODES.md](LOOPER-MODES.md).
 ## 11. Sounds
 
 ChoralRoot plays two sounds at once: the **chord sound** (PRESETS) and the **bass sound** (ALGORITHM). Each belongs
-to one of six engines.
+to one of five engines.
 
 ### The engines
 
@@ -905,10 +905,9 @@ to one of six engines.
 | **VA** | ChoralRoot's virtual analog: four oscillators, a morphing filter, four envelopes, four LFOs, a modulation matrix, stereo | 25 |
 | **CZ-1** | Casio CZ-1 phase distortion, with Casio's own 64 tones | 64 |
 | **WHEEL** | a tonewheel organ with nine drawbars | 5 |
-| **PHYS** | physical models: bars, plates and strings | 9 |
 
-This is the order in which the instrument shows them. Up to 0.17 there were five more, PHASE, LOFI, VOICE, TRIO and
-NOISE; they are retired (see [Sounds from outside](#sounds-from-outside) for what happens to a sound saved on one). At power-on the chord sound is the one of your last global save (on a
+This is the order in which the instrument shows them. Up to 0.17 there were six more, PHASE, LOFI, VOICE, TRIO,
+NOISE and PHYS; they are retired (see [Sounds from outside](#sounds-from-outside) for what happens to a sound saved on one). At power-on the chord sound is the one of your last global save (on a
 new unit FM6 `TINE EP`), and the bass sound is VA `DEEP SUB` until you choose another.
 
 ### Presets: one pool per engine
@@ -940,7 +939,7 @@ Hold **EDIT**. The engine picker opens and stays (EDIT blinks). It is a preview:
 
 | Control | In the engine picker |
 | --- | --- |
-| SELECT | the six engines, one at a time, in the order of the table above (FM6 ... PHYS). The sound moves to that engine and keeps its envelope and mix |
+| SELECT | the five engines, one at a time, in the order of the table above (FM6 ... WHEEL). The sound moves to that engine and keeps its envelope and mix |
 | KNOB 1 (or PRESETS) | the engine's pool, as PRESETS |
 | KNOB 2 | INIT: the engine's plain starting sound (`init sound`) |
 | the root keys and the chord keys | play, as always: you hear every engine and preset as you turn to it |
@@ -996,7 +995,7 @@ they are when you change sound, and a global save keeps them.
   [SOUNDS.md](SOUNDS.md)).
 - A sound saved on an older version with the retired ANALOG engine loads on the VA
   (`ANALOG retired: on the VA`).
-- A sound saved on PHASE, LOFI, VOICE, TRIO or NOISE (retired in 0.18) stays in its slot under its name. You find it
+- A sound saved on PHASE, LOFI, VOICE, TRIO, NOISE or PHYS (retired in 0.18) stays in its slot under its name. You find it
   at the end of the VA's pool. It does not sound as it did: it plays the VA's plain starting sound with its own
   attack and release, and the screen says so (`PHASE retired: stand-in`). Nothing is deleted; the
   device manager and a backup still hold the sound as it was saved. If the chord or the bass was on one of these
@@ -1114,9 +1113,9 @@ line then reads `fine · B1`. More: [QUAD.md](QUAD.md) (the engine's working nam
 
 More: [CZ1.md](CZ1.md).
 
-### WHEEL, PHYS
+### WHEEL
 
-These two have one screen in each group:
+WHEEL has one screen in each group:
 
 | Group | Holds |
 | --- | --- |
@@ -1560,7 +1559,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed). With LOCK on, the only latched type pressed again alone: off (single notes, the extensions kept) |
 | F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4 |
 | D4 to G5 | roots |
-| white roots D4 to B4, engine picker | FM6, FM TONE, VA, CZ-1, WHEEL, PHYS |
+| white roots D4 to A4, engine picker | FM6, FM TONE, VA, CZ-1, WHEEL |
 | white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |

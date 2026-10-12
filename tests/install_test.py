@@ -1169,9 +1169,16 @@ def bindings():
        ff["14"] == 1 and ff["12"] == 0 and not any(e in fp for e in ("0", "1", "4", "8", "10")) and I.pool_of(1) == 12 and
        I.pool_of(0) == 13 and I.pool_of(8) == 13 and I.pool_of(14) == 14,
        "binding: the factory table (the firmware's, --check), retired engines' pools (ANALOG's: the VA's)")
-    ok(sorted(fp, key=int) == ["7", "9", "12", "13", "14", "15"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 11)) and
-       not any(I.engine_retired(e) for e in (7, 9, 12, 13, 14, 15)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE",
-       "0.18: six engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE retired (the VA's pool), their names kept")
+    ok(sorted(fp, key=int) == ["7", "12", "13", "14", "15"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 9, 11)) and
+       not any(I.engine_retired(e) for e in (7, 12, 13, 14, 15)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE" and
+       I.ENGINE_NAMES[9] == "PHYS",
+       "0.18: five engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept")
+    pobjs = {6: sound_bank({0: bind(sound_rec(9, "MY PLUCK", seed=21), 3)}), 7: b"", 9: b"", 10: b"", 11: b"", 12: b"", 13: b""}
+    pt = I.parse_sound_objects(pobjs)
+    ok(pt[0]["used"] and pt[0]["bound"] is None and pt[0]["added"] and pt[0]["engineName"] == "PHYS" and
+       I.sound_line(pt[0]).split() == ["U01", "MY", "PLUCK", "PHYS", "retired", "+"] and
+       I.read_sound_file(json.dumps(I.export_sound(pobjs, 1, "ChoralRoot 0.18")))[2] == 9,
+       "0.18: a PHYS record: kept, listed 'retired', an added preset (the VA's pool), exports and reads as PHYS")
     js = (ROOT / "web" / "fm1sounds.js").read_text()
     jf = re.search(r"^export const FACTORY_PRESETS = (.*);$", js, re.M)
     js1 = re.search(r"^export const FACTORY_FIRST = (.*);$", js, re.M)

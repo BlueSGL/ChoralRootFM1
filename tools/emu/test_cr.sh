@@ -838,7 +838,7 @@ silent_end cr_editor_pick
 echo "EDIT held: the engine picker"
 run cr_engine --wav "$OUT/cr_engine.wav"
 has '^engine: part 0 -> WHEEL' "$OUT/cr_engine.log" && has 'part 0: WHEEL /' "$OUT/cr_engine.log" &&
-    ok "EDIT held + A4 (the fifth of six white roots): part 0 FM6 -> WHEEL: $OUT/cr_engine_switched.ppm" || bad "the engine did not switch"
+    ok "EDIT held + SELECT +4 (the fifth of five engines): part 0 FM6 -> WHEEL: $OUT/cr_engine_switched.ppm" || bad "the engine did not switch"
 has '^preset: part 0 -> WHEEL / ' "$OUT/cr_engine.log" && ok "EDIT held + KNOB 1: the next place of the engine's pool" || bad "KNOB 1: no preset step"
 silent_end cr_engine
 
@@ -2027,7 +2027,8 @@ LC_ALL=C grep -aq "select: part 1 engine FM6 pos 3" "$OUT/cr_select.log" && ok "
 [ "$(LC_ALL=C grep -ac "^select: " "$OUT/cr_select.log")" = 2 ] && ok "a bad engine: refused (no third load)" ||
     bad "SELECT: $(LC_ALL=C grep -ac "^select: " "$OUT/cr_select.log") loads, want 2"
 
-# 0.18: a 0.17 unit's flash (a user sound on PHASE, the chord part parked on NOISE) on today's build (test_retired.sh)
+# 0.18: a 0.17 unit's flash (a user sound on PHASE, the chord part parked on NOISE; then both parts on PHYS, a user
+# sound on it, the session) on today's build (test_retired.sh)
 sh tools/emu/test_retired.sh >"$OUT/test_retired.log" 2>&1 || fail=1
 LC_ALL=C grep -a '^retired\|^  ok\|^  FAIL' "$OUT/test_retired.log"
 

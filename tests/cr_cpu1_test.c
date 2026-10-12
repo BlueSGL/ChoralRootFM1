@@ -36,6 +36,9 @@
 #define FELUCCA_TRIO 0
 #define FELUCCA_NOISE 0
 #endif
+#ifndef FELUCCA_PHYS
+#define FELUCCA_PHYS 0           /* .. and PHYS */
+#endif
 #ifndef FM6_POLY
 #define FM6_POLY 8
 #endif

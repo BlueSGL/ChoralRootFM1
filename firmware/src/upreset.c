@@ -233,8 +233,10 @@ static void up_values(const up_rec_t *r, int16_t *v)   /* mapped and clamped for
     for (i = 0; i < P_COUNT; i++)
         def[i] = param_desc_of(r->engine, i)->def;
     up_params(r, v, def);
+#if FELUCCA_PHYS
     if (r->ver == 1u && ENGINES[r->engine] == &ENG_PHYS)   /* (before 1.0: MODEL 2 was DUST) */
         phys_legacy(&v[P_E0]);
+#endif
     for (i = 0; i < P_COUNT; i++)
         v[i] = (int16_t)clamp(v[i], param_desc_of(r->engine, i)->min, param_desc_of(r->engine, i)->max);
 }
