@@ -766,7 +766,8 @@ number.
 In the PLAY menu, tap **EDIT**. The loop in memory is shown as a pattern of steps, and you can change it one step at a
 time. (Outside the PLAY menu EDIT is the sound editor, as ever.)
 
-<img src="manual/loop-editor.png" width="240" alt="The loop editor: Edit; a row of sixteen steps, three red, the second outlined, a white line under the next three; Am, step 2/16; cells Step 2/16, Note len 4, Steps 16, Velocity 100">
+<img src="manual/loop-editor.png" width="240" alt="The loop editor, page Step: a row of sixteen steps, three red, the second outlined, a white line under the next three; Am, step 2/16; cells Note len 4, Steps 16, Chance 100%, Velocity 100">
+<img src="manual/loop-editor-trig.png" width="240" alt="The loop editor, page Trig: the same row, the second step with a notch in its corner; cells Ratchet x2, Condition 1:2, Voicing +2">
 
 The grid is the same as in Step entry: **sixteenth-note steps, 16 to a row, four rows: all 64 steps of a pattern on one
 screen.** A red step has a chord or a note starting in it. A dark red step has nothing starting in it, but a longer
@@ -775,15 +776,45 @@ chord is named under the grid. While the loop plays, the step being played light
 
 | Control | In the loop editor |
 | --- | --- |
-| SELECT, or KNOB 1 | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it |
-| the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. The cursor stays on the step; turn SELECT to move on |
-| REC tap | **clears** the selected step (REC does not record here) |
-| KNOB 2 | **Note len**: how long the selected step's notes sound, 1 to 64 steps. **Nothing else moves**: the other steps stay where they are and the loop keeps its length. A white line under the following steps shows how far the note reaches |
-| KNOB 3 | **Steps**: the loop's length, 1 to 64 steps, a step a click. Shorter hides the last step, longer brings it back; past what there was, longer adds an empty step |
+| PRESETS | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it. **GLO held + PRESETS** jumps 8 steps a click. (PRESETS never changes the sound or the slot while the editor is open) |
+| SELECT | the **page**: `Step` and `Trig`. The page's name is at the top, the bottom line begins `1/2` or `2/2` |
+| ALGORITHM | the selected step's **Voicing**, on either page |
+| the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. The cursor stays on the step; turn PRESETS to move on |
+| OCT-, OCT+ | the **octave**, as on the main screen: what you play into a step next is entered there |
+| REC tap | **clears** the selected step, its notes and its settings (REC does not record here) |
+| **Page 1, Step** | |
+| KNOB 1 | **Note len**: how long the selected step's notes sound: `1/4`, `1/2` or `3/4` of a step, then 1 to 64 steps. **Nothing else moves**: the other steps stay where they are and the loop keeps its length. A white line under the following steps shows how far the note reaches |
+| KNOB 2 | **Steps**: the loop's length, 1 to 64 steps, a step a click. Shorter hides the last step, longer brings it back; past what there was, longer adds an empty step. **GLO held + KNOB 2** goes straight to the next of 8, 16, 32, 48 and 64 steps (in 3/4 and 6/8: 12, 24, 36, 48) |
+| KNOB 3 | **Chance**: how often the step plays, 100 % down to 10 % |
 | KNOB 4 | the step's **Velocity** |
+| **Page 2, Trig** | |
+| KNOB 1 | **Ratchet**: Off, x2, x3, x4: the step's notes are struck two, three or four times within the one step |
+| KNOB 2 | **Condition**: on which passes of the loop the step plays: Always, `1:2` `2:2`, `1:3` `2:3` `3:3`, `1:4` .. `4:4`, `1st`, `not 1st` |
+| KNOB 3 | **Voicing**: Follow, or a voicing of its own, -12 to +12 (the same as ALGORITHM) |
 | LOOP tap | play / stop, as ever, so you hear the edits in place. The cursor does not follow the playback; the white step does |
 | REC held | the looper's undo (see below) |
-| OCT-, OCT+, HOME, EDIT (tap or hold) | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it |
+| HOME, EDIT (tap or hold) | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it |
+
+**Ratchet, Condition, Chance and Voicing belong to the step**: to everything that starts in it, the chord and, with
+Split Bass, the bass note. A step that has a ratchet, a condition or a chance under 100 % shows a small notch in its
+top right corner. An empty step has none of them (the cells show `-`); clearing a step clears them; playing new notes
+into a step keeps them.
+
+- **Ratchet.** x2, x3 or x4 strikes the step's notes that many times, evenly spaced inside the one step. Each strike
+  is as long as its share of the step; with a Note len of `1/2` it is half of that, so the strikes are short with gaps
+  between them. A ratcheted step does not sound on past its own step, whatever its Note len.
+- **Condition.** `1:2` plays on the first of every two passes of the loop, `2:2` on the second; `1:3`, `2:3`, `3:3`
+  and `1:4` .. `4:4` the same over three and four passes. `1st` plays only the first time round, `not 1st` every time
+  but the first. The passes are counted from the moment the loop starts playing: stop and start, and it is pass 1
+  again.
+- **Chance.** 100, 90, 75, 60, 50, 40, 25 or 10 %: each pass, the step plays or stays silent by that chance. The
+  whole step decides together: its chord, its bass note and all the strikes of its ratchet. With a Condition as well,
+  both have to say yes.
+- **Voicing.** `Follow` is the voicing as it is set when the loop plays (KNOB 1 on the main screen), as every loop
+  plays. A number gives that step's chords their own voicing, whatever the live one is. Single notes and bass notes
+  have no voicing, so it does nothing to them.
+- **These four are kept for the first 64 steps of a loop.** In a take longer than that, the steps on its later pages
+  show `-` for them.
 
 Things to know:
 
@@ -796,17 +827,18 @@ Things to know:
 - **A loop you played by hand** opens too, at any Quantize setting. Its chords are shown on the sixteenth grid: a chord
   belongs to the step it starts in. **Nothing is moved**: a chord you played a little early or late keeps its exact
   timing until you replace that step (the new chord starts on the step). Its Note len shows the steps it reaches into
-  (a part of a step counts as one); turning KNOB 2 makes it end on the grid.
+  (a part of a step counts as one, unless it is exactly a quarter, a half or three quarters of a step); turning
+  KNOB 1 to a whole number makes it end on the grid.
 - **A loop longer than 64 steps** (a long take) is shown 64 steps at a time; the cursor walks through all of it and the
-  screen follows (`step 70/128 · p2`). KNOB 3 can make such a loop shorter, not longer.
+  screen follows (`step 70/128 · p2`). KNOB 2 can make such a loop shorter, not longer.
 - **A step loop made with an earlier 0.18 test build**, whose steps were as long as the Quantize value, plays as it
   did. Here it shows on the sixteenth grid: quarter-note steps are a chord on every fourth step, 4 steps long.
-- **An empty step**: its Note len and Velocity cells show `-`.
+- **An empty step**: its Note len, Chance and Velocity cells, and the three on the Trig page, show `-`.
 - **An empty slot** opens as an empty pattern of the set Length (Free: one bar, 16 steps; 8 or 16 bars: 64 steps).
   Leave without entering anything and the slot is empty again.
 - **Split Bass:** a note played on the bass side replaces the step's bass notes only, a chord on the other side only
   the chords, as when recording.
-- **Steps hidden by KNOB 3** are kept only while the editor is open: when you close it they are gone. A save while it
+- **Steps hidden by KNOB 2** are kept only while the editor is open: when you close it they are gone. A save while it
   is open writes the loop as it sounds.
 - **Undo.** There is no undo of a single edit. The first edit also folds the loop's layers into one (what a Replace
   layer had taken out is gone for good), so after an edit REC held says `nothing to undo`. The way back is the last
@@ -1465,7 +1497,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
 | SEQ | METRO | metronome on / off | METRO layer: SELECT time signature · KNOB 1 Click |
-| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · GLO: its keys play / loops · EDIT: the loop editor (SELECT step · the keys replace it · REC clears it · KNOB 2 its length · 3 the loop's steps · 4 velocity) |
+| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · GLO: its keys play / loops · EDIT: the loop editor (PRESETS step, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · HOME or EDIT closes it) |
 | REC | REC | record by the record mode; ends a take; cancels when armed | undo the last layer |
 | OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
 | OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |
