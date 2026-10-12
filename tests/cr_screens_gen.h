@@ -213,6 +213,7 @@ static const cr_screen_t CR_SCREENS[CR_NSCREENS] = {
         .batt = 3,
         .mid_col = CR_COL_WHITE,
         .right_col = CR_COL_WHITE,
+        .footer = "SELECT: move \267 OCT-: back \267 HOME",
         .kind = CR_K_PICKER,
         .item = {"MIDI In", "MIDI Out", "MIDI Clock", "Play Style", "Extension Addition", "Single Notes", "Secret Chords", "Quantization"},
         .n_items = 19,

@@ -483,11 +483,12 @@ S.append(state(
     "Tap OPT: Orchid's Options menu, one setting per screen. SELECT scrolls (its printed name), KNOB 1 changes the "
     "selected value, OCT+ enters / confirms (blinks), OCT- goes back (lit), HOME leaves — Felucca's dialog "
     "convention. Entries: Play Style, Extension Addition, Bass Behaviour, Secret Chords, Single Notes, "
-    "Velocity, Quantization, MIDI Channels, MIDI Clock, View, Metronome, Palette, LEDs, Version, Update.",
+    "Velocity, Quantization, MIDI Channels, MIDI Clock, View, Metronome, Palette, LEDs, Version, Update. "
+    "The keys are not the menu's: they play as on the view it was opened from (0.19), their LEDs show what plays.",
     buttons={"GLO": LIT, "OCT-": LIT, "OCT+": BLINK},
     button_notes={"GLO": "OPT lit while the menu is open; tap again, HOME or OCT- to leave"},
     encoders={"SELECT": ("SCROLL", ""), "KNOB1": ("VALUE", ""), "KNOB2": "", "KNOB3": "", "KNOB4": ""},
-    screen=scr({'kind': 'picker', 'items': ['Battery', 'View', 'Audio Output', 'MIDI Channels', 'MIDI In', 'MIDI Out', 'MIDI Clock', 'Play Style', 'Extension Addition', 'Single Notes', 'Secret Chords', 'Quantization', 'Metronome', 'Velocity Sense', 'Motion', 'Palette', 'LEDs', 'Version', 'Upgrade firmware'], 'sel': 7, 'label': 'options · KNOB 1 sets', 'col': 'white', 'value': 'Simple'}, batt=True, note="OPT tapped: one setting per screen — its name big, its value under it; SELECT slides to the next setting, KNOB 1 changes the value."),
+    screen=scr({'kind': 'picker', 'items': ['Battery', 'View', 'Audio Output', 'MIDI Channels', 'MIDI In', 'MIDI Out', 'MIDI Clock', 'Play Style', 'Extension Addition', 'Single Notes', 'Secret Chords', 'Quantization', 'Metronome', 'Velocity Sense', 'Motion', 'Palette', 'LEDs', 'Version', 'Upgrade firmware'], 'sel': 7, 'label': 'options · KNOB 1 sets', 'col': 'white', 'value': 'Simple'}, batt=True, foot="SELECT: move · OCT-: back · HOME", note="OPT tapped: one setting per screen — its name big, its value under it; SELECT slides to the next setting, KNOB 1 changes the value; the keys play."),
 ))
 
 # 13 ------------------------------------------------------------------------------ secret chord

@@ -1,0 +1,179 @@
+# ChoralRoot 0.19: the Options menu leaves the keys alone (the owner, 2026-10-12: "let's make it so the keyboard stays
+# unchanged when entering the menu and I can still play notes"). Until then the white roots jumped to the first eleven
+# settings and no key sounded while the menu was open. tools/emu/test_cr.sh reads the dumps by number:
+#   1 the menu open on Secret Chords (entry 2), set to Simple          2 MAJ + D4 held in the menu: D major sounds
+#   3 after more roots tapped: still entry 2                            4 B3 tapped in the menu: LOCK on
+#   5 / 6 / 7 a chord struck in the menu, Output Clean -> Classic -> Clean under it (60 ms after each turn)
+#   8 Reset Settings asked (OCT+ once)   9 after keys played: still asked, nothing reset   10 OCT-: the menu closed
+#   11 Calibrate with keys played: not started     12 .. 34 every entry, by SELECT alone
+#   35 Secret Chords still Simple (no reset happened)   36 a take recorded from inside the menu   37 silent
+wait 500
+btn GLO 80
+wait 300
+knob SELECT +2
+knob KNOB1 +1                 # Secret Chords: Simple (what a reset would undo)
+wait 300
+shot build/emu/test/cr_opt_keys_idle.ppm
+dump                          # 1
+btn A#3 down                  # MAJ + D4, the menu open
+btn D4 down
+wait 600
+expect sound
+expect led D4 on
+expect led F#4 on
+expect led A4 on
+expect led A#3 on
+expect led E4 off             # (the shortcut map lit every white root)
+expect led GLO on             # OPT: the menu is open
+shot build/emu/test/cr_opt_keys_play.ppm
+dump                          # 2
+btn D4 up
+btn A#3 up
+wait 200
+btn E4                        # the keys that were shortcuts 1, 4 and 10
+btn A4
+btn F5
+wait 300
+dump                          # 3
+btn B3                        # LOCK, as on the view
+wait 200
+dump                          # 4
+btn B3
+wait 1500
+knob SELECT +17               # Output
+wait 300
+btn A#3 down
+btn D4 down
+wait 1500
+dump                          # 5
+knob KNOB1 -1                 # Classic, under the chord
+wait 60
+dump                          # 6
+shot build/emu/test/cr_opt_keys_classic.ppm
+wait 1000
+knob KNOB1 +1                 # Clean
+wait 60
+dump                          # 7
+shot build/emu/test/cr_opt_keys_clean.ppm
+wait 1000
+btn D4 up
+btn A#3 up
+wait 1500
+knob SELECT +30               # Reset Settings, the last entry
+wait 300
+btn OCT+                      # asks
+wait 300
+dump                          # 8
+btn D4                        # no key confirms it, none cancels it
+btn E4
+btn G5
+btn A#3
+btn F3
+wait 300
+dump                          # 9
+btn OCT-                      # OCT-: back, nothing reset
+wait 300
+dump                          # 10
+btn GLO
+wait 300
+knob SELECT -1                # Calibrate: OCT+ starts it, no key does
+wait 200
+btn D4
+btn G5
+btn A#3
+wait 300
+dump                          # 11
+knob SELECT -30
+wait 200
+dump                          # 12: entry 0
+
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT +1
+wait 120
+dump
+knob SELECT -20
+wait 200
+dump                          # 35: Secret Chords, still Simple
+btn GLO
+wait 300
+btn REC                       # armed on the view; the take is played with the menu open
+wait 300
+btn GLO
+wait 300
+btn A#3 down
+btn D4 down
+wait 500
+btn D4 up
+btn A#3 up
+wait 500
+btn GLO
+wait 200
+btn REC                       # the take ends, the loop plays
+wait 600
+dump                          # 36
+btn PLAY                      # stop
+wait 2500
+dump                          # 37
+quit

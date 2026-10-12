@@ -3607,13 +3607,9 @@ static void cu_key_press(uint32_t k)
         cu.key_note[k] = 0xFFu;
         return;
     }
-    if (cu.opt_open) {                             /* Options: the white roots index the settings */
-        int32_t wi = cu_white_idx(k);
-        if (wi >= 0 && wi < (int32_t)cu_opt_n())
-            cu.opt_sel = (uint8_t)wi;
-        cu.key_note[k] = 0xFFu;
-        return;
-    }
+    /* (Options: the keys play as on the view it was opened from. Until 2026-10-12 the white roots jumped to the
+     * first eleven settings and no key sounded: the owner, "it isn't really helpful, and also makes it difficult to
+     * compare clean and classic". The menu is SELECT, KNOB 1 and the buttons only) */
     {
         int32_t n = 53 + (int32_t)k + 12 * cu.octave;
         n = n < 0 ? 0 : n > 127 ? 127 : n;
@@ -4259,7 +4255,8 @@ static void cu_scan_step(void)                     /* step entry: every key up (
  * own scan (cr_ui_input, in order, as before) takes everything, whenever
  *   a button is down, was pressed or let go since the scan, or a hold is armed (the keys may mean a layer's, a
  *     combo opens a layer: cu_activity, and a button's event comes before a key's);
- *   the root keys belong to the layer open (cu_layer_keys: they pick, load, save), to the naming page or to Options;
+ *   the root keys belong to the layer open (cu_layer_keys: they pick, load, save) or to the naming page (Options
+ *     never takes a key: they play there);
  *   the panel is being calibrated.
  * Nothing it calls draws, reads the flash or writes what the frame being drawn reads: cr_draw reads its screen
  * model (cu_scr, built before it: cr_build_screen, cu_animate), its cache, the canvas, the glyph buffer and the
@@ -4282,7 +4279,7 @@ static void cr_ui_pump(void)
         return;
     if ((fm1_in.notes != cu.kheld || CU_KEY_EDGES()) &&
         !cc.on && !cc.req && !fm1_in.buttons && !CU_BTN_EDGES() && !cu.bheld && cu.armed == NB &&
-        !cu_layer_keys(cu_layer()) && !(cu.page == PG_SAVE && ce.save_step) && !cu.opt_open) {
+        !cu_layer_keys(cu_layer()) && !(cu.page == PG_SAVE && ce.save_step)) {
         uint32_t ne = fm1_input_note_edges();
         cu_scan_keys(ne, fm1_in.notes);
         cu_scan_step();
@@ -4584,13 +4581,7 @@ static void cr_leds(void)
         for (k = CU_ROOT0; k < CU_NKEY; k++)
             if (cu_white_idx(k) >= 0 || k == 10u || k == 13u)
                 cu_led(own, 14u + k, 1);
-    } else if (cu.opt_open) {
-        for (k = CU_ROOT0; k < CU_NKEY; k++) {
-            int32_t wi = cu_white_idx(k);
-            if (wi >= 0 && wi < (int32_t)cu_opt_n())
-                cu_led(wi == cu.opt_sel ? own : nd, 14u + k, 1);
-        }
-    } else {
+    } else {                                             /* (Options too: the playing state, the OPT LED says it is open) */
         /* A sounding note lights every key that plays of its note name (the owner, 2026-10-11): a chord voiced,
          * transposed or shifted out of the keys' two octaves still shows, on both of them. Until then a note lit the
          * one key of its pitch, so a chord out of range lit nothing. pcs: the note names that sound (bit 0 = C), from
@@ -5607,7 +5598,8 @@ static void cu_options_screen(cr_screen_t *s)
         cu_erase_ask = 0;                          /* (left the entry: the confirmation starts again) */
     if (cu.opt_sel != O_RESET)
         cu_reset_ask = 0;
-    cu_picker(s, O_NAME, cu_opt_n(), cu.opt_sel, CR_COL_WHITE, "options \267 KNOB 1 sets", "");
+    cu_picker(s, O_NAME, cu_opt_n(), cu.opt_sel, CR_COL_WHITE, "options \267 KNOB 1 sets",
+              "SELECT: move \267 OCT-: back \267 HOME");
     opt_text(cu.opt_sel, s->value, sizeof s->value);
     if (cu.opt_sel == O_SAFE)                      /* "Safe mode: flash data skipped \267 OCT- OCT+ HOME 5 s: update" (0.18) */
         cu_cpy(s->label, "OCT- OCT+ HOME 5 s: update", sizeof s->label);
