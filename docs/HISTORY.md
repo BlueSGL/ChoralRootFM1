@@ -1257,3 +1257,19 @@ those, so "the shortcut does something else here" was still true of every layer.
   three kept ones, the picker's and the read-out's screens, the held-layer rule, a bass that is off. The loop
   editor's Follow / 0 is `cr_loop_edit`'s check, unchanged. Docs: MANUAL (Bass, Sounds with the table, the Knobs
   table), PRESETS.md (the before / after table), INTEGRATION, 0.19's notes.
+
+**3. The layers sheet still called the metronome's layer METRO: "Fine to rename."** The button is SEQ since 0.18 and
+its hold layer is the metronome.
+
+- `design/make_layers_mockups.py`: state 7's title `7 · METRO · the time signature over the click level` ->
+  `7 · SEQ · the metronome: the time signature over the click level`; its description says SEQ held, and what a SEQ
+  tap does now (in this layer and with GLO: the click; anywhere else: the loop editor), where it said "METRO tap
+  still toggles the click"; the sheet's name and notes say SEQ. The picker's label, **`metronome`**, stays: it is
+  what the firmware draws (`cu_picker(.., "metronome", ..)`). The top line's `Metro` is gone from the state
+  (`key=""`): the firmware's top line is empty in this layer (the emulator's `cr_metro_row.ppm`), so the mock-up
+  had a text the unit never showed.
+- Regenerated: `design/choralroot-fm1-layers-mockups.json`, `tests/cr_screens_gen.h` (state 61: its name, its slug
+  `61_seq_the_metronome_the_time`, no `.mid`). `tests/gen_cr_screens.py` picks the state by its number, not its
+  name: only a comment changed. `sh tests/run_cr_draw.sh`: 92 screens, 0 lint findings, 28 ellipsised (as before).
+- **Stale, not re-rendered** (it needs the designer's server): `design/choralroot-fm1-layers-screens.png` (state 7's
+  caption and its top line).
