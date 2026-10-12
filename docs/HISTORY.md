@@ -977,3 +977,21 @@ anything on the unit; a real preset saved by 0.14 .. 0.17 (an older record's lay
 test); a backup restored over FM TONE parts; the web manager's sound import of an FM TONE record (it goes through
 the same record and `cu_load_user`). No screen's layout changed; no manual picture was regenerated. Cost against
 main's build: flash +512 B (.text 442432 -> 442944), RAM and POOL unchanged (POOL 314764 B).
+
+## 2026-10-12 (the panel pictures)
+
+**Pictures only, no firmware change.** The mock-up sheets and the site's panel picture were re-rendered for the SEQ
+button (METRO until 0.18) and the major triad's capital M (`FM`, `GM`). The generators' JSONs were already current
+(all eight `design/make_*.py` run again: no diff); they were copied to the designer's `examples/` and exported through
+its dev server with headless Chromium. Replaced: `design/choralroot-fm1-panels.png` (`export=plate`, 1908 x 36228, was
+36147: the notes under the states are longer), `choralroot-fm1-screens.png`, `-loop-screens.png`, `-layers-screens.png`,
+`-preset-screens.png`, `-quad-screens.png` (`export=screens`, the sizes they had) and `-fx-screens.png` (2060 x 2216,
+was 1678: the sheet had been rendered from 12 states, the generator writes 16 since the 0.18 effects). The last four
+show no SEQ and no major triad; they were behind their own generators. `web/site/img/panel-main.png`: the plate export
+of a one-state design (the designer's `examples/site-plate-main-seq.json`, the old `site-plate-main.json` with the
+label changed), cropped at (76, 121) to 1757 x 1072 as before, with the old picture's screen kept (the emulator's
+Dmaj7 that "Fixed screenshots" had put there, x 472..862, y 92..480); its alt text says SEQ. Left alone, as a new
+render differs from them by antialiasing only: `-looper-screens.png`, `-sound-editor-screens.png`,
+`-sound-editor-panels.png`; and the site's `panel-editor-osc.png` / `panel-editor-filter.png`, where the editor's
+layer labels the button MOD. Not changed: `design/make_layers_mockups.py` still names its seventh state METRO (the
+sheet of 2026-10-07's decision), and the manual's pictures (emulator screenshots).
