@@ -79,7 +79,7 @@ nz=$(num "non-silent blocks" "$OUT/cr_dmaj.log")
 has 'expect led D4 on .*: ok' "$OUT/cr_dmaj.log" && has 'expect led F#4 on .*: ok' "$OUT/cr_dmaj.log" &&
     has 'expect led A4 on .*: ok' "$OUT/cr_dmaj.log" && has 'expect led D5 on .*: ok' "$OUT/cr_dmaj.log" && ! has 'expect.*FAILED' "$OUT/cr_dmaj.log" &&
     ok "the D4 F#4 A4 LEDs lit, and D5 F#5 (every root of a sounding note's name)" || bad "the sounding notes' LEDs"
-has 'chord D sounding 1 notes 62 66 69' "$OUT/cr_dmaj.log" && ok "the engine: D, notes 62 66 69 on part 0" || bad "not D major"
+has 'chord DM sounding 1 notes 62 66 69' "$OUT/cr_dmaj.log" && ok "the engine: DM (a major triad reads with its M), notes 62 66 69 on part 0" || bad "not D major"
 has 'part 0: .* voices 3' "$OUT/cr_dmaj.log" && ok "part 0 plays the three notes" || bad "part 0 not playing 3 voices"
 [ -s "$OUT/cr_dmaj.ppm" ] && ok "screenshot: $OUT/cr_dmaj.ppm" || bad "no cr_dmaj.ppm"
 has 'voicing 2 octave' "$OUT/cr_dmaj.log" && has 'notes 69 74 78' "$OUT/cr_dmaj.log" &&
@@ -559,8 +559,8 @@ pks() { seg "$1" | grep 'device): knobrow ' | grep -vc ' band arp '; }   # .. of
 bhp() { seg "$1" | sed -n 's/.* band arp pos \([0-9][0-9]*\) of .*/\1/p' | sort -u | wc -l | tr -d ' '; }
 [ "$(bnd 1)" = "Arpeggiate" ] && [ "$(bnd 2)" = "Arpeggiate" ] && [ "$(bas 2)" = 0 ] &&
     ok "PERF held, SELECT +3: the picker (Arpeggiate); nothing playing 2.5 s later: still the picker" || bad "the picker: $(bnd 1) / $(bnd 2), $(bas 2) arp frames"
-[ "$(bnd 3)" = "Arpeggiate band arp" ] && [ "$(bhp 3)" -ge 3 ] && seg 3 | tail -1 | grep -q "name 'D||'.* label 'Arpeggiate . on'" &&
-    ok "MAJ + D4 held: the band is the arp (D, the note hopping: $(bhp 3) places), the mode's name in the label: $OUT/cr_perf_arp_a.ppm" \
+[ "$(bnd 3)" = "Arpeggiate band arp" ] && [ "$(bhp 3)" -ge 3 ] && seg 3 | tail -1 | grep -q "name 'D|M|'.* label 'Arpeggiate . on'" &&
+    ok "MAJ + D4 held: the band is the arp (DM, the note hopping: $(bhp 3) places), the mode's name in the label: $OUT/cr_perf_arp_a.ppm" \
     || bad "no arp band: $(bnd 3), $(bhp 3) places"
 seg 3 | grep ' band arp ' | sed 1d | grep -qv 'blits [0-9]*/[0-2] ' && bad "a hop in the layer composed more than the band's 2 strips" ||
     ok "a hop composes the band's strips only (2 of 6: $(seg 3 | grep ' band arp ' | grep -c 'blits [0-9]*/2 ') frames; the others nothing): $(seg 3 | grep ' band arp ' | grep 'blits [0-9]*/2 ' | sed -n 's/.*(\([0-9]*\) us device).*/\1/p' | awk '{ s += $1; if ($1 > m) m = $1 } END { printf "%d us avg, %d max (device estimate)", NR ? s / NR : 0, m }')"
@@ -573,7 +573,7 @@ cmp -s "$OUT/cr_perf_arp_a.row" "$OUT/cr_perf_arp_b.row" && ! cmp -s "$OUT/cr_pe
     ok "SELECT +1 under the playing arp: the picker at once with the new name (Arp 2 Octaves), still there 1.65 s later; past 2 s the arp band again: $OUT/cr_perf_arp_pick.ppm" \
     || bad "SELECT: $(bnd 5) ($(bas 5) arp frames) / $(bnd 6)"
 [ "$(bnd 7)" = "Arp 2 Octaves" ] && ok "keys up: the picker" || bad "keys up: $(bnd 7)"
-[ "$(bnd 8)" = "Arp 2 Octaves band arp" ] && [ "$(bhp 8)" -ge 3 ] && seg 8 | tail -1 | grep -q "name 'E||'" &&
+[ "$(bnd 8)" = "Arp 2 Octaves band arp" ] && [ "$(bhp 8)" -ge 3 ] && seg 8 | tail -1 | grep -q "name 'E|M|'" &&
     ok "LATCH + a chord tapped: the arp band, hands off ($(bhp 8) places)" || bad "latched: $(bnd 8)"
 [ "$(bnd 9)" = "Arp 2 Octaves" ] && [ "$(seg 9 | tail -60 | grep -c ' band arp ')" = 0 ] && [ "$(bnd 10)" = "Arp 2 Octaves band arp" ] &&
     ok "the layer opened again over the latched arp: the picker first (its first second: no arp frame), the arp band after 2 s" || bad "reopened: $(bnd 9) / $(bnd 10)"
@@ -657,7 +657,7 @@ sp() { grep -a '^  loop:' "$L" | sed -n "$1p" | sed -n 's/.* split \([0-9]*\)$/\
 [ "$(kp 1)" = "0 0 1 0 0" ] && [ "$(kp 2)" = "1 2 1 0 0" ] && [ "$(kp 3)" = "1 2 1 0 1" ] && has '^key: keys play' "$L" &&
     ok "KEY held: keys pick (the default), D4: the tonic; GLO: keys play, the layer stays, no Options: $OUT/cr_key_pick.ppm" \
     || bad "pick / play: $(kp 1) / $(kp 2) / $(kp 3)"
-grep -a '^  cr: voices' "$L" | sed -n 4p | grep -q 'chord E sounding 1' && [ "$(kp 4)" = "1 2 1 0 1" ] && [ "$(kp 5)" = "1 4 1 0 1" ] &&
+grep -a '^  cr: voices' "$L" | sed -n 4p | grep -q 'chord EM sounding 1' && [ "$(kp 4)" = "1 2 1 0 1" ] && [ "$(kp 5)" = "1 4 1 0 1" ] &&
     ok "play: MAJ + E4 is E major with the tonic still D; KNOB 1 turns the tonic while it sounds: $OUT/cr_key_play.ppm" \
     || bad "playing in the layer: $(kp 4) / $(kp 5)"
 [ "$(sp 5)" = 5 ] && [ "$(sp 6)" = 6 ] && [ "$(kp 6)" = "1 4 1 0 1" ] && [ "$(kp 7)" = "1 4 1 0 0" ] &&
@@ -1022,7 +1022,7 @@ run cr_loop_menu
 LM="$OUT/cr_loop_menu.log"
 a=$(L cr_loop_menu 2); b=$(L cr_loop_menu 3)
 has '^loop: length 3' "$LM" && grep -aq "loopmenu .*title '4 bars'" "$LM" && ok "KNOB 1 +3 in the menu: 4 bars, big in the middle (state 1): $OUT/cr_lm_1.ppm" || bad "the menu's length"
-has 'chord D sounding 1' "$LM" && ok "Keys = Play: MAJ + D4 plays D with the menu open" || bad "Keys = Play: no D"
+has 'chord DM sounding 1' "$LM" && ok "Keys = Play: MAJ + D4 plays DM with the menu open" || bad "Keys = Play: no D"
 has '^loop: keys Loops' "$LM" && has 'expect led GLO on .*: ok' "$LM" && has 'expect led D#4 on .*: ok' "$LM" &&
     has 'expect led D#4 off .*: ok' "$LM" && ! has 'expect.*FAILED' "$LM" &&
     [ "$(grep -ac '^loop: keys ' "$LM")" = 2 ] && grep -aq "loopmenu .*foot '1/2 . keys: loops . GLO: play'" "$LM" &&
@@ -1062,7 +1062,7 @@ grep -aq "loopmenu .* lm 1/2/2/[0-9]* lanes 1/1 slot 1 jump 0 sub '0:0[0-9]' rig
 [ "$(lf "$(m 13)" layers)" = 2 ] && [ "$(lf "$(m 13)" hidden)" = 0 ] && [ "$(lf "$(m 13)" events)" = 5 ] &&
     ok "REC held: undo of the replace layer brings Ab back (2 layers, 5 events, none hidden)" || bad "Replace undo: $(m 13)"
 [ "$(lf "$(m 14)" cap)" = 6 ] && [ "$(lf "$(m 14)" state)" = 1 ] && [ "$(lf "$(m 15)" step)" = 3 ] && [ "$(lf "$(m 15)" events)" = 8 ] &&
-    grep -aq "loopmenu .* lm 2/1/0/2 .*sub 'G#' right 'Rec . Step'" "$LM" &&
+    grep -aq "loopmenu .* lm 2/1/0/2 .*sub 'G#M' right 'Rec . Step'" "$LM" &&
     ok "Step: REC enters it (the loop stops); D, Em, Ab at steps 1-3, OCT+ a rest, OCT- back: the cursor on step 4 ($OUT/cr_lm_11.ppm, $OUT/cr_lm_12.ppm)" \
     || bad "Step entry: $(m 14) / $(m 15)"
 [ "$(lf "$(m 16)" events)" = 3 ] && [ "$(lf "$(m 16)" len)" = 384 ] && [ "$(lf "$(m 16)" layers)" = 1 ] && [ "$(lf "$(m 16)" state)" = 1 ] &&
@@ -1259,8 +1259,8 @@ l3p() { grep -a '^  loop3:' "$EP" | sed -n "$1p" | sed -n "s/.* $2 \(-*[0-9]*\).
 esg() { awk -v n="$1" '/^fm1_in:/ { d++ } d == n - 1 && /^ui: frame/' "$EP"; }   # the frames up to dump N
 subs() { esg "$1" | sed -n "s/.* sub '\([^']*\)' right.*/[\1]/p" | sort -u | tr -d '\n'; }   # the name line's texts seen
 nows() { esg "$1" | sed -n "s/.* now '\([^']*\)' hot.*/[\1]/p" | sort -u | tr -d '\n'; }      # the playing names seen
-[ "$(l4 1)" = "69/30 count 1" ] && [ "$(lf "$(p 1)" events)" = 4 ] && [ "$(nows 1)" = "[]" ] && esg 1 | tail -1 | grep -aq "sub 'A' " &&
-    ok "stopped: D E G A entered; the name line is the selected step's (A); no playing name" || bad "the editor stopped: $(l4 1) / now $(nows 1) / $(subs 1)"
+[ "$(l4 1)" = "69/30 count 1" ] && [ "$(lf "$(p 1)" events)" = 4 ] && [ "$(nows 1)" = "[]" ] && esg 1 | tail -1 | grep -aq "sub 'AM' " &&
+    ok "stopped: D E G A (major triads) entered; the name line is the selected step's (AM: a major triad reads with its M); no playing name" || bad "the editor stopped: $(l4 1) / now $(nows 1) / $(subs 1)"
 [ "$(l4 2)" = "72/20 count 1" ] && [ "$(lf "$(p 2)" events)" = 5 ] && [ "$(lf "$(p 2)" state)" = 2 ] &&
     ok "the loop playing, MIN + C5 held 700 ms into step 15: Cm alone in it (none of the loop's own chords)" || bad "keys into a step while it plays: $(l4 2), $(lf "$(p 2)" events) events"
 [ "$(l4 3)" = "65/30 count 1" ] && [ "$(lf "$(p 3)" events)" = 6 ] &&
@@ -1272,16 +1272,16 @@ esg 5 | tail -1 | grep -aq "sub 'Bm' " && [ "$(l4 5)" = "count 0" ] &&
     ok "MIN + B4 down: the name line reads Bm, the chord being played (not yet in the step)" || bad "the name line with a key down: $(subs 5)"
 [ "$(l4 6)" = "71/20 count 1" ] && [ "$(l4 7)" = "71/20 count 1" ] && [ "$(lf "$(p 7)" events)" = 7 ] && [ "$(subs 7)" = "[Bm]" ] &&
     ok "let go: step 7 is Bm alone (not the F that was still sounding); LATCH off: nothing more written" || bad "LATCH: step 7: '$(l4 6)' / '$(l4 7)', $(lf "$(p 7)" events) events"
-case "$(nows 8)" in *"[]"*) bad "the playing name is empty in a frame while the loop plays: $(nows 8)";; *"[A]"*"[D]"*"[E]"*"[G]"*)
+case "$(nows 8)" in *"[]"*) bad "the playing name is empty in a frame while the loop plays: $(nows 8)";; *"[AM]"*"[DM]"*"[EM]"*"[GM]"*)
     ok "playing, page Step: the playing name at the left of the page's name: $(nows 8), never empty: $OUT/cr_le_now_step.ppm";; *) bad "the playing names: $(nows 8)";; esac
-case "$(nows 9)" in *"[]"*) bad "page Trig: the playing name is empty in a frame: $(nows 9)";; *"[A]"*"[D]"*"[E]"*"[G]"*)
+case "$(nows 9)" in *"[]"*) bad "page Trig: the playing name is empty in a frame: $(nows 9)";; *"[AM]"*"[DM]"*"[EM]"*"[GM]"*)
     esg 9 | tail -1 | grep -aq "item 'Trig' " && ok "playing, page Trig: the same names: $OUT/cr_le_now_trig.ppm" || bad "page Trig: $(esg 9 | tail -1 | cut -c1-120)";; *) bad "the playing names, Trig: $(nows 9)";; esac
 [ "$(px_count "$OUT/cr_le_now_step.ppm" 6 62 84 80 ink)" -ge 20 ] && [ "$(px_count "$OUT/cr_le_now_step.ppm" 84 56 90 92 ink)" = 0 ] &&
     ok "the playing name is drawn at x 6 .. 83 and leaves 6 px clear before the page's name" || bad "the playing name's pixels: $(px_count "$OUT/cr_le_now_step.ppm" 6 62 84 80 ink) / $(px_count "$OUT/cr_le_now_step.ppm" 84 56 90 92 ink)"
 esg 10 | tail -1 | grep -aq " now '' " && [ "$(lf "$(p 10)" state)" = 1 ] && ok "stopped: no playing name" || bad "stopped: the playing name stays: $(nows 10)"
 [ "$(l3p 11 epage) $(l3p 11 cursor) $(l4 11)" = "2 1 62/30 count 1" ] && [ "$(l4 12)" = "63/30 count 1" ] && [ "$(l4 13)" = "60/30 count 1" ] &&
-    has '^loop: cells Ratchet Condition Voicing Transpose' "$EP" && grep -aq "loopmenu .*hot 1\.3" "$EP" && esg 12 | tail -1 | grep -aq "sub 'D#' " && esg 13 | tail -1 | grep -aq "sub 'C' " &&
-    ok "Trig, KNOB 4 = Transpose: step 1's D a semitone up (D#), three down (C): the name line follows, the cell hot: $OUT/cr_le_tr_hot.ppm, $OUT/cr_le_tr.ppm" \
+    has '^loop: cells Ratchet Condition Voicing Transpose' "$EP" && grep -aq "loopmenu .*hot 1\.3" "$EP" && esg 12 | tail -1 | grep -aq "sub 'D#M' " && esg 13 | tail -1 | grep -aq "sub 'CM' " &&
+    ok "Trig, KNOB 4 = Transpose: step 1's DM a semitone up (D#M), three down (CM): the name line follows, the cell hot: $OUT/cr_le_tr_hot.ppm, $OUT/cr_le_tr.ppm" \
     || bad "Transpose: $(l3p 11 epage) $(l3p 11 cursor) '$(l4 11)' '$(l4 12)' '$(l4 13)'"
 differ cr_le_tr_hot cr_le_tr "the Transpose cell: the turn's sum while hot, then the root note"
 [ "$(l4 14)" = "count 0" ] && has '^loopedit: transpose: the step is empty' "$EP" && [ "$(lf "$(p 14)" events)" = 7 ] &&
@@ -1394,14 +1394,55 @@ phm 02 'FM BELL' 'Hold OPT to change engine' FM6 && phm 00 INIT 'Hold OPT to cha
 has '^engine pick: FM TONE' "$PH" && has '^sound: part 0 engine FM TONE pos 1 EP' "$PH" && phm 01 EP 'Hold OPT to change engine' 'FM TONE' &&
     grep -a 'part 0: ' "$PH" | head -1 | grep -q 'part 0: FM TONE /' &&
     ok "the text is true: OPT held + PRESETS, OPT let go: the chord part on FM TONE, its read-out names it: $OUT/cr_pool_hint_engine.ppm" || bad "OPT + PRESETS from the view"
-phm 01 'LUSH PAD' 'BASS + EDIT, hold EDIT: engine' VA &&
-    ok "ALGORITHM: the bass part's read-out: its engine over the number, its own way to another under the stripes: $OUT/cr_pool_hint_bass.ppm" || bad "the bass read-out"
+phm 01 'LUSH PAD' 'Hold OPT to change engine' VA &&
+    ok "ALGORITHM: the bass part's read-out: its engine over the number, 'Hold OPT to change engine' under the stripes as the chord part's: $OUT/cr_pool_hint_bass.ppm" || bad "the bass read-out"
 phm 02 BELL 'FM TONE . 02/16' '' && [ "$(grep -ac "^home read-out: part . over " "$PH")" = 6 ] &&
     ok "the sound editor's picker (no OPT + PRESETS there): the engine and the place as before, nothing over the number: $OUT/cr_pool_hint_picker.ppm" \
     || bad "the picker's read-out: $(grep -ac "^home read-out: part . over " "$PH") home read-outs of 6"
 has '^save: new part 0 FM TONE 17 (slot U01)' "$PH" && phm 17 BELL 'Hold OPT to change engine' 'FM TONE' &&
     ok "a user's preset (slot U01, FM TONE 17): the same two lines: $OUT/cr_pool_hint_user.ppm" || bad "a user preset's read-out"
 differ cr_pool_hint_anim cr_pool_hint_chord "the read-out while its stripes fill differs from the settled one (both carry the two lines)"
+# 0.18: OPT + ALGORITHM is the bass part's engine (as OPT + PRESETS the chord part's), BASS held + ALGORITHM the bass level
+export EMU_UI_LOG=1
+run cr_bass_engine
+unset EMU_UI_LOG
+BE="$OUT/cr_bass_engine.log"
+bp() { grep -a "^  part $1: " "$BE" | sed -n "$2p" | sed -n 's/^  part [01]: \(.*\), voices.* level \([0-9]*\),.*/\1 \2/p'; }   # "VA / LUSH PAD 92"
+bc() { grep -a '^  cr: key' "$BE" | sed -n "$1p" | sed -n 's/.* bass \([0-9]\) (sound \([0-9]*\)).* layer \([0-9]*\) .*/\1 \2 \3/p'; }   # "on sound layer"
+bem() { grep -a '^ui: frame.* meter ' "$BE" | grep -aq "value '$1' .*sub '$2' .*label '$3' over '$4'"; }
+[ "$(bp 1 1)" = "VA / LUSH PAD 92" ] && bem 01 'LUSH PAD' 'Hold OPT to change engine' VA && ! grep -aq 'hold EDIT' "$BE" &&
+    ok "the bass part's home read-out: VA over 01 LUSH PAD, 'Hold OPT to change engine' (the old 'BASS + EDIT, hold EDIT' line is gone): $OUT/cr_bass_engine_popup.ppm" \
+    || bad "the bass read-out's hint: $(bp 1 1)"
+has '^engine pick: bass CZ-1 (64 presets)' "$BE" && has '^sound: part 1 engine CZ-1 pos 1 BRASS 1' "$BE" && [ "$(bp 1 2)" = "CZ-1 / BRASS 1 92" ] &&
+    [ "$(bp 0 2)" = "FM6 / TINE EP 92" ] && bem 01 'BRASS 1' 'Hold OPT to change engine' CZ-1 && [ "$(bc 2)" = "1 2 0" ] &&
+    grep -a '^ui: frame.* picker ' "$BE" | grep -aq "item 'CZ-1' value '64 presets'" &&
+    ok "GLO held + ALGORITHM: the bass engine's picker, on GLO's release the bass part on CZ-1 at its first preset with the pool read-out; the chord part (FM6 TINE EP) and the bass level (92) as they were: $OUT/cr_bass_engine_pick.ppm $OUT/cr_bass_engine_new.ppm" \
+    || bad "GLO + ALGORITHM: part 1 '$(bp 1 2)' part 0 '$(bp 0 2)' cr '$(bc 2)'"
+[ "$(bp 1 3)" = "VA / LUSH PAD 92" ] && has '^sound: part 1 engine VA pos 1 LUSH PAD' "$BE" &&
+    ok "GLO held + ALGORITHM back: VA at the place it had there (01 LUSH PAD)" || bad "GLO + ALGORITHM back: $(bp 1 3)"
+[ "$(bp 0 4)" = "FM TONE / EP 92" ] && [ "$(bp 1 4)" = "VA / LUSH PAD 92" ] && [ "$(grep -ac '^engine pick: FM TONE' "$BE")" = 1 ] &&
+    ok "GLO held + PRESETS still changes the chord part's engine alone (FM TONE EP; the bass part VA LUSH PAD)" || bad "GLO + PRESETS: $(bp 0 4) / $(bp 1 4)"
+[ "$(bp 1 5)" = "VA / LUSH PAD 98" ] && [ "$(bp 0 5)" = "FM TONE / EP 92" ] && [ "$(bc 5)" = "1 2 0" ] && has '^bass: level 98 (BASS + ALGORITHM)$' "$BE" &&
+    grep -a '^ui: frame.* meter ' "$BE" | grep -aq "value '98' .*label 'bass level'" &&
+    ok "BASS held + ALGORITHM +3: the bass level 92 -> 98 with the 'bass level' meter; no layer, the bass still on (no tap), its engine and sound as they were: $OUT/cr_bass_engine_level.ppm" \
+    || bad "BASS + ALGORITHM: $(bp 1 5) cr '$(bc 5)'"
+[ "$(bp 1 6)" = "VA / LUSH PAD 94" ] && [ "$(bc 6)" = "1 2 4" ] && has '^bass: level 94 (BASS + ALGORITHM, layer)$' "$BE" &&
+    ok "BASS held past the hold time (its layer open) + ALGORITHM -2 with BASS still down: the level in the layer (98 -> 94), never the bass sound: $OUT/cr_bass_engine_layer.ppm" \
+    || bad "BASS held past the hold time + ALGORITHM: $(bp 1 6) cr '$(bc 6)'"
+[ "$(bp 1 7)" = "VA / WARM PAD 94" ] && [ "$(bc 7)" = "1 3 4" ] &&
+    ok "the BASS layer open, BASS not held: ALGORITHM is the bass sound's as before (02 WARM PAD)" || bad "ALGORITHM in the BASS layer: $(bp 1 7)"
+[ "$(bp 1 8)" = "VA / WARM PAD 96" ] && [ "$(bc 8)" = "1 3 4" ] && [ "$(grep -ac '^layer: close 4' "$BE")" -ge 1 ] &&
+    ok "BASS held again past the hold time (its layer closes) + ALGORITHM with BASS still down: the layer opens again, the level 96, the sound not moved" \
+    || bad "BASS held again + ALGORITHM: $(bp 1 8) cr '$(bc 8)'"
+[ "$(lf "$(L cr_bass_engine 9)" mode)" = 1 ] && [ "$(bp 1 9)" = "VA / WARM PAD 96" ] && [ "$(grep -ac '^engine pick: bass' "$BE")" = 3 ] &&
+    ok "the PLAY menu: GLO + ALGORITHM is the record mode (ALGORITHM's own there: Advance), no bass engine picker, no level change" \
+    || bad "GLO + ALGORITHM in the PLAY menu: mode $(lf "$(L cr_bass_engine 9)" mode) $(bp 1 9)"
+[ "$(bp 1 10)" = "VA / WARM PAD 98" ] && [ "$(bc 10)" = "1 3 4" ] && has '^bass: behaviour ' "$BE" &&
+    [ "$(grep -a '^  cr: key' "$BE" | sed -n 10p | sed -n 's/.* voicing \(-*[0-9]*\) .*/\1/p')" = 0 ] &&
+    ok "BASS held + ALGORITHM, then KNOB 1 in the same hold: the level (98), then the BASS layer opens and KNOB 1 is its Behaviour (the chord's voicing not turned)" \
+    || bad "BASS + ALGORITHM then KNOB 1: $(bp 1 10) cr '$(bc 10)'"
+[ "$(bc 11 | cut -d' ' -f1)" = 0 ] && [ "$(bp 1 11)" = "CZ-1 / BRASS 1 98" ] &&
+    ok "the bass off: GLO + ALGORITHM changes its engine (CZ-1 BRASS 1), the bass stays off" || bad "GLO + ALGORITHM with the bass off: $(bp 1 11) cr '$(bc 11)'"
 # 0.18: a pattern of 64 steps: entered, refused past the 64th, played, edited
 export EMU_UI_LOG=0
 run cr_loop_step
@@ -1495,7 +1536,7 @@ L="$OUT/cr_lock.log"
 [ "$(grep -c '^expect .*: ok' "$L")" = 12 ] && ok "LOCK lit; latched keys lit, toggled ones dim; LOCK off: dark ($(grep -c '^expect .*: ok' "$L") LED checks)" \
     || bad "cr_lock: $(grep -c '^expect .*: ok' "$L") of 12 LED checks"
 c=$(grep '^chord: [^-]' "$L" | sed 's/^chord: //' | tr '\n' ',' | sed 's/,$//')
-[ "$c" = "Dm,Dm6,Dm6 9,Dm6,D,D (1 note)" ] && ok "MIN latched: Dm; 6: Dm6; 9: Dm6/9; 9 again: Dm6; MAJ: D; LOCK off: one note ($c): $OUT/cr_lock_dm69.ppm" \
+[ "$c" = "Dm,Dm6,Dm6 9,Dm6,DM,D (1 note)" ] && ok "MIN latched: Dm; 6: Dm6; 9: Dm6/9; 9 again: Dm6; MAJ: DM; LOCK off: one note ($c): $OUT/cr_lock_dm69.ppm" \
     || bad "LOCK chords: $c"
 has '^lock: on' "$L" && has '^lock: off' "$L" && has '^lock: latched none' "$L" && ok "the trace: lock on / off, the latch cleared" || bad "lock trace"
 silent_end cr_lock

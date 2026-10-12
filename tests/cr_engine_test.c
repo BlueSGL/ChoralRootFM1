@@ -1773,7 +1773,7 @@ static void s_torture(void)
 static void s_tables(void)
 {
     static const struct { uint8_t q, x; const char *r, *qu, *sup; } N[] = {
-        { CR_Q_MAJ, 0, "C", "", "" }, { CR_Q_MIN, 0, "C", "m", "" }, { CR_Q_DIM, 0, "C", "dim", "" },
+        { CR_Q_MAJ, 0, "C", "M", "" }, { CR_Q_MIN, 0, "C", "m", "" }, { CR_Q_DIM, 0, "C", "dim", "" },
         { CR_Q_SUS, 0, "C", "sus", "" }, { CR_Q_AUG, 0, "C", "+", "" }, { CR_Q_POW, 0, "C", "", "5" },
         { CR_Q_MIN4, 0, "C", "m", "add4" }, { CR_Q_MIN4, CR_EXT_6, "C", "m", "add4 6" }, { CR_Q_POW, CR_EXT_MAJ7, "C", "", "5 M7" }, { CR_Q_MIN4, CR_EXT_6 | CR_EXT_M7 | CR_EXT_9, "C", "m", "add4 JAZZ" }, { CR_Q_AUG, CR_EXT_M7, "C", "+", "7" }, { CR_Q_MAJ, CR_EXT_M7, "C", "", "7" }, { CR_Q_MAJ, CR_EXT_MAJ7, "C", "", "M7" },
         { CR_Q_MAJ, CR_EXT_6, "C", "", "6" }, { CR_Q_MAJ, CR_EXT_9, "C", "", "9" },
@@ -1785,8 +1785,8 @@ static void s_tables(void)
         { CR_Q_SUS, CR_EXT_6 | CR_EXT_M7 | CR_EXT_9, "C", "sus", "JAZZ" }, { CR_Q_MAJ, 15, "C", "", "WTF" },
         { CR_Q_DIM, 15, "C", "dim", "WTF" }, { CR_Q_NONE, CR_EXT_M7, "C", "", "" },
     };
-    static const char *const keymap_major[12] = { "C", "Csus", "Dm", "Dsus", "Em", "F", "Gsus", "G", "Gsus", "Am", "Asus", "Bdim" };
-    static const char *const keymap_minor[12] = { "Cm", "Csus", "Ddim", "D#", "D#sus", "Fm", "Fsus", "Gm", "G#", "A#sus", "A#", "A#sus" };
+    static const char *const keymap_major[12] = { "CM", "Csus", "Dm", "Dsus", "Em", "FM", "Gsus", "GM", "Gsus", "Am", "Asus", "Bdim" };
+    static const char *const keymap_minor[12] = { "Cm", "Csus", "Ddim", "D#M", "D#sus", "Fm", "Fsus", "Gm", "G#M", "A#sus", "A#M", "A#sus" };
     char r[3], q[5], s[CR_SUP_MAX], buf[64];
     uint8_t out[CR_CHORD_MAX];
     int k, n;
@@ -1796,6 +1796,27 @@ static void s_tables(void)
         snprintf(buf, sizeof buf, "chord name: %s%s %s", N[k].r, N[k].qu, N[k].sup);
         ok(!strcmp(r, N[k].r) && !strcmp(q, N[k].qu) && !strcmp(s, N[k].sup), buf);
     }
+    /* the major triad's "M" (2026-10-12): every quality x every extension mask, all 12 roots: only a single note
+     * (CR_Q_NONE) reads as the bare root; "M" at root size only for the plain major triad; "CM" + "7" never
+     * (the major 7th stays the superscript "M7" on an empty quality) */
+    {
+        int q2, x, pc, bare = 0, mwrong = 0, m7wrong = 0, none = 0;
+        for (pc = 0; pc < 12; pc++)
+            for (q2 = 0; q2 < CR_Q_COUNT; q2++)
+                for (x = 0; x < 16; x++) {
+                    cr_chord_name((uint8_t)pc, (uint8_t)q2, (uint8_t)x, r, q, s);
+                    if (q2 == CR_Q_NONE) { if (q[0] || s[0]) none++; continue; }
+                    if (!q[0] && !s[0]) bare++;
+                    if ((!strcmp(q, "M")) != (q2 == CR_Q_MAJ && x == 0)) mwrong++;
+                    if (!strcmp(q, "M") && s[0]) m7wrong++;
+                }
+        ok(!none, "chord name: a single note is the bare root, any root, any extension bits");
+        ok(!bare, "chord name: no chord reads as a bare root (8 qualities x 16 extension masks x 12 roots)");
+        ok(!mwrong, "chord name: 'M' exactly for the plain major triad");
+        ok(!m7wrong, "chord name: 'M' never with a superscript (CM7 is C + M7, not CM + 7)");
+    }
+    cr_chord_name(6, CR_Q_MAJ, 0, r, q, s);
+    ok(!strcmp(r, "F#") && !strcmp(q, "M") && !s[0], "chord name: F#M");
     cr_chord_name(10, CR_Q_MIN, CR_EXT_M7, r, q, s);
     ok(!strcmp(r, "A#") && !strcmp(q, "m") && !strcmp(s, "7"), "chord name: A#m 7 (sharps)");
     cr_note_name(60, buf); ok(!strcmp(buf, "C4"), "note name: 60 = C4");

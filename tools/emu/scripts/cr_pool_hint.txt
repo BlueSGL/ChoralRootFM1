@@ -5,8 +5,8 @@
 #    once: the stripes on their way; then settled).
 # B. PRESETS -2: 00 INIT, the same two lines.
 # C. The text's claim: OPT (GLO) held + PRESETS +1, OPT let go: FM TONE; its read-out says FM TONE over the number.
-# D. ALGORITHM +2: the bass part's (orange): its engine over the number, the bass part's own way under the stripes
-#    (OPT does not reach the bass engine).
+# D. ALGORITHM +2: the bass part's (orange): its engine over the number, the same line under the stripes (since
+#    2026-10-12 OPT + ALGORITHM is the bass part's engine: cr_bass_engine.txt).
 # E. Not on a home page: the sound editor's picker (EDIT, PRESETS +1) keeps "FM TONE . 02/16" and nothing over the
 #    number: OPT + PRESETS does nothing there.
 # F. A user slot: SAVE, OCT+ (Save as new), OCT+: slot 17 of FM TONE; PRESETS -1 +1: its read-out.

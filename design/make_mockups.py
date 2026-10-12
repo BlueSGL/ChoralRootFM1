@@ -460,7 +460,7 @@ S.append(state(
     "progress indicator runs around the edge of the screen in red. The chord view keeps naming what is played.",
     held=["MAJ"], lit=["F4", "A4", "C5"], buttons={"REC": BLINK, "PLAY": LIT},
     encoders=IDLE_ENC,
-    screen=scr(chord("F", cols={"root": C_CHORD}, bubbles=bubbles(["F4", "A4", "C5"])), key="Rec", right="2.3", ring=0.35, ring_rec=True, note="recording: the red ring runs round the edge; 'Rec' blinks with the beat."),
+    screen=scr(chord("F", quality="M", cols={"root": C_CHORD}, bubbles=bubbles(["F4", "A4", "C5"])), key="Rec", right="2.3", ring=0.35, ring_rec=True, note="recording: the red ring runs round the edge; 'Rec' blinks with the beat."),
 ))
 
 # 11 ------------------------------------------------------------------------------ playing + overdub

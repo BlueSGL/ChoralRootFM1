@@ -1,0 +1,111 @@
+# ChoralRoot 0.18: the bass part's engine as the chord part's, and the bass level's new place (the owner, 2026-10-12:
+# "Bass presets, let's make that work similar to the main presets, GLO + Bass knob to change engine. With this change
+# then map, hold the ENV/Bass key and turn bass knob for the bass level shortcut").
+# A. ALGORITHM +2: the bass on, VA 01; its home read-out says "Hold OPT to change engine" (as the chord part's).
+# B. GLO held + ALGORITHM +1: the bass engine's picker (orange); GLO up: the bass part on the next engine, on its first
+#    preset, its read-out; the chord part's engine and sound as they were, the bass level as it was.
+# C. GLO held + ALGORITHM -1, GLO up: back on VA, at the place it had there (01).
+# D. GLO held + PRESETS +1, GLO up: the chord part alone moves to FM TONE; the bass part stays.
+# E. BASS held + ALGORITHM +3 (100 ms into the hold), BASS up: the bass level +6, the "bass level" popup, no layer, the
+#    bass still on (no tap), its engine and sound as they were.
+# F. BASS held 600 ms (past the hold time: its layer opens) + ALGORITHM -2 with BASS still down: the level -4 IN the
+#    layer (the LEVEL cell), never the bass sound; BASS up: the layer stays.
+# G. The layer open, BASS not held: ALGORITHM +1 is the bass sound's, as before (02).
+# H. BASS held again past the hold time (the layer closes) + ALGORITHM +1 with BASS still down: the layer opens again,
+#    the level +2, the sound not moved. HOME.
+# I. GLO held + ALGORITHM in the PLAY menu: the record mode (ALGORITHM's own there), no engine picker, no level. HOME.
+# J. BASS held + ALGORITHM then KNOB 1 in the same hold: the level's popup, then the layer opens for KNOB 1 (Behaviour),
+#    the chord's voicing is not turned. HOME.
+# K. The bass off (BASS tap): GLO + ALGORITHM +1, GLO up: the engine changes, the bass stays off.
+wait 300
+knob ALGORITHM +2
+wait 400
+shot build/emu/test/cr_bass_engine_popup.ppm
+wait 1200
+dump                              # 1: bass VA 01
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+shot build/emu/test/cr_bass_engine_pick.ppm
+btn GLO up
+wait 400
+shot build/emu/test/cr_bass_engine_new.ppm
+wait 1200
+dump                              # 2: the bass part on the next engine
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 3: VA 01 again
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 4: part 0 FM TONE, part 1 VA
+btn ENV down
+wait 100
+knob ALGORITHM +3
+wait 200
+shot build/emu/test/cr_bass_engine_level.ppm
+wait 600
+btn ENV up
+wait 1500
+dump                              # 5: level +6, layer 0, bass on
+btn ENV down
+wait 600
+knob ALGORITHM -2
+wait 300
+shot build/emu/test/cr_bass_engine_layer.ppm
+btn ENV up
+wait 500
+dump                              # 6: level -4, layer 4
+knob ALGORITHM +1
+wait 500
+dump                              # 7: bass sound 02
+btn ENV down
+wait 600
+knob ALGORITHM +1
+wait 300
+btn ENV up
+wait 500
+dump                              # 8: level +2, layer 4, sound 02
+btn HOME
+wait 300
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 500
+dump                              # 9: the PLAY menu, the record mode moved
+btn HOME
+wait 300
+btn ENV down
+wait 100
+knob ALGORITHM +1
+wait 100
+knob KNOB1 +1
+wait 300
+btn ENV up
+wait 500
+dump                              # 10: layer 4, level +2, Behaviour moved
+btn HOME
+wait 300
+btn ENV
+wait 1500
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 11: the bass off, on another engine

@@ -47,7 +47,7 @@ def dial(screen, on=False, pct=PCT, rec=None, dot=True):
 
 
 def gchord(**kw):
-    return chord("G", cols={"root": C_CHORD}, bubbles=bubbles(["G4", "B4", "D5"]), **kw)
+    return chord("G", quality="M", cols={"root": C_CHORD}, bubbles=bubbles(["G4", "B4", "D5"]), **kw)
 
 
 PLAY_BTN = {"PLAY": LIT}
@@ -151,7 +151,7 @@ S.append(state(
     "the whole panel (an overdub armed over a playing loop is the same dot over the playing arc: state 7).",
     held=["MAJ"], lit=["F4", "A4", "C5"], buttons={"REC": LIT}, encoders=IDLE_ENC,
     button_notes={"REC": "lit: armed; blinks once it records"},
-    screen=dial(scr(chord("F", cols={"root": C_CHORD}, bubbles=bubbles(["F4", "A4", "C5"])), key="Rec", right="ready",
+    screen=dial(scr(chord("F", quality="M", cols={"root": C_CHORD}, bubbles=bubbles(["F4", "A4", "C5"])), key="Rec", right="ready",
                     right_col="red", note="armed: the track and the REC dot; no ring."), pct=0, rec="armed"),
 ))
 
@@ -163,7 +163,7 @@ S.append(state(
     "ring, the chord at full size. The count-in before it keeps its own screen with the ring (state 10).",
     held=["MAJ"], lit=["F4", "A4", "C5"], buttons={"REC": BLINK}, encoders=IDLE_ENC,
     button_notes={"REC": "blinks: recording"},
-    screen=dial(scr(chord("F", cols={"root": C_CHORD}, bubbles=bubbles(["F4", "A4", "C5"])), key="Rec", right="2.3",
+    screen=dial(scr(chord("F", quality="M", cols={"root": C_CHORD}, bubbles=bubbles(["F4", "A4", "C5"])), key="Rec", right="2.3",
                     right_col="red", note="recording: the track red, the take's arc, the dot blinking."), pct=0.35, rec="rec"),
 ))
 

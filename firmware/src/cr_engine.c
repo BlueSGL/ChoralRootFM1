@@ -1352,7 +1352,12 @@ static void crx_cat(char *d, const char *s, int max)
 /* Orchid Standard Chord Naming (manual 6.2-6.5): triads at root size (C Cm Csus Cdim C+); the power chord
  * and Min+Sus secret print as superscript ("C" "5", "Cm" "add4", manual's secret-chord table), followed by
  * the extensions: 7ths first then 6 then 9 ("M7 9", "7 6"); a minor 7th prints "7" (the dominant anomaly,
- * also Cm7 / Cdim7) except on sus ("m7"); 3 extensions = JAZZ, 4 = WTF. */
+ * also Cm7 / Cdim7) except on sus ("m7"); 3 extensions = JAZZ, 4 = WTF.
+ * ChoralRoot's one departure (the owner, 2026-10-12: "for Major chords, nothing shows, major chords should use capital M
+ * to differentiate from single notes. So C major would read CM"): a plain major triad, no extension, prints "M" at
+ * root size ("C" "M"), so "C" alone is always a single note (CR_Q_NONE). A major triad WITH an extension keeps
+ * Orchid's name (C7, CM7, C6, C9, C JAZZ: the figure already says "a chord", and "CM7" must stay the major 7th, never
+ * "CM" + "7"); the power chord keeps "C5". Every screen names a chord through this function. */
 void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], char qual[5], char sup[CR_SUP_MAX])
 {
     crx_str(root, CR_NOTE_NAMES[root_pc % 12u], 3);
@@ -1363,6 +1368,7 @@ void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], 
     if (quality == CR_Q_POW) crx_str(sup, "5", CR_SUP_MAX);
     else if (quality == CR_Q_MIN4) crx_str(sup, "add4", CR_SUP_MAX);
     ext &= 15u;
+    if (quality == CR_Q_MAJ && !ext) crx_str(qual, "M", 5);
     if (crx_bits(ext) >= 4) { crx_cat(sup, "WTF", CR_SUP_MAX); return; }
     if (crx_bits(ext) == 3) { crx_cat(sup, "JAZZ", CR_SUP_MAX); return; }
     if (ext & CR_EXT_M7) crx_cat(sup, quality == CR_Q_SUS ? "m7" : "7", CR_SUP_MAX);

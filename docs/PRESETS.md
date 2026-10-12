@@ -35,8 +35,9 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   it currently says 'ENGINE - 20/25', let's change that to say 'Hold OPT to change engine', the numbers and the bar
   already communicate how many presets there are and which one is selected"): the part's engine over the number in
   the role orange (`cr_screen_t.line` / `line_col`, the meter's line over its value; the bass with Bass Behaviour
-  Solo: `VA · solo`), and under the stripes `Hold OPT to change engine` for the chord part, `BASS + EDIT, hold EDIT:
-  engine` for the bass part (OPT + ALGORITHM is the bass level: OPT does not reach the bass engine). **Elsewhere**
+  Solo: `VA · solo`), and under the stripes `Hold OPT to change engine` for both parts (since 2026-10-12 OPT + ALGORITHM is the bass
+  part's engine, as OPT + PRESETS the chord part's; until then the bass part's line read `BASS + EDIT, hold EDIT:
+  engine` and OPT + ALGORITHM was the bass level, which is BASS held + ALGORITHM now). **Elsewhere**
   (the engine picker's preview, a program change or SysEx select with a layer open): nothing over the number and
   `FM6 · 05/25` under the stripes, as everywhere until then (the place and the number of presets: 00 = INIT, which
   is not counted as a preset, 01.. the factory presets, then the user's); an overwritten factory preset
@@ -55,8 +56,10 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   the current preset is a user one or an edited one, Save as new otherwise. OCT+ takes it, OCT- cancels. **SAVE held
   1 s in the dialog**: "reset to factory?" on an overwritten factory preset, "delete?" on a user-added one. SAVE held
   outside the dialog stays the loops' save / load / delete.
-- The bass: the same model on ALGORITHM (the bass part's engine's pool; OPT + ALGORITHM stays the bass level; the
-  bass engine changes through BASS held + EDIT's picker). ALGORITHM position 0 = OFF as today.
+- The bass: the same model on ALGORITHM (the bass part's engine's pool). ALGORITHM position 0 = OFF as today. Its
+  engine: OPT held + ALGORITHM on the home pages since 2026-10-12 (the chord part's picker in orange, the same
+  engines, wrapping, the place last played in that engine, `cs.pool_pos[1]`; a bass that is off stays off), and as
+  before BASS held + EDIT's picker. The bass level, OPT + ALGORITHM until then, is BASS held + ALGORITHM.
 - The idea of "templates" is gone: what the editor's picker steps with KNOB 1 is the same pool PRESETS turns.
 
 ## Storage (no flash layout change)

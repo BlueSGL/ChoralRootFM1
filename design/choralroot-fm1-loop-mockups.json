@@ -15,7 +15,7 @@
    "HOME": "HOME",
    "SAVE": "SAVE",
    "ARP": "PERF",
-   "SEQ": "METRO",
+   "SEQ": "SEQ",
    "PLAY": "LOOP",
    "REC": "REC",
    "OCT-": "OCT-",
@@ -148,7 +148,7 @@
     "panel": {
      "kind": "chord",
      "root": "G",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
@@ -293,7 +293,7 @@
     "panel": {
      "kind": "chord",
      "root": "G",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
@@ -443,7 +443,7 @@
     "panel": {
      "kind": "chord",
      "root": "G",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
@@ -1018,7 +1018,7 @@
     "panel": {
      "kind": "chord",
      "root": "G",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
@@ -1407,7 +1407,7 @@
     "panel": {
      "kind": "chord",
      "root": "F",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
@@ -1560,7 +1560,7 @@
     "panel": {
      "kind": "chord",
      "root": "F",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
@@ -1713,7 +1713,7 @@
     "panel": {
      "kind": "chord",
      "root": "G",
-     "quality": "",
+     "quality": "M",
      "sup": "",
      "notes": "",
      "line": "",
