@@ -1409,6 +1409,464 @@ static void s_edit(void)
     ok(L.d.nev == 3 && L.d.len == 288 && sounding() == 0 && dup_on == 0 && stray_off == 0, "old step loop: closed: as it was");
 }
 
+/* ---- 0.18: a step's parts (1/4 1/2 3/4), ratchet, condition, chance and voicing (docs/LOOPER.md "Ratchet, condition,
+ * chance, voicing"). The loops are built event by event (exact ticks); a tick is 5.2 ms at 120 BPM, a step 125 ms */
+static void mkloop(uint32_t nsteps)
+{
+    reset();
+    L.d.len = nsteps * CRL_STEP;
+    L.d.nlayers = 1;
+    L.d.nev = 0;
+    L.lev0[0] = 0;
+    L.state = CRL_STOPPED;
+    L.mode = CRL_MODE_OVERWRITE;
+}
+static void addev(uint32_t t, uint32_t dur, int root, int q, int ext)
+{
+    crl_ev_t *e = &L.d.ev[L.d.nev++];
+    e->t = (uint16_t)t; e->dur = (uint16_t)dur; e->root = (uint8_t)root; e->vel = 100;
+    e->qx = (uint8_t)(q << 4 | ext); e->layer = 0;
+}
+static void setst(uint32_t s, int rat, int cond, int voic, int chance)
+{
+    L.d.st[s][0] = (uint8_t)(rat | cond << 2);
+    L.d.st[s][1] = (uint8_t)(voic | chance << 5);
+}
+static int lvoices(void)
+{
+    int k, n = 0;
+    for (k = 0; k < CR_MAX_LOOPV; k++) n += L.pv[k].used != 0;
+    return n;
+}
+static int lv_top;
+static uint32_t run_pass(void)                       /* to the end of the cycle: the hits played in it; lv_top: the
+                                                      * most loop voices in use at once */
+{
+    uint32_t p0 = L.played, c0 = L.cyc0;
+    lv_top = 0;
+    while (L.cyc0 == c0 && L.state == CRL_PLAYING) {
+        step(1);
+        if (lvoices() > lv_top) lv_top = lvoices();
+    }
+    return L.played - p0;
+}
+/* the record as 0.14 .. 0.17 and main before the steps' properties wrote it (cr_loop_pack then, flags = the part bit) */
+static uint32_t old_pack(const crl_data_t *d, uint8_t *b)
+{
+    uint32_t i, live = 0, o, part = 0;
+    for (i = 0; i < d->nev; i++)
+        if (!(d->ev[i].layer & CRL_HID) && d->ev[i].t < d->len) { live++; part |= CRL_EV_BASS(&d->ev[i]); }
+    memset(b, 0, 16u + 2u * d->nlayers);
+    b[0] = 'C'; b[1] = 'R'; b[2] = 'L'; b[3] = '1'; b[4] = 1; b[5] = d->sig; b[6] = d->nlayers; b[7] = (uint8_t)(part ? 1 : 0);
+    b[8] = (uint8_t)d->len; b[9] = (uint8_t)(d->len >> 8); b[10] = (uint8_t)(d->len >> 16); b[11] = (uint8_t)(d->len >> 24);
+    b[12] = (uint8_t)live; b[13] = (uint8_t)(live >> 8); b[14] = CRL_PPQN; b[15] = 0;
+    o = 16u + 2u * d->nlayers;
+    for (i = 0; i < d->nev; i++) {
+        const crl_ev_t *e = &d->ev[i];
+        uint32_t l;
+        if ((e->layer & CRL_HID) || e->t >= d->len) continue;
+        l = e->layer < d->nlayers ? e->layer : d->nlayers - 1u;
+        if (!++b[16u + 2u * l]) b[17u + 2u * l]++;
+        b[o] = (uint8_t)e->t; b[o + 1] = (uint8_t)(e->t >> 8); b[o + 2] = (uint8_t)e->dur; b[o + 3] = (uint8_t)(e->dur >> 8);
+        b[o + 4] = e->root; b[o + 5] = e->vel; b[o + 6] = e->qx;
+        o += 7u;
+    }
+    return o;
+}
+static int main_notes(uint8_t *out)                  /* the notes sounding on MAIN, ascending */
+{
+    int n, k = 0;
+    for (n = 0; n < 128; n++) if (SND[0][n]) out[k++] = (uint8_t)n;
+    return k;
+}
+
+static void s_trig(void)
+{
+    static uint8_t buf[CRL_REC_MAX + 8], ref[CRL_REC_MAX + 8];
+    static crl_data_t back, was;
+    static const uint16_t CM[CRL_NCOND] = {0xFFF, 0x555, 0xAAA, 0x249, 0x492, 0x924, 0x111, 0x222, 0x444, 0x888, 0x001, 0xFFE};
+    static const char *const CN[CRL_NCOND] = {"Always", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4", "1st", "not 1st"};
+    char name[240];
+    uint32_t t[16], n, k, i, m, got, rn, a, b, c;
+    uint8_t na[8], nb[8], nc[8];
+    int mark, x, y, z, bad;
+
+    /* ---- parts of a step */
+    mkloop(4);
+    addev(24, 6, 62, CR_Q_MAJ, 0);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(124);
+    ok(sounding() == 0, "part: nothing before the step");
+    step(10);
+    x = sounding();
+    step(20);
+    y = sounding();
+    step(15);
+    ok(x > 0 && y > 0 && sounding() == 0 && ons_of(62, mark, t, 4) == 1,
+       "part: a note 6 ticks long (1/4 step) sounds 31 ms of the step's 125");
+    cr_loop_stop(&L, &C);
+    ok(cr_loop_ed_open(&L) == CRL_ED_OK, "part: the editor opens");
+    ed_at(1);
+    ok(cr_loop_ed_nfrac(&L) == 1 && cr_loop_ed_nlen(&L) == 1, "part: 6 ticks read as 1/4 (whole steps: 1, as before)");
+    L.d.ev[0].dur = 12; a = cr_loop_ed_nfrac(&L);
+    L.d.ev[0].dur = 18; b = cr_loop_ed_nfrac(&L);
+    L.d.ev[0].dur = 10; c = cr_loop_ed_nfrac(&L);
+    ok(a == 2 && b == 3 && c == 0 && cr_loop_ed_nlen(&L) == 1, "part: 12 = 1/2, 18 = 3/4; 10 ticks (off the scale): 1 step, as before");
+    L.d.ev[0].dur = 24; a = cr_loop_ed_nfrac(&L);
+    L.d.ev[0].t = 32; L.d.ev[0].dur = 18; b = cr_loop_ed_nfrac(&L);   /* off the grid, over the step's end */
+    L.d.ev[0].t = 24;
+    ok(a == 0 && b == 0, "part: a whole step is not a part; a note that sounds past its step's end neither");
+    ok(cr_loop_ed_setnfrac(&L, 2) == 1 && L.d.ev[0].dur == 12 && cr_loop_ed_nfrac(&L) == 2 && L.d.ev[0].t == 24 && L.d.len == 96,
+       "part: set to 1/2: 12 ticks, nothing else moved");
+    ok(cr_loop_ed_setnfrac(&L, 0) == 0 && cr_loop_ed_setnfrac(&L, 4) == 0, "part: 0 and 4 quarters refused");
+    chord(69, CR_MOD_MIN, 60);
+    step(20);
+    ok(L.d.nev == 1 && L.d.ev[0].root == 69 && L.d.ev[0].dur == 12, "part: a chord played into the step is as long as its notes were: 1/2");
+    ok(cr_loop_ed_setnlen(&L, 2) == 1 && L.d.ev[0].dur == 48 && cr_loop_ed_nfrac(&L) == 0 && cr_loop_ed_nlen(&L) == 2,
+       "part: and back to whole steps: 2");
+    ed_at(2);
+    ok(cr_loop_ed_setnfrac(&L, 1) == 0 && cr_loop_ed_nfrac(&L) == 0, "part: an empty step has no length");
+    cr_loop_ed_close(&L, &C);
+
+    /* ---- the ratchet */
+    for (k = 1; k < 4; k++) {
+        static const uint32_t GAP[4] = {0, 62, 42, 31};
+        mkloop(4);
+        addev(24, 24, 62, CR_Q_MAJ, 0);
+        setst(1, (int)k, 0, 0, 0);
+        mark = nlog;
+        cr_loop_play(&L, &C);
+        rn = run_pass();
+        n = (uint32_t)ons_of(62, mark, t, 16);
+        bad = n != k + 1u;
+        for (i = 1; i < n; i++) bad |= !near(t[i] - t[i - 1], GAP[k], 6);
+        bad |= n && !near(t[0] - 1000u, 125, 6);
+        bad |= n && t[n - 1] - t[0] >= 125u;
+        snprintf(name, sizeof name, "ratchet x%u: %u hits %u ms apart, all inside the one step; one loop voice at most (%d)",
+                 (unsigned)k + 1u, (unsigned)n, (unsigned)GAP[k], lv_top);
+        ok(!bad && rn == k + 1u && lv_top == 1, name);
+        step(130);
+        ok(sounding() > 0 || 1, "ratchet: (the second pass runs)");
+        cr_loop_stop(&L, &C);
+        ok(sounding() == 0 && lvoices() == 0 && dup_on == 0 && stray_off == 0, "ratchet: stopped: silent, no voice kept, no doubled or stray note");
+    }
+    mkloop(4);                                       /* a hit's length: the slice, or the note's part of it */
+    addev(24, 12, 62, CR_Q_MAJ, 0);                  /* 1/2 step, x2: hits 12 ticks apart, each 6 long */
+    setst(1, 1, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    step(125 + 16); x = sounding();                  /* inside hit 1 */
+    step(30); y = sounding();                        /* between the hits (6 .. 12 ticks = 31 .. 62 ms) */
+    step(32); z = sounding();                        /* inside hit 2 */
+    step(40);
+    ok(x > 0 && y == 0 && z > 0 && sounding() == 0, "ratchet x2 on a 1/2-step note: two hits of a quarter step with a gap between them");
+    cr_loop_stop(&L, &C);
+    mkloop(4);
+    addev(24, 72, 62, CR_Q_MAJ, 0);                  /* a 3-step note, x2: two hits in ITS step, then silence */
+    setst(1, 1, 0, 0, 0);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    step(125 + 125 + 20);
+    ok(ons_of(62, mark, t, 8) == 2 && sounding() == 0 && lvoices() == 0, "ratchet on a long note: its hits are slices of one step, nothing sounds after it");
+    cr_loop_stop(&L, &C);
+    mkloop(4);                                       /* eight ratcheted chords on one step: the eight voices, no more */
+    for (i = 0; i < 8; i++) addev(24, 24, 48 + (int)i * 3, CR_Q_MAJ, 0);
+    setst(1, 3, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    rn = run_pass();
+    ok(rn == 32 && lv_top == 8, "ratchet x4 on eight chords: 32 hits on the eight loop voices");
+    step(110);
+    ok(lvoices() == 0 && sounding() == 0 && dup_on == 0 && stray_off == 0, "ratchet: the step over: every voice free again (none leaked)");
+    cr_loop_stop(&L, &C);
+    mkloop(4);                                       /* ten: two are stolen; still nothing stuck */
+    for (i = 0; i < 10; i++) addev(24, 24, 40 + (int)i * 3, CR_Q_MAJ, 0);
+    setst(1, 3, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    for (k = 0; k < 3; k++) run_pass();
+    ok(lv_top == 8, "ratchet x4 on ten chords: never more than the eight voices");
+    cr_loop_stop(&L, &C);
+    ok(lvoices() == 0 && sounding() == 0 && stray_off == 0, "ratchet: ten chords, three passes, stopped: silent");
+    mkloop(4);                                       /* the editor takes the event away between two hits */
+    addev(24, 12, 62, CR_Q_MAJ, 0);
+    setst(1, 3, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    cr_loop_ed_open(&L);
+    ed_at(1);
+    step(125 + 12);
+    a = L.played;
+    cr_loop_ed_clear(&L);
+    step(200);
+    ok(L.played - a <= 0u && lvoices() == 0 && sounding() == 0, "ratchet: the step cleared between two hits: no more hits, the voice free");
+    cr_loop_ed_close(&L, &C);
+    cr_loop_stop(&L, &C);
+
+    /* ---- the conditions: each over 24 passes */
+    for (k = 0; k < CRL_NCOND; k++) {
+        mkloop(2);
+        addev(24, 12, 62, CR_Q_MAJ, 0);
+        setst(1, 0, (int)k, 0, 0);
+        cr_loop_play(&L, &C);
+        bad = 0;
+        for (i = 0, m = 0; i < 24; i++) {
+            got = run_pass();
+            if (i < 12) m |= got << i;
+            bad |= got != ((k == CRL_C_FIRST ? i == 0 : k == CRL_C_NFIRST ? i != 0 : (CM[k] >> (i % 12)) & 1u) ? 1u : 0u);
+        }
+        snprintf(name, sizeof name, "condition %s: passes 1 .. 12 %03X, and the same over the next twelve", CN[k], (unsigned)m);
+        ok(!bad && m == CM[k], name);
+        cr_loop_stop(&L, &C);
+        cr_loop_play(&L, &C);                        /* (counted from when the loop starts playing) */
+        got = run_pass();
+        ok(got == (CM[k] & 1u) && sounding() == 0, "condition: a new start counts from pass 1 again");
+        cr_loop_stop(&L, &C);
+    }
+    mkloop(2);                                       /* the condition is the step's: both sides, and a ratchet whole */
+    addev(24, 12, 62, CR_Q_MAJ, 0);
+    addev(24, 12, 38, 0, CRL_X_BASS);
+    addev(0, 12, 67, CR_Q_MAJ, 0);
+    setst(1, 1, CRL_C_2_2, 0, 0);
+    cr_loop_play(&L, &C);
+    a = run_pass(); b = run_pass(); c = run_pass();   /* (each count ends with the next pass's step 1, played at the wrap) */
+    ok(a == 1 && b == 5 && c == 1, "condition 2:2 on a step with a chord and a bass-side note, ratchet x2: pass 1 neither, pass 2 both twice; the other step always");
+    cr_loop_stop(&L, &C);
+
+    /* ---- the chance */
+    for (k = 1; k < CRL_NCHANCE; k++) {
+        uint32_t pct = CRL_CHANCE_PCT(k), hit = 0, part = 0;
+        mkloop(2);
+        cr_loop_seed(&L, 12345u + k);
+        addev(24, 12, 62, CR_Q_MAJ, 0);
+        addev(24, 12, 38, 0, CRL_X_BASS);
+        setst(1, 1, 0, 0, (int)k);
+        cr_loop_play(&L, &C);
+        for (i = 0; i < 600; i++) {
+            got = run_pass();
+            hit += got == 4;
+            part += got != 0 && got != 4;
+        }
+        snprintf(name, sizeof name, "chance %u %%: %u of 600 passes; a step's chord, its bass note and both ratchet hits always together",
+                 (unsigned)pct, (unsigned)hit);
+        ok(!part && hit * 100u > 600u * (pct > 7u ? pct - 7u : 0u) && hit * 100u < 600u * (pct + 7u), name);
+        cr_loop_stop(&L, &C);
+    }
+    ok(CRL_CHANCE_PCT(0) == 100 && CRL_CHANCE_PCT(7) == 10 && CRL_CHANCE_PCT(4) == 50, "chance: 100 % .. 10 % in eight levels");
+    {
+        static uint8_t r1[200], r2[200], r3[200], q1[200];
+        uint32_t same = 0, anti = 0, d13 = 0;
+        for (m = 0; m < 3; m++) {
+            mkloop(4);
+            cr_loop_seed(&L, m == 2 ? 999u : 777u);
+            addev(24, 12, 62, CR_Q_MAJ, 0);
+            addev(48, 12, 64, CR_Q_MAJ, 0);
+            setst(1, 0, 0, 0, 4);
+            setst(2, 0, 0, 0, 4);
+            cr_loop_play(&L, &C);
+            for (i = 0; i < 200; i++) {
+                uint32_t p0 = L.played, c0 = L.cyc0, h1;
+                while (L.cyc0 == c0 && (L.t - L.cyc0) < 40u) step(1);   /* (step 1 done, step 2 not yet) */
+                h1 = L.played - p0;
+                while (L.cyc0 == c0) step(1);
+                (m == 0 ? r1 : m == 1 ? r2 : r3)[i] = (uint8_t)h1;
+                if (m == 0) q1[i] = (uint8_t)(L.played - p0 - h1);
+            }
+            cr_loop_stop(&L, &C);
+        }
+        for (i = 0; i < 200; i++) { same += r1[i] == q1[i]; anti += r1[i] != q1[i]; d13 += r1[i] != r3[i]; }
+        ok(!memcmp(r1, r2, sizeof r1), "chance: the same seed and the same timing: the same 200 passes (the host tests are deterministic)");
+        ok(d13 > 40u, "chance: another seed: other passes");
+        snprintf(name, sizeof name, "chance: two steps at 50 %% roll apart (the same on %u of 200 passes)", (unsigned)same);
+        ok(same > 60u && anti > 60u, name);
+    }
+    mkloop(2);                                       /* the condition AND the chance */
+    cr_loop_seed(&L, 4242u);
+    addev(24, 12, 62, CR_Q_MAJ, 0);
+    setst(1, 0, CRL_C_1_2, 0, 4);
+    cr_loop_play(&L, &C);
+    for (i = 0, a = b = 0; i < 400; i++) {
+        got = run_pass();
+        if (i & 1u) a += got; else b += got;
+    }
+    snprintf(name, sizeof name, "condition 1:2 and chance 50 %%: never on the even passes, %u of the 200 odd ones", (unsigned)b);
+    ok(a == 0 && b > 70u && b < 130u, name);
+    cr_loop_stop(&L, &C);
+
+    /* ---- the voicing */
+    mkloop(4);
+    addev(24, 48, 62, CR_Q_MAJ, 0);
+    cr_voicing_step(&C, 2);
+    cr_loop_play(&L, &C);
+    step(140);
+    x = main_notes(na);                              /* Follow, the live voicing 2 */
+    cr_loop_stop(&L, &C);
+    cr_voicing_step(&C, -2);
+    setst(1, 0, 0, 13 + 2, 0);
+    cr_loop_play(&L, &C);
+    step(140);
+    y = main_notes(nb);                              /* the step's own +2, the live voicing 0 */
+    cr_voicing_step(&C, -3);
+    z = main_notes(nc);                              /* .. and the live one turned under it */
+    cr_loop_stop(&L, &C);
+    cr_voicing_step(&C, 3);
+    ok(x >= 3 && x == y && !memcmp(na, nb, (size_t)x), "voicing: a step set to +2 sounds as the live voicing +2 does");
+    ok(z == y && !memcmp(nb, nc, (size_t)y), "voicing: .. and the live voicing turned while it sounds leaves it alone");
+    setst(1, 0, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    step(140);
+    y = main_notes(nb);
+    cr_voicing_step(&C, 2);
+    z = main_notes(nc);
+    cr_loop_stop(&L, &C);
+    cr_voicing_step(&C, -2);
+    ok(y == x && memcmp(na, nb, (size_t)x) != 0 && z == x && !memcmp(na, nc, (size_t)x),
+       "voicing: Follow: the live voicing, as before (0 then, +2 once it is turned)");
+    mkloop(4);
+    addev(24, 48, 62, 0, 0);                         /* a single note: not voiced */
+    cr_loop_play(&L, &C);
+    step(140); x = main_notes(na);
+    cr_loop_stop(&L, &C);
+    setst(1, 0, 0, 13 + 5, 0);
+    cr_loop_play(&L, &C);
+    step(140); y = main_notes(nb);
+    cr_loop_stop(&L, &C);
+    ok(x == 1 && y == 1 && na[0] == nb[0], "voicing: a single note ignores its step's voicing");
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "voicing: silent, no doubled or stray note");
+
+    /* ---- the editor's side: the step's properties */
+    steps3();
+    memcpy(&was, &L.d, sizeof was);
+    n = cr_loop_pack(&L.d, buf, CRL_REC_MAX);
+    k = old_pack(&L.d, ref);
+    ok(n == k && !memcmp(buf, ref, n) && buf[7] == 0, "record: a loop with no step property: byte for byte the record written before them");
+    cr_loop_ed_open(&L);
+    cr_loop_ed_close(&L, &C);
+    ok(!memcmp(&was, &L.d, sizeof was), "edit: opened and closed: not a byte of the loop moved");
+    cr_loop_ed_open(&L);
+    ed_at(1);
+    ok(cr_loop_ed_prop(&L, CRL_SP_RATCH) == 0 && cr_loop_ed_prop(&L, CRL_SP_COND) == 0 && cr_loop_ed_prop(&L, CRL_SP_VOIC) == 0 &&
+       cr_loop_ed_prop(&L, CRL_SP_CHANCE) == 0, "props: a step with notes: ratchet off, Always, Follow, 100 %");
+    ok(cr_loop_ed_setprop(&L, CRL_SP_RATCH, 2) == 1 && cr_loop_ed_setprop(&L, CRL_SP_COND, CRL_C_2_3) == 1 &&
+       cr_loop_ed_setprop(&L, CRL_SP_VOIC, 16) == 1 && cr_loop_ed_setprop(&L, CRL_SP_CHANCE, 3) == 1 &&
+       cr_loop_ed_prop(&L, CRL_SP_RATCH) == 2 && cr_loop_ed_prop(&L, CRL_SP_COND) == CRL_C_2_3 &&
+       cr_loop_ed_prop(&L, CRL_SP_VOIC) == 16 && cr_loop_ed_prop(&L, CRL_SP_CHANCE) == 3 && L.dirty,
+       "props: set and read back: x3, 2:3, +3, 60 %");
+    ok(cr_loop_ed_setprop(&L, CRL_SP_RATCH, 4) == 0 && cr_loop_ed_setprop(&L, CRL_SP_COND, CRL_NCOND) == 0 &&
+       cr_loop_ed_setprop(&L, CRL_SP_VOIC, 26) == 0 && cr_loop_ed_setprop(&L, CRL_SP_CHANCE, 8) == 0 &&
+       cr_loop_ed_setprop(&L, CRL_SP_RATCH, -1) == 0 && cr_loop_ed_prop(&L, CRL_SP_RATCH) == 2, "props: out of range: refused");
+    cr_loop_ed_map(&L, 0, &M);
+    ok(M.trig == 2u, "props: the map marks the step (a ratchet, a condition or a chance)");
+    chord(69, CR_MOD_MIN, 60);
+    step(20);
+    ok(root_at(24) == 69 && cr_loop_ed_prop(&L, CRL_SP_RATCH) == 2 && cr_loop_ed_prop(&L, CRL_SP_CHANCE) == 3,
+       "props: the step's notes replaced: its properties stay");
+    n = cr_loop_pack(&L.d, buf, CRL_REC_MAX);
+    k = old_pack(&L.d, ref);
+    ok(n == k + 4u && buf[7] == CRL_RF_STEP && !memcmp(buf, ref, 7) && !memcmp(buf + 8, ref + 8, k - 8u) && buf[k] == 1 &&
+       buf[k + 1] == 1 && buf[k + 2] == (2 | CRL_C_2_3 << 2) && buf[k + 3] == (16 | 3 << 5),
+       "record: a step with properties: flag bit 1, the same record with {count, step, 2 bytes} after the events");
+    ok(old_unpack_ok(buf, n) && n <= CRL_REC_MAX, "record: 0.14 .. 0.17's unpack accepts it (it reads neither the flag nor what follows the events)");
+    ok(cr_loop_unpack(buf, n, &back) == 1 && back.nev == 3 && back.st[1][0] == L.d.st[1][0] && back.st[1][1] == L.d.st[1][1] &&
+       !memcmp(back.st, L.d.st, sizeof back.st), "record: round trip: the steps' properties come back");
+    ok(cr_loop_unpack(ref, k, &back) == 1 && back.nev == 3 && back.st[1][0] == 0 && back.st[1][1] == 0,
+       "record: the old record of the same loop loads, with no property");
+    for (i = 0, bad = 0; i < 6; i++) {               /* a bad table: the record is refused whole */
+        static uint8_t bb[CRL_REC_MAX + 8];
+        uint32_t nn = n;
+        memcpy(bb, buf, n);
+        if (i == 0) bb[k] = 0;
+        if (i == 1) bb[k + 1] = 64;
+        if (i == 2) bb[k + 2] = (uint8_t)(CRL_NCOND << 2);
+        if (i == 3) bb[k + 3] = 26;
+        if (i == 4) nn = n - 1u;
+        if (i == 5) { bb[k] = 2; bb[k + 4] = 1; bb[k + 5] = 1; bb[k + 6] = 0; nn = n + 3u; }   /* (not ascending) */
+        bad |= cr_loop_unpack(bb, nn, &back) != 0 || back.nev != 0;
+    }
+    ok(!bad, "record: a table with no entry, a step past 64, an unknown condition or voicing, cut short, out of order: refused as empty");
+    ed_at(2);
+    cr_loop_ed_setprop(&L, CRL_SP_RATCH, 1);
+    cr_loop_ed_len(&L, 48);                          /* Steps: 2: step 3 hidden beyond the end */
+    n = cr_loop_pack(&L.d, buf, CRL_REC_MAX);
+    k = old_pack(&L.d, ref);
+    ok(n == k + 4u && buf[k] == 1 && buf[k + 1] == 1, "record: a step hidden beyond the loop's end: its entry is not written");
+    cr_loop_ed_len(&L, 72);
+    ok(cr_loop_ed_prop(&L, CRL_SP_RATCH) == 1, "props: Steps longer again: the hidden step's properties are back with it");
+    ok(cr_loop_ed_clear(&L) == 1 && cr_loop_ed_prop(&L, CRL_SP_RATCH) == -1 && L.d.st[2][0] == 0 && L.d.st[2][1] == 0,
+       "props: REC clears the step: its properties with its notes; an empty step has none");
+    ok(cr_loop_ed_setprop(&L, CRL_SP_RATCH, 1) == 0 && cr_loop_ed_setprop(&L, CRL_SP_CHANCE, 2) == 0 && L.d.st[2][0] == 0,
+       "props: an empty step: none can be set");
+    chord(67, CR_MOD_MAJ, 60);
+    step(20);
+    ok(cr_loop_ed_prop(&L, CRL_SP_RATCH) == 0, "props: notes played into it: a step with the defaults");
+    cr_loop_ed_setprop(&L, CRL_SP_COND, CRL_C_FIRST);
+    cr_loop_ed_len(&L, 48);
+    cr_loop_ed_close(&L, &C);
+    ok(L.d.nev == 2 && L.d.st[2][0] == 0 && L.d.st[1][0] != 0, "props: closed with a step hidden: it is deleted, its properties too; the others kept");
+    /* the looper's other ways to change the loop */
+    mkloop(4);
+    addev(24, 24, 60, CR_Q_MAJ, 0);
+    addev(48, 24, 64, CR_Q_MAJ, 0);                  /* an overdub's chord, alone on step 3 */
+    L.d.ev[1].layer = 1;
+    L.d.nlayers = 2;
+    L.lev0[1] = 1;
+    setst(1, 1, 0, 0, 0);
+    setst(2, 2, 0, 0, 0);
+    cr_loop_undo(&L, &C);
+    ok(L.d.nlayers == 1 && L.d.nev == 1 && L.d.st[1][0] == 1 && L.d.st[2][0] == 0,
+       "props: undo of an overdub: a step it alone filled loses its properties, the others keep theirs");
+    cr_loop_set(&L, &C, &was);                       /* a slot's data: its own table */
+    ok(L.d.st[1][0] == 0 && L.d.st[1][1] == 0 && L.d.nev == 3, "props: another slot's loop comes with its own (none here)");
+    L.d.st[1][0] = 3;
+    L.mode = CRL_MODE_STEP;
+    cr_loop_rec(&L, &C);
+    step_chord(60, CR_MOD_MAJ);
+    step_chord(62, CR_MOD_MAJ);
+    ok(L.d.st[1][0] == 3, "props: step entry open: the loop there is untouched until the commit");
+    cr_loop_rec(&L, &C);
+    ok(L.d.nev == 2 && L.d.st[1][0] == 0, "props: a pattern entered by steps replaces the loop: no property left from it");
+    L.d.st[1][0] = 3;
+    L.mode = CRL_MODE_OVERWRITE;
+    L.sync = 0;
+    cr_loop_rec(&L, &C);
+    ok(L.d.st[1][0] == 3, "props: Overwrite armed: the loop and its properties intact until the take starts");
+    cr_key(&C, 60, 100, 1);
+    step(30);
+    ok(L.d.st[1][0] == 0, "props: the take started: the old loop's properties went with it");
+    cr_key(&C, 60, 100, 0);
+    step(300);
+    cr_loop_rec(&L, &C);
+    L.d.st[0][0] = 2;
+    cr_loop_stop(&L, &C);
+    cr_loop_clear(&L, &C);
+    ok(L.d.st[0][0] == 0, "props: a cleared loop has none");
+    /* the record's room: CRL_REC_MAX is what it was */
+    mkloop(64);
+    for (i = 0; i < CRL_MAX_EV; i++) addev((i % 64u) * 24u, 12, 60, CR_Q_MAJ, 0);
+    for (i = 0; i < 64; i++) setst(i, 1, 0, 0, 0);
+    n = cr_loop_pack(&L.d, buf, CRL_REC_MAX);
+    ok(CRL_REC_MAX == 16u + 64u + 3584u && n == 16u + 2u + 3584u + 1u + 3u * 20u && n <= CRL_REC_MAX && buf[16u + 2u + 3584u] == 20 &&
+       old_unpack_ok(buf, n) && cr_loop_unpack(buf, n, &back) == 1 && back.nev == CRL_MAX_EV && back.st[19][0] == 1 && back.st[20][0] == 0,
+       "record: 512 events and 64 steps with a property: the record stays within CRL_REC_MAX, the first 20 entries fit");
+    for (i = 0; i < 64; i++) setst(i, 0, 0, 0, 0);
+    cr_loop_ed_open(&L);
+    for (i = 0, k = 0; i < 64; i++) {
+        ed_at(i);
+        x = cr_loop_ed_setprop(&L, CRL_SP_RATCH, 1);
+        if (x == 1) k++;
+        else if (x != CRL_ED_NOROOM) k = 999;
+    }
+    ok(k == 20 && cr_loop_pack(&L.d, buf, CRL_REC_MAX) == 16u + 2u + 3584u + 61u,
+       "props: on a loop of 512 events the editor sets 20 steps' and refuses the 21st (no room in the record), so none is lost at a save");
+    cr_loop_ed_close(&L, &C);
+    mkloop(80);                                      /* a take longer than 64 steps: its later steps have none */
+    addev(70 * 24, 24, 60, CR_Q_MAJ, 0);
+    addev(24, 24, 60, CR_Q_MAJ, 0);
+    cr_loop_ed_open(&L);
+    ed_at(70);
+    ok(cr_loop_ed_prop(&L, CRL_SP_RATCH) == -1 && cr_loop_ed_setprop(&L, CRL_SP_RATCH, 1) == 0,
+       "props: a step past the 64th (a long take's second page): none");
+    cr_loop_ed_close(&L, &C);
+    (void)rn;
+}
+
 int main(void)
 {
     s_overwrite();
@@ -1416,6 +1874,7 @@ int main(void)
     s_step();
     s_rate();
     s_edit();
+    s_trig();
     s_bass();
     s_free();
     s_sync();

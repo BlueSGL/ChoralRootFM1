@@ -1070,7 +1070,7 @@ void cr_voicing_step(cr_t *c, int d)
     c->voicing = (int8_t)nv;
     for (i = 0; i < CR_NVOICE; i++) {
         cr_voice_t *v = &c->v[i];
-        if (!v->used || v->zone) continue;
+        if (!v->used || v->zone || (v->loop & CR_LOOP_FIXV)) continue;   /* (a loop step with its own voicing) */
         crx_hush_voice(c, i);
         v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, nv, v->notes);
         crx_sound_voice(c, i);
@@ -1292,6 +1292,11 @@ int cr_loop_busy(const cr_t *c, int lv)
 
 int cr_loop_event(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on)
 {
+    return cr_loop_event_v(c, lv, root, q, ext, vel, on, CR_VOIC_FOLLOW);
+}
+
+int cr_loop_event_v(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on, int voic)
+{
     int vi = CR_MAX_VOICES + CR_MAX_PADS + lv;
     cr_voice_t *v;
     if (lv < 0 || lv >= CR_MAX_LOOPV) return 0;
@@ -1312,7 +1317,13 @@ int cr_loop_event(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t
     v->root = root;
     v->serial = ++c->serial;
     v->nbase = (uint8_t)cr_chord_base(root, q, v->sx, v->base);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, v->zone ? 0 : c->voicing, v->notes);
+    if (voic != CR_VOIC_FOLLOW && q != CR_Q_NONE && !v->zone) {   /* the step's own voicing (a chord's only) */
+        v->loop |= CR_LOOP_FIXV;
+        voic = crx_clamp(voic, CR_VOICE_MIN, CR_VOICE_MAX);
+    } else {
+        voic = c->voicing;
+    }
+    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, v->zone ? 0 : voic, v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;

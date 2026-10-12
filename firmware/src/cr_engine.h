@@ -99,7 +99,8 @@ typedef struct {
 
 typedef struct {
     uint8_t used, pad;           /* pad: chord-pad slot + 1 (not a keyed voice) */
-    uint8_t loop;                /* a loop voice (cr_loop_event): slot + 1 */
+    uint8_t loop;                /* a loop voice (cr_loop_event): slot + 1; | CR_LOOP_FIXV: its voicing is its own
+                                  * (cr_loop_event_v), not the live one */
     uint8_t key, id, superseded, is_free;
     uint8_t zone;                /* CR_Z_*: captured at note-on (the Full keyboard, Split Bass's bass side) */
     uint8_t vel, pc, pc_pressed, note_pressed;
@@ -118,6 +119,7 @@ typedef struct {
     cr_clk_t clk;
 } cr_voice_t;
 
+#define CR_LOOP_FIXV 0x80u       /* cr_voice_t.loop */
 #define CR_Z_FULL 1u             /* played on the Full keyboard: a single note, no voicing rotation */
 #define CR_Z_BASS 2u             /* Split Bass, below the split: the BASS stream alone, at the played pitch */
 #define CR_Z_LOW 4u              /* Split Oct on the Full keyboard, below the split key: an octave lower */
@@ -254,6 +256,11 @@ void cr_pad_set(cr_t *c, int slot, int used, int16_t root, uint8_t q, uint8_t ex
  * in force now, whatever Single, the split point, the layout, Bass on / off or its Behaviour say now (q is ignored:
  * a single note); a root without it is never a bass-side note, with Split Bass on too. */
 int  cr_loop_event(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on);
+/* .. with the chord's voicing given (the looper's per-step voicing): voic = a rotation -12 .. 12 instead of the live
+ * one, which then leaves this voice alone (cr_voicing_step); CR_VOIC_FOLLOW: as cr_loop_event. A single note and a
+ * bass-side note are not voiced: voic is ignored for them */
+#define CR_VOIC_FOLLOW 127
+int  cr_loop_event_v(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on, int voic);
 int  cr_loop_busy(const cr_t *c, int lv);          /* loop voice lv is sounding (panic clears them all) */
 
 /* ----------------------------------------------- queries: screen, LEDs --- */
