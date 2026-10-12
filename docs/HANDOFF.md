@@ -110,19 +110,25 @@ installed on the owner's Mac.
 ### For 0.19
 
 - **(a) Audio quality, GitHub issue 3: built, to be heard** (docs/AUDIO-QUALITY.md; HISTORY 2026-10-12 "the output
-  chain" and "the look-ahead, Sloop 2.6"). Options > Output: Classic (0.18's master, bit for bit) / Clean (linear to
-  -2.0 dBFS, a limiter that holds and looks 32 samples ahead: the output 0.73 ms late, no sample over its threshold;
-  MASTER last into the 24-bit word), default Clean in the dev builds. Felucca's SPEAKER setting left behind by another
+  chain", "the look-ahead, Sloop 2.6" and "the third round"). Options > Output: Classic (0.18's master, bit for bit)
+  / Clean (linear to -2.0 dBFS, a limiter that holds and looks 32 samples ahead: the output 0.73 ms late, no sample
+  over its threshold; MASTER last into the 24-bit word), default Clean in the dev builds. **The third round, built,
+  to be heard** (the owner's four decisions of 2026-10-12): Clean's limiter holds 200 ms (a hit's 40 ms; again within
+  1.2 dB): 2 to 11 dB less left on loud and very wet passages for 0.1 to 0.9 LU, a hit's recovery as it was
+  (`../audio-0.19/hold/`); the chorus returns in stereo, two taps a quarter turn apart, in both Output modes
+  (`../audio-0.19/chorus/`; so Classic is 0.18 bit for bit only without a chorus send: `tools/emu/classic_exact.sh`
+  proves that and, with `EMU_CHORUS=mono`, everything else); the click and the USB part pairs are lined up with
+  Clean; MASTER is read before the audio starts (Felucca 1.1.5's fix). **The owner's**: all four by ear on the unit;
+  whether the chorus gets a Width knob (the parameter is there: docs/FX.md "The chorus, stereo" has the three lines);
+  docs/USB-AUDIO.md does not yet say the part pairs are 0.73 ms late with the master pair in Clean. Felucca's SPEAKER setting left behind by another
   firmware is held off. The harness is in the tree (`tests/master_measure.c`, `tools/master_*`); the listening files
   and tables in `../audio-0.19/`. **The owner's decisions**: Output's default for the release; Clean's trim (single
   notes are 2.4 LU quieter than Classic, loud chords up to 1.4 LU louder) or the make-up build (`CR_OUT_MAKEUP=1
   ./build.sh`: the DAC word's unused 6 dB, not heard on the unit yet); the part LEVEL / trims against Sloop's (the
-  largest measured difference, untouched); the chorus's mono return; the limiter's hold (40 ms; longer takes 2 to
-  5 dB off what is left on loud chords) and 32 or 64 samples of look-ahead; the click and the USB part pairs, which
-  lead Clean's output by 0.73 ms. Measured against **Sloop 2.6** in the second round (its master now looks ahead):
+  largest measured difference, untouched); 32 or 64 samples of look-ahead. Measured against **Sloop 2.6** in the second round (its master now looks ahead):
   Classic is behind it on loud chords, Clean ahead; the level gap is 6.3 dB (Classic) / 8.8 dB (Clean) on a single
-  note, none on the loudest chords. From Felucca 1.0.1 .. 1.5.1 one fix is missing on the live path: MASTER read
-  before the audio starts (1.1.5, #137). Listening files: `../audio-0.19/lookahead/`. Not checked on the unit:
+  note, none on the loudest chords. From Felucca 1.0.1 .. 1.5.1 the one fix that was missing on the live path, MASTER
+  read before the audio starts (1.1.5, #137), is in. Listening files: `../audio-0.19/lookahead/`, `hold/`, `chorus/`. Not checked on the unit:
   anything (the emulator and the host only).
 - **(b) CZ-1 pops and drop-outs on held chords without FX.** The owner, 2026-10-13: believes it is internal clipping
   in the engine; the other engines are fine.
