@@ -309,11 +309,33 @@ static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
 #define CLN_K 26000                     /* the knee: a straight line up to here (-2.0 dBFS: the limiter's threshold, so
                                          * nothing the limiter lets through meets the curve), then
                                          * K + R tanh((a - K) / R), R = 32767 - K: to full scale. A safety net only */
+/* The hold (0.19's third round, docs/AUDIO-QUALITY.md "Round 3"). What Clean had left on a loud chord was the envelope
+ * letting go between the chord's beats and stepping the level 0.1 to 2 dB at the next one. So the envelope is held
+ * CLN_HOLD (200 ms) and held again by every block's peak within 1.2 dB of it (CLN_REHOLD): a chord, a wet tail, an
+ * arp keep one gain. A HIT, a peak more than 3.5 dB above the envelope (CLN_HIT), gets the short hold of the first
+ * rounds (CLN_HOLD_HIT, 40 ms: a period of 25 Hz) until the envelope has begun to let go: a kick or a slammed chord
+ * is released as it was (12 dB down: back within half a dB after 0.47 s), not held down for the long one. */
 #ifndef CLN_HOLD
-#define CLN_HOLD 1764u                  /* 40 ms: a period of 25 Hz */
+#define CLN_HOLD 8820u                  /* 200 ms */
+#endif
+#ifndef CLN_HOLD_HIT
+#define CLN_HOLD_HIT 1764u              /* 40 ms: after a hit */
+#endif
+#ifndef CLN_HIT
+#define CLN_HIT 1                       /* a hit: a peak more than env >> CLN_HIT (3.5 dB) above the envelope */
+#endif
+#ifndef CLN_REHOLD
+#define CLN_REHOLD 3                    /* a block's peak within env >> CLN_REHOLD (1.2 dB) of the envelope holds it again */
+#endif
+#ifndef CLN_CREEP
+#define CLN_CREEP 10                    /* .. and, once the top itself has not come back for CLN_HOLD, draws the
+                                         * envelope a 1024th of the way down to itself: an envelope held up to 1.2 dB
+                                         * above a steady sound (a release that stopped in the window) comes down to it
+                                         * within a second or two, too slowly to be a step; a sound whose top comes
+                                         * back (a bass note's period, a chord's beat) keeps its gain exactly */
 #endif
 #ifndef CLN_REL
-#define CLN_REL 13                      /* the release: (env - T) >> CLN_REL a sample, 186 ms */
+#define CLN_REL 13                     /* the release: (env - T) >> CLN_REL a sample, 186 ms */
 #endif
 /* The look-ahead (0.19, docs/AUDIO-QUALITY.md "The look-ahead"). The chain's output is its input CLN_LA samples late,
  * and the limiter's gain is a straight line across each block of CLN_LA_B samples, from what the last block ended on
@@ -355,7 +377,7 @@ static uint8_t fx_out_mode, fx_out_fade;
 static int32_t cln_dl[2u * CLN_DLEN];   /* the delay: the chain's samples (Q17, after the DC blocker), L R. In RAM
                                          * (.bss, 256 bytes): the ISR reads and writes it every sample; the pool is
                                          * the tight resource (docs/FX.md "The cost on the unit") */
-static uint32_t cln_w, cln_hold;
+static uint32_t cln_w, cln_hold, cln_hlen = CLN_HOLD, cln_top;
 static int32_t cln_pk[CLN_LA_K];        /* the peaks of the blocks in the delay, the newest first */
 static int32_t cln_wh[CLN_LA_K];        /* their gains (Q15), a ring; cln_gs is their sum */
 static uint32_t cln_wi;
@@ -376,7 +398,8 @@ static void clean_rest(void)
         cln_pk[i] = 0;
         cln_wh[i] = 32768;
     }
-    cln_w = cln_wi = cln_hold = 0;
+    cln_w = cln_wi = cln_hold = cln_top = 0;
+    cln_hlen = CLN_HOLD;
     cln_env = CLN_T4;
     cln_wg = cln_g = 32768;
     cln_gs = CLN_G1;
@@ -462,15 +485,27 @@ static __attribute__((noinline)) void clean_block(int32_t *o, uint32_t n)
         } else {
             wm = p = clean_short(p);
         }
-        /* the envelope: a new peak at once, held CLN_HOLD samples (again by every peak within 0.3 dB), then released */
+        /* the envelope: a new peak at once, held (CLN_HOLD; after a hit CLN_HOLD_HIT), held again by every peak
+         * within 1.2 dB of it, then released */
         if (wm > env) {
+            if (wm - env > (env >> CLN_HIT))            /* a hit: the short hold, until the envelope has let go */
+                cln_hlen = CLN_HOLD_HIT;
             env = wm;
-            cln_hold = CLN_HOLD;
-        } else if (p > env - (env >> 5)) {
-            cln_hold = CLN_HOLD;
+            cln_hold = cln_hlen;
+            cln_top = 0;
+        } else if (p > env - (env >> CLN_REHOLD)) {
+            if (cln_hold < cln_hlen)
+                cln_hold = cln_hlen;
+            if (p >= env - (env >> 8))                  /* the top itself again: nothing to creep to */
+                cln_top = 0;
+            else if (cln_top < CLN_HOLD)
+                cln_top += m;
+            else                                        /* (never under the delay's own peak) */
+                env -= (env - (wm > CLN_T4 ? wm : CLN_T4)) >> CLN_CREEP;
         } else if (cln_hold) {
             cln_hold = cln_hold > m ? cln_hold - m : 0u;
         } else if (env > CLN_T4) {
+            cln_hlen = CLN_HOLD;                        /* (letting go: from here on the long hold again) */
             env -= (((env - CLN_T4) >> CLN_REL) + 4) * (int32_t)m;
             if (env < wm)
                 env = wm;

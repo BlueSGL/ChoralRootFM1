@@ -20,6 +20,7 @@
  *   build/host/master_measure list
  *   build/host/master_measure render PREFIX [--eng N --name PRESET] [--fx 0|1] [--vel V] [--master ADC]
  *        [--mods k,k,..] [--root k] [--bass 0|1] [--hold MS] [--att dB,dB,..] [--send rev,cho,dly]
+ *        [--decay 0..127] [--fdbk 0..127]      (the reverb's Decay and the delay's Feedback: a very wet setting)
  *        [--out classic|clean]        (the chain the firmware itself runs in the render: the exactness check)
  *   build/host/master_measure chain RAW.i32 PREFIX [--att dB,dB,..]
  *        (a mix from a file, int32 L R in the mix's units, through both chains: tools/master_transient.py's test signal)
@@ -172,6 +173,7 @@ int main(int argc, char **argv)
 {
     const char *prefix, *name = NULL, *mods = "5,4,7,0", *atts = "0,6,12", *outm = "clean";
     int eng = -1, fx = 1, vel = -1, master = 1023, root = 9, bass = 1, hold = 4000, a, send[3] = {-1, -1, -1};
+    int decay = -1, fdbk = -1;
     uint32_t ms, last_frame = 0, end, modmask = 0, t_on = 1000u, mism = 0;
     int clean;
     char path[1024];
@@ -217,6 +219,8 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[a], "--att")) atts = argv[a + 1];
         else if (!strcmp(argv[a], "--out")) outm = argv[a + 1];
         else if (!strcmp(argv[a], "--send")) sscanf(argv[a + 1], "%d,%d,%d", &send[0], &send[1], &send[2]);
+        else if (!strcmp(argv[a], "--decay")) decay = atoi(argv[a + 1]);
+        else if (!strcmp(argv[a], "--fdbk")) fdbk = atoi(argv[a + 1]);
         else { printf("unknown option %s\n", argv[a]); return 2; }
     }
     clean = strcmp(outm, "classic") != 0;
@@ -250,6 +254,10 @@ int main(int argc, char **argv)
                 cs.fx_amt[1] = (uint8_t)send[1];
                 cs.fx_amt[2] = (uint8_t)send[2];
             }
+            if (decay >= 0)                       /* the reverb's Decay, the delay's Feedback (cr_fx.c xfp, 0..127) */
+                xfp[XP_RDECAY] = (int16_t)decay;
+            if (fdbk >= 0)
+                xfp[XP_DFDBK] = (int16_t)fdbk;
             cs.fx_on = (uint8_t)(fx != 0);
             cu_fx_apply();
             if (vel >= 0)
