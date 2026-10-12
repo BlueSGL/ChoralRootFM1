@@ -100,11 +100,11 @@ wait 300
 btn OCT-
 wait 300
 dump                          # 9: OCT+ and OCT-: still open (the octave up and back)
-btn HOME
+btn EDIT
 wait 300
 btn EDIT
 wait 300
-btn HOME
+btn EDIT
 wait 300
 dump                          # 10
 btn EDIT
@@ -139,7 +139,7 @@ btn EDIT
 wait 400
 shot build/emu/test/cr_le_take.ppm
 dump                          # 15: the editor open on it, the same length
-btn HOME
+btn EDIT
 wait 300
 dump                          # 16: closed: the take as it was
 knob PRESETS +1               # slot 3, empty
@@ -148,7 +148,7 @@ btn EDIT
 wait 400
 shot build/emu/test/cr_le_empty.ppm
 dump                          # 17: an empty pattern of a bar (16 steps), open
-btn HOME
+btn EDIT
 wait 300
 dump                          # 18: empty again
 btn OCT-

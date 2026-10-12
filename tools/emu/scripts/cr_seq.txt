@@ -1,0 +1,162 @@
+# ChoralRoot 0.18: SEQ is the loop editor's key (the owner, 2026-10-11: "The edit sequence is a bit buried, hold Play,
+# then press edit. Most people won't find this ... Add Metronome to the second param page of the play menu", and:
+# "press once -> sequencer, press SEQ a second time -> Play menu, press SEQ a third time -> Exit. Also from the
+# Sequencer, holding the play key should enter the Play Menu, not return to home").
+# A. The cycle: the view, SEQ: the editor (the PLAY menu, layer 8, under it); SEQ: the PLAY menu; SEQ: the view. SEQ's
+#    LED: lit in the PLAY menu, dim on the view. The click never toggles.
+# B. The editor opened by SEQ, EDIT: the PLAY menu. EDIT there: the editor; HOME: the view (HOME does not step it).
+# C. The PLAY menu entered by LOOP held: SEQ leaves to the view. The menu > EDIT, then SEQ: the PLAY menu.
+# D. The menu's page 2, KNOB 2: Metronome On / Off (cs.metro).
+# E. GLO held + SEQ: the click on / off, no Options, no editor.
+# F. The FX layer, the Options: SEQ changes nothing.
+# G. A take armed: SEQ is refused ("end the take first"), the view stays.
+# H. SEQ held on the view: the METRO layer, as before. In the editor SEQ held closes it to the PLAY menu and PRESETS
+#    turned with SEQ still down does nothing (no slot, no sound); turned inside the hold time it is the editor's step
+#    cursor and the editor stays.
+# I. In the editor LOOP held: the PLAY menu (the editor closed, the menu open), PRESETS with LOOP still down: the
+#    menu's slot. A LOOP tap in the editor: play / stop, the editor stays. LOOP held with no knob: the PLAY menu.
+wait 300
+btn SEQ
+wait 300
+expect led OCT- on
+shot build/emu/test/cr_seq_editor.ppm
+dump                              # 1: layer 8, edit 1, metro 0
+btn SEQ
+wait 300
+expect led SEQ on
+dump                              # 2: layer 8, edit 0: the PLAY menu
+btn SEQ
+wait 300
+expect led SEQ dim
+expect led OCT- dim
+dump                              # 3: layer 0, edit 0: the view
+btn SEQ
+wait 300
+btn EDIT
+wait 300
+dump                              # 4: layer 8, edit 0 (EDIT: the PLAY menu)
+btn EDIT
+wait 300
+btn HOME
+wait 300
+dump                              # 5: layer 0, edit 0, view 0 (HOME from the editor: the view)
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+btn SEQ
+wait 300
+dump                              # 6: layer 0 (SEQ in the PLAY menu: out, however it was entered)
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+btn EDIT
+wait 300
+btn SEQ
+wait 300
+dump                              # 7: layer 8, edit 0: the PLAY menu
+knob SELECT +1
+wait 300
+shot build/emu/test/cr_seq_p2_off.ppm
+knob KNOB2 +1
+wait 100
+shot build/emu/test/cr_seq_p2_on.ppm
+wait 900
+dump                              # 8: metro 1
+knob KNOB2 -1
+wait 900
+dump                              # 9: metro 0
+btn OCT-
+wait 300
+btn GLO down
+wait 50
+btn SEQ
+wait 100
+btn GLO up
+wait 300
+expect led SEQ dim                # (the click is on: SEQ's LED is the editor's now, not the click's)
+dump                              # 10: metro 1, layer 0, options 0, edit 0
+btn GLO down
+wait 50
+btn SEQ
+wait 100
+btn GLO up
+wait 1500
+dump                              # 11: metro 0
+btn FX down
+wait 500
+btn FX up
+wait 300
+dump                              # 12: layer 3
+btn SEQ
+wait 300
+dump                              # 13: layer 3, metro 0, edit 0
+btn OCT-
+wait 300
+btn GLO
+wait 300
+btn SEQ
+wait 300
+dump                              # 14: options 1, layer 0, metro 0, edit 0
+btn GLO
+wait 300
+btn REC
+wait 300
+btn SEQ
+wait 300
+dump                              # 15: cap not 0, layer 0, edit 0
+btn OCT- down
+btn OCT+ down
+wait 100
+btn OCT+ up
+btn OCT- up
+wait 2500
+dump                              # 16: after PANIC: cap 0
+btn SEQ down
+wait 500
+btn SEQ up
+wait 300
+dump                              # 17: layer 7 (the METRO layer)
+btn OCT-
+wait 300
+btn SEQ
+wait 300
+btn SEQ down
+wait 600
+knob PRESETS +1
+wait 200
+btn SEQ up
+wait 500
+dump                              # 18: layer 8, edit 0, slot 1 (the PLAY menu; the knob did nothing)
+btn EDIT
+wait 300
+btn SEQ down
+wait 100
+knob PRESETS +1
+wait 600
+btn SEQ up
+wait 500
+dump                              # 19: layer 8, edit 1, cursor 2
+btn PLAY down
+wait 600
+knob PRESETS +1
+wait 200
+btn PLAY up
+wait 500
+dump                              # 20: layer 8, edit 0, slot 2 (LOOP held: the PLAY menu; the knob: its slot)
+btn EDIT
+wait 300
+btn PLAY
+wait 300
+dump                              # 21: layer 8, edit 1 (a LOOP tap: play / stop, the editor stays)
+btn PLAY
+wait 300
+btn PLAY down
+wait 600
+btn PLAY up
+wait 500
+dump                              # 22: layer 8, edit 0 (LOOP held, no knob: the PLAY menu)
+btn SEQ
+wait 300
+dump                              # 23: layer 0

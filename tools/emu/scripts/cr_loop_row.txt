@@ -1,6 +1,6 @@
 # ChoralRoot: the PLAY menu's knob row, two pages (docs/LOOPER-MODES.md; CR_K_LOOPMENU; 0.18). LOOP (PLAY) held and
 # released locks it open, stopped. Page 1: Length / Rate / Quantize / Count-in under the slot strip, the mode and the
-# length; KNOB 1..4: each cell hot, no popup. SELECT +1: page 2: Level alone (KNOB 1), the bottom line "2/2"; SELECT
+# length; KNOB 1..4: each cell hot, no popup. SELECT +1: page 2: Level (KNOB 1) and Metronome (KNOB 2: on, then off again), the bottom line "2/2"; SELECT
 # -1: page 1. OCT-. Then a 1-bar loop is recorded (REC, D, REC) and plays; LOOP held: the menu, the timeline in the
 # middle, the dial in the top line, no ring; page 2, KNOB 1: Level hot; OCT- closes it.
 wait 300
@@ -32,12 +32,13 @@ knob KNOB1 -2
 wait 100
 shot build/emu/test/cr_loop_row_level.ppm
 wait 900
-knob KNOB2 +1                 # (page 2: KNOB 2..4 do nothing)
+knob KNOB2 +1                 # (page 2: KNOB 2 the metronome, KNOB 3 / 4 do nothing)
 knob KNOB3 +1
 knob KNOB4 +1
 wait 200
 dump                          # 1: page 2
 knob KNOB1 +2
+knob KNOB2 -1
 wait 900
 knob SELECT -1
 wait 300

@@ -180,9 +180,9 @@ wait 400
 knob PRESETS +1
 wait 300
 dump                              # 28: open again, step 2: condition 1st still
-btn HOME
+btn EDIT
 wait 300
-dump                              # 29: closed by HOME, the menu open
+dump                              # 29: closed by EDIT, the menu open
 btn OCT-
 wait 2500
 dump

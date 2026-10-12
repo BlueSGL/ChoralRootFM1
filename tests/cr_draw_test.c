@@ -1379,12 +1379,32 @@ int main(int argc, char **argv)
             snprintf(s.cell[0][0].label, sizeof s.cell[0][0].label, "Level");
             snprintf(s.cell[0][0].value, sizeof s.cell[0][0].value, "100");
             s.cell[0][0].glyph = CR_G_BAR; s.cell[0][0].pct = 255;
+            s.cell[0][1].flags = CR_CF_ON;
+            snprintf(s.cell[0][1].label, sizeof s.cell[0][1].label, "Metronome");
+            snprintf(s.cell[0][1].value, sizeof s.cell[0][1].value, "Off");
+            s.cell[0][1].glyph = CR_G_GATE; s.cell[0][1].pct = 26;
             snprintf(s.foot, sizeof s.foot, "2/2 \267 keys: play \267 GLO: loops");
             memcpy(a, host_screen, sizeof a);
             render(&s, 0);
-            COUNT(n1, 62u, 170u, 240u, 222u, HS(x, y) == swap16(T_TEXT));
+            COUNT(n1, 122u, 170u, 240u, 222u, HS(x, y) == swap16(T_TEXT));
+            COUNT(n0, 62u, 170u, 120u, 222u, HS(x, y) != swap16(T_BG));
             write_ppm(dir, "loopmenu_page2");
-            check("loop menu, page 2: Level alone, the other three cells empty", memcmp(a, host_screen, sizeof a) != 0 && n1 < 40u);
+            {                                    /* the new label whole, in its cell (KNOB 2's: x 60 .. 120) */
+                uint32_t i, whole = 0;
+                for (i = 0; i < nbox; i++)
+                    if (!strcmp(boxes[i].s, "Metronome") && !(boxes[i].flags & 1u) && boxes[i].x0 >= 60 && boxes[i].x1 <= 120)
+                        whole++;
+                check("loop menu, page 2: Level and Metronome (the label whole, inside its cell), the other two cells empty",
+                      memcmp(a, host_screen, sizeof a) != 0 && n1 < 40u && n0 > 60u && whole == 1u);
+            }
+            snprintf(s.cell[0][1].value, sizeof s.cell[0][1].value, "On");
+            s.cell[0][1].pct = 255;
+            memcpy(a, host_screen, sizeof a);
+            render(&s, 0);
+            write_ppm(dir, "loopmenu_page2_metro");
+            check("loop menu, page 2: Metronome On: its cell changes", memcmp(a, host_screen, sizeof a) != 0);
+            snprintf(s.cell[0][1].value, sizeof s.cell[0][1].value, "Off");
+            s.cell[0][1].pct = 26;
             s = CR_SCREENS[is];                  /* the editor, a step sequencer: a 16-step pattern, sixteenths: chords
                                                   * on steps 1 2 5 9 13, step 2's note 3 steps long (it sounds on
                                                   * into 3 and 4), step 9's 2 (into 10) */
@@ -1396,7 +1416,7 @@ int main(int argc, char **argv)
             s.lm_lane[3] = 0; s.lm_pos = 1; s.lm_steps = 16; s.lm_dirty = (uint8_t)(s.lm_slot + 1u);
             snprintf(s.sub, sizeof s.sub, "Am");
             snprintf(s.value, sizeof s.value, "step 2/16");
-            snprintf(s.foot, sizeof s.foot, "1/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done");
+            snprintf(s.foot, sizeof s.foot, "1/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back");
             s.right[0] = 0;
             memset(s.cell, 0, sizeof s.cell);
             for (c = 0; c < 4u; c++) {
@@ -1432,7 +1452,7 @@ int main(int argc, char **argv)
                     check(name, n0 == r1 + 18u);
                     s.lm_lane[3] = 0;
                     t2.sel = 1; t2.lm_lane[3] = 0x110ull;
-                    snprintf(t2.foot, sizeof t2.foot, "2/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done");
+                    snprintf(t2.foot, sizeof t2.foot, "2/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back");
                     memset(t2.cell, 0, sizeof t2.cell);
                     for (c2 = 0; c2 < 3u; c2++) {
                         t2.cell[0][c2].flags = CR_CF_ON;

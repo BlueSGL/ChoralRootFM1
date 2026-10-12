@@ -630,9 +630,10 @@ L="$OUT/cr_loop_row.log"
 has '^loop: cells Length Rate Quantize Count-in' "$L" && ok "LOOP held, stopped: the PLAY menu's page 1 over Length / Rate / Quantize / Count-in: $OUT/cr_loop_row.ppm" || bad "no loop cells"
 has '^loop: length 1' "$L" && has '^loop: knob 2 rate x3/4' "$L" && has '^loop: knob 3 quantize 1/4' "$L" && has '^loop: knob 4 count-in off' "$L" &&
     ok "page 1, KNOB 1..4: length (1 bar), rate (x3/4), quantize (1/4), count-in (off)" || bad "loop knobs: $(grep '^loop: knob\|^loop: length' "$L" | tr '\n' ' ')"
-has '^loop: page 2' "$L" && has '^loop: cells Level - - -' "$L" && has '^loop: knob 1 level 90' "$L" && has '^loop: page 1' "$L" &&
-    [ "$(grep -c '^loop: knob [234] ' "$L")" = 6 ] && grep -a '^  loop2:' "$L" | sed -n 1p | grep -q ' page 2 ' &&
-    ok "SELECT turns the page (not the length): page 2 is Level on KNOB 1, KNOB 2..4 nothing there; SELECT back: page 1: $OUT/cr_loop_row_p2.ppm" \
+has '^loop: page 2' "$L" && has '^loop: cells Level Metronome - -' "$L" && has '^loop: knob 1 level 90' "$L" && has '^loop: page 1' "$L" &&
+    [ "$(grep -c '^loop: knob [234] ' "$L")" = 8 ] && has '^loop: knob 2 metronome on' "$L" && has '^loop: knob 2 metronome off' "$L" &&
+    grep -a '^  loop2:' "$L" | sed -n 1p | grep -q ' page 2 ' && grep -a '^  loop:' "$L" | sed -n 1p | grep -q ' metro 1 ' &&
+    ok "SELECT turns the page (not the length): page 2 is Level on KNOB 1, Metronome on KNOB 2 (on, off), KNOB 3 / 4 nothing there; SELECT back: page 1: $OUT/cr_loop_row_p2.ppm" \
     || bad "the PLAY menu's pages: $(grep '^loop: page\|^loop: cells' "$L" | tr '\n' ' ')"
 grep -q "^ui: frame.*device): loopmenu .*foot '1/2 . keys: play . GLO: loops'" "$L" && grep -q "^ui: frame.*device): loopmenu .*foot '2/2 . keys: play . GLO: loops'" "$L" &&
     ok "the bottom line: the page (1/2, 2/2), what the keys do, what GLO makes them" || bad "the PLAY menu's bottom line: $(grep -o "loopmenu .*foot '[^']*'" "$L" | sed "s/.*foot //" | sort -u | tr '\n' ' ')"
@@ -1120,7 +1121,7 @@ has '^loopedit: knob 4 velocity 92' "$EL" && [ "$(lf "$(e 7)" state)" = 2 ] && [
     [ "$(l2 "$EL" 9 edit) $(ly "$EL" 9)" = "1 8 0" ] && [ "$(grep -ac '^loopedit: octave' "$EL")" = 2 ] && [ "$(l2 "$EL" 10 edit) $(ly "$EL" 10)" = "0 8 0" ] && [ "$(l2 "$EL" 11 edit) $(ly "$EL" 11)" = "0 8 0" ] &&
     [ "$(l2 "$EL" 12 edit)" = 1 ] && [ "$(l2 "$EL" 13 edit) $(ly "$EL" 13)" = "0 8 0" ] && [ "$(grep -ac '^loopedit: close' "$EL")" -ge 5 ] &&
     ! has '^picker: open' "$EL" &&
-    ok "EDIT tapped, HOME and EDIT held again each close the editor, back to the PLAY menu (no engine picker from EDIT held there); OCT+ / OCT- do not (the octave); the loop as edited (2 events, 48)" \
+    ok "EDIT tapped and EDIT held again each close the editor, back to the PLAY menu (no engine picker from EDIT held there); OCT+ / OCT- do not (the octave); the loop as edited (2 events, 48)" \
     || bad "closing the editor: $(l2 "$EL" 8 edit) $(ly "$EL" 8) / $(l2 "$EL" 9 edit) / $(l2 "$EL" 10 edit) $(ly "$EL" 10) / $(l2 "$EL" 11 edit) $(ly "$EL" 11) / $(l2 "$EL" 12 edit) / $(l2 "$EL" 13 edit)"
 tl=$(lf "$(e 14)" len)
 [ "$(lf "$(e 14)" slot)" = 2 ] && [ "$(lf "$(e 14)" events)" = 1 ] && [ "${tl:-0}" -gt 100 ] && [ $((tl % 24)) != 0 ] &&
@@ -1215,6 +1216,42 @@ k() { L cr_loop_presetknob "$1"; }
 [ "$(ly "$PK" 7)" = "0 0" ] && [ "$(grep -ac '^sound: part 0 pos' "$PK")" = 1 ] && [ "$(lf "$(k 8)" slot)" = 5 ] &&
     ok "LOOP held again with no knob still closes the menu; the one sound change of the script is PRESETS on the view afterwards" \
     || bad "the preset knob: layer $(ly "$PK" 7), $(grep -ac '^sound: part 0 pos' "$PK") sound change(s)"
+# 0.18: SEQ is the loop editor's key (the view -> the editor -> the PLAY menu -> the view); the metronome: the PLAY
+# menu's page 2 (KNOB 2), GLO + SEQ
+export EMU_UI_LOG=0
+run cr_seq
+unset EMU_UI_LOG
+SQ="$OUT/cr_seq.log"
+q() { L cr_seq "$1"; }
+sq() { echo "$(ly "$SQ" "$1") $(l2 "$SQ" "$1" edit) $(lf "$(q "$1")" metro)"; }   # layer options edit metro
+[ "$(sq 1)" = "8 0 1 0" ] && [ "$(sq 2)" = "8 0 0 0" ] && [ "$(sq 3)" = "0 0 0 0" ] && [ "$(grep -ac '^loopedit: from the view' "$SQ")" = 3 ] &&
+    has 'expect led SEQ on .*: ok' "$SQ" && [ "$(grep -ac 'expect led SEQ dim .*: ok' "$SQ")" = 2 ] && has 'expect led OCT- dim .*: ok' "$SQ" &&
+    grep -aq "loopmenu .*item 'Step' .*foot '1/2 . PRESETS: step . REC: clear . SEQ: back'" "$SQ" &&
+    ok "SEQ's cycle: the view -> the loop editor (its bottom line 'SEQ: back') -> the PLAY menu (SEQ's LED lit) -> the view (dim): $OUT/cr_seq_editor.ppm" \
+    || bad "SEQ's cycle: $(sq 1) / $(sq 2) / $(sq 3), $(grep -ac '^loopedit: from the view' "$SQ") openings from the view"
+[ "$(sq 4)" = "8 0 0 0" ] && [ "$(sq 5)" = "0 0 0 0" ] && [ "$(grep -a '^  cr: key' "$SQ" | sed -n 5p | sed -n 's/.* view \([0-9]*\) .*/\1/p')" = 0 ] &&
+    ok "the editor opened by SEQ, EDIT: the PLAY menu; EDIT there: the editor; HOME: the view (it does not step the view)" || bad "SEQ then EDIT / HOME: $(sq 4) / $(sq 5)"
+[ "$(sq 6)" = "0 0 0 0" ] && [ "$(sq 7)" = "8 0 0 0" ] &&
+    ok "the PLAY menu entered by LOOP held: SEQ leaves to the view; the menu > EDIT, then SEQ: back in the PLAY menu" || bad "SEQ in the PLAY menu: $(sq 6) / $(sq 7)"
+has '^loop: cells Level Metronome - -' "$SQ" && [ "$(sq 8)" = "8 0 0 1" ] && [ "$(sq 9)" = "8 0 0 0" ] && grep -aq "loopmenu .*hot 1\.1" "$SQ" &&
+    ok "the PLAY menu's page 2, KNOB 2: Metronome On / Off, its cell hot: $OUT/cr_seq_p2_on.ppm" || bad "the metronome cell: $(sq 8) / $(sq 9)"
+differ cr_seq_p2_off cr_seq_p2_on "the Metronome cell shows On"
+[ "$(sq 10)" = "0 0 0 1" ] && [ "$(sq 11)" = "0 0 0 0" ] && grep -aq "msg 'metronome on'" "$SQ" && grep -aq "msg 'metronome off'" "$SQ" &&
+    [ "$(grep -ac '^metro: o' "$SQ")" = 2 ] &&
+    ok "GLO held + SEQ: the metronome on / off with its message (no Options, no editor); SEQ's LED does not show the click; SEQ alone never toggled it (the 2 toggles of the script are these)" \
+    || bad "GLO + SEQ: $(sq 10) / $(sq 11), $(grep -ac '^metro: o' "$SQ") toggles"
+[ "$(sq 12)" = "3 0 0 0" ] && [ "$(sq 13)" = "3 0 0 0" ] && [ "$(sq 14)" = "0 1 0 0" ] && ! has '^fx: o' "$SQ" &&
+    ok "SEQ in the FX layer and in the Options: nothing (the layer stays, no editor, no click)" || bad "SEQ in a layer: $(sq 12) / $(sq 13) / $(sq 14)"
+[ "$(lf "$(q 15)" cap)" != 0 ] && [ "$(sq 15)" = "0 0 0 0" ] && has '^loopedit: open rc 1' "$SQ" && grep -aq "msg 'end the take first'" "$SQ" &&
+    ok "SEQ with a take open: refused (end the take first), the view stays" || bad "SEQ during a capture: cap $(lf "$(q 15)" cap), $(sq 15)"
+[ "$(sq 17)" = "7 0 0 0" ] && [ "$(sq 18)" = "8 0 0 0" ] && [ "$(lf "$(q 18)" slot)" = 1 ] && [ "$(sq 19)" = "8 0 1 0" ] &&
+    [ "$(grep -a '^  loop3:' "$SQ" | sed -n 19p | sed -n 's/.* cursor \([0-9]*\) .*/\1/p')" = 2 ] &&
+    ok "SEQ held: the METRO layer on the view, as before; in the editor it closes it to the PLAY menu and PRESETS with SEQ still down does nothing (slot 1); turned inside the hold: the step cursor (2), the editor stays" \
+    || bad "SEQ held + PRESETS: $(sq 17) / $(sq 18) slot $(lf "$(q 18)" slot) / $(sq 19)"
+[ "$(sq 20)" = "8 0 0 0" ] && [ "$(lf "$(q 20)" slot)" = 2 ] && [ "$(sq 21)" = "8 0 1 0" ] && [ "$(sq 22)" = "8 0 0 0" ] && [ "$(sq 23)" = "0 0 0 0" ] &&
+    [ "$(grep -ac '^sound: part 0 pos' "$SQ")" = 0 ] &&
+    ok "LOOP held in the editor: the PLAY menu (not the view), PRESETS with LOOP still down: its slot (2); a LOOP tap there: the editor stays; the sound never changed" \
+    || bad "LOOP held in the editor: $(sq 20) slot $(lf "$(q 20)" slot) / $(sq 21) / $(sq 22) / $(sq 23), $(grep -ac '^sound: part 0 pos' "$SQ") sound change(s)"
 # 0.18: a pattern of 64 steps: entered, refused past the 64th, played, edited
 export EMU_UI_LOG=0
 run cr_loop_step
