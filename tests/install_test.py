@@ -200,6 +200,8 @@ class BackupSide:
             return d and [1, len(d)] + [b for v in d for b in I.bk_u32(v)]
         if cmd == I.BK_PEAK and getattr(self, "peak", None) is not None and not a:
             return [1, len(self.peak)] + [b for v in self.peak for b in I.bk_u32(v)]
+        if cmd == I.BK_USB and getattr(self, "usb", None) is not None and not a:   # (0.19; None: "unsupported")
+            return [1, len(self.usb)] + [b for v in self.usb for b in I.bk_u32(v)]
         if cmd == I.BK_SCREEN and self.version.startswith("ChoralRoot") and len(a) == 1 and a[0] <= 1:
             self.log.append(f"screen {a[0]}")
             return [0]
@@ -566,6 +568,30 @@ def debug():
     cr.peak = None
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")
+    ok("ua_rate" not in out and "ChoralRoot In:" not in out, "--debug on a firmware without 79 USB (before 0.19): no word of a rate")
+    # 0.19: 79 USB (DEBUG_USB): the rate, the 48 kHz packets, the resampler's time on the unit
+    ok(I.BK_USB == 79 and I.DEBUG_USB[:4] == ["ua_rate", "ua_rate_last_open", "ua_rate_sets", "ua_rate_changes"] and
+       len(I.DEBUG_USB) == 11, "--debug: 79 USB's names (cr_backup.c crb_usb's order)")
+    cr.usb = [48000, 48000, 3, 1, 59000, 4, 1200, 81000, 46, 131, 588]
+    cr.debug[I.DEBUG_NAMES.index("ua_open_close_ms")] = 60400
+    cr.debug[I.DEBUG_NAMES.index("ua_frames_last_open")] = 2900000
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "ua_rate 48000" in out and "ua_rs_avg_us 46" in out and "ua_packet_max 588" in out and
+       "ChoralRoot In: 48000 Hz now, the last whole open at 48000 Hz; the host set the rate 3 times (1 changes)" in out and
+       "48 kHz: packets of 48 / 47 / 49 frames: 59000 / 4 / 1200; the resampler takes 46 us a block on average = 184 us "
+       "of a half's 2902 (6.3 %), 131 us at most for one block" in out and
+       "last whole open: 2900000 frames in 60400 ms = 48.0132 frames/ms (at 48000 Hz: 48 is the rate's)" in out,
+       "--debug: 79 USB by name, the rate's line, the resampler's cost a half, the last open against its rate")
+    cr.usb = [44100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 588]
+    cr.debug[I.DEBUG_NAMES.index("ua_open_close_ms")] = 0
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "ChoralRoot In: 44100 Hz now, the last whole open at no rate (none yet); the host set the rate 0 "
+       "times (0 changes)" in out and "48 kHz: packets" not in out, "--debug: 44.1 kHz, never at 48: no 48 kHz line")
+    cr.usb = [48000, 44100, 1]                      # (a shorter answer: what it has)
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "ua_rate_sets 1" in out and "ua_rate_changes" not in out and "ChoralRoot In:" not in out,
+       "--debug: a 79 USB answer with fewer values: those named, no line made of the missing ones")
+    cr.usb = None
     cr.debug = [0] * n
     # stub version 2: the key samples behind the event log (appended: DEBUG_TAIL), the request bits in the detail
     cr.debug = [0] * (n + I.DEBUG_LOG) + [0xFFF00000, 0x00000001, 0, 0x000000FF]
@@ -643,6 +669,42 @@ def uac():
     u = U.unit_delta(base, dict(after, ms=30000, ua_opens=1, ua_overruns=1, ua_tx_packets=60372, ua_sofs=60400, ua_nudges_up=1162, ua_open_ms=60400))
     ok(u["restarted"] and u["opens"] == 1 and u["packets"] == 60372 and u["overruns"] == 1,
        "uac_check: the FM-1 restarted between the reads (its uptime went back): the second read alone counts")
+    # 0.19, 48 kHz: the open's rate as the unit reports it (79 USB, merged into the read): a clean minute at 48 kHz,
+    # the FM-1's clock +435 ppm: 48.0209 frames a ms, 1262 packets of 49
+    b48 = dict(base, ua_rate=44100, ua_rate_last_open=44100, ua_rate_sets=0, ua_rate_changes=0, ua_pk576=0, ua_pk564=0,
+               ua_pk588=0, ua_rs_blocks=0, ua_rs_avg_us=0, ua_rs_max_us=0)
+    f48 = 60372 * 48 + 1262
+    a48 = dict(b48, ms=165000, ua_opens=4, ua_open_ms=110400, ua_open_close_ms=60400, ua_frames_last_open=f48,
+               ua_tx_packets=49900 + 60372, ua_sofs=50000 + 60400, ua_overruns=4, ua_nudges_up=20 + 1262,
+               ua_rate=48000, ua_rate_last_open=48000, ua_rate_sets=1, ua_rate_changes=1, ua_pk576=60372 - 1262,
+               ua_pk588=1262, ua_rs_blocks=65000, ua_rs_avg_us=46, ua_rs_max_us=131)
+    u = U.unit_delta(b48, a48)
+    ok(u["rate"] == 48000 and u["rate_known"] and u["rate_now"] == 48000 and u["rate_sets"] == 1 and
+       u["rate_changes"] == 1 and u["pk48"] == (59110, 0, 1262) and abs(u["frames_ratio"] - f48 / (48000 * 60.4)) < 1e-12
+       and abs(u["short_ms"] - (60400 - f48 / 48.0)) < 1e-6 and round(u["ppm"]) == 435,
+       "uac_check at 48 kHz: the open's frames against 48000 Hz, the nudges against 48 frames a packet (+435 ppm)")
+    text = "\n".join(U.unit_report(b48, a48, 60.0, 48000))
+    ok(f"frames sent in it: {U.num(f48)} = {f48 / 48000:.3f} s at 48000 Hz = {f48 / (48000 * 60.4):.5f} x its length" in text and
+       "the rate of that open, as the FM-1 reports it: 48000 Hz (resampled from its 44.1 kHz by the FM-1)" in text and
+       "rate requests from the host (SET_CUR): 1, of which changes of the rate: 1; the rate now: 48000 Hz" in text and
+       "48 kHz packets: 59 110 of 48 frames, 0 of 47, 1 262 of 49; the resampler: 46 us a block on average = 184 us of a "
+       "half's 2902 (6.3 %), 131 us at most" in text and "+435 ppm" in text and
+       text.endswith("verdict: the FM-1 sent the stream whole"), "uac_check at 48 kHz: its lines, the resampler's cost, the verdict")
+    text = "\n".join(U.unit_report(b48, a48, 60.0, 44100))
+    ok("verdict: the FM-1 streamed at 48000 Hz, not the 44100 Hz asked for" in text, "uac_check --rate 44100, the FM-1 at 48000: said")
+    text = "\n".join(U.unit_report(b48, a48, 60.0))
+    ok(text.endswith("verdict: the FM-1 sent the stream whole"), "uac_check without --rate: the rate the FM-1 reports is taken")
+    # the same counters judged as 44.1 kHz would be 8.8 % too many frames: the rate must come from the unit
+    old = {k: v for k, v in a48.items() if not k.startswith(("ua_rate", "ua_pk5", "ua_rs"))}
+    u = U.unit_delta(base, old)
+    text = "\n".join(U.unit_report(base, old, 60.0, 48000))
+    ok(u["rate"] == 44100 and not u["rate_known"] and "this firmware does not report a rate (before 0.19: 44100 Hz only), "
+       "48000 Hz was asked for" in text, "uac_check: a firmware without 79 USB is 44100 Hz; --rate 48000 against it: said")
+    text = "\n".join(U.unit_report(base, after, 60.0, 44100))
+    ok(text.endswith("verdict: the FM-1 sent the stream whole") and "as the FM-1 reports it" not in text,
+       "uac_check: a firmware without 79 USB, --rate 44100: as before")
+    text = "\n".join(U.unit_report(b48, dict(a48, ua_rate_changes=3, ua_rate_sets=5), 60.0, 48000))
+    ok("the host changed the rate 3 times during the capture" in text, "uac_check: the rate changed more than once in a capture: said")
     # the read itself, through fm1_install's MIDI side (the simulated FM-1): by name; a firmware without the counters
     n = len(I.DEBUG_NAMES)
     cr = BackupSide("ChoralRoot 0.17", I.CR_IDS)
@@ -651,6 +713,14 @@ def uac():
     d, why = U.counters(I.Updater(dev))
     ok(why is None and d["ua_opens"] == I.DEBUG_NAMES.index("ua_opens") and d["ms"] == 0 and all(x.closed for x in dev.links),
        "uac_check: the counters read by name through the tool's MIDI side, the link closed")
+    ok("ua_rate" not in d, "uac_check: a firmware without 79 USB: 73's counters alone")
+    cr.usb = [48000, 44100, 2, 1, 7, 8, 9, 10, 11, 12, 588]
+    dev = FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)
+    d, why = U.counters(I.Updater(dev))
+    ok(why is None and d["ua_rate"] == 48000 and d["ua_rate_last_open"] == 44100 and d["ua_pk588"] == 9 and
+       d["ua_rs_max_us"] == 12 and d["ua_opens"] == I.DEBUG_NAMES.index("ua_opens") and all(x.closed for x in dev.links),
+       "uac_check: 79 USB's values merged into the read by name (0.19), the link closed")
+    cr.usb = None
     cr.debug = list(range(I.DEBUG_NAMES.index("ua_cap_alt")))
     d, why = U.counters(I.Updater(FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)))
     ok(d is None and "no USB recording counters" in why, "uac_check: a firmware whose DEBUG ends before the recording's counters: said")

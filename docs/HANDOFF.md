@@ -121,6 +121,11 @@ installed on the owner's Mac.
 - **(b) CZ-1 pops and drop-outs on held chords without FX.** The owner, 2026-10-13: believes it is internal clipping
   in the engine; the other engines are fine.
 - **(c) WHEEL**: the owner is on the fence about cutting it.
+- **(d) USB recording at 48 kHz: built, nothing run on a host or the unit** (docs/USB-AUDIO.md "48 kHz"; HISTORY
+  2026-10-12). ChoralRoot In offers 44.1 and 48 kHz, the host chooses; 44.1 kHz is bit for bit 0.18's. At 48 kHz the
+  six channels are resampled in the audio ISR: about 185 us a half by the listing, which the heaviest CZ-1 patches
+  may not have. **The owner's**: the test plan there (macOS at both rates, a phone, Windows; the heavy case with
+  `--debug`), then whether six channels at 48 kHz stay as they are, get the 16-tap filter, or 48 kHz is dropped.
 
 ## Facts that are easy to get wrong
 

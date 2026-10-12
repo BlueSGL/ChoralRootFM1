@@ -21,6 +21,9 @@
  *                paced service curing it
  *   hold         the ring not fed until the host's first take (no overrun at every stream open)
  *   frames       30 s byte for byte: whole 12-byte frames in order across the 44 / 45 boundaries and the nudges
+ *   golden       the 44.1 kHz stream's digest (tests/cr_usbaudio_golden.h): every byte and length of 45950 packets,
+ *                equal to the one taken on the tree before 48 kHz (f402608): 44.1 kHz is bit for bit what it was
+ *   (48 kHz: the second rate, its requests, the resampler and the stream are tests/cr_usbaudio48_test.c)
  *   --bench      host instructions for a half's USB work (macOS) and the device estimate (perf.sh)
  *   cc -std=gnu11 -O2 -o build/host/cr_usbaudio_test tests/cr_usbaudio_test.c   (tests/run_cr_tests.sh) */
 #include <stdint.h>
@@ -39,6 +42,7 @@
 static void fm1_delay_ms(uint32_t ms) { (void)ms; }
 #pragma GCC diagnostic ignored "-Wint-to-pointer-cast"   /* SIE register macros (never touched here) */
 #include "../firmware/src/usb.c"
+#include "cr_usbaudio_golden.h"
 
 static int fails, passes;
 static void check(const char *what, int ok)
@@ -88,9 +92,9 @@ static void parse(const char *tag, uint8_t off, int cap, int cdc)
     present(off);
     get_desc(0x0100, &dev, &dl);
     get_desc(0x0200, &c, &n);
-    snprintf(s, sizeof s, "%s: device: 18 bytes, misc / IAD class, bcdDevice %s", tag, cdc ? "3.21" : "3.22");
+    snprintf(s, sizeof s, "%s: device: 18 bytes, misc / IAD class, bcdDevice %s", tag, cdc ? "3.21" : "3.23");
     check(s, dl == 18 && dev[0] == 18 && dev[4] == 0xEF && dev[5] == 2 && dev[6] == 1 && dev[13] == 3 &&
-             dev[12] == (cdc ? 0x21 : 0x22) && dev[14] == 1 && dev[15] == 2);
+             dev[12] == (cdc ? 0x21 : 0x23) && dev[14] == 1 && dev[15] == 2);
     snprintf(s, sizeof s, "%s: configuration: wTotalLength = the %u bytes sent", tag, n);
     check(s, c[1] == 2 && le16(c + 2) == n);
     for (off_b = 0; off_b < n; off_b += d[0]) {
@@ -138,8 +142,9 @@ static void parse(const char *tag, uint8_t off, int cap, int cdc)
             nlists++;
         } else if (d[1] == 0x24 && cur_sub == 2 && d[2] == 2) {                /* type I format */
             uint32_t rate = d[8] | d[9] << 8 | (uint32_t)d[10] << 16;
-            if (d[4] == 6 && d[5] == 2 && d[6] == 16 && rate == 44100)
-                fmt_cap = 1;
+            uint32_t rate2 = d[0] >= 14 ? d[11] | d[12] << 8 | (uint32_t)d[13] << 16 : 0;
+            if (d[0] == 14 && d[4] == 6 && d[5] == 2 && d[6] == 16 && d[7] == 2 && rate == 44100 && rate2 == 48000)
+                fmt_cap = 1;                               /* two discrete rates (0.19) */
             else
                 fmt_other = 1;
         }
@@ -163,7 +168,7 @@ static void parse(const char *tag, uint8_t off, int cap, int cdc)
     snprintf(s, sizeof s, "%s: the recording %s (IF %d)", tag, cap ? "on" : "off", ua_if_cap == UA_NO_IF ? -1 :
              ua_if_cap);
     check(s, (ua_if_cap != UA_NO_IF) == cap && (!cap || sub_of[ua_if_cap] == 2));
-    snprintf(s, sizeof s, "%s: format (6 x PCM16, 44.1 kHz) and packet size; no playback (OUT, feedback, format)", tag);
+    snprintf(s, sizeof s, "%s: format (6 x PCM16, 44.1 and 48 kHz) and packet size; no playback (OUT, feedback, format)", tag);
     check(s, fmt_cap && !fmt_other && sizes && noplay);
 }
 
@@ -172,8 +177,8 @@ static void test_descriptors(void)
     const uint8_t *d;
     uint16_t l;
     parse("USB Record on", 0, 1, 0);
-    check("USB Record on: 208 bytes, 4 interfaces (MIDI 0-1, the recording 2-3)",
-          ua_cfg_len == 208 && ua_if_cap == 3 && ua_nif == 4);
+    check("USB Record on: 211 bytes, 4 interfaces (MIDI 0-1, the recording 2-3)",
+          ua_cfg_len == 211 && ua_if_cap == 3 && ua_nif == 4);
     parse("USB Record off (the console)", UA_OFF_IN, 0, 1);
     present(0);
     check("strings: the product \"ChoralRoot FM-1\" (the MIDI port), the maker", str_is(2, "ChoralRoot FM-1") &&
@@ -362,6 +367,48 @@ static uint64_t instr(void)
 }
 #endif
 static volatile int32_t sink;
+/* 48 kHz. (The 44.1 kHz packets' host figure in bench() is 4800 instructions a half since this was added, 2630
+ * before: the host's compiler builds bench()'s loop differently with more of this file around it, experiments say;
+ * ua_transmit's loops on the unit are instruction for instruction what they were, tools/fx_loops.py. It is an
+ * estimate of the host's) */
+static __attribute__((noinline)) void bench48(uint64_t *t3p, uint64_t *t4p)
+{
+#ifdef __APPLE__
+    enum { HALVES = 20000 };
+    uint8_t cp[UA_PACKET];
+    uint32_t h, b, i, f = 0;
+    uint64_t t3, t4;
+    /* 48 kHz: what the resampler adds in the ISR (four blocks of six channels: ua_block48 -> ua_resample; the ring
+     * copy is 139 frames for 128) and the packets of 48 frames */
+    ua_reset();
+    ua.cap_alt = 1;
+    ua.r48 = 1;
+    for (i = 0; i < 32 * UA_CAP_CHANNELS; i++)
+        stage[i] = (int16_t)((int32_t)(i * 997u % 60000u) - 30000);
+    for (h = 0; h < HALVES; h++)
+        for (b = 0; b < 4; b++) {
+            uint32_t k = ua_block48(stage, 32);
+            if (ua.cw - ua.cr > 300u)
+                ua.cr = ua.cw - 256u;
+            ua_feed(ua.rs_out, k, 1);
+            sink += ua.cap[5];
+        }
+    t3 = instr();
+    for (h = 0; h < HALVES; h++) {
+        uint32_t frames = (h % 10u) < 9u ? 3u : 2u;
+        for (f = 0; f < frames; f++) {
+            ua_sof();
+            if (ua.cw - ua.cr < 300u)
+                ua.cw += 128u;
+            sink += (int32_t)ua_transmit(cp);
+        }
+    }
+    t4 = instr();
+    *t3p = t3;
+    *t4p = t4;
+#endif
+}
+
 /* a half's (128 frames, 2.9 ms) USB recording work on the host: per block (x4) fx.c's ua_stage clear and the part
  * captures (two parts x 32 frames, as mix_part writes them), the master tap (choralroot.c) and the ring copy
  * (ua_audio); per USB frame (x2.9) the packet out (ua_transmit) and the SOF fill filter. Device us = host instructions /
@@ -374,7 +421,8 @@ static void bench(void)
     int32_t out[64], part[64];
     uint64_t t0, t1, t2;
     uint32_t h, b, i, f = 0;
-    double per_half_isr, per_half_t5;
+    double per_half_isr, per_half_t5, per_half_rs, per_half_t5_48;
+    uint64_t t3, t4;
     memset(&ua, 0, sizeof ua);
     ua_reset();
     ua.cap_alt = 1;
@@ -414,6 +462,7 @@ static void bench(void)
         }
     }
     t2 = instr();
+    bench48(&t3, &t4);
     if (!t0) {
         printf("bench: no instruction counter\n");
         return;
@@ -424,6 +473,13 @@ static void bench(void)
            "%.0f us + %.0f us = %.0f us of 2902 (%.1f %%), SIE register access not included\n",
            per_half_isr, per_half_t5, per_half_isr / 259.0, per_half_t5 / 259.0, (per_half_isr + per_half_t5) / 259.0,
            100.0 * (per_half_isr + per_half_t5) / 259.0 / 2902.0);
+    per_half_rs = (double)(t3 - t2) / HALVES;
+    per_half_t5_48 = (double)(t4 - t3) / HALVES;
+    printf("usb audio at 48 kHz: the resampler (six channels, %u taps) and its ring copy take %.0f host instructions a "
+           "half in the audio ISR (the 44.1 kHz copy alone is in the line above), the packets %.0f (44.1 kHz: %.0f) -> "
+           "device estimate +%.0f us in the ISR, %.0f us of packets. An estimate: the unit's own count from its "
+           "disassembly is in docs/USB-AUDIO.md, \"48 kHz\"\n",
+           (unsigned)UAC_FIR_N, per_half_rs, per_half_t5_48, per_half_t5, per_half_rs / 259.0, per_half_t5_48 / 259.0);
 #else
     printf("bench: macOS only (proc_pid_rusage)\n");
 #endif
@@ -725,6 +781,18 @@ static void test_frames(void)
     }
 }
 
+/* 44.1 kHz bit for bit: the digest of every packet of three runs (cr_usbaudio_golden.h), taken with the same file on
+ * the tree before the second rate (commit f402608, its usb.c and usb_audio*.c) */
+#define UA_GOLD_44K1 0x3C1F6F60F9E08D4Dull
+static void test_golden(void)
+{
+    char m[200];
+    ua_gold();
+    snprintf(m, sizeof m, "44.1 kHz bit for bit: %u packets, %u bytes, digest %016llX = before 48 kHz",
+             ua_gold_packets, ua_gold_bytes, (unsigned long long)ua_gold_hash);
+    check(m, ua_gold_hash == UA_GOLD_44K1 && ua_gold_packets == 45950u && ua_gold_bytes == 24310980u);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1 && !strcmp(argv[1], "--bench")) {
@@ -742,6 +810,7 @@ int main(int argc, char **argv)
     test_render_gap();
     test_hold();
     test_frames();
+    test_golden();
     printf("cr_usbaudio: %d passed, %d failed\n", passes, fails);
     return fails ? 1 : 0;
 }

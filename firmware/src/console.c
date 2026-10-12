@@ -180,6 +180,8 @@ static void con_uac(void)                              /* USB audio (usb_audio_s
     con_kv("ua_missed_frames", (int32_t)ua.missed_frames);
     con_kv("ua_poll_max_us", (int32_t)(ua.poll_max_ticks / FM1_TICKS_PER_US));
     con_kv("ua_service_max_us", (int32_t)(ua.service_max_ticks / FM1_TICKS_PER_US));
+    con_kv("ua_rate_last_open", !ua_dbg.open_close_ms ? 0 : ua_dbg.rate_last_open ? (int32_t)UA_RATE48 : (int32_t)UA_RATE);
+    con_kv("ua_rs_max_us", (int32_t)(ua.rs_max_ticks / FM1_TICKS_PER_US));   /* (48 kHz: a block's resampling) */
 }
 #endif
 

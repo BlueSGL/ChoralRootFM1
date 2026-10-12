@@ -48,7 +48,9 @@
 #                   release, stray samples ignored, fast repeats, the encoders' detents; the LED scan: lit LEDs every
 #                   frame, dim ones a short pulse (the second line write) every frame, each only on its own column.
 # USB audio (tests/cr_usbaudio_test.c, also in run_cr_tests.sh): Melodee's UAC1 recording as ChoralRoot builds it
-#                   (no playback): the descriptors in each presentation, routing, packing, the ring against drift.
+#                   (no playback): the descriptors in each presentation, routing, packing, the ring against drift,
+#                   the 44.1 kHz stream's digest. tests/cr_usbaudio48_test.c: the second rate (0.19), its requests,
+#                   the 44.1 -> 48 kHz resampler's exactness and spectrum, the 48 kHz stream, a rate switch.
 # web (web/test_web.mjs): the editor protocol against its mock device, whose tables must equal the
 #                   firmware's (tests/descdump.c -> build/host/desc.json), the package builder, the updater.
 # Transporter (tests/transporter_shim_test.py): tools/transporter's stand-ins for the FM-1 Transporter's fm1_ota / fm1fw:
@@ -137,6 +139,8 @@ run "TRS MIDI parser" "$OUT/midi_uart_test"
 
 $CC -std=gnu11 -o "$OUT/cr_usbaudio_test" tests/cr_usbaudio_test.c
 run "USB audio: descriptors, routing, packing, clock drift and recovery" "$OUT/cr_usbaudio_test"
+$CC -std=gnu11 -o "$OUT/cr_usbaudio48_test" tests/cr_usbaudio48_test.c -lm
+run "USB audio at 48 kHz: the two rates, SET_CUR, the resampler, a rate switch" "$OUT/cr_usbaudio48_test"
 
 # the build's outputs the sections below read: without one of them a section would have nothing to test
 for f in build/choralroot.fwsc build/choralroot.dis build/gen/felucca_tables.h build/gen/ui_fonts.h; do

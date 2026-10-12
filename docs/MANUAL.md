@@ -1401,7 +1401,8 @@ A part whose channel is Off ignores MIDI in.
 
 ### USB audio recording
 
-**ChoralRoot In** is a class-compliant audio input: no driver is needed. It has six channels at 44.1 kHz, 16 bit.
+**ChoralRoot In** is a class-compliant audio input: no driver is needed. It has six channels, 16 bit, at 44.1 kHz
+or 48 kHz.
 
 | Channels | Signal |
 | --- | --- |
@@ -1409,7 +1410,13 @@ A part whose channel is Off ignores MIDI in.
 | 3-4 | the chord sound alone, before the reverb, chorus and delay, at half level |
 | 5-6 | the bass sound alone, the same way |
 
-- Set the computer or the DAW to 44.1 kHz.
+- The computer, phone or app chooses the rate; there is no setting on the FM-1. **44.1 kHz** is the FM-1's own
+  rate: the recording is exactly what the FM-1 made. Use it when you can. **48 kHz** (from 0.19) is for phones,
+  tablets, apps and projects that only take 48 kHz: the FM-1 converts on the way out. The top of the treble is a
+  little softer (1 dB down at 16 kHz), and the conversion takes some processor time: in the very heaviest sounds
+  (CZ-1 chords with both effects) a voice may drop sooner while a 48 kHz recording runs.
+- On a Mac the rate is ChoralRoot In's Format in Audio MIDI Setup; on Windows, Sound settings > ChoralRoot In >
+  Properties > Advanced. A DAW usually sets it from the project's rate.
 - Options > USB Level = Fixed records at full level while MASTER only turns the speaker and headphones down.
 - Options > USB Record = Off removes the audio input. When you change it the FM-1 leaves USB for about a second
   (`USB RECONNECTING`); the MIDI port goes with it and comes back.

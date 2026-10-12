@@ -98,11 +98,19 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
 #if FELUCCA_UAC
     /* the USB recording's ring (usb_audio_stream.c): the capture frames in (fx.c ua_stage). TIMER5 serves the
      * endpoint nested in this render (main.c): only this short copy goes without IRQs, stream resets and alternate
-     * changes included, not the synth and FX work (Melodee's) */
+     * changes included, not the synth and FX work (Melodee's). 0.19: when the host runs ChoralRoot In at 48 kHz the
+     * block is resampled first, with the IRQs on (ua_block48: 34 or 35 frames for the 32); at 44.1 kHz that is one
+     * test of the rate and the frames go in as they are */
     if (ua_stage_on) {                                  /* (the computer records: else no IRQ-off section at all) */
+        const int16_t *st = ua_stage;
+        uint32_t fn = n, r48 = ua.r48;
+        if (r48) {
+            fn = ua_block48(ua_stage, n);
+            st = ua.rs_out;
+        }
         fm1_irq_off();
         if (usb.up && usb.config && !usb.suspended && !USB_CDC_ON)
-            ua_audio(ua_stage, n);
+            ua_feed(st, fn, r48);
         fm1_irq_on();
     }
 #endif

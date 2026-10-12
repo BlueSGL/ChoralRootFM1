@@ -693,6 +693,11 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   the recording out and presents the serial console instead (the FM-1 replugs itself, `usb_replug`; both need EP2
   IN). Options > USB Level = Fixed (Felucca 1.0.5): USB at the full level, MASTER
   scales the DAC after (`fx.c` `usb_fixed_dac`). The emulator has no USB (`FELUCCA_UAC` 0 there): the settings only.
+  **48 kHz (0.19)**, SLOOP 2.5's after Felucca 1.1.5, for six channels: the format lists 44100 and 48000 Hz and the
+  host's `SET_CUR` on the endpoint picks (`ua_rate_set`); at 48 kHz `audio.c` resamples each staged block x 160 /
+  147 before the ring (`ua_block48`, `usb_audio_stream.c` `ua_resample`, SLOOP's 12-tap polyphase table
+  `uac_fir.h`), about 185 us a half counted from the listing; 44.1 kHz is bit for bit as before. `bcdDevice` 3.23,
+  `wMaxPacketSize` 688; SysEx 79 USB has the rate and the 48 kHz counters. Nothing in `fx.c` changed.
   Felucca 1.0.5's BASS+ fix (#42) came with it: `spk_bass`'s low-pass has 4 poles.
 
 - **Install guard (2026-10-07, docs/INSTALL-COMPAT.md)**: both installers classify the running firmware (identity + INFO) and refuse Sloop, the Felucca 0.x betas and unknown ones (`--force` / an "I understand the risk" box); the loader is not the cause; the cause is still open (the emulator boots fine on Sloop and 0.9 data).

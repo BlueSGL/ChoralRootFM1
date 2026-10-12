@@ -68,6 +68,12 @@ grep -c ' ok$' build/host/fm4_div0_test.log | sed 's/^/fm4_div0_test: /; s/$/ ch
 cc -std=gnu11 -O2 -w -o build/host/cr_usbaudio_test tests/cr_usbaudio_test.c
 ./build/host/cr_usbaudio_test > build/host/cr_usbaudio_test.log || { cat build/host/cr_usbaudio_test.log; exit 1; }
 tail -1 build/host/cr_usbaudio_test.log
+# ChoralRoot In at 48 kHz (0.19, tests/cr_usbaudio48_test.c): the two-rate descriptors against SLOOP 2.5's, the
+# sampling-frequency requests, the resampler (160 / 147 exactly, bit for bit against a reference, its spectrum), the
+# 48 kHz stream and a rate switch mid-stream. (44.1 kHz bit for bit: the digest in cr_usbaudio_test above)
+cc -std=gnu11 -O2 -w -o build/host/cr_usbaudio48_test tests/cr_usbaudio48_test.c -lm
+./build/host/cr_usbaudio48_test > build/host/cr_usbaudio48_test.log || { cat build/host/cr_usbaudio48_test.log; exit 1; }
+tail -1 build/host/cr_usbaudio48_test.log
 cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_midi_test tests/cr_midi_test.c
 ./build/host/cr_midi_test
 # the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md)

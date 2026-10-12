@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
- * ChoralRoot changes (the PCM16-only capture, SAFE MODE, the console's presentation, the playback function removed)
+ * ChoralRoot changes (the PCM16-only capture, SAFE MODE, the console's presentation, the playback function removed;
+ * 0.19: the second rate, 48 kHz, chosen by the host's SET_CUR as in SLOOP 2.5 / Felucca 1.1.5)
  * Copyright (C) 2026 ChoralRoot FM-1 contributors */
 /* Melodee's usb_audio.c (Melodee 0.11.1). USB0 full-speed isochronous service, included by usb.c after the SIE
  * helpers.
@@ -59,6 +60,9 @@ static struct {
     uint32_t isr_busy, t5_busy;                       /* skipped: the SIE was in another context's sequence */
     uint32_t stalls, log_n, ovr_seen;                 /* EP0 requests stalled; events logged; overruns logged */
     uint32_t log[16][2];                              /* the last 16 events: fm1_ms, what (UA_EV_*) */
+    /* 0.19, 48 kHz (cr_backup.c's USB command, 79): packets armed at 48 kHz by size (48 frames; 47, 49: the drift),
+     * and the rate of the last whole open (1 = 48 kHz): what ua_frames_last_open is measured against */
+    uint32_t pk576, pk564, pk588, rate_last_open;
 } ua_dbg;
 /* an event: a SETUP (bmRequestType | bRequest << 8 | wValue low << 16 | wIndex low << 24, the stalled ones repeated
  * with bit 31 of the time set) or an overrun (0xFF0000nn: the count) */
@@ -179,6 +183,12 @@ static void ua_tx_fill(void)
                 ua_dbg.pk528++;
             else if (ua_tx_bytes == 540u)
                 ua_dbg.pk540++;
+            else if (ua.r48 && ua_tx_bytes == 576u)
+                ua_dbg.pk576++;                 /* 48 kHz: 48 frames; 47 or 49 on a nudge */
+            else if (ua.r48 && ua_tx_bytes == 564u)
+                ua_dbg.pk564++;
+            else if (ua.r48 && ua_tx_bytes == 588u)
+                ua_dbg.pk588++;
             else {
                 ua_dbg.pk_other++;
                 ua_dbg.pk_other_last = ua_tx_bytes;
@@ -207,12 +217,14 @@ static int ua_set_interface(uint16_t interface, uint16_t alt)
         alt = 0;                                /* (SAFE MODE presents no audio function: belt and braces) */
     ua_cap_reset();
     if (alt && !ua.cap_alt) {
+        ua.rs_on = 0;                           /* (48 kHz: the resampler's history is the last stream's) */
         ua_dbg.open_at = fm1_ms;
         ua_dbg.opens++;
         ua_dbg.arm_last = 0;
         ua_dbg.frames_open = 0;
     } else if (!alt && ua.cap_alt) {
         ua_dbg.frames_last_open = ua_dbg.frames_open;
+        ua_dbg.rate_last_open = ua.r48;         /* (a rate change restarts the open's count: ua_control_data) */
         ua_dbg.open_ms += fm1_ms - ua_dbg.open_at;
         ua_dbg.open_close_ms = fm1_ms - ua_dbg.open_at;
     }
@@ -233,13 +245,32 @@ static int ua_set_interface(uint16_t interface, uint16_t alt)
     return 1;
 }
 
-/* UAC1 endpoint sampling-frequency control. There is only one discrete rate;
- * retain these requests for hosts that set it while starting a stream.
- * The capture's one alternate is PCM16. */
+/* UAC1 endpoint sampling-frequency control. Two discrete rates since 0.19 (44100, 48000: SLOOP 2.5 / Felucca
+ * 1.1.5's way, one alternate setting and SET_CUR): GET_CUR answers the rate in force, GET_MIN / GET_MAX the two,
+ * SET_CUR's three bytes choose (ua_control_data). The capture's one alternate is PCM16. */
+static int ua_control_is(const uint8_t *s)   /* a sampling-frequency request (three bytes) to the capture endpoint */
+{
+    return usb.config && !s[2] && s[3] == 1u && !s[5] && s[6] == 3u && !s[7] && s[4] == 0x82u && ua_if_cap != UA_NO_IF;
+}
+
+static int ua_control_get(const uint8_t *s, uint32_t *rate)   /* a GET of it: its answer (no SIE: the host tests) */
+{
+    if (s[0] != 0xA2u)
+        return 0;
+    switch (s[1]) {
+    case 0x81: *rate = ua.r48 ? UA_RATE48 : UA_RATE; break;   /* GET_CUR */
+    case 0x82: *rate = UA_RATE; break;         /* GET_MIN */
+    case 0x83: *rate = UA_RATE48; break;       /* GET_MAX */
+    case 0x84: *rate = 0; break;               /* GET_RES: discrete frequencies */
+    default: return 0;
+    }
+    return 1;
+}
+
 static int ua_control_setup(const uint8_t *s)
 {
     uint32_t rate;
-    if (!usb.config || s[2] || s[3] != 1u || s[5] || s[6] != 3u || s[7] || s[4] != 0x82u || ua_if_cap == UA_NO_IF)
+    if (!ua_control_is(s))
         return 0;                            /* (not the capture endpoint, or the recording left out) */
     if (s[0] == 0x22u && s[1] == 1u) {       /* SET_CUR: three-byte OUT stage */
         ua_rate_pending = s[4];
@@ -247,15 +278,8 @@ static int ua_control_setup(const uint8_t *s)
         sie_wr(S_CSR0, 0x40);
         return 1;
     }
-    if (s[0] != 0xA2u)
+    if (!ua_control_get(s, &rate))
         return 0;
-    switch (s[1]) {
-    case 0x81:                               /* GET_CUR */
-    case 0x82:                               /* GET_MIN */
-    case 0x83: rate = UA_RATE; break;          /* GET_MAX */
-    case 0x84: rate = 0; break;                /* GET_RES: fixed frequency */
-    default: return 0;
-    }
     ua_rate_reply[0] = (uint8_t)rate;
     ua_rate_reply[1] = (uint8_t)(rate >> 8);
     ua_rate_reply[2] = (uint8_t)(rate >> 16);
@@ -266,13 +290,46 @@ static int ua_control_setup(const uint8_t *s)
 static int ua_control_data(const uint8_t *p, uint32_t n)
 {
     uint8_t ep = ua_rate_pending;
-    (void)p;
     ua_rate_pending = 0;
     if (!usb.config || !ep || n != 3u)
         return 0;
-    /* UAC1 rounds unsupported values to the closest discrete rate: 44100.
-     * Do not flush an already running stream for this no-op control. */
+    /* UAC1 rounds unsupported values to the closest discrete rate: 44100 or 48000 (ua_rate_set). The rate in force
+     * again is a no-op: an already running stream is not flushed for it. A change while the stream is open (macOS
+     * and Windows send SET_CUR after SET_INTERFACE) empties the ring, drops the packet packed ahead at the old
+     * rate (the one the SIE holds goes out as it is) and starts the open's own count again, so the frames of an
+     * open are all of one rate (ua_frames_last_open against ua_rate_last_open) */
+    if (ua_rate_set(p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16)) {
+        ua_tx_bytes = 0;
+        if (ua.cap_alt) {
+            ua_dbg.open_at = fm1_ms;
+            ua_dbg.frames_open = 0;
+        }
+    }
     return 1;
+}
+
+/* The audio ISR at 48 kHz, interrupts on (TIMER5 and its endpoint service nest): the block's capture frames
+ * resampled into ua.rs_out for ua_feed; returns their count, 0 while the host does not read yet (cap_hold: nothing
+ * is fed then, so nothing is filtered; the resampler starts from silence when it reads). Timed for cr_backup.c's
+ * USB command: ua_rs_avg_us, ua_rs_max_us */
+static __attribute__((noinline)) uint32_t ua_block48(const int16_t *stage, uint32_t n)
+{
+    uint32_t t0, dt, k;
+    if (ua.cap_hold) {
+        ua.rs_on = 0;
+        return 0;
+    }
+    t0 = UA_DBG_NOW();
+    k = ua_resample(stage, n);
+    dt = UA_DBG_NOW() - t0;
+    if (dt > ua.rs_max_ticks)
+        ua.rs_max_ticks = dt;
+    ua.rs_ticks += dt;
+    if (++ua.rs_blocks >= 65536u) {
+        ua.rs_blocks >>= 1;
+        ua.rs_ticks >>= 1;
+    }
+    return k;
 }
 
 static void ua_hw_poll(void)

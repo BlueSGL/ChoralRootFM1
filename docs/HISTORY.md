@@ -1055,3 +1055,42 @@ goldens were rewritten, and with both fixes switched off in a copy all 197 are m
 CZ-1 is 5.4 dB hotter at the peak than the VA for the same chord (it adds a half-scale voice `* 4` where `dsp.c`'s
 convention is `<< 1`); -6 dB for the engine would level it, a decision for the master's rework. Details, the tables
 and what was not tested: docs/CZ1.md "Pops (0.19)". The ten worst, before and after: `../audio-0.19/cz-pops/`.
+
+## 2026-10-12 (USB recording at 48 kHz)
+
+**0.19 dev (built; not flashed, nothing run on a host).** The owner wants SLOOP 2.5's "USB audio at 48 kHz
+too" (after Felucca 1.1.5) in ChoralRoot, as a compatibility feature: the synth and the headphones stay at 44.1 kHz.
+**Read:** SLOOP's working tree at v2.6 (`firmware/src/usb.c` `FELUCCA_UAC_48K`, `uac_fir.h`, `tools/gen_uac_fir.py`,
+`tests/uac_test.c`). **Not read:** Felucca 1.1.5 itself and SLOOP's v2.4.1..v2.5 diff: the agent's sandbox refuses
+git commands aimed at other repositories, and Felucca's working tree is v1.0.1; what is said of Felucca's filter (24
+taps, Q30, 7680 B) is SLOOP's own account of it. **What they shipped:** one alternate setting whose type I format
+lists two discrete rates, the endpoint's `SET_CUR` choosing, `bcdDevice` raised (SLOOP 3.10 -> 3.20), a polyphase
+FIR x 160 / 147 in the audio ISR's tap writing 48 kHz frames into the ring, packets of 48 frames, 47 or 49 by the
+ring's fill; both stereo. **ChoralRoot's:** the same descriptor form for six channels (`usb_audio_desc.h`; the
+streaming descriptors equal SLOOP's but the channel count, the terminal, the endpoint's number and size),
+`bcdDevice` 3.22 -> 3.23, `wMaxPacketSize` 640 -> 688 (a 49-frame packet bit-stuffed: 686), `ua_rate_set` /
+`ua_control_get` / `ua_control_data` (`usb_audio.c`), the rate back to 44.1 at a bus reset or a new configuration.
+The resampler (`usb_audio_stream.c ua_resample`) is SLOOP's table value for value (12 taps, Q15, 1920 B; the
+generator's output compares equal to SLOOP's file) run over six channels: `audio.c` calls it after the mix has
+staged the block and before the interrupts-off ring copy, so nothing in `fx.c` changed and both Dual Core settings
+take the same path. **Measured (host, the C code):** 160 out for 147 in, bit for bit against a reference in any
+block sizes; passband flat to 12 kHz, -0.21 dB at 14 kHz, -0.95 at 16, -2.72 at 18; a tone's image (at f + 3900
+Hz) 77 dB down or more to 14 kHz, 55.6 dB for 16 kHz, above 20 kHz beyond that (a 20 kHz tone: 23.9 kHz at -14 dB);
+1 kHz SNR 80 dB. **The cost** from `build/choralroot.dis` at 205 instructions a us: 236 / 242 instructions an output
+frame of six channels, 9 150 a block, **179 us a half + 6 for the longer copies = about 185 us (6.4 %)**, the worst
+half 187; at 44.1 kHz about 0.3 us (the test of the rate). Got there in three steps on the unit's compiler: a tap
+loop with six 32-bit sums 326 instructions a frame, three channels at a time with 64-bit sums (one multiply-add
+instruction) 277 inlined, 236 as functions of their own. **A real cost:** the heaviest case on record is 2580 of
+2902 us (CZ-1 chords, both effects); a 48 kHz recording on top is about 2765, where `shed_check` starts giving up
+voices. A 16-tap filter would be better at the top (-1.5 dB at 18 kHz, images -80 dB) for about 225 us: not built.
+**44.1 kHz bit for bit:** `tests/cr_usbaudio_golden.h` hashes every byte and length of 45 950 packets (three runs,
+noise in six channels, an overrun and both nudges in them); the digest was taken with the same file on f402608's
+`usb.c` and is compared in `cr_usbaudio_test`. **Counters:** 73 DEBUG is full, so SysEx 79 USB (rate now, rate of
+the last whole open, SET_CURs, changes, 48 kHz packets by size, the resampler's us a block); a rate change while
+open restarts the open's frame count, so `ua_frames_last_open` is of one rate; `fm1_install.py --debug` and
+`uac_check.py` (`--rate`) read it, tested against the simulated FM-1. **Memory:** XIP +4896 B (83.8 %), POOL +724 B
+(91.7 %), RAM +128 B (82.2 %). **perf.sh (u)** prints both rates; its 44.1 kHz packet estimate moved from 10 to 19
+us with the test file's shape (the host compiler's inlining; the unit's loops are instruction for instruction the
+same). **Not tested:** any host (enumeration with two rates, the default rate, SET_CUR's order, 49-frame packets
+and 688 bytes on the controller and through a hub, a switch while recording, iOS / Android / Windows), and the cost
+on the unit. The test plan is docs/USB-AUDIO.md "The owner's test plan".
