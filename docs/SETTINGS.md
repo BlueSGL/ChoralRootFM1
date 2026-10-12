@@ -273,6 +273,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | the page picked in the FX layer (Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive) | no | **yes** | session `fx.sel` (an effect tag; the second pages and Sends have their own) |
 | the effects' own parameters, GLOBAL (the reverb's 7 and the delay's 9: [FX.md](FX.md); the chorus's rate and depth) | no | **yes** | session `fx.par[]` (tag, value) |
 | the chord part's four sends (the FX layer's "Send" cells, KNOB 4) | no (the preset's again) | **yes** | session `fx.amt[]`. The sends are the PART's since 0.18: no sound load touches them (MANUAL section 8) |
+| an FM TONE sound's Drive (its AMP screen; the Sends page's Drive while the part plays FM TONE) | no (the preset's again) | **yes**, with the part's sound as it is | with the SOUND: a user preset's record (`upreset.c`, its `P_DIST` field), a factory preset's table row; the session `part[].p[P_DIST]`. The part's own drive send stays beside it: `fx.amt[DRIVE]` (chord), tag 29 (bass). docs/FX.md "FM TONE's Drive" |
 | the bass part's four sends (its editor's FX group, CC 91 / 93 / 94 on the bass channel) | no (the bass sound's again) | **yes** | session `fx.par[]`, tags 26..29 |
 | which sound the chord part plays, each engine's last place | yes | yes | block `chord_sound`, `pool_pos` |
 | each part's sound as it is: an edit not saved, the deep patch, the name, "edited", the pool entry | no | **yes** | session `part[0]`, `part[1]` (the edit buffers) |
@@ -340,7 +341,7 @@ that effect's send from the chord part (0..127, `CSS_FX_NONE` = not stored: the 
 | 23 `XR_LOW` | .. low cut (20 .. 500 Hz) | 0..127, 60 | `XP_RLOW` |
 | 24 `XR_WIDTH` | .. width | 0..127, 127 | `XP_RWIDTH` |
 | 25 `XD_TIME2` | the delay's free time (16 .. 740 ms: the delay at the full rate) | 0..127, 91 | `XP_DTIME` |
-| 26 `BS_REV`, 27 `BS_CHO`, 28 `BS_DLY`, 29 `BS_DRIVE` | the BASS part's sends (the chord part's are `amt[]`) | 0..127; 10, 0, 0, 0 | `trk[1].p[P_REV ..]` |
+| 26 `BS_REV`, 27 `BS_CHO`, 28 `BS_DLY`, 29 `BS_DRIVE` | the BASS part's sends (the chord part's are `amt[]`) | 0..127; 10, 0, 0, 0 | `trk[1].p[P_REV ..]`; 29 while the bass part plays FM TONE: `cu_bdrive` (`cr_ui.c cu_bdrive_p`: the part's send waits there, the track's `P_DIST` is the sound's Drive and is stored in `part[1].p[]`) |
 
 22 entries are stored today (24 fit). A session written by 0.17 or by a 0.18 build before the new effects holds
 tags 1..8: the chorus's two are read, the six retired ones are ignored, and the new delay and reverb start at

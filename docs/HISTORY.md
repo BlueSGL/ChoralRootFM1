@@ -889,3 +889,41 @@ it); `docs/manual/sound-popup.png` regenerated. Not tested: anything on the unit
 panel, the feel of GLO + REC with the real buttons' timing); GLO + REC in the calibration and in SAFE MODE; the
 read-out after a SysEx `--select` (it needs the device tool's path; it goes through the same `cu_sound_popup`).
 
+**2026-10-12, FM TONE's Drive is the sound's (0.18 dev, built, not flashed).** The owner, asked whether FM TONE's AMP
+Drive should read per cent like the Sends page: "FM TONE Drive, no, keep as 127 to match Digitone. Also Digitone
+presets should save and load the drive level with them and also always enable drive if this is greater than 0 on FM
+TONE and FX is off." Two merges earlier that cell had been made the chord part's drive send (one store, gated by FX
+off, not an edit of the sound, never loaded).
+
+What the formats held: FM TONE's 80-byte patch has no drive and gets none. A factory preset's row has one
+(`QUAD_PRESETS`' `FX(drive, ..)`: 10 on WOBBLE, 0 on the other fifteen; our own values, not Digitone conversions), a
+user record has the `P_DIST` field every save wrote, the session has the part's `p[]`. So nothing stored changed: the
+drive is read back. `cr_ui.c`: while a part's engine is FM TONE its track's `P_DIST` is the sound's Drive.
+`cu_drive_load` (called by `cu_load`, `cu_load_user`, `cu_init_load`, `cu_engine_switch` before they write the engine)
+sets it from the preset or the record; `cu_fx_apply` leaves it with FX off; `cu_send` / `cu_send_set` read and write
+it for such a part (the AMP cell, the Sends page, the Drive page, KNOB 4, the editor's FX group: one value), mark the
+sound edited and do not switch FX on; `cu_fx_cells` keeps that Drive cell live with FX off. `fx.c`, the patch, the
+stores and the records are untouched.
+
+Decisions taken here, the owner's to overrule: (1) the part's own drive send is **remembered**, not overwritten: the
+chord part's stays in `cs.fx_amt[]`, the bass part's (which lives in its track) is put aside in `cu_bdrive` while the
+part is on FM TONE and the session's tag 29 stores it from there; a driven FM TONE preset therefore leaves nothing on
+the next FM6 sound, and no stored field was added. (2) The Sends page's Drive knob on an FM TONE part **is** an edit
+of the sound, as the AMP cell is. (3) Turning it with FX off leaves FX off. (4) With FX off only that cell is live;
+the label still says `fx · off`. (5) The engine picker's switch to FM TONE takes 01 EP's Drive (0), INIT 0.
+
+Old records: a user preset of 0.14 .. 0.17 or of an earlier 0.18 build loads with the byte in its `P_DIST`: the
+part's drive when it was saved, 0 on the chord part if FX was off then. An earlier 0.18 build wrote the part's send
+of that moment, so such a preset can carry a drive that was set for another sound: the owner's unit was not read.
+An older session's FM TONE part comes up with what sounded when it was saved.
+
+Bit-exact: all 153 scripts of main's `tools/emu/scripts/` rendered with `--wav` through an emulator built from
+`git archive` of main (81331b4) and through this tree's: 153 identical WAVs (700 MB); none of them plays an FM TONE
+preset with a drive, which is the one thing that changed. Felucca's goldens (`tests/run_tests.sh`) unchanged, `fx.c`
+not edited. Tests: `cr_quad_drive.txt`, `cr_quad_drive_wav_{tone,fm6}_{hi,lo}.txt` (`test_cr.sh`),
+`quad_drive_set.txt` / `quad_drive_check.txt` (`test_persist.sh`), `tests/cr_fm6_test.c` (ten "drive:" checks);
+`cr_fx_sends.txt`'s FM TONE step now expects the sound's Drive. The emulator's dump has a `drive:` line. Not tested:
+anything on the unit; a real preset saved by 0.14 .. 0.17 (an older record's layout is built by hand in the host
+test); a backup restored over FM TONE parts; the web manager's sound import of an FM TONE record (it goes through
+the same record and `cu_load_user`). No screen's layout changed; no manual picture was regenerated. Cost against
+main's build: flash +512 B (.text 442432 -> 442944), RAM and POOL unchanged (POOL 314764 B).

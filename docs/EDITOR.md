@@ -211,7 +211,7 @@ Built from FM TONE's screen plan (`eng_quad.c` `QUAD_SCREENS`), not from the tit
 | ENV | 1 | `edit8`, the **ade2** band (`CR_W_ADE2`: A's and B's curves, level bars; the turned cell's segment lit) | A, B | A: A Attack · A Decay · A End · A Level; B: the same for B | `ENV A/B` |
 | ENV | 2 | `edit8`, no band | A, B | A: A Delay · A Trig · A Reset · Phase (PHRT, text: Off · All · C · A+B · A+B2); B: B Delay · B Trig · B Reset · Velocity | `ENV 2` |
 | ENV | 3 | `edit8`, one row | one | A Key · B1 Key · B2 Key (the operators' key scaling, three cells) | `ENV 3` |
-| ENV | 4 | `edit8`, the AHDSR band (FM TONE's own amp envelope) | A, B | A: Attack · Decay · Sustain · Release; B: Level · Pan · Drive (the part's P_PAN and P_DIST) | `AMP · A` |
+| ENV | 4 | `edit8`, the AHDSR band (FM TONE's own amp envelope) | A, B | A: Attack · Decay · Sustain · Release; B: Level · Pan · Drive (the part's P_PAN and P_DIST; the Drive reads 0..127 and is the sound's: saved and loaded with an FM TONE preset, not gated by FX off, an edit of the sound: docs/FX.md "FM TONE's Drive") | `AMP · A` |
 | LFO | 1–3 | `edit8`, no band, one screen an LFO | A, B | A: Speed (a bipolar knob, −64..+63) · Mult (text: 1 .. 2k synced, F1 .. F2k at a fixed 120 BPM) · Fade (bipolar, −64..+63: below 0 fades in, above fades out) · Dest; B: **Wave · Phase** (one span cell: the wave drawn from its start phase, "Tri · 90", degrees; KNOB 1 the wave, KNOB 2 the phase) · Trig · Depth | `LFO 1 · A` |
 | MOD | 1 | the platform's routes (as an engine without deep pages) | 4 | | `MOD n` |
 
