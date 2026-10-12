@@ -6446,6 +6446,9 @@ static void cr_ui_init(void)
     cs.metro_vol = 70;
     cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
     cs.out_clean = 1;                             /* Options > Output Clean (the record's) */
+#if !CR_HAVE_SETTINGS
+    fx_output_set(1, 1);                          /* (a build without the record: nothing else tells fx.c) */
+#endif
     cs.usb_in = 1;                                /* (the record's, cr_settings_load; usb.c got it at boot) */
     cu_route();
     cu_set_tempo(cr.bpm ? cr.bpm : 120);
