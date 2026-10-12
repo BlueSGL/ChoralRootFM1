@@ -14,7 +14,7 @@ for n in fm6 va wheel cz; do
         python3 tools/master_analyze.py --pair "$D" "$n-$k" 0 >> "$D/table-loudness.txt"
     done
 done
-for k in fm6-chord4-fx fm6-chord6-fx-vel127 cz-chord6-fx-vel127; do
+for k in fm6-chord4-fx fm6-chord6-fx-vel127 cz-chord6-fx-vel127 kick6 kick12 kick12dry; do
     python3 tools/master_analyze.py --pair "$D" "$k" 0 >> "$D/table-loudness.txt"
 done
 python3 tools/master_analyze.py --dir "$D" --wav '*-chord6-fx.classic.a00.i32' '*-chord6-fx.clean.a00.i32' > /dev/null

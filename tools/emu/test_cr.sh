@@ -2431,6 +2431,25 @@ EMU_OUTPUT=classic "$EMU" --headless --script "$S/perf_a.txt" --wav "$OUT/cr_out
 cmp -s "$OUT/cr_output_pin.wav" "$OUT/cr_output_set.wav" && ! cmp -s "$OUT/cr_output_pin.wav" "$OUT/cr_output_def.wav" &&
     ok "a script on the flash that says Classic = the same with EMU_OUTPUT=classic, bit for bit (what tools/emu/classic_exact.sh compares with 0.18's), and not the Clean default's" \
     || bad "Output Classic from the settings and EMU_OUTPUT=classic: the WAVs differ, or equal the default's"
+# Clean's limiter looks ahead: its output is the same passage 32 samples (0.73 ms) late, and never over its threshold
+# (26000 of 32768: with the look-ahead no sample overshoots into the knee)
+LC_ALL=C grep -aq "^  clean: look-ahead 32 samples" "$OUT/cr_output.log" && ok "the Clean chain's look-ahead: 32 samples" \
+    || bad "the dump's look-ahead: $(LC_ALL=C grep -a '^  clean:' "$OUT/cr_output.log" | head -1)"
+wl=$(python3 tools/emu/wavlag.py "$OUT/cr_output_pin.wav" "$OUT/cr_output_def.wav")
+echo "$wl" | grep -Eq "^lag 32 samples \(0\.73 ms\), correlation (0\.99|1\.00)" &&
+    ok "the same script through Clean is Classic's 32 samples late and nothing else moves ($wl)" || bad "Clean against Classic: $wl"
+EMU_UI_LOG=1 "$EMU" --headless --script "$S/cr_output_loud.txt" --wav "$OUT/cr_output_loud.wav" >"$OUT/cr_output_loud.log" 2>&1 || bad "cr_output_loud: exit $?"
+EMU_OUTPUT=classic "$EMU" --headless --script "$S/cr_output_loud.txt" --wav "$OUT/cr_output_loud_classic.wav" >/dev/null 2>&1
+wl=$(python3 tools/emu/wavlag.py "$OUT/cr_output_loud_classic.wav" "$OUT/cr_output_loud.wav")
+pk=$(echo "$wl" | sed 's/.*, B \([0-9]*\) of.*/\1/')
+# (the ceiling in the WAV: 26000 x MASTER, 4080 / 4096 at the pot's top in the emulator = 25898: a peak that sits on it
+# to a unit was put there by the limiter; one over it would have got past)
+[ "${pk:-99999}" -le 25899 ] && [ "${pk:-0}" -ge 25890 ] &&
+    ok "a loud chord with the bass at full MASTER, held 5 s: the peak sits on Clean's ceiling and no sample is over it (peak $pk, ceiling 25898; Classic's on the same: $(echo "$wl" | sed 's/.*peak A \([0-9]*\),.*/\1/'))" \
+    || bad "the loud chord through Clean: peak ${pk:-?} (the ceiling is 25898: 25890 .. 25899): $wl"
+wc_=$(python3 tools/emu/wavclicks.py "$OUT/cr_output_loud.wav" --from 1.0 | tail -1)
+echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &&
+    ok "and no jump, no hole, no click in it" || bad "the loud chord through Clean: $wc_"
 
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

@@ -551,6 +551,7 @@ void emu_fw_dump(void)
         printf("  master: output %s (chain %u, want %u, fade %u) lowcut %u/%u found %u\n", cs.out_clean ? "Clean" : "Classic",
                (unsigned)fx_out_mode, (unsigned)fx_out_want, (unsigned)fx_out_fade, (unsigned)settings.lowcut,
                (unsigned)fx_lowcut, (unsigned)crs_lowcut_found);
+        printf("  clean: look-ahead %u samples, the limiter's gain %d of 32768\n", (unsigned)CLN_LA, (int)cln_g);
         printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "
                "view %u chord-sound %04X slot %u pending %u  panel %08X\n",
                (unsigned)t.check, (unsigned)crs_rec.cr.check, (unsigned)t.playstyle, (unsigned)t.extadd, (unsigned)t.key_on,

@@ -8,16 +8,21 @@
  * keys through the matrix (emu_hal.keys). The audio is rendered by the ISR's block (emu_firmware.h's mix_block: the
  * engine's tick, fx.c's mix, the click) called directly, so that after each block the mix can be read back from
  * fx.c's own buffers: raw = mix + wet, what out_master's first lines turn into the chain's input.
- * The captured mix is then put through the firmware's OWN chain functions a frame at a time (master_block(o, 1) /
- * clean_block(o, 1), states at rest), which gives the limiter's gain for every sample; run at the render's own
+ * The captured mix is then put through the firmware's OWN chain functions (Classic: master_block(o, 1), a frame at a
+ * time; Clean: clean_block(o, CTL), a block at a time as the ISR calls it, the gain of each sample from fx.c's
+ * CLN_GAIN_TAP; states at rest), which gives the limiter's gain for every sample; run at the render's own
  * MASTER this must equal what the firmware put out, bit for bit, the 7 bits under the Q15 sample included
  * ("chain: exact"). The same is run for each MASTER setting asked for (--att: dB under the knob's top), in both chains.
+ * Clean's output is CLN_LA samples late (the limiter's look-ahead): its record holds the input as late, so the two
+ * stay sample for sample.
  *
  *   cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/master_measure tests/master_measure.c -lm
  *   build/host/master_measure list
  *   build/host/master_measure render PREFIX [--eng N --name PRESET] [--fx 0|1] [--vel V] [--master ADC]
  *        [--mods k,k,..] [--root k] [--bass 0|1] [--hold MS] [--att dB,dB,..] [--send rev,cho,dly]
  *        [--out classic|clean]        (the chain the firmware itself runs in the render: the exactness check)
+ *   build/host/master_measure chain RAW.i32 PREFIX [--att dB,dB,..]
+ *        (a mix from a file, int32 L R in the mix's units, through both chains: tools/master_transient.py's test signal)
  * Files: PREFIX.raw.i32 (int32 L R: mix + wet), and PREFIX.classic.aNN.i32 / PREFIX.clean.aNN.i32 for each MASTER
  * setting NN dB down: int32 x 5 a frame:
  *   refL refR   the chain's input as it would be with no arithmetic lost: raw * gain (Classic: MASTER; Clean:
@@ -25,6 +30,7 @@
  *   gain        the limiter's, Q15
  *   outL outR   the DAC word: Q15 << 7 (Classic), Q22 (Clean)
  * tools/master_analyze.py reads them; tools/master_measure_run.sh renders the set. */
+#define CLN_GAIN_TAP
 #include "../tools/emu/emu_fw.c"
 
 static int32_t *cap;                              /* mix + wet, L R */
@@ -54,44 +60,83 @@ static void chain_rest(void)
     dc_l = dc_r = dce_l = dce_r = 0;
     lim_env = LIM_T;
     lim_g = 32768;
-    cln_env = CLN_T4;
-    cln_gt = cln_g = 32768;
-    cln_hold = 0;
+    clean_rest();
 }
 
-/* raw through one chain at MASTER m (Q12): the firmware's functions, a frame a call */
+/* raw through one chain at MASTER m (Q12): the firmware's functions */
 static void chain(const int32_t *raw, uint32_t n, int clean, int32_t m, FILE *f, uint32_t *mismatch)
 {
+    static int32_t ref[CLN_LA + CTL][2];          /* Clean: the input as late as the output */
     double dcl = 0, dcr = 0, k = (clean ? CLN_TRIM : m) / 4096.0;
-    uint32_t i;
+    uint32_t i, j;
     chain_rest();
-    for (i = 0; i < n; i++) {
-        int32_t o[2], rec[5];
-        double xl = raw[2u * i] * k, xr = raw[2u * i + 1u] * k;
-        dcl += (xl - dcl) / 4096.0;               /* dc_block's corner (2 Hz), without its arithmetic */
-        dcr += (xr - dcr) / 4096.0;
-        rec[0] = (int32_t)lrint((xl - dcl) * 64.0);
-        rec[1] = (int32_t)lrint((xr - dcr) * 64.0);
-        if (clean) {
-            o[0] = (raw[2u * i] * (CLN_TRIM >> 4)) >> 6;   /* fx.c out_master's lines */
-            o[1] = (raw[2u * i + 1u] * (CLN_TRIM >> 4)) >> 6;
-            clean_block(o, 1u);
-            rec[2] = cln_g;
-            rec[3] = (o[0] * (m * CLN_MAKEUP >> 12)) >> 7;   /* clean_post's line at a resting knob */
-            rec[4] = (o[1] * (m * CLN_MAKEUP >> 12)) >> 7;
-        } else {
-            o[0] = ((raw[2u * i] >> 2) * m) >> 10;
-            o[1] = ((raw[2u * i + 1u] >> 2) * m) >> 10;
-            master_block(o, 1u);
-            rec[2] = lim_g;
-            rec[3] = o[0] * 128;
-            rec[4] = o[1] * 128;
+    memset(ref, 0, sizeof ref);
+    for (i = 0; i + (clean ? CTL : 1u) <= n; i += clean ? CTL : 1u) {
+        int32_t o[2 * CTL], rec[5];
+        uint32_t nb = clean ? CTL : 1u;
+        for (j = 0; j < nb; j++) {
+            double xl = raw[2u * (i + j)] * k, xr = raw[2u * (i + j) + 1u] * k;
+            dcl += (xl - dcl) / 4096.0;           /* dc_block's corner (2 Hz), without its arithmetic */
+            dcr += (xr - dcr) / 4096.0;
+            ref[CLN_LA + j][0] = (int32_t)lrint((xl - dcl) * 64.0);
+            ref[CLN_LA + j][1] = (int32_t)lrint((xr - dcr) * 64.0);
+            if (clean) {
+                o[2u * j] = (raw[2u * (i + j)] * (CLN_TRIM >> 4)) >> 6;   /* fx.c out_master's lines */
+                o[2u * j + 1u] = (raw[2u * (i + j) + 1u] * (CLN_TRIM >> 4)) >> 6;
+            } else {
+                o[0] = ((raw[2u * i] >> 2) * m) >> 10;
+                o[1] = ((raw[2u * i + 1u] >> 2) * m) >> 10;
+            }
         }
-        if (mismatch && (rec[3] != fwout[2u * i] || rec[4] != fwout[2u * i + 1u]))
-            (*mismatch)++;
-        if (f)
-            fwrite(rec, sizeof rec, 1, f);
+        if (clean)
+            clean_block(o, CTL);
+        else
+            master_block(o, 1u);
+        for (j = 0; j < nb; j++) {
+            if (clean) {
+                rec[0] = ref[j][0];
+                rec[1] = ref[j][1];
+                rec[2] = cln_gtap[j];
+                rec[3] = (o[2u * j] * (m * CLN_MAKEUP >> 12)) >> 7;   /* clean_post's line at a resting knob */
+                rec[4] = (o[2u * j + 1u] * (m * CLN_MAKEUP >> 12)) >> 7;
+            } else {
+                rec[0] = ref[CLN_LA][0];
+                rec[1] = ref[CLN_LA][1];
+                rec[2] = lim_g;
+                rec[3] = o[0] * 128;
+                rec[4] = o[1] * 128;
+            }
+            if (mismatch && (rec[3] != fwout[2u * (i + j)] || rec[4] != fwout[2u * (i + j) + 1u]))
+                (*mismatch)++;
+            if (f)
+                fwrite(rec, sizeof rec, 1, f);
+        }
+        if (clean)
+            memmove(ref, ref + CTL, CLN_LA * sizeof ref[0]);
     }
+}
+
+/* every MASTER setting of atts, both chains, into PREFIX.<chain>.aNN.i32 */
+static int chains_out(const char *prefix, const char *atts)
+{
+    char path[1024];
+    int a;
+    for (a = 0; a < 2; a++) {
+        const char *q = atts;
+        while (*q) {
+            char *e;
+            double db = strtod(q, &e);
+            FILE *f;
+            if (e == q) break;
+            snprintf(path, sizeof path, "%s.%s.a%02d.i32", prefix, a ? "clean" : "classic", (int)lrint(db));
+            f = fopen(path, "wb");
+            if (!f) { printf("cannot write %s\n", path); return 1; }
+            chain(cap, cap_n, a, (int32_t)lrint(4088.0 * pow(10.0, -db / 20.0)), f, NULL);
+            fclose(f);
+            q = *e ? e + 1 : e;
+        }
+    }
+    return 0;
 }
 
 static void list(void)
@@ -137,8 +182,25 @@ int main(int argc, char **argv)
         list();
         return 0;
     }
+    if (argc >= 4 && !strcmp(argv[1], "chain")) {  /* a mix from a file through both chains */
+        FILE *f = fopen(argv[2], "rb");
+        long sz;
+        if (!f) { printf("cannot read %s\n", argv[2]); return 1; }
+        fseek(f, 0, SEEK_END);
+        sz = ftell(f);
+        fseek(f, 0, SEEK_SET);
+        cap_n = (uint32_t)(sz / 8) / CTL * CTL;
+        cap = calloc(cap_n + 1u, 2 * sizeof *cap);
+        if (fread(cap, 2 * sizeof *cap, cap_n, f) != cap_n) { printf("short read\n"); return 1; }
+        fclose(f);
+        emu_fw_init(0);
+        fx_smooth = 1;
+        printf("chain: %u frames of %s; CLN_T %d, CLN_K %d, look-ahead %u samples\n", cap_n, argv[2], CLN_T, CLN_K,
+               (unsigned)CLN_LA);
+        return chains_out(argv[3], argc >= 6 && !strcmp(argv[4], "--att") ? argv[5] : "0");
+    }
     if (argc < 3 || strcmp(argv[1], "render")) {
-        printf("usage: master_measure list | render PREFIX [options]\n");
+        printf("usage: master_measure list | render PREFIX [options] | chain RAW.i32 PREFIX [--att dB,..]\n");
         return 2;
     }
     prefix = argv[2];
@@ -215,11 +277,12 @@ int main(int argc, char **argv)
         audio_due(ms);
     }
     printf("render: %u frames, note-on at frame %u, release at frame %u; master_q12 %u, vel %u, fx_on %u, fx_smooth %u, "
-           "lowcut %u, bass_on %u, output %s; LIM_T %d, CLN_T %d, CLN_TRIM %d, CLN_K %d, hold %u, release >> %d\n", cap_n,
+           "lowcut %u, bass_on %u, output %s; LIM_T %d, CLN_T %d, CLN_TRIM %d, CLN_K %d, hold %u, release >> %d, "
+           "look-ahead %u samples (blocks of %u)\n", cap_n,
            (unsigned)((uint64_t)(t_on + 60u) * FS / 1000u),
            (unsigned)((uint64_t)(t_on + 60u + (uint32_t)hold) * FS / 1000u), (unsigned)song.master_q12, (unsigned)cs.vel,
            (unsigned)cs.fx_on, (unsigned)fx_smooth, (unsigned)fx_lowcut, (unsigned)cs.bass_on, clean ? "Clean" : "Classic",
-           LIM_T, CLN_T, CLN_TRIM, CLN_K, (unsigned)CLN_HOLD, CLN_REL);
+           LIM_T, CLN_T, CLN_TRIM, CLN_K, (unsigned)CLN_HOLD, CLN_REL, (unsigned)CLN_LA, (unsigned)CLN_LA_B);
     snprintf(path, sizeof path, "%s.raw.i32", prefix);
     {
         FILE *f = fopen(path, "wb");
@@ -230,20 +293,7 @@ int main(int argc, char **argv)
     chain(cap, cap_n, clean, (int32_t)song.master_q12, NULL, &mism);
     printf("chain: %s (%u frames differ from the firmware's own output, %s)\n", mism ? "DIFFERS" : "exact", mism,
            clean ? "Clean" : "Classic");
-    for (a = 0; a < 2; a++) {
-        const char *q = atts;
-        while (*q) {
-            char *e;
-            double db = strtod(q, &e);
-            FILE *f;
-            if (e == q) break;
-            snprintf(path, sizeof path, "%s.%s.a%02d.i32", prefix, a ? "clean" : "classic", (int)lrint(db));
-            f = fopen(path, "wb");
-            if (!f) { printf("cannot write %s\n", path); return 1; }
-            chain(cap, cap_n, a, (int32_t)lrint(4088.0 * pow(10.0, -db / 20.0)), f, NULL);
-            fclose(f);
-            q = *e ? e + 1 : e;
-        }
-    }
+    if (chains_out(prefix, atts))
+        return 1;
     return mism ? 1 : 0;
 }
