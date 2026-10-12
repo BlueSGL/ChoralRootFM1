@@ -110,14 +110,20 @@ installed on the owner's Mac.
 ### For 0.19
 
 - **(a) Audio quality, GitHub issue 3: built, to be heard** (docs/AUDIO-QUALITY.md; HISTORY 2026-10-12 "the output
-  chain"). Options > Output: Classic (0.18's master, bit for bit) / Clean (linear to -2.5 dBFS, a limiter that holds,
+  chain" and "the look-ahead, Sloop 2.6"). Options > Output: Classic (0.18's master, bit for bit) / Clean (linear to
+  -2.0 dBFS, a limiter that holds and looks 32 samples ahead: the output 0.73 ms late, no sample over its threshold;
   MASTER last into the 24-bit word), default Clean in the dev builds. Felucca's SPEAKER setting left behind by another
   firmware is held off. The harness is in the tree (`tests/master_measure.c`, `tools/master_*`); the listening files
   and tables in `../audio-0.19/`. **The owner's decisions**: Output's default for the release; Clean's trim (single
   notes are 2.4 LU quieter than Classic, loud chords up to 1.4 LU louder) or the make-up build (`CR_OUT_MAKEUP=1
   ./build.sh`: the DAC word's unused 6 dB, not heard on the unit yet); the part LEVEL / trims against Sloop's (the
-  largest measured difference, untouched); the chorus's mono return. Not checked on the unit: anything (the emulator
-  and the host only).
+  largest measured difference, untouched); the chorus's mono return; the limiter's hold (40 ms; longer takes 2 to
+  5 dB off what is left on loud chords) and 32 or 64 samples of look-ahead; the click and the USB part pairs, which
+  lead Clean's output by 0.73 ms. Measured against **Sloop 2.6** in the second round (its master now looks ahead):
+  Classic is behind it on loud chords, Clean ahead; the level gap is 6.3 dB (Classic) / 8.8 dB (Clean) on a single
+  note, none on the loudest chords. From Felucca 1.0.1 .. 1.5.1 one fix is missing on the live path: MASTER read
+  before the audio starts (1.1.5, #137). Listening files: `../audio-0.19/lookahead/`. Not checked on the unit:
+  anything (the emulator and the host only).
 - **(b) CZ-1 pops and drop-outs on held chords without FX.** The owner, 2026-10-13: believes it is internal clipping
   in the engine; the other engines are fine.
 - **(c) WHEEL**: the owner is on the fence about cutting it.

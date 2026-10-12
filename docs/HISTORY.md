@@ -1055,3 +1055,50 @@ goldens were rewritten, and with both fixes switched off in a copy all 197 are m
 CZ-1 is 5.4 dB hotter at the peak than the VA for the same chord (it adds a half-scale voice `* 4` where `dsp.c`'s
 convention is `<< 1`); -6 dB for the engine would level it, a decision for the master's rework. Details, the tables
 and what was not tested: docs/CZ1.md "Pops (0.19)". The ten worst, before and after: `../audio-0.19/cz-pops/`.
+
+## 2026-10-12 (the look-ahead, Sloop 2.6)
+
+**The owner: the comparison was with Sloop 2.2; its later releases changed the output ("the master limiter looks
+0.7 ms ahead"), and Felucca has moved to 1.5.1. Redo it, and give Clean a look-ahead limiter.**
+
+- **Sloop 2.6** (read against the first round's copy of 2.2, built on the host with the same harness, its master's
+  shadow exact on 52 renders): the limiter looks one block (32 samples) ahead with a linear gain across the block, a
+  35 ms hold and a 46 ms release, a 64-bit product; nothing leaves it over 18000. 153 sounds, the 68 old trims
+  unchanged, the new ones levelled the same way (-15 LUFS). Everything else on the way to the DAC word is 2.2's.
+  Measured: on the same loud chord its master is 2 to 4 dB cleaner than 2.2's and than Classic's, 5 to 11 dB above
+  2 kHz; Clean is 9 to 20 dB under it. The level gap to 0.17: 7.7 dB on a single note (9.4 on the 68 sounds both
+  versions have), 4.0 dB on a chord, 13.8 dB on the power-on sound; main's Classic 6.3 / 3.0, Clean 8.8 / 4.9; on the
+  loudest chords Classic is level with it and Clean 1 to 2 LU over.
+- **What the first round got wrong**: "the limiter and the clip cannot explain the report, Sloop distorts more" was
+  true of 2.2 only. Against 2.6, 0.17's master is the rougher one above 2 kHz on loud chords: a candidate for
+  "harsh", and what Clean replaces. Level remains the larger measured difference.
+- **Felucca 1.0.1 .. 1.5.1** (19 commits, read from GitHub's compare: git could not be aimed at the local checkout
+  from the worktree): nothing in the limiter, the clip, the threshold, `OUT_SHIFT` or the levels. Missing here on the
+  live path: MASTER read before the audio starts (1.1.5, #137). Dormant: BASS+ x 1.5 (1.4). The list:
+  docs/AUDIO-QUALITY.md.
+- **Clean's limiter looks ahead** (`fx.c clean_block`): a delay of 32 samples (0.73 ms, 256 bytes of RAM), the gain
+  a straight line across each block to what the loudest sample of the block coming out and of the next needs. One
+  block ahead and the linear glide are Sloop 2.6's design (credited in `fx.c` and `LICENSING.md`; no code taken);
+  the block's peak kept from block to block (no scan of the delay), the hold and release of the first round, the
+  exact product and glide are ChoralRoot's. The knee moved to the threshold (26000): nothing the limiter passes
+  meets it. A test proves no sample over the threshold for inputs up to 30 dB over, from the first sample.
+- **What it does, measured**: the overshoot is gone (the knee's share on a kick 12 dB over: -19 dB before, -89 dB
+  now; on loud chords -63 .. -86 dB before, under -90 now; the peak at -2.0 dBFS instead of up to -0.1). **It does
+  not lower the loud chords' "dist"** (0.7 to 1.3 dB worse): that figure is the limiter's level steps at each new
+  peak of a beating chord, which are the same just before a peak as just after. A longer hold would lower it (200 to
+  500 ms: 2 to 5 dB for 0.1 to 0.6 LU): left for the owner, with the files. Loudness unchanged.
+- **Length**: 16 to 64 samples measured; 32 chosen (the top stops improving there; one audio block; cheapest). 64 is
+  `-DCLN_LA_K=2u`.
+- **Cost from the device's listing**: Clean idle 76 instructions a frame (83 before: the envelope is a block's work
+  now), limiting about 104 (99). Flash +96 bytes, RAM +256, POOL the same.
+- **Not aligned**: the click and the USB recording's part pairs do not pass the limiter and lead Clean's output by
+  0.73 ms. Named, not changed.
+- **The switch**: one more silent block through the old chain lets the delay play out; both limiters at rest and the
+  delay empty at the change.
+- **Classic**: all 164 emulator scripts bit for bit against f402608 held at Classic; against 19b6453 the 158 that do
+  not play CZ-1 (the other three changed with CZ-1's fix, before this); the 197 goldens unchanged.
+- **Seen on the way**: CZ-1 BRASS 1 with the bass, struck again while it sounds, still shows two clicks to
+  `wavclicks.py` in Clean (in f402608 as now; not in Classic): in the mix, before the output chain.
+- Tools: `tools/master_transient.py`, `master_measure chain`, `tools/master_listen_la.py`, `tools/emu/wavlag.py`,
+  `classic_exact.sh REF_CLASSIC=1`. Listening files: `../audio-0.19/lookahead/`. Also: the site's Options list had no
+  Output and no Reset Settings. Not run: the browser emulator's test (no emcc); nothing on the device.

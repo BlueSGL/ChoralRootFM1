@@ -628,14 +628,24 @@ the measurements, the reasons and the harness.
 | the mix line | `((mix + wet) >> 2) * MASTER >> 10` (Q15) | `(mix + wet) * 0.75`, kept in Q17 (`CLN_TRIM`) |
 | DC blocker | 2 Hz | the same (the same state) |
 | LOWCUT / BASS+ | Felucca's, if `fx_lowcut` (held at 0 by ChoralRoot since 0.19) | none |
-| limiter | `LIM_T` 18000; release 93 ms; the gain eased over 1.5 ms (`fx_smooth`); `(x >> 4) * g >> 11` | `CLN_T` 26000; the peak held 40 ms, release 186 ms; the same easing; the exact product |
-| clip | `softclip`: a tanh over the whole range | `clean_knee`: linear to 24576, a tanh above |
+| delay | none | 32 samples, 0.73 ms (`cln_dl`, 256 bytes of RAM): the limiter's look-ahead |
+| limiter | `LIM_T` 18000; release 93 ms; the gain eased over 1.5 ms after the peak (`fx_smooth`); `(x >> 4) * g >> 11` | `CLN_T` 26000; the peak held 40 ms, release 186 ms; the gain a straight line across each block of 32 to what the loudest sample of the block coming out of the delay and of the one after it needs: down before the peak, no sample over the threshold; the exact product |
+| clip | `softclip`: a tanh over the whole range | `clean_knee`: linear to 26000 (the threshold), a tanh above: a safety net the limiter keeps everything under |
 | MASTER | in the mix line (USB Level = Fixed: after, `usb_fixed_dac`) | last, into the 24-bit word (`clean_post17`; Fixed: `clean_split`, then `clean_post`) |
 | the DAC word | the Q15 sample `<< 7` | Q22: the Q15 sample and the 7 bits under it (`out_frac`, `audio.c`) |
-| a frame on the unit | 76 instructions idle, about 92 limiting | 83 idle, about 99 limiting |
+| a frame on the unit | 76 instructions idle, about 92 limiting | 76 idle, about 104 limiting (before the look-ahead: 83, about 99) |
 
-A change of Output while sound plays fades the chain's input to nothing over 16 blocks (11.6 ms), changes the chain
-at that zero with its limiter at rest, and fades in (`out_fade`). Felucca's FX hold layer (`perf_master`, not in
+Clean's look-ahead (0.19; one block ahead with a linear glide between blocks is Sloop 2.6's design, `LICENSING.md`):
+the output is 0.73 ms late. Everything that goes through the master is late together; the metronome's click
+(`cr_click_mix`, mixed after the master) and the USB recording's chord and bass pairs (taken before it) are not, so
+in Clean they lead the output by 0.73 ms. The limiter's work a block: the block's peak (kept while the samples go
+into the delay), the larger of it and the last block's, the envelope, one divide if it moved; no loop over the
+delay. Lengths other than 32 are build switches (`CLN_LA_B`, `CLN_LA_K`); AUDIO-QUALITY.md "The look-ahead" has the
+measurements against the length and what it does and does not improve.
+
+A change of Output while sound plays fades the chain's input to nothing over 16 blocks (11.6 ms), runs one more
+silent block through the old chain (Clean's delay plays its last samples out), changes the chain at that zero with
+both limiters at rest and the delay empty, and fades in (`out_fade`, `out_master`). Felucca's FX hold layer (`perf_master`, not in
 ChoralRoot's unit) and Felucca's own builds always run Classic. `EMU_OUTPUT=classic` holds the emulator at Classic
 whatever the settings say (`tools/emu/classic_exact.sh`).
 
