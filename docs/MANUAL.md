@@ -573,11 +573,14 @@ The one rule to know: **the effects and their sends belong to the instrument, no
   reverb and delay.
 - Everything else about an effect (the reverb's size and decay, the delay's time and feedback, ...) is set once for
   the whole instrument too.
+- **One exception: FM TONE's Drive belongs to the sound**, as on the Digitone. See
+  [FM TONE's Drive](#fm-tones-drive) below.
 - All of it is kept by a global save (SAVE held): [What the FM-1 remembers](#what-the-fm-1-remembers).
 
 On the panel:
 
-- **FX** tap switches the effects on and off: with FX off nothing is sent into them, from the bass neither.
+- **FX** tap switches the effects on and off: with FX off nothing is sent into them, from the bass neither. (An
+  FM TONE sound keeps its Drive with FX off.)
 - **KNOB 4** is the chord part's send into the selected effect (turning it switches the effects on). The selected
   effect is the one whose page the FX layer showed last; the reverb until you pick another. The screen shows the
   send in per cent, 0 to 100.
@@ -610,6 +613,25 @@ effects on again. In the sound editor the FX group always shows the values that 
 The Sends page and the Send cells are the chord part's. The bass part's four sends are in the bass sound's editor, FX
 group (BASS held + EDIT, then the FX button); it plays into the same reverb and delay as the chords. A new FM-1 has a
 little reverb on the bass and nothing else.
+
+### FM TONE's Drive
+
+On FM TONE the Drive is part of the sound, like the Digitone's overdrive:
+
+- **Each FM TONE preset has its own Drive.** Loading one sets it; saving a sound stores it. It is the **Drive** cell of
+  the AMP screen in the sound editor (ENV group, fourth screen, second row), which reads 0 to 127 as on the Digitone.
+  Of the factory presets only 10 WOBBLE has any (10); the others are at 0.
+- **It sounds with FX off too.** FX off still closes the chorus, the delay and the reverb.
+- The Drive on the Sends page, on the Drive page and in the editor's FX group is this same value while the chord
+  part plays FM TONE (there in per cent: 127 is `100%`). With FX off that one cell stays lit and shows the value while
+  the other three read `off`; turning it does not switch the effects on.
+- Turning it is a change to the sound: the sound is marked as edited, and SAVE keeps it.
+- The part's own drive, the one every other engine uses, is not lost: it waits, and is back as soon as the part plays
+  another engine. So a driven FM TONE preset does not leave its drive on the next FM6 or VA sound.
+- The bass part works the same way when it plays FM TONE.
+
+An FM TONE sound you saved before this (0.14 to 0.17, or an earlier 0.18 build) loads with the drive the part had
+at the moment you saved it. If FX happened to be off then, that is 0.
 
 A saved sound still has four send values inside it (the format has not changed), but they are not used when it is
 loaded.
@@ -1048,7 +1070,7 @@ To **delete** a sound you added, or to **reset** a factory preset you saved over
 SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does it, OCT- keeps it.
 
 There is room for **32 saved sounds** in all, shared by the engines and the two parts (`no free slot` when they are
-used up). A saved sound holds the engine's whole patch, its envelopes and modulation. (It also holds four send values, which are no longer used: the sends are the part's.)
+used up). A saved sound holds the engine's whole patch, its envelopes and modulation. (It also holds four send values, which are no longer used: the sends are the part's. An FM TONE sound's Drive is the one that is used: [FM TONE's Drive](#fm-tones-drive).)
 Changes you have not saved are lost when you load another sound. A **global save** (SAVE held) keeps each part's
 sound as it is, edited or not, without making it a preset: the FM-1 comes back with it after a power-off, and GLO +
 SAVE brings it back (new in 0.18). The pool still holds the sound as it was saved as a preset, so turning PRESETS
@@ -1122,7 +1144,7 @@ Two groups are the same for every engine:
 
 | Group | Lanes | KNOB 1 to KNOB 4 |
 | --- | --- | --- |
-| **FX** | one | Drive · Chorus · Delay · Reverb: the part's four sends (its drive, and how much of it goes into the chorus, the delay and the reverb). They stay when the sound changes |
+| **FX** | one | Drive · Chorus · Delay · Reverb: the part's four sends (its drive, and how much of it goes into the chorus, the delay and the reverb). They stay when the sound changes (on FM TONE the Drive is the sound's: [FM TONE's Drive](#fm-tones-drive)) |
 | **MIX** | two | Level · Pan · Voice · Glide, and Trans · Detune · Priority · Gl. mode |
 
 The sections below list what the other groups hold for each engine. They name the screens; for what each parameter
@@ -1164,7 +1186,7 @@ More: [FM6.md](FM6.md).
 | --- | --- |
 | OSC | (1) `SYN 1`, under a drawing of the algorithm: Algo · Ratio C · Ratio A · Ratio B, and Harm · Dtune · Feedback · Mix. (2) `SYN 2`: Offset C · Offset A · Offset B1 · Offset B2 |
 | FILT | (1) `FILTER`, under the filter curve: Attack · Decay · Sustain · Release (the filter's envelope), and Freq · Reso · Type · Env depth. (2) `FILTER 2`: Env delay · Key track, and Base · Width |
-| ENV | (1) `ENV A/B`, the two operator envelopes: Attack · Decay · End · Level for A and for B. (2) `ENV 2`: Delay · Trig · Reset for A and B, Phase, Velocity. (3) `ENV 3`: A Key · B1 Key · B2 Key. (4) `AMP`: Attack · Decay · Sustain · Release, and Level · Pan · Drive |
+| ENV | (1) `ENV A/B`, the two operator envelopes: Attack · Decay · End · Level for A and for B. (2) `ENV 2`: Delay · Trig · Reset for A and B, Phase, Velocity. (3) `ENV 3`: A Key · B1 Key · B2 Key. (4) `AMP`: Attack · Decay · Sustain · Release, and Level · Pan · Drive (0 to 127, saved with the sound, heard with FX off too) |
 | LFO | three screens, `LFO 1` to `LFO 3`: Speed · Mult · Fade · Dest, and Wave · Phase · Trig · Depth |
 | MOD | four fixed routes with an Amount each: ENV to FILT, ENV to PITCH, ENV to SHAPE, LFO to AMP |
 
@@ -1544,6 +1566,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | The echoes are on one side, then the other | the delay's Mode is Ping-pong | FX layer, Delay 2, KNOB 2: Stereo |
 | The bass has reverb or echo | the bass part has sends of its own | BASS held + EDIT, the FX group; or FX off |
 | A sound I saved with lots of reverb loads dry (or the other way round) | sends are no longer loaded with a sound: they are the part's | set the sends once in the FX layer (its first page); they stay for every sound |
+| An FM TONE sound is distorted although FX is off, or the drive changes when I turn PRESETS | on FM TONE the Drive is the sound's: saved with it, loaded with it, not switched off by FX | the sound editor, ENV group, AMP screen, Drive (or the Sends page's Drive); SAVE to keep it |
 | In the engine picker the white keys no longer choose the engine | they always play now, so that you hear what you turn to | SELECT steps the engines |
 | After updating to 0.18 the reverb and the delay sound different | they are new, and start at their defaults | [FX](#8-fx) |
 | My edit is gone | unsaved changes are lost with the next sound, and at power-off unless you held SAVE | SAVE tap to make it a preset; SAVE held to keep the part as it is |

@@ -346,6 +346,140 @@ int main(void)
            "store: a slot without a blob, PTCH 9 (Felucca's B2) -> B2 today (25), Dexed's function settings");
     }
 
+    /* ---- FM TONE's Drive is its preset's (docs/FX.md "FM TONE's Drive"; cr_ui.c cu_drive_load) ---- */
+    {
+        track_t *c = &trk[CR_PART_CHORD], *bs = &trk[CR_PART_BASS];
+        const eng_deep_t *qd = ENGINES[ENGI_QUAD]->deep;
+        static cr_session_t x, y;
+        up_rec_t r;
+        uint32_t slot = cb_free_slot(), good, nz;
+        int v29 = -1;
+        /* the parts' own drive sends: 40 (chord, FX on) and 33 (bass), on FM6 and the VA */
+        cu_load(c, ENGI_FM6, 0, 0);
+        cu_load(bs, ENGI_VA, 0, 1);
+        cu_send_set(0, P_DIST, 40);
+        cu_send_set(1, P_DIST, 33);
+        OK(cs.fx_on && c->p[P_DIST] == 40 && bs->p[P_DIST] == 33 && cu_send(0, P_DIST) == 40 && cu_send(1, P_DIST) == 33 &&
+           !psnd[0].edited && !psnd[1].edited,
+           "drive: another engine's is the part's send (chord 40, bass 33), not an edit of the sound");
+        /* every factory preset, on both parts: the Drive of its table row; the parts' sends wait */
+        for (k = 0, good = 0, nz = 0; k < QUAD_NPRESETS; k++) {
+            int32_t d = cu_preset_drive(&QUAD_PRESETS[k]);
+            cu_load(c, ENGI_QUAD, k, 0);
+            cu_load(bs, ENGI_QUAD, k, 1);
+            nz += d != 0;
+            good += c->p[P_DIST] == d && bs->p[P_DIST] == d && cu_send(0, P_DIST) == d && cu_send(1, P_DIST) == d &&
+                    qd->get(c, 13, 2) == d && cs.fx_amt[3] == 40 && cu_bdrive == 33 && *cu_bdrive_p() == 33;
+        }
+        OK(good == 16u && nz == 1u && cu_preset_drive(&QUAD_PRESETS[9]) == 10,
+           "drive: each of the 16 FM TONE presets loads its own Drive on either part (WOBBLE 10, the other 15: 0); the parts' sends wait (40, 33) (%u, %u)",
+           (unsigned)good, (unsigned)nz);
+        /* the AMP cell and the Sends knob are one value, an edit of the sound; FX off does not close it, and turning
+         * it does not switch FX on */
+        cu_load(c, ENGI_QUAD, 9, 0);
+        cs.fx_on = 0;
+        cu_fx_apply();
+        good = c->p[P_DIST] == 10 && c->p[P_REV] == 0 && c->p[P_CHOR] == 0 && c->p[P_DLY] == 0 && !psnd[0].edited;
+        cu_send_set(0, P_DIST, 91);
+        good += c->p[P_DIST] == 91 && qd->get(c, 13, 2) == 91 && cu_send(0, P_DIST) == 91 && psnd[0].edited && !cs.fx_on &&
+                cs.fx_amt[3] == 40 && !c->user;
+        cu_fx_toggle();
+        cu_fx_toggle();
+        good += c->p[P_DIST] == 91 && !cs.fx_on;
+        OK(good == 3u, "drive: FM TONE, FX off: the Drive stays in the track (10; the three sends 0); turned to 91: the AMP cell's value, the sound edited, FX still off, the part's send still 40 (%u of 3)", (unsigned)good);
+        /* the store round trip: saved with the sound, loaded with it, on either part */
+        OK(slot < UP_SLOTS && cb_store(c, 0, slot, "DRV91", 0) != 1 && up_used(slot) && up_rec(slot)->engine == ENGI_QUAD &&
+           up_value(up_rec(slot), P_DIST) == 91, "drive: saved: the record's P_DIST field holds 91 (slot %u)", (unsigned)slot + 1u);
+        cu_load(c, ENGI_QUAD, 0, 0);
+        good = c->p[P_DIST] == 0;
+        cu_load_user(c, slot, 0);
+        good += c->p[P_DIST] == 91 && !psnd[0].edited && c->user == slot + 1u;
+        cu_load(bs, ENGI_VA, 0, 1);
+        good += bs->p[P_DIST] == 33;
+        cu_load_user(bs, slot, 1);
+        good += bs->p[P_DIST] == 91 && cu_bdrive == 33;
+        OK(good == 4u, "drive: 01 EP: 0; the saved sound again: 91, not edited; on the bass part (from the VA, its send 33): 91, the send waits (%u of 4)", (unsigned)good);
+        /* an old record: the layout of an older firmware (fewer common parameters: np smaller, mapped by count), its
+         * P_DIST byte as that firmware left it (the part's drive when it was saved: 23) */
+        memset(&r, 0, sizeof r);
+        r.used = UP_USED;
+        r.ver = UP_VER;
+        r.engine = ENGI_QUAD;
+        r.np = (uint8_t)(P_COUNT - 5u);
+        memcpy(r.name, "OLD", 3);
+        for (k = 0; k < r.np; k++)
+            up_set_value(&r, k, k < r.np - 8u ? TP[k].def : (int16_t)QUAD_PRESETS[1].e[k - (r.np - 8u)]);
+        up_set_value(&r, P_DIST, 23);
+        up_set_value(&r, P_REV, 99);
+        up_put(slot, &r);
+        cu_load(c, ENGI_QUAD, 0, 0);
+        cu_load_user(c, slot, 0);
+        OK(up_valid(&r) && c->eng_req == ENGI_QUAD && c->p[P_DIST] == 23 && c->p[P_REV] == 0 && cs.fx_amt[0] != 99 &&
+           c->p[P_E0 + 2] == QUAD_PRESETS[1].e[2],
+           "drive: an older record (np %u): its P_DIST byte is the Drive (23); its other send fields are still not loaded", (unsigned)r.np);
+        /* leaving FM TONE: the part's send is back (the chord part's gated by FX), whatever the sound's Drive was;
+         * a record of another engine brings no drive */
+        r.engine = ENGI_FM6;
+        r.np = P_COUNT;
+        for (k = 0; k < P_COUNT; k++)
+            up_set_value(&r, k, k < P_E0 ? TP[k].def : 0);
+        up_set_value(&r, P_DIST, 55);
+        up_put(slot, &r);
+        cu_load_user(c, slot, 0);
+        good = c->eng_req == ENGI_FM6 && c->p[P_DIST] == 0 && cu_send(0, P_DIST) == 40;       /* (FX is off) */
+        cu_fx_toggle();
+        good += c->p[P_DIST] == 40;
+        cu_load(bs, ENGI_VA, 0, 1);
+        good += bs->p[P_DIST] == 33;
+        cu_engine_switch(0, ENGI_QUAD);
+        cu_engine_switch(1, ENGI_QUAD);
+        good += c->p[P_DIST] == 0 && bs->p[P_DIST] == 0 && cs.fx_amt[3] == 40 && cu_bdrive == 33;
+        cu_send_set(1, P_DIST, 17);
+        good += bs->p[P_DIST] == 17 && psnd[1].edited && cu_bdrive == 33;
+        cu_engine_switch(0, ENGI_VA);
+        cu_engine_switch(1, ENGI_VA);
+        good += c->p[P_DIST] == 40 && bs->p[P_DIST] == 33;
+        cu_init_load(0, ENGI_QUAD);
+        good += c->p[P_DIST] == 0 && cs.fx_amt[3] == 40;
+        up_put(slot, 0);
+        OK(good == 7u, "drive: an FM6 record (its field 55): the part's send, 0 with FX off, 40 with FX on; the bass part back on the VA: 33; the engine switched to FM TONE: 01 EP's 0, back: 40 / 33; FM TONE's INIT: 0 (%u of 7)", (unsigned)good);
+        /* the session: the sounds' Drives (edited, saved to no preset) in the parts' p[], the parts' sends beside them */
+        cu_load(c, ENGI_QUAD, 9, 0);
+        cu_load(bs, ENGI_QUAD, 0, 1);
+        cu_send_set(0, P_DIST, 91);
+        cu_send_set(1, P_DIST, 17);
+        cu_fx_toggle();                               /* off */
+        css_capture(&x);
+        OK(!cs.fx_on && x.part[0].p[P_DIST] == 91 && x.part[1].p[P_DIST] == 17 && x.fx.amt[CSS_FXE_DRIVE] == 40 &&
+           cr_session_fx_get(&x, CSS_FXP_BS_DRIVE, &v29) && v29 == 33 && x.part[0].edited && x.part[1].edited,
+           "drive: the session record: the FM TONE sounds' Drives 91 / 17 in the parts' parameters, the parts' sends 40 / 33 under their tags (bass tag: %d)", v29);
+        cu_load(c, ENGI_FM6, 0, 0);
+        cu_load(bs, ENGI_VA, 0, 1);
+        cu_sends_default();
+        good = c->p[P_DIST] == 0 && bs->p[P_DIST] == 0;
+        css_apply(&x);
+        css_capture(&y);
+        good += c->p[P_DIST] == 91 && bs->p[P_DIST] == 17 && cs.fx_amt[3] == 40 && cu_bdrive == 33 && !cs.fx_on &&
+                cr_session_hash(&x) == cr_session_hash(&y);
+        cu_load(c, ENGI_FM6, 0, 0);
+        cu_load(bs, ENGI_VA, 0, 1);
+        good += c->p[P_DIST] == 0 && bs->p[P_DIST] == 33;
+        OK(good == 3u, "drive: the session applied over other sounds: 91 / 17 again with FX off, the same record captured; the parts' sends 40 / 33 behind them (%u of 3)", (unsigned)good);
+        /* a session written before this change (main's): an FM TONE chord part's p[P_DIST] is what cu_fx_apply had
+         * left there (the amount, or 0 with FX off: what sounded), the bass part's tag and its p[P_DIST] the same value */
+        x.part[0].p[P_DIST] = 0;
+        x.part[1].p[P_DIST] = 21;
+        cr_session_fx_set(&x, CSS_FXP_BS_DRIVE, 21);
+        css_apply(&x);
+        OK(c->eng_req == ENGI_QUAD && c->p[P_DIST] == 0 && cs.fx_amt[3] == 40 && bs->p[P_DIST] == 21 && cu_bdrive == 21,
+           "drive: an older session (FX off, FM TONE on both parts): the chord sound's Drive 0 as it sounded, its send 40 kept; the bass sound's 21, and 21 the part's send");
+        cu_fx_toggle();                               /* FX on again, the power-on sounds, a new unit's sends */
+        cu_load(c, ENGI_FM6, 0, 0);
+        cu_load(bs, ENGI_VA, 0, 1);
+        cu_sends_default();
+        psnd[0].edited = psnd[1].edited = 0;
+    }
+
     /* ---- the voice model ---- */
     {
         uint32_t busy;

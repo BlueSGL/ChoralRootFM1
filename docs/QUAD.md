@@ -221,6 +221,12 @@ FENV BASE WIDTH "F ATK" "F DEC" "F SUS" "F REL" "AMP A" "AMP D" "AMP S" "AMP R" 
 +-26, DTUN / FDBK / MIX / levels / times / FREQ / RESO / BASE / WIDTH / LEVEL +-127 (FDBK 120), FENV +-127, PAN +-64.
 
 **DRIVE and PAN are not in the patch**: AMP+'s PAN and DRIVE columns read and write the part's `P_PAN` and `P_DIST`.
+The DRIVE is the sound's all the same (2026-10-12, the owner: "Digitone presets should save and load the drive level
+with them and also always enable drive if this is greater than 0 on FM TONE and FX is off"): a factory preset's is the
+drive of its `FX()` row in `QUAD_PRESETS` (10 on WOBBLE, 0 on the other fifteen: our own values, there is no Digitone
+conversion in the table), a user sound's is its record's `P_DIST` field (`upreset.c`, where a save always wrote the
+part's drive), and ChoralRoot loads it, saves it and does not close it with FX off (`cr_ui.c cu_drive_load`,
+[FX.md](FX.md) "FM TONE's Drive"). The 80-byte blob and the store are unchanged.
 
 **The patch and the blob** (`QUAD_BLOB` 80 bytes): `'Q'` (0x51), **version 3**, a byte per value (value - min), zeros
 to 80 (73 values + 5 zero bytes). Values (index name min..max (init)): 0 ALGO 1..8 (1); 1 RATIO C 0..18 (3); 2 RATIO A

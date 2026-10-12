@@ -9,8 +9,10 @@
 # four amounts, not 0 (dump 4; the screen is the one of dump 3's values); its KNOB 4 turned: one step from the amount,
 # FX on again, the other three as they were (dump 5).
 # MIDI: CC 91 on the chord channel and on the bass channel (dump 6): the editor reads both. PRESETS +1 (another
-# sound): the sends stay (dump 7). FM TONE (OPT + PRESETS +1): its AMP page's Drive (ENV x4, SELECT +1, KNOB 3) is
-# the part's drive: turned there, read on the Sends page (dump 8); FX off: that cell still reads it (dump 9).
+# sound): the sends stay (dump 7). FM TONE (OPT + PRESETS +1, 01 EP: Drive 0): its AMP page's Drive (ENV x4, SELECT
+# +1, KNOB 3 +3: 18) is the SOUND's since 2026-10-12 (docs/FX.md "FM TONE's Drive"; tools/emu/scripts/cr_quad_drive.txt
+# has the rest): in the track, the part's own drive send (12) untouched (dump 8); FX off: still in the track, the
+# cell reads the same (dump 9).
 # GLO + SAVE held (the revert; nothing was saved): a new unit's sends on both screens, the layer on Sends (dump 10).
 wait 300
 btn FX down
@@ -96,7 +98,7 @@ btn ENV
 wait 300
 knob SELECT +1                # AMP's row B: Level / Pan / Drive
 wait 300
-knob KNOB3 +2
+knob KNOB3 +3
 wait 900
 shot build/emu/test/cr_fx_sends_tone.ppm
 btn EDIT

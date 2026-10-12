@@ -1,0 +1,179 @@
+# ChoralRoot: FM TONE's Drive is its preset's, and FX off does not close it (docs/FX.md "FM TONE's Drive"; the owner
+# 2026-10-12: "Digitone presets should save and load the drive level with them and also always enable drive if this is
+# greater than 0 on FM TONE and FX is off"). The dump's `drive:` line: each part's track (what the audio reads) and
+# the part's own drive send (the other engines'; it waits while the part is on FM TONE).
+#  1  FM6: the Sends page's Drive (KNOB 1 +2): the chord part's send 12, in the track
+#  2  OPT + PRESETS +1: FM TONE 01 EP: its Drive 0; the send (12) waits
+#  3  PRESETS +9: 10 WOBBLE: its Drive 10          4  PRESETS -1: 09 METAL: 0
+#  5  WOBBLE again, its AMP page's Drive (KNOB 3 +3): 28, the sound edited; the send still 12
+#  6  SAVE, OCT+ (Overwrite: a user record bound to WOBBLE)
+#  7  PRESETS -1: METAL: 0                         8  PRESETS +1: the saved WOBBLE: 28, not edited
+#  9  FX held, FX tapped (off): the Sends page reads Drive 22%, the other three "off"; the track: 28 0 0 0
+# 10  its KNOB 1 +1: 34, edited, FX still off
+# 11  OPT + PRESETS +1 (the VA), FX still off: the track's drive 0 (the part's send, gated), the send 12
+# 12  FX on: 12
+# 13  OPT + PRESETS -1 (FM TONE again, its place: WOBBLE as saved): 28
+# The bass part:
+# 14  ALGORITHM +1 (the bass on, VA), BASS + EDIT, its FX group's Drive (KNOB 1 +3): the bass part's send 18
+# 15  EDIT held + SELECT -1 (the picker: VA -> FM TONE), OCT+: 01 EP: 0; the send (18) waits
+# 16  ALGORITHM +9: WOBBLE on the bass part (the record saved at 6): 28    17  FX off: still 28
+# 18  BASS + EDIT, AMP row B's Drive (KNOB 3 +1): 34, edited
+# 19  EDIT held + SELECT +1 (the VA again), OCT+: the bass part's send is back: 18
+# The picker's preview (the chord part, FX still off):
+# 20  EDIT, EDIT held + SELECT +1: the VA previewed: its drive is the part's send, gated: 0
+# 21  OCT- (cancel): FM TONE WOBBLE as it was: 28
+wait 300
+btn FX down
+wait 500
+btn FX up
+wait 400
+knob KNOB1 +2
+wait 900
+btn OCT-
+wait 300
+dump
+btn GLO down
+wait 100
+knob PRESETS +1
+wait 100
+btn GLO up
+wait 1500
+dump
+knob PRESETS +9
+wait 1500
+dump
+knob PRESETS -1
+wait 1500
+dump
+knob PRESETS +1
+wait 1500
+btn EDIT
+wait 400
+btn ENV
+wait 300
+btn ENV
+wait 300
+btn ENV
+wait 300
+btn ENV
+wait 300
+knob SELECT +1
+wait 300
+knob KNOB3 +3
+wait 900
+shot build/emu/test/cr_quad_drive_amp.ppm
+dump
+btn EDIT
+wait 400
+btn SAVE
+wait 300
+btn OCT+
+wait 1800
+dump
+knob PRESETS -1
+wait 1500
+dump
+knob PRESETS +1
+wait 1500
+dump
+btn FX down
+wait 500
+btn FX up
+wait 400
+btn FX
+wait 900
+shot build/emu/test/cr_quad_drive_sends_off.ppm
+dump
+knob KNOB1 +1
+wait 900
+dump
+btn OCT-
+wait 300
+btn GLO down
+wait 100
+knob PRESETS +1
+wait 100
+btn GLO up
+wait 1500
+dump
+btn FX
+wait 300
+dump
+btn GLO down
+wait 100
+knob PRESETS -1
+wait 100
+btn GLO up
+wait 1500
+dump
+knob ALGORITHM +1
+wait 1500
+btn ENV down
+wait 100
+btn EDIT
+wait 100
+btn ENV up
+wait 400
+btn PLAY
+wait 400
+knob KNOB1 +3
+wait 900
+dump
+btn EDIT down
+wait 400
+knob SELECT -1
+wait 300
+btn EDIT up
+btn OCT+
+wait 400
+btn EDIT
+wait 400
+dump
+knob ALGORITHM +9
+wait 1500
+dump
+btn FX
+wait 300
+dump
+btn ENV down
+wait 100
+btn EDIT
+wait 100
+btn ENV up
+wait 400
+btn ENV
+wait 300
+btn ENV
+wait 300
+btn ENV
+wait 300
+btn ENV
+wait 300
+knob SELECT +1
+wait 300
+knob KNOB3 +1
+wait 900
+shot build/emu/test/cr_quad_drive_bass_amp.ppm
+dump
+btn EDIT down
+wait 400
+knob SELECT +1
+wait 300
+btn EDIT up
+btn OCT+
+wait 400
+btn EDIT
+wait 400
+dump
+btn EDIT
+wait 400
+btn EDIT down
+wait 400
+knob SELECT +1
+wait 300
+dump
+btn EDIT up
+btn OCT-
+wait 400
+dump
+quit

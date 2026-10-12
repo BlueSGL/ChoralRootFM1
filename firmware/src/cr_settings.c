@@ -759,6 +759,9 @@ _Static_assert(CSS_FXP_DCOLOR == 8 && CSS_FXP_XD_TIME == 9 && CSS_FXP_XR_SIZE ==
                CSS_FXP_XD_TIME2 == 25 && CSS_FXP_BS_REV == 26 && CSS_FXP_BS_DRIVE == 29 && CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5 && CSS_FXE_SENDS == 6, "the session's FX tags are never renumbered");
 static int16_t *css_fxg_p(uint32_t i)
 {
+    if (CSS_FXG[i].x == 2u && CSS_FXG[i].id == P_DIST)
+        return cu_bdrive_p();                      /* (the bass part's drive SEND: beside its track while its engine is
+                                                    * FM TONE, whose Drive is the sound's and rides in part[1].p[]) */
     return CSS_FXG[i].x == 2u ? &trk[CR_PART_BASS].p[CSS_FXG[i].id] : CSS_FXG[i].x ? &xfp[CSS_FXG[i].id] : &song.g[CSS_FXG[i].id];
 }
 static int css_fxg_ok(uint32_t i, int v)

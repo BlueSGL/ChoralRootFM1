@@ -188,9 +188,13 @@ static const char *cu_preset_name(uint32_t e, uint32_t p)
     return en->npresets ? en->presets[p % en->npresets].name : en->name;
 }
 static int cu_kept(uint32_t i) { return param_kept(i); }
+/* FM TONE's Drive is its preset's (below, at cu_fx_apply): every load that changes a part's engine or loads an FM
+ * TONE sound says so BEFORE it writes eng_req: engine e is coming, with Drive d if e is FM TONE */
+static void cu_drive_load(track_t *t, uint32_t e, int32_t d);
+static int32_t cu_preset_drive(const preset_t *pr) { return pr->fx[0] ? (int32_t)pr->fx[0] - 1 : 0; }   /* core.h FX() */
 
 /* engine e's preset pi into part t, as ui.c set_engine_of + apply_preset_to: the sound only (not its sends: they are
- * the part's, cu_kept); the part's
+ * the part's, cu_kept; an FM TONE preset's Drive is loaded: cu_drive_load); the part's
  * notes are released (panic_req: cr_out.c events_block, the audio side). bass: P_VOICE MONO, else POLY (a chord on a
  * mono preset) */
 static void cu_load(track_t *t, uint32_t e, uint32_t pi, int bass)
@@ -203,6 +207,7 @@ static void cu_load(track_t *t, uint32_t e, uint32_t pi, int bass)
     pi = cu_preset_orig(en, pi % en->npresets);
     pr = &en->presets[pi];
     fm1_irq_off();
+    cu_drive_load(t, e % NENGINES, cu_preset_drive(pr));
     t->eng_req = (uint8_t)(e % NENGINES);
     t->preset = (uint8_t)pi;
     t->user = 0;
@@ -276,6 +281,7 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
 #if !FELUCCA_FM4
     if (r->engine == ENGI_DIGITAL) {
         int16_t p[P_COUNT];
+        cu_drive_load(t, ENGI_FM6, 0);
         for (i = 0; i < P_COUNT; i++)
             p[i] = cu_kept(i) ? t->p[i] : v[i];
         fm4_apply(t, p);
@@ -288,6 +294,7 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
 #endif
         cu_analog_va(v);
         fm1_irq_off();
+        cu_drive_load(t, ENGI_VA, 0);
         t->eng_req = ENGI_VA;
         for (i = 0; i < P_COUNT; i++)
             if (!cu_kept(i))
@@ -309,6 +316,7 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
                was ? " (" : "", was ? was : "", was ? ")" : "", en->name, carry ? ", its ATK, REL" : "");
 #endif
         fm1_irq_off();
+        cu_drive_load(t, CB_RETIRED_POOL, 0);
         t->eng_req = CB_RETIRED_POOL;
         for (i = 0; i < P_E0; i++)
             if (!cu_kept(i))
@@ -331,6 +339,7 @@ static void cu_load_user(track_t *t, uint32_t k, int bass)
         cu_message(was && carry ? msg : "engine retired: init sound", CR_COL_WHITE);
     } else {
         fm1_irq_off();
+        cu_drive_load(t, r->engine, v[P_DIST]);   /* (an FM TONE record: the Drive it was saved with) */
         t->eng_req = r->engine;
         for (i = 0; i < P_COUNT; i++)
             if (!cu_kept(i))
@@ -355,6 +364,7 @@ static void cu_init_load(uint32_t part, uint32_t e)
     const engine_t *en = ENGINES[e % NENGINES];
     uint32_t i;
     fm1_irq_off();
+    cu_drive_load(t, e % NENGINES, 0);            /* (FM TONE's INIT: Drive 0, its AMP page's default) */
     t->eng_req = (uint8_t)(e % NENGINES);
     t->preset = 0;
     t->user = 0;
@@ -436,7 +446,8 @@ static const char *const CU_DIV[CR_DIV_COUNT] = {"2/1", "1/1", "1/2", "1/2T", "1
 static const char *const CU_DIR[6] = {"up", "down", "up-down", "down-up", "as played", "random"};
 
 /* FX (docs/FX.md): four effects on seven pages (SELECT: Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive).
- * A PART has its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST), no sound load touches them: the chord part's are
+ * A PART has its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST), no sound load touches them (but FM TONE's Drive,
+ * which is the sound's: "FM TONE'S DRIVE IS ITS PRESET'S" below): the chord part's are
  * cs.fx_amt[] (cu_send / cu_send_set below: the ONE value the Sends page, the "Send" cell on KNOB 4 of an effect's
  * first page, the sound editor's FX group, KNOB 4 of the main view and CC 91 / 93 / 94 read and write, each in per
  * cent and by the same detent: cu_send_text / cu_send_step), the bass
@@ -561,13 +572,54 @@ static void cu_set_tempo(int32_t bpm)
  * P_DIST .. P_REV as they stand (its editor's FX group, CC 91 / 93 / 94 on the bass channel; the session's
  * CSS_FXP_BS_*). No load writes them (cr_bank.c param_kept); a preset's or a saved sound's send fields are ignored
  * on load and written as the part's on save (the record's format is as it was) */
+/* FM TONE'S DRIVE IS ITS PRESET'S (the owner, 2026-10-12: "Digitone presets should save and load the drive level with
+ * them and also always enable drive if this is greater than 0 on FM TONE and FX is off"). While a part's engine is FM
+ * TONE its track's P_DIST is the SOUND's Drive (the AMP page's cell, 0..127): an FM TONE load writes it (cu_drive_load:
+ * a factory preset's preset_t.fx[0], a user record's P_DIST field, INIT 0), a save stores it in the record's P_DIST
+ * field (cr_bank.c cb_store, as it always wrote the track's), the session keeps it in the part's p[] (css_part_t),
+ * turning it marks the sound edited, and FX off does not close it (cu_fx_apply leaves it). The part's own drive SEND
+ * (the other engines') waits meanwhile, untouched: the chord part's in cs.fx_amt[] as ever, the bass part's in
+ * cu_bdrive; it is back when the part leaves FM TONE. No stored format changed (docs/FX.md "FM TONE's Drive") */
+static int16_t cu_bdrive;                         /* the bass part's drive send while its engine is FM TONE */
+static int cu_quad_part(uint32_t part)
+{
+#if FELUCCA_QUAD
+    return eng_idx(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req) == ENGI_QUAD;
+#else
+    (void)part;
+    return 0;
+#endif
+}
+static int16_t *cu_bdrive_p(void)                 /* the bass part's drive send, where it is now (the session's tag) */
+{
+    return cu_quad_part(1) ? &cu_bdrive : &trk[CR_PART_BASS].p[P_DIST];
+}
 static void cu_fx_apply(void)                     /* the sends of part 0: the amounts, or 0 with FX off */
 {
     uint32_t i;
     for (i = 0; i < CU_NFX; i++)
-        trk[CR_PART_CHORD].p[CU_FX[i].send] = (int16_t)(cs.fx_on ? cs.fx_amt[i] : 0u);
+        if (CU_FX[i].send != P_DIST || !cu_quad_part(0))         /* (FM TONE's Drive: the sound's, not gated) */
+            trk[CR_PART_CHORD].p[CU_FX[i].send] = (int16_t)(cs.fx_on ? cs.fx_amt[i] : 0u);
     fx_off = !cs.fx_on;                           /* (fx.c: FX off closes every part's sends: the bass part's too, which
                                                    * keeps its values) */
+}
+static void cu_drive_load(track_t *t, uint32_t e, int32_t d)     /* (declared at cu_load; the IRQ may be off) */
+{
+#if FELUCCA_QUAD
+    int was = eng_idx(t->eng_req) == ENGI_QUAD, is = eng_idx(e) == ENGI_QUAD;
+    if (t == &trk[CR_PART_BASS]) {
+        if (is && !was)
+            cu_bdrive = t->p[P_DIST];             /* the part's send waits */
+        else if (was && !is)
+            t->p[P_DIST] = cu_bdrive;             /* .. and is back */
+    } else if (t == &trk[CR_PART_CHORD] && was && !is) {
+        t->p[P_DIST] = (int16_t)(cs.fx_on ? cs.fx_amt[3] : 0u);   /* (as cu_fx_apply: CU_FX[3] is Drive) */
+    }
+    if (is)
+        t->p[P_DIST] = (int16_t)(d < 0 ? 0 : d > 127 ? 127 : d);
+#else
+    (void)t; (void)e; (void)d;
+#endif
 }
 /* a new unit's, and Options > Reset Settings': what the power-on sounds were made with (FM6 TINE EP: reverb 35,
  * chorus 45, delay 25, no drive; VA DEEP SUB: a little reverb, 10) */
@@ -577,7 +629,10 @@ static void cu_sends_default(void)
     uint32_t i;
     for (i = 0; i < CU_NFX; i++) {
         cs.fx_amt[i] = DEF[i];
-        trk[CR_PART_BASS].p[CU_FX[i].send] = (int16_t)(CU_FX[i].send == P_REV ? 10 : 0);
+        if (CU_FX[i].send == P_DIST)
+            *cu_bdrive_p() = 0;                   /* (the SEND: an FM TONE bass sound keeps its Drive) */
+        else
+            trk[CR_PART_BASS].p[CU_FX[i].send] = (int16_t)(CU_FX[i].send == P_REV ? 10 : 0);
     }
     cu_fx_apply();
 }
@@ -596,23 +651,33 @@ static int32_t cu_send_ix(uint32_t id)            /* the effect (CU_FX) a send p
             return (int32_t)i;
     return -1;
 }
+static int cu_send_quad(uint32_t part, uint32_t id) { return id == P_DIST && cu_quad_part(part); }   /* FM TONE's
+                                                   * Drive: the sound's, in the part's track (above, at cu_fx_apply) */
 static int32_t cu_send(uint32_t part, uint32_t id)
 {
     int32_t i = cu_send_ix(id);
-    return !part && i >= 0 ? (int32_t)cs.fx_amt[i] : trk[part ? CR_PART_BASS : CR_PART_CHORD].p[id];
+    return !part && i >= 0 && !cu_send_quad(0, id) ? (int32_t)cs.fx_amt[i]
+                                                   : trk[part ? CR_PART_BASS : CR_PART_CHORD].p[id];
 }
 static void cu_send_set(uint32_t part, uint32_t id, int32_t v)   /* (the chord part's: FX on, as every send turned) */
 {
     int32_t i = cu_send_ix(id);
     v = v < 0 ? 0 : v > 127 ? 127 : v;
-    if (!part && i >= 0) {
+    if (!part && i >= 0 && !cu_send_quad(0, id)) {
         cs.fx_amt[i] = (uint8_t)v;
         cs.fx_on = 1;
         cu_fx_apply();
     } else {
+        track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
+        int32_t was = t->p[id];
         fm1_irq_off();
-        trk[part ? CR_PART_BASS : CR_PART_CHORD].p[id] = (int16_t)v;
+        t->p[id] = (int16_t)v;
         fm1_irq_on();
+        if (cu_send_quad(part, id) && v != was) { /* FM TONE's Drive is the sound's: an edit of it (cu_edited); FX
+                                                   * stays as it is: this drive sounds with FX off too */
+            psnd[part & 1u].edited = 1;
+            t->user = 0;
+        }
     }
 }
 
@@ -801,7 +866,7 @@ static void cu_fx_cells(cr_screen_t *s)
             uint32_t id = CU_FX[e].send;
             int32_t v = cu_send(0, id);
             c->glyph = id == P_DIST ? CR_G_CLIP : CR_G_MIX;
-            if (!cs.fx_on) {
+            if (!cs.fx_on && !cu_send_quad(0, id)) {  /* (FM TONE's Drive sounds with FX off: its cell stays live) */
                 cu_cpy(c->value, "off", sizeof c->value);
             } else {
                 cu_send_text(v, c->value, sizeof c->value);
@@ -2609,6 +2674,7 @@ static void cu_engine_switch(uint32_t part, uint32_t e)
     if (t->eng_req == e)
         return;
     fm1_irq_off();
+    cu_drive_load(t, e, en->npresets ? cu_preset_drive(&en->presets[p0]) : 0);   /* (FM TONE: its first preset's) */
     t->eng_req = (uint8_t)e;
     t->preset = (uint8_t)p0;
     t->trim = 0;
@@ -3964,8 +4030,8 @@ static void cu_knob(uint32_t role, int32_t s)
     case EN_K4:
         cu_send_set(0, CU_FX[cs.fx_sel].send, cu_send_step(cu_send(0, CU_FX[cs.fx_sel].send), s, 0));
         cu_send_popup(cu_send(0, CU_FX[cs.fx_sel].send), CU_FX[cs.fx_sel].name, CR_COL_GREEN);
-        cu_trace("send: knob 4 %s %u (%u%%)\n", CU_FX[cs.fx_sel].name, (unsigned)cs.fx_amt[cs.fx_sel],
-                 (unsigned)cu_send_pct(cs.fx_amt[cs.fx_sel]));
+        cu_trace("send: knob 4 %s %u (%u%%)\n", CU_FX[cs.fx_sel].name, (unsigned)cu_send(0, CU_FX[cs.fx_sel].send),
+                 (unsigned)cu_send_pct(cu_send(0, CU_FX[cs.fx_sel].send)));
         break;
     case EN_PRESET:                                /* the chord part's engine's pool, wrapping */
         {

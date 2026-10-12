@@ -27,7 +27,7 @@ through the presets and experience the effect on each instrument."
 
 | What | Where it lives | Changed by a sound load |
 | --- | --- | --- |
-| each **part's sends** into the reverb, the chorus and the delay, and its **drive** | one value a send (`cr_ui.c cu_send` / `cu_send_set`): the chord part's in `cs.fx_amt[]`, the bass part's in its track (`P_REV`, `P_CHOR`, `P_DLY`, `P_DIST` of `trk[]`), which no load writes (`cr_bank.c param_kept`, as Level and Pan). See "The sends: one value" below | **never** |
+| each **part's sends** into the reverb, the chorus and the delay, and its **drive** | one value a send (`cr_ui.c cu_send` / `cu_send_set`): the chord part's in `cs.fx_amt[]`, the bass part's in its track (`P_REV`, `P_CHOR`, `P_DLY`, `P_DIST` of `trk[]`), which no load writes (`cr_bank.c param_kept`, as Level and Pan). See "The sends: one value" below | **never** (but FM TONE's Drive, the sound's: "FM TONE's Drive" below) |
 | every effect's **own parameters** (16 of the delay and the reverb: `cr_fx.c` `xfp[]`; the chorus's rate and depth: `song.g`) | global | never |
 | all of it over a power-off | the session's FX block, by tag (`cr_settings.h`: `fx.amt[]` the chord part's sends, `CSS_FXP_BS_*` the bass part's, `CSS_FXP_*` the parameters; [SETTINGS.md](SETTINGS.md)) | |
 | FX on / off | the settings block (`fx_on`) | no |
@@ -41,13 +41,14 @@ through the presets and experience the effect on each instrument."
   its Sends page too, is the chord part's.
 - **The editor's FX group** (`cr_pages.c`: Drive, Chorus, Delay, Reverb) shows and edits the part's sends: the chord
   sound's editor the chord part's (the same four values as the FX layer's Sends page and Send cells), the bass
-  sound's the bass part's. A change there no longer marks the sound as edited. FM TONE's AMP page has the part's
-  drive too (its Drive cell: `eng_quad.c QUAD_XDIST`): the same value again.
+  sound's the bass part's. A change there no longer marks the sound as edited. FM TONE's AMP page has a Drive
+  cell too (`eng_quad.c QUAD_XDIST`): on FM TONE the drive is the SOUND's ("FM TONE's Drive" below).
 - **A preset's or a saved sound's send fields** are ignored on load. A save writes the part's current sends into them,
   as it always wrote the part's values: the record's format is unchanged and an older firmware reads it as before.
 - **Defaults** (a new unit, Options > Reset Settings): the chord part reverb 35, chorus 45, delay 25, drive 0 (what
   the power-on sound, FM6 TINE EP, was made with); the bass part reverb 10 (VA DEEP SUB's), the rest 0.
-- **FX off closes every part's sends** (`fx.c` `fx_off`), the bass part's too.
+- **FX off closes every part's sends** (`fx.c` `fx_off`), the bass part's too, and the chord part's drive
+  (`cu_fx_apply` writes 0 into its track), unless that part plays FM TONE.
 - MIDI: CC 91 / 93 / 94 set a part's reverb / chorus / delay send; a program change does not touch them.
 - A send is reached as a ramp over a block (`fx.c fx_sg`): turning Send, FX on / off and a CC write no step into
   what the delay and the reverb are fed.
@@ -110,13 +111,80 @@ step in each place. The stored value, `cu_fx_apply` and the audio are untouched.
 1 %, successive detents from a new unit's reverb send (35) read 28 %, 32 %, 37 %, 42 % .., and a send that has been
 to an end comes back on another lattice (127, 121, 115).
 
-Left as it is: FM TONE's `Drive` on its AMP page (the part's drive, `ce_send_ref`) is a number cell of that engine's
+Left as it is: FM TONE's `Drive` on its AMP page (`ce_send_ref`) is a number cell of that engine's
 screen, beside Level and Pan, and reads the stored 0..127 as every cell there does; it steps with `cu_send_step`.
+The owner, 2026-10-12, asked whether it should read per cent: "FM TONE Drive, no, keep as 127 to match Digitone."
 
 Checked by `tools/emu/scripts/cr_fx_send_scale.txt` (`test_cr.sh`, "a send's read-out and its step are ONE"): the
 reverb send a detent in each place and read in the next (KNOB 4's popup, the Sends page, Reverb 1's Send cell, the
 editor, CC 91), 0 % and 100 % from each, the Send cells of Chorus, Delay 1 and Drive, the bass part's in its editor
 and by CC. The dump's `screen reads:` line prints the last frame's popup and cells, as drawn.
+
+### FM TONE's Drive
+
+The owner, 2026-10-12: "Digitone presets should save and load the drive level with them and also always enable drive
+if this is greater than 0 on FM TONE and FX is off." (His "Digitone presets" are FM TONE's.) So on FM TONE, and only
+there, the drive is the sound's, as the Digitone's overdrive is its sound's.
+
+**No stored format changed.** FM TONE's 80-byte patch (`eng_quad.c`, 'Q' version 3) has no drive value and still has
+none: the AMP page's Drive column always was the part's `P_DIST` (`QUAD_XDIST`). The drive already had a place in
+everything that stores a sound, and it was only not read back:
+
+| | where the Drive is | before |
+| --- | --- | --- |
+| a factory preset | its row's `FX(drive, ..)` in `QUAD_PRESETS` (`preset_t.fx[0]`): **10 on WOBBLE, 0 on the other fifteen**. Our own values: the table is not converted from Digitone patches | not loaded since the sends became the part's |
+| a user preset | its record's `P_DIST` field (`upreset.c up_rec_t`; `cr_bank.c cb_store` writes every track parameter) | written at every save, ignored at load |
+| the session | `part[].p[P_DIST]` (`css_part_t`: the part's parameters as they are) | written, then overwritten by `cu_fx_apply` |
+
+**The rule** (`cr_ui.c`, "FM TONE'S DRIVE IS ITS PRESET'S"): while a part's engine is FM TONE, its track's `P_DIST` is
+the sound's Drive.
+
+- **Loading** an FM TONE sound sets it (`cu_drive_load`, called by every load before it writes the engine: a factory
+  preset's value, a user record's, INIT 0; the engine picker's switch to FM TONE loads 01 EP's, 0).
+- **Saving** stores it: `cb_store` writes the track's `P_DIST`, which now is the Drive.
+- **FX off does not close it**: `cu_fx_apply` leaves `P_DIST` alone for an FM TONE chord part and still writes 0 into
+  the other three. (`fx.c` is untouched: it reads the drive from the track and never gated it; the bass part's drive
+  was never closed by FX off, for any engine.)
+- **One value on every screen**: `cu_send` / `cu_send_set` return and write the track's `P_DIST` for an FM TONE part,
+  so the AMP page's cell (0..127), the Sends page's Drive, the Drive page's Send cell, KNOB 4 with Drive picked and
+  the editor's FX group (all in per cent) are the same value, as before.
+- **Turning it is an edit of the sound** (`cu_send_set` sets the part's `edited` and clears `trk[].user`), from any
+  of those places; it does **not** switch FX on, since it sounds anyway.
+- **With FX off the Drive cell of an FM TONE chord part stays live** on the Sends page and the Drive page (its per
+  cent and its meter) while the other cells read "off": the smallest display that does not lie. The label still
+  reads `fx · off` and the FX LED is off: they speak of the effects.
+- **The part's own drive send is not touched**: it waits while the part is on FM TONE and is back when the part
+  leaves it. The chord part's is `cs.fx_amt[]`, as ever (the session's `fx.amt[DRIVE]`). The bass part's send lives
+  in its track, which FM TONE's Drive now occupies, so it is put aside in `cu_bdrive` (RAM) on the way in and
+  restored on the way out; the session's tag 29 stores it from wherever it is (`cu_bdrive_p`). So a preset with
+  Drive does not leave its drive on the next FM6 or VA sound, and no new stored field was needed.
+- **The other engines: nothing changed.** Their drive is the part's send, not stored with presets, gated by FX off
+  on the chord part.
+
+**The session** comes back as it sounded when saved: `css_part_put` restores each part's parameters, FM TONE's Drive
+among them (an edited one that was saved to no preset too), `cu_fx_apply` then leaves it, and the parts' sends go
+back beside them (`fx.amt[]`, tag 29 into `cu_bdrive` while the bass part is on FM TONE). The order in `css_apply`
+is fixed: the parts, the tags, the amounts, `cu_fx_apply`. GLO + SAVE (the revert) and Reset Settings run the same
+path after `crs_reinit`, whose default loads take the parts off FM TONE first.
+
+**Older records.**
+
+- A user preset saved by 0.14 .. 0.17 or by an earlier 0.18 build loads unchanged, and its Drive is the byte that
+  firmware left in `P_DIST`: **the part's drive when it was saved** (0.14 .. 0.17: what the preset then sounded
+  with; an earlier 0.18 build: the part's drive send of that moment, whichever sound it had been set for). On the
+  chord part that byte is **0 if FX was off at the save**, whatever the Drive cell showed. Nobody can tell from here
+  which of the owner's FM TONE presets carry a drive above 0: the first load shows it in the AMP page's cell.
+- A session written before this change: an FM TONE chord part comes up with the `P_DIST` its record holds, which is
+  what sounded when it was saved (the amount, or 0 with FX off); the bass part's tag 29 and its `P_DIST` held the
+  same value, which becomes both the sound's Drive and the part's send.
+- Loop slots and backups reference no drive: nothing changed in them.
+
+Checked by `tools/emu/scripts/cr_quad_drive.txt` and the four `cr_quad_drive_wav_*.txt` (`test_cr.sh`: the presets'
+Drives, edit / save / away / back, FX off on the Sends page, the engine switched away and back, the bass part, the
+picker's cancel; heard: FM TONE with Drive 127 against 0 with FX off, and FM6's two renders identical),
+`quad_drive_set.txt` / `quad_drive_check.txt` (`test_persist.sh`: the session over a relaunch, the revert, the
+parts' sends after it, Reset Settings) and `tests/cr_fm6_test.c` ("drive:": the sixteen presets, the store round
+trip, an older record, an older session). The dump's `drive:` line prints each part's track value and its send.
 
 ## What the first build got wrong
 
@@ -624,8 +692,10 @@ the far wall's direction turned round.
    loop's stop, are as they were and can still fall into a tail: `flash_holes` will show it. The save policy is
    being reworked separately.)
 8. **The sends' defaults**: chord 35 / 45 / 25 / 0 (reverb, chorus, delay, drive), bass reverb 10.
-9. **The editor's FX group stays**, now the part's sends; a change there is not an edit of the sound.
-10. **A sound saved from now on stores the part's sends** in its unused fields (FX off: zeros).
+9. **The editor's FX group stays**, now the part's sends; a change there is not an edit of the sound (but
+   FM TONE's Drive, the sound's: it is).
+10. **A sound saved from now on stores the part's sends** in its unused fields (FX off: zeros; an FM TONE sound's
+    drive field is its Drive, and is used).
 11. **The delay does not self-oscillate**: feedback tops out at 0.988.
 12. **Spread makes the right side shorter**, 1 .. 1/2 of the left; synced it has four steps.
 13. **Sync folds a division longer than the line to half** instead of clamping it.

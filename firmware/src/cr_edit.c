@@ -573,7 +573,9 @@ static void ce_view(const track_t *t, uint32_t p, ce_view_t *v)
 }
 
 /* a ref that is one of the part's sends (cr_ui.c cu_send: P_DIST .. P_REV), -1: not one. The FX group's four, and a
- * deep column an engine maps onto the part's parameter: FM TONE's AMP+ DRIVE is P_DIST (eng_quad.c QUAD_XDIST) */
+ * deep column an engine maps onto the part's parameter: FM TONE's AMP+ DRIVE is P_DIST (eng_quad.c QUAD_XDIST). On an
+ * FM TONE part that P_DIST is the SOUND's Drive (cr_ui.c "FM TONE'S DRIVE IS ITS PRESET'S"): cu_send / cu_send_set
+ * know, so the AMP cell, the FX group's Drive and the FX layer's Drive are still one value */
 static int32_t ce_send_ref(const track_t *t, ce_ref_t r)
 {
     if (r.k == CE_R_TRK && r.a >= P_DIST && r.a <= P_REV)
@@ -1218,12 +1220,13 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
     }
     if ((i = (uint32_t)ce_send_ref(t, r)) != (uint32_t)-1) {   /* a send: the part's one value (cr_ui.c cu_send_set:
                                                     * the chord part's are the FX amounts). The part's since 0.18, as
-                                                    * the MIX group's Level and Pan: not an edit of the sound */
+                                                    * the MIX group's Level and Pan: not an edit of the sound; but
+                                                    * FM TONE's Drive is the sound's: cu_send_set marks it edited */
         v = cu_send_step(v0, s, fine || cx.shift);                /* (a send's one step, as the FX layer's) */
         cu_send_set(ce.part, i, v);
         cu_send_text(v, b, sizeof b);
-        cu_trace("param: part %u %s %s %d -> %d (%s)\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],
-                 d->label, (int)v0, (int)v, b);
+        cu_trace("param: part %u %s %s %d -> %d (%s)%s\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],
+                 d->label, (int)v0, (int)v, b, cu_send_quad(ce.part, i) && psnd[ce.part].edited ? " edited" : "");
         return;
     }
     fm1_irq_off();

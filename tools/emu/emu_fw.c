@@ -507,6 +507,12 @@ void emu_fw_dump(void)
                 printf(" %d", (int)trk[k ? CR_PART_BASS : CR_PART_CHORD].p[CP_PAGES[CP_FX].id[c]]);
             printf("\n");
         }
+        /* the drive of each part (docs/FX.md "FM TONE's Drive"): what the audio reads (the track's), the part's own
+         * drive send (the other engines'; it waits while the engine is FM TONE, whose Drive is the sound's) */
+        printf("  drive: chord%s track %d send %d edited %u | bass%s track %d send %d edited %u\n",
+               cu_quad_part(0) ? " FM TONE" : "", (int)trk[CR_PART_CHORD].p[P_DIST], (int)cs.fx_amt[3],
+               (unsigned)psnd[0].edited, cu_quad_part(1) ? " FM TONE" : "", (int)trk[CR_PART_BASS].p[P_DIST],
+               (int)*cu_bdrive_p(), (unsigned)psnd[1].edited);
         {   /* what the last frame's screen READS (docs/FX.md "One read-out": a send reads the same wherever it is
              * shown): a popup's value, its unit line and its label, and the cells that are on, row by row */
             const cr_screen_t *sc = &cu_scr;
