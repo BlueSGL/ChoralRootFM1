@@ -23,7 +23,7 @@ globalThis.FM1 = {
   ].map(([code, kind, idx, cap]) => ({ code, kind, idx, cap })),
   // EMU_B_* labels and their ChoralRoot roles (the sticker)
   BTN: ["FX", "SEL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"],
-  BTN_ROLE: ["FX", "KEY", "BASS", "LATCH", "EDIT", "OPT", "HOME", "SAVE", "PERF", "METRO", "LOOP", "REC", "OCT−", "OCT+"],
+  BTN_ROLE: ["FX", "KEY", "BASS", "LATCH", "EDIT", "OPT", "HOME", "SAVE", "PERF", "SEQ", "LOOP", "REC", "OCT−", "OCT+"],
   // EMU_E_* knobs and their roles
   ENC: ["SELECT", "ALGORITHM", "PRESETS", "KNOB1", "KNOB2", "KNOB3", "KNOB4", "MASTER"],
   ENC_ROLE: ["BPM", "BASS SND", "SOUND", "VOICING", "BASS VOICE", "PERFORM", "FX", "VOLUME"],

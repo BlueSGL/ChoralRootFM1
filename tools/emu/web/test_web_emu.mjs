@@ -194,13 +194,18 @@ ok(noteOn.length >= 3 && [62, 66, 69].every((n) => notes.includes(n)),
    `MIDI out: ${run.midi.length} packets, ${noteOn.length} note-ons on channel 1 (notes ${notes.join(" ")})`);
 ok(true, `speed: ${secs.toFixed(2)} s of device time in ${took.toFixed(2)} s (${(secs / took).toFixed(1)}x real time)`);
 
-// the flash: a setting changed (BPM) is saved by cr_settings_poll once things are quiet
+// the flash: a setting changed (BPM) is saved by the global save (SAVE held)
 {
   const d0 = ex.web_flash_dirty();
   ex.web_enc(0, 3);   // SELECT = BPM
+  const run10 = () => { ex.web_step(10); ex.web_render(Math.min(1024, ex.web_avail())); while (ex.web_avail()) ex.web_render(Math.min(1024, ex.web_avail())); };
+  for (let s = 0; s < 300; s += 10) run10();
+  ex.web_buttons(1 << 7);   // SAVE held: the global save (saving is manual since 0.18; the tempo is not written by itself)
+  for (let s = 0; s < 1200; s += 10) run10();
+  ex.web_buttons(0);
   for (let s = 0; s < 12000 && ex.web_flash_dirty() === d0; s += 10) { ex.web_step(10); ex.web_render(Math.min(1024, ex.web_avail())); while (ex.web_avail()) ex.web_render(Math.min(1024, ex.web_avail())); }
   const d1 = ex.web_flash_dirty();
-  ok(d1 > d0, `flash: BPM +3 saved (dirty counter ${d0} -> ${d1}); web_flash_size ${ex.web_flash_size()}`);
+  ok(d1 > d0, `flash: BPM +3, SAVE held: saved (dirty counter ${d0} -> ${d1}); web_flash_size ${ex.web_flash_size()}`);
   // and it comes back: a second module booted from the saved image keeps the setting (the IndexedDB round trip)
   const img = new Uint8Array(ex.memory.buffer, ex.web_flash(), ex.web_flash_size()).slice();
   const ex2 = await load();
