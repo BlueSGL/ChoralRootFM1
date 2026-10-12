@@ -491,8 +491,11 @@ off as it was at your last save** (SAVE held) when you switch on (until 0.17 it 
 - **KNOB 2** moves the bass register, -2 to +4 octaves.
 - **OPT + ALGORITHM** changes the bass sound's engine, exactly as OPT + PRESETS does for the chord sound: hold OPT
   (printed GLO), turn ALGORITHM until the engine you want is in the middle, let go. You land on the sound you last
-  used in that engine. A bass that is off stays off. This works on the main screen; in a layer or in the sound editor
-  OPT changes nothing about ALGORITHM (in the loop editor OPT + ALGORITHM sets the step's Voicing to `Follow` or `0`).
+  used in that engine. A bass that is off stays off. From 0.19 this works **wherever ALGORITHM alone is the bass
+  sound**: on the main screen, in the Options, in every layer but the PLAY menu, and in the sound editor (in 0.18 it
+  worked on the main screen only). Where ALGORITHM has another job, OPT does not change it into the engine picker:
+  in the PLAY menu it stays the record mode, and in the loop editor OPT + ALGORITHM sets the step's Voicing to
+  `Follow` or `0`. The table is in [Sounds](#11-sounds).
 - **BASS held + ALGORITHM** is the bass level: hold BASS (printed ENV / BASS), turn ALGORITHM, let go. The screen
   shows `bass level`, and the bass stays on or off as it was. (Until 0.18 this was OPT + ALGORITHM.) If you have held
   BASS long enough for its layer to open, or the layer is open already, the same turn changes the layer's Level
@@ -1015,9 +1018,10 @@ one): none is lit on INIT, all of them on the last preset, so they show how many
 small square after the name marks a factory preset you have saved over. The bottom line says how to get to another
 engine: `Hold OPT to change engine` (hold OPT, printed GLO, and turn PRESETS). **ALGORITHM** does the same for the
 bass, with `00 off` in front of the pool; its read-out is all orange and its bottom line is the same,
-`Hold OPT to change engine` (hold OPT and turn ALGORITHM: the bass part's engine). Where OPT + PRESETS
-does not work (in the sound editor's picker, or when a program change arrives while a layer is open) the bottom line
-is the engine and the place instead (`FM6 · 02/25`) and nothing stands over the number.
+`Hold OPT to change engine` (hold OPT and turn ALGORITHM: the bass part's engine). The line is there wherever
+holding OPT does change the engine, which from 0.19 includes the layers. Where it does not (the PLAY menu, the sound
+editor's picker, the save dialog, and for the chord sound the sound editor) the bottom line is the engine and the
+place instead (`FM6 · 02/25`) and nothing stands over the number.
 
 When you step to another preset the stripes move from where they were: going up, the ones in between light one after
 another; going down, they go out. Only the first read-out after switching on, and the first after changing the engine,
@@ -1025,6 +1029,24 @@ fills from the left. A long way (from the last preset round to INIT, say) takes 
 
 **OPT + PRESETS** changes the chord sound's engine: hold OPT, turn PRESETS until the engine you want is in the
 middle (the screen shows how many presets it has), let go. You land on the sound you last used in that engine.
+**OPT + ALGORITHM** does the same for the bass.
+
+The rule, the same for both knobs (0.19): **wherever the knob alone changes the sound, OPT held makes it change the
+engine; where the knob has another job, OPT leaves that job alone.**
+
+| Where | PRESETS alone | OPT + PRESETS | ALGORITHM alone | OPT + ALGORITHM |
+| --- | --- | --- | --- | --- |
+| the main screen (any view), the Options | chord sound | **chord engine** | bass sound | **bass engine** |
+| a layer: KEY, PERF, FX, BASS, SEQ (metronome), LOCK, the view menu | chord sound | **chord engine** (new in 0.19) | bass sound | **bass engine** (new in 0.19) |
+| the sound editor | opens the editor's preset picker | the same (the editor's picker) | bass sound | **bass engine** (new in 0.19) |
+| the PLAY menu | the loop slot | the loop slot | the record mode | the record mode |
+| the loop editor | the step | 8 steps a click | the step's Voicing | Voicing `Follow` / `0` |
+| the editor's picker (EDIT held, or PRESETS in the editor) | its presets | its presets | bass sound | bass sound |
+| the save dialog | chord sound | chord sound | bass sound | bass sound |
+
+In the editor's picker and on the save dialog OPT changes nothing about either knob: each of them is busy with one
+sound (a preview you can still cancel, the sound you are naming). A knob you turn while a layer's own button is held
+past the hold time is always that layer's, whatever else is held.
 
 ### The engine picker
 
@@ -1625,7 +1647,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass engine · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass engine (both wherever the knob alone is the sound: the main screen, the Options, the layers but PLAY; ALGORITHM in the sound editor too) · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
@@ -1661,8 +1683,8 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | --- | --- | --- | --- | --- |
 | MASTER | volume | | volume | volume |
 | SELECT | tempo | click level | the layer's picker (KEY layer: its page; LOCK layer: tempo) | the lane |
-| PRESETS | chord sound | chord engine | chord sound (PLAY menu: slot) | the engine picker |
-| ALGORITHM | bass sound (with BASS held: bass level) | on the main screen: the bass sound's engine (loop editor: the step's Voicing, `Follow` / `0`; elsewhere: as without OPT) | bass sound (PLAY menu: record mode; loop editor: the step's Voicing; with BASS held: the BASS layer's Level) | bass sound |
+| PRESETS | chord sound | the chord sound's engine, wherever PRESETS alone is the chord sound: the main screen, the Options, the layers (PLAY menu: the slot, as without OPT; loop editor: 8 steps; the editor, its picker and the save dialog: as without OPT) | chord sound (PLAY menu: slot; loop editor: the step) | the engine picker |
+| ALGORITHM | bass sound (with BASS held: bass level) | the bass sound's engine, wherever ALGORITHM alone is the bass sound: the main screen, the Options, the layers, the sound editor (PLAY menu: the record mode, as without OPT; loop editor: the step's Voicing, `Follow` / `0`; the editor's picker and the save dialog: as without OPT) | bass sound (PLAY menu: record mode; loop editor: the step's Voicing; with BASS held: the BASS layer's Level) | bass sound |
 | KNOB 1 | voicing (Full keyboard: the octave) | split point | the layer's first cell | the lane's first value |
 | KNOB 2 | bass register | | second cell | second value |
 | KNOB 3 | performance parameter | | third cell | third value |

@@ -2517,5 +2517,72 @@ echo "$(oe 4)" | grep -q "^open 0 " && [ "$(ur 4)" = "48k 1 4" ] && ok "set and 
     || bad "USB Rate after the menu: '$(oe 4)' / $(ur 4)"
 differ cr_usb_rate_44 cr_usb_rate_48 "USB Rate: the two values' screens differ"
 
+echo "GLO + ALGORITHM is the bass engine, GLO + PRESETS the chord engine, wherever the knob alone is the part's sound (0.19)"
+export EMU_UI_LOG=0
+run cr_glo_knobs
+unset EMU_UI_LOG
+GK="$OUT/cr_glo_knobs.log"
+gp() { grep -a "^  part $1: " "$GK" | sed -n "$2p" | sed -n 's/^  part [01]: \(.*\), voices.*/\1/p'; }      # gp PART N: "VA / LUSH PAD"
+gl() { grep -a '^  cr: key' "$GK" | sed -n "$1p" | sed -n 's/.* bass \([0-9]\) (sound \([0-9]*\)).* layer \([0-9]*\) .*/\3/p'; }   # the layer open
+gb() { grep -a '^  cr: key' "$GK" | sed -n "$1p" | sed -n 's/.* bass \([0-9]\) (sound.*/\1/p'; }               # the bass on
+go() { grep -a '^  options:' "$GK" | sed -n "$1p" | sed -n 's/^  options: open \([0-9]\).*/\1/p'; }
+A="VA / LUSH PAD"; B="CZ-1 / BRASS 1"; P="FM6 / TINE EP"; Q="FM TONE / EP"
+# a "yes" context: dump N after GLO + ALGORITHM (the bass part on $2), dump N + 1 after GLO + PRESETS (the chord part on
+# $3; the bass part still on $2), the layer $4 open at both
+gyes() {
+    n=$1; m=$(($1 + 1))
+    [ "$(gp 1 $n)" = "$2" ] && [ "$(gp 1 $m)" = "$2" ] && [ "$(gp 0 $m)" = "$3" ] && [ "$(gl $n)" = "$4" ] && [ "$(gl $m)" = "$4" ] &&
+        ok "$5: GLO + ALGORITHM the bass engine ($2), GLO + PRESETS the chord engine ($3), the place still open" \
+        || bad "$5: bass '$(gp 1 $n)' chord '$(gp 0 $m)' layer $(gl $n)/$(gl $m) (wanted '$2', '$3', layer $4)"
+}
+[ "$(gp 0 1)" = "$P" ] && [ "$(gp 1 1)" = "$A" ] && ok "the start: the chord part FM6 TINE EP, the bass on VA LUSH PAD" || bad "the start: $(gp 0 1) / $(gp 1 1)"
+gyes 2 "$B" "$Q" 0 "home"
+gyes 4 "$A" "$P" 0 "the Options"
+[ "$(go 4)" = 1 ] && [ "$(go 5)" = 1 ] && ok "  the Options stay open under it (GLO held is no tap)" || bad "the Options after GLO + a knob: open $(go 4) / $(go 5)"
+gyes 6 "$B" "$Q" 1 "the KEY layer"
+gyes 8 "$A" "$P" 2 "the PERF layer"
+gyes 10 "$B" "$Q" 3 "the FX layer"
+gyes 12 "$A" "$P" 4 "the BASS layer"
+gyes 14 "$B" "$Q" 7 "the SEQ layer (metronome)"
+gyes 16 "$A" "$P" 10 "the LOCK layer"
+gyes 18 "$B" "$Q" 9 "the view menu"
+gyes 20 "$A" "$P" 2 "a layer over the sound editor (PERF)"
+[ "$(gp 1 22)" = "$B" ] && [ "$(gp 0 22)" = "$P" ] && [ "$(gl 22)" = 0 ] && [ "$(gl 23)" = 5 ] && [ "$(gp 0 23)" = "FM6 / FM BELL" ] &&
+    [ "$(gp 1 23)" = "$B" ] && has '^picker: open part 0 TINE EP' "$GK" &&
+    ok "the sound editor (chord part): GLO + ALGORITHM the bass engine ($B); GLO + PRESETS opens the editor's own picker, previewing (PRESETS's job there), no engine picker" \
+    || bad "the sound editor: bass '$(gp 1 22)' layer $(gl 22), then chord '$(gp 0 23)' layer $(gl 23)"
+[ "$(gp 1 24)" = "$A" ] && [ "$(gp 0 24)" = "$P" ] && [ "$(gl 24)" = 0 ] && has '^edit: open part 1' "$GK" &&
+    ok "the sound editor on the bass part: GLO + ALGORITHM the bass engine ($A); HOME in the picker had given the chord sound back" \
+    || bad "the bass sound's editor: bass '$(gp 1 24)' chord '$(gp 0 24)' layer $(gl 24)"
+[ "$(lf "$(L cr_glo_knobs 25)" mode)" = 1 ] && [ "$(gp 1 25)" = "$A" ] && [ "$(gp 0 26)" = "$P" ] && [ "$(gl 25)" = 8 ] && [ "$(gl 26)" = 8 ] &&
+    has '^loop: mode Advance' "$GK" && has '^loop: slot 2 turned' "$GK" &&
+    ok "NOT in the PLAY menu: GLO + ALGORITHM is the record mode (Advance), GLO + PRESETS the slot (2); both sounds as they were" \
+    || bad "the PLAY menu: mode $(lf "$(L cr_glo_knobs 25)" mode), bass '$(gp 1 25)' chord '$(gp 0 26)'"
+[ "$(gp 1 27)" = "VA / WARM PAD" ] && [ "$(gl 27)" = 5 ] && [ "$(gp 0 28)" = "FM6 / FM BELL" ] && [ "$(gl 28)" = 5 ] &&
+    ok "NOT in the editor's picker (EDIT held): GLO + ALGORITHM is the bass sound (VA 02), GLO + PRESETS the picker's presets, as the knobs alone" \
+    || bad "the editor's picker: bass '$(gp 1 27)' chord '$(gp 0 28)' layer $(gl 27)/$(gl 28)"
+[ "$(gp 1 29)" = "VA / GLASS PAD" ] && [ "$(gp 0 29)" = "$P" ] && [ "$(gp 0 30)" = "FM6 / FM BELL" ] && has '^save: dialog part 0 TINE EP' "$GK" &&
+    ok "NOT on the save dialog: GLO + ALGORITHM is the bass sound (VA 03), GLO + PRESETS the chord sound, as the knobs alone (HOME in the picker had given TINE EP back)" \
+    || bad "the save dialog: bass '$(gp 1 29)' chord '$(gp 0 29)' -> '$(gp 0 30)'"
+[ "$(grep -ac '^engine pick: bass' "$GK")" = 13 ] && [ "$(grep -ac '^engine pick: F' "$GK")" = 10 ] &&
+    ok "the engine picker opened 13 times for the bass part and 10 for the chord part: once per place above, never in the PLAY menu, the editor's picker or the save dialog" \
+    || bad "engine pickers: $(grep -ac '^engine pick: bass' "$GK") bass (13), $(grep -ac '^engine pick: F' "$GK") chord (10)"
+[ "$(grep -ac "^home read-out: part 1 over 'CZ-1' line 'Hold OPT to change engine'" "$GK")" = 7 ] &&
+    [ "$(grep -ac "^home read-out: part 0 over 'FM TONE' line 'Hold OPT to change engine'" "$GK")" = 5 ] &&
+    ! grep -a -A1 '^popup: part 1 02 / WARM PAD' "$GK" | grep -aq '^home read-out' &&
+    ! grep -a -A1 '^popup: part 1 03 / GLASS PAD' "$GK" | grep -aq '^home read-out' &&
+    ok "the same read-out everywhere it works (the engine over the place, 'Hold OPT to change engine'); in the editor's picker and the save dialog the old line (VA · 02/25): OPT does nothing there" \
+    || bad "the read-out's hint: $(grep -ac "^home read-out: part 1 over 'CZ-1'" "$GK") / $(grep -ac "^home read-out: part 0 over 'FM TONE'" "$GK")"
+grep -a '^ui: frame.* picker ' "$GK" | grep -aq "item 'CZ-1' value '64 presets'" && grep -a '^ui: frame.* picker ' "$GK" | grep -aq "item 'FM TONE' value '16 presets'" &&
+    ok "the picker itself is the home pages': the engine big, its presets' count: $OUT/cr_glo_knobs_key_pick.ppm (the KEY layer), cr_glo_knobs_edit_pick.ppm (the editor), cr_glo_knobs_opt.ppm" \
+    || bad "the engine picker's screen in a layer"
+[ "$(gp 1 31)" = "VA / SLOW STRINGS" ] && [ "$(gl 31)" = 7 ] && [ "$(gp 0 31)" = "FM6 / FM BELL" ] &&
+    ok "the held-layer rule: SEQ held past the hold time and still down, GLO pressed too, ALGORITHM: the bass sound (VA 04), SEQ's layer open; no engine picker (GLO is the shift only when it is the button held)" \
+    || bad "SEQ held + GLO + ALGORITHM: bass '$(gp 1 31)' layer $(gl 31)"
+[ "$(gb 32)" = 0 ] && [ "$(gp 1 32)" = "$B" ] && [ "$(gl 32)" = 3 ] &&
+    ok "a bass that is off, in the FX layer: GLO + ALGORITHM changes its engine ($B), the bass stays off (as on the home pages)" \
+    || bad "the bass off in a layer: on $(gb 32) '$(gp 1 32)' layer $(gl 32)"
+differ cr_glo_knobs_key_pick cr_glo_knobs_key_pop "the picker in the KEY layer, then the pool read-out on GLO's release"
+
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

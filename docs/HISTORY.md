@@ -1226,3 +1226,34 @@ sounds do not have to spare.
 - **Not tested**: any host. In particular that macOS and Windows re-read the descriptors when `bcdDevice` goes 3.23
   -> 3.22 on the owner's Mac (which has cached 3.23 with 48 000 selected); docs/USB-AUDIO.md's plan, part A step 2,
   is that check. Cost: .text +256 B, .bss +16 B.
+
+**2. "If GLO + Algo is changing bass level anywhere, it should change bass engine, let's keep the UI consistent where
+we can."** It was not the level anywhere any more: since 0.18 GLO + ALGORITHM was the bass engine on the home pages
+and, in a layer or the editor, simply ALGORITHM (the bass sound); but until 0.18 it had been the level in all of
+those, so "the shortcut does something else here" was still true of every layer.
+
+- **The rule** (`cr_ui.c cu_epk_ok(part)`, for both knobs): where the knob's plain job is the part's sound, OPT held
+  makes it the part's engine picker; where the knob has a job of the place's own, OPT changes nothing about it.
+  `cu_pool_home` is gone: the gesture and the read-out's hint line ask the same predicate.
+- **GLO + ALGORITHM, before -> after.** Home pages and the Options: bass engine (as 0.18). The layers KEY, PERF, FX,
+  BASS, SEQ, LOCK and the view menu, also over the sound editor: bass sound -> **bass engine**. The sound editor's
+  pages: bass sound -> **bass engine** (ALGORITHM is not the editor's; its SHIFT is for KNOB 1 .. 4 and SELECT).
+  Kept: the PLAY menu (the record mode), the loop editor (Voicing Follow / 0), the editor's picker `L_EDIT` and the
+  save dialog (the bass sound, as the knob alone).
+- **GLO + PRESETS, before -> after.** Home pages and the Options: chord engine. The same layers: chord sound ->
+  **chord engine**. Kept: the sound editor (PRESETS opens its picker, with or without GLO), the PLAY menu (the
+  slot), the loop editor (8 steps), the editor's picker (its presets), the save dialog (the chord sound).
+- **Why the picker and the save dialog are kept out**, though ALGORITHM's plain job there is the bass sound: each
+  holds one sound (a preview that OCT- or HOME takes back; the sound being named and stored). An engine loaded
+  under it by a second picker would be previewed, cancelled or saved in its place. This is a judgement, not the
+  owner's word: the one-line change is `cu_epk_ok`'s first test. (Named, not changed: on the save dialog PRESETS
+  and ALGORITHM alone still change the sounds under the dialog, as they always did.)
+- **The read-out** follows: `Hold OPT to change engine` and the engine over the number now show in the layers and,
+  for the bass, in the editor; `FM6 · 05/25` where OPT does nothing. No existing check read the old line in a layer.
+- **The held-layer rule** is untouched: `cu_shift` is true only when OPT is the button held (`cu.armed`), so with a
+  layer's own button held past the hold time the knob is the layer's, GLO pressed with it or not (the script's dump
+  31). The bass level stays BASS held + ALGORITHM, tested first in `cu_knob`.
+- **Test**: `tools/emu/scripts/cr_glo_knobs.txt` in `test_cr.sh`, 24 checks over 32 dumps: each place above, the
+  three kept ones, the picker's and the read-out's screens, the held-layer rule, a bass that is off. The loop
+  editor's Follow / 0 is `cr_loop_edit`'s check, unchanged. Docs: MANUAL (Bass, Sounds with the table, the Knobs
+  table), PRESETS.md (the before / after table), INTEGRATION, 0.19's notes.

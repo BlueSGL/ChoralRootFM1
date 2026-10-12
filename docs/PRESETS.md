@@ -29,16 +29,17 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   stand-in, with the message `PHASE retired: stand-in` (`cr_ui.c cu_load_user`); the record is not rewritten.
   Every entry is editable: **saving over a factory preset is allowed** and the factory one stays recoverable (reset).
 - **PRESETS turns inside the current engine's pool only** (the chord part's engine; ALGORITHM the bass part's). The
-  popup: the number big, the name, the stripe meter over the pool, and two lines that depend on where it shows. **On
-  the home pages** (no layer, not the sound editor, not the save dialog: `cu_pool_home`, exactly where OPT + PRESETS
-  works; 2026-10-11, the owner: "show above the preset number in orange the current engine name. Then at the bottom
+  popup: the number big, the name, the stripe meter over the pool, and two lines that depend on where it shows.
+  **Where OPT held + the part's knob is its engine picker** (`cu_epk_ok(part)`, 0.19: wherever the knob's plain job
+  is the part's sound: the home pages, the Options, the layers but the PLAY menu, and for the bass part the sound
+  editor; in 0.18 the home pages only, `cu_pool_home`; 2026-10-11, the owner: "show above the preset number in orange the current engine name. Then at the bottom
   it currently says 'ENGINE - 20/25', let's change that to say 'Hold OPT to change engine', the numbers and the bar
   already communicate how many presets there are and which one is selected"): the part's engine over the number in
   the role orange (`cr_screen_t.line` / `line_col`, the meter's line over its value; the bass with Bass Behaviour
   Solo: `VA · solo`), and under the stripes `Hold OPT to change engine` for both parts (since 2026-10-12 OPT + ALGORITHM is the bass
   part's engine, as OPT + PRESETS the chord part's; until then the bass part's line read `BASS + EDIT, hold EDIT:
   engine` and OPT + ALGORITHM was the bass level, which is BASS held + ALGORITHM now). **Elsewhere**
-  (the engine picker's preview, a program change or SysEx select with a layer open): nothing over the number and
+  (the PLAY menu, the editor's picker and its preview, the save dialog; the chord part in the sound editor): nothing over the number and
   `FM6 · 05/25` under the stripes, as everywhere until then (the place and the number of presets: 00 = INIT, which
   is not counted as a preset, 01.. the factory presets, then the user's); an overwritten factory preset
   carries a small square mark after its name. The meter is a stripe per preset and place k lights k of them: none on
@@ -51,13 +52,36 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 - **OPT + PRESETS changes the engine** outside the editor (a horizontal picker: the engine big, the pool size as the
   value); the part lands on the preset it last had in that pool (remembered per engine per part; the first preset
   before that). The editor's EDIT-held picker is unchanged (it is the same thing inside the editor).
+- **Where the two engine shortcuts work (0.19; the owner, 2026-10-12: "If GLO + Algo is changing bass level
+  anywhere, it should change bass engine, let's keep the UI consistent where we can.").** One rule for both knobs,
+  `cr_ui.c cu_epk_ok(part)`: where the knob's plain job is the part's sound, OPT held makes it the part's engine;
+  where the knob has a job of the place's own, OPT changes nothing about it. Before and after, per place:
+
+  | place | OPT + PRESETS, 0.18 | OPT + PRESETS, 0.19 | OPT + ALGORITHM, to 0.17 | 0.18 | 0.19 |
+  | --- | --- | --- | --- | --- | --- |
+  | home pages (every view) | chord engine | chord engine | bass level | bass engine | bass engine |
+  | the Options | chord engine | chord engine | bass level | bass engine | bass engine |
+  | layers KEY, PERF, FX, BASS, SEQ, LOCK, the view menu (also over the sound editor) | chord sound (plain) | **chord engine** | bass level | bass sound (plain) | **bass engine** |
+  | the sound editor's pages | the editor's picker opens (PRESETS's job there) | the same | bass level | bass sound (plain) | **bass engine** |
+  | the PLAY menu | the slot (PRESETS's job there) | the same | bass level | the record mode (ALGORITHM's job there) | the same |
+  | the loop editor | 8 steps a click | the same | Voicing Follow / 0 | the same | the same |
+  | the editor's picker (`L_EDIT`) | its presets | the same | bass level | bass sound (plain) | the same |
+  | the save dialog | chord sound (plain) | the same | bass level | bass sound (plain) | the same |
+
+  The last two are kept out on purpose: each holds one sound (a preview OCT- takes back; the sound being named and
+  stored), and another engine loaded under it by a second picker would be previewed, cancelled or saved in its
+  place. The picker, the landing rule (`cs.pool_pos[part]`), the read-out and "a bass that is off stays off" are
+  `cu_epk_step` / `cu_epk_commit` everywhere: one code path. The read-out's hint line follows the same predicate, so
+  `Hold OPT to change engine` is shown exactly where it is true. `tools/emu/scripts/cr_glo_knobs.txt` walks every
+  row.
 - **SAVE tap**: a two-item picker, **Overwrite** (the current preset; saves at once, name kept) or **Save as new**
   (the pool's next free place, then the naming screen prefilled with the current name). The default is Overwrite when
   the current preset is a user one or an edited one, Save as new otherwise. OCT+ takes it, OCT- cancels. **SAVE held
   1 s in the dialog**: "reset to factory?" on an overwritten factory preset, "delete?" on a user-added one. SAVE held
   outside the dialog stays the loops' save / load / delete.
 - The bass: the same model on ALGORITHM (the bass part's engine's pool). ALGORITHM position 0 = OFF as today. Its
-  engine: OPT held + ALGORITHM on the home pages since 2026-10-12 (the chord part's picker in orange, the same
+  engine: OPT held + ALGORITHM on the home pages since 2026-10-12, and since 0.19 wherever ALGORITHM alone is the
+  bass sound (the table above) (the chord part's picker in orange, the same
   engines, wrapping, the place last played in that engine, `cs.pool_pos[1]`; a bass that is off stays off), and as
   before BASS held + EDIT's picker. The bass level, OPT + ALGORITHM until then, is BASS held + ALGORITHM.
 - The idea of "templates" is gone: what the editor's picker steps with KNOB 1 is the same pool PRESETS turns.

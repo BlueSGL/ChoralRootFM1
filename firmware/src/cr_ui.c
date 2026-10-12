@@ -1258,19 +1258,46 @@ static uint32_t cu_pool_lit(uint32_t pos, uint32_t n, uint32_t segs)
  * overwritten factory preset: a square mark after it), a stripe per preset (at most 32; a pool of INIT alone: one, never
  * lit), position k lighting k of them (cu_pool_lit), the bass part's in orange, and two lines that depend on where it
  * is shown.
- * On the home pages (cu_pool_home: no layer, not the sound editor, not the save dialog; the owner, 2026-10-11: "show
+ * Where OPT held + the part's knob is its engine picker (cu_epk_ok; the owner, 2026-10-11: "show
  * above the preset number in orange the current engine name. Then at the bottom it currently says 'ENGINE - 20/25',
  * let's change that to say 'Hold OPT to change engine', the numbers and the bar already communicate how many presets
  * there are and which one is selected"): the part's engine over the number in orange (the bass with Bass Behaviour
- * Solo: "VA \267 solo"), and under the stripes the way to another engine: CU_POOL_HINT for the chord part (OPT held +
- * PRESETS, cu_epk_step, works exactly where cu_pool_home is true) and, since 2026-10-12, for the bass part too (OPT held
- * + ALGORITHM: the bass part's engine, the same picker; the bass level went to BASS held + ALGORITHM).
- * Anywhere else (the engine picker's preview, a program change with a layer open): nothing over the number and
- * "FM6 \267 05/25" under the stripes (the engine, the position, the pool's presets: INIT, position 00, is not counted;
- * the bass: " \267 solo" after it with Bass Behaviour Solo), as everywhere until 0.18: OPT + PRESETS does nothing there */
+ * Solo: "VA \267 solo"), and under the stripes the way to another engine: CU_POOL_HINT (OPT held + PRESETS for the
+ * chord part, OPT held + ALGORITHM for the bass part: cu_epk_step, which works exactly where cu_epk_ok is true, so
+ * the line never names a gesture that does nothing there).
+ * Anywhere else (the PLAY menu, the editor's picker and its preview, the save dialog; the chord part in the sound
+ * editor): nothing over the number and "FM6 \267 05/25" under the stripes (the engine, the position, the pool's
+ * presets: INIT, position 00, is not counted; the bass: " \267 solo" after it with Bass Behaviour Solo), as
+ * everywhere until 0.18.
+ *
+ * cu_epk_ok(part): OPT held + PRESETS (part 0) / + ALGORITHM (part 1) is that part's engine picker. The owner,
+ * 2026-10-12: "If GLO + Algo is changing bass level anywhere, it should change bass engine, let's keep the UI
+ * consistent where we can." The rule: wherever the knob's plain job is the part's sound (its pool), OPT held makes it
+ * the part's engine; where the knob has a job of the place's own, OPT changes nothing about it. So:
+ *   yes  the home pages (every view), the Options, the layers KEY, PERF, FX, BASS, SEQ (metronome), LOCK and the view
+ *        menu (locked open or over the sound editor: their knobs are KNOB 1..4, PRESETS and ALGORITHM stay the
+ *        sounds'), and for the BASS part the sound editor's pages (ALGORITHM is the bass sound there; SHIFT is the
+ *        editor's for KNOB 1..4 and SELECT only)
+ *   no   the PLAY menu (PRESETS the slot, ALGORITHM the record mode) and the loop editor (the step, the voicing; OPT
+ *        held: 8 steps, Follow / 0: cu_knob takes those first);
+ *        the chord part in the sound editor (PRESETS opens the editor's own picker);
+ *        the editor's picker (L_EDIT: EDIT held or PRESETS in the editor) and the save dialog, for both parts: each
+ *        holds ONE sound (a preview that OCT- takes back, the sound being named and stored), and another engine
+ *        loaded under it by a second picker would be previewed, cancelled or saved in its place. There OPT changes
+ *        nothing about either knob, as in 0.18.
+ * Until 0.18 OPT + ALGORITHM was the bass level in all of these but the loop editor; 0.18 made it the bass engine on
+ * the home pages only (cu_pool_home: no layer, not the editor, not the save dialog) and plain everywhere else */
 #define CU_POOL_HINT "Hold OPT to change engine"
 static uint32_t cu_layer(void);
-static int cu_pool_home(void) { return cu.page != PG_EDIT && cu.page != PG_SAVE && !cu_layer(); }
+static int cu_epk_ok(uint32_t part)
+{
+    uint32_t l = cu_layer();
+    if (l == L_EDIT || l == L_LOOP || (cu.page == PG_SAVE && !l))
+        return 0;
+    if (!part && cu.page == PG_EDIT && !l)
+        return 0;
+    return 1;
+}
 /* a pool's stripes: one per preset, at most 32; a pool of INIT alone: one */
 static uint32_t cu_pool_segs(uint32_t e)
 {
@@ -1286,7 +1313,7 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, n = pool_count(e) - 1u;
     uint32_t segs = cu_pool_segs(e);
     pool_ent_t en = pool_entry(e, pos);
-    int home = cu_pool_home();
+    int home = cu_epk_ok(part);
     cu_2d(b, pos, sizeof b);
     pool_name(e, pos, nm);
     cu_cpy(lb, ENGINES[e]->name, sizeof lb);
@@ -1310,7 +1337,7 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     cu_trace("popup: part %u %s / %s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "");   /* (the place) */
     cu_trace_txt(lb);
     cu_trace("\n");
-    if (home) {                                    /* .. and the two lines the home pages show instead of it */
+    if (home) {                                    /* .. and the two lines shown instead of it where OPT picks engines */
         cu_trace("home read-out: part %u over '", (unsigned)part);
         cu_trace_txt(cu.pop.over);
         cu_trace("' line '%s'\n", cu.pop.label);
@@ -3757,8 +3784,8 @@ static void cu_btn_release(uint32_t b)
 
 /* OPT held + PRESETS (docs/PRESETS.md; mock-up design/choralroot-fm1-preset-screens.png 2): the chord part's engine,
  * a horizontal picker shown while OPT is held (each detent an engine, wrapping); on OPT's release the part switches to
- * it and lands on the place it last had in that engine's pool (cs.pool_pos; the first preset before that). Not in the
- * editor (its EDIT-held picker) nor on the save dialog.
+ * it and lands on the place it last had in that engine's pool (cs.pool_pos; the first preset before that). Where:
+ * cu_epk_ok (not the chord part in the editor: its EDIT-held picker; nor the save dialog, nor the PLAY menu).
  * OPT held + ALGORITHM (the owner, 2026-10-12: "Bass presets, let's make that work similar to the main presets, GLO +
  * Bass knob to change engine"): the same for the BASS part (cu.epk_on 2, orange): the same engines, stepping and
  * landing rule (cs.pool_pos[1]). A bass that is off stays off (its sound waits on the new engine: a BASS tap or
@@ -3898,16 +3925,14 @@ static void cu_knob(uint32_t role, int32_t s)
             ce_knob(role - EN_K1, s, 1);
         return;
     }
-    if (cu_shift() && role == EN_PRESET && cu.page != PG_EDIT && cu.page != PG_SAVE && !cu_layer()) {
-        cu_epk_step(0, s);                         /* OPT held + PRESETS: the chord part's engine (on OPT's release) */
-        return;
-    }
-    if (cu_shift() && role == EN_ALGO && cu_pool_home()) {
-        cu_epk_step(1, s);                         /* OPT held + ALGORITHM: the bass part's engine, the same way. (Until
-                                                    * 2026-10-12 the bass level, and that everywhere but the loop
-                                                    * editor; now anywhere else OPT changes nothing about ALGORITHM,
-                                                    * as about PRESETS: the PLAY menu's record mode, a layer's or the
-                                                    * editor's bass sound. The level: BASS held + ALGORITHM) */
+    if (cu_shift() && (role == EN_PRESET || role == EN_ALGO) && cu_epk_ok(role == EN_ALGO)) {
+        cu_epk_step(role == EN_ALGO, s);           /* OPT held + PRESETS: the chord part's engine (on OPT's release);
+                                                    * + ALGORITHM: the bass part's, the same way; in a layer and for
+                                                    * the bass in the sound editor too since 2026-10-12 (cu_epk_ok:
+                                                    * wherever the knob's plain job is the part's sound). Where it is
+                                                    * not (the PLAY menu's slot and record mode, the editor's picker,
+                                                    * the save dialog) OPT changes nothing about the knob. The bass
+                                                    * level: BASS held + ALGORITHM */
         return;
     }
     if (cu_shift() && (role == EN_K1 || role == EN_SELECT)) {   /* OPT held: second functions (the other knobs: their
