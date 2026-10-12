@@ -135,10 +135,9 @@ installed on the owner's Mac.
   whose DCW is still open, as the chip model does; the 79 jumps left at C2 are the waves' own edges, each checked
   against its definition. **The owner's**: the level by ear against the other engines (`../audio-0.19/cz-trim/`),
   the per-sound trims proposed for INIT TONE, STRINGS 1, BRASS 1, PIPE ORGAN 2 and four quiet sounds (none
-  applied), whether a re-attack should open from a closed DCW when the DCA has let go (not built). **Open in
-  another file**: the session record restores a stored trim (`cr_settings.c css_part_put`), so a unit switched off
-  on BRASS 1, STRINGS 2 or PIPE ORGAN 1 plays it 5, 3 or 6 dB too quiet until the sound is picked again. **Not
-  done on the unit**: anything; `python3 tools/cz_pop_check.py --play` (late halves: the third possible cause of
+  applied), whether a re-attack should open from a closed DCW when the DCA has let go (not built). A session
+  saved on BRASS 1, STRINGS 2 or PIPE ORGAN 1 comes back without the old trim (a part's trim is the table's at a
+  restore, never the record's: `cr_settings.h cr_session_part_trim`). **Not done on the unit**: anything; `python3 tools/cz_pop_check.py --play` (late halves: the third possible cause of
   the first report) was never run.
 - **(c) WHEEL**: the owner is on the fence about cutting it.
 - **(d) USB recording at 48 kHz: built, nothing run on a host or the unit** (docs/USB-AUDIO.md "48 kHz"; HISTORY

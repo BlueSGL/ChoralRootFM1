@@ -1346,3 +1346,34 @@ shows 2 clicks to `wavclicks.py` in Clean".** Two commits on 778a6ad.
 - Tools: `tests/cz_pops.c` (restrike, arp-up, `CZ_TRACE`, `CZ_WHY`, `CZ_VEL2`, `CZ_GAP`, `CZ_CLEAN`, the hash),
   `tools/cz_pops_report.py --jumps / --halves`, `tools/cz_pops_why.py`, `wavclicks.py --both-sides`,
   `cr_cz_brass.txt` in test_cr.sh. Listening files: `../audio-0.19/cz-trim/`. Not run: anything on the device.
+
+## 2026-10-12 (the session and a removed trim)
+
+**0.19 dev (built; not flashed).** The leftover of "CZ-1's level": `cr_settings.c css_part_put` wrote the session
+record's `trim` back into `track_t.trim`, so a unit last saved on CZ-1 BRASS 1, STRINGS 2 or PIPE ORGAN 1 (0.18 stored
+-10, -6, -12 half-dB steps for them) would have played 5, 3 or 6 dB too quiet under 0.19 until the sound was picked
+again. Fixed at the cause: a part's trim belongs to its sound in the running firmware's table, not to the session.
+
+- **The rule** (`cr_settings.h cr_session_part_trim`, a pure function the host test calls with its own tables;
+  `css_part_put` hands it `cb_trim`): by the record's pool entry, as `cr_ui.c cu_pool_load` loads a sound by hand: a
+  factory preset its `CB_TRIM` row; a user preset bound to a factory preset (an overwritten one) that preset's row;
+  an added user preset and INIT none. An edited, unsaved sound the same as its unedited one: no edit ever moved the
+  trim (`cu_edited` leaves it). Every path through `css_part_put`: power-on and GLO + SAVE (a backup holds no session;
+  Reset Settings loads the pools' sounds).
+- **The record is unchanged** (CSS_VERSION, 1024 bytes): `trim` is still written with what the part had, so an older
+  firmware reads what it always read, and old records load as before. Seen once after an update: the dump's
+  "pending 1" on such a unit (the captured state has trim 0, flash's -10) until the next global save; nothing is
+  written by itself.
+- **The same class, checked**: `CB_TRIM` is the only per-sound value `cr_bank.c` owns (the curated bank's level rows
+  went with docs/PRESETS.md). The record's `p[]` and deep patch are the sound as it was left, by design (the edit
+  buffer): a factory preset whose definition an update changes comes back as saved until picked again, and that is
+  the session's promise, not a table value. Level, Pan and the sends are the part's. FM TONE's Drive rides in `p[]`
+  on purpose (0.18; `test_persist.sh`'s drive runs pass unchanged). CZ-1's -6 dB is in the engine, in no record.
+  One inconsistency left as it is, with no row to make it audible today: `cu_engine_switch` sets trim 0 for the
+  engine's first preset where `cu_pool_load` would read its row.
+- Tests: `tests/cr_settings_test.c t_session_trim` (0.18's record on each of the three sounds, either part: loads,
+  trim 0 with 0.19's table and the old value with 0.18's; a sound with a row today gets the row whatever the record
+  says; bound and added user presets, INIT, an edited sound, an unknown kind, no sound). `tools/emu/test_persist.sh`:
+  BRASS 1 and PIPE ORGAN 1 saved on the two parts, the session's trims set to 0.18's in the flash file
+  (`tools/emu/seed_trim.py`), a relaunch and a GLO + SAVE: trim 0 both times (before the fix: -10 / -12 both times);
+  the dump prints a `trim:` line. Not run: anything on the device.

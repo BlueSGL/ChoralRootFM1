@@ -617,5 +617,30 @@ lc() { LC_ALL=C grep -a '^  master:' "$1" | tail -1 | sed 's/.*lowcut //'; }
 [ "${n4:-0}" -ge 1 ] && [ "$(lc "$OUT/persist_lowcut_4.log")" = "0/0 found 1" ] && grep -q "record: defaults" "$OUT/persist_lowcut_4.log" &&
     ok "a Felucca PER4 object with SPEAKER at LOWCUT ($n4 copies): found, held off; ChoralRoot's defaults" \
     || bad "lowcut 1 in a PER4 object: $n4 copies, $(lc "$OUT/persist_lowcut_4.log")"
+# ---- the session and a removed trim row (0.19, docs/CZ1.md "Level"): a part's trim is its sound's in THIS firmware's
+# table (cr_bank.c CB_TRIM), not what the session held. Run 1 (trim_set.txt, a fresh flash): CZ-1 BRASS 1 on the chord
+# part, CZ-1 PIPE ORGAN 1 on the bass, SAVE held. The session's two trims are then set to what 0.18 stored for them
+# (-10, -12: seed_trim.py). Run 2 (trim_check.txt, a relaunch): trim 0 on both at power-on, and after GLO + SAVE
+TF=$OUT/persist_trim_flash.bin
+T1=$OUT/persist_trim_1.log; T2=$OUT/persist_trim_2.log
+rm -f "$TF" "$T1" "$T2"
+"$EMU" --headless --flash "$TF" --script "$S/trim_set.txt" >"$T1" 2>&1 || bad "trim run 1: exit status"
+tr_() { dl "$1" 'trim:' "$2" | sed 's/^  trim: //'; }
+want_t="chord 0 kind 1 fk 1 slot 255 | bass 0 kind 1 fk 35 slot 255"
+[ "$(tr_ "$T1" 1)" = "$want_t" ] && dl "$T1" 'session chord:' 1 | grep -q 'CZ-1 / BRASS 1 edited 0' &&
+    dl "$T1" 'session bass:' 1 | grep -q 'CZ-1 / PIPE ORGAN 1 edited 0' && [ "$(sx "$T1" 1 1)" = 1 ] &&
+    [ "$(python3 tools/emu/seed_trim.py "$TF")" = "0 0" ] &&
+    ok "trim run 1: CZ-1 BRASS 1 / PIPE ORGAN 1 on the parts, no trim (their rows went with 0.19's -6 dB); SAVE held: the session written" \
+    || bad "trim run 1: $(tr_ "$T1" 1) / $(dl "$T1" 'session bass:' 1) / $(sv "$T1" 1)"
+nt=$(python3 tools/emu/seed_trim.py "$TF" -10 -12)
+"$EMU" --headless --flash "$TF" --script "$S/trim_check.txt" >"$T2" 2>&1 || bad "trim run 2: exit status"
+[ "${nt:-0}" -ge 1 ] && [ "$(python3 tools/emu/seed_trim.py "$TF")" = "-10 -12" ] && [ "$(sx "$T2" 1 2)" = current ] &&
+    [ "$(tr_ "$T2" 1)" = "$want_t" ] && dl "$T2" 'session chord:' 1 | grep -q 'CZ-1 / BRASS 1 edited 0' &&
+    [ "$(dl "$T2" 'session chord:' 1)" = "$(dl "$T1" 'session chord:' 1)" ] && [ "$(dl "$T2" 'session bass:' 1)" = "$(dl "$T1" 'session bass:' 1)" ] &&
+    ok "trim run 2 (a relaunch on a session that holds 0.18's trims -10 / -12, $nt copies): the session is read, both sounds as saved, their trims 0: the table's, not the record's" \
+    || bad "trim run 2: seeded '$nt', flash '$(python3 tools/emu/seed_trim.py "$TF")', $(tr_ "$T2" 1) / $(sv "$T2" 1)"
+grep -aq '^save: reverted' "$T2" && [ "$(tr_ "$T2" 2)" = "$want_t" ] && grep -q '^expect sound .*: ok' "$T2" &&
+    ok "GLO + SAVE held: the revert reads that session again: trim 0 on both parts; a chord sounds" \
+    || bad "trim, the revert: $(tr_ "$T2" 2)"
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail

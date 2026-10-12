@@ -281,6 +281,16 @@ uint32_t cr_session_hash(const cr_session_t *x);   /* the state alone (bytes [16
 /* the FX block's entries by tag: 1 found (*v), 0 not stored; set: 0 when the block is full */
 int  cr_session_fx_get(const cr_session_t *x, unsigned tag, int *v);
 int  cr_session_fx_set(cr_session_t *x, unsigned tag, int v);
+/* a part record's trim when it is put back (0.19). track_t.trim is the SOUND's, from the running firmware's table
+ * (cr_bank.c CB_TRIM), never the record's: 0.19 took CZ-1's three rows out, and a session saved on BRASS 1, STRINGS 2
+ * or PIPE ORGAN 1 brought their -5 / -3 / -6 dB back. The rule is cr_ui.c cu_pool_load's, so the session gives what
+ * picking the sound by hand gives: a factory preset its row, a user preset bound to one (an overwritten factory
+ * preset) that preset's row, an added user preset and INIT none; edited or not (an edit never moves the trim).
+ * row(engine, factory preset) is the table (0: no row). The record's own `trim` is still written (what the part had:
+ * an older firmware reads it) and no longer read */
+enum { CSS_KIND_INIT, CSS_KIND_FACTORY, CSS_KIND_USER };   /* css_part_t.kind (cr_bank.c PK_*) */
+#define CSS_FK_NONE 0xFFu                          /* css_part_t.fk: no factory preset (cr_bank.c PF_NONE) */
+int  cr_session_part_trim(const css_part_t *r, int (*row)(unsigned engine, unsigned fk));
 
 #ifdef CR_ENGINE_H
 /* the record -> the engine's setters (call with the engine idle / the audio IRQ off) and the routing */

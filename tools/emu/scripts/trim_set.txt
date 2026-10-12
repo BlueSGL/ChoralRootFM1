@@ -1,0 +1,91 @@
+# test_persist.sh, the session and a removed trim row, run 1 on a fresh flash: the chord part on the CZ-1's 01 BRASS 1
+# (OPT + PRESETS +3, as cz_persist_set.txt), the bass on (ALGORITHM +2: the VA's 01) and on the CZ-1 (OPT + ALGORITHM +1
+# from the VA), its sound turned to 35 PIPE ORGAN 1 (ALGORITHM, a click at a time); SAVE held: the global save. Dump 1.
+wait 300
+btn GLO down
+wait 100
+knob PRESETS +3
+wait 100
+btn GLO up
+wait 900
+knob ALGORITHM +2
+wait 1500
+btn GLO down
+wait 100
+knob ALGORITHM +1
+wait 100
+btn GLO up
+wait 900
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+knob ALGORITHM +1
+wait 120
+wait 1500
+btn SAVE 900
+wait 3500
+dump
+quit
