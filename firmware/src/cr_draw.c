@@ -652,18 +652,17 @@ static void cr_picto(uint32_t g, int32_t x, int32_t y, int32_t w, int32_t h, uin
     uint32_t np = 0;
 #define CR_PT(px16, py16) (p[2 * np] = (int16_t)(px16), p[2 * np + 1] = (int16_t)(py16), np++)
     switch (g) {
-    case CR_G_ROOM: {                               /* one-point perspective: the room opens up with pct: its mouth 55 %
-                                                     * .. 100 % of the box about the centre, the far wall 50 % .. 42 %
-                                                     * of the mouth (deeper as it grows, and still larger on the
-                                                     * screen: 27 % .. 42 % of the box) */
-        int32_t fw = H * 14 / 10 < W ? H * 14 / 10 : W, s = 2253 + 1843 * pct / 256, f = 2048 - 328 * pct / 256;
-        int32_t bw = fw * s >> 12, bh = H * s >> 12, bx = cx - bw / 2, by = cy - bh / 2;
-        int32_t iw = bw * f >> 12, ih = bh * f >> 12, ix = cx - iw / 2, iy = cy - ih / 2;
-        cr_srect(bx, by, bw, bh, lw, col);           /* the box and the far wall: rectangles (cheap), the corner */
+    case CR_G_ROOM: {                               /* one-point perspective: the box is fixed (the glyph box, at most
+                                                     * 1.4 : 1); only the far wall changes, 22 % (pct 0) .. 70 % (1)
+                                                     * of the box about its centre: a small room's far wall is small,
+                                                     * a large room's large (the owner 2026-10-11), never on the box */
+        int32_t bw = H * 14 / 10 < W ? H * 14 / 10 : W, bx = cx - bw / 2, by = y0, f = 901 + 1966 * pct / 256;
+        int32_t iw = bw * f >> 12, ih = H * f >> 12, ix = cx - iw / 2, iy = cy - ih / 2;
+        cr_srect(bx, by, bw, H, lw, col);            /* the box and the far wall: rectangles (cheap), the corner */
         cr_srect(ix, iy, iw, ih, lw, col);           /* lines: four short polylines */
         for (k = 0; k < 4; k++) {
             np = 0;
-            CR_PT(k & 1 ? bx + bw : bx, k & 2 ? by + bh : by);
+            CR_PT(k & 1 ? bx + bw : bx, k & 2 ? by + H : by);
             CR_PT(k & 1 ? ix + iw : ix, k & 2 ? iy + ih : iy);
             cr_poly(p, np, lw, 0, 0, col);
         }

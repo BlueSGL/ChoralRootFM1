@@ -545,9 +545,15 @@ read "off", as a Send cell; turning one switches FX on. Fixture: `design/make_fx
 The seven new glyphs (`cr_draw.c cr_picto`: `CR_G_TAIL PRE CUT WIDTH SPREAD SYNC PING`) are drawn in the manner of the
 old ones and have fixtures (`design/make_fx_mockups.py` states 2, 3, 5b, 12, 13, 14; `tests/cr_draw_test.c`). The
 designer app does not draw them yet: `design/choralroot-fm1-fx-screens.png` is stale for those states. `CR_G_SPRING`
-went with the spring. The room (`CR_G_ROOM`, Size's alone) opens up with its value since the owner's first try: the
-whole box grows from 55 % to 100 % of the cell's glyph box, its far wall from 50 % to 42 % of it (it used to keep the
-box and shrink the far wall, which read as a room closing in).
+went with the spring. The room (`CR_G_ROOM`, Size's alone, on Reverb 1; no other page, nor the Sends page or the
+sound editor, draws it): the outer box is fixed (the cell's glyph box, at most 1.4 : 1) and **only the inner box, the
+far wall, changes: 22 % of the box at Size 0, 70 % at 127**, about the centre, joined to the box by the four corner
+lines; at its largest 4 px of background are left between the two (`tests/cr_draw_test.c` "room"). Its history: until
+2026-10-11 the far wall SHRANK with Size, 70 % to 22 % (the owner: it "gets tighter"); the first fix (`1121f93`) made
+the whole icon grow, 55 % to 100 % of the glyph box with the far wall 50 % to 42 % of it; the owner: "Currently it's
+now scaling the whole icon. I don't want that. [...] I only want the inner box to change size. The inner box should be
+small when the room size is small and large when the room size is large." So the drawing is the first one again with
+the far wall's direction turned round.
 
 ## How to tune
 
