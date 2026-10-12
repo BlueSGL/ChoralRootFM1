@@ -1,0 +1,364 @@
+# ChoralRoot 0.19: GLO held + ALGORITHM is the bass engine wherever ALGORITHM alone is the bass sound, and GLO held +
+# PRESETS the chord engine wherever PRESETS alone is the chord sound (the owner, 2026-10-12: "If GLO + Algo is
+# changing bass level anywhere, it should change bass engine, let's keep the UI consistent where we can."; cr_ui.c
+# cu_epk_ok). 0.18 had both on the home pages only. tools/emu/test_cr.sh reads the dumps by number.
+# Each "yes" context: GLO + ALGORITHM (the bass part's engine moves, +1 then -1 in turn), then GLO + PRESETS (the
+# chord part's), the place still open afterwards. Each "no" context: the knob's own job there, no engine picker.
+#    1 the start: the bass on (VA 01), the chord part FM6
+#    2  3  home                  4  5  the Options (open before and after)
+#    6  7  the KEY layer         8  9  the PERF layer       10 11  the FX layer
+#   12 13  the BASS layer       14 15  the SEQ layer (metronome)
+#   16 17  the LOCK layer (B3 held)                          18 19  the view menu (HOME held)
+#   20 21  a layer over the sound editor (PERF held in it: the editor keeps FX, ENV, SEL for its sections)
+#   22     the sound editor, chord part: GLO + ALGORITHM = the bass engine
+#   23     .. GLO + PRESETS there = the editor's own picker opens (no engine picker); HOME
+#   24     the sound editor, bass part (BASS held + EDIT): GLO + ALGORITHM = the bass engine, the editor stays
+#   25 26  NO: the PLAY menu: GLO + ALGORITHM the record mode, GLO + PRESETS the slot
+#   27 28  NO: the editor's picker (EDIT held): GLO + ALGORITHM / + PRESETS as the knobs alone
+#   29 30  NO: the save dialog: the same
+#   31     the held-layer rule: SEQ held past the hold time and still down, GLO pressed too, ALGORITHM: the bass sound
+#          (SEQ's hold owns the knob: GLO is not the shift then), the layer open
+#   32     the bass off (BASS tap), the FX layer: GLO + ALGORITHM changes the engine, the bass stays off
+wait 300
+knob ALGORITHM +2
+wait 1500
+dump                              # 1
+# ---- home
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 2
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 3
+# ---- the Options
+btn GLO 80
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+shot build/emu/test/cr_glo_knobs_opt.ppm
+btn GLO up
+wait 1500
+dump                              # 4
+btn GLO down
+wait 50
+knob PRESETS -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 5
+btn GLO 80
+wait 300
+# ---- the KEY layer
+btn SEL down
+wait 600
+btn SEL up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+shot build/emu/test/cr_glo_knobs_key_pick.ppm
+btn GLO up
+wait 400
+shot build/emu/test/cr_glo_knobs_key_pop.ppm
+wait 1100
+dump                              # 6
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 7
+btn HOME
+wait 300
+# ---- the PERF layer
+btn ARP down
+wait 600
+btn ARP up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 8
+btn GLO down
+wait 50
+knob PRESETS -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 9
+btn HOME
+wait 300
+# ---- the FX layer
+btn FX down
+wait 600
+btn FX up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 10
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 11
+btn HOME
+wait 300
+# ---- the BASS layer
+btn ENV down
+wait 600
+btn ENV up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 12
+btn GLO down
+wait 50
+knob PRESETS -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 13
+btn HOME
+wait 300
+# ---- the SEQ layer
+btn SEQ down
+wait 600
+btn SEQ up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 14
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 15
+btn HOME
+wait 300
+# ---- the LOCK layer
+btn B3 down
+wait 600
+btn B3 up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 16
+btn GLO down
+wait 50
+knob PRESETS -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 17
+btn HOME
+wait 300
+# ---- the view menu
+btn HOME down
+wait 800
+btn HOME up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 18
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 19
+btn HOME
+wait 300
+# ---- a layer over the sound editor
+btn EDIT
+wait 300
+btn ARP down
+wait 600
+btn ARP up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 20
+btn GLO down
+wait 50
+knob PRESETS -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 21
+btn HOME
+wait 300
+# ---- the sound editor (the chord part's pages; HOME above left the layer, back to the editor)
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+shot build/emu/test/cr_glo_knobs_edit_pick.ppm
+btn GLO up
+wait 1500
+dump                              # 22
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 600
+dump                              # 23
+btn HOME
+wait 300
+btn HOME
+wait 300
+# ---- the sound editor on the bass part
+btn ENV down
+wait 100
+btn EDIT
+wait 100
+btn ENV up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM -1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 24
+btn HOME
+wait 300
+# ---- NO: the PLAY menu
+btn PLAY down
+wait 600
+btn PLAY up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 600
+dump                              # 25
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 600
+dump                              # 26
+btn HOME
+wait 300
+# ---- NO: the editor's picker
+btn EDIT down
+wait 600
+btn EDIT up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 27
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 28
+btn HOME
+wait 300
+btn HOME
+wait 300
+# ---- NO: the save dialog
+btn SAVE
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 29
+btn GLO down
+wait 50
+knob PRESETS +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 30
+btn HOME
+wait 300
+btn HOME
+wait 300
+# ---- the held-layer rule
+btn SEQ down
+wait 600
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+btn SEQ up
+wait 1500
+dump                              # 31
+btn HOME
+wait 300
+# ---- the bass off
+btn ENV
+wait 600
+btn FX down
+wait 600
+btn FX up
+wait 300
+btn GLO down
+wait 50
+knob ALGORITHM +1
+wait 300
+btn GLO up
+wait 1500
+dump                              # 32
+btn HOME
+wait 300
+quit

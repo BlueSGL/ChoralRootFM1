@@ -727,11 +727,13 @@ static void crb_peak(void)
  * the last whole open's (0 before one: what ua_frames_last_open counts frames of), SET_CURs seen and those that
  * changed the rate, the 48 kHz packets armed by size (48 frames; 47 and 49, the drift's), then the resampler in the
  * audio ISR: blocks, the recent average and the longest time of one block in us (TIMER5 nested in it included; four
- * blocks a half), and the largest packet's bytes */
+ * blocks a half), and the largest packet's bytes; then Options > USB Rate (2026-10-12): 1 = 48 kHz is offered (0: the
+ * device is 0.18's, 44.1 kHz only), the SET_CURs for 48 kHz that came while it was not, and the times the FM-1 left
+ * the bus for a USB option */
 #if FELUCCA_UAC
 static void crb_usb(void)
 {
-    uint32_t v[12], k = 0, i;
+    uint32_t v[16], k = 0, i;
     v[k++] = ua.r48 ? UA_RATE48 : UA_RATE;
     v[k++] = !ua_dbg.open_close_ms ? 0u : ua_dbg.rate_last_open ? UA_RATE48 : UA_RATE;
     v[k++] = ua.rate_sets;
@@ -743,6 +745,9 @@ static void crb_usb(void)
     v[k++] = ua.rs_blocks ? ua.rs_ticks / ua.rs_blocks / FM1_TICKS_PER_US : 0u;
     v[k++] = ua.rs_max_ticks / FM1_TICKS_PER_US;
     v[k++] = UA_PACKET;
+    v[k++] = (ua_off & UA_OFF_48) ? 0u : 1u;
+    v[k++] = ua_dbg.rate_refused;
+    v[k++] = ua_replugs;
     crb_b(1);
     crb_b(k);
     for (i = 0; i < k; i++)

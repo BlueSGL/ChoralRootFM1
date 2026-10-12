@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generate the knob-row mock-ups for the remaining layers (fm1-panel-design JSON): KEY, LOOP, METRO.
+"""Generate the knob-row mock-ups for the remaining layers (fm1-panel-design JSON): KEY, LOOP, SEQ (the metronome).
 
   python3 design/make_layers_mockups.py     # writes design/choralroot-fm1-layers-mockups.json
 
@@ -13,7 +13,8 @@ The three layers left have a wrinkle each, so they get their own sheet:
   LOOP   the ring stays in this layer (decided with the dial), so the knob row has to live inside it: drafted inside
          the ring (A) and, for comparison, without the ring (B). Stopped: the picker is the length (KNOB 1 = SYNC is
          the same control); playing: the picker is the action.
-  METRO  one knob (the click level); three cells are '–'.
+  SEQ    the SEQ button's hold layer, the metronome (the button was called METRO until 0.18; the screen's own
+         title is still "metronome", as the firmware draws it): one knob (the click level); three cells are '–'.
 """
 import json
 import os
@@ -130,15 +131,16 @@ S.append(state(
     chord_block=False,
 ))
 
-# 7 ------------------------------------------------------------------ METRO
+# 7 ------------------------------------------------------------------ SEQ (the metronome)
 S.append(state(
-    "7 · METRO · the time signature over the click level",
-    "METRO held: the time signature picker (4/4 · 3/4 · 6/8) in white over one cell, CLICK (KNOB 1, a bar); the other "
-    "three '–'. METRO tap still toggles the click. (OPT + SELECT sets the same level from anywhere.)",
+    "7 · SEQ · the metronome: the time signature over the click level",
+    "SEQ held (the SEQ key's hold menu, the metronome): the time signature picker (4/4 · 3/4 · 6/8) in white over one "
+    "cell, CLICK (KNOB 1, a bar); the other three '–'. The screen's title is \"metronome\" and the top line is empty, as "
+    "the firmware draws it. GLO held + SEQ toggles the click, and so does SEQ tapped in this layer (a SEQ tap anywhere else opens the loop editor). (OPT + SELECT sets the same level from anywhere.)",
     keys=[OFF] * 27, buttons={"SEQ": BLINK}, button_notes={"SEQ": LAYER_BTN_NOTE},
     encoders={"KNOB1": ("CLICK", "70"), "KNOB2": "", "KNOB3": "", "KNOB4": ""},
     screen=scr(knobrow(["4/4", "3/4", "6/8"], 0, "white", [g("Click", "70", "bar", 0.7), None, None, None], label="metronome"),
-               key="Metro", foot="OCT-: back · HOME: home", note="METRO: the signature big, the click level on KNOB 1."),
+               key="", foot="OCT-: back · HOME: home", note="SEQ (metronome): the signature big, the click level on KNOB 1."),
     chord_block=False,
 ))
 
@@ -149,12 +151,12 @@ for _s in S:
 
 design = {
     "format": "fm1-panel-design", "version": 1, "device": "M-VAVE FM-1",
-    "name": "ChoralRoot FM-1 layer knob-row mockups (KEY, LOOP, METRO)",
+    "name": "ChoralRoot FM-1 layer knob-row mockups (KEY, LOOP, SEQ)",
     "palette": "MOD",
     "labels": {"buttons": BUTTON_LABELS, "encoders": ENCODER_LABELS},
     "notes": "The knob row on the three layers with a wrinkle: KEY (A: the keyboard kept as the band over the cells; B: the "
-             "key name big), LOOP (A: inside the ring, stopped and playing; B: without the ring), METRO (one cell). "
-             "Decided 2026-10-07 by the user: KEY A, LOOP B (no ring in the LOOP layer; the dial in the top line while playing, as everywhere), METRO as drawn.",
+             "key name big), LOOP (A: inside the ring, stopped and playing; B: without the ring), SEQ, the metronome (one cell). "
+             "Decided 2026-10-07 by the user: KEY A, LOOP B (no ring in the LOOP layer; the dial in the top line while playing, as everywhere), the metronome's layer (then METRO, SEQ since 0.18) as drawn.",
     "states": S,
 }
 

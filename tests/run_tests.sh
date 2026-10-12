@@ -141,6 +141,8 @@ $CC -std=gnu11 -o "$OUT/cr_usbaudio_test" tests/cr_usbaudio_test.c
 run "USB audio: descriptors, routing, packing, clock drift and recovery" "$OUT/cr_usbaudio_test"
 $CC -std=gnu11 -o "$OUT/cr_usbaudio48_test" tests/cr_usbaudio48_test.c -lm
 run "USB audio at 48 kHz: the two rates, SET_CUR, the resampler, a rate switch" "$OUT/cr_usbaudio48_test"
+$CC -std=gnu11 -w -o "$OUT/cr_usbrate_test" tests/cr_usbrate_test.c
+run "Options > USB Rate: 0.18's descriptors at 44.1 kHz, SET_CUR, the digest, the replug" "$OUT/cr_usbrate_test"
 
 # the build's outputs the sections below read: without one of them a section would have nothing to test
 for f in build/choralroot.fwsc build/choralroot.dis build/gen/felucca_tables.h build/gen/ui_fonts.h; do
@@ -239,6 +241,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "REVERB TYPE: ROOM bit-identical, SPRING decay / chirp / stability / level, model change, cost, demos" "$OUT/reverb_test" build/fx_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/regress" tests/regress.c -lm
     run "regression: golden renders, health, voices, CPU budget" "$OUT/regress" tests/golden.txt tests/cpu_baseline.txt
+    $CC -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/cr_usbtap_test" tests/cr_usbtap_test.c -lm
+    run "USB recording is a tap: the DAC's words bit-identical in five USB states (Output, USB Level, MASTER, one core and two)" "$OUT/cr_usbtap_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/descdump" tests/descdump.c -lm
     section="parameter and engine tables as JSON (for the editor mock test)"
     echo "== $section"

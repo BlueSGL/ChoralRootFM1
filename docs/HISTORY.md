@@ -1176,3 +1176,137 @@ menu and I can still play notes."**
 - Test: `cr_opt_keys.txt` in test_cr.sh. The manual's `options.png` re-shot. Stale: the designer's sheet
   `design/choralroot-fm1-screens.png` (state 12 has a footer now). Not run: the browser emulator's test (no emcc; it
   does not use the Options); nothing on the device.
+
+## 2026-10-12 (48 kHz opt-in; GLO and the two sound knobs; the SEQ layer's mock-up)
+
+**0.19 dev (built; not flashed, nothing run on a host or the unit).** Three decisions of the owner's after the first
+48 kHz build was on the unit.
+
+**1. "Make 48 kHz opt-in for now."** The 48 kHz build offered both rates always, on the inference that macOS would
+stay at 44.1 kHz (`GET_CUR` 44100, 44100 listed first). It did not: the unit's counters showed `ua_rate 48000` after
+one `SET_CUR`, so every recording paid the six-channel resampler (about 185 us a half, 6.4 %), which the heaviest
+sounds do not have to spare.
+
+- **Options > USB Rate**, `44.1 kHz` (the default) / `44.1 + 48 kHz`, the entry after USB Level (24 entries now; the
+  scripts' entry numbers after it moved up by one). The line under it: "48 kHz: not offered" / "the computer picks
+  the rate". Considered and not taken: `USB 48 kHz: Off / On` (reads as "the stream is at 48 kHz" when On, which is
+  the computer's choice, not the unit's).
+- **Storage**: bit 2 of the settings block's `pick_roots` (`CRS_USB_48K`), as Output took bit 1: no record version
+  (15 still), nothing to migrate, every older record reads 44.1 kHz only; automatic (`CRS_PICK_AUTO`); the range of
+  the byte is 0 .. 7 now. docs/SETTINGS.md says which of its steps a spare bit takes.
+- **Off = 0.18's device**: `ua_off` got a second bit, `UA_OFF_48`; with it `ua_cfg_build` writes the one-rate format
+  (11 bytes) and `wMaxPacketSize` 640, 208 bytes in all, and `get_desc` answers `DEV_DESC44`, `bcdDevice` 3.22. The
+  bytes are compared with a stored copy of the tag's (`tests/cr_usb018_desc.h`, made by building v0.18's four USB
+  files as the host test does and printing `get_desc`). `GET_MAX` 44100; `SET_CUR` is taken and leaves the rate
+  (0.18 did exactly that: "UAC1 rounds unsupported values to the closest discrete rate: 44100"; a stall would be the
+  other reading of "refused", and would break a host that sets the rate while it opens the stream, which is why
+  Melodee kept the request); `ua.r48` is never set, so `audio.c`, which this change does not touch, is never asked
+  for 48 kHz. On = the two-rate descriptors of this morning, 3.23, 688.
+- **Two `bcdDevice` values**, so a host that cached one state reads the other. 0.18 released with 3.22 for the
+  recording and 3.21 for the console (`v0.18:firmware/src/usb.c`); the off state is 3.22 with 0.18's bytes, so a
+  unit updated from 0.18 shows the computer nothing new. Nothing in `tools/`, `web/` or `tests/install_test.py`
+  names `bcdDevice` (searched for both values again).
+- **The replug** is USB Record's (`ua_off_set` / `ua_off_apply`, 0.6 s of rest, `usb_replug`, main.c's
+  `USB RECONNECTING`); main.c is untouched, `cu_usb_apply` sends both bits. **USB Record had no guard against a
+  transfer** (looked for: `ua_off_apply` checked the time only; the update's own loop, `ota_session`, never returns
+  to the main loop, but its handshake and every backup / restore do). Added in `usb.c`: `sysex_byte` stamps
+  `usb.sx_ms`, and `ua_off_apply` waits while the last SysEx byte is under 1.5 s old (`UA_REPLUG_QUIET`), then makes
+  the change; a frame a host left open does not hold it for ever. A page that polls the unit by SysEx more often
+  than every 1.5 s would hold the change until it stops: none of ours does (the installer and the device manager
+  talk when asked). With the console presented (USB Record Off, SAFE MODE) USB Rate changes no byte the host is
+  given: taken without a replug.
+- **Counters**: 79 USB got three values behind its eleven (`ua_48k_offered`, `ua_48k_refused`, `ua_replugs`);
+  `fm1_install.py --debug` prints the option as a line; `tools/uac_check.py --rate 48000` stops with "the unit does
+  not offer 48 kHz: Options > USB Rate is 44.1 kHz ..." (tested against the simulated FM-1; not run on hardware).
+- **Tests**: `tests/cr_usbrate_test.c` (32 checks: both descriptor sets, 0.18's bytes, the console's in both states,
+  the requests, the golden digest in both states and under a host that keeps asking for 48 kHz, one replug per
+  change, the SysEx guard, no replug with the console presented); `tests/cr_settings_test.c` (the bit, versions 1
+  .. 14 read off, automatic); `tests/install_test.py`; `tools/emu/scripts/cr_usb_rate.txt`. The two older USB tests
+  run unchanged (their `ua_off = 0` is the option on).
+- **Not tested**: any host. In particular that macOS and Windows re-read the descriptors when `bcdDevice` goes 3.23
+  -> 3.22 on the owner's Mac (which has cached 3.23 with 48 000 selected); docs/USB-AUDIO.md's plan, part A step 2,
+  is that check. Cost: .text +256 B, .bss +16 B.
+
+**2. "If GLO + Algo is changing bass level anywhere, it should change bass engine, let's keep the UI consistent where
+we can."** It was not the level anywhere any more: since 0.18 GLO + ALGORITHM was the bass engine on the home pages
+and, in a layer or the editor, simply ALGORITHM (the bass sound); but until 0.18 it had been the level in all of
+those, so "the shortcut does something else here" was still true of every layer.
+
+- **The rule** (`cr_ui.c cu_epk_ok(part)`, for both knobs): where the knob's plain job is the part's sound, OPT held
+  makes it the part's engine picker; where the knob has a job of the place's own, OPT changes nothing about it.
+  `cu_pool_home` is gone: the gesture and the read-out's hint line ask the same predicate.
+- **GLO + ALGORITHM, before -> after.** Home pages and the Options: bass engine (as 0.18). The layers KEY, PERF, FX,
+  BASS, SEQ, LOCK and the view menu, also over the sound editor: bass sound -> **bass engine**. The sound editor's
+  pages: bass sound -> **bass engine** (ALGORITHM is not the editor's; its SHIFT is for KNOB 1 .. 4 and SELECT).
+  Kept: the PLAY menu (the record mode), the loop editor (Voicing Follow / 0), the editor's picker `L_EDIT` and the
+  save dialog (the bass sound, as the knob alone).
+- **GLO + PRESETS, before -> after.** Home pages and the Options: chord engine. The same layers: chord sound ->
+  **chord engine**. Kept: the sound editor (PRESETS opens its picker, with or without GLO), the PLAY menu (the
+  slot), the loop editor (8 steps), the editor's picker (its presets), the save dialog (the chord sound).
+- **Why the picker and the save dialog are kept out**, though ALGORITHM's plain job there is the bass sound: each
+  holds one sound (a preview that OCT- or HOME takes back; the sound being named and stored). An engine loaded
+  under it by a second picker would be previewed, cancelled or saved in its place. This is a judgement, not the
+  owner's word: the one-line change is `cu_epk_ok`'s first test. (Named, not changed: on the save dialog PRESETS
+  and ALGORITHM alone still change the sounds under the dialog, as they always did.)
+- **The read-out** follows: `Hold OPT to change engine` and the engine over the number now show in the layers and,
+  for the bass, in the editor; `FM6 · 05/25` where OPT does nothing. No existing check read the old line in a layer.
+- **The held-layer rule** is untouched: `cu_shift` is true only when OPT is the button held (`cu.armed`), so with a
+  layer's own button held past the hold time the knob is the layer's, GLO pressed with it or not (the script's dump
+  31). The bass level stays BASS held + ALGORITHM, tested first in `cu_knob`.
+- **Test**: `tools/emu/scripts/cr_glo_knobs.txt` in `test_cr.sh`, 24 checks over 32 dumps: each place above, the
+  three kept ones, the picker's and the read-out's screens, the held-layer rule, a bass that is off. The loop
+  editor's Follow / 0 is `cr_loop_edit`'s check, unchanged. Docs: MANUAL (Bass, Sounds with the table, the Knobs
+  table), PRESETS.md (the before / after table), INTEGRATION, 0.19's notes.
+
+**3. The layers sheet still called the metronome's layer METRO: "Fine to rename."** The button is SEQ since 0.18 and
+its hold layer is the metronome.
+
+- `design/make_layers_mockups.py`: state 7's title `7 · METRO · the time signature over the click level` ->
+  `7 · SEQ · the metronome: the time signature over the click level`; its description says SEQ held, and what a SEQ
+  tap does now (in this layer and with GLO: the click; anywhere else: the loop editor), where it said "METRO tap
+  still toggles the click"; the sheet's name and notes say SEQ. The picker's label, **`metronome`**, stays: it is
+  what the firmware draws (`cu_picker(.., "metronome", ..)`). The top line's `Metro` is gone from the state
+  (`key=""`): the firmware's top line is empty in this layer (the emulator's `cr_metro_row.ppm`), so the mock-up
+  had a text the unit never showed.
+- Regenerated: `design/choralroot-fm1-layers-mockups.json`, `tests/cr_screens_gen.h` (state 61: its name, its slug
+  `61_seq_the_metronome_the_time`, no `.mid`). `tests/gen_cr_screens.py` picks the state by its number, not its
+  name: only a comment changed. `sh tests/run_cr_draw.sh`: 92 screens, 0 lint findings, 28 ellipsised (as before).
+- **Stale, not re-rendered** (it needs the designer's server): `design/choralroot-fm1-layers-screens.png` (state 7's
+  caption and its top line).
+
+**4. Asked the same day: does the six-channel recording have "any negative effect on the audio quality" of the
+instrument?** (No behaviour changed; docs/USB-AUDIO.md "Does USB recording affect the sound?" and a test.)
+
+- **By reading**: USB reaches the mix through `ua_stage_on` and `fx_usb_fixed` only. With the stream open the mix
+  clears a stage, takes the loop variants with the tap (the same source, two more stores of a saturated half-level
+  copy after `mix_l` / `mix_r` are written), copies the master pair out, and feeds the ring: all reads of the mix.
+  The "-6 dB and saturated" is the recorded part channels' level. USB Record On with nothing recording is USB Record
+  Off as far as the audio path goes. **USB Level is the one that is not a tap**: Fixed puts MASTER behind the
+  limiter, with or without a computer; with Output Classic below full MASTER that is a differently limited output
+  (by design), with Output Clean a unit of the 24-bit word.
+- **By test** (`tests/cr_usbtap_test.c`): one passage, five USB states (Record Off; closed; open, host not reading;
+  44.1 kHz; 48 kHz) x Output x USB Level x MASTER full / -18 dB x one core / two x two sound pairs: 32 settings, 160
+  renders, the DAC's 24-bit words bit-identical across the five states in every one. The firmware's `fx.c` and
+  `usb.c` code runs; the shim's and `audio_block`'s dozen capture lines are copied into the test (they are in
+  `choralroot.c` and `audio.c`, which the host unit does not build).
+- **The cost, from the listing** (205 instructions a us): the audio ISR 13 100 instructions a half, 64 us, 2.2 %
+  (22 us of it in four 5.5 us interrupts-off copies); TIMER5 and the ISR's own service 12 700, 62 us, **and about
+  140 SIE register accesses a half whose waits the listing cannot give**: 126 us and those, 4.3 % and up.
+  `tools/emu/perf.sh` (u) says 31 us: host instructions, where the copy loops are vector code. The listing is the
+  one to believe; the unit has not been measured (`pk_block_us` / `pk_t5_us` with and without a recording). With the
+  heaviest patch at 2580 of 2902 us, a 44.1 kHz recording can already bring the shed (85 %) into reach: a voice
+  faded, not a distorted sound.
+- **Priorities**: USB is polled from TIMER5 (4), above the audio interrupt (3): it preempts the render for its own
+  length, which the half's measurement and the shed include; it delays an audio interrupt that falls into TIMER5's
+  `usb_poll` by that poll (`pk_lag_us`).
+- **`ua_poll_max_us 17860`, `ua_arm_gap_max_us 17698`** (the unit, today): the first times the FM-1's own TIMER5
+  cadence and cannot come from a host that does not poll; 17.86 ms without TIMER5 is a stretch with the interrupts
+  masked, and the one thing that masks that long is a flash sector erase (documented as 45 ms from the data sheet's
+  maximum, never measured: 17.8 ms would be its real time). The second starts again at every open and is either the
+  host's first read (about 14 ms: an idle artefact) or the same erase inside an open stream; the two figures are
+  too close for chance, so: one erase while the Mac had the stream open. **Inference, not verified**: `irq_gap_us`
+  and `irq_gap_pc` in PEAK decide it (about 17 800, an address in `st_erase`'s caller). The driver measures the
+  erase (`took`) and nothing reads it.
+- **Reported to the DSP side, not changed here** (`fx.c` is another agent's): `mix_loop_u` reloads four constants on
+  every pass (it runs out of registers: 38 instructions a frame for `mix_loop`'s 22, where the tap itself is about
+  10); the stage is cleared every block although both parts overwrite their channels when they sound.

@@ -756,7 +756,7 @@ def fx_states():
 
 
 # .. and the layers' (design/choralroot-fm1-layers-mockups.json, the user's 2026-10-07 choices): KEY with the keyboard
-# as the band (1, 3 hot), LOOP stopped with no ring (6), METRO (7)
+# as the band (1, 3 hot), LOOP stopped with no ring (6), SEQ's layer, the metronome (7; titled METRO until 0.19)
 LAYERS_SRC = ROOT / "design" / "choralroot-fm1-layers-mockups.json"
 LAYERS_PICK = ["1", "3", "6", "7"]
 
