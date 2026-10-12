@@ -98,7 +98,16 @@ static void emu_fw_exit(void)
 static uint32_t emu_pa2_ms;          /* ms PA2 was high since power-on (emu_hooks.h pa2: the matrix dead; the dump) */
 static uint32_t in_btn, in_key;      /* the debounced state the tick delivers */
 static uint32_t btn_ms[32], key_ms[32];/* ms each went down */
-static int32_t master_knob = 512 * 16;
+/* the MASTER pot as the unit reads it (hal/fm1_adc.h: 0..1023), and main.c's own two functions on it
+ * (firmware/src/master.c): the pot's level before the first block (master_boot), then smoothed a frame (master_poll) */
+#define FM1_ADC_MASTER 0u
+static int32_t fm1_adc_read(uint32_t ch)
+{
+    int32_t a = emu_hal.master;
+    (void)ch;
+    return a < 0 ? 0 : a > 1023 ? 1023 : a;
+}
+#include "../../firmware/src/master.c"
 
 void emu_fw_init(int demo)
 {
@@ -120,7 +129,21 @@ void emu_fw_init(int demo)
         const char *o = getenv("EMU_OUTPUT");
         fx_out_pin = o && !strcmp(o, "classic");
     }
+    {   /* EMU_CHORUS=mono: the chorus's return as 0.18 had it, one tap to both sides (fx.c CR_CHORUS_MONO 2), so that
+         * Classic can be compared with 0.18 bit for bit on scripts with a chorus send (tools/emu/classic_exact.sh) */
+        const char *c = getenv("EMU_CHORUS");
+        cho_mono = c && !strcmp(c, "mono");
+    }
     cr_settings_boot();                           /* .. and the settings record (Felucca's fields + ChoralRoot's) */
+    {   /* the MASTER pot at power-on: EMU_MASTER=ADC (0..1023), else where a caller put it, else 724 (-> master_q12
+         * 2047, felucca_init's default); main.c reads it before the audio starts (master_boot) */
+        const char *m = getenv("EMU_MASTER");
+        if (m)
+            emu_hal.master = atoi(m);
+        else if (!emu_hal.master)
+            emu_hal.master = 724;
+        master_boot();
+    }
     cr_ui_init();                                 /* the engine, the sounds, the record applied (cr_settings_load) */
     {   /* the second core (main.c, docs/DUALCORE.md): the stub runs the bass part's job when handed. EMU_C1=nostart: it
          * does not answer at power-on; EMU_C1=hang: it answers, then never finishes a job (8 ms: core 0 does it).
@@ -147,9 +170,6 @@ void emu_fw_init(int demo)
         emu_hal.enc_dir[i] = panel.dir[i];
     }
     emu_hal.led_play_green = LED_PLAY_GREEN;
-    if (!emu_hal.master)
-        emu_hal.master = 724;                     /* -> master_q12 2047, as felucca_init */
-    master_knob = emu_hal.master * 16;
     lcd_fill(0, 0, 240, 240, T_BG);
     emu_hal.ready = 1;
 }
@@ -204,16 +224,6 @@ void emu_fw_tick(uint32_t ms)
     fm1_irq_on();
 }
 
-static void master_pot(void)                      /* main.c: the MASTER pot (ADC) through its IIR */
-{
-    int32_t a = emu_hal.master;
-    uint32_t k10;
-    a = a < 0 ? 0 : a > 1023 ? 1023 : a;
-    master_knob += (a * 16 - master_knob) / 8;
-    k10 = (uint32_t)(master_knob / 16);
-    song.master_q12 = (k10 * k10) >> 8;
-}
-
 static uint32_t real_us(void)
 {
     struct timespec ts;
@@ -226,7 +236,7 @@ void emu_fw_frame(void)                           /* main.c's loop body (choralr
     uint32_t t0, d;
     fm1_irq_off();
     t0 = real_us();
-    master_pot();
+    master_poll();                                /* main.c: the MASTER pot (ADC) through its IIR */
     cr_ui_input();
     cr_ui_frame();                                /* the engine's snapshot, the LEDs */
     d = real_us() - t0;

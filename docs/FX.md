@@ -1,7 +1,8 @@
 # The effects: a stereo delay and a large reverb (0.18)
 
 ChoralRoot 0.18 replaces Felucca's mono tempo delay and its ROOM / SPRING reverb with a stereo delay in the spirit of
-the Moog Matriarch's and a large, slow, modulated reverb. The chorus and the drive are Felucca's, unchanged. This is the
+the Moog Matriarch's and a large, slow, modulated reverb. The drive is Felucca's, unchanged; the chorus was until 0.19,
+which returns it in stereo (["The chorus, stereo"](#the-chorus-stereo-019)). This is the
 design as built: what the code is, why, what it costs, and how to tune it. The player's side is
 [MANUAL.md section 8](MANUAL.md#8-fx).
 
@@ -617,6 +618,69 @@ The new effects' returns are set once so that the same send gives the same loudn
 The defaults: Reverb Size 88, Damp 56, Decay 3.0 s, Pre-delay 17 ms, Mod 56, Low cut 127 Hz, Width 127; Delay Sync
 on, 1/8, Spread 1:1, Feedback 58, ping-pong, Tone 70 (3.8 kHz), Wow 24 (free time 250 ms, free spread x1.00).
 
+## The chorus, stereo (0.19)
+
+Felucca's chorus (`fx.c fx_buses`) is a line of 2048 samples (`cho_buf`, 4 KB of the pool) that the chorus send is
+written into at half level, read at one point that a sine LFO moves between 400 and 400 + 6 x Depth samples back (9.1
+.. 17.2 ms at the default Depth 60; Rate is the LFO's), and returned to **both sides alike**: beside the dry sound a
+comb, the same in both ears. It ran on the unit to 0.18 (with `CR_FX` 1 it was all that was left of `fx_buses`).
+
+**0.19, `cr_fx.c xc_block`** (the owner, 2026-10-12: "chorus improvements sound good"): the same line, written as
+before, read at **two points**: the left ear's is Felucca's own, the right ear's the same LFO **a quarter turn ahead**.
+Both come back at the level one did, straight into the mix.
+
+| | 0.18 | 0.19 |
+| --- | --- | --- |
+| each ear beside the dry sound, the default send (45: the wet 9.0 dB under) | notch -3.8 dB, peak +2.6 dB | the same |
+| the two ears' wet against each other | the same signal | unrelated: correlation -0.01 over 100 Hz .. 10 kHz (0.005 on noise through the code) |
+| the mono sum's deepest notch | -3.8 dB | -3.8 dB, at the two moments of a turn where the taps cross, never deeper |
+| the mono sum, the share of band and time more than 3 dB down | 16 % | 5 % |
+| what is left of the chorus's motion in the mono sum | all | 71 % (half a turn apart, as SLOOP has it: none, a comb that stands still) |
+| the mono sum's level | | 0.0 .. 0.4 dB lower at the default send, 0.8 .. 1.5 dB at send 105 |
+| Rate, Depth, the send, the line, the pool | | as they were |
+
+(`tools/chorus_response.py`, computed from the firmware's numbers; `tests/cr_fx_test.c` on the code;
+[AUDIO-QUALITY.md "The chorus, stereo"](AUDIO-QUALITY.md#the-chorus-stereo) has the tables with the full send and
+the comparison with half a turn.)
+
+- **How**: the LFO is taken once a block, at its start and at its end, for each tap (four sines a block where there
+  was one a sample), and each tap's read point is a straight line between the two, kept at a 32nd of the line's own
+  resolution so that it ends exactly on the next block's first point: no step in the read position. The left tap
+  against 0.18's own, on noise: 45 dB under it (the line's resolution of a 256th of a sample).
+- **Nothing sent, nothing run**: `xc_live` counts the samples for which the line still holds something. While it is 0
+  a block costs a look at the send (32 loads); with a send, or until the line has run out (2048 samples of silence
+  written), the loop runs. Zeros in, zeros out, to the bit.
+- **In both Output modes**: the chorus is an effect, not a part of the output stage. A sound with a chorus send is
+  therefore no longer 0.18's in Classic either; without one it is, bit for bit
+  ([AUDIO-QUALITY.md "What Classic's guarantee is now"](AUDIO-QUALITY.md#what-classics-guarantee-is-now)).
+- **Credit**: two taps on the one line, left and right, and the LFO a block with the read points a line across it are
+  the design of SLOOP 2.6's chorus (its `firmware/src/fx.c fx_buses`; GPL-3.0-only): the design, written anew, no
+  code copied (`cr_fx.c`'s header, `LICENSING.md`). SLOOP's taps are half a turn apart; the quarter turn, the width
+  parameter, the exact line and the idle path are ChoralRoot's.
+- **The test switch**: `CR_CHORUS_MONO` (`fx.c`): 0 the unit (stereo only; Felucca's one-tap loop is not in the image);
+  1 a build with 0.18's return; 2 the emulator's: stereo, and 0.18's return with `EMU_CHORUS=mono`
+  (`tools/emu/classic_exact.sh`, `tools/chorus_listen.sh`). With it the sums are 0.18's, bit for bit.
+
+**The cost on the unit** (the listing, 205 instructions a microsecond): 0.18's loop was 48 instructions a sample
+(the sine among them): 30 us a half, whether a part sent or not. `xc_block`: 52 a sample and about 110 a block (the
+four LFO points): 35 us a half while it runs, 3 us while nothing is sent; and the master's mix line no longer adds a
+wet buffer (3 instructions a frame, 2 us). **+3 us a half with a chorus send, -29 us without.** Flash: `xc_block` is
+546 bytes (the whole round: +564 B); RAM: the mono wet's 128 bytes gone; the pool unchanged.
+
+**Width: the parameter is there, the knob is not.** `xfp[XP_CWIDTH]` (`cr_fx.c`, 0 .. 127, default 127): the right
+tap's lead as a part of a quarter turn; 0 is both ears the left tap, 0.18's mono return. KNOB 3 of the Chorus page
+is free. What a knob needs, in files this change did not touch:
+
+```
+cr_ui.c  CU_FXP[], the Chorus row:   {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, XP_CWIDTH, FC_SEND}, {"Rate", "Depth", "Width", "Send"}},
+cr_ui.c  cu_fx_cells' glyphs:        case XP_RWIDTH: case XP_CWIDTH: c->glyph = CR_G_WIDTH; break;
+cr_settings.h / .c, to keep it:      a new tag CSS_FXP_XC_WIDTH (30, appended) and {CSS_FXP_XC_WIDTH, 1, XP_CWIDTH} in CSS_FXG
+```
+
+(an `xfp` cell is generic in the layer: its step, its read-out and its range come from `XFP[]`; without the third
+line the knob works and the value is the default again after a restart.) Not on the unit, not heard by anyone:
+`../audio-0.19/chorus/` has the listening files.
+
 ## The master, and Options > Output (0.19)
 
 What comes after the effects: the mix and the chorus's wet through the output chain to the DAC word. Two chains
@@ -629,16 +693,19 @@ the measurements, the reasons and the harness.
 | DC blocker | 2 Hz | the same (the same state) |
 | LOWCUT / BASS+ | Felucca's, if `fx_lowcut` (held at 0 by ChoralRoot since 0.19) | none |
 | delay | none | 32 samples, 0.73 ms (`cln_dl`, 256 bytes of RAM): the limiter's look-ahead |
-| limiter | `LIM_T` 18000; release 93 ms; the gain eased over 1.5 ms after the peak (`fx_smooth`); `(x >> 4) * g >> 11` | `CLN_T` 26000; the peak held 40 ms, release 186 ms; the gain a straight line across each block of 32 to what the loudest sample of the block coming out of the delay and of the one after it needs: down before the peak, no sample over the threshold; the exact product |
+| limiter | `LIM_T` 18000; release 93 ms; the gain eased over 1.5 ms after the peak (`fx_smooth`); `(x >> 4) * g >> 11` | `CLN_T` 26000; the peak held 200 ms and again by every peak within 1.2 dB, a hit's (more than 3.5 dB above the envelope) 40 ms (AUDIO-QUALITY.md "Round 3"; it was 40 ms and 0.3 dB), release 186 ms; the gain a straight line across each block of 32 to what the loudest sample of the block coming out of the delay and of the one after it needs: down before the peak, no sample over the threshold; the exact product |
 | clip | `softclip`: a tanh over the whole range | `clean_knee`: linear to 26000 (the threshold), a tanh above: a safety net the limiter keeps everything under |
 | MASTER | in the mix line (USB Level = Fixed: after, `usb_fixed_dac`) | last, into the 24-bit word (`clean_post17`; Fixed: `clean_split`, then `clean_post`) |
 | the DAC word | the Q15 sample `<< 7` | Q22: the Q15 sample and the 7 bits under it (`out_frac`, `audio.c`) |
 | a frame on the unit | 76 instructions idle, about 92 limiting | 76 idle, about 104 limiting (before the look-ahead: 83, about 99) |
 
 Clean's look-ahead (0.19; one block ahead with a linear glide between blocks is Sloop 2.6's design, `LICENSING.md`):
-the output is 0.73 ms late. Everything that goes through the master is late together; the metronome's click
-(`cr_click_mix`, mixed after the master) and the USB recording's chord and bass pairs (taken before it) are not, so
-in Clean they lead the output by 0.73 ms. The limiter's work a block: the block's peak (kept while the samples go
+the output is 0.73 ms late. Everything that goes through the master is late together. The metronome's click
+(`cr_click_mix`, mixed after the master) and the USB recording's chord and bass pairs (taken before it) do not go
+through it; they led Clean's output by 0.73 ms until the click was made 32 samples later in Clean (`cr_ck_wait`: it
+is generated, so it needs no line) and the part pairs got a line of their own (`fx.c ua_parts_late`, 256 bytes of
+RAM, 9 us a half while the computer records through Clean): the three stems of a recording line up to the sample in
+both modes (AUDIO-QUALITY.md "The click and the recording's stems"). The limiter's work a block: the block's peak (kept while the samples go
 into the delay), the larger of it and the last block's, the envelope, one divide if it moved; no loop over the
 delay. Lengths other than 32 are build switches (`CLN_LA_B`, `CLN_LA_K`); AUDIO-QUALITY.md "The look-ahead" has the
 measurements against the length and what it does and does not improve.
@@ -662,7 +729,7 @@ Sends does not know the tag and keeps Reverb 1).
 | Sends | Drive (clip) | Chorus (mix) | Delay (mix) | Reverb (mix) |
 | Reverb 1 | Size (room) | Damp (moon) | Decay (tail) | Send (mix) |
 | Reverb 2 | Pre-delay (pre) | Mod (lfo) | Low cut (cut) | Width (width) |
-| Chorus | Rate (lfo) | Depth (lfo) | – | Send (mix) |
+| Chorus | Rate (lfo) | Depth (lfo) | – (free: Width, "The chorus, stereo") | Send (mix) |
 | Delay 1 | Time (echoes) | Spread (spread) | Feedback (echoes) | Send (mix) |
 | Delay 2 | Sync (sync) | Mode (ping) | Tone (moon) | Wow (lfo) |
 | Drive | – | – | – | Send (clip) |

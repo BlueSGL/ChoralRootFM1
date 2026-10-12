@@ -623,6 +623,9 @@ static void cr_out_init(void)                    /* power-on (the audio ISR may 
 {
     fm1_irq_off();
     cr_ready = 0;
+    if (master_pot_q12)                          /* MASTER: the pot's level again, not cr_ui_init's default, before the
+                                                  * engine sounds (0.19, master.c; none read: the default stays) */
+        fx_master_now(master_pot_q12 - 1u);
     cr_init(&cr, &CR_OUT);
     cr_seed(&cr, 0x43524631u);
     voice_fade_steal = 1;                        /* voice.c: a stolen voice fades out, its new note waits a block */
@@ -690,9 +693,15 @@ static void cr_audio_block(uint32_t n)
 }
 
 /* the metronome's click (crl.click, set by the loop's clock in this block): a decaying sine, 1.5 kHz on a beat and
- * 2.5 kHz on the bar's first, from a two-pole resonator (Q14), mixed after fx.c's master (the mix_block shim) */
+ * 2.5 kHz on the bar's first, from a two-pole resonator (Q14), mixed after fx.c's master (the mix_block shim): never
+ * through the limiter, never into a recording. The count-in is the same click; nothing else is mixed after the master.
+ * Output Clean (0.19): the master's output is CLN_LA samples (0.73 ms) behind the mix (the limiter's look-ahead), so
+ * the click, which does not pass it, STARTS that many samples later (cr_ck_wait): the click and a note of the same
+ * block leave the DAC on the same sample, as in Classic. The click is made here, not passed through: starting it late
+ * IS delaying it, sample for sample, with no line and no memory. The chain is the one this block went through
+ * (fx.c fx_out_blk: fx.c's mix ran just before this) */
 static int32_t cr_ck_y1, cr_ck_y2, cr_ck_a1;
-static uint32_t cr_ck_n;
+static uint32_t cr_ck_n, cr_ck_wait;
 #define CR_CK_A2 16335                           /* r^2, r = 0.9985 per sample: ~25 ms */
 static void cr_click_mix(int32_t *out, uint32_t n)
 {
@@ -703,9 +712,12 @@ static void cr_click_mix(int32_t *out, uint32_t n)
         else { cr_ck_a1 = 32011; cr_ck_y1 = amp * 2121 / 10000; }
         cr_ck_y2 = 0;
         cr_ck_n = amp ? 2400u : 0u;
+        cr_ck_wait = fx_out_blk ? CLN_LA : 0u;
         crl.click = 0;
     }
-    for (i = 0; i < n && cr_ck_n; i++, cr_ck_n--) {
+    i = cr_ck_wait < n ? cr_ck_wait : n;
+    cr_ck_wait -= i;
+    for (; i < n && cr_ck_n; i++, cr_ck_n--) {
         int32_t y = ((cr_ck_a1 * cr_ck_y1) >> 14) - ((CR_CK_A2 * cr_ck_y2) >> 14);
         cr_ck_y2 = cr_ck_y1;
         cr_ck_y1 = y;

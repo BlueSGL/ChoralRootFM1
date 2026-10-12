@@ -1,0 +1,21 @@
+# ChoralRoot 0.19: the metronome / count-in click is lined up with Output Clean's sound (docs/AUDIO-QUALITY.md
+# "Round 3"): Clean's output is 32 samples (0.73 ms) behind the mix (the limiter's look-ahead) and the click, mixed
+# after the master, now starts 32 samples later too; in Classic nothing moved.
+# The loop's length to 1 bar (LOOP held, KNOB 1 +1), then REC: the one-bar count-in, four clicks and nothing else;
+# REC again stops.
+# tools/emu/test_cr.sh: this script's WAV through Clean (the default) is the one through Classic (EMU_OUTPUT=classic)
+# exactly 32 samples later (tools/emu/wavlag.py: lag 32, correlation 1.00), and has sound.
+wait 300
+btn PLAY down
+wait 700
+knob KNOB1 +1
+wait 400
+btn PLAY up
+btn OCT-                      # the layer stays open after a hold: OCT- closes it
+wait 600
+btn REC
+wait 1900
+expect sound
+btn REC
+wait 600
+quit

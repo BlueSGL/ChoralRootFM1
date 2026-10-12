@@ -2,7 +2,9 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Effects: per-track DIST insert, then sends into three
  * shared buses (chorus, tempo delay, reverb). Mono buses, stereo dry mix.
- * ChoralRoot 0.19: Options > Output's Clean chain (clean_block). Its limiter's look-ahead, one audio block with the
+ * ChoralRoot 0.19: the chorus returns in stereo in ChoralRoot's unit (cr_fx.c xc_block; this file's one tap is
+ * Felucca's, for its builds and goldens). MASTER is read before the audio starts (fx_master_now, master.c: Felucca
+ * 1.1.5's fix). Options > Output's Clean chain (clean_block). Its limiter's look-ahead, one audio block with the
  * gain a straight line across the block, is the design of SLOOP 2.6's master (github.com/isod89/sloop-fm1,
  * firmware/src/fx.c lim_block; GPL-3.0-only, a fork of Felucca): the design, written anew, no code copied
  * (LICENSING.md, docs/AUDIO-QUALITY.md "The look-ahead"). */
@@ -23,6 +25,15 @@
 #endif
 #define CHO_LEN 2048u
 static int16_t cho_buf[CHO_LEN] __attribute__((section(".pool")));
+#ifndef CR_CHORUS_MONO
+#define CR_CHORUS_MONO 0         /* ChoralRoot's unit (CR_FX 1), a TEST switch: 0, the unit: the chorus returns in stereo
+                                  * (cr_fx.c xc_block, 0.19); 1: 0.18's return, one tap to both sides; 2 (the emulator):
+                                  * stereo unless cho_mono is set (EMU_CHORUS=mono: tools/emu/classic_exact.sh compares
+                                  * Classic with 0.18 bit for bit on scripts that have a chorus send) */
+#endif
+#if CR_CHORUS_MONO
+static uint8_t cho_mono;
+#endif
 #if !CR_FX
 #define DLY_LEN 65536u           /* 1.49 s: 1/4 at 40 BPM fits */
 static int16_t dly_buf[DLY_LEN] __attribute__((section(".pool")));
@@ -309,11 +320,34 @@ static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
 #define CLN_K 26000                     /* the knee: a straight line up to here (-2.0 dBFS: the limiter's threshold, so
                                          * nothing the limiter lets through meets the curve), then
                                          * K + R tanh((a - K) / R), R = 32767 - K: to full scale. A safety net only */
+/* The hold (0.19's third round, docs/AUDIO-QUALITY.md "Round 3"). What Clean had left on a loud chord was the envelope
+ * letting go between the chord's beats and stepping the level 0.1 to 2 dB at the next one. So the envelope is held
+ * CLN_HOLD (200 ms) and held again by every block's peak within 1.2 dB of it (CLN_REHOLD): a chord, a wet tail, an
+ * arp keep one gain. A HIT, a peak more than 3.5 dB above the envelope (CLN_HIT), gets the short hold of the first
+ * rounds (CLN_HOLD_HIT, 40 ms: a period of 25 Hz) until the envelope has begun to let go: a kick or a slammed chord
+ * is released as it was (12 dB down: back within half a dB after 0.47 s), not held down for the long one. */
 #ifndef CLN_HOLD
-#define CLN_HOLD 1764u                  /* 40 ms: a period of 25 Hz */
+#define CLN_HOLD 8820u                  /* 200 ms */
+#endif
+#ifndef CLN_HOLD_HIT
+#define CLN_HOLD_HIT 1764u              /* 40 ms: after a hit */
+#endif
+#ifndef CLN_HIT
+#define CLN_HIT 1                       /* a hit: a peak more than env >> CLN_HIT (3.5 dB) above the envelope */
+#endif
+#ifndef CLN_REHOLD
+#define CLN_REHOLD 3                    /* a block's peak within env >> CLN_REHOLD (1.2 dB) of the envelope holds it again */
+#endif
+#ifndef CLN_CREEP
+#define CLN_CREEP 10                    /* .. and, once CLN_HOLD samples of such blocks have gone by without the
+                                         * top itself (a peak within 0.03 dB of the envelope), draws the envelope a
+                                         * 1024th of the way down to itself: an envelope held up to 1.2 dB above a
+                                         * steady sound (a release that stopped in the window) comes down to it
+                                         * within a second or two, too slowly to be a step; a sound whose top comes
+                                         * back (a bass note's period, a chord's beat) keeps its gain exactly */
 #endif
 #ifndef CLN_REL
-#define CLN_REL 13                      /* the release: (env - T) >> CLN_REL a sample, 186 ms */
+#define CLN_REL 13                     /* the release: (env - T) >> CLN_REL a sample, 186 ms */
 #endif
 /* The look-ahead (0.19, docs/AUDIO-QUALITY.md "The look-ahead"). The chain's output is its input CLN_LA samples late,
  * and the limiter's gain is a straight line across each block of CLN_LA_B samples, from what the last block ended on
@@ -355,7 +389,7 @@ static uint8_t fx_out_mode, fx_out_fade;
 static int32_t cln_dl[2u * CLN_DLEN];   /* the delay: the chain's samples (Q17, after the DC blocker), L R. In RAM
                                          * (.bss, 256 bytes): the ISR reads and writes it every sample; the pool is
                                          * the tight resource (docs/FX.md "The cost on the unit") */
-static uint32_t cln_w, cln_hold;
+static uint32_t cln_w, cln_hold, cln_hlen = CLN_HOLD, cln_top;
 static int32_t cln_pk[CLN_LA_K];        /* the peaks of the blocks in the delay, the newest first */
 static int32_t cln_wh[CLN_LA_K];        /* their gains (Q15), a ring; cln_gs is their sum */
 static uint32_t cln_wi;
@@ -376,7 +410,8 @@ static void clean_rest(void)
         cln_pk[i] = 0;
         cln_wh[i] = 32768;
     }
-    cln_w = cln_wi = cln_hold = 0;
+    cln_w = cln_wi = cln_hold = cln_top = 0;
+    cln_hlen = CLN_HOLD;
     cln_env = CLN_T4;
     cln_wg = cln_g = 32768;
     cln_gs = CLN_G1;
@@ -462,15 +497,27 @@ static __attribute__((noinline)) void clean_block(int32_t *o, uint32_t n)
         } else {
             wm = p = clean_short(p);
         }
-        /* the envelope: a new peak at once, held CLN_HOLD samples (again by every peak within 0.3 dB), then released */
+        /* the envelope: a new peak at once, held (CLN_HOLD; after a hit CLN_HOLD_HIT), held again by every peak
+         * within 1.2 dB of it, then released */
         if (wm > env) {
+            if (wm - env > (env >> CLN_HIT))            /* a hit: the short hold, until the envelope has let go */
+                cln_hlen = CLN_HOLD_HIT;
             env = wm;
-            cln_hold = CLN_HOLD;
-        } else if (p > env - (env >> 5)) {
-            cln_hold = CLN_HOLD;
+            cln_hold = cln_hlen;
+            cln_top = 0;
+        } else if (p > env - (env >> CLN_REHOLD)) {
+            if (cln_hold < cln_hlen)
+                cln_hold = cln_hlen;
+            if (p >= env - (env >> 8))                  /* the top itself again: nothing to creep to */
+                cln_top = 0;
+            else if (cln_top < CLN_HOLD)
+                cln_top += m;
+            else                                        /* (never under the delay's own peak) */
+                env -= (env - (wm > CLN_T4 ? wm : CLN_T4)) >> CLN_CREEP;
         } else if (cln_hold) {
             cln_hold = cln_hold > m ? cln_hold - m : 0u;
         } else if (env > CLN_T4) {
+            cln_hlen = CLN_HOLD;                        /* (letting go: from here on the long hold again) */
             env -= (((env - CLN_T4) >> CLN_REL) + 4) * (int32_t)m;
             if (env < wm)
                 env = wm;
@@ -581,20 +628,24 @@ static __attribute__((noinline)) void out_fade(int32_t *o, uint32_t n)
         fx_out_mode = !fx_out_mode;                     /* (out_master puts both at rest after this one) */
     fx_out_fade = fx_out_fade == 2u * OUT_FADE_BLK + OUT_FADE_FLUSH ? 0u : (uint8_t)(fx_out_fade + 1u);
 }
-/* the mix (l, r, the chorus's wet) through its chain into out: fx_out_mode's, read once for the block */
-static inline void out_master(int32_t *out, const int32_t *l, const int32_t *r, const int32_t *w, uint32_t n)
+/* the mix (l, r, and Felucca's mono wet w: its chorus, delay and reverb; 0 where the mix already holds every return,
+ * ChoralRoot's unit: mix_block) through its chain into out: fx_out_mode's, read once for the block */
+static inline __attribute__((always_inline)) void out_master(int32_t *out, const int32_t *l, const int32_t *r,
+                                                             const int32_t *w, uint32_t n)
 {
     uint32_t i, mode = fx_out_mode;
     if (mode) {
         for (i = 0; i < n; i++) {                       /* (x 3 for the default trim: nothing shifted out) */
-            out[2u * i] = ((l[i] + w[i]) * (CLN_TRIM >> 4)) >> 6;
-            out[2u * i + 1u] = ((r[i] + w[i]) * (CLN_TRIM >> 4)) >> 6;
+            int32_t ww = w ? w[i] : 0;
+            out[2u * i] = ((l[i] + ww) * (CLN_TRIM >> 4)) >> 6;
+            out[2u * i + 1u] = ((r[i] + ww) * (CLN_TRIM >> 4)) >> 6;
         }
     } else {
         int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB Level Fixed: MASTER after) */
         for (i = 0; i < n; i++) {
-            out[2u * i] = (((l[i] + w[i]) >> 2) * mg) >> 10;
-            out[2u * i + 1u] = (((r[i] + w[i]) >> 2) * mg) >> 10;
+            int32_t ww = w ? w[i] : 0;
+            out[2u * i] = (((l[i] + ww) >> 2) * mg) >> 10;
+            out[2u * i + 1u] = (((r[i] + ww) >> 2) * mg) >> 10;
         }
     }
     if (fx_out_fade || fx_out_want != mode)
@@ -631,6 +682,17 @@ static void fx_output_set(uint32_t clean, int now)
         clean_rest();
         cln_mq = ((int32_t)song.master_q12 * CLN_MAKEUP >> 12) << 8;
     }
+}
+/* MASTER at once, no ramp (master.c master_boot: the pot as it stands before the audio starts, 0.19; Felucca 1.1.5's
+ * fix for its #137): song.master_q12, and Output Clean's eased copy of it, which would glide from where it was over
+ * the first block. master_pot_q12: the pot's level + 1 as master.c last read it (0: never read: a host test, a unit
+ * whose ADC did not answer); cr_out.c cr_out_init goes back to it after the UI's power-on defaults */
+static uint32_t master_pot_q12;
+static void fx_master_now(uint32_t q12)
+{
+    song.master_q12 = q12;
+    master_pot_q12 = q12 + 1u;
+    cln_mq = ((int32_t)q12 * CLN_MAKEUP >> 12) << 8;
 }
 
 /* one frame through the master (tests/speaker_test.c: its response sample by sample) */
@@ -763,9 +825,11 @@ static void rev_clear(void)
 
 static int32_t part_buf[CTL];                            /* a part's block (mix_part); the fade of a model change */
 
-/* process the three buses for one block; sends in, wet stereo-equal out */
-static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in, int32_t *wet,
-                     uint32_t n)
+/* process the three buses for one block; sends in, wet stereo-equal out. (CR_FX 1, ChoralRoot's unit: only the
+ * chorus is left in here, and since 0.19 that unit's chorus is cr_fx.c xc_block, two taps, left and right: this one
+ * tap to both sides then runs only where CR_CHORUS_MONO asks for 0.18's return, mix_block) */
+static __attribute__((unused)) void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t *rev_in,
+                                             int32_t *wet, uint32_t n)
 {
     uint32_t i;
     int32_t cdepth = song.g[G_CDEPTH] * 6;
@@ -844,7 +908,10 @@ static void fx_buses(const int32_t *cho_in, const int32_t *dly_in, const int32_t
  * -> dist -> SLICER -> level / pan / sends -> buses -> master; out: stereo Q15 */
 static void events_block(uint32_t n);                    /* seq.c */
 static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_r[CTL];
-#if FELUCCA_UAC
+#ifndef FX_UA_STAGE
+#define FX_UA_STAGE FELUCCA_UAC                         /* (1 without USB: tests/cr_align_test.c, the staging alone) */
+#endif
+#if FX_UA_STAGE
 /* USB audio's "ChoralRoot In" (usb_audio_stream.c ua_audio), one block's frames of six channels: 0-1 the master
  * (choralroot.c's mix_block shim: before the click), 2-3 the CHORD part, 4-5 the BASS part,
  * each part's dry stereo as it goes into the mix (after DIST, LEVEL, pan and the stereo side, before the sends, the
@@ -853,9 +920,41 @@ static int32_t send_c[CTL], send_d[CTL], send_r[CTL], wet[CTL], mix_l[CTL], mix_
  * alternate setting); else the ISR does none of this */
 #define UA_CAP_CHANNELS 6u
 #define UA_PART_CAPTURED 2u                             /* parts 0 (CHORD) and 1 (BASS) */
-static int16_t ua_stage[CTL * UA_CAP_CHANNELS];
+static int16_t ua_stage[CTL * UA_CAP_CHANNELS] __attribute__((aligned(4)));
 static uint8_t ua_stage_on;
 static inline int16_t ua_sat(int32_t x) { return (int16_t)(x > 32767 ? 32767 : x < -32768 ? -32768 : x); }
+/* Output Clean (0.19): the master pair is the chain's output, CLN_LA samples (0.73 ms) behind the mix; the two part
+ * pairs are taken from the mix. So that the three stems of a recording line up to the sample, the part pairs wait
+ * the same CLN_LA samples in a line of their own (4 x int16 a frame: 256 bytes of RAM, written only while the
+ * computer records through Clean). Classic has no delay and none here. The line starts empty with each recording
+ * and each change of the chain (ua_dl_on), as the master's does. */
+typedef uint32_t __attribute__((may_alias)) ua_pair_t;  /* a part's stereo frame, two int16, moved as one word (the
+                                                         * stage is 4-aligned and a frame is 12 bytes: its part pairs
+                                                         * are at 4 and 8) */
+static uint32_t ua_dl[CLN_DLEN * UA_PART_CAPTURED];
+static uint32_t ua_dl_w;
+static uint8_t ua_dl_on;
+_Static_assert(UA_PART_CAPTURED == 2u && UA_CAP_CHANNELS == 6u, "ua_parts_late's frame");
+static __attribute__((noinline)) void ua_parts_late(int16_t *st, uint32_t n)
+{
+    uint32_t i, w = ua_dl_w;
+    if (!ua_dl_on) {
+        for (i = 0; i < CLN_DLEN * UA_PART_CAPTURED; i++)
+            ua_dl[i] = 0;
+        ua_dl_on = 1;
+    }
+    for (i = 0; i < n; i++) {
+        ua_pair_t *s = (ua_pair_t *)(void *)(st + i * UA_CAP_CHANNELS + 2u);
+        uint32_t *in = ua_dl + 2u * w, *o = ua_dl + 2u * ((w + CLN_DLEN - CLN_LA) & (CLN_DLEN - 1u));
+        uint32_t c = s[0], b = s[1];                    /* (CLN_LA = CLN_DLEN: the same cell, read before written) */
+        s[0] = o[0];
+        s[1] = o[1];
+        in[0] = c;
+        in[1] = b;
+        w = (w + 1u) & (CLN_DLEN - 1u);
+    }
+    ua_dl_w = w;
+}
 #endif
 
 /* A part's block b (sd: its stereo side, when side) at its level into the mix: the peak, the three sends (sg: their
@@ -905,7 +1004,7 @@ static inline __attribute__((always_inline)) int32_t mix_part_loop(const int32_t
         }
         mix_l[i] += l;
         mix_r[i] += rr;
-#if FELUCCA_UAC
+#if FX_UA_STAGE
         if (tap) {
             pc[i * UA_CAP_CHANNELS] = ua_sat(l >> 1);
             pc[i * UA_CAP_CHANNELS + 1u] = ua_sat(rr >> 1);
@@ -928,7 +1027,7 @@ MIX_LOOP_FN(mix_loop, 0, 0, 0)
 MIX_LOOP_FN(mix_loop_f, 0, 1, 0)
 MIX_LOOP_FN(mix_loop_s, 1, 0, 0)
 MIX_LOOP_FN(mix_loop_sf, 1, 1, 0)
-#if FELUCCA_UAC
+#if FX_UA_STAGE
 MIX_LOOP_FN(mix_loop_u, 0, 0, 1)
 MIX_LOOP_FN(mix_loop_fu, 0, 1, 1)
 MIX_LOOP_FN(mix_loop_su, 1, 0, 1)
@@ -948,7 +1047,7 @@ static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on,
 {
     int32_t *sd;
     int16_t *pc = 0;
-#if FELUCCA_UAC
+#if FX_UA_STAGE
     if (ua_stage_on && (uint32_t)(t - trk) < UA_PART_CAPTURED)
         pc = ua_stage + 2u + 2u * (uint32_t)(t - trk);
 #endif
@@ -1143,7 +1242,7 @@ static void mix_block(int32_t *out, uint32_t n)
 #if FELUCCA_PERFORM
     int perf;
 #endif
-#if FELUCCA_UAC
+#if FX_UA_STAGE
     if (ua_stage_on)
         for (i = 0; i < n * UA_CAP_CHANNELS; i++)
             ua_stage[i] = 0;                            /* (a silent part: mix_part leaves its channels) */
@@ -1170,10 +1269,24 @@ static void mix_block(int32_t *out, uint32_t n)
     if (perf)
         perf_pre(mix_l, mix_r, send_d, send_r, n);
 #endif
-    fx_buses(send_c, send_d, send_r, wet, n);
 #if CR_FX
+#if CR_CHORUS_MONO
+    if (CR_CHORUS_MONO == 1 || cho_mono) {              /* 0.18's return: one tap, the same to both sides (a test's
+                                                         * reference: the sums are 0.18's, bit for bit) */
+        fx_buses(send_c, send_d, send_r, wet, n);
+        for (i = 0; i < n; i++) {
+            mix_l[i] += wet[i];
+            mix_r[i] += wet[i];
+            wet[i] = 0;
+        }
+        xc_live = CHO_LEN;
+    } else
+#endif
+        xc_block(send_c, mix_l, mix_r, n);              /* (cr_fx.c: the chorus, two taps, into the mix) */
     xf_block(send_d, send_r, mix_l, mix_r, n);          /* (cr_fx.c: stereo, into the mix; the FX layer's master
                                                          * effects and the limiter after it, as the chorus) */
+#else
+    fx_buses(send_c, send_d, send_r, wet, n);
 #endif
     CR_PROF(CRP_FX);
 #if FELUCCA_PERFORM
@@ -1182,5 +1295,14 @@ static void mix_block(int32_t *out, uint32_t n)
         return;
     }
 #endif
-    out_master(out, mix_l, mix_r, wet, n);
+#ifdef FX_MIX_HOOK
+    FX_MIX_HOOK(mix_l, mix_r, n);                       /* (tests/cr_align_test.c: a sample put into the mix) */
+#endif
+    out_master(out, mix_l, mix_r, CR_FX ? (const int32_t *)0 : wet, n);
+#if FX_UA_STAGE
+    if (ua_stage_on && fx_out_blk)                      /* Output Clean: the part pairs as late as the master pair */
+        ua_parts_late(ua_stage, n);
+    else
+        ua_dl_on = 0;
+#endif
 }

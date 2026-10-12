@@ -1,0 +1,15 @@
+# ChoralRoot 0.19: MASTER is read before the audio starts (firmware/src/master.c; Felucca 1.1.5's fix for its #137):
+# the first note after power-on is at the knob's level from its first sample. Until 0.19 MASTER was 2048 (70 % of the
+# knob's travel) at power-on and glided to the pot from mid-scale over about 0.4 s.
+# The pot is where EMU_MASTER puts it at power-on (tools/emu/emu_fw.c); D4 struck 5 ms after power-on (the earliest
+# note there can be: a key already down at the first scan is not a press), held 400 ms.
+# tools/emu/test_cr.sh: with EMU_MASTER=160 (MASTER 100 / 4096) against EMU_MASTER=1023 (4088): the note's first
+# 10 ms and its 200 .. 250 ms are both 32.2 dB under the top position's (tools/emu/wavstat.py level), in Clean and in
+# Classic.
+wait 5
+btn D4 down
+wait 400
+dump
+btn D4 up
+wait 300
+quit

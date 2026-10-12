@@ -66,6 +66,10 @@
 #ifndef CR_FX
 #define CR_FX 1                                       /* as choralroot.c: ChoralRoot's delay and reverb (cr_fx.c) */
 #endif
+#ifndef CR_CHORUS_MONO
+#define CR_CHORUS_MONO 2                              /* fx.c: the unit's stereo chorus, and 0.18's mono return when
+                                                         * asked (EMU_CHORUS=mono: emu_fw.c, tools/emu/classic_exact.sh) */
+#endif
 #ifndef CR_CPU1
 #define CR_CPU1 1                                     /* as choralroot.c: the bass part as the second core's job; here the
                                                          * stub core (firmware/src/cr_cpu1.h) runs it when handed */

@@ -112,7 +112,10 @@ peak / rms, the block render time, the host instructions per audio block and UI 
 (`EMU_CPU_LOG=PCT` lists every block above PCT % of the device's budget; `EMU_STAGES=1` adds the audio ISR's stages,
 `cpu: stages ...` (docs/DUALCORE.md); the second core is off unless the flash's settings say Options > Dual Core On
 (`cr_dualcore_on.txt` on a `--flash` file, then relaunch with it); then `EMU_C1=nostart` / `EMU_C1=hang`: it does not
-answer at power-on / never finishes a job (the stub otherwise runs the bass part's job inline); `EMU_UI_LOG=N` every UI frame above N
+answer at power-on / never finishes a job (the stub otherwise runs the bass part's job inline); `EMU_OUTPUT=classic`
+holds Options > Output at Classic whatever the settings say, `EMU_CHORUS=mono` returns the chorus as 0.18 did (one tap
+to both sides: the unit has only the stereo return), `EMU_MASTER=ADC` puts the MASTER pot at ADC (0..1023) at
+power-on (docs/AUDIO-QUALITY.md "Round 3"); `EMU_UI_LOG=N` every UI frame above N
 million host instructions; `EMU_TRACE_LEDS=1` prints the LED bytes and the buttons off / dim / lit after every UI
 frame they (or the held controls) change, and in the window each panel redraw and its time; `EMU_PANEL_CHECK=1`
 compares every partial panel redraw with a whole one, pixel for pixel, with its index, time, device estimate and the screen it drew: kind, view, name / item /

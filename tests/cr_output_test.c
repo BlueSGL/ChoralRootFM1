@@ -108,8 +108,8 @@ static void t_staging(void)
     static int32_t o[2 * CTL], ref[CLN_LA + CTL];
     uint32_t i, k;
     int exact = 1;
-    int32_t dl = 0, el = 0, gmin = 32768, gmax = 0, cmin = 32768, cmax = 0, pk = 0;
-    double a;
+    int32_t dl = 0, el = 0, gmin = 32768, gmax = 0, cmin = 32768, cmax = 0, pk = 0, gtop = 0, gbot = 32768;
+    double a = 0;
     rest(1);
     /* under the threshold: the chain is the DC blocker and the delay, and nothing else */
     memset(ref, 0, sizeof ref);
@@ -142,12 +142,20 @@ static void t_staging(void)
             if (cln_gtap[k] > gmax) gmax = cln_gtap[k];
             if (o[2 * k] > pk) pk = o[2 * k];
         }
+        if (i > 44100u && (i / CTL) % 35u == 34u) {     /* a period of the 40 Hz note (25.4 ms of blocks): its movement */
+            double m = 20 * log10((double)gmax / gmin);
+            if (m > a) a = m;
+            if (gmax > gtop) gtop = gmax;
+            if (gmin < gbot) gbot = gmin;
+            gmin = 32768;
+            gmax = 0;
+        }
     }
-    a = 20 * log10((double)gmax / gmin);
-    printf("cr_output: Clean limiter under a 40 Hz + 1 kHz pair 6 dB over: gain %.2f dB, moving %.3f dB; peak out %d of %d\n",
-           20 * log10(gmax / 32768.0), a, pk, CLN_T4);
+    printf("cr_output: Clean limiter under a 40 Hz + 1 kHz pair 6 dB over: gain %.2f dB, moving %.4f dB within a period of "
+           "the note, %.3f dB over the second (the creep down to the settled peak); peak out %d of %d\n",
+           20 * log10(gtop / 32768.0), a, 20 * log10((double)gtop / gbot), pk, CLN_T4);
     check("staging: 6 dB over the threshold the Clean limiter's gain stands still over the note's period (< 0.02 dB)",
-          a < 0.02 && gmax < 32768);
+          a < 0.02 && gtop < 32768);
     check("staging: and the peak is held at the threshold or up to 0.3 dB under it (the hold's margin)",
           pk <= CLN_T4 && pk >= CLN_T4 - CLN_T4 / 30);
     /* Classic on the same (its own threshold, 6 dB over): the gain rides the 40 Hz period */
@@ -165,6 +173,94 @@ static void t_staging(void)
     printf("cr_output: Classic limiter on the same pair: gain moving %.3f dB every period\n", 20 * log10((double)cmax / cmin));
     check("staging: (the reference) Classic's gain moves more than 0.3 dB with every period of that note",
           20 * log10((double)cmax / cmin) > 0.3);
+}
+
+/* ---- the hold (0.19's third round) ----
+ * A tone of 441 Hz through clean_block whose level follows lvl(sample) (dB re the threshold), n samples; the gain of
+ * every sample into g[] (Q15). Returns nothing: the checks read g. */
+static void hold_run(double (*lvl)(uint32_t), uint32_t n, int32_t *g)
+{
+    static int32_t o[2 * CTL];
+    uint32_t i, k;
+    rest(1);
+    for (i = 0; i + CTL <= n; i += CTL) {
+        for (k = 0; k < CTL; k++) {
+            double a = 4.0 * CLN_T * pow(10.0, lvl(i + k) / 20.0);
+            o[2 * k] = o[2 * k + 1] = (int32_t)lrint(a * sin(2 * M_PI * 441.0 * (i + k) / 44100.0));
+        }
+        clean_block(o, CTL);
+        for (k = 0; k < CTL; k++)
+            g[i + k] = cln_gtap[k];
+    }
+}
+#define HS(ms) ((uint32_t)((ms) * 441u / 10u))          /* ms -> samples */
+static double hl_step(uint32_t i) { return i < HS(1000) ? 3.0 : -6.0; }            /* 3 dB over for 1 s, then under */
+static double hl_hit(uint32_t i) { return i >= HS(500) && i < HS(520) ? 12.0 : -6.0; }   /* a 20 ms hit 12 dB over */
+static double hl_wave(uint32_t i) { return i < HS(100) ? 3.0 : ((i / HS(150)) & 1u) ? 2.0 : 3.0; }   /* 3 / 2 dB over */
+static double hl_hit_then(uint32_t i) { return i >= HS(500) && i < HS(520) ? 12.0 : i < HS(500) ? -6.0 : 2.0; }
+/* the first sample from `from` on whose gain is above the gain at `from` (the release begins); n if none */
+static uint32_t hold_rise(const int32_t *g, uint32_t from, uint32_t n)
+{
+    uint32_t i;
+    for (i = from; i < n; i++)
+        if (g[i] > g[from])
+            return i;
+    return n;
+}
+static void t_hold(void)
+{
+    static int32_t g[3 * 44100];
+    uint32_t n = 3u * 44100u / CTL * CTL, i, r, back;
+    int32_t lo, hi;
+    double dip = 0;
+    /* a chord's level (no hit: 3 dB over from rest is under CLN_HIT's 3.5 dB): held CLN_HOLD after its last peak */
+    hold_run(hl_step, n, g);
+    r = hold_rise(g, HS(1000), n);
+    printf("cr_output: the hold: 3 dB over, then under: the gain %.2f dB, let go %.1f ms after the level fell (CLN_HOLD "
+           "%.1f ms)\n", 20 * log10(g[HS(1000)] / 32768.0), (r - HS(1000)) / 44.1, CLN_HOLD / 44.1);
+    check("hold: a level 3 dB over the threshold is held 200 ms after its last peak (CLN_HOLD, to 3 blocks), then released",
+          r >= HS(1000) + CLN_HOLD - 2u * CTL && r <= HS(1000) + CLN_HOLD + 3u * CTL && g[n - 1u] == 32768);
+    /* a hit: 12 dB over for 20 ms out of a quiet tone: the short hold, and the level is back as it was in 0.18's rounds */
+    hold_run(hl_hit, n, g);
+    r = hold_rise(g, HS(520) + 2u * CTL, n);
+    for (back = n; back > HS(520) && g[back - 1u] >= 30934; back--)   /* (30934: 0.5 dB under 1) */
+        ;
+    for (i = HS(500); i < HS(1500); i++)
+        dip += 20 * log10(g[i] / 32768.0);
+    dip /= HS(1000);
+    printf("cr_output: the hold: a 20 ms hit 12 dB over: the gain %.2f dB, let go %.1f ms after it (CLN_HOLD_HIT %.1f ms), "
+           "within 0.5 dB of 1 after %.0f ms; the mean dip over the second after the hit %.2f dB\n",
+           20 * log10(g[HS(520)] / 32768.0), (r - HS(520)) / 44.1, CLN_HOLD_HIT / 44.1, (back - HS(500)) / 44.1, dip);
+    check("hold: a hit (more than 3.5 dB above the envelope) gets the short hold: let go 40 ms after it (to 3 blocks)",
+          r >= HS(520) + CLN_HOLD_HIT - 2u * CTL && r <= HS(520) + CLN_HOLD_HIT + 3u * CTL);
+    check("hold: 12 dB down after a 20 ms hit, the level is back within 0.5 dB in under 520 ms; the second's mean dip under 3.5 dB",
+          back - HS(500) < HS(520) && dip > -3.5 && g[n - 1u] == 32768);
+    /* held again: a level that swings 1 dB every 150 ms (inside CLN_REHOLD's 1.2 dB): the gain does not move at all */
+    hold_run(hl_wave, n, g);
+    for (i = HS(200), lo = 32768, hi = 0; i < n; i++) {
+        if (g[i] < lo) lo = g[i];
+        if (g[i] > hi) hi = g[i];
+    }
+    printf("cr_output: the hold: a level swinging between 3 and 2 dB over every 150 ms: the gain moves %.4f dB\n",
+           20 * log10((double)hi / lo));
+    check("hold: a level that swings 1 dB every 150 ms (peaks within 1.2 dB of the envelope, the top back inside the hold) "
+          "keeps one gain", hi == lo && hi < 32768);
+    /* after a hit the long hold is back: the hit's envelope lets go down to the tone 2 dB over, stops within 1.2 dB
+     * of it and creeps the rest of the way: no step, and nothing left of the hit */
+    hold_run(hl_hit_then, n, g);
+    for (i = HS(520) + CLN_HOLD_HIT + 4u * CTL, r = 0; i < n; i++)
+        if (g[i] < g[i - 1u])
+            r++;                                        /* (after the hit's hold the gain only ever comes back up) */
+    for (i = n - HS(300), lo = 32768, hi = 0; i < n; i++) {
+        if (g[i] < lo) lo = g[i];
+        if (g[i] > hi) hi = g[i];
+    }
+    printf("cr_output: the hold: a hit, then a tone 2 dB over: the gain 1 s after the hit %.2f dB, at the end (2.5 s) %.2f dB, "
+           "moving %.4f dB over the last 300 ms\n", 20 * log10(g[HS(1500)] / 32768.0), 20 * log10(hi / 32768.0),
+           20 * log10((double)hi / lo));
+    check("hold: after a hit the envelope lets go down to the level that follows (2 dB over): within 0.3 dB of it after 2.5 s, "
+          "never turned down again on the way, under 0.1 dB in 300 ms at the end", !r &&
+          fabs(20 * log10(hi / 32768.0) + 2.0) < 0.3 && 20 * log10((double)hi / lo) < 0.1);
 }
 
 /* ---- the look-ahead ---- */
@@ -577,12 +673,14 @@ int main(void)
     if (!buf)
         return 2;
     song.master_q12 = 4088;
-    printf("cr_output: CLN_TRIM %d / 4096, CLN_T %d, CLN_K %d, hold %u, release >> %d, look-ahead %u samples (%u blocks of "
-           "%u), make-up %d / 4096; LIM_T %d\n", CLN_TRIM, CLN_T, CLN_K, (unsigned)CLN_HOLD, CLN_REL, (unsigned)CLN_LA,
+    printf("cr_output: CLN_TRIM %d / 4096, CLN_T %d, CLN_K %d, hold %u (after a hit %u; a hit: env >> %d above; held again "
+           "within env >> %d), release >> %d, look-ahead %u samples (%u blocks of %u), make-up %d / 4096; LIM_T %d\n",
+           CLN_TRIM, CLN_T, CLN_K, (unsigned)CLN_HOLD, (unsigned)CLN_HOLD_HIT, CLN_HIT, CLN_REHOLD, CLN_REL, (unsigned)CLN_LA,
            (unsigned)CLN_LA_K, (unsigned)CLN_LA_B, CLN_MAKEUP, LIM_T);
     t_knee();
     t_gain();
     t_staging();
+    t_hold();
     t_lookahead();
     t_master();
     t_switch();

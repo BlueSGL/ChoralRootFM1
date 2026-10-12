@@ -1346,3 +1346,60 @@ shows 2 clicks to `wavclicks.py` in Clean".** Two commits on 778a6ad.
 - Tools: `tests/cz_pops.c` (restrike, arp-up, `CZ_TRACE`, `CZ_WHY`, `CZ_VEL2`, `CZ_GAP`, `CZ_CLEAN`, the hash),
   `tools/cz_pops_report.py --jumps / --halves`, `tools/cz_pops_why.py`, `wavclicks.py --both-sides`,
   `cr_cz_brass.txt` in test_cr.sh. Listening files: `../audio-0.19/cz-trim/`. Not run: anything on the device.
+
+## 2026-10-12 (the third round: the hold, the stereo chorus, the click, MASTER at power-on)
+
+The owner, after hearing the first two rounds of the output chain: dry, little difference between Clean and Classic;
+"with very wet FX clean is a definite winner over classic, classic has more crackles and dropouts". His four
+decisions: "Chorus improvements sound good" (stereo); a longer limiter hold in Clean, "probably good to do"; the
+click lined up with Clean, "ok, do it"; Felucca's fix for MASTER at power-on, "yes". Classic stays in for
+comparison, Clean is the default. docs/AUDIO-QUALITY.md "Round 3" has the measurements; docs/FX.md "The chorus,
+stereo" the chorus.
+
+- **The hold** (`fx.c clean_block`). Before: the envelope held 40 ms, again by a peak within 0.3 dB; on a loud
+  chord it let go between the beats and stepped the level at the next. A plain longer hold (the second round's
+  table) keeps the level down after a hit for as long as it is: at 300 ms one hit 12 dB over left a pad 5.7 dB down
+  on average for the next second (2.65 at 40 ms) and a kick every half second 2.2 LU quieter. Now: 200 ms
+  (`CLN_HOLD`), again within 1.2 dB (`CLN_REHOLD`), and a hit, a peak more than 3.5 dB above the envelope
+  (`CLN_HIT`), keeps 40 ms (`CLN_HOLD_HIT`) until the envelope lets go; an envelope left standing above a steady
+  sound creeps down to it (`CLN_CREEP`). Measured on the same mixes: WHEEL at velocity 127 -34.7 to -40.5 dB, CZ-1
+  at 127 -40.0 to -45.6, very wet WHEEL -35.6 to -46.4, very wet CZ-1 -35.0 to -38.9, sixteenths at 120 BPM over a
+  bass -30.4 to -42.4; 0.1 to 0.9 LU on the chords (with the bass still 0.4 to 1.3 LU over Classic), 1 LU on the
+  arps; one hit's recovery 466 ms for 455, the kicks 0.2 and 0.3 LU. 300 ms and 500 ms take more and hold a 120 BPM
+  kick down for good (1.9, 2.6 LU); a 2.5 dB window takes much more (CZ-1 to -57) for up to 1.7 LU: not taken. The
+  release stays 186 ms. Classic untouched.
+- **The chorus** (`cr_fx.c xc_block`; in both Output modes). Before: Felucca's one tap to both sides, a comb the
+  same in both ears. Now: two taps on the same line, the left one Felucca's own, the right one the LFO a quarter turn
+  ahead; the LFO once a block, the read points a line across it; nothing run while nothing is sent. Two taps left
+  and right and the LFO a block are SLOOP 2.6's design (credited: `cr_fx.c`, `LICENSING.md`); SLOOP's half turn was
+  not taken: as wide, but the mono sum then stands still, where a quarter turn keeps 71 % of the motion. The mono
+  sum's deepest notch is 0.18's (-3.8 dB at the default send), reached only where the taps cross. Rate, Depth, the
+  send: as they were. A width parameter (`xfp[XP_CWIDTH]`) with no knob: the UI's files were another agent's;
+  docs/FX.md has the three lines. Cost: +3 us a half with a chorus send, -29 us with none.
+- **Classic's guarantee** changes with it: the output chain is 0.18's bit for bit, and so is any sound without a
+  chorus send; with one, the chorus's return differs. `tools/emu/classic_exact.sh` proves both parts: all 0.18
+  scripts with the return held at 0.18's (`EMU_CHORUS=mono`: 158 identical, CZ-1's three by CZ-1's fix), and two
+  scripts without a chorus send through the stereo build. `CR_CHORUS_MONO` is a test switch; the unit has only the
+  stereo return. One check of test_cr.sh read a timbre beside the chorus's comb in the two channels' average
+  (`cr_quad_ratiob`, 5.8 % apart on a 5 % bar): it reads the left channel now (`wavpitch.py --left`).
+- **The click**: the only thing mixed after the master (metronome and count-in are one generator; no UI sounds). In
+  Clean it now starts 32 samples later (`cr_out.c cr_ck_wait`): it is made, not passed through, so that is the
+  delay, with no line. **The USB stems**: the CHORD and BASS pairs wait 32 frames in Clean in a line of their own
+  (`fx.c ua_parts_late`, 256 bytes of RAM, 9 us a half while recording): the three pairs line up to the sample.
+  SCOPE shows what the DAC gets, as before.
+- **MASTER at power-on** (`firmware/src/master.c`: Felucca 1.1.5, commit 276f72a, #137). Traced: nothing sounds
+  under ChoralRoot's splash (the engine is closed until `cr_out_init`; no chime, no restored chord, no click); the
+  window was the half second after it, because `cr_ui_init` set MASTER to 2048 again and the smoothing started at
+  mid-scale: a first key or MIDI note at the default's level whatever the knob said. Now the pot is read before
+  `audio_init`, followed under the splash, and `cr_out_init` puts its level back after the UI's default; Clean's
+  eased MASTER starts on it.
+- Size: XIP +564 B, RAM +196 B, POOL unchanged. The stub's bytes unchanged.
+- Tests: `tests/cr_output_test.c` (the hold), `tests/cr_fx_test.c` (the chorus), `tests/cr_align_test.c` (new: the
+  click, the stems, the mono switch, MASTER at power-on with 0.18's start failing the same check), test_cr.sh
+  (`cr_chorus`, `cr_click`, `cr_boot_master`). Tools: `master_rhythm.py`, `master_listen_hold.py`,
+  `chorus_response.py`, `chorus_listen.sh`, `tools/emu/wavstat.py`. Listening files: `../audio-0.19/hold/`,
+  `../audio-0.19/chorus/`.
+- Not run: anything on the unit (the hold and the chorus by ear, the unit's own speaker with the stereo chorus, a
+  USB recording's stems in a DAW, the real ADC before the audio starts); the browser emulator's test (no emcc; the
+  same sources, its checks do not depend on the chorus's width). Left: docs/USB-AUDIO.md does not say that the part
+  pairs are 0.73 ms late with the master pair in Clean.

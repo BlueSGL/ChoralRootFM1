@@ -925,6 +925,169 @@ static void demos(void)
     wav_write(name, n, 1.0);
 }
 
+/* ------------------------------------------------------------------ the chorus --- */
+/* THE CHORUS, STEREO (0.19, cr_fx.c xc_block; docs/FX.md "The chorus, stereo"): the left tap is 0.18's own, the right
+ * one differs, Width 0 is mono, the mono sum's comb is never deeper than 0.18's, Rate and Depth mean what they did,
+ * nothing sent costs nothing and returns nothing. */
+static void cho_reset(void)
+{
+    memset(cho_buf, 0, sizeof cho_buf);
+    fx.cho_w = fx.cho_ph = 0;
+    xc_live = 0;
+    song.g[G_CRATE] = GP[G_CRATE].def;
+    song.g[G_CDEPTH] = GP[G_CDEPTH].def;
+    xfp[XP_CWIDTH] = XFP[XP_CWIDTH].def;
+}
+/* n samples of gen through the chorus into WL, WR; mono: Felucca's one tap (fx.c fx_buses), the same into both */
+static void cho_run(uint32_t n, gen_t gen, int mono)
+{
+    static int32_t sc[CTL], z[CTL], ml[CTL], mr[CTL];
+    uint32_t i, k;
+    for (i = 0; i < n && i + CTL <= MAXS; i += CTL) {
+        for (k = 0; k < CTL; k++) {
+            sc[k] = gen ? gen(i + k) : 0;
+            ml[k] = mr[k] = 0;
+        }
+        if (mono) {
+            fx_buses(sc, z, z, ml, CTL);
+            memcpy(mr, ml, sizeof mr);
+        } else {
+            xc_block(sc, ml, mr, CTL);
+        }
+        memcpy(WL + i, ml, sizeof ml);
+        memcpy(WR + i, mr, sizeof mr);
+    }
+}
+static int32_t g_imp2(uint32_t i) { return i == 64u ? 20000 : 0; }
+static void t_chorus(void)
+{
+    static const double F[8] = {110.0, 220.0, 311.1, 440.0, 880.0, 1244.5, 1760.0, 3520.0};
+    const uint32_t n = 4u * 44100u / CTL * CTL;
+    const double g = 45 * 258 / 32768.0;                /* the default send's gain (mix_part_out) */
+    int32_t *ol = malloc(n * sizeof *ol);
+    double e = 0, p = 0, sl = 0, sr = 0, slr = 0, lo_s = 9, lo_m = 9, hi_s = 0, bound_ok = 1;
+    uint32_t i, k, same = 1, ph_mono, ph_st, first[2] = {0, 0}, last[2] = {0, 0}, nz = 0, touched = 0, big = 0;
+    /* 1. left is 0.18's tap (the LFO a line across the block for a sine a sample); right is another */
+    g_a = 12000.0;
+    g_len = 0xFFFFFFFFu;
+    xs = 0x1234567u;
+    cho_reset();
+    cho_run(n, g_noise, 1);
+    memcpy(ol, WL, n * sizeof *ol);
+    ph_mono = fx.cho_ph;
+    xs = 0x1234567u;
+    cho_reset();
+    cho_run(n, g_noise, 0);
+    ph_st = fx.cho_ph;
+    for (i = 4096; i < n; i++) {
+        e += (double)(WL[i] - ol[i]) * (WL[i] - ol[i]);
+        p += (double)ol[i] * ol[i];
+        sl += (double)WL[i] * WL[i];
+        sr += (double)WR[i] * WR[i];
+        slr += (double)WL[i] * WR[i];
+    }
+    printf("cr_fx:   the chorus on noise, 4 s: the left tap against 0.18's one tap %.1f dB; left %.2f dB and right %.2f dB re "
+           "0.18's; left against right: correlation %.3f\n", 10 * log10(e / p), 10 * log10(sl / p), 10 * log10(sr / p),
+           slr / sqrt(sl * sr));
+    check("chorus: the left tap is 0.18's (the LFO a straight line across a block: under -40 dB of it apart)",
+          10 * log10(e / p) < -40.0);
+    check("chorus: the right tap is as loud (0.2 dB) and another signal: left against right under 0.3 of correlation",
+          fabs(10 * log10(sr / p)) < 0.2 && fabs(10 * log10(sl / p)) < 0.2 && fabs(slr / sqrt(sl * sr)) < 0.3);
+    check("chorus: Rate is what it was: the LFO has turned exactly as far as 0.18's after 4 s", ph_mono == ph_st);
+    /* 2. Width 0: one tap, both sides */
+    xs = 0x1234567u;
+    cho_reset();
+    xfp[XP_CWIDTH] = 0;
+    cho_run(n, g_noise, 0);
+    for (i = 0; i < n; i++)
+        if (WL[i] != WR[i])
+            same = 0;
+    check("chorus: Width 0 is mono: the same sample left and right", same);
+    /* 3. the mono sum beside the dry sound: its comb is never deeper than 0.18's (1 - g), for held tones over two
+     * turns of the LFO; the level in windows of 1024 samples */
+    for (k = 0; k < 8u; k++) {
+        uint32_t pass;
+        g_f = F[k];
+        g_a = 20000.0 * g;
+        for (pass = 0; pass < 2u; pass++) {
+            cho_reset();
+            cho_run(n, g_sine, (int)pass);
+            for (i = 8192; i + 1024u <= n; i += 512u) {
+                double sd = 0, sm = 0, v;
+                uint32_t j;
+                for (j = i; j < i + 1024u; j++) {
+                    double dry = 20000.0 * sin(2.0 * M_PI * g_f * j / 44100.0);
+                    double sum = dry + (WL[j] + WR[j]) / 2.0;
+                    sd += dry * dry;
+                    sm += sum * sum;
+                }
+                v = sqrt(sm / sd);
+                if (pass) {
+                    if (v < lo_m) lo_m = v;
+                } else {
+                    if (v < lo_s) lo_s = v;
+                    if (v > hi_s) hi_s = v;
+                    if (v < 1.0 - g - 0.02 || v > 1.0 + g + 0.02) bound_ok = 0;
+                }
+            }
+        }
+    }
+    printf("cr_fx:   dry + chorus at the default send (wet at %.1f dB), 8 tones, 4 s each: the mono sum's level between "
+           "%.2f and %+.2f dB of the dry (0.18's one tap: down to %.2f dB; the bound 1 - g: %.2f dB)\n", 20 * log10(g),
+           20 * log10(lo_s), 20 * log10(hi_s), 20 * log10(lo_m), 20 * log10(1.0 - g));
+    check("chorus: the mono sum (L + R) / 2 beside the dry sound never falls under 0.18's deepest notch (1 - g) nor over 1 + g",
+          bound_ok && lo_s > lo_m - 0.02);
+    /* 4. Depth: an impulse comes back 400 samples later with Depth 0 (both sides, the sample itself), and inside
+     * 400 .. 400 + 6 x 127 with Depth 127 */
+    cho_reset();
+    song.g[G_CDEPTH] = 0;
+    cho_run(4096, g_imp2, 0);
+    check("chorus: Depth 0: the send comes back 400 samples later, the sample itself, on both sides",
+          WL[464] == 20000 && WR[464] == 20000 && WL[463] == 0 && WL[465] == 0 && WR[465] == 0);
+    cho_reset();
+    song.g[G_CDEPTH] = 127;
+    fx.cho_ph = 0x30000000u;                            /* (somewhere on the LFO's way) */
+    cho_run(4096, g_imp2, 0);
+    for (i = 0; i < 4096u; i++) {
+        if (WL[i]) { if (!first[0]) first[0] = i; last[0] = i; }
+        if (WR[i]) { if (!first[1]) first[1] = i; last[1] = i; }
+    }
+    printf("cr_fx:   Depth 127: an impulse comes back %u .. %u samples later on the left, %u .. %u on the right\n",
+           first[0] - 64u, last[0] - 64u, first[1] - 64u, last[1] - 64u);
+    check("chorus: Depth 127: both taps inside 400 .. 1163 samples (9 .. 26 ms), not the same one",
+          first[0] >= 464u && last[0] <= 64u + 1163u && first[1] >= 464u && last[1] <= 64u + 1163u && first[0] != first[1]);
+    /* 5. nothing sent: nothing returned, nothing touched; a send, then silence: exact zeros once the line has run out */
+    cho_reset();
+    {
+        static int32_t z[CTL], ml[CTL], mr[CTL];
+        for (i = 0; i < CTL; i++)
+            ml[i] = mr[i] = 7;
+        xc_block(z, ml, mr, CTL);
+        for (i = 0; i < CTL; i++)
+            touched |= ml[i] != 7 || mr[i] != 7;
+    }
+    cho_reset();
+    song.g[G_CDEPTH] = 127;
+    cho_run(8192, g_imp2, 0);
+    for (i = 64u + 1164u; i < 8192u; i++)
+        nz |= WL[i] != 0 || WR[i] != 0;
+    check("chorus: nothing sent, an empty line: the mix is not touched; after a send the line runs out to exact zeros and rests",
+          !touched && !nz && xc_live == 0u && (WL[464 + 0] || first[0]));
+    /* 6. the loudest send: the line saturates (16 bits), the return stays inside twice that */
+    g_a = 2097148.0;
+    xs = 0x7654321u;
+    cho_reset();
+    cho_run(44096, g_noise, 0);
+    for (i = 0; i < 44096u; i++)
+        if (WL[i] > 65534 || WL[i] < -65536 || WR[i] > 65534 || WR[i] < -65536)
+            big = 1;
+    check("chorus: the loudest send: the return is bounded by the saturated line (+-65536)", !big);
+    g_a = 20000.0;
+    g_f = 1000.0;
+    cho_reset();
+    free(ol);
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -936,6 +1099,7 @@ int main(int argc, char **argv)
     if (!WL || !WR)
         return 2;
     printf("cr_fx: the delay at %s rate, the reverb at %s rate\n", DSD == 1 ? "full" : "half", DSR == 1 ? "full" : "half");
+    t_chorus();
     t_maths();
     t_sync();
     t_band();

@@ -11,6 +11,11 @@ Felucca up to 1.5.1: [Sloop 2.6 and Felucca 1.5.1](#sloop-26-and-felucca-151-the
 of the first round no longer holds. Where this document says "Sloop" without a version it is 2.2. The second round
 also gave Clean's limiter its look-ahead: [The look-ahead](#the-look-ahead).
 
+**A third round**, the same day, after the owner had heard the first two: Clean's limiter holds longer, the chorus
+returns in stereo, the click and the USB recording's stems are lined up with Clean, MASTER is read before the audio
+starts: [Round 3](#round-3-the-hold-the-chorus-in-stereo-the-click-master-at-power-on). Where the earlier sections
+say "the chorus's return is mono", "hold 40 ms" or "the click is 0.73 ms ahead", they describe the tree before it.
+
 Levels are the Q15 sample before the DAC word's `<< 7` unless said otherwise, in dB re 32768; MASTER at its top
 (`master_q12` 4088). "dist" is the harness's measure, explained under [How to measure](#how-to-measure).
 
@@ -35,7 +40,8 @@ Levels are the Q15 sample before the DAC word's `<< 7` unless said otherwise, in
   front of a 16-bit path, so a low MASTER left a quiet note with a quarter of its bits), and a setting of Felucca's
   that ChoralRoot cannot show could be left running by another firmware ([Left behind](#left-behind)).
 - **Not fixed by 0.19's output chain**: the level against Sloop (a decision about the part level and the sounds'
-  trims, [Open questions](#open-questions-and-proposals)), the chorus's mono return.
+  trims, [Open questions](#open-questions-and-proposals)). The chorus's mono return was not either; the third round
+  made it stereo ([Round 3](#round-3-the-hold-the-chorus-in-stereo-the-click-master-at-power-on)).
 
 ## Part 1: ChoralRoot main, 0.17 and Sloop, stage by stage
 
@@ -311,7 +317,7 @@ ChoralRoot smoothed (`fx_smooth`) before 0.17.
 | db70550 (1.0.2) | USB LEVEL FIXED: MASTER after the master for the DAC, the full level to USB (`fx_usb_fixed`, `usb_fixed_dac`) | #42: record with the speaker turned down | **has it** (`fx.c`; its comment says "Felucca 1.0.5": it is 1.0.2's) |
 | db70550 (1.0.2) | BASS+: the low-pass 4 poles instead of 2 (`spk_bass`) | #42: it cancelled up to 6 dB of 300 .. 600 Hz | **has it** (held off since 0.19) |
 | 7414269 (1.0.5.2) | `rev_clear` cleared one int16 too few of ROOM's all-pass | PR #121: a faint click after a REVERB TYPE change | does not have it; **not on the unit** (Felucca's reverb is not built: `CR_FX` 1). Two lines if a `CR_FX=0` build is ever shipped |
-| 276f72a (1.1.5) | MASTER read before the audio starts (`master.c master_boot`), polled under the splash | #137: MASTER was 2048 (70 % of the knob) until the first read after the splash, then a glide: keys sounded loud with the knob down | **does not have it: worth taking** (`main.c`: `master_q12 = 2048`, `audio_init`, then 430 ms before the first read). Whether anything sounds in that window on ChoralRoot was not traced. Outside the master chain: not done here |
+| 276f72a (1.1.5) | MASTER read before the audio starts (`master.c master_boot`), polled under the splash | #137: MASTER was 2048 (70 % of the knob) until the first read after the splash, then a glide: keys sounded loud with the knob down | did not have it; **ported in the third round** ([MASTER at power-on](#master-at-power-on): `master.c`; nothing sounds under ChoralRoot's splash, the window was the half second after it) |
 | 276f72a (1.1.5) | the metronome (`click.c`): after the master, after the USB tap, a hard clamp | "never through the limiter, never into a recording" | has its own (`cr_out.c cr_click_mix`), at the same place |
 | 276f72a (1.1.5) | USB audio at 48 kHz (`uac_fir.h`) | | the USB agent's |
 | 88f1030 (1.4) | BASS+ harmonics x 1.5 instead of x 3 | #180: the limiter pulled the mix down up to 16 dB on each kick | does not have it; dormant (BASS+ is held off). **Take the one line if BASS+ ever gets a control** |
@@ -320,8 +326,8 @@ ChoralRoot smoothed (`fx_smooth`) before 0.17.
 | 88f1030 (1.4), 129a4cf (1.5), a4d7ca2 (1.5.1) | FX-layer flanger / phaser, LFO 2 SYNC, ENV SYNC, per-track INSERT, dotted delay times, send throws, ANALOG's SYNC / SUB / filter types | features | not built or not applicable (FX layer, sequencer and ANALOG are not ChoralRoot's); INSERT would cost POOL |
 | db70550, 2da8a71, 276f72a, f21d6d6 | drum kits, SAMPLE / GRAIN / SLICE fixes ("no click" on an empty slot), FM6 bank storage | | not built (no drum, sample or slice engine); storage only |
 
-For the owner: **the power-on MASTER (#137)** is the one fix on the live path ChoralRoot lacks; nothing upstream helps
-the limiter, the clip or the level.
+For the owner: **the power-on MASTER (#137)** is the one fix on the live path ChoralRoot lacked (taken in the third
+round); nothing upstream helps the limiter, the clip or the level.
 
 ### Verdict
 
@@ -363,7 +369,8 @@ at -40 dB it is -16 .. -32 dB.
 
 ```
 mix + wet  --x 0.75 (CLN_TRIM), kept in Q17-->  DC blocker  -->  a delay of 32 samples (0.73 ms)
-           -->  limiter (CLN_T 26000, its gain fitted to the peaks still in the delay: hold 40 ms, release 186 ms)
+           -->  limiter (CLN_T 26000, its gain fitted to the peaks still in the delay: hold 200 ms, 40 ms after a
+                hit (round 3; it was 40 ms), release 186 ms)
            -->  knee (linear to 26000, tanh above: a safety)  -->  x MASTER  -->  the DAC's 24-bit word
 ```
 
@@ -372,7 +379,7 @@ mix + wet  --x 0.75 (CLN_TRIM), kept in Q17-->  DC blocker  -->  a delay of 32 s
 | the clip | linear up to `CLN_K` 26000 (-2.0 dBFS, the limiter's threshold), then `K + R tanh((a - K) / R)`, `R` = 32767 - `K`, to full scale. (Before the look-ahead: linear to 24576, and a limited peak ran 0.5 dB into the curve) | Sloop's `knee()` / Felucca's `soft_knee`, placed at the threshold: with the look-ahead no sample leaves the limiter over it (a test), so the curve is a safety net that nothing in normal use meets; everything comes out as it went in but for the limiter's gain |
 | where the headroom comes from | 3.2 dB from the limiter's threshold (26000 instead of 18000: Classic limits at 18000 because its tanh is already 0.8 dB down there; a knee that is straight up to the threshold does not need that), 2.5 dB from a fixed trim in front of it (`CLN_TRIM` 3072 / 4096) | 5.7 dB in all: the chord with the bass that was 5 .. 8 dB over Classic's threshold is 0 .. 2.5 dB over Clean's, and under it most of the time |
 | where the loudness goes | chords with the bass come out 0.4 .. 1.4 LU **louder** than Classic (the limiter takes less); a single note and FM6's chords 1.2 .. 2.5 LU **quieter** (the trim). Nothing is given back after the limiter in 0.19's default build: there is no room left under the Q15 sample's full scale. The DAC word has 6 dB above that: [Proposed](#proposed-not-built-in) | the owner's condition (the speaker not noticeably quieter) is met for chords and not for single notes: his decision, with the listening files |
-| the limiter | a safety. The peak is held 40 ms (`CLN_HOLD`: a period of 25 Hz), held again by every peak within 0.3 dB of it, then released over 186 ms; the gain glides in a straight line over the 32 samples before the peak comes out of the delay ([The look-ahead](#the-look-ahead); before it: eased down over 1.5 ms after the peak); applied as an exact product (`clean_gain`) | Classic's gain moved with every period of a bass note (0.46 dB at 40 Hz in the test; Clean's: 0.000 dB). `(x >> 4) * g >> 11` dropped four bits and shifted the sample by up to 16 while limiting |
+| the limiter | a safety. The peak is held 200 ms, held again by every peak within 1.2 dB of it, a hit's 40 ms ([Round 3](#the-hold); until then: 40 ms (a period of 25 Hz), again within 0.3 dB), then released over 186 ms; the gain glides in a straight line over the 32 samples before the peak comes out of the delay ([The look-ahead](#the-look-ahead); before it: eased down over 1.5 ms after the peak); applied as an exact product (`clean_gain`) | Classic's gain moved with every period of a bass note (0.46 dB at 40 Hz in the test; Clean's: 0.000 dB). `(x >> 4) * g >> 11` dropped four bits and shifted the sample by up to 16 while limiting |
 | MASTER | last, after the knee, into the 24-bit word | the knob turns the level down and nothing else: the limiter's work no longer depends on it, and a low setting keeps the resolution |
 | bits | the chain's samples are Q17 (the two bits Classic's `>> 2` shifts out are kept: the default trim is `x 3`, nothing lost); the DAC word gets the 7 bits under the Q15 sample (`out_frac`, added in `audio.c`) | the buffers are int32 and the DAC takes 24 bits: no dither is needed, the bits are simply not thrown away |
 | LOWCUT / BASS+ | not in the Clean chain | ChoralRoot holds them off (above); if they get a control, they go in |
@@ -499,7 +506,8 @@ it and stay where they were against each other. Two things do not pass through i
 the sound in Clean: the metronome / count-in click (`cr_out.c cr_click_mix` is mixed after the master, as Felucca's:
 never through the limiter) and, in a USB recording, the chord and bass pairs (taken before the master) against the
 master pair. A key's own delay to its sound is a block (0.73 ms) to 2.9 ms already; nobody has judged the click on a
-unit, and delaying it too would be 64 more samples of RAM and a second line: not done, named here.
+unit, and delaying it too would be 64 more samples of RAM and a second line: not done, named here. (Round 3: done,
+both, [The click and the recording's stems](#the-click-and-the-recordings-stems): the click needs no line at all.)
 
 **The transient test** (`tools/master_transient.py`: a kick every 500 ms, a sine falling from 160 to 48 Hz with
 0.5 ms of attack and 3 ms of noise on it, on a held 55 Hz bass; its peak 6 or 12 dB over Clean's threshold; the same
@@ -563,6 +571,8 @@ chord's beats. Measured with the look-ahead in (`-DCLN_HOLD`; the release as it 
 
 2 to 5 dB for 0.1 to 0.6 LU on chords, and a level that stays down longer after a loud hit (the kick's column). Not
 changed: the brief was to keep the hold and the release, and it is a matter of taste with the listening files.
+(Round 3: changed, with a short hold of its own for a hit so that the kick's column stays where it is:
+[The hold](#the-hold).)
 
 **Memory.** The delay is 32 frames of two int32 (the chain's Q17 samples: packing them into 16 bits would throw away
 what Clean keeps): 256 bytes, in RAM (`.bss`, `cln_dl`), not in the pool. Both are the same on-chip RAM as far as the
@@ -602,6 +612,9 @@ dearer (the second pass over the block). Flash +96 bytes, RAM +256 (the delay), 
 
 ### Classic is 0.18's, bit for bit
 
+(As of the second round. Since the third round's stereo chorus, an effect in both Output modes, this holds for the
+output chain and for any sound without a chorus send: [What Classic's guarantee is now](#what-classics-guarantee-is-now).)
+
 - `sh tools/emu/classic_exact.sh build/scratch/ref18` (a `git archive 19b6453` built beside): all 161 emulator
   scripts the 0.18 tree has, this tree's emulator with the Output held at Classic (`EMU_OUTPUT=classic`): 161 WAVs
   identical (104 of them with sound) when the chain was built. Since CZ-1's click fix (abb0b81, after it) the three
@@ -626,19 +639,290 @@ dearer (the second pass over the block). Flash +96 bytes, RAM +256 (the delay), 
 - **The HAL's comments** (`hal/fm1_audio.h`: "codec control lines", "24-bit left-justified") are wrong as found
   above; left as they are until the owner says the HAL may be touched for a comment.
 
+## Round 3: the hold, the chorus in stereo, the click, MASTER at power-on
+
+The owner's decisions of 2026-10-12, after hearing the first two rounds ("dry, little difference between Clean and
+Classic; with very wet FX clean is a definite winner over classic, classic has more crackles and dropouts"): a longer
+limiter hold in Clean ("probably good to do"), the chorus in stereo, the click lined up with Clean ("ok, do it"),
+Felucca's fix for MASTER at power-on ("yes"). Classic stays as it is, for comparison; Clean is the default.
+
+### The hold
+
+**What was chosen.** The envelope is held **200 ms** (`CLN_HOLD`; it was 40) and held again by every block's peak
+within **1.2 dB** of it (`CLN_REHOLD`: `env >> 3`; it was 0.3 dB). A **hit**, a peak more than 3.5 dB above the
+envelope (`CLN_HIT`: `env >> 1`), keeps the **40 ms** of the first rounds (`CLN_HOLD_HIT`) until the envelope has
+begun to let go; from then on the long hold applies again. An envelope that stands above a steady sound (a release
+that stopped inside the 1.2 dB) creeps down to it (`CLN_CREEP`: a 1024th of the way for every block whose peak is in
+the window, once 200 ms of such blocks have gone by without the top itself, a peak within 0.03 dB of the envelope):
+a second or two (a tone 2 dB over after a hit: 0.83 dB above it after 1 s, 0.18 dB after 2.5 s), too slow to be a
+step; a sound whose top comes back (a bass note's period, a chord's beat) keeps its gain exactly. The release is unchanged (186 ms).
+
+**Why not simply a longer hold.** The second round's table said 200 to 500 ms takes 2 to 5 dB off; it also keeps
+the level down after a loud hit for as long as the hold is. Measured on the same mixes through the firmware's own
+chain built with each setting (`tests/master_measure.c chain`; the mixes: the loud chords of the earlier rounds at
+velocity 100 and 127; the same sounds very wet: reverb and delay sends at 120, Decay 100, Feedback 105; made signals:
+sixteenth notes at 120 and 180 BPM over a held bass, 6 dB over the threshold (`tools/master_rhythm.py`), the kick
+test, and ONE hit 12 dB over on a steady pad). dist in dB; the loudness and the recovery against the first row:
+
+| Hold, re-hold window | WHEEL v127 | CZ-1 v127 | WHEEL wet | CZ-1 wet | arp 120 | chords' loudness | kick 6 dB over, loudness | one 12 dB hit: back within 0.5 dB after, mean dip over the next second |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| 40 ms, 0.3 dB (rounds 1 and 2) | -34.7 | -40.0 | -35.6 | -35.0 | -30.4 | | | 455 ms, -2.65 dB |
+| 100 ms, 0.3 dB | -35.6 | -44.3 | -38.3 | -36.7 | -36.8 | -0.1 .. -0.5 LU | -0.5 LU | 514 ms, -3.35 dB |
+| 200 ms, 0.3 dB | -39.3 | -44.7 | -42.0 | -37.8 | -40.9 | -0.1 .. -0.7 | -1.4 | 614 ms, -4.51 dB |
+| 300 ms, 0.3 dB | -40.2 | -45.0 | -41.1 | -38.3 | -39.7 | -0.1 .. -1.0 | -2.2 | 715 ms, -5.68 dB |
+| 500 ms, 0.3 dB | -41.5 | -45.4 | -45.2 | -38.7 | -38.4 | -0.2 .. -1.3 | -2.8 | 915 ms, -8.01 dB |
+| 40 ms, 2.5 dB | -41.7 | -44.8 | -47.2 | -38.6 | -38.4 | -0.1 .. -0.8 | -0.5 | 482 ms, -2.97 dB |
+| 200 ms and 40 ms after a hit, 0.3 dB | -39.3 | -44.7 | -42.0 | -37.8 | -40.9 | -0.1 .. -0.7 | -0.1 | 455 ms, -2.65 dB |
+| **200 ms and 40 ms after a hit, 1.2 dB (chosen)** | **-40.5** | **-45.6** | **-46.4** | **-38.9** | **-42.4** | **-0.1 .. -1.0** | **-0.2** | **466 ms, -2.79 dB** |
+| 300 ms and 40 ms after a hit, 1.2 dB | -40.7 | -46.0 | -44.2 | -39.0 | -45.6 | -0.2 .. -1.3 | -1.9 | 466 ms, -2.79 dB |
+| 500 ms and 40 ms after a hit, 1.2 dB | -41.9 | -51.6 | -50.6 | -39.1 | -43.2 | -0.3 .. -1.6 | -2.6 | 466 ms, -2.79 dB |
+| 200 ms and 40 ms after a hit, 2.5 dB | -47.9 | -57.3 | -51.2 | -39.3 | -52.1 | -0.2 .. -1.7 | -1.4 | 482 ms, -2.97 dB |
+
+Read plainly:
+
+- **A plain hold buys its 3 to 10 dB with the level after a hit**: at 300 ms a single hit 12 dB over leaves the pad
+  5.7 dB down on average for the next second where 40 ms left 2.65, and a kick every half second is 2.2 LU quieter
+  because the envelope never comes back between two of them.
+- **The hit's own short hold takes that away**: with it a single hit is released as it was (466 ms against 455, the
+  mean dip -2.79 dB against -2.65), and the kick 12 dB over comes out as before (-0.3 LU).
+- **The window does as much as the hold**: 0.3 dB to 1.2 dB is worth 1 to 11 dB more on the wet passages and the
+  arps for 0.1 to 0.3 LU. 2.5 dB is worth 6 to 12 dB more on some passages, for up to 1.7 LU and a kick every half
+  second held down (-1.4 LU): the other end of the trade, not taken.
+- **Above 200 ms a regular kick at 120 BPM is held down for good** (300 ms: -1.9 LU, the gain steady 5.9 dB down):
+  not pumping, but quieter than the player set it. 200 ms lets go between the beats as before (-0.2 LU). Inference
+  from how the 300 ms row comes about, not measured: above about 150 BPM a hit on every beat is held at 200 ms too
+  (the envelope has let go less than 3.5 dB when the next one comes, so it is no longer a hit): steady.
+- **The release** (93 ms, 372 ms beside the 186 ms): within 1 dB on the chords; 372 ms doubles a hit's recovery
+  (837 ms). Left at 186 ms.
+
+So: 200 ms and 1.2 dB, with the hit's 40 ms, is the setting that takes the most off the chords and the wet passages
+**without** making a hit's recovery longer or a 120 BPM kick quieter. What it costs is 0.1 to 0.9 LU on the loudest
+chords (with the bass they stay 0.4 to 1.3 LU louder than Classic, below) and 1 LU on the made arps.
+
+**Before and after, every passage** (Clean, full MASTER; dist overall / in 2 .. 8 kHz relative to the content there;
+the share of the samples in gain reduction; loudness):
+
+| Passage | 40 ms, 0.3 dB | 0.19 (200 ms / 40 ms, 1.2 dB) |
+| --- | --- | --- |
+| VA chord6 + bass, FX | -52.6 / -53.5, 9.8 %, -10.93 LKFS | -52.5 / -53.4, 40.0 %, -11.06 |
+| VA, velocity 127 | -40.6 / -40.8, 53.1 %, -10.08 | -41.8 / -42.5, 99.3 %, -10.67 |
+| WHEEL chord6 + bass, FX | -40.2 / -39.1, 29.8 %, -10.52 | -44.3 / -43.8, 51.0 %, -10.88 |
+| WHEEL, velocity 127 | -34.7 / -34.3, 78.2 %, -9.61 | -40.5 / -40.5, 98.2 %, -10.48 |
+| CZ-1 chord6 + bass, FX | -42.1 / -40.8, 28.5 %, -11.17 | -44.5 / -46.6, 52.1 %, -11.48 |
+| CZ-1, velocity 127 | -40.0 / -39.4, 46.9 %, -10.90 | -45.6 / -47.3, 80.5 %, -11.34 |
+| FM6, velocity 127 | -77.0 / -35.1, 3.6 %, -14.34 | -76.5 / -35.0, 7.6 %, -14.45 |
+| VA, very wet | -36.1 / -35.8, 95.1 %, -9.68 | -40.5 / -40.5, 95.1 %, -10.43 |
+| WHEEL, very wet | -35.6 / -35.1, 88.5 %, -9.63 | -46.4 / -45.7, 93.0 %, -10.35 |
+| CZ-1, very wet | -35.0 / -31.8, 98.5 %, -9.80 | -38.9 / -36.0, 100 %, -10.65 |
+| CZ-1, very wet, velocity 127 | -34.3 / -32.1, 99.6 %, -9.80 | -38.9 / -37.4, 100 %, -10.63 |
+| FM6, very wet | -54.6 / -32.3, 12.3 %, -13.09 | -66.5 / -41.3, 23.8 %, -13.38 |
+| sixteenths at 120 BPM over a bass | -30.4 / -30.0, 91.4 %, -10.03 | -42.4 / -42.6, 96.1 %, -10.99 |
+| sixteenths at 180 BPM over a bass | -32.5 / -31.9, 91.4 %, -9.81 | -47.2 / -47.1, 95.5 %, -10.65 |
+| the kick 6 dB over | -22.9 / -13.0, 70.2 %, -10.49 | -22.9 / -13.1, 75.0 %, -10.70 |
+| the kick 12 dB over | -14.0 / -2.0, 98.5 %, -11.27 | -14.0 / -2.4, 100 %, -11.56 |
+| one hit 12 dB over on a pad | -17.6 / -23.8, 12.3 %, -15.22 | -17.5 / -23.7, 12.6 %, -15.26 |
+
+The gain share goes up because that is what holding is: the limiter is "at work" (its gain under 1) for longer and
+moves less while it is. On the very wet passages, where the owner hears Clean ahead of Classic, the residue falls 4
+to 11 dB (WHEEL: -35.6 to -46.4). VA's default chord and FM6 were already under -50 dB and stay there.
+
+**The harness's own rows again** (`tools/master_measure_run.sh`, the 26 renders: "chain: exact" on all), Clean
+before and after the hold; the rows not listed are unchanged to the last digit (every single note, every dry FM6 and
+VA chord: the limiter is idle on them):
+
+| Render | Clean, rounds 1 and 2: GR share, dist, loudness | Clean, 0.19's hold | Clean - Classic now |
+| --- | --- | --- | --- |
+| FM6 chord6 + bass, FX | 1.2 %, -93.9 dB, -15.0 LKFS | 8.6 %, -86.1, -15.1 | -1.4 LU |
+| FM6 chord6 + bass, FX, velocity 127 | 3.6 %, -77.0, -14.3 | 7.6 %, -76.5, -14.4 | -1.1 LU |
+| VA chord6 + bass, FX | 9.8 %, -52.6, -10.9 | 40.0 %, -52.5, -11.1 | +1.1 LU |
+| WHEEL chord6 + bass, dry | 13.0 %, -46.0, -10.9 | 37.5 %, -48.6, -11.1 | +0.6 LU |
+| WHEEL chord6 + bass, FX | 29.8 %, -40.2, -10.5 | 51.0 %, -44.3, -10.9 | +0.9 LU |
+| CZ-1 chord6 + bass, dry | 2.1 %, -76.3, -11.8 | 6.1 %, -76.6, -11.8 | +0.4 LU |
+| CZ-1 chord6 + bass, FX | 28.5 %, -42.1, -11.2 | 52.1 %, -44.5, -11.5 | +1.1 LU |
+| CZ-1 chord6 + bass, FX, velocity 127 | 46.9 %, -40.0, -10.9 | 80.5 %, -45.6, -11.3 | +1.3 LU |
+| kick 6 dB over | 70.2 %, -22.9, -10.5 | 75.0 %, -22.9, -10.7 | +0.9 LU |
+| kick 12 dB over | 98.5 %, -14.0, -11.3 | 100 %, -14.0, -11.6 | -0.1 LU |
+
+(With the stereo chorus in, below, the FX rows' mixes are other mixes: VA -59.2 dB at 50.5 %, WHEEL -46.5, CZ-1
+-45.2 and -46.2 at velocity 127, FM6 -96.0; the loudness within 0.1 LU.) The no-sample-over-the-threshold proof is
+untouched: the envelope is still never under the loudest sample in the delay (the creep stops at it).
+
+Tests: `tests/cr_output_test.c` (the hold's length to three blocks; a hit's 40 ms and its recovery under 520 ms; a
+level that swings 1 dB every 150 ms keeps one gain; after a hit the envelope comes down to the level that follows
+and is never turned down again on the way; the look-ahead's checks as before). Listening files:
+`../audio-0.19/hold/` (`tools/master_listen_hold.py`: each passage before, after, and both in one file).
+
+### The chorus, stereo
+
+The chorus that runs on the unit was Felucca's in `fx.c` (`fx_buses`; with `CR_FX` 1 nothing else was left in
+that function): one tap on a line of 2048 samples, 400 + 0 .. 6 x Depth samples back (9.1 .. 17.2 ms at the default
+Depth 60) on a sine LFO, returned equal to both sides. Since 0.19 the unit's is `cr_fx.c xc_block`: **two taps on the
+same line**, the left one Felucca's own, the right one the same LFO **a quarter turn ahead**. Rate, Depth and the
+send mean what they did; the line, its memory and the pool are unchanged. An effect, not a part of the output stage:
+it is the same in Classic and in Clean. docs/FX.md "The chorus, stereo" has the design, the cost and what a Width
+knob would need.
+
+**A quarter turn, not Sloop's half.** Computed from the firmware's own numbers (`tools/chorus_response.py`: dry at 1,
+the wet at the send's gain, 100 Hz .. 10 kHz, every moment of the LFO's turn), and checked on the code
+(`tests/cr_fx_test.c`):
+
+| Send 45 (the default: the wet 9.0 dB under the dry) | worst notch / peak at any moment | the response averaged over the LFO's turn | band x time more than 3 dB down | the two ears' wet against each other | what is left of the motion |
+| --- | --- | --- | --- | --- | --- |
+| 0.18: one tap, both ears and the mono sum | -3.8 / +2.6 dB | -0.75 .. +1.16 dB | 16 % | 1.00 (the same signal) | 1.00 |
+| 0.19, either ear | -3.8 / +2.6 dB | -0.75 .. +1.16 dB | 16 % | -0.01 | 1.00 |
+| 0.19, the mono sum (L + R) / 2 | -3.8 / +2.6 dB | -1.09 .. +0.96 dB | 5 % | | 0.71 |
+| half a turn apart (Sloop 2.6), the mono sum | -3.8 / +2.6 dB | -1.02 .. +0.98 dB | 5 % | +0.01 | **0.00** |
+
+| Send 127 (the wet as loud as the dry) | worst notch / peak | averaged over the turn | more than 3 dB down |
+| --- | --- | --- | --- |
+| 0.18, both ears and the sum | -84 / +6.0 dB | +0.78 .. +4.00 dB | 23 % |
+| 0.19, either ear | -84 / +6.0 dB | +0.78 .. +4.00 dB | 23 % |
+| 0.19, the mono sum | -78 / +6.0 dB | -1.61 .. +3.25 dB | 18 % |
+| half a turn apart, the mono sum | -73 / +6.0 dB | -0.95 .. +3.22 dB | 18 % |
+
+- **Each ear has the comb it had** (it is one tap beside the dry sound: -3.8 / +2.6 dB at the default send, a full
+  notch at a full send), but never the same one as the other ear: the two wets are unrelated over the band
+  (correlation -0.01; measured on noise through the code: 0.005). That is the width.
+- **The mono sum's deepest notch is 0.18's, no deeper**: it is reached at the two moments of a turn where the two
+  taps cross. Everywhere else it is shallower: the part of the band and the time more than 3 dB down falls from 16 %
+  to 5 %. Measured on the code with held tones: the sum's level between -3.72 and +2.63 dB of the dry (0.18: down
+  to -3.81; the bound 1 - g: -3.80).
+- **Half a turn apart is as wide and stands still in mono**: the two taps then move against each other, their mean
+  does not move, and one speaker gets a comb that only breathes. A quarter turn leaves 71 % of the swing. The FM-1's
+  own speaker is one speaker (whether it gets the left channel or the sum is not known from the material at hand:
+  with the left alone it plays 0.18's chorus).
+- **The mono sum is a little quieter** than 0.18's: two different taps add to less than one tap twice. 0.0 to 0.4 dB
+  at the default send, 0.8 to 1.5 dB at send 105 (the listening files' render.log).
+
+Two taps left and right on the one line and the LFO taken once a block with the read points a line across it are
+**Sloop 2.6's design** (its `fx.c fx_buses`; GPL-3.0-only; credited in `cr_fx.c` and `LICENSING.md`). No code was
+taken. ChoralRoot's own: the quarter turn and its width parameter (`xfp[XP_CWIDTH]`: 0 = both ears the left tap, 127
+= a quarter; no knob yet), a line that ends exactly on the next block's first point, the return straight into the
+mix, and no work at all while nothing is sent and the line is empty.
+
+**Cost on the unit** (the listing, 205 instructions a microsecond, 128 frames a half): 0.18's loop 48 instructions
+a sample with its sine, 30 us a half, always. 0.19: 52 a sample and about 110 a block for the four LFO points: 35
+us a half while a part sends; the mix line lost its `+ wet` (3 a frame, 2 us): **+3 us a half with a chorus send**,
+and **-29 us with none** (the look at the block: 3 us). Flash and RAM under "What it all costs" below.
+
+Listening files: `../audio-0.19/chorus/` (`tools/chorus_listen.sh`: a note and a six-note chord on TINE EP and VA
+LUSH PAD, 0.18's return and 0.19's, at the default send, at a high one and with all three effects, the mono sums,
+and one file with the three after each other).
+
+### The click and the recording's stems
+
+Everything that is mixed after the master was looked for: it is **the click alone** (`cr_out.c cr_click_mix`: the
+metronome and the count-in are the same generator; there are no UI sounds; previews are notes and go through the
+parts). And one thing is taken before the master: the USB recording's CHORD and BASS pairs. Both led Clean's output
+by the look-ahead, 32 samples.
+
+- **The click is made late, not delayed**: it is a resonator started by `crl.click`, so in a block that went through
+  Clean its start waits `CLN_LA` samples (`cr_ck_wait`). The same samples, 32 later, with no line and no memory, and
+  never through the limiter's gain, as before (mixing it in front of the delay would have put it through the
+  limiter; a ring of its own would have cost 64 bytes for the same samples). `tests/cr_align_test.c`: the click of a
+  block and a sample put into that block's mix leave the DAC on the same sample in Classic (sample 96 of the test)
+  and in Clean (128); Clean's click is Classic's, sample for sample, 32 later. `tools/emu/scripts/cr_click.txt`: the
+  count-in's four clicks through Clean are those through Classic at a lag of 32, correlation 1.000, the same peak.
+- **The stems are aligned** (the owner records them): in a block that went through Clean the two part pairs wait 32
+  frames in a line of their own (`fx.c ua_parts_late`: 4 x int16 a frame moved as two words, 256 bytes of RAM, 14
+  instructions a frame: **9 us a half, only while the computer records through Clean**). The line starts empty with
+  each recording and each change of the chain, as the master's does: a recording's first 0.73 ms of the part pairs is
+  silence. The test: the master pair against the CHORD pair of a dry note, lag 0 at correlation 1.0000 in both modes.
+  Classic: no delay, none added. **Not run on a host or the unit** (the test stages the frames as `choralroot.c`
+  does, without USB).
+- **SCOPE** reads the block after the master and the click, as before: it shows what the DAC gets, the click now
+  where it sounds. Nothing to change.
+
+### MASTER at power-on
+
+Felucca 1.1.5 (commit 276f72a, its issue #137): MASTER was 2048 (70 % of the knob's travel) from `felucca_init`
+until the main loop's first read of the pot, about 430 ms after the audio had started, and the smoothed value then
+glided from mid-scale an eighth of the way a frame. Its fix reads the pot before `audio_init` (`master.c
+master_boot`) and follows it under the splash.
+
+**What ChoralRoot did, traced**: `main.c` as Felucca's (2048, `audio_init`, 30 + 400 ms of splash). Nothing sounds
+under the splash: the engine takes no key and no MIDI before `cr_out_init` (`cr_ready`), and there is no boot chime,
+no restored chord (the session restores no sounding note) and no click. Then the loop's first pass read the pot (one
+step of the smoothing, from mid-scale) and ran ChoralRoot's power-on, `cr_ui_init`, which **set MASTER to 2048
+again** and opened the engine. From there MASTER glided to the pot over the next 20 to 30 frames, 0.3 to 0.5 s. So
+on a unit: a key struck (or a MIDI note arriving) in the first half second after the splash sounded at up to the
+default's level whatever the knob said: with the knob low, loud; with it at the top, 6 dB quiet and rising. (A key
+already down at power-on is not a press and plays nothing: seen in the emulator. The 0.3 to 0.5 s is read from the
+code, an eighth of the way a frame; nobody timed it on a unit.)
+
+**The port**: `firmware/src/master.c` (Felucca's two functions; `main.c` calls `master_boot` before `audio_init`,
+`master_poll` every 10 ms under the splash and in the loop). ChoralRoot's own part: `cr_out.c cr_out_init`, which
+`cr_ui_init` calls right after its default and which opens the engine, puts the pot's level back
+(`fx.c fx_master_now`), and Clean's eased MASTER (`cln_mq`, a ramp over a block) is set with it, so the first block
+does not ramp from the default. No line of `cr_ui.c` changed. The emulator runs the same two functions on its own
+pot (`EMU_MASTER=ADC` sets it at power-on).
+
+Tests: `tests/cr_align_test.c` boots the firmware with the pot at 160, 512 and 1023 and strikes a key 2 ms later:
+the first sounding block is within 0.1 dB of the pot's level and so is the note 100 ms on, in both chains; with
+0.18's start put back (2048, the smoothing from mid-scale) the same check reads 18.7 dB over the pot's level in the
+first block and 10.4 dB after 100 ms, and fails. `tools/emu/scripts/cr_boot_master.txt`: the pot at 160 against the
+top: -32.2 dB in the first 10 ms and 200 ms later, both chains. **Not checked on the unit**: that its ADC answers
+before the audio starts as Felucca's does (the code falls back to the old behaviour if three reads fail).
+
+### What it all costs
+
+Counted in `build/choralroot.dis` against 778a6ad's:
+
+| | before | 0.19 |
+| --- | --- | --- |
+| the chorus, a part sending | 30 us a half | 35 us (and 2 us less in the mix line) |
+| the chorus, nothing sent | 30 us | 3 us (and the same 2 less) |
+| Clean's limiter | 44 a frame idle, 97 limiting (`clean_block`'s loops) | 44 and 93; about 20 instructions a block more for the hold (under 0.5 us a half) |
+| the click | | 3 instructions a block |
+| the recording's stems, Clean, while recording | | 9 us a half |
+| flash (XIP) | 480 832 B | 481 396 B (+564) |
+| RAM | 81 104 B | 81 300 B (+196: the stems' line 256, the mono wet's buffer gone) |
+| POOL | 315 488 B (91.7 %) | unchanged |
+
+`tools/emu/perf.sh` before and after (the emulator's estimate, for comparing builds only): the block's average within
+1 % on every scenario (TINE EP chord 645 / 645 us, FM PAD + bass + loop + arp 944 / 945, VA 756 / 752, CZ-1 539 /
+537, both sends at 127: 833 / 832), the fx stage -3 .. +5 us, the master 24 us in both, the same clicks counted by
+`wavclicks` (1, 0, 0, 0, 0, 1, 4, 0, 0, 1, 0).
+
+### What Classic's guarantee is now
+
+- **Classic's output chain is 0.18's**, bit for bit, as it was: `tests/cr_output_test.c` (out_master in Classic = the
+  mix line and `master_block`), and `tools/emu/classic_exact.sh` part 1: all 161 scripts the 0.18 tree has, this
+  tree's emulator held at Classic **with the chorus's return held at 0.18's** (`EMU_CHORUS=mono`, a test switch of
+  the emulator's build): 158 WAVs identical (101 of them with sound), the three CZ-1 scripts differ by CZ-1's own
+  fix, as before. Against 778a6ad's own emulator, both held at Classic and this one at the mono return: every script
+  identical, CZ-1's too.
+- **With the stereo chorus as the unit has it, Classic is 0.18 bit for bit for any sound that sends nothing to the
+  chorus** (the chord part's chorus send at 0, or FX off; the bass part's is 0 by default): part 2 of the script,
+  `classic_dry_send0.txt` and `classic_dry_fxoff.txt`, the same file through 0.18's emulator and this one: identical.
+- **With a chorus send** (the default is 45) Classic differs from 0.18 by the chorus's return and nothing else: the
+  left channel's chorus tap is 0.18's to -45 dB, the right one is the new tap.
+- Felucca's own builds (`CR_FX` 0) are untouched: the 197 golden renders, 0 changed.
+
+### Not tested, and not done
+
+- Nothing on the unit: the hold by ear on its speaker and headphones, the stereo chorus on its speaker (left or
+  sum?), the click against a note by ear, a USB recording's stems in a DAW, MASTER at power-on with the real ADC.
+- The browser emulator's test (no emcc on this machine): it builds the same `emu_fw.c` and `fx.c`, so its
+  comparison with the native emulator holds by construction; its assertions (peak over 300, sound, the notes) do not
+  depend on the chorus's width.
+- A Width knob: the parameter is there (`xfp[XP_CWIDTH]`), KNOB 3 of the Chorus page is free, the two lines in
+  `cr_ui.c` and the one in `cr_settings.c` are in docs/FX.md; not added here (those files were another agent's).
+- docs/USB-AUDIO.md does not yet say that the part pairs are 0.73 ms late with the master pair in Clean.
+
 ## Open questions and proposals
 
 1. **The level against Sloop** is the largest measured difference and 0.19's output chain does not touch it: part
    LEVEL 92 against 104, and trims. Raising LEVEL to 104 on 0.18 would have put the default chord 99 % of the time in
    Classic's limiter (dist -31.9 dB instead of -39.6); with Clean's headroom and the DAC word's 6 dB it becomes
    possible. A decision about the sounds' levels, by ear.
-2. **The chorus's return is mono** (one tap to both sides). Two taps, as Sloop's, would end the comb's sameness in
-   both ears. Not built.
+2. ~~The chorus's return is mono~~: stereo since the third round ([The chorus, stereo](#the-chorus-stereo)). Open:
+   a Width knob on the Chorus page's free KNOB 3 (the parameter is there), and what the unit's own speaker gets.
 3. **Output's default for the release** (Classic or Clean), the trim, and the make-up build: after listening.
-   And since the second round: **the limiter's hold** (40 ms now; 200 to 500 ms takes 2 to 5 dB off what is left on
-   loud chords for 0.1 to 0.6 LU: [The look-ahead](#the-look-ahead)), and 32 or 64 samples of look-ahead.
-8. **The click and the USB part pairs are 0.73 ms ahead of Clean's output** (they do not pass the limiter's delay).
-9. **MASTER at power-on** (Felucca 1.1.5, #137): 2048 until the first read, 430 ms after the audio starts.
+   And since the second round: 32 or 64 samples of look-ahead. (The limiter's hold: chosen in the third round,
+   [The hold](#the-hold); to be heard: `../audio-0.19/hold/`.)
+8. ~~The click and the USB part pairs are 0.73 ms ahead of Clean's output~~: lined up in the third round.
+9. ~~MASTER at power-on~~ (Felucca 1.1.5, #137): ported in the third round.
 10. **CZ-1 struck again while it sounds** still shows a click to `tools/emu/wavclicks.py` in the mix of
     `BRASS 1` with the bass (2.30 s and 3.06 s of the script this round first used), before the output chain: in
     f402608's Clean as in this one, not in Classic (whose tanh rounds it). CZ-1's own item (docs/CZ1.md).
@@ -661,7 +945,15 @@ sh tools/master_measure_run.sh OUTDIR -DCLN_TRIM=4096     # a variant: any of CL
 python3 tools/master_transient.py OUTDIR                  # the transient test's mixes (the run script makes and uses them)
 build/host/master_measure chain MIX.raw.i32 PREFIX        # any mix (int32 L R) through both chains
 python3 tools/master_listen_la.py BEFORE NOW WAVDIR       # the look-ahead's listening files (two runs' OUTDIRs)
+python3 tools/master_rhythm.py OUTDIR                     # round 3: arps over a bass, one 12 dB hit on a pad (mixes)
+python3 tools/master_rhythm.py --gain X.clean.a00.i32 ..  # .. and the limiter's gain on them: recovery, dip, swing
+build/host/master_measure render P --send 120,45,120 --decay 100 --fdbk 105   # a very wet setting
+python3 tools/master_listen_hold.py BEFORE NOW WAVDIR     # the hold's listening files (two directories of chain records)
+python3 tools/chorus_response.py                          # the chorus's comb: 0.18's tap, 0.19's two, Sloop's half turn
+sh tools/chorus_listen.sh [WAVDIR]                        # the chorus's listening files (the emulator, EMU_CHORUS=mono)
 ```
+(a variant of the hold: `-DCLN_HOLD=`, `-DCLN_HOLD_HIT=`, `-DCLN_HIT=`, `-DCLN_REHOLD=`, `-DCLN_CREEP=`; rounds 1 and
+2's limiter is `-DCLN_HOLD=1764u -DCLN_HOLD_HIT=1764u -DCLN_REHOLD=5 -DCLN_CREEP=31`.)
 
 `tests/master_measure.c` is the firmware as the emulator builds it, driven through its key matrix, with the mix
 captured from `fx.c`'s buffers after every block; the captured mix is then run through the firmware's own chain
@@ -720,3 +1012,6 @@ closed in docs/CZ1.md ("Level", "The second round"). What matters to the output 
 - **A real step upstream was fixed**: a sounding CZ-1 note struck again at another velocity (not reachable from the
   emulator's scripts, which strike at one velocity).
 - Listening files, through Clean at the power-on MASTER: `../audio-0.19/cz-trim/`.
+
+Round 3: the hold in `tests/cr_output_test.c`; the chorus in `tests/cr_fx_test.c`; `tests/cr_align_test.c` (the click,
+the stems, MASTER at power-on); `cr_chorus.txt`, `cr_click.txt`, `cr_boot_master.txt` and the two `classic_dry_*.txt`.

@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 """The notes of an emulator WAV (build/host/emu --headless --script S --wav W) and their pitch.
 
-  python3 tools/emu/wavpitch.py W.wav [--gap MS] [--floor F]
+  python3 tools/emu/wavpitch.py W.wav [--gap MS] [--floor F] [--left]
 
-The 16-bit output (the channels averaged) is cut into notes at silences: 10 ms blocks whose RMS is under F (default
+The 16-bit output (the channels averaged; --left: the left channel alone, which since 0.19's stereo chorus is the
+one that has 0.18's chorus tap: the average has both taps' combs in it) is cut into notes at silences: 10 ms blocks whose RMS is under F (default
 0.001 of full scale) for at least MS (default 150 ms) end a note. Per note one line:
   note K: START..END s, RMS R, zc HZ, cent HZ, peak HZ
 zc: the zero-crossing rate / 2 over the note's middle (from 15 % to 85 % of it: past the attack, before the tail),
@@ -23,12 +24,14 @@ except ImportError:   # pragma: no cover
     np = None
 
 
-def load(path):
+def load(path, left=False):
     w = wave.open(path, "rb")
     n, ch, fs = w.getnframes(), w.getnchannels(), w.getframerate()
     raw = w.readframes(n)
     w.close()
     v = struct.unpack("<%dh" % (n * ch), raw)
+    if left:
+        return [v[i * ch] / 32768.0 for i in range(n)], fs
     return [sum(v[i * ch:(i + 1) * ch]) / (ch * 32768.0) for i in range(n)], fs
 
 
@@ -84,7 +87,7 @@ def main():
         gap = int(a[a.index("--gap") + 1])
     if "--floor" in a:
         floor = float(a[a.index("--floor") + 1])
-    x, fs = load(a[0])
+    x, fs = load(a[0], "--left" in a)
     for k, (s, e) in enumerate(notes(x, fs, gap, floor)):
         m0, m1 = s + (e - s) * 15 // 100, s + (e - s) * 85 // 100
         seg = x[m0:m1]
