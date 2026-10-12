@@ -74,6 +74,12 @@ tail -1 build/host/cr_usbaudio_test.log
 cc -std=gnu11 -O2 -w -o build/host/cr_usbaudio48_test tests/cr_usbaudio48_test.c -lm
 ./build/host/cr_usbaudio48_test > build/host/cr_usbaudio48_test.log || { cat build/host/cr_usbaudio48_test.log; exit 1; }
 tail -1 build/host/cr_usbaudio48_test.log
+# Options > USB Rate (0.19, 2026-10-12: 48 kHz is opt-in; tests/cr_usbrate_test.c): at 44.1 kHz the descriptors are
+# 0.18's byte for byte (tests/cr_usb018_desc.h) and SET_CUR 48000 changes nothing; the 44.1 kHz digest in both
+# states; a change of the option leaves the bus once, and never under a SysEx transfer
+cc -std=gnu11 -O2 -w -o build/host/cr_usbrate_test tests/cr_usbrate_test.c
+./build/host/cr_usbrate_test > build/host/cr_usbrate_test.log || { cat build/host/cr_usbrate_test.log; exit 1; }
+tail -1 build/host/cr_usbrate_test.log
 cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_midi_test tests/cr_midi_test.c
 ./build/host/cr_midi_test
 # the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md)

@@ -141,6 +141,8 @@ $CC -std=gnu11 -o "$OUT/cr_usbaudio_test" tests/cr_usbaudio_test.c
 run "USB audio: descriptors, routing, packing, clock drift and recovery" "$OUT/cr_usbaudio_test"
 $CC -std=gnu11 -o "$OUT/cr_usbaudio48_test" tests/cr_usbaudio48_test.c -lm
 run "USB audio at 48 kHz: the two rates, SET_CUR, the resampler, a rate switch" "$OUT/cr_usbaudio48_test"
+$CC -std=gnu11 -w -o "$OUT/cr_usbrate_test" tests/cr_usbrate_test.c
+run "Options > USB Rate: 0.18's descriptors at 44.1 kHz, SET_CUR, the digest, the replug" "$OUT/cr_usbrate_test"
 
 # the build's outputs the sections below read: without one of them a section would have nothing to test
 for f in build/choralroot.fwsc build/choralroot.dis build/gen/felucca_tables.h build/gen/ui_fonts.h; do

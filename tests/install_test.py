@@ -571,7 +571,8 @@ def debug():
     ok("ua_rate" not in out and "ChoralRoot In:" not in out, "--debug on a firmware without 79 USB (before 0.19): no word of a rate")
     # 0.19: 79 USB (DEBUG_USB): the rate, the 48 kHz packets, the resampler's time on the unit
     ok(I.BK_USB == 79 and I.DEBUG_USB[:4] == ["ua_rate", "ua_rate_last_open", "ua_rate_sets", "ua_rate_changes"] and
-       len(I.DEBUG_USB) == 11, "--debug: 79 USB's names (cr_backup.c crb_usb's order)")
+       len(I.DEBUG_USB) == 14 and I.DEBUG_USB[10:] == ["ua_packet_max", "ua_48k_offered", "ua_48k_refused", "ua_replugs"],
+       "--debug: 79 USB's names (cr_backup.c crb_usb's order; the option's state appended behind 0.19's first eleven)")
     cr.usb = [48000, 48000, 3, 1, 59000, 4, 1200, 81000, 46, 131, 588]
     cr.debug[I.DEBUG_NAMES.index("ua_open_close_ms")] = 60400
     cr.debug[I.DEBUG_NAMES.index("ua_frames_last_open")] = 2900000
@@ -587,6 +588,17 @@ def debug():
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "ChoralRoot In: 44100 Hz now, the last whole open at no rate (none yet); the host set the rate 0 "
        "times (0 changes)" in out and "48 kHz: packets" not in out, "--debug: 44.1 kHz, never at 48: no 48 kHz line")
+    ok("Options > USB Rate" not in out, "--debug: a 79 USB answer of before the option (11 values): no word of it")
+    # 2026-10-12: Options > USB Rate (48 kHz is opt-in): its state, the refused requests, the replugs
+    cr.usb = [44100, 44100, 2, 0, 0, 0, 0, 0, 0, 0, 588, 0, 2, 1]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "ua_48k_offered 0" in out and "ua_48k_refused 2" in out and "ua_replugs 1" in out and
+       "Options > USB Rate: 44.1 kHz (48 kHz is not offered: 0.18's device); the host asked for 48 kHz 2 times and "
+       "got 44.1" in out, "--debug: USB Rate 44.1 kHz: said, with the host's refused requests for 48 kHz")
+    cr.usb = [48000, 48000, 1, 1, 59000, 4, 1200, 81000, 46, 131, 588, 1, 0, 1]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "Options > USB Rate: 44.1 + 48 kHz (the computer chooses)" in out and "got 44.1" not in out,
+       "--debug: USB Rate 44.1 + 48 kHz: said")
     cr.usb = [48000, 44100, 1]                      # (a shorter answer: what it has)
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "ua_rate_sets 1" in out and "ua_rate_changes" not in out and "ChoralRoot In:" not in out,
@@ -705,6 +717,20 @@ def uac():
        "uac_check: a firmware without 79 USB, --rate 44100: as before")
     text = "\n".join(U.unit_report(b48, dict(a48, ua_rate_changes=3, ua_rate_sets=5), 60.0, 48000))
     ok("the host changed the rate 3 times during the capture" in text, "uac_check: the rate changed more than once in a capture: said")
+    # 2026-10-12: 48 kHz is an option of the unit, off by default: --rate 48000 against a unit that does not offer it
+    off = dict(base, ua_rate=44100, ua_48k_offered=0)
+    why48 = U.rate_offered(off, 48000)
+    ok(why48 is not None and why48.startswith("the unit does not offer 48 kHz: Options > USB Rate is 44.1 kHz") and
+       "44.1 + 48 kHz" in why48 and "Audio MIDI Setup" in why48,
+       "uac_check --rate 48000, the unit at USB Rate 44.1 kHz: 'the unit does not offer 48 kHz: Options > USB Rate ...'")
+    ok(U.rate_offered(off, 44100) is None and U.rate_offered(off, None) is None and
+       U.rate_offered(dict(off, ua_48k_offered=1), 48000) is None and U.rate_offered(base, 48000) is None and
+       U.rate_offered(None, 48000) is None,
+       "uac_check: 44100 or no --rate, the option on, a firmware that does not say, no counters: not refused")
+    text = "\n".join(U.unit_report(base, dict(after, ua_rate=44100, ua_rate_last_open=44100, ua_48k_offered=0,
+                                              ua_48k_refused=1), 60.0, 48000))
+    ok("the FM-1 streamed at 44100 Hz, not the 48000 Hz asked for (it does not offer 48 kHz: Options > USB Rate)" in text,
+       "uac_check: the option switched off between the check and the capture: the verdict names it")
     # the read itself, through fm1_install's MIDI side (the simulated FM-1): by name; a firmware without the counters
     n = len(I.DEBUG_NAMES)
     cr = BackupSide("ChoralRoot 0.17", I.CR_IDS)
@@ -714,6 +740,17 @@ def uac():
     ok(why is None and d["ua_opens"] == I.DEBUG_NAMES.index("ua_opens") and d["ms"] == 0 and all(x.closed for x in dev.links),
        "uac_check: the counters read by name through the tool's MIDI side, the link closed")
     ok("ua_rate" not in d, "uac_check: a firmware without 79 USB: 73's counters alone")
+    cr.usb = [44100, 0, 0, 0, 0, 0, 0, 0, 0, 0, 588, 0, 0, 0]
+    dev = FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)
+    d, why = U.counters(I.Updater(dev))
+    ok(why is None and d["ua_48k_offered"] == 0 and (U.rate_offered(d, 48000) or "").startswith(
+        "the unit does not offer 48 kHz: Options > USB Rate") and U.rate_offered(d, 44100) is None,
+       "uac_check against the simulated FM-1 at USB Rate 44.1 kHz: --rate 48000 is refused with the option's name")
+    cr.usb[11] = 1
+    dev = FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)
+    d, why = U.counters(I.Updater(dev))
+    ok(why is None and d["ua_48k_offered"] == 1 and U.rate_offered(d, 48000) is None,
+       "uac_check against the simulated FM-1 at USB Rate 44.1 + 48 kHz: --rate 48000 goes on")
     cr.usb = [48000, 44100, 2, 1, 7, 8, 9, 10, 11, 12, 588]
     dev = FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr)
     d, why = U.counters(I.Updater(dev))

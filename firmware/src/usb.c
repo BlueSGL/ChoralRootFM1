@@ -13,8 +13,8 @@
  * FELUCCA_UAC=1 adds Melodee's USB audio recording (usb_audio.c,
  * docs/USB-AUDIO.md): one UAC1 function, the six-channel input device
  * "ChoralRoot In" (EP2 IN: the master, CHORD and BASS, each a stereo pair),
- * 44.1 kHz, or 48 kHz when the host asks (0.19, usb_audio_stream.c: after
- * SLOOP 2.5 / Felucca 1.1.5); Melodee's playback function is not there. Its endpoint is served
+ * 44.1 kHz, or 48 kHz when the host asks and Options > USB Rate offers it
+ * (0.19, usb_audio_stream.c: after SLOOP 2.5 / Felucca 1.1.5); Melodee's playback function is not there. Its endpoint is served
  * from the TIMER5 ISR by elapsed time (ua_service, main.c), nested in the
  * render too; usb_poll never runs nested, so the two never interleave. It can
  * be left out of the configuration (ua_off, Options > USB Record); usb_replug
@@ -69,6 +69,10 @@ static struct {
     uint8_t sysex[16];
     uint8_t sx_len, sx_on;
     uint8_t rx_pend;             /* EP1 OUT packet seen, not yet taken (the MIDI ring was too full) */
+#ifndef FELUCCA_LOADER
+    uint8_t sx_seen;             /* a SysEx byte has come from the host (sx_ms is a time) */
+    uint32_t sx_ms;              /* its last one's time: ua_off_apply does not leave the bus under a transfer */
+#endif
     volatile uint8_t uboot_req;
     volatile uint8_t ota_req;    /* F0 22 24 35 7F F7: M-UPGRADE upgrade command (FELUCCA_OTA) */
 #ifndef FELUCCA_LOADER
@@ -147,11 +151,18 @@ static void midi_out_event(uint32_t pkt)            /* from the audio ISR */
  * bcdDevice (hosts cache descriptors per version): 3.23 ChoralRoot's USB recording at 44.1 and 48 kHz (0.19: the
  * format's second rate and the endpoint's 688 bytes; as SLOOP 2.5 and Felucca 1.1.5 raised theirs for 48 kHz), 3.22
  * was the recording at 44.1 kHz only (0.14 .. 0.18), 3.20 the 0.14 dev builds' playback + recording, Melodee's 3.06
- * has four capture channels: other layouts; 3.21 ChoralRoot's MIDI + console (unchanged) */
+ * has four capture channels: other layouts; 3.21 ChoralRoot's MIDI + console (unchanged).
+ * 48 kHz is an option since 2026-10-12 (Options > USB Rate, off by default; UA_OFF_48 in ua_off): without it the
+ * device is 0.18's byte for byte, 3.22 with the one-rate format and the endpoint's 640 bytes (DEV_DESC44, and
+ * ua_cfg_build writes the configuration that way); with it 3.23 and the two-rate descriptors below. Two versions, so
+ * a host that cached one reads the other when the option changes */
 #include "usb_audio_stream.c"
 #define CFG_LEN 211
+#define CFG_LEN44 208                                   /* 0.18's: the format three bytes shorter (one rate) */
 static const uint8_t DEV_DESC[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
                                      FELUCCA_USB_PID >> 8, 0x23, 0x03, 1, 2, 0, 1};   /* misc/IAD, 3.23 */
+static const uint8_t DEV_DESC44[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
+                                       FELUCCA_USB_PID >> 8, 0x22, 0x03, 1, 2, 0, 1};  /* 3.22: 44.1 kHz only (0.18's) */
 static const uint8_t CFG_DESC[] = {
     9, 2, CFG_LEN & 0xFF, CFG_LEN >> 8, 4, 1, 0, 0x80, 50,   /* 211 bytes, four interfaces */
     8, 0x0B, 0, 2, 1, 1, 0, 0,                          /* IAD: MIDI (IF 0-1) */
@@ -172,6 +183,7 @@ static const uint8_t CFG_DESC[] = {
 typedef char cfg_len_ok[sizeof CFG_DESC == CFG_LEN ? 1 : -1];
 static uint8_t ua_cfg[sizeof CFG_DESC];                 /* the configuration as sent (usb_audio.c ua_cfg_build) */
 static uint16_t ua_cfg_len;
+static uint8_t ua_dev44;                                /* the device descriptor as sent: 1 = DEV_DESC44 (ua_cfg_build) */
 #if FELUCCA_CDC
 #define CFG_LEN_CDC 175
 static const uint8_t DEV_DESC_CDC[18] = {18, 1, 0x00, 0x02, 0xEF, 0x02, 0x01, 64, 0x09, 0x12, FELUCCA_USB_PID & 0xFF,
@@ -313,6 +325,13 @@ static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)
         if (usb_cdc_on) {
             *d = DEV_DESC_CDC;
             *l = sizeof DEV_DESC_CDC;
+            return 1;
+        }
+#endif
+#if FELUCCA_UAC
+        if (ua_dev44) {                                 /* Options > USB Rate 44.1 kHz: 0.18's device, 3.22 */
+            *d = DEV_DESC44;
+            *l = sizeof DEV_DESC44;
             return 1;
         }
 #endif
@@ -683,6 +702,10 @@ static void sysex_byte(uint8_t b)
     }
     if (!usb.sx_on)
         return;
+#if !defined(FELUCCA_LOADER) && FELUCCA_UAC
+    usb.sx_ms = fm1_ms;                                /* (a SysEx frame is on its way: usb.c ua_off_apply waits) */
+    usb.sx_seen = 1;
+#endif
 #if FELUCCA_OTA
     if (sx_collect && b != 0xF0 && b != 0xF7) {
         if (sx_pos < sizeof sx_frame)
@@ -1116,8 +1139,22 @@ static void usb_replug(uint32_t now_ms)
 #endif
 }
 
-/* Options > USB Record switches the recording on or off (main loop). The host gets the new configuration once the
- * setting has rested for 0.6 s, so stepping through Off and back costs no replug. ua_off_apply: 1 = replugged. */
+/* Options > USB Record switches the recording on or off, Options > USB Rate (UA_OFF_48, 2026-10-12) the second
+ * sampling frequency (main loop). The host gets the new configuration once the setting has rested for 0.6 s, so
+ * stepping through Off and back costs no replug. ua_off_apply: 1 = replugged.
+ * Never under a SysEx transfer (an update's handshake, a backup or a restore, a sound dump: tools/fm1_install.py, the
+ * installer page): while the last SysEx byte from the host is less than UA_REPLUG_QUIET ms old the change waits,
+ * and is made when the host has gone quiet (a frame left open by a host that went away does not hold it for
+ * ever; the update itself runs in ota_session, which never returns here). And
+ * never for nothing: with the console presented (USB Record Off, SAFE MODE) the rate option changes no byte the
+ * host is given, so it is taken without leaving the bus */
+#define UA_REPLUG_QUIET 1500u
+static uint32_t ua_replugs;                             /* replugs made for an option (diagnostics, the tests) */
+static uint8_t ua_off_shown(uint8_t off)                /* what of ua_off the host can see */
+{
+    return (uint8_t)((off & UA_OFF_IN) || UAC_BLOCKED() ? UA_OFF_IN : off);
+}
+
 static void ua_off_set(uint32_t bit, int on, uint32_t now_ms)
 {
     uint8_t want = (uint8_t)(on ? ua_off_want & ~bit : ua_off_want | bit);
@@ -1131,8 +1168,17 @@ static int ua_off_apply(uint32_t now_ms)
 {
     if (ua_off_want == ua_off || now_ms - ua_off_ms < 600u)
         return 0;
+#ifndef FELUCCA_LOADER
+    if (usb.sx_seen && now_ms - usb.sx_ms < UA_REPLUG_QUIET)
+        return 0;                                       /* (a transfer: later) */
+#endif
+    if (ua_off_shown(ua_off_want) == ua_off_shown(ua_off)) {
+        ua_off = ua_off_want;                           /* (nothing the host is given changes) */
+        return 0;
+    }
     ua_off = ua_off_want;
     usb_replug(now_ms);
+    ua_replugs++;
     return 1;
 }
 

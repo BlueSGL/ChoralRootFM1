@@ -1176,3 +1176,53 @@ menu and I can still play notes."**
 - Test: `cr_opt_keys.txt` in test_cr.sh. The manual's `options.png` re-shot. Stale: the designer's sheet
   `design/choralroot-fm1-screens.png` (state 12 has a footer now). Not run: the browser emulator's test (no emcc; it
   does not use the Options); nothing on the device.
+
+## 2026-10-12 (48 kHz opt-in; GLO and the two sound knobs; the SEQ layer's mock-up)
+
+**0.19 dev (built; not flashed, nothing run on a host or the unit).** Three decisions of the owner's after the first
+48 kHz build was on the unit.
+
+**1. "Make 48 kHz opt-in for now."** The 48 kHz build offered both rates always, on the inference that macOS would
+stay at 44.1 kHz (`GET_CUR` 44100, 44100 listed first). It did not: the unit's counters showed `ua_rate 48000` after
+one `SET_CUR`, so every recording paid the six-channel resampler (about 185 us a half, 6.4 %), which the heaviest
+sounds do not have to spare.
+
+- **Options > USB Rate**, `44.1 kHz` (the default) / `44.1 + 48 kHz`, the entry after USB Level (24 entries now; the
+  scripts' entry numbers after it moved up by one). The line under it: "48 kHz: not offered" / "the computer picks
+  the rate". Considered and not taken: `USB 48 kHz: Off / On` (reads as "the stream is at 48 kHz" when On, which is
+  the computer's choice, not the unit's).
+- **Storage**: bit 2 of the settings block's `pick_roots` (`CRS_USB_48K`), as Output took bit 1: no record version
+  (15 still), nothing to migrate, every older record reads 44.1 kHz only; automatic (`CRS_PICK_AUTO`); the range of
+  the byte is 0 .. 7 now. docs/SETTINGS.md says which of its steps a spare bit takes.
+- **Off = 0.18's device**: `ua_off` got a second bit, `UA_OFF_48`; with it `ua_cfg_build` writes the one-rate format
+  (11 bytes) and `wMaxPacketSize` 640, 208 bytes in all, and `get_desc` answers `DEV_DESC44`, `bcdDevice` 3.22. The
+  bytes are compared with a stored copy of the tag's (`tests/cr_usb018_desc.h`, made by building v0.18's four USB
+  files as the host test does and printing `get_desc`). `GET_MAX` 44100; `SET_CUR` is taken and leaves the rate
+  (0.18 did exactly that: "UAC1 rounds unsupported values to the closest discrete rate: 44100"; a stall would be the
+  other reading of "refused", and would break a host that sets the rate while it opens the stream, which is why
+  Melodee kept the request); `ua.r48` is never set, so `audio.c`, which this change does not touch, is never asked
+  for 48 kHz. On = the two-rate descriptors of this morning, 3.23, 688.
+- **Two `bcdDevice` values**, so a host that cached one state reads the other. 0.18 released with 3.22 for the
+  recording and 3.21 for the console (`v0.18:firmware/src/usb.c`); the off state is 3.22 with 0.18's bytes, so a
+  unit updated from 0.18 shows the computer nothing new. Nothing in `tools/`, `web/` or `tests/install_test.py`
+  names `bcdDevice` (searched for both values again).
+- **The replug** is USB Record's (`ua_off_set` / `ua_off_apply`, 0.6 s of rest, `usb_replug`, main.c's
+  `USB RECONNECTING`); main.c is untouched, `cu_usb_apply` sends both bits. **USB Record had no guard against a
+  transfer** (looked for: `ua_off_apply` checked the time only; the update's own loop, `ota_session`, never returns
+  to the main loop, but its handshake and every backup / restore do). Added in `usb.c`: `sysex_byte` stamps
+  `usb.sx_ms`, and `ua_off_apply` waits while the last SysEx byte is under 1.5 s old (`UA_REPLUG_QUIET`), then makes
+  the change; a frame a host left open does not hold it for ever. A page that polls the unit by SysEx more often
+  than every 1.5 s would hold the change until it stops: none of ours does (the installer and the device manager
+  talk when asked). With the console presented (USB Record Off, SAFE MODE) USB Rate changes no byte the host is
+  given: taken without a replug.
+- **Counters**: 79 USB got three values behind its eleven (`ua_48k_offered`, `ua_48k_refused`, `ua_replugs`);
+  `fm1_install.py --debug` prints the option as a line; `tools/uac_check.py --rate 48000` stops with "the unit does
+  not offer 48 kHz: Options > USB Rate is 44.1 kHz ..." (tested against the simulated FM-1; not run on hardware).
+- **Tests**: `tests/cr_usbrate_test.c` (32 checks: both descriptor sets, 0.18's bytes, the console's in both states,
+  the requests, the golden digest in both states and under a host that keeps asking for 48 kHz, one replug per
+  change, the SysEx guard, no replug with the console presented); `tests/cr_settings_test.c` (the bit, versions 1
+  .. 14 read off, automatic); `tests/install_test.py`; `tools/emu/scripts/cr_usb_rate.txt`. The two older USB tests
+  run unchanged (their `ua_off = 0` is the option on).
+- **Not tested**: any host. In particular that macOS and Windows re-read the descriptors when `bcdDevice` goes 3.23
+  -> 3.22 on the owner's Mac (which has cached 3.23 with 48 000 selected); docs/USB-AUDIO.md's plan, part A step 2,
+  is that check. Cost: .text +256 B, .bss +16 B.

@@ -2,7 +2,7 @@
 # the stored ones, Dual Core is running), LOCK on with MAJ latched, then the entry: OCT+ asks, another entry or OCT-
 # cancels, a closed menu forgets the ask, OCT+ twice resets: everything reads default at once (on the view, LOCK
 # off) and is saved; the unit plays on the default sound.
-#   Options: 22 Reset Settings, the last entry (SELECT past the end stops on it)
+#   Options: 23 Reset Settings, the last entry (SELECT past the end stops on it)
 wait 500
 dump                          # 1: as stored: Advanced, 137 BPM, Key Mode on, Motion Off, Dual Core On
 btn B3                        # LOCK on, MAJ latched
@@ -14,7 +14,7 @@ wait 200
 knob SELECT +30               # past the end: the last entry: Reset Settings
 wait 300
 shot build/emu/test/reset_entry.ppm
-dump                          # 2: entry 22 'Reset Settings', 'all options to default'
+dump                          # 2: entry 23 'Reset Settings', 'all options to default'
 btn OCT+                      # the first OCT+: asks
 wait 300
 shot build/emu/test/reset_ask.ppm

@@ -702,6 +702,11 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   147 before the ring (`ua_block48`, `usb_audio_stream.c` `ua_resample`, SLOOP's 12-tap polyphase table
   `uac_fir.h`), about 185 us a half counted from the listing; 44.1 kHz is bit for bit as before. `bcdDevice` 3.23,
   `wMaxPacketSize` 688; SysEx 79 USB has the rate and the 48 kHz counters. Nothing in `fx.c` changed.
+  **Opt-in (2026-10-12): Options > USB Rate**, `44.1 kHz` by default: `ua_off`'s `UA_OFF_48` bit, with which
+  `ua_cfg_build` writes 0.18's configuration (one rate, 640, 208 bytes) and `get_desc` answers `DEV_DESC44`
+  (`bcdDevice` 3.22), `SET_CUR` leaves the rate at 44100 and `ua.r48` is never set (so `audio.c` is never asked to
+  resample). A change replugs through `ua_off_set` / `ua_off_apply` as USB Record does, and `ua_off_apply` now
+  waits while SysEx comes in (`usb.sx_ms`, `UA_REPLUG_QUIET` 1.5 s). `tests/cr_usbrate_test.c`.
   Felucca 1.0.5's BASS+ fix (#42) came with it: `spk_bass`'s low-pass has 4 poles.
 
 - **Install guard (2026-10-07, docs/INSTALL-COMPAT.md)**: both installers classify the running firmware (identity + INFO) and refuse Sloop, the Felucca 0.x betas and unknown ones (`--force` / an "I understand the risk" box); the loader is not the cause; the cause is still open (the emulator boots fine on Sloop and 0.9 data).
@@ -738,7 +743,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   register, sound, level), EDIT (the engine picker; KNOB 1 the engine's sounds). Knobs: KNOB 1 voicing, KNOB 2 bass
   voicing, KNOB 3 the mode's main parameter, KNOB 4 FX amount, PRESETS the chord sound (Felucca's factory presets of
   the melodic engines, POLY), ALGORITHM the bass (presets named BASS / ACID; 0 = OFF), SELECT tempo (in a picker:
-  move); OPT + ALGORITHM the bass part's engine (home pages), BASS held + ALGORITHM the bass level. Options: a picker of 19 settings (USB Record and USB Level since 0.14, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, Off by default since 0.16, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
+  move); OPT + ALGORITHM the bass part's engine (home pages), BASS held + ALGORITHM the bass level. Options: a picker of 24 settings (USB Record and USB Level since 0.14, USB Rate since 0.19, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, Off by default since 0.16, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
   of section 5 (PANIC / message, knob meter 900 ms, layer, page, Options, the stripes (the splash; the screensaver after 3 min without input; the screen off after 10 min), the View: CHORD,
   KEYBOARD, NOTES, GEEK OUT, SCOPE; perform on never swaps the chosen view: it shows in the PERF LED and the top
   line's right text, and on the Chord view an arpeggio or a pattern playing shows the arp screen in its place:

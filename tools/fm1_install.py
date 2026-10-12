@@ -2151,9 +2151,13 @@ LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 # full; reading clears nothing; values are only appended): ChoralRoot In's rate now and in the last whole open (Hz; 0:
 # no open yet), the host's SET_CUR sampling-frequency requests and those that changed the rate, the 48 kHz packets by
 # size (48 frames; 47 and 49: the drift's), the resampler's blocks, its recent average and its longest time for one
-# block of 32 frames in us (four a half; the longest has TIMER5 nested in it), the largest packet in bytes
+# block of 32 frames in us (four a half; the longest has TIMER5 nested in it), the largest packet in bytes; then
+# Options > USB Rate (2026-10-12): 1 when ChoralRoot In offers 48 kHz (0, the default: 44.1 kHz only, 0.18's device),
+# the host's requests for 48 kHz while it was not offered, the times the FM-1 left the bus for a USB option
 DEBUG_USB = ["ua_rate", "ua_rate_last_open", "ua_rate_sets", "ua_rate_changes", "ua_pk576", "ua_pk564", "ua_pk588",
-             "ua_rs_blocks", "ua_rs_avg_us", "ua_rs_max_us", "ua_packet_max"]
+             "ua_rs_blocks", "ua_rs_avg_us", "ua_rs_max_us", "ua_packet_max", "ua_48k_offered", "ua_48k_refused",
+             "ua_replugs"]
+USB_RATE_OPTION = "Options > USB Rate"             # the entry's name on the unit (cr_ui.c O_NAME)
 
 
 def stub_lines(d, out):
@@ -2212,6 +2216,11 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
         print(f"ChoralRoot In: {d['ua_rate']} Hz now, the last whole open at "
               f"{d['ua_rate_last_open'] or 'no rate (none yet)'}" + (" Hz" if d["ua_rate_last_open"] else "") +
               f"; the host set the rate {d['ua_rate_sets']} times ({d['ua_rate_changes']} changes)", file=out)
+        if "ua_48k_offered" in d:
+            print(f"{USB_RATE_OPTION}: " + ("44.1 + 48 kHz (the computer chooses)" if d["ua_48k_offered"] else
+                                             "44.1 kHz (48 kHz is not offered: 0.18's device)") +
+                  (f"; the host asked for 48 kHz {d['ua_48k_refused']} times and got 44.1" if d.get("ua_48k_refused") else ""),
+                  file=out)
         if d.get("ua_rs_blocks"):
             print(f"48 kHz: packets of 48 / 47 / 49 frames: {d.get('ua_pk576', 0)} / {d.get('ua_pk564', 0)} / "
                   f"{d.get('ua_pk588', 0)}; the resampler takes {d['ua_rs_avg_us']} us a block on average = "

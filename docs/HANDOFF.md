@@ -128,10 +128,13 @@ installed on the owner's Mac.
   in the engine; the other engines are fine.
 - **(c) WHEEL**: the owner is on the fence about cutting it.
 - **(d) USB recording at 48 kHz: built, nothing run on a host or the unit** (docs/USB-AUDIO.md "48 kHz"; HISTORY
-  2026-10-12). ChoralRoot In offers 44.1 and 48 kHz, the host chooses; 44.1 kHz is bit for bit 0.18's. At 48 kHz the
+  2026-10-12). **Opt-in since 2026-10-12: Options > USB Rate, `44.1 kHz` by default** (0.18's descriptors byte for
+  byte, `bcdDevice` 3.22; `44.1 + 48 kHz`: 3.23), because the owner's Mac chose 48 kHz by itself. With it on,
+  ChoralRoot In offers 44.1 and 48 kHz, the host chooses; 44.1 kHz is bit for bit 0.18's. At 48 kHz the
   six channels are resampled in the audio ISR: about 185 us a half by the listing, which the heaviest CZ-1 patches
   may not have. **The owner's**: the test plan there (macOS at both rates, a phone, Windows; the heavy case with
-  `--debug`), then whether six channels at 48 kHz stay as they are, get the 16-tap filter, or 48 kHz is dropped.
+  `--debug`), then whether six channels at 48 kHz stay opt-in, get the 16-tap filter, become the default, or 48 kHz
+  is dropped. The plan has both states of the option now.
 
 ## Facts that are easy to get wrong
 

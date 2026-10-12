@@ -75,6 +75,14 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
  * firmware up to 0.18 finds 2 or 3 there out of range and takes its own default for the byte, nothing else */
 #define CRS_OUT_CLASSIC 0x02u
 #define CRS_OUT_CLEAN(s) (((unsigned)(s)->pick_roots & CRS_OUT_CLASSIC) ? 0u : 1u)
+/* Options > USB Rate (0.19, the owner 2026-10-12: "Make 48 kHz opt-in for now"; docs/USB-AUDIO.md "48 kHz") rides in
+ * bit 2 of the same byte: set = ChoralRoot In offers 44.1 and 48 kHz, clear = 44.1 kHz only (0.18's device, the
+ * default). The same reasoning as Output's bit: every older record has 0 there and 0 is the default, so there is no
+ * version and nothing to migrate; a firmware up to 0.18 finds 4..7 out of range and takes its own default for the
+ * byte, a 0.19 build of before the option finds them out of range too and reads Output as Clean until it is set */
+#define CRS_USB_48K 0x04u
+#define CRS_USB48(s) (((unsigned)(s)->pick_roots & CRS_USB_48K) ? 1u : 0u)
+#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K)   /* the byte's automatic bits (cr_settings_auto) */
 
 typedef struct {
     /* header (12 bytes) */
@@ -149,7 +157,7 @@ void cr_settings_seal(cr_settings_t *s);         /* header + checksum, before it
 int  cr_settings_equal(const cr_settings_t *a, const cr_settings_t *b);   /* the payloads */
 /* Saving is manual since 0.18 (the owner, 2026-10-11; docs/SETTINGS.md "Manual and automatic"): the block holds two
  * kinds of field. AUTOMATIC: what the Options menu alone sets (Play Style, Extension Addition, Secret Chords, Velocity,
- * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, Dual Core, Output; the palette, which
+ * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, USB Rate, Dual Core, Output; the palette, which
  * has no control), written by itself when the unit is quiet. MANUAL: everything else, how the instrument is set to
  * play, written only by the global save (SAVE held). cr_settings_auto copies the automatic fields of *src into *dst
  * and leaves dst's manual ones (not sealed): flash's block with the Options as they are now is what an automatic

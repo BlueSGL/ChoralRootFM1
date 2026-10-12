@@ -14,6 +14,8 @@
  * hal/fm1_usb.h. */
 #define UA_IF_CAP 3u                            /* the streaming interface in CFG_DESC (usb_audio_desc.h) */
 #define UA_OFF_IN 1u                            /* ua_off: the recording left out of the configuration */
+#define UA_OFF_48 2u                            /* ua_off: 48 kHz not offered (Options > USB Rate 44.1 kHz, the default:
+                                                 * 0.18's descriptors, SET_CUR stays at 44.1 kHz, ua.r48 never set) */
 #define UA_NO_IF 0xFFu
 #ifndef UAC_BLOCKED
 #define UAC_BLOCKED() 0                         /* (core.h: SAFE MODE, no audio function, the console instead) */
@@ -63,6 +65,7 @@ static struct {
     /* 0.19, 48 kHz (cr_backup.c's USB command, 79): packets armed at 48 kHz by size (48 frames; 47, 49: the drift),
      * and the rate of the last whole open (1 = 48 kHz): what ua_frames_last_open is measured against */
     uint32_t pk576, pk564, pk588, rate_last_open;
+    uint32_t rate_refused;                      /* SET_CURs for 48 kHz while it is not offered (UA_OFF_48) */
 } ua_dbg;
 /* an event: a SETUP (bmRequestType | bRequest << 8 | wValue low << 16 | wIndex low << 24, the stalled ones repeated
  * with bit 31 of the time set) or an overrun (0xFF0000nn: the count) */
@@ -74,11 +77,15 @@ static void ua_log(uint32_t ms, uint32_t what)
 }
 
 /* CFG_DESC without the recording when ua_off has it (MIDI only: a build without the console). The AC header's
- * streaming interface list is kept as it is (the function goes whole); an absent stream gets UA_NO_IF. */
+ * streaming interface list is kept as it is (the function goes whole); an absent stream gets UA_NO_IF.
+ * UA_OFF_48 (Options > USB Rate 44.1 kHz): the streaming interface as 0.18 had it, byte for byte: the type I format
+ * with one sampling frequency (11 bytes for the 14) and the endpoint's wMaxPacketSize 640 (UA_EP_MAXP44); the
+ * configuration is then 208 bytes (tests/cr_usbaudio_test.c compares it with a copy of 0.18's) */
 static void ua_cfg_build(void)
 {
     uint32_t i, k, n = 0, nif = 0, skip = 0;
     ua_if_cap = UA_NO_IF;
+    ua_dev44 = (uint8_t)((ua_off & UA_OFF_48) != 0);
 #if FELUCCA_CDC
     if (usb_cdc_on) {                           /* the console's configuration (CFG_DESC_CDC): MIDI and CDC */
         ua_nif = 4;
@@ -91,8 +98,19 @@ static void ua_cfg_build(void)
             skip = (ua_off & UA_OFF_IN) && d[2] + 1u == UA_IF_CAP;
         if (skip)
             continue;
+        if ((ua_off & UA_OFF_48) && ua_if_cap == UA_IF_CAP && d[1] == 0x24u && d[2] == 2u) {
+            static const uint8_t F44[11] = {11, 0x24, 2, 1, UA_CAP_CHANNELS, 2, 16, 1, 0x44, 0xAC, 0};
+            for (k = 0; k < sizeof F44; k++)    /* the format: 44100 Hz alone */
+                ua_cfg[n + k] = F44[k];
+            n += sizeof F44;
+            continue;
+        }
         for (k = 0; k < d[0]; k++)
             ua_cfg[n + k] = d[k];
+        if ((ua_off & UA_OFF_48) && d[1] == 5u && d[2] == 0x82u) {
+            ua_cfg[n + 4u] = (uint8_t)UA_EP_MAXP44;
+            ua_cfg[n + 5u] = (uint8_t)(UA_EP_MAXP44 >> 8);
+        }
         n += d[0];
         if (d[1] == 4u) {
             nif += d[3] == 0u;
@@ -260,7 +278,7 @@ static int ua_control_get(const uint8_t *s, uint32_t *rate)   /* a GET of it: it
     switch (s[1]) {
     case 0x81: *rate = ua.r48 ? UA_RATE48 : UA_RATE; break;   /* GET_CUR */
     case 0x82: *rate = UA_RATE; break;         /* GET_MIN */
-    case 0x83: *rate = UA_RATE48; break;       /* GET_MAX */
+    case 0x83: *rate = (ua_off & UA_OFF_48) ? UA_RATE : UA_RATE48; break;   /* GET_MAX (one rate: 0.18's answer) */
     case 0x84: *rate = 0; break;               /* GET_RES: discrete frequencies */
     default: return 0;
     }
@@ -297,8 +315,17 @@ static int ua_control_data(const uint8_t *p, uint32_t n)
      * again is a no-op: an already running stream is not flushed for it. A change while the stream is open (macOS
      * and Windows send SET_CUR after SET_INTERFACE) empties the ring, drops the packet packed ahead at the old
      * rate (the one the SIE holds goes out as it is) and starts the open's own count again, so the frames of an
-     * open are all of one rate (ua_frames_last_open against ua_rate_last_open) */
-    if (ua_rate_set(p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16)) {
+     * open are all of one rate (ua_frames_last_open against ua_rate_last_open).
+     * Options > USB Rate 44.1 kHz (UA_OFF_48): 48 kHz is not a rate of this device, so whatever is asked rounds to
+     * the only one, 44100, as 0.18 answered: the request is taken (no stall: a host that sets the rate while it
+     * starts a stream goes on), the rate does not change, GET_CUR says 44100, ua.r48 stays 0 and audio.c is never
+     * asked to resample */
+    uint32_t hz = p[0] | (uint32_t)p[1] << 8 | (uint32_t)p[2] << 16;
+    if (ua_off & UA_OFF_48) {
+        ua_dbg.rate_refused += hz >= (UA_RATE + UA_RATE48) / 2u;
+        hz = UA_RATE;
+    }
+    if (ua_rate_set(hz)) {
         ua_tx_bytes = 0;
         if (ua.cap_alt) {
             ua_dbg.open_at = fm1_ms;

@@ -66,7 +66,7 @@ want=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralro
 [ -n "${CR_VERSION:-}" ] && want=$(grep -a -m1 "^  version:" "$L" | sed -n "s/.* build '\(.*\)'$/\1/p")   # (a release build of the emulator)
 vo=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*options '\([^']*\)'.*/\1/p")
 vi=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*identity '\([^']*\)'.*/\1/p")
-[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 20 of 2[0-9] 'Version' value '$want'" "$L" &&
+[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 21 of 2[0-9] 'Version' value '$want'" "$L" &&
     ok "Options > Version '$vo' = the identity over SysEx '$vi' = the build's ($want): $OUT/cr_version.ppm" \
     || bad "the version: Options '$vo', identity '$vi', choralroot.c '$want'"
 lits=$(grep -n '"ChoralRoot [0-9]' firmware/src/*.c firmware/src/*.h firmware/hal/*.h tools/emu/*.c tools/emu/*.h tools/emu/web/*.c 2>/dev/null | grep -v '^firmware/src/choralroot.c:[0-9]*:#define FELUCCA_VERSION ')
@@ -2456,7 +2456,7 @@ run cr_opt_keys --wav "$OUT/cr_opt_keys.wav"
 L="$OUT/cr_opt_keys.log"
 dl() { LC_ALL=C grep -a "^  $1" "$L" | sed -n "$2p"; }   # dl PREFIX N: the Nth dump's line that starts with PREFIX
 oe() { dl 'options:' "$1" | sed 's/^  options: //'; }
-[ "$(oe 1)" = "open 1 entry 2 of 23 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
+[ "$(oe 1)" = "open 1 entry 2 of 24 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
     dl 'cr: voices' 2 | grep -q '^  cr: voices 1 pending 0 notes-out 3 chord DM sounding 1 notes 62 66 69' &&
     dl 'loopv:' 2 | grep -q 'stream-notes main 3 ' && ! has 'expect.*FAILED' "$L" &&
     ok "MAJ + D4 with the menu open: D major sounds (62 66 69), three notes out on MIDI" \
@@ -2484,22 +2484,38 @@ echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &
     ok "no jump, no silent hole, no click at either change (5.3 .. 8.3 s)" || bad "Output switched under a chord struck in the menu: $wc_"
 sh_() { dl 'settings:' "$1" | sed -n 's/.* now \([0-9A-F]*\) .*/\1/p'; }
 echo "$(oe 8)" | grep -q "'Reset Settings' value 'OCT+ again: reset'" && [ "$(oe 9)" = "$(oe 8)" ] && [ -n "$(sh_ 8)" ] && [ "$(sh_ 9)" = "$(sh_ 8)" ] &&
-    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 35)" = "open 1 entry 2 of 23 'Secret Chords' value 'Simple'" ] &&
+    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 36)" = "open 1 entry 2 of 24 'Secret Chords' value 'Simple'" ] &&
     ! grep -aq 'settings reset' "$L" &&
     ok "Reset Settings asked (OCT+ once): five keys neither confirm nor cancel it; OCT- leaves, nothing was reset (Secret Chords still Simple)" \
-    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 35)'"
-echo "$(oe 11)" | grep -q "^open 1 entry 21 of 23 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
+    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 36)'"
+echo "$(oe 11)" | grep -q "^open 1 entry 22 of 24 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
     || bad "Calibrate and the keys: '$(oe 11)' $(grep -a -m1 '^calib:' "$L")"
 n=0; i=0
-while [ $i -le 22 ]; do
-    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 23 '" && n=$((n + 1))
+while [ $i -le 23 ]; do
+    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 24 '" && n=$((n + 1))
     i=$((i + 1))
 done
-[ $n = 23 ] && echo "$(oe 34)" | grep -q "'Reset Settings'" && ok "every entry by SELECT alone: 23 of 23, Play Style to Reset Settings" \
-    || bad "the entries by SELECT: $n of 23"
+[ $n = 24 ] && echo "$(oe 35)" | grep -q "'Reset Settings'" && ok "every entry by SELECT alone: 24 of 24, Play Style to Reset Settings" \
+    || bad "the entries by SELECT: $n of 24"
 grep -aq '^loop: loop recorded (state 2 layers 1 events 1 ' "$L" && ok "a take played with the menu open is recorded (armed on the view, one chord)" \
     || bad "the looper with the Options open: $(grep -a '^loop:' "$L" | tail -2 | tr '\n' ' ')"
 silent_end cr_opt_keys
+
+echo "Options > USB Rate (0.19): 48 kHz is opt-in; 44.1 kHz, the default, is 0.18's device (the USB side: tests/cr_usbrate_test.c)"
+run cr_usb_rate
+L="$OUT/cr_usb_rate.log"
+ur() { dl 'usb-rate:' "$1" | sed 's/^  usb-rate: //; s/ (.*pick_roots \([0-9]*\))/ \1/'; }
+ul() { dl 'screen reads:' "$1" | sed -n "s/.*label '\([^']*\)'.*/\1/p"; }
+[ "$(oe 1)" = "open 1 entry 18 of 24 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
+    ok "a new unit: USB Rate is the entry after USB Level, 44.1 kHz ('48 kHz: not offered'), the record's bit clear" \
+    || bad "USB Rate on a new unit: '$(oe 1)' / $(ur 1) / '$(ul 1)'"
+[ "$(oe 2)" = "open 1 entry 18 of 24 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
+    [ "$(ul 2)" = "the computer picks the rate" ] && [ "$(oe 3)" = "$(oe 1)" ] && [ "$(ur 3)" = "48k 0 0" ] &&
+    ok "KNOB 1 +1: 44.1 + 48 kHz ('the computer picks the rate'), bit 2 of the record's byte; -1: 44.1 kHz again" \
+    || bad "USB Rate turned: '$(oe 2)' / $(ur 2) / '$(ul 2)' then '$(oe 3)' / $(ur 3)"
+echo "$(oe 4)" | grep -q "^open 0 " && [ "$(ur 4)" = "48k 1 4" ] && ok "set and the menu closed: kept (the two values end the range)" \
+    || bad "USB Rate after the menu: '$(oe 4)' / $(ur 4)"
+differ cr_usb_rate_44 cr_usb_rate_48 "USB Rate: the two values' screens differ"
 
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

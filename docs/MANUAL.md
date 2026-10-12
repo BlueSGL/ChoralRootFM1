@@ -1276,6 +1276,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **Hold Time** | 300, 400, 500, 600 ms | 400 ms | how long a hold is |
 | **USB Record** | Off, On | On | On: the computer can record the FM-1 ([USB audio recording](#usb-audio-recording)) |
 | **USB Level** | Master, Fixed | Master | Master: the recording follows the MASTER knob. Fixed: it is recorded at full level and MASTER only sets what you hear |
+| **USB Rate** | 44.1 kHz, 44.1 + 48 kHz | 44.1 kHz | 44.1 kHz: the computer records at the FM-1's own rate, as in 0.18. 44.1 + 48 kHz: the computer may also choose 48 kHz, which the FM-1 converts for it; that takes some of its processor time while a recording runs ([USB audio recording](#usb-audio-recording)). The FM-1 leaves USB for a second when you change it |
 | **Dual Core** | Off, On | Off | On: the bass plays on the chip's second core (below). Takes effect after a restart |
 | **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder. You can switch while you play to compare |
 | **Version** | | | the firmware's version |
@@ -1291,7 +1292,7 @@ strangely, and the way to make sure two people are looking at the same instrumen
 Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the Options.
 
 - **Reset:** everything in the Options (Play Style back to Simple, Motion, LEDs, Hold Time, the MIDI channels and
-  clock, USB Record and USB Level, Dual Core and the rest), Key Mode with its tonic, scale and Transpose, Single
+  clock, USB Record, USB Level and USB Rate, Dual Core and the rest), Key Mode with its tonic, scale and Transpose, Single
   Notes and the split point, the KEY layer's keys, Key plays and Keyboard, the LOCK layer's two settings, the
   performance mode with all its parameters and whether it is on, LATCH, the effects being on, the tempo, the
   metronome, the looper's options (length, record mode, quantize, count-in, level, what its keys do), the bass
@@ -1341,7 +1342,7 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 | Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, Velocity | notes that were sounding, a chord LATCH was holding |
 | the performance mode, its parameters, and whether it is on | MIDI Perform, MIDI Bass, MIDI Raw Chord, Raw Chord Sound, MIDI Clock | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
 | LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, LEDs, Hold Time | a take you were recording |
-| the voicing on KNOB 1 and the octave shift | USB Record, USB Level, Dual Core, Output | an open layer, menu, dialog or editor: the FM-1 starts on the view |
+| the voicing on KNOB 1 and the octave shift | USB Record, USB Level, USB Rate, Dual Core, Output | an open layer, menu, dialog or editor: the FM-1 starts on the view |
 | the bass being on, its **behaviour**, register, level, and which sound it plays | the panel calibration | where you were in the editor, the KEY layer's and the PLAY menu's page |
 | the effects in full: on or off, the page picked, every cell of the reverb, the chorus and the delay, both parts' sends | | |
 | which sound each part plays and each engine's last place; **each part's sound as it is, with changes you have not saved as a preset**; the parts' Level and Pan | | |
@@ -1409,8 +1410,8 @@ A part whose channel is Off ignores MIDI in.
 
 ### USB audio recording
 
-**ChoralRoot In** is a class-compliant audio input: no driver is needed. It has six channels, 16 bit, at 44.1 kHz
-or 48 kHz.
+**ChoralRoot In** is a class-compliant audio input: no driver is needed. It has six channels, 16 bit, at 44.1 kHz;
+with Options > USB Rate set to `44.1 + 48 kHz` the computer can also run it at 48 kHz.
 
 | Channels | Signal |
 | --- | --- |
@@ -1418,16 +1419,22 @@ or 48 kHz.
 | 3-4 | the chord sound alone, before the reverb, chorus and delay, at half level |
 | 5-6 | the bass sound alone, the same way |
 
-- The computer, phone or app chooses the rate; there is no setting on the FM-1. **44.1 kHz** is the FM-1's own
-  rate: the recording is exactly what the FM-1 made. Use it when you can. **48 kHz** (from 0.19) is for phones,
-  tablets, apps and projects that only take 48 kHz: the FM-1 converts on the way out. The top of the treble is a
-  little softer (1 dB down at 16 kHz), and the conversion takes some processor time: in the very heaviest sounds
-  (CZ-1 chords with both effects) a voice may drop sooner while a 48 kHz recording runs.
-- On a Mac the rate is ChoralRoot In's Format in Audio MIDI Setup; on Windows, Sound settings > ChoralRoot In >
-  Properties > Advanced. A DAW usually sets it from the project's rate.
+- **44.1 kHz** is the FM-1's own rate: the recording is exactly what the FM-1 made. As the FM-1 comes, it is the
+  only rate ChoralRoot In offers (Options > USB Rate: `44.1 kHz`), exactly as in 0.18.
+- **48 kHz** (from 0.19) is for phones, tablets, apps and projects that only take 48 kHz. Set **Options > USB Rate**
+  to `44.1 + 48 kHz`: the FM-1 reconnects (`USB RECONNECTING`, about a second), and the computer, phone or app
+  can then choose either rate. At 48 kHz the FM-1 converts on the way out. The top of the treble is a little softer
+  (1 dB down at 16 kHz), and the conversion takes about 6 % of the processor while a recording runs: in the very
+  heaviest sounds (CZ-1 chords with both effects) a voice may drop sooner. That is why it is off until you ask for
+  it: a Mac chooses 48 kHz by itself as soon as it is offered.
+- With USB Rate at `44.1 + 48 kHz`, on a Mac the rate is ChoralRoot In's Format in Audio MIDI Setup; on Windows,
+  Sound settings > ChoralRoot In > Properties > Advanced. A DAW usually sets it from the project's rate. Choose
+  44 100 there when you do not need 48 kHz.
 - Options > USB Level = Fixed records at full level while MASTER only turns the speaker and headphones down.
-- Options > USB Record = Off removes the audio input. When you change it the FM-1 leaves USB for about a second
-  (`USB RECONNECTING`); the MIDI port goes with it and comes back.
+- Options > USB Record = Off removes the audio input. When you change it, or USB Rate, the FM-1 leaves USB for
+  about a second (`USB RECONNECTING`); the MIDI port goes with it and comes back. It waits for a backup, a restore
+  or an update that is under way, so do not be surprised if the message comes a moment later. Do not change either
+  during a take: the computer sees the FM-1 unplugged and plugged in again.
 - The computer cannot play audio through the FM-1.
 
 More: [USB-AUDIO.md](USB-AUDIO.md).
@@ -1597,7 +1604,9 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | The screen shows the logo, or is black | three minutes, or ten, without input | touch anything |
 | `Safe mode` on the top line | SAFE MODE | see [SAFE MODE](#safe-mode) |
 | The computer shows no audio input | USB Record is Off | Options > USB Record: On |
-| The FM-1 drops off USB for a second | USB Record was changed (`USB RECONNECTING`) | wait |
+| The FM-1 drops off USB for a second | USB Record or USB Rate was changed (`USB RECONNECTING`) | wait |
+| The computer offers 44.1 kHz only for ChoralRoot In | USB Rate is `44.1 kHz` (the default) | Options > USB Rate: `44.1 + 48 kHz` |
+| Voices drop while the computer records, not otherwise | the computer records at 48 kHz, which the FM-1 converts | choose 44 100 Hz on the computer, or Options > USB Rate: `44.1 kHz` |
 | The FM-1 became a `WL82 UBOOT1.00` disk | no update loader is stored on it and update mode was asked for (OCT- at power-on, or OCT- + OCT+ + HOME for 5 s) | switch off and on |
 | The screen went black with three flashes while I played | OCT-, OCT+ and HOME were held for 5 s: update mode | switch off and on; nothing was written |
 | The FM-1 crashes or resets while playing | with Dual Core On, possibly the second core | Options > Dual Core: Off, switch off and on; please report it either way |

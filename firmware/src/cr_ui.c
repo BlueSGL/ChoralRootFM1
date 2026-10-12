@@ -520,6 +520,8 @@ static struct {
     uint8_t usb_in, usb_fixed;            /* Options > USB Record (on: presented to the computer), USB Level */
     uint8_t dualcore;                     /* Options > Dual Core (v12): 1 On; read at power-on only (cr_c1_off) */
     uint8_t out_clean;                    /* Options > Output (0.19): 1 Clean, 0 Classic (fx.c fx_output_set) */
+    uint8_t usb48;                        /* Options > USB Rate (0.19): 1 = ChoralRoot In offers 48 kHz too; 0, the
+                                           * default: 44.1 kHz only, 0.18's device (usb.c UA_OFF_48) */
 } cs;
 #if CR_HAVE_SETTINGS
 static void cr_settings_load(void);       /* cr_settings.c (included after this file): the record -> the UI */
@@ -918,31 +920,35 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 
 /* ------------------------------------------------------------- Options --- */
 enum { O_STYLE, O_EXTADD, O_SECRET, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
-       O_CLOCK, O_VIEW, O_MOTION, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_DUALCORE, O_OUTPUT, O_VERSION, O_CALIB,
+       O_CLOCK, O_VIEW, O_MOTION, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
+       O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
        O_SAFE, O_ERASE,
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
 static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "Velocity",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
-    "MIDI Clock", "View", "Motion", "LEDs", "Hold Time", "USB Record", "USB Level", "Dual Core", "Output", "Version",
+    "MIDI Clock", "View", "Motion", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
+    "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
 static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 3, 1, 1, 1,
-                                   1, 0, 0, 0, 0, 0};
+                                   1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
 static uint8_t cu_reset_ask;              /* Options > Reset Settings: OCT+ pressed once (the second resets) */
 
-/* Options > USB Record / USB Level (docs/USB-AUDIO.md; named from the FM-1's side: Record = the computer records
- * the FM-1, the device "ChoralRoot In"): USB Level at once (fx.c), USB Record once the setting has rested 0.6 s
- * (usb.c ua_off_set / ua_off_apply: the FM-1 leaves the bus for a second and the computer reads the new
- * configuration). Off: the serial console instead (usb.c usb_cdc_on). The emulator has no USB: the settings are
- * kept and saved only */
+/* Options > USB Record / USB Level / USB Rate (docs/USB-AUDIO.md; named from the FM-1's side: Record = the computer
+ * records the FM-1, the device "ChoralRoot In"): USB Level at once (fx.c), USB Record and USB Rate once the setting
+ * has rested 0.6 s (usb.c ua_off_set / ua_off_apply: the FM-1 leaves the bus for a second and the computer reads
+ * the new configuration; never under a SysEx transfer). USB Record Off: the serial console instead (usb.c
+ * usb_cdc_on). USB Rate (0.19, the owner 2026-10-12): 44.1 kHz, the default, is 0.18's device; 44.1 + 48 kHz adds
+ * the second rate for the computer to choose. The emulator has no USB: the settings are kept and saved only */
 static void cu_usb_apply(void)
 {
     fx_usb_fixed = cs.usb_fixed;
 #if FELUCCA_UAC
     ua_off_set(UA_OFF_IN, cs.usb_in, fm1_ms);
+    ua_off_set(UA_OFF_48, cs.usb48, fm1_ms);
 #endif
 }
 
@@ -965,6 +971,7 @@ static int32_t opt_get(uint32_t o)
     case O_HOLD: return settings_hold % 4u;
     case O_USB_IN: return cs.usb_in;
     case O_USB_LEVEL: return cs.usb_fixed;
+    case O_USB_RATE: return cs.usb48;
     case O_DUALCORE: return cs.dualcore;
     case O_OUTPUT: return cs.out_clean;
     default: return 0;
@@ -990,6 +997,7 @@ static void opt_set(uint32_t o, int32_t v)
     case O_HOLD: settings_hold = (uint8_t)v; break;
     case O_USB_IN: cs.usb_in = (uint8_t)v; cu_usb_apply(); break;
     case O_USB_LEVEL: cs.usb_fixed = (uint8_t)v; cu_usb_apply(); break;
+    case O_USB_RATE: cs.usb48 = (uint8_t)v; cu_usb_apply(); break;
     case O_DUALCORE: cs.dualcore = (uint8_t)v; break;   /* saved; core 1 starts (or not) at the next power-on */
     case O_OUTPUT: cs.out_clean = (uint8_t)v; fx_output_set((uint32_t)v, 0); break;   /* (fx.c: faded over) */
     default: break;
@@ -1026,6 +1034,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_HOLD: cu_int(d, HOLD_MS[v & 3], 0, n); cu_cat(d, " ms", n); break;
     case O_USB_IN: cu_cpy(d, ONOFF[v & 1], n); break;
     case O_USB_LEVEL: cu_cpy(d, v ? "Fixed" : "Master", n); break;
+    case O_USB_RATE: cu_cpy(d, v ? "44.1 + 48 kHz" : "44.1 kHz", n); break;
     case O_DUALCORE: cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n); break;
     case O_OUTPUT: cu_cpy(d, v ? "Clean" : "Classic", n); break;
     case O_VERSION: cu_cpy(d, CR_VERSION, n); break;
@@ -5611,6 +5620,9 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, "records master, chord, bass", sizeof s->label);
     else if (cu.opt_sel == O_USB_LEVEL)            /* (the values stay Master / Fixed: the line says what they do) */
         cu_cpy(s->label, cs.usb_fixed ? "record full, MASTER: speaker" : "record level: MASTER knob", sizeof s->label);
+    else if (cu.opt_sel == O_USB_RATE)             /* (48 kHz is the computer's choice once offered; it costs the
+                                                    * audio 6 % while it records: docs/USB-AUDIO.md "48 kHz") */
+        cu_cpy(s->label, cs.usb48 ? "the computer picks the rate" : "48 kHz: not offered", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
     else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: Off the default, On the option; never started /
@@ -6438,6 +6450,7 @@ static void cr_ui_init(void)
     cs.metro_vol = 70;
     cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
     cs.out_clean = 1;                             /* Options > Output Clean (the record's) */
+    cs.usb48 = 0;                                 /* Options > USB Rate 44.1 kHz (the record's) */
 #if !CR_HAVE_SETTINGS
     fx_output_set(1, 1);                          /* (a build without the record: nothing else tells fx.c) */
 #endif

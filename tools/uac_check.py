@@ -9,7 +9,9 @@ usage: tools/uac_check.py OUT.wav [SECONDS] [--nonotes] [--debug] [--device NAME
   --nonotes   no chords: the stream's behaviour in silence
   --debug     also print the counters as read, before and after (fm1_install.py --debug's names)
   --device    the capture device's name (default "ChoralRoot In")
-  --rate      the rate ChoralRoot In is expected to run at, 44100 or 48000 (0.19: the host chooses; on a Mac it is
+  --rate      the rate ChoralRoot In is expected to run at, 44100 or 48000 (0.19: 48 kHz is offered when Options >
+              USB Rate is 44.1 + 48 kHz, else the tool says "the unit does not offer 48 kHz" and records nothing;
+              then the host chooses; on a Mac it is
               the Format set for ChoralRoot In in Audio MIDI Setup, which this tool does not change). The WAV is
               written at that rate, and the verdict says so if the FM-1 streamed at the other. Without it the WAV is
               44100 Hz as before and whatever rate the FM-1 reports is taken as meant
@@ -60,7 +62,8 @@ import fm1_install as fi                                # noqa: E402  (the MIDI 
 RATE = 44100                                            # the rate of a firmware that does not say (before 0.19)
 RATES = (44100, 48000)
 USB_KEYS = ("ua_rate", "ua_rate_last_open", "ua_rate_sets", "ua_rate_changes", "ua_pk576", "ua_pk564", "ua_pk588",
-            "ua_rs_blocks", "ua_rs_avg_us", "ua_rs_max_us")   # fm1_install.DEBUG_USB (SysEx 79), merged into the read
+            "ua_rs_blocks", "ua_rs_avg_us", "ua_rs_max_us", "ua_48k_offered",
+            "ua_48k_refused")                           # fm1_install.DEBUG_USB (SysEx 79), merged into the read
 RAW_KEYS = ("ms", "ua_cap_alt", "ua_opens", "ua_open_ms", "ua_open_close_ms", "ua_frames_this_open",
             "ua_frames_last_open", "ua_tx_packets", "ua_sofs", "ua_overruns", "ua_underruns", "ua_missed_frames",
             "ua_nudges_up", "ua_nudges_down", "ua_holds", "ua_first_take_ms", "ua_pk528", "ua_pk540", "ua_pk_other",
@@ -92,6 +95,18 @@ def counters(up):
     d = dict(zip(fi.DEBUG_NAMES, vals))
     d.update(usb)
     return (d, None) if "ua_opens" in d else (None, "this firmware has no USB recording counters (73 DEBUG is shorter)")
+
+
+def rate_offered(counters_now, want_rate):
+    """None when the FM-1 can run at want_rate, else the sentence that says why not (pure: the tests call it).
+    48 kHz is an option of the unit since 2026-10-12 (off by default): its 79 USB answer says whether it is offered
+    (ua_48k_offered); a firmware that does not say (0.19 builds of before the option, which always offered it, and
+    anything older, which unit_report judges) is not refused here"""
+    if want_rate == 48000 and counters_now and counters_now.get("ua_48k_offered") == 0:
+        return (f"the unit does not offer 48 kHz: {fi.USB_RATE_OPTION} is 44.1 kHz. Set it to 44.1 + 48 kHz on the "
+                "FM-1 (OPT tap, SELECT to USB Rate, KNOB 1; it reconnects), choose 48 000 Hz for ChoralRoot In in "
+                "Audio MIDI Setup, and run this again")
+    return None
 
 
 def unit_delta(before, after):
@@ -164,8 +179,9 @@ def unit_report(before, after, wall_s, want_rate=None):
             out.append(f"  the rate of that open, as the FM-1 reports it: {rate} Hz" +
                        (" (resampled from its 44.1 kHz by the FM-1)" if rate == 48000 else " (its own rate: nothing resampled)"))
         if want_rate and u["rate_known"] and rate != want_rate:
-            odd.append(f"the FM-1 streamed at {rate} Hz, not the {want_rate} Hz asked for (set ChoralRoot In's format "
-                       "in Audio MIDI Setup)")
+            odd.append(f"the FM-1 streamed at {rate} Hz, not the {want_rate} Hz asked for (" +
+                       (f"it does not offer 48 kHz: {fi.USB_RATE_OPTION}" if rate_offered(after, want_rate) else
+                        "set ChoralRoot In's format in Audio MIDI Setup") + ")")
         elif want_rate and not u["rate_known"] and want_rate != RATE:
             odd.append(f"this firmware does not report a rate (before 0.19: 44100 Hz only), {want_rate} Hz was asked for")
         if u["short_ms"] > OPEN_SLACK_MS:
@@ -268,6 +284,9 @@ def main():
     before, why = counters(up)
     if before is None:
         print(f"the FM-1's counters could not be read ({why}): no verdict on the FM-1 below, the WAV only")
+    no48 = rate_offered(before, a.rate)
+    if no48:                                             # (nothing is recorded: the WAV would be the host's resampling)
+        sys.exit(no48)
     port_name = next((n for n in up.names(outs=True) if "ChoralRoot" in n), None)
     if port_name is None and not a.nonotes:
         sys.exit("no ChoralRoot MIDI output (use --nonotes to record without notes)" +

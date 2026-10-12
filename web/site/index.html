@@ -167,7 +167,7 @@
     <div class="cols">
       <div>
         <h3>Options</h3>
-        <p>OPT tap opens them, one setting per screen. SELECT steps through the settings, KNOB 1 sets the value, and OPT, HOME or OCT− leaves. The keys keep playing while the Options are open, so you can hold a chord and hear a setting change. Play Style (Simple / Advanced / Free), Extension Addition, Secret Chords, Velocity, Bass Behaviour, Single Notes, Split Point, the MIDI Perform / Bass / Raw Chord channels, Raw Chord Sound, MIDI Clock, View, Motion, LEDs, Hold Time, USB Record, USB Level, Dual Core, Output, Version, Calibrate, Reset Settings. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#14-options">The manual</a> says what each one does.</p>
+        <p>OPT tap opens them, one setting per screen. SELECT steps through the settings, KNOB 1 sets the value, and OPT, HOME or OCT− leaves. The keys keep playing while the Options are open, so you can hold a chord and hear a setting change. Play Style (Simple / Advanced / Free), Extension Addition, Secret Chords, Velocity, Bass Behaviour, Single Notes, Split Point, the MIDI Perform / Bass / Raw Chord channels, Raw Chord Sound, MIDI Clock, View, Motion, LEDs, Hold Time, USB Record, USB Level, USB Rate, Dual Core, Output, Version, Calibrate, Reset Settings. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#14-options">The manual</a> says what each one does.</p>
         <p><b>Dual Core</b> is Off by default in 0.16: one core, as the stock firmware runs. On (after a restart) gives the bass the chip's second core and its own voices; it is the first thing to turn off if an FM-1 ever crashes or resets while playing.</p>
       </div>
       <div>
@@ -260,7 +260,7 @@
       </div>
     </div>
     <h3>USB recording</h3>
-    <p>The computer sees an audio input, <b>ChoralRoot In</b>: class compliant, no driver, six channels at 44.1 kHz, or at 48 kHz for the phones, tablets and apps that only take that. Channels 1–2 are the master (what you hear, without the metronome click), 3–4 the chord sound alone and 5–6 the bass sound alone, both before the reverb, chorus and delay. The computer cannot play audio through the FM-1, and there is no Bluetooth MIDI. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#15-midi-and-usb">MIDI and USB in the manual.</a></p>
+    <p>The computer sees an audio input, <b>ChoralRoot In</b>: class compliant, no driver, six channels at 44.1 kHz. For the phones, tablets and apps that only take 48 kHz, set Options &gt; USB Rate to 44.1 + 48 kHz: the computer or phone can then choose 48 kHz too, which the FM-1 converts for it (off by default: the conversion takes some processor time while a recording runs). Channels 1–2 are the master (what you hear, without the metronome click), 3–4 the chord sound alone and 5–6 the bass sound alone, both before the reverb, chorus and delay. The computer cannot play audio through the FM-1, and there is no Bluetooth MIDI. <a href="https://github.com/Quixotic7/ChoralRootFM1/blob/main/docs/MANUAL.md#15-midi-and-usb">MIDI and USB in the manual.</a></p>
   </div>
 </section>
 

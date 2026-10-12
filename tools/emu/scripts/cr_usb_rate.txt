@@ -1,0 +1,26 @@
+# ChoralRoot 0.19: Options > USB Rate (the owner, 2026-10-12: "Make 48 kHz opt-in for now"; docs/USB-AUDIO.md
+# "48 kHz"). The entry after USB Level (18): 44.1 kHz, the default (0.18's device), or 44.1 + 48 kHz. The emulator has
+# no USB: the entry, its texts and the record's bit are what is checked here (tools/emu/test_cr.sh); what the computer
+# is given in each state is tests/cr_usbrate_test.c.
+#   1 the entry as a new unit has it   2 KNOB 1 +1: 44.1 + 48 kHz   3 KNOB 1 -1: 44.1 kHz again
+#   4 +1 and the menu closed: the bit in the record
+wait 500
+btn GLO 80
+wait 300
+knob SELECT +18
+wait 300
+dump                          # 1
+shot build/emu/test/cr_usb_rate_44.ppm
+knob KNOB1 +1
+wait 300
+dump                          # 2
+shot build/emu/test/cr_usb_rate_48.ppm
+knob KNOB1 -1
+wait 300
+dump                          # 3
+knob KNOB1 +3                 # (past the end: stays at 44.1 + 48 kHz)
+wait 300
+btn GLO 80
+wait 600
+dump                          # 4
+quit

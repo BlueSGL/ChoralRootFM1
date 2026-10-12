@@ -157,7 +157,7 @@ void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src)
     dst->palette = src->palette;
     dst->usb_in = src->usb_in;
     dst->usb_level = src->usb_level;
-    dst->pick_roots = (uint8_t)((dst->pick_roots & (uint8_t)~CRS_OUT_CLASSIC) | (src->pick_roots & CRS_OUT_CLASSIC));
+    dst->pick_roots = (uint8_t)((dst->pick_roots & (uint8_t)~CRS_PICK_AUTO) | (src->pick_roots & CRS_PICK_AUTO));
     dst->view = (uint8_t)((dst->view & (uint8_t)~CRS_DC_ON) | (src->view & CRS_DC_ON));   /* (Dual Core rides in the
                                                     * view's byte: the view and its lock are manual) */
 }
@@ -211,7 +211,7 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(metro_sig, 0, 2);
     CRS_FIX(metro_vol, 0, 100);
     CRS_FIX(loop_slot, 0, 9);
-    CRS_FIX(pick_roots, 0, 3);                     /* (bit 1: Output Classic, CRS_OUT_CLASSIC) */
+    CRS_FIX(pick_roots, 0, 7);                     /* (bit 1: Output Classic, CRS_OUT_CLASSIC; bit 2: USB Rate, CRS_USB_48K) */
     CRS_FIX(usb_in, 0, 1);
     CRS_FIX(usb_level, 0, CRS_USB_FIXED);
     if (CRS_LOOP_MODE(s) >= CRS_NLOOPMODE)         /* (an unknown mode: the defaults; v13: bit 5 the KEY layer's keys,
@@ -588,7 +588,7 @@ static void crs_usb_apply(const cr_settings_t *s)
     fx_usb_fixed = s->usb_level == CRS_USB_FIXED;
     fx_output_set(CRS_OUT_CLEAN(s), 1);            /* Options > Output: before the first block, no fade */
 #if FELUCCA_UAC
-    ua_off = ua_off_want = s->usb_in ? 0u : UA_OFF_IN;
+    ua_off = ua_off_want = (uint8_t)((s->usb_in ? 0u : UA_OFF_IN) | (CRS_USB48(s) ? 0u : UA_OFF_48));   /* (USB Rate) */
 #endif
 }
 
@@ -726,7 +726,7 @@ static void crs_capture(cr_settings_t *s)
     s->loop_slot = cs.loop_slot;
     s->loop_rec = (uint8_t)(CRS_LOOP_REC(cs.loop_mode, cs.loop_keys) | (cs.key_play ? CRS_KEY_PLAY : 0u) |
                             (cs.lock_keep ? CRS_LOCK_KEEP : 0u) | (cs.lock_push ? CRS_LOCK_PUSH : 0u));
-    s->pick_roots = cs.out_clean ? 0u : CRS_OUT_CLASSIC;   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
+    s->pick_roots = (uint8_t)((cs.out_clean ? 0u : CRS_OUT_CLASSIC) | (cs.usb48 ? CRS_USB_48K : 0u));   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
                                                     * as "play", so an older firmware reading this record plays too) */
     s->usb_in = cs.usb_in;
     s->usb_level = cs.usb_fixed;
@@ -999,6 +999,7 @@ static void cr_settings_load(void)
     cs.lock_push = (uint8_t)((s->loop_rec & CRS_LOCK_PUSH) != 0);
     cs.usb_in = s->usb_in;
     cs.usb_fixed = s->usb_level;
+    cs.usb48 = (uint8_t)CRS_USB48(s);              /* (a revert, a reset, a restore: cu_usb_apply tells usb.c) */
     fx_usb_fixed = cs.usb_fixed;                   /* (USB Record: crs_usb_apply at boot, before usb_start) */
     if (cs.out_clean != CRS_OUT_CLEAN(s)) {        /* (a revert, a reset, a restore while it plays: faded over) */
         cs.out_clean = (uint8_t)CRS_OUT_CLEAN(s);
@@ -1215,7 +1216,7 @@ static void cr_settings_reset(void)
                                                     * The session then captured is a new unit's */
     cr_settings_load();
     cu_loop_conf();                                /* the looper's options and the metronome -> the ISR */
-    cu_usb_apply();                                /* USB Record on again, if it was off (usb.c) */
+    cu_usb_apply();                                /* USB Record on again, if it was off; USB Rate 44.1 kHz (usb.c) */
     cr_settings_commit();
 }
 

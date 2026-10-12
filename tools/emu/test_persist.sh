@@ -171,10 +171,10 @@ grep -aq '^save: part 0 slot U01 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "st
     [ -n "$changed" ] && [ "$changed" = "$(sn "$R2" 1)" ] && [ "$(bpm "$R2")" != "" ] && grep -aq ' bpm 137 ' "$R2" &&
     ok "reset run 1 / 2: U01 saved; Advanced, 137 BPM, Key Mode on, Motion Off, Hold Time, Dual Core On stored and back after a relaunch" \
     || bad "reset: the changed settings: $(sf "$R1" 1) / $changed / $(sn "$R2" 1)"
-[ "$(ov "$R2" 2)" = "1 22 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 22 of 23 " "$R2" &&
-    ok "Reset Settings is the last Options entry (22 of 22): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
-[ "$(ov "$R2" 3)" = "1 22 Reset Settings: OCT+ again: reset" ] && [ "$(ov "$R2" 4)" = "1 22 Reset Settings: all options to default" ] &&
-    [ "$(ov "$R2" 5)" = "0 22 Reset Settings: all options to default" ] && [ "$(ov "$R2" 6)" = "1 22 Reset Settings: all options to default" ] &&
+[ "$(ov "$R2" 2)" = "1 23 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 23 of 24 " "$R2" &&
+    ok "Reset Settings is the last Options entry (23 of 23): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
+[ "$(ov "$R2" 3)" = "1 23 Reset Settings: OCT+ again: reset" ] && [ "$(ov "$R2" 4)" = "1 23 Reset Settings: all options to default" ] &&
+    [ "$(ov "$R2" 5)" = "0 23 Reset Settings: all options to default" ] && [ "$(ov "$R2" 6)" = "1 23 Reset Settings: all options to default" ] &&
     [ "$(sn "$R2" 3)" = "$changed" ] && [ "$(sn "$R2" 4)" = "$changed" ] && [ "$(sn "$R2" 5)" = "$changed" ] && [ "$(sn "$R2" 6)" = "$changed" ] &&
     ! grep -a '^options: settings reset' "$R2" | sed -n 2p | grep -q . &&
     ok "OCT+ asks (OCT+ again); another entry cancels; OCT- leaves and cancels; the menu reopened is not armed; nothing reset: $OUT/reset_ask.ppm" \

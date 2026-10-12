@@ -52,6 +52,7 @@
  * endpoint serves both rates and a 48 kHz packet is up to 49 frames, 588 bytes: 588 x 7 / 6 = 686, so 688; the
  * full-speed maximum is 1023 */
 #define UA_EP_MAXP 688u
+#define UA_EP_MAXP44 640u                       /* with 48 kHz not offered (usb_audio.c UA_OFF_48): 0.18's, 45 frames */
 _Static_assert(UA_EP_MAXP >= UA_PACKET * 7u / 6u && UA_EP_MAXP <= 1023u,
                "wMaxPacketSize: the largest packet, bit-stuffed .. 1023");
 /* the resampler (48 kHz): the audio ISR's block is CTL = 32 frames; 32 x 160 / 147 = 34.8: 34 or 35 frames out */
