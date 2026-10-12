@@ -182,7 +182,7 @@ ok(dChord > 500, `MAJ + D4: the chord screen (${dChord} pixels changed from the 
 ok(fbDiff(run.shots.cr_dmaj, run.shots.cr_voicing) > 0, "KNOB 1 +2: the screen changed (the voicing line)");
 for (const [what, good, got] of log.filter((l) => l[0] !== "dump")) ok(good, `${what} (${got})`);
 const dumps = log.filter((l) => l[0] === "dump").map((l) => l[2]).join("\n");
-ok(/chord D sounding 1 notes 62 66 69/.test(dumps), "the engine: D major, notes 62 66 69 (web_dump)");
+ok(/chord DM sounding 1 notes 62 66 69/.test(dumps), "the engine: D major (DM), notes 62 66 69 (web_dump)");
 ok(/part 0: .* voices 3/.test(dumps), "part 0 plays the three notes");
 const lastBusy = [...dumps.matchAll(/parts busy (\d+)/g)].pop();
 ok(lastBusy && lastBusy[1] === "0", "every part silent 2 s after the last release (no stuck note)");
