@@ -1,8 +1,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # Publish the GitHub Pages site (the landing page, the web installer and the package) for a release.
-#   workflow_dispatch (version, ref)  -> download choralroot-VERSION.fwsc from the release vVERSION, build the
-#                                        browser emulator (Emscripten, build/emu-web -> emu/), web/make_site.py,
-#                                        deploy to Pages
+#   workflow_dispatch (version, ref)  -> download choralroot-VERSION.fwsc from the release vVERSION and every
+#                                        other version of web/releases.json from its own release (the installer
+#                                        offers them all; each is checked against the sha256 in releases.json),
+#                                        build the browser emulator (Emscripten, build/emu-web -> emu/),
+#                                        web/make_site.py --require-all, deploy to Pages
 #   release published                 -> starts the dispatch above from the default branch (the github-pages
 #                                        environment only accepts deployments from it), the site built from the tag
 # release.yml starts the dispatch itself after it made the release. Settings -> Pages -> Source must be
@@ -106,6 +108,40 @@ jobs:
           fi
           ls -l "build/$pkg"
 
+      - name: Download the other versions the installer offers (web/releases.json)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # the installer offers every version of web/releases.json, and a browser cannot fetch a release asset
+          # (no CORS headers on the download), so the site hosts them: build/packages/choralroot-X.Y.fwsc
+          mkdir -p build/packages
+          if ! python3 -c 'import json,sys; v=sys.argv[1]; r=json.load(open("web/releases.json"))["releases"]; sys.exit(0 if r and r[0]["version"]==v else 1)' "$VERSION"; then
+            echo "::error title=web/releases.json does not start with $VERSION::The site is published for the newest version of web/releases.json. Add $VERSION there (bullets, date, tag, the package's sha256: docs/HANDOFF.md, Release steps) on the ref this site is built from, then run pages.yml again."
+            exit 1
+          fi
+          python3 -c 'import json; [print(r["version"], r["tag"], r["sha256"]) for r in json.load(open("web/releases.json"))["releases"]]' > build/packages/list.txt
+          missing=""
+          while read -r v tag sha; do
+            pkg="choralroot-$v.fwsc"
+            if [ "$v" = "$VERSION" ]; then
+              cp "build/$pkg" "build/packages/$pkg"
+            elif ! gh release download "$tag" --repo "$GITHUB_REPOSITORY" --pattern "$pkg" --dir build/packages --clobber; then
+              echo "::error title=No package for version $v::web/releases.json lists version $v, but the release $tag does not exist or has no asset $pkg. Attach $pkg to the release $tag, or take $v out of web/releases.json, then run pages.yml again."
+              missing="$missing $v"
+              continue
+            fi
+            if ! echo "$sha  build/packages/$pkg" | sha256sum -c -; then
+              echo "::error title=Wrong package for version $v::build/packages/$pkg (from the release $tag) does not have the sha256 web/releases.json lists for $v ($sha)."
+              missing="$missing $v"
+            fi
+          done < build/packages/list.txt
+          if [ -n "$missing" ]; then
+            echo "::error::not published: version(s)$missing of web/releases.json have no usable package (see above)"
+            exit 1
+          fi
+          ls -l build/packages
+
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -140,16 +176,26 @@ jobs:
       - name: Make the site (web/make_site.py)
         run: |
           set -euo pipefail
-          # make_site.py refuses a package without the identity FM-1_9xx or without Felucca's loader;
-          # it copies build/emu-web/ to emu/
-          python3 web/make_site.py "build/choralroot-$VERSION.fwsc" "$VERSION" build/site
+          # make_site.py refuses a package without the identity FM-1_9xx or without Felucca's loader, and one
+          # whose sha256 is not the one web/releases.json lists; --require-all: every listed version must be in
+          # build/packages and VERSION must be the newest listed. It copies build/emu-web/ to emu/
+          python3 tests/releases_test.py
+          python3 web/make_site.py "build/choralroot-$VERSION.fwsc" "$VERSION" build/site \
+              --packages build/packages --require-all
           for f in index.html webapp/installer/index.html "firmware/choralroot-$VERSION.fwsc" firmware/LICENSE \
-                   emu/index.html emu/choralroot.wasm; do
+                   firmware/index.html firmware/SHA256SUMS emu/index.html emu/choralroot.wasm; do
             if [ ! -s "build/site/$f" ]; then
               echo "::error::build/site/$f is missing"
               exit 1
             fi
           done
+          while read -r v tag sha; do
+            if [ ! -s "build/site/firmware/choralroot-$v.fwsc" ]; then
+              echo "::error::build/site/firmware/choralroot-$v.fwsc (version $v of web/releases.json) is missing"
+              exit 1
+            fi
+          done < build/packages/list.txt
+          (cd build/site/firmware && sha256sum -c SHA256SUMS)
           find build/site -type f | sort
 
       - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0

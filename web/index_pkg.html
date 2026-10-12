@@ -2,6 +2,12 @@
 <!-- SPDX-License-Identifier: GPL-3.0-only
      Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
      Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) -->
+<!-- The web installer: a guided flow of six steps (browser, get ready, test the connection, choose a version,
+     install, done) around the update protocol of fm1ota.js. web/make_site.py inlines the libraries at LIB and the
+     metadata at META (the versions of web/releases.json with their packages under ../../firmware/).
+     ?demo=1 .. ?demo=6 (also 4b: an older version chosen, 5w: writing, 5b: interrupted) shows a step with made-up
+     device data for review and screenshots: in demo mode the page never asks the browser for MIDI and fetches
+     nothing. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -11,52 +17,136 @@
 <style>
   @font-face { font-family: "Inter Tight"; src: url(../../InterTight.woff2) format("woff2");
                font-weight: 100 900; font-display: swap; }
-  :root { --ground: #080808; --cream: #F6F2EE; --red: #E63829; --orange: #F67918;
-          --grey: #6A696A; --dark: #313031; --dim: #9A999A; }
+  :root { --ground: #080808; --cream: #F6F2EE; --red: #E63829; --orange: #F67918; --yellow: #F6B600;
+          --blue: #2950CD; --green: #29B27B; --grey: #6A696A; --dark: #313031; --dim: #9A999A; --text: #D9D5D1; }
   * { box-sizing: border-box; }
-  html { background: var(--ground); }
-  body { margin: 0; background: var(--ground); color: var(--cream);
-         font: 400 17px/1.5 "Inter Tight", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; }
-  main { max-width: 560px; margin: 0 auto; padding: 24px 16px 64px; }
-  a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  [hidden] { display: none !important; }      /* (a class that sets display must not show a hidden element) */
+  html { background: var(--ground); -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--text); overflow-x: hidden;
+         font: 450 17px/1.5 "Inter Tight", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto; padding: 24px 16px 64px; }
+  a { color: var(--cream); text-decoration-thickness: 2px; text-underline-offset: 3px; text-decoration-color: var(--orange); }
   a:hover { color: var(--orange); }
-  .home { display: inline-block; font-size: 14px; font-weight: 600; color: var(--dim); text-decoration: none; margin-bottom: 40px; }
+  a:focus-visible, button:focus-visible, summary:focus-visible, input:focus-visible { outline: 3px solid var(--cream); outline-offset: 3px; }
+  h2:focus { outline: none; }
+  b, strong { color: var(--cream); font-weight: 700; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 36px; }
+  .home { font-size: 14px; font-weight: 600; color: var(--dim); text-decoration: none; }
   .home:hover { color: var(--cream); }
-  .mgr { float: right; margin-top: -8px; padding: 8px 14px; background: var(--orange); color: #000; border-radius: 2px;
-         font-size: 16px; font-weight: 800; letter-spacing: -0.01em; text-decoration: none; }
+  .mgr { padding: 8px 14px; background: var(--orange); color: #000; border-radius: 2px;
+         font-size: 16px; font-weight: 800; letter-spacing: -0.01em; text-decoration: none; white-space: nowrap; }
   .mgr:hover { color: #000; filter: brightness(1.08); }
-  h1 { font-size: clamp(40px, 12vw, 64px); font-weight: 900; letter-spacing: -0.045em; line-height: .95; margin: 0; }
+  h1 { color: var(--cream); font-size: clamp(44px, 12vw, 104px); font-weight: 900; letter-spacing: -0.05em; line-height: .88; margin: 0; }
   .nw { white-space: nowrap; }
-  .sub { margin: 12px 0 0; font-size: 15px; font-weight: 600; color: var(--dim); letter-spacing: -0.01em; }
-  .stripes { display: grid; gap: 5px; margin: 24px 0 40px; }
+  .sub { margin: 14px 0 0; font-size: clamp(16px, 2.4vw, 20px); font-weight: 600; color: var(--dim); letter-spacing: -0.01em; }
+  .stripes { display: grid; gap: 5px; margin: 24px 0 0; }
   .stripes i { display: block; height: 10px; }
   .stripes i:nth-child(1) { background: var(--red); }
   .stripes i:nth-child(2) { background: var(--orange); }
   .stripes i:nth-child(3) { background: var(--cream); }
   p { margin: 0 0 16px; }
-  .lead { font-size: 21px; font-weight: 600; line-height: 1.35; letter-spacing: -0.015em; }
+  .lead { font-size: clamp(20px, 2.8vw, 24px); font-weight: 600; line-height: 1.35; letter-spacing: -0.015em; color: var(--cream); }
   .small { color: var(--dim); font-size: 14px; }
   button { font: inherit; border: 0; border-radius: 2px; cursor: pointer; }
   button:disabled { opacity: .3; cursor: default; }
-  #go { display: block; width: 100%; margin: 32px 0 0; padding: 20px 24px; background: var(--red); color: #fff;
-        font-size: 24px; font-weight: 800; letter-spacing: -0.02em; text-align: left; }
-  #stock-go, #backup-go, #restore-go, #snd-read { padding: 12px 20px; background: var(--cream); color: #000; font-weight: 700; }
-  .check { display: flex; gap: 10px; align-items: baseline; margin: 16px 0 0; color: var(--dim); font-size: 14px; cursor: pointer; }
+  .demo { margin: 20px 0 0; padding: 10px 14px; background: var(--yellow); color: #000; font-weight: 800; border-radius: 2px; }
+
+  /* ---- the steps: a strip of six, one step shown at a time; each step has the colour of its block ---- */
+  .s1 { --c: var(--blue); --ct: var(--cream); }
+  .s2 { --c: var(--yellow); --ct: #080808; }
+  .s3 { --c: var(--orange); --ct: #080808; }
+  .s4 { --c: var(--cream); --ct: #080808; }
+  .s5 { --c: var(--red); --ct: #fff; }
+  .s6 { --c: var(--green); --ct: #080808; }
+  .strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; margin: 36px 0 0; padding: 0; list-style: none; }
+  .strip button { display: flex; flex-direction: column; justify-content: space-between; align-items: flex-start; width: 100%;
+                  min-height: 76px; padding: 8px 10px; text-align: left; background: var(--dark); color: var(--dim); }
+  .strip b { font-size: 30px; font-weight: 900; line-height: 1; letter-spacing: -0.04em; color: inherit; }
+  .strip span { font-size: 13px; font-weight: 700; line-height: 1.15; letter-spacing: -0.01em; }
+  .strip .done { background: transparent; box-shadow: inset 0 0 0 2px var(--dark); color: var(--cream); }
+  .strip .done b::after { content: " \2713"; color: var(--green); font-size: 20px; }
+  .strip .now { background: var(--c); color: var(--ct); }
+  .strip button:not(:disabled):hover { filter: brightness(1.12); }
+  @media (max-width: 640px) {
+    .strip { gap: 4px; }
+    .strip button { min-height: 48px; padding: 6px; align-items: center; justify-content: center; }
+    .strip b { font-size: 24px; }
+    .strip span { display: none; }
+    .strip .done b::after { font-size: 14px; }
+  }
+  .step { padding: 28px 0 0; }
+  .kicker { display: inline-block; margin: 0 0 14px; padding: 4px 10px; background: var(--c); color: var(--ct);
+            font-size: 14px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; border-radius: 2px; }
+  h2 { color: var(--cream); font-size: clamp(40px, 9.5vw, 84px); font-weight: 900; letter-spacing: -0.05em; line-height: .92; margin: 0 0 24px; }
+  h3 { color: var(--cream); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 14px; }
+  .verdict { margin: 0 0 20px; padding: 16px 18px; border-left: 10px solid var(--dark); background: #141414; color: var(--cream);
+             font-size: clamp(20px, 3vw, 26px); font-weight: 800; line-height: 1.25; letter-spacing: -0.02em; overflow-wrap: anywhere; }
+  .verdict.good { border-color: var(--green); }
+  .verdict.bad { border-color: var(--red); }
+  .verdict.wait { border-color: var(--yellow); }
+  ul.todo { list-style: none; margin: 0 0 20px; padding: 0; }
+  ul.todo li { position: relative; padding: 12px 0 12px 34px; border-top: 1px solid var(--dark); color: var(--cream);
+               font-size: clamp(18px, 2.6vw, 22px); font-weight: 700; line-height: 1.3; letter-spacing: -0.015em; }
+  ul.todo li::before { content: ""; position: absolute; left: 0; top: 17px; width: 16px; height: 16px; background: var(--c); }
+  .kept { margin: 0 0 20px; padding: 16px 18px; background: var(--green); color: #080808; border-radius: 3px;
+          font-size: clamp(18px, 2.6vw, 22px); font-weight: 800; line-height: 1.3; letter-spacing: -0.015em; }
+  .big { display: block; width: 100%; padding: 20px 24px; background: var(--c); color: var(--ct);
+         font-size: clamp(24px, 4.4vw, 34px); font-weight: 900; letter-spacing: -0.03em; line-height: 1.05; text-align: left; }
+  .big:not(:disabled):hover { filter: brightness(1.08); }
+  .nav { display: flex; flex-wrap: wrap; gap: 10px; margin: 28px 0 0; }
+  .nav button { padding: 14px 20px; font-size: 19px; font-weight: 800; letter-spacing: -0.02em; background: var(--dark); color: var(--cream); }
+  .nav .next { flex: 1 1 240px; background: var(--cream); color: #080808; text-align: left; }
+  .nav button:not(:disabled):hover { filter: brightness(1.12); }
+  .check { display: flex; gap: 10px; align-items: baseline; margin: 16px 0 0; color: var(--dim); font-size: 15px; cursor: pointer; }
   .check input { accent-color: var(--red); }
-  section.bk { margin-top: 56px; border-top: 3px solid var(--dark); padding-top: 20px; }
-  h2 { font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 16px; }
-  progress { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 8px; margin: 16px 0 0;
+
+  /* ---- the versions ---- */
+  .ver { margin: 12px 0 0; padding: 16px 18px 6px; border: 3px solid var(--dark); border-radius: 3px; }
+  .ver.sel { border-color: var(--cream); }
+  .ver .head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; margin: 0 0 12px; cursor: pointer; }
+  .ver input { width: 24px; height: 24px; margin: 0; accent-color: var(--red); }
+  .ver .vn { color: var(--cream); font-size: 44px; font-weight: 900; letter-spacing: -0.05em; line-height: 1; }
+  .ver.top .vn { font-size: clamp(56px, 12vw, 84px); }
+  .ver .vd { flex: 1 1 100%; color: var(--dim); font-size: 15px; font-weight: 600; }
+  .ver .vd b { font-weight: 800; }
+  .tag { padding: 3px 8px; background: var(--dark); color: var(--cream); border-radius: 2px;
+         font-size: 13px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+  .tag.rec { background: var(--green); color: #080808; }
+  .tag.has { background: var(--blue); }
+  ul.news { margin: 0 0 14px; padding: 0; list-style: none; }
+  ul.news li { position: relative; padding: 5px 0 5px 22px; }
+  ul.news li::before { content: ""; position: absolute; left: 0; top: 13px; width: 10px; height: 10px; background: var(--orange); }
+  ul.news.back li::before { background: var(--yellow); }
+  ul.facts { margin: 0 0 14px; padding: 0; list-style: none; color: var(--dim); font-size: 14px; }
+  .ver details { margin: 0 0 12px; }
+  .ver summary { cursor: pointer; margin: 0 0 10px; color: var(--cream); font-weight: 800; }
+  .goback { margin: 0 0 14px; padding: 2px 0 2px 12px; border-left: 6px solid var(--yellow); color: var(--cream); }
+  .vlinks { color: var(--dim); font-size: 14px; overflow-wrap: anywhere; }
+  .files { margin: 0; padding: 0; list-style: none; }
+  .files li { padding: 12px 0; border-top: 1px solid var(--dark); font-size: 15px; }
+  .files code, code { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--dim); overflow-wrap: anywhere; }
+
+  /* ---- the status of whatever is running: always in view under the steps ---- */
+  .console { margin: 36px 0 0; padding: 16px 18px 18px; background: #141414; border-radius: 3px; }
+  progress { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 12px; margin: 0;
              border: 0; background: var(--dark); color: var(--cream); }
   progress::-webkit-progress-bar { background: var(--dark); }
   progress::-webkit-progress-value { background: var(--cream); }
   progress::-moz-progress-bar { background: var(--cream); }
-  #status { margin: 16px 0 0; min-height: 1.5em; font-size: 19px; font-weight: 700; letter-spacing: -0.01em; }
+  #status { margin: 14px 0 0; min-height: 1.3em; color: var(--cream); font-size: clamp(19px, 3vw, 24px); font-weight: 800;
+            line-height: 1.3; letter-spacing: -0.015em; overflow-wrap: anywhere; }
   pre { color: var(--grey); font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         white-space: pre-wrap; margin: 12px 0 0; max-height: 240px; overflow: auto; }
   pre:empty { display: none; }
-  details { margin-top: 56px; border-top: 3px solid var(--dark); padding-top: 20px; }
-  summary { cursor: pointer; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 16px; }
+  .halt { margin: 24px 0 0; padding: 18px 20px 6px; background: var(--red); color: #fff; border-radius: 3px; }
+  .halt h3, .halt p { color: #fff; }
+  .halt a { color: #fff; text-decoration-color: #fff; }
+
+  section.bk, details.more, #dark { margin-top: 56px; border-top: 3px solid var(--dark); padding-top: 20px; }
+  details.more > summary, #dark > summary, section.bk > h3 { cursor: pointer; color: var(--cream); font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin-bottom: 16px; }
+  section.bk > h3 { cursor: default; }
   .warn { color: var(--cream); font-weight: 700; border-left: 6px solid var(--red); padding-left: 12px; }
+  #stock-go, #backup-go, #restore-go, #snd-read { padding: 12px 20px; background: var(--cream); color: #000; font-weight: 700; }
   input[type=file] { margin-top: 8px; color: var(--dim); font: inherit; font-size: 14px; max-width: 100%; }
   input[type=file]::file-selector-button { font: inherit; font-weight: 700; border: 0; border-radius: 2px;
              background: var(--dark); color: var(--cream); padding: 8px 14px; margin-right: 12px; cursor: pointer; }
@@ -75,34 +165,130 @@
 </head>
 <body>
 <main>
-  <a class="home" href="../../">← ChoralRoot FM-1</a> <a class="mgr" href="manager.html">Device manager →</a>
+  <div class="topbar"><a class="home" href="../../">← ChoralRoot FM-1</a> <a class="mgr" href="manager.html">Device manager →</a></div>
   <h1>ChoralRoot <span class="nw">FM-1</span></h1>
   <p class="sub">Web installer · identity FM-1_920</p>
   <div class="stripes" aria-hidden="true"><i></i><i></i><i></i></div>
-  <p class="lead" data-t="intro"></p>
-  <p data-t="warn"></p>
-  <p class="small" data-t="direct"></p>
-  <p class="small" data-t="over"></p>
-  <p class="small" data-t="beta"></p>
-  <p class="small" data-t="brick"></p>
-  <p class="small" data-t="backupFirst"></p>
-  <button id="go" disabled data-t="install"></button>
-  <label class="check"><input id="skip-backup" type="checkbox"><span data-t="skipBackup"></span></label>
-  <label class="check" id="force-box" hidden><input id="force-risk" type="checkbox"><span data-t="forceRisk"></span></label>
-  <progress id="bar" max="100" value="0"></progress>
-  <p id="status"></p>
-  <pre id="log"></pre>
+  <p class="demo" id="demo-note" hidden data-t="demoNote"></p>
+  <noscript><p class="lead">The installer needs JavaScript (it talks to the FM-1 over Web MIDI). The firmware files are in <a href="../../firmware/">firmware/</a> and on <a href="https://github.com/Quixotic7/ChoralRootFM1/releases">GitHub</a>.</p></noscript>
+
+  <div id="flow">
+    <nav aria-label="Steps">
+      <ol class="strip">
+        <li class="s1"><button id="tab-1" data-go="1" class="now" aria-current="step"><b>1</b><span data-t="tab1"></span></button></li>
+        <li class="s2"><button id="tab-2" data-go="2"><b>2</b><span data-t="tab2"></span></button></li>
+        <li class="s3"><button id="tab-3" data-go="3"><b>3</b><span data-t="tab3"></span></button></li>
+        <li class="s4"><button id="tab-4" data-go="4"><b>4</b><span data-t="tab4"></span></button></li>
+        <li class="s5"><button id="tab-5" data-go="5"><b>5</b><span data-t="tab5"></span></button></li>
+        <li class="s6"><button id="tab-6" data-go="6"><b>6</b><span data-t="tab6"></span></button></li>
+      </ol>
+    </nav>
+
+    <section class="step s1" id="step-1" aria-labelledby="h-1">
+      <p class="kicker" data-t="kick1"></p>
+      <h2 id="h-1" tabindex="-1" data-t="h1"></h2>
+      <p class="verdict" id="browser" role="status"></p>
+      <p class="lead" data-t="intro"></p>
+      <ul class="todo">
+        <li data-t="brYes"></li>
+        <li data-t="brNo"></li>
+        <li data-t="brAndroid"></li>
+      </ul>
+      <p class="small" data-t="brAsk"></p>
+      <div class="nav"><button class="next" data-go="2" data-t="next2"></button></div>
+    </section>
+
+    <section class="step s2" id="step-2" aria-labelledby="h-2" hidden>
+      <p class="kicker" data-t="kick2"></p>
+      <h2 id="h-2" tabindex="-1" data-t="h2"></h2>
+      <ul class="todo">
+        <li data-t="rdCharge"></li>
+        <li data-t="rdCable"></li>
+        <li data-t="rdAwake"></li>
+        <li data-t="rdSave"></li>
+      </ul>
+      <p class="kept" data-t="kept"></p>
+      <p class="small" data-t="warn"></p>
+      <p class="small" data-t="direct"></p>
+      <p class="small" data-t="over"></p>
+      <p class="small" data-t="backupFirst"></p>
+      <p class="small" data-t="beta"></p>
+      <div class="nav"><button data-go="1" data-t="back"></button><button class="next" data-go="3" data-t="next3"></button></div>
+    </section>
+
+    <section class="step s3" id="step-3" aria-labelledby="h-3" hidden>
+      <p class="kicker" data-t="kick3"></p>
+      <h2 id="h-3" tabindex="-1" data-t="h3"></h2>
+      <p class="lead" data-t="cnLead"></p>
+      <button class="big" id="test-go" disabled data-t="cnGo"></button>
+      <p class="verdict" id="conn" role="status" hidden style="margin-top:20px"></p>
+      <p class="small" id="conn-note" hidden></p>
+      <p class="small" style="margin-top:20px"><span data-t="cnHelp"></span> <a href="#dark" data-t="darkTitle"></a></p>
+      <div class="nav"><button data-go="2" data-t="back"></button><button class="next" data-go="4" data-t="next4"></button></div>
+    </section>
+
+    <section class="step s4" id="step-4" aria-labelledby="h-4" hidden>
+      <p class="kicker" data-t="kick4"></p>
+      <h2 id="h-4" tabindex="-1" data-t="h4"></h2>
+      <p class="lead" data-t="chLead"></p>
+      <div id="versions" role="radiogroup" aria-labelledby="h-4"></div>
+      <p class="small" style="margin-top:20px"><span id="older-note"></span> <a href="https://github.com/Quixotic7/ChoralRootFM1/releases" target="_blank" rel="noopener" data-t="chOlder"></a></p>
+      <p class="small" id="safe-note"></p>
+      <div class="nav"><button data-go="3" data-t="back"></button><button class="next" data-go="5" data-t="next5"></button></div>
+    </section>
+
+    <section class="step s5" id="step-5" aria-labelledby="h-5" hidden>
+      <p class="kicker" data-t="kick5"></p>
+      <h2 id="h-5" tabindex="-1" data-t="h5"></h2>
+      <p class="verdict wait" id="plan" role="status"></p>
+      <p class="goback" id="plan-back" hidden></p>
+      <button class="big" id="go" disabled data-t="install"></button>
+      <label class="check"><input id="skip-backup" type="checkbox"><span data-t="skipBackup"></span></label>
+      <label class="check" id="force-box" hidden><input id="force-risk" type="checkbox"><span data-t="forceRisk"></span></label>
+      <p class="small" style="margin-top:20px" data-t="inKeep"></p>
+      <p class="small" data-t="brick"></p>
+      <div class="halt" id="interrupted" role="alert" hidden>
+        <h3 data-t="intTitle"></h3>
+        <p data-t="intEarly"></p>
+        <p data-t="intOn"></p>
+        <p data-t="intOff"></p>
+        <p><span data-t="intDark"></span> <a href="#dark" data-t="darkTitle"></a></p>
+      </div>
+      <div class="nav"><button data-go="4" data-t="back"></button></div>
+    </section>
+
+    <section class="step s6" id="step-6" aria-labelledby="h-6" hidden>
+      <p class="kicker" data-t="kick6"></p>
+      <h2 id="h-6" tabindex="-1" data-t="h6"></h2>
+      <p class="verdict good" id="done-line" role="status"></p>
+      <p class="lead" data-t="dnLead"></p>
+      <button class="big" id="verify-go" disabled data-t="dnGo"></button>
+      <p class="verdict" id="verify" role="status" hidden style="margin-top:20px"></p>
+      <div id="done-new" style="margin-top:24px"></div>
+      <p class="small" data-t="dnRestore"></p>
+      <div class="nav"><button data-go="4" data-t="dnAgain"></button></div>
+    </section>
+  </div>
+
+  <div class="console" aria-live="polite">
+    <progress id="bar" max="100" value="0"></progress>
+    <p id="status"></p>
+    <pre id="log"></pre>
+  </div>
+
   <details id="dark">
     <summary data-t="darkTitle"></summary>
     <p class="small" data-t="darkCable"></p>
     <p class="small" data-t="darkRescue"></p>
+    <p class="small" data-t="darkGesture"></p>
+    <p class="small" data-t="darkSafe"></p>
     <p class="small" data-t="darkText"></p>
     <p class="small"><a href="https://github.com/Quixotic7/MvaveFM1Unbricker" target="_blank" rel="noopener">github.com/Quixotic7/MvaveFM1Unbricker</a></p>
     <p class="small" data-t="darkTransporter"></p>
     <p class="small"><a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">github.com/kurogedelic/FM-1-transporter</a></p>
   </details>
   <section class="bk">
-    <h2 data-t="bkTitle"></h2>
+    <h3 data-t="bkTitle"></h3>
     <p class="small" data-t="bkText"></p>
     <p class="small" data-t="bkAcross"></p>
     <p><button id="backup-go" disabled data-t="backupGo"></button></p>
@@ -110,7 +296,7 @@
     <p><button id="restore-go" disabled data-t="restoreGo"></button></p>
   </section>
   <section class="bk" id="sounds">
-    <h2 data-t="sndTitle"></h2>
+    <h3 data-t="sndTitle"></h3>
     <p class="small" data-t="sndText"></p>
     <p class="small" data-t="sndAll"></p>
     <p class="small" data-t="sndSyxText"></p>
@@ -123,22 +309,28 @@
       </table>
     </div>
   </section>
-  <details>
+  <details class="more">
     <summary data-t="stockTitle"></summary>
     <p class="warn" data-t="stockWarn"></p>
-    <p class="small" data-t="back"></p>
+    <p class="small" data-t="stockBack"></p>
     <p class="small"><a href="https://www.m-vave.com/download" target="_blank" rel="noopener">M-VAVE Downloads</a></p>
     <p><label><span data-t="stockFile"></span><br><input id="stock-file" type="file" accept=".fwsc"></label></p>
     <label class="check"><input id="stock-recovery" type="checkbox"><span data-t="stockRecovery"></span></label>
     <p><button id="stock-go" disabled data-t="stockGo"></button></p>
   </details>
+  <section class="bk" id="files-section">
+    <h3 data-t="flTitle"></h3>
+    <p class="small" data-t="flText"></p>
+    <ul class="files" id="files"></ul>
+  </section>
   <footer>
     <p><span data-t="license"></span> <a href="https://github.com/Quixotic7/ChoralRootFM1" target="_blank" rel="noopener">github.com/Quixotic7/ChoralRootFM1</a></p>
+    <p data-t="licAll"></p>
     <p>Built on Felucca by Leo Kuroshita (@kurogedelic), <a href="https://hugelton.com" target="_blank" rel="noopener">Hügelton Instruments</a>:
       <a href="https://github.com/hugelton/Felucca" target="_blank" rel="noopener">github.com/hugelton/Felucca</a>.</p>
     <p>Font: Inter Tight (The Inter Project Authors, SIL OFL 1.1).
-      FM6 engine: msfa from Dexed (Google, Pascal Gauthier, Apache-2.0). PHYS engine (in the source; not in the firmware since 0.18): DaisySP (Electrosmith, Emilie Gillet) and Rings (Emilie Gillet), MIT.
-      The package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0).</p>
+      FM6 engine: msfa from Dexed (Google, Pascal Gauthier, Apache-2.0). PHYS engine (in 0.16 and 0.17, and in the source; not in the firmware since 0.18): DaisySP (Electrosmith, Emilie Gillet) and Rings (Emilie Gillet), MIT.
+      Each package also holds three JieLi AC79 SDK files, uboot.boot, cfg_tool.bin and eq_cfg_hw.bin (JieLi Technology, Apache-2.0).</p>
     <p><a href="../../firmware/LICENSING.md">Licences</a>: <a href="../../firmware/LICENSE">GPL-3.0</a>,
       <a href="../../firmware/LICENSES/Apache-2.0.txt">Apache-2.0</a>, <a href="../../firmware/LICENSES/">all</a>.</p>
     <p>M-VAVE and FM-1 are trademarks of their respective owners. ChoralRoot is not affiliated with Telepathic Instruments, M-VAVE or Cuvave.</p>
@@ -178,7 +370,73 @@ const TEXT = {
     darkText: "If the FM-1's screen stays black and the computer shows a USB disk named \"WL82 UBOOT1.00\" (USB ID 4C4A:8057) instead of the FM-1, the FM-1 is in the chip's ROM boot mode: the firmware on it does not start, and this page cannot reach it. Do not format that disk. Recovery tools and a guide that put the official V15 back over the same USB cable:",
     darkTransporter: "If it does not show up as WL82 UBOOT1.00 either, the hardware route is the FM-1 Transporter (an RP2040 board on the USB lines):",
     beta: "ChoralRoot {version} is a first public beta; please report problems on GitHub. Installing firmware is at your own risk: the authors accept no responsibility if your FM-1 is damaged or misbehaves.",
-    back: "Get the official FM-1 V15 firmware from M-VAVE and select the unmodified FM-1.fwsc. The browser checks the file locally; it is not sent to a server.",
+    stockBack: "Get the official FM-1 V15 firmware from M-VAVE and select the unmodified FM-1.fwsc. The browser checks the file locally; it is not sent to a server.",
+    // ---- the guided flow: the strip, the six steps
+    demoNote: "Demo: this page shows one step with made-up device data. Nothing is sent to an FM-1 and nothing is downloaded; the buttons that talk to an FM-1 do nothing.",
+    tab1: "Browser", tab2: "Get ready", tab3: "Connect", tab4: "Version", tab5: "Install", tab6: "Done",
+    kick1: "Step 1 of 6", kick2: "Step 2 of 6", kick3: "Step 3 of 6", kick4: "Step 4 of 6", kick5: "Step 5 of 6", kick6: "Step 6 of 6",
+    h1: "Your browser", h2: "Get ready", h3: "Test the connection", h4: "Choose a version", h5: "Install", h6: "Done",
+    back: "Back", next2: "Next: get ready", next3: "Next: test the connection", next4: "Next: choose a version", next5: "Next: install",
+    brOk: "This browser can install.", brDemo: "This browser can install. (Demo: not checked.)",
+    brYes: "Chrome or Edge on a computer: yes. They are what this page is tested with.",
+    brNo: "Safari and Firefox: no. Safari has no Web MIDI, and Firefox is not supported.",
+    brAndroid: "Chrome on Android has Web MIDI and may work with a USB adapter. We have not tested it.",
+    brAsk: "The browser asks once for permission to use MIDI devices: allow it. The page talks only to the FM-1, and the firmware comes from this site.",
+    rdCharge: "Charge the FM-1 fully. It updates on its own battery, and the installer cannot read the charge.",
+    rdCable: "Plug it straight into the computer with a data cable. No hub.",
+    rdAwake: "Keep the computer awake, and leave the cable alone until the page says Done.",
+    rdSave: "Hold SAVE on the FM-1 first if what you have set up right now should survive: 0.18 and later save by hand.",
+    kept: "Updating ChoralRoot keeps your saved sounds, loops and settings. Install saves a backup file first anyway.",
+    cnLead: "Switch the FM-1 on, connect it, and let the page look at what is on it. Nothing is written in this step.",
+    cnGo: "Test the connection",
+    cnHelp: "Nothing found?",
+    cnNone: "Not tested yet.",
+    cnTesting: "Looking for the FM-1 …",
+    cnFound: "Found: {name}.",
+    cnAllow: "ChoralRoot can be installed over it.",
+    cnCr: "It reports {identity}. Its saved sounds, loops and settings stay when you install another ChoralRoot version.",
+    cnOther: "Install saves a backup of what it holds first, when that firmware can give one; the stock firmware cannot.",
+    cnLoader: "The FM-1 is in update mode ({identity}).",
+    cnLoaderNote: "An update was interrupted, or update mode was started on purpose. Go to step 5 and press Install: it finishes the write. Switching the FM-1 off and on starts the firmware again if nothing was being written.",
+    cnRefused: "Not supported: {name}.",
+    chLead: "The newest version is selected. Older ones are below it, each with what going back means.",
+    chOlder: "Older versions are on GitHub.",
+    chRec: "Recommended", chNewest: "Newest", chHas: "On your FM-1", chDev: "Local build",
+    chNoNotes: "A build that is not in the list of releases: no notes for it.",
+    chWhat: "What {version} brought, and going back in full",
+    chBack: "Going back:",
+    chBackTo: "Going back to {version}",
+    chNotes: "Full notes", chFile: "Download {file}", chSource: "Source at {tag}",
+    chReinstall: "Your FM-1 already runs ChoralRoot {version}. You can install it again; nothing that is saved changes.",
+    planNew: "Ready to install ChoralRoot {version}.",
+    planUp: "Ready to update your FM-1 from {from} to ChoralRoot {version}.",
+    planSame: "Your FM-1 already runs ChoralRoot {version}. Installing it again is allowed.",
+    planDown: "Ready to go back from {from} to ChoralRoot {version}.",
+    planOver: "Ready to install ChoralRoot {version} over {from}.",
+    planResume: "The FM-1 is in update mode: Install writes ChoralRoot {version} and finishes the update.",
+    planWait: "Loading ChoralRoot {version} …",
+    planBack: "Going back to {version}: ",
+    installV: "Install ChoralRoot {version}",
+    inKeep: "Install saves a backup file first, switches the FM-1 to update mode, writes the firmware and restarts it. About two minutes. Do not unplug, and do not close the page.",
+    badhash: "The file for ChoralRoot {version} is not the released one (its SHA-256 does not match). Nothing was written. Reload the page.",
+    intTitle: "The install stopped. The FM-1 is not lost.",
+    intEarly: "If it stopped before \"Switching to update mode\", nothing was written and the FM-1 runs what it ran: replug the USB cable and press Install again.",
+    intOn: "If it stopped while writing and the FM-1 stayed on: it is still in update mode (a black screen) and waits. Replug the USB cable and press Install again; the write is done again from the start.",
+    intOff: "If the FM-1 was switched off or its battery ran out: switch it on. Three short flashes of the key lights and a black screen mean update mode: press Install again. This works when the FM-1 already ran ChoralRoot 0.16 or later (the boot stub); the first install over another firmware is unprotected during its first second.",
+    intDark: "One long flash, no flash, or a USB disk named WL82 UBOOT1.00:",
+    dnLine: "ChoralRoot {version} is installed.",
+    dnLead: "The FM-1 restarted and answered with its identity. Options > Version on the FM-1 shows the version; so does the check below.",
+    dnGo: "Check the FM-1",
+    dnMatch: "The FM-1 runs {name}.",
+    dnDiffer: "The FM-1 runs {name}, not ChoralRoot {version}.",
+    dnNew: "New in {version}",
+    dnRestore: "If the FM-1 ran Felucca before, the page offered to restore the backup it took. Restore (below) does it at any time, and the device manager moves single sounds and loops.",
+    dnAgain: "Install another version",
+    darkGesture: "From ChoralRoot 0.18 on, update mode without switching off: hold OCT-, OCT+ and HOME for five seconds (a countdown; let go to cancel).",
+    darkSafe: "A yellow screen that says Safe mode: ChoralRoot crashed twice while starting and now runs without what is stored on the FM-1, which stays untouched. Back up and Install both work in SAFE MODE; switching off and on tries the stored data again.",
+    flTitle: "The files",
+    flText: "For the command-line tool (python3 tools/fm1_install.py FILE) and for checking: every version this page installs, its SHA-256, its notes and its source. The page checks the SHA-256 itself before it writes.",
+    licAll: "Every package offered here is under the same licences (GPL-3.0; the parts listed below), and the source of each version is the repository at that version's tag: the links are with the files above.",
     stockTitle: "Return to official V15", stockFile: "Official FM-1.fwsc", stockGo: "Back up and return to official V15",
     stockWarn: "The stock firmware cannot use ChoralRoot's user sounds, loops or settings. They are saved to a backup file first; to bring them back, reinstall ChoralRoot and press Restore.",
     stockRecovery: "Resume an interrupted update: I already saved a backup to this computer",
@@ -236,16 +494,29 @@ applyLang();
 const sayK = (k, arg = "") => { lastKey = k; lastArg = arg; $("status").textContent = t(k) + arg; };
 const say = (txt) => { lastKey = null; $("status").textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; };
-let image = null;
+let image = null;                                // the selected version's image, set only after its checks passed
+
+// ---- demo mode (?demo=1 .. 6, 4b, 5w, 5b): one step shown with made-up device data, for review and screenshots.
+// Inert by construction: midiAccess() is the page's only way to the browser's MIDI and refuses in demo mode, every
+// handler that talks to an FM-1 returns first, and no package is fetched.
+const DEMO = (() => {
+  try { const m = /[?&]demo=([1-6])([a-z]?)(?:&|$)/.exec(location.search); return m ? { step: Number(m[1]), variant: m[2] } : null; }
+  catch (_) { return null; }
+})();
 
 let writing = false, stock = null, stockFileEpoch = 0, restoreArc = null, restoreEpoch = 0;
 let sndTable = null, sndTarget = 0;              // the Sounds: the slot table last read, the row a file is chosen for
-const midiOk = !!navigator.requestMIDIAccess;
+const midiOk = !DEMO && !!navigator.requestMIDIAccess;
+const midiAccess = async () => {
+  if (DEMO) throw new Error("demo mode: no MIDI");
+  return navigator.requestMIDIAccess({ sysex: true });
+};
 const lockInstaller = (on) => {
-  writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock; $("stock-file").disabled = on;
+  writing = on; $("go").disabled = on || (!image && !DEMO); $("stock-go").disabled = on || !stock; $("stock-file").disabled = on;
   $("stock-recovery").disabled = on; $("skip-backup").disabled = on; $("force-risk").disabled = on; $("backup-go").disabled = on || !midiOk;
   $("restore-go").disabled = on || !midiOk || !restoreArc; $("restore-file").disabled = on;
   $("snd-read").disabled = on || !midiOk; $("snd-file").disabled = on; renderSounds();
+  $("test-go").disabled = on || (!midiOk && !DEMO); $("verify-go").disabled = on || (!midiOk && !DEMO);
 };
 window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = t("leave"); } });
 
@@ -313,7 +584,6 @@ const failSay = (e) => {
   else sayK("error", e && e.message);
   log(String(e && e.stack || e));
 };
-if (midiOk) { $("backup-go").disabled = false; $("snd-read").disabled = false; }
 
 // ---- Sounds (fm1sounds.js, docs/SOUNDS.md): one user sound as a file; each action reads the seven objects afresh,
 // edits the slot, writes back only what changed (the stores, then the bank) and reads again for the table
@@ -333,11 +603,11 @@ function renderSounds() {
 function showSounds(objs) { sndTable = parseSoundObjects(objs).slots; $("snd-table").hidden = false; renderSounds(); }
 // connect, require ChoralRoot, read the sounds (the table shown), then fn({req, info, objs, read}); locked meanwhile
 async function soundsRun(fn) {
-  if (writing) return;
+  if (DEMO || writing) return;
   lockInstaller(true);
   try {
     let midi;
-    try { midi = await navigator.requestMIDIAccess({ sysex: true }); } catch (e) { sayK("denied"); return; }
+    try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
     const link = await openBackup(new Updater(midi, log));
     try {
       const req = (r, o) => link.request(r, o), info = await deviceInfo(req);
@@ -414,41 +684,235 @@ $("snd-file").addEventListener("change", async () => {
   });
 });
 
-(async () => {
-  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+// ---- the guided flow: six steps around the install (browser, get ready, test the connection, choose a version,
+// install, done). The versions are meta.releases (web/releases.json through make_site.py), newest first; the package
+// of the selected one is fetched from this site and checked (identity, then SHA-256 against the list) before Install
+// is enabled, so nothing is ever written from a file that is not the released one.
+const tv = (k, vals) => Object.entries(vals).reduce((s, [a, v]) => s.split(`{${a}}`).join(String(v)), TEXT[lang][k]);
+const releases = Array.isArray(meta.releases) && meta.releases.length ? meta.releases : [{ version: meta.version, pkg: meta.pkg }];
+const newest = releases[0];
+let sel = newest;                                // the version to install: the newest unless another is chosen
+let unit = null;                                 // what the connection test found on the FM-1 (identify(), or { loader })
+let curStep = 1, seen = 1, loadEpoch = 0, loadState = "loading", installedV = null;
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const dateText = (iso) => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ""); return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : ""; };
+const fileOf = (r) => String(r.pkg || "").split("/").pop();
+const unitVersion = () => { const m = unit && !unit.loader && /^ChoralRoot\s+(\S+)/i.exec(unit.version || ""); return m ? m[1] : null; };
+const verNum = (v) => String(v).split(/[.-]/).map((x) => parseInt(x, 10) || 0);
+const verCmp = (a, b) => {
+  const x = verNum(a), y = verNum(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
+  return 0;
+};
+const ready = (meta) => say(`ChoralRoot ${meta.version} · ${meta.product}`);
+const bullets = (list, cls = "news") => (list && list.length ? `<ul class="${cls}">${list.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : "");
+const linksOf = (r) => {
+  const out = [];
+  if (r.tag && meta.repo) out.push(`<a href="${esc(meta.repo)}/blob/main/docs/releases/${esc(r.version)}.md" target="_blank" rel="noopener">${t("chNotes")}</a>`);
+  out.push(`<a href="${esc(r.pkg)}" download>${esc(tv("chFile", { file: fileOf(r) }))}</a>`);
+  if (r.tag && meta.repo) out.push(`<a href="${esc(meta.repo)}/tree/${esc(r.tag)}" target="_blank" rel="noopener">${esc(tv("chSource", { tag: r.tag }))}</a>`);
+  return out.join(" · ");
+};
+const goingBack = (r) => {                       // the note applies when r is older than what runs (or nothing is known)
+  const uv = unitVersion();
+  return r !== newest && r.going_back && (!uv || verCmp(r.version, uv) < 0) ? r.going_back : null;
+};
+
+function renderVersions() {
+  const uv = unitVersion();
+  $("versions").innerHTML = releases.map((r, i) => {
+    const on = r === sel;
+    const tags = (i === 0 && r.tag ? `<span class="tag rec">${t("chRec")}</span>` : i === 0 ? `<span class="tag">${t("chNewest")}</span>` : "") +
+      (r.tag ? "" : `<span class="tag">${t("chDev")}</span>`) + (uv === r.version ? `<span class="tag has">${t("chHas")}</span>` : "");
+    const news = bullets(r.bullets) || `<p class="small">${t("chNoNotes")}</p>`;
+    const facts = bullets(r.notes, "facts");
+    const back = r.going_back;
+    const body = i === 0 ? news + facts
+      : (back && (!uv || verCmp(r.version, uv) < 0) ? `<p class="goback"><b>${t("chBack")}</b> ${esc(back.short)}</p>` : "") +
+        `<details${on ? " open" : ""}><summary>${esc(tv("chWhat", { version: r.version }))}</summary>${news}${facts}` +
+        (back ? `<h3>${esc(tv("chBackTo", { version: r.version }))}</h3>${bullets(back.points, "news back")}` : "") + "</details>";
+    return `<div class="ver${on ? " sel" : ""}${i ? "" : " top"}"><label class="head">` +
+      `<input type="radio" name="ver" value="${esc(r.version)}"${on ? " checked" : ""}><span class="vn">${esc(r.version)}</span>${tags}` +
+      `<span class="vd">${r.title ? `<b>${esc(r.title)}</b> · ` : ""}${dateText(r.date)}</span></label>` +
+      (uv === r.version ? `<p class="goback">${esc(tv("chReinstall", { version: r.version }))}</p>` : "") +
+      `${body}<p class="vlinks">${linksOf(r)}</p></div>`;
+  }).join("");
+}
+function renderFiles() {
+  $("files").innerHTML = releases.map((r) => `<li><b>ChoralRoot ${esc(r.version)}</b>${r.date ? " · " + dateText(r.date) : ""}<br>${linksOf(r)}` +
+    (r.sha256 ? `<br><code>sha256 ${esc(r.sha256)}</code>` : "") + "</li>").join("");
+  $("older-note").textContent = meta.minimum ? meta.minimum.note : "";
+  $("safe-note").textContent = meta.minimum ? meta.minimum.boot_safe : "";
+}
+function renderPlan() {
+  const v = sel.version, uv = unitVersion();
+  let k = "planNew", from = "";
+  if (loadState === "loading") k = "planWait";
+  else if (unit && unit.loader) k = "planResume";
+  else if (uv) { from = "ChoralRoot " + uv; const c = verCmp(v, uv); k = c > 0 ? "planUp" : c < 0 ? "planDown" : "planSame"; }
+  else if (unit && unit.verdict === "allow") { k = "planOver"; from = unit.name; }
+  const failed = loadState === "failed";
+  $("plan").textContent = failed ? $("status").textContent : tv(k, { version: v, from });
+  $("plan").className = "verdict " + (failed ? "bad" : loadState === "ready" ? "good" : "wait");
+  const back = goingBack(sel);
+  $("plan-back").hidden = !back;
+  $("plan-back").textContent = back ? tv("planBack", { version: v }) + back.short : "";
+  $("go").textContent = tv("installV", { version: v });
+}
+const stepDone = (i) => (i === 1 ? midiOk || !!DEMO : i === 3 ? !!unit && unit.verdict !== "refuse" : i >= 5 ? !!installedV : seen > i);
+function showStep(n, focus = false) {
+  curStep = n; seen = Math.max(seen, n);
+  for (let i = 1; i <= 6; i++) {
+    $("step-" + i).hidden = i !== n;
+    const tab = $("tab-" + i);
+    tab.className = i === n ? "now" : stepDone(i) ? "done" : "";
+    if (i === n) tab.setAttribute("aria-current", "step"); else tab.removeAttribute("aria-current");
+  }
+  $("tab-6").disabled = !installedV && !DEMO;     // Done is reached by an install, not by a click
+  if (focus) $("h-" + n).focus();
+}
+// what is on the FM-1, into the step's verdict ("conn": step 3; "verify": step 6, against the version just installed)
+function showUnit(where) {
+  const out = $(where);
+  out.hidden = false;
+  let cls = "good", text, note = "";
+  if (!unit) { cls = "bad"; text = t("notfound"); }
+  else if (unit.loader) { cls = "wait"; text = tv("cnLoader", { identity: unit.identity }); note = t("cnLoaderNote"); }
+  else if (unit.verdict === "refuse") { cls = "bad"; text = refusalText(unit.name); }
+  else if (where === "verify") {
+    const same = unitVersion() === installedV;
+    cls = same ? "good" : "bad";
+    text = tv(same ? "dnMatch" : "dnDiffer", { name: unit.name, version: installedV });
+  } else if (unit.kind === "choralroot") { text = tv("cnFound", { name: unit.name }); note = tv("cnCr", { identity: unit.identity }); }
+  else { text = tv("cnFound", { name: unit.name }) + " " + t("cnAllow"); note = t("cnOther"); }
+  out.className = "verdict " + cls; out.textContent = text;
+  if (where === "conn") { $("conn-note").hidden = !note; $("conn-note").textContent = note; }
+}
+// the connection test: the handshake and the INFO request the install itself starts with; nothing is written
+async function checkUnit(where) {
+  if (writing || DEMO) return;
+  lockInstaller(true);
+  const out = $(where);
+  out.hidden = false; out.className = "verdict wait"; out.textContent = t("cnTesting");
+  const bad = (k) => { unit = null; out.className = "verdict bad"; out.textContent = t(k); if (where === "conn") $("conn-note").hidden = true; };
   try {
-    const r = await fetch(meta.pkg);
-    if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
+    let midi;
+    try { midi = await midiAccess(); } catch (e) { bad("denied"); return; }
+    const up = new Updater(midi, log);
+    const dev = await up.find();
+    if (!dev) { bad("notfound"); return; }
+    dev.link.close();
+    const loader = /^ota-/i.test(dev.id.model);
+    if (dev.id.model.replace(/^ota-/i, "") !== meta.product.split("_")[0]) { bad("model"); return; }
+    if (loader) unit = { loader: true, identity: dev.id.text };
+    else {
+      unit = await identify(up);
+      if (!unit) { bad("notfound"); return; }
+    }
+    log(`test: ${unit.identity}${unit.version ? " " + unit.version : ""} -> ${unit.loader ? "loader" : unit.verdict}`);
+    showUnit(where);
+  } catch (e) { unit = null; out.className = "verdict bad"; out.textContent = t("error") + (e && e.message); log(String(e && e.stack || e)); }
+  finally { lockInstaller(false); renderVersions(); renderPlan(); showStep(curStep); }
+}
+async function loadPackage(rel) {
+  const epoch = ++loadEpoch;
+  const fin = (state) => { loadState = state; lockInstaller(writing); renderPlan(); };
+  image = null; fin("loading");
+  if (DEMO) { ready({ version: rel.version, product: meta.product }); fin("ready"); return; }
+  if (!navigator.requestMIDIAccess) { sayK("nomidi"); fin("failed"); return; }
+  try {
+    const r = await fetch(rel.pkg);
+    if (!r.ok) throw new Error(`${rel.pkg}: HTTP ${r.status}`);
     const pkg = new Uint8Array(await r.arrayBuffer());
-    if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
+    if (epoch !== loadEpoch) return;
+    if (productOf(pkg) !== meta.product) { sayK("badpkg"); fin("failed"); return; }
+    const sum = await sha256hex(pkg);
+    if (epoch !== loadEpoch) return;
+    if (!rel.sha256 || sum !== rel.sha256) {       // not the released file: never offered to the FM-1
+      say(tv("badhash", { version: rel.version })); log(`sha256 of ${rel.pkg}: ${sum}, the list says ${rel.sha256 || "nothing"}`);
+      fin("failed"); return;
+    }
     image = logicalImage(pkg);
-    say(`ChoralRoot ${meta.version} · ${meta.product}`);
-    $("go").disabled = false;
-  } catch (e) { sayK("loadfail", e.message); }
-})();
+    ready({ version: rel.version, product: meta.product });
+    fin("ready");
+  } catch (e) { if (epoch === loadEpoch) { sayK("loadfail", e.message); fin("failed"); } }
+}
+function selectVersion(v) {
+  const r = releases.find((x) => x.version === v);
+  if (!r || writing || r === sel) { renderVersions(); return; }
+  sel = r; $("force-box").hidden = true; $("force-risk").checked = false;
+  renderVersions(); loadPackage(r);
+}
+function finishInstall(rel) {
+  installedV = rel.version; unit = null;          // what ran before is gone: "Check the FM-1" reads it again
+  $("done-line").textContent = tv("dnLine", { version: rel.version });
+  $("done-new").innerHTML = rel.bullets && rel.bullets.length ? `<h3>${esc(tv("dnNew", { version: rel.version }))}</h3>${bullets(rel.bullets)}` : "";
+  $("verify").hidden = true;
+  renderVersions(); renderPlan(); showStep(6, true);
+}
+$("flow").addEventListener("click", (e) => {
+  const b = e.target && e.target.closest ? e.target.closest("[data-go]") : null;
+  if (!b || b.disabled || writing) return;
+  const n = Number(b.dataset.go);
+  if (n === 6 && !installedV && !DEMO) return;
+  showStep(n, true);
+});
+$("versions").addEventListener("change", (e) => { if (e.target && e.target.name === "ver") selectVersion(e.target.value); });
+$("test-go").addEventListener("click", () => checkUnit("conn"));
+$("verify-go").addEventListener("click", () => checkUnit("verify"));
+
+$("browser").textContent = midiOk ? t("brOk") : DEMO ? t("brDemo") : t("nomidi");
+$("browser").className = "verdict " + (midiOk || DEMO ? "good" : "bad");
+if (DEMO) {                                      // made-up states; see DEMO above for why nothing can reach an FM-1
+  $("demo-note").hidden = false;
+  const was = (releases[1] || newest).version;
+  if (DEMO.step >= 3) unit = { verdict: "allow", kind: "choralroot", name: "ChoralRoot " + was, version: "ChoralRoot " + was, identity: meta.product };
+  if (DEMO.step === 4 && DEMO.variant === "b") sel = releases[2] || releases[releases.length - 1];
+  if (DEMO.step >= 3) showUnit("conn");
+  seen = DEMO.step;
+}
+renderVersions(); renderFiles();
+lockInstaller(false);
+showStep(DEMO ? DEMO.step : 1);
+loadPackage(sel);
+if (DEMO && DEMO.step === 5 && DEMO.variant === "w") { $("bar").value = 58; sayK("write"); }
+if (DEMO && DEMO.step === 5 && DEMO.variant === "b") { $("bar").value = 42; sayK("lost"); $("interrupted").hidden = false; }
+if (DEMO && DEMO.step === 6) {
+  installedV = sel.version; $("bar").value = 100; sayK("done");
+  $("done-line").textContent = tv("dnLine", { version: sel.version });
+  $("done-new").innerHTML = `<h3>${esc(tv("dnNew", { version: sel.version }))}</h3>${bullets(sel.bullets)}`;
+  unit = { verdict: "allow", kind: "choralroot", name: "ChoralRoot " + sel.version, version: "ChoralRoot " + sel.version, identity: meta.product };
+  showUnit("verify"); renderVersions(); renderPlan(); showStep(6);
+}
 
 $("go").addEventListener("click", async () => {
-  if (writing) return;
+  if (writing || DEMO || !image) return;
+  const rel = sel, pkgImage = image;             // the version chosen when Install was pressed
+  let began = false, okDone = false, halted = false;
   lockInstaller(true);
+  $("interrupted").hidden = true; showStep(5);
   let midi;
-  try { midi = await navigator.requestMIDIAccess({ sysex: true }); }
+  try { midi = await midiAccess(); }
   catch (e) { sayK("denied"); lockInstaller(false); return; }
   try {
     const up = new Updater(midi, log);
     const total = 74 + 1167;
     const step = (k, a) => {
       log(`${k} ${a ?? ""}`);
-      if (k === "start") sayK("start");
+      if (k === "start") { began = true; sayK("start"); }
       if (k === "verify") { sayK("verify"); $("bar").value = (a / total) * 100; }
       if (k === "loader") sayK("loader");
-      if (k === "write") { sayK("write"); $("bar").value = ((74 + a) / total) * 100; }
+      if (k === "write") { began = true; sayK("write"); $("bar").value = ((74 + a) / total) * 100; }
       if (k === "reboot") sayK("reboot");
       if (k === "done") { $("bar").value = 100; sayK("done"); }
     };
     const ota = await up.find((id) => /^ota-/i.test(id.model));
     if (ota) {                                  // an interrupted update: the backup (if any) was taken before it
       ota.link.close();
-      sayK((await up.resume(image, step, meta.product)) ? "done" : "stopped");
+      began = true;
+      okDone = await up.resume(pkgImage, step, meta.product);
+      sayK(okDone ? "done" : "stopped");
+      halted = !okDone;
     } else {
       const fw = await identify(up);              // which firmware runs: Sloop, the 0.x betas, unknown ones are refused
       if (fw) {
@@ -471,20 +935,24 @@ $("go").addEventListener("click", async () => {
           }
         }
       }
-      await up.install(image, meta.product, step);
+      log(`install: ChoralRoot ${rel.version} (${fileOf(rel)})`);
+      await up.install(pkgImage, meta.product, step);
+      okDone = true;
       // over another firmware: offer its data back (an update of ChoralRoot keeps its own flash)
       if (saved && backupFamily(saved.firmware) !== "choralroot" && confirm(t("restoreOffer"))) await restoreArchive(up, saved);
     }
-  } catch (e) { failSay(e); }
+  } catch (e) { failSay(e); halted = began && !okDone && e.code !== "mismatch"; }
   lockInstaller(false);
+  if (okDone) finishInstall(rel);
+  else if (halted) $("interrupted").hidden = false;   // what to do now: the three cases, and the way to the help
 });
 
 $("backup-go").addEventListener("click", async () => {
-  if (writing) return;
+  if (DEMO || writing) return;
   lockInstaller(true);
   try {
     let midi;
-    try { midi = await navigator.requestMIDIAccess({ sysex: true }); } catch (e) { sayK("denied"); return; }
+    try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
     await takeBackup(new Updater(midi, log));
   } catch (e) { failSay(e); }
   finally { lockInstaller(false); }
@@ -500,13 +968,13 @@ $("restore-file").addEventListener("change", async () => {
   } catch (e) { if (epoch === restoreEpoch) sayK("badBackup", e.message); }
 });
 $("restore-go").addEventListener("click", async () => {
-  if (writing || !restoreArc) return;
+  if (DEMO || writing || !restoreArc) return;
   const arc = restoreArc;
   lockInstaller(true);
   try {
     if (!confirm(t("restoreConfirm"))) return;
     let midi;
-    try { midi = await navigator.requestMIDIAccess({ sysex: true }); } catch (e) { sayK("denied"); return; }
+    try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
     await restoreArchive(new Updater(midi, log), arc);
   } catch (e) { failSay(e); }
   finally { lockInstaller(false); }
@@ -524,11 +992,11 @@ $("stock-file").addEventListener("change", async () => {
 });
 // the return to stock: a backup first (the stock firmware cannot use ChoralRoot's data), as Felucca's installer
 $("stock-go").addEventListener("click", async () => {
-  if (!stock || writing) return;
+  if (DEMO || !stock || writing) return;
   const selected = stock; lockInstaller(true);
   try {
     let midi;
-    try { midi = await navigator.requestMIDIAccess({sysex:true}); } catch (e) { sayK("denied"); return; }
+    try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
     const up = new Updater(midi, log);
     const step = (k, n) => { log(`${k} ${n ?? ""}`); if (["start","verify","loader","write","reboot","done"].includes(k)) sayK(k); if (k === "done") $("bar").value = 100; };
     const loader = await up.find(id => id.model === "ota-FM-1");

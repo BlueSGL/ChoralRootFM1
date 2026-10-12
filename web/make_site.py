@@ -4,11 +4,15 @@
 """Make the site (GitHub Pages):
 
   index.html, site.css, img/,  the landing page and the manual: web/site/** copied, {{VERSION}} {{PKG}}
-  InterTight.woff2, OFL.txt    {{PKG_URL}} {{PRODUCT}} filled in index.html (an unknown {{...}} fails)
-  firmware/choralroot-VER.fwsc the package (+ LICENSE, LICENSING.md, LICENSES/: the package holds
-                              JieLi SDK files under Apache-2.0, see LICENSING.md)
-  webapp/installer/index.html index_pkg.html, self-contained (fm1pkg.js, fm1ota.js, fm1backup.js, fm1sounds.js,
-                              metadata inlined)
+  InterTight.woff2, OFL.txt    {{PKG_URL}} {{PRODUCT}} {{NEWS}} filled in index.html (an unknown {{...}} fails);
+                              {{NEWS}} is "New in VER": the version's bullets from web/releases.json
+  firmware/choralroot-X.Y.fwsc the packages: the current version's (PKG) and every other version of
+                              web/releases.json found in the packages folder, each checked against the sha256
+                              in releases.json; index.html (the files, their checksums, each version's source at
+                              its tag), SHA256SUMS, LICENSE, LICENSING.md, LICENSES/ (the packages hold JieLi SDK
+                              files under Apache-2.0, see LICENSING.md)
+  webapp/installer/index.html index_pkg.html, self-contained (fm1pkg.js, fm1ota.js, fm1backup.js, fm1sounds.js
+                              and the metadata inlined: the versions offered, their notes and checksums)
   webapp/installer/manager.html  the device manager (docs/DEVICE-MANAGER.md): manager.html, self-contained
                               (fm1backup.js, fm1sounds.js, fm1manager.js and the packs of web/packs inlined; ?sim=1
                               runs it against a simulated FM-1)
@@ -18,21 +22,34 @@
   src/                        not touched
 
   web/make_site.py build/choralroot.fwsc VERSION OUT_DIR [EMU_DIR]     (or build/choralroot-X.Y.fwsc X.Y)
+                   [--packages DIR] [--require-all]
+
+The other versions: --packages DIR (or CR_PACKAGES_DIR; build/scratch/packages when it exists) holds their
+choralroot-X.Y.fwsc. A local build skips a version whose file is not there, with a "skipped:" line, and builds a
+VERSION that is not in releases.json as a local build without notes. --require-all (the Pages job) stops instead:
+every listed version must be there and VERSION must be the newest listed. A package whose sha256 is not the one
+in releases.json, or whose identity is not the current package's, always stops the build.
 
 No web editor: Felucca's editor protocol is not in ChoralRoot, so webapp/editor/ is not written (an old one in
 OUT_DIR is left as it is). The package must be one made by tools/fm1pkg_make.py (Felucca's own loader, no
 vendor files). Its identity (FM-1_9xx; ChoralRoot's is FM-1_920) is read from the package; the device must
 report it after the install.
 """
+import argparse
+import hashlib
 import json
 import os
 import re
 import shutil
 import sys
+from html import escape as html_escape
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 SITE = HERE / "site"
+RELEASES = HERE / "releases.json"                   # the versions the installer offers (newest first), their notes
+MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December")
 BLOCKS, BLK, KEEP = 20, 0x30, 0x2F
 
 
@@ -87,32 +104,154 @@ def manager_page():
     return html.replace("/*LIB*/", lib).replace("/*PACKS*/null", json.dumps(embed, separators=(",", ":")).replace("</", "<\\/"))
 
 
-def main(pkg, version, out, emu=None):
-    pkg, out = Path(pkg), Path(out)
-    emu = Path(emu or os.environ.get("EMU_DIR") or HERE.parent / "build" / "emu-web")
-    raw = pkg.read_bytes()
+def check_package(path, raw):
+    """the identity of a package the site may publish: FM-1_9xx and Felucca's loader, or the build stops"""
     product = product_of(raw)
     if not re.fullmatch(r"FM-1_9\d\d", product):
-        raise SystemExit(f"{pkg}: identity {product!r} is not a Felucca / ChoralRoot package (FM-1_9xx)")
+        raise SystemExit(f"{path}: identity {product!r} is not a Felucca / ChoralRoot package (FM-1_9xx)")
     if b"FELUCCA-LOADER-1" not in raw:              # Felucca loader marker: never publish a package with vendor files
-        raise SystemExit(f"{pkg}: no Felucca loader in it; the site ships only fm1pkg_make.py packages "
+        raise SystemExit(f"{path}: no Felucca loader in it; the site ships only fm1pkg_make.py packages "
                          "(a package patched from an official one carries vendor files)")
+    return product
+
+
+def pkg_name(version):
+    return f"choralroot-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
+
+
+def date_text(iso):
+    y, m, d = (int(x) for x in iso.split("-"))
+    return f"{d} {MONTHS[m - 1]} {y}"
+
+
+def collect(pkg, version, packages, require_all):
+    """the versions the site offers, newest first: [(entry, raw bytes)], the identity, and the lines to print.
+
+    The current version comes from pkg; every other version of web/releases.json from PACKAGES/choralroot-X.Y.fwsc.
+    A package is refused when its sha256 is not the one in releases.json, or its identity is not the current one's.
+    A listed version whose file is missing is skipped with a line (a local build), or stops the build
+    (--require-all: the Pages job)."""
+    data = json.loads(RELEASES.read_text(encoding="utf-8"))
+    listed = data["releases"]
+    raw = Path(pkg).read_bytes()
+    product = check_package(pkg, raw)
+    digest = hashlib.sha256(raw).hexdigest()
+    notes, out = [], []
+    by_version = {r["version"]: r for r in listed}
+    if version in by_version:
+        want = by_version[version]["sha256"]
+        if digest != want:
+            raise SystemExit(f"{pkg}: sha256 {digest} is not the released {pkg_name(version)} "
+                             f"({want} in web/releases.json): the site publishes the release's own file")
+        if require_all and listed[0]["version"] != version:
+            raise SystemExit(f"version {version} is not the newest in web/releases.json ({listed[0]['version']} is): "
+                             "the site is published for the newest version")
+    else:
+        if require_all:
+            raise SystemExit(f"version {version} is not in web/releases.json: add it (its bullets, date, tag and the "
+                             f"package's sha256 {digest}); docs/HANDOFF.md, 'Release steps'")
+        notes.append(f"note: {version} is not in web/releases.json: published as a local build, without notes")
+        out.append(({"version": version, "sha256": digest, "bullets": []}, raw))
+    for r in listed:
+        v, name = r["version"], pkg_name(r["version"])
+        if v == version:
+            out.append((r, raw))
+            continue
+        src = packages / name if packages else None
+        if src is None or not src.is_file():
+            where = f"not in {packages}" if packages else "no packages folder given"
+            if require_all:
+                raise SystemExit(f"version {v}: {name} is missing ({where}). Every version of web/releases.json "
+                                 f"must be published: download it from the release {r['tag']}, or take {v} out of "
+                                 "web/releases.json")
+            notes.append(f"skipped: {name} ({where}): version {v} is not offered by this build "
+                         "(--packages DIR or CR_PACKAGES_DIR; python3 tools/fetch_packages.py fetches them)")
+            continue
+        old = src.read_bytes()
+        got = hashlib.sha256(old).hexdigest()
+        if got != r["sha256"]:
+            raise SystemExit(f"version {v}: {src} has sha256 {got}, web/releases.json says {r['sha256']}: refused")
+        if check_package(src, old) != product:
+            raise SystemExit(f"version {v}: {src} has the identity {product_of(old)}, the current package {product}: "
+                             "refused (the installer verifies one identity)")
+        out.append((r, old))
+    return data, out, product, notes
+
+
+def news_html(data, offered, version):
+    """the landing page's 'New in X': the current version's bullets, the links to its notes, the older versions"""
+    cur = offered[0][0]
+    esc = html_escape
+    repo = data["repo"]
+    if cur.get("bullets"):
+        head = f'<h3 id="new">New in {esc(version)} <span class="sub">{esc(date_text(cur["date"]))}</span></h3>'
+        body = '<ul class="news">' + "".join(f"<li>{esc(b)}</li>" for b in cur["bullets"]) + "</ul>"
+        more = f'<a href="{esc(repo)}/blob/main/docs/releases/{esc(version)}.md">The full notes of {esc(version)}</a>. '
+    else:
+        head = f'<h3 id="new">Version {esc(version)} <span class="sub">a local build</span></h3>'
+        body, more = "", ""
+    older = [r for r, _ in offered[1:]]
+    if older:
+        more += ("The installer also offers " + ", ".join(
+            f'<a href="firmware/{esc(pkg_name(r["version"]))}" download>{esc(r["version"])}</a>' for r in older)
+            + ', each with what going back means; <a href="firmware/">all files and checksums</a>. ')
+    more += f'<a href="{esc(repo)}/releases">Older versions are on GitHub</a>.'
+    return f'{head}\n      {body}\n      <p class="note">{more}</p>'
+
+
+def firmware_index(data, offered, product):
+    """firmware/index.html: every package with its checksum, its notes and its source (the tag), and the licences"""
+    esc, repo, rows = html_escape, data["repo"], []
+    for r, raw in offered:
+        v, name = r["version"], pkg_name(r["version"])
+        src = (f'<a href="{esc(repo)}/tree/{esc(r["tag"])}">source at {esc(r["tag"])}</a> '
+               f'(<a href="{esc(repo)}/archive/refs/tags/{esc(r["tag"])}.zip">zip</a>) · '
+               f'<a href="{esc(repo)}/blob/main/docs/releases/{esc(v)}.md">notes</a>'
+               if r.get("tag") else "a local build of the working tree")
+        rows.append(f'<li><a href="{esc(name)}" download>{esc(name)}</a> · {len(raw)} bytes · {esc(product)} · {src}'
+                    f'<br><code>sha256 {esc(r["sha256"])}</code></li>')
+    return ('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<title>ChoralRoot FM-1 firmware files</title><h1>ChoralRoot FM-1: firmware files</h1>'
+            '<p>The packages the <a href="../webapp/installer/">web installer</a> installs, for the command-line tool '
+            '(<code>python3 tools/fm1_install.py FILE</code>). <a href="SHA256SUMS">SHA256SUMS</a> lists the same '
+            'checksums.</p><ul>' + "".join(rows) + '</ul>'
+            '<p>Every package here is free software under the GNU General Public License, version 3 only: '
+            '<a href="LICENSE">LICENSE</a>. <a href="LICENSING.md">LICENSING.md</a> lists the parts under other '
+            'licences and <a href="LICENSES/">LICENSES/</a> holds their texts; the three have covered every version '
+            'listed here since 0.16 (the licence texts have not changed; LICENSING.md has gained credits). The '
+            'complete corresponding source of each version is the repository at that version\'s tag, linked beside '
+            f'it. {esc(data["minimum"]["note"])} <a href="{esc(repo)}/releases">Older versions are on GitHub</a>.</p>\n')
+
+
+def main(pkg, version, out, emu=None, packages=None, require_all=False):
+    pkg, out = Path(pkg), Path(out)
+    emu = Path(emu or os.environ.get("EMU_DIR") or HERE.parent / "build" / "emu-web")
+    if packages is None:
+        default = HERE.parent / "build" / "scratch" / "packages"
+        packages = os.environ.get("CR_PACKAGES_DIR") or (default if default.is_dir() else None)
+    packages = Path(packages) if packages else None
+    data, offered, product, notes = collect(pkg, version, packages, require_all)
     html = (HERE / "index_pkg.html").read_text(encoding="utf-8")
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1backup.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1sounds.js").read_text(encoding="utf-8"))
-    name = f"choralroot-{re.sub(r'[^A-Za-z0-9.-]', '-', version)}.fwsc"
-    meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name})
+    name = pkg_name(version)
+    meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name, "repo": data["repo"],
+                       "minimum": data["minimum"],
+                       "releases": [{**r, "pkg": "../../firmware/" + pkg_name(r["version"]), "size": len(raw)}
+                                    for r, raw in offered]},
+                      ensure_ascii=False, separators=(",", ":")).replace("</", "<\\/")
     for mark in ("/*LIB*/", "/*META*/"):
         if html.count(mark) != 1:
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
-    index = fill({"VERSION": version, "PKG": name, "PKG_URL": "firmware/" + name, "PRODUCT": product})
+    index = fill({"VERSION": version, "PKG": name, "PKG_URL": "firmware/" + name, "PRODUCT": product,
+                  "NEWS": news_html(data, offered, version)})
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
     inst, fw = out / "webapp" / "installer", out / "firmware"
     for d in (inst, fw):
         d.mkdir(parents=True, exist_ok=True)
-    for old in [*fw.glob("choralroot-*.fwsc"), *fw.glob("felucca-*.fwsc")]:   # one package: the current one
+    for old in [*fw.glob("choralroot-*.fwsc"), *fw.glob("felucca-*.fwsc")]:   # only the versions offered now
         old.unlink()
     (inst / "index.html").write_text(html, encoding="utf-8")
     mgr = manager_page()
@@ -122,16 +261,21 @@ def main(pkg, version, out, emu=None):
     pack_files = sorted((HERE / "packs").glob("*.json"))
     for f in pack_files:
         shutil.copy(f, packs_out / f.name)
-    shutil.copy(pkg, fw / name)
-    lic = HERE.parent / "LICENSES"                  # the package holds JieLi SDK files (Apache-2.0): their
-    (fw / "LICENSES").mkdir(exist_ok=True)          # licence travels next to it, with Felucca's own
+    for r, raw in offered:
+        (fw / pkg_name(r["version"])).write_bytes(raw)
+    (fw / "SHA256SUMS").write_text("".join(f"{r['sha256']}  {pkg_name(r['version'])}\n" for r, _ in offered),
+                                   encoding="utf-8")
+    (fw / "index.html").write_text(firmware_index(data, offered, product), encoding="utf-8")
+    lic = HERE.parent / "LICENSES"                  # the packages hold JieLi SDK files (Apache-2.0): their
+    (fw / "LICENSES").mkdir(exist_ok=True)          # licence travels next to them, with Felucca's own
     names = sorted(f.name for f in lic.glob("*.txt"))
     for n in names:
         shutil.copy(lic / n, fw / "LICENSES" / n)
     (fw / "LICENSES" / "index.html").write_text(    # the pages link this folder: Pages lists no folders
         '<!doctype html><meta charset="utf-8"><title>ChoralRoot FM-1 licences</title><h1>Licence texts</h1><ul>'
         + "".join(f'<li><a href="{n}">{n}</a></li>' for n in names)
-        + '</ul><p><a href="../LICENSING.md">LICENSING.md</a> · <a href="../LICENSE">LICENSE (GPL-3.0)</a></p>\n',
+        + '</ul><p><a href="../LICENSING.md">LICENSING.md</a> · <a href="../LICENSE">LICENSE (GPL-3.0)</a> · '
+          '<a href="../">the packages they cover, each with its source</a></p>\n',
         encoding="utf-8")
     for doc in ("LICENSE", "LICENSING.md"):
         shutil.copy(HERE.parent / doc, fw / doc)
@@ -147,13 +291,24 @@ def main(pkg, version, out, emu=None):
         print(f"warning: {emu}/index.html missing: the site is made without the browser emulator (emu/), so the "
               "landing page's 'Try it in the browser' link has no target; build it with sh tools/emu/web/build_web.sh",
               file=sys.stderr)
+    for line in notes:
+        print(line)
     print(f"site: {out}: {', '.join(site)}; webapp/installer/index.html ({len(html)} B); "
           f"webapp/installer/manager.html ({len(mgr)} B, {len(pack_files)} pack files); "
-          f"firmware/{name} ({len(raw)} B, {product}), firmware/LICENSE, firmware/LICENSING.md, "
+          + ", ".join(f"firmware/{pkg_name(r['version'])} ({len(raw)} B, {product})" for r, raw in offered)
+          + f", firmware/index.html, firmware/SHA256SUMS, firmware/LICENSE, firmware/LICENSING.md, "
           f"firmware/LICENSES/ ({len(names)} texts + index.html); {emu_note}")
 
 
 if __name__ == "__main__":
-    if len(sys.argv) not in (4, 5):
-        sys.exit(__doc__)
-    main(*sys.argv[1:5])
+    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("pkg", help="the current version's package (build/choralroot.fwsc, or the release's file)")
+    ap.add_argument("version", help="its version, e.g. 0.19")
+    ap.add_argument("out", help="the folder the site is written to")
+    ap.add_argument("emu", nargs="?", help="the browser emulator's folder (default: EMU_DIR, build/emu-web)")
+    ap.add_argument("--packages", metavar="DIR", help="the folder with the other versions' choralroot-X.Y.fwsc "
+                    "(default: CR_PACKAGES_DIR, else build/scratch/packages when it exists)")
+    ap.add_argument("--require-all", action="store_true", help="stop when a version of web/releases.json has no "
+                    "package, or the current version is not its newest (the Pages job)")
+    a = ap.parse_args()
+    main(a.pkg, a.version, a.out, a.emu, a.packages, a.require_all)

@@ -1,7 +1,7 @@
 <!doctype html>
 <!-- SPDX-License-Identifier: GPL-3.0-only -->
 <!-- The landing page of ChoralRoot FM-1. web/make_site.py copies it to the site's root and fills
-     {{VERSION}} {{PKG}} {{PKG_URL}} {{PRODUCT}}; no other templating. The keybed SVGs are plain markup.
+     {{VERSION}} {{PKG}} {{PKG_URL}} {{PRODUCT}} {{NEWS}} ("New in X": the version's bullets from web/releases.json); no other templating. The keybed SVGs are plain markup.
      Its content is the short version of docs/MANUAL.md (the reference: every sentence here was read against it,
      for 0.16); where the manual goes deeper the page links to it on GitHub. Two comments in the Recovery section
      (interrupted update, rescue key) mark the statements the manual's section 16 still marks as to be confirmed
@@ -22,7 +22,7 @@
   <div class="wrap">
     <h1><span>ChoralRoot</span> <span>FM-1</span></h1>
     <p class="lede">A chord instrument for the M-VAVE FM-1 inspired by the Telepathic Orchid ORC—1.</p>
-    <p class="ver">Version {{VERSION}}. GPL-3.0.</p>
+    <p class="ver">Version {{VERSION}}: <a href="#new">what is new</a>. GPL-3.0.</p>
   </div>
   <div class="stripes" aria-hidden="true"><i class="s-red"></i><i class="s-orange"></i><i class="s-cream"></i></div>
 </header>
@@ -55,10 +55,13 @@
       <a class="btn b-green" href="emu/">Try it first</a>
       <p class="note">The exact same firmware, running in your browser. No FM-1 needed. Chrome, Edge and Firefox supported.</p>
     </div>
+    <div class="new">
+      {{NEWS}}
+    </div>
     <div class="buttons">
       <div class="cell">
         <a class="btn b-red" href="webapp/installer/">It's even better on hardware</a>
-        <p class="note">Install directly to your FM-1 from Chrome or Edge.</p>
+        <p class="note">Install {{VERSION}} directly to your FM-1 from Chrome or Edge: the installer walks you through it, shows what is new and can also put an older version back.</p>
       </div>
       <div class="cell">
         <a class="btn b-cream" href="{{PKG_URL}}" download>Download <span class="pkg">{{PKG}}</span></a>

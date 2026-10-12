@@ -1450,3 +1450,30 @@ copied to the designer's `docs/`. Byte for byte the same as before: `-fx-screens
 `-quad-screens`. Left, antialiasing only (no pixel differs by more than 35 / 42 / 54 of 255; 10 / 59 / 117 pixels
 by more than 32): `-looper-screens`, `-sound-editor-screens`, `-sound-editor-panels`. `web/site/img/panel-main.png`
 not touched (its one-state design did not change).
+
+## 2026-10-12 (the web installer: what is new, older versions, a guided flow)
+
+3y27. **The owner:** "One thing bothering me on the site is the firmware installer. It does not include release notes
+or anything that makes it clear what's new. Would be nice if it showed simple bulleted features for the version and
+also let you install older versions." Website work only; no firmware source changed, `fm1ota.js` untouched.
+`web/releases.json` (new) lists 0.19, 0.18, 0.17, 0.16 with a date, a tag, the package's sha256 (from each
+release's SHA256SUMS; all four releases have one, and the downloaded packages hash to them), 7 or 8 bullets for
+players and, for the three older ones, what going back means (from the "Going back" sections of 0.17, 0.18 and
+0.19). 0.14 and 0.15 are not offered: no boot stub, and the idle fault. The four releases carry the same stub
+(`stub.lock` is version 3, `baee55ed`, at v0.16, v0.17, v0.18 and now), so an install between them is the row
+"the same stub, another body" of docs/BOOT-SAFETY.md: no unprotected cut. `web/index_pkg.html` is a flow of six
+steps (browser, get ready, test the connection, choose a version, install, done) around the unchanged install; the
+chosen package is fetched from the site and checked against the list's sha256 before Install is enabled; a
+connection test names what is on the unit; `?demo=N` shows a step without a device and cannot reach MIDI.
+`web/make_site.py` publishes every listed version (`--packages`, `--require-all`), `firmware/index.html` and
+`SHA256SUMS`, and fills the landing page's "New in X". `.github/workflows/pages.yml` downloads each listed
+version's package from its release and fails, naming the version, when one is missing or has another sha256 (the
+step was run locally against a stand-in `gh`; the workflow itself was not run). A browser cannot fetch a release
+asset: the 302 and the 200 of the download carry no `Access-Control-Allow-Origin`. Found on the way: the page's
+`.check { display: flex }` showed the "I understand the risk" box although it was `hidden`, since the box
+existed; `[hidden] { display: none !important }` now. Tests: `web/test_installer.mjs` (the old checks unchanged
+but for the stub DOM, which did not see `h2`), `tests/releases_test.py` (new), `tests/site_test.py` (the
+multi-version layout, the refusals, the site as Pages builds it); `tools/fetch_packages.py` (new) fills
+`build/scratch/packages/` for a local build. Not run: a real FM-1, Chrome or Edge themselves, Android; going back
+on a unit (the notes are the release notes' own). Docs: MANUAL 16, README, BUILDING "Releasing", HANDOFF "Release
+steps", DEVICE-MANAGER "The installer beside it".

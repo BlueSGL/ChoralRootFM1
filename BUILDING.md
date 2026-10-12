@@ -221,6 +221,11 @@ prints the guard, the reset reason and the stage the crash reached. Emulator: `b
 A release is a tag `vX.Y`; GitHub Actions builds it and publishes the site.
 
 1. Check the release build locally: `./build.sh --release X.Y` (it makes `build/release-X.Y/`).
+   Add the version to `web/releases.json`, as the first entry: its date, tag, 4 to 8 bullets a player understands
+   (from `docs/releases/X.Y.md`), the sha256 of `build/release-X.Y/choralroot-X.Y.fwsc` (the build is reproducible:
+   CI makes the same file), and give the entry that was first a `going_back` note (from the new notes' "Going back"
+   section). `python3 tests/releases_test.py` checks the file. Commit this before the tag: the site is built from
+   the tag's tree, and the installer offers what the file lists.
 2. Tag the commit and push the tag:
 
    ```
@@ -233,10 +238,17 @@ A release is a tag `vX.Y`; GitHub Actions builds it and publishes the site.
    `choralroot-X.Y.fwsc`, `choralroot-X.Y-app.bin`, `SHA256SUMS`, `LICENSE`, `LICENSING.md`, `ATTRIBUTION.txt`
    and `LICENSES.zip`. Run from the Actions tab (Run workflow, with a version) it only builds, and the package is
    a workflow artifact.
-3. Then it starts `.github/workflows/pages.yml`, which downloads `choralroot-X.Y.fwsc` from the release, builds the
-   browser emulator (`tools/emu/web/build_web.sh`, Emscripten; the site's `emu/`), runs `web/make_site.py`
-   and deploys the site to <https://quixotic7.github.io/ChoralRootFM1/>. A release published by hand starts it
-   too. Versions with a suffix (`1.1-rc1`) leave the site as it is.
+3. Then it starts `.github/workflows/pages.yml`, which downloads `choralroot-X.Y.fwsc` from the release and the
+   package of every other version in `web/releases.json` from that version's release (the installer offers them
+   all, and a browser cannot fetch a release asset itself: the download has no CORS headers, so the site hosts
+   them under `firmware/`), checks each against the sha256 in `web/releases.json`, builds the
+   browser emulator (`tools/emu/web/build_web.sh`, Emscripten; the site's `emu/`), runs
+   `web/make_site.py ... --packages build/packages --require-all` and deploys the site to
+   <https://quixotic7.github.io/ChoralRootFM1/>. A release published by hand starts it
+   too. Versions with a suffix (`1.1-rc1`) leave the site as it is. The job fails, naming the version, when a
+   listed version's release has no package, when a package does not have the listed sha256, or when X.Y is not
+   the first entry of `web/releases.json`; correct the file on main and run pages.yml by hand (version X.Y, ref
+   main).
 
 Once, before the first release: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 

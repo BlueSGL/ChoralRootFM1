@@ -1508,9 +1508,28 @@ The FM-1 updates on its own battery, and the installer cannot read how full it i
 
 ### Updating
 
-Open <https://quixotic7.github.io/ChoralRootFM1/> in Chrome or Edge, connect the FM-1 and press **Install**. The page
-saves a backup first, switches the FM-1 to update mode, writes the firmware and restarts it. Your settings, sounds and
-loops are kept. Options > Version shows what is installed.
+Open the installer, <https://quixotic7.github.io/ChoralRootFM1/webapp/installer/> (the red button on the site), in
+Chrome or Edge. It walks you through six steps:
+
+1. **Your browser**: whether this browser can install. Chrome and Edge on a computer can; Safari and Firefox cannot.
+   Chrome on Android has what it takes but is not tested.
+2. **Get ready**: the list above.
+3. **Test the connection**: the page looks at what is on the FM-1 and says so (ChoralRoot and its version, the stock
+   firmware, Felucca, Melodee, or a firmware it will not install over). Nothing is written.
+4. **Choose a version**: the newest is selected, with what is new in it. The older versions from 0.16 on are below
+   it, each with what going back to it means.
+5. **Install**: the page saves a backup first, switches the FM-1 to update mode, writes the firmware and restarts
+   it. About two minutes.
+6. **Done**: the version that was installed, and a button that reads it back from the FM-1.
+
+Your saved sounds, loops and settings are kept. What you have not saved is not: hold SAVE first.
+Options > Version shows what is installed.
+
+**Going back to an older version** is the same install with that version chosen in step 4. Your saved sounds and
+loops stay; what the older version does not know it ignores or plays without (an older version has no Options >
+Output; 0.17 plays a loop without the steps' ratchets and conditions and has its old effects; the page lists it for
+each version, from the "Going back" parts of the release notes). 0.15 and older are not offered: they have no
+protected update path, and 0.14 and 0.15 stop responding after ten idle minutes. They remain on GitHub.
 
 Updating to 0.16 sets Options > Dual Core to Off.
 
