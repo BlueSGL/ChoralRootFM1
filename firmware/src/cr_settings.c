@@ -157,6 +157,7 @@ void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src)
     dst->palette = src->palette;
     dst->usb_in = src->usb_in;
     dst->usb_level = src->usb_level;
+    dst->pick_roots = (uint8_t)((dst->pick_roots & (uint8_t)~CRS_OUT_CLASSIC) | (src->pick_roots & CRS_OUT_CLASSIC));
     dst->view = (uint8_t)((dst->view & (uint8_t)~CRS_DC_ON) | (src->view & CRS_DC_ON));   /* (Dual Core rides in the
                                                     * view's byte: the view and its lock are manual) */
 }
@@ -210,7 +211,7 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(metro_sig, 0, 2);
     CRS_FIX(metro_vol, 0, 100);
     CRS_FIX(loop_slot, 0, 9);
-    CRS_FIX(pick_roots, 0, 1);
+    CRS_FIX(pick_roots, 0, 3);                     /* (bit 1: Output Classic, CRS_OUT_CLASSIC) */
     CRS_FIX(usb_in, 0, 1);
     CRS_FIX(usb_level, 0, CRS_USB_FIXED);
     if (CRS_LOOP_MODE(s) >= CRS_NLOOPMODE)         /* (an unknown mode: the defaults; v13: bit 5 the KEY layer's keys,
@@ -585,6 +586,7 @@ static uint32_t css_saves;                         /* flash writes done (diagnos
 static void crs_usb_apply(const cr_settings_t *s)
 {
     fx_usb_fixed = s->usb_level == CRS_USB_FIXED;
+    fx_output_set(CRS_OUT_CLEAN(s), 1);            /* Options > Output: before the first block, no fade */
 #if FELUCCA_UAC
     ua_off = ua_off_want = s->usb_in ? 0u : UA_OFF_IN;
 #endif
@@ -614,6 +616,7 @@ static void css_read(void)
     (void)n;
 }
 
+static uint8_t crs_lowcut_found;                   /* Felucca's SPEAKER setting as this power-on found it (diagnostics) */
 static void cr_settings_boot(void)                 /* persist_boot (flash_ok known), before settings_init / panel_init */
 {
     int n = -1;
@@ -628,6 +631,14 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
         memset(&crs_rec, 0, sizeof crs_rec);
         settings_export(&crs_rec);
     }
+    /* Felucca's SPEAKER setting (settings.lowcut: 1 LOWCUT, 2 BASS+, fx.c's master) is in the same object, and a unit
+     * that ran Felucca with it on brought it along: every sound high-passed (BASS+: with harmonics added) by a stage
+     * ChoralRoot has no control for and Reset Settings did not reach (0.19, docs/AUDIO-QUALITY.md "Left behind").
+     * ChoralRoot holds it off: here before settings_init applies it, whatever flash, a backup or the RAM that
+     * survives a reset says; crs_rec keeps what flash holds, so the next write of the object stores the 0 */
+    crs_lowcut_found = (uint8_t)(settings.lowcut % 3u);
+    settings.lowcut = 0;
+    fx_lowcut = 0;
     crs_last_rc = cr_settings_import(&crs_rec.cr, &crs_rec.cr, sizeof crs_rec.cr);
     crs_usb_apply(&crs_rec.cr);                    /* (before usb_start: the configuration the host first reads) */
     cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off (the default): core 1 not started */
@@ -715,7 +726,7 @@ static void crs_capture(cr_settings_t *s)
     s->loop_slot = cs.loop_slot;
     s->loop_rec = (uint8_t)(CRS_LOOP_REC(cs.loop_mode, cs.loop_keys) | (cs.key_play ? CRS_KEY_PLAY : 0u) |
                             (cs.lock_keep ? CRS_LOCK_KEEP : 0u) | (cs.lock_push ? CRS_LOCK_PUSH : 0u));
-    s->pick_roots = 0;                             /* (reserved since 0.18: the engine picker's roots always play; written
+    s->pick_roots = cs.out_clean ? 0u : CRS_OUT_CLASSIC;   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
                                                     * as "play", so an older firmware reading this record plays too) */
     s->usb_in = cs.usb_in;
     s->usb_level = cs.usb_fixed;
@@ -989,6 +1000,10 @@ static void cr_settings_load(void)
     cs.usb_in = s->usb_in;
     cs.usb_fixed = s->usb_level;
     fx_usb_fixed = cs.usb_fixed;                   /* (USB Record: crs_usb_apply at boot, before usb_start) */
+    if (cs.out_clean != CRS_OUT_CLEAN(s)) {        /* (a revert, a reset, a restore while it plays: faded over) */
+        cs.out_clean = (uint8_t)CRS_OUT_CLEAN(s);
+        fx_output_set(cs.out_clean, 0);
+    }
     cs.split = s->split_pc;
     cs.view = (uint8_t)CRS_VIEW(s);
     cs.view_lock = (uint8_t)CRS_VIEW_LOCK(s);
@@ -1194,6 +1209,8 @@ static void cr_settings_reset(void)
         return;
     cr_settings_factory(&crs_rec.cr);
     settings_hold = HOLD_DEF;
+    settings.lowcut = 0;                           /* (Felucca's SPEAKER setting: held off since 0.19, cr_settings_boot) */
+    fx_lowcut = 0;
     crs_reinit();                                  /* the session too (0.18): cu_reset: LOCK, the voicing, the octave.
                                                     * The session then captured is a new unit's */
     cr_settings_load();

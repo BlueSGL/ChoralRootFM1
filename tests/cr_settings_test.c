@@ -332,6 +332,29 @@ static void t_version(void)
     s.pick_roots = 7;
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range: the default");
+    /* 0.19: Options > Output in bit 1 of that byte (CRS_OUT_CLASSIC): clear = Clean, the default and every older
+     * record's; set = Classic, kept beside the retired bit 0 */
+    cr_settings_defaults(&s);
+    ok(CRS_OUT_CLEAN(&s) == 1u, "Output: the default is Clean");
+    s.pick_roots = CRS_OUT_CLASSIC;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_OUT_CLEAN(&r) == 0u, "Output Classic (bit 1 of pick_roots) kept");
+    s.pick_roots = CRS_OUT_CLASSIC | 1u;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_OUT_CLEAN(&r) == 0u && r.pick_roots == 3u,
+       "Output Classic beside the retired picker bit: both kept");
+    s.pick_roots = 0;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_OUT_CLEAN(&r) == 1u, "a 0.18 record (the byte 0): Output Clean");
+    {
+        cr_settings_t m2, o2;
+        cr_settings_defaults(&m2);
+        cr_settings_defaults(&o2);
+        m2.pick_roots = 1;
+        o2.pick_roots = CRS_OUT_CLASSIC;
+        cr_settings_auto(&m2, &o2);
+        ok(m2.pick_roots == (CRS_OUT_CLASSIC | 1u), "Output is automatic (an Option): its bit alone is taken from the Options of now");
+    }
     /* a version-3 record (written before the USB audio settings: zeros in their place, which would read as the
      * recording off) */
     cr_settings_defaults(&s);
@@ -1068,11 +1091,11 @@ static void t_auto(void)
         cr_settings_auto(&z, &y);                  /* 0xFF where automatic */
         if (((const uint8_t *)&z)[i] == 0xFF) nauto++;
         else if (((const uint8_t *)&z)[i] == 0x00) nman++;
-        else both++;                               /* (the view's byte: bit 6 alone) */
+        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bit 1, Output) */
     }
-    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6)\n", (unsigned)nauto,
+    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1)\n", (unsigned)nauto,
            (unsigned)nman, (unsigned)both);
-    ok(nauto == 17u && both == 1u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and one bit of the block's 180 are automatic");
+    ok(nauto == 17u && both == 2u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and two bits of the block's 180 are automatic");
     m = b;
     cr_settings_auto(&m, &b);
     ok(!memcmp(&m, &b, sizeof b), "auto: copying a record's own Options into it changes nothing");

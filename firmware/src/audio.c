@@ -112,6 +112,9 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
         out[2u * i] *= 1 << OUT_SHIFT;
         out[2u * i + 1u] *= 1 << OUT_SHIFT;
     }
+    if (fx_out_blk)                                     /* Output Clean (fx.c): the 7 bits under the Q15 sample */
+        for (i = 0; i < 2u * n; i++)
+            out[i] += out_frac[i & (2u * CTL - 1u)];
 }
 
 /* Overload: two halves in a row above 85 % (the render plus TIMER5 nested in it), fade one voice over the
