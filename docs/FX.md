@@ -617,6 +617,28 @@ The new effects' returns are set once so that the same send gives the same loudn
 The defaults: Reverb Size 88, Damp 56, Decay 3.0 s, Pre-delay 17 ms, Mod 56, Low cut 127 Hz, Width 127; Delay Sync
 on, 1/8, Spread 1:1, Feedback 58, ping-pong, Tone 70 (3.8 kHz), Wow 24 (free time 250 ms, free spread x1.00).
 
+## The master, and Options > Output (0.19)
+
+What comes after the effects: the mix and the chorus's wet through the output chain to the DAC word. Two chains
+since 0.19, chosen in Options > Output, both in `fx.c` (`out_master`); [AUDIO-QUALITY.md](AUDIO-QUALITY.md) has
+the measurements, the reasons and the harness.
+
+| | Classic (0.18's, bit for bit) | Clean (0.19) |
+| --- | --- | --- |
+| the mix line | `((mix + wet) >> 2) * MASTER >> 10` (Q15) | `(mix + wet) * 0.75`, kept in Q17 (`CLN_TRIM`) |
+| DC blocker | 2 Hz | the same (the same state) |
+| LOWCUT / BASS+ | Felucca's, if `fx_lowcut` (held at 0 by ChoralRoot since 0.19) | none |
+| limiter | `LIM_T` 18000; release 93 ms; the gain eased over 1.5 ms (`fx_smooth`); `(x >> 4) * g >> 11` | `CLN_T` 26000; the peak held 40 ms, release 186 ms; the same easing; the exact product |
+| clip | `softclip`: a tanh over the whole range | `clean_knee`: linear to 24576, a tanh above |
+| MASTER | in the mix line (USB Level = Fixed: after, `usb_fixed_dac`) | last, into the 24-bit word (`clean_post17`; Fixed: `clean_split`, then `clean_post`) |
+| the DAC word | the Q15 sample `<< 7` | Q22: the Q15 sample and the 7 bits under it (`out_frac`, `audio.c`) |
+| a frame on the unit | 76 instructions idle, about 92 limiting | 83 idle, about 99 limiting |
+
+A change of Output while sound plays fades the chain's input to nothing over 16 blocks (11.6 ms), changes the chain
+at that zero with its limiter at rest, and fades in (`out_fade`). Felucca's FX hold layer (`perf_master`, not in
+ChoralRoot's unit) and Felucca's own builds always run Classic. `EMU_OUTPUT=classic` holds the emulator at Classic
+whatever the settings say (`tools/emu/classic_exact.sh`).
+
 ## The FX layer
 
 SELECT steps seven pages; the picker shows the page's name (Sends, or the effect) over five marks, the label an

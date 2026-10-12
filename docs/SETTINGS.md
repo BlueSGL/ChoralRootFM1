@@ -51,6 +51,7 @@ from a layer: it goes with the layer (manual).
 | Hold Time | Options | Felucca's `bold` (HOLD), in the same flash object | **automatic** |
 | USB Record, USB Level | Options | block `usb_in`, `usb_level` | **automatic** |
 | Dual Core | Options | block `view` bit 6 | **automatic** |
+| Output (0.19) | Options | block `pick_roots` bit 1 | **automatic** |
 | the palette (no control: MOD) | | block `palette` | automatic |
 | the panel calibration | Options > Calibrate, OCT- + OCT+ at power-on | Felucca's `panel` | **automatic** (written by the calibration itself) |
 | Bass Behaviour | Options **and** the BASS layer (SELECT, KNOB 1) | block `bass_mode` | manual |
@@ -164,7 +165,7 @@ The block has its own header:
 | chord_sound | v6: the chord part's sound, (engine << 8) \| its pool position (docs/PRESETS.md); 0xFFFF = the UI's default. v1..5: an old list position, read as the default | FM6 TINE EP |
 | bass_sound | v6: the bass part's sound (what BASS tap brings), (engine << 8) \| pool position; 0xFFFF = the UI's default (v1..5: read as the default; v6 on ANALOG, engine 0, retired in 0.14: read as the default) | VA DEEP SUB (ANALOG SUB BASS until 0.14) |
 | metro_on, metro_sig, metro_vol, loop_slot (v2) | the click, 4/4 3/4 6/8, 0..100, 0..9 | off, 4/4, 70, 0 |
-| pick_roots (v3) | RESERVED since 0.18 (it was: the engine picker's white roots, 1 choose engines, 0 play, KNOB 4 in the picker): the roots always play there now; written 0, read and ignored | **1** in a record's defaults (0.17 reads it) |
+| pick_roots (v3) | bit 0: RESERVED since 0.18 (it was: the engine picker's white roots, 1 choose engines, 0 play, KNOB 4 in the picker): the roots always play there now; written 0, read and ignored. **Bit 1 (0.19): Options > Output**, set = Classic (0.18's master), clear = Clean (`CRS_OUT_CLASSIC`, `CRS_OUT_CLEAN`; the UI's `cs.out_clean`; applied by `crs_usb_apply` at boot without a fade, by `cr_settings_load` and the Options with one: `fx.c fx_output_set`; docs/AUDIO-QUALITY.md). No version for it: the bit is 0 in every older record and 0 is the default. A firmware up to 0.18 finds 2 or 3 out of range and takes its own default for the byte, nothing else | **1** in a record's defaults (0.17 reads it): Output Clean |
 | loop_rec (v8; was rsv_usb, v4: usb_out) | v8: the looper's record mode (bits 0..3: 0 Overwrite, 1 Advance, 2 Overdub, 3 Replace, 4 Step; `CRS_LOOP_MODE`) and the PLAY menu's keys (bit 4: 0 Play, 1 Loops; `CRS_LOOP_KEYS`), docs/LOOPER-MODES.md; **v13: bit 5 the KEY layer's keys** (0 pick: a root = the tonic, MAJ / MIN = the scale; 1 play: the keys play as outside the layer; OPT tapped in the layer; `CRS_KEY_PLAY`, `CRS_KEY_KEYS`; the UI's `cs.key_play`); **v13 also: bits 6 and 7 the LOCK layer's styles** (B3 held): bit 6 Type key (0 Clears, 1 Keeps the latched extensions; `CRS_LOCK_KEEP`, `cs.lock_keep`), bit 7 Ext keys (0 Toggle, 1 Pushed; `CRS_LOCK_PUSH`, `cs.lock_push`); a mode out of range: the defaults (every bit of the byte has a job now). Before v8: retired in v5: v4's Options > USB Audio Out (the playback device, removed: docs/USB-AUDIO.md). A 0.14 dev build (still v6) kept the chord part's pool position on FM TONE (engine 15, `eng_quad.c`, code name QUAD) here; v6 → 7 moves it into `pool_pos` slot 0 and clears the byte: 0 since | 0 (Overwrite, Play, pick, Clears, Toggle); a v4 record's byte (1 by default there) is cleared on import; v1..v7 records read 0; a v8..v12 record: its mode and PLAY-menu keys, pick |
 | usb_in (v4) | Options > **USB Record**: ChoralRoot In is presented to the computer (docs/USB-AUDIO.md); Off: the serial console instead | **1** (on); a v1..v3 record takes it (its zero would mean off) |
 | usb_level (v4) | Options > USB Level: `CRS_USB_MASTER` (the recording follows MASTER) / `CRS_USB_FIXED` (recorded at the full level, MASTER after) | Master |
@@ -202,6 +203,18 @@ firmware would stop meeting; (3) a session written every time a knob is turned s
 the calibration table. So the block keeps its size and layout, an older firmware reads a v15 block exactly as it read
 a v14 one (a newer version of the same size: its fields are taken, `tests/cr_settings_test.c t_v15`), and the version
 number says one thing: this block was written by a firmware that keeps a session beside it.
+
+**0.19 added one bit and no version**: Options > Output in bit 1 of `pick_roots` (the table below). The version stays 15:
+an older record's bit is 0, which is the default (Clean), so there is nothing to migrate, and a version bump would
+have said something the bytes do not.
+
+**Felucca's SPEAKER setting (0.19).** The object's head holds Felucca's own fields; one of them, `lowcut` (MENU >
+SPEAKER there: 1 LOWCUT, 2 BASS+), is a stage of the master that ChoralRoot has no control for. Until 0.19 a unit
+that had run Felucca with it on kept it under ChoralRoot, through every save, backup and Reset Settings. Since 0.19
+`cr_settings_boot` sets `settings.lowcut` and `fx_lowcut` to 0 before `settings_init` applies them (and keeps what
+it found in `crs_lowcut_found`, the emulator's dump), `crs_rec` keeps what flash holds so that the next write of
+the object stores the 0, `cr_backup.c crb_commit` stores 0 from a restored object, and `cr_settings_reset` clears
+it. docs/AUDIO-QUALITY.md "Left behind" lists every other value another firmware can leave.
 
 ### Import rules (`cr_settings_import`)
 

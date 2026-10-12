@@ -1269,6 +1269,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **USB Record** | Off, On | On | On: the computer can record the FM-1 ([USB audio recording](#usb-audio-recording)) |
 | **USB Level** | Master, Fixed | Master | Master: the recording follows the MASTER knob. Fixed: it is recorded at full level and MASTER only sets what you hear |
 | **Dual Core** | Off, On | Off | On: the bass plays on the chip's second core (below). Takes effect after a restart |
+| **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder. You can switch while you play to compare |
 | **Version** | | | the firmware's version |
 | **Calibrate** | | | OCT+ starts the panel calibration ([Calibration](#calibration)) |
 | **Reset Settings** | | | OCT+ twice puts every setting back to its default (below) |
@@ -1332,7 +1333,7 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 | Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, Velocity | notes that were sounding, a chord LATCH was holding |
 | the performance mode, its parameters, and whether it is on | MIDI Perform, MIDI Bass, MIDI Raw Chord, Raw Chord Sound, MIDI Clock | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
 | LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, LEDs, Hold Time | a take you were recording |
-| the voicing on KNOB 1 and the octave shift | USB Record, USB Level, Dual Core | an open layer, menu, dialog or editor: the FM-1 starts on the view |
+| the voicing on KNOB 1 and the octave shift | USB Record, USB Level, Dual Core, Output | an open layer, menu, dialog or editor: the FM-1 starts on the view |
 | the bass being on, its **behaviour**, register, level, and which sound it plays | the panel calibration | where you were in the editor, the KEY layer's and the PLAY menu's page |
 | the effects in full: on or off, the page picked, every cell of the reverb, the chorus and the delay, both parts' sends | | |
 | which sound each part plays and each engine's last place; **each part's sound as it is, with changes you have not saved as a preset**; the parts' Level and Pan | | |
