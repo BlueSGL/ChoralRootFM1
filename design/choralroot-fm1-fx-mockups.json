@@ -266,12 +266,13 @@
     "panel": {
      "kind": "knobrow",
      "items": [
+      "Sends",
       "Reverb",
       "Chorus",
       "Delay",
       "Drive"
      ],
-     "sel": 0,
+     "sel": 1,
      "col": "green",
      "label": "fx \u00b7 on \u00b7 1/2",
      "cells": [
@@ -417,12 +418,13 @@
     "panel": {
      "kind": "knobrow",
      "items": [
+      "Sends",
       "Reverb",
       "Chorus",
       "Delay",
       "Drive"
      ],
-     "sel": 2,
+     "sel": 3,
      "col": "green",
      "label": "fx \u00b7 on \u00b7 1/2",
      "cells": [
@@ -571,12 +573,13 @@
     "panel": {
      "kind": "knobrow",
      "items": [
+      "Sends",
       "Reverb",
       "Chorus",
       "Delay",
       "Drive"
      ],
-     "sel": 1,
+     "sel": 2,
      "col": "green",
      "label": "fx",
      "cells": [
@@ -719,12 +722,13 @@
     "panel": {
      "kind": "knobrow",
      "items": [
+      "Sends",
       "Reverb",
       "Chorus",
       "Delay",
       "Drive"
      ],
-     "sel": 3,
+     "sel": 4,
      "col": "green",
      "label": "fx \u00b7 off",
      "cells": [
@@ -855,12 +859,13 @@
     "panel": {
      "kind": "knobrow",
      "items": [
+      "Sends",
       "Reverb",
       "Chorus",
       "Delay",
       "Drive"
      ],
-     "sel": 0,
+     "sel": 1,
      "col": "green",
      "label": "fx \u00b7 on \u00b7 2/2",
      "cells": [
@@ -1884,12 +1889,13 @@
     "panel": {
      "kind": "knobrow",
      "items": [
+      "Sends",
       "Reverb",
       "Chorus",
       "Delay",
       "Drive"
      ],
-     "sel": 2,
+     "sel": 3,
      "col": "green",
      "label": "fx \u00b7 on \u00b7 2/2",
      "cells": [
@@ -2246,6 +2252,153 @@
     },
     "footer": null,
     "note": "spread, sync and mode low (top) and high (bottom)."
+   }
+  },
+  {
+   "name": "15 \u00b7 knob row: Sends (the first page)",
+   "notes": "0.18 (the owner, 2026-10-12): the FX layer opens on the chord part's four send levels, the same four as the sound editor's FX group in its order and under its names: DRIVE (KNOB 1), CHORUS (KNOB 2), DELAY (KNOB 3), REVERB (KNOB 4). Each is the one value the editor and an effect's own Send cell show; SELECT +1 is Reverb 1, the pages as they were, each one later. FX off: the four read 'off'.",
+   "export": true,
+   "keys": [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   "keyLabels": {},
+   "keyNotes": {},
+   "buttons": {
+    "FX": 3,
+    "SEL": 1,
+    "ENV": 1,
+    "LFO": 1,
+    "EDIT": 1,
+    "GLO": 1,
+    "HOME": 1,
+    "SAVE": 1,
+    "ARP": 1,
+    "SEQ": 1,
+    "PLAY": 1,
+    "REC": 1,
+    "OCT-": 1,
+    "OCT+": 1
+   },
+   "playGreen": 0,
+   "buttonLabels": {},
+   "buttonNotes": {
+    "FX": "blinks: its layer is open (locked since the 300 ms hold); OCT- or HOME closes it, a tap still toggles it"
+   },
+   "encoders": {
+    "MASTER": {
+     "note": "",
+     "value": ""
+    },
+    "SELECT": {
+     "note": "",
+     "value": ""
+    },
+    "PRESETS": {
+     "note": "",
+     "value": ""
+    },
+    "ALGORITHM": {
+     "note": "",
+     "value": ""
+    },
+    "KNOB1": {
+     "note": "DRIVE",
+     "value": "9%"
+    },
+    "KNOB2": {
+     "note": "CHORUS",
+     "value": "35%"
+    },
+    "KNOB3": {
+     "note": "DELAY",
+     "value": "20%"
+    },
+    "KNOB4": {
+     "note": "REVERB",
+     "value": "28%"
+    }
+   },
+   "screen": {
+    "header": {
+     "icon": "none",
+     "bpm": "",
+     "mid": "",
+     "right": "",
+     "batt": 255,
+     "usb": false
+    },
+    "cards": null,
+    "panel": {
+     "kind": "knobrow",
+     "items": [
+      "Sends",
+      "Reverb",
+      "Chorus",
+      "Delay",
+      "Drive"
+     ],
+     "sel": 0,
+     "col": "green",
+     "label": "fx \u00b7 on",
+     "cells": [
+      {
+       "label": "Drive",
+       "value": "9%",
+       "glyph": "clip",
+       "pct": 0.094
+      },
+      {
+       "label": "Chorus",
+       "value": "35%",
+       "glyph": "mix",
+       "pct": 0.354
+      },
+      {
+       "label": "Delay",
+       "value": "20%",
+       "glyph": "mix",
+       "pct": 0.197
+      },
+      {
+       "label": "Reverb",
+       "value": "28%",
+       "glyph": "mix",
+       "pct": 0.276
+      }
+     ],
+     "hot": null,
+     "value": ""
+    },
+    "footer": {
+     "text": "SELECT: effect \u00b7 FX: on/off \u00b7 OCT-: back"
+    },
+    "note": "Sends: the chord part's drive, chorus, delay and reverb sends."
    }
   }
  ]

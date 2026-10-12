@@ -275,7 +275,7 @@ export EMU_UI_LOG=0
 run cr_fx_row
 unset EMU_UI_LOG
 L="$OUT/cr_fx_row.log"
-has '^fx: cells Size Damp Decay Send' "$L" && ok "FX held: Reverb over Size / Damp / Decay / Send: $OUT/cr_fx_row.ppm" || bad "no Reverb cells"
+has '^fx: cells Size Damp Decay Send' "$L" && ok "FX held, SELECT +1: Reverb over Size / Damp / Decay / Send: $OUT/cr_fx_row.ppm" || bad "no Reverb cells"
 has '^fx: knob 2 Reverb damp' "$L" && ok "KNOB 2: Reverb's damp ($(grep '^fx: knob 2' "$L" | head -1 | sed 's/^fx: //'))" || bad "KNOB 2: no damp change"
 fr=$(grep -c '^ui: frame' "$L"); kr=$(grep -c '^ui: frame.*device): knobrow ' "$L"); mt=$(grep -c '^ui: frame.*device): meter ' "$L")
 [ "$mt" = 0 ] && [ "$kr" -gt 100 ] && ok "no popup: every frame in the layer a knob row ($kr knobrow frames of $fr, 0 meters)" \
@@ -288,8 +288,9 @@ h=$(px_count "$OUT/cr_fx_row_hot.ppm" 64 176 116 196 ink); c=$(px_count "$OUT/cr
 has '^fx: cells Time Spread Feedback Send' "$L" && has '^fx: cells Rate Depth - Send' "$L" && has '^fx: cells - - - Send' "$L" &&
     ok "SELECT picks the effect, the cells follow (Delay, Chorus with a dash, Drive the send only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
 has '^fx: effect Reverb 2/2' "$L" && has '^fx: cells Pre-delay Mod Low cut Width' "$L" && has '^fx: effect Delay 2/2' "$L" &&
-    has '^fx: cells Sync Mode Tone Wow' "$L" && [ "$(grep -c '^fx: effect' "$L")" = 6 ] &&
-    ok "SELECT steps six pages: Reverb 1, Reverb 2 (Pre-delay / Mod / Low cut / Width), Chorus, Delay 1, Delay 2 (Sync / Mode / Tone / Wow), Drive: $OUT/cr_fx_row_reverb2.ppm, $OUT/cr_fx_row_delay2.ppm" \
+    has '^fx: cells Sync Mode Tone Wow' "$L" && [ "$(grep -c '^fx: effect' "$L")" = 7 ] &&
+    [ "$(grep -a '^fx: cells' "$L" | head -1)" = "fx: cells Drive Chorus Delay Reverb" ] &&
+    ok "SELECT steps the pages after Sends: Reverb 1, Reverb 2 (Pre-delay / Mod / Low cut / Width), Chorus, Delay 1, Delay 2 (Sync / Mode / Tone / Wow), Drive: $OUT/cr_fx_row_reverb2.ppm, $OUT/cr_fx_row_delay2.ppm" \
     || bad "the FX layer's pages: $(grep -c '^fx: effect' "$L") page changes"
 differ cr_fx_row cr_fx_row_reverb2 "Reverb 1 / Reverb 2 pages differ"
 differ cr_fx_row_delay cr_fx_row_delay2 "Delay 1 / Delay 2 pages differ"
@@ -332,6 +333,52 @@ has '^fx: knob 1 Reverb size 98' "$L" && has '^fx: knob 3 Reverb decay 60' "$L" 
 [ "$(fxsnd 3)" = "0 0 0 0" ] && [ "$(fxamt 3)" = "$(fxamt 2)" ] && [ "$(fxsnd 4)" = "$(fxamt 2)" ] && [ "$(fxpar 3)" = "$(fxpar 1)" ] &&
     ok "FX tapped off: the sends closed, the amounts and the effects' parameters kept; on again: the sends back" \
     || bad "FX off / on: sends $(fxsnd 3) / $(fxsnd 4), amt $(fxamt 3)"
+
+echo "a part's send is one value: the FX layer's Sends page, the editor's FX group, CC 91, FM TONE's Drive (docs/FX.md)"
+run cr_fx_sends
+L="$OUT/cr_fx_sends.log"
+fxl() { grep -a '^  session fx:' "$L" | sed -n "$1p"; }
+fxamt() { fxl "$1" | sed -n 's/.* amt \([0-9 ]*\) sends.*/\1/p'; }
+fxsnd() { fxl "$1" | sed -n 's/.* sends \([0-9 ]*\) par.*/\1/p'; }
+edc() { grep -a '^  editor fx chord:' "$L" | sed -n "$1p" | sed 's/^  editor fx chord: //; s/ track.*//'; }   # as the editor's cells read
+edb() { grep -a '^  editor fx bass:' "$L" | sed -n "$1p" | sed 's/^  editor fx bass: //; s/ track.*//'; }
+[ "$(grep -a '^fx: cells' "$L" | head -1)" = "fx: cells Drive Chorus Delay Reverb" ] && fxl 1 | grep -q '(Sends 1/1)' &&
+    ok "FX held: the layer opens on Sends, Drive / Chorus / Delay / Reverb on KNOB 1..4 (the editor's FX group's order and names): $OUT/cr_fx_sends.ppm" \
+    || bad "the FX layer's first page: $(grep -a '^fx: cells' "$L" | head -1), $(fxl 1 | cut -c1-48)"
+has '^fx: knob 1 Drive send 12' "$L" && has '^fx: knob 2 Chorus send 39' "$L" && has '^fx: knob 3 Delay send 31' "$L" &&
+    has '^fx: knob 4 Reverb send 53' "$L" && [ "$(fxamt 1)" = "53 39 31 12" ] && [ "$(fxsnd 1)" = "53 39 31 12" ] &&
+    ! cmp -s "$OUT/cr_fx_sends.ppm" "$OUT/cr_fx_sends_hot.ppm" &&
+    ok "the Sends page: KNOB 1..4 set the chord part's four sends (the editor's step; reverb chorus delay drive $(fxamt 1)): $OUT/cr_fx_sends_hot.ppm" \
+    || bad "the Sends page's knobs: amt $(fxamt 1), sends $(fxsnd 1)"
+has '^fx: knob 4 Reverb send 57' "$L" && [ "$(fxamt 2)" = "57 39 31 12" ] &&
+    [ "$(edc 2)" = "DST 12 9% CHO 39 31% DLY 31 24% REV 57 45%" ] && ! cmp -s "$OUT/cr_fx_sends_hot.ppm" "$OUT/cr_fx_sends_back.ppm" &&
+    ok "Reverb 1's Send cell (KNOB 4) and the Sends page are the same value; the editor's FX group reads the four ($(edc 2)): $OUT/cr_fx_sends_edit.ppm" \
+    || bad "the FX layer's sends in the editor: amt $(fxamt 2), the editor: $(edc 2)"
+has '^param: part 0 FX CHO 39 -> 45' "$L" && [ "$(fxamt 3)" = "57 45 31 12" ] && [ "$(edc 3)" = "DST 12 9% CHO 45 35% DLY 31 24% REV 57 45%" ] &&
+    ! cmp -s "$OUT/cr_fx_sends_back.ppm" "$OUT/cr_fx_sends_from_edit.ppm" &&
+    ok "the other way: the editor's KNOB 2 (chorus 39 -> 45), the Sends page reads it: $OUT/cr_fx_sends_from_edit.ppm" \
+    || bad "the editor's send in the FX layer: amt $(fxamt 3), the editor: $(edc 3)"
+[ "$(fxsnd 4)" = "0 0 0 0" ] && [ "$(fxamt 4)" = "57 45 31 12" ] && [ "$(edc 4)" = "$(edc 3)" ] &&
+    cmp -s "$OUT/cr_fx_sends_edit2.ppm" "$OUT/cr_fx_sends_edit_off.ppm" &&
+    ok "FX off (the track's sends closed): the editor's FX group still reads the part's four ($(edc 4)), the same screen as with FX on: $OUT/cr_fx_sends_edit_off.ppm" \
+    || bad "FX off: the editor's FX group reads '$(edc 4)' (the sends are $(fxamt 4): '$(edc 3)')"
+has '^param: part 0 FX REV 57 -> 63' "$L" && [ "$(fxamt 5)" = "63 45 31 12" ] && [ "$(fxsnd 5)" = "63 45 31 12" ] &&
+    ok "FX off, the editor's KNOB 4: one step from the send as it was (reverb 57 -> 63), FX on again, the other three as they were" \
+    || bad "FX off, a send turned in the editor: $(grep -a '^param: part 0 FX REV' "$L" | head -1), amt $(fxamt 5)"
+has '^send: part 0 Reverb 64 (cc)' "$L" && has '^send: part 1 Reverb 32 (cc)' "$L" &&
+    [ "$(edc 6)" = "DST 12 9% CHO 45 35% DLY 31 24% REV 64 50%" ] && [ "$(edb 6)" = "DST 0 0% CHO 0 0% DLY 0 0% REV 32 25%" ] &&
+    [ "$(fxamt 7)" = "64 45 31 12" ] && [ "$(edc 7)" = "$(edc 6)" ] && has '^sound: part 0 pos 2 FM BELL' "$L" &&
+    ok "CC 91 on the chord and the bass channel: the editor reads both (reverb 64, the bass part's 32); PRESETS +1: the sends stay" \
+    || bad "CC 91 / a sound change: chord '$(edc 6)' -> '$(edc 7)', bass '$(edb 6)'"
+has '^param: part 0 ENV DRIVE 12 -> 24' "$L" && [ "$(fxamt 8)" = "64 45 31 24" ] && [ "$(fxsnd 8)" = "64 45 31 24" ] &&
+    [ "$(fxamt 9)" = "64 45 31 24" ] && [ "$(fxsnd 9)" = "0 0 0 0" ] && cmp -s "$OUT/cr_fx_sends_tone.ppm" "$OUT/cr_fx_sends_tone_off.ppm" &&
+    ok "FM TONE's AMP Drive is the part's drive: turned there (12 -> 24), the FX amount; with FX off its cell reads the same: $OUT/cr_fx_sends_tone.ppm" \
+    || bad "FM TONE's Drive: amt $(fxamt 8) sends $(fxsnd 8); FX off: amt $(fxamt 9) sends $(fxsnd 9)"
+[ "$(fxamt 10)" = "35 45 25 0" ] && [ "$(fxsnd 10)" = "35 45 25 0" ] && [ "$(edc 10)" = "DST 0 0% CHO 45 35% DLY 25 20% REV 35 28%" ] &&
+    [ "$(edb 10)" = "DST 0 0% CHO 0 0% DLY 0 0% REV 10 8%" ] && fxl 10 | grep -q 'on 1 .*(Sends 1/1)' &&
+    cmp -s "$OUT/cr_fx_sends.ppm" "$OUT/cr_fx_sends_reverted.ppm" &&
+    ok "GLO + SAVE (the revert, nothing saved): both parts' sends a new unit's on both screens, the layer on Sends: $OUT/cr_fx_sends_reverted.ppm" \
+    || bad "the revert: amt $(fxamt 10) sends $(fxsnd 10), the editor: '$(edc 10)' / '$(edb 10)'"
 
 echo "the perform layer: a knob row (the mode over its four parameters), a turned cell hot, no popup"
 export EMU_UI_LOG=0

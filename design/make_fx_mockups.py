@@ -30,6 +30,7 @@ from make_mockups import (state, scr, cell, editor_screen, BUTTON_LABELS, ENCODE
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "choralroot-fm1-fx-mockups.json")
 
 FX = ["Reverb", "Chorus", "Delay", "Drive"]                       # cr_ui.c CU_FX (SELECT steps their six pages)
+FXP = ["Sends"] + FX                                              # .. the picker's items: the Sends page first (state 15)
 fx_labels = {ROOT_WHITE[i]: n.upper() for i, n in enumerate(FX)}
 FX_FOOT = "SELECT: effect · FX: on/off · OCT-: back"       # cr_ui.c cu_layer_screen (the printed names; OCT+ closes too)
 FX_BTN = {"FX": BLINK}
@@ -68,6 +69,10 @@ DELAY2_CELLS = [g("Sync", "Tempo", "sync", 1.0), g("Mode", "Ping-pong", "ping", 
                 g("Wow", "24", "lfo", 0.08, 24 / 127)]
 CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), None, g("Send", "30", "mix", 0.3)]
 DRIVE_CELLS = [None, None, None, g("Send", "15", "clip", 0.15)]
+# the Sends page (the owner, 2026-10-12): the sound editor's FX group on the FX layer's first page, its order, its names,
+# its knobs and its read-out (per cent of the send's 0..127); the glyphs are the Send cells' (clip for the drive)
+SENDS_CELLS = [g("Drive", "9%", "clip", 12 / 127), g("Chorus", "35%", "mix", 45 / 127), g("Delay", "20%", "mix", 25 / 127),
+               g("Reverb", "28%", "mix", 35 / 127)]
 
 # 1 ---------------------------------------------------------------- today
 S.append(state(
@@ -93,7 +98,7 @@ S.append(state(
     "sliding in from the right; a turned bar fills stripe by stripe.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": ("SIZE", "88"), "KNOB2": ("DAMP", "56"), "KNOB3": ("DECAY", "3.0 S"), "KNOB4": ("SEND", "25")},
-    screen=scr(knobrow(FX, 0, C_FX, REVERB_CELLS, label="fx · on · 1/2"), foot=FX_FOOT,
+    screen=scr(knobrow(FXP, 1, C_FX, REVERB_CELLS, label="fx · on · 1/2"), foot=FX_FOOT,
                note="the knob row: Reverb big in green over the four cells in the knob colours; the amount green on KNOB 4."),
     chord_block=False,
 ))
@@ -104,7 +109,7 @@ S.append(state(
     "block for 800 ms (the editor's hot cell), no popup over the screen.",
     keys=[OFF] * 27, lit=["F4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": ("TIME", "1/8"), "KNOB2": ("SPREAD", "3:4"), "KNOB3": ("FEEDBACK", "58"), "KNOB4": ("SEND", "40")},
-    screen=scr(knobrow(FX, 2, C_FX, DELAY_CELLS, hot=1, label="fx · on · 1/2"), foot=FX_FOOT,
+    screen=scr(knobrow(FXP, 3, C_FX, DELAY_CELLS, hot=1, label="fx · on · 1/2"), foot=FX_FOOT,
                note="Delay 1: the hot cell (SPREAD on an orange block) is the only trace of the turn."),
     chord_block=False,
 ))
@@ -115,7 +120,7 @@ S.append(state(
     "AMOUNT): the row's shape stays, so the hand always finds the amount on KNOB 4. This state shows Chorus.",
     keys=[OFF] * 27, lit=["E4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": ("RATE", "0.8 Hz"), "KNOB2": ("DEPTH", "60"), "KNOB3": "", "KNOB4": ("AMOUNT", "30")},
-    screen=scr(knobrow(FX, 1, C_FX, CHORUS_CELLS, label="fx"), foot=FX_FOOT,
+    screen=scr(knobrow(FXP, 2, C_FX, CHORUS_CELLS, label="fx"), foot=FX_FOOT,
                note="Chorus: two cells and a dim '–'; the amount stays on KNOB 4."),
     chord_block=False,
 ))
@@ -126,7 +131,7 @@ S.append(state(
     "'off' and its bar is empty; a KNOB 4 turn switches it on again (today's rule).",
     keys=[OFF] * 27, lit=["G4"], buttons={"FX": BLINK}, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": "", "KNOB2": "", "KNOB3": "", "KNOB4": ("AMOUNT", "off")},
-    screen=scr(knobrow(FX, 3, C_FX, [None, None, None, g("Send", "off", "clip", 0.0)], label="fx · off"), foot=FX_FOOT,
+    screen=scr(knobrow(FXP, 4, C_FX, [None, None, None, g("Send", "off", "clip", 0.0)], label="fx · off"), foot=FX_FOOT,
                note="Drive, FX off: the amount cell reads off."),
     chord_block=False,
 ))
@@ -138,7 +143,7 @@ S.append(state(
     "leaving the centre) on KNOB 4, which is no send here. The label carries the page quietly, as the KEY layer's.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": ("PRE-DELAY", "17 MS"), "KNOB2": ("MOD", "56"), "KNOB3": ("LOW CUT", "127 HZ"), "KNOB4": ("WIDTH", "127")},
-    screen=scr(knobrow(FX, 0, C_FX, REVERB2_CELLS, hot=2, label="fx · on · 2/2"), foot=FX_FOOT,
+    screen=scr(knobrow(FXP, 1, C_FX, REVERB2_CELLS, hot=2, label="fx · on · 2/2"), foot=FX_FOOT,
                note="Reverb 2: pre-delay, mod, low cut, width; KNOB 3 just turned (hot)."),
     chord_block=False,
 ))
@@ -231,7 +236,7 @@ S.append(state(
     "TONE (the loop's low-pass: the moon) and WOW (the time's slow wobble).",
     keys=[OFF] * 27, lit=["F4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
     encoders={"KNOB1": ("SYNC", "TEMPO"), "KNOB2": ("MODE", "PING-PONG"), "KNOB3": ("TONE", "84"), "KNOB4": ("WOW", "24")},
-    screen=scr(knobrow(FX, 2, C_FX, DELAY2_CELLS, label="fx · on · 2/2"), foot=FX_FOOT,
+    screen=scr(knobrow(FXP, 3, C_FX, DELAY2_CELLS, label="fx · on · 2/2"), foot=FX_FOOT,
                note="Delay 2: sync, mode, tone, wow."),
     chord_block=False,
 ))
@@ -267,6 +272,20 @@ for _s in S:                                   # the battery shows on the Option
         _h["batt"] = False
 
 assert len(S) <= 24
+
+# 15 --------------------------------------------------------------- 0.18: the Sends page, the layer's first
+S.append(state(
+    "15 · knob row: Sends (the first page)",
+    "0.18 (the owner, 2026-10-12): the FX layer opens on the chord part's four send levels, the same four as the sound "
+    "editor's FX group in its order and under its names: DRIVE (KNOB 1), CHORUS (KNOB 2), DELAY (KNOB 3), REVERB (KNOB "
+    "4). Each is the one value the editor and an effect's own Send cell show; SELECT +1 is Reverb 1, the pages as they "
+    "were, each one later. FX off: the four read 'off'.",
+    keys=[OFF] * 27, buttons=FX_BTN, button_notes=FX_NOTE,
+    encoders={"KNOB1": ("DRIVE", "9%"), "KNOB2": ("CHORUS", "35%"), "KNOB3": ("DELAY", "20%"), "KNOB4": ("REVERB", "28%")},
+    screen=scr(knobrow(FXP, 0, C_FX, SENDS_CELLS, label="fx · on"), foot=FX_FOOT,
+               note="Sends: the chord part's drive, chorus, delay and reverb sends."),
+    chord_block=False,
+))
 
 design = {
     "format": "fm1-panel-design", "version": 1, "device": "M-VAVE FM-1",

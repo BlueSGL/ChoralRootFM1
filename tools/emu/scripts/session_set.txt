@@ -66,7 +66,7 @@ btn FX down                   # the FX layer: Delay 1, its time (1/8 -> 1/8., an
 wait 500                      # 3:4), feedback, send
 btn FX up
 wait 300
-knob SELECT +3
+knob SELECT +4                # (Sends, Reverb 1, Reverb 2, Chorus, Delay 1)
 wait 300
 knob KNOB1 -2
 wait 200

@@ -203,8 +203,11 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
 #define CSS_NFXE 8
 #define CSS_FX_NONE 0xFFu               /* amt: not stored (the default send) */
 enum { CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE,              /* effect tags (amt's index, sel) */
-       CSS_FXE_REVERB2, CSS_FXE_DELAY2 };                                          /* .. sel only (0.18): the effect's
+       CSS_FXE_REVERB2, CSS_FXE_DELAY2,                                            /* .. sel only (0.18): the effect's
                                                                                     * second page in the FX layer */
+       CSS_FXE_SENDS };                                                            /* .. sel only: the Sends page (a
+                                                                                    * record without it: sel is the
+                                                                                    * effect's page it was left on) */
 /* parameter tags (1..255). 1..3 and 6..8 were Felucca's ROOM / SPRING reverb and its mono delay (0.17 and the first
  * 0.18 builds: size, damp, type; time, feedback, colour): RETIRED with them, never reused; a record that holds them
  * loses them at its next save. 9..24: the stereo delay's and the large reverb's (cr_fx.c XP_*, docs/FX.md) */

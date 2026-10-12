@@ -87,9 +87,10 @@ way, the highest note down); the screen reads `voicing +2`.
 **Open a layer.** Hold **FX** for about half a second. Its layer opens and stays open after you let go; the FX button
 blinks.
 
-<img src="manual/layer-fx.png" width="240" alt="The FX layer: Reverb as the picked effect, four cells Size, Damp, Decay, Send in the knob colours">
+<img src="manual/layer-fx-sends.png" width="240" alt="The FX layer on its first page, Sends: four cells Drive, Chorus, Delay, Reverb in the knob colours">
 
-SELECT picks the effect, KNOB 1 to KNOB 4 turn the four cells under it, and the root keys still play so you hear the
+It opens on **Sends**: how much of the chords goes into each effect. SELECT steps on to the effects themselves, KNOB 1
+to KNOB 4 turn the four cells under the name, and the root keys still play so you hear the
 change. **OCT-** closes the layer (so do OCT+, HOME, and holding FX again). All the layer buttons work this way: a tap is the button's on / off,
 a hold opens its layer. [Layers](#5-layers) has the rules.
 
@@ -559,13 +560,15 @@ The one rule to know: **the effects and their sends belong to the instrument, no
 On the panel:
 
 - **FX** tap switches the effects on and off: with FX off nothing is sent into them, from the bass neither.
-- **KNOB 4** is the chord part's send into the selected effect (turning it switches the effects on).
-- Hold FX for the **FX layer**. SELECT steps through six pages; the name of the effect is big, the page is in the
-  small line above it (`fx · on · 1/2`). KNOB 1 to KNOB 4 turn the four cells, a FX tap is still on / off, and the
-  root keys play. OCT-, OCT+, HOME or holding FX again closes the layer.
+- **KNOB 4** is the chord part's send into the selected effect (turning it switches the effects on). The selected
+  effect is the one whose page the FX layer showed last; the reverb until you pick another.
+- Hold FX for the **FX layer**. SELECT steps through seven pages; the name of the page is big, an effect's page
+  number is in the small line above it (`fx · on · 1/2`). KNOB 1 to KNOB 4 turn the four cells, a FX tap is still
+  on / off, and the root keys play. OCT-, OCT+, HOME or holding FX again closes the layer.
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- |
+| **Sends** | Drive | Chorus | Delay | Reverb |
 | Reverb 1 | Size | Damp | Decay | **Send** |
 | Reverb 2 | Pre-delay | Mod | Low cut | Width |
 | Chorus | Rate | Depth | | **Send** |
@@ -573,9 +576,18 @@ On the panel:
 | Delay 2 | Sync | Mode | Tone | Wow |
 | Drive | | | | **Send** (the amount of drive) |
 
-The bass part's four sends are in the bass sound's editor, FX group (BASS held + EDIT, then the FX button); it plays
-into the same reverb and delay as the chords. A new FM-1 has a little reverb on the bass and nothing else. The chord
-sound's editor shows the chord part's sends in its FX group too: the same four values as the FX layer's Send cells.
+**Sends**, the first page, is the chord part's four sends side by side: its drive, and how much of it goes into the
+chorus, the delay and the reverb. They are the same four, in the same order and on the same knobs, as the FX group
+of the sound editor ([The sound editor](#12-the-sound-editor)), and each is the same value as the **Send** cell on
+the effect's own page: change it in one place and the others show it at once. A new FM-1 opens the layer on Sends;
+after that it opens on the page you left it on. While FX is off the four cells read `off`; turning one switches the
+effects on again. In the sound editor the FX group always shows the values that are kept, FX on or off.
+
+<img src="manual/layer-fx.png" width="240" alt="The FX layer on Reverb 1: four cells Size, Damp, Decay, Send in the knob colours">
+
+The Sends page and the Send cells are the chord part's. The bass part's four sends are in the bass sound's editor, FX
+group (BASS held + EDIT, then the FX button); it plays into the same reverb and delay as the chords. A new FM-1 has a
+little reverb on the bass and nothing else.
 
 A saved sound still has four send values inside it (the format has not changed), but they are not used when it is
 loaded.
@@ -1426,7 +1438,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | The reverb does not stop | Decay is at `Inf`, or very long | turn Decay down (FX layer, Reverb 1, KNOB 3) |
 | The echoes are on one side, then the other | the delay's Mode is Ping-pong | FX layer, Delay 2, KNOB 2: Stereo |
 | The bass has reverb or echo | the bass part has sends of its own | BASS held + EDIT, the FX group; or FX off |
-| A sound I saved with lots of reverb loads dry (or the other way round) | sends are no longer loaded with a sound: they are the part's | set the Send once in the FX layer; it stays for every sound |
+| A sound I saved with lots of reverb loads dry (or the other way round) | sends are no longer loaded with a sound: they are the part's | set the sends once in the FX layer (its first page); they stay for every sound |
 | In the engine picker the white keys no longer choose the engine | they always play now, so that you hear what you turn to | SELECT steps the engines |
 | After updating to 0.18 the reverb and the delay sound different | they are new, and start at their defaults | [FX](#8-fx) |
 | My edit is gone | unsaved changes are lost with the next sound, and at power-off unless you held SAVE | SAVE tap to make it a preset; SAVE held to keep the part as it is |
@@ -1455,7 +1467,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
-| FX | FX | effects on / off (in its layer too) | FX layer: SELECT the page (Reverb 1 · Reverb 2 · Chorus · Delay 1 · Delay 2 · Drive) · KNOB 1-4 its cells (KNOB 4 on a first page: the chord part's Send) |
+| FX | FX | effects on / off (in its layer too) | FX layer: SELECT the page (Sends · Reverb 1 · Reverb 2 · Chorus · Delay 1 · Delay 2 · Drive) · KNOB 1-4 its cells (Sends: the chord part's drive, chorus, delay and reverb sends; KNOB 4 on an effect's first page: its Send) |
 | SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · GLO: the keys pick / play |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |

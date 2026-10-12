@@ -21,15 +21,19 @@ wait 400
 shot docs/manual/sound-popup.png
 wait 1500
 
-# layer-fx.png: FX held past the hold time (the layer stays; OCT- closes it)
+# layer-fx-sends.png: FX held past the hold time (the layer stays; OCT- closes it): its first page, the sends
 btn FX 600
 wait 400
+shot docs/manual/layer-fx-sends.png
+# layer-fx.png: SELECT +1: the reverb's first page
+knob SELECT +1
+wait 500
 shot docs/manual/layer-fx.png
-# layer-fx-delay.png: SELECT +3 in the layer: the delay's first page (then back, for the shots below)
+# layer-fx-delay.png: SELECT +3: the delay's first page (then back, for the shots below)
 knob SELECT +3
 wait 500
 shot docs/manual/layer-fx-delay.png
-knob SELECT -3
+knob SELECT -4
 wait 300
 btn OCT-
 wait 400

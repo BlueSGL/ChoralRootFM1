@@ -611,3 +611,25 @@ steps entered, a new root is a new step also with LOCK latched, the editor opens
 and moves nothing, four rows of 16 on the screen. HANDOFF.md was split from this file; 19 merged worktrees were removed
 (their branches remain: the hook blocks branch deletion).
 
+
+**2026-10-12, the sends: one value, and the FX layer's Sends page** (0.18 dev; built, not flashed; number it at the
+merge). The user: "if I am in the FX menu from main and change the FX sends, then I enter the sound editor and go to
+the FX send page, the send values shown [do not] update to what they actually are until I turn them", and: "when you
+enter the FX menu from main the first page should also show the 4 FX send levels for convenience". The cause: two
+stores for the chord part's sends. `cs.fx_amt[]` holds the amounts; the track's `P_DIST .. P_REV` are what the audio
+reads, written by `cu_fx_apply` as the amounts or as 0 with FX off. The FX layer read the first, the editor the
+second: with FX off (a FX tap, in its layer too) the editor's FX group read 0 % four times and its knob stepped from
+0, switched FX on and the other three jumped back. With FX on the two agreed (no case found in the emulator where
+they did not, on any of the six engines). FM TONE's AMP Drive wrote the track alone, so the next `cu_fx_apply` took
+it back. The fix: `cu_send` / `cu_send_set` (`cr_ui.c`) are the only way the UI reads or writes a send (the FX
+layer, KNOB 4 of the main view, CC 91 / 93 / 94, the editor through `ce_param` / `ce_knob`, `ce_send_ref` naming the
+cells that are sends); the chord track's four fields are `cu_fx_apply`'s output and nothing reads them back. No
+audio change (`cu_fx_apply` writes what it wrote; fx.c untouched). The Sends page: `CU_FXP[0]`, Drive / Chorus /
+Delay / Reverb on KNOB 1..4 with the editor's names, order, step and per-cent read-out, the chord part's as every
+Send cell; `cs.fx_page == CU_FXPG_SENDS`, `cs.fx_sel` stays (KNOB 4 of the main view is still the last effect's
+send); the session's `fx.sel` gets the tag `CSS_FXE_SENDS` (6), older records open on the effect's page they name.
+The Send cells of Reverb 1, Chorus, Delay 1 and Drive are now redundant and were left in place. Left for the user's
+decision: a Send cell reads 0..99 and steps 4, the Sends page and the editor read per cent of 127 and step 6 (57 is
+"44" on Reverb 1 and "45%" on Sends); with FX off the bass part's drive still sounds while the chord part's does
+not (fx.c gates the three sends, not the drive). `tools/emu/scripts/cr_fx_sends.txt`, the dump's `editor fx` lines,
+`design/make_fx_mockups.py` state 15, the manual's `layer-fx-sends.png`.

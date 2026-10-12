@@ -8,7 +8,9 @@ wait 300
 btn FX down
 wait 500
 btn FX up
-wait 300
+wait 150
+knob SELECT +1                # (the layer opens on Sends: Reverb 1)
+wait 150
 knob KNOB1 +1
 wait 30
 knob KNOB2 +1

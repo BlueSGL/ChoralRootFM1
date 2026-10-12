@@ -27,18 +27,22 @@ through the presets and experience the effect on each instrument."
 
 | What | Where it lives | Changed by a sound load |
 | --- | --- | --- |
-| each **part's sends** into the reverb, the chorus and the delay, and its **drive** | the part: `P_REV`, `P_CHOR`, `P_DLY`, `P_DIST` of `trk[]`, which no load writes (`cr_bank.c param_kept`, as Level and Pan); the chord part's also in `cs.fx_amt[]` | **never** |
+| each **part's sends** into the reverb, the chorus and the delay, and its **drive** | one value a send (`cr_ui.c cu_send` / `cu_send_set`): the chord part's in `cs.fx_amt[]`, the bass part's in its track (`P_REV`, `P_CHOR`, `P_DLY`, `P_DIST` of `trk[]`), which no load writes (`cr_bank.c param_kept`, as Level and Pan). See "The sends: one value" below | **never** |
 | every effect's **own parameters** (16 of the delay and the reverb: `cr_fx.c` `xfp[]`; the chorus's rate and depth: `song.g`) | global | never |
 | all of it over a power-off | the session's FX block, by tag (`cr_settings.h`: `fx.amt[]` the chord part's sends, `CSS_FXP_BS_*` the bass part's, `CSS_FXP_*` the parameters; [SETTINGS.md](SETTINGS.md)) | |
 | FX on / off | the settings block (`fx_on`) | no |
 
-- **"Send" on KNOB 4 is the chord part's send** (0..127, shown 0..99). There is no master wet level: the returns are
-  fixed (`XD_WET`, `XR_WET`), matched to the old effects (below).
+- **The FX layer's first page, Sends, is the chord part's four** (Drive, Chorus, Delay, Reverb on KNOB 1..4), and
+  **"Send" on KNOB 4 of an effect's own page is the same send** (0..127; the Sends page reads it in per cent as the
+  editor does, a Send cell 0..99). There is no master wet level: the returns are fixed (`XD_WET`, `XR_WET`), matched
+  to the old effects (below).
 - **The bass part's sends** are set in the bass sound's editor, FX group (BASS held + EDIT, then the FX button), and by
-  CC 91 / 93 / 94 on the bass channel. Nothing on the main pages sets them, and nothing was added.
+  CC 91 / 93 / 94 on the bass channel. Nothing on the main pages sets them, and nothing was added: the FX layer,
+  its Sends page too, is the chord part's.
 - **The editor's FX group** (`cr_pages.c`: Drive, Chorus, Delay, Reverb) shows and edits the part's sends: the chord
-  sound's editor the chord part's (the same four values as the FX layer's Send cells), the bass sound's the bass
-  part's. A change there no longer marks the sound as edited.
+  sound's editor the chord part's (the same four values as the FX layer's Sends page and Send cells), the bass
+  sound's the bass part's. A change there no longer marks the sound as edited. FM TONE's AMP page has the part's
+  drive too (its Drive cell: `eng_quad.c QUAD_XDIST`): the same value again.
 - **A preset's or a saved sound's send fields** are ignored on load. A save writes the part's current sends into them,
   as it always wrote the part's values: the record's format is unchanged and an older firmware reads it as before.
 - **Defaults** (a new unit, Options > Reset Settings): the chord part reverb 35, chorus 45, delay 25, drive 0 (what
@@ -47,6 +51,38 @@ through the presets and experience the effect on each instrument."
 - MIDI: CC 91 / 93 / 94 set a part's reverb / chorus / delay send; a program change does not touch them.
 - A send is reached as a ramp over a block (`fx.c fx_sg`): turning Send, FX on / off and a CC write no step into
   what the delay and the reverb are fed.
+
+### The sends: one value
+
+The owner, 2026-10-12: "if I am in the FX menu from main and change the FX sends, then I enter the sound editor and go
+to the FX send page, the send values shown [do not] update to what they actually are until I turn them."
+
+The cause was two stores for the chord part's sends. The amounts live in `cs.fx_amt[]`; the track's `P_DIST .. P_REV`
+are what the audio reads, and `cu_fx_apply` writes them: the amounts, or **0 while FX is off** (the drive has no
+other gate: `fx.c` closes the three sends itself, the drive it reads from the track). The FX layer showed the first,
+the editor the second. With FX on the two agree, so the editor followed the layer; with FX off (a tap of FX, in its
+layer too) the editor's FX group read 0 % four times whatever the sends were, and its knob stepped from that 0: one
+detent made the send 6 instead of amount + 6, switched FX on, and the other three jumped to their amounts. FM
+TONE's Drive cell had the mirror fault: it wrote the track alone, so the FX layer did not show it and the next
+`cu_fx_apply` took it back.
+
+Now every reader and writer of a send in the UI goes through two functions (`cr_ui.c`):
+
+| | chord part | bass part |
+| --- | --- | --- |
+| `cu_send(part, id)` | `cs.fx_amt[]` | the track's `p[id]` |
+| `cu_send_set(part, id, v)` | `cs.fx_amt[]`, FX on, `cu_fx_apply` | the track's `p[id]` |
+
+They are: the Sends page and the Send cells (`cu_fx_cells`, the `L_FX` knobs), KNOB 4 of the main view, CC 91 / 93 /
+94, and the editor (`cr_edit.c ce_param` to read, `ce_knob` to write; `ce_send_ref` says which cell is a send: the
+FX group's four, and FM TONE's Drive). The chord track's four fields are an output of `cu_fx_apply` and nothing
+else: no screen reads them. So a send shows the same in both places at once, in both directions, FX on or off; with
+FX off the editor shows the send that is kept (as it always did for the bass part) and the FX layer shows "off".
+A send turned in either place switches FX on, as before. The audio is untouched: `cu_fx_apply` writes what it wrote.
+
+Checked by `tools/emu/scripts/cr_fx_sends.txt` (`test_cr.sh`, "a part's send is one value"): the layer to the editor
+and back, FX off, CC 91 on both channels, a sound change, FM TONE's Drive, the revert. The emulator's dump prints the
+editor's FX group as its cells read it (`editor fx chord:` / `bass:`) beside the track's fields.
 
 ## What the first build got wrong
 
@@ -481,16 +517,30 @@ on, 1/8, Spread 1:1, Feedback 58, ping-pong, Tone 70 (3.8 kHz), Wow 24 (free tim
 
 ## The FX layer
 
-SELECT steps six pages; the picker shows the effect, the label the page (`fx · on · 1/2`).
+SELECT steps seven pages; the picker shows the page's name (Sends, or the effect) over five marks, the label an
+effect's page (`fx · on · 1/2`). The layer opens on Sends on a new unit and after a reset or a revert with nothing
+saved; otherwise on the page it was left on (the session's `fx.sel`, a tag a page: `CSS_FXE_SENDS` is the new one,
+6. A record written before it names an effect's page and opens there; an older firmware that reads a record naming
+Sends does not know the tag and keeps Reverb 1).
 
 | Page | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 |
 | --- | --- | --- | --- | --- |
+| Sends | Drive (clip) | Chorus (mix) | Delay (mix) | Reverb (mix) |
 | Reverb 1 | Size (room) | Damp (moon) | Decay (tail) | Send (mix) |
 | Reverb 2 | Pre-delay (pre) | Mod (lfo) | Low cut (cut) | Width (width) |
 | Chorus | Rate (lfo) | Depth (lfo) | – | Send (mix) |
 | Delay 1 | Time (echoes) | Spread (spread) | Feedback (echoes) | Send (mix) |
 | Delay 2 | Sync (sync) | Mode (ping) | Tone (moon) | Wow (lfo) |
 | Drive | – | – | – | Send (clip) |
+
+**Sends** (the owner, 2026-10-12: "I also really like in this sound editor page being able to set the send levels for
+each FX, so I think when you enter the FX menu from main the first page should also show the 4 FX send levels for
+convenience") is the sound editor's FX group on the layer's knob row: the same four, in its order, under its names,
+on its knobs, with its step (6 a detent) and its read-out (per cent). It edits the **chord part's** sends, as every
+Send cell of the layer does; the bass part's stay in the bass sound's editor. The Send cells on KNOB 4 of Reverb 1,
+Chorus, Delay 1 and Drive are still there (the same values, 4 a detent, shown 0..99), and KNOB 4 of the main view is
+still the send of the effect last picked (Reverb while the layer has only shown Sends). While FX is off the four
+read "off", as a Send cell; turning one switches FX on. Fixture: `design/make_fx_mockups.py` state 15.
 
 The seven new glyphs (`cr_draw.c cr_picto`: `CR_G_TAIL PRE CUT WIDTH SPREAD SYNC PING`) are drawn in the manner of the
 old ones and have fixtures (`design/make_fx_mockups.py` states 2, 3, 5b, 12, 13, 14; `tests/cr_draw_test.c`). The
