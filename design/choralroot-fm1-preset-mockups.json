@@ -15,7 +15,7 @@
    "HOME": "HOME",
    "SAVE": "SAVE",
    "ARP": "PERF",
-   "SEQ": "METRO",
+   "SEQ": "SEQ",
    "PLAY": "LOOP",
    "REC": "REC",
    "OCT-": "OCT-",
@@ -36,7 +36,7 @@
  "states": [
   {
    "name": "1 \u00b7 PRESETS turned: the next preset of the current engine",
-   "notes": "PRESETS steps through the presets of the engine the chord part plays, and nothing else: here FM6, preset 05 of 25 (01..25 the factory presets, then the ones the user saves; 00 is INIT, the engine's plain sound: it is not counted as a preset and cannot be overwritten). The popup: the number big, the name, 'FM6 \u00b7 05/25' as the label, the stripe meter over the pool: a stripe per preset, none lit on INIT, every one on the last preset. A preset the user overwrote carries a small square mark after its name (state 5). It loads at once, as today.",
+   "notes": "PRESETS steps through the presets of the engine the chord part plays, and nothing else: here FM6, preset 05 of 25 (01..25 the factory presets, then the ones the user saves; 00 is INIT, the engine's plain sound: it is not counted as a preset and cannot be overwritten). The popup: the engine in orange over the number, the number big, the name, 'Hold OPT to change engine' as the label (until 0.18: 'FM6 \u00b7 05/25'; `over` is the line over a meter's value), the stripe meter over the pool: a stripe per preset, none lit on INIT, every one on the last preset. A preset the user overwrote carries a small square mark after its name (state 5). It loads at once, as today.",
    "export": true,
    "keys": [
     1,
@@ -146,13 +146,15 @@
      "kind": "meter",
      "value": "05",
      "sub": "FM PAD",
-     "label": "FM6 \u00b7 05/25",
+     "label": "Hold OPT to change engine",
+     "over": "FM6",
+     "overCol": "orange",
      "col": "white",
      "pct": 0.2,
      "segments": 25
     },
     "footer": null,
-    "note": "PRESETS: the preset number big, its name, the engine and the place among its presets (INIT, 00, is not counted)."
+    "note": "PRESETS: the engine in orange, the preset number big, its name, the stripes (INIT, 00, is not one), the way to another engine."
    }
   },
   {
@@ -671,7 +673,9 @@
      "kind": "meter",
      "value": "02",
      "sub": "MY BELL \u25aa",
-     "label": "FM6 \u00b7 02/25",
+     "label": "Hold OPT to change engine",
+     "over": "FM6",
+     "overCol": "orange",
      "col": "white",
      "pct": 0.08,
      "segments": 25

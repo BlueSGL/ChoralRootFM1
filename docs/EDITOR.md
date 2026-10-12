@@ -70,7 +70,7 @@ stage (MOD FX MIX).
 | SEL | KEY | **FILT** | as OSC | — |
 | ENV | BASS | **ENV** | as OSC (the next envelope) | — ; **held + KNOB 1–4: the quick mapping** (§13) |
 | LFO | LATCH | **LFO** | as OSC | — ; **held + KNOB 1–4: the quick mapping** (§13) |
-| SEQ | METRO | **MOD** | as OSC | — |
+| SEQ | SEQ | **MOD** | as OSC | — |
 | PLAY | LOOP | **FX** | the group (one screen) | — |
 | REC | REC | **MIX** | the group (one screen) | — |
 | GLO | OPT | **SHIFT** | latch / unlatch SHIFT (§6) | momentary SHIFT while held; held + EDIT: chord ↔ bass sound |
@@ -432,7 +432,7 @@ What made it fast:
 3. **PRESETS in the editor**: decided (2026-10-06): the engine picker, previewing (§7). ALGORITHM still loads the
    bass at once.
 4. **A group button held**: reserved (nothing). Could become "reset this parameter / lane to default".
-5. **The functions the sections hide** (KEY, BASS, LATCH, METRO, LOOP, REC, the FX on/off): not reachable while
+5. **The functions the sections hide** (KEY, BASS, LATCH, SEQ, LOOP, REC, the FX on/off): not reachable while
    editing. Variant B gives REC back.
 6. **OPT tap in the editor**: decided: SHIFT latch (§6); the Options stay outside the editor.
 7. **Page memory across power-off**: RAM only for now; it could join the settings record if wanted.

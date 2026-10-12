@@ -496,7 +496,9 @@ static void cr_p_meter(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
     int32_t gap = 4 * 16, sw = (224 * 16 - gap * (int32_t)(n - 1u)) / (int32_t)n, my = CR_PY0 + ph - 46;
     int32_t mh = s->thick ? s->thick : 14;
     cr_text(P8(120), vy, s->value, size, 1, CR_C, sx, col, T_BG, 0);
-    if (s->sub[0] && s->sub_mark) {      /* the name and a 5 px square after it, centred together */
+    if (s->line[0])                      /* a line over the value (a pool's read-out: the part's engine, in orange) */
+        cr_text_fit(P8(120), P8(CR_PY0 + 26), s->line, 15, 1, CR_C, cr_rgb(s->line_col, T_MID), T_BG, P8(150));
+    if (s->sub[0] && s->sub_mark) {     /* the name and a 5 px square after it, centred together */
         int32_t tw = cr_tw(s->sub, 15, 1), x0 = P8(120) - (tw + P8(9)) / 2;
         cr_text(x0, vy + P8(22), s->sub, 15, 1, CR_L, 4096, col, T_BG, 0);
         cr_frect((x0 + tw + P8(4)) >> 4, ((vy + P8(22)) >> 4) - 6 * 16, 5 * 16, 5 * 16, col);

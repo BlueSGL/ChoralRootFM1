@@ -572,8 +572,9 @@ void emu_fw_ui_info(char *buf, uint32_t n)
         size_t l = strlen(buf);
         cr_frame_t fr;
         cr_frame(s, cr_anim_ms(&cu_anim, cu_now()), &fr);
-        snprintf(buf + l, n - l, " fill %u of %u from %u to %u label '%s'", (unsigned)fr.filled, (unsigned)cr_segs(s),
-                 (unsigned)cr_filled(s, s->pct_from), (unsigned)cr_filled(s, s->pct), s->label);
+        snprintf(buf + l, n - l, " fill %u of %u from %u to %u label '%s' over '%s'", (unsigned)fr.filled,
+                 (unsigned)cr_segs(s), (unsigned)cr_filled(s, s->pct_from), (unsigned)cr_filled(s, s->pct), s->label,
+                 s->line);                        /* (over: the line over the value, a pool's read-out's engine) */
     }
     if (s->kind == CR_K_ARP) {                    /* the arp screen's hop and its rate line (tools/emu/test_cr.sh) */
         size_t l = strlen(buf);

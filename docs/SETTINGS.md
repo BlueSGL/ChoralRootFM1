@@ -72,7 +72,7 @@ from a layer: it goes with the layer (manual).
 | the looper: Length, Quantize, Count-in, Level, the record mode, the PLAY menu's keys | the PLAY menu | block `loop_sync`, `loop_quant`, `loop_count_in`, `loop_level`, `loop_rec` bits 0..4 | manual |
 | the looper's Rate | the PLAY menu's KNOB 2 | session `loop_rate` | manual |
 | the loop slot selected | the PLAY menu's PRESETS | block `loop_slot` | manual |
-| the metronome: on, time signature, level | the PLAY menu's page 2 (KNOB 2), GLO + SEQ, the METRO layer, OPT + SELECT | block `metro_on`, `metro_sig`, `metro_vol` | manual |
+| the metronome: on, time signature, level | the PLAY menu's page 2 (KNOB 2), GLO + SEQ, the SEQ key's hold menu (metronome), OPT + SELECT | block `metro_on`, `metro_sig`, `metro_vol` | manual |
 | the voicing, the octave | KNOB 1, OCT | session `voicing`, `octave` | manual |
 | Bass on | BASS tap | session `bass_on` | manual |
 | LOCK on, the chord keys it latched | B3 | session `lock`, `latched` | manual |

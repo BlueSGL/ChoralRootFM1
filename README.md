@@ -97,7 +97,7 @@ A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes o
 - **Chords**: the chord block on the keybed (DIM MIN MAJ SUS on the black keys F#3 G#3 A#3 C#4, 6 m7 M7 9 on the
   white keys F3 G3 A3 C4, B3 = LOCK), roots on D4..G5, voicing on KNOB 1, Key Mode, the Simple / Advanced / Free play
   styles, secret chords, LATCH.
-- **Layers** that lock open on a hold (KEY, PERF, FX, BASS, METRO, LOOP), each a picker over a row of four knob
+- **Layers** that lock open on a hold (KEY, PERF, FX, BASS, SEQ for the metronome, LOOP), each a picker over a row of four knob
   cells; OCT- or HOME closes them.
 - **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,
   chorus, delay, drive), a metronome.

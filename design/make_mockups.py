@@ -61,7 +61,7 @@ ROOT_BLACK = [k for k in ROOTS if key_black(k)]          # 7 black root keys
 
 BUTTON_LABELS = {
     "FX": "FX", "SEL": "KEY", "ENV": "BASS", "LFO": "LATCH", "EDIT": "EDIT", "GLO": "OPT",
-    "HOME": "HOME", "SAVE": "SAVE", "ARP": "PERF", "SEQ": "METRO", "PLAY": "LOOP", "REC": "REC",
+    "HOME": "HOME", "SAVE": "SAVE", "ARP": "PERF", "SEQ": "SEQ", "PLAY": "LOOP", "REC": "REC",
     "OCT-": "OCT-", "OCT+": "OCT+",
 }
 ENCODER_LABELS = {
@@ -324,7 +324,7 @@ S.append(state(
                   "GLO": "OPT: tap = Options menu · held + a knob = its second function (KNOB 1 split point, SELECT metronome level, ALGORITHM bass volume)",
                   "PLAY": "LOOP: tap = play / stop · hold = the loop layer, locked open (slots, sync, quantize)",
                   "REC": "REC: tap = record / overdub arm (red) · hold = undo the last layer",
-                  "SEQ": "METRO: tap = metronome / beat on-off (Orchid's BPM press) · hold = the beat layer, locked open (beat, time signature)",
+                  "SEQ": "SEQ (called METRO until 0.18): tap = the loop editor, the sequencer (GLO + SEQ: metronome on-off) · hold = its hold menu, the metronome's, locked open (time signature, click)",
                   "EDIT": "EDIT: tap = the sound editor (EDIT blinks; EDIT or HOME leaves) · hold = engine picker · BASS held + EDIT = the bass sound's editor",
                   "HOME": "HOME: back to the view from any page, menu, layer or the editor · tap again: next View (CHORD / KEYBOARD / NOTES / GEEK OUT / SCOPE)",
                   "SAVE": "SAVE: tap = save the sound (Orchid's Sound long press) · hold = save the loop",
@@ -579,7 +579,7 @@ S.append(state(
     "does the same for the bass part's engine (00 = OFF before its pool). SAVE: Overwrite or Save as new.",
     held=["MAJ"], lit=["E4", "G#4", "B4"],
     encoders=IDLE_ENC | {"PRESETS": "05 FM PAD", "KNOB4": "40"},
-    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "FM6 · 05/25", "col": C_CHORD, "pct": 5 / 25, "segments": 25}, note="PRESETS turned: the place in the engine's pool huge, the preset's name under it, the engine and the place over the number of its presets (INIT, 00, is not counted); the stripe meter is the pool, a stripe per preset."),
+    screen=scr({"kind": "meter", "value": "05", "sub": "FM PAD", "label": "Hold OPT to change engine", "over": "FM6", "overCol": "orange", "col": C_CHORD, "pct": 5 / 25, "segments": 25}, note="PRESETS turned: the engine in orange over the place in its pool, huge, the preset's name under it; the stripe meter is the pool, a stripe per preset (INIT, 00, is not one); under it the way to another engine."),
 ))
 
 # 19 ------------------------------------------------------------------------------ panic

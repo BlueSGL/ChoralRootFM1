@@ -80,7 +80,7 @@ chord part. Until 0.17 it was recorded as an ordinary single note and came back 
   (page 2, KNOB 1) scales the loop's velocities (0 = mute).
 - **Metronome**: on / off in the PLAY menu (page 2, KNOB 2) or by GLO held + SEQ from anywhere but the sound editor
   (`metronome on`; SEQ's tap was the click until 2026-10-11: it is the loop editor's key now, below); it clicks on the
-  take's / the loop's / its own grid. SEQ (METRO) held = 4/4 3/4 6/8 picker (a SEQ tap in that layer is still the
+  take's / the loop's / its own grid. SEQ held = 4/4 3/4 6/8 picker (a SEQ tap in that layer is still the
   click on / off: the layer's own button), KNOB 1 there or OPT + SELECT = click level. The click is a 25 ms two-pole sine burst mixed after fx.c (cr_out.c
   `cr_click_mix`), 2.5 kHz on the bar's first beat.
 
@@ -156,6 +156,19 @@ The record mode (`cs.loop_mode`, settings v8; ALGORITHM in the PLAY menu; posted
 when nothing is being captured. REC while capturing ends the capture whatever the mode (a take, a layer, step entry);
 REC while armed or counting in cancels.
 
+**GLO held + REC** (2026-10-11, the owner: "I would also add shortcut for GLO + REC which changes the record mode,
+cycling through them"; `cu_rec_mode_next`, in `cu_btn_press` beside GLO + SEQ): the next mode in the picker's order,
+wrapping (Step -> Overwrite; the knob stops at the ends), with the message `Rec: Overdub`. Where: everywhere GLO +
+SEQ works: the views, the PLAY menu (its picker follows; GLO's tap, the keys, is not taken: the combo), every other
+layer, the Options, and the loop editor, where it clears no step (REC alone does); not in the sound editor, where
+GLO is SHIFT. REC is the second button of a combo there, so it is swallowed: no `LP_REC`, no undo (REC held is undo
+only when REC is pressed first). It posts `LC_MODE` and nothing else, exactly as the knob (`cu_loop_mode_turn`),
+and is stored where the knob's is (no format change). **During a capture** (armed, counting in, a take, a layer,
+step entry) neither the knob nor the shortcut is refused and there is no message but the mode's: `cr_loop_rec`
+reads `crl.mode` only when nothing is captured, so the capture under way ends as it began and the new mode counts
+from the next REC (one visible effect: a take armed in Overwrite with the mode then set to Advance still records
+where it is; the top line's `Rec · <mode>` follows the setting). `tools/emu/scripts/cr_glo_rec.txt`.
+
 | mode | REC on an empty slot | REC over a loop (stopped or playing) |
 | --- | --- | --- |
 | **Overwrite** (default) | a fresh take (Free: armed; synced: the count-in) | stops it and arms the same way; the loop is cleared when the take **starts** (the first chord, the count-in's end: `crl.ow`, `crl_take_start`), so REC / LOOP before that cancels and the loop is intact |
@@ -218,6 +231,7 @@ stops; in step entry OCT+ is a rest and OCT- a step back). Mock-ups: `design/cho
 | EDIT tap | **the loop editor** (below) |
 | SEQ tap | **out of the menu**, to the view, however the menu was entered (the third step of SEQ's cycle: the view, the editor, the PLAY menu, the view; below). SEQ's LED is lit in the menu |
 | REC tap / held | by the record mode / undo, as outside the menu |
+| GLO held + REC | the next record mode, wrapping (above, "Record modes"): the picker band follows |
 | LOOP held again | closes the menu. **With a knob turned while LOOP is still down the menu opens again and the knob acts in it** (2026-10-13): until then LOOP held + PRESETS with the menu already open chose a slot when turned within the hold time and changed the chord sound's preset when turned after it, the menu having closed under the hand ("sometimes in the play menu turning the preset knob ends up changing the preset"; `cu.hclosed`, `tools/emu/scripts/cr_loop_presetknob.txt`). The same for every layer's own button |
 
 The bottom line (`foot`, as the KEY layer's label and footer): `1/2 · keys: play · GLO: loops` (the page, what the
@@ -265,7 +279,7 @@ every screen, layer, picker and popup until the take ended): a 16 px dial at the
   REC dot blinking with the REC LED (its 250 ms phase);
 - **overdubbing**: the playing dial with the REC dot blinking.
 
-It shows on the views, the layers (KEY, PERF, FX, BASS, LOOP, METRO, the engine picker), the SAVE naming dialog
+It shows on the views, the layers (KEY, PERF, FX, BASS, LOOP, SEQ, the engine picker), the SAVE naming dialog
 and the knob popups; not in the sound editor (no top line) nor on the Options pages, where the REC LED and the LOOP
 button's green LED carry it. `tools/emu/scripts/cr_rec_dial.txt` shoots the REC looks (`cr_rec_armed.ppm`,
 `cr_rec_rec.ppm`, `cr_rec_od.ppm`).
@@ -310,7 +324,7 @@ version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr
 
 | gesture | does |
 | --- | --- |
-| **SEQ tap on the view** (2026-10-11) | opens it from the main screen, whichever view shows, with the same refusals (then SEQ does nothing else) and the same empty pattern as below (`cu_seq_tap`: the PLAY menu is locked open under it). **SEQ is a cycle of three**: the view -> the editor -> the PLAY menu (the editor closed, the menu as if LOOP had been held) -> the view. The owner: "The edit sequence is a bit buried, hold Play, then press edit. Most people won't find this ... from Main level you should be able to press the seq key to enter the edit sequence menu", then: "press once -> sequencer, press SEQ a second time -> Play menu, press SEQ a third time -> Exit". In KEY, PERF, FX, BASS, LOCK, the view menu, the engine picker, the Options and the save dialog SEQ tapped does nothing (it toggled the click there); in the sound editor it is the MOD group; in the METRO layer the click on / off |
+| **SEQ tap on the view** (2026-10-11) | opens it from the main screen, whichever view shows, with the same refusals (then SEQ does nothing else) and the same empty pattern as below (`cu_seq_tap`: the PLAY menu is locked open under it). **SEQ is a cycle of three**: the view -> the editor -> the PLAY menu (the editor closed, the menu as if LOOP had been held) -> the view. The owner: "The edit sequence is a bit buried, hold Play, then press edit. Most people won't find this ... from Main level you should be able to press the seq key to enter the edit sequence menu", then: "press once -> sequencer, press SEQ a second time -> Play menu, press SEQ a third time -> Exit". In KEY, PERF, FX, BASS, LOCK, the view menu, the engine picker, the Options and the save dialog SEQ tapped does nothing (it toggled the click there); in the sound editor it is the MOD group; in the SEQ key's hold menu (metronome) the click on / off |
 | EDIT tap in the PLAY menu | opens it (`cr_loop_ed_open`), **at any Quantize setting** (the first build refused a loop with Quantize none: `set Quantize to edit`). Refused: a slot switch on its way (`a slot is on its way`); a capture open (`end the take first`). An empty slot: an empty pattern of the set Length (Free: a bar, 16 steps; more than 64 steps: its first whole bars within 64), which is the slot empty again if nothing is entered |
 | PRESETS | the **step cursor**, a step a detent, wrapping at the loop's end (`cu_ledit_move`). **GLO held + PRESETS**: 8 steps a detent, wrapping the same way. Never the slot, never the chord sound, while the editor is open. (Until 2026-10-13 the cursor was SELECT and KNOB 1) |
 | SELECT | the editor's **page**, clamped: 1 **Step**, 2 **Trig** (`cu.le_page`, the first whenever it opens). The page's name stands where the record mode does, with the picker's two marks; the bottom line begins `1/2` / `2/2` |
@@ -332,7 +346,7 @@ version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr
 | LOOP tap | play / stop from the loop's start, as ever; the cursor does not follow the playback, the playhead shows it. A length changed under the playhead: the playhead where it is in the new cycle (`crl_ed_renorm`) |
 | REC held | the looper's undo, as outside (below) |
 | GLO tapped | nothing (the keys play; GLO held is the shift of PRESETS, Steps and the voicing above) |
-| SEQ / EDIT tapped, EDIT or SEQ held again | close it, back to the PLAY menu (`cr_loop_ed_close`), however it was opened: nothing to confirm, an edit is applied when it is made. A knob turned while EDIT or SEQ is still down after closing it by the hold does nothing (it would be the PLAY menu's: PRESETS there is the slot). **No METRO layer from the editor**: SEQ held there closes it, and SEQ held + a knob inside the hold time leaves the knob the editor's (`cu_activity`; `tools/emu/scripts/cr_seq.txt`) |
+| SEQ / EDIT tapped, EDIT or SEQ held again | close it, back to the PLAY menu (`cr_loop_ed_close`), however it was opened: nothing to confirm, an edit is applied when it is made. A knob turned while EDIT or SEQ is still down after closing it by the hold does nothing (it would be the PLAY menu's: PRESETS there is the slot). **No hold menu (the metronome's) from the editor**: SEQ held there closes it, and SEQ held + a knob inside the hold time leaves the knob the editor's (`cu_activity`; `tools/emu/scripts/cr_seq.txt`) |
 | **LOOP held** | the PLAY menu: the editor closes, the menu stays (the owner, 2026-10-11: "from the Sequencer, holding the play key should enter the Play Menu, not return to home"; until then it closed the menu with the editor). A knob turned with LOOP still down is the menu's (PRESETS: the slot), never the sound's. A LOOP tap is play / stop as ever, the editor stays |
 | HOME | the view: the editor and the menu close (it went back to the PLAY menu until 2026-10-11; with SEQ's cycle HOME is "home" here as everywhere). Another layer, a revert: the same |
 

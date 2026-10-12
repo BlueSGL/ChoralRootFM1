@@ -101,7 +101,7 @@ says so).
 | --- | --- | --- | --- |
 | MASTER | VOLUME | the pot | — |
 | SELECT | BPM | tempo 20–300 (in menus and pickers: scroll; in the editor: what the section's tap steps) | metronome volume |
-| PRESETS | SOUND | the chord part's engine's **pool** (docs/PRESETS.md): 00 INIT, the factory presets, the user's; wraps, loads at once, popup "05 / FM PAD / FM6 · 05/25" (the place / the presets, INIT not counted) | OPT held: the engine |
+| PRESETS | SOUND | the chord part's engine's **pool** (docs/PRESETS.md): 00 INIT, the factory presets, the user's; wraps, loads at once, popup "FM6" in orange over "05 / FM PAD", the stripes (a preset each, INIT not counted), "Hold OPT to change engine" | OPT held: the engine |
 | ALGORITHM | BASS SOUND | the bass part's engine's pool, 00 = OFF before it (Orchid's Bass Dial turn); the bass engine: BASS held + EDIT, the editor's EDIT-held picker | bass volume |
 | KNOB 1 | **VOICING** | Orchid's Chord Voicing: lowest note up an octave / highest down, one click = one note; **never reassigned** outside the layers and the editor | single-note split point |
 | KNOB 2 | BASS VOICE | bass register, octaves | — |
