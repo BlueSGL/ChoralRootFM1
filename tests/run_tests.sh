@@ -303,6 +303,10 @@ else
     skip "web tests: editor, backup, installer, sounds, device manager (no node)"
 fi
 
-run "site: make_site.py into build/site, every internal link resolves" python3 tests/site_test.py
+run "releases: web/releases.json (the versions the installer offers) against docs/releases and the tags" \
+    python3 tests/releases_test.py
+# the other versions' packages: CR_PACKAGES_DIR, else build/scratch/packages (python3 tools/fetch_packages.py); a
+# version whose package is not there is reported as "skipped" by the test and left out of the local site
+run "site: make_site.py into build/site, the versions' packages, every internal link resolves" python3 tests/site_test.py
 
 ended=1                                              # (the verdict is the EXIT trap's: verdict, above)

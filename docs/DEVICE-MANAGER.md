@@ -135,3 +135,41 @@ docs/SOUNDS.md.
   `selectRequest`, `selectOnUnit`, `playingText`; the simulators (fm1manager.js `makeSimFM1`, test_installer.mjs's
   backup side) answer 76. Row numbers are the unit's: 00 INIT, then 01...
 - Not yet: Melodee's banks as packs, the device run of this revision.
+
+## The installer beside it (as built, 2026-10-12)
+
+The manager's neighbour, `webapp/installer/index.html` (`web/index_pkg.html`, made self-contained by
+`web/make_site.py`), is a guided flow of six steps, one shown at a time under a strip of six buttons:
+
+| step | what it shows | what it does |
+| --- | --- | --- |
+| 1 Your browser | whether Web MIDI is there; which browsers can install | nothing |
+| 2 Get ready | charge, cable, awake, SAVE; what an update keeps | nothing |
+| 3 Test the connection | what runs on the FM-1 (`classifyFirmware`: ChoralRoot and its version, stock, Felucca, Melodee, a refused firmware, update mode) | the handshake and INFO, read only |
+| 4 Choose a version | the versions of `web/releases.json`: the newest selected and marked Recommended with its bullets; the older ones with a going-back note, their bullets collapsed; "On your FM-1" on the version the test found | fetches the chosen package from `firmware/`, checks its identity and its sha256 against the list; Install stays disabled when either fails |
+| 5 Install | the plan (update, reinstall, going back, over another firmware, finishing an update), the backup tick boxes, the override after a refusal | the install as before: `fm1ota.js` unchanged, backup first, restore offered after Felucca; when it stops after it began, a red box says what to do |
+| 6 Done | the version installed and its bullets | "Check the FM-1" reads the version back |
+
+Under the steps, always in view: the progress bar, the status line and the log; then "Device not found?" (the
+rescue key, the 0.18 gesture, SAFE MODE, the WL82 disk, the Transporter), Back up and restore, Sounds, Return to
+official V15, and "The files" (every version's package, sha256, notes and source at its tag).
+
+- **The versions** are `web/releases.json` (newest first; `tests/releases_test.py`). `make_site.py` publishes the
+  current package and, from `--packages DIR` (`CR_PACKAGES_DIR`, else `build/scratch/packages`), every other listed
+  version whose file is there, each refused unless its sha256 is the listed one and its identity the current
+  package's; a missing one is a "skipped:" line locally and an error with `--require-all` (the Pages job).
+  `firmware/` also gets `index.html` (the files, their checksums, the source of each at its tag) and `SHA256SUMS`.
+  0.15 and older are not listed: no boot stub, and the idle fault of 0.14 / 0.15.
+- **Why the site hosts them:** a release asset's download redirects to `release-assets.githubusercontent.com`, and
+  neither answer carries `Access-Control-Allow-Origin` (checked 2026-10-12 with `curl -sI -L -H "Origin: ..."`), so
+  a page cannot `fetch` it. The page's only network request is the same-origin fetch of the chosen package.
+- **Licences:** `firmware/LICENSE`, `LICENSING.md` and `LICENSES/` are the tree's own at the ref the site is built
+  from. The licence texts are the same files since v0.16 (`git diff v0.16 HEAD -- LICENSE LICENSES` is empty;
+  LICENSING.md gained credits), so they cover every hosted package; each version's complete source is the
+  repository at its tag, linked beside each file.
+- **Demo mode:** `?demo=1` .. `?demo=6`, `4b`, `5w`, `5b` show a step with made-up device data. `midiAccess()` is
+  the page's one way to the browser's MIDI and refuses in demo mode, every handler that talks to an FM-1 returns
+  first, and no package is fetched: `web/test_installer.mjs` clicks every such button in demo mode and counts no
+  MIDI request and no fetch.
+- **Not run:** against an FM-1, in Chrome or Edge themselves, on Android. `web/test_installer.mjs` runs the page's
+  script against a simulated FM-1 in node; the look was read from headless Chromium screenshots.

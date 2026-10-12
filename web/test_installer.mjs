@@ -14,6 +14,10 @@
 // - the Sounds section (fm1sounds.js, docs/SOUNDS.md): Read sounds -> the table, Export -> a sound file, Rename (the
 //   bank only), Import (the store, then the bank; a used slot asks first), Delete, a bad file, and Felucca refused;
 //   .syx: Export .syx on FM6 / CZ-1 rows, a .syx imported into an empty slot, a two-voice file asks which voice
+// - the guided flow (six steps) and the versions of web/releases.json: the list renders from the JSON, the newest is
+//   the default, an older version installs its own package (checked against the list's sha256 before any write), the
+//   going-back note, 0.14 / 0.15 not offered, the connection test, an interrupted install's guidance, and demo mode
+//   (?demo=N), which must never reach MIDI or the network
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -32,7 +36,19 @@ const count = (s, sub) => s.split(sub).length - 1;
 
 const html = readFileSync(join(HERE, "index_pkg.html"), "utf8");
 const ota = readFileSync(join(HERE, "fm1ota.js"), "utf8");
-const META = { version: "0.1", product: "FM-1_920", pkg: "../../firmware/choralroot-0.1.fwsc" };
+const sha256 = async (b) => Buffer.from(await crypto.subtle.digest("SHA-256", b)).toString("hex");
+// a package with an identity: 20 blocks of 47 bytes + a marker byte each, then the rest (fm1pkg.js productOf); the
+// seed makes packages that differ (one per version)
+function makePackage(product, seed = 0) {
+  const raw = Uint8Array.from({ length: 20 * 48 + 0x2000 }, (_, i) => (i * 13 + 5 + seed) & 0xFF);
+  for (let i = 0; i < 20; i++) raw[i * 48 + 47] = i < product.length ? (product.charCodeAt(i) + i + 1) & 0xFF : 0x7D;
+  return raw;
+}
+const raw = makePackage("FM-1_920");
+// the metadata as make_site.py writes it: the versions (here one, 0.1), each with its package and the package's sha256
+const META = { version: "0.1", product: "FM-1_920", pkg: "../../firmware/choralroot-0.1.fwsc", repo: "https://github.com/Quixotic7/ChoralRootFM1",
+  releases: [{ version: "0.1", date: "2026-10-06", tag: "v0.1", sha256: await sha256(raw), bullets: ["The first release."],
+    pkg: "../../firmware/choralroot-0.1.fwsc" }] };
 
 /* -------------------------------------------------------------- (a) shape --- */
 ok(count(html, "/*LIB*/") === 1 && count(html, "/*META*/") === 1, "page: /*LIB*/ and /*META*/ exactly once");
@@ -102,15 +118,18 @@ class El {
   constructor(attrs) {
     this.id = attrs.id; this.textContent = ""; this.disabled = "disabled" in attrs; this.value = 0; this.files = [];
     this.checked = false; this.dataset = attrs.t ? { t: attrs.t } : {}; this.style = {}; this.l = {}; this.clicks = 0;
-    this.hidden = "hidden" in attrs; this.innerHTML = "";
+    this.hidden = "hidden" in attrs; this.innerHTML = ""; this.className = ""; this.attrs = {}; this.focused = 0;
   }
+  setAttribute(k, v) { this.attrs[k] = v; }
+  removeAttribute(k) { delete this.attrs[k]; }
+  focus() { this.focused++; }
   click() { this.clicks++; }                    // (a file input opening its picker)
   addEventListener(type, f) { this.l[type] = f; }
   fire(type) { return this.l[type] ? this.l[type]({ type }) : undefined; }
 }
 function makeDom() {
   const byId = {}, withT = [];
-  for (const m of html.matchAll(/<[a-z]+\b([^>]*)>/g)) {
+  for (const m of html.matchAll(/<[a-z][a-z0-9]*\b([^>]*)>/g)) {   // (h2, h3 too)
     const a = m[1], attrs = {};
     const id = /\sid="([^"]+)"/.exec(a), t = /\sdata-t="([^"]+)"/.exec(a);
     if (!id && !t) continue;
@@ -128,7 +147,7 @@ const realSleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // the Updater's waits (2 s, 3 s, 1 s polls) at a tenth: the simulated FM-1 answers in milliseconds
 const fastTimeout = (f, ms = 0, ...a) => setTimeout(f, ms >= 100 ? ms / 10 : ms, ...a);
 
-function runPage({ navigator = {}, fetch, confirm = () => true, prompt = () => null, prelude = "", extra = {} } = {}) {
+function runPage({ navigator = {}, fetch, confirm = () => true, prompt = () => null, prelude = "", extra = {}, page = code } = {}) {
   const { byId, withT } = makeDom();
   const win = { l: {}, addEventListener(type, f) { this.l[type] = f; } };
   const confirms = [], downloads = [], prompts = [];
@@ -146,7 +165,7 @@ function runPage({ navigator = {}, fetch, confirm = () => true, prompt = () => n
     URL, Blob, crypto: globalThis.crypto, TextEncoder, TextDecoder, console, btoa, atob, DataView,
     setTimeout: fastTimeout, clearTimeout, setInterval, clearInterval, ...extra,
   };
-  const src = prelude ? code.replace(lib, () => lib + "\n" + prelude) : code;
+  const src = prelude ? page.replace(lib, () => lib + "\n" + prelude) : page;
   let error = null;
   try { vm.runInNewContext(src, ctx, { filename: "installer.js" }); } catch (e) { error = e; }
   return { $: byId, withT, win, document, confirms, downloads, prompts, error };
@@ -219,12 +238,6 @@ class FakeFM1 {
   }
 }
 
-// a package with an identity: 20 blocks of 47 bytes + a marker byte each, then the rest (fm1pkg.js productOf)
-function makePackage(product) {
-  const raw = Uint8Array.from({ length: 20 * 48 + 0x2000 }, (_, i) => (i * 13 + 5) & 0xFF);
-  for (let i = 0; i < 20; i++) raw[i * 48 + 47] = i < product.length ? (product.charCodeAt(i) + i + 1) & 0xFF : 0x7D;
-  return raw;
-}
 // a firmware's backup side (cr_backup.c / Felucca's editor_backup.c, as the protocol says): INFO, LIST, GET, PUT, SMP, RESTART
 function backupSide(version, ids, objs = []) {
   const b = { objs: new Map(objs), log: [], staged: null, restarts: 0 };
@@ -264,7 +277,7 @@ const pkgFetch = (raw) => async (url) => (url === META.pkg
 const settle = () => realSleep(30);
 const midiOf = (dev) => ({ requestMIDIAccess: async () => dev.access });
 
-const raw = makePackage(META.product), image = logicalImage(raw);
+const image = logicalImage(raw);
 ok(productOf(raw) === META.product, "test package: identity FM-1_920");
 const built920 = join(HERE, "../build/choralroot.fwsc");
 if (existsSync(built920)) ok(productOf(readFileSync(built920)) === META.product, "build/choralroot.fwsc: identity FM-1_920");
@@ -724,6 +737,224 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
      "syx: a CZ-101 tone refused with the message, nothing written");
   ok(!p.$["snd-read"].disabled && !p.$["backup-go"].disabled, "syx: the installer unlocked afterwards");
 }
+
+/* ------------------- the guided flow: the steps, the versions of web/releases.json, going back, demo mode --- */
+{
+  // the page with the metadata make_site.py writes for the real list: every version of web/releases.json, each with a
+  // package of its own here (same identity, different bytes) and that package's sha256
+  const list = JSON.parse(readFileSync(join(HERE, "releases.json"), "utf8"));
+  const vers = list.releases.map((r) => r.version), newest = vers[0], older = vers[2] || vers[vers.length - 1];
+  const RAW = Object.fromEntries(vers.map((v, i) => [v, makePackage("FM-1_920", 17 * (i + 1))]));
+  const pkgOf = (v) => `../../firmware/choralroot-${v}.fwsc`;
+  const metaFor = async (tamper = null) => ({ version: newest, product: "FM-1_920", pkg: pkgOf(newest), repo: list.repo, minimum: list.minimum,
+    releases: await Promise.all(list.releases.map(async (r) => ({ ...r, pkg: pkgOf(r.version), size: RAW[r.version].length,
+      sha256: r.version === tamper ? "0".repeat(64) : await sha256(RAW[r.version]) }))) });
+  const pageFor = (meta) => scriptOf(html.split("/*LIB*/").join(lib).split("/*META*/").join(JSON.stringify(meta)));
+  const page = pageFor(await metaFor());
+  const fetched = [];
+  const listFetch = (over = {}) => async (url) => {
+    fetched.push(url);
+    const v = vers.find((x) => pkgOf(x) === url), b = v && (over[v] || RAW[v]);
+    return b ? { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }
+      : { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
+  };
+  const choose = (p, v) => p.$.versions.l.change({ target: { name: "ver", value: v } });
+  const go = (p, n) => p.$.flow.l.click({ target: { closest: (sel) => (sel === "[data-go]" ? { dataset: { go: String(n) }, disabled: p.$["tab-" + n].disabled && n === 6 } : null) } });
+  const shown = (p) => [1, 2, 3, 4, 5, 6].filter((i) => p.$["step-" + i].hidden === false).join();
+  const unesc = (s) => s.replace(/&quot;/g, "\"").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
+  const crSide = (v) => backupSide("ChoralRoot " + v, CR_BACKUP_IDS, crData());
+
+  // the page's shape: six steps, a strip of six buttons, headings that take the focus, no network but this site
+  ok([1, 2, 3, 4, 5, 6].every((i) => html.includes(`id="step-${i}"`) && html.includes(`<button id="tab-${i}" data-go="${i}"`) &&
+     html.includes(`<h2 id="h-${i}" tabindex="-1"`)) && count(html, "class=\"step ") === 6,
+     "flow: six steps, each with a button in the strip and a heading that takes the focus");
+  ok(["flow", "browser", "test-go", "conn", "versions", "plan", "plan-back", "interrupted", "done-line", "verify-go", "verify", "files", "demo-note"]
+     .every((id) => html.includes(`id="${id}"`)) && html.includes('id="interrupted" role="alert" hidden') && html.includes('id="demo-note" hidden'),
+     "flow: the connection test, the versions, the plan, the interrupted box (hidden), the check at the end");
+  const src = scriptOf(html);
+  ok(count(src, "requestMIDIAccess({") === 1 && count(src, "await midiAccess()") === 6 && /if \(DEMO\) throw new Error/.test(src) &&
+     count(src, "fetch(") === 1 && src.includes("await fetch(rel.pkg)") && !/XMLHttpRequest|sendBeacon|WebSocket|EventSource|importScripts|import\(/.test(src),
+     "flow: one way to the browser's MIDI (refused in demo mode), one fetch (the selected version's package)");
+  const tvKeys = [...src.matchAll(/\btv\(([^)]*?)[,)]/g)].flatMap((m) => [...m[1].matchAll(/"([A-Za-z0-9]+)"/g)].map((x) => x[1]));
+  ok(tvKeys.length >= 15 && tvKeys.every((k) => typeof en[k] === "string"), `texts: every key tv() fills has a text (${tvKeys.length}${tvKeys.filter((k) => typeof en[k] !== "string")})`);
+  ok(/saved sounds, loops and settings/.test(en.kept) && /backup/.test(en.kept) && /SAFE MODE/.test(en.darkSafe) && html.includes('data-t="darkSafe"') &&
+     /OCT-, OCT\+ and HOME/.test(en.darkGesture), "texts: what an update keeps; the SAFE MODE and update-gesture hints");
+  ok(/Chrome or Edge/.test(en.brYes) && /Safari and Firefox: no/.test(en.brNo) && /Android/.test(en.brAndroid) && /not tested/.test(en.brAndroid),
+     "texts: which browsers can install (Android named as untested)");
+
+  // the list renders from the JSON; the newest is selected, recommended, loaded and checked
+  {
+    fetched.length = 0;
+    const dev = new FakeFM1(logicalImage(RAW[newest]));
+    const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+    await settle();
+    const v = p.$.versions.innerHTML;
+    ok(!p.error, `versions: the page runs with the real list${p.error ? " (" + p.error.stack + ")" : ""}`);
+    ok(vers.every((x) => v.includes(`value="${x}"`)) && count(v, 'type="radio"') === vers.length &&
+       list.releases.every((r) => r.bullets.every((b) => unesc(v).includes(b))), `versions: ${vers.join(", ")} from web/releases.json, each with its bullets`);
+    ok(count(v, " checked") === 1 && v.includes(`value="${newest}" checked`) && count(v, en.chRec) === 1 && v.indexOf(en.chRec) < v.indexOf(`value="${vers[1]}"`) &&
+       p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920` && fetched.join() === pkgOf(newest) && !p.$.go.disabled,
+       `versions: the newest (${newest}) is selected, marked Recommended, and the only package fetched`);
+    ok(!v.includes('value="0.15"') && !v.includes('value="0.14"') && !/choralroot-0\.1[45]\.fwsc/.test(v + p.$.files.innerHTML) && vers.every((x) => verOk(x)) &&
+       p.$["older-note"].textContent === list.minimum.note && /0\.15 and older are not offered/.test(list.minimum.note) &&
+       html.includes('href="https://github.com/Quixotic7/ChoralRootFM1/releases"') && en.chOlder === "Older versions are on GitHub.",
+       "versions: 0.14 and 0.15 are not offered; \"Older versions are on GitHub\" links the releases page");
+    ok(list.releases.slice(1).every((r) => unesc(v).includes(r.going_back.short) && r.going_back.points.every((b) => unesc(v).includes(b))) &&
+       count(v, "<details") === vers.length - 1 && !v.includes("<details open") && !unesc(v).includes(en.planBack),
+       "versions: each older version has its going-back note; their bullets are collapsed");
+    ok(vers.every((x) => v.includes(`href="${pkgOf(x)}" download`) && v.includes(`/tree/v${x}"`) && v.includes(`/docs/releases/${x}.md"`)) &&
+       list.releases.every((r) => p.$.files.innerHTML.includes(r.sha256) === false) && vers.every((x) => p.$.files.innerHTML.includes(`href="${pkgOf(x)}" download`)),
+       "versions: a download link, the full notes and the source at its tag for each (the files list: the page's own sha256)");
+    ok(shown(p) === "1" && p.$["tab-1"].className === "now" && p.$["tab-1"].attrs["aria-current"] === "step" && p.$["tab-6"].disabled === true &&
+       p.$.browser.textContent === en.brOk && p.$["plan-back"].hidden === true && p.$.plan.textContent === en.planNew.replace("{version}", newest),
+       "flow: starts on step 1 (the browser can install); Done is not reachable before an install");
+    go(p, 4);
+    ok(shown(p) === "4" && p.$["tab-4"].className === "now" && p.$["tab-2"].className === "done" && p.$["h-4"].focused === 1 && !("aria-current" in p.$["tab-1"].attrs),
+       "flow: a step's button shows that step and moves the focus to its heading");
+    go(p, 6);
+    ok(shown(p) === "4", "flow: Done cannot be opened by a click");
+
+    // the connection test: what runs on the FM-1, and "already runs this version"
+    const side = crSide(newest);
+    dev.identity = "FM-1_920"; dev.bk = () => side;
+    await p.$["test-go"].fire("click");
+    ok(p.$.conn.hidden === false && p.$.conn.textContent === en.cnFound.replace("{name}", "ChoralRoot " + newest) && p.$.conn.className === "verdict good" &&
+       dev.upgrades === 0 && !side.log.length && p.$["tab-3"].className === "done", "connection test: finds ChoralRoot " + newest + ", writes nothing");
+    ok(unesc(p.$.versions.innerHTML).includes(en.chReinstall.replace("{version}", newest)) && count(p.$.versions.innerHTML, en.chHas) === 1 &&
+       p.$.plan.textContent === en.planSame.replace("{version}", newest) && !p.$.go.disabled,
+       "connection test: the unit already runs the selected version -> said so, Install still enabled");
+
+    // an older version: its package is fetched and checked, the going-back note is shown
+    fetched.length = 0;
+    choose(p, older);
+    await settle();
+    const v2 = p.$.versions.innerHTML;
+    ok(fetched.join() === pkgOf(older) && p.$.status.textContent === `ChoralRoot ${older} · FM-1_920` && v2.includes(`value="${older}" checked`) &&
+       count(v2, " checked") === 1 && count(v2, "<details open") === 1 && !p.$.go.disabled, `older: choosing ${older} loads and checks its package, its notes open`);
+    const back = list.releases.find((r) => r.version === older).going_back.short;
+    ok(p.$["plan-back"].hidden === false && p.$["plan-back"].textContent === en.planBack.replace("{version}", older) + back &&
+       p.$.plan.textContent === en.planDown.replace("{version}", older).replace("{from}", "ChoralRoot " + newest) && p.$.go.textContent === en.installV.replace("{version}", older),
+       `older: the going-back note is shown with the plan ("${p.$.plan.textContent}")`);
+  }
+
+  // choosing an older version installs THAT package: the unit accepts only the older image and reports that version
+  {
+    const img = logicalImage(RAW[older]);
+    const run = async (pick) => {
+      let after = false;
+      const before = crSide(newest), then = crSide(older);
+      const dev = new FakeFM1(img, { identity: "FM-1_920", bk: (id) => (id.startsWith("ota-") ? null : after ? then : before) });
+      const boot = dev.boot.bind(dev);
+      dev.boot = (id, name) => { if (!id.startsWith("ota-")) after = true; boot(id, name); };
+      const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+      await settle();
+      if (pick) { choose(p, pick); await settle(); }
+      await p.$.go.fire("click");
+      return { p, dev };
+    };
+    let { p, dev } = await run(older);
+    ok(dev.identity === "FM-1_920" && dev.bad === 0 && dev.served > 8 && p.$.status.textContent === en.done && p.$.log.textContent.includes(`install: ChoralRoot ${older} (choralroot-${older}.fwsc)`),
+       `older: Install wrote the ${older} package, byte for byte (${dev.served} reads)`);
+    ok(shown(p) === "6" && p.$["done-line"].textContent === en.dnLine.replace("{version}", older) && p.$["tab-6"].disabled === false && p.$["tab-5"].className === "done" &&
+       p.$["h-6"].focused === 1 && p.$["interrupted"].hidden === true && unesc(p.$["done-new"].innerHTML).includes(list.releases.find((r) => r.version === older).bullets[0]),
+       "older: the page goes to Done and names the version and its news");
+    await p.$["verify-go"].fire("click");
+    ok(p.$.verify.hidden === false && p.$.verify.textContent === en.dnMatch.replace("{name}", "ChoralRoot " + older) && p.$.verify.className === "verdict good" &&
+       count(p.$.versions.innerHTML, en.chHas) === 1, `older: Check the FM-1 -> "${p.$.verify.textContent}"`);
+    ({ p, dev } = await run(null));
+    ok(dev.bad > 0, `older: (the control) the default installs another package: the same unit sees ${dev.bad} reads that are not ${older}'s`);
+    await p.$["verify-go"].fire("click");
+    ok(p.$.verify.textContent === en.dnDiffer.replace("{name}", "ChoralRoot " + older).replace("{version}", newest) && p.$.verify.className === "verdict bad",
+       "check: a unit that reports another version than the one installed is told so");
+  }
+
+  // a package that is not the released one: refused before any write
+  for (const [what, opts] of [["the file differs from the list's sha256", { over: { [older]: makePackage("FM-1_920", 99) } }],
+    ["the list's sha256 differs from the file", { tamper: older }]]) {
+    const dev = new FakeFM1(logicalImage(RAW[older]), { identity: "FM-1_920", bk: () => crSide(newest) });
+    const p = runPage({ navigator: midiOf(dev), fetch: listFetch(opts.over), page: opts.tamper ? pageFor(await metaFor(opts.tamper)) : page });
+    await settle();
+    const first = !p.$.go.disabled;
+    choose(p, older);
+    await settle();
+    const refused = p.$.status.textContent === en.badhash.replace("{version}", older) && p.$.go.disabled && p.$.plan.className === "verdict bad" &&
+      /sha256 of /.test(p.$.log.textContent);
+    await p.$.go.fire("click");
+    await settle();
+    ok(first && refused && dev.upgrades === 0 && dev.served === 0 && dev.bkFrames === 0 && dev.identity === "FM-1_920" && shown(p) === "1",
+       `hash: ${what} -> refused, Install disabled, nothing sent to the FM-1`);
+    choose(p, newest);
+    await settle();
+    ok(!p.$.go.disabled && p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920`, "hash: ... another version can still be chosen");
+  }
+  {
+    const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: listFetch({ [newest]: makePackage("FM-1_920", 5) }), page });
+    await settle();
+    ok(p.$.status.textContent === en.badhash.replace("{version}", newest) && p.$.go.disabled, "hash: the newest version's file is checked the same way at load");
+  }
+
+  // an interrupted install: the guidance appears; the unit in update mode is finished by Install
+  {
+    const dev = new FakeFM1(logicalImage(RAW[newest]), { identity: "FM-1_920", bk: (id) => (id.startsWith("ota-") ? null : crSide(vers[1])) });
+    dev.onServe = () => { if (dev.identity.startsWith("ota-") && dev.served >= 6) dev.input.state = dev.output.state = "disconnected"; };
+    const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+    await settle();
+    ok(p.$.interrupted.hidden === true, "interrupted: the guidance is hidden before an install");
+    await p.$.go.fire("click");
+    ok(p.$.status.textContent === en.lost && p.$.interrupted.hidden === false && shown(p) === "5" && !p.$.go.disabled && p.$["tab-6"].disabled === true,
+       "interrupted: the cable lost while writing -> the status says so and the guidance appears, on the Install step");
+    ok(/not lost/.test(en.intTitle) && /nothing was written/.test(en.intEarly) && /update mode/.test(en.intOn) && /Three short flashes/.test(en.intOff) &&
+       /0\.16 or later/.test(en.intOff) && /WL82 UBOOT1\.00/.test(en.intDark) && html.includes('<a href="#dark" data-t="darkTitle">'),
+       "interrupted: the three cases (nothing written, still on, switched off) and the way to the help");
+    dev.onServe = null; dev.boot("ota-FM-1_920", "Felucca Update");
+    await p.$.go.fire("click");
+    ok(p.$.status.textContent === en.done && dev.identity === "FM-1_920" && p.$.interrupted.hidden === true && shown(p) === "6",
+       "interrupted: Install again on the unit in update mode finishes the write -> Done");
+  }
+  {
+    const fel = backupSide("FELUCCA SLOOP 2.2", BACKUP_IDS, feluccaData());
+    const dev = new FakeFM1(logicalImage(RAW[newest]), { identity: "FM-1_900", bk: () => fel });
+    const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+    await settle();
+    await p.$["test-go"].fire("click");
+    ok(p.$.conn.className === "verdict bad" && p.$.conn.textContent.startsWith("Installing over Sloop is not supported") && p.$["tab-3"].className !== "done",
+       "connection test: a firmware the installer refuses is named with the refusal");
+    await p.$.go.fire("click");
+    ok(p.$.interrupted.hidden === true && dev.upgrades === 0 && p.$["force-box"].hidden === false, "interrupted: a refusal is not an interruption (no guidance, nothing written)");
+    const none = runPage({ navigator: midiOf({ access: { inputs: new Map(), outputs: new Map() } }), fetch: listFetch(), page });
+    await settle();
+    await none.$["test-go"].fire("click");
+    ok(none.$.conn.textContent === en.notfound && none.$.conn.className === "verdict bad" && !none.$["test-go"].disabled, "connection test: no FM-1 -> the notfound text");
+    const upd = new FakeFM1(logicalImage(RAW[newest]), { identity: "ota-FM-1_920" });
+    const pu = runPage({ navigator: midiOf(upd), fetch: listFetch(), page });
+    await settle();
+    await pu.$["test-go"].fire("click");
+    ok(pu.$.conn.textContent === en.cnLoader.replace("{identity}", "ota-FM-1_920") && pu.$["conn-note"].textContent === en.cnLoaderNote &&
+       pu.$.plan.textContent === en.planResume.replace("{version}", newest) && upd.upgrades === 0, "connection test: a unit in update mode is recognised (Install will finish it)");
+  }
+
+  // demo mode: a step shown with made-up data; nothing reaches MIDI or the network, whatever is clicked
+  for (const [q, want] of [["?demo=1", "1"], ["?demo=3", "3"], ["?demo=4b", "4"], ["?demo=5b", "5"], ["?demo=6", "6"], ["?x=1&demo=5w", "5"]]) {
+    let midiCalls = 0, fetches = 0;
+    const nav = { requestMIDIAccess: async () => { midiCalls++; return new FakeFM1(image).access; } };
+    const p = runPage({ navigator: nav, fetch: async () => { fetches++; throw new Error("no fetch in demo mode"); }, page, extra: { location: { search: q } } });
+    await settle();
+    const before = shown(p);
+    for (const id of ["go", "test-go", "verify-go", "backup-go", "snd-read", "restore-go", "stock-go"]) await p.$[id].fire("click");
+    await settle();
+    ok(!p.error && before === want && shown(p) === want && midiCalls === 0 && fetches === 0 && p.$["demo-note"].hidden === false && !p.confirms.length && !p.downloads.length,
+       `demo ${q}: step ${want} shown, marked as a demo; Install, Test, Check, Back up, Read sounds: no MIDI request, no fetch${p.error ? " (" + p.error.stack + ")" : ""}`);
+    if (q === "?demo=4b") ok(p.$.versions.innerHTML.includes(`value="${older}" checked`) && p.$.versions.innerHTML.includes("<details open"), "demo 4b: an older version chosen, its notes open");
+    if (q === "?demo=5b") ok(p.$.interrupted.hidden === false && p.$.status.textContent === en.lost, "demo 5b: the interrupted guidance");
+    if (q === "?demo=6") ok(p.$["done-line"].textContent === en.dnLine.replace("{version}", newest) && p.$.verify.hidden === false, "demo 6: Done");
+  }
+  {
+    const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: listFetch(), page, extra: { location: { search: "?demo=9" } } });
+    await settle();
+    ok(p.$["demo-note"].hidden === true && shown(p) === "1" && !p.$.go.disabled, "demo: an unknown step is not demo mode (the page works as usual)");
+  }
+}
+function verOk(v) { const [a, b] = v.split(".").map(Number); return a > 0 || b >= 16; }
 
 console.log(failed ? `INSTALLER TESTS FAILED (${failed})` : "installer tests passed");
 process.exit(failed ? 1 : 0);

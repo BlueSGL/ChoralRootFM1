@@ -136,6 +136,12 @@ main > section:last-child { padding-bottom: clamp(64px, 9vw, 120px); }
 .b-orange { background: var(--orange); color: #080808; }
 .b-orange:hover { color: #080808; }
 .try { margin: 8px 0 36px; }
+/* ---- "New in X" (web/releases.json through make_site.py): the version's bullets, above the buttons ---- */
+.new { margin: 0 0 44px; padding: 4px 0 2px 20px; border-left: 10px solid var(--orange); }
+.new h3 { margin-top: 0; }
+.news { list-style: none; margin: 0 0 14px; padding: 0; max-width: 46em; color: var(--cream); font-size: clamp(18px, 1.9vw, 22px); font-weight: 600; line-height: 1.35; letter-spacing: -0.01em; }
+.news li { position: relative; padding: 7px 0 7px 26px; }
+.news li::before { content: ""; position: absolute; left: 0; top: 0.85em; width: 12px; height: 12px; background: var(--orange); }
 .try .btn, .cell-wide .btn { min-height: clamp(112px, 12vw, 156px); }
 .b-yellow:hover { color: #080808; }
 .btn .pkg { display: block; font-size: clamp(16px, 1.7vw, 21px); font-weight: 700; letter-spacing: -0.01em; margin-top: 8px; overflow-wrap: anywhere; }

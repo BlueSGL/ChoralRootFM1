@@ -1,0 +1,120 @@
+{
+  "about": "The versions the web installer offers, newest first: the one source for the installer's version chooser, the landing page's 'New in X' and the packages web/make_site.py publishes under firmware/. Written by hand from docs/releases/X.Y.md for players (no internals). sha256 is the package's (choralroot-X.Y.fwsc), from the release's SHA256SUMS: make_site.py refuses a package that does not match it, and the page checks it again in the browser before any write. Adding a release: docs/HANDOFF.md, 'Release steps'. tests/releases_test.py checks this file.",
+  "repo": "https://github.com/Quixotic7/ChoralRootFM1",
+  "minimum": {
+    "version": "0.16",
+    "note": "0.15 and older are not offered here: they have no protected update path (the boot stub that brings an interrupted update back arrived in 0.16), and 0.14 and 0.15 have a known fault: after ten minutes without playing the FM-1 stops responding until it is switched off and on.",
+    "boot_safe": "0.16 to 0.19 carry the same boot stub. An install from one of them to another that is cut off comes back in update mode: switch the FM-1 on, three flashes, press Install again. Only the first install of one of them over another firmware (the stock one, Felucca, Melodee, ChoralRoot 0.15 or older) is unprotected during its first second."
+  },
+  "releases": [
+    {
+      "version": "0.19",
+      "date": "2026-10-12",
+      "tag": "v0.19",
+      "sha256": "df0f8c51c5cb29b27b025edb24f9f5e080cf12419b6747c32c8f7c05f6cb3e33",
+      "title": "The sound release",
+      "bullets": [
+        "A cleaner output: full chords with the bass no longer sound rough at full MASTER. Options > Output switches between Clean (new) and Classic (as before), so you can compare.",
+        "The chorus is stereo: on headphones it spreads out instead of sitting in the middle.",
+        "CZ-1 no longer pops when a chord is struck again or changed, its bass no longer clicks, and it now sits level with the other engines (6 dB quieter).",
+        "USB recording at 48 kHz as an option (Options > USB Rate), for phones, tablets and apps that want it.",
+        "The keys keep playing while the Options are open.",
+        "Hold GLO and turn PRESETS or ALGORITHM to change the chord or the bass engine, in the layers too.",
+        "Fixed: MASTER is right from the first note after switching on, and a speaker setting left behind by Felucca no longer thins the sound."
+      ],
+      "notes": [
+        "Updating from 0.18 keeps your settings, sounds and loops.",
+        "Three things sound different by themselves: CZ-1 is 6 dB quieter, single notes are a little quieter and full chords cleaner (Output starts on Clean), and the chorus is stereo."
+      ]
+    },
+    {
+      "version": "0.18",
+      "date": "2026-10-12",
+      "tag": "v0.18",
+      "sha256": "f0cf03b2436add9835416447433895b4f29eb6681db25be1c83d3d0c42916f33",
+      "title": "Effects, the loop editor, saving by hand",
+      "bullets": [
+        "A new reverb and a new stereo delay that belong to the instrument, not to each sound.",
+        "Five engines instead of eleven: FM6, FM TONE, VA, CZ-1 and WHEEL. CZ-1 needs a third of the processor time it did, so eight-note chords hold with the bass and the effects running.",
+        "Saving is by hand: hold SAVE and the FM-1 comes back as you saved it. GLO + SAVE takes you back to the last save.",
+        "A loop editor (SEQ) that works while the loop plays, with step entry, ratchets, conditions, chance and a voicing per step.",
+        "Loop Rate: play a loop slower or faster than it was recorded.",
+        "With Single on Split Bass, a loop keeps your bass line on the bass sound.",
+        "Keys respond at once, whatever the screen is drawing.",
+        "Update mode without switching off: hold OCT-, OCT+ and HOME for five seconds."
+      ],
+      "notes": [
+        "Updating from 0.17 keeps your sounds, loops and settings, with two exceptions: the reverb and the delay start at their new defaults, and a sound saved on a retired engine plays as a stand-in."
+      ],
+      "going_back": {
+        "short": "Your saved sounds, loops and settings stay. You lose the Clean output, the stereo chorus and 48 kHz USB recording, and CZ-1 is 6 dB louder again.",
+        "points": [
+          "0.18 reads 0.19's settings as its own. It does not know Options > Output or USB Rate: if one of them was off its default, 0.18 takes its default for one retired setting and nothing else changes.",
+          "The chorus is mono again, CZ-1 is back at its old, louder level, and USB recording is 44.1 kHz only.",
+          "In the Options the white keys jump to settings again instead of playing.",
+          "The fix for a speaker setting left behind by Felucca is not in 0.18."
+        ]
+      }
+    },
+    {
+      "version": "0.17",
+      "date": "2026-10-11",
+      "tag": "v0.17",
+      "sha256": "73b58f3c176939c2c31bd4973480157cddc76f311565ed99faad62d064642258",
+      "title": "The playing release",
+      "bullets": [
+        "The dancing arp is back on the Chord view, and the PERF layer shows it too.",
+        "The keys light the notes that sound, in every octave, and Key Mode lights its scale on the keys.",
+        "Key Mode can guard single notes against wrong ones (Key plays: Notes), and Keyboard: Full turns all 27 keys into an ordinary keyboard.",
+        "Split Bass: the bass sound on the left keys, the chord sound on the right.",
+        "A LOCK layer (hold B3) with two settings for how LOCK latches.",
+        "One rule in every layer: OCT- is back, OCT+ is confirm, and holding a layer's button again closes it.",
+        "Options > Reset Settings puts every setting back; your sounds and loops are not touched.",
+        "Fixed: Options > Version showed 0.1, and PANIC with LATCH on left the next chord latched."
+      ],
+      "notes": [
+        "Updating from 0.16 keeps your settings, sounds and loops."
+      ],
+      "going_back": {
+        "short": "Your saved sounds and loops stay, but 0.17 has the old effects and the eleven engines, ignores what SAVE stored, and plays newer loops without their step settings.",
+        "points": [
+          "Everything said for 0.18, and:",
+          "0.17 reads the settings as its own but starts as it always did (bass off, voicing 0) and ignores what the global save (SAVE held) stored. If you return to a newer version after 0.17 has stored a setting, that version starts from 0.17's settings.",
+          "Its own reverb and echo are back with their defaults, and each sound brings its own effect sends again.",
+          "The six engines retired in 0.18 (PHASE, LOFI, VOICE, TRIO, NOISE, PHYS) are back: sounds saved on them play on their own engines again, as long as you did not save over them.",
+          "Loops load. Ratchet, Condition, Chance and the voicing per step are not played, and the bass-side notes of a Split Bass loop play on the chord sound. If 0.17 saves such a loop again, its bass side is lost.",
+          "There is no OCT- + OCT+ + HOME gesture. Update mode is OCT- alone, held while switching on."
+        ]
+      }
+    },
+    {
+      "version": "0.16",
+      "date": "2026-10-10",
+      "tag": "v0.16",
+      "sha256": "3aac9ffefa9cd4549a6289d1cdf1ce34f9f6fadda885fe6cf719f4573267c816",
+      "title": "The safe-update release",
+      "bullets": [
+        "Fixed: the FM-1 no longer stops responding after ten minutes without playing (a fault of 0.14 and 0.15).",
+        "An interrupted update no longer leaves a dark FM-1: switch it on again, three flashes, press Install again.",
+        "Update mode on purpose: hold OCT- alone while switching on.",
+        "One core by default, as the stock firmware. Options > Dual Core On gives the bass its own eight voices.",
+        "With Dual Core on, the second core is more robust: a fault there no longer resets the FM-1.",
+        "The sound read-out counts the presets correctly.",
+        "The device manager can audition sounds on the FM-1."
+      ],
+      "notes": [
+        "The first version with the boot stub: the oldest one this page installs.",
+        "Updating from 0.14 or 0.15 sets Options > Dual Core to Off."
+      ],
+      "going_back": {
+        "short": "Your saved sounds and loops stay, but 0.16 misreads a few newer key and LOCK settings until you set them again, on top of everything 0.17 lacks.",
+        "points": [
+          "Everything said for 0.17 and 0.18, and:",
+          "With the KEY layer's keys left on play, or a LOCK setting off its default, 0.16 reads the looper's record mode as Overwrite and the PLAY menu's Keys as Play. With Key plays on Notes or Keyboard on Full it reads Key Mode as off. With Single on Split Bass it reads Full. Set them again and they are right.",
+          "No dancing arp, no scale lights, no LOCK layer, no Options > Reset Settings.",
+          "Two faults fixed in 0.17 are back: Options > Version shows 0.1, and PANIC with LATCH on leaves the next chord latched."
+        ]
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Handoff: ChoralRoot FM-1, the current state
 
-The current state only. What was done, when and why (the lettered items 3b .. 3y26, with the owner's words) is in
+The current state only. What was done, when and why (the lettered items 3b .. 3y27, with the owner's words) is in
 [`HISTORY.md`](HISTORY.md): new work is recorded there, at the end; this file changes only when the state does.
 
 ## State in three sentences
@@ -62,6 +62,7 @@ sh tests/run_cr_draw.sh     # exit 0
 sh tools/emu/build.sh && sh tools/emu/test_cr.sh && sh tools/emu/test_persist.sh     # each ends PASS
 sh tools/emu/perf.sh        # estimates only: compare with main's, never quote as the unit's cost
 python3 tests/install_test.py; for t in backup web sounds installer manager; do node web/test_$t.mjs; done
+python3 tests/releases_test.py                    # web/releases.json: the versions the installer offers
 sh tests/run_tests.sh       # ends ALL HOST TESTS PASSED
 sh tools/emu/test_retired.sh                      # the engines retired in 0.18: a unit that comes with sounds on them
 CR_VERSION=0.19 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
@@ -77,6 +78,25 @@ sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.1
   guarantee is now" there says what the two parts of the script prove since the stereo chorus.
 
 POOL is the tight resource: read it off the size line.
+
+## Release steps
+
+BUILDING.md "Releasing" has them in full. The ones that are easy to forget, in order, before the tag:
+
+1. `docs/releases/X.Y.md`: the first line replaced by the summary paragraph, a "Going back to" section.
+2. `./build.sh --release X.Y`, then **add the version to web/releases.json** (first entry: date, tag, 4 to 8
+   bullets for players, the sha256 of `build/release-X.Y/choralroot-X.Y.fwsc`; the entry that was first gets a
+   `going_back` note). The web installer's version chooser, the landing page's "New in X.Y" and the packages the
+   site hosts all come from this file; `python3 tests/releases_test.py` checks it, and the Pages job refuses to
+   publish a version that is not its first entry.
+3. The browser emulator's test (Verification, above), then the tag when the owner says so.
+
+To publish the site again without a new release (a change to the pages): run pages.yml by hand with the current
+version and ref `main`. A local copy of the whole site, as Pages builds it: `python3 tools/fetch_packages.py`
+(the listed packages into `build/scratch/packages/`, checked; needs the network once), then
+`python3 web/make_site.py build/choralroot.fwsc X.Y build/site --require-all`. The installer page shows any step
+without an FM-1 with `?demo=1` .. `?demo=6` (`4b` an older version chosen, `5w` writing, `5b` interrupted): demo
+mode never asks the browser for MIDI and fetches nothing.
 
 ## Tools for the device
 
