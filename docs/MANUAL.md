@@ -148,7 +148,7 @@ Two rows of six, and the two octave buttons.
 | HOME | **HOME** | back to the view; on the view: the next view | 0.6 s: the view menu |
 | SAVE | **SAVE** | save the sound | held: **save everything** (`saved`). GLO + SAVE held 1 s: back to the last save (`reverted`) |
 | ARP | **PERF** | performance on / off | the PERF layer |
-| SEQ | **METRO** | metronome on / off | the METRO layer |
+| SEQ | **METRO** | the loop editor, then the PLAY menu, then back to the view ([The loop editor](#the-loop-editor)). With OPT (GLO) held: metronome on / off | the METRO layer |
 | PLAY | **LOOP** | play / stop the loop | the PLAY menu |
 | REC | **REC** | record | undo the last layer |
 | OCT- / OCT+ | octave | the roots an octave down / up; in layers, menus and dialogs: back / OK | both together: PANIC |
@@ -198,7 +198,9 @@ MIDI message wakes it and does its normal job at the same time.
 
 | Light | Means |
 | --- | --- |
-| KEY, PERF, FX, BASS, LATCH, METRO lit | that function is on |
+| KEY, PERF, FX, BASS, LATCH lit | that function is on |
+| METRO (SEQ) and EDIT blinking together | the loop editor is open: either of them goes back to the PLAY menu |
+| METRO (SEQ) lit | the PLAY menu is open: SEQ leaves it |
 | a layer button blinking | its layer is open |
 | EDIT blinking | the sound editor (or the engine picker) is open |
 | OPT lit | the Options are open (in the PLAY menu: Keys = Loops; in the KEY layer: its keys play; in the editor: SHIFT) |
@@ -459,7 +461,7 @@ KEY, PERF, FX, BASS, METRO and LOOP.
 | PERF | PERF (ARP) | the performance mode | play as usual | performance on / off | close |
 | FX | FX | the effect | play as usual | effects on / off | close |
 | BASS | BASS (ENV) | the bass behaviour | the white keys D4 E4 F4 G4 pick the behaviour; nothing sounds | bass on / off | close |
-| METRO | METRO (SEQ) | the time signature | D4 E4 F4 pick 4/4, 3/4, 6/8 | metronome on / off | close |
+| METRO | METRO (SEQ) | the time signature | D4 E4 F4 pick 4/4, 3/4, 6/8 | metronome on / off (in this layer only; on the view a tap is the loop editor) | close |
 | PLAY menu | LOOP (PLAY) | see [The looper](#10-the-looper) | play, or pick loop slots | play / stop | close (in step entry: back a step / a rest) |
 
 Three more things open the same way and are described in their own chapters: **EDIT** held is the engine picker
@@ -644,7 +646,10 @@ one to three short gaps in it ([What the FM-1 remembers](#what-the-fm-1-remember
 ## 9. Tempo and metronome
 
 - **SELECT** sets the tempo, 20 to 300 BPM. Arpeggios, patterns, the delay, the loop and the MIDI clock follow it.
-- **METRO** (printed SEQ) tap switches the click on and off (`metronome on`).
+- The click is switched on and off in the **PLAY menu**: hold LOOP, turn SELECT to page 2, **KNOB 2 is Metronome**,
+  On or Off.
+- From anywhere outside the sound editor, **hold OPT (GLO) and tap METRO** (printed SEQ) for the same thing
+  (`metronome on`). METRO tapped by itself opens the loop editor (until 0.18 it was the click).
 - Hold METRO for the **METRO layer**: SELECT (or D4, E4, F4) picks the time signature, 4/4, 3/4 or 6/8; KNOB 1 is the
   click's level. OPT + SELECT sets the level without opening the layer.
 - The click is not part of the USB recording.
@@ -710,9 +715,11 @@ playing and recording with it open.
 | page 1, KNOB 2 | **Rate**: x1/16, x1/12, x1/8, x1/6, x1/4, x1/2, x3/4, x1, x1.5, x2, x4 | x1 |
 | page 1, KNOB 3 | **Quantize**: none, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32 | none |
 | page 1, KNOB 4 | **Count-in**: On or Off | On |
-| page 2, KNOB 1 | **Level**: how loud the loop plays, 0 to 100 (0 mutes it). KNOB 2 to 4 do nothing on this page | 100 |
+| page 2, KNOB 1 | **Level**: how loud the loop plays, 0 to 100 (0 mutes it) | 100 |
+| page 2, KNOB 2 | **Metronome**: On or Off ([Tempo and metronome](#9-tempo-and-metronome)). KNOB 3 and 4 do nothing on this page | Off |
 | OPT (GLO) tap | **what the keys do** in the menu: play, or the loop shortcuts (below). The bottom line says which. The Options do not open from here | play |
 | EDIT | the **loop editor** ([below](#the-loop-editor)) | |
+| METRO (SEQ) | leaves the PLAY menu, back to the main screen (its light is lit while the menu is open) | |
 
 While a loop records or plays, the middle of the menu is a timeline: the bars, a line of marks for each layer, the
 playhead. These settings are kept by a global save (SAVE held), like the rest of how the FM-1 is set up to play.
@@ -779,8 +786,12 @@ number.
 
 ### The loop editor
 
-In the PLAY menu, tap **EDIT**. The loop in memory is shown as a pattern of steps, and you can change it one step at a
-time. (Outside the PLAY menu EDIT is the sound editor, as ever.)
+On the main screen, tap **SEQ** (the METRO button). The loop in memory is shown as a pattern of steps, and you can
+change it one step at a time. **SEQ goes round three places**: the main screen, the loop editor, the PLAY menu, and
+the main screen again. So from the editor one tap of SEQ is the PLAY menu (the slots, the record mode, Length, Rate,
+the metronome) and one more is back where you started. In the PLAY menu **EDIT** opens the same editor. (Outside the
+PLAY menu EDIT is the sound editor, as ever.) SEQ does not open the editor from another layer, the Options or the
+sound editor, and not while a take is being recorded (`end the take first`).
 
 <img src="manual/loop-editor.png" width="240" alt="The loop editor, page Step: a row of sixteen steps, three red, the second outlined, a white line under the next three; Am, step 2/16; cells Note len 4, Steps 16, Chance 100%, Velocity 100">
 <img src="manual/loop-editor-trig.png" width="240" alt="The loop editor, page Trig: the same row, the second step with a notch in its corner; cells Ratchet x2, Condition 1:2, Voicing +2">
@@ -809,7 +820,8 @@ chord is named under the grid. While the loop plays, the step being played light
 | KNOB 3 | **Voicing**: Follow, or a voicing of its own, -12 to +12 (the same as ALGORITHM) |
 | LOOP tap | play / stop, as ever, so you hear the edits in place. The cursor does not follow the playback; the white step does |
 | REC held | the looper's undo (see below) |
-| HOME, EDIT (tap or hold) | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it |
+| SEQ, EDIT (tap or hold), LOOP held | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it. The bottom line says `SEQ: back` |
+| HOME | closes the editor and the PLAY menu: the main screen |
 
 **Ratchet, Condition, Chance and Voicing belong to the step**: to everything that starts in it, the chord and, with
 Split Bass, the bass note. A step that has a ratchet, a condition or a chance under 100 % shows a small notch in its
@@ -1463,7 +1475,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | The chord sound is silent, the bass plays | Bass Behaviour is Solo (`Bass Solo`) | BASS layer, another behaviour, or tap BASS |
 | No bass | the bass is off (a new unit, a reset, or you switched it off) | tap BASS |
 | The bass layer's keys make no sound | in that layer the white keys pick the behaviour | close the layer to play |
-| The loop plays but is silent | its Level is 0 | PLAY menu, KNOB 3 |
+| The loop plays but is silent | its Level is 0 | PLAY menu, page 2, KNOB 1 |
 | REC replaced my loop | the record mode is Overwrite | PLAY menu, ALGORITHM: Overdub. Before the first chord, REC again cancels |
 | In step entry two notes land on the same step | they were held together | let go of the first before pressing the next; OCT- goes back |
 | Step entry says `64 steps: full` | a pattern has 64 steps at most | REC to finish; OCT- to go back and change a step |
@@ -1507,12 +1519,12 @@ A held layer button opens its layer and it stays; holding the same button again 
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
-| SEQ | METRO | metronome on / off | METRO layer: SELECT time signature · KNOB 1 Click |
-| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · GLO: its keys play / loops · EDIT: the loop editor (PRESETS step, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · HOME or EDIT closes it) |
+| SEQ | METRO | the loop editor; in it: the PLAY menu; in the PLAY menu: leave. With GLO held: metronome on / off | METRO layer: SELECT time signature · KNOB 1 Click · a tap there: metronome on / off |
+| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · 2 Metronome · GLO: its keys play / loops · SEQ: leave · EDIT: the loop editor (PRESETS step, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · SEQ, EDIT or LOOP held: the PLAY menu · HOME: the view) |
 | REC | REC | record by the record mode; ends a take; cancels when armed | undo the last layer |
 | OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
 | OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |

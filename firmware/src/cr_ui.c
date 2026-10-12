@@ -1687,6 +1687,44 @@ static void cu_ledit_close(void)
     cu_hot.knob = 0;
     cu_trace("loopedit: close (events %u len %u)\n", (unsigned)crl.d.nev, (unsigned)crl.d.len);
 }
+/* SEQ tapped (the owner, 2026-10-11: "The edit sequence is a bit buried, hold Play, then press edit. Most people won't
+ * find this ... from Main level you should be able to press the seq key to enter the edit sequence menu", and then:
+ * "press once -> sequencer, press SEQ a second time -> Play menu, press SEQ a third time -> Exit"). A cycle of three:
+ * the view (no layer, no Options, no page) -> the loop editor, the PLAY menu locked open under it (the editor is that
+ * layer's; cu_ledit_open's refusals: then nothing) -> the PLAY menu (the editor closed, however it was opened) -> the
+ * view (however the menu was entered; EDIT is the menu's way into the editor). The METRO layer (SEQ held): its own
+ * button, the click on / off as before. Every other layer, the Options, the naming page: nothing (the sound editor:
+ * its MOD group, cu_tap) */
+static void cu_layer_close(void);
+static void cu_metro_toggle(void)
+{
+    cs.metro ^= 1u;
+    cr_post(CRE_LOOP, LP_METRO, 0, cs.metro);
+    cu_message(cs.metro ? "metronome on" : "metronome off", CR_COL_WHITE);
+    cu_trace("metro: %s\n", cs.metro ? "on" : "off");
+}
+static void cu_seq_tap(void)
+{
+    if (cu.lock == L_METRO) {
+        cu_metro_toggle();
+        return;
+    }
+    if (cu.lock == L_LOOP) {
+        if (cu.ledit)
+            cu_ledit_close();
+        else
+            cu_layer_close();
+        return;
+    }
+    if (cu.lock || cu.opt_open || cu.page != PG_NONE)
+        return;
+    cu_ledit_open();
+    if (!cu.ledit)
+        return;
+    cu.lock = L_LOOP;
+    cu.lpage = 0;
+    cu_trace("loopedit: from the view\n");
+}
 static void cu_ledit_move(int32_t s)               /* PRESETS: the cursor, a step a detent (GLO held: 8), wrapping */
 {
     int32_t n, c;
@@ -2201,10 +2239,9 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
         else
             cu_save_open(cu.page == PG_EDIT ? ce.part : 0u);
         break;
-    case BT_METRO:                                /* the click on / off */
-        cs.metro ^= 1u;
-        cr_post(CRE_LOOP, LP_METRO, 0, cs.metro);
-        cu_message(cs.metro ? "metronome on" : "metronome off", CR_COL_WHITE);
+    case BT_METRO:                                /* SEQ: the loop editor (the click: the PLAY menu's page 2, GLO +
+                                                   * SEQ, and SEQ in its own layer) */
+        cu_seq_tap();
         break;
     case BT_LOOP:                                 /* play / stop (a take: commit) */
         cr_post(CRE_LOOP, LP_PLAY, 0, 0);
@@ -2247,10 +2284,6 @@ static void cu_opened(uint32_t b)                 /* a button held past HOLD (or
 
 static void cu_home_tap(void)
 {
-    if (cu.ledit && cu.lock == L_LOOP) {          /* the loop editor: back to the PLAY menu */
-        cu_ledit_close();
-        return;
-    }
     if (cu.lock == L_EDIT)                        /* the engine picker: cancelled, the sound as it was */
         cu_pick_end(0);
     if (cu.lock && cu.page == PG_EDIT) {          /* a layer over the editor: back to the editor */
@@ -3065,19 +3098,26 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                                                     * steps the engines) */
         break;
     case L_LOOP:                                   /* the PLAY menu. Page 1: LENGTH RATE QUANTIZE COUNT-IN; page 2
-                                                    * (SELECT): LEVEL. The loop editor: STEP, its LENGTH, the loop's
+                                                    * (SELECT): LEVEL METRONOME. The loop editor: STEP, its LENGTH, the loop's
                                                     * STEPS, the step's VELOCITY */
         if (cu.ledit) {
             cu_ledit_knob(knob, s);
             break;
         }
         if (cu.lpage) {
-            if (knob != 0)
+            if (knob == 1) {                       /* the click on / off (SEQ's tap until 0.18: the owner, 2026-10-11:
+                                                    * "Add Metronome to the second param page of the play menu") */
+                cs.metro = s > 0;
+                cr_post(CRE_LOOP, LP_METRO, 0, cs.metro);
+                cu_trace("loop: knob 2 metronome %s\n", cs.metro ? "on" : "off");
+            } else if (knob != 0)
                 break;
-            v = cs.loop_level + s * 5;
-            cs.loop_level = (uint8_t)(v < 0 ? 0 : v > 100 ? 100 : v);
-            cr_post(CRE_LOOP, LP_CONF, LC_LEVEL, cs.loop_level);
-            cu_trace("loop: knob 1 level %u\n", (unsigned)cs.loop_level);
+            else {
+                v = cs.loop_level + s * 5;
+                cs.loop_level = (uint8_t)(v < 0 ? 0 : v > 100 ? 100 : v);
+                cr_post(CRE_LOOP, LP_CONF, LC_LEVEL, cs.loop_level);
+                cu_trace("loop: knob 1 level %u\n", (unsigned)cs.loop_level);
+            }
         } else if (knob == 0) {                    /* the length (the next take's) */
             v = cs.loop_len + s;
             cu_layer_pick(L_LOOP, v < 0 ? 0 : v >= (int32_t)CRL_NSYNC ? (int32_t)CRL_NSYNC - 1 : v);
@@ -3126,6 +3166,9 @@ static void cu_activity(void)
         cu.combo = 1;
         if (!cu.open) {
             cu.open = 1;
+            if (cu.armed == BT_METRO && cu.ledit && cu.lock == L_LOOP)
+                return;                           /* the loop editor: SEQ is its way out, no METRO layer from there
+                                                   * (SEQ held + a knob: the knob stays the editor's) */
 #if CR_EDIT_HOOKS
             if (cu.page == PG_EDIT && !cu_layer() && ce_owns(cu.armed))
                 return;                           /* the editor's button: a combo, no layer */
@@ -3440,6 +3483,9 @@ static void cu_btn_press(uint32_t b)
     }
 #endif
     cu_activity();
+    if (cu.armed == BT_OPT && b == BT_METRO && !(cu.page == PG_EDIT && !cu_layer()))
+        cu_metro_toggle();                         /* GLO held + SEQ: the click on / off, from anywhere but the sound
+                                                    * editor (SHIFT and MOD there) */
     if (cu.armed == BT_BASS && b == BT_EDIT) {     /* BASS held + EDIT / SAVE: the bass sound's editor, saving */
         cu.lock = L_NONE;
         cu_edit_open(1);
@@ -4026,10 +4072,20 @@ static void cr_ui_input(void)
     }
     if (cu.armed != NB && !cu.open && ((cu.bheld >> cu.armed) & 1u) && !(cu.armed == BT_SAVE && cu.page == PG_SAVE) &&
         now - cu.t0 >= (uint32_t)HOLD_MS[settings_hold % 4u]) {
-        if (cu.armed == BT_EDIT && cu.ledit && cu.lock == L_LOOP) {   /* the loop editor: EDIT held again closes
-                                                    * it, as a layer's own button does (no engine picker from there) */
+        if ((cu.armed == BT_EDIT || cu.armed == BT_METRO) && cu.ledit && cu.lock == L_LOOP) {   /* the loop editor:
+                                                    * EDIT or SEQ held again closes it, as a layer's own button does (no
+                                                    * engine picker, no METRO layer from there; a knob turned while the
+                                                    * button is still down: nothing, cu_knob) */
             cu.open = 1;
             cu.hclosed = 0xFF;
+            cu_ledit_close();
+        } else
+        if (cu.armed == BT_LOOP && cu.ledit && cu.lock == L_LOOP) {   /* .. LOOP held there: the PLAY menu (the owner,
+                                                    * 2026-10-11: "from the Sequencer, holding the play key should
+                                                    * enter the Play Menu, not return to home"): the editor closes, the
+                                                    * menu stays, and a knob turned with LOOP still down is the menu's
+                                                    * (PRESETS: the slot) */
+            cu.open = 1;
             cu_ledit_close();
         } else
         if (cu.armed == BT_SAVE) {                 /* SAVE held alone past the hold time: the global save (a key, a
@@ -4141,7 +4197,10 @@ static void cr_leds(void)
     cu_led(nl, panel.btn[BT_EDIT], (cu.page == PG_EDIT || (cu.ledit && l == L_LOOP)) && blink);   /* blinks while the
                                                                        * editor is open (the sound's, the loop's) */
     cu_led(nl, panel.btn[BT_SAVE], cu.page == PG_SAVE);
-    cu_led(nl, panel.btn[BT_METRO], cs.metro);
+    cu_led(nl, panel.btn[BT_METRO], l == L_LOOP && (!cu.ledit || blink));   /* SEQ's cycle: blinking with EDIT in the
+                                                                       * loop editor, lit in the PLAY menu (one more
+                                                                       * tap: the view), dark on the view. The click:
+                                                                       * the PLAY menu's cell */
     {                                                    /* REC: blinks capturing, lit armed; LOOP: a loop */
         uint32_t cap = sn->lcap;
         cu_led(nl, panel.btn[BT_REC], cap == CRL_CAP_ARMED || cap == CRL_CAP_OD_ARMED || cap == CRL_CAP_STEP ||
@@ -4797,8 +4856,8 @@ static void cu_key_cells(cr_screen_t *s)
     cu_hot_row(s, L_KEY);
 }
 /* the PLAY menu's knob row (docs/LOOPER-MODES.md), two pages (SELECT). Page 1: Length (the next take's: Free, 1 .. 16
- * bars), Rate (x1/16 .. x4), Quantize (echoes), Count-in (gate: full on, narrow off); page 2: Level (bar), the other
- * three knobs free. Until 0.17: Quantize Count-in Level Keys, the length on SELECT; Keys is GLO's alone now */
+ * bars), Rate (x1/16 .. x4), Quantize (echoes), Count-in (gate: full on, narrow off); page 2: Level (bar), Metronome
+ * (gate, On / Off), KNOB 3 / 4 free. Until 0.17: Quantize Count-in Level Keys, the length on SELECT; Keys is GLO's alone now */
 static void cu_loop_cells(cr_screen_t *s)
 {
     static const char *const LB[4] = {"Length", "Rate", "Quantize", "Count-in"};
@@ -4809,6 +4868,11 @@ static void cu_loop_cells(cr_screen_t *s)
         cu_int(s->cell[0][0].value, cs.loop_level, 0, sizeof s->cell[0][0].value);
         s->cell[0][0].glyph = CR_G_BAR;
         s->cell[0][0].pct = (uint8_t)(cs.loop_level * 255u / 100u);
+        s->cell[0][1].flags = CR_CF_ON;            /* the click, as Count-in on page 1 */
+        cu_cpy(s->cell[0][1].label, "Metronome", sizeof s->cell[0][1].label);
+        cu_cpy(s->cell[0][1].value, cs.metro ? "On" : "Off", sizeof s->cell[0][1].value);
+        s->cell[0][1].glyph = CR_G_GATE;
+        s->cell[0][1].pct = cs.metro ? 255 : 26;
         cu_hot_row(s, L_LOOP);
         return;
     }
@@ -4993,8 +5057,8 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
             cu_int(b, (int32_t)(first / pg) + 1, 0, sizeof b);
             cu_cat(s->value, b, sizeof s->value);
         }
-        cu_cpy(s->foot, cu.le_page ? "2/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done"
-                                   : "1/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done", sizeof s->foot);
+        cu_cpy(s->foot, cu.le_page ? "2/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back"
+                                   : "1/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back", sizeof s->foot);
         return;
     }
     if (cap == CRL_CAP_STEP) {                     /* step entry: the pattern's steps, sixteenths, a bar a row, four
