@@ -912,6 +912,9 @@ static struct {
     uint32_t kheld;                       /* key bits held */
     uint8_t armed;                        /* the armed button (tap / hold / layer), NB: none */
     uint8_t open, combo;                  /* its layer (or shift) is open; something else was touched */
+    uint8_t hclosed;                      /* the armed button, held again past the hold time, CLOSED this layer (0xFF:
+                                           * the loop editor) and is still down: a knob turned now belongs to that
+                                           * layer still (cu_knob), not to the view under it */
     uint32_t t0;                          /* when it was pressed (fm1_ms) */
     uint8_t lock;                         /* the open layer (locked since its button's hold), L_NONE: none */
     uint32_t perf_t0;                     /* the PERF layer opened / SELECT turned in it: its picker shows for
@@ -938,6 +941,8 @@ static struct {
                                            * the first page whenever the menu opens */
     uint8_t ledit;                        /* the loop editor is open (EDIT in the PLAY menu; cu_ledit_*) */
     uint16_t le_cell;                     /* .. its cursor: the first cell of the selected step */
+    uint8_t le_page;                      /* .. its page (SELECT): 0 Step (Note len, Steps, Chance, Velocity), 1 Trig
+                                           * (Ratchet, Condition, Voicing); the first whenever it opens */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
     uint8_t key_note[CU_NKEY];            /* root keys (the Full keyboard: every key): note + 1 sent; 0xFF: the
@@ -1517,12 +1522,16 @@ static void cu_rec(void)
 /* ------------------------------------------------------------------ the loop editor --- */
 /* EDIT in the PLAY menu (the owner, 2026-10-11; a step sequencer since 2026-10-12: docs/LOOPER.md "The loop editor"):
  * the loop in RAM as a pattern of sixteenth-note steps (cr_loop.c cr_loop_ed_*: the steps are read from the events,
- * nothing is stored for them). SELECT / KNOB 1: the step cursor (wrapping); a chord or a note played on the keys
- * REPLACES the selected step's notes and sounds (the cursor stays: SELECT moves on); REC clears the step; KNOB 2 how
- * long its notes sound, in steps (1 .. 64: no other step moves); KNOB 3 the loop's length in steps (1 .. 64); KNOB 4
- * its velocity; LOOP plays / stops as ever; REC held: the looper's undo. OCT- / OCT+ / HOME / EDIT (tapped, or held
- * again) close it, back to the PLAY menu: nothing to confirm, an edit is done when it is made, in RAM, and saved like
- * any loop change (the global save, a slot switch).
+ * only a step's ratchet, condition, chance and voicing are: crl_data_t.st). Since 2026-10-13 (the owner: "let the
+ * preset knob change selected step, select change pages. Algo knob to change the voicing per step ... let the octave
+ * keys work"): PRESETS: the step cursor (wrapping; GLO held: 8 steps a detent); SELECT: the page; ALGORITHM: the
+ * step's voicing. A chord or a note played on the keys REPLACES the selected step's notes and sounds (the cursor
+ * stays); REC clears the step. Page 1 "Step": KNOB 1 how long its notes sound (1/4 1/2 3/4 of a step, 1 .. 64 steps:
+ * no other step moves), KNOB 2 the loop's length in steps (1 .. 64; GLO held: to the next of 8 16 32 48 64), KNOB 3
+ * its chance, KNOB 4 its velocity. Page 2 "Trig": KNOB 1 its ratchet, KNOB 2 its condition, KNOB 3 its voicing.
+ * LOOP plays / stops as ever; REC held: the looper's undo; OCT- / OCT+: the octave, as on the view. HOME / EDIT
+ * (tapped, or held again) close it, back to the PLAY menu: nothing to confirm, an edit is done when it is made, in
+ * RAM, and saved like any loop change (the global save, a slot switch).
  * The view: cu_le, rebuilt from the ISR's loop (IRQ off: two passes over <= 512 events) only when its events change
  * (crl.gen) or the cursor moves; the map (cu_le_map: the page's 64 steps, 24 bytes) is the editor's only buffer. A
  * page is the whole bars that fit 64 steps (cu_le_page): a loop longer than that (a long take) is paged by the cursor */
@@ -1530,7 +1539,22 @@ static crl_edmap_t cu_le_map __attribute__((section(".pool")));
 static struct {
     uint16_t gen, c0, nstep;                       /* crl.gen then; the cursor's step; steps */
     uint8_t ok, n, cnt, root, qx, vel;             /* its notes' length (steps); its events, the last one's chord, the loudest */
+    uint8_t nf;                                    /* .. its notes are a part of a step: 1 .. 3 quarters (0: n steps) */
+    int8_t rat, cond, voic, chance;                /* the step's properties (cr_loop_ed_prop; -1: it has none) */
 } cu_le;
+static const char *const CU_LE_COND[CRL_NCOND] = {"Always", "1:2", "2:2", "1:3", "2:3", "3:3", "1:4", "2:4", "3:4", "4:4",
+                                                  "1st", "not 1st"};
+static const char *const CU_LE_RAT[CRL_NRATCH] = {"Off", "x2", "x3", "x4"};
+static const char *const CU_LE_FRAC[4] = {"", "1/4", "1/2", "3/4"};
+static void cu_le_voic_txt(char *d, uint32_t n)    /* the step's voicing: "Follow", "0", "+3", "-2"; none: "-" */
+{
+    if (cu_le.voic < 0)
+        cu_cpy(d, "-", n);
+    else if (!cu_le.voic)
+        cu_cpy(d, "Follow", n);
+    else
+        cu_int(d, (int32_t)cu_le.voic - 13, cu_le.voic != 13, n);
+}
 static uint32_t cu_le_per(void)                    /* steps a bar (a row of the grid): 16, 12 in 3/4 and 6/8 */
 {
     return (cr_snap.lsig % CRL_NSIG == CRL_SIG_44 ? 384u : 288u) / CRL_STEP;
@@ -1547,6 +1571,11 @@ static void cu_le_sync(void)
     cr_loop_ed_map(&crl, c0 / pg * pg, &cu_le_map);
     cr_loop_ed_cursor(&crl, c0);
     n = cr_loop_ed_nlen(&crl);
+    cu_le.nf = (uint8_t)cr_loop_ed_nfrac(&crl);
+    cu_le.rat = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_RATCH);
+    cu_le.cond = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_COND);
+    cu_le.voic = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_VOIC);
+    cu_le.chance = (int8_t)cr_loop_ed_prop(&crl, CRL_SP_CHANCE);
     cu_le.cnt = cu_le.vel = 0;
     t0 = c0 * CRL_STEP;
     t1 = t0 + CRL_STEP;
@@ -1566,8 +1595,10 @@ static void cu_le_sync(void)
     cu_le.n = (uint8_t)n;
     cu_le.nstep = cu_le_map.nstep;
     cu_le.ok = 1;
-    cu_trace("loopedit: step %u/%u notes %u long %u len %u\n", (unsigned)c0 + 1u, (unsigned)cu_le.nstep,
-             (unsigned)cu_le.cnt, (unsigned)n, (unsigned)crl.d.len);
+    cu_trace("loopedit: step %u/%u notes %u long %u len %u frac %u ratchet %d cond %d voicing %d chance %d root %u\n",
+             (unsigned)c0 + 1u, (unsigned)cu_le.nstep, (unsigned)cu_le.cnt, (unsigned)n, (unsigned)crl.d.len,
+             (unsigned)cu_le.nf, (int)cu_le.rat, (int)cu_le.cond, (int)cu_le.voic, (int)cu_le.chance,
+             (unsigned)(cu_le.cnt ? cu_le.root : 0u));
 }
 static void cu_ledit_open(void)
 {
@@ -1588,6 +1619,7 @@ static void cu_ledit_open(void)
     }
     cu.ledit = 1;
     cu.le_cell = 0;
+    cu.le_page = 0;
     cu_le.ok = 0;
     cu_hot.knob = 0;
 }
@@ -1602,7 +1634,7 @@ static void cu_ledit_close(void)
     cu_hot.knob = 0;
     cu_trace("loopedit: close (events %u len %u)\n", (unsigned)crl.d.nev, (unsigned)crl.d.len);
 }
-static void cu_ledit_move(int32_t s)               /* SELECT / KNOB 1: the cursor, a step a detent, wrapping */
+static void cu_ledit_move(int32_t s)               /* PRESETS: the cursor, a step a detent (GLO held: 8), wrapping */
 {
     int32_t n, c;
     cu_le_sync();
@@ -1622,28 +1654,97 @@ static void cu_ledit_clear(void)                   /* REC: the step's notes go *
     fm1_irq_on();
     cu_trace("loopedit: clear step %u (%d events)\n", (unsigned)cu_le.c0 + 1u, n);
 }
-static void cu_ledit_knob(uint32_t knob, int32_t s)
+/* a property of the selected step (cr_loop_ed_setprop): v clamped to 0 .. top; an empty step has none */
+static void cu_ledit_prop(int which, int32_t v, int32_t top, const char *nm)
 {
-    uint32_t len, n, nc;
+    int rc;
+    if (cu_le.rat < 0) {
+        cu_trace("loopedit: %s: the step has none\n", nm);
+        return;
+    }
+    v = v < 0 ? 0 : v > top ? top : v;
+    fm1_irq_off();
+    rc = cr_loop_ed_setprop(&crl, which, (int)v);
+    fm1_irq_on();
+    if (rc == CRL_ED_NOROOM)
+        cu_message("loop too full", CR_COL_RED);
+    cu_trace("loopedit: %s %d %s\n", nm, (int)v, rc == 1 ? "ok" : "refused");
+}
+static void cu_ledit_voic(int32_t s, int msg)      /* ALGORITHM (every page), Trig's KNOB 3: the step's voicing */
+{
+    char b[24], v[8];
+    cu_le_sync();
+    cu_ledit_prop(CRL_SP_VOIC, (int32_t)cu_le.voic + s, (int32_t)CRL_NVOIC - 1, "voicing");
+    if (cu.le_page == 1u)
+        cu_hot_set(L_LOOP, 2);
+    else if (msg && cu_le.voic >= 0) {             /* (the Step page has no Voicing cell: said) */
+        cu_le_sync();
+        cu_le_voic_txt(v, sizeof v);
+        cu_cpy(b, "step voicing: ", sizeof b);
+        cu_cat(b, v, sizeof b);
+        cu_message(b, CR_COL_BLUE);
+    }
+}
+/* GLO held + Steps: the loop's length to the next of 8 16 32 48 64 steps in the turn's direction (12 steps a bar, 3/4
+ * and 6/8: 12 24 36 48); none further that way: it stays */
+static void cu_ledit_snap(int32_t s)
+{
+    static const uint8_t T16[5] = {8, 16, 32, 48, 64}, T12[4] = {12, 24, 36, 48};
+    const uint8_t *T = cu_le_per() == 16u ? T16 : T12;
+    uint32_t n = cu_le_per() == 16u ? 5u : 4u, i, nc, v = 0;
     int ok = 0;
     cu_le_sync();
     nc = cu_le.nstep;
-    if (knob == 0) {
-        cu_ledit_move(s);
-    } else if (knob == 1) {                        /* how long the step's notes sound, steps (1 .. 64): the NOTE's
-                                                    * length: no other step moves, the loop keeps its length; a long
-                                                    * note sounds over the steps after it, which still play */
-        int32_t v = (int32_t)cu_le.n + s;
+    if (s > 0) {
+        for (i = 0; i < n && !v; i++)
+            if (T[i] > nc)
+                v = T[i];
+    } else {
+        for (i = n; i-- && !v;)
+            if (T[i] < nc)
+                v = T[i];
+    }
+    if (v) {
+        fm1_irq_off();
+        ok = cr_loop_ed_len(&crl, v * CRL_STEP);
+        fm1_irq_on();
+    }
+    cu_trace("loopedit: snap %u steps %s\n", (unsigned)v, ok ? "ok" : "refused");
+    cu_hot_set(L_LOOP, 1);
+}
+static void cu_ledit_knob(uint32_t knob, int32_t s)
+{
+    uint32_t len, nc;
+    int ok = 0;
+    cu_le_sync();
+    nc = cu_le.nstep;
+    if (cu.le_page) {                              /* Trig: Ratchet, Condition, Voicing; KNOB 4 free */
+        if (knob == 0)
+            cu_ledit_prop(CRL_SP_RATCH, (int32_t)cu_le.rat + s, (int32_t)CRL_NRATCH - 1, "ratchet");
+        else if (knob == 1)
+            cu_ledit_prop(CRL_SP_COND, (int32_t)cu_le.cond + s, (int32_t)CRL_NCOND - 1, "condition");
+        else if (knob == 2)
+            cu_ledit_voic(s, 0);
+        else
+            return;
+    } else if (knob == 0) {                        /* how long the step's notes sound: 1/4 1/2 3/4 of a step, then
+                                                    * 1 .. 64 steps: the NOTE's length: no other step moves, the loop
+                                                    * keeps its length; a long note sounds over the steps after it,
+                                                    * which still play. One scale: 0 .. 2 the parts, 3 .. 66 the steps */
+        int32_t cur = cu_le.nf ? (int32_t)cu_le.nf - 1 : (int32_t)cu_le.n + 2, v = cur + s;
         if (!cu_le.cnt)
             return;                                /* (an empty step: its cell shows "-") */
-        n = (uint32_t)(v < 1 ? 1 : v > (int32_t)CRL_STEPS ? (int32_t)CRL_STEPS : v);
-        if (n != cu_le.n) {
+        v = v < 0 ? 0 : v > (int32_t)CRL_STEPS + 2 ? (int32_t)CRL_STEPS + 2 : v;
+        if (v != cur) {
             fm1_irq_off();
-            ok = cr_loop_ed_setnlen(&crl, n);
+            ok = v < 3 ? cr_loop_ed_setnfrac(&crl, (uint32_t)v + 1u) : cr_loop_ed_setnlen(&crl, (uint32_t)v - 2u);
             fm1_irq_on();
         }
-        cu_trace("loopedit: knob 2 note length %u %s\n", (unsigned)n, ok ? "ok" : "refused");
-    } else if (knob == 2) {                        /* the loop's length, a step a detent, 1 .. 64 steps: shorter hides
+        if (v < 3)
+            cu_trace("loopedit: knob 1 note length %s %s\n", CU_LE_FRAC[v + 1], ok ? "ok" : "refused");
+        else
+            cu_trace("loopedit: knob 1 note length %u %s\n", (unsigned)v - 2u, ok ? "ok" : "refused");
+    } else if (knob == 1) {                        /* the loop's length, a step a detent, 1 .. 64 steps: shorter hides
                                                     * the last step (kept until the editor closes: longer brings it
                                                     * back), longer past what there was adds an empty step. A take
                                                     * longer than 64 steps can be made shorter, not longer */
@@ -1657,7 +1758,9 @@ static void cu_ledit_knob(uint32_t knob, int32_t s)
         fm1_irq_on();
         if (!ok && s > 0)
             cu_message("64 steps at most", CR_COL_RED);
-        cu_trace("loopedit: knob 3 loop length %u %s\n", (unsigned)len, ok ? "ok" : "refused");
+        cu_trace("loopedit: knob 2 loop length %u %s\n", (unsigned)len, ok ? "ok" : "refused");
+    } else if (knob == 2) {                        /* the step's chance: clockwise = more (100 % is entry 0) */
+        cu_ledit_prop(CRL_SP_CHANCE, (int32_t)cu_le.chance - s, (int32_t)CRL_NCHANCE - 1, "chance");
     } else {                                       /* the step's velocity */
         fm1_irq_off();
         ok = cr_loop_ed_vel(&crl, (int)s * 4);
@@ -1668,28 +1771,43 @@ static void cu_ledit_knob(uint32_t knob, int32_t s)
 }
 static void cu_ledit_cells(cr_screen_t *s)
 {
-    static const char *const LB[4] = {"Step", "Note len", "Steps", "Velocity"};
-    uint32_t k;
-    char b[8];
+    static const char *const LB[2][4] = {{"Note len", "Steps", "Chance", "Velocity"}, {"Ratchet", "Condition", "Voicing", ""}};
+    uint32_t k, pg = cu.le_page ? 1u : 0u;
     for (k = 0; k < 4u; k++) {
+        if (!LB[pg][k][0])
+            continue;
         s->cell[0][k].flags = CR_CF_ON;
-        cu_cpy(s->cell[0][k].label, LB[k], sizeof s->cell[0][k].label);
+        cu_cpy(s->cell[0][k].label, LB[pg][k], sizeof s->cell[0][k].label);
+        cu_cpy(s->cell[0][k].value, "-", sizeof s->cell[0][k].value);
     }
-    cu_int(s->cell[0][0].value, (int32_t)cu_le.c0 + 1, 0, sizeof s->cell[0][0].value);
-    cu_cat(s->cell[0][0].value, "/", sizeof s->cell[0][0].value);
-    cu_int(b, (int32_t)cu_le.nstep, 0, sizeof b);
-    cu_cat(s->cell[0][0].value, b, sizeof s->cell[0][0].value);
+    if (pg) {
+        if (cu_le.rat >= 0) {
+            cu_cpy(s->cell[0][0].value, CU_LE_RAT[cu_le.rat % (int)CRL_NRATCH], sizeof s->cell[0][0].value);
+            cu_cpy(s->cell[0][1].value, CU_LE_COND[cu_le.cond % (int)CRL_NCOND], sizeof s->cell[0][1].value);
+            cu_le_voic_txt(s->cell[0][2].value, sizeof s->cell[0][2].value);
+        } else
+            s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][2].flags = CR_CF_ON | CR_CF_DIM;
+        cu_hot_row(s, L_LOOP);
+        return;
+    }
+    cu_int(s->cell[0][1].value, (int32_t)cu_le.nstep, 0, sizeof s->cell[0][1].value);
     if (cu_le.cnt) {
-        cu_int(s->cell[0][1].value, cu_le.n, 0, sizeof s->cell[0][1].value);
+        if (cu_le.nf)
+            cu_cpy(s->cell[0][0].value, CU_LE_FRAC[cu_le.nf & 3u], sizeof s->cell[0][0].value);
+        else
+            cu_int(s->cell[0][0].value, cu_le.n, 0, sizeof s->cell[0][0].value);
         cu_int(s->cell[0][3].value, cu_le.vel, 0, sizeof s->cell[0][3].value);
         s->cell[0][3].glyph = CR_G_BAR;
         s->cell[0][3].pct = (uint8_t)(cu_le.vel * 2u);
-    } else {
-        cu_cpy(s->cell[0][1].value, "-", sizeof s->cell[0][1].value);
-        cu_cpy(s->cell[0][3].value, "-", sizeof s->cell[0][3].value);
-        s->cell[0][1].flags = s->cell[0][3].flags = CR_CF_ON | CR_CF_DIM;
-    }
-    cu_int(s->cell[0][2].value, (int32_t)cu_le.nstep, 0, sizeof s->cell[0][2].value);
+    } else
+        s->cell[0][0].flags = s->cell[0][3].flags = CR_CF_ON | CR_CF_DIM;
+    if (cu_le.chance >= 0) {
+        cu_int(s->cell[0][2].value, CRL_CHANCE_PCT((uint32_t)cu_le.chance), 0, sizeof s->cell[0][2].value);
+        cu_cat(s->cell[0][2].value, "%", sizeof s->cell[0][2].value);
+        s->cell[0][2].glyph = CR_G_BAR;
+        s->cell[0][2].pct = (uint8_t)(CRL_CHANCE_PCT((uint32_t)cu_le.chance) * 255u / 100u);
+    } else
+        s->cell[0][2].flags = CR_CF_ON | CR_CF_DIM;
     cu_hot_row(s, L_LOOP);
 }
 
@@ -2173,9 +2291,14 @@ static void cu_oct_tap(uint32_t b)
         cu_calib_start();                         /* Options > Calibrate, OCT+: Felucca's HARDWARE CALIBRATION */
         return;
     }
-    if (cu.ledit && cu_layer() == L_LOOP) {       /* the loop editor: OCT- / OCT+ close it, back to the PLAY menu
-                                                   * (nothing to confirm: an edit is done when it is made) */
-        cu_ledit_close();
+    if (cu.ledit && cu_layer() == L_LOOP) {       /* the loop editor: the octave, as on the view (the owner,
+                                                   * 2026-10-13; they closed it until then: HOME and EDIT do): the
+                                                   * notes entered next are entered there */
+        cu.octave = (int8_t)(cu.octave + (b == B_OCTUP ? 1 : -1));
+        cu.octave = (int8_t)(cu.octave < -2 ? -2 : cu.octave > 2 ? 2 : cu.octave);
+        cu_post_kbd();
+        cu_popup_num(cu.octave, 1, "", "octave", CR_COL_WHITE, -2, 2, 5);
+        cu_trace("loopedit: octave %d\n", (int)cu.octave);
         return;
     }
     if (cr_snap.lcap == CRL_CAP_STEP && (!cu_layer() || cu_layer() == L_LOOP) && !cu.opt_open && cu.page == PG_NONE) {
@@ -3243,6 +3366,7 @@ static void cu_btn_press(uint32_t b)
         cu.armed = (uint8_t)b;
         cu.t0 = cu_now();
         cu.open = cu.combo = 0;
+        cu.hclosed = 0;
         return;
     }
     /* another button during a hold: a combo (its release does nothing) */
@@ -3351,6 +3475,30 @@ static void cu_knob(uint32_t role, int32_t s)
     uint32_t l;
     int32_t v;
     cu_activity();
+    if (cu.armed != NB && cu.hclosed) {            /* the button held again CLOSED its layer and is still down (the
+                                                    * owner: "sometimes in the play menu turning the preset knob ends
+                                                    * up changing the preset": LOOP held + PRESETS with the menu
+                                                    * already open, turned after the hold time, reached the sound's
+                                                    * pool). The knob is that layer's still: it opens again. The loop
+                                                    * editor closed by EDIT held: nothing (not the slot under it) */
+        if (cu.hclosed == 0xFFu)
+            return;
+        if (!cu.lock) {
+            cu.hclosed = 0;
+            cu_opened(cu.armed);
+        }
+    }
+    if (cu.ledit && cu_layer() == L_LOOP && cu_shift()) {   /* the loop editor, GLO held: PRESETS jumps 8 steps, Steps
+                                                    * (page 1, KNOB 2) snaps to 8 16 32 48 64 */
+        if (role == EN_PRESET) {
+            cu_ledit_move(s * 8);
+            return;
+        }
+        if (role == EN_K2 && !cu.le_page) {
+            cu_ledit_snap(s);
+            return;
+        }
+    }
     if (cu_shift() && cu.page == PG_EDIT && (role >= EN_K1 || role == EN_SELECT) && !cu_layer()) {
         if (role == EN_SELECT)                     /* the editor wins: SHIFT + SELECT steps as SELECT */
             ce_select(s);
@@ -3396,20 +3544,29 @@ static void cu_knob(uint32_t role, int32_t s)
         return;
     }
     if (l == L_LOOP && role == EN_PRESET) {        /* the PLAY menu: PRESETS the slot, ALGORITHM the record mode */
-        if (!cu.ledit)                             /* (the loop editor: neither: it is this loop's) */
+        if (cu.ledit)                              /* (the loop editor: the step cursor, the step's voicing: never
+                                                    * the slot, never the sound) */
+            cu_ledit_move(s);
+        else
             cu_loop_turn(s);
         return;
     }
     if (l == L_LOOP && role == EN_ALGO) {
-        if (!cu.ledit)
+        if (cu.ledit)
+            cu_ledit_voic(s, 1);
+        else
             cu_loop_mode_turn(s);
         return;
     }
     if (l == L_LOOP && role == EN_SELECT) {        /* the PLAY menu: SELECT turns its page (the owner, 2026-10-11: until
-                                                    * then the length, now KNOB 1); the loop editor: the step cursor */
+                                                    * then the length, now KNOB 1); the loop editor: its page */
         uint32_t pg = s > 0 ? 1u : 0u;
         if (cu.ledit) {
-            cu_ledit_move(s);
+            if (pg != cu.le_page) {
+                cu.le_page = (uint8_t)pg;
+                cu_hot.knob = 0;
+                cu_trace("loopedit: page %u\n", (unsigned)pg + 1u);
+            }
             return;
         }
         if (pg != cu.lpage) {
@@ -3816,6 +3973,7 @@ static void cr_ui_input(void)
         if (cu.armed == BT_EDIT && cu.ledit && cu.lock == L_LOOP) {   /* the loop editor: EDIT held again closes
                                                     * it, as a layer's own button does (no engine picker from there) */
             cu.open = 1;
+            cu.hclosed = 0xFF;
             cu_ledit_close();
         } else
         if (cu.armed == BT_SAVE) {                 /* SAVE held alone past the hold time: the global save (a key, a
@@ -3838,6 +3996,7 @@ static void cr_ui_input(void)
                                                               * opened; the engine picker keeps its sound (as EDIT
                                                               * tapped). Its release does nothing */
             cu.open = 1;
+            cu.hclosed = cu.lock;
             if (cu.lock == L_EDIT)
                 cu_pick_end(1);
             cu_layer_close();
@@ -4697,10 +4856,11 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
     uint32_t sig = sn->lsig % CRL_NSIG, bar = sig == CRL_SIG_44 ? 384u : 288u;
     uint32_t beats = sig == CRL_SIG_44 ? 4u : sig == CRL_SIG_34 ? 3u : 6u, cap = sn->lcap, slot = cu_lm_slot();
     uint32_t cur = 1u << cs.loop_slot;
-    static const char *const ED[1] = {"Edit"};
+    static const char *const ED[2] = {"Step", "Trig"};
     char b[12];
-    if (cu.ledit)                                  /* the loop editor: its name where the record mode is */
-        cu_picker(s, ED, 1, 0, CR_COL_WHITE, "", "");
+    if (cu.ledit)                                  /* the loop editor: its page's name where the record mode is (the
+                                                    * picker's marks: the two pages, SELECT) */
+        cu_picker(s, ED, 2, cu.le_page ? 1 : 0, CR_COL_WHITE, "", "");
     else
         cu_picker(s, CU_LOOP_MODE, CRL_NMODE, cs.loop_mode % CRL_NMODE, CR_COL_WHITE, "", "");
     s->kind = CR_K_LOOPMENU;
@@ -4743,6 +4903,7 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         s->lm_beats = (uint8_t)per;
         s->lm_lane[0] = cu_le_map.start;
         s->lm_lane[1] = cu_le_map.tail;
+        s->lm_lane[3] = cu_le_map.trig;            /* (a ratchet, a condition, a chance under 100 %: the small mark) */
         if (cu_le.n > 1u) {                        /* the selected step's note: the steps after its own it sounds in */
             uint32_t a = cu_le.c0 - first + 1u, e = cu_le.c0 - first + cu_le.n;
             e = e > n ? n : e;
@@ -4776,7 +4937,8 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
             cu_int(b, (int32_t)(first / pg) + 1, 0, sizeof b);
             cu_cat(s->value, b, sizeof s->value);
         }
-        cu_cpy(s->foot, "SELECT: step \267 REC: clear \267 EDIT: done", sizeof s->foot);
+        cu_cpy(s->foot, cu.le_page ? "2/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done"
+                                   : "1/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done", sizeof s->foot);
         return;
     }
     if (cap == CRL_CAP_STEP) {                     /* step entry: the pattern's steps, sixteenths, a bar a row, four

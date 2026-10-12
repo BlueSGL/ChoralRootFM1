@@ -1349,8 +1349,10 @@ int main(int argc, char **argv)
         if (ix >= 0 && is >= 0) {
             static const char *const LB1[4] = {"Length", "Rate", "Quantize", "Count-in"};
             static const char *const V1[4] = {"4 bars", "x1.5", "1/16", "On"};
-            static const char *const LBE[4] = {"Step", "Note len", "Steps", "Velocity"};
-            static const char *const VE[4] = {"2/16", "3", "16", "100"};
+            static const char *const LBE[4] = {"Note len", "Steps", "Chance", "Velocity"};
+            static const char *const VE[4] = {"3", "16", "100%", "100"};
+            static const char *const LBT[4] = {"Ratchet", "Condition", "Voicing", ""};
+            static const char *const VT[4] = {"x3", "not 1st", "Follow", ""};
             cr_screen_t s = CR_SCREENS[ix];
             uint16_t line = swap16(T_LINE);
             uint32_t c;
@@ -1383,13 +1385,14 @@ int main(int argc, char **argv)
                                                   * on steps 1 2 5 9 13, step 2's note 3 steps long (it sounds on
                                                   * into 3 and 4), step 9's 2 (into 10) */
             s.anim = 0;
-            s.n_items = 1; s.item0 = 0; s.sel = 0;
-            snprintf(s.item[0], sizeof s.item[0], "Edit");
+            s.n_items = 2; s.item0 = 0; s.sel = 0;   /* (the editor's two pages where the record mode is) */
+            snprintf(s.item[0], sizeof s.item[0], "Step");
+            snprintf(s.item[1], sizeof s.item[1], "Trig");
             s.lm_bars = 1; s.lm_beats = 16; s.lm_lane[0] = 0x1113ull; s.lm_lane[1] = 0x20Cull; s.lm_lane[2] = 0xCull;
             s.lm_lane[3] = 0; s.lm_pos = 1; s.lm_steps = 16; s.lm_dirty = (uint8_t)(s.lm_slot + 1u);
             snprintf(s.sub, sizeof s.sub, "Am");
             snprintf(s.value, sizeof s.value, "step 2/16");
-            snprintf(s.foot, sizeof s.foot, "SELECT: step \267 REC: clear \267 EDIT: done");
+            snprintf(s.foot, sizeof s.foot, "1/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done");
             s.right[0] = 0;
             memset(s.cell, 0, sizeof s.cell);
             for (c = 0; c < 4u; c++) {
@@ -1398,6 +1401,7 @@ int main(int argc, char **argv)
                 snprintf(s.cell[0][c].value, sizeof s.cell[0][c].value, "%s", VE[c]);
             }
             s.cell[0][3].glyph = CR_G_BAR; s.cell[0][3].pct = 200;
+            s.cell[0][2].glyph = CR_G_BAR; s.cell[0][2].pct = 255;
             render(&s, 0);
             {
                 int32_t gy = cr_lm_st_y(&s), x2 = cr_lm_st_x(16, 2) / 16, x4 = cr_lm_st_x(16, 4) / 16, x8 = cr_lm_st_x(16, 8) / 16;
@@ -1412,6 +1416,33 @@ int main(int argc, char **argv)
                 snprintf(name, sizeof name, "loop editor: 16 steps: 5 filled (%u red px), 3 a longer note sounds in (%u dark red), 8 "
                          "empty (%u grey); the selected step's note: a white line along steps 3-4 (%u px, %u in the row)", n0, n3, n1, n4, n5);
                 check(name, n0 > 250u && n3 > 100u && n1 > 400u && n4 >= 30u && n5 == n4);
+                {   /* steps 5 and 9 have a ratchet, a condition or a chance: a 3 px notch out of the top right
+                     * corner; then the editor's second page (Trig) */
+                    cr_screen_t t2 = s;
+                    uint32_t r1, c2;
+                    s.lm_lane[3] = 0x110ull;
+                    render(&s, 0);
+                    COUNT(r1, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);
+                    write_ppm(dir, "loopmenu_editor_marks");
+                    snprintf(name, sizeof name, "loop editor: two steps with a ratchet / condition / chance: a 3 x 3 px notch each (%u red px, %u without)", r1, n0);
+                    check(name, n0 == r1 + 18u);
+                    s.lm_lane[3] = 0;
+                    t2.sel = 1; t2.lm_lane[3] = 0x110ull;
+                    snprintf(t2.foot, sizeof t2.foot, "2/2 \267 PRESETS: step \267 REC: clear \267 EDIT: done");
+                    memset(t2.cell, 0, sizeof t2.cell);
+                    for (c2 = 0; c2 < 3u; c2++) {
+                        t2.cell[0][c2].flags = CR_CF_ON;
+                        snprintf(t2.cell[0][c2].label, sizeof t2.cell[0][c2].label, "%s", LBT[c2]);
+                        snprintf(t2.cell[0][c2].value, sizeof t2.cell[0][c2].value, "%s", VT[c2]);
+                    }
+                    memcpy(a, host_screen, sizeof a);
+                    render(&t2, 0);
+                    COUNT(r1, 20u, 228u, 220u, 240u, HS(x, y) != swap16(T_BG));
+                    write_ppm(dir, "loopmenu_editor_trig");
+                    check("loop editor, page 2 (Trig): Ratchet / Condition / Voicing, KNOB 4 free, over its bottom line",
+                          memcmp(a, host_screen, sizeof a) != 0 && r1 > 100u);
+                    render(&s, 0);
+                }
                 s.lm_steps = 12;                 /* the loop four steps shorter: steps 13 .. 16 are not drawn */
                 render(&s, 0);
                 COUNT(n2, 20u, (uint32_t)gy, 220u, (uint32_t)gy + 7u, HS(x, y) == red);

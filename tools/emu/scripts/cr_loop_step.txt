@@ -6,7 +6,7 @@
 #    2026-10-12 they all piled on one step: the cursor waited for every key up). MAJ up: the cursor on step 64 (shot).
 # C. The 64th chord; a 65th: refused, "64 steps: full" (shot); OCT+ (a rest): nothing more. REC: a loop of 64 events,
 #    1536 ticks (4 bars). LOOP: the 64 steps play in 8 s at 120 BPM (x1).
-# D. EDIT: the loop editor on the 64 steps (shot: four rows of 16). SELECT +20: step 21; KNOB 2 +15: its note 16 steps
+# D. EDIT: the loop editor on the 64 steps (shot: four rows of 16). PRESETS +20: step 21; KNOB 1 +15: its note 16 steps
 #    long (shot: the dark cells after it; nothing moved: still 64 events, 1536 ticks). LOOP: the playhead (shots).
 # (written by a generator, the roots a rising pattern over the white keys D4 .. F5)
 wait 300
@@ -353,9 +353,9 @@ btn EDIT                      # D: the editor
 wait 400
 shot build/emu/test/cr_st_ed64.ppm
 dump                          # 11: edit 1
-knob SELECT +20
+knob PRESETS +20
 wait 200
-knob KNOB2 +15
+knob KNOB1 +15
 wait 400
 shot build/emu/test/cr_st_long.ppm            # step 21's note 16 steps long
 dump                          # 12: long 16, 64 events, 1536
@@ -367,7 +367,7 @@ shot build/emu/test/cr_st_ph2.ppm
 dump                          # 13: playing in the editor
 btn PLAY
 wait 600
-btn OCT-
+btn EDIT
 wait 300
 btn OCT-
 wait 2500

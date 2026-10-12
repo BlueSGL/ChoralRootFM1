@@ -1,0 +1,56 @@
+# ChoralRoot 0.18: "sometimes in the play menu turning the preset knob ends up changing the preset" (the owner,
+# 2026-10-13). The cause: the PLAY menu is opened by LOOP held, and a hand that learnt "LOOP held + PRESETS = the slot"
+# does it again with the menu already open. A layer's own button held AGAIN past the hold time closes the layer (as it
+# opened it), so from 300 ms into that second hold the menu was gone while LOOP was still down, and PRESETS reached the
+# chord sound's pool. Turned within the 300 ms the same gesture chose a slot: hence "sometimes".
+# Now a knob turned while the button that just closed its layer is still held opens the layer again and acts in it.
+# A. LOOP held 500 ms: the menu (layer 8). PRESETS +1 with LOOP still down: slot 2. LOOP up.
+# B. The menu still open: LOOP down again, 600 ms (past the hold: it closes), PRESETS +1 with LOOP still down:
+#    slot 3, the menu open again, the chord sound NOT changed (before: "sound: part 0 pos" moved, slot 2 stayed).
+# C. The same turned early (100 ms into the hold): slot 4.
+# D. The loop editor: EDIT held again closes it; PRESETS turned with EDIT still down does nothing (not a slot of the
+#    PLAY menu under it, not a sound); EDIT up, PRESETS in the menu: the slot, as ever.
+# E. LOOP held again and let go with no knob: the menu closes, as before; PRESETS then is the sound's (the view).
+wait 300
+btn PLAY down
+wait 500
+knob PRESETS +1
+wait 200
+btn PLAY up
+wait 500
+dump                              # 1: slot 2, layer 8
+btn PLAY down
+wait 600
+knob PRESETS +1
+wait 200
+btn PLAY up
+wait 500
+dump                              # 2: slot 3, layer 8
+btn PLAY down
+wait 100
+knob PRESETS +1
+wait 600
+btn PLAY up
+wait 500
+dump                              # 3: slot 4, layer 8
+btn EDIT
+wait 300
+dump                              # 4: the editor open
+btn EDIT down
+wait 600
+knob PRESETS +1
+wait 200
+btn EDIT up
+wait 500
+dump                              # 5: the editor closed, slot 4 still
+knob PRESETS +1
+wait 600
+dump                              # 6: slot 5
+btn PLAY down
+wait 600
+btn PLAY up
+wait 300
+dump                              # 7: layer 0
+knob PRESETS +1
+wait 500
+dump                              # 8: the sound moved (the view's PRESETS)

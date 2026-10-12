@@ -265,7 +265,8 @@ typedef struct {
     uint64_t lm_lane[4];            /* timeline: event marks per lane, 64 columns over the bars shown (64 / lm_bars
                                      * columns a bar); steps: lm_lane[0] = the filled steps of the page, bit s = step s
                                      * (lm_beats a bar), lm_lane[1] = the steps a longer note still sounds in,
-                                     * lm_lane[2] = the steps the cursor step's note sounds on into */
+                                     * lm_lane[2] = the steps the cursor step's note sounds on into, lm_lane[3] = the
+                                     * steps with a ratchet, a condition or a chance under 100 % (a notch) */
     uint16_t lm_pos;                /* timeline: the playhead, Q8 bars from the left edge (0..lm_bars*256); steps: the
                                      * cursor's step index on the page (0..63), | CR_LM_CUR_OFF: the cursor not drawn
                                      * (its blink), | CR_LM_PLAY(st): the step being played (the loop editor) */

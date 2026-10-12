@@ -1043,32 +1043,32 @@ e() { L cr_loop_edit "$1"; }
 [ "$(lf "$(e 1)" events)" = 3 ] && [ "$(lf "$(e 1)" len)" = 72 ] && [ "$(lf "$(e 1)" state)" = 1 ] &&
     ok "Step, Length Free, Quantize none: 3 chords are a loop 3 steps long (72 ticks: 3 sixteenths, not a bar, not 3 quarter notes)" || bad "the 3-step loop: $(e 1)"
 has '^loopedit: open rc 0' "$EL" && ! has '^loopedit: open rc [1-9]' "$EL" && [ "$(l2 "$EL" 2 edit)" = 1 ] && [ "$(l2 "$EL" 2 grid)" = 24 ] &&
-    has '^loopedit: step 1/3 notes 1 long 1 len 72' "$EL" && has '^loop: cells Step Note len Steps Velocity' "$EL" && [ "$(ly "$EL" 2)" = "8 0" ] &&
-    ok "EDIT with Quantize none: the loop editor opens (no \"set Quantize to edit\"): the PLAY menu's screen (Step / Note len / Steps / Velocity), step 1 of 3 sixteenths: $OUT/cr_le_1.ppm" \
+    has '^loopedit: step 1/3 notes 1 long 1 len 72' "$EL" && has '^loop: cells Note len Steps Chance Velocity' "$EL" && [ "$(ly "$EL" 2)" = "8 0" ] &&
+    ok "EDIT with Quantize none: the loop editor opens (no \"set Quantize to edit\"): the PLAY menu's screen (Note len / Steps / Chance / Velocity), step 1 of 3 sixteenths: $OUT/cr_le_1.ppm" \
     || bad "the editor: $(grep -a '^loopedit:' "$EL" | sed -n 1,2p | tr '\n' ' ')"
-has '^loopedit: knob 3 loop length 384 ok' "$EL" && [ "$(lf "$(e 3)" len)" = 384 ] && [ "$(lf "$(e 3)" events)" = 3 ] &&
-    ok "KNOB 3 +13: the loop 16 steps (384), its three chords where they were" || bad "Steps: $(e 3)"
+has '^loopedit: knob 2 loop length 384 ok' "$EL" && [ "$(lf "$(e 3)" len)" = 384 ] && [ "$(lf "$(e 3)" events)" = 3 ] &&
+    ok "KNOB 2 +13: the loop 16 steps (384), its three chords where they were" || bad "Steps: $(e 3)"
 has '^loopedit: step 2/16 notes 1 long 1 len 384' "$EL" && has 'expect sound .*: ok' "$EL" &&
-    grep -aq "loopmenu .*sub 'Am' " "$EL" && has '^loopedit: knob 2 note length 4 ok' "$EL" && has '^loopedit: step 2/16 notes 1 long 4 len 384' "$EL" &&
+    grep -aq "loopmenu .*sub 'Am' " "$EL" && has '^loopedit: knob 1 note length 4 ok' "$EL" && has '^loopedit: step 2/16 notes 1 long 4 len 384' "$EL" &&
     [ "$(lf "$(e 4)" len)" = 384 ] && [ "$(lf "$(e 4)" events)" = 3 ] && [ "$(l2 "$EL" 4 long)" = 4 ] && has '^loopedit: step 3/16 notes 1 long 1 len 384' "$EL" &&
-    ok "SELECT: step 2; a chord played (Am) replaces the step's notes and sounds; KNOB 2: its NOTE 4 steps long: nothing moves (G still on step 3, one long; the loop still 384): $OUT/cr_le_2.ppm, cr_le_3.ppm" \
-    || bad "replace / note length: $(e 4) / $(grep -a '^loopedit: knob 2' "$EL" | tr '\n' ' ')"
+    ok "PRESETS: step 2; a chord played (Am) replaces the step's notes and sounds; KNOB 1: its NOTE 4 steps long: nothing moves (G still on step 3, one long; the loop still 384): $OUT/cr_le_2.ppm, cr_le_3.ppm" \
+    || bad "replace / note length: $(e 4) / $(grep -a '^loopedit: knob 1' "$EL" | tr '\n' ' ')"
 differ cr_le_2 cr_le_3 "the long note is drawn (the steps it sounds on into)"
 has '^loopedit: clear step 3 (1 events)' "$EL" && [ "$(lf "$(e 5)" events)" = 2 ] && [ "$(lf "$(e 5)" cap)" = 0 ] && [ "$(lf "$(e 5)" len)" = 384 ] &&
     has '^loopedit: step 3/16 notes 0 long 0 len 384' "$EL" &&
     ok "REC in the editor clears the selected step (no recording: no capture opened); the step stays, empty: $OUT/cr_le_4.ppm" || bad "REC in the editor: $(e 5)"
-has '^loopedit: knob 3 loop length 48 ok' "$EL" && [ "$(lf "$(e 6)" len)" = 48 ] && [ "$(l2 "$EL" 6 ext)" = 384 ] &&
-    has '^loopedit: knob 3 loop length 72 ok' "$EL" && has '^loopedit: step 2/2 ' "$EL" &&
-    ok "KNOB 3: the loop 2 steps (48; the rest kept behind the end), then 3 again (72), then 2" || bad "loop length: $(e 6) / $(grep -a '^loopedit: knob 3' "$EL" | tr '\n' ' ')"
+has '^loopedit: knob 2 loop length 48 ok' "$EL" && [ "$(lf "$(e 6)" len)" = 48 ] && [ "$(l2 "$EL" 6 ext)" = 384 ] &&
+    has '^loopedit: knob 2 loop length 72 ok' "$EL" && has '^loopedit: step 2/2 ' "$EL" &&
+    ok "KNOB 2: the loop 2 steps (48; the rest kept behind the end), then 3 again (72), then 2" || bad "loop length: $(e 6) / $(grep -a '^loopedit: knob 2' "$EL" | tr '\n' ' ')"
 has '^loopedit: knob 4 velocity 92' "$EL" && [ "$(lf "$(e 7)" state)" = 2 ] && [ "$(l2 "$EL" 7 edit)" = 1 ] && [ "$(lf "$(e 7)" slot)" = 1 ] &&
     [ "$(lf "$(e 7)" mode)" = 4 ] && [ "$(lf "$(e 7)" keys)" = 0 ] &&
-    ok "SELECT wraps to step 1; KNOB 4: its velocity (100 -> 92); LOOP plays in the editor; PRESETS, ALGORITHM and GLO do nothing there" \
+    ok "PRESETS wraps to step 1; KNOB 4: its velocity (100 -> 92); LOOP plays in the editor; a GLO tap does nothing there (slot 1, the mode, the keys as they were)" \
     || bad "velocity / play / the other knobs: $(e 7) / $(grep -a '^loopedit: knob 4' "$EL")"
 [ "$(l2 "$EL" 8 edit) $(ly "$EL" 8)" = "0 8 0" ] && [ "$(lf "$(e 8)" events)" = 2 ] && [ "$(lf "$(e 8)" len)" = 48 ] &&
-    [ "$(l2 "$EL" 9 edit) $(ly "$EL" 9)" = "0 8 0" ] && [ "$(l2 "$EL" 10 edit) $(ly "$EL" 10)" = "0 8 0" ] && [ "$(l2 "$EL" 11 edit) $(ly "$EL" 11)" = "0 8 0" ] &&
+    [ "$(l2 "$EL" 9 edit) $(ly "$EL" 9)" = "1 8 0" ] && [ "$(grep -ac '^loopedit: octave' "$EL")" = 2 ] && [ "$(l2 "$EL" 10 edit) $(ly "$EL" 10)" = "0 8 0" ] && [ "$(l2 "$EL" 11 edit) $(ly "$EL" 11)" = "0 8 0" ] &&
     [ "$(l2 "$EL" 12 edit)" = 1 ] && [ "$(l2 "$EL" 13 edit) $(ly "$EL" 13)" = "0 8 0" ] && [ "$(grep -ac '^loopedit: close' "$EL")" -ge 5 ] &&
     ! has '^picker: open' "$EL" &&
-    ok "OCT-, OCT+, HOME, EDIT held again and EDIT tapped each close the editor, back to the PLAY menu (no engine picker from EDIT held there); the loop as edited (2 events, 48)" \
+    ok "EDIT tapped, HOME and EDIT held again each close the editor, back to the PLAY menu (no engine picker from EDIT held there); OCT+ / OCT- do not (the octave); the loop as edited (2 events, 48)" \
     || bad "closing the editor: $(l2 "$EL" 8 edit) $(ly "$EL" 8) / $(l2 "$EL" 9 edit) / $(l2 "$EL" 10 edit) $(ly "$EL" 10) / $(l2 "$EL" 11 edit) $(ly "$EL" 11) / $(l2 "$EL" 12 edit) / $(l2 "$EL" 13 edit)"
 tl=$(lf "$(e 14)" len)
 [ "$(lf "$(e 14)" slot)" = 2 ] && [ "$(lf "$(e 14)" events)" = 1 ] && [ "${tl:-0}" -gt 100 ] && [ $((tl % 24)) != 0 ] &&
@@ -1105,6 +1105,64 @@ f() { L cr_loop_stepfaults "$1"; }
     ok "Length 8 bars in Step mode: a pattern is 64 steps at most: \"Step: 4 bars (64 steps)\", the cursor wraps there: $OUT/cr_sf_8bars.ppm" \
     || bad "Step with Length 8 bars: $(f 10) / step-len $(l2 "$SF" 10 step-len)"
 silent_end cr_loop_stepfaults
+# 0.18: the loop editor's pages (Step / Trig), the cursor on PRESETS, GLO + PRESETS, GLO + Steps, the octave keys, a
+# step's part, chance, ratchet, condition and voicing, the ways out (the owner, 2026-10-13)
+export EMU_UI_LOG=0
+run cr_loop_trig
+unset EMU_UI_LOG
+TL="$OUT/cr_loop_trig.log"
+t() { L cr_loop_trig "$1"; }
+l3() { grep -a '^  loop3:' "$TL" | sed -n "$1p" | sed -n "s/.* $2 \(-*[0-9]*\).*/\1/p"; }
+oc() { grep -a '^  cr: key' "$TL" | sed -n "$1p" | sed -n 's/.* octave \(-*[0-9]*\) .*/\1/p'; }
+[ "$(l2 "$TL" 1 edit)" = 1 ] && [ "$(l3 1 epage)" = 1 ] && [ "$(l3 1 cursor)" = 1 ] && [ "$(lf "$(t 1)" events)" = 4 ] && [ "$(lf "$(t 1)" len)" = 96 ] &&
+    has '^loop: cells Note len Steps Chance Velocity' "$TL" &&
+    ok "the editor opens on page 1 \"Step\": Note len / Steps / Chance / Velocity, the cursor on step 1: $OUT/cr_lt_step.ppm" || bad "the editor's first page: $(t 1)"
+[ "$(l3 2 cursor)" = 3 ] && [ "$(lf "$(t 2)" slot)" = 1 ] && ! has '^sound: part 0' "$TL" &&
+    ok "PRESETS is the step cursor (step 3): never the slot, never the chord sound (no sound change in the whole script)" || bad "PRESETS in the editor: $(t 2)"
+[ "$(lf "$(t 3)" len)" = 384 ] && [ "$(lf "$(t 4)" len)" = 1536 ] && has '^loopedit: snap 0 steps refused' "$TL" && [ "$(lf "$(t 5)" len)" = 1152 ] && [ "$(lf "$(t 6)" len)" = 384 ] &&
+    [ "$(grep -ac '^loopedit: snap [0-9]* steps ok' "$TL")" = 8 ] &&
+    ok "GLO held + KNOB 2 (Steps) snaps: 4 -> 8 -> 16 -> 32 -> 48 -> 64, no further; back: 48 -> 32 -> 16" || bad "the snap: $(grep -a '^loopedit: snap' "$TL" | tr '\n' ' ')"
+[ "$(l3 7 cursor)" = 11 ] && [ "$(l3 8 cursor)" = 3 ] && [ "$(l3 9 cursor)" = 11 ] && [ "$(ly "$TL" 9)" = "8 0" ] && [ "$(lf "$(t 9)" keys)" = 0 ] &&
+    ok "GLO held + PRESETS jumps 8 steps, wrapping at the loop's end (3 -> 11 -> 3; back: 11); GLO let go: no Options, the keys still play" \
+    || bad "the jump: $(l3 7 cursor) $(l3 8 cursor) $(l3 9 cursor) / $(ly "$TL" 9)"
+[ "$(l3 10 cursor)" = 1 ] && [ "$(l3 10 frac)" = 3 ] && [ "$(l3 11 frac)" = 1 ] && has '^loopedit: knob 1 note length 3/4 ok' "$TL" && has '^loopedit: knob 1 note length 1/4 ok' "$TL" &&
+    ok "KNOB 1 below a step: 3/4, 1/2, 1/4 (the cell reads 1/4: $OUT/cr_lt_quarter.ppm)" || bad "the parts of a step: $(l3 10 frac) $(l3 11 frac)"
+[ "$(l3 12 cursor)" = 3 ] && [ "$(l3 12 chance)" = 4 ] && [ "$(l3 12 props)" = 1 ] && [ "$(l3 13 chance)" = 0 ] && [ "$(l3 13 props)" = 0 ] &&
+    ok "KNOB 3: the step's chance 50 % (the grid's notch: $OUT/cr_lt_chance.ppm), and 100 % again: no property left" || bad "chance: $(l3 12 chance) $(l3 12 props) / $(l3 13 chance) $(l3 13 props)"
+differ cr_lt_quarter cr_lt_chance "the chance cell and the step's notch are drawn"
+[ "$(l3 14 epage)" = 2 ] && [ "$(l3 14 cursor)" = 1 ] && [ "$(l3 14 ratchet)" = 2 ] && has '^loop: cells Ratchet Condition Voicing' "$TL" &&
+    [ "$(l3 15 cursor)" = 2 ] && [ "$(l3 15 cond)" = 10 ] && [ "$(l3 16 voicing)" = 3 ] && [ "$(l3 17 voicing)" = 15 ] && [ "$(l3 17 props)" = 3 ] &&
+    grep -aq "loopmenu .*item 'Trig' .*foot '2/2 " "$TL" && grep -aq "loopmenu .*item 'Step' .*foot '1/2 " "$TL" &&
+    ok "SELECT: page 2 \"Trig\": KNOB 1 ratchet x3 (step 1), KNOB 2 condition 1st (step 2), KNOB 3 voicing -10 and ALGORITHM on to +2 (step 3, the same value): $OUT/cr_lt_trig.ppm" \
+    || bad "the Trig page: $(l3 14 epage) $(l3 14 ratchet) / $(l3 15 cond) / $(l3 16 voicing) $(l3 17 voicing)"
+[ "$(l3 18 epage)" = 2 ] && [ "$(l3 19 epage)" = 1 ] && [ "$(l3 19 voicing)" = 14 ] && grep -aq "loopmenu .*msg 'step voicing: +1'" "$TL" &&
+    ok "SELECT is clamped (two pages); ALGORITHM is the step's voicing on page 1 too (\"step voicing: +1\")" || bad "SELECT / ALGORITHM: $(l3 18 epage) $(l3 19 epage) $(l3 19 voicing)"
+[ "$(oc 20)" = 1 ] && [ "$(l2 "$TL" 20 edit)" = 1 ] && [ "$(oc 21)" = 0 ] && [ "$(l2 "$TL" 21 edit)" = 1 ] && has '^loopedit: step 4/16 .* root 74$' "$TL" &&
+    ok "OCT+ / OCT- change the octave and leave the editor open; a chord entered at +1 is written an octave up (D: root 74)" || bad "the octave keys: $(oc 20) $(l2 "$TL" 20 edit) / $(oc 21)"
+[ "$(lf "$(t 22)" played)" = 6 ] && [ "$(lf "$(t 23)" played)" = 11 ] && [ "$(l3 23 pass)" = 1 ] && [ "$(lf "$(t 24)" state)" = 1 ] && [ "$(l3 24 loopv)" = 0 ] &&
+    ok "played: the first pass 6 hits (step 1 three times, 2 3 4 once), the second 5 (step 2 is 1st only); stopped: no loop voice kept" \
+    || bad "ratchet / condition played: $(lf "$(t 22)" played) $(lf "$(t 23)" played) loopv $(l3 24 loopv)"
+[ "$(lf "$(t 25)" events)" = 3 ] && [ "$(l3 25 props)" = 2 ] && [ "$(l3 25 ratchet)" = -1 ] &&
+    ok "REC clears the step: its notes and its ratchet (an empty step has none)" || bad "REC on a ratcheted step: $(t 25) / props $(l3 25 props)"
+[ "$(l2 "$TL" 26 edit) $(ly "$TL" 26)" = "0 8 0" ] && has '^loop: auto-save slot 1 46 bytes rc 0' "$TL" && [ "$(lf "$(t 27)" events)" = 3 ] && [ "$(l3 27 props)" = 2 ] &&
+    [ "$(l2 "$TL" 28 edit)" = 1 ] && [ "$(l3 28 cond)" = 10 ] && [ "$(l2 "$TL" 29 edit) $(ly "$TL" 29)" = "0 8 0" ] &&
+    ok "EDIT tapped closes it (the PLAY menu); the loop to its slot (46 bytes: 3 events + 2 steps' entries) and back from flash: the properties kept; HOME closes it too" \
+    || bad "closing / the record: $(l2 "$TL" 26 edit) $(ly "$TL" 26) / $(t 27) props $(l3 27 props) / $(l3 28 cond) / $(l2 "$TL" 29 edit) $(ly "$TL" 29)"
+silent_end cr_loop_trig
+# 0.18: "sometimes in the play menu turning the preset knob ends up changing the preset": LOOP held again past the hold
+# time closed the menu under the hand; fails on 722fe71 (dump 2: layer 0, slot 2, "sound: part 0 pos 2")
+run cr_loop_presetknob
+PK="$OUT/cr_loop_presetknob.log"
+k() { L cr_loop_presetknob "$1"; }
+[ "$(lf "$(k 1)" slot) $(ly "$PK" 1)" = "2 8 0" ] && [ "$(lf "$(k 2)" slot) $(ly "$PK" 2)" = "3 8 0" ] && [ "$(lf "$(k 3)" slot) $(ly "$PK" 3)" = "4 8 0" ] &&
+    ok "LOOP held + PRESETS is the slot whenever the knob is turned: opening the menu (slot 2), the menu open and LOOP held 600 ms (slot 3, the menu open again), turned early (slot 4)" \
+    || bad "LOOP held + PRESETS: $(lf "$(k 1)" slot) $(ly "$PK" 1) / $(lf "$(k 2)" slot) $(ly "$PK" 2) / $(lf "$(k 3)" slot) $(ly "$PK" 3)"
+[ "$(l2 "$PK" 4 edit)" = 1 ] && [ "$(l2 "$PK" 5 edit)" = 0 ] && [ "$(lf "$(k 5)" slot) $(ly "$PK" 5)" = "4 8 0" ] && [ "$(lf "$(k 6)" slot)" = 5 ] &&
+    ok "the loop editor closed by EDIT held: PRESETS with EDIT still down does nothing (slot 4 stays; it switched the slot before); EDIT up: the slot again (5)" \
+    || bad "EDIT held + PRESETS: $(l2 "$PK" 5 edit) $(lf "$(k 5)" slot) / $(lf "$(k 6)" slot)"
+[ "$(ly "$PK" 7)" = "0 0" ] && [ "$(grep -ac '^sound: part 0 pos' "$PK")" = 1 ] && [ "$(lf "$(k 8)" slot)" = 5 ] &&
+    ok "LOOP held again with no knob still closes the menu; the one sound change of the script is PRESETS on the view afterwards" \
+    || bad "the preset knob: layer $(ly "$PK" 7), $(grep -ac '^sound: part 0 pos' "$PK") sound change(s)"
 # 0.18: a pattern of 64 steps: entered, refused past the 64th, played, edited
 export EMU_UI_LOG=0
 run cr_loop_step
@@ -1123,7 +1181,7 @@ g() { L cr_loop_step "$1"; }
     [ $(( $(lf "$(g 10)" played) - $(lf "$(g 9)" played) )) -ge 63 ] && [ $(( $(lf "$(g 10)" played) - $(lf "$(g 9)" played) )) -le 64 ] &&
     ok "REC: a loop of 64 events, 1536 ticks (4 bars); LOOP: the 64 steps in 8 s at 120 BPM ($(( $(lf "$(g 10)" played) - $(lf "$(g 9)" played) )) played in 7.9 s)" \
     || bad "the 64-step loop: $(g 9) / $(g 10)"
-has '^loopedit: step 1/64 notes 1 long 1 len 1536' "$SL" && grep -aq "loopmenu .* lm 2/4/0/" "$SL" && has '^loopedit: knob 2 note length 16 ok' "$SL" &&
+has '^loopedit: step 1/64 notes 1 long 1 len 1536' "$SL" && grep -aq "loopmenu .* lm 2/4/0/" "$SL" && has '^loopedit: knob 1 note length 16 ok' "$SL" &&
     has '^loopedit: step 21/64 notes 1 long 16 len 1536' "$SL" && [ "$(lf "$(g 12)" events)" = 64 ] && [ "$(lf "$(g 12)" len)" = 1536 ] && [ "$(l2 "$SL" 12 long)" = 16 ] &&
     ok "the editor on the 64 steps (four rows of 16: $OUT/cr_st_ed64.ppm); step 21's note 16 steps long: 64 events, 1536 ticks still: $OUT/cr_st_long.ppm" \
     || bad "the editor on 64 steps: $(g 12) / $(grep -a '^loopedit: knob' "$SL" | tr '\n' ' ')"
