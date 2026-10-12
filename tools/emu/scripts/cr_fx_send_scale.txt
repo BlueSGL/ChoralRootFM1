@@ -1,0 +1,152 @@
+# ChoralRoot: a send's read-out and its step are ONE (docs/FX.md "One read-out, one step"; the owner 2026-10-13: the
+# same send read "74" on the Reverb page and "75%" on the Sends page: "make the old per effect send parameters also
+# show as 0-100% to match the first send page"). Per cent of the stored 0..127, 6 a detent, in every place.
+# The dump's "screen reads:" line is the last frame's popup (value, sub, label) and its cells.
+# A new unit: reverb 35, chorus 45, delay 25, drive 0; the bass part's reverb 10.
+# The reverb send, one detent in each place: KNOB 4 of the main view (dump 1: the popup), the Sends page (2, 3),
+# Reverb 1's Send cell (4, 5), the Sends page again (6), the editor's FX group (7, 8), KNOB 4 (9), CC 91 (10).
+# Both ends from each place: the popup (11, 12), the Send cell (13 .. 15), the Sends page (16 .. 18), the editor
+# (19 .. 21). The Send cells of Chorus (22, 23), Delay 1 (24, 25) and Drive (26, 27), the Sends page (28), KNOB 4 with
+# Drive picked (29). The bass part's: its editor (30 .. 33), CC 91 on its channel (34).
+wait 300
+knob KNOB4 +1
+wait 200
+shot build/emu/test/cr_fx_scale_pop.ppm
+dump
+wait 1000
+btn FX down
+wait 500
+btn FX up
+wait 400
+dump
+knob KNOB4 +1
+wait 300
+dump
+knob SELECT +1                # Reverb 1
+wait 400
+dump
+knob KNOB4 +1
+wait 300
+shot build/emu/test/cr_fx_scale_reverb.ppm
+dump
+knob SELECT -1                # Sends
+wait 400
+dump
+btn OCT-
+wait 300
+btn EDIT
+wait 400
+btn PLAY                      # the editor's FX group
+wait 400
+dump
+knob KNOB4 +1
+wait 300
+dump
+btn EDIT
+wait 1000
+knob KNOB4 +1
+wait 200
+dump
+wait 1000
+midi B0 5B 3B                 # CC 91 on the chord channel: 59
+wait 200
+dump
+wait 1000
+knob KNOB4 +12                # the ends, from the main view
+wait 200
+shot build/emu/test/cr_fx_scale_full.ppm
+dump
+knob KNOB4 -22
+wait 200
+dump
+wait 1000
+btn FX down
+wait 500
+btn FX up
+wait 400
+knob SELECT +1                # Reverb 1: its Send cell
+wait 400
+dump
+knob KNOB4 +22
+wait 300
+dump
+knob KNOB4 -22
+wait 300
+dump
+knob SELECT -1                # Sends
+wait 400
+dump
+knob KNOB4 +22
+wait 300
+dump
+knob KNOB4 -22
+wait 300
+dump
+btn OCT-
+wait 300
+btn EDIT                      # the editor (its FX group, as it was left)
+wait 400
+dump
+knob KNOB4 +22
+wait 300
+dump
+knob KNOB4 -22
+wait 300
+dump
+btn EDIT
+wait 400
+btn FX down
+wait 500
+btn FX up
+wait 400
+knob SELECT +3                # Chorus
+wait 400
+dump
+knob KNOB4 +1
+wait 300
+dump
+knob SELECT +1                # Delay 1
+wait 400
+dump
+knob KNOB4 +1
+wait 300
+dump
+knob SELECT +2                # Drive
+wait 400
+dump
+knob KNOB4 +1
+wait 300
+dump
+knob SELECT -6                # Sends
+wait 400
+dump
+btn OCT-
+wait 300
+knob KNOB4 +1                 # the main view: the effect last picked, Drive
+wait 200
+dump
+wait 1000
+btn ENV down                  # BASS held + EDIT: the bass sound's editor
+wait 100
+btn EDIT
+wait 100
+btn ENV up
+wait 400
+btn PLAY                      # its FX group
+wait 400
+shot build/emu/test/cr_fx_scale_bass.ppm
+dump
+knob KNOB4 +1
+wait 300
+dump
+knob KNOB4 +22
+wait 300
+dump
+knob KNOB4 -22
+wait 300
+dump
+btn EDIT
+wait 400
+midi B1 5B 40                 # CC 91 on the bass channel: 64
+wait 200
+dump

@@ -438,7 +438,8 @@ static const char *const CU_DIR[6] = {"up", "down", "up-down", "down-up", "as pl
 /* FX (docs/FX.md): four effects on seven pages (SELECT: Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive).
  * A PART has its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST), no sound load touches them: the chord part's are
  * cs.fx_amt[] (cu_send / cu_send_set below: the ONE value the Sends page, the "Send" cell on KNOB 4 of an effect's
- * first page, the sound editor's FX group, KNOB 4 of the main view and CC 91 / 93 / 94 read and write), the bass
+ * first page, the sound editor's FX group, KNOB 4 of the main view and CC 91 / 93 / 94 read and write, each in per
+ * cent and by the same detent: cu_send_text / cu_send_step), the bass
  * part's its track's. The effects' own parameters are GLOBAL: the delay's and the reverb's are cr_fx.c's xfp[], the
  * chorus's song.g; the session keeps them (cr_settings.c CSS_FXG) and no sound load touches them */
 #define CU_NFX 4u                         /* the effects (cs.fx_sel, cs.fx_amt) */
@@ -754,6 +755,30 @@ static void cu_fx_glyph(int32_t c0, cr_cell_t *c)
     default: break;
     }
 }
+/* A SEND'S READ-OUT AND ITS STEP, ONE SCALE (the owner, 2026-10-13: the same send read "74" in Reverb 1's Send cell
+ * and "75%" on the Sends page; "make the old per effect send parameters also show as 0-100% to match the first send
+ * page"). Every screen that shows a part's send shows cu_send_text, every knob that turns one steps cu_send_step: the
+ * Sends page, the Send cell of an effect's page, KNOB 4 of the main view and its popup, the CC 91 / 93 / 94 popups,
+ * the sound editor's FX group (cr_edit.c ce_text, ce_knob), either part's.
+ * The scale: per cent of the stored 0..127, rounded to the nearest (params.c param_format's F_PCT, as the editor
+ * always read it): 0 is 0 %, 127 is 100 %, and only they are.
+ * The step: 6 of 127 a detent, about 5 % (cp_dstep's (range + 10) / 20, the editor's), clamped, so both ends are
+ * reached exactly; fine (the editor's SHIFT): 1 */
+static uint32_t cu_send_pct(int32_t v)
+{
+    v = v < 0 ? 0 : v > 127 ? 127 : v;
+    return ((uint32_t)v * 100u + 63u) / 127u;
+}
+static void cu_send_text(int32_t v, char *out, uint32_t n)       /* "46%" */
+{
+    cu_int(out, (int32_t)cu_send_pct(v), 0, n);
+    cu_cat(out, "%", n);
+}
+static int32_t cu_send_step(int32_t v, int32_t s, uint32_t fine)
+{
+    v += s * (fine ? 1 : 6);
+    return v < 0 ? 0 : v > 127 ? 127 : v;
+}
 /* the effect a cell of page pg sends into: its "Send" cell's, a cell of the Sends page's; -1: another cell */
 static int32_t cu_fx_send_of(uint32_t pg, int32_t c0)
 {
@@ -761,7 +786,7 @@ static int32_t cu_fx_send_of(uint32_t pg, int32_t c0)
 }
 /* the fx layer's cells: the page's four (a missing one: no cell, a dim dash); "Send" is the chord part's send into
  * the effect (Drive: its amount, the clip glyph; the others the dry / wet squares; "off" while FX is off). The Sends
- * page: the four sends, each read as the sound editor's FX group reads it (cr_pages.c cp_value: "46%") */
+ * page: the four sends. Every send cell reads as the sound editor's FX group reads it (cu_send_text: "46%") */
 static void cu_fx_cells(cr_screen_t *s)
 {
     uint32_t pg = cu_fx_pg(), k;
@@ -779,10 +804,7 @@ static void cu_fx_cells(cr_screen_t *s)
             if (!cs.fx_on) {
                 cu_cpy(c->value, "off", sizeof c->value);
             } else {
-                if (c0 == FC_SEND)
-                    cu_2d(c->value, (uint32_t)v * 99u / 127u, sizeof c->value);
-                else
-                    cp_value(cp_desc(&trk[CR_PART_CHORD], id), v, c->value, sizeof c->value);
+                cu_send_text(v, c->value, sizeof c->value);
                 c->pct = (uint8_t)((uint32_t)v * 255u / 127u);
             }
             continue;
@@ -1101,6 +1123,16 @@ static void cu_popup(const char *value, const char *sub, const char *label, uint
     cu.pop.col = (uint8_t)col;
     cu.pop.segs = (uint8_t)segs;
     cu.pop.pct = (uint16_t)(hi > lo ? (uint32_t)((v - lo) * 256 / (hi - lo)) : 0u);
+}
+/* a send's popup (KNOB 4 of the main view, CC 91 / 93 / 94): the per cent of every send read-out (cu_send_pct), big
+ * over "%" (as the click level's), the meter 0 .. 100 */
+static void cu_send_popup(int32_t v, const char *name, uint32_t col)
+{
+    char b[8], lb[24];
+    cu_int(b, (int32_t)cu_send_pct(v), 0, sizeof b);
+    cu_cpy(lb, name, sizeof lb);
+    lb[0] = (char)(lb[0] | 0x20);
+    cu_popup(b, "%", lb, col, (int32_t)cu_send_pct(v), 0, 100, 12);
 }
 static void cu_popup_num(int32_t v, int plus, const char *sub, const char *label, uint32_t col, int32_t lo,
                          int32_t hi, uint32_t segs)
@@ -3047,11 +3079,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
         lb[0] = (char)(lb[0] | 0x20);
         if (c0 == FC_NONE)
             break;
-        if (e >= 0) {                             /* a send: an effect's "Send" cell (4 a detent), a cell of the Sends
-                                                   * page (the sound editor's step for the same knob: cp_dstep) */
+        if (e >= 0) {                             /* a send: an effect's "Send" cell, a cell of the Sends page: the
+                                                   * one step (cu_send_step, the sound editor's for the same knob) */
             uint32_t sid = CU_FX[e].send;
             v = cu_send(0, sid);
-            cu_send_set(0, sid, c0 == FC_SEND ? v + s * 4 : cp_dstep(cp_desc(&trk[CR_PART_CHORD], sid), v, s, 0));
+            cu_send_set(0, sid, cu_send_step(v, s, 0));
             cu_hot_set(L_FX, knob);               /* (no popup: the knob row is the readout, its cell turns hot) */
             cu_trace("fx: knob %u %s send %u\n", (unsigned)knob + 1u, CU_FX[e].name, (unsigned)cu_send(0, sid));
             break;
@@ -3760,13 +3792,10 @@ static void cu_knob(uint32_t role, int32_t s)
         cu_param_turn(cu_perf_mode(), CU_PERF_KNOB[cu_perf_mode()][0], s, 1);
         break;
     case EN_K4:
-        cu_send_set(0, CU_FX[cs.fx_sel].send, cu_send(0, CU_FX[cs.fx_sel].send) + s * 4);
-        {
-            char lb[24];
-            cu_cpy(lb, CU_FX[cs.fx_sel].name, sizeof lb);
-            lb[0] = (char)(lb[0] | 0x20);
-            cu_popup_num(cs.fx_amt[cs.fx_sel] * 99 / 127, 0, "", lb, CR_COL_GREEN, 0, 99, 12);
-        }
+        cu_send_set(0, CU_FX[cs.fx_sel].send, cu_send_step(cu_send(0, CU_FX[cs.fx_sel].send), s, 0));
+        cu_send_popup(cu_send(0, CU_FX[cs.fx_sel].send), CU_FX[cs.fx_sel].name, CR_COL_GREEN);
+        cu_trace("send: knob 4 %s %u (%u%%)\n", CU_FX[cs.fx_sel].name, (unsigned)cs.fx_amt[cs.fx_sel],
+                 (unsigned)cu_send_pct(cs.fx_amt[cs.fx_sel]));
         break;
     case EN_PRESET:                                /* the chord part's engine's pool, wrapping */
         {
@@ -5980,12 +6009,7 @@ static void cu_midi_poll(void)
                 if (CU_FX[i].send == id)
                     break;
             cu_send_set(a.part ? 1u : 0u, id, a.v);   /* (part 0's sends are the FX amounts: cu_send_set) */
-            {
-                char lb[24];
-                cu_cpy(lb, i < CU_NFX ? CU_FX[i].name : "send", sizeof lb);
-                lb[0] = (char)(lb[0] | 0x20);
-                cu_popup_num(a.v * 99 / 127, 0, "", lb, p ? CR_COL_ORANGE : CR_COL_GREEN, 0, 99, 12);
-            }
+            cu_send_popup(a.v, i < CU_NFX ? CU_FX[i].name : "send", p ? CR_COL_ORANGE : CR_COL_GREEN);
             cu_trace("send: part %u %s %u (cc)\n", (unsigned)p, i < CU_NFX ? CU_FX[i].name : "?", (unsigned)a.v);
         }
     }

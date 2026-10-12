@@ -57,18 +57,18 @@ def g(label, value, glyph, pct=None, pct2=None, **kw):
 
 # 0.18 (docs/FX.md): the delay and the reverb are new (a stereo delay, a large reverb), global, on two pages each
 # (SELECT: Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive); KNOB 4 of an effect's first page is the chord part's
-# SEND into it (what a sound carries). The glyphs tail, pre, cut, width, spread, sync, ping are the firmware's
+# SEND into it, read in per cent as the Sends page reads it (0.18, the owner 2026-10-13: one read-out for a send). The glyphs tail, pre, cut, width, spread, sync, ping are the firmware's
 # (cr_draw.c cr_picto): the designer does not draw them yet, so the sheet's PNG is stale for these states.
 REVERB_CELLS = [g("Size", "88", "room", 88 / 127), g("Damp", "56", "moon", 1 - 56 / 127), g("Decay", "3.0 s", "tail", 52 / 127),
-                g("Send", "25", "mix", 0.25)]
+                g("Send", "25%", "mix", 0.25)]
 REVERB2_CELLS = [g("Pre-delay", "17 ms", "pre", 16 / 127), g("Mod", "56", "lfo", 0.25, 56 / 127), g("Low cut", "127 Hz", "cut", 60 / 127),
                  g("Width", "127", "width", 1.0)]
 DELAY_CELLS = [g("Time", "1/8", "echoes", 0.5, 58 / 127), g("Spread", "3:4", "spread", 0.5, 0.5), g("Feedback", "58", "echoes", 0.5, 58 / 127),
-               g("Send", "40", "mix", 0.4)]
+               g("Send", "40%", "mix", 0.4)]
 DELAY2_CELLS = [g("Sync", "Tempo", "sync", 1.0), g("Mode", "Ping-pong", "ping", 1.0), g("Tone", "84", "moon", 84 / 127),
                 g("Wow", "24", "lfo", 0.08, 24 / 127)]
-CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), None, g("Send", "30", "mix", 0.3)]
-DRIVE_CELLS = [None, None, None, g("Send", "15", "clip", 0.15)]
+CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), None, g("Send", "30%", "mix", 0.3)]
+DRIVE_CELLS = [None, None, None, g("Send", "15%", "clip", 0.15)]
 # the Sends page (the owner, 2026-10-12): the sound editor's FX group on the FX layer's first page, its order, its names,
 # its knobs and its read-out (per cent of the send's 0..127); the glyphs are the Send cells' (clip for the drive)
 SENDS_CELLS = [g("Drive", "9%", "clip", 12 / 127), g("Chorus", "35%", "mix", 45 / 127), g("Delay", "20%", "mix", 25 / 127),
@@ -97,7 +97,7 @@ S.append(state(
     "Motion: a root or SELECT flips the effect name (the split-flap) and the row's labels and bars change with it, "
     "sliding in from the right; a turned bar fills stripe by stripe.",
     keys=[OFF] * 27, lit=["D4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("SIZE", "88"), "KNOB2": ("DAMP", "56"), "KNOB3": ("DECAY", "3.0 S"), "KNOB4": ("SEND", "25")},
+    encoders={"KNOB1": ("SIZE", "88"), "KNOB2": ("DAMP", "56"), "KNOB3": ("DECAY", "3.0 S"), "KNOB4": ("SEND", "25%")},
     screen=scr(knobrow(FXP, 1, C_FX, REVERB_CELLS, label="fx · on · 1/2"), foot=FX_FOOT,
                note="the knob row: Reverb big in green over the four cells in the knob colours; the amount green on KNOB 4."),
     chord_block=False,
@@ -108,7 +108,7 @@ S.append(state(
     "Delay selected (F4): TIME / FEEDBACK / COLOUR / AMOUNT. KNOB 2 has just moved: FEEDBACK's value sits on an orange "
     "block for 800 ms (the editor's hot cell), no popup over the screen.",
     keys=[OFF] * 27, lit=["F4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("TIME", "1/8"), "KNOB2": ("SPREAD", "3:4"), "KNOB3": ("FEEDBACK", "58"), "KNOB4": ("SEND", "40")},
+    encoders={"KNOB1": ("TIME", "1/8"), "KNOB2": ("SPREAD", "3:4"), "KNOB3": ("FEEDBACK", "58"), "KNOB4": ("SEND", "40%")},
     screen=scr(knobrow(FXP, 3, C_FX, DELAY_CELLS, hot=1, label="fx · on · 1/2"), foot=FX_FOOT,
                note="Delay 1: the hot cell (SPREAD on an orange block) is the only trace of the turn."),
     chord_block=False,
@@ -119,7 +119,7 @@ S.append(state(
     "Effects with fewer parameters leave their cells as a dim '–' (Chorus: RATE, DEPTH, –, AMOUNT; Drive: –, –, –, "
     "AMOUNT): the row's shape stays, so the hand always finds the amount on KNOB 4. This state shows Chorus.",
     keys=[OFF] * 27, lit=["E4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("RATE", "0.8 Hz"), "KNOB2": ("DEPTH", "60"), "KNOB3": "", "KNOB4": ("AMOUNT", "30")},
+    encoders={"KNOB1": ("RATE", "0.8 Hz"), "KNOB2": ("DEPTH", "60"), "KNOB3": "", "KNOB4": ("AMOUNT", "30%")},
     screen=scr(knobrow(FXP, 2, C_FX, CHORUS_CELLS, label="fx"), foot=FX_FOOT,
                note="Chorus: two cells and a dim '–'; the amount stays on KNOB 4."),
     chord_block=False,

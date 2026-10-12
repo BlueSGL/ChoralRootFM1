@@ -250,7 +250,7 @@
     },
     "KNOB4": {
      "note": "SEND",
-     "value": "25"
+     "value": "25%"
     }
    },
    "screen": {
@@ -296,7 +296,7 @@
       },
       {
        "label": "Send",
-       "value": "25",
+       "value": "25%",
        "glyph": "mix",
        "pct": 0.25
       }
@@ -402,7 +402,7 @@
     },
     "KNOB4": {
      "note": "SEND",
-     "value": "40"
+     "value": "40%"
     }
    },
    "screen": {
@@ -451,7 +451,7 @@
       },
       {
        "label": "Send",
-       "value": "40",
+       "value": "40%",
        "glyph": "mix",
        "pct": 0.4
       }
@@ -557,7 +557,7 @@
     },
     "KNOB4": {
      "note": "AMOUNT",
-     "value": "30"
+     "value": "30%"
     }
    },
    "screen": {
@@ -600,7 +600,7 @@
       null,
       {
        "label": "Send",
-       "value": "30",
+       "value": "30%",
        "glyph": "mix",
        "pct": 0.3
       }

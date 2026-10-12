@@ -325,7 +325,7 @@ fxsnd() { fxl "$1" | sed -n 's/.* sends \([0-9 ]*\) par.*/\1/p'; }
 has '^fx: knob 1 Reverb size 98' "$L" && has '^fx: knob 3 Reverb decay 60' "$L" && has '^fx: knob 3 Delay feedback 50' "$L" &&
     fxpar 1 | grep -q ' 13=50 .* 18=98 .* 20=60 ' &&
     ok "the reverb's Size and Decay and the delay's Feedback turned: in the session's FX block (tags 18, 20, 13)" || bad "the FX parameters: $(fxpar 1)"
-[ -n "$(fxpar 1)" ] && [ "$(fxpar 1)" = "$(fxpar 2)" ] && [ "$(fxamt 1)" = "47 45 25 0" ] && [ "$(fxamt 2)" = "$(fxamt 1)" ] &&
+[ -n "$(fxpar 1)" ] && [ "$(fxpar 1)" = "$(fxpar 2)" ] && [ "$(fxamt 1)" = "53 45 25 0" ] && [ "$(fxamt 2)" = "$(fxamt 1)" ] &&
     [ "$(fxamt 2)" = "$(fxsnd 2)" ] && has '^sound: part 0 pos 4 BRASS' "$L" && has '^sound: part 0 engine VA' "$L" &&
     fxpar 2 | grep -q ' 26=10 27=0 28=0 29=0 ' &&
     ok "PRESETS +3 (another sound), OPT + PRESETS +2 (another engine): every effect parameter and the sends as they were ($(fxamt 2); the bass part's: reverb 10)" \
@@ -350,20 +350,20 @@ has '^fx: knob 1 Drive send 12' "$L" && has '^fx: knob 2 Chorus send 39' "$L" &&
     ! cmp -s "$OUT/cr_fx_sends.ppm" "$OUT/cr_fx_sends_hot.ppm" &&
     ok "the Sends page: KNOB 1..4 set the chord part's four sends (the editor's step; reverb chorus delay drive $(fxamt 1)): $OUT/cr_fx_sends_hot.ppm" \
     || bad "the Sends page's knobs: amt $(fxamt 1), sends $(fxsnd 1)"
-has '^fx: knob 4 Reverb send 57' "$L" && [ "$(fxamt 2)" = "57 39 31 12" ] &&
-    [ "$(edc 2)" = "DST 12 9% CHO 39 31% DLY 31 24% REV 57 45%" ] && ! cmp -s "$OUT/cr_fx_sends_hot.ppm" "$OUT/cr_fx_sends_back.ppm" &&
+has '^fx: knob 4 Reverb send 59' "$L" && [ "$(fxamt 2)" = "59 39 31 12" ] &&
+    [ "$(edc 2)" = "DST 12 9% CHO 39 31% DLY 31 24% REV 59 46%" ] && ! cmp -s "$OUT/cr_fx_sends_hot.ppm" "$OUT/cr_fx_sends_back.ppm" &&
     ok "Reverb 1's Send cell (KNOB 4) and the Sends page are the same value; the editor's FX group reads the four ($(edc 2)): $OUT/cr_fx_sends_edit.ppm" \
     || bad "the FX layer's sends in the editor: amt $(fxamt 2), the editor: $(edc 2)"
-has '^param: part 0 FX CHO 39 -> 45' "$L" && [ "$(fxamt 3)" = "57 45 31 12" ] && [ "$(edc 3)" = "DST 12 9% CHO 45 35% DLY 31 24% REV 57 45%" ] &&
+has '^param: part 0 FX CHO 39 -> 45' "$L" && [ "$(fxamt 3)" = "59 45 31 12" ] && [ "$(edc 3)" = "DST 12 9% CHO 45 35% DLY 31 24% REV 59 46%" ] &&
     ! cmp -s "$OUT/cr_fx_sends_back.ppm" "$OUT/cr_fx_sends_from_edit.ppm" &&
     ok "the other way: the editor's KNOB 2 (chorus 39 -> 45), the Sends page reads it: $OUT/cr_fx_sends_from_edit.ppm" \
     || bad "the editor's send in the FX layer: amt $(fxamt 3), the editor: $(edc 3)"
-[ "$(fxsnd 4)" = "0 0 0 0" ] && [ "$(fxamt 4)" = "57 45 31 12" ] && [ "$(edc 4)" = "$(edc 3)" ] &&
+[ "$(fxsnd 4)" = "0 0 0 0" ] && [ "$(fxamt 4)" = "59 45 31 12" ] && [ "$(edc 4)" = "$(edc 3)" ] &&
     cmp -s "$OUT/cr_fx_sends_edit2.ppm" "$OUT/cr_fx_sends_edit_off.ppm" &&
     ok "FX off (the track's sends closed): the editor's FX group still reads the part's four ($(edc 4)), the same screen as with FX on: $OUT/cr_fx_sends_edit_off.ppm" \
     || bad "FX off: the editor's FX group reads '$(edc 4)' (the sends are $(fxamt 4): '$(edc 3)')"
-has '^param: part 0 FX REV 57 -> 63' "$L" && [ "$(fxamt 5)" = "63 45 31 12" ] && [ "$(fxsnd 5)" = "63 45 31 12" ] &&
-    ok "FX off, the editor's KNOB 4: one step from the send as it was (reverb 57 -> 63), FX on again, the other three as they were" \
+has '^param: part 0 FX REV 59 -> 65' "$L" && [ "$(fxamt 5)" = "65 45 31 12" ] && [ "$(fxsnd 5)" = "65 45 31 12" ] &&
+    ok "FX off, the editor's KNOB 4: one step from the send as it was (reverb 59 -> 65), FX on again, the other three as they were" \
     || bad "FX off, a send turned in the editor: $(grep -a '^param: part 0 FX REV' "$L" | head -1), amt $(fxamt 5)"
 has '^send: part 0 Reverb 64 (cc)' "$L" && has '^send: part 1 Reverb 32 (cc)' "$L" &&
     [ "$(edc 6)" = "DST 12 9% CHO 45 35% DLY 31 24% REV 64 50%" ] && [ "$(edb 6)" = "DST 0 0% CHO 0 0% DLY 0 0% REV 32 25%" ] &&
@@ -379,6 +379,49 @@ has '^param: part 0 ENV DRIVE 12 -> 24' "$L" && [ "$(fxamt 8)" = "64 45 31 24" ]
     cmp -s "$OUT/cr_fx_sends.ppm" "$OUT/cr_fx_sends_reverted.ppm" &&
     ok "GLO + SAVE (the revert, nothing saved): both parts' sends a new unit's on both screens, the layer on Sends: $OUT/cr_fx_sends_reverted.ppm" \
     || bad "the revert: amt $(fxamt 10) sends $(fxsnd 10), the editor: '$(edc 10)' / '$(edb 10)'"
+
+echo "a send's read-out and its step are ONE: per cent, 6 a detent, on the Sends page, an effect's Send cell, the editor, KNOB 4's popup, a CC's (docs/FX.md)"
+run cr_fx_send_scale
+L="$OUT/cr_fx_send_scale.log"
+rd() { grep -a '^  screen reads:' "$L" | sed -n "$1p"; }
+pop() { rd "$1" | sed -n "s/^  screen reads: value '\([^']*\)' sub '\([^']*\)' label '\([^']*\)'.*/\1\2 \3/p"; }   # "32% reverb"
+cel() { rd "$1" | sed -n "s/.* [01]\.[0-3]:$2=\([^ ]*\).*/\1/p"; }                                         # cell LABEL's value
+fxamt() { grep -a '^  session fx:' "$L" | sed -n "$1p" | sed -n 's/.* amt \([0-9 ]*\) sends.*/\1/p'; }
+bsr() { grep -a '^  editor fx bass:' "$L" | sed -n "$1p" | sed -n 's/.* REV \([0-9]*\) .*/\1/p'; }
+# the reverb send, a detent in each place: 35 -> 41 (KNOB 4 of the main view) -> 47 (the Sends page) -> 53 (Reverb 1's
+# Send cell) -> 59 (the editor) -> 65 (KNOB 4 again); CC 91 = 59
+[ "$(pop 1)" = "32% reverb" ] && [ "$(fxamt 1)" = "41 45 25 0" ] && [ "$(cel 2 Reverb)" = "32%" ] && [ "$(cel 2 Chorus)" = "35%" ] &&
+    [ "$(cel 2 Delay)" = "20%" ] && [ "$(cel 2 Drive)" = "0%" ] &&
+    ok "KNOB 4 of the main view, a detent: reverb 35 -> 41, its popup reads $(pop 1 | cut -d' ' -f1); the Sends page reads the same ($(cel 2 Reverb)): $OUT/cr_fx_scale_pop.ppm" \
+    || bad "KNOB 4's popup and the Sends page: '$(pop 1)' / '$(cel 2 Reverb)', amt $(fxamt 1)"
+[ "$(fxamt 3)" = "47 45 25 0" ] && [ "$(cel 3 Reverb)" = "37%" ] && [ "$(cel 4 Send)" = "37%" ] && [ "$(fxamt 5)" = "53 45 25 0" ] &&
+    [ "$(cel 5 Send)" = "42%" ] && [ "$(cel 6 Reverb)" = "42%" ] &&
+    ok "the Sends page's KNOB 4, a detent: 47, 37%; Reverb 1's Send cell reads 37% too; its KNOB 4, the same detent: 53, 42% in both: $OUT/cr_fx_scale_reverb.ppm" \
+    || bad "the Sends page and Reverb 1's Send cell: $(cel 3 Reverb) / $(cel 4 Send), then $(cel 5 Send) / $(cel 6 Reverb) (amt $(fxamt 3), $(fxamt 5))"
+[ "$(cel 7 Reverb)" = "42%" ] && [ "$(fxamt 8)" = "59 45 25 0" ] && [ "$(cel 8 Reverb)" = "46%" ] && [ "$(pop 9)" = "51% reverb" ] &&
+    [ "$(fxamt 9)" = "65 45 25 0" ] && [ "$(pop 10)" = "46% reverb" ] && [ "$(fxamt 10)" = "59 45 25 0" ] &&
+    ok "the editor's FX group reads 42%; its KNOB 4, the same detent: 59, 46%; KNOB 4 of the main view: 65, the popup 51%; CC 91 = 59: the popup 46%" \
+    || bad "the editor, KNOB 4 and CC 91: $(cel 7 Reverb) / $(cel 8 Reverb) / '$(pop 9)' / '$(pop 10)' (amt $(fxamt 8), $(fxamt 9), $(fxamt 10))"
+# both ends from each place (dumps 11 .. 22): the popup, the Send cell, the Sends page, the editor
+[ "$(pop 11)" = "100% reverb" ] && [ "$(fxamt 11)" = "127 45 25 0" ] && [ "$(pop 12)" = "0% reverb" ] && [ "$(fxamt 12)" = "0 45 25 0" ] &&
+    [ "$(cel 13 Send)" = "0%" ] && [ "$(cel 14 Send)" = "100%" ] && [ "$(fxamt 14)" = "127 45 25 0" ] && [ "$(cel 15 Send)" = "0%" ] && [ "$(fxamt 15)" = "0 45 25 0" ] &&
+    [ "$(cel 16 Reverb)" = "0%" ] && [ "$(cel 17 Reverb)" = "100%" ] && [ "$(fxamt 17)" = "127 45 25 0" ] && [ "$(cel 18 Reverb)" = "0%" ] &&
+    [ "$(cel 19 Reverb)" = "0%" ] && [ "$(cel 20 Reverb)" = "100%" ] && [ "$(fxamt 20)" = "127 45 25 0" ] && [ "$(cel 21 Reverb)" = "0%" ] && [ "$(fxamt 21)" = "0 45 25 0" ] &&
+    ok "0% and 100% are reached from each place and are the stored 0 and 127: KNOB 4's popup, Reverb 1's Send cell, the Sends page, the editor: $OUT/cr_fx_scale_full.ppm" \
+    || bad "the ends: popup '$(pop 11)' '$(pop 12)', Send $(cel 13 Send) $(cel 14 Send) $(cel 15 Send), Sends $(cel 16 Reverb) $(cel 17 Reverb) $(cel 18 Reverb), editor $(cel 19 Reverb) $(cel 20 Reverb) $(cel 21 Reverb)"
+# the other effects' Send cells (dumps 22 .. 28): a detent each, then the Sends page and the popup of the effect picked
+[ "$(cel 22 Send)" = "35%" ] && [ "$(cel 23 Send)" = "40%" ] && [ "$(cel 24 Send)" = "20%" ] && [ "$(cel 25 Send)" = "24%" ] &&
+    [ "$(cel 26 Send)" = "0%" ] && [ "$(cel 27 Send)" = "5%" ] && [ "$(fxamt 27)" = "0 51 31 6" ] &&
+    [ "$(cel 28 Drive)" = "5%" ] && [ "$(cel 28 Chorus)" = "40%" ] && [ "$(cel 28 Delay)" = "24%" ] && [ "$(pop 29)" = "9% drive" ] && [ "$(fxamt 29)" = "0 51 31 12" ] &&
+    ok "the Send cells of Chorus, Delay 1 and Drive: 35% -> 40%, 20% -> 24%, 0% -> 5% (6 a detent: chorus delay drive 51 31 6); the Sends page reads the three; KNOB 4's popup: drive 9%" \
+    || bad "the other Send cells: chorus $(cel 22 Send) $(cel 23 Send), delay $(cel 24 Send) $(cel 25 Send), drive $(cel 26 Send) $(cel 27 Send); Sends $(cel 28 Drive) $(cel 28 Chorus) $(cel 28 Delay); popup '$(pop 29)' (amt $(fxamt 27), $(fxamt 29))"
+[ "$(grep -a '^  screen reads:' "$L" | grep -c ':Send=[0-9][0-9]*%')" = 11 ] && ! grep -a '^  screen reads:' "$L" | grep -q ':Send=[0-9][0-9]*\( \|$\)' &&
+    ok "no Send cell reads a bare number in any dump (the 0..99 read-out is gone)" || bad "a Send cell without its per cent"
+# the bass part's: its editor's FX group and CC 91 on its channel (dumps 30 .. 34)
+[ "$(cel 30 Reverb)" = "8%" ] && [ "$(bsr 30)" = 10 ] && [ "$(cel 31 Reverb)" = "13%" ] && [ "$(bsr 31)" = 16 ] && [ "$(cel 32 Reverb)" = "100%" ] && [ "$(bsr 32)" = 127 ] &&
+    [ "$(cel 33 Reverb)" = "0%" ] && [ "$(bsr 33)" = 0 ] && [ "$(pop 34)" = "50% reverb" ] && [ "$(bsr 34)" = 64 ] && [ "$(fxamt 34)" = "0 51 31 12" ] &&
+    ok "the bass part's sends read and step the same in its editor (reverb 10: 8%; a detent: 16, 13%; both ends); CC 91 on its channel: the popup 50%, the chord part's untouched" \
+    || bad "the bass part's sends: $(cel 30 Reverb) $(bsr 30), $(cel 31 Reverb) $(bsr 31), $(cel 32 Reverb), $(cel 33 Reverb), popup '$(pop 34)' ($(bsr 34))"
 
 echo "the perform layer: a knob row (the mode over its four parameters), a turned cell hot, no popup"
 export EMU_UI_LOG=0

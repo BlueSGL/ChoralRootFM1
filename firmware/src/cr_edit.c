@@ -638,6 +638,10 @@ static void ce_text(const track_t *t, ce_ref_t r, const param_desc_t *d, int32_t
     char val[12];
     const char *unit;
     uint32_t i, l;
+    if (r.k == CE_R_TRK && ce_send_ref(t, r) >= 0) {             /* the FX group's four: a send's one read-out */
+        cu_send_text(v, out, n);
+        return;
+    }
     param_format(d, v, val, &unit);
 #ifdef ENGI_VA
     if (r.k == CE_R_DEEP && t->eng_req == ENGI_VA && cp_eq(d->label, "RATE") && ce_synced(t, r.a)) {
@@ -1215,8 +1219,9 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
     if ((i = (uint32_t)ce_send_ref(t, r)) != (uint32_t)-1) {   /* a send: the part's one value (cr_ui.c cu_send_set:
                                                     * the chord part's are the FX amounts). The part's since 0.18, as
                                                     * the MIX group's Level and Pan: not an edit of the sound */
+        v = cu_send_step(v0, s, fine || cx.shift);                /* (a send's one step, as the FX layer's) */
         cu_send_set(ce.part, i, v);
-        cp_value(d, v, b, sizeof b);
+        cu_send_text(v, b, sizeof b);
         cu_trace("param: part %u %s %s %d -> %d (%s)\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],
                  d->label, (int)v0, (int)v, b);
         return;
