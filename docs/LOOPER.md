@@ -78,8 +78,10 @@ chord part. Until 0.17 it was recorded as an ordinary single note and came back 
 - **Clear**: D#4 held 1 s in the PLAY menu with its keys on loops (GLO). **Panic**: stops, keeps the
   loop; a fresh take is dropped (a take only armed or counting in: the loop kept), a partial overdub kept. **Level**
   (page 2, KNOB 1) scales the loop's velocities (0 = mute).
-- **Metronome**: METRO tap = click on/off (on the take's / the loop's / its own grid), held = 4/4 3/4 6/8 picker,
-  KNOB 1 there or OPT + SELECT = click level. The click is a 25 ms two-pole sine burst mixed after fx.c (cr_out.c
+- **Metronome**: on / off in the PLAY menu (page 2, KNOB 2) or by GLO held + SEQ from anywhere but the sound editor
+  (`metronome on`; SEQ's tap was the click until 2026-10-11: it is the loop editor's key now, below); it clicks on the
+  take's / the loop's / its own grid. SEQ (METRO) held = 4/4 3/4 6/8 picker (a SEQ tap in that layer is still the
+  click on / off: the layer's own button), KNOB 1 there or OPT + SELECT = click level. The click is a 25 ms two-pole sine burst mixed after fx.c (cr_out.c
   `cr_click_mix`), 2.5 kHz on the bar's first beat.
 
 ## The Rate (0.18)
@@ -211,9 +213,10 @@ stops; in step entry OCT+ is a rest and OCT- a step back). Mock-ups: `design/cho
 | ALGORITHM | the **record mode** (Overwrite · Advance · Overdub · Replace · Step, the picker band) |
 | SELECT | the **page** (`cu.lpage`, the first whenever the menu opens; the owner 2026-10-11: "turn the select knob to change the page. It currently changes length") |
 | page 1: KNOB 1 / 2 / 3 / 4 | **Length** (Free 1 2 4 8 16 bars; also big in the middle while idle; while the timeline shows, the message "next take: 4 bars") / **Rate** (x1/16 .. x4) / **Quantize** (echoes) / **Count-in** (gate): the cell hot 800 ms, no popup |
-| page 2: KNOB 1 | **Level** (bar); KNOB 2 .. 4: nothing (empty cells) |
+| page 2: KNOB 1 / 2 | **Level** (bar) / **Metronome** (On / Off, the gate glyph as Count-in: right on, left off; `cs.metro`, stored where it was: the owner 2026-10-11: "Add Metronome to the second param page of the play menu"); KNOB 3 / 4: nothing (empty cells) |
 | GLO tap | **the keys**: play (default) = the roots and the chord block play as on the chord view, so the menu stays open while you play into a take; loops = the slot shortcuts (white roots D4..F5 slots 1..10, D#4 held 1 s clear, F#4 undo) and their LED map, GLO lit. No Options from this menu. The Keys cell of 0.17 (KNOB 4) is gone: "get rid of the Keys / play shortcut and map this to the GLO button like in other pages" |
 | EDIT tap | **the loop editor** (below) |
+| SEQ tap | **out of the menu**, to the view, however the menu was entered (the third step of SEQ's cycle: the view, the editor, the PLAY menu, the view; below). SEQ's LED is lit in the menu |
 | REC tap / held | by the record mode / undo, as outside the menu |
 | LOOP held again | closes the menu. **With a knob turned while LOOP is still down the menu opens again and the knob acts in it** (2026-10-13): until then LOOP held + PRESETS with the menu already open chose a slot when turned within the hold time and changed the chord sound's preset when turned after it, the menu having closed under the hand ("sometimes in the play menu turning the preset knob ends up changing the preset"; `cu.hclosed`, `tools/emu/scripts/cr_loop_presetknob.txt`). The same for every layer's own button |
 
@@ -238,7 +241,7 @@ the right "Rec · Overwrite" (armed: the mode; also outside the menu), "Rec 2.4"
 | --- | --- | --- |
 | LOOP tap | play (a take: commit; step entry: commit and play) | stop |
 | LOOP held | the PLAY menu (above) | the same, the timeline in the middle, the corner dial in the top line |
-| EDIT tap in the PLAY menu | the loop editor | the same (the loop plays on) |
+| SEQ tap on the view; EDIT tap in the PLAY menu | the loop editor | the same (the loop plays on) |
 | REC tap | by the record mode (above) | the same; ends a take / layer / step entry |
 | REC held | undo: the layers left huge in red ("layers · undo"); none: "nothing to undo" | the same |
 | OCT+ / OCT- in step entry | a rest / back one step | — |
@@ -306,6 +309,7 @@ version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr
 
 | gesture | does |
 | --- | --- |
+| **SEQ tap on the view** (2026-10-11) | opens it from the main screen, whichever view shows, with the same refusals (then SEQ does nothing else) and the same empty pattern as below (`cu_seq_tap`: the PLAY menu is locked open under it). **SEQ is a cycle of three**: the view -> the editor -> the PLAY menu (the editor closed, the menu as if LOOP had been held) -> the view. The owner: "The edit sequence is a bit buried, hold Play, then press edit. Most people won't find this ... from Main level you should be able to press the seq key to enter the edit sequence menu", then: "press once -> sequencer, press SEQ a second time -> Play menu, press SEQ a third time -> Exit". In KEY, PERF, FX, BASS, LOCK, the view menu, the engine picker, the Options and the save dialog SEQ tapped does nothing (it toggled the click there); in the sound editor it is the MOD group; in the METRO layer the click on / off |
 | EDIT tap in the PLAY menu | opens it (`cr_loop_ed_open`), **at any Quantize setting** (the first build refused a loop with Quantize none: `set Quantize to edit`). Refused: a slot switch on its way (`a slot is on its way`); a capture open (`end the take first`). An empty slot: an empty pattern of the set Length (Free: a bar, 16 steps; more than 64 steps: its first whole bars within 64), which is the slot empty again if nothing is entered |
 | PRESETS | the **step cursor**, a step a detent, wrapping at the loop's end (`cu_ledit_move`). **GLO held + PRESETS**: 8 steps a detent, wrapping the same way. Never the slot, never the chord sound, while the editor is open. (Until 2026-10-13 the cursor was SELECT and KNOB 1) |
 | SELECT | the editor's **page**, clamped: 1 **Step**, 2 **Trig** (`cu.le_page`, the first whenever it opens). The page's name stands where the record mode does, with the picker's two marks; the bottom line begins `1/2` / `2/2` |
@@ -327,7 +331,9 @@ version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr
 | LOOP tap | play / stop from the loop's start, as ever; the cursor does not follow the playback, the playhead shows it. A length changed under the playhead: the playhead where it is in the new cycle (`crl_ed_renorm`) |
 | REC held | the looper's undo, as outside (below) |
 | GLO tapped | nothing (the keys play; GLO held is the shift of PRESETS and Steps above) |
-| HOME / EDIT tapped / EDIT held again | close it, back to the PLAY menu (`cr_loop_ed_close`): nothing to confirm, an edit is applied when it is made. LOOP held again, another layer, a revert: the menu and the editor close. A knob turned while EDIT is still down after closing it by the hold does nothing (it would be the PLAY menu's: PRESETS there is the slot) |
+| SEQ / EDIT tapped, EDIT or SEQ held again | close it, back to the PLAY menu (`cr_loop_ed_close`), however it was opened: nothing to confirm, an edit is applied when it is made. A knob turned while EDIT or SEQ is still down after closing it by the hold does nothing (it would be the PLAY menu's: PRESETS there is the slot). **No METRO layer from the editor**: SEQ held there closes it, and SEQ held + a knob inside the hold time leaves the knob the editor's (`cu_activity`; `tools/emu/scripts/cr_seq.txt`) |
+| **LOOP held** | the PLAY menu: the editor closes, the menu stays (the owner, 2026-10-11: "from the Sequencer, holding the play key should enter the Play Menu, not return to home"; until then it closed the menu with the editor). A knob turned with LOOP still down is the menu's (PRESETS: the slot), never the sound's. A LOOP tap is play / stop as ever, the editor stays |
+| HOME | the view: the editor and the menu close (it went back to the PLAY menu until 2026-10-11; with SEQ's cycle HOME is "home" here as everywhere). Another layer, a revert: the same |
 
 ### Ratchet, condition, chance, voicing (2026-10-13; `crl_data_t.st`, `cr_loop.c crl_play_ev`)
 
@@ -386,7 +392,8 @@ sounds on into carry a white line along their bottom (`lm_lane[2]`), so turning 
 over the following steps and to move nothing. While the loop plays, the step being played is white (grey when empty:
 `CR_LM_PLAY` in `lm_pos`; only its rows' strips are redrawn). Under the grid the selected step's chord, big, and `step
 5/16`; the cells Note len / Steps / Chance / Velocity (page 1) or Ratchet / Condition / Voicing (page 2); the bottom
-line `1/2 · PRESETS: step · REC: clear · EDIT: done`. **A take longer than 64 steps is paged**: the cursor walks all its
+line `1/2 · PRESETS: step · REC: clear · SEQ: back` (`EDIT: done` until 2026-10-11; both keys go back to the PLAY
+menu, the line names the one that opens the editor from the view: `EDIT/SEQ` does not fit `foot`'s 47 characters). **A take longer than 64 steps is paged**: the cursor walks all its
 steps and the grid shows the 64 the cursor is in (`step 70/128 · p2`); one page was chosen over a scrolling row
 because a pattern fits it whole, and a page turns only for loops no step sequencer made.
 

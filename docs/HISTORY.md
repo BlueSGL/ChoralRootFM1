@@ -675,3 +675,33 @@ at x1/16 and 120 BPM). Tests: `cr_loop_test.c` `s_rate` over 48 bars for all ele
 `cr_settings_test.c`, `tools/emu/scripts/cr_loop_rate.txt`. Seen on the way: `docs/manual/shots.txt` no longer gives
 the committed `loop-editor.png` / `loop-editor-trig.png` byte for byte (the cursor's blink phase at the shot: main's
 pictures show it off, a run today shows it on); they were left as they are.
+
+**0.18 dev, 2026-10-11 (built, not flashed): SEQ is the loop editor's key; Metronome on the PLAY menu's page 2.** The
+owner: "The edit sequence is a bit buried, hold Play, then press edit. Most people won't find this. The Seq key is
+currently toggling the metronome on and off. I think from Main level you should be able to press the seq key to enter
+the edit sequence menu, press it again to exit. Add Metronome to the second param page of the play menu." And, the
+same day, on the first design (SEQ in and out, the editor returning to where it was opened from): "With new SEQ
+shortcut to enter editor from main, press once -> sequencer, press SEQ a second time -> Play menu, press SEQ a third
+time -> Exit. Also from the Sequencer, holding the play key should enter the Play Menu, not return to home."
+`cr_ui.c cu_seq_tap`, a cycle of three: on the view (no layer, no Options, no page) SEQ opens the loop editor, the
+PLAY menu locked open under it, with `cu_ledit_open`'s refusals (then nothing); in the editor it closes it to the
+PLAY menu, however the editor was opened; in the PLAY menu it closes the menu, however that was entered (EDIT stays
+the menu's way into the editor). In the editor **LOOP held** closes the editor and keeps the menu (it closed both:
+the layer's own button held again), and a knob turned with LOOP still down is the menu's (PRESETS: the slot); a
+LOOP tap is play / stop as it was. EDIT: the PLAY menu, as it was. **HOME from the editor is the view** (it stopped
+at the PLAY menu; `cr_loop_edit.txt` and `cr_loop_trig.txt` left the editor by HOME to get to the menu and use EDIT
+now). In the other layers, the Options and the save dialog a SEQ tap does nothing (it toggled the click there); the
+sound editor keeps it as MOD; the METRO layer (SEQ held) keeps its own button's tap, the click on / off. The click's
+switch is the **Metronome** cell on the PLAY menu's page 2, KNOB 2 (the gate glyph, as Count-in; page 2 had Level
+alone), and, added by us, **GLO held + SEQ** from anywhere but the sound editor, with the message; `cs.metro` is
+stored where it was, no format changed. The SEQ LED showed the click; now it blinks with EDIT's in the loop editor,
+is lit in the PLAY menu and dark on the view (the three places of its cycle). The editor's bottom line ends `SEQ:
+back` (`EDIT/SEQ` does not fit: `foot` holds 47 characters). SEQ's hold: the METRO layer as before, except in the
+loop editor, where SEQ held closes it as EDIT held does and a knob turned with it still down does nothing, and SEQ
+held + a knob inside the hold time stays the editor's knob: otherwise PRESETS there (the step cursor) would have
+reached the chord sound through the METRO layer, the fault of 2026-10-13 by a new way. Tests:
+`tools/emu/scripts/cr_seq.txt` (23 states), `cr_loop_row.txt`, `cr_draw_test.c` (the cell, its label whole); the
+manual's `loop-editor.png` / `loop-editor-trig.png` are new (the bottom line). Not renamed: the button is still METRO
+in the manual's tables and on the panel pictures, though its tap is the editor now: the owner's call. Seen on the
+way: the manual's troubleshooting table sent a silent loop to "PLAY menu, KNOB 3" (Level is page 2, KNOB 1 since
+0.18): corrected.
