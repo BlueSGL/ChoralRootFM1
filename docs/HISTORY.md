@@ -790,3 +790,36 @@ Tests: `tests/cr_draw_test.c` (the bar's widths, none elsewhere, the strip's col
 brightness, the ticks, the dim cursor, the voicing and its fit), `tests/cr_loop_test.c` (the map); the manual's two
 editor pictures regenerated. Not tested: the look on the unit's panel (the plum and the dim strips at its gamma and
 viewing angle), 3/4 and 6/8 grids beyond the shared code, the MONO palette.
+
+**2026-10-12, GLO + REC steps the record mode; the home read-out names the engine (0.18 dev, built, not flashed).** The
+owner: "For your GLO + SEQ metronome shortcut, that is fine, I would also add shortcut for GLO + REC which changes the
+record mode, cycling through them", and: "From the main root home pages when changing presets, I would like everything
+to stay the same but show above the preset number in orange the current engine name. Then at the bottom it currently
+says 'ENGINE - 20/25', let's change that to say 'Hold OPT to change engine', the numbers and the bar already
+communicate how many presets there are and which one is selected."
+*GLO + REC* (`cr_ui.c cu_rec_mode_next`, called from `cu_btn_press` beside GLO + SEQ, under the same condition: not
+the sound editor): the next of Overwrite, Advance, Overdub, Replace, Step, wrapping, `LC_MODE` posted as the PLAY
+menu's knob does, the message `Rec: <mode>`. GLO + REC had no function before (REC as the second button of a combo is
+swallowed: no record, no undo). What the knob does during a capture was looked up first: nothing special, it sets the
+mode with no refusal and no message, and `cr_loop_rec` reads the mode only with nothing captured; the shortcut does
+the same. In the loop editor it steps the mode and clears no step: safe, the mode is a setting and the editor refuses
+to open during a capture.
+*The read-out* (`cu_pool_popup`): on the home pages (`cu_pool_home`: no layer, not the sound editor, not the save
+dialog, which is exactly where OPT + PRESETS works) the engine stands over the number in the role orange (a meter's
+`line` / `line_col`, drawn by `cr_p_meter` at 15 px bold on the panel's row 26) and the label is the fixed text. Two
+decisions the request did not spell out: **the bass part's text is not the owner's**, because it would be false there
+(OPT + ALGORITHM is the bass level, OPT + PRESETS changes the chord engine): it reads `BASS + EDIT, hold EDIT: engine`,
+the true way, and Bass Behaviour Solo's ` · solo`, which the old label carried, moved to the engine's line
+(`VA · solo`); and **outside the home pages the read-out is unchanged** (`FM6 · 05/25`, nothing over the number: the
+engine picker's preview, a program change with a layer open), since the text would be false there too. `00 off` is
+as it was. The trace keeps its `popup: part ...` line with the place (the tests count them) and adds
+`home read-out: part N over '..' line '..'`; the emulator's frame line ends `over '..'`.
+Widths at 14 px: `Hold OPT to change engine` 180 px, the bass line 206 px, of 240: no ellipsis. Mock-ups: `over` /
+`overCol` in the meter's JSON (`make_mockups.py`, `make_preset_mockups.py`, `gen_cr_screens.py`); the designer does
+not draw `over` and the PNG sheets were not rendered again. Cost: flash +416 B, RAM +16 B (the read-out's two texts),
+POOL unchanged (314744 B). Tests: `tools/emu/scripts/cr_glo_rec.txt`, `cr_pool_hint.txt` (in `test_cr.sh`),
+`tests/cr_draw_test.c` (seven variants: the line's place, colour, the texts whole, no overlap; the picker's without
+it); `docs/manual/sound-popup.png` regenerated. Not tested: anything on the unit (the orange line's legibility on its
+panel, the feel of GLO + REC with the real buttons' timing); GLO + REC in the calibration and in SAFE MODE; the
+read-out after a SysEx `--select` (it needs the device tool's path; it goes through the same `cu_sound_popup`).
+

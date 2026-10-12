@@ -156,6 +156,19 @@ The record mode (`cs.loop_mode`, settings v8; ALGORITHM in the PLAY menu; posted
 when nothing is being captured. REC while capturing ends the capture whatever the mode (a take, a layer, step entry);
 REC while armed or counting in cancels.
 
+**GLO held + REC** (2026-10-11, the owner: "I would also add shortcut for GLO + REC which changes the record mode,
+cycling through them"; `cu_rec_mode_next`, in `cu_btn_press` beside GLO + SEQ): the next mode in the picker's order,
+wrapping (Step -> Overwrite; the knob stops at the ends), with the message `Rec: Overdub`. Where: everywhere GLO +
+SEQ works: the views, the PLAY menu (its picker follows; GLO's tap, the keys, is not taken: the combo), every other
+layer, the Options, and the loop editor, where it clears no step (REC alone does); not in the sound editor, where
+GLO is SHIFT. REC is the second button of a combo there, so it is swallowed: no `LP_REC`, no undo (REC held is undo
+only when REC is pressed first). It posts `LC_MODE` and nothing else, exactly as the knob (`cu_loop_mode_turn`),
+and is stored where the knob's is (no format change). **During a capture** (armed, counting in, a take, a layer,
+step entry) neither the knob nor the shortcut is refused and there is no message but the mode's: `cr_loop_rec`
+reads `crl.mode` only when nothing is captured, so the capture under way ends as it began and the new mode counts
+from the next REC (one visible effect: a take armed in Overwrite with the mode then set to Advance still records
+where it is; the top line's `Rec · <mode>` follows the setting). `tools/emu/scripts/cr_glo_rec.txt`.
+
 | mode | REC on an empty slot | REC over a loop (stopped or playing) |
 | --- | --- | --- |
 | **Overwrite** (default) | a fresh take (Free: armed; synced: the count-in) | stops it and arms the same way; the loop is cleared when the take **starts** (the first chord, the count-in's end: `crl.ow`, `crl_take_start`), so REC / LOOP before that cancels and the loop is intact |
@@ -218,6 +231,7 @@ stops; in step entry OCT+ is a rest and OCT- a step back). Mock-ups: `design/cho
 | EDIT tap | **the loop editor** (below) |
 | SEQ tap | **out of the menu**, to the view, however the menu was entered (the third step of SEQ's cycle: the view, the editor, the PLAY menu, the view; below). SEQ's LED is lit in the menu |
 | REC tap / held | by the record mode / undo, as outside the menu |
+| GLO held + REC | the next record mode, wrapping (above, "Record modes"): the picker band follows |
 | LOOP held again | closes the menu. **With a knob turned while LOOP is still down the menu opens again and the knob acts in it** (2026-10-13): until then LOOP held + PRESETS with the menu already open chose a slot when turned within the hold time and changed the chord sound's preset when turned after it, the menu having closed under the hand ("sometimes in the play menu turning the preset knob ends up changing the preset"; `cu.hclosed`, `tools/emu/scripts/cr_loop_presetknob.txt`). The same for every layer's own button |
 
 The bottom line (`foot`, as the KEY layer's label and footer): `1/2 · keys: play · GLO: loops` (the page, what the

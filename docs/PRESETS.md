@@ -29,8 +29,17 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   stand-in, with the message `PHASE retired: stand-in` (`cr_ui.c cu_load_user`); the record is not rewritten.
   Every entry is editable: **saving over a factory preset is allowed** and the factory one stays recoverable (reset).
 - **PRESETS turns inside the current engine's pool only** (the chord part's engine; ALGORITHM the bass part's). The
-  popup: the number big, the name, `FM6 · 05/25` (the place and the number of presets: 00 = INIT, which is not counted
-  as a preset, 01.. the factory presets, then the user's), the stripe meter over the pool; an overwritten factory preset
+  popup: the number big, the name, the stripe meter over the pool, and two lines that depend on where it shows. **On
+  the home pages** (no layer, not the sound editor, not the save dialog: `cu_pool_home`, exactly where OPT + PRESETS
+  works; 2026-10-11, the owner: "show above the preset number in orange the current engine name. Then at the bottom
+  it currently says 'ENGINE - 20/25', let's change that to say 'Hold OPT to change engine', the numbers and the bar
+  already communicate how many presets there are and which one is selected"): the part's engine over the number in
+  the role orange (`cr_screen_t.line` / `line_col`, the meter's line over its value; the bass with Bass Behaviour
+  Solo: `VA · solo`), and under the stripes `Hold OPT to change engine` for the chord part, `BASS + EDIT, hold EDIT:
+  engine` for the bass part (OPT + ALGORITHM is the bass level: OPT does not reach the bass engine). **Elsewhere**
+  (the engine picker's preview, a program change or SysEx select with a layer open): nothing over the number and
+  `FM6 · 05/25` under the stripes, as everywhere until then (the place and the number of presets: 00 = INIT, which
+  is not counted as a preset, 01.. the factory presets, then the user's); an overwritten factory preset
   carries a small square mark after its name. The meter is a stripe per preset and place k lights k of them: none on
   INIT, every one on the last preset (`WHEEL · 05/05`: five stripes, all lit). A pool of more than 32 presets (the
   CZ-1's 64, FM6 with eight added) has 32 stripes: none on INIT, one from preset 01 on, every one only on the last

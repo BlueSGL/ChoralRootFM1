@@ -94,8 +94,9 @@ to KNOB 4 turn the four cells under the name, and the root keys still play so yo
 change. **OCT-** closes the layer (so do OCT+, HOME, and holding FX again). All the layer buttons work this way: a tap is the button's on / off,
 a hold opens its layer. [Layers](#5-layers) has the rules.
 
-**Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place,
-`02 / FM BELL / FM6 · 02/25`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
+**Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place:
+the engine in orange (`FM6`), the number big (`02`), the name (`FM BELL`), a stripe for every preset of the engine,
+and `Hold OPT to change engine`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
 (FM6, FM TONE, VA, CZ-1 and seven more). Let go of OPT and the engine you stopped on is loaded.
 
 **Add the bass.** Tap **BASS** (printed ENV). A bass note now plays under every chord, and `Bass` shows at the top
@@ -476,8 +477,9 @@ Time (300, 400, 500 or 600 ms).
 The bass is a second, monophonic part with its own sound. On a new unit it is off; from then on it is **on or
 off as it was at your last save** (SAVE held) when you switch on (until 0.17 it was off at every power-on).
 
-- **BASS** tap switches it on and off. The screen shows the bass sound's place (`17 / DEEP SUB / VA · 17/25`), or
-  `00 / off`.
+- **BASS** tap switches it on and off. The screen shows the bass sound's place, in orange (`VA` over `17`, then
+  `DEEP SUB`; with Bass Behaviour Solo the top line reads `VA · solo`), or `00 / off`. Its bottom line,
+  `BASS + EDIT, hold EDIT: engine`, is the way to another bass engine (OPT does not change the bass engine).
 - **ALGORITHM** turns through off (`00 off`) and then the sounds of the bass part's engine. Its first sound is
   `00 INIT`, the engine's plain starting sound.
 - **KNOB 2** moves the bass register, -2 to +4 octaves.
@@ -682,6 +684,7 @@ and keep the chord sound.
 | **REC** tap | record, in the way the record mode says (below). While recording: ends the take. While armed or counting in: cancels |
 | **LOOP** (PLAY) tap | play / stop. While recording: ends the take |
 | **REC** held | undo the last layer (the screen shows how many layers are left); the first layer stays: `nothing to undo` |
+| **GLO** held + **REC** | the next record mode (`Rec: Overdub`); it records nothing |
 | **LOOP** held | the PLAY menu |
 
 With the settings a new FM-1 has (length Free, mode Overwrite):
@@ -748,7 +751,13 @@ playhead. These settings are kept by a global save (SAVE held), like the rest of
 
 ### Record modes
 
-The record mode decides what a REC tap does when nothing is being recorded.
+The record mode decides what a REC tap does when nothing is being recorded. You set it with ALGORITHM in the PLAY
+menu, or from anywhere but the sound editor with a shortcut: **hold GLO and tap REC**. Each tap goes to the next
+mode, Overwrite, Advance, Overdub, Replace, Step and round to Overwrite again, and a message names it
+(`Rec: Overdub`). The shortcut never starts, arms or stops a recording, and in the loop editor it does not clear the
+step (REC alone does that there). If you change the mode while you are recording, overdubbing or entering steps,
+with the shortcut or with the knob, what you are doing goes on and ends as it began; the new mode counts from the
+next REC.
 
 | Mode | REC on an empty slot | REC when the slot holds a loop |
 | --- | --- | --- |
@@ -944,13 +953,17 @@ Every engine has one list, its **pool**:
 - then the factory presets;
 - then the sounds you added.
 
-<img src="manual/sound-popup.png" width="240" alt="The sound read-out: 02, FM BELL, FM6 · 02/25, two of the 25 stripes lit">
+<img src="manual/sound-popup.png" width="240" alt="The sound read-out: FM6 in orange over 02, FM BELL, two of the 25 stripes lit, Hold OPT to change engine">
 
-**PRESETS** turns through the pool of the chord sound's engine and wraps round. The read-out is the place, the name,
-and `FM6 · 02/25`: the engine, the place and the number of presets in the pool (`00 INIT` is not counted). The
-stripes under it are the presets: none is lit on INIT, all of them on the last preset. A small square after the name
-marks a factory preset you have saved over. **ALGORITHM** does the same for the bass, with `00 off` in front of the
-pool.
+**PRESETS** turns through the pool of the chord sound's engine and wraps round. The read-out is the engine's name
+in orange, the place big under it, and the sound's name. The stripes are the presets of the pool (`00 INIT` is not
+one): none is lit on INIT, all of them on the last preset, so they show how many there are and where you are. A
+small square after the name marks a factory preset you have saved over. The bottom line says how to get to another
+engine: `Hold OPT to change engine` (hold OPT, printed GLO, and turn PRESETS). **ALGORITHM** does the same for the
+bass, with `00 off` in front of the pool; its read-out is all orange and its bottom line reads
+`BASS + EDIT, hold EDIT: engine`, because the bass engine is changed in the bass sound's editor. Where OPT + PRESETS
+does not work (in the sound editor's picker, or when a program change arrives while a layer is open) the bottom line
+is the engine and the place instead (`FM6 · 02/25`) and nothing stands over the number.
 
 When you step to another preset the stripes move from where they were: going up, the ones in between light one after
 another; going down, they go out. Only the first read-out after switching on, and the first after changing the engine,
@@ -1533,13 +1546,13 @@ A held layer button opens its layer and it stays; holding the same button again 
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
 | SEQ | METRO | the loop editor; in it: the PLAY menu; in the PLAY menu: leave. With GLO held: metronome on / off | METRO layer: SELECT time signature · KNOB 1 Click · a tap there: metronome on / off |
 | PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · 2 Metronome · GLO: its keys play / loops · SEQ: leave · EDIT: the loop editor (PRESETS step, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · SEQ, EDIT or LOOP held: the PLAY menu · HOME: the view) |
-| REC | REC | record by the record mode; ends a take; cancels when armed | undo the last layer |
+| REC | REC | record by the record mode; ends a take; cancels when armed. With GLO held: the next record mode | undo the last layer |
 | OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
 | OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |
 | OCT- + OCT+ | PANIC | all notes off | nothing more; with HOME as well, 5 s: update mode (a countdown from 2 s, let go to cancel) |

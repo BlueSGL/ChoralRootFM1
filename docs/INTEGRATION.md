@@ -737,7 +737,9 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
 - **Sounds** (`cr_bank.c`, `cr_pages.c`, `cr_name.c`; section 7, docs/PRESETS.md): PRESETS turns the pool of the
   chord part's engine, ALGORITHM the bass part's (after OFF); OPT + PRESETS the chord part's engine (a horizontal
   picker while OPT is held, applied on release). The meter: the place big, the name (a square after an overwritten
-  factory preset's), "FM6 · 05/25" (the place and the pool's presets, INIT not counted: a stripe per preset).
+  factory preset's), a stripe per preset (INIT not counted); on the home pages the engine over the number in orange
+  and "Hold OPT to change engine" under the stripes (the bass part: its own line), elsewhere "FM6 · 05/25" under
+  them (docs/PRESETS.md).
   **Its fill goes on from the place shown** (0.17, the owner: "it should just animate from previous index to the
   current index"; until then every detent filled from none, because the label carries the place and `cu_animate` took a
   changed label for a new meter). The read-out carries its pool (`cu.pop.pool`, `CU_POOL_ID`: the part and its
