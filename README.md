@@ -116,7 +116,8 @@ A public beta, at version 0.16 ([docs/releases/](docs/releases/) has the notes o
 - **MIDI**: three streams out over USB (performance on channel 1, bass on 2, the raw chord off by default), MIDI in
   on the parts (USB and TRS), clock both ways.
   **USB audio recording** (Melodee's, class compliant, no driver): the computer records the FM-1 through **ChoralRoot
-  In**: the master, the CHORD part and the BASS part as three stereo pairs; Options > USB Record switches it (Off:
+  In**: the master, the CHORD part and the BASS part as three stereo pairs, at 44.1 kHz or (0.19, after SLOOP 2.5 and
+  Felucca 1.1.5) 48 kHz as the computer or phone asks; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
 - **New in 0.16** ([docs/releases/0.16.md](docs/releases/0.16.md)): Options > Dual Core is Off by default
