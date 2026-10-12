@@ -1039,7 +1039,10 @@ static struct {
                                           /* pool: CU_POOL_ID of a pool's read-out (0: another meter) */
                                           /* jump: the meter's bar jumps to the value (no fill: the picker's preview);
                                            * mark: the square after the name (an overwritten factory preset) */
-    uint8_t epk_on, epk_rank;             /* OPT held + PRESETS: the engine picker, the engine (ENGINE_ORDER rank) */
+    uint8_t epk_on, epk_rank;             /* OPT held + PRESETS (1) / + ALGORITHM (2: the bass part's): the engine
+                                           * picker, the engine (ENGINE_ORDER rank) */
+    uint8_t blvl;                         /* BASS held + ALGORITHM with no layer open: the bass level's shortcut took
+                                           * this hold (no layer by the hold time; anything else touched opens it) */
     uint32_t rev_t0;                      /* GLO and SAVE went down together (| 1): held CU_REVERT_MS, the revert */
     uint8_t gsave_pend;                   /* SAVE held while a loop played or a take was open: saved at the stop */
     struct { uint32_t until; uint8_t big, col; char text[24], label[32]; } msg;   /* big: 1 PANIC, 2 red type */
@@ -1182,13 +1185,12 @@ static uint32_t cu_pool_lit(uint32_t pos, uint32_t n, uint32_t segs)
  * let's change that to say 'Hold OPT to change engine', the numbers and the bar already communicate how many presets
  * there are and which one is selected"): the part's engine over the number in orange (the bass with Bass Behaviour
  * Solo: "VA \267 solo"), and under the stripes the way to another engine: CU_POOL_HINT for the chord part (OPT held +
- * PRESETS, cu_epk_step, works exactly where cu_pool_home is true), CU_POOL_HINT_BASS for the bass part, whose engine
- * OPT does not reach (OPT + ALGORITHM is the bass level; its engine: the bass sound's editor, EDIT held there).
+ * PRESETS, cu_epk_step, works exactly where cu_pool_home is true) and, since 2026-10-12, for the bass part too (OPT held
+ * + ALGORITHM: the bass part's engine, the same picker; the bass level went to BASS held + ALGORITHM).
  * Anywhere else (the engine picker's preview, a program change with a layer open): nothing over the number and
  * "FM6 \267 05/25" under the stripes (the engine, the position, the pool's presets: INIT, position 00, is not counted;
  * the bass: " \267 solo" after it with Bass Behaviour Solo), as everywhere until 0.18: OPT + PRESETS does nothing there */
 #define CU_POOL_HINT "Hold OPT to change engine"
-#define CU_POOL_HINT_BASS "BASS + EDIT, hold EDIT: engine"
 static uint32_t cu_layer(void);
 static int cu_pool_home(void) { return cu.page != PG_EDIT && cu.page != PG_SAVE && !cu_layer(); }
 /* a pool's stripes: one per preset, at most 32; a pool of INIT alone: one */
@@ -1221,7 +1223,7 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     cu_cpy(ov, ENGINES[e]->name, sizeof ov);
     if (part && cs.bass_mode == CR_BASS_SOLO)
         cu_cat(ov, " \267 solo", sizeof ov);
-    cu_popup(b, nm, !home ? lb : part ? CU_POOL_HINT_BASS : CU_POOL_HINT, part ? CR_COL_ORANGE : CR_COL_WHITE,
+    cu_popup(b, nm, !home ? lb : CU_POOL_HINT, part ? CR_COL_ORANGE : CR_COL_WHITE,
              (int32_t)cu_pool_lit(pos, n, segs), 0, (int32_t)segs, segs);
     if (home)
         cu_cpy(cu.pop.over, ov, sizeof cu.pop.over);
@@ -3305,8 +3307,9 @@ static void cu_activity(void)
     cu.home_hold = 0;                             /* HOME held with something else: no view menu */
     if (cu.armed != NB) {                         /* something touched during a hold: a combo, the layer at once */
         cu.combo = 1;
-        if (!cu.open) {
+        if (!cu.open || cu.blvl) {                /* (.. after BASS + ALGORITHM's level too: cu_bass_level_hold) */
             cu.open = 1;
+            cu.blvl = 0;
             if (cu.armed == BT_METRO && cu.ledit && cu.lock == L_LOOP)
                 return;                           /* the loop editor: SEQ is its way out, no METRO layer from there
                                                    * (SEQ held + a knob: the knob stays the editor's) */
@@ -3610,6 +3613,7 @@ static void cu_btn_press(uint32_t b)
         cu.t0 = cu_now();
         cu.open = cu.combo = 0;
         cu.hclosed = 0;
+        cu.blvl = 0;
         return;
     }
     /* another button during a hold: a combo (its release does nothing) */
@@ -3679,51 +3683,108 @@ static void cu_btn_release(uint32_t b)
 /* OPT held + PRESETS (docs/PRESETS.md; mock-up design/choralroot-fm1-preset-screens.png 2): the chord part's engine,
  * a horizontal picker shown while OPT is held (each detent an engine, wrapping); on OPT's release the part switches to
  * it and lands on the place it last had in that engine's pool (cs.pool_pos; the first preset before that). Not in the
- * editor (its EDIT-held picker) nor on the save dialog */
-static void cu_epk_step(int32_t s)
+ * editor (its EDIT-held picker) nor on the save dialog.
+ * OPT held + ALGORITHM (the owner, 2026-10-12: "Bass presets, let's make that work similar to the main presets, GLO +
+ * Bass knob to change engine"): the same for the BASS part (cu.epk_on 2, orange): the same engines, stepping and
+ * landing rule (cs.pool_pos[1]). A bass that is off stays off (its sound waits on the new engine: a BASS tap or
+ * ALGORITHM brings it). The other knob turned in the same hold: the first part's pick is committed, then the other's
+ * picker opens */
+static void cu_epk_step(uint32_t part, int32_t s)
 {
     uint32_t n;
     int32_t r;
     cu_engine_at(0, &n);
     if (!n)
         return;
+    if (cu.epk_on && cu.epk_on != part + 1u)
+        cu_epk_commit();
     if (!cu.epk_on) {
-        r = cu_engine_rank(trk[CR_PART_CHORD].eng_req % NENGINES);
-        cu.epk_on = 1;
+        r = cu_engine_rank(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES);
+        cu.epk_on = (uint8_t)(part + 1u);
         cu.epk_rank = (uint8_t)(r < 0 ? 0 : r);
         cu.pop.until = 0;
     }
     cu.epk_rank = (uint8_t)(((int32_t)cu.epk_rank + s % (int32_t)n + (int32_t)n) % (int32_t)n);
-    cu_trace("engine pick: %s (%u presets)\n", ENGINES[cu_engine_at(cu.epk_rank, 0)]->name,
+    cu_trace("engine pick: %s%s (%u presets)\n", part ? "bass " : "", ENGINES[cu_engine_at(cu.epk_rank, 0)]->name,
              (unsigned)pool_count(cu_engine_at(cu.epk_rank, 0)) - 1u);
 }
 static void cu_epk_commit(void)                   /* OPT released: the engine picked */
 {
-    uint32_t e, pos, n;
+    uint32_t e, pos, n, part;
     if (!cu.epk_on)
         return;
+    part = cu.epk_on - 1u;
     cu.epk_on = 0;
     e = cu_engine_at(cu.epk_rank, 0);
-    if (e == trk[CR_PART_CHORD].eng_req % NENGINES) {
-        cu_trace("sound: part 0 engine %s kept\n", ENGINES[e]->name);
+    if (e == trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES) {
+        cu_trace("sound: part %u engine %s kept\n", (unsigned)part, ENGINES[e]->name);
         return;
     }
     cu_pos_sync();                                 /* (the place in the engine left: remembered) */
     n = pool_count(e);
-    pos = cs.pool_pos[0][eng_rank(e)];
+    pos = cs.pool_pos[part][eng_rank(e)];
     if (pos >= n)
         pos = n > 1u ? 1u : 0u;
-    cu_pool_load(0, e, pos);
-    cu_sends_to_fx();
-    cu_sound_popup(0);
-    cu_trace("sound: part 0 engine %s pos %u %s\n", ENGINES[e]->name, (unsigned)cs.sound, psnd[0].name);
+    cu_pool_load(part, e, pos);
+    if (!part)
+        cu_sends_to_fx();
+    if (part)                                      /* (a bass that is off: still where its sound landed, not "00 off") */
+        cu_pool_popup(1u, cu_part_pos(1));
+    else
+        cu_sound_popup(0);
+    cu_trace("sound: part %u engine %s pos %u %s\n", (unsigned)part, ENGINES[e]->name, (unsigned)cu_part_pos(part),
+             psnd[part].name);
 }
 static void cu_epk_screen(cr_screen_t *s);
+
+/* BASS (ENV / BASS) held + ALGORITHM: the bass level (the owner, 2026-10-12: "hold the ENV/Bass key and turn bass knob
+ * for the bass level shortcut"; OPT + ALGORITHM until then). Returns 1 when the turn was taken.
+ *   no layer open, BASS not yet past the hold time: the level's popup, as OPT + ALGORITHM showed it, and NO layer (a
+ *     shortcut that left the BASS layer locked open would need HOME after every use): the hold is spent (cu.blvl: no
+ *     layer at the hold time, no tap on release); a key, another knob or a button touched in the same hold opens the
+ *     layer as always (cu_activity)
+ *   the BASS layer open (BASS held past the hold time, or held again in its locked layer, or a layer BASS's hold
+ *     replaces): the level IN the layer, its LEVEL cell (KNOB 4's) hot, never the bass sound (ALGORITHM's own, which
+ *     this combination turned until now)
+ * Not in the loop editor (ALGORITHM is the step's voicing whatever is held) nor in the sound editor without a layer
+ * (ENV is the editor's own button there) */
+static int cu_bass_level_hold(int32_t s)
+{
+    int32_t v;
+    if (cu.armed != BT_BASS || !((cu.bheld >> BT_BASS) & 1u) || (cu.ledit && cu.lock == L_LOOP))
+        return 0;
+#if CR_EDIT_HOOKS
+    if (cu.page == PG_EDIT && !cu_layer() && ce_owns(BT_BASS))
+        return 0;
+#endif
+    if (!cu.lock && !cu.hclosed && (!cu.open || cu.blvl)) {   /* the shortcut: no layer */
+        cu.last_input = cu.last_local = cu_now();
+        cu.home_hold = 0;
+        cu.combo = cu.open = cu.blvl = 1;
+    } else {                                       /* the layer's: opened by the hold as by any knob */
+        cu_activity();
+        if (cu.hclosed && !cu.lock) {              /* (BASS held again closed it and is still down: it opens again) */
+            cu.hclosed = 0;
+            cu_opened(BT_BASS);
+        }
+    }
+    v = trk[CR_PART_BASS].p[P_LEVEL] + s * 2;
+    trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+    if (cu_layer() == L_BASS)
+        cu_hot_set(L_BASS, 3);
+    else
+        cu_popup_num(trk[CR_PART_BASS].p[P_LEVEL], 0, "", "bass level", CR_COL_ORANGE, 0, 127, 12);
+    cu_trace("bass: level %d (BASS + ALGORITHM%s)\n", (int)trk[CR_PART_BASS].p[P_LEVEL],
+             cu_layer() == L_BASS ? ", layer" : "");
+    return 1;
+}
 
 static void cu_knob(uint32_t role, int32_t s)
 {
     uint32_t l;
     int32_t v;
+    if (role == EN_ALGO && cu_bass_level_hold(s))  /* BASS held + ALGORITHM: the bass level */
+        return;
     cu_activity();
     if (cu.armed != NB && cu.hclosed) {            /* the button held again CLOSED its layer and is still down (the
                                                     * owner: "sometimes in the play menu turning the preset knob ends
@@ -3750,7 +3811,7 @@ static void cu_knob(uint32_t role, int32_t s)
             return;
         }
         if (role == EN_ALGO || (role == EN_K3 && cu.le_page)) {   /* the step's voicing: Follow / 0 (GLO + ALGORITHM is
-                                                    * the bass level everywhere else: not in the editor) */
+                                                    * the bass engine on the home pages: not in the editor) */
             cu_ledit_voic(s, role == EN_ALGO, 1);
             return;
         }
@@ -3763,16 +3824,20 @@ static void cu_knob(uint32_t role, int32_t s)
         return;
     }
     if (cu_shift() && role == EN_PRESET && cu.page != PG_EDIT && cu.page != PG_SAVE && !cu_layer()) {
-        cu_epk_step(s);                            /* OPT held + PRESETS: the chord part's engine (on OPT's release) */
+        cu_epk_step(0, s);                         /* OPT held + PRESETS: the chord part's engine (on OPT's release) */
         return;
     }
-    if (cu_shift() && (role == EN_ALGO || role == EN_K1 || role == EN_SELECT)) {   /* OPT held: second functions
-                                                                                    * (the other knobs: their own) */
-        if (role == EN_ALGO) {
-            v = trk[CR_PART_BASS].p[P_LEVEL] + s * 2;
-            trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(v < 0 ? 0 : v > 127 ? 127 : v);
-            cu_popup_num(trk[CR_PART_BASS].p[P_LEVEL], 0, "", "bass level", CR_COL_ORANGE, 0, 127, 12);
-        } else if (role == EN_K1) {                /* the Single Notes split point */
+    if (cu_shift() && role == EN_ALGO && cu_pool_home()) {
+        cu_epk_step(1, s);                         /* OPT held + ALGORITHM: the bass part's engine, the same way. (Until
+                                                    * 2026-10-12 the bass level, and that everywhere but the loop
+                                                    * editor; now anywhere else OPT changes nothing about ALGORITHM,
+                                                    * as about PRESETS: the PLAY menu's record mode, a layer's or the
+                                                    * editor's bass sound. The level: BASS held + ALGORITHM) */
+        return;
+    }
+    if (cu_shift() && (role == EN_K1 || role == EN_SELECT)) {   /* OPT held: second functions (the other knobs: their
+                                                                 * own) */
+        if (role == EN_K1) {                /* the Single Notes split point */
             cs.split = (uint8_t)((cs.split + 12 + s % 12) % 12);
             cu_post_single();
             cu_popup(CU_NOTE[cs.split], cs.kbd_full ? "Full: at F4" : cs.single == 2u ? "split bass" :
@@ -5501,7 +5566,10 @@ static void cu_epk_screen(cr_screen_t *s)
     cu_engine_at(0, &n);
     for (k = 0; k < n && k < NENGINES; k++)
         eng[k] = ENGINES[cu_engine_at(k, 0)]->name;
-    cu_picker(s, eng, n, cu.epk_rank, CR_COL_WHITE, "engine \267 OPT + PRESETS", "");
+    if (cu.epk_on == 2u)                           /* the bass part's: orange */
+        cu_picker(s, eng, n, cu.epk_rank, CR_COL_ORANGE, "bass engine \267 OPT + ALGORITHM", "");
+    else
+        cu_picker(s, eng, n, cu.epk_rank, CR_COL_WHITE, "engine \267 OPT + PRESETS", "");
     s->orient = 1;
     cu_int(s->value, (int32_t)pool_count(e) - 1, 0, sizeof s->value);
     cu_cat(s->value, " presets", sizeof s->value);

@@ -1719,6 +1719,30 @@ int main(int argc, char **argv)
                         snprintf(name, sizeof name, "loop editor, playing: 'G#madd4 JAZZ' (the longest) and three more: whole, not cut (%u), ending by x 84 "
                                  "(%u): 6 px clear of 'Step'; %u blue px or more; %u lint findings", nell - e0, lblue, lmin, nfind - f0);
                         check(name, okl && nell == e0 && nfind == f0);
+                        {   /* the major triad's "M" (2026-10-12): the widest, G#M: the playing name at its biggest face
+                             * (as tall as "G#m"), and the name line "G#M -12" beside "step 64/64": whole */
+                            cr_screen_t pm = s;
+                            uint32_t j, hM = 0, hm = 0, cutM = 0, line = 0;
+                            snprintf(pm.lm_now, sizeof pm.lm_now, "G#m");
+                            render(&pm, 0);
+                            for (j = 0; j < nbox; j++)
+                                if (!strcmp(boxes[j].s, "G#m") && boxes[j].x1 <= 84) hm = (uint32_t)(boxes[j].y1 - boxes[j].y0);
+                            snprintf(pm.lm_now, sizeof pm.lm_now, "G#M");
+                            snprintf(pm.sub, sizeof pm.sub, "G#M\t-12");
+                            snprintf(pm.value, sizeof pm.value, "step 64/64");
+                            render(&pm, 0);
+                            lint("loopmenu_editor_major", &pm);
+                            write_ppm(dir, "loopmenu_editor_major");
+                            for (j = 0; j < nbox; j++) {
+                                if (strncmp(boxes[j].s, "G#M", 3)) continue;
+                                cutM |= boxes[j].flags & 1u;
+                                if (boxes[j].x1 <= 84 && boxes[j].y1 < 92) hM = (uint32_t)(boxes[j].y1 - boxes[j].y0);
+                                else line++;
+                            }
+                            snprintf(name, sizeof name, "loop editor: a major triad 'G#M': the playing name at the biggest face (%u px tall, "
+                                     "'G#m' %u), the name line beside 'step 64/64' (%u): whole", hM, hm, line);
+                            check(name, hM > 0u && hM == hm && line >= 1u && !cutM && nell == e0 && nfind == f0);
+                        }
                         p2 = t2;                                     /* the Trig page: the name where "Step" (the left neighbour) stood */
                         render(&p2, 0);
                         for (i = 0; i < nbox; i++)
@@ -1916,6 +1940,57 @@ int main(int argc, char **argv)
         check("an animation frame is a function of (state, anim_ms) only", pure);
         check("mid-animation frames differ from the settled ones (squeeze, slide, fill)", moving);
         check("past their duration the animations equal the settled screen", settle);
+    }
+
+    {   /* the major triad's "M" (2026-10-12: "C major would read CM"): the widest of them, G#M, as the big name of every
+         * screen in the table that names a chord (the "M" at the quality's size after the root, on its line, inside
+         * the panel: narrower than "dim" was), and on step entry's line beside "step 64/64". Nothing cut, no lint
+         * finding. (The loop editor's name line and its playing name: with the editor's checks above) */
+        uint32_t k, i, f0 = nfind, e0 = nell, views = 0, okv = 1, wM = 0, wdim = 0, steps = 0, oks = 1;
+        for (k = 0; k < CR_NSCREENS; k++) {
+            cr_screen_t s = CR_SCREENS[k];
+            int32_t rx1 = -1, mx0 = -1, mx1 = -1, ry0 = 0, ry1 = 0, my1 = 0, cut = 0, got = 0;
+            s.anim = 0;
+            if (s.kind == CR_K_LOOPMENU && s.lm_mid == CR_LM_STEPS) {
+                snprintf(s.sub, sizeof s.sub, "G#M");
+                snprintf(s.value, sizeof s.value, "step 64/64");
+                render(&s, 0);
+                lint("major_m_step", &s);
+                if (!steps) write_ppm(dir, "major_m_step");
+                for (i = 0; i < nbox; i++)
+                    if (!strcmp(boxes[i].s, "G#M")) { got = 1; cut |= boxes[i].flags & 1; }
+                oks &= got && !cut;
+                steps++;
+                continue;
+            }
+            if (!s.name.root[0] || s.name.sup[0] || s.kind == CR_K_LOOPMENU) continue;
+            snprintf(s.name.root, sizeof s.name.root, "G#");
+            snprintf(s.name.quality, sizeof s.name.quality, "M");
+            render(&s, 0);
+            lint("major_m_name", &s);
+            if (!views) write_ppm(dir, "major_m_name");
+            for (i = 0; i < nbox; i++) {
+                if (!strcmp(boxes[i].s, "G#") && rx1 < 0) { rx1 = boxes[i].x1; ry0 = boxes[i].y0; ry1 = boxes[i].y1; }
+                if (!strcmp(boxes[i].s, "M") && mx0 < 0) { mx0 = boxes[i].x0; mx1 = boxes[i].x1; my1 = boxes[i].y1; cut = boxes[i].flags & 1; }
+            }
+            if (!(rx1 > 0 && mx0 >= rx1 && mx1 <= 232 && my1 > ry0 && my1 <= ry1 + 2 && !cut)) {
+                okv = 0;
+                fprintf(rep, "major M: %s: root x1 %d rows %d..%d, M x %d..%d y1 %d cut %d\n", CR_SCREEN_SLUGS[k], (int)rx1, (int)ry0,
+                        (int)ry1, (int)mx0, (int)mx1, (int)my1, (int)cut);
+            }
+            if (!views) wM = (uint32_t)(mx1 - mx0);
+            snprintf(s.name.quality, sizeof s.name.quality, "dim");
+            render(&s, 0);
+            if (!views)
+                for (i = 0; i < nbox; i++)
+                    if (!strcmp(boxes[i].s, "dim")) wdim = (uint32_t)(boxes[i].x1 - boxes[i].x0);
+            views++;
+        }
+        snprintf(name, sizeof name, "major 'M': the big name G#M on %u screens: M after the root, on its line, whole (%u px; 'dim' %u); "
+                 "%u findings, %u cut", views, wM, wdim, nfind - f0, nell - e0);
+        check(name, views >= 3u && okv && wM > 0u && wM < wdim && nfind == f0 && nell == e0);
+        snprintf(name, sizeof name, "major 'M': step entry's line 'G#M' beside 'step 64/64' (%u screens): whole", steps);
+        check(name, steps >= 1u && oks && nfind == f0 && nell == e0);
     }
 
     fprintf(rep, "\n%u lint findings, %u ellipsised texts\n", nfind, nell);
