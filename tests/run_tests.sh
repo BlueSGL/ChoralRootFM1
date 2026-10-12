@@ -241,6 +241,8 @@ if [ -f build/gen/felucca_tables.h ]; then
     run "REVERB TYPE: ROOM bit-identical, SPRING decay / chirp / stability / level, model change, cost, demos" "$OUT/reverb_test" build/fx_demo
     $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/regress" tests/regress.c -lm
     run "regression: golden renders, health, voices, CPU budget" "$OUT/regress" tests/golden.txt tests/cpu_baseline.txt
+    $CC -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o "$OUT/cr_usbtap_test" tests/cr_usbtap_test.c -lm
+    run "USB recording is a tap: the DAC's words bit-identical in five USB states (Output, USB Level, MASTER, one core and two)" "$OUT/cr_usbtap_test"
     $CC -w -Ibuild/gen -Ifirmware/src -o "$OUT/descdump" tests/descdump.c -lm
     section="parameter and engine tables as JSON (for the editor mock test)"
     echo "== $section"

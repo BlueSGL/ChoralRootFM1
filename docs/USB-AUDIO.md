@@ -432,6 +432,136 @@ suspect the 49-frame packets or the 688-byte reservation on a hub; if `ua_pk_oth
 `ua_rate` stays 44100 with the Mac at 48 000 and the option on: the host did not send `SET_CUR` (the event log in
 `--debug` shows `SET_CUR(ep rate)` or not).
 
+## Does USB recording affect the sound?
+
+The owner's question (2026-10-12; another FM-1 firmware's developer had trouble with multi-track USB audio): does
+recording six channels over USB have "any negative effect on the audio quality" of the instrument itself?
+
+**No, not on what is played: the capture is a tap. It costs processor time while a computer records, and only
+then.** In order: what was read, what was tested, what it costs, and what the two 17.7 ms figures on the unit are.
+
+### What the capture does to the mix (by reading)
+
+USB reaches the mix through two variables only: `ua_stage_on` (a computer has the stream open: `choralroot.c`'s
+`mix_block` shim sets it each block from `ua.cap_alt`) and `fx_usb_fixed` (Options > USB Level). Every place the
+audio path looks at either:
+
+| Where | With the stream open | Changes the DAC's samples? |
+| --- | --- | --- |
+| `fx.c mix_block` | clears `ua_stage` (192 words) | no: writes the stage only |
+| `fx.c mix_part_out` | picks the loop with the tap (`mix_loop_u`, `_fu`, `_su`, `_sfu`) in place of the one without | no: the same `mix_part_loop` source with `tap` 1, which adds two stores of `ua_sat(l >> 1)`, `ua_sat(rr >> 1)` into the stage after `mix_l` / `mix_r` have been written; the saturation and the -6 dB are on the copy, not on the mix |
+| `fx.c mix_parts_split` (Dual Core On) | calls the same `mix_part_out` for both parts | no (and `c1_split_ok` does not look at USB: the split is the same with and without) |
+| `choralroot.c mix_block` | copies `out` into the stage's master pair (`ua_sat`), before the click | no: reads `out` |
+| `audio.c audio_block` | at 48 kHz `ua_block48` (reads the stage), then `ua_feed` into the ring with the interrupts off | no: reads the stage |
+| `audio.c ua_isr_service` | serves the endpoint between blocks | no |
+
+Not there: no other mix loop, no other rounding, no level change. The "-6 dB and saturated" in `fx.c` is the level
+of the **recorded** CHORD and BASS channels (a loud chord's dry part is about twice the limiter's threshold, and the
+recording has no limiter of its own), not of anything the DAC gets. The `MIX_NPART` staging is ChoralRoot's two
+parts and has nothing to do with USB.
+
+**USB Record On, no program recording: nothing differs from USB Record Off** in the audio path (`ua_stage_on` is 0
+in both; the ISR tests one flag a block). On the bus, On presents the audio function and Off the console.
+
+**Options > USB Level is different in kind: it is a setting of the output chain, and it acts with or without a
+computer.** `Master` (the default): MASTER, then the limiter. `Fixed`: the mix reaches the limiter at the full
+MASTER level, the recording takes that, and MASTER scales the DAC's word afterwards (`usb_fixed_dac`). At full
+MASTER the two are the same samples. Below it, with **Output Classic**, Fixed makes the limiter and the soft clip
+work as hard as at full volume however low the knob is, so a loud chord is as compressed at a whisper as at full
+level: audible as a difference in character on loud material, by design (it is what "record at full level" means),
+and it is there even with no cable plugged in. With **Output Clean** the limiter is in front of MASTER either way,
+and Fixed's DAC word equals Master's to within one unit of the 24-bit word (`tests/cr_output_test.c`): inaudible.
+So: leave USB Level at Master unless you want the full-level recording, and with Output Clean it does not matter.
+
+### The test
+
+`tests/cr_usbtap_test.c` (in `tests/run_cr_tests.sh` and `tests/run_tests.sh`) renders one passage (CZ-1 or FM6
+chords at a level that works the limiter, a chord change, a VA bass, the releases) through the firmware's mix on the
+host, with the shim's and `audio_block`'s capture lines around it, in five USB states: USB Record Off; On with the
+stream closed; open with the host not reading yet; open and read at 44.1 kHz; open and read at 48 kHz (the
+resampler running). For Output Clean and Classic x USB Level Master and Fixed x MASTER at full and at -18 dB x one
+core and two x two sound pairs (with and without sends: every mix loop with and without its tap): 32 settings, 160
+renders. **In every setting the DAC's 24-bit words are bit-identical in all five states.** The same test checks
+that the capture did run (nothing staged when closed, staged but not fed while the host waits, every frame fed at
+44.1 kHz, 160 for 147 at 48 kHz), that it can tell two outputs apart (Clean against Classic), and the USB Level
+facts above (the same at full MASTER; Classic differs below it).
+
+`tests/cr_cpu1_test.c` already had the other half: the staged CHORD and BASS channels are bit for bit the same with
+the bass on the second core as on one.
+
+### What it costs (by the unit's listing; not measured on the unit)
+
+Instructions counted in `build/choralroot.dis`, at 205 a microsecond (docs/FX.md), for a 44.1 kHz stream that a
+computer has open, per half of 128 frames (2902 us):
+
+| Where | What | Instructions | Time |
+| --- | --- | --- | --- |
+| audio ISR | the stage cleared: 4 x 192 words, 3 instructions each | 2 300 | 11 us |
+| audio ISR | the two parts' taps: 17 instructions a frame more than the loop without (the loop with the tap also reloads four constants each pass: it ran out of registers) | 4 350 | 21 us |
+| audio ISR | the master pair: 15 a frame | 1 900 | 9 us |
+| audio ISR | the ring copy, **interrupts off**: 34 a frame, 4 x 1 120 | 4 500 | 22 us (5.5 us off at a time) |
+| **audio ISR in all** | | **13 100** | **64 us, 2.2 %** |
+| TIMER5 | packing the packets (`ua_transmit`: 62 a frame, 2.9 packets a half) | 8 100 | 40 us |
+| TIMER5 and the ISR's own service | arming and bookkeeping (`ua_service_paced`, `ua_tx_fill`, `ua_hw_poll`: 29 ticks, 11.6 paced services, 4 calls from the ISR) | about 4 600 | about 22 us |
+| | their SIE register accesses, about 140 a half (a write to CON1 and a wait for its done bit each) | not countable from the listing | **unknown** |
+| **in all** | | **25 800 and the SIE waits** | **126 us and the SIE waits: 4.3 % and up** |
+
+This is four times what `tools/emu/perf.sh` scenario (u) says (31 us: "Cost" above). That figure is host
+instructions divided by the emulator's ratio, and the host's compiler turns these copy loops into a few vector
+instructions; the unit's does not. **The listing's count is the one to believe until the unit is measured.**
+
+- **With the stream closed** (USB Record On or Off): one flag test a block in the ISR, and TIMER5's
+  `ua_service_paced` returns after about 25 instructions a tick: 3.5 us a half, which is there whatever USB does.
+- **What it adds to the worst block:** the heaviest case measured on the unit was `pk_block_us` 2580 of 2902
+  (docs/FX.md: CZ-1 chords, both effects). If that was measured without a recording, the same half with one is
+  about 2580 + 64 + TIMER5's part (PEAK measures the half with TIMER5 nested in it): about 2700, 93 %. The shed
+  starts at two halves in a row over 85 %, so in the heaviest patches **a recording at 44.1 kHz can already cost a
+  voice** that the same patch keeps without one; 48 kHz adds its 185 us on top. That is a cost in voices, not in
+  sound quality: nothing is distorted, a voice is faded out.
+- **Can the USB work delay the audio interrupt?** USB has no interrupt of its own: everything is polled from
+  TIMER5 (priority 4), which is above the audio interrupt (3) on purpose (the key scan). So TIMER5 preempts the
+  render, 100 us apart, for as long as its own work takes; that time is inside the measured half (`pk_wall_us`,
+  `pk_t5_us`: the most TIMER5 took of one half) and inside what the shed looks at. And an audio interrupt that
+  falls while TIMER5 runs outside the render (where it also does `usb_poll`: EP0 and the MIDI endpoints) waits for
+  it to return: `pk_lag_us` is that wait. Neither can lose a half unless the half then runs past its boundary
+  (`stale_halves`). The only stretches with the interrupts **off** that USB adds are the ring copy (5.5 us, four a
+  half) and the ISR's own endpoint service between blocks (under 100 us by docs/FX.md's reading; its SIE waits are
+  the unknown above).
+- **To measure on the unit** (the owner; one patch, 30 s each, `fm1_install.py --debug` before and after, which
+  clears PEAK): no recording; a recording at 44.1 kHz; with USB Rate on, at 48 kHz. Compare `pk_block_us`,
+  `pk_wall_us`, `pk_t5_us`, `pk_lag_us`, `pk_late`, `stale_halves`. `pk_t5_us` with and without the stream is the
+  SIE's unknown.
+
+### `ua_poll_max_us 17860` and `ua_arm_gap_max_us 17698`
+
+Two different clocks, and neither is the audio's.
+
+- **`ua_poll_max_us`** is the longest time between two of the FM-1's own paced endpoint services
+  (`main.c ua_service_paced`). TIMER5 calls it every 100 us whether a computer is there or not, stream open or
+  closed, so it **cannot be an artefact of a host that does not poll**: 17.86 ms without it means TIMER5 did not run
+  for 17.86 ms, that is, the interrupts were masked that long. One thing in the firmware does that: a flash sector
+  erase (`storage_hw.c st_erase`: the interrupts are held across it, the code runs from the same flash). docs/FX.md
+  gives 45 ms for it, from the data sheet's maximum, never measured; 17.8 ms would be this flash's real erase
+  time. Erases happen when a store's sector fills: an Options change saved by itself (only once the unit has been
+  silent for a second), the global save (SAVE held), a sound or a loop saved, and at the first start after an
+  update. The audio buffer is silenced first, so it is a known, deliberate hole, never a glitch into a sounding
+  note for the settings (`flash_holes` counts the ones that were). It has nothing to do with USB recording, and it
+  is not cleared by reading: the figure is the largest since power-on.
+- **`ua_arm_gap_max_us`** is the longest time between two packets armed on the endpoint, and its clock starts
+  again at every open of the stream. It has two innocent sources: the host's first read (macOS reads about 14 ms
+  after it opens the stream, `ua_first_take_ms`: the table in "Reading the counters" says "all < 1.2 ms but one per
+  open"), which **is** an idle artefact of the host; or the same flash erase, if one fell into an open stream.
+  17 698 against 17 860 us is too close for chance: both look like one erase of about 17.7 ms that happened while
+  the Mac had the stream open (an Options change during the session would do it).
+- **How to tell, on the unit:** `--debug`'s PEAK line `interrupts: TIMER5 ... once came N us after the one before
+  ... until 0x...` (`irq_gap_us`, `irq_gap_pc`): about 17 800 with an address in the flash driver's caller
+  (`st_erase` in `build/choralroot.dis`) is the erase. If `irq_gap_us` stays small over a session in which nothing
+  was saved while `ua_poll_max_us` still grows, this explanation is wrong and something else stops TIMER5: report
+  it. `st_erases` / the saves' counters in the same read say how many erases there were; `ua_underruns` rises by
+  one when an erase falls into a recording (the ring runs dry: "Limits" above).
+- **Not verified:** the erase time of this flash (the driver measures it, `fl_erase4k_ram`'s `took`, and nobody
+  reads it: a counter for it would settle this).
+
 ## Cost
 
 (At 44.1 kHz; what 48 kHz adds is counted in "48 kHz" above.)
@@ -440,7 +570,9 @@ The emulator cannot stream, so the cost is measured on the host and scaled (`sh 
 `tests/cr_usbaudio_test.c --bench`, emu.c's ratio of 259 host instructions per device µs): while the computer
 records, the audio ISR's share (the stage cleared, the part captures, the master tap, the ring copy) is about 21 µs a
 2.9 ms half and TIMER5's packets (the packet out) about 10 µs: **~31 µs, 1.1 % of the half**, plus the SIE
-register accesses of the endpoint service (up to 4 kHz, nested in the render; not in the host figure). Without the
+register accesses of the endpoint service (up to 4 kHz, nested in the render; not in the host figure). **Counted
+from the unit's listing it is about four times that, 126 us and the SIE waits** ("Does USB recording affect the
+sound?" above: the host's compiler vectorises the copy loops, the unit's does not). Without the
 stream the ISR does none of it (a flag test a block, no IRQ-off section). On the device: record, then switch USB
 Record Off and read `cpu` and `status` on the console: `audio_max_all_us`, `ua_poll_max_us`, `ua_service_max_us`
 (the longest endpoint service), and the glitch counters.

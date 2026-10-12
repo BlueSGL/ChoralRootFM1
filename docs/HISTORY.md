@@ -1273,3 +1273,40 @@ its hold layer is the metronome.
   name: only a comment changed. `sh tests/run_cr_draw.sh`: 92 screens, 0 lint findings, 28 ellipsised (as before).
 - **Stale, not re-rendered** (it needs the designer's server): `design/choralroot-fm1-layers-screens.png` (state 7's
   caption and its top line).
+
+**4. Asked the same day: does the six-channel recording have "any negative effect on the audio quality" of the
+instrument?** (No behaviour changed; docs/USB-AUDIO.md "Does USB recording affect the sound?" and a test.)
+
+- **By reading**: USB reaches the mix through `ua_stage_on` and `fx_usb_fixed` only. With the stream open the mix
+  clears a stage, takes the loop variants with the tap (the same source, two more stores of a saturated half-level
+  copy after `mix_l` / `mix_r` are written), copies the master pair out, and feeds the ring: all reads of the mix.
+  The "-6 dB and saturated" is the recorded part channels' level. USB Record On with nothing recording is USB Record
+  Off as far as the audio path goes. **USB Level is the one that is not a tap**: Fixed puts MASTER behind the
+  limiter, with or without a computer; with Output Classic below full MASTER that is a differently limited output
+  (by design), with Output Clean a unit of the 24-bit word.
+- **By test** (`tests/cr_usbtap_test.c`): one passage, five USB states (Record Off; closed; open, host not reading;
+  44.1 kHz; 48 kHz) x Output x USB Level x MASTER full / -18 dB x one core / two x two sound pairs: 32 settings, 160
+  renders, the DAC's 24-bit words bit-identical across the five states in every one. The firmware's `fx.c` and
+  `usb.c` code runs; the shim's and `audio_block`'s dozen capture lines are copied into the test (they are in
+  `choralroot.c` and `audio.c`, which the host unit does not build).
+- **The cost, from the listing** (205 instructions a us): the audio ISR 13 100 instructions a half, 64 us, 2.2 %
+  (22 us of it in four 5.5 us interrupts-off copies); TIMER5 and the ISR's own service 12 700, 62 us, **and about
+  140 SIE register accesses a half whose waits the listing cannot give**: 126 us and those, 4.3 % and up.
+  `tools/emu/perf.sh` (u) says 31 us: host instructions, where the copy loops are vector code. The listing is the
+  one to believe; the unit has not been measured (`pk_block_us` / `pk_t5_us` with and without a recording). With the
+  heaviest patch at 2580 of 2902 us, a 44.1 kHz recording can already bring the shed (85 %) into reach: a voice
+  faded, not a distorted sound.
+- **Priorities**: USB is polled from TIMER5 (4), above the audio interrupt (3): it preempts the render for its own
+  length, which the half's measurement and the shed include; it delays an audio interrupt that falls into TIMER5's
+  `usb_poll` by that poll (`pk_lag_us`).
+- **`ua_poll_max_us 17860`, `ua_arm_gap_max_us 17698`** (the unit, today): the first times the FM-1's own TIMER5
+  cadence and cannot come from a host that does not poll; 17.86 ms without TIMER5 is a stretch with the interrupts
+  masked, and the one thing that masks that long is a flash sector erase (documented as 45 ms from the data sheet's
+  maximum, never measured: 17.8 ms would be its real time). The second starts again at every open and is either the
+  host's first read (about 14 ms: an idle artefact) or the same erase inside an open stream; the two figures are
+  too close for chance, so: one erase while the Mac had the stream open. **Inference, not verified**: `irq_gap_us`
+  and `irq_gap_pc` in PEAK decide it (about 17 800, an address in `st_erase`'s caller). The driver measures the
+  erase (`took`) and nothing reads it.
+- **Reported to the DSP side, not changed here** (`fx.c` is another agent's): `mix_loop_u` reloads four constants on
+  every pass (it runs out of registers: 38 instructions a frame for `mix_loop`'s 22, where the tap itself is about
+  10); the stage is cleared every block although both parts overwrite their channels when they sound.
