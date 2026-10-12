@@ -1,0 +1,79 @@
+# CZ-1 struck again while it sounds, the case the output chain's round left (docs/CZ1.md "Pops", the second round;
+# docs/AUDIO-QUALITY.md's open item 10; tools/emu/test_cr.sh): the chord part on CZ-1 01 BRASS 1, the bass part on
+# CZ-1 13 SYNTH.BASS (set as cr_cz_pop.txt sets them), Options > Output as it comes (Clean), MASTER at its top.
+# A 6-note chord on D4 from 3240 ms, held 700 ms; struck again 60 ms after its release, twice (BRASS 1's DCA has let
+# go by then, its DCW has not: the note comes back bright at once, and wavclicks' own measure reads that first bright
+# window as a click: 2 of them in 778a6ad as here, the tone's own edges and not a step); then 20 ms after its release,
+# twice (every voice still sounds); then the unit's own Arpeggiate over the same chord for 3 s, the bass under it
+# (each note struck again while its tail sounds). test_cr.sh asks for no burst that stands above the sound on both
+# of its sides (wavclicks --both-sides), no jump, no hole.
+master 1023
+wait 300
+btn ENV down                  # the bass part's engine (BASS held + EDIT, the editor's EDIT-held picker):
+wait 50
+btn EDIT                      # BASS held + EDIT: the bass sound's editor
+btn ENV up
+wait 300
+btn EDIT 600                  # EDIT held: the engine picker (the bass part)
+wait 200
+knob SELECT +1                # VA (the bass part's default) -> CZ-1
+wait 200
+btn OCT+                      # kept
+wait 200
+btn EDIT                      # the editor closed
+wait 200
+btn GLO down
+wait 100
+knob PRESETS +3               # OPT + PRESETS: the chord part to the CZ-1 (01 BRASS 1), on OPT's release
+wait 100
+btn GLO up
+wait 351
+knob ALGORITHM +14            # OFF -> CZ-1 13 SYNTH.BASS
+wait 300
+dump
+key F3 down
+key 2 down
+key 4 down
+key 5 down
+wait 40
+btn D4 down                   # 3240 ms: the chord and the bass
+wait 700
+expect sound
+btn D4 up                     # struck again 60 ms after the release, twice
+wait 60
+btn D4 down
+wait 700
+btn D4 up
+wait 60
+btn D4 down
+wait 700
+btn D4 up                     # .. and 20 ms after it, twice
+wait 20
+btn D4 down
+wait 500
+btn D4 up
+wait 20
+btn D4 down
+wait 800
+dump
+btn D4 up
+wait 1500
+btn ARP down                  # Arpeggiate (PERF held, SELECT +3; OCT- closes the layer)
+wait 500
+btn ARP up
+wait 300
+knob SELECT +3
+wait 300
+btn OCT-
+wait 300
+btn D4 down                   # the unit's arp over the chord, 3 s
+wait 3000
+expect sound
+dump
+btn D4 up
+key F3 up
+key 2 up
+key 4 up
+key 5 up
+wait 2500
+dump

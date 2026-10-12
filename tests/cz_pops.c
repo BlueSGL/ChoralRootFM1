@@ -41,6 +41,7 @@
  *   CZ_TRACE=A,B   a line for every voice's block between samples A and B (gains, depths, the envelopes' stages)
  *   CZ_WHY=J       what every line did at sample J against its wave's definition (cz_probe_why; tools/cz_pops_why.py
  *                  runs it for every jump of a matrix)
+ *   CZ_CLEAN=1     (every mode) the output through Options > Output Clean; without it hostsim's master: Classic
  *   CZ_GAP=MS      restrike: the release that long before each strike (20)
  *   CZ_VEL2=V      retrig: every second strike at velocity V (a sounding voice struck again at another velocity)
  * tools/cz_pops_report.py sorts the lines of "all". The file builds against an older tree too (copy it into that
@@ -613,6 +614,8 @@ static void render(uint32_t eng, uint32_t pr, uint32_t s, uint32_t ci, int root,
     voice_fade_steal = 1;
     song.master_q12 = 2047;
     song.g[G_BPM] = 120;
+    if (getenv("CZ_CLEAN"))                      /* Options > Output Clean (hostsim's own is Classic, 0.18's master) */
+        fx_output_set(1, 1);
     host_preset(&trk[0], eng, pr);
     trk[0].p[P_VOICE] = V_POLY;
     trk[0].p[P_LEVEL] = 92;
@@ -642,6 +645,8 @@ static void render(uint32_t eng, uint32_t pr, uint32_t s, uint32_t ci, int root,
         mix_block(out, CTL);
         r->part_pk = trk[0].peak > r->part_pk ? trk[0].peak : r->part_pk;
         r->lim_min = lim_g < r->lim_min ? lim_g : r->lim_min;
+        if (getenv("CZ_CLEAN"))
+            r->lim_min = cln_g < r->lim_min ? cln_g : r->lim_min;
         for (i = 0; i < CTL; i++) {
             int32_t m = (mix_l[i] + mix_r[i]) / 2, o = out[2u * i];
             mx[b * CTL + i] = m;

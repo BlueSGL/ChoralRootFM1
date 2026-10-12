@@ -6,7 +6,8 @@
  * Checks: the engine's place (14, after the VA in the picker order), Casio's 64 tones (valid, A-1 BRASS 1 .. H-8
  * TYPHOON, the PRESETS names); every factory tone through the 144-byte blob and back, a bad blob = the init tone;
  * every factory tone rendered (three notes, velocity 127 and 1, held then released) without overflow and not
- * silent; the pops (a sounding note struck again goes on from its level, the DCW depth is ramped across a block: no
+ * silent; the level (0.19: every sample of a part's render exactly half of 778a6ad's); the pops (a sounding note
+ * struck again goes on from its level, at another velocity too; the DCW depth is ramped across a block: no
  * step of the sample at a note-on or at a block's edge, docs/CZ1.md "Pops"); Casio SysEx: a 144-byte tone dump (7n 30) -> the part's tone -> the dump cz_store.c sends on a send
  * request (7n 11 60) identical; a 128-byte (CZ-101) dump gets the CZ-1 defaults; a bad dump is refused; the banks
  * (A..D Casio's, E..H empty; BANK / PTCH load their tone; a bank exported and imported through the backup's objects
@@ -337,6 +338,83 @@ int main(void)
         }
         OK(!low, "pops: INIT TONE and the 64 at C2, the attack's 40 blocks: no step at a block's edge above twice the "
                  "largest inside the blocks (%u tones step; the worst %d, tone %d)", (unsigned)low, (int)worst, (int)wk);
+        /* A sounding note struck again at ANOTHER velocity (0.19's second round): the DCA curve of the same level is
+         * another gain at the new velocity, and the engine put it on the block's first sample: a step of the voice's
+         * whole sample (STRINGS 1 at its sustain, 127 then 30: a third of its level between two samples). The gain
+         * now runs on from where the line's last block ended (cz_voice_t.ag). Every tone, C3 at 127 held 400 ms and
+         * struck again at 30, and 30 then 127: the step at the new note's first sample is at most 1.5 times the
+         * largest of the 100 ms before, and the step into the block after it (the ramp is a block's) at most 1.5
+         * times the largest inside those two blocks. */
+        {
+            uint32_t vfail = 0, dir;
+            int32_t e2, i2, h2;
+            for (k = 0, worst = 0; k <= CZ_FACTORY_N; k++)
+                for (dir = 0; dir < 2u; dir++) {
+                    pop_start(t, k);
+                    trk_note_on(t, 48, dir ? 30 : 127);
+                    pop_render(t, 300u * FS / (1000u * CTL), &edge, &in, &head);
+                    pop_render(t, 100u * FS / (1000u * CTL), &edge, &in0, &head);
+                    in0 = edge > in0 ? edge : in0;
+                    if (dir)                         /* (struck harder: the level it goes to has larger steps of its own) */
+                        in0 = in0 * 127 / 30;
+                    trk_note_on(t, 48, dir ? 127 : 30);
+                    pop_render(t, 1, &edge1, &in1, &head1);
+                    pop_render(t, 1, &e2, &i2, &h2);
+                    i2 = i2 > in1 ? i2 : in1;        /* (the two blocks' own steps: the attack the new note makes) */
+                    i2 = i2 > in0 ? i2 : in0;
+                    if ((edge1 > in0 + in0 / 2 && edge1 > 100 * CZ_VOICE_GAIN) || (e2 > i2 + i2 / 2 && e2 > 100 * CZ_VOICE_GAIN)) {
+                        vfail++;
+                        if (edge1 > worst) {
+                            worst = edge1;
+                            wk = (int32_t)k;
+                        }
+                    }
+                }
+            OK(!vfail, "pops: INIT TONE and the 64, C3 struck again at another velocity while it sounds (127 -> 30, 30 -> "
+                       "127): no step at the new note's first sample or after its first block (%u of 130 step; the worst "
+                       "%d, tone %d)", (unsigned)vfail, (int)worst, (int)wk);
+        }
+        {   /* .. and the gain itself: a voice's line ends a block at the DCA curve of its level and velocity, and the
+             * next block starts there, whatever the velocity is by then (cz_native_render through the probe's eyes:
+             * two blocks of INIT TONE's voice, the velocity changed between them; the first block's samples are the
+             * ones the engine made before, bit for bit: one curve a block, not two) */
+            vmod_t m;
+            voice_t *v = &t->v[0];
+            cz_voice_t *c;
+            int32_t o1[CTL], o2[CTL], want;
+            uint32_t i;
+            pop_start(t, 0);
+            memset(&m, 0, sizeof m);
+            m.amp0 = m.amp1 = 32767;
+            m.shape = 64 << 8;
+            m.pitch16 = 60 * 16;
+            m.inc = pitch_inc(60u * 16u);
+            v->note = 60;
+            v->vel = 127;
+            v->gate = v->active = 1;
+            voice_was = 0;
+            ENG_CZ.note_on(t, v);
+            c = cz_voice(t, v);
+            for (i = 0; i < 40u; i++) {
+                memset(o1, 0, sizeof o1);
+                ENG_CZ.render(t, v, o1, CTL, &m);
+            }
+            want = cz_native_amp(c->eg[0][2].level, cz_patch[0].raw[16] >> 4, 15u - (cz_patch[0].raw[20] >> 4), 127);
+            bad = c->ag[0] != want + 1;
+            v->vel = 20;
+            voice_was = 2;
+            ENG_CZ.note_on(t, v);
+            bad += c->ag[0] != want + 1;             /* (kept across the note-on of a sounding voice) */
+            memset(o2, 0, sizeof o2);
+            ENG_CZ.render(t, v, o2, CTL, &m);
+            want = cz_native_amp(c->eg[0][2].level, cz_patch[0].raw[16] >> 4, 15u - (cz_patch[0].raw[20] >> 4), 20);
+            bad += c->ag[0] != want + 1;
+            voice_was = 0;
+            ENG_CZ.note_on(t, v);
+            bad += c->ag[0] != 0;                    /* (a free voice: none) */
+            OK(!bad, "pops: a line's gain at a block's end is kept for the next block's start (a sounding voice's note-on "
+                     "keeps it, a free voice's clears it)");
+        }
         {   /* cz_native_pd: the ramp starts at the last block's depth and ends at this block's; none when it is the same */
             cz_hw_pd_t pd;
             uint32_t pk[3] = {0, 0, 0};

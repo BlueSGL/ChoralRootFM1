@@ -2082,6 +2082,25 @@ wc=$(python3 tools/emu/wavclicks.py "$OUT/cz_pop.wav" --from 3.4 | tail -1)
 echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "cr_cz_pop: $wc" || bad "cr_cz_pop: $wc"
 silent_end cz_pop
 
+echo "CZ-1 BRASS 1 with the CZ-1 bass in Output Clean, struck again 60 and 20 ms after its release, then the unit's arp (docs/CZ1.md Pops, the second round)"
+rm -f "$OUT"/cz_brass*
+"$EMU" --headless --script "$S/cr_cz_brass.txt" --wav "$OUT/cz_brass.wav" >"$OUT/cz_brass.log" 2>&1 && ok "cr_cz_brass: exit 0" || bad "cr_cz_brass: see $OUT/cz_brass.log"
+PL="$OUT/cz_brass.log"
+has 'part 0: CZ-1 / BRASS 1' "$PL" && has 'part 1: CZ-1 / SYNTH.BASS' "$PL" && ok "the chord part on CZ-1 BRASS 1, the bass on CZ-1 SYNTH.BASS" ||
+    bad "cr_cz_brass: $(grep -m2 'part [01]:' "$PL" | tr '\n' ' ')"
+LC_ALL=C grep -aq "master: output Clean (chain 1, want 1, fade 0)" "$PL" && ok "Output Clean" || bad "cr_cz_brass: the output is not Clean: $(LC_ALL=C grep -a -m1 "master: output" "$PL")"
+[ "$(grep -c '^expect sound .*: ok' "$PL")" -eq 2 ] && ok "the chord sounds, and the arp" || bad "cr_cz_brass: no sound"
+has 'perform 1 mode 2 bass 1' "$PL" && ok "Arpeggiate with the bass on" || bad "cr_cz_brass: $(grep -m1 'perform' "$PL")"
+# (the four re-strikes, 3.4 .. 9.5 s: a burst is a click when it stands 12 times above the sound before it AND the
+# sound after it; wavclicks' one-sided measure counts the first bright window of the two 60 ms re-attacks, 2 in
+# 778a6ad as now: BRASS 1's DCW is still open when its DCA comes back, the tone's own edges, docs/CZ1.md)
+wc=$(python3 tools/emu/wavclicks.py "$OUT/cz_brass.wav" --from 3.4 --to 9.5 --both-sides | tail -1)
+echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "cr_cz_brass, the chord struck again: $wc" || bad "cr_cz_brass: $wc"
+# (the arp: every note is an attack of its own, so no click count; no jump, no hole)
+wc=$(python3 tools/emu/wavclicks.py "$OUT/cz_brass.wav" --from 9.5 | tail -1)
+echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound' && ok "cr_cz_brass, the arp: no jump, no hole" || bad "cr_cz_brass, the arp: $wc"
+silent_end cz_brass
+
 echo "FM TONE (code name QUAD): the engine picker, the pool, a chord, the editor's screens (docs/QUAD.md)"
 run cr_quad --wav "$OUT/cr_quad.wav"
 QL="$OUT/cr_quad.log"

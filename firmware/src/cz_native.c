@@ -239,11 +239,17 @@ static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, i
         cz_env_tick(&c->eg[l][2],&defs[2],c->krate[src],v->gate);
         /* A line the tone does not play: its envelopes run on as they did (a LINE change under a held note finds
          * them where they would be), its level, pitch and phase function are nobody's. */
-        if (l < first || l > last) continue;
+        if (l < first || l > last) { c->ag[l] = 0; continue; }
         uint32_t av = 15u-(b[20u+off]>>4), al = b[16u+off]>>4;
-        amp[l][0] = cz_native_amp(level,al,av,v->vel);
-        /* (a DCA that did not move: the same level, no second curve) */
-        amp[l][1] = c->eg[l][2].level == level ? amp[l][0] : cz_native_amp(c->eg[l][2].level,al,av,v->vel);
+        /* The block's gain runs from where the line's last block ended (ag: that gain + 1) to this block's. While
+         * the velocity and the tone's level bytes are what they were that is the DCA curve at the level before the
+         * tick, as it always was (one curve a block now, not two while the envelope moves). A note struck again at
+         * another velocity on a voice that sounds (cz_note_on keeps ag), MONO's legato raising it, a LEVEL or V.AMP
+         * turned under a held note: the curve of the same level is another gain, and from one sample to the next it
+         * was a step of the voice's whole sample (0.19, docs/CZ1.md "Pops": the click of a chord struck again). */
+        amp[l][1] = cz_native_amp(c->eg[l][2].level,al,av,v->vel);
+        amp[l][0] = c->ag[l] ? c->ag[l]-1 : c->eg[l][2].level == level ? amp[l][1] : cz_native_amp(level,al,av,v->vel);
+        c->ag[l] = amp[l][1]+1;
         step[l] = (amp[l][1]-amp[l][0])*256;
         /* (a whole block: the divide by n as the shift it is, towards zero) */
         step[l] = n == CTL ? (step[l]+((step[l]>>31)&(int32_t)(CTL-1u)))>>CTL_LOG2 : step[l]/(int32_t)n;
