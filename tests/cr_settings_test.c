@@ -1151,6 +1151,58 @@ static void t_auto(void)
     ok(!memcmp(&m, &b, sizeof b), "auto: copying a record's own Options into it changes nothing");
 }
 
+/* the trim of a part put back from the session is the running firmware's table's, not the record's (0.19:
+ * cr_settings.h cr_session_part_trim; cr_settings.c css_part_put calls it with cr_bank.c's cb_trim) */
+static int trim_019(unsigned e, unsigned fk) { (void)e; (void)fk; return 0; }   /* 0.19's CB_TRIM: no row */
+static int trim_018(unsigned e, unsigned fk)       /* 0.18's: CZ-1 (engine 14) BRASS 1, STRINGS 2, PIPE ORGAN 1 */
+{
+    return e != 14u ? 0 : fk == 1u ? -10 : fk == 5u ? -6 : fk == 35u ? -12 : 0;
+}
+static int trim_new(unsigned e, unsigned fk) { return e == 13u && fk == 7u ? -8 : 0; }   /* a row added later */
+static void t_session_trim(void)
+{
+    static const struct { uint8_t fk; int8_t trim; const char *name; } Z[3] = {
+        {1, -10, "BRASS 1"}, {5, -6, "STRINGS 2"}, {35, -12, "PIPE ORGAN 1"}};
+    unsigned k, part, good = 0;
+    css_part_t *r;
+    for (k = 0; k < 3u; k++)                       /* as 0.18's css_part_get wrote them: the trim beside the pool entry */
+        for (part = 0; part < 2u; part++) {
+            css_fill(&SX);
+            r = &SX.part[part];
+            r->eng = 14; r->preset = Z[k].fk; r->user = 0; r->trim = Z[k].trim; r->edited = 0;
+            r->kind = CSS_KIND_FACTORY; r->fk = Z[k].fk; r->slot = CSS_FK_NONE; r->nblob = 0;
+            strcpy(r->name, Z[k].name);
+            cr_session_seal(&SX);
+            if (cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.part[part].trim == Z[k].trim &&
+                cr_session_part_trim(&SR.part[part], trim_018) == Z[k].trim &&
+                cr_session_part_trim(&SR.part[part], trim_019) == 0)
+                good++;
+        }
+    ok(good == 6u, "session trim: 0.18's session on CZ-1 BRASS 1, STRINGS 2, PIPE ORGAN 1 (trim -10 / -6 / -12 in the "
+                   "record, either part) still loads and is put back with trim 0: the row is gone");
+    css_fill(&SX);
+    r = &SX.part[0];
+    r->eng = 13; r->kind = CSS_KIND_FACTORY; r->fk = 7; r->slot = CSS_FK_NONE; r->trim = 0;
+    ok(cr_session_part_trim(r, trim_new) == -8, "session trim: a sound with a row today, a record that says 0: the row's -8");
+    r->trim = 5;
+    ok(cr_session_part_trim(r, trim_new) == -8, "session trim: .. a record that says +5: the row's -8");
+    r->edited = 1;
+    ok(cr_session_part_trim(r, trim_new) == -8, "session trim: an edited, unsaved sound keeps its sound's row (an edit never moved the trim)");
+    r->fk = 8;
+    ok(cr_session_part_trim(r, trim_new) == 0, "session trim: its neighbour has no row: 0, whatever the record says");
+    r->fk = 7; r->kind = CSS_KIND_USER; r->slot = 3; r->user = 4; r->edited = 0; r->trim = 0;
+    ok(cr_session_part_trim(r, trim_new) == -8, "session trim: a user preset bound to that factory preset (an overwritten one): its row, as PRESETS loads it");
+    r->fk = CSS_FK_NONE; r->trim = -8;
+    ok(cr_session_part_trim(r, trim_new) == 0, "session trim: an added user preset: none, as PRESETS loads it");
+    r->kind = CSS_KIND_INIT; r->fk = 7;
+    ok(cr_session_part_trim(r, trim_new) == 0, "session trim: INIT: none");
+    r->kind = 3; r->trim = -8;
+    ok(cr_session_part_trim(r, trim_new) == 0, "session trim: a kind this firmware does not know: none");
+    r->kind = CSS_KIND_FACTORY; r->valid = 0;
+    ok(cr_session_part_trim(r, trim_new) == 0 && cr_session_part_trim(&SX.part[1], 0) == 0,
+       "session trim: no sound stored, no table: none");
+}
+
 int main(void)
 {
     t_auto();
@@ -1164,7 +1216,7 @@ int main(void)
     t_flash();
     t_loop_rec();
     t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13(); t_page2_v14();
-    t_v15(); t_session(); t_session_flash();
+    t_v15(); t_session(); t_session_trim(); t_session_flash();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

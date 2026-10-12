@@ -528,6 +528,11 @@ void emu_fw_dump(void)
                cu_quad_part(0) ? " FM TONE" : "", (int)trk[CR_PART_CHORD].p[P_DIST], (int)cs.fx_amt[3],
                (unsigned)psnd[0].edited, cu_quad_part(1) ? " FM TONE" : "", (int)trk[CR_PART_BASS].p[P_DIST],
                (int)*cu_bdrive_p(), (unsigned)psnd[1].edited);
+        /* each part's trim (track_t.trim, 0.5 dB steps: the sound's, cr_bank.c CB_TRIM) beside its pool entry (kind
+         * 0 INIT, 1 factory, 2 user; the factory preset; the slot): test_persist.sh, a session and a removed row */
+        printf("  trim: chord %d kind %u fk %u slot %u | bass %d kind %u fk %u slot %u\n",
+               (int)trk[CR_PART_CHORD].trim, (unsigned)psnd[0].kind, (unsigned)psnd[0].fk, (unsigned)psnd[0].slot,
+               (int)trk[CR_PART_BASS].trim, (unsigned)psnd[1].kind, (unsigned)psnd[1].fk, (unsigned)psnd[1].slot);
         {   /* what the last frame's screen READS (docs/FX.md "One read-out": a send reads the same wherever it is
              * shown): a popup's value, its unit line and its label, and the cells that are on, row by row */
             const cr_screen_t *sc = &cu_scr;

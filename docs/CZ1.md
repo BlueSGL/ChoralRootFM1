@@ -547,11 +547,12 @@ What the lower scale changes besides the level, by the code: a user's CZ-1 sound
 hold tone data only, no level that assumed the old scale); a user record bound to one of the three factory sounds
 loses the trim with it (`cu_pool_load` reads `cb_trim`); the sends, the USB part pair and the part's meter follow the
 part (6 dB lower); DIST on a CZ-1 part is driven 6 dB less (`track_dist` works on the part's sum before LEVEL); the
-part's sum now clamps at 884 000 only above 11 voices' worth (it never did in a run). **One thing is left to
-`cr_settings.c`** (not this change's file): the session record stores `track_t.trim` and `css_part_put` writes it
-back, so a unit switched off with BRASS 1, STRINGS 2 or PIPE ORGAN 1 on a part comes up with the old trim under the
-new scale (5, 3 or 6 dB too quiet) until the sound is picked again; taking the trim from `cb_trim(e, fk)` there
-instead of the record would end it.
+part's sum now clamps at 884 000 only above 11 voices' worth (it never did in a run). **The session** stored
+`track_t.trim` and `css_part_put` wrote it back, so a unit last saved with BRASS 1, STRINGS 2 or PIPE ORGAN 1 on a
+part would have come up with the old trim under the new scale (5, 3 or 6 dB too quiet) until the sound was picked
+again. Since 2026-10-12 it does not: a part put back from the session takes its trim from `cb_trim` by the record's
+pool entry, as `cu_pool_load` does (`cr_settings.h cr_session_part_trim`; docs/SETTINGS.md "The session", the
+`part[2]` row), at power-on and at GLO + SAVE.
 
 Listening files: `../audio-0.19/cz-trim/` (the same chord on FM6, VA, FM TONE and CZ-1 before and after, through
 Output Clean at the power-on MASTER; `README.txt`).

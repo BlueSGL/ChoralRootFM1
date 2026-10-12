@@ -1,0 +1,24 @@
+# test_persist.sh, the session and a removed trim row, run 2 (the same flash, the session's trims set to what 0.18
+# stored: tools/emu/seed_trim.py): dump 1 at power-on; the voicing turned (KNOB 1 +1), then GLO + SAVE held: the
+# revert reads the session again: dump 2; a chord sounds
+wait 600
+dump
+knob KNOB1 +1
+wait 900
+btn GLO down
+wait 50
+btn SAVE down
+wait 1200
+btn SAVE up
+btn GLO up
+wait 1500
+dump
+key F3 down
+wait 40
+btn D4 down
+wait 600
+expect sound
+btn D4 up
+key F3 up
+wait 300
+quit

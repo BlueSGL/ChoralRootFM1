@@ -377,6 +377,12 @@ void cr_session_seal(cr_session_t *x)
     x->check = css_fnv(x, CSS_HDR, CSS_SIZE);
 }
 uint32_t cr_session_hash(const cr_session_t *x) { return css_fnv(x, CSS_HDR + 4u, CSS_SIZE); }
+int cr_session_part_trim(const css_part_t *r, int (*row)(unsigned engine, unsigned fk))
+{
+    if (!r->valid || !row || r->fk == CSS_FK_NONE || (r->kind != CSS_KIND_FACTORY && r->kind != CSS_KIND_USER))
+        return 0;
+    return row(r->eng, r->fk);
+}
 int cr_session_fx_get(const cr_session_t *x, unsigned tag, int *v)
 {
     uint32_t i;
@@ -816,7 +822,13 @@ static void css_part_get(uint32_t part, css_part_t *r)
         r->nblob = (uint8_t)d->blob_size;
     }
 }
-/* .. and back (cu_pick_end's restore); 0: not this firmware's (another parameter count, an engine gone or without
+_Static_assert(CSS_KIND_INIT == PK_INIT && CSS_KIND_FACTORY == PK_FACTORY && CSS_KIND_USER == PK_USER &&
+               CSS_FK_NONE == PF_NONE, "the session's pool entry is cr_bank.c's");
+static int css_trim_row(unsigned e, unsigned fk)   /* cr_bank.c's table, for cr_session_part_trim */
+{
+    return e < NENGINES && fk < ENGINES[e]->npresets ? cb_trim(e, fk) : 0;
+}
+/* .. and back (cu_pick_end's restore; the trim: the table's, cr_settings.h); 0: not this firmware's (another parameter count, an engine gone or without
  * this blob, a pool entry that cannot be): the part keeps the sound the block's chord_sound / bass_sound loaded */
 static int css_part_put(uint32_t part, const css_part_t *r)
 {
@@ -836,7 +848,7 @@ static int css_part_put(uint32_t part, const css_part_t *r)
     t->eng_req = (uint8_t)e;
     t->preset = r->preset;
     t->user = r->user;
-    t->trim = r->trim;
+    t->trim = (int8_t)cr_session_part_trim(r, css_trim_row);   /* (not r->trim: a row removed since stays removed) */
     for (i = 0; i < P_COUNT; i++)
         t->p[i] = r->p[i];
     panic_req |= (uint8_t)(1u << (uint32_t)(t - trk));
