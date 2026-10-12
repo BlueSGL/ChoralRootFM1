@@ -1076,9 +1076,14 @@ rt=""; for k in 2 3 4 5 6 7 8; do rt="$rt $(( $(pl $k) - $(pl $((k - 1))) ))"; d
 [ "$rt" = " 1 2 3 4 6 8 16" ] && has '^loop: knob 2 rate x1/4' "$RL" && has '^loop: knob 2 rate x4' "$RL" &&
     ok "Rate x1/4 x1/2 x3/4 x1 x1.5 x2 x4: a 1-bar loop starts 1 2 3 4 6 8 16 times in 4 bars of the tempo: $OUT/cr_loop_rate_q.ppm, cr_loop_rate_4.ppm" \
     || bad "the Rate against the clock: starts in 4 bars:$rt (want 1 2 3 4 6 8 16)"
-[ "$(l2 "$RL" 9 rate) $(l2 "$RL" 9 want)" = "3 5" ] && [ "$(l2 "$RL" 10 rate)" = 5 ] && [ $(( $(pl 11) - $(pl 10) )) = 2 ] &&
+[ "$(l2 "$RL" 9 rate) $(l2 "$RL" 9 want)" = "7 9" ] && [ "$(l2 "$RL" 10 rate)" = 9 ] && [ $(( $(pl 11) - $(pl 10) )) = 2 ] &&
     ok "the Rate changed while it plays: x1 until the loop's start, x2 from there (2 starts in the next 1.9 s): never in the middle of a cycle" \
     || bad "a rate change while playing: $(l2 "$RL" 9 rate)/$(l2 "$RL" 9 want) -> $(l2 "$RL" 10 rate), $(( $(pl 11) - $(pl 10) )) starts"
+[ $(( $(pl 14) - $(pl 13) )) = 2 ] && [ $(( $(pl 15) - $(pl 14) )) = 2 ] && [ "$(l2 "$RL" 13 rate)" = 2 ] && [ "$(l2 "$RL" 15 rate)" = 0 ] &&
+    has '^loop: knob 2 rate x1/6' "$RL" && has '^loop: knob 2 rate x1/8' "$RL" && has '^loop: knob 2 rate x1/12' "$RL" &&
+    [ "$(grep -c '^loop: knob 2 rate x1/16' "$RL")" = 2 ] &&
+    ok "the slow Rates x1/6 x1/8 x1/12 x1/16: the 1-bar loop starts twice in 17 s at x1/8 and twice in 33.5 s at x1/16 (a step is a bar); the knob ends at x1/16: $OUT/cr_loop_rate_16.ppm" \
+    || bad "the slow Rates: $(( $(pl 14) - $(pl 13) )) starts at x1/8 (want 2), $(( $(pl 15) - $(pl 14) )) at x1/16 (want 2), rate $(l2 "$RL" 13 rate) / $(l2 "$RL" 15 rate) (want 2 / 0): $(grep -c '^loop: knob 2 rate x1/16' "$RL") x1/16 traces"
 silent_end cr_loop_rate
 # 0.18: Step with Length Free; the loop editor (a step sequencer since 2026-10-12: sixteenth steps, a step's length
 # is its note's)

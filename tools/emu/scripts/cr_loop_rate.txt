@@ -1,9 +1,11 @@
-# ChoralRoot 0.18: the loop's Rate (the PLAY menu's KNOB 2: x1/4 x1/2 x3/4 x1 x1.5 x2 x4; docs/LOOPER.md "The Rate").
+# ChoralRoot 0.18: the loop's Rate (the PLAY menu's KNOB 2: x1/16 x1/12 x1/8 x1/6 x1/4 x1/2 x3/4 x1 x1.5 x2 x4;
+# docs/LOOPER.md "The Rate").
 # 120 BPM, 4/4: a bar = 2 s. The menu open throughout (LOOP tap plays / stops in it). A 1-bar loop with one chord (D)
 # at its start (Length 1 bar, no count-in). For each rate from x1/4 up: played 7.8 s (just under 4 bars of the tempo),
 # stopped, a dump: the loop's starts in it = the events played: 1 2 3 4 6 8 16. Then a change while it plays: x1
-# playing, KNOB 2 +2 (x2) a beat in: the rate in force stays x1 until the loop's start (dump: rate 3 want 5), x2 after
-# it (dump: rate 5).
+# playing, KNOB 2 +2 (x2) a beat in: the rate in force stays x1 until the loop's start (dump: rate 7 want 9), x2 after
+# it (dump: rate 9). Last, the slow end (2026-10-11): x1/8 played 17 s: 2 starts (the bar lasts 16 s); x1/16 (the
+# knob's end: one more detent stays there) played 33.5 s: 2 starts (it lasts 32 s).
 wait 300
 btn PLAY down
 wait 500
@@ -91,7 +93,7 @@ knob KNOB2 +1
 wait 100
 knob KNOB2 +1                 # x2 asked, a beat in
 wait 400
-dump                          # 9: still x1 (rate 3 want 5)
+dump                          # 9: still x1 (rate 7 want 9)
 wait 1200                     # the loop's start passed (2 s)
 dump                          # 10: x2
 wait 1900
@@ -99,3 +101,35 @@ dump                          # 11: 2 more starts in 1.9 s
 btn PLAY
 wait 2500
 dump
+knob KNOB2 -1                 # x2 -> x1.5 x1 x3/4 x1/2 x1/4 x1/6 x1/8
+wait 100
+knob KNOB2 -1
+wait 100
+knob KNOB2 -1
+wait 100
+knob KNOB2 -1
+wait 100
+knob KNOB2 -1
+wait 100
+knob KNOB2 -1
+wait 100
+knob KNOB2 -1                 # x1/8
+wait 400
+dump                          # 13: before x1/8
+btn PLAY
+wait 17000
+btn PLAY
+wait 800
+dump                          # 14: after x1/8: 2 starts
+knob KNOB2 -1                 # x1/12
+wait 100
+knob KNOB2 -1                 # x1/16
+wait 100
+knob KNOB2 -1                 # (the end: stays x1/16)
+wait 400
+shot build/emu/test/cr_loop_rate_16.ppm
+btn PLAY
+wait 33500
+btn PLAY
+wait 800
+dump                          # 15: after x1/16: 2 starts

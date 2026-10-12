@@ -962,7 +962,13 @@ static void t_session(void)
     css_fill(&SX);
     SX.loop_rate = 4;
     cr_session_seal(&SX);
-    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == 0, "session: a Rate out of range (x1/4 .. x4 = -3 .. 3): x1");
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == 0, "session: a Rate out of range (x1/16 .. x4 = -7 .. 3): x1");
+    SX.loop_rate = -8;
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == 0, "session: Rate -8 (below x1/16): x1");
+    SX.loop_rate = -7;
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == -7, "session: Rate x1/16 (-7) kept");
     SX.loop_rate = -3;
     cr_session_seal(&SX);
     ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == -3, "session: Rate x1/4 kept");

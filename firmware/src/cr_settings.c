@@ -409,7 +409,10 @@ static void css_sanitize(cr_session_t *x)
     if (x->bass_on > 1u) x->bass_on = 0;
     if (x->lock > 1u) x->lock = 0;
     if (!x->lock) x->latched = 0;                  /* (the latch belongs to LOCK) */
-    if (x->loop_rate < -3 || x->loop_rate > 3) x->loop_rate = 0;   /* (cr_loop.h CRL_NRATE: x1/4 .. x4 around x1) */
+    if (x->loop_rate < -7 || x->loop_rate > 3)
+        x->loop_rate = 0;                          /* (cr_loop.h CRL_NRATE: x1/16 .. x4 around x1 (css_fit_ok); until
+                                                    * 2026-10-11 -3 .. 3: a 0.18 dev build of before reads the four
+                                                    * new ones as x1) */
     if (x->fx.version != CSS_FX_VERSION || x->fx.n > (uint32_t)CSS_NFXP)
         css_fx_defaults(&x->fx);                   /* another layout of the FX block: the sounds' own sends, the
                                                     * effects' defaults */
@@ -565,7 +568,7 @@ static uint32_t crs_saves;                         /* flash writes done (diagnos
  * into for a write; what flash holds is kept as a hash (cr_session_hash), so that "unchanged: no erase" costs no
  * second kilobyte */
 typedef char css_fit_ok[P_COUNT <= CSS_NP && ENG_BLOB_MAX <= CSS_BLOB && sizeof psnd[0].name == CSS_NAME &&
-                        CR_NMOD <= 8 && CRL_NRATE == 7 && CRL_RATE_1 == 3 ? 1 : -1];
+                        CR_NMOD <= 8 && CRL_NRATE == 11 && CRL_RATE_1 == 7 ? 1 : -1];
 static cr_session_t css_buf __attribute__((section(".pool")));
 static uint32_t css_flash;                         /* cr_session_hash of the session in flash (0: none) */
 static uint32_t crs_obj_crc;                       /* the settings object's payload CRC in flash (0: none): the session's

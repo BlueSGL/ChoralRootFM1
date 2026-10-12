@@ -14,7 +14,11 @@
 
 static const uint8_t CRL_BARS[CRL_NSYNC] = {0, 1, 2, 4, 8, 16};
 static const uint8_t CRL_QGRID[CRL_NQUANT] = {0, 96, 48, 32, 24, 16, 12};
-static const uint8_t CRL_RATE_Q2[CRL_NRATE] = {1, 2, 3, 4, 6, 8, 16};   /* the Rate in quarters: x1/4 .. x4 */
+/* the Rate in 48ths of a loop tick a tempo tick: x1/16 x1/12 x1/8 x1/6 x1/4 x1/2 x3/4 x1 x1.5 x2 x4 (48: the smallest
+ * unit that holds a 16th, a 12th and a 6th; until 2026-10-11 quarters, x1/4 the slowest). Each divides CRL_Q48 or is a
+ * multiple of 12, so the loop's ticks fall on the same tempo ticks every cycle */
+#define CRL_Q48 48u
+static const uint8_t CRL_RATE_Q48[CRL_NRATE] = {3, 4, 6, 8, 12, 24, 36, 48, 72, 96, 192};
 
 static void crl_zero(void *p, uint32_t n)
 {
@@ -32,7 +36,7 @@ static uint32_t crl_data_size(uint32_t nev) { return (uint32_t)(sizeof(crl_data_
 uint32_t cr_loop_bar(const cr_loop_t *lp) { return lp->sig == CRL_SIG_44 ? 4u * CRL_PPQN : 3u * CRL_PPQN; }
 uint32_t cr_loop_beat(const cr_loop_t *lp) { return lp->sig == CRL_SIG_68 ? CRL_PPQN / 2u : CRL_PPQN; }
 int cr_loop_layers(const cr_loop_t *lp) { return lp->d.nlayers; }
-uint32_t cr_loop_rate_q2(const cr_loop_t *lp) { return CRL_RATE_Q2[lp->rate < CRL_NRATE ? lp->rate : CRL_RATE_1]; }
+uint32_t cr_loop_rate_q48(const cr_loop_t *lp) { return CRL_RATE_Q48[lp->rate < CRL_NRATE ? lp->rate : CRL_RATE_1]; }
 
 void cr_loop_init(cr_loop_t *lp)
 {
@@ -574,7 +578,7 @@ static int crl_commit(cr_loop_t *lp, cr_t *c)      /* the capture ends */
 }
 
 /* ----------------------------------------------------------- the clock --- */
-/* one tempo tick (adv 0: the clock's first call, tick 0). The loop's own time first: CRL_RATE_Q2 quarters of a loop
+/* one tempo tick (adv 0: the clock's first call, tick 0). The loop's own time first: CRL_RATE_Q48 48ths of a loop
  * tick a tempo tick (x1: one each, exactly the clock there was before the Rate), each with the take's end, the
  * voices' ends and the events due; then the tempo's: the count-in's end, the click */
 static void crl_tick1(cr_loop_t *lp, cr_t *c, int adv)
@@ -583,9 +587,9 @@ static void crl_tick1(cr_loop_t *lp, cr_t *c, int adv)
     int on = 0;
     if (adv) {
         lp->rt++;
-        lp->rfrac = (uint8_t)(lp->rfrac + CRL_RATE_Q2[lp->rate < CRL_NRATE ? lp->rate : CRL_RATE_1]);
-        n = lp->rfrac >> 2;
-        lp->rfrac &= 3u;
+        uint32_t f = (uint32_t)lp->rfrac + CRL_RATE_Q48[lp->rate < CRL_NRATE ? lp->rate : CRL_RATE_1];   /* <= 47 + 192 */
+        for (n = 0; f >= CRL_Q48; f -= CRL_Q48) n++;  /* (0 .. 4 loop ticks: no divide in the ISR) */
+        lp->rfrac = (uint8_t)f;
     }
     for (; n; n--) {
         if (adv) lp->t++;

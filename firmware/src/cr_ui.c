@@ -468,7 +468,7 @@ static const char *const CU_LOOPLEN[6] = {"Free", "1 bar", "2 bars", "4 bars", "
 static const char *const CU_SIG[CRL_NSIG] = {"4/4", "3/4", "6/8"};
 static const char *const CU_QUANT[CRL_NQUANT] = {"none", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CU_LOOP_MODE[CRL_NMODE] = {"Overwrite", "Advance", "Overdub", "Replace", "Step"};
-static const char *const CU_RATE[CRL_NRATE] = {"x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
+static const char *const CU_RATE[CRL_NRATE] = {"x1/16", "x1/12", "x1/8", "x1/6", "x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
 enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_N };
 
 static struct {
@@ -491,7 +491,7 @@ static struct {
     uint8_t split;                        /* Single Notes' split point, pitch class 0..11 */
     uint8_t metro, metro_sig, metro_vol;  /* the click: on, CRL_SIG_*, level 0..100 */
     uint8_t loop_len, loop_quant, loop_count_in, loop_level;   /* SYNC (0 Free, 1..16 bars), QUANT, COUNT-IN, LEVEL */
-    uint8_t loop_rate;                    /* the loop's Rate, 0..CRL_NRATE-1 (x1/4 .. x4; CRL_RATE_1; the session's) */
+    uint8_t loop_rate;                    /* the loop's Rate, 0..CRL_NRATE-1 (x1/16 .. x4; CRL_RATE_1; the session's) */
     uint8_t loop_slot;                    /* the slot in RAM (0..9) */
     uint8_t loop_mode, loop_keys;         /* the record mode (CRL_MODE_*); the PLAY menu's keys: 0 Play, 1 Loops (v8) */
     uint8_t key_play;                     /* the KEY layer's keys: 0 pick (a root = the tonic, MAJ / MIN = the scale),
@@ -4797,7 +4797,7 @@ static void cu_key_cells(cr_screen_t *s)
     cu_hot_row(s, L_KEY);
 }
 /* the PLAY menu's knob row (docs/LOOPER-MODES.md), two pages (SELECT). Page 1: Length (the next take's: Free, 1 .. 16
- * bars), Rate (x1/4 .. x4), Quantize (echoes), Count-in (gate: full on, narrow off); page 2: Level (bar), the other
+ * bars), Rate (x1/16 .. x4), Quantize (echoes), Count-in (gate: full on, narrow off); page 2: Level (bar), the other
  * three knobs free. Until 0.17: Quantize Count-in Level Keys, the length on SELECT; Keys is GLO's alone now */
 static void cu_loop_cells(cr_screen_t *s)
 {
@@ -5050,9 +5050,9 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         s->lm_mid = CR_LM_TIMELINE;
         s->lm_beats = (uint8_t)beats;
         if (cap == CRL_CAP_REC && !sn->lrec_len) { /* Free, the first take: the bars as they pass, the current one right */
-            uint32_t nb = pos / bar + 1u, ms = pos * 2500u / ((cs.bpm ? cs.bpm : 120u) * cr_loop_rate_q2(&crl));
+            uint32_t nb = pos / bar + 1u, ms = pos * 30000u / ((cs.bpm ? cs.bpm : 120u) * cr_loop_rate_q48(&crl));
                                                    /* (60000 / 96 = 625 ms a tick at 1 BPM; the loop's ticks run at the
-                                                    * Rate, in quarters) */
+                                                    * Rate, in 48ths; pos <= CRL_MAX_LEN: 1.97e9 at most) */
             start = (nb > 4u ? nb - 4u : 0u) * bar;
             shown = nb > 4u ? 4u : nb;
             s->lm_free = (uint8_t)(nb > 255u ? 255u : nb);
