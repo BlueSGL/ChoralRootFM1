@@ -1,0 +1,188 @@
+# ChoralRoot 0.18: the loop editor's two pages and its new controls (the owner, 2026-10-13; docs/LOOPER.md "The loop
+# editor"). The PLAY menu open throughout. Chords: MAJ = A#3.
+# A. Step (ALGORITHM +4), Free: D E G A entered: a loop of 4 steps (96 ticks). EDIT: the editor, page 1 "Step" (Note
+#    len / Steps / Chance / Velocity), the cursor on step 1.
+# B. PRESETS +2: the cursor on step 3 (the slot and the chord sound untouched). GLO held + KNOB 2 (Steps): the snap:
+#    +1 8 steps, +1 16; then 32, 48, 64, a sixth: stays; -1: 48; -1, -1: 16. GLO held + PRESETS: 8 steps a detent,
+#    wrapping at the loop's end (3 -> 11 -> 3; -1: 11). PRESETS -10: step 1.
+# C. KNOB 1 -1: the note 3/4 of a step; -2: 1/4 (shot). KNOB 3 -4 on step 3: its chance 50 % (the grid's notch), +4:
+#    100 % again.
+# D. SELECT +1: page 2 "Trig" (Ratchet / Condition / Voicing; shot). Step 1: KNOB 1 +2: ratchet x3. Step 2 (PRESETS
+#    +1): KNOB 2 +10: condition 1st. Step 3: KNOB 3 +3: its voicing -10; ALGORITHM +12: +2 (the same value). SELECT +3:
+#    still page 2 (clamped); SELECT -1: page 1; ALGORITHM -1 there: +1 ("step voicing: +1").
+# E. OCT+: the octave +1, the editor still open; PRESETS +1 (step 4), MAJ + D4: the step is D an octave up (root 74).
+#    OCT-: the octave 0 again.
+# F. LOOP: the first pass: step 1 three times, steps 2 3 4 once: 6 hits; the second: step 2 (1st) stays away: 5 more.
+#    LOOP: stop: silent, no loop voice kept.
+# G. Step 1, REC: cleared, its ratchet with it. EDIT tapped: closed, the PLAY menu. PRESETS +1, -1: the loop saved to
+#    its slot and read back from flash: the steps' properties are in the record. EDIT, HOME: closed again.
+wait 300
+btn PLAY down
+wait 500
+btn PLAY up
+wait 300
+knob ALGORITHM +4
+wait 300
+btn REC
+wait 300
+btn A#3 down
+btn D4 down
+wait 150
+btn D4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn E4 down
+wait 150
+btn E4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn G4 down
+wait 150
+btn G4 up
+btn A#3 up
+wait 150
+btn A#3 down
+btn A4 down
+wait 150
+btn A4 up
+btn A#3 up
+wait 300
+btn REC
+wait 1500
+btn EDIT
+wait 400
+shot build/emu/test/cr_lt_step.ppm
+dump                              # 1: the editor, page 1, cursor 1, 4 events, 96
+knob PRESETS +2                   # B
+wait 300
+dump                              # 2: cursor 3
+btn GLO down
+wait 100
+knob KNOB2 +1
+wait 200
+knob KNOB2 +1
+wait 200
+dump                              # 3: 16 steps (384)
+knob KNOB2 +1
+wait 200
+knob KNOB2 +1
+wait 200
+knob KNOB2 +1
+wait 200
+dump                              # 4: 64 steps (1536)
+knob KNOB2 +1
+wait 200
+knob KNOB2 -1
+wait 200
+dump                              # 5: 48 steps (1152)
+knob KNOB2 -1
+wait 200
+knob KNOB2 -1
+wait 200
+dump                              # 6: 16 steps (384)
+knob PRESETS +1
+wait 200
+dump                              # 7: cursor 11
+knob PRESETS +1
+wait 200
+dump                              # 8: cursor 3 (wrapped)
+knob PRESETS -1
+wait 200
+btn GLO up
+wait 300
+dump                              # 9: cursor 11; GLO let go: no Options, the keys still play
+knob PRESETS -10
+wait 300
+knob KNOB1 -1                     # C
+wait 300
+dump                              # 10: cursor 1, its note 3/4
+knob KNOB1 -2
+wait 400
+shot build/emu/test/cr_lt_quarter.ppm
+dump                              # 11: 1/4
+knob PRESETS +2
+wait 200
+knob KNOB3 -4
+wait 400
+shot build/emu/test/cr_lt_chance.ppm
+dump                              # 12: step 3, chance 50 % (entry 4), 1 step with a property
+knob KNOB3 +4
+wait 300
+dump                              # 13: 100 % again, no property
+knob SELECT +1                    # D
+wait 300
+knob PRESETS -2
+wait 200
+knob KNOB1 +2
+wait 300
+dump                              # 14: page 2, step 1, ratchet x3
+knob PRESETS +1
+wait 200
+knob KNOB2 +10
+wait 300
+dump                              # 15: step 2, condition 1st (10)
+knob PRESETS +1
+wait 200
+knob KNOB3 +3
+wait 300
+dump                              # 16: step 3, voicing 3 (-10)
+knob ALGORITHM +12
+wait 400
+shot build/emu/test/cr_lt_trig.ppm
+dump                              # 17: voicing 15 (+2)
+knob SELECT +3
+wait 200
+dump                              # 18: still page 2
+knob SELECT -1
+wait 200
+knob ALGORITHM -1
+wait 300
+dump                              # 19: page 1, voicing 14 (+1)
+btn OCT+                          # E
+wait 300
+dump                              # 20: octave 1, the editor open
+knob PRESETS +1
+wait 200
+btn A#3 down
+btn D4 down
+wait 200
+btn D4 up
+btn A#3 up
+wait 400
+btn OCT-
+wait 1500
+dump                              # 21: octave 0, step 4 is the D of the octave above (root 74)
+btn PLAY                          # F
+wait 1500
+dump                              # 22: 6 hits in the first pass
+wait 2000
+dump                              # 23: 5 more in the second
+btn PLAY
+wait 800
+dump                              # 24: stopped, no loop voice
+knob PRESETS -3                   # G
+wait 200
+btn REC
+wait 400
+dump                              # 25: step 1 cleared: 3 events, 2 steps with a property
+btn EDIT
+wait 400
+dump                              # 26: closed, the PLAY menu
+knob PRESETS +1
+wait 1500
+knob PRESETS -1
+wait 1500
+dump                              # 27: slot 1 read back from flash: 3 events, 2 steps with a property
+btn EDIT
+wait 400
+knob PRESETS +1
+wait 300
+dump                              # 28: open again, step 2: condition 1st still
+btn HOME
+wait 300
+dump                              # 29: closed by HOME, the menu open
+btn OCT-
+wait 2500
+dump

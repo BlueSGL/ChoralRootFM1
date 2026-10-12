@@ -32,6 +32,19 @@
                                   * (16 steps a bar of 4/4 at Rate x1; the Rate scales it with the loop). Until
                                   * 2026-10-12 the step was the Quantize value (a quarter note when none) */
 #define CRL_STEPS 64u            /* a pattern's steps at most: step entry, the editor's Steps; a note's length in steps */
+/* A STEP's properties (the loop editor's Trig page; docs/LOOPER.md "Ratchet, condition, voicing"): they belong to the
+ * step, i.e. to every event that starts in it (both sides), for the loop's first CRL_STEPS steps; an empty step has
+ * none. crl_data_t.st[step][0] = ratchet (bits 0-1: 0 off, 1 .. 3 = x2 .. x4) | condition << 2 (CRL_C_*);
+ * st[step][1] = the voicing (bits 0-4: 0 Follow (the live voicing), 1 .. 25 = a fixed rotation -12 .. +12) | the
+ * chance << 5 (0 .. 7: CRL_CHANCE_PCT, 0 = 100 %). A step plays on a pass when its condition is met AND its chance
+ * roll passes: one roll per step per pass (both sides, every hit of a ratchet) */
+enum { CRL_C_ALWAYS, CRL_C_1_2, CRL_C_2_2, CRL_C_1_3, CRL_C_2_3, CRL_C_3_3, CRL_C_1_4, CRL_C_2_4, CRL_C_3_4, CRL_C_4_4,
+       CRL_C_FIRST, CRL_C_NFIRST, CRL_NCOND };
+#define CRL_NRATCH 4u            /* off, x2, x3, x4 */
+#define CRL_NVOIC 26u            /* Follow, -12 .. +12 */
+#define CRL_NCHANCE 8u           /* 100 90 75 60 50 40 25 10 % */
+#define CRL_CHANCE_PCT(k) ((uint8_t)("\144\132\113\074\062\050\031\012"[(k) & 7u]))
+#define CRL_FRAC 6u              /* a note shorter than a step: 1/4, 1/2, 3/4 of it (CRL_FRAC, 2x, 3x ticks) */
 
 enum { CRL_EMPTY, CRL_STOPPED, CRL_PLAYING };                  /* the loop */
 enum { CRL_CAP_NONE,                                            /* capture */
@@ -62,6 +75,7 @@ typedef struct {                 /* a loop's content: what a slot stores */
     uint32_t len;                /* ticks, 0 = empty */
     uint16_t nev;
     uint8_t nlayers, sig;        /* sig: the time signature it was made in (CRL_SIG_*) */
+    uint8_t st[CRL_STEPS][2];    /* the steps' properties (above); all 0: none (128 bytes; before ev: crl_data_size) */
     crl_ev_t ev[CRL_MAX_EV];     /* in layer order (a layer's events follow the previous layer's) */
 } crl_data_t;
 
@@ -87,7 +101,13 @@ typedef struct {
     uint32_t rec0, rec_len, cin0, od0, met0;
     struct { uint32_t gid, t0; int16_t root; uint8_t used, q, ext, vel, rep; } open[CRL_OPEN];   /* held gestures
                                                 * (rep: opened while replacing) */
-    struct { uint32_t off; uint16_t ev; uint8_t used; } pv[CR_MAX_LOOPV];   /* ev: the event it plays */
+    /* the loop voices. ev: the event it plays; used: 1 sounding (off: its end), 2 a ratchet waiting for its next hit
+     * (off: when); hits: the ratchet's hits still to come, slice ticks apart, each gate long, with the chord kept
+     * here (the event may be gone by then: an edit, a slot switch); voic: the step's voicing (CR_VOIC_FOLLOW) */
+    struct { uint32_t off; uint16_t ev; uint8_t used, hits, slice, gate, root, qx, vel; int8_t voic; } pv[CR_MAX_LOOPV];
+    uint8_t pass12, pass_n;                    /* the pass of the loop since it started playing, mod 12 (the A:B
+                                                * conditions: 2, 3 and 4 divide it); 0 on the first, then 1 */
+    uint32_t rnd;                              /* the chance rolls' state: a new value each pass (xorshift32) */
     uint16_t lev0[CRL_MAX_LAYERS];             /* each layer's first event (a hidden event's layer, back on undo) */
     uint8_t ow;                                /* Overwrite armed over a loop: it is cleared when the take starts */
     uint8_t rep, rep_n;                        /* the overdub replaces (Replace); gestures of it held */
@@ -101,6 +121,7 @@ typedef struct {
      * step's notes had; 1 for an empty step); the sides (bit 0 chord, bit 1 bass) already replaced by the keys now
      * down; the loop's extent with the steps Loop length hid */
     uint8_t ed, ed_g, ed_n, ed_w;
+    uint8_t ed_nf;                             /* .. ed_n is a part of a step: 1 .. 3 quarters (0: whole steps) */
     uint8_t ed_flat;                           /* .. an edit was made: the loop is one layer */
     uint32_t ed_t0, ed_len;
     uint32_t step_len;                         /* a set Length: the ticks the cursor wraps at (whole bars, CRL_STEPS
@@ -117,6 +138,8 @@ typedef struct {
 } cr_loop_t;
 
 void cr_loop_init(cr_loop_t *lp);
+void cr_loop_seed(cr_loop_t *lp, uint32_t seed);   /* the steps' chance rolls: the same seed and the same
+                                                * timing give the same passes (the host tests) */
 void cr_loop_tick(cr_loop_t *lp, cr_t *c, uint32_t now_ms);
 /* cr_out_t.gesture's body */
 void cr_loop_gesture(cr_loop_t *lp, uint32_t gid, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on);
@@ -162,6 +185,8 @@ typedef struct {                               /* a page: the CRL_STEPS steps fr
     uint64_t start;                            /* bit s: an event starts in step first + s */
     uint64_t tail;                             /* bit s: none starts there, and a note begun earlier sounds through
                                                 * half of it or more */
+    uint64_t trig;                             /* bit s: an event starts there and the step has a ratchet, a
+                                                * condition or a chance under 100 % (the grid's small mark) */
     uint16_t first;
     uint16_t nstep, nall;                      /* steps in the loop; with the steps hidden beyond its end */
 } crl_edmap_t;
@@ -179,6 +204,18 @@ int  cr_loop_ed_setnlen(cr_loop_t *lp, uint32_t n);   /* .. its notes n steps lo
 int  cr_loop_ed_len(cr_loop_t *lp, uint32_t len);     /* the loop's length in ticks (the events beyond it are kept,
                                                 * unheard and unsaved, until the editor closes); 0: refused */
 int  cr_loop_ed_vel(cr_loop_t *lp, int delta); /* the step's events' velocity; the highest after, 0: no event */
+uint32_t cr_loop_ed_nfrac(const cr_loop_t *lp);/* the cursor's step: its notes are a part of a step long: 1 .. 3 quarters
+                                                * of it (the longest is exactly 6, 12 or 18 ticks); 0: not (cr_loop_ed_nlen) */
+int  cr_loop_ed_setnfrac(cr_loop_t *lp, uint32_t f);   /* .. its notes f quarters of a step long (1 .. 3). 0: refused */
+/* the cursor step's properties (CRL_SP_*: the ratchet 0 .. 3, the condition CRL_C_*, the voicing 0 Follow, 1 .. 25,
+ * the chance 0 .. 7: CRL_CHANCE_PCT).
+ * get: -1 = none (no event starts in the step, or a step past the CRL_STEPS the table has: a long take's later pages).
+ * set: 1 done, 0 refused (the same; a value out of range; CRL_ED_NOROOM: the loop is so full of events that its
+ * record could not hold the step's entry too) */
+enum { CRL_SP_RATCH, CRL_SP_COND, CRL_SP_VOIC, CRL_SP_CHANCE };
+#define CRL_ED_NOROOM (-2)
+int  cr_loop_ed_prop(const cr_loop_t *lp, int which);
+int  cr_loop_ed_setprop(cr_loop_t *lp, int which, int v);
 
 /* queries */
 uint32_t cr_loop_bar(const cr_loop_t *lp);     /* ticks per bar, per beat (the click) */
@@ -194,7 +231,11 @@ uint32_t cr_loop_rate_q2(const cr_loop_t *lp); /* the Rate in force, quarters (1
 #define CRL_REC_HDR 16u
 #define CRL_RF_PART 1u                         /* byte 7 (flags; 0 until 0.17): a single note's ext nibble is its part
                                                 * (CRL_X_BASS). Written only by a loop with a bass-side note */
-#define CRL_REC_MAX (CRL_REC_HDR + 2u * CRL_MAX_LAYERS + 7u * CRL_MAX_EV)
+#define CRL_RF_STEP 2u                         /* byte 7, bit 1 (0.18): the steps' properties follow the events: a count
+                                                * u8, then per step {step u8, st[0], st[1]}, ascending, only steps that
+                                                * have a property and an event. Written only by a loop that uses one */
+#define CRL_REC_MAX (CRL_REC_HDR + 2u * CRL_MAX_LAYERS + 7u * CRL_MAX_EV)   /* (unchanged by CRL_RF_STEP: the entries
+                                                * go in the room the events leave, cr_loop_pack) */
 uint32_t cr_loop_pack(const crl_data_t *d, uint8_t *buf, uint32_t max);
 int  cr_loop_unpack(const uint8_t *buf, uint32_t n, crl_data_t *d);
 

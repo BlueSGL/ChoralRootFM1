@@ -611,6 +611,28 @@ steps entered, a new root is a new step also with LOCK latched, the editor opens
 and moves nothing, four rows of 16 on the screen. HANDOFF.md was split from this file; 19 merged worktrees were removed
 (their branches remain: the hook blocks branch deletion).
 
+## 2026-10-13
+
+3y15. **0.18 dev (built, not flashed).** The loop editor grew a second page and the steps their own settings (the user:
+"The loop editor note length is minimum of 1 step, it would be good if we could go lower like 0.75, 0.5, 0.25 steps. And
+also maybe do a ratchet on a step we can enable. Conditional steps would also be good ... let the preset knob change
+selected step, select change pages. Algo knob to change the voicing per step. Also while in this menu, let the octave
+keys work ... hold GLO and turn steps to snap to 8, 16, 32, 48, and 64 steps. And option + turn select step knob to jump
++- 8 steps"; then, the same day: Chance on page 1 in place of the 25 / 50 / 75 % conditions, KNOB 1 no longer a cursor).
+PRESETS is the cursor (GLO held: 8 steps), SELECT the page, ALGORITHM the step's voicing, OCT- / OCT+ the octave; HOME
+and EDIT leave. Step: Note len (1/4 1/2 3/4, 1 .. 64) / Steps (GLO held: 8 16 32 48 64) / Chance / Velocity. Trig:
+Ratchet / Condition / Voicing. Storage: `crl_data_t.st`, two bytes a step for the first 64 steps (RAM +352 B, POOL +8 B,
+flash +3.5 KiB); the record gets flag bit 1 and the entries after the events inside the old `CRL_REC_MAX`, so a loop
+without them packs byte for byte as before and 0.14 .. 0.17 load one with them (and play it plain). A ratchet stays on
+its one loop voice; conditions are a table on the pass mod 12; a chance is one seedable roll per step per pass
+(docs/LOOPER.md "Ratchet, condition, chance, voicing"). **The preset knob in the PLAY menu** ("sometimes in the play menu
+turning the preset knob ends up changing the preset, which is a bug, but not sure how to repro"): the menu's own button
+held again past the hold time closes the menu, so LOOP held + PRESETS with the menu already open chose a slot when
+turned within 300 ms and reached the chord sound's pool when turned later; a knob turned while that button is still down
+now opens the layer again and acts in it (`cu.hclosed`; `tools/emu/scripts/cr_loop_presetknob.txt` fails on 722fe71).
+Not done: the ISR cost is estimated from the source, not counted in the disassembly; the snap in 3/4 and 6/8 has no
+script; `web/fm1backup.js`'s comment on byte 7 does not name bit 1 (the manager reads neither).
+
 
 **2026-10-12, the sends: one value, and the FX layer's Sends page** (0.18 dev; built, not flashed; number it at the
 merge). The user: "if I am in the FX menu from main and change the FX sends, then I enter the sound editor and go to

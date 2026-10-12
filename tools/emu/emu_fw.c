@@ -389,6 +389,21 @@ void emu_fw_dump(void)
                (unsigned)crl.rate, (unsigned)crl.rate_want, (unsigned)crl.dirty, (unsigned)cu.lpage + 1u, (unsigned)crl.ed,
                (unsigned)crl.ed_t0, (unsigned)(crl.ed ? cr_loop_ed_nlen(&crl) : 0u), (unsigned)crl.ed_g, (unsigned)crl.ed_len,
                (unsigned)cu.gsave_pend, (unsigned)crl.step_end, (unsigned)crl.step_len, (unsigned)crl.step_no);
+        /* 0.18: the loop editor's page and its cursor step's properties (-1: none), its notes' part of a step
+         * (quarters; 0: whole steps); the pass of the loop (mod 12); the steps that have a property; the loop voices
+         * in use (sounding or a ratchet between two hits) */
+        {
+            unsigned q, np = 0, nv = 0;
+            for (q = 0; q < CRL_STEPS; q++)
+                np += crl.d.st[q][0] || crl.d.st[q][1];
+            for (q = 0; q < (unsigned)CR_MAX_LOOPV; q++)
+                nv += crl.pv[q].used != 0;
+            printf("  loop3: epage %u cursor %u ratchet %d cond %d voicing %d chance %d frac %u pass %u props %u loopv %u\n",
+                   (unsigned)cu.le_page + 1u, (unsigned)(crl.ed_t0 / CRL_STEP) + 1u,
+                   crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_RATCH) : -1, crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_COND) : -1,
+                   crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_VOIC) : -1, crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_CHANCE) : -1,
+                   (unsigned)(crl.ed ? cr_loop_ed_nfrac(&crl) : 0u), (unsigned)crl.pass12, np, nv);
+        }
     }
     {   /* the loop's parts (0.18): its voices sounding by part (a recorded Split Bass bass-side note: the bass part),
          * its live events of the bass side, the notes on the engine's main / bass streams (looped and played) */

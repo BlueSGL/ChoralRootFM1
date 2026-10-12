@@ -42,6 +42,16 @@ void cr_loop_init(cr_loop_t *lp)
     lp->metro_vol = 70;
     lp->rate = lp->rate_want = CRL_RATE_1;
     lp->state = CRL_EMPTY;
+    lp->rnd = 0x2545F491u;
+}
+
+void cr_loop_seed(cr_loop_t *lp, uint32_t seed) { lp->rnd = seed ? seed : 0x2545F491u; }
+
+static uint32_t crl_xs(uint32_t x)                  /* xorshift32 (cr_engine.c crx_rand's) */
+{
+    if (!x) x = 0x9E3779B9u;
+    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+    return x;
 }
 
 /* ------------------------------------------------------------ playback --- */
@@ -55,22 +65,73 @@ static void crl_voices_off(cr_loop_t *lp, cr_t *c)
         }
 }
 
+/* a step's condition on this pass of the loop (CRL_C_*; the audio ISR: a table and a shift, no division). A:B: pass A
+ * of every B, counted from when the loop started playing (pass12: the pass mod 12, which 2, 3 and 4 divide) */
+static int crl_cond(const cr_loop_t *lp, uint32_t cd)
+{
+    static const uint16_t M[10] = {0xFFFu, 0x555u, 0xAAAu, 0x249u, 0x492u, 0x924u, 0x111u, 0x222u, 0x444u, 0x888u};
+    if (cd < 10u) return (M[cd] >> lp->pass12) & 1u;
+    return cd == CRL_C_FIRST ? !lp->pass_n : lp->pass_n != 0;
+}
+/* a step's chance roll (ch 1 .. 7): decided per pass and per STEP, not per event (a step's chord and its bass note,
+ * and every hit of its ratchet, come or stay away together): the pass's random word (lp->rnd, new at every wrap)
+ * hashed with the step (two multiplies), its top byte against the level */
+static int crl_chance(const cr_loop_t *lp, uint32_t ch, uint32_t s)
+{
+    static const uint8_t T[8] = {255, 230, 192, 154, 128, 102, 64, 26};   /* CRL_CHANCE_PCT of 256 */
+    uint32_t x = lp->rnd + (s + 1u) * 0x9E3779B1u;
+    x ^= x >> 15; x *= 0x2C1B3C6Du; x ^= x >> 12; x *= 0x297A2D39u;
+    return (x >> 24) < T[ch & 7u];
+}
+
+static void crl_hit(cr_loop_t *lp, cr_t *c, int lv)   /* voice lv sounds its chord (a ratchet: again) */
+{
+    uint32_t qx = lp->pv[lv].qx;
+    cr_loop_event_v(c, lv, lp->pv[lv].root, (uint8_t)(qx >> 4),
+                    (uint8_t)(!(qx & 0xF0u) && (qx & CRL_X_BASS) ? CR_GX_BASS : qx & 15u),   /* (a bass-side note: the
+                                                     * bass part, as it was played) */
+                    lp->pv[lv].vel, 1, lp->pv[lv].voic);
+    lp->pv[lv].used = 1;
+    lp->pv[lv].off = lp->t + lp->pv[lv].gate;
+    lp->played++;
+}
+
+/* an event is due. Its step's properties (the first CRL_STEPS steps have them): the condition may keep it silent this
+ * pass; a ratchet makes it 2 .. 4 hits evenly inside ONE step (the slice: 12, 8, 6 ticks), each as long as the slice,
+ * or the note's part of it when the note is shorter than a step. A ratchet stays on its one loop voice (crl_offs
+ * strikes it again), so it can never take more voices than a plain note does */
 static void crl_play_ev(cr_loop_t *lp, cr_t *c, const crl_ev_t *e, uint32_t idx)
 {
+    static const uint8_t SLICE[4] = {CRL_STEP, CRL_STEP / 2u, CRL_STEP / 3u, CRL_STEP / 4u};
     int lv, best = -1;
-    uint32_t vel = (uint32_t)e->vel * lp->level / 100u;
+    uint32_t vel = (uint32_t)e->vel * lp->level / 100u, s = e->t / CRL_STEP, a = 0, b = 0, dur = e->dur ? e->dur : 1u;
     if (!vel) return;
+    if (s < CRL_STEPS) {
+        a = lp->d.st[s][0];
+        b = lp->d.st[s][1];
+    }
+    if ((a >> 2) && !crl_cond(lp, a >> 2)) return;
+    if ((b >> 5) && !crl_chance(lp, b >> 5, s)) return;
+    b &= 31u;
     for (lv = 0; lv < CR_MAX_LOOPV; lv++)
         if (!lp->pv[lv].used) { best = lv; break; }
     if (best < 0)                                   /* all busy: the one that would end first */
         for (lv = 0; lv < CR_MAX_LOOPV; lv++)
             if (best < 0 || (int32_t)(lp->pv[lv].off - lp->pv[best].off) < 0) best = lv;
-    cr_loop_event(c, best, e->root, (uint8_t)(e->qx >> 4), (uint8_t)(CRL_EV_BASS(e) ? CR_GX_BASS : e->qx & 15u),
-                  (uint8_t)vel, 1);                 /* (a bass-side note: the bass part, as it was played) */
-    lp->pv[best].used = 1;
     lp->pv[best].ev = (uint16_t)idx;
-    lp->pv[best].off = lp->t + (e->dur ? e->dur : 1u);
-    lp->played++;
+    lp->pv[best].root = e->root;
+    lp->pv[best].qx = e->qx;
+    lp->pv[best].vel = (uint8_t)vel;
+    lp->pv[best].voic = (int8_t)(b && b < CRL_NVOIC ? (int)b - 13 : CR_VOIC_FOLLOW);
+    lp->pv[best].hits = (uint8_t)(a & 3u);
+    lp->pv[best].slice = SLICE[a & 3u];
+    if (a & 3u) {
+        dur = dur >= CRL_STEP ? SLICE[a & 3u] : SLICE[a & 3u] * dur / CRL_STEP;
+        if (!dur) dur = 1;
+    }
+    lp->pv[best].gate = (uint8_t)(dur > 255u ? 255u : dur);   /* (read by a ratchet's hits only: <= a slice) */
+    crl_hit(lp, c, best);
+    lp->pv[best].off = lp->t + dur;
 }
 
 static void crl_hide(cr_loop_t *lp, uint32_t i)    /* Replace: event i hidden by the layer being recorded */
@@ -118,10 +179,22 @@ static void crl_offs(cr_loop_t *lp, cr_t *c)
     int lv;
     for (lv = 0; lv < CR_MAX_LOOPV; lv++) {
         if (!lp->pv[lv].used) continue;
+        if (lp->pv[lv].used == 2u) {                              /* a ratchet between two hits: the next one */
+            if ((int32_t)(lp->t - lp->pv[lv].off) >= 0) crl_hit(lp, c, lv);
+            continue;
+        }
         if (!cr_loop_busy(c, lv)) lp->pv[lv].used = 0;            /* (a panic took it) */
         else if ((int32_t)(lp->t - lp->pv[lv].off) >= 0) {
             cr_loop_event(c, lv, 0, 0, 0, 0, 0);
             lp->pv[lv].used = 0;
+            if (lp->pv[lv].hits) {                                /* a ratchet: the voice is kept for its next hit */
+                lp->pv[lv].hits--;
+                if (lp->pv[lv].gate >= lp->pv[lv].slice) crl_hit(lp, c, lv);   /* (back to back: now) */
+                else {
+                    lp->pv[lv].used = 2;
+                    lp->pv[lv].off += (uint32_t)lp->pv[lv].slice - lp->pv[lv].gate;
+                }
+            }
         }
     }
 }
@@ -144,6 +217,9 @@ static void crl_take_next(cr_loop_t *lp)            /* a queued slot replaces th
 static void crl_wrap(cr_loop_t *lp)
 {
     if (lp->rate == CRL_RATE_1 || (lp->rt - lp->rcyc0) % cr_loop_beat(lp) == 0u) lp->rcyc0 = lp->rt;
+    lp->pass12 = (uint8_t)(lp->pass12 >= 11u ? 0u : lp->pass12 + 1u);   /* the next pass (the steps' conditions) */
+    lp->pass_n = 1;
+    lp->rnd = crl_xs(lp->rnd);
     if (lp->rate != lp->rate_want) {
         lp->rate = lp->rate_want;
         lp->rfrac = 0;
@@ -164,6 +240,7 @@ static void crl_play_upto(cr_loop_t *lp, cr_t *c)
         if (lp->next_on) {
             lp->next_on = 0;
             crl_take_next(lp);
+            lp->pass12 = lp->pass_n = 0;             /* (another loop: its first pass) */
             if (lp->state != CRL_PLAYING || !lp->d.len) return;
             if (pos >= lp->d.len) pos %= lp->d.len;
         }
@@ -182,6 +259,8 @@ static void crl_start(cr_loop_t *lp, cr_t *c)
     lp->rate = lp->rate_want;                        /* (a start: the Rate asked for) */
     lp->rfrac = 0;
     lp->scan = 0;
+    lp->pass12 = lp->pass_n = 0;                     /* the first pass (the steps' conditions count from here) */
+    lp->rnd = crl_xs(lp->rnd ^ lp->t * 0x9E3779B1u); /* (the random ones: another run each start) */
     crl_play_upto(lp, c);
     if (lp->metro) lp->click = 2;                    /* the grid restarts here: its first beat now */
 }
@@ -205,6 +284,22 @@ static void crl_step_adv(cr_loop_t *lp)
     lp->step = (uint16_t)(s + 1u < nst ? s + 1u : lp->step_len ? 0u : nst);
     lp->step_w = 0;
     lp->gen++;
+}
+
+/* the steps' properties: all gone (a new loop: a fresh take, a pattern entered, a clear) */
+static void crl_st_zero(cr_loop_t *lp) { crl_zero(lp->d.st, sizeof lp->d.st); }
+/* .. gone from the steps no event starts in any more (an undo took the layer, the editor cleared the step or closed
+ * with steps hidden beyond the end). An event a Replace layer hid counts: undo brings it back with its step's */
+static void crl_st_prune(cr_loop_t *lp)
+{
+    uint64_t has = 0;
+    uint32_t i, s;
+    for (i = 0; i < lp->d.nev; i++) {
+        s = lp->d.ev[i].t / CRL_STEP;
+        if (s < CRL_STEPS) has |= (uint64_t)1 << s;
+    }
+    for (s = 0; s < CRL_STEPS; s++)
+        if (!((has >> s) & 1u)) lp->d.st[s][0] = lp->d.st[s][1] = 0;
 }
 
 static void crl_write(cr_loop_t *lp, uint32_t t0, int16_t root, uint8_t q, uint8_t ext, uint8_t vel)
@@ -257,6 +352,7 @@ static void crl_take_start(cr_loop_t *lp)
     lp->d.nev = 0;
     lp->d.len = 0;
     lp->d.nlayers = 0;
+    crl_st_zero(lp);
     lp->state = CRL_EMPTY;
     lp->next_on = 0;
     lp->dirty = 1;
@@ -281,7 +377,11 @@ static void crl_cut(cr_loop_t *lp)
         lp->d.nev++;
         crl_hide(lp, i);
         for (lv = 0; lv < CR_MAX_LOOPV; lv++)
-            if (lp->pv[lv].used && lp->pv[lv].ev == i) lp->pv[lv].off = lp->t;   /* (crl_offs ends it) */
+            if (lp->pv[lv].used && lp->pv[lv].ev == i) {
+                lp->pv[lv].hits = 0;                 /* (a ratchet: no more hits) */
+                if (lp->pv[lv].used == 2u) lp->pv[lv].used = 0;
+                else lp->pv[lv].off = lp->t;         /* (crl_offs ends it) */
+            }
     }
 }
 
@@ -374,6 +474,7 @@ static void crl_quantize(cr_loop_t *lp, uint32_t i0)   /* note-ons to the grid; 
 
 static void crl_drop_take(cr_loop_t *lp)
 {
+    crl_st_zero(lp);
     lp->d.nev = 0;
     lp->d.len = 0;
     lp->d.nlayers = 0;
@@ -404,6 +505,7 @@ static int crl_step_commit(cr_loop_t *lp, cr_t *c, int play)
     lp->d.nlayers = 1;
     lp->lev0[0] = 0;
     lp->layer_ev0 = 0;
+    crl_st_zero(lp);                                 /* (the loop there before is gone, its steps' properties too) */
     if (lp->step_len) len = lp->step_len;
     else len = (uint32_t)(lp->step_end ? lp->step_end : 1u) * lp->step_g;
     lp->d.len = len;
@@ -442,6 +544,7 @@ static int crl_commit(cr_loop_t *lp, cr_t *c)      /* the capture ends */
         lp->gen++;
         lp->dirty = 1;
         lp->state = CRL_PLAYING;                     /* the take was the first cycle: playback goes on from here */
+        lp->pass12 = lp->pass_n = 0;
         lp->cyc0 = lp->rec0;
         lp->rcyc0 = lp->rrec0;
         lp->scan = elapsed + 1u;
@@ -681,6 +784,7 @@ int cr_loop_undo(cr_loop_t *lp, cr_t *c)
     lp->d.nev = (uint16_t)(i < lp->d.nev ? i : lp->d.nev);   /* (its sounding notes finish) */
     lp->d.nlayers--;
     crl_restore(lp, lp->d.nlayers);                  /* the events a Replace layer hid come back */
+    crl_st_prune(lp);                                /* (a step the layer alone filled: its properties go with it) */
     lp->gen++;
     lp->full = 0;
     lp->dirty = 1;
@@ -776,7 +880,13 @@ static uint32_t crl_ed_kill(cr_loop_t *lp, uint32_t t0, uint32_t t1, int side, i
                        : !(e->layer & CRL_HID) && e->t >= t0 && e->t < t1 && (side > 1 || (CRL_EV_BASS(e) != 0) == side);
         while (l < lp->d.nlayers && lp->lev0[l] <= i) lp->lev0[l++] = (uint16_t)w;
         for (v = 0; v < CR_MAX_LOOPV; v++)
-            if (lp->pv[v].used && lp->pv[v].ev == i) lp->pv[v].ev = (uint16_t)(kill ? 0xFFFFu : w);
+            if (lp->pv[v].used && lp->pv[v].ev == i) {
+                lp->pv[v].ev = (uint16_t)(kill ? 0xFFFFu : w);
+                if (kill) {                          /* (a ratchet: its hits to come go with the event) */
+                    lp->pv[v].hits = 0;
+                    if (lp->pv[v].used == 2u) lp->pv[v].used = 0;
+                }
+            }
         if (kill) continue;
         if (w != i) lp->d.ev[w] = *e;
         w++;
@@ -829,6 +939,7 @@ static void crl_ed_write(cr_loop_t *lp, int16_t root, uint8_t q, uint8_t ext, ui
     if (!lp->ed_w) {
         n = cr_loop_ed_nlen(lp);
         lp->ed_n = (uint8_t)(n ? n : 1u);
+        lp->ed_nf = (uint8_t)cr_loop_ed_nfrac(lp);
     }
     if (!(lp->ed_w & (1u << side))) {
         crl_ed_kill(lp, lp->ed_t0, lp->ed_t0 + CRL_STEP, (int)side, 0);
@@ -837,7 +948,7 @@ static void crl_ed_write(cr_loop_t *lp, int16_t root, uint8_t q, uint8_t ext, ui
     if (lp->d.nev >= CRL_MAX_EV) { lp->full = 1; return; }
     e = &lp->d.ev[lp->d.nev++];
     e->t = (uint16_t)lp->ed_t0;
-    e->dur = (uint16_t)((lp->ed_n ? lp->ed_n : 1u) * CRL_STEP);
+    e->dur = (uint16_t)(lp->ed_nf ? lp->ed_nf * CRL_FRAC : (lp->ed_n ? lp->ed_n : 1u) * CRL_STEP);
     e->root = (uint8_t)(root < 0 ? 0 : root > 127 ? 127 : root);
     e->vel = (uint8_t)(vel ? vel : 1u);
     e->qx = (uint8_t)(q << 4 | (q ? ext & 15u : side ? CRL_X_BASS : 0u));
@@ -868,6 +979,7 @@ int cr_loop_ed_open(cr_loop_t *lp)
     lp->ed_len = lp->d.len;
     lp->ed_t0 = 0;
     lp->ed_n = 1;
+    lp->ed_nf = 0;
     lp->ed_w = 0;
     lp->gen++;
     return CRL_ED_OK;
@@ -886,6 +998,7 @@ void cr_loop_ed_close(cr_loop_t *lp, cr_t *c)
         crl_drop_take(lp);
         lp->next_on = 0;
     }
+    crl_st_prune(lp);                                /* (the hidden steps' properties went with them) */
     lp->gen++;
 }
 
@@ -900,7 +1013,10 @@ void cr_loop_ed_map(const cr_loop_t *lp, uint32_t first, crl_edmap_t *m)
         const crl_ev_t *e = &lp->d.ev[i];
         uint32_t s = e->t / CRL_STEP, end = (uint32_t)e->t + e->dur, lim = e->t < lp->d.len ? m->nstep : m->nall, a, b;
         if (e->layer & CRL_HID) continue;
-        if (s >= first && s < first + CRL_STEPS) m->start |= (uint64_t)1 << (s - first);
+        if (s >= first && s < first + CRL_STEPS) {
+            m->start |= (uint64_t)1 << (s - first);
+            if (s < CRL_STEPS && (lp->d.st[s][0] || (lp->d.st[s][1] >> 5))) m->trig |= (uint64_t)1 << (s - first);
+        }
         /* the steps after its own that it sounds through, half or more: [a, b), on this page, up to the loop's end */
         a = s + 1u > first ? s + 1u : first;
         b = (end + CRL_STEP / 2u) / CRL_STEP;
@@ -926,7 +1042,10 @@ int cr_loop_ed_clear(cr_loop_t *lp)
     crl_ed_flat(lp);
     n = crl_ed_kill(lp, lp->ed_t0, lp->ed_t0 + CRL_STEP, 2, 0);
     lp->ed_w = 0;
-    if (n) lp->dirty = 1;
+    if (n) {
+        lp->dirty = 1;
+        crl_st_prune(lp);                            /* a cleared step has no ratchet, condition or voicing */
+    }
     return (int)n;
 }
 
@@ -953,6 +1072,88 @@ int cr_loop_ed_setnlen(cr_loop_t *lp, uint32_t n)
         if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= lp->ed_t0 + CRL_STEP) continue;
         e->dur = (uint16_t)(n * CRL_STEP - (e->t - lp->ed_t0));   /* (to the grid: n steps from the step's start) */
     }
+    lp->gen++;
+    lp->dirty = 1;
+    return 1;
+}
+
+uint32_t cr_loop_ed_nfrac(const cr_loop_t *lp)
+{
+    uint32_t i, top = 0;
+    for (i = 0; i < lp->d.nev; i++) {
+        const crl_ev_t *e = &lp->d.ev[i];
+        if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= lp->ed_t0 + CRL_STEP) continue;
+        if (e->t - lp->ed_t0 + e->dur > CRL_STEP) return 0;       /* (it sounds past the step: whole steps) */
+        if (e->dur > top) top = e->dur;
+    }
+    return top == CRL_FRAC || top == 2u * CRL_FRAC || top == 3u * CRL_FRAC ? top / CRL_FRAC : 0u;
+}
+
+int cr_loop_ed_setnfrac(cr_loop_t *lp, uint32_t f)
+{
+    uint32_t i;
+    if (!lp->ed || f < 1u || f > 3u || !cr_loop_ed_nlen(lp)) return 0;
+    crl_ed_flat(lp);
+    for (i = 0; i < lp->d.nev; i++) {
+        crl_ev_t *e = &lp->d.ev[i];
+        if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= lp->ed_t0 + CRL_STEP) continue;
+        e->dur = (uint16_t)(f * CRL_FRAC);           /* (from where the note starts: a gate, not a place) */
+    }
+    lp->gen++;
+    lp->dirty = 1;
+    return 1;
+}
+
+/* the cursor's step has an event (what sounds) and a place in the table: its index, else -1 */
+static int crl_ed_sp(const cr_loop_t *lp)
+{
+    uint32_t i, s = lp->ed_t0 / CRL_STEP;
+    if (s >= CRL_STEPS) return -1;
+    for (i = 0; i < lp->d.nev; i++) {
+        const crl_ev_t *e = &lp->d.ev[i];
+        if (!(e->layer & CRL_HID) && e->t >= lp->ed_t0 && e->t < lp->ed_t0 + CRL_STEP) return (int)s;
+    }
+    return -1;
+}
+
+int cr_loop_ed_prop(const cr_loop_t *lp, int which)
+{
+    int s = crl_ed_sp(lp);
+    if (s < 0) return -1;
+    return which == CRL_SP_RATCH ? lp->d.st[s][0] & 3 : which == CRL_SP_COND ? (lp->d.st[s][0] >> 2) & 15
+         : which == CRL_SP_VOIC ? lp->d.st[s][1] & 31 : lp->d.st[s][1] >> 5;
+}
+
+int cr_loop_ed_setprop(cr_loop_t *lp, int which, int v)
+{
+    int s = crl_ed_sp(lp);
+    uint8_t *st;
+    if (!lp->ed || s < 0 || v < 0) return 0;
+    if ((which == CRL_SP_RATCH && v >= (int)CRL_NRATCH) || (which == CRL_SP_COND && v >= (int)CRL_NCOND) ||
+        (which == CRL_SP_VOIC && v >= (int)CRL_NVOIC) || (which == CRL_SP_CHANCE && v >= (int)CRL_NCHANCE) ||
+        which < CRL_SP_RATCH || which > CRL_SP_CHANCE)
+        return 0;
+    crl_ed_flat(lp);
+    st = lp->d.st[s];
+    if (v && !st[0] && !st[1]) {                     /* the step's first property: an entry more in the record: does
+                                                      * it fit beside the events? (cr_loop_pack; only a loop within a
+                                                      * few events of CRL_MAX_EV can fail this) */
+        uint64_t has = 0;
+        uint32_t i, k = 1, live = 0;
+        for (i = 0; i < lp->d.nev; i++) {
+            const crl_ev_t *e = &lp->d.ev[i];
+            if ((e->layer & CRL_HID) || e->t >= lp->d.len) continue;
+            live++;
+            if (e->t / CRL_STEP < CRL_STEPS) has |= (uint64_t)1 << (e->t / CRL_STEP);
+        }
+        for (i = 0; i < CRL_STEPS; i++)
+            k += ((has >> i) & 1u) && (lp->d.st[i][0] || lp->d.st[i][1]);
+        if (CRL_REC_HDR + 2u * lp->d.nlayers + 7u * live + 1u + 3u * k > CRL_REC_MAX) return CRL_ED_NOROOM;
+    }
+    if (which == CRL_SP_RATCH) st[0] = (uint8_t)((st[0] & ~3u) | (uint32_t)v);
+    else if (which == CRL_SP_COND) st[0] = (uint8_t)((st[0] & 3u) | (uint32_t)v << 2);
+    else if (which == CRL_SP_VOIC) st[1] = (uint8_t)((st[1] & ~31u) | (uint32_t)v);
+    else st[1] = (uint8_t)((st[1] & 31u) | (uint32_t)v << 5);
     lp->gen++;
     lp->dirty = 1;
     return 1;
@@ -1039,7 +1240,8 @@ static uint32_t crl_get32(const uint8_t *p) { return crl_get16(p) | crl_get16(p 
 
 uint32_t cr_loop_pack(const crl_data_t *d, uint8_t *buf, uint32_t max)
 {
-    uint32_t i, live = 0, n, o, part = 0;
+    uint32_t i, live = 0, n, o, part = 0, nst = 0, s;
+    uint64_t has = 0;                                /* the steps (of the first CRL_STEPS) a stored event starts in */
 #define CRL_PK(e) (!((e)->layer & CRL_HID) && (e)->t < d->len)   /* stored: what sounds (not hidden by a Replace layer,
                                                       * nor beyond the end: the editor's Loop length keeps those in RAM
                                                       * until it closes) */
@@ -1047,15 +1249,23 @@ uint32_t cr_loop_pack(const crl_data_t *d, uint8_t *buf, uint32_t max)
         if (CRL_PK(&d->ev[i])) {
             live++;
             part |= CRL_EV_BASS(&d->ev[i]);
+            if (d->ev[i].t / CRL_STEP < CRL_STEPS) has |= (uint64_t)1 << (d->ev[i].t / CRL_STEP);
         }
     n = CRL_REC_HDR + 2u * d->nlayers + 7u * live;
     if (!d->len || !live || !d->nlayers || d->nlayers > CRL_MAX_LAYERS || d->nev > CRL_MAX_EV || n > max) return 0;
+    /* the steps' properties (CRL_RF_STEP): an entry per step that has one AND an event, after the events, in the room
+     * they leave (CRL_REC_MAX is what it was, so every older firmware's length check passes: with 512 events and one
+     * layer 20 entries fit, all 64 up to 494 events; the editor refuses a property that would not fit,
+     * cr_loop_ed_setprop). None: not a byte differs from what 0.14 .. 0.17 wrote */
+    for (s = 0; s < CRL_STEPS; s++)
+        if (((has >> s) & 1u) && (d->st[s][0] || d->st[s][1]) && n + 1u + 3u * (nst + 1u) <= max) nst++;
     crl_put32(buf, CRL_REC_MAGIC);
     buf[4] = 1;                                      /* record version */
     buf[5] = d->sig;
     buf[6] = d->nlayers;
-    buf[7] = (uint8_t)(part ? CRL_RF_PART : 0u);     /* flags (0.14 .. 0.17 wrote 0 and never read it: they load this
-                                                      * record, its bass-side notes as chord-side single notes) */
+    buf[7] = (uint8_t)((part ? CRL_RF_PART : 0u) | (nst ? CRL_RF_STEP : 0u));   /* flags (0.14 .. 0.17 wrote 0 and
+                                                      * never read it: they load this record, its bass-side notes as
+                                                      * chord-side single notes, its steps without their properties) */
     crl_put32(buf + 8, d->len);
     crl_put16(buf + 12, live);
     crl_put16(buf + 14, CRL_PPQN);
@@ -1080,6 +1290,18 @@ uint32_t cr_loop_pack(const crl_data_t *d, uint8_t *buf, uint32_t max)
         o += 7u;
     }
 #undef CRL_PK
+    if (nst) {
+        buf[o++] = (uint8_t)nst;
+        for (s = i = 0; s < CRL_STEPS && i < nst; s++)
+            if (((has >> s) & 1u) && (d->st[s][0] || d->st[s][1])) {
+                buf[o] = (uint8_t)s;
+                buf[o + 1] = d->st[s][0];
+                buf[o + 2] = d->st[s][1];
+                o += 3u;
+                i++;
+            }
+        n = o;
+    }
     return n;
 }
 
@@ -1116,6 +1338,24 @@ int cr_loop_unpack(const uint8_t *buf, uint32_t n, crl_data_t *d)
                 return 0;
             }
         }
+    if (buf[7] & CRL_RF_STEP) {                      /* the steps' properties: checked as everything else is */
+        uint32_t cnt2 = n > o ? buf[o] : 0u, prev = 0;
+        if (!cnt2 || cnt2 > CRL_STEPS || n < o + 1u + 3u * cnt2) {
+            crl_zero(d, crl_data_size(0));
+            return 0;
+        }
+        for (i = 0, o++; i < cnt2; i++, o += 3u) {
+            uint32_t s = buf[o];
+            if (s >= CRL_STEPS || (i && s <= prev) || (buf[o + 1] & 0xC0u) || (buf[o + 1] >> 2) >= CRL_NCOND ||
+                (buf[o + 2] & 31u) >= CRL_NVOIC || (!buf[o + 1] && !buf[o + 2])) {
+                crl_zero(d, crl_data_size(0));
+                return 0;
+            }
+            d->st[s][0] = buf[o + 1];
+            d->st[s][1] = buf[o + 2];
+            prev = s;
+        }
+    }
     d->len = len;
     d->nev = (uint16_t)nev;
     d->nlayers = (uint8_t)nl;

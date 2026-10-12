@@ -2,16 +2,17 @@
 # editor"): a step sequencer since 2026-10-12: a step is a sixteenth whatever Quantize says, a step's length is its
 # NOTE's length. The PLAY menu open throughout. Chords: MAJ = A#3, MIN = G#3.
 # A. Step (ALGORITHM +4), Length Free, Quantize none: REC, D, Em, G, REC: a loop of exactly 3 steps (72 ticks).
-# B. EDIT (Quantize still none): the editor opens (until 2026-10-12: "set Quantize to edit"). KNOB 3 +13: 16 steps.
-# C. SELECT +1: step 2; MIN + A4: the step is Am now (replaced), heard. KNOB 2 +3: its note 4 steps long: nothing
-#    moves (G still on step 3, the loop still 384). SELECT +1: step 3 (G, 1 long); REC: cleared (no recording).
-#    KNOB 3 -14: the loop 2 steps (48); KNOB 3 +1: 3; KNOB 3 -1: 2. SELECT +1 wraps to step 1; KNOB 4 -2: its velocity
-#    92. LOOP: plays in the editor (the playhead); LOOP: stops.
-# D. The ways out, each back to the PLAY menu (layer 8): OCT-; EDIT, OCT+; EDIT, HOME; EDIT, EDIT held (no engine
-#    picker); EDIT, EDIT tapped. PRESETS / ALGORITHM / GLO in the editor: nothing.
+# B. EDIT (Quantize still none): the editor opens (until 2026-10-12: "set Quantize to edit"). KNOB 2 +13: 16 steps.
+# C. PRESETS +1: step 2; MIN + A4: the step is Am now (replaced), heard. KNOB 1 +3: its note 4 steps long: nothing
+#    moves (G still on step 3, the loop still 384). PRESETS +1: step 3 (G, 1 long); REC: cleared (no recording).
+#    KNOB 2 -14: the loop 2 steps (48); KNOB 2 +1: 3; KNOB 2 -1: 2. PRESETS +1 wraps to step 1; KNOB 4 -2: its velocity
+#    92. GLO tapped: nothing (the keys play). LOOP: plays in the editor (the playhead); LOOP: stops.
+# D. The ways out, each back to the PLAY menu (layer 8): EDIT; EDIT, HOME; EDIT, EDIT held (no engine picker); and
+#    OCT- / OCT+ do NOT close it since 2026-10-13 (the octave: cr_loop_trig.txt).
 # E. Slot 2 (PRESETS +1), Overwrite, Quantize none: a Free take played by hand; EDIT: it opens on the sixteenth grid,
-#    nothing moved; closed: the loop as it was. Slot 3 (empty): EDIT opens an empty pattern of a bar (16 steps); OCT-:
+#    nothing moved; closed: the loop as it was. Slot 3 (empty): EDIT opens an empty pattern of a bar (16 steps); HOME:
 #    the slot empty again.
+# (The pages, the cursor on PRESETS, the jumps, the snap, the octave keys: cr_loop_trig.txt.)
 wait 300
 btn PLAY down
 wait 500
@@ -46,10 +47,10 @@ btn EDIT
 wait 400
 shot build/emu/test/cr_le_1.ppm
 dump                          # 2: the editor, step 1 of 3 (Quantize none)
-knob KNOB3 +13
+knob KNOB2 +13
 wait 400
 dump                          # 3: 16 steps (384)
-knob SELECT +1
+knob PRESETS +1
 wait 300
 btn G#3 down
 btn A4 down
@@ -59,30 +60,28 @@ btn A4 up
 btn G#3 up
 wait 400
 shot build/emu/test/cr_le_2.ppm
-knob KNOB2 +3
+knob KNOB1 +3
 wait 400
 shot build/emu/test/cr_le_3.ppm
 dump                          # 4: step 2 is Am, its note 4 steps long; the loop still 384, 3 events
 wait 800
-knob SELECT +1
+knob PRESETS +1
 wait 300
 btn REC
 wait 400
 shot build/emu/test/cr_le_4.ppm
 dump                          # 5: step 3 cleared: 2 events, no capture
-knob KNOB3 -14
+knob KNOB2 -14
 wait 300
 dump                          # 6: 48 ticks, the extent 384
-knob KNOB3 +1
+knob KNOB2 +1
 wait 300
-knob KNOB3 -1
+knob KNOB2 -1
 wait 300
-knob SELECT +1
+knob PRESETS +1
 wait 300
 knob KNOB4 -2
 wait 300
-knob PRESETS +1
-knob ALGORITHM -1
 btn GLO
 wait 300
 btn PLAY
@@ -91,14 +90,18 @@ expect sound
 dump                          # 7: playing in the editor
 btn PLAY
 wait 800
-btn OCT-
+btn EDIT
 wait 300
 dump                          # 8: closed (the menu): 2 events, 48
 btn EDIT
 wait 300
 btn OCT+
 wait 300
-dump                          # 9
+btn OCT-
+wait 300
+dump                          # 9: OCT+ and OCT-: still open (the octave up and back)
+btn HOME
+wait 300
 btn EDIT
 wait 300
 btn HOME
@@ -136,7 +139,7 @@ btn EDIT
 wait 400
 shot build/emu/test/cr_le_take.ppm
 dump                          # 15: the editor open on it, the same length
-btn OCT-
+btn HOME
 wait 300
 dump                          # 16: closed: the take as it was
 knob PRESETS +1               # slot 3, empty
@@ -145,7 +148,7 @@ btn EDIT
 wait 400
 shot build/emu/test/cr_le_empty.ppm
 dump                          # 17: an empty pattern of a bar (16 steps), open
-btn OCT-
+btn HOME
 wait 300
 dump                          # 18: empty again
 btn OCT-

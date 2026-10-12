@@ -180,6 +180,7 @@ stops; in step entry OCT+ is a rest and OCT- a step back). Mock-ups: `design/cho
 | GLO tap | **the keys**: play (default) = the roots and the chord block play as on the chord view, so the menu stays open while you play into a take; loops = the slot shortcuts (white roots D4..F5 slots 1..10, D#4 held 1 s clear, F#4 undo) and their LED map, GLO lit. No Options from this menu. The Keys cell of 0.17 (KNOB 4) is gone: "get rid of the Keys / play shortcut and map this to the GLO button like in other pages" |
 | EDIT tap | **the loop editor** (below) |
 | REC tap / held | by the record mode / undo, as outside the menu |
+| LOOP held again | closes the menu. **With a knob turned while LOOP is still down the menu opens again and the knob acts in it** (2026-10-13): until then LOOP held + PRESETS with the menu already open chose a slot when turned within the hold time and changed the chord sound's preset when turned after it, the menu having closed under the hand ("sometimes in the play menu turning the preset knob ends up changing the preset"; `cu.hclosed`, `tools/emu/scripts/cr_loop_presetknob.txt`). The same for every layer's own button |
 
 The bottom line (`foot`, as the KEY layer's label and footer): `1/2 · keys: play · GLO: loops` (the page, what the
 keys do, what GLO makes them); in step entry and in the editor their own.
@@ -263,33 +264,94 @@ changing it moves no other step and does not change the loop's length. A long no
 and those steps still play: the voices are the looper's eight (`CR_MAX_LOOPV`; when all are busy the one that would
 end first is taken), each chord its own voice, so a held chord and the next step's chord sound together as two chords
 played on the keys would. The steps are read from the events each time (`cr_loop_ed_map`: one pass, a page of 64
-steps as two 64-bit maps: 24 bytes in the POOL, the editor's only buffer; 520 bytes before), and **the record's format
-is unchanged**: `t` and `dur` are what the record always had; no new field, no flag, version 1, and 0.14 .. 0.17 read
-an edited loop's record as any other (`tests/cr_loop_test.c s_edit`; `old_unpack_ok`).
+steps as three 64-bit maps: 32 bytes in the POOL, the editor's only buffer; 520 bytes before), and **the notes need
+nothing new in the record**: `t` and `dur` are what the record always had (a part of a step is a `dur` of 6, 12 or 18),
+version 1, and 0.14 .. 0.17 read an edited loop's record as any other (`tests/cr_loop_test.c s_edit`;
+`old_unpack_ok`). Only a step's ratchet, condition, chance and voicing are stored for the editor (below, and "Byte 7").
 
 | gesture | does |
 | --- | --- |
 | EDIT tap in the PLAY menu | opens it (`cr_loop_ed_open`), **at any Quantize setting** (the first build refused a loop with Quantize none: `set Quantize to edit`). Refused: a slot switch on its way (`a slot is on its way`); a capture open (`end the take first`). An empty slot: an empty pattern of the set Length (Free: a bar, 16 steps; more than 64 steps: its first whole bars within 64), which is the slot empty again if nothing is entered |
-| SELECT, KNOB 1 | the step cursor, wrapping at the loop's end (`cu_ledit_move`) |
+| PRESETS | the **step cursor**, a step a detent, wrapping at the loop's end (`cu_ledit_move`). **GLO held + PRESETS**: 8 steps a detent, wrapping the same way. Never the slot, never the chord sound, while the editor is open. (Until 2026-10-13 the cursor was SELECT and KNOB 1) |
+| SELECT | the editor's **page**, clamped: 1 **Step**, 2 **Trig** (`cu.le_page`, the first whenever it opens). The page's name stands where the record mode does, with the picker's two marks; the bottom line begins `1/2` / `2/2` |
+| ALGORITHM | the selected step's **voicing**, on both pages (the same value as Trig's KNOB 3; on the Step page, which has no cell for it, the message `step voicing: +2`) |
+| OCT- / OCT+ | the **octave**, exactly as on the view (the popup, -2 .. +2): what is played into a step next is entered there. They closed the editor until 2026-10-13 |
 | the keys | they play, as on the view (auditioned by the chord engine). A gesture's end writes its chord INTO the selected step, replacing its notes: the first key of a new push (no gesture open) clears, the keys of one push add up (`crl_ed_write`, `ed_w`). **By side** (3y9's rule): a bass-side note (Split Bass) replaces the step's bass-side notes, anything else the chord side. The new notes start on the step's tick and are **as long as the step's notes were** (one step on an empty step) |
-| | **The cursor stays on the step** (it does not advance as Step entry does; an Elektron's grid recording stays on the selected trig too): an editor's step is tried, heard and tried again. SELECT moves on |
-| REC tap | clears the selected step (`cr_loop_ed_clear`): no recording in the editor |
-| KNOB 2 | **Note len**: how long the selected step's notes sound, 1 .. 64 steps (`cr_loop_ed_setnlen`; shown: the longest of them, a part of a step counted whole, `cr_loop_ed_nlen`). Whole steps only: the event format could carry a shorter gate, but no control was asked for one. A note played off the grid keeps its start and ends on the grid. Nothing else moves. An empty step has none (`-`). Longer than the loop: it sounds across the loop's start |
-| KNOB 3 | **Steps**: the loop's length, 1 .. 64 steps, a step a detent (`cr_loop_ed_len`): shorter hides the last step (its events stay in RAM beyond the end, unheard), longer brings it back, and past what there was adds an empty step; `64 steps at most`. **The hidden steps are deleted when the editor closes**; a save while it is open writes what sounds (`cr_loop_pack` skips events beyond the end). A loop played to a length off the grid: the first detent up makes its last step whole. A take longer than 64 steps can be made shorter, not longer |
+| | **The cursor stays on the step** (it does not advance as Step entry does; an Elektron's grid recording stays on the selected trig too): an editor's step is tried, heard and tried again. PRESETS moves on |
+| REC tap | clears the selected step (`cr_loop_ed_clear`): its notes and its ratchet, condition, chance and voicing. No recording in the editor |
+| **page 1 "Step"** | |
+| KNOB 1 | **Note len**: how long the selected step's notes sound: `1/4`, `1/2`, `3/4` of a step (6, 12, 18 ticks: `cr_loop_ed_setnfrac`), then 1 .. 64 steps (`cr_loop_ed_setnlen`), one scale, a value a detent. Shown: a part when the step's longest note is exactly 6, 12 or 18 ticks and none of its notes sounds past the step's end (`cr_loop_ed_nfrac`); otherwise the whole steps as before (the longest, a part of a step counted whole, `cr_loop_ed_nlen`: a note of 10 ticks reads `1`). A part is a gate from where the note starts; a whole length ends on the grid (a note played off the grid keeps its start). Nothing else moves. An empty step has none (`-`). Longer than the loop: it sounds across the loop's start |
+| KNOB 2 | **Steps**: the loop's length, 1 .. 64 steps, a step a detent (`cr_loop_ed_len`): shorter hides the last step (its events stay in RAM beyond the end, unheard), longer brings it back, and past what there was adds an empty step; `64 steps at most`. **The hidden steps are deleted when the editor closes**; a save while it is open writes what sounds (`cr_loop_pack` skips events beyond the end). A loop played to a length off the grid: the first detent up makes its last step whole. A take longer than 64 steps can be made shorter, not longer. **GLO held + KNOB 2** snaps (`cu_ledit_snap`): the next of 8, 16, 32, 48, 64 steps in the turn's direction (3/4 and 6/8, 12 steps a bar: 12, 24, 36, 48); none further that way: it stays. One snap a turn event, however fast the knob |
+| KNOB 3 | **Chance**: how likely the step plays on a pass: 100 (default), 90, 75, 60, 50, 40, 25, 10 % (`CRL_CHANCE_PCT`; clockwise = more) |
 | KNOB 4 | the step's velocity (the event format's `vel`; the highest of its events shown) |
+| **page 2 "Trig"** | |
+| KNOB 1 | **Ratchet**: Off, x2, x3, x4 |
+| KNOB 2 | **Condition**: Always; 1:2, 2:2; 1:3, 2:3, 3:3; 1:4, 2:4, 3:4, 4:4; 1st; not 1st |
+| KNOB 3 | **Voicing**: Follow, -12 .. +12 (as ALGORITHM) |
+| KNOB 4 | nothing |
 | LOOP tap | play / stop from the loop's start, as ever; the cursor does not follow the playback, the playhead shows it. A length changed under the playhead: the playhead where it is in the new cycle (`crl_ed_renorm`) |
 | REC held | the looper's undo, as outside (below) |
-| PRESETS, ALGORITHM, GLO | nothing |
-| OCT- / OCT+ / HOME / EDIT tapped / EDIT held again | close it, back to the PLAY menu (`cr_loop_ed_close`): nothing to confirm, an edit is applied when it is made. LOOP held again, another layer, a revert: the menu and the editor close |
+| GLO tapped | nothing (the keys play; GLO held is the shift of PRESETS and Steps above) |
+| HOME / EDIT tapped / EDIT held again | close it, back to the PLAY menu (`cr_loop_ed_close`): nothing to confirm, an edit is applied when it is made. LOOP held again, another layer, a revert: the menu and the editor close. A knob turned while EDIT is still down after closing it by the hold does nothing (it would be the PLAY menu's: PRESETS there is the slot) |
+
+### Ratchet, condition, chance, voicing (2026-10-13; `crl_data_t.st`, `cr_loop.c crl_play_ev`)
+
+The owner: "maybe do a ratchet on a step we can enable. Conditional steps would also be good ... Algo knob to change the
+voicing per step"; and Chance, which took the place of the random conditions. **They belong to the STEP**: to every
+event that starts in it, the chord side and the bass side alike. An empty step has none (the cells show `-`, nothing
+can be set); clearing a step clears them; replacing a step's notes keeps them.
+
+- **Ratchet** (x2, x3, x4): the step's notes strike that many times, evenly inside ONE step (12, 8, 6 ticks apart).
+  Each hit is as long as the slice; if Note len is a part of a step, that part of the slice (x2 on a 1/2-step note:
+  two hits of 6 ticks, 12 apart; never under a tick). A note longer than a step ratchets inside its own step and is
+  silent after it: a ratchet replaces the note's length.
+- **Condition**: `A:B` plays on pass A of every B passes of the loop, **counted from when the loop starts playing**
+  (LOOP from stopped, a take committed into playback, a slot taken at the end of a cycle: pass 1 again); `1st` only on
+  the first pass, `not 1st` on every other.
+- **Chance**: the step plays on a pass when its condition is met AND its roll passes. **One roll per step per pass**:
+  the chord, the bass-side note and every hit of a ratchet come or stay away together.
+- **Voicing**: `Follow` (default) = the live voicing, as every loop plays; a fixed rotation -12 .. +12 (the range of
+  KNOB 1 on the view: `cr_engine.c CR_VOICE_MIN / MAX`) is used for that step's chords instead, and a live voicing
+  change while they sound leaves them alone (`cr_loop_event_v`, `CR_LOOP_FIXV`). Single notes and bass-side notes are
+  not voiced, so it does nothing to them.
+
+**Storage: a table, two bytes a step, for the loop's first 64 steps** (`crl_data_t.st[64][2]`: ratchet 2 bits,
+condition 4; voicing 5, chance 3). A table rather than bits in the events because an event has 3 spare bits and these
+need 14, and widening `crl_ev_t` would cost 512 x 2 bytes in each of the two copies of a loop. What follows from it:
+
+- **A take longer than 64 steps** has them on its first page only: on a later page the cells show `-`.
+- **A take played by hand**: the properties are its steps', i.e. of the events that start in them (`t / 24`); opening
+  and closing the editor moves no byte of the loop (the table included).
+- **What keeps the table right**: a fresh take, a pattern committed by step entry and a clear zero it (a new loop);
+  the editor's REC, its close (the steps Steps hid) and the looper's undo drop the entries of steps no event starts
+  in any more (`crl_st_prune`; an event a Replace layer hid counts, so undoing that layer brings step and properties
+  back); an overdub's or a Replace layer's events take the properties of the steps they land in; Quantize moves
+  events, never entries; a slot's loop comes with its own table (`cr_loop_set` / `cr_loop_queue`: the whole
+  `crl_data_t`). The first property set is an edit like any other: the loop becomes one layer.
+
+**In the audio ISR** (estimated from the source, not yet counted in the device's disassembly): per event fired, one
+divide by the constant 24 (the step), two table bytes and two tests, about 15 instructions when the step has nothing;
+a condition adds a table word and a shift (no division: the pass is kept mod 12, which 2, 3 and 4 divide); a chance
+adds two multiplies and a compare; a ratchet about 20 once, then each further hit is one `cr_loop_event_v`, the cost
+of any chord's note-on. Per tick, the voices' loop (8) has one more compare for a voice in use. **A ratchet stays on
+its one loop voice** (`pv[].used` 2 = waiting for the next hit, the chord kept in `pv[]` so a hit never reads an event
+that an edit or a slot switch took away): it can never hold more voices than a plain note, and a stop, a clear of the
+step, a Replace cut or a stolen voice ends its hits.
+
+**The rolls** are xorshift32 (the engine's `crx_rand` algorithm, the looper's own state `crl.rnd` so the arp's random
+order is not disturbed): a new word each pass, stirred with the loop's clock at every start, hashed with the step
+number for each step's roll. `cr_loop_seed` sets it: the same seed and timing give the same passes (the host tests).
 
 **The screen** (`CR_K_LOOPMENU` with `lm_mid = CR_LM_STEPS`, the step grid of Step entry: `cr_draw.c cr_lm_steps`): a
 bar a row, **four rows of 16: all 64 steps at a glance** (3/4 and 6/8: four rows of 12). A step with a note starting
-in it is red; a step a longer note still sounds in (half of it or more) is dark red (`lm_lane[1]`); an empty one grey;
+in it is red (**with a 3 px notch out of its top right corner when it has a ratchet, a condition or a chance under 100 %**:
+`lm_lane[3]`, `crl_edmap_t.trig`); a step a longer note still sounds in (half of it or more) is dark red (`lm_lane[1]`); an empty one grey;
 the grid ends where the loop ends (`lm_steps`). The cursor is the red outline. The steps the **selected** step's note
 sounds on into carry a white line along their bottom (`lm_lane[2]`), so turning KNOB 2 is seen to stretch the note
 over the following steps and to move nothing. While the loop plays, the step being played is white (grey when empty:
 `CR_LM_PLAY` in `lm_pos`; only its rows' strips are redrawn). Under the grid the selected step's chord, big, and `step
-5/16`; the cells Step / Note len / Steps / Velocity. **A take longer than 64 steps is paged**: the cursor walks all its
+5/16`; the cells Note len / Steps / Chance / Velocity (page 1) or Ratchet / Condition / Voicing (page 2); the bottom
+line `1/2 · PRESETS: step · REC: clear · EDIT: done`. **A take longer than 64 steps is paged**: the cursor walks all its
 steps and the grid shows the 64 the cursor is in (`step 70/128 · p2`); one page was chosen over a scrolling row
 because a pattern fits it whole, and a page turns only for loops no step sequencer made.
 
@@ -303,7 +365,9 @@ an edit, the loop and its layers are untouched.
 
 **Saving**: edits are in RAM and set `crl.dirty`, like a take: the global save and leaving the slot write them.
 
-**Cost**: 520 bytes of POOL (`cu_le_map`), about 16 bytes in `cr_loop_t`; no copy of the loop. The UI rebuilds its view only
+**Cost**: 32 bytes of POOL (`cu_le_map`; 24 before the notch's map); in RAM the steps' table, 128 bytes in each of the
+two `crl_data_t` (the loop and the staged slot), 64 for the voices' ratchet state and a few bytes of state: 352 in all
+(RAM 80168 -> 80520 B, POOL 326600 -> 326608 B, flash +3520 B on 2026-10-13); no copy of the loop. The UI rebuilds its view only
 when the events change (`crl.gen`) or the cursor moves, with the IRQ off for the two passes; the operations run with
 the IRQ off from the UI thread, as `cu_rec`'s stop does.
 
@@ -360,9 +424,10 @@ sample slot 3's 80 KiB (0xC8000..0xDBFFF; ChoralRoot has no SAMPLE engine (`FELU
 sample objects, so nothing else writes it; a Felucca build's `eng_sample.c` ignores non-sample data): slot k copy c at `0xC8000 + (2k + c) * 4 KiB`, header type `0x4C30 + k`. Payload (little-endian):
 
 ```
-0  u32 "CRL1"   4 u8 version 1   5 u8 sig   6 u8 nlayers   7 u8 flags (bit 0 CRL_RF_PART; 0 until 0.17)
+0  u32 "CRL1"   4 u8 version 1   5 u8 sig   6 u8 nlayers   7 u8 flags (bit 0 CRL_RF_PART, bit 1 CRL_RF_STEP; 0 until 0.17)
 8  u32 len (ticks)   12 u16 nev   14 u16 ppqn (96)
 16 nlayers x u16: events per layer, then nev x 7 bytes: t u16, dur u16, root, vel, qx
+then, with CRL_RF_STEP: u8 n (1 .. 64), n x 3 bytes: step (0 .. 63, ascending), st[0], st[1]
 ```
 
 Unpack checks everything (magic, version, ppqn, counts, each field's range) and refuses a bad record as empty: a
@@ -378,6 +443,27 @@ loop without one is written byte for byte as 0.17 wrote it. The version stays 1 
   `tests/cr_loop_test.c old_unpack_ok` is those checks). The bass-side notes play as single notes of the chord part,
   which is what 0.17 itself recorded. If that firmware then writes the loop again (a stop after a change, a switch),
   it writes flags 0 and the bass side is lost for good; a loop only played or left alone keeps its record.
+**Bit 1, `CRL_RF_STEP` (0.18, 2026-10-13): the steps' properties follow the events**: a count, then `{step, st[0],
+st[1]}` for each step that has a property AND a stored event, ascending. `st[0]` = ratchet (bits 0-1) | condition << 2
+(0 .. 11); `st[1]` = voicing (bits 0-4: 0 Follow, 1 .. 25 = -12 .. +12) | chance << 5 (0 .. 7 = 100 90 75 60 50 40 25
+10 %).
+
+- **A loop that uses none** is written without the flag and without the bytes: byte for byte the record of before
+  (`tests/cr_loop_test.c s_trig`: compared with a copy of the old packer).
+- **`CRL_REC_MAX` is what it was (3664)**: the entries go in the room the events leave, so the pending-save buffer in
+  the POOL did not grow and no record is longer than an older firmware's slot reader accepts. All 64 entries fit up
+  to 494 events (one layer); at the 512-event cap 20 do. The editor refuses a step's first property when its entry
+  would not fit (`loop too full`, `CRL_ED_NOROOM`); the one way past that check is to overdub more events onto a loop
+  that already has entries until fewer fit: then the save keeps the lowest steps' entries and drops the rest.
+- **Unpack checks the table as it checks everything**: no entry, a step past 63 or out of order, an unknown condition
+  or voicing, a record cut short: the record is refused as empty.
+- **An older record in this build** (0.14 .. 0.17, main before this): loads unchanged, the table all zero.
+- **This record in 0.14 .. 0.17 and in main before this**: accepted whole, as an unknown flag is today: their unpack
+  reads neither byte 7's other bits nor anything after the events (`old_unpack_ok` is those checks, run on such a
+  record), and the record is never longer than their `CRL_REC_MAX`. The loop plays without ratchets, conditions,
+  chances and step voicings (a part-of-a-step note plays right: it is only a `dur`). If that firmware writes the loop
+  again, the properties are gone from the record.
+
 - **Backup, restore, the device manager, `fm1_install.py`**: a slot is an opaque object (40..49); the firmware
   validates a restored one with `cr_loop_unpack`, the manager's header line (`loopHeader`: bars, time signature,
   layers, events) reads neither byte 7 nor the events. A backup taken on 0.18 restores on 0.17 and the other way.
@@ -385,5 +471,5 @@ loop without one is written byte for byte as 0.17 wrote it. The version stays 1 
 ## Caps
 
 512 events per loop (all layers, a Replace layer's hidden events and its cut copies included; 4 KiB in RAM + a 4 KiB staging copy for slot switches; 3.6 KiB record, and
-3664 bytes in the POOL for the loop being left, packed; 24 bytes there for the editor's map: a page of 64 steps),
+3664 bytes in the POOL for the loop being left, packed; 32 bytes there for the editor's map: a page of 64 steps),
 32 layers, 16 open gestures, 8 loop voices, 65535 ticks; a step-entered pattern 64 steps. Reaching the event cap ends the take ("loop full").

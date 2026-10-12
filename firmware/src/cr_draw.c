@@ -2090,7 +2090,8 @@ static void cr_lm_timeline(const cr_screen_t *s, uint16_t col)
 /* the step grid (FORMAT.md `steps`): a row per bar (four at most), sixteen steps across (2 px more every four); the
  * filled steps (lm_lane[0]) red, the steps a longer note still sounds in (lm_lane[1]) a dark red, the others grey; the
  * step being played (CR_LM_PLAYED: the loop editor's playhead) white when filled, light grey when not; the steps the
- * cursor step's note sounds on into (lm_lane[2]) a 2 px white line along the cell's bottom; the cursor
+ * cursor step's note sounds on into (lm_lane[2]) a 2 px white line along the cell's bottom; the steps with a ratchet,
+ * a condition or a chance under 100 % (lm_lane[3], the loop editor) a 3 px notch out of the cell's top right corner; the cursor
  * (lm_pos) a 2 px red outline in a 1 px background ring, not drawn while CR_LM_CUR_OFF (its blink); `sub` (the step's
  * chord) 15 px under the grid at the left, `value` 12 px grey at the right; lm_steps: the cells after that many are
  * not drawn (the loop editor: the loop ends there) */
@@ -2111,6 +2112,7 @@ static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
                 cr_frect(xx, yy, cw, 7 * 16, ph == st + 1u ? (on ? T_TEXT : T_MID)
                                              : on ? col : (s->lm_lane[1] >> st) & 1u ? tail : T_LINE);
                 if ((s->lm_lane[2] >> st) & 1u) cr_frect(xx, yy + 5 * 16, cw, 2 * 16, T_TEXT);
+                if ((s->lm_lane[3] >> st) & 1u) cr_frect(xx + cw - 3 * 16, yy, 3 * 16, 3 * 16, T_BG);   /* the notch */
                 if (st == cur && curon) {            /* (the steps after it cover its ring, as the designer's) */
                     cr_srect(xx - 48, yy - 48, cw + 96, 7 * 16 + 96, 16, T_BG);
                     cr_srect(xx - 24, yy - 24, cw + 48, 7 * 16 + 48, 32, col);
