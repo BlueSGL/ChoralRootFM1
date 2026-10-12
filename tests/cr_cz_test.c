@@ -6,7 +6,8 @@
  * Checks: the engine's place (14, after the VA in the picker order), Casio's 64 tones (valid, A-1 BRASS 1 .. H-8
  * TYPHOON, the PRESETS names); every factory tone through the 144-byte blob and back, a bad blob = the init tone;
  * every factory tone rendered (three notes, velocity 127 and 1, held then released) without overflow and not
- * silent; Casio SysEx: a 144-byte tone dump (7n 30) -> the part's tone -> the dump cz_store.c sends on a send
+ * silent; the pops (a sounding note struck again goes on from its level, the DCW depth is ramped across a block: no
+ * step of the sample at a note-on or at a block's edge, docs/CZ1.md "Pops"); Casio SysEx: a 144-byte tone dump (7n 30) -> the part's tone -> the dump cz_store.c sends on a send
  * request (7n 11 60) identical; a 128-byte (CZ-101) dump gets the CZ-1 defaults; a bad dump is refused; the banks
  * (A..D Casio's, E..H empty; BANK / PTCH load their tone; a bank exported and imported through the backup's objects
  * 14..21); the deep page table (37 pages: titles, sections, every column's get / set at its min / max / default, the
@@ -115,6 +116,44 @@ static int32_t render_peak(track_t *t, uint32_t vel)
     return peak;
 }
 
+/* The part's own render (voice.c track_render: the sum of its voices before LEVEL) of tone k, one note through
+ * trk_note_on, for the pops' checks (docs/CZ1.md "Pops"). pop_render: nb blocks more; the largest sample-to-sample
+ * step at a block's first sample (*edge: from the block before) and inside the blocks (*in), the largest |sample| of
+ * the first 16 samples (*head) and of all (returned). */
+static int32_t pop_last;
+static void pop_start(track_t *t, uint32_t k)
+{
+    memset(t->v, 0, sizeof t->v);
+    t->engine = t->eng_req = ENGI_CZ;
+    t->p[P_VOICE] = V_POLY;
+    t->p[P_GLIDE] = 0;
+    cz_blob_preset(t, k);
+    pop_last = 0;
+}
+static int32_t pop_render(track_t *t, uint32_t nb, int32_t *edge, int32_t *in, int32_t *head)
+{
+    int32_t out[CTL], pk = 0, d;
+    uint32_t b, i;
+    *edge = *in = *head = 0;
+    for (b = 0; b < nb; b++) {
+        track_render(t, out, CTL);
+        for (i = 0; i < CTL; i++) {
+            d = out[i] - (i ? out[i - 1u] : pop_last);
+            d = d < 0 ? -d : d;
+            if (!i)
+                *edge = d > *edge ? d : *edge;
+            else
+                *in = d > *in ? d : *in;
+            d = out[i] < 0 ? -out[i] : out[i];
+            pk = d > pk ? d : pk;
+            if (!b && i < 16u)
+                *head = d > *head ? d : *head;
+        }
+        pop_last = out[CTL - 1u];
+    }
+    return pk;
+}
+
 int main(void)
 {
     static uint8_t frame[600];
@@ -164,6 +203,93 @@ int main(void)
     for (k = 0, bad = 0; k < 2048u; k++)
         bad += CZ_CARRIER[k] != (pd_cos((k << 5) + (k >> 6)) + 32767) >> 1;
     OK(!bad && NELEM(CZ_CARRIER) == 2048u, "carrier: CZ_CARRIER's 2048 phases are (pd_cos + 32767) >> 1, each");
+
+    /* ---- the slopes' table is the two divides of cz_native_pd ---- */
+    for (k = 1, bad = 0; k < 2048u; k++)
+        bad += CZ_RECIP[k] != (1024u << 16) / k;
+    OK(!bad && NELEM(CZ_RECIP) == 2048u, "slopes: CZ_RECIP[x] is (1024 << 16) / x for x = 1 .. 2047");
+
+    /* ---- pops (docs/CZ1.md "Pops"): a note struck again goes on from its level; the DCW depth is ramped ---- */
+    {
+        uint8_t eng = t->engine, req = t->eng_req;
+        int32_t edge, in, head, pk0, in0, edge1, in1, head1, worst = 0, wk = 0;
+        uint32_t fails0 = 0, low = 0;
+        /* A-5 STRINGS 2, C5 held 0.7 s (at its sustain), the same key again (voice.c voice_alloc: the sounding voice
+         * is the note's): the first sample after it is no step and the level does not fall away. (The DCA started at
+         * 0 again: a step of the sample's size, then the attack from silence.) */
+        pop_start(t, 5);
+        trk_note_on(t, 72, 100);
+        pop_render(t, 600u * FS / (1000u * CTL), &edge, &in, &head);
+        pk0 = pop_render(t, 100u * FS / (1000u * CTL), &edge, &in0, &head);
+        in0 = edge > in0 ? edge : in0;
+        trk_note_on(t, 72, 100);
+        head1 = pop_render(t, 3, &edge1, &in1, &head);
+        OK(edge1 <= in0 + in0 / 2 && in1 <= in0 + in0 / 2 && head1 * 3 >= pk0,
+           "pops: a sounding note struck again: its first sample steps %d (the held note's largest step %d), the next "
+           "three blocks (a cycle of C5 and more) peak at %d of %d", (int)edge1, (int)in0, (int)head1, (int)pk0);
+        /* .. every tone, let go and struck again in the same block (a chord change's common tone), and 60 ms after
+         * (the arp): the step at the new note's first sample is at most 1.5 times the largest of the 100 ms before */
+        for (k = 0; k <= CZ_FACTORY_N; k++) {
+            uint32_t gap;
+            for (gap = 0; gap < 2u; gap++) {
+                pop_start(t, k);
+                trk_note_on(t, 48, 127);
+                pop_render(t, 300u * FS / (1000u * CTL), &edge, &in, &head);
+                pop_render(t, 100u * FS / (1000u * CTL), &edge, &in0, &head);
+                in0 = edge > in0 ? edge : in0;
+                trk_note_off(t, 48);
+                if (gap) {
+                    pop_render(t, 60u * FS / (1000u * CTL), &edge, &in, &head);
+                    in0 = edge > in0 ? edge : in > in0 ? in : in0;
+                }
+                trk_note_on(t, 48, 127);
+                pop_render(t, 1, &edge1, &in1, &head1);
+                if (edge1 > in0 + in0 / 2 && edge1 > 400) {
+                    fails0++;
+                    if (edge1 > worst) {
+                        worst = edge1;
+                        wk = (int32_t)k;
+                    }
+                }
+            }
+        }
+        OK(!fails0, "pops: INIT TONE and the 64, C3 let go and struck again at once and 60 ms later: no step at the new "
+                    "note's first sample (%u of 130 step; the worst %d, tone %d)", (unsigned)fails0, (int)worst, (int)wk);
+        /* B-5 SYNTH.BASS and every other tone at C2, a new note: the first 40 blocks, where the DCW envelope rises a
+         * fifth of its range a block. The step at a block's first sample is no larger than the steps inside the
+         * blocks. (The depth was a block's: the phase function stepped at the block's edge, the sample with it.) */
+        for (k = 0, worst = 0; k <= CZ_FACTORY_N; k++) {
+            pop_start(t, k);
+            trk_note_on(t, 36, 127);
+            pop_render(t, 40, &edge, &in, &head);
+            if (edge > 2 * in && edge > 400) {
+                low++;
+                if (edge > worst) {
+                    worst = edge;
+                    wk = (int32_t)k;
+                }
+            }
+        }
+        OK(!low, "pops: INIT TONE and the 64 at C2, the attack's 40 blocks: no step at a block's edge above twice the "
+                 "largest inside the blocks (%u tones step; the worst %d, tone %d)", (unsigned)low, (int)worst, (int)wk);
+        {   /* cz_native_pd: the ramp starts at the last block's depth and ends at this block's; none when it is the same */
+            cz_hw_pd_t pd;
+            uint32_t pk[3] = {0, 0, 0};
+            cz_native_pd(&pd, 0, 300, pk, CTL);
+            bad = pd.dstep != 0 || pd.pivot != 724u || pd.k0 != CZ_RECIP[724] || pd.k1 != CZ_RECIP[1324];
+            cz_native_pd(&pd, 0, 500, pk, CTL);
+            bad += pd.dq != 300u << 16 || pd.dq + pd.dstep * CTL != 500u << 16 || pd.pivot != 524u;
+            cz_native_pd(&pd, 0, 100, pk, CTL);
+            bad += pd.dq != 500u << 16 || pd.dq + pd.dstep * CTL != 100u << 16;
+            cz_native_pd(&pd, 0, 100, pk, CTL);
+            bad += pd.dstep != 0;
+            OK(!bad, "pops: cz_native_pd ramps the depth from the last block's to this block's (300 -> 500 -> 100), none "
+                     "on a new voice or when it did not change");
+        }
+        memset(t->v, 0, sizeof t->v);
+        t->engine = eng;
+        t->eng_req = req;
+    }
 
     /* ---- every factory tone renders ---- */
     {

@@ -23,7 +23,7 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "slicer_track",
          "slice_render", "slc_rev",                          # SLICE (eng_slice.c): the render, the reverse windows
          "va_render", "va_block",                            # VA (eng_va.c, ChoralRoot): the voice, the part's LFOs
-         "cz_native_render", "cz_native_line", "cz_native_noise", "cz_env_tick",   # CZ-1 (cz_native.c, Melodee's): the voice, a line's loops (one per wave and window), line 2 with NOISE, envelopes
+         "cz_native_render", "cz_native_line", "cz_native_line_mv", "cz_native_noise", "cz_env_tick",   # CZ-1 (cz_native.c, Melodee's): the voice, a line's loops (one per wave and window; _mv: the same with the DCW depth ramped a sample at a time, for the blocks in which it changes), line 2 with NOISE, envelopes
          "quad_render", "quad_block",                        # FM TONE (eng_quad.c, code name QUAD, ChoralRoot): the voice, the part's macros
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
