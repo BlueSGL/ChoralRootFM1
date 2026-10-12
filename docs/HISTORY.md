@@ -1141,3 +1141,38 @@ on the unit. The test plan is docs/USB-AUDIO.md "The owner's test plan".
 - Tools: `tools/master_transient.py`, `master_measure chain`, `tools/master_listen_la.py`, `tools/emu/wavlag.py`,
   `classic_exact.sh REF_CLASSIC=1`. Listening files: `../audio-0.19/lookahead/`. Also: the site's Options list had no
   Output and no Reset Settings. Not run: the browser emulator's test (no emcc); nothing on the device.
+
+## 2026-10-12 (the Options leave the keys alone)
+
+**The owner: "The Global settings menu uses the keyboard for shortcuts to settings, but it isn't really helpful, and
+also makes it difficult to compare clean and classic, let's make it so the keyboard stays unchanged when entering the
+menu and I can still play notes."**
+
+- **Before**: with the Options open the 18 root keys were the menu's: the eleven white ones jumped to entries 0 .. 10
+  (Play Style .. Raw Chord Sound), the black ones did nothing, none sounded (`cu_key_press` swallowed them), the
+  white roots' LEDs drew that map (the selected entry's key lit). The chord keys and B3 already kept their jobs. The
+  key pump (`cr_ui_pump`) stood back on the Options page.
+- **Now**: no Options case in `cu_key_press`, in `cr_ui_pump`'s condition or in `cr_leds`: the keys, their LEDs and
+  the pump are the view's (chords, LOCK, Key Mode, Split, the Full keyboard, the arp, LATCH, a take being recorded,
+  step entry's chords). OPT's LED still says the menu is open.
+- **The menu's controls, unchanged**: SELECT moves (clamped at both ends; every entry was always reachable by it,
+  the keys reached eleven of 23), KNOB 1 sets (Velocity in fours), OCT- / OCT+ / HOME / OPT close, OCT+ on Calibrate
+  starts it, OCT+ twice on Reset Settings (and on SAFE MODE's Flash Data) confirms. KNOB 2 .. 4, PRESETS and
+  ALGORITHM fall through to their view jobs, as they did. No entry needed a key, so nothing got a new control.
+- **Confirmations**: no key ever confirmed or cancelled one and none does: Reset Settings' "OCT+ again" survives
+  playing; it is dropped by another entry, OCT-, HOME, OPT. The calibration reads buttons and knobs only; the note
+  keys are not scanned while it runs (a key let go during it is released when it ends: as before).
+- **Changing a setting under held notes** (each of the 20 turned up and down under a held chord with the bass, in
+  the emulator): no voice dropped, retriggered or left hanging, no click by `wavclicks` anywhere but the strike.
+  Output fades over (fx.c). Play Style clears Free's held voices (`cr_set_playstyle`, as ever); the others act on the
+  next gesture. On the unit USB Record leaves the bus for a second (the USB side, not the speaker: as ever; not in
+  the emulator); Dual Core waits for a restart.
+- **The screen**: a footer, "SELECT: move · OCT-: back · HOME" (it had none; no text ever named the shortcuts).
+  Mock-up state 12 has it; 0 lint findings, the ellipsised count unchanged.
+- **Left alone**: OPT tapped in the PLAY menu (Keys: Play / Loops) and in the KEY layer (pick / play), which do not
+  open the Options; every OPT-held combination; the 0.18 rule for a knob turned while a layer's button is held.
+- **Named, not changed**: OCT- / OCT+ close the menu, so the octave cannot be shifted in it; a chord held when
+  Calibrate starts sounds until the calibration ends.
+- Test: `cr_opt_keys.txt` in test_cr.sh. The manual's `options.png` re-shot. Stale: the designer's sheet
+  `design/choralroot-fm1-screens.png` (state 12 has a footer now). Not run: the browser emulator's test (no emcc; it
+  does not use the Options); nothing on the device.

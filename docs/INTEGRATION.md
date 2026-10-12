@@ -416,7 +416,11 @@ SEQ key's hold menu (metronome) still shows the click-level popup.
 Pickers (`cr_picker_t { items, n, sel, on_change }`): SELECT or a root key moves `sel` (the white
 roots index into the list), OCT+ confirms (`on_change` is already live for settings, so OCT+ only
 closes), OCT− / HOME leave. Options is a picker of settings whose KNOB 1 edits the value of the
-current one.
+current one, **and the one picker that takes no key** (0.19, the owner 2026-10-12): SELECT alone moves
+`cu.opt_sel`, the keys play as on the view (`cu_key_press` has no Options case, `cr_ui_pump` hands them
+to the engine between strips, `cr_leds` draws the playing state), KNOB 2..4 / PRESETS / ALGORITHM fall
+through to their view jobs as before; its footer reads "SELECT: move · OCT-: back · HOME". Until then
+the white roots jumped to the first eleven entries and no key sounded. Test: `cr_opt_keys.txt`.
 
 ## 4. Timing
 
@@ -570,8 +574,8 @@ and `key leds:` lines (per key 0 off 1 faint 2 dim 3 mid 4 lit).
 
 Who uses which level (`cr_leds`, Options > LEDs = Glow): **faint** (`nf`): the eight chord keys and B3 when idle
 (not held, not latched, LOCK off); **dim** (`nd`): every idle button, a note of the scale with Key Mode on, the KEY
-layer's MAJ / MIN "half", a layer's map on the roots (PLAY's / SAVE's slots, the list layers' entries, the Options'
-entries, the KEY layer's tonic picker with Key Mode off), a playing loop's notes (`ld`); **mid** (`nm`): the tonic's
+layer's MAJ / MIN "half", a layer's map on the roots (PLAY's / SAVE's slots, the list layers' entries, the KEY layer's
+tonic picker with Key Mode off; not the Options, which have none since 0.19), a playing loop's notes (`ld`); **mid** (`nm`): the tonic's
 keys; **lit** (`nl`, `own`): what sounds, is held, latched, on or selected. Key Mode off: the roots have no idle
 level at all (dark; the Full keyboard: all 27). Stock: unchanged: `nf`, `nd` and `nm` are all "idle" = lit, and with
 Key Mode off every root is still put in `nd` there (lit, a sounding one dark).
@@ -609,7 +613,7 @@ every key that plays is dark until it sounds (it glowed dim until 2026-10-12); o
 the editor, and the layers whose roots play (PERF, FX, LOCK, PLAY with Keys = Play, the engine picker (always, since
 0.18), KEY with keys: play), and the KEY layer on pick (its roots pick a tonic: the same picture; Key Mode off
 there: all dim). Not in the layers with their own map on the roots (PLAY's and SAVE's slots, BASS / SEQ / the view
-menu / the engine picker's lists, naming, the Options). Stock (two levels): the scale's keys lit, the tonic as the
+menu / the engine picker's lists, naming; the Options had one until 0.19: they show the playing state now). Stock (two levels): the scale's keys lit, the tonic as the
 rest, the others dark, a sounding one dark. The Full keyboard: all 27 keys carry that picture and every held key
 that plays is lit; the chord block's LEDs are not drawn. `cr_key_leds.txt`, the dump's `key leds:` line.
 layer maps on the roots while a layer is open; KEY,
@@ -1247,7 +1251,7 @@ LOCK latch, B3's tap), and stands back, leaving every edge untaken for the frame
 - a button is down, or was pressed or let go since the last scan, or a hold is armed (`fm1_in.buttons`, the edges,
   `cu.bheld`, `cu.armed`): a button's event comes before a key's, and a key during a hold opens a layer;
 - the root keys belong to the open layer (`cu_layer_keys`: KEY's pick, BASS, SEQ, the view menu, the PLAY menu
-  with Keys = Pick), to the naming page or to Options;
+  with Keys = Pick) or to the naming page (not to Options since 0.19: the keys play there, so they are pumped);
 - the panel is being calibrated.
 
 `cr_draw_idle` is set by `cr_ui_draw` around its own `cr_draw` only: the splash's draws, and `cu_flash_erase`'s

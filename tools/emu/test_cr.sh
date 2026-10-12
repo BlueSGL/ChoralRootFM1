@@ -2451,5 +2451,55 @@ wc_=$(python3 tools/emu/wavclicks.py "$OUT/cr_output_loud.wav" --from 1.0 | tail
 echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &&
     ok "and no jump, no hole, no click in it" || bad "the loud chord through Clean: $wc_"
 
+echo "the Options menu leaves the keys alone (0.19): they play as on the view, the menu is SELECT, KNOB 1 and the buttons"
+run cr_opt_keys --wav "$OUT/cr_opt_keys.wav"
+L="$OUT/cr_opt_keys.log"
+dl() { LC_ALL=C grep -a "^  $1" "$L" | sed -n "$2p"; }   # dl PREFIX N: the Nth dump's line that starts with PREFIX
+oe() { dl 'options:' "$1" | sed 's/^  options: //'; }
+[ "$(oe 1)" = "open 1 entry 2 of 23 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
+    dl 'cr: voices' 2 | grep -q '^  cr: voices 1 pending 0 notes-out 3 chord DM sounding 1 notes 62 66 69' &&
+    dl 'loopv:' 2 | grep -q 'stream-notes main 3 ' && ! has 'expect.*FAILED' "$L" &&
+    ok "MAJ + D4 with the menu open: D major sounds (62 66 69), three notes out on MIDI" \
+    || bad "a chord in the Options: $(dl 'cr: voices' 2) / $(dl 'loopv:' 2)"
+[ "$(oe 2)" = "$(oe 1)" ] && [ "$(oe 3)" = "$(oe 1)" ] &&
+    ok "the selection did not move: Secret Chords under D4, E4, A4 and F5 (they were the shortcuts to entries 0, 1, 4 and 9)" \
+    || bad "a key moved the Options' selection: '$(oe 2)' / '$(oe 3)'"
+dl 'key leds:' 2 | grep -q '^  key leds:111114111 400040040000400040 ' && has 'expect led GLO on .*: ok' "$L" && has 'expect led E4 off .*: ok' "$L" &&
+    ok "the key LEDs show the playing state (MAJ lit, D F# A lit on both octaves, the other roots dark), OPT lit" \
+    || bad "the key LEDs in the Options: $(dl 'key leds:' 2)"
+dl 'lock:' 4 | grep -q '^  lock: on 1 ' && dl 'lock:' 5 | grep -q '^  lock: on 0 ' && ok "B3 in the menu: LOCK on, and off again" \
+    || bad "B3 in the Options: $(dl 'lock:' 4)"
+om() { dl 'master:' "$1" | sed 's/^  master: //; s/ lowcut.*//'; }
+ov() { dl 'screen reads:' "$1" | sed -n "s/.*value '\([^']*\)'.*/\1/p"; }
+[ "$(om 5)" = "output Clean (chain 1, want 1, fade 0)" ] && [ "$(om 6)" = "output Classic (chain 0, want 0, fade 0)" ] &&
+    [ "$(om 7)" = "output Clean (chain 1, want 1, fade 0)" ] && [ "$(ov 5)/$(ov 6)/$(ov 7)" = "Clean/Classic/Clean" ] &&
+    dl 'part 0:' 6 | grep -q 'voices 3,' && dl 'part 0:' 7 | grep -q 'voices 3,' &&
+    ok "a chord struck in the menu, Output Clean -> Classic -> Clean by KNOB 1: the chain and the screen's value 60 ms after each turn, the three voices held" \
+    || bad "Output under a chord: $(om 5) / $(om 6) / $(om 7), the screen $(ov 5)/$(ov 6)/$(ov 7)"
+differ cr_opt_keys_classic cr_opt_keys_clean "Output in the menu with a chord held: the two values' screens differ"
+# (the chord is struck at 4.78 s and let go at 8.4 s; the turns are at 6.28 and 7.34 s. The window leaves the strike
+# out: wavclicks reads TINE EP's attack as a click, as every bright onset)
+wc_=$(python3 tools/emu/wavclicks.py "$OUT/cr_opt_keys.wav" --from 5.3 --to 8.3 | tail -1)
+echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &&
+    ok "no jump, no silent hole, no click at either change (5.3 .. 8.3 s)" || bad "Output switched under a chord struck in the menu: $wc_"
+sh_() { dl 'settings:' "$1" | sed -n 's/.* now \([0-9A-F]*\) .*/\1/p'; }
+echo "$(oe 8)" | grep -q "'Reset Settings' value 'OCT+ again: reset'" && [ "$(oe 9)" = "$(oe 8)" ] && [ -n "$(sh_ 8)" ] && [ "$(sh_ 9)" = "$(sh_ 8)" ] &&
+    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 35)" = "open 1 entry 2 of 23 'Secret Chords' value 'Simple'" ] &&
+    ! grep -aq 'settings reset' "$L" &&
+    ok "Reset Settings asked (OCT+ once): five keys neither confirm nor cancel it; OCT- leaves, nothing was reset (Secret Chords still Simple)" \
+    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 35)'"
+echo "$(oe 11)" | grep -q "^open 1 entry 21 of 23 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
+    || bad "Calibrate and the keys: '$(oe 11)' $(grep -a -m1 '^calib:' "$L")"
+n=0; i=0
+while [ $i -le 22 ]; do
+    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 23 '" && n=$((n + 1))
+    i=$((i + 1))
+done
+[ $n = 23 ] && echo "$(oe 34)" | grep -q "'Reset Settings'" && ok "every entry by SELECT alone: 23 of 23, Play Style to Reset Settings" \
+    || bad "the entries by SELECT: $n of 23"
+grep -aq '^loop: loop recorded (state 2 layers 1 events 1 ' "$L" && ok "a take played with the menu open is recorded (armed on the view, one chord)" \
+    || bad "the looper with the Options open: $(grep -a '^loop:' "$L" | tail -2 | tr '\n' ' ')"
+silent_end cr_opt_keys
+
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

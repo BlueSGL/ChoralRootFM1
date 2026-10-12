@@ -221,7 +221,8 @@ keyboard; on the Full keyboard all 27 keys are dark until played. With Key Mode 
 layers, in the KEY layer too): the notes of the scale glow at the low level, the tonic's keys at a middle level, the
 roots outside the scale are dark, white or black, and the notes that sound are fully lit over it. So a glance tells
 you that Key Mode is on, which key it is, and where the tonic sits. The layers that use the root keys for something
-else (the loop slots, the pickers, naming, the Options) show their own map instead.
+else (the loop slots, the pickers, naming) show their own map instead. The Options are not one of them: the keys
+play there and show what plays.
 
 **The notes that sound.** While a chord sounds, every root key that carries the name of one of its notes is lit: D
 major lights the D, F# and A keys in both octaves (there is one A). The octave does not matter, so a chord that
@@ -1244,9 +1245,16 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 
 <img src="manual/options.png" width="240" alt="An Options page: Play Style, value Simple, the next entry Extension Addition under it, the battery at the top right">
 
-- **SELECT** moves to the next or previous setting. The white root keys jump to the first eleven.
+- **SELECT** moves to the next or previous setting.
 - **KNOB 1** changes the value. Changes act at once.
-- **OPT**, **HOME**, **OCT-** or **OCT+** closes the Options.
+- **OPT**, **HOME**, **OCT-** or **OCT+** closes the Options. The bottom line of the screen says so.
+- **The keys play**, exactly as on the view you opened the Options from: chords, LOCK, Key Mode, the split, the
+  arpeggio, LATCH, and a loop being recorded takes what you play. Their lights show what plays, and OPT is lit while
+  the Options are open. So you can hold a chord and turn KNOB 1 to hear a setting change: Output between Classic and
+  Clean, for one. KNOB 2 to 4, PRESETS and ALGORITHM also keep the jobs they have on the view. Only OCT- and OCT+ are
+  different: they close the Options instead of shifting the octave. (Until 0.19 the white keys jumped to the first
+  eleven settings and nothing sounded.)
+- No key confirms or cancels anything in the Options. Calibrate and Reset Settings are started with OCT+ only.
 
 | Setting | Values | Default | What it does |
 | --- | --- | --- | --- |
@@ -1549,7 +1557,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 
 | What you see or hear | Likely cause | What to do |
 | --- | --- | --- |
-| Keys or knobs do something unexpected | a layer, the Options or the editor is open (a button blinks, or OPT is lit) | HOME |
+| Keys or knobs do something unexpected | a layer or the editor is open (a button blinks), or the Options are (OPT is lit: SELECT, KNOB 1, OCT- and OCT+ are theirs; the keys play) | HOME |
 | The FM-1 behaves strangely and you cannot tell which setting it is | some option is not at its default | Options > Reset Settings, OCT+ twice: every setting back to default; your sounds, loops and the calibration stay ([Options](#14-options)) |
 | A layer will not go away | layers stay open by design | OCT- or HOME |
 | Plain root keys play chords | Key Mode is on (KEY lit, `Key: C`) | tap KEY |
@@ -1665,7 +1673,6 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |
 | white roots D4 to A4, then B4, view menu | Chord, Keyboard, Notes, Geek Out, Scope; Lock |
-| white roots, Options | the first eleven settings |
 | white roots D4 to G4, BASS layer | the bass behaviour |
 | white roots D4 to F4, the SEQ key's hold menu (metronome) | 4/4, 3/4, 6/8 |
 
