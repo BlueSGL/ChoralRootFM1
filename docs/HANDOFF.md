@@ -124,8 +124,22 @@ installed on the owner's Mac.
   note, none on the loudest chords. From Felucca 1.0.1 .. 1.5.1 one fix is missing on the live path: MASTER read
   before the audio starts (1.1.5, #137). Listening files: `../audio-0.19/lookahead/`. Not checked on the unit:
   anything (the emulator and the host only).
-- **(b) CZ-1 pops and drop-outs on held chords without FX.** The owner, 2026-10-13: believes it is internal clipping
-  in the engine; the other engines are fine.
+- **(b) CZ-1: the pops, the level, the click that was left: built, to be heard and read on the unit** (docs/CZ1.md
+  "Pops (0.19)" with "The second round", and "Level"; HISTORY 2026-10-12 "CZ-1's pops" and "CZ-1's level and the
+  click that was left"). The owner's report ("pop and dropout when holding chords without FX ... probably internal
+  clipping") was not clipping: a sounding note struck again cut its own voice, and the DCW depth stepped at a block's
+  edge (abb0b81). Since then: **the engine is 6 dB lower** (the owner: "CZ-1 trim sounds good"; a voice adds `* 2`,
+  every sample exactly half; the three per-sound trims are gone; user CZ-1 sounds are 6 dB quieter with the rest),
+  and **a sounding note struck again at another velocity no longer steps** (a loop's step velocities, MIDI in). The
+  two clicks `wavclicks.py` counted on BRASS 1 struck again are not a step: the first bright window of a re-attack
+  whose DCW is still open, as the chip model does; the 79 jumps left at C2 are the waves' own edges, each checked
+  against its definition. **The owner's**: the level by ear against the other engines (`../audio-0.19/cz-trim/`),
+  the per-sound trims proposed for INIT TONE, STRINGS 1, BRASS 1, PIPE ORGAN 2 and four quiet sounds (none
+  applied), whether a re-attack should open from a closed DCW when the DCA has let go (not built). **Open in
+  another file**: the session record restores a stored trim (`cr_settings.c css_part_put`), so a unit switched off
+  on BRASS 1, STRINGS 2 or PIPE ORGAN 1 plays it 5, 3 or 6 dB too quiet until the sound is picked again. **Not
+  done on the unit**: anything; `python3 tools/cz_pop_check.py --play` (late halves: the third possible cause of
+  the first report) was never run.
 - **(c) WHEEL**: the owner is on the fence about cutting it.
 - **(d) USB recording at 48 kHz: built, nothing run on a host or the unit** (docs/USB-AUDIO.md "48 kHz"; HISTORY
   2026-10-12). ChoralRoot In offers 44.1 and 48 kHz, the host chooses; 44.1 kHz is bit for bit 0.18's. At 48 kHz the

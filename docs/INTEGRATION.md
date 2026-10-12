@@ -818,8 +818,8 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   92 (-10 dB: Felucca's default 104, -4 dB, trimmed by 6 dB), the bass 92 too (-10 dB: trimmed by 6 dB; 98 until
   2026-10-06), so a 6-note chord stays out of the master limiter (Performance, item 2). A sound's load keeps the
   part's level (the rule above); MASTER makes up the loudness (about 4 dB quieter than before on a held chord).
-  **Per-sound trims**: the loud factory presets carry a trim (`cr_bank.c` `CB_TRIM`, by engine and preset name: PHASE STRING / ORGAN -8 dB, PHASE BRASS -3 dB, VOICE CHOIR AAH -3 dB, CZ-1 BRASS 1 -5 dB, STRINGS 2
-  -3 dB, PIPE ORGAN 1 -6 dB; ANALOG STRINGS -1 dB until ANALOG was retired in 0.14; since docs/PRESETS.md also a user record bound to one of them), signed 0.5 dB steps, a
+  **Per-sound trims**: the loud factory presets carry a trim (`cr_bank.c` `CB_TRIM`, by engine and preset name: PHASE STRING / ORGAN -8 dB, PHASE BRASS -3 dB, VOICE CHOIR AAH -3 dB; CZ-1 BRASS 1 -5 dB, STRINGS 2
+  -3 dB, PIPE ORGAN 1 -6 dB until 0.19, when the whole CZ-1 engine went 6 dB down and its three rows with it (docs/CZ1.md "Level": the table has no row left on ChoralRoot's unit); ANALOG STRINGS -1 dB until ANALOG was retired in 0.14; since docs/PRESETS.md also a user record bound to one of them), signed 0.5 dB steps, a
   gain after LEVEL (`track_t.trim`, applied in `fx.c` `mix_part` as LEVEL + trim steps of `LEVEL_Q12`, LEVEL 0 still
   OFF), set by `cu_pool_load` when such a preset loads from its pool; 0 for an added user preset, INIT, an engine
   switch, and on Felucca (its renders unchanged). LEVEL is never touched. Trims (measured as Performance item 2:

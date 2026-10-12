@@ -1176,3 +1176,39 @@ menu and I can still play notes."**
 - Test: `cr_opt_keys.txt` in test_cr.sh. The manual's `options.png` re-shot. Stale: the designer's sheet
   `design/choralroot-fm1-screens.png` (state 12 has a footer now). Not run: the browser emulator's test (no emcc; it
   does not use the Options); nothing on the device.
+
+## 2026-10-12 (CZ-1's level and the click that was left)
+
+**The owner: "CZ-1 trim sounds good"; and the output round's "CZ-1 BRASS 1 with bass, struck again while sounding,
+shows 2 clicks to `wavclicks.py` in Clean".** Two commits on 778a6ad.
+
+- **The trim.** `cz_native.c CZ_VOICE_GAIN` 2: a voice adds `voice_amp(..) * 2`, not `* 4`. The factor is the last
+  thing done to the sample, so every sample a voice leaves in its part's sum is exactly half: proven on 33 280 runs
+  (a hash of every such sample against a 778a6ad build's halved ones: all the same, none without an exact half) and
+  in `cr_cz_test.c` for all 65 tones by kind. The same chord's median: peak +2.4 -> -3.5 dB, RMS -12.3 -> -18.0 dB
+  (VA -3.0 / -15.6, FM TONE -3.8 / -16.8, FM6 -4.7 / -20.4); 40 -> 3 of 65 above full scale. `CB_TRIM`'s rows for
+  BRASS 1, STRINGS 2, PIPE ORGAN 1 removed (0 % under the limiter without them; none louder than with its trim).
+  More than 4 dB from the median and left for the ear: INIT TONE +9.6, STRINGS 1 +5.8, BRASS 1 +5.3, PIPE ORGAN 2
+  +4.4; ACCORDION -9.4, SYNTH.LEAD 2 -7.9, JET ROAR -7.1 and five more. User CZ-1 sounds are 6 dB quieter with the
+  rest (intended). Left in `cr_settings.c` (another agent's file): the session restores a stored trim.
+- **The click.** Reproduced to the millisecond (the chord let go 60 ms and struck again) and followed to the
+  sample: no gain or depth step; the flagged window is the first audible one of a re-attack whose DCW the 60 ms
+  release left open (third difference 42 against 150 to 215 for the tone's own edges after it). The uPD933 model
+  slews an envelope from its current level on every write (MAME `upd933.cpp`), so the engine does what the chip
+  does; nothing changed for it. **Found on the way and fixed**: a sounding note struck again at ANOTHER velocity
+  stepped the DCA's gain between two samples (43 of 65 tones more than 5 % of full scale; STRINGS 1 a third of its
+  level); the matrix had one velocity a run. A line's gain is now kept across blocks and note-ons (`cz_voice_t.ag`):
+  bit for bit when the velocity did not change (33 280 runs, 167 emulator WAVs).
+- **The 41 jumps at C2** (79 in the larger matrix): each rendered again and set against its wave's definition
+  (`tools/cz_pops_why.py`): in all 79 the definition gives the step. The waves' own edges at a DCW depth of 812 to
+  1014 of 1023. Left.
+- **After both**: 0 wraps, 0 gain steps, 0 holes; the voice into the part peaks at 78 336 (156 672), the dry mix at
+  75 787 (151 577); Classic's limiter works in 6.3 % of the runs (54.9 %).
+- **Cost** from the device's listing: the trim nothing; the fix +9 instructions a line and block at rest (+0.4 % a
+  voice), one DCA curve fewer in a block whose envelope moves, +10 a note-on. XIP -112 B, RAM and POOL the same.
+- **Bit for bit**: 161 of 166 emulator WAVs against a 778a6ad build, in Clean and at Classic (the five others play
+  CZ-1); 132 goldens unchanged, the 65 CZ-1 ones rewritten (50 of them twice: regress's phrase re-strikes at another
+  velocity).
+- Tools: `tests/cz_pops.c` (restrike, arp-up, `CZ_TRACE`, `CZ_WHY`, `CZ_VEL2`, `CZ_GAP`, `CZ_CLEAN`, the hash),
+  `tools/cz_pops_report.py --jumps / --halves`, `tools/cz_pops_why.py`, `wavclicks.py --both-sides`,
+  `cr_cz_brass.txt` in test_cr.sh. Listening files: `../audio-0.19/cz-trim/`. Not run: anything on the device.

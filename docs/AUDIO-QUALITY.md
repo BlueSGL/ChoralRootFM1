@@ -692,3 +692,31 @@ samples, calls that are not whole blocks; MASTER last, the switch and nothing st
 `sh tests/run_cr_tests.sh`), `tools/emu/scripts/cr_output.txt`, `cr_output_classic.txt` and `cr_output_loud.txt`
 (`tools/emu/test_cr.sh`: Clean is Classic's passage 32 samples late, `tools/emu/wavlag.py`; a loud chord's peak sits
 on the limiter's ceiling), the seeded flash images of `tools/emu/test_persist.sh`, `tools/emu/classic_exact.sh`.
+
+## CZ-1 level (0.19, after the second round)
+
+Round 2's note "a CZ-1 click remains in the mix" (open item 10 above) and the level gap were CZ-1's own and are
+closed in docs/CZ1.md ("Level", "The second round"). What matters to the output chain:
+
+- **CZ-1 is 6 dB lower into the mix.** `cz_native.c` adds a voice `* 2` where it added `* 4` (a half-scale line, as
+  `dsp.c` says of `<< 1`); every sample a voice leaves in its part's sum is exactly half. The same held 6-note chord
+  at LEVEL 92: the part's median peak +2.4 -> -3.5 dB re full scale at MASTER's top, RMS -12.3 -> -18.0 dB (VA -3.0 /
+  -15.6, FM TONE -3.8 / -16.8, FM6 -4.7 / -20.4); 40 -> 3 of 65 sounds peak above full scale. The three per-sound
+  trims (BRASS 1, STRINGS 2, PIPE ORGAN 1) are gone. Every figure this document gives for a CZ-1 render ("CZ-1 BRASS
+  1", `cz-*.wav` in `../audio-0.19/`) is of the old level: BRASS 1 moved by 1 dB only (its -5 dB trim against the
+  engine's -6 dB), any other CZ-1 sound by 6 dB.
+- **The limiter has less to do on CZ-1.** Over the 33 280 runs of `tests/cz_pops.c` (65 sounds, chords of four to six
+  notes, with and without the CZ-1 bass, velocity 100 and 127): Classic's limiter worked in 54.9 % of the runs before
+  and 6.3 % after, its lowest gain 0.28 -> 0.55. Clean's (`CZ_CLEAN=1`): 56.8 % -> 7.9 %, its lowest gain 0.26 -> 0.52. The runs
+  left: INIT TONE most (313 of its 512), then SYNTH.BASS, HARP, SYNTH.LEAD 2, WHISTLE, BRASS 1, STRINGS 1; 48 of the 65
+  sounds have at least one.
+- **The click of item 10 is not a step.** The two `wavclicks.py` counts on BRASS 1 let go for 60 ms and struck again
+  are the first bright window of each re-attack (its DCW is still open when its DCA comes back; the tone's own
+  edges follow at five times that level for as long as the note sounds). Classic shows the same event at 10 times
+  its neighbourhood, under wavclicks' threshold of 12: masked by the count, not removed by the tanh.
+  `wavclicks.py --both-sides` (a burst must stand above the sound before it and the sound after it) counts 0 there and
+  still finds a 30 % gain step put into the same file by hand. `cr_output_loud.txt`'s single strike still sits on
+  Clean's ceiling (peak 25 899, the ceiling 25 898: `test_cr.sh`).
+- **A real step upstream was fixed**: a sounding CZ-1 note struck again at another velocity (not reachable from the
+  emulator's scripts, which strike at one velocity).
+- Listening files, through Clean at the power-on MASTER: `../audio-0.19/cz-trim/`.
