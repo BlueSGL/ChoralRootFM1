@@ -5,8 +5,8 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.17 (`git tag`; v0.17 is the latest, notes in `docs/releases/`). Main is the 0.18 dev
-tree (`FELUCCA_VERSION` "ChoralRoot 0.18" in `firmware/src/choralroot.c`; draft notes `docs/releases/0.18.md`). The
+Released: v0.1 and v0.11 .. v0.18 (`git tag`; v0.18 is the latest, notes in `docs/releases/`). The 0.19 work is the
+dev tree (`FELUCCA_VERSION` "ChoralRoot 0.19" in `firmware/src/choralroot.c`; draft notes `docs/releases/0.19.md`). The
 owner's unit runs the latest verified dev build of main, flashed by the orchestrator: check with
 `python3 tools/fm1_install.py --info`.
 
@@ -107,13 +107,17 @@ installed on the owner's Mac.
     enumeration of "ChoralRoot In", the stub's second attempt (one long flash, UBOOT), the dual-core checklist
     (docs/DUALCORE.md), the LED levels' cost (console `inp`).
 
-### For 0.19 (tracked, not started)
+### For 0.19
 
-- **(a) Audio quality, GitHub issue 3.** Measured 2026-10-12: at full Master a 6-note chord with bass sits in the
-  master limiter 100 % of the time, and the master adds about -28 dB of distortion. The full-range tanh `softclip`
-  distorts even below the limiter (Sloop's `knee()` is linear to half scale). Options: a Sloop-style knee; about 6 dB
-  of headroom before the limiter. Data in `../muffled-review/`; the harness is in the worktree
-  `.claude/worktrees/agent-a039dd76d7c85841d` (`tests/master_measure.c`, `tools/master_analyze.py`).
+- **(a) Audio quality, GitHub issue 3: built, to be heard** (docs/AUDIO-QUALITY.md; HISTORY 2026-10-12 "the output
+  chain"). Options > Output: Classic (0.18's master, bit for bit) / Clean (linear to -2.5 dBFS, a limiter that holds,
+  MASTER last into the 24-bit word), default Clean in the dev builds. Felucca's SPEAKER setting left behind by another
+  firmware is held off. The harness is in the tree (`tests/master_measure.c`, `tools/master_*`); the listening files
+  and tables in `../audio-0.19/`. **The owner's decisions**: Output's default for the release; Clean's trim (single
+  notes are 2.4 LU quieter than Classic, loud chords up to 1.4 LU louder) or the make-up build (`CR_OUT_MAKEUP=1
+  ./build.sh`: the DAC word's unused 6 dB, not heard on the unit yet); the part LEVEL / trims against Sloop's (the
+  largest measured difference, untouched); the chorus's mono return. Not checked on the unit: anything (the emulator
+  and the host only).
 - **(b) CZ-1 pops and drop-outs on held chords without FX.** The owner, 2026-10-13: believes it is internal clipping
   in the engine; the other engines are fine.
 - **(c) WHEEL**: the owner is on the fence about cutting it.

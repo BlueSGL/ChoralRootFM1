@@ -115,6 +115,11 @@ void emu_fw_init(int demo)
     CR_STAGE(BS_FLASH);
     cr_bank_boot();                               /* persist_boot: the user sounds (upreset.c) from the flash */
     CR_STAGE(BS_SETTINGS);
+    {   /* EMU_OUTPUT=classic: Options > Output held at Classic (0.18's master) whatever the settings say, so a
+         * script's WAV can be compared with 0.18's bit for bit (tools/emu/test_cr.sh, docs/AUDIO-QUALITY.md) */
+        const char *o = getenv("EMU_OUTPUT");
+        fx_out_pin = o && !strcmp(o, "classic");
+    }
     cr_settings_boot();                           /* .. and the settings record (Felucca's fields + ChoralRoot's) */
     cr_ui_init();                                 /* the engine, the sounds, the record applied (cr_settings_load) */
     {   /* the second core (main.c, docs/DUALCORE.md): the stub runs the bass part's job when handed. EMU_C1=nostart: it
@@ -543,6 +548,9 @@ void emu_fw_dump(void)
             h ^= ((const uint8_t *)&panel)[k];
             h *= 16777619u;
         }
+        printf("  master: output %s (chain %u, want %u, fade %u) lowcut %u/%u found %u\n", cs.out_clean ? "Clean" : "Classic",
+               (unsigned)fx_out_mode, (unsigned)fx_out_want, (unsigned)fx_out_fade, (unsigned)settings.lowcut,
+               (unsigned)fx_lowcut, (unsigned)crs_lowcut_found);
         printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "
                "view %u chord-sound %04X slot %u pending %u  panel %08X\n",
                (unsigned)t.check, (unsigned)crs_rec.cr.check, (unsigned)t.playstyle, (unsigned)t.extadd, (unsigned)t.key_on,

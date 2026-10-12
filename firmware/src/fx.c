@@ -114,10 +114,16 @@ static int32_t lim_g = 32768;
  * 0 (Master, the default): MASTER before master_out, as always (USB follows the knob) */
 static volatile uint8_t fx_usb_fixed;
 #define MASTER_FULL 4096                /* main.c: the MASTER knob's top, Q12 */
+static uint8_t fx_out_blk;              /* Options > Output: 1, this block went through the Clean chain (below) */
+static void clean_post(int32_t *out, uint32_t n);
 static __attribute__((noinline)) void usb_fixed_dac(int32_t *out, uint32_t n)   /* audio ISR, after the USB tap */
 {
     uint32_t i;
     int32_t m = (int32_t)song.master_q12;
+    if (fx_out_blk) {                               /* Output Clean: MASTER into the 24-bit word */
+        clean_post(out, n);
+        return;
+    }
     for (i = 0; i < 2u * n; i++)
         out[i] = (out[i] * m) >> 12;                /* (|out| <= 32767 after the soft clip: fits) */
 }
@@ -272,6 +278,222 @@ static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
             master_loop(o, n, 2u, 0);
         else
             master_loop(o, n, 1u, 0);
+    }
+}
+
+/* ------------------------------------------------------------------------------------------------------------
+ * Options > Output: Classic / Clean (ChoralRoot 0.19, docs/AUDIO-QUALITY.md; GitHub issue 3).
+ * Classic is the master above, untouched: 0.18's sound bit for bit. Clean is another chain on the same mix:
+ *   the mix at a FIXED gain (CLN_TRIM: MASTER is not in front of anything any more), with the two bits the Classic
+ *   line shifts out kept (the chain's samples are Q17: a quarter of a Q15 unit) -> the same DC blocker -> a limiter
+ *   that is a safety, not a part of the sound (threshold CLN_T instead of LIM_T: the knee below leaves it the room;
+ *   the peak HELD for CLN_HOLD samples and released slowly, so a bass note's own period no longer moves the gain;
+ *   the gain applied to all the sample's bits) -> a knee that is a straight line up to CLN_K and a tanh only above it
+ *   (to full scale) -> MASTER, last, into the DAC's 24-bit word (out_frac: the 7 bits under the Q15 sample, which
+ *   Classic leaves at 0): the knob turns the level down and nothing else, a quiet setting keeps its resolution, and
+ *   the limiter's work no longer depends on it.
+ * No LOWCUT / BASS+ in it: ChoralRoot has no control for them and holds them off (cr_settings.c cr_settings_boot).
+ * fx_out_want is what Options asks for (the main loop writes it), fx_out_mode what runs: a change is taken at a
+ * block's start, the mix faded to nothing over OUT_FADE_BLK blocks, the chain changed at that zero with its limiter
+ * at rest, and faded in again: no step in the sound. Felucca's builds never ask: Classic. */
+#ifndef CLN_TRIM
+#define CLN_TRIM 3072                   /* Q12, a multiple of 16: the mix into the Clean chain, -2.5 dB (x 0.75) */
+#endif
+#ifndef CLN_T
+#define CLN_T 26000                     /* the limiter's threshold in Q15 units (LIM_T + 3.2 dB) */
+#endif
+#define CLN_K 24576                     /* the knee: linear up to here (-2.5 dBFS), then K + tanh(4 (a - K)) / 4 */
+#ifndef CLN_HOLD
+#define CLN_HOLD 1764u                  /* 40 ms: a period of 25 Hz */
+#endif
+#ifndef CLN_REL
+#define CLN_REL 13                      /* the release: (env - T) >> CLN_REL a sample, 186 ms */
+#endif
+#ifndef CLN_MAKEUP
+#define CLN_MAKEUP 4096                 /* Q12 after the knee, with MASTER: 4096 = none, the DAC word stays under the
+                                         * Q15 sample's full scale as in every release. The word has 6 dB above that
+                                         * (audio.c OUT_SHIFT): a build with 5461 gives the trim back there. NOT the
+                                         * default: nobody has heard this unit's output stage up there
+                                         * (docs/AUDIO-QUALITY.md "Proposed") */
+#endif
+#define CLN_T4 (4 * CLN_T)              /* (Q17) */
+#define CLN_K4 (4 * CLN_K)
+#define OUT_FADE_BLK 16u                /* 512 samples, 11.6 ms, each way */
+_Static_assert(OUT_FADE_BLK * CTL == 512u, "the fade's step is 4096 / 512");
+_Static_assert(!(CLN_TRIM & 15) && CLN_T <= 32767 && CLN_MAKEUP <= 8192, "the Clean chain's ranges");
+static volatile uint8_t fx_out_want;
+static uint8_t fx_out_mode, fx_out_fade;
+static int32_t cln_env = CLN_T4, cln_gt = 32768, cln_g = 32768, cln_mq;
+static uint32_t cln_hold;
+static uint8_t out_frac[2u * CTL];      /* Clean: the bits under each of the block's Q15 samples: the DAC word's 7
+                                         * (audio.c), or between clean_block and a later clean_post the chain's 2 */
+
+/* (Q17: the tanh table's own unit is the knee's quarter scale) */
+static inline int32_t clean_knee(int32_t y)
+{
+    int32_t a = y < 0 ? -y : y;
+    if (a <= CLN_K4)
+        return y;
+    a = CLN_K4 + softclip(a - CLN_K4);
+    return y < 0 ? -a : a;
+}
+/* x * g / 32768 with every bit of x (|x| < 2^23, g Q15): the limiter's gain (Classic's (x >> 4) * g >> 11 drops four
+ * bits and, rounding down from them, shifts the sample by up to 16 while it limits) */
+static inline int32_t clean_gain(int32_t x, int32_t g)
+{
+    return (((x >> 8) * g) >> 7) + (((x & 255) * g) >> 15);
+}
+
+static __attribute__((noinline)) void clean_block(int32_t *o, uint32_t n)
+{
+    int32_t dl = dc_l, el = dce_l, dr = dc_r, er = dce_r, env = cln_env, gt = cln_gt, lg = cln_g;
+    uint32_t i, hold = cln_hold;
+    for (i = 0; i < n; i++) {
+        int32_t l = o[2u * i], r = o[2u * i + 1u], al, ar, a;
+        l = dc_block(l, &dl, &el);
+        r = dc_block(r, &dr, &er);
+        al = l < 0 ? -l : l;
+        ar = r < 0 ? -r : r;
+        a = al > ar ? al : ar;
+        if (a > env) {                /* a new peak: at once, and held */
+            if (a > 0x7FFFFF) {       /* (clean_gain's range; 36 dB over the threshold: no sound gets there) */
+                l = clamp(l, -0x7FFFFF, 0x7FFFFF);
+                r = clamp(r, -0x7FFFFF, 0x7FFFFF);
+                a = 0x7FFFFF;
+            }
+            env = a;
+            hold = CLN_HOLD;
+            gt = env > CLN_T4 ? (int32_t)(((uint32_t)CLN_T4 << 15) / (uint32_t)env) : 32768;
+        } else if (a > env - (env >> 5)) {
+            hold = CLN_HOLD;          /* (within 0.3 dB of the held peak: the same peaks keep coming, the gain stays) */
+        } else if (hold) {
+            hold--;
+        } else if (env > CLN_T4) {
+            env -= ((env - CLN_T4) >> CLN_REL) + 4;
+            gt = env > CLN_T4 ? (int32_t)(((uint32_t)CLN_T4 << 15) / (uint32_t)env) : 32768;
+        }
+        if (gt < lg)
+            lg += (gt - lg) >> 6;     /* eased down over ~1.5 ms (fx_smooth's: no audio-rate gain) */
+        else
+            lg = gt;
+        if (lg < 32768) {
+            l = clean_gain(l, lg);
+            r = clean_gain(r, lg);
+        }
+        o[2u * i] = clean_knee(l);
+        o[2u * i + 1u] = clean_knee(r);
+    }
+    dc_l = dl;
+    dce_l = el;
+    dc_r = dr;
+    dce_r = er;
+    cln_env = env;
+    cln_gt = gt;
+    cln_g = lg;
+    cln_hold = hold;
+}
+/* Clean's last stage: MASTER (eased over the block: a turned knob is a ramp, not 32-sample steps) on the block, kept
+ * as the DAC's 24-bit word: out = its upper 17 bits (the Q15 sample: what USB, the scope and the click see), out_frac
+ * the 7 under them (audio.c adds them to the word). q17: the block is the chain's own (Q17); else it is Q15 samples
+ * with the chain's two bits in out_frac (clean_split: USB Level = Fixed, where USB's tap and the click come between) */
+static inline __attribute__((always_inline)) void clean_post_loop(int32_t *out, uint32_t n, int q17)
+{
+    int32_t m = ((int32_t)song.master_q12 * CLN_MAKEUP >> 12) << 8, mq = cln_mq, d = (m - mq) >> CTL_LOG2;
+    uint32_t i;
+    for (i = 0; i < n; i++) {
+        uint32_t j = (2u * i) & (2u * CTL - 1u);
+        int32_t g, l = out[2u * i], r = out[2u * i + 1u];
+        if (!q17) {
+            l = l * 4 + out_frac[j];
+            r = r * 4 + out_frac[j + 1u];
+        }
+        mq += d;
+        g = mq >> 8;
+        l = (l * g) >> 7;                               /* Q17 x Q12 -> Q22 (|l| < 2^18) */
+        r = (r * g) >> 7;
+        out[2u * i] = l >> 7;
+        out[2u * i + 1u] = r >> 7;
+        out_frac[j] = (uint8_t)(l & 127);
+        out_frac[j + 1u] = (uint8_t)(r & 127);
+    }
+    cln_mq = m;
+}
+static __attribute__((noinline)) void clean_post(int32_t *out, uint32_t n) { clean_post_loop(out, n, 0); }
+static __attribute__((noinline)) void clean_post17(int32_t *out, uint32_t n) { clean_post_loop(out, n, 1); }
+static __attribute__((noinline)) void clean_split(int32_t *out, uint32_t n)   /* Q17 -> Q15 and the two bits under */
+{
+    uint32_t i;
+    for (i = 0; i < 2u * n; i++) {
+        out_frac[i & (2u * CTL - 1u)] = (uint8_t)(out[i] & 3);
+        out[i] >>= 2;
+    }
+}
+/* Options changed Output: this block of the chain's input (o, n = CTL) faded, and the chain changed at the zero */
+static __attribute__((noinline)) void out_fade(int32_t *o, uint32_t n)
+{
+    uint32_t i, k;
+    if (!fx_out_fade)
+        fx_out_fade = 1;
+    k = fx_out_fade - 1u;
+    for (i = 0; i < n; i++) {
+        int32_t g = k < OUT_FADE_BLK ? 4096 - 8 * (int32_t)(k * CTL + i + 1u)
+                                     : 8 * (int32_t)((k - OUT_FADE_BLK) * CTL + i + 1u);
+        g = clamp(g, 0, 4096);
+        o[2u * i] = ((clamp(o[2u * i], -0x7FFFFF, 0x7FFFFF) >> 4) * g) >> 8;
+        o[2u * i + 1u] = ((clamp(o[2u * i + 1u], -0x7FFFFF, 0x7FFFFF) >> 4) * g) >> 8;
+    }
+    if (fx_out_fade == OUT_FADE_BLK) {                  /* silent now: the other chain, its limiter at rest */
+        fx_out_mode = !fx_out_mode;
+        lim_env = LIM_T;
+        lim_g = 32768;
+        cln_env = CLN_T4;
+        cln_gt = cln_g = 32768;
+        cln_hold = 0;
+        cln_mq = ((int32_t)song.master_q12 * CLN_MAKEUP >> 12) << 8;
+    }
+    fx_out_fade = fx_out_fade == 2u * OUT_FADE_BLK ? 0u : (uint8_t)(fx_out_fade + 1u);
+}
+/* the mix (l, r, the chorus's wet) through its chain into out: fx_out_mode's, read once for the block */
+static inline void out_master(int32_t *out, const int32_t *l, const int32_t *r, const int32_t *w, uint32_t n)
+{
+    uint32_t i, mode = fx_out_mode;
+    if (mode) {
+        for (i = 0; i < n; i++) {                       /* (x 3 for the default trim: nothing shifted out) */
+            out[2u * i] = ((l[i] + w[i]) * (CLN_TRIM >> 4)) >> 6;
+            out[2u * i + 1u] = ((r[i] + w[i]) * (CLN_TRIM >> 4)) >> 6;
+        }
+    } else {
+        int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB Level Fixed: MASTER after) */
+        for (i = 0; i < n; i++) {
+            out[2u * i] = (((l[i] + w[i]) >> 2) * mg) >> 10;
+            out[2u * i + 1u] = (((r[i] + w[i]) >> 2) * mg) >> 10;
+        }
+    }
+    if (fx_out_fade || fx_out_want != mode)
+        out_fade(out, n);
+    fx_out_blk = (uint8_t)mode;
+    if (!mode) {
+        master_block(out, n);
+        return;
+    }
+    clean_block(out, n);
+    if (fx_usb_fixed)
+        clean_split(out, n);
+    else
+        clean_post17(out, n);
+}
+/* Options > Output (cr_ui.c) and the settings at boot (now: before the first block, no fade) */
+static uint8_t fx_out_pin;              /* the emulator's EMU_OUTPUT=classic (the proof that Classic is 0.18's, bit for
+                                         * bit, on scripts whose settings say Clean): Classic whatever is asked */
+static void fx_output_set(uint32_t clean, int now)
+{
+    if (fx_out_pin)
+        clean = 0;
+    fx_out_want = (uint8_t)(clean != 0u);
+    if (now) {
+        fx_out_mode = fx_out_want;
+        fx_out_fade = 0;
+        cln_mq = ((int32_t)song.master_q12 * CLN_MAKEUP >> 12) << 8;
     }
 }
 
@@ -775,7 +997,7 @@ static __attribute__((noinline)) void perf_master(int32_t *out, uint32_t n)
         out[2u * i] = mix_l[i];
         out[2u * i + 1u] = mix_r[i];
     }
-    master_block(out, n);
+    master_block(out, n);                               /* (Options > Output is ChoralRoot's, which has no FX layer) */
 }
 #endif
 
@@ -785,7 +1007,6 @@ static void mix_block(int32_t *out, uint32_t n)
 #if FELUCCA_PERFORM
     int perf;
 #endif
-    int32_t mg = fx_usb_fixed ? MASTER_FULL : (int32_t)song.master_q12;   /* (USB Level Fixed: MASTER after) */
 #if FELUCCA_UAC
     if (ua_stage_on)
         for (i = 0; i < n * UA_CAP_CHANNELS; i++)
@@ -825,9 +1046,5 @@ static void mix_block(int32_t *out, uint32_t n)
         return;
     }
 #endif
-    for (i = 0; i < n; i++) {
-        out[2u * i] = (((mix_l[i] + wet[i]) >> 2) * mg) >> 10;
-        out[2u * i + 1u] = (((mix_r[i] + wet[i]) >> 2) * mg) >> 10;
-    }
-    master_block(out, n);
+    out_master(out, mix_l, mix_r, wet, n);
 }

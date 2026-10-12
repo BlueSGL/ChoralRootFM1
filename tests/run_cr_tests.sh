@@ -35,6 +35,10 @@ cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cpu1_te
 # and noise, every corner stable and ending in exact silence, smooth parameter changes, the level against Felucca's
 # effects, mono, the cost; impulse responses for tools/fx_plots.py into build/fx-review
 mkdir -p build/fx-review
+cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_output_test tests/cr_output_test.c -lm
+./build/host/cr_output_test > build/host/cr_output_test.log || { cat build/host/cr_output_test.log; exit 1; }
+grep -c ' ok$' build/host/cr_output_test.log | sed 's/^/cr_output_test: /; s/$/ checks ok/'
+tail -1 build/host/cr_output_test.log
 cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_fx_test tests/cr_fx_test.c -lm
 ./build/host/cr_fx_test build/fx-review > build/host/cr_fx_test.log || { cat build/host/cr_fx_test.log; exit 1; }
 grep -c ' ok$' build/host/cr_fx_test.log | sed 's/^/cr_fx_test: /; s/$/ checks ok/'

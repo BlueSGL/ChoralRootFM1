@@ -404,6 +404,9 @@ static uint32_t crb_commit(void)
         if (!crb_panel_ok(pn) || !settings_import(p, (int)len))
             return 2;
         cr_settings_import(&p->cr, &p->cr, sizeof p->cr);   /* (a PER1..4 record: a zeroed block -> the defaults) */
+        p->lowcut = 0;                               /* Felucca's SPEAKER setting: not ChoralRoot's to run (0.19,
+                                                      * cr_settings.c cr_settings_boot): a restored object stores 0 */
+        settings.lowcut = 0;
         if (st_save(OBJ_SETTINGS, p, sizeof *p))
             return 4;
 #if CR_HAVE_SETTINGS

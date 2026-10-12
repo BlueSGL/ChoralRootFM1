@@ -996,6 +996,42 @@ render differs from them by antialiasing only: `-looper-screens.png`, `-sound-ed
 layer labels the button MOD. Not changed: `design/make_layers_mockups.py` still names its seventh state METRO (the
 sheet of 2026-10-07's decision), and the manual's pictures (emulator screenshots).
 
+## 2026-10-12 (the output chain: GitHub issue 3)
+
+3y17. **0.19 dev (built; not flashed, not heard on the unit).** The report: "muffled / harsh compared to other
+firmwares ... sloop sounds a lot clearer, fuller ... maybe it is just level matching / in the output stage" (a user on
+0.17 or older, headphones). The owner: ChoralRoot sounds very good to him, he wants it improved in 0.19, and the
+speaker must not end up noticeably quieter. Everything measured and decided is in docs/AUDIO-QUALITY.md; in short:
+
+- **Against Sloop** (all three firmwares rendered on the host): the same chain, the same output at equal part level.
+  The differences that can explain the report on 0.17 are level (single notes a median 9.4 dB under Sloop's at the same
+  MASTER: part LEVEL 92 against 104, and Sloop's trims), mono (the same word in both ears on 164 of 168 sounds; Sloop's
+  chorus and reverb return in stereo) and the mono chorus's comb. Not the FX amounts (Sloop is as wet), not the
+  limiter or the clip (Sloop's are driven far harder), not the DAC (the four "codec" pins of the HAL are the I2S bus;
+  the set-up is the same in every Felucca-family firmware; the chip is not identified).
+- **Options > Output: Classic / Clean** (`fx.c`; bit 1 of the settings block's `pick_roots`, no new version; default
+  Clean in the dev builds; switched with an 11.6 ms fade each way). Classic is 0.18's master: 161 emulator scripts
+  bit for bit against a build of 19b6453 (`tools/emu/classic_exact.sh`), the goldens unchanged. Clean: the mix at
+  x 0.75 kept in Q17, a limiter at 26000 that holds its peak 40 ms (Classic's gain moved 0.46 dB with every period of
+  a 40 Hz note), a knee that is linear to 24576, MASTER last into the DAC's 24-bit word. Measured: a 6-note chord with
+  the bass was in gain reduction 100 % of the time with dist -28 dB and is 0 .. 30 % with -41 .. -99 dB; a single
+  note -43 .. -50 dB and now -76 .. -90; at MASTER -24 dB a quiet note's error -32 .. -48 dB and now -72 .. -86. Loud
+  chords come out 0.4 .. 1.4 LU louder, single notes 2.4 LU quieter (the trim). About 5 us a half more on the unit
+  (counted: 83 instructions a frame against 76 idle, 99 against 92 limiting).
+- **Found on the way: Felucca's SPEAKER setting (LOWCUT / BASS+) survived a flash to ChoralRoot** and ran in the
+  master with no control and no reset (the coordinator's lead, verified: a Felucca 1.0+ settings object is accepted;
+  reproduced on 0.18's emulator with a seeded flash: -17 dB under 100 Hz). Held off since this build
+  (`cr_settings_boot`, a restore, Reset Settings; the next save stores 0). It thins the bass, so it is not the report's
+  cause.
+- **Proposed, not default**: `CR_OUT_MAKEUP=1 ./build.sh` gives Clean's 2.5 dB back in the DAC word's unused upper
+  6 dB (fm1-x0x uses all 6 as an option). Nobody has heard this unit up there; with it USB's master pair can clip.
+- **Left for the owner's ear**: Output's default, the trim, the part LEVEL against Sloop's, the chorus's mono return.
+
+The harness of the first measurement (it lived untracked in a worktree) is in the tree: `tests/master_measure.c`,
+`tools/master_analyze.py`, `tools/master_measure_run.sh`, `tools/master_measure_tables.sh`, `tools/master_listen.py`.
+Listening files and tables: `../audio-0.19/`. Not run: the browser emulator's test (no emcc on this Mac); nothing on
+the device.
+
 ## 2026-10-12 (CZ-1's pops)
 
 **The owner: "CZ-1 can pop and dropout when holding chords without FX, I believe it is an engine issue ... probably

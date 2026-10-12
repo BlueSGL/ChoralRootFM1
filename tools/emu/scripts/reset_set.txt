@@ -2,7 +2,7 @@
 # (U01 "ADG", as cr_save.txt), a handful of settings changed and saved (137 BPM, Play Style Advanced, Motion Off, Dual
 # Core On, Hold Time, Key Mode on). Run 2 (reset_do.txt, the same file): the reset. Run 3 (reset_check.txt): still
 # default after a relaunch, U01 still there.
-#   Options: 0 Play Style .. 13 Motion, 15 Hold Time, 18 Dual Core, 19 Version, 20 Calibrate, 21 Reset Settings
+#   Options: 0 Play Style .. 13 Motion, 15 Hold Time, 18 Dual Core, 19 Output, 20 Version, 21 Calibrate, 22 Reset Settings
 wait 300
 btn SAVE                      # U01 "ADG" from TINE EP
 wait 300

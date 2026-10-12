@@ -70,6 +70,12 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
 #define CRS_KEY_KEYS(s) (((unsigned)(s)->loop_rec & CRS_KEY_PLAY) ? 1u : 0u)
 #define CRS_LOOP_REC(mode, keys) ((uint8_t)(((mode) & 15u) | ((keys) & 1u) << 4))  /* usb_level: USB audio follows MASTER / takes the full level (docs/USB-AUDIO.md) */
 
+/* Options > Output (0.19, docs/AUDIO-QUALITY.md) rides in bit 1 of pick_roots (bit 0: the retired picker option): set =
+ * Classic (0.18's master), clear = Clean, so every older record reads as the default and no version is needed. A
+ * firmware up to 0.18 finds 2 or 3 there out of range and takes its own default for the byte, nothing else */
+#define CRS_OUT_CLASSIC 0x02u
+#define CRS_OUT_CLEAN(s) (((unsigned)(s)->pick_roots & CRS_OUT_CLASSIC) ? 0u : 1u)
+
 typedef struct {
     /* header (12 bytes) */
     uint32_t magic;                     /* CRS_MAGIC */
@@ -143,7 +149,7 @@ void cr_settings_seal(cr_settings_t *s);         /* header + checksum, before it
 int  cr_settings_equal(const cr_settings_t *a, const cr_settings_t *b);   /* the payloads */
 /* Saving is manual since 0.18 (the owner, 2026-10-11; docs/SETTINGS.md "Manual and automatic"): the block holds two
  * kinds of field. AUTOMATIC: what the Options menu alone sets (Play Style, Extension Addition, Secret Chords, Velocity,
- * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, Dual Core; the palette, which
+ * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, Dual Core, Output; the palette, which
  * has no control), written by itself when the unit is quiet. MANUAL: everything else, how the instrument is set to
  * play, written only by the global save (SAVE held). cr_settings_auto copies the automatic fields of *src into *dst
  * and leaves dst's manual ones (not sealed): flash's block with the Options as they are now is what an automatic
