@@ -47,6 +47,10 @@ def main(path):
         return sine[i] + (((sine[(i + 1) & 1023] - sine[i]) * ((ph >> 7) & 0x7FFF)) >> 15)
     L += arr("CZ_CARRIER", "int16_t",
              [(-sine_i(((((p << 5) + (p >> 6)) & 0xFFFF) << 16) + 0x40000000 & 0xFFFFFFFF) + 32767) >> 1 for p in range(2048)])
+    # CZ-1 (cz_native.c cz_native_run): the two slopes of a phase function at a pivot, (1024 << 16) / x for x = 1 .. 2047
+    # (k0 = [pivot], k1 = [2048 - pivot]): what cz_native_pd divides once a block, for the blocks whose DCW depth changes
+    # and is ramped across the block a sample at a time (tests/cr_cz_test.c compares)
+    L += arr("CZ_RECIP", "uint32_t", [0] + [(1024 << 16) // x for x in range(1, 2048)], per=8)
     # phase increment for pitch in 1/16 semitone, MIDI 0..127
     inc = []
     for p in range(128 * 16):

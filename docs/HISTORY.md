@@ -995,3 +995,27 @@ render differs from them by antialiasing only: `-looper-screens.png`, `-sound-ed
 `-sound-editor-panels.png`; and the site's `panel-editor-osc.png` / `panel-editor-filter.png`, where the editor's
 layer labels the button MOD. Not changed: `design/make_layers_mockups.py` still names its seventh state METRO (the
 sheet of 2026-10-07's decision), and the manual's pictures (emulator screenshots).
+
+## 2026-10-12 (CZ-1's pops)
+
+**The owner: "CZ-1 can pop and dropout when holding chords without FX, I believe it is an engine issue ... probably
+internal clipping."** Looked for in the host render with a new tool (`tests/cz_pops.c`: INIT TONE and the 64 x six
+scenarios x four chords x four roots x two velocities x the CZ-1 bass off / on, 24 960 runs, the sanitizer on every
+int32, the peaks of every stage, each line's gain across block edges, jumps against the signal's own slope, holes).
+No wrap and no saturation anywhere: it is not clipping. Two steps of the engine's own making were found and fixed:
+(A) `cz_note_on` cleared a sounding voice's envelopes (the same note again, a chord change's common tone, MONO, the
+arp), so its level fell to 0 between two samples and the attack began again: all 65 tones, in 4000 of 4160 re-strike
+runs; a sounding voice now keeps its envelopes' levels and its DCW depth. (B) the DCW depth was a control block's and
+stepped the phase function at the block's edge: a click 3 to 4 ms into a low note with a fast DCW attack (the CZ-1
+bass at C2 under any chord: 14 000 of the dry mix); the depth is now ramped a sample at a time in a block where it
+changed (`cz_native_line_mv`, `CZ_RECIP`), and a block where it did not runs the code it ran. After: 0 gain steps, 0
+holes, 41 runs with a jump left (five percussive tones at C2: their own edges). A plain held chord showed no pop in
+any run before either, apart from (B) at its start: what the owner hears on a held chord may be late audio, which no
+host render shows; `tools/cz_pop_check.py` plays the worst case on the unit and reads SysEx 78 PEAK (not run: only
+the owner runs device tools). Cost from the device's listing: +0.8 % a voice with the depth at rest, +9 % while it
+moves, no divide in a loop; flash +15.8 KB (XIP 79.9 -> 82.7 %), RAM and POOL unchanged. Bit for bit: 158 of the 161
+emulator scripts' WAVs against a build of 19b6453 (the three others play CZ-1), 132 of 197 goldens; the 65 CZ-1
+goldens were rewritten, and with both fixes switched off in a copy all 197 are main's. Also measured, not changed:
+CZ-1 is 5.4 dB hotter at the peak than the VA for the same chord (it adds a half-scale voice `* 4` where `dsp.c`'s
+convention is `<< 1`); -6 dB for the engine would level it, a decision for the master's rework. Details, the tables
+and what was not tested: docs/CZ1.md "Pops (0.19)". The ten worst, before and after: `../audio-0.19/cz-pops/`.

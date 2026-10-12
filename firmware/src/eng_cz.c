@@ -81,10 +81,24 @@ static int32_t cz_env_tick(cz_env_t *e, const cz_env_def_t *d, const uint32_t *r
 static void cz_note_on(track_t *t, voice_t *v)        /* Melodee's phase_note_on */
 {
     cz_voice_t *c = cz_voice(t, v);
+    int32_t lev[2][3];
+    uint32_t pk[2][3];
     if (!c) return;                                    /* (no engine state: no voice, engines.c ENG_STATE_NPART) */
+    /* A voice that sounds (the same note struck again, a chord change's common tone, MONO, the arp: voice_was) keeps
+     * its six envelopes' levels and its lines' DCW depth (pk): they go on from there to step 1 (0.19, docs/CZ1.md
+     * "Pops"; a CZ's envelopes are said to go on from their level too: not checked on one). From 0 the DCA cut the
+     * voice's level in one sample and the DCW its wave: a pop, then the attack again (a drop-out). voice_start keeps
+     * the phases and this function the DC filters (below) for the same reason. */
+    memcpy(pk, c->pk, sizeof pk);
+    for (uint32_t l = 0; l < 2u; l++)
+        for (uint32_t e = 0; e < 3u; e++) lev[l][e] = c->eg[l][e].level;
     memset(c, 0, sizeof *c);
     for (uint32_t l = 0; l < 2u; l++)
-        for (uint32_t e = 0; e < 3u; e++) c->eg[l][e].gate = 1;
+        for (uint32_t e = 0; e < 3u; e++) {
+            c->eg[l][e].gate = 1;
+            if (voice_was) c->eg[l][e].level = lev[l][e];
+        }
+    if (voice_was) memcpy(c->pk, pk, sizeof pk);
     v->ph[0] = v->ph[1] = v->ph[2] = 0;
     v->s[0] = v->s[1] = v->s[4] = 0;
     if (!voice_was) v->s[2] = v->s[3] = 0;

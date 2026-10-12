@@ -68,15 +68,25 @@ static __attribute__((noinline)) int32_t cz_native_amp(int32_t level, uint32_t a
     a = a * (int32_t)(15u-atten) / 15;
     return a * (int32_t)(127u*15u - (127u-vel)*sense) / (127*15);
 }
-/* Block-prepared slopes of the chip's 11-bit phase functions. */
-typedef struct { uint32_t wave[2], window, dcw, pivot, k0, k1; } cz_hw_pd_t;
-/* pk: the voice's pivot and slopes of this line's last block: the two divides only when the DCW depth moved */
-static __attribute__((noinline)) void cz_native_pd(cz_hw_pd_t *p, uint32_t word, uint32_t dcw, uint32_t *pk)
+/* Block-prepared slopes of the chip's 11-bit phase functions. dq, dstep: the DCW depth in Q16 at the block's start
+ * (where the line's last block left it) and its step a sample, when the depth changed (dstep 0: it did not, and the
+ * block's pivot and slopes are every sample's). */
+typedef struct { uint32_t wave[2], window, dcw, pivot, k0, k1, dq, dstep; } cz_hw_pd_t;
+/* pk: the voice's pivot and slopes of this line's last block: the two divides only when the DCW depth changed.
+ * The depth of the last block (1024 - pk[0]; pk[0] 0: a new voice, none) is where this block's ramp starts: the depth
+ * is the envelope's of a control block, and a step of it at a block's edge is a step of the phase function, so of
+ * the sample (a pop on every fast DCW attack of a low note: 0.19, docs/CZ1.md "Pops"). The chip's envelopes step at
+ * its sample rate (cz_hw_rate). */
+static __attribute__((noinline)) void cz_native_pd(cz_hw_pd_t *p, uint32_t word, uint32_t dcw, uint32_t *pk, uint32_t n)
 {
+    int32_t was = pk[0] ? (int32_t)(1024u - pk[0]) : (int32_t)dcw, mv = (int32_t)dcw - was;
     p->wave[0] = (word >> 13) & 7u;
     p->wave[1] = word & 512u ? (word >> 10) & 7u : p->wave[0];
     p->window = (word >> 6) & 7u; p->dcw = dcw;
     p->pivot = 1024u - dcw;
+    p->dq = (uint32_t)was << 16;
+    /* (a whole block: the divide by n as the shift it is; after n steps dq is dcw << 16 then) */
+    p->dstep = !mv ? 0u : n == CTL ? (uint32_t)(mv * (65536 >> CTL_LOG2)) : (uint32_t)(mv * 65536 / (int32_t)n);
     if (pk[0] != p->pivot) {
         pk[0] = p->pivot;
         pk[1] = (1024u << 16) / p->pivot;
@@ -118,11 +128,15 @@ typedef struct { uint32_t ph, tg, inc; int32_t dc, amp, step; } cz_line_t;
 /* A line's samples from i on until its phase wraps (the next cycle may play the other wave) or the block ends, into
  * o; returns where it stopped. Built once for each wave and window (cz_native_line). */
 static inline __attribute__((always_inline)) uint32_t cz_native_run(const cz_hw_pd_t *b, cz_line_t *s, int32_t *o, uint32_t i,
-                                                                    uint32_t n, uint32_t wave, uint32_t win)
+                                                                    uint32_t n, uint32_t wave, uint32_t win, uint32_t mov)
 {
     uint32_t ph = s->ph, old, inc = s->inc, pivot = b->pivot, k0 = b->k0, k1 = b->k1, dcw = b->dcw;
+    uint32_t dq = b->dq+b->dstep*i, dstep = b->dstep;
     int32_t dc = s->dc, amp = s->amp, step = s->step;
     do {
+        if (mov) {                                     /* the depth of this sample, its pivot and slopes (CZ_RECIP) */
+            dq += dstep; dcw = dq>>16; pivot = 1024u-dcw; k0 = CZ_RECIP[pivot]; k1 = CZ_RECIP[2048u-pivot];
+        }
         int32_t raw = cz_native_wave(wave,win,ph>>21,pivot,k0,k1,dcw);
         old = ph; ph += inc;
         dc += raw-(dc>>10); raw = (raw-(dc>>10))>>1;
@@ -134,33 +148,50 @@ static inline __attribute__((always_inline)) uint32_t cz_native_run(const cz_hw_
     return i;
 }
 /* A line's block: the wave of the cycle and the window pick the loop, once a cycle and not once a sample (windows
- * 5..7 are one; the silent wave has no window). 43 loops: about 9 KB of flash for a sample's two switches. */
+ * 5..7 are one; the silent wave has no window). 43 loops: about 9 KB of flash for a sample's two switches.
+ * Twice: cz_native_line for a block whose DCW depth is the last block's (the usual one: a held note at its sustain),
+ * cz_native_line_mv for one whose depth changed, ramped a sample at a time (mov). */
+#define CZ_RUN(w,k) case (w)*6u+(k): i = cz_native_run(b,s,o,i,n,w,k,CZ_MOV); break;
+#define CZ_RUNS(w) CZ_RUN(w,0u) CZ_RUN(w,1u) CZ_RUN(w,2u) CZ_RUN(w,3u) CZ_RUN(w,4u) CZ_RUN(w,5u)
+#define CZ_LINE_BODY \
+    uint32_t win = b->window > 5u ? 5u : b->window; \
+    for (uint32_t i = 0; i < n; ) { \
+        uint32_t wave = b->wave[s->tg & 1u]; \
+        switch (wave == 3u ? 3u*6u : wave*6u+win) { \
+        CZ_RUNS(0u) CZ_RUNS(1u) CZ_RUNS(2u) CZ_RUN(3u,0u) CZ_RUNS(4u) CZ_RUNS(5u) CZ_RUNS(6u) \
+        CZ_RUN(7u,0u) CZ_RUN(7u,1u) CZ_RUN(7u,2u) CZ_RUN(7u,3u) CZ_RUN(7u,4u) \
+        default: i = cz_native_run(b,s,o,i,n,7u,5u,CZ_MOV); break;   /* (the last: no value of the switch leaves i) */ \
+        } \
+    }
+#define CZ_MOV 0u
 static __attribute__((noinline)) void cz_native_line(const cz_hw_pd_t *b, cz_line_t *s, int32_t *o, uint32_t n)
 {
-    uint32_t win = b->window > 5u ? 5u : b->window;
-    for (uint32_t i = 0; i < n; ) {
-        uint32_t wave = b->wave[s->tg & 1u];
-        switch (wave == 3u ? 3u*6u : wave*6u+win) {
-#define CZ_RUN(w,k) case (w)*6u+(k): i = cz_native_run(b,s,o,i,n,w,k); break;
-#define CZ_RUNS(w) CZ_RUN(w,0u) CZ_RUN(w,1u) CZ_RUN(w,2u) CZ_RUN(w,3u) CZ_RUN(w,4u) CZ_RUN(w,5u)
-        CZ_RUNS(0u) CZ_RUNS(1u) CZ_RUNS(2u) CZ_RUN(3u,0u) CZ_RUNS(4u) CZ_RUNS(5u) CZ_RUNS(6u)
-        CZ_RUN(7u,0u) CZ_RUN(7u,1u) CZ_RUN(7u,2u) CZ_RUN(7u,3u) CZ_RUN(7u,4u)
-        default: i = cz_native_run(b,s,o,i,n,7u,5u); break;   /* (the last: no value of the switch leaves i) */
+    CZ_LINE_BODY
+}
+#undef CZ_MOV
+#define CZ_MOV 1u
+static __attribute__((noinline)) void cz_native_line_mv(const cz_hw_pd_t *b, cz_line_t *s, int32_t *o, uint32_t n)
+{
+    CZ_LINE_BODY
+}
+#undef CZ_MOV
+#undef CZ_LINE_BODY
 #undef CZ_RUNS
 #undef CZ_RUN
-        }
-    }
-}
 /* Line 2 with NOISE: the generator moves its increment every sample, so its loop keeps a sample's switches. */
 static __attribute__((noinline)) void cz_native_noise(const cz_hw_pd_t *b, cz_line_t *s, uint32_t *noise, int32_t *o, uint32_t n)
 {
-    uint32_t ph = s->ph, tg = s->tg, nz = *noise;
+    uint32_t ph = s->ph, tg = s->tg, nz = *noise, pivot = b->pivot, k0 = b->k0, k1 = b->k1, dcw = b->dcw;
+    uint32_t dq = b->dq, dstep = b->dstep;
     int32_t dc = s->dc;
     for (uint32_t i = 0; i < n; i++) {
         uint32_t old = ph, delta = s->inc;
         nz ^= nz<<13; nz ^= nz>>17; nz ^= nz<<5;
         if (nz&1u) delta = delta > 0x1428A2F9u ? 0x7FFFFFFFu : (delta>>8)*1625u;
-        int32_t raw = cz_native_wave(b->wave[tg&1u],b->window,ph>>21,b->pivot,b->k0,b->k1,b->dcw); ph += delta;
+        if (dstep) {                                   /* (the depth changed: this sample's, as cz_native_run) */
+            dq += dstep; dcw = dq>>16; pivot = 1024u-dcw; k0 = CZ_RECIP[pivot]; k1 = CZ_RECIP[2048u-pivot];
+        }
+        int32_t raw = cz_native_wave(b->wave[tg&1u],b->window,ph>>21,pivot,k0,k1,dcw); ph += delta;
         if (ph < old) tg ^= 1u;
         dc += raw-(dc>>10); raw = (raw-(dc>>10))>>1;
         o[i] = mulq15(raw,s->amp+((s->step*(int32_t)i)>>8));
@@ -228,7 +259,7 @@ static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, i
         inc[l] += (uint32_t)((int32_t)(inc[l]>>12)*m->fine);
         uint32_t word = (uint32_t)b[14u+off]<<8 | b[15u+off];
         uint32_t dep = (uint32_t)clamp((depth>>14)+((m->cutoff+m->shape-(64<<8))>>5),0,1023);
-        cz_native_pd(&pd[l],word,dep,c->pk[l]);
+        cz_native_pd(&pd[l],word,dep,c->pk[l],n);
     }
     v->s[4] = c->eg[first][2].level >> 9;
     uint32_t modulation = (b[15]>>3)&7u;
@@ -236,10 +267,14 @@ static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, i
     for (uint32_t l=first;l<=last;l++) {               /* each line's block on its own: a line reads no other */
         cz_line_t s = {v->ph[l],(uint32_t)v->s[l],inc[l],v->s[2u+l],amp[l][0],step[l]};
         if (l && modulation==3u) cz_native_noise(&pd[l],&s,&c->noise,line[l],n);
+        else if (pd[l].dstep) cz_native_line_mv(&pd[l],&s,line[l],n);
         else cz_native_line(&pd[l],&s,line[l],n);
         v->ph[l] = s.ph; v->s[l] = (int32_t)s.tg; v->s[2u+l] = s.dc;
     }
     if (first==last) for (uint32_t i=0;i<n;i++) out[i]+=voice_amp(line[first][i],m,i)*4;
     else if (modulation==4u) for (uint32_t i=0;i<n;i++) out[i]+=voice_amp(mulq15(line[0][i],line[1][i])*2,m,i)*4;
     else for (uint32_t i=0;i<n;i++) out[i]+=voice_amp((line[0][i]+line[1][i])>>1,m,i)*4;
+#ifdef CZ_PROBE                                         /* (host only: tests/cz_pops.c looks at the voice's block) */
+    CZ_PROBE(t,v,first,last,amp,pd,line,n,modulation,m);
+#endif
 }

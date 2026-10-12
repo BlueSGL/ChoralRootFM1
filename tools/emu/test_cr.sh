@@ -2069,6 +2069,19 @@ has '^edit: group ENV screen 6 ' "$ZL" && has '^edit: group FILT screen 1 ' "$ZL
     has '^edit: group MOD screen 1 ' "$ZL" && ok "CZ-1's groups: ENV DCW 1 (1-4, 5-8, END), FILT (DCW), LFO (VIB), MOD (TONE)" ||
     bad "CZ-1 groups: $(grep -c '^edit: group' "$ZL")"
 
+echo "CZ-1's pops (docs/CZ1.md Pops): a chord struck again while it sounds, chord changes with common tones, the CZ-1 bass"
+rm -f "$OUT"/cz_pop*
+"$EMU" --headless --script "$S/cr_cz_pop.txt" --wav "$OUT/cz_pop.wav" >"$OUT/cz_pop.log" 2>&1 && ok "cr_cz_pop: exit 0" || bad "cr_cz_pop: see $OUT/cz_pop.log"
+PL="$OUT/cz_pop.log"
+has 'part 0: CZ-1 / STRINGS 2' "$PL" && has 'part 1: CZ-1 / SYNTH.BASS' "$PL" && ok "the chord part on CZ-1 STRINGS 2, the bass on CZ-1 SYNTH.BASS" ||
+    bad "cr_cz_pop: $(grep -m2 'part [01]:' "$PL" | tr '\n' ' ')"
+has '^expect sound .*: ok' "$PL" && ok "the chord sounds" || bad "cr_cz_pop: no sound"
+# (from 3.4 s: after the first chord's attack, whose bright bass onset wavclicks reads as high-frequency bursts in any
+# build; the three re-strikes from 4.46 s and the two chord changes from 6.3 s are the pops' places)
+wc=$(python3 tools/emu/wavclicks.py "$OUT/cz_pop.wav" --from 3.4 | tail -1)
+echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "cr_cz_pop: $wc" || bad "cr_cz_pop: $wc"
+silent_end cz_pop
+
 echo "FM TONE (code name QUAD): the engine picker, the pool, a chord, the editor's screens (docs/QUAD.md)"
 run cr_quad --wav "$OUT/cr_quad.wav"
 QL="$OUT/cr_quad.log"
