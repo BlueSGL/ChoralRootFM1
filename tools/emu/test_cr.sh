@@ -2391,5 +2391,33 @@ a=$(klw 2700 1); b=$(klw 2700 0); c=$(klw 7800 1); d=$(klw 7800 0)
     ok "a key struck while a frame draws: to the engine in $a ms at most with a 16 ms redraw (2.7 ms a strip), $c ms with a 47 ms one; read between frames only (as it was) $b and $d ms" \
     || bad "the keys while a frame draws: worst ${a:-?} ms (16 ms redraw; <= 5), ${c:-?} ms (47 ms redraw; <= 10); without the pump ${b:-?} (>= 15), ${d:-?} (>= 40)"
 
+echo "Options > Output: Classic / Clean (0.19, docs/AUDIO-QUALITY.md): switched under a held chord, saved, Classic from the first block"
+EMU_UI_LOG=1 "$EMU" --headless --script "$S/cr_output.txt" --wav "$OUT/cr_output.wav" >"$OUT/cr_output.log" 2>&1 || bad "cr_output: exit $?"
+ml() { LC_ALL=C grep -a '^  master:' "$1" | sed -n "$2p" | sed 's/^  master: //; s/ lowcut.*//'; }
+[ "$(ml "$OUT/cr_output.log" 1)" = "output Clean (chain 1, want 1, fade 0)" ] &&
+    ok "a new unit: Output Clean, the Clean chain from the first block" || bad "Output at power-on: $(ml "$OUT/cr_output.log" 1)"
+LC_ALL=C grep -aq "item 'Output' value 'Clean'" "$OUT/cr_output.log" && LC_ALL=C grep -aq "item 'Output' value 'Classic'" "$OUT/cr_output.log" &&
+    [ "$(ml "$OUT/cr_output.log" 2)" = "output Classic (chain 0, want 0, fade 0)" ] &&
+    [ "$(ml "$OUT/cr_output.log" 3)" = "output Clean (chain 1, want 1, fade 0)" ] &&
+    ok "Options > Output, KNOB 1: Classic (0.18's master runs, the fade over), then Clean again ($OUT/cr_output_classic.ppm)" \
+    || bad "Output switched: $(ml "$OUT/cr_output.log" 2) / $(ml "$OUT/cr_output.log" 3)"
+differ cr_output_clean cr_output_classic "Output: the two values' screens differ"
+wc_=$(python3 tools/emu/wavclicks.py "$OUT/cr_output.wav" --from 1.0 | tail -1)
+echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &&
+    ok "both changes under the held chord: no jump, no hole, no click ($(echo "$wc_" | sed 's/.*wav: //; s/:.*//'))" || bad "Output switched: $wc_"
+OF=$OUT/cr_output_flash.bin
+rm -f "$OF"
+"$EMU" --headless --flash "$OF" --script "$S/cr_output_classic.txt" >"$OUT/cr_output_set.log" 2>&1 || bad "cr_output_classic: exit $?"
+"$EMU" --headless --flash "$OF" --script "$S/persist_check.txt" >"$OUT/cr_output_relaunch.log" 2>&1 || bad "cr_output relaunch: exit $?"
+grep -q "settings saves 1 " "$OUT/cr_output_set.log" && [ "$(ml "$OUT/cr_output_relaunch.log" 1)" = "output Classic (chain 0, want 0, fade 0)" ] &&
+    ok "Output Classic is saved by itself (an Option) and is the chain from the first block after a relaunch" \
+    || bad "Output saved: $(ml "$OUT/cr_output_relaunch.log" 1)"
+EMU_OUTPUT=classic "$EMU" --headless --script "$S/perf_a.txt" --wav "$OUT/cr_output_pin.wav" >"$OUT/cr_output_pin.log" 2>&1
+"$EMU" --headless --flash "$OF" --script "$S/perf_a.txt" --wav "$OUT/cr_output_set.wav" >/dev/null 2>&1
+"$EMU" --headless --script "$S/perf_a.txt" --wav "$OUT/cr_output_def.wav" >/dev/null 2>&1
+cmp -s "$OUT/cr_output_pin.wav" "$OUT/cr_output_set.wav" && ! cmp -s "$OUT/cr_output_pin.wav" "$OUT/cr_output_def.wav" &&
+    ok "a script on the flash that says Classic = the same with EMU_OUTPUT=classic, bit for bit (what tools/emu/classic_exact.sh compares with 0.18's), and not the Clean default's" \
+    || bad "Output Classic from the settings and EMU_OUTPUT=classic: the WAVs differ, or equal the default's"
+
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

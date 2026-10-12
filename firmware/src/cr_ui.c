@@ -5620,7 +5620,7 @@ static void cu_options_screen(cr_screen_t *s)
     else if (cu.opt_sel == O_USB_LEVEL)            /* (the values stay Master / Fixed: the line says what they do) */
         cu_cpy(s->label, cs.usb_fixed ? "record full, MASTER: speaker" : "record level: MASTER knob", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
-        cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18's limiter and soft clip", sizeof s->label);
+        cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
     else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: Off the default, On the option; never started /
                                                     * stopped live) */
         cu_cpy(s->label, cs.dualcore != !cr_c1_off ? "takes effect after a restart"

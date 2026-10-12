@@ -270,6 +270,9 @@ def build_app(stub):
             flags.append(f"-D{flag}={v}")
     if os.environ.get("CR_ACK_LATE") == "1":      # the audio half's pending bit cleared after the render, as to 0.18's
         flags.append("-DFM1_AUDIO_ACK_LATE=1")    # second build (firmware/src/audio.c fm1_alnk0_irq)
+    if os.environ.get("CR_OUT_MAKEUP") == "1":    # Options > Output Clean: the 2.5 dB its trim takes given back after the
+        flags.append("-DCLN_MAKEUP=5461")         # knee, in the DAC word's upper 6 dB (firmware/src/fx.c CLN_MAKEUP;
+                                                  # docs/AUDIO-QUALITY.md "Proposed": not a default, to be heard first)
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')

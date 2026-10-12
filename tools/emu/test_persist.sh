@@ -591,5 +591,31 @@ want_f="on 0 amt 35 45 25 12 sends 0 0 0 28 bass-send 18"
 [ "$(qd "$Q2" 5)" = "chord track 0 send 0 edited 0 | bass track 0 send 0 edited 0" ] && dl "$Q2" 'session chord:' 5 | grep -q 'FM6 / TINE EP edited 0' && dl "$Q2" 'session bass:' 5 | grep -q 'VA / DEEP SUB edited 0' &&
     ok "Options > Reset Settings from FM TONE on both parts: a new unit's sounds, no drive anywhere" \
     || bad "FM TONE drive, the reset: $(qd "$Q2" 5) / $(dl "$Q2" 'session chord:' 5)"
+# Felucca's SPEAKER setting left behind (0.19, docs/AUDIO-QUALITY.md "Left behind"): a unit that ran Felucca with
+# MENU > SPEAKER at LOWCUT or BASS+ kept that master stage under ChoralRoot, which has no control for it. A ChoralRoot
+# settings object with the field at 2 (BASS+), and a Felucca PER4 object with it at 1 (LOWCUT): both power on with the
+# stage off, and the next write of the object stores 0
+LCF=$OUT/persist_lowcut_flash.bin
+LC4=$OUT/persist_lowcut4_flash.bin
+rm -f "$LCF" "$LC4" "$OUT"/persist_lowcut*.log
+"$EMU" --headless --flash "$LCF" --script "$S/persist_set.txt" >"$OUT/persist_lowcut_0.log" 2>&1 || bad "lowcut run 0: exit status"
+cp "$LCF" "$LC4"
+n5=$(python3 tools/emu/seed_lowcut.py "$LCF" 2)
+n4=$(python3 tools/emu/seed_lowcut.py "$LC4" 1 --per4)
+lc() { LC_ALL=C grep -a '^  master:' "$1" | tail -1 | sed 's/.*lowcut //'; }
+"$EMU" --headless --flash "$LCF" --script "$S/persist_check.txt" >"$OUT/persist_lowcut_1.log" 2>&1 || bad "lowcut run 1: exit status"
+[ "${n5:-0}" -ge 1 ] && [ "$(python3 tools/emu/seed_lowcut.py "$LCF")" = 2 ] && [ "$(lc "$OUT/persist_lowcut_1.log")" = "0/0 found 2" ] &&
+    [ "$(bpm "$OUT/persist_lowcut_1.log")" = 137 ] &&
+    ok "a settings object with Felucca's SPEAKER at BASS+ ($n5 copies): found, held off (settings.lowcut 0, fx_lowcut 0); the settings kept (137 BPM)" \
+    || bad "lowcut 2 in a PER5 object: $n5 copies, $(lc "$OUT/persist_lowcut_1.log")"
+"$EMU" --headless --flash "$LCF" --script "$S/cr_output_classic.txt" >"$OUT/persist_lowcut_2.log" 2>&1 || bad "lowcut run 2: exit status"
+"$EMU" --headless --flash "$LCF" --script "$S/persist_check.txt" >"$OUT/persist_lowcut_3.log" 2>&1 || bad "lowcut run 3: exit status"
+[ "$(python3 tools/emu/seed_lowcut.py "$LCF")" = 0 ] && [ "$(lc "$OUT/persist_lowcut_3.log")" = "0/0 found 0" ] &&
+    ok "the next write of the object (an Option changed) stores 0: the flash is clean for whatever firmware comes next" \
+    || bad "lowcut after a save: flash $(python3 tools/emu/seed_lowcut.py "$LCF"), $(lc "$OUT/persist_lowcut_3.log")"
+"$EMU" --headless --flash "$LC4" --script "$S/persist_check.txt" >"$OUT/persist_lowcut_4.log" 2>&1 || bad "lowcut run 4: exit status"
+[ "${n4:-0}" -ge 1 ] && [ "$(lc "$OUT/persist_lowcut_4.log")" = "0/0 found 1" ] && grep -q "record: defaults" "$OUT/persist_lowcut_4.log" &&
+    ok "a Felucca PER4 object with SPEAKER at LOWCUT ($n4 copies): found, held off; ChoralRoot's defaults" \
+    || bad "lowcut 1 in a PER4 object: $n4 copies, $(lc "$OUT/persist_lowcut_4.log")"
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail
