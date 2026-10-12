@@ -1355,8 +1355,8 @@ int main(int argc, char **argv)
             static const char *const V1[4] = {"4 bars", "x1.5", "1/16", "On"};
             static const char *const LBE[4] = {"Note len", "Steps", "Chance", "Velocity"};
             static const char *const VE[4] = {"3", "16", "100%", "100"};
-            static const char *const LBT[4] = {"Ratchet", "Condition", "Voicing", ""};
-            static const char *const VT[4] = {"x3", "not 1st", "Follow", ""};
+            static const char *const LBT[4] = {"Ratchet", "Condition", "Voicing", "Transpose"};
+            static const char *const VT[4] = {"x3", "not 1st", "Follow", "C#4"};
             cr_screen_t s = CR_SCREENS[ix];
             uint16_t line = swap16(T_LINE);
             uint32_t c;
@@ -1568,7 +1568,7 @@ int main(int argc, char **argv)
                     t2.sel = 1; t2.lm_lane[3] = 0x100ull; t2.lm_cell[4] = (uint8_t)(12u | CR_LMC_COND | 3u << 4);
                     snprintf(t2.foot, sizeof t2.foot, "2/2 \267 PRESETS: step \267 REC: clear \267 SEQ: back");
                     memset(t2.cell, 0, sizeof t2.cell);
-                    for (c2 = 0; c2 < 3u; c2++) {
+                    for (c2 = 0; c2 < 4u; c2++) {
                         t2.cell[0][c2].flags = CR_CF_ON;
                         snprintf(t2.cell[0][c2].label, sizeof t2.cell[0][c2].label, "%s", LBT[c2]);
                         snprintf(t2.cell[0][c2].value, sizeof t2.cell[0][c2].value, "%s", VT[c2]);
@@ -1577,8 +1577,116 @@ int main(int argc, char **argv)
                     render(&t2, 0);
                     COUNT(r1, 20u, 228u, 220u, 240u, HS(x, y) != swap16(T_BG));
                     write_ppm(dir, "loopmenu_editor_trig");
-                    check("loop editor, page 2 (Trig): Ratchet / Condition / Voicing, KNOB 4 free, over its bottom line",
+                    check("loop editor, page 2 (Trig): Ratchet / Condition / Voicing / Transpose over its bottom line",
                           memcmp(a, host_screen, sizeof a) != 0 && r1 > 100u);
+                    {   /* Transpose (KNOB 4): the label whole inside its cell (x 180 .. 240), the root note under it; hot:
+                         * the turn's sum; an empty step: "-", dim. 0 lint findings */
+                        uint32_t i, whole = 0, val = 0, f0 = nfind, e0 = nell, hot, dim;
+                        lint("loopmenu_editor_trig", &t2);
+                        for (i = 0; i < nbox; i++) {
+                            if (!strcmp(boxes[i].s, "Transpose") && !(boxes[i].flags & 1u) && boxes[i].x0 >= 180 && boxes[i].x1 <= 240) whole++;
+                            if (!strcmp(boxes[i].s, "C#4") && boxes[i].x0 >= 180 && boxes[i].x1 <= 240) val++;
+                        }
+                        memcpy(a, host_screen, sizeof a);
+                        snprintf(t2.cell[0][3].value, sizeof t2.cell[0][3].value, "+1");
+                        t2.hot_r = 1; t2.hot_c = 3;
+                        render(&t2, 0);
+                        lint("loopmenu_editor_trig_hot", &t2);
+                        write_ppm(dir, "loopmenu_editor_trig_hot");
+                        hot = memcmp(a, host_screen, sizeof a) != 0;
+                        t2.hot_r = t2.hot_c = 0;
+                        snprintf(t2.cell[0][3].value, sizeof t2.cell[0][3].value, "-");
+                        t2.cell[0][3].flags = CR_CF_ON | CR_CF_DIM;
+                        memcpy(a, host_screen, sizeof a);
+                        render(&t2, 0);
+                        lint("loopmenu_editor_trig_empty", &t2);
+                        dim = memcmp(a, host_screen, sizeof a) != 0;
+                        snprintf(name, sizeof name, "loop editor, Trig: the Transpose cell: its label whole in its cell (%u), the root note C#4 (%u); hot "
+                                 "'+1'; an empty step '-'; %u lint findings, %u cut", whole, val, nfind - f0, nell - e0);
+                        check(name, whole == 1u && val == 1u && hot && dim && nfind == f0 && nell == e0);
+                        snprintf(t2.cell[0][3].value, sizeof t2.cell[0][3].value, "C#4");
+                        t2.cell[0][3].flags = CR_CF_ON;
+                    }
+                    {   /* the playing name (lm_now): blue, at the left of the page's name on the picker band's row; the
+                         * page's name does not move; no voicing; the longest name fits whole; on the Trig page it takes
+                         * the left neighbour's place; a new name redraws one strip */
+                        static const char *const LONG[4] = {"G#madd4 JAZZ", "G#madd4 WTF", "A#madd4 JAZZ", "D#sus JAZZ"};
+                        cr_screen_t p = s, p2;
+                        uint32_t i, f0 = nfind, e0 = nell, nb, nz, nout, nx1 = 0, sx0 = 240, okl = 1, in, lblue = 0, lmin = 9999, nostep = 1, hasstep = 0, d1, b1, same;
+                        int32_t x, y;
+                        render(&p, 0);                               /* stopped: none */
+                        memcpy(a, host_screen, sizeof a);
+                        COUNT(nz, 0u, 56u, 240u, 92u, HS(x, y) == blu);
+                        snprintf(p.lm_now, sizeof p.lm_now, "Am");
+                        render(&p, 0);
+                        lint("loopmenu_editor_now", &p);
+                        write_ppm(dir, "loopmenu_editor_now");
+                        COUNT(nb, 6u, 62u, 84u, 80u, HS(x, y) == blu);
+                        for (nout = 0, y = 0; y < 240; y++)          /* nothing else changed: only x 6 .. 83, rows 62 .. 79 */
+                            for (x = 0; x < 240; x++)
+                                if (!(x >= 6 && x < 84 && y >= 62 && y < 80) && a[y * 240 + x] != host_screen[y * 240 + x]) nout++;
+                        for (i = 0; i < nbox; i++) {
+                            if (!strcmp(boxes[i].s, "Am") && boxes[i].y0 < 92 && boxes[i].y1 > 56) nx1 = (uint32_t)boxes[i].x1;
+                            if (!strcmp(boxes[i].s, "Step") && boxes[i].y0 < 92) sx0 = (uint32_t)boxes[i].x0;
+                        }
+                        snprintf(name, sizeof name, "loop editor, playing: the playing name left of the page's name, blue (%u px; %u when stopped); "
+                                 "nothing else moves (%u px differ outside its box); 'Am' ends at x %u, 'Step' begins at %u", nb, nz, nout, nx1, sx0);
+                        check(name, nb >= 20u && nz == 0u && nout == 0u && nx1 > 6u && nx1 <= 84u && sx0 >= 90u);
+                        for (i = 0; i < 4u; i++) {                   /* the longest names: whole, 6 px or more before "Step" */
+                            uint32_t j, x1 = 0;
+                            snprintf(p.lm_now, sizeof p.lm_now, "%s", LONG[i]);
+                            render(&p, 0);
+                            lint("loopmenu_editor_now_long", &p);
+                            if (!i) write_ppm(dir, "loopmenu_editor_now_long");
+                            for (j = 0; j < nbox; j++)
+                                if (!strcmp(boxes[j].s, LONG[i])) x1 = (uint32_t)boxes[j].x1;
+                            COUNT(in, 6u, 62u, 84u, 80u, HS(x, y) == blu);
+                            okl &= x1 > 40u && x1 <= 84u && in >= 40u;
+                            if (!i) lblue = x1;
+                            if (in < lmin) lmin = in;
+                        }
+                        snprintf(name, sizeof name, "loop editor, playing: 'G#madd4 JAZZ' (the longest) and three more: whole, not cut (%u), ending by x 84 "
+                                 "(%u): 6 px clear of 'Step'; %u blue px or more; %u lint findings", nell - e0, lblue, lmin, nfind - f0);
+                        check(name, okl && nell == e0 && nfind == f0);
+                        p2 = t2;                                     /* the Trig page: the name where "Step" (the left neighbour) stood */
+                        render(&p2, 0);
+                        for (i = 0; i < nbox; i++)
+                            if (!strcmp(boxes[i].s, "Step")) hasstep++;
+                        snprintf(p2.lm_now, sizeof p2.lm_now, "C#m7 9");
+                        render(&p2, 0);
+                        lint("loopmenu_editor_now_trig", &p2);
+                        write_ppm(dir, "loopmenu_editor_now_trig");
+                        for (i = 0; i < nbox; i++)
+                            if (!strcmp(boxes[i].s, "Step")) nostep = 0;
+                        COUNT(nb, 6u, 62u, 84u, 80u, HS(x, y) == blu);
+                        snprintf(name, sizeof name, "loop editor, playing, the Trig page: the name (%u blue px) in the left neighbour's place: 'Step' drawn "
+                                 "when stopped (%u), not while a name shows; %u lint findings", nb, hasstep, nfind - f0);
+                        check(name, nb >= 40u && hasstep == 1u && nostep && nfind == f0);
+                        snprintf(p.lm_now, sizeof p.lm_now, "Am");   /* a new name: one strip composed, = a full draw */
+                        render(&p, 0);
+                        snprintf(p.lm_now, sizeof p.lm_now, "Dm7");
+                        cr_draw(&p, 0);
+                        d1 = cr_dc.drawn; b1 = cr_dc.blits;
+                        memcpy(a, host_screen, sizeof a);
+                        render(&p, 0);
+                        same = !memcmp(a, host_screen, sizeof a);
+                        cr_draw(&p, 0);
+                        p.lm_now[0] = 0;                             /* stopped: it goes, one strip again */
+                        cr_draw(&p, 0);
+                        snprintf(name, sizeof name, "loop editor, playing: another name redraws one strip (%u composed, %u blitted) and equals a full "
+                                 "draw; the name gone (stopped): one strip (%u)", d1, b1, cr_dc.drawn);
+                        check(name, d1 == 1u && b1 == 1u && same && cr_dc.drawn == 1u);
+                        p = s;                                       /* a page sliding in crosses its place: not drawn meanwhile */
+                        snprintf(p.lm_now, sizeof p.lm_now, "Am");
+                        p.anim = CR_A_SLIDE; p.slide = 1; p.sel = 1;
+                        render(&p, 60);
+                        COUNT(nb, 0u, 56u, 240u, 92u, HS(x, y) == blu);
+                        render(&p, 400);
+                        COUNT(in, 6u, 62u, 84u, 80u, HS(x, y) == blu);
+                        snprintf(name, sizeof name, "loop editor, playing: while the page's name slides (160 ms) the playing name waits (%u blue px), "
+                                 "then it is back (%u)", nb, in);
+                        check(name, nb == 0u && in >= 20u);
+                    }
                     render(&s, 0);
                 }
                 s.lm_steps = 12;                 /* the loop four steps shorter: steps 13 .. 16 are not drawn */

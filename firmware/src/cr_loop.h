@@ -102,11 +102,14 @@ typedef struct {
     uint32_t cyc0, scan;                       /* the current cycle's start (abs ticks); next position to play */
     uint32_t rec0, rec_len, cin0, od0, met0;
     struct { uint32_t gid, t0; int16_t root; uint8_t used, q, ext, vel, rep; } open[CRL_OPEN];   /* held gestures
-                                                * (rep: opened while replacing) */
+                                                * (rep: opened while replacing; used 2: its key is up and it sounds on,
+                                                * latched, and the editor has written it: CR_G_KEYUP) */
     /* the loop voices. ev: the event it plays; used: 1 sounding (off: its end), 2 a ratchet waiting for its next hit
-     * (off: when); hits: the ratchet's hits still to come, slice ticks apart, each gate long, with the chord kept
-     * here (the event may be gone by then: an edit, a slot switch); voic: the step's voicing (CR_VOIC_FOLLOW) */
-    struct { uint32_t off; uint16_t ev; uint8_t used, hits, slice, gate, root, qx, vel; int8_t voic; } pv[CR_MAX_LOOPV];
+     * (off: when); hits: the ratchet's hits still to come, slice ticks apart, each gate long but the LAST, which is
+     * `last` long (a plain note: its only hit, the note's length; a ratchet on a note longer than a step: the rest of
+     * the note, so the last hit holds to the note's end), with the chord kept here (the event may be gone by then:
+     * an edit, a slot switch); voic: the step's voicing (CR_VOIC_FOLLOW) */
+    struct { uint32_t off; uint16_t ev, last; uint8_t used, hits, slice, gate, root, qx, vel; int8_t voic; } pv[CR_MAX_LOOPV];
     uint8_t pass12, pass_n;                    /* the pass of the loop since it started playing, mod 12 (the A:B
                                                 * conditions: 2, 3 and 4 divide it); 0 on the first, then 1 */
     uint32_t rnd;                              /* the chance rolls' state: a new value each pass (xorshift32) */
@@ -136,6 +139,9 @@ typedef struct {
                                                 * of the loop still playing: an overdub armed, an undo) */
     /* out: the click (the audio side takes it), diagnostics */
     uint8_t click;                             /* 0 none, 1 beat, 2 the bar's first beat */
+    uint8_t hit_on, hit_root, hit_qx;          /* the chord the loop struck last since it started playing (crl_hit: what
+                                                * sounded, so a step its condition or chance kept silent is not it);
+                                                * hit_on 0: none yet. The loop editor's "now playing" name */
     uint32_t played;                           /* events played (diagnostics) */
 } cr_loop_t;
 
@@ -215,6 +221,12 @@ int  cr_loop_ed_setnlen(cr_loop_t *lp, uint32_t n);   /* .. its notes n steps lo
 int  cr_loop_ed_len(cr_loop_t *lp, uint32_t len);     /* the loop's length in ticks (the events beyond it are kept,
                                                 * unheard and unsaved, until the editor closes); 0: refused */
 int  cr_loop_ed_vel(cr_loop_t *lp, int delta); /* the step's events' velocity; the highest after, 0: no event */
+int  cr_loop_ed_transpose(cr_loop_t *lp, int semis);   /* the step's notes (chord roots, single notes, bass-side notes)
+                                                * semis up or down, chromatically: the events' roots are rewritten, nothing
+                                                * else moves and nothing new is stored. 1 done; 0 refused: no event, or
+                                                * one of them would leave CRL_ROOT_MIN .. CRL_ROOT_MAX (none moves) */
+#define CRL_ROOT_MIN 0
+#define CRL_ROOT_MAX 127
 uint32_t cr_loop_ed_nfrac(const cr_loop_t *lp);/* the cursor's step: its notes are a part of a step long: 1 .. 3 quarters
                                                 * of it (the longest is exactly 6, 12 or 18 ticks); 0: not (cr_loop_ed_nlen) */
 int  cr_loop_ed_setnfrac(cr_loop_t *lp, uint32_t f);   /* .. its notes f quarters of a step long (1 .. 3). 0: refused */

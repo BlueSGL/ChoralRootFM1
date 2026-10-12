@@ -13,7 +13,7 @@ static uint32_t NOW;
 static int passed, failed;
 static uint8_t SND[3][128];
 static int dup_on, stray_off;
-typedef struct { char k; uint8_t s, note, vel; uint32_t ms; } ev_t;
+typedef struct { char k; uint8_t s, note, vel; uint32_t ms, lt; } ev_t;   /* (lt: the loop's tick then) */
 static ev_t LOG[20000];
 static int nlog;
 static int clicks[3];
@@ -23,14 +23,14 @@ static void cb_on(void *ud, cr_stream_t s, uint8_t n, uint8_t v)
     (void)ud;
     if (SND[s][n]) dup_on++;
     SND[s][n] = 1;
-    if (nlog < 20000) { LOG[nlog].k = '+'; LOG[nlog].s = (uint8_t)s; LOG[nlog].note = n; LOG[nlog].vel = v; LOG[nlog].ms = NOW; nlog++; }
+    if (nlog < 20000) { LOG[nlog].k = '+'; LOG[nlog].s = (uint8_t)s; LOG[nlog].note = n; LOG[nlog].vel = v; LOG[nlog].ms = NOW; LOG[nlog].lt = L.t; nlog++; }
 }
 static void cb_off(void *ud, cr_stream_t s, uint8_t n)
 {
     (void)ud;
     if (!SND[s][n]) stray_off++;
     SND[s][n] = 0;
-    if (nlog < 20000) { LOG[nlog].k = '-'; LOG[nlog].s = (uint8_t)s; LOG[nlog].note = n; LOG[nlog].vel = 0; LOG[nlog].ms = NOW; nlog++; }
+    if (nlog < 20000) { LOG[nlog].k = '-'; LOG[nlog].s = (uint8_t)s; LOG[nlog].note = n; LOG[nlog].vel = 0; LOG[nlog].ms = NOW; LOG[nlog].lt = L.t; nlog++; }
 }
 static void cb_all(void *ud, cr_stream_t s) { (void)ud; memset(SND[s], 0, sizeof SND[s]); }
 static void cb_gesture(void *ud, uint32_t gid, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on)
@@ -1710,12 +1710,16 @@ static void s_trig(void)
     ok(x > 0 && y == 0 && z > 0 && sounding() == 0, "ratchet x2 on a 1/2-step note: two hits of a quarter step with a gap between them");
     cr_loop_stop(&L, &C);
     mkloop(4);
-    addev(24, 72, 62, CR_Q_MAJ, 0);                  /* a 3-step note, x2: two hits in ITS step, then silence */
+    addev(24, 72, 62, CR_Q_MAJ, 0);                  /* a 3-step note, x2: two hits in ITS step, the second holds to the
+                                                      * note's end (s_ratlong: the exact lengths) */
     setst(1, 1, 0, 0, 0);
     mark = nlog;
     cr_loop_play(&L, &C);
     step(125 + 125 + 20);
-    ok(ons_of(62, mark, t, 8) == 2 && sounding() == 0 && lvoices() == 0, "ratchet on a long note: its hits are slices of one step, nothing sounds after it");
+    x = sounding(); y = lvoices();
+    step(125 + 125);
+    ok(ons_of(62, mark, t, 8) == 2 && x > 0 && y == 1 && sounding() == 0 && lvoices() == 0,
+       "ratchet on a long note: two hits in its step, the last one sounds on to the note's end, then nothing");
     cr_loop_stop(&L, &C);
     mkloop(4);                                       /* eight ratcheted chords on one step: the eight voices, no more */
     for (i = 0; i < 8; i++) addev(24, 24, 48 + (int)i * 3, CR_Q_MAJ, 0);
@@ -2018,6 +2022,312 @@ static void s_trig(void)
     (void)rn;
 }
 
+/* ---- 2026-10-11, the owner: "if length is greater than one step, the last trig of ratchet then holds for the length.
+ * So if ratchet is 2 and step length is 2, the sequence would be note of length 0.5, then after that a note of 1.5; if
+ * the length was 4 and the ratchet was 4, you get 3 notes that are 0.25 length, then the 4th note is a length of 3.25
+ * steps". Exact, in the loop's ticks (LOG's lt), at Rate x1 and x1/16 */
+static int hits_of(int note, int from, uint32_t t0, uint32_t *at, uint32_t *len, int max)
+{
+    int k, n = 0;
+    for (k = from; k < nlog; k++) {
+        if (LOG[k].s != 0 || LOG[k].note != note) continue;
+        if (LOG[k].k == '+' && n < max) { at[n] = LOG[k].lt - t0; len[n] = 0; n++; }
+        else if (LOG[k].k == '-' && n && !len[n - 1]) len[n - 1] = LOG[k].lt - t0 - at[n - 1];
+    }
+    return n;
+}
+static void ratlong(int rate, const char *rn, uint32_t dur, int rat, const uint32_t *want)
+{
+    uint32_t at[8], len[8], t0, i, n, top = 0, tick = rate == 0 ? 84u : 6u;
+    char name[200];
+    int mark, bad = 0;
+    mkloop(dur / 24u + 4u);                          /* (the note ends inside the pass) */
+    addev(24, dur, 62, CR_Q_MAJ, 0);
+    setst(1, rat - 1, 0, 0, 0);
+    cr_loop_set_rate(&L, rate);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    t0 = L.t;
+    while (L.t - t0 < 24u + dur + 12u) {             /* (to half a step past the note's end) */
+        step(1);
+        if ((uint32_t)lvoices() > top) top = (uint32_t)lvoices();
+    }
+    n = (uint32_t)hits_of(62, mark, t0, at, len, 8);
+    bad = n != (uint32_t)rat;
+    for (i = 0; i < n && i < (uint32_t)rat; i++)
+        bad |= at[i] != 24u + i * (24u / (uint32_t)rat) || len[i] != want[i];
+    snprintf(name, sizeof name, "ratchet x%d, Note len %u.%02u steps, Rate %s: %u hits at ticks %u %u %u %u, %u %u %u %u long (want %u %u %u %u)",
+             rat, (unsigned)(dur / 24u), (unsigned)(dur % 24u * 100u / 24u), rn, (unsigned)n, (unsigned)at[0], (unsigned)at[1],
+             (unsigned)(n > 2 ? at[2] : 0), (unsigned)(n > 3 ? at[3] : 0), (unsigned)len[0], (unsigned)len[1], (unsigned)(n > 2 ? len[2] : 0),
+             (unsigned)(n > 3 ? len[3] : 0), (unsigned)want[0], (unsigned)want[1], (unsigned)(rat > 2 ? want[2] : 0), (unsigned)(rat > 3 ? want[3] : 0));
+    ok(!bad, name);
+    ok(top == 1 && sounding() == 0 && lvoices() == 0 && dup_on == 0 && stray_off == 0,
+       "  .. on one loop voice, silent after the note's end, no doubled or stray note");
+    step(tick);
+    cr_loop_stop(&L, &C);
+}
+static void s_ratlong(void)
+{
+    static const uint32_t W22[2] = {12, 36}, W44[4] = {6, 6, 6, 78}, W32[3] = {8, 8, 32}, W21[2] = {12, 12}, W41[4] = {6, 6, 6, 6},
+                          W2h[2] = {6, 6}, W2o[2] = {12, 13}, W460[4] = {6, 6, 6, 1422};
+    uint32_t at[8], len[8], t0;
+    int mark, x, y, z;
+    ratlong((int)CRL_RATE_1, "x1", 48, 2, W22);      /* 0.5 then 1.5 steps */
+    ratlong((int)CRL_RATE_1, "x1", 96, 4, W44);      /* 0.25 0.25 0.25 then 3.25 */
+    ratlong((int)CRL_RATE_1, "x1", 48, 3, W32);      /* a third, a third, then 1 1/3 */
+    ratlong(0, "x1/16", 48, 2, W22);
+    ratlong(0, "x1/16", 96, 4, W44);
+    ratlong(0, "x1/16", 48, 3, W32);
+    ratlong((int)CRL_RATE_1, "x1", 24, 2, W21);      /* exactly a step: as before, all hits inside it */
+    ratlong((int)CRL_RATE_1, "x1", 24, 4, W41);
+    ratlong((int)CRL_RATE_1, "x1", 12, 2, W2h);      /* half a step: each hit half its slice, as before */
+    ratlong((int)CRL_RATE_1, "x1", 25, 2, W2o);      /* a tick over a step (a take played by hand): the last a tick longer */
+    ratlong((int)CRL_RATE_1, "x1", 60 * 24, 4, W460);/* 60 steps in a 64-step loop: the last hit 59.25 steps */
+    /* the long last hit sounds over the following steps like any long note: they still play, on their own voices */
+    mkloop(8);
+    addev(24, 72, 62, CR_Q_MAJ, 0);
+    addev(48, 24, 71, CR_Q_MIN, 0);
+    setst(1, 1, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    t0 = L.t;
+    while (L.t - t0 < 60u) step(1);
+    x = lvoices(); y = SND[0][62] && SND[0][71];
+    while (L.t - t0 < 80u) step(1);
+    z = SND[0][62] && !SND[0][71];
+    while (L.t - t0 < 100u) step(1);
+    ok(x == 2 && y && z && sounding() == 0 && lvoices() == 0,
+       "ratchet x2 on a 3-step note: the next step's chord plays over its held last hit (two voices), which ends with the note");
+    cr_loop_stop(&L, &C);
+    /* .. and across the loop's end, as a long note does */
+    mkloop(4);
+    addev(72, 48, 62, CR_Q_MAJ, 0);
+    setst(3, 1, 0, 0, 0);
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    t0 = L.t;
+    while (L.t - t0 < 96u + 10u) step(1);
+    x = SND[0][62];
+    while (L.t - t0 < 96u + 30u) step(1);
+    y = SND[0][62];
+    ok(hits_of(62, mark, t0, at, len, 8) == 2 && at[1] == 84 && len[1] == 36 && x && !y,
+       "ratchet x2 on a 2-step note on the last step: the last hit holds across the loop's start (36 ticks) and ends there");
+    cr_loop_stop(&L, &C);
+    ok(sounding() == 0 && lvoices() == 0 && dup_on == 0 && stray_off == 0, "  .. stopped: silent");
+    /* a stop inside the held last hit, and the step cleared under it: no voice kept */
+    mkloop(8);
+    addev(24, 96, 62, CR_Q_MAJ, 0);
+    setst(1, 3, 0, 0, 0);
+    cr_loop_play(&L, &C);
+    t0 = L.t;
+    while (L.t - t0 < 70u) step(1);
+    x = lvoices();
+    cr_loop_stop(&L, &C);
+    ok(x == 1 && sounding() == 0 && lvoices() == 0, "ratchet x4 on a 4-step note, stopped inside the held last hit: silent, the voice free");
+    /* the grid follows Note len with a ratchet as without: the tail over the steps the last hit sounds in */
+    {
+        static crl_edmap_t M;
+        mkloop(8);
+        addev(24, 96, 62, CR_Q_MAJ, 0);
+        setst(1, 3, 0, 0, 0);
+        cr_loop_ed_open(&L);
+        ed_at(1);
+        cr_loop_ed_map(&L, 0, &M);
+        ok(M.start == 2u && M.tail == 0x1Cu && cr_loop_ed_nlen(&L) == 4 && ((M.rat[0] >> 1) & 1u) && ((M.rat[1] >> 1) & 1u),
+           "the editor's map: a ratcheted 4-step note: its step, three steps it sounds on in (the bar and the dark cells), Note len 4, x4");
+        cr_loop_ed_close(&L, &C);
+    }
+}
+
+/* ---- 2026-10-11, the Trig page's KNOB 4: Transpose (cr_loop_ed_transpose): the selected step's notes a semitone a
+ * detent, chord roots, single notes and bass-side notes alike, by rewriting the events' roots; refused whole when one
+ * of them would leave 0 .. 127 */
+static void s_transpose(void)
+{
+    static uint8_t b0[CRL_REC_MAX + 8], b1[CRL_REC_MAX + 8];
+    uint32_t n0, n1, t[8];
+    int mark, n;
+    mkloop(4);
+    addev(24, 48, 60, CR_Q_MAJ, CR_EXT_M7);          /* C7, two steps long */
+    addev(24, 24, 64, 0, 0);                         /* a single note */
+    addev(26, 12, 36, 0, CRL_X_BASS);                /* a bass-side note, off the grid */
+    addev(72, 24, 67, CR_Q_MIN, 0);                  /* another step */
+    setst(1, 1, CRL_C_1_2, 3, 2);
+    L.d.ev[1].vel = 77;
+    L.dirty = 0;
+    ok(cr_loop_ed_transpose(&L, 1) == 0 && L.d.ev[0].root == 60, "transpose: nothing outside the editor");
+    cr_loop_ed_open(&L);
+    ed_at(1);
+    n0 = cr_loop_pack(&L.d, b0, sizeof b0);
+    ok(cr_loop_ed_transpose(&L, 1) == 1 && L.d.ev[0].root == 61 && L.d.ev[1].root == 65 && L.d.ev[2].root == 37,
+       "transpose +1: the chord's root, the single note and the bass-side note each a semitone up (C7 -> C#7)");
+    ok(L.d.ev[0].qx == (CR_Q_MAJ << 4 | CR_EXT_M7) && L.d.ev[1].qx == 0 && CRL_EV_BASS(&L.d.ev[2]) && L.d.ev[0].t == 24 && L.d.ev[0].dur == 48 &&
+       L.d.ev[2].t == 26 && L.d.ev[2].dur == 12 && L.d.ev[1].vel == 77 && L.d.ev[3].root == 67 && L.d.nev == 4 && L.d.len == 96,
+       "transpose: nothing else moves: quality, extensions, the part, times, lengths, velocity, the other step, the loop's length");
+    ok(L.d.st[1][0] == (1 | CRL_C_1_2 << 2) && L.d.st[1][1] == (3 | 2 << 5) && L.dirty == 1 && L.d.nlayers == 1,
+       "transpose: the step's ratchet, condition, voicing and chance stay; the loop is changed (to save)");
+    n1 = cr_loop_pack(&L.d, b1, sizeof b1);
+    ok(n0 == n1 && b1[5] == b0[5] && b1[7] == b0[7], "transpose: the record: the same size, version and flags (roots only)");
+    ok(cr_loop_ed_transpose(&L, -1) == 1 && cr_loop_pack(&L.d, b1, sizeof b1) == n0 && !memcmp(b0, b1, n0),
+       "transpose -1 after +1: the record byte for byte what it was");
+    ok(cr_loop_ed_transpose(&L, 12) == 1 && L.d.ev[0].root == 72 && L.d.ev[2].root == 48 && cr_loop_ed_transpose(&L, -12) == 1 &&
+       cr_loop_ed_transpose(&L, 0) == 0, "transpose: an octave up and back; 0: nothing");
+    /* it plays: C# major 7 where C was (the lowest note of the chord on MAIN) */
+    cr_loop_ed_transpose(&L, 1);
+    setst(1, 1, 0, 0, 0);                            /* (no condition, chance or voicing for this pass: the ratchet) */
+    mark = nlog;
+    cr_loop_play(&L, &C);
+    run_pass();
+    n = ons_of(61, mark, t, 8);
+    ok(n == 2 && ons_of(60, mark, t, 8) == 0, "transpose: the loop plays C# where C was (both hits of its ratchet)");
+    cr_loop_stop(&L, &C);
+    cr_loop_ed_transpose(&L, -1);
+    setst(1, 1, CRL_C_1_2, 3, 2);
+    /* the range: 0 .. 127 for every note of the step, or none moves */
+    L.d.ev[0].root = 126; L.d.ev[1].root = 120; L.d.ev[2].root = 1;
+    ok(cr_loop_ed_transpose(&L, 1) == 1 && L.d.ev[0].root == 127 && L.d.ev[2].root == 2, "transpose: up to 127");
+    L.gen = 7; L.dirty = 0;
+    ok(cr_loop_ed_transpose(&L, 1) == 0 && L.d.ev[0].root == 127 && L.d.ev[1].root == 121 && L.d.ev[2].root == 2 && L.gen == 7 && L.dirty == 0,
+       "transpose: a detent past 127 is refused: no note of the step moves (no wrap), nothing marked changed");
+    ok(cr_loop_ed_transpose(&L, -2) == 1 && L.d.ev[2].root == 0 && L.d.ev[0].root == 125, "transpose: down to 0 (the bass-side note)");
+    ok(cr_loop_ed_transpose(&L, -1) == 0 && L.d.ev[2].root == 0 && L.d.ev[0].root == 125 && L.d.ev[1].root == 119,
+       "transpose: a detent under 0 is refused: the chord above stays too");
+    ok(cr_loop_ed_transpose(&L, 3) == 0 && cr_loop_ed_transpose(&L, 2) == 1 && L.d.ev[0].root == 127,
+       "transpose: three at once would pass 127: refused; two: done");
+    ed_at(2);
+    ok(cr_loop_ed_transpose(&L, 1) == 0 && L.d.ev[3].root == 67, "transpose: an empty step has nothing to move");
+    ed_at(3);
+    ok(cr_loop_ed_transpose(&L, -7) == 1 && L.d.ev[3].root == 60 && L.d.ev[0].root == 127, "transpose: step 4 alone: Gm -> Cm");
+    cr_loop_ed_close(&L, &C);
+    /* an edit like the others: the first one makes the loop one layer (a Replace layer's hidden event is gone) */
+    mkloop(4);
+    addev(24, 24, 60, CR_Q_MAJ, 0);
+    addev(24, 24, 50, CR_Q_MIN, 0);
+    L.d.ev[1].layer = (uint8_t)(CRL_HID | 1);        /* hidden by layer 1 */
+    addev(48, 24, 64, CR_Q_MAJ, 0);
+    L.d.ev[2].layer = 1;
+    L.d.nlayers = 2;
+    L.lev0[1] = 2;
+    cr_loop_ed_open(&L);
+    ed_at(1);
+    ok(cr_loop_ed_transpose(&L, 2) == 1 && L.d.nlayers == 1 && L.d.nev == 2 && L.d.ev[0].root == 62 && L.d.ev[1].root == 64 &&
+       cr_loop_undo(&L, &C) == CRL_DID_NOTHING,
+       "transpose: the first edit: one layer (the hidden event gone, never moved), nothing for the looper's undo, as the other edits");
+    cr_loop_ed_close(&L, &C);
+}
+
+/* ---- 2026-10-11, the owner: "In the sequencer if playback is going on then when I enter keys to a selected step, it
+ * also ends up combining the playing notes into that step. In this case it should only enter the keys I'm playing, not
+ * the notes playing from the sequence." A loop voice never reaches the gesture hook, so the loop's own notes cannot be
+ * written (checked here first). What could: a LATCHED chord (LATCH / Sticky, a Perform mode's Hold) does not end when
+ * its keys go up, so the editor wrote it only at the next press, into the step selected by then: the chord still
+ * sounding, not the keys played. Now: at its keys' release (CR_G_KEYUP), as without a latch */
+static void edloop(void)                             /* D E G A on steps 1 .. 4, the editor open, playing */
+{
+    mkloop(4);
+    addev(0, 24, 62, CR_Q_MAJ, 0);
+    addev(24, 24, 64, CR_Q_MAJ, 0);
+    addev(48, 24, 67, CR_Q_MAJ, 0);
+    addev(72, 24, 69, CR_Q_MAJ, 0);
+    cr_loop_ed_open(&L);
+    cr_loop_play(&L, &C);
+    step(730);
+}
+static int step_is(uint32_t st, int root, int q)     /* step st holds exactly one event: that chord */
+{
+    uint32_t i, n = 0, hit = 0;
+    for (i = 0; i < L.d.nev; i++)
+        if (L.d.ev[i].t / CRL_STEP == st) {
+            n++;
+            hit += L.d.ev[i].root == root && (L.d.ev[i].qx >> 4) == q;
+        }
+    return n == 1 && hit == 1;
+}
+static void s_edkeys(void)
+{
+    uint32_t p0;
+    int k;
+    for (k = 0; k < 4; k++) {
+        static const char *const W[4] = {"no latch", "LATCH (Sticky)", "Arp with Hold", "Arp, no Hold"};
+        char name[200];
+        int a, b, c, d, e;
+        edloop();
+        if (k == 1) cr_set_sticky(&C, 1);
+        if (k >= 2) {
+            cr_set_perform_mode(&C, CR_PM_ARP);
+            cr_set_param(&C, CR_PM_ARP, CR_P_HOLD, k == 2);
+            cr_set_perform(&C, 1);
+        }
+        ed_at(2);
+        p0 = L.played;
+        chord(72, CR_MOD_MIN, 400);                  /* Cm held through three of the loop's chords, let go */
+        a = step_is(2, 72, CR_Q_MIN) && L.d.nev == 4;
+        step(300);
+        b = step_is(2, 72, CR_Q_MIN) && step_is(0, 62, CR_Q_MAJ) && step_is(1, 64, CR_Q_MAJ) && step_is(3, 69, CR_Q_MAJ) && L.d.nev == 4;
+        snprintf(name, sizeof name, "%s: a chord played into step 3 while the loop plays is in it when its keys go up, alone: "
+                 "none of the loop's playing chords (%u played meanwhile)", W[k], (unsigned)(L.played - p0));
+        ok(a && b && L.played - p0 >= 4u, name);
+        ed_at(1);                                    /* another step, another chord */
+        chord(65, CR_MOD_MIN, 90);
+        c = step_is(1, 65, CR_Q_MIN) && step_is(2, 72, CR_Q_MIN) && L.d.nev == 4;
+        snprintf(name, sizeof name, "%s: then Fm into step 2: step 2 is Fm, step 3 still Cm (not the chord that was still sounding)", W[k]);
+        ok(c, name);
+        chord(70, CR_MOD_MAJ, 90);                   /* the same step again: replaced, not added */
+        step(200);
+        d = step_is(1, 70, CR_Q_MAJ) && step_is(2, 72, CR_Q_MIN) && L.d.nev == 4;
+        cr_mod(&C, CR_MOD_SUS, 1);                   /* two roots of one push: both, and only they */
+        cr_key(&C, 60, 100, 1); step(40); cr_key(&C, 67, 100, 1); step(60);
+        cr_key(&C, 60, 100, 0); step(30); cr_key(&C, 67, 100, 0);
+        cr_mod(&C, CR_MOD_SUS, 0);
+        step(100);
+        e = L.d.nev == 5 && !step_is(1, 70, CR_Q_MAJ);
+        {
+            uint32_t i, n = 0;
+            for (i = 0; i < L.d.nev; i++)
+                if (L.d.ev[i].t == 24 && (L.d.ev[i].qx >> 4) == CR_Q_SUS && (L.d.ev[i].root == 60 || L.d.ev[i].root == 67)) n++;
+            e = e && n == 2;
+        }
+        snprintf(name, sizeof name, "%s: the same step again: replaced (one chord); two roots of one push: both in it, and nothing else", W[k]);
+        ok(d && e, name);
+        cr_set_sticky(&C, 0);
+        cr_set_perform(&C, 0);
+        cr_loop_ed_close(&L, &C);
+        cr_loop_stop(&L, &C);
+        cr_panic(&C);
+        cr_loop_panic(&L);
+        ok(sounding() == 0 && L.d.nev == 5, "  .. closed and stopped: silent, the loop as edited");
+    }
+    /* a latched chord sounding when the editor opens is not a key played into a step; its end later writes nothing */
+    mkloop(4);
+    addev(0, 24, 62, CR_Q_MAJ, 0);
+    cr_set_sticky(&C, 1);
+    chord(72, CR_MOD_MIN, 60);                       /* latched, sounding on */
+    step(50);
+    cr_loop_ed_open(&L);
+    ed_at(2);
+    step(100);
+    chord(65, CR_MOD_MAJ, 60);                       /* its end comes here, with the next press */
+    ok(L.d.nev == 2 && step_is(2, 65, CR_Q_MAJ) && step_is(0, 62, CR_Q_MAJ),
+       "LATCH: a chord latched before the editor opened is not written when the next press ends it: the step gets the keys played");
+    cr_set_sticky(&C, 0);
+    cr_loop_ed_close(&L, &C);
+    /* a take: the latched chord's length is its real one, as before (CR_G_KEYUP is the editor's alone) */
+    reset();
+    L.mode = CRL_MODE_OVERWRITE;
+    cr_set_sticky(&C, 1);
+    cr_loop_rec(&L, &C);
+    chord(62, CR_MOD_MAJ, 100);
+    step(400);
+    chord(64, CR_MOD_MIN, 100);
+    step(400);
+    cr_loop_rec(&L, &C);
+    ok(L.d.nev == 2 && L.d.ev[0].root == 62 && L.d.ev[0].dur >= 94 && L.d.ev[0].dur <= 98 && L.d.ev[1].dur >= 94,
+       "LATCH, a take: the latched chords are recorded with the length they sounded (to the next press), as before");
+    cr_set_sticky(&C, 0);
+    cr_loop_stop(&L, &C);
+    cr_panic(&C);
+    cr_loop_panic(&L);
+}
+
 int main(void)
 {
     s_overwrite();
@@ -2027,6 +2337,9 @@ int main(void)
     s_slow();
     s_edit();
     s_trig();
+    s_ratlong();
+    s_transpose();
+    s_edkeys();
     s_bass();
     s_free();
     s_sync();

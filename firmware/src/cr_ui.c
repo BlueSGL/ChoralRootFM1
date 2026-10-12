@@ -1581,7 +1581,8 @@ static void cu_rec(void)
  * step's voicing. A chord or a note played on the keys REPLACES the selected step's notes and sounds (the cursor
  * stays); REC clears the step. Page 1 "Step": KNOB 1 how long its notes sound (1/4 1/2 3/4 of a step, 1 .. 64 steps:
  * no other step moves), KNOB 2 the loop's length in steps (1 .. 64; GLO held: to the next of 8 16 32 48 64), KNOB 3
- * its chance, KNOB 4 its velocity. Page 2 "Trig": KNOB 1 its ratchet, KNOB 2 its condition, KNOB 3 its voicing.
+ * its chance, KNOB 4 its velocity. Page 2 "Trig": KNOB 1 its ratchet, KNOB 2 its condition, KNOB 3 its voicing,
+ * KNOB 4 Transpose (its notes a semitone a detent). GLO held + the voicing (ALGORITHM, Trig's KNOB 3): Follow / 0.
  * LOOP plays / stops as ever; REC held: the looper's undo; OCT- / OCT+: the octave, as on the view. HOME / EDIT
  * (tapped, or held again) close it, back to the PLAY menu: nothing to confirm, an edit is done when it is made, in
  * RAM, and saved like any loop change (the global save, a slot switch).
@@ -1775,11 +1776,19 @@ static void cu_ledit_prop(int which, int32_t v, int32_t top, const char *nm)
         cu_message("loop too full", CR_COL_RED);
     cu_trace("loopedit: %s %d %s\n", nm, (int)v, rc == 1 ? "ok" : "refused");
 }
-static void cu_ledit_voic(int32_t s, int msg)      /* ALGORITHM (every page), Trig's KNOB 3: the step's voicing */
+/* ALGORITHM (every page), Trig's KNOB 3: the step's voicing, a value a detent. snap (GLO held; the owner, 2026-10-11:
+ * "hold GLO key and turn voicing to snap to Follow or 0"): between Follow and 0: from either, a turn in either
+ * direction gives the other; from any other value clockwise gives 0, the other way Follow. One snap a turn event,
+ * however fast the knob (as GLO + Steps) */
+static void cu_ledit_voic(int32_t s, int msg, int snap)
 {
     char b[24], v[8];
+    int32_t to;
     cu_le_sync();
-    cu_ledit_prop(CRL_SP_VOIC, (int32_t)cu_le.voic + s, (int32_t)CRL_NVOIC - 1, "voicing");
+    to = (int32_t)cu_le.voic + s;
+    if (snap)
+        to = cu_le.voic == 0 ? 13 : cu_le.voic == 13 ? 0 : s > 0 ? 13 : 0;   /* (0 Follow; 13: a rotation of 0) */
+    cu_ledit_prop(CRL_SP_VOIC, to, (int32_t)CRL_NVOIC - 1, snap ? "voicing snap" : "voicing");
     if (cu.le_page == 1u)
         cu_hot_set(L_LOOP, 2);
     else if (msg && cu_le.voic >= 0) {             /* (the Step page has no Voicing cell: said) */
@@ -1817,21 +1826,54 @@ static void cu_ledit_snap(int32_t s)
     cu_trace("loopedit: snap %u steps %s\n", (unsigned)v, ok ? "ok" : "refused");
     cu_hot_set(L_LOOP, 1);
 }
+/* Trig's KNOB 4, Transpose (the owner, 2026-10-11: "this should move all the notes up or down, so if my chord is C maj
+ * and I transpose it up one, now it's a C# maj"): the selected step's notes a semitone a detent, chromatic whatever
+ * Key Mode says (an edit of stored notes); a detent that would take a note out of 0 .. 127 is refused, none moves.
+ * The cell: the step's root note ("C#4"); while it is hot, how far this turn has moved it ("+2") */
+static struct { uint16_t step; int8_t sum; } cu_le_tr;
+static int cu_le_tr_hot(void)                      /* the Transpose cell is still hot, on this step */
+{
+    return cu.le_page && cu_hot.knob == 4u && cu_hot.layer == L_LOOP && (int32_t)(cu_hot.until - fm1_ms) > 0 &&
+           cu_le_tr.step == cu_le.c0;
+}
+static void cu_ledit_transpose(int32_t s)
+{
+    int32_t d = s;
+    int ok = 0;
+    if (!cu_le.cnt) {
+        cu_trace("loopedit: transpose: the step is empty\n");
+        return;
+    }
+    if (!cu_le_tr_hot()) {
+        cu_le_tr.step = cu_le.c0;
+        cu_le_tr.sum = 0;
+    }
+    fm1_irq_off();
+    for (; d && !ok; d += d > 0 ? -1 : 1)          /* (a fast turn at the range's end: as far as it goes) */
+        if ((ok = cr_loop_ed_transpose(&crl, (int)d)) != 0)
+            break;
+    fm1_irq_on();
+    if (ok)
+        cu_le_tr.sum = (int8_t)(cu_le_tr.sum + d);
+    else
+        cu_message(s > 0 ? "no higher" : "no lower", CR_COL_RED);
+    cu_trace("loopedit: transpose %d %s\n", (int)(ok ? d : s), ok ? "ok" : "refused");
+}
 static void cu_ledit_knob(uint32_t knob, int32_t s)
 {
     uint32_t len, nc;
     int ok = 0;
     cu_le_sync();
     nc = cu_le.nstep;
-    if (cu.le_page) {                              /* Trig: Ratchet, Condition, Voicing; KNOB 4 free */
+    if (cu.le_page) {                              /* Trig: Ratchet, Condition, Voicing, Transpose */
         if (knob == 0)
             cu_ledit_prop(CRL_SP_RATCH, (int32_t)cu_le.rat + s, (int32_t)CRL_NRATCH - 1, "ratchet");
         else if (knob == 1)
             cu_ledit_prop(CRL_SP_COND, (int32_t)cu_le.cond + s, (int32_t)CRL_NCOND - 1, "condition");
         else if (knob == 2)
-            cu_ledit_voic(s, 0);
+            cu_ledit_voic(s, 0, 0);
         else
-            return;
+            cu_ledit_transpose(s);
     } else if (knob == 0) {                        /* how long the step's notes sound: 1/4 1/2 3/4 of a step, then
                                                     * 1 .. 64 steps: the NOTE's length: no other step moves, the loop
                                                     * keeps its length; a long note sounds over the steps after it,
@@ -1876,7 +1918,7 @@ static void cu_ledit_knob(uint32_t knob, int32_t s)
 }
 static void cu_ledit_cells(cr_screen_t *s)
 {
-    static const char *const LB[2][4] = {{"Note len", "Steps", "Chance", "Velocity"}, {"Ratchet", "Condition", "Voicing", ""}};
+    static const char *const LB[2][4] = {{"Note len", "Steps", "Chance", "Velocity"}, {"Ratchet", "Condition", "Voicing", "Transpose"}};
     uint32_t k, pg = cu.le_page ? 1u : 0u;
     for (k = 0; k < 4u; k++) {
         if (!LB[pg][k][0])
@@ -1892,6 +1934,16 @@ static void cu_ledit_cells(cr_screen_t *s)
             cu_le_voic_txt(s->cell[0][2].value, sizeof s->cell[0][2].value);
         } else
             s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][2].flags = CR_CF_ON | CR_CF_DIM;
+        if (cu_le.cnt) {                           /* Transpose: the root note of the step's name; hot: this turn's sum */
+            if (cu_le_tr_hot() && cu_le_tr.sum)
+                cu_int(s->cell[0][3].value, cu_le_tr.sum, 1, sizeof s->cell[0][3].value);
+            else {
+                char nn[5];
+                cr_note_name(cu_le.root, nn);
+                cu_cpy(s->cell[0][3].value, nn, sizeof s->cell[0][3].value);
+            }
+        } else
+            s->cell[0][3].flags = CR_CF_ON | CR_CF_DIM;
         cu_hot_row(s, L_LOOP);
         return;
     }
@@ -3608,13 +3660,19 @@ static void cu_knob(uint32_t role, int32_t s)
         }
     }
     if (cu.ledit && cu_layer() == L_LOOP && cu_shift()) {   /* the loop editor, GLO held: PRESETS jumps 8 steps, Steps
-                                                    * (page 1, KNOB 2) snaps to 8 16 32 48 64 */
+                                                    * (page 1, KNOB 2) snaps to 8 16 32 48 64, the voicing (ALGORITHM;
+                                                    * page 2, KNOB 3) to Follow / 0 */
         if (role == EN_PRESET) {
             cu_ledit_move(s * 8);
             return;
         }
         if (role == EN_K2 && !cu.le_page) {
             cu_ledit_snap(s);
+            return;
+        }
+        if (role == EN_ALGO || (role == EN_K3 && cu.le_page)) {   /* the step's voicing: Follow / 0 (GLO + ALGORITHM is
+                                                    * the bass level everywhere else: not in the editor) */
+            cu_ledit_voic(s, role == EN_ALGO, 1);
             return;
         }
     }
@@ -3672,7 +3730,7 @@ static void cu_knob(uint32_t role, int32_t s)
     }
     if (l == L_LOOP && role == EN_ALGO) {
         if (cu.ledit)
-            cu_ledit_voic(s, 1);
+            cu_ledit_voic(s, 1, 0);
         else
             cu_loop_mode_turn(s);
         return;
@@ -5056,10 +5114,15 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
         ph = sn->lpos / CRL_STEP;
         if (sn->lstate == CRL_PLAYING && ph >= first && ph < first + n)
             s->lm_pos |= CR_LM_PLAY(ph - first);
-        if (sn->ci.sounding && !sn->ldisp) {       /* the chord being played, else the one in the step */
-            cu_cpy(s->sub, sn->ci.root, sizeof s->sub);
-            cu_cat(s->sub, sn->ci.qual, sizeof s->sub);
-            cu_cat(s->sub, sn->ci.sup, sizeof s->sub);
+        /* the name line: ALWAYS the selected step's (the owner, 2026-10-11: "the name of the chord changes during
+         * playback, I would like this to always show chord/notes of the selected step"), but while a root key is DOWN:
+         * then the chord the player plays into it (his own, never a loop voice's: until then ci, the engine's "most
+         * recent voice", which is the loop's whenever the loop strikes and a latched chord's whenever it does not) */
+        if ((cu.kheld >> (cs.kbd_full ? 0u : CU_ROOT0)) && sn->pl_on) {
+            cr_chord_name(sn->pl_pc, sn->pl_q, sn->pl_x, r, q, sup);
+            cu_cpy(s->sub, r, sizeof s->sub);
+            cu_cat(s->sub, q, sizeof s->sub);
+            cu_cat(s->sub, sup, sizeof s->sub);
         } else if (cu_le.cnt) {
             cr_chord_name((uint8_t)(cu_le.root % 12u), (uint8_t)(cu_le.qx >> 4), (uint8_t)(cu_le.qx & 15u), r, q, sup);
             cu_cpy(s->sub, r, sizeof s->sub);
@@ -5073,6 +5136,16 @@ static void cu_loopmenu(cr_screen_t *s, uint32_t now)
             }
         } else
             cu_cpy(s->sub, "-", sizeof s->sub);
+        /* while the loop plays: what it struck last, at the left of the page's name (cr_draw.c cr_lm_now): the chord
+         * or the note, no voicing; it stays until the next step that sounds (a step alone in a bar would flash for a
+         * sixteenth), nothing before the first one and nothing when stopped */
+        s->lm_now[0] = 0;
+        if (sn->lstate == CRL_PLAYING && sn->lhit) {
+            cr_chord_name((uint8_t)(sn->lhit_root % 12u), (uint8_t)(sn->lhit_qx >> 4), (uint8_t)(sn->lhit_qx & 15u), r, q, sup);
+            cu_cpy(s->lm_now, r, sizeof s->lm_now);
+            cu_cat(s->lm_now, q, sizeof s->lm_now);
+            cu_cat(s->lm_now, sup, sizeof s->lm_now);
+        }
         cu_cpy(s->value, "step ", sizeof s->value);
         cu_int(b, (int32_t)cu_le.c0 + 1, 0, sizeof b);
         cu_cat(s->value, b, sizeof s->value);

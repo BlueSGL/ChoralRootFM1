@@ -992,8 +992,11 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
     } else {
         if (c->phys[note] & bit) { c->phys[note] &= (uint8_t)~bit; c->phys_n--; }
         crx_rec_commit(c);
-        if (cr_latching(c)) return;
         vi = crx_find_voice(c, note);
+        if (cr_latching(c)) {                     /* it sounds on: a looper is told the key is up (CR_G_KEYUP) */
+            if (vi >= 0 && c->v[vi].id == id && !c->v[vi].is_free) crx_gesture(c, vi, CR_G_KEYUP);
+            return;
+        }
         if (vi < 0) return;
         if (c->v[vi].id == id) crx_kill_voice(c, vi);
         else if (c->v[vi].superseded & bit) c->v[vi].superseded &= (uint8_t)~bit;   /* superseded press: ignored */

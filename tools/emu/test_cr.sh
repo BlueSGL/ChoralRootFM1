@@ -1202,6 +1202,58 @@ differ cr_lt_quarter cr_lt_chance "the chance cell and the step's notch are draw
     ok "EDIT tapped closes it (the PLAY menu); the loop to its slot (46 bytes: 3 events + 2 steps' entries) and back from flash: the properties kept; HOME closes it too" \
     || bad "closing / the record: $(l2 "$TL" 26 edit) $(ly "$TL" 26) / $(t 27) props $(l3 27 props) / $(l3 28 cond) / $(l2 "$TL" 29 edit) $(ly "$TL" 29)"
 silent_end cr_loop_trig
+# 0.18 (2026-10-11): the loop editor while its loop plays: only the keys played go into the step (a latched chord is
+# written when its keys go up; on 86d162f step 3 stays empty at dump 3 and step 7 gets the chord still sounding at dump
+# 6), the name line is the selected step's (on 86d162f it reads the latched chord between the loop's notes: dump 4),
+# the playing name at the left of the page's name; Transpose (Trig, KNOB 4); GLO + the voicing: Follow / 0
+export EMU_UI_LOG=0
+run cr_loop_edplay
+unset EMU_UI_LOG
+EP="$OUT/cr_loop_edplay.log"
+p() { L cr_loop_edplay "$1"; }
+l4() { grep -a '^  loop4:' "$EP" | sed -n "$1p" | sed -n 's/.*step-events \{0,1\}\(.*\) hit.*/\1/p'; }   # "72/20 count 1"
+l3p() { grep -a '^  loop3:' "$EP" | sed -n "$1p" | sed -n "s/.* $2 \(-*[0-9]*\).*/\1/p"; }
+esg() { awk -v n="$1" '/^fm1_in:/ { d++ } d == n - 1 && /^ui: frame/' "$EP"; }   # the frames up to dump N
+subs() { esg "$1" | sed -n "s/.* sub '\([^']*\)' right.*/[\1]/p" | sort -u | tr -d '\n'; }   # the name line's texts seen
+nows() { esg "$1" | sed -n "s/.* now '\([^']*\)' hot.*/[\1]/p" | sort -u | tr -d '\n'; }      # the playing names seen
+[ "$(l4 1)" = "69/30 count 1" ] && [ "$(lf "$(p 1)" events)" = 4 ] && [ "$(nows 1)" = "[]" ] && esg 1 | tail -1 | grep -aq "sub 'A' " &&
+    ok "stopped: D E G A entered; the name line is the selected step's (A); no playing name" || bad "the editor stopped: $(l4 1) / now $(nows 1) / $(subs 1)"
+[ "$(l4 2)" = "72/20 count 1" ] && [ "$(lf "$(p 2)" events)" = 5 ] && [ "$(lf "$(p 2)" state)" = 2 ] &&
+    ok "the loop playing, MIN + C5 held 700 ms into step 15: Cm alone in it (none of the loop's own chords)" || bad "keys into a step while it plays: $(l4 2), $(lf "$(p 2)" events) events"
+[ "$(l4 3)" = "65/30 count 1" ] && [ "$(lf "$(p 3)" events)" = 6 ] &&
+    ok "LATCH on: F played into step 3 is in it when its keys go up (it sounds on, latched)" || bad "LATCH: step 3 after the keys went up: '$(l4 3)'"
+[ "$(subs 4)" = "[-]" ] && [ "$(l4 4)" = "count 0" ] &&
+    ok "the latched F sounding over the loop, no key down, an empty step selected: the name line reads '-' in every frame (the selected step)" \
+    || bad "the name line while a latched chord sounds: $(subs 4)"
+esg 5 | tail -1 | grep -aq "sub 'Bm' " && [ "$(l4 5)" = "count 0" ] &&
+    ok "MIN + B4 down: the name line reads Bm, the chord being played (not yet in the step)" || bad "the name line with a key down: $(subs 5)"
+[ "$(l4 6)" = "71/20 count 1" ] && [ "$(l4 7)" = "71/20 count 1" ] && [ "$(lf "$(p 7)" events)" = 7 ] && [ "$(subs 7)" = "[Bm]" ] &&
+    ok "let go: step 7 is Bm alone (not the F that was still sounding); LATCH off: nothing more written" || bad "LATCH: step 7: '$(l4 6)' / '$(l4 7)', $(lf "$(p 7)" events) events"
+case "$(nows 8)" in *"[]"*) bad "the playing name is empty in a frame while the loop plays: $(nows 8)";; *"[A]"*"[D]"*"[E]"*"[G]"*)
+    ok "playing, page Step: the playing name at the left of the page's name: $(nows 8), never empty: $OUT/cr_le_now_step.ppm";; *) bad "the playing names: $(nows 8)";; esac
+case "$(nows 9)" in *"[]"*) bad "page Trig: the playing name is empty in a frame: $(nows 9)";; *"[A]"*"[D]"*"[E]"*"[G]"*)
+    esg 9 | tail -1 | grep -aq "item 'Trig' " && ok "playing, page Trig: the same names: $OUT/cr_le_now_trig.ppm" || bad "page Trig: $(esg 9 | tail -1 | cut -c1-120)";; *) bad "the playing names, Trig: $(nows 9)";; esac
+[ "$(px_count "$OUT/cr_le_now_step.ppm" 6 62 84 80 ink)" -ge 20 ] && [ "$(px_count "$OUT/cr_le_now_step.ppm" 84 56 90 92 ink)" = 0 ] &&
+    ok "the playing name is drawn at x 6 .. 83 and leaves 6 px clear before the page's name" || bad "the playing name's pixels: $(px_count "$OUT/cr_le_now_step.ppm" 6 62 84 80 ink) / $(px_count "$OUT/cr_le_now_step.ppm" 84 56 90 92 ink)"
+esg 10 | tail -1 | grep -aq " now '' " && [ "$(lf "$(p 10)" state)" = 1 ] && ok "stopped: no playing name" || bad "stopped: the playing name stays: $(nows 10)"
+[ "$(l3p 11 epage) $(l3p 11 cursor) $(l4 11)" = "2 1 62/30 count 1" ] && [ "$(l4 12)" = "63/30 count 1" ] && [ "$(l4 13)" = "60/30 count 1" ] &&
+    has '^loop: cells Ratchet Condition Voicing Transpose' "$EP" && grep -aq "loopmenu .*hot 1\.3" "$EP" && esg 12 | tail -1 | grep -aq "sub 'D#' " && esg 13 | tail -1 | grep -aq "sub 'C' " &&
+    ok "Trig, KNOB 4 = Transpose: step 1's D a semitone up (D#), three down (C): the name line follows, the cell hot: $OUT/cr_le_tr_hot.ppm, $OUT/cr_le_tr.ppm" \
+    || bad "Transpose: $(l3p 11 epage) $(l3p 11 cursor) '$(l4 11)' '$(l4 12)' '$(l4 13)'"
+differ cr_le_tr_hot cr_le_tr "the Transpose cell: the turn's sum while hot, then the root note"
+[ "$(l4 14)" = "count 0" ] && has '^loopedit: transpose: the step is empty' "$EP" && [ "$(lf "$(p 14)" events)" = 7 ] &&
+    ok "Transpose on an empty step: nothing" || bad "Transpose, an empty step: $(l4 14)"
+[ "$(l4 15)" = "127/30 count 1" ] && has '^loopedit: transpose 67 ok' "$EP" && [ "$(l4 16)" = "127/30 count 1" ] && has '^loopedit: transpose 1 refused' "$EP" &&
+    grep -aq "msg 'no higher'" "$EP" && [ "$(l4 17)" = "60/30 count 1" ] &&
+    ok "Transpose stops at the range's end: +70 in one turn goes as far as 127, one more is refused (\"no higher\", no wrap); -67: C again" \
+    || bad "Transpose's range: '$(l4 15)' '$(l4 16)' '$(l4 17)'"
+[ "$(l3p 18 voicing) $(l3p 19 voicing) $(l3p 20 voicing)" = "13 0 13" ] && [ "$(l3p 21 voicing) $(l3p 22 voicing)" = "16 0" ] && [ "$(l3p 23 voicing) $(l3p 24 voicing)" = "5 13" ] &&
+    [ "$(l3p 25 voicing) $(l3p 25 epage)" = "0 1" ] && [ "$(grep -ac '^loopedit: voicing snap [0-9]* ok' "$EP")" = 6 ] && grep -aq "msg 'step voicing: Follow'" "$EP" && ! grep -aq 'bass level' "$EP" &&
+    ok "GLO held + the voicing (KNOB 3, ALGORITHM): Follow <-> 0 either way; from +3 down: Follow; from -8 up (a turn of 2): 0, one snap; page 1: \"step voicing: Follow\"; no bass level" \
+    || bad "the voicing's snap: $(l3p 18 voicing) $(l3p 19 voicing) $(l3p 20 voicing) / $(l3p 21 voicing) $(l3p 22 voicing) / $(l3p 23 voicing) $(l3p 24 voicing) / $(l3p 25 voicing)"
+[ "$(l4 26)" = "76/20 count 1" ] && [ "$(l4 27)" = "77/20 count 1" ] && [ "$(lf "$(p 27)" events)" = 9 ] &&
+    ok "LOCK with MIN latched: a root alone into a step is that one chord (Em, Fm)" || bad "LOCK latched in the editor: '$(l4 26)' '$(l4 27)'"
+silent_end cr_loop_edplay
 # 0.18: "sometimes in the play menu turning the preset knob ends up changing the preset": LOOP held again past the hold
 # time closed the menu under the hand; fails on 722fe71 (dump 2: layer 0, slot 2, "sound: part 0 pos 2")
 run cr_loop_presetknob
