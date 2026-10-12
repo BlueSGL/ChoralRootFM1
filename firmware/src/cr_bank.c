@@ -94,11 +94,10 @@ static const struct { uint8_t engine; const char *preset; int8_t trim; } CB_TRIM
 #if FELUCCA_VOICE
     {5u, "CHOIR AAH", -6},               /* VOICE CHOIR AAH (CHOIR) -3 dB */
 #endif
-#if FELUCCA_CZ
-    {ENGI_CZ, "BRASS 1", -10},           /* CZ-1 A-1 -5 dB */
-    {ENGI_CZ, "STRINGS 2", -6},          /* CZ-1 A-5 -3 dB */
-    {ENGI_CZ, "PIPE ORGAN 1", -12},      /* CZ-1 E-3 -6 dB */
-#endif
+    /* CZ-1's three (BRASS 1 -5 dB, STRINGS 2 -3 dB, PIPE ORGAN 1 -6 dB) went with 0.19's -6 dB for the whole engine
+     * (cz_native.c CZ_VOICE_GAIN, docs/CZ1.md "Level"): without them a 6-note chord with the bass stays out of the
+     * limiter, and none is louder than it was with its trim. */
+    {0xFFu, "", 0},                      /* (no engine, no preset: the table is never empty, ChoralRoot has no row) */
 };
 static uint8_t cb_trim_k[NELEM(CB_TRIM)];         /* the resolved preset indices (0xFF: not found) */
 

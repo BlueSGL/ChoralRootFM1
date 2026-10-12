@@ -37,6 +37,16 @@ static uint32_t sx_out_n, sx_out_count;
 #define CZ_SEND(p, n) (memcpy(sx_out, (p), (n)), sx_out_n = (n), sx_out_count++)
 #include "../tools/emu/emu_firmware.h"
 
+#ifndef CZ_VOICE_GAIN
+#define CZ_VOICE_GAIN 4                              /* (this file in a tree before 0.19's trim: the constants below) */
+#endif
+/* 778a6ad's hashes of the part's render ("level" in main): INIT TONE and the 64, then by the tone's kind */
+#define CZ_REL_ALL 0x129ea1922121e5c9ull
+#define CZ_REL_ONE 0x3c6b4d6611b03c4aull
+#define CZ_REL_SUM 0x74fea5c4424601beull
+#define CZ_REL_RING 0x82aff32eeb2e1618ull
+#define CZ_REL_NOISE 0xbe66150f3519f1b6ull
+
 static int fails, checks;
 #define CHECK(c, ...)                                                   \
     do {                                                                \
@@ -209,6 +219,61 @@ int main(void)
         bad += CZ_RECIP[k] != (1024u << 16) / k;
     OK(!bad && NELEM(CZ_RECIP) == 2048u, "slopes: CZ_RECIP[x] is (1024 << 16) / x for x = 1 .. 2047");
 
+    /* ---- the level (0.19, docs/CZ1.md "Level"): a voice into its part is exactly half of what it was ---- */
+    {
+        /* INIT TONE and the 64 through the part's own render (track_render: the voices' sum before LEVEL): C4 at
+         * velocity 100, E4 at 127 on another voice 30 blocks later, both let go 30 blocks after, 20 blocks more. The
+         * hash of TWICE every sample (FNV-1a 64 of its four bytes) is the hash 778a6ad gave of the sample itself
+         * (the same lines, built in a tree of that commit: cz_native.c added voice_amp(..) * 4 there): so every
+         * sample is exactly half, of every tone, by its kind: one line, two lines summed, ring modulation, NOISE. */
+        static const uint64_t WAS[5] = {CZ_REL_ALL, CZ_REL_ONE, CZ_REL_SUM, CZ_REL_RING, CZ_REL_NOISE};
+        static const char *const KIND[5] = {"all 65", "one line", "two lines", "ring modulation", "NOISE"};
+        uint8_t eng = t->engine, req = t->eng_req;
+        uint64_t h[5];
+        uint32_t nk[5] = {0, 0, 0, 0, 0}, q, i, bb;
+        int32_t out[CTL], pk = 0;
+        for (q = 0; q < 5u; q++)
+            h[q] = 1469598103934665603ull;
+        for (k = 0; k <= CZ_FACTORY_N; k++) {
+            uint32_t ls, md, kind;
+            pop_start(t, k);
+            ls = cz_patch[0].raw[0] & 3u;
+            md = (cz_patch[0].raw[15] >> 3) & 7u;
+            kind = ls < 2u ? 1u : md == 4u ? 3u : md == 3u ? 4u : 2u;
+            nk[0]++;
+            nk[kind]++;
+            trk_note_on(t, 60, 100);
+            for (bb = 0; bb < 80u; bb++) {
+                if (bb == 30u)
+                    trk_note_on(t, 64, 127);
+                if (bb == 60u) {
+                    trk_note_off(t, 60);
+                    trk_note_off(t, 64);
+                }
+                track_render(t, out, CTL);
+                for (i = 0; i < CTL; i++) {
+                    uint32_t x = (uint32_t)(out[i] * (4 / CZ_VOICE_GAIN)), by;
+                    pk = abs(out[i]) > pk ? abs(out[i]) : pk;
+                    for (by = 0; by < 4u; by++) {
+                        h[0] = (h[0] ^ (uint8_t)(x >> (8u * by))) * 1099511628211ull;
+                        h[kind] = (h[kind] ^ (uint8_t)(x >> (8u * by))) * 1099511628211ull;
+                    }
+                }
+            }
+        }
+        if (getenv("CZ_REL_PRINT"))
+            printf("level: %016llxull %016llxull %016llxull %016llxull %016llxull\n", (unsigned long long)h[0],
+                   (unsigned long long)h[1], (unsigned long long)h[2], (unsigned long long)h[3], (unsigned long long)h[4]);
+        for (q = 0; q < 5u; q++)
+            OK(h[q] == WAS[q] && nk[q], "level: %s (%u tones): twice every sample of the part's render is 778a6ad's sample "
+                                        "(-6.02 dB, a bit's shift)", KIND[q], (unsigned)nk[q]);
+        OK(CZ_VOICE_GAIN == 2 && pk > 0, "level: a voice adds voice_amp() * 2, as dsp.c says of a half-scale "
+                                                          "engine (the loudest sample of those renders %d)", (int)pk);
+        memset(t->v, 0, sizeof t->v);
+        t->engine = eng;
+        t->eng_req = req;
+    }
+
     /* ---- pops (docs/CZ1.md "Pops"): a note struck again goes on from its level; the DCW depth is ramped ---- */
     {
         uint8_t eng = t->engine, req = t->eng_req;
@@ -244,7 +309,7 @@ int main(void)
                 }
                 trk_note_on(t, 48, 127);
                 pop_render(t, 1, &edge1, &in1, &head1);
-                if (edge1 > in0 + in0 / 2 && edge1 > 400) {
+                if (edge1 > in0 + in0 / 2 && edge1 > 100 * CZ_VOICE_GAIN) {
                     fails0++;
                     if (edge1 > worst) {
                         worst = edge1;
@@ -262,7 +327,7 @@ int main(void)
             pop_start(t, k);
             trk_note_on(t, 36, 127);
             pop_render(t, 40, &edge, &in, &head);
-            if (edge > 2 * in && edge > 400) {
+            if (edge > 2 * in && edge > 100 * CZ_VOICE_GAIN) {
                 low++;
                 if (edge > worst) {
                     worst = edge;

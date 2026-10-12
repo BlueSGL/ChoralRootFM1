@@ -215,6 +215,7 @@ static __attribute__((noinline)) int32_t cz_native_vibrato(cz_voice_t *c, const 
      * the negative half of the wave down a step */
     return (wave * (int32_t)depth) / (1 << 19);
 }
+#define CZ_VOICE_GAIN 2              /* a voice's sum into the part (below); 4 until 0.19 */
 static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     uint32_t tr = (uint32_t)(t-trk)%NTRK, gen = cz_pgen[tr];
@@ -271,9 +272,12 @@ static __attribute__((noinline)) void cz_native_render(track_t *t, voice_t *v, i
         else cz_native_line(&pd[l],&s,line[l],n);
         v->ph[l] = s.ph; v->s[l] = (int32_t)s.tg; v->s[2u+l] = s.dc;
     }
-    if (first==last) for (uint32_t i=0;i<n;i++) out[i]+=voice_amp(line[first][i],m,i)*4;
-    else if (modulation==4u) for (uint32_t i=0;i<n;i++) out[i]+=voice_amp(mulq15(line[0][i],line[1][i])*2,m,i)*4;
-    else for (uint32_t i=0;i<n;i++) out[i]+=voice_amp((line[0][i]+line[1][i])>>1,m,i)*4;
+    /* The voice into the part: a line is half scale ((raw-dc)>>1), and such an engine adds its voice << 1 (dsp.c
+     * voice_amp). Until 0.19 this was * 4: CZ-1 sat 6 dB above the other engines (docs/CZ1.md "Level"); every sample
+     * a voice adds is exactly half of what it was (the factor is the last thing done to it). */
+    if (first==last) for (uint32_t i=0;i<n;i++) out[i]+=voice_amp(line[first][i],m,i)*CZ_VOICE_GAIN;
+    else if (modulation==4u) for (uint32_t i=0;i<n;i++) out[i]+=voice_amp(mulq15(line[0][i],line[1][i])*2,m,i)*CZ_VOICE_GAIN;
+    else for (uint32_t i=0;i<n;i++) out[i]+=voice_amp((line[0][i]+line[1][i])>>1,m,i)*CZ_VOICE_GAIN;
 #ifdef CZ_PROBE                                         /* (host only: tests/cz_pops.c looks at the voice's block) */
     CZ_PROBE(t,v,first,last,amp,pd,line,n,modulation,m);
 #endif

@@ -3,7 +3,8 @@
 /* CZ-1's pops, looked for in the host render (docs/CZ1.md "Pops", HISTORY 2026-10-12). Not a pass / fail suite (that is
  * tests/cr_cz_test.c's): the matrix that found them, kept to run again after a change of the engine.
  *
- * A run: one factory sound on part 0 (LEVEL 92, POLY, the sends at 0, its trim as cr_bank.c CB_TRIM), ChoralRoot's mix
+ * A run: one factory sound on part 0 (LEVEL 92, POLY, the sends at 0, no trim: cr_bank.c has none for CZ-1 since 0.19;
+ * against a tree before it, the three it had), ChoralRoot's mix
  * (fx_smooth, voice_fade_steal, MASTER 2047 as at power-on), optionally the CZ-1 bass (SYNTH.BASS, MONO) on part 1,
  * one of the scenarios below on a 4-, 5- or 6-note chord at a root and a velocity. Each run in a fork()ed child (every
  * state as at boot). Looked at: the dry mix before the master (fx.c mix_l / mix_r: linear, 32768 = full scale at
@@ -14,6 +15,11 @@
  *   dip    a 32-sample window whose RMS is under 1/8 of the window two before it (18 dB in 1.5 ms) and that is back
  *          above half within 30 ms: a drop-out and return
  *   hole   a 32-sample window of zeros between sounding windows
+ *   click  a burst of the dry mix's third difference (clicks() below: wavclicks.py's measure, asked for on both sides
+ *          and against the tone's own edges); oclick: wavclicks.py's own measure on the output, which reads attacks
+ *          and low pulses as clicks (kept to set beside the emulator's WAVs)
+ *   half   the hash of every sample a CZ-1 voice left in its part's sum, at 0.19's scale (cz_probe_out; "odd"): two
+ *          trees that differ in the engine's trim alone print the same (tools/cz_pops_report.py --halves)
  *   dc     the largest |mean| of 2048 samples (a step the DC filter rides out)
  *   peaks  the part after its level (track_t.peak; the mix loop clamps at 524287), the dry mix, the output, the
  *          limiter's lowest gain
@@ -21,15 +27,24 @@
  *   cc -O2 -w -fsanitize=signed-integer-overflow -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src \
  *      -o build/host/cz_pops tests/cz_pops.c -lm
  *   build/host/cz_pops all A B              every run of CZ-1 presets A..B (0 INIT TONE, 1..64 Casio's): a line a run
- *                                           (384 runs a preset, about 10 s; the 65 in parallel: 3 minutes)
+ *                                           (512 runs a preset; the 65 eight at a time: 5 minutes)
  *   build/host/cz_pops one E P S C R V B [out.wav [mix.wav]]   one run: engine E (this build's number: hostsim.c
  *                                           builds SLICE in, so CZ-1 is 15 here, 14 on the unit; the first field of a
  *                                           line of "all"), preset P, scenario S (0 hold, 1 retrig, 2 retrig-gap,
- *                                           3 change, 4 steal, 5 arp), chord C (0 .. 3), root R (a MIDI note),
+ *                                           3 change, 4 steal, 5 arp, 6 restrike, 7 arp-up), chord C (0 .. 3), root R
+ *                                           (a MIDI note),
  *                                           velocity V, bass B (0 / 1); prints its line and the samples around the
  *                                           worst jump, writes the output and the dry mix (a quarter of its level)
  *   build/host/cz_pops level                the engines' levels for the same chord (docs/CZ1.md "Level")
- * tools/cz_pops_report.py sorts the lines of "all". The probe (CZ_PROBE, the end of cz_native.c cz_native_render) is
+ * The thresholds (FLOOR, CLICK_FLOOR) follow the engine's scale (CZ_VOICE_GAIN), so a tree before 0.19's trim and one
+ * after it count the same steps of the same voices. For "one", from the environment:
+ *   CZ_TRACE=A,B   a line for every voice's block between samples A and B (gains, depths, the envelopes' stages)
+ *   CZ_WHY=J       what every line did at sample J against its wave's definition (cz_probe_why; tools/cz_pops_why.py
+ *                  runs it for every jump of a matrix)
+ *   CZ_GAP=MS      restrike: the release that long before each strike (20)
+ *   CZ_VEL2=V      retrig: every second strike at velocity V (a sounding voice struck again at another velocity)
+ * tools/cz_pops_report.py sorts the lines of "all". The file builds against an older tree too (copy it into that
+ * tree's tests/). The probe (CZ_PROBE, the end of cz_native.c cz_native_render) is
  * this file's: the firmware and the other host builds do not define it. */
 #define FELUCCA_VA 1
 #define FELUCCA_CZ 1
@@ -41,15 +56,43 @@
 /* the voice's block as cz_native.c rendered it: the lines' DCA gains at its two ends, their DCW depths, the two lines */
 static void cz_probe(const void *t, const void *v, uint32_t first, uint32_t last, const int32_t *amp, const uint32_t *dcw,
                      const int32_t *l0, const int32_t *l1, uint32_t n, uint32_t mod, const void *m);
+static void cz_probe_out(const int32_t *out, uint32_t n);
+static void cz_probe_why(const void *t, const void *v, uint32_t first, uint32_t last, const int32_t *amp, const int32_t *step,
+                         const void *pd, const uint32_t *inc, const int32_t *l0, const int32_t *l1, uint32_t n, int noise);
 #define CZ_PROBE(t, v, first, last, amp, pd, line, n, mod, m) \
     do { \
         uint32_t dcw_[2] = {(first) == 0u ? pd[0].dcw : 0u, (last) == 1u ? pd[1].dcw : 0u}; \
         cz_probe(t, v, first, last, &amp[0][0], dcw_, line[0], line[1], n, mod, m); \
+        cz_probe_out(out, n); \
+        cz_probe_why(t, v, first, last, &amp[0][0], step, pd, inc, line[0], line[1], n, mod == 3u); \
     } while (0)
 #define main hostsim_main
 #include "hostsim.c"
 #undef main
+#ifndef CZ_VOICE_GAIN
+#define CZ_VOICE_GAIN 4          /* (this file against a tree before 0.19's trim: cz_native.c's own * 4) */
+#endif
 
+/* The part's sum after each CZ-1 voice (the render's out[]), at 0.19's scale (a voice * 2): one hash a run. A tree
+ * before the trim (* 4) hashes each sample's half and counts the samples that have no exact half ("odd"): two trees
+ * that differ in the trim alone print the same hash for every run, odd 0 (docs/CZ1.md "Level"). */
+static uint64_t ph_hash = 1469598103934665603ull;
+static uint32_t ph_odd;
+static void cz_probe_out(const int32_t *out, uint32_t n)
+{
+    uint32_t i, k;
+    for (i = 0; i < n; i++) {
+        int32_t x = out[i];
+        if (CZ_VOICE_GAIN == 4) {
+            ph_odd += (uint32_t)(x & 1);
+            x >>= 1;
+        }
+        for (k = 0; k < 4u; k++) {
+            ph_hash ^= (uint8_t)((uint32_t)x >> (8u * k));
+            ph_hash *= 1099511628211ull;
+        }
+    }
+}
 /* what the probe saw in a run: the peaks of a line, of a voice's sum before the voice's level and of what it adds to
  * the part; the largest step of a line's gain (DCA curve x the voice's ramp, Q15) from the end of a voice's block to the
  * start of its next, and of its DCW depth (0..1023), with the block and whether a note-on fell between */
@@ -58,6 +101,7 @@ static struct {
     uint32_t gstep_blk;
 } pb;
 static uint32_t pb_blk;
+static uint32_t tr_on, tr_a, tr_b;               /* CZ_TRACE=A,B: every voice's block between samples A and B, a line each */
 static struct { uint32_t blk, age; int32_t g[2], last, valid; uint32_t dcw[2]; } pbv[NTRK][NVOICE];
 static void cz_probe(const void *t_, const void *v_, uint32_t first, uint32_t last, const int32_t *amp, const uint32_t *dcw,
                      const int32_t *l0, const int32_t *l1, uint32_t n, uint32_t mod, const void *m_)
@@ -70,7 +114,7 @@ static void cz_probe(const void *t_, const void *v_, uint32_t first, uint32_t la
     int32_t y0 = 0, y1 = 0;
     for (i = 0; i < n; i++) {
         int32_t y = first == last ? ln[first][i] : mod == 4u ? mulq15(l0[i], l1[i]) * 2 : (l0[i] + l1[i]) >> 1;
-        int32_t o = voice_amp(y, m, i) * 4;
+        int32_t o = voice_amp(y, m, i) * CZ_VOICE_GAIN;
         for (l = first; l <= last; l++)
             pb.line_pk = abs(ln[l][i]) > pb.line_pk ? abs(ln[l][i]) : pb.line_pk;
         pb.sum_pk = abs(y) > pb.sum_pk ? abs(y) : pb.sum_pk;
@@ -78,6 +122,16 @@ static void cz_probe(const void *t_, const void *v_, uint32_t first, uint32_t la
         if (!i)
             y0 = o;
         y1 = o;
+    }
+    if (tr_on && (pb_blk - 1u) * CTL + CTL > tr_a && (pb_blk - 1u) * CTL < tr_b) {   /* CZ_TRACE: this voice's block */
+        cz_voice_t *c = cz_voice((track_t *)t, (voice_t *)v);
+        printf("trace %u part %u voice %u note %u gate %u ramp %d>%d |", (pb_blk - 1u) * CTL, tr, vi, v->note, v->gate,
+               m->amp0, m->amp1);
+        for (l = first; l <= last; l++)
+            printf(" line %u amp %d>%d dcw %u stage p%u w%u a%u pitch %d first %d last %d |", l + 1u, amp[2u * l],
+                   amp[2u * l + 1u], dcw[l], c->eg[l][0].stage, c->eg[l][1].stage, c->eg[l][2].stage,
+                   c->eg[l][0].level >> 13, ln[l][0], ln[l][n - 1u]);
+        printf(" out %d .. %d\n", y0, y1);
     }
     if (pbv[tr][vi].valid && pbv[tr][vi].blk + 1u == pb_blk) {
         int on = pbv[tr][vi].age != v->age;
@@ -106,12 +160,102 @@ static void cz_probe(const void *t_, const void *v_, uint32_t first, uint32_t la
     pbv[tr][vi].valid = 1;
 }
 
-enum { S_HOLD, S_RETRIG, S_RETRIG_GAP, S_CHANGE, S_STEAL, S_ARP, S_N };
-static const char *const S_NAME[S_N] = {"hold", "retrig", "retrig-gap", "change", "steal", "arp"};
+/* CZ_WHY=J: what each voice's lines did at sample J of the run (a jump's place: "one" prints it, a second run with
+ * CZ_WHY explains it). For the samples J-2 .. J+1 of a line: its phase position (the top 11 bits), the wave of the
+ * cycle, the DCW depth of the sample, the wave's value there by its definition (cz_native_wave: no state), the DCA
+ * gain, the sample. Then the step J-1 -> J as the definition alone gives it (the two values' difference, halved, at
+ * the gain) beside the step the line made, and the largest step the definition makes between two neighbouring
+ * positions inside that stretch at that depth: a step that is the wave's own shows as predicted = made, with one
+ * position's step carrying it (an edge of the phase function); a step of a block or an envelope would show as made
+ * without the definition predicting it. (Not for line 2 with NOISE: its increment is the generator's.) */
+static uint32_t why_on, why_j;
+static int32_t why_last[NTRK][NVOICE][2][2];     /* a line's last two samples of the block before */
+static void cz_probe_why(const void *t_, const void *v_, uint32_t first, uint32_t last, const int32_t *amp, const int32_t *step,
+                         const void *pd_, const uint32_t *inc, const int32_t *l0, const int32_t *l1, uint32_t n, int noise)
+{
+    const track_t *t = t_;
+    const voice_t *v = v_;
+    const cz_hw_pd_t *pd = pd_;
+    const int32_t *ln[2] = {l0, l1};
+    uint32_t b0 = (pb_blk - 1u) * CTL, l, tr = (uint32_t)(t - trk) % NTRK, vi = (uint32_t)(v - t->v) % NVOICE;
+    int32_t i, j, k;
+    if (!why_on)
+        return;
+    if (why_j >= b0 && why_j < b0 + n) {
+        j = (int32_t)(why_j - b0);
+        for (l = first; l <= last; l++) {
+            const cz_hw_pd_t *b = &pd[l];
+            uint32_t ph0 = v->ph[l] - inc[l] * n, tg0 = (uint32_t)v->s[l], wraps = 0, win = b->window > 5u ? 5u : b->window;
+            int32_t wv[4] = {0, 0, 0, 0}, big = 0, bigpos = 0, smp[4] = {0, 0, 0, 0}, gn[4] = {0, 0, 0, 0};
+            uint32_t ps[4] = {0, 0, 0, 0};
+            if (l && noise) {
+                printf("why %u part %u voice %u note %u line 2: NOISE (not explained)\n", why_j, tr, vi, v->note);
+                continue;
+            }
+            for (i = 0; i < (int32_t)n; i++)                         /* the cycles that ended inside the block */
+                wraps += ph0 + inc[l] * ((uint32_t)i + 1u) < ph0 + inc[l] * (uint32_t)i;
+            tg0 ^= wraps & 1u;                                       /* the toggle at the block's start */
+            printf("why %u part %u voice %u note %u line %u: waves %u/%u window %u, depth %u -> %u%s, gain %d -> %d\n", why_j,
+                   tr, vi, v->note, l + 1u, b->wave[0], b->wave[1], b->window, b->dq >> 16, b->dcw,
+                   b->dstep ? " (ramped)" : "", amp[2u * l], amp[2u * l + 1u]);
+            for (k = 0; k < 4; k++) {                                /* samples j-2 .. j+1 (before the block: the block's
+                                                                      * first depth and gain, this block's increment) */
+                uint32_t ph, dcw, pivot, k0, k1, w, tg = tg0, q;
+                i = j - 2 + k;
+                if (i >= (int32_t)n)
+                    continue;
+                ph = ph0 + inc[l] * (uint32_t)i;
+                for (q = 0; (int32_t)q < i; q++)
+                    tg ^= ph0 + inc[l] * (q + 1u) < ph0 + inc[l] * q;
+                for (q = 0; (int32_t)q < -i; q++)
+                    tg ^= ph0 - inc[l] * q < ph0 - inc[l] * (q + 1u);
+                dcw = b->dstep ? (b->dq + b->dstep * (uint32_t)(i < 0 ? 0 : i + 1)) >> 16 : b->dcw;
+                pivot = 1024u - dcw;
+                k0 = b->dstep ? CZ_RECIP[pivot] : b->k0;
+                k1 = b->dstep ? CZ_RECIP[2048u - pivot] : b->k1;
+                w = b->wave[tg & 1u];
+                ps[k] = ph >> 21;
+                wv[k] = cz_native_wave(w, win, ph >> 21, pivot, k0, k1, dcw);
+                gn[k] = amp[2u * l] + ((step[l] * (i < 0 ? 0 : i)) >> 8);
+                smp[k] = i >= 0 ? ln[l][i] : why_last[tr][vi][l][2 + i];
+                printf("   sample %+d: position %4u wave %u depth %4u definition %6d gain %5d line %6d%s\n", (int)(i - j), ps[k], w,
+                       dcw, wv[k], gn[k], smp[k], i < 0 ? " (the block before)" : "");
+                if (k == 2) {                                        /* the definition between the two positions */
+                    uint32_t a = ps[1], z = ps[2];
+                    int32_t last_ = wv[1];
+                    for (q = a; q != z; ) {
+                        int32_t x;
+                        q = (q + 1u) & 2047u;
+                        x = cz_native_wave(w, win, q, pivot, k0, k1, dcw);
+                        if (abs(x - last_) > big) {
+                            big = abs(x - last_);
+                            bigpos = (int32_t)q;
+                        }
+                        last_ = x;
+                    }
+                }
+            }
+            printf("   step %d -> %d: the definition's %d (x gain / 2: %d), the line's %d; positions %u -> %u, the definition's "
+                   "largest step between neighbours there %d (into position %d)%s%s\n", (int)j - 1, (int)j, wv[2] - wv[1],
+                   (int32_t)(((int64_t)(wv[2] - wv[1]) * gn[2]) >> 16), smp[2] - smp[1], ps[1], ps[2], big, bigpos,
+                   ps[2] < ps[1] ? " (the cycle's end)" : "", j ? "" : " (a block's first sample)");
+        }
+    }
+    for (l = first; l <= last; l++) {
+        why_last[tr][vi][l][0] = n > 1u ? ln[l][n - 2u] : 0;
+        why_last[tr][vi][l][1] = ln[l][n - 1u];
+    }
+}
+
+enum { S_HOLD, S_RETRIG, S_RETRIG_GAP, S_CHANGE, S_STEAL, S_ARP, S_RESTRIKE, S_ARP_UP, S_N };
+static const char *const S_NAME[S_N] = {"hold", "retrig", "retrig-gap", "change", "steal", "arp", "restrike", "arp-up"};
 static const int8_t CHORD[4][6] = {{0, 4, 7, 11, -1, -1}, {0, 4, 7, 10, 14, -1}, {0, 4, 7, 9, 11, 14}, {0, 7, 12, 16, 19, 24}};
 static const char *const C_NAME[4] = {"4", "5", "6", "6wide"};
 static const uint8_t ROOTS[4] = {36, 60, 84, 96};
-#define FLOOR 600               /* a jump's least step: -35 dB of full scale in the dry mix */
+/* a jump's least step: -35 dB of full scale in the dry mix at the scale before 0.19's trim, -41 dB after it: the same
+ * step of the same voice (the thresholds follow the engine's scale, so the counts before and after compare) */
+#define FLOOR (150 * CZ_VOICE_GAIN)
+#define CLICK_FLOOR (33 * CZ_VOICE_GAIN)   /* a click's least third difference (RMS of a window), likewise */
 #define MAXS (6u * FS)
 
 typedef struct { uint32_t blk; uint8_t part, note, vel, on; } ev_t;
@@ -151,9 +295,10 @@ static void scenario(uint32_t s, uint32_t ci, int root, uint32_t vel, int bass)
         break;
     case S_RETRIG:                               /* the same chord struck again every 300 ms: off and on in one block */
         for (k = 0; k < 8u; k++) {
+            uint32_t v2 = getenv("CZ_VEL2") && (k & 1u) ? (uint32_t)atoi(getenv("CZ_VEL2")) : vel;
             if (k)
                 chord_ev(k * 300u, c, root, vel, 0, bass);
-            chord_ev(k * 300u, c, root, vel, 1, bass);
+            chord_ev(k * 300u, c, root, v2, 1, bass);
         }
         chord_ev(2400, c, root, vel, 0, bass);
         end = 3600;
@@ -190,6 +335,35 @@ static void scenario(uint32_t s, uint32_t ci, int root, uint32_t vel, int bass)
         chord_ev(2300, c, root + 3, vel, 1, 0);
         chord_ev(2800, c, root + 3, vel, 0, bass);
         end = 4000;
+        break;
+    case S_RESTRIKE:                             /* tools/emu/scripts/cr_cz_pop.txt's: held 1.2 s, struck again 20 ms
+                                                  * after its release three times, 500 ms apart (every voice still
+                                                  * sounds), then two changes with common tones in one block */
+        chord_ev(0, c, root, vel, 1, bass);
+        for (k = 0; k < 3u; k++) {
+            uint32_t gap = getenv("CZ_GAP") ? (uint32_t)atoi(getenv("CZ_GAP")) : 20u;
+            chord_ev(1200u + k * 520u, c, root, vel, 0, bass);
+            chord_ev(1200u + gap + k * 520u, c, root, vel, 1, bass);
+        }
+        chord_ev(3060, c, root, vel, 0, bass);
+        chord_ev(3060, c, root + 7, vel, 1, bass);
+        chord_ev(3860, c, root + 7, vel, 0, bass);
+        chord_ev(3860, c, root, vel, 1, bass);
+        chord_ev(4660, c, root, vel, 0, bass);
+        end = 5800;
+        break;
+    case S_ARP_UP:                               /* the unit's Arpeggiate as it comes: up, sixteenths at 120 BPM, a
+                                                  * note let go as the next starts; ten passes of the chord (each note
+                                                  * struck again while its own tail sounds), the bass held under it */
+        if (bass)
+            ev_add(0, 1, root - 12 < 24 ? root : root - 12, vel, 1);
+        for (k = 0; k < 10u * nn && k < 44u; k++) {
+            ev_add(k * 125u, 0, root + c[k % nn], vel, 1);
+            ev_add(k * 125u + 125u, 0, root + c[k % nn], vel, 0);
+        }
+        if (bass)
+            ev_add(5000, 1, root - 12 < 24 ? root : root - 12, vel, 0);
+        end = 5900;
         break;
     default:                                     /* the arp: up and down at 200 BPM sixteenths, each note twice */
         if (bass)
@@ -230,7 +404,81 @@ typedef struct {
     uint32_t kills, steals;
     int32_t line_pk, sum_pk, voice_pk, gstep, gstep_on, gjump, dstep, dstep_on;
     uint32_t gstep_at;
+    uint32_t nclick, click_at, click_x, oclick, oclick_at, oclick_x, odd;
+    uint64_t half;
 } res_t;
+
+/* clicks of x[0..n), as tools/emu/wavclicks.py finds them in a WAV: the third difference of the signal in 32-sample
+ * windows (its RMS), against the median of the windows around it (30 before, 29 after, not the nearest two); a window
+ * 12 times above that and above floor_ is a click (windows within 4 of the last: the same one). That measure reads
+ * the first bright window of any attack after a quiet stretch as a click, and every pulse of a low note (half of all
+ * runs have one). burst = 1 asks more, and is what "click" in a run's line means: the window is 12 times above the
+ * median of the windows BEFORE it and of those AFTER it, each on its own (an attack has a loud side, a note's end
+ * too), and 3 times above the largest window within 1.25 periods of the run's lowest note on either side (the
+ * tone's own edges come again; a pop does not). The worst's place and ratio. */
+static int dcmp(const void *a, const void *b)
+{
+    double x = *(const double *)a, y = *(const double *)b;
+    return x < y ? -1 : x > y;
+}
+static double median(double *v, uint32_t m)
+{
+    if (!m)
+        return 0;
+    qsort(v, m, sizeof v[0], dcmp);
+    return m & 1u ? v[m / 2u] : (v[m / 2u - 1u] + v[m / 2u]) / 2.0;
+}
+static uint32_t clicks(const int32_t *x, uint32_t n, double floor_, int burst, uint32_t *at, uint32_t *ratio)
+{
+    uint32_t nw = n / 32u, w, i, cnt = 0, K = 32, span = lowest_period / 32u + 1u < 19u ? 19u : lowest_period / 32u + 1u;
+    int32_t last = -10;
+    double *e = calloc(nw + 1u, sizeof *e), nb[64], na[64], best = 0;
+    for (w = 0; w < nw; w++) {
+        double sq = 0;
+        for (i = 0; i < 32u; i++) {
+            uint32_t k = w * 32u + i;
+            double d3 = k >= 3u ? (double)x[k] - 3.0 * x[k - 1u] + 3.0 * x[k - 2u] - (double)x[k - 3u] : 0.0;
+            sq += d3 * d3;
+        }
+        e[w] = sqrt(sq / 32.0);
+    }
+    for (w = 0; w < nw; w++) {
+        uint32_t mb = 0, ma = 0;
+        double med, r, tiny = 1e-7 * 32768.0;
+        if (e[w] < floor_)
+            continue;
+        for (i = w > K ? w - K : 0; i + 2u < w; i++)
+            nb[mb++] = e[i];
+        for (i = w + 3u; i < w + K && i < nw; i++)
+            na[ma++] = e[i];
+        if (burst) {
+            double m0 = median(nb, mb), m1 = median(na, ma), big = 0;
+            med = m0 > m1 ? m0 : m1;
+            for (i = w > span ? w - span : 0; i <= w + span && i < nw; i++)
+                if (i + 2u < w || i > w + 2u)
+                    big = e[i] > big ? e[i] : big;
+            if (e[w] < 3.0 * big)
+                continue;
+        } else {
+            for (i = 0; i < ma; i++)
+                nb[mb++] = na[i];
+            med = median(nb, mb);
+        }
+        r = e[w] / (med > tiny ? med : tiny);
+        if (r >= 12.0) {
+            if ((int32_t)w - last > 4)
+                cnt++;
+            last = (int32_t)w;
+            if (r > best) {
+                best = r;
+                *at = w * 32u;
+                *ratio = r > 99999.0 ? 99999u : (uint32_t)r;
+            }
+        }
+    }
+    free(e);
+    return cnt;
+}
 
 /* jumps of x[0..n): the count, the worst (by step / reference) */
 static uint32_t jumps(const int32_t *x, uint32_t n, int32_t floor_, uint32_t *at, int32_t *dmax, int32_t *refmax)
@@ -281,6 +529,8 @@ static void analyse(uint32_t n, res_t *r)
     int64_t acc = 0;
     r->njump = jumps(mx, n, FLOOR, &r->jump_at, &r->jump_d, &r->jump_ref);
     r->ojump = jumps(ol, n, FLOOR / 2, &r->ojump_at, &r->ojump_d, &r->ojump_ref);
+    r->nclick = clicks(mx, n, CLICK_FLOOR, 1, &r->click_at, &r->click_x);
+    r->oclick = clicks(ol, n, 0.002 * 32768.0, 0, &r->oclick_at, &r->oclick_x);
     for (w = 0; w < nw; w++) {
         double s = 0;
         for (i = 0; i < 32u; i++) {
@@ -333,7 +583,11 @@ static void analyse(uint32_t n, res_t *r)
     free(pk);
 }
 
-static const struct { const char *pr; int8_t trim; } TRIM[] = {{"BRASS 1", -10}, {"STRINGS 2", -6}, {"PIPE ORGAN 1", -12}};
+static const struct { const char *pr; int8_t trim; } TRIM[] = {
+#if CZ_VOICE_GAIN == 4                           /* (a tree before 0.19: cr_bank.c CB_TRIM had these three) */
+    {"BRASS 1", -10}, {"STRINGS 2", -6}, {"PIPE ORGAN 1", -12},
+#endif
+    {"", 0}};
 static uint32_t preset_named(uint32_t eng, const char *name)
 {
     const engine_t *e = ENGINES[eng];
@@ -409,6 +663,8 @@ static void render(uint32_t eng, uint32_t pr, uint32_t s, uint32_t ci, int root,
     r->dstep_on = pb.dstep_on;
     r->kills = voice_kills;
     r->steals = voice_steals;
+    r->half = ph_hash;
+    r->odd = ph_odd;
     analyse(nblk * CTL, r);
     {   /* the event nearest before the worst jump: its distance in samples, -1 none */
         int32_t best = -1;
@@ -433,12 +689,13 @@ static void line(uint32_t eng, uint32_t pr, uint32_t s, uint32_t ci, int root, u
                  int wrap)
 {
     printf("%u %u \"%s\" %s %s %d %u %d | part %d mix %d out %d lim %d dc %d | jump %u at %u d %d ref %d ev %d %s | ojump "
-           "%u at %u d %d ref %d | dip %u at %u hole %u at %u | kills %u steals %u | line %d sum %d voice %d gstep %d %s at %u vjump %d dcwstep %d %s%s\n",
+           "%u at %u d %d ref %d | dip %u at %u hole %u at %u | kills %u steals %u | line %d sum %d voice %d gstep %d %s at %u vjump %d dcwstep %d %s | click %u at %u x %u oclick %u at %u x %u | half %016llx odd %u%s\n",
            eng, pr, ENGINES[eng]->presets[pr].name, S_NAME[s], C_NAME[ci], root, vel, bass, r->part_pk, r->mix_pk, r->out_pk,
            r->lim_min, r->dc, r->njump, r->jump_at, r->jump_d, r->jump_ref, r->jump_ev < 0 ? -1 : r->jump_ev / 2,
            r->jump_ev < 0 ? "-" : r->jump_ev & 1 ? "on" : "off", r->ojump, r->ojump_at, r->ojump_d, r->ojump_ref, r->ndip,
            r->dip_at, r->nhole, r->hole_at, r->kills, r->steals, r->line_pk, r->sum_pk, r->voice_pk, r->gstep,
-           r->gstep_on ? "on" : "-", r->gstep_at, r->gjump, r->dstep, r->dstep_on ? "on" : "-", wrap ? " WRAP" : "");
+           r->gstep_on ? "on" : "-", r->gstep_at, r->gjump, r->dstep, r->dstep_on ? "on" : "-", r->nclick, r->click_at, r->click_x, r->oclick,
+           r->oclick_at, r->oclick_x, (unsigned long long)r->half, r->odd, wrap ? " WRAP" : "");
 }
 
 /* a run in a child: its result through a pipe; a child that died (the sanitizer: a wrap) is reported as such */
@@ -475,6 +732,12 @@ int main(int argc, char **argv)
                             for (bass = 0; bass < 2u; bass++)
                                 run(ENGI_CZ, pr, s, ci, ROOTS[ri], v ? 127u : 100u, (int)bass);
         return 0;
+    }
+    if (getenv("CZ_TRACE") && sscanf(getenv("CZ_TRACE"), "%u,%u", &tr_a, &tr_b) == 2)
+        tr_on = 1;
+    if (getenv("CZ_WHY")) {
+        why_on = 1;
+        why_j = (uint32_t)atoi(getenv("CZ_WHY"));
     }
     if (argc >= 9 && !strcmp(argv[1], "one")) {
         uint32_t eng = (uint32_t)atoi(argv[2]), pr = (uint32_t)atoi(argv[3]), s = (uint32_t)atoi(argv[4]),
