@@ -339,7 +339,7 @@ is never the octave), **its own button held again past HOLD_MS closes it** (alon
 meanwhile it is a combo in the layer, which stays), holding another layer button switches to that layer.
 **OCT+ confirms where a layer has something to confirm, and closes it where it has not** (the owner's rule,
 2026-10-10; until then PERF's and FX's OCT+ were on / off and the PLAY menu's did nothing): the table below.
-The lockable layers: KEY, PERF, FX, BASS, LOOP, METRO and the engine picker (EDIT held: a preview, OCT− cancels,
+The lockable layers: KEY, PERF, FX, BASS, LOOP, SEQ and the engine picker (EDIT held: a preview, OCT− cancels,
 OCT+ / EDIT / EDIT held again keep).
 
 | layer | OCT− | OCT+ | HOME | a tap of its button | its button held again |
@@ -348,7 +348,7 @@ OCT+ / EDIT / EDIT held again keep).
 | PERF | close | **close** (was: perform on/off) | close | perform on/off, the layer stays | close (was: stays) |
 | FX | close | **close** (was: the effects on/off) | close | the effects on/off, the layer stays | close (was: stays) |
 | BASS | close | close | close | bass on/off, the layer stays | close (was: stays) |
-| METRO | close | close | close | the click on/off, the layer stays | close (was: stays) |
+| SEQ (the metronome's) | close | close | close | the click on/off, the layer stays | close (was: stays) |
 | LOOP (the PLAY menu) | close; step entry: back a step | **close** (was: nothing); step entry: a rest | close | play / stop, the menu stays | close (was: stays) |
 | the view menu (HOME held) | close | close ("ok": the change is live) | close | (HOME tap: close) | close (was: stays) |
 | the engine picker (EDIT held; since 0.18 its roots and chord keys always play, SELECT steps the engines, KNOB 4 has no job) | cancel, close | keep, close | cancel, close | keep, close | keep, close (was: stays) |
@@ -372,7 +372,7 @@ a button pressed during another's hold is that hold's combo (its release does no
 | EDIT | EDIT | the sound editor (again: leave; in the engine picker: keep its sound, close it) | the engine picker (a preview: OCT− cancels, OCT+ keeps): SELECT the engine, KNOB 1 its presets, KNOB 2 init; the roots and the chord keys play (0.18: until then the white roots chose the engine unless KNOB 4 set them to play) |
 | HOME | HOME | close the layer / page / menu (the view unchanged); on the view: next View **unless the view is locked** | **600 ms: the view menu** (`L_VIEW`, a picker: Chord · Keyboard · Notes · Geek Out · Scope by SELECT / the white roots, the last line "Lock: On / Off": KNOB 1 or the sixth white root; OCT+ ok, OCT− / HOME back; Settings v9 `view_lock`, the same view as Options > View) |
 | SAVE | SAVE | save sound (naming; in it: save, as OCT+) | **the global save** (0.18, `cu_gsave`: at the hold time, alone: the settings block, the session and the loop in RAM if they changed; "saved"; while a loop plays or a capture is open: "saves at stop"). GLO + SAVE held 1 s: **the revert** ("reverted"). Until 0.17: save / load / delete loops |
-| SEQ | METRO | the loop editor (0.18; docs/LOOPER.md; the metronome on/off until then: now the PLAY menu's page 2, GLO + SEQ, and SEQ in its own layer) | the knob row: the time signature over Click (KNOB 1, hot; no popup) and three empty cells |
+| SEQ | SEQ | the loop editor (0.18; docs/LOOPER.md; the metronome on/off until then: now the PLAY menu's page 2, GLO + SEQ, and SEQ in its own layer) | the knob row: the time signature over Click (KNOB 1, hot; no popup) and three empty cells |
 | PLAY | LOOP | play / stop | the knob row, no ring: slots on white roots, D#4 CLEAR (hold), F#4 UNDO; KNOB 1 the length picker, 2–4 Quantize Count-in Level cells (hot, no popups); playing: the action picker, OCT+ does it, Sync dim, the dial |
 | REC | REC | record / overdub arm | undo the last layer (not a layer) |
 | OCT−/OCT+ | | octave −2..+2; in a layer or picker: back / confirm (nothing to confirm: close) | **both: PANIC** (the LOCK latch cleared) |
@@ -409,9 +409,9 @@ Tonic (text), Scale (Major / Minor), Transpose (shift, (v + 24) / 48, "+5"), Sin
 opens; no tempo there; the label ends "· 1/2" / "· 2/2", the footer starts "SELECT: page"): page 2 is Key plays
 (Chords / Notes, KNOB 1) and Keyboard (Chords / Full, KNOB 2), KNOB 3 / 4 free (a dash); below. LOOP
 (`cu_loop_cells`): Sync (range, index / 5, the length; `CR_CF_DIM` while playing), Quantize (echoes, index / 6, pct2
-1.0), Count-in (gate 1.0 / 0.1), Level (bar). METRO: Click (bar, level / 100). Traces `key: cells ...`, `key: knob 3
+1.0), Count-in (gate 1.0 / 0.1), Level (bar). SEQ's (the metronome's): Click (bar, level / 100). Traces `key: cells ...`, `key: knob 3
 transpose 5`, `loop: cells ...`, `loop: knob 2 quantize 1/4`, `metro: knob 1 click 60`. OPT + SELECT outside the
-METRO layer still shows the click-level popup.
+SEQ key's hold menu (metronome) still shows the click-level popup.
 
 Pickers (`cr_picker_t { items, n, sel, on_change }`): SELECT or a root key moves `sel` (the white
 roots index into the list), OCT+ confirms (`on_change` is already live for settings, so OCT+ only
@@ -439,7 +439,7 @@ Priority, top down, first match wins:
 
 1. a message (panic, "SAVED", errors) → `big` block / `message`
 2. a knob popup (within 900 ms of a turn) → `meter` in the knob's colour (`PLAN.md` §5)
-3. an open layer → its screen: KEY, PERF, FX, BASS, LOOP, METRO the `knobrow` (no popup over it: their knob turns never set one; KEY's band the keyboard); SAVE (loops) and the engine picker pickers; EDIT the `params` page
+3. an open layer → its screen: KEY, PERF, FX, BASS, LOOP, SEQ the `knobrow` (no popup over it: their knob turns never set one; KEY's band the keyboard); SAVE (loops) and the engine picker pickers; EDIT the `params` page
 4. Options → the settings picker
 5. the View: CHORD (`chord` with squeeze + notes line, `Key:` in the top line, `Rec`/loop status in the top line; the ring only for the count-in, the undo screen, recording / overdubbing and calibration; the corner dial (`dial_on`) while the loop merely plays — on every screen with a top line but Options, the LOOP and SAVE layers included), KEYBOARD, NOTES, GEEK OUT, SCOPE (Felucca's scope buffer)
    - **the arp screen** (`arp`, `cr_draw.c cr_p_arp`: the chord's name, its notes on a line, the sounding note on a
@@ -608,12 +608,12 @@ every key that plays is dark until it sounds (it glowed dim until 2026-10-12); o
 `cu_black(k)` keys alone, so every white key glowed whatever the key), a sounding note lit over it. Where: the view,
 the editor, and the layers whose roots play (PERF, FX, LOCK, PLAY with Keys = Play, the engine picker (always, since
 0.18), KEY with keys: play), and the KEY layer on pick (its roots pick a tonic: the same picture; Key Mode off
-there: all dim). Not in the layers with their own map on the roots (PLAY's and SAVE's slots, BASS / METRO / the view
+there: all dim). Not in the layers with their own map on the roots (PLAY's and SAVE's slots, BASS / SEQ / the view
 menu / the engine picker's lists, naming, the Options). Stock (two levels): the scale's keys lit, the tonic as the
 rest, the others dark, a sounding one dark. The Full keyboard: all 27 keys carry that picture and every held key
 that plays is lit; the chord block's LEDs are not drawn. `cr_key_leds.txt`, the dump's `key leds:` line.
 layer maps on the roots while a layer is open; KEY,
-PERF, FX, BASS, LATCH, METRO lit when on; **the open layer's button blinks** (locked after its hold; SAVE while
+PERF, FX, BASS, LATCH, SEQ lit when on; **the open layer's button blinks** (locked after its hold; SAVE while
 held); EDIT blinks while the editor is open; REC blink while recording, lit when armed; PLAY lit when a loop
 exists, its green LED when playing; OPT lit in Options; OCT− lit / OCT+ blinking in layers and pickers.
 
@@ -723,7 +723,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   `cr_snapshot` copies what the UI shows with the IRQ off.
 - **`cr_ui.c`**: the grammar of section 3: chord keys, LOCK, roots (+ OCT), the tap / hold / combo gesture
   (one armed button, as `ui_layer.c`; a hold locks its layer open), OCT- + OCT+ = panic (octave reset), OCT in
-  layers and pickers = back / OK. Taps: KEY PERF FX BASS LATCH OPT EDIT SAVE METRO; layers: KEY (select-key, MIN held = minor, KNOB 1-3
+  layers and pickers = back / OK. Taps: KEY PERF FX BASS LATCH OPT EDIT SAVE SEQ; layers: KEY (select-key, MIN held = minor, KNOB 1-3
   tonic / scale / transpose), PERF (7 modes on the white roots, KNOB 1-4 the mode's parameters), FX (Reverb Chorus
   Delay Drive = part 0's sends, KNOB 1-3 the buses' `song.g` parameters, KNOB 4 the amount), BASS (behaviours,
   register, sound, level), EDIT (the engine picker; KNOB 1 the engine's sounds). Knobs: KNOB 1 voicing, KNOB 2 bass
@@ -823,7 +823,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
 
 - **The looper** (step 4, `cr_loop.c`, docs/LOOPER.md): semantic events through the engine's `gesture` hook and
   `cr_loop_event` loop voices; Free / 1-16 bar sync with a clicked count-in, quantize on commit, overdub layers,
-  undo, clear, panic; LOOP / REC / METRO taps and holds, the LOOP layer (slots on D4..F5, D#4 CLEAR, F#4 UNDO,
+  undo, clear, panic; LOOP / REC / SEQ taps and holds, the LOOP layer (slots on D4..F5, D#4 CLEAR, F#4 UNDO,
   KNOB 1-4 SYNC QUANT COUNT-IN LEVEL, the Overdub/Pause/Undo/Clear picker while playing), SAVE held (Save / Load /
   Delete, OCT+), ten flash slots (storage.c's commit protocol on sectors of their own), the ring and `Rec 1.2` /
   `Loop 1` top lines, REC / LOOP / green LEDs, the metronome click (time signature, level). The count-in is a big
@@ -851,7 +851,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
 
 - **The third-pass grammar** (2026-10-06, `design/make_mockups.py` states 1-24): printed SEL = KEY, printed EDIT =
   EDIT (swapped; the emulator: `X` = KEY, `B` = EDIT); B3 = LOCK (the chord block's latch, a UI virtual hold); a
-  layer locks open on its hold (KEY PERF FX BASS LOOP METRO, the engine picker), its button blinks, OCT- / HOME
+  layer locks open on its hold (KEY PERF FX BASS LOOP SEQ, the engine picker), its button blinks, OCT- / HOME
   close it, another layer's hold switches; the HOME + hold lock, OPT + FX / PERF and OPT + KNOB 3 locks removed
   (OPT + KNOB 2 / 3 / 4 / PRESETS: the knob's own job). Footers "… · OCT-: back · HOME: home". Scripts: `cr_lock.txt`,
   `cr_layer_lock.txt` (new), `cr_perf_lock.txt` (gone); the others close their layers with `btn OCT-`. The editor's
@@ -1241,7 +1241,7 @@ LOCK latch, B3's tap), and stands back, leaving every edge untaken for the frame
 
 - a button is down, or was pressed or let go since the last scan, or a hold is armed (`fm1_in.buttons`, the edges,
   `cu.bheld`, `cu.armed`): a button's event comes before a key's, and a key during a hold opens a layer;
-- the root keys belong to the open layer (`cu_layer_keys`: KEY's pick, BASS, METRO, the view menu, the PLAY menu
+- the root keys belong to the open layer (`cu_layer_keys`: KEY's pick, BASS, SEQ, the view menu, the PLAY menu
   with Keys = Pick), to the naming page or to Options;
 - the panel is being calibrated.
 

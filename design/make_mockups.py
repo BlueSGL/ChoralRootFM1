@@ -61,7 +61,7 @@ ROOT_BLACK = [k for k in ROOTS if key_black(k)]          # 7 black root keys
 
 BUTTON_LABELS = {
     "FX": "FX", "SEL": "KEY", "ENV": "BASS", "LFO": "LATCH", "EDIT": "EDIT", "GLO": "OPT",
-    "HOME": "HOME", "SAVE": "SAVE", "ARP": "PERF", "SEQ": "METRO", "PLAY": "LOOP", "REC": "REC",
+    "HOME": "HOME", "SAVE": "SAVE", "ARP": "PERF", "SEQ": "SEQ", "PLAY": "LOOP", "REC": "REC",
     "OCT-": "OCT-", "OCT+": "OCT+",
 }
 ENCODER_LABELS = {
@@ -324,7 +324,7 @@ S.append(state(
                   "GLO": "OPT: tap = Options menu · held + a knob = its second function (KNOB 1 split point, SELECT metronome level, ALGORITHM bass volume)",
                   "PLAY": "LOOP: tap = play / stop · hold = the loop layer, locked open (slots, sync, quantize)",
                   "REC": "REC: tap = record / overdub arm (red) · hold = undo the last layer",
-                  "SEQ": "METRO: tap = metronome / beat on-off (Orchid's BPM press) · hold = the beat layer, locked open (beat, time signature)",
+                  "SEQ": "SEQ (called METRO until 0.18): tap = the loop editor, the sequencer (GLO + SEQ: metronome on-off) · hold = its hold menu, the metronome's, locked open (time signature, click)",
                   "EDIT": "EDIT: tap = the sound editor (EDIT blinks; EDIT or HOME leaves) · hold = engine picker · BASS held + EDIT = the bass sound's editor",
                   "HOME": "HOME: back to the view from any page, menu, layer or the editor · tap again: next View (CHORD / KEYBOARD / NOTES / GEEK OUT / SCOPE)",
                   "SAVE": "SAVE: tap = save the sound (Orchid's Sound long press) · hold = save the loop",
