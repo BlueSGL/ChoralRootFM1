@@ -26,6 +26,18 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "cz_native_render", "cz_native_line", "cz_native_line_mv", "cz_native_noise", "cz_env_tick",   # CZ-1 (cz_native.c, Melodee's): the voice, a line's loops (one per wave and window; _mv: the same with the DCW depth ramped a sample at a time, for the blocks in which it changes), line 2 with NOISE, envelopes
          "quad_render", "quad_block",                        # FM TONE (eng_quad.c, code name QUAD, ChoralRoot): the voice, the part's macros
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
+         # TIMER5's USB work, each a function of its own since 0.19 (usb.c USB_OUTLINE / USB_COLD), so that
+         # fm1_timer5_irq is what every 100 us tick runs: the scan, the clock, the UART's bytes. Inlined there, the
+         # control transfers (ep0_service) and the bus reset were two thirds of its instructions, and each branch
+         # back from one of their tails was a "loop" around the rest, x4 a level: the figure went 45994 -> 58635 ->
+         # 68460 over two merges that added no instruction to any path a tick takes. Watched instead: usb_poll (2 kHz,
+         # never nested in the render; its two spans are the returns from the cold calls, not loops), ep1_rx (a MIDI
+         # packet from the host), ua_service_paced (the recording's endpoint, every tick; its loop is the frame number
+         # read twice) and ua_transmit (a packet's frames out of the ring, once a ms while a stream is open: the one
+         # real per-sample loop of the four). Not watched: ua_tx_fill (no loop: nothing to count), ep0_service and
+         # usb_bus_reset (they run on a cable or a host's request, and a budget on code laid out as one span guards
+         # nothing)
+         "usb_poll", "ep1_rx", "ua_service_paced", "ua_transmit",
          "mod_begin", "mod_voice", "mod_end",                 # the modulation matrix (mod.c), called when active
          "master_block",                                    # the master (fx.c): a loop per LOWCUT / limiter setting
          "mix_loop", "mix_loop_f", "mix_loop_s", "mix_loop_sf",   # a part into the mix (fx.c mix_part_out): plain, with the

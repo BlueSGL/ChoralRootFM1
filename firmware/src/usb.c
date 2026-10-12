@@ -377,6 +377,22 @@ static int get_desc(uint32_t wvalue, const uint8_t **d, uint16_t *l)
 #endif
 
 /* ---------------------------------------------------------- the SIE --- */
+/* What usb_poll does on a rare event is kept out of its line (0.19): a control transfer (ep0_service: the
+ * descriptors, SET_CUR, the class requests) and a bus reset happen when a cable goes in or a host opens the device,
+ * a MIDI packet from the host (ep1_rx) or to it (ep1_tx) when there is one, the console's bytes (ep3_rx, ep3_tx)
+ * only while it is presented. Inlined into the TIMER5 ISR they were most of its 1800
+ * instructions, and every branch back from their tails counted as a loop around the scan in tests/target_budget.py
+ * (the figure moved by a quarter with the order the compiler laid the blocks out in, with no instruction more on any
+ * path). usb_poll itself is one call from the ISR, 2 kHz, never nested in the render. The update loader
+ * (FELUCCA_LOADER) keeps its code as it was, byte for byte. */
+#ifdef FELUCCA_LOADER
+#define USB_COLD
+#define USB_OUTLINE
+#else
+#define USB_COLD __attribute__((noinline, cold))
+#define USB_OUTLINE __attribute__((noinline))
+#endif
+
 static void sie_wr(uint32_t r, uint32_t v)
 {
     uint32_t n = 20000;
@@ -478,7 +494,7 @@ static void e0_send(const uint8_t *p, uint16_t len, uint16_t wlen)
 #include "usb_audio.c"
 #endif
 
-static void ep0_service(void)
+static USB_COLD void ep0_service(void)
 {
     static const uint8_t zero2[2];
     uint32_t csr, i;
@@ -785,7 +801,7 @@ static int ep1_take(const uint8_t *b, uint32_t n)
     return 1;
 }
 
-static void ep1_rx(void)                                /* leaves the packet (NAK) while the ring is too full */
+static USB_OUTLINE void ep1_rx(void)                    /* leaves the packet (NAK) while the ring is too full */
 {
     uint32_t csr, n;
     sie_wr(S_INDEX, 1);
@@ -878,7 +894,12 @@ static int ota_wire_gone(uint32_t mark) { return (int32_t)(so_gone - mark) >= 0;
 #endif
 #endif
 
-static void ep1_tx(void)
+#if FELUCCA_OTA                                         /* nothing for the host (ep1_tx's first test; usb_poll) */
+#define EP1_TX_IDLE() (mo_w == mo_r && so_w == so_r && !SX_UNSEEN())
+#else
+#define EP1_TX_IDLE() (mo_w == mo_r)
+#endif
+static USB_OUTLINE void ep1_tx(void)
 {
     uint32_t csr, n = 0;
 #if FELUCCA_OTA
@@ -932,7 +953,7 @@ static void ep1_tx(void)
 }
 
 #if FELUCCA_CDC
-static void ep3_rx(void)                                /* leaves the packet (NAK) while the ring is full */
+static USB_OUTLINE void ep3_rx(void)                                /* leaves the packet (NAK) while the ring is full */
 {
     uint32_t csr, n, i;
     sie_wr(S_INDEX, 3);
@@ -958,7 +979,7 @@ static void ep3_rx(void)                                /* leaves the packet (NA
     sie_wr(S_RXCSR2, csr >> 8);
 }
 
-static void ep3_tx(void)                                /* <= 63 bytes per packet: never needs a ZLP */
+static USB_OUTLINE void ep3_tx(void)                                /* <= 63 bytes per packet: never needs a ZLP */
 {
     uint32_t csr, n = 0;
     if (co_w == co_r)
@@ -978,7 +999,37 @@ static void ep3_tx(void)                                /* <= 63 bytes per packe
 #endif
 
 
-static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
+static USB_COLD void usb_bus_reset(void)
+{
+#if FELUCCA_UAC
+    ua_hw_stop();
+#endif
+    usb.resets++;
+    sie_wr(S_FADDR, 0);
+    usb.config = 0;
+    usb.suspended = 0;
+    mo_r = mo_w;                                    /* nothing stale for the next host */
+    usb.sx_on = 0;
+#if FELUCCA_OTA
+    so_r = so_w;
+    SX_TAKEN();                                     /* (dropped: nothing of it is on its way any more) */
+    sx_collect = 0;
+#endif
+    usb.e0_tx = 0;
+    usb.has_pend_addr = 0;
+    usb.rx_pend = 0;
+#if FELUCCA_CDC
+    cdc.dtr = 0;
+    cdc.e0_rx = 0;
+    cdc.rx_pend = 0;
+#endif
+    fm1_usb_ep0_buf(ep0buf);
+    sie_wr(S_INTRUSBE, 0x07);
+    sie_wr(S_INTRTX1E, 0x01);
+    sie_wr(S_INTRRX1E, 0);
+}
+
+static USB_OUTLINE void usb_poll(void)                  /* TIMER5 ISR, 2 kHz */
 {
     uint32_t iu, it, ir;
     if (!usb.up)
@@ -1020,42 +1071,21 @@ static void usb_poll(void)                              /* TIMER5 ISR, 2 kHz */
     }
     if (iu & 0x02u)                                     /* resume */
         usb.suspended = 0;
-    if (iu & 0x04u) {                                   /* bus reset */
-#if FELUCCA_UAC
-        ua_hw_stop();
-#endif
-        usb.resets++;
-        sie_wr(S_FADDR, 0);
-        usb.config = 0;
-        usb.suspended = 0;
-        mo_r = mo_w;                                    /* nothing stale for the next host */
-        usb.sx_on = 0;
-#if FELUCCA_OTA
-        so_r = so_w;
-        SX_TAKEN();                                     /* (dropped: nothing of it is on its way any more) */
-        sx_collect = 0;
-#endif
-        usb.e0_tx = 0;
-        usb.has_pend_addr = 0;
-        usb.rx_pend = 0;
-#if FELUCCA_CDC
-        cdc.dtr = 0;
-        cdc.e0_rx = 0;
-        cdc.rx_pend = 0;
-#endif
-        fm1_usb_ep0_buf(ep0buf);
-        sie_wr(S_INTRUSBE, 0x07);
-        sie_wr(S_INTRTX1E, 0x01);
-        sie_wr(S_INTRRX1E, 0);
-    }
+    if (iu & 0x04u)                                     /* bus reset */
+        usb_bus_reset();
     if (it & 0x01u)
         ep0_service();
     if (ir & 0x02u)
         usb.rx_pend = 1;
     if (usb.rx_pend)                                    /* not every poll: 3 SIE round trips each */
         ep1_rx();
+#ifdef FELUCCA_LOADER
     if (usb.config)
         ep1_tx();
+#else
+    if (usb.config && !EP1_TX_IDLE())                   /* (ep1_tx's own first test, in line: with nothing for the */
+        ep1_tx();                                       /* host, the usual poll, no call) */
+#endif
 #if FELUCCA_CDC
     if (usb.config && USB_CDC_ON) {
         if (ir & 0x08u)
