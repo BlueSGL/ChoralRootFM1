@@ -43,6 +43,12 @@ cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_fx_test
 ./build/host/cr_fx_test build/fx-review > build/host/cr_fx_test.log || { cat build/host/cr_fx_test.log; exit 1; }
 grep -c ' ok$' build/host/cr_fx_test.log | sed 's/^/cr_fx_test: /; s/$/ checks ok/'
 tail -1 build/host/cr_fx_test.log
+# 0.19: what does not pass the master lined up with it (the click, the USB recording's part pairs), the chorus's test
+# switch, MASTER at power-on (docs/AUDIO-QUALITY.md "Round 3"), on the emulator's firmware build
+cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_align_test tests/cr_align_test.c -lm
+./build/host/cr_align_test > build/host/cr_align_test.log 2>&1 || { grep -a 'cr_align' build/host/cr_align_test.log; exit 1; }
+grep -ac ' ok$' build/host/cr_align_test.log | sed 's/^/cr_align_test: /; s/$/ checks ok/'
+grep -a 'cr_align_test' build/host/cr_align_test.log | tail -1
 # backup / restore SysEx (cr_backup.c) on the emulator's firmware build (tools/emu/emu_firmware.h; macOS: os_unfair_lock)
 cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_backup_test tests/cr_backup_test.c -lm
 ./build/host/cr_backup_test

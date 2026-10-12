@@ -1,0 +1,32 @@
+# ChoralRoot 0.19: Classic is 0.18's sound bit for bit where no part sends into the chorus (tools/emu/classic_exact.sh,
+# its second part; see classic_dry_send0.txt). Here FX is off: no part sends into any effect.
+# FX tapped: off (the tap toggles it); the chord part to the VA (OPT + PRESETS +2), the bass on (ALGORITHM +18),
+# MASTER at its top, a 6-note chord with the bass held 3 s (the limiter at work all the time in Classic), let go.
+# Only commands and controls 0.18 has: the same file runs in both emulators.
+master 1023
+wait 300
+btn FX
+wait 400
+btn GLO down
+wait 100
+knob PRESETS +2               # OPT + PRESETS: the chord part to the VA, on OPT's release
+wait 100
+btn GLO up
+wait 300
+knob ALGORITHM +18            # the bass on
+wait 700
+key F3 down
+key 2 down
+key 4 down
+key 5 down
+wait 40
+btn D4 down
+wait 3000
+dump
+btn D4 up
+key F3 up
+key 2 up
+key 4 up
+key 5 up
+wait 1500
+quit

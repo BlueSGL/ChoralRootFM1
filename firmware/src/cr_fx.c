@@ -2,7 +2,8 @@
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
 /* ChoralRoot's delay and reverb (CR_FX 1; docs/FX.md), included by fx.c in the place of Felucca's mono tempo delay and
  * its ROOM / SPRING reverb, which stay as they are for Felucca's units (CR_FX 0: its goldens). Both take a mono
- * send bus of fx.c and add a stereo wet to the mix.
+ * send bus of fx.c and add a stereo wet to the mix. Since 0.19 the chorus's return is here too (xc_block: two taps
+ * on Felucca's line, left and right; SLOOP 2.6's design, credited there and in LICENSING.md).
  *
  * THE RATES (build flags; docs/FX.md "Half rate or full"). CR_FX_DELAY_DS 1: the delay runs at the full 44.1 kHz,
  * straight on the send and into the mix: its repeats are heard beside the dry sound and keep its band. CR_FX_REVERB_DS
@@ -101,12 +102,16 @@ enum { XP_DTIME,                 /* the delay's time, free: 0..127 = 16 ms .. XD
        XP_RMOD,                  /* the modulated lines' swing: 0..127 = 0 .. 0.9 ms */
        XP_RLOW,                  /* the input's low cut: 0..127 = 20 .. 500 Hz */
        XP_RWIDTH,                /* 0 mono .. 127 full */
+       XP_CWIDTH,                /* the chorus's right tap: its LFO 0 .. a quarter turn ahead of the left's (0: both
+                                  * ears the same tap, the mono return of 0.18; 127: a quarter). No knob yet: the
+                                  * default (docs/FX.md "The chorus, stereo" has the two lines a knob needs) */
        XP_N };
 static const struct { int16_t min, max, def; } XFP[XP_N] = {
     [XP_DTIME] = {0, 127, 91}, [XP_DDIV] = {0, 12, 6}, [XP_DSPREAD] = {0, 127, 0}, [XP_DRATIO] = {0, 3, 0},
     [XP_DFDBK] = {0, 127, 58}, [XP_DSYNC] = {0, 1, 1}, [XP_DMODE] = {0, 1, 1}, [XP_DTONE] = {0, 127, 70},
     [XP_DWOW] = {0, 127, 24}, [XP_RSIZE] = {0, 127, 88}, [XP_RDAMP] = {0, 127, 56}, [XP_RDECAY] = {0, 127, 52},
-    [XP_RPRE] = {0, 127, 16}, [XP_RMOD] = {0, 127, 56}, [XP_RLOW] = {0, 127, 60}, [XP_RWIDTH] = {0, 127, 127}};
+    [XP_RPRE] = {0, 127, 16}, [XP_RMOD] = {0, 127, 56}, [XP_RLOW] = {0, 127, 60}, [XP_RWIDTH] = {0, 127, 127},
+    [XP_CWIDTH] = {0, 127, 127}};
 static int16_t xfp[XP_N];                 /* the values (xf_defaults at power-on, then the session's) */
 static uint16_t xf_bpm = 120;             /* the tempo the synced delay follows (cr_ui.c: the engine's, 20..300) */
 
@@ -820,6 +825,69 @@ static void xf_hb_clear(xf_hb_t *h)
     for (i = 0; i < 4u; i++)
         h->x[i] = h->y[i] = 0;
 }
+/* ---------------------------------------------------------------- the chorus --- */
+/* THE CHORUS, STEREO (0.19; docs/FX.md "The chorus, stereo"). Felucca's chorus (fx.c fx_buses) reads its line at one
+ * point that an LFO moves (400 + 0 .. 6 x DEPTH samples back: 9 .. 17 ms at the default) and returns that one tap to
+ * both sides: beside the dry sound the same comb in both ears. Here the same line (fx.c cho_buf, written as before)
+ * is read at TWO points: the left's is Felucca's own, the right's the same LFO a quarter turn ahead (XP_CWIDTH: 0 ..
+ * a quarter). Each ear still has the comb 0.18 had, but never the same one, and the two wets are unrelated over the
+ * band; the mono sum's deepest notch is 0.18's (at the two moments of a turn where the taps cross) and less
+ * everywhere else, and it keeps 71 % of the chorus's motion (half a turn apart, as SLOOP has it, is as wide and
+ * leaves the sum a comb that stands still: tools/chorus_response.py). Rate, Depth and the send are what they were.
+ * Two taps on the one line, left and right, and the LFO taken once a block with the read points a straight line
+ * across it (no sine a sample) are the design of SLOOP 2.6's chorus (github.com/isod89/sloop-fm1 firmware/src/fx.c
+ * fx_buses; GPL-3.0-only, a fork of Felucca): the design, written anew, no code copied (LICENSING.md). ChoralRoot's
+ * own: the quarter turn and its width parameter, the line ending exactly on the next block's start, the return
+ * straight into the mix, and the rest below.
+ * xc_live: samples for which the line still holds something. A part that sends nothing costs a look at the block
+ * (and nothing at all once the line has run empty: no write, no read). */
+#ifndef XC_TURN
+#define XC_TURN 0x40000000u               /* the right tap's lead at Width 127: a quarter of the LFO's turn */
+#endif
+static uint32_t xc_live;
+#define XC_POS(ph) ((400 << 8) + (((osc_sine(ph) + 32768) * cdepth) >> 8))   /* Q8 samples back (fx_buses's own) */
+static __attribute__((noinline)) void xc_block(const int32_t *in, int32_t *ml, int32_t *mr, uint32_t n)
+{
+    int32_t cdepth = song.g[G_CDEPTH] * 6, any = 0, ra, rb, da, db;
+    uint32_t i, w = fx.cho_w, ph0 = fx.cho_ph, ph1 = ph0 + (LFO_INC[song.g[G_CRATE] & 127] / CTL) * n;
+    uint32_t off = (uint32_t)xfp[XP_CWIDTH] * (XC_TURN / 127u);
+    fx.cho_ph = ph1;                                    /* (the LFO runs on while nothing is sent, as it always did) */
+    fx.cho_w = w + n;
+    if (!xc_live) {
+        for (i = 0; i < n; i++)
+            any |= in[i];
+        if (!any)
+            return;                                     /* nothing sent and the line empty: zeros in, zeros out */
+    }
+    ra = XC_POS(ph0) << 5;                              /* the read points, a 32nd of Q8: a line from this block's */
+    rb = XC_POS(ph0 + off) << 5;                        /* LFO to the next one's, so it ends where the next begins */
+    da = XC_POS(ph1) - (ra >> 5);
+    db = XC_POS(ph1 + off) - (rb >> 5);
+    if (n != CTL) {                                     /* (the ISR's block is CTL: the step is the difference) */
+        da = da * (int32_t)CTL / (int32_t)n;
+        db = db * (int32_t)CTL / (int32_t)n;
+    }
+    for (i = 0; i < n; i++, w++) {
+        int32_t x = in[i], r, c0, c1;
+        uint32_t k;
+        any |= x;
+        cho_buf[w & (CHO_LEN - 1u)] = (int16_t)clamp(x >> 1, -32768, 32767);
+        ra += da;
+        r = ra >> 5;
+        k = w - ((uint32_t)r >> 8);
+        c0 = cho_buf[k & (CHO_LEN - 1u)];
+        c1 = cho_buf[(k - 1u) & (CHO_LEN - 1u)];
+        ml[i] += (c0 + (((c1 - c0) * (r & 255)) >> 8)) * 2;
+        rb += db;
+        r = rb >> 5;
+        k = w - ((uint32_t)r >> 8);
+        c0 = cho_buf[k & (CHO_LEN - 1u)];
+        c1 = cho_buf[(k - 1u) & (CHO_LEN - 1u)];
+        mr[i] += (c0 + (((c1 - c0) * (r & 255)) >> 8)) * 2;
+    }
+    xc_live = any ? CHO_LEN : xc_live > n ? xc_live - n : 0u;
+}
+
 /* a block of the two sends (the mono buses of fx.c) -> the stereo wet added to ml, mr. n: CTL */
 static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int32_t *rev_in, int32_t *ml,
                                                int32_t *mr, uint32_t n)

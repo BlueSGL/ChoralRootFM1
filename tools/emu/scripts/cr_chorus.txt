@@ -1,0 +1,26 @@
+# ChoralRoot 0.19: the chorus returns in stereo (docs/FX.md "The chorus, stereo"): two taps on its line, left and
+# right, the right one's LFO a quarter turn ahead.
+# FX held: the Sends page (Drive / Chorus / Delay / Reverb on KNOB 1..4); KNOB 3 -5 and KNOB 4 -6: the delay and the
+# reverb sends to 0 (they are stereo themselves), the chorus send stays at its default (45); FX let go, OCT- closes
+# the layer. D4 alone (TINE EP, a single note) held 2 s, let go, its tail.
+# tools/emu/test_cr.sh: the WAV's left differs from its right (the side 20 dB or less under the mid); the same script
+# with EMU_CHORUS=mono (0.18's return, the emulator's test switch) is the same word on both sides, and the two runs'
+# mono sums and left channels are as loud as each other.
+wait 300
+btn FX down
+wait 500
+knob KNOB3 -5
+wait 100
+knob KNOB4 -6
+wait 300
+btn FX up
+wait 300
+btn OCT-
+wait 300
+dump
+btn D4 down
+wait 2000
+btn D4 up
+wait 2000
+dump
+quit

@@ -185,7 +185,7 @@ static void felucca_init(void)
     }
     undo_depth--;
     song.sel = 0;
-    song.master_q12 = 2048;
+    song.master_q12 = 2048;                   /* (the pot's level replaces it before the audio starts: master_boot) */
     ui.home = 1;
     ui.force = 1;
 }
@@ -230,9 +230,11 @@ static void dbg_boot(void)
     CR_STAGE(BS_GUARD);
 }
 
+#include "master.c"              /* the MASTER pot: read before the audio starts (0.19; Felucca 1.1.5, #137) */
+
 static void fm1_main(void)
 {
-    int32_t knob = 512 * 16;
+    uint32_t ms;
     persist_boot();                                     /* (stages BS_FLASH .. BS_SETTINGS; SAFE MODE: no object read) */
 #if FELUCCA_OTA
     CR_STAGE(BS_OTA_CLEANUP);
@@ -263,6 +265,7 @@ static void fm1_main(void)
         cr_c1_boot();
 #endif
     CR_STAGE(BS_AUDIO);
+    master_boot();                            /* the first block already at the knob's level (master.c) */
     audio_init();
     CR_STAGE(BS_USB);
     usb_start();
@@ -280,7 +283,10 @@ static void fm1_main(void)
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
-    fm1_delay_ms(cr_safe ? 2500 : 400);       /* (SAFE MODE: its screen stays readable) */
+    for (ms = 0; ms < (cr_safe ? 2500u : 400u); ms += 10u) {   /* the splash (SAFE MODE: its screen stays readable); */
+        fm1_delay_ms(10);                     /* the pot followed under it */
+        master_poll();
+    }
     lcd_fill(0, 0, 240, 240, T_BG);
 
     for (;;) {
@@ -299,15 +305,7 @@ static void fm1_main(void)
             if (b > 0)
                 song.batt_raw = song.batt_raw ? song.batt_raw + (b - song.batt_raw) / 32 : b;
         }
-        {
-            int32_t a = fm1_adc_read(FM1_ADC_MASTER);
-            if (a >= 0) {
-                uint32_t k10;
-                knob += (a * 16 - knob) / 8;
-                k10 = (uint32_t)(knob / 16);
-                song.master_q12 = (k10 * k10) >> 8;            /* 0 .. ~4096 */
-            }
-        }
+        master_poll();                                  /* MASTER: the pot, smoothed (master.c) */
 #if defined(CR_A_STRIPES) && FELUCCA_FLASH           /* (ChoralRoot: cr_backup.c is in the unit) */
         cr_update_poll();                               /* OCT- + OCT+ + HOME held 5 s: update mode through the boot
                                                          * stub (cr_backup.c; 0.18: the two OCT keys alone no longer) */

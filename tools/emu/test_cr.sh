@@ -2148,8 +2148,11 @@ has '^deep: part 0 page 0 SYN 1 col 3 RATIO B 62 -> 81 (3.00/2.00)' "$QL" && ok 
 has '^deep: part 0 page 0 SYN 1 col 3 RATIO B 81 -> 347 (3.00/16.00)' "$QL" && has '^deep: part 0 page 0 SYN 1 col 3 RATIO B 347 -> 5 (3.00/0.25)' "$QL" &&
     ok "Shift + KNOB 4 +-30: B1 stops at 16.00 and 0.25, B2 kept" || bad "B1's ends: $(grep 'RATIO B' "$QL" | tail -2 | tr '\n' ' ')"
 # (--floor 0.003: the notes end where their own sound does. At wavpitch's 0.001 the delay's last repeats, which hover
-# at that level, were a fourth "note" of 0.13 s in one build of the effects and not in the next)
-rbn=$(python3 tools/emu/wavpitch.py "$OUT/cr_quad_ratiob.wav" --floor 0.003)
+# at that level, were a fourth "note" of 0.13 s in one build of the effects and not in the next. --left: the centroid
+# is read beside the chorus's comb (the default send). The two channels' average has both of the stereo chorus's taps
+# in it since 0.19 and the two notes' centroids came out 4.6 % apart there (5.8 % with 0.18's one tap: the comb's
+# moment, not the ratio); one channel has one tap: 440 against 352 Hz)
+rbn=$(python3 tools/emu/wavpitch.py "$OUT/cr_quad_ratiob.wav" --floor 0.003 --left)
 rbp=$(echo "$rbn" | sed -n 's/.*peak \([0-9.]*\) Hz/\1/p' | tr '\n' ' ')
 rbc=$(echo "$rbn" | sed -n 's/.*cent \([0-9.]*\) Hz.*/\1/p' | tr '\n' ' ')
 python3 -c "import sys; p = [float(x) for x in sys.argv[1:]]; sys.exit(not (len(p) == 3 and abs(p[0] - 262) < 10 and
@@ -2450,6 +2453,41 @@ pk=$(echo "$wl" | sed 's/.*, B \([0-9]*\) of.*/\1/')
 wc_=$(python3 tools/emu/wavclicks.py "$OUT/cr_output_loud.wav" --from 1.0 | tail -1)
 echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &&
     ok "and no jump, no hole, no click in it" || bad "the loud chord through Clean: $wc_"
+
+echo "0.19's audio: the chorus in stereo, the click lined up with Clean, MASTER read before the audio starts (docs/FX.md, docs/AUDIO-QUALITY.md \"Round 3\")"
+run cr_chorus --wav "$OUT/cr_chorus.wav"
+EMU_CHORUS=mono "$EMU" --headless --script "$S/cr_chorus.txt" --wav "$OUT/cr_chorus_mono.wav" >"$OUT/cr_chorus_mono.log" 2>&1
+LC_ALL=C grep -aq "session fx: on 1 .* amt 0 45 0 0 " "$OUT/cr_chorus.log" || bad "cr_chorus: the sends are not reverb 0, chorus 45, delay 0: $(LC_ALL=C grep -a 'session fx' "$OUT/cr_chorus.log" | head -1)"
+ws=$(python3 tools/emu/wavstat.py stereo "$OUT/cr_chorus.wav")
+sd=$(echo "$ws" | sed -n 's/^side -\([0-9]*\)\..*/\1/p')
+[ "${sd:-99}" -le 20 ] && [ "${sd:-0}" -ge 3 ] &&
+    ok "a note with only its chorus send: left and right differ, the stereo chorus ($ws)" || bad "the chorus is not stereo: $ws"
+ws=$(python3 tools/emu/wavstat.py stereo "$OUT/cr_chorus_mono.wav")
+echo "$ws" | grep -q "^side -inf dB re mid; left differs from right on 0 of " &&
+    ok "the same with EMU_CHORUS=mono (0.18's return, the test switch): the same word on both sides" || bad "EMU_CHORUS=mono: $ws"
+wm=$(python3 tools/emu/wavstat.py mono "$OUT/cr_chorus.wav" "$OUT/cr_chorus_mono.wav")
+echo "$wm" | grep -Eq "^mono sum [+-]0\.[0-9]* dB re B's; left [+-]0\.[0-4][0-9]* dB" &&
+    ok "the stereo chorus's left is as loud as 0.18's return, its mono sum within 1 dB of it ($wm)" || bad "the chorus's level: $wm"
+run cr_click --wav "$OUT/cr_click.wav"
+EMU_OUTPUT=classic "$EMU" --headless --script "$S/cr_click.txt" --wav "$OUT/cr_click_classic.wav" >/dev/null 2>&1
+wl=$(python3 tools/emu/wavlag.py "$OUT/cr_click_classic.wav" "$OUT/cr_click.wav")
+echo "$wl" | grep -Eq "^lag 32 samples \(0\.73 ms\), correlation 1\.000; peak A ([0-9]*), B \1 of" &&
+    ok "the count-in's clicks through Clean are Classic's, 32 samples later: lined up with Clean's sound, their level untouched ($wl)" \
+    || bad "the click in Clean against Classic: $wl"
+bm() {   # bm CHAIN ADC: cr_boot_master with the pot at ADC at power-on, through CHAIN
+    if [ "$1" = classic ]; then
+        EMU_OUTPUT=classic EMU_MASTER=$2 "$EMU" --headless --script "$S/cr_boot_master.txt" --wav "$OUT/cr_boot_$1_$2.wav" >"$OUT/cr_boot_$1_$2.log" 2>&1
+    else
+        EMU_MASTER=$2 "$EMU" --headless --script "$S/cr_boot_master.txt" --wav "$OUT/cr_boot_$1_$2.wav" >"$OUT/cr_boot_$1_$2.log" 2>&1
+    fi
+}
+for c in clean classic; do
+    bm $c 160; bm $c 1023
+    lv=$(python3 tools/emu/wavstat.py level "$OUT/cr_boot_${c}_160.wav" "$OUT/cr_boot_${c}_1023.wav" 0 10 200 250)
+    grep -aq "master_q12 100 " "$OUT/cr_boot_${c}_160.log" && echo "$lv" | grep -Eq "^level -32\.[0-4][0-9]* dB re B's \(0 \.\. 10 ms\); -32\.[0-4][0-9]* dB " &&
+        ok "MASTER at power-on, $c: the pot at 160 (MASTER 100 / 4096): the first note's first 10 ms are 32.2 dB under the top position's, as 200 ms later ($lv)" \
+        || bad "MASTER at power-on, $c: $lv ($(grep -a 'master_q12' "$OUT/cr_boot_${c}_160.log" | head -1))"
+done
 
 echo "the Options menu leaves the keys alone (0.19): they play as on the view, the menu is SELECT, KNOB 1 and the buttons"
 run cr_opt_keys --wav "$OUT/cr_opt_keys.wav"
