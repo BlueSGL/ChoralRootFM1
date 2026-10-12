@@ -268,7 +268,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | Bass on | no (off at every power-on, by rule) | **yes** (the rule is superseded by the owner's sentence above) | session `bass_on` |
 | which sound the bass part plays | yes | yes | block `bass_sound`, `pool_pos`; and the session's part |
 | the bass behaviour, the bass register | yes | yes | block `bass_mode`, `bass_voicing` |
-| the bass level (the BASS layer's Level, OPT + ALGORITHM), each part's Level and Pan (MIX) | no ("bass level 102 came back as 92") | **yes** | session `part[k].p[P_LEVEL]`, `p[P_PAN]`: the part's own parameters travel with its record |
+| the bass level (the BASS layer's Level, BASS held + ALGORITHM; OPT + ALGORITHM until 2026-10-12), each part's Level and Pan (MIX) | no ("bass level 102 came back as 92") | **yes** | session `part[k].p[P_LEVEL]`, `p[P_PAN]`: the part's own parameters travel with its record |
 | FX on / off | yes | yes | block `fx_on` |
 | the page picked in the FX layer (Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive) | no | **yes** | session `fx.sel` (an effect tag; the second pages and Sends have their own) |
 | the effects' own parameters, GLOBAL (the reverb's 7 and the delay's 9: [FX.md](FX.md); the chorus's rate and depth) | no | **yes** | session `fx.par[]` (tag, value) |

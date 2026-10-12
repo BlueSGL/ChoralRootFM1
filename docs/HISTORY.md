@@ -889,3 +889,52 @@ it); `docs/manual/sound-popup.png` regenerated. Not tested: anything on the unit
 panel, the feel of GLO + REC with the real buttons' timing); GLO + REC in the calibration and in SAFE MODE; the
 read-out after a SysEx `--select` (it needs the device tool's path; it goes through the same `cu_sound_popup`).
 
+**2026-10-12, a major triad reads `CM`; OPT + ALGORITHM is the bass engine; BASS + ALGORITHM the bass level (0.18 dev,
+built, not flashed).** The owner: "I noticed that for Major chords, nothing shows, major chords should use capital M
+to differentiate from single notes. So C major would read CM", then, while it was being built, "Big Chord Name on home
+page should also change"; and "Bass presets, let's make that work similar to the main presets, GLO + Bass knob to
+change engine. With this change then map, hold the ENV/Bass key and turn bass knob for the bass level shortcut."
+*The name.* One function names a chord for every screen, `cr_chord_name` (`cr_engine.c`): the home views' big name
+(`cr_chord_info`), the arp band, the loop editor's name line, its playing name, step entry's line, the trace. The
+change is one line there: quality `CR_Q_MAJ` with no extension bit gives the quality text `M` (at the quality's size,
+0.58 of the root's, on the root's line, as `m`). The rule for the rest, decided here: a major triad WITH an extension
+keeps Orchid's name (`C7`, `CM7`, `C6`, `C9`, `C6 9`, `CM7 9`, `CJAZZ`, `CWTF`): none of those can be read as a note
+(no screen prints an octave after a chord's root), `CM7` must stay the major seventh rather than become "CM" + "7" =
+dominant, and `CM6 9` would be longer for nothing. `C5` (power), `C+`, `Csus`, `Cdim`, `Cm`, `Cm add4` are as they
+were; `C` alone is `CR_Q_NONE`, a single note. So only one name of the 8 x 16 changes. Display only: the engine's
+spec, the loop events (root, quality << 4 | extension) and the MIDI are untouched. Widths: the new name is the
+shortest chord name there is after the note itself (`G#M`: narrower than `G#m`'s neighbours `G#dim`, `G#sus`), so no
+place gets a longer longest name: the big name is not squeezed, the playing name stays at its 13 px face, the name
+line beside `step 64/64` is whole; 0 lint findings, the 28 ellipsised texts are the PLAY menu pickers' neighbours as
+before.
+*The bass engine* (`cu_epk_step(part, s)`, `cu_epk_commit`): the chord part's picker with a part: `cu.epk_on` 1 the
+chord's, 2 the bass's (orange, "bass engine · OPT + ALGORITHM"); the same list (`cu_engine_at`: the shown melodic
+engines, so a part standing on a retired engine's stand-in starts from the first), the same wrap, the same landing
+(`cs.pool_pos[part]`, else the first preset), on the same pages (`cu_pool_home`). Decided here: a bass that is off
+stays off (`cs.bass_sound` 0 or BASS tapped off: the engine and its sound are loaded and wait; the read-out shows
+where it landed, not `00 off`); the other knob turned in the same hold commits the first pick and opens the other
+picker. The home read-out's bass line is `Hold OPT to change engine` now (`CU_POOL_HINT_BASS` is gone).
+*The bass level* (`cu_bass_level_hold`). Until now OPT + ALGORITHM, by one rule everywhere but the loop editor.
+**The collision**: BASS held + a knob already meant something: any knob turned during a hold opens the button's layer
+at once (`cu_activity`) and LOCKS it, and ALGORITHM, which the BASS layer does not claim, then fell through to its
+own job: BASS held + ALGORITHM opened the BASS layer and changed the bass SOUND. The layer already has a Level cell
+(KNOB 4). The mapping chosen: BASS held + ALGORITHM is the level always, and nothing is dropped (ALGORITHM alone still
+turns the bass sound, in the layer too; KNOB 3 there as well): with no layer open and BASS not yet past the hold time
+it is the old popup and NO layer (`cu.blvl`: the hold is spent, no layer at the hold time, no tap on release; a
+shortcut that left the layer locked open would cost a HOME every time), and anything else touched in that hold opens
+the layer as always (KNOB 1 is never the chord's voicing); with the BASS layer open (BASS held past the hold time,
+held again in its locked layer, or held over another layer, which it replaces) the level moves in the layer, its
+Level cell hot, and never the sound: the rule of "a knob turned while a layer's button is held acts in that layer",
+which this combination broke until now. Not in the loop editor (the voicing) nor in the sound editor without a layer
+(ENV is the editor's own button there). OPT + ALGORITHM off the home pages (the PLAY menu, the other layers, the sound
+editor, the save dialog), where it was the level by the old rule, is ALGORITHM's own job there now, as OPT + PRESETS
+always was: the PLAY menu's record mode, the bass sound elsewhere; the loop editor keeps Follow / 0.
+Nothing new is stored. Mock-ups: `make_mockups.py` / `make_loop_mockups.py` name their major triads `FM` / `GM`
+(the JSONs regenerated; five other JSONs picked up the "SEQ" label their generators already had); the PNG sheets
+`design/choralroot-fm1-screens.png` and `choralroot-fm1-loop-screens.png` were not rendered again and show `F` / `G`.
+No manual picture changed (none shows a major triad's name: `chord.png` is Dm7, the loop editor's selected step Am).
+Tests: `tests/cr_engine_test.c` (the table; 8 qualities x 16 masks x 12 roots: no chord is a bare root, `M` only for
+the plain triad), `tests/cr_draw_test.c` (the big name `G#M` on every named screen, the three looper places),
+`tools/emu/scripts/cr_bass_engine.txt` in `test_cr.sh`, and the expectations that named a major triad. Not tested:
+anything on the unit; the `M`'s legibility at the Notes / Scope views' small name; BASS + ALGORITHM over the save
+dialog and in SAFE MODE.

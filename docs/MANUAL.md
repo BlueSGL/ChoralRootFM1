@@ -70,7 +70,8 @@ stays until you touch something.
 a root key plays one note; the screen shows `D` and under it `D4`.
 
 **Play a chord.** The lowest five white keys and the four black keys between them are the **chord block**. Hold MAJ
-(the black key A#3) and press D4: D major. The screen shows `D` large and the notes `D4 F#4 A4` under it, and the
+(the black key A#3) and press D4: D major. The screen shows `DM` (a major chord has a capital `M` after its root, so
+that it cannot be taken for the single note `D`) and the notes `D4 F#4 A4` under it, and the
 three root keys where those notes sound light up. Now hold MIN (G#3) and m7 (the white key G3) together and press D4:
 
 <img src="manual/chord.png" width="240" alt="The chord view: Dm with a small orange 7, the notes D4 F4 A4 C5 under it, C5 in orange">
@@ -166,7 +167,7 @@ None of them can be pressed. A turn (of any knob but MASTER) shows its value lar
 | MASTER | the volume | |
 | SELECT | the tempo, 20 to 300 BPM; in a layer or a menu: moves the picker (the KEY layer: turns its page) | the metronome's level |
 | PRESETS | the chord sound: the next or previous one of its engine | the chord sound's engine |
-| ALGORITHM | the bass sound: off, then the bass engine's sounds | the bass level |
+| ALGORITHM | the bass sound: off, then the bass engine's sounds | the bass sound's engine (with BASS held instead: the bass level) |
 | KNOB 1 | the chord's voicing (on the Full keyboard: the octave) | the Single Notes split point |
 | KNOB 2 | the bass register, in octaves | |
 | KNOB 3 | the first parameter of the performance mode | |
@@ -244,7 +245,7 @@ Hold one chord type and any extensions, then press a root.
 | --- | --- | --- | --- |
 | F#3 | DIM | 3, 6 | `Ddim` |
 | G#3 | MIN | 3, 7 | `Dm` |
-| A#3 | MAJ | 4, 7 | `D` |
+| A#3 | MAJ | 4, 7 | `DM` |
 | C#4 | SUS | 5, 7 | `Dsus` |
 | F3 | 6 | adds 9 | `D` with a small `6` |
 | G3 | m7 | adds 10 | `D` with a small `7` (on a sus chord: `m7`) |
@@ -253,7 +254,11 @@ Hold one chord type and any extensions, then press a root.
 
 - With two types held, the one pressed last counts (unless it is a [secret chord](#secret-chords)).
 - Extensions stack: MAJ + 6 + 9 reads `D` `6 9`. Three extensions read `JAZZ`, all four `WTF`.
-- A root with no chord key is a single note (unless Key Mode is on).
+- **A major chord on its own reads with a capital `M`: `DM`.** A minor chord has a small `m` (`Dm`). With an
+  extension the major chord's `M` is left out, as chord names are usually written: `D` with a small `7`, `6`, `9` or
+  `M7` (the major seventh, not "D major" plus a 7). The name is the same on every screen: the views, the PERF layer,
+  the sequencer.
+- A root with no chord key is a single note (unless Key Mode is on): it reads as the note's name alone, `D`.
 - Under the name the screen lists the notes as they are voiced. Extension notes are orange.
 - The name of the last chord stays on the screen until the next one.
 
@@ -479,11 +484,18 @@ off as it was at your last save** (SAVE held) when you switch on (until 0.17 it 
 
 - **BASS** tap switches it on and off. The screen shows the bass sound's place, in orange (`VA` over `17`, then
   `DEEP SUB`; with Bass Behaviour Solo the top line reads `VA · solo`), or `00 / off`. Its bottom line,
-  `BASS + EDIT, hold EDIT: engine`, is the way to another bass engine (OPT does not change the bass engine).
+  `Hold OPT to change engine`, is the way to another bass engine (below).
 - **ALGORITHM** turns through off (`00 off`) and then the sounds of the bass part's engine. Its first sound is
   `00 INIT`, the engine's plain starting sound.
 - **KNOB 2** moves the bass register, -2 to +4 octaves.
-- **OPT + ALGORITHM** is the bass level (not in the loop editor, where it sets the step's Voicing to `Follow` or `0`).
+- **OPT + ALGORITHM** changes the bass sound's engine, exactly as OPT + PRESETS does for the chord sound: hold OPT
+  (printed GLO), turn ALGORITHM until the engine you want is in the middle, let go. You land on the sound you last
+  used in that engine. A bass that is off stays off. This works on the main screen; in a layer or in the sound editor
+  OPT changes nothing about ALGORITHM (in the loop editor OPT + ALGORITHM sets the step's Voicing to `Follow` or `0`).
+- **BASS held + ALGORITHM** is the bass level: hold BASS (printed ENV / BASS), turn ALGORITHM, let go. The screen
+  shows `bass level`, and the bass stays on or off as it was. (Until 0.18 this was OPT + ALGORITHM.) If you have held
+  BASS long enough for its layer to open, or the layer is open already, the same turn changes the layer's Level
+  cell, and the layer stays open.
 
 Hold BASS for the **BASS layer**:
 
@@ -493,6 +505,7 @@ Hold BASS for the **BASS layer**:
 | KNOB 2 | Register |
 | KNOB 3 | Sound (as ALGORITHM, without wrapping round) |
 | KNOB 4 | Level |
+| ALGORITHM | the bass sound, as everywhere; **with BASS held: Level** |
 
 The root keys do not sound while this layer is open, whatever its footer says; close it to hear the change.
 
@@ -506,7 +519,8 @@ The root keys do not sound while this layer is open, whatever its footer says; c
 The same setting is Options > Bass Behaviour. The behaviour, the register and the level are kept by a global save (SAVE held).
 
 To edit the bass sound, hold BASS and tap EDIT. To save it, hold BASS and tap SAVE. To change the bass part's
-engine, open the bass sound's editor and hold EDIT there ([Sounds](#11-sounds)).
+engine, hold OPT and turn ALGORITHM (above), or open the bass sound's editor and hold EDIT there
+([Sounds](#11-sounds)).
 
 ## 7. Performance modes
 
@@ -836,7 +850,7 @@ What a step shows:
 | --- | --- |
 | PRESETS | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it. **GLO held + PRESETS** jumps 8 steps a click. (PRESETS never changes the sound or the slot while the editor is open) |
 | SELECT | the **page**: `Step` and `Trig`. The page's name is at the top, the bottom line begins `1/2` or `2/2` |
-| ALGORITHM | the selected step's **Voicing**, on either page. **GLO held + ALGORITHM** jumps between `Follow` and `0`: from either one a click gives the other; from any other value a click clockwise gives `0`, the other way `Follow`. (Outside the loop editor GLO + ALGORITHM is the bass level; in the editor it is this) |
+| ALGORITHM | the selected step's **Voicing**, on either page. **GLO held + ALGORITHM** jumps between `Follow` and `0`: from either one a click gives the other; from any other value a click clockwise gives `0`, the other way `Follow`. (On the main screen GLO + ALGORITHM is the bass sound's engine; in the editor it is this) |
 | the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. **Only what you play goes in**, also while the loop plays: never the loop's own notes. The step has the chord as soon as you let the keys go, with LATCH on too. The cursor stays on the step; turn PRESETS to move on |
 | OCT-, OCT+ | the **octave**, as on the main screen: what you play into a step next is entered there |
 | REC tap | **clears** the selected step, its notes and its settings (REC does not record here) |
@@ -977,8 +991,8 @@ in orange, the place big under it, and the sound's name. The stripes are the pre
 one): none is lit on INIT, all of them on the last preset, so they show how many there are and where you are. A
 small square after the name marks a factory preset you have saved over. The bottom line says how to get to another
 engine: `Hold OPT to change engine` (hold OPT, printed GLO, and turn PRESETS). **ALGORITHM** does the same for the
-bass, with `00 off` in front of the pool; its read-out is all orange and its bottom line reads
-`BASS + EDIT, hold EDIT: engine`, because the bass engine is changed in the bass sound's editor. Where OPT + PRESETS
+bass, with `00 off` in front of the pool; its read-out is all orange and its bottom line is the same,
+`Hold OPT to change engine` (hold OPT and turn ALGORITHM: the bass part's engine). Where OPT + PRESETS
 does not work (in the sound editor's picker, or when a program change arrives while a layer is open) the bottom line
 is the engine and the place instead (`FM6 · 02/25`) and nothing stands over the number.
 
@@ -1563,7 +1577,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass level · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass engine · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
@@ -1600,7 +1614,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | MASTER | volume | | volume | volume |
 | SELECT | tempo | click level | the layer's picker (KEY layer: its page; LOCK layer: tempo) | the lane |
 | PRESETS | chord sound | chord engine | chord sound (PLAY menu: slot) | the engine picker |
-| ALGORITHM | bass sound | bass level (loop editor: the step's Voicing, `Follow` / `0`) | bass sound (PLAY menu: record mode; loop editor: the step's Voicing) | bass sound |
+| ALGORITHM | bass sound (with BASS held: bass level) | on the main screen: the bass sound's engine (loop editor: the step's Voicing, `Follow` / `0`; elsewhere: as without OPT) | bass sound (PLAY menu: record mode; loop editor: the step's Voicing; with BASS held: the BASS layer's Level) | bass sound |
 | KNOB 1 | voicing (Full keyboard: the octave) | split point | the layer's first cell | the lane's first value |
 | KNOB 2 | bass register | | second cell | second value |
 | KNOB 3 | performance parameter | | third cell | third value |
