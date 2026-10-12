@@ -418,11 +418,12 @@ static void cr_pick_marks(int32_t n, int32_t sel, int32_t y, uint16_t col)
     for (i = 0; i < n; i++)
         cr_fill(x0 + i * (mw + gap), y, mw, 4, i == sel ? col : T_LINE);
 }
-/* a horizontal picker's neighbours: 13 px dim at lx (left) and rx (right), on baseline base - 4 (Q8), cut to room */
+/* a horizontal picker's neighbours: 13 px dim at lx (left) and rx (right), on baseline base - 4 (Q8), cut to room
+ * (lx < 0: no left one: the loop editor's playing name stands there, cr_lm_now) */
 static void cr_pick_sides(const cr_screen_t *s, int32_t n, int32_t sel, int32_t base, int32_t lx, int32_t rx,
                           int32_t room)
 {
-    if (sel > 0 && room > P8(24))
+    if (sel > 0 && room > P8(24) && lx >= 0)
         cr_text_fit(P8(lx), base - P8(4), cr_item(s, sel - 1), 13, 0, CR_L, T_DIM, T_BG, room);
     if (sel < n - 1 && room > P8(24)) {
         char b[48];
@@ -2181,6 +2182,20 @@ static void cr_lm_steps(const cr_screen_t *s, uint16_t col)
     }
 }
 
+/* the loop editor's playing name (lm_now; the owner, 2026-10-11: "show the name of the playing step chord/notes to the
+ * left of the Page Name (don't offset the page name ...) in blue"): the role blue, left-aligned at x 6 on the picker
+ * neighbours' baseline, CR_LM_NOW_W px wide at most: the page name ("Step", the wider of the two, 60 px centred on 120)
+ * begins at x 90, so 6 px stay clear whatever the name. Bold, the largest of 13 / 11 / 10 px that fits: 13 for most
+ * ("D#sus JAZZ" 74 px), 10 for the longest ("G#madd4 JAZZ" 73 px; 95 at 13). Its rows (67 .. 77) are inside one strip */
+#define CR_LM_NOW_W 78
+static void cr_lm_now(const cr_screen_t *s, int32_t base)
+{
+    static const uint8_t PX[3] = {13, 11, 10};
+    int32_t k = 0;
+    while (k < 2 && cr_tw(s->lm_now, PX[k], 1) > P8(CR_LM_NOW_W)) k++;
+    cr_text_fit(P8(6), base - P8(4), s->lm_now, PX[k], 1, CR_L, CR_NAMED[CR_COL_BLUE], T_BG, P8(CR_LM_NOW_W));
+}
+
 static void cr_p_loopmenu(const cr_screen_t *s, const cr_frame_t *fr)
 {
     int32_t n = s->n_items, sel = s->sel < n ? s->sel : n - 1, ry = cr_lm_rowy(s), size = 28;
@@ -2189,8 +2204,11 @@ static void cr_p_loopmenu(const cr_screen_t *s, const cr_frame_t *fr)
     cr_lm_slots(s, red);
     if (n > 0 && cr_in_strip(56, 92)) {              /* the record mode */
         int32_t bw = cr_tw(cr_item(s, sel), (uint32_t)size, 1);
+        int now = s->lm_now[0] && !(fr->slide && s->slide);   /* (a page sliding in crosses the name's place: 160 ms
+                                                               * without it) */
         if (bw > P8(150)) bw = P8(150);
-        cr_pick_sides(s, n, sel, base + P8(1), 6, 234, (P8(228) - bw) / 2 - P8(10));
+        if (now) cr_lm_now(s, base + P8(1));
+        cr_pick_sides(s, n, sel, base + P8(1), s->lm_now[0] ? -1 : 6, 234, (P8(228) - bw) / 2 - P8(10));
         cr_pick_item(s, fr, sel, size, 150, 1, base, P8(56), P8(56) + size * 282, col);
         if (n > 1) cr_pick_marks(n, sel, 56 + 36 - 6, col);
     }
@@ -2421,6 +2439,7 @@ static struct {
     uint32_t dl;                         /* the corner dial drawn (dial | pulse << 16 | mode << 17 | dot << 20) */
     int8_t pos;                          /* the arp screen's sounding note drawn (cr_arp_strips) */
     uint32_t lm, lmr;                    /* the loop menu's moving parts (lm_lane .. lm_erase1), .. but lm_pos */
+    uint32_t now;                        /* .. its playing name (lm_now) */
     uint16_t lmpos;                      /* .. lm_pos drawn (the step cursor's old row) */
     uint8_t valid, force;
     uint8_t blits, drawn;                /* strips blitted / composed by the last cr_draw (the host test reads them) */
@@ -2621,7 +2640,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     /* the struct's bytes but these (offset, size), hashed apart: the ring's fraction, the corner dial's fraction,
      * pulse, look and REC dot, the editor's parts (its cells, the hot cell, the band's values, its title line), the
      * arp screen's sounding note */
-    uint32_t lm, lmr, sk[10][2] = {
+    uint32_t lm, lmr, now, sk[11][2] = {
         {(uint32_t)__builtin_offsetof(cr_screen_t, pos), sizeof s->pos},
         {(uint32_t)__builtin_offsetof(cr_screen_t, lm_lane), (uint32_t)(__builtin_offsetof(cr_screen_t, lm_used) -
                                                                          __builtin_offsetof(cr_screen_t, lm_lane))},
@@ -2632,7 +2651,8 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
         {(uint32_t)__builtin_offsetof(cr_screen_t, hot_r), 3u},
         {(uint32_t)__builtin_offsetof(cr_screen_t, wv), sizeof s->wv},
         {(uint32_t)__builtin_offsetof(cr_screen_t, title), sizeof s->title},
-        {(uint32_t)__builtin_offsetof(cr_screen_t, page), sizeof s->page}};
+        {(uint32_t)__builtin_offsetof(cr_screen_t, page), sizeof s->page},
+        {(uint32_t)__builtin_offsetof(cr_screen_t, lm_now), sizeof s->lm_now}};
     _Static_assert(__builtin_offsetof(cr_screen_t, hot_c) == __builtin_offsetof(cr_screen_t, hot_r) + 1 &&
                    __builtin_offsetof(cr_screen_t, hot_col) == __builtin_offsetof(cr_screen_t, hot_r) + 2, "hot_r c col");
     _Static_assert(__builtin_offsetof(cr_screen_t, dial_mode) == __builtin_offsetof(cr_screen_t, dial_pulse) + 1 &&
@@ -2646,7 +2666,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
                    "lm_lane cell bar ed pos erase0 erase1 used");
     uint32_t dl = (uint32_t)s->dial | (uint32_t)s->dial_pulse << 16 | (uint32_t)s->dial_mode << 17 |
                   (uint32_t)s->dial_dot << 20;
-    for (i = 1; i < 10u; i++)                                    /* (in the struct's order) */
+    for (i = 1; i < 11u; i++)                                    /* (in the struct's order) */
         for (j = i; j && sk[j - 1][0] > sk[j][0]; j--) {
             uint32_t a = sk[j][0], c = sk[j][1];
             sk[j][0] = sk[j - 1][0]; sk[j][1] = sk[j - 1][1];
@@ -2654,7 +2674,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
         }
     cr_frame(s, anim_ms, &fr);
     base = 2166136261u ^ ux.gen;
-    for (i = 0, o = 0; i < 10u; o = sk[i][0] + sk[i][1], i++)
+    for (i = 0, o = 0; i < 11u; o = sk[i][0] + sk[i][1], i++)
         base = cr_hash(base, (const uint8_t *)s + o, sk[i][0] - o);
     base = cr_hash(base, (const uint8_t *)s + o, (uint32_t)sizeof *s - o);
     base = cr_hash(base, &fr, sizeof fr);
@@ -2663,15 +2683,18 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
         base = cr_hash(base, &ttl, sizeof ttl);
     lmr = cr_hash(cr_hash(2166136261u, s->lm_lane, 106u), &s->lm_erase0, 4u);   /* (the lanes, lm_cell, lm_bar, lm_ed) */
     lm = cr_hash(lmr, &s->lm_pos, sizeof s->lm_pos);
-    if (s->kind != CR_K_LOOPMENU)                                /* (the loop menu's moving parts: its middle only) */
+    now = cr_hash(2166136261u, s->lm_now, sizeof s->lm_now);    /* (the editor's playing name: its strip only) */
+    if (s->kind != CR_K_LOOPMENU) {                              /* (the loop menu's moving parts: its middle only) */
         base = cr_hash(base, &lm, sizeof lm);
+        base = cr_hash(base, &now, sizeof now);
+    }
     for (k = 0; k < CR_ED_ROWS; k++)
         row[k] = cr_hash(2166136261u, s->cell[k], sizeof s->cell[k]);
     wv = cr_hash(2166136261u, s->wv, sizeof s->wv);
     hot = (uint32_t)s->hot_r | (uint32_t)s->hot_c << 8 | (uint32_t)s->hot_col << 16;
     sig = cr_hash(cr_hash(cr_hash(cr_hash(cr_hash(cr_hash(base, &s->ring, sizeof s->ring), &dl, sizeof dl), row, sizeof row),
                                   &wv, sizeof wv), &hot, sizeof hot), &ttl, sizeof ttl);
-    sig = cr_hash(cr_hash(sig, &lm, sizeof lm), &s->pos, sizeof s->pos);
+    sig = cr_hash(cr_hash(cr_hash(sig, &lm, sizeof lm), &s->pos, sizeof s->pos), &now, sizeof now);
     cr_dc.blits = cr_dc.drawn = 0;
     if (cr_dc.valid && !cr_dc.force && sig == cr_dc.sig)
         return;                          /* nothing changed: nothing drawn */
@@ -2685,6 +2708,9 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
             strips |= 1u;                                        /* the corner dial (rows 2..22; the REC dot's blink) */
         if (lm != cr_dc.lm)
             strips |= cr_lm_strips(s, lmr != cr_dc.lmr);         /* the loop menu: a playhead, a mark, the cursor */
+        if (now != cr_dc.now)
+            strips |= cr_strips_of(64, 79);                      /* the editor's playing name (and the left neighbour
+                                                                  * it stands for): one strip */
         if (s->pos != cr_dc.pos)
             strips |= cr_arp_strips(s);                          /* the arp screen: the hop moved */
         if (wv != cr_dc.wv || hot != cr_dc.hot)
@@ -2723,6 +2749,7 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     cr_dc.dl = dl;
     cr_dc.lm = lm;
     cr_dc.lmr = lmr;
+    cr_dc.now = now;
     cr_dc.lmpos = s->lm_pos;
     cr_dc.pos = s->pos;
     for (k = 0; k < CR_ED_ROWS; k++)

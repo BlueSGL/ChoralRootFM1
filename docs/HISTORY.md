@@ -808,3 +808,51 @@ lines now print the cell's own text); the old scripts' values moved with the ste
 `cr_fx_global`: 47 -> 53; `test_persist.sh`: the delay send 37 -> 43). The mock-ups' Send cells
 (`design/make_fx_mockups.py`) and the manual's `layer-fx.png` and `layer-fx-delay.png` follow. Not tested: the unit
 (nothing was flashed); CC 93 and 94 (the code path is CC 91's); the popup with the MONO palette.
+
+**2026-10-11, the loop editor while it plays; Transpose; the voicing's snap; a ratchet's held last hit (0.18 dev,
+built, not flashed).** The owner, after using the sequencer on the unit: "In the sequencer if playback is going on then
+when I enter keys to a selected step, it also ends up combining the playing notes into that step. In this case it
+should only enter the keys I'm playing, not the notes playing from the sequence. Also the name of the chord changes
+during playback, I would like this to always show chord/notes of the selected step. Then during playback in the
+sequencer, show the name of the playing step chord/notes to the left of the Page Name (don't offset the page name, also
+don't show voicing here since that would overlap the page name probably) in blue. Also in sequencer on the second trig
+page for Knob 4 which is empty, let's make this a transpose ... For the voicing follow selection, below -12 is fine,
+but let's make it so you can hold GLO key and turn voicing to snap to Follow or 0. Ratchet playing inside the step is
+fine, but let's make it so if length is greater than one step, the last trig of ratchet then holds for the length."
+
+*The notes in the step.* The loop's own notes could not be found entering a step, and cannot: the editor writes what
+the engine's gesture hook reports, a loop voice never raises it, and MIDI in plays the parts, not the chord engine.
+Tried on main with the loop playing and a chord held over its chords: no latch, the arp, Advanced, Key Mode with Split
+Oct (the owner's settings record of 2026-10-10), Split Bass, LOCK: the step got the played chord alone each time. What
+did put a chord that was not being played into a step, and makes the name line change during playback, is **a latch**
+(LATCH / Sticky, or a Perform mode's Hold): a latched chord does not end when its keys go up, the editor wrote at the
+gesture's end, so the chord arrived at the next press, in whichever step was selected then, while the latched chord,
+still sounding over the loop, was what the name line showed between the loop's notes. Taken as the cause; if the owner
+had no latch on, it is not found. The fix is at the cause: the engine reports a latched gesture's key-up
+(`CR_G_KEYUP`), the editor writes then. Free play style's re-sounded chord (a chord key with no root held) is still
+written, as it sounds; left alone.
+
+*The choices.* The name line: the selected step's always; the played chord only while a root key is down (the
+player's own voice, `cr_snap.pl_*`). The playing name: what the loop STRUCK last (`crl.hit_*`, not the step's stored
+events: a step silenced by its condition or chance is not named), kept until the next step that sounds rather than
+blanked on empty steps (a lone chord would flash for a sixteenth), empty before the first note and when stopped;
+left-aligned at x 6, 78 px at most, 13 / 11 / 10 px bold by fit (`G#madd4 JAZZ` at 10 px, whole); on the Trig page it
+takes the left neighbour's place ("Step" is not drawn while a name shows; the alternative, two lines at the left, was
+not built). Transpose: 0 .. 127 for every note of the step or the detent is refused whole; chromatic with Key Mode on;
+the cell the root note, hot: the turn's sum. The snap: Follow <-> 0 from either by a turn either way, from another
+value clockwise 0, the other way Follow; inside the editor it takes GLO + ALGORITHM from the bass level. The ratchet:
+`last = Note len - (N - 1) slices` for a note longer than a step, worked out when the event fires (`pv[].last`, in the
+struct's padding); the record's format is untouched by all of it (Transpose rewrites roots; nothing new is stored).
+**A saved loop with a ratchet on a note longer than a step now sounds that note on** (it was silent after its step).
+
+Cost: flash +784 B (XIP 455460 -> 456244), POOL +20 B (314744 -> 314764, 91.5 %: `lm_now` 16, the draw cache 4), RAM
++0 (80612 B, 82.0 %: the new bytes fell in padding). The ISR: three byte stores and one test a hit. A UI frame on the
+emulator over 4.2 s of the editor playing (estimates, `cr_loop_edplay.txt`): the average +2.8 %, the worst +8 %; not
+counted on the unit. Tests: `tests/cr_loop_test.c` `s_ratlong` (the two examples and x3 on 2 steps in exact ticks at x1
+and x1/16, a step and under as before, over the next step, across the loop's end, a stop inside the held hit, the
+map), `s_transpose`, `s_edkeys` (no latch, LATCH, Arp with and without Hold: 31 of the new checks fail on 86d162f);
+`tools/emu/scripts/cr_loop_edplay.txt` in `test_cr.sh`; `tests/cr_draw_test.c` (the playing name: blue, nothing else
+moves, the longest names whole, the Trig page, one strip, the slide; the Transpose cell). The manual's two editor
+pictures regenerated. Not tested: anything on the unit (the blue name's legibility on the panel, the feel of the
+snap); the owner's actual settings at the time of his report; 3/4 and 6/8; the playing name with a take longer than
+64 steps beyond the shared code; Free play style in the editor.

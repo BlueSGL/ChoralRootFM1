@@ -731,6 +731,10 @@ typedef struct {
     uint32_t llen, lbar, lbeat, lplayed;
     uint8_t lnote[16];               /* bit n: a loop voice sounds note n (PLAN 6: their keys glow dim) */
     uint8_t ldisp;                   /* the chord shown (ci) is a loop voice's, not the player's */
+    uint8_t lhit, lhit_root, lhit_qx;/* the chord the loop struck last since it started playing (0: none yet): the loop
+                                      * editor's playing name */
+    uint8_t pl_on, pl_pc, pl_q, pl_x;/* the player's own chord: the last keyed voice still sounding (never a loop
+                                      * voice's, whatever ci shows): its root's pitch class, quality, extensions */
     /* the PLAY menu's timeline and step grid (cr_ui.c cu_lm_*): the events themselves are read (IRQ off) only when
      * lgen changes */
     uint8_t lrep, lrep_on, lstep_g;  /* the overdub replaces; a gesture of it held; the step grid (ticks) */
@@ -795,6 +799,22 @@ static void cr_snapshot(void)
                 cr_snap.lnote[(v->notes[i] >> 3) & 15u] |= (uint8_t)(1u << (v->notes[i] & 7u));
     }
     cr_snap.ldisp = (uint8_t)(cr.disp_vi >= CR_MAX_VOICES + CR_MAX_PADS && cr.disp_vi < CR_NVOICE);
+    cr_snap.lhit = crl.hit_on;
+    cr_snap.lhit_root = crl.hit_root;
+    cr_snap.lhit_qx = crl.hit_qx;
+    cr_snap.pl_on = 0;
+    {
+        const cr_voice_t *pv = 0;
+        for (n = 0; n < (uint32_t)CR_MAX_VOICES; n++)
+            if (cr.v[n].used && (!pv || (int32_t)(cr.v[n].serial - pv->serial) > 0))
+                pv = &cr.v[n];
+        if (pv) {
+            cr_snap.pl_on = 1;
+            cr_snap.pl_pc = (uint8_t)((((int32_t)pv->root + pv->transpose) % 12 + 12) % 12);
+            cr_snap.pl_q = pv->rq;
+            cr_snap.pl_x = (uint8_t)(pv->rq ? pv->sx : 0u);
+        }
+    }
     fm1_irq_on();
 }
 

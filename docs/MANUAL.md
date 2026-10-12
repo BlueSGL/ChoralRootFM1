@@ -481,7 +481,7 @@ off as it was at your last save** (SAVE held) when you switch on (until 0.17 it 
 - **ALGORITHM** turns through off (`00 off`) and then the sounds of the bass part's engine. Its first sound is
   `00 INIT`, the engine's plain starting sound.
 - **KNOB 2** moves the bass register, -2 to +4 octaves.
-- **OPT + ALGORITHM** is the bass level.
+- **OPT + ALGORITHM** is the bass level (not in the loop editor, where it sets the step's Voicing to `Follow` or `0`).
 
 Hold BASS for the **BASS layer**:
 
@@ -798,13 +798,17 @@ PLAY menu EDIT is the sound editor, as ever.) SEQ does not open the editor from 
 sound editor, and not while a take is being recorded (`end the take first`).
 
 <img src="manual/loop-editor.png" width="240" alt="The loop editor, page Step: a row of sixteen steps, three red, the second outlined, a white bar along its foot and the next three; Am, step 2/16; cells Note len 4, Steps 16, Chance 100%, Velocity 100">
-<img src="manual/loop-editor-trig.png" width="240" alt="The loop editor, page Trig: the same row, the second step with two ticks at its top and a blue strip at its right; Am +2 under the grid; cells Ratchet x2, Condition 1:2, Voicing +2">
+<img src="manual/loop-editor-trig.png" width="240" alt="The loop editor, page Trig: the same row, the second step with two ticks at its top and a blue strip at its right; Am +2 under the grid; cells Ratchet x2, Condition 1:2, Voicing +2, Transpose A4">
 
 The grid is the same as in Step entry: **sixteenth-note steps, 16 to a row, four rows: all 64 steps of a pattern on one
 screen.** A red step has a chord or a note starting in it. A dark red step has nothing starting in it, but a longer
 note from an earlier step is still sounding there. Grey steps are empty. The outlined step is the selected one (the
 outline pulses, bright and dim); its chord is named under the grid, and if the step has a Voicing of its own, that
-follows the name in blue: `Am +2`. While the loop plays, the step being played lights up white.
+follows the name in blue: `Am +2`. **That name is always the selected step's**, whether the loop plays or not; only
+while you hold keys down does it show the chord you are playing instead. While the loop plays, the step being played
+lights up white, and **the chord or note the loop is playing is named in blue at the left of the page's name**
+(`Step` or `Trig`, which stays where it is). It stays there until the next step that sounds, and goes when the loop
+stops.
 
 What a step shows:
 
@@ -823,8 +827,8 @@ What a step shows:
 | --- | --- |
 | PRESETS | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it. **GLO held + PRESETS** jumps 8 steps a click. (PRESETS never changes the sound or the slot while the editor is open) |
 | SELECT | the **page**: `Step` and `Trig`. The page's name is at the top, the bottom line begins `1/2` or `2/2` |
-| ALGORITHM | the selected step's **Voicing**, on either page |
-| the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. The cursor stays on the step; turn PRESETS to move on |
+| ALGORITHM | the selected step's **Voicing**, on either page. **GLO held + ALGORITHM** jumps between `Follow` and `0`: from either one a click gives the other; from any other value a click clockwise gives `0`, the other way `Follow`. (Outside the loop editor GLO + ALGORITHM is the bass level; in the editor it is this) |
+| the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. **Only what you play goes in**, also while the loop plays: never the loop's own notes. The step has the chord as soon as you let the keys go, with LATCH on too. The cursor stays on the step; turn PRESETS to move on |
 | OCT-, OCT+ | the **octave**, as on the main screen: what you play into a step next is entered there |
 | REC tap | **clears** the selected step, its notes and its settings (REC does not record here) |
 | **Page 1, Step** | |
@@ -835,7 +839,8 @@ What a step shows:
 | **Page 2, Trig** | |
 | KNOB 1 | **Ratchet**: Off, x2, x3, x4: the step's notes are struck two, three or four times within the one step |
 | KNOB 2 | **Condition**: on which passes of the loop the step plays: Always, `1:2` `2:2`, `1:3` `2:3` `3:3`, `1:4` .. `4:4`, `1st`, `not 1st` |
-| KNOB 3 | **Voicing**: Follow, or a voicing of its own, -12 to +12 (the same as ALGORITHM) |
+| KNOB 3 | **Voicing**: Follow, or a voicing of its own, -12 to +12 (the same as ALGORITHM; with GLO held: `Follow` / `0`) |
+| KNOB 4 | **Transpose**: moves the selected step's notes up or down, a semitone a click. A C major chord one click up is C# major. The cell shows the step's root note (`C#4`), and while you turn, how far you have moved it (`+1`) |
 | LOOP tap | play / stop, as ever, so you hear the edits in place. The cursor does not follow the playback; the white step does |
 | REC held | the looper's undo (see below) |
 | SEQ, EDIT (tap or hold), LOOP held | close the editor, back to the PLAY menu. Nothing to confirm: an edit is done when you make it. The bottom line says `SEQ: back` |
@@ -848,7 +853,15 @@ into a step keeps them.
 
 - **Ratchet.** x2, x3 or x4 strikes the step's notes that many times, evenly spaced inside the one step. Each strike
   is as long as its share of the step; with a Note len of `1/2` it is half of that, so the strikes are short with gaps
-  between them. A ratcheted step does not sound on past its own step, whatever its Note len.
+  between them. **With a Note len longer than one step, the last strike is held to the end of the note.** Ratchet x2
+  with Note len 2: a note half a step long, then one a step and a half long. Ratchet x4 with Note len 4: three notes
+  a quarter of a step long, then a fourth that lasts three and a quarter steps. The held note sounds over the steps
+  after it, as any long note does.
+- **Transpose.** It changes the notes stored in the step: every chord and note that starts in it, the bass note too,
+  moves by the same number of semitones. Nothing else changes: the chord type, its length, its Ratchet, Condition,
+  Chance and Voicing stay. It always moves by semitones, also with Key Mode on (Key Mode decides what the keys play,
+  not what is already in a loop). No note can go below the lowest or above the highest MIDI note: a click that would
+  take one there does nothing (`no higher`, `no lower`). There is no undo for it; turn it back.
 - **Condition.** `1:2` plays on the first of every two passes of the loop, `2:2` on the second; `1:3`, `2:3`, `3:3`
   and `1:4` .. `4:4` the same over three and four passes. `1st` plays only the first time round, `not 1st` every time
   but the first. The passes are counted from the moment the loop starts playing: stop and start, and it is pass 1
@@ -879,7 +892,7 @@ Things to know:
   screen follows (`step 70/128 · p2`). KNOB 2 can make such a loop shorter, not longer.
 - **A step loop made with an earlier 0.18 test build**, whose steps were as long as the Quantize value, plays as it
   did. Here it shows on the sixteenth grid: quarter-note steps are a chord on every fourth step, 4 steps long.
-- **An empty step**: its Note len, Chance and Velocity cells, and the three on the Trig page, show `-`.
+- **An empty step**: its Note len, Chance and Velocity cells, and the four on the Trig page, show `-`.
 - **An empty slot** opens as an empty pattern of the set Length (Free: one bar, 16 steps; 8 or 16 bars: 64 steps).
   Leave without entering anything and the slot is empty again.
 - **Split Bass:** a note played on the bass side replaces the step's bass notes only, a chord on the other side only
@@ -1574,7 +1587,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | MASTER | volume | | volume | volume |
 | SELECT | tempo | click level | the layer's picker (KEY layer: its page; LOCK layer: tempo) | the lane |
 | PRESETS | chord sound | chord engine | chord sound (PLAY menu: slot) | the engine picker |
-| ALGORITHM | bass sound | bass level | bass sound (PLAY menu: record mode) | bass sound |
+| ALGORITHM | bass sound | bass level (loop editor: the step's Voicing, `Follow` / `0`) | bass sound (PLAY menu: record mode; loop editor: the step's Voicing) | bass sound |
 | KNOB 1 | voicing (Full keyboard: the octave) | split point | the layer's first cell | the lane's first value |
 | KNOB 2 | bass register | | second cell | second value |
 | KNOB 3 | performance parameter | | third cell | third value |

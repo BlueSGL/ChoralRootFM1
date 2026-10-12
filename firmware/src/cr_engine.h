@@ -39,8 +39,12 @@ typedef struct {
      * and extension mask, as they are at that moment (Advanced / Free: the end carries the final state). Keyed
      * voices and pads only, never a loop voice. A same-root retrigger ends one gesture and begins another.
      * ext | CR_GX_BASS: a Split Bass bass-side note (q and the mask 0; root: the played pitch + transpose, without
-     * the bass register) */
+     * the bass register).
+     * on = CR_G_KEYUP (2): the gesture's key was let go and the chord sounds on, latched (Sticky, a Perform mode's
+     * Hold): not its end (that comes with the next press, a panic, the latch's end), with the chord as it is now. The
+     * looper's editor writes the step then, as it does at an unlatched key's release (cr_loop.c) */
     void (*gesture)(void *ud, uint32_t serial, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on);
+#define CR_G_KEYUP 2
 } cr_out_t;
 
 /* ---------------------------------------------------- the chord block --- */

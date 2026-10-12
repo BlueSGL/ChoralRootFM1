@@ -1,0 +1,197 @@
+# ChoralRoot 0.18: the loop editor while its loop plays, Transpose, the voicing's snap (the owner, 2026-10-11; docs/LOOPER.md
+# "The loop editor"). Chord keys: MAJ = A#3, MIN = G#3; LATCH = the LFO button; LOCK = B3.
+# A. SEQ on the view: the editor on an empty slot (16 steps). D E G A (MAJ) into steps 1 5 9 13. Stopped: the name line
+#    is the selected step's (A), no playing name.
+# B. LOOP: it plays. Step 15 (empty): MIN + C5 held 700 ms over the loop's chords, let go: step 15 is Cm ALONE (none of
+#    the loop's own chords: a loop voice never reaches the editor).
+# C. LATCH on. Step 3: MAJ + F4, let go: the chord sounds on (latched) and IS in step 3 now (before: not until the next
+#    press). Step 7 (empty), no key down, the latched F still sounding over the loop: the name line reads "-", the
+#    selected step, in every frame (before: F between the loop's notes). MIN + B4 down: the name line reads Bm while the
+#    key is down. Let go: step 7 is Bm alone (before: F, the chord that was still sounding). LATCH off: nothing written.
+# D. Two seconds of playback: the playing name at the left of the page's name: D, E, G, A (and what was entered), never
+#    empty once the loop has struck; SELECT +1: page 2 "Trig": the same. LOOP: stopped: no playing name.
+# E. Trig, step 1 (D): KNOB 4 +1: D#, the cell hot "+1" (shot), then "D#4" (shot); -3: C. Step 2 (empty): nothing.
+#    Step 1: +70 in one turn: as far as it goes (127); +1: refused ("no higher"); -67: C again.
+# F. GLO held + KNOB 3: Follow -> 0 -> Follow -> (the other way) 0; a value set by hand (+3), GLO + ALGORITHM -1: Follow;
+#    (-8), GLO + ALGORITHM +2: 0, one snap for the turn. No bass level popup (GLO + ALGORITHM outside the editor).
+#    SELECT -1: page 1: GLO + ALGORITHM +1: "step voicing: Follow".
+# G. LOCK (B3) with MIN latched: E5 alone into step 2: Em, one chord; F5 into step 4: Fm. LOCK off.
+#    LOOP plays the result a pass; stop; silent.
+wait 300
+btn SEQ
+wait 400
+btn A#3 down
+btn D4 down
+wait 150
+btn D4 up
+btn A#3 up
+wait 200
+knob PRESETS +4
+wait 200
+btn A#3 down
+btn E4 down
+wait 150
+btn E4 up
+btn A#3 up
+wait 200
+knob PRESETS +4
+wait 200
+btn A#3 down
+btn G4 down
+wait 150
+btn G4 up
+btn A#3 up
+wait 200
+knob PRESETS +4
+wait 200
+btn A#3 down
+btn A4 down
+wait 150
+btn A4 up
+btn A#3 up
+wait 400
+dump                              # 1: stopped: 4 events, the cursor on 13 (A), no playing name
+btn PLAY                          # B
+wait 730
+knob PRESETS +2
+wait 200
+btn G#3 down
+btn C5 down
+wait 700
+btn C5 up
+btn G#3 up
+wait 400
+dump                              # 2: step 15: 72/20 alone
+btn LFO                           # C: LATCH
+wait 200
+knob PRESETS +4
+wait 200
+btn A#3 down
+btn F4 down
+wait 300
+btn F4 up
+btn A#3 up
+wait 500
+dump                              # 3: step 3: 65/30 alone, the chord still sounding
+knob PRESETS +4
+wait 1200
+dump                              # 4: step 7, empty, no key down: the name line "-" (its last 60 frames)
+btn G#3 down
+btn B4 down
+wait 300
+dump                              # 5: the key down: the name line Bm
+btn B4 up
+btn G#3 up
+wait 500
+dump                              # 6: step 7: 71/20 alone
+btn LFO                           # LATCH off
+wait 300
+dump                              # 7: step 7 still 71/20 alone, 7 events
+wait 2100                         # D
+shot build/emu/test/cr_le_now_step.ppm
+dump                              # 8: playing names seen: D E G A
+knob SELECT +1
+wait 2100
+shot build/emu/test/cr_le_now_trig.ppm
+dump                              # 9: page 2: the same
+btn PLAY
+wait 400
+dump                              # 10: stopped: no playing name
+wait 1500
+knob PRESETS -6                   # E: step 1
+wait 300
+dump                              # 11: Trig, step 1: 62/30
+knob KNOB4 +1
+wait 150
+shot build/emu/test/cr_le_tr_hot.ppm
+dump                              # 12: 63/30
+wait 1100
+shot build/emu/test/cr_le_tr.ppm
+knob KNOB4 -3
+wait 300
+dump                              # 13: 60/30
+knob PRESETS +1
+wait 200
+knob KNOB4 +1
+wait 300
+dump                              # 14: step 2, empty: nothing moved
+knob PRESETS -1
+wait 200
+knob KNOB4 +70
+wait 300
+dump                              # 15: 127/30
+knob KNOB4 +1
+wait 300
+dump                              # 16: still 127/30 ("no higher")
+knob KNOB4 -67
+wait 1200
+dump                              # 17: 60/30
+btn GLO down                      # F
+wait 100
+knob KNOB3 +1
+wait 200
+dump                              # 18: voicing 13 (0)
+knob KNOB3 +1
+wait 200
+dump                              # 19: 0 (Follow)
+knob KNOB3 -1
+wait 200
+dump                              # 20: 13
+btn GLO up
+wait 200
+knob KNOB3 +3
+wait 200
+dump                              # 21: 16 (+3)
+btn GLO down
+wait 100
+knob ALGORITHM -1
+wait 200
+dump                              # 22: 0 (Follow)
+btn GLO up
+wait 200
+knob KNOB3 +5
+wait 200
+dump                              # 23: 5 (-8)
+btn GLO down
+wait 100
+knob ALGORITHM +2
+wait 200
+dump                              # 24: 13 (0): one snap
+btn GLO up
+wait 200
+knob SELECT -1
+wait 200
+btn GLO down
+wait 100
+knob ALGORITHM +1
+wait 200
+dump                              # 25: page 1: Follow, "step voicing: Follow"
+btn GLO up
+wait 1200
+btn B3                            # G: LOCK
+wait 150
+btn G#3
+wait 150
+knob PRESETS +1
+wait 200
+btn E5 down
+wait 150
+btn E5 up
+wait 300
+dump                              # 26: step 2: 76/20 alone
+knob PRESETS +2
+wait 200
+btn F5 down
+wait 150
+btn F5 up
+wait 300
+dump                              # 27: step 4: 77/20 alone
+btn G#3
+wait 150
+btn B3
+wait 300
+btn PLAY
+wait 2100
+btn PLAY
+wait 2200
+dump                              # 28: stopped, silent

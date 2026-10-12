@@ -38,6 +38,7 @@ enum { CR_LM_TEXT, CR_LM_TIMELINE, CR_LM_STEPS };
 #define CR_LM_CUR_OFF 0x8000u       /* lm_pos (steps): the cursor's blink, off this frame (the producer's clock) */
 #define CR_LM_PLAY(st) ((uint16_t)((((st) & 63u) + 1u) << 6))   /* lm_pos (steps): the playhead on the page's step st */
 #define CR_LMC_COND 0x80u           /* lm_cell: the step has a condition */
+#define CR_LM_NOW_MAX 16            /* lm_now: 2 + 4 + 11 - 1 characters and the 0 */
 #define CR_LM_PLAYED(pos) ((((uint32_t)(pos) >> 6) & 127u))     /* .. that step + 1 (0: no playhead) */
 
 /* the top line's icon: none = the bare Orchid line (mid at the left in 15 px, right at the right) */
@@ -295,6 +296,10 @@ typedef struct {
                                      * cell's corner (saved by the global save or by leaving the slot) */
     uint8_t lm_steps;               /* steps: the cells of the page that exist (the loop editor: a loop ends inside the
                                      * page's last bar); 0: all of them */
+    char lm_now[CR_LM_NOW_MAX];     /* the loop editor while its loop plays: the chord / note the loop struck last
+                                     * ("G#madd4 JAZZ" the longest), blue, at the LEFT of the picker band's row, where a
+                                     * left neighbour would stand (not drawn then); the band's item does not move. "":
+                                     * none. Hashed apart (cr_draw.c): a new name redraws its strip (rows 40 .. 79) only */
 } cr_screen_t;
 
 /* the filter's FTYPE position's name (eng_va.c's names): "LP" "BP" "HP" "NOTCH" at 0 32 64 96, "LP>BP" .. "NT>LP"

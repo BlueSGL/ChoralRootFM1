@@ -67,6 +67,7 @@ static void crl_voices_off(cr_loop_t *lp, cr_t *c)
             cr_loop_event(c, lv, 0, 0, 0, 0, 0);
             lp->pv[lv].used = 0;
         }
+    lp->hit_on = 0;                                  /* (stopped: nothing is "playing now") */
 }
 
 /* a step's condition on this pass of the loop (CRL_C_*; the audio ISR: a table and a shift, no division). A:B: pass A
@@ -96,14 +97,19 @@ static void crl_hit(cr_loop_t *lp, cr_t *c, int lv)   /* voice lv sounds its cho
                                                      * bass part, as it was played) */
                     lp->pv[lv].vel, 1, lp->pv[lv].voic);
     lp->pv[lv].used = 1;
-    lp->pv[lv].off = lp->t + lp->pv[lv].gate;
+    lp->pv[lv].off = lp->t + (lp->pv[lv].hits ? lp->pv[lv].gate : lp->pv[lv].last);   /* (the last hit: to the note's end) */
     lp->played++;
+    lp->hit_on = 1;                                  /* the editor's "now playing" (three bytes a hit) */
+    lp->hit_root = lp->pv[lv].root;
+    lp->hit_qx = lp->pv[lv].qx;
 }
 
 /* an event is due. Its step's properties (the first CRL_STEPS steps have them): the condition may keep it silent this
  * pass; a ratchet makes it 2 .. 4 hits evenly inside ONE step (the slice: 12, 8, 6 ticks), each as long as the slice,
- * or the note's part of it when the note is shorter than a step. A ratchet stays on its one loop voice (crl_offs
- * strikes it again), so it can never take more voices than a plain note does */
+ * or the note's part of it when the note is shorter than a step. A note LONGER than a step (the owner, 2026-10-11:
+ * "the last trig of ratchet then holds for the length"): the hits before the last are a slice long and the last one
+ * holds to the note's end: dur - (N - 1) slices (x2 on 2 steps: 12 then 36 ticks; x4 on 4: 6, 6, 6 then 78). A ratchet
+ * stays on its one loop voice (crl_offs strikes it again), so it can never take more voices than a plain note does */
 static void crl_play_ev(cr_loop_t *lp, cr_t *c, const crl_ev_t *e, uint32_t idx)
 {
     static const uint8_t SLICE[4] = {CRL_STEP, CRL_STEP / 2u, CRL_STEP / 3u, CRL_STEP / 4u};
@@ -130,12 +136,13 @@ static void crl_play_ev(cr_loop_t *lp, cr_t *c, const crl_ev_t *e, uint32_t idx)
     lp->pv[best].hits = (uint8_t)(a & 3u);
     lp->pv[best].slice = SLICE[a & 3u];
     if (a & 3u) {
-        dur = dur >= CRL_STEP ? SLICE[a & 3u] : SLICE[a & 3u] * dur / CRL_STEP;
-        if (!dur) dur = 1;
+        uint32_t sl = SLICE[a & 3u], g = dur >= CRL_STEP ? sl : sl * dur / CRL_STEP;
+        if (!g) g = 1;
+        lp->pv[best].gate = (uint8_t)g;              /* (the hits before the last: <= a slice) */
+        dur = dur > CRL_STEP ? dur - (a & 3u) * sl : g;   /* the last: the rest of a long note (> a slice) */
     }
-    lp->pv[best].gate = (uint8_t)(dur > 255u ? 255u : dur);   /* (read by a ratchet's hits only: <= a slice) */
+    lp->pv[best].last = (uint16_t)dur;               /* (a plain note: its one hit) */
     crl_hit(lp, c, best);
-    lp->pv[best].off = lp->t + dur;
 }
 
 static void crl_hide(cr_loop_t *lp, uint32_t i)    /* Replace: event i hidden by the layer being recorded */
@@ -265,6 +272,7 @@ static void crl_start(cr_loop_t *lp, cr_t *c)
     lp->scan = 0;
     lp->pass12 = lp->pass_n = 0;                     /* the first pass (the steps' conditions count from here) */
     lp->rnd = crl_xs(lp->rnd ^ lp->t * 0x9E3779B1u); /* (the random ones: another run each start) */
+    lp->hit_on = 0;
     crl_play_upto(lp, c);
     if (lp->metro) lp->click = 2;                    /* the grid restarts here: its first beat now */
 }
@@ -393,10 +401,26 @@ static void crl_ed_write(cr_loop_t *lp, int16_t root, uint8_t q, uint8_t ext, ui
 void cr_loop_gesture(cr_loop_t *lp, uint32_t gid, int16_t root, uint8_t q, uint8_t ext, uint8_t vel, int on)
 {
     uint32_t i, k = CRL_OPEN;
+    if (on == CR_G_KEYUP) {
+        /* a latched gesture's key is up (Sticky, a Perform mode's Hold): it sounds on, and its end comes only with the
+         * next press. The editor writes the step NOW, as at an unlatched key's release: until 2026-10-11 it wrote at
+         * that end, so the chord landed a press late, in whichever step was selected by then: a step got the chord
+         * that was still sounding, not the keys being played (the owner: "it should only enter the keys I'm playing").
+         * A capture: nothing (a take records the latched chord's real length, as before) */
+        if (!lp->ed || lp->cap != CRL_CAP_NONE) return;
+        for (i = 0; i < CRL_OPEN; i++)
+            if (lp->open[i].used == 1u && lp->open[i].gid == gid) {
+                lp->open[i].used = 2;
+                crl_ed_write(lp, root, q, ext, vel);
+                return;
+            }
+        return;
+    }
     if (on) {
         if (lp->ed) {                                                  /* the editor: the first key of a new chord:
-                                                                        * what it plays replaces the step's notes */
-            for (i = 0; i < CRL_OPEN && !lp->open[i].used; i++) {}
+                                                                        * what it plays replaces the step's notes (a
+                                                                        * latched chord already written: not held) */
+            for (i = 0; i < CRL_OPEN && lp->open[i].used != 1u; i++) {}
             if (i == CRL_OPEN) lp->ed_w = 0;
         }
         for (i = 0; i < CRL_OPEN; i++)
@@ -444,10 +468,12 @@ void cr_loop_gesture(cr_loop_t *lp, uint32_t gid, int16_t root, uint8_t q, uint8
     }
     for (i = 0; i < CRL_OPEN; i++)
         if (lp->open[i].used && lp->open[i].gid == gid) {
+            uint32_t was = lp->open[i].used;
             lp->open[i].used = 0;
             if (lp->open[i].rep && lp->rep_n) lp->rep_n--;
-            if (lp->ed && lp->cap == CRL_CAP_NONE) crl_ed_write(lp, root, q, ext, vel);
-            else crl_write(lp, lp->open[i].t0, root, q, ext, vel);
+            if (lp->ed && lp->cap == CRL_CAP_NONE) {
+                if (was == 1u) crl_ed_write(lp, root, q, ext, vel);    /* (a latched one: written at its key's up) */
+            } else crl_write(lp, lp->open[i].t0, root, q, ext, vel);
             return;
         }
 }
@@ -813,6 +839,7 @@ void cr_loop_panic(cr_loop_t *lp)
 {
     uint32_t i;
     for (i = 0; i < CR_MAX_LOOPV; i++) lp->pv[i].used = 0;          /* cr_panic ended the voices */
+    lp->hit_on = 0;
     if (lp->cap == CRL_CAP_REC) {
         crl_drop_take(lp);                                          /* a fresh take is dropped */
     } else if (lp->cap == CRL_CAP_OD && lp->d.nev > lp->layer_ev0) {
@@ -1202,6 +1229,31 @@ int cr_loop_ed_vel(cr_loop_t *lp, int delta)
         lp->dirty = 1;
     }
     return top;
+}
+
+int cr_loop_ed_transpose(cr_loop_t *lp, int semis)
+{
+    uint32_t i, B = lp->ed_t0 + CRL_STEP, n = 0;
+    if (!lp->ed || !semis) return 0;
+    for (i = 0; i < lp->d.nev; i++) {                /* every note of the step fits, or none moves */
+        const crl_ev_t *e = &lp->d.ev[i];
+        int r;
+        if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= B) continue;
+        r = (int)e->root + semis;
+        if (r < CRL_ROOT_MIN || r > CRL_ROOT_MAX) return 0;
+        n++;
+    }
+    if (!n) return 0;
+    crl_ed_flat(lp);                                 /* (an edit like the others: one layer; it removes hidden events
+                                                      * only, so the step's are the ones counted) */
+    for (i = 0; i < lp->d.nev; i++) {
+        crl_ev_t *e = &lp->d.ev[i];
+        if ((e->layer & CRL_HID) || e->t < lp->ed_t0 || e->t >= B) continue;
+        e->root = (uint8_t)((int)e->root + semis);
+    }
+    lp->gen++;
+    lp->dirty = 1;
+    return 1;
 }
 
 uint32_t cr_loop_pos(const cr_loop_t *lp)

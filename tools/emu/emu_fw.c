@@ -404,6 +404,22 @@ void emu_fw_dump(void)
                    crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_VOIC) : -1, crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_CHANCE) : -1,
                    (unsigned)(crl.ed ? cr_loop_ed_nfrac(&crl) : 0u), (unsigned)crl.pass12, np, nv);
         }
+        /* 0.18: the loop editor's cursor step: its events as root/qx (in the array's order: the last one names it);
+         * the chord the loop struck last since it started (the editor's playing name; -: none) */
+        {
+            unsigned q, n = 0;
+            printf("  loop4: step-events");
+            for (q = 0; crl.ed && q < crl.d.nev; q++)
+                if (!(crl.d.ev[q].layer & CRL_HID) && crl.d.ev[q].t >= crl.ed_t0 && crl.d.ev[q].t < crl.ed_t0 + CRL_STEP) {
+                    printf(" %u/%02X", (unsigned)crl.d.ev[q].root, (unsigned)crl.d.ev[q].qx);
+                    n++;
+                }
+            printf(" count %u", n);
+            if (crl.hit_on)
+                printf(" hit %u/%02X\n", (unsigned)crl.hit_root, (unsigned)crl.hit_qx);
+            else
+                printf(" hit -\n");
+        }
     }
     {   /* the loop's parts (0.18): its voices sounding by part (a recorded Split Bass bass-side note: the bass part),
          * its live events of the bass side, the notes on the engine's main / bass streams (looped and played) */
@@ -540,7 +556,7 @@ void emu_fw_ui_info(char *buf, uint32_t n)
     const cr_screen_t *s = &cu_scr;
     snprintf(buf, n, "%s view %u name '%s|%s|%s' from '%s|%s|%s' item '%s' value '%s' title '%s' size %u squeeze %u "
              "anim %02X %u ms ring %u/%u dial %s/%u/%u msg '%s' blits %u/%u bytes %u wv %u,%u,%u,%u,%u "
-             "lm %u/%u/%u/%u lanes %u/%u slot %u jump %u sub '%s' right '%s' foot '%s' hot %u.%u",
+             "lm %u/%u/%u/%u lanes %u/%u slot %u jump %u sub '%s' right '%s' foot '%s' now '%s' hot %u.%u",
              s->kind < CR_K_N && s->kind < sizeof K / sizeof K[0] ? K[s->kind] : "?", (unsigned)cs.view, s->name.root, s->name.quality, s->name.sup,
              s->from.root, s->from.quality, s->from.sup, s->kind == CR_K_PICKER || s->kind == CR_K_KNOBROW || s->kind == CR_K_LOOPMENU ? cr_item(s, s->sel) : "",
              s->value, s->title, (unsigned)s->size, (unsigned)s->squeeze, (unsigned)s->anim,
@@ -549,7 +565,8 @@ void emu_fw_ui_info(char *buf, uint32_t n)
              (unsigned)cr_dc.blits, (unsigned)cr_dc.drawn, (unsigned)cr_dc.bytes, (unsigned)s->wv[0], (unsigned)s->wv[1], (unsigned)s->wv[2], (unsigned)s->wv[3],
              (unsigned)s->wv[4], (unsigned)s->lm_mid, (unsigned)s->lm_bars,
              (unsigned)s->lm_free, (unsigned)(s->lm_pos & 0x7FFFu), (unsigned)s->lm_nlane, (unsigned)s->lm_newlane,
-             (unsigned)s->lm_slot + 1u, (unsigned)s->lm_jump, s->sub, s->right, s->kind == CR_K_LOOPMENU ? s->foot : "", (unsigned)s->hot_r, (unsigned)s->hot_c);
+             (unsigned)s->lm_slot + 1u, (unsigned)s->lm_jump, s->sub, s->right, s->kind == CR_K_LOOPMENU ? s->foot : "", s->kind == CR_K_LOOPMENU ? s->lm_now : "",
+             (unsigned)s->hot_r, (unsigned)s->hot_c);
     if (s->kind == CR_K_METER) {                  /* a meter's stripes in this frame: lit of all, the fill's start and end,
                                                    * its label (tools/emu/test_cr.sh: the sound read-out's steps) */
         size_t l = strlen(buf);
