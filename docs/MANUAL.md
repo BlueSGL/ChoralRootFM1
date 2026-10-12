@@ -596,7 +596,7 @@ loaded.
 
 | Cell | What it does |
 | --- | --- |
-| Size | how large the space is: the room grows from a hall to something much larger. Turning it bends the tail's pitch for a moment, then it is still |
+| Size | how large the space is: the room grows from a hall to something much larger. In its picture, a room seen from the front, the outer box stays and the inner box, the far wall, is small for a small room and large for a large one. Turning it bends the tail's pitch for a moment, then it is still |
 | Damp | how fast the highs die: low = bright, high = dark |
 | Decay | how long the tail lasts: `0.3 s` to `72 s`, and at the very top **`Inf`**: the reverb holds what is in it (Damp is out of the way then). Turn it down to let go |
 | Send | the chord part's send into the reverb |
@@ -707,7 +707,7 @@ playing and recording with it open.
 | ALGORITHM | the **record mode**: Overwrite, Advance, Overdub, Replace, Step | Overwrite |
 | SELECT | the **page**: 1 or 2 (the bottom line shows `1/2` or `2/2`) | 1 |
 | page 1, KNOB 1 | **Length** of the next take: Free, 1, 2, 4, 8 or 16 bars (also shown big in the middle) | Free |
-| page 1, KNOB 2 | **Rate**: x1/4, x1/2, x3/4, x1, x1.5, x2, x4 | x1 |
+| page 1, KNOB 2 | **Rate**: x1/16, x1/12, x1/8, x1/6, x1/4, x1/2, x3/4, x1, x1.5, x2, x4 | x1 |
 | page 1, KNOB 3 | **Quantize**: none, 1/4, 1/8, 1/8T, 1/16, 1/16T, 1/32 | none |
 | page 1, KNOB 4 | **Count-in**: On or Off | On |
 | page 2, KNOB 1 | **Level**: how loud the loop plays, 0 to 100 (0 mutes it). KNOB 2 to 4 do nothing on this page | 100 |
@@ -723,8 +723,9 @@ playhead. These settings are kept by a global save (SAVE held), like the rest of
   exactly that many bars and plays by itself. Ending such a take early rounds it up to whole bars.
 - **Rate** makes the loop run faster or slower against the tempo: x2 plays it twice in the time it took to record, x1/2
   takes twice as long. The loop stays locked to the clock: it does not drift, and a loop that is a whole number of
-  bars long starts on a beat again at x1/2, x1/4, x2 and x4 (at x3/4 and x1.5 its start falls between the beats for some
-  of its rounds, as three against four does). The pitch never changes; the sound, the bass, the performance mode and
+  bars long starts on a beat again at every rate but two (at x3/4 and x1.5 its start falls between the beats for some
+  of its rounds, as three against four does). The slow end, x1/6, x1/8, x1/12 and x1/16, is for long loops: at x1/16
+  the loop takes sixteen times as long, so a one-bar loop lasts sixteen bars. The pitch never changes; the sound, the bass, the performance mode and
   the effects are the ones of now. **Changing it while the loop plays takes effect when the loop next starts**, so
   nothing jumps or cuts off in the middle; stopped, it applies at once. The metronome, the count-in and MIDI clock out
   stay the tempo's. The dial in the top line and the timeline follow the loop's own time. If you record while the
@@ -771,6 +772,9 @@ number.
   end. A pattern cannot be longer than 64 steps: with Length 8 or 16 bars, step entry uses 4 bars and says so (`Step:
   4 bars (64 steps)`). Takes you play by hand keep the full 8 or 16 bars.
 - **Rate** scales the pattern like any loop: at x1 a step is a sixteenth, at x2 a thirty-second, at x1/2 an eighth.
+  At the slow end a step is long: a dotted quarter at x1/6, a half note at x1/8, three quarters at x1/12, and **a whole
+  bar at x1/16**, so 64 steps are 64 bars. A step's ratchet, its 1/4, 1/2 and 3/4 lengths and its condition stretch
+  with it (at x1/16 a ratchet x4 plays four quarter notes in the bar).
 - Quantize does nothing here (see above).
 
 ### The loop editor
