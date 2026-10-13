@@ -362,6 +362,57 @@ def smk():
        "same_keyboard: the SMK models one keyboard, never the FM-1")
 
 
+def starrykey():
+    """a 21-character identity ("STARRYKEY-37 PLAY_016"): the device's and the package's (as web/fm1pkg.js)"""
+    def pkg(product, blocks, size=0x3000):
+        img = bytearray((i * 7) & 0xFF for i in range(size))
+        data = bytes(img[0x400:])
+        e = bytearray(0x50)
+        e[4:6] = I._crc16(data).to_bytes(2, "little")
+        e[8:16] = (0x400).to_bytes(4, "little") + len(data).to_bytes(4, "little")
+        e[0x40:0x49] = b"flash.bin"
+        lst = I._dec(bytes(e))
+        hdr = bytearray(0x40)
+        hdr[4:10] = size.to_bytes(4, "little") + (1).to_bytes(2, "little")
+        hdr[2:4] = I._crc16(lst).to_bytes(2, "little")
+        hdr[0:2] = I._crc16(bytes(hdr[2:0x40])).to_bytes(2, "little")
+        img[0:0x90] = I._dec(bytes(hdr)) + lst
+        raw = bytearray()
+        for i in range(blocks):
+            m = (ord(product[i]) + i + 1) & 0xFF if i < len(product) else 0x7D
+            raw += img[i * I.KEEP:(i + 1) * I.KEEP] + bytes([m])
+        return bytes(raw + img[blocks * I.KEEP:])
+
+    ident = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + b"STARRYKEY-37 PLAY_016" + bytes(7)) + b"\xF7")
+    ok(ident and ident.text == "STARRYKEY-37 PLAY_016" and ident.model == "STARRYKEY-37 PLAY" and ident.version == 16,
+       "device identity STARRYKEY-37 PLAY_016: all 21 characters")
+    ident = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + b"FM-1_015\0xyz" + bytes(16)) + b"\xF7")
+    ok(ident and ident.text == "FM-1_015", "device identity: the text ends at the first NUL")
+    raw = pkg("STARRYKEY-37 PLAY_016", 36)
+    im = I.deinterleave(raw)
+    ok(I.identity_blocks(raw) == 21 and I.block_count(raw) == 36 and len(im) == len(raw) - 36 and I.files_ok(im)
+       and I.product_of(raw) == "STARRYKEY-37 PLAY_016", "36-block package with a 21-character identity: read in full")
+    raw = pkg("STARRYKEY-37 PLAY_015", 20)
+    ok(I.identity_blocks(raw) == 20 and I.product_of(raw) == "STARRYKEY-37 PLAY_01" and I.files_ok(I.deinterleave(raw)),
+       "20-block package: the identity stops at 20 characters (the stock V015 layout)")
+    raw = pkg("SMK-37 Pro_016", 36)
+    ok(I.identity_blocks(raw) == 20 and I.block_count(raw) == 36 and I.product_of(raw) == "SMK-37 Pro_016",
+       "36-block package with a short identity: unchanged")
+    raw = package("FM-1_920")
+    ok(I.deinterleave(raw) == I.logical_image(raw) and I.product_of(raw) == "FM-1_920", "an FM-1 package: as before")
+    if shutil.which("node"):                      # the page reads them as this tool does (web/fm1pkg.js)
+        js = ("import { logicalImage, productOf } from %r; import { readFileSync } from 'node:fs';"
+              "const p = readFileSync(process.argv[1]); process.stderr.write(productOf(p));"
+              "process.stdout.write(logicalImage(p));") % str(ROOT / "web/fm1pkg.js")
+        same = True
+        for name, raw in (("long", pkg("STARRYKEY-37 PLAY_016", 36)), ("short20", pkg("STARRYKEY-37 PLAY_015", 20)),
+                          ("smk36", pkg("SMK-37 Pro_016", 36))):
+            f = pkgfile(f"id-{name}.fwsc", raw)
+            r = subprocess.run(["node", "--input-type=module", "-e", js, f], capture_output=True, check=True)
+            same &= I.deinterleave(raw) == r.stdout and I.product_of(raw) == r.stderr.decode()
+        ok(same, "web/fm1pkg.js reads the 21-character identity and the 36-block layouts as this tool does")
+
+
 def against_js_guard():
     if not shutil.which("node"):
         print("classify_firmware vs fm1ota.js: skipped (needs node)")
@@ -485,6 +536,11 @@ def against_js():
     ok(I.logical_image(raw) == r.stdout and I.product_of(raw) == r.stderr.decode(),
        f"logical_image / product_of == fm1pkg.js ({clean.name}, {I.product_of(raw)})")
     ok(I.LOADER_MARK in raw, f"{clean.name} carries the Felucca loader marker")
+    for f in sorted((ROOT / "build").glob("choralroot-smk37*.fwsc")):   # (the SMK packages, when built: SMK37.md)
+        r = subprocess.run(["node", "--input-type=module", "-e", js, str(f)], capture_output=True, check=True)
+        raw = f.read_bytes()
+        ok(I.deinterleave(raw) == r.stdout and I.product_of(raw) == r.stderr.decode(),
+           f"logical image / identity == fm1pkg.js ({f.name}, {I.product_of(raw)})")
 
 
 def official():
@@ -1774,7 +1830,7 @@ def exits():
 
 
 PHASES = [wire, exits, backups, screen, debug, uac, stub, stuck, midi_side, select, sounds, syx, bindings, installs,
-          errors, against_js, guard, smk, against_js_guard, official]
+          errors, against_js, guard, smk, starrykey, against_js_guard, official]
 
 
 def run_phases():
