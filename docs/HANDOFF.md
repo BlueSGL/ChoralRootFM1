@@ -12,7 +12,8 @@ published as the latest and not on the site; its notes, `web/releases.json`'s fi
 (`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
 3y33, 3y34; and, not in the notes yet, a sixth engine in its first phase: P5 (the code's PROPHET), Melodee's
 Prophet-5, HISTORY 3y38, 3y39, docs/PROPHET.md: on the host and in the emulators; the owner played its first build,
-cd43720, on the unit once, and that reading made it four voices; open items 26 and 27). The owner's unit runs what
+cd43720, on the unit once, and that reading made it four voices; open items 26 and 27; and favourites, HISTORY 3y40,
+docs/PRESETS.md "Favourites": a mark on any sound, in the notes; not on a unit yet; open item 28). The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
@@ -79,7 +80,7 @@ build). What is behind it, to know when a suite is run alone:
   runs every time.
 - **`run_tests.sh` and `run_cr_tests.sh` run their sections side by side** (`tests/par.sh`) and print them in the
   file's order, so the output reads as before and the last line means what it meant. `PAR_JOBS=1` runs them one
-  after another. `tests/install_test.py` runs its 19 phases in forks of itself (`INSTALL_TEST_JOBS=1`: in a row).
+  after another. `tests/install_test.py` runs its 20 phases in forks of itself (`INSTALL_TEST_JOBS=1`: in a row).
 - **Two tests read what another suite makes, and say "skip" when it is not there**: `web/test_web.mjs` compares the
   editor's mock with `build/host/desc.json` (written by `run_tests.sh`), and `tests/site_test.py` (in
   `run_tests.sh`) checks the browser emulator in the site only when `build/emu-web` exists. `run_all.sh` orders
@@ -264,6 +265,16 @@ installed on the owner's Mac.
     program); a fifth voice (chord voices on core 1, the loop built per program, `P5_RAM`: none built). XIP is at
     88.2 % with the 48 (90.6 % with all 200, 87.3 % with INIT alone).
 
+28. **Favourites and the three-unit P5 voice: not on a unit yet** (HISTORY 3y40). To do with the build of all 200
+    (`P5_SHIPPED=all ./build.sh`): the owner marks P5 programs (SAVE, KNOB 4; or the editor's browser, KNOB 4), then
+    `python3 tools/fm1_install.py --favorites` and `tools/p5_shipped_from_favorites.py` make the list (docs/PROPHET.md
+    "The shipped list from the unit's favourites"). To read on the unit with it: **four P5 chord voices + a VA bass +
+    all three effects** (`--debug`: `pk_part0_us`, `pk_block_us`, `pk_late`, `stale_halves`), and the same with a P5
+    bass (five P5 voices: 15 of 16 units); `p5_units` goes back to 4 if it does not fit. Not decided: whether the
+    star is yellow (`cr_draw.c CR_STAR_COL`); a favourites-only way of turning PRESETS and favourites in the web
+    Sound Manager (not built, the store supports both); the browser's label does not name KNOB 4 (kept so that a
+    screen without a mark is c176dd4's). The first right turn in the save dialog from Save as new is Favorite now.
+
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
 ## Facts that are easy to get wrong
@@ -274,27 +285,36 @@ installed on the owner's Mac.
   `FELUCCA_PHYS` 0, its files kept); records of retired engines stay and load as stand-ins (docs/PRESETS.md).
 - **P5** (docs/PROPHET.md; shown as "P5", the files and switches say PROPHET): `FELUCCA_PROPHET` (1 in
   `choralroot.c`; `FELUCCA_PROPHET=0 ./build.sh` is the image without the engine, byte for byte the one before it:
-  `choralroot.bin` sha256 501a9d09..; code added for P5 in a shared file must stay behind the switch, and even a
+  `choralroot.bin` sha256 501a9d09.. until the favourites, 57371526.. with them (3y40: they are every engine's);
+  code added for P5 in a shared file must stay behind the switch, and even a
   local variable outside it changed the image once), `FELUCCA_P5_FACTORY` (1: Sequential's programs of the shipped
   list; 0: INIT alone), `P5_SHIPPED` (the environment: another list file, or `all`), `P5_RAM` (1: its sample loop in
-  `.ram_text`; default 0). **Four voices, four budget units each.** **A factory program's identity is its
+  `.ram_text`; default 0). **Four voices (`P5_POLY`), three budget units each since 3y40 (a measurement build: the
+  chord keeps four voices with a bass; c176dd4: four units, three voices with a bass).** **A factory program's identity is its
   Sequential number 1..200** (in the program's own bytes: `p5_patch_id`), never its place in the pool: the pool is
   `assets/prophet5-factory/shipped.txt`, which changes; the session finds the place again from the number
   (`cr_settings.c css_part_put`), and the regression's P5 entries are named by the number. After the list changes:
   `python3 tools/p5_goldens.py` (P5's goldens and CPU entries only), not `GOLDEN_UPDATE=1`. **A load takes the
   program's UNISON switch** (`p5_track_loaded`); the two paths that restore a part from a record (`css_part_put`,
   `cu_pick_end`) set the recorded voice mode again after it (`p5_voice_restore`), and `cu_engine_switch` calls
-  `p5_leave`. It has no store: SAVE on a P5 part is refused (the session keeps the part's edited program over a
-  power cycle), and the settings record has no slot for its per-engine pool position (back from another engine after
+  `p5_leave`. It has no store: a P5 part's SAVE dialog has the Favorite choice alone and OCT+ there is refused (the session keeps
+  the part's edited program over a power cycle), and the settings record has no slot for its per-engine pool position (back from another engine after
   a power cycle it lands on 01).
 - **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, P5 48 of Sequential's 200: a list,
   WHEEL 5) + the user's. The user's are the 32 slots of `upreset.c` (`UP_SLOTS`, `core.h`), shared by all engines; a slot's deep
   patch sits at the same index in its engine's store (`va_store.c`, `fm6_ustore.c`, `cz_ustore.c`, `quad_store.c`).
 - **Flash map**: the comment at the top of `storage.c` owns it. The FM TONE store is 0xB2000 / 0xB3000, the session
-  0xB4000 / 0xB5000; 0xB6000 .. 0xC7FFF is free; the loops are 0xC8000 .. 0xDBFFF.
-- **SAFE MODE's Flash Data** erases 58 sectors (`cr_ui.c cu_flash_erase`).
+  0xB4000 / 0xB5000, **the favourites 0xB6000 / 0xB7000** (0.22, `OBJ_FAVS`); 0xB8000 .. 0xC7FFF is free; the loops
+  are 0xC8000 .. 0xDBFFF.
+- **Favourites** (0.22, `cr_favs.c`, docs/PRESETS.md "Favourites"): a bit per sound. A factory sound's key is (the
+  engine's index, the preset's index in the engine's table), P5's the Sequential number 1..200, a user sound's its
+  slot; a record over a factory preset has that preset's key; INIT has none. Version byte 1, sections of tag / length
+  / bits. Written as an Option is (the poll, when quiet), with SAVE held and before a backup's LIST. Backup id 23.
+  SAVE's third choice and the editor's browser: KNOB 4. `tools/fm1_install.py --favorites` reads them.
+- **SAFE MODE's Flash Data** erases 60 sectors (`cr_ui.c cu_flash_erase`; 58 until the favourites).
 - **Backup object ids** (`cr_backup.c`'s head): 1 settings, 6 / 7 user banks, 8 the FM6 bank, 9 the VA store,
-  10 / 11 FM6, 12 / 13 CZ-1, 14 .. 21 the CZ banks, 22 FM TONE, 40 .. 49 the loop slots. The session is not in a backup.
+  10 / 11 FM6, 12 / 13 CZ-1, 14 .. 21 the CZ banks, 22 FM TONE, 23 the favourites (0.22; a firmware before it does not
+  list 23 and the clients skip it there), 40 .. 49 the loop slots. The session is not in a backup.
 - **Settings**: the block is v15, 192 bytes, and never grows; the session record sits beside it. docs/SETTINGS.md
   owns both and the add-a-field procedure.
 - **The package identity** is always FM-1_920; `./build.sh --release X.Y` sets only the version string and names.

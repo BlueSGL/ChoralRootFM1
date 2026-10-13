@@ -433,13 +433,14 @@ engine is gone or not a melodic one, whose blob is not that engine's size, or wh
 
 `OBJ_SESSION` (`storage.c`): the A/B sector pair **0xB4000 / 0xB5000**, the first two of the 20 sectors that were
 free after FM TONE's patch store (0xB2000 / 0xB3000) in what was Felucca's user sample slot 2 (ChoralRoot has no
-SAMPLE engine; docs/HANDOFF.md's flash map and `storage.c`'s say 0xB4000..0xC7FFF free; 0xB6000..0xC7FFF still is).
+SAMPLE engine; docs/HANDOFF.md's flash map and `storage.c`'s said 0xB4000..0xC7FFF free; since 0.22 the favourites
+take 0xB6000 / 0xB7000, below, and 0xB8000..0xC7FFF still is).
 It is inside `FL_DATA` (`hal/fm1_flash.h`: the HAL writes there), outside the firmware, the update's staging area and
 every other object. The same commit protocol as every object: the other copy is erased and written, its header
 last, so a write torn by the power switch leaves the previous session in charge (`t_session_flash`).
 
 - **SAFE MODE** neither reads nor writes it (`ST_BLOCKED`), and Options > Flash Data erases it with the rest
-  (`cr_ui.c cu_flash_erase`: 58 sectors now).
+  (`cr_ui.c cu_flash_erase`: 60 sectors since 0.22, with the favourites' two; 58 until then).
 - **Backup**: it is NOT a backup object (no new id; `web/fm1backup.js`, the manager and `tools/fm1_install.py` are
   unchanged). A backup holds what you keep (settings, saved sounds, loops), not where the unit happened to be. A
   settings object restored over SysEx empties the session (`cr_backup.c crb_commit`: a zero-length object), so the
@@ -449,6 +450,18 @@ last, so a write torn by the power switch leaves the previous session in charge 
   The two copies alternate, so a sector is erased every second save. The part is rated for 100 000 erases a sector:
   200 000 session saves, which is 50 saves a day for eleven years. The settings object's pair: the same at a global
   save, plus an automatic write when an Option changed.
+
+### The favourites are a third object (0.22)
+
+Not a setting and not in the block (which never grows): the marks on sounds are `OBJ_FAVS`, the pair **0xB6000 /
+0xB7000**, written by `cr_favs.c crf_flush` with the same commit protocol (docs/PRESETS.md "Favourites" has the
+format and the keys). It is AUTOMATIC in the sense of [Manual and automatic](#manual-and-automatic-018): `crf_poll`
+(called from `cr_settings_poll`) writes a changed mark once no mark changed for `CRS_QUIET_MS` and nothing sounded for
+`CRS_IDLE_MS`, never while a loop plays or after a restore, and `cr_settings_commit` (SAVE held) and
+`cr_settings_save` (a backup's LIST, the update gesture) write a pending one at once. GLO + SAVE (revert) does not
+touch the marks; Options > Reset Settings does not either. It IS a backup object (id 23), unlike the session: marks
+are something you keep. SAFE MODE neither reads nor writes it; Flash Data erases it. Wear: one sector erase a write,
+the two copies in turn; a mark is rare.
 
 ### `bind`: which settings a session belongs to
 

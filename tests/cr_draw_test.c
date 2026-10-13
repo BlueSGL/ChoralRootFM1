@@ -417,6 +417,96 @@ int main(int argc, char **argv)
             for (j = 0, ok = 1; j < nbox; j++)
                 if (boxes[j].y1 <= CR_PY0 + 40 && boxes[j].y0 >= CR_PY0) ok = 0;
             check("the read-out elsewhere (the picker's preview): nothing over the number", ok);
+            /* a favourite's star (0.22, cr_screen_t.star; docs/PRESETS.md "Favourites"): a yellow five-point star
+             * before the sound's name, the two centred together, on the pool read-out (the meter's sub; with the
+             * overwritten preset's square too), under the save dialog's choice and in the editor's browser (the
+             * picker's value), white and orange names. star 0: the frame is the one without the field, every pixel */
+            {
+                static const struct { uint8_t kind, col, mark; const char *name, *slug; } F[] = {
+                    {CR_K_METER, CR_COL_WHITE, 0, "FM PAD", "fav_pool"},
+                    {CR_K_METER, CR_COL_WHITE, 1, "WWWWWWWWWWWW", "fav_pool_user"},
+                    {CR_K_METER, CR_COL_ORANGE, 0, "DEEP SUB", "fav_pool_bass"},
+                    {CR_K_PICKER, CR_COL_WHITE, 0, "TINE EP", "fav_save"},
+                    {CR_K_PICKER, CR_COL_ORANGE, 0, "DEEP SUB *", "fav_save_bass"},
+                    {CR_K_PICKER, CR_COL_WHITE, 2, "ABCDEFGHIJKL*", "fav_browser"},
+                };
+                static uint16_t ref[240u * 240u];
+                uint32_t v, j, x, y, good = 0, f0 = nfind, e0 = nell;
+                for (v = 0; v < sizeof F / sizeof F[0]; v++) {
+                    const tbox_t *b = 0;
+                    int16_t nx0 = 0, nx1 = 0, ny0 = 0, ny1 = 0;
+                    uint32_t ny = 0, out = 0, same = 1, x0 = 240, x1 = 0, y0 = 240, y1 = 0;
+                    if (F[v].kind == CR_K_METER) {
+                        s = CR_SCREENS[ip];
+                        s.anim = 0;
+                        snprintf(s.sub, sizeof s.sub, "%s", F[v].name);
+                        s.sub_mark = F[v].mark;
+                    } else {
+                        cr_screen_clear(&s);
+                        s.kind = CR_K_PICKER;
+                        s.header = 1;
+                        if (F[v].mark == 2u) {       /* the editor's browser: the engines, left / right */
+                            s.n_items = 6;
+                            s.sel = 0;
+                            s.orient = 1;
+                            snprintf(s.item[0], sizeof s.item[0], "FM6");
+                            snprintf(s.item[1], sizeof s.item[1], "FM TONE");
+                            snprintf(s.label, sizeof s.label, "engine \267 KNOB 1 its presets");
+                            snprintf(s.footer, sizeof s.footer, "SELECT: engine \267 OCT-: cancel \267 OCT+: ok");
+                        } else {                     /* the save dialog on its third choice */
+                            s.n_items = 3;
+                            s.sel = 2;
+                            snprintf(s.item[0], sizeof s.item[0], "Overwrite");
+                            snprintf(s.item[1], sizeof s.item[1], "Save as new");
+                            snprintf(s.item[2], sizeof s.item[2], "Favorite");
+                            snprintf(s.label, sizeof s.label, "FM TONE \267 KNOB 4 marks");
+                            snprintf(s.footer, sizeof s.footer, "KNOB 4: mark \267 OCT-: close");
+                        }
+                        s.title_col = CR_COL_MID;
+                        snprintf(s.value, sizeof s.value, "%s", F[v].name);
+                    }
+                    s.col = F[v].col;
+                    s.star = 0;
+                    render(&s, 0);
+                    memcpy(ref, host_screen, sizeof ref);
+                    for (j = 0; j < nbox; j++)
+                        if (!strcmp(boxes[j].s, F[v].name)) { nx0 = boxes[j].x0; nx1 = boxes[j].x1; }
+                    s.star = 1;
+                    render(&s, 0);
+                    snprintf(name, sizeof name, "%s", F[v].slug);
+                    write_ppm(dir, name);
+                    lint(name, &s);
+                    for (j = 0; j < nbox; j++)
+                        if (!strcmp(boxes[j].s, F[v].name)) b = &boxes[j];
+                    if (b) { ny0 = b->y0; ny1 = b->y1; }
+                    for (y = 0; y < 240u; y++)
+                        for (x = 0; x < 240u; x++) {
+                            uint32_t c = swap16(host_screen[y * 240u + x]), r = (c >> 11) * 255u / 31u,
+                                     g = ((c >> 5) & 63u) * 255u / 63u, bl = (c & 31u) * 255u / 31u;
+                            if (r > 200u && g > 140u && g < 215u && bl < 90u) {    /* the role yellow, not the orange */
+                                ny++;
+                                x0 = x < x0 ? x : x0; x1 = x > x1 ? x : x1; y0 = y < y0 ? y : y0; y1 = y > y1 ? y : y1;
+                            }
+                            /* outside the name's row nothing changes */
+                            if (b && ((int32_t)y < ny0 - 4 || (int32_t)y >= ny1 + 4) && host_screen[y * 240u + x] != ref[y * 240u + x])
+                                same = 0;
+                        }
+                    out = !b || ny < 18u || (int32_t)x1 >= b->x0 || (int32_t)y0 < ny0 - 3 || (int32_t)y1 > ny1 + 1 || x1 - x0 > 16u || y1 - y0 > 16u;
+                    ok = b && !out && same && b->x0 > nx0 && b->x1 - b->x0 >= nx1 - nx0 - 1 && b->x1 - b->x0 <= nx1 - nx0 + 1 && !(b->flags & 1u) &&
+                         (int32_t)x0 + b->x1 + (F[v].mark == 1u ? 9 : 0) >= 236 && (int32_t)x0 + b->x1 + (F[v].mark == 1u ? 9 : 0) <= 244;
+                    if (!ok)
+                        fprintf(rep, "favourite %s: name %s, %u yellow px in (%u,%u)-(%u,%u), name (%d..%d was %d..%d) rows %d..%d, "
+                                "rest %s\n", F[v].slug, b ? "drawn" : "MISSING", ny, x0, y0, x1, y1, b ? b->x0 : 0, b ? b->x1 : 0, nx0,
+                                nx1, ny0, ny1, same ? "same" : "CHANGED");
+                    else
+                        fprintf(rep, "favourite %s: the star %u yellow px in (%u,%u)-(%u,%u), the name at %d..%d (alone: %d..%d)\n",
+                                F[v].slug, ny, x0, y0, x1, y1, b->x0, b->x1, nx0, nx1);
+                    good += (uint32_t)ok;
+                }
+                snprintf(name, sizeof name, "a favourite's star: yellow, before the name, the pair centred, nothing else moves (%u of %u)",
+                         good, (unsigned)(sizeof F / sizeof F[0]));
+                check(name, good == sizeof F / sizeof F[0] && nfind == f0 && nell == e0);
+            }
         }
         if (ip >= 0) {
             s = CR_SCREENS[ip];

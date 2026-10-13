@@ -2029,3 +2029,61 @@ five UNISON programs load in UNISON.
 **Not done / not tested**: this tree on a unit; UNISON by ear; the store, the device manager, backup ids, the web
 manager, the manual, a release note; `tools/emu/perf.sh` (p), (q) and the listening files again (docs/PROPHET.md
 marks cd43720's figures); a list of fewer than 15 programs (the emulator's script visits place 15).
+
+3y40. **Favourites: a mark on any sound; and P5's voices back to three budget units, a measurement build (2026-10-13;
+0.22 in development; on p5-c after c176dd4).** The owner: "I would like to add a feature to mark presets as
+favorites. To do this I am thinking, press save to go into the save menu, turn select to third option "Favorite", use
+knob 4 to mark as favorite or remove from favorites. Or inside the edit menu turning a preset brings a locked on
+preset browser, use knob 4 in this to mark favorites too. Then what I can do is mark my favorite Prophet patches and
+only those get included."
+**The mark** (`firmware/src/cr_favs.c`, new; docs/PRESETS.md "Favourites"): a bit per sound. A factory sound: (the
+engine's index, the preset's index in the engine's table), the index a user record's binding already stores, not
+reordered since 0.14 (checked through the tags); P5: the Sequential number 1..200; a user sound: its slot; a record
+over a factory preset: that preset's key; INIT: none; an edited sound: its origin. A slot deleted or filled anew
+loses its mark (`upreset.c up_put`). Felucca's `favorites.c` is not in ChoralRoot's unit (it belongs to `ui.c`) and
+was not used: its bitmap lives in the settings record, has 16 engines and knows a P5 program only by its place.
+**The store**: `OBJ_FAVS`, the A/B pair 0xB6000 / 0xB7000 (the first free sectors after the session), version byte 1,
+sections of tag / length / bits, 2 .. 88 bytes; `storage.c`'s writer (a torn write leaves the marks as they were);
+written as an Option is (`cr_settings.c crf_poll`: the change settled 1.5 s, nothing sounding 1 s, no loop playing),
+with SAVE held and before a backup's LIST. RAM +96 B (72 of bits). Backup id 23 "favorites" (`cr_backup.c`,
+`web/fm1backup.js`, `tools/fm1_install.py`, web/EDITOR_PROTOCOL.md); 0.21 does not list 23, the clients write only
+what is listed, and its PUT begin of an unknown id answers rc 1; its map never reaches 0xB6000. SAFE MODE's Flash Data
+erases it with the sounds: 60 sectors (58).
+**The UI**: SAVE's dialog has a third choice, Favorite: `Not a favorite` / `Favorite` big, the name under it, KNOB 4
+right marks and left takes the mark off, at once; OCT+ there saves nothing, SAVE again closes. SELECT / KNOB 1 now move
+a step a turn through three and stop at the ends (until now any turn right was Save as new: the first right turn from
+Save as new is Favorite). A P5 part's dialog opens (it was refused) with Favorite alone; OCT+ is still refused, "P5:
+no save yet". The editor's browser: KNOB 4, which had no job since 0.19, marks the previewed sound; the browser
+stays. The star: five triangles in the role yellow before the name, the pair centred (`cr_draw.c cr_star`, about 250
+B), on the pool read-out, in the browser and in the dialog (`cr_screen_t.star`).
+**Off the unit**: `tools/fm1_install.py --favorites` (read-only, the backup read of object 23) prints the marks, P5's
+as `NUMBER  # NAME` lines: a valid shipped.txt; `tools/p5_shipped_from_favorites.py` writes the list (the present
+list's order and headings for the programs it has, the new ones after, by number; `--by-number`).
+**P5's budget**: `p5_units` 3 (c176dd4: 4), `P5_POLY` stays 4: the chord keeps four voices with a VA or FM6 bass
+(4 x 3 + 2 = 14 of 16; with four units it had three). The price: a P5 bass under a P5 chord is a fifth P5 voice (15
+of 16). To be measured on the unit (four chord voices + a bass + all three effects); it may go back to 4.
+**Tests.** `tests/cr_favs_test.c` (new, 46 checks: set, clear, ranges, a power cycle, two torn writes, an unknown
+version, a newer object, an empty one, SAFE MODE, a slot's mark, every bit); `tests/cr_backup_test.c` (object 23, the
+LIST's flush, PUT, another version, the bound record's key, a deleted slot); `tests/cr_prophet_test.c` (P5's dialog,
+the three choices, KNOB 4 on Favorite and on the saves, the browser, the units; `--fav-out` / `--fav-in`:
+`tests/run_prophet_test.sh` marks with one shipped list and reads with another, four pairs); `tests/cr_draw_test.c`
+(the star on six screens; the 261 renders of the draw test are c176dd4's bytes); `tests/install_test.py` (a twentieth
+phase: the firmware's own writer compiled on the host, its bytes through the tool's decoder, `--favorites`' text, the
+list made from it, 0.21 without the object, a backup to and from it); `web/test_backup.mjs`; the emulator:
+`cr_favs.txt` and its block in `test_cr.sh`, `favs_persist_set / _check.txt` and P5's case in `test_persist.sh`.
+Emulator scripts edited, each for a reason: `cr_presets.txt` (one KNOB 1 +1 removed: from Save as new a turn right is
+Favorite now); `cr_prophet.txt` and `prophet_persist_set.txt` (SAVE opens P5's dialog: marked there, OCT+ refused,
+OCT- closes); `cr_editor_pick.txt` (its KNOB 4 +1 "nothing" is a mark now: comment and check). Against a build of
+c176dd4, test_cr's 467 shots: 11 differ: six of the save dialog's choice page and "no free slot" over it (the third
+item), P5's SAVE (the dialog where the refusal was) and the picker after it (the star), `cr_pick_roots_play` (the
+read-out of the mark), and `cr_dualcore_geek_ok` (a timing counter on the Geek view, c217 / c218: not this change, by
+inference).
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders, 0 changed (P5's too: the regression's phrase plays the chord part alone, four voices either
+way); 0 lint findings; test_cr 923 ok, test_persist 98 ok, test_retired 18 ok. Size: XIP 507 572 B (88.5 %; +1 984),
+RAM 81 444 (+96), POOL 316 052 (the same). `FELUCCA_PROPHET=0 ./build.sh`: `choralroot.bin` 57371526.. (it was
+501a9d09..: the favourites are every engine's).
+**Not done / not tested**: anything on a unit (the marks, the write under a ringing reverb, `--favorites` against a
+real FM-1, the three-unit voice's cost); a favourites-only way of turning PRESETS; favourites in the web Sound
+Manager (it does not show or edit them; a backup made by the pages keeps them); the browser emulator's own test has
+no favourites case; `tools/emu/perf.sh`.

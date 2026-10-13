@@ -27,7 +27,9 @@
  *   store (va_store.c), 10, 11 the FM6 patch store (fm6_ustore.c: user slots 1..16, 17..32), 12, 13 the CZ-1 tone store
  *   (cz_ustore.c: user slots 1..16, 17..32), 14..21 the CZ-1 banks A..H (cz_bank.c: one object a bank, as Melodee's
  *   backup ids 9..16; a bank never saved has no object: its default, Casio's tones or empty), 22 the QUAD patch store
- *   (quad_store.c, FELUCCA_QUAD), 40..49 loop slots 1..10
+ *   (quad_store.c, FELUCCA_QUAD), 23 the favourites (cr_favs.c, 0.22: the marks on sounds; an older firmware has no
+ *   id 23: it does not list it and answers a PUT begin of it rc 1, which the clients report as skipped), 40..49 loop
+ *   slots 1..10
  *   (cr_ui.c's flash records, docs/LOOPER.md). No sample objects: ChoralRoot has
  *   no SAMPLE engine (FELUCCA_SAMPLE 0); Felucca's 32..34 and SMP_BEGIN .. SMP_ERASE (11..14) are not answered, so the
  *   installer page reports a Felucca archive's samples (and a ChoralRoot 0.1 archive's 32 / 33) skipped. The flash of
@@ -64,8 +66,9 @@ enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBU
 #define CRB_CZB 14u                                  /* 14..21: the CZ-1 banks A..H */
 #if FELUCCA_QUAD
 #define CRB_QUAD 22u                                 /* 22: the QUAD patch store */
+#define CRB_FAVS 23u                                 /* 23: the favourites (after the sounds they mark) */
 static const uint8_t CRB_IDS[] = {1, 6, 7, 8, CRB_VA, CRB_FM6S, CRB_FM6S + 1u, CRB_CZS, CRB_CZS + 1u, 14, 15, 16, 17, 18, 19,
-                                  20, 21, CRB_QUAD, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
+                                  20, 21, CRB_QUAD, CRB_FAVS, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
 _Static_assert(sizeof(quad_store_t) <= CRL_REC_MAX, "backup: the QUAD store stages too");
 #else
 static const uint8_t CRB_IDS[] = {1, 6, 7, 8, CRB_VA, CRB_FM6S, CRB_FM6S + 1u, CRB_CZS, CRB_CZS + 1u, 14, 15, 16, 17, 18, 19,
@@ -176,6 +179,10 @@ static uint32_t crb_obj(uint32_t id)                 /* storage.c's object of id
 #if FELUCCA_QUAD
     if (id == CRB_QUAD)
         return OBJ_QUADSTORE;
+#if FELUCCA_CZ
+    if (id == CRB_FAVS)
+        return OBJ_FAVS;
+#endif
 #endif
 #if FELUCCA_CZ
     if (crb_is_cz(id))
@@ -321,6 +328,10 @@ static int crb_size_ok(uint32_t id, uint32_t len)   /* a begin's size for this i
 #if FELUCCA_QUAD
     if (id == CRB_QUAD)
         return !len || len == sizeof(quad_store_t);
+#if FELUCCA_CZ
+    if (id == CRB_FAVS)                              /* (0: none; else the version and the count at least) */
+        return !len || (len >= 2u && len <= CRF_PACK_MAX);
+#endif
 #endif
     if (id == CRB_VA)                                /* version 3 / 2, or version 1's 104-byte blobs */
         return !len || len == sizeof(va_store_t) || len == 16u + UP_SLOTS * VA_BLOB1;
@@ -442,6 +453,15 @@ static uint32_t crb_commit(void)
     } else if (id == CRB_QUAD) {
         if (len && !quad_store_valid((const quad_store_t *)raw))
             return 2;
+#if FELUCCA_CZ
+    } else if (id == CRB_FAVS) {                     /* the marks: stored as sent (an object this firmware cannot read
+                                                      * reads as no marks, cr_favs.c), the RAM copy from flash */
+        if (st_save(OBJ_FAVS, raw, len))
+            return 4;
+        crf_boot();
+        ui.force = 1;
+        return 0;
+#endif
 #endif
     } else if (id == CRB_VA) {
         const va_store_t *s = (const va_store_t *)raw;

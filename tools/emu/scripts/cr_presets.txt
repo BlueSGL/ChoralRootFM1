@@ -10,7 +10,8 @@
 # 4. PRESETS +3: 02 FM BELL; SAVE, KNOB 1 -1: Overwrite, OCT+: a record bound to FM BELL (U02), the number and the
 #    name kept; PRESETS +1 -1: 02 FM BELL with the mark.
 # 5. SAVE, SAVE held 1 s: "reset to factory?", OCT+: U02 deleted, the factory FM BELL back at 02 (no mark).
-# 6. 31 Saves as new fill the 32 slots; the next one: "no free slot".
+# 6. 31 Saves as new fill the 32 slots; the next one: "no free slot". (The first of them from the factory FM BELL: the
+#    dialog's default; the others from the user preset just saved: Overwrite by default, KNOB 1 +1: Save as new.)
 # 7. FM6's pool is 57 presets long now, its meter 32 stripes: PRESETS +1: 00 INIT (none lit), +1: 01 (one), -2: 57, the
 #    last (every one), -1: 56 (31: all of them only on the last).
 wait 500
@@ -100,7 +101,8 @@ shot build/emu/test/cr_presets_factory.ppm
 wait 1500
 btn SAVE
 wait 150
-knob KNOB1 +1
+# (0.22: no KNOB 1 +1 here. The dialog opens on Save as new for this factory preset, and a turn right from it is the
+# third choice now, Favorite, where OCT+ saves nothing. The 31 below start on a user preset: Overwrite, +1: Save as new)
 wait 100
 btn OCT+
 wait 150

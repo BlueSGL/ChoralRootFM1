@@ -73,10 +73,10 @@
 #if FELUCCA_P5_FACTORY
 #include "melodee_prophet_factory.h"   /* Sequential's v1.03 programs, the shipped ones (tools/gen_prophet_factory.py) */
 #endif
-/* FOUR voices a part, four budget units each (p5_units): Melodee's five of three units were measured on the owner's
- * unit on 2026-10-13 (cd43720, a five-voice chord): pk_part0_us 2033 where the listing's count said 1318 (1.54 x),
- * pk_block_us 2814 of the half's 2902, pk_late 17, stale_halves 0 (nothing heard). Four voices are about 1630 us by
- * proportion (docs/PROPHET.md "Cost on the unit") */
+/* FOUR voices a part (P5_POLY), THREE budget units each (p5_units; a measurement build, 2026-10-13: see there).
+ * Melodee's five voices of three units were measured on the owner's unit on 2026-10-13 (cd43720, a five-voice chord):
+ * pk_part0_us 2033 where the listing's count said 1318 (1.54 x), pk_block_us 2814 of the half's 2902, pk_late 17,
+ * stale_halves 0 (nothing heard). Four voices are about 1630 us by proportion (docs/PROPHET.md "Cost on the unit") */
 #define P5_POLY 4u
 typedef struct { int32_t value; uint8_t stage; } p5_env_t;
 typedef struct {
@@ -888,10 +888,13 @@ static const eng_deep_t P5_DEEP={
 };
 _Static_assert(sizeof(p5_patch_t)==138u && sizeof(p5_patch_t)<=ENG_BLOB_MAX,"the Prophet program fits the blob cap");
 
-/* The budget: four of the sixteen units a voice, so that at most four P5 voices sound on a part (P5_POLY, above:
- * the unit's reading), three when the other part sounds (a VA or FM6 bass takes 2 units, a P5 bass 4), through the
- * existing per-engine budget hook. (Melodee: three units, five voices.) */
-static uint32_t p5_units(const track_t *t) { (void)t; return 4u; }
+/* The budget: THREE of the sixteen units a voice (as Melodee's; the cap of four voices a part is P5_POLY, above, not
+ * the budget), so that the chord part KEEPS its four voices when a bass sounds on one core: 4 x 3 + a VA or FM6
+ * bass's 2 = 14 of 16. With four units (c176dd4) a bass left the chord three voices (3 x 4 + 2). The price: a P5 BASS
+ * under a P5 chord is a fifth P5 voice (4 x 3 + 3 = 15 of 16), and five voices were the reading that did not fit with
+ * a margin. A MEASUREMENT BUILD (the owner, 2026-10-13): to be read on the unit (four P5 chord voices + a bass + all
+ * three effects: pk_part0_us, pk_block_us, pk_late, stale_halves); it may go back to 4 */
+static uint32_t p5_units(const track_t *t) { (void)t; return 3u; }
 static const engine_t ENG_P5_TEST = {
     .name="P5", .page_title={"FILTER/TUNE","PW/MIX"},
     .edit={{"CUT",F_INT,-63,63,0,0,0},{"RES",F_INT,-63,63,0,0,0},

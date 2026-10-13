@@ -75,6 +75,7 @@ static void cr_bank_boot(void)                    /* persist_boot (after flash_o
         return;
     cb_booted = 1;
     up_boot();
+    crf_boot();                                   /* the favourites (cr_favs.c) */
 }
 
 /* ----------------------------------------------- 3. the trims of the loud presets --- */

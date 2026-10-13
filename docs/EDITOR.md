@@ -283,7 +283,9 @@ the VA's), the `edited` flag and the pool entry it came from (its place in the p
 - **KNOB 4** switches the roots' job: `roots: engines` (they pick engines) or `roots: play` (they play the previewed
   sound; engines are then chosen with SELECT only). The footer shows it. **0.18: the roots always play there** (the owner:
   "I don't see any case in which I would want to scroll through presets and not be able to immediately play them");
-  KNOB 4 has no job in the picker, the footer reads `SELECT: engine`, the byte is reserved. Until then: a setting (`pick_roots`,
+  KNOB 4 has no job in the picker, the footer reads `SELECT: engine`, the byte is reserved. **0.22: KNOB 4 marks the
+  previewed sound as a favourite** (right on, left off; the read-out pops with its star, the browser stays;
+  docs/PRESETS.md "Favourites"; the footer is unchanged). Until 0.18: a setting (`pick_roots`,
   docs/SETTINGS.md), default engines.
 
 Closing it:

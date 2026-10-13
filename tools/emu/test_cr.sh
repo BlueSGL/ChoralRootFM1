@@ -938,8 +938,8 @@ has '^preset: part 0 -> VA / ' "$L" && [ -n "$o1" ] && [ "$o1" = "$c1" ] &&
 cmp -s "$OUT/cr_pick_editor.ppm" "$OUT/cr_pick_cancel.ppm" && ok "OCT-: back in the editor as it was" || bad "not back in the editor: $OUT/cr_pick_cancel.ppm"
 c2=$(sed -n 's/^picker: cancel part 0 -> LUSH PAD crc \([0-9a-f]*\)$/\1/p' "$L" | sed -n 2p)
 ! has '^picker: roots' "$L" && has '^expect sound .*: ok' "$L" && has '^expect silence .*: ok' "$L" &&
-    has '^engine: part 0 -> FM6' "$L" && [ "$c2" = "$o1" ] &&
-    ok "the picker's roots play (D4 sounded; KNOB 4 changes nothing there since 0.18); SELECT -2: FM6; OCT-: the VA patch back (crc $c2): $OUT/cr_pick_roots_play.ppm" \
+    has '^engine: part 0 -> FM6' "$L" && [ "$c2" = "$o1" ] && has '^fav: part 0 LUSH PAD on (tag 13 id 0, 1 marked)' "$L" &&
+    ok "the picker's roots play (D4 sounded; KNOB 4 there marks the sound as a favourite since 0.22 and changes nothing of the sound: the read-out with the star); SELECT -2: FM6; OCT-: the VA patch back (crc $c2): $OUT/cr_pick_roots_play.ppm" \
     || bad "picker roots / engine cancel (crc '$c2')"
 [ "$(grep -c '^engine: part 0' "$L")" = 1 ] && ok "no engine switched by D4 in the picker (one switch: SELECT's)" || bad "a root switched an engine"
 grep '^layer: open 5' "$L" | sed -n 3p | grep -q . && has '^picker: keep part 0 ' "$L" &&
@@ -2161,8 +2161,15 @@ has '^edit: group OSC screen 3 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL
     has '^edit: group LFO screen 2 ' "$PL" && has '^edit: group MOD screen 2 ' "$PL" &&
     ok "P5's groups: OSC (OSC A, OSC B, MIXER), FILT, ENV 1 / ENV 2, LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
     bad "P5 groups: $(grep -c '^edit: group' "$PL")"
-has '^save: part 0 P5 refused (no store)' "$PL" && ! has '^save: dialog' "$PL" &&
-    ok "SAVE on a P5 part: refused (\"P5: no save yet\"), no dialog: $OUT/cr_prophet_save.ppm" || bad "SAVE was not refused"
+p5id=$(python3 tools/gen_prophet_factory.py --list | awk '$1 == 15 { print $2 }')
+p5fav=$(grep -a '^  favs:' "$PL" | tail -1)
+has "^save: dialog part 0 $P5C\* (favorite)" "$PL" && [ "$(grep -c '^save: choice favorite' "$PL")" = 1 ] && ! has '^save: choice [os]' "$PL" &&
+    has "^fav: part 0 $P5C on (tag 16 id $p5id, 1 marked)" "$PL" && has '^save: part 0 P5 refused (no store)' "$PL" &&
+    ! has '^save: part 0 .*slot' "$PL" && ! has '^save: new' "$PL" && echo "$p5fav" | grep -q "favs: 1 marked.* : 16:$p5id\$" &&
+    [ "$(yellow_in "$OUT/cr_prophet_fav.ppm" 0 0 57600)" -ge 10 ] && [ "$(yellow_in "$OUT/cr_prophet_save.ppm" 0 0 57600)" = 0 ] &&
+    ! cmp -s "$OUT/cr_prophet_fav.ppm" "$OUT/cr_prophet_refused.ppm" &&
+    ok "SAVE on a P5 part (0.22): the dialog with Favorite alone (SELECT cannot leave it); KNOB 4 marks place 15 by Sequential's number ($p5id), the star; OCT+: refused (\"P5: no save yet\"), no slot written: $OUT/cr_prophet_save.ppm cr_prophet_fav.ppm cr_prophet_refused.ppm" ||
+    bad "P5's SAVE dialog: $(grep -a '^save:\|^fav:' "$PL" | tr '\n' ' ') / $p5fav / yellow $(yellow_in "$OUT/cr_prophet_fav.ppm" 0 0 57600)"
 has "^picker: open part 0 $P5C" "$PL" && has "^picker: cancel part 0 -> $P5C" "$PL" &&
     ok "EDIT held: the engine picker with P5 among the six, OCT- leaves the sound: $OUT/cr_prophet_epk.ppm" || bad "the picker in the editor"
 silent_end cr_prophet
@@ -2353,9 +2360,9 @@ differ cr_safe_options cr_safe_erase_entry "Options opens on Safe Mode; SELECT +
 differ cr_safe_erase_entry cr_safe_erase_ask "OCT+ once: the confirmation (OCT+ again): $OUT/cr_safe_erase_ask.ppm"
 "$EMU" --headless --flash "$SF" --script "$S/cr_safe_erase.txt" --boot-fail 1 --reset-reason wdt >"$OUT/cr_safe_erase.log" 2>&1
 st=$?
-[ $st = 0 ] && has '^safe: flash data erased, 58 sectors, 0 failed: reboot' "$OUT/cr_safe_erase.log" &&
+[ $st = 0 ] && has '^safe: flash data erased, 60 sectors, 0 failed: reboot' "$OUT/cr_safe_erase.log" &&
     has '^reboot: guard failed 0 pending 0' "$OUT/cr_safe_erase.log" &&
-    ok "OCT+ twice: 58 data sectors erased (36 + the CZ-1's 18 + FM TONE's 2 + the session's 2), reboot with the guard clear" || bad "erase: exit $st, $(grep -m1 'safe:\|reboot' "$OUT/cr_safe_erase.log")"
+    ok "OCT+ twice: 60 data sectors erased (36 + the CZ-1's 18 + FM TONE's 2 + the session's 2 + the favourites' 2), reboot with the guard clear" || bad "erase: exit $st, $(grep -m1 'safe:\|reboot' "$OUT/cr_safe_erase.log")"
 ff=$(python3 -c "
 import sys; d = open(sys.argv[1], 'rb').read()
 r = [(0x97000, 9), (0xA0000, 22), (0xC8000, 20), (0xDC000, 4), (0xFC000, 3)]   # (0xB4000 / 0xB5000: the session, 0.18)
@@ -2824,6 +2831,43 @@ grep -a '^ui: frame.* picker ' "$GK" | grep -aq "item 'CZ-1' value '64 presets'"
     ok "a bass that is off, in the FX layer: GLO + ALGORITHM changes its engine ($B), the bass stays off (as on the home pages)" \
     || bad "the bass off in a layer: on $(gb 32) '$(gp 1 32)' layer $(gl 32)"
 differ cr_glo_knobs_key_pick cr_glo_knobs_key_pop "the picker in the KEY layer, then the pool read-out on GLO's release"
+
+echo "favourites (0.22, docs/PRESETS.md): the SAVE dialog's third choice, KNOB 4 there and in the editor's browser, the star"
+run cr_favs
+FL="$OUT/cr_favs.log"
+fv() { grep -a '^  favs:' "$FL" | sed -n "$1p"; }
+star() { yellow_in "$OUT/$1.ppm" 0 0 57600; }      # the yellow pixels of a shot: the star's (nothing else is yellow there)
+has '^save: dialog part 0 TINE EP (save as new)' "$FL" && [ "$(grep -m1 '^save: choice' "$FL")" = "save: choice favorite" ] &&
+    ! cmp -s "$OUT/cr_favs_save2.ppm" "$OUT/cr_favs_not.ppm" && [ "$(star cr_favs_not)" = 0 ] &&
+    ok "SAVE on TINE EP: the dialog on Save as new as before; SELECT +1: the third choice, \"Not a favorite\", no star: $OUT/cr_favs_save2.ppm cr_favs_not.ppm" ||
+    bad "the third choice: $(grep -m2 '^save:' "$FL" | tr '\n' ' ')"
+has '^fav: part 0 TINE EP on (tag 12 id 0, 1 marked)' "$FL" && fv 1 | grep -q 'favs: 1 marked, saves 0, pending 1 .* : 12:0$' &&
+    [ "$(star cr_favs_on)" -ge 10 ] && ! cmp -s "$OUT/cr_favs_not.ppm" "$OUT/cr_favs_on.ppm" &&
+    ok "KNOB 4 right on Favorite: TINE EP marked at once (FM6's preset 0), \"Favorite\" and the star before the name ($(star cr_favs_on) yellow px in its row): $OUT/cr_favs_on.ppm" ||
+    bad "KNOB 4 +1: $(grep -m1 '^fav:' "$FL") / $(fv 1) / yellow $(star cr_favs_on)"
+has '^save: favorite, nothing to save' "$FL" && ! has '^save: part 0 .*slot' "$FL" && ! has '^save: new part 0' "$FL" &&
+    has '^fav: part 0 TINE EP off (tag 12 id 0, 0 marked)' "$FL" && fv 2 | grep -q 'favs: 0 marked' &&
+    ok "OCT+ on Favorite: nothing saved, no naming page, no slot; KNOB 4 left: the mark off" || bad "OCT+ / KNOB 4 -1: $(grep '^save:\|^fav:' "$FL" | sed -n 3,6p | tr '\n' ' ')"
+[ "$(star cr_favs_save1)" -ge 10 ] && [ "$(grep -c '^save: choice save as new' "$FL")" = 1 ] &&
+    ok "a turn left from Favorite: Save as new (a turn is a step, however fast); a marked sound's star shows under the other choices too: $OUT/cr_favs_save1.ppm" ||
+    bad "the star on Save as new: $(star cr_favs_save1)"
+! has '^save: global' "$FL" && [ "$(grep -c '^save: dialog part 0' "$FL")" = 2 ] &&
+    has '^popup: part 0 01 / TINE EP (star) / ' "$FL" && has '^popup: part 0 02 / FM BELL / ' "$FL" &&
+    [ "$(star cr_favs_pop01)" -ge 10 ] && [ "$(star cr_favs_pop02)" = 0 ] &&
+    ok "SAVE again on Favorite closes the dialog; PRESETS: the pool read-out of 01 TINE EP with the star, 02 FM BELL without: $OUT/cr_favs_pop01.ppm cr_favs_pop02.ppm" ||
+    bad "the read-out: $(grep '^popup: part 0 0[12]' "$FL" | head -3 | tr '\n' ' ') yellow $(star cr_favs_pop01) / $(star cr_favs_pop02)"
+has '^picker: open part 0 TINE EP' "$FL" && has '^fav: part 0 FM BELL on (tag 12 id 1, 2 marked)' "$FL" &&
+    has '^popup: part 0 02 / FM BELL (star) / FM6 .* 02/25' "$FL" && ! has '^fav: part 0 FM BASS on' "$FL" &&
+    has '^picker: cancel part 0 -> TINE EP' "$FL" && fv 3 | grep -q 'favs: 2 marked, saves [1-9][0-9]*, pending 0 .* : 12:0 12:1$' &&
+    [ "$(star cr_favs_browser_star)" -ge 10 ] && [ "$(star cr_favs_browser)" = 0 ] && [ "$(star cr_favs_browser_next)" = 0 ] &&
+    ok "the editor's browser (PRESETS in the editor): KNOB 4 right marks FM BELL under the cursor, the browser stays, the star beside the name; the next sound has none; OCT- gives TINE EP back, both marks stay and are in flash: $OUT/cr_favs_browser_star.ppm" ||
+    bad "the browser: $(grep '^fav:\|^picker:' "$FL" | tr '\n' ' ') / $(fv 3) / yellow $(star cr_favs_browser_star)"
+[ "$(grep -c 'cannot be marked$' "$FL")" = 1 ] && fv 4 | grep -q 'favs: 2 marked' &&
+    ok "INIT cannot be a favourite: KNOB 4 on it says so, nothing changes: $OUT/cr_favs_init.ppm" || bad "INIT: $(grep -c 'cannot be marked' "$FL") refusals, $(fv 4)"
+has '^save: dialog part 1 ' "$FL" && grep -q '^fav: part 1 .* on (tag 13 id [0-9]*, 3 marked)' "$FL" && fv 5 | grep -q 'favs: 3 marked.*pending 0 .* 13:' &&
+    [ "$(star cr_favs_bass)" -ge 10 ] &&
+    ok "the bass part's dialog (BASS + EDIT, SAVE): its sound marked the same way, the star on the orange name: $OUT/cr_favs_bass.ppm" ||
+    bad "the bass: $(grep '^fav: part 1' "$FL") / $(fv 5)"
 
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

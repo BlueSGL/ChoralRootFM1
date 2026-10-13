@@ -485,6 +485,17 @@ void emu_fw_dump(void)
                        : "low: the backlight, the key matrix and the LEDs alive", (unsigned)emu_pa2_ms);
     printf("  flash: %s, %u writes, settings saves %u (record: %s)\n", emu_flash_path[0] ? emu_flash_path : "RAM only",
            (unsigned)emu_flash_writes, (unsigned)crs_saves, crs_last_rc == 1 ? "current" : crs_last_rc == 2 ? "migrated" : "defaults");
+    {   /* the favourites (cr_favs.c): the marks in all, the flash writes, one still to be written, what power-on found,
+         * then every mark as tag:id (tag: the engine's index, 128 the user slots; P5's id: the Sequential number) */
+        unsigned k, i, off = 0;
+        printf("  favs: %u marked, saves %u, pending %u (at power-on: %s) :", (unsigned)crf_count(), (unsigned)crf_saves,
+               (unsigned)crf_dirty, crf_last_rc == 1 ? "read" : crf_last_rc < 0 ? "not understood" : "none");
+        for (k = 0; k < CRF_NSEC; off += CRF_SEC[k].bytes, k++)
+            for (i = 0; i < CRF_SEC[k].bytes * 8u; i++)
+                if ((crf_bits[off + i / 8u] >> (i % 8u)) & 1u)
+                    printf(" %u:%u", (unsigned)CRF_SEC[k].tag, i);
+        printf("\n");
+    }
     {   /* the session (cr_settings.c css_*, docs/SETTINGS.md): its saves, what power-on found, the state as it would be
          * saved now and as flash holds it (cr_session_hash; "pending 1": they differ, a global save would write it),
          * and the state itself: the FX layer, each part's sound */

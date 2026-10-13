@@ -254,7 +254,7 @@ int main(void)
     CHECK(!t_send(&n), "an editor command (GET 2) gets no reply");
 
     /* ---- an empty device: every object listed, sizes 0 but the settings ---- */
-    CHECK(t_list() == 0 && nman == 28, "LIST on a fresh flash: 28 objects");
+    CHECK(t_list() == 0 && nman == 29, "LIST on a fresh flash: 29 objects");
     for (i = 0, k = 0; i < nman; i++) k += man[i].size != 0;
     CHECK(k <= 1, "fresh flash: nothing stored (the settings at most)");
 
@@ -344,11 +344,11 @@ int main(void)
     /* ---- backup: LIST, GET everything, CRCs ---- */
     CHECK(t_capture() == 0, "backup: LIST + GET of every object, each CRC as listed");
     {
-        static const uint8_t ids[28] = {1, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22,
+        static const uint8_t ids[29] = {1, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
                                         40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
-        int same = nman == 28;
-        for (i = 0; same && i < 28; i++) same = man[i].id == ids[i];
-        CHECK(same, "LIST: ids 1 6..22 (12 13 the CZ-1 tones, 14..21 its banks, 22 QUAD's patches) 40..49 in order (no sample slots)");
+        int same = nman == 29;
+        for (i = 0; same && i < 29; i++) same = man[i].id == ids[i];
+        CHECK(same, "LIST: ids 1 6..23 (12 13 the CZ-1 tones, 14..21 its banks, 22 QUAD's patches, 23 the favourites) 40..49 in order (no sample slots)");
     }
     CHECK(find(man, nman, 1)->size == sizeof(persist_t) && find(man, nman, 6)->size == sizeof(up_bank_t) &&
           find(man, nman, 8)->size == sizeof(fm6_bank_t) && find(man, nman, 9)->size == sizeof(va_store_t) &&
@@ -1081,6 +1081,77 @@ int main(void)
         cr_update_poll();
         cr_restore_lock = (uint8_t)keep_lock;
 #undef T_HOLD
+    }
+
+    /* ---- the favourites (0.22, cr_favs.c; docs/PRESETS.md "Favourites"): object 23 ---- */
+    {
+        uint8_t fav[CRF_PACK_MAX], other[CRF_PACK_MAX];
+        uint32_t fn, tag, id, keep_lock = cr_restore_lock;
+        int rc;
+        cr_restore_lock = 0;
+        cu_pool_load(0, ENGI_FM6, 2);                /* FM BELL */
+        CHECK(cu_fav_part_key(0, &tag, &id) && tag == ENGI_FM6 && id == 1u && !cu_fav_part(0) && cu_fav_turn(0, +1) &&
+              cu_fav_part(0) && crf_dirty, "favourites: FM6 02 marked through the UI's turn: a mark to be written");
+        cu_pool_load(0, ENGI_VA, 0);                 /* INIT */
+        cu.msg.text[0] = 0;
+        CHECK(!cu_fav_turn(0, +1) && !strcmp(cu.msg.text, "INIT: cannot be marked") && crf_count() == 1u,
+              "favourites: INIT cannot be marked (a message), nothing changes");
+        CHECK(t_list() == 0 && !crf_dirty && find(man, nman, 23)->size == 2u + 2u + 1u,
+              "favourites: LIST writes a pending mark first, then lists object 23 (5 bytes: version, 1 section, FM6: 1 byte)");
+        rc = t_get(23, 0, 5, fav);
+        CHECK(!rc && fav[0] == CRF_VER && fav[1] == 1u && fav[2] == ENGI_FM6 && fav[3] == 1u && fav[4] == 0x02u &&
+              st_crc32(fav, 5) == find(man, nman, 23)->crc, "favourites: GET 23: the object as cr_favs.c packs it");
+        fn = 5;
+        (void)crf_set(ENGI_FM6, 1, 0);
+        (void)crf_set(13, 7, 1);
+        CHECK(crf_flush() == 0 && !crf_has(ENGI_FM6, 1), "(the marks changed on the unit: FM6 02 off, VA 08 on)");
+        CHECK(t_put(23, fav, fn) == 0 && crf_has(ENGI_FM6, 1) && !crf_has(13, 7) && crf_count() == 1u && !crf_dirty,
+              "favourites: PUT 23: the backup's marks replace the unit's, in RAM at once");
+        power_on();
+        CHECK(crf_has(ENGI_FM6, 1) && crf_count() == 1u && crf_last_rc == 1, "favourites: .. and after a power cycle");
+        cu_pool_load(0, ENGI_FM6, 2);
+        cu_pool_popup(0, 2);
+        CHECK(cu.pop.star == 1 && !cu.pop.mark, "favourites: the pool read-out of FM6 02 carries the star");
+        cu_pool_popup(0, 3);
+        CHECK(cu.pop.star == 0, "favourites: FM6 03's does not");
+        memcpy(other, fav, fn);
+        other[0] = CRF_VER + 1u;                     /* a newer firmware's object */
+        CHECK(t_put(23, other, fn) == 0 && crf_count() == 0u && crf_last_rc == -1,
+              "favourites: PUT of another version: stored, read as no marks (never half-understood)");
+        CHECK(t_put_begin(23, 1, 0) == 1 && t_put_begin(23, CRF_PACK_MAX + 1u, 0) == 1, "favourites: a size of 1 or over 96: rc 1");
+        CHECK(t_put(23, fav, 0) == 0 && crf_count() == 0u && crf_last_rc == 0, "favourites: PUT of size 0: no marks");
+        CHECK(t_put(23, fav, fn) == 0 && crf_count() == 1u, "(the backup's marks again)");
+        /* an overwritten factory preset keeps its factory key: the mark stays through Overwrite and Reset */
+        {
+            uint32_t k = cb_free_slot();
+            cu_pool_load(0, ENGI_FM6, 2);
+            rc = cb_store(&trk[CR_PART_CHORD], 0, k, "FM BELL", 1u + 1u);
+            cu_pool_load(0, ENGI_FM6, 2);
+            CHECK((rc == 0 || rc == 3) && psnd[0].kind == PK_USER && psnd[0].fk == 1u && cu_fav_part(0) &&
+                  cu_fav_ent(ENGI_FM6, pool_entry(ENGI_FM6, 2)),
+                  "favourites: FM6 02 overwritten by a user record: the same sound of the pool, still marked");
+            (void)up_put(k, 0);
+            cu_pool_load(0, ENGI_FM6, 2);
+            CHECK(psnd[0].kind == PK_FACTORY && cu_fav_part(0), "favourites: .. and after Reset to factory");
+            /* an added user sound: its slot; the slot erased: the mark goes with it */
+            k = cb_free_slot();
+            rc = cb_store(&trk[CR_PART_CHORD], 0, k, "MINE", 0);
+            cu_pool_load(0, ENGI_FM6, pool_pos_slot(ENGI_FM6, k));
+            CHECK((rc == 0 || rc == 3) && psnd[0].kind == PK_USER && cu_fav_part_key(0, &tag, &id) && tag == CRF_T_USER &&
+                  id == k && cu_fav_turn(0, +1) && crf_has(CRF_T_USER, k), "favourites: an added user sound is marked by its slot");
+            psnd[0].edited = 1;
+            CHECK(cu_fav_part(0), "favourites: an edited sound is still its origin's mark");
+            (void)up_put(k, 0);
+            CHECK(!crf_has(CRF_T_USER, k) && crf_count() == 1u, "favourites: the slot deleted: its mark goes (a new sound there starts unmarked)");
+            (void)crf_set(CRF_T_USER, k, 1);         /* (a stale bit, as a restored object could carry) */
+            rc = cb_store(&trk[CR_PART_CHORD], 0, k, "OTHER", 0);
+            CHECK((rc == 0 || rc == 3) && !crf_has(CRF_T_USER, k), "favourites: a record into an empty slot clears a stale mark");
+            (void)up_put(k, 0);
+        }
+        (void)crf_set(ENGI_FM6, 1, 0);
+        (void)crf_flush();
+        cu_pool_load(0, ENGI_FM6, 1);
+        cr_restore_lock = (uint8_t)keep_lock;
     }
 
     printf("objects: settings %u (PER4 %u), bank %u, FM6 %u, VA %u, FM6 patches 2 x %u, QUAD %u, loop <= %u bytes\n",

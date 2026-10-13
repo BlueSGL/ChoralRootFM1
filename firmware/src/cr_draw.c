@@ -467,6 +467,32 @@ static void cr_pick_item(const cr_screen_t *s, const cr_frame_t *fr, int32_t sel
     }
 }
 
+/* a favourite's star: five points, the first up, in the role yellow (CR_STAR_COL), centre and outer radius in Q4.
+ * Five triangles, each a point with the two inner corners across from it: together the whole star, no seam (a
+ * triangle's inner edge lies inside two others). The font has no star and a glyph would be one size */
+#define CR_STAR_COL CR_COL_YELLOW
+static void cr_star(int32_t cx, int32_t cy, int32_t r)
+{
+    int32_t x[10], y[10], k;
+    for (k = 0; k < 10; k++) {
+        int32_t rr = k & 1 ? r * 98 / 256 : r;   /* the inner corners at 0.382 r */
+        uint32_t a = (uint32_t)k * 65536u / 10u;
+        x[k] = cx + ((rr * cr_sin(a)) >> 14);
+        y[k] = cy - ((rr * cr_cos(a)) >> 14);
+    }
+    for (k = 0; k < 10; k += 2)
+        cr_tri(x[k], y[k], x[(k + 3) % 10], y[(k + 3) % 10], x[(k + 7) % 10], y[(k + 7) % 10], cr_rgb(CR_STAR_COL, 0));
+}
+/* a name with the star before it, the two centred on x = 120: the star's box is 2 r wide, then a gap; returns the
+ * name's left edge (Q8). base: the name's baseline (Q8), px its size */
+static int32_t cr_star_name(const char *name, int32_t base, uint32_t px, int32_t extra)
+{
+    int32_t r = (int32_t)px * 3 / 8, gap = (int32_t)px / 4, tw = cr_tw(name, px, 1);
+    int32_t x0 = P8(120) - (tw + extra + P8(2 * r + gap)) / 2;
+    cr_star((x0 >> 4) + r * 16, (base >> 4) - (int32_t)px * 16 * 9 / 25, r * 16);
+    return x0 + P8(2 * r + gap);
+}
+
 static void cr_p_picker(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
 {
     int ringed = s->ring_on, horiz = s->orient == 1;
@@ -489,7 +515,10 @@ static void cr_p_picker(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
             cr_text_fit(P8(120), top + nbh + bigh + valh + P8(16), cr_item(s, sel + 1), 15, 0, CR_C, T_DIM, T_BG, P8(maxw));
     }
     cr_pick_item(s, fr, sel, size, maxw, horiz, base, top + nbh, top + nbh + bigh, col);
-    if (s->value[0]) cr_text(P8(120), top + nbh + bigh + P8(20), s->value, 20, 1, CR_C, 4096, col, T_BG, 0);
+    if (s->value[0] && s->star)          /* a favourite: the star, then the name */
+        cr_text(cr_star_name(s->value, top + nbh + bigh + P8(20), 20, 0), top + nbh + bigh + P8(20), s->value, 20, 1, CR_L,
+                4096, col, T_BG, 0);
+    else if (s->value[0]) cr_text(P8(120), top + nbh + bigh + P8(20), s->value, 20, 1, CR_C, 4096, col, T_BG, 0);
     if (s->label[0])
         cr_text(P8(120), P8(CR_PY0 + ph) - marksh - P8(ringed ? 34 : 8), s->label, 13, 0, CR_C, 4096, T_MID, T_BG, 0);
     if (n > 1 && !ringed)                /* square position marks */
@@ -507,7 +536,12 @@ static void cr_p_meter(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
     cr_text(P8(120), vy, s->value, size, 1, CR_C, sx, col, T_BG, 0);
     if (s->line[0])                      /* a line over the value (a pool's read-out: the part's engine, in orange) */
         cr_text_fit(P8(120), P8(CR_PY0 + 26), s->line, 15, 1, CR_C, cr_rgb(s->line_col, T_MID), T_BG, P8(150));
-    if (s->sub[0] && s->sub_mark) {     /* the name and a 5 px square after it, centred together */
+    if (s->sub[0] && s->star) {         /* a favourite: the star, the name (and its square), centred together */
+        int32_t tw = cr_tw(s->sub, 15, 1), x0 = cr_star_name(s->sub, vy + P8(22), 15, s->sub_mark ? P8(9) : 0);
+        cr_text(x0, vy + P8(22), s->sub, 15, 1, CR_L, 4096, col, T_BG, 0);
+        if (s->sub_mark)
+            cr_frect((x0 + tw + P8(4)) >> 4, ((vy + P8(22)) >> 4) - 6 * 16, 5 * 16, 5 * 16, col);
+    } else if (s->sub[0] && s->sub_mark) {     /* the name and a 5 px square after it, centred together */
         int32_t tw = cr_tw(s->sub, 15, 1), x0 = P8(120) - (tw + P8(9)) / 2;
         cr_text(x0, vy + P8(22), s->sub, 15, 1, CR_L, 4096, col, T_BG, 0);
         cr_frect((x0 + tw + P8(4)) >> 4, ((vy + P8(22)) >> 4) - 6 * 16, 5 * 16, 5 * 16, col);

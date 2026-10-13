@@ -76,6 +76,18 @@ id() {  # id READER WRITER-IDS WHAT
     echo "prophet: $3: $(sed -n 's/^id-in: //p' build/host/cr_prophet_id.log)"
 }
 id b all "a session saved with all 200, read with the list of 7"
+# the favourites across lists (docs/PRESETS.md "Favourites"): marked in one build, read by another: a program's mark
+# is on its Sequential number, so the star stands at the place THAT build has the program at
+fav() {  # fav READER WRITER WHAT
+    ./build/host/cr_prophet_$2 --fav-out build/host/cr_prophet_$2.fav > /dev/null &&
+        ./build/host/cr_prophet_$1 --fav-in build/host/cr_prophet_$2.fav > build/host/cr_prophet_fav.log || {
+        echo "run_prophet_test.sh: $3: a mark does not follow its program:"; cat build/host/cr_prophet_fav.log; exit 1; }
+    echo "prophet: $3: $(sed -n 's/^fav-in: //p' build/host/cr_prophet_fav.log)"
+}
+fav b all "favourites marked with all 200, read with the list of 7"
+fav all b "favourites marked with the list of 7, read with all 200"
+fav s7 all "favourites marked with all 200, read with the tree's list"
+fav b s7 "favourites marked with the tree's list, read with the list of 7"
 id all b "a session saved with the list of 7, read with all 200"
 id s7 all "a session saved with all 200, read with the tree's list"
 id b s "a session saved with the tree's list, read with the list of 7"

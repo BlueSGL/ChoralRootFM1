@@ -14,6 +14,8 @@
  *                                            samples wherever it stands)
  *   build/host/cr_prophet_test --id-out FILE the session's record of the chord part on every shipped program, as
  *                                            cr_settings.c css_part_get writes it
+ *   build/host/cr_prophet_test --fav-out FILE / --fav-in FILE   the favourites across lists (0.22): programs marked in
+ *                                            one build, the object read by another: the star follows the NUMBER
  *   build/host/cr_prophet_test --id-in FILE  .. read by THIS build (css_part_put), which may ship another list: every
  *                                            record brings its own program back, at the program's place here or, when
  *                                            it is not shipped here, at no place (run_prophet_test.sh)
@@ -27,7 +29,7 @@
  * units; poly again on the next program; another engine; the bass part; the session's record; no hanging note) and
  * GLIDE; the pitch bend through the part's MIDI (cr_out.c midi_event): +2 semitones measured; the deep page table (19
  * pages: every column sets the byte it names and only that one, clamps, reads back; every one of the 56 bytes on
- * exactly one column); the pool (INIT + the shipped list) and a load through it; SAVE refused with a message and no
+ * exactly one column); the pool (INIT + the shipped list) and a load through it; the SAVE dialog (Favorite alone, OCT+ refused, no
  * record written. With -DFELUCCA_P5_FACTORY=0: the engine with INIT alone builds and plays. */
 #include <os/lock.h>
 #include <pthread.h>
@@ -235,6 +237,63 @@ static int id_out(const char *path)
     printf("id-out: %u records (INIT + %u shipped programs in this build)\n", (unsigned)k - 1u, (unsigned)k - 1u);
     return 0;
 }
+/* --fav-out: every third program of THIS build's pool marked through the UI's turn (cu_fav_turn: what KNOB 4 does),
+ * then the favourites' object as it goes to flash (cr_favs.c crf_pack), after a line of the Sequential numbers marked */
+static int fav_out(const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    uint8_t b[CRF_PACK_MAX];
+    uint32_t k, n, m = 0, ids[256];
+    if (!f)
+        return 1;
+    (void)crf_unpack(0, 0);
+    for (k = 1; k < NELEM(P5_TEST_PRESETS); k += 3u) {
+        cu_pool_load(0, ENGI_PROPHET, k);
+        if (!cu_fav_turn(0, +1))
+            return 1;
+        ids[m++] = p5_preset_id(k);
+    }
+    n = crf_pack(b);
+    fwrite(&m, sizeof m, 1, f);
+    fwrite(ids, sizeof ids[0], m, f);
+    fwrite(&n, sizeof n, 1, f);
+    fwrite(b, 1, n, f);
+    fclose(f);
+    printf("fav-out: %u programs marked (every third place of this build's pool), %u bytes\n", (unsigned)m, (unsigned)n);
+    return 0;
+}
+/* --fav-in: the object another build wrote, read by THIS one, whose pool is another list. Every place of this pool
+ * must show the star exactly when its program's NUMBER was marked by the writer, wherever the writer had it; a marked
+ * program this build does not ship keeps its mark in the store (it comes back with a list that ships it) */
+static int fav_in(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    uint8_t b[CRF_PACK_MAX], c[CRF_PACK_MAX];
+    uint32_t k, n = 0, m = 0, ids[256], bad = 0, here = 0, away = 0, i;
+    if (!f || fread(&m, sizeof m, 1, f) != 1 || m > 256u || fread(ids, sizeof ids[0], m, f) != m ||
+        fread(&n, sizeof n, 1, f) != 1 || n > sizeof b || fread(b, 1, n, f) != n)
+        return 1;
+    fclose(f);
+    if (crf_unpack(b, n) != 0 || crf_count() != m)
+        return 1;
+    for (k = 1; k < NELEM(P5_TEST_PRESETS); k++) {
+        uint32_t id = p5_preset_id(k), want = 0;
+        for (i = 0; i < m; i++)
+            want |= ids[i] == id;
+        cu_pool_load(0, ENGI_PROPHET, k);
+        cu_pool_popup(0, k);
+        bad += cu.pop.star != want || (uint32_t)cu_fav_part(0) != want || (uint32_t)cu_fav_ent(ENGI_PROPHET, pool_entry(ENGI_PROPHET, k)) != want;
+        here += want;
+    }
+    for (i = 0; i < m; i++) {
+        away += !p5_preset_of(ids[i]);
+        bad += !crf_has(ENGI_PROPHET, ids[i]);
+    }
+    bad += here + away != m || crf_pack(c) != n || memcmp(b, c, n) != 0;   /* nothing lost by reading and writing it here */
+    printf("fav-in: %u marks, %u wrong; %u of the marked programs are shipped here and starred at their own place, %u are "
+           "not shipped here and keep their mark in the store\n", (unsigned)m, (unsigned)bad, (unsigned)here, (unsigned)away);
+    return bad != 0;
+}
 /* --id-in: records another build wrote, put into the chord part by this one (css_part_put). Every record must bring
  * its own program (the blob's 138 bytes, its name, its voice mode), and its place must be the place of the program
  * of that NUMBER in this build's pool (not the place the writer had it at); a program this build does not ship plays
@@ -329,6 +388,10 @@ int main(int argc, char **argv)
         return id_out(argv[2]);
     if (argc == 3 && !strcmp(argv[1], "--id-in"))
         return id_in(argv[2]);
+    if (argc == 3 && !strcmp(argv[1], "--fav-out"))
+        return fav_out(argv[2]);
+    if (argc == 3 && !strcmp(argv[1], "--fav-in"))
+        return fav_in(argv[2]);
 
     /* ---- the engine's place ---- */
     for (k = 0, bad = 1; k + 2u < NENG_SHOWN + 1u; k++)
@@ -338,8 +401,8 @@ int main(int argc, char **argv)
        eng_ok(ENGI_PROPHET) && !bad && NENG_SHOWN == 6 && cu_engine_melodic(ENGI_PROPHET) && cu_engine_rank(ENGI_PROPHET) == 4,
        "engine: P5 (the code's PROPHET) is 16 (appended after FM TONE's 15), shown after CZ-1 and before WHEEL, six engines to pick");
     OK(sizeof(p5_patch_t) == 138u && sizeof(p5_part_t) <= sizeof eng_state[0] && sizeof eng_state[0] == sizeof(fm6_part_t) &&
-       ENG_P5_TEST.poly == 4u && P5_POLY == 4u && p5_units(t) == 4u && ENG_P5_TEST.ownenv && ENG_P5_TEST.deep == &P5_DEEP,
-       "state: p5_part_t %u B in the parts' engine state (%u B, FM6's size: no growth); four voices of four units (the unit's reading)",
+       ENG_P5_TEST.poly == 4u && P5_POLY == 4u && p5_units(t) == 3u && ENG_P5_TEST.ownenv && ENG_P5_TEST.deep == &P5_DEEP,
+       "state: p5_part_t %u B in the parts' engine state (%u B, FM6's size: no growth); four voices (the cap) of three units (a measurement build)",
        (unsigned)sizeof(p5_part_t), (unsigned)sizeof eng_state[0]);
 
     /* ---- INIT PROPHET, the wire format ---- */
@@ -523,8 +586,8 @@ int main(int argc, char **argv)
             trk_note_on(t, 48 + 3 * k, 100);
         for (b = 0; b < 8u; b++)
             track_render(t, out, CTL);
-        OK(busy(t) == 4u && trk_nvoice(t) == 4u && voice_units(t) == 4u && voices_busy_of(&trk[1]) == 16u,
-           "voices: seven keys sound four voices (the cap), four budget units each: the 16 of one core");
+        OK(busy(t) == 4u && trk_nvoice(t) == 4u && voice_units(t) == 3u && voices_busy_of(&trk[1]) == 12u,
+           "voices: seven keys sound four voices (the cap, P5_POLY), three budget units each: 12 of the 16 of one core");
         for (k = 0; k < 7u; k++)
             trk_note_off(t, 48 + 3 * k);
         for (b = 0; b < FS / CTL && busy(t); b++)
@@ -571,7 +634,7 @@ int main(int argc, char **argv)
         for (b = 0; b < 8u; b++)
             track_render(t, out, CTL);
         /* one core's shared budget (16 units; Dual Core Off, the default): a bass note takes two (the VA's) of them,
-         * the chord part keeps three voices of its four */
+         * the chord part keeps its four voices (4 x 3 + 2 = 14; with four units a voice it kept three) */
         cu_pool_load(1, ENGI_VA, 1);
         trk[1].engine = trk[1].eng_req;
         trk[1].xf_on = trk[1].xf = 0;
@@ -580,8 +643,8 @@ int main(int argc, char **argv)
             track_render(t, out, CTL);
             track_render(&trk[1], out, CTL);
         }
-        OK(!cr_dualcore_active() && busy(t) == 3u && busy(&trk[1]) == 1u,
-           "voices: with the bass sounding on one core the chord part has three (3 x 4 + the bass's 2 of 16 units)");
+        OK(!cr_dualcore_active() && busy(t) == 4u && busy(&trk[1]) == 1u && voices_busy_of(&trk[2]) == 14u,
+           "voices: with the bass sounding on one core the chord part keeps its four (4 x 3 + the bass's 2 = 14 of 16 units)");
         trk_note_off(&trk[1], 36);
         for (b = 0; b < 4u * FS / CTL && busy(&trk[1]); b++)
             track_render(&trk[1], out, CTL);
@@ -695,12 +758,12 @@ int main(int argc, char **argv)
                             mixed += note && t->v[i].note != note;
                             note = t->v[i].note;
                         }
-                    OK(nv == 4u && !mixed && note == (g ? 73u : 62u) && voices_busy_of(&trk[1]) == 16u && p5_cap(t) == 4u,
+                    OK(nv == 4u && !mixed && note == (g ? 73u : 62u) && voices_busy_of(&trk[1]) == 12u && p5_cap(t) == 4u,
                        "unison on load: a 4-note chord (D4 F#4 A4 C#5) on %s: %u voices, all on %s (the program's key "
                        "priority: %s), %u of the 16 budget units", P5_TEST_PRESETS[pr].name, (unsigned)nv,
                        note == 62u ? "D4, the chord's lowest note" : note == 73u ? "C#5, the last note sent" : "another note",
                        g ? "LAST" : "LOW", (unsigned)voices_busy_of(&trk[1]));
-                    if (!g) {                          /* with a bass note on one core: three of the four stack */
+                    if (!g) {                          /* with a bass note on one core: all four still stack */
                         trk[1].engine = trk[1].eng_req;
                         trk[1].xf_on = trk[1].xf = 0;
                         for (i = 0; i < 4u; i++)
@@ -717,8 +780,8 @@ int main(int argc, char **argv)
                         }
                         for (i = 0, nv = 0; i < NVOICE; i++)
                             nv += t->v[i].active && t->v[i].gate && t->v[i].stage != 4u;
-                        OK(nv == 3u && busy(&trk[1]) == 1u,
-                           "unison on load: with a VA bass note sounding (2 units) the chord's one note has three voices");
+                        OK(nv == 4u && busy(&trk[1]) == 1u,
+                           "unison on load: with a VA bass note sounding (2 units) the chord's one note keeps its four voices");
                         trk_note_off(&trk[1], 38);
                         for (b = 0; b < 4u * FS / CTL && busy(&trk[1]); b++)
                             track_render(&trk[1], out, CTL);
@@ -827,9 +890,9 @@ int main(int argc, char **argv)
                             events_block(CTL);
                         }
                     }
-                    OK(cc[0] + cb[0] == 4u && cc[1] + cb[1] == 4u && cb[0] >= 1u && cb[1] >= 1u,
-                       "unison on load: a UNISON bass (%s) with a 4-note chord on one core: four voices between the two "
-                       "parts. The bass note first: the bass has %u voices, the chord %u of its notes; the chord first: "
+                    OK(cc[0] + cb[0] == 5u && cc[1] + cb[1] == 5u && cb[0] >= 1u && cb[1] >= 1u,
+                       "unison on load: a UNISON bass (%s) with a 4-note chord on one core: FIVE P5 voices between the two "
+                       "parts (15 of 16 units; four with four units a voice). The bass note first: the bass has %u voices, the chord %u of its notes; the chord first: "
                        "the chord %u, the bass %u", P5_TEST_PRESETS[lowp].name, (unsigned)cb[0], (unsigned)cc[0],
                        (unsigned)cc[1], (unsigned)cb[1]);
                     cu_pool_load(1, ENGI_VA, 1);
@@ -1003,17 +1066,133 @@ int main(int argc, char **argv)
         }
         cu_pool_load(1, ENGI_VA, 1);
 #endif
-        cu.page = PG_NONE;
+        /* SAVE on a P5 part (0.22): the dialog opens with the Favorite choice alone; KNOB 4 marks the program by its
+         * Sequential number; OCT+ (and SELECT, KNOB 1) change nothing and write no record; SAVE again closes */
+        {
+            cr_screen_t *sc = &cu_scr;
+            uint32_t pos = pool_count(ENGI_PROPHET) > 3u ? 3u : pool_count(ENGI_PROPHET) - 1u, id = p5_preset_id(pos);
+            int has_prog = pos > 0u;
+            cu_pool_load(0, ENGI_PROPHET, pos);
+            (void)crf_unpack(0, 0);
+            cu.page = PG_NONE;
+            cu.lock = L_NONE;
+            cu.opt_open = 0;
+            cu.msg.text[0] = 0;
+            cu_save_open(0);
+            OK(cu.page == PG_SAVE && ce.save_choice == CU_SAVE_FAV && !ce.save_step && !cu.msg.text[0],
+               "save: a P5 part's dialog opens on Favorite (0.22; before: refused)");
+            cu_knob(EN_SELECT, -1);
+            cu_knob(EN_K1, -2);
+            cu_knob(EN_SELECT, +1);
+            OK(ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT and KNOB 1 cannot leave Favorite (the two saves are not offered)");
+            cr_screen_clear(sc);
+            cu_save_screen(sc, 0);
+            OK(sc->kind == CR_K_PICKER && sc->n_items == 1u && !strcmp(sc->item[0], "Not a favorite") && !sc->star &&
+               !strcmp(sc->value, has_prog ? P5_TEST_PRESETS[pos].name : "INIT"),
+               "save: P5: the screen: one item, \"Not a favorite\", the program's name, no star");
+            cu_knob(EN_K4, +1);
+            cr_screen_clear(sc);
+            cu_save_screen(sc, 0);
+            OK(has_prog ? crf_has(ENGI_PROPHET, id) && crf_count() == 1u && sc->star == 1 && !strcmp(sc->item[0], "Favorite")
+                        : crf_count() == 0u && !strcmp(cu.msg.text, "INIT: cannot be marked"),
+               has_prog ? "save: P5: KNOB 4 right marks the program by its Sequential number (%u), not its place (%u): "
+                          "\"Favorite\", the star" : "save: P5 INIT cannot be marked%.0u%.0u", (unsigned)id, (unsigned)pos);
+            cu.msg.text[0] = 0;
+            cu_oct_tap(B_OCTUP);
+            for (k = 0, used = 0; k < UP_SLOTS; k++)
+                used += (uint32_t)up_used(k);
+            OK(cu.page == PG_SAVE && !strcmp(cu.msg.text, "P5: no save yet") && !used && !ce.save_step,
+               "save: P5: OCT+ is refused with a message (\"P5: no save yet\"), no record written, the dialog stays (docs/PROPHET.md \"Saving\")");
+            cu_knob(EN_K4, -1);
+            OK(crf_count() == 0u, "save: P5: KNOB 4 left takes the mark off");
+            cu_knob(EN_K4, +3);
+            cu_tap(BT_SAVE);
+            for (k = 0, used = 0; k < UP_SLOTS; k++)
+                used += (uint32_t)up_used(k);
+            OK(cu.page == PG_NONE && !used && (!has_prog || crf_has(ENGI_PROPHET, id)),
+               "save: P5: SAVE again closes the dialog; nothing saved, the mark kept");
+            /* the mark is read wherever the name is: the pool read-out, the editor's browser */
+            if (has_prog) {
+                cu_pool_popup(0, pos);
+                OK(cu.pop.star == 1, "favourite: the pool read-out of that place carries the star");
+                cu_pool_popup(0, pos == 1u ? 2u : 1u);
+                OK(cu.pop.star == 0 || pool_count(ENGI_PROPHET) < 3u, "favourite: another place's does not");
+                /* edited: still its program's mark (the number is in the program's bytes) */
+                psnd[0].edited = 1;
+                p5_patch_of(&trk[CR_PART_CHORD])->raw[P5_CUTOFF] ^= 1u;
+                OK(cu_fav_part(0), "favourite: the program edited: still marked (its factory origin)");
+                p5_patch_of(&trk[CR_PART_CHORD])->raw[P5_CUTOFF] ^= 1u;
+                psnd[0].edited = 0;
+            }
+            /* the editor's browser (PRESETS over the editor): KNOB 4 marks the previewed sound, the browser stays */
+            if (pool_count(ENGI_PROPHET) > 2u) {
+                uint32_t p2 = pos == 1u ? 2u : 1u, id2 = p5_preset_id(p2), crc;
+                cu_pool_load(0, ENGI_PROPHET, pos);
+                cu.page = PG_EDIT;
+                ce.part = 0;
+                cu_pick_open();
+                cu_pool_load(0, ENGI_PROPHET, p2);    /* (the browser's step to another place: KNOB 1 / PRESETS) */
+                cpk.changed = 1;
+                crc = cu_snd_crc(&trk[CR_PART_CHORD]);
+                cu_knob(EN_K4, +1);
+                cr_screen_clear(sc);
+                cu_layer_screen(sc, L_EDIT);
+                OK(cu.lock == L_EDIT && cpk.on && crf_has(ENGI_PROPHET, id2) && crf_count() == 2u && sc->star == 1 &&
+                   cu.pop.star == 1 && crc == cu_snd_crc(&trk[CR_PART_CHORD]),
+                   "browser: KNOB 4 right marks the previewed program (Sequential's %u); the browser stays open, the sound "
+                   "untouched, the star beside the name and on the read-out", (unsigned)id2);
+                cu_knob(EN_K4, -1);
+                cr_screen_clear(sc);
+                cu_layer_screen(sc, L_EDIT);
+                OK(!crf_has(ENGI_PROPHET, id2) && crf_count() == 1u && !sc->star && cu.lock == L_EDIT,
+                   "browser: KNOB 4 left takes it off");
+                cu_knob(EN_K4, +1);
+                cu_knob(EN_K3, +1);
+                OK(crf_count() == 2u && cu.lock == L_EDIT && crc == cu_snd_crc(&trk[CR_PART_CHORD]), "browser: KNOB 3 still does nothing");
+                cu_pick_end(0);                       /* OCT-: the preview cancelled: the marks are not part of it */
+                cu.lock = L_NONE;
+                cu.page = PG_NONE;
+                OK(crf_has(ENGI_PROPHET, id2) && crf_has(ENGI_PROPHET, id) && cu_part_pos(0) == pos,
+                   "browser: OCT- gives the sound back (place %u); the marks made while browsing stay", (unsigned)pos);
+            }
+            (void)crf_unpack(0, 0);
+            crf_dirty = 0;
+        }
+        /* another engine: three choices now; the two saves as before */
+        cu_pool_load(0, ENGI_FM6, 1);
         cu.msg.text[0] = 0;
         cu_save_open(0);
-        for (k = 0; k < UP_SLOTS; k++)
-            used += (uint32_t)up_used(k);
-        OK(cu.page == PG_NONE && !strcmp(cu.msg.text, "P5: no save yet") && !used,
-           "save: refused on a P5 part with a message (\"P5: no save yet\"), no record written (docs/PROPHET.md \"Saving\")");
-        cu_pool_load(0, ENGI_FM6, 1);
-        cu_save_open(0);
-        OK(cu.page == PG_SAVE, "save: another engine's part opens the dialog as before");
+        OK(cu.page == PG_SAVE && ce.save_choice == 1u, "save: another engine's part opens the dialog as before (TINE EP, a factory sound: Save as new)");
+        cu_knob(EN_SELECT, -1);
+        bad = ce.save_choice != 0u;
+        cu_knob(EN_K1, -1);
+        bad |= ce.save_choice != 0u;
+        cu_knob(EN_K1, +1);
+        bad |= ce.save_choice != 1u;
+        cu_knob(EN_SELECT, +1);
+        bad |= ce.save_choice != CU_SAVE_FAV;
+        cu_knob(EN_SELECT, +5);
+        bad |= ce.save_choice != CU_SAVE_FAV;
+        OK(!bad, "save: SELECT / KNOB 1 step through three choices and stop at the ends: Overwrite, Save as new, Favorite");
+        {
+            int32_t send = cu_send(0, CU_FX[cs.fx_sel].send);
+            cu_knob(EN_K4, +1);
+            cu_oct_tap(B_OCTUP);
+            for (k = 0, used = 0; k < UP_SLOTS; k++)
+                used += (uint32_t)up_used(k);
+            OK(crf_has(ENGI_FM6, 0) && cu.page == PG_SAVE && !ce.save_step && !used && send == cu_send(0, CU_FX[cs.fx_sel].send),
+               "save: on Favorite KNOB 4 marks TINE EP (not the send it turns elsewhere); OCT+ saves nothing and names nothing");
+            cu_knob(EN_SELECT, -1);
+            cu_knob(EN_K4, +1);
+            OK(send != cu_send(0, CU_FX[cs.fx_sel].send) && crf_count() == 1u,
+               "save: on the two save choices KNOB 4 is what it was (the chord part's send)");
+            cu_send_set(0, CU_FX[cs.fx_sel].send, send);
+            cu_oct_tap(B_OCTUP);
+            OK(ce.save_step == 1u, "save: OCT+ on Save as new: the naming page, as before");
+        }
         cu.page = PG_NONE;
+        (void)crf_unpack(0, 0);
+        crf_dirty = 0;
     }
 
     printf("%s: %d checks, %d failed\n", fails ? "cr_prophet_test FAILED" : "cr_prophet_test ok", checks, fails);

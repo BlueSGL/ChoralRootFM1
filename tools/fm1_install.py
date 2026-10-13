@@ -26,6 +26,8 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py --restore FILE       (write a backup back; ChoralRoot restarts afterwards)
   fm1_install.py PACKAGE.fwsc --backup FILE [--restore FILE]   (back up, install, restore onto the new firmware)
   fm1_install.py --sounds             (ChoralRoot: list the 32 user sounds U01..U32)
+  fm1_install.py --favorites          (ChoralRoot 0.22 on: the sounds marked as favorites, read-only; P5's programs as
+                                       lines for assets/prophet5-factory/shipped.txt: tools/p5_shipped_from_favorites.py)
   fm1_install.py --export-sound N FILE   (user sound N to a sound file; FILE may be a directory)
   fm1_install.py --import-sound N FILE   (a sound file into slot N) [--yes]
   fm1_install.py --rename-sound N NAME   /   --delete-sound N [--yes]
@@ -942,8 +944,9 @@ def debug_event(ms, what):
     return f"{ms & 0x7FFFFFFF:9d} ms  {'STALLED ' if ms >> 31 else ''}{name} wValue {wv} wIndex {wi}"
 BK_CHUNK = 256
 FELUCCA_IDS = [0, 1, 2, 3, 4, 5, 6, 7, 8, 32, 33, 34]
-CR_IDS = [1, 6, 7, 8, 9, 10, 11, 12, 13] + list(range(14, 22)) + [22] + list(range(40, 50))   # fm1backup.js CR_BACKUP_IDS
-# (9 the VA patches, 10 11 the FM6 patches, 12 13 the CZ-1 tones, 14..21 the CZ-1 banks, 22 the FM TONE patches, 40..49
+CR_IDS = [1, 6, 7, 8, 9, 10, 11, 12, 13] + list(range(14, 22)) + [22, 23] + list(range(40, 50))   # fm1backup.js CR_BACKUP_IDS
+# (9 the VA patches, 10 11 the FM6 patches, 12 13 the CZ-1 tones, 14..21 the CZ-1 banks, 22 the FM TONE patches, 23 the
+# favourites (0.22 on; a firmware before it does not list 23, and a restore skips what the FM-1 does not list), 40..49
 # loops; no samples)
 KNOWN_IDS = set(FELUCCA_IDS) | set(CR_IDS)
 BK_RC = {1: "invalid object, size or request", 2: "the data failed validation", 3: "busy: stop the loop on the FM-1",
@@ -1030,6 +1033,8 @@ def object_name(i):
         return "CZ-1 bank " + chr(ord("A") + i - 14)
     if i == 22:
         return "FM TONE patches"
+    if i == 23:
+        return "favorites"
     if is_sample(i):
         return f"sample slot {i - 31}"
     if 40 <= i <= 49:
@@ -2395,6 +2400,8 @@ def run(a, backend, out, ask):
         return run_stub(up, a.stub, out)
     if sound_op(a):
         return run_sounds(up, a, out, ask)
+    if getattr(a, "favorites", False):
+        return run_favorites(up, out)
     if getattr(a, "select", None):
         part, eng, pos = a.select
         if part not in (0, 1) or not 0 <= eng < 128 or not 0 <= pos < 16384:
@@ -2512,6 +2519,97 @@ def run(a, backend, out, ask):
     return 0
 
 
+# ------------------------------------------------------------- favourites ---
+# docs/PRESETS.md "Favourites" (firmware/src/cr_favs.c): the marks on sounds are one small object, backup id 23, read
+# with the backup protocol's LIST and GET (nothing is written, no command of its own).
+
+FAV_ID, FAV_VERSION, FAV_USER, FAV_P5 = 23, 1, 0x80, 16
+FAV_ORDER = (12, 15, 13, 14, 7)                  # the engines as the FM-1 shows them (P5 comes last: its own block)
+
+
+def parse_favorites(b):
+    """the favourites object -> {tag: [ids]} (tag: an engine's index, FAV_USER the user slots; an id: the preset's
+    index in its engine's table, a user slot 0..31, for P5 the Sequential program number 1..200). The object:
+    version 1, the number of sections, then per section tag, len, len bytes of bits (bit i of byte i // 8 is id i).
+    Empty bytes: no marks."""
+    b = bytes(b)
+    if not b:
+        return {}
+    if len(b) < 2 or b[0] != FAV_VERSION:
+        raise BackupError(f"favourites of version {b[0]}: this tool reads version {FAV_VERSION}")
+    out, p = {}, 2
+    for _ in range(b[1]):
+        if p + 2 > len(b) or p + 2 + b[p + 1] > len(b):
+            raise BackupError("the favourites object is cut short")
+        tag, n = b[p], b[p + 1]
+        ids = [i for i in range(n * 8) if b[p + 2 + i // 8] >> (i % 8) & 1]
+        if tag == FAV_P5:
+            ids = [i for i in ids if 1 <= i <= 200]
+        if ids:
+            out[tag] = ids
+        p += 2 + n
+    return out
+
+
+def p5_program_names():
+    """Sequential's 200 programs' PRESETS names by number (tools/gen_prophet_factory.py and the bank in assets/);
+    {} where the bank is not beside this tool"""
+    try:
+        here = os.path.dirname(os.path.abspath(__file__))
+        if here not in sys.path:
+            sys.path.insert(0, here)
+        import gen_prophet_factory as g
+        return dict(enumerate(g.names(g.records()), 1))
+    except Exception:                             # (no bank, no generator: the numbers alone)
+        return {}
+
+
+def favorites_text(marks, version, user_names=None, p5_names=None):
+    """the marks as text. Every line but P5's begins with '#', and P5's are 'NUMBER  # NAME': the whole text is a
+    valid assets/prophet5-factory/shipped.txt (tools/p5_shipped_from_favorites.py turns it into the list)."""
+    user_names, p5_names = user_names or {}, p5_names or {}
+    total = sum(len(v) for v in marks.values())
+    lines = [f"# favorites on {version}: {total} marked"]
+    for e in list(FAV_ORDER) + sorted(t for t in marks if t not in FAV_ORDER and t not in (FAV_USER, FAV_P5)):
+        name = ENGINE_NAMES[e] if e < len(ENGINE_NAMES) else f"engine {e}"
+        presets, first = FACTORY_PRESETS.get(str(e), []), FACTORY_FIRST.get(str(e), 0)
+        for i in marks.get(e, []):
+            lines.append(f"# {name} {i - first + 1:02d} {presets[i] if i < len(presets) else '?'}")
+    for k in marks.get(FAV_USER, []):
+        lines.append(f"# user U{k + 1:02d} {user_names.get(k + 1, '')}".rstrip())
+    p5 = sorted(marks.get(FAV_P5, []))
+    lines.append(f"# P5: {len(p5)} program{'' if len(p5) == 1 else 's'}, by Sequential's number"
+                 + (" (the lines below as they are: assets/prophet5-factory/shipped.txt)" if p5 else ""))
+    lines += [f"{i:<6d} # {p5_names[i]}" if p5_names.get(i) else str(i) for i in p5]
+    return "\n".join(lines) + "\n"
+
+
+def run_favorites(up, out):
+    """--favorites: LIST, GET of object 23 (and of the user banks for the names of marked user sounds) -> the text"""
+    bl, (version, fam) = open_backup(up)
+    try:
+        if fam != "choralroot":
+            raise InstallError("nosounds", f"{version}: favourites are ChoralRoot's (0.22 on)")
+        man = {o["id"]: o for o in bk_manifest(bl.request(BK_LIST, [], 3.0))}
+        if FAV_ID not in man:
+            raise InstallError("nosounds", f"{version} keeps no favourites (ChoralRoot 0.22 on)")
+        data = bk_get_object(bl, FAV_ID, man[FAV_ID]["size"])
+        if bk_crc(data) != man[FAV_ID]["crc"] and data:
+            raise BackupError("the FM-1 changed its favourites while they were read: try again")
+        marks = parse_favorites(data)
+        names = {}
+        if marks.get(FAV_USER):
+            objs = {i: bk_get_object(bl, i, man[i]["size"]) for i in (6, 7) if i in man}
+            for k in marks[FAV_USER]:
+                r = _record(objs, k + 1)
+                if sound_record_valid(r):
+                    names[k + 1] = _record_name(r)
+    finally:
+        bl.link.close()
+    out.write(favorites_text(marks, version, names, p5_program_names() if marks.get(FAV_P5) else {}))
+    return 0
+
+
 def sound_op(a):
     return [o for o, v in (("--sounds", a.sounds), ("--export-sound", a.export_sound), ("--import-sound", a.import_sound),
                            ("--export-syx", a.export_syx), ("--import-syx", a.import_syx),
@@ -2556,6 +2654,11 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     ap.add_argument("--restore", metavar="FILE", help="restore a backup FILE onto the FM-1 (after the install, or alone)")
     ap.add_argument("--sounds", action="store_true", help="list the 32 user sounds (ChoralRoot): 'over FM6 02 FM BELL' "
                                                           "for one saved over a factory preset, '+' for one added")
+    ap.add_argument("--favorites", action="store_true",
+                    help="ChoralRoot 0.22 on: print the sounds marked as favorites (read-only: the backup protocol's "
+                         "read of object 23). Per engine a '# FM6 01 TINE EP' line, a marked user sound '# user U03 "
+                         "NAME', and P5's programs by their Sequential number, one a line, 'NUMBER  # NAME': the output "
+                         "is a valid assets/prophet5-factory/shipped.txt (tools/p5_shipped_from_favorites.py)")
     ap.add_argument("--export-sound", nargs=2, metavar=("N", "FILE"),
                     help="save user sound N (1..32) to a sound file FILE (a directory: choralroot-sound-UNN-NAME.json)")
     ap.add_argument("--import-sound", nargs=2, metavar=("N", "FILE"),
@@ -2597,6 +2700,9 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
         ap.error(f"--rename-sound: {check_sound_name(a.rename_sound[1])}")
     if a.info and (a.package or a.backup or a.restore):
         ap.error("--info goes alone")
+    if a.favorites and (a.info or a.debug or a.screen or a.select or a.stub or a.rescan_midi or a.package or a.backup
+                        or a.restore or ops):
+        ap.error("--favorites goes alone")
     if a.debug and (a.info or a.package or a.backup or a.restore or ops):
         ap.error("--debug goes alone")
     if a.screen and (a.debug or a.info or a.package or a.backup or a.restore or ops):
@@ -2609,7 +2715,7 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
                           or ops):
         ap.error("--rescan-midi goes alone")
     if not (a.rescan_midi or a.stub or a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore
-            or ops):
+            or ops or a.favorites):
         ap.error("give a PACKAGE.fwsc, --backup FILE, --restore FILE, --info, --sounds, --screen off|on or --select")
     try:
         return run(a, MidiBackend() if backend is None else backend, out, ask)   # (without python-rtmidi: the first

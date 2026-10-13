@@ -1124,7 +1124,7 @@ static struct {
     uint8_t sx_off;                       /* SysEx 74 SCREEN 0: off until SysEx on or a key, button or knob */
     uint32_t home_t0;                     /* HOME pressed (held CU_HOME_HOLD_MS: the view menu) */
     uint8_t home_hold;                    /* .. armed (pressed alone, the menu not opened yet) */
-    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool; uint16_t pct; char value[8], sub[12 + FELUCCA_PROPHET], label[32], over[16]; } pop;
+    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool, star; uint16_t pct; char value[8], sub[12 + FELUCCA_PROPHET], label[32], over[16]; } pop;
                                           /* over: the line over the value, in orange (a pool's read-out on the home
                                            * pages: the part's engine). sub: a pool's read-out puts the sound's name
                                            * there, and 12 bytes cut a 12-character name's last ("ENSEMBLE ST", "FOREVER
@@ -1152,7 +1152,7 @@ static struct {
     uint16_t from_pct, shown_pct[4];      /* the turned glyph's tween: from, and what each column last showed */
     uint8_t from_env[4], shown_env[4][4];
     uint8_t save_part, slot, save_from_edit;   /* SAVE: the part saved, the slot written (Save as new: the free one) */
-    uint8_t save_step, save_choice;       /* 0 the choice (save_choice 0 Overwrite, 1 Save as new), 1 the naming page */
+    uint8_t save_step, save_choice;       /* 0 the choice (save_choice 0 Overwrite, 1 Save as new, 2 Favorite: CU_SAVE_FAV), 1 the naming page */
     uint8_t save_pos;                     /* Save as new: the place in the pool it takes ("FM6 \267 27") */
     uint8_t del_ask;                      /* SAVE held 1 s in the dialog on a user preset: 1 "delete?", 2 "reset to
                                            * factory?" (an overwritten factory preset); OCT+ does it, OCT- keeps */
@@ -1174,6 +1174,8 @@ static int ce_button(uint32_t b, uint32_t ev);
 static void ce_leds(uint8_t *nl, uint32_t blink);
 static void cu_led(uint8_t *nl, uint32_t id, int on);
 static void cu_save_open(uint32_t part);
+#define CU_SAVE_FAV 2u                    /* the save dialog's third choice: Favorite (KNOB 4 marks; nothing is saved) */
+static int cu_save_favonly(uint32_t part);
 static void cu_save_close(void);
 static void cu_save_commit(void);
 static void cu_save_delete(void);
@@ -1215,6 +1217,7 @@ static void cu_popup(const char *value, const char *sub, const char *label, uint
     cu.pop.kind = PU_METER;
     cu.pop.jump = 0;
     cu.pop.mark = 0;
+    cu.pop.star = 0;
     cu.pop.pool = 0;
     cu.pop.over[0] = 0;
     cu_cpy(cu.pop.value, value, sizeof cu.pop.value);
@@ -1314,6 +1317,69 @@ static int cu_epk_ok(uint32_t part)
         return 0;
     return 1;
 }
+/* ---- favourites (cr_favs.c; docs/PRESETS.md "Favourites"): the mark's key of a sound. A pool entry: a factory preset
+ * (the engine, its index in the engine's table; P5: the program's Sequential number), a record that overwrites one
+ * (the same key: the same place in the pool), an added record (its slot); INIT: none, 0 */
+static int cu_fav_key(uint32_t e, uint32_t kind, uint32_t fk, uint32_t slot, uint32_t *tag, uint32_t *id)
+{
+    e %= NENGINES;
+    if (kind == PK_USER && fk == PF_NONE) {
+        *tag = CRF_T_USER;
+        *id = slot;
+        return slot < UP_SLOTS && up_used(slot);
+    }
+    if (kind != PK_FACTORY && kind != PK_USER)
+        return 0;
+    *tag = e;
+    *id = fk;
+#if FELUCCA_PROPHET
+    if (e == ENGI_PROPHET) {
+        *id = p5_preset_id(fk);
+        return *id != 0u;
+    }
+#endif
+    return 1;
+}
+static int cu_fav_ent(uint32_t e, pool_ent_t en)   /* the pool entry is marked */
+{
+    uint32_t tag, id;
+    return cu_fav_key(e, en.kind, en.fk, en.slot, &tag, &id) && crf_has(tag, id);
+}
+/* the part's sound, as it is now: the entry it came from, edited or not (an edited factory sound is its factory
+ * origin). A P5 part: the number its program carries, in this build's list or not */
+static int cu_fav_part_key(uint32_t part, uint32_t *tag, uint32_t *id)
+{
+    const track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
+#if FELUCCA_PROPHET
+    if (eng_idx(t->eng_req) == ENGI_PROPHET) {
+        *tag = ENGI_PROPHET;
+        *id = psnd[part].kind == PK_INIT ? 0u : p5_patch_id(p5_patch_of(t));
+        return *id != 0u;
+    }
+#endif
+    return cu_fav_key(t->eng_req, psnd[part].kind, psnd[part].fk, psnd[part].slot, tag, id);
+}
+static int cu_fav_part(uint32_t part)
+{
+    uint32_t tag, id;
+    return cu_fav_part_key(part, &tag, &id) && crf_has(tag, id);
+}
+/* KNOB 4 in the SAVE dialog's Favorite and in the editor's browser: a turn right marks the part's sound, a turn left
+ * takes the mark off. 1: the sound can carry a mark (INIT cannot: a message). Written by cr_settings.c crf_poll */
+static int cu_fav_turn(uint32_t part, int32_t s)
+{
+    uint32_t tag, id;
+    if (!cu_fav_part_key(part, &tag, &id)) {
+        cu_message("INIT: cannot be marked", CR_COL_RED);
+        cu_trace("fav: part %u %s cannot be marked\n", (unsigned)part, psnd[part].name);
+        return 0;
+    }
+    (void)crf_set(tag, id, s > 0);
+    cu_trace("fav: part %u %s %s (tag %u id %u, %u marked)\n", (unsigned)part, psnd[part].name,
+             crf_has(tag, id) ? "on" : "off", (unsigned)tag, (unsigned)id, (unsigned)crf_count());
+    return 1;
+}
+
 /* a pool's stripes: one per preset, at most 32; a pool of INIT alone: one */
 static uint32_t cu_pool_segs(uint32_t e)
 {
@@ -1349,8 +1415,10 @@ static void cu_pool_popup(uint32_t part, uint32_t pos)
     if (home)
         cu_cpy(cu.pop.over, ov, sizeof cu.pop.over);
     cu.pop.mark = en.kind == PK_USER && en.fk != PF_NONE;
+    cu.pop.star = (uint8_t)cu_fav_ent(e, en);     /* a favourite: the star before its name */
     cu.pop.pool = (uint8_t)CU_POOL_ID(part, e);
-    cu_trace("popup: part %u %s / %s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "");   /* (the place) */
+    cu_trace("popup: part %u %s / %s%s%s / ", (unsigned)part, b, nm, cu.pop.mark ? " (mark)" : "",
+             cu.pop.star ? " (star)" : "");       /* (the place) */
     cu_trace_txt(lb);
     cu_trace("\n");
     if (home) {                                    /* .. and the two lines shown instead of it where OPT picks engines */
@@ -2498,6 +2566,8 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
     case BT_SAVE:                                 /* naming and saving the sound (on a bass page: the bass) */
         if (cu.page == PG_SAVE && ce.del_ask)
             ce.del_ask = 0;                       /* "delete?": no */
+        else if (cu.page == PG_SAVE && !ce.save_step && ce.save_choice == CU_SAVE_FAV)
+            cu_save_close();                      /* SAVE again on Favorite: nothing to save, the dialog closes */
         else if (cu.page == PG_SAVE)
             cu_save_commit();                     /* SAVE again: save (as OCT+) */
         else
@@ -2891,32 +2961,38 @@ static void cu_edit_open(uint32_t part) { ce_open(part); }
  * is a Save as new (and the old one deleted). SAVE held 1 s in the dialog: "reset to factory?" on an overwritten
  * factory preset, "delete?" on an added one; OCT+ does it. No free slot: "no free slot". Every user preset is one of
  * upreset.c's 32 records (cr_bank.c cb_store writes the binding) */
+static const char *const CU_SAVE_NAME[3] = {"overwrite", "save as new", "favorite"};   /* (the traces) */
+/* the part's engine has no store for its sound: its dialog has the Favorite choice alone, and OCT+ is refused. P5
+ * (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's parameters and no program, and would load as
+ * P5's INIT under the sound's name */
+static int cu_save_favonly(uint32_t part)
+{
+#if FELUCCA_PROPHET
+    return eng_idx(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req) == ENGI_PROPHET;
+#else
+    (void)part;
+    return 0;
+#endif
+}
 static void cu_save_open(uint32_t part)
 {
     if (cr_safe) {                                 /* SAFE MODE: the user sounds are neither read nor written */
         cu_message("safe mode: no saving", CR_COL_RED);
         return;
     }
-#if FELUCCA_PROPHET
-    /* P5 has no store for its program yet (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's
-     * parameters and no program, and would load as P5's INIT under the sound's name. Nothing is written */
-    if (eng_idx(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req) == ENGI_PROPHET) {
-        cu_message("P5: no save yet", CR_COL_RED);
-        cu_trace("save: part %u P5 refused (no store)\n", (unsigned)part);
-        return;
-    }
-#endif
     ce.save_part = (uint8_t)part;
     ce.save_from_edit = cu.page == PG_EDIT;
     ce.save_step = 0;
     ce.save_choice = psnd[part].kind == PK_USER || psnd[part].edited ? 0u : 1u;
+    if (cu_save_favonly(part))                     /* P5: the dialog is its Favorite alone (cu_save_favonly) */
+        ce.save_choice = CU_SAVE_FAV;
     ce.del_ask = 0;
     cu.opt_open = 0;
     cu.lock = L_NONE;
     cu.page = PG_SAVE;
     cu.pop.until = 0;                              /* (a PRESETS meter would hide the dialog) */
     cu_trace("save: dialog part %u %s%s (%s)\n", (unsigned)part, psnd[part].name, psnd[part].edited ? "*" : "",
-             ce.save_choice ? "save as new" : "overwrite");
+             CU_SAVE_NAME[ce.save_choice]);
 }
 static void cu_save_close(void) { cu.page = ce.save_from_edit ? PG_EDIT : PG_NONE; }
 
@@ -3003,6 +3079,15 @@ static void cu_save_commit(void)
     track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
     char name[16], l[4];
     int rc;
+    if (ce.save_step == 0u && ce.save_choice == CU_SAVE_FAV) {   /* Favorite: OCT+ saves nothing, writes no slot */
+        if (cu_save_favonly(part)) {
+            cu_message("P5: no save yet", CR_COL_RED);
+            cu_trace("save: part %u P5 refused (no store)\n", (unsigned)part);
+        } else {
+            cu_trace("save: favorite, nothing to save\n");
+        }
+        return;
+    }
     if (ce.save_step == 0u) {
         cu_save_take();
         return;
@@ -3376,7 +3461,14 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
         } else if (knob == 1) {                    /* INIT */
             cu_sound_init(ce.part);
             cpk.changed = 1;
-        }                                          /* (KNOB 3, KNOB 4: nothing. Until 0.18 KNOB 4 switched the white roots
+        } else if (knob == 3) {                    /* KNOB 4: the favourite's mark on the sound under the cursor (the
+                                                    * one previewed), right on, left off; the browser stays (0.22, the
+                                                    * owner 2026-10-13); the read-out shows it with its star */
+            if (cu_fav_turn(ce.part, s)) {
+                cu_pool_popup(ce.part, cu_part_pos(ce.part));
+                cu.pop.jump = 1;
+            }
+        }                                          /* (KNOB 3: nothing; KNOB 4 had no job in 0.19 .. 0.21. Until 0.18 KNOB 4 switched the white roots
                                                     * between choosing engines and playing; the owner, 2026-10-12: "I
                                                     * don't see any case in which I would want to scroll through presets
                                                     * and not be able to immediately play them": they always play, SELECT
@@ -4064,10 +4156,16 @@ static void cu_knob(uint32_t role, int32_t s)
             ce_knob(role - EN_K1, s, 0);
         return;
     }
-    if (cu.page == PG_SAVE && !ce.save_step && (role == EN_K1 || role == EN_SELECT)) {   /* the choice */
-        ce.save_choice = s > 0 ? 1u : 0u;
+    if (cu.page == PG_SAVE && !ce.save_step && (role == EN_K1 || role == EN_SELECT)) {   /* the choice: three (0.22),
+                                                    * a turn a step, stopping at the ends; P5's dialog: Favorite alone */
+        v = (int32_t)ce.save_choice + (s > 0 ? 1 : -1);
+        ce.save_choice = cu_save_favonly(ce.save_part) ? CU_SAVE_FAV : (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
         ce.del_ask = 0;
-        cu_trace("save: choice %s\n", ce.save_choice ? "save as new" : "overwrite");
+        cu_trace("save: choice %s\n", CU_SAVE_NAME[ce.save_choice]);
+        return;
+    }
+    if (cu.page == PG_SAVE && !ce.save_step && !ce.del_ask && role == EN_K4 && ce.save_choice == CU_SAVE_FAV) {
+        (void)cu_fav_turn(ce.save_part, s);        /* Favorite: KNOB 4 right marks, left takes the mark off; at once */
         return;
     }
     if (cu.page == PG_SAVE && ce.save_step && role == EN_K2) {            /* naming: the last letter */
@@ -4992,7 +5090,8 @@ static void cu_safe_screen(cr_screen_t *s)
  * FM6 bank copy A 0x97000..0x9FFFF (storage.c st_sector: VA store, FM6 stores, the project slots, 0x9F000), the loop
  * slots 0xC8000..0xDBFFF (CRL_FL_BASE), the user sound banks 0xDC000..0xDFFFF, the settings A / B and FM6 bank
  * copy B 0xFC000..0xFEFFF; FELUCCA_CZ: the CZ-1 tone store's second half and the eight CZ-1 banks 0xA0000..0xB1FFF;
- * FELUCCA_QUAD: the QUAD patch store 0xB2000..0xB3FFF and the session 0xB4000..0xB5FFF (0.18) */
+ * FELUCCA_QUAD: the QUAD patch store 0xB2000..0xB3FFF, the session 0xB4000..0xB5FFF (0.18) and the favourites
+ * 0xB6000..0xB7FFF (0.22: marks on sounds that are gone would name whatever takes their slots) */
 #ifndef CR_REBOOT
 #define CR_REBOOT() do { bootguard_settled(&bootguard); usb_detach(); fm1_delay_ms(30); fm1_reboot(); } while (0)
 #endif
@@ -5004,7 +5103,7 @@ static void cu_flash_erase(void)
                                     {0xA0000u, 18u},   /* (storage.c: OBJ_CZSTORE1, OBJ_CZBANK0..+7) */
 #endif
 #if FELUCCA_QUAD
-                                    {0xB2000u, 4u},    /* (storage.c: OBJ_QUADSTORE, OBJ_SESSION) */
+                                    {0xB2000u, 6u},    /* (storage.c: OBJ_QUADSTORE, OBJ_SESSION, OBJ_FAVS) */
 #endif
     };
     cr_screen_t *es = &cu_scr;                     /* (the frame's screen, in the pool: off the stack and out of
@@ -5664,6 +5763,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
         cu_cpy(s->value, psnd[ce.part].name, sizeof s->value);
         if (psnd[ce.part].edited)
             cu_cat(s->value, "*", sizeof s->value);
+        s->star = (uint8_t)cu_fav_part(ce.part);   /* a favourite (KNOB 4 here): the star before its name */
         break;
     case L_LOOP:                                   /* the PLAY menu (no ring: a loop running shows the dial) */
         cu_loopmenu(s, cu_now());
@@ -5746,9 +5846,9 @@ static void cu_epk_screen(cr_screen_t *s)
  * naming page (the place it takes, "FM6 \267 27", the name being typed), the red question */
 static void cu_save_screen(cr_screen_t *s, uint32_t now)
 {
-    static const char *const CHOICE[2] = {"Overwrite", "Save as new"};
+    static const char *const CHOICE[3] = {"Overwrite", "Save as new", "Favorite"};
     uint32_t part = ce.save_part, e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, col;
-    char b[24];
+    char b[32];
     col = part ? CR_COL_ORANGE : CR_COL_WHITE;
     if (ce.del_ask) {                              /* the place huge in red, the name (reset: the factory one's) */
         s->kind = CR_K_BIG;
@@ -5765,12 +5865,22 @@ static void cu_save_screen(cr_screen_t *s, uint32_t now)
         return;
     }
     if (!ce.save_step) {                           /* the choice */
+        int fav = cu_fav_part(part), only = cu_save_favonly(part);
         cu_cpy(b, part ? "save bass \267 " : "save \267 ", sizeof b);
         cu_cat(b, ENGINES[e]->name, sizeof b);
-        cu_picker(s, CHOICE, 2, ce.save_choice, col, b, "OCT+: save \267 OCT-: cancel");
+        if (ce.save_choice == CU_SAVE_FAV) {       /* Favorite: the state big, the name (its star) under it */
+            const char *it[3] = {CHOICE[0], CHOICE[1], fav ? "Favorite" : "Not a favorite"};
+            cu_cpy(b, part ? "bass \267 " : "", sizeof b);
+            cu_cat(b, ENGINES[e]->name, sizeof b);
+            cu_cat(b, " \267 KNOB 4 marks", sizeof b);
+            cu_picker(s, only ? it + 2 : it, only ? 1u : 3u, only ? 0u : 2u, col, b, "KNOB 4: mark \267 OCT-: close");
+        } else {
+            cu_picker(s, CHOICE, 3, ce.save_choice, col, b, "OCT+: save \267 OCT-: cancel");
+        }
         cu_cpy(s->value, psnd[part].name, sizeof s->value);
         if (psnd[part].edited)
             cu_cat(s->value, " *", sizeof s->value);
+        s->star = (uint8_t)fav;
         return;
     }
     s->kind = CR_K_TEXT;
@@ -6114,6 +6224,7 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
         } else {
             cu_meter(s, cu.pop.value, cu.pop.sub, cu.pop.label, cu.pop.col, cu.pop.pct, cu.pop.segs);
             s->sub_mark = cu.pop.mark;
+            s->star = cu.pop.star;
             if (cu.pop.over[0]) {                  /* a pool's read-out on the home pages: the engine over the number */
                 cu_cpy(s->line, cu.pop.over, sizeof s->line);
                 s->line_col = CR_COL_ORANGE;

@@ -46,7 +46,7 @@ and keeps none, so **the DSP is 8a3074b's**, statement for statement, with these
 | no `.dsp_text` / `.dsp_tables` sections: the code runs from flash, the tables are `const` | ChoralRoot's map has no such sections, RAM is the tight region, and RAM changed nothing for the effects' loops on the unit (docs/FX.md `CR_FX_RAM`). `P5_RAM=1 ./build.sh` puts the three hot functions into `.ram_text` (3796 B of RAMTEXT, it links: not run on a unit) | the same |
 | the pitch bend: Melodee's `p5_update_bend` (voice.c: the program's own range byte) is not here | the part bends as ChoralRoot's other engines do, through `vmod_t` (voice.c: the channel's range, RPN 0, ±2 semitones). The program's `P5_BEND` byte is kept and unused | tested: +2 / −2 semitones measured |
 | the matrix's ENV source is 0 (Melodee's voice.c asks `p5_env_source`) | as FM6's and CZ-1's here; voice.c is not touched | none on a factory program |
-| four voices of four budget units (Melodee: five of three) | the unit's reading of five voices, [below](#measured-on-the-unit-2026-10-13) | a chord of more than four keys sounds four of them ([Voices](#voices-which-keys-of-a-big-chord-sound)) |
+| four voices a part (`P5_POLY`; Melodee: five), three budget units each as Melodee's (c176dd4: four units) | the unit's reading of five voices, [below](#measured-on-the-unit-2026-10-13); three units so that a bass does not cost the chord a voice: a measurement build, [Voices](#voices-which-keys-of-a-big-chord-sound) | a chord of more than four keys sounds four of them |
 | UNISON on a load | as Melodee's (`V_UNISON` whenever the program says so); cd43720 had left it out, the owner asked for it | [UNISON](#unison) |
 | only `P5_OVERSAMPLE` 1 | Melodee's 2x never passed its budget; the generator makes the 1x coefficient table only | the same |
 
@@ -64,7 +64,8 @@ user-slot scheme ([Saving](#saving)).
 
 `FELUCCA_PROPHET` (core.h, default 0: Felucca's unit; 1 in `choralroot.c`, the emulator, `tests/regress.c`,
 `tests/va_levels.c`). **`FELUCCA_PROPHET=0 ./build.sh` gives the image of before the engine, byte for byte**
-(`build/choralroot.bin` sha256 501a9d09.., aa5875a's: checked again for 3y39). `ENGINES[]` stays append-only (16
+(`build/choralroot.bin` sha256 501a9d09.., aa5875a's: checked again for 3y39; since the favourites, 3y40, which are
+every engine's, the image without P5 is 57371526.., and the rule is the same: nothing of P5 outside the switch). `ENGINES[]` stays append-only (16
 after FM TONE's 15; Melodee numbers it 19); `ENGINE_ORDER` shows it **after CZ-1 and before WHEEL** (FM6, FM TONE, VA,
 CZ-1, P5, WHEEL: six engines). The display name is `ENG_P5_TEST.name`, "P5" ("Prophet" is Sequential's mark,
 LICENSING.md).
@@ -72,9 +73,15 @@ LICENSING.md).
 - **State**: `p5_part_t` (672 B: four voices of 116 B, the wheel's 32 samples and their pitch ratios, the DC blocker) is
   a member of `engines.c`'s `eng_state` union (6884 B, FM6's size): **the union does not grow**. The program of each part
   (`p5_patch[NPART]`, 4 × 138 B) is in the pool: **POOL +552 B**.
-- **Voices**: four (`P5_POLY`), each **four of the 16 budget units** (`p5_units`). One core shares the 16 units
-  between the parts, so a chord alone is four voices (all 16) and **with the bass sounding three** (12 + a VA or FM6
-  bass's 2, or a P5 bass's 4); with Options > Dual Core On each part has its own 16: four and the bass.
+- **Voices**: four (`P5_POLY`, the cap), each **three of the 16 budget units** (`p5_units`) **since 2026-10-13, a
+  measurement build** (HISTORY 3y40). One core shares the 16 units between the parts: a chord alone is four voices
+  (12 units) and **with a VA or FM6 bass sounding still four** (4 × 3 + 2 = 14 of 16). c176dd4 had four units a
+  voice, which left the chord THREE voices whenever a bass sounded (3 × 4 + 2 = 14). The price of three units: **a
+  P5 bass under a P5 chord is a fifth P5 voice** (4 × 3 + 3 = 15), and five voices are the reading that did not fit
+  with a margin. **To be measured on the unit next**: four P5 chord voices + a VA bass + all three effects
+  (`--debug`: `pk_part0_us`, `pk_block_us`, `pk_late`, `stale_halves`), then the same with a P5 bass; **it may go
+  back to 4 units**. Where this document says "three voices with a bass" further down, that is c176dd4's four units.
+  With Options > Dual Core On each part has its own 16: four and the bass.
 - **EDIT 1 / 2** are Melodee's eight offsets on the program (CUT RES TUNA TUNB PWA PWB MIXA MIXB), 0 in every preset;
   the editor shows the deep pages instead.
 - `FELUCCA_P5_FACTORY` (default 1): Sequential's programs in the build, the ones `assets/prophet5-factory/shipped.txt`
@@ -94,7 +101,7 @@ so (`tests/cr_prophet_test.c`, measured):
 | 4 | all four | nothing |
 | 5 (D3 F#3 A3 C#4 E4) | the bottom note and the top three (D3 A3 C#4 E4) | the second note from the bottom |
 | 6 (.. F#4) | the bottom note and the top three (D3 C#4 E4 F#4) | the second and the third from the bottom |
-| any, with the bass part sounding on one core | three (measured: the count); by the same rule the bottom note and the top two (which notes: not measured) | |
+| any, with a VA or FM6 bass sounding on one core | all four (measured on the host: the count; three units a voice. With c176dd4's four units: three) | |
 
 The root stays, the top stays, the inner notes go. (The bottom-up order is the chord engine's plain order; a play
 style that sends the notes in another order changes which is "oldest": not measured per style.) With Dual Core On the
@@ -117,11 +124,12 @@ sounds**, on the program's stacked voices.
   the voices' own start phases and drift), at about the level of one voice (voice.c halves the velocity of a stack).
 - *The cost*: a voice is a voice. Four stacked voices are **the four voices of a four-note chord: all 16 budget
   units, and the same processor time** (about 1630 us of the half by the unit's reading, below). A UNISON program
-  costs no more than a full poly chord, and never more than the cap. With the bass sounding on one core the one note
-  has three voices (measured), as a chord has three notes.
+  costs no more than a full poly chord, and never more than the cap. With a VA bass sounding on one core the one note
+  keeps its four voices (measured on the host; three units a voice: 12 + 2. With four units: three).
 - On the **bass part** a UNISON program stacks up to four voices on the bass note while the chord part is silent
   (all 16 units). **Under a chord on one core the stack gives way**: measured with LAGOON BASS as the bass and a
-  4-note chord, in either order of arrival: **the bass note keeps one voice and the chord has three of its notes**,
+  4-note chord, in either order of arrival: **the bass note keeps one voice and the chord has all four of its notes
+  (five P5 voices, 15 units: three units a voice; with c176dd4's four units the chord had three)**,
   which is what a mono bass leaves the chord too (a stack's extra voices are the first the budget takes, and are
   only started when there is room: voice.c). So a UNISON bass is thick alone and a plain mono bass under a chord; it
   does not starve the chord (the reason cd43720 gave for leaving UNISON off a load does not hold at four units a
@@ -287,6 +295,28 @@ The 48's median is 0.6 dB over the VA's (the list has fewer percussive programs 
 limiter with four notes. **No trim was applied** (the rule: only beyond about 4 dB of the median). Not measured: a
 UNISON program as it loads (one note on four voices), six keys with a bass against the limiter (the VA's own test).
 
+### The shipped list from the unit's favourites
+
+The owner's way to choose the list by ear (2026-10-13): flash a build with all 200, mark the programs worth keeping
+(SAVE, KNOB 4; or EDIT, PRESETS to browse, KNOB 4 on each), then read the marks off the unit.
+
+```
+P5_SHIPPED=all ./build.sh                                   # the build with all 200 (flashed by the orchestrator)
+# .. on the unit: OPT + PRESETS to P5; SAVE, KNOB 4 right on a program; or EDIT, PRESETS, KNOB 4 while browsing ..
+python3 tools/fm1_install.py --favorites > build/scratch/favorites.txt     # read-only; a moment after the last mark
+python3 tools/p5_shipped_from_favorites.py build/scratch/favorites.txt             # the new list, printed
+python3 tools/p5_shipped_from_favorites.py build/scratch/favorites.txt --write     # .. into assets/prophet5-factory/shipped.txt
+./build.sh && python3 tools/p5_goldens.py && CR_VERSION=0.22 sh tests/run_all.sh
+```
+
+`--favorites` prints P5's marked programs by Sequential's number, one a line with the name as a comment (`44     #
+CARS STRINGS`); the other engines' marks are comment lines, so the file is a valid list as it is.
+`p5_shipped_from_favorites.py` orders it: **a marked program that is in the present list keeps its place, its comment
+and its group heading** (the list is grouped by hand: pads, brass, keys ..); **the marked programs that were not in
+it follow under one heading, by Sequential number**; `--by-number` drops the groups. The unit knows no categories, so
+new programs have to be moved into a group by hand. The marks stay on the unit and name the same programs in the
+build with the shorter list (`tests/run_prophet_test.sh`: marked with one list, read with another).
+
 ## The editor
 
 EDIT on a P5 part shows its 19 deep pages through the editor's title rules (docs/EDITOR.md §4; no screen plan, no
@@ -315,7 +345,10 @@ the sound edited (`REEDY STRPAD*`) and is kept by the session over a power cycle
 
 ## Saving
 
-**SAVE on a P5 part is refused**: "P5: no save yet", nothing is written (`cr_ui.c cu_save_open`). Why not the
+**Nothing of a P5 part is saved to a slot.** Since 0.22's favourites the SAVE tap opens the dialog with **the
+Favorite choice alone** (`cr_ui.c cu_save_favonly`): KNOB 4 marks the program by its Sequential number; SELECT and
+KNOB 1 cannot leave it; **OCT+ is refused**, "P5: no save yet", and nothing is written (until c176dd4 the tap itself
+was refused). Why not the
 remix's scheme (57 seven-bit values in the 32-slot record's tail, bytes 91..143, marker 'P','5'):
 
 - the bytes are free today (`up_rec_t.packed[144]` holds `P_COUNT` = 91 values; `up_valid` reads no further; `cb_store`
@@ -352,7 +385,9 @@ Five voices do not fit with a margin. **So the cap is four voices a part**: `P5_
 (HISTORY 3y39). Four voices are **about 1630 us** by proportion (2033 × 4 / 5 = 1626; by the count's own shape, a
 voice 249 us and the part 74: 2033 × 1068 / 1318 = 1648), which would put the half near 2410 us, 83 % (2814 less the
 fifth voice: an inference, **the four-voice build has not been measured**). With the bass sounding on one core the
-chord part has three voices (about 1260 us by the same proportion).
+chord part had three voices at four units (about 1260 us by the same proportion); **at three units (3y40) it keeps
+four: about 1630 us + the bass, by the same proportion about 2410 + 150 = 2560 us of 2902 (88 %) with a VA bass: an
+inference, the thing to measure**; with a P5 bass it is five P5 voices, the 2814 us reading's class.
 
 ### Counted
 
@@ -472,7 +507,9 @@ and on the bass part under a chord.
   **every shipped program through voice.c** (a four-note chord: none silent, no sample beyond the voices' sum, no DC,
   every voice free after its release, exact silence then); 410 stress programs; note-off; a note struck again (no
   step beyond the wave's own); **the four-voice cap, the units, which keys of a five- and a six-key chord sound,
-  three voices with the bass sounding**; the editor's UNISON cell and GLIDE; **UNISON on a load** (every shipped
+  four voices kept with the bass sounding (three units a voice)**; the SAVE dialog (Favorite alone, KNOB 4 marks by
+  the Sequential number, OCT+ refused, no record) and the browser's KNOB 4; the favourites across three lists
+  (`--fav-out` / `--fav-in`); the editor's UNISON cell and GLIDE; **UNISON on a load** (every shipped
   program on both parts; a 4-note chord on a LOW and on a LAST program: four voices on one note, which note, 16
   units; three with a bass; held keys over a load both ways; the editor's cell after a load; another engine by a
   pool load and by the editor's engine switch; the session's record); the bend through the part's MIDI; the 19 pages

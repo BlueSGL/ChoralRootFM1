@@ -203,6 +203,9 @@ typedef struct {
     uint16_t pct, pct_from;         /* Q8: the stripes filled; CR_A_FILL: from */
     uint8_t segments, thick;        /* stripes (0 = 12), their height (0 = 14) */
     uint8_t sub_mark;               /* a small square after `sub` (an overwritten factory preset, docs/PRESETS.md) */
+    uint8_t star;                   /* a favourite's star before the sound's name, the two centred together (0.22,
+                                     * docs/PRESETS.md "Favourites"): the meter's `sub`, the picker's `value`. 0: every
+                                     * pixel as before */
 
     /* panel: stripes */
     uint8_t bands[4], n_bands, band, gap;   /* colours (top first), band height, the gap between */

@@ -75,8 +75,10 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   `cu_epk_step` / `cu_epk_commit` everywhere: one code path. The read-out's hint line follows the same predicate, so
   `Hold OPT to change engine` is shown exactly where it is true. `tools/emu/scripts/cr_glo_knobs.txt` walks every
   row.
-- **SAVE tap**: a two-item picker, **Overwrite** (the current preset; saves at once, name kept) or **Save as new**
-  (the pool's next free place, then the naming screen prefilled with the current name). The default is Overwrite when
+- **SAVE tap**: a picker of three since 0.22 (two until then), **Overwrite** (the current preset; saves at once, name
+  kept), **Save as new** (the pool's next free place, then the naming screen prefilled with the current name) and
+  **Favorite** ([Favourites](#favourites-022), below: KNOB 4 marks, nothing is saved). SELECT / KNOB 1 move a step a
+  turn and stop at the ends (until 0.22 any turn right was Save as new, any turn left Overwrite). The default is Overwrite when
   the current preset is a user one or an edited one, Save as new otherwise. OCT+ takes it, OCT- cancels. **SAVE held
   1 s in the dialog**: "reset to factory?" on an overwritten factory preset, "delete?" on a user-added one. SAVE held
   outside the dialog stays the loops' save / load / delete.
@@ -102,13 +104,75 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 - **A load takes the program's UNISON switch** (5 of the 48): a chord on such a program sounds one note on up to four
   stacked voices; the next program without the switch is poly again (docs/PROPHET.md "UNISON").
 - The programs are dry; they play with the part's sends, which no sound load touches (the model above).
-- **It is the first pool that cannot grow yet: SAVE on a P5 part is refused** ("P5: no save yet"): the
-  engine has no store for its program (phase B). Its edits live in the part and in the session.
+- **It is the first pool that cannot grow yet: a P5 part's SAVE dialog has the Favorite choice alone** (0.22; until
+  then the tap was refused), and OCT+ there is refused ("P5: no save yet"): the engine has no store for its program
+  (phase B). Its edits live in the part and in the session. A P5 program's mark is on its Sequential number.
 - Left as it is for phase B: the settings record has no slot for P5's per-engine pool position (`cr_settings.c
   crs_slot`), so after a power cycle a part that comes back to P5 from another engine lands on 01 (the sound a part
   was playing at power-off does come back: the session). A pool's place, an engine's preset count and a track's
   preset are bytes: 200 fits, 255 is the end.
 - The pool read-out showed 11 of a name's 12 characters; it shows 12 with P5 in the build (`cu.pop.sub`).
+
+## Favourites (0.22)
+
+The owner, 2026-10-13: "I would like to add a feature to mark presets as favorites. To do this I am thinking, press
+save to go into the save menu, turn select to third option "Favorite", use knob 4 to mark as favorite or remove from
+favorites. Or inside the edit menu turning a preset brings a locked on preset browser, use knob 4 in this to mark
+favorites too. Then what I can do is mark my favorite Prophet patches and only those get included."
+
+**What a mark is.** A flag on a SOUND (`firmware/src/cr_favs.c`, `cr_ui.c cu_fav_key`):
+
+| the sound | its key |
+| --- | --- |
+| a factory preset of FM6, FM TONE, VA, CZ-1, WHEEL | the engine's index and the preset's index in the engine's own table (`engine_t.presets`). That index is already what a user record's binding stores (`flags[15]`, below), so it has to stay put from release to release; nothing was reordered since 0.14 (checked through the tags for VA, FM TONE, WHEEL and FM6's table; CZ-1's 64 are Casio's order). There is no other stable id for these engines |
+| a P5 factory program | its **Sequential program number 1..200** (`p5_preset_id`; for the part's sound the number in the program's own bytes), never its place: marks survive `shipped.txt` being trimmed or reordered, and a marked program that a build does not ship keeps its mark for the build that does |
+| a user sound added to a pool | its slot 0..31 |
+| a user record that overwrites a factory preset | that factory preset's key (it is the same place of the pool): the mark survives Overwrite and Reset to factory |
+| INIT | none: **INIT cannot be a favourite** (`INIT: cannot be marked`) |
+| a sound edited and not saved | the sound it came from (an edited factory sound marks its factory origin) |
+
+A user slot loses its mark when it is deleted, and when a record goes into an empty slot (`upreset.c up_put`). A slot
+rewritten from outside (the Sound Manager importing over a used slot) keeps it: the slot is the identity.
+
+**Where it is kept.** One small flash object of its own, `OBJ_FAVS`, the A/B sector pair **0xB6000 / 0xB7000**
+(`storage.c`; not the settings block, which never grows). In RAM 72 bytes of bits. In flash: a version byte (1), the
+number of sections, then per section a tag (the engine's index; 0x80 the user slots), a length and that many bytes of
+bits; trailing zero bytes and empty sections are not stored (no mark: 2 bytes; everything marked: 88). An unknown
+version reads as no marks; an unknown section is skipped; bits past a section are ignored. The write is `storage.c`'s
+(the other copy, the commit record last): a torn write leaves the marks as they were.
+
+**When it is written.** By itself, as an Option is: once no mark changed for 1.5 s and nothing has sounded for 1 s,
+never while a loop plays (`cr_settings.c crf_poll`: the erase holds the audio 45 ms, so a mark made under a ringing
+chord waits for the quiet); also with the global save (SAVE held) and before a backup's LIST. Not in SAFE MODE.
+Options > Reset Settings leaves the marks; SAFE MODE's Flash Data erases them with the sounds (60 sectors now).
+
+**Backup.** Object id **23**, "favorites" (`cr_backup.c`, `web/fm1backup.js`, `tools/fm1_install.py`). A firmware
+before 0.22 does not list 23, the clients write only what the FM-1 lists, so restoring a 0.22 backup there leaves the
+favourites in the file (reported as skipped); asked directly, 0.21 answers a PUT begin of an unknown id rc 1 and
+writes nothing. An older ChoralRoot never reads or erases 0xB6000 / 0xB7000 (0.21's map ends at the session,
+0xB5FFF), so the object's presence does not touch it, and it is still there when 0.22 comes back.
+
+**On the unit.**
+
+- **SAVE, the third choice.** `Not a favorite` / `Favorite` big, the sound's name under it with the star once marked.
+  **KNOB 4 right marks, left takes the mark off**, at once. OCT+ there saves nothing and writes no slot; OCT- (or SAVE
+  again, or HOME) closes. On the two save choices KNOB 4 is what it was (the chord part's send).
+- **The editor's browser** (PRESETS turned in the editor, or EDIT held): **KNOB 4** marks the sound under the cursor
+  (the one previewed) the same way, the browser stays open, the read-out pops with the star. OCT- gives the sound
+  back as before; marks made while browsing stay. (KNOB 4 had no job there in 0.19 .. 0.21.)
+- **The star**: a small five-point star in the role yellow before the name, the two centred together, wherever a
+  sound's name is read out: the pool read-out (PRESETS, ALGORITHM), the editor's browser, the save dialog. Drawn as
+  five triangles (`cr_draw.c cr_star`, about 250 bytes of flash; the font has no star). Yellow is the KEY layer's
+  colour; the star never stands on a KEY screen's own content, and a gold star reads as "favourite" without a
+  legend. With no mark every screen is drawn as before, pixel for pixel, except the save dialog's choice page, which
+  has a third item.
+- **Not built**: a favourites-only way of turning PRESETS, favourites in the web Sound Manager. The store answers
+  `crf_has(tag, id)` for any sound, which is what both need.
+
+**Off the unit.** `python3 tools/fm1_install.py --favorites` prints the marks (read-only: the backup protocol's read
+of object 23): `# FM6 01 TINE EP` a line, `# user U03 NAME`, and P5's programs by Sequential's number, `NUMBER  #
+NAME` a line, so the whole output is a valid `shipped.txt`. docs/PROPHET.md "The shipped list from the unit's
+favourites" has the commands.
 
 ## Storage (no flash layout change)
 

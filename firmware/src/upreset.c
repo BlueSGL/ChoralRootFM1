@@ -283,6 +283,9 @@ static void up_boot(void)                      /* persist_boot: the banks from f
 static int up_put(uint32_t k, const up_rec_t *r)
 {
     up_bank_t *bk;
+#ifdef CR_FAVS
+    int was_used;
+#endif
 #if FELUCCA_FLASH
     up_rec_t old;
     uint32_t magic;
@@ -294,6 +297,9 @@ static int up_put(uint32_t k, const up_rec_t *r)
         ui_message("STOP TO SAVE");
         return 2;
     }
+#ifdef CR_FAVS
+    was_used = up_used(k);
+#endif
     bk = &up_bank[k / UP_PER_BANK];
 #if FELUCCA_FLASH
     old = *up_rec(k);
@@ -316,6 +322,10 @@ static int up_put(uint32_t k, const up_rec_t *r)
         bk->nslot = nslot;
         return 2;
     }
+#endif
+#ifdef CR_FAVS
+    if (!r || !was_used)
+        crf_slot_new(k);                               /* (cr_favs.c: the slot's mark was another sound's) */
 #endif
     if (!r) {
 #ifdef FELUCCA_FAVORITES

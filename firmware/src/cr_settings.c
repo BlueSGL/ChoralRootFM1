@@ -1164,6 +1164,23 @@ static int crs_sounding(void)
 }
 
 
+/* the favourites (cr_favs.c): a mark that changed is written as an Option is: once no mark changed for CRS_QUIET_MS
+ * and nothing sounded for CRS_IDLE_MS, never while a loop plays or after a restore; a flash error: again in a second.
+ * (Marked while a chord rings, the write waits for the quiet: the erase would be a 45 ms hole in it) */
+static uint32_t crf_retry_ms;
+static uint8_t crf_failed;
+static void crf_poll(void)
+{
+#ifdef CR_FAVS
+    if (!crf_dirty || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - crf_change_ms) < CRS_QUIET_MS ||
+        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS ||
+        (crf_failed && (uint32_t)(fm1_ms - crf_retry_ms) < 1000u))
+        return;
+    crf_failed = crf_flush() != 0;
+    crf_retry_ms = crs_wr_ms = fm1_ms;
+#endif
+}
+
 /* every UI frame (main.c settings_poll) */
 static void cr_settings_poll(void)
 {
@@ -1172,6 +1189,7 @@ static void cr_settings_poll(void)
         return;
     if (crs_sounding())
         crs_loud_ms = fm1_ms;
+    crf_poll();
     crs_capture(&now);
     if (!cr_settings_equal(&now, &crs_seen) || settings_hold != crs_hold_seen) {   /* (HOLD: crs_write's
                                                     * settings_export puts it in the record) */
@@ -1215,6 +1233,10 @@ static void cr_settings_save(void)
     crs_change_ms = fm1_ms - CRS_QUIET_MS;
     if (!CR_SETTINGS_BUSY() && crs_write(0) == 0)
         crs_pending = 0;
+#ifdef CR_FAVS
+    if (!CR_SETTINGS_BUSY())
+        (void)crf_flush();                         /* a mark not yet written goes in too (a backup's LIST reads flash) */
+#endif
 }
 
 /* THE GLOBAL SAVE (the owner, 2026-10-11: "Hold Save button to manually do a global save, instead of trying to
@@ -1234,6 +1256,10 @@ static int cr_settings_commit(void)
         rc = -1;
     if (css_write() != 0)
         rc = -1;
+#ifdef CR_FAVS
+    if (crf_flush() != 0)                          /* (a mark the poll has not written yet) */
+        rc = -1;
+#endif
     return rc;
 }
 

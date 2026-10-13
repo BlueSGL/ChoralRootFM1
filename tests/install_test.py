@@ -1726,7 +1726,86 @@ def exits():
     ok(w.returncode == 3, "an error line that cannot be written (stderr's reader is gone): the exit code is still 3")
 
 
-PHASES = [wire, exits, backups, screen, debug, uac, stub, stuck, midi_side, select, sounds, syx, bindings, installs,
+def favorites():
+    """--favorites (docs/PRESETS.md "Favourites"): the object as the FIRMWARE's own writer makes it (tests/cr_favs_test.c
+    --emit: cr_favs.c crf_pack through storage.c, compiled here), decoded by the tool; the text; the list made of it"""
+    import subprocess
+    exe = TMP / "cr_favs_emit"
+    blob = TMP / "favs.bin"
+    c = subprocess.run(["cc", "-std=c11", "-O1", "-w", "-o", str(exe), str(ROOT / "tests/cr_favs_test.c")], capture_output=True, text=True)
+    e = subprocess.run([str(exe), "--emit", str(blob)], capture_output=True, text=True) if c.returncode == 0 else c
+    ok(c.returncode == 0 and e.returncode == 0 and blob.exists(), "favorites: the firmware's writer on the host wrote the object"
+       + ("" if c.returncode == 0 else ": " + c.stderr[-300:]))
+    data = blob.read_bytes() if blob.exists() else b""
+    want = {12: [0, 24], 13: [3], 14: [64], 15: [15], 7: [4], 16: [1, 15, 44, 199, 200], I.FAV_USER: [0, 31]}
+    ok(I.parse_favorites(data) == want and data[:1] == bytes([I.FAV_VERSION]),
+       "favorites: the tool's decoder reads the firmware's bytes: every mark of the fixed set, nothing else")
+    ok(I.parse_favorites(b"") == {} and I.parse_favorites(bytes([1, 0])) == {}, "favorites: an empty object, no section: no marks")
+    for bad, what in ((bytes([2]) + data[1:], "another version"), (data[:-3], "cut short"), (b"\x01", "one byte")):
+        try:
+            I.parse_favorites(bad)
+            ok(False, f"favorites: {what} must be refused")
+        except I.BackupError:
+            ok(True, f"favorites: {what}: refused")
+    newer = bytes([1, 3, 99, 2, 0xFF, 0xFF, 16, 28]) + b"\xFF" * 28 + bytes([12, 1, 2])
+    ok(I.parse_favorites(newer) == {99: list(range(16)), 16: list(range(1, 201)), 12: [1]},
+       "favorites: a newer object: P5's ids 1..200 only, an unknown section listed by its number")
+
+    objs = {I.FAV_ID: data, 6: sound_bank({0: sound_rec(13, "MY PAD", seed=1)}), 7: sound_bank({15: sound_rec(12, "LAST", seed=2)})}
+    side = BackupSide("ChoralRoot 0.22", I.CR_IDS, objs.items())
+    rc, out, err = cli(["--favorites"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: side))
+    lines = out.splitlines()
+    ok(rc == 0 and lines[0] == "# favorites on ChoralRoot 0.22: 13 marked" and
+       lines[1:8] == ["# FM6 01 TINE EP", "# FM6 25 PIANO", "# FM TONE 16 NOISE-ISH", "# VA 04 SLOW STRINGS", "# CZ-1 64 TYPHOON",
+                      "# WHEEL 05 ROCK DRIVE", "# user U01 MY PAD"] and lines[8] == "# user U32 LAST",
+       "--favorites: the engines' marked presets by their pool place and name, the marked user sounds by slot and name")
+    ok(lines[9].startswith("# P5: 5 programs") and [ln.split("#")[0].split() for ln in lines[10:]] == [["1"], ["15"], ["44"], ["199"], ["200"]] and
+       lines[10] == "1      # ITS PROPHET5" and lines[11] == "15     # REEDY STRPAD" and len(lines) == 15,
+       "--favorites: P5's programs by Sequential's number, one a line with the name as a comment")
+    ok(not any(isinstance(x, int) for x in side.log) and side.restarts == 0, "--favorites: nothing written to the FM-1")
+    sys.path.insert(0, str(ROOT / "tools"))
+    import gen_prophet_factory as g
+    import p5_shipped_from_favorites as pf
+    fav = TMP / "favorites.txt"
+    fav.write_text(out)
+    ok(g.shipped(str(fav)) == [1, 15, 44, 199, 200], "--favorites: its output is a shipped list as it is (gen_prophet_factory.py reads it)")
+    text = pf.build(pf.marked(out), g.SHIPPED.read_text())
+    new = TMP / "shipped.txt"
+    new.write_text(text)
+    body = [ln for ln in text.splitlines() if ln and not ln.startswith("# ") and ln != "#"]
+    ok(g.shipped(str(new)) == [1, 15, 44, 199, 200] and "# ---- pads, strings, voices" in text.splitlines() and
+       "# ---- brass" not in text and body[:3] == [ln for ln in g.SHIPPED.read_text().splitlines() if ln.split("#")[0].split() in (["1"], ["15"], ["44"])] and
+       "# ---- marked on the unit, not in the list before (by Sequential number)" in text and len(body) == 5 and
+       body[3].startswith("199 ") and body[4].startswith("200 "),
+       "p5_shipped_from_favorites: the marked programs of the present list in its order under its headings, the new ones after, by number")
+    by = pf.build([200, 3, 1], "", by_number=True)
+    new.write_text(by)
+    ok(g.shipped(str(new)) == [1, 3, 200], "p5_shipped_from_favorites --by-number: by Sequential number")
+    try:
+        pf.build([], "")
+        ok(False, "an empty list must be refused")
+    except ValueError:
+        ok(True, "p5_shipped_from_favorites: no P5 mark: refused (not an empty list)")
+    old = BackupSide("ChoralRoot 0.21", [i for i in I.CR_IDS if i != I.FAV_ID])
+    rc, out, err = cli(["--favorites"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: old))
+    ok(rc == 7 and "keeps no favourites" in err, "--favorites on ChoralRoot 0.21 (no object 23): exit 7, says so")
+    # a backup made on 0.22 restored onto 0.21: the favourites are skipped (0.21 does not list 23), the rest goes in
+    import json
+    full = BackupSide("ChoralRoot 0.22", I.CR_IDS, {1: per(764, I.PER5, 1), 6: objs[6], I.FAV_ID: data}.items())
+    path = TMP / "fav-backup.json"
+    rc, out, err = cli(["--backup", str(path)], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: full))
+    f = json.loads(path.read_text()) if path.exists() else {"objects": []}
+    ok(rc == 0 and "favorites" in out and any(o["id"] == I.FAV_ID and o["size"] == len(data) for o in f["objects"]),
+       "--backup on 0.22: the favourites are in the file (object 23, \"favorites\")")
+    rc, out, err = cli(["--restore", str(path), "--yes"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: old))
+    ok(rc == 0 and I.FAV_ID not in old.objs and old.objs.get(6) == objs[6] and not any(x == I.FAV_ID for x in old.log) and "favorites" in out,
+       "--restore of it onto 0.21: object 23 is never sent (not listed there): reported as kept in the file, the sounds restored")
+    fresh = BackupSide("ChoralRoot 0.22", I.CR_IDS)
+    rc, out, err = cli(["--restore", str(path), "--yes"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: fresh))
+    ok(rc == 0 and fresh.objs.get(I.FAV_ID) == data, "--restore of it onto 0.22: the favourites are back")
+
+
+PHASES = [wire, exits, backups, screen, debug, uac, stub, stuck, midi_side, select, sounds, syx, bindings, favorites, installs,
           errors, against_js, guard, against_js_guard, official]
 
 

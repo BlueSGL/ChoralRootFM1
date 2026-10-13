@@ -260,9 +260,11 @@ grep -q "^deep: part 0 page 11 DCW 1+ col 0 L1 0 -> " "$OUT/persist_cz_2.log" &&
 
 # P5 (engine 16; docs/PROPHET.md): no store yet, so no user slot: run 1 puts the chord part on a program of the
 # shipped list (assets/prophet5-factory/shipped.txt: its first with UNISON on, so that the part's voice mode is in the
-# case; without one, place 03), turns its cutoff down a detent, is refused a SAVE, and saves globally (SAVE held: the
-# settings' chord sound, the session's blob); run 2 (the same file) powers on with that program as edited, and the
-# part in UNISON as the load left it (voice mode 3; else POLY, 0)
+# case; without one, place 03), turns its cutoff down a detent, marks it as a favourite in the SAVE dialog (0.22: the
+# dialog opens with Favorite alone; OCT+ is refused, no store), and saves globally (SAVE held: the settings' chord
+# sound, the session's blob, and the mark with them); run 2 (the same file) powers on with that program as edited, the
+# part in UNISON as the load left it (voice mode 3; else POLY, 0), and the mark read from flash: on the program's
+# Sequential number, not its place
 PFLASH=$OUT/persist_p5_flash.bin
 rm -f "$PFLASH" "$OUT"/persist_p5_1.log "$OUT"/persist_p5_2.log
 P5POS=$(python3 tools/gen_prophet_factory.py --list | awk '$3 == "U" { print $1; exit }')
@@ -274,10 +276,17 @@ sed "s/^knob PRESETS +2 .*/knob PRESETS +$((P5POS - 1))/" "$S/prophet_persist_se
 "$EMU" --headless --flash "$PFLASH" --script "$S/prophet_persist_check.txt" >"$OUT/persist_p5_2.log" 2>&1 || bad "P5 run 2: exit status"
 p5cut=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$OUT/persist_p5_1.log" | head -1)
 p5a=${p5cut% *}; p5b=${p5cut#* }
+P5ID=$(python3 tools/gen_prophet_factory.py --list | awk -v p="$P5POS" '$1 == p { print $2 }')
 [ -n "$p5cut" ] && [ "$p5a" != "$p5b" ] && grep -q '^save: part 0 P5 refused' "$OUT/persist_p5_1.log" &&
+    grep -q '^save: dialog part 0 .* (favorite)' "$OUT/persist_p5_1.log" && ! grep -q '^save: part 0 .*slot' "$OUT/persist_p5_1.log" &&
     grep -q '^save: global rc 0' "$OUT/persist_p5_1.log" && grep -aq "part 0: P5 / $P5NAME, .* voice mode $P5MODE\$" "$OUT/persist_p5_1.log" &&
-    ok "P5 run 1: place $P5POS $P5NAME (voice mode $P5MODE: the program's UNISON), the cutoff $p5a -> $p5b; SAVE refused (no store); the global save" ||
+    ok "P5 run 1: place $P5POS $P5NAME (voice mode $P5MODE: the program's UNISON), the cutoff $p5a -> $p5b; SAVE: the dialog with Favorite alone, OCT+ refused (no store), no slot written; the global save" ||
     bad "P5 run 1: $(grep -m1 '^deep:\|^save:' "$OUT/persist_p5_1.log") / $(grep -a 'part 0:' "$OUT/persist_p5_1.log" | tail -1)"
+grep -q "^fav: part 0 $P5NAME on (tag 16 id $P5ID, 1 marked)" "$OUT/persist_p5_1.log" &&
+    grep -a '^  favs:' "$OUT/persist_p5_1.log" | tail -1 | grep -q "favs: 1 marked, saves 1, pending 0 .* : 16:$P5ID\$" &&
+    grep -a '^  favs:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "favs: 1 marked, saves 0, pending 0 (at power-on: read) : 16:$P5ID\$" &&
+    ok "P5: KNOB 4 in the dialog marked the program by Sequential's number ($P5ID, at place $P5POS here); written with the global save; run 2 reads the mark from flash" ||
+    bad "P5's mark: $(grep -m1 '^fav:' "$OUT/persist_p5_1.log") / $(grep -a '^  favs:' "$OUT/persist_p5_1.log" | tail -1) / $(grep -a -m1 '^  favs:' "$OUT/persist_p5_2.log")"
 grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "P5 / $P5NAME edited 1" &&
     grep -q "^deep: part 0 page 5 FILTER col 0 CUT $p5b -> " "$OUT/persist_p5_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_p5_2.log" &&
     ok "P5 run 2: powers on with $P5NAME as edited (the cutoff reads $p5b: the session's program), the sound plays" ||
@@ -285,6 +294,28 @@ grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "P5 / $P5
 grep -a 'part 0:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "part 0: P5 / $P5NAME, .* voice mode $P5MODE\$" &&
     ok "P5 run 2: the part's voice mode is $P5MODE as it was left (3: UNISON, the program's switch taken by the load)" ||
     bad "P5 run 2: $(grep -a -m1 'part 0:' "$OUT/persist_p5_2.log")"
+
+# Favourites (0.22, docs/PRESETS.md "Favourites"; cr_favs.c, the object at 0xB6000 / 0xB7000): run 1 marks FM6 01 in
+# the SAVE dialog and FM6 04 in the editor's browser and quits WITHOUT a SAVE held: a mark is written by itself once
+# the unit is quiet; run 2 (the same file) reads both and shows the star on the read-out
+FFLASH=$OUT/persist_favs_flash.bin
+F1=$OUT/persist_favs_1.log; F2=$OUT/persist_favs_2.log
+rm -f "$FFLASH" "$F1" "$F2" "$OUT"/persist_favs_star.ppm "$OUT"/persist_favs_none.ppm
+"$EMU" --headless --flash "$FFLASH" --script "$S/favs_persist_set.txt" >"$F1" 2>&1 || bad "favourites run 1: exit status"
+"$EMU" --headless --flash "$FFLASH" --script "$S/favs_persist_check.txt" >"$F2" 2>&1 || bad "favourites run 2: exit status"
+ffl() { grep -a '^  favs:' "$1" | sed -n "$2p"; }
+fyel() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
+    awk '{ v[n++] = $1 } END { c = 0; for (i = 0; i + 2 < n; i += 3) if (v[i] > 200 && v[i+1] > 140 && v[i+2] < 90) c++; print c }'; }
+grep -q '^fav: part 0 TINE EP on (tag 12 id 0, 1 marked)' "$F1" && grep -q '^fav: part 0 BRASS on (tag 12 id 3, 2 marked)' "$F1" &&
+    ! grep -q '^save: global' "$F1" && ffl "$F1" 1 | grep -q 'favs: 2 marked, saves [12], pending 0 (at power-on: none) : 12:0 12:3$' &&
+    ok "favourites run 1: FM6 01 marked in the SAVE dialog, FM6 04 in the editor's browser; no SAVE held: written once the unit was quiet ($(ffl "$F1" 1 | sed -n 's/.*saves \([0-9]*\).*/\1/p') erase cycles for the two)" ||
+    bad "favourites run 1: $(grep '^fav:' "$F1" | tr '\n' ' ') / $(ffl "$F1" 1)"
+ffl "$F2" 1 | grep -q 'favs: 2 marked, saves 0, pending 0 (at power-on: read) : 12:0 12:3$' &&
+    grep -q '^popup: part 0 01 / TINE EP (star) / ' "$F2" && grep -q '^popup: part 0 04 / BRASS (star) / ' "$F2" &&
+    grep -q '^popup: part 0 05 / FM PAD / ' "$F2" && [ "$(fyel "$OUT/persist_favs_star.ppm")" -ge 10 ] && [ "$(fyel "$OUT/persist_favs_none.ppm")" = 0 ] &&
+    ffl "$F2" 2 | grep -q 'saves 0, pending 0' &&
+    ok "favourites run 2 (a relaunch): both marks read from flash; the read-outs of 01 TINE EP and 04 BRASS carry the star, 05 FM PAD none; nothing written again: $OUT/persist_favs_star.ppm" ||
+    bad "favourites run 2: $(ffl "$F2" 1) / $(grep '^popup: part 0' "$F2" | tr '\n' ' ') / yellow $(fyel "$OUT/persist_favs_star.ppm") $(fyel "$OUT/persist_favs_none.ppm")"
 
 # FM TONE (engine 15, code name QUAD; docs/QUAD.md): run 1 edits FM TONE's EP (Ratio A, KNOB 3 +5 on SYN 1) and saves it in U01: the patch into the QUAD
 # patch store (quad_store.c, 0xB2000 / 0xB3000); run 2 (the same file) powers on with U01: the same patch back

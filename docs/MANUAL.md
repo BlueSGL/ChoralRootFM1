@@ -1140,8 +1140,8 @@ held + EDIT) and hold EDIT there.
 
 Tap **SAVE**. (With BASS held: the bass sound. In the editor: the sound being edited.)
 
-1. Choose **Overwrite** or **Save as new** with KNOB 1 or SELECT. The current name is under it, with `*` if you have
-   changed the sound. The dialog opens on Overwrite when the sound is one of yours or has been changed, otherwise on
+1. Choose **Overwrite**, **Save as new** or **Favorite** (new in 0.22, below) with KNOB 1 or SELECT: a turn is one
+   step, and the list stops at its ends. The current name is under it, with `*` if you have changed the sound. The dialog opens on Overwrite when the sound is one of yours or has been changed, otherwise on
    Save as new.
    - **Overwrite** saves over the current preset at once and keeps its name. Over a factory preset this is allowed:
      your version takes its place in the pool and the factory one can be brought back. `00 INIT` cannot be
@@ -1160,6 +1160,16 @@ Tap **SAVE**. (With BASS held: the bass sound. In the editor: the sound being ed
    | OCT- or HOME | cancels |
 
    The name starts as the current one, in grey; the first key you type replaces it.
+
+**Favorites** (new in 0.22). The third choice of the save dialog marks the sound instead of saving it. The screen
+reads `Not a favorite` or `Favorite`. **KNOB 4 to the right marks the sound, to the left takes the mark off**; it
+takes effect at once and nothing is saved or overwritten (OCT+ does nothing there; OCT-, HOME or SAVE closes the
+dialog). A marked sound has a small yellow star before its name wherever the name is shown: when you turn PRESETS or
+ALGORITHM, in the save dialog and in the editor's sound browser. You can also mark while browsing: in the browser
+(PRESETS turned in the sound editor) KNOB 4 marks the sound you are hearing, and the browser stays open. Any factory
+preset and any sound of yours can be a favorite; `00 INIT` cannot. A sound you have changed and not saved marks the
+preset it came from. The marks are kept by themselves, a moment after the FM-1 goes quiet (no SAVE held needed), and
+they are part of a backup. Deleting one of your sounds removes its mark.
 
 To **delete** a sound you added, or to **reset** a factory preset you saved over: open the save dialog on it and hold
 SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does it, OCT- keeps it.
@@ -1229,7 +1239,9 @@ their buttons are the editor's groups.
   it for fine steps only while held.
 - The top line has the sound's name (with `*` once changed, and `· BASS` in orange on the bass sound) and, at the
   right, where you are (`OSC 2 · A`, `ENV 2 · filter`, `MOD 3`).
-- **PRESETS** in the editor opens the engine picker as a preview ([Sounds](#11-sounds)).
+- **PRESETS** in the editor opens the engine picker as a preview ([Sounds](#11-sounds)): the sound browser. KNOB 1
+  or PRESETS steps the sounds, KNOB 2 is INIT, and since 0.22 **KNOB 4 marks the sound you hear as a favorite**
+  (right: on, left: off; [Saving](#saving)).
 - **SAVE** opens the save dialog for the sound being edited and returns to the editor.
 - A layer opened over the editor (PERF held, EDIT held, HOME held) closes back to the editor. SAVE held is the
   global save there too.

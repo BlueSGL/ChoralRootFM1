@@ -1,0 +1,18 @@
+# test_persist.sh, favourites run 2 (the same flash file): the dump's "favs:" line has both marks, read at power-on;
+# PRESETS -1 +1: the read-out of FM6 01 TINE EP with its star (shot); +3: 04 BRASS with its star; +1: 05 without
+wait 500
+dump
+knob PRESETS -1
+wait 300
+knob PRESETS +1
+wait 600
+shot build/emu/test/persist_favs_star.ppm
+wait 1200
+knob PRESETS +3
+wait 1500
+knob PRESETS +1
+wait 600
+shot build/emu/test/persist_favs_none.ppm
+wait 1500
+dump
+quit

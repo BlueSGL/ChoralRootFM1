@@ -228,6 +228,7 @@ static void mix_block(int32_t *out, uint32_t n)   /* the audio ISR's block: the 
 #include "storage_hw.c"
 #include "storage.c"
 #endif
+#include "cr_favs.c"             /* the favourites: a mark on a sound (before the sounds: upreset.c tells it of a slot) */
 #include "cr_bank.c"             /* upreset.c's UI names, upreset.c (32 user sounds, fm6_bank.c), the factory bank */
 #include "cr_pages.c"            /* the sound pages (EDIT) */
 #include "cr_name.c"             /* naming with the root keys (SAVE) */
