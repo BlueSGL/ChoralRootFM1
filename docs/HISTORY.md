@@ -1477,3 +1477,45 @@ multi-version layout, the refusals, the site as Pages builds it); `tools/fetch_p
 `build/scratch/packages/` for a local build. Not run: a real FM-1, Chrome or Edge themselves, Android; going back
 on a unit (the notes are the release notes' own). Docs: MANUAL 16, README, BUILDING "Releasing", HANDOFF "Release
 steps", DEVICE-MANAGER "The installer beside it".
+
+## 2026-10-12 (chord names: Orchid or Standard; 0.20 begins)
+
+3y28. **A user:** "I'm not a huge fan of the chord names though ... something simpler/more accurate would be better
+(e.g. A9 for A7 + 9th rather than A79, Aadd9 for A major triad + 9th which is incorrectly displayed as A9 atm, Asus9
+for Asus + 7 + 9 etc...)". **The owner:** "We can add option for the chord names but I would prefer we match the
+ORC-1 by default." **Options > Chord Names: Orchid / Standard**, after Motion (entry 14 of 25), Orchid the default.
+Orchid is 0.19's naming string for string (`tests/cr_engine_test.c`: 12 roots x 8 qualities x 16 extension sets
+against a copy of 6229c8c's `cr_chord_name`). Standard (`cr_engine.c crx_name_std`) is the lead-sheet name of the
+notes that sound, derived from `CR_QUALITY` / `CR_EXT_IV`: SUS is the fourth (`sus4`); the 6 is always 9 semitones
+(`Cm6`; on DIM the diminished seventh, `Cdim7`); the 7 key always 10 (on DIM half-diminished, `Cm7b5`); the 9
+always 14. `Cadd9` / `C9` / `CM9`, `C6/9`, `C13` for 7 + 6 with or without the 9, `C7sus4`, `C9sus4`, `Csus2` for
+the power chord with a 9, `C7no3`, `Cm7add4`. Of the 112 chords 84 have a name of their own; the 28 with both
+sevenths keep Orchid's (7 `7 M7`, 14 `JAZZ`, 7 `WTF`) and nothing else says `JAZZ` or `WTF`. The major triad stays
+`CM`: a single note reads `C`, without its octave, on every screen that names both. docs/CHORD-NAMES.md has the 128
+cells with buttons, intervals, both names and the reasons; the test mirrors it and reads every Standard name with an
+independent reader whose pitch classes must be `cr_chord_base`'s (allowances: a 13's 9th, the Min + Sus chord's
+missing fifth). Display only: `cr_chord_names_set` is one byte outside `cr_t`; every script's WAV is the main
+tree's (below). Stored in bit 3 of the block's `pick_roots` (`CRS_NAMES_STD`), no record version, automatic; an
+older record reads Orchid, and 0.19 and older take their default for the byte when it is 8 .. 15 (Output Clean, USB
+Rate 44.1 kHz until set there). No glyph added: the qualities (`M m dim sus4 sus2 +`) are in the 37-character
+104 px face, the rest is the superscript's, the 40 px ASCII face (`/` included). **Found on the way, both in Orchid
+mode too:** the screen's copy of the superscript was 8 bytes against the engine's 12, so the views showed
+`Cm add4 JAZZ` as `add4 JA` (seen in main's emulator: `name 'G#|m|add4 JA'`): 12 now, asserted against
+`CR_SUP_MAX`; and with it whole the longest names ran off Geek Out's left edge (the name is centred on x 70 with
+224 px of room): 132 px there now. Fit (`tests/cr_draw_test.c` "chord names": 224 names in each setting on five
+kinds of screen, the Scope header, the Notes title, the looper's name line with `-12` beside `step 64/64`, the
+playing name's 78 px): 0 lint findings, nothing cut; Standard's widest own name is `G#madd9add4`, squeezed to 58 %
+at 104 px (Orchid's `G#m add4 JAZZ`: 56 %), 105 px on the looper's line (110), and none of Standard's own names
+needs the playing name's 10 px face. Size: .text +880 B, RAM +16 B (81316, 82.7 %), POOL +8 B (315496, 91.7 %). The
+Options entry moved every later entry by one: 16 emulator scripts and the entry numbers in `test_cr.sh` and
+`test_persist.sh`.
+**0.20 begins:** `FELUCCA_VERSION` "ChoralRoot 0.20", `docs/releases/0.20.md` (in progress); `web/releases.json`
+is not touched (released versions only; `tests/releases_test.py` passes with a dev version that is not listed).
+The sound: every emulator script through this tree's emulator and one built from `git archive 6229c8c`, each on its
+own copy of the script: 175 of 176 WAVs identical byte for byte; the one that differs, `cr_opt_keys`, walks one
+more Options entry (120 ms) and is identical to main's run of its script with that step added. With the option set
+to Standard (a flash file whose record says so) against the same flash file set back to Orchid: 179 of 179
+identical. Not built, the owner's (docs/CHORD-NAMES.md "Open questions"): the same user's "it would be nice if the
+6th was played an octave higher if either 7th is enabled" (a change of what sounds); `C` for the major triad in
+Standard; a name of its own for the 13 without its 9th. Not run: the unit (nothing was flashed), `tools/emu/classic_exact.sh`
+(it needs the 0.18 reference build).

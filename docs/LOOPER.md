@@ -384,7 +384,9 @@ would overlap the page name probably) in blue."
   chord with, so the name line, the playing name, step entry's line and the home views agree: `M` only for the plain
   major triad; a major triad with an extension keeps `C7` `CM7` `C6` `C9` `C6 9` `CJAZZ` `CWTF` (none reads as a note,
   and `CM7` stays the major seventh); the power chord stays `C5`; minor `Cm`. The stored event is unchanged (root,
-  quality, extension bits): only the text. **While a root key is down** it names the chord being played instead (the
+  quality, extension bits): only the text. (Those are Orchid's names, the default of Options > Chord Names; set to
+  Standard, 0.20, the same lines read the lead-sheet names, the longest of which are shorter than
+  `G#madd4 JAZZ`: docs/CHORD-NAMES.md.) **While a root key is down** it names the chord being played instead (the
   player's own voice: `cr_snap.pl_*`, the last keyed voice still sounding), and goes back to the step when the keys
   are up, a latch or not. Until then it showed the engine's "chord on display" unless that was a loop voice's: with a
   key held over a playing loop it flipped between the played chord and the step's old one at every loop note, and

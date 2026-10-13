@@ -263,6 +263,46 @@ Hold one chord type and any extensions, then press a root.
 - Under the name the screen lists the notes as they are voiced. Extension notes are orange.
 - The name of the last chord stays on the screen until the next one.
 
+### Chord names
+
+The names above are the Orchid's: they say which keys you hold. **Options > Chord Names** chooses between them and
+the names a lead sheet would use for the notes that sound. Only the name on the screen changes: the notes, the
+MIDI and a recorded loop are the same under either, and you can switch at any time.
+
+| You hold (root D) | Orchid (default) | Standard |
+| --- | --- | --- |
+| MAJ | `DM` | `DM` |
+| MAJ + 9 | `D` `9` | `Dadd9` |
+| MAJ + 7 + 9 | `D` `7 9` | `D9` |
+| MAJ + 6 + 9 | `D` `6 9` | `D6/9` |
+| MAJ + 7 + 6 | `D` `7 6` | `D13` |
+| MAJ + 7 + 6 + 9 | `D` `JAZZ` | `D13` |
+| MAJ + M7 + 9 | `D` `M7 9` | `DM9` |
+| MIN + 9 | `Dm` `9` | `Dmadd9` |
+| MIN + 7 + 9 | `Dm` `7 9` | `Dm9` |
+| SUS | `Dsus` | `Dsus4` |
+| SUS + 7 | `Dsus` `m7` | `D7sus4` |
+| SUS + 7 + 9 | `Dsus` `m7 9` | `D9sus4` |
+| DIM + 6 | `Ddim` `6` | `Ddim7` |
+| DIM + 7 | `Ddim` `7` | `Dm7b5` |
+| MAJ + 7 + M7 | `D` `7 M7` | `D` `7 M7` |
+
+In Standard:
+
+- A 9 without a seventh is `add9`; with the 7 it is `9`, with M7 `M9`. The major seventh is always written `M`.
+- A 6 with a seventh is a `13` (`D13`, `Dm13`, `DM13`), with or without the 9. The 6th still sounds where it
+  always did, inside the octave: the name changes, not the voicing.
+- SUS is the fourth, so it reads `sus4`, and a seventh or ninth goes in front: `D7sus4`, `D9sus4`.
+- On a diminished chord the 6 key gives the diminished seventh (`Ddim7`) and the 7 key the half-diminished chord
+  (`Dm7b5`).
+- The [secret chords](#secret-chords): `D+` and `D5` as before; the power chord with a 9 is `Dsus2`, with a 7
+  `D7no3`; `Dm` `add4` with extensions reads `Dm7add4`, `Dm9add4`.
+- A major chord on its own still reads `DM`, because `D` alone is a single note.
+- With **both sevenths** held (7 + M7) there is no such name: those chords keep the Orchid's (`7 M7`, `JAZZ`,
+  `WTF`). Nothing else reads `JAZZ` or `WTF` in Standard.
+
+The full list, with the notes of every chord, is in [CHORD-NAMES.md](CHORD-NAMES.md).
+
 ### LOCK
 
 B3 switches LOCK on and off; B3 is lit and `lock` shows at the top right while it is on. With LOCK on:
@@ -1296,6 +1336,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **MIDI Clock** | Off, Out, In | Out | Out: sends clock, and start / stop with the loop. In: follows them |
 | **View** | Chord, Keyboard, Notes, Geek Out, Scope | Chord | the view ([Views](#13-views)) |
 | **Motion** | Full, Calm, Off | Full | screen animation |
+| **Chord Names** | Orchid, Standard | Orchid | how a chord is named on every screen. Orchid: by the keys held, as the Orchid does (`A` `7 9`, `JAZZ`). Standard: as a lead sheet names the notes that sound (`A9`, `Aadd9`, `A13`). Only the name changes, never the notes ([Chord names](#chord-names)) |
 | **LEDs** | Glow, Stock | Glow | Glow: idle keys glow dim, active ones are bright. Stock: the reverse |
 | **Hold Time** | 300, 400, 500, 600 ms | 400 ms | how long a hold is |
 | **USB Record** | Off, On | On | On: the computer can record the FM-1 ([USB audio recording](#usb-audio-recording)) |
@@ -1315,7 +1356,7 @@ strangely, and the way to make sure two people are looking at the same instrumen
 `OCT+ again: reset`. Press **OCT+** again and it is done: `settings reset` shows, and you are back on the view.
 Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the Options.
 
-- **Reset:** everything in the Options (Play Style back to Simple, Motion, LEDs, Hold Time, the MIDI channels and
+- **Reset:** everything in the Options (Play Style back to Simple, Motion, Chord Names, LEDs, Hold Time, the MIDI channels and
   clock, USB Record, USB Level and USB Rate, Dual Core and the rest), Key Mode with its tonic, scale and Transpose, Single
   Notes and the split point, the KEY layer's keys, Key plays and Keyboard, the LOCK layer's two settings, the
   performance mode with all its parameters and whether it is on, LATCH, the effects being on, the tempo, the
@@ -1365,7 +1406,7 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 | --- | --- | --- |
 | Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, Velocity | notes that were sounding, a chord LATCH was holding |
 | the performance mode, its parameters, and whether it is on | MIDI Perform, MIDI Bass, MIDI Raw Chord, Raw Chord Sound, MIDI Clock | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
-| LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, LEDs, Hold Time | a take you were recording |
+| LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, Chord Names, LEDs, Hold Time | a take you were recording |
 | the voicing on KNOB 1 and the octave shift | USB Record, USB Level, USB Rate, Dual Core, Output | an open layer, menu, dialog or editor: the FM-1 starts on the view |
 | the bass being on, its **behaviour**, register, level, and which sound it plays | the panel calibration | where you were in the editor, the KEY layer's and the PLAY menu's page |
 | the effects in full: on or off, the page picked, every cell of the reverb, the chorus and the delay, both parts' sends | | |
