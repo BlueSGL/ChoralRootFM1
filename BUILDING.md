@@ -133,10 +133,21 @@ the SAMPLE engine has only the generated drum kit.
 ## Tests
 
 ```
-tests/run_tests.sh
+sh tests/run_all.sh          # everything in docs/HANDOFF.md "Verification": the build, then the suites side by side
+tests/run_tests.sh           # the host tests alone
 ```
 
-Runs the host tests and, with Node.js, the web page tests. Run it after `./build.sh`
+`tests/run_all.sh` runs `./build.sh`, then every suite of docs/HANDOFF.md "Verification" with its documented
+command, side by side where they share no file (logs in `build/scratch/logs/`), and ends `ALL SUITES PASSED`
+(exit 0) or names the suites that failed (exit 1); `--only name,name` runs some, `--list` names them, `CR_VERSION`
+is the version the browser emulator is built as. Each script still runs alone as before.
+
+The host test programs are compiled through `tests/hostcc.sh`, which keeps a program only when its compile command
+and the sha256 of every file it was compiled from are unchanged (`HOSTCC_FORCE=1`: compile everything); the tests
+themselves always run. `run_tests.sh` and `run_cr_tests.sh` run their sections side by side and print them in the
+order of the file (`PAR_JOBS=1`: one after another).
+
+`tests/run_tests.sh` runs the host tests and, with Node.js, the web page tests. Run it after `./build.sh`
 (it uses `build/` and needs `AC79_SDK` set as for the build). The suites cover flash storage,
 user presets, projects of every format, backup, the keys and knobs, MIDI (USB, TRS, clock,
 control), USB audio, the update entry and loader, the command-line installer, the UI (the real

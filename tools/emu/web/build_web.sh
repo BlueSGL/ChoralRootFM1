@@ -35,8 +35,10 @@ fi
 OUT=build/emu-web
 W=tools/emu/web
 mkdir -p "$OUT"
-# the firmware unit as build.sh builds it (warnings off: the firmware's own code), single-threaded, no JS runtime
-emcc -O2 -w -std=gnu11 -I$W/compat -Ibuild/gen -Ifirmware/src -DEMU_WEB "-DFELUCCA_VERSION=\"$VER\"" \
+# the firmware unit as build.sh builds it (warnings off: the firmware's own code), single-threaded, no JS runtime;
+# through tests/hostcc.sh: compiled again only when the command (the version is in it) or a file it was compiled from
+# has changed (hashes, not dates; HOSTCC_FORCE=1: always)
+sh tests/hostcc.sh emcc -O2 -w -std=gnu11 -I$W/compat -Ibuild/gen -Ifirmware/src -DEMU_WEB "-DFELUCCA_VERSION=\"$VER\"" \
     --no-entry -sSTANDALONE_WASM -sFILESYSTEM=0 -sSTACK_SIZE=1048576 -sINITIAL_MEMORY=33554432 \
     -o "$OUT/choralroot.wasm" $W/emu_web.c
 cp $W/index.html $W/emu.js $W/keymap.js $W/worklet.js "$OUT/"

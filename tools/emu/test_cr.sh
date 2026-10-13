@@ -29,9 +29,21 @@ fi
 mkdir -p "$OUT"
 rm -f "$OUT"/cr_*
 
+# One script is a third of this file's time (cr_screen_off: the idle minutes, about 12 s of the emulator): it starts here, in the
+# background, and `run cr_screen_off` below waits for it and reads its exit status as if it had run there. Nothing
+# else reads or writes its files ($OUT/cr_screen_off.log, $OUT/cr_off_*.ppm: only its own block), and a headless
+# run without --flash keeps no state.
+ahead() { "$EMU" --headless --script "$S/$1.txt" >"$OUT/$1.log" 2>&1 & eval "ahead_$1=\$!"; }
+ahead cr_screen_off
 run() {   # run NAME [options]: tools/emu/scripts/NAME.txt to its end, the log in $OUT/NAME.log
     name=$1; shift
-    "$EMU" --headless --script "$S/$name.txt" "$@" >"$OUT/$name.log" 2>&1
+    eval "st=\${ahead_$name:-}"
+    if [ -n "$st" ] && [ $# -eq 0 ]; then
+        eval "ahead_$name="
+        wait "$st"
+    else
+        "$EMU" --headless --script "$S/$name.txt" "$@" >"$OUT/$name.log" 2>&1
+    fi
     st=$?
     if [ $st -eq 0 ]; then ok "$name: exit 0 ($(grep -c '^expect .*: ok' "$OUT/$name.log") expectations met)"
     else bad "$name: exit $st (see $OUT/$name.log)"; grep 'FAILED\|script' "$OUT/$name.log" | sed 's/^/        /'; fi

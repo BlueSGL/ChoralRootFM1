@@ -33,13 +33,27 @@ else
     VER=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralroot.c | head -1)
 fi
 [ -n "$VER" ] || { echo "build.sh: no FELUCCA_VERSION in firmware/src/choralroot.c"; exit 1; }
+# The five units side by side, each through tests/hostcc.sh: compiled again only when its command (the version and
+# every flag are in it) or a file it was compiled from has changed (hashes, not dates; build/gen's headers and the
+# system's are among them); their diagnostics in the order below. HOSTCC_FORCE=1: everything again.
+H="sh tests/hostcc.sh"
 # the firmware: one unit, as the host tests build it (warnings off: it is the firmware's own code)
-$CC -O2 -w -Ibuild/gen -Ifirmware/src "-DFELUCCA_VERSION=\"$VER\"" -c tools/emu/emu_fw.c -o "$OBJ/emu_fw.o"
+$H $CC -O2 -w -Ibuild/gen -Ifirmware/src "-DFELUCCA_VERSION=\"$VER\"" -c tools/emu/emu_fw.c -o "$OBJ/emu_fw.o" > "$OBJ/emu_fw.log" 2>&1 &
+pids=$!
 # the emulator
 for f in emu keymap emu_img; do
-    $CC -O2 -Wall -Wextra -Wno-unused-parameter $SDL_CFLAGS -c "tools/emu/$f.c" -o "$OBJ/$f.o"
+    $H $CC -O2 -Wall -Wextra -Wno-unused-parameter $SDL_CFLAGS -c "tools/emu/$f.c" -o "$OBJ/$f.o" > "$OBJ/$f.log" 2>&1 &
+    pids="$pids $!"
 done
-$CC -O2 -Wall -Wno-deprecated-declarations -c tools/emu/emu_midi.c -o "$OBJ/emu_midi.o" $SDL_CFLAGS
-$CC -o "$OUT/emu" "$OBJ/emu.o" "$OBJ/keymap.o" "$OBJ/emu_img.o" "$OBJ/emu_midi.o" "$OBJ/emu_fw.o" \
+$H $CC -O2 -Wall -Wno-deprecated-declarations -c tools/emu/emu_midi.c -o "$OBJ/emu_midi.o" $SDL_CFLAGS > "$OBJ/emu_midi.log" 2>&1 &
+pids="$pids $!"
+st=0
+for f in emu_fw emu keymap emu_img emu_midi; do
+    p=${pids%% *}; pids=${pids#* }
+    wait "$p" || st=$?
+    cat "$OBJ/$f.log"
+done
+[ "$st" -eq 0 ] || exit "$st"
+$H $CC -o "$OUT/emu" "$OBJ/emu.o" "$OBJ/keymap.o" "$OBJ/emu_img.o" "$OBJ/emu_midi.o" "$OBJ/emu_fw.o" \
     $SDL_LIBS -lz -lm -framework CoreMIDI -framework CoreFoundation
 echo "built $OUT/emu"

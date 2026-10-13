@@ -14,7 +14,12 @@ build/host/emu --help          # options and the key map
 ```
 
 `build.sh` runs the generate step (`python3 tools/build.py`) when `build/gen` is missing; it sets
-`DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` for Pillow.
+`DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` for Pillow. It compiles its five units side by side through
+`tests/hostcc.sh`: a unit is compiled again only when its command (the version and every flag) or a file it was
+compiled from has changed (hashes, not dates), so a second `build.sh` takes a fraction of a second;
+`HOSTCC_FORCE=1 sh tools/emu/build.sh` compiles everything. `web/build_web.sh` does the same for the wasm module.
+`test_cr.sh` starts its longest script (`cr_screen_off`) in the background at its start and reads its result at
+the script's place. All of it with the rest of the verification: `sh tests/run_all.sh` (docs/HANDOFF.md).
 
 ## Files
 

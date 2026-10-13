@@ -1726,25 +1726,78 @@ def exits():
     ok(w.returncode == 3, "an error line that cannot be written (stderr's reader is gone): the exit code is still 3")
 
 
-wire()
-exits()
-backups()
-screen()
-debug()
-uac()
-stub()
-stuck()
-midi_side()
-select()
-sounds()
-syx()
-bindings()
-installs()
-errors()
-against_js()
-guard()
-against_js_guard()
-official()
+PHASES = [wire, exits, backups, screen, debug, uac, stub, stuck, midi_side, select, sounds, syx, bindings, installs,
+          errors, against_js, guard, against_js_guard, official]
+
+
+def run_phases():
+    """The phases, in PHASES' order on the output. Most of this file's time is waiting (the tool's bounds and the
+    fake's restarts, in real time), so the phases run side by side, each in a fork of this process taken before
+    any phase has run (one thread, the module's state as imported, a TMP of its own), its output to a file; the
+    files are printed in PHASES' order as the phases end, the FAIL counts added. A phase that raises: its output
+    and traceback are the last thing printed and the exit status is 1, as when the phases ran one after another.
+    INSTALL_TEST_JOBS: how many at once (default 6, at most one per core; 1: one after another in this process,
+    as before)."""
+    global failed, TMP
+    try:
+        jobs = int(os.environ.get("INSTALL_TEST_JOBS", "") or 0)
+    except ValueError:
+        jobs = 0
+    if jobs <= 0:
+        jobs = min(6, os.cpu_count() or 1)
+    if jobs == 1 or not hasattr(os, "fork") or threading.active_count() != 1:
+        for phase in PHASES:
+            phase()
+        return
+    sys.stdout.flush()
+    sys.stderr.flush()
+    top, running, ended, shown, k = TMP, {}, {}, 0, 0
+    try:
+        while shown < len(PHASES):
+            while k < len(PHASES) and len(running) < jobs:
+                pid = os.fork()
+                if pid == 0:
+                    code = 1
+                    try:
+                        fd = os.open(top / f"phase-{k}.out", os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+                        os.dup2(fd, 1)
+                        os.dup2(fd, 2)
+                        TMP = top / f"phase-{k}"
+                        TMP.mkdir()
+                        failed = 0
+                        PHASES[k]()
+                        sys.stdout.flush()
+                        (top / f"phase-{k}.failed").write_text(str(failed))
+                        code = 0
+                    except BaseException:
+                        import traceback
+                        sys.stdout.flush()
+                        traceback.print_exc()
+                        sys.stderr.flush()
+                    finally:
+                        os._exit(code)
+                running[pid] = k
+                k += 1
+            pid, status = os.wait()
+            if pid not in running:
+                continue
+            ended[running.pop(pid)] = status
+            while shown in ended:
+                sys.stdout.write((top / f"phase-{shown}.out").read_text(errors="replace"))
+                sys.stdout.flush()
+                if ended[shown] != 0:             # the phase raised (or was killed): nothing after it is reported
+                    sys.exit(1)
+                failed += int((top / f"phase-{shown}.failed").read_text())
+                shown += 1
+    finally:
+        for pid in running:                       # (an early end: the phases still running)
+            try:
+                os.kill(pid, 15)
+            except OSError:
+                pass
+
+
+run_phases()
 shutil.rmtree(TMP, ignore_errors=True)
 print(f"INSTALL TESTS FAILED ({failed})" if failed else "install tests passed")
 sys.exit(1 if failed else 0)

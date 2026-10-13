@@ -1828,3 +1828,90 @@ answers again, and an install of ChoralRoot after a return reports in the card. 
 build is 0.22 and is refused) and looked at in headless Chromium, 900 and 390 px wide
 (`build/scratch/installer-stock/`). **Not done**: a real FM-1, real Chrome or Edge, a real official file in the
 page (the test stands in for its check). The errors' texts there still end "press Install again".
+
+3y36. **The verification in one minute instead of nine (2026-10-13; tests and scripts only, no firmware change, not
+flashed).** **The owner:** "review the current test suite and optimize the tests so they don't take long." Nothing
+was removed, shortened or loosened; no result is kept between runs. **Measured first** (this Mac, 18 cores, the
+list of docs/HANDOFF.md "Verification" one suite after another, 544 s): `run_tests.sh` 247 s = 54 s of compiles
+one after another (44 programs, each compiled on every run), about 35 s of C tests, `install_test.py` 79 s,
+`test_web.mjs` 30 s, `test_installer.mjs` 30 to 45 s; `run_cr_tests.sh` 59 s = 28 s of compiles, `fm4_div0_test`
+16 s, `stub_pkg_test.py` 8 s; `test_cr.sh` 43 s = 21 s in 162 emulator runs (one of them, `cr_screen_off`, 12 s)
+and about 15 s in some 5000 `sed` / `grep` / `awk` calls; `install_test.py` 79 s, nearly all of it waiting in real
+time for the tool's bounds; `test_installer.mjs` 45 s (18 simulated installs of about 1.8 s, its timers already at
+a tenth); `test_web.mjs` 30 s (16 s in three runs of `fm1ota.js`'s Updater at its real waits).
+**What changed.** (1) `tests/hostcc.sh`: a host program is compiled again only when its command (compiler version,
+working directory, every argument) or the sha256 of a file it was compiled from (the sources, every header `cc -M`
+lists, the system's and `build/gen`'s among them, and the program itself) has changed. Hashes and not dates,
+because `./build.sh` writes `build/gen` again with the same bytes on every run. (2) `tests/par.sh`: `run_tests.sh`
+and `run_cr_tests.sh` start every compile and every test in the background as the script reaches it, with what
+each waits for (its own program, the files made above it, `PAR_AFTER` where one test reads what another writes:
+`ui_render.py` after `ui_render`, `reverb_test` after `perform_test`, the second `hostsim`, `test_web.mjs` after
+`descdump`), and print them in the file's order: a compile's diagnostics where it stood, `== section`, the test's
+output; the verdict, the exit status and what a failure prints are as they were (a program that does not compile
+still ends `run_tests.sh` at its place, "the suite stopped ... in or after"). `PAR_JOBS=1` is the old order.
+`run_tests.sh`'s builds of the four USB tests are `build/host/rt_cr_usb*` now: `run_cr_tests.sh` built the same
+names with other flags. (3) `tests/install_test.py` runs its 19 phases in forks of itself, six at a time, each
+with its own temporary directory, printed in order (`INSTALL_TEST_JOBS=1`: in a row). (4) `tools/emu/build.sh`
+compiles its five units side by side through `hostcc.sh`, `tools/emu/web/build_web.sh` its one. (5)
+`tools/emu/test_cr.sh` starts `cr_screen_off` at its beginning and reads its status at the script's place. (6)
+`tests/run_all.sh`: `./build.sh`, then the sixteen other suites of the list with their documented commands, side
+by side, each to `build/scratch/logs/NAME.log`; a line per suite, the lines to read, `ALL SUITES PASSED` or the
+names; `--only`, `--list`; `CR_VERSION` goes to `build_web.sh` alone, as in the list.
+
+| | before | after, alone | in `run_all.sh` |
+| --- | --- | --- | --- |
+| `./build.sh` | 11 s | 11 s | 12 to 14 s |
+| `run_cr_tests.sh` | 59 s | 17 s (19 s compiling all) | 19 s |
+| `run_cr_draw.sh` | 5 s | 5 s | 7 s |
+| `tools/emu/build.sh` | 6 s | 0.1 s (6 s compiling all) | 0.2 s |
+| `test_cr.sh` | 43 s | 37 s | 40 s |
+| `test_persist.sh`, `test_retired.sh` | 3 s, 0.3 s | the same | 5 s, 0.6 s |
+| `run_tests.sh` | 247 s | 46 s (80 s before `install_test.py` was split) | 46 s |
+| `install_test.py` | 79 s | 20 s | 20 s |
+| `releases_test.py`, `test_backup` / `manager` / `sounds.mjs` | 0 to 2 s | the same | the same |
+| `test_installer.mjs` | 45 s | 45 s | 45 s |
+| `test_web.mjs` | 30 s | 30 s | 30 s |
+| `build_web.sh`, `test_web_emu.mjs` | 5 s, 5 s | 0.3 s (5 s compiling), 4 s | 0.5 s, 4 s |
+| **the whole list** | **544 s** | | **63, 64, 65 s warm (three runs in a row), 74 s from an empty `build/`** |
+
+**What stands in the way of less**: `./build.sh` (12 s, Docker) is first and alone, and then `test_installer.mjs`
+(45 s, alone and again inside `run_tests.sh`) decides; behind it `test_cr.sh` (40 s) and `test_web.mjs` (30 s).
+Not done, and why: the two web tests wait on `fm1ota.js`'s own `setTimeout` and `Date.now()`; a scaled clock would
+have to scale both together from the test, with bounds of tenths of a second left for a busy machine, and
+`test_installer.mjs` already runs at a tenth. Splitting them into processes as `install_test.py` was would bring
+the list to about 50 s; its blocks share a file-wide state that was not audited. `test_cr.sh`'s other 161 emulator
+runs take 0.06 s each; its cost is the shell.
+**The same checks** (the logs of a run before any change against the logs of `run_all.sh`, per suite, lines as
+multisets after masking durations and temporary paths; a second unchanged run showed which lines are measurements
+that differ from run to run: instruction counts, host ns): 8575 lines before, 8576 after; `cr_tests` (3168 lines),
+`cr_draw`, `install`, `releases`, `test_persist`, `test_retired`, the five web tests and the two emulator builds
+are the same lines in the same order; `test_cr`'s 979 the same (one more line on a tree that is not fresh, `rm:
+build/emu/test/cr_again: is a directory`, as before the change); `run_tests` the same in the same order but about 155
+measured lines whose figures move by a count or two, as between two unchanged runs, and two check lines more:
+with `build/emu-web` there, `site_test.py` checks the emulator in the site where the first run said "skip:
+build/emu-web missing". Check lines (ok / PASS / passed / FAIL / counters): 8060 before, 8062 after.
+**Failures still fail** (each made, run, undone): `cr_engine.c`'s numeral table `DEG[0][1]` 0x11 -> 0x12:
+`run_cr_tests.sh` exit 1 with `numeral 7: "bIII", want "bII"` and `2568 passed, 1 failed`, `run_all.sh` exit 1
+naming `cr_tests`; a comment appended to `cr_engine.h`: 12 of 23 programs compiled again, and again when it was put
+back with its old date; to `build/gen/felucca_tables.h`: 14; one flag: that program; a byte appended to a program:
+that one; a `touch` alone: none (the bytes are the same); `expect led FX on` -> `off` in `cr_screen_off.txt` (the
+script started ahead) and `expect led D4 on` -> `off` in `cr_dmaj.txt`: `test_cr.sh` exit 1 with two `FAIL` lines
+each; a syntax error in `tests/swing_test.c`: `run_tests.sh` prints the 36 sections above it, the compiler's
+error, "the suite stopped (status 1) in or after: SLICER ...", `HOST TESTS FAILED`; `scale_test` made to fail: all
+59 sections, `== failed: scales ...`, `HOST TESTS FAILED`; `test_backup.mjs`'s expected CRC changed: `run_all.sh`
+exit 1 naming `run_tests` and `web_backup`. `PAR_JOBS=1 sh tests/run_cr_tests.sh`: byte for byte the first run's
+output.
+**Found on the way.** (a) `test_web_emu.mjs` failed once beside the other suites: "render quantum ... max 20.314
+ms" against 4 budgets of 2.9 ms (0.3 ms alone): it measures wall-clock time, one preemption fails it.
+`run_all.sh` runs it last and alone; no failure in the seven whole runs after that. This kind of check
+(`install_test.py`'s bounds of tenths of a second, the web tests' 30 ms settles, this one) is the likely cause of
+`run_tests.sh` failing once on 2026-10-12 while another build ran (an inference: that failure's output was not
+kept). (b) `install_test.py` exits 0 when a check fails (it prints `INSTALL TESTS FAILED (n)` and ends; read in the code, not run): neither
+`run_tests.sh` nor `run_all.sh` sees it; `test_installer.mjs` and the others do exit 1. Left as it is and
+reported: the exit status was not this task's to change. (c) Two suites read what another makes and say "skip"
+without failing when it is missing (`test_web.mjs`: `build/host/desc.json`; `site_test.py`: `build/emu-web`);
+`run_all.sh` orders them. (d) `run_tests.sh` runs `install_test.py` and the five web tests itself, so the list
+runs them twice; both are kept. (e) The host instruction counts with limits move a little more beside other
+work: `mod_test`'s "every slot active" read +3.7 to +4.2 % in four runs against +4.0 % alone (limit +5 %).
+**Not tested**: Linux (the scripts are POSIX sh; `sha256sum` or `shasum`), a machine with few cores, `PAR_JOBS=1`
+for `run_tests.sh` whole, an interrupted run (Ctrl-C) beyond reading the code.

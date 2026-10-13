@@ -53,8 +53,42 @@ Read first: `PLAN.md` (§3 .. §5, §7), `docs/INTEGRATION.md`, the area's own d
 
 ## Verification
 
-In a fresh worktree `./build.sh` comes first (Docker running; the site and installer tests read
-`build/choralroot.fwsc`). No counts here: they go stale.
+One command runs the list below, whole, in about a minute on the owner's Mac (it was nine one after another;
+HISTORY 3y36):
+
+```
+CR_VERSION=0.22 sh tests/run_all.sh          # ends "ALL SUITES PASSED (17 suites, N s; ...)", exit 0; else names the suites
+sh tests/run_all.sh --only test_cr,install   # some of them (--list names them); a prerequisite not named is not run
+```
+
+It starts with `./build.sh` (Docker running), then runs the suites side by side where they share no file, each with
+its documented command and its whole output in `build/scratch/logs/NAME.log`; it prints one line per suite (PASS /
+FAIL, seconds), then the lines to read: the stub's, the size line, the goldens, the lint, the emulator scripts' ok
+counts. There is no quick mode: nothing is skipped. `CR_VERSION` goes to `tools/emu/web/build_web.sh` alone, as in
+the list below (the version being tagged); the other suites run without it. `sh tools/emu/perf.sh` and `sh tools/emu/classic_exact.sh` are not in it (estimates; a reference
+build). What is behind it, to know when a suite is run alone:
+
+- **The host programs are compiled once** (`tests/hostcc.sh`, used by `run_tests.sh`, `run_cr_tests.sh`,
+  `tools/emu/build.sh`, `tools/emu/web/build_web.sh`): a program is kept only when its compile command (compiler
+  version, every flag) and the sha256 of every file it was compiled from (sources, every header the preprocessor
+  opened, `build/gen`'s and the system's, and the program itself) are unchanged. Hashes, not dates: `./build.sh`
+  writes `build/gen` again on every run with the same bytes, and a file put back with an old date is still seen.
+  `HOSTCC_FORCE=1` compiles everything, `HOSTCC_VERBOSE=1` says kept / compiled. Only programs are kept; every test
+  runs every time.
+- **`run_tests.sh` and `run_cr_tests.sh` run their sections side by side** (`tests/par.sh`) and print them in the
+  file's order, so the output reads as before and the last line means what it meant. `PAR_JOBS=1` runs them one
+  after another. `tests/install_test.py` runs its 19 phases in forks of itself (`INSTALL_TEST_JOBS=1`: in a row).
+- **Two tests read what another suite makes, and say "skip" when it is not there**: `web/test_web.mjs` compares the
+  editor's mock with `build/host/desc.json` (written by `run_tests.sh`), and `tests/site_test.py` (in
+  `run_tests.sh`) checks the browser emulator in the site only when `build/emu-web` exists. `run_all.sh` orders
+  them; by hand, run `build_web.sh` before `run_tests.sh` and `run_tests.sh` before `test_web.mjs`.
+- **Tests that measure real time fail on a busy machine**: `tools/emu/web/test_web_emu.mjs` (the longest render
+  quantum, so `run_all.sh` runs it last and alone), `tests/install_test.py` and the web tests (bounds of tenths of
+  a second against simulated devices). Run a suite that failed beside a build again on a quiet machine before
+  believing it.
+
+The suites one by one. In a fresh worktree `./build.sh` comes first (Docker running; the site and installer tests
+read `build/choralroot.fwsc`). No counts here: they go stale.
 
 ```
 export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
