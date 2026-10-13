@@ -285,8 +285,8 @@ grep -q '^ui: frame.*device): knobrow .*hot 1\.1$' "$L" && grep -q '^ui: frame.*
 h=$(px_count "$OUT/cr_fx_row_hot.ppm" 64 176 116 196 ink); c=$(px_count "$OUT/cr_fx_row_cool.ppm" 64 176 116 196 ink)
 [ "$h" -gt $((c + 300)) ] && ok "the hot block behind Damp's value ($h ink px), gone 900 ms later ($c): $OUT/cr_fx_row_hot.ppm" \
     || bad "hot block: $h px hot, $c after"
-has '^fx: cells Time Spread Feedback Send' "$L" && has '^fx: cells Rate Depth - Send' "$L" && has '^fx: cells - - - Send' "$L" &&
-    ok "SELECT picks the effect, the cells follow (Delay, Chorus with a dash, Drive the send only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
+has '^fx: cells Time Spread Feedback Send' "$L" && has '^fx: cells Rate Depth Width Send' "$L" && has '^fx: knob 3 Chorus width 125$' "$L" && has '^fx: cells - - - Send' "$L" &&
+    ok "SELECT picks the effect, the cells follow (Delay, Chorus with its Width on KNOB 3 (0.21: 127 -> 125 a detent), Drive the send only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
 has '^fx: effect Reverb 2/2' "$L" && has '^fx: cells Pre-delay Mod Low cut Width' "$L" && has '^fx: effect Delay 2/2' "$L" &&
     has '^fx: cells Sync Mode Tone Wow' "$L" && [ "$(grep -c '^fx: effect' "$L")" = 7 ] &&
     [ "$(grep -a '^fx: cells' "$L" | head -1)" = "fx: cells Drive Chorus Delay Reverb" ] &&

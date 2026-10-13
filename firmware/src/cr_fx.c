@@ -103,8 +103,9 @@ enum { XP_DTIME,                 /* the delay's time, free: 0..127 = 16 ms .. XD
        XP_RLOW,                  /* the input's low cut: 0..127 = 20 .. 500 Hz */
        XP_RWIDTH,                /* 0 mono .. 127 full */
        XP_CWIDTH,                /* the chorus's right tap: its LFO 0 .. a quarter turn ahead of the left's (0: both
-                                  * ears the same tap, the mono return of 0.18; 127: a quarter). No knob yet: the
-                                  * default (docs/FX.md "The chorus, stereo" has the two lines a knob needs) */
+                                  * ears the same tap, the mono return of 0.18; 127: a quarter). KNOB 3 of the
+                                  * Chorus page since 0.21 (cr_ui.c CU_FXP), kept in the session (CSS_FXP_XC_WIDTH);
+                                  * xc_block glides to it */
        XP_N };
 static const struct { int16_t min, max, def; } XFP[XP_N] = {
     [XP_DTIME] = {0, 127, 91}, [XP_DDIV] = {0, 12, 6}, [XP_DSPREAD] = {0, 127, 0}, [XP_DRATIO] = {0, 3, 0},
@@ -845,12 +846,29 @@ static void xf_hb_clear(xf_hb_t *h)
 #define XC_TURN 0x40000000u               /* the right tap's lead at Width 127: a quarter of the LFO's turn */
 #endif
 static uint32_t xc_live;
-#define XC_POS(ph) ((400 << 8) + (((osc_sine(ph) + 32768) * cdepth) >> 8))   /* Q8 samples back (fx_buses's own) */
+/* 0.21: NO STEP IN THE READ POINT, WHATEVER MOVES (the owner: "This FX pops and crackles when adjusting the depth").
+ * To 0.20 each block's line ran from XC_POS(ph0) to XC_POS(ph1) with the Depth and the Width of that block: it ended
+ * where the next began only while both stood still. A step of Depth moved the next block's first point by up to 6
+ * samples (1536 Q8) and a step of Width the right tap's by up to 4.7: a click a detent. Now
+ *  - each tap's last read point is kept (xc.ra, xc.rb: Q8, the point the last block's line aimed at) and the next
+ *    block's line starts there: the read point is continuous by construction;
+ *  - the depth (xc.dc, a 16th of the 6 x DEPTH unit) and the right tap's lead (xc.oc, the LFO's phase) go to what is
+ *    set by a 1/2^XC_GL of what is left a block, rounded away from zero: a one-pole of 2^XC_GL blocks (64: 46 ms)
+ *    that LANDS on the target. At rest dc is 16 x the old cdepth and (s x 16 c) >> 12 is (s x c) >> 8: the block is
+ *    0.20's to the bit (tests/cr_fx_test.c "chorus glide" holds 0.20's block beside it);
+ *  - an empty line (xc_live 0) glides nothing: the first block with a send starts on what is set, as 0.20's did.
+ * Rate needs none of it: it is the LFO's increment, and the phase runs on. */
+#ifndef XC_GL
+#define XC_GL 6                           /* the glide: 2^6 blocks of 32, 46 ms (docs/FX.md has the measurements) */
+#endif
+static struct { int32_t dc, oc, ra, rb; } xc;
+#define XC_POS(ph, d) ((400 << 8) + (((osc_sine(ph) + 32768) * (d)) >> 12))   /* Q8 samples back (fx_buses's own; d: x16) */
+#define XC_GLIDE(c, t) ((c) + (((t) - (c) + ((t) > (c) ? (1 << XC_GL) - 1 : 0)) >> XC_GL))
 static __attribute__((noinline)) void xc_block(const int32_t *in, int32_t *ml, int32_t *mr, uint32_t n)
 {
-    int32_t cdepth = song.g[G_CDEPTH] * 6, any = 0, ra, rb, da, db;
+    int32_t dt = song.g[G_CDEPTH] * (6 << 4), ot = xfp[XP_CWIDTH] * (int32_t)(XC_TURN / 127u);
+    int32_t any = 0, dc, oc, ra, rb, da, db, ea, eb;
     uint32_t i, w = fx.cho_w, ph0 = fx.cho_ph, ph1 = ph0 + (LFO_INC[song.g[G_CRATE] & 127] / CTL) * n;
-    uint32_t off = (uint32_t)xfp[XP_CWIDTH] * (XC_TURN / 127u);
     fx.cho_ph = ph1;                                    /* (the LFO runs on while nothing is sent, as it always did) */
     fx.cho_w = w + n;
     if (!xc_live) {
@@ -858,11 +876,25 @@ static __attribute__((noinline)) void xc_block(const int32_t *in, int32_t *ml, i
             any |= in[i];
         if (!any)
             return;                                     /* nothing sent and the line empty: zeros in, zeros out */
+        xc.dc = dt;                                     /* the first block after rest (and after power-on, a load): */
+        xc.oc = ot;                                     /* in place, no glide */
+        xc.ra = XC_POS(ph0, dt);
+        xc.rb = XC_POS(ph0 + (uint32_t)ot, dt);
     }
-    ra = XC_POS(ph0) << 5;                              /* the read points, a 32nd of Q8: a line from this block's */
-    rb = XC_POS(ph0 + off) << 5;                        /* LFO to the next one's, so it ends where the next begins */
-    da = XC_POS(ph1) - (ra >> 5);
-    db = XC_POS(ph1 + off) - (rb >> 5);
+    dc = xc.dc;
+    oc = xc.oc;
+    if (dc != dt)
+        xc.dc = dc = XC_GLIDE(dc, dt);
+    if (oc != ot)
+        xc.oc = oc = XC_GLIDE(oc, ot);
+    ea = XC_POS(ph1, dc);                               /* the read points, a 32nd of Q8: a line from where the last */
+    eb = XC_POS(ph1 + (uint32_t)oc, dc);                /* block's ended to this block's end, where the next begins */
+    da = ea - xc.ra;
+    db = eb - xc.rb;
+    ra = xc.ra << 5;
+    rb = xc.rb << 5;
+    xc.ra = ea;
+    xc.rb = eb;
     if (n != CTL) {                                     /* (the ISR's block is CTL: the step is the difference) */
         da = da * (int32_t)CTL / (int32_t)n;
         db = db * (int32_t)CTL / (int32_t)n;

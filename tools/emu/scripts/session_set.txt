@@ -3,7 +3,8 @@
 #   a loop recorded in slot 3 (D, Em) and stopped;
 #   the chord part's sound edited and not saved (EDIT, KNOB 2), the bass part's too (BASS held + EDIT, KNOB 2);
 #   Bass on (BASS tap), its Level turned down (the BASS layer's KNOB 4);
-#   the delay picked in the FX layer (SELECT +3: Delay 1), its time, spread, feedback and send turned, then its second
+#   the chorus's Width turned (0.21), the delay picked in the FX layer (Delay 1), its time, spread, feedback and send
+#   turned, then its second
 #   page (SELECT +1: Delay 2), Mode to Stereo and Tone up: the effects' parameters are global and the session's;
 #   Perform on with Arpeggiate (the PERF layer, SELECT +3);
 #   the voicing +2 (KNOB 1), the octave -1 (OCT-);
@@ -66,7 +67,11 @@ btn FX down                   # the FX layer: Delay 1, its time (1/8 -> 1/8., an
 wait 500                      # 3:4), feedback, send
 btn FX up
 wait 300
-knob SELECT +4                # (Sends, Reverb 1, Reverb 2, Chorus, Delay 1)
+knob SELECT +3                # (Sends, Reverb 1, Reverb 2, Chorus): its Width 127 -> 123 (0.21: KNOB 3, tag 30)
+wait 300
+knob KNOB3 -2
+wait 200
+knob SELECT +1                # Delay 1
 wait 300
 knob KNOB1 -2
 wait 200

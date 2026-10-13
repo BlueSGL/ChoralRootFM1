@@ -388,7 +388,7 @@ the knob's meter/dial for 900 ms (§5) — except in the FX layer, a **knob row*
 effect's picker over KNOB 1–4's cells. Since 0.18 (docs/FX.md) the layer has seven pages (`CU_FXP`: `cs.fx_sel` the
 effect, `cs.fx_page` its page or `CU_FXPG_SENDS`; SELECT steps them, the label carries "1/2"): Sends Drive Chorus
 Delay Reverb (the chord part's four, as the editor's FX group: `cu_send`), Reverb 1 Size Damp Decay Send, Reverb 2
-Pre-delay Mod Low cut Width, Chorus Rate Depth – Send, Delay 1 Time Spread Feedback Send, Delay 2 Sync Mode Tone Wow,
+Pre-delay Mod Low cut Width, Chorus Rate Depth Width Send, Delay 1 Time Spread Feedback Send, Delay 2 Sync Mode Tone Wow,
 Drive – – – Send. A cell is a global parameter (`cr_fx.c xfp[]`, or the chorus's `song.g`), or "Send" =
 the chord part's send in per cent (`cu_send_text`, as the Sends page and the editor read it; "off" with FX off); Time and Spread are the synced or the
 free parameter by Sync (`cu_fx_id`). Values with their units (`cu_fx_val`: "250 ms", "1/8.", "3:4", "x0.75",

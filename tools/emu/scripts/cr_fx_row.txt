@@ -7,7 +7,7 @@
 # divisions FASTER (clockwise speeds the echoes up: 1/8 -> 1/16, the bars of its glyph closer), -3: back; +1: Delay 2
 # (Sync / Mode / Tone / Wow), KNOB 1 -1: Sync to Free, KNOB 2 -1: Mode to Stereo; -1: Delay 1 again, its Time now in
 # milliseconds, KNOB 1 +1: fewer of them;
-# -1: Chorus (Rate / Depth / - / Send); +3: Drive (- - - Send); D4 + MAJ: the chord sounds in the layer; FX tap: off
+# -1: Chorus (Rate / Depth / Width / Send), KNOB 3 -1: Width 127 -> 125; +3: Drive (- - - Send); D4 + MAJ: the chord sounds in the layer; FX tap: off
 # (the send reads "off"); OCT- closes the layer.
 wait 300
 btn FX down
@@ -53,6 +53,8 @@ wait 900
 knob SELECT -1
 wait 400
 shot build/emu/test/cr_fx_row_chorus.ppm
+knob KNOB3 -1
+wait 900
 knob SELECT +3
 wait 400
 key F3 down

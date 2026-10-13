@@ -229,7 +229,7 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
  * when `version` is not its CSS_FX_VERSION (bump it only if this struct's layout changes). A parameter whose meaning
  * or range changes gets a NEW tag (the old one retired, never reused); room for 24 parameters and 8 effects */
 #define CSS_FX_VERSION 1u
-#define CSS_NFXP 24                     /* (22 used) */
+#define CSS_NFXP 24                     /* (23 used) */
 #define CSS_NFXE 8
 #define CSS_FX_NONE 0xFFu               /* amt: not stored (the default send) */
 enum { CSS_FXE_REVERB, CSS_FXE_CHORUS, CSS_FXE_DELAY, CSS_FXE_DRIVE,              /* effect tags (amt's index, sel) */
@@ -249,8 +249,10 @@ enum { CSS_FXP_NONE, CSS_FXP_RSIZE, CSS_FXP_RDAMP, CSS_FXP_RTYPE, CSS_FXP_CRATE,
        CSS_FXP_XR_WIDTH,                                                           /* 18..24: the reverb */
        CSS_FXP_XD_TIME2,                 /* 25: the delay's free time, 16 .. 740 ms (the delay at the full rate: 9's
                                           * 21 .. 1000 ms is retired with the half-rate line) */
-       CSS_FXP_BS_REV, CSS_FXP_BS_CHO, CSS_FXP_BS_DLY, CSS_FXP_BS_DRIVE };         /* 26..29: the BASS part's sends (the
+       CSS_FXP_BS_REV, CSS_FXP_BS_CHO, CSS_FXP_BS_DLY, CSS_FXP_BS_DRIVE,           /* 26..29: the BASS part's sends (the
                                           * chord part's are amt[]): the sends are the parts', not the sounds' */
+       CSS_FXP_XC_WIDTH };               /* 30 (0.21): the chorus's Width (cr_fx.c XP_CWIDTH). A record without it:
+                                          * 127, the chorus of 0.19 and 0.20 */
 typedef struct { uint8_t tag, rsv; int16_t v; } css_fxp_t;
 typedef struct {
     uint8_t version, n, sel, on_rsv;    /* CSS_FX_VERSION, entries of par[] used, the FX layer's picked effect (its

@@ -466,8 +466,8 @@
    }
   },
   {
-   "name": "4 \u00b7 knob row: Chorus (two parameters) and Drive (amount only)",
-   "notes": "Effects with fewer parameters leave their cells as a dim '\u2013' (Chorus: RATE, DEPTH, \u2013, AMOUNT; Drive: \u2013, \u2013, \u2013, AMOUNT): the row's shape stays, so the hand always finds the amount on KNOB 4. This state shows Chorus.",
+   "name": "4 \u00b7 knob row: Chorus (three parameters since 0.21: Width) and Drive (amount only)",
+   "notes": "Effects with fewer parameters leave their cells as a dim '\u2013' (Drive: \u2013, \u2013, \u2013, AMOUNT; Chorus until 0.20: RATE, DEPTH, \u2013, AMOUNT): the row's shape stays, so the hand always finds the amount on KNOB 4. This state shows Chorus as 0.21 has it: RATE, DEPTH, WIDTH (the stereo chorus's, the reverb's glyph), AMOUNT.",
    "export": true,
    "keys": [
     0,
@@ -552,8 +552,8 @@
      "value": "60"
     },
     "KNOB3": {
-     "note": "",
-     "value": ""
+     "note": "WIDTH",
+     "value": "127"
     },
     "KNOB4": {
      "note": "AMOUNT",
@@ -597,7 +597,12 @@
        "pct": 0.3,
        "pct2": 0.472
       },
-      null,
+      {
+       "label": "Width",
+       "value": "127",
+       "glyph": "width",
+       "pct": 1.0
+      },
       {
        "label": "Send",
        "value": "30%",
@@ -611,7 +616,7 @@
     "footer": {
      "text": "SELECT: effect \u00b7 FX: on/off \u00b7 OCT-: back"
     },
-    "note": "Chorus: two cells and a dim '\u2013'; the amount stays on KNOB 4."
+    "note": "Chorus: rate, depth, width (0.21); the amount stays on KNOB 4."
    }
   },
   {

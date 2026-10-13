@@ -645,8 +645,45 @@ the comparison with half a turn.)
 
 - **How**: the LFO is taken once a block, at its start and at its end, for each tap (four sines a block where there
   was one a sample), and each tap's read point is a straight line between the two, kept at a 32nd of the line's own
-  resolution so that it ends exactly on the next block's first point: no step in the read position. The left tap
-  against 0.18's own, on noise: 45 dB under it (the line's resolution of a 256th of a sample).
+  resolution so that it ends exactly on the next block's first point: no step in the read position **while Depth and
+  Width stand still** (0.19, 0.20; the next bullet). The left tap against 0.18's own, on noise: 45 dB under it (the
+  line's resolution of a 256th of a sample).
+- **While a knob turns (0.21)** (the owner: "This FX pops and crackles when adjusting the depth which I don't
+  like."). The cause: each block's line ran from the LFO's point at the block's start to its point at the end *with
+  that block's Depth and Width*, so the next block began where this one ended only while neither moved. A step of
+  Depth put the next block's first point up to 6 samples away for each unit of Depth (the FX layer's detent is 2
+  units: 12), a step of Width the right tap's up to 4.7: a click a detent. The fix, two parts:
+  - **the read point is kept**: each tap's last point (`xc.ra`, `xc.rb`, Q8: where the last block's line aimed) is
+    state, and the next block's line starts there, whatever the parameters did. Continuous by construction; and a
+    running block takes two sines where it took four;
+  - **Depth and Width glide**: the depth the block uses (`xc.dc`, in 16ths of the old unit) and the right tap's lead
+    (`xc.oc`, the LFO's phase) go a 64th of what is left a block, rounded away from zero: a one-pole of 64 blocks,
+    **46 ms** (`XC_GL` 6), that lands exactly on what is set (the last 64 units one a block). Without it the kept
+    read point would make a 6-sample step up inside one block of 32: a pitch blip of 19 % instead of a click.
+  At rest the glided depth is 16 x the old one and `(s x 16 d) >> 12` is `(s x d) >> 8`: **the block is 0.20's to
+  the bit** (`tests/cr_fx_test.c` "chorus glide" keeps 0.20's block beside the new one: noise and a sine, six
+  settings, blocks of 32 and of 8 / 24 / 16; the golden renders: 0 changed). An empty line (`xc_live` 0) glides
+  nothing: the first block with a send takes what is set and its own first point, as 0.20's did, so a note after a
+  knob turned in silence, after power-on or after a session is loaded starts in place. Rate needed nothing: it is
+  the LFO's increment and the phase runs on (the test: Rate stepped, swept and thrown gives 0.20's samples).
+
+  | the read point's largest move in one sample (samples); a 110 Hz sine's largest second difference | 0.20's block | 0.21 |
+  | --- | --- | --- |
+  | at rest, Depth 60 / Depth 127 | 0.06 / 0.13; 12 | the same |
+  | Depth 60 -> 61 | 6.0; 1862 | 0.06; 12 |
+  | Depth 0 .. 127 .. 0, a unit every 2 or 3 blocks | 6.0; 1878 | 0.13; 12 |
+  | Depth 0 -> 127 at once (no knob does it) | 561; 9738 | 0.31; 76 |
+  | Width 60 -> 61 (Depth 127) | 3.3; 212 | 0.13; 12 |
+  | Width 0 .. 127 .. 0 | 4.8; 1472 | 0.19; 12 |
+  | Width 0 -> 127 at once | 516; 15106 | 0.38; 82 |
+
+  (the read point is measured from the output: the send is a ramp, so a tap's output is the time it reads at; the
+  grain is a 16th of a sample.) **Why 46 ms**: with 23, 46 and 93 ms a detent and a sweep by hand measure the
+  same, the steady chorus's own figures; they differ only when the whole range is thrown at once (0.56 / 0.31 /
+  0.19 samples a sample, second difference 152 / 76 / 38), which a knob cannot do, and 93 ms would lag the hand
+  twice as long and take 1.6 s to land the Width. One unit of Depth at 46 ms bends the chorus's pitch by at most
+  5 cents, fading over that time (the FX layer's detent, 2 units: 10 cents; computed from the glide's first block,
+  6 / 64 samples in 32): under what the chorus itself swings (18 cents each way at the default Rate and Depth).
 - **Nothing sent, nothing run**: `xc_live` counts the samples for which the line still holds something. While it is 0
   a block costs a look at the send (32 loads); with a send, or until the line has run out (2048 samples of silence
   written), the loop runs. Zeros in, zeros out, to the bit.
@@ -666,20 +703,24 @@ the comparison with half a turn.)
 four LFO points): 35 us a half while it runs, 3 us while nothing is sent; and the master's mix line no longer adds a
 wet buffer (3 instructions a frame, 2 us). **+3 us a half with a chorus send, -29 us without.** Flash: `xc_block` is
 546 bytes (the whole round: +564 B); RAM: the mono wet's 128 bytes gone; the pool unchanged.
+**0.21** (the listing again): 51 a sample and about 90 a block at rest (two sines, not four; the two glides are a
+compare each), about 106 while a knob's glide runs, 10 more in the one block that starts after rest; an idle block
+161 instructions where it was 156. A running block: 1722 instructions for 1778, **-0.3 us a block, -1 us a half**.
+Flash: `xc_block` 632 bytes (+82), the whole change +144 B (`.text` 468208); RAM +16 B (the four words of `xc`);
+the pool unchanged (315496 B, 91.7 %).
 
-**Width: the parameter is there, the knob is not.** `xfp[XP_CWIDTH]` (`cr_fx.c`, 0 .. 127, default 127): the right
-tap's lead as a part of a quarter turn; 0 is both ears the left tap, 0.18's mono return. KNOB 3 of the Chorus page
-is free. What a knob needs, in files this change did not touch:
-
-```
-cr_ui.c  CU_FXP[], the Chorus row:   {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, XP_CWIDTH, FC_SEND}, {"Rate", "Depth", "Width", "Send"}},
-cr_ui.c  cu_fx_cells' glyphs:        case XP_RWIDTH: case XP_CWIDTH: c->glyph = CR_G_WIDTH; break;
-cr_settings.h / .c, to keep it:      a new tag CSS_FXP_XC_WIDTH (30, appended) and {CSS_FXP_XC_WIDTH, 1, XP_CWIDTH} in CSS_FXG
-```
-
-(an `xfp` cell is generic in the layer: its step, its read-out and its range come from `XFP[]`; without the third
-line the knob works and the value is the default again after a restart.) Not on the unit, not heard by anyone:
-`../audio-0.19/chorus/` has the listening files.
+**Width (0.21: KNOB 3 of the Chorus page)** (the owner: "Since it's stereo now, and we have Knob 3 as empty slot we
+should be able to add a parameter for Stereo Width."). `xfp[XP_CWIDTH]` (`cr_fx.c`, 0 .. 127, default 127): the
+right tap's lead as a part of a quarter turn; 127 is the chorus of 0.19 and 0.20, 0 is both ears the left tap, 0.18's
+mono return (the same sample left and right). The cell is a generic `xfp` cell of the layer (`cr_ui.c CU_FXP`'s
+Chorus row; 2 a detent, as every 0 .. 127 cell there), reads a number 0 .. 127 as the reverb's Width does and has its
+glyph (`CR_G_WIDTH`). It glides as Depth does (above). **Kept in the session** under a new tag, `CSS_FXP_XC_WIDTH`
+(30, appended; `cr_settings.c CSS_FXG`): a session saved by 0.19 or 0.20 has no such tag and loads with Width 127;
+0.19 and 0.20 skip the tag when they read a session that has it (nothing else in the record is touched; their chorus
+is Width 127), and their next save writes the record without it, so the Width is 127 again on the way back
+([SETTINGS.md](SETTINGS.md)). Listening files, from the host test's renderer (the firmware's block, not a unit):
+`../audio-0.21/chorus/` (`tools/chorus_glide_listen.sh`); 0.19's are in `../audio-0.19/chorus/`. Not played on the
+unit yet.
 
 ## The master, and Options > Output (0.19)
 
@@ -729,7 +770,7 @@ Sends does not know the tag and keeps Reverb 1).
 | Sends | Drive (clip) | Chorus (mix) | Delay (mix) | Reverb (mix) |
 | Reverb 1 | Size (room) | Damp (moon) | Decay (tail) | Send (mix) |
 | Reverb 2 | Pre-delay (pre) | Mod (lfo) | Low cut (cut) | Width (width) |
-| Chorus | Rate (lfo) | Depth (lfo) | – (free: Width, "The chorus, stereo") | Send (mix) |
+| Chorus | Rate (lfo) | Depth (lfo) | Width (width; 0.21) | Send (mix) |
 | Delay 1 | Time (echoes) | Spread (spread) | Feedback (echoes) | Send (mix) |
 | Delay 2 | Sync (sync) | Mode (ping) | Tone (moon) | Wow (lfo) |
 | Drive | – | – | – | Send (clip) |

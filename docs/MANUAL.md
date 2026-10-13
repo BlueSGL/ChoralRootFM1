@@ -619,7 +619,10 @@ Four effects: **Reverb**, **Chorus**, **Delay** and **Drive**. The reverb and th
 slow reverb that goes from a hall to a wash that does not end, and a stereo delay with separate times left and
 right that can ping-pong. From 0.19 the chorus is stereo too: it comes back as two signals, one for each side,
 moved by the same sweep a quarter turn apart, so on headphones it spreads out instead of sitting in the middle. Its
-Rate, Depth and send are what they were.
+Rate, Depth and send are what they were. From 0.21 the Chorus page has **Width** on KNOB 3: 127 (where it starts) is
+that full spread, 0 is one chorus in the middle, the same in both ears, and anything between is between. Width is
+kept with the other effect settings when you hold SAVE. Turning Depth or Width while a sound plays is smooth: the
+chorus slides to the new setting in a twentieth of a second (until 0.20, Depth clicked at every step).
 
 The one rule to know: **the effects and their sends belong to the instrument, not to the sound.**
 
@@ -649,7 +652,7 @@ On the panel:
 | **Sends** | Drive | Chorus | Delay | Reverb |
 | Reverb 1 | Size | Damp | Decay | **Send** |
 | Reverb 2 | Pre-delay | Mod | Low cut | Width |
-| Chorus | Rate | Depth | | **Send** |
+| Chorus | Rate | Depth | Width | **Send** |
 | Delay 1 | Time | Spread | Feedback | **Send** |
 | Delay 2 | Sync | Mode | Tone | Wow |
 | Drive | | | | **Send** (the amount of drive) |

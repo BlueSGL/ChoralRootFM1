@@ -800,8 +800,8 @@ that function): one tap on a line of 2048 samples, 400 + 0 .. 6 x Depth samples 
 Depth 60) on a sine LFO, returned equal to both sides. Since 0.19 the unit's is `cr_fx.c xc_block`: **two taps on the
 same line**, the left one Felucca's own, the right one the same LFO **a quarter turn ahead**. Rate, Depth and the
 send mean what they did; the line, its memory and the pool are unchanged. An effect, not a part of the output stage:
-it is the same in Classic and in Clean. docs/FX.md "The chorus, stereo" has the design, the cost and what a Width
-knob would need.
+it is the same in Classic and in Clean. docs/FX.md "The chorus, stereo" has the design, the cost, the Width
+knob (0.21) and the glide under a turning Depth or Width (0.21).
 
 **A quarter turn, not Sloop's half.** Computed from the firmware's own numbers (`tools/chorus_response.py`: dry at 1,
 the wet at the send's gain, 100 Hz .. 10 kHz, every moment of the LFO's turn), and checked on the code
@@ -951,6 +951,7 @@ Counted in `build/choralroot.dis` against 778a6ad's:
   tag: docs/HANDOFF.md "Verification".)
 - A Width knob: the parameter is there (`xfp[XP_CWIDTH]`), KNOB 3 of the Chorus page is free, the two lines in
   `cr_ui.c` and the one in `cr_settings.c` are in docs/FX.md; not added here (those files were another agent's).
+  (Added in 0.21: docs/FX.md "The chorus, stereo".)
 - docs/USB-AUDIO.md does not yet say that the part pairs are 0.73 ms late with the master pair in Clean.
   (Superseded: it does, under "ChoralRoot In: the channels", with what a change of Output does to a running
   recording's part pairs.)
@@ -963,7 +964,7 @@ Counted in `build/choralroot.dis` against 778a6ad's:
    possible. A decision about the sounds' levels, by ear. (The owner, for 0.19: no per-sound loudness matching right
    now. Open.)
 2. ~~The chorus's return is mono~~: stereo since the third round ([The chorus, stereo](#the-chorus-stereo)). Open:
-   a Width knob on the Chorus page's free KNOB 3 (the parameter is there), and what the unit's own speaker gets.
+   what the unit's own speaker gets. (The Width knob: KNOB 3 of the Chorus page since 0.21.)
 3. **Output's default for the release** (Classic or Clean), the trim, and the make-up build: after listening.
    And since the second round: 32 or 64 samples of look-ahead. (The limiter's hold: chosen in the third round,
    [The hold](#the-hold); to be heard: `../audio-0.19/hold/`.) (The default: Clean, with Classic kept for

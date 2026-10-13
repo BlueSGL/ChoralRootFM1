@@ -20,7 +20,8 @@
  *     nothing; the decay times against the knob;
  * 10. the cost: host instructions a 128-frame block with both fully on, and emu.c's device estimate (budget: 350 us).
  * WAVs for tools/fx_plots.py into OUTDIR: the reverb's impulse responses (small, default, large, Inf), the delay's
- * repeats (stereo, ping-pong, spread). */
+ * repeats (stereo, ping-pong, spread).
+ *   build/host/cr_fx_test --chorus-listen DIR   the chorus's listening files of 0.21 (tools/chorus_glide_listen.sh) */
 #define CR_FX 1
 #define main hostsim_main
 #include "hostsim.c"
@@ -1088,6 +1089,375 @@ static void t_chorus(void)
     free(ol);
 }
 
+/* ------------------------------------------------------- the chorus's glide --- */
+/* THE CHORUS WHILE A KNOB TURNS (0.21, cr_fx.c xc_block; docs/FX.md "The chorus, stereo"; the owner: "This FX pops and
+ * crackles when adjusting the depth"). xc_block_ref is the block of 0.19 and 0.20 (f9db021), kept here word for word:
+ * it is what the new one must equal to the bit while nothing moves, and what these checks must FAIL on while
+ * something does (each one says what the old block measures: the test would have caught it). */
+static uint32_t ref_live;
+#define XC_POS0(ph) ((400 << 8) + (((osc_sine(ph) + 32768) * cdepth) >> 8))
+static void xc_block_ref(const int32_t *in, int32_t *ml, int32_t *mr, uint32_t n)
+{
+    int32_t cdepth = song.g[G_CDEPTH] * 6, any = 0, ra, rb, da, db;
+    uint32_t i, w = fx.cho_w, ph0 = fx.cho_ph, ph1 = ph0 + (LFO_INC[song.g[G_CRATE] & 127] / CTL) * n;
+    uint32_t off = (uint32_t)xfp[XP_CWIDTH] * (XC_TURN / 127u);
+    fx.cho_ph = ph1;
+    fx.cho_w = w + n;
+    if (!ref_live) {
+        for (i = 0; i < n; i++)
+            any |= in[i];
+        if (!any)
+            return;
+    }
+    ra = XC_POS0(ph0) << 5;
+    rb = XC_POS0(ph0 + off) << 5;
+    da = XC_POS0(ph1) - (ra >> 5);
+    db = XC_POS0(ph1 + off) - (rb >> 5);
+    if (n != CTL) {
+        da = da * (int32_t)CTL / (int32_t)n;
+        db = db * (int32_t)CTL / (int32_t)n;
+    }
+    for (i = 0; i < n; i++, w++) {
+        int32_t x = in[i], r, c0, c1;
+        uint32_t k;
+        any |= x;
+        cho_buf[w & (CHO_LEN - 1u)] = (int16_t)clamp(x >> 1, -32768, 32767);
+        ra += da;
+        r = ra >> 5;
+        k = w - ((uint32_t)r >> 8);
+        c0 = cho_buf[k & (CHO_LEN - 1u)];
+        c1 = cho_buf[(k - 1u) & (CHO_LEN - 1u)];
+        ml[i] += (c0 + (((c1 - c0) * (r & 255)) >> 8)) * 2;
+        rb += db;
+        r = rb >> 5;
+        k = w - ((uint32_t)r >> 8);
+        c0 = cho_buf[k & (CHO_LEN - 1u)];
+        c1 = cho_buf[(k - 1u) & (CHO_LEN - 1u)];
+        mr[i] += (c0 + (((c1 - c0) * (r & 255)) >> 8)) * 2;
+    }
+    ref_live = any ? CHO_LEN : ref_live > n ? ref_live - n : 0u;
+}
+/* a run: sch(b) before block b (b 0: before anything, so the first block starts on what it sets); mixed: blocks of
+ * 32, 8, 24, 16 samples in turn instead of CTL. Returns the samples run */
+typedef void (*sch_t)(uint32_t b);
+static int gl_mixed;
+static uint32_t gl_run(uint32_t n, gen_t gen, int ref, sch_t sch)
+{
+    static const uint8_t NP[4] = {32, 8, 24, 16};
+    static int32_t sc[CTL], ml[CTL], mr[CTL];
+    uint32_t i = 0, k, b = 0, m;
+    cho_reset();
+    ref_live = 0;
+    while (i + CTL <= n && i + CTL <= MAXS) {
+        m = gl_mixed ? NP[b & 3u] : CTL;
+        if (sch)
+            sch(b);
+        for (k = 0; k < m; k++) {
+            sc[k] = gen ? gen(i + k) : 0;
+            ml[k] = mr[k] = 0;
+        }
+        (ref ? xc_block_ref : xc_block)(sc, ml, mr, m);
+        memcpy(WL + i, ml, m * sizeof *ml);
+        memcpy(WR + i, mr, m * sizeof *mr);
+        i += m;
+        b++;
+    }
+    return i;
+}
+/* the schedules: gs_par 0 Depth, 1 Width, 2 Rate; the others as gs_fix has them */
+#define GS_T 400u                                       /* the block of the first move */
+static int gs_par, gs_fix[3] = {60, 127, 64};
+static void gs_set(int par, int v)
+{
+    if (par == 0) song.g[G_CDEPTH] = v;
+    else if (par == 1) xfp[XP_CWIDTH] = (int16_t)v;
+    else song.g[G_CRATE] = v;
+}
+static void gs_init(int v)
+{
+    gs_set(0, gs_fix[0]);
+    gs_set(1, gs_fix[1]);
+    gs_set(2, gs_fix[2]);
+    gs_set(gs_par, v);
+}
+static void s_static(uint32_t b) { if (!b) gs_init(gs_fix[gs_par]); }
+static void s_step(uint32_t b)                          /* one detent, 60 -> 61, the LFO at its top (the left tap's) */
+{
+    if (!b) {
+        gs_init(60);
+        fx.cho_ph = 0x40000000u - GS_T * (LFO_INC[song.g[G_CRATE] & 127] / CTL) * CTL;
+    }
+    if (b == GS_T)
+        gs_set(gs_par, 61);
+}
+static void s_jump(uint32_t b)                          /* the whole range at once */
+{
+    if (!b) gs_init(0);
+    if (b == GS_T) gs_set(gs_par, 127);
+}
+static void s_sweep(uint32_t b)                         /* by hand: 0 .. 127 a step every 3 blocks (0.28 s), a rest, */
+{                                                       /* back a step every 2 blocks */
+    const uint32_t up = GS_T + 3u * 127u, dn = up + 300u;
+    if (!b) gs_init(0);
+    if (b >= GS_T && b <= up) gs_set(gs_par, (int)((b - GS_T) / 3u));
+    if (b >= dn && b <= dn + 2u * 127u) gs_set(gs_par, 127 - (int)((b - dn) / 2u));
+}
+#define GS_SWEEP_N ((GS_T + 3u * 127u + 300u + 2u * 127u + 400u) * CTL)
+/* THE READ POINT, FROM THE OUTPUT: the send is a ramp (32 a sample, 2040 samples long, again and again), so a tap's
+ * output / 32 is the time it reads at and i - that its delay, to a 16th of a sample. Where the tap reads across the
+ * ramp's fall the figure means nothing: a second run with the ramp half a period on has its fall elsewhere, and of the
+ * two figures the one nearer the last sample's is taken (they agree everywhere else). Returns the largest change of
+ * a tap's delay from one sample to the next, in samples (either tap; lo / hi: the range of the delay) */
+#define SAW_P 2040u
+static uint32_t g_so;
+static int32_t g_saw(uint32_t i) { return 32 * (int32_t)((i + g_so) % SAW_P); }
+static double saw_d(int32_t out, uint32_t i, uint32_t o)
+{
+    return fmod((double)(i + o) - out / 32.0 + 4.0 * SAW_P, (double)SAW_P);
+}
+static double pos_step(uint32_t n, int ref, sch_t sch, double *lo, double *hi)
+{
+    int32_t *a[2];
+    double worst = 0;
+    uint32_t i, c, m;
+    a[0] = malloc(n * sizeof **a);
+    a[1] = malloc(n * sizeof **a);
+    g_so = 0;
+    m = gl_run(n, g_saw, ref, sch);
+    memcpy(a[0], WL, m * sizeof **a);
+    memcpy(a[1], WR, m * sizeof **a);
+    g_so = SAW_P / 2u;
+    gl_run(n, g_saw, ref, sch);
+    *lo = 1e9;
+    *hi = 0;
+    for (c = 0; c < 2u; c++) {
+        const int32_t *b = c ? WR : WL;
+        double prev = -1;
+        for (i = 4096; i < m; i++) {
+            double da = saw_d(a[c][i], i, 0), db2 = saw_d(b[i], i, SAW_P / 2u), d;
+            if (prev < 0) {
+                if (fabs(da - db2) < 0.2)
+                    prev = da;
+                continue;
+            }
+            d = fabs(da - db2) < 0.2 || fabs(da - prev) <= fabs(db2 - prev) ? da : db2;
+            if (fabs(d - prev) > worst) worst = fabs(d - prev);
+            if (d < *lo) *lo = d;
+            if (d > *hi) *hi = d;
+            prev = d;
+        }
+    }
+    free(a[0]);
+    free(a[1]);
+    return worst;
+}
+/* the largest second difference of either side's output, samples a .. b */
+static double dd2(uint32_t a, uint32_t b)
+{
+    double w = 0;
+    uint32_t i;
+    for (i = a + 2u; i < b; i++) {
+        double l = fabs((double)WL[i] - 2.0 * WL[i - 1] + WL[i - 2]), r = fabs((double)WR[i] - 2.0 * WR[i - 1] + WR[i - 2]);
+        if (l > w) w = l;
+        if (r > w) w = r;
+    }
+    return w;
+}
+/* new against old, the same run: the first sample that differs (n: none) */
+static uint32_t gl_same(uint32_t n, gen_t gen, sch_t sch, uint32_t seed, uint32_t from)
+{
+    int32_t *l = malloc(n * sizeof *l), *r = malloc(n * sizeof *r);
+    uint32_t i, m;
+    xs = seed;
+    m = gl_run(n, gen, 1, sch);
+    memcpy(l, WL, m * sizeof *l);
+    memcpy(r, WR, m * sizeof *r);
+    xs = seed;
+    gl_run(n, gen, 0, sch);
+    for (i = from; i < m; i++)
+        if (l[i] != WL[i] || r[i] != WR[i])
+            break;
+    free(l);
+    free(r);
+    return i < m ? i : n;
+}
+static uint32_t gi_live;
+static int32_t g_bursts(uint32_t i) { return i < 320u || (i >= 9600u && i < 9920u) ? noise(12000) : 0; }
+static void s_idle(uint32_t b)                          /* a burst, rest, both knobs turned at rest, a burst */
+{
+    if (!b) { gs_set(0, 20); gs_set(1, 127); gs_set(2, 64); }
+    if (b == 200u) {
+        gi_live = xc_live | ref_live;
+        gs_set(0, 110);
+        gs_set(1, 30);
+    }
+}
+static void t_chorus_glide(void)
+{
+    static const int SET[6][3] = {{60, 127, 64}, {0, 0, 0}, {127, 127, 127}, {127, 64, 30}, {1, 1, 100}, {60, 0, 64}};
+    static const char *const PN[3] = {"Depth", "Width", "Rate"};
+    static const sch_t SCH[3] = {s_step, s_sweep, s_jump};
+    static const char *const SN[3] = {"60 -> 61", "0 .. 127 .. 0 by hand", "0 -> 127 at once"};
+    const uint32_t n2 = 2u * 44100u / CTL * CTL;
+    double st_pos[3], st_dd[3], lo, hi;
+    uint32_t i, k, same = 1, mixed_same = 1, land = 1, rate_same = 1, idle_same;
+    int pos_ok = 1, pos_old = 1, dd_ok = 1, dd_old = 1, rng_ok = 1;
+    /* 1. at rest: the block of 0.20, to the bit (noise and a sine, six corners, the ISR's block and odd lengths) */
+    for (k = 0; k < 6u; k++) {
+        gs_fix[0] = SET[k][0]; gs_fix[1] = SET[k][1]; gs_fix[2] = SET[k][2];
+        gs_par = 0;
+        g_a = 12000.0;
+        g_f = 110.0;
+        gl_mixed = 0;
+        same &= gl_same(n2, g_noise, s_static, 0x1234567u + k, 0) == n2 && gl_same(n2, g_sine, s_static, 1, 0) == n2;
+        gl_mixed = 1;
+        mixed_same &= gl_same(n2, g_noise, s_static, 0x7654321u + k, 0) == n2;
+        gl_mixed = 0;
+    }
+    check("chorus glide: Depth, Width and Rate at rest: 0.20's block to the bit (noise and a sine, 2 s, six settings)", same);
+    check("chorus glide: .. and with blocks of 32, 8, 24, 16 samples in turn (n != CTL)", mixed_same);
+    /* 2. Rate never needed a glide: the old block and the new one, swept, are the same samples */
+    gs_fix[0] = 127; gs_fix[1] = 127; gs_fix[2] = 64;
+    gs_par = 2;
+    for (k = 0; k < 3u; k++)
+        rate_same &= gl_same(GS_SWEEP_N, g_noise, SCH[k], 77u + k, 0) == GS_SWEEP_N;
+    check("chorus glide: Rate stepped, swept and thrown: the samples of 0.20's block (the phase runs on: nothing to glide)", rate_same);
+    /* 3. the read point: no step, whatever turns. The steady figure first (the LFO's own slope at these settings) */
+    for (k = 0; k < 3u; k++) {
+        gs_par = (int)k;
+        gs_fix[0] = k ? 127 : 60; gs_fix[1] = 127; gs_fix[2] = 64;
+        if (k == 2u) gs_fix[2] = 127;                   /* (the fastest LFO at the deepest Depth: the steepest there is) */
+        st_pos[k] = pos_step(n2, 0, s_static, &lo, &hi);
+        g_a = 20000.0;
+        g_f = 110.0;
+        gl_run(n2, g_sine, 0, s_static);
+        st_dd[k] = dd2(4096, n2);
+        gs_fix[2] = 64;
+    }
+    printf("cr_fx:   the chorus at rest: a tap's delay moves at most %.3f samples a sample (Depth 60), %.3f (Depth 127), "
+           "%.3f (Depth 127, Rate 127); a 110 Hz sine's second difference at most %.0f, %.0f, %.0f\n",
+           st_pos[0], st_pos[1], st_pos[2], st_dd[0], st_dd[1], st_dd[2]);
+    for (k = 0; k < 3u; k++) {                          /* the parameter */
+        uint32_t s;
+        gs_par = (int)k;
+        gs_fix[0] = k ? 127 : 60; gs_fix[1] = 127; gs_fix[2] = 64;
+        for (s = 0; s < 3u; s++) {                      /* the move */
+            double po, pn, d_o, dn2, bound_p, bound_d;
+            po = pos_step(GS_SWEEP_N, 1, SCH[s], &lo, &hi);
+            pn = pos_step(GS_SWEEP_N, 0, SCH[s], &lo, &hi);
+            rng_ok &= lo > 399.0 && hi < 1164.0;
+            g_a = 20000.0;
+            g_f = 110.0;
+            gl_run(GS_SWEEP_N, g_sine, 1, SCH[s]);
+            d_o = dd2(4096, GS_SWEEP_N);
+            gl_run(GS_SWEEP_N, g_sine, 0, SCH[s]);
+            dn2 = dd2(4096, GS_SWEEP_N);
+            printf("cr_fx:   %s %s: a tap's delay steps at most %.3f samples a sample (0.20's block: %.3f); a 110 Hz "
+                   "sine's second difference at most %.0f (0.20's: %.0f)\n", PN[k], SN[s], pn, po, dn2, d_o);
+            /* the bounds. Depth, Width, a detent or a sweep by hand: the read point no faster than a quarter of a
+             * sample a sample (the steady chorus at Depth 127: an eighth; the measure's grain is a 16th) and the
+             * sine's curve no more than twice the steady one's. The whole range at once is a slide (the glide's
+             * first block: 1/64 of 762 samples in 32 = 0.37 a sample): half a sample a sample, 150. Rate: no
+             * faster than the steady chorus at Rate 127, and nothing 0.20's block did not do */
+            bound_p = k == 2u ? st_pos[2] + 0.07 : s == 2u ? 0.5 : 0.25;
+            bound_d = s == 2u ? 150.0 : 2.0 * st_dd[1] + 8.0;
+            pos_ok &= pn <= bound_p;
+            if (k < 2u) {                               /* (the old block: a step every time, of samples) */
+                dd_ok &= dn2 <= bound_d;
+                pos_old &= po > 3.0;
+                dd_old &= d_o > 150.0;
+            } else {                                    /* (Rate: the LFO's speed changes at once, as it did: a */
+                dd_ok &= dn2 == d_o && pn == po;        /* corner in the read point's path, never a step) */
+            }
+        }
+    }
+    check("chorus glide: Depth, Width, Rate turned (a detent, a sweep by hand, the range at once): no step in a tap's read point", pos_ok);
+    check("chorus glide: .. and a 110 Hz sine through it keeps its curve (second difference inside the stated bounds)", dd_ok);
+    check("chorus glide: .. where 0.20's block stepped by samples and clicked, for Depth and for Width (the test sees it)", pos_old && dd_old);
+    check("chorus glide: the taps stay inside 400 .. 1163 samples through every move", rng_ok);
+    /* 4. the glide lands: 1400 blocks (1.0 s) after the whole range at once the samples are 0.20's again, to the bit */
+    for (k = 0; k < 2u; k++) {
+        const uint32_t from = (GS_T + 1400u) * CTL, n = from + 44100u;
+        gs_par = (int)k;
+        gs_fix[0] = 127; gs_fix[1] = 127; gs_fix[2] = 64;
+        g_a = 12000.0;
+        land &= gl_same(n, g_noise, s_jump, 5u + k, from) == n && gl_same(n, g_noise, s_step, 9u + k, from) == n;
+    }
+    check("chorus glide: the glide lands exactly: a second after a move the samples are 0.20's again, to the bit", land);
+    /* 5. at rest nothing glides: both knobs turned while the line is empty, the next note starts in place */
+    gi_live = 1;
+    idle_same = gl_same(16384, g_bursts, s_idle, 0x2468ACEu, 0) == 16384u;
+    check("chorus glide: Depth and Width turned while the line is empty: the next send starts in place (0.20's samples)",
+          idle_same && !gi_live);
+    gs_fix[0] = 60; gs_fix[1] = 127; gs_fix[2] = 64;
+    g_a = 20000.0;
+    g_f = 1000.0;
+    cho_reset();
+}
+
+/* LISTENING FILES for 0.21's chorus (tools/chorus_glide_listen.sh: cr_fx_test --chorus-listen DIR): a held chord (g_chord)
+ * beside its chorus at send 105 (the wet 1.6 dB under the dry: the chorus easy to hear), the knobs turned in detents
+ * as the FX layer turns them (2 a detent), through 0.20's block ("before") and the new one ("after") */
+#define LI_BPS (44100u / CTL)                           /* blocks a second */
+static uint32_t li_n;
+static int li_w = 127;
+static int32_t li_dry(uint32_t i)
+{
+    const uint32_t off = li_n - 3u * 44100u / 2u;       /* the chord: in over 20 ms, out over 0.4 s, 1.1 s of rest */
+    double e = i < 882u ? i / 882.0 : i < off ? 1.0 : i < off + 17640u ? 1.0 - (i - off) / 17640.0 : 0.0;
+    return e > 0.0 ? (int32_t)(g_chord(i) * e) : 0;
+}
+static int32_t li_send(uint32_t i) { return li_dry(i) * (105 * 258) / 32768; }
+static void li_det(uint32_t b, uint32_t at, uint32_t every, uint32_t count, int par, int d)   /* count detents of d from block at */
+{
+    if (b >= at && (b - at) % every == 0u && (b - at) / every < count) {
+        int v = (par ? xfp[XP_CWIDTH] : song.g[G_CDEPTH]) + d;
+        gs_set(par, v < 0 ? 0 : v > 127 ? 127 : v);
+    }
+}
+static void li_depth(uint32_t b)                        /* 60 .. 100 slowly (a detent every 125 ms), 100 .. 0 and */
+{                                                       /* 0 .. 127 as a quick turn (a detent every 20 ms) */
+    if (!b) { gs_set(0, 60); gs_set(1, 127); gs_set(2, GP[G_CRATE].def); }
+    li_det(b, 3u * LI_BPS / 2u, LI_BPS / 8u, 20, 0, 2);
+    li_det(b, 5u * LI_BPS, LI_BPS / 50u, 50, 0, -2);
+    li_det(b, 7u * LI_BPS, LI_BPS / 50u, 64, 0, 2);
+}
+static void li_width(uint32_t b)                        /* 127 .. 0 .. 127, a detent every 40 ms */
+{
+    if (!b) { gs_set(0, 60); gs_set(1, 127); gs_set(2, GP[G_CRATE].def); }
+    li_det(b, 3u * LI_BPS / 2u, LI_BPS / 25u, 64, 1, -2);
+    li_det(b, 5u * LI_BPS, LI_BPS / 25u, 64, 1, 2);
+}
+static void li_fixed(uint32_t b) { if (!b) { gs_set(0, 60); gs_set(1, li_w); gs_set(2, GP[G_CRATE].def); } }
+static void li_render(const char *name, uint32_t secs, int ref, sch_t sch)
+{
+    uint32_t i, m;
+    li_n = secs * 44100u / CTL * CTL;
+    g_len = 0xFFFFFFFFu;
+    m = gl_run(li_n, li_send, ref, sch);
+    for (i = 0; i < m; i++) {
+        int32_t d = li_dry(i);
+        WL[i] += d;
+        WR[i] += d;
+    }
+    wav_write(name, m, 1.0);
+    printf("cr_fx: wrote %s/%s (%u s)\n", outdir, name, (unsigned)secs);
+}
+static void chorus_listen(void)
+{
+    li_render("depth-steps-before-0.20.wav", 10, 1, li_depth);
+    li_render("depth-steps-after-0.21.wav", 10, 0, li_depth);
+    li_render("width-sweep-127-0-127.wav", 9, 0, li_width);
+    li_render("width-sweep-127-0-127-without-the-glide.wav", 9, 1, li_width);
+    li_w = 0;
+    li_render("width-000.wav", 6, 0, li_fixed);
+    li_w = 64;
+    li_render("width-064.wav", 6, 0, li_fixed);
+    li_w = 127;
+    li_render("width-127.wav", 6, 0, li_fixed);
+    cho_reset();
+}
+
 int main(int argc, char **argv)
 {
     if (argc > 1)
@@ -1098,8 +1468,14 @@ int main(int argc, char **argv)
     WR = calloc(MAXS, sizeof *WR);
     if (!WL || !WR)
         return 2;
+    if (argc > 2 && !strcmp(argv[1], "--chorus-listen")) {   /* (tools/chorus_glide_listen.sh: the files, no tests) */
+        outdir = argv[2];
+        chorus_listen();
+        return 0;
+    }
     printf("cr_fx: the delay at %s rate, the reverb at %s rate\n", DSD == 1 ? "full" : "half", DSR == 1 ? "full" : "half");
     t_chorus();
+    t_chorus_glide();
     t_maths();
     t_sync();
     t_band();

@@ -6,8 +6,10 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 ## State in three sentences
 
 Released: v0.1 and v0.11 .. v0.20 (`git tag`; v0.20 is the latest, notes in `docs/releases/`; `web/releases.json` lists
-0.16 .. 0.20 for the installer). The tree's `FELUCCA_VERSION` is "ChoralRoot 0.20" (`firmware/src/choralroot.c`): the
-next development version starts by bumping it and creating `docs/releases/0.21.md`. The owner's unit runs what
+0.16 .. 0.20 for the installer). The tree's `FELUCCA_VERSION` is "ChoralRoot 0.21" (`firmware/src/choralroot.c`): 0.21
+is in development, its notes begun in `docs/releases/0.21.md` (the chorus: no clicks while Depth turns, the Width
+knob; HISTORY 3y31). `web/releases.json` and the manual's first line still say 0.20, the released one: they change at
+the release. The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
@@ -64,7 +66,7 @@ python3 tests/install_test.py; for t in backup web sounds installer manager; do 
 python3 tests/releases_test.py                    # web/releases.json: the versions the installer offers
 sh tests/run_tests.sh       # ends ALL HOST TESTS PASSED
 sh tools/emu/test_retired.sh                      # the engines retired in 0.18: a unit that comes with sounds on them
-CR_VERSION=0.20 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
+CR_VERSION=0.21 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
 sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.18 reference build, bit for bit
 ```
 
@@ -157,10 +159,11 @@ installed on the owner's Mac.
     macOS at both rates, a phone, Windows, the heavy case with `--debug`). One observation so far: macOS chose
     48 kHz unasked, which is why Options > USB Rate is opt-in. After the plan: whether six channels at 48 kHz stay
     opt-in, get the 16-tap filter, become the default, or 48 kHz is dropped.
-18. **The chorus's Width knob is not wired.** The parameter is there (`xfp[XP_CWIDTH]`: 0 = both sides the left tap,
-    127 = a quarter turn), KNOB 3 of the Chorus page is free; the lines it needs in `cr_ui.c` and `cr_settings.c`
-    are in docs/FX.md "The chorus, stereo". Also not known: whether the unit's own speaker gets the left channel
-    or the sum.
+18. **The unit's own speaker: the left channel or the sum?** Not known. It decides what the stereo chorus (and its
+    Width, KNOB 3 of the Chorus page since 0.21) is on the speaker: the left tap alone is 0.18's chorus, the sum is
+    docs/FX.md's "mono sum" column. 0.21's chorus changes (the glide under a turning Depth or Width, the Width
+    knob) are built and tested on the host and in the emulator, not flashed and not heard on the unit:
+    `../audio-0.21/chorus/` has the listening files.
 19. **CZ-1's outlier trims are proposed, not applied** (docs/CZ1.md "Level", the table of sounds more than 4 dB from
     the engine's median: INIT TONE, STRINGS 1, BRASS 1, PIPE ORGAN 2 down; SWEEP 2, VOICE 2, JET ROAR, ACCORDION
     up). `CB_TRIM` has no CZ-1 row now. Also the owner's: whether a re-attack should open from a closed DCW when the

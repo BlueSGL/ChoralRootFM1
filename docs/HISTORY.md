@@ -1606,3 +1606,62 @@ Octave up, at Voicing 0, +2 and -2, with the notes of every strike in the README
 flashed; the owner has not heard it), `tools/emu/classic_exact.sh` (nothing near the audio path changed; it needs
 the 0.18 reference build), the old firmwares themselves (their rule for the byte was read in their source and
 modelled in `tests/cr_settings_test.c`).
+
+## 2026-10-12 (the chorus: no clicks under a turning Depth, the Width knob; 0.21 begins)
+
+3y31. **The owner:** "This FX pops and crackles when adjusting the depth which I don't like." and "Since it's stereo
+now, and we have Knob 3 as empty slot we should be able to add a parameter for Stereo Width." **0.21 dev (built; not
+flashed).** `FELUCCA_VERSION` "ChoralRoot 0.21", `docs/releases/0.21.md` begun.
+**The cause, measured before the fix** (`tests/cr_fx_test.c` "chorus glide", which keeps 0.20's block word for word
+beside the new one; the read point is taken from the output: the send is a ramp, so a tap's output is the time it
+reads at): `cr_fx.c xc_block` drew each tap's read line from the LFO's point at the block's start to its point at the
+end with that block's Depth and Width, so a block began where the last one ended only while neither moved. Depth 60
+-> 61 with the LFO at its top: the read point steps 6.0 samples at the block's edge (a 110 Hz sine's second
+difference 1862 for a steady 12); Width 60 -> 61 at Depth 127: 3.3 samples (212); the FX layer's detent is 2 units,
+so twice that a click. Rate was never a cause: it is the LFO's increment, the phase runs on (swept and thrown, the
+new block's samples are 0.20's).
+**The fix**, in `xc_block` alone: (1) each tap's last read point is state (`xc.ra`, `xc.rb`, Q8) and the next
+block's line starts there; (2) the depth (`xc.dc`, 16ths of the old unit) and the right tap's lead (`xc.oc`, phase)
+go to what is set by a 64th of what is left a block, rounded away from zero: a one-pole of 64 blocks, 46 ms
+(`XC_GL` 6), that lands exactly. (1) alone would turn the click into a 6-sample slide inside 32 samples, a 19 %
+pitch blip. After: Depth 60 -> 61: 0.06 samples a sample, second difference 12, the steady figures; a sweep by hand
+0.13 / 12; Width a detent 0.13 / 12, a sweep 0.19 / 12; the whole range at once (no knob does it) 0.31 / 76 for
+Depth, 0.38 / 82 for Width, where 0.20's block stepped 561 and 516 samples. 46 ms chosen against 23 and 93: the
+three measure alike for a detent and a sweep by hand and differ only for the range at once (0.56 / 0.31 / 0.19
+samples a sample); 93 ms lags the hand twice as long and needs 1.6 s to land the Width.
+**At rest it is 0.20's block to the bit**: the glided depth is 16 x the old one and `(s x 16 d) >> 12` is
+`(s x d) >> 8`; the stored point is the one the old block computed again. The test: noise and a sine, 2 s, six
+settings of Rate / Depth / Width, blocks of 32 and of 32 / 8 / 24 / 16 in turn; a second after a move the samples
+are 0.20's again (the glide lands); both knobs turned while the line is empty, then a send: 0.20's samples from the
+first one (an empty line glides nothing: power-on, a loaded session and a note after a knob turned in silence start
+in place). The golden renders: 197, 0 changed.
+**Width**: KNOB 3 of the Chorus page (`cr_ui.c CU_FXP`, the glyph `CR_G_WIDTH`), `xfp[XP_CWIDTH]` 0 .. 127, default
+127 (0.19's and 0.20's chorus; 0: both ears the left tap), read as a number as the reverb's Width, 2 a detent as
+every 0 .. 127 cell of the layer, glided as Depth. Kept in the session under a new tag, `CSS_FXP_XC_WIDTH` 30
+(`CSS_FXG`, the static assert, docs/SETTINGS.md): **23 of the FX block's 24 parameter entries are used now, one is
+left**. Saved data, read in `git show v0.19:` and `v0.20:firmware/src/cr_settings.c` (the same code: `v0.20` is
+`f9db021`) and run through an emulator built from `git archive f9db021`: (a) a session written by 0.20 has no tag 30 and
+loads with Width 127 (run: `30=127`, everything else as 0.20 wrote it); (b) 0.20 reading a session with tag 30
+applies everything else and never looks the tag up (run: its 22 parameters as stored, 23 entries being inside its
+24; nothing reset), its chorus is its fixed Width 127; with no save under 0.20 the record still holds `30=123` on
+the way back, and after SAVE held under 0.20 (its record is built from its own 22 tags) 0.21 reads 127. 0.19: the
+same loader and writer by its source, not run. The session is not in a
+backup (`cr_backup.c`: a restore of the settings empties it), so the backup format is untouched.
+**Cost** (the device listing, 205 instructions a microsecond): a running block 1722 instructions for 1778 (51 a
+sample for 52; about 90 a block for 114: two sines for four, the glides a compare each at rest), about 106 a block
+while a glide runs, +10 in the one block after rest, an idle block 161 for 156. `.text` +144 B (468208; `xc_block`
+632 B for 550), RAM +16 B (81332, 82.7 %), POOL +0 (315496, 91.7 %), `.ram_text` unchanged.
+**Tests and fixtures touched**: `tests/cr_fx_test.c` (+9 checks, 58), `tools/emu/scripts/cr_fx_row.txt` and
+`test_cr.sh` (the Chorus page's cells read `Rate Depth Width Send`, KNOB 3 traces `width 125`),
+`tools/emu/scripts/session_set.txt` and `test_persist.sh` (Width turned to 123, saved, back after a relaunch as
+`30=123`), `design/make_fx_mockups.py` state 4 and its JSON (the Chorus row with its Width cell; the designer's PNG
+is as stale as it was for the glyphs). **Listening files** (the host test's renderer, `cr_fx_test --chorus-listen`
+through `tools/chorus_glide_listen.sh`: the firmware's block and 0.20's beside it, a held chord at send 105; not
+the emulator's whole path, not the unit): `../audio-0.21/chorus/`: Depth in detents before and after, Width 127 ->
+0 -> 127 (and the same without the glide), Width 0 / 64 / 127. **Run** (logs in `build/scratch/logs/`): `./build.sh` (stub version 3, sha256
+baee55ed142fe1cc), `run_cr_tests.sh` (cr_fx_test 58 checks ok), `run_cr_draw.sh` (92 screens, 0 lint findings),
+`tools/emu/test_cr.sh` (891 ok, PASS), `test_persist.sh` (PASS), `test_retired.sh` (PASS), `run_tests.sh` (ALL HOST
+TESTS PASSED), `install_test.py`, `releases_test.py` (ALL OK; it notes that 0.21 is not in `web/releases.json` and
+need not be yet), the five `web/test_*.mjs`, `CR_VERSION=0.21 build_web.sh` + `test_web_emu.mjs` (PASS). Not run: the unit (nothing flashed; the
+owner has not heard it), `tools/emu/classic_exact.sh` (it needs the 0.18 reference build; the script it compares
+has no knob turning).

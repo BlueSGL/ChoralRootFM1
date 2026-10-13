@@ -468,7 +468,7 @@ static const struct { uint8_t fx, page, of; int8_t c[4]; const char *label[4]; }
     {0, CU_FXPG_SENDS, 1, {FC_SND0 - 3, FC_SND0 - 1, FC_SND0 - 2, FC_SND0 - 0}, {"Drive", "Chorus", "Delay", "Reverb"}},
     {0, 0, 2, {XP_RSIZE, XP_RDAMP, XP_RDECAY, FC_SEND}, {"Size", "Damp", "Decay", "Send"}},
     {0, 1, 2, {XP_RPRE, XP_RMOD, XP_RLOW, XP_RWIDTH}, {"Pre-delay", "Mod", "Low cut", "Width"}},
-    {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, FC_NONE, FC_SEND}, {"Rate", "Depth", "", "Send"}},
+    {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, XP_CWIDTH, FC_SEND}, {"Rate", "Depth", "Width", "Send"}},
     {2, 0, 2, {FC_TIME, FC_SPREAD, XP_DFDBK, FC_SEND}, {"Time", "Spread", "Feedback", "Send"}},
     {2, 1, 2, {XP_DSYNC, XP_DMODE, XP_DTONE, XP_DWOW}, {"Sync", "Mode", "Tone", "Wow"}},
     {3, 0, 1, {FC_NONE, FC_NONE, FC_NONE, FC_SEND}, {"", "", "", "Send"}}};
@@ -804,7 +804,7 @@ static void cu_fx_glyph(int32_t c0, cr_cell_t *c)
     case XP_RPRE: c->glyph = CR_G_PRE; break;
     case XP_RMOD: c->glyph = CR_G_LFO; c->pct = 64; c->pct2 = (uint8_t)q; break;   /* two cycles, the depth */
     case XP_RLOW: c->glyph = CR_G_CUT; break;
-    case XP_RWIDTH: c->glyph = CR_G_WIDTH; break;
+    case XP_RWIDTH: case XP_CWIDTH: c->glyph = CR_G_WIDTH; break;
     case FC_TIME: case XP_DFDBK:                  /* the time (spacing), the feedback (decay) */
         c->glyph = CR_G_ECHOES;
         c->pct = (uint8_t)tq;

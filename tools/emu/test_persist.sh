@@ -447,8 +447,8 @@ want_cr="perform 1 mode 2 bass 1 sound 18 voicing 2 octave -1 view 0 layer 0 opt
 # (the FX block by tag, cr_settings.h CSS_FXP_*: 4, 5 the chorus; 26..29 the bass part's sends (reverb 10); 25, 10..17
 # the delay: 10 its division 6 -> 8 (1/8.), 12 its spread 0 -> 1 (3:4), 13 its feedback 58 -> 52, 15 its mode 1 -> 0
 # (Stereo), 16 its tone 70 -> 74; 18..24 the reverb; amt: the chord part's sends, the delay's turned 25 -> 43,
-# three detents of 6)
-want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 43 0 sends 35 45 43 0 par 4=40 5=60 26=10 27=0 28=0 29=0 25=91 10=8 11=0 12=1 13=52 14=1 15=0 16=74 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127"
+# three detents of 6; 30 the chorus's Width (0.21) 127 -> 123, two detents of 2)
+want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 43 0 sends 35 45 43 0 par 4=40 5=60 26=10 27=0 28=0 29=0 25=91 10=8 11=0 12=1 13=52 14=1 15=0 16=74 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127 30=123"
 c1=$(dl "$S1" 'session chord:' 2); b1=$(dl "$S1" 'session bass:' 2)
 [ "$(sx "$S1" 2 6)" = "$want_state" ] && [ "$(crl "$S1" 2)" = "$want_cr" ] && [ "$(dl "$S1" 'session fx:' 2)" = "$want_fx" ] &&
     echo "$c1" | grep -q 'FM6 / TINE EP edited 1 kind 1 crc [0-9A-F]* level 92 pan 0' &&

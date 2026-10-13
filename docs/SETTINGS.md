@@ -350,8 +350,8 @@ Header: `magic` `CSS1`, `version` (`CSS_VERSION`, 1), `size`, `check` (FNV-1a ov
 | fx (`css_fx_t`, 108 bytes) | the FX sub-block, below | nothing stored |
 | part[2] (`css_part_t`, 384 bytes each: chord, bass) | `valid`; `eng`, `preset`, `user`, `trim` (the part's `track_t` fields; **`trim` is written and, since 0.19, not read**: a part put back takes the trim of its pool entry from the running firmware's table, `cr_session_part_trim`: a factory preset its `CB_TRIM` row, a user preset bound to one that row, an added user preset and INIT none, as `cu_pool_load`, so a row removed or added by an update holds for a session saved before it); `edited`, `kind`, `fk`, `slot`, `name` (the UI's `cu_snd_t`: the pool entry the sound came from); `np` and `p[96]` (the writer's `P_COUNT`, 91 today, and every parameter: the engine's eight, the envelopes, the LFO, the modulation, the sends, **Level and Pan**); `nblob` and `blob[160]` (the engine's deep patch, `ENG_BLOB_MAX`: FM6 128, VA 110, CZ-1 144, FM TONE 80; none on the other engines) | not valid: the pool's sound (the block's `chord_sound` / `bass_sound`) |
 
-**Reserve: 142 bytes of the 1024** (46 after the state, 20 after the FX block, 8 in each part, 60 at the end), 16 of
-the FX block's 24 parameter entries and 5 of a part's 96 parameters; and the object holds 3840 bytes, so `CSS_SIZE`
+**Reserve: 142 bytes of the 1024** (46 after the state, 20 after the FX block, 8 in each part, 60 at the end), 1 of
+the FX block's 24 parameter entries (23 are stored since 0.21) and 5 of a part's 96 parameters; and the object holds 3840 bytes, so `CSS_SIZE`
 itself can grow: the import takes a shorter (older) record over the defaults and a longer (newer) one by its prefix,
 and no other firmware and no tool reads this object.
 
@@ -386,7 +386,10 @@ that effect's send from the chord part (0..127, `CSS_FX_NONE` = not stored: the 
 | 25 `XD_TIME2` | the delay's free time (16 .. 740 ms: the delay at the full rate) | 0..127, 91 | `XP_DTIME` |
 | 26 `BS_REV`, 27 `BS_CHO`, 28 `BS_DLY`, 29 `BS_DRIVE` | the BASS part's sends (the chord part's are `amt[]`) | 0..127; 10, 0, 0, 0 | `trk[1].p[P_REV ..]`; 29 while the bass part plays FM TONE: `cu_bdrive` (`cr_ui.c cu_bdrive_p`: the part's send waits there, the track's `P_DIST` is the sound's Drive and is stored in `part[1].p[]`) |
 
-22 entries are stored today (24 fit). A session written by 0.17 or by a 0.18 build before the new effects holds
+| 30 `XC_WIDTH` | the chorus's width (0.21; KNOB 3 of the Chorus page) | 0..127, 127 | `XP_CWIDTH`. A record without it (0.19, 0.20): 127, their chorus. 0.19 and 0.20 skip it and write their record without it |
+
+23 entries are stored today (24 fit: **one is left**; the next effect parameter after that needs `CSS_NFXP` and
+with it `css_fx_t`'s layout and `CSS_FX_VERSION` to change, or a place outside `par[]`). A session written by 0.17 or by a 0.18 build before the new effects holds
 tags 1..8: the chorus's two are read, the six retired ones are ignored, and the new delay and reverb start at
 their defaults ([FX.md](FX.md), decision 13). `cr_settings.c` has a static assert on the numbers.
 

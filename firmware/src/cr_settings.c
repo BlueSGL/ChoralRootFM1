@@ -775,10 +775,10 @@ static const struct { uint8_t tag, x, id; } CSS_FXG[] = {      /* x: 0 song.g, 1
     {CSS_FXP_XD_MODE, 1, XP_DMODE}, {CSS_FXP_XD_TONE, 1, XP_DTONE}, {CSS_FXP_XD_WOW, 1, XP_DWOW},
     {CSS_FXP_XR_SIZE, 1, XP_RSIZE}, {CSS_FXP_XR_DAMP, 1, XP_RDAMP}, {CSS_FXP_XR_DECAY, 1, XP_RDECAY},
     {CSS_FXP_XR_PRE, 1, XP_RPRE}, {CSS_FXP_XR_MOD, 1, XP_RMOD}, {CSS_FXP_XR_LOW, 1, XP_RLOW},
-    {CSS_FXP_XR_WIDTH, 1, XP_RWIDTH}};
+    {CSS_FXP_XR_WIDTH, 1, XP_RWIDTH}, {CSS_FXP_XC_WIDTH, 1, XP_CWIDTH}};
 _Static_assert(NELEM(CSS_FXG) <= CSS_NFXP, "the FX block holds every global parameter");
 _Static_assert(CSS_FXP_DCOLOR == 8 && CSS_FXP_XD_TIME == 9 && CSS_FXP_XR_SIZE == 18 && CSS_FXP_XR_WIDTH == 24 &&
-               CSS_FXP_XD_TIME2 == 25 && CSS_FXP_BS_REV == 26 && CSS_FXP_BS_DRIVE == 29 && CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5 && CSS_FXE_SENDS == 6, "the session's FX tags are never renumbered");
+               CSS_FXP_XD_TIME2 == 25 && CSS_FXP_BS_REV == 26 && CSS_FXP_BS_DRIVE == 29 && CSS_FXP_XC_WIDTH == 30 && CSS_FXE_DRIVE == 3 && CSS_FXE_REVERB2 == 4 && CSS_FXE_DELAY2 == 5 && CSS_FXE_SENDS == 6, "the session's FX tags are never renumbered");
 static int16_t *css_fxg_p(uint32_t i)
 {
     if (CSS_FXG[i].x == 2u && CSS_FXG[i].id == P_DIST)

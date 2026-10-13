@@ -67,7 +67,8 @@ DELAY_CELLS = [g("Time", "1/8", "echoes", 0.5, 58 / 127), g("Spread", "3:4", "sp
                g("Send", "40%", "mix", 0.4)]
 DELAY2_CELLS = [g("Sync", "Tempo", "sync", 1.0), g("Mode", "Ping-pong", "ping", 1.0), g("Tone", "84", "moon", 84 / 127),
                 g("Wow", "24", "lfo", 0.08, 24 / 127)]
-CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), None, g("Send", "30%", "mix", 0.3)]
+CHORUS_CELLS = [g("Rate", "0.8 Hz", "lfo", 0.3, 0.5), g("Depth", "60", "lfo", 0.3, 60 / 127), g("Width", "127", "width", 1.0),
+                g("Send", "30%", "mix", 0.3)]            # (Width: 0.21, cr_fx.c XP_CWIDTH; KNOB 3 was a dim dash)
 DRIVE_CELLS = [None, None, None, g("Send", "15%", "clip", 0.15)]
 # the Sends page (the owner, 2026-10-12): the sound editor's FX group on the FX layer's first page, its order, its names,
 # its knobs and its read-out (per cent of the send's 0..127); the glyphs are the Send cells' (clip for the drive)
@@ -115,13 +116,14 @@ S.append(state(
 ))
 
 S.append(state(
-    "4 · knob row: Chorus (two parameters) and Drive (amount only)",
-    "Effects with fewer parameters leave their cells as a dim '–' (Chorus: RATE, DEPTH, –, AMOUNT; Drive: –, –, –, "
-    "AMOUNT): the row's shape stays, so the hand always finds the amount on KNOB 4. This state shows Chorus.",
+    "4 · knob row: Chorus (three parameters since 0.21: Width) and Drive (amount only)",
+    "Effects with fewer parameters leave their cells as a dim '–' (Drive: –, –, –, AMOUNT; Chorus until 0.20: RATE, "
+    "DEPTH, –, AMOUNT): the row's shape stays, so the hand always finds the amount on KNOB 4. This state shows Chorus "
+    "as 0.21 has it: RATE, DEPTH, WIDTH (the stereo chorus's, the reverb's glyph), AMOUNT.",
     keys=[OFF] * 27, lit=["E4"], buttons=FX_BTN, key_labels=fx_labels, button_notes=FX_NOTE,
-    encoders={"KNOB1": ("RATE", "0.8 Hz"), "KNOB2": ("DEPTH", "60"), "KNOB3": "", "KNOB4": ("AMOUNT", "30%")},
+    encoders={"KNOB1": ("RATE", "0.8 Hz"), "KNOB2": ("DEPTH", "60"), "KNOB3": ("WIDTH", "127"), "KNOB4": ("AMOUNT", "30%")},
     screen=scr(knobrow(FXP, 2, C_FX, CHORUS_CELLS, label="fx"), foot=FX_FOOT,
-               note="Chorus: two cells and a dim '–'; the amount stays on KNOB 4."),
+               note="Chorus: rate, depth, width (0.21); the amount stays on KNOB 4."),
     chord_block=False,
 ))
 
