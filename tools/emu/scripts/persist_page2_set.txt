@@ -1,5 +1,6 @@
 # test_persist.sh, KEY page 2 run 1: KEY (SEL) held: Single = Split Bass (KNOB 4), SELECT: page 2, Key plays = Notes
-# (KNOB 1), Keyboard = Full (KNOB 2) (Settings v14: bits 1 / 2 of key_on, single = 2); OCT-; saved past the quiet time
+# (KNOB 1), Keyboard = Full (KNOB 2) (Settings v14: bits 1 / 2 of key_on, single = 2), Numerals = On (KNOB 4; 0.22:
+# bit 1 of bass_on); OCT-; saved past the quiet time
 wait 500
 btn SEL 600
 wait 300
@@ -10,6 +11,8 @@ wait 200
 knob KNOB1 +1
 wait 200
 knob KNOB2 +1
+wait 200
+knob KNOB4 +1                 # Numerals: On (0.22: bit 1 of bass_on)
 wait 300
 btn OCT-
 btn SAVE 900                  # SAVE held: the global save (the manual settings are written by it alone, 0.18)

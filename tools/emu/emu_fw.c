@@ -369,6 +369,11 @@ void emu_fw_dump(void)
            cs.key_notes ? "notes" : "chords", cs.kbd_full ? "full" : "chords", (unsigned)cs.single,
            (unsigned)cr.split_note, (unsigned)cu.kpage + 1u, (unsigned)cr.key_notes, (unsigned)cr.full,
            (unsigned)cr.single);
+    {                                               /* the KEY layer's Numerals and what the top line adds for it now */
+        char rn[CR_NUMERAL_MAX];
+        cu_numeral(rn);
+        printf("  numerals: %s top \"%s\"\n", cs.numerals ? "on" : "off", rn);
+    }
     printf("  lock: on %u latched %02X type-key %s ext-keys %s\n", (unsigned)cu.clock, (unsigned)cu.mlatch,
            cs.lock_keep ? "keeps" : "clears", cs.lock_push ? "pushed" : "toggle");   /* (latched: bit cr_mod_t) */
     {                                               /* the engine's side of the chord keys: down (held or latched),

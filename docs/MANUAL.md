@@ -177,7 +177,9 @@ In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four va
 
 ### The screen
 
-- **Top left**: `Key: C` in yellow while Key Mode is on. While a loop records or plays: `Loop 1` in red.
+- **Top left**: `Key: C` in yellow while Key Mode is on. With Numerals on (the KEY layer's page 2), the Roman numeral
+  of the chord that is sounding follows it: `Key: C · V`. While a loop records or plays: `Loop 1` in red (no key and
+  no numeral then).
 - **Top right**: one status word, the first of these that applies: `Bass Solo`, the performance mode (`Strum`, `Slop`,
   `Arp`, `Pattern`, `Harp`), `Bass`, `Oct +1`, `Latch`, `lock`. While a loop records or plays, the looper's state
   instead (`Rec · Overwrite`, `Rec 2.3`, `Dub 3.2`), and a small dial at the right end that fills as the loop goes
@@ -415,9 +417,10 @@ Hold KEY to open the **KEY layer**:
 | KNOB 2 | Scale: Major or Minor |
 | KNOB 3 | Transpose, -24 to +24 semitones. It moves everything you play from then on, in or out of Key Mode |
 | KNOB 4 | Single: Full, Split Oct or Split Bass (below) |
-| SELECT | turns the layer's page: page 1 is the four settings above, page 2 has Key plays and Keyboard (below). The top line says `1/2` or `2/2`. SELECT does not change the tempo in this layer |
+| SELECT | turns the layer's page: page 1 is the four settings above, page 2 has Key plays, Keyboard and Numerals (below). The top line says `1/2` or `2/2`. SELECT does not change the tempo in this layer |
 | KNOB 1, page 2 | **Key plays**: Chords or Notes |
 | KNOB 2, page 2 | **Keyboard**: Chords or Full |
+| KNOB 4, page 2 | **Numerals**: Off or On (KNOB 3 does nothing on this page) |
 | OPT (printed GLO) tap | switches the keys between **pick** and **play** (below). It does not open the Options from here |
 | OCT-, OCT+, HOME, KEY held again | close the layer |
 
@@ -474,7 +477,17 @@ nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still sh
 - In the KEY layer with its keys on pick, the keys still pick: a root sets the tonic, MAJ and MIN the scale (B3 does
   nothing there). With the keys on play they are the Full keyboard.
 
-Key plays, Keyboard and Single are kept by a global save (SAVE held), like the rest of the KEY layer.
+**Numerals: Off or On** (page 2, KNOB 4; off unless you turn it on). With Key Mode on, the top line shows the Roman
+numeral of the chord that is sounding, beside the key: in C major `Key: C · I` for C, `Key: C · V` for G (and for G7
+and G9: the extensions stay with the name), `Key: C · vi` for Am; in A minor `Key: A minor · iv` for Dm. Capitals
+for a chord with a major third (and for sus chords, power chords and single notes), small letters for a minor third;
+`°` after a diminished chord, `+` after an augmented one. The numeral counts from the tonic to the root that the
+chord's name shows. A root that is not a note of the scale gets a `b` or a `#`: `bVII` for B flat (written `A#` in
+the name) in C. In Key Mode that only happens with Transpose, because a key outside the scale plays a chord on a
+scale note. When nothing sounds the line is `Key: C` alone, and while a loop records or plays it shows the loop
+instead. Numerals changes nothing you hear.
+
+Key plays, Keyboard, Numerals and Single are kept by a global save (SAVE held), like the rest of the KEY layer.
 
 The Geek Out view shows the transposition (`Trans +2`).
 
@@ -1418,7 +1431,7 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 
 | A global save keeps (SAVE held) | Stored by itself | Never kept, on purpose |
 | --- | --- | --- |
-| Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, 6th with 7th, Velocity | notes that were sounding, a chord LATCH was holding |
+| Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays, Keyboard and Numerals | **Options:** Play Style, Extension Addition, Secret Chords, 6th with 7th, Velocity | notes that were sounding, a chord LATCH was holding |
 | the performance mode, its parameters, and whether it is on | MIDI Perform, MIDI Bass, MIDI Raw Chord, Raw Chord Sound, MIDI Clock | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
 | LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, Chord Names, LEDs, Hold Time | a take you were recording |
 | the voicing on KNOB 1 and the octave shift | USB Record, USB Level, USB Rate, Dual Core, Output | an open layer, menu, dialog or editor: the FM-1 starts on the view |
@@ -1723,7 +1736,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
 | FX | FX | effects on / off (in its layer too) | FX layer: SELECT the page (Sends · Reverb 1 · Reverb 2 · Chorus · Delay 1 · Delay 2 · Drive) · KNOB 1-4 its cells (Sends: the chord part's drive, chorus, delay and reverb sends; KNOB 4 on an effect's first page: its Send) |
-| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · GLO: the keys pick / play |
+| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · 4 Numerals (Off / On) · GLO: the keys pick / play |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |

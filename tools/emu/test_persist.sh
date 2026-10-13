@@ -307,10 +307,11 @@ grep -q 'kbd: plays notes keyboard full single 2 ' "$OUT/persist_page2_1.log" &&
     ok "KEY page 2 run 1: Key plays Notes, Keyboard Full, Single Split Bass, the settings saved once" || bad "KEY page 2 run 1: $(grep '  kbd:' "$OUT/persist_page2_1.log")"
 [ "$(grep -c 'kbd: plays notes keyboard full single 2 split-note 65 page 1 (engine: notes 1 full 1 single 2)' "$OUT/persist_page2_2.log")" = 3 ] &&
     grep -q '(record: current)' "$OUT/persist_page2_2.log" &&
+    [ "$(grep -c '^  numerals: on ' "$OUT/persist_page2_2.log")" = 3 ] && grep -q '^  numerals: on ' "$OUT/persist_page2_1.log" &&
     [ "$(grep '^  part 1:' "$OUT/persist_page2_2.log" | sed -n 2p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 1 ] &&
     [ "$(grep '^  part 0:' "$OUT/persist_page2_2.log" | sed -n 2p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 0 ] &&
     [ "$(grep '^  part 1:' "$OUT/persist_page2_2.log" | sed -n 3p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 0 ] &&
-    ok "KEY page 2 run 2: the three back after a relaunch (UI and engine); B3 a bass note of the left side, F4 the chord part" \
+    ok "KEY page 2 run 2: the three back after a relaunch (UI and engine), Numerals On with them; B3 a bass note of the left side, F4 the chord part" \
     || bad "KEY page 2 run 2: $(grep '  kbd:' "$OUT/persist_page2_2.log" | head -1)"
 
 # the engine picker's roots always play (0.18; until then Settings pick_roots, KNOB 4 in the picker: the byte is

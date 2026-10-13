@@ -513,6 +513,8 @@ static struct {
                                            * roots out of the scale and generates no chord; v14) */
     uint8_t kbd_full;                     /* .. Keyboard: 0 Chords (the chord block + 18 roots), 1 Full (27 single-note
                                            * keys, no chord block, no LOCK; v14) */
+    uint8_t numerals;                     /* .. Numerals (KNOB 4; 0.22): 1 = the top line shows the sounding chord's
+                                           * Roman numeral beside the key (cu_numeral); 0 Off, the default */
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
                                            * (0: clears them, today's); the extension keys are pushed as the type
                                            * keys are (0: toggles, today's) */
@@ -3226,7 +3228,7 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
     int32_t v;
     switch (l) {
     case L_KEY:
-        if (cu.kpage) {                            /* page 2: KEY PLAYS, KEYBOARD (KNOB 3 / 4: nothing there) */
+        if (cu.kpage) {                            /* page 2: KEY PLAYS, KEYBOARD, NUMERALS on KNOB 4 (KNOB 3: nothing) */
             if (knob == 0) {
                 cs.key_notes = (uint8_t)(s > 0);
                 cr_post(CRE_KEYPLAYS, 0, 0, cs.key_notes);
@@ -3235,6 +3237,9 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                 cs.kbd_full = (uint8_t)(s > 0);
                 cu_post_kbd();
                 cu_trace("key: knob 2 keyboard %s\n", cs.kbd_full ? "full" : "chords");
+            } else if (knob == 3) {                /* NUMERALS: the chord's Roman numeral on the top line (display only) */
+                cs.numerals = (uint8_t)(s > 0);
+                cu_trace("key: knob 4 numerals %s\n", cs.numerals ? "on" : "off");
             } else
                 break;
             cu_hot_set(L_KEY, knob);
@@ -4747,6 +4752,17 @@ static uint32_t cu_batt(void)
     return song.batt_raw >= 591 ? 3u : song.batt_raw >= 561 ? 2u : song.batt_raw >= 531 ? 1u : 0u;
 }
 
+/* the KEY layer's Numerals (0.22): the sounding chord's Roman numeral in the key, "" when there is none to show (the
+ * option or Key Mode off, nothing sounding). The root is the one the name shows (cr_chord_info: transposed, Key Mode
+ * resolved), so the two agree */
+static void cu_numeral(char b[CR_NUMERAL_MAX])
+{
+    const cr_chord_info_t *ci = &cr_snap.ci;
+    b[0] = 0;
+    if (cs.numerals && cs.key_on && ci->valid && ci->sounding)
+        cr_chord_numeral(ci->root_pc, ci->quality, cs.tonic, cs.scale, b);
+}
+
 static void cu_header(cr_screen_t *s)
 {
     const cr_snap_t *sn = &cr_snap;
@@ -4760,6 +4776,14 @@ static void cu_header(cr_screen_t *s)
         cu_cat(s->mid, CU_NOTE[cs.tonic], sizeof s->mid);
         if (cs.scale == CR_SCALE_MINOR)
             cu_cat(s->mid, " minor", sizeof s->mid);
+        {                                          /* "Key: A minor \267 ii" (Numerals On, a chord sounding) */
+            char rn[CR_NUMERAL_MAX];
+            cu_numeral(rn);
+            if (rn[0]) {
+                cu_cat(s->mid, " \267 ", sizeof s->mid);
+                cu_cat(s->mid, rn, sizeof s->mid);
+            }
+        }
         s->mid_col = CR_COL_YELLOW;
     } else if (cr_safe) {                         /* SAFE MODE: on the top line all session (Options > Safe Mode) */
         cu_cpy(s->mid, "Safe mode", sizeof s->mid);
@@ -5154,8 +5178,10 @@ static void cu_key_cells(cr_screen_t *s)
 {
     static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
     uint32_t k;
-    if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard; KNOB 3 / 4 free */
-        s->cell[0][0].flags = s->cell[0][1].flags = CR_CF_ON;
+    if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard; KNOB 3 free; KNOB 4 Numerals */
+        s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][3].flags = CR_CF_ON;
+        cu_cpy(s->cell[0][3].label, "Numerals", sizeof s->cell[0][3].label);
+        cu_cpy(s->cell[0][3].value, cs.numerals ? "On" : "Off", sizeof s->cell[0][3].value);
         cu_cpy(s->cell[0][0].label, "Key plays", sizeof s->cell[0][0].label);
         cu_cpy(s->cell[0][0].value, cs.key_notes ? "Notes" : "Chords", sizeof s->cell[0][0].value);
         cu_cpy(s->cell[0][1].label, "Keyboard", sizeof s->cell[0][1].label);

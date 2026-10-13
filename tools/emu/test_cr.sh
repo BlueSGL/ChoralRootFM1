@@ -1747,7 +1747,7 @@ kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\)
 cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3|\4|\5/p'; }
 bp() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* bpm \([0-9]*\) .*/\1/p'; }
 [ "$(kb 1)" = "chords chords 0 1 000" ] && [ "$(kb 2)" = "chords chords 0 2 000" ] && [ "$(bp 2)" = 120 ] && [ "$(kb 4)" = "notes chords 0 1 100" ] &&
-    has '^key: cells Key plays Keyboard - -' "$L" && [ "$(grep -ac '^key: page' "$L")" = 3 ] &&
+    has '^key: cells Key plays Keyboard - Numerals' "$L" && [ "$(grep -ac '^key: page' "$L")" = 3 ] &&
     ok "KEY held: page 1; SELECT: page 2 (Key plays, Keyboard; the tempo untouched), past the last page: stays; back: page 1: $OUT/cr_key_page2.ppm" \
     || bad "the page turn: $(kb 1) / $(kb 2) bpm $(bp 2) / $(kb 4)"
 differ cr_key_page1 cr_key_page2 "the two pages differ on screen"
@@ -1761,6 +1761,29 @@ differ cr_key_page2 cr_key_page2_notes "KNOB 1 on page 2: Key plays Notes: $OUT/
     ok "Chords again: D4 is Dm, D#4 its altered chord" || bad "back to Chords: $(cv 11) / $(cv 12)"
 [ "$(grep -c '^expect .*: ok' "$L")" = 6 ] && ! has 'expect.*FAILED' "$L" && ok "its sound and LED expectations" || bad "cr_key_page expectations"
 silent_end cr_key_page
+
+# the KEY layer's Numerals (0.22, GitHub issue 1): page 2, KNOB 4; the chord's Roman numeral beside the key
+run cr_numerals
+L="$OUT/cr_numerals.log"
+nm() { grep -a '^  numerals:' "$L" | sed -n "$1p" | sed -n 's/.*numerals: \([a-z]*\) top "\(.*\)"$/\1|\2/p'; }
+cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\3|\4|\5/p'; }
+[ "$(nm 1)" = "off|" ] && has '^key: knob 4 numerals on' "$L" && [ "$(nm 2)" = "on|" ] &&
+    ok "Numerals is Off by default (G in C major: no numeral); KEY page 2, KNOB 4 turns it on: $OUT/cr_numerals_page2.ppm" \
+    || bad "the option: $(nm 1) / $(nm 2)"
+[ "$(nm 3)" = "on|V" ] && [ "$(nm 4)" = "on|ii" ] && [ "$(nm 7)" = "on|" ] && [ "$(nm 8)" = "on|iv" ] &&
+    ok "C major: G is V, Dm ii; nothing sounding: the key alone; A minor: Dm is iv: $OUT/cr_numerals_major.ppm, $OUT/cr_numerals_minor.ppm" \
+    || bad "the numerals: $(nm 3) / $(nm 4) / $(nm 7) / $(nm 8)"
+[ "$(nm 5)|$(cv 5 | cut -d'|' -f1)" = "on|VI|Asus" ] && [ "$(nm 6)|$(cv 6 | cut -d'|' -f1)" = "on|bVII|A#M" ] &&
+    ok "a key outside the scale is Key Mode's sus chord on a scale note (A#4: Asus, VI); with Transpose +3, G plays A#M: bVII, the name's root: $OUT/cr_numerals_borrowed.ppm" \
+    || bad "outside the scale: $(nm 5) $(cv 5) / $(nm 6) $(cv 6)"
+[ "$(cv 1)" = "$(cv 3)" ] && [ "$(cv 3 | cut -d'|' -f1,2)" = "GM|1" ] && [ "$(nm 9)" = "on|" ] &&
+    ok "display only: G's notes are the same with it on; Key Mode off: no numeral" || bad "$(cv 1) / $(cv 3) / $(nm 9)"
+differ cr_numerals_idle cr_numerals_major "the top line changes with the chord"
+if cmp -s "$OUT/cr_numerals_off.ppm" "$OUT/cr_numerals_major.ppm"; then bad "the numeral is not on the screen"; else
+    n=$(cmp -l "$OUT/cr_numerals_off.ppm" "$OUT/cr_numerals_major.ppm" | awk '{ p = int(($1 - 16) / 3); if (int(p / 240) >= 24) n++ } END { print n + 0 }')
+    [ "$n" = 0 ] && ok "Numerals On against Off, the same chord: only the top line's 24 rows differ" || bad "$n bytes differ below the top line"
+fi
+silent_end cr_numerals
 
 # the Full keyboard
 run cr_fullkbd

@@ -64,6 +64,7 @@ from a layer: it goes with the layer (manual).
 | the view's lock | the view menu | block `view` bit 7 | manual |
 | Key Mode, tonic, scale | KEY tap, the KEY layer | block `key_on` bit 0, `tonic`, `scale` | manual |
 | Key plays, Keyboard | the KEY layer's page 2 | block `key_on` bits 1 / 2 | manual |
+| Numerals (0.22) | the KEY layer's page 2, KNOB 4 | block `bass_on` bit 1 | manual |
 | the KEY layer's keys (pick / play) | GLO in the KEY layer | block `loop_rec` bit 5 | manual |
 | Transpose | the KEY layer | block `transpose` | manual |
 | the LOCK layer's two settings | B3 held | block `loop_rec` bits 6 / 7 | manual |
@@ -136,6 +137,23 @@ so the ChoralRoot side reads defaults. A Felucca build (`felucca.c` → `project
 saved. Felucca's own fields stay where they were: the panel calibration table, the palette, HOLD in `bold`, and
 LEDs in `zoom`.
 
+**0.22 added one bit and no version, in another byte**: the KEY layer's Numerals (page 2, KNOB 4: the chord's Roman
+numeral on the top line; Off, the default, is 0) in bit 1 of `bass_on`. The byte was chosen by what the older
+firmwares do with it, read in `git show v0.17:` .. `v0.21:firmware/src/cr_settings.c`: all five have
+`CRS_FIX(bass_on, 0, 1)` with the default 0, and since v15 the block's `bass_on` is always written 0. So an older
+firmware that meets Numerals On (the byte = 2) finds it out of range and takes 0, the value it would have read
+anyway: **nothing is reset on the way back**, and its own next global save writes 0 (Numerals is Off again when the
+newer firmware returns). The two homes that were looked at first cost something: bit 3 of `key_on`
+(`CRS_FIX(key_on, 0, 7)` in 0.17 .. 0.21: Key Mode off, Key plays Chords, Keyboard Chords there), bit 5 of
+`pick_roots` (0 .. 31 in 0.20 and 0.21: Output, USB Rate, Chord Names and 6th with 7th to their defaults there).
+Steps 3, 5 and 6 of "How to add a field": `crs_sanitize`'s range for the byte is 0 .. 3; `cr_settings_apply` gives
+the engine bit 0 only (`cr_set_bass(c, s->bass_on & 1u)`) and `cr_settings_capture` keeps bit 1; the glue
+(`crs_capture` / `cr_settings_load`) maps it to `cs.numerals`; `tests/cr_settings_test.c` checks the round trip,
+that it never switches the bass on, that it is manual, and the older firmwares' rule (modelled from their `CRS_FIX`
+line: the old binaries were not run). Manual, as the page's other two: not in `cr_settings_auto`. The web manager
+and the backup tools carry the block as 192 opaque bytes and decode no field of it (`web/fm1backup.js`,
+`tools/fm1_install.py`: `CR_BLOCK`), so they need not know the bit.
+
 ## The ChoralRoot block (`cr_settings_t`, `CRS_SIZE` = 192 bytes)
 
 The block has its own header:
@@ -152,7 +170,7 @@ The block has its own header:
 | transpose | −24..24 | 0 |
 | single, split_pc | 0 Full Octave / 1 Split Oct ("Split" until v14) / **v14: 2 Split Bass**, 0..11 (the Chords layout's split, a pitch class; the Full keyboard splits at F4, fixed, not stored) | Full Octave, F (5) |
 | vel | 1..127 (the keys' velocity) | 100 |
-| bass_on | 0/1 | **0**, and always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
+| bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
 | bass_mode, bass_voicing | Chords Only..Solo, −2..4 octaves | Chords Only, 0 |
 | perform_on, perform_mode, perf_sel | 0/1, Strum..Harp, the PERF layer's entry 0..6 | off, Strum, 0 |
 | sticky | latch | off |
@@ -298,7 +316,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | every entry of Options (Play Style .. Dual Core, Hold Time) | yes | yes | block; Hold Time in Felucca's `bold` |
 | the panel calibration | yes | yes | Felucca's `panel` in the settings object |
 | Key Mode, tonic, scale, Transpose | yes | yes | block `key_on`, `tonic`, `scale`, `transpose` |
-| the KEY layer: its keys (pick / play), Key plays, Keyboard, Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
+| the KEY layer: its keys (pick / play), Key plays, Keyboard, Numerals (0.22: `bass_on` bit 1), Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
 | the KEY layer's page, the PLAY menu's page | no | **no, on purpose** | page 1 whenever the layer opens (`cu.kpage`, `cu.lpage`) |
 | the performance mode, its parameters, Perform on | yes | yes | block `perform_mode`, `perf_sel`, `par`, `perform_on` |
 | LATCH on | yes | yes | block `sticky` |

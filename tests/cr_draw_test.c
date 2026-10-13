@@ -914,13 +914,13 @@ int main(int argc, char **argv)
     }
 
     {   /* the KEY layer's two pages (0.17): page 1 with Single = "Split Bass" (the longest value: inside its cell),
-         * page 2: Key plays / Keyboard on KNOB 1 / 2, KNOB 3 / 4 free (a dash each); the label carries the page,
+         * page 2: Key plays / Keyboard on KNOB 1 / 2, KNOB 3 free (a dash), Numerals on KNOB 4 (0.22); the label carries the page,
          * the footer "SELECT: page" */
         static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
         static const char *const VA[4] = {"D", "Minor", "+0", "Full"};
         static uint16_t one[240u * 240u];
         cr_screen_t s;
-        uint32_t x, y, ry, k, out = 0, in = 0, c01 = 0, c23 = 0;
+        uint32_t x, y, ry, k, out = 0, in = 0, c01 = 0, c2 = 0, c3 = 0;
         uint16_t bg;
         cr_screen_clear(&s);
         s.kind = CR_K_KNOBROW;
@@ -956,7 +956,11 @@ int main(int argc, char **argv)
         check(name, in > 40u && out == 0u && sizeof s.cell[0][3].value > strlen("Split Bass"));
         for (k = 0; k < 4u; k++)
             memset(&s.cell[0][k], 0, sizeof s.cell[0][k]);
-        s.cell[0][0].flags = s.cell[0][1].flags = CR_CF_ON;
+        s.cell[0][0].flags = s.cell[0][1].flags = s.cell[0][3].flags = CR_CF_ON;
+        snprintf(s.cell[0][3].label, sizeof s.cell[0][3].label, "Numerals");
+        snprintf(s.cell[0][3].value, sizeof s.cell[0][3].value, "On");
+        snprintf(s.mid, sizeof s.mid, "Key: C \267 V");
+        s.mid_col = CR_COL_YELLOW;
         snprintf(s.cell[0][0].label, sizeof s.cell[0][0].label, "Key plays");
         snprintf(s.cell[0][0].value, sizeof s.cell[0][0].value, "Notes");
         snprintf(s.cell[0][1].label, sizeof s.cell[0][1].label, "Keyboard");
@@ -968,9 +972,52 @@ int main(int argc, char **argv)
         bg = host_screen[(ry - 4u) * 240u + 2u];
         for (y = ry; y < 240u && y < ry + 72u; y++)
             for (x = 0; x < 240u; x++)
-                if (host_screen[y * 240u + x] != bg) { if (x < 120u) c01++; else c23++; }
-        snprintf(name, sizeof name, "KEY page 2: Key plays / Keyboard drawn (%u ink px), KNOB 3 / 4 a dash each (%u)", c01, c23);
-        check(name, c01 > 200u && c23 > 0u && c23 * 4u < c01);
+                if (host_screen[y * 240u + x] != bg) { if (x < 120u) c01++; else if (x < 180u) c2++; else c3++; }
+        snprintf(name, sizeof name, "KEY page 2: Key plays / Keyboard drawn (%u ink px), KNOB 3 a dash (%u), KNOB 4 Numerals (%u)", c01, c2, c3);
+        check(name, c01 > 200u && c2 > 0u && c2 * 8u < c01 && c3 > 80u);
+    }
+
+    {   /* the numeral on the top line (0.22, the KEY layer's Numerals): "Key: C \267 V" in the header's own face. The
+         * longest text the UI can build ("Key: G# minor \267 #vii\260") beside the widest status the views show
+         * ("Split Bass") is drawn whole: no ellipsis, a gap before the status; and a top line without a numeral is
+         * the same picture as before (the text is the only thing that changed) */
+        static const struct { const char *slug, *mid, *right, *root, *qual, *sup; } H[] = {
+            {"numeral_major", "Key: C \267 V", "", "G", "", "7"},
+            {"numeral_minor", "Key: A minor \267 iv", "Bass", "D", "m", ""},
+            {"numeral_borrowed", "Key: C \267 bVII", "", "A#", "M", ""},
+            {"numeral_longest", "Key: G# minor \267 #vii\260", "Split Bass", "G", "dim", ""},
+        };
+        cr_screen_t s;
+        char fit[48];
+        uint32_t k, cut = 0, tight = 0;
+        for (k = 0; k < sizeof H / sizeof H[0]; k++) {
+            int32_t room, w;
+            cr_screen_clear(&s);
+            s.kind = CR_K_CHORD;
+            s.header = 1;
+            s.batt = 255;
+            s.icon = CR_ICON_NONE;
+            s.mid_col = CR_COL_YELLOW;
+            s.right_col = CR_COL_ORANGE;
+            snprintf(s.mid, sizeof s.mid, "%s", H[k].mid);
+            snprintf(s.right, sizeof s.right, "%s", H[k].right);
+            snprintf(s.name.root, sizeof s.name.root, "%s", H[k].root);
+            snprintf(s.name.quality, sizeof s.name.quality, "%s", H[k].qual);
+            snprintf(s.name.sup, sizeof s.name.sup, "%s", H[k].sup);
+            s.name.col_root = s.name.col_quality = CR_COL_WHITE;
+            s.name.col_sup = CR_COL_ORANGE;
+            lint(H[k].slug, &s);
+            render(&s, 0);
+            write_ppm(dir, H[k].slug);
+            room = P8(236 - (s.right[0] ? (cr_tw(s.right, 12, 1) >> 8) + 8 : 0) - 10);   /* (cr_header's own sum) */
+            w = cr_tw(s.mid, 15, 1);
+            cut += (uint32_t)cr_fit(fit, sizeof fit, s.mid, 15, 1, room);
+            tight += w > room;
+            if (k == 3u)
+                snprintf(name, sizeof name, "numeral: the longest top line is %d px wide in %d px of room beside \"Split Bass\"",
+                         (int)(w >> 8), (int)(room >> 8));
+        }
+        check(name, !cut && !tight && strlen(H[3].mid) < sizeof s.mid);
     }
 
     {   /* QUAD's primitives (docs/QUAD.md, design/choralroot-fm1-quad-mockups.json): the algo band, the ade2 band, the

@@ -402,6 +402,30 @@ firmware with Octave up set**: that firmware finds the byte out of its range and
 byte, so Output reads Clean, USB Rate 44.1 kHz and Chord Names Orchid there until they are set again. With In place
 set the older firmware reads the byte as before.
 
+## The numeral (the KEY layer's Numerals, 0.22)
+
+GitHub issue 1 asked for "the Roman numeral of the chord being played relative to the selected key ... alongside the
+chord name". The KEY layer's page 2 has **Numerals: Off / On** on KNOB 4 (Off by default). On, with Key Mode on and
+a chord sounding, the views' top line reads `Key: C · V`, `Key: A minor · iv` (`cr_ui.c cu_header`, `cu_numeral`).
+The numeral is `cr_engine.c cr_chord_numeral(root_pc, quality, tonic, scale, buf)`, a pure function
+(`tests/cr_engine_test.c s_numerals`):
+
+- **The degree** is the root the name shows (`cr_chord_info`'s `root_pc`: Key Mode resolved, transposed) above the
+  tonic. Major: 0 2 4 5 7 9 11 semitones = I .. VII; minor (natural): 0 2 3 5 7 8 10.
+- **A root between two degrees** is the neighbour with an accidental: major `bII bIII #IV bVI bVII` (1 3 6 8 10),
+  minor `bII #III #IV #VI #VII` (1 4 6 9 11). In Key Mode a key outside the scale plays a chord on a scale note, so
+  these are reached with Transpose (the top line still says the key that was set, the name the root that sounds),
+  or when the key is changed under a held chord.
+- **The case** is the third: lower for MIN, DIM and MIN + SUS (`m add4`), upper for MAJ, SUS, the augmented chord,
+  the power chord and a single note.
+- **Marks**: the degree sign after a diminished chord (`vii°`; with the 7 key it is half-diminished and still
+  written `°`), `+` after the augmented one. No extensions: `V` for G, G7 and G9.
+
+The longest top line the UI can build, `Key: G# minor · #vii°`, is 138 px wide in the header's face and has 165 px
+beside the widest status of the views, `Split Bass` (`tests/cr_draw_test.c`). While a loop records or plays the top
+left is the looper's and shows neither the key nor the numeral. Stored in bit 1 of the settings block's `bass_on`
+(docs/SETTINGS.md), saved with SAVE held.
+
 ## Where the option is stored
 
 Bit 3 of the settings block's `pick_roots` byte (`cr_settings.h CRS_NAMES_STD`; set = Standard), beside Output

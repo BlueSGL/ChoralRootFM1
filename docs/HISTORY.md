@@ -1676,3 +1676,55 @@ short of the tag: the summary paragraph in `docs/releases/0.21.md`, `./build.sh 
 93bbfe1444fa3783b51ec4a3f0d0ff1494ef430d5b022fc9297ee0aa0176a3a7), `web/releases.json` (0.21 first, 0.20 with its
 going-back note), the version in the manual, README and HANDOFF. Not heard: the unit's own speaker at Width 0 against
 127 (left or sum, HANDOFF item 18).
+
+## 2026-10-12 (the chord's numeral in Key Mode: the KEY layer's Numerals; 0.22 begins)
+
+3y33. **Numerals: the chord's Roman numeral beside the key (2026-10-12; GitHub issue 1; 0.22, not flashed).** The
+user (akanazawa): "when the key is set it shows the chord number that you are playing, so for ex in C major key, C is
+1 and G is 5" ... "the Roman numeral of the chord being played relative to the selected key. For example, in C major,
+C would show I, G would show V, Am would show vi, etc., alongside the chord name. Non diatonic one could just be
+'-'. ... a small letter right next to the key like where it says 'A minor scale: ii' kinda thing". **The owner:**
+"show a chord number on the Chord Home screen when we have key mode turned on. This seems reasonable and could help
+people with chords. I would default this off, but add an option on the second page of the key menu in the 4th slot
+to turn it on." **Built**: the KEY layer's page 2, KNOB 4, `Numerals` `Off` (default) / `On` (`cr_ui.c
+cu_key_cells`, `cu_layer_knob`; KNOB 3 stays empty; the trace `key: knob 4 numerals on|off`; the cell turns hot as
+its neighbours). On, with Key Mode on and a chord sounding (`cr_snap.ci.sounding`), `cu_header` writes
+`Key: C · V` / `Key: A minor · iv` in the key's yellow, with the separator the top line already uses for
+`Rec · Step`; nothing sounding: `Key: C` as before; Numerals Off or Key Mode off: the top line is built by the same
+code as before, to the byte. Every screen that shows the key on its top line shows the numeral (the views, and the
+layers over them); while a loop records or plays the top left is `Loop 1`, as it was, and neither shows. **The
+numeral** is `cr_engine.c cr_chord_numeral(root_pc, quality, tonic, scale, buf)`, pure (docs/CHORD-NAMES.md "The
+numeral"): the degree of the name's root (`cr_chord_info`'s `root_pc`, so it agrees with the name under Transpose
+and for the secret chords) above the tonic, major 0 2 4 5 7 9 11 and natural minor 0 2 3 5 7 8 10 = I .. VII; a root
+between two degrees is not "-" but the neighbour with an accidental (major bII bIII #IV bVI bVII, minor bII #III #IV
+#VI #VII); lower case for MIN, DIM and MIN + SUS, upper for MAJ, SUS, the augmented and the power chord and a single
+note; the degree sign (0xB0: the header's face CRB has it) after DIM, with or without the 7 key, `+` after the
+augmented chord; no extensions. **Found on the way**: in Key Mode a key outside the scale plays a sus chord on a
+scale note (A#4 in C: `Asus`, VI), and Key plays = Notes and the Full keyboard block such keys, so a root outside
+the scale is reached only through Transpose (Transpose +3, G played: `A#M`, `Key: C · bVII`: the top line names the
+key that was set, the name and the numeral the root that sounds) or by changing the key under a held chord. The
+names write sharps only, so bVII stands beside `A#`. **Width**: the longest top line, `Key: G# minor · #vii°` (20
+characters in `mid[24]`), is 138 px in 165 px of room beside `Split Bass`: nothing shortened. **Storage**: bit 1 of
+the settings block's `bass_on` (`CRS_NUMERALS`), no version, the block's size unchanged, manual (SAVE held) as Key
+plays and Keyboard. Read in `git show v0.17:` .. `v0.21:firmware/src/cr_settings.c`: all have `CRS_FIX(bass_on, 0,
+1)` with the default 0 and the byte's bit 0 has been written 0 since v15, so an older firmware reads Numerals On (2)
+as 0, which it would have read anyway: nothing is reset on the way back, and its own global save drops the bit.
+The spare bit beside Key plays and Keyboard (bit 3 of `key_on`) would have cost Key Mode, Key plays and Keyboard
+there (`CRS_FIX(key_on, 0, 7)`), bit 5 of `pick_roots` Output, USB Rate, Chord Names and 6th with 7th. The old
+binaries were not run: the rule is read from their source and modelled in `tests/cr_settings_test.c`. The web
+manager and the backup tools carry the block as 192 opaque bytes and decode no field. **Cost**: `.text` +48 B
+(468256), RAM and POOL unchanged (81332, 82.7 %; 315496, 91.7 %), against a build of 8d6325d made beside the tree.
+**No sound changes**: nothing the audio reads was touched; 197 goldens, 0 changed. **Tests**:
+`tests/cr_engine_test.c s_numerals` (the table, all 2304 cells ended inside the buffer), `tests/cr_settings_test.c`
+(the bit), `tests/cr_draw_test.c` (KEY page 2 with its fourth cell; four top lines with a numeral, the longest
+fitting), `tools/emu/scripts/cr_numerals.txt` with `test_cr.sh` (Off by default; V, ii, VI, bVII, iv; the same
+notes with it on; only the top line's rows differ on screen; `key: cells Key plays Keyboard - Numerals`),
+`persist_page2_set.txt` and `test_persist.sh` (On, saved, back after a relaunch). The emulator's dump has a line
+`numerals: on top "V"`. No design mock-up shows the KEY layer's page 2, so none was changed. **Version**:
+`FELUCCA_VERSION` "ChoralRoot 0.22", `docs/releases/0.22.md` (in progress); v0.21 is tagged at 8d6325d, and
+`web/releases.json`, the 0.21 notes, the README and the manual's first line still say 0.21. **Run** (logs in
+`build/scratch/logs/`): `./build.sh` (stub version 3, sha256 baee55ed142fe1cc), `run_cr_tests.sh`,
+`run_cr_draw.sh` (0 lint findings), `tools/emu/test_cr.sh` (PASS), `test_persist.sh` (PASS), `run_tests.sh` (ALL
+HOST TESTS PASSED), `web/test_manager.mjs`, `web/test_backup.mjs`, `releases_test.py`, `CR_VERSION=0.22
+build_web.sh` + `test_web_emu.mjs` (PASS). Not run: the unit (nothing flashed), `install_test.py`, the other
+`web/test_*.mjs`, `test_retired.sh`, `perf.sh`, `classic_exact.sh`.

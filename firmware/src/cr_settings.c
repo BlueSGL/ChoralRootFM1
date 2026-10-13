@@ -179,7 +179,7 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
     CRS_FIX(vel, 1, 127);
-    CRS_FIX(bass_on, 0, 1);
+    CRS_FIX(bass_on, 0, 3);                        /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS, 0.22) */
     CRS_FIX(bass_mode, 0, CR_BASS_SOLO);
     CRS_FIX(bass_voicing, -2, 4);
     CRS_FIX(perform_on, 0, 1);
@@ -490,7 +490,7 @@ void cr_settings_apply(const cr_settings_t *s, cr_t *c, cr_settings_out_t *o)
     cr_set_single_notes(c, (cr_single_t)s->single, s->split_pc);
     cr_set_bass_mode(c, (cr_bassmode_t)s->bass_mode);
     cr_bass_voicing_step(c, s->bass_voicing - c->bass_voicing);
-    cr_set_bass(c, s->bass_on);
+    cr_set_bass(c, s->bass_on & 1u);               /* (bit 1: Numerals, the UI's) */
     for (m = 0; m < CRS_NPM; m++)
         for (p = 0; p < CRS_NPAR; p++)
             if (cr_get_param(c, (cr_pmode_t)m, p) != s->par[m][p])
@@ -527,7 +527,7 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
     s->transpose = c->transpose;
     s->single = c->single;
     s->split_pc = c->split_pc;
-    s->bass_on = c->bass_on;
+    s->bass_on = (uint8_t)((s->bass_on & CRS_NUMERALS) | (c->bass_on ? 1u : 0u));
     s->bass_mode = c->bass_mode;
     s->bass_voicing = c->bass_voicing;
     s->perform_on = c->perform_on;
@@ -712,8 +712,9 @@ static void crs_capture(cr_settings_t *s)
     s->single = cs.single;
     s->vel = cs.vel;
     s->bass_mode = cs.bass_mode;
-    s->bass_on = 0;                                /* (always 0 here: Bass on is the session's, css_capture; an older
-                                                    * firmware would switch the engine's bass on from this byte) */
+    s->bass_on = cs.numerals ? CRS_NUMERALS : 0u;  /* (bit 0 always 0 here: Bass on is the session's, css_capture; an
+                                                    * older firmware would switch the engine's bass on from it. Bit 1:
+                                                    * the KEY layer's Numerals, which 0.17 .. 0.21 read as 0) */
     s->perform_on = cs.perform_on;
     s->perf_sel = cs.perf_sel;
     s->sticky = cs.sticky;
@@ -985,6 +986,7 @@ static void cr_settings_load(void)
     cs.key_on = (uint8_t)CRS_KEY_ON(s);
     cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
     cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
+    cs.numerals = (uint8_t)CRS_NUMS(s);
     cs.tonic = s->tonic;
     cs.scale = s->scale;
     cs.transpose = s->transpose;

@@ -49,6 +49,14 @@
 #define CRS_KEY_PLAYS(s) (((unsigned)(s)->key_on & CRS_KEY_NOTES) ? 1u : 0u)
 #define CRS_KEYBOARD(s) (((unsigned)(s)->key_on & CRS_KBD_FULL) ? 1u : 0u)
 #define CRS_KEY_BYTE(on, notes, full) ((uint8_t)(((on) ? 1u : 0u) | ((notes) ? CRS_KEY_NOTES : 0u) | ((full) ? CRS_KBD_FULL : 0u)))
+/* The KEY layer's page 2 "Numerals" (0.22: the chord's Roman numeral beside the key on the top line; Off, the default
+ * / On) rides in bit 1 of bass_on. That byte's bit 0 is always written 0 since v15 (Bass on is the session's), and
+ * every firmware from 0.17 to 0.21 reads the byte with CRS_FIX(bass_on, 0, 1), default 0: it finds 2 out of range and
+ * takes 0, which is what it would have read anyway: NOTHING is reset on the way back (key_on's bit 3 would have cost
+ * Key Mode, Key plays and Keyboard there; pick_roots' bit 5 Output, USB Rate, Chord Names and 6th with 7th). 0 in
+ * every older record and 0 is the default: no version, nothing to migrate. Manual (SAVE held), as the page's others */
+#define CRS_NUMERALS 0x02u
+#define CRS_NUMS(s) (((unsigned)(s)->bass_on & CRS_NUMERALS) ? 1u : 0u)
 enum { CRS_CLOCK_OFF, CRS_CLOCK_OUT, CRS_CLOCK_IN };
 enum { CRS_NONE = 0xFF };               /* out part: no part */
 enum { CRS_USB_MASTER, CRS_USB_FIXED };
@@ -112,7 +120,7 @@ typedef struct {
     uint8_t tonic, scale;                            /* 0..11, cr_scale_t */
     int8_t transpose;                                /* -24..24 */
     uint8_t single;                                  /* cr_single_t: Full Octave / Split Oct / (v14) 2 Split Bass */
-    uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (always written 0: a firmware
+    uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (bit 0 always written 0: a firmware
                                                       * older than v15 turns the engine's bass on from it with its own
                                                       * UI off; Bass on is the session's since v15); cr_bassmode_t */
     int8_t bass_voicing;                             /* bass register, octaves -2..4 */

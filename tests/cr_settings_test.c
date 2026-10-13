@@ -1023,6 +1023,43 @@ static void t_v15(void)
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.bass_on == 1, "bass_on = 1 in a block is still in range");
     cr_settings_apply(&r, &E, &o);
     ok(E.bass_on == 1, ".. and applies (cr_settings.c's glue writes 0: Bass on is the session's)");
+    /* 0.22: the KEY layer's Numerals in bit 1 of bass_on (CRS_NUMERALS): off by default and in every older record;
+     * round-trips; never the engine's Bass on; the engine's capture keeps it; and the rule 0.17 .. 0.21 apply to the
+     * byte (their CRS_FIX(bass_on, 0, 1), default 0: modelled here, the old binaries were not run) reads 2 as 0, which
+     * is what they would write themselves: nothing is reset there */
+    ok(!CRS_NUMS(&d) && CRS_VERSION == 15u, "Numerals: Off by default, no settings version for it");
+    s = d;
+    s.bass_on = CRS_NUMERALS;
+    s.key_on = CRS_KEY_BYTE(1, 1, 1);
+    s.pick_roots = 31;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_NUMS(&r) == 1u && r.bass_on == CRS_NUMERALS && r.key_on == 7u &&
+       r.pick_roots == 31u, "Numerals On round-trips (bit 1 of bass_on); the key byte and pick_roots untouched");
+    cr_init(&E, &OUT);
+    cr_settings_apply(&r, &E, &o);
+    ok(E.bass_on == 0, ".. and does not switch the engine's bass on");
+    cr_settings_capture(&r, &E, &o);
+    ok(CRS_NUMS(&r) == 1u && !(r.bass_on & 1u), ".. the engine's capture keeps the bit");
+    s.bass_on = 4;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.bass_on == 0, "bass_on above 3: the byte's default (0)");
+    {
+        unsigned old = CRS_NUMERALS;               /* what 0.21 reads: out of its 0..1, so its default */
+        if (old > 1u) old = d.bass_on;
+        ok(old == 0u && d.bass_on == 0u, "0.17 .. 0.21 read a Numerals-On byte as bass_on 0: nothing reset");
+    }
+    s = d;                                         /* an older record: whatever its version, the bit is 0 */
+    s.bpm = 97;
+    cr_settings_seal(&s);
+    s.version = 14;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.bpm == 97 && !CRS_NUMS(&r), "a version-14 record: Numerals Off");
+    {                                              /* manual: the automatic save does not carry it */
+        cr_settings_t a = d, m = d;
+        a.bass_on = CRS_NUMERALS;
+        cr_settings_auto(&m, &a);
+        ok(!CRS_NUMS(&m), "Numerals is manual (SAVE held), as Key plays and Keyboard");
+    }
 }
 
 static void css_reseal(uint8_t *b, unsigned version, unsigned size)   /* a session record of another version / size */

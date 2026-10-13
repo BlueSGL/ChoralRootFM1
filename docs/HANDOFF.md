@@ -5,11 +5,12 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.20 (`git tag`; v0.20 is the latest, notes in `docs/releases/`; `web/releases.json` lists
-0.16 .. 0.20 for the installer). The tree's `FELUCCA_VERSION` is "ChoralRoot 0.21" (`firmware/src/choralroot.c`): 0.21
-is prepared for release and NOT TAGGED (the chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32):
-its notes, `web/releases.json`'s first entry (package sha256 93bbfe14...) and the manual's first line say 0.21; the
-tag, the release and the site wait for the owner's word. The owner's unit runs what
+Released: v0.1 and v0.11 .. v0.20 (`git tag`; v0.20 is the latest published, notes in `docs/releases/`). 0.21 (the
+chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32) is tagged `v0.21` as a pre-release: not yet
+published as the latest and not on the site; its notes, `web/releases.json`'s first entry (package sha256
+93bbfe14...) and the manual's first line say 0.21. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.22"
+(`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
+3y33). The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
@@ -66,7 +67,7 @@ python3 tests/install_test.py; for t in backup web sounds installer manager; do 
 python3 tests/releases_test.py                    # web/releases.json: the versions the installer offers
 sh tests/run_tests.sh       # ends ALL HOST TESTS PASSED
 sh tools/emu/test_retired.sh                      # the engines retired in 0.18: a unit that comes with sounds on them
-CR_VERSION=0.21 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
+CR_VERSION=0.22 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
 sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.18 reference build, bit for bit
 ```
 

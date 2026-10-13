@@ -2758,10 +2758,61 @@ static void s_names_std(void)
     ok(!strcmp(s, "9") && cr_chord_names() == 0, "back to Orchid: A + 9 is A9 again");
 }
 
+/* 0.22: the chord's Roman numeral in the key (the KEY layer's Numerals; GitHub issue 1): cr_chord_numeral */
+static void s_numerals(void)
+{
+    static const struct { uint8_t tonic, scale, root, q; const char *want; } T[] = {
+        /* C major: the scale's chords, then the roots between */
+        {0, CR_SCALE_MAJOR, 0, CR_Q_MAJ, "I"},      {0, CR_SCALE_MAJOR, 2, CR_Q_MIN, "ii"},
+        {0, CR_SCALE_MAJOR, 4, CR_Q_MIN, "iii"},    {0, CR_SCALE_MAJOR, 5, CR_Q_MAJ, "IV"},
+        {0, CR_SCALE_MAJOR, 7, CR_Q_MAJ, "V"},      {0, CR_SCALE_MAJOR, 9, CR_Q_MIN, "vi"},
+        {0, CR_SCALE_MAJOR, 11, CR_Q_DIM, "vii\260"},
+        {0, CR_SCALE_MAJOR, 1, CR_Q_MAJ, "bII"},    {0, CR_SCALE_MAJOR, 3, CR_Q_MAJ, "bIII"},
+        {0, CR_SCALE_MAJOR, 6, CR_Q_DIM, "#iv\260"}, {0, CR_SCALE_MAJOR, 8, CR_Q_MAJ, "bVI"},
+        {0, CR_SCALE_MAJOR, 10, CR_Q_MAJ, "bVII"},
+        /* the case and the marks: by the third */
+        {0, CR_SCALE_MAJOR, 7, CR_Q_SUS, "V"},      {0, CR_SCALE_MAJOR, 7, CR_Q_POW, "V"},
+        {0, CR_SCALE_MAJOR, 7, CR_Q_NONE, "V"},     {0, CR_SCALE_MAJOR, 7, CR_Q_AUG, "V+"},
+        {0, CR_SCALE_MAJOR, 2, CR_Q_MIN4, "ii"},    {0, CR_SCALE_MAJOR, 7, CR_Q_MIN, "v"},
+        /* A minor (natural) */
+        {9, CR_SCALE_MINOR, 9, CR_Q_MIN, "i"},      {9, CR_SCALE_MINOR, 11, CR_Q_DIM, "ii\260"},
+        {9, CR_SCALE_MINOR, 0, CR_Q_MAJ, "III"},    {9, CR_SCALE_MINOR, 2, CR_Q_MIN, "iv"},
+        {9, CR_SCALE_MINOR, 4, CR_Q_MAJ, "V"},      {9, CR_SCALE_MINOR, 4, CR_Q_MIN, "v"},
+        {9, CR_SCALE_MINOR, 5, CR_Q_MAJ, "VI"},     {9, CR_SCALE_MINOR, 7, CR_Q_MAJ, "VII"},
+        {9, CR_SCALE_MINOR, 10, CR_Q_MAJ, "bII"},   {9, CR_SCALE_MINOR, 1, CR_Q_MAJ, "#III"},
+        {9, CR_SCALE_MINOR, 3, CR_Q_MAJ, "#IV"},    {9, CR_SCALE_MINOR, 6, CR_Q_MIN, "#vi"},
+        {9, CR_SCALE_MINOR, 8, CR_Q_DIM, "#vii\260"}, {9, CR_SCALE_MINOR, 1, CR_Q_AUG, "#III+"},
+        /* another tonic: G# minor's bVII is F#, F major's V is C */
+        {8, CR_SCALE_MINOR, 6, CR_Q_MAJ, "VII"},    {5, CR_SCALE_MAJOR, 0, CR_Q_MAJ, "V"},
+    };
+    char b[CR_NUMERAL_MAX], r[3], q[5], s[CR_SUP_MAX];
+    unsigned i, bad = 0, t, sc, pc, qq, longest = 0;
+    for (i = 0; i < sizeof T / sizeof T[0]; i++) {
+        cr_chord_numeral(T[i].root, T[i].q, T[i].tonic, T[i].scale, b);
+        if (strcmp(b, T[i].want)) { printf("  numeral %u: \"%s\", want \"%s\"\n", i, b, T[i].want); bad++; }
+    }
+    ok(!bad, "numerals: C major I ii iii IV V vi vii(deg), bII bIII #iv bVI bVII; A minor i III iv V VI VII, #III #IV #vi #vii");
+    for (bad = 0, t = 0; t < 12u; t++)             /* every cell ends inside the buffer */
+        for (sc = 0; sc < 2u; sc++)
+            for (pc = 0; pc < 12u; pc++)
+                for (qq = 0; qq < CR_Q_COUNT; qq++) {
+                    memset(b, 0x55, sizeof b);
+                    cr_chord_numeral((uint8_t)pc, (uint8_t)qq, (uint8_t)t, (uint8_t)sc, b);
+                    if (!memchr(b, 0, sizeof b) || !b[0]) bad++;
+                    else if (strlen(b) > longest) longest = (unsigned)strlen(b);
+                }
+    ok(!bad && longest == CR_NUMERAL_MAX - 1u, "numerals: all 2304 cells written and ended (the longest: 5 characters)");
+    /* G7 and G9 read V as G does: the extensions are the name's (the numeral takes none), in both namings */
+    cr_chord_name(7, CR_Q_MAJ, CR_EXT_M7 | CR_EXT_9, r, q, s);
+    cr_chord_numeral(7, CR_Q_MAJ, 0, CR_SCALE_MAJOR, b);
+    ok(!strcmp(b, "V") && !strcmp(r, "G") && s[0], "numerals: G7 9 in C major is V, the extensions stay with the name");
+}
+
 int main(void)
 {
     s_tables();
     s_names_std();
+    s_numerals();
     s_sixth_tables();
     run_suite(1000, 0, "1ms");
     run_suite(2902, 0, "2.9ms");
