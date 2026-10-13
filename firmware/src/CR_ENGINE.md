@@ -73,6 +73,7 @@ Each setting has its own setter. A setter applies the setting's live side effect
 | `cr_set_playstyle` | clears Free state |
 | `cr_set_ext_addition` | — |
 | `cr_set_secret` | — |
+| `cr_set_sixth_up(on)` | 0.20, Options > 6th with 7th: a chord with the 6 and a seventh has its 6th 21 semitones above the root (`cr_chord_base_ex`); the chords built from now on, a sounding chord keeps its notes (docs/CHORD-NAMES.md) |
 | `cr_set_key` | new gestures only |
 | `cr_set_transpose` | new gestures only |
 | `cr_set_single_notes(mode, split_pc)` | new gestures only; mode: Full, Split Oct, Split Bass (0.17) |
@@ -186,7 +187,7 @@ its exact time, and never accumulates drift: the tests check 25 steps in 6 s, 1/
 | Table | Content | Provenance |
 | --- | --- | --- |
 | `CR_QUALITY` | dim 0 3 6, min 0 3 7, maj 0 4 7, sus 0 5 7, aug 0 4 8, pow 0 7 12, min4 0 3 5 (packed: low nibble = count) | **Firmware ground truth** (fw 3.63 → 3.84 diff; ORCHID_FIRMWARE_REFERENCE.md §6.1/§7). |
-| `CR_EXT_IV` | 6 +9, m7 +10, M7 +11, 9 +14 | Firmware, high confidence (§6.2). |
+| `CR_EXT_IV` | 6 +9, m7 +10, M7 +11, 9 +14 | Firmware, high confidence (§6.2). ChoralRoot's option (0.20, off by default): the 6 at +21 when a seventh is held (`CR_SIXTH_UP_IV`; not the Orchid's). |
 | Secret combo map (`crx_secret_quality`) | DIM+SUS → pow, MAJ+SUS → aug, MIN+SUS → min4; other pairs → last pressed. Scope Off / Simple / All. | Types firmware-confirmed. **Combo map is a Choralroot choice** (provisional; min+sus → min4 inferred). |
 | `CR_KEYMAP` | One byte per pitch class from the tonic: low 3 bits = quality (1 dim, 2 min, 3 maj, 4 sus), bits 3–4 = root shift (8 down, 16 up). Major `3 12 2 12 2 3 20 3 12 2 12 1`, minor `2 12 1 3 12 2 12 2 3 20 3 12`. | Diatonic triads: theory. **C# in C → Csus is measured** (manual §9.3). The other chromatic entries are a **labelled fallback** (lower neighbour as sus, upward where its sus4 leaves the scale). A held Chord Type overrides the quality and keeps the shift. |
 | `CR_PATTERNS` | 12 packed phrases: 13 offset bytes, then one byte per step (low nibble = chord index, 0 = rest; high nibble L = accent, vel × (L+1) / 16). Names: pulse, alberti, waltz, cascade, updown, syncopate, gallop, skip, ballad, stride, drive, ladder. | **Choralroot-designed**, ported byte for byte. Orchid's factory patterns are unpublished, so none is factory parity until measured. |

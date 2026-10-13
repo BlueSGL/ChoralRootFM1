@@ -2328,6 +2328,68 @@ static void s_edkeys(void)
     cr_loop_panic(&L);
 }
 
+/* Options > 6th with 7th (0.20; docs/CHORD-NAMES.md "The 6th above a seventh"): a loop stores a chord as its root, type
+ * and extension bits, never as notes, so a recorded C7 6 is played by the setting of the moment each step is struck,
+ * as it follows the live voicing, Extension Addition and the Perform mode: recorded In place, it plays Octave up once
+ * the option says so, and back */
+static int ons_set(int from, char *out)             /* the MAIN note-ons since log entry from, as "60 64 67" (each once) */
+{
+    uint8_t seen[128];
+    int k, n = 0;
+    memset(seen, 0, sizeof seen);
+    for (k = from; k < nlog; k++)
+        if (LOG[k].k == '+' && LOG[k].s == 0) seen[LOG[k].note] = 1;
+    out[0] = 0;
+    for (k = 0; k < 128; k++)
+        if (seen[k]) { sprintf(out + strlen(out), n ? " %d" : "%d", k); n++; }
+    return n;
+}
+static void s_sixth(void)
+{
+    char b[128];
+    int mark;
+    uint8_t qx;
+    reset();
+    ok(cr_loop_rec(&L, &C) == CRL_DID_ARM, "6th with 7th: REC arms");
+    step(100);
+    cr_mod(&C, CR_MOD_MAJ, 1); cr_mod(&C, CR_MOD_M7, 1); cr_mod(&C, CR_MOD_6, 1);
+    mark = nlog;
+    cr_key(&C, 60, 100, 1);
+    step(500);
+    cr_key(&C, 60, 100, 0);
+    cr_mod(&C, CR_MOD_6, 0); cr_mod(&C, CR_MOD_M7, 0); cr_mod(&C, CR_MOD_MAJ, 0);
+    ons_set(mark, b);
+    ok(!strcmp(b, "60 64 67 69 70"), "recorded In place: C7 6 sounds C E G A Bb");
+    step(1500);
+    ok(cr_loop_rec(&L, &C) == CRL_DID_COMMIT && L.state == CRL_PLAYING && L.d.nev == 1, "one bar, one event, playing");
+    qx = L.d.ev[0].qx;
+    ok(L.d.ev[0].root == 60 && (qx >> 4) == CR_Q_MAJ && (qx & 15) == (CR_EXT_6 | CR_EXT_M7), "the event is root 60, MAJ, 6 + 7 (no notes)");
+    step(700);                                       /* (inside the first played chord) */
+    mark = nlog;
+    step(2000);
+    ons_set(mark, b);
+    ok(!strcmp(b, "60 64 67 69 70"), "played In place: the same five notes");
+    step(100);                                       /* (the chord of this cycle sounds) */
+    cr_set_sixth_up(&C, 1);
+    mark = nlog;
+    step(2000);
+    ons_set(mark, b);
+    ok(!strcmp(b, "60 64 67 70 81"), "Octave up set while the loop plays: the next cycle's chord has its 6th an octave up (A5)");
+    ok(L.d.ev[0].qx == qx && L.d.ev[0].root == 60 && L.d.nev == 1, "  the stored event is untouched");
+    cr_set_sixth_up(&C, 0);
+    mark = nlog;
+    step(2000);
+    ons_set(mark, b);
+    ok(!strcmp(b, "60 64 67 69 70"), "In place again: the next cycle plays it as recorded");
+    cr_set_sixth_up(&C, 1);
+    step(2100);                                      /* (a raised chord sounds) */
+    cr_set_sixth_up(&C, 0);
+    cr_loop_stop(&L, &C);
+    step(50);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "stopped with the option changed under a sounding step: no note left, doubled or ended twice");
+    cr_set_sixth_up(&C, 0);
+}
+
 int main(void)
 {
     s_overwrite();
@@ -2346,6 +2408,7 @@ int main(void)
     s_slots();
     s_switch();
     s_limits();
+    s_sixth();
     printf("\ncr_loop: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

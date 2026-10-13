@@ -524,6 +524,8 @@ static struct {
                                            * default: 44.1 kHz only, 0.18's device (usb.c UA_OFF_48) */
     uint8_t names_std;                    /* Options > Chord Names (0.20): 1 Standard, 0 Orchid, the default
                                            * (cr_engine.c cr_chord_names_set; docs/CHORD-NAMES.md) */
+    uint8_t sixth_up;                     /* Options > 6th with 7th (0.20): 1 Octave up, 0 In place, the default
+                                           * (cr_engine.c cr_set_sixth_up; docs/CHORD-NAMES.md) */
 } cs;
 #if CR_HAVE_SETTINGS
 static void cr_settings_load(void);       /* cr_settings.c (included after this file): the record -> the UI */
@@ -921,19 +923,20 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 }
 
 /* ------------------------------------------------------------- Options --- */
-enum { O_STYLE, O_EXTADD, O_SECRET, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
+enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
        O_CLOCK, O_VIEW, O_MOTION, O_NAMES, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
        O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
        O_SAFE, O_ERASE,
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
-static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "Velocity",
+static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "6th with 7th",
+    "Velocity",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -960,6 +963,7 @@ static int32_t opt_get(uint32_t o)
     case O_STYLE: return cs.playstyle;
     case O_EXTADD: return cs.extadd;
     case O_SECRET: return cs.secret;
+    case O_SIXTH: return cs.sixth_up;
     case O_VEL: return cs.vel;
     case O_BASSMODE: return cs.bass_mode;
     case O_SINGLE: return cs.single;
@@ -987,6 +991,7 @@ static void opt_set(uint32_t o, int32_t v)
     case O_STYLE: cs.playstyle = (uint8_t)v; cr_post(CRE_PLAYSTYLE, 0, 0, v); break;
     case O_EXTADD: cs.extadd = (uint8_t)v; cr_post(CRE_EXTADD, 0, 0, v); break;
     case O_SECRET: cs.secret = (uint8_t)v; cr_post(CRE_SECRET, 0, 0, v); break;
+    case O_SIXTH: cs.sixth_up = (uint8_t)v; cr_post(CRE_SIXTH, 0, 0, v); break;   /* (the chords built from now on) */
     case O_VEL: cs.vel = (uint8_t)v; break;
     case O_BASSMODE: cs.bass_mode = (uint8_t)v; cr_post(CRE_BASS_MODE, 0, 0, v); break;
     case O_SINGLE: cs.single = (uint8_t)v; cu_post_single(); break;
@@ -1022,6 +1027,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_STYLE: cu_cpy(d, STYLE[v % 3], n); break;
     case O_EXTADD: cu_cpy(d, EXTADD[v & 1], n); break;
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
+    case O_SIXTH: cu_cpy(d, v ? "Octave up" : "In place", n); break;
     case O_VEL: cu_int(d, v, 0, n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
     case O_SINGLE: cu_cpy(d, v == 2 ? "Split Bass" : v ? "Split Oct" : "Full Octave", n); break;
@@ -5655,6 +5661,8 @@ static void cu_options_screen(cr_screen_t *s)
     else if (cu.opt_sel == O_USB_RATE)             /* (48 kHz is the computer's choice once offered; it costs the
                                                     * audio 6 % while it records: docs/USB-AUDIO.md "48 kHz") */
         cu_cpy(s->label, cs.usb48 ? "the computer picks the rate" : "48 kHz: not offered", sizeof s->label);
+    else if (cu.opt_sel == O_SIXTH)                /* (docs/CHORD-NAMES.md "The 6th above a seventh": C7 + 6 and the like) */
+        cu_cpy(s->label, cs.sixth_up ? "6 + 7: the 6th on top, a 13th" : "6 + 7: the 6th under the 7th", sizeof s->label);
     else if (cu.opt_sel == O_NAMES)                /* (docs/CHORD-NAMES.md: the same notes under either name) */
         cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
@@ -6486,6 +6494,7 @@ static void cr_ui_init(void)
     cs.out_clean = 1;                             /* Options > Output Clean (the record's) */
     cs.usb48 = 0;                                 /* Options > USB Rate 44.1 kHz (the record's) */
     cs.names_std = 0;                             /* Options > Chord Names Orchid (the record's) */
+    cs.sixth_up = 0;                              /* Options > 6th with 7th In place (the record's) */
     cr_chord_names_set(0);
 #if !CR_HAVE_SETTINGS
     fx_output_set(1, 1);                          /* (a build without the record: nothing else tells fx.c) */

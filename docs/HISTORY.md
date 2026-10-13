@@ -1552,3 +1552,57 @@ identical. Not built, the owner's (docs/CHORD-NAMES.md "Open questions"): the sa
 6th was played an octave higher if either 7th is enabled" (a change of what sounds); `C` for the major triad in
 Standard; a name of its own for the 13 without its 9th. Not run: the unit (nothing was flashed), `tools/emu/classic_exact.sh`
 (it needs the 0.18 reference build).
+
+## 2026-10-12 (the 6th above a seventh: Options > 6th with 7th)
+
+3y30. **The same user:** "it would be nice if the 6th was played an octave higher if either 7th is enabled
+(effectively making it a 13th chord)". **The owner:** "Let's add as option you can turn on, defaulted off."
+**Options > 6th with 7th: In place / Octave up**, after Secret Chords (entry 3 of 26), In place the default. The
+name was chosen for the row and for a player without the manual: the entry says which notes it is about, the value
+what happens to the 6th (`13th Voicing: Off / On` would need the manual to say what Off is); the line under it reads
+`6 + 7: the 6th under the 7th` / `6 + 7: the 6th on top, a 13th`. **Octave up**: a chord with the 6 and at least one
+seventh (m7, M7 or both) has its 6th 21 semitones above the root instead of 9, before the voicing arranges it
+(`cr_engine.c cr_chord_base_ex`, the one place a chord's notes come from; `cr_chord_base` is main's function with
+the option off). Decisions: every chord type alike, the secret ones and DIM too (on DIM + 7 the 9-semitone note is the
+13th of a half-diminished chord, as Standard already names it, `Cm13b5`; one rule reads and sounds the same
+everywhere); both sevenths at once: raised; the 13th is above the 9th (14) and is the chord's top note, so KNOB 1
+rotates it as it rotates the 9th (one step down gives In place's notes at 0); chords without a seventh (`C6`,
+`C6 9`), single notes and the bass: untouched; Key Mode: the extensions were never corrected to the scale and are
+not now; where root + 21 is above MIDI 127 the 6th stays in place rather than be dropped (the same number of notes
+as In place for every root: no extra voice, none lost). **Everything that shows or sends a chord's notes reads the
+engine's**: the sound, MIDI out, the Raw Chord stream, the arp, strum and patterns, the key LEDs, the views' note
+lists, the emulator's dump (`cr_chord_base` had no caller outside `cr_engine.c`). **The looper** stores root, type
+and extension bits, so a recorded chord follows the setting at the moment each step is struck, as it follows the
+live voicing, Extension Addition and the Perform mode; a step's own voicing rotates the raised note the same way.
+**A change acts from the next chord on** (a press, a pad, a loop step, a chord key changing a held chord); a chord
+that sounds keeps its notes and its note-offs are its own: tested with the option turned under a held chord, a
+latched one, the Raw stream and the bass, a running strum, arp and pattern, and a sounding loop voice (no stuck
+note, no double note-on, no stray note-off, no event left). **Names**: unchanged in both namings (`C7 6`; `C13`).
+**Stored** in bit 4 of the block's `pick_roots` (`CRS_SIXTH_UP`), no record version, automatic; the engine's
+(`cr_t.sixth_up`, in a byte that was padding: `cr_t` did not grow; `cr_settings_apply` / `cr_settings_capture`,
+the event `CRE_SIXTH`). Read before taking the bit: `crs_sanitize` is `CRS_FIX(pick_roots, 0, hi)` with `hi` 1 at
+v0.17 / v0.18 and 7 at v0.19 (`git show v0.19:firmware/src/cr_settings.c`), 15 on main; a value above it gives
+that firmware its default for the whole byte. So 0.19 with Octave up set reads Output Clean, USB Rate 44.1 kHz and
+Chord Names Orchid until they are set there; with In place set it reads the byte as before. The same price the
+three earlier bits paid, and a version bump would not change what an older firmware does (docs/SETTINGS.md).
+**In place is main's, bit for bit**: the golden renders 197 with 0 changed; `tests/cr_engine_test.c`: 8 types x 16
+extension sets x 28 roots against a copy of main's builder, each voiced at 13 KNOB 1 positions, and 5600 chords each
+way through a loop voice, a loop step with its own voicing, a pad and the keys; every emulator script through this
+tree's emulator and one built from `git archive e51baa5`, each on its own copy of the script: 179 of 179 WAVs
+identical byte for byte (`cr_opt_keys` walks one more entry and waits 120 ms less after it, so its WAV is main's
+too). Octave up changes only chords with the 6 and a seventh: the unit test's cells, and A + 9 on a flash that says
+Octave up is a new unit's WAV. Note for the next reader: most of `tools/emu/perf.sh`'s scenarios hold MAJ + 6 + M7
++ 9, so their notes (not their cost) differ with the option on. **Cost**: note selection when a chord is built,
+nothing per sample, `.ram_text` unchanged; `.text` +368 B (468064), RAM +0 (81316, 82.7 %), POOL +0 (315496,
+91.7 %). The Options entry moved every entry from Velocity on by one: 21 emulator scripts, `cr_opt_keys`' walk, and
+the entry numbers in `test_cr.sh` and `test_persist.sh`; `cr_layers.txt` turned KNOB 1 on entry 3 (Velocity) and
+turns it on entry 4 now. New: `tools/emu/scripts/cr_sixth.txt` (14 dumps: both values, the chord held through the
+change, M7, no seventh, with the 9, KNOB 1, the key LEDs), `cr_sixth_set.txt` / `cr_sixth_check.txt` (saved by
+itself, back after a relaunch); a draw check of the row (0 lint findings, nothing cut). The mock-up generator's
+Options sheet (`design/make_mockups.py`, state 12) is the first design's list and has none of the entries added
+since: not touched, as stale as it was. **Listening files** (the emulator, not the unit):
+`../audio-0.20/sixth/`: C7 + 6, CM7 + 6, Cm7 + 6, C7 + 6 + 9 on FM6 TINE EP and VA LUSH PAD, each In place then
+Octave up, at Voicing 0, +2 and -2, with the notes of every strike in the README. Not run: the unit (nothing was
+flashed; the owner has not heard it), `tools/emu/classic_exact.sh` (nothing near the audio path changed; it needs
+the 0.18 reference build), the old firmwares themselves (their rule for the byte was read in their source and
+modelled in `tests/cr_settings_test.c`).

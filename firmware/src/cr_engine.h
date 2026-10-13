@@ -153,6 +153,8 @@ typedef struct {
     uint8_t bass_on, bass_mode;
     int8_t bass_voicing, voicing;
     uint8_t perform_on, perform_mode, sticky;
+    uint8_t sixth_up;                /* Options > 6th with 7th: 1 Octave up (cr_set_sixth_up); in the byte that was
+                                      * padding before bpm: cr_t keeps its size */
     uint16_t bpm;
     uint8_t stream_on[CR_NSTREAM];
     int16_t par[CR_PM_COUNT][CR_P_COUNT];
@@ -210,6 +212,12 @@ void cr_panic(cr_t *c);
 void cr_set_playstyle(cr_t *c, cr_playstyle_t p);
 void cr_set_ext_addition(cr_t *c, cr_extadd_t e);
 void cr_set_secret(cr_t *c, cr_secret_t s);
+/* Options > 6th with 7th (0.20; docs/CHORD-NAMES.md "The 6th above a seventh"): 0 In place, the default and the
+ * Orchid's (the 6th 9 semitones above the root, under the seventh); 1 Octave up: a chord with the 6 and a seventh (m7,
+ * M7 or both), of any chord type, has its 6th 21 semitones above the root, a 13th, before the voicing arranges it.
+ * Chords without a seventh, single notes and the bass are untouched. Chords built from now on (new gestures, loop
+ * steps, pads, a chord key changing a held chord): a sounding chord keeps its notes */
+void cr_set_sixth_up(cr_t *c, int on);
 void cr_set_key(cr_t *c, int enabled, uint8_t tonic_pc, cr_scale_t scale);  /* new gestures only */
 void cr_set_transpose(cr_t *c, int semis);         /* -24..24, new gestures only */
 /* Single Notes (design.md 8.3): Split = a single note (no chord quality) whose pressed key's pitch class is below
@@ -300,7 +308,9 @@ int  cr_pending(const cr_t *c);                    /* queued events */
 const char *cr_pattern_name(int pattern);          /* 1..12 */
 
 /* chord helpers, shared with a looper (pure functions of the tables) */
-int  cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CHORD_MAX]);
+int  cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CHORD_MAX]);   /* (the 6th in place) */
+/* .. as the engine builds a chord: sixth_up = cr_t.sixth_up (Options > 6th with 7th) */
+int  cr_chord_base_ex(int root_note, uint8_t quality, uint8_t ext, int sixth_up, uint8_t out[CR_CHORD_MAX]);
 int  cr_voice_apply(const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX]);
 
 #endif

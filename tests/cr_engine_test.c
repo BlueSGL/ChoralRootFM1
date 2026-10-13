@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+#include <stddef.h>
 #include "../firmware/src/cr_engine.h"
 
 /* ------------------------------------------------------------ harness --- */
@@ -2068,6 +2069,408 @@ static void s_loopvoice(void)
     fresh("loop voices end");
 }
 
+/* -------------------------- Options > 6th with 7th (0.20): Octave up --- */
+/* a copy of main's note builder (cr_engine.c at e51baa5: cr_chord_base and cr_voice_apply), which knows nothing of the
+ * option: Off must give its notes, bit for bit */
+static const uint16_t M_QUALITY[CR_Q_COUNT] = { 0, 0x6303, 0x7303, 0x7403, 0x7503, 0x8403, 0xC703, 0x5303 };
+static const uint8_t M_EXT_IV[4] = { 9, 10, 11, 14 };
+static void m_sort(uint8_t *a, int n)
+{
+    int i, j;
+    for (i = 1; i < n; i++) {
+        uint8_t x = a[i];
+        for (j = i; j > 0 && a[j - 1] > x; j--) a[j] = a[j - 1];
+        a[j] = x;
+    }
+}
+static int m_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CHORD_MAX])
+{
+    uint8_t iv[CR_CHORD_MAX];
+    int ni = 0, n = 0, j, k;
+    if (quality > CR_Q_NONE && quality < CR_Q_COUNT) {
+        uint16_t q = M_QUALITY[quality];
+        for (j = 1; j <= (int)(q & 15u); j++) iv[ni++] = (uint8_t)((q >> (j * 4)) & 15u);
+        for (k = 0; k < 4; k++) {
+            int dup = 0;
+            if (!(ext & (1u << k))) continue;
+            for (j = 0; j < ni; j++) if (iv[j] == M_EXT_IV[k]) dup = 1;
+            if (!dup && ni < CR_CHORD_MAX) iv[ni++] = M_EXT_IV[k];
+        }
+    } else {
+        iv[ni++] = 0;
+    }
+    m_sort(iv, ni);
+    for (j = 0; j < ni; j++) {
+        int nn = root_note + iv[j];
+        if (nn >= 0 && nn <= 127) out[n++] = (uint8_t)nn;
+    }
+    return n;
+}
+static int m_voice_apply(const uint8_t *base, int n, int k, uint8_t out[CR_CHORD_MAX])
+{
+    int i;
+    for (i = 0; i < n; i++) out[i] = base[i];
+    m_sort(out, n);
+    if (!n) return 0;
+    for (; k > 0; k--) {
+        if (out[0] + 12 > 127) break;
+        out[0] = (uint8_t)(out[0] + 12);
+        m_sort(out, n);
+    }
+    for (; k < 0; k++) {
+        if (out[n - 1] < 12) break;
+        out[n - 1] = (uint8_t)(out[n - 1] - 12);
+        m_sort(out, n);
+    }
+    return n;
+}
+/* b is a with exactly one note an octave higher (as multisets): returns that note of a, or -1 */
+static int one_up(const uint8_t *a, const uint8_t *b, int n)
+{
+    uint8_t ua[CR_CHORD_MAX], ub[CR_CHORD_MAX];
+    int i, j, na = 0, nb = 0, used[CR_CHORD_MAX];
+    for (i = 0; i < n; i++) used[i] = 0;
+    for (i = 0; i < n; i++) {
+        for (j = 0; j < n; j++) if (!used[j] && b[j] == a[i]) break;
+        if (j < n) used[j] = 1; else ua[na++] = a[i];
+    }
+    for (j = 0; j < n; j++) if (!used[j]) ub[nb++] = b[j];
+    return na == 1 && nb == 1 && ub[0] == ua[0] + 12 ? ua[0] : -1;
+}
+static int same_pcs(const uint8_t *a, const uint8_t *b, int n)
+{
+    int ca[12], cb[12], i;
+    for (i = 0; i < 12; i++) ca[i] = cb[i] = 0;
+    for (i = 0; i < n; i++) { ca[a[i] % 12]++; cb[b[i] % 12]++; }
+    for (i = 0; i < 12; i++) if (ca[i] != cb[i]) return 0;
+    return 1;
+}
+static int snd_is(const uint8_t *notes, int n)       /* the MAIN stream sounds exactly these notes */
+{
+    uint8_t w[128];
+    int i;
+    memset(w, 0, sizeof w);
+    for (i = 0; i < n; i++) w[notes[i]] = 1;
+    return !memcmp(w, SND[0], 128);
+}
+static int info_is(const uint8_t *notes, int n)      /* .. and cr_chord_info (the views, the LEDs) lists them */
+{
+    cr_chord_info_t ci;
+    cr_chord_info(&C, &ci);
+    return ci.nnotes == n && !memcmp(ci.notes, notes, (size_t)n);
+}
+
+static void s_sixth_tables(void)
+{
+    static const int ROOTS[] = { -24, -12, -10, -9, -3, 0, 5, 12, 24, 36, 41, 45, 48, 53, 57, 60, 64, 71, 72, 84, 96, 105, 106, 107,
+                                 113, 114, 118, 127 };
+    static const int VOIC[] = { -12, -7, -3, -2, -1, 0, 1, 2, 3, 4, 5, 8, 12 };
+    uint8_t a[CR_CHORD_MAX], b[CR_CHORD_MAX], m[CR_CHORD_MAX], va[CR_CHORD_MAX], vb[CR_CHORD_MAX], vm[CR_CHORD_MAX];
+    int q, x, ri, k, cells = 0, moved = 0, kept = 0, stayed = 0;
+    int bad_off = 0, bad_same = 0, bad_move = 0, bad_top = 0, bad_cnt = 0, bad_voff = 0, bad_vpc = 0, bad_vone = 0, vone = 0, bad_range = 0;
+    char name[220];
+    strcpy(TAG, "6th");
+    for (q = 0; q < CR_Q_COUNT; q++)
+        for (x = 0; x < 16; x++)
+            for (ri = 0; ri < (int)(sizeof ROOTS / sizeof ROOTS[0]); ri++) {
+                int r = ROOTS[ri], na, nb, nm, i;
+                int applies = q != CR_Q_NONE && (x & CR_EXT_6) && (x & (CR_EXT_M7 | CR_EXT_MAJ7));
+                nm = m_chord_base(r, (uint8_t)q, (uint8_t)x, m);
+                na = cr_chord_base_ex(r, (uint8_t)q, (uint8_t)x, 0, a);
+                nb = cr_chord_base_ex(r, (uint8_t)q, (uint8_t)x, 1, b);
+                cells++;
+                if (na != nm || memcmp(a, m, (size_t)nm)) bad_off++;
+                nm = cr_chord_base(r, (uint8_t)q, (uint8_t)x, vm);
+                if (na != nm || memcmp(a, vm, (size_t)nm)) bad_off++;
+                if (nb != na) { bad_cnt++; continue; }
+                for (i = 0; i < nb; i++) if (b[i] > 127) bad_range++;
+                if (!applies) {
+                    if (memcmp(a, b, (size_t)na)) bad_same++;
+                    else kept++;
+                } else if (r + 9 >= 0 && r + 21 <= 127) {
+                    if (one_up(a, b, na) != r + 9) bad_move++;
+                    else moved++;
+                    if (b[nb - 1] != r + 21) bad_top++;                 /* the top note, above the 9th's r + 14 */
+                } else {
+                    if (memcmp(a, b, (size_t)na)) bad_move++;           /* no room above (or the 6th itself out of range) */
+                    else stayed++;
+                }
+                for (k = 0; k < (int)(sizeof VOIC / sizeof VOIC[0]); k++) {
+                    int n1 = cr_voice_apply(a, na, VOIC[k], va), n2 = cr_voice_apply(b, nb, VOIC[k], vb);
+                    int n3 = m_voice_apply(m, na, VOIC[k], vm);
+                    if (n1 != n3 || memcmp(va, vm, (size_t)n3)) bad_voff++;
+                    if (n1 != n2 || !same_pcs(va, vb, n1)) bad_vpc++;
+                    if (!applies && memcmp(va, vb, (size_t)n1)) bad_same++;
+                    /* where no rotation meets the range's ends: still exactly one note an octave apart, whatever KNOB 1 */
+                    if (applies && r >= 36 && r <= 60 && VOIC[k] >= -8 && VOIC[k] <= 8) {
+                        vone++;
+                        if (one_up(va, vb, n1) < 0) bad_vone++;
+                    }
+                }
+            }
+    snprintf(name, sizeof name, "Off: cr_chord_base_ex(.., 0) and cr_chord_base are main's builder, note for note (%d cells: 8 types x 16 "
+             "extension sets x 28 roots)", cells);
+    ok(!bad_off && cells == 8 * 16 * 28, name);
+    ok(!bad_voff, "Off: every one of them voiced at 13 KNOB 1 positions is main's voicing, note for note");
+    snprintf(name, sizeof name, "On: nothing moves without the 6 and a seventh, or for a single note (%d cells the same, voiced too)", kept);
+    ok(!bad_same && kept == cells - 7 * 6 * 28, name);
+    snprintf(name, sizeof name, "On: the 6 with a seventh (m7, M7 or both; 7 types x 6 sets): the 6th alone moves, 12 up (%d cells), and "
+             "stays where the range has no room (%d)", moved, stayed);
+    ok(!bad_move && moved > 0 && stayed > 0 && moved + stayed == 7 * 6 * 28, name);
+    ok(!bad_top, "On: the raised 6th is the chord's top note, 21 above the root: above the 9th (14) when that is held");
+    ok(!bad_cnt && !bad_range, "On: the same number of notes as Off in every cell (no extra voice, none dropped), all 0..127");
+    ok(!bad_vpc, "On, voiced: the same number of notes and the same pitch classes as Off at every KNOB 1 position");
+    snprintf(name, sizeof name, "On, voiced, away from the range's ends: still exactly one note an octave above Off's (%d cells)", vone);
+    ok(!bad_vone && vone > 0, name);
+    {   /* the table of docs/CHORD-NAMES.md "The 6th above a seventh", root C4, before the voicing */
+        static const struct { uint8_t q, x; const char *off, *on; } T[] = {
+            { CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, "60 64 67 69 70", "60 64 67 70 81" },
+            { CR_Q_MAJ, CR_EXT_6 | CR_EXT_MAJ7, "60 64 67 69 71", "60 64 67 71 81" },
+            { CR_Q_MIN, CR_EXT_6 | CR_EXT_M7, "60 63 67 69 70", "60 63 67 70 81" },
+            { CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7 | CR_EXT_9, "60 64 67 69 70 74", "60 64 67 70 74 81" },
+            { CR_Q_DIM, CR_EXT_6 | CR_EXT_M7, "60 63 66 69 70", "60 63 66 70 81" },
+            { CR_Q_SUS, CR_EXT_6 | CR_EXT_M7, "60 65 67 69 70", "60 65 67 70 81" },
+            { CR_Q_AUG, CR_EXT_6 | CR_EXT_M7, "60 64 68 69 70", "60 64 68 70 81" },
+            { CR_Q_POW, CR_EXT_6 | CR_EXT_M7, "60 67 69 70 72", "60 67 70 72 81" },
+            { CR_Q_MIN4, CR_EXT_6 | CR_EXT_M7, "60 63 65 69 70", "60 63 65 70 81" },
+            { CR_Q_MAJ, 15, "60 64 67 69 70 71 74", "60 64 67 70 71 74 81" },
+            { CR_Q_MAJ, CR_EXT_6, "60 64 67 69", "60 64 67 69" },
+            { CR_Q_MAJ, CR_EXT_6 | CR_EXT_9, "60 64 67 69 74", "60 64 67 69 74" },
+            { CR_Q_NONE, 15, "60", "60" },
+        };
+        int t, i, n, badt = 0;
+        for (t = 0; t < (int)(sizeof T / sizeof T[0]); t++) {
+            char s0[64] = "", s1[64] = "";
+            n = cr_chord_base_ex(60, T[t].q, T[t].x, 0, a);
+            for (i = 0; i < n; i++) snprintf(s0 + strlen(s0), 8, i ? " %d" : "%d", a[i]);
+            n = cr_chord_base_ex(60, T[t].q, T[t].x, 1, b);
+            for (i = 0; i < n; i++) snprintf(s1 + strlen(s1), 8, i ? " %d" : "%d", b[i]);
+            if (strcmp(s0, T[t].off) || strcmp(s1, T[t].on)) { badt++; printf("  type %d ext %d: '%s' / '%s'\n", T[t].q, T[t].x, s0, s1); }
+        }
+        ok(!badt, "the documented chords on C4: C7 6, CM7 6, Cm7 6, C7 6 9, Cdim7 6, sus, +, 5, m add4, WTF moved; C6, C6 9, a note not");
+    }
+    /* the engine, by its ways in (a loop voice, a loop step with its own voicing, a pad, the keys): what sounds, what
+     * cr_chord_info lists (the views' note lists and the key LEDs are drawn from it) and what was sent are one set
+     * of notes; Off = main's */
+    {
+        static const int RT[] = { 36, 48, 57, 60, 72 };
+        static const int VK[] = { -12, -5, -2, -1, 0, 1, 2, 3, 7, 12 };
+        static const uint8_t M1[CR_Q_COUNT] = { 0, CR_MOD_DIM, CR_MOD_MIN, CR_MOD_MAJ, CR_MOD_SUS, CR_MOD_MAJ, CR_MOD_DIM, CR_MOD_MIN };
+        int set, vi, i, bad_lv = 0, bad_fix = 0, bad_pad = 0, bad_key = 0, bad_stuck = 0, n = 0;
+        memset(SND, 0, sizeof SND); dup_on = stray_off = 0;
+        for (set = 0; set < 2; set++)
+            for (q = 1; q < CR_Q_COUNT; q++)
+                for (x = 0; x < 16; x++)
+                    for (ri = 0; ri < 5; ri++)
+                        for (vi = 0; vi < 10; vi++) {
+                            int nb, nv, r = RT[ri];
+                            nb = set ? cr_chord_base_ex(r, (uint8_t)q, (uint8_t)x, 1, b) : m_chord_base(r, (uint8_t)q, (uint8_t)x, b);
+                            nv = m_voice_apply(b, nb, VK[vi], vb);
+                            cr_init(&C, &OUT);
+                            cr_tick(&C, now_ms());
+                            cr_set_sixth_up(&C, set);
+                            cr_voicing_step(&C, VK[vi]);
+                            cr_loop_event(&C, 0, (int16_t)r, (uint8_t)q, (uint8_t)x, 100, 1);       /* the live voicing */
+                            if (!snd_is(vb, nv) || !info_is(vb, nv)) bad_lv++;
+                            cr_loop_event(&C, 0, 0, 0, 0, 0, 0);
+                            cr_voicing_step(&C, -VK[vi]);
+                            cr_loop_event_v(&C, 1, (int16_t)r, (uint8_t)q, (uint8_t)x, 100, 1, VK[vi]);   /* the step's own */
+                            if (!snd_is(vb, nv) || !info_is(vb, nv)) bad_fix++;
+                            cr_loop_event_v(&C, 1, 0, 0, 0, 0, 0, 0);
+                            cr_voicing_step(&C, VK[vi]);
+                            cr_pad_set(&C, 0, 1, (int16_t)r, (uint8_t)q, (uint8_t)x, 100);
+                            cr_pad_down(&C, 0);
+                            if (!snd_is(vb, nv) || !info_is(vb, nv)) bad_pad++;
+                            cr_pad_up(&C, 0);
+                            cr_set_secret(&C, CR_SECRET_ALL);           /* the keys: a type key (two for a secret chord), */
+                            MD((cr_mod_t)M1[q]);                        /* the extensions, a root */
+                            if (q > CR_Q_SUS) MD(CR_MOD_SUS);
+                            for (i = 0; i < 4; i++) if (x & (1 << i)) MD((cr_mod_t)(CR_MOD_6 + i));
+                            cr_key(&C, (uint8_t)r, 100, 1);
+                            if (!snd_is(vb, nv) || !info_is(vb, nv)) bad_key++;
+                            cr_key(&C, (uint8_t)r, 100, 0);
+                            for (i = 0; i < CR_NMOD; i++) MU((cr_mod_t)i);
+                            if (sounding() || dup_on || stray_off) bad_stuck++;
+                            n++;
+                        }
+        snprintf(name, sizeof name, "the engine, Off then On, 7 types x 16 sets x 5 roots x 10 voicings (%d chords each way): a loop voice "
+                 "sounds and lists the expected notes (Off: main's)", n / 2);
+        ok(!bad_lv && n == 2 * 7 * 16 * 5 * 10, name);
+        ok(!bad_fix, "  a loop step with its own voicing (cr_loop_event_v): the same notes as the live voicing at that position");
+        ok(!bad_pad, "  a chord pad: the same");
+        ok(!bad_key, "  the keys (a type key, or two for a secret chord, the extensions, a root): the same");
+        ok(!bad_stuck, "  every one of them ended with nothing sounding, no double note-on, no stray note-off");
+        memset(SND, 0, sizeof SND); dup_on = stray_off = 0;
+        cr_init(&C, &OUT);
+        clear();
+    }
+    ok(offsetof(cr_t, bpm) - offsetof(cr_t, sixth_up) == 1u, "cr_t.sixth_up sits in the byte before bpm (it was padding: cr_t did not grow)");
+}
+
+static void s_sixth(void)
+{
+    char b[96];
+    int idx[64], n, i;
+    cr_chord_info_t ci;
+    fresh("6th with 7th");
+    ok(C.sixth_up == 0, "6th with 7th: In place after cr_init (the default)");
+    /* held through the change: a sounding chord keeps its notes; its note-offs are its own */
+    MD(CR_MOD_MAJ); MD(CR_MOD_M7); MD(CR_MOD_6); K(48, 1);
+    expect("+48 +52 +55 +57 +58", "In place: C + 7 + 6 is C E G A Bb, the 6th under the seventh");
+    cr_set_sixth_up(&C, 1);
+    expect("", "Octave up set under the held chord: nothing is sent");
+    cr_chord_info(&C, &ci);
+    ok(ci.nnotes == 5 && ci.notes[3] == 57 && ci.notes[4] == 58, "  and cr_chord_info still lists what sounds");
+    R(48, 1);
+    expect("-48 -52 -55 -57 -58", "  its release ends the five notes that began (no note-off for a note that never sounded)");
+    K(48, 1);
+    expect("+48 +52 +55 +58 +69", "Octave up: the same keys: C E G Bb and the A an octave higher, on top");
+    cr_chord_info(&C, &ci);
+    ok(ci.nnotes == 5 && ci.notes[4] == 69 && !strcmp(ci.root, "C") && !strcmp(ci.sup, "7 6") && ci.ext == (CR_EXT_6 | CR_EXT_M7),
+       "  the name is the Orchid's still (C7 6), the extension bits the same, the notes list the raised 6th");
+    cr_set_sixth_up(&C, 0);
+    expect("", "In place set under the held chord: nothing is sent");
+    R(48, 1);
+    expect("-48 -52 -55 -58 -69", "  its release ends the raised 6th it began");
+    K(48, 1); expect("+48 +52 +55 +57 +58", "In place again: as at first");
+    R(48, 1); clear();
+    MU(CR_MOD_6); MU(CR_MOD_M7); MU(CR_MOD_MAJ);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "no note left, doubled or ended twice across the two changes");
+    /* the voicing: KNOB 1 treats it as the top note it is */
+    cr_set_sixth_up(&C, 1);
+    MD(CR_MOD_MAJ); MD(CR_MOD_M7); MD(CR_MOD_6); K(48, 1); clear();
+    cr_voicing_step(&C, -1);
+    on_notes_sorted(b, 0);
+    ok(!strcmp(b, "48 52 55 57 58"), "Octave up, KNOB 1 -1: the top note (the 13th) comes down an octave: C E G A Bb");
+    clear(); cr_voicing_step(&C, 2); on_notes_sorted(b, 0);
+    ok(!strcmp(b, "52 55 58 60 69"), "KNOB 1 +1: the root goes up under it: E G Bb C A");
+    cr_voicing_step(&C, -1);
+    cr_set_sixth_up(&C, 0);
+    clear(); cr_voicing_step(&C, 1); on_notes_sorted(b, 0);
+    ok(!strcmp(b, "52 55 58 60 69"), "the option changed under it, then KNOB 1: the held chord is re-voiced from the notes it was built with");
+    cr_voicing_step(&C, -1);
+    R(48, 1); MU(CR_MOD_6); MU(CR_MOD_M7); MU(CR_MOD_MAJ);
+    ok(sounding() == 0, "  and ends whole");
+    clear();
+    /* Advanced, Add Note: a chord key pushed under a held chord builds the chord by the setting of that moment */
+    cr_set_playstyle(&C, CR_PS_ADVANCED);
+    MD(CR_MOD_MAJ); MD(CR_MOD_M7); K(48, 1);
+    expect("+48 +52 +55 +58", "Advanced: C7 held");
+    cr_set_sixth_up(&C, 1);
+    MD(CR_MOD_6);
+    expect("+69", "  Octave up, the 6 pushed: one note added, the 13th (Add Note: the rest sounds on)");
+    cr_set_sixth_up(&C, 0);
+    MD(CR_MOD_9);
+    expect("-69 +57 +62", "  In place, the 9 pushed: the chord is rebuilt: the raised 6th ends, the 6th in place and the 9th begin");
+    cr_set_sixth_up(&C, 1);
+    MU(CR_MOD_M7); MD(CR_MOD_M7);                 /* (the 7 toggled off: no seventh: the 6th in place whatever the option) */
+    expect("-58", "  Octave up, the 7 toggled off: C6 9: only the seventh ends (no seventh, nothing raised)");
+    MU(CR_MOD_M7); MD(CR_MOD_M7);
+    expect("-57 +58 +69", "  the 7 toggled on again: the 6th goes up with it");
+    R(48, 1);
+    expect("-48 -52 -55 -58 -62 -69", "  released: the six notes that sound end");
+    MU(CR_MOD_M7); MU(CR_MOD_9); MU(CR_MOD_6); MU(CR_MOD_MAJ);
+    cr_set_playstyle(&C, CR_PS_SIMPLE);
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "Advanced: nothing left, doubled or ended twice");
+    /* the raw chord stream and the bass */
+    cr_set_stream(&C, CR_STREAM_RAW, 1);
+    cr_set_bass(&C, 1);
+    MD(CR_MOD_MIN); MD(CR_MOD_MAJ7); MD(CR_MOD_6); K(48, 1);
+    expect("+48 +51 +55 +59 +69 +48r +51r +55r +59r +69r +36b", "Octave up, CmM7 6 with the raw stream and the bass: both chord streams raised, the bass its root");
+    cr_set_sixth_up(&C, 0);
+    R(48, 1);
+    expect("-48 -51 -55 -59 -69 -48r -51r -55r -59r -69r -36b", "  the option changed, the release: every stream's own notes end");
+    K(48, 1);
+    expect("+48 +51 +55 +57 +59 +48r +51r +55r +57r +59r +36b", "In place: the same bass note (the bass part is the root, never the 6th)");
+    R(48, 1); clear();
+    MU(CR_MOD_6); MU(CR_MOD_MAJ7); MU(CR_MOD_MIN);
+    cr_set_bass(&C, 0);
+    cr_set_stream(&C, CR_STREAM_RAW, 0);
+    /* Key Mode: the type comes from the scale, the extensions are added as held (never corrected to the scale) */
+    cr_set_key(&C, 1, 0, CR_SCALE_MAJOR);
+    cr_set_sixth_up(&C, 1);
+    MD(CR_MOD_M7); MD(CR_MOD_6); K(50, 1);
+    expect("+50 +53 +57 +60 +71", "Key Mode (C major), D + 7 + 6, Octave up: Dm7 with its 6th (B) on top");
+    R(50, 1); clear();
+    cr_set_sixth_up(&C, 0);
+    K(50, 1);
+    expect("+50 +53 +57 +59 +60", "  In place: the same pitch classes, the B under the C");
+    R(50, 1); clear();
+    MU(CR_MOD_6); MU(CR_MOD_M7);
+    cr_set_key(&C, 0, 0, CR_SCALE_MAJOR);
+    /* a single note, and a chord without a seventh, with Octave up */
+    cr_set_sixth_up(&C, 1);
+    MD(CR_MOD_M7); MD(CR_MOD_6); K(48, 1);
+    expect("+48", "Octave up, no type key: a single note (the extensions need a chord)");
+    R(48, 1); clear(); MU(CR_MOD_M7);
+    MD(CR_MOD_MAJ); MD(CR_MOD_9); K(48, 1);
+    expect("+48 +52 +55 +57 +62", "Octave up, C6 9 (no seventh): as ever");
+    R(48, 1); clear(); MU(CR_MOD_9);
+    /* Sticky: a latched chord is replaced whole by the next press, whatever changed in between */
+    cr_set_sticky(&C, 1);
+    MD(CR_MOD_M7); K(48, 1); R(48, 1);
+    expect("+48 +52 +55 +58 +69", "Sticky, Octave up: C7 6 latched");
+    cr_set_sixth_up(&C, 0);
+    K(48, 1);
+    expect("-48 -52 -55 -58 -69 +48 +52 +55 +57 +58", "  In place, the next press: the latched chord ends with its raised 6th, the new one has it in place");
+    R(48, 1);
+    cr_set_sticky(&C, 0);
+    expect("-48 -52 -55 -57 -58", "  Sticky off: it ends");
+    /* a strum and the arp walk the chord's notes: the raised 6th is the last and highest */
+    cr_set_sixth_up(&C, 1);
+    cr_set_perform(&C, 1);
+    cr_set_perform_mode(&C, CR_PM_STRUM);
+    K(48, 1); step(400);
+    n = ons(idx, 64, 0);
+    for (b[0] = 0, i = 0; i < n; i++) snprintf(b + strlen(b), 8, i ? " %d" : "%d", LOG[idx[i]].note);
+    ok(!strcmp(b, "48 52 55 58 69"), "Octave up, Strum (up): the five notes in order, the 13th last");
+    cr_set_sixth_up(&C, 0);
+    R(48, 1); step(50);
+    ok(sounding() == 0, "  the option changed mid-strum, the release: nothing left");
+    clear();
+    cr_set_sixth_up(&C, 1);
+    cr_set_perform_mode(&C, CR_PM_ARP);
+    K(48, 1); step(1200);                          /* 1/8 at 120 BPM: a step every 250 ms */
+    n = ons(idx, 64, 0);
+    for (b[0] = 0, i = 0; i < n && i < 5; i++) snprintf(b + strlen(b), 8, i ? " %d" : "%d", LOG[idx[i]].note);
+    ok(n >= 5 && !strcmp(b, "48 52 55 58 69"), "Octave up, the arp (up): steps through C E G Bb and the A above");
+    cr_set_sixth_up(&C, 0);
+    step(700);
+    R(48, 1); step(600);
+    ok(sounding() == 0 && cr_pending(&C) == 0, "  the option changed under the running arp, the release: no note and no event left");
+    clear();
+    K(48, 1); step(1200);
+    n = ons(idx, 64, 0);
+    for (b[0] = 0, i = 0; i < n && i < 5; i++) snprintf(b + strlen(b), 8, i ? " %d" : "%d", LOG[idx[i]].note);
+    ok(n >= 5 && !strcmp(b, "48 52 55 57 58"), "In place, the arp: C E G A Bb");
+    R(48, 1); step(600); clear();
+    cr_set_perform_mode(&C, CR_PM_PATTERN);
+    cr_set_sixth_up(&C, 1);
+    K(48, 1); step(900); cr_set_sixth_up(&C, 0); step(900); R(48, 1); step(600);
+    ok(sounding() == 0 && cr_pending(&C) == 0, "a Pattern through the change and the release: no note and no event left");
+    clear();
+    cr_set_perform(&C, 0);
+    cr_set_perform_mode(&C, CR_PM_STRUM);
+    MU(CR_MOD_6); MU(CR_MOD_M7); MU(CR_MOD_MAJ);
+    /* a loop voice plays a stored chord (root, type, extension bits) by the setting of the moment it is struck */
+    cr_set_sixth_up(&C, 0);
+    cr_loop_event(&C, 0, 48, CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, 90, 1);
+    expect("+48/90 +52/90 +55/90 +57/90 +58/90", "a loop voice, In place: the stored C7 6 as it was recorded");
+    cr_set_sixth_up(&C, 1);
+    cr_loop_event(&C, 0, 0, 0, 0, 0, 0);
+    expect("-48 -52 -55 -57 -58", "  Octave up set while it sounds: its end ends its own notes");
+    cr_loop_event(&C, 0, 48, CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, 90, 1);
+    expect("+48/90 +52/90 +55/90 +58/90 +69/90", "  the same stored chord struck again: the 6th an octave up (playback follows the setting)");
+    cr_loop_event_v(&C, 0, 48, CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, 90, 1, 1);
+    expect("-48 -52 -55 -58 -69 +52/90 +55/90 +58/90 +60/90 +69/90", "  a step with its own voicing +1: the root up, the 13th on top");
+    cr_set_sixth_up(&C, 0);
+    cr_loop_event_v(&C, 0, 48, CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, 90, 1, 1);
+    expect("-52 -55 -58 -60 -69 +52/90 +55/90 +57/90 +58/90 +60/90", "  In place, the same step: as main plays it");
+    cr_loop_event(&C, 0, 0, 0, 0, 0, 0);
+    clear();
+    ok(sounding() == 0 && dup_on == 0 && stray_off == 0, "6th with 7th: nothing left, doubled or ended twice");
+}
+
 static void run_suite(uint32_t tick_us, uint32_t base_ms, const char *tag)
 {
     strcpy(TAG, tag);
@@ -2079,6 +2482,7 @@ static void run_suite(uint32_t tick_us, uint32_t base_ms, const char *tag)
     s_keyboard(); s_sticky(); s_chords(); s_panic(); s_voicing(); s_bass(); s_keymode(); s_pads();
     s_secret(); s_advanced(); s_free(); s_lock(); s_strum(); s_arp(); s_pattern(); s_live(); s_streams();
     s_bassmodes(); s_transpose(); s_single(); s_keyplays(); s_loopvoice(); s_queries(); s_limits(); s_torture();
+    s_sixth();
     fresh("end");
 }
 
@@ -2358,6 +2762,7 @@ int main(void)
 {
     s_tables();
     s_names_std();
+    s_sixth_tables();
     run_suite(1000, 0, "1ms");
     run_suite(2902, 0, "2.9ms");
     run_suite(5000, 0, "5ms");

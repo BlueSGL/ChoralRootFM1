@@ -19,7 +19,10 @@ A **semantic event** per chord gesture, written when the gesture ends (or when t
 
 Capture comes from the engine's `cr_out_t.gesture` hook (keyed voices and pads; a same-root retrigger ends one
 gesture and starts another). Playback calls `cr_loop_event(c, lv, root, q, ext, vel, on)`: a resolved chord on one
-of `CR_MAX_LOOPV` (8) loop voices, bypassing the chord-key state machine; voicing, performance, bass apply live.
+of `CR_MAX_LOOPV` (8) loop voices, bypassing the chord-key state machine; voicing, performance, bass apply live,
+and so does Options > 6th with 7th (0.20): an event is a root, a type and extension bits, so a recorded `C7 6` has its
+6th in place or an octave up by the setting at the moment the step is struck (docs/CHORD-NAMES.md "The 6th above a
+seventh").
 
 **Bass-side notes (Single = Split Bass; since 0.18).** A key played on the bass side is recorded as a bass-side note
 and plays back on the bass part: the BASS stream alone (the bass sound, the bass channel on MIDI out), never the

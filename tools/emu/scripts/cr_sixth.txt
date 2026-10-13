@@ -1,0 +1,99 @@
+# ChoralRoot 0.20: Options > 6th with 7th (docs/CHORD-NAMES.md "The 6th above a seventh"): In place, the default (the
+# Orchid's: the 6th 9 semitones above the root, under the seventh), or Octave up (a chord with the 6 AND a seventh
+# plays its 6th 21 semitones above the root: a 13th). The entry after Secret Chords (3).
+# Chord keys: F3 = 6, G3 = 7 (m7), A3 = M7, A#3 = MAJ, C4 = 9; root A4 (69). Read in the dump's "cr: voices" line (the
+# engine's name and notes), the "key leds" line and the "sixth:" line. tools/emu/test_cr.sh reads the dumps by number:
+#   1 In place: A + 7 + 6 = 69 73 76 78 79          2 the entry, In place     3 KNOB 1 +1: Octave up
+#   4 the chord of 1 was held through the change: its notes as they were (a sounding chord keeps its notes)
+#   5 released: silent (its note-offs were its own)
+#   6 Octave up: A + 7 + 6 = 69 73 76 79 90         7 A + M7 + 6 = 69 73 76 80 90
+#   8 A + 6 (no seventh): 69 73 76 78, as ever       9 A + 7 + 6 + 9 = 69 73 76 79 83 90 (the 13th above the 9th)
+#   10 A + 7 + 6 held, KNOB 1 -1: the voicing takes the top note, the 13th, down an octave: 69 73 76 78 79
+#   11 KNOB 1 +1: the voicing back: 69 73 76 79 90
+#   12 KNOB 1 -1 in the Options: In place again     13 A + 7 + 6 = 69 73 76 78 79 again     14 silent
+wait 500
+btn A#3 down                  # MAJ + 7 + 6, A4
+btn G3 down
+btn F3 down
+btn A4 down
+wait 400
+dump                          # 1
+shot build/emu/test/cr_sixth_off.ppm
+btn GLO 80                    # Options > 6th with 7th, the chord still held
+wait 300
+knob SELECT +3
+wait 300
+dump                          # 2
+shot build/emu/test/cr_sixth_opt_off.ppm
+knob KNOB1 +1
+wait 300
+dump                          # 3
+shot build/emu/test/cr_sixth_opt_on.ppm
+knob KNOB1 +3                 # (past the end: stays Octave up)
+wait 200
+btn GLO 80
+wait 400
+dump                          # 4
+btn A4 up
+wait 2500
+dump                          # 5
+btn A4 down                   # the same keys, Octave up
+wait 400
+dump                          # 6
+shot build/emu/test/cr_sixth_on.ppm
+btn A4 up
+btn G3 up
+wait 300
+btn A3 down                   # MAJ + M7 + 6
+btn A4 down
+wait 400
+dump                          # 7
+btn A4 up
+btn A3 up
+wait 300
+btn A4 down                   # MAJ + 6: no seventh
+wait 400
+dump                          # 8
+btn A4 up
+wait 300
+btn G3 down                   # MAJ + 7 + 6 + 9
+btn C4 down
+btn A4 down
+wait 400
+dump                          # 9
+btn A4 up
+btn C4 up
+wait 300
+btn A4 down                   # MAJ + 7 + 6, then the voicing one step down
+wait 300
+knob KNOB1 -1
+wait 400
+dump                          # 10
+knob KNOB1 +1
+wait 300
+dump                          # 11
+btn A4 up
+btn G3 up
+btn F3 up
+btn A#3 up
+wait 600
+btn GLO 80                    # In place again (the menu opens on the entry it was left on)
+wait 300
+knob KNOB1 -1
+wait 300
+dump                          # 12
+btn GLO 80
+wait 500
+btn A#3 down
+btn G3 down
+btn F3 down
+btn A4 down
+wait 400
+dump                          # 13
+btn A4 up
+btn F3 up
+btn G3 up
+btn A#3 up
+wait 2500
+dump                          # 14
+quit

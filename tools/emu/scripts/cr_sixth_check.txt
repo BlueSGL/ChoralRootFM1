@@ -1,0 +1,16 @@
+# ChoralRoot 0.20: after cr_sixth_set.txt, on the same flash file: 6th with 7th is Octave up at power-on, with nothing
+# touched: A + 7 + 6 (A#3 = MAJ, G3 = 7, F3 = 6, A4) sounds 69 73 76 79 90.
+wait 500
+btn A#3 down
+btn G3 down
+btn F3 down
+btn A4 down
+wait 400
+dump
+btn A4 up
+btn F3 up
+btn G3 up
+btn A#3 up
+wait 2500
+dump
+quit
