@@ -43,7 +43,7 @@ and keeps none, so **the DSP is 8a3074b's**, statement for statement, with these
 | --- | --- | --- |
 | the remix's stage 36, three optimisations (`P5_STAGE36` bits): (1) an oscillator with no waveform on computes nothing; (2) the envelope's terms of the cutoff, the Poly-Mod frequency and width once a sample instead of once an oversampling pass; (4) hard sync's two phase products as 32-bit halves instead of a 64-bit multiply | fewer instructions | **bit-identical**, each alone and all three: `tests/run_prophet_test.sh` renders INIT, the shipped programs and 683 stress programs with `P5_STAGE36` 0, 1, 2, 4, 7 and compares every sample's digest |
 | the part's DC blocker (`p5_post`, Melodee 7cd66fb: integer code written after the float change, about 5 Hz) | without it 59 of the 201 presets (INIT and all 200: cd43720's count) hold a DC of more than a quarter of their RMS in a held chord (the worst 47 878 on a scale where a voice is 24 000): it would ride into the sends and the limiter | changed on purpose (`P5_DC_BLOCK=0` gives 8a3074b's output for a measurement) |
-| no `.dsp_text` / `.dsp_tables` sections: the code runs from flash, the tables are `const` | ChoralRoot's map has no such sections, RAM is the tight region, and RAM changed nothing for the effects' loops on the unit (docs/FX.md `CR_FX_RAM`). `P5_RAM=1 ./build.sh` puts the three hot functions into `.ram_text` (3796 B of RAMTEXT, it links: not run on a unit) | the same |
+| no `.dsp_text` / `.dsp_tables` sections: the code runs from flash, the tables are `const` | ChoralRoot's map has no such sections, RAM is the tight region, and RAM changed nothing for the effects' loops on the unit (docs/FX.md `CR_FX_RAM`). **Since 3y41 a device build has `P5_RAM=1`**: the two per-sample functions (`p5_samples` with `p5_inc` inlined, `p5_mod_samples`: 3792 B) are in `.ram_text`, because the unit said so ("Cost on the unit": the chord part 2084 -> 1533 us). The four per-sample tables stay in flash unless `CR_RAM_TABLES_P5=1` (docs/FX.md "Code in RAM") | the same |
 | the pitch bend: Melodee's `p5_update_bend` (voice.c: the program's own range byte) is not here | the part bends as ChoralRoot's other engines do, through `vmod_t` (voice.c: the channel's range, RPN 0, ±2 semitones). The program's `P5_BEND` byte is kept and unused | tested: +2 / −2 semitones measured |
 | the matrix's ENV source is 0 (Melodee's voice.c asks `p5_env_source`) | as FM6's and CZ-1's here; voice.c is not touched | none on a factory program |
 | four voices a part (`P5_POLY`; Melodee: five), three budget units each as Melodee's (c176dd4: four units) | the unit's reading of five voices, [below](#measured-on-the-unit-2026-10-13); three units so that a bass does not cost the chord a voice: a measurement build, [Voices](#voices-which-keys-of-a-big-chord-sound) | a chord of more than four keys sounds four of them |
@@ -165,7 +165,8 @@ The engine is 17 472 B of flash (code about 8 KB of which the sample loop 3350; 
 and 55 with all 200; its `preset_t` row and 12-character name; its number): 48 programs 4720 B, 200 programs
 18 640 B. RAM +16 B (the parts' flags; the pool read-out's name field, below). POOL +552 B (the four programs); the
 four-voice state is smaller than the five-voice one but lives in a union of FM6's size, so POOL is the same.
-`P5_RAM=1`: RAMTEXT 3016 -> 6812 of 24 576, XIP the same (cd43720's figure, not built again).
+`P5_RAM` (1 in a device build since 3y41): RAMTEXT 3016 -> 6808 of 24 576, XIP the same (the code is in the image
+either way). `CR_RAM_TABLES_P5=1`: RAM +5376 B (86 820).
 
 ## Sounds
 
@@ -389,6 +390,24 @@ chord part had three voices at four units (about 1260 us by the same proportion)
 four: about 1630 us + the bass, by the same proportion about 2410 + 150 = 2560 us of 2902 (88 %) with a VA bass: an
 inference, the thing to measure**; with a P5 bass it is five P5 voices, the 2814 us reading's class.
 
+### Flash against RAM (2026-10-13, 40acb01)
+
+The owner played the same thing on two builds of 40acb01 with all 200 programs: P5 on the chord part, four voices,
+and P5 on the bass part, reverb, delay and chorus up.
+
+| build | `pk_block_us` | `pk_part0_us` | `pk_part1_us` | `pk_fx_us` | `pk_master_us` | `pk_late` | `stale_halves` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| all code in flash | **3136** of 2902 | 2084 | 1414 | 717 | 187 | 83 | 22 |
+| `P5_RAM=1` (the sample loop in RAM) | **2623** | 1533 | 1317 | 716 | 159 | 1 | 0 |
+
+Four P5 voices and a P5 bass with three effects did not fit from flash (108 % at the worst half, 83 late) and fit
+with the loop in RAM (90 %). The chord part is 26 % cheaper with the same instructions; the bass part 7 % (by
+inference: one voice, less of the loop's time against the part's fixed work). **`P5_RAM` is 1 in every device build
+since 3y41**; `P5_RAM=0 ./build.sh` is the flash build. The first row's four voices (2084) are well above the 1630
+"by proportion" of the section above: that estimate was low. What the rest of the half would gain from RAM is the
+experiment of docs/FX.md "Code in RAM" (packages B, C, D); P5's own per-block code (`p5_render`, `p5_env_tick`,
+`p5_block`, `p5_post`: 1926 B) and its tables are still in flash.
+
 ### Counted
 
 `python3 tools/p5_cost.py` after `./build.sh`. The sample loop (`p5_samples`) is one loop of
@@ -452,8 +471,8 @@ USB audio running peaked at **2158 us (SSI) / 2009 us (Curtis)** of the half's 2
 of an older DSP (before b351a14's exponential Poly-Mod, which its author puts at +8 % on the host, and before 8a3074b),
 with the sample loop and four tables in RAM, and with Melodee's effects, not ChoralRoot's. ChoralRoot's five voices
 of a plain two-saw program from flash read 2033 us for the part alone: the same order, and late where Melodee's were
-not. Whether RAM for the hot code (`P5_RAM`) buys the fifth voice back is not known (it changed nothing for the
-effects' loops: docs/FX.md).
+not. **RAM for the hot code does buy time** (3y41, below: four voices 2084 -> 1533 us); whether it buys the fifth
+voice back is not measured.
 
 **The emulator's estimates** (`sh tools/emu/perf.sh`, scenarios (p) and (q); host instructions / 259: ESTIMATES, low by
 1.2 to 2.2 for other stages, docs/FX.md), a 6-key ITS PROPHET5 chord with the default sends, us of 2902, avg / max.
@@ -568,6 +587,7 @@ the 48 are provisional), and, by the unit's reading, **four voices**.
    the list (the session); what is not remembered over a power cycle is the place a part had in P5's pool when it
    is on another engine (OPT + PRESETS back to P5 lands on 01).
 6. **Flash**: XIP is at 88.2 % with the 48 (87.3 % with INIT alone, 90.6 % with all 200).
-7. **A fifth voice**: chord voices on core 1, the loop built per program, or RAM for the hot code and tables
-   (`P5_RAM`, `ram=True` in `tools/gen_tables.py`: RAM has 16.9 KB free, RAMTEXT 21.5 KB; the hot code would take 3.8
-   of it, the four per-sample tables 5.4 KB of RAM). None is built or measured.
+7. **A fifth voice**: chord voices on core 1, the loop built per program, or more of the half in RAM. The sample
+   loop is in RAM since 3y41 (`P5_RAM`, measured: above); the four per-sample tables (`CR_RAM_TABLES_P5`, 5.4 KB of
+   RAM) and the rest of the audio path (`CR_RAM_FX` ..: docs/FX.md "Code in RAM") are built as switches and not
+   measured. Five voices are not built.

@@ -131,7 +131,7 @@ static volatile uint8_t fx_usb_fixed;
 #define MASTER_FULL 4096                /* main.c: the MASTER knob's top, Q12 */
 static uint8_t fx_out_blk;              /* Options > Output: 1, this block went through the Clean chain (below) */
 static void clean_post(int32_t *out, uint32_t n);
-static __attribute__((noinline)) void usb_fixed_dac(int32_t *out, uint32_t n)   /* audio ISR, after the USB tap */
+CR_HOT_MASTER static __attribute__((noinline)) void usb_fixed_dac(int32_t *out, uint32_t n)   /* audio ISR, after the USB tap */
 {
     uint32_t i;
     int32_t m = (int32_t)song.master_q12;
@@ -276,7 +276,7 @@ static inline __attribute__((always_inline)) void master_loop(int32_t *o, uint32
         sb_hl = sb[SB_HL];
     }
 }
-static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
+CR_HOT_MASTER static __attribute__((noinline)) void master_block(int32_t *o, uint32_t n)
 {
     uint32_t lowcut = fx_lowcut;                        /* (the main loop's: it does not run under this block) */
     if (fx_smooth) {
@@ -453,7 +453,7 @@ static __attribute__((noinline)) int32_t clean_short(int32_t p)
     return p;
 }
 
-static __attribute__((noinline)) void clean_block(int32_t *o, uint32_t n)
+CR_HOT_MASTER static __attribute__((noinline)) void clean_block(int32_t *o, uint32_t n)
 {
     int32_t dl = dc_l, el = dce_l, dr = dc_r, er = dce_r;
     uint32_t w = cln_w;
@@ -596,9 +596,9 @@ static inline __attribute__((always_inline)) void clean_post_loop(int32_t *out, 
     }
     cln_mq = m;
 }
-static __attribute__((noinline)) void clean_post(int32_t *out, uint32_t n) { clean_post_loop(out, n, 0); }
-static __attribute__((noinline)) void clean_post17(int32_t *out, uint32_t n) { clean_post_loop(out, n, 1); }
-static __attribute__((noinline)) void clean_split(int32_t *out, uint32_t n)   /* Q17 -> Q15 and the two bits under */
+CR_HOT_MASTER static __attribute__((noinline)) void clean_post(int32_t *out, uint32_t n) { clean_post_loop(out, n, 0); }
+CR_HOT_MASTER static __attribute__((noinline)) void clean_post17(int32_t *out, uint32_t n) { clean_post_loop(out, n, 1); }
+CR_HOT_MASTER static __attribute__((noinline)) void clean_split(int32_t *out, uint32_t n)   /* Q17 -> Q15 and the two bits under */
 {
     uint32_t i;
     for (i = 0; i < 2u * n; i++) {
@@ -1023,15 +1023,15 @@ static inline __attribute__((always_inline)) int32_t mix_part_loop(const int32_t
     { \
         return mix_part_loop(b, sd, n, k, pc, side_, sends_, tap_); \
     }
-MIX_LOOP_FN(mix_loop, 0, 0, 0)
-MIX_LOOP_FN(mix_loop_f, 0, 1, 0)
-MIX_LOOP_FN(mix_loop_s, 1, 0, 0)
-MIX_LOOP_FN(mix_loop_sf, 1, 1, 0)
+CR_HOT_FX MIX_LOOP_FN(mix_loop, 0, 0, 0)                /* (cr_ram.h: the marker names the function for the build) */
+CR_HOT_FX MIX_LOOP_FN(mix_loop_f, 0, 1, 0)
+CR_HOT_FX MIX_LOOP_FN(mix_loop_s, 1, 0, 0)
+CR_HOT_FX MIX_LOOP_FN(mix_loop_sf, 1, 1, 0)
 #if FX_UA_STAGE
-MIX_LOOP_FN(mix_loop_u, 0, 0, 1)
-MIX_LOOP_FN(mix_loop_fu, 0, 1, 1)
-MIX_LOOP_FN(mix_loop_su, 1, 0, 1)
-MIX_LOOP_FN(mix_loop_sfu, 1, 1, 1)
+CR_HOT_FX MIX_LOOP_FN(mix_loop_u, 0, 0, 1)
+CR_HOT_FX MIX_LOOP_FN(mix_loop_fu, 0, 1, 1)
+CR_HOT_FX MIX_LOOP_FN(mix_loop_su, 1, 0, 1)
+CR_HOT_FX MIX_LOOP_FN(mix_loop_sfu, 1, 1, 1)
 #else
 #define mix_loop_u mix_loop
 #define mix_loop_fu mix_loop_f
@@ -1043,7 +1043,7 @@ MIX_LOOP_FN(mix_loop_sfu, 1, 1, 1)
 /* one synth part into the dry mix and the sends; a part with no voice sounding costs
  * the LFO tick and a cleared buffer only (after the DIST tail has run out) */
 /* (mix_part's second half: the part rendered into b, its side into side when side_on, nr voices) */
-static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on, uint32_t nr, uint32_t n)
+CR_HOT_CORE static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint8_t side_on, uint32_t nr, uint32_t n)
 {
     int32_t *sd;
     int16_t *pc = 0;
@@ -1164,7 +1164,7 @@ static int32_t c1_buf[CTL] __attribute__((section(".pool"))), c1_side[CTL] __att
 static uint8_t c1_side_on;
 static uint32_t c1_nr;
 static int32_t c1_lfo[2];                               /* the parts' LFO values before this block's tick */
-static void c1_part1_job(uint32_t n)
+CR_HOT_CORE static void c1_part1_job(uint32_t n)
 {
     uint32_t t0 = cr_dbg.prof_on ? cr_prof_now() : 0u;
     c1_nr = track_render_x(&trk[1], c1_buf, c1_side, &c1_side_on, n, &c1_lfo[1]);

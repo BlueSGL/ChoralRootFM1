@@ -31,6 +31,10 @@ and JieLi's AC79 SDK `EnableOtherCpu` (Apache-2.0). The registers, as ported:
 `reti = fm1_c1_main`, `rti`. `fm1_c1_main` lives in `.c1_text` (RAMTEXT, right after `.ram_text`; `app.ld` sets
 `_rt_end = _c1_end`, so main.c's one copy loop and the guard's RAM code window cover both, and `tools/build.py` puts
 `.c1_text` in the image): it reports in (`fm1_c1_alive`), then loops on the job counter forever, from RAM.
+(Since 3y41 the `.ram_text` output section can also hold audio functions, `.rhot.*`, in a build with a `CR_RAM_*`
+switch: `.c1_text` then starts that much higher, still inside the one copy and the one PC window. With
+`CR_RAM_CORE` core 1's job, `c1_part1_job`, and `track_render_x` run from RAM on both cores: docs/FX.md "Code in
+RAM". Not run on a unit.)
 
 Start (Dual Core On only; `cr_cpu1.h cr_c1_boot`, from `main.c fm1_main`, after the sounds and **before `audio_init`
 and the timers**:

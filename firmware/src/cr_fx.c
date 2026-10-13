@@ -69,6 +69,10 @@
 #define CR_FX_RAM 0                      /* 1 (device builds only): the four per-sample loops in .ram_text, called
                                           * through a pointer as the flash driver is: no XIP cache miss in them */
 #endif
+#include "cr_ram.h"
+#if CR_FX_RAM && CR_RAM_FX
+#error "cr_fx.c: CR_FX_RAM (the four loops alone, 0.18's measurement) or CR_RAM_FX (the stage: cr_ram.h), not both"
+#endif
 #if (CR_FX_DELAY_DS != 1 && CR_FX_DELAY_DS != 2) || (CR_FX_REVERB_DS != 1 && CR_FX_REVERB_DS != 2)
 #error "cr_fx.c: CR_FX_DELAY_DS and CR_FX_REVERB_DS are 1 or 2"
 #endif
@@ -268,7 +272,7 @@ XF_AI int32_t xf_ap(xf_hb_t *h, uint32_t k, int32_t a, int32_t x)
     return y;
 }
 /* n samples of a send -> n / 2 at half its level (the lines' scale: XF_IN), saturated */
-XF_HOT void xf_down(xf_hb_t *h, const int32_t *in, int32_t *out, uint32_t n)
+CR_HOT_FX XF_HOT void xf_down(xf_hb_t *h, const int32_t *in, int32_t *out, uint32_t n)
 {
     uint32_t i;
     for (i = 0; i + 1u < n; i += 2u) {
@@ -278,7 +282,7 @@ XF_HOT void xf_down(xf_hb_t *h, const int32_t *in, int32_t *out, uint32_t n)
     }
 }
 /* nh samples of wet (saturated at +-131068) -> 2 nh, added to out */
-XF_HOT void xf_up(xf_hb_t *h, const int32_t *in, int32_t *out, uint32_t nh)
+CR_HOT_FX XF_HOT void xf_up(xf_hb_t *h, const int32_t *in, int32_t *out, uint32_t nh)
 {
     uint32_t j;
     xf_hb_t s = *h;                                     /* (the states in registers for the block: 49 instructions a
@@ -441,7 +445,7 @@ XF_AI uint32_t xf_seg(uint32_t p, uint32_t m, uint32_t left)
  * own writes: the samples are the per-sample loop's. A side at rest (its time reached, no wow, a whole number of
  * samples) reads straight from the line; a side that moves reads between two samples (linear: the first builds' cubic
  * was 35 instructions a read), its time a ramp over the block: the glide's step and the wow's, once a block */
-XF_HOT void xd_run(const int32_t *in, int32_t *ol, int32_t *orr, uint32_t n, uint32_t sh)
+CR_HOT_FX XF_HOT void xd_run(const int32_t *in, int32_t *ol, int32_t *orr, uint32_t n, uint32_t sh)
 {
     uint32_t w = xf.d_w, j, k, e;
     int32_t pk = 0, st = 0, fb, kc, kh = xf.d_kh, pt = xf.d_ping ? 256 : 0, q = xf.d_q, pm = xf.d_pm;
@@ -621,7 +625,7 @@ XF_AI int32_t xr_sat(int32_t v)           /* itself up to 3/4 of the line's rang
  * clear of what the stage before it writes (XR_APB, XR_BASE), so a block's reads never see its own writes. The
  * lines' two gains are one multiply: g_i x 181 / 512 (the Hadamard's scale) goes in front of the mix (gm, Q17), and
  * the one rounding a pass is the line's own */
-XF_HOT void xr_run(const int32_t *in, int32_t *ol, int32_t *orr, uint32_t n, uint32_t sh)
+CR_HOT_FX XF_HOT void xr_run(const int32_t *in, int32_t *ol, int32_t *orr, uint32_t n, uint32_t sh)
 {
     uint32_t w = xf.r_w0, pw = xf.r_pw, j, i, e;
     int32_t act = 0, pk = 0, kc, lk = xf.r_lk, ig, q = xf.r_q, t;
@@ -864,7 +868,7 @@ static uint32_t xc_live;
 static struct { int32_t dc, oc, ra, rb; } xc;
 #define XC_POS(ph, d) ((400 << 8) + (((osc_sine(ph) + 32768) * (d)) >> 12))   /* Q8 samples back (fx_buses's own; d: x16) */
 #define XC_GLIDE(c, t) ((c) + (((t) - (c) + ((t) > (c) ? (1 << XC_GL) - 1 : 0)) >> XC_GL))
-static __attribute__((noinline)) void xc_block(const int32_t *in, int32_t *ml, int32_t *mr, uint32_t n)
+CR_HOT_FX static __attribute__((noinline)) void xc_block(const int32_t *in, int32_t *ml, int32_t *mr, uint32_t n)
 {
     int32_t dt = song.g[G_CDEPTH] * (6 << 4), ot = xfp[XP_CWIDTH] * (int32_t)(XC_TURN / 127u);
     int32_t any = 0, dc, oc, ra, rb, da, db, ea, eb;
@@ -921,7 +925,7 @@ static __attribute__((noinline)) void xc_block(const int32_t *in, int32_t *ml, i
 }
 
 /* a block of the two sends (the mono buses of fx.c) -> the stereo wet added to ml, mr. n: CTL */
-static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int32_t *rev_in, int32_t *ml,
+CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int32_t *rev_in, int32_t *ml,
                                                int32_t *mr, uint32_t n)
 {
     uint32_t i, h = xf_bpm, nh = n >> 1;

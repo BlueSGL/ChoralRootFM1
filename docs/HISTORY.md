@@ -2087,3 +2087,50 @@ RAM 81 444 (+96), POOL 316 052 (the same). `FELUCCA_PROPHET=0 ./build.sh`: `chor
 real FM-1, the three-unit voice's cost); a favourites-only way of turning PRESETS; favourites in the web Sound
 Manager (it does not show or edit them; a backup made by the pages keeps them); the browser emulator's own test has
 no favourites case; `tools/emu/perf.sh`.
+
+3y41. **Code in RAM: P5's sample loop by default, and switches to measure the rest (2026-10-13; 0.22 in development;
+on p5-d after 40acb01).** The owner read the unit twice with the same playing (P5 on the chord part, four voices, and
+on the bass part; reverb, delay, chorus): all code in flash, `pk_block_us` 3136 of 2902, `pk_part0_us` 2084,
+`pk_part1_us` 1414, `pk_fx_us` 717, `pk_master_us` 187, `pk_late` 83, `stale_halves` 22; the same tree built with
+`P5_RAM=1`: 2623, 1533, 1317, 716, 159, 1, 0. The chord part is 26 % cheaper with the same instructions.
+**`P5_RAM` is 1 in a device build** (`tools/build.py` passes it unless `P5_RAM=0`; the source's default, the host's
+and the emulator's, stays 0). The default build's listing is byte for byte `P5_RAM=1 ./build.sh`'s at 40acb01, and
+`P5_RAM=0`'s is 40acb01's default.
+**The switches** (docs/FX.md "Code in RAM" has the table with every function and its bytes): `CR_RAM_FX` (the
+effects' block and loops, the chorus, a part's mix loops: 7490 B), `CR_RAM_MASTER` (both output chains: 4764),
+`CR_RAM_CORE` (the voice loop, a part's mix, the matrix, the LFO: 4068), `CR_RAM_CZ` (16 390), `CR_RAM_VA` (9022),
+`CR_RAM_FM6` (6206), and `CR_RAM_TABLES_P5` (the four tables P5 reads every sample, 5376 B of RAM `.data`). All off.
+RAMTEXT is 24 576 B: P5 6808; + FX + MASTER 19 072; + CORE 23 140; an engine fits only alone beside P5 (CZ-1:
+23 200); all at once would be about 54.8 KB. `tools/build.py` stops under 512 B spare. **Not moved: the audio ISR's
+own body** (`fm1_alnk0_irq`, 5656 B with `mix_block`, `audio_block`'s DAC words and the event dispatch inlined: it
+does not fit beside the rest), P5's per-block code, `fm6_block`, `va_block`.
+**The mechanism, and two that failed.** A section attribute changes the code: this compiler does not inline into a
+function of another section (`osc_sine`, `clamp` became calls into flash). Calls written through a pointer change it
+too: the callee's address escapes and the compiler forgets its callers (`clean_block` grew its general path back).
+So the compiler is not told: the sources carry empty markers (`cr_ram.h CR_HOT_x`), and `tools/ram_code.py place`
+renames the marked functions' sections in the compiled object (`.text.NAME` -> `.rhot.NAME`, linked at RAMTEXT by
+one more pattern in `app.ld`'s `.ram_text`) and points the direct calls that would cross between XIP and RAMTEXT
+(4 MiB + 4 KiB apart; the direct call reaches 4 MiB and the linker refuses a longer one) at veneers, C functions of
+`cr_ram.c` that load the target's address into a register (`hal/fm1_cc.h FM1_FAR`). The copy at power-on and the
+guard's PC window follow `_rt_end` by themselves. `tools/build.py`'s "no call in `.ram_text`" check now ends at
+`_rt_hot` (the flash driver's part), and it writes `build/choralroot.sym`.
+**The proof.** `tools/ram_code.py cmp` compares every function of two listings instruction by instruction, addresses
+made relative: for each switch alone and for B, C and D, 0 functions differ (841 compared; 2 to 29 moved); the only
+new code is the veneers (8 to 24 B each, 152 B in C), printed whole. The tool fails where it should (`CR_FX_LITE=1`:
+`xr_run` 675 -> 677). `tests/target_budget.py` passes on every listing, unchanged.
+**The tables**: listed in docs/FX.md; FM6's per-sample tables were in RAM already; candidates after P5's four are
+`SINE` + `TANH_Q15` (2.6 KB) and `CZ_CARRIER` (4 KB): reported, not built.
+**The favourite's write** (the first reading had `irq_gap_us` 17 783 in a session with a mark): by the code it waits
+as the Options' write does (no voice of the parts active, no chord held or latched, nothing scheduled, the master
+under −60 dBFS over the scope's 23 ms, all for a second; no loop playing), so it cannot cut a sound above −60 dBFS;
+not changed. The 17.8 ms is, by inference, a sector erase (HANDOFF 30).
+**Packages** for the unit, `P5_SHIPPED=all`, in the main checkout's `build/scratch/p5-ram/` with a `README.txt`:
+`choralroot-0-all-flash`, `-A-p5` (sha256 9654f7c9.., the same bytes as 40acb01's `P5_RAM=1` build), `-B-p5-fx-master`,
+`-C-all-audio` (B + CORE), `-D-all-tables`, `-E-p5-cz`, `-F-p5-va`, `-G-p5-fm6`.
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders, 0 changed; 0 lint findings; test_cr 923 ok, test_persist 98 ok, test_retired 18 ok. Size (the
+default): XIP 507 572 B (88.5 %, the same), RAMTEXT 6808 of 24 576 (3016), RAM 81 444, POOL 316 052.
+`FELUCCA_PROPHET=0 ./build.sh`: `choralroot.bin` d43c66e3.., as at 40acb01.
+**Not done / not tested**: anything on a unit but A's bytes; whether RAM helps any stage but P5's loop (the 0.18
+reading said not for the effects' four loops); a Dual Core session with `CR_RAM_CORE`; the tables beyond P5's; the
+ISR's body in RAM; a write guard over RAMTEXT.

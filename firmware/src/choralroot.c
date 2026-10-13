@@ -255,3 +255,6 @@ static void mix_block(int32_t *out, uint32_t n)   /* the audio ISR's block: the 
 #include "console.c"
 #endif
 #include "main.c"
+#if CR_RAM_ANY                    /* a CR_RAM_* measurement build (cr_ram.h): the veneers of the calls across */
+#include "cr_ram.c"
+#endif

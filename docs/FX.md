@@ -298,7 +298,8 @@ where the host's compiler turned eight lines into two vector operations:
 | CZ-1's chord, part 0 (perf.sh (g): 446 / 864) | | 1699 .. 1985 at its largest | 2.2 |
 
 `CR_FX_RAM=1` changed nothing on the unit (reverb 345 for 331, delay the same): the code cache was not it. It stays a
-build switch, off.
+build switch, off. (Not the whole story: the P5 engine's 3.3 KB sample loop did gain from RAM, a quarter of the
+part's time: [Code in RAM](#code-in-ram-3y41).)
 
 **The cost model that holds**: count the unit's own instructions. `tools/fx_loops.py` lists a function's loops from
 the build's disassembly; times each loop's passes a half, over 205, is its time. The third build's loops, for the
@@ -400,7 +401,7 @@ count is the lag: a half that starts 600 us behind and renders 2400 is as late a
 
 | What | How long (read from the code and the flash's data sheet; not measured) | When |
 | --- | --- | --- |
-| a flash erase (`storage_hw.c st_erase`) | 45 ms, the buffer silenced first | a store's sector fills; never into a sounding output for the settings and the session (`flash_holes`) |
+| a flash erase (`storage_hw.c st_erase`) | 45 ms by the data sheet, the buffer silenced first; **the unit read `irq_gap_us` 17 783 in a session with a favourite's write (2026-10-13): 17.8 ms is, by inference, one sector erase** (six halves nobody served: `stale_halves` counts them, and they are silence) | a store's sector fills; never into a sounding output for the settings and the session (`flash_holes`) |
 | a flash page program (`fm1_flash.h fl_write`, 256 bytes a go) | ~1 ms each, one after the other with a gap | every save: settings, session, a loop, a user sound |
 | a flash read through the driver (`st_read`, 256 bytes a go) | ~0.5 ms each | loading a stored loop or record |
 | TIMER5, above the audio ISR (the key and LED scan, USB audio's endpoint, the MIDI in): 10 kHz | not known: `pk_t5_us` is its share of the worst half (29 ticks) | always |
@@ -432,6 +433,215 @@ Built since (0.18, bit for bit; docs/CZ1.md "The render's cost on the unit"): 2 
 each wave and window, the carrier from a table), and the larger find of the audit that followed: the envelopes'
 definitions were rebuilt for every voice and block. Counted: about 1 980 us -> 630 us for eight voices. 1 is not
 needed for it; 3 cannot be done sample for sample.
+
+## Code in RAM (3y41)
+
+The firmware executes in place from the SPI flash (XIP, through the chip's code cache). Two readings of the owner's
+unit, 2026-10-13, the same playing both times (the P5 engine on the chord part, four voices, and on the bass part;
+reverb, delay and chorus up), peaks in microseconds of a half's 2902:
+
+| build | `pk_block` | `pk_part0` (chord) | `pk_part1` (bass) | `pk_fx` | `pk_master` | `pk_late` | `stale_halves` |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 40acb01, all code in flash | 3136 | 2084 | 1414 | 717 | 187 | 83 | 22 |
+| the same with `P5_RAM=1` | 2623 | 1533 | 1317 | 716 | 159 | 1 | 0 |
+
+`P5_RAM=1` links the P5 engine's two per-sample functions (`p5_samples`, `p5_mod_samples`: 3792 B) at RAM instead of
+flash. **The chord part got 26 % cheaper and not one instruction changed** (`tools/ram_code.py cmp`: the two
+functions are the same 1149 and 155 instructions in both builds). Melodee's notes say the same of its first hardware
+run, and ChoralRoot's own count for CZ-1 has an unexplained gap of the same kind (1066 us measured, 630 counted:
+docs/CZ1.md). The effects' four loops in RAM changed nothing in 0.18 (`CR_FX_RAM`, above): small loops that run many
+passes stay in the cache; a 3.3 KB loop body that runs once a sample apparently does not. **That is a hypothesis.**
+What follows is the means to measure it, stage by stage; nothing but `P5_RAM` is on by default.
+
+**`P5_RAM` is 1 in a device build since 3y41** (`tools/build.py`; `P5_RAM=0 ./build.sh` is the all-flash build, byte
+for byte 40acb01's default). The host and the emulator never see the flag.
+
+### The switches
+
+Each moves one stage's functions to RAMTEXT (`0x01C00000`, 24 576 B, of which the flash driver has 2888 and the
+second core's loop 128). Environment variables of `./build.sh`, all off unless set to 1:
+
+| switch | functions (bytes) | moved | RAMTEXT with it alone (P5 in) |
+| --- | --- | --- | --- |
+| `P5_RAM` (default 1) | `p5_samples` 3352, `p5_mod_samples` 440 | 3792 | 6808 |
+| `CR_RAM_FX` | `xd_run` 1708 (the delay), `xr_run` 2000 (the reverb), `xf_down` 308, `xf_up` 244 (the half-band filters), `xf_block` 794, `xc_block` 636 (the chorus), the eight `mix_loop*` 1800 (a part's level, pan and sends into the buses) | 7490 + an 8 B veneer | 14 308 |
+| `CR_RAM_MASTER` | `master_block` 3534 (Classic), `clean_block` 948 (Clean's look-ahead limiter), `clean_post` 110, `clean_post17` 90, `clean_split` 36, `usb_fixed_dac` 46 | 4764 | 11 572 |
+| `CR_RAM_CORE` | `track_render_x` 1432 (the voice loop, the envelopes, the calls of the engine), `mix_part_out` 960 (drive, level, pan, the choice of mix loop), `mod_begin` 640, `mod_voice` 390, `mod_voice_add` 122, `mod_tsrc` 82, `mod_end` 70 (the matrix), `track_lfo_tick` 272, `c1_part1_job` 100 | 4068 | 10 876 |
+| `CR_RAM_CZ` | `cz_native_line_mv` 7340, `cz_native_line` 6098, `cz_native_render` 1464, `cz_native_noise` 554, `cz_native_defs` 218, `cz_env_tick` 206, `cz_native_vibrato` 134, `cz_native_pd` 122, `cz_native_krate` 106, `cz_native_amp` 90, `cz_hw_rate` 58 | 16 390 | 23 200 |
+| `CR_RAM_VA` | `va_render` 8406 (the oscillators and the filter are inlined in it), `va_morph` 582, `va_render_mono` 22, `memset` 12 | 9022 | 15 832 |
+| `CR_RAM_FM6` | `fm6_render` 3518 (the operators' kernel is inlined in it), `fm6_control` 2476, `fm6_eg_step` 138, `fm6_mulhi` 74 | 6206 + 28 B of veneers | 13 044 |
+| `CR_RAM_TABLES_P5` | not code: `P5_TANH_Q15` 4098, `P5_EXP2_Q14` 514, `P5_INV_DEN` 514, `P5_TPT_G` 256, the tables `p5_samples` reads every sample | 5376 B of RAM `.data` | RAM 86 820 of 98 304 |
+
+Together: FX + MASTER 19 072; **FX + MASTER + CORE 23 140** (1436 B spare); every switch at once would need about
+54 800 and does not link. `tools/build.py` refuses a build that leaves less than 512 B of RAMTEXT. So the three engines
+cannot ride with the rest: each is built alone beside P5 (CZ-1 alone leaves 1376 B).
+
+**What still runs from flash under a switch**, by reading the listing (`python3 tools/ram_code.py list
+build/choralroot.dis`):
+
+- **The audio ISR's own body, under every switch**: `fm1_alnk0_irq` is 5656 B with `mix_block`, `audio_block`, the
+  engine's tick and the event dispatch inlined into it (it calls 43 functions directly, most of them a key's or a
+  loop's handling). That is `pk_tick` (clearing the five buses, `events_block`, `cr_tick`, `cr_loop_tick`), the
+  mid/side sums before the master, **the DAC word packing** (`audio_block`: x 128, the scope, Clean's fraction bits)
+  and the profile's own reads. It was not moved: it does not fit beside FX + MASTER + CORE, and its loops are a few
+  instructions each. `shed_check`, `cr_prof_whole`, `cr_tick` (432 B), `cr_loop_tick`, `crl_tick1` stay too.
+- `CR_RAM_FX`: `xf_block` calls `xf_coefs` (flash, through a veneer) only in a block in which a parameter or the
+  tempo moved. A part's drive (`track_dist`) is inlined in `mix_part_out`: that is CORE's.
+- `CR_RAM_CORE`: `track_render_x` calls the engine (`render`, `done`, `block`: six calls through `engine_t`'s
+  pointers): flash, unless that engine's switch is on. P5's per-block code (`p5_render` 1240 B, `p5_env_tick` 342,
+  `p5_block` 214, `p5_post` 130) is in flash under every switch: a candidate if C shows a gain.
+- `CR_RAM_FM6`: an envelope's or the pitch envelope's change of segment calls `fm6_eg_go` / `fm6_peg_go` in flash
+  (veneers in RAM; a few times a note, not per sample). `fm6_block` (per part and block, 1374 B) stays in flash.
+- `CR_RAM_VA`: `va_block` (per part and block, 558 B) stays in flash. `CR_RAM_CZ`: nothing.
+- The constant tables, under every switch but `CR_RAM_TABLES_P5` (below).
+
+### The mechanism
+
+The compiler is not told that a function will run from RAM. Two obvious ways were tried and each changed the code it
+moved:
+
+- **A section attribute** (as `P5_HOT`, `RAMFN`): this compiler does not inline a function into one that lives in
+  another section unless it is `always_inline`. With the attribute on `xf_block`, `osc_sine` and `clamp` turned into
+  calls, back into flash, inside the loops.
+- **The calls across written through a pointer in the source**: the callee's address escapes, and the compiler drops
+  what it knew of its callers. `clean_block` is compiled for `n == 32` because every caller passes it; reached
+  through a pointer it grew its general path back, and `xd_run`, `mod_begin`, `fm6_control` each came out different.
+
+So (`firmware/src/cr_ram.h`, `cr_ram.c`, `tools/ram_code.py`):
+
+1. The sources carry **a marker**, `CR_HOT_FX` .. `CR_HOT_FM6`, in front of each function's definition. It expands
+   to nothing in every build.
+2. `tools/build.py` compiles as always. For the switches that are on it then calls `ram_code.place` on the object:
+   each marked function's section `.text.NAME` is renamed `.rhot.NAME` (six bytes of the section-name table; a
+   marked function that the compiler did not emit on its own, because it was inlined, stops the build), and
+   `firmware/app.ld` puts `.rhot.*` in the `.ram_text` output section, after the flash driver. `main.c` copies the
+   whole section from the image at power-on (`_rt_load` .. , up to `_rt_end`, whatever its size) and
+   `fm1_guard.h`'s second PC window is `_rt_start .. _rt_end - 1`: both follow the section by themselves.
+3. **Calls.** XIP (`0x02001000`) and RAMTEXT (`0x01C00000`) are 4 MiB + 4 KiB apart; pi32v2's direct call is
+   PC-relative and reaches 4 MiB. The linker refuses a longer one (`relocation truncated to fit:
+   R_PI32V2_LONG_JUMP_23M2`): it cannot be missed silently. A call across goes through **a veneer** on the caller's
+   side, a C function the same switch compiles in (`cr_ram.c`): it loads the target's absolute address into a
+   register and calls or jumps there. `ram_code.place` points the direct calls at it by rewriting the symbol of their
+   relocation entries, and the veneer's own reference at the real function. The listing, both directions:
+
+   ```
+   fm1_alnk0_irq (flash)     200a666: 81 ea 92 37        call 159524 <cr_v_xf_block : 203158e >   PC-relative, to the veneer
+   cr_v_clean_block (flash)  20315aa: c2 ff 04 4e c0 01  r2 = 29380100 <clean_block : 1c04e04 >   the absolute address
+                             20315b0: d2 00              goto r2
+   xf_block (RAM)            1c03d52: 80 ea be 0a        call 5500 <cr_v_xf_coefs : 1c052d2 >     PC-relative, inside RAMTEXT
+   cr_v_xf_coefs (RAM)       1c052d2: c0 ff 20 89 00 02  r0 = 33589536 <xf_coefs : 2008920 >      absolute, back into flash
+                             1c052d8: d0 00              goto r0
+   xf_block (RAM)            1c03e9e: bf ea eb f6        call -4650 <xd_run : 1c02c78 >           RAM to RAM: direct, as before
+   ```
+   (package C's listing)
+
+   A veneer with stack arguments is a real call (`cr_v_mix_part_out`: push, copy the two stack words, `call r4`,
+   pop: 24 B). The existing RAM code uses the older form: a `volatile` pointer on the stack, then `call rN`
+   (`FL_FAR`, `P5_RAM`'s `run`, `XF_CALL`). The engines' `render` and the mix loops were already reached through
+   pointers and need nothing.
+
+A build without a switch has no `.rhot` section, no veneer and an object nobody touched.
+
+### The proof that only the place changed
+
+`python3 tools/ram_code.py cmp BASE.dis NEW.dis` reads two listings (and `choralroot.sym` beside each) and compares
+**every function of both**, instruction by instruction, with addresses replaced by what they point into (a place in
+the function itself, another function, a constant by the nearest named object before it). It accepts: a function
+whose address moved; a call whose target became `cr_v_NAME` for `NAME`; the veneers, which it prints whole and whose
+one address must be their target's, on the other side. Anything else fails. Results, each against the default build
+(`P5_SHIPPED=all`, 841 functions):
+
+| build | moved | functions that differ | veneers (bytes) |
+| --- | --- | --- | --- |
+| `P5_RAM=0` -> the default | 2 | 0 | 0 |
+| `CR_RAM_FX` | 14 | 0 | 3 (40) |
+| `CR_RAM_MASTER` | 6 | 0 | 5 (40) |
+| `CR_RAM_CORE` | 9 | 0 | 5 (72) |
+| `CR_RAM_CZ` | 11 | 0 | 0 |
+| `CR_RAM_VA` | 4 | 0 | 1 (8) |
+| `CR_RAM_FM6` | 4 | 0 | 3 (40) |
+| FX + MASTER (package B) | 20 | 0 | 8 (80) |
+| FX + MASTER + CORE (C) | 29 | 0 | 13 (152) |
+| C + `CR_RAM_TABLES_P5` (D) | 29 | 0 | 13 (152) |
+
+No function's instruction count differs. (The tool is not blind: `CR_FX_LITE=1` against the default fails on
+`xr_run`, 675 -> 677 instructions.) The default build's listing is byte for byte the one `P5_RAM=1 ./build.sh` made
+at 40acb01, and `P5_RAM=0`'s is 40acb01's default. `tests/target_budget.py` reads functions by name and passes on
+every one of these listings unchanged. The host and the emulator build none of it: the 246 golden renders and the
+17 suites are the proof on that side.
+
+### The tables
+
+A table in flash is read through the same cache as the code. What the hot paths read, by the listing
+(`.rodata` is XIP; FM6's five are RAM `.data` already, 11 780 B, since Felucca):
+
+| path | every sample | every block or voice |
+| --- | --- | --- |
+| P5 | **`P5_TANH_Q15` 4098** (seven look-ups a sample), `P5_EXP2_Q14` 514, `P5_INV_DEN` 514, `P5_TPT_G` 256: 5382 B, XIP; RAM with `CR_RAM_TABLES_P5` | `PITCH_OCT` 768, `P5_ENV_ATK` 512, `P5_ENV_SSM` 512, `P5_ENV_EXP` 256, `P5_LFO_INC` 512, `P5_AMOUNT_Q15` 256 |
+| CZ-1 | `CZ_CARRIER` 4096 (every loop), `CZ_RECIP` 8192 (the `_mv` loops and NOISE): XIP | `CZ_AMP` 256, `PITCH_OCT` |
+| FM6 | `FM6_SIN` 4100, `FM6_MKI_LOG` 4096, `FM6_MKI_EXP` 2048, `FM6_OPL_LOG` 1024, `FM6_OPL_EXP` 512: **RAM already** | `FM6_FREQ` 4100, `FM6_EXP2` 4100, `FM6_ALG` 192, the small ones: XIP |
+| VA | `SINE` 2050, `TANH_Q15` 514: XIP | `SVF_G` 256, `PITCH_OCT` 768, `ENV_EXP` 256, `ENV_LIN` 512 (one copy with `P5_ENV_ATK`: the same bytes), `VA_BROWN_*` |
+| FM TONE | `QUAD_HARM` 27 702, `SINE`, `TANH_Q15`, five of 256: XIP | |
+| the chorus, the effects' block | | `SINE` (the LFOs, once a block), `LFO_INC` |
+| the delay's and the reverb's loops | none | |
+| a part's drive, the master | `TANH_Q15` 514 (when the drive is on; the limiters' soft clip) | `LEVEL_Q12` 256 |
+| the matrix | | `TP` 1820, `PITCH_OCT` |
+
+RAM has 16 860 B free (81 444 of 98 304), 11 484 with the P5 tables in. POOL (316 052 of 344 064) is zero-filled
+memory with no image behind it: a table there would need a copy loop at power-on, and the build keeps 8 KB of it
+spare. **Worth a RAM copy, as an estimate only**: the P5 four (built: `CR_RAM_TABLES_P5`); then `SINE` + `TANH_Q15`
+(2564 B: VA, the chorus, the drive, both limiters, FM TONE, WHEEL); then `CZ_CARRIER` (4096 B). `CZ_RECIP` (8192)
+fits only without the P5 tables; `QUAD_HARM` does not fit. None but the first is built: D against C says first
+whether a table in RAM is worth anything.
+
+### The measurement plan
+
+Eight packages in `build/scratch/p5-ram/` of the main checkout (its `README.txt` has each one's switches, hash and
+size line), all with the 200 programs:
+
+| package | switches |
+| --- | --- |
+| `choralroot-0-all-flash.fwsc` | `P5_RAM=0`: the first row of the table above, for a control |
+| `choralroot-A-p5.fwsc` | the default: the second row (byte for byte the build that was read) |
+| `choralroot-B-p5-fx-master.fwsc` | A + `CR_RAM_FX` + `CR_RAM_MASTER` |
+| `choralroot-C-all-audio.fwsc` | B + `CR_RAM_CORE` (the engines left out: they do not fit) |
+| `choralroot-D-all-tables.fwsc` | C + `CR_RAM_TABLES_P5` |
+| `choralroot-E-p5-cz.fwsc`, `-F-p5-va.fwsc`, `-G-p5-fm6.fwsc` | A + `CR_RAM_CZ`, `CR_RAM_VA`, `CR_RAM_FM6`, one each |
+
+For each: install, **power-cycle**, read `python3 tools/fm1_install.py --debug` once to clear the peaks, play, read
+again. The peaks are the worst half since the last read, so play the same thing for the same time (30 s is enough).
+
+- **A, B, C, D**: the playing of the table above: P5 on the chord part (01 ITS PROPHET5, four keys held, then
+  changed a few times) and P5 on the bass part, reverb, delay and chorus sends up. Compare `pk_part0_us`,
+  `pk_part1_us`, `pk_fx_us`, `pk_master_us`, `pk_tick_us`, `pk_block_us`, and `fx_delay_avg_us`,
+  `fx_reverb_avg_us`. Expect: A = the second row. B against A: `pk_fx_us` and `pk_master_us` (0.18 said the four
+  loops gain nothing; the chorus, the mix loops and the limiter were not in that test). C against B: `pk_part0_us`
+  and `pk_part1_us` (the framework around the engine). D against C: `pk_part0_us`, `pk_part1_us` (the tables).
+- **E**: CZ-1 on the chord part, eight keys (`python3 tools/cz_pop_check.py --play` plays it): `pk_part0_us` against
+  A's with the same playing, and against the count's 630.
+- **F**: a VA chord and bass (LUSH PAD). **G**: an FM6 chord. `pk_part0_us` against A's with the same playing.
+- With every package: `pk_late`, `stale_halves` (the rule: 0), `flash_erases`, `flash_holes` (the rule: 0).
+
+Nothing here has run on a unit but A (as 40acb01 + `P5_RAM=1`).
+
+### What to keep in mind
+
+- **RAM code can be overwritten; flash code cannot.** The write guards (`fm1_guard.h`) cover the two stack bands and
+  the top of RAM, not RAMTEXT: a stray write into `0x01C00000 .. 0x01C05FFF` would change audio code silently where
+  the same write is harmless today. It is so for the flash driver and for P5's loop already; B and C put 12 to 16 KB
+  more there.
+- **The PC guard** allows two windows, XIP up to `_etext` and `_rt_start .. _rt_end - 1`; the second covers
+  `.ram_text` with `.rhot.*` in it and `.c1_text`, whatever their size, on both cores. Nothing else in the firmware
+  looks at a PC's range (`irq_gap_pc` is reported, not judged: a value in `0x01C0....` now names a RAM function, in
+  the same listing).
+- **The second core** runs `c1_part1_job` and `track_render_x` from RAM under `CR_RAM_CORE`, `.c1_text` sits behind
+  `.rhot.*` instead of right behind the flash driver; `fm1_c1_main`'s address is the linker's either way. A Dual
+  Core session belongs in C's reading.
+- **The flash driver's rule is unchanged**: below `_rt_hot` nothing may call (`tools/build.py` checks the listing);
+  the audio code above it runs only with the flash on (the driver masks the interrupts and core 1 works only inside
+  core 0's audio interrupt).
+- A veneer is one more call level: 8 bytes of stack for the three with stack arguments, twelve to thirteen far
+  calls a block in C (about forty instructions a half).
 
 ## The delay
 ## The delay
@@ -824,7 +1034,8 @@ the far wall's direction turned round.
    say otherwise, and both are one build flag.
 2. **0.74 s a side** (a 32768-sample line: what the pool has).
 3. **16-bit lines** for the reverb (32 bits: 48 dB less noise for the delay's last 0.15 s).
-4. **`CR_FX_RAM` is off**: on the unit it changed nothing (reverb 345 us for 331). Kept as a switch.
+4. **`CR_FX_RAM` is off**: on the unit it changed nothing (reverb 345 us for 331). Kept as a switch. `CR_RAM_FX` (3y41) moves the
+   whole stage, the chorus and the mix loops too: to be measured ("Code in RAM").
 5. **A tail ends at one unit of the line** (-90 dBFS of it), nowhere above.
 6. **"Inf" takes the damping out of the loop.**
 7. **Nothing is saved while a tail rings**, with no time limit: with the reverb frozen, nothing is stored until it is

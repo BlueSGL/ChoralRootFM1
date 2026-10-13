@@ -806,7 +806,7 @@ static void fm6_legato(track_t *t, voice_t *v)
 static int fm6_done(track_t *t, voice_t *v) { return !FM6P(t) || fm6_state(t, v)->quiet >= 2u; }  /* (no state: over) */
 
 /* a new Dexed block: key-up, the envelopes, pitch and gains (Dx7Note::compute), the routing */
-static void fm6_control(track_t *t, voice_t *v, fm6_voice_t *s, const vmod_t *m)
+CR_HOT_FM6 static void fm6_control(track_t *t, voice_t *v, fm6_voice_t *s, const vmod_t *m)
 {
     fm6_part_t *P = FM6P(t);
     uint32_t tr = (uint32_t)(t - trk) % NTRK, alg, k, dead = 1;
@@ -944,7 +944,7 @@ static void fm6_ghost(track_t *t, voice_t *v, fm6_voice_t *s)
 
 static uint32_t fm6_units(const track_t *t) { (void)t; return 1u; }   /* a voice: one budget unit, whatever the cap */
 
-static void fm6_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
+CR_HOT_FM6 static void fm6_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     fm6_voice_t *s;
     fm6_scr_t *S = &fm6_scr[CR_C1_IDX(t)];              /* (core 1's own while it renders part 1: cr_cpu1.h) */

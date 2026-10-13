@@ -72,7 +72,7 @@ static int16_t mod_rand(void)    /* RAND of a note-on: xorshift32, bipolar */
 static int32_t mod_key(uint32_t note) { return clamp(((int32_t)note - 60) * 512, -32767, 32767); }
 
 /* source s of the track: the per-track ones, the per-voice ones of the latest note-on */
-static int32_t mod_tsrc(const track_t *t, uint32_t s, int32_t lfo)
+CR_HOT_CORE static int32_t mod_tsrc(const track_t *t, uint32_t s, int32_t lfo)
 {
     switch (s) {
     case MS_LFO:
@@ -102,7 +102,7 @@ static int32_t mod_gain(uint32_t s, int32_t x, int32_t a)
 }
 
 /* a per-voice destination d by source value x, amount a */
-static void mod_voice_add(uint32_t s, uint32_t d, int32_t x, int32_t a, int32_t *pit, int32_t *cut, int32_t *shp,
+CR_HOT_CORE static void mod_voice_add(uint32_t s, uint32_t d, int32_t x, int32_t a, int32_t *pit, int32_t *cut, int32_t *shp,
                           int32_t *gain)
 {
     if (d == MD_PITCH)
@@ -117,7 +117,7 @@ static void mod_voice_add(uint32_t s, uint32_t d, int32_t x, int32_t a, int32_t 
 
 /* before a part's block (fx.c mix_part): the per-track offsets, the per-block destinations into t->p.
  * 0 = no slot active (then nothing changed) */
-static __attribute__((noinline)) int mod_begin(track_t *t)
+CR_HOT_CORE static __attribute__((noinline)) int mod_begin(track_t *t)
 {
     const int16_t *p = t->p;
     int32_t lfo, off[NMSLOT];
@@ -174,7 +174,7 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
 }
 
 /* after the part's block (when MODP(t).on): the stored values back */
-static __attribute__((noinline)) void mod_end(track_t *t)
+CR_HOT_CORE static __attribute__((noinline)) void mod_end(track_t *t)
 {
     uint32_t j;
     for (j = 0; j < MODP(t).nk; j++)
@@ -185,7 +185,7 @@ static __attribute__((noinline)) void mod_end(track_t *t)
 /* a voice's modulation (voice.c track_render, when MODP(t).on), onto its vmod_t m as track_render made it:
  * pitch (the increment again, with the fine factor fine as there), cutoff and shape (clamped to what the
  * fixed routings can reach), the amplitude (and v->env_out, the next block's start). env: its envelope */
-static __attribute__((noinline)) void mod_voice(track_t *t, voice_t *v, vmod_t *m, int32_t fine)
+CR_HOT_CORE static __attribute__((noinline)) void mod_voice(track_t *t, voice_t *v, vmod_t *m, int32_t fine)
 {
     int32_t pit = MODP(t).pit, cut = MODP(t).cut, shp = MODP(t).shp, gain = MODP(t).gain, env = m->envq15;
     uint32_t k;

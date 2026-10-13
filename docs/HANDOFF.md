@@ -212,7 +212,10 @@ installed on the owner's Mac.
     engine's first preset gets a trim (item 19 proposes rows).
 21. **CZ-1's cost on the unit is above the count**: 1066 us measured for the chord part (`pk_part0_us`) against the
     630 us predicted for eight voices from the listing (docs/CZ1.md "Cost on the unit"; `tools/cz_pop_check.py`
-    calls anything above 1450 far from the count). The difference is not explained.
+    calls anything above 1450 far from the count). **A likely explanation since 3y41, a hypothesis until package E
+    is measured**: the count is instructions, and code executed from the flash stalls on the code cache: P5's
+    sample loop lost 26 % of its part's time in RAM with the same instructions (docs/FX.md "Code in RAM"; docs/CZ1.md
+    "The unit"). `CR_RAM_CZ=1 ./build.sh` is CZ-1's render in RAM (item 29).
 22. **USB capture's cost at 44.1 kHz**: about 126 us a half by the listing, and the SIE's waits on top, against
     `tools/emu/perf.sh`'s estimate of about 30 (scenario (u); docs/USB-AUDIO.md "What it costs" has the table and
     what to read on the unit: `pk_t5_us` with and without the stream). In the heaviest patches a recording at
@@ -274,6 +277,34 @@ installed on the owner's Mac.
     star is yellow (`cr_draw.c CR_STAR_COL`); a favourites-only way of turning PRESETS and favourites in the web
     Sound Manager (not built, the store supports both); the browser's label does not name KNOB 4 (kept so that a
     screen without a mark is c176dd4's). The first right turn in the save dialog from Save as new is Favorite now.
+29. **Code in RAM: eight packages for the unit, seven of them not measured** (HISTORY 3y41; docs/FX.md "Code in RAM" has the
+    mechanism, the table of switches and the plan). `P5_RAM` is 1 in a device build now (the unit: `pk_part0_us`
+    2084 -> 1533, `pk_block_us` 3136 -> 2623, `stale_halves` 22 -> 0 for four P5 voices, a P5 bass and three
+    effects). The rest is switches, all off: `CR_RAM_FX`, `CR_RAM_MASTER`, `CR_RAM_CORE`, `CR_RAM_CZ`,
+    `CR_RAM_VA`, `CR_RAM_FM6`, `CR_RAM_TABLES_P5`. `../ChoralRootFM1/build/scratch/p5-ram/` holds
+    `choralroot-0-all-flash`, `-A-p5` (the default; byte for byte what was read), `-B-p5-fx-master`,
+    `-C-all-audio` (B + CORE: the engines do not fit beside it), `-D-all-tables`, and `-E-p5-cz`, `-F-p5-va`,
+    `-G-p5-fm6` (one engine each), with `README.txt`. **None but A has run on a unit.** To read for each, after a
+    power cycle and a clearing `--debug`: `pk_part0_us`, `pk_part1_us`, `pk_fx_us`, `pk_master_us`, `pk_tick_us`,
+    `pk_block_us`, `pk_late`, `stale_halves`. Then decide which switches become defaults (RAMTEXT is 24 576 B:
+    FX + MASTER + CORE leave 1436; an engine's render is 6 to 16 KB), whether the tables follow (`SINE` + `TANH_Q15`
+    2.6 KB and `CZ_CARRIER` 4 KB are the candidates, not built), and whether the audio ISR's own body (5.6 KB, not
+    moved: it does not fit beside the rest) and P5's per-block code (1.9 KB) are worth it. Open by design: RAM code
+    is not write-protected (a stray write into RAMTEXT changes audio code).
+30. **A favourite's write and the 17.8 ms `irq_gap_us`** (the first reading of item 29's table: `irq_gap_us` 17 783,
+    `stale_halves` 22, in a session in which the owner marked a favourite). By the code the mark's write cannot cut
+    a sound: `crf_poll` (`cr_settings.c`) waits with the very condition of the Options' write: 1.5 s since the last
+    mark, and 1 s in which, at every UI frame, no voice of the two parts was active (release tails are active
+    voices), the engine held or latched no chord and had no note scheduled (`cr_snap.voices`, `.pending`: held keys
+    count), and the master output stayed inside ±32 of 32 768 (−60 dBFS) over the scope's last 23 ms (the effects'
+    tails are in it); never while a loop plays. **So "silence" there is both: voices idle and the output under
+    −60 dBFS.** What it does not wait for is a tail's last part below −60 dBFS, as the Options do not; the delay's
+    and the reverb's own `d_live` / `r_live` counters would wait for the last bit, minutes at a high feedback, and
+    were not put in. The 17.8 ms is, **by inference**, one 4 KiB sector erase with the interrupts masked (the store
+    erases when a sector fills; the 45 ms in docs/FX.md is the data sheet's, this is the first reading of it), which
+    adds six to `stale_halves` by itself (six boundaries nobody served, the buffer silenced first: silence in a
+    pause). The other 16 of the 22 are either more erases or the overload of that build (`pk_block_us` 3136, 83
+    late): the reading cannot say which. `flash_erases` and `flash_holes` (the rule: 0) in the same `--debug` do.
 
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
@@ -285,11 +316,13 @@ installed on the owner's Mac.
   `FELUCCA_PHYS` 0, its files kept); records of retired engines stay and load as stand-ins (docs/PRESETS.md).
 - **P5** (docs/PROPHET.md; shown as "P5", the files and switches say PROPHET): `FELUCCA_PROPHET` (1 in
   `choralroot.c`; `FELUCCA_PROPHET=0 ./build.sh` is the image without the engine, byte for byte the one before it:
-  `choralroot.bin` sha256 501a9d09.. until the favourites, 57371526.. with them (3y40: they are every engine's);
+  `choralroot.bin` sha256 501a9d09.. until the favourites, d43c66e3.. at 40acb01 and after 3y41 (3y40: the favourites
+  are every engine's);
   code added for P5 in a shared file must stay behind the switch, and even a
   local variable outside it changed the image once), `FELUCCA_P5_FACTORY` (1: Sequential's programs of the shipped
   list; 0: INIT alone), `P5_SHIPPED` (the environment: another list file, or `all`), `P5_RAM` (1: its sample loop in
-  `.ram_text`; default 0). **Four voices (`P5_POLY`), three budget units each since 3y40 (a measurement build: the
+  `.ram_text`; **1 in a device build since 3y41**, `P5_RAM=0 ./build.sh` for flash; the source's default, the host's
+  and the emulator's, is 0). **Four voices (`P5_POLY`), three budget units each since 3y40 (a measurement build: the
   chord keeps four voices with a bass; c176dd4: four units, three voices with a bass).** **A factory program's identity is its
   Sequential number 1..200** (in the program's own bytes: `p5_patch_id`), never its place in the pool: the pool is
   `assets/prophet5-factory/shipped.txt`, which changes; the session finds the place again from the number

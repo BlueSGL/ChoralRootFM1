@@ -23,9 +23,12 @@
  *       2  the envelope's terms of the cutoff, the Poly-Mod frequency and the Poly-Mod width once a sample, not once
  *          a pass of the oversampling loop (one pass at P5_OVERSAMPLE 1: the same sums in another order);
  *       4  hard sync's phase products as two 32-bit halves instead of a 64-bit multiply (p5_phase_fraction);
- *   - no .dsp_text / .dsp_tables sections: ChoralRoot's map has none. P5_RAM 1 (device builds) puts the three
- *     per-sample functions into .ram_text as CR_FX_RAM does the effects' loops; 0, the default, runs them from flash
- *     as every other engine here (on the unit RAM changed nothing for the effects: docs/FX.md). The tables are const;
+ *   - no .dsp_text / .dsp_tables sections: ChoralRoot's map has none. P5_RAM 1 puts the per-sample functions
+ *     (p5_samples with p5_inc inlined, p5_mod_samples) into .ram_text as CR_FX_RAM does the effects' loops; 0 runs
+ *     them from flash as every other engine here. A DEVICE BUILD HAS 1 since 3y41 (tools/build.py passes it: on the
+ *     unit the chord part went 2084 -> 1533 us with the same instructions, docs/FX.md "Code in RAM"); this file's
+ *     default stays 0, the host's and the emulator's. The tables are const (in flash), or RAM with
+ *     CR_RAM_TABLES_P5 (build/gen/felucca_tables.h P5_TABLE);
  *   - the pitch bend: Melodee's p5_update_bend (voice.c, the program's own range byte P5_BEND) is not here; the part
  *     bends as ChoralRoot's other engines do, through vmod_t (voice.c: the channel's range, RPN 0, +-2 semitones by
  *     default). The program's P5_BEND byte is kept and not used;
@@ -53,7 +56,8 @@
 #define P5_STAGE36 7                    /* the remix's three optimisations (above): bits 1, 2, 4; 0: 8a3074b's code */
 #endif
 #ifndef P5_RAM
-#define P5_RAM 0                        /* 1 (device builds only): the per-sample functions in .ram_text */
+#define P5_RAM 0                        /* 1 (device builds: tools/build.py's default): the per-sample functions
+                                         * in .ram_text; 0 here: the host and the emulator have no such section */
 #endif
 #ifndef P5_DC_BLOCK
 #define P5_DC_BLOCK 1                   /* the part's DC blocker (p5_post); 0: 8a3074b's output, for a measurement */
@@ -577,7 +581,8 @@ static void p5_post(track_t *t,int32_t *out,uint32_t n,uint32_t nr)
     }
     P->dc_x1=x1;P->dc_y1=y;
 }
-/* XIP stalls dominated Melodee's first hardware run; its hot path ran from RAM. Here: P5_RAM (above). */
+/* XIP stalls dominated Melodee's first hardware run; its hot path ran from RAM. Here: P5_RAM (above), on in a
+ * device build. This function, p5_env_tick, p5_block and p5_post (a voice's and the part's block) are in flash. */
 static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
     p5_voice_t *s=p5_voice(t,v);

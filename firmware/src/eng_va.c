@@ -818,7 +818,7 @@ static int va_done(track_t *t, voice_t *v)      /* ENV 1 has ended (voice.c, eng
  * half a cycle, the triangle by three quarters, the ramp is the saw reversed), so no crossfade cancels the
  * fundamental. sh: Q15 (SHAPE x 258) */
 #define VA_MP(k) ((k) * 24 * 258)               /* the shapes' positions, Q15 */
-static inline int32_t va_morph(uint32_t ph, uint32_t inc, int32_t sh)
+CR_HOT_VA static inline int32_t va_morph(uint32_t ph, uint32_t inc, int32_t sh)
 {
     int32_t a, b, f;
     if (sh >= VA_MP(2)) {
@@ -931,7 +931,7 @@ static inline int32_t va_svf(const tsvf_t *c, int32_t x, int32_t *ic1, int32_t *
 
 /* a voice's block: out gets the mono (the mid), side (0: none) the stereo side of SPREAD / USPREAD; 1 = side got
  * something */
-static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *side, uint32_t n, const vmod_t *m)
+CR_HOT_VA static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *side, uint32_t n, const vmod_t *m)
 {
     va_voice_t *s = va_voice(t, v);
     uint32_t tr = va_tr(t), k, i, wrap = 0, osc_on = 0, vinyl = 0;
@@ -1253,7 +1253,7 @@ static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *side, uint32
     return side && (spr || up);
 }
 
-static void va_render_mono(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)   /* engine_t.render */
+CR_HOT_VA static void va_render_mono(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)   /* engine_t.render */
 {
     va_render(t, v, out, 0, n, m);
 }

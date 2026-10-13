@@ -109,6 +109,9 @@ Build options (environment, `0` or `1`; defaults in `firmware/src/choralroot.c`;
 | `FELUCCA_ICONS` | 0 | Felucca's icon atlas (`icons.c`, `build/gen/ui_icons.h`): parameter icons on Felucca's knob cards (ChoralRoot: off; its header glyphs are drawn by `cr_draw.c`) |
 | `FELUCCA_KEYCAPS` | 0 | Felucca's keycaps and key hints (`gfx.c`, `build/gen/ui_keycaps.h`; ChoralRoot: off, no screen draws one) |
 | `FELUCCA_FM4` | 0 | the retired DIGITAL engine (4-operator FM) instead of its FM6 conversion |
+| `P5_RAM` | 1 | the P5 engine's sample loop in RAM (`.ram_text`, 3792 B) instead of flash: a quarter less time for the part on the unit; `0`: all code in flash (docs/FX.md "Code in RAM") |
+| `CR_RAM_FX`, `CR_RAM_MASTER`, `CR_RAM_CORE`, `CR_RAM_CZ`, `CR_RAM_VA`, `CR_RAM_FM6` | 0 | measurement builds: one stage's functions linked at RAM (the same instructions; `firmware/src/cr_ram.h`, `tools/ram_code.py`). RAMTEXT holds FX + MASTER + CORE, or one engine; the build stops under 512 B spare |
+| `CR_RAM_TABLES_P5` | 0 | the four tables the P5 engine reads every sample in RAM `.data` (5376 B) |
 | `FELUCCA_SEQ` | 0 | Felucca's sequencer (`seq.c`, `song_chain.c`, `chord.c`, `motion.c`, `midi_control.c`, `midi_clock.c`); ChoralRoot: off, `cr_out.c` has the `events_block` and MIDI in (docs/INTEGRATION.md section 1) |
 | `FELUCCA_SAMPLE` | 0 | the SAMPLE engine and its ADPCM sets (about 190 KB of flash); ChoralRoot: off, engine 4 a retired slot |
 | `FELUCCA_GRAIN` | 0 | the GRAIN engine (needs `FELUCCA_SAMPLE`; 27 KB of POOL); ChoralRoot: off, engine 8 retired |

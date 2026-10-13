@@ -38,6 +38,7 @@ LDR = OUT / "loader"
 STB = OUT / "stub"
 sys.path.insert(0, str(SRC / "tools"))
 import fm1pkg_make  # noqa: E402
+import ram_code  # noqa: E402
 import lz4blk  # noqa: E402
 
 STUB_XIP = 0x02000120               # app.bin offset 0 in the XIP map; the SPL jumps here: the boot stub
@@ -60,6 +61,8 @@ SDK_SHA256 = {
 UNIT = "choralroot"                 # firmware/src/UNIT.c; outputs build/UNIT.{bin,elf,dis,fwsc}
 PRODUCT = "FM-1_920"                # package identity (ChoralRoot: constant, releases too)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/choralroot.c)
+RAMTEXT_LEN, RAMTEXT_SPARE = 0x6000, 512            # firmware/app.ld RAMTEXT; what a build must leave of it
+RAM_SWITCHES = ("CR_RAM_FX", "CR_RAM_MASTER", "CR_RAM_CORE", "CR_RAM_CZ", "CR_RAM_VA", "CR_RAM_FM6")
 XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = fm1pkg_make.BODY_MAX, 96 * 1024, 0x54000, 0x3D30   # firmware/app.ld
 
 
@@ -259,10 +262,19 @@ def build_app(stub):
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_ICONS", "FELUCCA_KEYCAPS", "FELUCCA_SLICE",
                  "FELUCCA_SLICER", "FELUCCA_FM4", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_DRUM", "FELUCCA_SEQ",
                  "FELUCCA_CZ", "FELUCCA_QUAD", "FELUCCA_ANALOG", "FELUCCA_PHASE", "FELUCCA_LOFI", "FELUCCA_VOICE",
-                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS", "FELUCCA_PROPHET", "FELUCCA_P5_FACTORY", "P5_RAM"):
+                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS", "FELUCCA_PROPHET", "FELUCCA_P5_FACTORY"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/choralroot.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
+    # Code in RAM (docs/FX.md "Code in RAM"). P5_RAM: the P5 engine's sample loop in .ram_text, 1 in a device build
+    # since 3y41 (the unit: the chord part 2084 -> 1533 us; P5_RAM=0 for the flash build to measure against). The
+    # host and the emulator never see these flags: there the source's default (0) holds
+    flags.append("-DP5_RAM=" + ("0" if os.environ.get("P5_RAM") == "0" else "1"))
+    for flag in RAM_SWITCHES:       # each 1 moves one stage's functions to RAMTEXT (firmware/src/cr_ram.h); unset: 0
+        if os.environ.get(flag) == "1":
+            flags.append(f"-D{flag}=1")
+    if os.environ.get("CR_RAM_TABLES_P5") == "1":   # the four tables the P5 engine reads every sample in RAM .data,
+        flags.append("-DCR_RAM_TABLES_P5=1")        # 6.7 KB (build/gen/felucca_tables.h P5_TABLE)
     # the delay's and the reverb's rate (1 full, 2 half) and their loops in RAM (docs/FX.md "Half rate or full"): for
     # the builds that are measured against each other on the unit; unset: firmware/src/cr_fx.c's defaults
     for flag, ok in (("CR_FX_DELAY_DS", ("1", "2")), ("CR_FX_REVERB_DS", ("1", "2")), ("CR_FX_RAM", ("0", "1")),
@@ -295,6 +307,16 @@ def build_app(stub):
                        check=True)
         tc("cc", *[f for f in flags if not f.startswith(("-I", "-D", "-W"))], "-c",
            OUT / f"{UNIT}_size.ll", "-o", OUT / f"{UNIT}.o")
+    # Code in RAM: the functions the sources mark for each switch that is on (firmware/src/cr_ram.h CR_HOT_x) get
+    # their sections renamed in the object, .text.NAME -> .rhot.NAME, and app.ld links .rhot.* at RAMTEXT; the
+    # direct calls across are pointed at the veneers the switch compiled in (cr_ram.c). Nothing else is compiled
+    # differently. No switch: the object is not touched
+    hot = [n for names in ram_code.marks([f for f in RAM_SWITCHES if os.environ.get(f) == "1"]).values() for n in names]
+    if hot:
+        sizes, calls = ram_code.place(OUT / f"{UNIT}.o", hot)
+        print(f"ram: {len(sizes)} functions, {sum(sizes.values())} B, to RAMTEXT ("
+              + ", ".join(f for f in RAM_SWITCHES if os.environ.get(f) == "1") + "); calls across through a veneer: "
+              + (", ".join(f"{n} x{c}" for n, c in calls.items()) or "none"))
     elf = OUT / f"{UNIT}.elf"
     # --gc-sections (as the loader and the stub): the functions nothing refers to stay out (-ffunction-sections: the
     # engine's and the looper's API this unit does not call, fm1_vec.S's weak fault handler when cr_cpu1.h has its
@@ -313,6 +335,7 @@ def build_app(stub):
                                ("common/bin/objdump", "-d", "-j", ".ram_text", elf),
                                ("common/bin/objdump", "-h", elf))
     (OUT / f"{UNIT}.dis").write_text(dis)
+    (OUT / f"{UNIT}.sym").write_text(syms)          # (tools/ram_code.py cmp: which of the listing's labels are code)
 
     def symv(name):
         return int(re.search(r"^([0-9a-f]+) .*\s" + name + r"$", syms, re.M).group(1), 16)
@@ -360,11 +383,36 @@ def check(img, syms, dis, rt):
         errors.append(f"_start is not at {APP_XIP:#x}")
     if img[STUB_LEN:STUB_LEN + 4] != bytes.fromhex("04818000"):
         errors.append(f"the app starts with {img[STUB_LEN:STUB_LEN + 4].hex()}, not its entry (goto +4; rts)")
-    rt_calls = [ln for ln in rt.splitlines() if re.search(r"\bcall\b", ln)]
+    # .ram_text has two parts (firmware/app.ld). Below _rt_hot: the flash driver (and P5_RAM's loop), which runs
+    # with the flash off: no call at all. From _rt_hot: the audio code the CR_RAM_* switches moved; it runs with the
+    # flash on, calls its neighbours directly and XIP through a register (hal/fm1_cc.h FM1_FAR): a direct call or
+    # goto that leaves RAMTEXT cannot be encoded (the linker refuses it), checked here all the same
+    hot = re.search(r"^([0-9a-f]+) .*\s_rt_hot$", syms, re.M)
+    hot = int(hot.group(1), 16) if hot else 1 << 32
+    rt_lo, rt_calls, hot_n, hot_far, hot_out = [], [], 0, 0, []
+    for ln in rt.splitlines():
+        mm = LINE.match(ln)
+        if not mm:
+            continue
+        if int(mm.group(1), 16) < hot:
+            rt_lo.append(ln)
+            if re.search(r"\bcall\b", ln):
+                rt_calls.append(ln)
+            continue
+        hot_n += 1
+        hot_far += bool(re.search(r"\bcall r\d+", mm.group(3)))
+        for a in re.findall(r"(?:call|goto) -?\d+ <[^:>]*: ([0-9a-f]+) >", mm.group(3)):
+            if not 0x01C00000 <= int(a, 16) < 0x01C00000 + RAMTEXT_LEN:
+                hot_out.append(ln.strip())
     if rt_calls:                    # RAM code runs with the flash off: no calls into XIP
         errors.append(f".ram_text contains calls: {rt_calls[:3]}")
     else:
-        notes.append(f".ram_text: {len([ln for ln in rt.splitlines() if LINE.match(ln)])} insns, no calls")
+        notes.append(f".ram_text: {len(rt_lo)} insns, no calls")
+    if hot_out:
+        errors.append(f".rhot: a direct call or goto out of RAMTEXT: {hot_out[:3]}")
+    elif hot_n:
+        notes.append(f".rhot: {hot_n} insns from {hot:#x}, {hot_far} calls through a register, none direct out of "
+                     "RAMTEXT")
     for ln in dis.splitlines():     # nothing may call or load an address in the chip ROM
         mm = LINE.match(ln)
         if not mm:
@@ -385,6 +433,10 @@ def check(img, syms, dis, rt):
                  f"pool {pool} B of {0x54000}")
     if bss > 96 * 1024:
         errors.append("RAM region overflow")
+    rt_used = sym("_rt_end") - sym("_rt_start")   # .ram_text and .c1_text (the linker stops at the region's end)
+    if RAMTEXT_LEN - rt_used < RAMTEXT_SPARE:
+        errors.append(f"RAMTEXT {rt_used} B of {RAMTEXT_LEN}: under {RAMTEXT_SPARE} B spare (too many CR_RAM_* "
+                      "switches at once: docs/FX.md \"Code in RAM\")")
     if 0x54000 - pool < 8192:                     # keep >= 8 KiB of the pool spare
         errors.append(f"pool headroom {0x54000 - pool} B < 8192 B")
     return errors, notes

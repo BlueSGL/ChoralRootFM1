@@ -2,7 +2,9 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* The few libc routines the compiler may call implicitly (struct copies,
  * zeroing). Freestanding: no other libc. */
-void *memset(void *d, int c, unsigned n)
+#include "cr_ram.h"                /* (CR_HOT_VA: a marker, nothing for the compiler) */
+CR_HOT_VA void *memset(void *d, int c, unsigned n)   /* (in RAM with va_render, which clears 48 bytes with it every
+                                                     * voice and block; its other callers then come through a veneer) */
 {
     unsigned char *p = d;
     while (n--)

@@ -903,7 +903,8 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
 `cr_fx.c` (included by `fx.c` under `CR_FX 1`: `choralroot.c`, `tools/emu/emu_firmware.h`; Felucca's delay and ROOM /
 SPRING stay behind `CR_FX 0` for its own units and goldens). `fx_buses` keeps the chorus; `mix_block` then calls
 `xf_block(send_d, send_r, mix_l, mix_r)`: the delay at 44.1 kHz straight on its send, the reverb at 22.05 kHz between
-half-band filters (`CR_FX_DELAY_DS`, `CR_FX_REVERB_DS`; `CR_FX_RAM=1`: the four loops in `.ram_text`), the stereo wet
+half-band filters (`CR_FX_DELAY_DS`, `CR_FX_REVERB_DS`; `CR_FX_RAM=1`: the four loops in `.ram_text`; `CR_RAM_FX=1`:
+the whole stage, the chorus and the mix loops linked at RAM, docs/FX.md "Code in RAM"), the stereo wet
 into the mix before the FX layer's master effects and the limiter. **The sends are the parts'** (the owner,
 2026-10-12): `cr_bank.c param_kept` keeps `P_DIST .. P_REV` through every load, the chord part's are `cs.fx_amt[]`,
 the bass part's its `p[]` (session tags 26..29); the effects' parameters are `xfp[]` (16) and the chorus's two, in

@@ -237,6 +237,11 @@ Device estimate = host instructions / 100 x 1.7 % of the 2.9 ms half (docs/INTEG
   same script on MORPH PAD (PRESETS +40): 38 % / 54 %; on WIDE STRINGS (+42): 36 % / 52 %. The worst blocks fall at
   random times through the hold, the host's per-block noise also seen in scenarios (a)-(e). `poly` stays 8.
 - `tests/regress.c` (8 notes, one part): `cpu/VA/*` in `tests/cpu_baseline.txt`.
+- **On the unit the VA has no count to compare with** (docs/PROPHET.md "Counted"). Since 3y41 `CR_RAM_VA=1
+  ./build.sh` links `va_render` (8406 B: the oscillators and the filter are inlined in it), `va_morph`,
+  `va_render_mono` and `memset` at RAM instead of flash, the same instructions (docs/FX.md "Code in RAM", package
+  F): what executing from the flash costs a VA chord is `pk_part0_us` on F against A. `SINE` and `TANH_Q15`, which it
+  reads every sample, stay in flash. Not measured.
 - `tests/target_budget.txt`: `va_render` (now the stereo body, `render2`; `va_render_mono` is `render`'s wrapper),
   `va_block`. The static cost grew with the new loops (MORPH, BROWN, VINYL, the general filter loop): 72014 against
   32669; they are alternatives, one voice runs one of each.

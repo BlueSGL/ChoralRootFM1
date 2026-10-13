@@ -45,7 +45,7 @@ static uint32_t lfo_rand(track_t *t)
     return s;
 }
 
-static void track_lfo_tick(track_t *t)
+CR_HOT_CORE static void track_lfo_tick(track_t *t)
 {
     uint32_t old = t->lfo_ph;
     t->lfo_ph += LFO_INC[t->p[P_LRATE] & 127];
@@ -662,7 +662,7 @@ static uint8_t part_side_on;
 /* side / side_on: the part's stereo side (part_side, or core 1's own: fx.c); lfo_pre: 0 = tick the LFO here, else the
  * caller ticked it (before the hand-off to core 1, so the shared generator's draws keep one core's order: cr_cpu1.h)
  * and this is the value it had before, the one the block renders with */
-static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t *side_on, uint32_t n,
+CR_HOT_CORE static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t *side_on, uint32_t n,
                                const int32_t *lfo_pre)
 {
     const engine_t *e = ENGINES[t->engine];

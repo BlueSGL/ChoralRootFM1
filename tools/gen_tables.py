@@ -16,8 +16,9 @@ CTL = 32
 
 
 def arr(name, ctype, vals, per=12, ram=False):
-    """a table in flash (XIP, through the cache); ram: in RAM (.data), for lookups every sample"""
-    out = [f"static {'TABLE_RAM ' if ram else 'const '}{ctype} {name}[{len(vals)}] = {{"]
+    """a table in flash (XIP, through the cache); ram: in RAM (.data), for lookups every sample; ram a string: that
+    macro decides (P5_TABLE: const, or TABLE_RAM in a build with CR_RAM_TABLES_P5)"""
+    out = [f"static {ram + ' ' if isinstance(ram, str) else 'TABLE_RAM ' if ram else 'const '}{ctype} {name}[{len(vals)}] = {{"]
     for i in range(0, len(vals), per):
         out.append("    " + ", ".join(str(v) for v in vals[i:i + per]) + ",")
     out.append("};")
@@ -36,6 +37,13 @@ def main(path):
          "#define TABLE_RAM                 /* host builds: anywhere */",
          "#else",
          "#define TABLE_RAM __attribute__((section(\".data.tables\")))   /* RAM, not XIP flash: per-sample lookups */",
+         "#endif",
+         "/* the four tables the P5 engine reads every sample (5.4 KB): flash, or RAM .data in a device build with",
+         " * CR_RAM_TABLES_P5=1 (docs/FX.md \"Code in RAM\": a measurement) */",
+         "#if defined(CR_RAM_TABLES_P5) && CR_RAM_TABLES_P5",
+         "#define P5_TABLE TABLE_RAM",
+         "#else",
+         "#define P5_TABLE const",
          "#endif", ""]
     # (1025 points: SINE[i + 1] needs no wrap; the users mask)
     sine = [int(round(32767 * math.sin(2 * math.pi * i / 1024))) for i in range(1025)]
@@ -108,7 +116,8 @@ def p5_tables(fc):
     the remix that brought the engine here, docs/PROPHET.md "Where it comes from"). ChoralRoot's differences: only the 1x sample rate's coefficient table (Melodee also had P5_OVERSAMPLE 2's),
     and every table const, in flash as SINE is: Melodee put P5_EXP2_Q14, P5_TPT_G, P5_INV_DEN and P5_TANH_Q15 into a
     RAM section (.dsp_tables, 5.4 KB); here RAM is the tight region and the unit showed no gain from RAM for the
-    effects' loops (docs/FX.md CR_FX_RAM). ram=True on a table puts it in RAM if the unit says otherwise. A build
+    effects' loops (docs/FX.md CR_FX_RAM). The four are P5_TABLE: const, and RAM in a device build with
+    CR_RAM_TABLES_P5=1 (3y41: the unit did gain from RAM for this engine's code; the tables are measured apart). A build
     without the engine drops them (static const, unused)."""
     L = []
     L += [f"#define P5_KEYTRACK_HALF_Q7 {round(128 * 256 * 127 * math.log(2) / (2 * 192 * math.log(fc[-1] / fc[0])))}"]
@@ -134,14 +143,14 @@ def p5_tables(fc):
                                         for m in p5ms])
     L += arr("P5_ENV_SSM", "uint32_t", [max(1, int((1 << 24) * CTL / (3.6 * m * FS / 1000))) for m in p5ms], 8)
     # 2^(i/256), Q14: exponential pitch (wheel and Poly-Mod) at audio rate
-    L += arr("P5_EXP2_Q14", "uint16_t", [round(16384 * 2 ** (i / 256)) for i in range(257)])
+    L += arr("P5_EXP2_Q14", "uint16_t", [round(16384 * 2 ** (i / 256)) for i in range(257)], ram="P5_TABLE")
     # Four TPT poles at the sample rate (Melodee's P5_OVERSAMPLE 1 table).
     L += arr("P5_TPT_G", "uint16_t", [round(4096 * math.tan(math.pi * f / FS) / (1 + math.tan(math.pi * f / FS)))
-                                      for f in fc])
-    L += arr("P5_INV_DEN", "uint16_t", [round((8192 * 4096) / (4096 + i * 32)) for i in range(257)])
+                                      for f in fc], ram="P5_TABLE")
+    L += arr("P5_INV_DEN", "uint16_t", [round((8192 * 4096) / (4096 + i * 32)) for i in range(257)], ram="P5_TABLE")
     # Nearest 32-unit lookup: <17 Q15 units of error, with the same tanh knee.
     # Distributed SSI saturation invokes this seven times per audio sample.
-    L += arr("P5_TANH_Q15", "int16_t", [int(32767 * math.tanh(i / 2048 * 2)) for i in range(2049)])
+    L += arr("P5_TANH_Q15", "int16_t", [int(32767 * math.tanh(i / 2048 * 2)) for i in range(2049)], ram="P5_TABLE")
     return L
 
 
