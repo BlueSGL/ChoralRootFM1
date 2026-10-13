@@ -1915,3 +1915,12 @@ runs them twice; both are kept. (e) The host instruction counts with limits move
 work: `mod_test`'s "every slot active" read +3.7 to +4.2 % in four runs against +4.0 % alone (limit +5 %).
 **Not tested**: Linux (the scripts are POSIX sh; `sha256sum` or `shasum`), a machine with few cores, `PAR_JOBS=1`
 for `run_tests.sh` whole, an interrupted run (Ctrl-C) beyond reading the code.
+
+3y37. **The installer page published for 0.21 from a branch (2026-10-13; the owner: "publish").** main is 0.22 in
+development (Numerals), and pages.yml builds the browser emulator from the ref it is given: built from main the site's
+emulator would have shown an unreleased feature under 0.21. So the site was built from `site-0.21` (2d88365: the tag
+v0.21 plus `web/index_pkg.html` and `web/test_installer.mjs` of a8ab0a6, the return to the official V15 reporting in
+its own section), dispatched with version 0.21 and that commit as ref. Checked live: the installer page has the stock
+section's bar, `firmware/SHA256SUMS` is unchanged (0.21: 93bbfe14...). Not done: an install or a return to stock from the
+live page on a real FM-1. The rule for next time: a page change between releases is published from a branch cut at the
+released tag, not from main, whenever main's firmware is ahead of the release.
