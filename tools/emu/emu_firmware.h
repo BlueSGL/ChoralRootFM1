@@ -126,6 +126,7 @@ static void mix_block(int32_t *out, uint32_t n)        /* the audio ISR's block:
 #include "../../firmware/src/cr_gfx.c"                /* (includes build/gen/cr_fonts.h) */
 #include "../../firmware/src/cr_draw.c"               /* (includes cr_screen.h) */
 #include "../../firmware/src/cr_anim.c"
+#define ST_AHEAD 1                                    /* (choralroot.c's: the erase ahead) */
 #include "../../firmware/src/storage.c"               /* (before the sounds: upreset.c's banks, the loop slots) */
 #define CR_TRACE 1                                    /* cr_ui.c: "param: / page: / save: .." lines in the logs */
 #include "../../firmware/src/cr_favs.c"               /* the favourites (before the sounds) */

@@ -18,7 +18,9 @@
  *                        scheduled note, the master output below -60 dBFS), never while a loop plays
  *                        (CR_SETTINGS_BUSY()), retried after a flash error. A flash erase holds every IRQ for ~45 ms
  *                        with the audio buffer zeroed (storage_hw.c st_erase): saved under a sounding chord it was a
- *                        46 ms hole with a click at each edge (docs/INTEGRATION.md, Performance). What is written:
+ *                        46 ms hole with a click at each edge (docs/INTEGRATION.md, Performance). Since 0.22 the
+ *                        erase is done AHEAD (power-on, a long idle) and the write only programs: "THE QUIET WRITES"
+ *                        below, storage.c st_write_due / st_ahead_due. What is written:
  *                        flash's block with the automatic fields as they are now; the MANUAL fields stay what the
  *                        last global save wrote
  *   cr_settings_save()   the automatic part now (Felucca's settings_save: the calibration, a backup's LIST, the
@@ -553,13 +555,14 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
 #ifndef CR_SETTINGS_BUSY
 #define CR_SETTINGS_BUSY() 0                       /* (cr_ui.c defines it: a loop is playing, no flash erase) */
 #endif
-#define CRS_QUIET_MS 1500u                         /* an automatic change is saved once nothing changed for this long */
-#define CRS_IDLE_MS 1000u                          /* .. and nothing sounded for this long (crs_sounding) */
+#define CRS_QUIET_MS ST_SETTLE_MS                   /* an automatic change is saved once nothing changed for this long */
+#define CRS_IDLE_MS ST_SILENT_MS                   /* .. and nothing sounded for this long (crs_sounding); storage.c
+                                                    * st_write_due has the whole rule (the quiet writes, 0.22) */
 #define CRS_QUIET_PEAK 32                          /* the master output (audio.c scope_buf, Q15): -60 dBFS */
 
 #include "settings_persist.c"                      /* Felucca's record, PER5: its last member is cr_settings_t */
 
-#define CSS_GAP_MS 250u                            /* an automatic write waits this long after another object's */
+#define CSS_GAP_MS ST_GAP_MS                       /* an automatic write waits this long after another object's */
 
 static persist_t crs_rec;                          /* the last record read or written (Felucca's fields + ours) */
 static cr_settings_t crs_seen;                     /* the last captured state (change detection) */
@@ -590,6 +593,10 @@ static int8_t css_last_rc;                         /* the session at power-on: 1
                                                     * that does not belong to these settings (not applied) */
 static uint32_t crs_wr_ms;
 static uint32_t css_saves;                         /* flash writes done (diagnostics, the emulator) */
+/* the quiet writes (0.22; storage.c "erase ahead", docs/SETTINGS.md "When flash is written"): what the poll wrote by
+ * itself (an Option's change, a favourite's), the erases done ahead (at power-on, after a long idle), and the erase
+ * ahead given up for this power-on after a flash error (the saves then erase for themselves, as before 0.22) */
+static struct { uint32_t auto_saves, ahead, ahead_boot; uint8_t off; } crq;
 
 /* the USB settings to usb.c (which devices the host is given; ua_off at boot, usb_start builds the configuration)
  * and fx.c (USB Level) */
@@ -1164,19 +1171,115 @@ static int crs_sounding(void)
 }
 
 
+/* THE QUIET WRITES (0.22; the owner, 2026-10-13, on the build with the favourites' filter: "I am now getting lots of
+ * audio glitches and dropouts now"; the unit: 9 erases, irq_gap_us 17 851 at st_erase's return, stale_halves 46).
+ * Until then every automatic write erased a sector (storage.c st_save: one erase a save, the interrupts masked for
+ * 17.8 ms), a second after the output fell silent: where the next note is. Now (storage.c has the rule and the
+ * writer's side): the spare copy of the settings, the session and the favourites is erased AHEAD (st_prep): at
+ * power-on before the audio starts (crs_ahead_boot) and after ST_AHEAD_IDLE_MS without a sound and without input
+ * (crs_ahead_poll), so a save finds it blank and only programs; a change that comes before the next erase ahead
+ * (the spare is the copy written a moment ago) waits for ST_ERASE_IDLE_MS of the same instead of one silent second.
+ * Input is cu.last_input (cr_ui.c: a key, a button, a knob, a MIDI channel message). What is lost if the power is
+ * cut meanwhile: the Options and the marks changed since the last write (SAVE held writes them at once) */
+static void crs_when(st_when_t *w, uint32_t change_ms, uint32_t obj)
+{
+    w->now = fm1_ms;
+    w->change = change_ms;
+    w->loud = crs_loud_ms;
+    w->input = cu.last_input;
+    w->wrote = crs_wr_ms;
+    w->busy = (uint8_t)(CR_SETTINGS_BUSY() != 0);
+#if FELUCCA_FLASH
+    w->ready = (uint8_t)st_ready(obj);
+#else
+    w->ready = 1;
+    (void)obj;
+#endif
+}
+#if FELUCCA_FLASH
+#ifdef CR_FAVS
+static const uint8_t CRQ_OBJ[] = {OBJ_SETTINGS, OBJ_SESSION, OBJ_FAVS};
+#else
+static const uint8_t CRQ_OBJ[] = {OBJ_SETTINGS, OBJ_SESSION};
+#endif
+#endif
+/* power-on, after the objects were read and before the audio starts (cr_shim.c persist_boot): each spare copy that
+ * is not blank is erased now, when nothing can be heard (a unit coming from an older firmware, or switched off before
+ * the idle erase: at most three erases, about 18 ms each, and for each object the read of one sector) */
+static void crs_ahead_boot(void)
+{
+#if FELUCCA_FLASH
+    uint32_t i;
+    if (!flash_ok)
+        return;
+    st_ahead_ok[3] = 1;                            /* (the emulator's flash model: no audio to stall yet) */
+    for (i = 0; i < sizeof CRQ_OBJ; i++) {
+        int rc = st_prep(CRQ_OBJ[i]);
+        if (rc > 0) {
+            crq.ahead++;
+            crq.ahead_boot++;
+        } else if (rc < 0 && !ST_BLOCKED()) {
+            crq.off = 1;
+        }
+    }
+    st_ahead_ok[3] = 0;
+#endif
+}
+/* every UI frame, after the writes: ONE erase ahead when the unit has been idle long enough (st_ahead_due) and the
+ * object has nothing to write (a pending write goes first: st_write_due). The input and the sound are read here, in
+ * the same frame, so an input before the erase starts cancels it; once started it runs to its end */
+static void crs_ahead_poll(void)
+{
+#if FELUCCA_FLASH
+    uint32_t i;
+    if (crq.off || !flash_ok)
+        return;
+    for (i = 0; i < sizeof CRQ_OBJ; i++) {
+        st_when_t w;
+        int rc;
+        if (st_ready(CRQ_OBJ[i]))
+            continue;
+        if (CRQ_OBJ[i] == OBJ_SETTINGS && crs_pending)
+            continue;
+#ifdef CR_FAVS
+        if (CRQ_OBJ[i] == OBJ_FAVS && crf_dirty)
+            continue;
+#endif
+        crs_when(&w, fm1_ms, CRQ_OBJ[i]);
+        if (!st_ahead_due(&w))
+            return;
+        st_auto = 1;
+        rc = st_prep(CRQ_OBJ[i]);
+        st_auto = 0;
+        crs_wr_ms = fm1_ms;
+        if (rc > 0)
+            crq.ahead++;
+        else if (rc < 0)
+            crq.off = 1;                           /* a flash error: no erase ahead until the next power-on */
+        return;
+    }
+#endif
+}
+
 /* the favourites (cr_favs.c): a mark that changed is written as an Option is: once no mark changed for CRS_QUIET_MS
- * and nothing sounded for CRS_IDLE_MS, never while a loop plays or after a restore; a flash error: again in a second.
- * (Marked while a chord rings, the write waits for the quiet: the erase would be a 45 ms hole in it) */
+ * and nothing sounded for CRS_IDLE_MS (and, when the write has to erase, no input came for ST_ERASE_IDLE_MS:
+ * st_write_due), never while a loop plays or after a restore; a flash error: again in a second.
+ * (Marked while a chord rings, the write waits for the quiet) */
 static uint32_t crf_retry_ms;
 static uint8_t crf_failed;
 static void crf_poll(void)
 {
 #ifdef CR_FAVS
-    if (!crf_dirty || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - crf_change_ms) < CRS_QUIET_MS ||
-        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS ||
-        (crf_failed && (uint32_t)(fm1_ms - crf_retry_ms) < 1000u))
+    st_when_t w;
+    if (!crf_dirty || (crf_failed && (uint32_t)(fm1_ms - crf_retry_ms) < 1000u))
         return;
+    crs_when(&w, crf_change_ms, OBJ_FAVS);
+    if (!st_write_due(&w))
+        return;
+    st_auto = 1;
     crf_failed = crf_flush() != 0;
+    st_auto = 0;
+    crq.auto_saves += (uint32_t)!crf_failed;
     crf_retry_ms = crs_wr_ms = fm1_ms;
 #endif
 }
@@ -1185,6 +1288,7 @@ static void crf_poll(void)
 static void cr_settings_poll(void)
 {
     cr_settings_t now;
+    st_when_t w;
     if (!crs_loaded)
         return;
     if (crs_sounding())
@@ -1204,16 +1308,25 @@ static void cr_settings_poll(void)
         crs_hold_seen = settings_hold;
         return;
     }
-    if (!crs_pending || CR_SETTINGS_BUSY() || (uint32_t)(fm1_ms - crs_change_ms) < CRS_QUIET_MS ||
-        (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS)
+    crs_ahead_poll();
+    if (!crs_pending || (crs_pending == 2u && (uint32_t)(fm1_ms - crs_retry_ms) < 1000u))
         return;
-    if (crs_pending == 2u && (uint32_t)(fm1_ms - crs_retry_ms) < 1000u)
+    crs_when(&w, crs_change_ms, OBJ_SETTINGS);
+    if (!st_write_due(&w))
         return;
-    if (crs_write(0) == 0) {
-        crs_pending = 0;
-    } else {
-        crs_pending = 2;                           /* flash error: retry in a second */
-        crs_retry_ms = fm1_ms;
+    {
+        uint32_t n = crs_saves;
+        int rc;
+        st_auto = 1;
+        rc = crs_write(0);
+        st_auto = 0;
+        crq.auto_saves += crs_saves - n;           /* (a block that came out unchanged: no write) */
+        if (rc == 0) {
+            crs_pending = 0;
+        } else {
+            crs_pending = 2;                       /* flash error: retry in a second */
+            crs_retry_ms = fm1_ms;
+        }
     }
 }
 

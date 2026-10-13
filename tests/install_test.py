@@ -553,7 +553,7 @@ def debug():
        "started at most 640 us behind its boundary, its longest half took 3350 us with TIMER5 nested in it (410 us" in out and
        "once came 1130 us after the one before: masked for about 1030 us, until 0x0200B2C4" in out,
        "--debug: when the ISR got to start (PEAK's values 25..30): the stale halves, the lag, TIMER5, the masked stretch")
-    ok(rc == 0 and len(I.DEBUG_PEAK) == 34 and "key_ons" not in out and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
+    ok(rc == 0 and "key_ons" not in out and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
        "worst half since the last --debug: 2580 us of 2902 (88 %) over 34500 halves" in out and
        "late 12 (the latest: 2950 us, its largest stage fx)" in out and
        "down 40 / 110, delay 90 / 200, reverb 300 / 520, up 35 / 90" in out and
@@ -565,6 +565,17 @@ def debug():
        "key_eng_us 5400" in out and "keys: 212 note-ons since the last --debug" in out and
        "posted one after 3.1 ms at most, the engine had it after 2.6 ms on average, 5.4 ms at most" in out,
        "--debug: the keys' way to the engine (PEAK's values 31..34): the note-ons, the main loop's and the engine's times")
+    ok("erases_near" not in out and "quiet writes" not in out, "--debug: a firmware of 34 PEAK values: no word of the quiet writes")
+    cr.peak += [7, 3, 0, 612]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 38 and "saves_auto 7" in out and "erases_ahead 3" in out and "erases_near 0" in out and
+       "flash_prog_us 612" in out and "quiet writes since power-on: 7 saves by the unit itself (Options, favourites), 3 of "
+       "the 14 erases done ahead" in out and "0 erases started by the unit while a voice was active or within 2 s of an "
+       "input (the rule: 0), the longest page program 612 us" in out and "NEAR PLAYING" not in out,
+       "--debug: the quiet writes (PEAK's values 35..38): the unit's own saves, the erases ahead, those near playing, a page's time")
+    cr.peak[36] = 2
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "erases_near 2" in out and "AN ERASE FELL NEAR PLAYING" in out, "--debug: an erase near playing is said loudly")
     cr.peak = None
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")

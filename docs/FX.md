@@ -265,7 +265,8 @@ the numbers are that stretch's):
 | `pk_late`, `pk_late_stage`, `pk_late_us` | late halves; the latest one's largest stage (1 tick .. 6 wait) and its time |
 | `pk_halves`, `fx_busy_halves` | halves counted; halves in which the effects ran |
 | `fx_down_avg_us` / `_max_us`, `fx_delay_*`, `fx_reverb_*`, `fx_up_*` | inside the fx stage, over `fx_busy_halves`: the sends' down-sampler, the delay, the reverb, the wet's up-sampler |
-| `flash_erases`, `flash_holes`, `saves_settings`, `saves_session` | since power-on: erases (46 ms of silence each), erases into an output above -60 dBFS (the rule: 0), saves |
+| `flash_erases`, `flash_holes`, `saves_settings`, `saves_session` | since power-on: erases (17.8 ms measured on the unit, the interrupts masked and the buffer silenced; the emulator's model and the data sheet: 45), erases into an output above -60 dBFS (the rule: 0), saves |
+| `saves_auto`, `erases_ahead`, `erases_near`, `flash_prog_us` | **the quiet writes** (0.22, docs/SETTINGS.md "When flash is written"), since power-on: the saves the unit did by itself (an Option's, a favourite's); the erases done ahead (at power-on before the audio starts, then after 10 s without a sound or an input); the erases the unit started by itself while a voice was active or within 2 s of an input (**the rule: 0**; SAVE held, a sound's or a loop's save are the player's and are not counted); the longest page program in us (the driver's wait for the chip, the interrupts masked; the page's SPI transfer before it is not in it) |
 | `stale_halves` | **the audible ones**: halves in which the DAC played something old (a boundary nobody served, or a half finished after the DAC had reached it). The rule: 0 |
 | `pk_lag_us` | the furthest the ISR started behind its boundary (an estimate: "Late is not slow") |
 | `pk_wall_us`, `pk_t5_us` | the longest half by the clock, TIMER5 nested in it (`pk_block_us` leaves TIMER5 out), and the most TIMER5 took of one half |
@@ -401,8 +402,8 @@ count is the lag: a half that starts 600 us behind and renders 2400 is as late a
 
 | What | How long (read from the code and the flash's data sheet; not measured) | When |
 | --- | --- | --- |
-| a flash erase (`storage_hw.c st_erase`) | 45 ms by the data sheet, the buffer silenced first; **the unit read `irq_gap_us` 17 783 in a session with a favourite's write (2026-10-13): 17.8 ms is, by inference, one sector erase** (six halves nobody served: `stale_halves` counts them, and they are silence) | a store's sector fills; never into a sounding output for the settings and the session (`flash_holes`) |
-| a flash page program (`fm1_flash.h fl_write`, 256 bytes a go) | ~1 ms each, one after the other with a gap | every save: settings, session, a loop, a user sound |
+| a flash erase (`storage_hw.c st_erase`) | 45 ms by the data sheet, the buffer silenced first; **the unit read `irq_gap_us` 17 783 and 17 851 (2026-10-13), the second with `irq_gap_pc` 0x02014E9E: in that build's listing the instruction after `st_erase`'s `sti`, behind its call of `fl_erase4k_ram`: 17.8 ms is one sector erase**, five or six halves nobody served (`stale_halves` counts them: 9 erases read 46; they are silence) | EVERY save of a `storage.c` object erased its copy first until 0.22. Since then (docs/SETTINGS.md "When flash is written"): the settings', the session's and the favourites' erases are done ahead, at power-on before the audio starts and after 10 s without a sound or an input; a save of those that still has to erase waits for 4 s of the same when the unit writes by itself (`erases_near`: 0), and SAVE held erases at once. A user sound's, a patch store's and a loop slot's save erase as before (the player's own act) |
+| a flash page program (`storage_hw.c st_prog`, `fm1_flash.h fl_write`; 256 bytes a go) | ~1 ms each by the driver's comments (3 ms the generic maximum), one after the other with the interrupts open between; `flash_prog_us` is the unit's own longest (not read yet) | every save: settings (4 pages), session (5), favourites (3), a loop, a user sound |
 | a flash read through the driver (`st_read`, 256 bytes a go) | ~0.5 ms each | loading a stored loop or record |
 | TIMER5, above the audio ISR (the key and LED scan, USB audio's endpoint, the MIDI in): 10 kHz | not known: `pk_t5_us` is its share of the worst half (29 ticks) | always |
 | the USB recording's service inside the ISR, interrupts off (`ua_isr_service`, `ua_audio`) | under 100 us a block | a computer records |
@@ -620,7 +621,7 @@ again. The peaks are the worst half since the last read, so play the same thing 
 - **E**: CZ-1 on the chord part, eight keys (`python3 tools/cz_pop_check.py --play` plays it): `pk_part0_us` against
   A's with the same playing, and against the count's 630.
 - **F**: a VA chord and bass (LUSH PAD). **G**: an FM6 chord. `pk_part0_us` against A's with the same playing.
-- With every package: `pk_late`, `stale_halves` (the rule: 0), `flash_erases`, `flash_holes` (the rule: 0).
+- With every package: `pk_late`, `stale_halves` (the rule: 0), `flash_erases`, `flash_holes` (the rule: 0), `erases_near` (the rule: 0).
 
 Nothing here has run on a unit but A (as 40acb01 + `P5_RAM=1`).
 

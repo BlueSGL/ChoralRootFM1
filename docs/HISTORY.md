@@ -2211,3 +2211,71 @@ line); every other screen is pixel for pixel 40acb01's.
 is cached: by construction, not measured); a version-1 reader against an object over 96 bytes (read from its code;
 96 bytes: run on the host); favourites in the web Sound Manager; the browser emulator's own test has no favourites
 case; `tools/emu/perf.sh`.
+3y43. **The quiet writes: the erase taken out of every automatic save (2026-10-13; 0.22 in development; on p5-g
+after 74eae04; not on a unit).** The owner, on 74eae04's build (`P5_SHIPPED=all`, sha256 64bc2532..), marking, typing
+and filtering favourites across engines while playing: "The filter and menu changes works good. I am now getting lots
+of audio glitches and dropouts now, even with older engines like FM6." The unit after that session (`--debug`, 3352 s
+of running): `flash_erases` 9, `flash_holes` 0, `irq_gap_us` 17 851 at `irq_gap_pc` 0x02014E9E, `stale_halves` 46,
+`pk_block_us` 2785 of 2902, `pk_late` 6 (largest stage fx), `pk_wait_us` 1042, `pk_lag_us` 2358, `pk_wall_us` 3095,
+`c1_state` 1 with `c1_jobs` 4 632 372 (Dual Core On), 320 note-ons.
+**The facts, from the code.** `storage.c st_save`: ONE ERASE A SAVE, always (the copy that is not current is erased,
+then programmed; HANDOFF 30 and docs/FX.md said "when a sector fills": wrong). A favourites change: 1 erase + 2
+payload pages (1 up to 256 bytes; the object is 2 to 262) + the commit record, in 0xB6000 / 0xB7000 in turn. An
+Option: 1 erase + 4 programs (0xFC000 / 0xFD000). SAVE held: the settings and the session (1 + 5; 0xB4000 /
+0xB5000), each only if it changed, a pending favourite, and the loop slot (its own writer, `cr_ui.c`). The erase:
+`storage_hw.c st_erase`, `cli`, the buffer zeroed, `fl_erase4k_ram` waits for the chip, `sti`: 17.8 ms on the unit.
+A page: `fl_prog_ram`, a masked stretch of its own each, the interrupts open between; about 1 ms by the driver's
+comments (3 ms "generic NOR max", a 10 ms time-out), never measured. 0x02014E9E: the package rebuilt from 74eae04 is
+the same sha256, and in its listing the address is the instruction after `st_erase`'s `sti` (`2014e98 call r2`,
+`csync`, `sti`, `2014e9e r1 = r0`): the gap IS the erase's wait. Nothing writes without a change: `crf_touch` is
+the only setter of `crf_dirty` (a mark, a type, the filter; the filter's generation counter writes nothing), a
+version-1 object is rewritten by the next change only, the Options' poll writes when an automatic field differs and
+`crs_write` skips an unchanged block, the session is SAVE held's alone. Several changes inside 1.5 s are one write.
+**The reading.** 17.75 ms masked against a half of 2.902 ms: the entry after it is 14.85 to 17.75 ms behind its
+boundary, so `cr_prof_entry` counts 5 unserved boundaries, 6 in about one erase of eight; a first half after it that
+starts more than 2.1 ms behind adds one. 9 erases: 45 to 54; read: 46. The stale halves are the erases'. Nine
+settled changes in 56 minutes of organising favourites is what a player does. **What does not follow**: that the
+nine holes are everything he heard. `flash_holes` 0 says each began with the output under −60 dBFS; such a hole is
+heard as a note that comes in it (the keys are not scanned for 18 ms: late; or cut, when it started between the
+poll's look and the erase) or as the end of a tail. "Lots", and FM6: the same reading has the worst half at 96 % of
+the budget and 6 late; two halves in a row above 85 % fade a voice (`audio.c shed_check`), a drop-out that no flash
+counter shows. `pk_wait_us` 1042 is core 0 waiting for the bass part on core 1 (its render less the chord part's):
+normal with a heavy bass sound (P5's bass measured 1.3 ms in 3y41), and `c1_jobs` / 4 is every half of the 3352 s:
+no job was refused. A slow job makes the half long, and a long half can be stale; those would be in the same 46.
+**Built** (docs/SETTINGS.md "When flash is written"). `storage.c`: `st_prep(obj)` makes the copy that is not
+current blank (reads the whole sector; erases it if any byte is not 0xFF; reads it back); `st_save` reads its
+target sector and programs without erasing only when it is all 0xFF, for the settings, the session and the
+favourites (`st_ahead_ix`; `ST_AHEAD` 1 in `choralroot.c`, 0 for Felucca's own tests); `st_write_due` /
+`st_ahead_due`, the schedule, pure. `cr_settings.c`: `crs_ahead_boot` (from `persist_boot`, before the audio and
+before core 1 start: at most three erases), `crs_ahead_poll` (one erase after 10 s without a sound and without
+input, 250 ms between objects; an input in that frame puts it off), `crf_poll` and the Options' poll through
+`st_write_due` (1.5 s settled, 1 s silent, and, when the write has to erase, 4 s without sound or input). SAVE held,
+a backup's LIST and the update gesture write at once as before, programming only when the copy is blank. The
+format, the map and the commit protocol are unchanged; wear is unchanged (one erase a write, moved).
+**The counters**: `saves_auto`, `erases_ahead`, `erases_near` (the unit's own erases started with a voice active or
+within 2 s of an input: 0), `flash_prog_us`, PEAK's values 35..38 (`cr_backup.c crb_peak`, `tools/fm1_install.py`:
+a line "quiet writes since power-on"; docs/FX.md).
+**Tests.** `tests/storage_test.c` (+25 checks: a blank spare is programmed; the stale copy alone is erased; a
+program-only save cut at every byte; an erase ahead cut at every 32nd byte; a sector blank only in its first pages;
+rubbish with no valid copy; erase errors and write protection; the stores untouched; 74eae04's writer, copied into
+the test, on this one's flash and back; the schedule at each edge and walked in time: a mark and a note 1.6 s
+later, a mark under a note, five marks one write, a second mark before the erase ahead, an input 9.9 s into the
+idle twice, no power-on erase). `tests/cr_settings_test.c` (the three objects), `tests/cr_favs_test.c` (a blank
+copy: no erase), `tests/cr_backup_test.c` (38 values), `tests/install_test.py` (the four names, the line, an erase
+near playing said loudly). The emulator's flash model counts every erase, the masked time, the erases near playing
+and when the last one started (`emu_hal_fw.h`; the dump's `quiet writes:` line); `tools/emu/test_persist.sh` with
+`quiet_writes.txt`, `quiet_writes_boot.txt`, `quiet_writes_save.txt` (8 new checks: a mark and a chord 1.6 s later
+with no erase; the third mark waiting; written 6.2 s after the last input; the erase ahead 12.2 s after it; a knob
+every 6 s keeps it away; the power-on erase with no stall; SAVE held three times under a chord erases at once on
+the third). Five older checks of `test_persist.sh` counted an erase a save and now read none (a new unit's blank
+copies).
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders, 0 changed; 0 lint findings; test_cr 943 ok, test_persist 106 ok, test_retired 18 ok. Size: XIP
+511 684 B (89.2 %; +1 120), RAM 81 732 (+32), POOL 316 064 (the same).
+**Package** for the unit, `P5_SHIPPED=all`: the main checkout's
+`build/scratch/p5-fav/choralroot-p5-quietwrites-all200.fwsc`, 610 313 B, sha256 4268ac82..; XIP 525 604 B (91.7 %).
+**Not done / not tested**: anything on a unit: the page program's time (`flash_prog_us`), the power-on's cost
+(about 25 ms with blank spares, about 100 ms with three erases: by reading), an erase ahead beside USB recording,
+whether the glitches are gone. A second erase after a power-on that did not finish its own. The load (`pk_block_us`
+2785, `voices_shed`): not looked into. `tools/emu/perf.sh`. The emulator's model keeps 45 ms an erase and takes
+1 ms a page.

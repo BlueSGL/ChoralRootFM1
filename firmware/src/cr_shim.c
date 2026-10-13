@@ -63,6 +63,8 @@ static void persist_boot(void)         /* before settings_init / panel_init (pro
 #if CR_HAVE_SETTINGS
     CR_STAGE(BS_SETTINGS);
     cr_settings_boot();                                    /* the settings record with ChoralRoot's block */
+    crs_ahead_boot();                                      /* the quiet writes: the spare copies erased now, before
+                                                            * the audio starts (cr_settings.c; SAFE MODE: nothing) */
 #endif
 #endif
 }

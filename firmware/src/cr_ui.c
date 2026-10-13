@@ -1188,6 +1188,13 @@ static void cu_pick_end(int keep);
 static void cu_epk_commit(void);
 static uint32_t cu_layer(void);
 static uint32_t cu_now(void) { return fm1_ms; }
+/* storage_hw.c st_erase (78 PEAK erases_near): an erase the unit starts by itself now would be near playing: a voice
+ * of the parts is active, the engine holds a chord or has a note scheduled, or the last input (a key, a button, a
+ * knob, a MIDI message: the screensaver's clock) is less than 2 s old */
+static inline int cr_erase_near(void)
+{
+    return cr_parts_busy() || cr_snap.voices || cr_snap.pending || (uint32_t)(cu_now() - cu.last_input) < 2000u;
+}
 /* the Full keyboard's split point is a KEY: F4, the second F (key 12: F3..E4 left, F4..G5 right; the owner's,
  * 2026-10-11), fixed: the stored split point (cs.split, OPT + KNOB 1) is a pitch class and stays the Chords layout's,
  * untouched (Split Oct and Split Bass there: the roots whose pitch class is below it, in every octave). The engine

@@ -225,6 +225,9 @@ static void mix_block(int32_t *out, uint32_t n)   /* the audio ISR's block: the 
 #include "cr_anim.c"
 #if FELUCCA_FLASH                /* storage before the sounds: upreset.c reads / writes its banks */
 #include "fm1_flash.h"
+static int cr_erase_near(void);  /* cr_ui.c: a voice is active or an input came within 2 s (78 PEAK erases_near) */
+#define ST_NEAR_NOW() cr_erase_near()
+#define ST_AHEAD 1               /* storage.c: the settings', the session's and the favourites' spare copies erased ahead */
 #include "storage_hw.c"
 #include "storage.c"
 #endif

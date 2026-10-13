@@ -33,6 +33,7 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 #define __attribute__(x)
 #define FELUCCA_CZ 1                               /* ChoralRoot's object list: the session's object (OBJ_SESSION) */
 #define FELUCCA_QUAD 1
+#define ST_AHEAD 1                                 /* (choralroot.c's: the erase ahead) */
 #include "../firmware/src/storage.c"
 #undef __attribute__
 
@@ -699,6 +700,14 @@ static void t_flash(void)
        "flash: after a torn save the previous copy is in charge");
     ok(st_save(OBJ_SETTINGS, &s, sizeof s) == 0 && st_load(OBJ_SETTINGS, &r, sizeof r) == (int)sizeof r &&
        cr_settings_import(&r, &r, sizeof r) == 1 && r.bpm == 160, "flash: the next save wins");
+    /* the quiet writes (storage.c "erase ahead"; its states and its schedule: tests/storage_test.c): in ChoralRoot's
+     * object list the settings, the session and the favourites, and no store */
+    ok(st_ahead_ix(OBJ_SETTINGS) == 0 && st_ahead_ix(OBJ_SESSION) == 1 && st_ahead_ix(OBJ_FAVS) == 2 &&
+       st_ahead_ix(OBJ_QUADSTORE) < 0 && st_ahead_ix(OBJ_UPRESET0) < 0 && st_ahead_ix(OBJ_FM6BANK) < 0 &&
+       st_ahead_ix(OBJ_CZSTORE1) < 0 && st_ahead_ix(OBJ_PROJECT0) < 0, "flash: erased ahead: settings, session, favourites");
+    ok(st_prep(OBJ_SETTINGS) == 1 && st_ready(OBJ_SETTINGS) && st_load(OBJ_SETTINGS, &r, sizeof r) == (int)sizeof r &&
+       cr_settings_import(&r, &r, sizeof r) == 1 && r.bpm == 160 && st_prep(OBJ_SESSION) == 0 && st_prep(OBJ_FAVS) == 0,
+       "flash: the stale copy erased ahead, the settings read as before");
 }
 
 /* version 8 (docs/LOOPER-MODES.md): the record mode and the PLAY menu's keys in loop_rec (rsv_usb before) */
