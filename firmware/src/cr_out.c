@@ -365,6 +365,7 @@ enum {
     CRE_BASS_VOICING, /* v: +-steps */
     CRE_PANIC,
     CRE_PLAYSTYLE, CRE_EXTADD, CRE_SECRET,
+    CRE_SIXTH,        /* v: Options > 6th with 7th: 1 Octave up (cr_set_sixth_up) */
     CRE_KEYMODE,      /* a: on, b: tonic, v: scale */
     CRE_TRANSPOSE,    /* v */
     CRE_BASS, CRE_BASS_MODE,
@@ -499,6 +500,7 @@ static void cr_apply(const cr_ev_in_t *e)
     case CRE_PLAYSTYLE: cr_set_playstyle(&cr, (cr_playstyle_t)e->v); break;
     case CRE_EXTADD: cr_set_ext_addition(&cr, (cr_extadd_t)e->v); break;
     case CRE_SECRET: cr_set_secret(&cr, (cr_secret_t)e->v); break;
+    case CRE_SIXTH: cr_set_sixth_up(&cr, e->v); break;
     case CRE_KEYMODE: cr_set_key(&cr, e->a, e->b, (cr_scale_t)e->v); break;
     case CRE_TRANSPOSE: cr_set_transpose(&cr, e->v); break;
     case CRE_BASS: cr_set_bass(&cr, e->v); break;

@@ -89,7 +89,16 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
  * Rate 44.1 kHz) until those are set there */
 #define CRS_NAMES_STD 0x08u
 #define CRS_NAMES(s) (((unsigned)(s)->pick_roots & CRS_NAMES_STD) ? 1u : 0u)
-#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD)   /* the byte's automatic bits (cr_settings_auto) */
+/* Options > 6th with 7th (0.20; docs/CHORD-NAMES.md "The 6th above a seventh") rides in bit 4 of the same byte: set =
+ * Octave up (a chord with the 6 and a seventh plays its 6th an octave higher, a 13th), clear = In place (the Orchid's,
+ * the default: the owner, "Let's add as option you can turn on, defaulted off"). Once more: 0 in every older record
+ * and 0 is the default, so no version and nothing to migrate. A firmware up to this option (0.19: range 0..7; a 0.20
+ * build of before it: 0..15) finds 16..31 out of range and takes its own default for the WHOLE byte: with this bit
+ * set it reads Output Clean, USB Rate 44.1 kHz and Chord Names Orchid until they are set there (and its next save
+ * writes that); with it clear the byte is in its range and is read as before */
+#define CRS_SIXTH_UP 0x10u
+#define CRS_SIXTH(s) (((unsigned)(s)->pick_roots & CRS_SIXTH_UP) ? 1u : 0u)
+#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD | CRS_SIXTH_UP)   /* the byte's automatic bits (cr_settings_auto) */
 
 typedef struct {
     /* header (12 bytes) */
@@ -164,7 +173,7 @@ void cr_settings_seal(cr_settings_t *s);         /* header + checksum, before it
 int  cr_settings_equal(const cr_settings_t *a, const cr_settings_t *b);   /* the payloads */
 /* Saving is manual since 0.18 (the owner, 2026-10-11; docs/SETTINGS.md "Manual and automatic"): the block holds two
  * kinds of field. AUTOMATIC: what the Options menu alone sets (Play Style, Extension Addition, Secret Chords, Velocity,
- * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, Chord Names, LEDs, USB Record, USB Level, USB Rate, Dual Core, Output; the palette, which
+ * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, Chord Names, 6th with 7th, LEDs, USB Record, USB Level, USB Rate, Dual Core, Output; the palette, which
  * has no control), written by itself when the unit is quiet. MANUAL: everything else, how the instrument is set to
  * play, written only by the global save (SAVE held). cr_settings_auto copies the automatic fields of *src into *dst
  * and leaves dst's manual ones (not sealed): flash's block with the Options as they are now is what an automatic

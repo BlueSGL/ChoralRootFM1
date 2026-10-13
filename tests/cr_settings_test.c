@@ -329,9 +329,9 @@ static void t_version(void)
     s.pick_roots = 0;
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 0, "pick_roots 0 (the roots play) kept");
-    s.pick_roots = 17;
+    s.pick_roots = 33;
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range (bit 4 up): the default");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range (bit 5 up): the default");
     /* 0.19: Options > Output in bit 1 of that byte (CRS_OUT_CLASSIC): clear = Clean, the default and every older
      * record's; set = Classic, kept beside the retired bit 0 */
     cr_settings_defaults(&s);
@@ -453,6 +453,104 @@ static void t_version(void)
         o2.pick_roots = 0;
         cr_settings_auto(&m2, &o2);
         ok(m2.pick_roots == 1u, "  and cleared the same way");
+    }
+    /* 0.20: Options > 6th with 7th in bit 4 of the same byte (CRS_SIXTH_UP): clear = In place, the default and every
+     * older record's (the Orchid's: the 6th under the seventh); set = Octave up. No version: nothing to migrate
+     * (docs/CHORD-NAMES.md "The 6th above a seventh") */
+    cr_settings_defaults(&s);
+    ok(CRS_SIXTH(&s) == 0u && CRS_VERSION == 15u, "6th with 7th: the default is In place; the record's version is still 15");
+    cr_settings_factory(&s);
+    ok(CRS_SIXTH(&s) == 0u, "6th with 7th: Reset Settings' record is In place");
+    cr_settings_defaults(&s);
+    s.pick_roots = CRS_SIXTH_UP;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SIXTH(&r) == 1u && CRS_NAMES(&r) == 0u && CRS_OUT_CLEAN(&r) == 1u && CRS_USB48(&r) == 0u,
+       "6th with 7th Octave up (bit 4 of pick_roots) round-trips; Chord Names still Orchid, Output Clean, USB Rate 44.1 kHz");
+    s.pick_roots = CRS_SIXTH_UP | CRS_NAMES_STD | CRS_USB_48K | CRS_OUT_CLASSIC | 1u;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SIXTH(&r) == 1u && CRS_NAMES(&r) == 1u && CRS_USB48(&r) == 1u && CRS_OUT_CLEAN(&r) == 0u &&
+       r.pick_roots == 31u, "6th with 7th, Chord Names, USB Rate, Output Classic and the retired picker bit together: the five kept");
+    {
+        uint32_t k, good = 0;                              /* what 0.17 .. 0.20 before the option wrote there: 0 .. 15 */
+        for (k = 0; k < 16u; k++) {
+            cr_settings_defaults(&s);
+            s.pick_roots = (uint8_t)k;
+            cr_settings_seal(&s);
+            good += cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SIXTH(&r) == 0u && r.pick_roots == k;
+        }
+        ok(good == 16u, "a record of before the option (the byte 0..15): 6th with 7th In place, its other bits as they were");
+    }
+    {
+        uint32_t v, good = 0;                              /* every older version's record: In place */
+        for (v = 1; v < CRS_VERSION; v++) {
+            cr_settings_defaults(&s);
+            s.pick_roots = v < 3 ? 0 : 1;
+            s.version = (uint16_t)v;
+            for (h = 2166136261u, i = 12; i < CRS_SIZE; i++) { h ^= ((uint8_t *)&s)[i]; h *= 16777619u; }
+            s.check = h;
+            good += cr_settings_import(&r, &s, sizeof s) != 0 && CRS_SIXTH(&r) == 0u;
+        }
+        ok(good == CRS_VERSION - 1u, "records of versions 1..14: all read 6th with 7th In place");
+    }
+    {
+        cr_settings_t m2, o2;
+        cr_settings_defaults(&m2);
+        cr_settings_defaults(&o2);
+        m2.pick_roots = 1;
+        o2.pick_roots = CRS_SIXTH_UP;
+        cr_settings_auto(&m2, &o2);
+        ok(m2.pick_roots == (CRS_SIXTH_UP | 1u), "6th with 7th is automatic (an Option): saved by itself, bit 4 alone taken");
+        o2.pick_roots = 0;
+        cr_settings_auto(&m2, &o2);
+        ok(m2.pick_roots == 1u, "  and cleared the same way");
+    }
+    {   /* the record -> the engine and back (cr_settings_apply / cr_settings_capture): it is the engine's setting */
+        cr_t E;
+        cr_settings_t t;
+        uint8_t nn[CR_CHORD_MAX];
+        int k;
+        cr_init(&E, 0);
+        ok(E.sixth_up == 0, "the engine: In place after cr_init");
+        cr_settings_defaults(&s);
+        s.pick_roots = CRS_SIXTH_UP | CRS_NAMES_STD | CRS_OUT_CLASSIC;
+        cr_settings_apply(&s, &E, 0);
+        cr_loop_event(&E, 0, 60, CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, 100, 1);
+        k = cr_chord_base_ex(60, CR_Q_MAJ, CR_EXT_6 | CR_EXT_M7, E.sixth_up, nn);
+        ok(E.sixth_up == 1 && k == 5 && nn[4] == 81 && E.v[CR_MAX_VOICES + CR_MAX_PADS].notes[4] == 81,
+           "a record with the bit applied: the engine plays C7 6 with its 6th at 81 (A5)");
+        t = s;
+        cr_settings_capture(&t, &E, 0);
+        ok(CRS_SIXTH(&t) == 1u && t.pick_roots == s.pick_roots, "  captured: the bit set, the byte's other bits as they were");
+        cr_set_sixth_up(&E, 0);
+        cr_settings_capture(&t, &E, 0);
+        ok(CRS_SIXTH(&t) == 0u && t.pick_roots == (CRS_NAMES_STD | CRS_OUT_CLASSIC), "  In place captured: bit 4 alone cleared");
+        cr_settings_defaults(&s);
+        cr_set_sixth_up(&E, 1);
+        cr_settings_apply(&s, &E, 0);
+        ok(E.sixth_up == 0, "a record without the bit applied over Octave up: In place (GLO + SAVE, Reset Settings, a backup put back)");
+    }
+    {   /* what an older firmware does with the byte (docs/SETTINGS.md): its crs_sanitize was CRS_FIX(pick_roots, 0, hi)
+         * with hi 1 up to 0.18, 7 in 0.19, 15 in the 0.20 builds of before this option: a value above hi becomes that
+         * firmware's default for the whole byte, 1. This is the rule, modelled; the old binaries were not run */
+        static const uint8_t HI[3] = { 1, 7, 15 };
+        uint32_t k, hi, lost = 0, same = 0, wrong = 0;
+        for (hi = 0; hi < 3u; hi++)
+            for (k = 0; k < 32u; k++) {
+                uint8_t old = (uint8_t)(k > HI[hi] ? 1u : k);
+                cr_settings_t o;
+                cr_settings_defaults(&o);
+                o.pick_roots = old;
+                if (k & CRS_SIXTH_UP) {            /* Octave up set here: the old firmware reads the byte's default */
+                    if (old == 1u && CRS_OUT_CLEAN(&o) == 1u && CRS_USB48(&o) == 0u && CRS_NAMES(&o) == 0u) lost++;
+                    else wrong++;
+                } else if (k <= HI[hi]) {          /* In place here and nothing newer than it knows: as it wrote it */
+                    if (old == k) same++;
+                    else wrong++;
+                }
+            }
+        ok(!wrong && lost == 3u * 16u && same == 2u + 8u + 16u,
+           "an older firmware (the rule of 0.18, 0.19, 0.20 before the option): with Octave up set it finds the byte out of range and "
+           "takes its default (Output Clean, USB Rate 44.1 kHz, Chord Names Orchid, the 6th in place); with In place it reads its own bits as before");
     }
     /* a version-3 record (written before the USB audio settings: zeros in their place, which would read as the
      * recording off) */
@@ -1190,9 +1288,9 @@ static void t_auto(void)
         cr_settings_auto(&z, &y);                  /* 0xFF where automatic */
         if (((const uint8_t *)&z)[i] == 0xFF) nauto++;
         else if (((const uint8_t *)&z)[i] == 0x00) nman++;
-        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 .. 3, Output, USB Rate, Chord Names) */
+        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 .. 4, Output, USB Rate, Chord Names, 6th with 7th) */
     }
-    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3)\n", (unsigned)nauto,
+    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3, 6th with 7th in bit 4)\n", (unsigned)nauto,
            (unsigned)nman, (unsigned)both);
     ok(nauto == 17u && both == 2u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and two bits of the block's 180 are automatic");
     m = b;

@@ -1,10 +1,10 @@
-# test_persist.sh, Hold Time run 1: Options (OPT), SELECT +16: Hold Time, KNOB 1 +2: 400 -> 600 ms, and nothing else
+# test_persist.sh, Hold Time run 1: Options (OPT), SELECT +17: Hold Time, KNOB 1 +2: 400 -> 600 ms, and nothing else
 # (HOLD is Felucca's field of the settings record, not ChoralRoot's block: docs/SETTINGS.md), OCT-; the record saved
 # past the quiet time; quit
 wait 500
 btn GLO 80
 wait 300
-knob SELECT +16
+knob SELECT +17
 wait 300
 knob KNOB1 +2
 wait 400

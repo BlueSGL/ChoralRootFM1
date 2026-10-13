@@ -570,6 +570,8 @@ void emu_fw_dump(void)
                (unsigned)t.pick_roots);
         printf("  chord-names: standard %u (Options > Chord Names; the engine's %d; the record's bit %u)\n",
                (unsigned)cs.names_std, cr_chord_names(), (unsigned)CRS_NAMES(&t));
+        printf("  sixth: up %u (Options > 6th with 7th; the engine's %u; the record's bit %u)\n",
+               (unsigned)cs.sixth_up, (unsigned)cr.sixth_up, (unsigned)CRS_SIXTH(&t));
         printf("  clean: look-ahead %u samples, the limiter's gain %d of 32768\n", (unsigned)CLN_LA, (int)cln_g);
         printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "
                "view %u chord-sound %04X slot %u pending %u  panel %08X\n",

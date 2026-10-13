@@ -16,6 +16,7 @@ static const uint16_t CR_QUALITY[CR_Q_COUNT] = { 0, 0x6303, 0x7303, 0x7403, 0x75
 
 /* Extension intervals in mask-bit order 6, m7, M7, 9 (ORCHID_FIRMWARE_REFERENCE.md 6.2, high-confidence). */
 static const uint8_t CR_EXT_IV[4] = { 9, 10, 11, 14 };
+#define CR_SIXTH_UP_IV 21        /* the 6th an octave up: the 13th (cr_chord_base_ex) */
 
 /* Key Mode rule table (design.md 10.3/10.4): one byte per pitch class, relative to the tonic. Low 3 bits =
  * quality (1 dim, 2 min, 3 maj, 4 sus); bits 3-4 = root shift (0 none, 8 down, 16 up). Diatonic degrees keep
@@ -184,7 +185,14 @@ static void crx_cancel(cr_t *c, uint8_t owner)
 }
 
 /* ====================================================== chord tables === */
-int cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CHORD_MAX])
+/* sixth_up (Options > 6th with 7th: Octave up; docs/CHORD-NAMES.md "The 6th above a seventh"): a chord with the 6 AND
+ * a seventh (m7, M7 or both) has its 6th an octave higher, 21 semitones above the root instead of 9: the 13th, above
+ * the 9th's 14. Every chord type alike (the secret ones and DIM, where it is the 13th of a half-diminished chord);
+ * without a seventh (C6, C6/9) and for a single note nothing moves. It is done here, before the voicing, so KNOB 1
+ * rotates it as the top note it is. Where root + 21 would leave 0..127 the 6th stays in place (the 9th up there is
+ * dropped by the range rule below; a 6th that has a place inside the range keeps it): the same number of notes as
+ * Off, always */
+int cr_chord_base_ex(int root_note, uint8_t quality, uint8_t ext, int sixth_up, uint8_t out[CR_CHORD_MAX])
 {
     uint8_t iv[CR_CHORD_MAX];
     int ni = 0, n = 0, j, k;
@@ -195,7 +203,13 @@ int cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CH
             int dup = 0;
             if (!(ext & (1u << k))) continue;
             for (j = 0; j < ni; j++) if (iv[j] == CR_EXT_IV[k]) dup = 1;
-            if (!dup && ni < CR_CHORD_MAX) iv[ni++] = CR_EXT_IV[k];
+            if (!dup && ni < CR_CHORD_MAX) {
+                iv[ni] = CR_EXT_IV[k];
+                if (sixth_up && k == 0 && (ext & (CR_EXT_M7 | CR_EXT_MAJ7)) && root_note + CR_EXT_IV[0] >= 0 &&
+                    root_note + CR_SIXTH_UP_IV <= 127)
+                    iv[ni] = CR_SIXTH_UP_IV;         /* (a 6th the range drops in place is not brought back either) */
+                ni++;
+            }
         }
     } else {
         iv[ni++] = 0;   /* single note */
@@ -206,6 +220,10 @@ int cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CH
         if (nn >= 0 && nn <= 127) out[n++] = (uint8_t)nn;
     }
     return n;
+}
+int cr_chord_base(int root_note, uint8_t quality, uint8_t ext, uint8_t out[CR_CHORD_MAX])
+{
+    return cr_chord_base_ex(root_note, quality, ext, 0, out);
 }
 
 /* voicing: lowest note +12 / highest -12, k steps from the unvoiced base; a step leaving 0..127 stops
@@ -281,7 +299,7 @@ static void crx_build_base(const cr_t *c, cr_voice_t *v)
     v->rq = (uint8_t)q;
     v->root = (int16_t)root;
     v->pc = (uint8_t)pc;
-    v->nbase = (uint8_t)cr_chord_base(root + v->transpose, (uint8_t)q, v->sx, v->base);
+    v->nbase = (uint8_t)cr_chord_base_ex(root + v->transpose, (uint8_t)q, v->sx, c->sixth_up, v->base);
 }
 
 /* ======================================================= performance === */
@@ -1126,6 +1144,9 @@ void cr_set_playstyle(cr_t *c, cr_playstyle_t p)
     crx_clear_free_voices(c);
 }
 void cr_set_ext_addition(cr_t *c, cr_extadd_t e) { c->extadd = (uint8_t)(e == CR_EXTADD_PLAY_CHORD); }
+/* Options > 6th with 7th (0.20): the chords built from now on (a key, a pad, a loop step, a chord key's change of a
+ * held chord); a chord that sounds keeps its notes, and its note-offs are its owners' own, whatever this says then */
+void cr_set_sixth_up(cr_t *c, int on) { c->sixth_up = (uint8_t)(on != 0); }
 void cr_set_secret(cr_t *c, cr_secret_t s) { if ((int)s >= CR_SECRET_OFF && (int)s <= CR_SECRET_ALL) c->secret = (uint8_t)s; }
 void cr_set_key(cr_t *c, int enabled, uint8_t tonic_pc, cr_scale_t scale)
 {
@@ -1249,7 +1270,7 @@ void cr_pad_down(cr_t *c, int slot)
     v->root = d->root;
     v->serial = ++c->serial;
     v->gid = ++c->gid;
-    v->nbase = (uint8_t)cr_chord_base(d->root + v->transpose, d->q, d->x, v->base);
+    v->nbase = (uint8_t)cr_chord_base_ex(d->root + v->transpose, d->q, d->x, c->sixth_up, v->base);
     v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, c->voicing, v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
@@ -1319,7 +1340,7 @@ int cr_loop_event_v(cr_t *c, int lv, int16_t root, uint8_t q, uint8_t ext, uint8
     v->sq = v->rq = q; v->sx = (uint8_t)(ext & 15u);
     v->root = root;
     v->serial = ++c->serial;
-    v->nbase = (uint8_t)cr_chord_base(root, q, v->sx, v->base);
+    v->nbase = (uint8_t)cr_chord_base_ex(root, q, v->sx, c->sixth_up, v->base);
     if (voic != CR_VOIC_FOLLOW && q != CR_Q_NONE && !v->zone) {   /* the step's own voicing (a chord's only) */
         v->loop |= CR_LOOP_FIXV;
         voic = crx_clamp(voic, CR_VOICE_MIN, CR_VOICE_MAX);

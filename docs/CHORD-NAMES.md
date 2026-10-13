@@ -2,8 +2,9 @@
 
 Files: `firmware/src/cr_engine.c` (`cr_chord_name`, the one function every screen names a chord through;
 `crx_name_std`, `crx_figure`), `firmware/src/cr_draw.c` (`cr_name`: how the three strings are drawn),
-`firmware/src/cr_ui.c` (the Options entry), `tests/cr_engine_test.c` (`s_names_std`: this document's table, cell for
-cell), `tests/cr_draw_test.c` ("chord names": the fit), `tools/emu/scripts/cr_chord_names.txt`.
+`firmware/src/cr_ui.c` (the Options entries), `tests/cr_engine_test.c` (`s_names_std`: this document's table, cell for
+cell; `s_sixth_tables`, `s_sixth`: the 6th above a seventh), `tests/cr_draw_test.c` ("chord names": the fit),
+`tools/emu/scripts/cr_chord_names.txt`, `tools/emu/scripts/cr_sixth.txt`.
 
 **Options > Chord Names: Orchid / Standard** (0.20). Orchid is the default.
 
@@ -23,6 +24,10 @@ can add option for the chord names but I would prefer we match the ORC-1 by defa
 and extension bits, and is named when it is shown), a MIDI byte or a saved sound. Switching the option renames what
 is on the screen at once, the last chord included.
 
+A second option, **Options > 6th with 7th: In place / Octave up** (0.20), is the one that changes a note: with it on,
+the 6th of a chord that also has a seventh sounds an octave higher, as a 13th. It is off by default and has its own
+section: [The 6th above a seventh](#the-6th-above-a-seventh-options--6th-with-7th). It changes no name.
+
 ## What sounds
 
 The names are derived from the engine's tables (`cr_engine.c`), not from the buttons' labels:
@@ -36,13 +41,13 @@ The names are derived from the engine's tables (`cr_engine.c`), not from the but
 | MAJ + SUS (secret) | 0 4 8 (augmented) |
 | DIM + SUS (secret) | 0 7 12 (the power chord: root, fifth, octave) |
 | MIN + SUS (secret) | 0 3 5 (`m add4`: **no fifth**) |
-| 6 | adds 9, under every chord (a major sixth: under a minor chord `m6`, under a diminished one the diminished seventh) |
+| 6 | adds 9, under every chord (a major sixth: under a minor chord `m6`, under a diminished one the diminished seventh); with Options > 6th with 7th at Octave up and a seventh held: adds 21 instead |
 | 7 (the m7 key) | adds 10, under every chord (a minor seventh: under a diminished chord that is half-diminished, `m7b5`, not `dim7`) |
 | M7 | adds 11 |
 | 9 | adds 14, always a major ninth, always in the octave above |
 
 An extension is added once, in the octave the table says. The notes are then voiced (KNOB 1) without changing the
-name.
+name. The tables below give the notes with 6th with 7th at In place, the default.
 
 ## Standard's rules
 
@@ -71,9 +76,11 @@ name.
    `JAZZ` or `WTF`: the 14 other `JAZZ` cells (7 + 6 + 9 and M7 + 6 + 9) are `13` and `M13`.
 7. **Sharps**, as before: `C#`, `D#`, `F#`, `G#`, `A#`.
 
-**The 13 names a sixth voiced inside the octave.** The engine plays the 6th where it always did, a major sixth above
-the root, under the seventh; the Orchid does not raise it and this option changes no voicing. `C13` here is "a C7
-with its 6th", not a promise of a note above the octave. See "Open questions".
+**The 13 names a sixth voiced inside the octave, unless you ask for the octave.** By default the engine plays the
+6th where it always did, a major sixth above the root, under the seventh; the Orchid does not raise it and Chord
+Names changes no voicing: `C13` is then "a C7 with its 6th", not a promise of a note above the octave. With
+**Options > 6th with 7th** at Octave up the 6th of such a chord is 21 semitones above the root and `C13` names a real
+13th (the next section). The two options are independent: either naming with either voicing.
 
 **One name, one set of notes**, with one exception: `13` stands for the chord with and without its 9th (12 pairs:
 six qualities, the minor and the major seventh). And one name says less than it could: the Min + Sus chord has no
@@ -304,24 +311,115 @@ sevenths cells), so no layout had to change for Standard. Two things were found 
 - With the superscript whole, the longest names ran off Geek Out's left edge (centred on x 70 with 224 px of room:
   `G#m add4 JAZZ` began at x -7). Geek Out's room is 132 px now; a name up to 132 px wide is drawn as before.
 
+## The 6th above a seventh: Options > 6th with 7th
+
+**Options > 6th with 7th: In place / Octave up** (0.20), the entry after Secret Chords. In place is the default.
+
+The user who asked for Standard names: "it would be nice if the 6th was played an octave higher if either 7th is
+enabled (effectively making it a 13th chord)". The owner: "Let's add as option you can turn on, defaulted off."
+
+- **In place** (the default): the 6 key adds 9 semitones, always. This is what the Orchid does and what every version
+  up to 0.19 did; nothing changes if the option is left alone (bit for bit: below).
+- **Octave up**: when a chord has the 6 **and** at least one seventh (the 7 key, M7, or both), the 6th is 21 semitones
+  above the root instead of 9: the same note an octave higher, the chord's 13th. Everything else is as before.
+
+Root C4, KNOB 1 (Voicing) at 0. The names are the same under either value (Orchid: `C7 6`; Standard: `C13`).
+
+| Buttons | In place | Octave up |
+| --- | --- | --- |
+| MAJ + 7 + 6 | C4 E4 G4 **A4** A#4 (0 4 7 9 10) | C4 E4 G4 A#4 **A5** (0 4 7 10 21) |
+| MAJ + M7 + 6 | C4 E4 G4 **A4** B4 (0 4 7 9 11) | C4 E4 G4 B4 **A5** (0 4 7 11 21) |
+| MIN + 7 + 6 | C4 D#4 G4 **A4** A#4 (0 3 7 9 10) | C4 D#4 G4 A#4 **A5** (0 3 7 10 21) |
+| MAJ + 7 + 6 + 9 | C4 E4 G4 **A4** A#4 D5 (0 4 7 9 10 14) | C4 E4 G4 A#4 D5 **A5** (0 4 7 10 14 21) |
+| DIM + 7 + 6 | C4 D#4 F#4 **A4** A#4 (0 3 6 9 10) | C4 D#4 F#4 A#4 **A5** (0 3 6 10 21) |
+| MAJ + 6, MAJ + 6 + 9 (no seventh) | C4 E4 G4 A4 (D5) | the same |
+
+### What it does and does not touch
+
+- **Which chords.** Every chord type with the 6 and a seventh: 7 types x 6 extension sets (6 + 7, 6 + M7, 6 + 7 + M7,
+  each with or without the 9) = 42 of the 112 chords. A chord without a seventh is never touched: `C6` and `C6 9`
+  stay close.
+- **The 9.** The 9th is at 14, the raised 6th at 21: the 13th sits above the 9th, the conventional stacking, and is
+  the chord's top note.
+- **DIM.** Raised too. Alone, the 6 on a diminished triad is the diminished seventh (`Cdim7`) and stays where it is;
+  with the 7 key the chord is half-diminished and Standard already calls the 9-semitone note its 13th (`Cm13b5`). One
+  rule for every type reads and sounds the same everywhere, and it takes the semitone between the 6th and the
+  seventh out of this chord as out of the others. DIM + M7 + 6 (`CdimM13`) follows the same rule.
+- **The secret chords** (`+`, `5`, `m add4`): raised, by the same rule. The power chord with 7 + 6 is C4 G4 A#4 C5 A5.
+- **Both sevenths at once** (`7 M7` with the 6: `JAZZ`, `WTF`): raised ("either seventh").
+- **A single note** (no chord type, Key Mode off): extensions never applied to it; nothing changes.
+- **Key Mode.** The scale chooses the chord's type; the extensions are added as held, in either setting (they were
+  never corrected to the scale), so the raised note is the same pitch class as before.
+- **The voicing (KNOB 1).** The 6th is raised before the voicing arranges the chord, so the knob treats it as the
+  top note it is, as it treats the 9th: one step down moves the 13th down an octave (which gives In place's notes at
+  0), one step up moves the root up under it. A loop step's own voicing works the same way. At every position the
+  two settings have the same pitch classes and the same number of notes; away from the ends of the range they
+  differ by exactly one note, an octave apart.
+- **Split / Octave** (Single Notes): those settings move single notes only, so they do not meet this one.
+- **The top of the range.** A note above MIDI 127 does not exist. Where root + 21 would be above it (a root above
+  A#7, MIDI 106) the 6th stays in place rather than disappear. The engine's rule for a note out of range is to leave
+  it out (the 9th of such a chord already is); the 6th has a place inside the range, so it keeps it. The number of
+  notes is the same as In place for every root. KNOB 1's own rule (a step that would leave 0 .. 127 stops the
+  rotation) applies to the raised note as to any other.
+- **Voices.** The same number of notes: no extra voice.
+- **The bass part.** Unaffected: it plays the root.
+- **Strum, Slop, Harp, the arp, patterns.** They walk the chord's notes, so the raised 6th is where it sounds: last
+  and highest going up. A pattern's step that names "the fourth note" plays the fourth note of the chord as it is now
+  (in `C7 6` that was the 6th and is the seventh with Octave up).
+- **MIDI out, the Raw Chord stream, the key LEDs, the Notes and Geek Out views' lists.** All are the engine's notes,
+  so they agree. The key LEDs light a sounding note's key in both octaves of the keyboard, so the same keys are lit
+  under either value.
+- **The looper.** A loop stores a chord as root, type and extension bits, never as notes, so a recorded `C7 6` is
+  played by the setting **at the moment each step is struck**: a loop recorded In place plays Octave up once the
+  option says so, and back. That is how a loop already follows the live voicing, Extension Addition, the Perform mode
+  and the sound. Nothing is rewritten in the loop.
+- **When a change takes effect.** With the next chord that is built: a new press, a pad, a loop step, or a chord key
+  changing a held chord (Advanced / Free). A chord that is sounding keeps its notes, and its note-offs are for the
+  notes it started: nothing hangs when the option is turned under a held or latched chord.
+- **The names.** Unchanged in both namings: Orchid `C7 6` (it names the keys), Standard `C13`. With In place,
+  Standard's `13` names a 6th voiced inside the octave; with Octave up it names a 13th.
+
+### How it is built
+
+`cr_engine.c cr_chord_base_ex(root, type, extensions, sixth_up, out)`: the one place a chord's notes come from. With
+`sixth_up` the 6's interval is 21 instead of 9 when a seventh's bit is set and `root + 9 >= 0`, `root + 21 <= 127`.
+`cr_chord_base` is the same with `sixth_up` 0 (main's function, unchanged). The three callers (a key, a pad, a loop
+voice) pass `cr_t.sixth_up`, set by `cr_set_sixth_up` (the engine's event `CRE_SIXTH` from the Options,
+`cr_settings_apply` at power-on, a revert and a reset). The byte sits in what was padding: `cr_t` has the size it
+had.
+
+**Cost.** Note selection when a chord is built, never per sample: nothing in the audio path, `.ram_text` unchanged.
+Flash +368 B (`.text` 468064), RAM +0, POOL +0.
+
+**In place is main's, bit for bit.** `tests/cr_engine_test.c`: 8 types x 16 extension sets x 28 roots against a copy
+of main's builder, each voiced at 13 KNOB 1 positions; 5600 chords through a loop voice, a loop step with its own
+voicing, a pad and the keys. Every emulator script's WAV against a build of `git archive e51baa5`: HISTORY 3y30.
+
+**Stored** in bit 4 of the settings block's `pick_roots` byte (`cr_settings.h CRS_SIXTH_UP`; set = Octave up), beside
+Output, USB Rate and Chord Names: docs/SETTINGS.md. No record version: the bit is 0 in every older record and 0 is
+the default. An Option, so it is saved by itself; Reset Settings puts it back to In place. **Going back to an older
+firmware with Octave up set**: that firmware finds the byte out of its range and takes its default for the whole
+byte, so Output reads Clean, USB Rate 44.1 kHz and Chord Names Orchid there until they are set again. With In place
+set the older firmware reads the byte as before.
+
 ## Where the option is stored
 
 Bit 3 of the settings block's `pick_roots` byte (`cr_settings.h CRS_NAMES_STD`; set = Standard), beside Output
-(bit 1) and USB Rate (bit 2): docs/SETTINGS.md. No record version: the bit is 0 in every older record and 0 is the
+(bit 1) and USB Rate (bit 2), and 6th with 7th (bit 4): docs/SETTINGS.md. No record version: the bit is 0 in every older record and 0 is the
 default, Orchid. An Option, so it is saved by itself. The engine is told through `cr_chord_names_set` (a byte of its
 own in `cr_engine.c`, not part of `cr_t`: nothing that plays reads it).
 
 ## Open questions (the owner's)
 
-1. **The 6th an octave higher when a seventh is held.** The same user: "it would be nice if the 6th was played an
-   octave higher if either 7th is enabled", which would make the `13` a real 13th (21 semitones above the root
-   instead of 9, above the 9th's 14). Not built: it changes what sounds and what a stored loop step plays, the
-   Orchid does not do it, and the owner did not ask for it. If wanted it is one line in `cr_chord_base` (the 6's
-   interval 9 -> 21 when a seventh's bit is set) plus the goldens, and a question of its own: for both settings or
-   for Standard only (a naming option that changes the sound would be a surprise).
-2. **`C` for the major triad in Standard.** Kept as `CM` (above). `C` would need the single note to read
+(The 6th an octave higher when a seventh is held was question 1 here: built as an option of its own, for both
+namings: [The 6th above a seventh](#the-6th-above-a-seventh-options--6th-with-7th).)
+
+1. **`C` for the major triad in Standard.** Kept as `CM` (above). `C` would need the single note to read
    differently where both are named (its octave, `C4`, as the notes list writes it).
-3. **`13` with and without the 9th.** `C13` is both MAJ + 7 + 6 and MAJ + 7 + 6 + 9. `C7add13` for the first would
+2. **`13` with and without the 9th.** `C13` is both MAJ + 7 + 6 and MAJ + 7 + 6 + 9. `C7add13` for the first would
    tell them apart, at 7 characters of superscript.
-4. **The Min + Sus chord's missing fifth.** `Cmadd4` (as Orchid's `Cm add4`); `Cm(add4,no5)` would be exact and
+3. **The Min + Sus chord's missing fifth.** `Cmadd4` (as Orchid's `Cm add4`); `Cm(add4,no5)` would be exact and
    would not fit.
+4. **6th with 7th: a held chord and the option.** A chord that sounds keeps its notes when the option is turned;
+   the next chord has the new setting. Re-striking held chords at the turn (as KNOB 1 does) would let the two be
+   compared without lifting a finger, at the price of a re-attack; not built.

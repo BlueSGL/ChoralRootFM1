@@ -187,17 +187,25 @@ installed on the owner's Mac.
     recording having run on the builds before. Not read on a build with 2489a89: `pk_t5_us` idle about 32 and
     playing no higher than 214, `ua_svc_t5` still counting (the endpoint is served from TIMER5), `irq_gap_us` about 340 as before.
 
-24. **Chord names: the owner's four questions** (docs/CHORD-NAMES.md "Open questions"; HISTORY 3y28). Options >
-    Chord Names (0.20): Orchid, the default, or Standard (lead-sheet names; display only). Open: the same user's
-    second wish, the 6th an octave higher when a seventh is held (a change of what sounds: not built); whether
-    Standard should write the major triad `C` (it keeps `CM`, because a single note reads `C` on every screen);
-    `C13` standing for the chord with and without its 9th; `Cmadd4` not saying that its fifth is missing.
+24. **Chord names: the owner's questions** (docs/CHORD-NAMES.md "Open questions"; HISTORY 3y29, 3y30). Options >
+    Chord Names (0.20): Orchid, the default, or Standard (lead-sheet names; display only). The same user's second
+    wish, the 6th an octave higher when a seventh is held, is built as **Options > 6th with 7th** (In place, the
+    default / Octave up; HISTORY 3y30): **not heard by the owner yet** (the listening files are in
+    `../audio-0.20/sixth/`), and not played on the unit. Open: whether Standard should write the major triad `C` (it
+    keeps `CM`, because a single note reads `C` on every screen); `C13` standing for the chord with and without its
+    9th; `Cmadd4` not saying that its fifth is missing; whether turning 6th with 7th should re-strike a chord that
+    is held (today it acts from the next chord on).
 
 ### 0.20: in progress
 
-- **Options > Chord Names** (docs/CHORD-NAMES.md; HISTORY 3y28): bit 3 of the settings block's `pick_roots`, no
-  record version. The Options have 25 entries now (Chord Names is entry 14, after Motion): the emulator scripts
-  that walk to a later entry count one more step than 0.19's.
+- **Options > Chord Names** (docs/CHORD-NAMES.md; HISTORY 3y29): bit 3 of the settings block's `pick_roots`, no
+  record version.
+- **Options > 6th with 7th** (docs/CHORD-NAMES.md "The 6th above a seventh"; HISTORY 3y30): In place (default,
+  main's notes bit for bit) / Octave up (a chord with the 6 and a seventh plays its 6th 21 semitones above the
+  root). The engine's (`cr_t.sixth_up`, `cr_chord_base_ex`), bit 4 of `pick_roots`, no record version; an older
+  firmware that meets the bit resets that byte (Output, USB Rate, Chord Names to their defaults there).
+- The Options have 26 entries now (6th with 7th is entry 3, after Secret Chords; Chord Names entry 15, after
+  Motion): the emulator scripts that walk to an entry from Velocity on count two more steps than 0.19's.
 
 ### 0.19: what shipped (the section that was "For 0.19"; (b) is still CZ-1)
 

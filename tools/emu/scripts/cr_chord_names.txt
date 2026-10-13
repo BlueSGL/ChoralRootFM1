@@ -1,5 +1,5 @@
 # ChoralRoot 0.20: Options > Chord Names (docs/CHORD-NAMES.md): Orchid, the default (the ORC-1's naming), or Standard
-# (lead-sheet names of the notes that sound). The entry after Motion (14). The three chords of the user's letter:
+# (lead-sheet names of the notes that sound). The entry after Motion (15). The three chords of the user's letter:
 # A + 7 + 9, A + 9, Asus + 7 + 9 (chord keys: G3 = 7, A#3 = MAJ, C4 = 9, C#4 = SUS; root A4), read in the dump's
 # "cr: voices" line (the engine's name and notes) and "frame:" line (the name on the screen).
 # tools/emu/test_cr.sh reads the dumps by number:
@@ -35,7 +35,7 @@ btn C#4 up
 wait 600
 btn GLO 80                    # Options > Chord Names
 wait 300
-knob SELECT +14
+knob SELECT +15
 wait 300
 dump                          # 4
 shot build/emu/test/cr_chord_names_opt_orchid.ppm

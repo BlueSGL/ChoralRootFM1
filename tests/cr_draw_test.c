@@ -2157,6 +2157,45 @@ int main(int argc, char **argv)
         cr_chord_names_set(0);
     }
 
+    {   /* Options > 6th with 7th (0.20, docs/CHORD-NAMES.md "The 6th above a seventh"): the entry as cr_ui.c
+         * cu_options_screen builds it (the fourth of 26: the list's first window, Secret Chords above it, Velocity
+         * below), with each of its two values and the line under it: every text whole, nothing over another */
+        static const char *const ITEMS[8] = {"Play Style", "Extension Addition", "Secret Chords", "6th with 7th", "Velocity",
+                                             "Bass Behaviour", "Single Notes", "Split Point"};
+        static const char *const VAL[2] = {"In place", "Octave up"};
+        static const char *const LAB[2] = {"6 + 7: the 6th under the 7th", "6 + 7: the 6th on top, a 13th"};
+        uint32_t v, k, j, f0 = nfind, e0 = nell, okv = 1, found = 0;
+        char name[200];
+        for (k = 0; k < CR_NSCREENS; k++)
+            if (!strcmp(CR_SCREEN_SLUGS[k], "12_opt_tapped_the_options_menu")) break;
+        for (v = 0; v < 2u && k < CR_NSCREENS; v++) {
+            cr_screen_t s = CR_SCREENS[k];
+            uint32_t got = 0;
+            memset(s.item, 0, sizeof s.item);
+            for (j = 0; j < 8u; j++) snprintf(s.item[j], sizeof s.item[j], "%s", ITEMS[j]);
+            s.n_items = 26;
+            s.item0 = 0;
+            s.sel = 3;
+            snprintf(s.value, sizeof s.value, "%s", VAL[v]);
+            snprintf(s.label, sizeof s.label, "%s", LAB[v]);
+            if (strcmp(s.item[3], ITEMS[3]) || strcmp(s.value, VAL[v]) || strcmp(s.label, LAB[v])) okv = 0;   /* (the arrays hold them whole) */
+            render(&s, 0);
+            lint(v ? "options_6th_with_7th_octave_up" : "options_6th_with_7th_in_place", &s);
+            for (j = 0; j < nbox; j++) {
+                uint32_t hit = !strcmp(boxes[j].s, ITEMS[3]) ? 1u : !strcmp(boxes[j].s, VAL[v]) ? 2u : !strcmp(boxes[j].s, LAB[v]) ? 4u : 0u;
+                if (!hit) continue;
+                got |= hit;
+                if ((boxes[j].flags & 1u) || boxes[j].x0 < 0 || boxes[j].x1 > 240) okv = 0;
+            }
+            if (got != 7u) okv = 0;
+            found++;
+            write_ppm(dir, v ? "options_6th_with_7th_octave_up" : "options_6th_with_7th_in_place");
+        }
+        snprintf(name, sizeof name, "Options > 6th with 7th: the entry with 'In place' and 'Octave up' and their lines: whole, on screen; %u findings, %u cut",
+                 nfind - f0, nell - e0);
+        check(name, found == 2u && okv && nfind == f0 && nell == e0);
+    }
+
     fprintf(rep, "\n%u lint findings, %u ellipsised texts\n", nfind, nell);
     fclose(rep);
     printf("cr_draw: %u screens x 2 frames rendered to %s/ppm; %u lint findings, %u ellipsised; report %s\n",

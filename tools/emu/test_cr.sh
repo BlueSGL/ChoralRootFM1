@@ -66,7 +66,7 @@ want=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralro
 [ -n "${CR_VERSION:-}" ] && want=$(grep -a -m1 "^  version:" "$L" | sed -n "s/.* build '\(.*\)'$/\1/p")   # (a release build of the emulator)
 vo=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*options '\([^']*\)'.*/\1/p")
 vi=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*identity '\([^']*\)'.*/\1/p")
-[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 22 of 2[0-9] 'Version' value '$want'" "$L" &&
+[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 23 of 2[0-9] 'Version' value '$want'" "$L" &&
     ok "Options > Version '$vo' = the identity over SysEx '$vi' = the build's ($want): $OUT/cr_version.ppm" \
     || bad "the version: Options '$vo', identity '$vi', choralroot.c '$want'"
 lits=$(grep -n '"ChoralRoot [0-9]' firmware/src/*.c firmware/src/*.h firmware/hal/*.h tools/emu/*.c tools/emu/*.h tools/emu/web/*.c 2>/dev/null | grep -v '^firmware/src/choralroot.c:[0-9]*:#define FELUCCA_VERSION ')
@@ -2513,7 +2513,7 @@ run cr_opt_keys --wav "$OUT/cr_opt_keys.wav"
 L="$OUT/cr_opt_keys.log"
 dl() { LC_ALL=C grep -a "^  $1" "$L" | sed -n "$2p"; }   # dl PREFIX N: the Nth dump's line that starts with PREFIX
 oe() { dl 'options:' "$1" | sed 's/^  options: //'; }
-[ "$(oe 1)" = "open 1 entry 2 of 25 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
+[ "$(oe 1)" = "open 1 entry 2 of 26 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
     dl 'cr: voices' 2 | grep -q '^  cr: voices 1 pending 0 notes-out 3 chord DM sounding 1 notes 62 66 69' &&
     dl 'loopv:' 2 | grep -q 'stream-notes main 3 ' && ! has 'expect.*FAILED' "$L" &&
     ok "MAJ + D4 with the menu open: D major sounds (62 66 69), three notes out on MIDI" \
@@ -2541,19 +2541,20 @@ echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &
     ok "no jump, no silent hole, no click at either change (5.3 .. 8.3 s)" || bad "Output switched under a chord struck in the menu: $wc_"
 sh_() { dl 'settings:' "$1" | sed -n 's/.* now \([0-9A-F]*\) .*/\1/p'; }
 echo "$(oe 8)" | grep -q "'Reset Settings' value 'OCT+ again: reset'" && [ "$(oe 9)" = "$(oe 8)" ] && [ -n "$(sh_ 8)" ] && [ "$(sh_ 9)" = "$(sh_ 8)" ] &&
-    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 37)" = "open 1 entry 2 of 25 'Secret Chords' value 'Simple'" ] &&
+    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 38)" = "open 1 entry 2 of 26 'Secret Chords' value 'Simple'" ] &&
     ! grep -aq 'settings reset' "$L" &&
     ok "Reset Settings asked (OCT+ once): five keys neither confirm nor cancel it; OCT- leaves, nothing was reset (Secret Chords still Simple)" \
-    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 37)'"
-echo "$(oe 11)" | grep -q "^open 1 entry 23 of 25 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
+    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 38)'"
+echo "$(oe 11)" | grep -q "^open 1 entry 24 of 26 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
     || bad "Calibrate and the keys: '$(oe 11)' $(grep -a -m1 '^calib:' "$L")"
 n=0; i=0
-while [ $i -le 24 ]; do
-    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 25 '" && n=$((n + 1))
+while [ $i -le 25 ]; do
+    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 26 '" && n=$((n + 1))
     i=$((i + 1))
 done
-[ $n = 25 ] && echo "$(oe 36)" | grep -q "'Reset Settings'" && ok "every entry by SELECT alone: 25 of 25, Play Style to Reset Settings" \
-    || bad "the entries by SELECT: $n of 25"
+[ $n = 26 ] && echo "$(oe 37)" | grep -q "'Reset Settings'" && echo "$(oe 15)" | grep -q "entry 3 of 26 '6th with 7th' value 'In place'" &&
+    ok "every entry by SELECT alone: 26 of 26, Play Style to Reset Settings (6th with 7th the fourth, after Secret Chords)" \
+    || bad "the entries by SELECT: $n of 26"
 grep -aq '^loop: loop recorded (state 2 layers 1 events 1 ' "$L" && ok "a take played with the menu open is recorded (armed on the view, one chord)" \
     || bad "the looper with the Options open: $(grep -a '^loop:' "$L" | tail -2 | tr '\n' ' ')"
 silent_end cr_opt_keys
@@ -2563,10 +2564,10 @@ run cr_usb_rate
 L="$OUT/cr_usb_rate.log"
 ur() { dl 'usb-rate:' "$1" | sed 's/^  usb-rate: //; s/ (.*pick_roots \([0-9]*\))/ \1/'; }
 ul() { dl 'screen reads:' "$1" | sed -n "s/.*label '\([^']*\)'.*/\1/p"; }
-[ "$(oe 1)" = "open 1 entry 19 of 25 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
+[ "$(oe 1)" = "open 1 entry 20 of 26 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
     ok "a new unit: USB Rate is the entry after USB Level, 44.1 kHz ('48 kHz: not offered'), the record's bit clear" \
     || bad "USB Rate on a new unit: '$(oe 1)' / $(ur 1) / '$(ul 1)'"
-[ "$(oe 2)" = "open 1 entry 19 of 25 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
+[ "$(oe 2)" = "open 1 entry 20 of 26 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
     [ "$(ul 2)" = "the computer picks the rate" ] && [ "$(oe 3)" = "$(oe 1)" ] && [ "$(ur 3)" = "48k 0 0" ] &&
     ok "KNOB 1 +1: 44.1 + 48 kHz ('the computer picks the rate'), bit 2 of the record's byte; -1: 44.1 kHz again" \
     || bad "USB Rate turned: '$(oe 2)' / $(ur 2) / '$(ul 2)' then '$(oe 3)' / $(ur 3)"
@@ -2584,8 +2585,8 @@ sn_() { LC_ALL=C grep -aq " name '$1' " "$L"; }                    # the name a 
     [ "$(cb 1)" = "0 0 0" ] && sn_ 'A||7 9' && sn_ 'A||9' && sn_ 'A|sus|m7 9' &&
     ok "a new unit names as the Orchid does: A + 7 + 9 'A7 9', A + 9 'A9', Asus + 7 + 9 'Asus m7 9' (the engine's and the screen's)" \
     || bad "Orchid names: '$(cn 1)' / '$(cn 2)' / '$(cn 3)' / $(cb 1)"
-[ "$(oe 4)" = "open 1 entry 14 of 25 'Chord Names' value 'Orchid'" ] && [ "$(ul 4)" = "A7 9 $(printf '\267') A9 $(printf '\267') Asus m7 9" ] &&
-    [ "$(oe 5)" = "open 1 entry 14 of 25 'Chord Names' value 'Standard'" ] && [ "$(ul 5)" = "A9 $(printf '\267') Aadd9 $(printf '\267') A9sus4" ] &&
+[ "$(oe 4)" = "open 1 entry 15 of 26 'Chord Names' value 'Orchid'" ] && [ "$(ul 4)" = "A7 9 $(printf '\267') A9 $(printf '\267') Asus m7 9" ] &&
+    [ "$(oe 5)" = "open 1 entry 15 of 26 'Chord Names' value 'Standard'" ] && [ "$(ul 5)" = "A9 $(printf '\267') Aadd9 $(printf '\267') A9sus4" ] &&
     [ "$(cb 5)" = "1 1 1" ] &&
     ok "Chord Names is the entry after Motion: Orchid; KNOB 1 +1: Standard (the engine told, bit 3 of the record's byte), the same three chords under it" \
     || bad "the Chord Names entry: '$(oe 4)' / '$(ul 4)' then '$(oe 5)' / '$(ul 5)' / $(cb 5)"
@@ -2593,7 +2594,7 @@ sn_() { LC_ALL=C grep -aq " name '$1' " "$L"; }                    # the name a 
     sn_ 'A||add9' && sn_ 'A||9sus4' &&
     ok "Standard: A + 7 + 9 'A9', A + 9 'Aadd9', Asus + 7 + 9 'A9sus4', each with the notes it had under Orchid" \
     || bad "Standard names: '$(cn 6)' / '$(cn 7)' / '$(cn 8)'"
-[ "$(oe 9)" = "open 1 entry 14 of 25 'Chord Names' value 'Orchid'" ] && [ "$(cb 9)" = "0 0 0" ] && [ "$(cn 10)" = "A9|1|69 73 76 83" ] &&
+[ "$(oe 9)" = "open 1 entry 15 of 26 'Chord Names' value 'Orchid'" ] && [ "$(cb 9)" = "0 0 0" ] && [ "$(cn 10)" = "A9|1|69 73 76 83" ] &&
     ok "KNOB 1 -1: Orchid again, A + 9 reads 'A9' again" || bad "back to Orchid: '$(oe 9)' / $(cb 9) / '$(cn 10)'"
 differ cr_chord_names_opt_orchid cr_chord_names_opt_standard "Chord Names: the two values' screens differ"
 differ cr_chord_names_orchid cr_chord_names_standard "A + 7 + 9: the Chord view differs under the two namings"
@@ -2611,6 +2612,53 @@ grep -q "settings saves 1 " "$OUT/cr_chord_names_set.log" && [ "$(cb 1)" = "1 1 
 cmp -s "$OUT/cr_chord_names_std.wav" "$OUT/cr_chord_names_def.wav" &&
     ok "a script played on the flash that says Standard sounds as on a new unit, bit for bit (the names are display only)" \
     || bad "Chord Names Standard changed the sound: cr_chord_names_std.wav differs from cr_chord_names_def.wav"
+
+echo "Options > 6th with 7th (0.20): In place, the default, or Octave up: the 6th of a chord with a seventh an octave higher (docs/CHORD-NAMES.md)"
+EMU_UI_LOG=1 "$EMU" --headless --script "$S/cr_sixth.txt" >"$OUT/cr_sixth.log" 2>&1 || bad "cr_sixth: exit $?"
+L="$OUT/cr_sixth.log"
+sx() { dl 'sixth:' "$1" | sed -n "s/^  sixth: up \([01]\) .* engine's \([01]\); the record's bit \([01]\))$/\1 \2 \3/p"; }
+kl() { dl 'key leds:' "$1" | sed -n 's/^  key leds:\([0-9]* [0-9]*\) .*/\1/p'; }
+[ "$(cn 1)" = "A7 6|1|69 73 76 78 79" ] && [ "$(sx 1)" = "0 0 0" ] && sn_ 'A||7 6' &&
+    ok "a new unit plays the 6th in place, as the Orchid does: A + 7 + 6 is A C# E F# G (69 73 76 78 79), named 'A7 6'" \
+    || bad "In place: '$(cn 1)' / $(sx 1)"
+[ "$(oe 2)" = "open 1 entry 3 of 26 '6th with 7th' value 'In place'" ] && [ "$(ul 2)" = "6 + 7: the 6th under the 7th" ] &&
+    [ "$(oe 3)" = "open 1 entry 3 of 26 '6th with 7th' value 'Octave up'" ] && [ "$(ul 3)" = "6 + 7: the 6th on top, a 13th" ] && [ "$(sx 3)" = "1 1 1" ] &&
+    ok "6th with 7th is the entry after Secret Chords: In place; KNOB 1 +1: Octave up (the engine told, bit 4 of the record's byte), each with its line" \
+    || bad "the 6th with 7th entry: '$(oe 2)' / '$(ul 2)' then '$(oe 3)' / '$(ul 3)' / $(sx 3)"
+[ "$(cn 4)" = "A7 6|1|69 73 76 78 79" ] && dl 'part 0:' 4 | grep -q 'voices 5,' && [ "$(dl 'parts busy' 5 | sed -n 's/.*parts busy \([0-9]*\).*/\1/p')" = 0 ] &&
+    ok "the chord held through the change keeps its five notes, and its release leaves nothing sounding 2.5 s later" \
+    || bad "held through the change: '$(cn 4)' / $(dl 'part 0:' 4) / $(dl 'parts busy' 5)"
+[ "$(cn 6)" = "A7 6|1|69 73 76 79 90" ] && [ "$(cn 7)" = "AM7 6|1|69 73 76 80 90" ] && [ "$(cn 8)" = "A6|1|69 73 76 78" ] &&
+    [ "$(cn 9)" = "AJAZZ|1|69 73 76 79 83 90" ] &&
+    ok "Octave up: A + 7 + 6 is 69 73 76 79 90 (the F# an octave up), A + M7 + 6 69 73 76 80 90, A + 7 + 6 + 9 with the 13th above the 9th; A + 6 alone as ever; the names the Orchid's" \
+    || bad "Octave up: '$(cn 6)' / '$(cn 7)' / '$(cn 8)' / '$(cn 9)'"
+[ -n "$(kl 1)" ] && [ "$(kl 6)" = "$(kl 1)" ] &&
+    ok "the key LEDs light the same keys under either setting (the sounding notes' keys in both octaves: the F# is an F# still): $(kl 6)" \
+    || bad "the key LEDs: '$(kl 1)' / '$(kl 6)'"
+[ "$(cn 10)" = "A7 6|1|69 73 76 78 79" ] && [ "$(cn 11)" = "A7 6|1|69 73 76 79 90" ] &&
+    ok "KNOB 1 -1 on the view: the voicing takes the top note, the 13th, down an octave; +1: back" || bad "the voicing: '$(cn 10)' / '$(cn 11)'"
+[ "$(oe 12)" = "open 1 entry 3 of 26 '6th with 7th' value 'In place'" ] && [ "$(sx 12)" = "0 0 0" ] && [ "$(cn 13)" = "A7 6|1|69 73 76 78 79" ] &&
+    ok "KNOB 1 -1 in the Options: In place again, A + 7 + 6 as at first" || bad "back to In place: '$(oe 12)' / $(sx 12) / '$(cn 13)'"
+differ cr_sixth_opt_off cr_sixth_opt_on "6th with 7th: the two values' screens differ"
+differ cr_sixth_off cr_sixth_on "A + 7 + 6: the Chord view's notes differ under the two settings"
+silent_end cr_sixth
+XF=$OUT/cr_sixth_flash.bin
+rm -f "$XF"
+"$EMU" --headless --flash "$XF" --script "$S/cr_sixth_set.txt" >"$OUT/cr_sixth_set.log" 2>&1 || bad "cr_sixth_set: exit $?"
+"$EMU" --headless --flash "$XF" --script "$S/cr_sixth_check.txt" --wav "$OUT/cr_sixth_on.wav" >"$OUT/cr_sixth_relaunch.log" 2>&1 || bad "cr_sixth relaunch: exit $?"
+"$EMU" --headless --script "$S/cr_sixth_check.txt" --wav "$OUT/cr_sixth_off.wav" >"$OUT/cr_sixth_fresh.log" 2>&1 || bad "cr_sixth fresh: exit $?"
+L="$OUT/cr_sixth_relaunch.log"
+grep -q "settings saves 1 " "$OUT/cr_sixth_set.log" && [ "$(sx 1)" = "1 1 1" ] && [ "$(cn 1)" = "A7 6|1|69 73 76 79 90" ] &&
+    ok "6th with 7th Octave up is saved by itself (an Option) and is the setting after a relaunch: A + 7 + 6 sounds 69 73 76 79 90" \
+    || bad "6th with 7th saved: $(sx 1) / '$(cn 1)'"
+silent_end cr_sixth_relaunch
+cmp -s "$OUT/cr_sixth_on.wav" "$OUT/cr_sixth_off.wav" && bad "A + 7 + 6 sounds the same on the flash that says Octave up: cr_sixth_on.wav = cr_sixth_off.wav" \
+    || ok "A + 7 + 6 on the flash that says Octave up is another sound than on a new unit: $OUT/cr_sixth_on.wav, cr_sixth_off.wav"
+"$EMU" --headless --flash "$XF" --script "$S/cr_chord_names_check.txt" --wav "$OUT/cr_sixth_perf_on.wav" >/dev/null 2>&1
+"$EMU" --headless --script "$S/cr_chord_names_check.txt" --wav "$OUT/cr_sixth_perf_def.wav" >/dev/null 2>&1
+cmp -s "$OUT/cr_sixth_perf_on.wav" "$OUT/cr_sixth_perf_def.wav" &&
+    ok "a chord without a 6 + 7 (A + 9, cr_chord_names_check.txt) played on that flash sounds as on a new unit, bit for bit (Octave up touches nothing else)" \
+    || bad "Octave up changed a sound without a 6 + 7 chord: cr_sixth_perf_on.wav differs from cr_sixth_perf_def.wav"
 
 echo "GLO + ALGORITHM is the bass engine, GLO + PRESETS the chord engine, wherever the knob alone is the part's sound (0.19)"
 export EMU_UI_LOG=0

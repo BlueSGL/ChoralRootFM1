@@ -262,6 +262,14 @@ Hold one chord type and any extensions, then press a root.
 - A root with no chord key is a single note (unless Key Mode is on): it reads as the note's name alone, `D`.
 - Under the name the screen lists the notes as they are voiced. Extension notes are orange.
 - The name of the last chord stays on the screen until the next one.
+- **The 6 with a seventh.** The 6 key adds the note 9 semitones above the root, right under a seventh (on D: B4
+  under C5 or C#5). That is how the Orchid plays it and it is the default. **Options > 6th with 7th** set to
+  **Octave up** plays that 6th an octave higher whenever the chord also has the 7 or the M7 (or both): D + 7 + 6 is
+  then D F# A C and the B above them, a 13th chord. Chords without a seventh (`D` `6`, `D` `6 9`) and single notes do
+  not change, on every chord type; the name on the screen does not change either. KNOB 1 voices the raised note as
+  the top note it is (one step down brings it back inside). A recorded loop holds chords, not notes, so it plays by
+  whichever value is set while it plays. The option acts from the next chord on: one that is sounding keeps its
+  notes.
 
 ### Chord names
 
@@ -291,7 +299,9 @@ In Standard:
 
 - A 9 without a seventh is `add9`; with the 7 it is `9`, with M7 `M9`. The major seventh is always written `M`.
 - A 6 with a seventh is a `13` (`D13`, `Dm13`, `DM13`), with or without the 9. The 6th still sounds where it
-  always did, inside the octave: the name changes, not the voicing.
+  always did, inside the octave: the name changes, not the voicing. To hear it as a 13th, an octave up, set
+  **Options > 6th with 7th** to Octave up ([Types and extensions](#types-and-extensions)); the two options are
+  separate, and either naming goes with either.
 - SUS is the fourth, so it reads `sus4`, and a seventh or ninth goes in front: `D7sus4`, `D9sus4`.
 - On a diminished chord the 6 key gives the diminished seventh (`Ddim7`) and the 7 key the half-diminished chord
   (`Dm7b5`).
@@ -1325,6 +1335,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **Play Style** | Simple, Advanced, Free | Simple | what chord keys do while a root is held ([Play styles](#play-styles)) |
 | **Extension Addition** | Add Note, Play Chord | Add Note | in Advanced and Free: an extension adds its note, or replays the chord |
 | **Secret Chords** | Off, Simple, All | Off | two chord types together make a third chord ([Secret chords](#secret-chords)) |
+| **6th with 7th** | In place, Octave up | In place | where the 6th sounds in a chord that also has a seventh (7 or M7). In place: 9 semitones above the root, under the seventh, as the Orchid plays it. Octave up: an octave higher, on top, which makes it a 13th chord (D + 7 + 6: D F# A C B). Chords without a seventh never change; the name does not change ([Types and extensions](#types-and-extensions)) |
 | **Velocity** | 1 to 127 | 100 | the velocity of every key, for the sound and for MIDI out |
 | **Bass Behaviour** | Chords Only, Unison Bass, Bass Single Notes, Solo | Chords Only | what the bass plays ([Bass](#6-bass)) |
 | **Single Notes** | Full Octave, Split Oct, Split Bass | Full Octave | Split Oct: single notes below the split point sound an octave lower. Split Bass: the keys below it play the bass part ([Key Mode](#key-mode)) |
@@ -1356,7 +1367,7 @@ strangely, and the way to make sure two people are looking at the same instrumen
 `OCT+ again: reset`. Press **OCT+** again and it is done: `settings reset` shows, and you are back on the view.
 Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the Options.
 
-- **Reset:** everything in the Options (Play Style back to Simple, Motion, Chord Names, LEDs, Hold Time, the MIDI channels and
+- **Reset:** everything in the Options (Play Style back to Simple, 6th with 7th back to In place, Motion, Chord Names, LEDs, Hold Time, the MIDI channels and
   clock, USB Record, USB Level and USB Rate, Dual Core and the rest), Key Mode with its tonic, scale and Transpose, Single
   Notes and the split point, the KEY layer's keys, Key plays and Keyboard, the LOCK layer's two settings, the
   performance mode with all its parameters and whether it is on, LATCH, the effects being on, the tempo, the
@@ -1404,7 +1415,7 @@ sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md)
 
 | A global save keeps (SAVE held) | Stored by itself | Never kept, on purpose |
 | --- | --- | --- |
-| Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, Velocity | notes that were sounding, a chord LATCH was holding |
+| Key Mode, the tonic, the scale, Transpose; **Single Notes and the split point**; the KEY layer's keys (pick or play), Key plays and Keyboard | **Options:** Play Style, Extension Addition, Secret Chords, 6th with 7th, Velocity | notes that were sounding, a chord LATCH was holding |
 | the performance mode, its parameters, and whether it is on | MIDI Perform, MIDI Bass, MIDI Raw Chord, Raw Chord Sound, MIDI Clock | a playing loop: its slot is loaded, **stopped**. It never starts by itself |
 | LATCH; LOCK and what it latched; the LOCK layer's two settings | Motion, Chord Names, LEDs, Hold Time | a take you were recording |
 | the voicing on KNOB 1 and the octave shift | USB Record, USB Level, USB Rate, Dual Core, Output | an open layer, menu, dialog or editor: the FM-1 starts on the view |
