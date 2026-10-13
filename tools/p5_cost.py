@@ -40,7 +40,9 @@ SRC = Path(__file__).resolve().parent.parent
 OUT = SRC / "build" / "p5cost"
 RATE = 205.0                      # instructions a microsecond
 HALF_US = 2902.0
-LOW = 1.7                         # the count against the unit, at worst so far
+LOW = 1.7                         # the count against the unit, at worst so far (CZ-1)
+MEASURED = 2033 / 1318            # P5 itself, the owner's unit, 2026-10-13: a five-voice chord's pk_part0_us against
+                                  # this tool's count for it (cd43720): 1.54
 
 # prophet_patch.c's indices
 (FREQ_A, FREQ_B, FINE_B, SAW_A, PULSE_A, SAW_B, TRI_B, PULSE_B, PW_A, PW_B, SYNC, LOW_B, KEY_B, GLIDE, LEVEL_A, LEVEL_B,
@@ -50,7 +52,7 @@ INIT = {FREQ_A: 24, FREQ_B: 24, SAW_A: 1, KEY_B: 1, PW_A: 64, PW_B: 64, LEVEL_A:
 B_ON = {LEVEL_B: 127, SAW_B: 1}
 CONFIGS = [
     ("none", "no waveform switched on, Curtis (the loop's floor)", {SAW_A: 0}),
-    ("init", "INIT PROPHET: saw A, Curtis", {}),
+    ("init", "INIT: saw A, Curtis", {}),
     ("saws_curtis", "saw A + saw B, Curtis", B_ON),
     ("saws_ssi", "saw A + saw B, SSI", {**B_ON, FILTER_REV: 0}),
     ("pulses_curtis", "saw + pulse A, saw + pulse B, Curtis", {**B_ON, PULSE_A: 1, PULSE_B: 1}),
@@ -442,19 +444,19 @@ def main():
           f"{part_block} at most ({us(4 * part_block):.0f} us a half)\n")
 
     hdr = ("program", "a sample: hit", "miss", "longest", "built alone: hit", "a voice a half (miss)", "us",
-           "3 voices", "4", "5", "5 at 1.7 x")
+           "2 voices", "3", "4", "4 at 1.54 x")
     print("| " + " | ".join(hdr) + " |")
     print("|" + " --- |" * len(hdr))
     for name, text, lo, miss, hi, nd, ulo, umiss in rows:
         voice = 128 * miss + 4 * voice_block
         part = 4 * part_block
-        v = [us(k * voice + part) for k in (3, 4, 5)]
+        v = [us(k * voice + part) for k in (2, 3, 4)]
         alone = f"{ulo}" if ulo is not None else "-"
         print(f"| {text} | {lo} | {miss} | {hi} | {alone} | {voice} | {us(voice):.0f} | {v[0]:.0f} | {v[1]:.0f} | "
-              f"{v[2]:.0f} | {v[2] * LOW:.0f} |")
+              f"{v[2]:.0f} | {v[2] * MEASURED:.0f} |")
     print(f"\n(us of a {HALF_US:.0f} us half at {RATE:.0f} instructions a microsecond; the part's own "
-          f"{us(4 * part_block):.0f} us is in the voices' columns; \"5 at 1.7 x\": five voices with the count as low "
-          "against the unit as CZ-1's was. \"built alone\": the loop the compiler makes for that program only, without the "
+          f"{us(4 * part_block):.0f} us is in the voices' columns; \"4 at 1.54 x\": four voices (the cap) with the count as low "
+          "against the unit as it was for P5's own five-voice chord (2033 us measured, 1318 counted). \"built alone\": the loop the compiler makes for that program only, without the "
           "switches' tests: the cross-check, always less)")
     return 0
 

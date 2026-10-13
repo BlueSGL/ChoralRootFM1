@@ -10,6 +10,8 @@
 set -e
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 cd "$ROOT"
+# P5's factory header follows the shipped list (assets/prophet5-factory/shipped.txt; written only when its text changes)
+[ -d build/gen ] && python3 tools/gen_prophet_factory.py build/gen/melodee_prophet_factory.h >/dev/null
 if ! command -v emcc >/dev/null 2>&1; then
     for e in "${EMSDK:-}/emsdk_env.sh" "$HOME/emsdk/emsdk_env.sh"; do
         [ -f "$e" ] && { . "$e" >/dev/null 2>&1; break; }

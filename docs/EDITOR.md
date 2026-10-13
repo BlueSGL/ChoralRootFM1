@@ -198,9 +198,9 @@ hold after the SUS step, nothing after END; the step of the turned cell (R k / L
 knob's colour, digits 1–8 (and S) under the steps. No matrix (`not modulatable`). Melodee's CZ TOOLS page (NAME, 1 > 2,
 2 > 1, COMPARE) is not ported. Tests: `tools/emu/scripts/cr_cz.txt`.
 
-### PROPHET (docs/PROPHET.md)
+### P5 (docs/PROPHET.md)
 
-From the title rules, no screen plan (0.22 in development; engine 16, Melodee's Prophet-5):
+From the title rules, no screen plan (0.22 in development; engine 16, Melodee's Prophet-5; the code's name is PROPHET):
 
 | Group | Screen | Kind | Lanes | KNOB 1–4 | Top-right text |
 | --- | --- | --- | --- | --- | --- |
@@ -211,7 +211,8 @@ From the title rules, no screen plan (0.22 in development; engine 16, Melodee's 
 | LFO | 1, 2 | `edit8`, two rows | A, B | A: Rate · Amount · Noise · Aftertch; B: Saw · Tri · Square (`LFO`, `LFO+`); A: Freq A · Freq B · PW A · PW B; B: Filter (`WHEEL`, `WHEEL+`) | `LFO`, `WHEEL` |
 | MOD | 1, 2 | `edit8`, two rows | A, B | A: Env · Osc B · Freq A · PW A; B: Filter (`POLYMOD`, `POLYMOD+`); A: Unison · Voices · Detune · Glide; B: Priority · Vintage (`VOICE`, `VOICE+`) | `POLYMOD`, `VOICE` |
 
-A cell is one byte of the program; the switches read on / off, the knobs the stored 0..127. No matrix of its own
+A cell is one byte of the program; the switches read on / off, the knobs the stored 0..127 (Voices 1..4: the engine's
+four voices; Unison also switches the part's voice mode). No matrix of its own
 ("not modulatable"). Tests: `tools/emu/scripts/cr_prophet.txt`, `tests/cr_prophet_test.c`.
 
 ### FM TONE (docs/QUAD.md; the user-approved screens design/choralroot-fm1-quad-screens.png)

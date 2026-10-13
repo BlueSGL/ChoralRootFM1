@@ -12,8 +12,8 @@
  * With "cz": the bank's six CZ-1 rows (docs/CZ1.md Levels; no trims since 0.19: the engine is 6 dB lower):
  *   build/host/va_levels cz
  * With "p5": PROPHET against the VA and FM6 (docs/PROPHET.md "Level"): a 4-note chord (D4 F#4 A4 C#5), every send 0
- * (the engines' own levels), alone, on INIT PROPHET and Sequential's 200 programs, on the VA's chord presets and on
- * FM6's presets; each sound's line, then each engine's median RMS and the programs more than 4 dB from PROPHET's:
+ * (the engines' own levels), alone, on P5's INIT and its shipped programs, on the VA's chord presets and on
+ * FM6's presets; each sound's line, then each engine's median RMS and the programs more than 4 dB from P5's:
  *   build/host/va_levels p5 */
 #define FELUCCA_VA 1
 #define FELUCCA_CZ 1
@@ -171,7 +171,7 @@ int main(int argc, char **argv)
         return 0;
     }
 #if FELUCCA_PROPHET
-    if (argc > 1 && !strcmp(argv[1], "p5")) {    /* PROPHET's programs against the VA's and FM6's presets, dry */
+    if (argc > 1 && !strcmp(argv[1], "p5")) {    /* P5's programs against the VA's and FM6's presets, dry */
         static const uint8_t ENG[3] = {ENGI_PROPHET, ENGI_VA, ENGI_FM6};
         static double R[3][256];
         double med[3];
@@ -202,7 +202,7 @@ int main(int argc, char **argv)
             printf("median %-8s %6.1f dB RMS over %u sounds (quartiles %.1f .. %.1f, range %.1f .. %.1f)\n",
                    ENGINES[ENG[g]]->name, med[g], (unsigned)n[g], R[g][n[g] / 4u], R[g][n[g] * 3u / 4u], R[g][0],
                    R[g][n[g] - 1u]);
-        printf("PROPHET's median against the VA's: %+.1f dB, against FM6's: %+.1f dB\n", med[0] - med[1], med[0] - med[2]);
+        printf("P5's median against the VA's: %+.1f dB, against FM6's: %+.1f dB\n", med[0] - med[1], med[0] - med[2]);
         return 0;
     }
 #endif

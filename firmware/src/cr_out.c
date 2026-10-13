@@ -226,6 +226,9 @@ static void events_block(uint32_t n)
 /* --------------------------------------------------------------- routing --- */
 #define CR_PART_CHORD 0u
 #define CR_PART_BASS 1u
+#if FELUCCA_PROPHET
+_Static_assert(CR_PART_BASS == P5_PART_BASS, "eng_prophet_test.c: the bass part (a UNISON program's voice mode under it)");
+#endif
 #define CR_NOPART 0xFFu
 typedef struct {
     uint8_t part[CR_NSTREAM];        /* the Felucca part a stream plays (CR_NOPART: none) */

@@ -95,9 +95,9 @@
                                   * docs/QUAD.md) */
 #endif
 #ifndef FELUCCA_PROPHET
-#define FELUCCA_PROPHET 1        /* Melodee's Prophet-5 engine (eng_prophet_test.c, engine 16; docs/PROPHET.md). 0: the image
+#define FELUCCA_PROPHET 1        /* P5: Melodee's Prophet-5 engine (eng_prophet_test.c, engine 16; docs/PROPHET.md). 0: the image
                                   * without it, byte for byte as before it came. FELUCCA_P5_FACTORY (default 1 there):
-                                  * Sequential's 200 factory programs in its PRESETS; 0: INIT PROPHET alone */
+                                  * Sequential's factory programs of the shipped list in its PRESETS; 0: INIT alone */
 #endif
 #ifndef FM6_POLY
 #define FM6_POLY 8               /* FM6's voices per part (eng_fm6.c; Melodee plays Dexed's 16): ChoralRoot's chords use <= 7,

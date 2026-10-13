@@ -10,8 +10,9 @@ chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32) is tagg
 published as the latest and not on the site; its notes, `web/releases.json`'s first entry (package sha256
 93bbfe14...) and the manual's first line say 0.21. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.22"
 (`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
-3y33, 3y34; and, not in the notes yet, a sixth engine in its first phase: PROPHET, Melodee's Prophet-5, HISTORY 3y38,
-docs/PROPHET.md: on the host and in the emulators, never on a unit, open items 26 and 27). The owner's unit runs what
+3y33, 3y34; and, not in the notes yet, a sixth engine in its first phase: P5 (the code's PROPHET), Melodee's
+Prophet-5, HISTORY 3y38, 3y39, docs/PROPHET.md: on the host and in the emulators; the owner played its first build,
+cd43720, on the unit once, and that reading made it four voices; open items 26 and 27). The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
@@ -242,83 +243,51 @@ installed on the owner's Mac.
     for the V15: an estimate, the loader is M-VAVE's), and whether an interrupted write really waits in update mode
     for the resume box, as the guidance says. The texts of the errors there still end "press Install again" (they
     are the install card's).
-26. **PROPHET has never run on a unit (HISTORY 3y38, docs/PROPHET.md).** Its cost is counted from the listing
-    (`python3 tools/p5_cost.py`: a two-saw SSI voice 249 us a half, five voices 1318 us; 2240 if the count is as low
-    as CZ-1's was, item 21), not measured. To read first, before any release with it: `pk_part0_us` with a five-voice
-    01 ITS PROPHET5 chord held (no bass), then with the bass on (the budget gives four chord voices), on one core and
-    with Options > Dual Core On; above about 1700 us for five voices the cap comes down (`p5_units` 4: four voices).
-    Also to hear on the unit: both filters, sync and Poly-Mod programs for aliasing, the wheel and aftertouch.
-27. **PROPHET, phase B: the owner's decisions** (docs/PROPHET.md "Open decisions"): whether a release carries
-    Sequential's 200 factory programs (`FELUCCA_P5_FACTORY`; the data are Sequential's, no licence granted) and
-    under which name the engine shows; the store for user programs (flash objects in 0xB6000 .. 0xC7FFF as
-    `va_store.c`, backup ids, POOL for the mirrors, the web manager's engine list: `web/fm1sounds.js` treats a
-    record of engine 16 as no record today) with the settings record's place for its pool position; whether a load
-    takes a program's UNISON switch (40 of the 200 have it; today none does); chord voices on core 1 (not built).
-    XIP is at 90.5 % with the bank in.
+26. **P5 (the engine shown as "P5"; code name PROPHET) on the unit: one reading, of the build before this one
+    (HISTORY 3y38, 3y39, docs/PROPHET.md "Cost on the unit").** The owner played cd43720 (five voices) on 2026-10-13:
+    `pk_part0_us` 2033 (the listing's count said 1318: 1.54 × low), `pk_block_us` 2814 of 2902, `pk_late` 17,
+    `stale_halves` 0, nothing heard. So the engine is **four voices of four budget units** now (three chord voices
+    when the bass sounds on one core): about 1630 us for the part by proportion, **not measured**. To read on the
+    unit with this tree: the same counters with a four-key 01 ITS PROPHET5 chord, with the bass on, and with a UNISON
+    program (43 LAGOON BASS) on the chord part and on the bass part under a chord. Also to hear: which notes a five-
+    and six-key chord keeps (the bottom and the top three), UNISON (one note of the chord, four voices; a UNISON bass
+    thins to one voice under a chord), both filters, sync and Poly-Mod programs for aliasing, the wheel and aftertouch.
+27. **P5, what is open** (docs/PROPHET.md "Open decisions"). Decided by the owner on 2026-10-13: the name P5, UNISON
+    on a load, a trimmed list. Open: **the list itself** (`assets/prophet5-factory/shipped.txt`: 48 programs chosen
+    from their parameters, not by ear; a one-file change, then `./build.sh`, `python3 tools/p5_goldens.py`, the
+    suite); whether a release carries Sequential's data at all (`FELUCCA_P5_FACTORY`; no licence granted); **the
+    store for user programs and the device manager's "load all 200"** (the owner's plan; flash objects in 0xB6000 ..
+    0xC7FFF as `va_store.c`, backup ids, POOL for the mirrors, the web manager's engine list: `web/fm1sounds.js`
+    treats a record of engine 16 as no record today; a stored program must keep its 138 bytes, which carry its
+    Sequential number); the settings record's place for P5's pool position and its `chord_sound` / `bass_sound`,
+    which hold a pool position, not a program's number (harmless while the session record is there: it holds the
+    program); a fifth voice (chord voices on core 1, the loop built per program, `P5_RAM`: none built). XIP is at
+    88.2 % with the 48 (90.6 % with all 200, 87.3 % with INIT alone).
 
-### 0.20: what shipped
-
-- **Options > Chord Names** (docs/CHORD-NAMES.md; HISTORY 3y29): bit 3 of the settings block's `pick_roots`, no
-  record version.
-- **Options > 6th with 7th** (docs/CHORD-NAMES.md "The 6th above a seventh"; HISTORY 3y30): In place (default,
-  main's notes bit for bit) / Octave up (a chord with the 6 and a seventh plays its 6th 21 semitones above the
-  root). The engine's (`cr_t.sixth_up`, `cr_chord_base_ex`), bit 4 of `pick_roots`, no record version; an older
-  firmware that meets the bit resets that byte (Output, USB Rate, Chord Names to their defaults there).
-- The Options have 26 entries now (6th with 7th is entry 3, after Secret Chords; Chord Names entry 15, after
-  Motion): the emulator scripts that walk to an entry from Velocity on count two more steps than 0.19's.
-
-### 0.19: what shipped (the section that was "For 0.19"; (b) is still CZ-1)
-
-The player's account is `docs/releases/0.19.md`; the record is HISTORY 3y17 .. 3y26. All of it was built and
-verified on the host and in the emulators; what was heard or read on the unit is in HISTORY and in items 21 and 22
-above, not assumed here.
-
-- **(a) The output chain, GitHub issue 3** (docs/AUDIO-QUALITY.md; HISTORY 3y17 "the output chain", 3y20 "the
-  look-ahead, Sloop 2.6", 3y24 "the third round"). Options > Output: **Clean**, the default (linear to -2.0 dBFS; a
-  limiter that looks 32 samples ahead, so the output is 0.73 ms late and no sample leaves it over its threshold,
-  and that holds 200 ms, a hit's 40 ms; MASTER last into the 24-bit word) / **Classic** (0.18's master). Single
-  notes are 2.4 LU quieter in Clean than in Classic, loud chords with the bass up to 1.3 LU louder. Felucca's
-  SPEAKER setting left behind by another firmware is held off. MASTER is read before the audio starts (Felucca
-  1.1.5's fix). The harness is in the tree (`tests/master_measure.c`, `tools/master_*`); the listening files and
-  tables are in `../audio-0.19/` (`lookahead/`, `hold/`, `chorus/`, `cz-trim/`). Open: items 14 .. 16.
-- **(b) CZ-1** (docs/CZ1.md "Pops (0.19)" with "The second round", and "Level"; HISTORY 3y18 "CZ-1's pops", 3y23
-  "CZ-1's level and the click that was left", 3y25 "the session and a removed trim"). The owner's report ("pop and
-  dropout when holding chords without FX ... probably internal clipping") was not clipping: a sounding note struck
-  again cut its own voice, and the DCW depth stepped at a block's edge. Both fixed; **the engine is 6 dB lower**
-  (the owner: "CZ-1 trim sounds good"; a voice adds `* 2`, every sample exactly half; the three per-sound trims are
-  gone; user CZ-1 sounds are 6 dB quieter with the rest); **a sounding note struck again at another velocity no
-  longer steps**; a session saved on BRASS 1, STRINGS 2 or PIPE ORGAN 1 comes back without the old trim
-  (`cr_settings.h cr_session_part_trim`). The two clicks `wavclicks.py` counted on BRASS 1 struck again are not a
-  step, and the 79 jumps left at C2 are the waves' own edges. `python3 tools/cz_pop_check.py --play` reads the
-  unit's late halves, the third possible cause of the first report. Open: items 19 .. 21.
-- **(c) The chorus in stereo** (docs/FX.md "The chorus, stereo"; HISTORY 3y24): two taps a quarter turn apart, in
-  both Output modes. Open: item 18.
-- **(d) The click and the USB part pairs are lined up with Clean** (HISTORY 3y24; docs/USB-AUDIO.md "ChoralRoot
-  In: the channels": the part pairs wait 32 frames in Clean, and a change of Output during a recording moves them
-  by 0.73 ms). The stems' alignment was tested without USB (`tests/cr_align_test.c`): not on a host.
-- **(e) USB recording at 48 kHz, opt-in** (docs/USB-AUDIO.md "48 kHz"; HISTORY 3y19, 3y22): Options > USB Rate,
-  `44.1 kHz` by default (0.18's descriptors byte for byte, `bcdDevice` 3.22) / `44.1 + 48 kHz` (3.23: the host
-  chooses; 44.1 kHz is bit for bit 0.18's). At 48 kHz the six channels are resampled in the audio ISR: about 185 us
-  a half by the listing, which the heaviest CZ-1 patches may not have. The capture is a tap and does not change the
-  sound (HISTORY 3y22, `tests/cr_usbtap_test.c`). Open: items 17 and 22.
-- **(f) The Options leave the keys alone** (HISTORY 3y21): the keys play as on the view; SELECT, KNOB 1 and the
-  buttons are the menu.
-- **(g) GLO + ALGORITHM / GLO + PRESETS pick the engine wherever the knob alone is the part's sound** (HISTORY 3y22;
-  `cr_ui.c cu_epk_ok`; the table in docs/PRESETS.md).
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
 ## Facts that are easy to get wrong
 
 - **Engines** (`engines.c`): indices are append-only, 0 .. 16; six are shown, in `ENGINE_ORDER`: FM6 (12), FM TONE
-  (15, code name QUAD), VA (13), CZ-1 (14), PROPHET (16, code name `p5_`, since 0.22 in development), WHEEL (7). Every
+  (15, code name QUAD), VA (13), CZ-1 (14), P5 (16, code names PROPHET and `p5_`, since 0.22 in development), WHEEL (7). Every
   other slot is `ENG_GONE` (PHYS, 9, since 0.18:
   `FELUCCA_PHYS` 0, its files kept); records of retired engines stay and load as stand-ins (docs/PRESETS.md).
-- **PROPHET's switches** (docs/PROPHET.md): `FELUCCA_PROPHET` (1 in `choralroot.c`; `FELUCCA_PROPHET=0 ./build.sh` is
-  the image without the engine, byte for byte the one before it), `FELUCCA_P5_FACTORY` (1: Sequential's 200 programs;
-  0: INIT PROPHET alone), `P5_RAM` (1: its sample loop in `.ram_text`; default 0). It has no store: SAVE on a PROPHET
-  part is refused (the session keeps the part's edited program over a power cycle), and the settings record has no
-  slot for its per-engine pool position (back from another engine after a power cycle it lands on 01).
-- **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, PROPHET 200,
+- **P5** (docs/PROPHET.md; shown as "P5", the files and switches say PROPHET): `FELUCCA_PROPHET` (1 in
+  `choralroot.c`; `FELUCCA_PROPHET=0 ./build.sh` is the image without the engine, byte for byte the one before it:
+  `choralroot.bin` sha256 501a9d09..; code added for P5 in a shared file must stay behind the switch, and even a
+  local variable outside it changed the image once), `FELUCCA_P5_FACTORY` (1: Sequential's programs of the shipped
+  list; 0: INIT alone), `P5_SHIPPED` (the environment: another list file, or `all`), `P5_RAM` (1: its sample loop in
+  `.ram_text`; default 0). **Four voices, four budget units each.** **A factory program's identity is its
+  Sequential number 1..200** (in the program's own bytes: `p5_patch_id`), never its place in the pool: the pool is
+  `assets/prophet5-factory/shipped.txt`, which changes; the session finds the place again from the number
+  (`cr_settings.c css_part_put`), and the regression's P5 entries are named by the number. After the list changes:
+  `python3 tools/p5_goldens.py` (P5's goldens and CPU entries only), not `GOLDEN_UPDATE=1`. **A load takes the
+  program's UNISON switch** (`p5_track_loaded`); the two paths that restore a part from a record (`css_part_put`,
+  `cu_pick_end`) set the recorded voice mode again after it (`p5_voice_restore`), and `cu_engine_switch` calls
+  `p5_leave`. It has no store: SAVE on a P5 part is refused (the session keeps the part's edited program over a
+  power cycle), and the settings record has no slot for its per-engine pool position (back from another engine after
+  a power cycle it lands on 01).
+- **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, P5 48 of Sequential's 200: a list,
   WHEEL 5) + the user's. The user's are the 32 slots of `upreset.c` (`UP_SLOTS`, `core.h`), shared by all engines; a slot's deep
   patch sits at the same index in its engine's store (`va_store.c`, `fm6_ustore.c`, `cz_ustore.c`, `quad_store.c`).
 - **Flash map**: the comment at the top of `storage.c` owns it. The FM TONE store is 0xB2000 / 0xB3000, the session

@@ -18,9 +18,11 @@ from which this file and the `.syx` were taken unchanged, less its paragraph on 
 ## In ChoralRoot
 
 `tools/gen_prophet_factory.py` checks the file's SHA-256 and turns it into `build/gen/melodee_prophet_factory.h` at
-build time: the 200 programs packed (55 bytes each) and their PRESETS names, PROPHET's factory presets 01..200
-(docs/PROPHET.md). They are in the build only with `FELUCCA_P5_FACTORY` 1 (the default for now):
-`FELUCCA_P5_FACTORY=0 ./build.sh` builds the engine with INIT PROPHET alone and none of this data in the image.
+build time: the programs that `shipped.txt` (beside this file) names, packed, and their PRESETS names: the factory
+presets of P5, as the engine is called on the unit (docs/PROPHET.md "The shipped list"; no `shipped.txt`, or `all` in
+it: the 200). A program's number in `shipped.txt` is its place in the `.syx`, 1..200. They are in the build only with
+`FELUCCA_P5_FACTORY` 1 (the default for now): `FELUCCA_P5_FACTORY=0 ./build.sh` builds the engine with its INIT
+alone and none of this data in the image.
 
 The programs are Sequential's (Sequential LLC, 2020-2025). They are included as sound data for compatibility with the
 instrument; no licence is granted for them by this project, and whether a ChoralRoot release carries them is not

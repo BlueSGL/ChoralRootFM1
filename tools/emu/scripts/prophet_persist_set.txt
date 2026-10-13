@@ -1,15 +1,15 @@
-# test_persist.sh, PROPHET run 1: OPT + PRESETS +4: PROPHET, 01 ITS PROPHET5; PRESETS +2: 03 FOREVER KEYS; EDIT, FILT
-# (SEL): KNOB 1 -1: the cutoff a detent down ("deep: part 0 page 5 FILTER col 0 CUT 57 -> 51"); EDIT; SAVE: refused
-# (PROPHET has no store: docs/PROPHET.md "Saving"); SAVE held: the global save: the session keeps the part's edited
+# test_persist.sh, P5 run 1: OPT + PRESETS +4: P5, place 01; PRESETS +2: place 03 (the shipped list's third program);
+# EDIT, FILT (SEL): KNOB 1 -1: the cutoff a detent down ("deep: part 0 page 5 FILTER col 0 CUT a -> b"); EDIT; SAVE:
+# refused (P5 has no store: docs/PROPHET.md "Saving"); SAVE held: the global save: the session keeps the part's edited
 # program (its 138-byte blob); quit
 wait 300
 btn GLO down
 wait 100
-knob PRESETS +4               # OPT + PRESETS: the engine (FM6 -> FM TONE -> VA -> CZ-1 -> PROPHET), on OPT's release
+knob PRESETS +4               # OPT + PRESETS: the engine (FM6 -> FM TONE -> VA -> CZ-1 -> P5), on OPT's release
 wait 100
 btn GLO up
 wait 600
-knob PRESETS +2               # 03 FOREVER KEYS
+knob PRESETS +2               # place 03
 wait 400
 btn EDIT
 wait 400

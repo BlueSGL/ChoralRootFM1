@@ -9,6 +9,8 @@
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p build/host
+# P5's factory header follows the shipped list (assets/prophet5-factory/shipped.txt; written only when its text changes)
+[ -d build/gen ] && python3 tools/gen_prophet_factory.py build/gen/melodee_prophet_factory.h >/dev/null
 . tests/par.sh
 par_init build/host/jobs_cr
 trap 'par_kill' EXIT
@@ -81,9 +83,10 @@ t logged_last cr_fm6_test
 # CZ-1 (Melodee's engine, docs/CZ1.md): Casio's tones, the blob, Casio SysEx, the banks, the deep pages, the tone store
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cz_test tests/cr_cz_test.c -lm
 t logged_last cr_cz_test
-# PROPHET (Melodee's Prophet-5 engine, docs/PROPHET.md): Sequential's bank against its .syx, the blob, every program
-# through voice.c, voices, UNISON, GLIDE, the bend, the deep pages, the pool, SAVE refused; then the remix's three
-# optimisations bit for bit (P5_STAGE36 0 / 1 / 2 / 4 / 7) and the build with INIT PROPHET alone (FELUCCA_P5_FACTORY=0)
+# P5 (Melodee's Prophet-5 engine, docs/PROPHET.md): Sequential's bank against its .syx, the blob, every shipped program
+# through voice.c, the four voices, UNISON (a load takes the program's), GLIDE, the bend, the deep pages, the pool, SAVE
+# refused; then the remix's three optimisations bit for bit (P5_STAGE36 0 / 1 / 2 / 4 / 7), the build with INIT alone
+# (FELUCCA_P5_FACTORY=0) and the shipped list (three lists: a program and a saved session are the same in each)
 par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_prophet_test tests/cr_prophet_test.c -lm
 t logged_last cr_prophet_test
 t sh tests/run_prophet_test.sh
@@ -113,9 +116,9 @@ t logged_last cr_usbtap_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_midi_test tests/cr_midi_test.c
 t ./build/host/cr_midi_test
 # the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md). Built without
-# PROPHET: the Sound Manager and fm1_install.py do not know engine 16 yet (its store and their support are phase B,
-# docs/PROPHET.md "Saving"; no PROPHET record can be saved until then). With it this check names what they lack: the
-# engine's name and its 201 presets
+# P5: the Sound Manager and fm1_install.py do not know engine 16 yet (its store and their support are phase B,
+# docs/PROPHET.md "Saving"; no P5 record can be saved until then). With it this check names what they lack: the
+# engine's name and its presets
 par_build cc -std=gnu11 -O1 -w -DFELUCCA_PROPHET=0 -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
 t ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py
 

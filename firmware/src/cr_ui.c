@@ -2730,6 +2730,10 @@ static void cu_engine_switch(uint32_t part, uint32_t e)
     if (t->eng_req == e)
         return;
     fm1_irq_off();
+#if FELUCCA_PROPHET
+    if (eng_idx(t->eng_req) == ENGI_PROPHET)
+        p5_leave(t);                              /* (the mix is kept: not a UNISON that a P5 program gave the part) */
+#endif
     cu_drive_load(t, e, en->npresets ? cu_preset_drive(&en->presets[p0]) : 0);   /* (FM TONE: its first preset's) */
     t->eng_req = (uint8_t)e;
     t->preset = (uint8_t)p0;
@@ -2852,6 +2856,10 @@ static void cu_pick_end(int keep)
         d = cp_deep(t);
         if (cpk.has_blob && d && d->blob_set)
             d->blob_set(t, cpk.blob);             /* the deep patch as it was */
+#if FELUCCA_PROPHET
+        if (eng_idx(t->eng_req) == ENGI_PROPHET)
+            p5_voice_restore(t, cpk.p[P_VOICE]);  /* (the load took the factory program's UNISON: the snapshot's mode) */
+#endif
         if (!cpk.part) {
             cs.fx_on = cpk.fx_on;
             for (i = 0; i < CU_NFX; i++)
@@ -2890,11 +2898,11 @@ static void cu_save_open(uint32_t part)
         return;
     }
 #if FELUCCA_PROPHET
-    /* PROPHET has no store for its program yet (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's
-     * parameters and no program, and would load as INIT PROPHET under the sound's name. Nothing is written */
+    /* P5 has no store for its program yet (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's
+     * parameters and no program, and would load as P5's INIT under the sound's name. Nothing is written */
     if (eng_idx(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req) == ENGI_PROPHET) {
-        cu_message("PROPHET: no save yet", CR_COL_RED);
-        cu_trace("save: part %u PROPHET refused (no store)\n", (unsigned)part);
+        cu_message("P5: no save yet", CR_COL_RED);
+        cu_trace("save: part %u P5 refused (no store)\n", (unsigned)part);
         return;
     }
 #endif

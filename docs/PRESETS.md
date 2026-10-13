@@ -16,9 +16,9 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 ## The model
 
 - **A pool per engine.** Each engine's pool starts with **INIT** at position 00 (the engine's init sound, `cu_sound_init`; it cannot be overwritten: Overwrite on it is Save as new), then its factory presets (`engine_t.presets`: FM6 25 (F1..F24, PIANO),
-  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, PROPHET 200 (engine 16, 0.22 in development:
+  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, P5 48 (engine 16, code name PROPHET, 0.22 in development: a list,
   below), WHEEL 5: the picker's order, six
-  engines; five from 0.18 until PROPHET; PHASE 6, LOFI 5, VOICE 4, TRIO 5, PHYS 9 and NOISE 4 came between and after them until then) followed by
+  engines; five from 0.18 until P5; PHASE 6, LOFI 5, VOICE 4, TRIO 5, PHYS 9 and NOISE 4 came between and after them until then) followed by
   the presets the user added. ANALOG (engine 0, 12 presets) is retired
   since 0.14 (`FELUCCA_ANALOG` 0): no pool; a user record of ANALOG is an added preset of the VA's pool and plays there
   with its CUT / RES / DRIVE / MIX / DTN, filter envelope and ATK / REL on the VA's macros of the same name (`cr_ui.c`
@@ -87,22 +87,28 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
   before BASS held + EDIT's picker. The bass level, OPT + ALGORITHM until then, is BASS held + ALGORITHM.
 - The idea of "templates" is gone: what the editor's picker steps with KNOB 1 is the same pool PRESETS turns.
 
-## PROPHET's pool (0.22 in development; docs/PROPHET.md)
+## P5's pool (0.22 in development; docs/PROPHET.md; the engine's code name is PROPHET)
 
-- **00 INIT** is the engine's INIT PROPHET (its preset 0 is the pool's INIT, as the CZ-1's INIT TONE: `cr_bank.c
-  pool_f0`); **01 .. 200** are Sequential's factory programs v1.03 in the bank's order (01 ITS PROPHET5 .. 200 CAT),
-  with 12-character PRESETS names made from the programs' own (`tools/gen_prophet_factory.py`). A build with
-  `FELUCCA_P5_FACTORY=0` has INIT alone. The read-out is `PROPHET · 03/200`; the stripe meter has 32 stripes, as every
+- **00 INIT** is the engine's init sound (its preset 0 is the pool's INIT, as the CZ-1's INIT TONE: `cr_bank.c
+  pool_f0`); **01 ..** are the **shipped** factory programs: the ones of Sequential's 200 (v1.03) that
+  `assets/prophet5-factory/shipped.txt` names, in that file's order, with 12-character PRESETS names made from the
+  programs' own (`tools/gen_prophet_factory.py`). Provisionally 48 (01 ITS PROPHET5 .. 48 UNISON GLIDE; the table is
+  in docs/PROPHET.md "The shipped list", with the steps to change it); no list or `all`: the 200. A build with
+  `FELUCCA_P5_FACTORY=0` has INIT alone. The read-out is `P5 · 03/48`; the stripe meter has 32 stripes, as every
   pool over 32.
+- **A place in this pool is not a program's identity**: the list may change between builds. A program is known by
+  its Sequential number (1..200), which it carries in its own bytes; the session keeps the program itself and finds
+  its place again from that number (docs/PROPHET.md).
+- **A load takes the program's UNISON switch** (5 of the 48): a chord on such a program sounds one note on up to four
+  stacked voices; the next program without the switch is poly again (docs/PROPHET.md "UNISON").
 - The programs are dry; they play with the part's sends, which no sound load touches (the model above).
-- **It is the first pool that cannot grow yet: SAVE on a PROPHET part is refused** ("PROPHET: no save yet"): the
+- **It is the first pool that cannot grow yet: SAVE on a P5 part is refused** ("P5: no save yet"): the
   engine has no store for its program (phase B). Its edits live in the part and in the session.
-- Two limits the first pool over 127 places met, both left as they are for phase B: the settings record has no slot
-  for PROPHET's per-engine pool position (`cr_settings.c crs_slot`), so after a power cycle a part that comes back
-  to PROPHET from another engine lands on 01 (the sound a part was playing at power-off does come back: the record's
-  chord / bass sound and the session), and the record's check would reset such a position over 127. A pool's place,
-  an engine's preset count and a track's preset are bytes: 200 fits, 255 is the end.
-- The pool read-out showed 11 of a name's 12 characters; it shows 12 with PROPHET in the build (`cu.pop.sub`).
+- Left as it is for phase B: the settings record has no slot for P5's per-engine pool position (`cr_settings.c
+  crs_slot`), so after a power cycle a part that comes back to P5 from another engine lands on 01 (the sound a part
+  was playing at power-off does come back: the session). A pool's place, an engine's preset count and a track's
+  preset are bytes: 200 fits, 255 is the end.
+- The pool read-out showed 11 of a name's 12 characters; it shows 12 with P5 in the build (`cu.pop.sub`).
 
 ## Storage (no flash layout change)
 

@@ -104,7 +104,7 @@ btn EDIT 600
 wait 300
 knob SELECT -8                # the engine picker: to its first engine,
 wait 200
-knob SELECT +5                # then the sixth: WHEEL (SELECT steps the engines; the roots play; PROPHET is the fifth since 0.22)
+knob SELECT +5                # then the sixth: WHEEL (SELECT steps the engines; the roots play; P5 is the fifth since 0.22)
 wait 300
 btn OCT+
 wait 1500

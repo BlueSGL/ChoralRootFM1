@@ -2,11 +2,12 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
  * Modifications Copyright (C) 2026 Kerem Kilic (Ellic Studio)
  * Modifications Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
-/* PROPHET (engine ENGI_PROPHET, FELUCCA_PROPHET; docs/PROPHET.md): Melodee's Prophet-5 engine (Kerem Kilic's fork of
+/* P5 (engine ENGI_PROPHET, FELUCCA_PROPHET; docs/PROPHET.md; the name a player sees is "P5", the owner's of 2026-10-13:
+ * the internal names keep PROPHET and p5_): Melodee's Prophet-5 engine (Kerem Kilic's fork of
  * Felucca, <https://github.com/keremimo/melodee>, GPL-3.0-only; its code name p5_, its file name kept so that a later
  * fix there can be diffed in). Native Sequential programs (prophet_patch.c: the 133 raw bytes of a program dump), two
  * band-limited oscillators with hard sync and audio-rate Poly-Mod into a four-pole ladder with a tanh knee in two
- * characters (SSI: Rev 1/2, Curtis: Rev 3), two ADSRs, the wheel's shared modulation source, five voices.
+ * characters (SSI: Rev 1/2, Curtis: Rev 3), two ADSRs, the wheel's shared modulation source. FOUR voices a part here (Melodee: five): P5_POLY, below.
  *
  * WHICH VERSION. Melodee's last INTEGER version: commit 8a3074b ("Lo Freq B seven octaves, free-running phase,
  * smoother saturation"), on b351a14 ("calibrate to Rev-4 demo and add 200 factory presets") and 1fbeccd. Melodee
@@ -30,13 +31,14 @@
  *     default). The program's P5_BEND byte is kept and not used;
  *   - the modulation matrix's ENV source: Melodee's voice.c asks p5_env_source for an ownenv engine; ChoralRoot's
  *     gives 0 (as FM6's and CZ-1's), so the function is not here;
- *   - a load does not take the program's UNISON switch: the part keeps its own voice mode (the chord part POLY, the
- *     bass part MONO) until UNISON is turned in the editor (p5_track_accept, p5_voice_mode);
+ *   - a load takes the program's UNISON switch, as Melodee's does (the owner, 2026-10-13: "loading a preset should
+ *     load the Unison"; cd43720 did not): p5_track_loaded, p5_voice_mode, p5_leave;
  *   - p5_fast_osc_pulse and p5_filter are kept though the engine calls neither (the tests call p5_filter).
  *
  * ChoralRoot's additions (as eng_cz.c's): the state in the parts' pooled engine state (engines.c eng_state.p5), the
- * PRESETS list (INIT PROPHET; with FELUCCA_P5_FACTORY Sequential's 200 programs: build/gen/melodee_prophet_factory.h,
- * tools/gen_prophet_factory.py), the load hook (p5_track_loaded, on every load path through eng_fm6.c
+ * PRESETS list (INIT; with FELUCCA_P5_FACTORY the programs of Sequential's 200 that the shipped list names:
+ * assets/prophet5-factory/shipped.txt -> build/gen/melodee_prophet_factory.h, tools/gen_prophet_factory.py; a program's
+ * identity is its Sequential number 1..200, p5_patch_id, whatever its place in the list), the load hook (p5_track_loaded, on every load path through eng_fm6.c
  * fm6_track_loaded), the deep pages for the sound editor (Melodee's P5_PANEL descriptors, prophet_edit.h there; the
  * page plan started from the remix's P5_DEEP) and the patch blob (the 138-byte p5_patch_t: the session keeps a part's
  * edited program; a user slot does not yet: cr_ui.c cu_save_open refuses, docs/PROPHET.md "Saving"). */
@@ -57,7 +59,7 @@
 #define P5_DC_BLOCK 1                   /* the part's DC blocker (p5_post); 0: 8a3074b's output, for a measurement */
 #endif
 #ifndef FELUCCA_P5_FACTORY
-#define FELUCCA_P5_FACTORY 1            /* Sequential's 200 factory programs in the PRESETS list; 0: INIT PROPHET alone */
+#define FELUCCA_P5_FACTORY 1            /* Sequential's factory programs (the shipped list's) in the PRESETS list; 0: INIT alone */
 #endif
 #ifdef P5_HOT                           /* (tools/p5_cost.py: its own, to build the sample loop for one program) */
 #elif P5_RAM
@@ -69,9 +71,13 @@
 #endif
 #include "prophet_patch.c"
 #if FELUCCA_P5_FACTORY
-#include "melodee_prophet_factory.h"   /* Sequential's 200 v1.03 programs (tools/gen_prophet_factory.py) */
+#include "melodee_prophet_factory.h"   /* Sequential's v1.03 programs, the shipped ones (tools/gen_prophet_factory.py) */
 #endif
-#define P5_POLY 5u
+/* FOUR voices a part, four budget units each (p5_units): Melodee's five of three units were measured on the owner's
+ * unit on 2026-10-13 (cd43720, a five-voice chord): pk_part0_us 2033 where the listing's count said 1318 (1.54 x),
+ * pk_block_us 2814 of the half's 2902, pk_late 17, stale_halves 0 (nothing heard). Four voices are about 1630 us by
+ * proportion (docs/PROPHET.md "Cost on the unit") */
+#define P5_POLY 4u
 typedef struct { int32_t value; uint8_t stage; } p5_env_t;
 typedef struct {
     uint32_t phase[2];
@@ -303,7 +309,7 @@ static void p5_block(track_t *t)
 {
     p5_part_t *s=p5_part((uint32_t)(t-trk));const uint8_t *p=p5_patch_of(t)->raw;
     if(!s)return;
-    /* Raw-to-DSP clamping is part-wide; envelopes and all five voices share it. */
+    /* Raw-to-DSP clamping is part-wide; envelopes and all the voices share it. */
     for(uint32_t k=0;k<55u;k++)s->value[k]=(uint8_t)p5_value(p,k);
     uint32_t inc=P5_LFO_INC[p5_value(p,P5_LFO_RATE)]/P5_OVERSAMPLE;
     int32_t amount=P5_AMOUNT_Q15[clamp(p5_value(p,P5_LFO_INITIAL)+t->mw+(p[P5_PRESS_LFO]?t->at:0),0,127)];
@@ -314,7 +320,7 @@ static uint32_t p5_cap(const track_t *t)
 {
     const uint8_t *p=p5_patch_of(t)->raw;
     return p[P5_UNISON] && t->p[P_VOICE]==V_UNISON ?
-        (uint32_t)clamp(p[P5_UNISON_COUNT]?p[P5_UNISON_COUNT]:5,1,5) : 5u;
+        (uint32_t)clamp(p[P5_UNISON_COUNT]?p[P5_UNISON_COUNT]:(int32_t)P5_POLY,1,(int32_t)P5_POLY) : P5_POLY;
 }
 static void p5_legato(track_t *t,voice_t *v)
 {
@@ -322,12 +328,15 @@ static void p5_legato(track_t *t,voice_t *v)
 }
 /* Native performance controls become the track's allocator settings at load
  * or native edit. Afterwards the MIX group's VOICE / PRIORITY / DETUNE can override.
- * ChoralRoot: a LOAD does not take the program's UNISON switch (Melodee's sets V_UNISON whenever the program says
- * so): the part keeps the voice mode its load gave it (cr_ui.c cu_load: the chord part POLY, "a chord on a mono
- * preset"; the bass part MONO), so a chord sounds as a chord and a unison bass does not take fifteen of the sixteen
- * budget units from the chord part. Turning UNISON in the editor does switch the part (p5_voice_mode), and back to
- * the mode of its load (p5_own) */
-static uint8_t p5_own[NPART];                     /* the part's voice mode as its last load left it (V_POLY, V_MONO ..) */
+ * ChoralRoot, UNISON (docs/PROPHET.md "UNISON"): a LOAD takes the program's UNISON switch, on the chord part and on
+ * the bass part (the owner, 2026-10-13; Melodee's does the same). p5_own is the part's voice mode WITHOUT the
+ * program's switch: what the load's caller gave it (cr_ui.c cu_load: the chord part POLY, the bass part MONO; a
+ * restored session or the picker's snapshot: the mode saved, and when that is UNISON the part's default). A program
+ * without the switch leaves the part's mode as the caller set it, so the next load of a poly program is POLY again;
+ * the editor's UNISON cell switches between UNISON and p5_own; an engine change that keeps the part's mix
+ * (cr_ui.c cu_engine_switch) takes a program's UNISON off again (p5_leave) */
+#define P5_PART_BASS 1u                           /* cr_out.c CR_PART_BASS (asserted there) */
+static uint8_t p5_own[NPART];                     /* the part's voice mode without the program's UNISON (V_POLY, V_MONO ..) */
 static void p5_track_accept(track_t *t)
 {
     const uint8_t *p=p5_patch_of(t)->raw;
@@ -339,6 +348,14 @@ static void p5_voice_mode(track_t *t)             /* the editor turned UNISON */
 {
     uint32_t k=(uint32_t)(t-trk)%NPART;
     t->p[P_VOICE]=(int16_t)(p5_patch_of(t)->raw[P5_UNISON]?V_UNISON:p5_own[k]);
+}
+/* the part leaves the engine with its mix kept (cr_ui.c cu_engine_switch, before it writes eng_req): a UNISON that
+ * the program gave is not the next engine's (the VA's UNISON is eight voices); one the player set on the MIX page
+ * of a program without the switch stays, as between any two engines */
+static void p5_leave(track_t *t)
+{
+    uint32_t k=(uint32_t)(t-trk)%NPART;
+    if(t->p[P_VOICE]==V_UNISON && p5_patch_of(t)->raw[P5_UNISON])t->p[P_VOICE]=p5_own[k];
 }
 
 /* Four trapezoidal one-poles with an algebraic feedback solution. Curtis:
@@ -635,26 +652,28 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
 }
 
 #if FELUCCA_P5_FACTORY
-/* Sequential's factory program k (0..P5_FACTORY_N-1), unpacked (tools/gen_prophet_factory.py pack; Melodee 1bc4555) */
+/* the shipped factory program k (0..P5_FACTORY_N-1: the pool's order, assets/prophet5-factory/shipped.txt), unpacked
+ * (tools/gen_prophet_factory.py pack; Melodee 1bc4555). Its group and program bytes are Sequential's (the program's
+ * number P5_FACTORY_ID[k], 1..200: its identity, p5_patch_id), not its place in the list */
 static void p5_factory(uint32_t k,p5_patch_t *p)
 {
     const uint8_t *b=P5_FPACK+k*P5_FACTORY_BYTES;
-    uint32_t pos=0;
+    uint32_t pos=0,id=P5_FACTORY_ID[k]-1u;
     memset(p,0,sizeof *p);
     for(uint32_t i=0;i<P5_RAW_MAX;i++){
         uint32_t v=0;
         for(uint32_t j=0;j<P5_FWIDTH[i];j++,pos++)v|=(uint32_t)(b[pos>>3]>>(pos&7u)&1u)<<j;
         p->raw[i]=(uint8_t)(P5_FBASE[i]+v);
     }
-    p->size=P5_RAW_MAX;p->model=0x32;p->command=2;p->group=(uint8_t)(k/40u);p->program=(uint8_t)(k%40u);
+    p->size=P5_RAW_MAX;p->model=0x32;p->command=2;p->group=(uint8_t)(id/40u);p->program=(uint8_t)(id%40u);
 }
 #endif
-/* INIT, then Sequential's factory programs in their order (111..588 on the
- * Prophet: preset k is program k-1 of the v1.03 bank). Dry, as the Prophet: the sends are the part's here (cr_bank.c
+/* INIT, then the shipped factory programs in the list's order (preset k is program P5_FACTORY_ID[k-1] of the v1.03
+ * bank; 111..588 on the Prophet). Dry, as the Prophet: the sends are the part's here (cr_bank.c
  * param_kept), so a program plays with the part's reverb, chorus and delay as every other engine's sound does. */
 #define P5_FACTORY_PRESET(n) {n,{0,0,0,0,0,0,0,0},{0,0,127,0},0,0,FX(0,0,0,0),PAT(1)},
 static const preset_t P5_TEST_PRESETS[] = {
-    {"INIT PROPHET",{0,0,0,0,0,0,0,0},{0,0,127,0},0,0,FX(0,0,0,0),PAT(1)},
+    {"INIT P5",{0,0,0,0,0,0,0,0},{0,0,127,0},0,0,FX(0,0,0,0),PAT(1)},
 #if FELUCCA_P5_FACTORY
     P5_FACTORY_PRESETS(P5_FACTORY_PRESET)
 #endif
@@ -663,6 +682,33 @@ static const preset_t P5_TEST_PRESETS[] = {
 _Static_assert(NELEM(P5_TEST_PRESETS)==P5_FACTORY_N+1u, "Prophet factory presets");
 #endif
 _Static_assert(NELEM(P5_TEST_PRESETS)<=255u, "engine_t.npresets and track_t.preset are bytes");
+/* A PROGRAM'S IDENTITY: its Sequential program number 1..200 (a program dump's group and program bytes, which every
+ * factory program carries in its own 138 bytes and an edit does not touch); 0: none (INIT, an edit-buffer dump).
+ * It does not depend on the shipped list, so a record that holds the program (the session's blob, cr_settings.c)
+ * names the same sound in a build with another list. p5_preset_of: the preset (= the pool's position) of identity
+ * id in THIS build, 0: not shipped here (or no identity) */
+static uint32_t p5_patch_id(const p5_patch_t *p)
+{
+    return p->command==2u && p->group<5u && p->program<40u ? (uint32_t)p->group*40u+p->program+1u : 0u;
+}
+static uint32_t p5_preset_of(uint32_t id)
+{
+#if FELUCCA_P5_FACTORY
+    for(uint32_t k=0;id && k<P5_FACTORY_N;k++)if(P5_FACTORY_ID[k]==id)return k+1u;
+#else
+    (void)id;
+#endif
+    return 0u;
+}
+static uint32_t p5_preset_id(uint32_t pi)        /* preset pi's identity (0: INIT) */
+{
+#if FELUCCA_P5_FACTORY
+    if(pi && pi<=P5_FACTORY_N)return P5_FACTORY_ID[pi-1u];
+#else
+    (void)pi;
+#endif
+    return 0u;
+}
 /* A factory preset's native program; preset 0 is INIT. */
 static void p5_preset_patch(uint32_t pi,p5_patch_t *p)
 {
@@ -682,10 +728,11 @@ static void p5_patch_put(track_t *t,const p5_patch_t *in)
     RING_PUBLISH();
 }
 /* ----------------------------------------------------- ChoralRoot: the program of a part --- */
-/* a sound load put PROPHET into track t (eng_fm6.c fm6_track_loaded calls it on every load path: a factory preset,
+/* a sound load put P5 into track t (eng_fm6.c fm6_track_loaded calls it on every load path: a factory preset,
  * a user slot, an engine change, INIT, the picker): the factory program t->preset names (0, a user slot's load and
- * INIT: INIT PROPHET; a user slot has no program of its own yet, docs/PROPHET.md "Saving"). The eight macros are
- * offsets on the program (CUT RES TUNA TUNB PWA PWB MIXA MIXB), 0 in every preset */
+ * INIT: INIT; a user slot has no program of its own yet, docs/PROPHET.md "Saving"). The eight macros are
+ * offsets on the program (CUT RES TUNA TUNB PWA PWB MIXA MIXB), 0 in every preset. The program's UNISON switch makes
+ * the part UNISON (above); a program without it leaves the mode the caller set */
 static void p5_track_loaded(track_t *t)
 {
     uint32_t tr=(uint32_t)(t-trk);
@@ -693,15 +740,23 @@ static void p5_track_loaded(track_t *t)
     if(tr>=NTRK || t->eng_req!=ENGI_PROPHET)return;
     p5_preset_patch(t->preset,&p);
     p5_patch_put(t,&p);
-    p5_own[tr]=(uint8_t)(t->p[P_VOICE]==V_UNISON?V_POLY:t->p[P_VOICE]);
+    p5_own[tr]=(uint8_t)(t->p[P_VOICE]==V_UNISON?(tr==P5_PART_BASS?V_MONO:V_POLY):t->p[P_VOICE]);
     p5_track_accept(t);
+    if(p.raw[P5_UNISON])t->p[P_VOICE]=V_UNISON;
+}
+/* a record's program came back over a load (cr_settings.c css_part_put, cr_ui.c cu_pick_end: after blob_set): the
+ * part's voice mode is the one the record held (the load above took the factory program's switch, and the record
+ * may hold another: UNISON turned off in the editor, a mode set on the MIX page) */
+static void p5_voice_restore(track_t *t,int32_t mode)
+{
+    t->p[P_VOICE]=(int16_t)mode;
 }
 /* the blob: p5_patch_t as it is (138 bytes: the 133 raw bytes, then size, model, command, group, program) */
 static void p5_blob_get(const track_t *t,uint8_t *out)
 {
     memcpy(out,p5_patch_of(t),sizeof(p5_patch_t));
 }
-static void p5_blob_set(track_t *t,const uint8_t *in)             /* 0 or a bad blob: INIT PROPHET */
+static void p5_blob_set(track_t *t,const uint8_t *in)             /* 0 or a bad blob: INIT */
 {
     p5_patch_t p;
     if(in)memcpy(&p,in,sizeof p);
@@ -760,7 +815,7 @@ static const eng_page_t P5_PAGES[] = {
     {"WHEEL+",{P5D_S("FILTER"),P5D_NONE,P5D_NONE,P5D_NONE}},
     {"POLYMOD",{P5D_K("ENV"),P5D_K("OSC B"),P5D_S("FREQ A"),P5D_S("PW A")}},                           /* 15 MOD */
     {"POLYMOD+",{P5D_S("FILTER"),P5D_NONE,P5D_NONE,P5D_NONE}},
-    {"VOICE",{P5D_S("UNISON"),{"VOICES",F_INT,1,5,5,0,0},{"DETUNE",F_INT,0,7,0,0,0},P5D_K("GLIDE")}},
+    {"VOICE",{P5D_S("UNISON"),{"VOICES",F_INT,1,(int16_t)P5_POLY,(int16_t)P5_POLY,0,0},{"DETUNE",F_INT,0,7,0,0,0},P5D_K("GLIDE")}},
     {"VOICE+",{{"PRIO",F_ENUM,0,3,0,N_P5_PRIO,0},P5D_K("VINTAGE"),P5D_NONE,P5D_NONE}},
 };
 #undef P5D_K
@@ -796,7 +851,7 @@ static int32_t p5_dref(uint32_t page,uint32_t col)                /* page column
     return P5_DKEY[page][col];
 }
 /* get: the value the engine plays, in the column's range (a switch byte other than 0: on; VOICES 0, as the factory
- * programs have it: all five, p5_cap); the byte itself stays as it is until the column is turned */
+ * programs have it: all P5_POLY, p5_cap; a stored 5: the four there are); the byte itself stays as it is until the column is turned */
 static int32_t p5_dget(const track_t *t,uint32_t page,uint32_t col)
 {
     int32_t id=p5_dref(page,col),v;
@@ -805,7 +860,7 @@ static int32_t p5_dget(const track_t *t,uint32_t page,uint32_t col)
     d=&P5_PAGES[page].col[col];
     v=p5_patch_of(t)->raw[id];
     if(d->fmt==F_ONOFF)return v!=0;
-    if(id==P5_UNISON_COUNT && !v)return 5;
+    if(id==P5_UNISON_COUNT && !v)return (int32_t)P5_POLY;
     return clamp(v,d->min,d->max);
 }
 static void p5_dset(track_t *t,uint32_t page,uint32_t col,int32_t v)
@@ -833,12 +888,12 @@ static const eng_deep_t P5_DEEP={
 };
 _Static_assert(sizeof(p5_patch_t)==138u && sizeof(p5_patch_t)<=ENG_BLOB_MAX,"the Prophet program fits the blob cap");
 
-/* Hardware (Melodee's): five heavy Prophet voices fit; five plus three other engines do
- * not. Charge three of sixteen units before allocation, using the existing
- * per-engine budget hook. Three Prophet + three regular voices cost fifteen. */
-static uint32_t p5_units(const track_t *t) { (void)t; return 3u; }
+/* The budget: four of the sixteen units a voice, so that at most four P5 voices sound on a part (P5_POLY, above:
+ * the unit's reading), three when the other part sounds (a VA or FM6 bass takes 2 units, a P5 bass 4), through the
+ * existing per-engine budget hook. (Melodee: three units, five voices.) */
+static uint32_t p5_units(const track_t *t) { (void)t; return 4u; }
 static const engine_t ENG_P5_TEST = {
-    .name="PROPHET", .page_title={"FILTER/TUNE","PW/MIX"},
+    .name="P5", .page_title={"FILTER/TUNE","PW/MIX"},
     .edit={{"CUT",F_INT,-63,63,0,0,0},{"RES",F_INT,-63,63,0,0,0},
            {"TUNA",F_SEMI,-24,24,0,0,0},{"TUNB",F_SEMI,-24,24,0,0,0},
            {"PWA",F_INT,-63,63,0,0,0},{"PWB",F_INT,-63,63,0,0,0},

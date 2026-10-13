@@ -1973,3 +1973,59 @@ programs dry and with the default sends; three programs by the remix's engine fi
 **Not done / not tested**: anything on a unit; a store, backup ids, the web manager, the manual (it still says five
 engines), a release note. **The owner's decisions** are listed in docs/PROPHET.md and docs/HANDOFF.md items 26, 27:
 ship Sequential's bank or not, the name, the measurement and the cap, UNISON on a load, the store.
+
+3y39. **P5: the name, UNISON on a load, a shipped list of 48, and four voices by the unit's reading (2026-10-13; 0.22
+in development; the owner, after playing 3y38's build: "I'd like to trim down the presets it ships with, maybe in the
+device manager you can have option to load up all 200, we can name in P5, loading a preset should load the
+Unison").** On p5-b, after cd43720. The device manager's loading is a later phase (it needs the store for user
+programs) and is not in this entry.
+**The unit's reading (the owner, cd43720, a five-voice chord).** `pk_part0_us` **2033** where the listing's count
+said 1318 (the count is 1.54 × low for this engine; CZ-1's was 1.7), `pk_block_us` **2814** of the half's 2902,
+`pk_late` **17**, `stale_halves` 0: late halves, none audible. So **four voices a part**: `P5_POLY` 5 -> 4 and
+`p5_units` 3 -> 4 of the 16 (the state 788 -> 672 B in the same union; the editor's VOICES 1..4; a stored count of 5
+or 0 plays four). Four voices are about 1630 us by proportion (2033 × 4 / 5), the half about 2410: **inferred, the
+four-voice build is not measured.** The shared budget works as before: with the bass sounding on one core the chord
+has three voices (3 × 4 + 2). A five-key chord keeps its bottom note and its top three, a six-key chord the bottom
+and the top three (voice.c's rule, every engine's: the oldest held voice goes, never the lowest note; the chord
+engine sends bottom-up): measured on the host.
+**The name.** "P5" wherever a player sees the engine (`ENG_P5_TEST.name`: the pickers, the pool's read-out, the
+editor, "P5: no save yet", the traces the tests match); preset 0 is "INIT P5" (shown as INIT). The code's names stay
+(`FELUCCA_PROPHET`, `ENGI_PROPHET`, the files, docs/PROPHET.md); LICENSING.md's rows and the trademark line name the
+origin as before. The screens were looked at with the shorter name: centred, nothing cut.
+**UNISON on a load** (cd43720 had left it out: "the chord part stays POLY, the bass MONO"). The load hook makes the
+part UNISON when the program's switch is on (40 of the 200, 5 of the 48), on both parts; a program without it leaves
+the mode the load's caller set, so the next poly program is POLY again and another engine's sound finds the part as
+it expects it; the editor's engine switch, which keeps the part's mix, takes a program's UNISON off (`p5_leave`); the
+session and the picker's snapshot bring back the mode as it was left (`p5_voice_restore`); every load releases held
+keys (tested both ways). **A 4-note chord on a UNISON program sounds one note on the program's stacked voices, four
+at most**: the chord's lowest note on a program of LOW priority (most), the last note sent, the top one, on a LAST
+program; 16 budget units, **the cost of a four-note chord, no more** (a voice is a voice); three voices with a bass
+sounding. On the bass part a UNISON program is four voices alone and **one voice under a chord** (measured, either
+order of arrival: the chord keeps three notes), so it does not starve the chord.
+**The shipped list.** `assets/prophet5-factory/shipped.txt`: one Sequential program number a line, comments, the
+pool's order; no file or `all`: the 200 (`P5_SHIPPED` in the environment: another list). `tools/gen_prophet_factory.py`
+generates `P5_FACTORY_N`, `P5_FACTORY_ID[]` and the packed programs from it; the preset count, the pool, the tests,
+the level tool and the regression follow. **A program's identity is its Sequential number**, which every factory
+program carries in its own 138 bytes. What cd43720's session stored for a P5 part: the whole program (the blob),
+its name, the parameters, and its place in the pool (`preset`, `fk`): the sound was safe, the place was not (a list
+changed would have shown another position, and a place past the pool's end dropped the record). Fixed in
+`css_part_put`: the place is looked up from the program's number; a program this build does not ship plays from the
+record, at no place. Not changed: the settings block's `chord_sound` / `bass_sound`, a pool position for every engine
+(used when there is no session record). Proved with three lists (`tests/run_prophet_test.sh`): records written with
+one list read with another bring the same program back; a program renders the same samples in each. The regression's
+P5 entries are named by the number, and `tools/p5_goldens.py` makes P5's lines again without touching the others.
+**The provisional 48**, chosen from the programs' parameters and names, not by ear: 14 pads, strings and voices, 6
+brass, 8 keys, 5 organs, 4 plucks and bells, 2 polysynths, 5 basses, 4 leads; no effects; one of each near-duplicate
+pair; the reason for each in the file, the table in docs/PROPHET.md.
+**Size.** XIP with all 200: 519 508 B (90.6 %); with the 48: **505 588 (88.2 %)**; INIT alone: 500 868 (87.3 %). RAM
+81 348, POOL 316 052, as before. `FELUCCA_PROPHET=0 ./build.sh` is still aa5875a's image (`choralroot.bin`
+501a9d09..): a first version of the session fix used plain local variables in `css_part_put` and changed that image;
+it is behind the switch now.
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders (197 of the other engines, their lines untouched, + INIT and the 48; 0 changed, 0 gone against the
+file as rewritten); 0 lint findings; test_cr 914 ok, test_persist 95 ok, test_retired 18 ok. All 49 P5 hashes differ
+from cd43720's for the same programs: the regression's phrase ends on a five-note chord (four voices now), and the
+five UNISON programs load in UNISON.
+**Not done / not tested**: this tree on a unit; UNISON by ear; the store, the device manager, backup ids, the web
+manager, the manual, a release note; `tools/emu/perf.sh` (p), (q) and the listening files again (docs/PROPHET.md
+marks cd43720's figures); a list of fewer than 15 programs (the emulator's script visits place 15).

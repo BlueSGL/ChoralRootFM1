@@ -17,8 +17,8 @@
 #   (l) (c) with the delay and the reverb fully on (0.18, docs/FX.md): the chord part's sends at 127, Decay 13 s,
 #       Feedback up: the heaviest sound scenario with both effects' loops running in every block (budget: both effects
 #       <= 350 us a block, no block over 80 %)
-#   (p) a 6-key PROPHET chord (01 ITS PROPHET5: the SSI filter, its envelope sweeping; five voices, the cap) + the
-#       PROPHET bass (04 FUNK BASS II) with the default sends, a chord change (docs/PROPHET.md "Cost on the unit": the
+#   (p) a 6-key P5 chord (01 ITS PROPHET5: the SSI filter, its envelope sweeping; four voices, the cap) + the
+#       P5 bass (FUNK BASS II, place 40 of the provisional list) with the default sends, a chord change (docs/PROPHET.md "Cost on the unit": the
 #       unit's figures are counted from its listing, tools/p5_cost.py; these are the emulator's estimates)
 #   (q) (p) with the VA bass (PUNCH BASS)
 # The heavy scenarios (c, d, e, i, l) also get a "keys" line each (tools/emu/keylat.py, docs/INTEGRATION.md "Keys while

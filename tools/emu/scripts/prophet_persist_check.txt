@@ -1,5 +1,5 @@
-# test_persist.sh, PROPHET run 2 (the same flash file): the power-on sound is PROPHET 03 FOREVER KEYS, edited (dump);
-# EDIT, FILT (SEL), KNOB 1 +1: the cutoff reads the saved value ("CUT 51 -> 57"); a chord on it sounds
+# test_persist.sh, P5 run 2 (the same flash file): the power-on sound is P5's place 03, edited (dump);
+# EDIT, FILT (SEL), KNOB 1 +1: the cutoff reads the saved value ("CUT b -> a"); a chord on it sounds
 wait 500
 dump
 btn EDIT

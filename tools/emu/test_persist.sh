@@ -258,20 +258,33 @@ grep -q "^deep: part 0 page 11 DCW 1+ col 0 L1 [0-9]* -> 0 " "$OUT/persist_cz_1.
 grep -q "^deep: part 0 page 11 DCW 1+ col 0 L1 0 -> " "$OUT/persist_cz_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_cz_2.log" &&
     ok "CZ-1 run 2: DCW 1's L1 is 0 as saved, the sound plays" || bad "CZ-1 run 2: $(grep -m1 '^deep:' "$OUT/persist_cz_2.log")"
 
-# PROPHET (engine 16; docs/PROPHET.md): no store yet, so no user slot: run 1 puts the chord part on 03 FOREVER KEYS,
-# turns its cutoff down a detent, is refused a SAVE, and saves globally (SAVE held: the settings' chord sound, the
-# session's blob); run 2 (the same file) powers on with that program as edited
+# P5 (engine 16; docs/PROPHET.md): no store yet, so no user slot: run 1 puts the chord part on a program of the
+# shipped list (assets/prophet5-factory/shipped.txt: its first with UNISON on, so that the part's voice mode is in the
+# case; without one, place 03), turns its cutoff down a detent, is refused a SAVE, and saves globally (SAVE held: the
+# settings' chord sound, the session's blob); run 2 (the same file) powers on with that program as edited, and the
+# part in UNISON as the load left it (voice mode 3; else POLY, 0)
 PFLASH=$OUT/persist_p5_flash.bin
 rm -f "$PFLASH" "$OUT"/persist_p5_1.log "$OUT"/persist_p5_2.log
-"$EMU" --headless --flash "$PFLASH" --script "$S/prophet_persist_set.txt" >"$OUT/persist_p5_1.log" 2>&1 || bad "PROPHET run 1: exit status"
-"$EMU" --headless --flash "$PFLASH" --script "$S/prophet_persist_check.txt" >"$OUT/persist_p5_2.log" 2>&1 || bad "PROPHET run 2: exit status"
-grep -q "^deep: part 0 page 5 FILTER col 0 CUT 57 -> 51 " "$OUT/persist_p5_1.log" && grep -q '^save: part 0 PROPHET refused' "$OUT/persist_p5_1.log" &&
-    grep -q '^save: global rc 0' "$OUT/persist_p5_1.log" &&
-    ok "PROPHET run 1: 03 FOREVER KEYS, the cutoff 57 -> 51; SAVE refused (no store); the global save" || bad "PROPHET run 1: $(grep -m1 '^deep:\|^save:' "$OUT/persist_p5_1.log")"
-grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q 'PROPHET / FOREVER KEYS edited 1' &&
-    grep -q "^deep: part 0 page 5 FILTER col 0 CUT 51 -> 57 " "$OUT/persist_p5_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_p5_2.log" &&
-    ok "PROPHET run 2: powers on with FOREVER KEYS as edited (the cutoff reads 51: the session's program), the sound plays" ||
-    bad "PROPHET run 2: $(grep -a -m1 'session chord:' "$OUT/persist_p5_2.log") / $(grep -m1 '^deep:' "$OUT/persist_p5_2.log")"
+P5POS=$(python3 tools/gen_prophet_factory.py --list | awk '$3 == "U" { print $1; exit }')
+P5MODE=3
+[ -n "$P5POS" ] || { P5POS=3; P5MODE=0; }
+P5NAME=$(python3 tools/gen_prophet_factory.py --list | awk -v p="$P5POS" '$1 == p { sub(/^ *[0-9]+ +[0-9]+ +[U-] +/, ""); print }')
+sed "s/^knob PRESETS +2 .*/knob PRESETS +$((P5POS - 1))/" "$S/prophet_persist_set.txt" > "$OUT/persist_p5_set.txt"
+"$EMU" --headless --flash "$PFLASH" --script "$OUT/persist_p5_set.txt" >"$OUT/persist_p5_1.log" 2>&1 || bad "P5 run 1: exit status"
+"$EMU" --headless --flash "$PFLASH" --script "$S/prophet_persist_check.txt" >"$OUT/persist_p5_2.log" 2>&1 || bad "P5 run 2: exit status"
+p5cut=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$OUT/persist_p5_1.log" | head -1)
+p5a=${p5cut% *}; p5b=${p5cut#* }
+[ -n "$p5cut" ] && [ "$p5a" != "$p5b" ] && grep -q '^save: part 0 P5 refused' "$OUT/persist_p5_1.log" &&
+    grep -q '^save: global rc 0' "$OUT/persist_p5_1.log" && grep -aq "part 0: P5 / $P5NAME, .* voice mode $P5MODE\$" "$OUT/persist_p5_1.log" &&
+    ok "P5 run 1: place $P5POS $P5NAME (voice mode $P5MODE: the program's UNISON), the cutoff $p5a -> $p5b; SAVE refused (no store); the global save" ||
+    bad "P5 run 1: $(grep -m1 '^deep:\|^save:' "$OUT/persist_p5_1.log") / $(grep -a 'part 0:' "$OUT/persist_p5_1.log" | tail -1)"
+grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "P5 / $P5NAME edited 1" &&
+    grep -q "^deep: part 0 page 5 FILTER col 0 CUT $p5b -> " "$OUT/persist_p5_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_p5_2.log" &&
+    ok "P5 run 2: powers on with $P5NAME as edited (the cutoff reads $p5b: the session's program), the sound plays" ||
+    bad "P5 run 2: $(grep -a -m1 'session chord:' "$OUT/persist_p5_2.log") / $(grep -m1 '^deep:' "$OUT/persist_p5_2.log")"
+grep -a 'part 0:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "part 0: P5 / $P5NAME, .* voice mode $P5MODE\$" &&
+    ok "P5 run 2: the part's voice mode is $P5MODE as it was left (3: UNISON, the program's switch taken by the load)" ||
+    bad "P5 run 2: $(grep -a -m1 'part 0:' "$OUT/persist_p5_2.log")"
 
 # FM TONE (engine 15, code name QUAD; docs/QUAD.md): run 1 edits FM TONE's EP (Ratio A, KNOB 3 +5 on SYN 1) and saves it in U01: the patch into the QUAD
 # patch store (quad_store.c, 0xB2000 / 0xB3000); run 2 (the same file) powers on with U01: the same patch back

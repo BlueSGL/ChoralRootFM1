@@ -90,7 +90,7 @@ static union {
     cz_part_t cz;                /* CZ-1's voices: six envelopes each, vibrato, noise */
 #endif
 #if FELUCCA_PROPHET
-    p5_part_t p5;                /* PROPHET's five voices, the wheel's block of samples, the DC blocker (788 B: the union
+    p5_part_t p5;                /* P5's four voices, the wheel's block of samples, the DC blocker (672 B: the union
                                   * stays FM6's size) */
 #endif
 } eng_state[ENG_STATE_NPART] __attribute__((section(".pool")));

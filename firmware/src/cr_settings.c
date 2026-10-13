@@ -841,18 +841,49 @@ static int css_part_put(uint32_t part, const css_part_t *r)
     track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
     const eng_deep_t *d;
     uint32_t i, e = r->eng;
+#if FELUCCA_PROPHET
+    uint32_t r_preset = r->preset, r_fk = r->fk, r_kind = r->kind, r_edited = r->edited;   /* (P5: its place in this build) */
+#else                                              /* (the record's own: the image without P5 byte for byte) */
+#define r_preset r->preset
+#define r_fk r->fk
+#define r_kind r->kind
+#define r_edited r->edited
+#endif
     if (!r->valid || r->np != P_COUNT || e >= NENGINES || !cu_engine_melodic(e))
         return 0;
+#if FELUCCA_PROPHET
+    /* P5: the record's `preset` and `fk` are places in the pool of the build that wrote it, and the pool is a list
+     * that a later build may change (assets/prophet5-factory/shipped.txt). The record also holds the program itself
+     * (the blob), and the program names itself: its Sequential number (p5_patch_id). The place is taken from that:
+     * the same program's place here, or, when this build does not ship it, no place (the pool's INIT position, shown
+     * edited) with the program and its name as they were. The sound is the blob's either way */
+    if (e == ENGI_PROPHET && r->nblob == sizeof(p5_patch_t) && r_kind == PK_FACTORY) {
+        p5_patch_t pp;
+        uint32_t k;
+        memcpy(&pp, r->blob, sizeof pp);
+        k = p5_preset_of(p5_patch_id(&pp));
+        if (k != r_preset || k != r_fk) {
+            cu_trace("session: part %u P5 program %u: place %u -> %u\n", (unsigned)part, (unsigned)p5_patch_id(&pp),
+                     (unsigned)r_fk, (unsigned)k);
+            r_preset = k;
+            r_fk = k ? k : PF_NONE;
+            if (!k) {
+                r_kind = PK_INIT;
+                r_edited = 1;
+            }
+        }
+    }
+#endif
     d = ENGINES[e]->deep;
     if (r->nblob != (d && d->pages && d->npages && d->get && d->set && d->blob_get && d->blob_set &&
                      d->blob_size <= CSS_BLOB ? d->blob_size : 0u))
         return 0;
-    if ((r->kind == PK_USER && r->slot >= UP_SLOTS) || r->user > UP_SLOTS ||
-        (r->kind == PK_FACTORY && r->fk >= ENGINES[e]->npresets))
+    if ((r_kind == PK_USER && r->slot >= UP_SLOTS) || r->user > UP_SLOTS ||
+        (r_kind == PK_FACTORY && r_fk >= ENGINES[e]->npresets))
         return 0;
     fm1_irq_off();
     t->eng_req = (uint8_t)e;
-    t->preset = r->preset;
+    t->preset = r_preset;
     t->user = r->user;
     t->trim = (int8_t)cr_session_part_trim(r, css_trim_row);   /* (not r->trim: a row removed since stays removed) */
     for (i = 0; i < P_COUNT; i++)
@@ -862,14 +893,25 @@ static int css_part_put(uint32_t part, const css_part_t *r)
     fm6_track_loaded(t);                           /* (the engine's own state for the sound) */
     if (r->nblob)
         d->blob_set(t, r->blob);                   /* the deep patch as it was left */
+#if FELUCCA_PROPHET
+    if (e == ENGI_PROPHET)
+        p5_voice_restore(t, r->p[P_VOICE]);        /* (the load took the factory program's UNISON: the part's mode as
+                                                    * it was left) */
+#endif
     str_cpy(psnd[part].name, r->name, sizeof psnd[0].name);
-    psnd[part].edited = r->edited;
-    psnd[part].kind = r->kind;
-    psnd[part].fk = r->fk;
+    psnd[part].edited = r_edited;
+    psnd[part].kind = r_kind;
+    psnd[part].fk = r_fk;
     psnd[part].slot = r->slot;
     t->engine = t->eng_req;                        /* (power-on: no fade) */
     return 1;
 }
+#if !FELUCCA_PROPHET
+#undef r_preset
+#undef r_fk
+#undef r_kind
+#undef r_edited
+#endif
 
 /* the unit's state now -> *x (sealed; `bind` is the writer's: css_write) */
 static void css_capture(cr_session_t *x)

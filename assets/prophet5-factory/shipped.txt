@@ -1,0 +1,75 @@
+# P5's shipped factory programs (docs/PROPHET.md "The shipped list"; tools/gen_prophet_factory.py reads this file).
+#
+# One Sequential program number (1..200, the program's place in prophet5-v1.03.syx) a line, in the order of the
+# pool: the first line is PRESETS 01. "#" starts a comment. The word "all" alone on a line: every program not named
+# yet, in the bank's order (a file with only "all", or no file: the 200). INIT alone: FELUCCA_P5_FACTORY=0.
+# A program's number is its identity: it stays the same wherever the program stands in this list, and it is what the
+# session keeps (the program's own bytes), so a list changed in a later build does not change a saved sound.
+# All 200 with their numbers: python3 tools/gen_prophet_factory.py --list all
+#
+# After a change: ./build.sh (or any build: the header is generated again), then the P5 goldens alone:
+#   GOLDEN_UPDATE=1 BUDGET_UPDATE=1 sh tests/run_tests.sh      (docs/PROPHET.md "The shipped list" has the steps)
+#
+# PROVISIONAL (2026-10-13, 48 programs; the owner edits it after playing). Chosen from the programs' parameters and
+# names, NOT by ear. The rule: a chord instrument's sounds first, sustained before percussive: 14 pads, strings and
+# voices, 6 brass, 8 keys, 5 organs, 4 plucks and bells, 2 plain polysynths; then 5 basses (three with UNISON) and 4
+# leads (two sync, two UNISON); no effect, noise or drum program; no program that needs the wheel or aftertouch to
+# sound; of two programs within 8 of the 55 panel bytes of each other only one (the bank has two such pairs:
+# 21 BASS FACE / 139 BASSMENT, 48 SMALL GONG / 120 FUNKY BELLS; the generator prints a pair that is in the list). 5 of the 48 have UNISON on (40 of the 200).
+
+# ---- pads, strings, voices (14)
+1      # ITS PROPHET5: the bank's first, the poly sweep on two saws (SSI filter)
+15     # REEDY STRPAD: a slow string pad, Poly-Mod on the width and the filter
+44     # CARS STRINGS: the saw string pad, slow attack
+110    # REVERB STRGS: bright saw strings with a fast attack (the other string colour)
+129    # OLD STR MACH: saw + pulse, open filter: the string machine
+105    # HIGH STRINGS: pulse strings, the top register
+162    # LOW STRINGS: Sequential's 1978 pulse strings, plain and dark
+66     # 80S HORROR: detuned pulse strings with a slow vibrato
+61     # INSTABIL PAD: a slow saw pad that opens with the filter envelope
+70     # VOCAL PAD: resonant pulse pad with a little noise: a choir colour
+47     # CHORAL VOICE: triangle + pulse voices, resonant
+13     # TAARICHOIR: saw + pulse choir, long release
+109    # SOFT SWELL: a slow filter swell, very long release
+54     # MIDNIGHT PWM: pulse-width pad, open and bright
+# ---- brass (6)
+6      # STABBY BRASS: the short brass stab
+102    # SOFT BRASS: saw + pulse, a slower filter: section brass
+131    # ICONIC BRASS: two saws, the Prophet brass
+94     # PINK NEON BR: bright, short release: funk brass
+161    # BRASS: Sequential's 1978 brass: one saw, the filter envelope does the work
+71     # MOVING BRASS: soft brass with a slow width movement
+# ---- keys (8)
+3      # FOREVER KEYS: the plain keys sound: two saws, a decaying filter
+62     # VINTAGE WRLY: the electric piano (triangle, velocity)
+43     # REED EP: a reed electric piano, percussive
+179    # ELEC PIANO I: Sequential's 1978 sync electric piano
+91     # FURRY TINES: tines that sustain
+163    # MUTED CLAV: the clavinet
+166    # HARPSICHORD: the harpsichord, open filter
+11     # CLAVICLE: a sync clav, very short
+# ---- organs (5)
+10     # PDG ORGAN: pulse + triangle organ (SSI filter)
+168    # PERC ORGAN: Sequential's 1978 percussive organ
+170    # HARMONIUM: a soft reed organ, slow attack
+143    # ORGANIZER: a percussive organ that decays
+145    # LESLIED: a rotary organ colour
+# ---- plucks and bells (4)
+81     # PULSE PLUCK: a pluck that sustains a little
+133    # PRETTY PLUCK: a short bright pluck
+79     # MARIMBA: the mallet
+32     # BLINKR BELLS: triangle bells, sustained
+# ---- polysynth (2)
+55     # HYPER POLY: a pulse and a saw, the filter open, short release: the plainest polysynth
+57     # AGGRO SYNTH: saw + pulse with bite (SSI filter)
+# ---- basses (5; three with UNISON: of a chord they sound ONE note, docs/PROPHET.md "UNISON")
+4      # FUNK BASS II: the funk bass (Poly-Mod on the pitch)
+46     # FAT POLYBASS: a bass that plays chords
+139    # BASSMENT: UNISON (one voice: a mono bass): saw + pulse (its near-duplicate 21 BASS FACE is left out)
+111    # LAGOON BASS: UNISON (four voices): a dark resonant bass with glide, short release
+135    # FEATURE BASS: UNISON (five voices, last-note): saws + triangle, glide, a long filter decay
+# ---- leads (4)
+17     # SYNCHROTRILL: the sync lead with the wheel's trill
+167    # SYNC I: Sequential's 1978 sync sweep
+82     # UNISAWYER: UNISON: four voices of two saws on one note, detuned, resonant
+169    # UNISON GLIDE: UNISON: Sequential's 1978 unison lead: four voices, glide, resonance

@@ -1,10 +1,11 @@
-# PROPHET (docs/PROPHET.md): OPT + PRESETS +4 -> the PROPHET pool (FM6 -> FM TONE -> VA -> CZ-1 -> PROPHET), its
-# place 01 ITS PROPHET5 (Sequential's program 1 on Melodee's Prophet-5 engine); the picker's read-out while OPT is
-# held (shot: six engines). MAJ + D4 held 1.5 s, released. PRESETS +2: 03 FOREVER KEYS, the chord again; PRESETS +12:
-# 15 REEDY STRPAD, the chord again. EDIT: the editor's groups, a shot each: OSC (OSC A, OSC B, MIXER), FILT (the
-# filter's curve), ENV (ENV 1 the amplifier's, ENV 2 the filter's), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE). On FILT:
-# KNOB 1 -8: the cutoff down ("deep: part 0 page 5 FILTER col 0 CUT"), the chord again: it sounds, darker. SAVE: refused
-# ("PROPHET: no save yet", shot). EDIT held: the engine picker in the editor (shot: PROPHET among the six). OCT-, EDIT.
+# P5 (docs/PROPHET.md; the code's PROPHET): OPT + PRESETS +4 -> P5's pool (FM6 -> FM TONE -> VA -> CZ-1 -> P5), its
+# place 01 (the shipped list's first program: assets/prophet5-factory/shipped.txt; test_cr.sh reads the names of the
+# places from tools/gen_prophet_factory.py --list); the picker's read-out while OPT is held (shot: six engines).
+# MAJ + D4 held 1.5 s, released. PRESETS +2: place 03, the chord again; PRESETS +12: place 15, the chord again.
+# EDIT: the editor's groups, a shot each: OSC (OSC A, OSC B, MIXER), FILT (the filter's curve), ENV (ENV 1 the
+# amplifier's, ENV 2 the filter's), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE). On FILT: KNOB 1 -8: the cutoff down
+# ("deep: part 0 page 5 FILTER col 0 CUT"), the chord again: it sounds, darker. SAVE: refused ("P5: no save yet",
+# shot). EDIT held: the engine picker in the editor (shot: P5 among the six). OCT-, EDIT.
 wait 300
 btn GLO down
 wait 100
@@ -22,7 +23,7 @@ expect sound
 btn D4 up
 key F3 up
 wait 2500
-knob PRESETS +2               # 03 FOREVER KEYS
+knob PRESETS +2               # place 03
 wait 300
 shot build/emu/test/cr_prophet_pool.ppm
 key F3 down
@@ -33,7 +34,7 @@ expect sound
 btn D4 up
 key F3 up
 wait 2500
-knob PRESETS +12              # 15 REEDY STRPAD
+knob PRESETS +12              # place 15
 wait 300
 key F3 down
 wait 60

@@ -20,7 +20,8 @@ EMU=build/host/emu
 mkdir -p "$O" "$W" build/emu/test build/host
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
 
-# the programs: pool position (= Sequential's program number), the PRESETS name, a file name, what it is
+# the programs: Sequential's program number (its place in the pool is the shipped list's: gen_prophet_factory.py
+# --pos; a program the list does not ship is skipped), the PRESETS name, a file name, what it is
 PROGS="01:ITS PROPHET5:its-a-prophet-5:the bank's first, a poly sweep (SSI filter)
 03:FOREVER KEYS:forever-keys:keys
 06:STABBY BRASS:stabby-brass:brass
@@ -33,12 +34,12 @@ PROGS="01:ITS PROPHET5:its-a-prophet-5:the bank's first, a poly sweep (SSI filte
 chord() {   # chord TYPEKEY ROOT MS
     printf 'key %s down\nwait 40\nbtn %s down\nwait %s\nbtn %s up\nkey %s up\nwait 150\n' "$1" "$2" "$3" "$2" "$1"
 }
-script() {  # script FILE POS dry|fx
+script() {  # script FILE PLACE dry|fx
     {
         echo "master 1023"
         echo "wait 300"
         printf 'btn GLO down\nwait 100\nknob PRESETS +4\nwait 100\nbtn GLO up\nwait 300\n'   # OPT + PRESETS: PROPHET, its place 01
-        steps=$(( ${2#0} - 1 ))
+        steps=$(( $2 - 1 ))
         [ "$steps" -gt 0 ] && printf 'knob PRESETS +%s\nwait 300\n' "$steps"
         if [ "$3" = dry ]; then                   # the FX layer's knobs: chorus, delay, reverb down to 0
             printf 'btn FX down\nwait 500\nknob KNOB2 -12\nwait 100\nknob KNOB3 -8\nwait 100\nknob KNOB4 -10\nwait 100\n'
@@ -56,11 +57,13 @@ script() {  # script FILE POS dry|fx
 
 : > "$O/render.log"
 while IFS=: read -r pos name file what; do
+    place=$(python3 tools/gen_prophet_factory.py --pos "${pos#0}")
+    [ "$place" -gt 0 ] || { echo "$pos $name: not in the shipped list, skipped"; continue; }
     for sends in dry fx; do
         n="$pos-$file-$sends"
-        script "$W/$n.txt" "$pos" "$sends"
+        script "$W/$n.txt" "$place" "$sends"
         "$EMU" --headless --script "$W/$n.txt" --wav "$O/$n.wav" > "$W/$n.log" 2>&1
-        LC_ALL=C grep -aq "part 0: PROPHET / $name" "$W/$n.log" || { echo "$n: the chord part is not on PROPHET $name"; exit 1; }
+        LC_ALL=C grep -aq "part 0: P5 / $name" "$W/$n.log" || { echo "$n: the chord part is not on P5 $name"; exit 1; }
         {
             echo "== $n ($what)"
             LC_ALL=C grep -a "part 0:" "$W/$n.log" | head -1
@@ -77,7 +80,10 @@ EOF
 AB=
 if [ -f "$R/firmware/src/eng_prophet_test.c" ]; then
     RA=$(cd "$R" && pwd)
-    ${CC:-cc} -O2 -w -Ibuild/gen -Ifirmware/src '-DENGINE_FILE="eng_prophet_test.c"' -o build/host/prophet_ab tools/prophet_ab.c -lm
+    # (this tree's side with all 200 programs, so that preset k is program k as in the remix's file)
+    mkdir -p "$W/all"
+    python3 tools/gen_prophet_factory.py "$W/all/melodee_prophet_factory.h" all > /dev/null
+    ${CC:-cc} -O2 -w "-I$W/all" -Ibuild/gen -Ifirmware/src '-DENGINE_FILE="eng_prophet_test.c"' -o build/host/prophet_ab tools/prophet_ab.c -lm
     ${CC:-cc} -O2 -w -Ibuild/gen -Ifirmware/src "-DENGINE_FILE=\"$RA/firmware/src/eng_prophet_test.c\"" \
         -o build/host/prophet_ab_remix tools/prophet_ab.c -lm
     # the remix's tables are this tree's (build/gen/felucca_tables.h), value for value
@@ -112,7 +118,7 @@ else
 fi
 
 {
-    echo "PROPHET (Melodee's Prophet-5 engine in ChoralRoot FM-1, docs/PROPHET.md): listening files"
+    echo "P5 (Melodee's Prophet-5 engine in ChoralRoot FM-1, docs/PROPHET.md): listening files"
     echo "rendered by sh tools/prophet_listen.sh on $(date +%Y-%m-%d) from $(git rev-parse --short HEAD 2>/dev/null || echo '?')$(git diff --quiet 2>/dev/null || echo ' + uncommitted changes')"
     echo
     echo "44.1 kHz stereo, 16 bit. The emulator's output (the firmware's own code on the host: voice.c, the engine, the"
@@ -124,7 +130,7 @@ fi
     echo "  NN-name-fx.wav    the unit's default sends: reverb 35, chorus 45, delay 25"
     echo
     echo "$PROGS" | while IFS=: read -r pos name file what; do
-        echo "  $pos-$file-dry.wav / -fx.wav   PRESETS $pos $name: $what"
+        echo "  $pos-$file-dry.wav / -fx.wav   Sequential's program $pos, $name: $what"
     done
     echo
     if [ -n "$AB" ]; then
