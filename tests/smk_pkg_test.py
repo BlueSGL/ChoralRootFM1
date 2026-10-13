@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca)
-# SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com>
+# SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro)
 """A ChoralRoot package for the M-Vave SMK-37 (fm1pkg_make.py --board smk37, build.py BOARD=smk37): flash.bin is the
 stock PRCT size (0x9D000) and its app area carries the stock v016 region table exactly, so the SPL and a later stock
 rollback see the same VM / BTIF / USRTRIM / USRFLASH / USR regions; app.bin keeps the FM-1's slot, so the boot stub,

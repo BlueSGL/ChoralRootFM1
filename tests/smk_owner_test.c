@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca)
- * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) <mcgeisler@gmail.com> */
+ * SMK-37 port: Copyright (C) 2026 M. Geisler (genkigenki/makkuro) */
 /* ChoralRoot on the M-Vave SMK-37, the store owner tag (storage.c st_owner_check, build with -DBOARD_SMK37=1): a
  * simulated flash with another firmware's store, an untagged one and ChoralRoot's own; only ChoralRoot's data sectors
  * (ST_SMK_REGIONS) and the tag sector are ever erased, ours is kept, the staging area, the calibration and the rest
