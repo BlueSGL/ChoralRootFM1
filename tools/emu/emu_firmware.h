@@ -27,6 +27,9 @@
 #ifndef FELUCCA_QUAD
 #define FELUCCA_QUAD 1                                /* as choralroot.c: the QUAD engine (15), its patch store */
 #endif
+#ifndef FELUCCA_PROPHET
+#define FELUCCA_PROPHET 1                             /* as choralroot.c: Melodee's Prophet-5 engine (16) */
+#endif
 #ifndef FELUCCA_SAMPLE
 #define FELUCCA_SAMPLE 0                              /* as choralroot.c: SAMPLE, GRAIN, DRUM retired */
 #endif

@@ -198,6 +198,22 @@ hold after the SUS step, nothing after END; the step of the turned cell (R k / L
 knob's colour, digits 1–8 (and S) under the steps. No matrix (`not modulatable`). Melodee's CZ TOOLS page (NAME, 1 > 2,
 2 > 1, COMPARE) is not ported. Tests: `tools/emu/scripts/cr_cz.txt`.
 
+### PROPHET (docs/PROPHET.md)
+
+From the title rules, no screen plan (0.22 in development; engine 16, Melodee's Prophet-5):
+
+| Group | Screen | Kind | Lanes | KNOB 1–4 | Top-right text |
+| --- | --- | --- | --- | --- | --- |
+| OSC | 1, 2 | `edit8`, two rows | A, B | A: Freq · Saw · Pulse · Width; B: Sync (`OSC A`, `OSC A+`); A: Freq · Fine · Saw · Tri; B: Pulse · Width · Lo freq · Keyboard (`OSC B`, `OSC B+`) | `OSC A`, `OSC B` |
+| OSC | 3 | `edit8`, one row | MIXER | Osc A · Osc B · Noise (no `OSC · MIX` bars: the pages have no instance number) | `MIXER` |
+| FILT | 1 | `edit8`, the filter curve | A, B | A: Cutoff · Reso · Env amt · Key trk; B: Filter rev (1/2, 3) · Aftertch | `FILTER` |
+| ENV | 1, 2 | `edit8`, the AHDSR of that envelope | A, B | A: Attack · Decay · Sustain · Release; B: Velocity (· Rel sw on ENV 1) | `ENV 1 · amp`, `ENV 2 · filter` |
+| LFO | 1, 2 | `edit8`, two rows | A, B | A: Rate · Amount · Noise · Aftertch; B: Saw · Tri · Square (`LFO`, `LFO+`); A: Freq A · Freq B · PW A · PW B; B: Filter (`WHEEL`, `WHEEL+`) | `LFO`, `WHEEL` |
+| MOD | 1, 2 | `edit8`, two rows | A, B | A: Env · Osc B · Freq A · PW A; B: Filter (`POLYMOD`, `POLYMOD+`); A: Unison · Voices · Detune · Glide; B: Priority · Vintage (`VOICE`, `VOICE+`) | `POLYMOD`, `VOICE` |
+
+A cell is one byte of the program; the switches read on / off, the knobs the stored 0..127. No matrix of its own
+("not modulatable"). Tests: `tools/emu/scripts/cr_prophet.txt`, `tests/cr_prophet_test.c`.
+
 ### FM TONE (docs/QUAD.md; the user-approved screens design/choralroot-fm1-quad-screens.png)
 
 Built from FM TONE's screen plan (`eng_quad.c` `QUAD_SCREENS`), not from the title rules:

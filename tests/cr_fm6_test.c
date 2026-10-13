@@ -317,10 +317,17 @@ int main(void)
                 OK(t->eng_req == ENGI_VA && t->p[P_E0 + 6] == ENG_VA.edit[6].def && t->p[P_REV] == 64,
                    "a SAMPLE record (a Felucca slot): the VA's plain init sound, as before (the part's sends stay)");
             }
+#if FELUCCA_PROPHET
+            OK(NENG_SHOWN == 6 && eng_vis(0) == ENGI_FM6 && eng_vis(1) == ENGI_QUAD && eng_vis(2) == ENGI_VA &&
+               eng_vis(3) == ENGI_CZ && eng_vis(4) == ENGI_PROPHET && eng_vis(5) == 7u && !eng_ok(ENGI_PHYS) &&
+               eng_step(7u, 1) == ENGI_FM6 && eng_rank(ENGI_PHYS) == 0u && ENGINES[ENGI_PHYS]->npresets == 0u,
+               "six engines shown: FM6, FM TONE, VA, CZ-1, PROPHET, WHEEL (PHYS, engine 9, retired: a silent slot without presets, FM6's place)");
+#else
             OK(NENG_SHOWN == 5 && eng_vis(0) == ENGI_FM6 && eng_vis(1) == ENGI_QUAD && eng_vis(2) == ENGI_VA &&
                eng_vis(3) == ENGI_CZ && eng_vis(4) == 7u && !eng_ok(ENGI_PHYS) && eng_step(7u, 1) == ENGI_FM6 &&
                eng_rank(ENGI_PHYS) == 0u && ENGINES[ENGI_PHYS]->npresets == 0u,
                "five engines shown: FM6, FM TONE, VA, CZ-1, WHEEL (PHYS, engine 9, retired: a silent slot without presets, FM6's place)");
+#endif
             {   /* the message a PHYS record's load shows, as the five's */
                 up_rec_t pr = *up_rec(slot);
                 pr.engine = ENGI_PHYS;

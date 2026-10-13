@@ -10,9 +10,17 @@
  * PIANO, a preset of ChoralRoot's unit only (FELUCCA_SAMPLE 0), as TINE EP with PIANO's macros and sends):
  *   build/host/va_levels fm6
  * With "cz": the bank's six CZ-1 rows (docs/CZ1.md Levels; no trims since 0.19: the engine is 6 dB lower):
- *   build/host/va_levels cz */
+ *   build/host/va_levels cz
+ * With "p5": PROPHET against the VA and FM6 (docs/PROPHET.md "Level"): a 4-note chord (D4 F#4 A4 C#5), every send 0
+ * (the engines' own levels), alone, on INIT PROPHET and Sequential's 200 programs, on the VA's chord presets and on
+ * FM6's presets; each sound's line, then each engine's median RMS and the programs more than 4 dB from PROPHET's:
+ *   build/host/va_levels p5 */
 #define FELUCCA_VA 1
 #define FELUCCA_CZ 1
+#define FELUCCA_QUAD 1
+#ifndef FELUCCA_PROPHET
+#define FELUCCA_PROPHET 1
+#endif
 #ifndef FM6_POLY
 #define FM6_POLY 8               /* as choralroot.c */
 #endif
@@ -24,6 +32,8 @@
 static const int8_t *ovr_e;                      /* "fm6": PIANO's macros and sends over TINE EP's (preset_t's) */
 static const uint8_t *ovr_fx;
 static int8_t ovr_trim;                          /* "cz": the bank row's trim (track_t.trim) */
+static uint32_t chord_n = 6;                     /* "p5": 4 notes, */
+static int dry_all;                              /* .. every send 0 */
 static uint64_t instr_now(void)
 {
     struct rusage_info_v4 ri;
@@ -34,7 +44,8 @@ static double cpu_ips;                           /* host instructions a sample o
 static void measure_in(uint32_t chord_e, uint32_t chord_p, int with_bass, uint32_t bass_e, uint32_t bass_p,
                     double *lim, double *pk, double *rms)
 {
-    static const uint8_t CH[6] = {62, 66, 69, 71, 73, 76};
+    static const uint8_t CH6[6] = {62, 66, 69, 71, 73, 76}, CH4[4] = {62, 66, 69, 73};
+    const uint8_t *CH = chord_n == 4u ? CH4 : CH6;
     int32_t out[2 * CTL];
     uint32_t i, n, nb = 6u * FS / CTL, b0 = (uint32_t)(0.3 * FS / CTL), b1 = (uint32_t)(5.9 * FS / CTL), under = 0, cnt = 0;
     double sq = 0, peak = 0;
@@ -50,6 +61,9 @@ static void measure_in(uint32_t chord_e, uint32_t chord_p, int with_bass, uint32
     if (ovr_fx)
         for (i = 0; i < 4u; i++)
             trk[0].p[P_DIST + i] = (int16_t)(ovr_fx[i] - 1);
+    if (dry_all)
+        for (i = P_DIST; i <= P_REV; i++)
+            trk[0].p[i] = 0;
     trk[0].p[P_VOICE] = V_POLY;
     trk[0].p[P_LEVEL] = 92;
     trk[0].trim = ovr_trim;
@@ -62,7 +76,7 @@ static void measure_in(uint32_t chord_e, uint32_t chord_p, int with_bass, uint32
         for (i = P_DIST; i <= P_REV; i++)       /* (the bass part's sends: ChoralRoot's FX are part 0's) */
             trk[1].p[i] = trk[0].p[i];
     }
-    for (i = 0; i < 6u; i++)
+    for (i = 0; i < chord_n; i++)
         trk_note_on(&trk[0], CH[i], 100);
     if (with_bass)
         trk_note_on(&trk[1], 38, 100);
@@ -156,6 +170,42 @@ int main(int argc, char **argv)
         ovr_trim = 0;
         return 0;
     }
+#if FELUCCA_PROPHET
+    if (argc > 1 && !strcmp(argv[1], "p5")) {    /* PROPHET's programs against the VA's and FM6's presets, dry */
+        static const uint8_t ENG[3] = {ENGI_PROPHET, ENGI_VA, ENGI_FM6};
+        static double R[3][256];
+        double med[3];
+        uint32_t n[3] = {0, 0, 0}, g, a, b;
+        chord_n = 4;
+        dry_all = 1;
+        printf("%-22s %s\n", "sound", "a 4-note chord alone, dry: limiter %, peak dB, RMS dB (after the master)");
+        for (g = 0; g < 3u; g++) {
+            const engine_t *en = ENGINES[ENG[g]];
+            for (k = 0; k < en->npresets; k++) {
+                double l0, p0, r0;
+                if (en->presets[k].mono)
+                    continue;                    /* (a bass: not a chord sound) */
+                measure(ENG[g], k, 0, 0, 0, &l0, &p0, &r0);
+                printf("%-8s %-13s %6.1f %% %6.1f %6.1f\n", en->name, en->presets[k].name, l0, p0, r0);
+                R[g][n[g]++] = r0;
+            }
+            for (a = 0; a < n[g]; a++)           /* the median: sorted in place (the lines above keep the order) */
+                for (b = a + 1u; b < n[g]; b++)
+                    if (R[g][b] < R[g][a]) {
+                        double x = R[g][a];
+                        R[g][a] = R[g][b];
+                        R[g][b] = x;
+                    }
+            med[g] = n[g] ? (R[g][(n[g] - 1u) / 2u] + R[g][n[g] / 2u]) / 2 : 0;
+        }
+        for (g = 0; g < 3u; g++)
+            printf("median %-8s %6.1f dB RMS over %u sounds (quartiles %.1f .. %.1f, range %.1f .. %.1f)\n",
+                   ENGINES[ENG[g]]->name, med[g], (unsigned)n[g], R[g][n[g] / 4u], R[g][n[g] * 3u / 4u], R[g][0],
+                   R[g][n[g] - 1u]);
+        printf("PROPHET's median against the VA's: %+.1f dB, against FM6's: %+.1f dB\n", med[0] - med[1], med[0] - med[2]);
+        return 0;
+    }
+#endif
     if (argc > 1 && !strcmp(argv[1], "fm6")) {   /* the bank's FM6 rows: name (display), preset */
         static const char *const ROW[8][2] = {{"TINE EP", "TINE EP"}, {"FM BELL", "BELL"}, {"PIANO", "PIANO"},
                                               {"FM PAD", "PAD"}, {"FM ORGAN", "ORGAN"}, {"MARIMBA", "MARIMBA"},

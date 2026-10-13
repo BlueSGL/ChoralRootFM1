@@ -10,7 +10,8 @@ chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32) is tagg
 published as the latest and not on the site; its notes, `web/releases.json`'s first entry (package sha256
 93bbfe14...) and the manual's first line say 0.21. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.22"
 (`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
-3y33, 3y34). The owner's unit runs what
+3y33, 3y34; and, not in the notes yet, a sixth engine in its first phase: PROPHET, Melodee's Prophet-5, HISTORY 3y38,
+docs/PROPHET.md: on the host and in the emulators, never on a unit, open items 26 and 27). The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
@@ -241,6 +242,19 @@ installed on the owner's Mac.
     for the V15: an estimate, the loader is M-VAVE's), and whether an interrupted write really waits in update mode
     for the resume box, as the guidance says. The texts of the errors there still end "press Install again" (they
     are the install card's).
+26. **PROPHET has never run on a unit (HISTORY 3y38, docs/PROPHET.md).** Its cost is counted from the listing
+    (`python3 tools/p5_cost.py`: a two-saw SSI voice 249 us a half, five voices 1318 us; 2240 if the count is as low
+    as CZ-1's was, item 21), not measured. To read first, before any release with it: `pk_part0_us` with a five-voice
+    01 ITS PROPHET5 chord held (no bass), then with the bass on (the budget gives four chord voices), on one core and
+    with Options > Dual Core On; above about 1700 us for five voices the cap comes down (`p5_units` 4: four voices).
+    Also to hear on the unit: both filters, sync and Poly-Mod programs for aliasing, the wheel and aftertouch.
+27. **PROPHET, phase B: the owner's decisions** (docs/PROPHET.md "Open decisions"): whether a release carries
+    Sequential's 200 factory programs (`FELUCCA_P5_FACTORY`; the data are Sequential's, no licence granted) and
+    under which name the engine shows; the store for user programs (flash objects in 0xB6000 .. 0xC7FFF as
+    `va_store.c`, backup ids, POOL for the mirrors, the web manager's engine list: `web/fm1sounds.js` treats a
+    record of engine 16 as no record today) with the settings record's place for its pool position; whether a load
+    takes a program's UNISON switch (40 of the 200 have it; today none does); chord voices on core 1 (not built).
+    XIP is at 90.5 % with the bank in.
 
 ### 0.20: what shipped
 
@@ -295,11 +309,17 @@ above, not assumed here.
 
 ## Facts that are easy to get wrong
 
-- **Engines** (`engines.c`): indices are append-only, 0 .. 15; five are shown, in `ENGINE_ORDER`: FM6 (12), FM TONE
-  (15, code name QUAD), VA (13), CZ-1 (14), WHEEL (7). Every other slot is `ENG_GONE` (PHYS, 9, since 0.18:
+- **Engines** (`engines.c`): indices are append-only, 0 .. 16; six are shown, in `ENGINE_ORDER`: FM6 (12), FM TONE
+  (15, code name QUAD), VA (13), CZ-1 (14), PROPHET (16, code name `p5_`, since 0.22 in development), WHEEL (7). Every
+  other slot is `ENG_GONE` (PHYS, 9, since 0.18:
   `FELUCCA_PHYS` 0, its files kept); records of retired engines stay and load as stand-ins (docs/PRESETS.md).
-- **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, WHEEL 5) + the
-  user's. The user's are the 32 slots of `upreset.c` (`UP_SLOTS`, `core.h`), shared by all engines; a slot's deep
+- **PROPHET's switches** (docs/PROPHET.md): `FELUCCA_PROPHET` (1 in `choralroot.c`; `FELUCCA_PROPHET=0 ./build.sh` is
+  the image without the engine, byte for byte the one before it), `FELUCCA_P5_FACTORY` (1: Sequential's 200 programs;
+  0: INIT PROPHET alone), `P5_RAM` (1: its sample loop in `.ram_text`; default 0). It has no store: SAVE on a PROPHET
+  part is refused (the session keeps the part's edited program over a power cycle), and the settings record has no
+  slot for its per-engine pool position (back from another engine after a power cycle it lands on 01).
+- **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, PROPHET 200,
+  WHEEL 5) + the user's. The user's are the 32 slots of `upreset.c` (`UP_SLOTS`, `core.h`), shared by all engines; a slot's deep
   patch sits at the same index in its engine's store (`va_store.c`, `fm6_ustore.c`, `cz_ustore.c`, `quad_store.c`).
 - **Flash map**: the comment at the top of `storage.c` owns it. The FM TONE store is 0xB2000 / 0xB3000, the session
   0xB4000 / 0xB5000; 0xB6000 .. 0xC7FFF is free; the loops are 0xC8000 .. 0xDBFFF.

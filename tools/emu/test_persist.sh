@@ -258,6 +258,21 @@ grep -q "^deep: part 0 page 11 DCW 1+ col 0 L1 [0-9]* -> 0 " "$OUT/persist_cz_1.
 grep -q "^deep: part 0 page 11 DCW 1+ col 0 L1 0 -> " "$OUT/persist_cz_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_cz_2.log" &&
     ok "CZ-1 run 2: DCW 1's L1 is 0 as saved, the sound plays" || bad "CZ-1 run 2: $(grep -m1 '^deep:' "$OUT/persist_cz_2.log")"
 
+# PROPHET (engine 16; docs/PROPHET.md): no store yet, so no user slot: run 1 puts the chord part on 03 FOREVER KEYS,
+# turns its cutoff down a detent, is refused a SAVE, and saves globally (SAVE held: the settings' chord sound, the
+# session's blob); run 2 (the same file) powers on with that program as edited
+PFLASH=$OUT/persist_p5_flash.bin
+rm -f "$PFLASH" "$OUT"/persist_p5_1.log "$OUT"/persist_p5_2.log
+"$EMU" --headless --flash "$PFLASH" --script "$S/prophet_persist_set.txt" >"$OUT/persist_p5_1.log" 2>&1 || bad "PROPHET run 1: exit status"
+"$EMU" --headless --flash "$PFLASH" --script "$S/prophet_persist_check.txt" >"$OUT/persist_p5_2.log" 2>&1 || bad "PROPHET run 2: exit status"
+grep -q "^deep: part 0 page 5 FILTER col 0 CUT 57 -> 51 " "$OUT/persist_p5_1.log" && grep -q '^save: part 0 PROPHET refused' "$OUT/persist_p5_1.log" &&
+    grep -q '^save: global rc 0' "$OUT/persist_p5_1.log" &&
+    ok "PROPHET run 1: 03 FOREVER KEYS, the cutoff 57 -> 51; SAVE refused (no store); the global save" || bad "PROPHET run 1: $(grep -m1 '^deep:\|^save:' "$OUT/persist_p5_1.log")"
+grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q 'PROPHET / FOREVER KEYS edited 1' &&
+    grep -q "^deep: part 0 page 5 FILTER col 0 CUT 51 -> 57 " "$OUT/persist_p5_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_p5_2.log" &&
+    ok "PROPHET run 2: powers on with FOREVER KEYS as edited (the cutoff reads 51: the session's program), the sound plays" ||
+    bad "PROPHET run 2: $(grep -a -m1 'session chord:' "$OUT/persist_p5_2.log") / $(grep -m1 '^deep:' "$OUT/persist_p5_2.log")"
+
 # FM TONE (engine 15, code name QUAD; docs/QUAD.md): run 1 edits FM TONE's EP (Ratio A, KNOB 3 +5 on SYN 1) and saves it in U01: the patch into the QUAD
 # patch store (quad_store.c, 0xB2000 / 0xB3000); run 2 (the same file) powers on with U01: the same patch back
 QFLASH=$OUT/persist_quad_flash.bin

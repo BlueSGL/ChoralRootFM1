@@ -13,6 +13,11 @@ cz_native_noise 161
 cz_env_tick 36
 quad_render 67230
 quad_block 37
+p5_samples 1148
+p5_render 50
+p5_mod_samples 99
+p5_post 12
+p5_block 7
 fm1_alnk0_irq 16415
 fm1_timer5_irq 4511
 usb_poll 159

@@ -94,6 +94,11 @@
 #define FELUCCA_QUAD 1           /* the QUAD engine (eng_quad.c, engine 15: four-operator FM) and its patch store (quad_store.c,
                                   * docs/QUAD.md) */
 #endif
+#ifndef FELUCCA_PROPHET
+#define FELUCCA_PROPHET 1        /* Melodee's Prophet-5 engine (eng_prophet_test.c, engine 16; docs/PROPHET.md). 0: the image
+                                  * without it, byte for byte as before it came. FELUCCA_P5_FACTORY (default 1 there):
+                                  * Sequential's 200 factory programs in its PRESETS; 0: INIT PROPHET alone */
+#endif
 #ifndef FM6_POLY
 #define FM6_POLY 8               /* FM6's voices per part (eng_fm6.c; Melodee plays Dexed's 16): ChoralRoot's chords use <= 7,
                                   * and at 16 the release tails of perf.sh (c) / (e) cost up to 59 / 62 % of a block

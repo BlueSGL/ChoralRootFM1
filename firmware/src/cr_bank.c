@@ -148,6 +148,10 @@ static uint32_t pool_f0(uint32_t e)               /* the engine's first factory 
     if (e == ENGI_CZ)
         return 1u;                                /* (preset 0, INIT TONE: the pool's INIT) */
 #endif
+#if FELUCCA_PROPHET
+    if (e == ENGI_PROPHET)
+        return 1u;                                /* (preset 0, INIT PROPHET: the pool's INIT) */
+#endif
     (void)e;
     return 0u;
 }

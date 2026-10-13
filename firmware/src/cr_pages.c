@@ -92,6 +92,12 @@ static const struct { const char *s, *l; } CP_DLABEL[] = {
     {"L7", "Level 7"}, {"L8", "Level 8"}, {"W.KEY1", "DCW key 1"}, {"W.KEY2", "DCW key 2"}, {"V.WAV1", "DCW vel 1"},
     {"V.WAV2", "DCW vel 2"}, {"A.KEY1", "DCA key 1"}, {"A.KEY2", "DCA key 2"}, {"V.AMP1", "DCA vel 1"},
     {"V.AMP2", "DCA vel 2"}, {"V.PIT", "Pitch vel"},
+#if FELUCCA_PROPHET
+    /* PROPHET (eng_prophet_test.c's pages) */
+    {"MIX A", "Osc A"}, {"MIX B", "Osc B"}, {"OSC B", "Osc B"}, {"FREQ A", "Freq A"}, {"FREQ B", "Freq B"},
+    {"PW A", "PW A"}, {"PW B", "PW B"}, {"LOFREQ", "Lo freq"}, {"KEYBD", "Keyboard"}, {"RELSW", "Rel sw"},
+    {"PRIO", "Priority"}, {"REV", "Filter rev"},
+#endif
 };
 static int cp_up(int ch) { return ch >= 'a' && ch <= 'z' ? ch - 32 : ch; }
 static int cp_eq(const char *a, const char *b)

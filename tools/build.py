@@ -114,6 +114,8 @@ def generate():
             [tools / "gen_tables.py", GEN / "felucca_tables.h"],
             [tools / "gen_fm6_patches.py", GEN / "felucca_fm6.h"],
             [tools / "gen_cz1_factory.py", GEN / "melodee_cz1.h"],   # CZ-1: Casio's 64 tones (Melodee's)
+            # PROPHET: Sequential's 200 factory programs (Melodee's; included with FELUCCA_P5_FACTORY)
+            [tools / "gen_prophet_factory.py", GEN / "melodee_prophet_factory.h"],
             [tools / "gen_samples.py", GEN / "felucca_samples.h"]]
     procs = [subprocess.Popen([sys.executable, *map(str, c)], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True) for c in cmds]
@@ -257,7 +259,7 @@ def build_app(stub):
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_ICONS", "FELUCCA_KEYCAPS", "FELUCCA_SLICE",
                  "FELUCCA_SLICER", "FELUCCA_FM4", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_DRUM", "FELUCCA_SEQ",
                  "FELUCCA_CZ", "FELUCCA_QUAD", "FELUCCA_ANALOG", "FELUCCA_PHASE", "FELUCCA_LOFI", "FELUCCA_VOICE",
-                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS"):
+                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS", "FELUCCA_PROPHET", "FELUCCA_P5_FACTORY", "P5_RAM"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/choralroot.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")

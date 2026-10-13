@@ -25,6 +25,11 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "va_render", "va_block",                            # VA (eng_va.c, ChoralRoot): the voice, the part's LFOs
          "cz_native_render", "cz_native_line", "cz_native_line_mv", "cz_native_noise", "cz_env_tick",   # CZ-1 (cz_native.c, Melodee's): the voice, a line's loops (one per wave and window; _mv: the same with the DCW depth ramped a sample at a time, for the blocks in which it changes), line 2 with NOISE, envelopes
          "quad_render", "quad_block",                        # FM TONE (eng_quad.c, code name QUAD, ChoralRoot): the voice, the part's macros
+         # PROPHET (eng_prophet_test.c, Melodee's Prophet-5): the sample loop (one loop with every switch of a program
+         # in it: tools/p5_cost.py walks it per program for the unit's figure; this weighs it whole, to catch growth),
+         # a voice's block (its set-up, the fade of a budget victim), the part's wheel source and its DC blocker, the
+         # part's block (p5_env_tick has no loop: nothing to weigh)
+         "p5_samples", "p5_render", "p5_mod_samples", "p5_post", "p5_block",
          "fm1_alnk0_irq", "fm1_timer5_irq",               # the audio ISR; TIMER5: the key / LED scan (hal/fm1_input.h)
          # TIMER5's USB work, each a function of its own since 0.19 (usb.c USB_OUTLINE / USB_COLD), so that
          # fm1_timer5_irq is what every 100 us tick runs: the scan, the clock, the UART's bytes. Inlined there, the

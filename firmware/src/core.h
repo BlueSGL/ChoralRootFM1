@@ -80,11 +80,22 @@
                                   * FELUCCA_CZ (15 on ChoralRoot); Felucca builds without it (choralroot.c, the emulator and
                                   * tests/regress.c set 1) */
 #endif
-#define NENGINES (13 + FELUCCA_SLICE + FELUCCA_VA + FELUCCA_CZ + FELUCCA_QUAD)   /* SLICE (13), VA, CZ-1 and QUAD come last:
-                                                                                  * the other engines keep their numbers */
+#ifndef FELUCCA_PROPHET
+#define FELUCCA_PROPHET 0        /* Melodee's Prophet-5 engine (eng_prophet_test.c, docs/PROPHET.md): engine 13 + FELUCCA_SLICE +
+                                  * FELUCCA_VA + FELUCCA_CZ + FELUCCA_QUAD (16 on ChoralRoot); Felucca builds without it
+                                  * (choralroot.c, the emulator and tests/regress.c set 1). FELUCCA_P5_FACTORY (its file):
+                                  * Sequential's 200 factory programs with it */
+#endif
+#define NENGINES (13 + FELUCCA_SLICE + FELUCCA_VA + FELUCCA_CZ + FELUCCA_QUAD + FELUCCA_PROPHET)   /* SLICE (13), VA, CZ-1,
+                                                                                  * QUAD and PROPHET come last: the other
+                                                                                  * engines keep their numbers */
 #define ENGI_CZ (13u + FELUCCA_SLICE + FELUCCA_VA)   /* engines.c ENGINES[] (append-only): 14 on ChoralRoot (Melodee: 15) */
 #if FELUCCA_QUAD
 #define ENGI_QUAD (13u + FELUCCA_SLICE + FELUCCA_VA + FELUCCA_CZ)   /* engines.c ENGINES[]: 15 on ChoralRoot */
+#endif
+#if FELUCCA_PROPHET
+#define ENGI_PROPHET (13u + FELUCCA_SLICE + FELUCCA_VA + FELUCCA_CZ + FELUCCA_QUAD)   /* engines.c ENGINES[]: 16 on ChoralRoot
+                                                                                       * (Melodee: 19) */
 #endif
 #define ENGI_DIGITAL 1u          /* reserved without FELUCCA_FM4: never selectable (eng_ok), its sounds load as FM6 */
 #define NENG_SHOWN (NENGINES - !FELUCCA_FM4 - !FELUCCA_SAMPLE - !FELUCCA_GRAIN - !FELUCCA_DRUM - !FELUCCA_ANALOG - \

@@ -32,6 +32,10 @@
 #ifndef FELUCCA_QUAD
 #define FELUCCA_QUAD 1           /* ChoralRoot's QUAD engine (docs/QUAD.md): its presets get renders and costs too */
 #endif
+#ifndef FELUCCA_PROPHET
+#define FELUCCA_PROPHET 1        /* ChoralRoot's PROPHET engine (Melodee's Prophet-5, docs/PROPHET.md): its programs get renders
+                                  * and costs too */
+#endif
 #ifndef FELUCCA_ANALOG
 #define FELUCCA_ANALOG 0         /* as choralroot.c: ANALOG retired (engine 0 a silent slot, no renders) */
 #endif
@@ -211,6 +215,12 @@ static void job_preset(const job_t *j)
                             !strcmp(ENGINES[j->e]->presets[j->pi].name, "SITAR") ||
                             !strcmp(ENGINES[j->e]->presets[j->pi].name, "JET ROAR")))
         free_cap_s = 90;
+#endif
+#if FELUCCA_PROPHET
+    /* a Prophet program's release is exponential with the time constant 10000^(raw / 127) ms (tools/gen_tables.py
+     * P5_ENV_EXP): -60 dB after 6.9 of them, up to 69 s at 127 (the bank's longest is 120: 41 s) */
+    if (j->e == ENGI_PROPHET)
+        free_cap_s = 12u + (uint32_t)(9.0 * pow(10000.0, p5_patch_of(t)->raw[P5_RELEASE_AMP] / 127.0) / 1000.0);
 #endif
     phrase(t, 60);
 }

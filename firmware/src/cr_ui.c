@@ -1124,9 +1124,12 @@ static struct {
     uint8_t sx_off;                       /* SysEx 74 SCREEN 0: off until SysEx on or a key, button or knob */
     uint32_t home_t0;                     /* HOME pressed (held CU_HOME_HOLD_MS: the view menu) */
     uint8_t home_hold;                    /* .. armed (pressed alone, the menu not opened yet) */
-    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool; uint16_t pct; char value[8], sub[12], label[32], over[16]; } pop;
+    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool; uint16_t pct; char value[8], sub[12 + FELUCCA_PROPHET], label[32], over[16]; } pop;
                                           /* over: the line over the value, in orange (a pool's read-out on the home
-                                           * pages: the part's engine) */
+                                           * pages: the part's engine). sub: a pool's read-out puts the sound's name
+                                           * there, and 12 bytes cut a 12-character name's last ("ENSEMBLE ST", "FOREVER
+                                           * KEY"): 13 with PROPHET, whose programs made it plain (FELUCCA_PROPHET 0: the
+                                           * image as it was, byte for byte; to be 13 for all when the switch goes) */
                                           /* pool: CU_POOL_ID of a pool's read-out (0: another meter) */
                                           /* jump: the meter's bar jumps to the value (no fill: the picker's preview);
                                            * mark: the square after the name (an overwritten factory preset) */
@@ -2886,6 +2889,15 @@ static void cu_save_open(uint32_t part)
         cu_message("safe mode: no saving", CR_COL_RED);
         return;
     }
+#if FELUCCA_PROPHET
+    /* PROPHET has no store for its program yet (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's
+     * parameters and no program, and would load as INIT PROPHET under the sound's name. Nothing is written */
+    if (eng_idx(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req) == ENGI_PROPHET) {
+        cu_message("PROPHET: no save yet", CR_COL_RED);
+        cu_trace("save: part %u PROPHET refused (no store)\n", (unsigned)part);
+        return;
+    }
+#endif
     ce.save_part = (uint8_t)part;
     ce.save_from_edit = cu.page == PG_EDIT;
     ce.save_step = 0;

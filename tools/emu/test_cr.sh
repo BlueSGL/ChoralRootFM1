@@ -950,7 +950,7 @@ silent_end cr_editor_pick
 echo "EDIT held: the engine picker"
 run cr_engine --wav "$OUT/cr_engine.wav"
 has '^engine: part 0 -> WHEEL' "$OUT/cr_engine.log" && has 'part 0: WHEEL /' "$OUT/cr_engine.log" &&
-    ok "EDIT held + SELECT +4 (the fifth of five engines): part 0 FM6 -> WHEEL: $OUT/cr_engine_switched.ppm" || bad "the engine did not switch"
+    ok "EDIT held + SELECT +5 (the sixth of six engines): part 0 FM6 -> WHEEL: $OUT/cr_engine_switched.ppm" || bad "the engine did not switch"
 has '^preset: part 0 -> WHEEL / ' "$OUT/cr_engine.log" && ok "EDIT held + KNOB 1: the next place of the engine's pool" || bad "KNOB 1: no preset step"
 silent_end cr_engine
 
@@ -2114,6 +2114,53 @@ z0=$(blue "$OUT/cr_cz_env.ppm"); z1=$(blue "$OUT/cr_cz_env_hot.ppm")
 has '^edit: group ENV screen 6 ' "$ZL" && has '^edit: group FILT screen 1 ' "$ZL" && has '^edit: group LFO screen 1 ' "$ZL" &&
     has '^edit: group MOD screen 1 ' "$ZL" && ok "CZ-1's groups: ENV DCW 1 (1-4, 5-8, END), FILT (DCW), LFO (VIB), MOD (TONE)" ||
     bad "CZ-1 groups: $(grep -c '^edit: group' "$ZL")"
+
+echo "PROPHET: Melodee's Prophet-5 engine, Sequential's programs, the deep pages, SAVE refused"
+run cr_prophet --wav "$OUT/cr_prophet.wav"
+PL="$OUT/cr_prophet.log"
+has '^engine pick: PROPHET (200 presets)' "$PL" && has 'part 0: PROPHET / ITS PROPHET5' "$PL" &&
+    ok "OPT + PRESETS +4: PROPHET, the fifth of six engines, 200 presets; its place 01 ITS PROPHET5 (Sequential's program 1): $OUT/cr_prophet_pick.ppm" ||
+    bad "not PROPHET ITS PROPHET5: $(grep -m1 'part 0:' "$PL")"
+grep -a '^  screen reads:' "$PL" | sed -n 1p | grep -q "value '01' sub 'ITS PROPHET5' " &&
+    ok "the pool's read-out shows the 12 characters of a name (01 ITS PROPHET5)" || bad "the read-out: $(grep -a -m1 '^  screen reads:' "$PL" | cut -c1-80)"
+has '^sound: part 0 pos 3 FOREVER KEYS' "$PL" && has '^sound: part 0 pos 15 REEDY STRPAD' "$PL" &&
+    ok "PRESETS steps the pool: 03 FOREVER KEYS, 15 REEDY STRPAD: $OUT/cr_prophet_pool.ppm" || bad "the pool: $(grep -c '^sound: part 0' "$PL") loads"
+[ "$(grep -c '^expect sound .*: ok' "$PL")" = 4 ] && ok "the chord sounds on the three programs and after the edit" ||
+    bad "PROPHET chord: $(grep -c '^expect sound .*: ok' "$PL") of 4"
+has '^deep: part 0 page 5 FILTER col 0 CUT [0-9]* -> 0 ' "$PL" && ok "FILT, KNOB 1: $(grep -m1 '^deep: part 0 page 5' "$PL")" ||
+    bad "no CUT edit: $(grep -m1 '^deep:' "$PL")"
+br=$(python3 - "$OUT/cr_prophet.wav" "$PL" <<'PY'
+import re, sys, wave, struct
+w = wave.open(sys.argv[1]); fs = w.getframerate(); ch = w.getnchannels()
+x = struct.unpack("<%dh" % (w.getnframes() * ch), w.readframes(w.getnframes()))
+m = [x[i] for i in range(0, len(x), ch)]
+t = [int(v) / 1000 for v in re.findall(r"^expect sound at (\d+) ms", open(sys.argv[2], errors="replace").read(), re.M)]
+def bright(t1):              # the 1.2 s before a check: the first difference's energy over the signal's
+    s = m[int((t1 - 1.3) * fs):int((t1 - 0.1) * fs)]
+    e = sum(v * v for v in s) or 1
+    return sum((s[i] - s[i - 1]) ** 2 for i in range(1, len(s))) / e
+b0, b1 = bright(t[2]), bright(t[3])
+print("%.4f %.4f %d" % (b0, b1, b1 < 0.5 * b0))
+PY
+)
+set -- $br
+[ "${3:-0}" = 1 ] && ok "CUT 0 changes the sound: brightness (HF share) $1 -> $2 (the filter closed)" || bad "the sound did not change: $br"
+orange=$(od -An -tu1 -v -j $((15 + 30 * 240 * 3)) -N$((240 * 90 * 3)) "$OUT/cr_prophet_filter.ppm" | tr -s ' \n' '\n\n' | grep -v '^$' |
+    awk '{ v[n++] = $1 } END { c = 0; for (i = 0; i + 2 < n; i += 3) if (v[i] > 200 && v[i+1] > 80 && v[i+1] < 170 && v[i+2] < 90) c++; print c }')
+white=$(od -An -tu1 -v -j $((15 + 30 * 240 * 3)) -N$((240 * 70 * 3)) "$OUT/cr_prophet_env1.ppm" | tr -s ' \n' '\n\n' | grep -v '^$' |
+    awk '{ v[n++] = $1 } END { c = 0; for (i = 0; i + 2 < n; i += 3) if (v[i] > 200 && v[i+1] > 200 && v[i+2] > 200) c++; print c }')
+[ "${orange:-0}" -gt 200 ] && [ "${white:-0}" -gt 300 ] &&
+    ok "the filter's curve under FILT ($orange orange pixels) and the amplifier's ADSR under ENV 1 ($white white): $OUT/cr_prophet_filter.ppm cr_prophet_env1.ppm" ||
+    bad "no band: filter $orange, env $white"
+has '^edit: group OSC screen 3 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL" && has '^edit: group ENV screen 2 ' "$PL" &&
+    has '^edit: group LFO screen 2 ' "$PL" && has '^edit: group MOD screen 2 ' "$PL" &&
+    ok "PROPHET's groups: OSC (OSC A, OSC B, MIXER), FILT, ENV 1 / ENV 2, LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
+    bad "PROPHET groups: $(grep -c '^edit: group' "$PL")"
+has '^save: part 0 PROPHET refused (no store)' "$PL" && ! has '^save: dialog' "$PL" &&
+    ok "SAVE on a PROPHET part: refused (\"PROPHET: no save yet\"), no dialog: $OUT/cr_prophet_save.ppm" || bad "SAVE was not refused"
+has '^picker: open part 0 REEDY STRPAD' "$PL" && has '^picker: cancel part 0 -> REEDY STRPAD' "$PL" &&
+    ok "EDIT held: the engine picker with PROPHET among the six, OCT- leaves the sound: $OUT/cr_prophet_epk.ppm" || bad "the picker in the editor"
+silent_end cr_prophet
 
 echo "CZ-1's pops (docs/CZ1.md Pops): a chord struck again while it sounds, chord changes with common tones, the CZ-1 bass"
 rm -f "$OUT"/cz_pop*

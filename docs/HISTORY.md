@@ -1924,3 +1924,52 @@ its own section), dispatched with version 0.21 and that commit as ref. Checked l
 section's bar, `firmware/SHA256SUMS` is unchanged (0.21: 93bbfe14...). Not done: an install or a return to stock from the
 live page on a real FM-1. The rule for next time: a page change between releases is published from a branch cut at the
 released tag, not from main, whenever main's firmware is ahead of the release.
+
+3y38. **PROPHET, phase A: Melodee's Prophet-5 engine as engine 16 (2026-10-13; 0.22 in development; host and
+emulators only, NOT on a unit, not flashed; the owner, of a remix of ChoralRoot 0.14-dev that Rosen sent: "the
+Prophet 5 Engine from Melodee that was added sounds really nice and is perfect for chords. Lets ... look into adding
+the Prophet engine.").** docs/PROPHET.md is the engine's document; this is what was decided and found.
+**Which code.** Melodee's engine is float on the FPU since its fa64ef0; ChoralRoot has no FPU flags. Taken: Melodee
+**8a3074b**, its last integer version (`firmware/src/eng_prophet_test.c`, `prophet_patch.c`: the names kept so that
+Melodee's fixes diff in), plus two later pieces that are integer and stand alone: the part's DC blocker (7cd66fb:
+without it 59 of the 201 presets hold a DC over a quarter of their RMS in a held chord) and the bank's packed form
+(1bc4555). The remix's file is b351a14 (one commit older: Lo Freq B ten octaves down and stuck at the ramp's
+bottom, the SSI output's knee uninterpolated) with its "stage 36" optimisations; those three are taken and **proven
+bit-exact** (`P5_STAGE36`; `tests/run_prophet_test.sh`: 884 renders with 0 / 1 / 2 / 4 / 7, the same digests). Not
+taken from the remix: the 192-frame half, dual core by default, the voice caps and chord-aware shedding, its
+user-slot scheme. The bend is the platform's (the channel's range through `vmod_t`; Melodee's own range byte unused):
+measured +2 / −2 semitones.
+**Wiring.** `FELUCCA_PROPHET` (core.h 0, `choralroot.c` 1): `FELUCCA_PROPHET=0 ./build.sh` is **byte for byte
+aa5875a's image** (`choralroot.bin` 501a9d09.., the `.fwsc` b85cd9f4..: compared). Index 16, shown after CZ-1 and
+before WHEEL; `p5_part_t` 788 B in the `eng_state` union (6884 B: no growth); five voices of three budget units. A
+load does not take a program's UNISON switch (the chord part stays POLY, the bass MONO); the editor's does.
+**Size.** XIP 483 396 -> 519 028 B (84.3 -> 90.5 %; the engine 17 264, the bank 18 368), RAM 81 332 -> 81 348, POOL
+315 500 -> 316 052 (the four programs). Tables and code in flash (`P5_RAM=1` links with 3796 B more RAMTEXT; not run).
+**Sounds.** INIT + Sequential's 200 factory programs v1.03 (`assets/prophet5-factory/`, generated at build time, the
+names cut to 12 characters by a table) behind `FELUCCA_P5_FACTORY` (1; 0: INIT alone, built and played by the test).
+Dry: the sends are the part's since 0.18, so nothing to give them. Level: a 4-note chord's median RMS −25.2 dB against
+the VA's −23.5 (FM6 −36.9: mostly decaying sounds): no trim. The pool read-out showed 11 of a name's 12 characters
+(`cu.pop.sub[12]`): 13 with PROPHET in the build.
+**Editor.** 19 pages, 56 named cells through the title rules (`cr_edit.c` untouched): OSC A / B, MIXER, FILTER, ENV 1
+(amp) / 2 (filter), LFO, WHEEL, POLYMOD, VOICE. **SAVE is refused** ("PROPHET: no save yet"): the remix's tail scheme
+(57 seven-bit values at the record's bytes 91..143) has no headroom (P_COUNT is 91), drops 76 of the 133 bytes, and a
+record of engine 16 reads as an empty slot to 0.21 and to today's Sound Manager, which would then reuse it. The
+session keeps an edited program over a power cycle (`test_persist.sh`).
+**Cost, counted (`tools/p5_cost.py`), never measured.** The sample loop is 1012 instructions with 17 switch branches;
+walked per program: 308 instructions a sample (INIT) .. 361 (two saws, SSI: ITS PROPHET5) .. 490 (everything on),
++21 while the cutoff moves. A voice a half: 44 .. 67 thousand instructions, **215 .. 329 us** at 205 a microsecond
+(CZ-1: 79; a VA voice estimated 107 .. 154); five voices of the two-saw SSI kind **1318 us** of 2902, **2240 if the
+count is as low as CZ-1's was (1.7)**. With about 500 us for the effects, the master and the rest: five voices and a
+bass fit one core by the count (68 %) and do not at 1.7 (99.6 %); four and a VA bass 59 % / 85 %. One core's shared
+budget already gives four chord voices whenever the bass sounds. Melodee measured five stress voices with its
+effects and USB at 2009 .. 2158 us on an FM-1 (an older DSP, in RAM). The emulator's estimates (perf.sh (p), (q)):
+1070 / 1700 and 1154 / 1672 us a block. PROPHET's chord voices cannot go to core 1 today (the one job is the bass
+part).
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+398 golden renders (201 new), 0 changed, 0 gone; 0 lint findings; test_cr 914 ok, test_persist 94 ok, test_retired 18
+ok. Four emulator scripts that stepped to WHEEL step one further; `test_retired.sh`'s pre-cut build and
+`sound_templates`' check of the web tools are built without PROPHET. Listening files: `../audio-0.22/prophet/` (eight
+programs dry and with the default sends; three programs by the remix's engine file and by this one).
+**Not done / not tested**: anything on a unit; a store, backup ids, the web manager, the manual (it still says five
+engines), a release note. **The owner's decisions** are listed in docs/PROPHET.md and docs/HANDOFF.md items 26, 27:
+ship Sequential's bank or not, the name, the measurement and the cap, UNISON on a load, the store.

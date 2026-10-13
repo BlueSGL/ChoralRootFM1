@@ -17,6 +17,10 @@
 #   (l) (c) with the delay and the reverb fully on (0.18, docs/FX.md): the chord part's sends at 127, Decay 13 s,
 #       Feedback up: the heaviest sound scenario with both effects' loops running in every block (budget: both effects
 #       <= 350 us a block, no block over 80 %)
+#   (p) a 6-key PROPHET chord (01 ITS PROPHET5: the SSI filter, its envelope sweeping; five voices, the cap) + the
+#       PROPHET bass (04 FUNK BASS II) with the default sends, a chord change (docs/PROPHET.md "Cost on the unit": the
+#       unit's figures are counted from its listing, tools/p5_cost.py; these are the emulator's estimates)
+#   (q) (p) with the VA bass (PUNCH BASS)
 # The heavy scenarios (c, d, e, i, l) also get a "keys" line each (tools/emu/keylat.py, docs/INTEGRATION.md "Keys while
 # a frame draws"): 40 taps of G5 at pseudo-random times while the chord is held, with a redraw's strip taking 2.7 ms of
 # the device's clock (the emulator's worst frame: 16 ms for six strips) and 7.8 ms (2.9 times that: the upper end of the
@@ -54,10 +58,10 @@ if [ "$EMU" = build/host/emu ] && { [ ! -x "$EMU" ] || [ -n "$(find tools/emu fi
     sh tools/emu/build.sh || { echo "build failed"; exit 1; }
 fi
 mkdir -p "$OUT"
-for s in a b c d e f g h i j l; do
+for s in a b c d e f g h i j l p q; do
     n=perf_$s
     "$EMU" --headless --script "tools/emu/scripts/$n.txt" --wav "$OUT/$n.wav" >"$OUT/$n.log" 2>&1
-    echo "== ($s) $(sed -n '1s/^# tools\/emu\/perf.sh ([a-l]): //p' "tools/emu/scripts/$n.txt")"
+    echo "== ($s) $(sed -n '1s/^# tools\/emu\/perf.sh ([a-q]): //p' "tools/emu/scripts/$n.txt")"
     grep '^audio: [0-9]* blocks\|^cpu:\|^ui:' "$OUT/$n.log" | sed 's/^/   /'
     grep 'voices: given up\|erases with' "$OUT/$n.log" | tail -2 | sed 's/^ */   /'
     python3 tools/emu/wavclicks.py "$OUT/$n.wav" --from 0.4 | tail -1 | sed 's/^/   /'
@@ -69,7 +73,7 @@ DCON="$OUT/dualcore_on_flash.bin"             # Options > Dual Core On, saved: t
 rm -f "$DCON"
 "$EMU" --headless --flash "$DCON" --script tools/emu/scripts/cr_dualcore_on.txt >"$OUT/dualcore_on.log" 2>&1 ||
     { echo "Dual Core On: the Options script failed (see $OUT/dualcore_on.log)"; exit 1; }
-for s in a b c d e f g h i j l; do
+for s in a b c d e f g h i j l p q; do
     n=perf_$s
     cp "$DCON" "$OUT/dualcore_run_flash.bin"
     "$EMU" --headless --flash "$OUT/dualcore_run_flash.bin" --script "tools/emu/scripts/$n.txt" --wav "$OUT/${n}_dc.wav" >"$OUT/${n}_dc.log" 2>&1
