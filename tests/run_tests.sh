@@ -221,6 +221,11 @@ run "SMK-37 package layout (fm1pkg_make --board smk37): PRCT 0x9D000, stock regi
     python3 tests/smk_pkg_test.py "$OUT/smk-new.fwsc"
 par_build $CC -DBOARD_SMK37=1 -DOWN_PKG=1 -o "$OUT/ota_test_smk" tests/ota_test.c
 run "M-UPGRADE entry, SMK-37 build (staging 0xBB000, parm ota-SMK-37 Pro_016)" "$OUT/ota_test_smk" "$OUT/smk-new.fwsc"
+for m in 1 2; do                                     # the MODEL=elite / mke builds of ota.c and the stub's record
+    par_build $CC -DBOARD_SMK37=1 -DT_MODEL=$m -DOWN_PKG=1 -o "$OUT/ota_test_smk_m$m" tests/ota_test.c
+    run "M-UPGRADE entry, SMK model $m build (MODEL=elite / mke: its own parm identity, the stub's the same)" \
+        "$OUT/ota_test_smk_m$m" "$OUT/smk-new.fwsc"
+done
 for m in no-stub other-body no-stub-other old-stub; do
     PAR_MAKES="$OUT/smk-stub-test-$m.fwsc"
     par_prep quiet python3 tools/make_stub_test_pkg.py "$m" --board smk37 -o "$OUT/smk-stub-test-$m.fwsc"
@@ -229,10 +234,12 @@ par_build $CC -O2 -DBOARD_SMK37=1 -Ifirmware/hal -o "$OUT/ldr_test_smk" tests/ld
 run "update loader, SMK-37: app area 0x4000-0x9CFFF, the interruption model, the protected ranges untouched" \
     "$OUT/ldr_test_smk" "$OUT/smk-stub-test-no-stub.fwsc" "$OUT/smk-new.fwsc" "$OUT/smk-stub-test-other-body.fwsc" \
     "$OUT/smk-stub-test-no-stub-other.fwsc" "$OUT/smk-stub-test-old-stub.fwsc"
-if [ -f build/choralroot-smk37.fwsc ]; then          # the package BOARD=smk37 ./build.sh made, when present
-    run "SMK package build/choralroot-smk37.fwsc: identity SMK-37 Pro_920, stock region table" \
-        python3 tests/smk_pkg_test.py build/choralroot-smk37.fwsc "SMK-37 Pro_920"
-fi
+for m in pro elite mke; do                           # the packages BOARD=smk37 MODEL=... ./build.sh made, when present
+    f=build/choralroot-smk37.fwsc; id="SMK-37 Pro_920"
+    [ $m = elite ] && f=build/choralroot-smk37-elite.fwsc && id="SMK-37 Elite_920"
+    [ $m = mke ] && f=build/choralroot-smk37-mke.fwsc && id="MKE-P37_920"
+    [ -f $f ] && run "SMK package $f: identity $id, stock region table" python3 tests/smk_pkg_test.py $f "$id"
+done
 
 if [ -f build/gen/felucca_tables.h ]; then
     par_build $CC -O2 -w -Ibuild/gen -Ifirmware/src -o "$OUT/hostsim" tests/hostsim.c -lm

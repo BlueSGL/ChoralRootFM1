@@ -805,7 +805,7 @@ $("go").addEventListener("click", async () => {
     if (ota) {                                  // an interrupted update: the backup (if any) was taken before it
       ota.link.close();
       began = true;
-      okDone = await up.resume(pkgImage, step, meta.product);
+      okDone = await up.resume(pkgImage, step, { package: meta.product });
       sayK(okDone ? "done" : "stopped");
       halted = !okDone;
     } else {
@@ -944,7 +944,7 @@ $("stock-go").addEventListener("click", async () => {
       if (!$("stock-recovery").checked) { sayK("stockNeedBackup"); return; }
       if (!confirm(t("stockConfirm"))) { sayK("cancelled"); return; }
       clearTop(); began = true;
-      okDone = await up.resume(selected.image, step, selected.product);
+      okDone = await up.resume(selected.image, step, { product: selected.product });
       if (!okDone) { sayK("stopped"); halted = true; }
     } else {
       if (!$("stock-recovery").checked) {

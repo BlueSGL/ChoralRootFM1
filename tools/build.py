@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 """Build ChoralRoot FM-1: the app, the update loader and an installable .fwsc package.
 
-  tools/build.py [--release X.Y[-suffix]] [--board fm1|smk37]
+  tools/build.py [--release X.Y[-suffix]] [--board fm1|smk37] [--model pro|elite|mke]
 
 The unit is firmware/src/choralroot.c (ChoralRoot's single compilation unit, a fork of Felucca's felucca.c).
 Outputs in build/: choralroot.bin (app.bin: the boot stub's 0xEE0 bytes, then the app), choralroot.elf,
@@ -18,6 +18,10 @@ BOARD=smk37 (or --board smk37) builds ChoralRoot for the M-Vave SMK-37: -DBOARD_
 the boot stub, identity SMK-37 Pro_920 (constant, as the FM-1's), the SMK flash layout (fm1pkg_make.py), the SMK
 stub's own lock (firmware/stub/stub_smk37.lock), and the package build/choralroot-smk37.fwsc
 (choralroot-smk37-X.Y.fwsc for a release). The default stays the FM-1.
+MODEL=elite / mke (or --model) with smk37: the same build under the SMK-37 Elite's or the MKE-P37's model name
+(identity SMK-37 Elite_920 / MKE-P37_920, the loader's and the update record's name too; -DSMK_MODEL), so M-Vave's
+updater still takes that unit's factory package; build/choralroot-smk37-elite.fwsc, -mke.fwsc. The boot stub holds
+the model's name in its update record: each model has its lock (stub_smk37-elite.lock, stub_smk37-mke.lock).
 See BUILDING.md for the toolchain and the SDK.
 
 The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
@@ -67,7 +71,9 @@ PRODUCT = "FM-1_920"                # package identity (ChoralRoot: constant, re
 BOARD = "fm1"                       # fm1 (default) or smk37: BOARD env or --board
 BOARD_DEFS = {"fm1": [], "smk37": ["-DBOARD_SMK37=1"]}       # the FM-1 build gets no new flag (byte-identical)
 BOARD_STEM = {"fm1": UNIT, "smk37": f"{UNIT}-smk37"}        # package name: STEM.fwsc, STEM-X.Y.fwsc
-BOARD_LOCK = {"fm1": "stub.lock", "smk37": "stub_smk37.lock"}   # the boot stub that ships, per board
+BOARD_LOCK = {"fm1": "stub.lock", "smk37": "stub_smk37.lock"}   # the boot stub that ships, per board (and model)
+# smk37: the keyboard's model name (MODEL env or --model); one hardware, three names. pro adds no flag
+MODELS = {"pro": "SMK-37 Pro", "elite": "SMK-37 Elite", "mke": "MKE-P37"}
 SMK_DATA_FAMILY = "CHORAL"          # SMK store owner tag (storage.c st_owner_check); FELUCCA_DATA_FAMILY overrides
 SMK_DATA_UNTAGGED_OK = 0            # an untagged SMK store is another firmware's: cleared (FELUCCA_DATA_UNTAGGED_OK)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/choralroot.c)
@@ -458,15 +464,24 @@ def main():
     ap.add_argument("--release", metavar="X.Y", help=f"release build: identity {PRODUCT}, version string ChoralRoot X.Y")
     ap.add_argument("--board", choices=sorted(BOARD_DEFS), default=None,
                     help="target board: fm1 (default) or smk37 (default: $BOARD, else fm1)")
+    ap.add_argument("--model", choices=sorted(MODELS), default=None,
+                    help="smk37: the model name, pro (default), elite or mke (default: $MODEL, else pro)")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
     BOARD = (a.board or os.environ.get("BOARD") or "fm1").lower().replace("-", "")
     if BOARD not in BOARD_DEFS:
         raise SystemExit(f"BOARD={BOARD}: use fm1 or smk37")
+    model = (a.model or (os.environ.get("MODEL") if BOARD == "smk37" else None) or "pro").lower()
+    if model not in MODELS or (model != "pro" and BOARD != "smk37"):
+        raise SystemExit(f"MODEL={model}: pro, elite or mke, with BOARD=smk37")
     fm1pkg_make.set_board(BOARD)
     if BOARD != "fm1":              # the board's identity, as constant as the FM-1's (SMK-37 Pro_920)
-        PRODUCT = fm1pkg_make.BOARDS[BOARD][1] + PRODUCT[PRODUCT.index("_"):]
+        PRODUCT = MODELS[model] + PRODUCT[PRODUCT.index("_"):]
     stem = BOARD_STEM[BOARD]
+    if model != "pro":              # another model name: identity, loader, update record, the stub's record (SMK_MODEL)
+        BOARD_DEFS[BOARD] = [*BOARD_DEFS[BOARD], f'-DSMK_MODEL="{MODELS[model]}"']
+        stem += "-" + model
+        BOARD_LOCK[BOARD] = f"stub_smk37-{model}.lock"
     name = f"{stem}.fwsc"
     if a.release:                   # the identity stays FM-1_920: only the version string and the names change
         m = re.fullmatch(r"\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)?", a.release)   # the identity never encodes it

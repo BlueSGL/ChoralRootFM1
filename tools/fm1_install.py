@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
-"""Install a Felucca package (.fwsc) on an FM-1 over USB-MIDI.
+"""Install a Felucca package (.fwsc) on an FM-1 (or an M-Vave SMK-37: SMK37.md) over USB-MIDI.
 
 The same update as the web installer (web/fm1ota.js): step 1, the
 running firmware reads parts of the package and starts the update loader;
@@ -54,9 +54,13 @@ file keeps the record's binding (its "binding" field says what it overwrites; th
 If the FM-1 is still in update mode (an earlier install was cut off), the
 install finishes the write. Needs python-rtmidi (pip install python-rtmidi; mido is no longer used).
 
+The SMK-37 Pro, SMK-37 Elite and MKE-P37 (and the Starrykey 37 Play) are one keyboard under several names: a package
+for one of them installs on any of them, never an FM-1 package on an SMK or back, and an update loader is written
+only when it is of the package's keyboard (the same rule on every path: the install and the resume of an update).
+
 Exit codes: 0 done, 1 cancelled or other error, 2 bad arguments or package,
 3 FM-1 not found, 4 connection lost or the device stopped, 5 timeout (no
-loader / no restart), 6 wrong model, or another identity after the install,
+loader / no restart), 6 wrong model (or a loader of another keyboard), or another identity after the install,
 7 the backup, restore or sound write failed (or the firmware has no backup protocol, or is not ChoralRoot for the
 sounds), 8 the running firmware is one ChoralRoot
 is not installed over (Sloop, the Felucca 0.x betas, unknown ones: docs/INSTALL-COMPAT.md; --force overrides).
@@ -86,7 +90,9 @@ LOADER_MARK = b"FELUCCA-LOADER-1"
 # the unmodified official FM-1 V15 (FM-1.fwsc from M-VAVE): returning to it is allowed without --force,
 # as the web installer's "Return to official V15" (web/fm1pkg.js validateStockPackage)
 STOCK_V15_SHA256 = "db1642b2b6fa5c2cccb11ffd13878068bb28601678d3644049f99dc40e7edb8a"
-PORT_RE = re.compile(r"fm-1|felucca|ota|composite|sinco|usb-midi", re.I)   # never probe other gear
+# the MIDI ports probed: the FM-1 / SMK-37 models' and the firmwares' names; other gear is never sent anything
+PORT_RE = re.compile(r"fm-1|smk|elite|mke-p37|starry|felucca|sloop|clipper|melodee|fomni|x0x|makkuro|maku|rainbow|amb-1|"
+                     r"choral|orbit|snoop|vector|vox|ota|composite|sinco|usb-midi", re.I)
 
 # seconds; the tests shorten them
 DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0, "retry": 1.0,
@@ -197,6 +203,18 @@ def model_of(text):
     return text.split("_")[0].removeprefix("ota-")
 
 
+# the SMK-37 Pro, SMK-37 Elite, MKE-P37, Starrykey 37 Play and the SMK-37+VA mod: one keyboard under several model
+# names, so a package for one runs on all of them (also "SMK-37", the name other firmwares report); an FM-1 is another
+# device
+SMK_FAMILY = re.compile(r"SMK-37([ +].*)?|MKE-P37|STARRYKEY-37.*", re.I)
+
+
+def same_keyboard(a, b):
+    """the models of identities a and b are the same hardware (never an FM-1 and an SMK)"""
+    ma, mb = model_of(a), model_of(b)
+    return ma == mb or bool(SMK_FAMILY.fullmatch(ma) and SMK_FAMILY.fullmatch(mb))
+
+
 # which firmware runs: may ChoralRoot be installed over it? The same table as web/fm1ota.js classifyFirmware
 # (docs/INSTALL-COMPAT.md). identity: the handshake text; info: the backup protocol's INFO version, None when the
 # firmware does not answer. The 9xx identities are shared by every Felucca-based firmware (Felucca 0.9-beta FM-1_909,
@@ -214,6 +232,8 @@ def classify_firmware(identity, info):
     if m[1]:
         return "loader", "loader", identity
     num = int(m[3])
+    if SMK_FAMILY.fullmatch(m[2]):                # the M-Vave SMK-37 (SMK37.md): its own table
+        return classify_smk(identity, m[2], num, v)
     if m[2] != "FM-1":
         return "refuse", "unknown", identity
     if 1 <= num < 100:
@@ -237,6 +257,21 @@ def classify_firmware(identity, info):
     if v:
         return "refuse", "unknown", f"an unknown firmware ({identity}, {v})"
     return "refuse", "unknown", f"an unknown Felucca-based firmware ({identity})"
+
+
+def classify_smk(identity, model, num, v):
+    """an SMK-37 (any of its model names): the official firmware and the Felucca-family ports (SLOOP, Felucca and the
+    ports on their SMK board layer: its owner tag keeps each firmware's data apart) are installed over. The bare name
+    "SMK-37_9NN" is ChanceTheMaker's SMK firmwares': another package format and their own updater, so not ours"""
+    if model.upper() == "SMK-37" and 900 <= num < 1000:
+        return "refuse", "other", f"a firmware with its own updater ({identity})"
+    if 1 <= num < 100:
+        return "allow", "stock", f"the official M-VAVE firmware ({identity})"
+    if re.match(r"choralroot\b", v, re.I):
+        return "allow", "choralroot", v
+    if 700 <= num < 1000:
+        return "allow", "smk", f"an SMK-37 port ({identity}{', ' + v if v else ''})"
+    return "refuse", "unknown", f"an unknown firmware ({identity})"
 
 
 def refusal_text(name):
@@ -884,11 +919,16 @@ class Updater:
 
     def install(self, dev, image, product, step=lambda *a: None):
         """running firmware -> loader -> new firmware; dev from find(). A device already in
-        update mode only needs the write."""
-        if model_of(dev.id.text) != model_of(product):
+        update mode only needs the write. The keyboard rule (same_keyboard) on both: the device, and the loader
+        that answers after step 1"""
+        if not same_keyboard(dev.id.text, product):
             dev.link.close()
             raise InstallError("model", f"the device is {dev.id.text}, the package is for {product}")
         ota = dev if dev.id.loader else self.check(dev, image, step)
+        if not same_keyboard(ota.id.text, product):
+            ota.link.close()
+            raise InstallError("model", f"the device is in the update mode of {ota.id.text}, the package is for "
+                                        f"{product}: nothing was written")
         self.write(ota, image, step)
         return self.verify(product, step)
 
@@ -2467,13 +2507,18 @@ def run(a, backend, out, ask):
     if not dev:
         raise not_found(up)
     version = None
-    if not dev.id.loader and not official and model_of(dev.id.text) == model_of(product):
+    if not dev.id.loader and not official and same_keyboard(dev.id.text, product):
         info = device_info(BackupLink(dev.link))     # the version text tells the Felucca-based firmwares apart
         version = info and info[0]
     print(f"device:  {dev.id.text}  ({dev.name})" + (f"  {version}" if version else "") +
           ("  in update mode: the write will be finished" if dev.id.loader else ""), file=out)
-    if not dev.id.loader and not official and model_of(dev.id.text) == model_of(product):
-        verdict, _kind, name = classify_firmware(dev.id.text, version)   # (the return to V15 is always allowed)
+    if not dev.id.loader and not official and same_keyboard(dev.id.text, product):
+        verdict, kind, name = classify_firmware(dev.id.text, version)   # (the return to V15 is always allowed)
+        if kind == "other":                       # (its own updater and package format: never, not with --force)
+            dev.link.close()
+            raise InstallError("unsupported", f"the keyboard runs {name}: ChoralRoot is not installed over it from "
+                                              "here, nothing was written. Return to the official firmware with that "
+                                              "firmware's own updater first")
         if verdict == "refuse" and not a.force:
             dev.link.close()
             raise InstallError("unsupported", refusal_text(name) + "\n  (--force installs anyway, at your own risk)")

@@ -14,8 +14,15 @@
 #define FELUCCA_OTA_DRYRUN 0
 /* the staging area (ota.c OTA_AREA): -DBOARD_SMK37=1 tests the SMK-37's (0xBB000, the parm identity of its model) */
 #if BOARD_SMK37
+#if T_MODEL == 1                         /* -DT_MODEL=1 / 2: the MODEL=elite / mke build */
+#define SMK_MODEL "SMK-37 Elite"
+#elif T_MODEL == 2
+#define SMK_MODEL "MKE-P37"
+#else
+#define SMK_MODEL "SMK-37 Pro"
+#endif
 #define T_AREA 0xBB000u
-#define T_PARM_ID "ota-SMK-37 Pro_016"
+#define T_PARM_ID "ota-" SMK_MODEL "_016"
 #else
 #define T_AREA 0xE0000u
 #define T_PARM_ID "ota-FM-1_015"
