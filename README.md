@@ -173,3 +173,4 @@ the chord logic after the Telepathic Instruments Orchid. The firmware is all-syn
 SAMPLE engine and its CC0 instruments by Versilian Studios stay in the tree for Felucca builds); the package carries three JieLi AC79 SDK files under Apache-2.0. The bundled font, icons,
 ported DSP and SDK files keep their own licences ([LICENSES/](LICENSES/)); [LICENSING.md](LICENSING.md) has
 the whole list. Orchid, M-VAVE and FM-1 are trademarks of their owners.
+Some additional ideas and features that are implemented like a full keyboard mode were suggested by Rosen u/Creative_One919
