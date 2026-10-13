@@ -2,7 +2,7 @@
 
 ChoralRoot also builds for the M-Vave SMK-37, a 37-key controller with the same chip as the FM-1. The FM-1 build is
 unchanged; everything for the SMK-37 is behind `BOARD_SMK37`. On the SMK-37 it is the same ChoralRoot: the same
-sounds, screens, boot and [manual](docs/MANUAL.md), with velocity-sensitive keys and the SMK-37's extra controls.
+sounds, screens, boot and [manual](docs/MANUAL.md), with velocity-sensitive keys, the chord block on the pads and the SMK-37's extra controls.
 
 Until this project's releases include SMK-37 packages, unofficial builds can be installed with the web installer: https://genkigenki.github.io/smk37/
 
@@ -18,17 +18,17 @@ unit's factory package afterwards.
 
 ## Controls
 
-The manual still applies: the middle 27 keys are the FM-1's keybed, and the SMK-37's buttons and knobs map onto the
-FM-1's. The screen keeps the FM-1's names (SELECT, SEL, ENV, GLO, HOME, OCT-, ...); the table translates them.
+The manual still applies, with one change: the chord block's keys (DIM MIN MAJ SUS, 6 m7 M7 9, LOCK) are on the pads,
+so the whole keybed plays roots. The SMK-37's buttons and knobs map onto the FM-1's. The screen keeps the FM-1's names
+(SELECT, SEL, ENV, GLO, HOME, OCT-, ...); the table translates them.
 
 | SMK-37 | ChoralRoot |
 | --- | --- |
-| Keys F3..C#4 | the chord block: 6, DIM, m7, MIN, M7, MAJ, LOCK (B3), 9, SUS |
-| Keys D4..G5 | the roots, with velocity |
-| Keys C3..E3 and G#5..C6 (the outer 10) | more roots, each at its own pitch: a chord with a chord key held or latched, a note on the Full keyboard; with the octave shift. Where the root keys pick (a layer's map, naming) they do nothing |
-| Pads 1-4 (top row, left) / 9-12 (bottom row, left) | DIM MIN MAJ SUS / 6 m7 M7 9: the chord block as a grid of two rows. A pad does what its key does (it holds the chord type, it stacks, it picks the scale in the KEY layer, it plays a note on the Full keyboard) and lights as that key's light: types white, extensions orange |
-| Pad 5 | LOCK (as B3: tap, or hold for the LOCK layer) |
-| Pads 6, 7, 8, 13, 14, 15, 16 | the performance modes: Strum, Strum 2 Octaves, Slop, Arpeggiate, Arp 2 Octaves, Pattern, Harp. A pad turns its mode on; its pad again turns performance off. Blue: the mode playing bright, the mode picked while off dimmer |
+| Keys C3..C6 (all 37) | roots, with velocity: a chord with a chord pad held (or latched by LOCK), a note on the Full keyboard; with the octave shift. Where the root keys pick (a layer's map, naming), D4..G5 pick as on the FM-1 |
+| Pads 1, 2, 3, 5 (top row) | DIM, MIN, MAJ, SUS: the chord types |
+| Pads 9, 10, 11, 13 (bottom row) | 6, m7, M7, 9: the extensions |
+| Pad 15 (bottom row) | LOCK (as B3: tap to switch it, hold for the LOCK layer) |
+| The chord pads | they are the FM-1's chord keys: a pad holds its function while it is held, pads combine as the keys do, LOCK latches them as on the FM-1, MIN / MAJ pick the scale in the KEY layer. Bright while held or latched, dim otherwise: types white, extensions orange, LOCK blue (bright while on). Pads 4, 6-8, 12, 14 and 16 are dark |
 | K1 | MASTER (volume) |
 | K2 / K3 / K4 | SELECT / ALGORITHM / PRESETS |
 | K5..K8 | KNOB 1..4 |
@@ -44,7 +44,7 @@ FM-1's. The screen keeps the FM-1's names (SELECT, SEL, ENV, GLO, HOME, OCT-, ..
 | Faders 1..4 | the sends into Drive, Chorus, Delay and Reverb (the order of the FX layer's Sends page), shown as they move; a fader takes over only once it moves, also after FADER BANK |
 | Pitch wheel | bends the chord and the bass part (their channels' bend range: 2 semitones unless set over MIDI); also sent on the CHORD and BASS MIDI channels |
 | Mod wheel | vibrato on both parts (5.5 Hz, up to half a semitone at the top) and the sounds' mod wheel source; also sent as CC 1 |
-| Options > Velocity | `keys` (the SMK-37's default): as played; 1..127: every key and pad at that velocity |
+| Options > Velocity | `keys` (the SMK-37's default): as played; 1..127: every key at that velocity |
 | OCTAVE- held at power-on | update mode (OCTAVE-'s light flashes three times; install a package, or switch off and on) |
 | OCTAVE- + OCTAVE+ held at power-on | HARDWARE CALIBRATION (the screen asks for the FM-1's names, the table above) |
 | OCTAVE- + OCTAVE+ + PATCH held 5 s | update mode |
