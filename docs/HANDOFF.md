@@ -86,7 +86,7 @@ BUILDING.md "Releasing" has them in full. The ones that are easy to forget, in o
 1. `docs/releases/X.Y.md`: the first line replaced by the summary paragraph, a "Going back to" section.
 2. `./build.sh --release X.Y`, then **add the version to web/releases.json** (first entry: date, tag, 4 to 8
    bullets for players, the sha256 of `build/release-X.Y/choralroot-X.Y.fwsc`; the entry that was first gets a
-   `going_back` note). The web installer's version chooser, the landing page's "New in X.Y" and the packages the
+   `going_back` note). The web installer's button, notes and "Other versions", the landing page's "New in X.Y" and the packages the
    site hosts all come from this file; `python3 tests/releases_test.py` checks it, and the Pages job refuses to
    publish a version that is not its first entry.
 3. The browser emulator's test (Verification, above), then the tag when the owner says so.
@@ -94,9 +94,10 @@ BUILDING.md "Releasing" has them in full. The ones that are easy to forget, in o
 To publish the site again without a new release (a change to the pages): run pages.yml by hand with the current
 version and ref `main`. A local copy of the whole site, as Pages builds it: `python3 tools/fetch_packages.py`
 (the listed packages into `build/scratch/packages/`, checked; needs the network once), then
-`python3 web/make_site.py build/choralroot.fwsc X.Y build/site --require-all`. The installer page shows any step
-without an FM-1 with `?demo=1` .. `?demo=6` (`4b` an older version chosen, `5w` writing, `5b` interrupted): demo
-mode never asks the browser for MIDI and fetches nothing.
+`python3 web/make_site.py build/choralroot.fwsc X.Y build/site --require-all`. `fetch_packages.py` falls back to
+`curl -sL` when Python's own download fails (this Mac's Python has no CA certificates) and says which it used. The
+installer page shows its states without an FM-1 with `?demo=idle`, `older`, `writing`, `interrupted`, `done` and
+`nomidi`: demo mode never asks the browser for MIDI and fetches nothing.
 
 ## Tools for the device
 

@@ -1509,27 +1509,27 @@ The FM-1 updates on its own battery, and the installer cannot read how full it i
 ### Updating
 
 Open the installer, <https://quixotic7.github.io/ChoralRootFM1/webapp/installer/> (the red button on the site), in
-Chrome or Edge. It walks you through six steps:
+Chrome or Edge on a computer, connect the FM-1 and press **Install ChoralRoot 0.19**. That is all of it: the page
+finds the FM-1, saves a backup first, switches the FM-1 to update mode, writes the firmware and restarts it. About
+two minutes. Safari and Firefox cannot install (the page says so); Chrome on Android has what it takes but is not
+tested.
 
-1. **Your browser**: whether this browser can install. Chrome and Edge on a computer can; Safari and Firefox cannot.
-   Chrome on Android has what it takes but is not tested.
-2. **Get ready**: the list above.
-3. **Test the connection**: the page looks at what is on the FM-1 and says so (ChoralRoot and its version, the stock
-   firmware, Felucca, Melodee, or a firmware it will not install over). Nothing is written.
-4. **Choose a version**: the newest is selected, with what is new in it. The older versions from 0.16 on are below
-   it, each with what going back to it means.
-5. **Install**: the page saves a backup first, switches the FM-1 to update mode, writes the firmware and restarts
-   it. About two minutes.
-6. **Done**: the version that was installed, and a button that reads it back from the FM-1.
+Beside the button the page lists what is new in the version it installs, with a link to the full notes. The button
+always names the version it writes. **What is on my FM-1?** under it reads what the FM-1 runs without writing
+anything (ChoralRoot and its version, the stock firmware, Felucca, Melodee, or a firmware the page will not install
+over), and after an install it reads the version back.
 
 Your saved sounds, loops and settings are kept. What you have not saved is not: hold SAVE first.
 Options > Version shows what is installed.
 
-**Going back to an older version** is the same install with that version chosen in step 4. Your saved sounds and
-loops stay; what the older version does not know it ignores or plays without (an older version has no Options >
-Output; 0.17 plays a loop without the steps' ratchets and conditions and has its old effects; the page lists it for
-each version, from the "Going back" parts of the release notes). 0.15 and older are not offered: they have no
-protected update path, and 0.14 and 0.15 stop responding after ten idle minutes. They remain on GitHub.
+**Going back to an older version:** under the button, **Other versions** offers 0.18, 0.17 and 0.16. One click on
+one of them shows its date, what it brought and what going back to it means, and the button now says, for example,
+"Install ChoralRoot 0.17", with the going-back sentence above it. "Back to 0.19, the newest" undoes the choice. The
+install is the same. Your saved sounds and loops stay; what the older version does not know it ignores or plays
+without (an older version has no Options > Output; 0.17 plays a loop without the steps' ratchets and conditions and
+has its old effects; the page has it for each version, from the "Going back" parts of the release notes). 0.15 and
+older are not offered: they have no protected update path, and 0.14 and 0.15 stop responding after ten idle
+minutes. They remain on GitHub.
 
 Updating to 0.16 sets Options > Dual Core to Off.
 

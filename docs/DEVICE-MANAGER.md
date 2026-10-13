@@ -139,20 +139,32 @@ docs/SOUNDS.md.
 ## The installer beside it (as built, 2026-10-12)
 
 The manager's neighbour, `webapp/installer/index.html` (`web/index_pkg.html`, made self-contained by
-`web/make_site.py`), is a guided flow of six steps, one shown at a time under a strip of six buttons:
+`web/make_site.py`), is one page with the Install button at the top, as it was up to 0.19. (A flow of six steps
+replaced it for a few hours on 2026-10-12 and was never published; the owner wanted the immediacy back, with the
+notes and the older versions within reach.) From the top:
 
-| step | what it shows | what it does |
-| --- | --- | --- |
-| 1 Your browser | whether Web MIDI is there; which browsers can install | nothing |
-| 2 Get ready | charge, cable, awake, SAVE; what an update keeps | nothing |
-| 3 Test the connection | what runs on the FM-1 (`classifyFirmware`: ChoralRoot and its version, stock, Felucca, Melodee, a refused firmware, update mode) | the handshake and INFO, read only |
-| 4 Choose a version | the versions of `web/releases.json`: the newest selected and marked Recommended with its bullets; the older ones with a going-back note, their bullets collapsed; "On your FM-1" on the version the test found | fetches the chosen package from `firmware/`, checks its identity and its sha256 against the list; Install stays disabled when either fails |
-| 5 Install | the plan (update, reinstall, going back, over another firmware, finishing an update), the backup tick boxes, the override after a refusal | the install as before: `fm1ota.js` unchanged, backup first, restore offered after Felucca; when it stops after it began, a red box says what to do |
-| 6 Done | the version installed and its bullets | "Check the FM-1" reads the version back |
+- the lead and the charge / cable warning; a notice only when the browser has no Web MIDI;
+- "ChoralRoot X.Y · date" and the button, **Install ChoralRoot X.Y**: the label is always the version that will be
+  written. Under it the progress bar and the status line;
+- **Other versions**: one button for each older version of `web/releases.json` with its date. One click chooses it:
+  the label and the notes change, the package is fetched and checked, and a yellow note above the button gives the
+  version's going-back sentence with "Back to X.Y, the newest". When the unit is known to run something older than
+  the chosen version the note only says that the version is not the newest;
+- **What is on my FM-1?**: the handshake and INFO, read only (`classifyFirmware`: ChoralRoot and its version,
+  stock, Felucca, Melodee, a refused firmware, update mode). The version found is marked "On your FM-1" in the
+  list. After an install the same button is the read-back: it says whether the unit runs the version just written.
+  Install does not need it: it identifies the unit itself, as before;
+- the backup tick box, and the override box after a refusal;
+- beside all this (under it on a phone) the notes of the chosen version: "New in X.Y" with the bullets, or "What
+  X.Y brought" with the going-back sentence and the points in full behind a disclosure; full notes, file, source.
 
-Under the steps, always in view: the progress bar, the status line and the log; then "Device not found?" (the
-rescue key, the 0.18 gesture, SAFE MODE, the WL82 disk, the Transporter), Back up and restore, Sounds, Return to
-official V15, and "The files" (every version's package, sha256, notes and source at its tag).
+Each chosen package is fetched from `firmware/` and checked (identity, then sha256 against the list) before Install
+is enabled; when either fails Install stays disabled and the status line gives the reason. When an install stops
+after it began, a red box under the status says what to do ("The install stopped. The FM-1 is not lost.").
+
+Below: what an install keeps and the other small print, "Device not found?" (the rescue key, the 0.18 gesture, SAFE
+MODE, the WL82 disk, the Transporter), Back up and restore, Sounds, Return to official V15, and "The files" (every
+version's package, sha256, notes and source at its tag).
 
 - **The versions** are `web/releases.json` (newest first; `tests/releases_test.py`). `make_site.py` publishes the
   current package and, from `--packages DIR` (`CR_PACKAGES_DIR`, else `build/scratch/packages`), every other listed
@@ -167,9 +179,9 @@ official V15, and "The files" (every version's package, sha256, notes and source
   from. The licence texts are the same files since v0.16 (`git diff v0.16 HEAD -- LICENSE LICENSES` is empty;
   LICENSING.md gained credits), so they cover every hosted package; each version's complete source is the
   repository at its tag, linked beside each file.
-- **Demo mode:** `?demo=1` .. `?demo=6`, `4b`, `5w`, `5b` show a step with made-up device data. `midiAccess()` is
-  the page's one way to the browser's MIDI and refuses in demo mode, every handler that talks to an FM-1 returns
-  first, and no package is fetched: `web/test_installer.mjs` clicks every such button in demo mode and counts no
-  MIDI request and no fetch.
+- **Demo mode:** `?demo=idle`, `older`, `writing`, `interrupted`, `done`, `nomidi` show a state with made-up device
+  data. `midiAccess()` is the page's one way to the browser's MIDI and refuses in demo mode, every handler that
+  talks to an FM-1 returns first, and no package is fetched: `web/test_installer.mjs` clicks every such button in
+  each demo state and counts no MIDI request and no fetch.
 - **Not run:** against an FM-1, in Chrome or Edge themselves, on Android. `web/test_installer.mjs` runs the page's
   script against a simulated FM-1 in node; the look was read from headless Chromium screenshots.
