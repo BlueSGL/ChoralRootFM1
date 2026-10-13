@@ -98,8 +98,9 @@ version and ref `main`. A local copy of the whole site, as Pages builds it: `pyt
 (the listed packages into `build/scratch/packages/`, checked; needs the network once), then
 `python3 web/make_site.py build/choralroot.fwsc X.Y build/site --require-all`. `fetch_packages.py` falls back to
 `curl -sL` when Python's own download fails (this Mac's Python has no CA certificates) and says which it used. The
-installer page shows its states without an FM-1 with `?demo=idle`, `older`, `writing`, `interrupted`, `done` and
-`nomidi`: demo mode never asks the browser for MIDI and fetches nothing.
+installer page shows its states without an FM-1 with `?demo=idle`, `older`, `writing`, `interrupted`, `done`,
+`nomidi`, `stockwriting` and `stockdone` (the last two: the "Return to official V15" section, far down the page):
+demo mode never asks the browser for MIDI and fetches nothing.
 
 ## Tools for the device
 
@@ -199,6 +200,13 @@ installed on the owner's Mac.
     keeps `CM`, because a single note reads `C` on every screen); `C13` standing for the chord with and without its
     9th; `Cmadd4` not saying that its fifth is missing; whether turning 6th with 7th should re-strike a chord that
     is held (today it acts from the next chord on).
+25. **The web installer's "Return to official V15" has its own progress display (HISTORY 3y35): NOT used on a real
+    FM-1 and not seen in real Chrome.** It is tested against the simulated FM-1 of `web/test_installer.mjs` and
+    looked at in headless Chromium (`?demo=stockwriting`, `?demo=stockdone`). To read on the unit: how far the bar
+    is when the official loader finishes (the write is measured against the whole image in 512-byte reads, 1368
+    for the V15: an estimate, the loader is M-VAVE's), and whether an interrupted write really waits in update mode
+    for the resume box, as the guidance says. The texts of the errors there still end "press Install again" (they
+    are the install card's).
 
 ### 0.20: what shipped
 

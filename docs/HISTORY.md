@@ -1781,3 +1781,50 @@ baee55ed142fe1cc), `run_cr_tests.sh`, `run_cr_draw.sh` (0 lint findings), `tools
 `test_persist.sh` (PASS), `run_tests.sh` (ALL HOST TESTS PASSED), `CR_VERSION=0.22 build_web.sh` +
 `test_web_emu.mjs` (PASS). Not run: the unit (nothing flashed), `install_test.py`, the `web/test_*.mjs`, `test_retired.sh`,
 `perf.sh`, `classic_exact.sh`.
+
+3y35. **The web installer: the return to the official V15 shows its own progress (2026-10-13; the site only, no
+firmware change, not used on a unit).** **The owner**: "The return to official V15 feature on the installer
+https://quixotic7.github.io/ChoralRootFM1/webapp/installer/ does not show any progress or anything which isn't
+great". **Cause** (`web/index_pkg.html`): the page is one install card at the top (button, bar, status line, the
+done and interrupted panels, the log) and, far below it, the folded section "Return to official V15". That
+section's two handlers reported only through `say` / `sayK`, which wrote the card's status line: the file's
+verdict, "Saving a backup n%", every step and every error appeared a few screens above the button that was
+pressed. Its step handler moved the bar (the card's, too) only at the end, to 100; there was no done panel for
+it, and no guidance when a write stopped. **Fix**: the section has its own bar, status line, done panel, guidance
+and log, under its button. `say`, `sayK` and `log` write where `out` points (`OUT_TOP`, the card, or `OUT_STOCK`),
+so `takeBackup`, `failSay` and the steps are not written twice; the return switches `out` for its run and gives
+it back in a `finally` (also after an error, a declined confirm, MIDI refused), the file check switches it for
+its one line, and the package load always answers in the card. The section is opened whenever something is shown
+in it, cannot be folded during a run or over a panel, and its status line is scrolled into view when the button
+is pressed. When the write is about to begin the card goes back to idle (bar 0, panels hidden, the read-back of
+"What is on my FM-1?" removed: what it said of an earlier install is no longer true) and nothing is said in it
+during the run. **The bar**: `Updater.serve` (`web/fm1ota.js`) counts the read requests it answered and
+`install` / `write` pass that count as `("verify", n)` and `("write", n)`. The card's `74 + 1167` came with
+Felucca's installer (the same line in `../Felucca/web/index_pkg.html`) and are counts of requests, not sizes: 74
+for the check by the running firmware, 1167 for our loader's write, which reads the app area only (0x4000 to
+0x93000, 143 sectors, eight 512-byte reads each = 1144, plus the directory and marker reads;
+`firmware/loader/ldr_core.c`; docs/UNBRICK-HANDOFF.md "of about 1167"). Neither follows from the image's size:
+ChoralRoot's image is 610293 bytes, 1192 reads of 512, not 1167, so the card's numbers stay as they are. The
+official package (699956 bytes, an image of 699936) brings M-VAVE's own loader (`ota.bin`, 19969 bytes), and how
+many reads it makes is not known before it makes them: the section gives the check the first 6 % (n of 74, as
+the card), and measures the write against the whole image in 512-byte reads, the most one request may ask for
+(1368 for the V15), held at 99 until the FM-1 has answered again, never backwards. A loader that reads only
+`flash.bin` (602112 bytes, 1176 reads) would end near 86 % and then jump to 100: an estimate, to be read on the
+unit. A resume in update mode (`up.resume`) uses the same step handler. **The end**: a green panel, "The FM-1 now
+runs the official V15 (FM-1_015)" with the identity of `step("done")`, the name of the backup file this run
+saved (or, when the resume box skipped the backup, that none was saved in this run), and the way back (Install at
+the top, then Restore). **Stopped after the start**: a red panel as the card's, adapted to what the handler
+supports: with an FM-1 in update mode it refuses without the resume box, so the guidance is to replug, tick
+"Resume an interrupted update" and press the button again with the same file. It does not promise what the card
+promises for a unit that was switched off (the boot stub's update mode): the official package has no stub. A
+declined confirm now says "Cancelled. Nothing was written." there (it said nothing). **Demo states**:
+`?demo=stockwriting`, `?demo=stockdone`. **Tests** (`web/test_installer.mjs`, the stock block): the bar rises
+through the check and the write and is 100 only at the end, also on a resume; during the run the card's status
+and bar do not change; the done panel; a cable lost while writing shows the section's guidance and not the
+card's, and the resume box finishes it; after a declined confirm, an error, notfound and a refused MIDI the card
+answers again, and an install of ChoralRoot after a return reports in the card. **Run**: the five
+`web/test_*.mjs` (passed), `tests/install_test.py`, `tests/releases_test.py`; the site built as Pages does
+(`web/make_site.py build/scratch/packages/choralroot-0.21.fwsc 0.21 build/site --require-all`: the tree's own
+build is 0.22 and is refused) and looked at in headless Chromium, 900 and 390 px wide
+(`build/scratch/installer-stock/`). **Not done**: a real FM-1, real Chrome or Edge, a real official file in the
+page (the test stands in for its check). The errors' texts there still end "press Install again".
