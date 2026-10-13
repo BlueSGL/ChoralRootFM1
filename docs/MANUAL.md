@@ -1,6 +1,6 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.20 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
+For ChoralRoot 0.21 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
 

@@ -8,6 +8,23 @@
   },
   "releases": [
     {
+      "version": "0.21",
+      "date": "2026-10-12",
+      "tag": "v0.21",
+      "sha256": "93bbfe1444fa3783b51ec4a3f0d0ff1494ef430d5b022fc9297ee0aa0176a3a7",
+      "title": "A smoother, wider chorus",
+      "bullets": [
+        "Fixed: the chorus no longer pops or crackles while you turn Depth. It slides to the new setting instead.",
+        "Chorus Width, on KNOB 3 of the Chorus page: from one chorus in the middle (0) to the full stereo spread (127, where it starts).",
+        "Width turns as smoothly as Depth and is kept with the other effect settings when you hold SAVE.",
+        "With the knobs left alone the chorus sounds exactly as it did in 0.20."
+      ],
+      "notes": [
+        "Updating from 0.20 keeps your settings, sounds and loops.",
+        "Nothing sounds different until you turn the new Width knob."
+      ]
+    },
+    {
       "version": "0.20",
       "date": "2026-10-12",
       "tag": "v0.20",
@@ -22,7 +39,15 @@
       "notes": [
         "Updating from 0.19 keeps your settings, sounds and loops.",
         "Nothing sounds or reads different until you change one of the two new options."
-      ]
+      ],
+      "going_back": {
+        "short": "Your saved sounds, loops and settings stay. You lose the chorus's Width knob.",
+        "points": [
+          "0.20's chorus is always the full spread, and its Depth clicks again while you turn it.",
+          "0.20 ignores the Width that 0.21 stored; nothing else is lost or reset.",
+          "If you hold SAVE while on 0.20, the stored Width is dropped: 0.21 starts at 127 again when you come back."
+        ]
+      }
     },
     {
       "version": "0.19",

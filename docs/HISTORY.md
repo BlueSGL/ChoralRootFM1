@@ -1665,3 +1665,14 @@ TESTS PASSED), `install_test.py`, `releases_test.py` (ALL OK; it notes that 0.21
 need not be yet), the five `web/test_*.mjs`, `CR_VERSION=0.21 build_web.sh` + `test_web_emu.mjs` (PASS). Not run: the unit (nothing flashed; the
 owner has not heard it), `tools/emu/classic_exact.sh` (it needs the 0.18 reference build; the script it compares
 has no knob turning).
+
+3y32. **0.21 on the unit and prepared for release (2026-10-12; not tagged).** Flashed by the orchestrator at 006862d
+(the unit reported "ChoralRoot 0.14": a remix build someone made, the owner's test; installed over it without a backup
+on his word, and he reset the settings from the menu afterwards "just in case anything weird saved"). **The owner,
+after turning the knobs:** "The new Chorus updates are great. Good for a 0.20 release." (taken as 0.21: 0.20 is
+tagged). The orchestrator's own full run on the merged tree: every suite of HANDOFF "Verification" but
+`classic_exact.sh` and `perf.sh`, 197 goldens 0 changed, the browser emulator as 0.21 PASS. Then the release steps
+short of the tag: the summary paragraph in `docs/releases/0.21.md`, `./build.sh --release 0.21` (package sha256
+93bbfe1444fa3783b51ec4a3f0d0ff1494ef430d5b022fc9297ee0aa0176a3a7), `web/releases.json` (0.21 first, 0.20 with its
+going-back note), the version in the manual, README and HANDOFF. Not heard: the unit's own speaker at Width 0 against
+127 (left or sum, HANDOFF item 18).

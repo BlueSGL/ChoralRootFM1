@@ -7,9 +7,9 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 Released: v0.1 and v0.11 .. v0.20 (`git tag`; v0.20 is the latest, notes in `docs/releases/`; `web/releases.json` lists
 0.16 .. 0.20 for the installer). The tree's `FELUCCA_VERSION` is "ChoralRoot 0.21" (`firmware/src/choralroot.c`): 0.21
-is in development, its notes begun in `docs/releases/0.21.md` (the chorus: no clicks while Depth turns, the Width
-knob; HISTORY 3y31). `web/releases.json` and the manual's first line still say 0.20, the released one: they change at
-the release. The owner's unit runs what
+is prepared for release and NOT TAGGED (the chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32):
+its notes, `web/releases.json`'s first entry (package sha256 93bbfe14...) and the manual's first line say 0.21; the
+tag, the release and the site wait for the owner's word. The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
