@@ -95,13 +95,16 @@ static uint32_t cu_white_key(uint32_t idx)        /* the inverse: white root idx
 #define CU_VEL_MIN 0                               /* Options > Velocity: 0 "keys" (the default), 1..127 fixed */
 #define CU_VEL_DEF 0
 /* The SMK-37's extras (SMK37.md). The keybed plays: all 37 keys are roots (the chord block's nine keys too,
- * CU_FN_KEYS 0), and the chord block's keys are on the pads, by meaning, a gap between the groups: the top row the
- * chord types (DIM MIN MAJ, a gap, SUS), the bottom row the extensions (6 m7 M7, a gap, 9) and, apart, LOCK. A pad is
- * its key: held while it is held (cu_pheld, the FM-1's cu_mod_press / cu_mod_release and LOCK's B3 rules), so
- * combinations, LOCK's latch and the KEY layer's scale pick work as on the FM-1. Every pad is the UI's (smk_pad_map
- * all -1: smk_pad_take); hardware pads 0..7 are the top row, 8..15 the bottom row */
+ * CU_FN_KEYS 0), and the chord block's keys are on the pads: the top row's left half the chord types (DIM MIN MAJ
+ * SUS), the bottom row's the extensions (6 m7 M7 9), then LOCK. A pad is its key: held while it is held (cu_pheld, the
+ * FM-1's cu_mod_press / cu_mod_release and LOCK's B3 rules), so combinations, LOCK's latch and the KEY layer's scale
+ * pick work as on the FM-1. The other seven pads pick the performance mode (CU_PERF): the free-timing ones on the top
+ * row (Strum, Strum 2 Octaves, Slop, Harp), the tempo-synced ones on the bottom row (Arpeggiate, Arp 2 Octaves,
+ * Pattern). Every pad is the UI's (smk_pad_map all -1: smk_pad_take); hardware pads 0..7 are the top row, 8..15 the
+ * bottom row */
 #define CU_FN_KEYS 0                               /* the chord block's keys are not function keys here */
-static const int8_t CU_PAD_FN[16] = {1, 3, 5, -1, 8, -1, -1, -1, 0, 2, 4, -1, 7, -1, 6, -1};   /* chord block key */
+static const int8_t CU_PAD_FN[16] = {1, 3, 5, 8, -1, -1, -1, -1, 0, 2, 4, 7, 6, -1, -1, -1};   /* chord block key */
+static const int8_t CU_PAD_PERF[16] = {-1, -1, -1, -1, 0, 1, 2, 6, -1, -1, -1, -1, -1, 3, 4, 5};   /* CU_PERF entry */
 static const int8_t CU_PAD_NOTE[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 static uint16_t cu_pheld;                          /* bit k: the pad of chord block key k is down */
 static uint16_t cu_ppick;                          /* .. pressed as the KEY layer's scale pick */
@@ -4443,8 +4446,21 @@ static void cu_smk_xkey(uint32_t kb, uint32_t vel)
  * (its release) and hold (cu_smk_input) */
 static void cu_smk_pad(uint32_t pad, uint32_t vel)
 {
-    int32_t k = pad < 16u ? CU_PAD_FN[pad] : -1;
+    int32_t k = pad < 16u ? CU_PAD_FN[pad] : -1, i = pad < 16u ? CU_PAD_PERF[pad] : -1;
     uint32_t bit;
+    if (i >= 0 && vel) {                           /* a mode pad: that mode, performance on; the mode playing: off (as
+                                                    * a PERF tap). The same state as PERF and the PERF layer's picker */
+        cu_activity();
+        if (cs.perform_on && cs.perf_sel == (uint32_t)i)
+            cu_perf_toggle();
+        else {
+            cu_perf_pick((uint32_t)i);
+            if (!cs.perform_on)
+                cu_perf_toggle();
+        }
+        cu_message(cs.perform_on ? CU_PERF[i].name : "perform off", CR_COL_WHITE);
+        return;
+    }
     if (k < 0)
         return;
     bit = 1u << k;
@@ -4834,8 +4850,19 @@ static void cu_smk_leds(const uint8_t *nl, const uint8_t *nd, const uint8_t *nm,
         return;                                    /* (console padtest) */
     for (p = 0; p < 16u; p++) {
         uint32_t lv = 0, r = 255, g = 255, b = 255, fid;  /* white */
-        int32_t k = CU_PAD_FN[p];
-        if (k >= 0) {                              /* (the gaps: dark) */
+        int32_t k = CU_PAD_FN[p], i = CU_PAD_PERF[p];
+        if (i >= 0) {                              /* a mode: bright while it plays, dim otherwise */
+            lv = panic ? (cu_smk_bit(nl, CU_LK(0)) ? 4u : 0u) : cs.perform_on && cs.perf_sel == (uint32_t)i ? 4u : 2u;
+            if (CU_PERF[i].mode == CR_PM_ARP || CU_PERF[i].mode == CR_PM_PATTERN) {   /* tempo-synced: green */
+                r = 30;
+                g = 200;
+                b = 60;
+            } else {                               /* free timing: cyan */
+                r = 20;
+                g = 170;
+                b = 200;
+            }
+        } else if (k >= 0) {
             fid = CU_LK((uint32_t)k);
             lv = cu_smk_bit(nl, fid) ? 4u : cu_smk_bit(nm, fid) || cu_smk_bit(nd, fid) || cu_smk_bit(nf, fid) ? 2u : 0u;
             if ((uint32_t)k == CU_KEY_LOCK) {      /* blue */

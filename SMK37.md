@@ -2,7 +2,7 @@
 
 ChoralRoot also builds for the M-Vave SMK-37, a 37-key controller with the same chip as the FM-1. The FM-1 build is
 unchanged; everything for the SMK-37 is behind `BOARD_SMK37`. On the SMK-37 it is the same ChoralRoot: the same
-sounds, screens, boot and [manual](docs/MANUAL.md), with velocity-sensitive keys, the chord block on the pads and the SMK-37's extra controls.
+sounds, screens, boot and [manual](docs/MANUAL.md), with velocity-sensitive keys, the chord block and the performance modes on the pads and the SMK-37's extra controls.
 
 Until this project's releases include SMK-37 packages, unofficial builds can be installed with the web installer: https://genkigenki.github.io/smk37/
 
@@ -25,10 +25,13 @@ so the whole keybed plays roots. The SMK-37's buttons and knobs map onto the FM-
 | SMK-37 | ChoralRoot |
 | --- | --- |
 | Keys C3..C6 (all 37) | roots, with velocity: a chord with a chord pad held (or latched by LOCK), a note on the Full keyboard; with the octave shift. Where the root keys pick (a layer's map, naming), D4..G5 pick as on the FM-1 |
-| Pads 1, 2, 3, 5 (top row) | DIM, MIN, MAJ, SUS: the chord types |
-| Pads 9, 10, 11, 13 (bottom row) | 6, m7, M7, 9: the extensions |
-| Pad 15 (bottom row) | LOCK (as B3: tap to switch it, hold for the LOCK layer) |
-| The chord pads | they are the FM-1's chord keys: a pad holds its function while it is held, pads combine as the keys do, LOCK latches them as on the FM-1, MIN / MAJ pick the scale in the KEY layer. Bright while held or latched, dim otherwise: types white, extensions orange, LOCK blue (bright while on). Pads 4, 6-8, 12, 14 and 16 are dark |
+| Pads 1-4 (top row) | DIM, MIN, MAJ, SUS: the chord types (white) |
+| Pads 9-12 (bottom row) | 6, m7, M7, 9: the extensions (orange) |
+| Pad 13 | LOCK (blue; as B3: tap to switch it, hold for the LOCK layer) |
+| The chord pads and LOCK | they are the FM-1's chord keys: a pad holds its function while it is held, pads combine as the keys do, LOCK latches them as on the FM-1, MIN / MAJ pick the scale in the KEY layer. Bright while held or latched (LOCK: while on), dim otherwise |
+| Pads 5-8 (top row) | the free-timing performance modes: Strum, Strum 2 Octaves, Slop, Harp (cyan) |
+| Pads 14-16 (bottom row) | the tempo-synced performance modes: Arpeggiate, Arp 2 Octaves, Pattern (green) |
+| The mode pads | a tap picks that mode and switches the performance on; the playing mode's pad again switches it off, as a PERF tap. Bright: the mode playing; dim: the others. PERF (ARP) and the PERF layer show the same state |
 | K1 | MASTER (volume) |
 | K2 / K3 / K4 | SELECT / ALGORITHM / PRESETS |
 | K5..K8 | KNOB 1..4 |
