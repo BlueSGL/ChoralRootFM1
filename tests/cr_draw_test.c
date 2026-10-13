@@ -51,6 +51,7 @@ static void hk_text(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const char *
 #include "../firmware/src/cr_gfx.c"
 #include "../firmware/src/cr_draw.c"
 #include "cr_screens_gen.h"
+#include "../firmware/src/cr_engine.h"   /* cr_chord_name: the names as the engine writes them (run_cr_draw.sh links cr_engine.c) */
 
 #define CR_TEST_MID 80u                   /* ms into the animations: mid-squeeze, mid-slide, 2 stripes filled */
 
@@ -1991,6 +1992,169 @@ int main(int argc, char **argv)
         check(name, views >= 3u && okv && wM > 0u && wM < wdim && nfind == f0 && nell == e0);
         snprintf(name, sizeof name, "major 'M': step entry's line 'G#M' beside 'step 64/64' (%u screens): whole", steps);
         check(name, steps >= 1u && oks && nfind == f0 && nell == e0);
+    }
+
+    {   /* Options > Chord Names (0.20, docs/CHORD-NAMES.md): every chord the engine can name (7 qualities x 16 extension
+         * sets), under the two widest roots (G#, A#), in both settings, the three strings as cr_ui.c cu_name copies
+         * them: (1) as the big name of every kind of screen that names a chord (the Chord view's 104 px, the Keyboard
+         * view's 40, the arp's 44, the PERF layer's arp band's 20, Geek Out's 40): whole, on the screen, over nothing
+         * else, never narrower than the squeeze's floor; (2) as the Scope view's name in the header and the Notes
+         * view's title; (3) on the looper's name line with a voicing "-12" beside "step 64/64"; (4) as the loop
+         * editor's playing name (78 px, 13 / 11 / 10 px). Nothing ellipsised, 0 lint findings. The widest of each go to
+         * the report and to the PPMs chord_names_* (in Standard: the widest of its own names; the 28 cells with both
+         * sevenths are Orchid's names there, checked with the rest and measured in the Orchid pass) */
+        static const uint8_t ROOT[2] = {8, 10};
+        static const char *const MODE[2] = {"Orchid", "Standard"};
+        enum { NK = 5 };
+        uint32_t mode, k, i;
+        for (mode = 0; mode < 2u; mode++) {
+            uint32_t f0 = nfind, e0 = nell, kinds = 0, seen = 0, cells = 0, okv = 1, lines = 0, nows = 0, okl = 1, okn = 1, now10 = 0;
+            uint32_t texts = 0, okt = 1, tcells = 0;
+            int32_t wline = 0, wnow = 0, wtext = 0;
+            char widest_line[40] = "", widest_now[40] = "", widest_text[40] = "", low[NK][40];
+            int32_t lowsq[NK];
+            uint32_t kindpx[NK];
+            cr_chord_names_set((int)mode);
+            for (k = 0; k < CR_NSCREENS; k++) {
+                cr_screen_t s = CR_SCREENS[k];
+                uint32_t r, q, x, kk = 0, px = 0, maxw = 224, id = s.kind, role;
+                enum { R_NAME = 1, R_TEXT, R_LOOP };
+                s.anim = 0;
+                if (s.kind == CR_K_LOOPMENU) role = s.lm_mid == CR_LM_STEPS && !lines ? R_LOOP : 0;
+                else if (s.kind == CR_K_SCOPE || s.kind == CR_K_TEXT) role = R_TEXT;
+                else if (s.kind == CR_K_KNOBROW) { role = s.kr_band == 0 ? R_NAME : 0; }
+                else role = s.kind == CR_K_KEYBOARD || s.kind == CR_K_ARP || s.kind == CR_K_GEEK || (s.kind == CR_K_CHORD && s.name.root[0]) ? R_NAME : 0;
+                if (!role || (role != R_LOOP && (seen & (1u << id)))) continue;
+                seen |= 1u << id;
+                if (role == R_NAME) {
+                    kk = kinds++;
+                    if (kk >= NK) { okv = 0; break; }
+                    if (s.kind == CR_K_KNOBROW) {                  /* the PERF layer while notes are stepped: the arp band */
+                        s.kr_band = 2;
+                        s.n_notes = 3;
+                        snprintf(s.note[0].t, sizeof s.note[0].t, "G#3");
+                        snprintf(s.note[1].t, sizeof s.note[1].t, "C4");
+                        snprintf(s.note[2].t, sizeof s.note[2].t, "D#4");
+                        s.pos = 0;
+                        maxw = 200;
+                    }
+                    px = s.kind == CR_K_CHORD ? (s.size ? s.size : 104u) : s.kind == CR_K_ARP ? (s.size ? s.size : 44u)
+                         : s.kind == CR_K_KNOBROW ? 20u : 40u;
+                    if (s.kind == CR_K_GEEK) maxw = CR_GEEK_NAME_W;
+                    kindpx[kk] = px;
+                    lowsq[kk] = 4096;
+                    snprintf(low[kk], sizeof low[kk], "none");
+                }
+                if (role == R_TEXT) texts++;
+                for (r = 0; r < 2u; r++)
+                    for (q = 1; q < CR_Q_COUNT; q++)
+                        for (x = 0; x < 16u; x++) {
+                            char rt[3], ql[5], sp[CR_SUP_MAX], all[40], slug[48];
+                            uint32_t j, got = 0, cut = 0, own = !(mode == 1u && (x & 6u) == 6u);   /* (Standard: both sevenths
+                                                                     * keep Orchid's name: checked here, measured there) */
+                            cr_chord_name(ROOT[r], (uint8_t)q, (uint8_t)x, rt, ql, sp);
+                            snprintf(all, sizeof all, "%s%s%s", rt, ql, sp);
+                            if (role == R_LOOP) {                   /* (3) and (4) */
+                                int32_t x1 = 0;
+                                snprintf(s.sub, sizeof s.sub, "%s\t-12", all);
+                                snprintf(s.value, sizeof s.value, "step 64/64");
+                                snprintf(s.lm_now, sizeof s.lm_now, "%s", all);
+                                if (strlen(all) >= sizeof s.lm_now) okn = 0;
+                                render(&s, 0);
+                                snprintf(slug, sizeof slug, "chord_names_%s_line", MODE[mode]);
+                                lint(slug, &s);
+                                for (j = 0; j < nbox; j++) {
+                                    if (strcmp(boxes[j].s, all)) continue;
+                                    if (boxes[j].x1 <= 84 && boxes[j].y0 < 92) {            /* the playing name */
+                                        got |= 1u; x1 = boxes[j].x1;
+                                    } else {
+                                        got |= 2u;
+                                        if (own && boxes[j].x1 - boxes[j].x0 > wline) { wline = boxes[j].x1 - boxes[j].x0; snprintf(widest_line, sizeof widest_line, "%s", all); }
+                                    }
+                                    cut |= boxes[j].flags & 1u;
+                                }
+                                if (got != 3u || cut) { okl = 0; fprintf(rep, "chord names (%s): '%s' on the looper's lines: got %u cut %u\n", MODE[mode], all, got, cut); }
+                                if (own && cr_tw(all, 13, 1) > P8(CR_LM_NOW_W) && cr_tw(all, 11, 1) > P8(CR_LM_NOW_W)) now10++;
+                                if (own && cr_tw(all, 10, 1) > wnow) { wnow = cr_tw(all, 10, 1); snprintf(widest_now, sizeof widest_now, "%s", all); }
+                                if (x1 > 84 || cr_tw(all, 10, 1) > P8(CR_LM_NOW_W)) okn = 0;
+                                nows++;
+                            } else if (role == R_TEXT) {            /* (2) */
+                                if (s.kind == CR_K_SCOPE) { snprintf(s.mid, sizeof s.mid, "%s", all); if (strlen(all) >= sizeof s.mid) okt = 0; }
+                                else { snprintf(s.title, sizeof s.title, "%s", all); if (strlen(all) >= sizeof s.title) okt = 0; }
+                                render(&s, 0);
+                                snprintf(slug, sizeof slug, "chord_names_%s_%s", MODE[mode], s.kind == CR_K_SCOPE ? "scope" : "notes");
+                                lint(slug, &s);
+                                for (j = 0; j < nbox; j++) {
+                                    if (strcmp(boxes[j].s, all)) continue;
+                                    got = 1; cut |= boxes[j].flags & 1u;
+                                    if (own && boxes[j].x1 - boxes[j].x0 > wtext) { wtext = boxes[j].x1 - boxes[j].x0; snprintf(widest_text, sizeof widest_text, "%s", all); }
+                                }
+                                if (!got || cut) { okt = 0; fprintf(rep, "chord names (%s): '%s' on %s: got %u cut %u\n", MODE[mode], all, CR_SCREEN_SLUGS[k], got, cut); }
+                                tcells++;
+                            } else {                                /* (1) */
+                                uint32_t qs = (px * 58u + 50u) / 100u, ss = (px * 38u + 50u) / 100u;
+                                int32_t w, sq, bx0 = 9999, bx1 = -9999;
+                                snprintf(s.name.root, sizeof s.name.root, "%s", rt);
+                                snprintf(s.name.quality, sizeof s.name.quality, "%s", ql);
+                                snprintf(s.name.sup, sizeof s.name.sup, "%s", sp);
+                                if (strcmp(s.name.sup, sp) || strcmp(s.name.quality, ql)) okv = 0;      /* (the screen's arrays hold it whole) */
+                                w = cr_tw(rt, px, 1) + (ql[0] ? cr_tw(ql, qs, 1) + P8(2) : 0) + (sp[0] ? cr_tw(sp, ss, 1) + P8(3) : 0);
+                                sq = P8(maxw) < w ? (int32_t)((P8(maxw) << 12) / w) : 4096;
+                                if (own && mode == 1u && px == 104u && r == 0u && sq < 4096)
+                                    fprintf(rep, "chord names (Standard): at 104 px '%s' is squeezed to %d of 4096 (%d px wide)\n", all, (int)sq, (int)(w >> 8));
+                                if (own && sq < lowsq[kk]) { lowsq[kk] = sq; snprintf(low[kk], sizeof low[kk], "%s", all); s.from = s.name; }
+                                render(&s, 0);
+                                snprintf(slug, sizeof slug, "chord_names_%s_%upx", MODE[mode], px);
+                                lint(slug, &s);
+                                for (j = 0; j < nbox; j++) {
+                                    int hit = (!strcmp(boxes[j].s, rt) && !(got & 1u)) ? 1 : (ql[0] && !strcmp(boxes[j].s, ql) && !(got & 2u)) ? 2
+                                              : (sp[0] && !strcmp(boxes[j].s, sp) && !(got & 4u)) ? 4 : 0;
+                                    if (!hit) continue;
+                                    got |= (uint32_t)hit;
+                                    cut |= boxes[j].flags & 1u;
+                                    if (boxes[j].x0 < bx0) bx0 = boxes[j].x0;
+                                    if (boxes[j].x1 > bx1) bx1 = boxes[j].x1;
+                                }
+                                if (got != (1u | (ql[0] ? 2u : 0u) | (sp[0] ? 4u : 0u)) || cut || bx0 < 0 || bx1 > 240 || sq < 300) {
+                                    okv = 0;
+                                    fprintf(rep, "chord names (%s): '%s' at %u px on %s: got %u cut %u x %d..%d squeeze %d\n", MODE[mode], all, px,
+                                            CR_SCREEN_SLUGS[k], got, cut, (int)bx0, (int)bx1, (int)sq);
+                                }
+                                cells++;
+                            }
+                        }
+                if (role == R_LOOP) {                               /* the pictures: the widest of each */
+                    lines++;
+                    snprintf(s.sub, sizeof s.sub, "%s\t-12", widest_line);
+                    snprintf(s.lm_now, sizeof s.lm_now, "%s", widest_now);
+                    render(&s, 0);
+                    snprintf(name, sizeof name, "chord_names_%s_looper", MODE[mode]);
+                    write_ppm(dir, name);
+                } else if (role == R_NAME) {
+                    if (lowsq[kk] < 4096) s.name = s.from;          /* (the most squeezed; none: the last, G#/A#m add4 WTF) */
+                    memset(&s.from, 0, sizeof s.from);
+                    render(&s, 0);
+                    snprintf(name, sizeof name, "chord_names_%s_%upx_%s", MODE[mode], px, s.kind == CR_K_GEEK ? "geek" : s.kind == CR_K_KEYBOARD ? "keyboard"
+                             : s.kind == CR_K_ARP ? "arp" : s.kind == CR_K_KNOBROW ? "perf" : "chord");
+                    write_ppm(dir, name);
+                }
+            }
+            for (i = 0; i < kinds && i < NK; i++)
+                fprintf(rep, "chord names (%s): at %u px the most squeezed is '%s', to %d of 4096\n", MODE[mode], kindpx[i], low[i], (int)lowsq[i]);
+            fprintf(rep, "chord names (%s): the looper's name line: the widest '%s' %d px at 15 px; the playing name: the widest '%s' %d px at 10 px (of %d), "
+                    "%u of %u names at 10 px; the Scope / Notes views: the widest '%s' %d px\n", MODE[mode], widest_line, (int)wline, widest_now,
+                    (int)((wnow + 255) >> 8), CR_LM_NOW_W, now10, nows, widest_text, (int)wtext);
+            snprintf(name, sizeof name, "chord names, %s: 224 names as the big name on %u kinds of screen (%u renders): whole, on screen; %u findings, %u cut",
+                     MODE[mode], kinds, cells, nfind - f0, nell - e0);
+            check(name, kinds == NK && okv && cells == kinds * 224u && nfind == f0 && nell == e0);
+            snprintf(name, sizeof name, "chord names, %s: the Scope view's header and the Notes view's title (%u screens, widest '%s' %d px): whole",
+                     MODE[mode], texts, widest_text, (int)wtext);
+            check(name, texts == 2u && tcells == 448u && okt && nfind == f0 && nell == e0);
+            snprintf(name, sizeof name, "chord names, %s: the looper's name line with '-12' beside 'step 64/64' (widest '%s') and the playing name "
+                     "(widest '%s', %d of %d px): whole", MODE[mode], widest_line, widest_now, (int)((wnow + 255) >> 8), CR_LM_NOW_W);
+            check(name, lines == 1u && nows == 224u && okl && okn && nfind == f0 && nell == e0);
+        }
+        cr_chord_names_set(0);
     }
 
     fprintf(rep, "\n%u lint findings, %u ellipsised texts\n", nfind, nell);

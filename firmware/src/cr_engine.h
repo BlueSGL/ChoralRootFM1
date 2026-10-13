@@ -280,6 +280,12 @@ typedef struct {
 } cr_chord_info_t;
 void cr_chord_info(const cr_t *c, cr_chord_info_t *ci);
 void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], char qual[5], char sup[CR_SUP_MAX]);
+/* Options > Chord Names (0.20, docs/CHORD-NAMES.md): 0 Orchid (the default: the names above), 1 Standard (lead-sheet
+ * names of the notes that sound: Cadd9, C9, C13, C7sus4, Cm7b5; both sevenths at once: Orchid's name). It is what
+ * cr_chord_name and cr_chord_info write; nothing that sounds, is stored or is sent reads it. One switch for the
+ * unit (a byte of its own, not a field of cr_t) */
+void cr_chord_names_set(int standard);
+int cr_chord_names(void);
 void cr_note_name(uint8_t note, char buf[5]);     /* "C#4" (MIDI 60 = C4) */
 uint16_t cr_scale_mask(const cr_t *c);             /* bit pc = in the scale; 0 when Key Mode is off */
 uint8_t cr_mods_held(const cr_t *c);               /* bit m = physically held */

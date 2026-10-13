@@ -20,7 +20,7 @@ python3 tests/gen_cr_screens.py
 OUT=build/cr_screens
 mkdir -p "$OUT/ppm" build/host
 ${CC:-cc} -std=c99 -O1 -Wall -Wextra -Wno-unused-function -Wno-unused-parameter -Wno-sign-compare \
-    -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_draw_test tests/cr_draw_test.c
+    -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_draw_test tests/cr_draw_test.c firmware/src/cr_engine.c
 status=0
 build/host/cr_draw_test "$OUT" || status=$?
 python3 - "$OUT" <<'EOF'

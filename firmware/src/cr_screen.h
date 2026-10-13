@@ -127,7 +127,9 @@ enum { CR_W_NONE, CR_W_ENV, CR_W_FILTER, CR_W_DX, CR_W_CZ,     /* CR_W_DX: a DX7
 #define CR_LINES_MAX 6u
 #define CR_WAVE_N 240u              /* scope: one sample per column */
 
-typedef struct { char root[4], quality[6], sup[8]; uint8_t col_root, col_quality, col_sup; } cr_name_t;
+typedef struct { char root[4], quality[6], sup[12]; uint8_t col_root, col_quality, col_sup; } cr_name_t;   /* (sup: the
+                                                             * engine's CR_SUP_MAX, cr_ui.c asserts it: "add4 JAZZ",
+                                                             * "add9add4" whole) */
 typedef struct { char t[6]; uint8_t col, mark; } cr_note_t;                    /* "C#5", its colour, a block under it */
 typedef struct {                                                                /* an editor cell (KNOB 1..4) */
     char label[14], value[12];      /* label: edit8 only (a stack's columns have headings), "Wave \267 Phase" fits;

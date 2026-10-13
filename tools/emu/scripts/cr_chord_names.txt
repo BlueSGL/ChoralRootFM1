@@ -1,0 +1,94 @@
+# ChoralRoot 0.20: Options > Chord Names (docs/CHORD-NAMES.md): Orchid, the default (the ORC-1's naming), or Standard
+# (lead-sheet names of the notes that sound). The entry after Motion (14). The three chords of the user's letter:
+# A + 7 + 9, A + 9, Asus + 7 + 9 (chord keys: G3 = 7, A#3 = MAJ, C4 = 9, C#4 = SUS; root A4), read in the dump's
+# "cr: voices" line (the engine's name and notes) and "frame:" line (the name on the screen).
+# tools/emu/test_cr.sh reads the dumps by number:
+#   1 / 2 / 3 Orchid: A7 9, A9, Asus m7 9          4 the entry, Orchid      5 KNOB 1 +1: Standard
+#   6 / 7 / 8 Standard: A9, Aadd9, A9sus4 (the same notes as 1 / 2 / 3)    9 KNOB 1 -1: Orchid again
+#   10 Orchid: A9 for A + 9 again                    11 silent
+wait 500
+btn A#3 down                  # MAJ + 7 + 9, A4
+btn G3 down
+btn C4 down
+btn A4 down
+wait 400
+dump                          # 1
+shot build/emu/test/cr_chord_names_orchid.ppm
+btn A4 up
+btn G3 up
+wait 300
+btn A4 down                   # MAJ + 9
+wait 400
+dump                          # 2
+btn A4 up
+btn A#3 up
+wait 300
+btn C#4 down                  # SUS + 7 + 9
+btn G3 down
+btn A4 down
+wait 400
+dump                          # 3
+btn A4 up
+btn G3 up
+btn C4 up
+btn C#4 up
+wait 600
+btn GLO 80                    # Options > Chord Names
+wait 300
+knob SELECT +14
+wait 300
+dump                          # 4
+shot build/emu/test/cr_chord_names_opt_orchid.ppm
+knob KNOB1 +1
+wait 300
+dump                          # 5
+shot build/emu/test/cr_chord_names_opt_standard.ppm
+knob KNOB1 +3                 # (past the end: stays Standard)
+wait 200
+btn GLO 80
+wait 500
+btn A#3 down                  # the same three, Standard
+btn G3 down
+btn C4 down
+btn A4 down
+wait 400
+dump                          # 6
+shot build/emu/test/cr_chord_names_standard.ppm
+btn A4 up
+btn G3 up
+wait 300
+btn A4 down
+wait 400
+dump                          # 7
+btn A4 up
+btn A#3 up
+wait 300
+btn C#4 down
+btn G3 down
+btn A4 down
+wait 400
+dump                          # 8
+shot build/emu/test/cr_chord_names_standard_sus.ppm
+btn A4 up
+btn G3 up
+btn C4 up
+btn C#4 up
+wait 600
+btn GLO 80                    # back to Orchid (the menu opens on the entry it was left on)
+wait 300
+knob KNOB1 -1
+wait 300
+dump                          # 9
+btn GLO 80
+wait 500
+btn A#3 down
+btn C4 down
+btn A4 down
+wait 400
+dump                          # 10
+btn A4 up
+btn C4 up
+btn A#3 up
+wait 2500
+dump                          # 11
+quit

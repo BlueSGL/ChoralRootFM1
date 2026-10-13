@@ -1,0 +1,14 @@
+# ChoralRoot 0.20: after cr_chord_names_set.txt, on the same flash file: Chord Names is Standard at power-on, with
+# nothing touched: A + 9 (A#3 = MAJ, C4 = 9, A4) reads Aadd9.
+wait 500
+btn A#3 down
+btn C4 down
+btn A4 down
+wait 400
+dump
+btn A4 up
+btn C4 up
+btn A#3 up
+wait 2500
+dump
+quit

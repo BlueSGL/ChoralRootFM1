@@ -329,9 +329,9 @@ static void t_version(void)
     s.pick_roots = 0;
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 0, "pick_roots 0 (the roots play) kept");
-    s.pick_roots = 9;
+    s.pick_roots = 17;
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range (bit 3 up): the default");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range (bit 4 up): the default");
     /* 0.19: Options > Output in bit 1 of that byte (CRS_OUT_CLASSIC): clear = Clean, the default and every older
      * record's; set = Classic, kept beside the retired bit 0 */
     cr_settings_defaults(&s);
@@ -401,6 +401,55 @@ static void t_version(void)
         o2.pick_roots = CRS_USB_48K;
         cr_settings_auto(&m2, &o2);
         ok(m2.pick_roots == (CRS_USB_48K | 1u), "USB Rate is automatic (an Option): saved by itself, bit 2 alone taken");
+        o2.pick_roots = 0;
+        cr_settings_auto(&m2, &o2);
+        ok(m2.pick_roots == 1u, "  and cleared the same way");
+    }
+    /* 0.20: Options > Chord Names in bit 3 of the same byte (CRS_NAMES_STD): clear = Orchid, the default and every
+     * older record's; set = Standard. No version: nothing to migrate (docs/CHORD-NAMES.md) */
+    cr_settings_defaults(&s);
+    ok(CRS_NAMES(&s) == 0u && CRS_VERSION == 15u, "Chord Names: the default is Orchid; the record's version is still 15");
+    cr_settings_factory(&s);
+    ok(CRS_NAMES(&s) == 0u, "Chord Names: Reset Settings' record is Orchid");
+    cr_settings_defaults(&s);
+    s.pick_roots = CRS_NAMES_STD;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_NAMES(&r) == 1u && CRS_OUT_CLEAN(&r) == 1u && CRS_USB48(&r) == 0u,
+       "Chord Names Standard (bit 3 of pick_roots) round-trips; Output still Clean, USB Rate still 44.1 kHz");
+    s.pick_roots = CRS_NAMES_STD | CRS_USB_48K | CRS_OUT_CLASSIC | 1u;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_NAMES(&r) == 1u && CRS_USB48(&r) == 1u && CRS_OUT_CLEAN(&r) == 0u &&
+       r.pick_roots == 15u, "Chord Names, USB Rate, Output Classic and the retired picker bit together: the four kept");
+    {
+        uint32_t k, good = 0;                              /* what 0.17 .. 0.19 wrote there: 0 .. 7 */
+        for (k = 0; k < 8u; k++) {
+            cr_settings_defaults(&s);
+            s.pick_roots = (uint8_t)k;
+            cr_settings_seal(&s);
+            good += cr_settings_import(&r, &s, sizeof s) == 1 && CRS_NAMES(&r) == 0u && r.pick_roots == k;
+        }
+        ok(good == 8u, "a record of before the option (the byte 0..7): Chord Names Orchid, its other bits as they were");
+    }
+    {
+        uint32_t v, good = 0;                              /* every older version's record: Orchid */
+        for (v = 1; v < CRS_VERSION; v++) {
+            cr_settings_defaults(&s);
+            s.pick_roots = v < 3 ? 0 : 1;
+            s.version = (uint16_t)v;
+            for (h = 2166136261u, i = 12; i < CRS_SIZE; i++) { h ^= ((uint8_t *)&s)[i]; h *= 16777619u; }
+            s.check = h;
+            good += cr_settings_import(&r, &s, sizeof s) != 0 && CRS_NAMES(&r) == 0u;
+        }
+        ok(good == CRS_VERSION - 1u, "records of versions 1..14: all read Chord Names Orchid");
+    }
+    {
+        cr_settings_t m2, o2;
+        cr_settings_defaults(&m2);
+        cr_settings_defaults(&o2);
+        m2.pick_roots = 1;
+        o2.pick_roots = CRS_NAMES_STD;
+        cr_settings_auto(&m2, &o2);
+        ok(m2.pick_roots == (CRS_NAMES_STD | 1u), "Chord Names is automatic (an Option): saved by itself, bit 3 alone taken");
         o2.pick_roots = 0;
         cr_settings_auto(&m2, &o2);
         ok(m2.pick_roots == 1u, "  and cleared the same way");
@@ -1141,9 +1190,9 @@ static void t_auto(void)
         cr_settings_auto(&z, &y);                  /* 0xFF where automatic */
         if (((const uint8_t *)&z)[i] == 0xFF) nauto++;
         else if (((const uint8_t *)&z)[i] == 0x00) nman++;
-        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 and 2, Output, USB Rate) */
+        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 .. 3, Output, USB Rate, Chord Names) */
     }
-    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2)\n", (unsigned)nauto,
+    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3)\n", (unsigned)nauto,
            (unsigned)nman, (unsigned)both);
     ok(nauto == 17u && both == 2u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and two bits of the block's 180 are automatic");
     m = b;

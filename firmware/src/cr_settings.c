@@ -211,7 +211,8 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(metro_sig, 0, 2);
     CRS_FIX(metro_vol, 0, 100);
     CRS_FIX(loop_slot, 0, 9);
-    CRS_FIX(pick_roots, 0, 7);                     /* (bit 1: Output Classic, CRS_OUT_CLASSIC; bit 2: USB Rate, CRS_USB_48K) */
+    CRS_FIX(pick_roots, 0, 15);                    /* (bit 1: Output Classic, CRS_OUT_CLASSIC; bit 2: USB Rate, CRS_USB_48K;
+                                                    * bit 3: Chord Names Standard, CRS_NAMES_STD) */
     CRS_FIX(usb_in, 0, 1);
     CRS_FIX(usb_level, 0, CRS_USB_FIXED);
     if (CRS_LOOP_MODE(s) >= CRS_NLOOPMODE)         /* (an unknown mode: the defaults; v13: bit 5 the KEY layer's keys,
@@ -732,7 +733,8 @@ static void crs_capture(cr_settings_t *s)
     s->loop_slot = cs.loop_slot;
     s->loop_rec = (uint8_t)(CRS_LOOP_REC(cs.loop_mode, cs.loop_keys) | (cs.key_play ? CRS_KEY_PLAY : 0u) |
                             (cs.lock_keep ? CRS_LOCK_KEEP : 0u) | (cs.lock_push ? CRS_LOCK_PUSH : 0u));
-    s->pick_roots = (uint8_t)((cs.out_clean ? 0u : CRS_OUT_CLASSIC) | (cs.usb48 ? CRS_USB_48K : 0u));   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
+    s->pick_roots = (uint8_t)((cs.out_clean ? 0u : CRS_OUT_CLASSIC) | (cs.usb48 ? CRS_USB_48K : 0u) |
+                              (cs.names_std ? CRS_NAMES_STD : 0u));   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
                                                     * as "play", so an older firmware reading this record plays too) */
     s->usb_in = cs.usb_in;
     s->usb_level = cs.usb_fixed;
@@ -1012,6 +1014,8 @@ static void cr_settings_load(void)
     cs.usb_in = s->usb_in;
     cs.usb_fixed = s->usb_level;
     cs.usb48 = (uint8_t)CRS_USB48(s);              /* (a revert, a reset, a restore: cu_usb_apply tells usb.c) */
+    cs.names_std = (uint8_t)CRS_NAMES(s);          /* Options > Chord Names (0.20): the names only */
+    cr_chord_names_set(cs.names_std);
     fx_usb_fixed = cs.usb_fixed;                   /* (USB Record: crs_usb_apply at boot, before usb_start) */
     if (cs.out_clean != CRS_OUT_CLEAN(s)) {        /* (a revert, a reset, a restore while it plays: faded over) */
         cs.out_clean = (uint8_t)CRS_OUT_CLEAN(s);

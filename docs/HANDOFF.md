@@ -5,11 +5,10 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.18, and 0.19 is the release made from this tree: v0.19 is tagged from this commit's
-tree once the owner says so (`git tag` says whether it has been; notes in `docs/releases/`, 0.19's final). The tree
-still reads `FELUCCA_VERSION` "ChoralRoot 0.19" (`firmware/src/choralroot.c`) until the next dev version is set, which
-is the first step of the next cycle together with a new `docs/releases/` file. The owner's unit runs what the
-orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
+Released: v0.1 and v0.11 .. v0.19 (`git tag`; v0.19 is the latest, notes in `docs/releases/`). The 0.20 work is the
+dev tree (`FELUCCA_VERSION` "ChoralRoot 0.20" in `firmware/src/choralroot.c`; draft notes `docs/releases/0.20.md`,
+"in progress"; `web/releases.json` lists released versions only and does not have 0.20). The owner's unit runs what
+the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
 
@@ -65,7 +64,7 @@ python3 tests/install_test.py; for t in backup web sounds installer manager; do 
 python3 tests/releases_test.py                    # web/releases.json: the versions the installer offers
 sh tests/run_tests.sh       # ends ALL HOST TESTS PASSED
 sh tools/emu/test_retired.sh                      # the engines retired in 0.18: a unit that comes with sounds on them
-CR_VERSION=0.19 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
+CR_VERSION=0.20 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
 sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.18 reference build, bit for bit
 ```
 
@@ -187,6 +186,18 @@ installed on the owner's Mac.
     merged build (a 414 us block, four or five ticks nested: 6 to 8 us a tick), 214 playing and 266 with a 48 kHz
     recording having run on the builds before. Not read on a build with 2489a89: `pk_t5_us` idle about 32 and
     playing no higher than 214, `ua_svc_t5` still counting (the endpoint is served from TIMER5), `irq_gap_us` about 340 as before.
+
+24. **Chord names: the owner's four questions** (docs/CHORD-NAMES.md "Open questions"; HISTORY 3y28). Options >
+    Chord Names (0.20): Orchid, the default, or Standard (lead-sheet names; display only). Open: the same user's
+    second wish, the 6th an octave higher when a seventh is held (a change of what sounds: not built); whether
+    Standard should write the major triad `C` (it keeps `CM`, because a single note reads `C` on every screen);
+    `C13` standing for the chord with and without its 9th; `Cmadd4` not saying that its fifth is missing.
+
+### 0.20: in progress
+
+- **Options > Chord Names** (docs/CHORD-NAMES.md; HISTORY 3y28): bit 3 of the settings block's `pick_roots`, no
+  record version. The Options have 25 entries now (Chord Names is entry 14, after Motion): the emulator scripts
+  that walk to a later entry count one more step than 0.19's.
 
 ### 0.19: what shipped (the section that was "For 0.19"; (b) is still CZ-1)
 
