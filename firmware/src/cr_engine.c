@@ -1542,6 +1542,7 @@ void cr_chord_info(const cr_t *c, cr_chord_info_t *ci)
         const cr_voice_t *v = &c->v[c->disp_vi];
         ci->valid = 1; ci->sounding = 1;
         ci->root_pc = (uint8_t)crx_mod(v->root + v->transpose, 12);
+        ci->transpose = v->loop ? c->transpose : v->transpose;
         ci->quality = v->rq;
         ci->ext = v->rq ? v->sx : 0;
         ci->nnotes = v->nnotes;

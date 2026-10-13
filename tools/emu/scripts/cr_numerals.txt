@@ -1,15 +1,18 @@
 # ChoralRoot: the KEY layer's Numerals (0.22; GitHub issue 1): page 2, KNOB 4, Off by default. On, with Key Mode on,
-# the top line shows the sounding chord's Roman numeral beside the key ("Key: C . V"); nothing sounding: the key alone;
-# Key Mode off or Numerals Off: the top line as before. The numeral is display only: the notes are the same.
+# the Chord view shows the sounding chord's Roman numeral in blue, centred above the chord name (3y34; until then it
+# was on the top line, beside the key); nothing sounding: no numeral, the name where it was; Key Mode off or Numerals
+# Off: every screen as before. The numeral counts from the root as PLAYED: Transpose is taken out, so the tonic chord
+# reads I at any Transpose. Display only: the notes are the same.
 wait 300
 btn SEL                       # tap: Key Mode on, C major
 wait 300
 btn G4 down                   # Numerals Off (the default): G, no numeral
 wait 400
 shot build/emu/test/cr_numerals_off.ppm
-dump                          # 1: numerals off, top ""
+dump                          # 1: numerals off, shown ""
 btn G4 up
 wait 2500
+shot build/emu/test/cr_numerals_off_idle.ppm
 btn SEL down                  # the KEY layer
 wait 500
 btn SEL up
@@ -19,49 +22,55 @@ wait 200
 knob KNOB4 +1                 # Numerals: On
 wait 300
 shot build/emu/test/cr_numerals_page2.ppm
-dump                          # 2: numerals on, nothing sounding: top ""
+dump                          # 2: numerals on, nothing sounding: shown ""
 btn OCT-
 wait 300
 shot build/emu/test/cr_numerals_idle.ppm
 btn G4 down                   # G in C major: V
 wait 400
 shot build/emu/test/cr_numerals_major.ppm
-dump                          # 3: top "V", chord G, notes 55 59 62 (as dump 1)
+dump                          # 3: shown "V", chord G, notes 55 59 62 (as dump 1)
 btn G4 up
 wait 300
 btn D4 down                   # Dm: ii
 wait 400
-dump                          # 4: top "ii"
+dump                          # 4: shown "ii"
 btn D4 up
 wait 300
-btn A#4 down                  # a key outside the scale: Key Mode's sus chord on the scale note beside it (Asus): VI.
-wait 400                      # Key Mode never puts a root outside the scale, so an accidental needs Transpose:
-dump                          # 5: top "VI", chord Asus
+btn B4 down                   # Bdim: vii and the degree sign
+wait 400
+shot build/emu/test/cr_numerals_dim.ppm
+dump                          # 5: shown "vii\260", chord Bdim
+btn B4 up
+wait 300
+btn A#4 down                  # a key outside the scale: Key Mode's sus chord on the scale note beside it (Asus): VI
+wait 400
+dump                          # 6: shown "VI", chord Asus
 btn A#4 up
 wait 300
-btn SEL down                  # the KEY layer, page 1: Transpose +3 (the name shows the transposed root; so does the
-wait 500                      # numeral: G played is A#, in "Key: C" the borrowed bVII)
+btn SEL down                  # the KEY layer, page 1: Transpose +1. The name shows what sounds (C played is C#M), the
+wait 500                      # numeral the degree played: I (it read bII until 3y34)
 btn SEL up
 wait 300
-knob KNOB3 +3
+knob KNOB3 +1
 wait 200
 btn OCT-
 wait 300
-btn G4 down
+btn C5 down
 wait 400
-shot build/emu/test/cr_numerals_borrowed.ppm
-dump                          # 6: top "bVII", chord A#M
-btn G4 up
+shot build/emu/test/cr_numerals_transposed.ppm
+dump                          # 7: shown "I", chord C#M
+btn C5 up
 wait 300
 btn SEL down
 wait 500
 btn SEL up
 wait 300
-knob KNOB3 -3                 # Transpose 0 again
+knob KNOB3 -1                 # Transpose 0 again
 wait 200
 btn OCT-
 wait 2500
-dump                          # 7: nothing sounding: top ""
+dump                          # 8: nothing sounding: shown ""
 btn SEL down                  # the KEY layer: A minor (A4 = the tonic, MIN = the scale)
 wait 500
 btn SEL up
@@ -75,14 +84,29 @@ wait 300
 btn D4 down                   # Dm in A minor: iv
 wait 400
 shot build/emu/test/cr_numerals_minor.ppm
-dump                          # 8: top "iv"
+dump                          # 9: shown "iv"
+btn D4 up
+wait 2500
+btn ARP down                  # the PERF layer: Arpeggiate (SELECT +3), OCT- closes
+wait 500
+btn ARP up
+wait 300
+knob SELECT +3
+wait 300
+btn OCT-
+wait 300
+shot build/emu/test/cr_numerals_arp_idle.ppm
+btn D4 down                   # the arp stepping on the Chord view: the name 6 px lower, the numeral above it
+wait 420
+shot build/emu/test/cr_numerals_arp.ppm
+dump                          # 10: shown "iv", the arp screen
 btn D4 up
 wait 300
 btn SEL                       # Key Mode off: no numeral, whatever sounds
 wait 300
 btn G4 down
 wait 400
-dump                          # 9: key 0, top ""
+dump                          # 11: key 0, shown ""
 btn G4 up
 wait 2500
-dump                          # 10: silent
+dump                          # 12: silent

@@ -177,9 +177,8 @@ In a layer KNOB 1 to KNOB 4 are the layer's; in the editor they edit the four va
 
 ### The screen
 
-- **Top left**: `Key: C` in yellow while Key Mode is on. With Numerals on (the KEY layer's page 2), the Roman numeral
-  of the chord that is sounding follows it: `Key: C · V`. While a loop records or plays: `Loop 1` in red (no key and
-  no numeral then).
+- **Top left**: `Key: C` in yellow while Key Mode is on. While a loop records or plays: `Loop 1` in red (no key
+  then).
 - **Top right**: one status word, the first of these that applies: `Bass Solo`, the performance mode (`Strum`, `Slop`,
   `Arp`, `Pattern`, `Harp`), `Bass`, `Oct +1`, `Latch`, `lock`. While a loop records or plays, the looper's state
   instead (`Rec · Overwrite`, `Rec 2.3`, `Dub 3.2`), and a small dial at the right end that fills as the loop goes
@@ -477,15 +476,20 @@ nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still sh
 - In the KEY layer with its keys on pick, the keys still pick: a root sets the tonic, MAJ and MIN the scale (B3 does
   nothing there). With the keys on play they are the Full keyboard.
 
-**Numerals: Off or On** (page 2, KNOB 4; off unless you turn it on). With Key Mode on, the top line shows the Roman
-numeral of the chord that is sounding, beside the key: in C major `Key: C · I` for C, `Key: C · V` for G (and for G7
-and G9: the extensions stay with the name), `Key: C · vi` for Am; in A minor `Key: A minor · iv` for Dm. Capitals
-for a chord with a major third (and for sus chords, power chords and single notes), small letters for a minor third;
-`°` after a diminished chord, `+` after an augmented one. The numeral counts from the tonic to the root that the
-chord's name shows. A root that is not a note of the scale gets a `b` or a `#`: `bVII` for B flat (written `A#` in
-the name) in C. In Key Mode that only happens with Transpose, because a key outside the scale plays a chord on a
-scale note. When nothing sounds the line is `Key: C` alone, and while a loop records or plays it shows the loop
-instead. Numerals changes nothing you hear.
+**Numerals: Off or On** (page 2, KNOB 4; off unless you turn it on). With Key Mode on, the Chord view shows the
+Roman numeral of the chord that is sounding, in blue, centred above the chord's name: in C major `I` for C, `V` for G
+(and for G7 and G9: the extensions stay with the name), `vi` for Am; in A minor `iv` for Dm. Capitals for a chord
+with a major third (and for sus chords, power chords and single notes), small letters for a minor third; `°` after a
+diminished chord, `+` after an augmented one. When nothing sounds there is no numeral, and the name stays where it
+is. While an arpeggio or another performance mode steps through the chord, the name sits a little lower to make room
+for the numeral. The other views (Keyboard, Notes, Geek Out, Scope) and the layers show no numeral.
+
+The numeral counts from the tonic to the root **as you played it**: Transpose is left out. With Transpose +1 in C
+major, the chord on C sounds as C sharp major; the name says `C#M` (what you hear) and the numeral says `I` (the
+degree you played). So the tonic chord always reads `I`. A chord played back by a loop is counted with the Transpose
+that is set now. A root that is not a note of the scale gets a `b` or a `#` (`bVII`); in Key Mode the keys cannot
+play one, because a key outside the scale plays a chord on a scale note, so you will see one only when the key is
+changed under a sounding chord or under a loop. Numerals changes nothing you hear.
 
 Key plays, Keyboard, Numerals and Single are kept by a global save (SAVE held), like the rest of the KEY layer.
 

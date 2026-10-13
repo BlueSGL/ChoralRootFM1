@@ -138,7 +138,7 @@ saved. Felucca's own fields stay where they were: the panel calibration table, t
 LEDs in `zoom`.
 
 **0.22 added one bit and no version, in another byte**: the KEY layer's Numerals (page 2, KNOB 4: the chord's Roman
-numeral on the top line; Off, the default, is 0) in bit 1 of `bass_on`. The byte was chosen by what the older
+numeral on the Chord view; Off, the default, is 0) in bit 1 of `bass_on`. The byte was chosen by what the older
 firmwares do with it, read in `git show v0.17:` .. `v0.21:firmware/src/cr_settings.c`: all five have
 `CRS_FIX(bass_on, 0, 1)` with the default 0, and since v15 the block's `bass_on` is always written 0. So an older
 firmware that meets Numerals On (the byte = 2) finds it out of range and takes 0, the value it would have read

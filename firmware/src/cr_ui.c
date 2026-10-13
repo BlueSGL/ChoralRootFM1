@@ -513,8 +513,8 @@ static struct {
                                            * roots out of the scale and generates no chord; v14) */
     uint8_t kbd_full;                     /* .. Keyboard: 0 Chords (the chord block + 18 roots), 1 Full (27 single-note
                                            * keys, no chord block, no LOCK; v14) */
-    uint8_t numerals;                     /* .. Numerals (KNOB 4; 0.22): 1 = the top line shows the sounding chord's
-                                           * Roman numeral beside the key (cu_numeral); 0 Off, the default */
+    uint8_t numerals;                     /* .. Numerals (KNOB 4; 0.22): 1 = the Chord view shows the sounding chord's
+                                           * Roman numeral above its name (cu_numeral); 0 Off, the default */
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
                                            * (0: clears them, today's); the extension keys are pushed as the type
                                            * keys are (0: toggles, today's) */
@@ -3237,7 +3237,7 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                 cs.kbd_full = (uint8_t)(s > 0);
                 cu_post_kbd();
                 cu_trace("key: knob 2 keyboard %s\n", cs.kbd_full ? "full" : "chords");
-            } else if (knob == 3) {                /* NUMERALS: the chord's Roman numeral on the top line (display only) */
+            } else if (knob == 3) {                /* NUMERALS: the chord's Roman numeral on the Chord view (display only) */
                 cs.numerals = (uint8_t)(s > 0);
                 cu_trace("key: knob 4 numerals %s\n", cs.numerals ? "on" : "off");
             } else
@@ -4753,14 +4753,25 @@ static uint32_t cu_batt(void)
 }
 
 /* the KEY layer's Numerals (0.22): the sounding chord's Roman numeral in the key, "" when there is none to show (the
- * option or Key Mode off, nothing sounding). The root is the one the name shows (cr_chord_info: transposed, Key Mode
- * resolved), so the two agree */
+ * option or Key Mode off, nothing sounding). The root is the one PLAYED: the name's (cr_chord_info: Key Mode
+ * resolved, transposed) less the Transpose inside it, so the tonic chord reads I at any Transpose (the owner,
+ * 2026-10-12; with Transpose +1 in C the name says C#M and the numeral I) */
 static void cu_numeral(char b[CR_NUMERAL_MAX])
 {
     const cr_chord_info_t *ci = &cr_snap.ci;
     b[0] = 0;
     if (cs.numerals && cs.key_on && ci->valid && ci->sounding)
-        cr_chord_numeral(ci->root_pc, ci->quality, cs.tonic, cs.scale, b);
+        cr_chord_numeral((uint8_t)(((int)ci->root_pc - ci->transpose) % 12 + 12), ci->quality, cs.tonic, cs.scale, b);
+}
+/* .. on the Chord view, blue, centred above the chord name (cr_draw.c cr_p_chord, cr_p_arp). numeral_on is the
+ * layout (the arp's name sits lower to make room): set by the two settings alone, not by a chord sounding, so the
+ * name does not move as chords are struck and released */
+_Static_assert(sizeof ((cr_screen_t *)0)->numeral >= CR_NUMERAL_MAX, "the screen's numeral holds the engine's");
+static void cu_numeral_put(cr_screen_t *s)
+{
+    if (!cs.numerals || !cs.key_on) return;
+    s->numeral_on = 1;
+    cu_numeral(s->numeral);
 }
 
 static void cu_header(cr_screen_t *s)
@@ -4776,14 +4787,6 @@ static void cu_header(cr_screen_t *s)
         cu_cat(s->mid, CU_NOTE[cs.tonic], sizeof s->mid);
         if (cs.scale == CR_SCALE_MINOR)
             cu_cat(s->mid, " minor", sizeof s->mid);
-        {                                          /* "Key: A minor \267 ii" (Numerals On, a chord sounding) */
-            char rn[CR_NUMERAL_MAX];
-            cu_numeral(rn);
-            if (rn[0]) {
-                cu_cat(s->mid, " \267 ", sizeof s->mid);
-                cu_cat(s->mid, rn, sizeof s->mid);
-            }
-        }
         s->mid_col = CR_COL_YELLOW;
     } else if (cr_safe) {                         /* SAFE MODE: on the top line all session (Options > Safe Mode) */
         cu_cpy(s->mid, "Safe mode", sizeof s->mid);
@@ -5849,6 +5852,7 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
         s->kind = CR_K_ARP;                        /* the arp in motion: the sounding note hops along */
         cu_name(&s->name, ci);
         cu_notes(s, ci);
+        cu_numeral_put(s);
         s->pos = (int8_t)(sn->perf_step && sn->perf_pos >= 0 && sn->perf_pos < (int)s->n_notes ? sn->perf_pos : -1);
         s->hop_col = CR_COL_WHITE;
         cu_param_text((uint32_t)p, cs.par[pm][p], v, sub);
@@ -5999,6 +6003,7 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
         s->kind = CR_K_CHORD;
         cu_name(&s->name, ci);
         cu_notes(s, ci);
+        cu_numeral_put(s);
         s->line_col = CR_COL_MID;
         break;
     }
@@ -6073,6 +6078,8 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
                 s->kind = CR_K_CHORD;
                 cu_name(&s->name, &sn->ci);
                 cu_notes(s, &sn->ci);
+                if (!l && cu.page != PG_EDIT && cu.page != PG_SAVE && !cu.opt_open && cs.view == V_CHORD)
+                    cu_numeral_put(s);             /* (the Chord view behind it: its numeral stays) */
                 cu_cpy(s->line, "voicing ", sizeof s->line);
                 cu_cat(s->line, b, sizeof s->line);
                 s->line_col = CR_COL_BLUE;

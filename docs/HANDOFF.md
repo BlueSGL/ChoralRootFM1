@@ -10,7 +10,7 @@ chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32) is tagg
 published as the latest and not on the site; its notes, `web/releases.json`'s first entry (package sha256
 93bbfe14...) and the manual's first line say 0.21. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.22"
 (`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
-3y33). The owner's unit runs what
+3y33, 3y34). The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)

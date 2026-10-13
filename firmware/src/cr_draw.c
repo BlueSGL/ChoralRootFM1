@@ -370,6 +370,13 @@ static void cr_keyboard(const cr_screen_t *s, int32_t y, int32_t h)
     }
 }
 
+/* the Chord view's Roman numeral (0.22, the KEY layer's Numerals): the voicing's blue, bold 16 px (the notes line's
+ * weight), centred on baseline 44, above the chord name. The big name (104 px) leaves the gap as it is; the arp's
+ * (44 px on baseline 78, its superscript's top on row 42) moves down CR_NUM_ARP_DY while numeral_on:
+ * 4 px between the numeral and the tallest name */
+#define CR_NUM_PX 16u
+#define CR_NUM_Y (CR_PY0 + 16)
+#define CR_NUM_ARP_DY 6
 static void cr_p_chord(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
 {
     int ringed = s->ring_on;
@@ -381,6 +388,8 @@ static void cr_p_chord(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
     if (s->block) cr_fill(0, CR_PY0, 240, ph, under);
     if (!s->name.root[0] && !(fr->from && s->from.root[0])) return;
     cr_name(fr->from ? &s->from : &s->name, P8(120), cy, size, 224, sq);
+    if (s->numeral[0])                   /* the Roman numeral, in the gap between the top line and the name */
+        cr_text(P8(120), P8(CR_NUM_Y), s->numeral, CR_NUM_PX, 1, CR_C, 4096, CR_NAMED[CR_COL_BLUE], under, 0);
     if (s->line[0]) {
         cr_text(P8(120), ly, s->line, 14, 0, CR_C, 4096, cr_rgb(s->line_col, T_MID), under, 0);
         ly -= P8(18);
@@ -546,7 +555,10 @@ static void cr_p_arp(const cr_screen_t *s, int32_t ph)
 {
     int32_t n = s->n_notes, by = CR_PY0 + ph - 46, gap16 = n > 1 ? 200 * 16 / (n - 1) : 0, x0, i, pos = s->pos;
     if (gap16 > 52 * 16) gap16 = 52 * 16;
-    if (s->name.root[0]) cr_name(&s->name, P8(120), P8(CR_PY0 + 50), s->size ? s->size : 44u, 224, 4096);
+    if (s->name.root[0])                 /* (with a numeral above it the name sits CR_NUM_ARP_DY lower) */
+        cr_name(&s->name, P8(120), P8(CR_PY0 + 50 + (s->numeral_on ? CR_NUM_ARP_DY : 0)), s->size ? s->size : 44u, 224, 4096);
+    if (s->numeral[0] && s->name.root[0])
+        cr_text(P8(120), P8(CR_NUM_Y), s->numeral, CR_NUM_PX, 1, CR_C, 4096, CR_NAMED[CR_COL_BLUE], T_BG, 0);
     cr_fill(14, by + 17, 212, 2, T_LINE);
     x0 = 120 * 16 - (n - 1) * gap16 / 2;                            /* Q4 */
     if (pos >= 0 && pos < n && n > 1) {                            /* the dotted hop to the next note */

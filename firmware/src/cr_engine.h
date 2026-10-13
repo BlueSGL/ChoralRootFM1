@@ -280,6 +280,9 @@ typedef struct {
     uint8_t valid;               /* a chord has been played (since init / panic) */
     uint8_t sounding;            /* ... and it is still sounding */
     uint8_t root_pc;             /* sounding root pitch class (Key Mode resolved, transposed) */
+    int8_t transpose;            /* the KEY layer's Transpose inside root_pc (semitones): root_pc - transpose is the
+                                  * root as played, what the numeral counts from (0.22). A live chord: the Transpose
+                                  * it was struck with; a loop's chord (its recorded root is absolute): the one of now */
     uint8_t quality;             /* CR_Q_*; CR_Q_NONE = a single note */
     uint8_t ext;                 /* CR_EXT_* */
     uint8_t secret;              /* quality is a Secret Chord type */
@@ -294,7 +297,7 @@ void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], 
  * unit (a byte of its own, not a field of cr_t) */
 void cr_chord_names_set(int standard);
 int cr_chord_names(void);
-/* the Roman numeral of a chord (its sounding root, CR_Q_* quality) in the key tonic / scale (cr_scale_t): "V", "ii",
+/* the Roman numeral of a chord (its root, CR_Q_* quality) in the key tonic / scale (cr_scale_t): "V", "ii",
  * "bVII", "vii\260", "III+"; a single note (CR_Q_NONE): upper case. Pure; display only (cr_engine.c) */
 #define CR_NUMERAL_MAX 6
 void cr_chord_numeral(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, char buf[CR_NUMERAL_MAX]);

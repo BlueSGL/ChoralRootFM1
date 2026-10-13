@@ -1728,3 +1728,56 @@ notes with it on; only the top line's rows differ on screen; `key: cells Key pla
 HOST TESTS PASSED), `web/test_manager.mjs`, `web/test_backup.mjs`, `releases_test.py`, `CR_VERSION=0.22
 build_web.sh` + `test_web_emu.mjs` (PASS). Not run: the unit (nothing flashed), `install_test.py`, the other
 `web/test_*.mjs`, `test_retired.sh`, `perf.sh`, `classic_exact.sh`.
+
+3y34. **Numerals: the numeral moves above the chord name, in blue, and leaves Transpose out (2026-10-12; 0.22, not
+flashed).** **The owner**, on the screenshots of 3y33: "I think visually it would look nicer to render in the Blue
+color we use centered above the chord name, you'd need to shift the chord name down a bit when playing an arp but
+there is space visually to do so." And on Transpose: the numeral must ignore it, so that the chord played as the
+tonic always reads I (with Transpose +1 in C the tonic chord read bII). **Placement**: `cu_header` is 8d6325d's
+again (`Key: C`, `Key: A minor`; the top line carries no numeral). The Chord view draws it: `cr_screen_t` has
+`numeral[6]` and `numeral_on`, set by `cr_ui.c cu_numeral_put` in the three places that build the Chord view (its
+plain form, its arp screen, its voicing read-out over the Chord view), drawn by `cr_draw.c cr_p_chord` and
+`cr_p_arp` in `CR_COL_BLUE` (the voicing's role colour, the existing constant), bold 16 px (`CR_NUM_PX`: CRB scaled,
+the notes line's face and size; it has the degree sign, as the header's 15 px did; no new font data), centred at
+x 120 on baseline 44 (`CR_NUM_Y`). Its ink is rows 31 .. 43: 8 px under the top line (last ink row 22). **The plain
+view does not shift**: the 104 px name starts on row 71 (row 62 with a superscript and the voicing line), so the
+numeral sits in the gap that was there and the name is where 8d6325d drew it. **The arp screen shifts 6 px**
+(`CR_NUM_ARP_DY`): its 44 px name on baseline 78 has its superscript's top on row 42, inside the numeral's rows, so
+with `numeral_on` it is drawn on baseline 84 (ink from row 48: 4 px under the numeral; the hop's arc starts at row
+122, far below). `numeral_on` is Numerals and Key Mode both on, whether or not a chord sounds, so the name does not
+jump as chords are struck and released; the numeral itself shows while a chord sounds, as before. **While a loop
+records or plays** the top left is `Loop 1`; the numeral, no longer part of that line, still shows on the Chord
+view (Key Mode is on). **Not shown elsewhere** (the owner to decide; the room is read from `cr_draw.c`, nothing was drawn to try it): the
+Keyboard view (a 40 px name on baseline 68, its top near row 39: about 11 free rows under the top line, so a 12 px
+numeral at most above it, or one beside the name), the Geek Out view (the name centred on x 70 with the status
+lines under it and the notes' column at the right: room beside the name, little above), the Notes view (the name
+is its title line: room after it), the Scope view (with Key Mode on its top line says the key and no chord name
+at all), the PERF layer's arp band (a 20 px name right under the layer's label: no room above, some beside) and
+the loop editor (the playing step's name at the left over the grid, the cursor step's under it: room after either,
+but they are the steps' own chords, not `cr_snap.ci`). **Transpose**: `cr_chord_info_t` has `transpose`, the Transpose inside
+`root_pc`: for a live chord the voice's own copy (`v->transpose`, what `root_pc = v->root + v->transpose` added; no
+octave, no voicing: those are in the notes, not in the root), and `cu_numeral` calls `cr_chord_numeral` with
+`root_pc - transpose`; the function is unchanged and pure. A loop's voice has `transpose` 0 and a recorded root that
+already holds the Transpose of the take, which is not stored: for those the Transpose of now is taken out (right
+when it has not been changed since the take; a choice, not the owner's word). **Consequence**: with Transpose on,
+the name shows the chord that sounds (`C#M`) and the numeral the degree played (`I`); and since Key Mode puts every
+played root on a scale note, an accidental (`bVII`) now appears only when the key, or a loop's Transpose, is
+changed under a sounding chord. **Proof of "as before"**: the 8d6325d tree built beside this one
+(`build/scratch/old8d`), its whole `tools/emu/test_cr.sh` run, and each of its 442 screenshots compared with this
+tree's shot of the same name: 428 identical, 14 differ and none by this change: ten are the version on the splash
+and in Options (0.21 / 0.22), three the KEY layer's page 2 (3y33's fourth cell), one the Geek Out view's timing
+counters. The arp screen, the Keyboard and Geek Out views and the voicing read-out are among the 428. In
+`cr_numerals.txt`: Numerals On with nothing sounding is the Numerals Off shot, byte for byte, and On against Off
+with G sounding differ in rows 32 .. 43 only. `tests/cr_draw_test.c` (ten screens: V, iv, `vii°`, `#vii°` over
+`G#m add4` with the voicing line, the same on the arp screen, idle and off): the numeral's ink is centred, under
+the top line by 8 px and over the tallest name by 4; the big name's picture is the same with and without
+`numeral_on`; the arp's name moves exactly 6 rows and nothing from row 122 down changes; 0 lint findings. **The
+emulator**: the dump line is now `numerals: on shown "V"`; `cr_numerals.txt` plays V, ii, `vii°` (Bdim), VI (Asus),
+Transpose +1 with the tonic (`C#M`, `I`), iv in A minor, the arp. **Cost** against 3y33: `.text` +240 B (468496),
+XIP 483396, RAM unchanged (81332), POOL +4 B (315500, 91.7 %). **No sound changes**: nothing the audio reads was
+touched. No design mock-up shows a numeral (`design/choralroot-fm1-mockups.json` has none), so none was changed.
+Screenshots from the headless emulator: `build/scratch/numerals2/` (`sheet.png`). **Run** (logs in `build/scratch/logs/`): `./build.sh` (stub version 3, sha256
+baee55ed142fe1cc), `run_cr_tests.sh`, `run_cr_draw.sh` (0 lint findings), `tools/emu/test_cr.sh` (PASS),
+`test_persist.sh` (PASS), `run_tests.sh` (ALL HOST TESTS PASSED), `CR_VERSION=0.22 build_web.sh` +
+`test_web_emu.mjs` (PASS). Not run: the unit (nothing flashed), `install_test.py`, the `web/test_*.mjs`, `test_retired.sh`,
+`perf.sh`, `classic_exact.sh`.

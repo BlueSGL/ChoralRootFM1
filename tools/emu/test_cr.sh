@@ -1762,27 +1762,38 @@ differ cr_key_page2 cr_key_page2_notes "KNOB 1 on page 2: Key plays Notes: $OUT/
 [ "$(grep -c '^expect .*: ok' "$L")" = 6 ] && ! has 'expect.*FAILED' "$L" && ok "its sound and LED expectations" || bad "cr_key_page expectations"
 silent_end cr_key_page
 
-# the KEY layer's Numerals (0.22, GitHub issue 1): page 2, KNOB 4; the chord's Roman numeral beside the key
+# the KEY layer's Numerals (0.22, GitHub issue 1): page 2, KNOB 4; the chord's Roman numeral in blue above the chord
+# name on the Chord view (3y34), counted from the root as played (Transpose taken out)
 run cr_numerals
 L="$OUT/cr_numerals.log"
-nm() { grep -a '^  numerals:' "$L" | sed -n "$1p" | sed -n 's/.*numerals: \([a-z]*\) top "\(.*\)"$/\1|\2/p'; }
+nm() { grep -a '^  numerals:' "$L" | sed -n "$1p" | sed -n 's/.*numerals: \([a-z]*\) shown "\(.*\)"$/\1|\2/p'; }
 cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\3|\4|\5/p'; }
+rows() {   # rows A B: the first and the last screen row where two shots differ ("" when they are the same)
+    cmp -l "$OUT/$1.ppm" "$OUT/$2.ppm" | awk '{ r = int(int(($1 - 16) / 3) / 240); if (!n++ || r < a) a = r; if (r > b) b = r } END { if (n) print a, b }'
+}
 [ "$(nm 1)" = "off|" ] && has '^key: knob 4 numerals on' "$L" && [ "$(nm 2)" = "on|" ] &&
     ok "Numerals is Off by default (G in C major: no numeral); KEY page 2, KNOB 4 turns it on: $OUT/cr_numerals_page2.ppm" \
     || bad "the option: $(nm 1) / $(nm 2)"
-[ "$(nm 3)" = "on|V" ] && [ "$(nm 4)" = "on|ii" ] && [ "$(nm 7)" = "on|" ] && [ "$(nm 8)" = "on|iv" ] &&
-    ok "C major: G is V, Dm ii; nothing sounding: the key alone; A minor: Dm is iv: $OUT/cr_numerals_major.ppm, $OUT/cr_numerals_minor.ppm" \
-    || bad "the numerals: $(nm 3) / $(nm 4) / $(nm 7) / $(nm 8)"
-[ "$(nm 5)|$(cv 5 | cut -d'|' -f1)" = "on|VI|Asus" ] && [ "$(nm 6)|$(cv 6 | cut -d'|' -f1)" = "on|bVII|A#M" ] &&
-    ok "a key outside the scale is Key Mode's sus chord on a scale note (A#4: Asus, VI); with Transpose +3, G plays A#M: bVII, the name's root: $OUT/cr_numerals_borrowed.ppm" \
-    || bad "outside the scale: $(nm 5) $(cv 5) / $(nm 6) $(cv 6)"
-[ "$(cv 1)" = "$(cv 3)" ] && [ "$(cv 3 | cut -d'|' -f1,2)" = "GM|1" ] && [ "$(nm 9)" = "on|" ] &&
-    ok "display only: G's notes are the same with it on; Key Mode off: no numeral" || bad "$(cv 1) / $(cv 3) / $(nm 9)"
-differ cr_numerals_idle cr_numerals_major "the top line changes with the chord"
-if cmp -s "$OUT/cr_numerals_off.ppm" "$OUT/cr_numerals_major.ppm"; then bad "the numeral is not on the screen"; else
-    n=$(cmp -l "$OUT/cr_numerals_off.ppm" "$OUT/cr_numerals_major.ppm" | awk '{ p = int(($1 - 16) / 3); if (int(p / 240) >= 24) n++ } END { print n + 0 }')
-    [ "$n" = 0 ] && ok "Numerals On against Off, the same chord: only the top line's 24 rows differ" || bad "$n bytes differ below the top line"
-fi
+[ "$(nm 3)" = "on|V" ] && [ "$(nm 4)" = "on|ii" ] && [ "$(nm 8)" = "on|" ] && [ "$(nm 9)" = "on|iv" ] &&
+    ok "C major: G is V, Dm ii; nothing sounding: none; A minor: Dm is iv: $OUT/cr_numerals_major.ppm, $OUT/cr_numerals_minor.ppm" \
+    || bad "the numerals: $(nm 3) / $(nm 4) / $(nm 8) / $(nm 9)"
+[ "$(nm 5)|$(cv 5 | cut -d'|' -f1)" = "$(printf 'on|vii\260|Bdim')" ] && [ "$(nm 6)|$(cv 6 | cut -d'|' -f1)" = "on|VI|Asus" ] &&
+    ok "Bdim is vii with the degree sign; a key outside the scale is Key Mode's sus chord on a scale note (A#4: Asus, VI): $OUT/cr_numerals_dim.ppm" \
+    || bad "dim / outside the scale: $(nm 5) $(cv 5) / $(nm 6) $(cv 6)"
+[ "$(nm 7)|$(cv 7 | cut -d'|' -f1)" = "on|I|C#M" ] &&
+    ok "Transpose +1, the tonic chord played: the name is what sounds (C#M), the numeral the degree played (I): $OUT/cr_numerals_transposed.ppm" \
+    || bad "Transpose: $(nm 7) $(cv 7)"
+[ "$(cv 1)" = "$(cv 3)" ] && [ "$(cv 3 | cut -d'|' -f1,2)" = "GM|1" ] && [ "$(nm 11)" = "on|" ] &&
+    ok "display only: G's notes are the same with it on; Key Mode off: no numeral" || bad "$(cv 1) / $(cv 3) / $(nm 11)"
+cmp -s "$OUT/cr_numerals_off_idle.ppm" "$OUT/cr_numerals_idle.ppm" &&
+    ok "Numerals On, nothing sounding: the Chord view is the one with Numerals Off, pixel for pixel (the name does not move)" \
+    || bad "Numerals On with nothing sounding moved something: rows $(rows cr_numerals_off_idle cr_numerals_idle)"
+r=$(rows cr_numerals_off cr_numerals_major)
+[ -n "$r" ] && [ "${r% *}" -ge 28 ] && [ "${r#* }" -le 47 ] &&
+    ok "Numerals On against Off, the same chord: only rows $r differ (the gap under the top line, above the name)" \
+    || bad "the numeral on the Chord view: rows '$r'"
+[ "$(nm 10)" = "on|iv" ] && ok "the arp stepping on the Chord view: the numeral with it (iv): $OUT/cr_numerals_arp.ppm" || bad "the arp: $(nm 10)"
+differ cr_numerals_arp cr_numerals_minor "the arp screen is not the chord view"
 silent_end cr_numerals
 
 # the Full keyboard

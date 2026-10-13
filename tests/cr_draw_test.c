@@ -959,8 +959,6 @@ int main(int argc, char **argv)
         s.cell[0][0].flags = s.cell[0][1].flags = s.cell[0][3].flags = CR_CF_ON;
         snprintf(s.cell[0][3].label, sizeof s.cell[0][3].label, "Numerals");
         snprintf(s.cell[0][3].value, sizeof s.cell[0][3].value, "On");
-        snprintf(s.mid, sizeof s.mid, "Key: C \267 V");
-        s.mid_col = CR_COL_YELLOW;
         snprintf(s.cell[0][0].label, sizeof s.cell[0][0].label, "Key plays");
         snprintf(s.cell[0][0].value, sizeof s.cell[0][0].value, "Notes");
         snprintf(s.cell[0][1].label, sizeof s.cell[0][1].label, "Keyboard");
@@ -977,47 +975,99 @@ int main(int argc, char **argv)
         check(name, c01 > 200u && c2 > 0u && c2 * 8u < c01 && c3 > 80u);
     }
 
-    {   /* the numeral on the top line (0.22, the KEY layer's Numerals): "Key: C \267 V" in the header's own face. The
-         * longest text the UI can build ("Key: G# minor \267 #vii\260") beside the widest status the views show
-         * ("Split Bass") is drawn whole: no ellipsis, a gap before the status; and a top line without a numeral is
-         * the same picture as before (the text is the only thing that changed) */
-        static const struct { const char *slug, *mid, *right, *root, *qual, *sup; } H[] = {
-            {"numeral_major", "Key: C \267 V", "", "G", "", "7"},
-            {"numeral_minor", "Key: A minor \267 iv", "Bass", "D", "m", ""},
-            {"numeral_borrowed", "Key: C \267 bVII", "", "A#", "M", ""},
-            {"numeral_longest", "Key: G# minor \267 #vii\260", "Split Bass", "G", "dim", ""},
+    {   /* the numeral on the Chord view (0.22, the KEY layer's Numerals; the owner, 2026-10-12: "render in the Blue
+         * color we use centered above the chord name, you'd need to shift the chord name down a bit when playing an
+         * arp"): blue, bold 16 px, centred on baseline 44. The top line carries no numeral. Checked on the pixels:
+         * the big name does not move (numeral_on with no numeral is the picture without it; a numeral adds ink only
+         * in rows between the top line and the name); the arp's name moves down 6 px with numeral_on, whether or not
+         * a numeral shows, and the rows from the hop's arc down are untouched; the widest numeral ("#vii" + the
+         * degree sign) over the tallest names (a sharp root, a superscript, the voicing line under it) keeps 2 px
+         * clear of the top line and of the name; the lint finds no overlap */
+        static const struct { const char *slug, *mid, *root, *qual, *sup, *num, *line; uint8_t arp, on; } N[] = {
+            {"numeral_major", "Key: C", "G", "", "7", "V", "", 0, 1},
+            {"numeral_minor", "Key: A minor", "D", "m", "", "iv", "", 0, 1},
+            {"numeral_dim", "Key: C", "B", "dim", "", "vii\260", "", 0, 1},
+            {"numeral_longest", "Key: G# minor", "G#", "m", "add4", "#vii\260", "voicing +12", 0, 1},
+            {"numeral_idle", "Key: C", "G", "", "7", "", "", 0, 1},
+            {"numeral_off", "Key: C", "G", "", "7", "", "", 0, 0},
+            {"numeral_arp", "Key: C", "G", "", "7", "V", "arp 1/8", 1, 1},
+            {"numeral_arp_longest", "Key: G# minor", "G#", "m", "add4", "#vii\260", "arp 1/8", 1, 1},
+            {"numeral_arp_idle", "Key: C", "G", "", "7", "", "arp 1/8", 1, 1},
+            {"numeral_arp_off", "Key: C", "G", "", "7", "", "arp 1/8", 1, 0},
         };
+        enum { NN = sizeof N / sizeof N[0] };
+        static uint16_t pic[NN][240u * 240u], bare[240u * 240u];
         cr_screen_t s;
-        char fit[48];
-        uint32_t k, cut = 0, tight = 0;
-        for (k = 0; k < sizeof H / sizeof H[0]; k++) {
-            int32_t room, w;
-            cr_screen_clear(&s);
-            s.kind = CR_K_CHORD;
-            s.header = 1;
-            s.batt = 255;
-            s.icon = CR_ICON_NONE;
-            s.mid_col = CR_COL_YELLOW;
-            s.right_col = CR_COL_ORANGE;
-            snprintf(s.mid, sizeof s.mid, "%s", H[k].mid);
-            snprintf(s.right, sizeof s.right, "%s", H[k].right);
-            snprintf(s.name.root, sizeof s.name.root, "%s", H[k].root);
-            snprintf(s.name.quality, sizeof s.name.quality, "%s", H[k].qual);
-            snprintf(s.name.sup, sizeof s.name.sup, "%s", H[k].sup);
-            s.name.col_root = s.name.col_quality = CR_COL_WHITE;
-            s.name.col_sup = CR_COL_ORANGE;
-            lint(H[k].slug, &s);
-            render(&s, 0);
-            write_ppm(dir, H[k].slug);
-            room = P8(236 - (s.right[0] ? (cr_tw(s.right, 12, 1) >> 8) + 8 : 0) - 10);   /* (cr_header's own sum) */
-            w = cr_tw(s.mid, 15, 1);
-            cut += (uint32_t)cr_fit(fit, sizeof fit, s.mid, 15, 1, room);
-            tight += w > room;
-            if (k == 3u)
-                snprintf(name, sizeof name, "numeral: the longest top line is %d px wide in %d px of room beside \"Split Bass\"",
-                         (int)(w >> 8), (int)(room >> 8));
+        uint32_t k, x, y, f0 = nfind, bad = 0, gap_top = 999, gap_name = 999, w_max = 0;
+        uint16_t bg = swap16(T_BG), blue = swap16(CR_NAMED[CR_COL_BLUE]);
+        for (k = 0; k < NN; k++) {
+            uint32_t pass, n0 = 999, n1 = 0, x0 = 999, x1 = 0, top = 999, nblue = 0;
+            for (pass = 0; pass < 2u; pass++) {            /* 0: the same screen without the numeral's text */
+                cr_screen_clear(&s);
+                s.kind = N[k].arp ? CR_K_ARP : CR_K_CHORD;
+                s.header = 1;
+                s.batt = 255;
+                s.icon = CR_ICON_NONE;
+                s.mid_col = CR_COL_YELLOW;
+                snprintf(s.mid, sizeof s.mid, "%s", N[k].mid);
+                snprintf(s.name.root, sizeof s.name.root, "%s", N[k].root);
+                snprintf(s.name.quality, sizeof s.name.quality, "%s", N[k].qual);
+                snprintf(s.name.sup, sizeof s.name.sup, "%s", N[k].sup);
+                s.name.col_root = s.name.col_quality = CR_COL_WHITE;
+                s.name.col_sup = CR_COL_ORANGE;
+                snprintf(s.note[0].t, sizeof s.note[0].t, "G3");
+                snprintf(s.note[1].t, sizeof s.note[1].t, "B3");
+                snprintf(s.note[2].t, sizeof s.note[2].t, "D4");
+                snprintf(s.note[3].t, sizeof s.note[3].t, "F#4");
+                s.note[0].col = s.note[1].col = s.note[2].col = CR_COL_WHITE;
+                s.note[3].col = CR_COL_ORANGE;
+                s.n_notes = 4;
+                s.pos = 1;
+                s.hop_col = CR_COL_WHITE;
+                snprintf(s.line, sizeof s.line, "%s", N[k].line);
+                s.line_col = N[k].arp ? CR_COL_MID : CR_COL_BLUE;
+                s.numeral_on = N[k].on;
+                if (pass) snprintf(s.numeral, sizeof s.numeral, "%s", N[k].num);
+                render(&s, 0);
+                if (!pass) memcpy(bare, host_screen, sizeof bare);
+            }
+            lint(N[k].slug, &s);
+            write_ppm(dir, N[k].slug);
+            memcpy(pic[k], host_screen, sizeof pic[k]);
+            for (y = 0; y < 240u; y++)
+                for (x = 0; x < 240u; x++) {
+                    if (y >= 28u && top == 999u && bare[y * 240u + x] != bg) top = y;      /* the name's first row */
+                    if (host_screen[y * 240u + x] == bare[y * 240u + x]) continue;
+                    nblue += host_screen[y * 240u + x] == blue;
+                    if (y < n0) n0 = y;
+                    if (y > n1) n1 = y;
+                    if (x < x0) x0 = x;
+                    if (x > x1) x1 = x;
+                }
+            if (!N[k].num[0]) { bad += n0 != 999u; continue; }
+            /* (the ink box: under the top line, over the name, centred on x 120 within a pixel or two of bearing) */
+            bad += n0 == 999u || n0 < 24u || n1 >= top || x0 < 8u || x1 > 231u || x0 + x1 < 236u || x0 + x1 > 243u || nblue < 12u;
+            if (n0 - 23u < gap_top) gap_top = n0 - 23u;    /* (the top line's last row with ink is 22: "g", "y") */
+            if (top - n1 - 1u < gap_name) gap_name = top - n1 - 1u;
+            if (x1 - x0 + 1u > w_max) w_max = x1 - x0 + 1u;
         }
-        check(name, !cut && !tight && strlen(H[3].mid) < sizeof s.mid);
+        snprintf(name, sizeof name, "numeral: blue, centred, in the gap: %u px under the top line, %u over the name; the widest %u px",
+                 gap_top, gap_name, w_max);
+        check(name, !bad && gap_top >= 2u && gap_name >= 2u && nfind == f0);
+        check("numeral: the big name does not move (numeral_on, nothing sounding = the picture without Numerals)",
+              !memcmp(pic[4], pic[5], sizeof pic[4]));
+        {   /* the arp: numeral_on moves the name's rows (28 .. 121) CR_NUM_ARP_DY (6) px down and nothing else */
+            uint32_t moved = 1, low = 1, clear = 1, dy = CR_NUM_ARP_DY;
+            for (y = 28u; y < 240u; y++)
+                for (x = 0; x < 240u; x++) {
+                    uint16_t a = pic[9][y * 240u + x], b = pic[8][y * 240u + x];
+                    if (y >= 122u) low &= a == b;
+                    else moved &= b == (y >= 28u + dy ? pic[9][(y - dy) * 240u + x] : bg);
+                    if (y >= 122u - dy && y < 122u) clear &= a == bg;   /* (.. and the name ended that far above the arc) */
+                }
+            check("numeral: the arp's name sits 6 px lower with numeral_on (a numeral or none), the hop and the notes where they were",
+                  moved && low && clear && !memcmp(pic[6] + 122u * 240u, pic[9] + 122u * 240u, 118u * 240u * sizeof pic[0][0]));
+        }
     }
 
     {   /* QUAD's primitives (docs/QUAD.md, design/choralroot-fm1-quad-mockups.json): the algo band, the ade2 band, the

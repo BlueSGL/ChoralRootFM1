@@ -406,25 +406,41 @@ set the older firmware reads the byte as before.
 
 GitHub issue 1 asked for "the Roman numeral of the chord being played relative to the selected key ... alongside the
 chord name". The KEY layer's page 2 has **Numerals: Off / On** on KNOB 4 (Off by default). On, with Key Mode on and
-a chord sounding, the views' top line reads `Key: C · V`, `Key: A minor · iv` (`cr_ui.c cu_header`, `cu_numeral`).
+a chord sounding, the Chord view shows the numeral in the voicing's blue (`CR_COL_BLUE`), centred above the chord
+name (`cr_ui.c cu_numeral`, `cu_numeral_put`; `cr_draw.c cr_p_chord`, `cr_p_arp`; the screen's `numeral`,
+`numeral_on`). Until HISTORY 3y34 it was on the top line, beside the key (`Key: C · V`).
 The numeral is `cr_engine.c cr_chord_numeral(root_pc, quality, tonic, scale, buf)`, a pure function
 (`tests/cr_engine_test.c s_numerals`):
 
-- **The degree** is the root the name shows (`cr_chord_info`'s `root_pc`: Key Mode resolved, transposed) above the
-  tonic. Major: 0 2 4 5 7 9 11 semitones = I .. VII; minor (natural): 0 2 3 5 7 8 10.
+- **The degree** is the root **as played** above the tonic: the name's root (`cr_chord_info`'s `root_pc`: Key Mode
+  resolved, transposed) less the Transpose inside it (`cr_chord_info`'s `transpose`; `cu_numeral` subtracts it, the
+  function stays pure). Major: 0 2 4 5 7 9 11 semitones = I .. VII; minor (natural): 0 2 3 5 7 8 10. So the tonic
+  chord reads `I` at any Transpose: with Transpose +1 in C the name is `C#M` (what sounds) and the numeral `I` (the
+  degree played). `transpose` is the Transpose the chord was struck with (the voice's own copy: turning the knob
+  under a held chord changes neither its name nor its numeral). A loop's chord is recorded as the root that sounded
+  and is not transposed again when it plays, so the Transpose it was recorded with is not known: the Transpose of
+  now is taken out (right when the loop was recorded with the Transpose that is still set).
 - **A root between two degrees** is the neighbour with an accidental: major `bII bIII #IV bVI bVII` (1 3 6 8 10),
   minor `bII #III #IV #VI #VII` (1 4 6 9 11). In Key Mode a key outside the scale plays a chord on a scale note, so
-  these are reached with Transpose (the top line still says the key that was set, the name the root that sounds),
-  or when the key is changed under a held chord.
+  with Transpose taken out these are reached only when the key (or, for a loop, Transpose) is changed under a
+  sounding chord.
 - **The case** is the third: lower for MIN, DIM and MIN + SUS (`m add4`), upper for MAJ, SUS, the augmented chord,
   the power chord and a single note.
 - **Marks**: the degree sign after a diminished chord (`vii°`; with the 7 key it is half-diminished and still
   written `°`), `+` after the augmented one. No extensions: `V` for G, G7 and G9.
 
-The longest top line the UI can build, `Key: G# minor · #vii°`, is 138 px wide in the header's face and has 165 px
-beside the widest status of the views, `Split Bass` (`tests/cr_draw_test.c`). While a loop records or plays the top
-left is the looper's and shows neither the key nor the numeral. Stored in bit 1 of the settings block's `bass_on`
-(docs/SETTINGS.md), saved with SAVE held.
+**The layout** (`cr_draw.c CR_NUM_PX`, `CR_NUM_Y`, `CR_NUM_ARP_DY`; `tests/cr_draw_test.c`): bold 16 px in the face
+of the notes line (CRB, which has the degree sign), centred at x 120 on baseline 44; its ink is rows 31 .. 43, 8 px
+under the top line (which ends on row 22). The big name (104 px) starts on row 71 or lower (row 62 with a
+superscript and the voicing line under it), so on the plain Chord view nothing moves: with Numerals on and nothing
+sounding the screen is the one with Numerals off, pixel for pixel. The arp screen's name (44 px on baseline 78) has
+its superscript's top on row 42, so while the layout is on (`numeral_on`: Numerals and Key Mode both on, a chord
+sounding or not) it is drawn 6 px lower, on baseline 84 (its ink from row 48; the hop's arc starts at row 122):
+4 px between the numeral and the tallest name, and the name does not jump as chords are struck and released. The
+widest numeral, `#vii°`, is 34 px. Only the Chord view shows it (its plain form, its arp screen, and its voicing
+read-out); the Keyboard, Notes, Geek Out and Scope views, the PERF layer's arp band and the loop editor do not.
+While a loop records or plays the top left is the looper's (`Loop 1`); the numeral is on the panel and still shows,
+Key Mode being on. Stored in bit 1 of the settings block's `bass_on` (docs/SETTINGS.md), saved with SAVE held.
 
 ## Where the option is stored
 

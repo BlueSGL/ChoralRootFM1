@@ -180,6 +180,10 @@ typedef struct {
     uint8_t n_notes;
     int8_t pos;                     /* arp: the sounding note (-1 none) */
     uint8_t hop_col;                /* arp: the dotted hop arc */
+    uint8_t numeral_on;             /* chord / arp: the layout with a numeral (0.22, the KEY layer's Numerals with Key Mode
+                                     * on): the arp's name 6 px lower; 0: every pixel as before */
+    char numeral[6];                /* .. the sounding chord's Roman numeral ("V", "#vii\260"), blue, 16 px, centred
+                                     * above the name; empty: none (nothing sounding), the layout stays */
 
     /* panel: picker */
     uint8_t n_items, item0, sel;    /* the list's length, the index of item[0] in it, the selection (an index in it) */
