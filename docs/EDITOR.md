@@ -308,7 +308,7 @@ Overwrite saves at once and keeps the name: over a factory preset it writes a us
 one stays recoverable), over a user preset its slot, on INIT (which cannot be overwritten) it is Save as new.
 Overwrite never renames (a new name: Save as new, then delete the old one). Save as new takes the first free user slot,
 which is the engine's pool's next place ("FM6 · 27"), then the naming page: the white roots type the name (phone
-style, prefilled with the current one), D#4 a space, **F#4 deletes** the last letter, KNOB 2 the last letter, SAVE or
+style, prefilled with the current one), D#4 a space, **F#4 deletes** the letter under the cursor, SELECT the cursor and KNOB 1 the letter under it (0.22; until then KNOB 2 the last letter; docs/PRESETS.md "The naming page"), SAVE or
 OCT+ saves. No free slot (32 user presets): "no free slot". **SAVE held 1 s in the dialog**: "reset to factory?" on an
 overwritten factory preset, "delete?" on an added one, the place huge in red (OCT+ does it, OCT− keeps); after a reset
 the factory preset is back at its place, after a delete the pool closes up. EDIT keeps blinking; the dialog returns to

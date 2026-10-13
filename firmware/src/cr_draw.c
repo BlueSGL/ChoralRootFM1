@@ -550,7 +550,9 @@ static void cr_p_meter(const cr_screen_t *s, const cr_frame_t *fr, int32_t ph)
     }
     for (i = 0; i < n; i++)
         cr_frect(8 * 16 + (int32_t)i * (sw + gap), my * 16, sw, mh * 16, i < fr->filled ? col : T_LINE);
-    if (s->label[0]) cr_text(P8(120), P8(CR_PY0 + ph - 10), s->label, 14, 0, CR_C, 4096, T_MID, T_BG, 0);
+    if (s->label[0])                     /* (the favourites filter on: the line in the star's colour) */
+        cr_text(P8(120), P8(CR_PY0 + ph - 10), s->label, 14, 0, CR_C, 4096, s->label_fav ? cr_rgb(CR_STAR_COL, 0) : T_MID,
+                T_BG, 0);
     if (s->title[0]) cr_text(P8(10), P8(CR_PY0 + 16), s->title, 14, 1, CR_L, 4096, T_MID, T_BG, 0);
 }
 
@@ -2310,9 +2312,27 @@ static void cr_p_text(const cr_screen_t *s)
         const cr_line_t *l = &s->lines[i];
         uint32_t px = l->px ? l->px : 12u;
         yy += (int32_t)px - 12;
+        if (l->cur)                       /* the name being typed is never cut (the cursor may be anywhere in it): a
+                                           * long one is set smaller, on the same baseline (12 wide letters: 22 px) */
+            while (px > 16u && cr_tw(l->t, px, l->bold) > P8(200))
+                px -= 2u;
         if (l->t[0])
             cr_text_fit(P8(l->center ? 120 : 10), P8(yy), l->t, px, l->bold, l->center ? CR_C : CR_L,
                         cr_rgb(l->col, CR_WHITE), T_BG, P8(220));
+        if (l->cur && !l->center) {       /* the naming cursor: a 3 px bar under the character, 4 px below the baseline */
+            char c[32];
+            uint32_t k;
+            int32_t x, w;
+            for (k = 0; k + 1u < l->cur && k + 1u < sizeof c && l->t[k]; k++)
+                c[k] = l->t[k];
+            c[k] = 0;
+            x = P8(10) + cr_tw(c, px, l->bold);
+            c[0] = l->t[k] && l->t[k] != ' ' ? l->t[k] : 'n';   /* (a space, the place after the last: a letter's width) */
+            c[1] = 0;
+            w = cr_tw(c, px, l->bold);
+            if (x + w <= P8(236))
+                cr_frect(x >> 4, (yy + 4) * 16, w >> 4, 3 * 16, cr_rgb(s->title_col, CR_RED));
+        }
         yy += 16;
     }
 }

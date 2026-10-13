@@ -2523,32 +2523,57 @@ def run(a, backend, out, ask):
 # docs/PRESETS.md "Favourites" (firmware/src/cr_favs.c): the marks on sounds are one small object, backup id 23, read
 # with the backup protocol's LIST and GET (nothing is written, no command of its own).
 
-FAV_ID, FAV_VERSION, FAV_USER, FAV_P5 = 23, 1, 0x80, 16
+FAV_ID, FAV_VERSION, FAV_USER, FAV_P5 = 23, 2, 0x80, 16
+FAV_CHORD, FAV_BASS, FAV_OPT = 0x40, 0x20, 0xFF   # version 2: tag | FAV_CHORD / FAV_BASS: the sounds typed so; the options
 FAV_ORDER = (12, 15, 13, 14, 7)                  # the engines as the FM-1 shows them (P5 comes last: its own block)
 
 
-def parse_favorites(b):
-    """the favourites object -> {tag: [ids]} (tag: an engine's index, FAV_USER the user slots; an id: the preset's
-    index in its engine's table, a user slot 0..31, for P5 the Sequential program number 1..200). The object:
-    version 1, the number of sections, then per section tag, len, len bytes of bits (bit i of byte i // 8 is id i).
-    Empty bytes: no marks."""
+def parse_favorites_full(b):
+    """the favourites object -> (marks, types, filter). marks: {tag: [ids]} (tag: an engine's index, FAV_USER the
+    user slots; an id: the preset's index in its engine's table, a user slot 0..31, for P5 the Sequential program
+    number 1..200). types: {(tag, id): "chord" | "bass"} for the sounds typed so, marked or not (none: Both).
+    filter: the favourites filter is on. The object: the version (2; 1, 0.22's first builds, had the marks alone),
+    the number of sections, then per section tag, len, len bytes: a tag's bits are its marks (bit i of byte i // 8
+    is id i), tag | 0x40 the sounds typed Chord, tag | 0x20 those typed Bass, 0xFF one byte of options (bit 0: the
+    filter). Empty bytes: no marks."""
     b = bytes(b)
     if not b:
-        return {}
-    if len(b) < 2 or b[0] != FAV_VERSION:
-        raise BackupError(f"favourites of version {b[0]}: this tool reads version {FAV_VERSION}")
-    out, p = {}, 2
+        return {}, {}, False
+    if len(b) < 2 or b[0] not in (1, FAV_VERSION):
+        raise BackupError(f"favourites of version {b[0]}: this tool reads versions 1 and {FAV_VERSION}")
+    marks, only, filt, p = {}, {"chord": {}, "bass": {}}, False, 2
     for _ in range(b[1]):
         if p + 2 > len(b) or p + 2 + b[p + 1] > len(b):
             raise BackupError("the favourites object is cut short")
         tag, n = b[p], b[p + 1]
         ids = [i for i in range(n * 8) if b[p + 2 + i // 8] >> (i % 8) & 1]
+        p += 2 + n
+        dst = marks
+        if b[0] >= 2:
+            if tag == FAV_OPT:
+                filt = bool(n and b[p - n] & 1)
+                continue
+            if tag & FAV_CHORD:
+                dst, tag = only["chord"], tag & ~FAV_CHORD
+            elif tag & FAV_BASS:
+                dst, tag = only["bass"], tag & ~FAV_BASS
         if tag == FAV_P5:
             ids = [i for i in ids if 1 <= i <= 200]
         if ids:
-            out[tag] = ids
-        p += 2 + n
-    return out
+            dst[tag] = ids
+    types = {(t, i): "chord" for t, v in only["chord"].items() for i in v}
+    for t, v in only["bass"].items():
+        for i in v:
+            if (t, i) in types:                   # (both at once, a foreign object: Both, as the firmware reads it)
+                del types[(t, i)]
+            else:
+                types[(t, i)] = "bass"
+    return marks, types, filt
+
+
+def parse_favorites(b):
+    """the favourites object -> {tag: [ids]}: the marks alone (parse_favorites_full has the types and the filter)"""
+    return parse_favorites_full(b)[0]
 
 
 def p5_program_names():
@@ -2564,23 +2589,30 @@ def p5_program_names():
         return {}
 
 
-def favorites_text(marks, version, user_names=None, p5_names=None):
+def favorites_text(marks, version, user_names=None, p5_names=None, types=None, filt=False):
     """the marks as text. Every line but P5's begins with '#', and P5's are 'NUMBER  # NAME': the whole text is a
-    valid assets/prophet5-factory/shipped.txt (tools/p5_shipped_from_favorites.py turns it into the list)."""
-    user_names, p5_names = user_names or {}, p5_names or {}
+    valid assets/prophet5-factory/shipped.txt (tools/p5_shipped_from_favorites.py turns it into the list). A mark
+    typed Chord or Bass says so after the name, "  (chord)" / "  (bass)" (in the comment: the line is still the
+    list's); a sound that is typed and not marked is not listed."""
+    user_names, p5_names, types = user_names or {}, p5_names or {}, types or {}
     total = sum(len(v) for v in marks.values())
-    lines = [f"# favorites on {version}: {total} marked"]
+    lines = [f"# favorites on {version}: {total} marked" + (", the filter on" if filt else "")]
+
+    def ty(tag, i):
+        return f"  ({types[(tag, i)]})" if (tag, i) in types else ""
+
     for e in list(FAV_ORDER) + sorted(t for t in marks if t not in FAV_ORDER and t not in (FAV_USER, FAV_P5)):
         name = ENGINE_NAMES[e] if e < len(ENGINE_NAMES) else f"engine {e}"
         presets, first = FACTORY_PRESETS.get(str(e), []), FACTORY_FIRST.get(str(e), 0)
         for i in marks.get(e, []):
-            lines.append(f"# {name} {i - first + 1:02d} {presets[i] if i < len(presets) else '?'}")
+            lines.append(f"# {name} {i - first + 1:02d} {presets[i] if i < len(presets) else '?'}" + ty(e, i))
     for k in marks.get(FAV_USER, []):
-        lines.append(f"# user U{k + 1:02d} {user_names.get(k + 1, '')}".rstrip())
+        lines.append(f"# user U{k + 1:02d} {user_names.get(k + 1, '')}".rstrip() + ty(FAV_USER, k))
     p5 = sorted(marks.get(FAV_P5, []))
     lines.append(f"# P5: {len(p5)} program{'' if len(p5) == 1 else 's'}, by Sequential's number"
                  + (" (the lines below as they are: assets/prophet5-factory/shipped.txt)" if p5 else ""))
-    lines += [f"{i:<6d} # {p5_names[i]}" if p5_names.get(i) else str(i) for i in p5]
+    lines += [(f"{i:<6d} # {p5_names.get(i, '')}".rstrip() + ty(FAV_P5, i)) if p5_names.get(i) or ty(FAV_P5, i) else str(i)
+              for i in p5]
     return "\n".join(lines) + "\n"
 
 
@@ -2596,7 +2628,7 @@ def run_favorites(up, out):
         data = bk_get_object(bl, FAV_ID, man[FAV_ID]["size"])
         if bk_crc(data) != man[FAV_ID]["crc"] and data:
             raise BackupError("the FM-1 changed its favourites while they were read: try again")
-        marks = parse_favorites(data)
+        marks, types, filt = parse_favorites_full(data)
         names = {}
         if marks.get(FAV_USER):
             objs = {i: bk_get_object(bl, i, man[i]["size"]) for i in (6, 7) if i in man}
@@ -2606,7 +2638,7 @@ def run_favorites(up, out):
                     names[k + 1] = _record_name(r)
     finally:
         bl.link.close()
-    out.write(favorites_text(marks, version, names, p5_program_names() if marks.get(FAV_P5) else {}))
+    out.write(favorites_text(marks, version, names, p5_program_names() if marks.get(FAV_P5) else {}, types, filt))
     return 0
 
 

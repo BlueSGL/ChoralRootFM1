@@ -329,7 +329,7 @@ static int crb_size_ok(uint32_t id, uint32_t len)   /* a begin's size for this i
     if (id == CRB_QUAD)
         return !len || len == sizeof(quad_store_t);
 #if FELUCCA_CZ
-    if (id == CRB_FAVS)                              /* (0: none; else the version and the count at least) */
+    if (id == CRB_FAVS)                              /* (0: none; else the version and the count at least; 264 at most) */
         return !len || (len >= 2u && len <= CRF_PACK_MAX);
 #endif
 #endif

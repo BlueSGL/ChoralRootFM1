@@ -2087,3 +2087,81 @@ RAM 81 444 (+96), POOL 316 052 (the same). `FELUCCA_PROPHET=0 ./build.sh`: `chor
 real FM-1, the three-unit voice's cost); a favourites-only way of turning PRESETS; favourites in the web Sound
 Manager (it does not show or edit them; a backup made by the pages keeps them); the browser emulator's own test has
 no favourites case; `tools/emu/perf.sh`.
+
+3y42. **The favourites' filter and type; the SAVE menu in the Options' grammar; a cursor for naming (2026-10-13; 0.22
+in development; on p5-e after 40acb01, beside 3y41's branch).** The owner: "now with the Favorites, I would love a
+feature to filter the presets to just favorites. This could be done by adding another option after favorite in the
+Preset Save Menu. So after the Favorite Section have an option to filter favorites. Lets also make knob 1 work for
+changing values to match menu behaviour in other menus like GBL, Knob 4 should set favorite regardless of which
+setting is selected. I want filter to reduce the preset list to just scrolling between favorites, still limited by
+engine. So in P5 if the filter is on I can only scroll and select the P5 favorites. If I change to FM-Tone, I can
+only scroll and select the FM-Tone Favorites. I would also like an additional filter option in the preset save menu
+to setup what type of favorite it is: Both, Chord, or Bass. With both, the preset appears for both chord presets and
+bass presets, for Chord, the preset appears only for Chord presets, and for Bass the preset appears only for the bass
+presets." Then, while it was built: on the type, "Setting a Type on an unmarked sound marks it should be separate, so
+I could have presets that work well for bass and ones that work well for chords, but favorite/unfavorite them and the
+type does not change. However I am fine if the sound is unfavorited and you change type to auto favorite it, which
+would make things quicker to organize."; "Lets also Fix knob 3 in the preset save menu to set the type too."; KNOB 2
+for the filter on every entry (through the coordinator); on naming, "When you save as new, the editor to name the
+preset needs work. All the other knobs do default things which is weird. Select knob should select character, knob 1
+to change the letter at selected index, knob 4 CCW as a backspace, the other knobs 2 and 3 in the name editor should
+not do anything." and "The cursor should always sit at the character you are editing, not the next character."
+**The SAVE menu** (`cr_ui.c cu_knob`, `cu_save_screen`; docs/PRESETS.md "Favourites", "On the unit"): five entries,
+Overwrite, Save as new, Favorite, Favorites filter, Favorite type (a P5 part: the last three). SELECT picks the entry
+(a step a turn, the ends), KNOB 1 changes its value (the two saves: nothing), and on EVERY entry KNOB 2 is the filter
+(left Off, right On), KNOB 3 the sound's type (a step a turn through Both / Chord / Bass, the ends), KNOB 4 the mark;
+a yellow message says what a knob changed when the selected entry does not show it. OCT+ saves on the first two
+only. What the knobs did there before: KNOB 1 moved the choice (with SELECT); KNOB 2, 3 and 4 fell through to the
+home jobs (the bass register, the Perform mode's knob, the chord part's send; KNOB 4 was the mark on Favorite alone).
+The footer of the three favourites' entries is `K1 change · K2 filter · K3 type · K4 favorite` (the knobs spelled
+out do not fit the line); the two saves keep `OCT+: save · OCT-: cancel`.
+**The type** is the SOUND's (`cr_favs.c crf_type`, `crf_set_type`): kept whether the sound is marked or not, never
+changed by the mark; a turn of the type (KNOB 3, or KNOB 1 on its entry) marks a sound that is not a favourite, a turn
+against the end stop too. A deleted user slot loses mark and type.
+**The store**: `OBJ_FAVS` version 2: the same sections, with tag | 0x40 for a section's sounds typed Chord, tag | 0x20
+for those typed Bass, and 0xFF for a byte of options (bit 0 the filter). 2 bytes empty, 262 at most (buffer 264; it
+was 96). Version 1 is read (marks Both, the filter off) and rewritten by the next change. 40acb01's reader meeting
+version 2 shows no marks and overwrites the object with a version-1 one at its next mark (run on the host with its
+own cr_favs.c). `tools/fm1_install.py --favorites` reads both versions and prints `  (chord)` / `  (bass)` after a
+marked sound's name, in the comment; a typed sound without a mark is not listed.
+**The filter** (`cr_ui.c cuf_n`, `cuf_move`; one Off / On in the same object): PRESETS, ALGORITHM, the BASS layer's
+SOUND and the editor's browser step the part's fitting favourites of its engine, in the pool's order, INIT left out;
+the ends go round (ALGORITHM keeps OFF between the last and the first; the BASS layer's knob stops, as without the
+filter); a sound that is not one of them keeps playing and the next turn goes to the nearest that way; an engine
+without one turns its whole pool and the read-out says `no favorites: all`; an engine change lands on the first; a
+program change, the session, a loop's sound changes, a restore are not filtered. The read-out keeps the pool place
+big and the stripes; its line under the stripes, in the star's colour, is the sign and the place among the
+favourites (`favorites 03/07`), where the OPT hint stands otherwise. A per-part list of 32 bytes of bits, rebuilt
+when a mark, a type, the user bank or the engine changes: no walk of the pool per detent.
+**Naming** (`cr_name.c`, `cr_ui.c cu_name_knob`): a cursor always on a character (the last when the page opens);
+SELECT moves it and, right from the last character, adds an `A` up to 12; KNOB 1 the character under it; KNOB 4 left
+deletes it (the cursor to the one before); KNOB 2, KNOB 3, KNOB 4 right, PRESETS and ALGORITHM (GLO or BASS held too)
+nothing. Until then every knob kept its home job under the name: KNOB 1 the voicing, KNOB 2 the last letter, KNOB 3
+the Perform knob, KNOB 4 the send, SELECT the tempo, PRESETS / ALGORITHM the sounds (the sound being named changed
+under its name), GLO + KNOB 1 the split point, GLO + SELECT the click level, BASS + ALGORITHM the bass level. A key goes in after the cursor, which moves onto it;
+F#4 is the backspace. An empty name stays allowed (no cursor). The cursor is a steady bar (`cr_line_t.cur`), not the
+blinking `_`; a long name is set smaller instead of being cut.
+**RAM and one thing learnt.** 3y42's RAM is one object, `crf_x` (240 bytes: the two type bitmaps, the filter, the
+generation, the two lists), and `cn` kept its 24 bytes. Not for tidiness: as four small statics the same bytes made
+`tests/target_budget.py` fail on `mix_loop_u` (fx.c, untouched): the target compiler merges small statics into blocks
+by size, the new ones moved a block's edge between `mix_r` and `mix_l`, the loop lost `mix_l = mix_r + 128` and
+gained an instruction a sample (38 -> 39; the budget's limit is 38). That figure is at its limit in 40acb01 already:
+any new static under 128 bytes can do this again.
+**Tests.** `tests/cr_favs_test.c` (75 checks: version 1 read, the types, a type without a mark kept over a power
+cycle, the filter, foreign objects, the longest object); `tests/cr_prophet_test.c` (82: the five entries and P5's
+three, KNOB 1 / 2 / 3 / 4 on each, the filter's turns for both parts, the engine without favourites, the un-marked
+current sound, P5's cached list, naming with the knobs and the inert knobs); `tests/install_test.py` (versions 1 and
+2, the types in `--favorites`' text, a typed unmarked sound not listed); the emulator: `cr_favfilter.txt` and
+`cr_naming.txt` (new) with their blocks in `test_cr.sh` (943 ok), `favs_persist_set / _check.txt` (the types, an
+unmarked sound's type and the filter over a relaunch). Scripts edited for KNOB 1: `cr_presets.txt` (32 turns in the
+dialog, KNOB 1 -> SELECT); no script used KNOB 2 for a name's last letter. Against a build of 40acb01, test_cr's and
+test_persist's 494 shots: 21 differ: 13 of the SAVE menu's page (five entries; "no free slot" over it; P5's three),
+7 of the naming page (the cursor, its two lines), and `persist_favs_star` (taken with the filter on now: the yellow
+line); every other screen is pixel for pixel 40acb01's.
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders, 0 changed; 0 lint findings; test_cr 943 ok, test_persist 98 ok, test_retired 18 ok. Size: XIP
+510 564 B (89.0 %; +2 992), RAM 81 700 (+256), POOL 316 064 (+12).
+**Not done / not tested**: anything on a unit; the time of a PRESETS turn in P5's pool with the filter on (the list
+is cached: by construction, not measured); a version-1 reader against an object over 96 bytes (read from its code;
+96 bytes: run on the host); favourites in the web Sound Manager; the browser emulator's own test has no favourites
+case; `tools/emu/perf.sh`.

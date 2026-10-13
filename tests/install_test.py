@@ -1738,10 +1738,21 @@ def favorites():
        + ("" if c.returncode == 0 else ": " + c.stderr[-300:]))
     data = blob.read_bytes() if blob.exists() else b""
     want = {12: [0, 24], 13: [3], 14: [64], 15: [15], 7: [4], 16: [1, 15, 44, 199, 200], I.FAV_USER: [0, 31]}
-    ok(I.parse_favorites(data) == want and data[:1] == bytes([I.FAV_VERSION]),
-       "favorites: the tool's decoder reads the firmware's bytes: every mark of the fixed set, nothing else")
-    ok(I.parse_favorites(b"") == {} and I.parse_favorites(bytes([1, 0])) == {}, "favorites: an empty object, no section: no marks")
-    for bad, what in ((bytes([2]) + data[1:], "another version"), (data[:-3], "cut short"), (b"\x01", "one byte")):
+    ok(I.parse_favorites(data) == want and data[:1] == bytes([I.FAV_VERSION]) and I.FAV_VERSION == 2,
+       "favorites: the tool's decoder reads the firmware's bytes (version 2): every mark of the fixed set, nothing else")
+    marks, types, filt = I.parse_favorites_full(data)
+    ok(marks == want and filt is True and
+       types == {(12, 24): "chord", (13, 3): "bass", (16, 15): "chord", (16, 44): "bass", (I.FAV_USER, 31): "bass",
+                 (12, 5): "bass", (16, 7): "chord"},
+       "favorites: .. and the types (Chord / Bass; the others Both), those of two sounds that are not marked, the filter on")
+    v1 = bytes([1, 3, 0x80, 1, 0x04, 12, 1, 0x09, 16, 2, 0x00, 0x10])
+    ok(I.parse_favorites_full(v1) == ({0x80: [2], 12: [0, 3], 16: [12]}, {}, False),
+       "favorites: a version-1 object (0.22's first builds): its marks, every one Both, no filter")
+    ok(I.parse_favorites_full(bytes([2, 3, 12, 1, 3, 12 | 0x40, 1, 3, 12 | 0x20, 1, 2])) == ({12: [0, 1]}, {(12, 0): "chord"}, False),
+       "favorites: Chord and Bass at once (a foreign object): Both, as the firmware reads it")
+    ok(I.parse_favorites(b"") == {} and I.parse_favorites(bytes([1, 0])) == {} and I.parse_favorites_full(bytes([2, 0])) == ({}, {}, False),
+       "favorites: an empty object, no section: no marks")
+    for bad, what in ((bytes([3]) + data[1:], "another version"), (data[:-2], "cut short"), (b"\x01", "one byte")):
         try:
             I.parse_favorites(bad)
             ok(False, f"favorites: {what} must be refused")
@@ -1755,13 +1766,18 @@ def favorites():
     side = BackupSide("ChoralRoot 0.22", I.CR_IDS, objs.items())
     rc, out, err = cli(["--favorites"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: side))
     lines = out.splitlines()
-    ok(rc == 0 and lines[0] == "# favorites on ChoralRoot 0.22: 13 marked" and
-       lines[1:8] == ["# FM6 01 TINE EP", "# FM6 25 PIANO", "# FM TONE 16 NOISE-ISH", "# VA 04 SLOW STRINGS", "# CZ-1 64 TYPHOON",
-                      "# WHEEL 05 ROCK DRIVE", "# user U01 MY PAD"] and lines[8] == "# user U32 LAST",
-       "--favorites: the engines' marked presets by their pool place and name, the marked user sounds by slot and name")
+    ok(rc == 0 and lines[0] == "# favorites on ChoralRoot 0.22: 13 marked, the filter on" and
+       lines[1:8] == ["# FM6 01 TINE EP", "# FM6 25 PIANO  (chord)", "# FM TONE 16 NOISE-ISH", "# VA 04 SLOW STRINGS  (bass)", "# CZ-1 64 TYPHOON",
+                      "# WHEEL 05 ROCK DRIVE", "# user U01 MY PAD"] and lines[8] == "# user U32 LAST  (bass)",
+       "--favorites: the engines' marked presets by their pool place and name, the marked user sounds by slot and name; "
+       "a mark typed Chord or Bass says so after the name")
     ok(lines[9].startswith("# P5: 5 programs") and [ln.split("#")[0].split() for ln in lines[10:]] == [["1"], ["15"], ["44"], ["199"], ["200"]] and
-       lines[10] == "1      # ITS PROPHET5" and lines[11] == "15     # REEDY STRPAD" and len(lines) == 15,
-       "--favorites: P5's programs by Sequential's number, one a line with the name as a comment")
+       lines[10] == "1      # ITS PROPHET5" and lines[11] == "15     # REEDY STRPAD  (chord)" and lines[12].endswith("  (bass)") and len(lines) == 15,
+       "--favorites: P5's programs by Sequential's number, one a line with the name (and the type) as a comment")
+    ok("FM6 06" not in out and not any(ln.split("#")[0].split() == ["7"] for ln in lines),
+       "--favorites: a sound that is typed and not marked (FM6 06, P5 7) is not listed")
+    ok(I.favorites_text({16: [3]}, "X", types={(16, 3): "bass"}).splitlines()[-1] == "3      #  (bass)" and
+       I.favorites_text({16: [3]}, "X").splitlines()[-1] == "3", "--favorites: a P5 line without the bank's names: the number, the type in the comment")
     ok(not any(isinstance(x, int) for x in side.log) and side.restarts == 0, "--favorites: nothing written to the FM-1")
     sys.path.insert(0, str(ROOT / "tools"))
     import gen_prophet_factory as g

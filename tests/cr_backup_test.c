@@ -1118,7 +1118,7 @@ int main(void)
         other[0] = CRF_VER + 1u;                     /* a newer firmware's object */
         CHECK(t_put(23, other, fn) == 0 && crf_count() == 0u && crf_last_rc == -1,
               "favourites: PUT of another version: stored, read as no marks (never half-understood)");
-        CHECK(t_put_begin(23, 1, 0) == 1 && t_put_begin(23, CRF_PACK_MAX + 1u, 0) == 1, "favourites: a size of 1 or over 96: rc 1");
+        CHECK(t_put_begin(23, 1, 0) == 1 && t_put_begin(23, CRF_PACK_MAX + 1u, 0) == 1, "favourites: a size of 1 or over 264: rc 1");
         CHECK(t_put(23, fav, 0) == 0 && crf_count() == 0u && crf_last_rc == 0, "favourites: PUT of size 0: no marks");
         CHECK(t_put(23, fav, fn) == 0 && crf_count() == 1u, "(the backup's marks again)");
         /* an overwritten factory preset keeps its factory key: the mark stays through Overwrite and Reset */

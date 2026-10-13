@@ -486,14 +486,21 @@ void emu_fw_dump(void)
     printf("  flash: %s, %u writes, settings saves %u (record: %s)\n", emu_flash_path[0] ? emu_flash_path : "RAM only",
            (unsigned)emu_flash_writes, (unsigned)crs_saves, crs_last_rc == 1 ? "current" : crs_last_rc == 2 ? "migrated" : "defaults");
     {   /* the favourites (cr_favs.c): the marks in all, the flash writes, one still to be written, what power-on found,
-         * then every mark as tag:id (tag: the engine's index, 128 the user slots; P5's id: the Sequential number) */
+         * ", filter on" while the favourites filter is, then every mark as tag:id (tag: the engine's index, 128 the user
+         * slots; P5's id: the Sequential number), "c" / "b" after a mark typed Chord / Bass */
         unsigned k, i, off = 0;
-        printf("  favs: %u marked, saves %u, pending %u (at power-on: %s) :", (unsigned)crf_count(), (unsigned)crf_saves,
-               (unsigned)crf_dirty, crf_last_rc == 1 ? "read" : crf_last_rc < 0 ? "not understood" : "none");
+        printf("  favs: %u marked, saves %u, pending %u (at power-on: %s)%s :", (unsigned)crf_count(), (unsigned)crf_saves,
+               (unsigned)crf_dirty, crf_last_rc == 1 ? "read" : crf_last_rc < 0 ? "not understood" : "none",
+               crf_filter ? ", filter on" : "");
         for (k = 0; k < CRF_NSEC; off += CRF_SEC[k].bytes, k++)
             for (i = 0; i < CRF_SEC[k].bytes * 8u; i++)
                 if ((crf_bits[off + i / 8u] >> (i % 8u)) & 1u)
-                    printf(" %u:%u", (unsigned)CRF_SEC[k].tag, i);
+                    printf(" %u:%u%s", (unsigned)CRF_SEC[k].tag, i,
+                           crf_type(CRF_SEC[k].tag, i) == CRF_CHORD ? "c" : crf_type(CRF_SEC[k].tag, i) == CRF_BASS ? "b" : "");
+        for (k = 0; k < CRF_NSEC; k++)             /* (.. then "~tag:id" + "c" / "b": a sound typed and not marked) */
+            for (i = 0; i < CRF_SEC[k].bytes * 8u; i++)
+                if (!crf_has(CRF_SEC[k].tag, i) && crf_type(CRF_SEC[k].tag, i) != CRF_BOTH)
+                    printf(" ~%u:%u%s", (unsigned)CRF_SEC[k].tag, i, crf_type(CRF_SEC[k].tag, i) == CRF_CHORD ? "c" : "b");
         printf("\n");
     }
     {   /* the session (cr_settings.c css_*, docs/SETTINGS.md): its saves, what power-on found, the state as it would be

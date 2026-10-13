@@ -297,7 +297,10 @@ grep -a 'part 0:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "part 0: P5 / $P
 
 # Favourites (0.22, docs/PRESETS.md "Favourites"; cr_favs.c, the object at 0xB6000 / 0xB7000): run 1 marks FM6 01 in
 # the SAVE dialog and FM6 04 in the editor's browser and quits WITHOUT a SAVE held: a mark is written by itself once
-# the unit is quiet; run 2 (the same file) reads both and shows the star on the read-out
+# the unit is quiet; run 2 (the same file) reads both and shows the star on the read-out. With them (version 2 of the
+# object): TINE EP's type Chord, the type Bass of FM BASS whose mark was taken off again (a sound's type is kept
+# without a mark), and the filter On: run 2 turns PRESETS through the chord part's two favourites only, then
+# switches the filter Off (written by itself)
 FFLASH=$OUT/persist_favs_flash.bin
 F1=$OUT/persist_favs_1.log; F2=$OUT/persist_favs_2.log
 rm -f "$FFLASH" "$F1" "$F2" "$OUT"/persist_favs_star.ppm "$OUT"/persist_favs_none.ppm
@@ -307,14 +310,18 @@ ffl() { grep -a '^  favs:' "$1" | sed -n "$2p"; }
 fyel() { od -An -tu1 -v -j 15 "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
     awk '{ v[n++] = $1 } END { c = 0; for (i = 0; i + 2 < n; i += 3) if (v[i] > 200 && v[i+1] > 140 && v[i+2] < 90) c++; print c }'; }
 grep -q '^fav: part 0 TINE EP on (tag 12 id 0, 1 marked)' "$F1" && grep -q '^fav: part 0 BRASS on (tag 12 id 3, 2 marked)' "$F1" &&
-    ! grep -q '^save: global' "$F1" && ffl "$F1" 1 | grep -q 'favs: 2 marked, saves [12], pending 0 (at power-on: none) : 12:0 12:3$' &&
-    ok "favourites run 1: FM6 01 marked in the SAVE dialog, FM6 04 in the editor's browser; no SAVE held: written once the unit was quiet ($(ffl "$F1" 1 | sed -n 's/.*saves \([0-9]*\).*/\1/p') erase cycles for the two)" ||
+    grep -q '^fav: part 0 FM BASS type Bass (tag 12 id 2, 3 marked)' "$F1" && grep -q '^fav: part 0 FM BASS off (tag 12 id 2, 2 marked)' "$F1" &&
+    grep -q '^fav: filter on' "$F1" &&
+    ! grep -q '^save: global' "$F1" && ffl "$F1" 1 | grep -q 'favs: 2 marked, saves [1-9], pending 0 (at power-on: none), filter on : 12:0c 12:3 ~12:2b$' &&
+    ok "favourites run 1: FM6 01 marked in the SAVE dialog and typed Chord (KNOB 3), FM6 04 in the editor's browser, FM6 03 typed Bass and its mark taken off again, the filter On; no SAVE held: written once the unit was quiet ($(ffl "$F1" 1 | sed -n 's/.*saves \([0-9]*\).*/\1/p') erase cycles for the two)" ||
     bad "favourites run 1: $(grep '^fav:' "$F1" | tr '\n' ' ') / $(ffl "$F1" 1)"
-ffl "$F2" 1 | grep -q 'favs: 2 marked, saves 0, pending 0 (at power-on: read) : 12:0 12:3$' &&
-    grep -q '^popup: part 0 01 / TINE EP (star) / ' "$F2" && grep -q '^popup: part 0 04 / BRASS (star) / ' "$F2" &&
+ffl "$F2" 1 | grep -q 'favs: 2 marked, saves 0, pending 0 (at power-on: read), filter on : 12:0c 12:3 ~12:2b$' &&
+    grep -q '^popup: part 0 01 / TINE EP (star) / FM6 .* favorites 01/02' "$F2" && grep -q '^popup: part 0 04 / BRASS (star) / FM6 .* favorites 02/02' "$F2" &&
+    [ "$(grep -a '^sound: part 0' "$F2" | head -3 | sed 's/^sound: part 0 pos //' | tr '\n' ';')" = "4 BRASS;1 TINE EP;4 BRASS;" ] &&
+    grep -q '^fav: filter off' "$F2" &&
     grep -q '^popup: part 0 05 / FM PAD / ' "$F2" && [ "$(fyel "$OUT/persist_favs_star.ppm")" -ge 10 ] && [ "$(fyel "$OUT/persist_favs_none.ppm")" = 0 ] &&
-    ffl "$F2" 2 | grep -q 'saves 0, pending 0' &&
-    ok "favourites run 2 (a relaunch): both marks read from flash; the read-outs of 01 TINE EP and 04 BRASS carry the star, 05 FM PAD none; nothing written again: $OUT/persist_favs_star.ppm" ||
+    ffl "$F2" 2 | grep -q 'favs: 2 marked, saves 1, pending 0 (at power-on: read) : 12:0c 12:3 ~12:2b$' &&
+    ok "favourites run 2 (a relaunch): the marks, TINE EP's type Chord, the unmarked FM BASS's type Bass and the filter On read from flash; PRESETS turns the chord part's two favourites only (04, 01, 04; FM BASS is typed and not marked), their read-outs with the star and the place among them; the filter switched Off: 05 FM PAD, no star, and that is written (one write): $OUT/persist_favs_star.ppm" ||
     bad "favourites run 2: $(ffl "$F2" 1) / $(grep '^popup: part 0' "$F2" | tr '\n' ' ') / yellow $(fyel "$OUT/persist_favs_star.ppm") $(fyel "$OUT/persist_favs_none.ppm")"
 
 # FM TONE (engine 15, code name QUAD; docs/QUAD.md): run 1 edits FM TONE's EP (Ratio A, KNOB 3 +5 on SYN 1) and saves it in U01: the patch into the QUAD

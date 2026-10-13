@@ -141,7 +141,10 @@ typedef struct {                                                                
     uint8_t pct2;                   /* Q8 of 255: a pictogram's second value (echoes: feedback, lfo: depth) */
     uint8_t wave;                   /* CR_G_LFOWAVE: CR_LW_* */
 } cr_cell_t;                        /* 32 bytes, no padding */
-typedef struct { char t[32]; uint8_t px, col, bold, center; } cr_line_t;       /* a text line (px 0 = 12) */
+typedef struct { char t[32]; uint8_t px, col, bold, center;
+                 uint8_t cur; } cr_line_t;       /* a text line (px 0 = 12). cur: a cursor under character cur - 1 of a
+                                                  * left-aligned line, in the
+                                                  * title's colour, steady; 0: none, every pixel as before (naming) */
 
 typedef struct {
     uint8_t kind;                   /* CR_K_* */
@@ -205,6 +208,10 @@ typedef struct {
     uint8_t sub_mark;               /* a small square after `sub` (an overwritten factory preset, docs/PRESETS.md) */
     uint8_t star;                   /* a favourite's star before the sound's name, the two centred together (0.22,
                                      * docs/PRESETS.md "Favourites"): the meter's `sub`, the picker's `value`. 0: every
+                                     * pixel as before */
+
+    uint8_t label_fav;              /* the meter's `label` in the star's colour: a pool's read-out while the favourites
+                                     * filter is on (its place among the favourites, or "no favorites: all"). 0: every
                                      * pixel as before */
 
     /* panel: stripes */

@@ -453,7 +453,8 @@ last, so a write torn by the power switch leaves the previous session in charge 
 
 ### The favourites are a third object (0.22)
 
-Not a setting and not in the block (which never grows): the marks on sounds are `OBJ_FAVS`, the pair **0xB6000 /
+Not a setting and not in the block (which never grows): the marks on sounds (and, since 3y42, the sounds' types and
+the favourites filter's Off / On, which Options > Reset Settings therefore leaves as it is) are `OBJ_FAVS`, the pair **0xB6000 /
 0xB7000**, written by `cr_favs.c crf_flush` with the same commit protocol (docs/PRESETS.md "Favourites" has the
 format and the keys). It is AUTOMATIC in the sense of [Manual and automatic](#manual-and-automatic-018): `crf_poll`
 (called from `cr_settings_poll`) writes a changed mark once no mark changed for `CRS_QUIET_MS` and nothing sounded for

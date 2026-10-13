@@ -7,11 +7,12 @@
 #    PRESETS -1: FM6, back on 05 FM PAD (remembered per engine); +1: the VA, back on 04; -1: FM6 05 again.
 # 3. SAVE on FM PAD (factory, not edited): the dialog, Save as new by default; OCT+: the naming screen (FM6 26, the
 #    pool's next place); A D G, OCT+: U01, FM6 26; PRESETS -1 +1: 25 PIANO, 26 ADG (the pool has 26 presets now).
-# 4. PRESETS +3: 02 FM BELL; SAVE, KNOB 1 -1: Overwrite, OCT+: a record bound to FM BELL (U02), the number and the
+# 4. PRESETS +3: 02 FM BELL; SAVE, SELECT -1: Overwrite, OCT+: a record bound to FM BELL (U02), the number and the
 #    name kept; PRESETS +1 -1: 02 FM BELL with the mark.
 # 5. SAVE, SAVE held 1 s: "reset to factory?", OCT+: U02 deleted, the factory FM BELL back at 02 (no mark).
 # 6. 31 Saves as new fill the 32 slots; the next one: "no free slot". (The first of them from the factory FM BELL: the
-#    dialog's default; the others from the user preset just saved: Overwrite by default, KNOB 1 +1: Save as new.)
+#    dialog's default; the others from the user preset just saved: Overwrite by default, SELECT +1: Save as new. Until
+#    the SAVE menu took the Options' grammar, 3y42, these turns were KNOB 1's: it changes values now, SELECT the entry.)
 # 7. FM6's pool is 57 presets long now, its meter 32 stripes: PRESETS +1: 00 INIT (none lit), +1: 01 (one), -2: 57, the
 #    last (every one), -1: 56 (31: all of them only on the last).
 wait 500
@@ -75,7 +76,7 @@ knob PRESETS +3
 wait 1500
 btn SAVE
 wait 300
-knob KNOB1 -1
+knob SELECT -1
 wait 200
 shot build/emu/test/cr_presets_overwrite.ppm
 btn OCT+
@@ -101,8 +102,9 @@ shot build/emu/test/cr_presets_factory.ppm
 wait 1500
 btn SAVE
 wait 150
-# (0.22: no KNOB 1 +1 here. The dialog opens on Save as new for this factory preset, and a turn right from it is the
-# third choice now, Favorite, where OCT+ saves nothing. The 31 below start on a user preset: Overwrite, +1: Save as new)
+# (0.22: no turn here. The dialog opens on Save as new for this factory preset, and a turn of SELECT right from it is
+# the third entry, Favorite, where OCT+ saves nothing. The 31 below start on a user preset: Overwrite, SELECT +1: Save
+# as new)
 wait 100
 btn OCT+
 wait 150
@@ -110,7 +112,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -118,7 +120,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -126,7 +128,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -134,7 +136,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -142,7 +144,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -150,7 +152,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -158,7 +160,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -166,7 +168,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -174,7 +176,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -182,7 +184,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -190,7 +192,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -198,7 +200,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -206,7 +208,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -214,7 +216,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -222,7 +224,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -230,7 +232,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -238,7 +240,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -246,7 +248,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -254,7 +256,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -262,7 +264,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -270,7 +272,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -278,7 +280,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -286,7 +288,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -294,7 +296,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -302,7 +304,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -310,7 +312,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -318,7 +320,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -326,7 +328,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -334,7 +336,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -342,7 +344,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 150
@@ -350,7 +352,7 @@ btn OCT+
 wait 300
 btn SAVE
 wait 150
-knob KNOB1 +1
+knob SELECT +1
 wait 100
 btn OCT+
 wait 100

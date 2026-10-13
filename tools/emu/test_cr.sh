@@ -2869,5 +2869,100 @@ has '^save: dialog part 1 ' "$FL" && grep -q '^fav: part 1 .* on (tag 13 id [0-9
     ok "the bass part's dialog (BASS + EDIT, SAVE): its sound marked the same way, the star on the orange name: $OUT/cr_favs_bass.ppm" ||
     bad "the bass: $(grep '^fav: part 1' "$FL") / $(fv 5)"
 
+echo "the SAVE menu's grammar, the favourites' filter and type (0.22, docs/PRESETS.md \"Favourites\")"
+run cr_favfilter
+FF="$OUT/cr_favfilter.log"
+ffv() { grep -a '^  favs:' "$FF" | sed -n "$1p"; }
+fstar() { yellow_in "$OUT/$1.ppm" 0 0 57600; }
+fline() { yellow_in "$OUT/$1.ppm" 196 0 7200; }    # the yellow of rows 196..225: the read-out's line under the stripes
+fsnd() { grep -a '^sound: ' "$FF" | sed -n "$1,$2p" | sed 's/^sound: part //' | tr '\n' ';'; }
+[ "$(grep -a '^save: choice' "$FF" | head -5 | tr '\n' ';')" = "save: choice overwrite;save: choice save as new;save: choice favorite;save: choice filter;save: choice type;" ] &&
+    has '^save: knob 1 on save as new: no value' "$FF" && has '^save: knob 1 on overwrite: no value' "$FF" &&
+    cmp -s "$OUT/cr_ff_e2.ppm" "$OUT/cr_ff_e2_k1.ppm" && ! cmp -s "$OUT/cr_ff_e2.ppm" "$OUT/cr_ff_e1.ppm" &&
+    ok "the menu: SELECT picks the entry (Overwrite, Save as new, Favorite, Favorites filter, Favorite type); KNOB 1 on the two saves changes nothing (the screen pixel for pixel): $OUT/cr_ff_e1.ppm cr_ff_e2.ppm" ||
+    bad "the menu's entries: $(grep -a '^save: choice\|^save: knob' "$FF" | head -8 | tr '\n' ' ')"
+[ "$(fstar cr_ff_e1)" = 0 ] && [ "$(fstar cr_ff_e1_star)" -ge 10 ] && [ "$(fstar cr_ff_e3_off)" = 0 ] && [ "$(fstar cr_ff_e3_on)" -ge 10 ] &&
+    [ "$(grep -a -c '^fav: part 0 TINE EP on (tag 12 id 0, 1 marked)' "$FF")" = 2 ] && ! cmp -s "$OUT/cr_ff_e3_off.ppm" "$OUT/cr_ff_e3_on.ppm" &&
+    ok "KNOB 4 on Overwrite marks the sound (the star; until this menu: the chord part's send); on Favorite KNOB 1 changes the value: \"Not a favorite\" -> \"Favorite\": $OUT/cr_ff_e1_star.ppm cr_ff_e3_off.ppm cr_ff_e3_on.ppm" ||
+    bad "the mark: stars $(fstar cr_ff_e1) $(fstar cr_ff_e1_star) $(fstar cr_ff_e3_off) $(fstar cr_ff_e3_on) / $(grep -a '^fav:' "$FF" | head -3 | tr '\n' ' ')"
+! cmp -s "$OUT/cr_ff_e4_off.ppm" "$OUT/cr_ff_e4_on.ppm" && ! cmp -s "$OUT/cr_ff_e5_both.ppm" "$OUT/cr_ff_e5_chord.ppm" &&
+    ! cmp -s "$OUT/cr_ff_e5_chord.ppm" "$OUT/cr_ff_e5_bass.ppm" && ! cmp -s "$OUT/cr_ff_e5_chord.ppm" "$OUT/cr_ff_e5_none.ppm" &&
+    [ "$(grep -a '^fav: part 0 TINE EP type' "$FF" | head -4 | sed 's/.*type \([A-Za-z]*\).*/\1/' | tr '\n' ' ')" = "Chord Bass Bass Chord " ] &&
+    [ "$(fstar cr_ff_e5_chord)" -ge 10 ] && [ "$(fstar cr_ff_e5_none)" = 0 ] &&
+    has '^fav: part 0 TINE EP type Bass, marked by it (tag 12 id 0, 1 marked)' "$FF" && ffv 1 | grep -q 'favs: 1 marked, .* : 12:0c$' &&
+    [ "$(grep -a -c '^save: favorite, nothing to save' "$FF")" = 1 ] &&
+    ok "Favorite type: KNOB 1 a step a turn, Both -> Chord -> Bass, +3: Bass still, -1: Chord; OCT+ saves nothing; KNOB 4 -1 takes the mark off and the type stays Chord (no star); the next turn of the type marks it again: $OUT/cr_ff_e5_both.ppm cr_ff_e5_chord.ppm cr_ff_e5_bass.ppm cr_ff_e5_none.ppm" ||
+    bad "the type: $(grep -a '^fav: part 0 TINE EP type' "$FF" | tr '\n' ' ') / $(ffv 1)"
+has '^fav: part 0 FM BASS type Chord, marked by it (tag 12 id 2, 2 marked)' "$FF" && [ "$(grep -a -c '^fav: part 0 FM BASS type Bass (' "$FF")" = 2 ] &&
+    has '^fav: part 0 FM BASS off' "$FF" && [ "$(fstar cr_ff_k3)" -ge 500 ] && [ "$(fstar cr_ff_k3_after)" -ge 10 ] && [ "$(fstar cr_ff_k3_after)" -lt 200 ] &&
+    ffv 2 | grep -q 'favs: 3 marked, .*, filter on : 12:0c 12:2b 12:3$' && ! cmp -s "$OUT/cr_ff_e4_off.ppm" "$OUT/cr_ff_e4_on.ppm" &&
+    ok "KNOB 3 on Save as new: the sound's type (Chord, and the mark; the message \"Type: Chord\"), +1: Bass, +1: Bass; KNOB 4 -1 +1 leaves it Bass; KNOB 4 on Save as new marks BRASS (Both); the filter On: $OUT/cr_ff_k3.ppm cr_ff_k3_after.ppm cr_ff_e4_on.ppm" ||
+    bad "KNOB 3 / the marks: $(grep -a '^fav: part 0 FM BASS' "$FF" | tr '\n' ' ') / $(ffv 2) / yellow $(fstar cr_ff_k3) $(fstar cr_ff_k3_after)"
+[ "$(fsnd 3 6)" = "0 pos 1 TINE EP;0 pos 4 BRASS;0 pos 1 TINE EP;0 pos 4 BRASS;" ] &&
+    has "^home read-out: part 0 over 'FM6' line 'favorites 01/02'" "$FF" && has "^home read-out: part 0 over 'FM6' line 'favorites 02/02'" "$FF" &&
+    [ "$(fline cr_ff_pop)" -ge 40 ] && [ "$(fstar cr_ff_pop)" -gt "$(fline cr_ff_pop)" ] &&
+    ok "the filter on, the chord part (FM6: 01 Chord, 03 Bass, 04 Both): PRESETS +1 from 04: 01 (round; 03 is the bass part's), +1: 04, -1: 01, -1: 04; the read-out's line is the place among them, \"favorites 01/02\", in the star's colour ($(fline cr_ff_pop) px): $OUT/cr_ff_pop.ppm" ||
+    bad "the chord part's turns: $(fsnd 3 6) / line $(fline cr_ff_pop)"
+[ "$(fsnd 7 8)" = "1 pos 1 INIT;1 pos 2 LUSH PAD;" ] && has "^home read-out: part 1 over 'VA' line 'no favorites: all'" "$FF" && [ "$(fline cr_ff_pop_none)" -ge 40 ] &&
+    ok "the bass part on VA, which has no favourite: ALGORITHM turns VA's whole pool, the read-out says \"no favorites: all\": $OUT/cr_ff_pop_none.ppm" ||
+    bad "the engine without favourites: $(fsnd 7 8) / line $(fline cr_ff_pop_none)"
+[ "$(fsnd 9 15)" = "1 engine FM6 pos 3 FM BASS;1 pos 5 BRASS;1 pos 0 off;1 pos 4 FM BASS;1 pos 0 off;1 pos 5 BRASS;1 pos 4 FM BASS;" ] &&
+    has '^popup: part 1 03 / FM BASS (star) / FM6 .* favorites 01/02' "$FF" && [ "$(fline cr_ff_pop_bass)" -ge 40 ] &&
+    ok "GLO + ALGORITHM to FM6: the bass part lands on FM6's first favourite of it, 03 FM BASS (01 is the chord part's); ALGORITHM +1: 04, +1: OFF, +1: 03, -1: OFF, -1: 04 (round), -1: 03: $OUT/cr_ff_pop_bass.ppm" ||
+    bad "the bass part's turns: $(fsnd 9 15)"
+ffv 3 | grep -q 'favs: 2 marked, .*, filter on : 12:0c 12:2b$' && grep -a -B30 '^  favs: 2 marked' "$FF" | grep -a 'part 0:' | tail -1 | grep -q 'BRASS' &&
+    [ "$(fsnd 16 17)" = "0 pos 1 TINE EP;0 pos 1 TINE EP;" ] && has "line 'favorites 01/01'" "$FF" &&
+    ok "the mark of the sound playing taken off (04 BRASS): it plays on; PRESETS -1: the nearest favourite that way, 01 TINE EP; +1: 01 still (the chord part's only one)" ||
+    bad "un-marking the current sound: $(ffv 3) / $(fsnd 16 17) / $(grep -a -B30 '^  favs: 2 marked' "$FF" | grep -a 'part 0:' | tail -1)"
+[ "$(grep -a '^fav: filter' "$FF" | sed 's/^fav: filter \([a-z]*\).*/\1/' | tr '\n' ' ')" = "on off on off " ] && [ "$(fstar cr_ff_k2)" -ge 500 ] &&
+    ok "KNOB 2 on Save as new: the favourites filter Off (the message \"Filter off\"), +1: On again (until this menu: the bass register): $OUT/cr_ff_k2.ppm" ||
+    bad "KNOB 2: $(grep -a '^fav: filter' "$FF" | tr '\n' ' ') / yellow $(fstar cr_ff_k2)"
+has '^save: new part 0 FM6 26 (slot U01)' "$FF" && grep -a -q '^fav: part 0 .* on (tag 128 id 0, 3 marked)' "$FF" &&
+    [ "$(fsnd 18 21 | sed 's/pos 26 [A-Z0-9 ]*;/pos 26;/g')" = "0 pos 1 TINE EP;0 pos 26;0 pos 1 TINE EP;0 pos 26;" ] &&
+    ok "a user sound (Save as new: FM6 26, U01) marked by its slot is one of the favourites: PRESETS turns 01, 26, 01, 26" ||
+    bad "the user sound: $(fsnd 18 21) / $(grep -a '^fav: part 0 .* (tag 128' "$FF")"
+[ "$(fsnd 22 25)" = "0 engine FM TONE pos 1 EP;0 pos 2 BELL;0 pos 3 BASS;0 engine FM6 pos 1 TINE EP;" ] &&
+    has "^home read-out: part 0 over 'FM TONE' line 'no favorites: all'" "$FF" && [ "$(fline cr_ff_pop_other)" -ge 40 ] && [ "$(fline cr_ff_pop_land)" -ge 40 ] &&
+    ffv 4 | grep -q 'favs: 3 marked, .*, filter on : 128:0 12:0c 12:2b$' &&
+    ok "an engine change with the filter on: GLO + PRESETS to FM TONE (no favourite: its remembered place, the whole pool, \"no favorites: all\"); back to FM6: its first favourite, 01 TINE EP, not 26 where it was left: $OUT/cr_ff_pop_other.ppm cr_ff_pop_land.ppm" ||
+    bad "the engine change: $(fsnd 22 25) / $(ffv 4)"
+[ "$(fsnd 26 27 | sed 's/pos 26 [A-Z0-9 ]*;/pos 26;/g')" = "0 pos 4 BRASS (program change);0 pos 26;" ] && has "line 'favorites --/02'" "$FF" &&
+    ok "not filtered: a program change loads FM6 04 BRASS, no favourite (the read-out: \"favorites --/02\"); PRESETS +1 from it: the nearest favourite after it, 26" ||
+    bad "the program change: $(fsnd 26 27)"
+has '^fav: filter off' "$FF" && [ "$(fsnd 28 28)" = "0 pos 0 INIT;" ] && [ "$(fline cr_ff_pop_off)" = 0 ] &&
+    has "^popup: part 0 00 / INIT / FM6 .* 00/26" "$FF" && ffv 5 | grep -q 'favs: 3 marked, saves [1-9][0-9]*, pending 0 (at power-on: none) : 128:0 12:0c 12:2b$' &&
+    ok "the filter Off again (KNOB 1 -1 on its entry): PRESETS +1 from 26: 00 INIT, the whole pool, the read-out as ever (no yellow line); the marks, the types and the filter are in flash" ||
+    bad "the filter off: $(fsnd 28 28) / line $(fline cr_ff_pop_off) / $(ffv 5)"
+
+echo "naming a sound with a cursor (0.22): SELECT the cursor, KNOB 1 the letter, KNOB 4 left the backspace, the other knobs nothing"
+run cr_naming
+NM="$OUT/cr_naming.log"
+nml() { grep -a '^name: ' "$NM" | sed -n "$1p" | sed "s/^name: \([a-z]*\)[^']*\('.*\)/\1 \2/"; }
+nmd() { grep -a "$1" "$NM" | sed -n "$2p"; }
+nred() { px_count "$OUT/$1.ppm" 0 110 240 125 red; }   # the cursor's bar (rows 110..124 hold nothing else red)
+[ "$(grep -a -c '^name: nothing' "$NM")" = 7 ] && [ "$(nml 7)" = "nothing 'TINE EP' cursor 6 of 7" ] && cmp -s "$OUT/cr_nm_open.ppm" "$OUT/cr_nm_inert.ppm" &&
+    [ "$(nmd '^  part 0:' 1)" = "$(nmd '^  part 0:' 2)" ] && [ "$(nmd '^  part 1:' 1)" = "$(nmd '^  part 1:' 2)" ] && [ "$(nmd '^  cr: key' 1)" = "$(nmd '^  cr: key' 2)" ] &&
+    nmd '^  part 0:' 2 | grep -q 'FM6 / TINE EP' && ! has '^sound:' "$NM" && ! has '^popup:' "$NM" && ! has '^engine pick' "$NM" && ! has '^send:' "$NM" &&
+    [ "$(nred cr_nm_open)" -ge 30 ] &&
+    ok "the naming page opens with the cursor on the last character (P of TINE EP, a red bar under it); PRESETS, ALGORITHM, KNOB 2, KNOB 3, KNOB 4 right and GLO + PRESETS / + ALGORITHM do nothing: the name, the sound (FM6 TINE EP), the engines, the bass, the tempo and the screen (pixel for pixel) as they were: $OUT/cr_nm_open.ppm cr_nm_inert.ppm" ||
+    bad "the inert knobs: $(grep -a -c '^name: nothing' "$NM") / $(nml 7) / $(nmd '^  part 0:' 2) / $(grep -a '^sound:\|^popup:\|^engine pick' "$NM" | head -3 | tr '\n' ' ')"
+[ "$(nml 8)" = "letter 'TINE EQ' cursor 6 of 7" ] && [ "$(nml 10)" = "cursor 'TINE EP' cursor 5 of 7" ] && [ "$(nml 11)" = "letter 'TINE FP' cursor 5 of 7" ] &&
+    [ "$(nml 13)" = "backspace 'TINEFP' cursor 3 of 6" ] && [ "$(nml 15)" = "cursor 'TINEFP' cursor 5 of 6" ] && [ "$(nml 16)" = "backspace 'TINEF' cursor 4 of 5" ] &&
+    [ "$(nml 17)" = "cursor 'TINEFA' cursor 5 of 6" ] && [ "$(nml 18)" = "letter 'TINEFC' cursor 5 of 6" ] && [ "$(nred cr_nm_cursor)" -ge 30 ] &&
+    ! cmp -s "$OUT/cr_nm_open.ppm" "$OUT/cr_nm_cursor.ppm" && ! cmp -s "$OUT/cr_nm_cursor.ppm" "$OUT/cr_nm_letter.ppm" &&
+    ok "the knobs alone: KNOB 1 +1 changes the last letter at once (P -> Q, as KNOB 2 did); SELECT -1: the cursor on the second E; KNOB 1 +1: F; SELECT -1, KNOB 4 -1: the space under the cursor goes, the cursor on the E before it (TINEFP); KNOB 4 -1 on the last character: TINEF; SELECT +1 from the last character: a new one, A, the cursor on it; KNOB 1 +2: C: $OUT/cr_nm_cursor.ppm cr_nm_letter.ppm" ||
+    bad "the knobs: $(grep -a '^name: ' "$NM" | sed -n 8,18p | sed "s/^name: \([a-z]*\)[^']*/\1 /" | tr '\n' '/') red $(nred cr_nm_cursor)"
+[ "$(nml 19)" = "key 'TINEFCA' cursor 6 of 7" ] && [ "$(nml 23)" = "key 'TINEDFCA' cursor 4 of 8" ] && [ "$(nml 24)" = "key 'TINEFCA' cursor 3 of 7" ] &&
+    ok "the keys still type: D4 with the cursor on the last character appends A, the cursor on it; E4 with the cursor on the E puts D after it and the cursor on the D (TINEDFCA); F#4 is the backspace: $OUT/cr_nm_insert.ppm" ||
+    bad "the keys: $(nml 19) / $(nml 23) / $(nml 24)"
+[ "$(grep -a -c "'TINEFCAAAAAA' cursor 11 of 12" "$NM")" = 2 ] && ! grep -a -q "cursor 12 of" "$NM" &&
+    [ "$(px_count "$OUT/cr_nm_full.ppm" 200 86 240 110 ink)" -lt "$(px_count "$OUT/cr_nm_full.ppm" 10 86 50 110 ink)" ] && [ "$(nred cr_nm_full)" -ge 20 ] &&
+    has '^save: part 0 slot U01 name TIN rc 0' "$NM" &&
+    ok "the maximum: SELECT right from the last character adds characters up to 12 and stops there (the name set smaller so that none is cut, the cursor on the twelfth: $OUT/cr_nm_full.ppm); nine backspaces: TIN; OCT+: saved as FM6 26 TIN" ||
+    bad "the maximum: $(grep -a "cursor 1[12] of 12" "$NM" | tr '\n' ' ') / $(grep -a '^save: part' "$NM" | tr '\n' ' ')"
+grep -a -q "^name: backspace .*'' cursor 0 of 0" "$NM" && has '^save: part 0 slot U02 name  rc 0' "$NM" && [ "$(nred cr_nm_empty)" = 0 ] &&
+    ok "an empty name (three backspaces): no character, no cursor; OCT+ saves it as an empty name always was (the slot's automatic name): $OUT/cr_nm_empty.ppm" ||
+    bad "the empty name: $(grep -a '^save: part 0 slot U02' "$NM") / red $(nred cr_nm_empty)"
+
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

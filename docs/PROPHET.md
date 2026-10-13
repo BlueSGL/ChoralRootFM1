@@ -345,9 +345,10 @@ the sound edited (`REEDY STRPAD*`) and is kept by the session over a power cycle
 
 ## Saving
 
-**Nothing of a P5 part is saved to a slot.** Since 0.22's favourites the SAVE tap opens the dialog with **the
-Favorite choice alone** (`cr_ui.c cu_save_favonly`): KNOB 4 marks the program by its Sequential number; SELECT and
-KNOB 1 cannot leave it; **OCT+ is refused**, "P5: no save yet", and nothing is written (until c176dd4 the tap itself
+**Nothing of a P5 part is saved to a slot.** Since 0.22's favourites the SAVE tap opens the menu with **the three
+favourites' entries alone** (Favorite, Favorites filter, Favorite type; `cr_ui.c cu_save_favonly`): KNOB 4 marks the
+program by its Sequential number, KNOB 3 types it, KNOB 2 is the filter (docs/PRESETS.md "Favourites"); SELECT
+cannot reach the two saves; **OCT+ is refused**, "P5: no save yet", and nothing is written (until c176dd4 the tap itself
 was refused). Why not the
 remix's scheme (57 seven-bit values in the 32-slot record's tail, bytes 91..143, marker 'P','5'):
 
