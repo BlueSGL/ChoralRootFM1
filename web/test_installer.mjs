@@ -14,10 +14,12 @@
 // - the Sounds section (fm1sounds.js, docs/SOUNDS.md): Read sounds -> the table, Export -> a sound file, Rename (the
 //   bank only), Import (the store, then the bank; a used slot asks first), Delete, a bad file, and Felucca refused;
 //   .syx: Export .syx on FM6 / CZ-1 rows, a .syx imported into an empty slot, a two-voice file asks which voice
-// - the guided flow (six steps) and the versions of web/releases.json: the list renders from the JSON, the newest is
-//   the default, an older version installs its own package (checked against the list's sha256 before any write), the
-//   going-back note, 0.14 / 0.15 not offered, the connection test, an interrupted install's guidance, and demo mode
-//   (?demo=N), which must never reach MIDI or the network
+// - one page, Install at the top, and the versions of web/releases.json: Install is reachable without any other
+//   click and its label names the version it writes; the newest is the default with its notes; "Other versions"
+//   render from the JSON, an older one installs its own package (checked against the list's sha256 before any write)
+//   with its going-back sentence beside the button and one click back to the newest; 0.14 / 0.15 not offered;
+//   "What is on my FM-1?", an interrupted install's guidance, and demo mode (?demo=STATE), which must never reach
+//   MIDI or the network
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -738,7 +740,7 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
   ok(!p.$["snd-read"].disabled && !p.$["backup-go"].disabled, "syx: the installer unlocked afterwards");
 }
 
-/* ------------------- the guided flow: the steps, the versions of web/releases.json, going back, demo mode --- */
+/* ------- one page: Install at once, what is new, the other versions of web/releases.json, going back, demo mode --- */
 {
   // the page with the metadata make_site.py writes for the real list: every version of web/releases.json, each with a
   // package of its own here (same identity, different bytes) and that package's sha256
@@ -758,83 +760,133 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
     return b ? { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }
       : { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
   };
-  const choose = (p, v) => p.$.versions.l.change({ target: { name: "ver", value: v } });
-  const go = (p, n) => p.$.flow.l.click({ target: { closest: (sel) => (sel === "[data-go]" ? { dataset: { go: String(n) }, disabled: p.$["tab-" + n].disabled && n === 6 } : null) } });
-  const shown = (p) => [1, 2, 3, 4, 5, 6].filter((i) => p.$["step-" + i].hidden === false).join();
+  // a click on the "Other versions" button of v (the page finds it with closest("[data-ver]"))
+  const choose = (p, v) => p.$.versions.l.click({ target: { closest: (sel) => (sel === "[data-ver]" ? { dataset: { ver: v }, disabled: false } : null) } });
   const unesc = (s) => s.replace(/&quot;/g, "\"").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&");
   const crSide = (v) => backupSide("ChoralRoot " + v, CR_BACKUP_IDS, crData());
+  const label = (v) => en.installV.replace("{version}", v);
+  const rel = (v) => list.releases.find((r) => r.version === v);
+  const chips = (p) => [...p.$.versions.innerHTML.matchAll(/data-ver="([^"]+)" aria-pressed="(true|false)"/g)].map((m) => m[1] + (m[2] === "true" ? "*" : "")).join();
 
-  // the page's shape: six steps, a strip of six buttons, headings that take the focus, no network but this site
-  ok([1, 2, 3, 4, 5, 6].every((i) => html.includes(`id="step-${i}"`) && html.includes(`<button id="tab-${i}" data-go="${i}"`) &&
-     html.includes(`<h2 id="h-${i}" tabindex="-1"`)) && count(html, "class=\"step ") === 6,
-     "flow: six steps, each with a button in the strip and a heading that takes the focus");
-  ok(["flow", "browser", "test-go", "conn", "versions", "plan", "plan-back", "interrupted", "done-line", "verify-go", "verify", "files", "demo-note"]
-     .every((id) => html.includes(`id="${id}"`)) && html.includes('id="interrupted" role="alert" hidden') && html.includes('id="demo-note" hidden'),
-     "flow: the connection test, the versions, the plan, the interrupted box (hidden), the check at the end");
+  // the page's shape: no steps; the button in the page itself, before the notes and every other section
+  ok(!/id="step-|id="tab-|data-go=|class="strip"|class="step |id="flow"|class="nav"|kicker/.test(html) &&
+     !/showStep|stepDone|curStep|\bseen\b|tab\d|kick\d|next\d/.test(scriptOf(html)), "page: no step strip, no steps, no Next buttons, no step machinery in the script");
+  ok(count(html, 'id="go"') === 1 && html.indexOf('id="go"') < html.indexOf('id="notes"') && html.indexOf('id="rel"') < html.indexOf('id="plan-back"') && html.indexOf('id="plan-back"') < html.indexOf('id="go"') &&
+     html.indexOf('id="go"') < html.indexOf('id="versions"') && html.indexOf('id="versions"') < html.indexOf('id="dark"') &&
+     html.indexOf('id="dark"') < html.indexOf('data-t="bkTitle"') && html.indexOf('id="sounds"') < html.indexOf('data-t="stockTitle"') &&
+     html.indexOf('data-t="stockTitle"') < html.indexOf('id="files"'),
+     "page: the version, Install, Other versions, then Device not found?, Back up and restore, Sounds, Return to official V15, The files");
+  ok(["rel", "others", "versions", "not-newest", "plan-back", "newest-go", "check-go", "unit", "notes", "interrupted", "done", "done-line", "files", "demo-note", "nomidi"]
+     .every((id) => html.includes(`id="${id}"`)) && html.includes('id="interrupted" role="alert" hidden') && html.includes('id="demo-note" hidden') &&
+     html.includes('id="not-newest" hidden') && html.includes('id="done" role="status" hidden') && html.includes('id="nomidi" hidden'),
+     "page: the going-back note, the interrupted box, the done box and the browser notice are in the page, hidden");
+  ok(/\[hidden\]\s*\{\s*display:\s*none\s*!important/.test(html), "page: [hidden] wins over a class that sets display (the override box)");
   const src = scriptOf(html);
   ok(count(src, "requestMIDIAccess({") === 1 && count(src, "await midiAccess()") === 6 && /if \(DEMO\) throw new Error/.test(src) &&
      count(src, "fetch(") === 1 && src.includes("await fetch(rel.pkg)") && !/XMLHttpRequest|sendBeacon|WebSocket|EventSource|importScripts|import\(/.test(src),
-     "flow: one way to the browser's MIDI (refused in demo mode), one fetch (the selected version's package)");
+     "page: one way to the browser's MIDI (refused in demo mode), one fetch (the chosen version's package)");
   const tvKeys = [...src.matchAll(/\btv\(([^)]*?)[,)]/g)].flatMap((m) => [...m[1].matchAll(/"([A-Za-z0-9]+)"/g)].map((x) => x[1]));
-  ok(tvKeys.length >= 15 && tvKeys.every((k) => typeof en[k] === "string"), `texts: every key tv() fills has a text (${tvKeys.length}${tvKeys.filter((k) => typeof en[k] !== "string")})`);
-  ok(/saved sounds, loops and settings/.test(en.kept) && /backup/.test(en.kept) && /SAFE MODE/.test(en.darkSafe) && html.includes('data-t="darkSafe"') &&
-     /OCT-, OCT\+ and HOME/.test(en.darkGesture), "texts: what an update keeps; the SAFE MODE and update-gesture hints");
-  ok(/Chrome or Edge/.test(en.brYes) && /Safari and Firefox: no/.test(en.brNo) && /Android/.test(en.brAndroid) && /not tested/.test(en.brAndroid),
-     "texts: which browsers can install (Android named as untested)");
+  ok(tvKeys.length >= 12 && tvKeys.every((k) => typeof en[k] === "string"), `texts: every key tv() fills has a text (${tvKeys.length}${tvKeys.filter((k) => typeof en[k] !== "string")})`);
+  const used = new Set([...dataT, ...sayKeys, ...tfKeys, ...tvKeys, ...codes, "restoreSkipped", "noBackup", "install"]);
+  const unused = Object.keys(en).filter((k) => !used.has(k) && !new RegExp(`\\b${k}\\b`).test(src.replace(/const TEXT = \{[\s\S]*?\n\};/, "")));
+  ok(!unused.length, `texts: no text is left that the page does not use (${unused})`);
+  ok(/saved sounds, loops and settings/.test(en.kept) && /not saved is not kept/.test(en.kept) && /hold SAVE/.test(en.kept) && html.includes('data-t="kept"') &&
+     /backup/.test(en.backupFirst) && /SAFE MODE/.test(en.darkSafe) && html.includes('data-t="darkSafe"') && /OCT-, OCT\+ and HOME/.test(en.darkGesture) &&
+     html.includes('data-t="darkGesture"'), "texts: what an update keeps and what it does not; the SAFE MODE and update-gesture hints");
+  ok(/Chrome or Edge/.test(en.nomidiNote) && /Safari and Firefox cannot/.test(en.nomidiNote) && /Android/.test(en.nomidiNote) && /not tested/.test(en.nomidiNote),
+     "texts: the notice for a browser that cannot install names the ones that can (Android as untested)");
 
-  // the list renders from the JSON; the newest is selected, recommended, loaded and checked
+  // Install at once: no click before it; the newest is what it writes, with its notes beside it
+  {
+    fetched.length = 0;
+    const before = crSide(vers[1]), after = crSide(newest);
+    let done = false;
+    const dev = new FakeFM1(logicalImage(RAW[newest]), { identity: "FM-1_920", bk: (id) => (id.startsWith("ota-") ? null : done ? after : before) });
+    const boot = dev.boot.bind(dev);
+    dev.boot = (id, name) => { if (!id.startsWith("ota-")) done = true; boot(id, name); };
+    const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+    await settle();
+    ok(!p.error, `versions: the page runs with the real list${p.error ? " (" + p.error.stack + ")" : ""}`);
+    const n = unesc(p.$.notes.innerHTML), v = p.$.versions.innerHTML;
+    ok(!p.$.go.disabled && p.$.go.textContent === label(newest) && p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920` && fetched.join() === pkgOf(newest) &&
+       p.$.nomidi.hidden === true && p.$["not-newest"].hidden === true && p.$.done.hidden === true && p.$.unit.hidden === true,
+       `at once: Install is enabled with no click before it and says "${p.$.go.textContent}"; only the newest package was fetched`);
+    ok(p.$.rel.innerHTML.includes(`<b>ChoralRoot ${newest}</b> · ${dateOf(rel(newest).date)}`) && p.$.rel.innerHTML.includes(en.chNewest) && !p.$.rel.innerHTML.includes(en.chOld),
+       `what is new: "ChoralRoot ${newest} · ${dateOf(rel(newest).date)}" over the button, marked Newest`);
+    ok(n.includes(`<h2>${en.chNew.replace("{version}", newest)}</h2>`) && rel(newest).bullets.every((b) => n.includes(b)) && rel(newest).notes.every((b) => n.includes(b)) &&
+       n.includes(`/docs/releases/${newest}.md"`) && n.includes(en.chNotes) && !n.includes("<details") && !n.includes(en.chBackFull),
+       `what is new: "New in ${newest}" with every bullet of web/releases.json at once, and the link to the full notes`);
+    ok(chips(p) === vers.slice(1).join() && vers.slice(1).every((x) => v.includes(`<b>${x}</b><span>${dateOf(rel(x).date)}</span>`)) && p.$.others.hidden === false &&
+       !v.includes(`data-ver="${newest}"`) && html.includes('data-t="chOthers"') && en.chOthers === "Other versions",
+       `other versions: ${vers.slice(1).join(", ")} from web/releases.json, each with its date; none chosen`);
+    ok(!/0\.1[45]/.test(v) && !/choralroot-0\.1[45]\.fwsc/.test(p.$.files.innerHTML + n) && vers.every((x) => verOk(x)) &&
+       p.$["older-note"].textContent === list.minimum.note && /0\.15 and older are not offered/.test(list.minimum.note) &&
+       html.includes('<a href="https://github.com/Quixotic7/ChoralRootFM1/releases" target="_blank" rel="noopener" data-t="chOlder">') && en.chOlder === "0.15 and older are on GitHub.",
+       "other versions: 0.14 and 0.15 are not offered; one line links the releases on GitHub");
+    const f = p.$.files.innerHTML;
+    ok(vers.every((x) => f.includes(`href="${pkgOf(x)}" download`) && f.includes(`/tree/v${x}"`) && f.includes(`/docs/releases/${x}.md"`)) &&
+       count(f, "<code>sha256 ") === vers.length && p.$["safe-note"].textContent === list.minimum.boot_safe,
+       "the files: a download link, the sha256, the full notes and the source at its tag for each version");
+    await p.$.go.fire("click");
+    ok(dev.identity === "FM-1_920" && dev.bad === 0 && dev.served > 8 && p.$.status.textContent === en.done &&
+       p.$.log.textContent.includes(`install: ChoralRoot ${newest} (choralroot-${newest}.fwsc)`), `at once: one click on Install wrote ${newest} (${dev.served} reads)`);
+    ok(p.$.done.hidden === false && p.$["done-line"].textContent === en.dnLine.replace("{version}", newest) && p.$.interrupted.hidden === true && !p.$.go.disabled &&
+       p.$.go.textContent === label(newest), "done: the page names the version installed");
+    await p.$["check-go"].fire("click");
+    ok(p.$.unit.hidden === false && p.$.unit.textContent === en.dnMatch.replace("{name}", "ChoralRoot " + newest) && p.$.unit.className === "unit" &&
+       p.$.rel.innerHTML.includes(en.chHas), `done: "What is on my FM-1?" reads the version back -> "${p.$.unit.textContent}"`);
+  }
+
+  // "What is on my FM-1?" before an install: read only; the version found is marked in the list
+  {
+    const side = crSide(vers[1]);
+    const dev = new FakeFM1(logicalImage(RAW[newest]), { identity: "FM-1_920", bk: () => side });
+    const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+    await settle();
+    await p.$["check-go"].fire("click");
+    ok(p.$.unit.textContent === en.cnCr.replace("{name}", "ChoralRoot " + vers[1]) && p.$.unit.className === "unit" && dev.upgrades === 0 && !side.log.length &&
+       !p.$.go.disabled && !p.$["check-go"].disabled, `check: finds ChoralRoot ${vers[1]}, writes nothing`);
+    ok(count(p.$.versions.innerHTML, en.chHas) === 1 && new RegExp(`data-ver="${vers[1].replace(".", "\\.")}"[^>]*>.*?${en.chHas}`).test(p.$.versions.innerHTML.split("</button>")[0]) &&
+       !p.$.rel.innerHTML.includes(en.chHas) && p.$.go.textContent === label(newest), `check: ${vers[1]} is marked "${en.chHas}" in the other versions; Install still says ${newest}`);
+    choose(p, vers[1]);
+    await settle();
+    ok(p.$.unit.textContent === en.cnSame.replace("{name}", "ChoralRoot " + vers[1]) && p.$.rel.innerHTML.includes(en.chHas) && !p.$.go.disabled &&
+       p.$["plan-back"].textContent === en.planOld.replace("{version}", vers[1]).replace("{newest}", newest),
+       "check: the version the FM-1 already runs, chosen -> said so (no going-back note: it is not going back), Install still enabled");
+  }
+
+  // an older version: one click chooses it; the button, the going-back sentence and the notes follow; one click back
   {
     fetched.length = 0;
     const dev = new FakeFM1(logicalImage(RAW[newest]));
     const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
     await settle();
-    const v = p.$.versions.innerHTML;
-    ok(!p.error, `versions: the page runs with the real list${p.error ? " (" + p.error.stack + ")" : ""}`);
-    ok(vers.every((x) => v.includes(`value="${x}"`)) && count(v, 'type="radio"') === vers.length &&
-       list.releases.every((r) => r.bullets.every((b) => unesc(v).includes(b))), `versions: ${vers.join(", ")} from web/releases.json, each with its bullets`);
-    ok(count(v, " checked") === 1 && v.includes(`value="${newest}" checked`) && count(v, en.chRec) === 1 && v.indexOf(en.chRec) < v.indexOf(`value="${vers[1]}"`) &&
-       p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920` && fetched.join() === pkgOf(newest) && !p.$.go.disabled,
-       `versions: the newest (${newest}) is selected, marked Recommended, and the only package fetched`);
-    ok(!v.includes('value="0.15"') && !v.includes('value="0.14"') && !/choralroot-0\.1[45]\.fwsc/.test(v + p.$.files.innerHTML) && vers.every((x) => verOk(x)) &&
-       p.$["older-note"].textContent === list.minimum.note && /0\.15 and older are not offered/.test(list.minimum.note) &&
-       html.includes('href="https://github.com/Quixotic7/ChoralRootFM1/releases"') && en.chOlder === "Older versions are on GitHub.",
-       "versions: 0.14 and 0.15 are not offered; \"Older versions are on GitHub\" links the releases page");
-    ok(list.releases.slice(1).every((r) => unesc(v).includes(r.going_back.short) && r.going_back.points.every((b) => unesc(v).includes(b))) &&
-       count(v, "<details") === vers.length - 1 && !v.includes("<details open") && !unesc(v).includes(en.planBack),
-       "versions: each older version has its going-back note; their bullets are collapsed");
-    ok(vers.every((x) => v.includes(`href="${pkgOf(x)}" download`) && v.includes(`/tree/v${x}"`) && v.includes(`/docs/releases/${x}.md"`)) &&
-       list.releases.every((r) => p.$.files.innerHTML.includes(r.sha256) === false) && vers.every((x) => p.$.files.innerHTML.includes(`href="${pkgOf(x)}" download`)),
-       "versions: a download link, the full notes and the source at its tag for each (the files list: the page's own sha256)");
-    ok(shown(p) === "1" && p.$["tab-1"].className === "now" && p.$["tab-1"].attrs["aria-current"] === "step" && p.$["tab-6"].disabled === true &&
-       p.$.browser.textContent === en.brOk && p.$["plan-back"].hidden === true && p.$.plan.textContent === en.planNew.replace("{version}", newest),
-       "flow: starts on step 1 (the browser can install); Done is not reachable before an install");
-    go(p, 4);
-    ok(shown(p) === "4" && p.$["tab-4"].className === "now" && p.$["tab-2"].className === "done" && p.$["h-4"].focused === 1 && !("aria-current" in p.$["tab-1"].attrs),
-       "flow: a step's button shows that step and moves the focus to its heading");
-    go(p, 6);
-    ok(shown(p) === "4", "flow: Done cannot be opened by a click");
-
-    // the connection test: what runs on the FM-1, and "already runs this version"
-    const side = crSide(newest);
-    dev.identity = "FM-1_920"; dev.bk = () => side;
-    await p.$["test-go"].fire("click");
-    ok(p.$.conn.hidden === false && p.$.conn.textContent === en.cnFound.replace("{name}", "ChoralRoot " + newest) && p.$.conn.className === "verdict good" &&
-       dev.upgrades === 0 && !side.log.length && p.$["tab-3"].className === "done", "connection test: finds ChoralRoot " + newest + ", writes nothing");
-    ok(unesc(p.$.versions.innerHTML).includes(en.chReinstall.replace("{version}", newest)) && count(p.$.versions.innerHTML, en.chHas) === 1 &&
-       p.$.plan.textContent === en.planSame.replace("{version}", newest) && !p.$.go.disabled,
-       "connection test: the unit already runs the selected version -> said so, Install still enabled");
-
-    // an older version: its package is fetched and checked, the going-back note is shown
-    fetched.length = 0;
-    choose(p, older);
+    const labels = [p.$.go.textContent];
+    for (const x of vers.slice(1)) {
+      choose(p, x);
+      labels.push(p.$.go.textContent);            // (the label follows the click at once, before the package is there)
+      await settle();
+      const n = unesc(p.$.notes.innerHTML), r = rel(x);
+      ok(p.$.go.textContent === label(x) && !p.$.go.disabled && p.$.status.textContent === `ChoralRoot ${x} · FM-1_920` && fetched[fetched.length - 1] === pkgOf(x) &&
+         chips(p) === vers.slice(1).map((y) => (y === x ? y + "*" : y)).join() && p.$.rel.innerHTML.includes(`<b>ChoralRoot ${x}</b> · ${dateOf(r.date)}`) &&
+         p.$.rel.innerHTML.includes(en.chOld) && !p.$.rel.innerHTML.includes(en.chNewest),
+         `older: one click on ${x} -> "${p.$.go.textContent}", its package loaded and checked, ${x} marked as chosen and as an older version`);
+      ok(p.$["not-newest"].hidden === false && p.$["plan-back"].textContent === en.planBack.replace("{version}", x) + r.going_back.short &&
+         p.$["newest-go"].textContent === en.toNewest.replace("{version}", newest), `older: the going-back sentence of ${x} is shown by the button, with the way back to ${newest}`);
+      ok(n.includes(`<h2>${en.chWhat.replace("{version}", x)}</h2>`) && n.includes(dateOf(r.date)) && r.bullets.every((b) => n.includes(b)) && n.includes(r.going_back.short) &&
+         count(n, "<details>") === 1 && !n.includes("<details open") && n.indexOf("<details>") < n.indexOf(r.going_back.points[0]) &&
+         r.going_back.points.every((b) => n.includes(b)) && n.includes(`/docs/releases/${x}.md"`) && n.includes(`href="${pkgOf(x)}" download`) && n.includes(`/tree/v${x}"`),
+         `older: the notes are ${x}'s: date, bullets, the going-back sentence; the points in full behind a disclosure; notes, file, source`);
+    }
+    ok(labels.join("|") === vers.map(label).join("|"), `label: Install always names the version it writes (${labels.join(", ")})`);
+    await p.$["newest-go"].fire("click");
     await settle();
-    const v2 = p.$.versions.innerHTML;
-    ok(fetched.join() === pkgOf(older) && p.$.status.textContent === `ChoralRoot ${older} · FM-1_920` && v2.includes(`value="${older}" checked`) &&
-       count(v2, " checked") === 1 && count(v2, "<details open") === 1 && !p.$.go.disabled, `older: choosing ${older} loads and checks its package, its notes open`);
-    const back = list.releases.find((r) => r.version === older).going_back.short;
-    ok(p.$["plan-back"].hidden === false && p.$["plan-back"].textContent === en.planBack.replace("{version}", older) + back &&
-       p.$.plan.textContent === en.planDown.replace("{version}", older).replace("{from}", "ChoralRoot " + newest) && p.$.go.textContent === en.installV.replace("{version}", older),
-       `older: the going-back note is shown with the plan ("${p.$.plan.textContent}")`);
+    ok(p.$.go.textContent === label(newest) && p.$["not-newest"].hidden === true && p.$["plan-back"].textContent === "" && chips(p) === vers.slice(1).join() &&
+       unesc(p.$.notes.innerHTML).includes(`<h2>${en.chNew.replace("{version}", newest)}</h2>`) && !p.$.go.disabled && fetched[fetched.length - 1] === pkgOf(newest),
+       `older: one click on "${p.$["newest-go"].textContent}" -> ${newest} again`);
+    choose(p, "0.15"); choose(p, "9.9");
+    await settle();
+    ok(p.$.go.textContent === label(newest) && fetched[fetched.length - 1] === pkgOf(newest), "older: a version that is not in the list cannot be chosen");
   }
 
   // choosing an older version installs THAT package: the unit accepts only the older image and reports that version
@@ -849,23 +901,24 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
       const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
       await settle();
       if (pick) { choose(p, pick); await settle(); }
+      const said = p.$.go.textContent;
       await p.$.go.fire("click");
-      return { p, dev };
+      return { p, dev, said };
     };
-    let { p, dev } = await run(older);
-    ok(dev.identity === "FM-1_920" && dev.bad === 0 && dev.served > 8 && p.$.status.textContent === en.done && p.$.log.textContent.includes(`install: ChoralRoot ${older} (choralroot-${older}.fwsc)`),
-       `older: Install wrote the ${older} package, byte for byte (${dev.served} reads)`);
-    ok(shown(p) === "6" && p.$["done-line"].textContent === en.dnLine.replace("{version}", older) && p.$["tab-6"].disabled === false && p.$["tab-5"].className === "done" &&
-       p.$["h-6"].focused === 1 && p.$["interrupted"].hidden === true && unesc(p.$["done-new"].innerHTML).includes(list.releases.find((r) => r.version === older).bullets[0]),
-       "older: the page goes to Done and names the version and its news");
-    await p.$["verify-go"].fire("click");
-    ok(p.$.verify.hidden === false && p.$.verify.textContent === en.dnMatch.replace("{name}", "ChoralRoot " + older) && p.$.verify.className === "verdict good" &&
-       count(p.$.versions.innerHTML, en.chHas) === 1, `older: Check the FM-1 -> "${p.$.verify.textContent}"`);
-    ({ p, dev } = await run(null));
-    ok(dev.bad > 0, `older: (the control) the default installs another package: the same unit sees ${dev.bad} reads that are not ${older}'s`);
-    await p.$["verify-go"].fire("click");
-    ok(p.$.verify.textContent === en.dnDiffer.replace("{name}", "ChoralRoot " + older).replace("{version}", newest) && p.$.verify.className === "verdict bad",
-       "check: a unit that reports another version than the one installed is told so");
+    let { p, dev, said } = await run(older);
+    ok(said === label(older) && dev.identity === "FM-1_920" && dev.bad === 0 && dev.served > 8 && p.$.status.textContent === en.done &&
+       p.$.log.textContent.includes(`install: ChoralRoot ${older} (choralroot-${older}.fwsc)`),
+       `older: "${said}" wrote the ${older} package, byte for byte (${dev.served} reads)`);
+    ok(p.$.done.hidden === false && p.$["done-line"].textContent === en.dnLine.replace("{version}", older) && p.$.interrupted.hidden === true &&
+       p.$.go.textContent === label(older) && unesc(p.$.notes.innerHTML).includes(rel(older).bullets[0]), "older: the page says which version is installed, beside its notes");
+    await p.$["check-go"].fire("click");
+    ok(p.$.unit.textContent === en.dnMatch.replace("{name}", "ChoralRoot " + older) && p.$.unit.className === "unit" && count(p.$.versions.innerHTML, en.chHas) === 1 &&
+       p.$["plan-back"].textContent === en.planOld.replace("{version}", older).replace("{newest}", newest), `older: the read-back -> "${p.$.unit.textContent}"`);
+    ({ p, dev, said } = await run(null));
+    ok(said === label(newest) && dev.bad > 0, `older: (the control) the default installs another package: the same unit sees ${dev.bad} reads that are not ${older}'s`);
+    await p.$["check-go"].fire("click");
+    ok(p.$.unit.textContent === en.dnDiffer.replace("{name}", "ChoralRoot " + older).replace("{version}", newest) && p.$.unit.className === "unit bad",
+       "read-back: a unit that reports another version than the one installed is told so");
   }
 
   // a package that is not the released one: refused before any write
@@ -877,20 +930,36 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
     const first = !p.$.go.disabled;
     choose(p, older);
     await settle();
-    const refused = p.$.status.textContent === en.badhash.replace("{version}", older) && p.$.go.disabled && p.$.plan.className === "verdict bad" &&
+    const refused = p.$.status.textContent === en.badhash.replace("{version}", older) && p.$.go.disabled && p.$.go.textContent === label(older) &&
       /sha256 of /.test(p.$.log.textContent);
     await p.$.go.fire("click");
     await settle();
-    ok(first && refused && dev.upgrades === 0 && dev.served === 0 && dev.bkFrames === 0 && dev.identity === "FM-1_920" && shown(p) === "1",
-       `hash: ${what} -> refused, Install disabled, nothing sent to the FM-1`);
-    choose(p, newest);
+    ok(first && refused && dev.upgrades === 0 && dev.served === 0 && dev.bkFrames === 0 && dev.identity === "FM-1_920" && p.$.done.hidden === true,
+       `hash: ${what} -> refused with the reason, Install disabled, nothing sent to the FM-1`);
+    await p.$["newest-go"].fire("click");
     await settle();
-    ok(!p.$.go.disabled && p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920`, "hash: ... another version can still be chosen");
+    ok(!p.$.go.disabled && p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920`, "hash: ... back to the newest, Install is enabled again");
   }
   {
     const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: listFetch({ [newest]: makePackage("FM-1_920", 5) }), page });
     await settle();
     ok(p.$.status.textContent === en.badhash.replace("{version}", newest) && p.$.go.disabled, "hash: the newest version's file is checked the same way at load");
+  }
+  {
+    const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: listFetch(), page });
+    await settle();
+    choose(p, older); choose(p, vers[1]); choose(p, older);      // quick clicks: the last one wins, whatever arrives when
+    const mid = p.$.go.disabled;
+    await settle();
+    ok(mid && !p.$.go.disabled && p.$.go.textContent === label(older) && p.$.status.textContent === `ChoralRoot ${older} · FM-1_920`,
+       "label: Install is disabled while a chosen package loads, and the last choice is the one loaded");
+    const dev = new FakeFM1(logicalImage(RAW[older]), { identity: "FM-1_920", bk: () => crSide(newest) });
+    const q = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
+    await settle();
+    choose(q, vers[1]); choose(q, older);
+    await settle();
+    await q.$.go.fire("click");
+    ok(dev.bad === 0 && dev.identity === "FM-1_920" && q.$.status.textContent === en.done, "label: ... and the one written");
   }
 
   // an interrupted install: the guidance appears; the unit in update mode is finished by Install
@@ -901,58 +970,89 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
     await settle();
     ok(p.$.interrupted.hidden === true, "interrupted: the guidance is hidden before an install");
     await p.$.go.fire("click");
-    ok(p.$.status.textContent === en.lost && p.$.interrupted.hidden === false && shown(p) === "5" && !p.$.go.disabled && p.$["tab-6"].disabled === true,
-       "interrupted: the cable lost while writing -> the status says so and the guidance appears, on the Install step");
+    ok(p.$.status.textContent === en.lost && p.$.interrupted.hidden === false && !p.$.go.disabled && p.$.done.hidden === true && p.$.go.textContent === label(newest),
+       "interrupted: the cable lost while writing -> the status says so and the guidance appears; Install can be pressed again");
     ok(/not lost/.test(en.intTitle) && /nothing was written/.test(en.intEarly) && /update mode/.test(en.intOn) && /Three short flashes/.test(en.intOff) &&
        /0\.16 or later/.test(en.intOff) && /WL82 UBOOT1\.00/.test(en.intDark) && html.includes('<a href="#dark" data-t="darkTitle">'),
        "interrupted: the three cases (nothing written, still on, switched off) and the way to the help");
     dev.onServe = null; dev.boot("ota-FM-1_920", "Felucca Update");
+    await p.$["check-go"].fire("click");
+    ok(p.$.unit.textContent === en.cnLoader.replace("{identity}", "ota-FM-1_920") && p.$.unit.className === "unit", "check: a unit in update mode is recognised (Install will finish it)");
     await p.$.go.fire("click");
-    ok(p.$.status.textContent === en.done && dev.identity === "FM-1_920" && p.$.interrupted.hidden === true && shown(p) === "6",
-       "interrupted: Install again on the unit in update mode finishes the write -> Done");
+    ok(p.$.status.textContent === en.done && dev.identity === "FM-1_920" && p.$.interrupted.hidden === true && p.$.done.hidden === false,
+       "interrupted: Install again on the unit in update mode finishes the write -> installed");
   }
   {
     const fel = backupSide("FELUCCA SLOOP 2.2", BACKUP_IDS, feluccaData());
     const dev = new FakeFM1(logicalImage(RAW[newest]), { identity: "FM-1_900", bk: () => fel });
     const p = runPage({ navigator: midiOf(dev), fetch: listFetch(), page });
     await settle();
-    await p.$["test-go"].fire("click");
-    ok(p.$.conn.className === "verdict bad" && p.$.conn.textContent.startsWith("Installing over Sloop is not supported") && p.$["tab-3"].className !== "done",
-       "connection test: a firmware the installer refuses is named with the refusal");
+    await p.$["check-go"].fire("click");
+    ok(p.$.unit.className === "unit bad" && p.$.unit.textContent.startsWith("Installing over Sloop is not supported") && dev.upgrades === 0,
+       "check: a firmware the installer refuses is named with the refusal");
     await p.$.go.fire("click");
-    ok(p.$.interrupted.hidden === true && dev.upgrades === 0 && p.$["force-box"].hidden === false, "interrupted: a refusal is not an interruption (no guidance, nothing written)");
+    ok(p.$.interrupted.hidden === true && p.$.done.hidden === true && dev.upgrades === 0 && p.$["force-box"].hidden === false,
+       "interrupted: a refusal is not an interruption (no guidance, nothing written)");
     const none = runPage({ navigator: midiOf({ access: { inputs: new Map(), outputs: new Map() } }), fetch: listFetch(), page });
     await settle();
-    await none.$["test-go"].fire("click");
-    ok(none.$.conn.textContent === en.notfound && none.$.conn.className === "verdict bad" && !none.$["test-go"].disabled, "connection test: no FM-1 -> the notfound text");
-    const upd = new FakeFM1(logicalImage(RAW[newest]), { identity: "ota-FM-1_920" });
-    const pu = runPage({ navigator: midiOf(upd), fetch: listFetch(), page });
+    await none.$["check-go"].fire("click");
+    ok(none.$.unit.textContent === en.notfound && none.$.unit.className === "unit bad" && !none.$["check-go"].disabled && !none.$.go.disabled, "check: no FM-1 -> the notfound text");
+    const stockDev = new FakeFM1(logicalImage(RAW[newest]));
+    const ps = runPage({ navigator: midiOf(stockDev), fetch: listFetch(), page });
     await settle();
-    await pu.$["test-go"].fire("click");
-    ok(pu.$.conn.textContent === en.cnLoader.replace("{identity}", "ota-FM-1_920") && pu.$["conn-note"].textContent === en.cnLoaderNote &&
-       pu.$.plan.textContent === en.planResume.replace("{version}", newest) && upd.upgrades === 0, "connection test: a unit in update mode is recognised (Install will finish it)");
+    await ps.$["check-go"].fire("click");
+    ok(ps.$.unit.className === "unit" && ps.$.unit.textContent.startsWith("On your FM-1: ") && /can be installed over it/.test(ps.$.unit.textContent) && stockDev.upgrades === 0,
+       `check: the stock firmware -> "${ps.$.unit.textContent.slice(0, 60)}..."`);
   }
 
-  // demo mode: a step shown with made-up data; nothing reaches MIDI or the network, whatever is clicked
-  for (const [q, want] of [["?demo=1", "1"], ["?demo=3", "3"], ["?demo=4b", "4"], ["?demo=5b", "5"], ["?demo=6", "6"], ["?x=1&demo=5w", "5"]]) {
+  // a browser without Web MIDI: the notice, Install disabled, and no package fetched
+  {
+    let fetches = 0;
+    const p = runPage({ navigator: {}, fetch: async () => { fetches++; throw new Error("no fetch without Web MIDI"); }, page });
+    await settle();
+    ok(!p.error && p.$.nomidi.hidden === false && p.$.nomidi.textContent === en.nomidiNote && p.$.status.textContent === en.nomidi && p.$.go.disabled &&
+       p.$["check-go"].disabled && p.$["backup-go"].disabled && fetches === 0 && p.$.go.textContent === label(newest),
+       "no Web MIDI: a notice says which browsers can install; Install, the check and Back up are disabled; nothing is fetched");
+  }
+
+  // demo mode: a state shown with made-up data; nothing reaches MIDI or the network, whatever is clicked
+  const DEMOS = ["idle", "older", "writing", "interrupted", "done", "nomidi"];
+  ok(DEMOS.every((d) => new RegExp(`\\b${d}\\b`).test(/const DEMO = [\s\S]*?\n\}\)\(\);/.exec(src)[0])), `demo: the states ${DEMOS.join(", ")}`);
+  for (const q of [...DEMOS.map((d) => "?demo=" + d), "?x=1&demo=writing"]) {
     let midiCalls = 0, fetches = 0;
+    const state = q.split("demo=")[1];
     const nav = { requestMIDIAccess: async () => { midiCalls++; return new FakeFM1(image).access; } };
     const p = runPage({ navigator: nav, fetch: async () => { fetches++; throw new Error("no fetch in demo mode"); }, page, extra: { location: { search: q } } });
     await settle();
-    const before = shown(p);
-    for (const id of ["go", "test-go", "verify-go", "backup-go", "snd-read", "restore-go", "stock-go"]) await p.$[id].fire("click");
+    const before = [p.$.go.textContent, p.$.status.textContent, p.$.done.hidden, p.$.interrupted.hidden, p.$.unit.textContent].join("|");
+    for (const id of ["go", "check-go", "backup-go", "snd-read", "restore-go", "stock-go"]) await p.$[id].fire("click");
     await settle();
-    ok(!p.error && before === want && shown(p) === want && midiCalls === 0 && fetches === 0 && p.$["demo-note"].hidden === false && !p.confirms.length && !p.downloads.length,
-       `demo ${q}: step ${want} shown, marked as a demo; Install, Test, Check, Back up, Read sounds: no MIDI request, no fetch${p.error ? " (" + p.error.stack + ")" : ""}`);
-    if (q === "?demo=4b") ok(p.$.versions.innerHTML.includes(`value="${older}" checked`) && p.$.versions.innerHTML.includes("<details open"), "demo 4b: an older version chosen, its notes open");
-    if (q === "?demo=5b") ok(p.$.interrupted.hidden === false && p.$.status.textContent === en.lost, "demo 5b: the interrupted guidance");
-    if (q === "?demo=6") ok(p.$["done-line"].textContent === en.dnLine.replace("{version}", newest) && p.$.verify.hidden === false, "demo 6: Done");
+    const after = [p.$.go.textContent, p.$.status.textContent, p.$.done.hidden, p.$.interrupted.hidden, p.$.unit.textContent].join("|");
+    ok(!p.error && before === after && midiCalls === 0 && fetches === 0 && p.$["demo-note"].hidden === false && !p.confirms.length && !p.downloads.length,
+       `demo ${q}: marked as a demo; Install, the check, Back up, Read sounds, Restore, Return to V15: no MIDI request, no fetch, nothing changes${p.error ? " (" + p.error.stack + ")" : ""}`);
+    const want = state === "older" ? older : newest;
+    ok(p.$.go.textContent === label(want) && p.$.go.disabled === (state === "writing" || state === "nomidi") &&
+       p.$["not-newest"].hidden === (state !== "older") && p.$.interrupted.hidden === (state !== "interrupted") && p.$.done.hidden === (state !== "done") &&
+       p.$.nomidi.hidden === (state !== "nomidi"), `demo ${state}: "${p.$.go.textContent}"${p.$.go.disabled ? " (disabled)" : ""}, and only this state's boxes`);
+    if (state === "idle") ok(p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920` && p.$.unit.textContent === en.cnCr.replace("{name}", "ChoralRoot " + vers[1]) &&
+      count(p.$.versions.innerHTML, en.chHas) === 1, "demo idle: the newest selected, the FM-1 shown as running the version before it");
+    if (state === "older") ok(chips(p).includes(older + "*") && p.$["plan-back"].textContent === en.planBack.replace("{version}", older) + rel(older).going_back.short &&
+      unesc(p.$.notes.innerHTML).includes(rel(older).bullets[0]), "demo older: an older version chosen, its going-back sentence and its notes");
+    if (state === "writing") ok(p.$.status.textContent === en.write && p.$.bar.value === 58, "demo writing: the bar part way, the status Writing");
+    if (state === "interrupted") ok(p.$.status.textContent === en.lost, "demo interrupted: the lost-connection status with the guidance");
+    if (state === "done") ok(p.$["done-line"].textContent === en.dnLine.replace("{version}", newest) && p.$.unit.textContent === en.dnMatch.replace("{name}", "ChoralRoot " + newest) &&
+      p.$.bar.value === 100, "demo done: installed, and the read-back");
+    if (state === "nomidi") ok(p.$.status.textContent === en.nomidi && p.$["check-go"].disabled, "demo nomidi: the notice of a browser that cannot install");
   }
-  {
-    const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: listFetch(), page, extra: { location: { search: "?demo=9" } } });
+  for (const q of ["?demo=9", "?demo=1", "?demo=", "?demo=idleX", "?nodemo=idle"]) {
+    const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: listFetch(), page, extra: { location: { search: q } } });
     await settle();
-    ok(p.$["demo-note"].hidden === true && shown(p) === "1" && !p.$.go.disabled, "demo: an unknown step is not demo mode (the page works as usual)");
+    ok(p.$["demo-note"].hidden === true && !p.$.go.disabled && p.$.status.textContent === `ChoralRoot ${newest} · FM-1_920`, `demo: ${q} is not demo mode (the page works as usual)`);
   }
+}
+function dateOf(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return `${d} ${["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"][m - 1]} ${y}`;
 }
 function verOk(v) { const [a, b] = v.split(".").map(Number); return a > 0 || b >= 16; }
 

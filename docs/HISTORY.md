@@ -1477,3 +1477,36 @@ multi-version layout, the refusals, the site as Pages builds it); `tools/fetch_p
 `build/scratch/packages/` for a local build. Not run: a real FM-1, Chrome or Edge themselves, Android; going back
 on a unit (the notes are the release notes' own). Docs: MANUAL 16, README, BUILDING "Releasing", HANDOFF "Release
 steps", DEVICE-MANAGER "The installer beside it".
+
+## 2026-10-12 (the web installer: one page again, with the notes and the older versions)
+
+3y28. **The owner, after seeing 3y27's page:** "For the web firmware tool I don't think we need to copy all of Baud
+Girl's multi step flashing process. I like the immediacy of how it was, but we should provide an option to see
+latest release notes or to roll back and see and flash previous releases easily." The six steps were never
+published. Website work only; `fm1ota.js` untouched. `web/index_pkg.html` is one page again with the sections of
+0.19's page in their order. The button is on the first screen of a laptop (on 0.19's page it was under six
+paragraphs, below the fold at 1280 x 800) and its label is always the version it writes, "Install ChoralRoot
+0.19". Beside it (under it on a phone) "New in 0.19" with the bullets of `web/releases.json` and the link to the
+full notes. Under it "Other versions": 0.18, 0.17, 0.16, each a button with its date; one click makes it the
+version the button installs, puts its going-back sentence above the button with "Back to 0.19, the newest", and
+shows its bullets and, behind a disclosure, the going-back points in full. Kept from 3y27: the package of the
+chosen version fetched from the site and checked (identity, sha256) before Install is enabled; "The files" and
+`firmware/index.html`; `[hidden] { display: none !important }`; the red box when an install stops after it began;
+the texts on what an install keeps; the hints under "Device not found?"; the landing page's "New in 0.19". The
+connection test is no step: Install identifies the unit as it always did, and a small "What is on my FM-1?" reads
+it without writing, marks that version "On your FM-1" and, after an install, is the read-back of the version. An
+automatic read-back was tried and dropped: it adds an INFO request to every install, which 0.19's own checks
+("Skip backup: only INFO", "resume: no firmware check") rightly refuse. The browser step is a notice that shows
+only without Web MIDI. Dropped with the steps: the strip, the Next and Back buttons, the "plan" sentences, the Get
+ready list (its content is the warning and the small print), and their CSS and texts; a test now fails on a text
+the page does not use. Demo mode is `?demo=idle | older | writing | interrupted | done | nomidi`.
+`tools/fetch_packages.py`: Python's urllib fails on this Mac with CERTIFICATE_VERIFY_FAILED, so it falls back to
+`curl -sL`, still keeps a file only when its sha256 is the listed one, and says which way each file came.
+Tests: `web/test_installer.mjs` (all 101 checks of 0.19's test still pass with their old wording; the step checks
+are replaced by: Install enabled with no click before it, the label naming the version after every choice, an
+older version writing its own package, the hash refusals, going back and back again, the check, the interrupted
+box, each demo state inert), `tests/site_test.py`, `tests/releases_test.py`. The page was also loaded without demo
+mode in headless Chromium from a local copy of the whole site (`--require-all`, the four packages fetched and
+verified): it fetched and checked the 0.19 package and enabled Install. Not run: a real FM-1, Chrome or Edge
+themselves, Android, Safari and Firefox (the notice was seen in demo mode only). Docs: MANUAL 16 "Updating",
+README, DEVICE-MANAGER "The installer beside it", HANDOFF "Release steps".

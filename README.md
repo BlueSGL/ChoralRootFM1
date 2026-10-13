@@ -17,10 +17,10 @@ Try it in the browser first: <https://quixotic7.github.io/ChoralRootFM1/emu/> (t
 FM-1 needed).
 
 **From the browser:** open the web installer at <https://quixotic7.github.io/ChoralRootFM1/webapp/installer/> in
-Chrome or Edge and follow its six steps: your browser, get ready, test the connection (it names what is on the
-FM-1), choose a version, install, done. The newest version is selected and the page lists what is new in it;
-the older versions from 0.16 on can be chosen too, each with a note on what going back means (0.15 and older are
-only on [Releases](https://github.com/Quixotic7/ChoralRootFM1/releases): no protected update path). Nothing is
+Chrome or Edge, connect the FM-1 and press Install. The button names the version it writes (the newest), and the
+page lists what is new in it beside the button. "Other versions" under the button offers the older ones from 0.16
+on, each with its notes and a sentence on what going back means (0.15 and older are only on
+[Releases](https://github.com/Quixotic7/ChoralRootFM1/releases): no protected update path). Nothing is
 installed on the computer: the page talks to the FM-1 over Web MIDI, and the firmware files come from the site
 itself (`firmware/`, with their SHA-256, which the page checks before it writes). Do not unplug while it writes; an
 interrupted install is resumed by pressing Install again (after a power loss too, from 0.16 on: see "If an install
