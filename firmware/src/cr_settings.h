@@ -82,7 +82,14 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
  * byte, a 0.19 build of before the option finds them out of range too and reads Output as Clean until it is set */
 #define CRS_USB_48K 0x04u
 #define CRS_USB48(s) (((unsigned)(s)->pick_roots & CRS_USB_48K) ? 1u : 0u)
-#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K)   /* the byte's automatic bits (cr_settings_auto) */
+/* Options > Chord Names (0.20; docs/CHORD-NAMES.md) rides in bit 3 of the same byte: set = Standard (lead-sheet
+ * names), clear = Orchid (the ORC-1's naming, the default: the owner, "I would prefer we match the ORC-1 by
+ * default"). The same reasoning once more: 0 in every older record and 0 is the default, so no version and nothing to
+ * migrate; a firmware up to 0.19 finds 8..15 out of range and takes its own default for the byte (Output Clean, USB
+ * Rate 44.1 kHz) until those are set there */
+#define CRS_NAMES_STD 0x08u
+#define CRS_NAMES(s) (((unsigned)(s)->pick_roots & CRS_NAMES_STD) ? 1u : 0u)
+#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD)   /* the byte's automatic bits (cr_settings_auto) */
 
 typedef struct {
     /* header (12 bytes) */
@@ -157,7 +164,7 @@ void cr_settings_seal(cr_settings_t *s);         /* header + checksum, before it
 int  cr_settings_equal(const cr_settings_t *a, const cr_settings_t *b);   /* the payloads */
 /* Saving is manual since 0.18 (the owner, 2026-10-11; docs/SETTINGS.md "Manual and automatic"): the block holds two
  * kinds of field. AUTOMATIC: what the Options menu alone sets (Play Style, Extension Addition, Secret Chords, Velocity,
- * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, LEDs, USB Record, USB Level, USB Rate, Dual Core, Output; the palette, which
+ * the MIDI channels, Raw Chord Sound, MIDI Clock, Motion, Chord Names, LEDs, USB Record, USB Level, USB Rate, Dual Core, Output; the palette, which
  * has no control), written by itself when the unit is quiet. MANUAL: everything else, how the instrument is set to
  * play, written only by the global save (SAVE held). cr_settings_auto copies the automatic fields of *src into *dst
  * and leaves dst's manual ones (not sealed): flash's block with the Options as they are now is what an automatic

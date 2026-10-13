@@ -2234,10 +2234,14 @@ static void cr_p_loopmenu(const cr_screen_t *s, const cr_frame_t *fr)
     if (s->foot[0] && cr_in_strip(226, 240)) cr_text_fit(P8(120), P8(237), s->foot, 11, 0, CR_C, T_MID, T_BG, P8(228));
 }
 
+/* Geek Out's name is centred on x 70: 132 px is what stays on the screen there (x 4 .. 136; the notes' column
+ * begins past x 200). The longest names ("G#m add4 JAZZ" 154 px at 40 px, Standard's "G#m add9add4") squeeze to it
+ * as the other views' squeeze to 224; a name up to 132 px wide is drawn as before */
+#define CR_GEEK_NAME_W 132
 static void cr_p_geek(const cr_screen_t *s, int32_t ph)
 {
     uint32_t i;
-    cr_name(&s->name, P8(70), P8(CR_PY0 + 56), 40, 224, 4096);
+    cr_name(&s->name, P8(70), P8(CR_PY0 + 56), 40, CR_GEEK_NAME_W, 4096);
     for (i = 0; i < s->n_notes; i++)
         cr_text(P8(230), P8(CR_PY0 + 30 + 14 * (int32_t)i), s->note[i].t, 12, 1, CR_R, 4096,
                 cr_rgb(s->note[i].col, CR_WHITE), T_BG, 0);

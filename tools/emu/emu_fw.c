@@ -568,6 +568,8 @@ void emu_fw_dump(void)
                (unsigned)fx_lowcut, (unsigned)crs_lowcut_found);
         printf("  usb-rate: 48k %u (Options > USB Rate; the record's pick_roots %u)\n", (unsigned)cs.usb48,
                (unsigned)t.pick_roots);
+        printf("  chord-names: standard %u (Options > Chord Names; the engine's %d; the record's bit %u)\n",
+               (unsigned)cs.names_std, cr_chord_names(), (unsigned)CRS_NAMES(&t));
         printf("  clean: look-ahead %u samples, the limiter's gain %d of 32768\n", (unsigned)CLN_LA, (int)cln_g);
         printf("  settings: now %08X saved %08X style %u extadd %u key %u motion %u leds %u hold %u dualcore %u usb %u/%u "
                "view %u chord-sound %04X slot %u pending %u  panel %08X\n",

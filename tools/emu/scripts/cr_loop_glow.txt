@@ -8,7 +8,7 @@
 wait 300
 btn GLO 80
 wait 200
-knob SELECT +14
+knob SELECT +15
 wait 100
 knob KNOB1 +1
 wait 200
@@ -47,7 +47,7 @@ expect led F#4 on
 dump
 btn GLO 80
 wait 200
-knob SELECT -3
+knob SELECT -4
 wait 100
 knob KNOB1 -1
 wait 100

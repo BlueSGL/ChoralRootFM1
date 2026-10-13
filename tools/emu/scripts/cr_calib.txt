@@ -1,11 +1,11 @@
 # ChoralRoot: the calibration (Felucca's HARDWARE CALIBRATION) on ChoralRoot's screens, from Options > Calibrate:
-# OPT tap, SELECT to Calibrate (entry 22, the one before Reset Settings), OCT+ starts; press each printed button in Felucca's order, turn each knob
+# OPT tap, SELECT to Calibrate (entry 23, the one before Reset Settings), OCT+ starts; press each printed button in Felucca's order, turn each knob
 # right, OCT+ keeps the table (the trace: "calib: ..."). The MASTER pot is not part of Felucca's calibration: moving
 # it mid-way changes nothing. Then a chord still plays (the table taught = the emulator's).
 wait 500
 btn GLO
 wait 100
-knob SELECT +22
+knob SELECT +23
 wait 100
 shot build/emu/test/cr_calib_opt.ppm
 btn OCT+

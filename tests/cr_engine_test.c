@@ -1770,6 +1770,7 @@ static void s_torture(void)
 }
 
 /* -------------------------------------------- tick-independent checks --- */
+static void s_names_std(void);
 static void s_tables(void)
 {
     static const struct { uint8_t q, x; const char *r, *qu, *sup; } N[] = {
@@ -2081,9 +2082,282 @@ static void run_suite(uint32_t tick_us, uint32_t base_ms, const char *tag)
     fresh("end");
 }
 
+/* ------------------------------ Options > Chord Names (0.20): Standard --- */
+/* docs/CHORD-NAMES.md's table, cell for cell: [quality][extension mask] with the mask's bits 6 = 1, 7 = 2, M7 = 4,
+ * 9 = 8, the root C, the three strings read in a row. Both sevenths at once (masks 6, 7, 14, 15) have no name of
+ * their own: Orchid's stands there */
+static const char *const STD_NAMES[CR_Q_COUNT][16] = {
+    /* a note */ { "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C" },
+    /* DIM  */ { "Cdim", "Cdim7", "Cm7b5", "Cm13b5", "CdimM7", "CdimM13", "Cdim7 M7", "CdimJAZZ",
+                 "Cdimadd9", "Cdim7add9", "Cm9b5", "Cm13b5", "CdimM9", "CdimM13", "CdimJAZZ", "CdimWTF" },
+    /* MIN  */ { "Cm", "Cm6", "Cm7", "Cm13", "CmM7", "CmM13", "Cm7 M7", "CmJAZZ",
+                 "Cmadd9", "Cm6/9", "Cm9", "Cm13", "CmM9", "CmM13", "CmJAZZ", "CmWTF" },
+    /* MAJ  */ { "CM", "C6", "C7", "C13", "CM7", "CM13", "C7 M7", "CJAZZ",
+                 "Cadd9", "C6/9", "C9", "C13", "CM9", "CM13", "CJAZZ", "CWTF" },
+    /* SUS  */ { "Csus4", "C6sus4", "C7sus4", "C13sus4", "CM7sus4", "CM13sus4", "Csusm7 M7", "CsusJAZZ",
+                 "Csus4add9", "C6/9sus4", "C9sus4", "C13sus4", "CM9sus4", "CM13sus4", "CsusJAZZ", "CsusWTF" },
+    /* AUG  */ { "C+", "C+6", "C+7", "C+13", "C+M7", "C+M13", "C+7 M7", "C+JAZZ",
+                 "C+add9", "C+6/9", "C+9", "C+13", "C+M9", "C+M13", "C+JAZZ", "C+WTF" },
+    /* POW  */ { "C5", "C6no3", "C7no3", "C13no3", "CM7no3", "CM13no3", "C5 7 M7", "C5 JAZZ",
+                 "Csus2", "C6sus2", "C7sus2", "C13sus2", "CM7sus2", "CM13sus2", "C5 JAZZ", "C5 WTF" },
+    /* MIN4 */ { "Cmadd4", "Cm6add4", "Cm7add4", "Cm13add4", "CmM7add4", "CmM13add4", "Cmadd4 7 M7", "Cmadd4 JAZZ",
+                 "Cmadd9add4", "Cm6/9add4", "Cm9add4", "Cm13add4", "CmM9add4", "CmM13add4", "Cmadd4 JAZZ", "Cmadd4 WTF" },
+};
+
+/* Orchid's names as 0.19 wrote them (cr_chord_name of 6229c8c, copied): what the option's default must still be */
+static void orchid_ref(int pc, int quality, int ext, char *root, char *qual, char *sup)
+{
+    static const char *const NN[12] = { "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B" };
+    static const char *const QN[CR_Q_COUNT] = { "", "dim", "m", "", "sus", "+", "", "m" };
+    int bits = (ext & 1) + ((ext >> 1) & 1) + ((ext >> 2) & 1) + ((ext >> 3) & 1);
+    strcpy(root, NN[pc % 12]);
+    strcpy(qual, QN[quality]);
+    sup[0] = 0;
+    if (quality == CR_Q_NONE) return;
+    if (quality == CR_Q_POW) strcpy(sup, "5");
+    else if (quality == CR_Q_MIN4) strcpy(sup, "add4");
+    if (quality == CR_Q_MAJ && !ext) strcpy(qual, "M");
+#define OCAT(t) do { if (sup[0]) strcat(sup, " "); strcat(sup, t); } while (0)
+    if (bits >= 4) { OCAT("WTF"); return; }
+    if (bits == 3) { OCAT("JAZZ"); return; }
+    if (ext & CR_EXT_M7) OCAT(quality == CR_Q_SUS ? "m7" : "7");
+    if (ext & CR_EXT_MAJ7) OCAT("M7");
+    if (ext & CR_EXT_6) OCAT("6");
+    if (ext & CR_EXT_9) OCAT("9");
+#undef OCAT
+}
+
+/* A lead-sheet reader that knows nothing of the engine: the name after its root -> the pitch classes it says
+ * (bit pc of *req), and those it leaves open (*opt): the 9th of a 13, and the fifth of "add4" on a minor chord
+ * (ChoralRoot's Min + Sus chord sounds none: docs/CHORD-NAMES.md). 0 = not a name it can read */
+static int std_read(const char *p, unsigned *req, unsigned *opt)
+{
+    int third = 4, fifth = 7, dim = 0, minor = 0, maj7 = 0, fig = 0;
+    unsigned m = 1u, o = 0;
+#define EAT(t) (!strncmp(p, t, strlen(t)) ? (p += strlen(t), 1) : 0)
+    if (!strcmp(p, "M")) { *req = 1u | 1u << 4 | 1u << 7; *opt = 0; return 1; }
+    if (!strcmp(p, "5")) { *req = 1u | 1u << 7; *opt = 0; return 1; }
+    if (EAT("dim")) { third = 3; fifth = 6; dim = 1; }
+    else if (EAT("m")) { third = 3; minor = 1; }
+    else if (EAT("+")) fifth = 8;
+    if (dim && EAT("7")) m |= 1u << 9;                       /* the diminished seventh */
+    if (EAT("M")) maj7 = 1;
+    if (EAT("13")) { m |= 1u << (maj7 ? 11 : 10) | 1u << 9; o |= 1u << 2; fig = 1; }
+    else if (EAT("6/9")) { m |= 1u << 9 | 1u << 2; fig = 2; }
+    else if (EAT("6")) { m |= 1u << 9; fig = 2; }
+    else if (EAT("7")) { m |= 1u << (maj7 ? 11 : 10); fig = 1; }
+    else if (EAT("9")) { m |= 1u << (maj7 ? 11 : 10) | 1u << 2; fig = 1; }
+    if (maj7 && fig != 1) return 0;                          /* "M" must head a seventh's figure */
+    for (;;) {
+        if (EAT("b5")) fifth = 6;
+        else if (EAT("sus4")) third = 5;
+        else if (EAT("sus2")) third = 2;
+        else if (EAT("no3")) third = -1;
+        else if (EAT("add9")) m |= 1u << 2;
+        else if (EAT("add4")) { if (!minor) return 0; m |= 1u << 5; o |= 1u << 7; fifth = -1; }
+        else break;
+    }
+#undef EAT
+    if (*p) return 0;
+    if (third >= 0) m |= 1u << third;
+    if (fifth >= 0) m |= 1u << fifth;
+    *req = m; *opt = o & ~m;
+    return 1;
+}
+
+static void s_names_std(void)
+{
+    char r[8], q[16], s[32], want[3][32], nm[48], buf[160];
+    int q2, x, pc, bad, n;
+    strcpy(TAG, "names");
+    ok(cr_chord_names() == 0, "Chord Names: Orchid until it is set");
+
+    /* Orchid, the default: every cell of every root is 0.19's */
+    for (bad = 0, pc = 0; pc < 12; pc++)
+        for (q2 = 0; q2 < CR_Q_COUNT; q2++)
+            for (x = 0; x < 16; x++) {
+                orchid_ref(pc, q2, x, want[0], want[1], want[2]);
+                cr_chord_name((uint8_t)pc, (uint8_t)q2, (uint8_t)x, r, q, s);
+                if (strcmp(r, want[0]) || strcmp(q, want[1]) || strcmp(s, want[2])) bad++;
+            }
+    ok(!bad, "Orchid: 12 roots x 8 qualities x 16 extension sets are 0.19's names, string for string");
+
+    cr_chord_names_set(1);
+    ok(cr_chord_names() == 1, "Chord Names: Standard set");
+    /* the table */
+    for (n = 0, q2 = 0; q2 < CR_Q_COUNT; q2++)
+        for (x = 0; x < 16; x++) {
+            cr_chord_name(0, (uint8_t)q2, (uint8_t)x, r, q, s);
+            snprintf(nm, sizeof nm, "%s%s%s", r, q, s);
+            if (strcmp(nm, STD_NAMES[q2][x])) {
+                snprintf(buf, sizeof buf, "Standard: quality %d extensions %d is '%s' (got '%s' '%s' '%s')", q2, x,
+                         STD_NAMES[q2][x], r, q, s);
+                ok(0, buf);
+            } else
+                n++;
+        }
+    ok(n == 128, "Standard: all 128 cells read as docs/CHORD-NAMES.md's table");
+
+    /* the fallbacks: both sevenths, and only those, keep Orchid's three strings; count them */
+    {
+        int fb = 0, jazz = 0, wtf = 0, lit = 0, wrong = 0, same_other = 0;
+        for (q2 = 1; q2 < CR_Q_COUNT; q2++)
+            for (x = 0; x < 16; x++) {
+                int both = (x & 6) == 6, same;
+                orchid_ref(0, q2, x, want[0], want[1], want[2]);
+                cr_chord_name(0, (uint8_t)q2, (uint8_t)x, r, q, s);
+                same = !strcmp(q, want[1]) && !strcmp(s, want[2]);
+                if (both) {
+                    fb++;
+                    if (!same) wrong++;
+                    if (strstr(s, "JAZZ")) jazz++;
+                    else if (strstr(s, "WTF")) wtf++;
+                    else lit++;
+                } else if (strstr(s, "JAZZ") || strstr(s, "WTF"))
+                    wrong++;
+                else if (same)
+                    same_other++;
+            }
+        snprintf(buf, sizeof buf, "Standard: the %d cells with both sevenths keep Orchid's name (%d '7 M7', %d JAZZ, %d WTF); "
+                 "no other cell says JAZZ or WTF", fb, lit, jazz, wtf);
+        ok(fb == 28 && lit == 7 && jazz == 14 && wtf == 7 && !wrong, buf);
+        printf("     Standard and Orchid agree on %d of the other 84 cells (Cm, Cm7, C6, C7, CM7, C5 ..)\n", same_other);
+    }
+
+    /* what the name says is what sounds: the reader's pitch classes against cr_chord_base's */
+    {
+        int read = 0, wrongset = 0, unread = 0;
+        unsigned sets[CR_Q_COUNT][16];
+        for (q2 = 1; q2 < CR_Q_COUNT; q2++)
+            for (x = 0; x < 16; x++) {
+                uint8_t out[CR_CHORD_MAX];
+                unsigned eng = 0, req = 0, opt = 0;
+                int j, k = cr_chord_base(60, (uint8_t)q2, (uint8_t)x, out);
+                for (j = 0; j < k; j++) eng |= 1u << ((out[j] - 60) % 12);
+                sets[q2][x] = eng;
+                if ((x & 6) == 6) continue;
+                if (!std_read(STD_NAMES[q2][x] + 1, &req, &opt)) {
+                    unread++;
+                    snprintf(buf, sizeof buf, "Standard: '%s' is a name the reader knows", STD_NAMES[q2][x]);
+                    ok(0, buf);
+                } else if ((req & ~eng) || (eng & ~(req | opt))) {
+                    wrongset++;
+                    snprintf(buf, sizeof buf, "Standard: '%s' says %03X (+ %03X open), the engine sounds %03X", STD_NAMES[q2][x],
+                             req, opt, eng);
+                    ok(0, buf);
+                } else
+                    read++;
+            }
+        ok(read == 84 && !wrongset && !unread,
+           "Standard: each of the 84 named cells says the pitch classes cr_chord_base sounds (an independent reader)");
+        /* the reader is not a yes-man: the two names the user's letter was about, swapped, do not pass */
+        {
+            unsigned req, opt, add9 = sets[CR_Q_MAJ][CR_EXT_9], nine = sets[CR_Q_MAJ][CR_EXT_M7 | CR_EXT_9];
+            int a = std_read("9", &req, &opt) && !(req & ~add9) && !(add9 & ~(req | opt));
+            int b = std_read("add9", &req, &opt) && !(req & ~nine) && !(nine & ~(req | opt));
+            int c = std_read("add9", &req, &opt) && req == add9 && std_read("9", &req, &opt) && req == nine;
+            ok(!a && !b && c, "  the reader tells C9 from Cadd9 (each fails for the other's notes)");
+            ok(std_read("m7b5", &req, &opt) && req == sets[CR_Q_DIM][CR_EXT_M7] &&
+               std_read("dim7", &req, &opt) && req == sets[CR_Q_DIM][CR_EXT_6] && req != sets[CR_Q_DIM][CR_EXT_M7],
+               "  dim + the 7 key (10 semitones) is m7b5, dim + the 6 key (9) is dim7");
+        }
+        /* one name, one set of notes: within a quality and across them. The exception is the 13th, which says the same
+         * with the 9th and without it (masks 3 / 11 and 5 / 13) */
+        {
+            int clash = 0, thirteen = 0, a, b;
+            for (a = 16; a < CR_Q_COUNT * 16; a++)
+                for (b = a + 1; b < CR_Q_COUNT * 16; b++) {
+                    if ((a & 6) == 6 || (b & 6) == 6 || strcmp(STD_NAMES[a / 16][a % 16], STD_NAMES[b / 16][b % 16])) continue;
+                    if (sets[a / 16][a % 16] == sets[b / 16][b % 16]) continue;
+                    if (a / 16 == b / 16 && (a % 16 | 8) == b % 16 && (a & 1) && (a & 6) &&
+                        (sets[a / 16][a % 16] | 1u << 2) == sets[b / 16][b % 16]) thirteen++;
+                    else clash++;
+                }
+            snprintf(buf, sizeof buf, "Standard: a name is one set of notes; only the 13ths stand for two (with and without the 9th: %d pairs)", thirteen);
+            ok(!clash && thirteen == 12, buf);
+        }
+    }
+
+    /* the strings: within the engine's buffers, the quality drawn from the big face's letters, all 12 roots */
+    {
+        int longq = 0, longs = 0, badq = 0, badroot = 0, single = 0, bare = 0, over = 0;
+        for (pc = 0; pc < 12; pc++)
+            for (q2 = 0; q2 < CR_Q_COUNT; q2++)
+                for (x = 0; x < 16; x++) {
+                    char g[3 + 5 + CR_SUP_MAX + 3];
+                    memset(g, 0x55, sizeof g);
+                    cr_chord_name((uint8_t)pc, (uint8_t)q2, (uint8_t)x, g, g + 4, g + 10);
+                    if (g[3] != 0x55 || g[9] != 0x55 || g[10 + CR_SUP_MAX] != 0x55) over++;
+                    orchid_ref(pc, 0, 0, want[0], want[1], want[2]);
+                    if (strcmp(g, want[0])) badroot++;
+                    if ((int)strlen(g + 4) > longq) longq = (int)strlen(g + 4);
+                    if ((int)strlen(g + 10) > longs) longs = (int)strlen(g + 10);
+                    if (strspn(g + 4, "Mmdisu+24") != strlen(g + 4)) badq++;
+                    if (q2 == CR_Q_NONE && (g[4] || g[10])) single++;
+                    if (q2 != CR_Q_NONE && !g[4] && !g[10]) bare++;
+                    snprintf(nm, sizeof nm, "%s%s", g + 4, g + 10);
+                    if (pc && strcmp(nm, STD_NAMES[q2][x] + 1)) badroot++;
+                }
+        snprintf(buf, sizeof buf, "Standard: no write past root[3], qual[5], sup[%d]; the longest quality %d, superscript %d characters",
+                 CR_SUP_MAX, longq, longs);
+        ok(!over && longq == 4 && longs == 9, buf);
+        ok(!badroot, "Standard: the 12 roots keep their sharps (C# D# F# G# A#), the rest of the name the same under each");
+        ok(!badq, "Standard: the quality is M, m, dim, sus4, sus2 or +: letters the 104 px face has");
+        ok(!single && !bare, "Standard: a single note is the bare root and no chord is (the major triad stays CM)");
+    }
+    /* the user's three (GitHub): A7 + 9, A + 9, Asus + 7 + 9 */
+    cr_chord_name(9, CR_Q_MAJ, CR_EXT_M7 | CR_EXT_9, r, q, s);
+    ok(!strcmp(r, "A") && !q[0] && !strcmp(s, "9"), "Standard: A + 7 + 9 is A9 (Orchid: A7 9)");
+    cr_chord_name(9, CR_Q_MAJ, CR_EXT_9, r, q, s);
+    ok(!strcmp(r, "A") && !q[0] && !strcmp(s, "add9"), "Standard: A + 9 is Aadd9 (Orchid: A9)");
+    cr_chord_name(9, CR_Q_SUS, CR_EXT_M7 | CR_EXT_9, r, q, s);
+    ok(!strcmp(r, "A") && !q[0] && !strcmp(s, "9sus4"), "Standard: Asus + 7 + 9 is A9sus4 (Orchid: Asus m7 9)");
+
+    /* display only: the same gesture's notes and the chord info's ids under either setting */
+    {
+        cr_chord_info_t a, b;
+        uint8_t na[CR_CHORD_MAX], nb[CR_CHORD_MAX];
+        int ka, kb, diff = 0;
+        for (q2 = 0; q2 < CR_Q_COUNT; q2++)
+            for (x = 0; x < 16; x++) {
+                cr_chord_names_set(0);
+                ka = cr_chord_base(57, (uint8_t)q2, (uint8_t)x, na);
+                cr_chord_names_set(1);
+                kb = cr_chord_base(57, (uint8_t)q2, (uint8_t)x, nb);
+                if (ka != kb || memcmp(na, nb, (size_t)ka)) diff++;
+            }
+        ok(!diff, "the notes of every cell are the same under either naming (cr_chord_base)");
+        {
+            static char log0[512], log1[512];
+            int m;
+            for (m = 0; m < 2; m++) {
+                cr_init(&C, &OUT);
+                cr_tick(&C, now_ms());
+                clear();
+                cr_chord_names_set(m);
+                MD(CR_MOD_MAJ); MD(CR_MOD_M7); MD(CR_MOD_9); K(57, 1);
+                cr_chord_info(&C, m ? &b : &a);
+                on_notes_sorted(m ? log1 : log0, 0);
+                R(57, 1); MU(CR_MOD_9); MU(CR_MOD_M7); MU(CR_MOD_MAJ);
+            }
+            ok(a.quality == b.quality && a.ext == b.ext && a.nnotes == 5 && b.nnotes == 5 && !memcmp(a.notes, b.notes, sizeof a.notes) &&
+               !strcmp(log0, log1) && log0[0] && !strcmp(a.sup, "7 9") && !strcmp(b.sup, "9") && !strcmp(a.root, "A") && !strcmp(b.root, "A"),
+               "a held A + 7 + 9: the notes sent and cr_chord_info's notes and ids the same, the name 'A7 9' / 'A9'");
+            memset(SND, 0, sizeof SND);
+            dup_on = stray_off = 0;
+            cr_init(&C, &OUT);
+            clear();
+        }
+    }
+    cr_chord_names_set(0);
+    cr_chord_name(9, CR_Q_MAJ, CR_EXT_9, r, q, s);
+    ok(!strcmp(s, "9") && cr_chord_names() == 0, "back to Orchid: A + 9 is A9 again");
+}
+
 int main(void)
 {
     s_tables();
+    s_names_std();
     run_suite(1000, 0, "1ms");
     run_suite(2902, 0, "2.9ms");
     run_suite(5000, 0, "5ms");

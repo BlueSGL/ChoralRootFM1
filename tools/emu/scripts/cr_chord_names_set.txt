@@ -1,0 +1,13 @@
+# ChoralRoot 0.20: Options > Chord Names set to Standard and left to be saved (an Option: written by itself once the
+# unit is quiet). tools/emu/test_cr.sh runs it on a flash file, then relaunches with cr_chord_names_check.txt.
+wait 500
+btn GLO 80
+wait 300
+knob SELECT +14
+wait 300
+knob KNOB1 +1
+wait 400
+btn GLO 80
+wait 3000
+dump
+quit

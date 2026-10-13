@@ -522,6 +522,8 @@ static struct {
     uint8_t out_clean;                    /* Options > Output (0.19): 1 Clean, 0 Classic (fx.c fx_output_set) */
     uint8_t usb48;                        /* Options > USB Rate (0.19): 1 = ChoralRoot In offers 48 kHz too; 0, the
                                            * default: 44.1 kHz only, 0.18's device (usb.c UA_OFF_48) */
+    uint8_t names_std;                    /* Options > Chord Names (0.20): 1 Standard, 0 Orchid, the default
+                                           * (cr_engine.c cr_chord_names_set; docs/CHORD-NAMES.md) */
 } cs;
 #if CR_HAVE_SETTINGS
 static void cr_settings_load(void);       /* cr_settings.c (included after this file): the record -> the UI */
@@ -920,7 +922,7 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 
 /* ------------------------------------------------------------- Options --- */
 enum { O_STYLE, O_EXTADD, O_SECRET, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
-       O_CLOCK, O_VIEW, O_MOTION, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
+       O_CLOCK, O_VIEW, O_MOTION, O_NAMES, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
        O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
        O_SAFE, O_ERASE,
@@ -928,10 +930,10 @@ enum { O_STYLE, O_EXTADD, O_SECRET, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_M
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
 static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "Velocity",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
-    "MIDI Clock", "View", "Motion", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
+    "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -967,6 +969,7 @@ static int32_t opt_get(uint32_t o)
     case O_CLOCK: return cr_route.clock_in ? 2 : cr_route.clock_out;
     case O_VIEW: return cs.view;
     case O_MOTION: return cr_motion;
+    case O_NAMES: return cs.names_std;
     case O_LEDS: return cs.leds;
     case O_HOLD: return settings_hold % 4u;
     case O_USB_IN: return cs.usb_in;
@@ -993,6 +996,7 @@ static void opt_set(uint32_t o, int32_t v)
     case O_CLOCK: cr_route.clock_in = (uint8_t)(v == 2); cr_route.clock_out = (uint8_t)(v == 1); break;
     case O_VIEW: cs.view = (uint8_t)v; break;
     case O_MOTION: cr_motion = (uint8_t)v; break;
+    case O_NAMES: cs.names_std = (uint8_t)v; cr_chord_names_set(v); break;   /* (the names only: docs/CHORD-NAMES.md) */
     case O_LEDS: cs.leds = (uint8_t)v; break;
     case O_HOLD: settings_hold = (uint8_t)v; break;
     case O_USB_IN: cs.usb_in = (uint8_t)v; cu_usb_apply(); break;
@@ -1030,6 +1034,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_CLOCK: cu_cpy(d, CLOCK[v % 3], n); break;
     case O_VIEW: cu_cpy(d, CU_VIEW[v % V_N], n); break;
     case O_MOTION: cu_cpy(d, MOTION[v % 3], n); break;
+    case O_NAMES: cu_cpy(d, v ? "Standard" : "Orchid", n); break;
     case O_LEDS: cu_cpy(d, LEDS[v & 1], n); break;
     case O_HOLD: cu_int(d, HOLD_MS[v & 3], 0, n); cu_cat(d, " ms", n); break;
     case O_USB_IN: cu_cpy(d, ONOFF[v & 1], n); break;
@@ -4686,6 +4691,8 @@ static void cr_leds(void)
 static const uint8_t CU_TRIAD[CR_Q_COUNT][3] = {     /* intervals of each quality's base (the rest: extensions) */
     {0, 0, 0}, {0, 3, 6}, {0, 3, 7}, {0, 4, 7}, {0, 5, 7}, {0, 4, 8}, {0, 7, 7}, {0, 3, 5}};
 
+_Static_assert(sizeof ((cr_name_t *)0)->sup >= CR_SUP_MAX && sizeof ((cr_name_t *)0)->quality >= 5,
+               "the screen's name holds the engine's whole (cr_chord_name)");
 static void cu_name(cr_name_t *n, const cr_chord_info_t *ci)
 {
     cu_cpy(n->root, ci->root, sizeof n->root);
@@ -5648,6 +5655,8 @@ static void cu_options_screen(cr_screen_t *s)
     else if (cu.opt_sel == O_USB_RATE)             /* (48 kHz is the computer's choice once offered; it costs the
                                                     * audio 6 % while it records: docs/USB-AUDIO.md "48 kHz") */
         cu_cpy(s->label, cs.usb48 ? "the computer picks the rate" : "48 kHz: not offered", sizeof s->label);
+    else if (cu.opt_sel == O_NAMES)                /* (docs/CHORD-NAMES.md: the same notes under either name) */
+        cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
     else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: Off the default, On the option; never started /
@@ -6476,6 +6485,8 @@ static void cr_ui_init(void)
     cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
     cs.out_clean = 1;                             /* Options > Output Clean (the record's) */
     cs.usb48 = 0;                                 /* Options > USB Rate 44.1 kHz (the record's) */
+    cs.names_std = 0;                             /* Options > Chord Names Orchid (the record's) */
+    cr_chord_names_set(0);
 #if !CR_HAVE_SETTINGS
     fx_output_set(1, 1);                          /* (a build without the record: nothing else tells fx.c) */
 #endif

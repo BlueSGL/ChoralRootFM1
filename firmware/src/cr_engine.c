@@ -1357,7 +1357,108 @@ static void crx_cat(char *d, const char *s, int max)
  * to differentiate from single notes. So C major would read CM"): a plain major triad, no extension, prints "M" at
  * root size ("C" "M"), so "C" alone is always a single note (CR_Q_NONE). A major triad WITH an extension keeps
  * Orchid's name (C7, CM7, C6, C9, C JAZZ: the figure already says "a chord", and "CM7" must stay the major 7th, never
- * "CM" + "7"); the power chord keeps "C5". Every screen names a chord through this function. */
+ * "CM" + "7"); the power chord keeps "C5". Every screen names a chord through cr_chord_name.
+ * Options > Chord Names (0.20): Orchid, the default, is all of the above, unchanged; Standard names what sounds
+ * (crx_name_std), and where that has no name (both sevenths at once) Orchid's stands. */
+static uint8_t crx_names;        /* Options > Chord Names: 0 Orchid, 1 Standard. Display only: no voice, no stored
+                                  * event and no MIDI byte reads it */
+void cr_chord_names_set(int standard) { crx_names = (uint8_t)(standard != 0); }
+int cr_chord_names(void) { return crx_names; }
+
+static void crx_app(char *d, const char *s, int max)   /* crx_cat without the space */
+{
+    int i = 0;
+    while (d[i]) i++;
+    while (*s && i < max - 1) d[i++] = *s++;
+    d[i] = 0;
+}
+
+/* the figure of an extension set without both sevenths, as a lead sheet writes it (docs/CHORD-NAMES.md): 6, 6/9,
+ * add9; 7, 9, 13 (a seventh with the 6th: the 13th, whether the 9th sounds with it or not), "M" before it for the
+ * major seventh */
+static void crx_figure(uint8_t ext, char *d, int max)
+{
+    d[0] = 0;
+    if (ext & (CR_EXT_M7 | CR_EXT_MAJ7)) {
+        if (ext & CR_EXT_MAJ7) crx_str(d, "M", max);
+        crx_app(d, (ext & CR_EXT_6) ? "13" : (ext & CR_EXT_9) ? "9" : "7", max);
+    } else if (ext & CR_EXT_6) {
+        crx_str(d, (ext & CR_EXT_9) ? "6/9" : "6", max);
+    } else if (ext & CR_EXT_9) {
+        crx_str(d, "add9", max);
+    }
+}
+
+/* Options > Chord Names > Standard (0.20; docs/CHORD-NAMES.md has the 128 cells and the reasons): the lead-sheet name
+ * of the notes that sound, by the tables at the top (CR_QUALITY, CR_EXT_IV), not by the buttons' labels. The same
+ * three strings as Orchid's (root at full size, qual at 0.58, sup the superscript); read in a row they are the name.
+ * 1 = named; 0 = no name of its own (both sevenths at once): the caller keeps Orchid's */
+static int crx_name_std(uint8_t quality, uint8_t ext, char qual[5], char sup[CR_SUP_MAX])
+{
+    char f[5];
+    if ((ext & (CR_EXT_M7 | CR_EXT_MAJ7)) == (CR_EXT_M7 | CR_EXT_MAJ7)) return 0;
+    crx_figure(ext, f, sizeof f);
+    qual[0] = sup[0] = 0;
+    switch (quality) {
+    case CR_Q_MAJ:                   /* CM (the triad keeps its M: "C" alone is a single note), C6 C7 Cadd9 C9 C13 CM7 */
+        if (!ext) crx_str(qual, "M", 5);
+        crx_str(sup, f, CR_SUP_MAX);
+        break;
+    case CR_Q_MIN:                   /* Cm Cm6 Cm7 Cmadd9 Cm9 Cm13 CmM7 */
+        crx_str(qual, "m", 5);
+        crx_str(sup, f, CR_SUP_MAX);
+        break;
+    case CR_Q_AUG:                   /* C+ C+7 C+M7 C+9 */
+        crx_str(qual, "+", 5);
+        crx_str(sup, f, CR_SUP_MAX);
+        break;
+    case CR_Q_SUS:                   /* 0 5 7: Csus4, Csus4add9; a figure goes before it: C7sus4 C9sus4 C6sus4 */
+        if (!ext || ext == CR_EXT_9) {
+            crx_str(qual, "sus4", 5);
+            crx_str(sup, f, CR_SUP_MAX);
+        } else {
+            crx_str(sup, f, CR_SUP_MAX);
+            crx_app(sup, "sus4", CR_SUP_MAX);
+        }
+        break;
+    case CR_Q_POW:                   /* 0 7: C5; the 9th makes it Csus2 (C7sus2 ..); without it there is no third to
+                                      * name: C6no3 C7no3 */
+        crx_figure((uint8_t)(ext & ~CR_EXT_9), f, sizeof f);
+        if (!ext) crx_str(sup, "5", CR_SUP_MAX);
+        else if (ext == CR_EXT_9) crx_str(qual, "sus2", 5);
+        else {
+            crx_str(sup, f, CR_SUP_MAX);
+            crx_app(sup, (ext & CR_EXT_9) ? "sus2" : "no3", CR_SUP_MAX);
+        }
+        break;
+    case CR_Q_MIN4:                  /* 0 3 5: the minor chord's name and "add4" (no fifth sounds: Orchid's secret
+                                      * chord; the name does not say so) */
+        crx_str(qual, "m", 5);
+        crx_str(sup, f, CR_SUP_MAX);
+        crx_app(sup, "add4", CR_SUP_MAX);
+        break;
+    case CR_Q_DIM:                   /* 0 3 6. The 6 key adds 9 semitones, the diminished seventh: Cdim7. The 7 key
+                                      * adds 10, the minor seventh: half-diminished, Cm7b5 (Cm9b5, Cm13b5). The major
+                                      * seventh: the triad's name and its figure, CdimM7 CdimM9 CdimM13 */
+        if (ext & CR_EXT_M7) {
+            crx_str(qual, "m", 5);
+            crx_str(sup, f, CR_SUP_MAX);
+            crx_app(sup, "b5", CR_SUP_MAX);
+            break;
+        }
+        crx_str(qual, "dim", 5);
+        if (ext & CR_EXT_MAJ7) crx_str(sup, f, CR_SUP_MAX);
+        else {
+            if (ext & CR_EXT_6) crx_str(sup, "7", CR_SUP_MAX);
+            if (ext & CR_EXT_9) crx_app(sup, "add9", CR_SUP_MAX);
+        }
+        break;
+    default:
+        return 0;
+    }
+    return 1;
+}
+
 void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], char qual[5], char sup[CR_SUP_MAX])
 {
     crx_str(root, CR_NOTE_NAMES[root_pc % 12u], 3);
@@ -1365,9 +1466,12 @@ void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], 
     if (quality >= CR_Q_COUNT) quality = CR_Q_NONE;
     crx_str(qual, CR_QUAL_NAMES[quality], 5);
     if (quality == CR_Q_NONE) return;
+    ext &= 15u;
+    if (crx_names && crx_name_std(quality, ext, qual, sup)) return;
+    crx_str(qual, CR_QUAL_NAMES[quality], 5);
+    sup[0] = 0;
     if (quality == CR_Q_POW) crx_str(sup, "5", CR_SUP_MAX);
     else if (quality == CR_Q_MIN4) crx_str(sup, "add4", CR_SUP_MAX);
-    ext &= 15u;
     if (quality == CR_Q_MAJ && !ext) crx_str(qual, "M", 5);
     if (crx_bits(ext) >= 4) { crx_cat(sup, "WTF", CR_SUP_MAX); return; }
     if (crx_bits(ext) == 3) { crx_cat(sup, "JAZZ", CR_SUP_MAX); return; }
