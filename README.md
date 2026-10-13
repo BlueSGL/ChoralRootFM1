@@ -96,7 +96,7 @@ Installing firmware is at your own risk.
 
 ## Status
 
-A public beta, at version 0.19 ([docs/releases/](docs/releases/) has the notes of every version). What is in it; the
+A public beta, at version 0.20 ([docs/releases/](docs/releases/) has the notes of every version). What is in it; the
 [manual](docs/MANUAL.md) says how to play each part:
 
 - **Chords**: the chord block on the keybed (DIM MIN MAJ SUS on the black keys F#3 G#3 A#3 C#4, 6 m7 M7 9 on the
@@ -125,6 +125,9 @@ A public beta, at version 0.19 ([docs/releases/](docs/releases/) has the notes o
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.20** ([docs/releases/0.20.md](docs/releases/0.20.md)): Options > Chord Names (the Orchid's names, the
+  default, or Standard lead-sheet names) and Options > 6th with 7th (the 6th an octave up over a seventh: a 13th)
+  ([docs/CHORD-NAMES.md](docs/CHORD-NAMES.md)).
 - **New in 0.19** ([docs/releases/0.19.md](docs/releases/0.19.md)): Options > Output, Clean (the default: a
   look-ahead limiter as a safety, MASTER last) or Classic (0.18's output stage)
   ([docs/AUDIO-QUALITY.md](docs/AUDIO-QUALITY.md)); the chorus in stereo; CZ-1 without its pops and 6 dB lower, level

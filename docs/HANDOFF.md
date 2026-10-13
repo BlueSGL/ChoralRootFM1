@@ -5,9 +5,9 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.19 (`git tag`; v0.19 is the latest, notes in `docs/releases/`). The 0.20 work is the
-dev tree (`FELUCCA_VERSION` "ChoralRoot 0.20" in `firmware/src/choralroot.c`; draft notes `docs/releases/0.20.md`,
-"in progress"; `web/releases.json` lists released versions only and does not have 0.20). The owner's unit runs what
+Released: v0.1 and v0.11 .. v0.20 (`git tag`; v0.20 is the latest, notes in `docs/releases/`; `web/releases.json` lists
+0.16 .. 0.20 for the installer). The tree's `FELUCCA_VERSION` is "ChoralRoot 0.20" (`firmware/src/choralroot.c`): the
+next development version starts by bumping it and creating `docs/releases/0.21.md`. The owner's unit runs what
 the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
@@ -196,7 +196,7 @@ installed on the owner's Mac.
     9th; `Cmadd4` not saying that its fifth is missing; whether turning 6th with 7th should re-strike a chord that
     is held (today it acts from the next chord on).
 
-### 0.20: in progress
+### 0.20: what shipped
 
 - **Options > Chord Names** (docs/CHORD-NAMES.md; HISTORY 3y29): bit 3 of the settings block's `pick_roots`, no
   record version.

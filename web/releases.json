@@ -8,6 +8,23 @@
   },
   "releases": [
     {
+      "version": "0.20",
+      "date": "2026-10-12",
+      "tag": "v0.20",
+      "sha256": "88902c6a8b9e617a7260e80bd5aeb4982b6168d3a854fd6a75a26df48e4f4ecb",
+      "title": "Chord names and 13ths",
+      "bullets": [
+        "Options > Chord Names: keep the Orchid's names (the default) or switch to Standard lead-sheet names, such as A9, Aadd9 and A13.",
+        "Options > 6th with 7th: play the 6th an octave higher when the chord has a seventh, a real 13th. Off by default.",
+        "With Standard names, JAZZ and WTF give way to real chord names wherever one exists.",
+        "Fixed: long chord names are no longer cut short on the Chord, Keyboard and Geek Out views."
+      ],
+      "notes": [
+        "Updating from 0.19 keeps your settings, sounds and loops.",
+        "Nothing sounds or reads different until you change one of the two new options."
+      ]
+    },
+    {
       "version": "0.19",
       "date": "2026-10-12",
       "tag": "v0.19",
@@ -25,7 +42,15 @@
       "notes": [
         "Updating from 0.18 keeps your settings, sounds and loops.",
         "Three things sound different by themselves: CZ-1 is 6 dB quieter, single notes are a little quieter and full chords cleaner (Output starts on Clean), and the chorus is stereo."
-      ]
+      ],
+      "going_back": {
+        "short": "Your saved sounds, loops and settings stay. You lose the Chord Names and 6th with 7th options.",
+        "points": [
+          "0.19 names every chord the Orchid's way and plays the 6th in place.",
+          "If 6th with 7th was set to Octave up, 0.19 does not know the setting and puts Output, USB Rate and Chord Names back to their defaults; set them again there. With In place set, nothing happens.",
+          "Long secret-chord names are cut short on the views again."
+        ]
+      }
     },
     {
       "version": "0.18",
