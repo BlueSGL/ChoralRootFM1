@@ -358,6 +358,12 @@ def smk():
     dev = FakeFM1(image, identity="SMK-37_931", name="SMK-37")
     rc, out, err = cli([p, "--yes", "--force"], dev)
     ok(rc == 8 and dev.upgrades == 0 and "its own updater" in err, "SMK: over SMK-37_9NN (its own updater): refused, not with --force")
+    dev = FakeFM1(image, identity="ota-SMK-37 Pro_016", name="SMK-37 Pro")
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 6 and dev.upgrades == 0 and "another firmware" in err,
+       "SMK: in the stock updater's update mode: never written (exit 6)")
+    ok(I.our_loader("ota-SMK-37 Elite_900") and not I.our_loader("ota-SMK-37 Pro_016") and not I.our_loader("ota-SMK-37_931"),
+       "our_loader: ours only")
     ok(I.same_keyboard("SMK-37 Pro_920", "ota-MKE-P37_900") and not I.same_keyboard("FM-1_920", "SMK-37 Pro_920"),
        "same_keyboard: the SMK models one keyboard, never the FM-1")
 

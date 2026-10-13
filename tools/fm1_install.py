@@ -294,6 +294,14 @@ def model_of(text):
 SMK_FAMILY = re.compile(r"SMK-37([ +].*)?|MKE-P37|STARRYKEY-37.*", re.I)
 
 
+def our_loader(text):
+    """the update loader of SLOOP / Felucca packages (ours: "ota-FM-1_9XX", "ota-SMK-37 Pro_9XX" and the other SMK
+    models', Makkuro37 _7XX). The stock updater's loader ("ota-SMK-37 Pro_016") and ChanceTheMaker's ("ota-SMK-37_931")
+    may lay the image out differently: an SMK left in their update mode is never written (but for the official
+    package, the return to stock)"""
+    return bool(re.fullmatch(r"ota-(FM-1|SMK-37 Pro|SMK-37 Elite|MKE-P37)_[789]\d\d", text, re.I))
+
+
 def same_keyboard(a, b):
     """the models of identities a and b are the same hardware (never an FM-1 and an SMK)"""
     ma, mb = model_of(a), model_of(b)
@@ -2595,6 +2603,10 @@ def run(a, backend, out, ask):
     if not dev.id.loader and not official and same_keyboard(dev.id.text, product):
         info = device_info(BackupLink(dev.link))     # the version text tells the Felucca-based firmwares apart
         version = info and info[0]
+    if dev.id.loader and SMK_FAMILY.fullmatch(model_of(dev.id.text)) and not our_loader(dev.id.text) and not official:
+        dev.link.close()
+        raise InstallError("model", f"the keyboard is in the update mode of another firmware ({dev.id.text}): nothing "
+                                    "was written. Finish that update with its own updater")
     print(f"device:  {dev.id.text}  ({dev.name})" + (f"  {version}" if version else "") +
           ("  in update mode: the write will be finished" if dev.id.loader else ""), file=out)
     if not dev.id.loader and not official and same_keyboard(dev.id.text, product):

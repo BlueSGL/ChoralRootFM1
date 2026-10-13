@@ -1251,6 +1251,25 @@ async function updater() {
   dev9.boot("ota-SMK-37 Elite_900", "Felucca Update");
   const got9 = await new Updater(dev9.access).resume(image, null, { package: "SMK-37 Pro_920", anyModel: true });
   ok(got9 === true && dev9.bad === 0, "fm1ota.js: resume an SMK write on another model's loader with anyModel");
+  // other SMK firmwares and other loaders (SMK37.md): ChanceTheMaker's (SMK-37_9NN) refused before UPGRADE; a
+  // firmware that restarts into a loader at once goes on only with our loader of the same keyboard; a device left in
+  // another firmware's update mode is never written (but for the return to stock: opts.product)
+  const dev10 = new FakeFM1(image, { identity: "SMK-37_931", name: "SMK-37" });
+  const e10 = await new Updater(dev10.access).install(image, "SMK-37 Pro_920", null, true).then(() => null, (x) => x);
+  ok(e10 && e10.code === "other" && dev10.upgrades === 0, "fm1ota.js: over SMK-37_9NN (its own updater) -> 'other', nothing sent");
+  const dev11 = new FakeFM1(image, { identity: "SMK-37 Pro_900", name: "Felucca", loader: "ota-SMK-37 Pro_900", afterWrite: "SMK-37 Pro_920", unplugAfter: 0 });
+  const jump = dev11.rx.bind(dev11);
+  dev11.rx = (d) => { if (eq(d, UPGRADE) && !dev11.identity.startsWith("ota-")) { dev11.upgrades++; dev11.input.state = dev11.output.state = "disconnected"; setTimeout(() => { dev11.unplugAfter = Infinity; dev11.boot("ota-SMK-37 Pro_900", "Felucca Update"); }, 300); return; } jump(d); };
+  const got11 = await new Updater(dev11.access).install(image, "SMK-37 Pro_920", null, true);
+  ok(got11 === "SMK-37 Pro_920" && dev11.bad === 0, "fm1ota.js: a firmware that restarts into our loader at once: installed");
+  const dev12 = new FakeFM1(image, { identity: "SMK-37 Pro_900", name: "Felucca", unplugAfter: 0 });
+  dev12.rx = (d) => { if (eq(d, UPGRADE)) { dev12.upgrades++; dev12.input.state = dev12.output.state = "disconnected"; setTimeout(() => { dev12.unplugAfter = Infinity; dev12.boot("ota-SMK-37 Pro_016", "SMK-37 Pro"); }, 300); return; } FakeFM1.prototype.rx.call(dev12, d); };
+  const e12 = await new Updater(dev12.access).install(image, "SMK-37 Pro_920", null, true).then(() => null, (x) => x);
+  ok(e12 && e12.code === "foreign" && e12.detail === "ota-SMK-37 Pro_016" && dev12.upgrades === 1, "fm1ota.js: ... into another firmware's loader -> 'foreign', nothing written");
+  const dev13 = new FakeFM1(image);
+  dev13.boot("ota-SMK-37 Pro_016", "SMK-37 Pro");
+  const e13 = await new Updater(dev13.access).resume(image, null, { package: "SMK-37 Pro_920", anyModel: true }).then(() => null, (x) => x);
+  ok(e13 && e13.code === "foreign" && dev13.upgrades === 0, "fm1ota.js: resume on another firmware's loader -> 'foreign', nothing written");
   ok(sameKeyboard("SMK-37 Pro", "MKE-P37") && sameKeyboard("SMK-37 Elite", "STARRYKEY-37 PLAY") && !sameKeyboard("FM-1", "SMK-37 Pro") &&
      !sameKeyboard("SMK-37 Pro", "FM-1"), "fm1ota.js sameKeyboard: the SMK models one keyboard, never the FM-1");
 
