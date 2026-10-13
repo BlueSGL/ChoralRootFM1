@@ -32,6 +32,10 @@
  * by cr_settings_load, written by cr_settings_commit alone (until 2026-10-11 the poll wrote it when the unit was
  * quiet: "switch off, switch on: where you left off"; the owner's rule since: the unit comes back as last SAVED).
  * Nothing here writes flash from the audio ISR. */
+#ifndef CU_VEL_MIN                                 /* Options > Velocity (cr_ui.c; the SMK-37: 0 = as the keys play) */
+#define CU_VEL_MIN 1
+#define CU_VEL_DEF 100
+#endif
 #ifndef CR_ENGINE_H
 #include "cr_engine.h"
 #endif
@@ -82,7 +86,7 @@ void cr_settings_defaults(cr_settings_t *s)
     s->scale = CR_SCALE_MAJOR;
     s->single = CR_SINGLE_FULL;
     s->split_pc = 5;
-    s->vel = 100;
+    s->vel = CU_VEL_DEF;
     s->bass_on = 0;                                /* (always 0 in the block: Bass on is the session's, cr_settings.h) */
     s->bass_mode = CR_BASS_CHORDS_ONLY;
     s->perform_mode = CR_PM_STRUM;
@@ -178,7 +182,7 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(transpose, -24, 24);
     CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
-    CRS_FIX(vel, 1, 127);
+    CRS_FIX(vel, CU_VEL_MIN, 127);
     CRS_FIX(bass_on, 0, 3);                        /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS, 0.22) */
     CRS_FIX(bass_mode, 0, CR_BASS_SOLO);
     CRS_FIX(bass_voicing, -2, 4);

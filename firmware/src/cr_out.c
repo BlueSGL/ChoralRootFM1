@@ -261,6 +261,61 @@ static void cr_midi(uint32_t status, uint32_t d1, uint32_t d2)
     midi_out_event((status >> 4) | status << 8 | (d1 & 0x7Fu) << 16 | (d2 & 0x7Fu) << 24);
 }
 
+#if BOARD_SMK37
+/* SMK-37: the wheels (cr_ui.c cr_smk_wheels writes these, the audio ISR plays them, once a block). The pitch wheel
+ * bends both parts as their channels' bend does (cr_mbend: +-2 semitones, RPN 0 sets the range), the mod wheel is a
+ * vibrato on both parts, 5.5 Hz, up to +-1/2 semitone at the top, and the parts' MODW source (mod.c, CC 1). Both go
+ * out on the CHORD and BASS streams' MIDI channels too (pitch bend, CC 1), as the streams' notes do */
+static volatile int16_t cr_smk_bend;             /* -8192..8191 */
+static volatile uint8_t cr_smk_modw;             /* 0..127 */
+static void cr_smk_wheel_block(uint32_t n)
+{
+    static int16_t bend_was;
+    static uint8_t modw_was;
+    static uint32_t ph;
+    int32_t b = cr_smk_bend, vib = 0;
+    uint32_t m = cr_smk_modw, p, s;
+    if (b != bend_was) {
+        bend_was = (int16_t)b;
+        for (p = 0; p < 2u; p++) {
+            cr_mchan(p)->bend = (int16_t)b;
+            cr_mbend(p);
+        }
+        for (s = CR_STREAM_MAIN; s <= CR_STREAM_BASS; s++)
+            if (cr_route.midi_en[s])
+                cr_midi(0xE0u | (cr_route.ch[s] & 15u), (uint32_t)(b + 8192) & 0x7Fu, (uint32_t)(b + 8192) >> 7);
+    }
+    if (m != modw_was) {
+        modw_was = (uint8_t)m;
+        for (p = 0; p < 2u; p++)
+            mod_midi(&trk[p], 0xB0u, 1u, m);
+        for (s = CR_STREAM_MAIN; s <= CR_STREAM_BASS; s++)
+            if (cr_route.midi_en[s])
+                cr_midi(0xB0u | (cr_route.ch[s] & 15u), 1u, m);
+        if (!m) {                                /* the vibrato over: the bends as they are */
+            ph = 0;
+            cr_mbend(0);
+            cr_mbend(1);
+        }
+    }
+    if (!m)
+        return;
+    ph += (uint32_t)(11ull * 2147483648ull / FS) * n;   /* 5.5 Hz */
+    {
+        int32_t t = (int32_t)(ph >> 16), tri = t < 32768 ? t - 16384 : 49151 - t;   /* -16384..16383 */
+        vib = tri * (int32_t)m / 127 * 128 / 16384;     /* Q8 semitones: +-1/2 at the top */
+    }
+    for (p = 0; p < 2u; p++) {
+        const cr_mch_t *c = cr_mchan(p);
+        int32_t range = ((int32_t)c->semis * 100 + c->cents) * 256 / 100, raw;
+        cr_mbend(p);
+        midi_bend_target[p] += vib;
+        raw = c->bend + (range ? vib * 8192 / range : 0);   /* (FM6 bends by its own range: the raw value) */
+        trk[p].bend_raw = (int16_t)(raw < -8192 ? -8192 : raw > 8191 ? 8191 : raw);
+    }
+}
+#endif
+
 /* TRANSPOSE (the part's P_TRANS, MIX page): the part's notes play P_TRANS semitones away (clamped to 0..127). The
  * MIDI out of the stream is not transposed: it carries the harmony as played. A part's transposition is taken when
  * none of its notes from here sound (cr_tr_n: started and not ended) and kept while any does, so every note-off
@@ -664,6 +719,9 @@ static void cr_audio_block(uint32_t n)
     if (cr_klat.pend && (int32_t)(w - cr_klat.at) > 0)
         cr_klat_applied();                       /* (78 PEAK key_eng_us: a key's note-on is in the engine) */
     cr_midi_in();
+#if BOARD_SMK37
+    cr_smk_wheel_block(n);
+#endif
     cr_ms_rem += n * 1000u;                      /* samples -> ms, the remainder kept (no drift) */
     while (cr_ms_rem >= FS) {
         cr_ms_rem -= FS;

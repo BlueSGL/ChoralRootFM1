@@ -38,7 +38,15 @@
                                   * master, CHORD and BASS (six channels) */
 #endif
 #ifndef FELUCCA_UART
+#if BOARD_SMK37
+#define FELUCCA_UART 0           /* SMK-37: the TRS jack is a MIDI OUT (UART1 TX, PC7), there is no MIDI IN; PH8 is a
+                                  * key-matrix row there and must never become UART RX */
+#else
 #define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
+#endif
+#endif
+#if BOARD_SMK37 && FELUCCA_UART
+#error "BOARD_SMK37: midi_uart.c is the FM-1 MIDI IN driver (RX on PH8, a key-matrix row on the SMK)"
 #endif
 #ifndef FELUCCA_SLICE
 #define FELUCCA_SLICE 0          /* no SLICE engine (ChoralRoot: melodic engines only) */
@@ -123,7 +131,11 @@
 #define FELUCCA_KEYCAPS 0        /* no Felucca keycaps (gfx.c's key hints, ui_keycaps.h): no cr_*.c draws one */
 #endif
 #ifndef FELUCCA_ID
+#if BOARD_SMK37
+#define FELUCCA_ID "SMK-37 Pro_920"   /* package identity (build.py: the .fwsc marker string) */
+#else
 #define FELUCCA_ID "FM-1_920"    /* package identity (build.py: the .fwsc marker string) */
+#endif
 #endif
 #ifndef FELUCCA_VERSION
 #define FELUCCA_VERSION "ChoralRoot 0.22"   /* the dev build reads as the next tag; --release X.Y sets it */
@@ -142,10 +154,16 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+#if BOARD_SMK37
+#include "smk_input.h"           /* SMK-37: keys, buttons, encoders, LEDs, pads, faders, wheels, battery */
+#else
 #include "fm1_input.h"
+#endif
 #include "fm1_timer.h"
 #include "fm1_audio.h"
+#if !BOARD_SMK37
 #include "fm1_adc.h"
+#endif
 #include "fm1_lcd_hw.h"
 #if CR_CPU1
 #include "fm1_cpu1.h"            /* the second core (docs/DUALCORE.md) */

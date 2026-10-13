@@ -45,11 +45,16 @@ static void persist_boot(void)         /* before settings_init / panel_init (pro
 #if FELUCCA_FLASH
     uint32_t f = irq_save(), k;
     CR_STAGE(BS_FLASH);
-    flash_ok = FL_FAR(fl_jedec_ram)() == 0x856014u;       /* the expected 1 MiB part, else stay RAM-only */
+    flash_ok = FL_JEDEC_OK(FL_FAR(fl_jedec_ram)());      /* the expected 1 MiB part, else stay RAM-only */
     irq_restore(f);
     if (!flash_ok)
         return;
     fl_plain_window_init();                                /* the data region reads as plaintext through XIP */
+#if BOARD_SMK37
+    if (!cr_safe)
+        st_owner_check();                                  /* SMK: never parse another ported firmware's store
+                                                            * (storage.c); SAFE MODE writes nothing */
+#endif
     /* SAFE MODE (main.c, cr_bootguard.h): flash_ok stays (the installer's update and the backup's reads need it),
      * but no object is read: storage.c st_load / st_save and the loop slots answer "none" (core.h ST_BLOCKED), so
      * the sounds, the stores, the FM6 bank and the settings start as on an erased flash; the flash is not touched */

@@ -251,6 +251,10 @@ static void fm1_main(void)
     CR_STAGE(BS_INPUT);
     fm1_input_init();
     fm1_adc_init();
+#if BOARD_SMK37 && FELUCCA_FLASH
+    if (flash_ok)                                   /* the factory key / pad velocity curves (USRTRIM, read only) */
+        smk_trim_load(fm1_xip_ptr(SMK_TRIM_FLASH));
+#endif
     panel_init();
     CR_STAGE(BS_SOUNDS);
     felucca_init();
@@ -279,7 +283,7 @@ static void fm1_main(void)
     fm1_irq_enable_all();
     fm1_delay_ms(30);
     CR_STAGE(BS_CALIB);
-    if ((fm1_in.buttons & 3u) == 3u) {
+    if ((fm1_in.buttons & FM1_OCT_BOTH) == FM1_OCT_BOTH) {
         panel_setup();                        /* OCT- + OCT+ held at power-on */
         settings_save();
     }
@@ -372,10 +376,17 @@ static void fm1_main(void)
         settings_poll();                              /* queued settings save: only while stopped */
         felucca_dbg.stage = BS_LOOP_DRAW;
         ui_leds();
+#if BOARD_SMK37
+        cr_smk_frame();                                 /* the faders, the wheels (cr_ui.c) */
+        padled_flush();                                 /* the pads' colours, between LCD transfers */
+#endif
         ui_draw();
         felucca_dbg.stage = BS_LOOP_IDLE;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
             ui_input();
+#if BOARD_SMK37
+            cr_smk_wheels();                    /* (bends follow the wheel, not the screen) */
+#endif
 #if FELUCCA_OTA
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif

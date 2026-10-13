@@ -3,7 +3,7 @@
 # Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 """Build ChoralRoot FM-1: the app, the update loader and an installable .fwsc package.
 
-  tools/build.py [--release X.Y[-suffix]]
+  tools/build.py [--release X.Y[-suffix]] [--board fm1|smk37]
 
 The unit is firmware/src/choralroot.c (ChoralRoot's single compilation unit, a fork of Felucca's felucca.c).
 Outputs in build/: choralroot.bin (app.bin: the boot stub's 0xEE0 bytes, then the app), choralroot.elf,
@@ -13,6 +13,11 @@ version string to "ChoralRoot X.Y" and writes choralroot-X.Y.fwsc and a folder r
 the app (choralroot-X.Y-app.bin), SHA256SUMS and the licence files (the CC0 sample attribution only for a build with
 FELUCCA_SAMPLE=1: ChoralRoot is all-synth, its image holds no samples).
 After the checks it prints the section sizes against the XIP slot and the RAM / POOL / NOINIT regions.
+
+BOARD=smk37 (or --board smk37) builds ChoralRoot for the M-Vave SMK-37: -DBOARD_SMK37=1 for the app, the loader and
+the boot stub, identity SMK-37 Pro_920 (constant, as the FM-1's), the SMK flash layout (fm1pkg_make.py), the SMK
+stub's own lock (firmware/stub/stub_smk37.lock), and the package build/choralroot-smk37.fwsc
+(choralroot-smk37-X.Y.fwsc for a release). The default stays the FM-1.
 See BUILDING.md for the toolchain and the SDK.
 
 The JieLi toolchain is Linux x86-64 only. JIELI_TOOLCHAIN points at it; on
@@ -59,6 +64,12 @@ SDK_SHA256 = {
 
 UNIT = "choralroot"                 # firmware/src/UNIT.c; outputs build/UNIT.{bin,elf,dis,fwsc}
 PRODUCT = "FM-1_920"                # package identity (ChoralRoot: constant, releases too)
+BOARD = "fm1"                       # fm1 (default) or smk37: BOARD env or --board
+BOARD_DEFS = {"fm1": [], "smk37": ["-DBOARD_SMK37=1"]}       # the FM-1 build gets no new flag (byte-identical)
+BOARD_STEM = {"fm1": UNIT, "smk37": f"{UNIT}-smk37"}        # package name: STEM.fwsc, STEM-X.Y.fwsc
+BOARD_LOCK = {"fm1": "stub.lock", "smk37": "stub_smk37.lock"}   # the boot stub that ships, per board
+SMK_DATA_FAMILY = "CHORAL"          # SMK store owner tag (storage.c st_owner_check); FELUCCA_DATA_FAMILY overrides
+SMK_DATA_UNTAGGED_OK = 0            # an untagged SMK store is another firmware's: cleared (FELUCCA_DATA_UNTAGGED_OK)
 VERSION = None                      # FELUCCA_VERSION for release builds (default: firmware/src/choralroot.c)
 XIP_LEN, RAM_LEN, POOL_LEN, NOINIT_LEN = fm1pkg_make.BODY_MAX, 96 * 1024, 0x54000, 0x3D30   # firmware/app.ld
 
@@ -160,7 +171,7 @@ def ldr_wrap(image):
 def build_loader():
     LDR.mkdir(parents=True, exist_ok=True)
     src = FW / "loader"
-    flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src"]
+    flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src"]
     tc_all(("cc", "-c", src / "crt0_ldr.S", "-o", LDR / "crt0_ldr.o"),
            ("cc", *flags, "-c", src / "loader.c", "-o", LDR / "loader.o"))
     elf = LDR / "loader.elf"
@@ -197,7 +208,7 @@ def build_stub():
     STB.mkdir(parents=True, exist_ok=True)
     src = FW / "stub"
     tc_all(("cc", "-Ifirmware/stub", "-c", src / "crt0_stub.S", "-o", STB / "crt0_stub.o"),
-           ("cc", *CFLAGS, "-Ifirmware/stub", "-c", src / "stub.c", "-o", STB / "stub.o"))
+           ("cc", *CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/stub", "-c", src / "stub.c", "-o", STB / "stub.o"))
     elf = STB / "stub.elf"
     tc("pi32v2/bin/ld", "--gc-sections", "-e", "_start", "-T", src / "stub.ld",
        STB / "crt0_stub.o", STB / "stub.o", "-o", elf)
@@ -232,7 +243,7 @@ def build_stub():
     img += b"\xff" * (STUB_LEN - len(img))
     ver, sha = fm1pkg_make.stub_version(img), hashlib.sha256(img).hexdigest()
     print(f"stub: {used} B of {STUB_LEN} ({100 * used / STUB_LEN:.1f}%), version {ver}, sha256 {sha[:16]}")
-    lock = src / "stub.lock"
+    lock = src / BOARD_LOCK[BOARD]
     want = lock.read_text().split() if lock.exists() else []
     if want != [str(ver), sha]:
         if os.environ.get("FM1_STUB_LOCK") == "update":
@@ -252,12 +263,12 @@ def build_stub():
 # ---- app
 
 def build_app(stub):
-    flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
+    flags = [*CFLAGS, *BOARD_DEFS[BOARD], "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_ICONS", "FELUCCA_KEYCAPS", "FELUCCA_SLICE",
                  "FELUCCA_SLICER", "FELUCCA_FM4", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_DRUM", "FELUCCA_SEQ",
                  "FELUCCA_CZ", "FELUCCA_QUAD", "FELUCCA_ANALOG", "FELUCCA_PHASE", "FELUCCA_LOFI", "FELUCCA_VOICE",
-                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS"):
+                 "FELUCCA_TRIO", "FELUCCA_NOISE", "FELUCCA_PHYS", "FELUCCA_DATA_UNTAGGED_OK"):
         v = os.environ.get(flag)    # unset: the default in firmware/src/choralroot.c
         if v in ("0", "1"):
             flags.append(f"-D{flag}={v}")
@@ -274,6 +285,13 @@ def build_app(stub):
         flags.append("-DCLN_MAKEUP=5461")         # knee, in the DAC word's upper 6 dB (firmware/src/fx.c CLN_MAKEUP;
                                                   # docs/AUDIO-QUALITY.md "Proposed": not a default, to be heard first)
     flags.append(f'-DFELUCCA_ID="{PRODUCT}"')
+    if BOARD == "smk37":            # SMK store owner (storage.c): ChoralRoot's own family, never another firmware's data
+        fam = os.environ.get("FELUCCA_DATA_FAMILY") or SMK_DATA_FAMILY
+        if not re.fullmatch(r"[A-Z0-9]{1,7}", fam):
+            raise SystemExit("FELUCCA_DATA_FAMILY: 1..7 of A-Z 0-9")
+        flags.append(f'-DFELUCCA_DATA_FAMILY="{fam}"')
+        if os.environ.get("FELUCCA_DATA_UNTAGGED_OK") not in ("0", "1"):
+            flags.append(f"-DFELUCCA_DATA_UNTAGGED_OK={SMK_DATA_UNTAGGED_OK}")
     if VERSION:
         flags.append(f'-DFELUCCA_VERSION="{VERSION}"')
     # the unit goes to LLVM IR without the optimizer, the main-loop functions (UI, screens, stores) are
@@ -435,18 +453,27 @@ def mmio_check():
 
 
 def main():
-    global VERSION
+    global VERSION, BOARD, PRODUCT
     ap = argparse.ArgumentParser()
     ap.add_argument("--release", metavar="X.Y", help=f"release build: identity {PRODUCT}, version string ChoralRoot X.Y")
+    ap.add_argument("--board", choices=sorted(BOARD_DEFS), default=None,
+                    help="target board: fm1 (default) or smk37 (default: $BOARD, else fm1)")
     ap.add_argument("--sdk", type=Path, help="JieLi AC79 SDK checkout (default: $AC79_SDK)")
     a = ap.parse_args()
-    name = f"{UNIT}.fwsc"
+    BOARD = (a.board or os.environ.get("BOARD") or "fm1").lower().replace("-", "")
+    if BOARD not in BOARD_DEFS:
+        raise SystemExit(f"BOARD={BOARD}: use fm1 or smk37")
+    fm1pkg_make.set_board(BOARD)
+    if BOARD != "fm1":              # the board's identity, as constant as the FM-1's (SMK-37 Pro_920)
+        PRODUCT = fm1pkg_make.BOARDS[BOARD][1] + PRODUCT[PRODUCT.index("_"):]
+    stem = BOARD_STEM[BOARD]
+    name = f"{stem}.fwsc"
     if a.release:                   # the identity stays FM-1_920: only the version string and the names change
         m = re.fullmatch(r"\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)?", a.release)   # the identity never encodes it
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix")
         VERSION = "ChoralRoot " + a.release.lower()      # e.g. ChoralRoot 1.0, ChoralRoot 1.1-rc1
-        name = f"{UNIT}-{a.release}.fwsc"
+        name = f"{stem}-{a.release}.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
@@ -483,12 +510,12 @@ def main():
         shutil.copy(att, OUT / "ATTRIBUTION.txt")
     print(f"app      {OUT / f'{UNIT}.bin'}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
-    print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}")
+    print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}" + (f", board {BOARD}" if BOARD != "fm1" else ""))
     if a.release:                   # what a release carries: the package, the app and every licence they need
         rel = OUT / f"release-{a.release}"
         shutil.rmtree(rel, ignore_errors=True)
         (rel / "LICENSES").mkdir(parents=True)
-        app = f"{UNIT}-{a.release}-app.bin"
+        app = f"{stem}-{a.release}-app.bin"
         (rel / name).write_bytes(pkg)
         (rel / app).write_bytes(img)
         (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n"
