@@ -1066,8 +1066,9 @@ int main(int argc, char **argv)
         }
         cu_pool_load(1, ENGI_VA, 1);
 #endif
-        /* SAVE on a P5 part (0.22): the dialog opens with the Favorite choice alone; KNOB 4 marks the program by its
-         * Sequential number; OCT+ (and SELECT, KNOB 1) change nothing and write no record; SAVE again closes */
+        /* SAVE on a P5 part (0.22): the menu opens on Favorite, with the three favourites' entries alone (Favorite,
+         * Favorites filter, Favorite type); KNOB 4 marks the program by its Sequential number on each of them; OCT+
+         * changes nothing and writes no record; SAVE again closes */
         {
             cr_screen_t *sc = &cu_scr;
             uint32_t pos = pool_count(ENGI_PROPHET) > 3u ? 3u : pool_count(ENGI_PROPHET) - 1u, id = p5_preset_id(pos);
@@ -1082,14 +1083,37 @@ int main(int argc, char **argv)
             OK(cu.page == PG_SAVE && ce.save_choice == CU_SAVE_FAV && !ce.save_step && !cu.msg.text[0],
                "save: a P5 part's dialog opens on Favorite (0.22; before: refused)");
             cu_knob(EN_SELECT, -1);
-            cu_knob(EN_K1, -2);
+            cu_knob(EN_SELECT, -3);
+            OK(ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT cannot go below Favorite (the two saves are not offered)");
             cu_knob(EN_SELECT, +1);
-            OK(ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT and KNOB 1 cannot leave Favorite (the two saves are not offered)");
+            bad = ce.save_choice != CU_SAVE_FILT;
+            cu_knob(EN_SELECT, +1);
+            bad |= ce.save_choice != CU_SAVE_TYPE;
+            cu_knob(EN_SELECT, +1);
+            bad |= ce.save_choice != CU_SAVE_TYPE;
             cr_screen_clear(sc);
             cu_save_screen(sc, 0);
-            OK(sc->kind == CR_K_PICKER && sc->n_items == 1u && !strcmp(sc->item[0], "Not a favorite") && !sc->star &&
+            bad |= sc->n_items != 3u || sc->sel != 2u || strcmp(sc->item[2], "Both");
+            if (has_prog) {
+                cu_knob(EN_K4, +1);                   /* KNOB 4 on the type and on the filter: the mark */
+                bad |= !crf_has(ENGI_PROPHET, id) || crf_type(ENGI_PROPHET, id) != CRF_BOTH;
+                cu_knob(EN_SELECT, -1);
+                cu_knob(EN_K4, -1);
+                bad |= crf_count() != 0u || crf_filter;
+            } else {
+                cu_knob(EN_SELECT, -1);
+            }
+            cu_knob(EN_SELECT, -1);
+            OK(!bad && ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT steps Favorite, Favorites filter, Favorite type and stops at "
+               "both ends; KNOB 4 marks and unmarks on each");
+            cu.msg.text[0] = 0;
+            cr_screen_clear(sc);
+            cu_save_screen(sc, 0);
+            OK(sc->kind == CR_K_PICKER && sc->n_items == 3u && sc->sel == 0u && !strcmp(sc->item[0], "Not a favorite") &&
+               !strcmp(sc->item[1], "Filter off") && !strcmp(sc->item[2], "Type: Both") && !sc->star &&
+               !strcmp(sc->footer, CU_SAVE_FOOT) &&
                !strcmp(sc->value, has_prog ? P5_TEST_PRESETS[pos].name : "INIT"),
-               "save: P5: the screen: one item, \"Not a favorite\", the program's name, no star");
+               "save: P5: the screen: three items, \"Not a favorite\" selected, the program's name, no star");
             cu_knob(EN_K4, +1);
             cr_screen_clear(sc);
             cu_save_screen(sc, 0);
@@ -1158,38 +1182,384 @@ int main(int argc, char **argv)
             (void)crf_unpack(0, 0);
             crf_dirty = 0;
         }
-        /* another engine: three choices now; the two saves as before */
+        /* another engine: the five entries, in the Options' grammar (SELECT the entry, KNOB 1 its value) */
         cu_pool_load(0, ENGI_FM6, 1);
         cu.msg.text[0] = 0;
         cu_save_open(0);
         OK(cu.page == PG_SAVE && ce.save_choice == 1u, "save: another engine's part opens the dialog as before (TINE EP, a factory sound: Save as new)");
         cu_knob(EN_SELECT, -1);
         bad = ce.save_choice != 0u;
-        cu_knob(EN_K1, -1);
+        cu_knob(EN_SELECT, -1);
         bad |= ce.save_choice != 0u;
+        cu_knob(EN_K1, -1);
         cu_knob(EN_K1, +1);
-        bad |= ce.save_choice != 1u;
+        bad |= ce.save_choice != 0u || crf_count() != 0u || crf_filter;
         cu_knob(EN_SELECT, +1);
-        bad |= ce.save_choice != CU_SAVE_FAV;
+        bad |= ce.save_choice != 1u;
+        cu_knob(EN_K1, +1);
+        bad |= ce.save_choice != 1u || crf_count() != 0u || crf_filter;
         cu_knob(EN_SELECT, +5);
         bad |= ce.save_choice != CU_SAVE_FAV;
-        OK(!bad, "save: SELECT / KNOB 1 step through three choices and stop at the ends: Overwrite, Save as new, Favorite");
+        cu_knob(EN_SELECT, +1);
+        bad |= ce.save_choice != CU_SAVE_FILT;
+        cu_knob(EN_SELECT, +1);
+        bad |= ce.save_choice != CU_SAVE_TYPE;
+        cu_knob(EN_SELECT, +1);
+        bad |= ce.save_choice != CU_SAVE_TYPE;
+        OK(!bad, "save: SELECT steps through five entries, a turn a step, and stops at the ends: Overwrite, Save as new, Favorite, "
+           "Favorites filter, Favorite type; KNOB 1 no longer moves the entry, and on the two saves (no value) does nothing");
         {
+            cr_screen_t *sc = &cu_scr;
             int32_t send = cu_send(0, CU_FX[cs.fx_sel].send);
+#define SCR() (cr_screen_clear(sc), cu_save_screen(sc, 0))
+            /* Favorite type */
+            SCR();
+            OK(sc->n_items == 5u && sc->sel == 4u && !strcmp(sc->item[4], "Both") && !sc->star && !strcmp(sc->label, "type \267 not a favorite") &&
+               !strcmp(sc->footer, CU_SAVE_FOOT),
+               "type: the screen of a sound that is not a favourite: its type (Both), no star, \"type . not a favorite\"");
+            cu_knob(EN_K1, +1);
+            SCR();
+            OK(crf_has(ENGI_FM6, 0) && crf_type(ENGI_FM6, 0) == CRF_CHORD && sc->star == 1 && !strcmp(sc->item[4], "Chord") &&
+               !strcmp(sc->label, "favorite type"), "type: KNOB 1 +1 on a sound that is not a favourite: Chord, and it marks the sound");
+            cu_knob(EN_K4, -1);
+            SCR();
+            OK(!crf_has(ENGI_FM6, 0) && crf_type(ENGI_FM6, 0) == CRF_CHORD && !sc->star && !strcmp(sc->item[4], "Chord"),
+               "type: KNOB 4 left takes the mark off and leaves the type: Chord still shown, no star");
+            cu_knob(EN_K4, +1);
+            OK(crf_has(ENGI_FM6, 0) && crf_type(ENGI_FM6, 0) == CRF_CHORD, "type: KNOB 4 right marks it again: Chord as it was");
+            cu_knob(EN_K1, +3);
+            bad = crf_type(ENGI_FM6, 0) != CRF_BASS;
+            cu_knob(EN_K1, +1);
+            bad |= crf_type(ENGI_FM6, 0) != CRF_BASS;
+            SCR();
+            bad |= strcmp(sc->item[4], "Bass");
+            cu_knob(EN_K4, -1);
+            cu_knob(EN_K1, +1);                       /* (against the end: no change of type, the turn still marks) */
+            bad |= !crf_has(ENGI_FM6, 0) || crf_type(ENGI_FM6, 0) != CRF_BASS;
+            cu_knob(EN_K1, -1);
+            cu_knob(EN_K1, -1);
+            cu_knob(EN_K1, -1);
+            OK(!bad && crf_type(ENGI_FM6, 0) == CRF_BOTH && crf_count() == 1u,
+               "type: KNOB 1 a step a turn through Both, Chord, Bass, stopping at the ends; a turn on an unmarked sound marks it");
+            cu_oct_tap(B_OCTUP);
+            /* Favorites filter */
+            cu_knob(EN_SELECT, -1);
+            SCR();
+            bad = ce.save_step || sc->sel != 3u || strcmp(sc->item[3], "Filter off") || strcmp(sc->item[4], "Type: Both") ||
+                  strcmp(sc->label, "favorites filter");
+            cu_knob(EN_K1, +1);
+            SCR();
+            bad |= !crf_filter || strcmp(sc->item[3], "Filter on");
+            cu_knob(EN_K1, +1);
+            bad |= !crf_filter;
+            cu_knob(EN_K4, -1);
+            SCR();
+            bad |= crf_count() != 0u || !crf_filter || strcmp(sc->label, "no favorites here: all");
+            cu_knob(EN_K4, +1);
+            cu_oct_tap(B_OCTUP);
+            cu_knob(EN_K1, -1);
+            OK(!bad && !crf_filter && crf_count() == 1u && !ce.save_step,
+               "filter: KNOB 1 right On, left Off; KNOB 4 there is the sound's mark; with no favourite here the line says the "
+               "whole pool is turned; OCT+ does nothing");
+            /* Favorite */
+            cu_knob(EN_SELECT, -1);
+            cu_knob(EN_K1, -1);
+            bad = ce.save_choice != CU_SAVE_FAV || crf_count() != 0u;
+            cu_knob(EN_K1, +1);
+            bad |= !crf_has(ENGI_FM6, 0);
+            cu_knob(EN_K4, -1);
+            bad |= crf_count() != 0u;
             cu_knob(EN_K4, +1);
             cu_oct_tap(B_OCTUP);
             for (k = 0, used = 0; k < UP_SLOTS; k++)
                 used += (uint32_t)up_used(k);
-            OK(crf_has(ENGI_FM6, 0) && cu.page == PG_SAVE && !ce.save_step && !used && send == cu_send(0, CU_FX[cs.fx_sel].send),
-               "save: on Favorite KNOB 4 marks TINE EP (not the send it turns elsewhere); OCT+ saves nothing and names nothing");
+            OK(!bad && crf_has(ENGI_FM6, 0) && cu.page == PG_SAVE && !ce.save_step && !used && send == cu_send(0, CU_FX[cs.fx_sel].send),
+               "save: on Favorite KNOB 1 and KNOB 4 both set the mark (not the send KNOB 4 turns elsewhere); OCT+ saves nothing and names nothing");
+            /* the two saves: KNOB 4 is the mark there too */
             cu_knob(EN_SELECT, -1);
+            cu_knob(EN_K4, -1);
+            bad = crf_count() != 0u;
             cu_knob(EN_K4, +1);
-            OK(send != cu_send(0, CU_FX[cs.fx_sel].send) && crf_count() == 1u,
-               "save: on the two save choices KNOB 4 is what it was (the chord part's send)");
-            cu_send_set(0, CU_FX[cs.fx_sel].send, send);
+            SCR();
+            OK(!bad && ce.save_choice == 1u && send == cu_send(0, CU_FX[cs.fx_sel].send) && crf_count() == 1u && sc->star == 1 &&
+               !strcmp(sc->footer, "OCT+: save \267 OCT-: cancel"),
+               "save: on the two saves KNOB 4 is the mark too (until this menu: the chord part's send), the send untouched");
+            cu_knob(EN_SELECT, -1);
+            cu_knob(EN_K4, -1);
+            OK(ce.save_choice == 0u && crf_count() == 0u, "save: .. on Overwrite as on Save as new");
+            cu_knob(EN_SELECT, +1);
             cu_oct_tap(B_OCTUP);
             OK(ce.save_step == 1u, "save: OCT+ on Save as new: the naming page, as before");
+            cu_knob(EN_K4, +1);
+            OK(send == cu_send(0, CU_FX[cs.fx_sel].send) && crf_count() == 0u,
+               "save: on the naming page KNOB 4 right is nothing (not the mark, not the send it was until the name's cursor)");
+#undef SCR
         }
+        /* KNOB 3 on every entry: the sound's type, as KNOB 1 on the Favorite type entry */
+        {
+            int32_t pv = trk[CR_PART_CHORD].p[0], e;
+            uint32_t crc = cu_snd_crc(&trk[CR_PART_CHORD]);
+            (void)pv;
+            cu.page = PG_NONE;
+            (void)crf_unpack(0, 0);
+            cu_save_open(0);
+            for (e = 0, bad = 0; e < (int32_t)CU_SAVE_N; e++) {
+                while ((int32_t)ce.save_choice > e)
+                    cu_knob(EN_SELECT, -1);
+                while ((int32_t)ce.save_choice < e)
+                    cu_knob(EN_SELECT, +1);
+                (void)crf_unpack(0, 0);
+                cu.msg.text[0] = 0;
+                cu_knob(EN_K3, +1);                   /* not a favourite: Chord, and marked by it */
+                bad |= !crf_has(ENGI_FM6, 0) || crf_type(ENGI_FM6, 0) != CRF_CHORD || (int32_t)ce.save_choice != e;
+                bad |= e == (int32_t)CU_SAVE_TYPE ? cu.msg.text[0] != 0 : strcmp(cu.msg.text, "Type: Chord");
+                cu_knob(EN_K3, +1);
+                cu_knob(EN_K3, +1);                   /* (the end) */
+                bad |= crf_type(ENGI_FM6, 0) != CRF_BASS || crf_count() != 1u;
+                cu_knob(EN_K4, -1);
+                cu_knob(EN_K4, +1);                   /* the mark off and on: Bass still */
+                bad |= crf_type(ENGI_FM6, 0) != CRF_BASS || !crf_has(ENGI_FM6, 0);
+                cu_knob(EN_K3, -1);                   /* a marked sound: the type alone */
+                bad |= crf_type(ENGI_FM6, 0) != CRF_CHORD || !crf_has(ENGI_FM6, 0) || crf_count() != 1u;
+                cu_knob(EN_K3, -1);
+                cu_knob(EN_K3, -1);
+                bad |= crf_type(ENGI_FM6, 0) != CRF_BOTH || !crf_has(ENGI_FM6, 0) || ce.save_step;
+                if (e != (int32_t)CU_SAVE_TYPE)
+                    bad |= strcmp(cu.msg.text, "Type: Both");
+            }
+            OK(!bad && crc == cu_snd_crc(&trk[CR_PART_CHORD]),
+               "save: KNOB 3 on each of the five entries is the sound's type (a step a turn, the ends): it marks a sound that is "
+               "not a favourite, leaves the mark of one that is, and says the type on the entries that do not show it; the "
+               "sound itself untouched (until this menu: the Perform mode's knob)");
+            cu.msg.text[0] = 0;
+            cu.msg.until = 0;
+            cu.page = PG_NONE;
+            (void)crf_unpack(0, 0);
+        }
+        /* KNOB 2 on every entry: the favourites filter, as KNOB 1 on the Favorites filter entry; on a P5 part's menu
+         * too; not on the naming page (the last letter there) */
+        {
+            int32_t e, bv = cr_snap.bass_voicing;
+            uint32_t pass;
+            for (pass = 0, bad = 0; pass < 2u; pass++) {
+                cu.page = PG_NONE;
+                (void)crf_unpack(0, 0);
+                cu_pool_load(0, pass ? ENGI_PROPHET : ENGI_FM6, 1);
+                cu_save_open(0);
+                for (e = pass ? (int32_t)CU_SAVE_FAV : 0; e < (int32_t)CU_SAVE_N; e++) {
+                    while ((int32_t)ce.save_choice > e)
+                        cu_knob(EN_SELECT, -1);
+                    while ((int32_t)ce.save_choice < e)
+                        cu_knob(EN_SELECT, +1);
+                    cu.msg.text[0] = 0;
+                    cu_knob(EN_K2, +1);
+                    bad |= !crf_filter || (int32_t)ce.save_choice != e || crf_count() != 0u;
+                    bad |= e == (int32_t)CU_SAVE_FILT ? cu.msg.text[0] != 0 : strcmp(cu.msg.text, "Filter on");
+                    cu_knob(EN_K2, +2);
+                    bad |= !crf_filter;
+                    cu_knob(EN_K2, -1);
+                    bad |= crf_filter || ce.save_step;
+                    if (e != (int32_t)CU_SAVE_FILT)
+                        bad |= strcmp(cu.msg.text, "Filter off");
+                    cu_knob(EN_K2, -1);
+                    bad |= crf_filter;
+                }
+                if (pass && pool_count(ENGI_PROPHET) > 1u)   /* (a build with INIT alone: nothing to mark) */
+                    cu_knob(EN_K3, +1), bad |= crf_count() != 1u || crf_type(ENGI_PROPHET, p5_preset_id(1)) != CRF_CHORD;
+            }
+            OK(!bad && bv == cr_snap.bass_voicing,
+               "save: KNOB 2 on each entry (the five, and a P5 part's three) is the favourites filter, left Off, right On, with a "
+               "message of the state on the entries that do not show it; no mark, no type changes (until this menu: the bass "
+               "register); KNOB 3 on a P5 part's menu types and marks the program");
+            cu.page = PG_NONE;
+            (void)crf_unpack(0, 0);
+            cu_pool_load(0, ENGI_FM6, 1);
+            cu_save_open(0);
+            cu_oct_tap(B_OCTUP);                      /* Save as new: the naming page */
+            {   /* the naming page: SELECT the cursor, KNOB 1 the character at it, KNOB 4 left the backspace; the rest nothing */
+                uint32_t pos0 = cu_part_pos(0), bs0 = cs.bass_sound, bpm0 = cs.bpm, e0 = trk[CR_PART_CHORD].eng_req, sp0 = cs.split;
+                int32_t send0 = cu_send(0, CU_FX[cs.fx_sel].send);
+                uint32_t crc0 = cu_snd_crc(&trk[CR_PART_CHORD]);
+                bad = strcmp(cn.s, "TINE EP") || cn.cur != 6u || !cn.pristine;   /* the cursor ON the last character */
+                cu_knob(EN_K2, +1);
+                cu_knob(EN_K3, +1);
+                cu_knob(EN_K4, +1);
+                cu_knob(EN_PRESET, +1);
+                cu_knob(EN_ALGO, +1);
+                cu_knob(EN_PRESET, -3);
+                cu.bheld |= 1u << BT_OPT;                 /* GLO held: no engine picker, no split point, no click level */
+                cu_knob(EN_PRESET, +1);
+                cu_knob(EN_ALGO, +1);
+                cu_knob(EN_K2, +1);
+                cu.bheld &= ~(1u << BT_OPT);
+                OK(!bad && ce.save_step == 1u && !crf_filter && !strcmp(cn.s, "TINE EP") && cn.cur == 6u && cn.pristine &&
+                   cu_part_pos(0) == pos0 && cs.bass_sound == bs0 && cs.bpm == bpm0 && trk[CR_PART_CHORD].eng_req == e0 &&
+                   !cu.epk_on && cs.split == sp0 && send0 == cu_send(0, CU_FX[cs.fx_sel].send) && crc0 == cu_snd_crc(&trk[CR_PART_CHORD]) &&
+                   (int32_t)(cu.pop.until - cu_now()) <= 0,
+                   "naming: the page opens with the cursor on the last character; KNOB 2, KNOB 3, KNOB 4 right, PRESETS and "
+                   "ALGORITHM (GLO held too) do nothing: the name, the sound, the engine, the bass, the send, the tempo and the "
+                   "filter as they were, no read-out");
+                cu_knob(EN_K1, +1);                       /* at once the last letter, as KNOB 2 was: P -> Q */
+                bad = strcmp(cn.s, "TINE EQ") || cn.pristine || cs.bpm != bpm0;
+                cu_knob(EN_K1, -1);
+                cu_knob(EN_SELECT, -9);                   /* (a step a turn) */
+                bad |= cn.cur != 5u;
+                cu_knob(EN_K1, +1);                       /* the cursor on 'E' (5): F */
+                bad |= strcmp(cn.s, "TINE FP");
+                cu_knob(EN_K1, -1);
+                cu_knob(EN_SELECT, -1);
+                cu_knob(EN_K4, -1);                       /* backspace in the middle: the space UNDER the cursor goes, the
+                                                           * cursor to the character before it */
+                bad |= strcmp(cn.s, "TINEEP") || cn.cur != 3u;
+                cu_knob(EN_SELECT, +1);
+                cu_knob(EN_SELECT, +1);
+                bad |= cn.cur != 5u || cn.len != 6u;      /* on the last character */
+                cu_knob(EN_K4, -1);                       /* backspace on the last character */
+                bad |= strcmp(cn.s, "TINEE") || cn.cur != 4u;
+                cu_knob(EN_SELECT, +1);                   /* right from the last: a new character, the cursor on it */
+                bad |= strcmp(cn.s, "TINEEA") || cn.cur != 5u;
+                cu_knob(EN_K1, +1);
+                bad |= strcmp(cn.s, "TINEEB");
+                for (k = 0; k < 20u; k++)                 /* to the maximum: 12 characters, then SELECT right stops */
+                    cu_knob(EN_SELECT, +1);
+                bad |= cn.len != 12u || strcmp(cn.s, "TINEEBAAAAAA") || cn.cur != 11u;
+                for (k = 0; k < 20u; k++)
+                    cu_knob(EN_SELECT, -1);
+                bad |= cn.cur != 0u || cn.len != 12u;
+                cn_white(0, 1000);                        /* a key with the name full: nothing */
+                bad |= cn.len != 12u || strcmp(cn.s, "TINEEBAAAAAA") || cn.cur != 0u;
+                cu_knob(EN_K4, -1);                       /* backspace on the first character: the cursor on the new first */
+                bad |= strcmp(cn.s, "INEEBAAAAAA") || cn.cur != 0u;
+                for (k = 0; k < 12u; k++)
+                    cu_knob(EN_SELECT, +1);               /* (to the end, and one more character: 12 again) */
+                for (k = 0; k < 9u; k++)
+                    cu_knob(EN_K4, -1);
+                bad |= strcmp(cn.s, "INE") || cn.cur != 2u;
+                cu_knob(EN_SELECT, -1);
+                cu_knob(EN_SELECT, -1);                   /* the cursor on 'I' */
+                cn_white(0, 5000);                        /* D4: 'A' in after it, the cursor on the A */
+                cn_white(0, 5100);                        /* .. again within 0.8 s: 'B' */
+                bad |= strcmp(cn.s, "IBNE") || cn.cur != 1u;
+                cn_space();
+                bad |= strcmp(cn.s, "IB NE") || cn.cur != 2u;
+                cn_delete();                              /* F#4: the backspace */
+                cn_delete();
+                bad |= strcmp(cn.s, "INE") || cn.cur != 0u;
+                {
+                    cr_screen_t *sc = &cu_scr;
+                    cr_screen_clear(sc);
+                    cu_save_screen(sc, 0);
+                    bad |= sc->kind != CR_K_TEXT || strcmp(sc->lines[1].t, "INE") || sc->lines[1].cur != 1u;
+                }
+                OK(!bad, "naming with the knobs: the cursor is always on a character; KNOB 1 changes it (at once the last one, as "
+                   "KNOB 2 did); SELECT moves a step a turn, and right from the last character adds one, to 12; KNOB 4 left "
+                   "deletes the character under the cursor (the middle, the last, the first); a key goes in after the "
+                   "cursor, which moves onto it; F#4 is the backspace");
+                for (k = 0; k < 3u; k++)
+                    cu_knob(EN_K4, -1);
+                {
+                    cr_screen_t *sc = &cu_scr;
+                    cr_screen_clear(sc);
+                    cu_save_screen(sc, 0);
+                    bad = cn.len != 0u || cn.cur != 0u || sc->lines[1].cur != 0u || sc->lines[1].t[0];
+                }
+                cu_knob(EN_K4, -1);
+                bad |= cn.len != 0u;
+                cu_knob(EN_SELECT, +1);
+                bad |= strcmp(cn.s, "A") || cn.cur != 0u;
+                cu_knob(EN_K4, -1);
+                cu_knob(EN_K1, -1);
+                OK(!bad && !strcmp(cn.s, "A") && cn.cur == 0u, "naming: every character deleted: an empty name, allowed as before "
+                   "(saved under the slot's automatic name), no cursor drawn; SELECT right or KNOB 1 gives it a first character");
+            }
+            cu.msg.text[0] = 0;
+            cu.msg.until = 0;
+            cu.page = PG_NONE;
+            (void)crf_unpack(0, 0);
+            crf_dirty = 0;
+        }
+        /* the filter's turns (cuf_*): FM6 01 Chord, 03 Bass, 04 Both; the chord part FM6, the bass part FM6 */
+        {
+            uint32_t keep_bs = cs.bass_sound;
+            cu.page = PG_NONE;
+            (void)crf_unpack(0, 0);
+            (void)crf_set(ENGI_FM6, 0, 1), (void)crf_set_type(ENGI_FM6, 0, CRF_CHORD);
+            (void)crf_set(ENGI_FM6, 2, 1), (void)crf_set_type(ENGI_FM6, 2, CRF_BASS);
+            (void)crf_set(ENGI_FM6, 3, 1);
+            (void)crf_set_type(ENGI_FM6, 5, CRF_CHORD);   /* (typed, not marked: not a favourite) */
+            cu_pool_load(0, ENGI_FM6, 6);
+            cu_pool_load(1, ENGI_FM6, 6);
+            OK(cuf_n(0, ENGI_FM6) == 0u && cuf_n(1, ENGI_FM6) == 0u, "filter off: no list (the whole pool is turned)");
+            cu_knob(EN_PRESET, +1);
+            OK(cu_part_pos(0) == 7u && !cu.pop.filt, "filter off: PRESETS +1 from 06: 07, the read-out without the sign");
+            (void)crf_set_filter(1);
+            OK(cuf_n(0, ENGI_FM6) == 2u && cuf_n(1, ENGI_FM6) == 2u && cuf_at(0, 1) && !cuf_at(0, 3) && cuf_at(0, 4) && !cuf_at(1, 1) &&
+               cuf_at(1, 3) && cuf_at(1, 4) && !cuf_at(0, 6) && !cuf_at(0, 0),
+               "filter on: the chord part's favourites of FM6 are 01 and 04, the bass part's 03 and 04; a typed sound without a mark is none");
+            cu_knob(EN_PRESET, -1);
+            bad = cu_part_pos(0) != 4u || !cu.pop.filt || strcmp(cu.pop.label, "favorites 02/02");
+            cu_knob(EN_PRESET, -1);
+            bad |= cu_part_pos(0) != 1u;
+            cu_knob(EN_PRESET, -1);
+            bad |= cu_part_pos(0) != 4u;
+            cu_knob(EN_PRESET, +2);
+            bad |= cu_part_pos(0) != 4u;
+            cu_knob(EN_PRESET, +1);
+            OK(!bad && cu_part_pos(0) == 1u && cu.pop.star, "filter on: PRESETS from 07 (no favourite): -1: 04, the nearest that way; "
+               "then 01, 04 (round), +2: 04, +1: 01; the read-out's line is its place among them, the sign on");
+            cs.bass_sound = 7;
+            cs.bass_on = 1;
+            cu_knob(EN_ALGO, +1);
+            bad = cs.bass_sound != 0u;                /* (past the last favourite: OFF, as past the pool's end) */
+            cu_knob(EN_ALGO, +1);
+            bad |= cu_part_pos(1) != 3u || cs.bass_sound != 4u;
+            cu_knob(EN_ALGO, +1);
+            bad |= cu_part_pos(1) != 4u;
+            cu_knob(EN_ALGO, -2);
+            bad |= cs.bass_sound != 0u;
+            cu_knob(EN_ALGO, -1);
+            OK(!bad && cu_part_pos(1) == 4u && cs.bass_sound == 5u,
+               "filter on: ALGORITHM from 06 +1: OFF (none after it), +1: 03, +1: 04, -2: OFF, -1: 04 (round)");
+            (void)crf_set(ENGI_FM6, 0, 0);
+            (void)crf_set(ENGI_FM6, 3, 0);
+            OK(cuf_n(0, ENGI_FM6) == 0u && cuf_n(1, ENGI_FM6) == 1u, "the marks of 01 and 04 off: the chord part has none here, the bass part 03");
+            cu_knob(EN_PRESET, +1);
+            OK(cu_part_pos(0) == 2u && cu.pop.filt && !strcmp(cu.pop.label, "no favorites: all"),
+               "filter on, no favourite of the part in the engine: PRESETS turns the whole pool (01 -> 02), the read-out says \"no favorites: all\"");
+            cu_knob(EN_ALGO, -1);
+            bad = cu_part_pos(1) != 3u;
+            cu_knob(EN_ALGO, +1);
+            OK(!bad && cs.bass_sound == 0u, "the sound playing lost its mark (04): it stays; ALGORITHM -1: 03, the nearest favourite; +1: OFF");
+            (void)crf_unpack(0, 0);
+            crf_dirty = 0;
+            cs.bass_sound = (uint16_t)keep_bs;
+            cs.bass_on = keep_bs != 0u;
+            cu_pool_load(1, ENGI_VA, 1);
+            cu_pool_load(0, ENGI_FM6, 1);
+            cu.pop.until = 0;
+        }
+#if FELUCCA_P5_FACTORY
+        /* P5's pool, the filter's cache: a turn does not walk the pool (the list is built once per change of a mark) */
+        if (pool_count(ENGI_PROPHET) > 3u) {
+            uint32_t last = pool_count(ENGI_PROPHET) - 1u, g;
+            cu_pool_load(0, ENGI_PROPHET, 1);
+            (void)crf_set(ENGI_PROPHET, p5_preset_id(2), 1);
+            (void)crf_set(ENGI_PROPHET, p5_preset_id(last), 1);
+            (void)crf_set_filter(1);
+            cu_knob(EN_PRESET, +1);
+            bad = cu_part_pos(0) != 2u;
+            g = cuf[0].gen;
+            cu_knob(EN_PRESET, +1);
+            bad |= cu_part_pos(0) != last || cuf[0].gen != g || cuf[0].e != ENGI_PROPHET + 1u;
+            cu_knob(EN_PRESET, +1);
+            OK(!bad && cu_part_pos(0) == 2u && cuf[0].n == 2u,
+               "filter on, P5: PRESETS turns between its two favourites (place 02 and the last, %u), round; the list is the cached one", (unsigned)last);
+            (void)crf_unpack(0, 0);
+            crf_dirty = 0;
+            cu_pool_load(0, ENGI_FM6, 1);
+            cu.pop.until = 0;
+        }
+#endif
         cu.page = PG_NONE;
         (void)crf_unpack(0, 0);
         crf_dirty = 0;

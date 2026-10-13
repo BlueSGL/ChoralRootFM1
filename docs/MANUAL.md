@@ -1140,8 +1140,10 @@ held + EDIT) and hold EDIT there.
 
 Tap **SAVE**. (With BASS held: the bass sound. In the editor: the sound being edited.)
 
-1. Choose **Overwrite**, **Save as new** or **Favorite** (new in 0.22, below) with KNOB 1 or SELECT: a turn is one
-   step, and the list stops at its ends. The current name is under it, with `*` if you have changed the sound. The dialog opens on Overwrite when the sound is one of yours or has been changed, otherwise on
+1. Choose **Overwrite** or **Save as new** with SELECT: a turn is one step, and the list stops at its ends. (The
+   three entries after them, **Favorite**, **Favorites filter** and **Favorite type**, are new in 0.22 and save
+   nothing: [Favorites](#favorites), below. Until 0.22 KNOB 1 also moved through this list; it now changes the
+   selected entry's value, as in the Options, and does nothing on the two saves.) The current name is under it, with `*` if you have changed the sound. The dialog opens on Overwrite when the sound is one of yours or has been changed, otherwise on
    Save as new.
    - **Overwrite** saves over the current preset at once and keeps its name. Over a factory preset this is allowed:
      your version takes its place in the pool and the factory one can be brought back. `00 INIT` cannot be
@@ -1155,21 +1157,71 @@ Tap **SAVE**. (With BASS held: the bass sound. In the editor: the sound being ed
    | the white roots D4 to G5 | `ABC` `DEF` `GHI` `JKL` `MNO` `PQRS` `TUV` `WXYZ` `0123` `4567` `89-.`; tap the same key again within 0.8 s for the next character of its group |
    | D#4 | a space |
    | F#4 | deletes the last character |
-   | KNOB 2 | steps the last character through the whole set |
+   | SELECT | moves the cursor, the red bar under the character you are editing. Turned right on the last character it adds a new one (`A`), up to 12 |
+   | KNOB 1 | changes the character under the cursor through the whole set (space, A to Z, 0 to 9, `-`, `.`) |
+   | KNOB 4 to the left | backspace: deletes the character under the cursor; the cursor moves to the one before it |
    | OCT+ or SAVE | saves (`saved FM6 26`) |
    | OCT- or HOME | cancels |
 
-   The name starts as the current one, in grey; the first key you type replaces it.
+   The name starts as the current one, in grey, with the cursor on its last character; the first key you type
+   replaces it, while SELECT, KNOB 1 and KNOB 4 edit it. A key types just after the cursor and the cursor moves onto
+   the new character, so with the cursor on the last character it adds to the end, and in the middle of the name it
+   inserts there; F#4 deletes the character under the cursor, as KNOB 4 does. So a name can be written with the
+   knobs alone: KNOB 1 for a letter, SELECT one step right for the next (it starts as `A`), KNOB 1 again. While you
+   are naming, KNOB 2, KNOB 3, PRESETS and ALGORITHM do nothing (new in 0.22: until then they kept their usual
+   jobs, KNOB 2 changed the last character, and a turn of PRESETS changed the sound you were naming).
 
-**Favorites** (new in 0.22). The third choice of the save dialog marks the sound instead of saving it. The screen
-reads `Not a favorite` or `Favorite`. **KNOB 4 to the right marks the sound, to the left takes the mark off**; it
-takes effect at once and nothing is saved or overwritten (OCT+ does nothing there; OCT-, HOME or SAVE closes the
-dialog). A marked sound has a small yellow star before its name wherever the name is shown: when you turn PRESETS or
-ALGORITHM, in the save dialog and in the editor's sound browser. You can also mark while browsing: in the browser
-(PRESETS turned in the sound editor) KNOB 4 marks the sound you are hearing, and the browser stays open. Any factory
-preset and any sound of yours can be a favorite; `00 INIT` cannot. A sound you have changed and not saved marks the
-preset it came from. The marks are kept by themselves, a moment after the FM-1 goes quiet (no SAVE held needed), and
-they are part of a backup. Deleting one of your sounds removes its mark.
+#### Favorites
+
+New in 0.22. You can mark the sounds you like, and then have PRESETS and ALGORITHM step through the marked sounds
+only. It all lives in the save menu (tap SAVE), which works like the Options: **SELECT picks an entry, KNOB 1 changes
+its value.** Nothing here saves or overwrites a sound.
+
+| Entry | The screen reads | KNOB 1 |
+| --- | --- | --- |
+| Overwrite, Save as new | the two ways to save, above | nothing |
+| **Favorite** | `Favorite` or `Not a favorite` | right marks the sound, left takes the mark off |
+| **Favorites filter** | `Filter on` or `Filter off` | right turns it on, left off |
+| **Favorite type** | `Both`, `Chord` or `Bass` | steps through the three |
+
+Three more knobs do the same job whichever entry is selected, so you rarely need to move:
+
+| Knob | In the save menu |
+| --- | --- |
+| **KNOB 2** | the favorites filter: right on, left off |
+| **KNOB 3** | the sound's type: Both, Chord, Bass |
+| **KNOB 4** | the mark: right makes the sound a favorite, left takes the mark off |
+
+A yellow note (`Filter on`, `Type: Chord`) confirms a change that the selected entry does not show. The footer of
+the three favorites entries reads `K1 change · K2 filter · K3 type · K4 favorite`. OCT+ saves on Overwrite and Save
+as new only; on the other three it does nothing. OCT-, HOME or SAVE closes the menu. While you are typing a name
+(Save as new) the knobs belong to the name (step 3, above).
+
+- **The mark.** A marked sound has a small yellow star before its name wherever the name is shown: when you turn
+  PRESETS or ALGORITHM, in the save menu and in the editor's sound browser. You can also mark while browsing: in the
+  browser (PRESETS turned in the sound editor) KNOB 4 marks the sound you are hearing, and the browser stays open.
+  Any factory preset and any sound of yours can be a favorite; `00 INIT` cannot. A sound you have changed and not
+  saved marks the preset it came from.
+- **The type** says which part a favorite is for: `Chord` sounds are offered to the chord part only, `Bass` sounds to
+  the bass part only, `Both` to both. Every sound is `Both` until you change it. The type belongs to the sound, not
+  to the mark: take the mark off and put it back, and the type is still what you set. Changing the type of a sound
+  that is not a favorite also marks it (so sorting sounds is one knob); KNOB 4 takes the mark off again without
+  touching the type.
+- **The filter.** With `Filter on`, PRESETS steps through the chord part's favorites of its engine only (typed Both
+  or Chord), and ALGORITHM through the bass part's (Both or Bass), in the order of the pool; so does the BASS
+  layer's Sound knob and the editor's browser. It is per engine: on FM6 you get FM6's favorites, on FM TONE those of
+  FM TONE. `00 INIT` is skipped. ALGORITHM still passes through `off` between the last favorite and the first.
+  - The big number is still the sound's place in the whole pool. The line under the stripes, in yellow, tells you the
+    filter is on and where you are among the favorites: `favorites 03/07`.
+  - If the sound you are on is not a favorite (you just turned the filter on, or took its mark off), it keeps
+    playing; the next turn goes to the nearest favorite in that direction.
+  - If the engine has no favorite for that part, the knob steps through all of its sounds as usual and the yellow
+    line reads `no favorites: all`.
+  - Changing the engine (GLO + PRESETS, GLO + ALGORITHM) lands on that engine's first favorite.
+  - A MIDI program change, the Sound Manager and a loop's recorded sound changes are not filtered.
+
+The marks, the types and the filter are kept by themselves, a moment after the FM-1 goes quiet (no SAVE held
+needed), and they are part of a backup. Deleting one of your sounds removes its mark and its type.
 
 To **delete** a sound you added, or to **reset** a factory preset you saved over: open the save dialog on it and hold
 SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does it, OCT- keeps it.
@@ -1758,7 +1810,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
 | GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass engine (both wherever the knob alone is the sound: the main screen, the Options, the layers but PLAY; ALGORITHM in the sound editor too) · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
-| SAVE | SAVE | the save dialog: KNOB 1 Overwrite / Save as new · OCT+ takes it · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
+| SAVE | SAVE | the save menu: SELECT Overwrite / Save as new / Favorite / Favorites filter / Favorite type · KNOB 1 value · KNOB 2 filter · 3 type · 4 favorite · OCT+ saves · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
 | SEQ | SEQ | the loop editor; in it: the PLAY menu; in the PLAY menu: leave. With GLO held: metronome on / off | its hold menu (metronome): SELECT time signature · KNOB 1 Click · a tap there: metronome on / off |
 | PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · 2 Metronome · GLO: its keys play / loops · SEQ: leave · EDIT: the loop editor (PRESETS step, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · SEQ, EDIT or LOOP held: the PLAY menu · HOME: the view) |

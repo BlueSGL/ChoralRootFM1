@@ -1,5 +1,6 @@
 # ChoralRoot 0.22, favourites (docs/PRESETS.md "Favourites"; the owner, 2026-10-13). On FM6 TINE EP (01):
-# 1. SAVE: the dialog (Save as new); SELECT +1: the third choice, "Not a favorite"; KNOB 4 +1: marked ("Favorite", the
+# (The menu's five entries, KNOB 1 / 2 / 3 and the filter: cr_favfilter.txt.)
+# 1. SAVE: the dialog (Save as new); SELECT +1: the third entry, "Not a favorite"; KNOB 4 +1: marked ("Favorite", the
 #    star before the name); OCT+: nothing is saved; KNOB 4 -1: the mark off; +1 again; SAVE: the dialog closes.
 # 2. PRESETS +1 -1: the read-out of 01 with the star, 02 without.
 # 3. EDIT, PRESETS +1 in the editor: the browser on FM BELL (02); KNOB 4 +1 marks it without leaving the browser;

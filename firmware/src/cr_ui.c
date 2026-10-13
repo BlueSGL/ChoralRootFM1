@@ -1124,7 +1124,7 @@ static struct {
     uint8_t sx_off;                       /* SysEx 74 SCREEN 0: off until SysEx on or a key, button or knob */
     uint32_t home_t0;                     /* HOME pressed (held CU_HOME_HOLD_MS: the view menu) */
     uint8_t home_hold;                    /* .. armed (pressed alone, the menu not opened yet) */
-    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool, star; uint16_t pct; char value[8], sub[12 + FELUCCA_PROPHET], label[32], over[16]; } pop;
+    struct { uint32_t until; uint8_t kind, col, segs, jump, mark, pool, star, filt; uint16_t pct; char value[8], sub[12 + FELUCCA_PROPHET], label[32], over[16]; } pop;
                                           /* over: the line over the value, in orange (a pool's read-out on the home
                                            * pages: the part's engine). sub: a pool's read-out puts the sound's name
                                            * there, and 12 bytes cut a 12-character name's last ("ENSEMBLE ST", "FOREVER
@@ -1152,7 +1152,8 @@ static struct {
     uint16_t from_pct, shown_pct[4];      /* the turned glyph's tween: from, and what each column last showed */
     uint8_t from_env[4], shown_env[4][4];
     uint8_t save_part, slot, save_from_edit;   /* SAVE: the part saved, the slot written (Save as new: the free one) */
-    uint8_t save_step, save_choice;       /* 0 the choice (save_choice 0 Overwrite, 1 Save as new, 2 Favorite: CU_SAVE_FAV), 1 the naming page */
+    uint8_t save_step, save_choice;       /* 0 the menu (save_choice 0 Overwrite, 1 Save as new, 2 Favorite: CU_SAVE_FAV,
+                                           * 3 Favorites filter, 4 Favorite type), 1 the naming page */
     uint8_t save_pos;                     /* Save as new: the place in the pool it takes ("FM6 \267 27") */
     uint8_t del_ask;                      /* SAVE held 1 s in the dialog on a user preset: 1 "delete?", 2 "reset to
                                            * factory?" (an overwritten factory preset); OCT+ does it, OCT- keeps */
@@ -1174,7 +1175,10 @@ static int ce_button(uint32_t b, uint32_t ev);
 static void ce_leds(uint8_t *nl, uint32_t blink);
 static void cu_led(uint8_t *nl, uint32_t id, int on);
 static void cu_save_open(uint32_t part);
-#define CU_SAVE_FAV 2u                    /* the save dialog's third choice: Favorite (KNOB 4 marks; nothing is saved) */
+#define CU_SAVE_FAV 2u                    /* the SAVE menu's third entry: Favorite (the sound's mark; nothing is saved) */
+#define CU_SAVE_FILT 3u                   /* .. the fourth: Favorites filter (Off / On: PRESETS turns through favourites) */
+#define CU_SAVE_TYPE 4u                   /* .. the fifth: Favorite type (Both / Chord / Bass: where the filter shows it) */
+#define CU_SAVE_N 5u
 static int cu_save_favonly(uint32_t part);
 static void cu_save_close(void);
 static void cu_save_commit(void);
@@ -1218,6 +1222,7 @@ static void cu_popup(const char *value, const char *sub, const char *label, uint
     cu.pop.jump = 0;
     cu.pop.mark = 0;
     cu.pop.star = 0;
+    cu.pop.filt = 0;
     cu.pop.pool = 0;
     cu.pop.over[0] = 0;
     cu_cpy(cu.pop.value, value, sizeof cu.pop.value);
@@ -1379,6 +1384,126 @@ static int cu_fav_turn(uint32_t part, int32_t s)
              crf_has(tag, id) ? "on" : "off", (unsigned)tag, (unsigned)id, (unsigned)crf_count());
     return 1;
 }
+/* KNOB 1 on the SAVE menu's Favorite type: a turn a step through Both / Chord / Bass, stopping at the ends. The type
+ * is the sound's, marked or not, and the mark (KNOB 4) never changes it (the owner, 2026-10-13: "favorite/unfavorite
+ * them and the type does not change"); a turn here on a sound that is not a favourite also marks it ("I am fine if
+ * the sound is unfavorited and you change type to auto favorite it, which would make things quicker to organize"):
+ * any turn, one against the end stop too */
+static const char *const CU_FAV_TYPE[3] = {"Both", "Chord", "Bass"};
+static int cu_fav_type_turn(uint32_t part, int32_t s)
+{
+    uint32_t tag, id;
+    int32_t v;
+    if (!cu_fav_part_key(part, &tag, &id)) {
+        cu_message("INIT: cannot be marked", CR_COL_RED);
+        cu_trace("fav: part %u %s cannot be marked\n", (unsigned)part, psnd[part].name);
+        return 0;
+    }
+    v = (int32_t)crf_type(tag, id) + (s > 0 ? 1 : -1);
+    (void)crf_set_type(tag, id, (uint32_t)(v < 0 ? 0 : v > 2 ? 2 : v));
+    v = crf_set(tag, id, 1);
+    cu_trace("fav: part %u %s type %s%s (tag %u id %u, %u marked)\n", (unsigned)part, psnd[part].name,
+             CU_FAV_TYPE[crf_type(tag, id)], v ? ", marked by it" : "", (unsigned)tag, (unsigned)id, (unsigned)crf_count());
+    return 1;
+}
+/* ---- the favourites filter (0.22; the owner, 2026-10-13: "I want filter to reduce the preset list to just scrolling
+ * between favorites, still limited by engine"). crf_filter on: PRESETS / ALGORITHM (and the BASS layer's SOUND, the
+ * editor's browser) turn through the part's engine's pool places that hold a favourite FITTING THE PART (the chord
+ * part: typed Both or Chord; the bass part: Both or Bass), in the pool's own order, INIT left out. An engine with no
+ * fitting favourite: its whole pool, as if the filter were off there (cuf_n 0), and the read-out says so. Not
+ * filtered: a program change, the session, a loop's recorded sound changes, the Sound Manager (they name a place).
+ * cuf[part]: the places as bits, built once per (engine, the marks' generation, the user bank's): a turn never walks
+ * the pool (P5: 200 places, each a look through the 32 slots) */
+#define cuf crf_x.list                             /* (kept in cr_favs.c's one object: see there why) */
+static uint32_t cuf_n(uint32_t part, uint32_t e)   /* the part's fitting favourites in engine e's pool; 0: the filter
+                                                    * off, or none (the whole pool is turned) */
+{
+    uint32_t pos, n, tag, id, i;
+    pool_ent_t en;
+    part &= 1u;
+    e %= NENGINES;
+    if (!crf_filter)
+        return 0u;
+    if (cuf[part].e == e + 1u && cuf[part].gen == crf_gen && cuf[part].upgen == up_gen)
+        return cuf[part].n;
+    for (i = 0; i < sizeof cuf[0].bits; i++)
+        cuf[part].bits[i] = 0;
+    cuf[part].n = 0;
+    n = pool_count(e);
+    for (pos = 1; pos < n && pos < 256u; pos++) {
+        en = pool_entry(e, pos);
+        if (cu_fav_key(e, en.kind, en.fk, en.slot, &tag, &id) && crf_fits(tag, id, part)) {
+            cuf[part].bits[pos / 8u] |= (uint8_t)(1u << (pos % 8u));
+            cuf[part].n++;
+        }
+    }
+    cuf[part].e = (uint8_t)(e + 1u);
+    cuf[part].gen = crf_gen;
+    cuf[part].upgen = up_gen;
+    return cuf[part].n;
+}
+static int cuf_at(uint32_t part, int32_t pos)      /* (after cuf_n) the place holds one of them */
+{
+    return pos > 0 && pos < 256 && ((cuf[part & 1u].bits[pos / 8] >> (pos % 8)) & 1u);
+}
+static uint32_t cuf_rank(uint32_t part, uint32_t pos)   /* (after cuf_n) its place among them, 1.., 0: not one */
+{
+    uint32_t p, r = 0;
+    if (!cuf_at(part, (int32_t)pos))
+        return 0u;
+    for (p = 1; p <= pos; p++)
+        r += (uint32_t)cuf_at(part, (int32_t)p);
+    return r;
+}
+/* (after cuf_n > 0) s detents from place cur (-1: the bass OFF) among them. A sound that is not one of them (the
+ * filter just turned on, its mark just taken off, a program change): the first detent goes to the nearest favourite
+ * in that direction. wrap: round the ends (PRESETS, ALGORITHM), else stopping there (the BASS layer's SOUND);
+ * off: OFF is a place below the first (ALGORITHM: past the last comes OFF, as in the whole pool) */
+static int32_t cuf_move(uint32_t part, int32_t cur, int32_t s, int wrap, int off)
+{
+    int32_t k, p, nx;
+    for (k = s < 0 ? -s : s; k > 0; k--) {
+        nx = cur;
+        if (s > 0) {
+            for (p = cur + 1; p < 256 && !cuf_at(part, p); p++)
+                ;
+            if (p < 256)
+                nx = p;
+            else if (wrap && off && cur >= 0)
+                nx = -1;
+            else if (wrap)
+                for (p = 1; p < 256; p++)
+                    if (cuf_at(part, p)) {
+                        nx = p;
+                        break;
+                    }
+        } else {
+            for (p = cur < 0 ? (wrap ? 255 : 0) : cur - 1; p > 0 && !cuf_at(part, p); p--)
+                ;
+            if (p > 0)
+                nx = p;
+            else if (cur < 0)
+                nx = cur;
+            else if (off)
+                nx = -1;
+            else if (wrap)
+                for (p = 255; p > 0; p--)
+                    if (cuf_at(part, p)) {
+                        nx = p;
+                        break;
+                    }
+        }
+        cur = nx;
+    }
+    return cur;
+}
+/* KNOB 1 on the SAVE menu's Favorites filter: right On, left Off; kept with the marks (crf_poll writes it) */
+static void cu_filter_turn(int32_t s)
+{
+    (void)crf_set_filter(s > 0);
+    cu_trace("fav: filter %s (chord %u, bass %u of their engines)\n", crf_filter ? "on" : "off",
+             (unsigned)cuf_n(0, trk[CR_PART_CHORD].eng_req), (unsigned)cuf_n(1, trk[CR_PART_BASS].eng_req));
+}
 
 /* a pool's stripes: one per preset, at most 32; a pool of INIT alone: one */
 static uint32_t cu_pool_segs(uint32_t e)
@@ -1391,27 +1516,46 @@ static uint32_t cu_pool_segs(uint32_t e)
 #define CU_POOL_ID(part, e) (1u + ((part) ? 1u : 0u) + 2u * (e))
 static void cu_pool_popup(uint32_t part, uint32_t pos)
 {
-    char b[8], nm[13], lb[24], c[8], ov[16];
+    char b[8], nm[13], lb[32], c[8], ov[16], fl[24];
     uint32_t e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, n = pool_count(e) - 1u;
-    uint32_t segs = cu_pool_segs(e);
+    uint32_t segs = cu_pool_segs(e), nf = cuf_n(part, e);
     pool_ent_t en = pool_entry(e, pos);
     int home = cu_epk_ok(part);
     cu_2d(b, pos, sizeof b);
     pool_name(e, pos, nm);
     cu_cpy(lb, ENGINES[e]->name, sizeof lb);
     cu_cat(lb, " \267 ", sizeof lb);
-    cu_2d(c, pos, sizeof c);
-    cu_cat(lb, c, sizeof lb);
-    cu_cat(lb, "/", sizeof lb);
-    cu_2d(c, n, sizeof c);
-    cu_cat(lb, c, sizeof lb);
-    if (part && cs.bass_mode == CR_BASS_SOLO)     /* Bass Behaviour Solo: the chord part is silent while it is on */
-        cu_cat(lb, " \267 solo", sizeof lb);
+    fl[0] = 0;
+    if (nf) {                                     /* the filter in force: the place among the part's favourites of this
+                                                   * engine ("--": the sound is not one of them), in the star's colour */
+        cu_cpy(fl, home ? "favorites " : "fav ", sizeof fl);
+        if (cuf_rank(part, pos))
+            cu_2d(c, cuf_rank(part, pos), sizeof c);
+        else
+            cu_cpy(c, "--", sizeof c);
+        cu_cat(fl, c, sizeof fl);
+        cu_cat(fl, "/", sizeof fl);
+        cu_2d(c, nf, sizeof c);
+        cu_cat(fl, c, sizeof fl);
+        cu_cat(lb, fl, sizeof lb);
+    } else if (crf_filter) {                      /* .. on, and no favourite of the part here: the whole pool is turned */
+        cu_cpy(fl, "no favorites: all", sizeof fl);
+        cu_cat(lb, fl, sizeof lb);
+    } else {
+        cu_2d(c, pos, sizeof c);
+        cu_cat(lb, c, sizeof lb);
+        cu_cat(lb, "/", sizeof lb);
+        cu_2d(c, n, sizeof c);
+        cu_cat(lb, c, sizeof lb);
+        if (part && cs.bass_mode == CR_BASS_SOLO) /* Bass Behaviour Solo: the chord part is silent while it is on */
+            cu_cat(lb, " \267 solo", sizeof lb);
+    }
     cu_cpy(ov, ENGINES[e]->name, sizeof ov);
     if (part && cs.bass_mode == CR_BASS_SOLO)
         cu_cat(ov, " \267 solo", sizeof ov);
-    cu_popup(b, nm, !home ? lb : CU_POOL_HINT, part ? CR_COL_ORANGE : CR_COL_WHITE,
+    cu_popup(b, nm, !home ? lb : fl[0] ? fl : CU_POOL_HINT, part ? CR_COL_ORANGE : CR_COL_WHITE,
              (int32_t)cu_pool_lit(pos, n, segs), 0, (int32_t)segs, segs);
+    cu.pop.filt = (uint8_t)(fl[0] != 0);          /* (the sign that the filter is on: the line under the stripes) */
     if (home)
         cu_cpy(cu.pop.over, ov, sizeof cu.pop.over);
     cu.pop.mark = en.kind == PK_USER && en.fk != PF_NONE;
@@ -2566,8 +2710,9 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
     case BT_SAVE:                                 /* naming and saving the sound (on a bass page: the bass) */
         if (cu.page == PG_SAVE && ce.del_ask)
             ce.del_ask = 0;                       /* "delete?": no */
-        else if (cu.page == PG_SAVE && !ce.save_step && ce.save_choice == CU_SAVE_FAV)
-            cu_save_close();                      /* SAVE again on Favorite: nothing to save, the dialog closes */
+        else if (cu.page == PG_SAVE && !ce.save_step && ce.save_choice >= CU_SAVE_FAV)
+            cu_save_close();                      /* SAVE again on Favorite, the filter, the type: nothing to save, the
+                                                   * dialog closes */
         else if (cu.page == PG_SAVE)
             cu_save_commit();                     /* SAVE again: save (as OCT+) */
         else
@@ -2826,7 +2971,10 @@ static void cu_engine_pick(uint32_t i) { cu_engine_switch(ce.part, cu_engine_at(
 static void cu_pool_step(int32_t s)
 {
     uint32_t part = ce.part, e = cu_edit_trk()->eng_req % NENGINES, n = pool_count(e), pos;
-    pos = (cu_part_pos(part) + (uint32_t)(s % (int32_t)n + (int32_t)n)) % n;
+    if (cuf_n(part, e))                            /* the favourites filter: the part's favourites of this engine */
+        pos = (uint32_t)cuf_move(part, (int32_t)cu_part_pos(part), s, 1, 0);
+    else
+        pos = (cu_part_pos(part) + (uint32_t)(s % (int32_t)n + (int32_t)n)) % n;
     cu_pool_load(part, e, pos);
     if (!part)
         cu_sends_to_fx();
@@ -2961,8 +3109,10 @@ static void cu_edit_open(uint32_t part) { ce_open(part); }
  * is a Save as new (and the old one deleted). SAVE held 1 s in the dialog: "reset to factory?" on an overwritten
  * factory preset, "delete?" on an added one; OCT+ does it. No free slot: "no free slot". Every user preset is one of
  * upreset.c's 32 records (cr_bank.c cb_store writes the binding) */
-static const char *const CU_SAVE_NAME[3] = {"overwrite", "save as new", "favorite"};   /* (the traces) */
-/* the part's engine has no store for its sound: its dialog has the Favorite choice alone, and OCT+ is refused. P5
+#define CU_SAVE_FOOT "K1 change \267 K2 filter \267 K3 type \267 K4 favorite"   /* (KNOB 1 .. 4: spelled out they are wider
+                                                                                * than the line) */
+static const char *const CU_SAVE_NAME[CU_SAVE_N] = {"overwrite", "save as new", "favorite", "filter", "type"};   /* (the traces) */
+/* the part's engine has no store for its sound: its menu has the three favourites' entries alone, and OCT+ is refused. P5
  * (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's parameters and no program, and would load as
  * P5's INIT under the sound's name */
 static int cu_save_favonly(uint32_t part)
@@ -3079,7 +3229,8 @@ static void cu_save_commit(void)
     track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
     char name[16], l[4];
     int rc;
-    if (ce.save_step == 0u && ce.save_choice == CU_SAVE_FAV) {   /* Favorite: OCT+ saves nothing, writes no slot */
+    if (ce.save_step == 0u && ce.save_choice >= CU_SAVE_FAV) {   /* Favorite, the filter, the type: OCT+ saves nothing,
+                                                                  * writes no slot */
         if (cu_save_favonly(part)) {
             cu_message("P5: no save yet", CR_COL_RED);
             cu_trace("save: part %u P5 refused (no store)\n", (unsigned)part);
@@ -3443,6 +3594,8 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cu_trace("bass: knob 2 register %+d\n", (int)s);
         } else if (knob == 2) {                    /* SOUND */
             v = (int32_t)cs.bass_sound + s;
+            if (cuf_n(1, trk[CR_PART_BASS].eng_req))   /* the favourites filter: off, then the bass part's favourites */
+                v = cuf_move(1, (int32_t)cs.bass_sound - 1, s, 0, 1) + 1;
             cu_bass_go((uint32_t)(v < 0 ? 0 : v));
             cu_trace("bass: knob 3 sound %u\n", (unsigned)cs.bass_sound);
         } else {                                   /* LEVEL */
@@ -3768,6 +3921,7 @@ static void cu_key_press(uint32_t k)
             cn_space();
         else if (k == 13u)
             cn_delete();
+        cu_trace("name: key %u: '%s' cursor %u of %u\n", (unsigned)k, cn.s, (unsigned)cn.cur, (unsigned)cn.len);
         cu.key_note[k] = 0xFFu;
         return;
     }
@@ -3955,6 +4109,9 @@ static void cu_epk_commit(void)                   /* OPT released: the engine pi
     pos = cs.pool_pos[part][eng_rank(e)];
     if (pos >= n)
         pos = n > 1u ? 1u : 0u;
+    if (cuf_n(part, e))                            /* the favourites filter: the engine's first favourite of the part,
+                                                    * not the place remembered (none: the place remembered) */
+        pos = (uint32_t)cuf_move(part, 0, +1, 0, 0);
     cu_pool_load(part, e, pos);
     if (!part)
         cu_sends_to_fx();
@@ -4009,10 +4166,44 @@ static int cu_bass_level_hold(int32_t s)
     return 1;
 }
 
+/* the knobs on the naming page of Save as new (the owner, 2026-10-13: "the editor to name the preset needs work. All
+ * the other knobs do default things which is weird. Select knob should select character, knob 1 to change the letter
+ * at selected index, knob 4 CCW as a backspace, the other knobs 2 and 3 in the name editor should not do anything"):
+ * SELECT the cursor (a step a turn; right from the last character: a new one), KNOB 1 the character under it, KNOB 4
+ * left the backspace (the character under it; "The cursor should always sit at the character you are editing, not
+ * the next character"); KNOB 2, KNOB 3, KNOB 4
+ * right, PRESETS and ALGORITHM nothing, GLO or BASS held or not. Until then, with a name on the screen: KNOB 1 was the
+ * voicing (the Full keyboard: the octave), KNOB 2 the name's last letter, KNOB 3 the Perform mode's knob, KNOB 4 the
+ * chord part's send, SELECT the tempo, PRESETS the chord part's sound and ALGORITHM the bass part's (the sound being
+ * named changed under its name), GLO + KNOB 1 the split point, GLO + SELECT the click level, BASS held + ALGORITHM
+ * the bass level. A layer held open over the page (PERF, FX, ..) still owns the knobs while it is open; MASTER is not
+ * a knob of this code */
+static void cu_name_knob(uint32_t role, int32_t s)
+{
+    const char *what = "nothing";
+    if (role == EN_SELECT) {
+        cn_move(s > 0 ? 1 : -1);
+        what = "cursor";
+    } else if (role == EN_K1) {
+        cn_knob(s);
+        what = "letter";
+    } else if (role == EN_K4 && s < 0) {
+        cn_delete();
+        what = "backspace";
+    }
+    cu_trace("name: %s (knob role %u %+d): '%s' cursor %u of %u\n", what, (unsigned)role, (int)s, cn.s, (unsigned)cn.cur,
+             (unsigned)cn.len);
+}
 static void cu_knob(uint32_t role, int32_t s)
 {
     uint32_t l;
     int32_t v;
+    if (cu.page == PG_SAVE && ce.save_step && !cu_layer()) {   /* naming a sound: the knobs are the name's and nothing
+                                                    * else (cu_name_knob): before the holds and shifts below */
+        cu_activity();
+        cu_name_knob(role, s);
+        return;
+    }
     if (role == EN_ALGO && cu_bass_level_hold(s))  /* BASS held + ALGORITHM: the bass level */
         return;
     cu_activity();
@@ -4156,20 +4347,54 @@ static void cu_knob(uint32_t role, int32_t s)
             ce_knob(role - EN_K1, s, 0);
         return;
     }
-    if (cu.page == PG_SAVE && !ce.save_step && (role == EN_K1 || role == EN_SELECT)) {   /* the choice: three (0.22),
-                                                    * a turn a step, stopping at the ends; P5's dialog: Favorite alone */
+    if (cu.page == PG_SAVE && !ce.save_step && role == EN_SELECT) {   /* the SAVE menu, in the Options' grammar (the
+                                                    * owner, 2026-10-13: "make knob 1 work for changing values to match
+                                                    * menu behaviour in other menus like GBL"): SELECT picks the entry, a
+                                                    * turn a step, stopping at the ends: Overwrite, Save as new, Favorite,
+                                                    * Favorites filter, Favorite type; P5's menu: the last three */
+        int32_t lo = cu_save_favonly(ce.save_part) ? (int32_t)CU_SAVE_FAV : 0;
         v = (int32_t)ce.save_choice + (s > 0 ? 1 : -1);
-        ce.save_choice = cu_save_favonly(ce.save_part) ? CU_SAVE_FAV : (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+        ce.save_choice = (uint8_t)(v < lo ? lo : v > (int32_t)CU_SAVE_N - 1 ? (int32_t)CU_SAVE_N - 1 : v);
         ce.del_ask = 0;
         cu_trace("save: choice %s\n", CU_SAVE_NAME[ce.save_choice]);
         return;
     }
-    if (cu.page == PG_SAVE && !ce.save_step && !ce.del_ask && role == EN_K4 && ce.save_choice == CU_SAVE_FAV) {
-        (void)cu_fav_turn(ce.save_part, s);        /* Favorite: KNOB 4 right marks, left takes the mark off; at once */
-        return;
-    }
-    if (cu.page == PG_SAVE && ce.save_step && role == EN_K2) {            /* naming: the last letter */
-        cn_knob(s);
+    if (cu.page == PG_SAVE && !ce.save_step && (role == EN_K1 || role == EN_K2 || role == EN_K3 || role == EN_K4)) {
+        /* KNOB 1 changes the entry's value (Favorite: Off / On; the filter: Off / On; the type: Both / Chord / Bass);
+         * Overwrite and Save as new have none: nothing. KNOB 4 is the sound's mark on every entry ("Knob 4 should set
+         * favorite regardless of which setting is selected"): right marks, left takes it off, at once. (Until this
+         * menu KNOB 1 also moved the choice, and KNOB 4 on the two saves was the chord part's send as on the home
+         * pages; on the naming page both are still what they are there.) KNOB 3 is the sound's TYPE on every entry
+         * (the owner, 2026-10-13: "Fix knob 3 in the preset save menu to set the type too"): what KNOB 1 does on the
+         * Favorite type entry, and on another entry a short message says the type it gave (until then KNOB 3 here was
+         * the Perform mode's knob, as on the home pages; on the naming page it still is). KNOB 2 is the favourites
+         * filter on every entry, left Off, right On: what KNOB 1 does on the Favorites filter entry, with a message of
+         * the state on another entry (until then KNOB 2 here was the bass register, as on the home pages; on the
+         * naming page it is the last letter, unchanged). So: SELECT the entry, KNOB 1 its value, KNOB 2 the filter,
+         * KNOB 3 the type, KNOB 4 the mark. Over the red question: none of them */
+        if (ce.del_ask)
+            return;
+        if (role == EN_K2) {
+            cu_filter_turn(s);
+            if (ce.save_choice != CU_SAVE_FILT)
+                cu_message(crf_filter ? "Filter on" : "Filter off", CR_COL_YELLOW);
+        } else if (role == EN_K3) {
+            if (cu_fav_type_turn(ce.save_part, s) && ce.save_choice != CU_SAVE_TYPE) {
+                uint32_t tag = 0, id = 0;
+                char m[24];
+                (void)cu_fav_part_key(ce.save_part, &tag, &id);
+                cu_cpy(m, "Type: ", sizeof m);
+                cu_cat(m, CU_FAV_TYPE[crf_type(tag, id)], sizeof m);
+                cu_message(m, CR_COL_YELLOW);
+            }
+        } else if (role == EN_K4 || ce.save_choice == CU_SAVE_FAV)
+            (void)cu_fav_turn(ce.save_part, s);
+        else if (ce.save_choice == CU_SAVE_FILT)
+            cu_filter_turn(s);
+        else if (ce.save_choice == CU_SAVE_TYPE)
+            (void)cu_fav_type_turn(ce.save_part, s);
+        else
+            cu_trace("save: knob 1 on %s: no value\n", CU_SAVE_NAME[ce.save_choice]);
         return;
     }
     switch (role) {
@@ -4204,7 +4429,10 @@ static void cu_knob(uint32_t role, int32_t s)
     case EN_PRESET:                                /* the chord part's engine's pool, wrapping */
         {
             uint32_t n = pool_count(trk[CR_PART_CHORD].eng_req % NENGINES);
-            cu_sound_go((cs.sound + (uint32_t)(s % (int32_t)n + (int32_t)n)) % n);
+            if (cuf_n(0, trk[CR_PART_CHORD].eng_req))   /* the favourites filter: the chord part's favourites, wrapping */
+                cu_sound_go((uint32_t)cuf_move(0, (int32_t)cs.sound, s, 1, 0));
+            else
+                cu_sound_go((cs.sound + (uint32_t)(s % (int32_t)n + (int32_t)n)) % n);
             cu_sound_popup(0);
             cu_trace("sound: part 0 pos %u %s\n", (unsigned)cs.sound, psnd[0].name);
         }
@@ -4213,6 +4441,8 @@ static void cu_knob(uint32_t role, int32_t s)
         {
             int32_t n = (int32_t)pool_count(trk[CR_PART_BASS].eng_req % NENGINES) + 1;
             v = ((int32_t)cs.bass_sound + s % n + n) % n;
+            if (cuf_n(1, trk[CR_PART_BASS].eng_req))   /* the favourites filter: OFF, then the bass part's favourites */
+                v = cuf_move(1, (int32_t)cs.bass_sound - 1, s, 1, 1) + 1;
         }
         cu_bass_go((uint32_t)v);
         cu_sound_popup(1);
@@ -5846,7 +6076,7 @@ static void cu_epk_screen(cr_screen_t *s)
  * naming page (the place it takes, "FM6 \267 27", the name being typed), the red question */
 static void cu_save_screen(cr_screen_t *s, uint32_t now)
 {
-    static const char *const CHOICE[3] = {"Overwrite", "Save as new", "Favorite"};
+    static const char *const CHOICE[2] = {"Overwrite", "Save as new"};
     uint32_t part = ce.save_part, e = trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req % NENGINES, col;
     char b[32];
     col = part ? CR_COL_ORANGE : CR_COL_WHITE;
@@ -5864,19 +6094,33 @@ static void cu_save_screen(cr_screen_t *s, uint32_t now)
         s->size = 96;
         return;
     }
-    if (!ce.save_step) {                           /* the choice */
+    if (!ce.save_step) {                           /* the menu: five entries (P5: the last three). The two saves by
+                                                    * their names; the other three show their VALUE big (the entry not
+                                                    * selected: a line that names it), the line under the name says
+                                                    * which entry it is */
+        static const char *const TYSM[3] = {"Type: Both", "Type: Chord", "Type: Bass"};
+        uint32_t ch = ce.save_choice, tag = 0, id = 0, ty;
         int fav = cu_fav_part(part), only = cu_save_favonly(part);
-        cu_cpy(b, part ? "save bass \267 " : "save \267 ", sizeof b);
-        cu_cat(b, ENGINES[e]->name, sizeof b);
-        if (ce.save_choice == CU_SAVE_FAV) {       /* Favorite: the state big, the name (its star) under it */
-            const char *it[3] = {CHOICE[0], CHOICE[1], fav ? "Favorite" : "Not a favorite"};
-            cu_cpy(b, part ? "bass \267 " : "", sizeof b);
-            cu_cat(b, ENGINES[e]->name, sizeof b);
-            cu_cat(b, " \267 KNOB 4 marks", sizeof b);
-            cu_picker(s, only ? it + 2 : it, only ? 1u : 3u, only ? 0u : 2u, col, b, "KNOB 4: mark \267 OCT-: close");
+        const char *it[CU_SAVE_N];
+        ty = cu_fav_part_key(part, &tag, &id) ? crf_type(tag, id) : CRF_BOTH;   /* (the sound's, marked or not) */
+        it[0] = CHOICE[0];
+        it[1] = CHOICE[1];
+        it[CU_SAVE_FAV] = fav ? "Favorite" : "Not a favorite";
+        it[CU_SAVE_FILT] = crf_filter ? "Filter on" : "Filter off";
+        it[CU_SAVE_TYPE] = ch != CU_SAVE_TYPE ? TYSM[ty] : CU_FAV_TYPE[ty];
+        if (ch == CU_SAVE_FILT) {
+            cu_cpy(b, crf_filter && !cuf_n(part, e) ? "no favorites here: all" : "favorites filter", sizeof b);
+        } else if (ch == CU_SAVE_TYPE) {             /* (not a favourite: said here, and the name has no star) */
+            cu_cpy(b, fav ? "favorite type" : "type \267 not a favorite", sizeof b);
         } else {
-            cu_picker(s, CHOICE, 3, ce.save_choice, col, b, "OCT+: save \267 OCT-: cancel");
+            cu_cpy(b, ch == CU_SAVE_FAV ? (part ? "bass \267 " : "") : part ? "save bass \267 " : "save \267 ", sizeof b);
+            cu_cat(b, ENGINES[e]->name, sizeof b);
+            if (ch == CU_SAVE_FAV)
+                cu_cat(b, " \267 favorite", sizeof b);
         }
+        cu_picker(s, only ? it + CU_SAVE_FAV : it, only ? CU_SAVE_N - CU_SAVE_FAV : CU_SAVE_N,
+                  only ? ch - CU_SAVE_FAV : ch, col, b,
+                  ch >= CU_SAVE_FAV ? CU_SAVE_FOOT : "OCT+: save \267 OCT-: cancel");
         cu_cpy(s->value, psnd[part].name, sizeof s->value);
         if (psnd[part].edited)
             cu_cat(s->value, " *", sizeof s->value);
@@ -5893,11 +6137,12 @@ static void cu_save_screen(cr_screen_t *s, uint32_t now)
     s->lines[1].px = 36;
     s->lines[1].col = cn.pristine ? CR_COL_GREY : CR_COL_WHITE;
     s->lines[1].bold = 1;
+    s->lines[1].cur = (uint8_t)(cn.len ? cn.cur + 1u : 0u);   /* the cursor: under its character (no name: none) */
     s->lines[2].px = 12;
-    cu_cpy(s->lines[3].t, "keys: letters \267 F#4: delete", sizeof s->lines[3].t);
+    cu_cpy(s->lines[3].t, "SELECT: cursor \267 K1: letter", sizeof s->lines[3].t);
     s->lines[3].px = 12;
     s->lines[3].col = CR_COL_GREY;
-    cu_cpy(s->lines[4].t, "SAVE: save \267 KNOB 2: letter", sizeof s->lines[4].t);
+    cu_cpy(s->lines[4].t, "keys: letters \267 K4 left: delete", sizeof s->lines[4].t);
     s->lines[4].px = 12;
     s->lines[4].col = CR_COL_GREY;
     s->n_lines = 5;
@@ -6225,6 +6470,7 @@ static void cr_build_screen(cr_screen_t *s, uint32_t now)
             cu_meter(s, cu.pop.value, cu.pop.sub, cu.pop.label, cu.pop.col, cu.pop.pct, cu.pop.segs);
             s->sub_mark = cu.pop.mark;
             s->star = cu.pop.star;
+            s->label_fav = cu.pop.filt;
             if (cu.pop.over[0]) {                  /* a pool's read-out on the home pages: the engine over the number */
                 cu_cpy(s->line, cu.pop.over, sizeof s->line);
                 s->line_col = CR_COL_ORANGE;

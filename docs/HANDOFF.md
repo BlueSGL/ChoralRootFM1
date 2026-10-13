@@ -305,6 +305,11 @@ installed on the owner's Mac.
     adds six to `stale_halves` by itself (six boundaries nobody served, the buffer silenced first: silence in a
     pause). The other 16 of the 22 are either more erases or the overload of that build (`pk_block_us` 3136, 83
     late): the reading cannot say which. `flash_erases` and `flash_holes` (the rule: 0) in the same `--debug` do.
+    star is yellow (`cr_draw.c CR_STAR_COL`); favourites in the web Sound Manager (not built, the store supports
+    it); the browser's label does not name KNOB 4 (kept so that a screen without a mark is c176dd4's). **The filter
+    and the type (HISTORY 3y42) are not on a unit either**: to read there: the SAVE menu's five entries and its four
+    knobs, the yellow line of the read-out, and that a turn of PRESETS in P5's pool with the filter on is as quick as
+    without. In the SAVE menu KNOB 1 no longer moves the entry (SELECT does): the one habit that changes.
 
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
@@ -330,7 +335,7 @@ installed on the owner's Mac.
   `python3 tools/p5_goldens.py` (P5's goldens and CPU entries only), not `GOLDEN_UPDATE=1`. **A load takes the
   program's UNISON switch** (`p5_track_loaded`); the two paths that restore a part from a record (`css_part_put`,
   `cu_pick_end`) set the recorded voice mode again after it (`p5_voice_restore`), and `cu_engine_switch` calls
-  `p5_leave`. It has no store: a P5 part's SAVE dialog has the Favorite choice alone and OCT+ there is refused (the session keeps
+  `p5_leave`. It has no store: a P5 part's SAVE menu has the three favourites' entries alone (Favorite, Favorites filter, Favorite type) and OCT+ there is refused (the session keeps
   the part's edited program over a power cycle), and the settings record has no slot for its per-engine pool position (back from another engine after
   a power cycle it lands on 01).
 - **Sounds**: a pool per engine = INIT + the factory presets (ROM: FM6 25, FM TONE 16, VA 25, CZ-1 64, P5 48 of Sequential's 200: a list,
@@ -341,9 +346,23 @@ installed on the owner's Mac.
   are 0xC8000 .. 0xDBFFF.
 - **Favourites** (0.22, `cr_favs.c`, docs/PRESETS.md "Favourites"): a bit per sound. A factory sound's key is (the
   engine's index, the preset's index in the engine's table), P5's the Sequential number 1..200, a user sound's its
-  slot; a record over a factory preset has that preset's key; INIT has none. Version byte 1, sections of tag / length
-  / bits. Written as an Option is (the poll, when quiet), with SAVE held and before a backup's LIST. Backup id 23.
-  SAVE's third choice and the editor's browser: KNOB 4. `tools/fm1_install.py --favorites` reads them.
+  slot; a record over a factory preset has that preset's key; INIT has none. **Version byte 2** (3y42; version 1,
+  40acb01's marks alone, is read: every mark Both), sections of tag / length / bits: tag the marks, tag | 0x40 the
+  sounds typed Chord, tag | 0x20 typed Bass, 0xFF the options (bit 0 the filter); 262 bytes at most. Written as an
+  Option is (the poll, when quiet), with SAVE held and before a backup's LIST. Backup id 23.
+  The editor's browser: KNOB 4 marks. `tools/fm1_install.py --favorites` reads them (the type in the comment).
+- **The favourites' type and filter** (3y42): a TYPE per sound, Both / Chord / Bass, the sound's own (kept without a
+  mark; KNOB 4 never changes it; a change of type marks an unmarked sound). The FILTER, one Off / On kept in the same
+  object: PRESETS / ALGORITHM / the BASS layer's SOUND / the editor's browser step the part's fitting favourites of
+  its engine (`cr_ui.c cuf_n`, `cuf_move`; a per-part cache of 32 bytes of bits, rebuilt on `crf_gen` / `up_gen` /
+  the engine); none in the engine: the whole pool, "no favorites: all"; an engine change lands on the first; program
+  changes, the session, loops, restores are not filtered. **The SAVE menu**: SELECT the entry (Overwrite, Save as
+  new, Favorite, Favorites filter, Favorite type), KNOB 1 its value, and on every entry KNOB 2 the filter, KNOB 3 the
+  type, KNOB 4 the mark; OCT+ saves on the first two only. **The naming page** (3y42, `cr_name.c`): a cursor
+  (`cn.cur`, always on a character), SELECT moves it and adds a character right of the last, KNOB 1 the character
+  under it, KNOB 4 left deletes it, every other knob inert (`cu_name_knob`, first thing in `cu_knob`); a key goes in
+  after the cursor; the cursor is `cr_line_t.cur`, a
+  steady bar.
 - **SAFE MODE's Flash Data** erases 60 sectors (`cr_ui.c cu_flash_erase`; 58 until the favourites).
 - **Backup object ids** (`cr_backup.c`'s head): 1 settings, 6 / 7 user banks, 8 the FM6 bank, 9 the VA store,
   10 / 11 FM6, 12 / 13 CZ-1, 14 .. 21 the CZ banks, 22 FM TONE, 23 the favourites (0.22; a firmware before it does not
