@@ -236,7 +236,7 @@ ok(html.indexOf('id="lib"') < html.indexOf('id="dev"') && html.includes("Place â
 ok(html.includes('"ChoralRoot FM-1"') && html.includes("onstatechange") && html.includes('get("sim") === "1"'), "page: the port name, hot-plug, ?sim=1");
 ok(!/<link\s/i.test(html) && !/src="http/.test(html), "page: no external assets");
 const strip = (src) => src.replace(/^export\s+/gm, "").replace(/^import .*?;\n/gm, "");
-const lib = ["fm1backup.js", "fm1sounds.js", "fm1manager.js"].map((f) => strip(readFileSync(join(HERE, f), "utf8"))).join("\n");
+const lib = ["fm1backup.js", "fm1dnsnd.js", "fm1sounds.js", "fm1manager.js"].map((f) => strip(readFileSync(join(HERE, f), "utf8"))).join("\n");
 const script = html.slice(html.indexOf('<script type="module">') + 22, html.lastIndexOf("</script>")).replace("/*LIB*/", lib);
 let compiled = null; try { new vm.Script(`(async () => {${script}\n})`); compiled = true; } catch (e) { compiled = e; }
 ok(compiled === true, `page: the script as make_site.py inlines it compiles (no duplicate names)${compiled === true ? "" : ": " + compiled.message}`);

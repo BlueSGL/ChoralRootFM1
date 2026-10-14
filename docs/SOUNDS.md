@@ -331,6 +331,87 @@ other engine's kind or of an engine the slot is not is simply the file's engine:
 - On hardware (2026-10-07): `--export-syx 2` (TINE EP, 163 bytes), `--import-syx 3` of it, `--export-syx 3` byte-identical
   to the first file, the slot's JSON export equal to U02's blob including the function defaults, then `--delete-sound 3`.
 
+## .dnsnd import (Elektron Digitone sounds as FM TONE sounds; 2026-10-14)
+
+The owner: "Being able to load in Digitone presets for the FM-Tone engine in the device manager" ... "Build now, I do
+have a Digitone we can refine later." FM TONE (engine 15, docs/QUAD.md) follows the Digitone's FM voice, so most of a
+Digitone sound has a place in its patch. The decoding is ours (clean-room, from exported files; Elektron publishes no
+spec), the files are read **on this computer**: nothing is uploaded. No Elektron sound, value or name is in this
+repository; the tests build their `.dnsnd` with our own encoder and made-up values.
+
+**Where.** The device manager's library (Add files: `.dnsnd`, several at once; each becomes a library item, an FM TONE
+sound, with its notes on its row; Place writes it, as any library item: to a chosen slot or each to the next free one);
+the installer page's Sounds section (Import on a row: a `.dnsnd` always asks first, listing the notes); the host:
+`node tools/dnsnd_to_sound.mjs IN.dnsnd OUT.json` makes a sound file (and prints the notes) that `fm1_install.py
+--import-sound N OUT.json` writes (the CLI has no `.dnsnd` option of its own: the field table stays in one place,
+`web/fm1dnsnd.js`).
+
+**The file** (`web/fm1dnsnd.js parseDnsnd`). A ZIP (stored or deflated: `DecompressionStream("deflate-raw")` in a
+browser, zlib in node) of `manifest.json` (`FileType` "Sound", `Payload` the payload's name, `FirmwareVersion`,
+`ProductType`, `MetaInfo.Tags`) and the payload: a 0x23-byte header (magic `ac 11 d3 03`, "0097" at 9, the record's
+size u16le at 0x1c), an LZ4 block, a 14-byte trailer (ending `aa a1 da aa`). The record, 302 bytes: `be ef ba ce`,
+u32be version 1, a u32 of tag bits, the name (16 bytes) at 12, then the parameters as byte pairs from 30 (the coarse
+value; the second byte is the fine part on the hi-res ones). Refused with the reason: not a ZIP, no manifest, not a
+Sound, no payload, another payload magic, a record size other than 302 or a record version other than 1 ("a newer
+Digitone format (version N): not supported": the Digitone II likely differs), the record's magic, a damaged LZ4 block.
+Read with a warning: a firmware other than 1.42A, a ProductType other than `["24","30"]`, an unusual header or trailer.
+
+**The field table** (`DNSND_FIELDS`: name, offset, hi-res, confidence, decode, the FM TONE value it sets). Confidence:
+*verified* (the structure, the name, the LZ4: proven by decoding), *inferred* (from the ranges and the sound
+categories' means over a corpus of exports), *guess*, *unknown* (decoded for the diff tool, not imported).
+
+| offset | Digitone | conf. | FM TONE (eng_quad.c) |
+| --- | --- | --- | --- |
+| 30 / 32 | LFO 1 / 2 SPEED (hi-res, 64 = 0) | inferred | LFO 1 / 2 SPEED, rounded |
+| 34 / 36 | MULT (0..11 synced, 12..23 fixed) | inferred | MULT, the same 24 |
+| 38 / 40 | FADE (64 = 0) | guess | FADE |
+| 42 / 44 | DEST (a number 0..66) | inferred | DEST by `DN_LFO_DEST` (none mapped yet: off, a note) |
+| 46 / 48 | WAVE TRI SINE SQR SAW EXP RMP RND | inferred | the same waves (EXP / RAMP swap places) |
+| 50 / 52 | SPH (start phase) | guess | PHASE |
+| 54 / 56 | MODE FREE TRG HLD ONE HLF | inferred | TRIG, the same five |
+| 58 / 60 | DEPTH (hi-res, 64 = 0) | inferred | DEPTH, rounded |
+| 62 | ALGO (0..7) | inferred | ALGO 1..8 |
+| 64 | RATIO C (19 steps) | inferred | RATIO C, the same index (1.00 = 3) |
+| 66 | RATIO A (36 steps) | guess | RATIO A, nearest quarter: the step table is **assumed** (0.25 .. 2 in quarters, 2.5 .. 16 in halves) |
+| (not found) | RATIO B | - | 1.00 / 1.00 (a note on every sound) |
+| 70 | HARM (hi-res, 63 = 0) | inferred | HARM -26..26 |
+| 72 | DTUN (hi-res) | inferred | DTUNE |
+| 74 | FDBK 0..127 | inferred | FDBK x 120 / 127 |
+| 76 | MIX (64 = 0) | inferred | MIX -64..63 |
+| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | inferred | ENV A / B, direct |
+| 98..108 | A DLY, A TRIG, A RESET, B DLY, B TRIG, B RESET | guess | ENV 2 / ENV 2+ |
+| 128 | filter type (5 kinds) | inferred (order guessed: LP4 LP2 BP HP2 HP4) | LP24, LP12, BP -> LP12, HP12, HP4 -> HP12 (a note for the two) |
+| 130 / 132 | FREQ / RESO (hi-res) | inferred | FREQ / RESO |
+| 134 | ENV depth (hi-res, 64 = 0) | guess | FILTER DEPTH |
+| 136..142 | filter ATK DEC SUS REL | inferred | FILTER ATK DEC SUS REL |
+| 144 / 146 | BASE (hi-res) / WIDTH | guess | BASE / WIDTH |
+| 148 / 152 / 154 / 166 | AMP ATK / DEC / SUS (hi-res) / REL (hi-res) | inferred / guess | AMP ATK DEC SUS REL |
+| 150 | AMP HOLD | guess | none: dropped (a note when not 0) |
+| 158 | PAN (64 = 0) | inferred | the record's track PAN (P_PAN) |
+| 160 | VOL (hi-res) | inferred | LEVEL |
+| 156 / 162 / 164 | delay / reverb / chorus sends | guess | not imported (the FM-1's effects are global; a note when not 0) |
+| 68, 78, 110, 168, 112..126, 188..263 | ? | unknown | - |
+
+Every FM TONE value is clamped into the firmware's range (`DN_QUAD_RANGES` = `quad_range`; the test compares it with
+`build/host/sound_templates --quad-ranges`, and every test blob passes the firmware's own `quad_blob_ok`). What the
+Digitone file does not give keeps FM TONE's default (OFS 0, PHRT ALL, VEL 64, the KEY scalings 0, filter DELAY and
+KTRK 0, LFO 3). Lost always: the overdrive, the arpeggiator, the multimap and the sends (none decoded, or global on the
+FM-1). The record is the FM TONE template (`SOUND_TEMPLATES.quad`, pinned by `sound_templates --check`) with the name
+(cut to 12), the PAN and the macros P_E0..P_E7 set from the patch; it is added to FM TONE's pool (no binding).
+
+On the owner's 256 factory files (a local check, not in the suite): all parse, all blobs pass `quad_blob_ok`; every
+sound gets the RATIO B note, about 70 % of the LFOs lose their destination (not mapped yet), most sounds a RATIO A
+note (the assumed table) and an AMP HOLD note; about 5 notes a sound.
+
+### Refining the table (with the owner's Digitone)
+
+Export a sound, change ONE parameter on the Digitone, export again, then compare:
+`node tools/dnsnd_diff.mjs BEFORE.dnsnd AFTER.dnsnd` prints every byte of the record that differs, both values and
+the field it belongs to (`?` for an unknown offset). Then edit the one line of `DNSND_FIELDS` in `web/fm1dnsnd.js`
+(its offset, its confidence, its conversion), or add a pair to `DN_LFO_DEST` (a Digitone destination number -> an
+FM TONE `QD_*` index) or fix `DN_RATIO_A` from the RATIO A steps the Digitone shows. First worth doing: RATIO B (turn
+it and diff), the LFO destinations (one export per destination), RATIO A at a few steps, the filter type order.
+
 ## Decisions taken in the implementation (2026-10-07)
 
 - **A version-2 VA store** (the same 3536 bytes, older blobs) is converted by the FM-1 at boot by reading every blob as

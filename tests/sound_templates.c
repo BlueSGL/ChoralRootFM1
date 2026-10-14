@@ -16,7 +16,10 @@
  *         "fixtures": { "fm6_blob": <base64 128>, "fm6_vced": <base64 155>, "fm6_fn": <base64 8: the packed
  *                       function defaults, blob bytes 114..121>, "cz_tone": <base64 144>, "quad_blob": <base64 80:
  *                       QUAD's first factory preset, EP> } }
- * (QUAD has no .syx: its template and blob are the test fixtures of the "quad" patch kind, not pinned in the clients) 
+ * (QUAD has no .syx: its template is the record a Digitone .dnsnd import gets (web/fm1dnsnd.js), pinned in the
+ * clients as the other two; its blob is the test fixture of the "quad" patch kind)
+ *   ./build/host/sound_templates --quad-ranges   FM TONE's per-value [min, max, def] (web/test_dnsnd.mjs compares)
+ *   ./build/host/sound_templates --quad-check    stdin: 80-byte blobs in hex, one a line -> "ok" / "bad" (quad_blob_ok)
  * A template is a valid record (up_valid) of the engine with every parameter at its default (param_desc_of), np =
  * P_COUNT, ver UP_VER, the name "SYX IMPORT" (the importer replaces it with the voice's name), no pattern. The
  * firmware maps a record's values by count, so a template stays valid when P_COUNT grows (upreset.c). The fixtures:
@@ -197,6 +200,26 @@ int main(int argc, char **argv)
     b64(blob + 114u, 8u, f_fn);
     b64(CZ_FACTORY[0], CZ_BYTES, f_tone);
     factory_json(fac, sizeof fac, first, sizeof first);
+    if (argc == 2 && !strcmp(argv[1], "--quad-ranges")) {   /* FM TONE's per-value [min, max, def] (web/fm1dnsnd.js) */
+        uint32_t i;
+        printf("[");
+        for (i = 0; i < QP_NP; i++) {
+            quad_rng_t g = quad_range(i);
+            printf("%s[%d,%d,%d]", i ? "," : "", g.min, g.max, g.def);
+        }
+        printf("]\n");
+        return 0;
+    }
+    if (argc == 2 && !strcmp(argv[1], "--quad-check")) {    /* stdin: an 80-byte blob in hex a line -> ok / bad */
+        char line[400];
+        while (fgets(line, sizeof line, stdin)) {
+            uint32_t i, n = 0, x;
+            for (i = 0; n < QUAD_BLOB && sscanf(line + 2u * i, "%2x", &x) == 1; i++)
+                qb[n++] = (uint8_t)x;
+            printf("%s\n", n == QUAD_BLOB && quad_blob_ok(qb) ? "ok" : "bad");
+        }
+        return 0;
+    }
     if (argc == 2 && !strcmp(argv[1], "--packs")) {
         packs_json();
         return 0;
@@ -217,7 +240,7 @@ int main(int argc, char **argv)
             s = calloc((size_t)n + 1u, 1);
             fread(s, 1, (size_t)n, f);
             fclose(f);
-            if (!strstr(s, t_fm6) || !strstr(s, t_cz)) {
+            if (!strstr(s, t_fm6) || !strstr(s, t_cz) || !strstr(s, t_quad)) {
                 fprintf(stderr, "%s: the sound templates differ from the firmware's defaults (run tests/sound_templates and paste)\n", argv[i]);
                 bad = 1;
             }

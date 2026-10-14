@@ -6,9 +6,10 @@
 // every write); the library (IndexedDB in a browser, a Map in node); files and packs read into library items; the
 // simulated FM-1 of ?sim=1 (web/test_installer.mjs's backup side, with sounds and loops in it).
 // No DOM: the page (manager.html) draws, this decides. Every name here is unique across fm1backup.js / fm1sounds.js:
-// make_site.py inlines the three into one script.
+// make_site.py inlines them (and fm1dnsnd.js) into one script.
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
-import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx } from "./fm1sounds.js";
+import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
+import { parseDnsnd } from "./fm1dnsnd.js";
 
 // the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; five engines since 0.18: PHASE, LOFI, VOICE,
 // TRIO, NOISE and PHYS retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
@@ -299,6 +300,16 @@ export function libraryItemsFromFile(name, content) {
   }
   throw new Error(`${name}: not a sound, loop, pack, backup or .syx file`);
 }
+// a Digitone .dnsnd's bytes -> one library item (an FM TONE sound) with `notes`: what was lost or approximated
+// (docs/SOUNDS.md ".dnsnd import"); a bad file throws with the reason
+export async function libraryItemsFromDnsnd(name, bytes) {
+  let parsed;
+  try { parsed = await parseDnsnd(bytes); } catch (e) { throw new Error(`${name}: ${e.message}`); }
+  const s = soundFromDnsnd(parsed), notes = [...parsed.warnings, ...s.notes];
+  const item = mgItemOfSound(soundToFile(s, { dnsnd: { name: parsed.name, tags: parsed.tags, notes } }), name);
+  return [{ ...item, notes }];
+}
+export const isDnsndName = (name) => /\.dnsnd$/i.test(name);
 export function readPack(pack) {
   if (typeof pack === "string") pack = JSON.parse(pack);
   if (!pack || pack.format !== PACK_FORMAT || pack.version !== 1 || !Array.isArray(pack.sounds)) throw new Error("Not a ChoralRoot pack");

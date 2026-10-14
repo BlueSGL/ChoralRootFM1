@@ -100,9 +100,9 @@ def landing(out, index):
 
 
 def manager_page():
-    """web/manager.html with /*LIB*/ (fm1backup.js, fm1sounds.js, fm1manager.js) and the packs (web/packs) inlined"""
+    """web/manager.html with /*LIB*/ (fm1backup.js, fm1dnsnd.js, fm1sounds.js, fm1manager.js) and the packs (web/packs) inlined"""
     html = (HERE / "manager.html").read_text(encoding="utf-8")
-    lib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8")) for n in ("fm1backup.js", "fm1sounds.js", "fm1manager.js"))
+    lib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8")) for n in ("fm1backup.js", "fm1dnsnd.js", "fm1sounds.js", "fm1manager.js"))
     packs = HERE / "packs"
     index = json.loads((packs / "index.json").read_text(encoding="utf-8")) if (packs / "index.json").is_file() else {"packs": []}
     embed = {"index": [{**p, "url": "packs/" + p["file"]} for p in index["packs"]],
@@ -293,6 +293,7 @@ def main(pkg, version, out, emu=None, packages=None, require_all=False):
     lib = strip_module((HERE / "fm1pkg.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1ota.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1backup.js").read_text(encoding="utf-8")) + "\n" + \
+        strip_module((HERE / "fm1dnsnd.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1sounds.js").read_text(encoding="utf-8"))
     name = pkg_name(version)
     meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name, "repo": data["repo"],

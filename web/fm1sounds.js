@@ -7,6 +7,7 @@
 // objects that changed are written back (the stores first, the bank last), each as a restore writes it (fm1backup.js).
 // Pure: no DOM, no MIDI (the requests go through the caller's request function, as captureBackup's).
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName } from "./fm1backup.js";
+import { dnsndToQuad } from "./fm1dnsnd.js";
 
 export const SOUND_IDS = [6, 7, 9, 10, 11, 12, 13, 22];
 const SOUND_IDS_OPTIONAL = [22];                 // (an older ChoralRoot has no FM TONE store: read as empty)
@@ -354,6 +355,7 @@ export async function writeSounds(request, changed, opts = {}) {
 export const SOUND_TEMPLATES = {
   fm6: "pQQMW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQEBAQEBAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   cz: "pQQOW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQEBAQEBAQEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+  quad: "pQQPW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQUNDQ0BAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",   // (FM TONE: a Digitone .dnsnd import, web/fm1dnsnd.js)
 };
 // the FM6 function settings an imported voice gets (eng_fm6.c FM6_FNDEF bit-packed as fm6_blob_make packs them: the
 // fixture fm6_fn, = bytes 114..121 of a blob the firmware makes)
@@ -533,6 +535,21 @@ export function soundFromSyx(parsed, index = 1) {
   const engine = record[2], kind = patchKindOf(engine);
   const patch = fm6 ? vcedToFm6Blob(item) : Uint8Array.from(item);
   return { record, name, engine, engineName: ENGINE_NAMES[engine], kind, patch };
+}
+// a Digitone sound (fm1dnsnd.js parseDnsnd's result) -> an FM TONE sound as readSoundFile returns it, plus notes (what
+// was lost or approximated): the template's record with the name (cut to 12), the PAN and the macros (P_E0..P_E7 =
+// eng_quad.c QUAD_MAC's values, as quad_macros_out leaves them), added to FM TONE's pool; the patch dnsndToQuad's blob
+const SND_P_PAN = 39, SND_P_E0 = 83, SND_QUAD_MAC = [0, 1, 2, 71, 4, 5, 6, 7];
+export function soundFromDnsnd(parsed) {
+  if (!parsed || !parsed.params) throw new Error("Not a parsed .dnsnd");
+  const q = dnsndToQuad(parsed), record = sndUnB64(SOUND_TEMPLATES.quad, "template");
+  const name = syxName(Array.from(parsed.name || "", (c) => c.charCodeAt(0)), "DIGITONE");
+  sndWriteName(record, name);
+  record[16 + SND_P_PAN] = q.pan + 64;
+  SND_QUAD_MAC.forEach((i, k) => { record[16 + SND_P_E0 + k] = q.values[i] + 64; });
+  record[SND_BIND_NOTE] = SND_BIND_MARK; record[SND_BIND_FLAGS] = 0;
+  if (!recordValid(record) || !nameValid(name)) throw new Error("The template record is not valid");
+  return { record, name, engine: 15, engineName: ENGINE_NAMES[15], kind: "quad", patch: q.blob, notes: q.notes };
 }
 // choralroot-sound-U05-NAME.syx
 export const syxFileName = (slot, name) => soundFileName(slot, name).replace(/\.json$/, ".syx");

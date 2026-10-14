@@ -60,7 +60,7 @@ One command runs the list below, whole, in about a minute on the owner's Mac (it
 HISTORY 3y36):
 
 ```
-CR_VERSION=0.22 sh tests/run_all.sh          # ends "ALL SUITES PASSED (19 suites, N s; ...)", exit 0; else names the suites
+CR_VERSION=0.22 sh tests/run_all.sh          # ends "ALL SUITES PASSED (20 suites, N s; ...)", exit 0; else names the suites
 sh tests/run_all.sh --only test_cr,install   # some of them (--list names them); a prerequisite not named is not run
 ```
 
@@ -156,6 +156,10 @@ the FM-1's MIDI port can stay offline in CoreMIDI: the tool names it, `--rescan-
 installed on the owner's Mac.
 
 ## Open items
+
+- **Digitone `.dnsnd` import** (branch dn-1, HISTORY 3y56, docs/SOUNDS.md ".dnsnd import"): built from decoded files;
+  refine with the owner's Digitone by controlled exports and `node tools/dnsnd_diff.mjs` (RATIO B, the LFO
+  destinations, RATIO A's steps, the filter type order are the open ones).
 
 1. **The effects' pops, round 3 on the unit.** The pending bit is cleared before the render and the effects run
    block-wise (docs/FX.md "Late is not slow"); not yet read on the unit: the owner plays CZ-1 with both effects up,

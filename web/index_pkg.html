@@ -235,8 +235,9 @@
     <p class="small" data-t="sndText"></p>
     <p class="small" data-t="sndAll"></p>
     <p class="small" data-t="sndSyxText"></p>
+    <p class="small" data-t="sndDnText"></p>
     <p><button id="snd-read" disabled data-t="sndReadGo"></button></p>
-    <input id="snd-file" type="file" accept=".json,.syx,application/json" hidden>
+    <input id="snd-file" type="file" accept=".json,.syx,.dnsnd,application/json" hidden>
     <div class="snd-wrap">
       <table class="snd" id="snd-table" hidden>
         <thead><tr><th data-t="sndColSlot"></th><th data-t="sndColName"></th><th data-t="sndColEngine"></th><th data-t="sndColPatch"></th><th data-t="sndColPool"></th><th></th></tr></thead>
@@ -416,6 +417,8 @@ const TEXT = {
     sndRenamePrompt: "New name for {slot} (1 to 12 characters):",
     sndBadName: "A name is 1 to 12 characters: letters, digits, symbols or spaces (no accents). Nothing was written.",
     sndBadFile: "Not a usable sound file: ",
+    sndDnText: "Import also reads Elektron Digitone sounds (.dnsnd) as FM TONE sounds, on this computer (nothing is uploaded). Some settings have no FM TONE equal or are not decoded yet: the import lists them before anything is written.",
+    sndDnConfirm: "Write the Digitone sound \"{name}\" into {slot} as an FM TONE sound?\n\nApproximated or not imported:\n{notes}",
     sndExportSyx: "Export .syx",
     sndSyxText: "FM6 and CZ-1 sounds also export as .syx: a DX7 voice (Dexed and other DX7 editors) or a CZ-1 tone (Casio tools). Import takes these .syx files too (and raw DX7 / CZ-1 dumps): the voice or tone becomes the slot's sound, with every other setting at the engine's default.",
     sndSyxSaved: ".syx saved: ",
@@ -604,13 +607,17 @@ $("snd-file").addEventListener("change", async () => {
   const file = $("snd-file").files[0], slot = sndTarget, label = slotLabel(slot || 1);
   if (!file || !slot || writing) return;
   // the kind by content: a JSON object -> a sound file; else a .syx (or a raw DX7 / CZ-1 dump)
-  let sound;
+  let sound, dnNotes = null;
   try {
     const bytes = file.arrayBuffer ? new Uint8Array(await file.arrayBuffer()) : new TextEncoder().encode(await file.text());
     let i = 0;
     while (i < bytes.length && (bytes[i] === 0x20 || bytes[i] === 0x09 || bytes[i] === 0x0A || bytes[i] === 0x0D || bytes[i] === 0xEF || bytes[i] === 0xBB || bytes[i] === 0xBF)) i++;
     if (bytes[i] === 0x7B) sound = readSoundFile(new TextDecoder().decode(bytes));
-    else {
+    else if (bytes[0] === 0x50 && bytes[1] === 0x4B) {    // a ZIP: a Digitone .dnsnd (docs/SOUNDS.md ".dnsnd import")
+      const parsed = await parseDnsnd(bytes);
+      sound = soundFromDnsnd(parsed);
+      dnNotes = [...parsed.warnings, ...sound.notes];
+    } else {
       const syx = parseSyx(bytes), n = syxCount(syx);
       let pick = 1;
       if (n > 1) {
@@ -625,6 +632,7 @@ $("snd-file").addEventListener("change", async () => {
   catch (e) { sayK("sndBadFile", e.message); log(`sounds: ${e.message}`); return; }
   return soundsRun(async (ctx) => {
     const now = sndTable[slot - 1];                // as the FM-1 holds it now (read afresh)
+    if (dnNotes && !confirm(tf("sndDnConfirm", { name: sound.name, slot: label, notes: dnNotes.map((n) => "- " + n).join("\n") }))) { sayK("cancelled"); return; }
     if (now.used && !confirm(tf("sndOverwrite", { slot: label, name: now.name, new: sound.name }))) { sayK("cancelled"); return; }
     await writeSlot(ctx, slot, importSound(ctx.objs, slot, sound).changed);
     sayK("sndImported", `${label}: ${sound.name}`);

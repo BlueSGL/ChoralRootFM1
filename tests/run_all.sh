@@ -25,6 +25,7 @@
 #   web_backup     node web/test_backup.mjs
 #   web_manager    node web/test_manager.mjs
 #   web_sounds     node web/test_sounds.mjs
+#   web_dnsnd      node web/test_dnsnd.mjs              (after cr_tests: build/host/sound_templates)
 #   web_installer  node web/test_installer.mjs
 #   web_web        node web/test_web.mjs                (once run_tests has written build/host/desc.json)
 #   web_emu_build  sh tools/emu/web/build_web.sh        (Emscripten: ~/emsdk)
@@ -60,7 +61,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}"
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
-ALL="build cr_tests cr_draw emu_build test_cr test_persist test_retired run_tests install releases web_backup web_manager web_sounds web_installer web_web web_emu_build layout_build layout_test web_emu_test"
+ALL="build cr_tests cr_draw emu_build test_cr test_persist test_retired run_tests install releases web_backup web_manager web_sounds web_dnsnd web_installer web_web web_emu_build layout_build layout_test web_emu_test"
 only=
 while [ $# -gt 0 ]; do
     case $1 in
@@ -106,6 +107,7 @@ command_of() {
         web_backup) echo "node web/test_backup.mjs" ;;
         web_manager) echo "node web/test_manager.mjs" ;;
         web_sounds) echo "node web/test_sounds.mjs" ;;
+        web_dnsnd) echo "node web/test_dnsnd.mjs" ;;
         web_installer) echo "node web/test_installer.mjs" ;;
         web_web) echo "node web/test_web.mjs" ;;
         web_emu_build) echo "sh tools/emu/web/build_web.sh" ;;
@@ -120,6 +122,7 @@ waits_of() {    # the suites that must have ended before this one starts (those 
         test_cr|test_persist|test_retired) echo "build emu_build" ;;
         run_tests) echo "build web_emu_build layout_build" ;;
         layout_test) echo "build web_emu_build layout_build" ;;
+        web_dnsnd) echo "build cr_tests" ;;
         web_emu_test) for o in $ALL; do [ "$o" = web_emu_test ] || echo "$o"; done ;;
         *) echo "build" ;;
     esac

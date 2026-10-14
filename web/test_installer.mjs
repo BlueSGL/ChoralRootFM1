@@ -108,8 +108,8 @@ ok(tpl && new Function("meta", `return ${tpl[1]}`)(META) === "ChoralRoot 0.1 · 
 const stripModule = (src) => src.replace(/^export\s+/gm, "").replace(/^import .*?;\n/gm, "");
 const site = readFileSync(join(HERE, "make_site.py"), "utf8");
 let libs = [...site.matchAll(/strip_module\(\(HERE \/ "([\w.]+\.js)"\)/g)].map((m) => m[1]);
-if (!libs.length) libs = ["fm1pkg.js", "fm1ota.js", "fm1backup.js", "fm1sounds.js"];
-ok(libs.join() === "fm1pkg.js,fm1ota.js,fm1backup.js,fm1sounds.js", `make_site.py inlines ${libs.join(", ")} (fm1sounds.js after fm1backup.js)`);
+if (!libs.length) libs = ["fm1pkg.js", "fm1ota.js", "fm1backup.js", "fm1dnsnd.js", "fm1sounds.js"];
+ok(libs.join() === "fm1pkg.js,fm1ota.js,fm1backup.js,fm1dnsnd.js,fm1sounds.js", `make_site.py inlines ${libs.join(", ")} (fm1sounds.js after fm1backup.js, fm1dnsnd.js)`);
 const lib = libs.map((f) => stripModule(readFileSync(join(HERE, f), "utf8"))).join("\n");
 const built = html.split("/*LIB*/").join(lib).split("/*META*/").join(JSON.stringify(META));   // no $-patterns
 const code = scriptOf(built);
@@ -750,9 +750,9 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
 {
   // .syx (docs/SOUNDS.md ".syx export and import"): the fixtures of tests/sound_templates.c (factory F1 TINE EP's blob,
   // Casio's A-1 BRASS 1)
-  ok(html.includes('id="snd-file" type="file" accept=".json,.syx,application/json"') && html.includes('"export-syx"') &&
-     ["exportSyx", "parseSyx", "soundFromSyx", "syxCount", "saveBytes"].every((f) => html.includes(f)),
-     "page: Export .syx on the rows, the Import picker accepts .json and .syx");
+  ok(html.includes('id="snd-file" type="file" accept=".json,.syx,.dnsnd,application/json"') && html.includes('"export-syx"') &&
+     ["exportSyx", "parseSyx", "soundFromSyx", "syxCount", "saveBytes", "parseDnsnd", "soundFromDnsnd", "sndDnConfirm"].every((f) => html.includes(f)),
+     "page: Export .syx on the rows, the Import picker accepts .json, .syx and .dnsnd (asks with the notes)");
   ok(["sndExportSyx", "sndSyxText", "sndSyxSaved", "sndSyxPick", "sndSyxBadPick"].every((k) => en[k]) && dataT.includes("sndSyxText") &&
      en.sndExportSyx === "Export .syx", "texts: the .syx button, its section text, the statuses and the voice prompt");
   const B = (x) => Uint8Array.from(Buffer.from(x, "base64"));

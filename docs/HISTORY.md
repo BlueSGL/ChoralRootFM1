@@ -2732,3 +2732,16 @@ now programs a blank spare: 0 erases, was 1).
 **Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 19 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
 313 golden renders, 0 changed; 0 lint findings; test_cr 975 ok, test_persist 111 ok, test_retired 18 ok.
 **Not done / not tested**: anything on a unit (the power-on cost, `flash_prog_us`, whether the glitches are gone).
+
+3y56. **Digitone sounds into FM TONE: the `.dnsnd` import (2026-10-14; branch dn-1 from 377264f, not pushed).** The
+owner: "Being able to load in Digitone presets for the FM-Tone engine in the device manager" ... "Build now, I do
+have a Digitone we can refine later." Built: `web/fm1dnsnd.js` (pure; `parseDnsnd`: the ZIP, the LZ4 block, the
+302-byte record, strict errors and warnings; `dnsndToQuad`: FM TONE's version-3 blob, every value clamped to the
+firmware's ranges, and the notes on what was lost or approximated; the field table `DNSND_FIELDS` in one place with
+each field's confidence), `web/fm1sounds.js soundFromDnsnd` (the FM TONE template record, now pinned in both clients
+by `sound_templates --check`), the device manager's library and the installer page's Sounds import take `.dnsnd`,
+`tools/dnsnd_diff.mjs` (for the owner's controlled exports), `tools/dnsnd_to_sound.mjs` (host side, then
+`--import-sound`). Assumed and said so: RATIO B not located (1.00 / 1.00), RATIO A's step table, the filter type
+order, no LFO destination mapped yet. docs/SOUNDS.md ".dnsnd import". **Tests** `web/test_dnsnd.mjs` (suite
+`web_dnsnd`, 20 suites now): our own encoder, made-up values, every mapped field, clamping, each error and warning, the
+placed sound, the firmware's `quad_blob_ok` on the blobs. The firmware image is unchanged.
