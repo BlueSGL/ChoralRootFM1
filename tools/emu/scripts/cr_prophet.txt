@@ -1,7 +1,7 @@
 # P5 (docs/PROPHET.md; the code's PROPHET): OPT + PRESETS +4 -> P5's pool (FM6 -> FM TONE -> VA -> CZ-1 -> P5), its
 # place 01 (the shipped list's first program: assets/prophet5-factory/shipped.txt; test_cr.sh reads the names of the
 # places from tools/gen_prophet_factory.py --list); the picker's read-out while OPT is held (shot: six engines).
-# MAJ + D4 held 1.5 s, released. PRESETS +2: place 03, the chord again; PRESETS +12: place 15, the chord again.
+# MAJ + D4 held 1.5 s, released. PRESETS +2: place 03, the chord again; PRESETS +1: place 04, the chord again.
 # EDIT: the editor's groups, a shot each: OSC (OSC A, OSC B, MIXER), FILT (the filter's curve), ENV (ENV 1 the
 # amplifier's, ENV 2 the filter's), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE). On FILT: KNOB 1 -8: the cutoff down
 # ("deep: part 0 page 5 FILTER col 0 CUT"), the chord again: it sounds, darker. SAVE (0.22): the dialog with the
@@ -36,7 +36,7 @@ expect sound
 btn D4 up
 key F3 up
 wait 2500
-knob PRESETS +12              # place 15
+knob PRESETS +1               # place 04 (STABBY BRASS in the 115, the program place 15 held in the 48: a held sound for the filter edit)
 wait 300
 key F3 down
 wait 60

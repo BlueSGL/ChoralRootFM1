@@ -29,7 +29,7 @@ PROGS="01:ITS PROPHET5:its-a-prophet-5:the bank's first, a poly sweep (SSI filte
 44:CARS STRINGS:cars-strings:a string pad
 62:VINTAGE WRLY:vintage-wurly:an electric piano
 17:SYNCHROTRILL:synchrotrill:a sync lead
-04:FUNK BASS II:funk-bass-ii:a bass"
+139:BASSMENT:bassment:a bass"
 
 chord() {   # chord TYPEKEY ROOT MS
     printf 'key %s down\nwait 40\nbtn %s down\nwait %s\nbtn %s up\nkey %s up\nwait 150\n' "$1" "$2" "$3" "$2" "$1"

@@ -260,16 +260,18 @@ installed on the owner's Mac.
     and six-key chord keeps (the bottom and the top three), UNISON (one note of the chord, four voices; a UNISON bass
     thins to one voice under a chord), both filters, sync and Poly-Mod programs for aliasing, the wheel and aftertouch.
 27. **P5, what is open** (docs/PROPHET.md "Open decisions"). Decided by the owner on 2026-10-13: the name P5, UNISON
-    on a load, a trimmed list. Open: **the list itself** (`assets/prophet5-factory/shipped.txt`: 48 programs chosen
-    from their parameters, not by ear; a one-file change, then `./build.sh`, `python3 tools/p5_goldens.py`, the
-    suite); whether a release carries Sequential's data at all (`FELUCCA_P5_FACTORY`; no licence granted); **the
+    on a load, a trimmed list; and (3y51) **the list: the 115 programs he marked as favourites on the unit**
+    (`assets/prophet5-factory/shipped.txt`, by Sequential's number; "We should only ship with the presets I
+    favorited. The other presets can be optionally loaded from the website."). Open: **the other 85 programs
+    optionally loadable from the website**: needs the P5 user-patch store (phase B, docs/PROPHET.md open decisions)
+    and is a publishing decision (hosting Sequential's data on the site); not built. Also open: whether a release carries Sequential's data at all (`FELUCCA_P5_FACTORY`; no licence granted); **the
     store for user programs and the device manager's "load all 200"** (the owner's plan; flash objects in 0xB6000 ..
     0xC7FFF as `va_store.c`, backup ids, POOL for the mirrors, the web manager's engine list: `web/fm1sounds.js`
     treats a record of engine 16 as no record today; a stored program must keep its 138 bytes, which carry its
     Sequential number); the settings record's place for P5's pool position and its `chord_sound` / `bass_sound`,
     which hold a pool position, not a program's number (harmless while the session record is there: it holds the
     program); a fifth voice (chord voices on core 1, the loop built per program, `P5_RAM`: none built). XIP is at
-    88.2 % with the 48 (90.6 % with all 200, 87.3 % with INIT alone).
+    91.3 % with the 115 (92.6 % with all 200, 89.3 % with INIT alone).
 
 28. **Favourites and the three-unit P5 voice: not on a unit yet** (HISTORY 3y40). To do with the build of all 200
     (`P5_SHIPPED=all ./build.sh`): the owner marks P5 programs (SAVE, KNOB 4; or the editor's browser, KNOB 4), then

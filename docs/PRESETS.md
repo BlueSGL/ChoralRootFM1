@@ -16,7 +16,7 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 ## The model
 
 - **A pool per engine.** Each engine's pool starts with **INIT** at position 00 (the engine's init sound, `cu_sound_init`; it cannot be overwritten: Overwrite on it is Save as new), then its factory presets (`engine_t.presets`: FM6 25 (F1..F24, PIANO),
-  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, P5 48 (engine 16, code name PROPHET, 0.22 in development: a list,
+  FM TONE 16 (engine 15, `eng_quad.c`, code name QUAD), VA 25, CZ-1 64, P5 115 (engine 16, code name PROPHET, 0.22 in development: a list,
   below), WHEEL 5: the picker's order, six
   engines; five from 0.18 until P5; PHASE 6, LOFI 5, VOICE 4, TRIO 5, PHYS 9 and NOISE 4 came between and after them until then) followed by
   the presets the user added. ANALOG (engine 0, 12 presets) is retired
@@ -100,9 +100,9 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 - **00 INIT** is the engine's init sound (its preset 0 is the pool's INIT, as the CZ-1's INIT TONE: `cr_bank.c
   pool_f0`); **01 ..** are the **shipped** factory programs: the ones of Sequential's 200 (v1.03) that
   `assets/prophet5-factory/shipped.txt` names, in that file's order, with 12-character PRESETS names made from the
-  programs' own (`tools/gen_prophet_factory.py`). Provisionally 48 (01 ITS PROPHET5 .. 48 UNISON GLIDE; the table is
+  programs' own (`tools/gen_prophet_factory.py`). Since 3y51 the owner's 115 favourites, by Sequential's number (the table is
   in docs/PROPHET.md "The shipped list", with the steps to change it); no list or `all`: the 200. A build with
-  `FELUCCA_P5_FACTORY=0` has INIT alone. The read-out is `P5 · 03/48`; the stripe meter has 32 stripes, as every
+  `FELUCCA_P5_FACTORY=0` has INIT alone. The read-out is `P5 · 03/115`; the stripe meter has 32 stripes, as every
   pool over 32.
 - **A place in this pool is not a program's identity**: the list may change between builds. A program is known by
   its Sequential number (1..200), which it carries in its own bytes; the session keeps the program itself and finds

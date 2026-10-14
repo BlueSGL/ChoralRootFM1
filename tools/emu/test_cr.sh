@@ -2119,7 +2119,7 @@ echo "P5: Melodee's Prophet-5 engine, Sequential's programs (the shipped list), 
 # the places' names come from the shipped list (assets/prophet5-factory/shipped.txt): a list changed changes no line here
 P5N=$(python3 tools/gen_prophet_factory.py --list | wc -l | tr -d ' ')
 p5name() { python3 tools/gen_prophet_factory.py --list | awk -v p="$1" '$1 == p { sub(/^ *[0-9]+ +[0-9]+ +[U-] +/, ""); print }'; }
-P5A=$(p5name 1); P5B=$(p5name 3); P5C=$(p5name 15)
+P5A=$(p5name 1); P5B=$(p5name 3); P5C=$(p5name 4)
 run cr_prophet --wav "$OUT/cr_prophet.wav"
 PL="$OUT/cr_prophet.log"
 [ "$P5N" -ge 15 ] && has "^engine pick: P5 ($P5N presets)" "$PL" && has "part 0: P5 / $P5A" "$PL" &&
@@ -2127,8 +2127,8 @@ PL="$OUT/cr_prophet.log"
     bad "not P5 $P5A of $P5N: $(grep -m1 'part 0:' "$PL")"
 grep -a '^  screen reads:' "$PL" | sed -n 1p | grep -q "value '01' sub '$P5A' " &&
     ok "the pool's read-out shows a name whole (01 $P5A)" || bad "the read-out: $(grep -a -m1 '^  screen reads:' "$PL" | cut -c1-80)"
-has "^sound: part 0 pos 3 $P5B" "$PL" && has "^sound: part 0 pos 15 $P5C" "$PL" &&
-    ok "PRESETS steps the pool: 03 $P5B, 15 $P5C: $OUT/cr_prophet_pool.ppm" || bad "the pool: $(grep -c '^sound: part 0' "$PL") loads"
+has "^sound: part 0 pos 3 $P5B" "$PL" && has "^sound: part 0 pos 4 $P5C" "$PL" &&
+    ok "PRESETS steps the pool: 03 $P5B, 04 $P5C: $OUT/cr_prophet_pool.ppm" || bad "the pool: $(grep -c '^sound: part 0' "$PL") loads"
 [ "$(grep -c '^expect sound .*: ok' "$PL")" = 4 ] && ok "the chord sounds on the three programs and after the edit" ||
     bad "P5 chord: $(grep -c '^expect sound .*: ok' "$PL") of 4"
 p5c=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$PL" | head -1)
@@ -2161,14 +2161,14 @@ has '^edit: group OSC screen 3 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL
     has '^edit: group LFO screen 2 ' "$PL" && has '^edit: group MOD screen 2 ' "$PL" &&
     ok "P5's groups: OSC (OSC A, OSC B, MIXER), FILT, ENV 1 / ENV 2, LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
     bad "P5 groups: $(grep -c '^edit: group' "$PL")"
-p5id=$(python3 tools/gen_prophet_factory.py --list | awk '$1 == 15 { print $2 }')
+p5id=$(python3 tools/gen_prophet_factory.py --list | awk '$1 == 4 { print $2 }')
 p5fav=$(grep -a '^  favs:' "$PL" | tail -1)
 has "^save: dialog part 0 $P5C\* (favorite)" "$PL" && [ "$(grep -c '^save: choice favorite' "$PL")" = 1 ] && ! has '^save: choice [os]' "$PL" &&
     has "^fav: part 0 $P5C on (tag 16 id $p5id, 1 marked)" "$PL" && has '^save: part 0 P5 refused (no store)' "$PL" &&
     ! has '^save: part 0 .*slot' "$PL" && ! has '^save: new' "$PL" && echo "$p5fav" | grep -q "favs: 1 marked.* : 16:$p5id\$" &&
     [ "$(yellow_in "$OUT/cr_prophet_fav.ppm" 0 0 57600)" -ge 10 ] && [ "$(yellow_in "$OUT/cr_prophet_save.ppm" 0 0 57600)" = 0 ] &&
     ! cmp -s "$OUT/cr_prophet_fav.ppm" "$OUT/cr_prophet_refused.ppm" &&
-    ok "SAVE on a P5 part (0.22): the dialog with Favorite alone (SELECT cannot leave it); KNOB 4 marks place 15 by Sequential's number ($p5id), the star; OCT+: refused (\"P5: no save yet\"), no slot written: $OUT/cr_prophet_save.ppm cr_prophet_fav.ppm cr_prophet_refused.ppm" ||
+    ok "SAVE on a P5 part (0.22): the dialog with Favorite alone (SELECT cannot leave it); KNOB 4 marks place 04 by Sequential's number ($p5id), the star; OCT+: refused (\"P5: no save yet\"), no slot written: $OUT/cr_prophet_save.ppm cr_prophet_fav.ppm cr_prophet_refused.ppm" ||
     bad "P5's SAVE dialog: $(grep -a '^save:\|^fav:' "$PL" | tr '\n' ' ') / $p5fav / yellow $(yellow_in "$OUT/cr_prophet_fav.ppm" 0 0 57600)"
 has "^picker: open part 0 $P5C" "$PL" && has "^picker: cancel part 0 -> $P5C" "$PL" &&
     ok "EDIT held: the engine picker with P5 among the six, OCT- leaves the sound: $OUT/cr_prophet_epk.ppm" || bad "the picker in the editor"

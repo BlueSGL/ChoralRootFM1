@@ -1819,12 +1819,15 @@ def favorites():
     fav = TMP / "favorites.txt"
     fav.write_text(out)
     ok(g.shipped(str(fav)) == [1, 15, 44, 199, 200], "--favorites: its output is a shipped list as it is (gen_prophet_factory.py reads it)")
-    text = pf.build(pf.marked(out), g.SHIPPED.read_text())
+    # a grouped list as the present one (the tree's is by number since 3y51: the groups are tested here, not the tree)
+    cur = ("# a list grouped by hand\n\n# ---- pads, strings, voices\n1      # ITS PROPHET5: the first\n15     # REEDY STRPAD\n"
+           "44     # CARS STRINGS\n\n# ---- brass\n6      # STABBY BRASS\n")
+    text = pf.build(pf.marked(out), cur)
     new = TMP / "shipped.txt"
     new.write_text(text)
     body = [ln for ln in text.splitlines() if ln and not ln.startswith("# ") and ln != "#"]
     ok(g.shipped(str(new)) == [1, 15, 44, 199, 200] and "# ---- pads, strings, voices" in text.splitlines() and
-       "# ---- brass" not in text and body[:3] == [ln for ln in g.SHIPPED.read_text().splitlines() if ln.split("#")[0].split() in (["1"], ["15"], ["44"])] and
+       "# ---- brass" not in text and body[:3] == [ln for ln in cur.splitlines() if ln.split("#")[0].split() in (["1"], ["15"], ["44"])] and
        "# ---- marked on the unit, not in the list before (by Sequential number)" in text and len(body) == 5 and
        body[3].startswith("199 ") and body[4].startswith("200 "),
        "p5_shipped_from_favorites: the marked programs of the present list in its order under its headings, the new ones after, by number")

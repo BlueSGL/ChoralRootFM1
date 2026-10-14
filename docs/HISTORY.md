@@ -2516,3 +2516,20 @@ tests/target_budget.txt: `p5_block` 29 -> 40 (the compare's two loops), `xf_bloc
 new `xf_prep` 19, `xf_delay` 5, `xf_reverb` 48; `mix_fx_split` 19, `c1_fx_job` 3), `usb_poll` 159 -> 175 (untouched
 code: the compiler laid its cold bus-reset call after the return with a branch back, which the count reads as a
 loop; no path of it changed). The other lines as they were.
+3y51. **P5 ships the owner's 115 favourites** (branch p5-o from a10303e, not pushed). The owner played all 200 of
+Sequential's Prophet-5 programs on the P5 engine and marked his favourites on the unit (2026-10-13): "We should only
+ship with the presets I favorited. The other presets can be optionally loaded from the website." The marks were read
+off the unit read-only (`tools/fm1_install.py --favorites`, fm1-backups/p5-favorites-2026-10-13-all200.txt: 115
+programs; 83 typed Both, 21 Chord, 11 Bass) and written with `tools/p5_shipped_from_favorites.py --by-number`:
+`assets/prophet5-factory/shipped.txt` is the 115 by Sequential's number, each with its name and his type; it replaces
+the provisional 48 (docs/PROPHET.md "The shipped list" has the table). 18 of the 115 have UNISON. Of the programs the
+tests and scripts named: 16 CANNED HAPPY and 20 WATERY PLUCK are in, 4 FUNK BASS II is not. Changed with it:
+`tools/emu/scripts/perf_p.txt` (the bass is 139 BASSMENT, place 85: ALGORITHM +86), `tools/prophet_listen.sh` (139
+BASSMENT for 4), `tools/emu/scripts/cr_prophet.txt` and `test_cr.sh` (the third place visited is 04 STABBY BRASS,
+not 15: place 15 is now STICKY PLUCK, whose decay hid the filter edit's change), `tests/install_test.py` (the
+grouped-list case on a fixture, not the tree's list). The gesture and release-click scripts follow by themselves.
+Goldens: P5 116 (INIT + 115; 84 new, 17 gone, 0 changed), the other engines' untouched. XIP 523 300 (91.3 %) with the
+115; 530 980 (92.6 %) with all 200; 512 324 (89.3 %) with INIT alone. Marks and sessions are keyed by Sequential's
+number, so his 115 marks name the same programs and a session saved on a program not shipped plays from its record
+(`tests/run_prophet_test.sh`). Open: the other 85 from the website needs the P5 store (phase B) and is a publishing
+decision; not built. Not tested: on a unit.

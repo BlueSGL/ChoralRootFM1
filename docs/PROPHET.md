@@ -216,7 +216,7 @@ How the part's voice mode is kept straight (`eng_prophet_test.c p5_track_loaded`
 | --- | --- | --- | --- |
 | before (aa5875a) and `FELUCCA_PROPHET=0` | 483 396 (84.3 %) | 81 332 (82.7 %) | 315 500 (91.7 %) |
 | the engine, INIT only (`FELUCCA_P5_FACTORY=0`) | 500 868 (87.3 %) | 81 348 (82.8 %) | 316 052 (91.9 %) |
-| **the engine and the provisional 48 (the default)** | **505 588 (88.2 %)** | **81 348 (82.8 %)** | **316 052 (91.9 %)** |
+| the engine and the provisional 48 | 505 588 (88.2 %) | 81 348 (82.8 %) | 316 052 (91.9 %) |
 | the engine and all 200 (`P5_SHIPPED=all ./build.sh`) | 519 508 (90.6 %) | 81 348 (82.8 %) | 316 052 (91.9 %) |
 | 8472e70 (3y45), the 48 | 511 412 (89.2 %) | 81 732 (83.1 %) | 316 064 (91.9 %) |
 | **3y46, the 48: eight voices on two cores, the pool, the level** | **515 076 (89.8 %)** | **81 748 (83.2 %)** | **316 900 (92.1 %)** |
@@ -235,7 +235,7 @@ the union of FM6's 6884. `CR_RAM_TABLES_P5=1`: RAM +5376 B (86 820).
 ## Sounds
 
 `PRESETS` on P5 turns its pool as on any engine (docs/PRESETS.md): **00 INIT** (one saw, the filter open), then the
-**shipped factory programs** in the list's order (provisionally 48: 01 ITS PROPHET5 .. 48 UNISON GLIDE). The names
+**shipped factory programs** in the list's order (the owner's 115 favourites since 3y51: 01 ITS PROPHET5 .. 115, by Sequential's number). The names
 are the programs' in upper case, shortened to PRESETS' 12 characters where needed (88 of the 200:
 `tools/gen_prophet_factory.py SHORT`; the program keeps its 20-character name in its bytes). The pool read-out cut a
 12-character name's last letter (`cu.pop.sub[12]`: "ENSEMBLE ST", "FOREVER KEY"); with P5 in the build the field is
@@ -278,68 +278,130 @@ in every build that ships it.
 4. `CR_VERSION=0.22 sh tests/run_all.sh`; then this file's table below and the size table
    (`python3 tools/gen_prophet_factory.py --list`).
 
-The emulator's tests read the names of the places they visit from the generator (`test_cr.sh`: places 01, 03, 15;
+The emulator's tests read the names of the places they visit from the generator (`test_cr.sh`: places 01, 03, 04;
 `test_persist.sh`: the list's first UNISON program), so they follow the list; they need at least 15 programs.
-What does not follow by itself: `tools/emu/scripts/perf_p.txt` (the step to FUNK BASS II as the bass: its place + 1)
+What does not follow by itself: `tools/emu/scripts/perf_p.txt` (the step to the bass, BASSMENT since 3y51: its place + 1)
 and the examples in this file.
 
-**The provisional list** (2026-10-13; the owner edits it after playing). **Chosen from the programs' parameters and
-names, not by ear.** The rule: a chord instrument's sounds first, sustained before percussive: 14 pads, strings and
-voices, 6 brass, 8 keys, 5 organs, 4 plucks and bells, 2 plain polysynths; then 5 basses (three with UNISON) and 4
-leads (two sync, two UNISON); no effect, noise or drum program; none that needs the wheel or aftertouch to sound; of
-two programs within 8 of the 55 panel bytes of each other only one (the bank has two such pairs: 21 BASS FACE / 139
-BASSMENT, 48 SMALL GONG / 120 FUNKY BELLS). The one-line reason for each is in the list file.
+**The shipped list: the owner's 115** (2026-10-13). He played all 200 of Sequential's programs on the P5 engine (a build with `P5_SHIPPED=all`) and marked his favourites on the unit; the marks were read off it (read-only, `fm1-backups/p5-favorites-2026-10-13-all200.txt`) and written with `p5_shipped_from_favorites.py --by-number` ([below](#the-shipped-list-from-the-units-favourites)). His decision: "We should only ship with the presets I favorited. The other presets can be optionally loaded from the website." (not built: [Open decisions](#open-decisions-the-owners)). The list is by Sequential's number, so place = row; "his type" is the favourite type he gave the mark (Both: 83, Chord: 21, Bass: 11). 18 of the 115 have UNISON on. It replaces the provisional 48 (chosen from parameters, not by ear; 4 FUNK BASS II, the old perf bass, is not in it).
 
-| place | Sequential's number | PRESETS name | the program's name | category | UNISON |
-| --- | --- | --- | --- | --- | --- |
-| 01 | 1 | ITS PROPHET5 | It's a Prophet 5 | pads, strings, voices | no |
-| 02 | 15 | REEDY STRPAD | Reedy String Pad | pads, strings, voices | no |
-| 03 | 44 | CARS STRINGS | Cars Strings | pads, strings, voices | no |
-| 04 | 110 | REVERB STRGS | Reverberant Strings | pads, strings, voices | no |
-| 05 | 129 | OLD STR MACH | Old String Machine | pads, strings, voices | no |
-| 06 | 105 | HIGH STRINGS | High Strings | pads, strings, voices | no |
-| 07 | 162 | LOW STRINGS | LOW STRINGS | pads, strings, voices | no |
-| 08 | 66 | 80S HORROR | 80s Horror Strings | pads, strings, voices | no |
-| 09 | 61 | INSTABIL PAD | Instability Pad | pads, strings, voices | no |
-| 10 | 70 | VOCAL PAD | Vocal Pad | pads, strings, voices | no |
-| 11 | 47 | CHORAL VOICE | Choral Voices | pads, strings, voices | no |
-| 12 | 13 | TAARICHOIR | TaariChoir | pads, strings, voices | no |
-| 13 | 109 | SOFT SWELL | Soft Swell | pads, strings, voices | no |
-| 14 | 54 | MIDNIGHT PWM | Midnight PWM | pads, strings, voices | no |
-| 15 | 6 | STABBY BRASS | Stabby Brass | brass | no |
-| 16 | 102 | SOFT BRASS | Soft Brass | brass | no |
-| 17 | 131 | ICONIC BRASS | Iconic Brass | brass | no |
-| 18 | 94 | PINK NEON BR | Pink Neon Brass | brass | no |
-| 19 | 161 | BRASS | BRASS | brass | no |
-| 20 | 71 | MOVING BRASS | Soft Moving Brass | brass | no |
-| 21 | 3 | FOREVER KEYS | Forever Keys | keys | no |
-| 22 | 62 | VINTAGE WRLY | Vintage Wurly | keys | no |
-| 23 | 43 | REED EP | Reed EP | keys | no |
-| 24 | 179 | ELEC PIANO I | ELECTRIC PIANO I | keys | no |
-| 25 | 91 | FURRY TINES | Furry Tines | keys | no |
-| 26 | 163 | MUTED CLAV | MUTED CLAVINET | keys | no |
-| 27 | 166 | HARPSICHORD | HARPSICHORD | keys | no |
-| 28 | 11 | CLAVICLE | Clavicle | keys | no |
-| 29 | 10 | PDG ORGAN | PDG Organ | organs | no |
-| 30 | 168 | PERC ORGAN | PERCUSSIVE ORGAN | organs | no |
-| 31 | 170 | HARMONIUM | HARMONIUM | organs | no |
-| 32 | 143 | ORGANIZER | Organizer | organs | no |
-| 33 | 145 | LESLIED | Leslied | organs | no |
-| 34 | 81 | PULSE PLUCK | Pulse Pluck | plucks and bells | no |
-| 35 | 133 | PRETTY PLUCK | Pretty Pluck | plucks and bells | no |
-| 36 | 79 | MARIMBA | Marimba | plucks and bells | no |
-| 37 | 32 | BLINKR BELLS | Blinker Bells | plucks and bells | no |
-| 38 | 55 | HYPER POLY | Hyper Poly | polysynth | no |
-| 39 | 57 | AGGRO SYNTH | Aggro Synth | polysynth | no |
-| 40 | 4 | FUNK BASS II | Funk Bass II | basses | no |
-| 41 | 46 | FAT POLYBASS | Fat Poly Bass | basses | no |
-| 42 | 139 | BASSMENT | Bassment | basses | yes (1 voice, low note) |
-| 43 | 111 | LAGOON BASS | Lagoon Bass | basses | yes (4 voices, low note) |
-| 44 | 135 | FEATURE BASS | Feature My Bass | basses | yes (4 voices, last note) |
-| 45 | 17 | SYNCHROTRILL | Synchrotrill | leads | no |
-| 46 | 167 | SYNC I | SYNC I | leads | no |
-| 47 | 82 | UNISAWYER | Unisawyer | leads | yes (4 voices, low note) |
-| 48 | 169 | UNISON GLIDE | UNISON GLIDE W RES | leads | yes (4 voices, low note) |
+| Sequential's number | PRESETS name | his type |
+| --- | --- | --- |
+| 1 | ITS PROPHET5 | Chord |
+| 2 | AFTER RINGER | Chord |
+| 3 | FOREVER KEYS | Both |
+| 6 | STABBY BRASS | Both |
+| 7 | NO WHINING | Both |
+| 8 | FANTASTIC 5 | Both |
+| 10 | PDG ORGAN | Both |
+| 11 | CLAVICLE | Bass |
+| 12 | BLOW BY BLOW | Both |
+| 13 | TAARICHOIR | Chord |
+| 15 | REEDY STRPAD | Chord |
+| 16 | CANNED HAPPY | Both |
+| 17 | SYNCHROTRILL | Both |
+| 18 | BORN IN 80S | Both |
+| 19 | STICKY PLUCK | Both |
+| 20 | WATERY PLUCK | Chord |
+| 21 | BASS FACE | Both |
+| 23 | WHINY OPENER | Both |
+| 24 | SYNCTINK | Both |
+| 25 | TREMBL ORGAN | Both |
+| 26 | SCI-FI ECHO | Bass |
+| 27 | UNICORN DRMS | Both |
+| 28 | COCKTAIL HR | Both |
+| 29 | NICE SMOOTH | Chord |
+| 30 | TUMESC BASS | Both |
+| 31 | INTERNALIZED | Bass |
+| 32 | BLINKR BELLS | Both |
+| 34 | UWATER TRILL | Both |
+| 41 | POLY MCFAT | Both |
+| 43 | REED EP | Both |
+| 45 | PIPE ORGANIS | Both |
+| 46 | FAT POLYBASS | Both |
+| 47 | CHORAL VOICE | Both |
+| 51 | HUM-ALONG | Bass |
+| 53 | AFTRBLW HORN | Both |
+| 54 | MIDNIGHT PWM | Both |
+| 56 | RIPPLES | Both |
+| 59 | RADIO TOWERS | Chord |
+| 60 | HARPSI-VIBE | Chord |
+| 61 | INSTABIL PAD | Chord |
+| 62 | VINTAGE WRLY | Both |
+| 65 | PRESSURE PTS | Chord |
+| 66 | 80S HORROR | Both |
+| 67 | NURSERYCOMP | Chord |
+| 68 | HOUSE MOVER | Bass |
+| 70 | VOCAL PAD | Chord |
+| 72 | SQUARECLIFF | Both |
+| 77 | UNDER ICE | Chord |
+| 79 | MARIMBA | Chord |
+| 82 | UNISAWYER | Both |
+| 83 | RECORDER | Both |
+| 85 | GHOSTLY GLOW | Chord |
+| 86 | UPTIGHT BASS | Both |
+| 87 | RAVECAVE | Bass |
+| 89 | CELTIC MOON | Both |
+| 92 | MOUSE BLASTR | Both |
+| 93 | KYOTO | Both |
+| 95 | ORGAN PERC | Both |
+| 97 | DRM ORGONON | Both |
+| 100 | PLUCK HOLLOW | Both |
+| 101 | VELO RES LD2 | Both |
+| 103 | REGAL MOVMNT | Both |
+| 104 | LOOSE SQUARE | Both |
+| 107 | RUBBR BUMPER | Both |
+| 108 | GALV BUCKET | Both |
+| 109 | SOFT SWELL | Both |
+| 110 | REVERB STRGS | Both |
+| 111 | LAGOON BASS | Both |
+| 112 | PLUCKTY DUCK | Both |
+| 113 | BELL TREE | Bass |
+| 114 | RISER CHORD | Both |
+| 115 | TIMPANALLY | Both |
+| 117 | TUNED PERC | Both |
+| 120 | FUNKY BELLS | Both |
+| 122 | FEDBACK | Both |
+| 123 | NYLON FINGRS | Both |
+| 127 | FAINT MEMORY | Bass |
+| 128 | FULL HEXAGON | Both |
+| 131 | ICONIC BRASS | Both |
+| 132 | SYNC SWELLPD | Both |
+| 133 | PRETTY PLUCK | Chord |
+| 135 | FEATURE BASS | Bass |
+| 136 | CHORUSLAYER | Chord |
+| 137 | BETTER WAYS | Chord |
+| 139 | BASSMENT | Bass |
+| 140 | DENOUEMENT | Chord |
+| 142 | SYNCWAVE | Both |
+| 143 | ORGANIZER | Both |
+| 146 | BULL BY HORN | Bass |
+| 147 | NAIVE MELODY | Both |
+| 148 | POLY MORGUE | Chord |
+| 150 | SWITCHBACK | Both |
+| 152 | PLUCKYNESS | Both |
+| 156 | CYBERIAN WND | Chord |
+| 159 | METAL DRONE | Both |
+| 162 | LOW STRINGS | Both |
+| 164 | PERC E PIANO | Both |
+| 165 | FLUTES | Both |
+| 168 | PERC ORGAN | Both |
+| 169 | UNISON GLIDE | Both |
+| 171 | ORGAN W RES | Both |
+| 172 | TOY PIANO | Both |
+| 173 | TRUMPT FLUTE | Both |
+| 179 | ELEC PIANO I | Both |
+| 181 | OCTAVE SAWS | Both |
+| 183 | DELAYED HARM | Both |
+| 184 | ECHO REPEAT | Both |
+| 185 | PULSE W MOD | Both |
+| 187 | 4THS W RES | Both |
+| 188 | SWEEP HARMS | Both |
+| 189 | SLOW SYNC | Both |
+| 194 | NOISE SWEEP | Both |
+| 198 | RES BELLS | Both |
+| 199 | HOLLOW SOUND | Both |
+| 200 | CAT | Both |
 
 **Sends.** The factory programs are dry, as the instrument. Nothing was added for that: since 0.18 the sends are the
 PART's, not the sound's (`cr_bank.c param_kept`), so a P5 program plays with the part's reverb, chorus and delay

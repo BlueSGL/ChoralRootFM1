@@ -18,7 +18,7 @@
 #       Feedback up: the heaviest sound scenario with both effects' loops running in every block (budget: both effects
 #       <= 350 us a block, no block over 80 %)
 #   (p) a 6-key P5 chord (01 ITS PROPHET5: the SSI filter, its envelope sweeping; four voices, the cap) + the
-#       P5 bass (FUNK BASS II, place 40 of the provisional list) with the default sends, a chord change (docs/PROPHET.md "Cost on the unit": the
+#       P5 bass (BASSMENT, place 85 of the shipped 115) with the default sends, a chord change (docs/PROPHET.md "Cost on the unit": the
 #       unit's figures are counted from its listing, tools/p5_cost.py; these are the emulator's estimates)
 #   (q) (p) with the VA bass (PUNCH BASS)
 # The heavy scenarios (c, d, e, i, l) also get a "keys" line each (tools/emu/keylat.py, docs/INTEGRATION.md "Keys while
