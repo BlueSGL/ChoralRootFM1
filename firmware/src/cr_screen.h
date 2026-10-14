@@ -244,8 +244,8 @@ typedef struct {
     uint8_t hot_col;                /* .. the block's colour (NONE: the knob's; a modulation source's while mapping) */
     uint8_t wide;                   /* edit8: CR_W_* */
     uint8_t tall;                   /* edit8: one row of tall level bars over the whole panel (the oscillator mixer) */
-    uint8_t fine;                   /* edit8 / stack: SHIFT on (fine steps): "fine" small in the title line (2: the
-                                     * lane has a ratio pair, SHIFT steps its slow hand B1: "fine \267 B1");
+    uint8_t fine;                   /* edit8 / stack: SHIFT on (OPT snap): "snap" small in the title line (2: the
+                                     * lane has a ratio pair, SHIFT steps its slow hand B1: "snap \267 B1");
                                      * `batt` (0..4, 4 = charging; 255 = none): edit8 / stack draw the header's battery
                                      * at the title line's right end (the MIX screens) */
     uint8_t wv[20];                 /* env: a h d s r (Q8 of 255), the lit segment + 1 (1 A .. 5 R, 0 none), 1 = REL INF (6: the tail flat);

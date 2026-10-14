@@ -836,8 +836,8 @@ static void cu_fx_glyph(int32_t c0, cr_cell_t *c)
  * the sound editor's FX group (cr_edit.c ce_text, ce_knob), either part's.
  * The scale: per cent of the stored 0..127, rounded to the nearest (params.c param_format's F_PCT, as the editor
  * always read it): 0 is 0 %, 127 is 100 %, and only they are.
- * The step: 6 of 127 a detent, about 5 % (cp_dstep's (range + 10) / 20, the editor's), clamped, so both ends are
- * reached exactly; fine (the editor's SHIFT): 1 */
+ * The step: the knob's speed (cr_pages.c kn_lin: 1 of 127 a slow detent, up to 5 a quick one), clamped, so both
+ * ends are reached exactly; snap (OPT held, the editor's SHIFT): 0 16 32 .. 112 127 (cu_kval) */
 static uint32_t cu_send_pct(int32_t v)
 {
     v = v < 0 ? 0 : v > 127 ? 127 : v;
@@ -848,10 +848,15 @@ static void cu_send_text(int32_t v, char *out, uint32_t n)       /* "46%" */
     cu_int(out, (int32_t)cu_send_pct(v), 0, n);
     cu_cat(out, "%", n);
 }
-static int32_t cu_send_step(int32_t v, int32_t s, uint32_t fine)
+/* a knob's value lo .. hi stepped s detents: at the knob's speed, or snapped (OPT held: cr_pages.c kn_snap_rng on the
+ * range's grid, kn_grid_rng). The values of the layers and the main view that have no descriptor */
+static int32_t cu_kval(int32_t v, int32_t s, int32_t lo, int32_t hi, uint32_t snap)
 {
-    v += s * (fine ? 1 : 6);
-    return v < 0 ? 0 : v > 127 ? 127 : v;
+    return snap ? kn_snap_rng(v, s, lo, hi, kn_grid_rng(lo, hi, lo < 0), 0) : kn_lin(v, s, lo, hi);
+}
+static int32_t cu_send_step(int32_t v, int32_t s, uint32_t snap)
+{
+    return cu_kval(v, s, 0, 127, snap);
 }
 /* the effect a cell of page pg sends into: its "Send" cell's, a cell of the Sends page's; -1: another cell */
 static int32_t cu_fx_send_of(uint32_t pg, int32_t c0)
@@ -1648,7 +1653,11 @@ static void cu_param_turn(uint32_t mode, int32_t p, int32_t s, int pop)   /* pop
     int32_t v;
     if (p < 0)
         return;
-    v = cs.par[mode][p] + s * CU_PAR[p].step;
+    if (CU_PAR[p].step > 1 || p == CR_P_SWING)    /* a value (rate, gate, swing, amount): at the knob's speed, snapped
+                                                   * with OPT held; the choices one a detent */
+        v = cu_kval(cs.par[mode][p], s, CU_PAR[p].min, CU_PAR[p].max, kn.snap);
+    else
+        v = cs.par[mode][p] + s;
     v = v < CU_PAR[p].min ? CU_PAR[p].min : v > CU_PAR[p].max ? CU_PAR[p].max : v;
     cs.par[mode][p] = (int16_t)v;
     cr_post(CRE_PARAM, mode, (uint32_t)p, v);
@@ -3533,7 +3542,8 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cu_post_key();
             cu_trace("key: knob 2 scale %s\n", cs.scale ? "minor" : "major");
         } else if (knob == 2) {                    /* TRANSPOSE */
-            v = cs.transpose + s;
+            v = kn.snap ? kn_snap_rng(cs.transpose, s, -24, 24, 12, 0) : cs.transpose + s;   /* (a semitone a detent;
+                                                    * OPT held: octaves) */
             cs.transpose = (int8_t)(v < -24 ? -24 : v > 24 ? 24 : v);
             cr_post(CRE_TRANSPOSE, 0, 0, cs.transpose);
             cu_trace("key: knob 3 transpose %d\n", (int)cs.transpose);
@@ -3580,7 +3590,7 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                                                    * one step (cu_send_step, the sound editor's for the same knob) */
             uint32_t sid = CU_FX[e].send;
             v = cu_send(0, sid);
-            cu_send_set(0, sid, cu_send_step(v, s, 0));
+            cu_send_set(0, sid, cu_send_step(v, s, kn.snap));
             cu_hot_set(L_FX, knob);               /* (no popup: the knob row is the readout, its cell turns hot) */
             cu_trace("fx: knob %u %s send %u\n", (unsigned)knob + 1u, CU_FX[e].name, (unsigned)cu_send(0, sid));
             break;
@@ -3601,7 +3611,8 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                                                    * turned round: the stored value, the read-out and the glyph's
                                                    * spacing are the time's as before */
             s = -s;
-        v = *q + s * (hi - lo > 20 ? 2 : 1);
+        v = hi - lo > 20 ? cu_kval(*q, s, lo, hi, kn.snap) : *q + s;   /* (a value at the knob's speed / snapped; a
+                                                   * division, a ratio, a switch: one a detent) */
         *q = (int16_t)(v < lo ? lo : v > hi ? hi : v);
         cu_hot_set(L_FX, knob);
         cu_trace("fx: knob %u %s %s %d\n", (unsigned)knob + 1u, CU_FX[cs.fx_sel].name, lb, (int)*q);
@@ -3621,8 +3632,7 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             cu_bass_go((uint32_t)(v < 0 ? 0 : v));
             cu_trace("bass: knob 3 sound %u\n", (unsigned)cs.bass_sound);
         } else {                                   /* LEVEL */
-            v = trk[CR_PART_BASS].p[P_LEVEL] + s * 2;
-            trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+            trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)cu_kval(trk[CR_PART_BASS].p[P_LEVEL], s, 0, 127, kn.snap);
             cu_trace("bass: knob 4 level %d\n", (int)trk[CR_PART_BASS].p[P_LEVEL]);
         }
         cu_hot_set(L_BASS, knob);                 /* (no popup: the knob row is the readout, its cell turns hot) */
@@ -4177,8 +4187,8 @@ static int cu_bass_level_hold(int32_t s)
             cu_opened(BT_BASS);
         }
     }
-    v = trk[CR_PART_BASS].p[P_LEVEL] + s * 2;
-    trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)(v < 0 ? 0 : v > 127 ? 127 : v);
+    (void)v;
+    trk[CR_PART_BASS].p[P_LEVEL] = (int16_t)cu_kval(trk[CR_PART_BASS].p[P_LEVEL], s, 0, 127, 0);
     if (cu_layer() == L_BASS)
         cu_hot_set(L_BASS, 3);
     else
@@ -4220,6 +4230,7 @@ static void cu_knob(uint32_t role, int32_t s)
 {
     uint32_t l;
     int32_t v;
+    kn_turn(role, s, cu_now(), (uint32_t)cu_shift());   /* (the knob's speed, OPT held: cr_pages.c kn_*) */
     if (cu.page == PG_SAVE && ce.save_step && !cu_layer()) {   /* naming a sound: the knobs are the name's and nothing
                                                     * else (cu_name_knob): before the holds and shifts below */
         cu_activity();
@@ -4262,7 +4273,7 @@ static void cu_knob(uint32_t role, int32_t s)
     if (cu_shift() && cu.page == PG_EDIT && (role >= EN_K1 || role == EN_SELECT) && !cu_layer()) {
         if (role == EN_SELECT)                     /* the editor wins: SHIFT + SELECT steps as SELECT */
             ce_select(s);
-        else                                       /* .. SHIFT + a knob: fine (one step) */
+        else                                       /* .. SHIFT + a knob: the value snaps (cr_pages.c kn_snap) */
             ce_knob(role - EN_K1, s, 1);
         return;
     }
@@ -4358,7 +4369,8 @@ static void cu_knob(uint32_t role, int32_t s)
             v = cu.opt_sel + s;
             cu.opt_sel = (uint8_t)(v < 0 ? 0 : v >= (int32_t)cu_opt_n() ? (int32_t)cu_opt_n() - 1 : v);
         } else {
-            opt_set(cu.opt_sel, opt_get(cu.opt_sel) + s * (cu.opt_sel == O_VEL ? 4 : 1));
+            opt_set(cu.opt_sel, cu.opt_sel == O_VEL ? cu_kval(opt_get(O_VEL), s, 1, 127, kn.snap) : opt_get(cu.opt_sel) + s);
+                                                   /* (Velocity: a value; the others are choices, one a detent) */
         }
         return;
     }
@@ -4443,7 +4455,7 @@ static void cu_knob(uint32_t role, int32_t s)
         cu_param_turn(cu_perf_mode(), CU_PERF_KNOB[cu_perf_mode()][0], s, 1);
         break;
     case EN_K4:
-        cu_send_set(0, CU_FX[cs.fx_sel].send, cu_send_step(cu_send(0, CU_FX[cs.fx_sel].send), s, 0));
+        cu_send_set(0, CU_FX[cs.fx_sel].send, cu_send_step(cu_send(0, CU_FX[cs.fx_sel].send), s, kn.snap));
         cu_send_popup(cu_send(0, CU_FX[cs.fx_sel].send), CU_FX[cs.fx_sel].name, CR_COL_GREEN);
         cu_trace("send: knob 4 %s %u (%u%%)\n", CU_FX[cs.fx_sel].name, (unsigned)cu_send(0, CU_FX[cs.fx_sel].send),
                  (unsigned)cu_send_pct(cu_send(0, CU_FX[cs.fx_sel].send)));
