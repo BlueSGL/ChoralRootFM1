@@ -31,8 +31,9 @@
  *   0xC0000-0xC0FFF  BTIF (BT pairing)              NEVER
  *   0xC1000-0xC1FFF  USRTRIM (key/pad/wheel calibration, "trimdat")   NEVER
  *   0xC2000-0xE9FFF  USRFLASH: the CZ-1 banks, the loop slots, the sound pool's sectors 5..8 (storage.c, cr_ui.c)
- *                                                                                  FL_SMP
- *   0xEA000-0xEAFFF  USRFLASH's last sector: the stock firmware's end marker; no data of ChoralRoot's
+ *                    (the stock mapping until ChoralRoot first writes there)              FL_SMP
+ *   0xEA000-0xEAFFF  USRFLASH's last sector: the stock end marker "usrdata" at 0xEAFF8; erased once before the
+ *                    first write into FL_SMP, no data of ChoralRoot's                    FL_STOCKTAG (erase only)
  *   0xEB000-0xF1FFF  the free tail (unlisted): the sound pool's sectors 9..15 (0.24)       FL_TAIL
  *   0xF2000-0xF3FFF  free (unlisted), unused
  *   0xF4000-0xFDFFF  USR (stock resources; kept for a rollback)   NEVER
@@ -59,6 +60,14 @@
 #define FL_SMP_HI       0x000EA000u
 #define FL_TAIL_LO      0x000EB000u                /* the free tail after USRFLASH: the sound pool's last 7 sectors */
 #define FL_TAIL_HI      0x000F2000u
+/* USRFLASH is the stock firmware's mapping (global settings 0xC2000, 8 presets from 0xC3000) with its end marker
+ * "usrdata\0" at 0xEAFF8: while the marker is there the stock firmware trusts the area and never rebuilds it.
+ * Before ChoralRoot's first write into USRFLASH the marker sector is erased (storage.c st_stock_release), so a
+ * return to stock rebuilds the factory mapping. That one sector is erased whole and never programmed. */
+#define FL_STOCKTAG_LO  0x000EA000u
+#define FL_STOCKTAG_HI  0x000EB000u
+#define FL_STOCKTAG_OFF 0x000EAFF8u
+#define FL_STOCKTAG_OK(off, n) ((uint32_t)(off) == FL_STOCKTAG_LO && (uint32_t)(n) == FL_STOCKTAG_HI - FL_STOCKTAG_LO)
 /* a window [lo, hi) is allowed: sector aligned, non-empty, and clear of every protected range */
 #define FL_WIN_SAFE(lo, hi) ((lo) % 0x1000u == 0u && (hi) % 0x1000u == 0u && (lo) < (hi) && \
                              (lo) >= FL_HEAD_HI && (hi) <= FL_KEYMAC_LO && \
@@ -69,7 +78,9 @@ _Static_assert(FL_WIN_SAFE(FL_OTA_LO, FL_OTA_HI), "SMK: FL_OTA overlaps a protec
 _Static_assert(FL_WIN_SAFE(FL_SMP_LO, FL_SMP_HI), "SMK: FL_SMP overlaps a protected range");
 _Static_assert(FL_WIN_SAFE(FL_TAIL_LO, FL_TAIL_HI) && FL_TAIL_HI <= FL_USRRES_LO,
                "SMK: FL_TAIL overlaps a protected range (the stock resources from 0xF4000)");
-_Static_assert(FL_TAIL_LO == FL_SMP_HI + 0x1000u, "SMK: FL_TAIL starts after USRFLASH's last sector (0xEA000)");
+_Static_assert(FL_WIN_SAFE(FL_STOCKTAG_LO, FL_STOCKTAG_HI) && FL_STOCKTAG_LO == FL_SMP_HI &&
+               FL_STOCKTAG_OFF + 8u == FL_STOCKTAG_HI, "SMK: the stock marker sector");
+_Static_assert(FL_TAIL_LO == FL_STOCKTAG_HI, "SMK: FL_TAIL starts after the stock marker's sector (0xEA000)");
 _Static_assert(FL_WIN_SAFE(FL_APP_LO, FL_APP_HI), "SMK: FL_APP overlaps a protected range");
 _Static_assert(FL_WIN_SAFE(FL_REC_LO, FL_REC_HI), "SMK: FL_REC overlaps a protected range");
 _Static_assert(FL_REC_HI == FL_CAL_LO && FL_OTA_HI <= FL_REC_HI && FL_OTA_LO >= FL_REC_LO,
@@ -81,7 +92,7 @@ _Static_assert(FL_DATA_HI <= FL_OTA_LO && FL_APP_HI <= FL_DATA_LO, "SMK: windows
 #define FL_STORE_OK(off, n) (FL_IN(off, n, FL_DATA_LO, FL_DATA_HI) || FL_IN(off, n, FL_SMP_LO, FL_SMP_HI) || \
                              FL_IN(off, n, FL_TAIL_LO, FL_TAIL_HI))
 #ifndef FL_RANGE_OK
-#define FL_RANGE_OK(off, n) (FL_STORE_OK(off, n) || FL_IN(off, n, FL_OTA_LO, FL_OTA_HI))
+#define FL_RANGE_OK(off, n) (FL_STORE_OK(off, n) || FL_IN(off, n, FL_OTA_LO, FL_OTA_HI) || FL_STOCKTAG_OK(off, n))
 #endif
 /* second, independent net in the RAM driver: [off, off + n) touches a protected range (also when a
  * caller supplies its own FL_RANGE_OK, as the update loader does) */

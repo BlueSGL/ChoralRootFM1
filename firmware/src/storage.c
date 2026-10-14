@@ -213,11 +213,45 @@ static uint8_t st_owner_cleared;                /* (the console says so) */
 #ifndef ST_FEED
 #define ST_FEED() ((void)0)                     /* (the device: the watchdog, between erases) */
 #endif
+/* The stock firmware's mapping in USRFLASH (global settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000; the
+ * end marker "usrdata\0" at 0xEAFF8, FL_STOCKTAG): the stock firmware trusts the area while the marker is there and
+ * never rebuilds it, so after a return to stock ChoralRoot's banks and loops would be its key, knob and fader
+ * mapping (every key one note). So: an owner change keeps an intact stock mapping (it reads as empty banks and
+ * loops), and the marker is released (its sector erased: the stock firmware rebuilds its factory mapping at its
+ * next start) before ChoralRoot's first erase or write in USRFLASH (storage_hw.c st_erase) and at an owner change
+ * that finds the marker over another firmware's data. */
+static int st_stock_tagged(void)
+{
+    static const uint8_t TAG[8] = {'u', 's', 'r', 'd', 'a', 't', 'a', 0};
+    uint8_t t[8];
+    uint32_t i;
+    if (st_read(FL_STOCKTAG_OFF, t, 8))
+        return 0;
+    for (i = 0; i < 8u; i++)
+        if (t[i] != TAG[i])
+            return 0;
+    return 1;
+}
+static int st_stock_intact(void)                /* the marker over the stock layout (its global settings' magic) */
+{
+    uint8_t h[2];
+    return st_stock_tagged() && !st_read(FL_SMP_LO, h, 2) && h[0] == 0xA3u && h[1] == 0x3Au;
+}
+static void st_stock_release(void)              /* erase the marker's sector, once: later calls find no marker */
+{
+    if (st_stock_tagged())
+        st_erase(FL_STOCKTAG_LO);
+}
+static int st_in_usrflash(uint32_t off) { return off >= FL_SMP_LO && off < FL_SMP_HI; }
 static void st_smk_clear(void)
 {
-    uint32_t r, k;
+    uint32_t r, k, keep = st_stock_intact();   /* the stock mapping: kept until ChoralRoot stores something there */
+    if (!keep)
+        st_stock_release();                     /* the marker over another firmware's data: let the stock rebuild */
     for (r = 0; r < sizeof ST_SMK_REGIONS / sizeof ST_SMK_REGIONS[0]; r++)
         for (k = 0; k < ST_SMK_REGIONS[r][1]; k++) {
+            if (keep && st_in_usrflash(ST_SMK_REGIONS[r][0]))
+                break;
             ST_FEED();
             st_erase(ST_SMK_REGIONS[r][0] + k * ST_SECTOR);
         }

@@ -23,12 +23,17 @@
 
 static uint8_t nor[0x100000];
 static int bad_write;
+static int tag_erases, usr_before_tag;
 static int in_regions(uint32_t s);
 static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
 static int st_erase(uint32_t off)
 {
-    if ((off & 0xFFFu) || !(in_regions(off) || off == 0xAF000u))
+    if ((off & 0xFFFu) || !(in_regions(off) || off == 0xAF000u || off == 0xEA000u))
         bad_write++;
+    if (off == 0xEA000u)
+        tag_erases++;
+    else if (off >= 0xC2000u && off < 0xEA000u && nor[0xEAFF8] == 'u')
+        usr_before_tag++;                          /* a USRFLASH erase while the stock marker is still there */
     memset(nor + off, 0xFF, 0x1000);
     return 0;
 }
@@ -128,7 +133,38 @@ int main(void)
     st_owner_check();
     check("an untagged store (FELUCCA_DATA_UNTAGGED_OK 0): cleared, tagged", store_erased() && tagged() &&
           others_kept());
-    check("nothing written outside ChoralRoot's data sectors and the tag", bad_write == 0);
+    /* the stock firmware's mapping in USRFLASH (marker "usrdata" at 0xEAFF8, A3 3A at 0xC2000) */
+    fill();
+    memset(nor + 0xC2000, 0x00, 0x28000);          /* (made-up presets) */
+    nor[0xC2000] = 0xA3; nor[0xC2001] = 0x3A;
+    memset(nor + 0xEA000, 0xFF, 0x1000);
+    memcpy(nor + 0xEAFF8, "usrdata", 8);
+    memcpy(nor + 0xAF000, "SMK37DATASLOOP\0", 16);
+    tag_erases = usr_before_tag = 0;
+    st_owner_cleared = 0;
+    st_owner_check();
+    check("owner change over the intact stock mapping: the store cleared, USRFLASH and its marker kept",
+          all(0x9D000, 0xAF000, 0xFF) && all(0xB0000, 0xB4000, 0xFF) && nor[0xC2000] == 0xA3 && all(0xC2002, 0xEA000, 0x00) &&
+          !memcmp(nor + 0xEAFF8, "usrdata", 8) && tag_erases == 0 && st_stock_tagged() && st_stock_intact() && tagged());
+    st_stock_release();                            /* ChoralRoot's first write into USRFLASH (storage_hw.c st_erase) */
+    check("first write into USRFLASH: the marker sector erased, once", all(0xEA000, 0xEB000, 0xFF) && tag_erases == 1 &&
+          !st_stock_tagged());
+    st_stock_release();
+    check("... and only once", tag_erases == 1);
+    fill();
+    memset(nor + 0xEA000, 0xFF, 0x1000);
+    memcpy(nor + 0xEAFF8, "usrdata", 8);           /* the marker over another firmware's data (0x44): broken stock */
+    memcpy(nor + 0xAF000, "SMK37DATASLOOP\0", 16);
+    tag_erases = usr_before_tag = 0;
+    st_owner_check();
+    check("owner change, marker over another firmware's data: marker released first, then the store cleared",
+          store_erased() && all(0xEA000, 0xEB000, 0xFF) && tag_erases == 1 && usr_before_tag == 0 && tagged());
+    fill();
+    memset(nor + 0xEA000, 0xFF, 0x1000);
+    tag_erases = 0;
+    st_owner_check();
+    check("no marker: nothing more erased than before", store_erased() && tag_erases == 0);
+    check("nothing written outside ChoralRoot's data sectors, the tag and the stock marker sector", bad_write == 0);
     printf("%s\n", bad ? "SMK OWNER TEST FAILED" : "smk owner test passed");
     return bad != 0;
 }
