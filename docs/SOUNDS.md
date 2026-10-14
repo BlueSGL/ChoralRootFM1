@@ -389,17 +389,17 @@ imported).
 | 74 | FDBK, stored 0..127 (the display's 20 = 20, MAX = 127) | **verified** | FDBK x 120 / 127 (FM TONE 0..120: the scale is ours) |
 | 76 | MIX (0 = -64, 64 = 0, 127 = +63) | **verified** | MIX |
 | 78 | PHRT 0..4 (OFF ALL C A+B A+B2?) | inferred | PHRT, the same five |
-| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | **verified** | ENV A / B, direct |
+| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | **verified** | ENV A / B: ATK and DEC by the time curve (`DN_TIME_TO_QUAD`, below: extrapolated), END and LEV direct |
 | 98 / 104 | A DLY / B DLY | slot | A DLY / B DLY |
 | 100 102 106 108 | A TRIG, A RESET, B TRIG, B RESET | inferred | ENV 2 / ENV 2+ |
 | 128 | filter TYPE: version 5 0 OFF, 1 LP2, 2 HP2, 3 LP4 | **verified** (version 5) | TYPE 1:1 (= the manual's order = FM TONE's) |
-| 128 | filter TYPE: version 1, five values 0..4 | guess (LP4 LP2 BP HP2 HP4) | LP24, LP12, BP -> LP12, HP12, HP4 -> HP12 (a note for the two) |
+| 128 | filter TYPE: version 1, five values 0..4: 0 OFF, 1 LP2, 2 HP, 3 LP4, 4 LP4 | **verified** 2 3 4 (the owner's re-saves on OS 1.44), inferred 0 1 (continuity with version 5) | OFF, LP12, HP12, LP24, LP24 (a note only for a value past 4) |
 | 130 / 132 | FREQ / RESO (hi-res) | **verified** | FREQ / RESO, rounded |
 | 134 | ENV depth (hi-res, 64 = 0) | **verified** | FILTER DEPTH |
-| 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC SUS REL (DEC INF: SUS 127, a note) |
+| 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC REL by the time curve (DEC 71 is a measured point), SUS direct (DEC INF: SUS 127, a note; REL INF stays 127) |
 | 144 / 146 | BASE (hi-res) / WIDTH | slot | BASE / WIDTH |
-| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC SUS (DEC INF: SUS 127, a note) |
-| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL (127 INF; a timed 126.85 stays 126) |
+| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC by the time curve, SUS direct (DEC INF: SUS 127, a note) |
+| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL by the time curve on the hi-res value (10.13 is a measured point; 127 INF stays 127) |
 | 156 | DRIVE (hi-res) | **verified** | the record's DRIVE (P_DIST), rounded |
 | 158 | PAN (0 = L64, 64 = 0, 127 = R63) | **verified** | the record's PAN (P_PAN) |
 | 160 | VOL (hi-res; init 110) | **verified** | LEVEL |
@@ -407,7 +407,8 @@ imported).
 | 168 | AENR (version 5: 1 on, 0 off; version 1 holds 0..15: something else) | **verified** (version 5) | none (a note when off) |
 | 174..180 | RATIO OFFSET C, A, B1, B2 (hi-res, 64 = 0; version 5) | slot (the scale not proved: +-64 read as +-1.00) | OFS C A B1 B2 (a note when not 0) |
 | 182 | the filter's ENV DELAY (version 5) | slot | FILT 2 DELAY |
-| 110, 170, 172, 186..263 | ? (110: 127 or 29; 170 / 172: 63 / 39 in the init sound) | unknown | - |
+| 263 (version 1) / 280 (version 5) | the sound's OCTAVE (the manual §9.5.10), a signed byte in semitones | inferred (below) | every ratio x 2^(octave / 12) when FM TONE's tables hold the result, else a note |
+| 110, 170, 172, 186..262 | ? (110: 127 or 29; 170 / 172: 63 / 39 in the init sound; 262: 2 in 251 factory sounds, 0 in version 5's 279 = 2: maybe PITCH BEND DEPTH) | unknown | - |
 | 112..126 | the slots of PITCH ALL .. AB DELAY (LFO-only targets): always 64 | - | - |
 
 The old table's mistakes (dn-1, inferred without ground truth): the AMP block was one slot off (it read HOLD at 150,
@@ -443,12 +444,11 @@ slot 182, a version-5 field): an inference. The depth's full scale per destinati
 "LFOs"): copied 1:1, not compared.
 
 **What stays approximate** (copied 1:1 or by our own scale; only listening to the owner's reference recordings can
-settle these): the operator, filter and amp envelope times (neither the manual nor the files give the Digitone's
-time curve; FM TONE's are its own), FREQ's cutoff curve and BASE / WIDTH's (FM TONE: 30 Hz x 533^(v/127)), FDBK's
+settle these): the envelope times (one curve through two measured points, below), FREQ's cutoff curve and BASE / WIDTH's (FM TONE: 30 Hz x 533^(v/127)), FDBK's
 amount (proportional, FM TONE's curve is ours), DTUN's amount (FM TONE follows the manual's description: slight to
 64, wide above), MIX's law, VOL against LEVEL (FM TONE's LEVEL^2; the Digitone's init 110, FM TONE's 100), the LFO
 depth per destination, HARM's fractions (rounded), the DRIVE's character (the FM-1's distortion), the ratio offsets'
-scale, RATIO A's unproved steps, the version-1 filter types, PHRT (inferred). The LFO rate matches by construction
+scale, RATIO A's unproved steps, the version-1 filter types 0 and 1, PHRT (inferred), the sound's OCTAVE (inferred). The LFO rate matches by construction
 (the manual's table: SPD x MULT = 128 is one bar = FM TONE's `QUAD_LFO_K`).
 
 Every FM TONE value is clamped into the firmware's range (`DN_QUAD_RANGES` = `quad_range`; the test compares it with
@@ -464,7 +464,62 @@ notes fell from 1325 (5.2 a sound) to 377 (1.5): the LFOs with a destination 349
 LEVEL 7, RATIO ALL 5, LFO 1's parameters 10 on LFO 2, DRIVE 1). Since FM TONE has every destination (2026-10-14,
 HISTORY 3y59): **371 of 371 mapped**, none off, notes 355, all 256 blobs pass `quad_blob_ok`; RATIO A between the proved steps 25; the version-1
 filter types 63; the sends 263; DEC INF 4. The owner's 143 controlled exports (version 5): all parse (were refused),
-all pass `quad_blob_ok`.
+all pass `quad_blob_ok`. With the version-1 filter types, the time curve and the OCTAVE (2026-10-14, HISTORY 3y60): all 256 parse, all
+256 blobs pass `quad_blob_ok`, notes 397 (1.55 a sound): no filter-type notes (were 63), the OCTAVE 105 sounds (44
+transposed by their ratios, 61 not: a ratio of 0.25 has no half, a 16 no double, or a quarter step's half needs a finer
+OFS: they play their OCTAVE higher or lower than on the Digitone, with a note), the sends 263, RATIO A 25, DEC INF 4.
+The 143 exports: all pass, notes 6 (none about the OCTAVE: theirs is 0).
+
+**The SQB TK recording (2026-10-14).** The owner played "a C" on his Digitone (the factory A003 SQB TK, version 1) and
+on the FM-1 (its import) at once (12 s, 44.1 kHz; local files, not in the repo). Measured (the note held 2.61 s):
+
+| | Digitone | FM-1 (the old import) | host render, old import | host render, now |
+| --- | --- | --- | --- | --- |
+| lowest partial | 65.4 Hz (C2) | 130.8 Hz (C3) | 130.8 Hz (at MIDI 60) | 65.4 Hz (at MIDI 60) |
+| harmonics of 65.4 Hz at 0.3 s (dB: 1st..6th) | 0 -16 -17 -32 -30 -43 | -80 -1 -78 -7 -80 0 | -114 0 -105 -6 -103 0 | 0 -15 -13 -25 -22 -36 |
+| spectral centroid 0.1 / 0.3 / 0.6 / 1.0 / 2.0 s | 473 185 93 74 71 Hz | 3129 2456 2395 2399 2456 | 2709 2261 2220 2219 2219 | 448 181 123 109 106 |
+| after the key's release, -40 / -60 dB | 49 / 71 ms | the dry sound ~3 ms, then a tail (the FM-1's effects) | ~2 ms | 48 / 68 ms |
+
+Two causes, both in the import: **the filter type** (version 1's 4 was read as HP4 -> HP12: the high-pass at FREQ 42
+removed the fundamental and left the even, bright partials; it is LP4, the owner's re-save) and **the sound's
+OCTAVE** (-12 in SQB TK's record, not read: the Digitone plays it an octave below the key). The FM-1's recording
+matches a render of the old import at MIDI 60 (its partials are those of 130.8 Hz; at MIDI 48 they would be those of
+65.4 Hz with odd ones present), so the FM-1 got MIDI 60 for the owner's C, a single note (no chord tones in the
+spectrum); with the OCTAVE the Digitone sounds MIDI 48. RATIO C 0.5 converts right: rendered at MIDI 48 with LP24
+the old ratios give 65.4 Hz and the Digitone's harmonic profile within 3 dB up to the 12th (0.3 s); algorithm 6's
+carriers (C and B1, MIX between X and Y) are the Digitone's. No engine change. What still differs: the closed
+filter (from about 0.6 s the Digitone's centroid is 71..93 Hz, FM TONE's 106..123: FREQ 42's cutoff or LP4's slope
+differ; FM TONE 30 Hz x 533^(v/127) = 238 Hz) and the level (below).
+
+**Envelope times** (`DN_TIME_K`, `DN_TIME_C`, `DN_TIME_TO_QUAD`, `dnTimeQ` in fm1dnsnd.js: the one place to refine).
+FM TONE's time value v is T(v) = 10^(4 v / 127) ms (1 ms .. 10 s; ATK a linear ramp over T, DEC and REL exponential,
+-40 dB at T). The Digitone's manual gives no times. Two points from the recording: AMP REL 10.13 falls 40 dB in about
+45 ms (renders of the import at FM TONE REL 50 / 52 / 53 / 54 give 45 / 48 / 54 / 56 ms by the same measure, the
+Digitone 49): FM TONE 52.5; the filter DEC 71 (SUS 0) closes the spectrum like FM TONE's FDEC 97 +-3 (the centroid's
+fall over 2 s, best fit 96..98). A power law through both (T = 0 at 0, the Digitone's T = 2.9 s x (v / 127)^1.66):
+FM TONE = 52.6 log10(v) - 0.4, at most 126 (127 stays INF on the releases):
+
+| Digitone | 1 | 3 | 5 | 10 | 20 | 40 | 64 | 71 | 90 | 110 | 127 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| FM TONE | 0 | 25 | 36 | 52 | 68 | 84 | 95 | 97 | 102 | 107 | 110 |
+| time | 1 ms | 6 ms | 14 ms | 43 ms | 140 ms | 440 ms | 1.0 s | 1.1 s | 1.6 s | 2.3 s | 2.9 s |
+
+Confidence: the two points within about +-1.5 FM TONE values (+-12 % in time); between them the power law is a choice
+(an exponential in v through the same points, a straight line in FM TONE values, is up to 10 values shorter at 20..40, 46 = 28 ms at 0, and past FM TONE's 10 s from about 100);
+below 10 and above 71 it is **extrapolated**, the top end most of all (a Digitone 127 might be 10 s or more: then
+long pads import short). ATK (amp, filter, ENV A / B) and the operator envelopes' DEC are assumed to follow the same
+curve (not measured: SQB TK's attacks are too short to read from this recording). Recordings that would pin it: a
+plain sine (ALGO 1, every operator level 0 but C, filter OFF, SUS 127), the key held 1 s, nothing else playing, the
+FM-1's effects off: AMP REL at 20, 40, 60, 80, 100, 120 (the decay after the key up), AMP ATK at 20, 60, 100 (the
+rise), AMP DEC at 40 and 80 with SUS 0; and one ENV A DEC at 60 on a modulated sound (C under A, A LEV 127, END 0).
+
+**Level.** The FM-1's recording of the old import against the host render of the same patch at MIDI 60 gives the
+recording chain's gain (-10.2 dB over the held note). The new import's render through that gain would be about 7 dB
+louder than the Digitone's recording at the note's onset (0.1 s) and about 10.6 dB over 0..2 s (the closed filter
+keeps more on FM TONE). That suggests VOL 110 -> LEVEL about 73 (FM TONE's amplitude is LEVEL^2: -7 dB) for this sound,
+but it is one sound, both recordings' gains are assumed equal, and the velocity (the render's 100) is not known: not
+applied; LEVEL stays VOL 1:1 until a second recording (the sine above at VOL 110 and 60 on both units, at the same
+interface gain, the same velocity) settles it.
 
 ### Refining the table (with the owner's Digitone)
 

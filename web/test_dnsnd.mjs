@@ -8,7 +8,8 @@
 import { deflateRawSync } from "node:zlib";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { parseDnsnd, dnsndToQuad, DNSND_FIELDS, DN_QUAD_RANGES, DN_QP, DN_RATIO_A, DN_LFO_DEST, dnLz4Block } from "./fm1dnsnd.js";
+import { parseDnsnd, dnsndToQuad, DNSND_FIELDS, DN_QUAD_RANGES, DN_QP, DN_RATIO_A, DN_LFO_DEST, dnLz4Block, DN_TIME_TO_QUAD, dnTimeQ } from "./fm1dnsnd.js";
+const T = (v) => DN_TIME_TO_QUAD[v], DN_RATIO_CB_OF = (i) => [0.25, 0.5, 0.75, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][i];                       // the envelope time curve (fm1dnsnd.js DN_TIME_*)
 import { soundFromDnsnd, recordValid, SOUND_IDS, POOL_IDS, placeSound, parseSoundObjects, firstFreeSlot } from "./fm1sounds.js";
 import { libraryItemsFromDnsnd } from "./fm1manager.js";
 
@@ -103,11 +104,11 @@ ok(q.blob.length === 80 && q.blob[0] === 0x51 && q.blob[1] === 3 && q.blob.subar
 ok(v.every((x, i) => q.blob[2 + i] === x - DN_QUAD_RANGES[i][0]), "blob: each byte = value - min");
 const want = [
   [DN_QP.ALGO, 6], [DN_QP.RC, 7], [DN_QP.RA, DN_RATIO_A[10] * 4 - 1], [DN_QP.RB1, 5], [DN_QP.RB2, 7], [DN_QP.HARM, 11], [DN_QP.DTUN, 41],
-  [DN_QP.FDBK, Math.round(100 * 120 / 127)], [DN_QP.MIX, -20], [DN_QP.AATK, 11], [DN_QP.ADEC, 22], [DN_QP.AEND, 33], [DN_QP.ALEV, 44],
-  [DN_QP.BATK, 55], [DN_QP.BDEC, 66], [DN_QP.BEND, 77], [DN_QP.BLEV, 88], [DN_QP.ADLY, 5], [DN_QP.ATRIG, 0], [DN_QP.ARST, 1],
-  [DN_QP.BDLY, 6], [DN_QP.BTRIG, 1], [DN_QP.BRST, 0], [DN_QP.FTYPE, 1], [DN_QP.FREQ, 90], [DN_QP.RESO, 13], [DN_QP.FDEPTH, 25],
-  [DN_QP.FATK, 3], [DN_QP.FDEC, 70], [DN_QP.FSUS, 80], [DN_QP.FREL, 90], [DN_QP.BASE, 10], [DN_QP.WIDTH, 100], [DN_QP.EATK, 7],
-  [DN_QP.EDEC, 57], [DN_QP.ESUS, 99], [DN_QP.EREL, 61], [DN_QP.LEVEL, 101],
+  [DN_QP.FDBK, Math.round(100 * 120 / 127)], [DN_QP.MIX, -20], [DN_QP.AATK, T(11)], [DN_QP.ADEC, T(22)], [DN_QP.AEND, 33], [DN_QP.ALEV, 44],
+  [DN_QP.BATK, T(55)], [DN_QP.BDEC, T(66)], [DN_QP.BEND, 77], [DN_QP.BLEV, 88], [DN_QP.ADLY, 5], [DN_QP.ATRIG, 0], [DN_QP.ARST, 1],
+  [DN_QP.BDLY, 6], [DN_QP.BTRIG, 1], [DN_QP.BRST, 0], [DN_QP.FTYPE, 2], [DN_QP.FREQ, 90], [DN_QP.RESO, 13], [DN_QP.FDEPTH, 25],
+  [DN_QP.FATK, T(3)], [DN_QP.FDEC, T(70)], [DN_QP.FSUS, 80], [DN_QP.FREL, T(90)], [DN_QP.BASE, 10], [DN_QP.WIDTH, 100], [DN_QP.EATK, T(7)],
+  [DN_QP.EDEC, T(57)], [DN_QP.ESUS, 99], [DN_QP.EREL, T(61)], [DN_QP.LEVEL, 101],
   [L(0, "SPEED"), 21], [L(1, "SPEED"), -30], [L(0, "MULT"), 14], [L(1, "MULT"), 5], [L(0, "FADE"), 9], [L(1, "FADE"), -7],
   [L(0, "DEST"), 0], [L(0, "WAVE"), 5], [L(1, "WAVE"), 4], [L(0, "PHASE"), 33], [L(0, "TRIG"), 3], [L(1, "TRIG"), 1],
   [L(0, "DEPTH"), 41], [L(1, "DEPTH"), -12],
@@ -120,8 +121,8 @@ ok(DN_RATIO_A.length === 36 && [[0, 0.25], [3, 1], [9, 2.5], [15, 4], [25, 8], [
    DN_RATIO_A.every((r, i) => !i || r > DN_RATIO_A[i - 1]), "convert: RATIO A's table holds the proved steps (0.25 1 2.5 4 8 16), rising");
 ok(q.pan === -5 && q.drive === 30, "convert: PAN and DRIVE -> the track's PAN and DRIVE");
 const has = (re) => q.notes.some((n) => re.test(n));
-ok(has(/filter type BP \(a version-1 sound: the type order is a guess\) -> LP12/) && has(/delay send 20\.00 not imported/) &&
-   has(/chorus send 3\.00/) && !has(/reverb send/) && !has(/RATIO/) && q.notes.length === 3, "notes: BP -> LP12 (version 1), the sends (0 sends say nothing), no others");
+ok(!has(/filter type/) && has(/delay send 20\.00 not imported/) &&
+   has(/chorus send 3\.00/) && !has(/reverb send/) && !has(/RATIO/) && q.notes.length === 2, "notes: the sends (0 sends say nothing), no others (version-1 type 2 = HP: no note)");
 // clamping: out-of-range raw values
 const qc = dnsndToQuad(await parseDnsnd(dnsnd(record("CLAMP", { algo: 200, ratioC: 99, ratioA: 99, ratioB: [255, 255], harm: [127, 255], fdbk: 255, "lfo1.mult": 90,
   "lfo1.wave": 40, "lfo1.mode": 77, "lfo1.dest": 5, "lfo2.dest": 99, "lfo1.depth": [127, 255], "envA.trig": 9, "filter.type": 9, "amp.pan": 250, "amp.drive": [255, 0] }))));
@@ -145,14 +146,14 @@ const PROVED = [
   ["harm", [37, 0], -26, DN_QP.HARM, -26], ["harm", [63, 0], 0, DN_QP.HARM, 0], ["harm", [89, 0], 26, DN_QP.HARM, 26],
   ["dtun", [127, 0], 127, DN_QP.DTUN, 127], ["fdbk", 20, 20, DN_QP.FDBK, 19], ["fdbk", 127, 127, DN_QP.FDBK, 120],
   ["mix", 0, -64, DN_QP.MIX, -64], ["mix", 64, 0, DN_QP.MIX, 0], ["mix", 127, 63, DN_QP.MIX, 63],
-  ["envA.atk", 127, 127, DN_QP.AATK, 127], ["envA.dec", 0, 0, DN_QP.ADEC, 0], ["envA.end", 0, 0, DN_QP.AEND, 0], ["envA.lev", 127, 127, DN_QP.ALEV, 127],
-  ["envB.atk", 127, 127, DN_QP.BATK, 127], ["envB.dec", 127, 127, DN_QP.BDEC, 127], ["envB.end", 0, 0, DN_QP.BEND, 0], ["envB.lev", 127, 127, DN_QP.BLEV, 127],
+  ["envA.atk", 127, 127, DN_QP.AATK, T(127)], ["envA.dec", 0, 0, DN_QP.ADEC, 0], ["envA.end", 0, 0, DN_QP.AEND, 0], ["envA.lev", 127, 127, DN_QP.ALEV, 127],
+  ["envB.atk", 127, 127, DN_QP.BATK, T(127)], ["envB.dec", 127, 127, DN_QP.BDEC, T(127)], ["envB.end", 0, 0, DN_QP.BEND, 0], ["envB.lev", 127, 127, DN_QP.BLEV, 127],
   ["filter.type", 0, 0, DN_QP.FTYPE, 0, V5], ["filter.type", 1, 1, DN_QP.FTYPE, 1, V5], ["filter.type", 2, 2, DN_QP.FTYPE, 2, V5], ["filter.type", 3, 3, DN_QP.FTYPE, 3, V5],
   ["filter.freq", [64, 113], 64.44, DN_QP.FREQ, 64], ["filter.reso", [71, 174], 71.68, DN_QP.RESO, 72], ["filter.reso", [12, 34], 12.13, DN_QP.RESO, 12],
   ["filter.env", [0, 0], -64, DN_QP.FDEPTH, -64], ["filter.env", [102, 15], 38.06, DN_QP.FDEPTH, 38], ["filter.env", [127, 0], 63, DN_QP.FDEPTH, 63],
-  ["filter.atk", 97, 97, DN_QP.FATK, 97], ["filter.dec", 6, 6, DN_QP.FDEC, 6], ["filter.dec", 126, 126, DN_QP.FDEC, 126], ["filter.sus", 127, 127, DN_QP.FSUS, 127],
-  ["filter.rel", 127, 127, DN_QP.FREL, 127], ["amp.atk", 127, 127, DN_QP.EATK, 127], ["amp.dec", 0, 0, DN_QP.EDEC, 0], ["amp.sus", 0, 0, DN_QP.ESUS, 0],
-  ["amp.rel", [126, 218], 126.85, DN_QP.EREL, 126], ["amp.rel", [127, 0], 127, DN_QP.EREL, 127], ["amp.rel", [0, 0], 0, DN_QP.EREL, 0], ["amp.vol", [100, 0], 100, DN_QP.LEVEL, 100],
+  ["filter.atk", 97, 97, DN_QP.FATK, T(97)], ["filter.dec", 6, 6, DN_QP.FDEC, T(6)], ["filter.dec", 126, 126, DN_QP.FDEC, T(126)], ["filter.sus", 127, 127, DN_QP.FSUS, 127],
+  ["filter.rel", 127, 127, DN_QP.FREL, 127], ["amp.atk", 127, 127, DN_QP.EATK, T(127)], ["amp.dec", 0, 0, DN_QP.EDEC, 0], ["amp.sus", 0, 0, DN_QP.ESUS, 0],
+  ["amp.rel", [126, 218], 126.85, DN_QP.EREL, Math.round(dnTimeQ(126.85))], ["amp.rel", [127, 0], 127, DN_QP.EREL, 127], ["amp.rel", [0, 0], 0, DN_QP.EREL, 0], ["amp.vol", [100, 0], 100, DN_QP.LEVEL, 100],
   ["lfo2.speed", [127, 254], 63.99, L(1, "SPEED"), 63], ["lfo2.speed", [0, 0], -64, L(1, "SPEED"), -64], ["lfo2.speed", [64, 0], 0, L(1, "SPEED"), 0],
   ["lfo2.mult", 0, 0, L(1, "MULT"), 0], ["lfo2.mult", 23, 23, L(1, "MULT"), 23],
   ["ofsC", [64, 0], 0, DN_QP.OFSC, 0, V5], ["ofsB2", [96, 0], 32, DN_QP.OFSB2, 50, V5], ["filter.delay", 40, 40, DN_QP.FDLY, 40, V5],
@@ -173,7 +174,7 @@ provedBad.forEach((s) => console.log(`  ${s}`));
 }
 { // DEC 127 = INF (filter and amp): FM TONE's SUS 127
   const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("INF", { "filter.dec": 127, "filter.sus": 10, "amp.dec": 127, "amp.sus": 20 }))));
-  ok(qq.values[DN_QP.FSUS] === 127 && qq.values[DN_QP.ESUS] === 127 && qq.values[DN_QP.FDEC] === 127 && qq.notes.length === 2, "convert: DEC INF (127) -> SUS 127, a note each");
+  ok(qq.values[DN_QP.FSUS] === 127 && qq.values[DN_QP.ESUS] === 127 && qq.values[DN_QP.FDEC] === T(127) && qq.notes.length === 2, "convert: DEC INF (127) -> SUS 127, a note each");
 }
 { // the LFO destinations: every Digitone number of the table -> FM TONE's; a version-5 record reads its own fields
   const dests = Object.entries(DN_LFO_DEST).map(([n, q]) => [+n, q]), bad = [];
@@ -188,6 +189,37 @@ provedBad.forEach((s) => console.log(`  ${s}`));
   ok(Object.entries(want).every(([n, q]) => DN_LFO_DEST[n] === q) && new Set(Object.values(DN_LFO_DEST)).size === 58 &&
      Object.values(DN_LFO_DEST).every((q) => q >= 0 && q <= DN_QUAD_RANGES[L(0, "DEST")][1]),
      "LFO destinations 1:1: LFO1 SPEED..DEPTH -> L1SPD..L1DEP, RATIO ALL, AB LEVEL..AB DELAY, DRIVE, REV DEL CHO sends, ENV DELAY; one each");
+}
+
+{ // version 1's filter TYPE (the owner's re-saves on OS 1.44, 2026-10-14: 2 -> HP, 3 -> LP4, 4 -> LP4; 0 OFF, 1 LP2 inferred)
+  const got = [];
+  for (let t = 0; t <= 5; t++) { const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("FT", { "filter.type": t })))); got.push(`${qq.values[DN_QP.FTYPE]}${qq.notes.length}`); }
+  ok(got.join() === "00,10,20,30,30,11", "filter type version 1: 0 OFF 1 LP12 2 HP12 3 LP24 4 LP24 (no notes), 5 unknown -> LP12 with a note");
+}
+{ // the envelope time curve: through the two measured points (SQB TK: AMP REL 10.13 -> 52..53, filter DEC 71 -> 97),
+  // 0 -> 0, rising, at most 126 (127 = INF stays for the releases)
+  ok(DN_TIME_TO_QUAD.length === 128 && T(0) === 0 && T(1) === 0 && T(71) === 97 && [52, 53].includes(Math.round(dnTimeQ(10.13))) &&
+     DN_TIME_TO_QUAD.every((x, i) => !i || x >= DN_TIME_TO_QUAD[i - 1]) && T(127) <= 126 && T(64) > 90 && T(64) < 100,
+     "envelope times: the curve holds the measured points, rises, 0 -> 0, max < 127");
+  const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("REL", { "amp.rel": [10, 33], "filter.rel": 127, "envA.end": 99, "envB.lev": 7 }))));
+  ok(qq.values[DN_QP.EREL] === Math.round(dnTimeQ(10 + 33 / 256)) && qq.values[DN_QP.FREL] === 127 && qq.values[DN_QP.AEND] === 99 && qq.values[DN_QP.BLEV] === 7,
+     "envelope times: a hi-res release by the curve, REL INF stays 127, END and LEV are levels (1:1)");
+}
+{ // the sound's OCTAVE (version 1 offset 263, version 5 offset 280, signed semitones): every ratio x 2^(oct / 12)
+  const oc = async (set, opt) => dnsndToQuad(await parseDnsnd(dnsnd(record("OCT", set, opt))));
+  const RB = (b1, b2) => [0, 2 * (b1 * 19 + b2)];                // RATIO B: B1 / B2 steps
+  const a = await oc({ octave: 244, ratioC: 1, ratioA: 3, ratioB: RB(3, 8) }), av = a.values;      // -12: C 0.5 A 1 B1 1 B2 6
+  ok(av[DN_QP.RC] === 0 && av[DN_QP.RA] === 1 && av[DN_QP.RB1] === 1 && av[DN_QP.RB2] === 5 && av[DN_QP.OFSC] === 0 && av[DN_QP.OFSB2] === 0 &&
+     a.notes.some((n) => /OCTAVE -1: every ratio x 0\.5/.test(n)), "octave -1 (version 1): C 0.5 -> 0.25, A 1 -> 0.5, B 1 / 6 -> 0.5 / 3, a note");
+  const b = await oc({ octave: 244, ratioC: 7, ratioA: 3, ratioB: RB(3, 3) }), bv = b.values;      // C 5 -> 2.5: 2.00 + 0.50 or 3.00 - 0.50
+  ok(DN_RATIO_CB_OF(bv[DN_QP.RC]) + bv[DN_QP.OFSC] / 100 === 2.5 && Math.abs(bv[DN_QP.OFSC]) === 50, "octave -1: C 5 -> 2.5 as a step and OFS 0.50");
+  const c = await oc({ octave: 244, ratioC: 0, ratioA: 3, ratioB: RB(3, 3) });                     // C 0.25 has no half
+  ok(c.values[DN_QP.RC] === 0 && c.values[DN_QP.RA] === 3 && c.notes.some((n) => /OCTAVE -1 not imported .* 1 octave\(s\) higher/.test(n)),
+     "octave -1: a ratio of 0.25 has no half in FM TONE: nothing changed, a note");
+  const d = await oc({ octave: 12, ratioC: 3, ratioA: 3, ratioB: RB(3, 3), ofsC: 64, ofsA: 64, ofsB1: 64, ofsB2: 64 }, V5);                // v5 reads 280 (record() sets both)
+  ok(d.values[DN_QP.RC] === 4 && d.values[DN_QP.RA] === 7 && d.values[DN_QP.RB1] === 4 && d.values[DN_QP.RB2] === 4, "octave +1 (version 5, offset 280): 1 -> 2");
+  const e = await oc({ ratioC: 1 });
+  ok(e.values[DN_QP.RC] === 1 && !e.notes.some((n) => /OCTAVE/.test(n)), "octave 0: nothing changed, no note");
 }
 const v5 = await parseDnsnd(dnsnd(record("V5", { ofsA: [64 + 16, 0] }, V5)));
 ok(v5.version === 5 && v5.params.ofsA === 16 && v5.confidence.ofsA === "slot" && dnsndToQuad(v5).values[DN_QP.OFSA] === 25, "parse: a version-5 record (OS 1.44) reads, with its ratio offsets");

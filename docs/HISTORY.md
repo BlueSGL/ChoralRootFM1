@@ -2826,3 +2826,23 @@ Places that already hold a user sound are skipped. Favourites: a mark on a facto
 a record over it has that key): the mark stays with the place, so the unit shows it on the import, and it is the
 factory sound's again after Restore; the confirm says so. Tests: test_manager.mjs (16 of 16, 5, 200 -> 16 + 112 + 72
 refused with the confirm's text, Restore, a drop onto 04, read back by a new session).
+3y60. **.dnsnd import against the owner's SQB TK recording: the filter type, the OCTAVE, the envelope times (2026-10-14;
+branch dn-5 from 0d227e0, not pushed).** The owner recorded the factory SQB TK (A003, version 1) on his Digitone and its
+import on the FM-1, "a C" on both at once: the FM-1 sounded an octave higher, bright and static, with a long tail. His
+facts: "SQB TK Filter type on the Digitone is LP4"; re-saved on OS 1.44: CHAPPET DL version-1 type 2 -> version-5 2
+(HP), DIGIT-ONE 3 -> 3 (LP4), SQB TK 4 -> 3 (LP4). **Found** (docs/SOUNDS.md ".dnsnd import", "The SQB TK
+recording"): version 1's type 4 was read as HP4 -> HP12, the high-pass removing the 65.4 Hz fundamental; and the
+record's byte 263 (version 5: 280) is the sound's OCTAVE in semitones (the corpus holds only multiples of 12; SQB TK
+-12), which the import ignored. The FM-1 played MIDI 60, one note (its recording matches a host render of the old
+import at 60, partials of 130.8 Hz); the Digitone sounds it at 48. RATIO C 0.5, algorithm 6's carriers and MIX convert
+right (the old ratios at MIDI 48 with LP24 give the Digitone's harmonic profile within 3 dB); the FM-1's long tail is
+its effects (the dry release ended in ~2 ms at FM TONE REL 10 = 2 ms). **Changed** (web only, no firmware): version 1's
+TYPE 0 OFF, 1 LP2 (both inferred), 2 HP, 3 LP4, 4 LP4; the OCTAVE: every operator's ratio x 2^(octave / 12) as a
+table step + OFS when all four are exact to 0.3 % (else unchanged, a note: 44 of the 105 factory sounds with an OCTAVE
+transpose, 61 not); the envelope times through a curve fitted to two measured points (AMP REL 10.13 -> 45 ms to -40 dB
+= FM TONE 52.5; filter DEC 71 = FM TONE 97 +-3): FM TONE = 52.6 log10(v) - 0.4 (`DN_TIME_TO_QUAD`), on the operator,
+filter and amp ATK / DEC / REL (extrapolated below 10 and above 71). SQB TK now: 65.4 Hz, centroid 448 / 181 / 123 /
+106 Hz at 0.1 / 0.3 / 0.6 / 2 s (Digitone 473 / 185 / 93 / 71), -40 / -60 dB 48 / 68 ms after the key up (Digitone 49 /
+71). Level: about 7 dB louder than the Digitone at the onset by the recordings' gain: proposed VOL 110 -> LEVEL ~73,
+not applied (one sound). Corpus (local): 256 parse, blobs valid, notes 355 -> 397. Tests: test_dnsnd.mjs (the version-1
+types, the time curve's points, the OCTAVE down / up / impossible / version 5). Nothing on a unit.

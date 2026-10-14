@@ -37,9 +37,31 @@ export const DN_RATIO_A_ANCHORS = [0, 3, 9, 15, 25, 35];
 const DN_WAVE = ["TRI", "SINE", "SQR", "SAW", "EXP", "RMP", "RND"];   // the manual's order (not proved by an export)
 const DN_WAVE_TO_QUAD = [0, 1, 2, 3, 5, 4, 6];                       // FM TONE: TRI SINE SQR SAW RAMP EXP RAND
 // filter TYPE. Version 5 (exports C110..C113): 0 OFF, 1 LP2, 2 HP2, 3 LP4 = the manual's order = FM TONE's, 1:1.
-// Version 1 (the factory files) has five values 0..4: its order is NOT proved (guess: LP4 LP2 BP HP2 HP4)
-const DN_FTYPE_V1 = ["LP4", "LP2", "BP", "HP2", "HP4"];
-const DN_FTYPE_V1_TO_QUAD = [DN_QF.LP24, DN_QF.LP12, DN_QF.LP12, DN_QF.HP12, DN_QF.HP12];
+// Version 1 (the factory files) has five values 0..4. The owner re-saved three on OS 1.44 (2026-10-14): CHAPPET DL 2 ->
+// version 5 2 (HP), DIGIT-ONE 3 -> 3 (LP4), SQB TK 4 -> 3 (LP4; "SQB TK Filter type on the Digitone is LP4"). 0 OFF and
+// 1 LP2 are by continuity with version 5 (inferred, no re-saved sound has them)
+export const DN_FTYPE_V1 = ["OFF", "LP2", "HP", "LP4", "LP4"];
+export const DN_FTYPE_V1_PROVED = [false, false, true, true, true];
+const DN_FTYPE_V1_TO_QUAD = [DN_QF.OFF, DN_QF.LP12, DN_QF.HP12, DN_QF.LP24, DN_QF.LP24];
+
+// ---- the envelope TIME curve: a Digitone time value 0..127 -> FM TONE's (one place to refine).
+// FM TONE (tools/gen_tables.py): T(v) = 10^(4 v / 127) ms, 1 ms .. 10 s; ATK linear to full in T, DEC / REL exponential,
+// -40 dB at T. The Digitone's curve is not in its manual or files; two points measured on the owner's recording of SQB TK
+// (2026-10-14, docs/SOUNDS.md "Envelope times"): AMP REL 10.13 falls 40 dB in ~45 ms = FM TONE 52.5 (renders at REL 50 /
+// 52 / 53 / 54 bracket it), and the filter DEC 71 closes like FM TONE's 97 (+-3: the centroid over 2 s). Through both, a
+// power law (T = 0 at 0): FM TONE = DN_TIME_K x log10(v) + DN_TIME_C, i.e. the Digitone's T = 2.9 s x (v / 127)^1.66.
+// Below 10 and above 71 it is extrapolated; ATK and the operator envelopes are assumed to follow the same curve
+export const DN_TIME_K = 52.6, DN_TIME_C = -0.4;
+export const dnTimeQ = (v) => v <= 0 ? 0 : Math.max(0, Math.min(126, DN_TIME_K * Math.log10(Math.min(127, v)) + DN_TIME_C));
+export const DN_TIME_TO_QUAD = Array.from({ length: 128 }, (_, v) => Math.round(dnTimeQ(v)));
+
+// ---- the sound's OCTAVE (the manual §9.5.10: "Sets the base octave of the Sound"): a signed byte in semitones, version
+// 1 offset 263, version 5 offset 280 (the record's tail moved by 17). Inferred: the factory corpus holds only multiples
+// of 12 there (0 147, -12 53, -24 29, +12 12, -36 5, +24 5, -60 1; the init sound 0), the owner's 143 exports 0, and SQB
+// TK's -12 is the octave its recording sounds below the FM-1's import (2026-10-14). FM TONE has no transpose in the
+// patch and a sound load keeps the part's TRN: the import scales every operator's ratio by 2^(octave / 12) instead (the
+// same timbre, the octave down), when each ratio has that value in FM TONE's tables (+ OFS, 1/100) within DN_OCT_TOL
+const DN_OCT_TOL = 0.003;                                         // 0.3 % (5 cents)
 // the LFO DEST numbers (each one an export, C042..C099; the number = the record slot of the target, (offset - 28) / 2)
 // -> FM TONE's (eng_quad.c QD_*): every one, 1:1 (since 2026-10-14 FM TONE has the Digitone's whole list: LFO 1's own
 // parameters for LFO 2, RATIO ALL, the AB macros, DRIVE, the three sends, the filter's ENV DELAY were added, numbers 40..57;
@@ -77,7 +99,6 @@ export const DN_LFO_DEST = {
 // "unknown" (decoded for the diff tool, not imported). since: the first record version that has the field (default 1)
 const dnLo = (d, o) => d[o], dnHi = (d, o) => d[o] + d[o + 1] / 256;
 const dnR = Math.round;
-const dnTimeI = (v) => v >= 127 ? 127 : Math.min(126, dnR(v));      // a release: 127 INF, a timed one (126.85) stays timed
 const dnTo = (qp, f = (v) => dnR(v)) => (v, out) => out.set(qp, f(v));
 const dnLfo = (k) => {
   const c = k ? "verified" : "slot";                             // LFO 2's SPEED / MULT were turned (C100..C109)
@@ -96,8 +117,10 @@ const dnLfo = (k) => {
     [`lfo${k + 1}.depth`, 58 + 2 * k, 1, "slot", (d, o) => dnHi(d, o) - 64, dnTo(dnQlfo(k, "DEPTH"))],
   ];
 };
+const dnT = (v) => DN_TIME_TO_QUAD[Math.max(0, Math.min(127, dnR(v)))];             // a time value (DN_TIME_TO_QUAD)
+const dnTRel = (v) => v >= 127 ? 127 : dnR(dnTimeQ(v));                                 // a release (hi-res): 127 INF
 const dnEnv = (x, base) => ["atk", "dec", "end", "lev"].map((f, i) => [`env${x}.${f}`, base + 2 * i, 0, "verified", dnLo,
-  dnTo(DN_QP[`${x}${f.toUpperCase()}`])]);
+  dnTo(DN_QP[`${x}${f.toUpperCase()}`], i < 2 ? dnT : undefined)]);
 const dnLost = (what) => (v, out) => { if (v > 0) out.note(`${what} ${v.toFixed(2)} not imported: effects are global on the FM-1`); };
 // a ratio offset (version 5 only, 64 = 0; its scale is not proved: +-64 read as +-1.00, FM TONE's OFS -100..100)
 const dnOfs = (qp, what) => (v, out) => { out.set(qp, dnR(v * 100 / 64)); if (dnR(v * 100 / 64)) out.note(`${what} offset read as ${(v / 64).toFixed(2)} (its scale is not proved)`); };
@@ -132,21 +155,22 @@ export const DNSND_FIELDS = [
     if (out.version >= 5) { out.set(DN_QP.FTYPE, v); return; }                                 // version 5: 1:1
     const q = DN_FTYPE_V1_TO_QUAD[v] ?? DN_QF.LP12, n = DN_FTYPE_V1[v] ?? `#${v}`;
     out.set(DN_QP.FTYPE, q);
-    if (v !== 0 && v !== 1 && v !== 3) out.note(`filter type ${n} (a version-1 sound: the type order is a guess) -> ${["OFF", "LP12", "HP12", "LP24"][q]}`);
+    // 0 / 1 (inferred, DN_FTYPE_V1_PROVED) are 174 of the 256 factory sounds: no note; a value past 4 is unknown
+    if (DN_FTYPE_V1[v] === undefined) out.note(`filter type ${n} (a version-1 sound: not a known value) -> ${["OFF", "LP12", "HP12", "LP24"][q]}`);
   }],
   ["filter.freq", 130, 1, "verified", dnHi, dnTo(DN_QP.FREQ)],
   ["filter.reso", 132, 1, "verified", dnHi, dnTo(DN_QP.RESO)],
   ["filter.env", 134, 1, "verified", (d, o) => dnHi(d, o) - 64, dnTo(DN_QP.FDEPTH)],
-  ["filter.atk", 136, 0, "verified", dnLo, dnTo(DN_QP.FATK)],
-  ["filter.dec", 138, 0, "verified", dnLo, dnTo(DN_QP.FDEC)],                                  // 127 = INF (dnsndToQuad)
+  ["filter.atk", 136, 0, "verified", dnLo, dnTo(DN_QP.FATK, dnT)],
+  ["filter.dec", 138, 0, "verified", dnLo, dnTo(DN_QP.FDEC, dnT)],                             // 127 = INF (dnsndToQuad)
   ["filter.sus", 140, 0, "verified", dnLo, dnTo(DN_QP.FSUS)],
-  ["filter.rel", 142, 0, "verified", dnLo, dnTo(DN_QP.FREL)],                                  // 127 = INF = FM TONE's
+  ["filter.rel", 142, 0, "verified", dnLo, dnTo(DN_QP.FREL, dnTRel)],                          // 127 = INF = FM TONE's
   ["filter.base", 144, 1, "slot", dnHi, dnTo(DN_QP.BASE)],
   ["filter.width", 146, 0, "slot", dnLo, dnTo(DN_QP.WIDTH)],
-  ["amp.atk", 148, 0, "verified", dnLo, dnTo(DN_QP.EATK)],
-  ["amp.dec", 150, 0, "verified", dnLo, dnTo(DN_QP.EDEC)],                                     // 127 = INF (dnsndToQuad)
+  ["amp.atk", 148, 0, "verified", dnLo, dnTo(DN_QP.EATK, dnT)],
+  ["amp.dec", 150, 0, "verified", dnLo, dnTo(DN_QP.EDEC, dnT)],                                // 127 = INF (dnsndToQuad)
   ["amp.sus", 152, 0, "verified", dnLo, dnTo(DN_QP.ESUS)],
-  ["amp.rel", 154, 1, "verified", dnHi, dnTo(DN_QP.EREL, dnTimeI)],                            // 127 = INF = FM TONE's
+  ["amp.rel", 154, 1, "verified", dnHi, dnTo(DN_QP.EREL, dnTRel)],                             // 127 = INF = FM TONE's
   ["amp.drive", 156, 1, "verified", dnHi, (v, out) => { out.drive = Math.max(0, Math.min(127, dnR(v))); }],
   ["amp.pan", 158, 0, "verified", (d, o) => d[o] - 64, (v, out) => { out.pan = Math.max(-64, Math.min(63, v)); }],
   ["amp.vol", 160, 1, "verified", dnHi, dnTo(DN_QP.LEVEL)],
@@ -161,6 +185,8 @@ export const DNSND_FIELDS = [
   ["ofsB1", 178, 1, "slot", (d, o) => dnHi(d, o) - 64, dnOfs(DN_QP.OFSB1, "RATIO B1"), 5],
   ["ofsB2", 180, 1, "slot", (d, o) => dnHi(d, o) - 64, dnOfs(DN_QP.OFSB2, "RATIO B2"), 5],
   ["filter.delay", 182, 0, "slot", dnLo, dnTo(DN_QP.FDLY), 5],
+  ["octave", 263, 0, "inferred", (d, o) => (d[o] << 24) >> 24, null],                        // version 1 (dnsndToQuad)
+  ["octave", 280, 0, "inferred", (d, o) => (d[o] << 24) >> 24, null, 5],                     // version 5: overrides 263
 ];
 
 // ---- the container
@@ -248,6 +274,29 @@ export async function parseDnsnd(bytes) {
   return { name, tags, firmware: man.FirmwareVersion ?? null, product: man.ProductType ?? null, version, params, confidence, warnings, record: d };
 }
 
+// the sound's OCTAVE (semitones, a multiple of 12) into FM TONE values p: each operator's ratio (its table step + OFS
+// / 100) x 2^(oct / 12), as a step + OFS within DN_OCT_TOL; all four or none (true: done). A step's OFS is -100..100
+const DN_RA_Q = Array.from({ length: 64 }, (_, i) => (i + 1) / 4);
+function dnOctave(p, oct) {
+  const f = 2 ** (oct / 12), rb1 = p[DN_QP.RB1], rb2 = p[DN_QP.RB2];
+  const ops = [[DN_RATIO_CB, DN_QP.RC, DN_QP.OFSC, p[DN_QP.RC]], [DN_RA_Q, DN_QP.RA, DN_QP.OFSA, p[DN_QP.RA]],
+    [DN_RATIO_CB, DN_QP.RB1, DN_QP.OFSB1, rb1], [DN_RATIO_CB, DN_QP.RB2, DN_QP.OFSB2, rb2]];
+  const set = [];
+  for (const [tab, qs, qo, step] of ops) {
+    const want = (tab[step] + p[qo] / 100) * f;
+    let best = null;
+    tab.forEach((x, i) => {
+      const o = Math.max(-100, Math.min(100, dnR((want - x) * 100))), got = x + o / 100;
+      const e = Math.abs(got - want) / want;
+      if (got > 0 && e <= DN_OCT_TOL && (!best || Math.abs(o) < Math.abs(best[1]) || (Math.abs(o) === Math.abs(best[1]) && e < best[2]))) best = [i, o, e];
+    });
+    if (!best) return false;
+    set.push([qs, qo, best[0], best[1]]);
+  }
+  for (const [qs, qo, i, o] of set) { p[qs] = i; p[qo] = o; }
+  return true;
+}
+
 // the parsed sound (or its params: read as version 1) -> FM TONE's blob, the track PAN and DRIVE (P_PAN, P_DIST: not in
 // the patch), and what was lost or approximated
 export function dnsndToQuad(parsed) {
@@ -266,6 +315,12 @@ export function dnsndToQuad(parsed) {
   // FM TONE's SUS at 127 (its DEC has no INF)
   if (params["filter.dec"] === 127) { p[DN_QP.FSUS] = 127; notes.push("filter DEC INF: FM TONE's filter SUS set to 127"); }
   if (params["amp.dec"] === 127) { p[DN_QP.ESUS] = 127; notes.push("AMP DEC INF: FM TONE's AMP SUS set to 127"); }
+  const oct = params.octave | 0;
+  if (oct) {
+    const r = dnOctave(p, oct);
+    notes.push(r ? `the sound's OCTAVE ${oct > 0 ? "+" : ""}${oct / 12}: every ratio x ${2 ** (oct / 12)}` :
+      `the sound's OCTAVE ${oct > 0 ? "+" : ""}${oct / 12} not imported (a ratio has no such value in FM TONE): it plays ${Math.abs(oct / 12)} octave(s) ${oct > 0 ? "lower" : "higher"} than on the Digitone`);
+  }
   const blob = new Uint8Array(DN_QUAD_BLOB);
   blob[0] = 0x51; blob[1] = 3;
   for (let i = 0; i < DN_QUAD_NP; i++) blob[2 + i] = p[i] - DN_QUAD_RANGES[i][0];
