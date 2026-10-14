@@ -1065,10 +1065,11 @@ static inline int32_t quad_hw(const int16_t *a, const int16_t *b, int32_t f, uin
  * into the carrier at 0 Hz. A DX7 / Digitone AC-couples its output; here every voice does, before the filters */
 #define QUAD_DC_K 75
 
-/* the multimode filter's coefficients (dsp.c tsvf_coef_k's, cut Q8, damping k Q12) with a2 and a3 to 1/32 of their
- * Q13 step (f2, f3: the fraction, 0..31): FREQ in hundredths moves g by 0.05 % a hundredth, below a Q13 step where g is
- * small (FREQ 42: a2 ~ 116), so the fine part would not reach the sound; g is interpolated in Q20 */
-typedef struct { int32_t a1, a2, a3, f2, f3; } quad_svf_t;
+/* the multimode filter's coefficients (dsp.c tsvf_coef_k's, cut Q8, damping k Q12) with a2 to 1/32 of its Q13 step
+ * (f2: the fraction, 0..31): FREQ in hundredths moves g by 0.05 % a hundredth, below a Q13 step where g is small
+ * (FREQ 42: a2 ~ 116), so the fine part would not reach the sound; g is interpolated in Q20. (a3 = a2 g, a3's own
+ * fraction: not worth its multiply a sample) */
+typedef struct { int32_t a1, a2, a3, f2; } quad_svf_t;
 static void quad_svf_coef(quad_svf_t *c, int32_t cut, int32_t k)
 {
     int32_t i, g, den;
@@ -1083,7 +1084,7 @@ static void quad_svf_coef(quad_svf_t *c, int32_t cut, int32_t k)
     a2 = ((int64_t)c->a1 * g) >> 15;             /* Q18 */
     a3 = (a2 * g) >> 20;
     c->a2 = (int32_t)(a2 >> 5), c->f2 = (int32_t)(a2 & 31);
-    c->a3 = (int32_t)(a3 >> 5), c->f3 = (int32_t)(a3 & 31);
+    c->a3 = (int32_t)(a3 >> 5);
 }
 
 /* the operator outputs: WS the sine (B2 always), WC / WA / WB1 C's, A's, B1's wave (HARM: defined per loop), QM a
@@ -1419,7 +1420,7 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         PRE                                                                \
         v3 = x - ic2;                                                      \
         v1 = (c.a1 * ic1 + c.a2 * v3 + ((c.f2 * v3) >> 5) + 4096) >> 13;     \
-        v2 = ic2 + ((c.a2 * ic1 + c.a3 * v3 + ((c.f2 * ic1 + c.f3 * v3) >> 5) + 4096) >> 13); \
+        v2 = ic2 + ((c.a2 * ic1 + c.a3 * v3 + ((c.f2 * ic1) >> 5) + 4096) >> 13); \
         ic1 = clamp(2 * v1 - ic1, -150000, 150000);                        \
         ic2 = clamp(2 * v2 - ic2, -150000, 150000);                        \
         acc[i] = soft_knee(clamp((Y), -200000, 200000), 16000);            \

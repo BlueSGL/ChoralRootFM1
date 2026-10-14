@@ -465,7 +465,7 @@ def tsvf_coef_k(cut, k):
 
 
 def quad_svf_coef(cut, k):
-    """eng_quad.c quad_svf_coef: tsvf_coef_k's with g in Q20 and a2, a3 to 1/32 of their Q13 step (as floats here)"""
+    """eng_quad.c quad_svf_coef: tsvf_coef_k's with g in Q20 and a2 to 1/32 of its Q13 step (a float here)"""
     cut = clamp(cut, 0, 127 << 8)
     i = cut >> 8
     g = SVF_G[i] << 8
@@ -475,7 +475,7 @@ def quad_svf_coef(cut, k):
     a1 = (4096 << 13) // den
     a2 = (a1 * g) >> 15
     a3 = (a2 * g) >> 20
-    return a1, a2 / 32.0, a3 / 32.0
+    return a1, a2 / 32.0, a3 >> 5
 
 
 PHRT_MASK = [0, 0xF, 0x1, 0xE, 0xA]
