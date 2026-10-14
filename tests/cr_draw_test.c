@@ -1423,6 +1423,57 @@ int main(int argc, char **argv)
             }
 #undef GL
         }
+        {   /* FM TONE's pages in the Digitone's ranges (eng_quad.c QUAD_SCREENS, F_FIX2: two decimals): every page whose
+             * cells show a hi-res value, each value at its longest text, the glyphs cr_edit.c gives those cells; 0 lint
+             * findings (no overlap, nothing off the screen) */
+            static const struct {
+                const char *slug, *title, *lab[2][4], *val[2][4];
+                uint8_t gl[2][4];                 /* 0 a bar, 1 HARM, 2 DETUNE, 3 the knob, 4 text, 5 none */
+            } QP[] = {
+                {"quad_syn1_longest", "SYN 1", {{"Algo", "Ratio C", "Ratio A", "Ratio B"}, {"Harm", "Dtune", "Feedback", "Mix"}},
+                 {{"8", "16.00", "16.00", "16.00"}, {"-26.00", "127.99", "127", "-64"}}, {{5, 5, 5, 5}, {1, 2, 0, 0}}},
+                {"quad_filter_longest", "FILTER", {{"Attack", "Decay", "Sustain", "Release"}, {"Freq", "Reso", "Type", "Env depth"}},
+                 {{"127", "127", "127", "INF"}, {"126.85", "127.99", "LP24", "-64.00"}}, {{0, 0, 0, 0}, {0, 0, 4, 0}}},
+                {"quad_filter2_longest", "FILTER 2", {{"Env delay", "Key track", 0, 0}, {"Base", "Width", 0, 0}},
+                 {{"127", "127", 0, 0}, {"127.99", "127", 0, 0}}, {{0, 0, 5, 5}, {0, 0, 5, 5}}},
+                {"quad_amp_longest", "AMP", {{"Attack", "Decay", "Sustain", "Release"}, {"Level", "Pan", "Drive", 0}},
+                 {{"127", "127", "127", "126.99"}, {"127.99", "-64", "127", 0}}, {{0, 0, 0, 0}, {0, 0, 0, 5}}},
+                {"quad_lfo_longest", "LFO 1", {{"Speed", "Mult", "Fade", "Dest"}, {"Wave", "Phase", "Trig", "Depth"}},
+                 {{"-64.00", "F2k", "-64", "ABLEV"}, {"RAMP", "127", "HALF", "-64.00"}}, {{3, 4, 4, 4}, {4, 0, 4, 0}}},
+            };
+            uint32_t q, r, c, n0 = nfind;
+            for (q = 0; q < sizeof QP / sizeof QP[0]; q++) {
+                cr_screen_t s;
+                cr_screen_clear(&s);
+                s.kind = CR_K_EDIT8;
+                s.n_rows = 2;
+                s.header = 1;
+                snprintf(s.title, sizeof s.title, "%s", QP[q].title);
+                for (r = 0; r < 2u; r++)
+                    for (c = 0; c < 4u; c++) {
+                        cr_cell_t *cl = &s.cell[r][c];
+                        if (!QP[q].lab[r][c])
+                            continue;
+                        cl->flags = CR_CF_ON;
+                        snprintf(cl->label, sizeof cl->label, "%s", QP[q].lab[r][c]);
+                        snprintf(cl->value, sizeof cl->value, "%s", QP[q].val[r][c]);
+                        cl->pct = 250;
+                        switch (QP[q].gl[r][c]) {
+                        case 0: cl->glyph = CR_G_BAR; cl->flags |= CR_CF_PCT | CR_CF_BIP; break;
+                        case 1: cl->glyph = CR_G_HARM; cl->flags |= CR_CF_PCT; break;
+                        case 2: cl->glyph = CR_G_DETUNE; cl->flags |= CR_CF_PCT; break;
+                        case 3: cl->glyph = CR_G_KNOB; cl->flags |= CR_CF_PCT | CR_CF_BIPOLAR; break;
+                        default: break;
+                        }
+                    }
+                s.hot_r = 2, s.hot_c = 0;            /* (the hot cell, its block: a hi-res one) */
+                render(&s, 0);
+                write_ppm(dir, QP[q].slug);
+                lint(QP[q].slug, &s);
+            }
+            snprintf(name, sizeof name, "FM TONE pages at their longest two-decimal values: %u lint findings", nfind - n0);
+            check(name, nfind == n0);
+        }
         {   /* cells: big (no bar, a larger value), span 2 (two columns, the cells after it shift), the bipolar knob */
             cr_screen_t s;
             int32_t h0 = 0, h1 = 0, xt = -1, xd = -1;

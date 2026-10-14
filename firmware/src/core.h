@@ -120,8 +120,12 @@ enum {
     F_ONOFF, F_OCT, F_STEPS,
     F_OFS, F_FMNOTE, F_FMFRQ,   /* FM6's pages: 0 at the middle of the range, the DX7 break point, an operator's frequency
                                  * (params.c param_format; F_FMFRQ: Melodee's operator pages, here a plain number) */
-    F_TIMEI                     /* F_TIME with 127 = "INF" (QUAD's filter / amp REL: the release holds, the Digitone's
+    F_TIMEI,                    /* F_TIME with 127 = "INF" (QUAD's filter REL: the release holds, the Digitone's
                                  * 0..126 + INF); the editor protocol's fmt 17 */
+    F_FIX2                      /* a hi-res value in hundredths (FM TONE, the Digitone's two decimals): 4201 = "42.01",
+                                 * a range below 0 signed ("+41.34", "-64.00"); its finest step 1, its whole-number step
+                                 * 100; names[0] (if any) = the word for the top whole number (AMP REL: "INF" at
+                                 * 127.00 and up); the editor protocol's fmt 18 */
 };
 
 typedef struct {

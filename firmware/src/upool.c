@@ -73,9 +73,12 @@ static int up_used(uint32_t k) { return k < UP_SLOTS && (upn[k].flags & UPN_USED
 static int up_patch_get(uint32_t k, uint32_t e, uint8_t *b, uint32_t n)
 {
     uint8_t h[4];
-    if (!up_used(k) || n > UPP_MAX || sp_read(k, UPP_HDR, h, 4) != 0 || h[0] != e + 1u || h[1] != n)
+    if (!up_used(k) || n > UPP_MAX || sp_read(k, UPP_HDR, h, 4) != 0 || h[0] != e + 1u ||
+        (h[1] != n && !(e == ENGI_QUAD && h[1] == QUAD_BLOB_V3)))   /* (FM TONE: an older slot's 80-byte version 1..3
+                                                                     * blob, the rest zeros; eng_quad.c converts it) */
         return 1;
-    return sp_read(k, UPP_DATA, b, n) != 0;
+    memset(b, 0, n);
+    return sp_read(k, UPP_DATA, b, h[1]) != 0;
 }
 static uint32_t up_patch_len(uint32_t e)        /* the length of engine e's patch in a slot, 0: it has none */
 {
@@ -250,8 +253,8 @@ static void upl_patch(uint32_t k, uint32_t e, uint8_t *slot)
         if (!st_read(upl.cz[h] + i * CZ_BYTES, d, CZ_BYTES))
             n = CZ_BYTES;
     } else if (e == ENGI_QUAD && upl.quad && ((upl.quad_used >> k) & 1u)) {
-        if (!st_read(upl.quad + k * QUAD_BLOB, d, QUAD_BLOB))
-            n = QUAD_BLOB;
+        if (!st_read(upl.quad + k * QUAD_BLOB_V3, d, QUAD_BLOB_V3))   /* (a version 1..3 blob: converted on load) */
+            n = QUAD_BLOB_V3;
     }
     if (n) {
         slot[UPP_HDR] = (uint8_t)(e + 1u);

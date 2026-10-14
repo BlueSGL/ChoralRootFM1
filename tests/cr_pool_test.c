@@ -94,6 +94,51 @@ int main(void)
            ENGINES[ENG[i]]->name);
     }
 
+    /* ---- FM TONE in the Digitone's ranges (2026-10-14): a slot of before (a self-made 80-byte version-3 blob) loads
+     * converted (the hi-res values x 100, FDBK 0..120 -> 0..127); the two-decimal texts (params.c, cr_edit.c) ---- */
+    {
+        static const struct { uint8_t pg, col; int16_t v; const char *s; } TX[] = {
+            {4, 0, 4201, "42.01"}, {4, 1, 4349, "43.49"}, {14, 0, 4134, "+41.34"}, {6, 0, 12685, "126.85"},
+            {4, 3, -6400, "-64.00"}, {15, 3, 5, "+0.05"}, {15, 3, -5, "-0.05"}, {1, 0, 0, "0.00"}, {1, 0, -2600, "-26.00"},
+            {12, 3, 12700, "INF"}, {12, 3, 12799, "INF"}, {12, 3, 12699, "126.99"}, {13, 0, 11000, "110.00"},
+            {1, 1, 12799, "127.99"}, {1, 2, 127, "127"}, {10, 3, 64, "64"}, {3, 2, 100, "100"}};
+        uint8_t v3[UPP_MAX], h[2];
+        uint32_t j, pos, tbad = 0;
+        cu_pool_load(0, ENGI_QUAD, 1);
+        OK(cb_store(t, 0, 127, "QUAD V3", 0) == 0 && up_used(127), "FM TONE: saved into U128");
+        memset(v3, 0, sizeof v3);
+        v3[0] = 'Q', v3[1] = 3;
+        for (j = 0; j < QP_NP; j++)
+            v3[2 + j] = (uint8_t)(quad_range_v3(j).def - quad_range_v3(j).min);
+        v3[2 + QP_FREQ] = 42, v3[2 + QP_HARM] = (uint8_t)(-19 + 26), v3[2 + QP_FDBK] = 120, v3[2 + QP_LEVEL] = 100;
+        v3[2 + QP_EREL] = 127, v3[2 + QP_LFO(0, QL_SPEED)] = (uint8_t)(-10 + 64);
+        h[0] = (uint8_t)(ENGI_QUAD + 1u), h[1] = QUAD_BLOB_V3;
+        OK(sp_write(127, UPP_DATA, v3, UPP_MAX) == 0 && sp_write(127, UPP_HDR, h, 2) == 0, "FM TONE: U128 made a slot of before");
+        power_cycle();
+        OK(up_patch_get(127, ENGI_QUAD, b1, QUAD_BLOB) == 0 && !memcmp(b1, v3, QUAD_BLOB),
+           "FM TONE: the slot's 80-byte patch read (the rest zeros)");
+        pos = pool_pos_slot(ENGI_QUAD, 127);
+        cu_pool_load(0, ENGI_QUAD, pos);
+        OK(quad_patch[0][QP_FREQ] == 4200 && quad_patch[0][QP_HARM] == -1900 && quad_patch[0][QP_FDBK] == 127 &&
+           quad_patch[0][QP_LEVEL] == 10000 && quad_patch[0][QP_EREL] == 12700 && quad_patch[0][QP_LFO(0, QL_SPEED)] == -1000 &&
+           t->p[P_E4] == -19 && t->p[P_E6] == 127,
+           "FM TONE: a version-3 slot loads converted (FREQ %d HARM %d FDBK %d LEVEL %d)", quad_patch[0][QP_FREQ],
+           quad_patch[0][QP_HARM], quad_patch[0][QP_FDBK], quad_patch[0][QP_LEVEL]);
+        for (j = 0; j < NELEM(TX); j++) {
+            const param_desc_t *dd = &QUAD_PAGES[TX[j].pg].col[TX[j].col];
+            char val[12], cell[16];
+            const char *u;
+            param_format(dd, TX[j].v, val, &u);
+            ce_ptext(dd, TX[j].v, ENG_C_NUM, cell, sizeof cell);
+            if (strcmp(val, TX[j].s) || strcmp(cell, TX[j].s) || u[0]) {
+                printf("  %s %d: \"%s\" / cell \"%s\" unit \"%s\", want \"%s\"\n", dd->label, TX[j].v, val, cell, u, TX[j].s);
+                tbad++;
+            }
+        }
+        OK(!tbad, "FM TONE: the two-decimal texts (\"42.01\" \"43.49\" \"+41.34\" \"126.85\" \"-64.00\" INF ..): %u wrong", tbad);
+        OK(up_put(127, 0) == 0 && !up_used(127), "FM TONE: U128 erased");
+    }
+
     /* ---- a rename keeps the patch; another engine's sound over a slot drops it ---- */
     cu_pool_load(0, ENGI_CZ, 3);
     ENGINES[ENGI_CZ]->deep->blob_get(t, b0);

@@ -14,12 +14,12 @@
  *
  * JSON: { "templates": { "fm6": <base64 up_rec_t>, "cz": <base64 up_rec_t>, "quad": <base64 up_rec_t> },
  *         "fixtures": { "fm6_blob": <base64 128>, "fm6_vced": <base64 155>, "fm6_fn": <base64 8: the packed
- *                       function defaults, blob bytes 114..121>, "cz_tone": <base64 144>, "quad_blob": <base64 80:
+ *                       function defaults, blob bytes 114..121>, "cz_tone": <base64 144>, "quad_blob": <base64 96:
  *                       QUAD's first factory preset, EP> } }
  * (QUAD has no .syx: its template is the record a Digitone .dnsnd import gets (web/fm1dnsnd.js), pinned in the
  * clients as the other two; its blob is the test fixture of the "quad" patch kind)
  *   ./build/host/sound_templates --quad-ranges   FM TONE's per-value [min, max, def] (web/test_dnsnd.mjs compares)
- *   ./build/host/sound_templates --quad-check    stdin: 80-byte blobs in hex, one a line -> "ok" / "bad" (quad_blob_ok)
+ *   ./build/host/sound_templates --quad-check    stdin: 96-byte blobs (version 4) in hex, one a line -> "ok" / "bad" (quad_blob_ok)
  * A template is a valid record (up_valid) of the engine with every parameter at its default (param_desc_of), np =
  * P_COUNT, ver UP_VER, the name "SYX IMPORT" (the importer replaces it with the voice's name), no pattern. The
  * firmware maps a record's values by count, so a template stays valid when P_COUNT grows (upreset.c). The fixtures:
@@ -210,7 +210,7 @@ int main(int argc, char **argv)
         printf("]\n");
         return 0;
     }
-    if (argc == 2 && !strcmp(argv[1], "--quad-check")) {    /* stdin: an 80-byte blob in hex a line -> ok / bad */
+    if (argc == 2 && !strcmp(argv[1], "--quad-check")) {    /* stdin: a 96-byte blob in hex a line -> ok / bad */
         char line[400];
         while (fgets(line, sizeof line, stdin)) {
             uint32_t i, n = 0, x;

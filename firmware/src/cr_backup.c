@@ -521,8 +521,8 @@ static int crb_legacy_fill(uint32_t j, uint8_t *slot)
     } else if (crb_lid == CRB_QUAD) {
         e = ENGI_QUAD;
         if ((on = crb_llen && ((((const quad_store_t *)raw)->used >> k) & 1u)) != 0) {
-            src = raw + 16u + k * QUAD_BLOB;
-            n = QUAD_BLOB;
+            src = raw + 16u + k * QUAD_BLOB_V3;   /* (the legacy store: versions 1..3, 80 bytes) */
+            n = QUAD_BLOB_V3;
         }
     } else {
         return 0;

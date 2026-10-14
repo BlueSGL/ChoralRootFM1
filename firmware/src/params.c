@@ -194,7 +194,13 @@ static int32_t enum_step(const param_desc_t *d, int32_t from, int32_t v)
 
 static uint8_t fmt_named;        /* the last param_format was a name (F_ENUM, even "4"): ui_draw.c's digits do not roll it */
 
-/* value string (<= 5 chars) and unit for a parameter value */
+/* a release at INF: F_TIMEI at its max, an F_FIX2 with a word (names[0]) at its top whole number (127.00 .. 127.99) */
+static int param_inf(const param_desc_t *d, int32_t v)
+{
+    return (d->fmt == F_TIMEI && v >= d->max) || (d->fmt == F_FIX2 && d->names && v >= d->max / 100 * 100);
+}
+
+/* value string (<= 5 chars; F_FIX2 <= 6) and unit for a parameter value */
 static void param_format(const param_desc_t *d, int32_t v, char *val, const char **unit)
 {
     *unit = "";
@@ -202,6 +208,26 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
     if (d->fmt == F_TIMEI && v >= 127) {            /* QUAD's REL: 127 = INF (the release holds), else F_TIME */
         str_cpy(val, "INF", 6);
         fmt_named = 1;
+        return;
+    }
+    if (d->fmt == F_FIX2) {                         /* hundredths: "42.01", "+41.34", "-64.00", "126.85" (<= 6) */
+        if (param_inf(d, v)) {
+            str_cpy(val, d->names[0], 6);
+            fmt_named = 1;
+            return;
+        }
+        if (d->min < 0 && v > 0) {
+            val[0] = '+';
+            fmt_fix(val + 1, v, 2);
+        } else {
+            fmt_fix(val, v, 2);
+        }
+        if (val[0] == '.' || (val[0] == '-' && val[1] == '.') || (val[0] == '+' && val[1] == '.')) {
+            uint32_t l, o = val[0] == '.' ? 0u : 1u;  /* (".05" -> "0.05") */
+            for (l = str_len(val) + 1u; l > o; l--)
+                val[l] = val[l - 1u];
+            val[o] = '0';
+        }
         return;
     }
     switch (d->fmt == F_TIMEI ? (uint8_t)F_TIME : d->fmt) {

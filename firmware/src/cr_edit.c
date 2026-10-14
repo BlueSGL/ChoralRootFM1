@@ -1305,7 +1305,7 @@ static void ce_band(const track_t *t, const ce_view_t *vw, uint8_t *o)
                 if ((k = cp_dcol(&d->pages[pg], EL[i])) >= 0) {
                     int32_t v = d->get(t, (uint32_t)pg, (uint32_t)k);
                     o[i] = ce_pct(&d->pages[pg].col[k], v);
-                    if (i == 4u && d->pages[pg].col[k].fmt == F_TIMEI && v >= d->pages[pg].col[k].max)
+                    if (i == 4u && param_inf(&d->pages[pg].col[k], v))
                         o[6] = 1;                     /* (REL INF: the band's tail held) */
                 }
     } else if (vw->wide == CR_W_ENV) {
@@ -1508,8 +1508,13 @@ static void ce_ptext(const param_desc_t *d, int32_t v, uint32_t style, char *out
             return;
         }
     }
-    if (d->fmt == F_TIMEI && v >= d->max) {      /* a release at INF: the word, whatever the style */
+    if (param_inf(d, v)) {                       /* a release at INF: the word, whatever the style */
         cu_cpy(out, "INF", n);
+        return;
+    }
+    if (d->fmt == F_FIX2) {                      /* hundredths: "42.01", "+41.34", whatever the style */
+        param_format(d, v, val, &unit);
+        cu_cpy(out, val, n);
         return;
     }
     if (style == ENG_C_NUM || style == ENG_C_BAR || style == ENG_C_DETUNE ||

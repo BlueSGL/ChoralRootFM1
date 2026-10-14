@@ -230,6 +230,21 @@ assert ND == 58
 FBOP = [1, 3, 1, 3, 2, 1, 1, 2]
 
 
+# version 4 (2026-10-14, the Digitone's ranges): these values in hundredths (eng_quad.c quad_hires), FDBK 0..127. The
+# patches above are written in version 3's units (RNG); to_v4 converts them as eng_quad.c quad_v4_of_v3 does, and the
+# model runs on version 4's
+HIRES = ["HARM", "DTUN", "FREQ", "RESO", "FDEPTH", "BASE", "EREL", "LEVEL"] + \
+    ["L%d%s" % (k, f) for k in range(3) for f in ("SPEED", "DEPTH")]
+
+
+def to_v4(p):
+    q = list(p)
+    for n in HIRES:
+        q[Q[n]] = p[Q[n]] * 100
+    q[Q["FDBK"]] = (p[Q["FDBK"]] * 127 + 60) // 120
+    return q
+
+
 def init_patch():
     return [RNG[n][2] for n in NAMES]
 
@@ -409,7 +424,7 @@ def soft_knee_f(y, k):
 
 def lfo_incv(sp, mu, bpm=120):
     b = bpm if mu < 12 else 120
-    v = (sp * (1 << (mu % 12)) * b * LFO_K) >> 16
+    v = cdiv(sp * (1 << (mu % 12)) * b * LFO_K, 100 * 65536)   # (SPEED in hundredths)
     return clamp(v, -0x7FFFFFFF, 0x7FFFFFFF)
 
 
@@ -447,6 +462,20 @@ def tsvf_coef_k(cut, k):
     a2 = (a1 * g) >> 12
     a3 = (a2 * g) >> 12
     return a1, a2, a3
+
+
+def quad_svf_coef(cut, k):
+    """eng_quad.c quad_svf_coef: tsvf_coef_k's with g in Q20 and a2, a3 to 1/32 of their Q13 step (as floats here)"""
+    cut = clamp(cut, 0, 127 << 8)
+    i = cut >> 8
+    g = SVF_G[i] << 8
+    if i < 127:
+        g += (SVF_G[i + 1] - SVF_G[i]) * (cut & 255)
+    den = 4096 + ((g * (g + (k << 8))) >> 28)
+    a1 = (4096 << 13) // den
+    a2 = (a1 * g) >> 15
+    a3 = (a2 * g) >> 20
+    return a1, a2 / 32.0, a3 / 32.0
 
 
 PHRT_MASK = [0, 0xF, 0x1, 0xE, 0xA]
@@ -565,12 +594,13 @@ class Voice:
         elif st == 3:
             x += mulq16(sus - x, ENV_EXP[dec & 127])
         elif st == 4 or st == 5:
-            if rel >= 127:                       # REL 127 = INF: the level held (stage 5)
+            if rel >= 12700:                     # REL (hundredths) 127.00 = INF: the level held (stage 5)
                 self.stage[k] = 5
                 self.env[k] = x
                 return x >> 9
             self.stage[k] = 4
-            x -= mulq16(x, ENV_EXP[rel & 127])
+            r0 = rel // 100
+            x -= mulq16(x, ENV_EXP[r0] + cdiv((ENV_EXP[r0 + 1] - ENV_EXP[r0]) * (rel % 100), 100))
             if x < (1 << 12):
                 x = 0
                 self.stage[k] = 0
@@ -595,7 +625,7 @@ class Voice:
             fd, sph, dep = g("L%dFADE" % k), g("L%dPHASE" % k), g("L%dDEPTH" % k)
             L = lambda n: dst[DEST[n]]
             if k == 0 and any(L(n) for n in ("L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP")):
-                sp = clamp(g("L0SPEED") + ((L("L1SPD") * 127) >> 15), -64, 63)
+                sp = clamp(g("L0SPEED") + ((L("L1SPD") * 12700) >> 15), -6400, 6399)
                 mu = g("L0MULT")
                 ms = 0 if mu < 12 else 12
                 mu = ms + clamp(mu - ms + ((L("L1MUL") * 11) >> 15), 0, 11)
@@ -606,7 +636,7 @@ class Voice:
                 fd = clamp(fd + ((L("L1FAD") * 127) >> 15), -64, 63)
                 wv = clamp(wv + ((L("L1WAV") * 6) >> 15), 0, 6)
                 sph = clamp(sph + ((L("L1SPH") * 127) >> 15), 0, 127)
-                dep = clamp(dep + ((L("L1DEP") * 127) >> 15), -64, 63)
+                dep = clamp(dep + ((L("L1DEP") * 12700) >> 15), -6400, 6399)
             else:
                 inc0 = lfo_inc(p, k)
             if tm == 0:
@@ -640,7 +670,7 @@ class Voice:
             if not d or d >= ND or not dep:
                 continue
             w = lfo_wave(wv, ph, self.lsl[k])
-            w = (w * dep) >> 6
+            w = cdiv(w * dep, 6400)
             if fd:
                 f = min(32767, self.ticks * (ENV_LIN[2 * abs(fd) - 1] >> 9))
                 w = (w * (f if fd < 0 else 32767 - f)) >> 15
@@ -663,14 +693,18 @@ class Voice:
                            m2("BEND", "BEND", "ABEND", 127, 0, 127) << 17, 0, m2("BDLY", "BDLY", "ABDLY", 127, 0, 127),
                            1, 0)
         eF = self.env_tick(2, mv("FATK", "FATK", 127, 0, 127), mv("FDEC", "FDEC", 127, 0, 127),
-                           mv("FSUS", "FSUS", 127, 0, 127) << 17, mv("FREL", "FREL", 127, 0, 127),
+                           mv("FSUS", "FSUS", 127, 0, 127) << 17, mv("FREL", "FREL", 127, 0, 127) * 100,
                            mv("FDLY", "FDLY", 127, 0, 127), self.gate, 1)
         eE = self.env_tick(3, mv("EATK", "EATK", 127, 0, 127), mv("EDEC", "EDEC", 127, 0, 127),
-                           mv("ESUS", "ESUS", 127, 0, 127) << 17, mv("EREL", "EREL", 127, 0, 127), 0, self.gate, 1)
+                           mv("ESUS", "ESUS", 127, 0, 127) << 17, mv("EREL", "EREL", 12700, 0, 12799), 0, self.gate, 1)
         if latest:
             self.part.pan = clamp((dst[DEST["PAN"]] * 64) >> 15, -64, 63)
         alg = mv("ALGO", "ALGO", 7, 1, 8)
-        dt = mv("DTUN", "DTUN", 127, 0, 127)
+        dt = mv("DTUN", "DTUN", 12700, 0, 12799)
+        d0, df = dt // 100, dt % 100
+        d1 = d0 + 1 if d0 < 127 else 127
+        du = DT_UP[d0] + cdiv((DT_UP[d1] - DT_UP[d0]) * df, 100)
+        dd = DT_DN[d0] + cdiv((DT_DN[d1] - DT_DN[d0]) * df, 100)
         ra = m2("RA", "RA", "RALL", 63, 0, 63)
         rb = clamp(g("RB1") * 19 + g("RB2") + D("RB", 180), 0, NRB - 1)
         rb1i, rb2i = rb // 19, rb % 19
@@ -696,8 +730,8 @@ class Voice:
         rA = ratio(q16(RA[ra]), mv("OFSA", "OFSA", 100, -100, 100))
         rB1 = ratio(q16(RCB[rb1i]), mv("OFSB1", "OFSB1", 100, -100, 100))
         rB2 = ratio(q16(RCB[rb2i]), mv("OFSB2", "OFSB2", 100, -100, 100))
-        inc = [opinc(bAll, rc, 0), opinc(bAB2, rA, DT_UP[dt]), opinc(bAll, rB1, 0), opinc(bAB2, rB2, DT_DN[dt])]
-        hq = clamp((g("HARM") << 8) + ((dst[DEST["HARM"]] * 26 * 256) >> 15), -26 * 256, 26 * 256)
+        inc = [opinc(bAll, rc, 0), opinc(bAB2, rA, du), opinc(bAll, rB1, 0), opinc(bAB2, rB2, dd)]
+        hq = cdiv(mv("HARM", "HARM", 2600, -2600, 2600) * 256, 100)
         ha = hb = HARM[0]
         hff = 0.0
         if hq:
@@ -706,7 +740,7 @@ class Voice:
             t1 = t0 + 1 if t0 < 26 else 26
             hff = ((h & 255) << 7) / 32768.0 if t1 > t0 else 0.0
             ha, hb = HARM[t0], HARM[t1]
-        fbq = fbq_of(mv("FDBK", "FDBK", 120, 0, 120))
+        fbq = fbq_of((mv("FDBK", "FDBK", 127, 0, 127) * 120 + 63) // 127)
         mix = mv("MIX", "MIX", 127, -64, 63)
         gy = (64 + mix) * 258
         gx = 32766 - gy
@@ -725,24 +759,28 @@ class Voice:
             tl[j] = mulq15(eA if j == 0 else eB, l)
         l0 = [x << 16 for x in self.lv]
         dl = [((tl[j] << 16) - l0[j]) >> 5 for j in range(3)]
-        fdep = mv("FDEPTH", "FENV", 127, -64, 63)
-        cut = (mv("FREQ", "FREQ", 127, 0, 127) << 8) + ((eF * fdep) >> 6) + \
+        fdep = mv("FDEPTH", "FENV", 12700, -6400, 6399)
+        cut = (mv("FREQ", "FREQ", 12700, 0, 12799) * 256 + 50) // 100 + cdiv(eF * fdep, 6400) + \
             (((pitch16 - 960) * g("FKTRK") * 150) >> 10)
-        reso = mv("RESO", "RESO", 127, 0, 127)
+        reso = mv("RESO", "RESO", 12700, 0, 12799)
         fty = g("FTYPE")
         svf = fty != 0 and not (fty != 2 and cut >= (127 << 8) and not reso)
-        kd = 8192 - reso * 60
+        kd = 8192 - reso * 3 // 5
         c1 = c2 = (0, 0, 0)
         if svf:
-            c1 = tsvf_coef_k(cut, kd)
+            c1 = quad_svf_coef(cut, kd)
             if fty == 3:
                 c2 = tsvf_coef_k(cut, 8192)
-        base = mv("BASE", "BASE", 127, 0, 127)
+        base = mv("BASE", "BASE", 12700, 0, 12799)
         wid = mv("WIDTH", "WIDTH", 127, 0, 127)
-        hpk = BW_K[base] / 65536.0 if base else 0.0
-        lpk = BW_K[base + wid] / 65536.0 if base + wid < 127 else 0.0
-        lvl = mv("LEVEL", "LEVEL", 127, 0, 127)
-        A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lvl * lvl * 2)
+
+        def bwk(x):                                        # BW_K at x hundredths, interpolated
+            i = x // 100
+            return BW_K[i] + cdiv((BW_K[i + 1] - BW_K[i]) * (x % 100), 100)
+        hpk = bwk(base) / 65536.0 if base else 0.0
+        lpk = bwk(base + wid * 100) / 65536.0 if base + wid * 100 < 12700 else 0.0
+        lvl = mv("LEVEL", "LEVEL", 12700, 0, 12799)
+        A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lvl * lvl // 5000)
         A1 = mulq15(A1, 32767)
         A0 = self.amp
         dA = (A1 - A0) >> 5
@@ -895,7 +933,7 @@ def main():
     write_header()
     print("quad_ref: wrote", os.path.relpath(OUT_H, ROOT))
     os.makedirs(GOLD, exist_ok=True)
-    jobs = [("algo%d" % a, algo_patch(a)) for a in range(1, 9)] + list(PRESETS.items())
+    jobs = [("algo%d" % a, to_v4(algo_patch(a))) for a in range(1, 9)] + [(n, to_v4(p)) for n, p in PRESETS.items()]
     for name, p in jobs:
         fn, pk = golden(name, p)
         print("quad_ref: %-28s peak %7.0f" % (os.path.relpath(fn, ROOT), pk))

@@ -891,7 +891,11 @@ static int css_part_put(uint32_t part, const css_part_t *r)
 #endif
     d = ENGINES[e]->deep;
     if (r->nblob != (d && d->pages && d->npages && d->get && d->set && d->blob_get && d->blob_set &&
-                     d->blob_size <= CSS_BLOB ? d->blob_size : 0u))
+                     d->blob_size <= CSS_BLOB ? d->blob_size : 0u)
+#if FELUCCA_QUAD
+        && !(e == ENGI_QUAD && r->nblob == QUAD_BLOB_V3)   /* (an FM TONE patch of before 2026-10-14: converted) */
+#endif
+    )
         return 0;
     if ((r_kind == PK_USER && r->slot >= UP_SLOTS) || r->user > UP_SLOTS ||
         (r_kind == PK_FACTORY && r_fk >= ENGINES[e]->npresets))
@@ -906,8 +910,12 @@ static int css_part_put(uint32_t part, const css_part_t *r)
     panic_req |= (uint8_t)(1u << (uint32_t)(t - trk));
     fm1_irq_on();
     fm6_track_loaded(t);                           /* (the engine's own state for the sound) */
-    if (r->nblob)
-        d->blob_set(t, r->blob);                   /* the deep patch as it was left */
+    if (r->nblob) {                                /* the deep patch as it was left (zeros past a shorter one) */
+        uint8_t bb[CSS_BLOB];
+        memset(bb, 0, sizeof bb);
+        memcpy(bb, r->blob, r->nblob);
+        d->blob_set(t, bb);
+    }
 #if FELUCCA_PROPHET
     if (e == ENGI_PROPHET)
         p5_voice_restore(t, r->p[P_VOICE]);        /* (the load took the factory program's UNISON: the part's mode as
