@@ -594,29 +594,34 @@ SL=$OUT/persist_session_old.log
 ST=$OUT/persist_session_storm.log; SH=$OUT/persist_session_hold.log
 "$EMU" --headless --script "$S/session_storm.txt" >"$ST" 2>&1 || bad "session storm: exit status"
 "$EMU" --headless --script "$S/session_hold.txt" >"$SH" 2>&1 || bad "session hold: exit status"
+# qw LOG N -> "erases ahead boot near autosaves ready lasterase lastinput now"; qwf LOG N -> "saves pending"; qs: stalls
+qw() { dl "$1" 'quiet writes:' "$2" | sed -n 's/.*erases \([0-9]*\) (ahead \([0-9]*\), at power-on \([0-9]*\)), near \([0-9]*\), auto saves \([0-9]*\), masked [0-9]* ms, ready \([01]*\), last erase at \([0-9]*\) ms (input at \([0-9]*\), now \([0-9]*\)).*/\1 \2 \3 \4 \5 \6 \7 \8 \9/p'; }
+qwf() { dl "$1" 'favs:' "$2" | sed -n 's/.*saves \([0-9]*\), pending \([0-9]*\) .*/\1 \2/p'; }
+qs() { dl "$1" 'flash erases' "$2" | sed -n 's/.*audio stalled \([0-9]*\) .*/\1/p'; }
+qe() { qw "$1" "$2" | cut -d' ' -f1-5; }
 fw() { dl "$1" 'flash:' "$2" | sed -n 's/.*, \([0-9]*\) writes, settings saves \([0-9]*\) .*/\1 \2/p'; }
 [ "$(sx "$ST" 1 1) $(sx "$ST" 1 5)" = "0 1" ] && [ "$(fw "$ST" 1)" = "0 0" ] && echo "$(sx "$ST" 1 6)" | grep -q '^voicing 4 ' &&
     ok "KNOB 1 turned for 3 s (20 detents), then 3 s of nothing: no flash write (the state differs from flash until a save)" \
     || bad "session storm, the voicing: $(sv "$ST" 1) / $(fw "$ST" 1)"
-[ "$(sx "$ST" 2 1) $(sx "$ST" 2 5)" = "1 0" ] && [ "$(fw "$ST" 2)" = "11 1" ] && [ "$(sx "$ST" 3 1)" = 1 ] && [ "$(fw "$ST" 3)" = "11 1" ] &&
-    ok "SAVE held, a new unit's first save: both objects written once (the settings: 1 erase + 4 programs; the session: 1 erase + 5); none after" \
+[ "$(sx "$ST" 2 1) $(sx "$ST" 2 5)" = "1 0" ] && [ "$(fw "$ST" 2)" = "10 1" ] && [ "$(sx "$ST" 3 1)" = 1 ] && [ "$(fw "$ST" 3)" = "10 1" ] &&
+    ok "SAVE held, a new unit's first save: both objects written once (the settings: an erase + 4 page programs, 3y52: not erased ahead; the session: 5 programs into its blank copy); none after" \
     || bad "session storm, the save: $(sv "$ST" 2) / $(fw "$ST" 2) / $(fw "$ST" 3)"
-[ "$(sx "$ST" 4 1) $(sx "$ST" 4 5)" = "1 1" ] && [ "$(sx "$ST" 5 1) $(sx "$ST" 5 5)" = "2 0" ] && [ "$(fw "$ST" 5)" = "17 1" ] &&
-    dl "$ST" 'session chord:' 5 | grep -q 'edited 1' && [ "$(fw "$ST" 6)" = "17 1" ] && [ "$(sx "$ST" 6 1)" = 2 ] &&
+[ "$(sx "$ST" 4 1) $(sx "$ST" 4 5)" = "1 1" ] && [ "$(sx "$ST" 5 1) $(sx "$ST" 5 5)" = "2 0" ] && [ "$(fw "$ST" 5)" = "15 1" ] &&
+    dl "$ST" 'session chord:' 5 | grep -q 'edited 1' && [ "$(fw "$ST" 6)" = "15 1" ] && [ "$(sx "$ST" 6 1)" = 2 ] &&
     ok "an editor knob turned for 1.2 s, 3 s: not written; SAVE held: ONE object written (the session: the settings block did not change); SAVE held again with nothing changed: no erase at all" \
     || bad "session storm, the edit: $(sv "$ST" 4) / $(sv "$ST" 5) / $(fw "$ST" 5) / $(fw "$ST" 6)"
-dl "$ST" 'flash erases' 6 | grep -q 'audio stalled 3 (48 blocks' &&
-    ok "each object a save writes: one sector erase (45 ms: 16 audio blocks of silence)" \
+dl "$ST" 'flash erases' 6 | grep -q 'audio stalled 1 (' &&
+    ok "a new unit's saves (the settings once, the session twice): the session's found a blank copy; the settings' one erase (3y52: the settings erase at their save)" \
     || bad "session storm: erases: $(dl "$ST" 'flash erases' 6)"
 [ "$(grep -ac '^expect sound at .*: ok' "$SH")" = 3 ] && [ "$(sx "$SH" 1 1) $(sx "$SH" 1 5)" = "0 1" ] && [ "$(fw "$SH" 1)" = "0 0" ] &&
     ok "a change under a held chord: nothing written (3 s)" || bad "session hold, held: $(sv "$SH" 1) / $(fw "$SH" 1)"
-[ "$(sx "$SH" 2 1) $(sx "$SH" 2 5)" = "1 0" ] && dl "$SH" 'flash erases' 2 | grep -q 'audio stalled 2 (32 blocks' &&
-    ok "SAVE held under the sounding chord: saved at once (the player's own press): an erase an object written (here two, a new unit's first save: 2 x 45 ms of silence in the chord), the chord sounds on" \
+[ "$(sx "$SH" 2 1) $(sx "$SH" 2 5)" = "1 0" ] && dl "$SH" 'flash erases' 2 | grep -q 'audio stalled 1 (' &&
+    ok "SAVE held under the sounding chord: saved at once (the player's own press); the session programmed into its blank copy, the settings erase once (3y52); the chord sounds on" \
     || bad "session hold, the save: $(sv "$SH" 2) / $(dl "$SH" 'flash erases' 2)"
 [ "$(fw "$SH" 3 | cut -d' ' -f2)" = 1 ] && dl "$SH" 'settings: now' 3 | grep -q 'style 1 .* pending 1 ' &&
     [ "$(fw "$SH" 4 | cut -d' ' -f2)" = 2 ] && dl "$SH" 'settings: now' 4 | grep -q 'pending 0 ' &&
-    dl "$SH" 'flash erases' 4 | grep -q 'audio stalled 3 (48 blocks' &&
-    ok "an Option changed under the same chord: the automatic write waits (3 s: nothing), written once the chord and its tail are over" \
+    [ "$(qe "$SH" 4)" = "2 0 0 0 1" ] &&
+    ok "an Option changed under the same chord: the automatic write waits (3 s: nothing), written once the chord and its tail are over (3y52: erasing then, as before 0.22)" \
     || bad "session hold, the Option: $(fw "$SH" 3) / $(fw "$SH" 4) / $(dl "$SH" 'settings: now' 3)"
 
 # Options > Reset Settings clears the session too (the reset runs above): after the reset the session as it would be
@@ -757,5 +762,49 @@ EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$YF" --script "$S/persist_1
     bad "single core -> standard: bpm $(bpm "$X8"), style $(st "$X8"), mode/keys '$(lm "$X8")', '$(c1of "$X6.std")'"
 rm -f "$X6.std"
 
+
+# The quiet writes (0.22, docs/SETTINGS.md "When flash is written"; cr_settings.c, storage.c "erase ahead"). The owner's
+# unit, marking favourites while playing: every mark's write erased a sector (the interrupts masked for the erase), a
+# second after the output fell silent: where the next note is. quiet_writes.txt marks and plays a chord 1.6 s after
+# each mark; the dump's "quiet writes" line has the flash model's erases, those done ahead, those the unit started by
+# itself near playing, its own saves and when the last erase started against the last input.
+QF=$OUT/persist_quiet_flash.bin
+Q1=$OUT/persist_quiet_1.log; Q2=$OUT/persist_quiet_2.log; Q3=$OUT/persist_quiet_3.log
+rm -f "$QF" "$Q1" "$Q2" "$Q3"
+"$EMU" --headless --flash "$QF" --script "$S/quiet_writes.txt" >"$Q1" 2>&1 || bad "quiet writes run 1: exit status"
+"$EMU" --headless --flash "$QF" --script "$S/quiet_writes_boot.txt" >"$Q2" 2>&1 || bad "quiet writes run 2: exit status"
+"$EMU" --headless --flash "$QF" --script "$S/quiet_writes_boot.txt" >"$Q3" 2>&1 || bad "quiet writes run 3: exit status"
+QS=$OUT/persist_quiet_save.log
+"$EMU" --headless --script "$S/quiet_writes_save.txt" >"$QS" 2>&1 || bad "quiet writes, SAVE held: exit status"
+[ "$(qwf "$Q1" 1)" = "1 0" ] && [ "$(qe "$Q1" 1)" = "0 0 0 0 1" ] && [ "$(qs "$Q1" 1)" = 0 ] &&
+    [ "$(qwf "$Q1" 2)" = "2 0" ] && [ "$(qe "$Q1" 2)" = "0 0 0 0 2" ] && [ "$(qs "$Q1" 2)" = 0 ] &&
+    ok "a mark, a chord 1.6 s later, twice (a new unit: two blank copies): each mark written before its chord, by itself, with no erase at all" \
+    || bad "quiet writes, marks 1 and 2: $(qwf "$Q1" 1) / $(qw "$Q1" 1) // $(qwf "$Q1" 2) / $(qw "$Q1" 2)"
+[ "$(qwf "$Q1" 3)" = "2 1" ] && [ "$(qe "$Q1" 3)" = "0 0 0 0 2" ] &&
+    ok "the third mark has to erase (no erase ahead yet): 2.9 s after its chord nothing is written, nothing erased" \
+    || bad "quiet writes, mark 3 waiting: $(qwf "$Q1" 3) / $(qw "$Q1" 3)"
+set -- $(qw "$Q1" 4)
+[ "$(qwf "$Q1" 4)" = "3 0" ] && [ "$(qe "$Q1" 4)" = "1 0 0 0 3" ] && [ "$(qs "$Q1" 4)" = 1 ] && [ "$(( ${7:-0} - ${8:-0} ))" -ge 4000 ] &&
+    ok "written once 4 s passed without a sound or an input: one erase, $(( ${7:-0} - ${8:-0} )) ms after the last input, none near playing" \
+    || bad "quiet writes, mark 3 written: $(qwf "$Q1" 4) / $(qw "$Q1" 4)"
+set -- $(qw "$Q1" 5)
+[ "$(qe "$Q1" 5)" = "2 1 0 0 3" ] && [ "${6:-x}" = 011 ] && [ "$(( ${7:-0} - ${8:-0} ))" -ge 10000 ] &&
+    ok "10 s without a sound or an input: the erase ahead ($(( ${7:-0} - ${8:-0} )) ms after the last input); every spare copy blank" \
+    || bad "quiet writes, the erase ahead: $(qw "$Q1" 5)"
+set -- $(qw "$Q1" 6)
+[ "$(qwf "$Q1" 6)" = "4 0" ] && [ "$(qe "$Q1" 6)" = "2 1 0 0 4" ] && [ "${6:-x}" = 010 ] && [ "$(qs "$Q1" 6)" = 2 ] &&
+    ok "the fourth mark programs only; a knob every 6 s for 27 s: no erase ahead meanwhile (an input puts it off)" \
+    || bad "quiet writes, inputs: $(qwf "$Q1" 6) / $(qw "$Q1" 6)"
+set -- $(qw "$Q1" 7)
+[ "$(qe "$Q1" 7)" = "3 2 0 0 4" ] && [ "${6:-x}" = 011 ] && [ "$(( ${7:-0} - ${8:-0} ))" -ge 10000 ] &&
+    ok ".. and 10 s after the last one it runs" || bad "quiet writes, the erase ahead after the inputs: $(qw "$Q1" 7)"
+[ "$(qwf "$Q2" 1)" = "1 0" ] && [ "$(qe "$Q2" 1)" = "0 0 0 0 1" ] && [ "$(qw "$Q2" 1 | cut -d' ' -f6)" = 010 ] &&
+    [ "$(qwf "$Q3" 1)" = "1 0" ] && [ "$(qe "$Q3" 1)" = "1 1 1 0 1" ] && [ "$(qs "$Q3" 1)" = 0 ] &&
+    dl "$Q3" 'favs:' 1 | grep -q '(at power-on: read)' &&
+    ok "switched off before the erase ahead (run 2), switched on (run 3): the stale copy erased at power-on, before the audio (no stall); the marks read; the next mark programs only" \
+    || bad "quiet writes, power-on: $(qwf "$Q2" 1) / $(qw "$Q2" 1) // $(qwf "$Q3" 1) / $(qw "$Q3" 1) / stalls $(qs "$Q3" 1)"
+[ "$(sx "$QS" 1 1)" = 3 ] && [ "$(qe "$QS" 1)" = "2 0 0 0 0" ] && [ "$(qs "$QS" 1)" = 2 ] && grep -q '^expect sound at .*: ok' "$QS" &&
+    ok "SAVE held three times under a held chord: the third session save has to erase and does so at once (the player's own press, as before), and the settings' save erases (3y52: not erased ahead): two erases, in the chord; not counted as near (that is for what the unit starts itself)" \
+    || bad "quiet writes, SAVE held: $(sv "$QS" 1) / $(qw "$QS" 1) / stalls $(qs "$QS" 1)"
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail

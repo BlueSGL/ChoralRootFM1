@@ -3021,8 +3021,8 @@ run cr_favs_arp_list
 AL="$OUT/cr_favs_arp_list.log"
 al() { grep -a '^  flash erases with the audio stalled' "$AL" | sed -n "$1p" | awk '{print $7}'; }
 af() { grep -a '^  favs:' "$AL" | sed -n "$1p"; }
-[ "$(al 1)" = 0 ] && [ "$(al 2)" = 0 ] && [ "$(al 3)" = 0 ] && af 3 | grep -q 'pending 1' && [ "$(al 4)" = 1 ] && af 4 | grep -q 'saves 1, pending 0' &&
-    ok "a mark while an arp plays: LIST, DEBUG, PEAK, USB and 30 s of the arp write nothing; quiet: the poll writes it (one erase)" ||
+[ "$(al 1)" = 0 ] && [ "$(al 2)" = 0 ] && [ "$(al 3)" = 0 ] && af 3 | grep -q 'pending 1' && [ "$(al 4)" = 0 ] && af 4 | grep -q 'saves 1, pending 0' &&
+    ok "a mark while an arp plays: LIST, DEBUG, PEAK, USB and 30 s of the arp write nothing; quiet: the poll writes it (3y52: into the blank spare, program only, no erase)" ||
     bad "the arp and the reads: erases $(al 1) $(al 2) $(al 3) $(al 4); $(af 3) / $(af 4)"
 run cr_favfilter
 FF="$OUT/cr_favfilter.log"

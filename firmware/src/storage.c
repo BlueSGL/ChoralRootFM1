@@ -9,6 +9,17 @@
  * copy with the newest seq wins (including wrap), so a write torn at any point leaves the
  * previous copy in charge.
  *
+ * ERASE AHEAD (ChoralRoot 0.22, the quiet writes: docs/SETTINGS.md "When flash is written"): an erase masks every
+ * interrupt for one sector's erase time (17.8 ms measured on the unit: six audio halves nobody serves), a page
+ * program for a fraction of one half. For the favourites and the session (st_ahead_ix; NOT the settings, whose
+ * previous copy is the panel calibration's fallback: the owner's decision of 2026-10-14) the erase is therefore taken out of the save: st_prep erases the copy that
+ * is NOT the current one at a moment nobody can hear (power-on, before the audio starts; later only after a long
+ * idle: cr_settings.c), and st_save, finding that copy blank (every byte 0xFF: read, never assumed), programs only.
+ * A copy that is not blank (no st_prep since the last save, an erase or a write cut by the power) is erased by
+ * st_save as before. The on-flash format is unchanged and so is the rule above: only the copy that is not current
+ * is ever erased or programmed, the commit record goes last. What changes is that the OLDER copy does not survive
+ * until the next save: between an st_prep and the next save there is one copy, as on a unit saved once.
+ *
  * Flash access goes through three hooks (also used by the host test):
  *   st_read(off, dst, n)   st_erase(off)   st_prog(off, src, n)
  */
@@ -175,21 +186,125 @@ static int st_load(uint32_t obj, void *dst, uint32_t max)
     return (int)h.len;
 }
 
+/* ---- erase ahead (see the top) ---- */
+#ifndef ST_AHEAD
+#define ST_AHEAD 0                                 /* (ChoralRoot's unit sets 1: choralroot.c. Off, every save erases
+                                                    * its copy first, as Felucca's writer always did) */
+#endif
+static inline int st_ahead_ix(uint32_t obj)        /* the objects whose spare copy is erased ahead: 0.., else -1 */
+{
+    if (!ST_AHEAD)
+        return -1;
+    /* (0: was the settings. Not erased ahead, the owner's decision of 2026-10-14: the settings hold the panel
+     * calibration, and their previous copy stays as the fallback until the next save, which erases at its time) */
+#if FELUCCA_CZ && FELUCCA_QUAD
+    if (obj == OBJ_SESSION)
+        return 1;
+    if (obj == OBJ_FAVS)
+        return 2;
+#endif
+    return -1;
+}
+static uint8_t st_ahead_ok[4];                     /* [ix]: st_prep found or made the spare copy blank and nothing
+                                                    * wrote the object since (this power-on). A hint for WHEN to
+                                                    * write (st_ready): st_save reads the sector itself. [3]: st_prep
+                                                    * runs at power-on (no audio yet: the emulator's flash model) */
+static inline int st_ready(uint32_t obj)
+{
+    int ix = st_ahead_ix(obj);
+    return ix >= 0 && st_ahead_ok[ix];
+}
+static int st_blank(uint32_t base)                 /* the whole sector reads 0xFF: 1 (st_buf is the scratch) */
+{
+    uint32_t off, i;
+    for (off = 0; off < ST_SECTOR; off += 256u) {
+        if (st_read(base + off, st_buf, 256u))
+            return 0;
+        for (i = 0; i < 256u; i++)
+            if (st_buf[i] != 0xFFu)
+                return 0;
+    }
+    return 1;
+}
+/* the copy a save of obj would write, made blank now: 0 it was blank already (no erase), 1 erased, < 0 not one of
+ * the erase-ahead objects, SAFE MODE, or a flash error (the copy is then not marked ready: st_save erases it).
+ * The copy erased is never the current one: st_current has just read the current copy's commit record and its
+ * payload's CRC; with no valid copy at all it is copy A, where the first save goes */
+static inline int st_prep(uint32_t obj)
+{
+    st_hdr_t h;
+    int ix = st_ahead_ix(obj), rc;
+    uint32_t base;
+    if (ix < 0 || ST_BLOCKED())
+        return -1;
+    st_ahead_ok[ix] = 0;
+    base = st_sector(obj, st_current(obj, &h) == 0 ? 1u : 0u);
+    if (st_blank(base)) {
+        st_ahead_ok[ix] = 1;
+        return 0;
+    }
+    if ((rc = st_erase(base)) != 0)
+        return rc;
+    if (!st_blank(base))                           /* (a write-protected or failing part: not ready, and the caller
+                                                    * does not try again and again) */
+        return -7;
+    st_ahead_ok[ix] = 1;
+    return 1;
+}
+
+/* WHEN the unit may write by itself (cr_settings.c's poll asks; pure, so the host tests walk it: tests/storage_test.c).
+ * All times are ms on one clock. An automatic WRITE of a changed object: nothing changed for ST_SETTLE_MS (so a run
+ * of changes is one write), nothing sounded for ST_SILENT_MS, ST_GAP_MS since another write, not busy (a loop plays,
+ * a restore); and then, when the spare copy is blank (program only: a few page programs, each masking the interrupts
+ * for less than one audio half), at once; when it is not (the save has to erase: 17.8 ms masked), only after
+ * ST_ERASE_IDLE_MS without a sound AND without input (a key, a button, a knob, a MIDI message), so that the hole
+ * does not fall on the next note. An ERASE AHEAD (st_prep, nothing to write): after ST_AHEAD_IDLE_MS of the same. */
+#define ST_SETTLE_MS 1500u
+#define ST_SILENT_MS 1000u
+#define ST_GAP_MS 250u
+#define ST_ERASE_IDLE_MS 4000u
+#define ST_AHEAD_IDLE_MS 10000u
+typedef struct {
+    uint32_t now, change, loud, input, wrote;      /* now; the last change, sound, input, flash write */
+    uint8_t busy, ready;                           /* no write now at all; the spare copy is blank (st_ready) */
+} st_when_t;
+static inline int st_idle_for(const st_when_t *w, uint32_t ms)
+{
+    return (uint32_t)(w->now - w->loud) >= ms && (uint32_t)(w->now - w->input) >= ms;
+}
+static inline int st_write_due(const st_when_t *w)
+{
+    if (w->busy || (uint32_t)(w->now - w->change) < ST_SETTLE_MS || (uint32_t)(w->now - w->loud) < ST_SILENT_MS ||
+        (uint32_t)(w->now - w->wrote) < ST_GAP_MS)
+        return 0;
+    return w->ready || st_idle_for(w, ST_ERASE_IDLE_MS);
+}
+static inline int st_ahead_due(const st_when_t *w)
+{
+    return !w->busy && !w->ready && (uint32_t)(w->now - w->wrote) >= ST_GAP_MS && st_idle_for(w, ST_AHEAD_IDLE_MS);
+}
+
 static int st_save(uint32_t obj, const void *src, uint32_t len)
 {
     uint32_t seq, base, off;
-    int cur, rc;
+    int cur, rc, ix, blank = 0;
     st_hdr_t h;
     if (ST_BLOCKED() || obj >= OBJ_COUNT || len > ST_PAYLOAD_MAX)
         return -1;
     cur = st_current(obj, &h);
     seq = cur < 0 ? 0u : h.seq;
     base = st_sector(obj, cur == 0 ? 1u : 0u);       /* write the other copy */
+    if ((ix = st_ahead_ix(obj)) >= 0) {              /* erased ahead (st_prep), or never written: program only */
+        st_ahead_ok[ix] = 0;
+        blank = st_blank(base);
+    }
     for (off = 0; off < len; off++)
         st_buf[off] = ((const uint8_t *)src)[off];    /* the driver wants RAM sources */
-    st_note(obj, st_why);
-    if ((rc = st_erase(base)) != 0)
-        return rc;
+    if (!blank) {                                    /* (3y48: only a save that erases is noted) */
+        st_note(obj, st_why);
+        if ((rc = st_erase(base)) != 0)
+            return rc;
+    }
     for (off = 0; off < len; off += 256u) {
         uint32_t n = len - off > 256u ? 256u : len - off;
         if ((rc = st_prog(base + ST_PAYLOAD_OFF + off, st_buf + off, n)) != 0)
@@ -211,5 +326,9 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
         if (st_head(obj, c, &chk) || memcmp(&chk, &h, sizeof h) || st_body(obj, c, &chk))
             return -7;
     }
+    if (ix >= 0 && cur < 0)                          /* the object's first save ever (copy A): the spare is copy B,
+                                                      * blank on a new unit; after every other save it is the copy
+                                                      * that was current, to be erased ahead */
+        st_ahead_ok[ix] = (uint8_t)st_blank(st_sector(obj, 1u));
     return 0;
 }

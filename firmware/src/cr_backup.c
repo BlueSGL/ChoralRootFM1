@@ -723,7 +723,7 @@ static void crb_debug(void)
  * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[64], k = 0, i;
+    uint32_t v[64], k = 0, i;                       /* (64 values: full; a 65th needs a larger v) */
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -815,6 +815,20 @@ static void crb_peak(void)
     v[k++] = cr_dbg.pk_w1 / CR_PROF_PER_US;
     v[k++] = cr_dbg.pk_fxmap;
     v[k++] = cr_dbg.c1x_jobs;
+    /* 3y52, values 61..64: the quiet writes (0.22, cr_settings.c, storage.c "erase ahead"; p5-g e31c096's values
+     * 35..38 there, merged by name), all since power-on: the saves the unit did by itself (an Option's, a
+     * favourite's), the erases done ahead (the session's and the favourites', not the settings': at power-on, after a
+     * long idle), the erases the unit started by itself while a voice was active or within 2 s of an input (the rule:
+     * 0), the longest page program in us (the wait for the chip, the interrupts masked) */
+#if CR_HAVE_SETTINGS
+    v[k++] = crq.auto_saves;
+    v[k++] = crq.ahead;
+#else
+    v[k++] = 0;
+    v[k++] = 0;
+#endif
+    v[k++] = st_near;
+    v[k++] = st_prog_us;
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

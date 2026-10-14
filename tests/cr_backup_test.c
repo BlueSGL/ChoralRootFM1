@@ -942,13 +942,13 @@ int main(void)
         CHECK(z == 0, "DEBUG: the tail (the stub's samples) is zero where no stub ran");
     }
 
-    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 60 values (24 to its second
+    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 64 values (24 to its second
      * build; the six behind them: when the ISR got to start; then four: the keys' way to the engine; then seven, 3y44:
-     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores; then eight, 3y48: the erases' writers and times; then seven, 3y50: each core's half); DEBUG keeps
+     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores; then eight, 3y48: the erases' writers and times; then seven, 3y50: each core's half; then four, 3y52: the quiet writes); DEBUG keeps
      * its 127 ---- */
     t_begin(78);
     a = t_send(&n);
-    CHECK(a && a[0] == 1 && a[1] == 60 && n == 2u + 5u * 60u, "PEAK: 1, 60, 60 x u32 (n %u)", (unsigned)n);
+    CHECK(a && a[0] == 1 && a[1] == 64 && n == 2u + 5u * 64u, "PEAK: 1, 64, 64 x u32 (n %u)", (unsigned)n);
     t_begin(73);
     a = t_send(&n);
     CHECK(a && a[1] <= 127 && n == 2u + 5u * a[1], "DEBUG after PEAK: its own values, as before (%u; the device's 127 fill its count byte)", a ? a[1] : 0);
@@ -1165,7 +1165,7 @@ int main(void)
             }
             CHECK(st_erases == e0 && crf_dirty, "sounding (3y48): a mark pending through a minute of sound: not written");
             trk[CR_PART_BASS].v[0].active = 0;
-            for (t = 0; t < 3000u && crf_dirty; t += 20u) {
+            for (t = 0; t < 6000u && crf_dirty; t += 20u) {   /* (3y52: the spare not blank: the 4 s rule) */
                 fm1_ms += 20u;
                 cr_settings_poll();
             }

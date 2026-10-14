@@ -265,7 +265,7 @@ the numbers are that stretch's):
 | `pk_late`, `pk_late_stage`, `pk_late_us` | late halves; the latest one's largest stage (1 tick .. 6 wait) and its time |
 | `pk_halves`, `fx_busy_halves` | halves counted; halves in which the effects ran |
 | `fx_down_avg_us` / `_max_us`, `fx_delay_*`, `fx_reverb_*`, `fx_up_*` | inside the fx stage, over `fx_busy_halves`: the sends' down-sampler, the delay, the reverb, the wet's up-sampler |
-| `flash_erases`, `flash_holes`, `saves_settings`, `saves_session` | since power-on: erases (46 ms of silence each), erases into an output above -60 dBFS (the rule: 0), saves |
+| `flash_erases`, `flash_holes`, `saves_settings`, `saves_session` | since power-on: erases (17.8 ms measured on the unit, the interrupts masked and the buffer silenced; the emulator's model and the data sheet: 45), erases into an output above -60 dBFS (the rule: 0), saves |
 | `stale_halves` | **the audible ones**: halves in which the DAC played something old (a boundary nobody served, or a half finished after the DAC had reached it). The rule: 0 |
 | `pk_lag_us` | the furthest the ISR started behind its boundary (an estimate: "Late is not slow") |
 | `pk_wall_us`, `pk_t5_us` | the longest half by the clock, TIMER5 nested in it (`pk_block_us` leaves TIMER5 out), and the most TIMER5 took of one half |
@@ -280,6 +280,7 @@ the numbers are that stretch's):
 | `pk_c0_busy_us`, `pk_c1_busy_us` | 3y50, **each core's half** (docs/DUALCORE.md "What each core runs"): the largest busy time of core 0 (its stages but `wait`, without core 1's job) and of core 1 (its voices' job and the reverb's), each in its own worst half |
 | `pk_c0_wait_us`, `pk_fx_join_us`, `pk_c1_idle_us` | core 0's waits in one half (both joins: the same as `pk_wait_us`), of them the effects' join alone, and core 1 idle between its voices' end and the reverb's start |
 | `pk_fx_map`, `c1_fx_jobs` | which core ran which effect in the largest whole half (`pk_wall_us`'s): 1 the chorus, 2 the delay, 4 the reverb ran, 8 the reverb on core 1 (so 15: all three, the reverb on core 1; 7: all three on core 0); and the reverb jobs core 1 ran |
+| `saves_auto`, `erases_ahead`, `erases_near`, `flash_prog_us` | **the quiet writes** (values 61..64, 3y52: p5-g's 35..38 appended by name; 0.22, docs/SETTINGS.md "When flash is written"), since power-on: the saves the unit did by itself (an Option's, a favourite's); the erases done ahead (the favourites' and the session's, not the settings': at power-on before the audio starts, then after 10 s without a sound or an input); the erases the unit started by itself while a voice was active or within 2 s of an input (**the rule: 0**; SAVE held, a sound's or a loop's save are the player's and are not counted); the longest page program in us (the driver's wait for the chip, the interrupts masked; the page's SPI transfer before it is not in it) |
 
 With Dual Core On **`pk_part1_us` is core 1's whole job of a half**: the bass part and, since 0.22, the chord part's
 P5 voices that core 1 renders; `pk_part0_us` is core 0's own render (its share of the chord's voices), `pk_wait_us`
@@ -420,8 +421,8 @@ count is the lag: a half that starts 600 us behind and renders 2400 is as late a
 
 | What | How long (read from the code and the flash's data sheet; not measured) | When |
 | --- | --- | --- |
-| a flash erase (`storage_hw.c st_erase`) | 45 ms by the data sheet, the buffer silenced first; **the unit read `irq_gap_us` 17 783 in a session with a favourite's write (2026-10-13): 17.8 ms is, by inference, one sector erase** (six halves nobody served: `stale_halves` counts them, and they are silence) | a store's sector fills; never into a sounding output for the settings and the session (`flash_holes`) |
-| a flash page program (`fm1_flash.h fl_write`, 256 bytes a go) | ~1 ms each, one after the other with a gap | every save: settings, session, a loop, a user sound |
+| a flash erase (`storage_hw.c st_erase`) | 45 ms by the data sheet, the buffer silenced first; **the unit read `irq_gap_us` 17 783 and 17 851 (2026-10-13), the second with `irq_gap_pc` 0x02014E9E: in that build's listing the instruction after `st_erase`'s `sti`, behind its call of `fl_erase4k_ram`: 17.8 ms is one sector erase**, five or six halves nobody served (`stale_halves` counts them: 9 erases read 46; they are silence) | EVERY save of a `storage.c` object erased its copy first until 0.22. Since then (docs/SETTINGS.md "When flash is written"): the session's and the favourites' erases are done ahead (not the settings': 3y52, their previous copy is the calibration's fallback; their save erases, as before 0.22), at power-on before the audio starts and after 10 s without a sound or an input; a save of those that still has to erase waits for 4 s of the same when the unit writes by itself (`erases_near`: 0), and SAVE held erases at once. A user sound's, a patch store's and a loop slot's save erase as before (the player's own act) |
+| a flash page program (`storage_hw.c st_prog`, `fm1_flash.h fl_write`; 256 bytes a go) | ~1 ms each by the driver's comments (3 ms the generic maximum), one after the other with the interrupts open between; `flash_prog_us` is the unit's own longest (not read yet) | every save: settings (4 pages), session (5), favourites (3), a loop, a user sound |
 | a flash read through the driver (`st_read`, 256 bytes a go) | ~0.5 ms each | loading a stored loop or record |
 | TIMER5, above the audio ISR (the key and LED scan, USB audio's endpoint, the MIDI in): 10 kHz | not known: `pk_t5_us` is its share of the worst half (29 ticks) | always |
 | the USB recording's service inside the ISR, interrupts off (`ua_isr_service`, `ua_audio`) | under 100 us a block | a computer records |
@@ -639,7 +640,7 @@ again. The peaks are the worst half since the last read, so play the same thing 
 - **E**: CZ-1 on the chord part, eight keys (`python3 tools/cz_pop_check.py --play` plays it): `pk_part0_us` against
   A's with the same playing, and against the count's 630.
 - **F**: a VA chord and bass (LUSH PAD). **G**: an FM6 chord. `pk_part0_us` against A's with the same playing.
-- With every package: `pk_late`, `stale_halves` (the rule: 0), `flash_erases`, `flash_holes` (the rule: 0).
+- With every package: `pk_late`, `stale_halves` (the rule: 0), `flash_erases`, `flash_holes` (the rule: 0), `erases_near` (the rule: 0).
 
 Nothing here has run on a unit but A (as 40acb01 + `P5_RAM=1`).
 

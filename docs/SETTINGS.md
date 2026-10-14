@@ -106,13 +106,17 @@ the loop editor with them), and afterwards reloads the loop: the slot the block 
 dropped (a loop staged by a slot switch while it played is written first: that save is the switch's). A unit that
 never saved reverts to what it powered on as.
 
-**Audio.** A flash erase holds every IRQ for ~45 ms with the audio buffer zeroed (`storage_hw.c st_erase`). The
-global save writes at most three objects, one erase each, back to back (the settings object: 1 erase + 4 page
-programs; the session: 1 + 5; the loop slot: 1 + up to 16) and only those that changed (`crs_write`'s compare,
-`css_write`'s hash, `crl.dirty`): into silence nothing is heard; into a held chord or a tail, one 45 ms hole a
-written object, the sound going on after each (`test_persist.sh` `session_hold.txt`: "audio stalled" in the dump).
-It is not deferred to silence: the owner presses and expects it. It IS deferred while a loop plays or a capture is
-open. The automatic write keeps main's rule: never while anything sounds above the tail floor.
+**Audio.** A flash erase holds every IRQ for the sector's erase time with the audio buffer zeroed (`storage_hw.c
+st_erase`; 17.8 ms measured on the unit, 45 ms by the data sheet and in the emulator's model). The
+global save writes at most three objects back to back (the settings object: 4 page programs; the session: 5; the
+loop slot: 1 erase + up to 16) and only those that changed (`crs_write`'s compare, `css_write`'s hash,
+`crl.dirty`). Since 0.22 the session is programmed into a copy that was erased ahead
+([When flash is written](#when-flash-is-written-022-the-quiet-writes)): no erase, nothing heard, also into a held
+chord; the settings object erases at its save as before (3y52: the calibration's fallback copy). A second global save before the erase ahead has come (10 s idle) erases for itself, one hole a written
+object, the sound going on after each (`test_persist.sh` `quiet_writes_save.txt`: "audio stalled" in the dump); the
+loop slot erases as before. It is not deferred to silence: the owner presses and expects it. It IS deferred while a
+loop plays or a capture is open. The automatic write keeps main's rule: never while anything sounds above the tail
+floor.
 
 **Power-on**: as the last global save left it, plus the Options as they were when the unit was last quiet. Never
 saved: the defaults. **Migration**: none; what a 0.17 unit or an earlier 0.18 build stored is "the last save".
@@ -130,6 +134,80 @@ Now LIST lists the Options as last written (a change not yet written is in the n
 and the favourites from RAM when a mark is not written yet (`crb_favram`: the bytes `crf_pack` gives; GET serves
 them; a restore of them writes as any PUT does). 78 PEAK's `erases_auto_sounding` (the rule: 0) and `last_erase_why`
 / `last_erase_obj` / `last_erase_ms` say who wrote last (docs/FX.md).
+
+## When flash is written (0.22: the quiet writes)
+
+The owner, 2026-10-13, on the build with the favourites' filter (marking, typing and filtering favourites across
+engines while playing): "I am now getting lots of audio glitches and dropouts now, even with older engines like
+FM6." The unit after that session: `flash_erases` 9, `irq_gap_us` 17 851 at `st_erase`'s return, `stale_halves` 46.
+
+**What it was.** `storage.c st_save` erased the copy it was about to write at EVERY save: one sector erase a write,
+17.8 ms with every interrupt masked (six audio halves nobody serves, the buffer silenced first), then the page
+programs. The automatic writes (an Option changed, a favourite marked, typed or filtered) waited 1.5 s after the
+change and for one second without a sound: the pause after a mark, where the next note is. A note in those 18 ms
+starts late or loses its attack; a tail under −60 dBFS is cut.
+
+**What it is now** (`storage.c` "erase ahead", `cr_settings.c` "the quiet writes"): for the **favourites** and
+the **session** the erase is taken out of the save. **The settings object is not** (3y52, the owner's decision of
+2026-10-14: "Lets go with your recommendation."): it holds the panel calibration, and its previous copy stays beside
+the current one as the fallback until its next save, which erases at that time as it always did. That costs an 18 ms
+pause when an Option changes, accepted: the automatic Options write keeps its rule from before the quiet writes
+(nothing changed for 1.5 s, nothing sounded for 1 s: `cr_settings.c crs_when` treats an object that is not erased
+ahead as `ready`), so the pause falls after the sound (`erases_auto_sounding` 0; it may come within 2 s of an input,
+which `erases_near` counts: that rule is the favourites' and the session's); SAVE held erases at once (the player's own press). p5-g's first version (e31c096) erased
+all three ahead; this line (3y52) keeps only these two (`storage.c st_ahead_ix`, `cr_settings.c CRQ_OBJ`).
+
+| | when | masks the interrupts for |
+| --- | --- | --- |
+| **the erase ahead** (`st_prep`): the copy that is NOT the current one is made blank | at power-on, before the audio starts (`crs_ahead_boot`, from `persist_boot`); afterwards only after **10 s** without a sound and without input (`ST_AHEAD_IDLE_MS`; `crs_ahead_poll`), one object at a time, 250 ms apart | one sector erase (17.8 ms), where nobody plays |
+| **an automatic write into a blank copy** (`st_write_due`, `ready`) | as before: nothing changed for 1.5 s (`ST_SETTLE_MS`: a run of changes is one write), nothing sounded for 1 s (`ST_SILENT_MS`), no loop playing, no restore | page programs only, each its own masked stretch with the interrupts open between: 3 for the favourites (2 payload pages when the object is over 256 bytes, 262 at most, + the commit record), 5 for the session (the settings: their erase + 4, see below). A page: about 1 ms by the driver's comments (3 ms the generic maximum), **not measured**: `flash_prog_us` in `--debug` is the unit's own figure. Under one audio half (2.9 ms) |
+| **an automatic write that has to erase** (a second change before the erase ahead came; a spare copy that is not blank for any reason) | the same, and **4 s** without a sound AND without input (`ST_ERASE_IDLE_MS`) instead of one silent second | the erase + the programs |
+| **SAVE held** (`cr_settings_commit`), the calibration, the update gesture (`cr_settings_save`; 3y48: never a backup's LIST) | at once, as before | programs only when the copy is blank; else the erase too |
+| **the settings object** (any save: the Options poll, SAVE held, the calibration) | the Options poll: 1.5 s unchanged, 1 s silent (as before 0.22); the others at once | its erase (18 ms) + 4 programs, every time; the previous copy kept |
+
+"Sound" is `crs_sounding` (a voice of the parts, a chord held or latched, a scheduled note, the master output above
+−60 dBFS over the scope's 23 ms); "input" is `cu.last_input` (`cr_ui.c`: a key, a button, a knob, a MIDI channel
+message: the screensaver's clock). Both are read in the frame that starts the erase: an input before it starts puts
+it off by the whole wait; once started an erase runs to its end.
+
+**What a save reads.** `st_save` does not trust the RAM flag (`st_ready`, which only decides WHEN): it reads the
+whole target sector (16 reads of 256 bytes) and programs without erasing only if every byte is 0xFF; else it erases
+as it always did. A copy half written or half erased when the power went is therefore erased again before use.
+
+**Power cuts** (for the favourites and the session; the settings object keeps Felucca's two copies: a cut leaves
+the older or the newer valid copy in charge, as before. The commit protocol is unchanged: only the copy that is not current is ever erased or programmed,
+the commit record last; `tests/storage_test.c` walks these):
+
+| the flash | what a power-on reads | what happens next |
+| --- | --- | --- |
+| valid A + blank B (after an erase ahead; also a new unit after its first save) | A | the next save programs B |
+| valid A + B half programmed (cut during a save: payload without a commit record, or a torn record) | A | B is not blank: erased at power-on |
+| valid A + valid B, B newer (cut after a save, before the erase ahead; every unit coming from an older firmware) | B | A erased at power-on |
+| valid B + A half erased (cut during the erase ahead) | B | A is not blank: erased again at power-on |
+| no valid copy, anything in A | nothing (the defaults) | A erased at power-on; the first save programs it |
+
+**What it costs.** (1) Power-on: per object the two commit records, the current payload and one sector's blank check
+(about 16 reads of 0.5 ms: 8 ms; by reading, not measured), and an erase (18 ms, + 8 ms to read it back) for each
+copy that is not blank: about 16 ms when both are blank, about 70 ms at worst (two objects; the settings object is
+not checked). (2) **The older copy of the favourites and the session does not survive until the next save** (the
+settings' does: the reason they are not erased ahead). Before 0.22 a unit kept the previous version of each object beside the current one,
+and a current copy that went bad (a flash fault, not a power cut) fell back to it; now, from the erase ahead on,
+there is one copy, as on a unit saved once. (3) An erase cut by the power so late that every byte already reads
+0xFF cannot be told from a finished one; such a sector is programmed, and read back and verified by the save, but
+its cells may hold their charge less well than after a whole erase. Felucca's writer had no such window (it erased
+and programmed in one go). Not done: a second erase when the previous power-on did not finish its own.
+(4) Wear: unchanged, one erase a write; it only moved. (5) A change made less than 1.5 s (or, with the spare copy
+not blank, until 4 s of quiet) before the power goes is lost, as before; SAVE held writes it at once.
+
+**Compatibility.** The format and the map are unchanged. An older firmware meets "one valid copy, one blank" on
+every unit saved once, and its writer erases before it programs; what it leaves (two valid copies) is the third
+row above (`storage_test.c`: 74eae04's writer on this one's flash and back).
+
+**The counters** (`--debug`, 78 PEAK; docs/FX.md): `saves_auto`, `erases_ahead`, `erases_near` (erases the unit
+started by itself while a voice was active or within 2 s of an input: 0 is the rule), `flash_prog_us`.
+The emulator's dump has them in its `quiet writes:` line (`tools/emu/test_persist.sh`, `quiet_writes*.txt`).
+
+`ST_AHEAD` (`choralroot.c`: 1) switches it on; without it `storage.c` is Felucca's writer (its host tests run so).
 
 ## Where it lives
 
@@ -466,7 +544,7 @@ last, so a write torn by the power switch leaves the previous session in charge 
   unchanged). A backup holds what you keep (settings, saved sounds, loops), not where the unit happened to be. A
   settings object restored over SysEx empties the session (`cr_backup.c crb_commit`: a zero-length object), so the
   restart comes up on the restored settings alone.
-- **Wear**: a session save is one sector erase and five page programs. It happens only at a global save (SAVE held),
+- **Wear**: a session save is one sector erase (since 0.22 done ahead, at power-on or after 10 s idle) and five page programs. It happens only at a global save (SAVE held),
   and only if the state differs from what flash holds (a hash compare: a save with nothing changed writes nothing).
   The two copies alternate, so a sector is erased every second save. The part is rated for 100 000 erases a sector:
   200 000 session saves, which is 50 saves a day for eleven years. The settings object's pair: the same at a global
@@ -479,12 +557,13 @@ the favourites filter's Off / On, which Options > Reset Settings therefore leave
 0xB7000**, written by `cr_favs.c crf_flush` with the same commit protocol (docs/PRESETS.md "Favourites" has the
 format and the keys). It is AUTOMATIC in the sense of [Manual and automatic](#manual-and-automatic-018): `crf_poll`
 (called from `cr_settings_poll`) writes a changed mark once no mark changed for `CRS_QUIET_MS` and nothing sounded for
-`CRS_IDLE_MS`, never while a loop plays or after a restore, and `cr_settings_commit` (SAVE held) and
+`CRS_IDLE_MS` (and, when the write has to erase, no input came for 4 s:
+[When flash is written](#when-flash-is-written-022-the-quiet-writes)), never while a loop plays or after a restore, and `cr_settings_commit` (SAVE held) and
 `cr_settings_save` (the calibration, the update gesture) write a pending one at once; a backup's LIST does not (3y48:
 it lists the pending marks from RAM). GLO + SAVE (revert) does not
 touch the marks; Options > Reset Settings does not either. It IS a backup object (id 23), unlike the session: marks
-are something you keep. SAFE MODE neither reads nor writes it; Flash Data erases it. Wear: one sector erase a write,
-the two copies in turn; a mark is rare.
+are something you keep. SAFE MODE neither reads nor writes it; Flash Data erases it. Wear: one sector erase a write
+(done ahead since 0.22, not at the write), the two copies in turn.
 
 ### `bind`: which settings a session belongs to
 

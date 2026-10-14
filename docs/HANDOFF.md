@@ -264,9 +264,9 @@ installed on the owner's Mac.
 27. **P5, what is open** (docs/PROPHET.md "Open decisions"). Decided by the owner on 2026-10-13: the name P5, UNISON
     on a load, a trimmed list; and (3y51) **the list: the 115 programs he marked as favourites on the unit**
     (`assets/prophet5-factory/shipped.txt`, by Sequential's number; "We should only ship with the presets I
-    favorited. The other presets can be optionally loaded from the website."). Open: **the other 85 programs
-    optionally loadable from the website**: needs the P5 user-patch store (phase B, docs/PROPHET.md open decisions)
-    and is a publishing decision (hosting Sequential's data on the site); not built. Also open: whether a release carries Sequential's data at all (`FELUCCA_P5_FACTORY`; no licence granted); **the
+    favorited. The other presets can be optionally loaded from the website."). **Closed (the owner, 2026-10-14):
+    the other 85 programs will NOT be hosted on the site** (it was open as "optionally loadable from the website":
+    a publishing decision, Sequential's data). Open: whether a release carries Sequential's data at all (`FELUCCA_P5_FACTORY`; no licence granted); **the
     store for user programs and the device manager's "load all 200"** (the owner's plan; flash objects in 0xB6000 ..
     0xC7FFF as `va_store.c`, backup ids, POOL for the mirrors, the web manager's engine list: `web/fm1sounds.js`
     treats a record of engine 16 as no record today; a stored program must keep its 138 bytes, which carry its
@@ -298,20 +298,36 @@ installed on the owner's Mac.
     2.6 KB and `CZ_CARRIER` 4 KB are the candidates, not built), and whether the audio ISR's own body (5.6 KB, not
     moved: it does not fit beside the rest) and P5's per-block code (1.9 KB) are worth it. Open by design: RAM code
     is not write-protected (a stray write into RAMTEXT changes audio code).
-30. **A favourite's write and the 17.8 ms `irq_gap_us`** (the first reading of item 29's table: `irq_gap_us` 17 783,
-    `stale_halves` 22, in a session in which the owner marked a favourite). By the code the mark's write cannot cut
-    a sound: `crf_poll` (`cr_settings.c`) waits with the very condition of the Options' write: 1.5 s since the last
-    mark, and 1 s in which, at every UI frame, no voice of the two parts was active (release tails are active
-    voices), the engine held or latched no chord and had no note scheduled (`cr_snap.voices`, `.pending`: held keys
-    count), and the master output stayed inside ±32 of 32 768 (−60 dBFS) over the scope's last 23 ms (the effects'
-    tails are in it); never while a loop plays. **So "silence" there is both: voices idle and the output under
-    −60 dBFS.** What it does not wait for is a tail's last part below −60 dBFS, as the Options do not; the delay's
-    and the reverb's own `d_live` / `r_live` counters would wait for the last bit, minutes at a high feedback, and
-    were not put in. The 17.8 ms is, **by inference**, one 4 KiB sector erase with the interrupts masked (the store
-    erases when a sector fills; the 45 ms in docs/FX.md is the data sheet's, this is the first reading of it), which
-    adds six to `stale_halves` by itself (six boundaries nobody served, the buffer silenced first: silence in a
-    pause). The other 16 of the 22 are either more erases or the overload of that build (`pk_block_us` 3136, 83
-    late): the reading cannot say which. `flash_erases` and `flash_holes` (the rule: 0) in the same `--debug` do.
+30. **The quiet writes: every automatic save erased a sector beside the playing (HISTORY 3y43; merged into p5-s and
+    restricted in 3y55; not on a unit).** The owner on 74eae04's build, marking, typing and filtering favourites while playing: "I am now getting
+    lots of audio glitches and dropouts now, even with older engines like FM6." The unit: `flash_erases` 9,
+    `flash_holes` 0, `irq_gap_us` 17 851 at `irq_gap_pc` 0x02014E9E, `stale_halves` 46, `pk_late` 6. **Found, by the
+    code:** `storage.c st_save` erased its copy at EVERY save (item 30 used to say "when a sector fills": wrong), so
+    each settled change of a favourite or an Option was one sector erase, 17.8 ms with every interrupt masked, 1.5 s
+    after the change and one silent second after the last sound: where the next note is. 0x02014E9E in that build's
+    listing (the package's bytes rebuilt from 74eae04: the same sha256) is the instruction after `st_erase`'s `sti`,
+    behind its call of `fl_erase4k_ram`. An erase leaves 5 boundaries unserved (6 in one of eight: 17.75 ms against
+    2.902): 9 erases are 45 to 54 stale halves, the unit read 46. **So the 46 are the erases', by the count**; with
+    `flash_holes` 0 every one of them started with the output under −60 dBFS, so what they cost is a note that came
+    in those 18 ms (late, or its attack cut when it started between the poll's look and the erase) and the last of a
+    tail. **Whether that is all the owner heard is not shown**: 9 holes in 56 minutes are few for "lots", and the
+    same reading has `pk_block_us` 2785 of 2902 with 6 late halves: over 85 % of a half twice running, `audio.c
+    shed_check` fades a voice, which is a drop-out no flash counter sees (`voices_shed` is on the console only).
+    **Built**: the erase ahead (docs/SETTINGS.md "When flash is written"): the session's and the favourites' spare
+    copy (**not the settings'**: the owner's decision of 2026-10-14, 3y55: the settings hold the panel calibration,
+    their previous copy stays as the fallback until the next save, which erases then; an 18 ms pause when an Option
+    changes, after 1.5 s unchanged and 1 s of silence as before, accepted) is erased at power-on before the audio starts and after 10 s without a sound or an input;
+    a save then only programs (3 to 5 pages, each under a half); a change before the next erase ahead waits for 4 s
+    of that quiet instead of one silent second; SAVE held writes at once as before. **To read on the unit** after a
+    session of marking while playing, `--debug`: `erases_near` 0, `saves_auto` about the changes made,
+    `erases_ahead` about as many, `flash_prog_us` (a page's time: not measured yet), `irq_gap_us` (17.8 ms only if an
+    erase came since the last read: then compare `flash_erases` with `erases_ahead`), `stale_halves`. **And to tell
+    the two causes apart**: play for some minutes WITHOUT touching a favourite, an Option or SAVE, read `--debug`
+    before and after: `flash_erases` unchanged and glitches heard (or `stale_halves` above 0, `pk_late` rising) is
+    the load, not the flash: then `pk_block_us`, the largest stage, and the console's `voices_shed`. **Open by
+    design**: from the erase ahead on there is ONE copy of the favourites and of the session until the next save (before: the
+    previous version stayed as a fallback against a flash fault); an erase cut by the power so late that the sector
+    already reads 0xFF is not told from a whole one. `ST_AHEAD 0` (`choralroot.c`) is the old writer.
     star is yellow (`cr_draw.c CR_STAR_COL`); favourites in the web Sound Manager (not built, the store supports
     it); the browser's label does not name KNOB 4 (kept so that a screen without a mark is c176dd4's). **The filter
     and the type (HISTORY 3y42) are not on a unit either**: to read there: the SAVE menu's five entries and its four

@@ -135,6 +135,7 @@ void emu_fw_init(int demo)
         cho_mono = c && !strcmp(c, "mono");
     }
     cr_settings_boot();                           /* .. and the settings record (Felucca's fields + ChoralRoot's) */
+    crs_ahead_boot();                             /* .. and the spare copies erased ahead (cr_shim.c persist_boot) */
     {   /* the MASTER pot at power-on: EMU_MASTER=ADC (0..1023), else where a caller put it, else 724 (-> master_q12
          * 2047, felucca_init's default); main.c reads it before the audio starts (master_boot) */
         const char *m = getenv("EMU_MASTER");
@@ -588,6 +589,15 @@ void emu_fw_dump(void)
                (unsigned)cr_dbg.shed_why, (unsigned)cr_dbg.shed_us, (unsigned)emu_shed_over, (unsigned)emu_shed_at0, (unsigned)emu_shed_at1);
     printf("  flash erases with the audio stalled %u (%u blocks of silence, %u ms each erase)\n", (unsigned)emu_stalls,
            (unsigned)emu_stall_blocks_all, (unsigned)EMU_ERASE_MS);
+    /* the quiet writes (cr_settings.c, storage.c "erase ahead"): every erase (at power-on too: no audio to stall),
+     * those done ahead, those the unit started by itself near playing (the rule: 0), its own saves, the interrupts'
+     * masked time by the model (EMU_ERASE_MS an erase, EMU_PROG_US a page), each spare copy's state, and when the
+     * last erase started against the last input (ms since power-on) */
+    printf("  quiet writes: erases %u (ahead %u, at power-on %u), near %u, auto saves %u, masked %u ms, ready %u%u%u, "
+           "last erase at %u ms (input at %u, now %u)\n", (unsigned)st_erases, (unsigned)crq.ahead,
+           (unsigned)crq.ahead_boot, (unsigned)st_near, (unsigned)crq.auto_saves, (unsigned)(emu_masked_us / 1000u),
+           (unsigned)st_ready(OBJ_SETTINGS), (unsigned)st_ready(OBJ_SESSION), (unsigned)st_ready(OBJ_FAVS),
+           (unsigned)emu_erase_ms, (unsigned)cu.last_input, (unsigned)fm1_ms);
     fm1_irq_on();
     {   /* the settings as they would be saved now (crs_capture: its own IRQ lock) and as they are in the record last
          * written; the panel calibration table and HOLD (Felucca's fields of the same flash object) */

@@ -38,6 +38,7 @@ static int blocked;
 #define FELUCCA_CZ 1                               /* ChoralRoot's object list (OBJ_FAVS is in it) */
 #define FELUCCA_QUAD 1
 static uint32_t fm1_ms;
+#define ST_AHEAD 1                                 /* (choralroot.c's: the erase ahead) */
 #include "../firmware/src/storage.c"
 #include "../firmware/src/cr_favs.c"
 #undef __attribute__
@@ -123,8 +124,8 @@ int main(int argc, char **argv)
     crf_dirty = 1;
 
     /* ---- persist across a power cycle ---- */
-    ok(crf_flush() == 0 && !crf_dirty && erases == 1 && crf_saves == 1, "flush: one write, one erase");
-    ok(crf_flush() == 0 && erases == 1, "flush again: nothing changed, no erase");
+    ok(crf_flush() == 0 && !crf_dirty && erases == 0 && crf_saves == 1, "flush: one write (a blank copy: no erase)");
+    ok(crf_flush() == 0 && erases == 0 && crf_saves == 1, "flush again: nothing changed, no write");
     power_cycle();
     ok(crf_last_rc == 1 && crf_count() == 3 && crf_has(16, 200) && crf_has(16, 1) && crf_has(CRF_T_USER, 31) && !crf_has(12, 0) &&
        !crf_dirty, "a power cycle: the three marks are back");
@@ -136,8 +137,8 @@ int main(int argc, char **argv)
     /* ---- a torn write ---- */
     (void)crf_set(13, 7, 1);
     e0 = erases;
-    fail_after = 0;                                /* the erase done, not a byte programmed */
-    ok(crf_flush() != 0 && crf_dirty && erases == e0 + 1, "a torn write (the power cut after the erase): the flush fails, still to be written");
+    fail_after = 0;                                /* not a byte programmed (the spare copy was blank: no erase) */
+    ok(crf_flush() != 0 && crf_dirty && erases == e0, "a torn write (the power cut before the first page): the flush fails, still to be written");
     fail_after = -1;
     power_cycle();
     ok(crf_last_rc == 1 && crf_count() == 3 && !crf_has(13, 7) && crf_has(16, 200), ".. the power back: the marks as before it (the other copy)");

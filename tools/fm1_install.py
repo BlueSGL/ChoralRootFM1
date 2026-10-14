@@ -2181,7 +2181,14 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # alone, core 1 idle between its two jobs; which core ran which effect in the largest whole half (1 the
               # chorus, 2 the delay, 4 the reverb ran, 8 the reverb on core 1); the reverb jobs core 1 ran
               "pk_c0_busy_us", "pk_c1_busy_us", "pk_c0_wait_us", "pk_fx_join_us", "pk_c1_idle_us", "pk_fx_map",
-              "c1_fx_jobs"]
+              "c1_fx_jobs",
+              # 3y52: the quiet writes (p5-g e31c096's values 35..38 there, appended here by name; 0.22,
+              # firmware/src/cr_settings.c, storage.c "erase ahead"; docs/SETTINGS.md "When flash is written"), all
+              # since power-on: the saves the unit did by itself (an Option's, a favourite's), the erases done ahead
+              # (the session's and the favourites', not the settings': at power-on before the audio starts, after
+              # 10 s without a sound or an input), the erases the unit started by itself while a voice was active or within 2 s of an input (the rule:
+              # 0), the longest page program in us (the wait for the chip, the interrupts masked)
+              "saves_auto", "erases_ahead", "erases_near", "flash_prog_us"]
 ERASE_WHY = ["other (a sound saved, a store)", "automatic: the Options", "automatic: the favourites",
              "the global save (SAVE held) or Reset Settings", "the calibration / the update gesture",
              "a backup restore", "a loop slot"]
@@ -2293,6 +2300,12 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
               f"{d['fx_reverb_avg_us']} / {d['fx_reverb_max_us']}, up {d['fx_up_avg_us']} / {d['fx_up_max_us']}", file=out)
         print(f"flash since power-on: {d['flash_erases']} erases (45 ms of silence each), {d['flash_holes']} of them into a "
               f"sounding output (holes), settings saves {d['saves_settings']}, session saves {d['saves_session']}", file=out)
+    if "erases_near" in d:
+        print(f"quiet writes since power-on: {d['saves_auto']} saves by the unit itself (Options, favourites), "
+              f"{d['erases_ahead']} of the {d['flash_erases']} erases done ahead (at power-on or after 10 s idle; the "
+              f"rest: saves that had to erase), {d['erases_near']} erases started by the unit while a voice was active or "
+              f"within 2 s of an input (the rule: 0), the longest page program {d['flash_prog_us']} us"
+              + ("" if not d["erases_near"] else ": AN ERASE FELL NEAR PLAYING"), file=out)
     if "stale_halves" in d and d.get("pk_halves"):
         print(f"the deadline: {d['stale_halves']} halves in which the DAC played something old (the audible ones; a late "
               f"half alone is not); the ISR started at most {d['pk_lag_us']} us behind its boundary, its longest half "
