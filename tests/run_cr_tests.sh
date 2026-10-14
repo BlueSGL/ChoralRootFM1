@@ -85,6 +85,9 @@ par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/
 t ./build/host/cr_backup_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_pool_test tests/cr_pool_test.c -lm
 t ./build/host/cr_pool_test
+# a full pool's browsing: no flash read on a frame, a detent reads only the sound it loads (3y60)
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_poolperf_test tests/cr_poolperf_test.c -lm
+t ./build/host/cr_poolperf_test
 # a restart asked over SysEx (72 RESTART, 77 STUB) leaves once the host has the reply: the device's ed_service and usb.c's
 # EP1 against a model of the SIE, the host and TIMER5 (the same firmware build, FELUCCA_OTA 1)
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_restart_test tests/cr_restart_test.c -lm

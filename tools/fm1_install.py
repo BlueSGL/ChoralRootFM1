@@ -2270,7 +2270,11 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # (the session's and the favourites', not the settings': at power-on before the audio starts, after
               # 10 s without a sound or an input), the erases the unit started by itself while a voice was active or within 2 s of an input (the rule:
               # 0), the longest page program in us (the wait for the chip, the interrupts masked)
-              "saves_auto", "erases_ahead", "erases_near", "flash_prog_us"]
+              "saves_auto", "erases_ahead", "erases_near", "flash_prog_us",
+              # 3y60 (a full sound pool made the UI laggy; docs/PRESETS.md "What browsing reads"), since the last
+              # --debug: a UI frame's own time (input, LEDs, draw) the longest and the average in us; the flash reads
+              # per second (storage_hw.c st_read), calls and bytes
+              "ui_frame_max_us", "ui_frame_avg_us", "flash_reads_ps", "flash_read_bytes_ps"]
 ERASE_WHY = ["other (a sound saved, a store)", "automatic: the Options", "automatic: the favourites",
              "the global save (SAVE held) or Reset Settings", "the calibration / the update gesture",
              "a backup restore", "a loop slot"]
@@ -2388,6 +2392,10 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
               f"rest: saves that had to erase), {d['erases_near']} erases started by the unit while a voice was active or "
               f"within 2 s of an input (the rule: 0), the longest page program {d['flash_prog_us']} us"
               + ("" if not d["erases_near"] else ": AN ERASE FELL NEAR PLAYING"), file=out)
+    if "flash_read_bytes_ps" in d:
+        print(f"the UI since the last --debug: a frame took {d['ui_frame_avg_us']} us on average, {d['ui_frame_max_us']} us "
+              f"at most; flash read {d['flash_reads_ps']} times a second ({d['flash_read_bytes_ps']} bytes a second)"
+              + ("" if d["ui_frame_max_us"] < 50000 else ": A FRAME TOOK OVER 50 MS"), file=out)
     if "stale_halves" in d and d.get("pk_halves"):
         print(f"the deadline: {d['stale_halves']} halves in which the DAC played something old (the audible ones; a late "
               f"half alone is not); the ISR started at most {d['pk_lag_us']} us behind its boundary, its longest half "

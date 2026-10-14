@@ -4,9 +4,14 @@
  * audio keeps up, erases and writes only inside the storage areas, the audio buffer silenced
  * first. The host tests (storage_test.c) provide their own st_* on a simulated NOR. */
 static uint8_t flash_ok;                 /* JEDEC id matched at boot (persist_boot) */
+/* 3y60: every flash read since power-on, calls and bytes (78 PEAK's st_reads_ps: the UI must not read per frame) */
+#define ST_READS_COUNTED 1
+static uint32_t st_reads, st_read_bytes;
 static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: audio keeps up */
 {
     uint8_t *d = dst;
+    st_reads++;
+    st_read_bytes += n;
     while (n) {
         uint32_t k = n > 256u ? 256u : n, f = irq_save();
         int rc = FL_FAR(fl_read_ram)(off, d, k);

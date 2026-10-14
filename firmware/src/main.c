@@ -365,6 +365,7 @@ static void fm1_main(void)
 #if FELUCCA_CDC
         cdc_task();
 #endif
+        uint32_t ft0 = fm1_ticks();                   /* (3y60: the frame's own time, audio.c ui_ft) */
         felucca_dbg.ui_frames++;
         felucca_dbg.page = ui.page;
         felucca_dbg.home = ui.home;
@@ -374,6 +375,7 @@ static void fm1_main(void)
         felucca_dbg.stage = BS_LOOP_DRAW;
         ui_leds();
         ui_draw();
+        ui_ft_add(ft0);
         felucca_dbg.stage = BS_LOOP_IDLE;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
             ui_input();

@@ -319,6 +319,39 @@ logical bank, len 3840, `rsv[0]` = `SP_VER` 1, the header CRC) and its payload C
   loads (the main loop, never the audio ISR). One 384-byte work buffer composes a save. (RAM -4992 B, POOL -12832 B,
   XIP +304 B against cd125b0.)
 
+### What browsing reads (3y60)
+
+The owner, on 0d227e0 with all 128 slots used: "with all the user presets filled, my FM-1's UI is now very laggy".
+The pools' order (`cr_bank.c`: each slot's pool, the factory place it is bound to, the first bound slot winning) was
+worked out from the **records**, through `up_rec` (a flash read of 192 bytes each), for every slot on every call, and
+the duplicate check made it quadratic: one PRESETS detent with a full pool read **~5500 records (1.05 MB)**, with the
+favourites filter on ~10900 (2.1 MB). The driver reads a byte at a time with the XIP cache off (`fm1_flash.h
+fl_read_ram`), so that is in the order of a second per detent. The frames themselves read nothing.
+
+Now **nothing in browsing reads flash**:
+- `upn[]` (the name table, POOL) already holds what the binding needs: the engine, step 16's two bytes, the grid flag;
+  `cr_bank.c cb_rec_raw` reads it there, never the record (the RAM mirror of builds without the pool otherwise);
+- `cr_bank.c cbc` (RAM, 128 + 128 + one per engine bytes: 281 B) keeps each slot's pool, its resolved binding and
+  the added sounds per engine. It is built again (O(slots^2) byte compares in RAM, once) when a slot's line of the
+  table changes (`upool.c upn_note` clears it: save, delete, rename, import, restore, boot) or `up_gen` moves;
+- names come from the table (`up_name`), as before; `pool_count` is a sum, `pool_entry` / `pool_pos_slot` one walk of
+  128 bytes, the favourites' list (`cr_ui.c cuf_n`) is rebuilt from these when marks or the pool change.
+A record and its patch are read only when a sound **loads** (2 reads, ~270 bytes). `tests/cr_poolperf_test.c` holds
+that: a full pool's frames read nothing, a PRESETS or ALGORITHM detent (filter off and on, after a mark change) at most
+4 reads. 78 PEAK's values 65..68 (`ui_frame_max_us`, `ui_frame_avg_us`, `flash_reads_ps`, `flash_read_bytes_ps`,
+docs/FX.md) show it on the unit.
+
+**Reading the pool through XIP instead** (the owner: "Can the user presets all be stored in Flash like the factory
+ones?" They are: the difference is the way they are read). `fl_plain_window_init` (at boot, `cr_shim.c
+persist_boot`) maps flash from 0x93000 up as a plain XIP window (`FM1_XIP(off)` = 0x02000000 + off - 0x4000), which
+covers the pool (0xB8000..0xC7FFF) and the legacy stores; the RAM driver's erase and program invalidate the cache lines
+of what they touched (`fl_inval`), and the CPU cannot read XIP while they run (interrupts off, code in RAM), so an XIP
+read is never stale. User sample sets already play that way (`eng_sample.c SMP_USER_XIP`). An XIP read is ~30 MB/s
+(docs/BOOT-SAFETY.md: 440 KiB in 14 ms) against the driver's byte loop; but the old walk through XIP would still have
+touched 1 MB a detent (~35 ms, the code cache thrashed), the slot's place moves with its bank's copy (`sp_cur`), and the
+emulator and host tests have no XIP mapping of the data region. The cache removes the walk instead; XIP remains an
+option for the loads themselves (2 reads a load: not worth it now).
+
 **The migration** (`upool.c upool_import`): at power-on, when the pool holds no bank and a legacy bank holds a record,
 legacy slot k (1..32) = the record of `OBJ_UPRESET0 + k / 16` and the patch k of the store of that record's engine (the
 VA store, the FM6 store's halves, the CZ-1 store's halves, the FM TONE store; a VA store of version 1 or 2 converted as
