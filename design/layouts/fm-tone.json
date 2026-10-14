@@ -3,7 +3,7 @@
   "version": 1,
   "generated": "by lay_catalog from the firmware's built-in tables: do not edit (tools/layout/dump_catalogs.mjs writes it; read-only in step 2, docs/LAYOUT-TOOL.md). The firmware version is not in it: params_hash binds it to the parameters",
   "engine": {"index": 15, "name": "FM TONE"},
-  "params_hash": "29fbe67b56ca3d63",
+  "params_hash": "935d640db462ee46",
   "pages": [
     {
       "page": 0,
@@ -152,7 +152,7 @@
         {"short": "SPEED", "fmt": "ofs", "min": -64, "max": 63, "def": 16, "names": null, "unit": null},
         {"short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null},
         {"short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
-        {"short": "DEST", "fmt": "enum", "min": 0, "max": 39, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN"], "unit": null}
+        {"short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null}
       ]
     },
     {
@@ -172,7 +172,7 @@
         {"short": "SPEED", "fmt": "ofs", "min": -64, "max": 63, "def": 16, "names": null, "unit": null},
         {"short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null},
         {"short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
-        {"short": "DEST", "fmt": "enum", "min": 0, "max": 39, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN"], "unit": null}
+        {"short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null}
       ]
     },
     {
@@ -192,7 +192,7 @@
         {"short": "SPEED", "fmt": "ofs", "min": -64, "max": 63, "def": 16, "names": null, "unit": null},
         {"short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null},
         {"short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
-        {"short": "DEST", "fmt": "enum", "min": 0, "max": 39, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN"], "unit": null}
+        {"short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null}
       ]
     },
     {
@@ -497,7 +497,7 @@
                 {"knob": 1, "bind": "deep", "page": 14, "col": 0, "page_title": "LFO 1", "label": "Speed", "short": "SPEED", "fmt": "ofs", "min": -64, "max": 63, "def": 16, "names": null, "unit": null, "style": "knob"},
                 {"knob": 2, "bind": "deep", "page": 14, "col": 1, "page_title": "LFO 1", "label": "Mult", "short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 14, "col": 2, "page_title": "LFO 1", "label": "Fade", "short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 4, "bind": "deep", "page": 14, "col": 3, "page_title": "LFO 1", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 39, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN"], "unit": null, "style": "text"}
+                {"knob": 4, "bind": "deep", "page": 14, "col": 3, "page_title": "LFO 1", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null, "style": "text"}
               ]
             },
             {
@@ -530,7 +530,7 @@
                 {"knob": 1, "bind": "deep", "page": 16, "col": 0, "page_title": "LFO 2", "label": "Speed", "short": "SPEED", "fmt": "ofs", "min": -64, "max": 63, "def": 16, "names": null, "unit": null, "style": "knob"},
                 {"knob": 2, "bind": "deep", "page": 16, "col": 1, "page_title": "LFO 2", "label": "Mult", "short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 16, "col": 2, "page_title": "LFO 2", "label": "Fade", "short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 4, "bind": "deep", "page": 16, "col": 3, "page_title": "LFO 2", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 39, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN"], "unit": null, "style": "text"}
+                {"knob": 4, "bind": "deep", "page": 16, "col": 3, "page_title": "LFO 2", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null, "style": "text"}
               ]
             },
             {
@@ -563,7 +563,7 @@
                 {"knob": 1, "bind": "deep", "page": 18, "col": 0, "page_title": "LFO 3", "label": "Speed", "short": "SPEED", "fmt": "ofs", "min": -64, "max": 63, "def": 16, "names": null, "unit": null, "style": "knob"},
                 {"knob": 2, "bind": "deep", "page": 18, "col": 1, "page_title": "LFO 3", "label": "Mult", "short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 18, "col": 2, "page_title": "LFO 3", "label": "Fade", "short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 4, "bind": "deep", "page": 18, "col": 3, "page_title": "LFO 3", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 39, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN"], "unit": null, "style": "text"}
+                {"knob": 4, "bind": "deep", "page": 18, "col": 3, "page_title": "LFO 3", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null, "style": "text"}
               ]
             },
             {

@@ -36,7 +36,7 @@ scaling law, the HARM partials) the curves are ours, listed under "Implementatio
    KEY A B1 B2   key scaling: less modulation the higher you play (neutral at C3 = MIDI 60)
    OFFSETS       C A B1 B2 -1.00..+1.00 added to the ratios
    then          DC blocker -> base-width filter -> multimode (OFF LP12 HP12 LP24) with its ADSR -> amp ADSR, LEVEL
-   LFO 1..3      SPEED -64..63 x MULT (BPM-synced 1..2k, or the same at 120 BPM), FADE in / out, 40 destinations
+   LFO 1..3      SPEED -64..63 x MULT (BPM-synced 1..2k, or the same at 120 BPM), FADE in / out, 58 destinations (the Digitone's 57 + none)
 ```
 
 The amp envelope is QUAD's own (`ownenv`, the Digitone's AMP page). Velocity scales the operator levels (VEL) and
@@ -214,11 +214,33 @@ MULT = 128 is a bar: SPEED 32 x 4 = 0.5 Hz at 120 BPM): MULT 0..11 `1 2 4 .. 512
 SPEED -64..63 (negative runs backwards). FADE -64..63: negative fades in, positive fades out, over the time of
 `2 |FADE| - 1` (`ENV_LIN`); 0 none. SPH on RAND is the slew: a one-pole on the random steps (127 ~ a period, 0 none;
 the start phase is 0). TRIG FREE TRIG HOLD ONE HALF, waves TRI SINE SQR SAW RAMP EXP RAND, DEPTH -64..63 as before.
-**DEST** (`N_QUAD_DEST`, 40, <= 5 characters): `NONE PITCH "P AB2" ALGO "RAT C" "RAT A" "RAT B" "OFS C" "OFS A" OFSB1
-OFSB2 HARM DTUN FDBK MIX "A LEV" "B LEV" "A ATK" "A DEC" "A END" "B ATK" "B DEC" "B END" "A DLY" "B DLY" FREQ RESO
-FENV BASE WIDTH "F ATK" "F DEC" "F SUS" "F REL" "AMP A" "AMP D" "AMP S" "AMP R" LEVEL PAN`. Full depth: PITCH / P AB2
-+-1 octave (all operators / A and B2), ALGO +-7, RATIO C +-18 steps, A +-63, B +-180 pair steps, offsets +-1.00, HARM
-+-26, DTUN / FDBK / MIX / levels / times / FREQ / RESO / BASE / WIDTH / LEVEL +-127 (FDBK 120), FENV +-127, PAN +-64.
+**DEST** (`N_QUAD_DEST`, 58, <= 5 characters): every destination of the Digitone's LFOs (2026-10-14, the owner:
+"Update FM Tone's LFO destinations to match."). The **stored numbers** (`QD_*`, the blob's DEST byte): 0..39 as
+before (`NONE PITCH "P AB2" ALGO "RAT C" "RAT A" "RAT B" "OFS C" "OFS A" OFSB1 OFSB2 HARM DTUN FDBK MIX "A LEV" "B LEV"
+"A ATK" "A DEC" "A END" "B ATK" "B DEC" "B END" "A DLY" "B DLY" FREQ RESO FENV BASE WIDTH "F ATK" "F DEC" "F SUS"
+"F REL" "AMP A" "AMP D" "AMP S" "AMP R" LEVEL PAN`), then **appended** 40..57: `L1SPD L1MUL L1FAD L1WAV L1SPH L1MOD
+L1DEP "R ALL" ABLEV ABATK ABDEC ABEND ABDLY DRIVE REV DEL CHO "F DLY"`. The **editor's order** (`QUAD_DEST_ORDER`;
+`cr_pages.c cp_dstep` steps a detent along it) is the Digitone's (its destination numbers ascending): NONE, LFO 1's
+SPEED MULT FADE WAVE SPH MODE DEPTH, ALGO, RATIO C A B, HARM DTUN FDBK MIX, A ATK DEC END LEV, B ATK DEC END LEV, A DLY,
+B DLY, PITCH, P AB2, RATIO ALL, the AB macros LEV ATK DEC END DLY, FREQ RESO FENV, F ATK DEC SUS REL, BASE WIDTH, AMP
+A D S R, DRIVE, PAN, LEVEL (the Digitone's VOLUME), the REV DEL CHO sends, OFS C A B1 B2, F DLY (the filter envelope's
+ENV DELAY). The numbers were kept (not renumbered) so every saved patch keeps its meaning with no blob version change:
+a version-3 blob stays version 3, its DEST range 0..57; only the display order is new.
+Full depth: PITCH / P AB2 +-1 octave (all operators / A and B2), ALGO +-7, RATIO C +-18 steps, A +-63, B +-180 pair
+steps, offsets +-1.00, HARM +-26, DTUN / FDBK / MIX / levels / times / FREQ / RESO / BASE / WIDTH / LEVEL +-127 (FDBK
+120), FENV +-127, PAN +-64. The appended ones: **LFO 1's own parameters** (an LFO 2 or 3 destination; LFO 1 on its own
+parameter does nothing: LFO 2 and 3 are read first, then LFO 1 with the moved values): SPEED +-127 (clamped -64..63; on
+a FREE LFO 1 the voice keeps its phase's lead over the part's, `lof`), MULT +-11 steps within its set (BPM or fixed),
+FADE +-127, WAVE +-6 steps, SPH +-127 (the phase read moves; on RAND the slew), MODE +-4 steps (read each tick, so a
+moving MODE switches FREE / TRIG / HOLD / ONE / HALF as it goes), DEPTH +-127; the stepped three (MULT WAVE MODE) are
+implemented as steps, as the Digitone allows them. **RATIO ALL**: C +-18, A +-63, B1 and B2 +-18 steps each (with the
+own RATIO destinations). **AB LEV / ATK / DEC / END / DLY**: A's and B's field together (the sum with A's and B's own
+destination: exactly two LFOs on the two). **F DLY**: the filter envelope's DELAY (as A DLY: a stored 0 starts without
+a delay stage). **DRIVE, REV, DEL, CHO**: the part's `P_DIST`, `P_REV`, `P_DLY`, `P_CHOR` +-127 (clamped 0..127), from the
+latest note's voice as PAN (`quad_fx_off`; `fx.c track_dist` / `mix_part_out` read them through `quad_drive` /
+`quad_sends` once a block; the sends then ramp over the block as any send change). Cost when unused: nothing on the
+per-sample paths; per voice and block the 18 more `dst[]` zeroed, one OR of seven terms (LFO 1's), the AB / RATIO ALL
+sums (an add each), and four offsets at the latest voice.
 
 **DRIVE and PAN are not in the patch**: AMP+'s PAN and DRIVE columns read and write the part's `P_PAN` and `P_DIST`.
 The DRIVE is the sound's all the same (2026-10-12, the owner: "Digitone presets should save and load the drive level
@@ -236,7 +258,7 @@ OFS C A B1 B2 -100..100 (0); 12..15 A ATK DEC END LEV (0 60 64 48); 16..19 B ATK
 28 A KEY (0); 29 B1 KEY (0); 30..33 filter ATK DEC SUS REL (0 64 0 40; REL 127 = INF); 34 FREQ (127); 35 RESO (0); 36 TYPE 0..3 OFF
 LP12 HP12 LP24 (1); 37 DEPTH -64..63 (0); 38 F DELAY (0); 39 F KTRK (0); 40 BASE (0); 41 WIDTH (127); 42..45 amp ATK
 DEC SUS REL (0 64 127 40; REL 127 = INF); 46 LEVEL (100); 47..54, 55..62, 63..70 LFO 1..3: SPEED -64..63 (16), MULT 0..23 (3), FADE
--64..63 (0), DEST 0..39 (0), WAVE 0..6 (0), PHASE (0), TRIG 0..4 (0), DEPTH -64..63 (0); 71 RATIO B2 0..18 (3); 72 B2
+-64..63 (0), DEST 0..57 (0; 40..57 since 2026-10-14), WAVE 0..6 (0), PHASE (0), TRIG 0..4 (0), DEPTH -64..63 (0); 71 RATIO B2 0..18 (3); 72 B2
 KEY (0). (Unlisted ranges 0..127.) Macros P_E0..P_E7 = values 0 1 2 **71** 4 5 6 7.
 **Versions 1 and 2 are read** (`quad_blob_ok` with their ranges, `quad_range_v2`; `quad_unpack` converts): version 1's
 RATIO B (BR x 19 + B1) as B1, the nearest B2 and the rest in OFS B2 (as before), then version 2 -> 3

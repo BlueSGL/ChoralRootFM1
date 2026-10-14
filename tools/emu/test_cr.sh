@@ -2362,6 +2362,15 @@ blue_q=$(od -An -tu1 -v -j $((15 + 180 * 240 * 3)) -N$((240 * 40 * 3)) "$OUT/cr_
 [ "${blue_q:-0}" -gt 2000 ] && ok "the span cell hot over two columns (KNOB 2 -> its cell 0, $blue_q blue pixels)" || bad "span cell not hot: $blue_q"
 silent_end cr_quad
 
+echo "FM TONE's LFO DEST: the Digitone's list in its order (2026-10-14, eng_quad.c QUAD_DEST_ORDER)"
+run cr_quad_dest
+QL="$OUT/cr_quad_dest.log"
+dl=$(grep '^deep: part 0 page 16 LFO 2 col 3 DEST ' "$QL" | grep -v ' DEST 57 -> 57 ' | sed 's/.* -> [0-9]* (\([^)]*\)).*/\1/' | tr '\n' '|')
+want="L1SPD|L1MUL|L1FAD|L1WAV|L1SPH|L1MOD|L1DEP|ALGO|RAT C|RAT A|RAT B|HARM|DTUN|FDBK|MIX|A ATK|A DEC|A END|A LEV|B ATK|B DEC|B END|B LEV|A DLY|B DLY|PITCH|P AB2|R ALL|ABLEV|ABATK|ABDEC|ABEND|ABDLY|FREQ|RESO|FENV|F ATK|F DEC|F SUS|F REL|BASE|WIDTH|AMP A|AMP D|AMP S|AMP R|DRIVE|PAN|LEVEL|REV|DEL|CHO|OFS C|OFS A|OFSB1|OFSB2|F DLY|NONE|"
+[ "$dl" = "$want" ] && has '^deep: part 0 page 16 LFO 2 col 3 DEST 57 -> 0 (NONE)' "$QL" &&
+    ok "LFO 2 DEST, KNOB 4 a detent at a time: NONE, LFO 1's SPEED .. DEPTH, ALGO .. F DLY (the Digitone's order; the end holds), -57: NONE: $OUT/cr_quad_dest_l1spd.ppm $OUT/cr_quad_dest_rall.ppm $OUT/cr_quad_dest_fdly.ppm" ||
+    bad "LFO 2 DEST order: $dl"
+
 echo "FM TONE's RATIO B heard: a detent steps B2 (the top), Shift steps B1 (the bottom: Y's pitch), the fraction uncut"
 run cr_quad_ratiob --wav "$OUT/cr_quad_ratiob.wav"
 QL="$OUT/cr_quad_ratiob.log"

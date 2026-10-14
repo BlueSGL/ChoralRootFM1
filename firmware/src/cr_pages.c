@@ -59,6 +59,13 @@ static const param_desc_t *cp_desc(const track_t *t, uint32_t id) { return track
 static int32_t cp_dstep(const param_desc_t *d, int32_t v0, int32_t s, uint32_t fine)
 {
     int32_t r = d->max - d->min, step = fine || d->fmt == F_ENUM ? 1 : (r + 10) / 20, v;
+    uint32_t no, k;
+    const uint8_t *ord = d->fmt == F_ENUM ? enum_order(d, &no) : 0;
+    if (ord) {                                           /* (a display order: s places along it, clamped) */
+        for (k = 0; k < no && ord[k] != v0; k++)
+            ;
+        return ord[clamp((int32_t)(k < no ? k : 0u) + s, 0, (int32_t)no - 1)];
+    }
     if (step < 1)
         step = 1;
     v = v0 + s * step;

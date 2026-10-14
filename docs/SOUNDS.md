@@ -417,23 +417,24 @@ the delay and chorus sends were swapped, RATIO B was not found (always 1/1), RAT
 exports were refused.
 
 **LFO destinations** (`DN_LFO_DEST`, `DN_LFO_DEST_NAMES`; each number from one export, C042..C099, names as the record
-holds them; the number is the target's slot) -> FM TONE `QD_*`:
+holds them; the number is the target's slot) -> FM TONE `QD_*`, **1:1 since 2026-10-14** (FM TONE has the Digitone's
+whole list, HISTORY 3y59; its editor shows them in the Digitone's order, docs/QUAD.md "LFOs"):
 
 | Digitone | FM TONE | Digitone | FM TONE | Digitone | FM TONE |
 | --- | --- | --- | --- | --- | --- |
 | 0 none | NONE | 31 B ATTACK | B ATK | 54 FILTER ATTACK | F ATK |
-| 1 3 5 9 11 13 15: LFO 1 SPEED MULT FADE WAVE SPH MODE DEPTH (LFO 2 only) | none | 32 B DECAY | B DEC | 55 FILTER DECAY | F DEC |
+| 1 3 5 9 11 13 15: LFO 1 SPEED MULT FADE WAVE SPH MODE DEPTH (LFO 2 only) | L1SPD L1MUL L1FAD L1WAV L1SPH L1MOD L1DEP | 32 B DECAY | B DEC | 55 FILTER DECAY | F DEC |
 | 17 ALGO | ALGO | 33 B END | B END | 56 FILTER SUSTAIN | F SUS |
 | 18 RATIO C | RAT C | 34 B LEVEL | B LEV | 57 FILTER RELEASE | F REL |
 | 19 RATIO A | RAT A | 35 A DELAY | A DLY | 58 FILTER BASE | BASE |
 | 20 RATIO B | RAT B | 38 B DELAY | B DLY | 59 FILTER WIDTH | WIDTH |
 | 21 HARM | HARM | 42 PITCH ALL | PITCH | 60..63 AMP ATTACK DECAY SUSTAIN RELEASE | AMP A D S R |
-| 22 DETUNE | DTUN | 43 PITCH A+B2 | P AB2 | 64 DRIVE | none |
-| 23 FEEDBACK | FDBK | 44 RATIO ALL | none | 65 PAN | PAN |
-| 24 MIX | MIX | 45..49 AB LEVEL ATTACK DECAY END DELAY | none | 66 VOLUME | LEVEL |
-| 27 A ATTACK | A ATK | 51 FILTER FREQ | FREQ | 67 68 69 REVERB DELAY CHORUS send | none |
+| 22 DETUNE | DTUN | 43 PITCH A+B2 | P AB2 | 64 DRIVE | DRIVE |
+| 23 FEEDBACK | FDBK | 44 RATIO ALL | R ALL | 65 PAN | PAN |
+| 24 MIX | MIX | 45..49 AB LEVEL ATTACK DECAY END DELAY | ABLEV ABATK ABDEC ABEND ABDLY | 66 VOLUME | LEVEL |
+| 27 A ATTACK | A ATK | 51 FILTER FREQ | FREQ | 67 68 69 REVERB DELAY CHORUS send | REV DEL CHO |
 | 28 A DECAY | A DEC | 52 FILTER RESO | RESO | 73..76 RATIO C A B1 B2 OFFSET | OFS C A, OFSB1, OFSB2 |
-| 29 A END | A END | 53 FILTER ENV DEPTH | FENV | 77 FILTER ENV DELAY | none |
+| 29 A END | A END | 53 FILTER ENV DEPTH | FENV | 77 FILTER ENV DELAY | F DLY |
 | 30 A LEVEL | A LEV | | | | |
 
 77: the export's record name is "LFO FILT ENV DEC" (the file name cut to "FILT ENV DE", as C075's ENV DEPTH); read as
@@ -460,7 +461,8 @@ the DRIVE and the macros P_E0..P_E7 set from the patch; it is added to FM TONE's
 On the owner's 256 factory files (a local check, not in the suite) with the corrected table: all parse, all 256 blobs
 pass `quad_blob_ok`, every LFO destination is a number of the table, every RATIO B pair is in range (0..360); the
 notes fell from 1325 (5.2 a sound) to 377 (1.5): the LFOs with a destination 349 of 371 mapped (were 0), 22 off (AB
-LEVEL 7, RATIO ALL 5, LFO 1's parameters 10 on LFO 2, DRIVE 1); RATIO A between the proved steps 25; the version-1
+LEVEL 7, RATIO ALL 5, LFO 1's parameters 10 on LFO 2, DRIVE 1). Since FM TONE has every destination (2026-10-14,
+HISTORY 3y59): **371 of 371 mapped**, none off, notes 355, all 256 blobs pass `quad_blob_ok`; RATIO A between the proved steps 25; the version-1
 filter types 63; the sends 263; DEC INF 4. The owner's 143 controlled exports (version 5): all parse (were refused),
 all pass `quad_blob_ok`.
 

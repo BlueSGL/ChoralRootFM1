@@ -16,7 +16,7 @@
 //   dnsndToQuad(parsed) -> {blob: Uint8Array(80) FM TONE version 3, pan, drive, notes: [what was lost / approximated]}
 
 // ---- FM TONE's patch (eng_quad.c QP_*: [min, max, def] of each value, `sound_templates --quad-ranges` prints it)
-export const DN_QUAD_RANGES = [[1,8,1],[0,18,3],[0,63,3],[0,18,3],[-26,26,0],[0,127,0],[0,120,0],[-64,63,0],[-100,100,0],[-100,100,0],[-100,100,0],[-100,100,0],[0,127,0],[0,127,60],[0,127,64],[0,127,48],[0,127,0],[0,127,60],[0,127,0],[0,127,0],[0,127,0],[0,1,1],[0,1,1],[0,4,1],[0,127,0],[0,1,1],[0,1,1],[0,127,64],[0,127,0],[0,127,0],[0,127,0],[0,127,64],[0,127,0],[0,127,40],[0,127,127],[0,127,0],[0,3,1],[-64,63,0],[0,127,0],[0,127,0],[0,127,0],[0,127,127],[0,127,0],[0,127,64],[0,127,127],[0,127,40],[0,127,100],[-64,63,16],[0,23,3],[-64,63,0],[0,39,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[-64,63,16],[0,23,3],[-64,63,0],[0,39,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[-64,63,16],[0,23,3],[-64,63,0],[0,39,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[0,18,3],[0,127,0]];
+export const DN_QUAD_RANGES = [[1,8,1],[0,18,3],[0,63,3],[0,18,3],[-26,26,0],[0,127,0],[0,120,0],[-64,63,0],[-100,100,0],[-100,100,0],[-100,100,0],[-100,100,0],[0,127,0],[0,127,60],[0,127,64],[0,127,48],[0,127,0],[0,127,60],[0,127,0],[0,127,0],[0,127,0],[0,1,1],[0,1,1],[0,4,1],[0,127,0],[0,1,1],[0,1,1],[0,127,64],[0,127,0],[0,127,0],[0,127,0],[0,127,64],[0,127,0],[0,127,40],[0,127,127],[0,127,0],[0,3,1],[-64,63,0],[0,127,0],[0,127,0],[0,127,0],[0,127,127],[0,127,0],[0,127,64],[0,127,127],[0,127,40],[0,127,100],[-64,63,16],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[-64,63,16],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[-64,63,16],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[0,18,3],[0,127,0]];
 export const DN_QP = { ALGO: 0, RC: 1, RA: 2, RB1: 3, HARM: 4, DTUN: 5, FDBK: 6, MIX: 7, OFSC: 8, OFSA: 9, OFSB1: 10, OFSB2: 11,
   AATK: 12, ADEC: 13, AEND: 14, ALEV: 15, BATK: 16, BDEC: 17, BEND: 18, BLEV: 19, ADLY: 20, ATRIG: 21, ARST: 22, PHRT: 23,
   BDLY: 24, BTRIG: 25, BRST: 26, FATK: 30, FDEC: 31, FSUS: 32, FREL: 33, FREQ: 34, RESO: 35, FTYPE: 36, FDEPTH: 37,
@@ -41,8 +41,9 @@ const DN_WAVE_TO_QUAD = [0, 1, 2, 3, 5, 4, 6];                       // FM TONE:
 const DN_FTYPE_V1 = ["LP4", "LP2", "BP", "HP2", "HP4"];
 const DN_FTYPE_V1_TO_QUAD = [DN_QF.LP24, DN_QF.LP12, DN_QF.LP12, DN_QF.HP12, DN_QF.HP12];
 // the LFO DEST numbers (each one an export, C042..C099; the number = the record slot of the target, (offset - 28) / 2)
-// -> FM TONE's (eng_quad.c QD_*). Missing from FM TONE (-> 0 none, a note): LFO 1's own parameters (LFO 2's 1..15),
-// RATIO ALL, the AB macros, DRIVE, the sends, the filter's ENV DELAY
+// -> FM TONE's (eng_quad.c QD_*): every one, 1:1 (since 2026-10-14 FM TONE has the Digitone's whole list: LFO 1's own
+// parameters for LFO 2, RATIO ALL, the AB macros, DRIVE, the three sends, the filter's ENV DELAY were added, numbers 40..57;
+// its editor lists them in the Digitone's order). A number not in the table (none known): off, with a note
 export const DN_LFO_DEST_NAMES = {
   0: "NONE", 1: "LFO1 SPEED", 3: "LFO1 MULT", 5: "LFO1 FADE", 9: "LFO1 WAVE", 11: "LFO1 SPH", 13: "LFO1 MODE", 15: "LFO1 DEPTH",
   17: "ALGO", 18: "RATIO C", 19: "RATIO A", 20: "RATIO B", 21: "HARM", 22: "DETUNE", 23: "FEEDBACK", 24: "MIX",
@@ -56,13 +57,18 @@ export const DN_LFO_DEST_NAMES = {
 };
 const DN_QD = { NONE: 0, PITCH: 1, PAB2: 2, ALGO: 3, RC: 4, RA: 5, RB: 6, OFSC: 7, OFSA: 8, OFSB1: 9, OFSB2: 10, HARM: 11, DTUN: 12,
   FDBK: 13, MIX: 14, ALEV: 15, BLEV: 16, AATK: 17, ADEC: 18, AEND: 19, BATK: 20, BDEC: 21, BEND: 22, ADLY: 23, BDLY: 24, FREQ: 25,
-  RESO: 26, FENV: 27, BASE: 28, WIDTH: 29, FATK: 30, FDEC: 31, FSUS: 32, FREL: 33, EATK: 34, EDEC: 35, ESUS: 36, EREL: 37, LEVEL: 38, PAN: 39 };
+  RESO: 26, FENV: 27, BASE: 28, WIDTH: 29, FATK: 30, FDEC: 31, FSUS: 32, FREL: 33, EATK: 34, EDEC: 35, ESUS: 36, EREL: 37, LEVEL: 38, PAN: 39,
+  L1SPD: 40, L1MUL: 41, L1FAD: 42, L1WAV: 43, L1SPH: 44, L1MOD: 45, L1DEP: 46, RALL: 47, ABLEV: 48, ABATK: 49, ABDEC: 50, ABEND: 51,
+  ABDLY: 52, DRIVE: 53, SREV: 54, SDLY: 55, SCHO: 56, FDLY: 57 };
 export const DN_LFO_DEST = {
-  0: DN_QD.NONE, 17: DN_QD.ALGO, 18: DN_QD.RC, 19: DN_QD.RA, 20: DN_QD.RB, 21: DN_QD.HARM, 22: DN_QD.DTUN, 23: DN_QD.FDBK,
+  0: DN_QD.NONE, 1: DN_QD.L1SPD, 3: DN_QD.L1MUL, 5: DN_QD.L1FAD, 9: DN_QD.L1WAV, 11: DN_QD.L1SPH, 13: DN_QD.L1MOD,
+  15: DN_QD.L1DEP, 17: DN_QD.ALGO, 18: DN_QD.RC, 19: DN_QD.RA, 20: DN_QD.RB, 21: DN_QD.HARM, 22: DN_QD.DTUN, 23: DN_QD.FDBK,
   24: DN_QD.MIX, 27: DN_QD.AATK, 28: DN_QD.ADEC, 29: DN_QD.AEND, 30: DN_QD.ALEV, 31: DN_QD.BATK, 32: DN_QD.BDEC, 33: DN_QD.BEND,
-  34: DN_QD.BLEV, 35: DN_QD.ADLY, 38: DN_QD.BDLY, 42: DN_QD.PITCH, 43: DN_QD.PAB2, 51: DN_QD.FREQ, 52: DN_QD.RESO, 53: DN_QD.FENV,
+  34: DN_QD.BLEV, 35: DN_QD.ADLY, 38: DN_QD.BDLY, 42: DN_QD.PITCH, 43: DN_QD.PAB2, 44: DN_QD.RALL,
+  45: DN_QD.ABLEV, 46: DN_QD.ABATK, 47: DN_QD.ABDEC, 48: DN_QD.ABEND, 49: DN_QD.ABDLY, 51: DN_QD.FREQ, 52: DN_QD.RESO, 53: DN_QD.FENV,
   54: DN_QD.FATK, 55: DN_QD.FDEC, 56: DN_QD.FSUS, 57: DN_QD.FREL, 58: DN_QD.BASE, 59: DN_QD.WIDTH, 60: DN_QD.EATK, 61: DN_QD.EDEC,
-  62: DN_QD.ESUS, 63: DN_QD.EREL, 65: DN_QD.PAN, 66: DN_QD.LEVEL, 73: DN_QD.OFSC, 74: DN_QD.OFSA, 75: DN_QD.OFSB1, 76: DN_QD.OFSB2,
+  62: DN_QD.ESUS, 63: DN_QD.EREL, 64: DN_QD.DRIVE, 65: DN_QD.PAN, 66: DN_QD.LEVEL, 67: DN_QD.SREV, 68: DN_QD.SDLY, 69: DN_QD.SCHO,
+  73: DN_QD.OFSC, 74: DN_QD.OFSA, 75: DN_QD.OFSB1, 76: DN_QD.OFSB2, 77: DN_QD.FDLY,
 };
 
 // ---- the field table: [name, offset, hi-res, confidence, decode(d, o) -> the Digitone's value, apply(value, out), since]

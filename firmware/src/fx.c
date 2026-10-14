@@ -87,6 +87,9 @@ _Static_assert(sizeof rev_comb / 2u >= SP_LEN && sizeof rev_u.sp / 4u >= 4u * (S
 static void track_dist(track_t *t, int32_t *b, uint32_t n)
 {
     int32_t d = t->p[P_DIST], i, g, k, mk, bias = 2400, b0;
+#if FELUCCA_QUAD
+    d = quad_drive(t, d);                               /* eng_quad.c: FM TONE's LFO -> DRIVE */
+#endif
     if (!d)
         return;                                         /* states kept: switching on does not click */
     g = 4096 + d * d * 2;                                /* Q12: 1x .. ~9x, gentle at first */
@@ -1072,6 +1075,9 @@ CR_HOT_CORE static void mix_part_out(track_t *t, int32_t *b, int32_t *side, uint
 #endif
         int32_t gl = 4096 - (pan > 0 ? pan * 64 : 0), gr = 4096 + (pan < 0 ? pan * 64 : 0);
         int32_t c = t->p[P_CHOR] * 258, d = t->p[P_DLY] * 258, r = t->p[P_REV] * 258, pk = t->peak;
+#if FELUCCA_QUAD
+        quad_sends(t, &c, &d, &r);                      /* eng_quad.c: FM TONE's LFO -> the sends (ramped below) */
+#endif
         int32_t xmax, k[MX_N], *g = k + MX_SG, *dg = k + MX_DG;
         int sends;
         dg[0] = dg[1] = dg[2] = 0;

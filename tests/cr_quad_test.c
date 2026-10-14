@@ -307,7 +307,7 @@ static void t_pages(void)
             CHECK(strlen(N_QUAD_DEST[k]) <= 5u && N_QUAD_DEST[k][0], "DEST %u: \"%s\"", k, N_QUAD_DEST[k]);
         for (k = 0; k < QUAD_NMULT; k++)
             CHECK(strlen(N_QUAD_MULT[k]) <= 4u, "MULT %u", k);
-        CHECK(QD_N == 40 && !strcmp(N_QUAD_DEST[QD_PITCH], "PITCH") && !strcmp(N_QUAD_DEST[QD_PAN], "PAN") &&
+        CHECK(QD_N == 58 && !strcmp(N_QUAD_DEST[QD_PITCH], "PITCH") && !strcmp(N_QUAD_DEST[QD_PAN], "PAN") &&
                   !strcmp(N_QUAD_FTYPE[0], "OFF") && !strcmp(N_QUAD_FTYPE[3], "LP24") && !strcmp(N_QUAD_PHRT[4], "A+B2") &&
                   quad_range(QP_FDBK).max == 120 && quad_range(QP_MIX).min == -64 && quad_range(QP_MIX).max == 63 &&
                   quad_range(QP_HARM).min == -26 && quad_range(QP_LFO(0, QL_SPEED)).max == 63 &&
@@ -1795,6 +1795,202 @@ static void t_fade_phrt(void)
     }
 }
 
+/* the destinations appended 2026-10-14 (the Digitone's full list, docs/QUAD.md "LFO"): each one by an LFO 2 held at
+ * +full (SQR, SPEED 0, TRIG: +32255 = +125 of a 0..127 range) is the stored value moved by that much (rendered
+ * bit-identically to the patch that stores it), DEPTH 0 changes nothing; the AB macros = the A and the B destination
+ * together; LFO 1's own parameters seen through LFO 1 -> PAN; DRIVE and the sends: the part's offsets */
+#define DN_T 120u
+static int32_t dn_a[DN_T * CTL], dn_b[DN_T * CTL];
+static int8_t dn_pan[2][DN_T];
+static void dn_hold(int8_t *p, uint32_t k, uint32_t d, int32_t dep)
+{
+    p[QP_LFO(k, QL_DEST)] = (int8_t)d, p[QP_LFO(k, QL_WAVE)] = QW_SQR, p[QP_LFO(k, QL_SPEED)] = 0;
+    p[QP_LFO(k, QL_TRIG)] = QT_TRIG, p[QP_LFO(k, QL_DEPTH)] = (int8_t)dep;
+}
+static void dn_pans(const int8_t *p, int8_t *pan)
+{
+    track_t *t = &trk[0];
+    int32_t out[CTL];
+    uint32_t n;
+    drv_reset(t);
+    drv_patch(t, p);
+    drv_on(t, 0, 60, 100);
+    for (n = 0; n < DN_T; n++) {
+        drv_tick(t, out);
+        pan[n] = quad_pan_off[0];
+    }
+}
+static void dn_base(int8_t *p)                   /* audible everywhere: filter, operators, envelopes */
+{
+    full_patch(p, 1, 0);
+    p[QP_FTYPE] = QF_LP12, p[QP_FREQ] = 40, p[QP_FDEPTH] = 50, p[QP_FDLY] = 1, p[QP_FATK] = 20, p[QP_FDEC] = 40;
+    p[QP_AATK] = p[QP_BATK] = 10, p[QP_ADEC] = p[QP_BDEC] = 50, p[QP_AEND] = p[QP_BEND] = 40;
+    p[QP_ALEV] = p[QP_BLEV] = 60, p[QP_ADLY] = p[QP_BDLY] = 1;
+    p[QP_RC] = 0, p[QP_RA] = 0, p[QP_RB1] = 0, p[QP_RB2] = 0;
+}
+static void t_dests(void)
+{
+    int8_t p[QP_NP], q[QP_NP];
+    uint32_t k, n, seen[QD_N] = {0};
+    CHECK(QD_N == 58 && QD_N_V3A == 40u && QD_PAN == 39 && QD_FDLY == 57, "DEST: 40 kept + 18 appended");
+    for (k = 0; k < QD_N; k++)
+        seen[QUAD_DEST_ORDER[k]]++;
+    for (k = 0; k < QD_N; k++)
+        CHECK(seen[k] == 1u, "the display order: DEST %u (%s) %u times", k, N_QUAD_DEST[k], seen[k]);
+    CHECK(QUAD_DEST_ORDER[0] == QD_NONE && QUAD_DEST_ORDER[1] == QD_L1SPD && QUAD_DEST_ORDER[8] == QD_ALGO &&
+              QUAD_DEST_ORDER[26] == QD_PITCH && QUAD_DEST_ORDER[QD_N - 1] == QD_FDLY, "the display order: the Digitone's");
+    /* the stored-value equivalents (the held +125 on a 0..127, +17 of 18, +62 of 63) */
+    {
+        static const struct { uint8_t d; uint8_t i[4]; int8_t v[4]; } EQ[] = {
+            {QD_ABLEV, {QP_ALEV, QP_BLEV, 0xFF, 0}, {127, 127, 0, 0}},
+            {QD_ABATK, {QP_AATK, QP_BATK, 0xFF, 0}, {127, 127, 0, 0}},
+            {QD_ABDEC, {QP_ADEC, QP_BDEC, 0xFF, 0}, {127, 127, 0, 0}},
+            {QD_ABEND, {QP_AEND, QP_BEND, 0xFF, 0}, {127, 127, 0, 0}},
+            {QD_ABDLY, {QP_ADLY, QP_BDLY, 0xFF, 0}, {126, 126, 0, 0}},
+            {QD_RALL, {QP_RC, QP_RA, QP_RB1, QP_RB2}, {17, 62, 17, 17}},
+            {QD_FDLY, {QP_FDLY, 0xFF, 0, 0}, {126, 0, 0, 0}},
+        };
+        for (k = 0; k < NELEM(EQ); k++) {
+            uint32_t j, diff;
+            dn_base(p);
+            note_buf(p, 60, DN_T, dn_b);           /* unmodulated */
+            memcpy(q, p, QP_NP);
+            dn_hold(p, 1, EQ[k].d, 63);
+            note_buf(p, 60, DN_T, dn_a);
+            for (j = 0; j < 4u && EQ[k].i[j] != 0xFFu; j++)
+                q[EQ[k].i[j]] = EQ[k].v[j];
+            diff = memcmp(dn_a, dn_b, sizeof dn_a) != 0;
+            note_buf(q, 60, DN_T, dn_b);
+            CHECK(diff && !memcmp(dn_a, dn_b, sizeof dn_a), "DEST %s: not the stored value moved by the LFO (%u)",
+                  N_QUAD_DEST[EQ[k].d], diff);
+            dn_hold(p, 1, EQ[k].d, 0);
+            note_buf(p, 60, DN_T, dn_a);
+            dn_base(q);
+            note_buf(q, 60, DN_T, dn_b);
+            CHECK(!memcmp(dn_a, dn_b, sizeof dn_a), "DEST %s at DEPTH 0: the sound changed", N_QUAD_DEST[EQ[k].d]);
+        }
+    }
+    /* the AB macros = A's and B's destination together (an LFO each, a moving sine) */
+    {
+        static const uint8_t AB[5][3] = {{QD_ABLEV, QD_ALEV, QD_BLEV}, {QD_ABATK, QD_AATK, QD_BATK},
+            {QD_ABDEC, QD_ADEC, QD_BDEC}, {QD_ABEND, QD_AEND, QD_BEND}, {QD_ABDLY, QD_ADLY, QD_BDLY}};
+        for (k = 0; k < 5u; k++) {
+            uint32_t j;
+            dn_base(p);
+            p[QP_ALEV] = p[QP_BLEV] = 80;
+            memcpy(q, p, QP_NP);
+            dn_hold(p, 1, AB[k][0], -40);
+            dn_hold(q, 1, AB[k][1], -40);
+            dn_hold(q, 2, AB[k][2], -40);
+            for (j = 1; j < 3u; j++) {
+                p[QP_LFO(j, QL_WAVE)] = q[QP_LFO(j, QL_WAVE)] = QW_SINE;
+                p[QP_LFO(j, QL_SPEED)] = q[QP_LFO(j, QL_SPEED)] = 20;
+            }
+            note_buf(p, 60, DN_T, dn_a);
+            note_buf(q, 60, DN_T, dn_b);
+            CHECK(!memcmp(dn_a, dn_b, sizeof dn_a), "DEST %s: not %s + %s", N_QUAD_DEST[AB[k][0]], N_QUAD_DEST[AB[k][1]],
+                  N_QUAD_DEST[AB[k][2]]);
+        }
+    }
+    /* LFO 1's parameters by LFO 2 (and 3): LFO 1 -> PAN, the trace = LFO 1 storing the moved value */
+    {
+        static const struct { uint8_t d, f; int8_t base, want; } L1[] = {
+            {QD_L1SPD, QL_SPEED, 0, 63}, {QD_L1MUL, QL_MULT, 3, 11}, {QD_L1FAD, QL_FADE, 0, 63},
+            {QD_L1WAV, QL_WAVE, QW_TRI, QW_EXP}, {QD_L1SPH, QL_PHASE, 0, 125}, {QD_L1MOD, QL_TRIG, QT_TRIG, QT_HALF},
+            {QD_L1DEP, QL_DEPTH, 0, 63},
+        };
+        for (k = 0; k < NELEM(L1); k++) {
+            uint32_t lfo;
+            for (lfo = 1; lfo < 3u; lfo++) {
+                quad_init_patch(p);
+                p[QP_LFO(0, QL_DEST)] = QD_PAN, p[QP_LFO(0, QL_WAVE)] = QW_TRI, p[QP_LFO(0, QL_SPEED)] = 8;
+                p[QP_LFO(0, QL_TRIG)] = QT_TRIG, p[QP_LFO(0, QL_DEPTH)] = 40, p[QP_LFO(0, QL_MULT)] = 3;
+                p[QP_LFO(0, L1[k].f)] = L1[k].base;
+                memcpy(q, p, QP_NP);
+                q[QP_LFO(0, L1[k].f)] = L1[k].want;
+                dn_hold(p, lfo, L1[k].d, 63);
+                dn_pans(p, dn_pan[0]);
+                dn_pans(q, dn_pan[1]);
+                CHECK(!memcmp(dn_pan[0], dn_pan[1], DN_T), "DEST %s (LFO %u): LFO 1 not moved to %d", N_QUAD_DEST[L1[k].d],
+                      lfo + 1u, L1[k].want);
+                p[QP_LFO(lfo, QL_DEPTH)] = 0;
+                q[QP_LFO(0, L1[k].f)] = L1[k].base;
+                dn_pans(p, dn_pan[0]);
+                dn_pans(q, dn_pan[1]);
+                CHECK(!memcmp(dn_pan[0], dn_pan[1], DN_T), "DEST %s at DEPTH 0: LFO 1 moved", N_QUAD_DEST[L1[k].d]);
+            }
+            quad_init_patch(p);                  /* LFO 1 on its own parameter: nothing */
+            dn_hold(p, 0, L1[k].d, 63);
+            dn_pans(p, dn_pan[0]);
+            for (n = 0; n < DN_T; n++)
+                CHECK(dn_pan[0][n] == 0, "LFO 1 -> %s: it moved something (pan %d)", N_QUAD_DEST[L1[k].d], dn_pan[0][n]);
+        }
+        /* FREE: SPEED moved runs LFO 1 at the moved rate (the voice's lead on the part's phase) */
+        quad_init_patch(p);
+        p[QP_LFO(0, QL_DEST)] = QD_PAN, p[QP_LFO(0, QL_WAVE)] = QW_TRI, p[QP_LFO(0, QL_SPEED)] = 0;
+        p[QP_LFO(0, QL_TRIG)] = QT_FREE, p[QP_LFO(0, QL_DEPTH)] = 63;
+        memcpy(q, p, QP_NP);
+        q[QP_LFO(0, QL_SPEED)] = 63;
+        dn_hold(p, 1, QD_L1SPD, 63);
+        dn_pans(p, dn_pan[0]);
+        dn_pans(q, dn_pan[1]);
+        CHECK(!memcmp(dn_pan[0], dn_pan[1], DN_T) && dn_pan[0][DN_T / 4] != dn_pan[0][0],
+              "L1SPD on a FREE LFO 1: %d %d, want %d %d", dn_pan[0][0], dn_pan[0][DN_T / 4], dn_pan[1][0],
+              dn_pan[1][DN_T / 4]);
+    }
+    /* DRIVE and the sends: the part's, offset by the latest voice's LFOs, read by fx.c */
+    {
+        static const uint8_t FXD[4] = {QD_DRIVE, QD_SREV, QD_SDLY, QD_SCHO};
+        track_t *t = &trk[0];
+        int32_t c, d, r;
+        for (k = 0; k < 4u; k++) {
+            int32_t dep;
+            for (dep = 63; dep >= -64; dep -= 127) {
+                uint32_t j;
+                int32_t lo = dep > 0 ? 127 : 0;
+                quad_init_patch(p);
+                dn_hold(p, 1, FXD[k], dep);
+                dn_pans(p, dn_pan[0]);
+                for (j = 0; j < 4u; j++)
+                    CHECK(quad_fx_off[0][j] == (j == k ? (dep > 0 ? 125 : -127) : 0), "DEST %s depth %d: offset %u = %d",
+                          N_QUAD_DEST[FXD[k]], dep, j, quad_fx_off[0][j]);
+                t->p[P_DIST] = 10, t->p[P_REV] = 20, t->p[P_DLY] = 30, t->p[P_CHOR] = 40;
+                c = 40 * 258, d = 30 * 258, r = 20 * 258;
+                quad_sends(t, &c, &d, &r);
+                CHECK(quad_drive(t, 10) == (k ? 10 : lo) && r == (k == 1u ? lo : 20) * 258 &&
+                          d == (k == 2u ? lo : 30) * 258 && c == (k == 3u ? lo : 40) * 258,
+                      "DEST %s depth %d: drive %d sends %d %d %d", N_QUAD_DEST[FXD[k]], dep, quad_drive(t, 10), r / 258,
+                      d / 258, c / 258);
+            }
+            quad_init_patch(p);
+            dn_hold(p, 1, FXD[k], 0);
+            dn_pans(p, dn_pan[0]);
+            t->p[P_DIST] = 10, t->p[P_REV] = 20, t->p[P_DLY] = 30, t->p[P_CHOR] = 40;
+            c = 40 * 258, d = 30 * 258, r = 20 * 258;
+            quad_sends(t, &c, &d, &r);
+            CHECK(!quad_fx_off[0][0] && !quad_fx_off[0][1] && !quad_fx_off[0][2] && !quad_fx_off[0][3] &&
+                      quad_drive(t, 10) == 10 && c == 40 * 258 && d == 30 * 258 && r == 20 * 258,
+                  "DEST %s at DEPTH 0: an offset", N_QUAD_DEST[FXD[k]]);
+            dn_hold(p, 1, FXD[k], 63);
+            dn_pans(p, dn_pan[0]);
+            t->engine = 0;                       /* not on FM TONE: the part's own values */
+            CHECK(quad_drive(t, 10) == 10, "DRIVE off FM TONE");
+            t->engine = ENGI_QUAD;
+        }
+    }
+    /* a version-3 blob with an appended destination: this firmware takes it; an older one (40 destinations) refuses it
+     * (quad_blob_ok's range: the init patch, the slot's bytes untouched) */
+    {
+        uint8_t b[QUAD_BLOB];
+        quad_init_patch(p);
+        p[QP_LFO(1, QL_DEST)] = QD_FDLY;
+        quad_pack(p, b);
+        CHECK(b[1] == 3u && quad_blob_ok(b) && quad_unpack(b, q) && q[QP_LFO(1, QL_DEST)] == QD_FDLY,
+              "a blob with DEST F DLY: version 3, taken");
+        CHECK(b[2 + QP_LFO(1, QL_DEST)] > QD_N_V3A - 1u, "an older firmware's range check refuses it");
+    }
+}
+
 int main(int argc, char **argv)
 {
     t_blob();
@@ -1820,6 +2016,7 @@ int main(int argc, char **argv)
     t_dtun_fdbk();
     t_keys();
     t_fade_phrt();
+    t_dests();
     if (argc > 1 && !strcmp(argv[1], "cpu"))
         t_cpu();
     printf("cr_quad_test: %d checks, %d failed\n", checks, fails);

@@ -2789,3 +2789,26 @@ files (local): all parse and pass `quad_blob_ok`; notes 1325 -> 377 (5.2 -> 1.5 
 offsets' scale, the time / cutoff / level curves (the reference recordings). **Tests**: `web/test_dnsnd.mjs` (our own
 records): 63 encodings the exports proved, every mapped destination, version 5, DEC INF, DRIVE; `tools/dnsnd_diff.mjs`
 names the destinations and marks version 5's save-to-save bytes. Nothing on a unit.
+
+3y59. **FM TONE's LFO destinations = the Digitone's (2026-10-14; branch qd-1 from b96c1d8, not pushed).** The owner:
+"Update FM Tone's LFO destinations to match." FM TONE had 40 (39 of the Digitone's 57 + none); the 18 missing are
+**appended** as numbers 40..57 (`eng_quad.c QD_*`): LFO 1's own SPEED MULT FADE WAVE SPH MODE DEPTH (for LFO 2 and 3;
+LFO 2 and 3 are read first, then LFO 1 with the moved values; on itself nothing; the stepped MULT WAVE MODE step,
+MULT within its BPM / fixed set; a FREE LFO 1 keeps a per-voice phase lead `lof`), RATIO ALL (C, A, B1, B2), the AB
+macros (A's and B's LEV ATK DEC END DLY together = the sum with their own destinations), the part's DRIVE and REV DEL
+CHO sends (offsets from the latest voice as PAN, read by `fx.c` once a block through `quad_drive` / `quad_sends`; the
+sends ramp as any send change), and F DLY (the filter envelope's DELAY). **No renumbering, no blob version change**:
+0..39 keep their meaning, the blob stays version 3 (DEST range 0..57), so every saved patch, the pool, backups, the
+web tools and `fm1_install.py` (which check versions 1..3) are unchanged; an older firmware meeting a blob with a
+destination >= 40 refuses it in `quad_blob_ok` (the range) and loads the init patch with the record's macros, the
+slot's bytes untouched. The **editor's order** is the Digitone's (`QUAD_DEST_ORDER`, `cr_pages.c cp_dstep` steps a
+detent along it via `params.c enum_order`); names <= 5 characters (L1SPD .. L1DEP, R ALL, ABLEV .. ABDLY, DRIVE, REV,
+DEL, CHO, F DLY). `web/fm1dnsnd.js` maps all 58 numbers 1:1; the owner's 256 factory files (local): LFOs mapped 371 of
+371 (were 349), notes 377 -> 355, all blobs valid. Cost: per-sample loops untouched; per voice and block 18 more
+`dst[]` words zeroed, one 7-term OR, the AB / RATIO ALL adds, four offsets at the latest voice; `quad_render` +578 B,
+`mix_part_out` +134 B, POOL +128 B (`lof`), `.text` +1024 B. **Tests**: `cr_quad_test t_dests` (each new destination =
+the patch storing the moved value, bit-identical; DEPTH 0 changes nothing; AB = A + B; LFO 1's seven via LFO 2 and 3,
+FREE speed; DRIVE and sends offsets, off FM TONE none; a blob with F DLY is version 3, out of an older range),
+`tests/quad_ref.py` models them; the FM TONE goldens regenerate unchanged; `tools/emu/scripts/cr_quad_dest.txt` steps
+LFO 2's DEST through all 58 (test_cr checks the order; shots); `design/layouts/fm-tone.json` re-dumped. Nothing on a
+unit.

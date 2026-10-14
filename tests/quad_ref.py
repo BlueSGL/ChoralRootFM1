@@ -211,17 +211,21 @@ RNG = {"ALGO": (1, 8, 1), "RC": (0, 18, 3), "RA": (0, 63, 3), "RB1": (0, 18, 3),
        "EDEC": (0, 127, 64), "ESUS": (0, 127, 127), "EREL": (0, 127, 40), "LEVEL": (0, 127, 100)}
 for _k in range(3):
     RNG.update({"L%dSPEED" % _k: (-64, 63, 16), "L%dMULT" % _k: (0, 23, 3), "L%dFADE" % _k: (-64, 63, 0),
-                "L%dDEST" % _k: (0, 39, 0), "L%dWAVE" % _k: (0, 6, 0), "L%dPHASE" % _k: (0, 127, 0),
+                "L%dDEST" % _k: (0, 57, 0), "L%dWAVE" % _k: (0, 6, 0), "L%dPHASE" % _k: (0, 127, 0),
                 "L%dTRIG" % _k: (0, 4, 0), "L%dDEPTH" % _k: (-64, 63, 0)})
 FT = {"OFF": 0, "LP12": 1, "HP12": 2, "LP24": 3}
 WAVE = {"TRI": 0, "SINE": 1, "SQR": 2, "SAW": 3, "RAMP": 4, "EXP": 5, "RAND": 6}
 TRIG = {"FREE": 0, "TRIG": 1, "HOLD": 2, "ONE": 3, "HALF": 4}
 DEST_N = ["NONE", "PITCH", "PAB2", "ALGO", "RC", "RA", "RB", "OFSC", "OFSA", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK",
           "MIX", "ALEV", "BLEV", "AATK", "ADEC", "AEND", "BATK", "BDEC", "BEND", "ADLY", "BDLY", "FREQ", "RESO", "FENV",
-          "BASE", "WIDTH", "FATK", "FDEC", "FSUS", "FREL", "EATK", "EDEC", "ESUS", "EREL", "LEVEL", "PAN"]
+          "BASE", "WIDTH", "FATK", "FDEC", "FSUS", "FREL", "EATK", "EDEC", "ESUS", "EREL", "LEVEL", "PAN",
+          # appended 2026-10-14 (the Digitone's full list): LFO 1's own parameters, RATIO ALL, the AB macros, the
+          # part's DRIVE and sends (fx.c: not in this model's output), the filter envelope's DELAY
+          "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "RALL", "ABLEV", "ABATK", "ABDEC", "ABEND",
+          "ABDLY", "DRIVE", "SREV", "SDLY", "SCHO", "FDLY"]
 DEST = {n: i for i, n in enumerate(DEST_N)}
 ND = len(DEST_N)
-assert ND == 40
+assert ND == 58
 # the algorithms' feedback operator (0 C, 1 A, 2 B1, 3 B2)
 FBOP = [1, 3, 1, 3, 2, 1, 1, 2]
 
@@ -403,11 +407,14 @@ def soft_knee_f(y, k):
     return -a if y < 0 else a
 
 
-def lfo_inc(p, k, bpm=120):
-    mu = p[Q["L%dMULT" % k]]
+def lfo_incv(sp, mu, bpm=120):
     b = bpm if mu < 12 else 120
-    v = (p[Q["L%dSPEED" % k]] * (1 << (mu % 12)) * b * LFO_K) >> 16
+    v = (sp * (1 << (mu % 12)) * b * LFO_K) >> 16
     return clamp(v, -0x7FFFFFFF, 0x7FFFFFFF)
+
+
+def lfo_inc(p, k, bpm=120):
+    return lfo_incv(p[Q["L%dSPEED" % k]], p[Q["L%dMULT" % k]], bpm)
 
 
 def lfo_wave(w, ph, r):
@@ -480,6 +487,7 @@ class Voice:
         self.lsl = [0] * 3
         self.lstop = 0
         self.ticks = 0
+        self.lof = 0
         self.live = 0
         self.gate = 0
         self.active = 0
@@ -537,6 +545,7 @@ class Voice:
             else:
                 self.lph[k] = sp
         self.ticks = 0
+        self.lof = 0
         self.live = 1
 
     def env_tick(self, k, atk, dec, sus, rel, dly, gate, adsr):
@@ -581,11 +590,27 @@ class Voice:
         p = self.part.p
         g = lambda n: p[Q[n]]
         dst = [0] * ND
-        for k in range(3):
+        for k in (1, 2, 0):                                # LFO 2, 3, then 1 (2 and 3 may move LFO 1's parameters)
             d, tm, wv = g("L%dDEST" % k), g("L%dTRIG" % k), g("L%dWAVE" % k)
-            inc0 = lfo_inc(p, k)
+            fd, sph, dep = g("L%dFADE" % k), g("L%dPHASE" % k), g("L%dDEPTH" % k)
+            L = lambda n: dst[DEST[n]]
+            if k == 0 and any(L(n) for n in ("L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP")):
+                sp = clamp(g("L0SPEED") + ((L("L1SPD") * 127) >> 15), -64, 63)
+                mu = g("L0MULT")
+                ms = 0 if mu < 12 else 12
+                mu = ms + clamp(mu - ms + ((L("L1MUL") * 11) >> 15), 0, 11)
+                inc0 = lfo_incv(sp, mu)
+                tm = clamp(tm + ((L("L1MOD") * 4) >> 15), 0, 4)
+                if tm == 0:
+                    self.lof = (self.lof + inc0 - lfo_inc(p, 0)) & M32
+                fd = clamp(fd + ((L("L1FAD") * 127) >> 15), -64, 63)
+                wv = clamp(wv + ((L("L1WAV") * 6) >> 15), 0, 6)
+                sph = clamp(sph + ((L("L1SPH") * 127) >> 15), 0, 127)
+                dep = clamp(dep + ((L("L1DEP") * 127) >> 15), -64, 63)
+            else:
+                inc0 = lfo_inc(p, k)
             if tm == 0:
-                ph = (self.part.lph[k] + (0 if wv == 6 else g("L%dPHASE" % k) << 25)) & M32
+                ph = (self.part.lph[k] + (0 if wv == 6 else sph << 25) + (0 if k else self.lof)) & M32
                 rv = self.part.lrnd[k]
             else:
                 ph = self.lph[k]
@@ -602,19 +627,20 @@ class Voice:
                     self.lph[k] = (old + (-(st << 1) if inc0 < 0 else st << 1)) & M32
                     if (inc0 > 0 and self.lph[k] < old) or (inc0 < 0 and self.lph[k] > old):
                         self.lrnd[k] = xs(self.lrnd[k] + k)
+                if wv != 6:
+                    ph = (ph + ((sph - g("L%dPHASE" % k)) << 25)) & M32
             if wv == 6:                                    # RAND: SPH is the slew (a one-pole on the steps)
                 r = (rv >> 16) - 32768
-                sl = g("L%dPHASE" % k)
+                sl = sph
                 if sl:
                     kk = clamp(((abs(inc0) >> 17) * 254) // sl, 1, 32767)
                     self.lsl[k] += ((r - self.lsl[k]) * kk) >> 15
                 else:
                     self.lsl[k] = r
-            if not d or d >= ND or not g("L%dDEPTH" % k):
+            if not d or d >= ND or not dep:
                 continue
             w = lfo_wave(wv, ph, self.lsl[k])
-            w = (w * g("L%dDEPTH" % k)) >> 6
-            fd = g("L%dFADE" % k)
+            w = (w * dep) >> 6
             if fd:
                 f = min(32767, self.ticks * (ENV_LIN[2 * abs(fd) - 1] >> 9))
                 w = (w * (f if fd < 0 else 32767 - f)) >> 15
@@ -629,22 +655,28 @@ class Voice:
         dst = self.lfos()
         D = lambda n, s: (dst[DEST[n]] * s) >> 15
         mv = lambda n, de, s, lo, hi: clamp(g(n) + D(de, s), lo, hi)
-        eA = self.env_tick(0, mv("AATK", "AATK", 127, 0, 127), mv("ADEC", "ADEC", 127, 0, 127),
-                           mv("AEND", "AEND", 127, 0, 127) << 17, 0, mv("ADLY", "ADLY", 127, 0, 127), 1, 0)
-        eB = self.env_tick(1, mv("BATK", "BATK", 127, 0, 127), mv("BDEC", "BDEC", 127, 0, 127),
-                           mv("BEND", "BEND", 127, 0, 127) << 17, 0, mv("BDLY", "BDLY", 127, 0, 127), 1, 0)
+        m2 = lambda n, de, d2, s, lo, hi: clamp(g(n) + (((dst[DEST[de]] + dst[DEST[d2]]) * s) >> 15), lo, hi)
+        eA = self.env_tick(0, m2("AATK", "AATK", "ABATK", 127, 0, 127), m2("ADEC", "ADEC", "ABDEC", 127, 0, 127),
+                           m2("AEND", "AEND", "ABEND", 127, 0, 127) << 17, 0, m2("ADLY", "ADLY", "ABDLY", 127, 0, 127),
+                           1, 0)
+        eB = self.env_tick(1, m2("BATK", "BATK", "ABATK", 127, 0, 127), m2("BDEC", "BDEC", "ABDEC", 127, 0, 127),
+                           m2("BEND", "BEND", "ABEND", 127, 0, 127) << 17, 0, m2("BDLY", "BDLY", "ABDLY", 127, 0, 127),
+                           1, 0)
         eF = self.env_tick(2, mv("FATK", "FATK", 127, 0, 127), mv("FDEC", "FDEC", 127, 0, 127),
-                           mv("FSUS", "FSUS", 127, 0, 127) << 17, mv("FREL", "FREL", 127, 0, 127), g("FDLY"),
-                           self.gate, 1)
+                           mv("FSUS", "FSUS", 127, 0, 127) << 17, mv("FREL", "FREL", 127, 0, 127),
+                           mv("FDLY", "FDLY", 127, 0, 127), self.gate, 1)
         eE = self.env_tick(3, mv("EATK", "EATK", 127, 0, 127), mv("EDEC", "EDEC", 127, 0, 127),
                            mv("ESUS", "ESUS", 127, 0, 127) << 17, mv("EREL", "EREL", 127, 0, 127), 0, self.gate, 1)
         if latest:
             self.part.pan = clamp((dst[DEST["PAN"]] * 64) >> 15, -64, 63)
         alg = mv("ALGO", "ALGO", 7, 1, 8)
         dt = mv("DTUN", "DTUN", 127, 0, 127)
-        ra = mv("RA", "RA", 63, 0, 63)
+        ra = m2("RA", "RA", "RALL", 63, 0, 63)
         rb = clamp(g("RB1") * 19 + g("RB2") + D("RB", 180), 0, NRB - 1)
         rb1i, rb2i = rb // 19, rb % 19
+        if dst[DEST["RALL"]]:
+            o = D("RALL", 18)
+            rb1i, rb2i = clamp(rb1i + o, 0, 18), clamp(rb2i + o, 0, 18)
 
         def ratio(r, o):
             r += cdiv(o * 65536, 100)
@@ -660,7 +692,7 @@ class Voice:
         bAB2 = bAll
         if dst[DEST["PAB2"]]:
             bAB2 = (bAll * exp2q((dst[DEST["PAB2"]] * 4096) >> 15)) >> 15
-        rc = ratio(q16(RCB[mv("RC", "RC", 18, 0, 18)]), mv("OFSC", "OFSC", 100, -100, 100))
+        rc = ratio(q16(RCB[m2("RC", "RC", "RALL", 18, 0, 18)]), mv("OFSC", "OFSC", 100, -100, 100))
         rA = ratio(q16(RA[ra]), mv("OFSA", "OFSA", 100, -100, 100))
         rB1 = ratio(q16(RCB[rb1i]), mv("OFSB1", "OFSB1", 100, -100, 100))
         rB2 = ratio(q16(RCB[rb2i]), mv("OFSB2", "OFSB2", 100, -100, 100))
@@ -680,8 +712,8 @@ class Voice:
         gx = 32766 - gy
         vel = self.vel
         velf = 32767 - ((g("VEL") * (127 - vel) * 2080) >> 10)
-        la_v = mv("ALEV", "ALEV", 127, 0, 127)
-        u1, u2 = blev(mv("BLEV", "BLEV", 127, 0, 127))
+        la_v = m2("ALEV", "ALEV", "ABLEV", 127, 0, 127)
+        u1, u2 = blev(m2("BLEV", "BLEV", "ABLEV", 127, 0, 127))
         lv = [lev_q15(la_v * 4096 // 127), lev_q15(u1), lev_q15(u2)]
         tl = [0, 0, 0]
         for j, kn in enumerate(("AKEY", "B1KEY", "B2KEY")):

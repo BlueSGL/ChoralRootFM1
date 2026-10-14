@@ -127,11 +127,11 @@ const qc = dnsndToQuad(await parseDnsnd(dnsnd(record("CLAMP", { algo: 200, ratio
   "lfo1.wave": 40, "lfo1.mode": 77, "lfo1.dest": 5, "lfo2.dest": 99, "lfo1.depth": [127, 255], "envA.trig": 9, "filter.type": 9, "amp.pan": 250, "amp.drive": [255, 0] }))));
 const cv = qc.values;
 ok(cv[DN_QP.ALGO] === 8 && cv[DN_QP.RC] === 18 && cv[DN_QP.RA] === 63 && cv[DN_QP.RB1] === 18 && cv[DN_QP.RB2] === 18 && cv[DN_QP.HARM] === 26 &&
-   cv[DN_QP.FDBK] === 120 && cv[L(0, "MULT")] === 23 && cv[L(0, "WAVE")] === 0 && cv[L(0, "TRIG")] === 4 && cv[L(0, "DEST")] === 0 &&
+   cv[DN_QP.FDBK] === 120 && cv[L(0, "MULT")] === 23 && cv[L(0, "WAVE")] === 0 && cv[L(0, "TRIG")] === 4 && cv[L(0, "DEST")] === 42 &&
    cv[L(1, "DEST")] === 0 && cv[L(0, "DEPTH")] === 63 && cv[DN_QP.ATRIG] === 1 && cv[DN_QP.FTYPE] === 1 && qc.pan === 63 && qc.drive === 127,
    "clamp: every value inside FM TONE's range");
-ok(qc.notes.some((n) => /LFO 1 destination LFO1 FADE: FM TONE has none, off/.test(n)) && qc.notes.some((n) => /LFO 2 destination #99: FM TONE has none, off/.test(n)),
-   "notes: an LFO destination FM TONE lacks (named, or its number) is off");
+ok(!qc.notes.some((n) => /LFO 1 destination/.test(n)) && qc.notes.some((n) => /LFO 2 destination #99: FM TONE has none, off/.test(n)),
+   "notes: every Digitone LFO destination maps (LFO1 FADE: FM TONE's L1FAD); an unknown number is off, with a note");
 
 /* the encodings the owner's controlled exports proved (2026-10-14; the raw bytes as those files hold them, our own
  * records): [field, raw (coarse or [coarse, fine]), the Digitone's value, the FM TONE value index, its value] */
@@ -181,8 +181,13 @@ provedBad.forEach((s) => console.log(`  ${s}`));
     const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("DEST", { "lfo1.dest": n, "lfo2.dest": n, "amp.reset": 1, ofsC: 64, ofsA: 64, ofsB1: 64, ofsB2: 64 }, V5))));
     if (qq.values[L(0, "DEST")] !== qd || qq.values[L(1, "DEST")] !== qd || qq.notes.length) bad.push(n);
   }
-  ok(dests.length === 40 && !bad.length && DN_LFO_DEST[17] === 3 && DN_LFO_DEST[42] === 1 && DN_LFO_DEST[66] === 38 && DN_LFO_DEST[76] === 10,
+  ok(dests.length === 58 && !bad.length && DN_LFO_DEST[17] === 3 && DN_LFO_DEST[42] === 1 && DN_LFO_DEST[66] === 38 && DN_LFO_DEST[76] === 10,
      `LFO destinations: ${dests.length} Digitone numbers map to FM TONE's (ALGO 17, PITCH ALL 42, VOL 66 -> LEVEL, B2 OFFSET 76)`);
+  const want = { 1: 40, 3: 41, 5: 42, 9: 43, 11: 44, 13: 45, 15: 46, 44: 47, 45: 48, 46: 49, 47: 50, 48: 51, 49: 52, 64: 53, 67: 54,
+    68: 55, 69: 56, 77: 57 };
+  ok(Object.entries(want).every(([n, q]) => DN_LFO_DEST[n] === q) && new Set(Object.values(DN_LFO_DEST)).size === 58 &&
+     Object.values(DN_LFO_DEST).every((q) => q >= 0 && q <= DN_QUAD_RANGES[L(0, "DEST")][1]),
+     "LFO destinations 1:1: LFO1 SPEED..DEPTH -> L1SPD..L1DEP, RATIO ALL, AB LEVEL..AB DELAY, DRIVE, REV DEL CHO sends, ENV DELAY; one each");
 }
 const v5 = await parseDnsnd(dnsnd(record("V5", { ofsA: [64 + 16, 0] }, V5)));
 ok(v5.version === 5 && v5.params.ofsA === 16 && v5.confidence.ofsA === "slot" && dnsndToQuad(v5).values[DN_QP.OFSA] === 25, "parse: a version-5 record (OS 1.44) reads, with its ratio offsets");

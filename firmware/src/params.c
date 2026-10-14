@@ -168,6 +168,21 @@ static int32_t enum_orig(const param_desc_t *d, int32_t v)
     return d->names == SMP_ALL_NAMES && v >= 0 && v < SMP_NSETS ? SMP_SET_ORIG[v] : v;
 }
 
+/* an F_ENUM shown in another order than its values (FM TONE's LFO DEST: the Digitone's order, eng_quad.c
+ * QUAD_DEST_ORDER): the values in that order, *n of them; 0 = in value order */
+static __attribute__((unused)) const uint8_t *enum_order(const param_desc_t *d, uint32_t *n)
+{
+#if FELUCCA_QUAD
+    if (d->names == N_QUAD_DEST) {
+        *n = QD_N;
+        return QUAD_DEST_ORDER;
+    }
+#endif
+    (void)d;
+    *n = 0;
+    return 0;
+}
+
 /* a knob moved an F_ENUM from `from` to v: past any alias in that direction (back to `from` at the end) */
 static int32_t enum_step(const param_desc_t *d, int32_t from, int32_t v)
 {

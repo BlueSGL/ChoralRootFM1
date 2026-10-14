@@ -82,8 +82,14 @@ enum {                                                                     /* LF
     QD_NONE, QD_PITCH, QD_PAB2, QD_ALGO, QD_RC, QD_RA, QD_RB, QD_OFSC, QD_OFSA, QD_OFSB1, QD_OFSB2, QD_HARM, QD_DTUN,
     QD_FDBK, QD_MIX, QD_ALEV, QD_BLEV, QD_AATK, QD_ADEC, QD_AEND, QD_BATK, QD_BDEC, QD_BEND, QD_ADLY, QD_BDLY,
     QD_FREQ, QD_RESO, QD_FENV, QD_BASE, QD_WIDTH, QD_FATK, QD_FDEC, QD_FSUS, QD_FREL, QD_EATK, QD_EDEC, QD_ESUS,
-    QD_EREL, QD_LEVEL, QD_PAN, QD_N
+    QD_EREL, QD_LEVEL, QD_PAN,
+    /* appended 2026-10-14 (the Digitone's full list; the numbers above stay: version-3 blobs keep their meaning):
+     * LFO 1's own SPEED MULT FADE WAVE SPH MODE DEPTH (for LFO 2 and 3; LFO 1 on itself: none), RATIO ALL, the AB
+     * macros (both operator envelopes), the part's DRIVE and its three sends, the filter envelope's DELAY */
+    QD_L1SPD, QD_L1MUL, QD_L1FAD, QD_L1WAV, QD_L1SPH, QD_L1MOD, QD_L1DEP, QD_RALL, QD_ABLEV, QD_ABATK, QD_ABDEC,
+    QD_ABEND, QD_ABDLY, QD_DRIVE, QD_SREV, QD_SDLY, QD_SCHO, QD_FDLY, QD_N
 };
+#define QD_N_V3A 40u             /* the destinations before 2026-10-14 (an older firmware refuses a blob with more) */
 #define QUAD_NMULT 24u           /* 0..11 x1 .. x2k at the part's BPM, 12..23 the same at 120 BPM */
 static const char *const N_QUAD_FTYPE[QF_N] = {"OFF", "LP12", "HP12", "LP24"};
 static const char *const N_QUAD_WAVE[QW_N] = {"TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"};
@@ -93,7 +99,16 @@ static const char *const N_QUAD_DEST[QD_N] = {   /* <= 5 characters (params.c pr
     "NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN",
     "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ",
     "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL",
-    "PAN"};
+    "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC",
+    "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"};
+/* the editor's order of DEST (cr_pages.c cp_dstep steps through it): the Digitone's (its destination numbers 0, 1 .. 77
+ * ascending, docs/QUAD.md "LFO"), so the list reads as the Digitone's; the stored numbers are QD_*'s */
+static const uint8_t QUAD_DEST_ORDER[QD_N] = {
+    QD_NONE, QD_L1SPD, QD_L1MUL, QD_L1FAD, QD_L1WAV, QD_L1SPH, QD_L1MOD, QD_L1DEP, QD_ALGO, QD_RC, QD_RA, QD_RB,
+    QD_HARM, QD_DTUN, QD_FDBK, QD_MIX, QD_AATK, QD_ADEC, QD_AEND, QD_ALEV, QD_BATK, QD_BDEC, QD_BEND, QD_BLEV,
+    QD_ADLY, QD_BDLY, QD_PITCH, QD_PAB2, QD_RALL, QD_ABLEV, QD_ABATK, QD_ABDEC, QD_ABEND, QD_ABDLY, QD_FREQ, QD_RESO,
+    QD_FENV, QD_FATK, QD_FDEC, QD_FSUS, QD_FREL, QD_BASE, QD_WIDTH, QD_EATK, QD_EDEC, QD_ESUS, QD_EREL, QD_DRIVE,
+    QD_PAN, QD_LEVEL, QD_SREV, QD_SDLY, QD_SCHO, QD_OFSC, QD_OFSA, QD_OFSB1, QD_OFSB2, QD_FDLY};
 static const char *const N_QUAD_MULT[QUAD_NMULT] = {"1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k",
     "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"};
 
@@ -252,6 +267,8 @@ static int16_t quad_mlast[QUAD_NPART][8] __attribute__((section(".pool")));   /*
 static uint8_t quad_user_pending;                /* upreset.c up_values: a QUAD user slot + 1 is being loaded */
 static int (*quad_store_read)(uint32_t k, uint8_t *blob);   /* the patch store: slot k's blob, 0 = there is one */
 static int8_t quad_pan_off[QUAD_NPART];          /* the LFOs' PAN (fx.c mix_part adds it: quad_pan) */
+static int8_t quad_fx_off[QUAD_NPART][4];        /* .. DRIVE, the reverb, delay, chorus sends (fx.c: quad_drive,
+                                                  * quad_sends; read once a block) */
 static struct {                                  /* per part: the LFOs' FREE phases */
     uint32_t ph[3], rnd[3];
 } quad_lfo[QUAD_NPART] __attribute__((section(".pool")));
@@ -270,6 +287,7 @@ typedef struct {
     uint32_t lph[3], lrnd[3], ltr[3];            /* the LFOs' own phases (TRIG ONE HALF HOLD), random, travel */
     int32_t lsl[3];                              /* the LFOs' RAND, slewed (SPH on RAND), Q15 */
     uint16_t ticks;                              /* control ticks since the note-on (LFO FADE) */
+    uint32_t lof;                                /* LFO 1 FREE: its phase's lead from L1SPD / L1MUL (LFO 2, 3) */
     uint8_t lstop;                               /* bit k: LFO k (ONE / HALF) has stopped */
     uint8_t live;
 } quad_voice_t;
@@ -694,12 +712,18 @@ static int32_t quad_exp2(int32_t x)
 
 /* LFO k's phase increment per control tick: f = SPEED x MULT / 128 x BPM / 240 Hz (SPEED x MULT = 128: a bar; MULT's
  * fixed set at 120 BPM); negative runs backwards, 0 stops */
+static int32_t quad_lfo_incv(int32_t sp, uint32_t mu)
+{
+    int32_t bpm;
+    int64_t v;
+    mu %= QUAD_NMULT;
+    bpm = mu < 12u ? clamp(song.g[G_BPM], 20, 300) : 120;
+    v = ((int64_t)sp * (int64_t)(1u << (mu % 12u)) * bpm * QUAD_LFO_K) >> 16;
+    return v > 0x7FFFFFFF ? 0x7FFFFFFF : v < -0x7FFFFFFF ? -0x7FFFFFFF : (int32_t)v;
+}
 static int32_t quad_lfo_inc(const int8_t *p, uint32_t k)
 {
-    uint32_t mu = (uint32_t)p[QP_LFO(k, QL_MULT)] % QUAD_NMULT;
-    int32_t bpm = mu < 12u ? clamp(song.g[G_BPM], 20, 300) : 120;
-    int64_t v = ((int64_t)p[QP_LFO(k, QL_SPEED)] * (int64_t)(1u << (mu % 12u)) * bpm * QUAD_LFO_K) >> 16;
-    return v > 0x7FFFFFFF ? 0x7FFFFFFF : v < -0x7FFFFFFF ? -0x7FFFFFFF : (int32_t)v;
+    return quad_lfo_incv(p[QP_LFO(k, QL_SPEED)], (uint32_t)p[QP_LFO(k, QL_MULT)]);
 }
 
 /* LFO wave w at phase ph (r: the random value, Q15): Q15 */
@@ -775,6 +799,7 @@ static void quad_lfo_on(track_t *t, quad_voice_t *s, const int8_t *p)
             s->lph[k] = sp;
         }
     }
+    s->lof = 0;
     s->ticks = 0;
 }
 
@@ -1027,12 +1052,30 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     /* the LFOs: read, then advanced; summed into their destinations (Q15 each) */
     for (k = 0; k < QD_N; k++)
         dst[k] = 0;
-    for (k = 0; k < 3u; k++) {
-        uint32_t d = (uint32_t)p[QP_LFO(k, QL_DEST)], tm = (uint32_t)p[QP_LFO(k, QL_TRIG)], ph, rv;
-        uint32_t wv = (uint32_t)p[QP_LFO(k, QL_WAVE)];
-        int32_t inc0 = quad_lfo_inc(p, k), w, fd = p[QP_LFO(k, QL_FADE)];
+    for (i = 0; i < 3u; i++) {                   /* LFO 2, 3, then 1 (2 and 3 may modulate LFO 1: QD_L1*) */
+        uint32_t d, tm, ph, rv, wv;
+        int32_t inc0, w, fd, sph, dep;
+        k = i < 2u ? i + 1u : 0u;
+        d = (uint32_t)p[QP_LFO(k, QL_DEST)], tm = (uint32_t)p[QP_LFO(k, QL_TRIG)], wv = (uint32_t)p[QP_LFO(k, QL_WAVE)];
+        fd = p[QP_LFO(k, QL_FADE)], sph = p[QP_LFO(k, QL_PHASE)], dep = p[QP_LFO(k, QL_DEPTH)];
+        if (!k && (dst[QD_L1SPD] | dst[QD_L1MUL] | dst[QD_L1FAD] | dst[QD_L1WAV] | dst[QD_L1SPH] | dst[QD_L1MOD] |
+                   dst[QD_L1DEP])) {            /* LFO 1's own parameters, moved by LFO 2 / 3 (none: as stored) */
+            int32_t sp = clamp(p[QP_LFO(0, QL_SPEED)] + ((dst[QD_L1SPD] * 127) >> 15), -64, 63);
+            int32_t mu = p[QP_LFO(0, QL_MULT)], ms = mu < 12 ? 0 : 12, ib = quad_lfo_inc(p, 0);
+            mu = ms + clamp(mu - ms + ((dst[QD_L1MUL] * 11) >> 15), 0, 11);   /* (within its set: BPM or fixed) */
+            inc0 = quad_lfo_incv(sp, (uint32_t)mu);
+            tm = (uint32_t)clamp((int32_t)tm + ((dst[QD_L1MOD] * (QT_N - 1)) >> 15), 0, QT_N - 1);
+            if (tm == QT_FREE)                   /* the part's phase runs at the stored rate: the voice's lead */
+                s->lof += (uint32_t)inc0 - (uint32_t)ib;
+            fd = clamp(fd + ((dst[QD_L1FAD] * 127) >> 15), -64, 63);
+            wv = (uint32_t)clamp((int32_t)wv + ((dst[QD_L1WAV] * (QW_N - 1)) >> 15), 0, QW_N - 1);
+            sph = clamp(sph + ((dst[QD_L1SPH] * 127) >> 15), 0, 127);
+            dep = clamp(dep + ((dst[QD_L1DEP] * 127) >> 15), -64, 63);
+        } else {
+            inc0 = quad_lfo_inc(p, k);
+        }
         if (tm == QT_FREE) {
-            ph = quad_lfo[tr].ph[k] + (wv == QW_RAND ? 0u : (uint32_t)p[QP_LFO(k, QL_PHASE)] << 25);
+            ph = quad_lfo[tr].ph[k] + (wv == QW_RAND ? 0u : (uint32_t)sph << 25) + (k ? 0u : s->lof);
             rv = quad_lfo[tr].rnd[k];
         } else {
             ph = s->lph[k];
@@ -1051,10 +1094,12 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
                 if (inc0 > 0 ? s->lph[k] < old : inc0 < 0 && s->lph[k] > old)
                     s->lrnd[k] = quad_xs(s->lrnd[k] + k);
             }
+            if (wv != QW_RAND)                   /* (L1SPH: the start phase moved = the phase read moved) */
+                ph += (uint32_t)(sph - p[QP_LFO(k, QL_PHASE)]) << 25;
         }
         if (wv == QW_RAND) {                     /* RAND: SPH is the slew, a one-pole on the steps (127: about a
                                                   * period) */
-            int32_t r = (int32_t)(rv >> 16) - 32768, sl = p[QP_LFO(k, QL_PHASE)];
+            int32_t r = (int32_t)(rv >> 16) - 32768, sl = sph;
             if (sl) {
                 int32_t kk = clamp((int32_t)(((uint32_t)(inc0 < 0 ? -inc0 : inc0) >> 17) * 254u / (uint32_t)sl), 1,
                                    32767);
@@ -1063,10 +1108,10 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
                 s->lsl[k] = r;
             }
         }
-        if (!d || d >= QD_N || !p[QP_LFO(k, QL_DEPTH)])
+        if (!d || d >= QD_N || !dep)
             continue;
         w = quad_lfo_wave(wv, ph, s->lsl[k]);
-        w = (w * p[QP_LFO(k, QL_DEPTH)]) >> 6;
+        w = (w * dep) >> 6;
         if (fd) {                                /* FADE: - in, + out, over the time of 2 |FADE| - 1 */
             int32_t f = (int32_t)s->ticks * (int32_t)(ENV_LIN[2 * (fd < 0 ? -fd : fd) - 1] >> 9);
             f = f > 32767 ? 32767 : f;
@@ -1077,23 +1122,35 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (s->ticks < 0xFFFFu)
         s->ticks++;
 #define QMV(i, d, sc, lo, hi) clamp(p[i] + ((dst[d] * (sc)) >> 15), lo, hi)
-    /* the envelopes (their times, END, SUS modulated) */
-    eA = quad_env_tick(s, 0, QMV(QP_AATK, QD_AATK, 127, 0, 127), QMV(QP_ADEC, QD_ADEC, 127, 0, 127),
-                       QMV(QP_AEND, QD_AEND, 127, 0, 127) << 17, 0, QMV(QP_ADLY, QD_ADLY, 127, 0, 127), 1, 0);
-    eB = quad_env_tick(s, 1, QMV(QP_BATK, QD_BATK, 127, 0, 127), QMV(QP_BDEC, QD_BDEC, 127, 0, 127),
-                       QMV(QP_BEND, QD_BEND, 127, 0, 127) << 17, 0, QMV(QP_BDLY, QD_BDLY, 127, 0, 127), 1, 0);
+#define QMV2(i, d, d2, sc, lo, hi) clamp(p[i] + (((dst[d] + dst[d2]) * (sc)) >> 15), lo, hi)   /* (+ an AB macro) */
+    /* the envelopes (their times, END, SUS modulated; the AB macros move A's and B's together) */
+    eA = quad_env_tick(s, 0, QMV2(QP_AATK, QD_AATK, QD_ABATK, 127, 0, 127),
+                       QMV2(QP_ADEC, QD_ADEC, QD_ABDEC, 127, 0, 127), QMV2(QP_AEND, QD_AEND, QD_ABEND, 127, 0, 127) << 17,
+                       0, QMV2(QP_ADLY, QD_ADLY, QD_ABDLY, 127, 0, 127), 1, 0);
+    eB = quad_env_tick(s, 1, QMV2(QP_BATK, QD_BATK, QD_ABATK, 127, 0, 127),
+                       QMV2(QP_BDEC, QD_BDEC, QD_ABDEC, 127, 0, 127), QMV2(QP_BEND, QD_BEND, QD_ABEND, 127, 0, 127) << 17,
+                       0, QMV2(QP_BDLY, QD_BDLY, QD_ABDLY, 127, 0, 127), 1, 0);
     eF = quad_env_tick(s, 2, QMV(QP_FATK, QD_FATK, 127, 0, 127), QMV(QP_FDEC, QD_FDEC, 127, 0, 127),
-                       QMV(QP_FSUS, QD_FSUS, 127, 0, 127) << 17, QMV(QP_FREL, QD_FREL, 127, 0, 127), p[QP_FDLY],
-                       v->gate, 1);
+                       QMV(QP_FSUS, QD_FSUS, 127, 0, 127) << 17, QMV(QP_FREL, QD_FREL, 127, 0, 127),
+                       QMV(QP_FDLY, QD_FDLY, 127, 0, 127), v->gate, 1);
     eE = quad_env_tick(s, 3, QMV(QP_EATK, QD_EATK, 127, 0, 127), QMV(QP_EDEC, QD_EDEC, 127, 0, 127),
                        QMV(QP_ESUS, QD_ESUS, 127, 0, 127) << 17, QMV(QP_EREL, QD_EREL, 127, 0, 127), 0, v->gate, 1);
     if (v - t->v == t->m_vi)                     /* the part's PAN: from the latest note's voice */
+    {
         quad_pan_off[tr] = (int8_t)clamp((dst[QD_PAN] * 64) >> 15, -64, 63);
+        for (k = 0; k < 4u; k++)                 /* DRIVE, REV, DEL, CHO: the part's, +-127 at full depth */
+            quad_fx_off[tr][k] = (int8_t)clamp((dst[QD_DRIVE + k] * 127) >> 15, -127, 127);
+    }
     /* the operators: ratios, detune, increments (PITCH: all, P AB2: A and B2, +-1 octave) */
     alg = (uint32_t)QMV(QP_ALGO, QD_ALGO, 7, 1, 8) - 1u;
     dt = QMV(QP_DTUN, QD_DTUN, 127, 0, 127);
-    ra = QMV(QP_RA, QD_RA, 63, 0, QUAD_NRA - 1);
+    ra = QMV2(QP_RA, QD_RA, QD_RALL, 63, 0, QUAD_NRA - 1);   /* (RATIO ALL: C, A, B1, B2 each over its range) */
     rb = clamp(p[QP_RB1] * (int32_t)QUAD_NRCB + p[QP_RB2] + ((dst[QD_RB] * 180) >> 15), 0, QUAD_NRB - 1);
+    if (dst[QD_RALL]) {
+        int32_t o = (dst[QD_RALL] * 18) >> 15;
+        rb = clamp(rb / (int32_t)QUAD_NRCB + o, 0, QUAD_NRCB - 1) * (int32_t)QUAD_NRCB +
+             clamp(rb % (int32_t)QUAD_NRCB + o, 0, QUAD_NRCB - 1);
+    }
     bAll = m->inc;
     if (dst[QD_PITCH])
         bAll = (uint32_t)(((uint64_t)bAll * (uint32_t)quad_exp2((dst[QD_PITCH] * 4096) >> 15)) >> 15);
@@ -1101,7 +1158,7 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (dst[QD_PAB2])
         bAB2 = (uint32_t)(((uint64_t)bAll * (uint32_t)quad_exp2((dst[QD_PAB2] * 4096) >> 15)) >> 15);
     {
-        int32_t rc = quad_ratio(QUAD_RCB_Q16[QMV(QP_RC, QD_RC, 18, 0, QUAD_NRCB - 1)], QMV(QP_OFSC, QD_OFSC, 100, -100, 100));
+        int32_t rc = quad_ratio(QUAD_RCB_Q16[QMV2(QP_RC, QD_RC, QD_RALL, 18, 0, QUAD_NRCB - 1)], QMV(QP_OFSC, QD_OFSC, 100, -100, 100));
         int32_t rA = quad_ratio(QUAD_RA_Q16[ra], QMV(QP_OFSA, QD_OFSA, 100, -100, 100));
         int32_t rB1 = quad_ratio(QUAD_RCB_Q16[rb / (int32_t)QUAD_NRCB], QMV(QP_OFSB1, QD_OFSB1, 100, -100, 100));
         int32_t rB2 = quad_ratio(QUAD_RCB_Q16[rb % (int32_t)QUAD_NRCB], QMV(QP_OFSB2, QD_OFSB2, 100, -100, 100));
@@ -1127,8 +1184,8 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     {
         int32_t vel = v->mvel ? v->mvel : v->vel, velf = 32767 - ((p[QP_VEL] * (127 - vel) * 2080) >> 10), j, u1, u2;
         int32_t lv[3];
-        quad_blev(QMV(QP_BLEV, QD_BLEV, 127, 0, 127), &u1, &u2);
-        lv[0] = quad_lev(QMV(QP_ALEV, QD_ALEV, 127, 0, 127) * 4096 / 127);
+        quad_blev(QMV2(QP_BLEV, QD_BLEV, QD_ABLEV, 127, 0, 127), &u1, &u2);
+        lv[0] = quad_lev(QMV2(QP_ALEV, QD_ALEV, QD_ABLEV, 127, 0, 127) * 4096 / 127);
         lv[1] = quad_lev(u1);
         lv[2] = quad_lev(u2);
         for (j = 0; j < 3; j++) {
@@ -1174,6 +1231,7 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         A1 = mulq15(A1, m->amp1);
     }
 #undef QMV
+#undef QMV2
     A0 = s->amp;
     dA = (A1 - A0) >> CTL_LOG2;
     a = A0;
@@ -1283,6 +1341,25 @@ static int32_t quad_pan(const track_t *t, int32_t pan)
     if (t->engine != ENGI_QUAD || tr >= QUAD_NPART || !quad_pan_off[tr])
         return pan;
     return clamp(pan + quad_pan_off[tr], -64, 63);
+}
+
+/* fx.c: the part's DRIVE (track_dist) and its sends (mix_part_out: c d r, x 258) with the LFOs' (QD_DRIVE, QD_SREV ..);
+ * read once a block, the sends ramped over it as any send change */
+static int32_t quad_drive(const track_t *t, int32_t d)
+{
+    uint32_t tr = quad_tr(t);
+    if (t->engine != ENGI_QUAD || tr >= QUAD_NPART || !quad_fx_off[tr][0])
+        return d;
+    return clamp(d + quad_fx_off[tr][0], 0, 127);
+}
+static void quad_sends(const track_t *t, int32_t *c, int32_t *d, int32_t *r)
+{
+    uint32_t tr = quad_tr(t);
+    if (t->engine != ENGI_QUAD || tr >= QUAD_NPART || !(quad_fx_off[tr][1] | quad_fx_off[tr][2] | quad_fx_off[tr][3]))
+        return;
+    *r = clamp(t->p[P_REV] + quad_fx_off[tr][1], 0, 127) * 258;
+    *d = clamp(t->p[P_DLY] + quad_fx_off[tr][2], 0, 127) * 258;
+    *c = clamp(t->p[P_CHOR] + quad_fx_off[tr][3], 0, 127) * 258;
 }
 
 /* --------------------------------------------------------- the engine --- */

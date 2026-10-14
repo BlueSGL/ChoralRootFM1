@@ -159,7 +159,8 @@ installed on the owner's Mac.
 
 - **Digitone `.dnsnd` import** (branch dn-1, HISTORY 3y56, docs/SOUNDS.md ".dnsnd import"): built from decoded files;
   refine with the owner's Digitone by controlled exports and `node tools/dnsnd_diff.mjs` (RATIO B, the LFO
-  destinations, RATIO A's steps, the filter type order are the open ones).
+  destinations, RATIO A's steps, the filter type order are the open ones). The LFO destinations are 1:1 since
+  HISTORY 3y59 (FM TONE has the Digitone's 57, numbers 40..57 appended, the editor in the Digitone's order).
 
 1. **The effects' pops, round 3 on the unit.** The pending bit is cleared before the render and the effects run
    block-wise (docs/FX.md "Late is not slow"); not yet read on the unit: the owner plays CZ-1 with both effects up,
