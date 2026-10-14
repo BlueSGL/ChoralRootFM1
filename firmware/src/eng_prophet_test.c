@@ -154,10 +154,6 @@
 #define P5_ONE_POOL P5_CORE
 #endif
 _Static_assert(P5_CORE >= 2u && P5_CORE <= 4u && P5_POLY <= NVOICE / 2u, "P5_CORE: 2 .. 4 (P5_STACK_G, the voice slots)");
-#ifndef P5_BASS_KEEP
-#define P5_BASS_KEEP 0                  /* 1: with two cores the bass keeps its last voice against a chord of eight
-                                         * (the chord then has seven); 0: the chord first, always */
-#endif
 typedef struct { int32_t value; uint8_t stage; } p5_env_t;
 typedef struct {
     uint32_t phase[2];

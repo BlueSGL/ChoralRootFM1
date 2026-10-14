@@ -44,7 +44,6 @@ $CC -DP5_STEAL_BLOCKS=0 -o build/host/cr_prophet_steal0 tests/cr_prophet_test.c 
 $CC -DP5_DC_BLOCK=0 -o build/host/cr_prophet_half0 tests/cr_prophet_test.c -lm &
 $CC -DP5_DC_BLOCK=0 -DP5_OUT_SHIFT=1 -o build/host/cr_prophet_half1 tests/cr_prophet_test.c -lm &
 $CC -DP5_ONE_POOL=5 -o build/host/cr_prophet_pool5 tests/cr_prophet_test.c -lm &
-$CC -DP5_BASS_KEEP=1 -o build/host/cr_prophet_keep1 tests/cr_prophet_test.c -lm &
 $CC -DP5_CORE=3 -o build/host/cr_prophet_core3 tests/cr_prophet_test.c -lm &
 $CC -DP5_WAIT_SLOT=0 -o build/host/cr_prophet_wait0 tests/cr_prophet_test.c -lm &
 # (the list's directory first: its header is the one the engine's #include finds)
@@ -98,27 +97,27 @@ cmp -s build/host/cr_prophet_half0.txt build/host/cr_prophet_half1.txt || {
     exit 1
 }
 echo "prophet: the level: every sample of every voice is exactly half of 3y45's ($hl programs, a four-note chord held and released, the capacitor off: this tree's samples x 2 are P5_OUT_SHIFT=1's, bit for bit)"
-# the rules that are a switch: -DP5_ONE_POOL=5 (one core: four chord voices and the bass's one), -DP5_BASS_KEEP=1
-# (two cores: the bass keeps its last voice), -DP5_CORE=3 (three voices a core, six with two: docs/PROPHET.md "Will
+# the rules that are a switch: -DP5_ONE_POOL=5 (one core: four chord voices and the bass's one),
+# -DP5_CORE=3 (three voices a core, six with two: docs/PROPHET.md "Will
 # it fit?"): they build; the test's own counts are the default's, so only the checks that do not name them are
 # asked for
-for v in pool5 keep1 core3; do
+for v in pool5 core3; do
     [ -x build/host/cr_prophet_$v ] || { echo "run_prophet_test.sh: the build '$v' did not build"; exit 1; }
     ./build/host/cr_prophet_$v > build/host/cr_prophet_$v.log 2>&1 || true
     grep -aq "every voice of both parts free after the release" build/host/cr_prophet_$v.log || { echo "run_prophet_test.sh: the build '$v' does not run through"; exit 1; }
 done
-echo "prophet: -DP5_ONE_POOL=5 (one core: 4 + 1), -DP5_BASS_KEEP=1 (two cores: the bass keeps a voice) and -DP5_CORE=3 (three voices a core) build and run ($(grep -ac '  FAIL' build/host/cr_prophet_pool5.log), $(grep -ac '  FAIL' build/host/cr_prophet_keep1.log) and $(grep -ac '  FAIL' build/host/cr_prophet_core3.log) of the default's counts differ, as they must)"
+echo "prophet: -DP5_ONE_POOL=5 (one core: 4 + 1) and -DP5_CORE=3 (three voices a core) build and run ($(grep -ac '  FAIL' build/host/cr_prophet_pool5.log) and $(grep -ac '  FAIL' build/host/cr_prophet_core3.log) of the default's counts differ, as they must)"
 c3=$(grep -a 'two cores: ten keys' build/host/cr_prophet_core3.log | sed -n 's/.*(core 0 \([0-9]*\), core 1 \([0-9]*\) at the most), the pool never above eight (\([0-9]*\)).*/\1 \2 \3/p')
 [ "$c3" = "3 3 6" ] || { echo "run_prophet_test.sh: -DP5_CORE=3: ten keys give '$c3' (core 0, core 1, the pool), want 3 3 6"; exit 1; }
 echo "prophet: -DP5_CORE=3: ten keys sound six voices, three rendered by each core"
 # the chord first, over its own release (voice.c voice_alloc: a note waits for a slot that is fading before it takes a
-# held voice of its own chord): without it (-DP5_WAIT_SLOT=0) the test's progression loses chord notes
+# held voice of its own chord). Its proof (-DP5_WAIT_SLOT=0 lost chord notes in the progression) ended with 3y53: the
+# bass keeps its one voice, the eighth chord note takes one of its own chord either way, and the 6- and 7-note
+# chords lose none without the wait too. The build still runs every check
 [ -x build/host/cr_prophet_wait0 ] || { echo "run_prophet_test.sh: -DP5_WAIT_SLOT=0 did not build"; exit 1; }
-./build/host/cr_prophet_wait0 > build/host/cr_prophet_wait0.log 2>&1 && {
-    echo "run_prophet_test.sh: without the wait for a fading slot the progression's check still passes: it proves nothing"; exit 1; }
-grep -aq 'FAIL.*D Bm G A twice over the ringing release' build/host/cr_prophet_wait0.log || {
-    echo "run_prophet_test.sh: -DP5_WAIT_SLOT=0 fails another check than the progression's:"; grep -a "  FAIL" build/host/cr_prophet_wait0.log | head -3; exit 1; }
-echo "prophet: a chord struck over its own release with a P5 bass: no chord note lost; without the wait for a fading slot (-DP5_WAIT_SLOT=0): $(grep -a 'FAIL.*D Bm G A' build/host/cr_prophet_wait0.log | sed -n 's/.*eight-note chords: \([0-9]*\) lost.*/\1/p') lost (the check fails, as it must)"
+./build/host/cr_prophet_wait0 > build/host/cr_prophet_wait0.log 2>&1 || {
+    echo "run_prophet_test.sh: -DP5_WAIT_SLOT=0 fails:"; grep -a "  FAIL" build/host/cr_prophet_wait0.log | head -3; exit 1; }
+echo "prophet: a chord struck over its own release with a P5 bass: no chord note lost of 6 or 7, one of 8 (3y53: the bass keeps one); -DP5_WAIT_SLOT=0 passes too (since 3y53 the wait changes nothing there)"
 echo "prophet: P5_STAGE36 1, 2, 4 and 7 render 8a3074b's samples ($lines renders: INIT, the $NS shipped programs, the stress programs, bit for bit)"
 [ -x build/host/cr_prophet_init ] || { echo "run_prophet_test.sh: FELUCCA_P5_FACTORY=0 did not build"; exit 1; }
 ./build/host/cr_prophet_init > build/host/cr_prophet_init.log || { grep -a "FAIL\|failed" build/host/cr_prophet_init.log; exit 1; }

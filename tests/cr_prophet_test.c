@@ -966,7 +966,7 @@ static void t_cores(void)
     /* ---- the bass part's stack and the chord: THE CHORD FIRST ---- */
     {
         uint32_t cv[8], bv[8], refused, back;
-        static const uint8_t WANT_B[8] = {4, 4, 4, 4, 3, 2, 1, 0};
+        static const uint8_t WANT_B[8] = {4, 4, 4, 4, 3, 2, 1, 1}, WANT_C[8] = {1, 2, 3, 4, 5, 6, 7, 7};
         p5_pair(poly, uni, 1);
         g0 = p5_bass_gave;
         trk_note_on(bt, 36, 100);
@@ -977,22 +977,22 @@ static void t_cores(void)
             blocks(6);
             cv[k] = heldv(ct);
             bv[k] = heldv(bt);
-            bad += cv[k] != k + 1u || bv[k] != WANT_B[k];
+            bad += cv[k] != WANT_C[k] || bv[k] != WANT_B[k];
             if (k == 5u)                               /* (two of four: each at twice the level, the stack's own sum) */
                 bad += p5_part(1)->sg1 != P5_STACK_G[1][3][1] && p5_part(1)->sg1 != P5_STACK_G[0][3][1];
         }
-        OK(!bad && p5_bass_gave - g0 == 4u && c_pool == 8u && c_core[0] <= 4u && c_core[1] <= 4u,
+        OK(!bad && p5_bass_gave - g0 == 3u && c_pool == 8u && c_core[0] <= 4u && c_core[1] <= 4u,
            "two cores, a UNISON bass (%s, four voices) and then a chord of 1 .. 8 keys: the chord has %u %u %u %u %u %u %u %u "
-           "voices, the bass %u %u %u %u %u %u %u %u: its stack thins to one and then gives its last voice before a chord "
-           "note is refused (%u held bass voices given up; the pool at most %u; the stack's voices that stay are raised to "
+           "voices, the bass %u %u %u %u %u %u %u %u: its stack thins to one and keeps that one (3y53): the eighth chord key "
+           "takes a voice of its own chord (%u held bass voices given up; the pool at most %u; the stack's voices that stay are raised to "
            "its level)", P5_TEST_PRESETS[pool_entry(ENGI_PROPHET, uni).fk].name, (unsigned)cv[0], (unsigned)cv[1],
            (unsigned)cv[2], (unsigned)cv[3], (unsigned)cv[4], (unsigned)cv[5], (unsigned)cv[6], (unsigned)cv[7], (unsigned)bv[0],
            (unsigned)bv[1], (unsigned)bv[2], (unsigned)bv[3], (unsigned)bv[4], (unsigned)bv[5], (unsigned)bv[6], (unsigned)bv[7],
            (unsigned)(p5_bass_gave - g0), (unsigned)c_pool);
         trk_note_off(bt, 36);
-        trk_note_on(bt, 38, 100);                      /* a bass key under a chord of eight: no voice for it */
+        trk_note_on(bt, 38, 100);                      /* a bass key under a chord of eight: one voice (3y53) */
         blocks(6);
-        refused = !p5_sounding(bt) && heldv(ct) == 8u;
+        refused = p5_sounding(bt) == 1u && heldv(bt) == 1u && heldv(ct) == 7u;
         trk_note_off(bt, 38);
         for (k = 4; k < 8u; k++)
             trk_note_off(ct, K[k]);
@@ -1001,9 +1001,10 @@ static void t_cores(void)
         trk_note_on(bt, 40, 100);
         blocks(6);
         back = p5_sounding(bt);
-        OK(refused && back == 4u && heldv(ct) == 4u && c_pool == 8u,
-           "two cores: a bass key under a chord of eight held keys does not sound (the chord first, always: no chord voice is "
-           "taken for it); with four chord keys let go and ended the next bass key has its four voices again");
+        OK(refused && back == 4u && heldv(ct) == 3u && c_pool == 8u,
+           "two cores: a bass key under a chord of eight held keys sounds one voice, the chord seven (3y53: the bass keeps "
+           "one voice; the second key, 50, gave way); with the top four chord keys let go and ended (three sound) the next "
+           "bass key has its four voices again");
         trk_all_off(ct);
         trk_all_off(bt);
         bad = !wait_free();
@@ -1022,10 +1023,10 @@ static void t_cores(void)
         bv[1] = heldv(bt);
         trk_note_on(ct, K[7], 100);
         blocks(6);
-        OK(!bad && cv[0] == 6u && bv[0] == 2u && cv[1] == 7u && bv[1] == 1u && heldv(ct) == 8u && !heldv(bt) && c_pool == 8u &&
+        OK(!bad && cv[0] == 6u && bv[0] == 2u && cv[1] == 7u && bv[1] == 1u && heldv(ct) == 7u && heldv(bt) == 1u && c_pool == 8u &&
            c_core[0] <= 4u && c_core[1] <= 4u,
            "two cores, a chord of six and then the UNISON bass key (the owner's case): the chord keeps its six, the bass has "
-           "two of its four; a seventh chord key: 7 and 1; an eighth: 8 and none");
+           "two of its four; a seventh chord key: 7 and 1; an eighth: 7 and 1 (3y53)");
         trk_all_off(ct);
         trk_all_off(bt);
         OK(wait_free(), "two cores: every voice of both parts free after the release");
@@ -1038,13 +1039,13 @@ static void t_cores(void)
         static const uint8_t CH[4][8] = {{50, 57, 62, 66, 69, 73, 76, 81}, {47, 54, 59, 62, 66, 69, 74, 78},
                                          {43, 50, 55, 59, 62, 67, 71, 74}, {45, 52, 57, 61, 64, 69, 73, 76}};
         static const uint8_t BASS[4] = {38, 35, 31, 33};
-        uint32_t nk, c, rep, lost[2] = {0, 0}, bmin[2] = {99, 99}, bmax[2] = {0, 0};
-        for (nk = 6; nk <= 8u; nk += 2u) {
+        uint32_t nk, c, rep, lost[3] = {0, 0, 0}, bmin[3] = {99, 99, 99}, bmax[3] = {0, 0, 0};
+        for (nk = 6; nk <= 8u; nk++) {
             p5_pair(poly, uni, 1);
             p5_patch_of(ct)->raw[P5_RELEASE_AMP] = 90;  /* (the release rings into the next chord) */
             for (rep = 0; rep < 2u; rep++)
                 for (c = 0; c < 4u; c++) {
-                    uint32_t x = nk == 8u, b;
+                    uint32_t x = nk - 6u, b;
                     trk_note_on(bt, BASS[c], 100);
                     for (k = 0; k < nk; k++)
                         trk_note_on(ct, CH[c][k], 96);
@@ -1065,11 +1066,63 @@ static void t_cores(void)
             trk_all_off(bt);
             bad = !wait_free();
         }
-        OK(!bad && !lost[0] && !lost[1] && bmin[0] == 2u && bmax[0] == 2u && !bmax[1] && c_pool <= 8u && c_core[0] <= 4u && c_core[1] <= 4u,
+        OK(!bad && !lost[0] && !lost[1] && lost[2] == 8u && bmin[0] == 2u && bmax[0] == 2u && bmin[1] == 1u && bmax[1] == 1u &&
+           bmin[2] == 1u && bmax[2] == 1u && c_pool <= 8u && c_core[0] <= 4u && c_core[1] <= 4u,
            "two cores, D Bm G A twice over the ringing release with the UNISON bass's key in the chord's block: six-note "
-           "chords: %u chord notes lost, the bass %u .. %u voices; eight-note chords: %u lost, the bass %u .. %u (the chord "
-           "first: every chord note sounds)", (unsigned)lost[0], (unsigned)bmin[0], (unsigned)bmax[0], (unsigned)lost[1],
-           (unsigned)bmin[1], (unsigned)bmax[1]);
+           "chords: %u chord notes lost, the bass %u .. %u voices; seven-note: %u lost, the bass %u .. %u; eight-note chords: %u "
+           "lost, the bass %u .. %u (the chord first; 3y53: an eight-note chord sounds seven, the bass keeps one)",
+           (unsigned)lost[0], (unsigned)bmin[0], (unsigned)bmax[0], (unsigned)lost[1], (unsigned)bmin[1], (unsigned)bmax[1],
+           (unsigned)lost[2], (unsigned)bmin[2], (unsigned)bmax[2]);
+    }
+    /* ---- 3y53: THE BASS ALWAYS HAS ONE VOICE. Eight chord keys (48 .. 62, in that order) and a bass key, both orders,
+     * both modes, a P5 (UNISON) bass and a VA one: the bass sounds one voice; the chord note that goes is the oldest
+     * held one that is not the lowest (50) ---- */
+    {
+        uint32_t two, order, va, ok3 = 1, cvn[2][2][2], bvn[2][2][2], msk[2][2][2];
+        for (two = 0; two < 2u; two++)
+            for (va = 0; va < 2u; va++)
+                for (order = 0; order < 2u; order++) {
+                    uint32_t want_c, want_m;
+                    p5_pair(poly, uni, (int)two);
+                    if (va) {
+                        cu_pool_load(1, ENGI_VA, 1);
+                        blocks(8);
+                    }
+                    if (order) {
+                        trk_note_on(bt, 36, 100);
+                        blocks(4);
+                    }
+                    for (k = 0; k < 8u; k++) {
+                        trk_note_on(ct, K[k], 100);
+                        blocks(4);
+                    }
+                    if (!order)
+                        trk_note_on(bt, 36, 100);
+                    blocks(12);
+                    for (k = m = 0; k < 8u; k++)
+                        for (i = 0; i < NVOICE; i++)
+                            if (P5_HELD(&ct->v[i]) && ct->v[i].note == K[k])
+                                m |= 1u << k;
+                    cvn[two][va][order] = heldv(ct);
+                    bvn[two][va][order] = heldv(bt);
+                    msk[two][va][order] = m;
+                    /* two cores: 7 + 1 (a P5 bass), 8 + its own (VA); one core: 3 + 1 (P5), 4 + 1 (VA: the budget) */
+                    want_c = two ? (va ? 8u : 7u) : (va ? 4u : 3u);
+                    want_m = two ? (va ? 0xFFu : 0xFDu) : 0u;
+                    ok3 &= cvn[two][va][order] == want_c && bvn[two][va][order] == 1u && (!want_m || m == want_m) &&
+                           (m & 1u) && c_pool <= p5_pool_size();
+                    trk_all_off(ct);
+                    trk_all_off(bt);
+                    ok3 &= wait_free();
+                }
+        OK(ok3, "3y53: eight chord keys and a bass key (chord first / bass first): two cores, P5 bass: chord %u %u + bass "
+           "%u %u (sounding %02X %02X: the second key, 50, the oldest that is not the lowest, gives way); VA bass: %u %u + "
+           "%u %u (%02X); one core, P5 bass: %u %u + %u %u; VA bass: %u %u + %u %u: the bass always sounds one voice",
+           (unsigned)cvn[1][0][0], (unsigned)cvn[1][0][1], (unsigned)bvn[1][0][0], (unsigned)bvn[1][0][1],
+           (unsigned)msk[1][0][0], (unsigned)msk[1][0][1], (unsigned)cvn[1][1][0], (unsigned)cvn[1][1][1],
+           (unsigned)bvn[1][1][0], (unsigned)bvn[1][1][1], (unsigned)msk[1][1][0], (unsigned)cvn[0][0][0],
+           (unsigned)cvn[0][0][1], (unsigned)bvn[0][0][0], (unsigned)bvn[0][0][1], (unsigned)cvn[0][1][0],
+           (unsigned)cvn[0][1][1], (unsigned)bvn[0][1][0], (unsigned)bvn[0][1][1]);
     }
     /* ---- ONE CORE: the chord part four, a P5 bass ONE voice, four P5 voices in all ---- */
     {
@@ -1196,7 +1249,7 @@ static void t_cores(void)
         bad += bt->engine != ENGI_PROPHET || heldv(ct) != 8u;
         trk_note_on(bt, 36, 100);
         blocks(6);
-        bad += p5_sounding(bt) != 0u;
+        bad += p5_sounding(bt) != 1u || heldv(ct) != 7u;
         trk_note_off(bt, 36);
         for (k = 5; k < 8u; k++)
             trk_note_off(ct, K[k]);
@@ -1204,10 +1257,10 @@ static void t_cores(void)
             blocks(4);
         trk_note_on(bt, 38, 100);
         blocks(6);
-        OK(!bad && heldv(ct) == 5u && p5_sounding(bt) == 3u && c_pool == 8u,
+        OK(!bad && heldv(ct) <= 5u && heldv(ct) >= 4u && p5_sounding(bt) == 8u - heldv(ct) && c_pool == 8u,
            "the bass part to the VA and back to P5 under held chord keys: with a VA bass the chord has all eight (a MONO bass "
-           "of another engine takes no voice of the pool); back on P5 the bass key finds no voice under eight chord keys, and "
-           "three when three of them have ended");
+           "of another engine takes no voice of the pool); back on P5 the bass key has one voice under eight chord keys (3y53), "
+           "and the rest of the pool when three of them have ended");
         trk_all_off(ct);
         trk_all_off(bt);
         OK(wait_free(), "the bass part's engine changed under held keys: no voice stuck");
