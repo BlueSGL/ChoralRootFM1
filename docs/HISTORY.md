@@ -2615,3 +2615,15 @@ note, a stack's lead), and `shed_p5_bass` takes a P5 bass stack's extra voices o
 expected no bass voice under eight chord keys now expect 7 + 1; a new one plays eight keys and a bass key in both
 orders, both modes, a P5 and a VA bass (two cores: 7 + 1, 50 gives way, VA 8 + 1; one core: 3 + 1, VA 4 + 1); the
 progression adds seven-note chords; `-DP5_WAIT_SLOT=0` now passes (its proof no longer distinguishes).
+
+3y54. **The favourites lost to another firmware; `--restore-favorites`** (branch p5-r from 39ca5d4, not pushed). The owner had marked 115 P5 programs (32 typed Chord or Bass), then ran other firmwares and came back: the
+favourites read 0 marked. ChoralRoot's flash objects outside the app area are not protected from another firmware:
+the third-party "remix" keeps loop slots 11-20 at 0xB4000-0xC7FFF (over OBJ_FAVS' 0xB6000 / 0xB7000), Melodee
+uses that flash too. A full `--backup` before trying another firmware keeps everything (`--restore` afterwards). His
+marks survived as the text `--favorites` had printed. **New**: `tools/fm1_install.py --restore-favorites FILE
+[--yes]` reads such a text (P5's numbers, the engines' and user sounds' lines, the types, the filter from the
+header), packs object 23 as `cr_favs.c crf_pack` does (version 2), PUTs it alone, reads it back and compares; the
+firmware already reloads the marks into RAM on that PUT (`cr_backup.c` calls `crf_boot`), so no restart and no
+firmware change. **Tests** (`tests/install_test.py`): the tool's packer equals the firmware's writer (cr_favs_test
+--emit) byte for byte; text -> object -> `--favorites` text is the input; asks, refuses on 0.21 and Felucca, writes
+23 only.

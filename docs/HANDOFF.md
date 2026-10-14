@@ -425,6 +425,7 @@ installed on the owner's Mac.
   sounds typed Chord, tag | 0x20 typed Bass, 0xFF the options (bit 0 the filter); 262 bytes at most. Written as an
   Option is (the poll, when quiet), with SAVE held and before a backup's LIST. Backup id 23.
   The editor's browser: KNOB 4 marks. `tools/fm1_install.py --favorites` reads them (the type in the comment).
+  `--restore-favorites FILE [--yes]` (3y54) writes such a text back (object 23 alone, read back; no restart).
 - **The favourites' type and filter** (3y42): a TYPE per sound, Both / Chord / Bass, the sound's own (kept without a
   mark; KNOB 4 never changes it; a change of type marks an unmarked sound). The FILTER, one Off / On kept in the same
   object: PRESETS / ALGORITHM / the BASS layer's SOUND / the editor's browser step the part's fitting favourites of

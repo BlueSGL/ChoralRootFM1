@@ -1810,6 +1810,30 @@ def favorites():
        "--favorites: P5's programs by Sequential's number, one a line with the name (and the type) as a comment")
     ok("FM6 06" not in out and not any(ln.split("#")[0].split() == ["7"] for ln in lines),
        "--favorites: a sound that is typed and not marked (FM6 06, P5 7) is not listed")
+
+    # --restore-favorites (3y54): text -> object, packed as the firmware's crf_pack packs it
+    ok(I.pack_favorites(marks, types, filt) == data, "--restore-favorites: the tool's packer = the firmware's writer, byte for byte")
+    tm, tt, tf, sk = I.parse_favorites_text(out)
+    marked = {k: v for k, v in types.items() if k[1] in marks.get(k[0], [])}
+    want_obj = I.pack_favorites(marks, marked, True)
+    ok((tm, tt, tf, sk) == (marks, marked, True, []) and I.pack_favorites(tm, tt, tf) == want_obj,
+       "--restore-favorites: the --favorites text decodes to the marks, the types of the marked sounds and the filter (engines, user, P5)")
+    fav = TMP / "favs-restore.txt"
+    fav.write_text(out)
+    dst = BackupSide("ChoralRoot 0.22", I.CR_IDS, [(I.FAV_ID, b"")])
+    rc, o2, err = cli(["--restore-favorites", str(fav)], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: dst), answer=False)
+    ok(rc == 1 and "cancelled" in o2 and "13 marks" in o2 and dst.log == [], "--restore-favorites: says what it will write, asks; no: nothing written")
+    rc, o2, err = cli(["--restore-favorites", str(fav), "--yes"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: dst))
+    ok(rc == 0 and "13 marks restored" in o2 and dst.log == [I.FAV_ID] and dst.objs[I.FAV_ID] == want_obj and dst.restarts == 0,
+       "--restore-favorites --yes: a PUT of object 23 alone, read back, no restart" + ("" if rc == 0 else ": " + err))
+    dst.objs[6] = objs[6]
+    rc, o3, err = cli(["--favorites"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: dst))
+    ok(rc == 0 and [ln for ln in o3.splitlines() if "U32" not in ln] == [ln for ln in out.splitlines() if "U32" not in ln],
+       "--restore-favorites: text -> object -> --favorites text = the input (U32's name lives in a bank not given here)")
+    for ver in ("ChoralRoot 0.21", "Felucca 1.0"):
+        bad = BackupSide(ver, I.CR_IDS, [(I.FAV_ID, b"")])
+        rc, _o, err = cli(["--restore-favorites", str(fav), "--yes"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: bad))
+        ok(rc != 0 and bad.log == [], f"--restore-favorites on {ver}: refused, nothing written")
     ok(I.favorites_text({16: [3]}, "X", types={(16, 3): "bass"}).splitlines()[-1] == "3      #  (bass)" and
        I.favorites_text({16: [3]}, "X").splitlines()[-1] == "3", "--favorites: a P5 line without the bank's names: the number, the type in the comment")
     ok(not any(isinstance(x, int) for x in side.log) and side.restarts == 0, "--favorites: nothing written to the FM-1")

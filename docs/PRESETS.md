@@ -204,6 +204,17 @@ favourites in the file (reported as skipped); asked directly, 0.21 answers a PUT
 writes nothing. An older ChoralRoot never reads or erases 0xB6000 / 0xB7000 (0.21's map ends at the session,
 0xB5FFF), so the object's presence does not touch it, and it is still there when 0.22 comes back.
 
+**Restoring marks from a saved list** (3y54). `tools/fm1_install.py --favorites > FILE` keeps the marks as text;
+`tools/fm1_install.py --restore-favorites FILE` writes them back: P5's lines by Sequential number, the engines' and
+the user sounds' comment lines (`# FM6 01 ..`, `# user U03 ..`, by pool place and slot), each `(chord)` / `(bass)`
+type, and the filter as the header line says (`, the filter on`). It prints what it will write and asks (`--yes`: not),
+PUTs object 23 alone (the object packed as `crf_pack` packs it; nothing else on the unit is touched), reads it back,
+compares, and says `N marks restored`. The unit takes it at once (`cr_backup.c`: the PUT reloads the RAM copy,
+`crf_boot`), no restart. Other `#` lines are notes and are skipped (and listed). ChoralRoot 0.22 on only. The text
+replaces the marks: a sound not in it is left unmarked (its type Both). Another firmware (the third-party "remix",
+whose loop slots 11-20 cover 0xB4000-0xC7FFF, or Melodee) can overwrite 0xB6000 / 0xB7000: a full `--backup` before
+trying one keeps the marks with everything else.
+
 **On the unit.**
 
 - **The SAVE menu** (`cr_ui.c cu_knob`, `cu_save_screen`). Five entries; a P5 part's menu has the last three:

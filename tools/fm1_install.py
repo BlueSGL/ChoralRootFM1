@@ -26,6 +26,7 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py --restore FILE       (write a backup back; ChoralRoot restarts afterwards)
   fm1_install.py PACKAGE.fwsc --backup FILE [--restore FILE]   (back up, install, restore onto the new firmware)
   fm1_install.py --sounds             (ChoralRoot: list the 32 user sounds U01..U32)
+  fm1_install.py --restore-favorites FILE [--yes]   (0.22 on: a --favorites text's marks back into object 23)
   fm1_install.py --favorites          (ChoralRoot 0.22 on: the sounds marked as favorites, read-only; P5's programs as
                                        lines for assets/prophet5-factory/shipped.txt: tools/p5_shipped_from_favorites.py)
   fm1_install.py --export-sound N FILE   (user sound N to a sound file; FILE may be a directory)
@@ -2464,6 +2465,8 @@ def run(a, backend, out, ask):
         return run_sounds(up, a, out, ask)
     if getattr(a, "favorites", False):
         return run_favorites(up, out)
+    if getattr(a, "restore_favorites", None):
+        return run_restore_favorites(up, a.restore_favorites, out, ask, a.yes)
     if getattr(a, "select", None):
         part, eng, pos = a.select
         if part not in (0, 1) or not 0 <= eng < 128 or not 0 <= pos < 16384:
@@ -2704,6 +2707,132 @@ def run_favorites(up, out):
     return 0
 
 
+# --restore-favorites FILE (3y54): a --favorites text back into object 23, packed as cr_favs.c crf_pack does
+FAV_SEC = ((FAV_USER, 4), (7, 2), (12, 8), (13, 8), (14, 16), (15, 8), (FAV_P5, 26))   # cr_favs.c CRF_SEC, in order
+FAV_PACK_MAX = 264                               # cr_favs.c CRF_PACK_MAX (cr_backup.c refuses more)
+
+
+def pack_favorites(marks, types=None, filt=False):
+    """{tag: [ids]}, {(tag, id): "chord"|"bass"}, filter -> the object's bytes, byte for byte as the firmware's
+    crf_pack writes them (version 2; per section of FAV_SEC: the marks, then the Chord, then the Bass bitmap, the zero
+    bytes at the end dropped, a zero bitmap not stored; the options last, only when the filter is on)"""
+    types = types or {}
+    sizes = dict(FAV_SEC)
+    for tag, ids in marks.items():
+        for i in ids:
+            if tag not in sizes or not 0 <= i < sizes[tag] * 8 or (tag == FAV_P5 and not 1 <= i <= 200):
+                raise InstallError("badbackup", f"favourites: no such sound to mark (section {tag}, id {i})")
+    out = bytearray([FAV_VERSION, 0])
+    for tag, n in FAV_SEC:
+        for w, ortag in ((None, 0), ("chord", FAV_CHORD), ("bass", FAV_BASS)):
+            bits = bytearray(n)
+            ids = marks.get(tag, []) if w is None else [i for (t, i), v in types.items() if t == tag and v == w]
+            for i in ids:
+                if 0 <= i < n * 8 and not (tag == FAV_P5 and not 1 <= i <= 200):
+                    bits[i // 8] |= 1 << (i % 8)
+            bits = bytes(bits).rstrip(b"\0")
+            if bits:
+                out += bytes([tag | ortag, len(bits)]) + bits
+                out[1] += 1
+    if filt:
+        out += bytes([FAV_OPT, 1, 1])
+        out[1] += 1
+    return bytes(out)
+
+
+def parse_favorites_text(text):
+    """a --favorites text -> (marks, types, filter, skipped lines). P5: 'NUMBER  # NAME  (type)'; the engines' and the
+    user sounds' comment lines '# FM6 01 NAME  (type)', '# user U03 NAME  (type)' are decoded too (the engine by its
+    name, the preset by its pool place); the filter from the header ', the filter on'. Other '#' lines are notes."""
+    marks, types, filt, skipped = {}, {}, False, []
+    names = sorted(((ENGINE_NAMES[e], e) for e in FAV_ORDER), key=lambda x: -len(x[0]))
+
+    def add(tag, i, rest):
+        if i not in marks.setdefault(tag, []):
+            marks[tag].append(i)
+        m = re.search(r"\((chord|bass)\)\s*$", rest)
+        if m:
+            types[(tag, i)] = m.group(1)
+
+    for ln in text.splitlines():
+        s = ln.strip()
+        if not s:
+            continue
+        if not s.startswith("#"):
+            num, _, rest = s.partition("#")
+            if not re.fullmatch(r"\d+", num.strip()) or not 1 <= int(num) <= 200:
+                raise InstallError("badbackup", f"not a P5 program number 1..200: {ln!r}")
+            add(FAV_P5, int(num), rest)
+            continue
+        body = s[1:].strip()
+        if body.startswith("favorites on "):
+            filt = body.endswith(", the filter on")
+            continue
+        if body.startswith("P5:"):
+            continue
+        m = re.match(r"user U(\d\d)\b(.*)$", body)
+        if m and 1 <= int(m.group(1)) <= SOUND_SLOTS:
+            add(FAV_USER, int(m.group(1)) - 1, m.group(2))
+            continue
+        for name, e in names:
+            m = re.match(re.escape(name) + r" (\d\d)\b(.*)$", body)
+            if m:
+                add(e, int(m.group(1)) - 1 + FACTORY_FIRST.get(str(e), 0), m.group(2))
+                break
+        else:
+            skipped.append(ln)
+    for t in marks:
+        marks[t].sort()
+    return marks, types, filt, skipped
+
+
+def cr_version_at_least(version, want=(0, 22)):
+    m = re.search(r"(\d+)\.(\d+)", version or "")
+    return bool(m) and (int(m.group(1)), int(m.group(2))) >= want
+
+
+def run_restore_favorites(up, path, out, ask, yes):
+    """--restore-favorites FILE: the marks of a --favorites text -> object 23 (a PUT of it alone), read back and
+    compared. cr_backup.c applies a PUT of 23 at once (crf_boot: the RAM copy from flash), no restart"""
+    try:
+        text = open(path, encoding="utf-8").read()
+    except (OSError, UnicodeDecodeError) as e:
+        raise InstallError("badbackup", f"cannot read {path}: {getattr(e, 'strerror', None) or e}")
+    marks, types, filt, skipped = parse_favorites_text(text)
+    types = {k: v for k, v in types.items() if k[1] in marks.get(k[0], [])}
+    data = pack_favorites(marks, types, filt)
+    if len(data) > FAV_PACK_MAX:
+        raise InstallError("badbackup", f"favourites object of {len(data)} bytes: over {FAV_PACK_MAX}")
+    total = sum(len(v) for v in marks.values())
+    bl, (version, fam) = open_backup(up)
+    try:
+        if fam != "choralroot" or not cr_version_at_least(version):
+            raise InstallError("nosounds", f"{version}: favourites (object 23, version 2) are ChoralRoot's, 0.22 on")
+        man = {o["id"]: o for o in bk_manifest(bl.request(BK_LIST, [], 3.0))}
+        if FAV_ID not in man:
+            raise InstallError("nosounds", f"{version} keeps no favourites (ChoralRoot 0.22 on)")
+        for ln in skipped:
+            print(f"skipped (not a mark): {ln.strip()}", file=out)
+        per = ", ".join(f"{'user' if t == FAV_USER else 'P5' if t == FAV_P5 else ENGINE_NAMES[t]} {len(marks[t])}"
+                        for t, _n in FAV_SEC if marks.get(t))
+        nt = {w: sum(1 for v in types.values() if v == w) for w in ("chord", "bass")}
+        print(f"write onto {version}: favourites (object 23, {len(data)} bytes, version {FAV_VERSION}): {total} marks"
+              f" ({per or 'none'}); {nt['chord']} Chord, {nt['bass']} Bass, the rest Both; the filter "
+              f"{'on' if filt else 'off'}. It replaces the marks on the FM-1; nothing else is written", file=out)
+        if not yes and not ask("Restore the favourites? [y/N] "):
+            print("cancelled", file=out)
+            return 1
+        bk_put_object(bl, FAV_ID, data, busy=lambda: print("busy: stop the loop on the FM-1", file=out))
+        man = {o["id"]: o for o in bk_manifest(bl.request(BK_LIST, [], 3.0))}
+        back = bk_get_object(bl, FAV_ID, man[FAV_ID]["size"])
+    finally:
+        bl.link.close()
+    if back != data:
+        raise BackupError("the favourites read back differ from what was written")
+    print(f"{total} marks restored", file=out)
+    return 0
+
+
 def sound_op(a):
     return [o for o, v in (("--sounds", a.sounds), ("--export-sound", a.export_sound), ("--import-sound", a.import_sound),
                            ("--export-syx", a.export_syx), ("--import-syx", a.import_syx),
@@ -2753,6 +2882,10 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
                          "read of object 23). Per engine a '# FM6 01 TINE EP' line, a marked user sound '# user U03 "
                          "NAME', and P5's programs by their Sequential number, one a line, 'NUMBER  # NAME': the output "
                          "is a valid assets/prophet5-factory/shipped.txt (tools/p5_shipped_from_favorites.py)")
+    ap.add_argument("--restore-favorites", metavar="FILE",
+                    help="ChoralRoot 0.22 on: write the marks of a --favorites text FILE back to the FM-1 (object 23 "
+                         "alone: P5's numbers, the engines' and user sounds' lines, the types, the filter; asks "
+                         "first unless --yes), read them back and compare")
     ap.add_argument("--export-sound", nargs=2, metavar=("N", "FILE"),
                     help="save user sound N (1..32) to a sound file FILE (a directory: choralroot-sound-UNN-NAME.json)")
     ap.add_argument("--import-sound", nargs=2, metavar=("N", "FILE"),
@@ -2797,6 +2930,9 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     if a.favorites and (a.info or a.debug or a.screen or a.select or a.stub or a.rescan_midi or a.package or a.backup
                         or a.restore or ops):
         ap.error("--favorites goes alone")
+    if a.restore_favorites and (a.favorites or a.info or a.debug or a.screen or a.select or a.stub or a.rescan_midi
+                                or a.package or a.backup or a.restore or ops):
+        ap.error("--restore-favorites goes alone")
     if a.debug and (a.info or a.package or a.backup or a.restore or ops):
         ap.error("--debug goes alone")
     if a.screen and (a.debug or a.info or a.package or a.backup or a.restore or ops):
@@ -2809,7 +2945,7 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
                           or ops):
         ap.error("--rescan-midi goes alone")
     if not (a.rescan_midi or a.stub or a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore
-            or ops or a.favorites):
+            or ops or a.favorites or a.restore_favorites):
         ap.error("give a PACKAGE.fwsc, --backup FILE, --restore FILE, --info, --sounds, --screen off|on or --select")
     try:
         return run(a, MidiBackend() if backend is None else backend, out, ask)   # (without python-rtmidi: the first
