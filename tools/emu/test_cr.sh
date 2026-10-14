@@ -942,10 +942,28 @@ o=$(dv 'OFS C')
 [ "$o" = "1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100 " ] &&
     ok "FM TONE's OFS C (-1.00 .. +1.00, 0.01 a stored step: hi-res style): slow 0.01 a detent, quick 0.10; GLO held: whole numbers (1.00, 0.00, -1.00)" \
     || bad "OFS C: '$o' (want 1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100)"
-[ "$(dv SPEED)" = "32 63 32 16 8 " ] &&
-    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along 8 16 32 64 (16 -> 32 -> 63, the end; back 32 16 8)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
+[ "$(dv SPEED)" = "3200 6399 3200 1600 800 " ] &&
+    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along the speed list x 100, hundredths since FM TONE's ranges (16.00 -> 32.00 -> 63.99, the end; back 32.00 16.00 8.00)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
 has '^sound: part 0 engine VA pos 1 LUSH PAD' "$L" && has '^sound: part 0 engine FM TONE pos 1 EP' "$L" &&
     ok "GLO + PRESETS still changes the engine (FM6 -> VA, VA -> FM TONE)" || bad "GLO + PRESETS: no engine change"
+
+echo "FM TONE's hi-res values (hundredths, F_FIX2) under knob acceleration and OPT snap (real timing)"
+run cr_quad_hires_knobs
+L="$OUT/cr_quad_hires_knobs.log"
+f=$(dv FREQ)
+[ "$f" = "12699 12698 12697 12057 11417 11400 11500 11600 " ] &&
+    ok "FREQ (0.00..127.99): slow detents 0.01 each, quick 6.40 (the range / 20); GLO held: 114.00 115.00 116.00 (whole numbers)" \
+    || bad "FREQ: '$f' (want 12699 12698 12697 12057 11417 11400 11500 11600)"
+s=$(dv SPEED)
+[ "$s" = "800 -800 -1600 -3200 -6400 -6400 -3200 -1600 -800 800 1600 3200 6399 6399 6399 " ] &&
+    ok "LFO 1 SPEED (hi-res, min < 0): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
+    || bad "SPEED under GLO: '$s'"
+r=$(dv REL)
+[ "$r" = "6201 6202 6842 7482 8122 8762 9402 10042 10682 11322 11962 12602 12799 12700 12600 12700 " ] &&
+    has 'REL 12602 -> 12799 (INF)' "$L" && has 'REL 12799 -> 12700 (INF)' "$L" && has 'REL 12700 -> 12600 (126.00)' "$L" &&
+    has 'REL 12600 -> 12700 (INF)' "$L" &&
+    ok "AMP REL: 0.01 slow, 6.40 quick to the end (INF); GLO held: 127.00 (INF), 126.00 (a number), 127.00 (INF): $OUT/cr_quad_hires_rel.ppm" \
+    || bad "AMP REL: '$r'"
 
 echo "EDIT held: the engine picker as a preview (cancel / keep), its roots, PRESETS in the editor"
 run cr_editor_pick --wav "$OUT/cr_editor_pick.wav"
@@ -2437,14 +2455,14 @@ b = px(186, 150); print(sum(1 for x in range(184, 237) if any(px(x, y) != b for 
 d2=$(den "$OUT/cr_quad_ratiob_b2.ppm"); d16=$(den "$OUT/cr_quad_ratiob_b16.ppm")
 [ "${d2:-0}" -gt 20 ] && [ "${d16:-0}" -gt $((d2 + 3)) ] && ok "the fraction: 3.00 over 2.00 ($d2 columns), over 16.00 ($d16): the denominator whole: $OUT/cr_quad_ratiob_b16.ppm" ||
     bad "the denominator: $d2 / $d16 ink columns"
-differ cr_quad_ratiob_b1 cr_quad_ratiob_b2 "Shift: the title line reads \"fine · B1\", the denominator 2.00: $OUT/cr_quad_ratiob_b2.ppm"
+differ cr_quad_ratiob_b1 cr_quad_ratiob_b2 "GLO held (the editor's SHIFT): KNOB 4 steps B1, the denominator 2.00 (B2 kept): $OUT/cr_quad_ratiob_b2.ppm"
 silent_end cr_quad_ratiob
 
 echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 61 decays; PANIC ends a held one"
 run cr_quad_inf --wav "$OUT/cr_quad_inf.wav"
 QL="$OUT/cr_quad_inf.log"
 has '^deep: part 0 page 12 AMP col 3 REL 6200 -> 12799 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 12799 -> 5759 (57.59)' "$QL" &&
-    ok "AMP: KNOB 4 to the top shows INF, back down a number (57.59: AMP REL in hundredths, F_FIX2; the step until the knob branch: 5 %): $OUT/cr_quad_inf_amp.ppm" ||
+    ok "AMP: KNOB 4 to the top shows INF, back down a number (57.59: AMP REL in hundredths, F_FIX2; the script's \"knobs quick\": 6.40 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
     bad "AMP REL INF text: $(grep '^deep:' "$QL" | head -2 | tr '\n' ' ')"
 qv() { grep "part 0:" "$QL" | sed -n "${1}p" | sed -n 's/.*voices \([0-9]*\),.*/\1/p'; }
 [ "$(qv 1)" = 1 ] && [ "$(qv 2)" = 0 ] && [ "$(qv 3)" = 1 ] && [ "$(qv 4)" = 0 ] &&

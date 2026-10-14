@@ -103,7 +103,7 @@ static int32_t kn_lin(int32_t v0, int32_t s, int32_t lo, int32_t hi)
 }
 /* THE HI-RES HOOK: the stored steps of a whole number (1: none). A hi-res parameter stores 1/100 units (its finest
  * step 0.01, a whole number 100 steps: OPT snaps to whole numbers; LFO speeds to the speed list x 100). Declared by
- * the descriptor's format: core.h FMT_HI (FM TONE's F_C100 F_O100 F_C100I F_FRQ100); another way to mark a column
+ * the descriptor's format: core.h FMT_HI (FM TONE's F_FIX2); another way to mark a column
  * hi-res goes here, the one place that asks */
 static int32_t kn_whole(const param_desc_t *d)
 {

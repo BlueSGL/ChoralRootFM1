@@ -2879,3 +2879,14 @@ every factory preset converted valid and audible, the old firmware's refusal, FR
 steps render differently), cr_pool_test (a self-made 80-byte version-3 slot loads converted; the texts "42.01" "43.49"
 "+41.34" "126.85" "-64.00" INF), cr_draw_test (the FM TONE pages at their longest values: 0 lint findings), the web
 and installer tests. FM TONE's goldens regenerated (tests/quad_goldens, 12 files); no other engine's changed.
+
+3y62. **Knob acceleration and OPT snap, merged with FM TONE's ranges (2026-10-14; branch qd-2-knobs-wt from 06da731,
+merged onto qd-3 as qd-4, not pushed).** The owner wanted the knobs to accelerate and a way to land on round values.
+Done (docs/EDITOR.md 6a): every value knob steps by the time between detents (cr_pages.c KN_CURVE, kn_turn: a slow
+detent the finest step, 1 or 0.01; detents a UI frame apart the range / 20); pickers and named choices one item a
+detent. OPT (GLO, the editor's SHIFT) held snaps (kn_snap / kn_grid: about 1/8 of the range, 1/16 centred; semitones
+12; hi-res values whole numbers; a bipolar SPEED / SPD along +-8 16 32 64). kn_whole asks core.h FMT_HI (qd-3's
+F_FIX2), so FM TONE's hundredths step 0.01 slow, 6.40 quick on 0..127.99, snap to whole numbers, the LFO speeds to
++-8.00 .. +-64.00, AMP REL to 127.00 (INF). The emulator's `knobs quick|real` (quick: every detent the quickest)
+keeps 15 scripts written for the old 5 % detent. The merge had no textual conflicts; test_cr.sh's knob block reads
+SPEED in hundredths; a new script cr_quad_hires_knobs checks FREQ, SPEED and AMP REL on FM TONE in real timing.
