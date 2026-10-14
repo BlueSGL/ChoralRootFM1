@@ -260,11 +260,11 @@ grep -q "^deep: part 0 page 11 DCW 1+ col 0 L1 0 -> " "$OUT/persist_cz_2.log" &&
 
 # P5 (engine 16; docs/PROPHET.md): no store yet, so no user slot: run 1 puts the chord part on a program of the
 # shipped list (assets/prophet5-factory/shipped.txt: its first with UNISON on, so that the part's voice mode is in the
-# case; without one, place 03), turns its cutoff down a detent, marks it as a favourite in the SAVE dialog (0.22: the
-# dialog opens with Favorite alone; OCT+ is refused, no store), and saves globally (SAVE held: the settings' chord
-# sound, the session's blob, and the mark with them); run 2 (the same file) powers on with that program as edited, the
-# part in UNISON as the load left it (voice mode 3; else POLY, 0), and the mark read from flash: on the program's
-# Sequential number, not its place
+# case; without one, place 03), turns its cutoff down a detent, marks it as a favourite in the SAVE dialog and saves it
+# (0.22, the sound pool: OCT+ on Overwrite, the edited program into U001 over its place), then the global save (SAVE
+# held); run 2 (the same file) powers on with U001 (the user sound, not edited: the saved program, its cutoff as
+# turned), the part in UNISON as the load left it (voice mode 3; else POLY, 0), and the mark read from flash: on the
+# program's Sequential number, not its place
 PFLASH=$OUT/persist_p5_flash.bin
 rm -f "$PFLASH" "$OUT"/persist_p5_1.log "$OUT"/persist_p5_2.log
 P5POS=$(python3 tools/gen_prophet_factory.py --list | awk '$3 == "U" { print $1; exit }')
@@ -277,19 +277,20 @@ sed "s/^knob PRESETS +2 .*/knob PRESETS +$((P5POS - 1))/" "$S/prophet_persist_se
 p5cut=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$OUT/persist_p5_1.log" | head -1)
 p5a=${p5cut% *}; p5b=${p5cut#* }
 P5ID=$(python3 tools/gen_prophet_factory.py --list | awk -v p="$P5POS" '$1 == p { print $2 }')
-[ -n "$p5cut" ] && [ "$p5a" != "$p5b" ] && grep -q '^save: part 0 P5 refused' "$OUT/persist_p5_1.log" &&
-    grep -q '^save: dialog part 0 .* (favorite)' "$OUT/persist_p5_1.log" && ! grep -q '^save: part 0 .*slot' "$OUT/persist_p5_1.log" &&
+[ -n "$p5cut" ] && [ "$p5a" != "$p5b" ] && ! grep -q '^save: part 0 P5 refused' "$OUT/persist_p5_1.log" &&
+    grep -q '^save: dialog part 0 .* (overwrite)' "$OUT/persist_p5_1.log" &&
+    grep -q "^save: part 0 overwrite slot U001 P5 [0-9]* $P5NAME rc 0" "$OUT/persist_p5_1.log" &&
     grep -q '^save: global rc 0' "$OUT/persist_p5_1.log" && grep -aq "part 0: P5 / $P5NAME, .* voice mode $P5MODE\$" "$OUT/persist_p5_1.log" &&
-    ok "P5 run 1: place $P5POS $P5NAME (voice mode $P5MODE: the program's UNISON), the cutoff $p5a -> $p5b; SAVE: the dialog with Favorite alone, OCT+ refused (no store), no slot written; the global save" ||
+    ok "P5 run 1: place $P5POS $P5NAME (voice mode $P5MODE: the program's UNISON), the cutoff $p5a -> $p5b; SAVE: Overwrite, the program saved into U001 (0.22); the global save" ||
     bad "P5 run 1: $(grep -m1 '^deep:\|^save:' "$OUT/persist_p5_1.log") / $(grep -a 'part 0:' "$OUT/persist_p5_1.log" | tail -1)"
 grep -q "^fav: part 0 $P5NAME on (tag 16 id $P5ID, 1 marked)" "$OUT/persist_p5_1.log" &&
     grep -a '^  favs:' "$OUT/persist_p5_1.log" | tail -1 | grep -q "favs: 1 marked, saves 1, pending 0 .* : 16:$P5ID\$" &&
     grep -a '^  favs:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "favs: 1 marked, saves 0, pending 0 (at power-on: read) : 16:$P5ID\$" &&
     ok "P5: KNOB 4 in the dialog marked the program by Sequential's number ($P5ID, at place $P5POS here); written with the global save; run 2 reads the mark from flash" ||
     bad "P5's mark: $(grep -m1 '^fav:' "$OUT/persist_p5_1.log") / $(grep -a '^  favs:' "$OUT/persist_p5_1.log" | tail -1) / $(grep -a -m1 '^  favs:' "$OUT/persist_p5_2.log")"
-grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "P5 / $P5NAME edited 1" &&
+grep -a 'session chord:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "P5 / $P5NAME edited 0 kind 2" &&
     grep -q "^deep: part 0 page 5 FILTER col 0 CUT $p5b -> " "$OUT/persist_p5_2.log" && grep -q '^expect sound .*: ok' "$OUT/persist_p5_2.log" &&
-    ok "P5 run 2: powers on with $P5NAME as edited (the cutoff reads $p5b: the session's program), the sound plays" ||
+    ok "P5 run 2: powers on with U001, $P5NAME as saved (the cutoff reads $p5b: the slot's program), the sound plays" ||
     bad "P5 run 2: $(grep -a -m1 'session chord:' "$OUT/persist_p5_2.log") / $(grep -m1 '^deep:' "$OUT/persist_p5_2.log")"
 grep -a 'part 0:' "$OUT/persist_p5_2.log" | sed -n 1p | grep -q "part 0: P5 / $P5NAME, .* voice mode $P5MODE\$" &&
     ok "P5 run 2: the part's voice mode is $P5MODE as it was left (3: UNISON, the program's switch taken by the load)" ||

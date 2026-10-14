@@ -1237,6 +1237,15 @@ static void crs_ahead_boot(void)
             crq.off = 1;
         }
     }
+#if UP_POOL
+    {   /* the sound pool's next target (storage.c sp_prep): a SAVE then programs only (0.22) */
+        int rc = sp_prep();
+        if (rc > 0) {
+            crq.ahead++;
+            crq.ahead_boot++;
+        }
+    }
+#endif
     st_ahead_ok[3] = 0;
 #endif
 }
@@ -1271,6 +1280,24 @@ static void crs_ahead_poll(void)
             crq.off = 1;                           /* a flash error: no erase ahead until the next power-on */
         return;
     }
+#if UP_POOL
+    if (!sp_ready()) {                             /* the sound pool's next target, after a SAVE used it (0.22) */
+        st_when_t w;
+        int rc;
+        crs_when(&w, fm1_ms, OBJ_SESSION);
+        w.ready = 0;
+        if (!st_ahead_due(&w))
+            return;
+        st_auto = 1;
+        rc = sp_prep();
+        st_auto = 0;
+        crs_wr_ms = fm1_ms;
+        if (rc > 0)
+            crq.ahead++;
+        else if (rc < 0)
+            crq.off = 1;
+    }
+#endif
 #endif
 }
 

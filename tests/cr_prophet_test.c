@@ -46,6 +46,8 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include "../tools/emu/emu_hooks.h"
 
 emu_hal_t emu_hal;
@@ -2104,70 +2106,97 @@ int main(int argc, char **argv)
         }
         cu_pool_load(1, ENGI_VA, 1);
 #endif
-        /* SAVE on a P5 part (0.22): the menu opens on Favorite, with the three favourites' entries alone (Favorite,
-         * Favorites filter, Favorite type); KNOB 4 marks the program by its Sequential number on each of them; OCT+
-         * changes nothing and writes no record; SAVE again closes */
+        /* SAVE on a P5 part (0.22, the sound pool: upool.c): the dialog's five entries as every engine's (Overwrite, Save
+         * as new, Favorite, Favorites filter, Favorite type); Save as new keeps the whole 138-byte program with the
+         * record; the slot loads it back after a power cycle, byte for byte and sounding the same (the render's
+         * digest); KNOB 4 on Favorite marks a factory program by its Sequential number */
         {
             cr_screen_t *sc = &cu_scr;
             uint32_t pos = pool_count(ENGI_PROPHET) > 3u ? 3u : pool_count(ENGI_PROPHET) - 1u, id = p5_preset_id(pos);
             int has_prog = pos > 0u;
+            uint32_t used, slot = UP_SLOTS, n0 = pool_count(ENGI_PROPHET);
+            static const uint8_t NOTES[3] = {57, 60, 64};
+            p5_patch_t saved, back;
+            rr_t r0, r1;
             cu_pool_load(0, ENGI_PROPHET, pos);
             (void)crf_unpack(0, 0);
             cu.page = PG_NONE;
             cu.lock = L_NONE;
             cu.opt_open = 0;
             cu.msg.text[0] = 0;
+            p5_patch_of(&trk[CR_PART_CHORD])->raw[P5_CUTOFF] ^= 3u;   /* (edited: the program as it is now is saved) */
+            psnd[0].edited = 1;
+            saved = *p5_patch_of(&trk[CR_PART_CHORD]);
             cu_save_open(0);
-            OK(cu.page == PG_SAVE && ce.save_choice == CU_SAVE_FAV && !ce.save_step && !cu.msg.text[0],
-               "save: a P5 part's dialog opens on Favorite (0.22; before: refused)");
-            cu_knob(EN_SELECT, -1);
-            cu_knob(EN_SELECT, -3);
-            OK(ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT cannot go below Favorite (the two saves are not offered)");
-            cu_knob(EN_SELECT, +1);
-            bad = ce.save_choice != CU_SAVE_FILT;
-            cu_knob(EN_SELECT, +1);
-            bad |= ce.save_choice != CU_SAVE_TYPE;
-            cu_knob(EN_SELECT, +1);
-            bad |= ce.save_choice != CU_SAVE_TYPE;
             cr_screen_clear(sc);
             cu_save_screen(sc, 0);
-            bad |= sc->n_items != 3u || sc->sel != 2u || strcmp(sc->item[2], "Both");
-            if (has_prog) {
-                cu_knob(EN_K4, +1);                   /* KNOB 4 on the type and on the filter: the mark */
-                bad |= !crf_has(ENGI_PROPHET, id) || crf_type(ENGI_PROPHET, id) != CRF_BOTH;
-                cu_knob(EN_SELECT, -1);
-                cu_knob(EN_K4, -1);
-                bad |= crf_count() != 0u || crf_filter;
-            } else {
-                cu_knob(EN_SELECT, -1);
+            OK(cu.page == PG_SAVE && ce.save_choice == 0u && sc->n_items == 5u && !cu.msg.text[0],
+               "save: a P5 part's dialog has the five entries, Overwrite first for an edited sound (0.22; before: Favorite alone)");
+            cu_knob(EN_SELECT, +1);
+            OK(ce.save_choice == 1u, "save: P5: SELECT +1: Save as new");
+            cu_oct_tap(B_OCTUP);
+            OK(ce.save_step == 1u, "save: P5: OCT+ on Save as new: the naming page");
+            cu_oct_tap(B_OCTUP);
+            for (k = 0, used = 0; k < UP_SLOTS; k++)
+                if (up_used(k)) {
+                    used++;
+                    slot = k;
+                }
+            OK(used == 1u && slot < UP_SLOTS && up_rec(slot)->engine == ENGI_PROPHET &&
+               up_patch_get(slot, ENGI_PROPHET, (uint8_t *)&back, sizeof back) == 0 && !memcmp(&back, &saved, sizeof back) &&
+               pool_count(ENGI_PROPHET) == n0 + 1u,
+               "save: P5: Save as new wrote one slot (U%03u): engine P5, its 138 bytes as the part's program, the pool one longer",
+               (unsigned)slot + 1u);
+            {   /* the part's sound parameters as they were saved (the part's own, param_kept, aside) */
+                int16_t before[P_COUNT];
+                memcpy(before, trk[CR_PART_CHORD].p, sizeof before);
+                memset(upn, 0, sizeof upn);          /* a power cycle: the table from flash */
+                up_boot();
+                cu_pool_load(0, ENGI_PROPHET, 1);
+                cu_pool_load(0, ENGI_PROPHET, pool_pos_slot(ENGI_PROPHET, slot));
+                back = *p5_patch_of(&trk[CR_PART_CHORD]);
+                for (k = 0, used = 0; k < P_COUNT; k++)
+                    used += !param_kept(k) && before[k] != trk[CR_PART_CHORD].p[k];
             }
-            cu_knob(EN_SELECT, -1);
-            OK(!bad && ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT steps Favorite, Favorites filter, Favorite type and stops at "
-               "both ends; KNOB 4 marks and unmarks on each");
+            {   /* the two programs rendered from one state (render keeps state from call to call: a fork renders each
+                 * from the same memory) */
+                int fd[2];
+                pid_t pid;
+                r0.h = r1.h = 0;
+                if (!pipe(fd) && (pid = fork()) >= 0) {
+                    if (!pid) {
+                        rr_t c = render(&trk[CR_PART_CHORD], &saved, NOTES, 3, 100, 40, 20);
+                        (void)!write(fd[1], &c.h, sizeof c.h);
+                        _exit(0);
+                    }
+                    r1 = render(&trk[CR_PART_CHORD], &back, NOTES, 3, 100, 40, 20);
+                    (void)!read(fd[0], &r0.h, sizeof r0.h);
+                    waitpid(pid, 0, 0);
+                    close(fd[0]);
+                    close(fd[1]);
+                }
+            }
+            OK(up_used(slot) && psnd[0].kind == PK_USER && psnd[0].slot == slot && !memcmp(&back, &saved, sizeof back) &&
+               !used && r0.h && r0.h == r1.h, "save: P5: after a power cycle the slot loads its program byte for byte, the "
+               "part's sound parameters as saved, and renders the same (digest %016llx)", (unsigned long long)r1.h);
+            OK(cu_fav_part_key(0, &k, &used) && k == CRF_T_USER && used == slot,
+               "save: P5: a P5 user sound's favourite key is its slot, as any user sound's");
+            OK(up_put(slot, 0) == 0 && !up_used(slot) && pool_count(ENGI_PROPHET) == n0, "save: P5: the slot erased (the pool as before)");
+            /* the mark on a factory program: KNOB 4 on Favorite, by its Sequential number */
+            cu_pool_load(0, ENGI_PROPHET, pos);
+            cu.page = PG_NONE;
             cu.msg.text[0] = 0;
-            cr_screen_clear(sc);
-            cu_save_screen(sc, 0);
-            OK(sc->kind == CR_K_PICKER && sc->n_items == 3u && sc->sel == 0u && !strcmp(sc->item[0], "Not a favorite") &&
-               !strcmp(sc->item[1], "Filter off") && !strcmp(sc->item[2], "Type: Both") && !sc->star &&
-               !strcmp(sc->footer, CU_SAVE_FOOT) &&
-               !strcmp(sc->value, has_prog ? P5_TEST_PRESETS[pos].name : "INIT"),
-               "save: P5: the screen: three items, \"Not a favorite\" selected, the program's name, no star");
+            cu_save_open(0);
+            cu_knob(EN_SELECT, +2);
+            OK(ce.save_choice == CU_SAVE_FAV, "save: P5: SELECT +2 from Save as new: Favorite");
             cu_knob(EN_K4, +1);
             cr_screen_clear(sc);
             cu_save_screen(sc, 0);
-            OK(has_prog ? crf_has(ENGI_PROPHET, id) && crf_count() == 1u && sc->star == 1 && !strcmp(sc->item[0], "Favorite")
+            OK(has_prog ? crf_has(ENGI_PROPHET, id) && crf_count() == 1u && sc->star == 1
                         : crf_count() == 0u && !strcmp(cu.msg.text, "INIT: cannot be marked"),
-               has_prog ? "save: P5: KNOB 4 right marks the program by its Sequential number (%u), not its place (%u): "
-                          "\"Favorite\", the star" : "save: P5 INIT cannot be marked%.0u%.0u", (unsigned)id, (unsigned)pos);
+               has_prog ? "save: P5: KNOB 4 marks the program by its Sequential number (%u), not its place (%u)"
+                        : "save: P5 INIT cannot be marked%.0u%.0u", (unsigned)id, (unsigned)pos);
             cu.msg.text[0] = 0;
-            cu_oct_tap(B_OCTUP);
-            for (k = 0, used = 0; k < UP_SLOTS; k++)
-                used += (uint32_t)up_used(k);
-            OK(cu.page == PG_SAVE && !strcmp(cu.msg.text, "P5: no save yet") && !used && !ce.save_step,
-               "save: P5: OCT+ is refused with a message (\"P5: no save yet\"), no record written, the dialog stays (docs/PROPHET.md \"Saving\")");
-            cu_knob(EN_K4, -1);
-            OK(crf_count() == 0u, "save: P5: KNOB 4 left takes the mark off");
-            cu_knob(EN_K4, +3);
             cu_tap(BT_SAVE);
             for (k = 0, used = 0; k < UP_SLOTS; k++)
                 used += (uint32_t)up_used(k);

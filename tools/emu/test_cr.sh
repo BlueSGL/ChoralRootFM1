@@ -2163,12 +2163,13 @@ has '^edit: group OSC screen 3 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL
     bad "P5 groups: $(grep -c '^edit: group' "$PL")"
 p5id=$(python3 tools/gen_prophet_factory.py --list | awk '$1 == 4 { print $2 }')
 p5fav=$(grep -a '^  favs:' "$PL" | tail -1)
-has "^save: dialog part 0 $P5C\* (favorite)" "$PL" && [ "$(grep -c '^save: choice favorite' "$PL")" = 1 ] && ! has '^save: choice [os]' "$PL" &&
-    has "^fav: part 0 $P5C on (tag 16 id $p5id, 1 marked)" "$PL" && has '^save: part 0 P5 refused (no store)' "$PL" &&
-    ! has '^save: part 0 .*slot' "$PL" && ! has '^save: new' "$PL" && echo "$p5fav" | grep -q "favs: 1 marked.* : 16:$p5id\$" &&
+has "^save: dialog part 0 $P5C\* (overwrite)" "$PL" && [ "$(grep -c '^save: choice overwrite' "$PL")" = 1 ] &&
+    has "^fav: part 0 $P5C on (tag 16 id $p5id, 1 marked)" "$PL" && ! has '^save: part 0 P5 refused' "$PL" &&
+    has "^save: part 0 overwrite slot U001 P5 04 $P5C rc 0" "$PL" && has '^p5: save slot 1 part 0 patch crc ' "$PL" &&
+    echo "$p5fav" | grep -q "favs: 1 marked.* : 16:$p5id\$" &&
     [ "$(yellow_in "$OUT/cr_prophet_fav.ppm" 0 0 57600)" -ge 10 ] && [ "$(yellow_in "$OUT/cr_prophet_save.ppm" 0 0 57600)" = 0 ] &&
     ! cmp -s "$OUT/cr_prophet_fav.ppm" "$OUT/cr_prophet_refused.ppm" &&
-    ok "SAVE on a P5 part (0.22): the dialog with Favorite alone (SELECT cannot leave it); KNOB 4 marks place 04 by Sequential's number ($p5id), the star; OCT+: refused (\"P5: no save yet\"), no slot written: $OUT/cr_prophet_save.ppm cr_prophet_fav.ppm cr_prophet_refused.ppm" ||
+    ok "SAVE on a P5 part (0.22, the sound pool): the dialog's five entries, on Overwrite (edited); KNOB 4 marks place 04 by Sequential's number ($p5id), the star; OCT+: the edited program saved into U001 over place 04 (its 138 bytes with the record), the mark kept: $OUT/cr_prophet_save.ppm cr_prophet_fav.ppm cr_prophet_refused.ppm (the saved message)" ||
     bad "P5's SAVE dialog: $(grep -a '^save:\|^fav:' "$PL" | tr '\n' ' ') / $p5fav / yellow $(yellow_in "$OUT/cr_prophet_fav.ppm" 0 0 57600)"
 has "^picker: open part 0 $P5C" "$PL" && has "^picker: cancel part 0 -> $P5C" "$PL" &&
     ok "EDIT held: the engine picker with P5 among the six, OCT- leaves the sound: $OUT/cr_prophet_epk.ppm" || bad "the picker in the editor"

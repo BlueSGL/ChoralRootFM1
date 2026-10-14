@@ -215,11 +215,18 @@ static int st_erase(uint32_t off)
     emu_flash_sync(off, 0x1000u);
     return 0;
 }
+static int emu_prog_left = -1;                    /* the host tests' power cut: programs that still reach the flash (-1:
+                                                   * no cut), then every program fails (tests/cr_pool_test.c) */
+static void emu_flash_fail_after(int n) { emu_prog_left = n; }
 static int st_prog(uint32_t off, const void *src, uint32_t n)
 {
     uint32_t i;
     if (off > EMU_FLASH_SIZE || n > EMU_FLASH_SIZE - off || (off & 0xFFu) + n > 256u)
         return -8;                                /* (a page program must not wrap: the device's rule) */
+    if (emu_prog_left == 0)
+        return -9;
+    if (emu_prog_left > 0)
+        emu_prog_left--;
     for (i = 0; i < n; i++)
         emu_flash[off + i] &= ((const uint8_t *)src)[i];
     emu_flash_sync(off, n);

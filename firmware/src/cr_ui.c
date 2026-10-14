@@ -1370,8 +1370,8 @@ static int cu_fav_part_key(uint32_t part, uint32_t *tag, uint32_t *id)
 {
     const track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
 #if FELUCCA_PROPHET
-    if (eng_idx(t->eng_req) == ENGI_PROPHET) {
-        *tag = ENGI_PROPHET;
+    if (eng_idx(t->eng_req) == ENGI_PROPHET && !(psnd[part].kind == PK_USER && psnd[part].fk == PF_NONE)) {
+        *tag = ENGI_PROPHET;                      /* (a P5 user sound of its own, 0.22: its slot, as any user sound's) */
         *id = psnd[part].kind == PK_INIT ? 0u : p5_patch_id(p5_patch_of(t));
         return *id != 0u;
     }
@@ -3127,16 +3127,16 @@ static void cu_edit_open(uint32_t part) { ce_open(part); }
  * binding and name kept), on INIT (which cannot be overwritten) is Save as new. Overwrite never renames: a new name
  * is a Save as new (and the old one deleted). SAVE held 1 s in the dialog: "reset to factory?" on an overwritten
  * factory preset, "delete?" on an added one; OCT+ does it. No free slot: "no free slot". Every user preset is one of
- * upreset.c's 32 records (cr_bank.c cb_store writes the binding) */
+ * the pool's 128 slots (upool.c, 0.22; 32 records before) (cr_bank.c cb_store writes the binding) */
 #define CU_SAVE_FOOT "K1 change \267 K2 filter \267 K3 type \267 K4 favorite"   /* (KNOB 1 .. 4: spelled out they are wider
                                                                                 * than the line) */
 static const char *const CU_SAVE_NAME[CU_SAVE_N] = {"overwrite", "save as new", "favorite", "filter", "type"};   /* (the traces) */
-/* the part's engine has no store for its sound: its menu has the three favourites' entries alone, and OCT+ is refused. P5
- * (docs/PROPHET.md "Saving"): a record of the 32 would hold the part's parameters and no program, and would load as
- * P5's INIT under the sound's name */
+/* the part's engine has no store for its sound: its menu has the three favourites' entries alone, and OCT+ is refused.
+ * Until 0.22 that was P5 (a record of the 32 held the part's parameters and no program); the sound pool (upool.c) keeps
+ * a P5 sound's whole program with its record, so P5 saves as every engine does (docs/PROPHET.md "Saving") */
 static int cu_save_favonly(uint32_t part)
 {
-#if FELUCCA_PROPHET
+#if FELUCCA_PROPHET && !UP_POOL
     return eng_idx(trk[part ? CR_PART_BASS : CR_PART_CHORD].eng_req) == ENGI_PROPHET;
 #else
     (void)part;
@@ -3250,12 +3250,15 @@ static void cu_save_commit(void)
     int rc;
     if (ce.save_step == 0u && ce.save_choice >= CU_SAVE_FAV) {   /* Favorite, the filter, the type: OCT+ saves nothing,
                                                                   * writes no slot */
-        if (cu_save_favonly(part)) {
+#if !UP_POOL
+        if (cu_save_favonly(part)) {                /* (before the sound pool: P5 had no store) */
             cu_message("P5: no save yet", CR_COL_RED);
             cu_trace("save: part %u P5 refused (no store)\n", (unsigned)part);
-        } else {
-            cu_trace("save: favorite, nothing to save\n");
+            return;
         }
+#endif
+        cu_trace("save: favorite, nothing to save\n");
+        (void)part;
         return;
     }
     if (ce.save_step == 0u) {

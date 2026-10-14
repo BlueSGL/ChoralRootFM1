@@ -4,10 +4,11 @@
 # MAJ + D4 held 1.5 s, released. PRESETS +2: place 03, the chord again; PRESETS +1: place 04, the chord again.
 # EDIT: the editor's groups, a shot each: OSC (OSC A, OSC B, MIXER), FILT (the filter's curve), ENV (ENV 1 the
 # amplifier's, ENV 2 the filter's), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE). On FILT: KNOB 1 -8: the cutoff down
-# ("deep: part 0 page 5 FILTER col 0 CUT"), the chord again: it sounds, darker. SAVE (0.22): the dialog with the
-# Favorite choice alone (shot); SELECT cannot leave it; KNOB 4 +1 marks the program (shot: "Favorite", the star);
-# OCT+: refused ("P5: no save yet", shot), nothing saved; OCT-: closed, back in the editor. EDIT held: the engine
-# picker in the editor (shot: P5 among the six). OCT-, EDIT. The last dump's "favs:" line has the mark.
+# ("deep: part 0 page 5 FILTER col 0 CUT"), the chord again: it sounds, darker. SAVE (0.22, the sound pool): the
+# dialog's five entries, on Overwrite (the sound is edited; shot); SELECT -1 stays there; KNOB 4 +1 marks the program
+# (shot: the star); OCT+: Overwrite, the edited program saved into U001 over place 04 (shot: the message); OCT-.
+# EDIT held: the engine picker in the editor (shot: P5 among the six). OCT-, EDIT. The last dump's "favs:" line has
+# the mark.
 wait 300
 btn GLO down
 wait 100
@@ -91,12 +92,12 @@ shot build/emu/test/cr_prophet_voice.ppm
 btn SAVE
 wait 300
 shot build/emu/test/cr_prophet_save.ppm
-knob SELECT -1                # (Favorite alone: no other choice)
+knob SELECT -1                # (Overwrite is the first entry)
 wait 200
 knob KNOB4 +1                 # the mark on
 wait 300
 shot build/emu/test/cr_prophet_fav.ppm
-btn OCT+                      # refused: P5 has no store
+btn OCT+                      # Overwrite: saved into U001 (0.22: P5 sounds save)
 wait 300
 shot build/emu/test/cr_prophet_refused.ppm
 wait 1500
