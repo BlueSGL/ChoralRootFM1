@@ -79,7 +79,7 @@ const sndWhole = (kind) => kind === "va" || kind === "quad";   // one store of 3
 const sndView = (b) => new DataView(b.buffer, b.byteOffset, b.byteLength);
 const sndSlotOk = (slot, n = SOUND_SLOTS) => Number.isInteger(slot) && slot >= 1 && slot <= n;
 // "U05" (the legacy 32), "U005" (the pool's 128): 3 digits wherever a pool slot is shown
-const sndLabel = (slot, pool = slot > 99) => `U${String(slot).padStart(pool ? 3 : 2, "0")}`;
+const sndLabel = (slot, pool = sndPoolNow || slot > 99) => `U${String(slot).padStart(pool ? 3 : 2, "0")}`;
 export const slotLabel = sndLabel;
 let sndPoolNow = false;                          // (the map last made: its labels and slot count)
 function sndCheckSlot(slot) {

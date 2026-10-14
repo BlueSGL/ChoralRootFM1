@@ -479,6 +479,19 @@ the sound edited (`REEDY STRPAD*`) and is kept by the session over a power cycle
 
 ## Saving
 
+**Since 0.22 (the sound pool, docs/PRESETS.md "The pool") a P5 sound saves as every engine's does.** SAVE opens the
+dialog with its five entries (Overwrite, Save as new, Favorite, Favorites filter, Favorite type); Overwrite or Save as
+new (with the name editor) writes the record and **the whole 138-byte program** (`p5_patch_t`, edited or not: the
+part's program as it is) into the slot, one slot of the 128. Loading that user sound restores the program byte for
+byte and, as any load, its UNISON switch (`p5_track_loaded`: `p5_user_pending`, `p5_store_read`). P5's user sounds
+follow the factory programs in P5's pool as other engines' do; a program change, the session, the favourites (a P5
+user sound's key is its slot; an Overwrite of a factory program keeps that program's Sequential number) and the
+filter treat them as any user sound. The Sound Manager exports and imports a P5 user sound as a sound file (patch
+kind `p5`). Sequential's program SysEx is not imported (not done: `prophet_patch.c p5_patch_decode` decodes it, the
+manager's path for it is not written). A 0.21 FM-1 has no P5 store: the tools refuse a P5 sound for it.
+
+What follows is the reasoning of before the pool (0.22's first builds), kept for the record.
+
 **Nothing of a P5 part is saved to a slot.** Since 0.22's favourites the SAVE tap opens the menu with **the three
 favourites' entries alone** (Favorite, Favorites filter, Favorite type; `cr_ui.c cu_save_favonly`): KNOB 4 marks the
 program by its Sequential number, KNOB 3 types it, KNOB 2 is the filter (docs/PRESETS.md "Favourites"); SELECT

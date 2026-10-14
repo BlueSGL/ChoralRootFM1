@@ -284,9 +284,69 @@ after the name, inside the comment: `# FM6 25 PIANO  (chord)`, `12     # BLOW BY
 `, the filter on` when it is. A sound that is typed and not marked is not listed. docs/PROPHET.md "The shipped list from the unit's
 favourites" has the commands.
 
-## Storage (no flash layout change)
+## The pool (0.22: 128 user slots shared by every engine)
 
-- The 32 user slots (`upreset.c` records, the VA / FM6 / CZ-1 stores beside them) hold every user-saved preset.
+The owner, 2026-10-14: "For preset slots can we have a larger shared pool?" and, on the design, "Yes build it".
+Since 0.22 the user sounds are **128 slots, U001..U128, shared by all engines** (P5 included), in a store of their own;
+the 32 slots of 0.21 and before (the records of `upreset.c` and each engine's patch store beside them) are read once,
+at the first power-on, and never written again.
+
+**A slot** (`firmware/src/upool.c`) is 384 bytes: the user record as before (`up_rec_t`, 192 bytes, `upreset.c`'s
+format, unchanged), then at 192 the engine of the patch that follows + 1 (0: none), at 193 its length, 194 / 195 zero,
+and from 196 that engine's deep patch (`eng_deep_t.blob_get`: VA 110, FM6 128, CZ-1 144, FM TONE 80, P5 138; at most
+188). A record and its patch are saved, loaded, erased and backed up together.
+
+**The store** (`firmware/src/storage.c`, the `sp_*` section): 13 logical banks of 10 slots (3840 bytes, one sector's
+payload; slots 129 and 130 of the last are not offered) **float** over the 16 sectors 0xB8000..0xC7FFF. A sector is a
+bank's copy when it carries a valid commit record (`st_hdr_t`: `ST_MAGIC`, type `SP_TYPE` 0x4C50 "PL", slot = the
+logical bank, len 3840, `rsv[0]` = `SP_VER` 1, the header CRC) and its payload CRC matches.
+- **Load** (`sp_scan`, at power-on): the 16 commit records; per bank the valid copy with the newest seq wins (serial
+  arithmetic: seq wraps; two copies with the same seq, which this writer never makes: the lower sector); a copy whose
+  payload fails its CRC is passed over for the next newest. Every save takes seq = the newest seq of any valid pool
+  header + 1, so seq orders all of the pool's writes.
+- **Save** (`sp_commit`): the new copy goes to the **target**, the first sector after the newest one (cyclic) that holds
+  no bank's current copy (16 - 13: at least three such sectors; the writes walk round all 16, the wear spreads). If the
+  target is not blank it is erased (the only erase), then the ten slots are programmed from the current copy slot by
+  slot through 384 bytes of `st_buf` (each in the pieces that fall in one page), the changed slot substituted, and the
+  commit record **last**; then everything is read back. Until the commit record is programmed the old copy is the
+  newest valid one, after it the new one is; the old copy stays as it is until its sector becomes a target. A cut
+  anywhere gives the old bank or the new one, never a mix (`tests/pool_test.c`).
+- **The quiet writes**: the target is erased ahead (`sp_prep`) at power-on before the audio starts and after a long idle
+  (`cr_settings.c crs_ahead_boot` / `crs_ahead_poll`), so a SAVE finds it blank and only programs (21 page programs).
+  A SAVE that finds it not blank erases at once (the player's own press, as before).
+- **No RAM mirror**: `upn[128]` in the pool section keeps per slot the name, the engine, used / has a pattern, step 16
+  (the binding); `up_rec(k)` reads a record from flash into one of two cached copies; a patch is read when a sound
+  loads (the main loop, never the audio ISR). One 384-byte work buffer composes a save. (RAM -4992 B, POOL -12832 B,
+  XIP +304 B against cd125b0.)
+
+**The migration** (`upool.c upool_import`): at power-on, when the pool holds no bank and a legacy bank holds a record,
+legacy slot k (1..32) = the record of `OBJ_UPRESET0 + k / 16` and the patch k of the store of that record's engine (the
+VA store, the FM6 store's halves, the CZ-1 store's halves, the FM TONE store; a VA store of version 1 or 2 converted as
+the VA store converted it), byte for byte, into pool slot k: four bank writes. The legacy objects are only read. It
+happens once: a pool with any bank is never migrated again. **Going back to 0.21** (or 377264f) finds its 32 slots and
+its favourites as they were at the update (`tools/emu/test_pool.sh`); what was saved under 0.22 is not there. Edits made
+under 0.21 afterwards are not migrated by themselves: the device manager's **Import the 0.21 slots** (SysEx 80 IMPORT)
+copies the legacy slots into U001..U032 again (U033..U128 stay).
+
+**Favourites**: slots 1..32 keep their keys (section 0x80); marks and types of U033..U128 go to a new section 0x81
+(`cr_favs.c CRF_T_USER2`, 12 bytes). 377264f's reader skips a section it does not know, so it keeps every other mark;
+it reads an object of at most 264 bytes, and the 0.22 object can reach 305 (then 377264f reads no marks at all and its
+next mark change writes its own object). The favourites filter covers pool places 1..255 (the default build's longest
+pool, P5's, is 115 + 128 + INIT = 244).
+
+**Backups** (`cr_backup.c`): the pool's banks are **ids 50..62** (each 3840 bytes, 0 when never written); the legacy
+ids 6, 7, 9..13, 22 are no longer listed but a PUT of them is taken: an older backup restores into U001..U032 (records
+from 6 / 7, the patches from the stores, in any order). Ids 24..36 were the plan's but would take Felucca's sample ids
+32..34 (refused since ChoralRoot 0.1). A backup of 0.22 restores on 0.21 only in part: its settings, the FM6 and CZ-1
+banks and the loops; the sounds (ids 50..62) are refused there (rc 1, reported as skipped), and so are the favourites
+(0.21 has none; a 0.22 build of before the pool, such as 377264f, takes them).
+
+**Third-party firmware**: the "remix" that keeps loop slots 11-20 at 0xB4000-0xC7FFF overwrites the pool's sectors as
+it does the favourites': back up before trying such a build.
+
+## Storage (no flash layout change until 0.22: [The pool](#the-pool-022-128-user-slots-shared-by-every-engine))
+
+- The 32 user slots (`upreset.c` records, the VA / FM6 / CZ-1 stores beside them; since 0.22 the pool's 128) hold every user-saved preset.
   A record **binds** to its place in a pool through two of the record's pattern bytes, unused by ChoralRoot (no
   sequencer): `note[15] = 0xA6` (the binding marker) and `flags[15]` = the factory index + 1 it overwrites, or 0 for
   a preset added to the pool. A record without the marker (saved by older firmware, or restored) is a user-added

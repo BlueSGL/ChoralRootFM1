@@ -2745,3 +2745,25 @@ by `sound_templates --check`), the device manager's library and the installer pa
 order, no LFO destination mapped yet. docs/SOUNDS.md ".dnsnd import". **Tests** `web/test_dnsnd.mjs` (suite
 `web_dnsnd`, 20 suites now): our own encoder, made-up values, every mapped field, clamping, each error and warning, the
 placed sound, the firmware's `quad_blob_ok` on the blobs. The firmware image is unchanged.
+
+3y57. **The sound pool: 128 user slots shared by every engine; P5 sounds save (2026-10-14; branch pool-1 from cd125b0, not
+pushed).** The owner wanted P5 presets saveable and asked "For preset slots can we have a larger shared pool?"; on the
+design: "Yes build it". Built (docs/PRESETS.md "The pool"): `storage.c`'s floating banks (`sp_*`: 13 banks of 10
+slots of 384 bytes over the 16 free sectors 0xB8000..0xC7FFF, a commit record per sector, the newest seq per bank wins,
+the target the first non-current sector after the newest, the ten slots programmed from the current copy, the commit
+record last, read back; the target erased ahead with the quiet writes); `upool.c` behind `upreset.c`'s API (a slot =
+the record + its engine's deep patch; a table in POOL, records read on demand; one bank write a save); the engine
+stores (VA, FM6, CZ-1, FM TONE) read once by the migration and never written; P5's 138-byte program saved and loaded
+(`p5_user_pending`); the favourites' section 0x81 for slots 33..128; backup ids 50..62 (not the plan's 24..36: Felucca's
+sample ids 32..34 sit there), the legacy ids imported into slots 1..32, 80 IMPORT; the web tools, the device manager's
+"Import the 0.21 slots" and `fm1_install.py` on the pool; labels U001..U128. **Sizes** (cd125b0 -> pool-1): RAM 82164
+-> 77172 B (-4992), POOL 317160 -> 304328 B (-12832), XIP 524612 -> 524916 B (+304, 91.5 %). **Tests**:
+`tests/pool_test.c` (3822 power cuts at every erase / program step and inside them, torn headers, equal seq, seq wrap,
+blank and stale pools, the full pool slot by slot under cuts, a whole-bank fill cut at every step, 20000 random steps
+against a reference model with cuts and reboots, the spare's erase counts, wear over the 16 sectors 717..823 erases);
+`tests/cr_pool_test.c` (every engine, P5 included, into U128 and back after a power cycle byte for byte; the full pool;
+a cut on the firmware's own path; section 0x81); `tools/emu/test_pool.sh` (377264f's firmware writes 32 edited sounds
+and five marks; this firmware migrates them byte for byte, the legacy sectors' CRCs unchanged, once; 377264f on the
+migrated image, and after a 0.22 save and a mark on U033, sees its 32 slots and five marks); the P5 render digest
+after a power cycle (`cr_prophet_test`); the web and install tests' pool cases. **Not done / not tested**: anything on
+a unit; Sequential program SysEx import; a mark on U100 through the emulator's UI (the host test's).

@@ -444,3 +444,18 @@ it and diff), the LFO destinations (one export per destination), RATIO A at a fe
   for FM6 and CZ-1, wider `used` masks, the UI's `U01..U32` picker, new backup ids, and about 12 KB of POOL. Possible
   later; not part of this.
 - The FM-1 shows no message when a bank is written from the computer (the PRESETS list simply changes).
+
+## The sound pool (0.22)
+
+ChoralRoot 0.22 keeps the user sounds in **128 slots shared by every engine** (docs/PRESETS.md "The pool"). Over the
+backup protocol they are **objects 50..62**, the pool's 13 banks: 3840 bytes each (size 0: a bank never written), ten
+slots of 384 bytes: the 192-byte record, at 192 the patch's engine + 1 (0: no patch), at 193 its length, the patch from
+196 (VA 110, FM6 128, CZ-1 144, FM TONE 80, P5 138). A slot's patch kind comes from the slot itself (`va`, `fm6`, `cz`,
+`quad`, `p5`), not from a store. The clients (`web/fm1sounds.js`, `tools/fm1_install.py`) see which an FM-1 has from its
+LIST: ids 50..62 (0.22: 128 slots, labels U001..U128) or the legacy ids 6, 7, 9..13, 22 (0.21 and before: 32 slots,
+U01..U32, unchanged). An edit writes the banks it changed (one for a slot; a swap two). A sound file is the same
+format either way (version 1; a P5 sound carries `"patch": {"kind": "p5"}`); a P5 sound cannot go to a 0.21 FM-1.
+`--sounds`, `--export-sound` / `--import-sound`, `--rename-sound`, `--delete-sound` take slots 1..128 (a slot past the
+FM-1's own is a usage error); `--favorites` / `--restore-favorites` name user slots `U05` .. `U128` (section 0x81 for
+33..128). The device manager's **Import the 0.21 slots** sends 80 IMPORT (-> rc, count): the FM-1 copies its legacy
+slots into U001..U032 again.

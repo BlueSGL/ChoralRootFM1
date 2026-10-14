@@ -39,7 +39,9 @@
  * each). FELUCCA_QUAD: 0xB2000 / 0xB3000 the QUAD patch store (quad_store.c, OBJ_QUADSTORE: the user sample slot 2's
  * flash); 0xB4000 / 0xB5000 the session (cr_settings.c, OBJ_SESSION: where the unit was left, 0.18);
  * 0xB6000 / 0xB7000 the favourites (cr_favs.c, OBJ_FAVS: the marked sounds, 0.22);
- * 0xB8000..0xC7FFF stays free */
+ * 0xB8000..0xC7FFF the sound pool (0.22: the sp_* section at the end, upool.c: 13 banks of 10 user slots floating over
+ * these 16 sectors). Since 0.22 the user preset banks, the VA / FM6 / CZ-1 tone / QUAD stores above are LEGACY: read once
+ * (the migration), never written */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2,
 #if FELUCCA_CZ && FELUCCA_QUAD
        OBJ_CZSTORE1, OBJ_CZBANK0, OBJ_QUADSTORE = OBJ_CZBANK0 + 8, OBJ_SESSION, OBJ_FAVS, OBJ_COUNT

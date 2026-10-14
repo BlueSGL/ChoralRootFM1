@@ -742,3 +742,11 @@ read as current, migrated or defaults.
    writes what changed, a second one nothing; `session_hold.txt`: SAVE held under a held chord writes at once (the
    erases' silence in the dump), an Option changed under it waits for silence; the reset runs: the session a new
    unit's.
+
+## The sound pool's sectors (0.22)
+
+0xB8000..0xC7FFF, free until 0.22, holds the sound pool (docs/PRESETS.md "The pool"): 16 sectors over which the 13
+banks of 10 user slots float (storage.c `sp_*`: a commit record per sector, type 0x4C50, the newest seq per bank wins).
+The legacy sound objects (0x97000..0x9EFFF, 0xA0000 / 0xA1000, 0xB2000 / 0xB3000, 0xDC000..0xDFFFF) stay where they are,
+read once by the migration and never written by 0.22. The pool's target sector is erased ahead with the favourites'
+and the session's spare copies (power-on, a long idle).
