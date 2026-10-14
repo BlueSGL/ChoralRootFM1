@@ -233,6 +233,16 @@ static uint32_t make_loop(uint32_t k, uint32_t nev)   /* slot k: nev events; -> 
     return n;
 }
 
+/* a version-3 FM TONE blob (the init patch in version 3's units) in a QUAD_BLOB buffer, zeros after its 80 bytes */
+static void qb_v3(uint8_t *b)
+{
+    uint32_t i;
+    memset(b, 0, QUAD_BLOB);
+    b[0] = QUAD_MAGIC, b[1] = 3;
+    for (i = 0; i < QP_NP; i++)
+        b[2 + i] = (uint8_t)(quad_range_v3(i).def - quad_range_v3(i).min);
+}
+
 int main(void)
 {
     uint32_t n, i, k;
@@ -330,10 +340,10 @@ int main(void)
             uint8_t qb[QUAD_BLOB];
             trk[0].eng_req = ENGI_QUAD;
             quad_blob_preset(&trk[0], 1);
-            quad_blob_get(&trk[0], qb);
+            qb_v3(qb);   /* (the legacy store: an 80-byte version-3 blob, zeros after) */
             memset(&qs, 0, sizeof qs);
-            qs.magic = QUAD_STORE_MAGIC; qs.ver = QUAD_STORE_VER; qs.nslot = UP_LEGACY; qs.blob = QUAD_BLOB; qs.used = 1u << 5;
-            memcpy(qs.p[5], qb, QUAD_BLOB);
+            qs.magic = QUAD_STORE_MAGIC; qs.ver = QUAD_STORE_VER; qs.nslot = UP_LEGACY; qs.blob = QUAD_BLOB_V3; qs.used = 1u << 5;
+            memcpy(qs.p[5], qb, QUAD_BLOB_V3);
             CHECK(quad_blob_ok(qb) && quad_store_valid(&qs) && st_save(OBJ_QUADSTORE, &qs, sizeof qs) == 0, "setup: QUAD store");
         }
     }
@@ -672,10 +682,10 @@ int main(void)
             uint8_t qb[QUAD_BLOB];
             trk[0].eng_req = ENGI_QUAD;
             quad_blob_preset(&trk[0], 11);           /* (STRINGS) */
-            quad_blob_get(&trk[0], qb);
+            qb_v3(qb);   /* (the legacy store: an 80-byte version-3 blob, zeros after) */
             memset(&q, 0, sizeof q);
-            q.magic = QUAD_STORE_MAGIC; q.ver = QUAD_STORE_VER; q.nslot = UP_LEGACY; q.blob = QUAD_BLOB; q.used = 1u << 6;
-            memcpy(q.p[6], qb, QUAD_BLOB);
+            q.magic = QUAD_STORE_MAGIC; q.ver = QUAD_STORE_VER; q.nslot = UP_LEGACY; q.blob = QUAD_BLOB_V3; q.used = 1u << 6;
+            memcpy(q.p[6], qb, QUAD_BLOB_V3);
             b0.r[6] = b0.r[4];
             b0.r[6].engine = ENGI_QUAD;
             memset(b0.r[6].name, 0, 12);

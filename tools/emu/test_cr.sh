@@ -2423,8 +2423,8 @@ silent_end cr_quad_ratiob
 echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 61 decays; PANIC ends a held one"
 run cr_quad_inf --wav "$OUT/cr_quad_inf.wav"
 QL="$OUT/cr_quad_inf.log"
-has '^deep: part 0 page 12 AMP col 3 REL 62 -> 127 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 127 -> 61 (83ms)' "$QL" &&
-    ok "AMP: KNOB 4 to the top shows INF, back down a time (61: 83ms): $OUT/cr_quad_inf_amp.ppm" ||
+has '^deep: part 0 page 12 AMP col 3 REL 6200 -> 12799 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 12799 -> 5759 (57.59)' "$QL" &&
+    ok "AMP: KNOB 4 to the top shows INF, back down a number (57.59: AMP REL in hundredths, F_FIX2; the step until the knob branch: 5 %): $OUT/cr_quad_inf_amp.ppm" ||
     bad "AMP REL INF text: $(grep '^deep:' "$QL" | head -2 | tr '\n' ' ')"
 qv() { grep "part 0:" "$QL" | sed -n "${1}p" | sed -n 's/.*voices \([0-9]*\),.*/\1/p'; }
 [ "$(qv 1)" = 1 ] && [ "$(qv 2)" = 0 ] && [ "$(qv 3)" = 1 ] && [ "$(qv 4)" = 0 ] &&
