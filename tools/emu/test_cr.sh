@@ -297,8 +297,8 @@ grep -q '^ui: frame.*device): knobrow .*hot 1\.1$' "$L" && grep -q '^ui: frame.*
 h=$(px_count "$OUT/cr_fx_row_hot.ppm" 64 176 116 196 ink); c=$(px_count "$OUT/cr_fx_row_cool.ppm" 64 176 116 196 ink)
 [ "$h" -gt $((c + 300)) ] && ok "the hot block behind Damp's value ($h ink px), gone 900 ms later ($c): $OUT/cr_fx_row_hot.ppm" \
     || bad "hot block: $h px hot, $c after"
-has '^fx: cells Time Spread Feedback Send' "$L" && has '^fx: cells Rate Depth Width Send' "$L" && has '^fx: knob 3 Chorus width 125$' "$L" && has '^fx: cells - - - Send' "$L" &&
-    ok "SELECT picks the effect, the cells follow (Delay, Chorus with its Width on KNOB 3 (0.21: 127 -> 125 a detent), Drive the send only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
+has '^fx: cells Time Spread Feedback Send' "$L" && has '^fx: cells Rate Depth Width Send' "$L" && has '^fx: knob 3 Chorus width 126$' "$L" && has '^fx: cells - - - Send' "$L" &&
+    ok "SELECT picks the effect, the cells follow (Delay, Chorus with its Width on KNOB 3 (0.22: 127 -> 126 a slow detent, cr_pages.c kn_lin), Drive the send only): $OUT/cr_fx_row_delay.ppm" || bad "the cells did not follow the effect"
 has '^fx: effect Reverb 2/2' "$L" && has '^fx: cells Pre-delay Mod Low cut Width' "$L" && has '^fx: effect Delay 2/2' "$L" &&
     has '^fx: cells Sync Mode Tone Wow' "$L" && [ "$(grep -c '^fx: effect' "$L")" = 7 ] &&
     [ "$(grep -a '^fx: cells' "$L" | head -1)" = "fx: cells Drive Chorus Delay Reverb" ] &&
@@ -310,8 +310,8 @@ has '^fx: knob 1 Delay sync 0' "$L" && has '^fx: knob 2 Delay mode 0' "$L" && di
 # Time's knob: clockwise is FASTER (the traces of KNOB 1 on Delay 1, in order: synced +3, -3, then free +1; the
 # division's index and the free time's 0..127 are the stored values, larger = longer)
 tm=$(sed -n 's/^fx: knob 1 Delay time \([0-9]*\)$/\1/p' "$L" | tr '\n' ' ')
-[ "$tm" = "3 6 89 " ] && ok "Delay's Time: KNOB 1 clockwise is faster (synced 1/8 -> 1/16 and back: division 6 -> 3 -> 6; free 91 -> 89: fewer ms)" \
-    || bad "Delay's Time: KNOB 1 +3, -3 synced and +1 free gave '$tm' (3 6 89)"
+[ "$tm" = "3 6 90 " ] && ok "Delay's Time: KNOB 1 clockwise is faster (synced 1/8 -> 1/16 and back: division 6 -> 3 -> 6, a division a detent; free 91 -> 90, a slow detent: fewer ms)" \
+    || bad "Delay's Time: KNOB 1 +3, -3 synced and +1 free gave '$tm' (3 6 90)"
 bar2() {   # bar2 FILE: on row 170 (the bars' feet, above the baseline) of the Time cell, the x where the second bar starts
     od -An -tu1 -v -j $((15 + 170 * 240 * 3)) -N $((60 * 3)) "$1" | awk '
         { for (i = 1; i <= NF; i++) v[n++] = $i }
@@ -334,9 +334,9 @@ fxl() { grep -a '^  session fx:' "$L" | sed -n "$1p"; }
 fxpar() { fxl "$1" | sed 's/.* par //'; }
 fxamt() { fxl "$1" | sed -n 's/.* amt \([0-9 ]*\) sends.*/\1/p'; }
 fxsnd() { fxl "$1" | sed -n 's/.* sends \([0-9 ]*\) par.*/\1/p'; }
-has '^fx: knob 1 Reverb size 98' "$L" && has '^fx: knob 3 Reverb decay 60' "$L" && has '^fx: knob 3 Delay feedback 50' "$L" &&
-    fxpar 1 | grep -q ' 13=50 .* 18=98 .* 20=60 ' &&
-    ok "the reverb's Size and Decay and the delay's Feedback turned: in the session's FX block (tags 18, 20, 13)" || bad "the FX parameters: $(fxpar 1)"
+has '^fx: knob 1 Reverb size 118' "$L" && has '^fx: knob 3 Reverb decay 76' "$L" && has '^fx: knob 3 Delay feedback 34' "$L" &&
+    fxpar 1 | grep -q ' 13=34 .* 18=118 .* 20=76 ' &&
+    ok "the reverb's Size and Decay and the delay's Feedback turned (+5, +4, -4 in a frame each: quick, 6 a detent): in the session's FX block (tags 18, 20, 13)" || bad "the FX parameters: $(fxpar 1)"
 [ -n "$(fxpar 1)" ] && [ "$(fxpar 1)" = "$(fxpar 2)" ] && [ "$(fxamt 1)" = "53 45 25 0" ] && [ "$(fxamt 2)" = "$(fxamt 1)" ] &&
     [ "$(fxamt 2)" = "$(fxsnd 2)" ] && has '^sound: part 0 pos 4 BRASS' "$L" && has '^sound: part 0 engine VA' "$L" &&
     fxpar 2 | grep -q ' 26=10 27=0 28=0 29=0 ' &&
@@ -805,11 +805,11 @@ has '^edit: group MOD screen 1 lane 3 ' "$L" && has '^deep: part 0 page [0-9]* M
     ok "MOD (SEQ), SELECT +2: slot 3, its source, destination, amount: $OUT/cr_editor_mod.ppm" || bad "MOD"
 has '^edit: group FX ' "$L" && has '^edit: group MIX screen 1 lane 2 ' "$L" &&
     ok "FX (PLAY): the sends; MIX (REC), SELECT: row B: $OUT/cr_editor_fx.ppm $OUT/cr_editor_mix_b.ppm" || bad "FX / MIX"
-has '^param: part 0 MIX DTUNE 40 -> 46 ' "$L" && has '^param: part 0 MIX DTUNE 46 -> 47 ' "$L" &&
-    ok "MIX row B KNOB 2: a detent (40 -> 46), SHIFT held: one step (46 -> 47)" || bad "SHIFT fine step"
-has '^edit: shift latched' "$L" && has '^param: part 0 MIX DTUNE 47 -> 48 ' "$L" && has '^edit: shift off' "$L" &&
+has '^param: part 0 MIX DTUNE 40 -> 46 ' "$L" && has '^param: part 0 MIX DTUNE 46 -> 48 ' "$L" &&
+    ok "MIX row B KNOB 2: a detent (40 -> 46), SHIFT held: the snap (0..127: 0 16 .. 112 127; 46 -> 48)" || bad "SHIFT snap step"
+has '^edit: shift latched' "$L" && has '^param: part 0 MIX DTUNE 48 -> 64 ' "$L" && has '^edit: shift off' "$L" &&
     has '^expect led GLO on .*: ok' "$L" && has '^expect led GLO dim .*: ok' "$L" &&
-    ok "GLO tap: SHIFT latched (LED lit, \"fine\"), KNOB 2 one step (47 -> 48), tap: off: $OUT/cr_editor_fine.ppm" || bad "SHIFT latch"
+    ok "GLO tap: SHIFT latched (LED lit, \"snap\"), KNOB 2 the next snap (48 -> 64), tap: off: $OUT/cr_editor_fine.ppm" || bad "SHIFT latch"
 has '^edit: part 1' "$L" && has '^edit: group OSC screen 1 lane 1 part 1' "$L" && has '^edit: part 0' "$L" &&
     ok "SHIFT + EDIT: the bass sound and back: $OUT/cr_editor_bass.ppm" || bad "SHIFT + EDIT"
 [ "$(grep -c '^layer: open 2 (locked)' "$L")" = 2 ] && [ "$(grep -c '^layer: close 2' "$L")" = 2 ] &&
@@ -909,7 +909,7 @@ run cr_editor_steps --wav "$OUT/cr_editor_steps.wav"
 run cr_editor_ref --wav "$OUT/cr_editor_ref.wav"
 L="$OUT/cr_editor_steps.log"
 has '^param: part 0 ENV DEC 64 -> 70 ' "$L" && ok "a platform engine's ENV (WHEEL SOFT FLUTE): a detent: DEC 64 -> 70 (5% of 0..127): $OUT/cr_editor_p_env.ppm" || bad "coarse step: $(grep -m1 '^param:' "$L")"
-has '^param: part 0 ENV DEC 70 -> 71 ' "$L" && ok "SHIFT held + KNOB 2: DEC 70 -> 71 (fine)" || bad "fine step"
+has '^param: part 0 ENV DEC 70 -> 80 ' "$L" && ok "SHIFT held + KNOB 2: DEC 70 -> 80 (the snap: 0..127 on 16s)" || bad "snap step"
 grep '^param: part 0 ENV DEC' "$L" | tail -1 | grep -q -- '-> 127 ' && ok "KNOB 2 +30: DEC clamps at 127" || bad "no clamp at 127"
 has '^param: part 0 ENV ATK 0 -> 42 ' "$L" && ok "KNOB 1 +7 (6 a detent): ATK 0 -> 42" || bad "KNOB 1: ATK not changed"
 grep -q '^split\|split point' "$L" && bad "SHIFT + KNOB reached the split point" || true
@@ -920,12 +920,32 @@ cmp -s "$OUT/cr_editor_steps.wav" "$OUT/cr_editor_ref.wav" && bad "the same audi
     || ok "the same chord with ATK 42 / DEC 127: the audio differs ($(num "non-zero samples" "$L") / $(num "non-zero samples" "$OUT/cr_editor_ref.log") non-zero samples)"
 silent_end cr_editor_steps
 
-echo "Shift + Up / Down: the firmware's fine mode (GLO held around the detent), Page Down to KNOB 1"
+echo "Shift + Up / Down: the firmware's OPT snap (GLO held around the detent), Page Down to KNOB 1; slow detents: the finest step"
 run cr_fine
 L="$OUT/cr_fine.log"
 d=$(grep '^deep: .* CUT ' "$L" | sed -E 's/.* CUT ([0-9]+) -> ([0-9]+).*/\1 \2/' | awk '{printf "%d ", $2 - $1}')
-[ "$d" = "6 6 1 1 6 " ] && ok "CUT steps plain / Shift / plain: $d(fine = 1, the SHIFT latch untouched)" \
-    || bad "fine steps: CUT deltas '$d' (want 6 6 1 1 6)"
+[ "$d" = "1 1 8 16 1 " ] && ok "CUT steps plain (slow: 1) / Shift (snap: 70 72 -> 80 -> 96) / plain: $d(the SHIFT latch untouched)" \
+    || bad "snap steps: CUT deltas '$d' (want 1 1 8 16 1)"
+
+echo "knob acceleration and OPT snap (0.22, docs/EDITOR.md): slow and quick detents, GLO held: the snap rules"
+run cr_knob_accel
+L="$OUT/cr_knob_accel.log"
+dv() { grep -a "^deep: .* $1 [-0-9]* -> " "$L" | sed -E "s/.* $1 (-?[0-9]+) -> (-?[0-9]+) .*/\2/" | tr '\n' ' '; }
+pv() { grep -a "^param: part 0 MIX $1 " "$L" | sed -E 's/.* (-?[0-9]+) -> (-?[0-9]+) .*/\2/' | tr '\n' ' '; }
+c=$(dv CUT)
+[ "$c" = "71 72 73 74 80 86 92 98 104 112 127 112 " ] &&
+    ok "VA's cutoff (0..127, an integer): 3 slow detents (300 ms apart) 1 each, a slow one after the rest, 5 a frame apart 6 each (the range / 20); GLO held: 112 127, back 112" \
+    || bad "VA's cutoff: '$c' (want 71 72 73 74 80 86 92 98 104 112 127 112)"
+[ "$(pv PAN)" = "8 16 " ] && [ "$(pv VCE)" = "1 " ] &&
+    ok "GLO held: Pan (-64..63) snaps 0 -> 8 -> 16; Voice (a named choice) one item (POLY -> MONO)" || bad "Pan / Voice under GLO: '$(pv PAN)' / '$(pv VCE)'"
+o=$(dv 'OFS C')
+[ "$o" = "1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100 " ] &&
+    ok "FM TONE's OFS C (-1.00 .. +1.00, 0.01 a stored step: hi-res style): slow 0.01 a detent, quick 0.10; GLO held: whole numbers (1.00, 0.00, -1.00)" \
+    || bad "OFS C: '$o' (want 1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100)"
+[ "$(dv SPEED)" = "32 63 32 16 8 " ] &&
+    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along 8 16 32 64 (16 -> 32 -> 63, the end; back 32 16 8)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
+has '^sound: part 0 engine VA pos 1 LUSH PAD' "$L" && has '^sound: part 0 engine FM TONE pos 1 EP' "$L" &&
+    ok "GLO + PRESETS still changes the engine (FM6 -> VA, VA -> FM TONE)" || bad "GLO + PRESETS: no engine change"
 
 echo "EDIT held: the engine picker as a preview (cancel / keep), its roots, PRESETS in the editor"
 run cr_editor_pick --wav "$OUT/cr_editor_pick.wav"
@@ -1490,26 +1510,26 @@ has '^engine pick: bass CZ-1 (64 presets)' "$BE" && has '^sound: part 1 engine C
     ok "GLO held + ALGORITHM back: VA at the place it had there (01 LUSH PAD)" || bad "GLO + ALGORITHM back: $(bp 1 3)"
 [ "$(bp 0 4)" = "FM TONE / EP 92" ] && [ "$(bp 1 4)" = "VA / LUSH PAD 92" ] && [ "$(grep -ac '^engine pick: FM TONE' "$BE")" = 1 ] &&
     ok "GLO held + PRESETS still changes the chord part's engine alone (FM TONE EP; the bass part VA LUSH PAD)" || bad "GLO + PRESETS: $(bp 0 4) / $(bp 1 4)"
-[ "$(bp 1 5)" = "VA / LUSH PAD 98" ] && [ "$(bp 0 5)" = "FM TONE / EP 92" ] && [ "$(bc 5)" = "1 2 0" ] && has '^bass: level 98 (BASS + ALGORITHM)$' "$BE" &&
-    grep -a '^ui: frame.* meter ' "$BE" | grep -aq "value '98' .*label 'bass level'" &&
-    ok "BASS held + ALGORITHM +3: the bass level 92 -> 98 with the 'bass level' meter; no layer, the bass still on (no tap), its engine and sound as they were: $OUT/cr_bass_engine_level.ppm" \
+[ "$(bp 1 5)" = "VA / LUSH PAD 110" ] && [ "$(bp 0 5)" = "FM TONE / EP 92" ] && [ "$(bc 5)" = "1 2 0" ] && has '^bass: level 110 (BASS + ALGORITHM)$' "$BE" &&
+    grep -a '^ui: frame.* meter ' "$BE" | grep -aq "value '110' .*label 'bass level'" &&
+    ok "BASS held + ALGORITHM +3 (three detents in a frame: quick, 6 each): the bass level 92 -> 110 with the 'bass level' meter; no layer, the bass still on (no tap), its engine and sound as they were: $OUT/cr_bass_engine_level.ppm" \
     || bad "BASS + ALGORITHM: $(bp 1 5) cr '$(bc 5)'"
-[ "$(bp 1 6)" = "VA / LUSH PAD 94" ] && [ "$(bc 6)" = "1 2 4" ] && has '^bass: level 94 (BASS + ALGORITHM, layer)$' "$BE" &&
-    ok "BASS held past the hold time (its layer open) + ALGORITHM -2 with BASS still down: the level in the layer (98 -> 94), never the bass sound: $OUT/cr_bass_engine_layer.ppm" \
+[ "$(bp 1 6)" = "VA / LUSH PAD 98" ] && [ "$(bc 6)" = "1 2 4" ] && has '^bass: level 98 (BASS + ALGORITHM, layer)$' "$BE" &&
+    ok "BASS held past the hold time (its layer open) + ALGORITHM -2 with BASS still down: the level in the layer (110 -> 98), never the bass sound: $OUT/cr_bass_engine_layer.ppm" \
     || bad "BASS held past the hold time + ALGORITHM: $(bp 1 6) cr '$(bc 6)'"
-[ "$(bp 1 7)" = "VA / WARM PAD 94" ] && [ "$(bc 7)" = "1 3 4" ] &&
+[ "$(bp 1 7)" = "VA / WARM PAD 98" ] && [ "$(bc 7)" = "1 3 4" ] &&
     ok "the BASS layer open, BASS not held: ALGORITHM is the bass sound's as before (02 WARM PAD)" || bad "ALGORITHM in the BASS layer: $(bp 1 7)"
-[ "$(bp 1 8)" = "VA / WARM PAD 96" ] && [ "$(bc 8)" = "1 3 4" ] && [ "$(grep -ac '^layer: close 4' "$BE")" -ge 1 ] &&
-    ok "BASS held again past the hold time (its layer closes) + ALGORITHM with BASS still down: the layer opens again, the level 96, the sound not moved" \
+[ "$(bp 1 8)" = "VA / WARM PAD 99" ] && [ "$(bc 8)" = "1 3 4" ] && [ "$(grep -ac '^layer: close 4' "$BE")" -ge 1 ] &&
+    ok "BASS held again past the hold time (its layer closes) + ALGORITHM with BASS still down: the layer opens again, the level 99 (a slow detent: 1), the sound not moved" \
     || bad "BASS held again + ALGORITHM: $(bp 1 8) cr '$(bc 8)'"
-[ "$(lf "$(L cr_bass_engine 9)" mode)" = 1 ] && [ "$(bp 1 9)" = "VA / WARM PAD 96" ] && [ "$(grep -ac '^engine pick: bass' "$BE")" = 3 ] &&
+[ "$(lf "$(L cr_bass_engine 9)" mode)" = 1 ] && [ "$(bp 1 9)" = "VA / WARM PAD 99" ] && [ "$(grep -ac '^engine pick: bass' "$BE")" = 3 ] &&
     ok "the PLAY menu: GLO + ALGORITHM is the record mode (ALGORITHM's own there: Advance), no bass engine picker, no level change" \
     || bad "GLO + ALGORITHM in the PLAY menu: mode $(lf "$(L cr_bass_engine 9)" mode) $(bp 1 9)"
-[ "$(bp 1 10)" = "VA / WARM PAD 98" ] && [ "$(bc 10)" = "1 3 4" ] && has '^bass: behaviour ' "$BE" &&
+[ "$(bp 1 10)" = "VA / WARM PAD 100" ] && [ "$(bc 10)" = "1 3 4" ] && has '^bass: behaviour ' "$BE" &&
     [ "$(grep -a '^  cr: key' "$BE" | sed -n 10p | sed -n 's/.* voicing \(-*[0-9]*\) .*/\1/p')" = 0 ] &&
-    ok "BASS held + ALGORITHM, then KNOB 1 in the same hold: the level (98), then the BASS layer opens and KNOB 1 is its Behaviour (the chord's voicing not turned)" \
+    ok "BASS held + ALGORITHM, then KNOB 1 in the same hold: the level (100), then the BASS layer opens and KNOB 1 is its Behaviour (the chord's voicing not turned)" \
     || bad "BASS + ALGORITHM then KNOB 1: $(bp 1 10) cr '$(bc 10)'"
-[ "$(bc 11 | cut -d' ' -f1)" = 0 ] && [ "$(bp 1 11)" = "CZ-1 / BRASS 1 98" ] &&
+[ "$(bc 11 | cut -d' ' -f1)" = 0 ] && [ "$(bp 1 11)" = "CZ-1 / BRASS 1 100" ] &&
     ok "the bass off: GLO + ALGORITHM changes its engine (CZ-1 BRASS 1), the bass stays off" || bad "GLO + ALGORITHM with the bass off: $(bp 1 11) cr '$(bc 11)'"
 # 0.18: a pattern of 64 steps: entered, refused past the 64th, played, edited
 export EMU_UI_LOG=0

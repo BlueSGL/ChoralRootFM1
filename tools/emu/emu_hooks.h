@@ -62,6 +62,10 @@ typedef struct {
     void (*strip_done)(void);
     void (*pump_mark)(void);
     uint8_t pump_off;
+    /* a script's "knobs quick" (1) / "knobs real" (0, the default): every knob detent at the quickest speed (the
+     * firmware's knob acceleration, firmware/src/cr_pages.c kn_turn: the range / 20 a detent, the step of before
+     * 0.22), for the scripts written against that step; real: the speed from the detents' times, as the unit */
+    volatile uint8_t knob_quick;
 } emu_hal_t;
 extern emu_hal_t emu_hal;
 

@@ -273,7 +273,7 @@ static void turn(int role, int steps)
     __atomic_fetch_add(&emu_hal.enc[emu_hal.enc_id[role]], steps * emu_hal.enc_dir[role], __ATOMIC_SEQ_CST);
     knob_angle[role] += steps * (float)(2 * M_PI / 24);
 }
-/* Shift + Up / Down: the firmware's fine mode (GLO = SHIFT held around the detent; outside the editor, GLO + a
+/* Shift + Up / Down: the firmware's OPT snap (GLO = SHIFT held around the detent; outside the editor, GLO + a
  * knob is OPT's second function). GLO goes down now, the detent arrives at the next UI frame (GLO already seen
  * down: cr_ui.c counts it a combo, so the GLO release does not toggle the latched SHIFT), GLO up one frame later. */
 static int shift_held, fine_steps, fine_role, fine_stage;    /* stage 0 idle, 1 GLO down, 2 stepped */
@@ -860,6 +860,9 @@ static int probe_frames;                         /* script `probe N`: the next N
  *                           (default 100 ms; the clock moves on), or down / up
  *   knob NAME +-N           turn a knob N detents (SELECT ALGORITHM PRESETS KNOB1..KNOB4; MASTER: N x 16 ADC)
  *   master ADC              set the MASTER pot (0..1023)
+ *   knobs quick|real        knob acceleration (firmware/src/cr_pages.c kn_turn): quick = every detent at the quickest
+ *                           speed (the range / 20, the step of before 0.22); real (the default) = from the detents'
+ *                           times: "knob KNOB1 +1", "wait 300" is a slow detent, "wait 30" between them quick ones
  *   shot NAME|PATH          the LCD: build/emu/NAME.png (+ .ppm headless), or PATH (.ppm or .png)
  *   expect led NAME on|mid|dim|faint|off  check a key's / button's LED now (on = lit; GREEN: PLAY's green LED);
  *                           a failure: exit status 1
@@ -877,7 +880,7 @@ static int probe_frames;                         /* script `probe N`: the next N
  * "<ms>" for an absolute time ("1200 down A"). Names: a computer key wins for key/press/hold, a panel control
  * for btn; "note:F3" names the note F3. */
 enum { OP_DOWN, OP_UP, OP_TURN, OP_SHOT, OP_WINDOW, OP_DUMP, OP_REC, OP_QUIT, OP_MASTER, OP_EXPECT_LED, OP_EXPECT_SND, OP_MIDI, OP_PROBE,
-       OP_PA2, OP_STRIKE };
+       OP_PA2, OP_STRIKE, OP_KNOBS };
 typedef struct { uint32_t ms, seq; int op, kind, idx, n; const keymap_t *km; char name[96]; } sev_t;
 static sev_t *sev;
 static int sev_n, sev_cap, sev_i, quit_req;
@@ -1063,6 +1066,11 @@ static void load_script(const char *path)
             continue;
         }
         if (!strcmp(cmd, "master")) { sev_add(cur, OP_MASTER, NULL, 0, 0, atoi(arg), NULL); continue; }
+        if (!strcmp(cmd, "knobs")) {              /* knob acceleration: quick (every detent the quickest) / real */
+            if (strcmp(arg, "quick") && strcmp(arg, "real")) { BAD("knobs: quick or real"); continue; }
+            sev_add(cur, OP_KNOBS, NULL, 0, 0, !strcmp(arg, "quick"), NULL);
+            continue;
+        }
         if (!strcmp(cmd, "pa2")) {                /* the PA2 line by hand (emu_hooks.h pa2: the model's own check) */
             if (strcmp(arg, "high") && strcmp(arg, "low")) { BAD("pa2: high or low"); continue; }
             sev_add(cur, OP_PA2, NULL, 0, 0, !strcmp(arg, "high"), NULL);
@@ -1196,6 +1204,7 @@ static void run_script(uint32_t ms)
             break;
         case OP_TURN: turn(e->idx, e->n); break;
         case OP_MASTER: emu_hal.master = e->n; break;
+        case OP_KNOBS: emu_hal.knob_quick = (uint8_t)e->n; break;
         case OP_PA2:
             emu_hal.pa2 = (uint8_t)e->n;
             printf("script: pa2 %s at %u ms\n", e->n ? "high" : "low", (unsigned)ms);

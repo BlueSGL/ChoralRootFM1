@@ -779,8 +779,9 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   oscillator mixer (the four LEVELs as tall bars); FILT = rows A / B under the filter curve; ENV = ENV 1-4, two lanes
   each under that envelope; LFO = the stack, the sync stack; MOD = the 8 slots; FX one lane, MIX two. Each part
   remembers its group, each group its screen and lane. Screens are the dense kinds `CR_K_STACK` and `CR_K_EDIT8`
-  (`tall`: the mixer), no header bar, no footer. A detent: 5 % of the range, enums one by one; GLO = SHIFT: a tap
-  latches fine steps (one unit a detent; its LED, "fine" in the title line), held it is momentary (`cp_dstep`); deep
+  (`tall`: the mixer), no header bar, no footer. A detent: accelerated (0.22: the finest step slowly, up to 5 % of the
+  range quickly), enums one by one; GLO = SHIFT: the OPT snap, a tap latches it (its LED, "snap" in the title line),
+  held it is momentary (`cp_dstep`, `kn_*`: EDITOR.md §6a); deep
   edits mark the sound `*`. Engines without deep pages: OSC = EDIT 1, FILT = EDIT 2, ENV / LFO / MOD the platform
   pages (FM6: "own envelopes" on ENV). A layer opened over the editor (PERF held, the engine picker) closes back to
   it. **EDIT held** (or PRESETS turned inside the editor): the engine picker as a **preview** of the part's sound

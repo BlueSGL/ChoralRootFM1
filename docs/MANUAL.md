@@ -679,8 +679,9 @@ chorus, the delay and the reverb. They are the same four, in the same order and 
 of the sound editor ([The sound editor](#12-the-sound-editor)), and each is the same value as the **Send** cell on
 the effect's own page: change it in one place and the others show it at once. **A send reads the same everywhere**:
 in per cent, from `0%` (nothing) to `100%` (all of it), on the Sends page, in a Send cell, in the sound editor, and in
-the large number KNOB 4 or a MIDI controller puts on the screen. One click of a knob is about 5 % in each of these
-places, and both ends are reached exactly. A new FM-1 opens the layer on Sends;
+the large number KNOB 4 or a MIDI controller puts on the screen. A knob turned slowly moves a send by one (under
+1 %), turned quickly by about 5 % a click, in each of these places ([Knob speed and OPT snap](#knob-speed-and-opt-snap)),
+and both ends are reached exactly. A new FM-1 opens the layer on Sends;
 after that it opens on the page you left it on. While FX is off the four cells read `off`; turning one switches the
 effects on again. In the sound editor the FX group always shows the values that are kept, FX on or off.
 
@@ -1285,10 +1286,33 @@ their buttons are the editor's groups.
   drawn in the knob colours; the rest is grey.
 - **SELECT** steps through the lanes, and on past the last lane into the next screen, so SELECT alone reaches
   everything in a group.
-- **KNOB 1 to KNOB 4** change the active lane's four values. One click is about 5 % of the range, or one step of a
-  list.
-- **SHIFT** (printed GLO) makes one click one unit. Tap it to latch it (`fine` in the top line, the button lit); hold
-  it for fine steps only while held.
+- **KNOB 1 to KNOB 4** change the active lane's four values. Turned slowly a click is the finest step (one unit, or
+  0.01 of a value with two decimals); turned quickly the steps grow, up to about 5 % of the range a click, so a quick
+  spin crosses the whole range. A list (a wave, a mode, an algorithm, a ratio) is always one item a click.
+- **SHIFT** (printed GLO, OPT outside) **snaps**: while it is held each click goes to the next common value
+  ([Knob speed and OPT snap](#knob-speed-and-opt-snap)). Tap it to latch it (`snap` in the top line, the button lit).
+
+### Knob speed and OPT snap
+
+Every knob that changes a value (the sound editor of every engine, the FX layer, the BASS layer's level, the PERF
+knobs, KNOB 3 and KNOB 4 on the main screen, Options > Velocity) follows how fast you turn it: slowly, the finest
+step a click; quickly, bigger steps, up to about 5 % of the range a click. Lists (presets, engines, waves, modes,
+algorithms, ratios, divisions) are always one item a click.
+
+Hold **OPT** (GLO) while turning a value and it snaps, as the Digitone does with FUNC held:
+
+| the value | snaps to |
+|---|---|
+| values with two decimals (FM TONE's Harmonics, Detune, Frequency, Resonance, Base, Level, Release, the offsets ...) | whole numbers |
+| an LFO speed that goes both ways (FM TONE's) | −64 −32 −16 −8, 8 16 32 64 |
+| transposes and coarse tunings in semitones | octaves |
+| 0 to 127 | 0 16 32 48 64 80 96 112 127 |
+| −64 to 63 (pan, amounts) | 0, then steps of 8 |
+| 0 to 99 (FM6, CZ-1) | tens |
+| a small range (up to 17 values) | one step a click |
+
+Lists do not snap. OPT's other jobs do not change: OPT + PRESETS or ALGORITHM changes an engine, OPT + KNOB 1 the
+split point, OPT + SELECT the click level.
 - The top line has the sound's name (with `*` once changed, and `· BASS` in orange on the bass sound) and, at the
   right, where you are (`OSC 2 · A`, `ENV 2 · filter`, `MOD 3`).
 - **PRESETS** in the editor opens the engine picker as a preview ([Sounds](#11-sounds)): the sound browser. KNOB 1
@@ -1350,7 +1374,7 @@ More: [FM6.md](FM6.md).
 | MOD | four fixed routes with an Amount each: ENV to FILT, ENV to PITCH, ENV to SHAPE, LFO to AMP |
 
 Ratio B is two values in one cell: a click steps the upper one (B2), a click with SHIFT the lower one (B1); the top
-line then reads `fine · B1`. More: [QUAD.md](QUAD.md) (the engine's working name was QUAD).
+line then reads `snap · B1`. More: [QUAD.md](QUAD.md) (the engine's working name was QUAD).
 
 ### CZ-1
 
@@ -1820,7 +1844,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |
-| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass engine (both wherever the knob alone is the sound: the main screen, the Options, the layers but PLAY; ALGORITHM in the sound editor too) · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: fine steps; + EDIT: chord / bass sound |
+| GLO | OPT | Options (SELECT setting · KNOB 1 value). In the PLAY menu: its keys play / loops. In the KEY layer: its keys pick / play. In the editor: SHIFT latch | + **SAVE, both held 1 s: revert to the last save** · + PRESETS: engine · + ALGORITHM: bass engine (both wherever the knob alone is the sound: the main screen, the Options, the layers but PLAY; ALGORITHM in the sound editor too) · + KNOB 1: split point · + SELECT: click level · + SEQ: metronome on / off · + REC: the next record mode. In the editor: snap (held or latched); + EDIT: chord / bass sound. Held + a value knob anywhere: the value snaps |
 | HOME | HOME | back; on the view: next view | 0.6 s: the view menu (SELECT view · KNOB 1 lock) |
 | SAVE | SAVE | the save menu: SELECT Overwrite / Save as new / Favorite / Favorites filter / Favorite type · KNOB 1 value · KNOB 2 filter · 3 type · 4 favorite · OCT+ saves · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
@@ -1842,7 +1866,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | SEQ | MOD | the same | |
 | PLAY | FX | the group | |
 | REC | MIX | the group | |
-| GLO | SHIFT | latch fine steps | fine steps while held; + EDIT: chord / bass sound |
+| GLO | SHIFT | latch snap | snap while held; + EDIT: chord / bass sound |
 | EDIT | EDIT | leave | the engine picker |
 | HOME | HOME | leave | the view menu |
 | SAVE | SAVE | the save dialog | the global save, as outside |

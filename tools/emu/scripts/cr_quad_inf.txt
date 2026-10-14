@@ -4,6 +4,7 @@
 # KNOB 4 -11: REL 61, the held note decays; a C4 released at 8.7 s is silent 1.5 s later (RMS at 9.9..10.2 s); REL
 # back to INF, a C4 released at 11.2 s, held (dump); EDIT leaves, End (OCT- + OCT+): PANIC ends it (the last dump:
 # every part silent)
+knobs quick                   # every detent the quickest (the range / 20: the step this script was written for, 0.22)
 wait 300
 btn EDIT down
 wait 400

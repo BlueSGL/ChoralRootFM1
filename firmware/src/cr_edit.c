@@ -11,8 +11,9 @@
  * group's button opens it (at its remembered screen and lane), tapped again it cycles the group's screens; held it
  * does nothing (reserved). SELECT moves the LANE (the four parameters on KNOB 1..4: a row, an oscillator, a slot)
  * and runs on across the screens (past the last lane: the next screen's first, wrapping), so SELECT alone reaches
- * everything. GLO = SHIFT: a tap latches it (fine steps, its LED lit, "fine" in the title line), held it is
- * momentary. KNOB 1..4 edit the active lane's cells (a detent 5 % of the range, enums one by one; SHIFT: one step).
+ * everything. GLO = SHIFT (OPT): a tap latches it (snap, its LED lit, "snap" in the title line), held it is
+ * momentary. KNOB 1..4 edit the active lane's cells (accelerated: cr_pages.c kn_lin; enums and named choices one by one;
+ * SHIFT: the value snaps, kn_snap).
  * The editor remembers its group per part, every group its screen and lane (RAM).
  *
  * The screens are built from the engine's deep pages (core.h eng_deep_t: its sections OSC FILTER ENV LFO MOD, pages
@@ -74,7 +75,7 @@ typedef struct {
 
 static struct {
     uint8_t grp[2], scr[2][CE_NSEC], lane[2][CE_NSEC];   /* per part: the group; per group its screen and lane */
-    uint8_t shift;                        /* SHIFT latched (fine steps) */
+    uint8_t shift;                        /* SHIFT latched (snap: OPT held or latched) */
     uint8_t hot_r, hot_c;                 /* the cell last turned (row + 1, 0 none), its column */
     uint8_t hot_slot, hot_src;            /* .. by a quick mapping: its matrix page + 1 (0: an edit), the source */
     uint32_t hot_t0;
@@ -1018,7 +1019,7 @@ static void ce_amt_text(char *o, const char *src, int32_t v, uint32_t n)
 }
 
 /* ENV (env 1) or LFO (env 0) held + KNOB k turned s: the last ENV n / LFO n shown modulates the parameter under k */
-static void ce_map(uint32_t knob, int32_t s, uint32_t fine, uint32_t env)
+static void ce_map(uint32_t knob, int32_t s, uint32_t snap, uint32_t env)
 {
     track_t *t = ce_trk();
     const eng_deep_t *d = ce_deep(t);
@@ -1067,7 +1068,7 @@ static void ce_map(uint32_t knob, int32_t s, uint32_t fine, uint32_t env)
         d->set(t, use.pg, (uint32_t)use.cd, dst);
     }
     amt0 = d->get(t, use.pg, (uint32_t)use.ca);
-    amt = cp_dstep(&d->pages[use.pg].col[(uint32_t)use.ca], amt0, s, fine || cx.shift);
+    amt = cp_dstep(&d->pages[use.pg].col[(uint32_t)use.ca], amt0, s, snap || cx.shift);
     if (amt != amt0)
         d->set(t, use.pg, (uint32_t)use.ca, amt);
     amt = d->get(t, use.pg, (uint32_t)use.ca);
@@ -1129,7 +1130,7 @@ static uint32_t ce_kmod(void)
 /* a ratio pair (QUAD's RATIO B): an F_INT column of k names over k x k values, v - min = slow x k + fast: the fast
  * hand names[v % k] (the numerator, on top: QUAD's B2), the slow hand names[v / k] (below: B1); k (0: not a pair).
  * The editor needs no engine hook: one detent steps the fast hand (carrying into the slow one on the wrap), SHIFT
- * steps the slow hand (ce_knob: "fine \267 B1"), the cell is a fraction of both (ce_cell_plan) */
+ * steps the slow hand (ce_knob: "snap \267 B1"), the cell is a fraction of both (ce_cell_plan) */
 static uint32_t ce_pair(const param_desc_t *d)
 {
     uint32_t k = 0;
@@ -1179,8 +1180,8 @@ static void ce_trace_value(const param_desc_t *d, int32_t v, char *b, uint32_t n
     cp_value(d, v, b, n);
 }
 
-/* KNOB 1..4 on the active lane's cell (fine: SHIFT latched or held, one step) */
-static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
+/* KNOB 1..4 on the active lane's cell (snap: SHIFT latched or held: cr_pages.c kn_snap; else at the knob's speed) */
+static void ce_knob(uint32_t knob, int32_t s, uint32_t snap)
 {
     track_t *t = ce_trk();
     ce_view_t vw;
@@ -1195,18 +1196,18 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
         return;
     }
     if (m) {                                       /* ENV / LFO held: map */
-        ce_map(knob, s, fine, m == 1u);
+        ce_map(knob, s, snap, m == 1u);
         return;
     }
     ce_view(t, ce.part & 1u, &vw);
     r = vw.ref[vw.active][knob & 3u];
     if (!(d = ce_param(t, r, &v0)))
         return;
-    v = cp_dstep(d, v0, s, fine || cx.shift);
+    v = cp_dstep(d, v0, s, snap || cx.shift);
     if (r.k == CE_R_DEEP && d->names && (ce_cstyle(t, &vw, vw.active, knob & 3u) == ENG_C_RATIO ||
                                          ce_cstyle(t, &vw, vw.active, knob & 3u) == ENG_C_BIG))
         v = clamp(v0 + s, d->min, d->max);        /* (a ratio: one step a detent, as the Digitone's) */
-    if (r.k == CE_R_DEEP && (pk = ce_pair(d)) != 0 && (fine || cx.shift)) {   /* a pair, SHIFT: the slow hand (B1) a step */
+    if (r.k == CE_R_DEEP && (pk = ce_pair(d)) != 0 && (snap || cx.shift)) {   /* a pair, SHIFT: the slow hand (B1) a step */
         int32_t c = v0 - d->min, b2 = clamp(c / (int32_t)pk + s, 0, (int32_t)pk - 1);
         v = d->min + b2 * (int32_t)pk + c % (int32_t)pk;
     }
@@ -1230,7 +1231,7 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t fine)
                                                     * the chord part's are the FX amounts). The part's since 0.18, as
                                                     * the MIX group's Level and Pan: not an edit of the sound; but
                                                     * FM TONE's Drive is the sound's: cu_send_set marks it edited */
-        v = cu_send_step(v0, s, fine || cx.shift);                /* (a send's one step, as the FX layer's) */
+        v = cu_send_step(v0, s, snap || cx.shift);                /* (a send's one step, as the FX layer's) */
         cu_send_set(ce.part, i, v);
         cu_send_text(v, b, sizeof b);
         cu_trace("param: part %u %s %s %d -> %d (%s)%s\n", (unsigned)ce.part, CE_SEC_NAME[cx.grp[ce.part & 1u] % CE_NSEC],

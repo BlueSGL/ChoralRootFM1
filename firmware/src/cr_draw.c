@@ -1258,9 +1258,9 @@ static void cr_ed_title(const cr_screen_t *s)
     }
     rw = (s->page[0] ? cr_tw(s->page, 11, 1) : 0) + P8(232 - rx);
     if (s->page[0]) cr_text(P8(rx), P8(17), s->page, 11, 1, CR_R, 4096, T_MID, T_BG, 0);
-    if (s->fine) {                                   /* SHIFT on: "fine", small, left of the right text (2: a ratio
+    if (s->fine) {                                   /* SHIFT on: "snap", small, left of the right text (2: a ratio
                                                       * pair's slow hand B1 steps) */
-        const char *ft = s->fine == 2u ? "fine \267 B1" : "fine";
+        const char *ft = s->fine == 2u ? "snap \267 B1" : "snap";
         int32_t fx = P8(232) - rw - (rw ? P8(6) : 0);
         cr_text(fx, P8(16), ft, 9, 1, CR_R, 4096, T_TEXT, T_BG, 0);
         rw += cr_tw(ft, 9, 1) + P8(6);
