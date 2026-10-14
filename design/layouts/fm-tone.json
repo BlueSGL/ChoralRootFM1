@@ -19,8 +19,8 @@
       "page": 1,
       "title": "SYN 1+",
       "cols": [
-        {"short": "HARM", "fmt": "?", "min": -2600, "max": 2600, "def": 0, "names": null, "unit": null},
-        {"short": "DTUNE", "fmt": "?", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
+        {"short": "HARM", "fmt": "fix2", "min": -2600, "max": 2600, "def": 0, "names": null, "unit": null},
+        {"short": "DTUNE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
         {"short": "FDBK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "MIX", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null}
       ]
@@ -49,10 +49,10 @@
       "page": 4,
       "title": "FILTER+",
       "cols": [
-        {"short": "FREQ", "fmt": "?", "min": 0, "max": 12799, "def": 12700, "names": null, "unit": null},
-        {"short": "RESO", "fmt": "?", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
+        {"short": "FREQ", "fmt": "fix2", "min": 0, "max": 12799, "def": 12700, "names": null, "unit": null},
+        {"short": "RESO", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
         {"short": "TYPE", "fmt": "enum", "min": 0, "max": 3, "def": 1, "names": ["OFF", "LP12", "HP12", "LP24"], "unit": null},
-        {"short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
+        {"short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
       ]
     },
     {
@@ -69,7 +69,7 @@
       "page": 6,
       "title": "FILT 2+",
       "cols": [
-        {"short": "BASE", "fmt": "?", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
+        {"short": "BASE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
         {"short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 127, "names": null, "unit": null},
         null,
         null
@@ -132,14 +132,14 @@
         {"short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "DEC", "fmt": "time", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
         {"short": "SUS", "fmt": "pct", "min": 0, "max": 127, "def": 127, "names": null, "unit": null},
-        {"short": "REL", "fmt": "?", "min": 0, "max": 12799, "def": 4000, "names": ["INF"], "unit": null}
+        {"short": "REL", "fmt": "fix2", "min": 0, "max": 12799, "def": 4000, "names": ["INF"], "unit": null}
       ]
     },
     {
       "page": 13,
       "title": "AMP+",
       "cols": [
-        {"short": "LEVEL", "fmt": "?", "min": 0, "max": 12799, "def": 11000, "names": null, "unit": null},
+        {"short": "LEVEL", "fmt": "fix2", "min": 0, "max": 12799, "def": 11000, "names": null, "unit": null},
         {"short": "PAN", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
         {"short": "DRIVE", "fmt": "pct", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         null
@@ -149,7 +149,7 @@
       "page": 14,
       "title": "LFO 1",
       "cols": [
-        {"short": "SPEED", "fmt": "?", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null},
+        {"short": "SPEED", "fmt": "fix2", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null},
         {"short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null},
         {"short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
         {"short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null}
@@ -162,14 +162,14 @@
         {"short": "WAVE", "fmt": "enum", "min": 0, "max": 6, "def": 0, "names": ["TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"], "unit": null},
         {"short": "PHASE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "TRIG", "fmt": "enum", "min": 0, "max": 4, "def": 0, "names": ["FREE", "TRIG", "HOLD", "ONE", "HALF"], "unit": null},
-        {"short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
+        {"short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
       ]
     },
     {
       "page": 16,
       "title": "LFO 2",
       "cols": [
-        {"short": "SPEED", "fmt": "?", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null},
+        {"short": "SPEED", "fmt": "fix2", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null},
         {"short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null},
         {"short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
         {"short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null}
@@ -182,14 +182,14 @@
         {"short": "WAVE", "fmt": "enum", "min": 0, "max": 6, "def": 0, "names": ["TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"], "unit": null},
         {"short": "PHASE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "TRIG", "fmt": "enum", "min": 0, "max": 4, "def": 0, "names": ["FREE", "TRIG", "HOLD", "ONE", "HALF"], "unit": null},
-        {"short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
+        {"short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
       ]
     },
     {
       "page": 18,
       "title": "LFO 3",
       "cols": [
-        {"short": "SPEED", "fmt": "?", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null},
+        {"short": "SPEED", "fmt": "fix2", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null},
         {"short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null},
         {"short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
         {"short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null}
@@ -202,7 +202,7 @@
         {"short": "WAVE", "fmt": "enum", "min": 0, "max": 6, "def": 0, "names": ["TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"], "unit": null},
         {"short": "PHASE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "TRIG", "fmt": "enum", "min": 0, "max": 4, "def": 0, "names": ["FREE", "TRIG", "HOLD", "ONE", "HALF"], "unit": null},
-        {"short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
+        {"short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
       ]
     }
   ],
@@ -239,8 +239,8 @@
               "lane": 1,
               "title": "SYN 1 · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 1, "col": 0, "page_title": "SYN 1+", "label": "Harm", "short": "HARM", "fmt": "?", "min": -2600, "max": 2600, "def": 0, "names": null, "unit": null, "style": "harm"},
-                {"knob": 2, "bind": "deep", "page": 1, "col": 1, "page_title": "SYN 1+", "label": "Dtune", "short": "DTUNE", "fmt": "?", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "detune"},
+                {"knob": 1, "bind": "deep", "page": 1, "col": 0, "page_title": "SYN 1+", "label": "Harm", "short": "HARM", "fmt": "fix2", "min": -2600, "max": 2600, "def": 0, "names": null, "unit": null, "style": "harm"},
+                {"knob": 2, "bind": "deep", "page": 1, "col": 1, "page_title": "SYN 1+", "label": "Dtune", "short": "DTUNE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "detune"},
                 {"knob": 3, "bind": "deep", "page": 1, "col": 2, "page_title": "SYN 1+", "label": "Feedback", "short": "FDBK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "bar"},
                 {"knob": 4, "bind": "deep", "page": 1, "col": 3, "page_title": "SYN 1+", "label": "Mix", "short": "MIX", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
@@ -302,10 +302,10 @@
               "lane": 1,
               "title": "FILTER · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 4, "col": 0, "page_title": "FILTER+", "label": "Freq", "short": "FREQ", "fmt": "?", "min": 0, "max": 12799, "def": 12700, "names": null, "unit": null, "style": "val"},
-                {"knob": 2, "bind": "deep", "page": 4, "col": 1, "page_title": "FILTER+", "label": "Reso", "short": "RESO", "fmt": "?", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 4, "col": 0, "page_title": "FILTER+", "label": "Freq", "short": "FREQ", "fmt": "fix2", "min": 0, "max": 12799, "def": 12700, "names": null, "unit": null, "style": "val"},
+                {"knob": 2, "bind": "deep", "page": 4, "col": 1, "page_title": "FILTER+", "label": "Reso", "short": "RESO", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 4, "col": 2, "page_title": "FILTER+", "label": "Type", "short": "TYPE", "fmt": "enum", "min": 0, "max": 3, "def": 1, "names": ["OFF", "LP12", "HP12", "LP24"], "unit": null, "style": "text"},
-                {"knob": 4, "bind": "deep", "page": 4, "col": 3, "page_title": "FILTER+", "label": "Env depth", "short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 4, "col": 3, "page_title": "FILTER+", "label": "Env depth", "short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
             }
           ]
@@ -335,7 +335,7 @@
               "lane": 1,
               "title": "FILTER 2 · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 6, "col": 0, "page_title": "FILT 2+", "label": "Base", "short": "BASE", "fmt": "?", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 6, "col": 0, "page_title": "FILT 2+", "label": "Base", "short": "BASE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 6, "col": 1, "page_title": "FILT 2+", "label": "Width", "short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 127, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
@@ -457,14 +457,14 @@
                 {"knob": 1, "bind": "deep", "page": 12, "col": 0, "page_title": "AMP", "label": "Attack", "short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 12, "col": 1, "page_title": "AMP", "label": "Decay", "short": "DEC", "fmt": "time", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 12, "col": 2, "page_title": "AMP", "label": "Sustain", "short": "SUS", "fmt": "pct", "min": 0, "max": 127, "def": 127, "names": null, "unit": null, "style": "num"},
-                {"knob": 4, "bind": "deep", "page": 12, "col": 3, "page_title": "AMP", "label": "Release", "short": "REL", "fmt": "?", "min": 0, "max": 12799, "def": 4000, "names": ["INF"], "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 12, "col": 3, "page_title": "AMP", "label": "Release", "short": "REL", "fmt": "fix2", "min": 0, "max": 12799, "def": 4000, "names": ["INF"], "unit": null, "style": "num"}
               ]
             },
             {
               "lane": 1,
               "title": "AMP · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 13, "col": 0, "page_title": "AMP+", "label": "Level", "short": "LEVEL", "fmt": "?", "min": 0, "max": 12799, "def": 11000, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 13, "col": 0, "page_title": "AMP+", "label": "Level", "short": "LEVEL", "fmt": "fix2", "min": 0, "max": 12799, "def": 11000, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 13, "col": 1, "page_title": "AMP+", "label": "Pan", "short": "PAN", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 13, "col": 2, "page_title": "AMP+", "label": "Drive", "short": "DRIVE", "fmt": "pct", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "none"}
@@ -494,7 +494,7 @@
               "lane": 0,
               "title": "LFO 1 · A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 14, "col": 0, "page_title": "LFO 1", "label": "Speed", "short": "SPEED", "fmt": "?", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null, "style": "knob"},
+                {"knob": 1, "bind": "deep", "page": 14, "col": 0, "page_title": "LFO 1", "label": "Speed", "short": "SPEED", "fmt": "fix2", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null, "style": "knob"},
                 {"knob": 2, "bind": "deep", "page": 14, "col": 1, "page_title": "LFO 1", "label": "Mult", "short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 14, "col": 2, "page_title": "LFO 1", "label": "Fade", "short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "deep", "page": 14, "col": 3, "page_title": "LFO 1", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null, "style": "text"}
@@ -507,7 +507,7 @@
                 {"knob": 1, "bind": "deep", "page": 15, "col": 0, "page_title": "LFO 1+", "label": "Wave · Phase", "short": "WAVE", "fmt": "enum", "min": 0, "max": 6, "def": 0, "names": ["TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"], "unit": null, "style": "waveph"},
                 {"knob": 2, "bind": "deep", "page": 15, "col": 1, "page_title": "LFO 1+", "label": "Phase", "short": "PHASE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "rule"},
                 {"knob": 3, "bind": "deep", "page": 15, "col": 2, "page_title": "LFO 1+", "label": "Trig", "short": "TRIG", "fmt": "enum", "min": 0, "max": 4, "def": 0, "names": ["FREE", "TRIG", "HOLD", "ONE", "HALF"], "unit": null, "style": "text"},
-                {"knob": 4, "bind": "deep", "page": 15, "col": 3, "page_title": "LFO 1+", "label": "Depth", "short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 15, "col": 3, "page_title": "LFO 1+", "label": "Depth", "short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
             }
           ]
@@ -527,7 +527,7 @@
               "lane": 0,
               "title": "LFO 2 · A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 16, "col": 0, "page_title": "LFO 2", "label": "Speed", "short": "SPEED", "fmt": "?", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null, "style": "knob"},
+                {"knob": 1, "bind": "deep", "page": 16, "col": 0, "page_title": "LFO 2", "label": "Speed", "short": "SPEED", "fmt": "fix2", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null, "style": "knob"},
                 {"knob": 2, "bind": "deep", "page": 16, "col": 1, "page_title": "LFO 2", "label": "Mult", "short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 16, "col": 2, "page_title": "LFO 2", "label": "Fade", "short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "deep", "page": 16, "col": 3, "page_title": "LFO 2", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null, "style": "text"}
@@ -540,7 +540,7 @@
                 {"knob": 1, "bind": "deep", "page": 17, "col": 0, "page_title": "LFO 2+", "label": "Wave · Phase", "short": "WAVE", "fmt": "enum", "min": 0, "max": 6, "def": 0, "names": ["TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"], "unit": null, "style": "waveph"},
                 {"knob": 2, "bind": "deep", "page": 17, "col": 1, "page_title": "LFO 2+", "label": "Phase", "short": "PHASE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "rule"},
                 {"knob": 3, "bind": "deep", "page": 17, "col": 2, "page_title": "LFO 2+", "label": "Trig", "short": "TRIG", "fmt": "enum", "min": 0, "max": 4, "def": 0, "names": ["FREE", "TRIG", "HOLD", "ONE", "HALF"], "unit": null, "style": "text"},
-                {"knob": 4, "bind": "deep", "page": 17, "col": 3, "page_title": "LFO 2+", "label": "Depth", "short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 17, "col": 3, "page_title": "LFO 2+", "label": "Depth", "short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
             }
           ]
@@ -560,7 +560,7 @@
               "lane": 0,
               "title": "LFO 3 · A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 18, "col": 0, "page_title": "LFO 3", "label": "Speed", "short": "SPEED", "fmt": "?", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null, "style": "knob"},
+                {"knob": 1, "bind": "deep", "page": 18, "col": 0, "page_title": "LFO 3", "label": "Speed", "short": "SPEED", "fmt": "fix2", "min": -6400, "max": 6399, "def": 1600, "names": null, "unit": null, "style": "knob"},
                 {"knob": 2, "bind": "deep", "page": 18, "col": 1, "page_title": "LFO 3", "label": "Mult", "short": "MULT", "fmt": "enum", "min": 0, "max": 23, "def": 3, "names": ["1", "2", "4", "8", "16", "32", "64", "128", "256", "512", "1k", "2k", "F1", "F2", "F4", "F8", "F16", "F32", "F64", "F128", "F256", "F512", "F1k", "F2k"], "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 18, "col": 2, "page_title": "LFO 3", "label": "Fade", "short": "FADE", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "deep", "page": 18, "col": 3, "page_title": "LFO 3", "label": "Dest", "short": "DEST", "fmt": "enum", "min": 0, "max": 57, "def": 0, "names": ["NONE", "PITCH", "P AB2", "ALGO", "RAT C", "RAT A", "RAT B", "OFS C", "OFS A", "OFSB1", "OFSB2", "HARM", "DTUN", "FDBK", "MIX", "A LEV", "B LEV", "A ATK", "A DEC", "A END", "B ATK", "B DEC", "B END", "A DLY", "B DLY", "FREQ", "RESO", "FENV", "BASE", "WIDTH", "F ATK", "F DEC", "F SUS", "F REL", "AMP A", "AMP D", "AMP S", "AMP R", "LEVEL", "PAN", "L1SPD", "L1MUL", "L1FAD", "L1WAV", "L1SPH", "L1MOD", "L1DEP", "R ALL", "ABLEV", "ABATK", "ABDEC", "ABEND", "ABDLY", "DRIVE", "REV", "DEL", "CHO", "F DLY"], "unit": null, "style": "text"}
@@ -573,7 +573,7 @@
                 {"knob": 1, "bind": "deep", "page": 19, "col": 0, "page_title": "LFO 3+", "label": "Wave · Phase", "short": "WAVE", "fmt": "enum", "min": 0, "max": 6, "def": 0, "names": ["TRI", "SINE", "SQR", "SAW", "RAMP", "EXP", "RAND"], "unit": null, "style": "waveph"},
                 {"knob": 2, "bind": "deep", "page": 19, "col": 1, "page_title": "LFO 3+", "label": "Phase", "short": "PHASE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "rule"},
                 {"knob": 3, "bind": "deep", "page": 19, "col": 2, "page_title": "LFO 3+", "label": "Trig", "short": "TRIG", "fmt": "enum", "min": 0, "max": 4, "def": 0, "names": ["FREE", "TRIG", "HOLD", "ONE", "HALF"], "unit": null, "style": "text"},
-                {"knob": 4, "bind": "deep", "page": 19, "col": 3, "page_title": "LFO 3+", "label": "Depth", "short": "DEPTH", "fmt": "?", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 19, "col": 3, "page_title": "LFO 3+", "label": "Depth", "short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
             }
           ]
