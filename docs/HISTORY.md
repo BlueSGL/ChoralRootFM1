@@ -2533,3 +2533,49 @@ Goldens: P5 116 (INIT + 115; 84 new, 17 gone, 0 changed), the other engines' unt
 number, so his 115 marks name the same programs and a session saved on a program not shipped plays from its record
 (`tests/run_prophet_test.sh`). Open: the other 85 from the website needs the P5 store (phase B) and is a publishing
 decision; not built. Not tested: on a unit.
+3y47. **The layout tool, step 2 of 5: a viewer whose picture is the firmware (2026-10-13; 0.22 in development; on
+lay-2 after 8472e70).** The owner: **"a webapp tool in which I can mockup page layouts for the synth engine sound
+editor interfaces"**, and his rules for the pages: **"Main rule for pages is they should all have the same
+consistent header across pages. None of the pages should use the main keybed for shortcuts. While sound designing I
+want to always be able to play notes. I design it, then we figure out how to build it. New UI's are in the build not
+on the fly changeable."** The plan has five steps (docs/LAYOUT-TOOL.md: 1 a generator reproducing P5's pages
+byte-identically from `design/layouts/p5.json`; 2 this viewer; 3 editing classic pages and export; 4 free pages from
+a small element vocabulary, every page under one shared header, switches on knobs / SELECT only, what the firmware
+cannot draw yet flagged "not buildable yet" and never refused; 5 the other engines); layouts are compiled into the
+build in every step. **Built, step 2 only.**
+**The preview module** (`tools/layout/layout_web.c`, `build_layout.sh` -> `build/layout-web/crlayout.wasm`, 940 KB,
+and `crlayout.js`, the loader with the same bytes as base64 so the page works from `file://`): the whole firmware as
+the browser emulator includes it, `-DCR_LAYOUT_PREVIEW`, with `lay_version` (per engine a `params_hash`, FNV-1a 64
+over its descriptors, pages, sections and screen plan), `lay_catalog` (the built-in layout, walked at run time
+through `ce_scr` / `ce_lanes` / `ce_view`), `lay_presets`, `lay_show`, `lay_knob`, `lay_select`, `lay_step`,
+`lay_render` (RGBA), `lay_fb`, `lay_lint` (`GFX_HOOK_TEXT`, cr_draw_test's rules), `lay_state`, `lay_reset`, and
+`lay_load` reserved ("not implemented"). `lay_show` calls the editor's own functions (`cu_pool_load`,
+`cu_edit_open`, `ce_group`, `ce_select`); the knobs and SELECT are detents injected into the HAL. The instance is a
+power-on with no flash, 1000 ms, then a snapshot of the static data (3.1 MB) that `lay_show` restores: deterministic.
+**The hook**: `cr_pages.c` `cp_deep()` asks `cp_deep_hook` under `#ifdef CR_LAYOUT_PREVIEW` (step 3's door; today
+it returns the built-in table). **The device image is byte-identical**: `build/choralroot.bin` sha256
+6fdf8f6a444f6aa9..76810fd2 before and after.
+**The viewer** (`web/layout.html` + `web/fm1layout.js`; the site's `webapp/layout/`, linked from the landing page
+when `build/layout-web` exists, else a warning and no link): engines, groups, screens and lanes; the live screen at
+2x with SELECT and the four knobs (wheel, drag, keys, - / +), the sound picker, the lint drawn over the picture; the
+inspector of the lane's four cells; the contact sheet with PNG downloads; the catalog as JSON. It says on every page
+that the shared header is missing (the owner's first rule against docs/EDITOR.md's "no header bar": noted, the
+firmware not changed).
+**The seed files**: `design/layouts/{fm6,fm-tone,va,cz-1,p5,wheel}.json`, format "choralroot-layout" version 1,
+generated (`tools/layout/dump_catalogs.mjs`) and compared with the firmware by the test.
+**Tests** (`web/test_layout.mjs`; suites `layout_build` and `layout_test` in `tests/run_all.sh`, 19 suites now): the
+catalogs (P5: 19 pages, 56 cells; every page cell of every engine is on a screen); every screen x lane of P5, VA and
+FM TONE not blank, all different, deterministic; a knob turn on each of the 88 lanes changes value, picture and hot
+cell; **the 88 frames are identical, pixel for pixel, to the browser emulator's LCD** with the emulator driven by its
+panel alone (GLO + PRESETS, EDIT, the group buttons, SELECT), and one more per engine after a knob turn; the page
+checks itself in headless Chromium from `file://`. Time: 5 s for the test, 6 s for a cold compile (0.4 s kept),
+beside the other suites, so the run's length does not change.
+**What the lint says about today's pages** (every screen x lane of every engine on every pool sound, 6374 frames):
+nothing off the screen, nothing overlapping; CZ-1's FILT screen cuts four labels ("DCW key 1", "DCW key 2",
+"DCW vel 1", "DCA key 1") on every sound; the VA's OSC "+" stack cuts the heading "Morph/Shape" or "Shape/Density"
+when the oscillators are in different modes (3 sounds); the others nothing.
+**Found on the way, not changed**: `tools/emu/web/build_web.sh` without `CR_VERSION` takes choralroot.c's comment
+into the version string (its sed keeps the rest of the line); the documented commands always pass `CR_VERSION`.
+**Not done / not tested**: editing, the generator, new page styles (steps 1, 3, 4, 5); the wheel and drag handlers
+and the downloads in a browser (the self-test clicks buttons); any browser but Chromium; the Pages job does not build
+the module, so the published site has no viewer until `.github/workflows/pages.yml` gets the step.

@@ -60,7 +60,7 @@ One command runs the list below, whole, in about a minute on the owner's Mac (it
 HISTORY 3y36):
 
 ```
-CR_VERSION=0.22 sh tests/run_all.sh          # ends "ALL SUITES PASSED (17 suites, N s; ...)", exit 0; else names the suites
+CR_VERSION=0.22 sh tests/run_all.sh          # ends "ALL SUITES PASSED (19 suites, N s; ...)", exit 0; else names the suites
 sh tests/run_all.sh --only test_cr,install   # some of them (--list names them); a prerequisite not named is not run
 ```
 
@@ -105,6 +105,8 @@ python3 tests/releases_test.py                    # web/releases.json: the versi
 sh tests/run_tests.sh       # ends ALL HOST TESTS PASSED
 sh tools/emu/test_retired.sh                      # the engines retired in 0.18: a unit that comes with sounds on them
 CR_VERSION=0.22 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs    # the browser emulator
+sh tools/layout/build_layout.sh && node web/test_layout.mjs   # the layout viewer (docs/LAYOUT-TOOL.md; after build_web.sh:
+                            # its frames are compared with the browser emulator's; HISTORY 3y47: step 2 of 5, a read-only viewer)
 sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.18 reference build, bit for bit
 ```
 

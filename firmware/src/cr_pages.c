@@ -35,9 +35,19 @@ static const struct { uint8_t id; const char *label; } CP_LABEL[] = {
 };
 
 /* the engine's deep pages, 0: none (the eight P_E only) */
+#ifdef CR_LAYOUT_PREVIEW
+/* (the layout tool's preview only: tools/layout/layout_web.c, docs/LAYOUT-TOOL.md. The tool may hand the editor
+ * another table for an engine, a layout being designed; 0, or the built-in one back: as the unit. The macro is the
+ * preview module's alone: the device build and the emulators do not have this) */
+static const eng_deep_t *(*cp_deep_hook)(const track_t *t, const eng_deep_t *builtin);
+#endif
 static const eng_deep_t *cp_deep(const track_t *t)
 {
     const eng_deep_t *d = ENGINES[eng_idx(t->eng_req)]->deep;
+#ifdef CR_LAYOUT_PREVIEW
+    if (cp_deep_hook)
+        d = cp_deep_hook(t, d);
+#endif
     return d && d->pages && d->npages && d->get && d->set ? d : 0;
 }
 

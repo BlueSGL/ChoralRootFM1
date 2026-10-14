@@ -1,0 +1,483 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca)
+     The layout tool, step 2: a read-only viewer of the sound editor's pages (docs/LAYOUT-TOOL.md). The picture is the
+     firmware's own renderer: crlayout.js beside this page (tools/layout/build_layout.sh) carries the whole firmware as
+     WebAssembly. Built by web/make_site.py (or tools/layout/make_page.py): the LIB mark = fm1layout.js inlined.
+     ?engine=P5&group=FILT&screen=1&lane=2&preset=1  a place (numbers from 1; group by name or index)
+     ?view=sheet                                     the contact sheet
+     ?selftest=1                                     web/test_layout.mjs: checks itself, paints the result squares -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>ChoralRoot FM-1 · layout viewer</title>
+<style>
+  @font-face { font-family: "Inter Tight"; src: url(../../InterTight.woff2) format("woff2");
+               font-weight: 100 900; font-display: swap; }
+  :root { --ground: #080808; --cream: #F6F2EE; --red: #E63829; --orange: #F67918; --yellow: #F6B600; --blue: #2950CD;
+          --green: #29B27B; --grey: #6A696A; --dark: #313031; --deep: #1A191A; --dim: #9A999A;
+          --mono: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  * { box-sizing: border-box; }
+  html { background: var(--ground); }
+  body { margin: 0; background: var(--ground); color: var(--cream);
+         font: 400 16px/1.45 "Inter Tight", system-ui, -apple-system, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 1320px; margin: 0 auto; padding: 20px 16px 56px; }
+  a { color: inherit; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+  a:hover { color: var(--orange); }
+  button { font: inherit; border: 0; border-radius: 2px; cursor: pointer; color: var(--cream); background: var(--dark); }
+  button:disabled { opacity: .3; cursor: default; }
+  button:focus-visible, select:focus-visible, [tabindex]:focus-visible, input:focus-visible { outline: 3px solid var(--cream); outline-offset: 2px; }
+  select { font: inherit; font-size: 14px; font-weight: 700; background: var(--dark); color: var(--cream); border: 0;
+           padding: 6px 8px; border-radius: 2px; max-width: 100%; }
+  .top { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; }
+  .home { font-size: 14px; font-weight: 600; color: var(--dim); text-decoration: none; }
+  .home:hover { color: var(--cream); }
+  h1 { font-size: clamp(36px, 7vw, 60px); font-weight: 900; letter-spacing: -0.045em; line-height: .95; margin: 14px 0 0; }
+  .stripes { display: grid; gap: 4px; margin: 16px 0 14px; }
+  .stripes i { display: block; height: 8px; }
+  .stripes i:nth-child(1) { background: var(--blue); } .stripes i:nth-child(2) { background: var(--orange); }
+  .stripes i:nth-child(3) { background: var(--cream); } .stripes i:nth-child(4) { background: var(--green); }
+  .small { color: var(--dim); font-size: 13px; margin: 4px 0; }
+  .pill { display: inline-block; padding: 3px 10px; border-radius: 99px; background: var(--yellow); color: #000;
+          font-size: 12px; font-weight: 800; }
+  #status { min-height: 1.5em; margin: 8px 0; font-size: 16px; font-weight: 800; }
+  #status.err { color: var(--red); }
+  .bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 12px 0; padding: 10px 0;
+         border-top: 3px solid var(--dark); border-bottom: 3px solid var(--dark); }
+  .bar button { padding: 8px 12px; font-weight: 800; font-size: 14px; }
+  .bar button:not(:disabled):hover { background: var(--cream); color: #000; }
+  .bar button[aria-pressed=true] { background: var(--cream); color: #000; }
+  .bar .sp { flex: 1; }
+  .engines { display: flex; flex-wrap: wrap; gap: 4px; }
+  .engines button { padding: 6px 11px; font-size: 14px; font-weight: 800; }
+  .engines button[aria-pressed=true] { background: var(--orange); color: #000; }
+  .grid { display: grid; grid-template-columns: 250px minmax(0, 500px) minmax(0, 1fr); gap: 14px; align-items: start; }
+  @media (max-width: 1080px) { .grid { grid-template-columns: 220px minmax(0, 1fr); } .grid > .insp { grid-column: 1 / -1; } }
+  @media (max-width: 720px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  .pane { background: var(--deep); border-top: 6px solid var(--c, var(--grey)); min-width: 0; padding-bottom: 10px; }
+  .pane h2 { margin: 0; padding: 10px 14px 6px; font-size: 22px; font-weight: 900; letter-spacing: -0.03em; }
+  .pane h3 { margin: 12px 14px 4px; font-size: 13px; font-weight: 800; color: var(--dim); text-transform: uppercase; letter-spacing: .04em; }
+  .pane h3 span { text-transform: none; font-weight: 500; letter-spacing: 0; }
+  .pane p, .pane dl { margin: 6px 14px; }
+  nav.list { max-height: 640px; overflow-y: auto; padding-bottom: 6px; }
+  @media (max-width: 720px) { nav.list { max-height: 260px; } }
+  nav.list button { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; width: 100%; text-align: left;
+                    padding: 5px 14px; background: none; border-radius: 0; font-size: 14px; }
+  nav.list button:hover { background: #242324; }
+  nav.list button[aria-current=true] { background: var(--orange); color: #000; }
+  nav.list button[aria-current=true] .pos { color: #000; }
+  .pos { font: 12px/1.6 var(--mono); color: var(--dim); }
+  .nm { font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .lcd { position: relative; width: min(480px, 100%); aspect-ratio: 1; margin: 0 auto; background: #000; }
+  .lcd canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; image-rendering: crisp-edges; }
+  .lcd .box { position: absolute; border: 2px solid var(--red); pointer-events: none; }
+  .lcd .box.ellipsis { border: 2px dashed var(--yellow); }
+  .lcd .box.text { border: 1px solid rgba(41, 178, 123, .8); }
+  .stage { padding: 10px; }
+  .knobs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin: 10px auto 0; width: min(480px, 100%); }
+  .knob { background: var(--dark); border-top: 5px solid var(--k, var(--grey)); padding: 6px 4px 6px; text-align: center; min-width: 0; }
+  .knob .cap { font-size: 11px; font-weight: 800; color: var(--dim); white-space: nowrap; overflow: hidden; }
+  .knob .dial { margin: 5px auto; width: 44px; height: 44px; border-radius: 50%; background: var(--k, var(--grey));
+                cursor: ns-resize; touch-action: none; position: relative; user-select: none; }
+  .knob .dial::after { content: ""; position: absolute; left: 50%; top: 4px; width: 3px; height: 14px; margin-left: -1.5px;
+                       background: #000; transform-origin: 50% 18px; transform: rotate(var(--a, 0deg)); }
+  .knob .val { font: 700 12px/1.3 var(--mono); min-height: 2.6em; overflow: hidden; word-break: break-word; }
+  .knob .val b { display: block; color: var(--dim); font-weight: 500; }
+  .knob .pm { display: flex; gap: 4px; justify-content: center; }
+  .knob .pm button { width: 30px; height: 28px; font-weight: 900; font-size: 16px; line-height: 1; background: #000; }
+  .knob .pm button:hover { background: var(--cream); color: #000; }
+  .ctl { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 10px auto 0; width: min(480px, 100%); font-size: 13px; color: var(--dim); }
+  .ctl label { display: flex; gap: 6px; align-items: center; }
+  .ctl button { padding: 6px 10px; font-size: 13px; font-weight: 800; }
+  ul.lint { list-style: none; margin: 4px 0; padding: 0; font-size: 13px; }
+  ul.lint li { padding: 4px 14px; border-left: 4px solid var(--red); margin: 3px 0; }
+  ul.lint li.ellipsis, ul.lint li.rule { border-left-color: var(--yellow); }
+  ul.lint li.ok { border-left-color: var(--green); color: var(--dim); }
+  ul.lint code, dl code { font: 12px var(--mono); color: var(--yellow); }
+  .cells { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; padding: 0 14px; }
+  .cell { background: #000; border-top: 5px solid var(--k, var(--grey)); padding: 8px 10px; min-width: 0; }
+  .cell h4 { margin: 0; font-size: 17px; font-weight: 900; }
+  .cell h4 small { font: 500 12px var(--mono); color: var(--dim); margin-left: 6px; }
+  .cell dl, dl.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; margin: 6px 0 0; font-size: 13px; }
+  dl.kv { margin: 6px 14px; }
+  dt { color: var(--dim); } dd { margin: 0; overflow-wrap: anywhere; }
+  #sheet { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+  #sheet figure { margin: 0; background: var(--deep); padding: 8px; }
+  #sheet canvas { display: block; width: 100%; max-width: 240px; margin: 0 auto; aspect-ratio: 1; image-rendering: pixelated; cursor: pointer; }
+  #sheet figcaption { display: flex; gap: 6px; align-items: center; justify-content: space-between; margin-top: 6px; font-size: 12px; font-weight: 700; }
+  #sheet figcaption span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #sheet figcaption i { font-style: normal; color: var(--red); font-family: var(--mono); }
+  #sheet figcaption button { padding: 3px 7px; font-size: 11px; font-weight: 800; flex: none; }
+  #selftest { position: fixed; left: 0; top: 0; display: flex; z-index: 9; }
+  #selftest i { display: block; width: 20px; height: 20px; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <a class="home" href="../../">&larr; ChoralRoot FM-1</a>
+    <span class="small" id="fw">loading the firmware&hellip;</span>
+  </div>
+  <h1>Layout viewer</h1>
+  <div class="stripes" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+  <p class="small"><span class="pill">step 2 of 5: a viewer</span> The sound editor's pages as the firmware has them
+    today, drawn by the firmware's own renderer (the whole firmware, compiled to WebAssembly, on its real engines and
+    factory sounds). Nothing can be changed or saved here yet: editing pages and exporting them come in the next steps.
+    Layouts are compiled into the firmware build, never loaded by a unit.</p>
+  <div id="status" role="status"></div>
+
+  <div class="bar">
+    <div class="engines" id="engines" role="group" aria-label="Engine"></div>
+    <span class="sp"></span>
+    <button id="v-screen" aria-pressed="true">Screen</button>
+    <button id="v-sheet" aria-pressed="false">Contact sheet</button>
+    <button id="dl-json" title="today's built-in layout of this engine, in the layout file format (generated, read-only)">Download catalog JSON</button>
+  </div>
+
+  <div id="view-screen" class="grid">
+    <section class="pane" style="--c: var(--orange)" aria-label="Screens">
+      <h2>Screens</h2>
+      <p class="small" id="counts"></p>
+      <nav class="list" id="nav" aria-label="Groups, screens and lanes"></nav>
+    </section>
+
+    <section class="pane" style="--c: var(--cream)" aria-label="Preview">
+      <div class="stage">
+        <div class="lcd" id="lcd"><canvas id="screen" width="240" height="240" aria-label="the FM-1's screen, 240 by 240, twice the size"></canvas></div>
+        <div class="knobs" id="knobs"></div>
+        <div class="ctl">
+          <label>Sound <select id="preset" aria-label="Sound (the engine's pool)"></select></label>
+          <button id="reload" title="the sound as stored: every knob turn undone">Reload sound</button>
+          <label><input type="checkbox" id="show-text"> text boxes</label>
+        </div>
+        <p class="small" style="text-align:center">Wheel, drag or arrow keys on a knob, or its &minus; / + buttons: one detent each, as on the unit.</p>
+      </div>
+      <h3>Lint <span id="lint-sum"></span></h3>
+      <ul class="lint" id="lint"></ul>
+    </section>
+
+    <section class="pane insp" style="--c: var(--green)" aria-label="Inspector">
+      <h2 id="i-title">Lane</h2>
+      <dl class="kv" id="i-screen"></dl>
+      <h3>The four cells <span>(read-only)</span></h3>
+      <div class="cells" id="i-cells"></div>
+    </section>
+  </div>
+
+  <div id="view-sheet" hidden>
+    <div class="bar" style="border-top:0;margin-top:0">
+      <span id="sheet-title" style="font-weight:800"></span>
+      <span class="sp"></span>
+      <label class="small">Sound <select id="preset2" aria-label="Sound for the sheet"></select></label>
+      <button id="dl-sheet">Download sheet PNG</button>
+    </div>
+    <div id="sheet"></div>
+  </div>
+  <div id="selftest" hidden></div>
+</main>
+<script src="crlayout.js"></script>
+<script type="module">
+/*LIB*/
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, attrs = {}, ...kids) => {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") e.className = v; else if (k === "text") e.textContent = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v);
+  }
+  for (const k of kids) e.append(k);
+  return e;
+};
+const KCOL = { blue: "var(--blue)", orange: "var(--orange)", white: "var(--cream)", green: "var(--green)" };
+const kcol = (i) => KCOL[KNOB_COLOURS[i]];
+const params = new URLSearchParams(location.search);
+const st = { m: null, version: null, engine: null, cat: null, tiles: [], tile: null, preset: 1, view: "screen",
+             turned: [0, 0, 0, 0, 0], hotTimer: 0 };
+
+function status(text, err) { $("status").textContent = text || ""; $("status").className = err ? "err" : ""; }
+function download(name, blob) {
+  const a = el("a", { href: URL.createObjectURL(blob), download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+const slug = () => layoutFileName(st.cat.engine.name).replace(/\.json$/, "");
+function remember() {   // the place in the address, so a link opens it (file:// may refuse: ignored)
+  const t = st.tile, q = new URLSearchParams();
+  q.set("engine", st.cat.engine.name);
+  if (st.view === "sheet") q.set("view", "sheet");
+  else if (t) { q.set("group", t.groupName); q.set("screen", t.screen + 1); q.set("lane", t.lane + 1); }
+  q.set("preset", st.preset);
+  try { history.replaceState(null, "", location.pathname + "?" + q); } catch (e) { /* file:// */ }
+}
+
+// ------------------------------------------------------------------ the screen ---
+function paint(canvas, rgba) { canvas.getContext("2d").putImageData(new ImageData(rgba, SCREEN, SCREEN), 0, 0); }
+function draw() {
+  const m = st.m;
+  paint($("screen"), m.render());
+  const lint = m.lint(), state = m.state(), lcd = $("lcd");
+  lcd.querySelectorAll(".box").forEach((b) => b.remove());
+  const box = (b, cls, title) => lcd.append(el("div", { class: "box " + cls, title,
+    style: `left:${b[0] / 2.4}%;top:${b[1] / 2.4}%;width:${(b[2] - b[0]) / 2.4}%;height:${(b[3] - b[1]) / 2.4}%` }));
+  if ($("show-text").checked) for (const t of lint.texts) box(t.box, "text", t.text);
+  const ul = $("lint");
+  ul.textContent = "";
+  for (const f of lint.findings) {
+    box(f.box, f.kind === "ellipsis" ? "ellipsis" : "", `${f.kind}: ${f.text}`);
+    if (f.other) box(f.other.box, "", `${f.kind}: ${f.other.text}`);
+    ul.append(el("li", { class: f.kind }, el("b", { text: f.kind + " " }), el("code", { text: `"${f.text}" [${f.box.join(", ")}]` }),
+                 f.other ? el("code", { text: ` / "${f.other.text}" [${f.other.box.join(", ")}]` }) : ""));
+  }
+  const c = lintCounts(lint), faults = c["off-screen"] + c.overlap;
+  if (!lint.findings.length) ul.append(el("li", { class: "ok", text: `No finding: ${lint.texts.length} texts, none off the screen, overlapping or cut.` }));
+  for (const n of ruleNotes(st.cat, st.tile)) ul.append(el("li", { class: "rule", text: n.text }));
+  $("lint-sum").textContent = `(${faults} fault${faults === 1 ? "" : "s"}, ${c.ellipsis} cut text${c.ellipsis === 1 ? "" : "s"})`;
+  // the knobs' read-outs: the active lane's cells as the screen model has them now
+  for (let k = 0; k < 4; k++) {
+    const cell = state.cells[k], v = $("kv" + (k + 1));
+    v.textContent = "";
+    v.append(el("b", { text: cell.on ? cell.label || " " : "–" }), cell.on ? cell.value : "");
+    $("kd" + (k + 1)).setAttribute("aria-valuetext", cell.on ? `${cell.label} ${cell.value}` : "no parameter");
+    $("kd" + (k + 1)).style.setProperty("--a", `${st.turned[k + 1] * 18}deg`);
+  }
+  $("kd0").style.setProperty("--a", `${st.turned[0] * 18}deg`);
+  $("kv0").textContent = "";
+  $("kv0").append(el("b", { text: "lane" }), `${state.lane + 1} of ${state.lanes}`);
+  inspector(state);
+  return { lint, state };
+}
+function show(tile) {
+  st.tile = tile;
+  st.turned = [0, 0, 0, 0, 0];
+  st.m.show(st.cat.engine.index, st.preset, tile.group, tile.screen, tile.lane);
+  nav();
+  remember();
+  return draw();
+}
+// SELECT and the knobs move the module; the place follows what the editor says (SELECT runs across the screens)
+function follow() {
+  const s = st.m.state();
+  const t = st.tiles.find((x) => x.group === s.group && x.screen === s.screen && x.lane === s.lane);
+  if (t && t !== st.tile) { st.tile = t; nav(); remember(); }
+}
+function turn(k, n) {   // k 0: SELECT, 1..4: the knobs
+  if (!st.m || !st.tile) return;
+  st.turned[k] += n;
+  if (k) st.m.knob(k, n); else st.m.select(n);
+  follow();
+  draw();
+  clearTimeout(st.hotTimer);   // the hot cell's mark lasts 800 ms on the unit: let it end here too
+  st.hotTimer = setTimeout(() => { st.m.step(800); draw(); }, 850);
+}
+function knobs() {
+  const host = $("knobs");
+  host.textContent = "";
+  for (let k = 0; k <= 4; k++) {
+    const name = k ? `KNOB ${k}` : "SELECT";
+    const dial = el("div", { class: "dial", id: "kd" + k, tabindex: "0", role: "slider", "aria-label": name,
+                             "aria-valuetext": "", title: `${name}: wheel, drag, arrow keys` });
+    dial.addEventListener("wheel", (e) => { e.preventDefault(); turn(k, e.deltaY < 0 ? 1 : -1); }, { passive: false });
+    dial.addEventListener("keydown", (e) => {
+      const d = { ArrowUp: 1, ArrowRight: 1, ArrowDown: -1, ArrowLeft: -1, PageUp: 5, PageDown: -5 }[e.key];
+      if (d) { e.preventDefault(); turn(k, d); }
+    });
+    let y0 = null;
+    dial.addEventListener("pointerdown", (e) => { y0 = e.clientY; dial.setPointerCapture(e.pointerId); });
+    dial.addEventListener("pointermove", (e) => {
+      if (y0 === null) return;
+      const d = Math.trunc((y0 - e.clientY) / 8);
+      if (d) { y0 -= d * 8; turn(k, d); }
+    });
+    const up = () => { y0 = null; };
+    dial.addEventListener("pointerup", up);
+    dial.addEventListener("pointercancel", up);
+    host.append(el("div", { class: "knob", style: `--k: ${k ? kcol(k - 1) : "var(--grey)"}` },
+      el("div", { class: "cap", text: name }), dial, el("div", { class: "val", id: "kv" + k }),
+      el("div", { class: "pm" },
+        el("button", { id: `k${k}-minus`, "aria-label": `${name} one detent down`, text: "−", onclick: () => turn(k, -1) }),
+        el("button", { id: `k${k}-plus`, "aria-label": `${name} one detent up`, text: "+", onclick: () => turn(k, 1) }))));
+  }
+}
+
+// --------------------------------------------------------------- the lists ---
+function nav() {
+  const host = $("nav");
+  host.textContent = "";
+  for (const g of st.cat.groups) {
+    host.append(el("h3", {}, g.name + " ", el("span", { text: `button ${g.button} · ${g.screens.length} screen${g.screens.length === 1 ? "" : "s"}` })));
+    for (const t of st.tiles.filter((x) => x.group === g.group))
+      host.append(el("button", { "aria-current": String(t === st.tile), title: tileLabel(t), onclick: () => show(t) },
+        el("span", { class: "pos", text: `${t.screen + 1}.${t.lane + 1}` }), el("span", { class: "nm", text: t.title })));
+  }
+  const cur = host.querySelector("[aria-current=true]");
+  if (cur && cur.scrollIntoView && host.scrollHeight > host.clientHeight) host.scrollTop = Math.max(0, cur.offsetTop - host.offsetTop - 120);
+}
+function inspector(state) {
+  const t = st.tile;
+  $("i-title").textContent = `${t.groupName} · screen ${t.screen + 1} · lane ${t.lane + 1} of ${t.lanes}`;
+  const kv = $("i-screen");
+  kv.textContent = "";
+  const row = (k, v) => kv.append(el("dt", { text: k }), el("dd", { text: v }));
+  row("Title line", `${state.title}  |  ${state.page}`);
+  row("Screen kind", `${t.kind} (${t.type})${t.tall ? ", tall bars" : ""}`);
+  row("Band", t.band + (t.plan !== null ? ` · from the engine's screen plan, screen ${t.plan + 1}` : t.type === "platform" ? " · the platform's page" : " · derived from the page titles"));
+  if (t.headings) row("Column headings", t.headings.map((h) => h || "–").join(" · "));
+  if (t.pages.length) row("Parameter pages", t.pages.map((p) => `${p} "${st.cat.pages[p].title}"`).join(", "));
+  row("Header", st.cat.header ? "shared header" : "none (rule 1: every page gets one shared header; not built yet)");
+  const host = $("i-cells");
+  host.textContent = "";
+  t.cells.forEach((c, i) => {
+    const now = state.cells[i];
+    const d = el("dl");
+    const r = (k, v) => d.append(el("dt", { text: k }), el("dd", { text: v }));
+    r("Bound to", cellBinding(c));
+    if (c.min !== undefined) {
+      r("Range", cellRange(c));
+      r("Format", c.fmt + (c.unit ? `, unit ${c.unit}` : "") + (c.style ? ` · style ${c.style}` : ""));
+      if (c.names) r("Values", c.names.length > 14 ? `${c.names.slice(0, 12).join(", ")}, … (${c.names.length})` : c.names.join(", "));
+      if (c.by_mode) r("Note", "the engine may show another label or names by the sound's mode");
+      if (now && now.on) r("Now", now.value);
+    }
+    host.append(el("div", { class: "cell", style: `--k: ${kcol(i)}` },
+      el("h4", {}, c.label || (c.bind === "text" ? c.text : "–"), el("small", { text: `KNOB ${i + 1}${c.short ? " · " + c.short : ""}` })), d));
+  });
+}
+
+// ---------------------------------------------------------- the contact sheet ---
+function sheet() {
+  const host = $("sheet"), m = st.m, e = st.cat.engine;
+  host.textContent = "";
+  let faults = 0;
+  for (const t of st.tiles) {
+    m.show(e.index, st.preset, t.group, t.screen, t.lane);
+    const c = el("canvas", { width: SCREEN, height: SCREEN, title: "open this screen" });
+    paint(c, m.render());
+    const n = lintFaults(m.lint()).length;
+    faults += n;
+    c.addEventListener("click", () => { view("screen"); show(t); });
+    host.append(el("figure", { "data-key": t.key },
+      c, el("figcaption", {}, el("span", { text: tileLabel(t), title: tileLabel(t) }), n ? el("i", { text: `${n}!` }) : "",
+        el("button", { text: "PNG", "aria-label": `download ${tileLabel(t)} as PNG`,
+                       onclick: () => c.toBlob((b) => download(`${slug()}-${t.groupName.toLowerCase()}-${t.screen + 1}-${t.lane + 1}.png`, b)) }))));
+  }
+  const names = m.presets(e.index);
+  $("sheet-title").textContent = `${e.name}: ${st.tiles.length} screens × lanes on "${names[st.preset]}" · ${faults} lint fault${faults === 1 ? "" : "s"}`;
+  if (st.tile) m.show(e.index, st.preset, st.tile.group, st.tile.screen, st.tile.lane);
+}
+function sheetPng() {
+  const figs = [...$("sheet").querySelectorAll("figure")];
+  const g = sheetGeometry(figs.length, Math.min(6, Math.max(1, figs.length)));
+  const c = el("canvas", { width: g.width, height: g.height }), x = c.getContext("2d");
+  x.fillStyle = "#16161a"; x.fillRect(0, 0, g.width, g.height);
+  x.fillStyle = "#d8d8dc"; x.font = "bold 16px system-ui, sans-serif"; x.textBaseline = "middle";
+  x.fillText(`${$("sheet-title").textContent} · ${st.version.firmware}`, g.gap, g.top / 2);
+  x.font = "12px system-ui, sans-serif";
+  figs.forEach((f, i) => {
+    const p = g.at(i);
+    x.drawImage(f.querySelector("canvas"), p.x, p.y);
+    x.fillText(f.querySelector("figcaption span").textContent, p.x, p.y + g.tile + g.cap / 2, g.tile);
+  });
+  c.toBlob((b) => download(`${slug()}-sheet.png`, b));
+}
+function view(v) {
+  st.view = v;
+  $("view-screen").hidden = v !== "screen";
+  $("view-sheet").hidden = v !== "sheet";
+  $("v-screen").setAttribute("aria-pressed", String(v === "screen"));
+  $("v-sheet").setAttribute("aria-pressed", String(v === "sheet"));
+  if (v === "sheet") sheet();
+  remember();
+}
+
+// ------------------------------------------------------------------ engines ---
+function presets() {
+  const names = st.m.presets(st.cat.engine.index);
+  if (st.preset >= names.length) st.preset = names.length > 1 ? 1 : 0;
+  for (const id of ["preset", "preset2"]) {
+    const s = $(id);
+    s.textContent = "";
+    names.forEach((n, i) => s.append(el("option", { value: i, text: `${String(i).padStart(2, "0")} ${n}` })));
+    s.value = String(st.preset);
+  }
+}
+function engine(index, place) {
+  st.engine = index;
+  st.cat = st.m.catalog(index);
+  st.tiles = tiles(st.cat);
+  if (!place || place.preset === undefined) st.preset = 1; else st.preset = place.preset;
+  presets();
+  const c = counts(st.cat);
+  $("counts").textContent = `${c.groups} groups, ${c.screens} screens, ${c.lanes} lanes, ${c.cells} cells bound to a parameter` +
+    (c.pages ? `; ${c.pages} parameter pages (${c.pageCells} cells)` : "; no pages of its own") + `. params_hash ${st.cat.params_hash}`;
+  for (const b of $("engines").children) b.setAttribute("aria-pressed", String(+b.dataset.index === index));
+  const t = (place && st.tiles.find((x) => (x.group === place.group || x.groupName === place.group) && x.screen === place.screen && x.lane === place.lane)) || st.tiles[0];
+  show(t);
+  if (st.view === "sheet") sheet();
+}
+
+async function main() {
+  if (!globalThis.CRLayoutModule) {
+    status("crlayout.js is not beside this page: build it with sh tools/layout/build_layout.sh, then python3 tools/layout/make_page.py (docs/LAYOUT-TOOL.md).", true);
+    return;
+  }
+  const t0 = performance.now();
+  st.m = wrap(await CRLayoutModule.load());
+  st.version = st.m.version();
+  st.m.reset();
+  $("fw").textContent = `${st.version.firmware} · preview API ${st.version.api} · layout format ${st.version.format} v${st.version.format_version} · loaded in ${Math.round(performance.now() - t0)} ms`;
+  for (const e of st.version.engines)
+    $("engines").append(el("button", { "data-index": e.index, "aria-pressed": "false", text: e.name, title: `engine ${e.index}, params_hash ${e.params_hash}`,
+                                       onclick: () => engine(e.index) }));
+  knobs();
+  $("preset").addEventListener("change", (e) => { st.preset = +e.target.value; $("preset2").value = e.target.value; show(st.tile); });
+  $("preset2").addEventListener("change", (e) => { st.preset = +e.target.value; $("preset").value = e.target.value; sheet(); remember(); });
+  $("reload").addEventListener("click", () => show(st.tile));
+  $("show-text").addEventListener("change", draw);
+  $("v-screen").addEventListener("click", () => { view("screen"); show(st.tile); });
+  $("v-sheet").addEventListener("click", () => view("sheet"));
+  $("dl-sheet").addEventListener("click", sheetPng);
+  $("dl-json").addEventListener("click", () => download(layoutFileName(st.cat.engine.name), new Blob([formatLayout(st.cat)], { type: "application/json" })));
+  const want = (params.get("engine") || "").toLowerCase();
+  const e = st.version.engines.find((x) => x.name.toLowerCase() === want || String(x.index) === want || layoutFileName(x.name) === want + ".json") ||
+            st.version.engines.find((x) => x.name === "P5") || st.version.engines[0];
+  const g = params.get("group"), num = (k) => Math.max(0, (parseInt(params.get(k) || "1", 10) || 1) - 1);
+  engine(e.index, { group: g === null ? 0 : /^\d+$/.test(g) ? +g : g.toUpperCase(), screen: num("screen"), lane: num("lane"),
+                    preset: params.has("preset") ? parseInt(params.get("preset"), 10) || 0 : undefined });
+  if (params.get("view") === "sheet") view("sheet");
+  if (params.has("selftest")) selftest();
+}
+
+// web/test_layout.mjs reads these squares from a screenshot: green = the check held, red = it did not
+function selftest() {
+  const res = [], px = () => $("screen").getContext("2d").getImageData(0, 0, SCREEN, SCREEN).data;
+  view("screen");
+  show(st.tiles.find((t) => t.cells[0].bind === "deep" || t.cells[0].bind === "track") || st.tiles[0]);
+  const a = px();
+  res.push(inkCount(a) > 500);                                   // 1: the canvas is not blank
+  $("k1-plus").click();
+  $("k1-plus").click();
+  const b = px();
+  res.push(diffCount(a, b) > 0 && st.m.state().hot === 1);       // 2: a knob click changed the picture, its cell is hot
+  $("v-sheet").click();
+  const figs = [...$("sheet").querySelectorAll("figure canvas")];
+  res.push(figs.length === st.tiles.length && figs.length > 0 &&   // 3: the sheet has every screen x lane, none blank
+           figs.every((c) => inkCount(c.getContext("2d").getImageData(0, 0, SCREEN, SCREEN).data) > 500));
+  res.push($("lint").children.length > 0 && /ChoralRoot/.test($("fw").textContent) && $("i-cells").children.length === 4);   // 4
+  const host = $("selftest");
+  host.hidden = false;
+  host.dataset.result = res.map((r) => (r ? 1 : 0)).join("");
+  host.dataset.tiles = String(figs.length);
+  for (const r of res) host.append(el("i", { style: `background:${r ? "#00ff00" : "#ff0000"}` }));
+  host.append(el("i", { style: "background:#0000ff" }));         // the end mark: the row is whole
+}
+
+main().catch((e) => { status(String(e && e.message || e), true); console.error(e); });
+</script>
+</body>
+</html>
