@@ -13,17 +13,28 @@
 // exports, 2026-10-14: docs/SOUNDS.md ".dnsnd import").
 //
 //   parseDnsnd(bytes)   -> Promise<{name, tags, firmware, product, version, params, confidence, warnings, record}>
-//   dnsndToQuad(parsed) -> {blob: Uint8Array(80) FM TONE version 3, pan, drive, notes: [what was lost / approximated]}
+//   dnsndToQuad(parsed) -> {blob: Uint8Array(96) FM TONE version 4, pan, drive, notes: [what was lost / approximated]}
+//   quadToV4(blob)      -> a 96-byte FM TONE patch: version 4 as it is, an 80-byte version 3 converted (best effort, as
+//                          eng_quad.c quad_unpack: the hi-res values x 100, FDBK 0..120 -> 0..127), 1 / 2 zero-padded
+//                          (the firmware converts them)
+//
+// Since 2026-10-14 (FM TONE version 4) FM TONE has the Digitone's ranges: the hi-res values (DN_QUAD_HIRES: HARM DTUN
+// FREQ RESO filter DEPTH BASE, AMP REL, LEVEL, the LFOs' SPEED and DEPTH) in hundredths, as the Digitone's coarse and
+// fine bytes: value = coarse x 100 + round(fine x 100 / 256); FDBK 0..127 as the Digitone's
 
-// ---- FM TONE's patch (eng_quad.c QP_*: [min, max, def] of each value, `sound_templates --quad-ranges` prints it)
-export const DN_QUAD_RANGES = [[1,8,1],[0,18,3],[0,63,3],[0,18,3],[-26,26,0],[0,127,0],[0,120,0],[-64,63,0],[-100,100,0],[-100,100,0],[-100,100,0],[-100,100,0],[0,127,0],[0,127,60],[0,127,64],[0,127,48],[0,127,0],[0,127,60],[0,127,0],[0,127,0],[0,127,0],[0,1,1],[0,1,1],[0,4,1],[0,127,0],[0,1,1],[0,1,1],[0,127,64],[0,127,0],[0,127,0],[0,127,0],[0,127,64],[0,127,0],[0,127,40],[0,127,127],[0,127,0],[0,3,1],[-64,63,0],[0,127,0],[0,127,0],[0,127,0],[0,127,127],[0,127,0],[0,127,64],[0,127,127],[0,127,40],[0,127,100],[-64,63,16],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[-64,63,16],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[-64,63,16],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-64,63,0],[0,18,3],[0,127,0]];
+// ---- FM TONE's patch (eng_quad.c QP_*: [min, max, def] of each value, version 4: the hi-res ones in hundredths;
+// `sound_templates --quad-ranges` prints it)
+export const DN_QUAD_RANGES = [[1,8,1],[0,18,3],[0,63,3],[0,18,3],[-2600,2600,0],[0,12799,0],[0,127,0],[-64,63,0],[-100,100,0],[-100,100,0],[-100,100,0],[-100,100,0],[0,127,0],[0,127,60],[0,127,64],[0,127,48],[0,127,0],[0,127,60],[0,127,0],[0,127,0],[0,127,0],[0,1,1],[0,1,1],[0,4,1],[0,127,0],[0,1,1],[0,1,1],[0,127,64],[0,127,0],[0,127,0],[0,127,0],[0,127,64],[0,127,0],[0,127,40],[0,12799,12700],[0,12799,0],[0,3,1],[-6400,6399,0],[0,127,0],[0,127,0],[0,12799,0],[0,127,127],[0,127,0],[0,127,64],[0,127,127],[0,12799,4000],[0,12799,11000],[-6400,6399,1600],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-6400,6399,0],[-6400,6399,1600],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-6400,6399,0],[-6400,6399,1600],[0,23,3],[-64,63,0],[0,57,0],[0,6,0],[0,127,0],[0,4,0],[-6400,6399,0],[0,18,3],[0,127,0]];
 export const DN_QP = { ALGO: 0, RC: 1, RA: 2, RB1: 3, HARM: 4, DTUN: 5, FDBK: 6, MIX: 7, OFSC: 8, OFSA: 9, OFSB1: 10, OFSB2: 11,
   AATK: 12, ADEC: 13, AEND: 14, ALEV: 15, BATK: 16, BDEC: 17, BEND: 18, BLEV: 19, ADLY: 20, ATRIG: 21, ARST: 22, PHRT: 23,
   BDLY: 24, BTRIG: 25, BRST: 26, FATK: 30, FDEC: 31, FSUS: 32, FREL: 33, FREQ: 34, RESO: 35, FTYPE: 36, FDEPTH: 37,
   FDLY: 38, BASE: 40, WIDTH: 41, EATK: 42, EDEC: 43, ESUS: 44, EREL: 45, LEVEL: 46, RB2: 71 };
 const DN_QL = { SPEED: 0, MULT: 1, FADE: 2, DEST: 3, WAVE: 4, PHASE: 5, TRIG: 6, DEPTH: 7 };
 const dnQlfo = (k, f) => 47 + k * 8 + DN_QL[f];
-export const DN_QUAD_NP = 73, DN_QUAD_BLOB = 80;
+export const DN_QUAD_NP = 73, DN_QUAD_BLOB = 96, DN_QUAD_BLOB_V3 = 80;
+// the hi-res values (eng_quad.c quad_hires): two bytes each in the blob (u16le, value - min)
+export const DN_QUAD_HIRES = [4, 5, 34, 35, 37, 40, 45, 46, 47, 54, 55, 62, 63, 70];
+const dnHiRes = (i) => DN_QUAD_HIRES.includes(i);
 const DN_QF = { OFF: 0, LP12: 1, HP12: 2, LP24: 3 };
 export const DN_VERSIONS = [1, 5];                // the record versions read (others: "not supported")
 
@@ -97,13 +108,15 @@ export const DN_LFO_DEST = {
 // confidence: "verified" (a controlled export changed exactly this field: offset and encoding proved), "slot" (the offset
 // proved by the LFO destination numbering, the encoding inferred), "inferred" (corpus ranges, the manual), "guess",
 // "unknown" (decoded for the diff tool, not imported). since: the first record version that has the field (default 1)
-const dnLo = (d, o) => d[o], dnHi = (d, o) => d[o] + d[o + 1] / 256;
+// a hi-res value: the coarse byte and the fine byte, in hundredths: coarse + round(fine x 100 / 256) / 100
+const dnLo = (d, o) => d[o], dnHi = (d, o) => (d[o] * 100 + Math.round(d[o + 1] * 100 / 256)) / 100;
 const dnR = Math.round;
 const dnTo = (qp, f = (v) => dnR(v)) => (v, out) => out.set(qp, f(v));
+const dnTo100 = (qp) => dnTo(qp, (v) => dnR(v * 100));                // a hi-res value 1:1 (hundredths)
 const dnLfo = (k) => {
   const c = k ? "verified" : "slot";                             // LFO 2's SPEED / MULT were turned (C100..C109)
   return [
-    [`lfo${k + 1}.speed`, 30 + 2 * k, 1, c, (d, o) => dnHi(d, o) - 64, dnTo(dnQlfo(k, "SPEED"))],   // -64.00..63.99
+    [`lfo${k + 1}.speed`, 30 + 2 * k, 1, c, (d, o) => dnHi(d, o) - 64, dnTo100(dnQlfo(k, "SPEED"))],   // -64.00..63.99
     [`lfo${k + 1}.mult`, 34 + 2 * k, 0, c, dnLo, dnTo(dnQlfo(k, "MULT"))],    // 0 = 1, 5 = 32, 21..23 = 512 1k 2k: = FM TONE's 24
     [`lfo${k + 1}.fade`, 38 + 2 * k, 0, "slot", (d, o) => d[o] - 64, dnTo(dnQlfo(k, "FADE"))],
     [`lfo${k + 1}.dest`, 42 + 2 * k, 0, "verified", dnLo, (v, out) => {
@@ -114,11 +127,12 @@ const dnLfo = (k) => {
     [`lfo${k + 1}.wave`, 46 + 2 * k, 0, "slot", dnLo, (v, out) => out.set(dnQlfo(k, "WAVE"), DN_WAVE_TO_QUAD[v] ?? 0)],
     [`lfo${k + 1}.phase`, 50 + 2 * k, 0, "slot", dnLo, dnTo(dnQlfo(k, "PHASE"))],
     [`lfo${k + 1}.mode`, 54 + 2 * k, 0, "slot", dnLo, dnTo(dnQlfo(k, "TRIG"))],          // FREE TRG HLD ONE HLF: = FM TONE's
-    [`lfo${k + 1}.depth`, 58 + 2 * k, 1, "slot", (d, o) => dnHi(d, o) - 64, dnTo(dnQlfo(k, "DEPTH"))],
+    [`lfo${k + 1}.depth`, 58 + 2 * k, 1, "slot", (d, o) => dnHi(d, o) - 64, dnTo100(dnQlfo(k, "DEPTH"))],
   ];
 };
 const dnT = (v) => DN_TIME_TO_QUAD[Math.max(0, Math.min(127, dnR(v)))];             // a time value (DN_TIME_TO_QUAD)
-const dnTRel = (v) => v >= 127 ? 127 : dnR(dnTimeQ(v));                                 // a release (hi-res): 127 INF
+const dnTRel = (v) => v >= 127 ? 127 : dnR(dnTimeQ(v));                                 // a release: 127 INF
+const dnTRel100 = (v) => v >= 127 ? 12700 : Math.min(12699, dnR(dnTimeQ(v) * 100));     // AMP REL (hundredths): 127 INF
 const dnEnv = (x, base) => ["atk", "dec", "end", "lev"].map((f, i) => [`env${x}.${f}`, base + 2 * i, 0, "verified", dnLo,
   dnTo(DN_QP[`${x}${f.toUpperCase()}`], i < 2 ? dnT : undefined)]);
 const dnLost = (what) => (v, out) => { if (v > 0) out.note(`${what} ${v.toFixed(2)} not imported: effects are global on the FM-1`); };
@@ -138,9 +152,9 @@ export const DNSND_FIELDS = [
   ["ratioB", 68, 1, "verified", (d, o) => Math.min(360, (d[o] << 8 | d[o + 1]) >> 1), (v, out) => {
     out.set(DN_QP.RB1, Math.floor(v / 19)); out.set(DN_QP.RB2, v % 19);
   }],
-  ["harm", 70, 1, "verified", (d, o) => dnHi(d, o) - 63, dnTo(DN_QP.HARM)],                    // 37 = -26, 63 = 0, 89 = +26
-  ["dtun", 72, 1, "verified", dnHi, dnTo(DN_QP.DTUN)],
-  ["fdbk", 74, 0, "verified", dnLo, dnTo(DN_QP.FDBK, (v) => dnR(v * 120 / 127))],              // stored 0..127 (MAX = 127)
+  ["harm", 70, 1, "verified", (d, o) => dnHi(d, o) - 63, dnTo100(DN_QP.HARM)],                 // 37 = -26, 63 = 0, 89 = +26
+  ["dtun", 72, 1, "verified", dnHi, dnTo100(DN_QP.DTUN)],
+  ["fdbk", 74, 0, "verified", dnLo, dnTo(DN_QP.FDBK)],                                         // 0..127 (MAX = 127) = FM TONE's
   ["mix", 76, 0, "verified", (d, o) => d[o] - 64, dnTo(DN_QP.MIX)],                            // 0 = -64, 64 = 0, 127 = +63
   ["phrt", 78, 0, "inferred", dnLo, dnTo(DN_QP.PHRT)],                                         // 0..4 OFF ALL C A+B A+B2 = FM TONE's
   ...dnEnv("A", 82), ...dnEnv("B", 90),
@@ -158,22 +172,22 @@ export const DNSND_FIELDS = [
     // 0 / 1 (inferred, DN_FTYPE_V1_PROVED) are 174 of the 256 factory sounds: no note; a value past 4 is unknown
     if (DN_FTYPE_V1[v] === undefined) out.note(`filter type ${n} (a version-1 sound: not a known value) -> ${["OFF", "LP12", "HP12", "LP24"][q]}`);
   }],
-  ["filter.freq", 130, 1, "verified", dnHi, dnTo(DN_QP.FREQ)],
-  ["filter.reso", 132, 1, "verified", dnHi, dnTo(DN_QP.RESO)],
-  ["filter.env", 134, 1, "verified", (d, o) => dnHi(d, o) - 64, dnTo(DN_QP.FDEPTH)],
+  ["filter.freq", 130, 1, "verified", dnHi, dnTo100(DN_QP.FREQ)],
+  ["filter.reso", 132, 1, "verified", dnHi, dnTo100(DN_QP.RESO)],
+  ["filter.env", 134, 1, "verified", (d, o) => dnHi(d, o) - 64, dnTo100(DN_QP.FDEPTH)],
   ["filter.atk", 136, 0, "verified", dnLo, dnTo(DN_QP.FATK, dnT)],
   ["filter.dec", 138, 0, "verified", dnLo, dnTo(DN_QP.FDEC, dnT)],                             // 127 = INF (dnsndToQuad)
   ["filter.sus", 140, 0, "verified", dnLo, dnTo(DN_QP.FSUS)],
   ["filter.rel", 142, 0, "verified", dnLo, dnTo(DN_QP.FREL, dnTRel)],                          // 127 = INF = FM TONE's
-  ["filter.base", 144, 1, "slot", dnHi, dnTo(DN_QP.BASE)],
+  ["filter.base", 144, 1, "slot", dnHi, dnTo100(DN_QP.BASE)],
   ["filter.width", 146, 0, "slot", dnLo, dnTo(DN_QP.WIDTH)],
   ["amp.atk", 148, 0, "verified", dnLo, dnTo(DN_QP.EATK, dnT)],
   ["amp.dec", 150, 0, "verified", dnLo, dnTo(DN_QP.EDEC, dnT)],                                // 127 = INF (dnsndToQuad)
   ["amp.sus", 152, 0, "verified", dnLo, dnTo(DN_QP.ESUS)],
-  ["amp.rel", 154, 1, "verified", dnHi, dnTo(DN_QP.EREL, dnTRel)],                             // 127 = INF = FM TONE's
+  ["amp.rel", 154, 1, "verified", dnHi, dnTo(DN_QP.EREL, dnTRel100)],                          // 127 = INF = FM TONE's
   ["amp.drive", 156, 1, "verified", dnHi, (v, out) => { out.drive = Math.max(0, Math.min(127, dnR(v))); }],
   ["amp.pan", 158, 0, "verified", (d, o) => d[o] - 64, (v, out) => { out.pan = Math.max(-64, Math.min(63, v)); }],
-  ["amp.vol", 160, 1, "verified", dnHi, dnTo(DN_QP.LEVEL)],
+  ["amp.vol", 160, 1, "verified", dnHi, dnTo100(DN_QP.LEVEL)],
   ["send.reverb", 162, 1, "verified", dnHi, dnLost("reverb send")],
   ["send.delay", 164, 1, "verified", dnHi, dnLost("delay send")],
   ["send.chorus", 166, 1, "verified", dnHi, dnLost("chorus send")],
@@ -321,8 +335,55 @@ export function dnsndToQuad(parsed) {
     notes.push(r ? `the sound's OCTAVE ${oct > 0 ? "+" : ""}${oct / 12}: every ratio x ${2 ** (oct / 12)}` :
       `the sound's OCTAVE ${oct > 0 ? "+" : ""}${oct / 12} not imported (a ratio has no such value in FM TONE): it plays ${Math.abs(oct / 12)} octave(s) ${oct > 0 ? "lower" : "higher"} than on the Digitone`);
   }
-  const blob = new Uint8Array(DN_QUAD_BLOB);
-  blob[0] = 0x51; blob[1] = 3;
-  for (let i = 0; i < DN_QUAD_NP; i++) blob[2 + i] = p[i] - DN_QUAD_RANGES[i][0];
-  return { blob, values: p, pan: out.pan, drive: out.drive, notes };
+  return { blob: dnQuadPack(p), values: p, pan: out.pan, drive: out.drive, notes };
 }
+
+// FM TONE's values (version 4) -> its blob: 'Q' 4, value - min a byte, the hi-res ones u16le, zeros (eng_quad.c quad_pack)
+export function dnQuadPack(p) {
+  const blob = new Uint8Array(DN_QUAD_BLOB);
+  let o = 2;
+  blob[0] = 0x51; blob[1] = 4;
+  for (let i = 0; i < DN_QUAD_NP; i++) {
+    const u = p[i] - DN_QUAD_RANGES[i][0];
+    blob[o++] = u & 255;
+    if (dnHiRes(i)) blob[o++] = u >> 8;
+  }
+  return blob;
+}
+// version 3's ranges (eng_quad.c quad_range_v3): the hi-res ones in whole numbers, FDBK 0..120
+const dnRangeV3 = (i) => {
+  const [mn, mx] = DN_QUAD_RANGES[i];
+  return dnHiRes(i) ? [Math.trunc(mn / 100), Math.trunc(mx / 100)] : i === DN_QP.FDBK ? [0, 120] : [mn, mx];
+};
+export function quadToV4(blob) {
+  if (!(blob instanceof Uint8Array) || blob[0] !== 0x51) return blob;
+  if (blob.length === DN_QUAD_BLOB && blob[1] === 4) return blob;
+  if (blob.length !== DN_QUAD_BLOB_V3 || blob[1] < 1 || blob[1] > 3) return blob;
+  if (blob[1] !== 3) { const b = new Uint8Array(DN_QUAD_BLOB); b.set(blob); return b; }
+  const p = [];
+  for (let i = 0; i < DN_QUAD_NP; i++) {
+    const [mn, mx] = dnRangeV3(i), v = Math.min(mx, blob[2 + i] + mn);
+    const w = dnHiRes(i) ? v * 100 : i === DN_QP.FDBK ? Math.trunc((v * 127 + 60) / 120) : v;
+    p.push(Math.max(DN_QUAD_RANGES[i][0], Math.min(DN_QUAD_RANGES[i][1], w)));
+  }
+  return dnQuadPack(p);
+}
+// a version-4 patch -> version 3's 80 bytes (for a firmware before the pool, whose QUAD store holds versions 1..3): the
+// hi-res values rounded to whole numbers, FDBK 0..127 -> 0..120; a version 1..3 blob as it is
+export function quadToV3(blob) {
+  if (!(blob instanceof Uint8Array) || blob.length !== DN_QUAD_BLOB || blob[0] !== 0x51) return blob;
+  if (blob[1] !== 4) return blob.slice(0, DN_QUAD_BLOB_V3);
+  const b = new Uint8Array(DN_QUAD_BLOB_V3);
+  let o = 2;
+  b[0] = 0x51; b[1] = 3;
+  for (let i = 0; i < DN_QUAD_NP; i++) {
+    let u = blob[o++];
+    if (dnHiRes(i)) u |= blob[o++] << 8;
+    const v = u + DN_QUAD_RANGES[i][0], [mn, mx] = dnRangeV3(i);
+    const w = dnHiRes(i) ? Math.round(v / 100) : i === DN_QP.FDBK ? Math.trunc((v * 120 + 63) / 127) : v;
+    b[2 + i] = Math.max(mn, Math.min(mx, w)) - mn;
+  }
+  return b;
+}
+// the macro value P_E0 + k of FM TONE value v (eng_quad.c quad_mac_val: HARM, DTUNE their coarse part)
+export const dnQuadMacro = (i, v) => (dnHiRes(i) ? Math.trunc(v / 100) : v);

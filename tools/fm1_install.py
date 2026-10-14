@@ -1370,7 +1370,16 @@ ENGINE_NAMES = ("ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO",
                                                           # VOICE, TRIO, NOISE, PHYS). 15: FM TONE (eng_quad.c, code name QUAD)
 ENGINE_PATCH = {12: "fm6", 13: "va", 14: "cz", 15: "quad", 16: "p5"}  # engine -> its patch kind (P5: the pool only)
 PATCH_KINDS = ("va", "fm6", "cz", "quad", "p5")
-PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 80, "p5": 138}
+PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 96, "p5": 138}
+# a kind's blob in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; version 4, 2026-10-14: 96 bytes, the
+# hi-res values in hundredths). A version 1..3 blob is zero-padded to 96 (the firmware converts it on load)
+STORE_PATCH = dict(PATCH_SIZE, quad=80)
+QUAD_V3 = 80
+
+
+def _quad96(b):
+    """an FM TONE blob of 80 bytes (versions 1..3) zero-padded to 96; 96 as it is"""
+    return bytes(b) + bytes(PATCH_SIZE["quad"] - len(b)) if len(b) == QUAD_V3 else bytes(b)
 KIND_ENGINE = {k: e for e, k in ENGINE_PATCH.items()}
 
 
@@ -1430,8 +1439,8 @@ def _store_at(kind, slot):
     """-> (backup id, index in that store, byte offset of the blob)"""
     k = slot - 1
     if kind in WHOLE_STORES:
-        return PATCH_ID[kind], k, 16 + k * PATCH_SIZE[kind]
-    return PATCH_ID[kind] + k // 16, k % 16, 16 + (k % 16) * PATCH_SIZE[kind]
+        return PATCH_ID[kind], k, 16 + k * STORE_PATCH[kind]
+    return PATCH_ID[kind] + k // 16, k % 16, 16 + (k % 16) * STORE_PATCH[kind]
 
 
 def _store_ok(kind, i, b):
@@ -1449,7 +1458,7 @@ def _new_store(kind, i):
     if kind in WHOLE_STORES:
         head = (VAS_MAGIC if kind == "va" else QUDS_MAGIC).to_bytes(4, "little") \
             + (3 if kind == "va" else 1).to_bytes(2, "little") + (32).to_bytes(2, "little") + bytes(4) \
-            + PATCH_SIZE[kind].to_bytes(2, "little") + bytes(2)
+            + STORE_PATCH[kind].to_bytes(2, "little") + bytes(2)
     else:
         head = (FM6U_MAGIC if kind == "fm6" else CZU_MAGIC).to_bytes(4, "little") + (1).to_bytes(2, "little") \
             + (16).to_bytes(2, "little") + (16 * (i - PATCH_ID[kind])).to_bytes(2, "little") \
@@ -1462,16 +1471,20 @@ def _store_blob(objs, kind, slot):
     if is_pool(objs):                              # (the pool: the slot's patch when it is that kind's)
         i, off = _pool_at(slot)
         b = objs.get(i, b"")
-        if len(b) != POOL_BANK or b[off + POOL_HDR] != KIND_ENGINE[kind] + 1 or b[off + POOL_HDR + 1] != PATCH_SIZE[kind]:
+        n = b[off + POOL_HDR + 1] if len(b) == POOL_BANK else 0
+        if len(b) != POOL_BANK or b[off + POOL_HDR] != KIND_ENGINE[kind] + 1 or \
+                (n != PATCH_SIZE[kind] and not (kind == "quad" and n == QUAD_V3)):   # (an older FM TONE slot: 80)
             return None
-        return bytes(b[off + POOL_DATA:off + POOL_DATA + PATCH_SIZE[kind]])
+        d = bytes(b[off + POOL_DATA:off + POOL_DATA + n])
+        return _quad96(d) if kind == "quad" else d
     if kind == "p5":
         return None
     i, k, off = _store_at(kind, slot)
     b = objs.get(i, b"")
     if not _store_ok(kind, i, b) or not _u32(b, 8 if kind in WHOLE_STORES else 12) >> k & 1:
         return None
-    return bytes(b[off:off + PATCH_SIZE[kind]])
+    d = bytes(b[off:off + STORE_PATCH[kind]])
+    return _quad96(d) if kind == "quad" else d
 
 
 def _set_blob(objs, kind, slot, blob):
@@ -1493,6 +1506,11 @@ def _set_blob(objs, kind, slot, blob):
         if blob is not None:
             raise InstallError("usage", "this FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)")
         return
+    if kind == "quad" and blob is not None:        # (a firmware before the pool keeps versions 1..3, 80 bytes)
+        if blob[1] > 3:
+            raise InstallError("usage", "this FM-1 keeps FM TONE sounds in an older format: update ChoralRoot (0.22 or "
+                               "later) to add this one")
+        blob = bytes(blob[:QUAD_V3])
     i, k, off = _store_at(kind, slot)
     b = objs.get(i, b"")
     if not _store_ok(kind, i, b):
@@ -1504,7 +1522,7 @@ def _set_blob(objs, kind, slot, blob):
     used = _u32(b, uo)
     used = used | 1 << k if blob is not None else used & ~(1 << k)
     b[uo:uo + 4] = used.to_bytes(4, "little")
-    b[off:off + PATCH_SIZE[kind]] = blob if blob is not None else bytes(PATCH_SIZE[kind])
+    b[off:off + STORE_PATCH[kind]] = blob if blob is not None else bytes(STORE_PATCH[kind])
     objs[i] = bytes(b)
 
 
@@ -1707,14 +1725,16 @@ def read_sound_file(f):
             raise bad(f"a {kind} patch does not go with the engine {ENGINE_NAMES[engine]} "
                       + (f"(its patch kind is {want})" if want else "(it has no patch)"))
         data = b64(patch.get("data"), "the patch data")
+        if kind == "quad" and len(data) == QUAD_V3 and data[:1] == b"Q" and 1 <= data[1] <= 3:
+            data = _quad96(data)                   # (an FM TONE sound file of before 2026-10-14: the FM-1 converts it)
         if len(data) != PATCH_SIZE[kind]:
             raise bad(f"the {kind} patch is {len(data)} bytes, not {PATCH_SIZE[kind]}")
         if kind == "va" and (data[0] != 0x56 or not 1 <= data[1] <= 3):
             raise bad("not a VA patch (its first bytes are not 'V' and a version 1..3)")
         if kind == "fm6" and (data[112] != 0x46 or data[113] != 1):
             raise bad("not an FM6 patch (bytes 112, 113 are not 'F', 1)")
-        if kind == "quad" and (data[0] != 0x51 or not 1 <= data[1] <= 3):
-            raise bad("not an FM TONE patch (its first bytes are not 'Q' and a version 1..3)")
+        if kind == "quad" and (data[0] != 0x51 or not 1 <= data[1] <= 4 or (data[1] < 4 and any(data[80:]))):
+            raise bad("not an FM TONE patch (its first bytes are not 'Q' and a version 1..4)")
         patch = (kind, bytes(data))
     return bytes(rec), name, engine, patch
 

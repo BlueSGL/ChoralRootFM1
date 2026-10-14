@@ -206,7 +206,10 @@ bytes). An upload writes over it like any other data; a record that is not the s
 | 4 | LFOHZ | 9 | BPM | | |
 
 14..16 (OFS, FMNOTE, FMFRQ: FM6's pages) show as numbers. 17 TIMEI: as TIME, but 127 = "INF" (FM TONE's filter and
-amp REL: the release holds); an editor that does not know it shows the number.
+amp REL: the release holds); an editor that does not know it shows the number. 18 FIX2 (2026-10-14): a value in
+hundredths, FM TONE's hi-res deep values in the Digitone's ranges (4201 = "42.01"; a range below 0 signed: "+41.34",
+"-64.00"); its finest step 1, its whole-number step 100. FM TONE's deep pages are not in this protocol (its macros are
+whole numbers: HARM, DTUNE their coarse part), so no DESC carries it today.
 
 The editor should show the value with the unit; formatting it exactly like the device does
 is not required.

@@ -7,7 +7,7 @@
 // objects that changed are written back (the stores first, the bank last), each as a restore writes it (fm1backup.js).
 // Pure: no DOM, no MIDI (the requests go through the caller's request function, as captureBackup's).
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName } from "./fm1backup.js";
-import { dnsndToQuad } from "./fm1dnsnd.js";
+import { dnsndToQuad, quadToV4, quadToV3, dnQuadMacro } from "./fm1dnsnd.js";
 
 export const SOUND_IDS = [6, 7, 9, 10, 11, 12, 13, 22];   // the legacy objects (0.21's: 32 slots, the engine stores)
 const SOUND_IDS_OPTIONAL = [22];                 // (an older ChoralRoot has no FM TONE store: read as empty)
@@ -23,7 +23,9 @@ export const isPool = (objs) => POOL_IDS.some((id) => (objs instanceof Map ? obj
 // stand-in). 15: FM TONE (engine 15, eng_quad.c, code name QUAD; its patch kind stays "quad")
 export const ENGINE_NAMES = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
   "DRUM", "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5"];
-export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 80, p5: 138 };
+export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 96, p5: 138 };
+// a kind's record in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; version 4 since 2026-10-14: 96)
+const STORE_PATCH = { ...PATCH_SIZE, quad: 80 };
 const KIND_ENGINE = { va: 13, fm6: 12, cz: 14, quad: 15, p5: 16 };
 export const SOUND_FORMAT = "choralroot-sound";
 export const patchKindOf = (engine) =>
@@ -121,7 +123,7 @@ function sndRecord(m, slot) {           // the slot's record bytes, or null (the
 // the store object of a kind that holds `slot`, its blob offset and its used bit
 function sndPlace(kind, slot) {
   const s = SND_STORE[kind], h = sndWhole(kind) ? 0 : slot > 16 ? 1 : 0, k = sndWhole(kind) ? slot - 1 : (slot - 1) % 16;
-  return { id: s.ids[h], half: h, bit: k, off: 16 + k * PATCH_SIZE[kind] };
+  return { id: s.ids[h], half: h, bit: k, off: 16 + k * STORE_PATCH[kind] };
 }
 function sndStoreOk(kind, b, half) {
   const s = SND_STORE[kind];
@@ -129,20 +131,24 @@ function sndStoreOk(kind, b, half) {
   const v = sndView(b), ver = v.getUint16(4, true);
   if (v.getUint32(0, true) !== s.magic || v.getUint16(6, true) !== s.nslot) return false;
   if (kind === "va") return (ver === 3 || ver === 2) && v.getUint16(12, true) === PATCH_SIZE.va;
-  if (kind === "quad") return ver === 1 && v.getUint16(12, true) === PATCH_SIZE.quad;
+  if (kind === "quad") return ver === 1 && v.getUint16(12, true) === STORE_PATCH.quad;
   return ver === 1 && v.getUint16(8, true) === half * 16 && v.getUint16(10, true) === PATCH_SIZE[kind] && v.getUint32(12, true) >>> 16 === 0;
 }
 const sndUsedOff = (kind) => (sndWhole(kind) ? 8 : 12);
 function sndBlob(m, kind, slot) {        // the slot's blob in the store of that kind, or null (no store, bit clear)
   if (m.pool) {                          // (the pool: the slot's patch when it is that kind's)
     const p = poolAt(slot), b = m.get(p.id);
-    if (b.length !== POOL_BANK || b[p.off + POOL_HDR] !== KIND_ENGINE[kind] + 1 || b[p.off + POOL_HDR + 1] !== PATCH_SIZE[kind]) return null;
-    return b.subarray(p.off + POOL_DATA, p.off + POOL_DATA + PATCH_SIZE[kind]);
+    const n = b.length === POOL_BANK ? b[p.off + POOL_HDR + 1] : 0;   // (FM TONE: an older slot's 80-byte patch)
+    if (b.length !== POOL_BANK || b[p.off + POOL_HDR] !== KIND_ENGINE[kind] + 1 ||
+        (n !== PATCH_SIZE[kind] && !(kind === "quad" && n === STORE_PATCH.quad))) return null;
+    const d = b.subarray(p.off + POOL_DATA, p.off + POOL_DATA + n);
+    return kind === "quad" ? quadToV4(d) : d;
   }
   if (kind === "p5") return null;        // (no P5 store before the pool)
   const p = sndPlace(kind, slot), b = m.get(p.id);
   if (!sndStoreOk(kind, b, p.half) || !(sndView(b).getUint32(sndUsedOff(kind), true) >>> p.bit & 1)) return null;
-  return b.subarray(p.off, p.off + PATCH_SIZE[kind]);
+  const d = b.subarray(p.off, p.off + STORE_PATCH[kind]);
+  return kind === "quad" ? quadToV4(d) : d;   // (FM TONE: the store's version 1..3 as version 4)
 }
 const sndDecodeName = (r) => { let s = ""; for (let i = 4; i < 4 + SND_NAME && r[i]; i++) s += String.fromCharCode(r[i]); return s; };
 export const nameValid = (name) => typeof name === "string" && /^[\x20-\x7e]{1,12}$/.test(name);
@@ -214,10 +220,12 @@ export function readSoundFile(file) {
     if (!kind || file.patch.kind !== kind)
       throw new Error(`The sound file's patch (${file.patch.kind}) is not the kind of its engine ${ENGINE_NAMES[engine]} (${kind || "none"})`);
     patch = sndUnB64(file.patch.data, "patch");
+    if (kind === "quad" && patch.length === STORE_PATCH.quad && patch[0] === 0x51 && patch[1] >= 1 && patch[1] <= 3)
+      patch = quadToV4(patch);              // (an FM TONE sound file of before 2026-10-14: converted, best effort)
     if (patch.length !== PATCH_SIZE[kind]) throw new Error(`The sound file's ${kind} patch is ${patch.length} bytes, not ${PATCH_SIZE[kind]}`);
     if (kind === "va" && (patch[0] !== 0x56 || patch[1] < 1 || patch[1] > 3)) throw new Error("The sound file's VA patch is not a VA patch (magic or version)");
     if (kind === "fm6" && (patch[112] !== 0x46 || patch[113] !== 1)) throw new Error("The sound file's FM6 patch is not an FM6 patch (magic)");
-    if (kind === "quad" && (patch[0] !== 0x51 || patch[1] < 1 || patch[1] > 3)) throw new Error("The sound file's FM TONE patch is not an FM TONE patch (magic or version)");
+    if (kind === "quad" && (patch[0] !== 0x51 || patch[1] < 1 || patch[1] > 4)) throw new Error("The sound file's FM TONE patch is not an FM TONE patch (magic or version)");
   }
   return { record, name, engine, engineName: ENGINE_NAMES[engine], kind, patch };
 }
@@ -231,8 +239,8 @@ function sndNewBank() {
 function sndNewStore(kind, half) {
   const s = SND_STORE[kind], b = new Uint8Array(s.size), v = sndView(b);
   v.setUint32(0, s.magic, true); v.setUint16(4, s.ver, true); v.setUint16(6, s.nslot, true);
-  if (sndWhole(kind)) v.setUint16(12, PATCH_SIZE[kind], true);
-  else { v.setUint16(8, half * 16, true); v.setUint16(10, PATCH_SIZE[kind], true); }
+  if (sndWhole(kind)) v.setUint16(12, STORE_PATCH[kind], true);
+  else { v.setUint16(8, half * 16, true); v.setUint16(10, STORE_PATCH[kind], true); }
   return b;
 }
 // the slot's blob of `kind` = blob (null: cleared). Clearing a slot whose bit is clear changes nothing (as va_store_put)
@@ -246,12 +254,13 @@ function sndPutBlob(m, kind, slot, blob) {
     m.set(p.id, b); return;
   }
   if (kind === "p5") { if (blob) throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)"); return; }
+  if (kind === "quad" && blob) blob = quadToV3(blob);   // (a firmware before the pool: its store holds versions 1..3, 80 bytes)
   const p = sndPlace(kind, slot), old = m.get(p.id), ok = sndStoreOk(kind, old, p.half), uo = sndUsedOff(kind);
   if (!blob) {
     if (!ok || !(sndView(old).getUint32(uo, true) >>> p.bit & 1)) return;
     const b = old.slice(), v = sndView(b);
     v.setUint32(uo, (v.getUint32(uo, true) & ~(1 << p.bit)) >>> 0, true);
-    b.fill(0, p.off, p.off + PATCH_SIZE[kind]);
+    b.fill(0, p.off, p.off + STORE_PATCH[kind]);
     m.set(p.id, b); return;
   }
   if (kind === "va" && ok && sndView(old).getUint16(4, true) === 2)   // (a version-2 store is converted at the FM-1's boot)
@@ -590,7 +599,7 @@ export function soundFromDnsnd(parsed) {
   sndWriteName(record, name);
   record[16 + SND_P_PAN] = q.pan + 64;
   record[16 + SND_P_DIST] = q.drive + 64;                       // the Digitone's DRIVE 0..127 -> the sound's (cr_ui.c cu_drive_load)
-  SND_QUAD_MAC.forEach((i, k) => { record[16 + SND_P_E0 + k] = q.values[i] + 64; });
+  SND_QUAD_MAC.forEach((i, k) => { record[16 + SND_P_E0 + k] = dnQuadMacro(i, q.values[i]) + 64; });   // (HARM, DTUNE: coarse)
   record[SND_BIND_NOTE] = SND_BIND_MARK; record[SND_BIND_FLAGS] = 0;
   if (!recordValid(record) || !nameValid(name)) throw new Error("The template record is not valid");
   return { record, name, engine: 15, engineName: ENGINE_NAMES[15], kind: "quad", patch: q.blob, notes: q.notes };
