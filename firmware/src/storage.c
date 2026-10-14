@@ -88,13 +88,14 @@ static void st_note(uint32_t obj, uint32_t why)   /* an erase of obj (0x100 + k:
         st_auto_loud++;
 }
 
-static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per step */
+/* zlib CRC-32, 4 bits per step, continuing crc (0: a fresh one; st_crc32(a ++ b) == st_crc_run(st_crc32(a), b)) */
+static uint32_t st_crc_run(uint32_t crc, const void *p, uint32_t n)
 {
     static const uint32_t T[16] = {
         0x00000000u, 0x1DB71064u, 0x3B6E20C8u, 0x26D930ACu, 0x76DC4190u, 0x6B6B51F4u, 0x4DB26158u, 0x5005713Cu,
         0xEDB88320u, 0xF00F9344u, 0xD6D6A3E8u, 0xCB61B38Cu, 0x9B64C2B0u, 0x86D3D2D4u, 0xA00AE278u, 0xBDBDF21Cu};
     const uint8_t *b = p;
-    uint32_t c = 0xFFFFFFFFu;
+    uint32_t c = ~crc;
     while (n--) {
         c ^= *b++;
         c = (c >> 4) ^ T[c & 15u];
@@ -102,6 +103,7 @@ static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per
     }
     return ~c;
 }
+static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n); }
 
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
@@ -332,3 +334,228 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
         st_ahead_ok[ix] = (uint8_t)st_blank(st_sector(obj, 1u));
     return 0;
 }
+
+#if FELUCCA_CZ && FELUCCA_QUAD
+/* ---- THE SOUND POOL (ChoralRoot 0.22: docs/PRESETS.md "The pool"): FLOATING objects ----
+ * 0xB8000..0xC7FFF, SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
+ * a user record and one engine's patch). A sector is a bank's copy when its st_hdr_t is valid: ST_MAGIC, type SP_TYPE,
+ * slot = the logical bank, len ST_PAYLOAD_MAX, rsv[0] SP_VER, the header CRC; and its payload's CRC matches.
+ * LOAD (sp_scan): per bank the valid copy with the newest seq wins (serial arithmetic, so seq wraps; equal seq,
+ * which this writer never makes: the lower sector); a copy whose payload CRC fails is skipped for the next newest.
+ * Every save takes seq = the newest seq of ANY valid pool header + 1, so seq orders all the pool's writes.
+ * SAVE (sp_save): the new copy goes to the TARGET, the first sector after the newest one (cyclic) that holds no
+ * bank's current copy (16 - 13 = at least 3 such sectors, so the target always exists and wear walks round all 16);
+ * if it is not blank it is erased (the only erase; st_prep's rule: sp_prep erases it ahead), then the 15 payload pages
+ * are programmed from the current copy page by page through 256 bytes (st_buf), the changed bytes substituted, and the
+ * commit record LAST, then everything read back. Until the header is programmed the old copy is the newest valid one;
+ * after, the new one is; the old copy is left as it is until its sector becomes a target. A cut anywhere: the old
+ * bank or the new one, never a mix. The legacy objects (OBJ_UPRESET0.., the engine stores) are other sectors */
+#define SP_BASE 0xB8000u
+#define SP_NSEC 16u
+#define SP_NBANK 13u
+#define SP_PER 10u
+#define SP_SLOT 384u
+#define SP_SLOTS (SP_NBANK * SP_PER)            /* 130: upool.c offers UPOOL_SLOTS of them */
+#define SP_TYPE 0x4C50u                         /* "PL" (never an OBJ_*: st_head of an older firmware rejects it) */
+#define SP_VER 1u
+#define SP_NONE 0xFFu
+_Static_assert(SP_PER * SP_SLOT == ST_PAYLOAD_MAX, "a pool bank fills one sector's payload");
+_Static_assert(SP_NSEC >= SP_NBANK + 2u, "the pool needs a target besides the spare");
+static uint8_t sp_cur[SP_NBANK];                /* the sector of bank b's current copy (SP_NONE: none) */
+static uint8_t sp_last = SP_NONE;               /* the sector of the newest valid header */
+static uint32_t sp_top;                         /* its seq */
+static uint8_t sp_scanned, sp_spare_ok;         /* sp_scan ran; the target is known blank (sp_prep, cleared by a save) */
+static uint32_t sp_erases, sp_progs;            /* (the host test's counters: erases and programs by the pool) */
+
+static inline int sp_newer(uint32_t a, uint32_t b) { return a != b && a - b < 0x80000000u; }
+static uint32_t sp_addr(uint32_t s) { return SP_BASE + s * ST_SECTOR; }
+
+static int sp_head(uint32_t s, st_hdr_t *h)    /* sector s holds a valid pool commit record: 0 */
+{
+    if (st_read(sp_addr(s), h, sizeof *h))
+        return -1;
+    if (h->magic != ST_MAGIC || h->type != SP_TYPE || h->slot >= SP_NBANK || h->len != ST_PAYLOAD_MAX ||
+        h->rsv[0] != SP_VER || h->hcrc != st_crc32(h, sizeof *h - 4u))
+        return -1;
+    return 0;
+}
+static int sp_body(uint32_t s, uint32_t crc)   /* the payload's CRC is crc: 0 (st_buf's first 256 bytes: scratch) */
+{
+    uint32_t off, c = 0;
+    for (off = 0; off < ST_PAYLOAD_MAX; off += 256u) {
+        if (st_read(sp_addr(s) + ST_PAYLOAD_OFF + off, st_buf, 256u))
+            return -1;
+        c = st_crc_run(c, st_buf, 256u);
+    }
+    return c == crc ? 0 : -1;
+}
+
+/* the 16 commit records -> sp_cur, sp_top, sp_last (power-on; at most 16 header reads and one payload read per bank,
+ * more only when a payload fails its CRC) */
+static void sp_scan(void)
+{
+    st_hdr_t h;
+    uint32_t seq[SP_NSEC], crc[SP_NSEC], s, b;
+    uint8_t bank[SP_NSEC];
+    sp_last = SP_NONE;
+    sp_top = 0;
+    sp_spare_ok = 0;
+    for (s = 0; s < SP_NSEC; s++) {
+        bank[s] = SP_NONE;
+        if (ST_BLOCKED() || sp_head(s, &h))
+            continue;
+        bank[s] = (uint8_t)h.slot;
+        seq[s] = h.seq;
+        crc[s] = h.crc;
+        if (sp_last == SP_NONE || sp_newer(h.seq, sp_top)) {
+            sp_top = h.seq;
+            sp_last = (uint8_t)s;
+        }
+    }
+    for (b = 0; b < SP_NBANK; b++) {
+        sp_cur[b] = SP_NONE;
+        for (;;) {                                  /* the newest unrejected candidate; its payload checked */
+            uint32_t best = SP_NONE;
+            for (s = 0; s < SP_NSEC; s++)
+                if (bank[s] == b && (best == SP_NONE || sp_newer(seq[s], seq[best])))
+                    best = s;
+            if (best == SP_NONE)
+                break;
+            if (sp_body(best, crc[best]) == 0) {
+                sp_cur[b] = (uint8_t)best;
+                break;
+            }
+            bank[best] = SP_NONE;
+        }
+    }
+    sp_scanned = 1;
+}
+static inline void sp_ensure(void) { if (!sp_scanned) sp_scan(); }
+
+static int sp_held(uint32_t s)                  /* sector s is some bank's current copy */
+{
+    uint32_t b;
+    for (b = 0; b < SP_NBANK; b++)
+        if (sp_cur[b] == s)
+            return 1;
+    return 0;
+}
+static uint32_t sp_target(void)                 /* where the next save goes (see the top) */
+{
+    uint32_t i, s = sp_last == SP_NONE ? SP_NSEC - 1u : sp_last;
+    for (i = 0; i < SP_NSEC; i++) {
+        s = (s + 1u) % SP_NSEC;
+        if (!sp_held(s))
+            return s;
+    }
+    return 0;                                   /* (cannot happen: SP_NSEC > SP_NBANK) */
+}
+static int sp_used(uint32_t b) { sp_ensure(); return b < SP_NBANK && sp_cur[b] != SP_NONE; }
+
+/* n bytes at off of slot k's SP_SLOT -> dst; a slot of a bank never written reads 0: 1, read: 0, error -1.
+ * NEVER from the audio ISR (st_read) */
+static int sp_read(uint32_t k, uint32_t off, void *dst, uint32_t n)
+{
+    uint32_t b = k / SP_PER;
+    if (ST_BLOCKED() || k >= SP_SLOTS || off + n > SP_SLOT)
+        return -1;
+    sp_ensure();
+    if (sp_cur[b] == SP_NONE) {
+        memset(dst, 0, n);
+        return 1;
+    }
+    return st_read(sp_addr(sp_cur[b]) + ST_PAYLOAD_OFF + (k % SP_PER) * SP_SLOT + off, dst, n) ? -1 : 0;
+}
+
+/* the target made blank now (the quiet writes: at power-on, after a long idle): 0 it was, 1 erased, < 0 error */
+static int sp_prep(void)
+{
+    uint32_t t;
+    int rc;
+    if (ST_BLOCKED())
+        return -1;
+    sp_ensure();
+    sp_spare_ok = 0;
+    t = sp_target();
+    if (st_blank(sp_addr(t))) {
+        sp_spare_ok = 1;
+        return 0;
+    }
+    st_note(0x200u + t, st_why);
+    sp_erases++;
+    if ((rc = st_erase(sp_addr(t))) != 0)
+        return rc;
+    if (!st_blank(sp_addr(t)))
+        return -7;
+    sp_spare_ok = 1;
+    return 1;
+}
+static inline int sp_ready(void) { return sp_scanned && sp_spare_ok; }
+
+/* slot k's bytes [off, off + n) = src (0: zeros), the rest of its bank as it is; 0 ok, < 0 nothing changed (the
+ * old copy is current; -7: written but not read back) */
+static int sp_write(uint32_t k, uint32_t off, const void *src, uint32_t n)
+{
+    st_hdr_t h;
+    uint32_t b = k / SP_PER, t, old, pg, lo, hi, i, crc = 0;
+    int rc;
+    if (ST_BLOCKED() || k >= SP_SLOTS || off + n > SP_SLOT)
+        return -1;
+    sp_ensure();
+    old = sp_cur[b];
+    t = sp_target();
+    lo = (k % SP_PER) * SP_SLOT + off;          /* the changed bytes in the payload */
+    hi = lo + n;
+    sp_spare_ok = 0;
+    if (!st_blank(sp_addr(t))) {
+        st_note(0x200u + t, st_why);
+        sp_erases++;
+        if ((rc = st_erase(sp_addr(t))) != 0) {
+            sp_scanned = 0;                     /* (after any failure the next access scans what is there) */
+            return rc;
+        }
+    }
+    for (pg = 0; pg < ST_PAYLOAD_MAX; pg += 256u) {
+        if (old == SP_NONE)
+            memset(st_buf, 0, 256u);
+        else if (st_read(sp_addr(old) + ST_PAYLOAD_OFF + pg, st_buf, 256u)) {
+            sp_scanned = 0;
+            return -1;
+        }
+        for (i = 0; i < 256u; i++)
+            if (pg + i >= lo && pg + i < hi)
+                st_buf[i] = src ? ((const uint8_t *)src)[pg + i - lo] : 0u;
+        crc = st_crc_run(crc, st_buf, 256u);
+        sp_progs++;
+        if ((rc = st_prog(sp_addr(t) + ST_PAYLOAD_OFF + pg, st_buf, 256u)) != 0) {
+            sp_scanned = 0;
+            return rc;
+        }
+    }
+    memset(&h, 0xFF, sizeof h);
+    h.magic = ST_MAGIC;
+    h.type = SP_TYPE;
+    h.slot = (uint16_t)b;
+    h.seq = sp_last == SP_NONE ? 1u : sp_top + 1u;
+    h.len = ST_PAYLOAD_MAX;
+    h.crc = crc;
+    h.rsv[0] = SP_VER;
+    h.hcrc = st_crc32(&h, sizeof h - 4u);
+    sp_progs++;
+    if ((rc = st_prog(sp_addr(t), &h, sizeof h)) != 0) {   /* the commit record, last */
+        sp_scanned = 0;
+        return rc;
+    }
+    {
+        st_hdr_t chk;
+        if (sp_head(t, &chk) || memcmp(&chk, &h, sizeof h) || sp_body(t, crc)) {
+            sp_scanned = 0;                     /* (what is valid now: the next access scans) */
+            return -7;
+        }
+    }
+    sp_cur[b] = (uint8_t)t;
+    sp_top = h.seq;
+    sp_last = (uint8_t)t;
+    return 0;
+}
+#endif

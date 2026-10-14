@@ -166,6 +166,8 @@ CC="${CC:-cc} -O1 -Wall -Wno-unused-function"
 
 par_build $CC -o "$OUT/storage_test" tests/storage_test.c
 run "flash storage (A/B, torn writes)" "$OUT/storage_test"
+par_build $CC -o "$OUT/pool_test" tests/pool_test.c
+run "sound pool (floating banks, power cuts)" "$OUT/pool_test"
 
 par_build $CC -o "$OUT/upreset_test" tests/upreset_test.c
 run "user presets (UP_PUT parser, bank round trip, versions, PHYS DRUM -> DRUM, grid records, DIGITAL kept)" "$OUT/upreset_test"
