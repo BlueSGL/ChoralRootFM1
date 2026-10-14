@@ -7,6 +7,7 @@
 # tap): ENV 1 shown, so ENV held on FILT now maps ENV1. The matrix filled (ENV1 to CUT RES FTYPE FENV SPRD
 # DRIVE) after LFO1 -> LVL1 on the OSC stack (LFO held + KNOB 2, the Level's mark): 8 slots; LFO1 -> CUT: "matrix
 # full". Then WHEEL (the picker, SELECT to the sixth engine; PHASE until 0.18): "not modulatable".
+knobs quick                   # every detent the quickest (the range / 20: the step this script was written for, 0.22)
 wait 100                      # (+ 200 ms of the engine change below: the same timeline)
 btn GLO down
 wait 100
