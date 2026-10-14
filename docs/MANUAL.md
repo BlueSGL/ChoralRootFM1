@@ -1482,6 +1482,15 @@ on, it comes up on one core that time (Geek Out: `c1 failed`), so that you can r
 Off. The value reads `On · restart` or `Off · restart` until you switch off and on. The Geek Out view shows the
 state: `c1 off`, `c1 ok ...`, `c1 failed`, or `c1 gave up · Options>Dual Core`. More: [DUALCORE.md](DUALCORE.md).
 
+**The single core package.** If your FM-1 crashes or freezes with the standard package, and setting Dual Core to
+Off is not enough (or you cannot reach Options), install the **Single core** package: in the web installer open
+**Advanced** under the versions and choose **Hardware fallback > Single core** (from 0.22). It is the same firmware,
+built so that the second core is never started: every sound and feature is there, and with one core a very full
+chord with the bass can cost a voice, as with Dual Core Off. Options > Dual Core then reads `1 core build` (it
+cannot be changed there) and Options > Version reads `ChoralRoot 0.22 1-core`. Your settings, sounds, loops and
+favorites stay when you move between the two packages, both ways; installing the standard package again (Install
+with Standard chosen, the default) puts Dual Core back as your settings say.
+
 ### What the FM-1 remembers
 
 **Saving is manual** (0.18). The FM-1 comes back, after switching off, as you last **saved** it, not as you left it.

@@ -10,8 +10,10 @@ Outputs in build/: choralroot.bin (app.bin: the boot stub's 0xEE0 bytes, then th
 choralroot.dis (the app), stub/stub.{bin,elf,dis} (the boot stub, firmware/stub; docs/BOOT-SAFETY.md),
 loader/ota.bin (update loader), choralroot.fwsc (package, identity FM-1_920). A release build (--release X.Y) keeps the identity, sets the
 version string to "ChoralRoot X.Y" and writes choralroot-X.Y.fwsc and a folder release-X.Y/ with the package,
-the app (choralroot-X.Y-app.bin), SHA256SUMS and the licence files (the CC0 sample attribution only for a build with
-FELUCCA_SAMPLE=1: ChoralRoot is all-synth, its image holds no samples).
+the app (choralroot-X.Y-app.bin), the single-core package and its app (choralroot-X.Y-1core.fwsc,
+choralroot-X.Y-1core-app.bin: CR_SINGLE_CORE=1, docs/DUALCORE.md "Two packages"), SHA256SUMS and the licence files
+(the CC0 sample attribution only for a build with FELUCCA_SAMPLE=1: ChoralRoot is all-synth, its image holds no
+samples). CR_SINGLE_CORE=1 without --release: build/choralroot.fwsc is the single-core package.
 After the checks it prints the section sizes against the XIP slot and the RAM / POOL / NOINIT regions.
 See BUILDING.md for the toolchain and the SDK.
 
@@ -256,8 +258,10 @@ def build_stub():
 
 # ---- app
 
-def build_app(stub):
+def build_app(stub, single=False):
     flags = [*CFLAGS, "-Ifirmware/hal", "-Ifirmware/src", "-Ibuild/gen"]
+    if single:                      # the single-core package (docs/DUALCORE.md "Two packages"): core 1 never started,
+        flags.append("-DCR_SINGLE_CORE=1")  # the version string "ChoralRoot X.Y 1-core" (firmware/src/cr_ui.h)
     for flag in ("FELUCCA_FLASH", "FELUCCA_OTA", "FELUCCA_OTA_DRYRUN", "FELUCCA_OTA_RAMONLY", "FELUCCA_CDC",
                  "FELUCCA_UART", "FELUCCA_UAC", "FELUCCA_ICONS", "FELUCCA_KEYCAPS", "FELUCCA_SLICE",
                  "FELUCCA_SLICER", "FELUCCA_FM4", "FELUCCA_SAMPLE", "FELUCCA_GRAIN", "FELUCCA_DRUM", "FELUCCA_SEQ",
@@ -501,6 +505,7 @@ def main():
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix")
         VERSION = "ChoralRoot " + a.release.lower()      # e.g. ChoralRoot 1.0, ChoralRoot 1.1-rc1
         name = f"{UNIT}-{a.release}.fwsc"
+        name1 = f"{UNIT}-{a.release}-1core.fwsc"     # the single-core package (docs/DUALCORE.md "Two packages")
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
@@ -511,24 +516,34 @@ def main():
         gen.result()
         ota = ldr.result()
         stub = stb.result()
-    img, syms, dis, rt, hdr = build_app(stub)
-    errors, notes = check(img, syms, dis, rt)
-    hal_err = mmio_check()
-    errors += hal_err
-    if not hal_err:
-        notes.append("register access: hal/ only (src/, loader/ clean)")
-    for n in notes:
-        print("  ok   ", n)
-    for e in errors:
-        print("  FAIL ", e)
-    print(size_line(hdr))
-    if errors:
-        raise SystemExit("build: checks failed")
-    flash = fm1pkg_make.flash_image(img, fm1pkg_make.KEY)
-    pkg = fm1pkg_make.ufw(flash, ota, PRODUCT)
-    print(f"sector 0x4000 (the directory and the stub: constant while the stub is) sha256 "
-          f"{hashlib.sha256(flash[0x4000:0x5000]).hexdigest()[:16]}; marker at 0x91fe0, body "
-          f"{len(img) - STUB_LEN + (-len(img) % 4)} B")
+    # CR_SINGLE_CORE=1: this build is the single-core package. A release builds both, the single-core one first, so
+    # that build/choralroot.{bin,elf,dis} are the standard package's when it ends
+    single_env = os.environ.get("CR_SINGLE_CORE") == "1"
+    variants = [True, False] if a.release else [single_env]
+    one = None
+    for single in variants:
+        img, syms, dis, rt, hdr = build_app(stub, single)
+        errors, notes = check(img, syms, dis, rt)
+        hal_err = mmio_check()
+        errors += hal_err
+        if not hal_err:
+            notes.append("register access: hal/ only (src/, loader/ clean)")
+        for n in notes:
+            print("  ok   ", n)
+        for e in errors:
+            print("  FAIL ", e)
+        print(("1-core " if single else "") + size_line(hdr))
+        if errors:
+            raise SystemExit("build: checks failed")
+        flash = fm1pkg_make.flash_image(img, fm1pkg_make.KEY)
+        pkg = fm1pkg_make.ufw(flash, ota, PRODUCT)
+        print(f"sector 0x4000 (the directory and the stub: constant while the stub is) sha256 "
+              f"{hashlib.sha256(flash[0x4000:0x5000]).hexdigest()[:16]}; marker at 0x91fe0, body "
+              f"{len(img) - STUB_LEN + (-len(img) % 4)} B")
+        if single and a.release:
+            one = (pkg, bytes(img))
+            (OUT / name1).write_bytes(pkg)
+            print(f"package  {OUT / name1}  {len(pkg)} B, identity {PRODUCT} (single core)")
     (OUT / name).write_bytes(pkg)
     att = SRC / "assets" / "samples-cc0" / "ATTRIBUTION.txt"
     att_on = att.exists() and os.environ.get("FELUCCA_SAMPLE") == "1"   # the SAMPLE sets' credit: only when built in
@@ -537,16 +552,17 @@ def main():
         shutil.copy(att, OUT / "ATTRIBUTION.txt")
     print(f"app      {OUT / f'{UNIT}.bin'}  {len(img)} B")
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
-    print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}")
+    print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}" + (" (single core)" if single_env and not a.release else ""))
     if a.release:                   # what a release carries: the package, the app and every licence they need
         rel = OUT / f"release-{a.release}"
         shutil.rmtree(rel, ignore_errors=True)
         (rel / "LICENSES").mkdir(parents=True)
         app = f"{UNIT}-{a.release}-app.bin"
-        (rel / name).write_bytes(pkg)
-        (rel / app).write_bytes(img)
-        (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n"
-                                                for n, b in ((name, pkg), (app, bytes(img)))))
+        app1 = f"{UNIT}-{a.release}-1core-app.bin"
+        files = ((name, pkg), (app, bytes(img)), (name1, one[0]), (app1, one[1]))
+        for n, b in files:
+            (rel / n).write_bytes(b)
+        (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n, b in files))
         for f in sorted((SRC / "LICENSES").glob("*.txt")):
             shutil.copy(f, rel / "LICENSES" / f.name)
         for doc in ("LICENSE", "LICENSING.md"):

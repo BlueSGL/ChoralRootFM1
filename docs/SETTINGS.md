@@ -53,7 +53,7 @@ from a layer: it goes with the layer (manual).
 | Hold Time | Options | Felucca's `bold` (HOLD), in the same flash object | **automatic** |
 | USB Record, USB Level | Options | block `usb_in`, `usb_level` | **automatic** |
 | USB Rate (0.19) | Options | block `pick_roots` bit 2 | **automatic** |
-| Dual Core (On by default since 0.22; a record keeps its own) | Options | block `view` bit 6 | **automatic** |
+| Dual Core (On by default since 0.22; a record keeps its own; the single-core package never changes it: docs/DUALCORE.md "Two packages") | Options | block `view` bit 6 | **automatic** |
 | Output (0.19) | Options | block `pick_roots` bit 1 | **automatic** |
 | the palette (no control: MOD) | | block `palette` | automatic |
 | the panel calibration | Options > Calibrate, OCT- + OCT+ at power-on | Felucca's `panel` | **automatic** (written by the calibration itself) |

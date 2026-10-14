@@ -6,7 +6,7 @@
      web/make_site.py inlines the libraries at LIB and the metadata at META (the versions of web/releases.json with
      their packages under ../../firmware/). The newest version is what Install writes; "Other versions" under the
      button chooses an older one, and the notes beside the button are those of the version chosen.
-     ?demo=idle | older | writing | interrupted | done | nomidi | stockwriting | stockdone shows a state with made-up
+     ?demo=idle | older | single | writing | interrupted | done | nomidi | stockwriting | stockdone shows a state with made-up
      device data for review and screenshots: in demo mode the page never asks the browser for MIDI and fetches nothing.
      The return to the official V15 (the <details id="stock"> far down the page) has its own bar, status line, end
      panels and log: OUT_STOCK in the script (the install card at the top is out of sight from there). -->
@@ -76,6 +76,13 @@
   .chip .has { color: #9DB4FF; }
   .chip[aria-pressed="true"] { background: var(--yellow); color: #080808; }
   .chip[aria-pressed="true"] span { color: #080808; }
+  .adv { margin: 14px 0 0; }
+  .adv > summary { cursor: pointer; width: max-content; font-size: 15px; font-weight: 800; color: var(--dim); letter-spacing: -0.01em; }
+  .adv > summary:hover, .adv[open] > summary { color: var(--cream); }
+  .adv .hw { margin: 12px 0 8px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+  .variants { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; margin: 0 0 10px; }
+  .chip.var b { font-size: 18px; }
+  .chip.var span { white-space: normal; }
   .goback { margin: 0 0 14px; padding: 2px 0 2px 12px; border-left: 6px solid var(--yellow); }
   .goback p { margin: 0 0 8px; font-weight: 600; }
   .side { padding: 8px 14px; background: var(--dark); color: var(--cream); font-size: 15px; font-weight: 700; }
@@ -173,6 +180,15 @@
         <span class="lbl" id="others-lbl" data-t="chOthers"></span>
         <div id="versions"></div>
       </div>
+      <details class="adv" id="adv" hidden>
+        <summary data-t="advTitle"></summary>
+        <p class="hw" data-t="hwTitle"></p>
+        <div class="variants" id="variants" role="group">
+          <button type="button" class="chip var" id="var-std" data-variant="std" aria-pressed="true"><b data-t="varStd"></b><span data-t="varStdSub"></span></button>
+          <button type="button" class="chip var" id="var-1core" data-variant="1core" aria-pressed="false"><b data-t="var1"></b><span data-t="var1Sub"></span></button>
+        </div>
+        <p class="small" data-t="hwNote"></p>
+      </details>
       <p class="small older"><a href="https://github.com/Quixotic7/ChoralRootFM1/releases" target="_blank" rel="noopener" data-t="chOlder"></a></p>
       <div class="ask">
         <button class="side" id="check-go" type="button" disabled data-t="cnGo"></button>
@@ -313,6 +329,14 @@ const TEXT = {
     midiAsk: "The browser asks once for permission to use MIDI devices: allow it. The page talks only to the FM-1, and the firmware comes from this site.",
     kept: "Updating ChoralRoot keeps your saved sounds, loops and settings. What is not saved is not kept: from 0.18 on the FM-1 saves by hand, so hold SAVE first. Install takes about two minutes.",
     installV: "Install ChoralRoot {version}",
+    installV1: "Install ChoralRoot {version} (single core)",
+    advTitle: "Advanced",
+    hwTitle: "Hardware fallback",
+    varStd: "Standard", varStdSub: "both cores, recommended",
+    var1: "Single core", var1Sub: "for an FM-1 that crashes or freezes with Standard",
+    hwNote: "Choose Single core only if your FM-1 crashes or freezes with Standard. It is the same firmware running on one of the FM-1's two processor cores: every sound and feature is there, and your settings, sounds and loops stay when you switch between the two. With one core, big chords with the bass on can run out of voices sooner. Options > Dual Core on the FM-1 then reads \"1 core build\".",
+    cn1core: "On your FM-1: {name}. Install writes the Standard package (both cores) back; to stay on one core, choose Single core under Advanced.",
+    dnLine1: "ChoralRoot {version} (single core) is installed.",
     chOthers: "Other versions",
     chOlder: "0.15 and older are on GitHub.",
     chNewest: "Newest", chOld: "Older version", chHas: "On your FM-1", chDev: "Local build",
@@ -419,11 +443,11 @@ const say = (txt) => { lastKey = null; $(out.status).textContent = txt; };
 const log = (t) => { $("log").textContent += t + "\n"; if (out.log) $(out.log).textContent += t + "\n"; };
 let image = null;                                // the selected version's image, set only after its checks passed
 
-// ---- demo mode (?demo=idle | older | writing | interrupted | done | nomidi | stockwriting | stockdone): made-up device data,
+// ---- demo mode (?demo=idle | older | single | writing | interrupted | done | nomidi | stockwriting | stockdone): made-up device data,
 // for review and screenshots. Inert by construction: midiAccess() is the page's only way to the browser's MIDI and
 // refuses in demo mode, every handler that talks to an FM-1 returns first, and no package is fetched.
 const DEMO = (() => {
-  try { const m = /[?&]demo=(idle|older|writing|interrupted|done|nomidi|stockwriting|stockdone)(?:&|$)/.exec(location.search); return m ? m[1] : null; }
+  try { const m = /[?&]demo=(idle|older|single|writing|interrupted|done|nomidi|stockwriting|stockdone)(?:&|$)/.exec(location.search); return m ? m[1] : null; }
   catch (_) { return null; }
 })();
 
@@ -618,6 +642,17 @@ let sel = newest;                                // the version Install writes
 let unit = null;                                 // what was last read from the FM-1 (identify(), or { loader })
 let unitAsked = false;                           // "What is on my FM-1?" was pressed: its answer is on the page
 let loadEpoch = 0, installedV = null;                // (installedV: the version an install of this page just wrote)
+// Advanced > Hardware fallback (docs/DUALCORE.md "Two packages"): a release that lists a single-core package
+// (releases.json sha256_1core; make_site.py adds pkg_1core) offers it. `oneCore` is the choice; a version without that
+// package installs Standard whatever it says. cur() is what Install writes: the release, or its single-core package
+// (the same version, its own file and sha256), checked the same way before any write
+let oneCore = false, installedOne = false;
+const SC = " (single core)";
+const hasOne = (r) => !!(r && r.pkg_1core && r.sha256_1core);
+const cur = () => (oneCore && hasOne(sel) ? { ...sel, pkg: sel.pkg_1core, sha256: sel.sha256_1core, size: sel.size_1core, one: true } : sel);
+const nameOf = (r) => r.version + (r.one ? SC : "");
+const unitOne = () => !!(unit && !unit.loader && /^ChoralRoot\s+\S+\s+1-core\b/i.test(unit.version || ""));
+const unitName = () => String(unit.name || "").replace(/\s+1-core\b/i, SC);   // "ChoralRoot 0.22 1-core" -> "... (single core)"
 const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
 const dateText = (iso) => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ""); return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : ""; };
 const fileOf = (r) => String(r.pkg || "").split("/").pop();
@@ -634,6 +669,7 @@ const linksOf = (r) => {
   const out = [];
   if (r.tag && meta.repo) out.push(`<a href="${esc(meta.repo)}/blob/main/docs/releases/${esc(r.version)}.md" target="_blank" rel="noopener">${t("chNotes")}</a>`);
   out.push(`<a href="${esc(r.pkg)}" download>${esc(tv("chFile", { file: fileOf(r) }))}</a>`);
+  if (hasOne(r)) out.push(`<a href="${esc(r.pkg_1core)}" download>${esc(tv("chFile", { file: fileOf({ pkg: r.pkg_1core }) }))}</a>`);
   if (r.tag && meta.repo) out.push(`<a href="${esc(meta.repo)}/tree/${esc(r.tag)}" target="_blank" rel="noopener">${esc(tv("chSource", { tag: r.tag }))}</a>`);
   return out.join(" · ");
 };
@@ -649,6 +685,7 @@ function renderChips() {                         // "Other versions": one button
     `<button type="button" class="chip" data-ver="${esc(r.version)}" aria-pressed="${r === sel}"${writing ? " disabled" : ""}>` +
     `<b>${esc(r.version)}</b><span>${dateText(r.date)}</span>${uv === r.version ? `<span class="has">${t("chHas")}</span>` : ""}</button>`).join("");
   $("newest-go").disabled = writing;
+  $("var-std").disabled = $("var-1core").disabled = writing;
 }
 function notesOf(r) {                            // what the version brought; for an older one, what going back means
   const back = r !== newest && r.going_back;
@@ -665,8 +702,14 @@ function showUnit() {                            // the answer of "What is on my
   if (!unit) { bad = true; text = t("notfound"); }
   else if (unit.loader) text = tv("cnLoader", { identity: unit.identity });
   else if (unit.verdict === "refuse") { bad = true; text = refusalText(unit.name); }
-  else if (installedV) { bad = unitVersion() !== installedV; text = tv(bad ? "dnDiffer" : "dnMatch", { name: unit.name, version: installedV }); }
-  else if (unit.kind === "choralroot") text = tv(unitVersion() === sel.version ? "cnSame" : "cnCr", { name: unit.name });
+  else if (installedV) {
+    bad = unitVersion() !== installedV || unitOne() !== installedOne;
+    text = tv(bad ? "dnDiffer" : "dnMatch", { name: unitName(), version: installedV + (installedOne ? SC : "") });
+  }
+  else if (unit.kind === "choralroot") {
+    const one = !!cur().one;
+    text = tv(unitOne() && !one ? "cn1core" : unitVersion() === sel.version && unitOne() === one ? "cnSame" : "cnCr", { name: unitName() });
+  }
   else text = tv("cnOther", { name: unit.name });
   out.hidden = false; out.className = bad ? "unit bad" : "unit"; out.textContent = text;
 }
@@ -675,7 +718,11 @@ function renderPick() {                          // the version over the button,
   $("rel").innerHTML = `<b>ChoralRoot ${esc(v)}</b>${sel.date ? " · " + dateText(sel.date) : ""}` +
     (!sel.tag ? ` <span class="tag">${t("chDev")}</span>` : sel === newest ? ` <span class="tag rec">${t("chNewest")}</span>` : ` <span class="tag old">${t("chOld")}</span>`) +
     (unitVersion() === v ? ` <span class="tag has">${t("chHas")}</span>` : "");
-  $("go").textContent = tv("installV", { version: v });
+  const one = !!cur().one;
+  $("go").textContent = tv(one ? "installV1" : "installV", { version: v });
+  $("adv").hidden = !hasOne(sel);                // (a version without a single-core package: no choice)
+  $("var-std").setAttribute("aria-pressed", String(!one));
+  $("var-1core").setAttribute("aria-pressed", String(one));
   $("not-newest").hidden = sel === newest;
   $("plan-back").textContent = sel === newest ? "" : back ? tv("planBack", { version: v }) + back.short : tv("planOld", { version: v, newest: newest.version });
   $("newest-go").textContent = tv("toNewest", { version: newest.version });
@@ -685,7 +732,8 @@ function renderPick() {                          // the version over the button,
 }
 function renderFiles() {
   $("files").innerHTML = releases.map((r) => `<li><b>ChoralRoot ${esc(r.version)}</b>${r.date ? " · " + dateText(r.date) : ""}<br>${linksOf(r)}` +
-    (r.sha256 ? `<br><code>sha256 ${esc(r.sha256)}</code>` : "") + "</li>").join("");
+    (r.sha256 ? `<br><code>sha256 ${esc(r.sha256)}</code>` : "") +
+    (hasOne(r) ? `<br><code>sha256 ${esc(r.sha256_1core)} (${esc(fileOf({ pkg: r.pkg_1core }))})</code>` : "") + "</li>").join("");
   $("older-note").textContent = meta.minimum ? meta.minimum.note : "";
   $("safe-note").textContent = meta.minimum ? meta.minimum.boot_safe : "";
 }
@@ -717,7 +765,7 @@ async function checkUnit() {
 async function loadPackage(rel) {
   const epoch = ++loadEpoch;
   image = null; lockInstaller(writing);
-  if (DEMO) { if (canMidi) ready({ version: rel.version, product: meta.product }); else sayK("nomidi"); return; }
+  if (DEMO) { if (canMidi) ready({ version: nameOf(rel), product: meta.product }); else sayK("nomidi"); return; }
   if (!canMidi) { sayK("nomidi"); return; }
   try {
     const r = await fetch(rel.pkg);
@@ -728,11 +776,11 @@ async function loadPackage(rel) {
     const sum = await sha256hex(pkg);
     if (epoch !== loadEpoch) return;
     if (!rel.sha256 || sum !== rel.sha256) {       // not the released file: never offered to the FM-1
-      sayAt(OUT_TOP, () => say(tv("badhash", { version: rel.version }))); log(`sha256 of ${rel.pkg}: ${sum}, the list says ${rel.sha256 || "nothing"}`);
+      sayAt(OUT_TOP, () => say(tv("badhash", { version: nameOf(rel) }))); log(`sha256 of ${rel.pkg}: ${sum}, the list says ${rel.sha256 || "nothing"}`);
       return;
     }
     image = logicalImage(pkg);
-    sayAt(OUT_TOP, () => ready({ version: rel.version, product: meta.product }));
+    sayAt(OUT_TOP, () => ready({ version: nameOf(rel), product: meta.product }));
     lockInstaller(writing);
   } catch (e) { if (epoch === loadEpoch) sayAt(OUT_TOP, () => sayK("loadfail", e.message)); }
 }
@@ -740,18 +788,27 @@ function selectVersion(v) {
   const r = releases.find((x) => x.version === v);
   if (!r || writing || r === sel) return;
   sel = r; installedV = null; $("force-box").hidden = true; $("force-risk").checked = false; $("done").hidden = true;
-  renderPick(); loadPackage(r);
+  renderPick(); loadPackage(cur());
+}
+function selectVariant(one) {                    // Advanced > Hardware fallback: Standard or Single core
+  if (writing || !hasOne(sel) || one === !!cur().one) return;
+  oneCore = one; installedV = null; $("done").hidden = true;
+  renderPick(); loadPackage(cur());
 }
 // after an install: what ran before is gone; "What is on my FM-1?" reads the version back and compares
 function finishInstall(rel) {
-  installedV = rel.version; unit = null; unitAsked = false; $("unit").hidden = true;
-  $("done-line").textContent = tv("dnLine", { version: rel.version });
+  installedV = rel.version; installedOne = !!rel.one; unit = null; unitAsked = false; $("unit").hidden = true;
+  $("done-line").textContent = tv(rel.one ? "dnLine1" : "dnLine", { version: rel.version });
   $("done").hidden = false;
   renderPick();
 }
 $("versions").addEventListener("click", (e) => {
   const b = e.target && e.target.closest ? e.target.closest("[data-ver]") : null;
   if (b && !b.disabled) selectVersion(b.dataset.ver);
+});
+$("variants").addEventListener("click", (e) => {
+  const b = e.target && e.target.closest ? e.target.closest("[data-variant]") : null;
+  if (b && !b.disabled) selectVariant(b.dataset.variant === "1core");
 });
 $("newest-go").addEventListener("click", () => selectVersion(newest.version));
 $("check-go").addEventListener("click", () => checkUnit());
@@ -762,17 +819,17 @@ if (DEMO) {                                      // made-up states; see DEMO abo
   const on = (v) => ({ verdict: "allow", kind: "choralroot", name: "ChoralRoot " + v, version: "ChoralRoot " + v, identity: meta.product });
   if (DEMO === "older") sel = releases[2] || releases[releases.length - 1];
   if (DEMO === "idle" || DEMO === "older") { unit = on((releases[1] || newest).version); unitAsked = true; }
+  if (DEMO === "single") { oneCore = true; $("adv").open = true; }   // Advanced open, Single core picked (newest)
 }
 renderPick(); renderFiles();
-loadPackage(sel);
+loadPackage(cur());
 if (DEMO === "writing") { $("bar").value = 58; sayK("write"); $("go").disabled = true; }
 if (DEMO === "interrupted") { $("bar").value = 42; sayK("lost"); $("interrupted").hidden = false; }
 if (DEMO === "done") {
+  finishInstall(cur());
   unit = { verdict: "allow", kind: "choralroot", name: "ChoralRoot " + sel.version, version: "ChoralRoot " + sel.version, identity: meta.product };
   $("bar").value = 100; sayK("done");
-  installedV = sel.version; unitAsked = true;
-  $("done-line").textContent = tv("dnLine", { version: sel.version });
-  $("done").hidden = false; renderPick();
+  unitAsked = true; renderPick();
 }
 if (DEMO === "stockwriting" || DEMO === "stockdone") sayAt(OUT_STOCK, () => {
   $("stock").open = true;
@@ -782,7 +839,7 @@ if (DEMO === "stockwriting" || DEMO === "stockdone") sayAt(OUT_STOCK, () => {
 
 $("go").addEventListener("click", async () => {
   if (writing || DEMO || !image) return;
-  const rel = sel, pkgImage = image;             // the version on the button when it was pressed
+  const rel = cur(), pkgImage = image;           // the version on the button when it was pressed
   let began = false, okDone = false, halted = false;
   lockInstaller(true);
   installedV = null; $("interrupted").hidden = true; $("done").hidden = true;
@@ -899,7 +956,7 @@ function stockFinished(identity, file) {
 function clearTop() {
   $("bar").value = 0; $("done").hidden = true; $("interrupted").hidden = true;
   installedV = null; unit = null; unitAsked = false; $("unit").hidden = true; renderPick();
-  if (image) sayAt(OUT_TOP, () => ready({ version: sel.version, product: meta.product }));
+  if (image) sayAt(OUT_TOP, () => ready({ version: nameOf(cur()), product: meta.product }));
 }
 $("stock-file").addEventListener("change", async () => {
   const epoch = ++stockFileEpoch, file = $("stock-file").files[0]; stock = null; lockInstaller(false);

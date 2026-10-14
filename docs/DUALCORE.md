@@ -16,7 +16,43 @@ was written). What the new default means, and for whom:
   release note says so. A record's Off is never turned On by the firmware (also not where a damaged view byte takes
   its default: `cr_settings.c crs_sanitize`). Records older than v12 load Off, as since 0.16.
 - **If a unit has trouble with it**: Options > Dual Core Off, restart. That is the owner's fallback, and the
-  fail-safes below are what stands between a unit whose second core misbehaves and that menu.
+  fail-safes below are what stands between a unit whose second core misbehaves and that menu. A unit that crashes
+  before its menu can be reached, or whose owner would rather not depend on it: **the single-core package** (next).
+
+## Two packages: Standard and Single core (0.22, HISTORY 3y49)
+
+The owner, 2026-10-13: "lets add option for single-core to the installer in-case users have dual-core issues."
+Melodee (another FM-1 firmware) found that on some FM-1s the second core misreads shared memory and those units
+crash; it ships a Standard (dual-core) and a Single core package, and its installer offers Single core under
+Advanced / Hardware fallback. ChoralRoot does the same from 0.22:
+
+- **`choralroot-X.Y.fwsc`, Standard**: as above (Dual Core an Option, On by default).
+- **`choralroot-X.Y-1core.fwsc`, Single core**: the same firmware built with **`CR_SINGLE_CORE=1`**. Core 1 is
+  **never started, whatever the settings say**: `cr_c1_power_on` (`cr_cpu1.h`) forces `cr_c1_off` and `cr_c1_boot`
+  returns before the rails are raised, and the start (`fm1_cpu1_start`, the PC-limit opening) is compiled out. GEEK
+  OUT reads `c1 off`; everything runs on the one-core rules (the shared budget of 8 voices, P5's four and a P5 bass
+  one, `cr_dualcore_active()` 0). **Options > Dual Core reads "1 core build"** (the line under it "the single core
+  package"); KNOB 1 changes nothing there, so the record keeps what it held for the Standard package. Reset Settings
+  says no "restart". Nothing else differs: the same identity (FM-1_920), the same settings, session, favourites,
+  sounds, loops and backup formats (`CR_SINGLE_CORE` appears only in `cr_cpu1.h`, `cr_ui.c`, `cr_ui.h`).
+- **The version** reads **`ChoralRoot X.Y 1-core`** on the splash, in Options > Version and over SysEx (INFO: what
+  `fm1_install.py --info`, the installer and the device manager read). A word after a space, so every parser that
+  reads the first word after "ChoralRoot" (the installer's `unitVersion`, `fm1ota.js classifyFirmware`,
+  `fm1backup.js backupFamily`, `fm1_install.py classify_firmware` / `family`, `cz_pop_check.py`) sees the version
+  and the family unchanged; the installer shows it as "ChoralRoot X.Y (single core)".
+
+**When to use it**: an FM-1 that crashes, freezes or restarts with Standard (with Dual Core On), especially one that
+does so before Options can be reached. The installer offers it under **Advanced > Hardware fallback** for a release
+that lists it (`web/releases.json` `sha256_1core`; 0.16 .. 0.21 have none), with Standard the default; when the unit
+already runs the single-core package, "What is on my FM-1?" says so and Install offers Standard back unless Single
+core is chosen. **Moving between the two keeps everything**: both read and write the same flash records
+(`tools/emu/test_persist.sh` "the two packages": the settings and the favourites written by one are read by the
+other; a record that says Dual Core On is still On after the single-core package ran on it; `web/test_manager.mjs`:
+a backup taken on one restores on the other).
+
+**Building it**: `CR_SINGLE_CORE=1 ./build.sh` (the version gets " 1-core"; the size line reads the same as the
+standard build's but `.bss` is about 3 KB smaller); `./build.sh --release X.Y` builds both (BUILDING.md
+"Releasing"). The emulator: `CR_SINGLE_CORE=1 sh tools/emu/build.sh` -> `build/host/emu_1core`.
 
 **What core 1 runs** (0.22): the bass part's render, as since 0.15, and, with P5 on the chord part, a share of the
 chord part's voices: at most four P5 voices a core, eight on the chord part (docs/PROPHET.md "Voices", "Two cores,

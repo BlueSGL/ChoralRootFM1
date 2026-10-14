@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
-import { captureBackup, loopHeader } from "./fm1backup.js";
+import { captureBackup, loopHeader, deviceInfo, readBackup, restoreBackup, backupFileName } from "./fm1backup.js";
 import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObjects, recordValid } from "./fm1sounds.js";
 import {
   selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
@@ -242,6 +242,30 @@ let compiled = null; try { new vm.Script(`(async () => {${script}\n})`); compile
 ok(compiled === true, `page: the script as make_site.py inlines it compiles (no duplicate names)${compiled === true ? "" : ": " + compiled.message}`);
 const site = readFileSync(join(HERE, "make_site.py"), "utf8");
 ok(site.includes('"manager.html"') && site.includes("fm1manager.js") && site.includes('"packs"'), "make_site.py: emits manager.html with fm1manager.js and the packs");
+
+/* -------------------- the single-core package's version string (docs/DUALCORE.md "Two packages") --- */
+// "ChoralRoot 0.22 1-core": the manager connects (family choralroot), reads and writes; a backup taken on it restores on
+// the standard package and back, every object the same (the two packages share every format)
+{
+  const one = makeSimFM1(simObjects(), { version: "ChoralRoot 0.22 1-core" }), std = makeSimFM1(new Map(), { version: "ChoralRoot 0.22" });
+  const info = await deviceInfo(one.request);
+  const s1 = new ManagerSession(one.request);
+  await s1.read();
+  ok(info && info.family === "choralroot" && info.version === "ChoralRoot 0.22 1-core" && sameObjs(simObjects(), s1.objs),
+     "1-core: the manager connects to \"ChoralRoot 0.22 1-core\" (family choralroot) and reads it");
+  const noFm6 = (a) => ({ ...a, objects: a.objects.filter((o) => o.id !== 8) });   // (the simulator refuses a PUT of object 8)
+  const arc = noFm6(readBackup(JSON.stringify(await captureBackup(one.request, info.version))));
+  const r = await restoreBackup(std.request, arc);
+  const s2 = new ManagerSession(std.request);
+  await s2.read();
+  const back = makeSimFM1(new Map(), { version: "ChoralRoot 0.22 1-core" });
+  await restoreBackup(back.request, noFm6(readBackup(JSON.stringify(await captureBackup(std.request, "ChoralRoot 0.22")))));
+  const s3 = new ManagerSession(back.request);
+  await s3.read();
+  ok(arc.firmware === "ChoralRoot 0.22 1-core" && r.restored.length > 0 && !r.skipped.length && sameObjs(s1.objs, s2.objs) && sameObjs(s1.objs, s3.objs) &&
+     backupFileName(info.version).startsWith("choralroot-backup-"),
+     `1-core: its backup restores on the standard package (${r.restored.length} objects, none skipped) and back, every object the same`);
+}
 
 if (failed) { console.log(`${failed} manager test(s) FAILED`); process.exit(1); }
 console.log("manager tests passed");

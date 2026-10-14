@@ -1009,7 +1009,11 @@ static void opt_set(uint32_t o, int32_t v)
     case O_USB_IN: cs.usb_in = (uint8_t)v; cu_usb_apply(); break;
     case O_USB_LEVEL: cs.usb_fixed = (uint8_t)v; cu_usb_apply(); break;
     case O_USB_RATE: cs.usb48 = (uint8_t)v; cu_usb_apply(); break;
-    case O_DUALCORE: cs.dualcore = (uint8_t)v; break;   /* saved; core 1 starts (or not) at the next power-on */
+    case O_DUALCORE:                                  /* saved; core 1 starts (or not) at the next power-on. The
+                                                       * single-core package: not a setting (the record keeps what
+                                                       * it holds, for the standard package) */
+        if (!CR_SINGLE_CORE) cs.dualcore = (uint8_t)v;
+        break;
     case O_OUTPUT: cs.out_clean = (uint8_t)v; fx_output_set((uint32_t)v, 0); break;   /* (fx.c: faded over) */
     default: break;
     }
@@ -1048,7 +1052,10 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_USB_IN: cu_cpy(d, ONOFF[v & 1], n); break;
     case O_USB_LEVEL: cu_cpy(d, v ? "Fixed" : "Master", n); break;
     case O_USB_RATE: cu_cpy(d, v ? "44.1 + 48 kHz" : "44.1 kHz", n); break;
-    case O_DUALCORE: cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n); break;
+    case O_DUALCORE:
+        if (CR_SINGLE_CORE) { cu_cpy(d, "1 core build", n); break; }   /* (the single-core package: unavailable) */
+        cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n);
+        break;
     case O_OUTPUT: cu_cpy(d, v ? "Clean" : "Classic", n); break;
     case O_VERSION: cu_cpy(d, CR_VERSION, n); break;
     case O_CALIB: cu_cpy(d, "OCT+ starts", n); break;
@@ -2816,10 +2823,10 @@ static void cu_reset(void)
     cr_settings_reset();
 #endif
     cu.opt_sel = O_STYLE;
-    cu_message(cr_c1_off ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core was Off at
+    cu_message(cr_c1_off && !CR_SINGLE_CORE ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core was Off at
                                                    * this power-on: On, the default since 0.22, is saved, the core
                                                    * starts at the next) */
-    cu_trace("options: settings reset%s\n", cr_c1_off ? " (Dual Core starts at the restart)" : "");
+    cu_trace("options: settings reset%s\n", cr_c1_off && !CR_SINGLE_CORE ? " (Dual Core starts at the restart)" : "");
 }
 static void cu_oct_tap(uint32_t b)
 {
@@ -6051,7 +6058,8 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
     else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: On the default since 0.22; never started /
                                                     * stopped live) */
-        cu_cpy(s->label, cs.dualcore != !cr_c1_off ? "takes effect after a restart"
+        cu_cpy(s->label, CR_SINGLE_CORE ? "the single core package"
+                         : cs.dualcore != !cr_c1_off ? "takes effect after a restart"
                          : cs.dualcore ? "bass on the second core" : "On: bass on the second core", sizeof s->label);
 }
 

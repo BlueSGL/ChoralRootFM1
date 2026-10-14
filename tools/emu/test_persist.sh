@@ -709,5 +709,53 @@ nt=$(python3 tools/emu/seed_trim.py "$TF" -10 -12)
 grep -aq '^save: reverted' "$T2" && [ "$(tr_ "$T2" 2)" = "$want_t" ] && grep -q '^expect sound .*: ok' "$T2" &&
     ok "GLO + SAVE held: the revert reads that session again: trim 0 on both parts; a chord sounds" \
     || bad "trim, the revert: $(tr_ "$T2" 2)"
+# ---- the two packages (docs/DUALCORE.md "Two packages"): the single-core package (CR_SINGLE_CORE=1, build/host/
+# emu_1core) and the standard one read and write the same flash. A user moves between them and keeps everything: the
+# settings and the favourites one writes the other reads; the single-core package never starts core 1 whatever the
+# record says, shows Options > Dual Core as "1 core build" (a turn changes nothing) and the version with " 1-core"; the
+# standard package on that flash starts core 1 again (the record's Dual Core On kept)
+E1=build/host/emu_1core
+if [ ! -x "$E1" ] || [ -n "$(find tools/emu firmware/src tests/hostsim.c -newer "$E1" -name '*.[ch]' 2>/dev/null | head -1)" ]; then
+    CR_SINGLE_CORE=1 sh tools/emu/build.sh >/dev/null || bad "the single-core emulator: build failed"
+fi
+XF=$OUT/persist_1core_flash.bin; YF=$OUT/persist_1core_back_flash.bin; ZF=$OUT/persist_1core_favs_flash.bin
+X1=$OUT/persist_1core_1.log; X2=$OUT/persist_1core_2.log; X3=$OUT/persist_1core_3.log; X4=$OUT/persist_1core_4.log
+X5=$OUT/persist_1core_5.log; X6=$OUT/persist_1core_6.log; X7=$OUT/persist_1core_7.log; X8=$OUT/persist_1core_8.log
+rm -f "$XF" "$YF" "$ZF" "$X1" "$X2" "$X3" "$X4" "$X5" "$X6" "$X7" "$X8" "$OUT"/persist_1core_*.ppm
+c1of() { LC_ALL=C grep -ao "line3 'c1 [a-z]*" "$1" | sort -u | sed "s/line3 '//" | tr '\n' ' ' | sed 's/ $//'; }
+# standard -> single core: the settings (137 BPM, Play Style Advanced, the PLAY menu's mode and keys) and the favourites
+"$EMU" --headless --flash "$XF" --script "$S/persist_set.txt" >"$X1" 2>&1 || bad "two packages, run 1: exit status"
+"$E1" --headless --flash "$XF" --script "$S/persist_check.txt" >"$X2" 2>&1 || bad "two packages, run 2: exit status"
+[ "$(bpm "$X2")" = 137 ] && [ "$(st "$X2")" = 1 ] && [ "$(lm "$X2")" = "3 1" ] && grep -q "record: current" "$X2" &&
+    ok "the standard package's settings on the single-core package: the record read (current), 137 BPM, Play Style Advanced, Replace / Loops" ||
+    bad "standard -> single core: bpm $(bpm "$X2"), style $(st "$X2"), mode/keys '$(lm "$X2")'"
+"$EMU" --headless --flash "$ZF" --script "$S/favs_persist_set.txt" >"$X3" 2>&1 || bad "two packages, favourites run 1: exit status"
+"$E1" --headless --flash "$ZF" --script "$S/favs_persist_check.txt" >"$X4" 2>&1 || bad "two packages, favourites run 2: exit status"
+ffl "$X4" 1 | grep -q 'favs: 2 marked, saves 0, pending 0 (at power-on: read), filter on : 12:0c 12:3 ~12:2b$' &&
+    grep -q '^popup: part 0 01 / TINE EP (star) / FM6 .* favorites 01/02' "$X4" && grep -q '^popup: part 0 04 / BRASS (star) / FM6 .* favorites 02/02' "$X4" &&
+    ok "the standard package's favourites on the single-core package: the two marks, the types, the filter On, PRESETS through the two" ||
+    bad "standard -> single core, favourites: $(ffl "$X4" 1)"
+# the single-core package: Options, the version, one core on a flash whose record says Dual Core On
+EMU_UI_LOG=1 "$E1" --headless --flash "$XF" --script "$S/persist_1core_opt.txt" >"$X5" 2>&1 || bad "two packages, Options: exit status"
+want1="$(grep -a -m1 '^  version:' "$X5" | sed -n "s/.* build '\(.*\)'$/\1/p") 1-core"
+grep -aq "^  options: open 1 entry 21 of 2[0-9] 'Dual Core' value '1 core build'" "$X5" &&
+    grep -aq "^  options: open 1 entry 23 of 2[0-9] 'Version' value '$want1'" "$X5" &&
+    grep -a -m1 '^  version:' "$X5" | grep -q "options '$want1' identity '$want1' " &&
+    ok "the single-core package: Options > Dual Core '1 core build' (KNOB 1 changes nothing), Version and the SysEx identity '$want1': $OUT/persist_1core_opt.ppm, persist_1core_version.ppm" ||
+    bad "the single-core package's Options: $(grep -a 'options: open 1' "$X5" | tr '\n' ' ') / $(grep -a -m1 '^  version:' "$X5")"
+EMU_STAGES=1 EMU_UI_LOG=0 "$E1" --headless --flash "$XF" --script "$S/persist_1core_geek.txt" >"$X6" 2>&1 || bad "two packages, GEEK OUT: exit status"
+[ "$(c1of "$X6")" = "c1 off" ] && ok "the single-core package on a record that says Dual Core On: core 1 never started (GEEK OUT: c1 off)" ||
+    bad "the single-core package: '$(c1of "$X6")'"
+# single core -> standard: the record written by the single-core package (the settings, Dual Core still On) read back
+"$E1" --headless --flash "$YF" --script "$S/persist_set.txt" >"$X7" 2>&1 || bad "two packages, run 7: exit status"
+grep -q '^save: global rc 0' "$X7" || bad "the single-core package: no global save"
+EMU_UI_LOG=1 "$E1" --headless --flash "$YF" --script "$S/persist_1core_opt.txt" >/dev/null 2>&1
+"$EMU" --headless --flash "$YF" --script "$S/persist_check.txt" >"$X8" 2>&1 || bad "two packages, run 8: exit status"
+EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$YF" --script "$S/persist_1core_geek.txt" >"$X6.std" 2>&1
+[ "$(bpm "$X8")" = 137 ] && [ "$(st "$X8")" = 1 ] && [ "$(lm "$X8")" = "3 1" ] && grep -q "record: current" "$X8" && [ "$(c1of "$X6.std")" = "c1 ok" ] &&
+    ok "the single-core package's record on the standard package: 137 BPM, Advanced, Replace / Loops, and Dual Core still On (c1 ok: the turn on '1 core build' wrote nothing over it)" ||
+    bad "single core -> standard: bpm $(bpm "$X8"), style $(st "$X8"), mode/keys '$(lm "$X8")', '$(c1of "$X6.std")'"
+rm -f "$X6.std"
+
 [ $fail = 0 ] && echo PASS || echo FAIL
 exit $fail

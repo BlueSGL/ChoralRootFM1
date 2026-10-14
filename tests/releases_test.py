@@ -6,7 +6,8 @@
 
 Every version has its notes in docs/releases/, a date, a tag, 4 to 8 bullets and a well-formed sha256; the list is
 newest first without doubles; nothing older than the minimum (0.16: the boot stub) is offered; every version but
-the newest says what going back to it means; the firmware's own version (firmware/src/choralroot.c) is in the list
+the newest says what going back to it means; a version with a single-core package (sha256_1core, optional: 0.16 ..
+0.21 have none) lists a well-formed sha256 of its own for it; the firmware's own version (firmware/src/choralroot.c) is in the list
 once it is tagged. A package found in build/scratch/packages (or CR_PACKAGES_DIR) must have the listed sha256.
 """
 import hashlib
@@ -33,8 +34,41 @@ def num(v):
     return tuple(int(x) for x in v.split("."))
 
 
+def fetch_check():
+    """tools/fetch_packages.py on a made-up list, its download replaced (no network): a release with sha256_1core gets
+    its choralroot-X.Y-1core.fwsc too, from the same release, kept only with the listed sha256; one without does not"""
+    import importlib.util
+    import shutil
+    import tempfile
+    spec = importlib.util.spec_from_file_location("fetch_packages", ROOT / "tools" / "fetch_packages.py")
+    fp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fp)
+    files = {"choralroot-9.9.fwsc": b"standard", "choralroot-9.9-1core.fwsc": b"single", "choralroot-9.8.fwsc": b"older"}
+    h = lambda b: hashlib.sha256(b).hexdigest()
+    tmp = Path(tempfile.mkdtemp(prefix="cr-fetch-"))
+    try:
+        (tmp / "web").mkdir()
+        rel = [{"version": "9.9", "tag": "v9.9", "sha256": h(b"standard"), "sha256_1core": h(b"single")},
+               {"version": "9.8", "tag": "v9.8", "sha256": h(b"older")}]
+        (tmp / "web" / "releases.json").write_text(json.dumps({"repo": "https://example.invalid/r", "releases": rel}))
+        asked = []
+        fp.ROOT = tmp
+        fp.download = lambda url: (asked.append(url), (files.get(url.rsplit("/", 1)[1]), "test"))[1]
+        rc = fp.main(tmp / "out")
+        ok(rc == 0 and sorted(p.name for p in (tmp / "out").iterdir()) == sorted(files) and
+           "https://example.invalid/r/releases/download/v9.9/choralroot-9.9-1core.fwsc" in asked and len(asked) == 3,
+           "fetch_packages.py: the single-core package of a release that lists it, from its release; none for 9.8")
+        shutil.rmtree(tmp / "out")
+        files["choralroot-9.9-1core.fwsc"] = b"tampered"
+        rc = fp.main(tmp / "out")
+        ok(rc == 1 and not (tmp / "out" / "choralroot-9.9-1core.fwsc").exists() and (tmp / "out" / "choralroot-9.9.fwsc").is_file(),
+           "fetch_packages.py: a single-core file whose sha256 is not sha256_1core is not kept, and fails")
+    finally:
+        shutil.rmtree(tmp)
+
+
 def main():
-    data = json.loads((ROOT / "web" / "releases.json").read_text(encoding="utf-8"))
+    data = json.loads(Path(os.environ.get("CR_RELEASES_JSON") or ROOT / "web" / "releases.json").read_text(encoding="utf-8"))
     rel = data["releases"]
     vers = [r["version"] for r in rel]
     ok(len(rel) >= 1 and all(re.fullmatch(r"\d+\.\d+(\.\d+)?", v) for v in vers), f"versions: {', '.join(vers)}")
@@ -57,6 +91,10 @@ def main():
         ok(r.get("tag") == "v" + v, f"{v}: tag v{v}")
         ok(re.fullmatch(r"[0-9a-f]{64}", r.get("sha256", "")) is not None and [x["sha256"] for x in rel].count(r["sha256"]) == 1,
            f"{v}: a sha256 of its own")
+        if "sha256_1core" in r:                     # optional: the single-core package (docs/DUALCORE.md "Two packages")
+            all_sums = [x["sha256"] for x in rel] + [x.get("sha256_1core") for x in rel]
+            ok(re.fullmatch(r"[0-9a-f]{64}", r["sha256_1core"] or "") is not None and all_sums.count(r["sha256_1core"]) == 1,
+               f"{v}: the single-core package's sha256 (sha256_1core), a sha256 of its own")
         b = r.get("bullets", [])
         ok(4 <= len(b) <= 8 and all(isinstance(x, str) and 20 <= len(x) <= 240 for x in b) and bool(r.get("title")),
            f"{v}: a title and {len(b)} bullets (4 to 8, each one or two sentences)")
@@ -79,11 +117,17 @@ def main():
         ok(t[1:] in vers, f"the tag {t} is in the list")
     pk = Path(os.environ.get("CR_PACKAGES_DIR") or ROOT / "build" / "scratch" / "packages")
     for r in rel:
-        f = pk / f"choralroot-{r['version']}.fwsc"
-        if f.is_file():
-            ok(hashlib.sha256(f.read_bytes()).hexdigest() == r["sha256"], f"{r['version']}: {f.relative_to(ROOT) if ROOT in f.parents else f} has the listed sha256")
-        else:
-            print(f"skipped: {f.name} not in {pk}: its sha256 is not compared (python3 tools/fetch_packages.py)")
+        for name, key in ((f"choralroot-{r['version']}.fwsc", "sha256"), (f"choralroot-{r['version']}-1core.fwsc", "sha256_1core")):
+            if key not in r:
+                continue
+            f = pk / name
+            if f.is_file():
+                ok(hashlib.sha256(f.read_bytes()).hexdigest() == r[key], f"{r['version']}: {f.relative_to(ROOT) if ROOT in f.parents else f} has the listed {key}")
+            else:
+                print(f"skipped: {f.name} not in {pk}: its sha256 is not compared (python3 tools/fetch_packages.py)")
+    ok(all(set(r) <= {"version", "date", "tag", "sha256", "sha256_1core", "title", "bullets", "notes", "going_back"} for r in rel),
+       "no entry has a key the site does not know (sha256_1core: optional)")
+    fetch_check()
     print("releases: ALL OK" if not failed else f"releases: {failed} FAILED")
     return 1 if failed else 0
 

@@ -27,6 +27,10 @@
 #ifndef CR_CPU1
 #define CR_CPU1 0
 #endif
+#ifndef CR_SINGLE_CORE
+#define CR_SINGLE_CORE 0                 /* 1: the single-core package (cr_ui.h): cr_c1_boot never starts core 1,
+                                          * whatever the settings say; everything runs on the one-core rules */
+#endif
 #ifndef CR_CORE1_TEST
 #define CR_CORE1_TEST 0                  /* 1: SysEx 75 CORE1_TEST injects core 1 failures (tools/core1_fault_test.py,
                                           * cr_backup.c); a test build only, never a release */
@@ -340,13 +344,15 @@ static void cr_c1_boot(void)
 {
     int rc;
     cr_rails_record();                                  /* (the boot loader's levels, reported either way) */
-    if (cr_c1_off) {                                    /* Options > Dual Core Off: one core this session, the boot
-                                                         * loader's rails (the stock behaviour) */
+    if (cr_c1_off || CR_SINGLE_CORE) {                  /* Options > Dual Core Off: one core this session, the boot
+                                                         * loader's rails (the stock behaviour); the single-core
+                                                         * package: always (cr_c1_off held at 1) */
+        cr_c1_off = 1;
         cr_dbg.c1 = C1_OFF;
         return;
     }
     cr_rails_init();                                    /* the core rails up before core 1 starts (IRQs off) */
-#ifdef FM1_HAVE_CPU1
+#if defined(FM1_HAVE_CPU1) && !CR_SINGLE_CORE           /* (the single-core package: the start compiled out) */
     {
     uint32_t t0 = fm1_ticks();
     fm1_guard_unlock_top();                             /* (fm1_main locks it after the IRQs are attached) */
@@ -355,6 +361,8 @@ static void cr_c1_boot(void)
     fm1_guard_enable(FM1_GUARD_PC);
     cr_dbg.c1_start_us = (fm1_ticks() - t0) / CR_PROF_PER_US;
     }
+#elif defined(FM1_HAVE_CPU1)
+    rc = -1;                                            /* (the single-core package: never reached, returned above) */
 #else
     rc = cr_c1_test_nostart ? -1 : 0;
 #endif
@@ -370,6 +378,11 @@ static void cr_c1_boot(void)
  * default it could not be switched Off. Nothing is written by itself: the next power-on tries the core again */
 static void cr_c1_power_on(int safe, int counted)
 {
+#if CR_SINGLE_CORE                                      /* the single-core package: never, whatever the record says */
+    (void)safe; (void)counted;
+    cr_c1_off = 1;
+    cr_c1_boot();                                       /* (the rails' record; C1_OFF) */
+#else
     if (safe) {
         cr_dbg.c1 = C1_OFF;
         cr_c1_off = 1;                                  /* (the Options' value then reads "On . restart") */
@@ -382,6 +395,7 @@ static void cr_c1_power_on(int safe, int counted)
         return;
     }
     cr_c1_boot();
+#endif
 }
 
 /* end of a half buffer (audio.c): the stages into the window and the totals */

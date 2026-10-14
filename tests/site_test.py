@@ -207,6 +207,60 @@ def refusals():
     ok(r.returncode != 0 and "FM-1_9xx" in r.stderr and not out.exists(), "make_site.py refuses a package whose identity is not FM-1_9xx")
 
 
+def one_core():
+    """a release with a single-core package (releases.json sha256_1core, docs/DUALCORE.md "Two packages"): published
+    under firmware/ beside the standard one, in SHA256SUMS and firmware/index.html, offered by the installer with its
+    sha256; a file whose sha256 is not the listed one is refused; a local build without the file offers the version
+    without the choice. A made-up list (CR_RELEASES_JSON) whose newest is 9.9 = build/choralroot.fwsc"""
+    pk, out, lst = SCRATCH / "site-1core-packages", SCRATCH / "site-1core", SCRATCH / "site-1core-releases.json"
+    for d in (pk, out):
+        if d.exists():
+            shutil.rmtree(d)
+    pk.mkdir(parents=True)
+    one = bytearray(PKG.read_bytes())
+    one[-1] ^= 0x5A                                 # (another body, the same identity and loader)
+    (pk / "choralroot-9.9-1core.fwsc").write_bytes(one)
+    top = {**RELEASES["releases"][0], "version": "9.9", "tag": "v9.9", "sha256": sha(PKG),
+           "sha256_1core": hashlib.sha256(one).hexdigest()}
+    top.pop("going_back", None)
+    lst.write_text(json.dumps({**RELEASES, "releases": [top] + RELEASES["releases"]}), encoding="utf-8")
+    env = {**os.environ, "CR_RELEASES_JSON": str(lst)}
+    run = lambda *a: subprocess.run([sys.executable, str(ROOT / "web" / "make_site.py"), *map(str, a)], capture_output=True, text=True, env=env)
+    r = run(PKG, "9.9", out, "--packages", pk)
+    if not ok(r.returncode == 0, "1-core: make_site.py builds a release with a single-core package"):
+        print(r.stdout + r.stderr)
+        return
+    fw = out / "firmware"
+    f1 = fw / "choralroot-9.9-1core.fwsc"
+    meta = read_meta((out / "webapp" / "installer" / "index.html").read_text(encoding="utf-8")) or {}
+    m0 = (meta.get("releases") or [{}])[0]
+    sums = (fw / "SHA256SUMS").read_text(encoding="utf-8")
+    idx = (fw / "index.html").read_text(encoding="utf-8")
+    ok(f1.is_file() and sha(f1) == top["sha256_1core"] and f"{top['sha256_1core']}  choralroot-9.9-1core.fwsc" in sums.splitlines() and
+       'href="choralroot-9.9-1core.fwsc"' in idx and top["sha256_1core"] in idx,
+       "1-core: firmware/choralroot-9.9-1core.fwsc, its sha256 in SHA256SUMS and firmware/index.html")
+    inst = out / "webapp" / "installer"
+    ok(m0.get("sha256_1core") == top["sha256_1core"] and m0.get("size_1core") == len(one) and m0.get("pkg_1core") and
+       (inst / m0["pkg_1core"]).resolve() == f1.resolve() and all("sha256_1core" not in x and "pkg_1core" not in x for x in meta["releases"][1:]),
+       "1-core: the installer offers it (pkg_1core resolves, its sha256 and size); the older versions have none")
+    bad = bytearray(one)
+    bad[-2] ^= 0xFF
+    (pk / "choralroot-9.9-1core.fwsc").write_bytes(bad)
+    shutil.rmtree(out)
+    r = run(PKG, "9.9", out, "--packages", pk)
+    ok(r.returncode != 0 and "sha256_1core" in r.stderr and "refused" in r.stderr and not out.exists(),
+       "1-core: a single-core file whose sha256 is not the listed one is refused (nothing written)")
+    (pk / "choralroot-9.9-1core.fwsc").unlink()
+    r = run(PKG, "9.9", out, "--packages", pk)
+    meta = read_meta((out / "webapp" / "installer" / "index.html").read_text(encoding="utf-8")) if r.returncode == 0 else {}
+    ok(r.returncode == 0 and "skipped: choralroot-9.9-1core.fwsc" in r.stdout and not (out / "firmware" / "choralroot-9.9-1core.fwsc").exists() and
+       "pkg_1core" not in meta["releases"][0] and "sha256_1core" not in meta["releases"][0],
+       "1-core: a local build without the file offers 9.9 without the choice (\"skipped:\")")
+    for d in (pk, out):
+        shutil.rmtree(d)
+    lst.unlink()
+
+
 def release_site(cur):
     """the site as the Pages job builds it: the newest release as the current version, every listed version required"""
     out = SCRATCH / "site-release"
@@ -274,6 +328,7 @@ def main():
                   "published by this local build (python3 tools/fetch_packages.py; the Pages job has them all)")
     versions(OUT, meta, [{"version": VERSION, "sha256": sha(PKG)}] + here, r.stdout)
     refusals()
+    one_core()
     cur = next((r for r in RELEASES["releases"] if r["sha256"] == sha(PKG)), None)
     if cur is not None and cur is RELEASES["releases"][0] and len(here) == len(RELEASES["releases"]):
         release_site(cur)

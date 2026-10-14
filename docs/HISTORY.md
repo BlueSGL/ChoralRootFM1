@@ -2447,3 +2447,40 @@ steps, a queued note; a mark through a minute of sound not written, written afte
 writer the favourites' poll); test_cr.sh `cr_favs_arp_list`. Not tested: P5 program 20 itself in the emulator (the
 script plays FM6 TINE EP), anything on the unit. p5-g (e31c096) appends other values to PEAK on its own list:
 merge by name.
+
+3y49. **A single-core package, offered by the installer** (branch p5-l from cc21a2b, not pushed). The owner: "lets add
+option for single-core to the installer in-case users have dual-core issues." Melodee learned that on some FM-1s the
+second core misreads shared memory and those units crash; it ships a Standard and a Single core package and offers the
+second under Advanced / Hardware fallback. ChoralRoot now does the same (docs/DUALCORE.md "Two packages"). **The
+switch**: `CR_SINGLE_CORE=1` (tools/build.py: the env, or `--release`'s second build; tools/emu/build.sh ->
+`build/host/emu_1core`). `cr_c1_power_on` forces `cr_c1_off`, `cr_c1_boot` returns before the rails are raised, the
+start (`fm1_cpu1_start`, the PC limits opened) is compiled out: core 1 never starts whatever the settings say, and
+everything runs on the one-core rules. Options > Dual Core reads "1 core build" ("the single core package" under it),
+KNOB 1 does nothing there so the record keeps the Standard package's choice; Reset Settings says no "restart". **The
+version**: `CR_VERSION` (cr_ui.h) gains " 1-core": "ChoralRoot 0.22 1-core" on the splash, Options > Version and
+SysEx INFO. A word after a space because every parser reads the first word after "ChoralRoot": the installer's
+`unitVersion` (`/^ChoralRoot\s+(\S+)/`), `fm1ota.js classifyFirmware`, `fm1backup.js backupFamily` /
+`backupFileName`, `fm1_install.py classify_firmware` / `family` / `backup_name`, `cz_pop_check.py`, the device
+manager (deviceInfo's family); "0.22-1core" would have read as another version to `unitVersion` and `verCmp`. **Same
+firmware otherwise**: identity FM-1_920, every flash and backup format (`CR_SINGLE_CORE` is only in cr_cpu1.h, cr_ui.c,
+cr_ui.h). Size: standard XIP 515572 B (89.9 %), RAM 82068 B (83.5 %); 1-core XIP 513396 B (89.5 %), RAM 78948 B
+(80.3 %, `.bss` 3 KB smaller: core 1's stack and job state gc'd), POOL 92.1 % both. **Release**: `./build.sh --release
+X.Y` builds the single-core package first, then the standard one (so build/choralroot.* are the standard one's), and
+writes both packages, both apps and a SHA256SUMS of four lines; release.yml checks and attaches them; web/releases.json
+gains an optional `sha256_1core` (0.16 .. 0.21 have none; tests/releases_test.py checks it, CR_RELEASES_JSON reads
+another list); tools/fetch_packages.py fetches `choralroot-X.Y-1core.fwsc` where listed (hermetic test in
+releases_test); web/make_site.py publishes it under firmware/ (SHA256SUMS, firmware/index.html), refuses a hash
+mismatch, skips it in a local build without the file, adds `pkg_1core` / `sha256_1core` / `size_1core` to the
+installer's metadata; pages.yml downloads and checks it. **The installer**: an "Advanced" disclosure under the
+versions (hidden for a release without the package, collapsed by default): Hardware fallback, Standard (both cores,
+recommended) / Single core (for an FM-1 that crashes or freezes with Standard); the button, the status and the done
+panel say "(single core)"; the chosen file is fetched and its sha256 checked before Install is enabled; the read-back
+shows "ChoralRoot 0.22 (single core)" and, with Standard chosen, says Install writes Standard back; `?demo=single`.
+**Tests**: tools/emu/test_persist.sh "the two packages" (the standard package's settings and favourites read by the
+single-core one, its Options and version, c1 off on a record that says On, and its record read back by the standard
+one with Dual Core still On), web/test_installer.mjs (the variant fetched, verified and written; switching; no choice
+without the package; a tampered single-core file refused; the read-back; the demo; the parsers), web/test_manager.mjs
+(the manager on "ChoralRoot 0.22 1-core"; a backup restored across the two), tests/install_test.py (classify_firmware,
+family, backup_name, an install over the 1-core build), tests/site_test.py (make_site.py's single-core layout,
+refusal, skip). release.yml and pages.yml were not run: their YAML parsed and their changed shell steps ran locally
+on build/release-0.22 with a stub `./build.sh` and a stub `gh`. Not tested: either package on a unit.

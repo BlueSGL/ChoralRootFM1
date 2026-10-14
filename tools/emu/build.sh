@@ -24,6 +24,10 @@ SDL_LIBS=$(/opt/homebrew/bin/sdl2-config --libs 2>/dev/null || echo "-L/opt/home
 CC=${CC:-clang}
 OUT=build/host
 OBJ=build/host/emu_obj
+# CR_SINGLE_CORE=1: the single-core package's firmware (docs/DUALCORE.md "Two packages") as build/host/emu_1core, with
+# its own objects (tools/emu/test_cr.sh: one flash file read and written by both)
+EXE=emu SC=
+if [ "${CR_SINGLE_CORE:-0}" = 1 ]; then EXE=emu_1core SC=-DCR_SINGLE_CORE=1 OBJ=build/host/emu_obj_1core; fi
 mkdir -p "$OUT" "$OBJ" build/emu
 # the version the firmware shows: firmware/src/choralroot.c's FELUCCA_VERSION (the device build's default), or
 # CR_VERSION=X.Y as ./build.sh --release X.Y ("ChoralRoot X.Y"); the same rule as tools/emu/web/build_web.sh
@@ -41,7 +45,7 @@ fi
 # system's are among them); their diagnostics in the order below. HOSTCC_FORCE=1: everything again.
 H="sh tests/hostcc.sh"
 # the firmware: one unit, as the host tests build it (warnings off: it is the firmware's own code)
-$H $CC -O2 -w -Ibuild/gen -Ifirmware/src "-DFELUCCA_VERSION=\"$VER\"" -c tools/emu/emu_fw.c -o "$OBJ/emu_fw.o" > "$OBJ/emu_fw.log" 2>&1 &
+$H $CC -O2 -w -Ibuild/gen -Ifirmware/src "-DFELUCCA_VERSION=\"$VER\"" $SC -c tools/emu/emu_fw.c -o "$OBJ/emu_fw.o" > "$OBJ/emu_fw.log" 2>&1 &
 pids=$!
 # the emulator
 for f in emu keymap emu_img; do
@@ -57,6 +61,6 @@ for f in emu_fw emu keymap emu_img emu_midi; do
     cat "$OBJ/$f.log"
 done
 [ "$st" -eq 0 ] || exit "$st"
-$H $CC -o "$OUT/emu" "$OBJ/emu.o" "$OBJ/keymap.o" "$OBJ/emu_img.o" "$OBJ/emu_midi.o" "$OBJ/emu_fw.o" \
+$H $CC -o "$OUT/$EXE" "$OBJ/emu.o" "$OBJ/keymap.o" "$OBJ/emu_img.o" "$OBJ/emu_midi.o" "$OBJ/emu_fw.o" \
     $SDL_LIBS -lz -lm -framework CoreMIDI -framework CoreFoundation
-echo "built $OUT/emu"
+echo "built $OUT/$EXE"

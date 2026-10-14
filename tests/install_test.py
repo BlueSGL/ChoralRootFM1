@@ -260,6 +260,7 @@ GUARD_CASES = [
     ("FM-1_014", None, "allow", "stock"),                       # an older official firmware
     ("FM-1_920", "ChoralRoot 0.12", "allow", "choralroot"),
     ("FM-1_920", "ChoralRoot 1.0-rc1", "allow", "choralroot"),
+    ("FM-1_920", "ChoralRoot 0.22 1-core", "allow", "choralroot"),   # the single-core package (docs/DUALCORE.md)
     ("FM-1_910", "FELUCCA v1.0", "allow", "felucca"),            # Felucca 1.0 (felucca.c FELUCCA_VERSION)
     ("FM-1_910", "FELUCCA v1.0.1", "allow", "felucca"),
     ("FM-1_910", "FELUCCA 1.0", "allow", "felucca"),
@@ -284,6 +285,8 @@ def guard():
     bad = [(i, v, I.classify_firmware(i, v)[:2]) for i, v, verdict, kind in GUARD_CASES
            if I.classify_firmware(i, v)[:2] != (verdict, kind)]
     ok(not bad, f"classify_firmware: {len(GUARD_CASES)} identity / version cases{'; wrong: ' + repr(bad) if bad else ''}")
+    ok(I.family("ChoralRoot 0.22 1-core") == "choralroot" and I.backup_name("ChoralRoot 0.22 1-core").startswith("choralroot-backup-"),
+       "the single-core package's version (ChoralRoot 0.22 1-core): family choralroot, its backup file named as ChoralRoot's")
     raw = package("FM-1_920")
     image = I.logical_image(raw)
     p = pkgfile("cr_guard.fwsc", raw)
@@ -305,7 +308,7 @@ def guard():
     ok(rc == 8 and dev.upgrades == 0 and "rescue mode" in err, "over Sloop's rescue mode (FM-1_000): refused")
     rc, out, err, dev = over("FM-1_900", None)
     ok(rc == 8 and dev.upgrades == 0 and "unknown" in err, "over a 9xx firmware that does not answer INFO: refused")
-    for ident, ver in (("FM-1_910", "FELUCCA v1.0.1"), ("FM-1_90111", "MELODEE v0.11.1"), ("FM-1_920", "ChoralRoot 0.12"),
+    for ident, ver in (("FM-1_910", "FELUCCA v1.0.1"), ("FM-1_90111", "MELODEE v0.11.1"), ("FM-1_920", "ChoralRoot 0.12"), ("FM-1_920", "ChoralRoot 0.22 1-core"),
                        ("FM-1_015", None)):
         rc, out, err, dev = over(ident, ver)
         ok(rc == 0 and dev.identity == "FM-1_920" and dev.bad == 0 and (not ver or ver in out),
