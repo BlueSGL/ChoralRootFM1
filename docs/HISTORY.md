@@ -2579,3 +2579,19 @@ into the version string (its sed keeps the rest of the line); the documented com
 **Not done / not tested**: editing, the generator, new page styles (steps 1, 3, 4, 5); the wheel and drag handlers
 and the downloads in a browser (the self-test clicks buttons); any browser but Chromium; the Pages job does not build
 the module, so the published site has no viewer until `.github/workflows/pages.yml` gets the step.
+3y53. **The bass always keeps one voice** (branch p5-p from 52531a9, not pushed). The owner, 2026-10-13, after
+heavy play on the unit (6- to 8-note chords, effects maxed: peak 87 %, 0 late, 0 stale, 0 shed): "I would like to
+enforce that the Bass always has at least 1 voice reserved for it." **Built** (`voice.c p5_pool_victim`): with Dual
+Core On the chord part never takes a P5 bass's last voice (its stack still thins from the top, chord first), and a
+bass key under a full pool takes the chord's oldest held voice that is not its lowest note, as one core already did:
+eight chord keys and a bass key sound 7 + 1, the chord note that goes is the oldest held that is not the lowest.
+One core: 3 + 1 as before. `-DP5_BASS_KEEP` is removed (its rule is now the only one). **Found on the way**:
+`voice_alloc`'s steal of "the oldest held voice" did not ask that the slot be sounding; with P5's pool full and
+nothing to give (new now that the bass keeps its voice) it could pick a free slot and start a ninth voice (the
+c1-thread test's pool 9): it now takes only a sounding one when the pool gives nothing. **Checked, not changed**: a
+bass of another engine with two cores runs on core 1 in its own 16 units (the pool only counts it against the chord);
+with one core the budget's victim and the overload shed never take a part's last voice (a POLY part's lowest held
+note, a stack's lead), and `shed_p5_bass` takes a P5 bass stack's extra voices only. **Tests**: the host checks that
+expected no bass voice under eight chord keys now expect 7 + 1; a new one plays eight keys and a bass key in both
+orders, both modes, a P5 and a VA bass (two cores: 7 + 1, 50 gives way, VA 8 + 1; one core: 3 + 1, VA 4 + 1); the
+progression adds seven-note chords; `-DP5_WAIT_SLOT=0` now passes (its proof no longer distinguishes).

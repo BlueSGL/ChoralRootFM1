@@ -365,8 +365,8 @@ installed on the owner's Mac.
     quietest engine: a four-note chord 6.6 dB under the VA's at the median); a UNISON key, whose voices now start
     together; a UNISON bass with one core (one voice at its stack's level) against two;
     `../audio-0.22/prophet/eight/`. **The owner's decisions left** (docs/PROPHET.md "Open decisions"): one core,
-    three chord voices under a P5 bass (`-DP5_ONE_POOL=5`: four and one); two cores, no bass voice under eight
-    chord keys (`-DP5_BASS_KEEP=1`); the level. **Not done**: a real hang of core 1's start on a unit (the boot
+    three chord voices under a P5 bass (`-DP5_ONE_POOL=5`: four and one); the level. (Decided 3y53: the bass
+    always keeps one voice, eight chord keys sound seven; `-DP5_BASS_KEEP` is gone.) **Not done**: a real hang of core 1's start on a unit (the boot
     after a failed one comes up on one core: host-tested only); `FELUCCA_PROPHET=0`'s image against a773d30's.
 34. **A read never writes flash; who erased, and when (HISTORY 3y48; docs/SETTINGS.md "When automatic writes
     happen")**: a backup's LIST no longer calls `cr_settings_save` (it erased for a pending Option or mark whatever

@@ -109,20 +109,26 @@ split: `fx.c p5x_run`; all measured by `tests/cr_prophet_test.c`, through `mix_b
 | Options > Dual Core | the bass part's engine | the chord part (P5) | the bass part | which core renders |
 | --- | --- | --- | --- | --- |
 | **On**, core 1 running | none sounding | **up to 8** | | shared out every block: core 1 takes the odd one (1: 0 + 1; 4: 2 + 2; 5: 2 + 3; 8: 4 + 4), never more than 4 a core |
-| On | **P5** | up to 8, **first**: chord + bass together are at most 8 | **up to 4** (a UNISON key's stack; a MONO program one), as far as the chord leaves them: 4 under a chord of up to 4, 3 under 5, 2 under 6, 1 under 7, **none under 8** | the bass's voices: core 1, always. The chord's: core 1 up to four with the bass's, the rest core 0 (6 + 2: core 0 four, core 1 two and the bass's two) |
+| On | **P5** | up to 8, **first**: chord + bass together are at most 8; **at most 7 while a bass note sounds** (3y53) | **up to 4** (a UNISON key's stack; a MONO program one), as far as the chord leaves them: 4 under a chord of up to 4, 3 under 5, 2 under 6, **1 under 7 and under 8: the bass always keeps one voice** (3y53) | the bass's voices: core 1, always. The chord's: core 1 up to four with the bass's, the rest core 0 (6 + 2: core 0 four, core 1 two and the bass's two) |
 | On | FM6, VA, CZ-1, FM TONE, WHEEL: one voice (MONO, as ChoralRoot's bass is) | up to 8 | its own budget of 16 units, as before | the bass part: core 1. The chord: 4 + 4 at eight, and below that core 1 takes the smaller share when the bass sounds (4: 2 + 2; 5: 3 + 2; 7: 4 + 3) |
 | On | another engine with many voices (a UNISON VA bass: 8) | 8 less one for every 6 budget units of the bass's sounding voices (16 units: 6 chord voices) | its own 16 units | the bass part and up to 4 - that many chord voices: core 1 |
 | **Off**, or core 1 not started, failed or given up | none sounding, or another engine | **up to 4** (three budget units each: 4 x 3 + a VA or FM6 bass's 2 = 14 of the one core's 16) | the shared 16 units, as before | core 0 |
 | Off | **P5** | **3 while the bass sounds**, 4 when it does not | **1** (a UNISON program too: one voice, at its stack's level, [Level](#level-3y46)) | core 0 |
 
-- **The chord first, always** (two cores). A chord note that finds the pool of eight full takes, in this order: a
-  released voice of either part (the oldest); a voice of the bass's stack, from the top (the stack thins towards
-  one); the bass's last voice; only then one of the chord's own (the steal below). A bass key takes a released voice
-  or does without: under eight held chord keys it does not sound. A stack's extra voices only start into free room,
+- **The chord first, but the bass always has one voice** (two cores; 3y53, the owner: "I would like to enforce
+  that the Bass always has at least 1 voice reserved for it."). A chord note that finds the pool of eight full
+  takes, in this order: a released voice of either part (the oldest); a voice of the bass's stack, from the top (the
+  stack thins towards one, never below it); only then one of the chord's own (the steal below: the oldest held voice
+  that is not the lowest note). A bass key takes a released voice, else the chord's oldest held voice that is not
+  its lowest note: eight chord keys and a bass key sound seven chord voices and one bass voice, and the chord note
+  that goes is the oldest held one that is not the lowest (keys 48 .. 62 struck in order: 50). A stack's extra voices only start into free room,
   and come back with the next bass key once the chord has let go. The voices of a thinned stack are raised to the
   stack's level, so the bass does not drop in level as the chord grows ([Level](#level-3y46)).
-  `-DP5_BASS_KEEP=1`: the bass keeps its last voice against a chord of eight (the chord then has seven). Built,
-  not the default: the owner's words give the chord the priority.
+  (`-DP5_BASS_KEEP` is gone: 3y53 made its rule the only one.) A bass of another engine is not in this pool's
+  reckoning for its own voice: with two cores it runs on core 1 in its own 16 budget units; with one core it shares
+  the 16 units and the budget never takes a part's last voice (a POLY part's lowest held note, a stack's lead). The
+  overload shed (`audio.c shed_voice`) never takes it either: a released voice first, then a P5 bass stack's extra
+  voices (not its lead), then a held voice that is not a part's lowest note or lead.
 - **One core: four P5 voices in all** (`P5_ONE_POOL` 4). The owner's rule is only "max of 1 voice" for the bass.
   Built beyond it: with a P5 bass sounding the chord part has three. Why: five P5 voices on one core are the
   readings that ran late (2814 us of 2902 from flash, 17 late halves; P5 on both parts with three effects about
@@ -131,11 +137,12 @@ split: `fx.c p5x_run`; all measured by `tests/cr_prophet_test.c`, through `mix_b
   chord's fourth (a bass under every chord is how ChoralRoot plays). `-DP5_ONE_POOL=5`: four and one, the owner's
   words alone (built, `tests/run_prophet_test.sh` builds and runs it).
 - **A chord struck over its own release** (a progression, the bass's key in the chord's block): every chord note
-  sounds and the bass has what is left (six-note chords: two of its four; eight: none). Found by the listening
+  sounds and the bass has what is left (six-note chords: two of its four; seven: one; eight: seven chord notes
+  and the bass's one, 3y53). Found by the listening
   files, where with every slot of the part still sounding or fading the eighth note took one of its own chord's
   new notes while the bass kept a voice: a note now waits for a slot that is fading before it takes a held voice
   of its own part (`voice.c voice_alloc`, P5 alone; `-DP5_WAIT_SLOT=0` is without it and the test's progression
-  then loses 3 chord notes in 8 chords).
+  then lost 3 chord notes in 8 chords; since 3y53, the bass keeping its one voice, it loses none there either).
 - **More keys than voices** (the rule is voice.c's, as for every engine): the new note takes **the oldest held
   voice that is not the lowest held note**. That voice fades as a whole voice over `P5_STEAL_BLOCKS` (2) blocks and
   the note starts after it ([A stolen voice](#a-stolen-voice)); while it fades it still counts in the pool, so there
@@ -1356,8 +1363,8 @@ does. **Goldens: all 49 P5 renders change** (the level), the 197 of the other en
   one voice and its gain; core 1 given up three ways under a chord of eight and under 4 + 4; Options > Dual Core
   turned under held notes; the bass part to the VA and back under held chord keys; a UNISON key with one core
   against two); `--half`, `--stack`, `--unichord`; `tests/run_prophet_test.sh` (the level's two builds; all 200:
-  the stack's and the key-over-chord figures; `-DP5_ONE_POOL=5`, `-DP5_BASS_KEEP=1`, `-DP5_CORE=3` build and run;
-  `-DP5_WAIT_SLOT=0` fails the progression's check);
+  the stack's and the key-over-chord figures; `-DP5_ONE_POOL=5`, `-DP5_CORE=3` build and run;
+  `-DP5_WAIT_SLOT=0` builds and passes);
   `tests/run_c1_thread_test.sh` (15 pairs; the seven with a P5 chord against the unsplit render; the sanitizer);
   `tests/cr_cpu1_test.c` (the start: SAFE MODE, the boot before failed, a clean boot); `tests/cr_settings_test.c`
   (Dual Core On by default; a record's Off kept); `tests/cr_backup_test.c` (78 PEAK: 45 values);
@@ -1429,7 +1436,7 @@ leaves to the owner:
   eight voices with three effects are predicted at 91 %, above the shed's line).
 - **P5 is now the quietest engine** ([Level](#level-3y46)): 6.6 dB under the VA's chords at the median.
 - **One core: three chord voices under a P5 bass** (built beyond his rule; `-DP5_ONE_POOL=5` is four and one).
-- **Two cores: a bass key under eight chord keys is silent** (`-DP5_BASS_KEEP=1` keeps it one voice).
+- ~~Two cores: a bass key under eight chord keys is silent~~ decided 3y53: the bass always keeps one voice.
 - **A stack's voices start together** now, and its level law ([Level](#level-3y46)), by ear.
 - **`-DP5_CORE=3`** if eight do not fit on the unit.
 

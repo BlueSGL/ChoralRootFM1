@@ -172,8 +172,9 @@ static void voice_kill(voice_t *v)                      /* fade out over the nex
  * its own sixteen), so P5 has a POOL beside them: the chord part's and the bass part's P5 voices together.
  *   TWO CORES   2 x P5_CORE = 8. THE CHORD FIRST: a chord note that finds the pool full takes (1) a released voice
  *               of either part, the oldest; (2) a voice of the bass part's stack, from the top (the stack thins
- *               towards one); (3) the bass part's last voice (P5_BASS_KEEP 0); only then one of its own (voice_alloc's
- *               steal). A bass note takes a released voice or does without; a stack's extra voices start only into
+ *               towards one, never its last voice: 3y53); only then one of its own (voice_alloc's steal). A bass
+ *               note takes a released voice, else the chord's oldest held voice that is not its lowest note (3y53:
+ *               the chord has at most seven while a P5 bass note sounds); a stack's extra voices start only into
  *               free room. A bass of ANOTHER engine is core 1's work beside the chord's four voices there: every
  *               P5_BASS_UNITS budget units of its sounding voices count as one voice of the pool (a MONO bass: none);
  *   ONE CORE    P5_ONE_POOL = 4; the chord part four, the bass part one (p5_cap), and the bass's one voice before the
@@ -254,9 +255,10 @@ static uint32_t p5_pool_victim(const track_t *self, int soft, track_t **pp)
         return best;
     if (chord && two && P5_IS(bt)) {                    /* two cores: the chord first */
         *pp = bt;
-        return p5_part_victim(bt, !soft && !P5_BASS_KEEP);
+        return p5_part_victim(bt, 0);                   /* never its last voice (3y53: the bass keeps one) */
     }
-    if (!chord && !two && P5_IS(ct)) {                  /* one core: the bass's one voice before the chord's fourth */
+    if (!chord && P5_IS(ct)) {                          /* the bass's one voice before the chord's last (one core: its
+                                                         * fourth; two: its eighth, 3y53) */
         *pp = ct;
         return p5_part_victim(ct, 0);
     }
@@ -525,7 +527,10 @@ static voice_t *voice_alloc(track_t *t, uint32_t note, uint32_t vel)
             best = i;
     if (best == np)
         for (i = 0; i < np; i++)                         /* oldest held, not the bass */
-            if (i != low && (!voice_fade_steal || t->v[i].stage != 4u) && (best == np || t->v[i].age < t->v[best].age))
+            if (i != low && (!voice_fade_steal || t->v[i].stage != 4u) && (!VA_NOPOOL || t->v[i].active) &&   /* (3y53:
+                                                         * the pool full, the bass's one voice kept: a free slot is
+                                                         * not a voice to take) */
+                (best == np || t->v[i].age < t->v[best].age))
                 best = i;
 #if FELUCCA_PROPHET
     /* P5 (3y46): before a HELD voice of the part is taken: a slot of the part that is fading out and that no waiting

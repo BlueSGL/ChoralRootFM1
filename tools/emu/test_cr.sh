@@ -2218,7 +2218,7 @@ wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_crackle_over.wav" --from 3.4 --b
 echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "the shed's fades are no crackle: $wc" || bad "cr_prophet_crackle, shed: $wc"
 silent_end cr_p5_crackle_over
 
-echo "P5 on two cores (0.22, 3y46, docs/PROPHET.md Voices): eight voices on the chord part, four rendered by each core; a P5 bass gives way to the chord; one core: four, and a P5 bass one"
+echo "P5 on two cores (0.22, 3y46, docs/PROPHET.md Voices): eight voices on the chord part, four rendered by each core; a P5 bass gives way to the chord down to its one voice; one core: four, and a P5 bass one"
 # a UNISON program with a stack of four for the bass part: Sequential's 111 (LAGOON BASS) where the list ships it
 p5b=$(python3 tools/gen_prophet_factory.py --pos 111)
 if [ "${p5b:-0}" -ge 1 ]; then
@@ -2227,16 +2227,16 @@ if [ "${p5b:-0}" -ge 1 ]; then
     EMU_STAGES=1 "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight.wav" >"$OUT/cr_p5_eight.log" 2>&1 &&
         ok "cr_prophet_eight: exit 0" || bad "cr_prophet_eight: see $OUT/cr_p5_eight.log"
     PL="$OUT/cr_p5_eight.log"
-    [ "$(pv "$PL" 0)" = "0 8 8 0 0 6 8 0 " ] && [ "$(pv "$PL" 1)" = "4 2 0 0 " ] && [ "$(p5sheds "$PL")" = 0 ] &&
+    [ "$(pv "$PL" 0)" = "0 8 8 0 0 6 7 0 " ] && [ "$(pv "$PL" 1)" = "4 2 1 0 " ] && [ "$(p5sheds "$PL")" = 0 ] &&
         LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$PL" &&
-        ok "a fresh unit (two cores): eight MIDI notes sound eight P5 voices, a ninth takes one (eight still); the bass's UNISON stack: four alone, two under a chord of six, none under a chord of eight (the chord first); nothing shed" ||
+        ok "a fresh unit (two cores): eight MIDI notes sound eight P5 voices, a ninth takes one (eight still); the bass's UNISON stack: four alone, two under a chord of six, one under a chord of eight, which then sounds seven (3y53: the bass keeps one voice); nothing shed" ||
         bad "P5 on two cores: the chord part's voices $(pv "$PL" 0)/ the bass part's $(pv "$PL" 1)/ sheds $(p5sheds "$PL")"
     LC_ALL=C grep -a '^cpu: stages' "$PL" | cut -c6- | sed 's/^/      /'
     silent_end cr_p5_eight
     EMU_C1=thread "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_thread.wav" >"$OUT/cr_p5_eight_thread.log" 2>&1
     "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_inline.wav" >"$OUT/cr_p5_eight_inline.log" 2>&1
     [ -s "$OUT/cr_p5_eight_inline.wav" ] && cmp -s "$OUT/cr_p5_eight_inline.wav" "$OUT/cr_p5_eight_thread.wav" &&
-        [ "$(pv "$OUT/cr_p5_eight_thread.log" 0)" = "0 8 8 0 0 6 8 0 " ] &&
+        [ "$(pv "$OUT/cr_p5_eight_thread.log" 0)" = "0 8 8 0 0 6 7 0 " ] &&
         ok "EMU_C1=thread: core 1's share of the chord's voices and the bass part on a second thread: the WAV is the inline job's, bit for bit" ||
         bad "EMU_C1=thread, P5's chord voices on two threads: the WAV differs from the inline job's"
     EMU_C1=nostart "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_one.wav" >"$OUT/cr_p5_eight_one.log" 2>&1
