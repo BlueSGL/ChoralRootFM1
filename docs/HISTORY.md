@@ -2579,3 +2579,23 @@ into the version string (its sed keeps the rest of the line); the documented com
 **Not done / not tested**: editing, the generator, new page styles (steps 1, 3, 4, 5); the wheel and drag handlers
 and the downloads in a browser (the self-test clicks buttons); any browser but Chromium; the Pages job does not build
 the module, so the published site has no viewer until `.github/workflows/pages.yml` gets the step.
+
+3y52. **The layout tool, steps 3 and 4 (design side): the designer** (branch lay-4 from 52531a9, not pushed). The
+owner: "Viewer looks good, let's build the designer." and "The current header that shows the preset name and the page
+name is good, no need to change it." So the shared header is the editor's title line, on every design screen,
+fixed; the viewer's "no shared header" finding is gone. **Design mode** in `web/layout.html`: groups and screens
+(add, duplicate, delete, reorder, move between groups; classic or free; copy today's page), the live screen at 2x with
+SELECT and the knobs, an editing layer on the 4 px grid for free screens (drag from the element strip, move, resize,
+multi-select, align, nudge, undo / redo, delete), lanes of four coloured slots, a parameter palette (searchable,
+"placed" marks, drag onto slots or elements), an inspector, lint plus the design's checks, a contact sheet of today's
+beside the design's, import / export of the JSON, PNGs, a localStorage autosave. **The format**: "choralroot-layout"
+version 2, `"kind": "design"`, parameters by stable id (`"FILTER:CUT"`); `design/layouts/designs/`. **Classic screens**
+render through the real editor: `lay_load` gives `cp_deep_hook` an `eng_deep_t` whose columns map to the built-in
+(page, col) and `cr_edit.c` gets a preview-only `ce_label_hook`; in place when the structure is today's, else as a
+screen plan; the rest is flagged "not buildable yet". **Free screens** render through preview-only draw calls on the
+firmware's own primitives (`cr_ed_title`, `cr_text`, `cr_cglyph`, `cr_hbar`, `cr_wide`) with the engine's real values
+(`lay_pget` / `lay_ptext` / `lay_pstep`). **The example**: `design/layouts/designs/p5-osc-panel.json`, P5's
+oscillators and mixer on two free screens, lint clean. **Tests**: `web/test_layout.mjs` section 6 and a Design-mode
+page self-test (a scripted drag adds an element; the export equals the model). The device image is byte-identical
+(sha256 of `build/choralroot.bin` 50ae1f51..84506d before and after). **Not done**: firmware support for free pages
+and the build-time generator (the remaining step).

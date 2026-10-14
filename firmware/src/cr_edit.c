@@ -680,9 +680,17 @@ static void ce_text(const track_t *t, ce_ref_t r, const param_desc_t *d, int32_t
 }
 
 /* a parameter's long label: cr_pages.c's tables, else its short one capitalised ("SYNC1" -> "Sync1") */
+#ifdef CR_LAYOUT_PREVIEW
+/* (the layout tool's preview only, docs/LAYOUT-TOOL.md: a design's own label for deep page p's column c, 1 = given) */
+static int (*ce_label_hook)(const track_t *t, uint32_t p, uint32_t c, char *out, uint32_t n);
+#endif
 static void ce_label(const track_t *t, ce_ref_t r, const param_desc_t *d, char *out, uint32_t n)
 {
     uint32_t i;
+#ifdef CR_LAYOUT_PREVIEW
+    if (ce_label_hook && r.k == CE_R_DEEP && ce_label_hook(t, r.a, r.b & 3u, out, n))
+        return;
+#endif
     if (r.k == CE_R_TRK)
         for (i = 0; i < NELEM(CP_LABEL); i++)
             if (CP_LABEL[i].id == r.a) {

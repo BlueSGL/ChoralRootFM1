@@ -3,7 +3,7 @@
 //   node web/test_layout.mjs [--no-page] [--no-emu]
 // (after sh tools/layout/build_layout.sh; the comparison with the emulator needs sh tools/emu/web/build_web.sh too)
 // 1. build/layout-web/crlayout.wasm: lay_version, lay_presets, lay_catalog of every engine (every cell bound to a
-//    parameter has a label and a range; P5: 19 pages, 56 cells), lay_load's reserved answer.
+//    parameter has a label and a range; P5: 19 pages, 56 cells), lay_load refusing what it cannot read.
 // 2. Every screen x lane of P5, VA and FM TONE on the engine's first factory sound: not blank, the same bytes when
 //    drawn twice and when shown again; a knob turn changes its cell's value and the picture and marks the cell hot
 //    (and 800 ms later the mark is gone); SELECT moves the lane.
@@ -11,6 +11,11 @@
 //    driven by its panel alone: GLO + PRESETS to the engine, EDIT, the group buttons, SELECT, a knob): the LCD's
 //    RGB565 must be identical, pixel for pixel, on every screen x lane of the three engines.
 // 4. design/layouts/*.json are what the firmware says today (tools/layout/dump_catalogs.mjs).
+// 6. The designer (steps 3 and 4): the design format's round trip and its validation; lay_load of a classic design
+//    that only relabels (every frame today's but the relabelled text), one that swaps two parameters (the knobs turn
+//    the right ones); the free-screen draw API on design/layouts/designs/p5-osc-panel.json (deterministic, lint clean,
+//    the knobs turn its parameters); and the page in Design mode (?selftest=design: a scripted drag adds an element,
+//    the export equals the model, the contact sheet has today's and the design's tiles).
 // 5. The page: web/layout.html made into TEST_TMP/page (tools/layout/make_page.py), opened from file:// by headless
 //    Chromium with ?selftest=1; the page checks itself (the canvas is drawn, a knob click changes it, the contact
 //    sheet has every screen x lane) and paints a square per check, read here from the screenshot.
@@ -49,14 +54,15 @@ t0 = performance.now();
 m.reset();
 const tBoot = performance.now() - t0;
 const ver = m.version();
-ok(/^ChoralRoot \d/.test(ver.firmware) && ver.api === 1 && ver.format === L.FORMAT && ver.format_version === L.FORMAT_VERSION,
+ok(/^ChoralRoot \d/.test(ver.firmware) && ver.api === 2 && ver.format === L.FORMAT && ver.format_version === L.DESIGN_VERSION,
    `lay_version: ${ver.firmware}, api ${ver.api}, ${ver.format} v${ver.format_version}`);
 const names = ver.engines.map((e) => e.name);
 ok(["FM6", "FM TONE", "VA", "CZ-1", "P5", "WHEEL"].every((n) => names.includes(n)), `engines: ${names.join(", ")}`);
 ok(ver.engines.every((e) => /^[0-9a-f]{16}$/.test(e.params_hash)) && new Set(ver.engines.map((e) => e.params_hash)).size === ver.engines.length,
    "every engine has its own params_hash");
 ok(true, `instantiated in ${tLoad.toFixed(0)} ms, power-on + snapshot (${m.snapshotBytes()} B of static data) in ${tBoot.toFixed(0)} ms (node, this machine)`);
-ok(m.load().ok === false && m.load().error === "not implemented", "lay_load: reserved, \"not implemented\"");
+ok(m.load().ok === false && m.load(Uint8Array.from([76, 2, 1])).ok === false && m.unload().ok === true,
+   "lay_load: refuses what is not a packed design or names an engine without pages; unloads");
 ok(ver.engines.every((e) => m.ex.lay_show(e.index, 0, 9, 0, 0) === -3) && m.ex.lay_show(1, 0, 0, 0, 0) === -1 &&
    m.ex.lay_show(ver.engines[0].index, 999, 0, 0, 0) === -2 && m.ex.lay_show(ver.engines[0].index, 0, 0, 99, 0) === -4 &&
    m.ex.lay_show(ver.engines[0].index, 0, 0, 0, 99) === -5, "lay_show refuses a place that does not exist (-1 .. -5)");
@@ -228,6 +234,138 @@ console.log("design/layouts: today's layouts in the file format");
      `${files.length} files are what the firmware says (else: node tools/layout/dump_catalogs.mjs)`);
 }
 
+
+// ===================================================================================================== 6 ===
+console.log("the designer: the design format, lay_load, the free-screen draw API");
+{
+  const P5 = ver.engines.find((x) => x.name === "P5"), cat = cats.P5, params = L.paramList(cat), pidx = L.paramIndex(params);
+  ok(params.length === 56 + L.tiles(cat).flatMap((t) => t.cells).filter((c) => c.bind === "track").length && pidx.size === params.length,
+     `paramList P5: ${params.length} parameters, ids unique ("${params[0].id}" ..)`);
+  // the round trip
+  const today = L.designFromCatalog(cat, "today");
+  const back = JSON.parse(L.formatDesign(today));
+  ok(JSON.stringify(back) === JSON.stringify(today) && L.validateDesign(back, cat).errors.length === 0 && L.validateDesign(back, cat).warnings.length === 0,
+     "a design's JSON reads back to the same model, valid");
+  for (const name of ["VA", "FM TONE", "FM6", "CZ-1", "WHEEL"]) {
+    const d = L.designFromCatalog(cats[name]);
+    const v = L.validateDesign(JSON.parse(L.formatDesign(d)), cats[name]);
+    if (v.errors.length) ok(false, `${name}: today's design not valid: ${v.errors[0]}`);
+  }
+  ok(true, "today's layout of every engine as a design: valid");
+  // the validation: each broken file caught
+  const free = () => JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-osc-panel.json"), "utf8"));
+  const broken = {
+    "another format": (d) => { d.format = "x"; },
+    "version 1": (d) => { d.version = 1; },
+    "not a design": (d) => { d.kind = "layout"; },
+    "another params_hash": (d) => { d.params_hash = "0".repeat(16); },
+    "another engine": (d) => { d.engine.index = 3; },
+    "no title-line header": (d) => { d.header = null; },
+    "an unknown group": (d) => { d.groups[1].name = "ARP"; },
+    "a screen of no type": (d) => { d.groups[1].screens[0].type = "panel"; },
+    "a classic lane of three cells": (d) => { d.groups[1].screens[0].lanes[0].cells.pop(); },
+    "an unknown parameter": (d) => { d.groups[1].screens[0].lanes[0].cells[0] = { param: "FILTER:NOPE" }; },
+    "an unknown band": (d) => { d.groups[1].screens[0].band = "rainbow"; },
+    "an unknown element type": (d) => { d.groups[0].screens[0].elements[1].type = "slider"; },
+    "a position not a number": (d) => { d.groups[0].screens[0].elements[1].x = "12"; },
+    "two elements of one id": (d) => { d.groups[0].screens[0].elements[2].id = d.groups[0].screens[0].elements[1].id; },
+    "a switch of four positions": (d) => { d.groups[0].screens[0].elements.find((e) => e.type === "switch").positions = 4; },
+    "an led glyph that does not exist": (d) => { d.groups[0].screens[0].elements.find((e) => e.type === "led").glyph = "star"; },
+    "a colour that is not a token": (d) => { d.groups[0].screens[0].elements[1].colour = "#ff0000"; },
+    "a lane naming no element": (d) => { d.groups[0].screens[0].lanes[0][0] = "nothing"; },
+    "an element bound to a key": (d) => { d.groups[0].screens[0].elements[1].key = 12; },
+  };
+  const missed = Object.entries(broken).filter(([, f]) => { const d = free(); f(d); return L.validateDesign(d, cat).errors.length === 0; }).map(([k]) => k);
+  ok(!missed.length, `validateDesign catches each of ${Object.keys(broken).length} broken designs` + (missed.length ? ` (missed: ${missed.join(", ")})` : ""));
+
+  // lay_load: today's design packed in place: every frame today's
+  const frameAll = () => L.tiles(cat).map((t) => { m.show(P5.index, 1, t.group, t.screen, t.lane); return { t, rgba: m.render(), lint: m.lint() }; });
+  m.unload();
+  const base = frameAll();
+  const pk0 = L.packDesign(today, cat);
+  ok(pk0.mode === "in-place" && m.load(pk0.bytes).ok, `today's design packs in place (${pk0.pages} pages, ${pk0.bytes.length} B) and loads`);
+  const same = frameAll();
+  ok(same.every((f, i) => L.diffCount(f.rgba, base[i].rgba) === 0), `loaded as today's: all ${same.length} P5 frames identical to the built-in tables'`);
+  // a relabel
+  const rel = L.designFromCatalog(cat, "relabel");
+  rel.groups[1].screens[0].lanes[0].cells[1].label = "Bright";      // FILT, lane 1, KNOB 2 (Reso)
+  ok(m.load(L.packDesign(rel, cat).bytes).ok, "a design that relabels FILT's Reso loads");
+  const relf = frameAll();
+  const bad = [];
+  relf.forEach((f, i) => {
+    const t = f.t, d = L.diffCount(f.rgba, base[i].rgba);
+    if (t.group !== 1 || t.screen !== 0) { if (d) bad.push(`${L.tileLabel(t)}: ${d} px`); return; }
+    const old = base[i].lint.texts.find((x) => x.text === "Reso"), now = f.lint.texts.find((x) => x.text === "Bright");
+    let out = 0;
+    for (let p = 0; p < 240 * 240; p++) {
+      const a = p * 4;
+      if (f.rgba[a] === base[i].rgba[a] && f.rgba[a + 1] === base[i].rgba[a + 1] && f.rgba[a + 2] === base[i].rgba[a + 2]) continue;
+      const x = p % 240, y = (p / 240) | 0, inb = (b) => b && x >= b.box[0] - 2 && x < b.box[2] + 2 && y >= b.box[1] - 2 && y < b.box[3] + 2;
+      if (!inb(old) && !inb(now)) out++;
+    }
+    if (!d || !now || out) bad.push(`${L.tileLabel(t)}: ${d} px differ, ${out} outside the label's box${now ? "" : ", no \"Bright\""}`);
+  });
+  ok(!bad.length, "relabelled: every frame is today's but FILT 1's, which differs only where \"Reso\" became \"Bright\"" + (bad.length ? ` (${bad.join("; ")})` : ""));
+  // a swap: Cutoff and Reso change knobs; KNOB 1 now turns the resonance
+  const sw = L.designFromCatalog(cat, "swap");
+  const c0 = sw.groups[1].screens[0].lanes[0].cells;
+  [c0[0], c0[1]] = [c0[1], c0[0]];
+  ok(m.load(L.packDesign(sw, cat).bytes).ok, "a design that swaps FILT's Cutoff and Reso loads");
+  m.show(P5.index, 1, 1, 0, 0);
+  const pre = m.render(), cut = pidx.get("FILTER:CUT"), res = pidx.get("FILTER:RES");
+  const lab = m.state().cells.map((c) => c.label);
+  const r0 = m.pget(res.page, res.col), u0 = m.pget(cut.page, cut.col);
+  m.knob(1, 3);
+  const r1 = m.pget(res.page, res.col), u1 = m.pget(cut.page, cut.col);
+  ok(lab[0] === "Reso" && lab[1] === "Cutoff" && r1 !== r0 && u1 === u0 && L.diffCount(pre, m.render()) > 0,
+     `swapped: KNOB 1 is "${lab[0]}", KNOB 2 "${lab[1]}"; KNOB 1 +3 turns the resonance (${r0} -> ${r1}), the cutoff stays (${u0})`);
+  m.knob(2, -2);
+  ok(m.pget(cut.page, cut.col) !== u0, `KNOB 2 turns the cutoff (${u0} -> ${m.pget(cut.page, cut.col)})`);
+  // a structural change: the plan (a screen added to FILT, two screens of ENV merged into one lane each)
+  const pl = L.designFromCatalog(cat, "plan");
+  pl.groups[1].screens.push(L.newClassicScreen("edit8", "MORE"));
+  pl.groups[1].screens[1].lanes[0].cells[0] = { param: "FILTER+:REV" };
+  const pk = L.packDesign(pl, cat);
+  ok(pk.mode === "plan" && !pk.unbuildable.length && m.load(pk.bytes).ok && m.show(P5.index, 1, 1, 1, 0) > 0 && m.state().page === "MORE",
+     `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}")`);
+  m.unload();
+
+  // the example (item 4) and the free-screen draw API
+  const ex = free();
+  const v = L.validateDesign(ex, cat);
+  ok(!v.errors.length && !v.warnings.length, "design/layouts/designs/p5-osc-panel.json: valid, no warning");
+  const s = L.designSession(m, cat, ex, 1);
+  s.reload();
+  const shots = [], findings = [];
+  for (const t of L.designTiles(ex)) {
+    s.open(t.gi, t.si, t.lane);
+    const r = s.render();
+    shots.push(r.rgba);
+    for (const f of r.lint.findings) findings.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${f.kind} "${f.text}"`);
+    for (const c of r.checks) findings.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${c.kind} ${c.text}`);
+    if (t.type === "free" && (L.inkCount(r.rgba) < 500 || !r.unbuildable)) findings.push(`${t.key}: blank or not marked`);
+  }
+  ok(!findings.length && L.usedTwice(ex).length === 0, `the example: ${shots.length} screens x lanes rendered, lint clean (text, overlap, lanes, budget, header), no parameter twice` +
+     (findings.length ? `\n          ${findings.slice(0, 10).join("\n          ")}` : ""));
+  const again = L.designTiles(ex).map((t) => { s.open(t.gi, t.si, t.lane); return s.render().rgba; });
+  ok(again.every((a, i) => L.diffCount(a, shots[i]) === 0), "the example drawn again: the same bytes (deterministic)");
+  s.open(0, 0, 0);
+  const free0 = s.render().rgba, fq = pidx.get("OSC A:FREQ"), f0 = m.pget(fq.page, fq.col);
+  s.knob(1, 2);
+  const f1 = m.pget(fq.page, fq.col), hotShot = s.render();
+  s.cool();
+  ok(f1 !== f0 && L.diffCount(free0, hotShot.rgba) > 0 && hotShot.ops.some((o) => o.op === "knob") && L.diffCount(hotShot.rgba, s.render().rgba) > 0,
+     `free OSC A: KNOB 1 +2 turns Osc A's frequency (${f0} -> ${f1}), the dial and value move, the hot value ends`);
+  s.select(1);
+  ok(s.at.lane === 1 && s.lane()[0] && s.lane()[0].label === "Sync", "SELECT +1: lane 2, KNOB 1 is Sync");
+  s.select(5);
+  ok(s.at.si === 1, `SELECT on past the last lane: the next screen (OSC B), lane ${s.at.lane + 1}`);
+  const st0 = s.render();
+  ok(/^ITS|\w/.test(st0.state.sound) && st0.lint.texts.some((x) => x.text === "OSC B") && st0.lint.texts.some((x) => x.text === st0.state.sound),
+     `the shared header on a free screen: the editor's title line ("${st0.state.sound}" | "OSC B")`);
+  m.unload();
+}
+
 // ===================================================================================================== 5 ===
 function readPng(file) {   // 8-bit RGB / RGBA, not interlaced -> {w, h, at(x, y) -> [r, g, b]}
   const b = fs.readFileSync(file);
@@ -282,6 +420,30 @@ if (!args.has("--no-page")) {
       for (let y = 300; y < img.h; y += 7) for (let x2 = 0; x2 < img.w; x2 += 7) colours.add(img.at(x2, y).join(","));
       ok(colours.size > 40, `the screenshot shows the sheet (${colours.size} colours sampled)`);
     }
+  }
+}
+
+if (!args.has("--no-page") && fs.existsSync("/Applications/Chromium.app/Contents/MacOS/Chromium")) {
+  console.log("the page in Design mode (headless Chromium, file://, ?selftest=design)");
+  const chrome = "/Applications/Chromium.app/Contents/MacOS/Chromium";
+  const dir = path.join(TMP, "page"), png = path.join(TMP, "selftest-design.png"), prof = path.join(TMP, `chrome-profile-d-${process.pid}`);
+  try { fs.unlinkSync(png); } catch {}
+  const c = spawn(chrome, ["--headless=new", "--use-mock-keychain", "--password-store=basic", "--disable-gpu", "--no-sandbox", "--no-first-run",
+    `--user-data-dir=${prof}`, "--hide-scrollbars", "--window-size=1400,1400", "--timeout=15000", "--virtual-time-budget=3000",
+    `--screenshot=${png}`, `file://${path.join(dir, "index.html")}?engine=P5&selftest=design`], { stdio: "ignore" });
+  for (let i = 0; i < 60 && !(fs.existsSync(png) && fs.statSync(png).size > 0); i++) await new Promise((r) => setTimeout(r, 500));
+  await new Promise((r) => setTimeout(r, 500));
+  c.kill();   // (by PID)
+  await new Promise((r) => setTimeout(r, 300));
+  try { fs.rmSync(prof, { recursive: true, force: true }); } catch {}
+  if (ok(fs.existsSync(png) && fs.statSync(png).size > 20000, `screenshot: ${path.relative(ROOT, png)}`)) {
+    const img = readPng(png), sq = (i) => img.at(10 + 20 * i, 10);
+    const green = (p) => p[0] < 40 && p[1] > 215 && p[2] < 40, blue = (p) => p[0] < 40 && p[1] < 40 && p[2] > 215;
+    const what = ["Design mode opens the shipped P5 example (designs.js)", "a free screen is drawn and marked \"not buildable yet\"",
+                  "KNOB 1's + turns a dial on the free screen", "a scripted drag from the element strip adds a knob on the 4 px grid (one undo step)",
+                  "Export JSON equals the model (and validates)", "the contact sheet has today's tiles and the design's"];
+    ok(blue(sq(6)), "the Design self-test ran to the end (the end mark is there)");
+    what.forEach((w, i) => ok(green(sq(i)), `page: ${w}`));
   }
 }
 

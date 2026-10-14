@@ -13,8 +13,10 @@ Two things make it more than a drawing program:
 - **Its output is a file the firmware build reads.** A layout is JSON in `design/layouts/`; the build turns it into
   the engine's tables. Layouts are compiled in: a unit never loads one.
 
-It is built in five steps. **Step 2 is what exists today: a read-only viewer.** Nothing can be edited or exported
-yet except today's built-in layouts.
+It is built in five steps. **Steps 2, 3 and the design side of 4 exist today**: the viewer, and the designer, in
+which today's pages can be rearranged and new free screens laid out, previewed live and exported as a design file.
+Nothing is built from a design yet: the firmware support for free pages and the build-time generator are the
+remaining step ("The five steps", below).
 
 ## The owner's rules
 
@@ -26,11 +28,12 @@ Verbatim (2026-10-13):
 
 What follows from them:
 
-1. **One shared header on every editor page.** Every page gets the same header design. This conflicts with today's
-   editor: `docs/EDITOR.md` says the editor takes the whole 240 x 240 with "no header bar, no footer hints", and
-   `cr_edit.c` `ce_screen` sets `header = 0`. The rule changes that in step 4; the firmware is not changed now. The
-   viewer shows the gap: the inspector and the lint list say "no shared header" on every page, and the layout files
-   carry `"header": null`.
+1. **One shared header on every editor page: the editor's title line.** The owner (2026-10-13): "The current header
+   that shows the preset name and the page name is good, no need to change it." So the shared header IS the title
+   line the editor draws on every page today (`cr_draw.c` `cr_ed_title`: the sound's name left, the page's name
+   right, rows 0 .. 27). Every design screen carries it automatically: it is not an element, it cannot be moved or
+   edited, and a free screen's design area is the 240 x 212 under it. (The step-2 viewer's "no shared header" note
+   was wrong and is gone; the catalog's `"header": null` means only that the header is not part of a layout.)
 2. **The 27 keys always play.** No page may use a key as a switch or a shortcut. A switch on a page is operated by
    a knob or SELECT, nothing else.
 3. **Design first, build second.** The tool is a design tool before it is a generator: the owner lays pages out
@@ -57,6 +60,152 @@ does not build the module yet, so the published site has no layout viewer until 
 
 A link opens a place: `?engine=P5&group=FILT&screen=1&lane=2&preset=1` (numbers from 1; the group by name or
 index), `?view=sheet` for the contact sheet.
+
+## The designer (steps 3 and 4)
+
+"Viewer looks good, let's build the designer." (the owner, 2026-10-13). **Design** in the top bar; the engine buttons
+work in both modes. The design is kept in the browser (localStorage, per engine; the page works without it) and is
+exported as a file.
+
+- **Top**: the design's name; *open a shipped design* (the files of `design/layouts/designs/`, e.g.
+  `p5-osc-panel`); *New from today* (today's layout, every screen classic); *Import* / *Export JSON* (a file pick and a
+  download: no server); *PNG* of the screen; *Contact sheet*; the sound; *Undo* / *Redo* (Ctrl+Z, Ctrl+Shift+Z).
+- **Left**: the groups (the editor's buttons: OSC, FILT, ENV, LFO, MOD, FX, MIX) and their screens. The current
+  screen has earlier / later, duplicate, delete and *move to* another group. *New screen*: a group and a kind (free,
+  classic edit8, classic stack), or *Copy today's* page as a classic screen.
+- **Centre**: the live 240 x 240 at 2x with SELECT and the four knobs, as in the viewer, and a badge under it:
+  "buildable today" (the firmware's editor draws it as designed) or **"design: not buildable yet"** (the badge's
+  title says why). Over a free screen an editing layer on the 4 px grid: drag an element from the strip above the
+  screen (frame, label, knob, switch, led, bar, glyph, band) onto it; click to select, Shift+click to add, drag to
+  move, the yellow corner to resize; arrows nudge 4 px (Shift 16); Delete; Ctrl+D duplicates, Ctrl+A selects all;
+  align left / top / right, spread. Each element in a lane wears its "lane·knob" tag in the knob's colour.
+- **Lanes**: four coloured slots a lane (KNOB 1..4); SELECT moves between lanes. On a free screen select an element,
+  then click a slot (it leaves any other slot); on a classic screen drag a parameter onto a slot, or click the slot
+  and pick it in the inspector. Lanes can be added (up to 8), moved up, deleted; a classic lane has its title.
+- **Right**: the inspector (a free element's type, parameter, label or text, x y w h, switch positions, led glyph,
+  glyph, band, dial size, label size and alignment, colour: `auto` = the editor's lane colours, or a palette token;
+  a classic screen's title, kind, band, and the selected slot's parameter and label) and the **parameter palette**:
+  the engine's parameters grouped by today's pages, searchable, "placed" on those the design uses; drag one onto a
+  slot or an element, or click it to bind the selection.
+- **Lint** under the screen: the firmware's text lint (a text cut, off the screen, two texts overlapping) and the
+  design's checks: a parameter twice on a screen or in the design, a bound element in no lane or in two, a lane of
+  more than four, two elements overlapping (frames excepted), outside the area under the header, more than 24
+  elements or 8 lanes, a title wider than the header's right side (112 px), and the "not buildable yet" reasons.
+- **Contact sheet**: per group, today's screens x lanes beside the design's; a click on a design tile opens it; one
+  PNG of the whole sheet.
+
+Turning a knob changes the preview's sound only; any edit of the design re-opens the screen from the reset
+instance, so earlier turns are undone then (the viewer's "Reload sound" behaviour). No element can be bound to a
+key, and a design file that tries (any `"key"`) is refused: the 27 keys always play.
+
+### How a design is drawn
+
+**Classic screens: through the real editor.** `packDesign` (web/fm1layout.js) packs the design's classic screens into
+the firmware's own tables and `lay_load` hands them to the editor through `cp_deep_hook`: an `eng_deep_t` whose pages
+hold, per column, a copy of the built-in descriptor the design binds there, and whose `get` / `set` / `desc` /
+`mod_dst` go through to the built-in (page, column), so the engine sees its own patch addresses. Labels come through a
+second preview-only hook, `cr_edit.c` `ce_label_hook`. `ce_scr`, `ce_view`, `ce_screen` and `cr_draw` then draw the
+design exactly as the unit would, and the knobs and SELECT are the unit's. Two ways:
+
+- **in place**, when every group's classic screens have today's structure (as many, the same kinds and lane counts):
+  today's page titles are kept (so the editor derives the same screens, bands and titles), with the design's
+  parameter and label in every column. Moves, swaps and relabels within that structure; tested: a relabel changes
+  nothing but the label's pixels, a swap makes the knobs turn the swapped parameters.
+- **plan**, when the structure changed (screens added, removed, reordered or moved between groups): OSC .. MOD become a
+  screen plan (`core.h` `eng_screen_t`, as FM TONE's): one page per lane, an edit8 screen of one or two lanes, its
+  band (none, env, filter, algo, ade2) and its title.
+
+What neither can express is flagged **"not buildable yet"** and today's screen is shown in its place: a stack or a
+screen of more than two lanes in a changed group, a part parameter moved onto an engine page, a changed platform
+screen (FX, MIX, a platform MOD), a lane title or band the in-place way cannot change (a note). A group with free
+screens only keeps today's tables, unseen.
+
+**Free screens: the firmware's primitives, not its editor.** The firmware has no free pages yet, so a free screen is
+drawn by preview-only calls of `layout_web.c` that use the firmware's own drawing code in the renderer's own six
+strips: the header by `cr_ed_title` (the real title line, the sound's name from the editor), text by `cr_text` /
+`cr_text_fit` (the unit's faces, sizes and ellipsis), the dial by `cr_cglyph` `CR_G_KNOB` (the 270-degree track and
+value arc, bipolar from 12 o'clock), bars by `cr_hbar`, waveforms and pictograms by `cr_cglyph`, the big bands by
+`cr_wide`, rectangles by `cr_fill` / `cv_rrect`, colours from `cr_rgb` (the named colours and the palette tokens).
+Values are the real engine's: `lay_pget` / `lay_ptext` (the editor's value text) and `lay_pstep` (the editor's own
+step, through the engine's `set`), so a knob turn moves the dial; the active lane is in the knob colours (blue,
+orange, white, green), the others grey, a turned value on its block for 800 ms, as the editor does. How faithful: the
+pixels of each primitive are the firmware's; the composition (where a knob's label, dial and value sit, how a switch
+or an led is drawn) is the tool's proposal (`freeOps`), which the firmware will copy when it gets free pages. A band
+element takes its values from the classic screen that has that band when the screen opens and does not follow later
+turns.
+
+### The draw API (preview only)
+
+| function | does |
+| --- | --- |
+| `lay_load(ptr, len)` | a packed design (below) for its engine's classic pages: `{"ok", "engine", "pages", "screens"}` or `{"ok": false, "error"}`; engine 255 unloads. Kept across `lay_show` (the tables live outside the snapshot) |
+| `lay_pget(page, col)`, `lay_ptext(page, col)`, `lay_pstep(page, col, n)` | a parameter of the editor's sound by its built-in address (page 255: a part parameter, col its `P_` id): the value, the editor's text, n detents by the editor's step (30 ms pass) |
+| `lay_draw_begin(title, page)` | a new free page under the title line (the sound's name, the page's name) |
+| `lay_draw_text(bold, px, x, y, s, col, align, maxw)` | text on baseline y (align 0 left, 1 centre, 2 right; maxw > 0: cut with an ellipsis) |
+| `lay_draw_rect(x, y, w, h, col, r, line)` | filled (r: rounded) or an outline `line` px wide |
+| `lay_draw_glyph(g, x, y, w, h, col, pct, pct2, flags)` | a `CR_G_*` glyph in the box (pct Q8 of 255; `CR_G_LFOWAVE`: the wave in pct2) |
+| `lay_draw_knob(cx, cy, size, col, pct, bip)` | the dial |
+| `lay_draw_hbar(x, y, w, h, col, pct, bip)` | the editor's small level bar |
+| `lay_draw_band(kind, wv)` | a `CR_W_*` band at its own rows (24 .. 120) with 20 values |
+| `lay_draw_end()` | draws it all in strips, to the LCD; the 240 x 240 RGBA; `lay_lint` then answers for it |
+| `lay_text_w(s, px, bold)`, `lay_wv()` | a text's advance; the editor's band values now |
+
+The packed form: `'L' 2 engine npages`, per page `tlen title` and four times `srcpage srccol llen label` (srcpage 255:
+an empty column), `section[8]`, `nscreens`, per screen `sec pg0 pg1 band tlen title`.
+
+## The design format, version 2
+
+A design is a "choralroot-layout" file of version 2 with `"kind": "design"`, in
+`design/layouts/designs/<engine>-<name>.json` (the generated `design/layouts/<engine>.json` stay version 1: today's
+layouts). It binds parameters by **stable id**: `"<page title>:<short>"` for an engine page's column (`"FILTER:CUT"`,
+`"OSC B+:LOFREQ"`), `"part:<P_ id>"` for a part parameter (`"part:12"`); the designer's palette and
+`paramList(catalog)` list them. `params_hash` ties the file to the parameters as in version 1.
+
+```
+{
+  "format": "choralroot-layout", "version": 2, "kind": "design",
+  "name": "osc-panel",
+  "engine": {"index": 16, "name": "P5"}, "params_hash": "f5941e824048848d",
+  "header": {"kind": "title-line"},       the shared header: the editor's title line, fixed (rule 1)
+  "groups": [                             the editor's groups by name (OSC FILT ENV LFO MOD FX MIX), screens in order
+    {"group": 1, "name": "FILT", "screens": [
+      {"type": "classic",                 (a) one of today's kinds
+       "kind": "edit8",                   edit8 (two rows under a band) or stack
+       "band": "filter",                  none env filter dx cz algo ade2
+       "title": "FILTER",
+       "lanes": [                         1 .. 8 lanes of four cells, KNOB 1..4; null = an empty cell
+         {"title": "FILTER", "cells": [
+           {"param": "FILTER:RES"},
+           {"param": "FILTER:CUT", "label": "Bright"},       a label of the design's own (else the editor's)
+           {"param": "FILTER:FENV"}, {"param": "FILTER:KTRK"}]},
+         ..]}]},
+    {"group": 0, "name": "OSC", "screens": [
+      {"type": "free",                    (b) placed elements under the header (x 0 .. 239, y 28 .. 239, 4 px grid)
+       "title": "OSC A",                  the header's right text
+       "elements": [
+         {"id": "fa", "type": "frame", "x": 4, "y": 36, "w": 232, "h": 80, "text": "OSC A"},
+         {"id": "a_freq", "type": "knob", "x": 12, "y": 44, "w": 56, "h": 64, "param": "OSC A:FREQ", "label": "Freq", "size": 32},
+         {"id": "a_saw", "type": "led", "x": 80, "y": 56, "w": 40, "h": 12, "param": "OSC A:SAW", "glyph": "saw"},
+         {"id": "a_sync", "type": "switch", "x": 184, "y": 48, "w": 48, "h": 44, "param": "OSC A+:SYNC", "label": "Sync", "positions": 2},
+         {"id": "m_a", "type": "bar", "x": 12, "y": 144, "w": 68, "h": 28, "param": "MIXER:MIX A", "label": "Osc A"},
+         ..],
+       "lanes": [["a_freq", "a_saw", "a_pulse", "a_pw"], ["a_sync", null, null, null], ..]}   ids, KNOB 1..4
+    ]}
+  ]
+}
+```
+
+Elements: `frame` (a titled section box: `text`), `label` (static `text`, `size`, `align`, `bold`), `knob` (dial,
+label, value: `size` the dial's height), `switch` (`positions` 2 or 3, the current one filled; `names` optional),
+`led` (an on/off square with its label, or a small waveform `glyph`: saw, square, triangle, sine, noise), `bar`
+(level), `glyph` (any `CR_G_*` pictogram by name, its fill from the bound parameter if any), `band` (`band`: env,
+filter, dx, cz, algo, ade2, at its own rows). `param`, `label` and `colour` (a palette token: white red blue yellow
+orange green grey black bg surf text theme accent mid dim line; default `auto`) where they apply. Every bound element
+must be in exactly one lane; up to 4 a lane, 8 lanes and 24 elements a screen (the firmware's `cell[8][4]`).
+`validateDesign` lists what is wrong; the page refuses a file with errors and opens one with warnings.
+
+**Not buildable yet** means: the design is valid and previewed, but the firmware cannot show it on a unit as it is.
+Every free screen is so today; a classic screen is so when the in-place and plan ways above cannot express it.
 
 ## The viewer (step 2)
 
@@ -115,17 +264,17 @@ module's memory, valid until the next call):
 | `lay_lint()` | JSON for the last `lay_render`: `findings` (`kind` "off-screen", "overlap" or "ellipsis"; `text`; `box` [x0, y0, x1, y1]; `other` for an overlap) and `texts` (every text's box): `tests/cr_draw_test.c`'s rules, from the same hook (`gfx.c` `GFX_HOOK_TEXT`) |
 | `lay_state()` | JSON: where the editor is and what the active lane shows now (title line, kind, band, `hot`, the four cells' label, value, pct) |
 | `lay_reset()` | the instance as after power-on |
-| `lay_buf()`, `lay_buf_size()`, `lay_load(ptr, len)` | **reserved for step 3**: packed tables replacing an engine's built-in pages. Today `{"ok": false, "error": "not implemented"}` |
+| `lay_buf()`, `lay_buf_size()`, `lay_load(ptr, len)` | a packed design's classic pages for its engine (the designer, below) |
 | `lay_snapshot_bytes()` | the size of the snapshot (a number for tests) |
 
 `web/fm1layout.js` wraps these (`wrap(exports)`: `catalog`, `show`, `knob`, `render`, `lint` ..) and holds the
 pure code the page and the tests share (`tiles`, `formatLayout`, `checkLayout`, `ruleNotes`, `sheetGeometry`).
 
-**The hook for step 3.** `firmware/src/cr_pages.c` `cp_deep()`, the one place the editor asks for an engine's
-pages, calls `cp_deep_hook` when `CR_LAYOUT_PREVIEW` is defined. The module installs a hook that returns the
-built-in table (step 3 will return the loaded one). The macro is the preview module's alone: the device image is
-byte-identical with and without the change (sha256 of `build/choralroot.bin` before and after: equal), and the
-emulators do not define it.
+**The hooks.** `firmware/src/cr_pages.c` `cp_deep()`, the one place the editor asks for an engine's pages, calls
+`cp_deep_hook` when `CR_LAYOUT_PREVIEW` is defined; `cr_edit.c` `ce_label()` asks `ce_label_hook` for a design's own
+label. The module's hooks return the loaded design's table and labels, else the built-in. The macro is the preview
+module's alone: the device image is byte-identical with and without them (sha256 of `build/choralroot.bin` before and
+after: equal), and the emulators do not define it. `lay_version`'s `api` is 2 (the design API) and `format_version` 2.
 
 ## The file format, version 1
 
@@ -147,7 +296,7 @@ compares, so they cannot rot: after a change to an engine's pages, run the dump 
       ..four; null = an empty column ]}
   ],
   "page_cells": 56,
-  "header": null,                     the shared header (rule 1): none yet
+  "header": null,                     (the shared header is the title line: not part of a layout)
   "groups": [                         the editor's groups, in button order
     {"group": 1, "name": "FILT", "button": "SEL", "screens": [
       {"screen": 0,
@@ -211,10 +360,22 @@ design, and the per-engine table that says which patch parameter a (page, column
 - `design/layouts/*.json` are what the firmware says;
 - the page, from `file://` in headless Chromium with `?selftest=1`: the page checks itself (the canvas is drawn, a
   click on a knob's + changes it, the contact sheet has every tile, the lists are filled) and paints a square per
-  check, which the test reads from the screenshot.
+  check, which the test reads from the screenshot;
+- **the designer**: a design's JSON reads back to the same model; today's layout of every engine is a valid design;
+  `validateDesign` catches each of 19 broken files (format, version, kind, params_hash, engine, header, group, screen
+  type, a lane of three cells, a parameter, a band, an element type, a position, an id twice, a switch of four, an
+  led glyph, a colour not a token, a lane naming nothing, a key binding); today's design loaded by `lay_load` gives
+  all 22 P5 frames identical to the built-in tables'; a relabel changes only the label's pixels; a swap of Cutoff and
+  Reso makes KNOB 1 turn the resonance and KNOB 2 the cutoff; an added screen packs as a plan and shows; the P5
+  example renders every screen x lane lint clean and the same bytes twice, its knobs turn its parameters, SELECT runs
+  across its lanes and screens, its header is the title line;
+- the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked, a knob
+  turns a dial, **a scripted pointer drag from the element strip adds a knob on the grid**, the export equals the
+  model and validates, the contact sheet has today's and the design's tiles.
 
-Not tested: the wheel and drag handlers and the downloads in a browser (the self-test clicks buttons only); any
-browser but Chromium.
+`?demo=osc|classic|sheet` opens the places the screenshots show. Not tested: the wheel handler, moving and resizing
+by drag, the keyboard shortcuts, import, the downloads (Export / PNG write a file the test does not read), the
+autosave, any browser but Chromium.
 
 ## What the lint says about today's pages
 
@@ -227,8 +388,8 @@ Every screen x lane of every engine on every sound of its pool (6374 frames, 202
   sound) is cut when the four oscillators are in different modes;
 - FM6, FM TONE, P5, WHEEL: nothing.
 
-And against the rules: no page has the shared header (rule 1: the catalog says so). Rule 2 is not something the
-tool can check yet; by docs/EDITOR.md today's editor uses buttons, SELECT and the knobs only, and the keys play.
+And against the rules: every page has the shared header, the title line (rule 1). Rule 2: by docs/EDITOR.md today's
+editor uses buttons, SELECT and the knobs only, and the keys play; a design cannot bind a key.
 
 ## The five steps
 
@@ -236,14 +397,17 @@ tool can check yet; by docs/EDITOR.md today's editor uses buttons, SELECT and th
    today's 19 pages byte-identically (the device image unchanged): the proof that a layout file can be the source.
    Needs the (page, column) to patch-parameter table in the file.
 2. **This viewer.** The preview module, the read-only page, the seed files, the tests.
-3. **Editing classic pages, and export.** Move parameters between knobs, lanes and screens of today's page styles;
-   rename labels; `lay_load` shows the edited layout at once; export the JSON the generator reads. The header of
-   rule 1 can be designed here as a mock-up on the preview.
-4. **Free pages.** A small element vocabulary (frame, label, knob, switch, led, bar, glyph, band) and lanes of up
-   to four bound elements, so the four knobs + SELECT grammar is kept and no key is ever needed (rule 2: a switch is
-   a knob's or SELECT's). Every free page carries the one shared header (rule 1): `docs/EDITOR.md`'s "no header
-   bar" changes here. The owner places anything; what the firmware cannot draw yet is flagged "not buildable yet",
-   never refused (rule 3). The first use: a P5 oscillator panel in the style of the original instrument.
+3. **Editing classic pages, and export** (done): the designer; `lay_load` shows the edited layout at once through
+   the real editor; export the design JSON.
+4. **Free pages.** The design side is done: the element vocabulary (frame, label, knob, switch, led, bar, glyph,
+   band), lanes of up to four bound elements (the four knobs + SELECT grammar; no key ever: rule 2), the title line
+   as the shared header on every screen (rule 1), "not buildable yet" flags instead of refusals (rule 3), and the
+   first example, `design/layouts/designs/p5-osc-panel.json` (P5's oscillators and mixer on two free screens in the
+   spirit of the original panel: OSC A with Freq, Saw / Pulse leds, PW, Sync; the mixer; OSC B with Freq, Fine,
+   Saw / Tri / Pulse leds, PW, Lo Freq and Keyboard switches). **Remaining**: firmware support for free pages (a
+   free-page kind in `cr_screen.h` / `cr_draw.c` drawing the vocabulary as `freeOps` does, the editor's lanes over
+   bound elements) and a **build-time generator** that turns a design file into the engine's tables (pages, screen
+   plan, labels) and the free pages' element tables, so a design is compiled into the build (rule 4).
 5. **The other engines.** FM6, FM TONE, VA, CZ-1, WHEEL through the generator; FM TONE's screen plan
    (`eng_screen_t`) becomes a layout file like the rest.
 
