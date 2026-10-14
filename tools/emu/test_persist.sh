@@ -149,7 +149,7 @@ print(n)" "$FLASH" "$P4" "$ER")
 
 # Options > Reset Settings (the owner, 2026-10-12): the last Options entry, OCT+ twice. Run 1 (reset_set.txt, a fresh
 # flash): a user sound saved (U01 ADG), settings changed and saved (SAVE held: Advanced, 137 BPM, Key Mode on, Motion Off, Hold
-# Time, Dual Core On). Run 2 (reset_do.txt, a relaunch): the stored settings are those; the entry asks, cancels (another
+# Time, Dual Core Off: On is the default since 0.22). Run 2 (reset_do.txt, a relaunch): the stored settings are those; the entry asks, cancels (another
 # entry, OCT-, a closed menu), resets on the second OCT+: at once the record a new unit has (the dump's "settings: now"
 # checksum = a fresh unit's, run 3 of above), saved. Run 3 (reset_check.txt, a relaunch): still that, U01 still there.
 # The flash outside the settings object is byte for byte what it was (sounds, patches, loops, banks), and the panel
@@ -167,9 +167,9 @@ ov() { grep -a '^  options:' "$1" | sed -n "$2p" | sed -n "s/.*options: open \([
 R1=$OUT/persist_reset_1.log; R2=$OUT/persist_reset_2.log; R3=$OUT/persist_reset_3.log
 fresh=$(sn "$OUT/persist_reset_fresh.log" 1 | cut -d' ' -f1)
 changed=$(sn "$R1" 1)
-grep -aq '^save: part 0 slot U01 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "style 1 extadd 0 key 1 motion 2 leds 0 hold 2 dualcore 1 usb 1/0 view 64" ] &&
+grep -aq '^save: part 0 slot U01 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "style 1 extadd 0 key 1 motion 2 leds 0 hold 2 dualcore 0 usb 1/0 view 0" ] &&
     [ -n "$changed" ] && [ "$changed" = "$(sn "$R2" 1)" ] && [ "$(bpm "$R2")" != "" ] && grep -aq ' bpm 137 ' "$R2" &&
-    ok "reset run 1 / 2: U01 saved; Advanced, 137 BPM, Key Mode on, Motion Off, Hold Time, Dual Core On stored and back after a relaunch" \
+    ok "reset run 1 / 2: U01 saved; Advanced, 137 BPM, Key Mode on, Motion Off, Hold Time, Dual Core Off stored and back after a relaunch" \
     || bad "reset: the changed settings: $(sf "$R1" 1) / $changed / $(sn "$R2" 1)"
 [ "$(ov "$R2" 2)" = "1 25 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 25 of 26 " "$R2" &&
     ok "Reset Settings is the last Options entry (25 of 25): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
@@ -179,10 +179,10 @@ grep -aq '^save: part 0 slot U01 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "st
     ! grep -a '^options: settings reset' "$R2" | sed -n 2p | grep -q . &&
     ok "OCT+ asks (OCT+ again); another entry cancels; OCT- leaves and cancels; the menu reopened is not armed; nothing reset: $OUT/reset_ask.ppm" \
     || bad "the confirm: $(ov "$R2" 3) / $(ov "$R2" 4) / $(ov "$R2" 5) / $(ov "$R2" 6); $(sn "$R2" 6)"
-grep -aq '^options: settings reset (Dual Core runs until the restart)' "$R2" && [ -n "$fresh" ] && [ "$(sn "$R2" 7 | cut -d' ' -f1)" = "$fresh" ] &&
-    [ "$(sf "$R2" 7)" = "style 0 extadd 0 key 0 motion 0 leds 0 hold 1 dualcore 0 usb 1/0 view 0" ] && [ "$(ov "$R2" 7)" = "0 0 Play Style: Simple" ] &&
+grep -aq '^options: settings reset (Dual Core starts at the restart)' "$R2" && [ -n "$fresh" ] && [ "$(sn "$R2" 7 | cut -d' ' -f1)" = "$fresh" ] &&
+    [ "$(sf "$R2" 7)" = "style 0 extadd 0 key 0 motion 0 leds 0 hold 1 dualcore 1 usb 1/0 view 64" ] && [ "$(ov "$R2" 7)" = "0 0 Play Style: Simple" ] &&
     [ "$(grep -a '^  lock: on' "$R2" | sed -n 7p | cut -c1-25)" = "  lock: on 0 latched 00 t" ] && [ "$(grep -a '^  cr: key' "$R2" | sed -n 7p | sed -n 's/.* bpm \([0-9]*\) view \([0-9]\) layer \([0-9]*\) options \([01]\).*/\1 \2 \3 \4/p')" = "120 0 0 0" ] &&
-    ok "OCT+ twice: every setting at once what a new unit has (the record's checksum $fresh = a fresh unit's): Simple, Key off, 120 BPM, Motion Full, Hold 1, Dual Core Off; on the view, LOCK off: $OUT/reset_done.ppm" \
+    ok "OCT+ twice: every setting at once what a new unit has (the record's checksum $fresh = a fresh unit's): Simple, Key off, 120 BPM, Motion Full, Hold 1, Dual Core On (0.22's default: it starts at the restart); on the view, LOCK off: $OUT/reset_done.ppm" \
     || bad "the reset: now $(sn "$R2" 7) want $fresh; $(sf "$R2" 7); $(ov "$R2" 7)"
 [ "$(sn "$R2" 8)" = "$fresh $fresh" ] && grep -aq '^expect sound .*: ok' "$R2" && grep -a '^  part 0:' "$R2" | sed -n 9p | grep -q 'FM6 / TINE EP, voices 3' &&
     ok "saved (the stored record = the defaults); the unit plays: MAJ + D4 on TINE EP" || bad "after the reset: $(sn "$R2" 8), $(grep -a '^  part 0:' "$R2" | sed -n 9p)"

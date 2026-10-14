@@ -53,7 +53,7 @@ from a layer: it goes with the layer (manual).
 | Hold Time | Options | Felucca's `bold` (HOLD), in the same flash object | **automatic** |
 | USB Record, USB Level | Options | block `usb_in`, `usb_level` | **automatic** |
 | USB Rate (0.19) | Options | block `pick_roots` bit 2 | **automatic** |
-| Dual Core | Options | block `view` bit 6 | **automatic** |
+| Dual Core (On by default since 0.22; a record keeps its own) | Options | block `view` bit 6 | **automatic** |
 | Output (0.19) | Options | block `pick_roots` bit 1 | **automatic** |
 | the palette (no control: MOD) | | block `palette` | automatic |
 | the panel calibration | Options > Calibrate, OCT- + OCT+ at power-on | Felucca's `panel` | **automatic** (written by the calibration itself) |
@@ -298,6 +298,15 @@ reads Full Octave: **Chords, Chords**, Split kept as Split Oct (`t_page2_v14`);
 v14 → 15 (0.18): nothing to migrate (no field changed; `t_v15` reads v12, v13 and v14 records). A
 settings object restored from a backup goes through the same import (`cr_backup.c`), so a 0.14 / 0.15 backup restores
 with Dual Core Off.
+
+**0.22: Dual Core's default is On, and the version stays 15.** `cr_settings_defaults` sets bit 6 of `view`: a unit
+with no record (new, erased, zeroed), a Felucca / Melodee record without ChoralRoot's block, SAFE MODE's defaults
+(where core 1 is not started all the same) and Options > Reset Settings. **A record that is there keeps what it
+holds**: its bit 6 clear is 0.16 .. 0.21's default as much as a chosen Off, and nothing else in the record tells
+them apart, so no migration turns it On (a v16 that did would switch the second core on for everyone who chose
+Off). Where `crs_sanitize` finds an unknown bit or a view out of range in the view's byte it takes the default view,
+unlocked, and **keeps the record's Dual Core bit** (before 0.22: the whole default byte, which was Off).
+`tests/cr_settings_test.c t_dualcore_v12`; docs/DUALCORE.md.
 
 ## The session (0.18)
 
@@ -586,8 +595,8 @@ calls `cr_settings_load()` only `if (!crs_loaded)`.
 What the reset does not write: the panel table (`persist_t.panel`: `settings_export` writes the table in RAM, as
 every save does), the favourites, and every other flash object but the session (saved sounds, VA / FM6 / CZ / FM
 TONE patches and banks, the loops): `test_persist.sh` compares the flash outside the settings object and the
-session's pair byte for byte and the panel table inside it. Dual Core: Off is saved; `cr_c1_off` is read at power-on only, so a running second core runs until
-the restart (the message says `restart`). In SAFE MODE the entry works on the session only (`ST_BLOCKED`: no write).
+session's pair byte for byte and the panel table inside it. Dual Core: On is saved (the default since 0.22); `cr_c1_off` is read at power-on only, so a
+second core that this power-on did not start starts at the restart (the message says `restart`). In SAFE MODE the entry works on the session only (`ST_BLOCKED`: no write).
 Tests: `tests/cr_settings_test.c t_factory`, `reset_set.txt` / `reset_do.txt` / `reset_check.txt`.
 
 ## Power-on calibration

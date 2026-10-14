@@ -2187,9 +2187,18 @@ p5sheds() { grep -a 'overload sheds' "$1" | tail -1 | sed -n 's/.*overload sheds
 PL="$OUT/cr_p5_crackle.log"
 has "^sound: part 0 pos $p5pos $P5G" "$PL" && ok "the chord part on P5 place $p5pos, $P5G" || bad "not P5 place $p5pos: $(grep -a '^sound: part 0' "$PL" | tail -1)"
 has 'chord Dm6 9 sounding 1 notes 62 65 69 71 76' "$PL" && has 'chord Dm9 sounding 1 notes 62 65 69 76' "$PL" &&
-    [ "$(p5voices "$PL")" = "0 4 4 4 0 " ] && [ "$(p5sheds "$PL")" = 0 ] &&
-    ok "Dm6/9 (five notes) and Dm9 struck twice over the release: four voices each time, never more, nothing shed" ||
+    [ "$(p5voices "$PL")" = "0 5 4 4 0 " ] && [ "$(p5sheds "$PL")" = 0 ] &&
+    ok "two cores (0.22's default): Dm6/9 has its five voices (eight are the chord part's: no voice is stolen for the fifth note), Dm9 struck twice over the release its four, nothing shed" ||
     bad "the gesture's voices: $(p5voices "$PL")/ sheds $(p5sheds "$PL") / $(grep -a -c 'chord Dm' "$PL") chord lines"
+# .. and with ONE core (EMU_C1=nostart: core 1 does not answer at power-on, as Options > Dual Core Off plays): four
+# voices, the fifth note takes one (the owner's unit of 3y44 had four)
+EMU_C1=nostart "$EMU" --headless --script "$OUT/cr_p5_crackle.txt" --wav "$OUT/cr_p5_crackle_one.wav" >"$OUT/cr_p5_crackle_one.log" 2>&1 ||
+    bad "cr_prophet_crackle with one core: see $OUT/cr_p5_crackle_one.log"
+[ "$(p5voices "$OUT/cr_p5_crackle_one.log")" = "0 4 4 4 0 " ] && [ "$(p5sheds "$OUT/cr_p5_crackle_one.log")" = 0 ] &&
+    ok "one core: Dm6/9 (five notes) and Dm9 struck twice over the release: four voices each time, never more, nothing shed" ||
+    bad "the gesture's voices with one core: $(p5voices "$OUT/cr_p5_crackle_one.log")/ sheds $(p5sheds "$OUT/cr_p5_crackle_one.log")"
+wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_crackle_one.wav" --from 3.4 --both-sides | tail -1)
+echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "no crackle with one core either: $wc" || bad "cr_prophet_crackle, one core: $wc"
 # (from 3.4 s: after the first chord's attack out of silence; a burst is a click when it stands 12 times above the
 # sound before it AND the sound after it, as for CZ-1's re-strikes)
 wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_crackle.wav" --from 3.4 --both-sides | tail -1)
@@ -2197,17 +2206,50 @@ echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' &&
 silent_end cr_p5_crackle
 # a unit that does not keep up with four voices (README "Overload"): audio.c's shed fades one voice of each chord
 # (two halves in a row above 85 %), and that is all: three voices, three sheds, no voice shed and struck again
-EMU_SHED_OVER=4 "$EMU" --headless --script "$OUT/cr_p5_crackle.txt" --wav "$OUT/cr_p5_crackle_over.wav" >"$OUT/cr_p5_crackle_over.log" 2>&1 ||
+EMU_C1=nostart EMU_SHED_OVER=4 "$EMU" --headless --script "$OUT/cr_p5_crackle.txt" --wav "$OUT/cr_p5_crackle_over.wav" >"$OUT/cr_p5_crackle_over.log" 2>&1 ||
     bad "cr_prophet_crackle with EMU_SHED_OVER=4: see $OUT/cr_p5_crackle_over.log"
 PL="$OUT/cr_p5_crackle_over.log"
 gu=$(grep -a 'voices: given up' "$PL" | tail -1 | sed -n 's/.*given up \([0-9]*\).*/\1/p')
 [ "$(p5voices "$PL")" = "0 3 3 3 0 " ] && [ "$(p5sheds "$PL")" = 3 ] && [ "${gu:-99}" -le 6 ] &&
     LC_ALL=C grep -aq '^  shed: halves over 85 % 6, last voice 1[0-9A-F]* why 2 ' "$PL" &&
-    ok "overload modelled (four voices do not fit): three voices a chord, 3 voices shed in 6 halves over 85 %, each a held voice; $gu voices faded in all (no circle)" ||
+    ok "overload modelled (one core, four voices do not fit): three voices a chord, 3 voices shed in 6 halves over 85 %, each a held voice; $gu voices faded in all (no circle)" ||
     bad "the overload model: voices $(p5voices "$PL")/ sheds $(p5sheds "$PL") / given up ${gu:-?} / $(LC_ALL=C grep -a '^  shed:' "$PL" | tail -1)"
 wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_crackle_over.wav" --from 3.4 --both-sides | tail -1)
 echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "the shed's fades are no crackle: $wc" || bad "cr_prophet_crackle, shed: $wc"
 silent_end cr_p5_crackle_over
+
+echo "P5 on two cores (0.22, 3y46, docs/PROPHET.md Voices): eight voices on the chord part, four rendered by each core; a P5 bass gives way to the chord; one core: four, and a P5 bass one"
+# a UNISON program with a stack of four for the bass part: Sequential's 111 (LAGOON BASS) where the list ships it
+p5b=$(python3 tools/gen_prophet_factory.py --pos 111)
+if [ "${p5b:-0}" -ge 1 ]; then
+    sed "s/@BASS@/$((p5b + 1))/" "$S/cr_prophet_eight.txt" > "$OUT/cr_p5_eight.txt"
+    pv() { grep -a "^  part $2: P5" "$1" | sed -n 's/.*voices \([0-9]*\),.*/\1/p' | tr '\n' ' '; }
+    EMU_STAGES=1 "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight.wav" >"$OUT/cr_p5_eight.log" 2>&1 &&
+        ok "cr_prophet_eight: exit 0" || bad "cr_prophet_eight: see $OUT/cr_p5_eight.log"
+    PL="$OUT/cr_p5_eight.log"
+    [ "$(pv "$PL" 0)" = "0 8 8 0 0 6 8 0 " ] && [ "$(pv "$PL" 1)" = "4 2 0 0 " ] && [ "$(p5sheds "$PL")" = 0 ] &&
+        LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$PL" &&
+        ok "a fresh unit (two cores): eight MIDI notes sound eight P5 voices, a ninth takes one (eight still); the bass's UNISON stack: four alone, two under a chord of six, none under a chord of eight (the chord first); nothing shed" ||
+        bad "P5 on two cores: the chord part's voices $(pv "$PL" 0)/ the bass part's $(pv "$PL" 1)/ sheds $(p5sheds "$PL")"
+    LC_ALL=C grep -a '^cpu: stages' "$PL" | cut -c6- | sed 's/^/      /'
+    silent_end cr_p5_eight
+    EMU_C1=thread "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_thread.wav" >"$OUT/cr_p5_eight_thread.log" 2>&1
+    "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_inline.wav" >"$OUT/cr_p5_eight_inline.log" 2>&1
+    [ -s "$OUT/cr_p5_eight_inline.wav" ] && cmp -s "$OUT/cr_p5_eight_inline.wav" "$OUT/cr_p5_eight_thread.wav" &&
+        [ "$(pv "$OUT/cr_p5_eight_thread.log" 0)" = "0 8 8 0 0 6 8 0 " ] &&
+        ok "EMU_C1=thread: core 1's share of the chord's voices and the bass part on a second thread: the WAV is the inline job's, bit for bit" ||
+        bad "EMU_C1=thread, P5's chord voices on two threads: the WAV differs from the inline job's"
+    EMU_C1=nostart "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_one.wav" >"$OUT/cr_p5_eight_one.log" 2>&1
+    [ "$(pv "$OUT/cr_p5_eight_one.log" 0)" = "0 4 4 0 0 3 3 0 " ] && [ "$(pv "$OUT/cr_p5_eight_one.log" 1)" = "1 1 1 0 " ] &&
+        ok "one core (EMU_C1=nostart): the chord part four voices; the UNISON bass ONE voice, and under it the chord three (four P5 voices on the one core)" ||
+        bad "P5 on one core: the chord part's voices $(pv "$OUT/cr_p5_eight_one.log" 0)/ the bass part's $(pv "$OUT/cr_p5_eight_one.log" 1)"
+    EMU_C1=hang "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_hang.wav" >"$OUT/cr_p5_eight_hang.log" 2>&1
+    cmp -s "$OUT/cr_p5_eight_hang.wav" "$OUT/cr_p5_eight_one.wav" &&
+        ok "core 1 never answering a job (EMU_C1=hang): given up in the first block, one core's rules and one core's WAV" ||
+        bad "EMU_C1=hang on P5: the WAV differs from one core's"
+else
+    bad "P5 on two cores: the shipped list has no program 111 (LAGOON BASS): name another UNISON program with a stack of four here"
+fi
 
 echo "P5, the click at a short release's end (3y44): the part's DC blocker discharges after the last voice, it is not cut"
 p5pos=$(python3 tools/gen_prophet_factory.py --pos 168)          # PERC ORGAN: a release of 20 ms, in the tree's list
@@ -2433,19 +2475,31 @@ st=$?
 [ $st = 3 ] && has '^boot: UBOOT (ROM boot): reset wdt' "$OUT/cr_safe_uboot.log" &&
     ok "SAFE MODE crashed twice more (failed 4): UBOOT" || bad "uboot: exit $st"
 
-echo "Options > Dual Core (settings v12): Off on a fresh unit (c1 off, the shared budget); On is the option, at the next power-on"
+echo "Options > Dual Core (settings v12; 0.22: On on a fresh unit: c1 ok, each part its budget); Off is the option, at the next power-on (c1 off, the shared budget)"
 c1line() { LC_ALL=C grep -a -o "line3 '[^']*'" "$1" | tail -1; }
 c1gu() { LC_ALL=C grep -a 'voices: given up' "$1" | tail -1 | sed -n 's/.*given up \([0-9]*\).*/\1/p'; }
 EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_dualcore.txt" --wav "$OUT/cr_dualcore_fresh.wav" >"$OUT/cr_dualcore_fresh.log" 2>&1
 l=$(c1line "$OUT/cr_dualcore_fresh.log"); g=$(c1gu "$OUT/cr_dualcore_fresh.log")
-echo "$l" | grep -q "c1 off" && [ "${g:-0}" -ge 1 ] && ok "a fresh unit: $l, one core's shared budget ($g given up)" ||
+echo "$l" | grep -q "c1 ok [1-9]" && [ "${g:-x}" = 0 ] && ok "a fresh unit (0.22): $l, the 8-note chord and the bass all sound (none given up)" ||
     bad "a fresh unit: ${l:-none}, ${g:-?} given up"
+[ -s "$OUT/cr_dualcore_geek.ppm" ] && mv "$OUT/cr_dualcore_geek.ppm" "$OUT/cr_dualcore_geek_fresh.ppm" || bad "no cr_dualcore_geek.ppm"
+DCOFF="$OUT/cr_dualcore_off_flash.bin"        # a flash whose settings say Dual Core Off, by the Options path
+rm -f "$DCOFF"
+EMU_UI_LOG=1 "$EMU" --headless --flash "$DCOFF" --script "$S/cr_dualcore_opt.txt" >"$OUT/cr_dualcore_seed_off.log" 2>&1
+LC_ALL=C grep -aq "item 'Dual Core' value 'On'" "$OUT/cr_dualcore_seed_off.log" &&
+    ok "a fresh unit's Options > Dual Core: On" || bad "a fresh unit's Dual Core is not On"
+LC_ALL=C grep -aq "item 'Dual Core' value 'Off .* restart'" "$OUT/cr_dualcore_seed_off.log" &&
+    ok "KNOB 1 -1: Off, the value says restart ($OUT/cr_dualcore_opt.ppm)" || bad "Dual Core Off: no restart note"
+EMU_UI_LOG=0 "$EMU" --headless --flash "$DCOFF" --script "$S/cr_dualcore.txt" --wav "$OUT/cr_dualcore_offrun.wav" >"$OUT/cr_dualcore_offrun.log" 2>&1
+l=$(c1line "$OUT/cr_dualcore_offrun.log"); g=$(c1gu "$OUT/cr_dualcore_offrun.log")
+echo "$l" | grep -q "c1 off" && [ "${g:-0}" -ge 1 ] && ok "relaunched with Dual Core Off: $l, one core's shared budget ($g given up)" ||
+    bad "relaunched with Dual Core Off: ${l:-none}, ${g:-?} given up"
 [ -s "$OUT/cr_dualcore_geek.ppm" ] && mv "$OUT/cr_dualcore_geek.ppm" "$OUT/cr_dualcore_geek_off.ppm" || bad "no cr_dualcore_geek.ppm"
-DCON="$OUT/cr_dualcore_on_flash.bin"          # a flash whose settings say Dual Core On, by the Options path: every run
-rm -f "$DCON"                                 # below that is about the second core starts from a copy of it
+DCON="$OUT/cr_dualcore_on_flash.bin"          # .. and one whose settings say On again (KNOB 1 +1 on that flash): every
+cp "$DCOFF" "$DCON"                           # run below that is about the second core starts from a copy of it
 EMU_UI_LOG=1 "$EMU" --headless --flash "$DCON" --script "$S/cr_dualcore_on.txt" >"$OUT/cr_dualcore_seed.log" 2>&1
 LC_ALL=C grep -aq "item 'Dual Core' value 'Off'" "$OUT/cr_dualcore_seed.log" &&
-    ok "a fresh unit's Options > Dual Core: Off" || bad "a fresh unit's Dual Core is not Off"
+    ok "that unit's Options > Dual Core: Off" || bad "the Off flash's Dual Core is not Off"
 LC_ALL=C grep -aq "item 'Dual Core' value 'On .* restart'" "$OUT/cr_dualcore_seed.log" &&
     ok "KNOB 1 +1: On, the value says restart ($OUT/cr_dualcore_opt_on.ppm)" || bad "Dual Core On: no restart note"
 dcflash() { cp "$DCON" "$OUT/cr_dualcore_run_flash.bin"; }   # (a run saves its own settings: a copy each)
@@ -2487,12 +2541,18 @@ EMU_C1=thread EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash
 dcflash
 EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/cr_dmaj.txt" --wav "$OUT/cr_dmaj_dualcore.wav" >"$OUT/cr_dmaj_dualcore.log" 2>&1
 LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$OUT/cr_dmaj_dualcore.log" && cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_dualcore.wav" &&
-    ok "cr_dmaj: the split's WAV (Dual Core On) = one core's (the default), bit for bit" ||
-    bad "cr_dmaj: the split's WAV differs from one core's (or core 1 did not run)"
+    ok "cr_dmaj: the WAV of a flash set to Dual Core On = the fresh unit's (On by default), bit for bit" ||
+    bad "cr_dmaj: the WAV of a flash set to Dual Core On differs from the fresh unit's (or core 1 did not run)"
+EMU_C1=nostart EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_dmaj.txt" --wav "$OUT/cr_dmaj_onecore.wav" >"$OUT/cr_dmaj_onecore.log" 2>&1
+cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_onecore.wav" &&
+    ok "cr_dmaj: the split's WAV (two cores) = one core's (EMU_C1=nostart), bit for bit" ||
+    bad "cr_dmaj: the split's WAV differs from one core's"
 cmp -s "$OUT/cr_dualcore_hang.wav" "$OUT/cr_dualcore_nostart.wav" && ok "a hung job from the first block: one core's WAV" ||
     bad "a hung job's WAV differs from one core's"
-cmp -s "$OUT/cr_dualcore_fresh.wav" "$OUT/cr_dualcore_nostart.wav" && ok "Dual Core Off: the WAV of a core 1 that did not start" ||
+cmp -s "$OUT/cr_dualcore_offrun.wav" "$OUT/cr_dualcore_nostart.wav" && ok "Dual Core Off: the WAV of a core 1 that did not start" ||
     bad "Dual Core Off: the WAV differs from a core 1 that did not start"
+cmp -s "$OUT/cr_dualcore_fresh.wav" "$OUT/cr_dualcore.wav" && ok "a fresh unit: the WAV of a flash set to Dual Core On" ||
+    bad "a fresh unit's WAV differs from a flash set to Dual Core On"
 
 echo "Options > Dual Core back Off at the next power-on (c1 off, the shared budget), On again (c1 ok)"
 DF="$OUT/cr_dualcore_flash.bin"
@@ -2510,6 +2570,14 @@ LC_ALL=C grep -aq "item 'Dual Core' value 'On .* restart'" "$OUT/cr_dualcore_on.
 EMU_UI_LOG=0 "$EMU" --headless --flash "$DF" --script "$S/cr_dualcore.txt" >"$OUT/cr_dualcore_back.log" 2>&1
 l=$(c1line "$OUT/cr_dualcore_back.log"); g=$(c1gu "$OUT/cr_dualcore_back.log")
 echo "$l" | grep -q "c1 ok [1-9]" && [ "${g:-x}" = 0 ] && ok "relaunched On: $l, none given up" || bad "relaunched On: ${l:-none}, ${g:-?} given up"
+# 0.22, On by default: the boot that follows a counted failed boot (a watchdog reset within 30 s of the boot before:
+# a start of core 1 that hung is one) does not start core 1: one core, "c1 failed", a normal boot that loads and saves
+# (cr_cpu1.h cr_c1_power_on); the power-on after it starts the core again
+EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_dualcore.txt" --boot-fail 0 --reset-reason wdt >"$OUT/cr_dualcore_afterfail.log" 2>&1
+l=$(c1line "$OUT/cr_dualcore_afterfail.log"); g=$(c1gu "$OUT/cr_dualcore_afterfail.log")
+has '^boot: normal reset wdt failed 1 pending 1 counted 1' "$OUT/cr_dualcore_afterfail.log" && echo "$l" | grep -q "c1 failed" && [ "${g:-0}" -ge 1 ] &&
+    ok "the boot after a failed one (a fresh unit, Dual Core On): NORMAL, $l: one core for this boot ($g given up)" ||
+    bad "the boot after a failed one: $(grep -m1 '^boot:' "$OUT/cr_dualcore_afterfail.log") / ${l:-none}"
 
 echo "SysEx 76 SELECT: the chord part to CZ-1 position 2, the bass to FM6 position 3, a bad engine refused"
 EMU_UI_LOG=1 "$EMU" --headless --no-flash --script "$S/cr_select.txt" >"$OUT/cr_select.log" 2>&1

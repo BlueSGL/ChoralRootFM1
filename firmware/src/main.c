@@ -257,12 +257,13 @@ static void fm1_main(void)
 #if CR_CPU1
     CR_STAGE(BS_CPU1);                                  /* (a hang here: prev_stage "core 1", the boot guard counts it) */
     cr_dbg.prof_on = 1;                                 /* the ISR's stage profile (cr_cpu1.h) */
-    if (!cr_safe)                                       /* the second core: at power-on, before the audio and the
+    cr_c1_power_on(cr_safe, (int)bootguard.counted);    /* the second core: at power-on, before the audio and the
                                                          * timers (started later it does not reach its entry: fm1-x0x,
                                                          * Melodee); no answer in 20 ms: one core (docs/DUALCORE.md).
                                                          * With Dual Core On the core rails go up first, IRQs still
-                                                         * off (hal/fm1_power.h, after Melodee PR 21) */
-        cr_c1_boot();
+                                                         * off (hal/fm1_power.h, after Melodee PR 21). Not in SAFE
+                                                         * MODE, and not when the boot before this one failed
+                                                         * (cr_cpu1.h cr_c1_power_on) */
 #endif
     CR_STAGE(BS_AUDIO);
     master_boot();                            /* the first block already at the knob's level (master.c) */

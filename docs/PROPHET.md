@@ -4,7 +4,8 @@
 <https://github.com/keremimo/melodee>, GPL-3.0-only; its code name `p5_`). Native Sequential programs (the 133 raw
 bytes of a program dump), two band-limited oscillators with hard sync and audio-rate Poly-Mod into a four-pole ladder
 with a tanh knee in two characters (Rev 1/2: SSI; Rev 3: Curtis), two ADSRs, the wheel's modulation source, **four
-voices** (Melodee: five; [the unit's reading](#measured-on-the-unit-2026-10-13)). It came here by way of a remix of
+voices a core** (Melodee: five a part; [the unit's reading](#measured-on-the-unit-2026-10-13)): **eight on the chord
+part with two cores, four with one** ([Voices](#voices), 3y46). It came here by way of a remix of
 ChoralRoot 0.14-dev that Rosen sent ("the Prophet 5 Engine from Melodee that was added sounds really nice and is
 perfect for chords").
 
@@ -13,7 +14,12 @@ yet", the emulator's traces): the owner's name for it, 2026-10-13 ("we can name 
 this file keep their names (`FELUCCA_PROPHET`, `ENGI_PROPHET`, `eng_prophet_test.c`, `p5_`); "Prophet" below means the
 instrument and Sequential's data.
 
-**Where it stands** (0.22 in development, 2026-10-13; HISTORY 3y38, 3y39): the engine plays on the host and in the
+**Where it stands, 3y46** (2026-10-13): the chord part's voices are rendered by BOTH cores (eight voices, four a
+core), a P5 bass shares that pool with the chord first, one core plays four and a P5 bass one, the engine is 6 dB
+lower, and Options > Dual Core is On on a new unit. All of it on the host and in the emulators; **nothing of 3y46 has
+run on a unit**. [Voices](#voices), [Two cores, eight voices](#two-cores-eight-voices-3y46), [Level](#level-3y46).
+
+**Where it stood** (0.22 in development, 2026-10-13; HISTORY 3y38, 3y39): the engine plays on the host and in the
 emulators, its sounds browse like any engine's, its editor is complete. The owner has played the first build
 (cd43720, five voices) on the FM-1 **once**, and that reading set the cap to four; nothing of the tree as it is now
 (four voices, the shipped list, UNISON on a load) has run on a unit. Not in this phase: a store for user programs
@@ -73,6 +79,8 @@ LICENSING.md).
 - **State**: `p5_part_t` (672 B: four voices of 116 B, the wheel's 32 samples and their pitch ratios, the DC blocker) is
   a member of `engines.c`'s `eng_state` union (6884 B, FM6's size): **the union does not grow**. The program of each part
   (`p5_patch[NPART]`, 4 × 138 B) is in the pool: **POOL +552 B**.
+- **Voices, since 3y46**: [Voices](#voices) (eight on the chord part with two cores, four with one; the state is
+  eight voices', 1172 B, still inside the union). What follows is 3y40's:
 - **Voices**: four (`P5_POLY`, the cap), each **three of the 16 budget units** (`p5_units`) **since 2026-10-13, a
   measurement build** (HISTORY 3y40). One core shares the 16 units between the parts: a chord alone is four voices
   (12 units) and **with a VA or FM6 bass sounding still four** (4 × 3 + 2 = 14 of 16). c176dd4 had four units a
@@ -89,23 +97,71 @@ LICENSING.md).
   `tests/run_prophet_test.sh` builds and plays it). Whether a release carries Sequential's data at all is the owner's
   decision: the data are Sequential's, no licence granted (LICENSING.md).
 
-### Voices: which keys of a big chord sound
+### Voices
 
-Four voices, so a chord of five or six keys sounds four of its notes. The rule is voice.c's, the same for every
-engine with a cap: a new note that finds no free voice takes **the oldest held voice that is not the lowest held
-note** (it fades over a block, the new note starts on it). The chord engine sends a chord's notes from the bottom up,
-so (`tests/cr_prophet_test.c`, measured):
+The owner, 2026-10-13: "lets split main P5 across both cores so we can get up to 8 voices of P5, 4 per core. If the
+bass is using P5, then it can use up to 4 [voices], but if main chord needs 6 voices, and bass has 4, then priority
+goes to the main chord engine. For Single Core, limit P5 bass to using max of 1 voice."
 
-| keys | what sounds | what gives way |
-| --- | --- | --- |
-| 4 | all four | nothing |
-| 5 (D3 F#3 A3 C#4 E4) | the bottom note and the top three (D3 A3 C#4 E4) | the second note from the bottom |
-| 6 (.. F#4) | the bottom note and the top three (D3 C#4 E4 F#4) | the second and the third from the bottom |
-| any, with a VA or FM6 bass sounding on one core | all four (measured on the host: the count; three units a voice. With c176dd4's four units: three) | |
+**Who gets how many voices** (`eng_prophet_test.c` "THE VOICES", `p5_cap`, `p5_units`; `voice.c p5_pool_*`; the
+split: `fx.c p5x_run`; all measured by `tests/cr_prophet_test.c`, through `mix_block`):
 
-The root stays, the top stays, the inner notes go. (The bottom-up order is the chord engine's plain order; a play
-style that sends the notes in another order changes which is "oldest": not measured per style.) With Dual Core On the
-bass does not take from the chord's 16 units.
+| Options > Dual Core | the bass part's engine | the chord part (P5) | the bass part | which core renders |
+| --- | --- | --- | --- | --- |
+| **On**, core 1 running | none sounding | **up to 8** | | shared out every block: core 1 takes the odd one (1: 0 + 1; 4: 2 + 2; 5: 2 + 3; 8: 4 + 4), never more than 4 a core |
+| On | **P5** | up to 8, **first**: chord + bass together are at most 8 | **up to 4** (a UNISON key's stack; a MONO program one), as far as the chord leaves them: 4 under a chord of up to 4, 3 under 5, 2 under 6, 1 under 7, **none under 8** | the bass's voices: core 1, always. The chord's: core 1 up to four with the bass's, the rest core 0 (6 + 2: core 0 four, core 1 two and the bass's two) |
+| On | FM6, VA, CZ-1, FM TONE, WHEEL: one voice (MONO, as ChoralRoot's bass is) | up to 8 | its own budget of 16 units, as before | the bass part: core 1. The chord: 4 + 4 at eight, and below that core 1 takes the smaller share when the bass sounds (4: 2 + 2; 5: 3 + 2; 7: 4 + 3) |
+| On | another engine with many voices (a UNISON VA bass: 8) | 8 less one for every 6 budget units of the bass's sounding voices (16 units: 6 chord voices) | its own 16 units | the bass part and up to 4 - that many chord voices: core 1 |
+| **Off**, or core 1 not started, failed or given up | none sounding, or another engine | **up to 4** (three budget units each: 4 x 3 + a VA or FM6 bass's 2 = 14 of the one core's 16) | the shared 16 units, as before | core 0 |
+| Off | **P5** | **3 while the bass sounds**, 4 when it does not | **1** (a UNISON program too: one voice, at its stack's level, [Level](#level-3y46)) | core 0 |
+
+- **The chord first, always** (two cores). A chord note that finds the pool of eight full takes, in this order: a
+  released voice of either part (the oldest); a voice of the bass's stack, from the top (the stack thins towards
+  one); the bass's last voice; only then one of the chord's own (the steal below). A bass key takes a released voice
+  or does without: under eight held chord keys it does not sound. A stack's extra voices only start into free room,
+  and come back with the next bass key once the chord has let go. The voices of a thinned stack are raised to the
+  stack's level, so the bass does not drop in level as the chord grows ([Level](#level-3y46)).
+  `-DP5_BASS_KEEP=1`: the bass keeps its last voice against a chord of eight (the chord then has seven). Built,
+  not the default: the owner's words give the chord the priority.
+- **One core: four P5 voices in all** (`P5_ONE_POOL` 4). The owner's rule is only "max of 1 voice" for the bass.
+  Built beyond it: with a P5 bass sounding the chord part has three. Why: five P5 voices on one core are the
+  readings that ran late (2814 us of 2902 from flash, 17 late halves; P5 on both parts with three effects about
+  3050 us by the second reading, 105 %), and a chord that is four voices for 6 ms and then loses one to the overload
+  shed at every strike is worse than one that is three from the start. The bass's one voice comes before the
+  chord's fourth (a bass under every chord is how ChoralRoot plays). `-DP5_ONE_POOL=5`: four and one, the owner's
+  words alone (built, `tests/run_prophet_test.sh` builds and runs it).
+- **A chord struck over its own release** (a progression, the bass's key in the chord's block): every chord note
+  sounds and the bass has what is left (six-note chords: two of its four; eight: none). Found by the listening
+  files, where with every slot of the part still sounding or fading the eighth note took one of its own chord's
+  new notes while the bass kept a voice: a note now waits for a slot that is fading before it takes a held voice
+  of its own part (`voice.c voice_alloc`, P5 alone; `-DP5_WAIT_SLOT=0` is without it and the test's progression
+  then loses 3 chord notes in 8 chords).
+- **More keys than voices** (the rule is voice.c's, as for every engine): the new note takes **the oldest held
+  voice that is not the lowest held note**. That voice fades as a whole voice over `P5_STEAL_BLOCKS` (2) blocks and
+  the note starts after it ([A stolen voice](#a-stolen-voice)); while it fades it still counts in the pool, so there
+  are never more than eight whole voices (four with one core). The fade's state is the voice's own
+  (`p5_voice_t.steal`), so it does not matter which core renders the fading voice: tested (an eleventh key on eight
+  held: its victim's two fade blocks rendered by core 1, the note in block 3, never more than four voices on a core).
+  Measured: of ten keys from the bottom up the bottom note and the top seven sound; with one core, of six keys the
+  bottom and the top three (as before).
+- **A UNISON key is four voices at most** on either part with one core or two (`P5_STACK`; the owner asked for
+  eight voices of chords, not for a stack of eight). The editor's VOICES cell is 1..4 as before.
+- **Core 1 lost while notes sound** (a job that does not answer in 8 ms, a fault about core 1, a second misread:
+  docs/DUALCORE.md "The fail-safes"): the block in which it is given up is rendered whole by core 0 (the same job
+  function, the samples of one core; late, once), and the next block has the one core's counts: the chord's voices
+  above four are given up (released ones first, then the ones in the slots a four-voice part does not use, then the
+  oldest that is not the lowest note), a bass stack keeps one, the chord three with it. `voice.c p5_pool_enforce`
+  does that once a block, before the block's notes, and so also covers a cap that changed under held notes. Tested
+  for all three ways of losing the core: no voice stuck, the chord's lowest note kept, a key after it steals as one
+  core does, everything free after the release.
+- **Options > Dual Core turned while notes sound** changes nothing (it is read at power-on); **the bass part's engine
+  changed under held chord keys** (to the VA and back to P5): no voice stuck, the pool's counts hold at every step.
+  Both tested.
+- The looper's loop voices play on the chord part and count as its voices.
+
+**The budget's units.** One core: three of the sixteen a voice, as since 3y40 (so that a VA or FM6 bass does not
+cost the chord a voice). Two cores: each part has its own sixteen (docs/DUALCORE.md), and the chord part's are eight
+voices: **two units**. How many P5 voices the two parts may have together is not the units' to say: that is the pool.
 
 ### UNISON
 
@@ -120,12 +176,15 @@ sounds**, on the program's stacked voices.
   which is the top one, C#5, in its plain bottom-up order.
 - *How many voices*: the program's VOICES count, **four at most** here (Sequential's count goes to five, and its 0
   means all: both play as four). Of the provisional list: LAGOON BASS, UNISAWYER, UNISON GLIDE four, FEATURE BASS
-  four (stored 0), BASSMENT one (a mono bass). They are spread by the program's DETUNE (0 on most: the same pitch,
-  the voices' own start phases and drift), at about the level of one voice (voice.c halves the velocity of a stack).
+  four (stored 0), BASSMENT one (a mono bass). They are spread by the program's DETUNE (0 on most) and its Vintage.
+  **Since 3y46 a stack's voices start together** (both oscillators at phase 0) and the voices that sound are raised
+  to the whole stack's level when the budget gives fewer: [Level](#level-3y46).
 - *The cost*: a voice is a voice. Four stacked voices are **the four voices of a four-note chord: all 16 budget
   units, and the same processor time** (about 1630 us of the half by the unit's reading, below). A UNISON program
   costs no more than a full poly chord, and never more than the cap. With a VA bass sounding on one core the one note
   keeps its four voices (measured on the host; three units a voice: 12 + 2. With four units: three).
+- **3y46: on the bass part a UNISON program is ONE voice with one core, and up to four with two, as far as the
+  chord leaves them ([Voices](#voices)).** What follows was 3y45's (three units a voice, no pool):
 - On the **bass part** a UNISON program stacks up to four voices on the bass note while the chord part is silent
   (all 16 units). **Under a chord on one core the stack gives way**: measured with LAGOON BASS as the bass and a
   4-note chord, in either order of arrival: **the bass note keeps one voice and the chord has all four of its notes
@@ -159,6 +218,8 @@ How the part's voice mode is kept straight (`eng_prophet_test.c p5_track_loaded`
 | the engine, INIT only (`FELUCCA_P5_FACTORY=0`) | 500 868 (87.3 %) | 81 348 (82.8 %) | 316 052 (91.9 %) |
 | **the engine and the provisional 48 (the default)** | **505 588 (88.2 %)** | **81 348 (82.8 %)** | **316 052 (91.9 %)** |
 | the engine and all 200 (`P5_SHIPPED=all ./build.sh`) | 519 508 (90.6 %) | 81 348 (82.8 %) | 316 052 (91.9 %) |
+| 8472e70 (3y45), the 48 | 511 412 (89.2 %) | 81 732 (83.1 %) | 316 064 (91.9 %) |
+| **3y46, the 48: eight voices on two cores, the pool, the level** | **515 076 (89.8 %)** | **81 748 (83.2 %)** | **316 900 (92.1 %)** |
 
 The engine is 17 472 B of flash (code about 8 KB of which the sample loop 3350; the nine tables 7430, the largest
 `P5_TANH_Q15` 4098; the pages). A shipped program costs **93 to 98 B** (its packed bytes, 53 a program with these 48
@@ -166,7 +227,10 @@ and 55 with all 200; its `preset_t` row and 12-character name; its number): 48 p
 18 640 B. RAM +16 B (the parts' flags; the pool read-out's name field, below). POOL +552 B (the four programs); the
 four-voice state is smaller than the five-voice one but lives in a union of FM6's size, so POOL is the same.
 `P5_RAM` (1 in a device build since 3y41): RAMTEXT 3016 -> 6808 of 24 576, XIP the same (the code is in the image
-either way). `CR_RAM_TABLES_P5=1`: RAM +5376 B (86 820).
+either way). 3y46: RAMTEXT the same 6808 (the sample loop is 8a3074b's but for the level); XIP +3664 (the pool, the
+split, the stack's level, the counters); RAM +16; POOL +836 (the list of a block's voices 708 B and core 1's buffer of
+the chord's voices 128 B: in the pool, RAM being the tight region); `p5_part_t` is 1172 B (eight voices' state) in
+the union of FM6's 6884. `CR_RAM_TABLES_P5=1`: RAM +5376 B (86 820).
 
 ## Sounds
 
@@ -877,6 +941,228 @@ late halves (7) with the half at 91 %. What only the unit can say: `c1_rejected`
 (a core reading wrong), whether it ever happens with Dual Core Off and the bass off, `stale_halves` without a flash
 erase in the same reading, and the bass part's voices (not in `--debug` yet).
 
+## Two cores, eight voices (3y46)
+
+Built on the host and in the emulators on 2026-10-13 from the owner's decisions of that day
+([Voices](#voices) has his words and the table). **Not run on a unit.**
+
+### How a block is rendered
+
+Everything that decides anything stays on core 0, before the hand-over, as it was: the events, both parts' note
+handling, the allocation, the pool, the steals (`events_block`), then both parts' matrix and LFO tick
+(`fx.c mix_parts_split`). Then, with P5 on the chord part:
+
+1. core 0 runs `voice.c track_render_x` for the chord part as ever, but for every voice it does all of the voice's
+   block except its samples (the envelope's stage and the fade's level, the glide, TUNE and the bend, the matrix:
+   the voice's `vmod_t`) and puts the voice on a list (`p5x.it[]`). Before the voices: `p5_block` (the wheel's 32
+   samples, `value[]`, the stack's gain);
+2. `fx.c p5x_run`: the list is shared out (below), and **one job** goes to core 1, as before: the bass part's whole
+   render (`track_render_x(trk[1])` into `c1_buf`), then the chord voices marked for core 1 (`p5_render` into
+   `p5x_buf`, cleared by core 1);
+3. core 0 renders the other chord voices into the part's buffer, then waits for core 1 (`cr_c1_wait`, 8 ms at
+   most);
+4. core 0 adds `p5x_buf` to the part's buffer, runs the part's DC blocker (`p5_post`) and mixes the two parts, in
+   the order of one core.
+
+**Which core renders which voice** (`p5x_assign`, every block). Core 0 waits for core 1 before the effects and the
+master, so a half is **the tick + the LONGER of the two cores' renders + the effects + the master**. What counts is
+the longer side, and the even split makes it shortest: of n whole voices core 1 takes the number that makes the
+longer side shortest, with at most four P5 voices a core (the owner's "4 per core"), counting the bass part's
+voices on core 1 (a P5 voice 440 us, a budget unit of another engine 75 us: the unit's readings), and an equal
+split's odd voice goes to core 1 (core 0 has the rest of the half to do). A voice that was given up and is in its
+last block (the line of its last sample to 0) is no work and stays on core 0.
+
+**This is not the fill order first planned** (core 1 takes the first four voices, core 0 only from the fifth on).
+That order is right if core 0's other work ran beside core 1's, and it does not: core 0 sits in the wait
+(`pk_wait_us` 1201 on the unit). With it a four-note chord, the common case, is four voices on core 1 and core 0
+waiting for them: the same half as one core, 2632 us by the reading. Shared out evenly it is two and two. The first
+plan is `-DP5_FILL_C1_FIRST=1` (built; `fx.c`).
+
+### What a voice's render touches
+
+A voice's render (`p5_render` -> `p5_samples`) on either core writes its own `p5_voice_t` and the buffer it is given.
+Everything else it reads, and nothing it reads is written while the two cores render:
+
+| state | written by | when | how it is kept from two cores |
+| --- | --- | --- | --- |
+| the voice (`p5_voice_t`: phases, the filter's state and kept coefficients, both envelopes, the glide, `sync_tail`, `last_pcm`, its noise, `steal`) | the voice's own render | the block | a voice is on exactly one core's share of the list (`p5x.it[i].c1`); note-ons (`p5_note_on`) are core 0's, before the hand-over |
+| the part's sum (`out[]`) | every voice | the block | **two buffers**: core 0's voices into `part_buf`, core 1's into `p5x_buf`; added on core 0 after the wait |
+| the DC blocker (`dc_x1`, `dc_y1`), the part's tail | `p5_post`, `p5_tail` | after the voices | core 0 alone, after the wait, on the sum |
+| the wheel's block (`wheel[]`, `wheel_pitch[]`), the LFO's phase and value, the wheel's noise, `value[]`, the stack's gain (`sg0`, `sg1`) | `p5_block` | before the voices | core 0, before the hand-over; read only after |
+| the program (`p5_patch[part]`, `p5_ready`) | a load, the editor | the main loop | not during the audio ISR; `p5_block` has made it ready before the voices |
+| `mod_tab[0]` (the matrix), `t->p[]` (P_E0..7 swapped during an engine fade), the LFO's value, TUNE, the bend | `mod_begin`, `mod_voice`, `track_render_x`'s head | before the list is handed over | core 0; the voice's share of the matrix is in its own `vmod_t`, copied onto the list |
+| `voice_t` (stage, env, `env_out`, `pitch_cur`, `active`) | `env_tick`, the glide (`track_render_x`'s voice loop) | before the list is handed over | core 0; the render only reads `gate`, `active`, `pitch16`, `pitch_cur`, `mvel` |
+| a stack voice's scratch (`tmp[CTL]`, the level's ramp) | `p5_render` | the block | on the rendering core's stack |
+| `last_pitch` (the glide's start) | `p5_note_on` | a note-on | core 0, before the hand-over |
+| the tables | | | const, or RAM tables written at power-on |
+| the list itself (`p5x`), `cr_c1_split`, the counters (`cr_dbg.p5_*`) | `p5x_run` | before the hand-over, after the wait | core 0; core 1 reads the list |
+| core 1's stage time (`cr_dbg.cur[CRP_PART1]`), `c1_buf`, `c1_side`, `c1_nr`, `p5x_buf` | the job | the block | core 1's alone until the wait is over |
+| the bass part (`trk[1]`, `eng_state[1]`: its own `p5_part_t`, its own block) | the job | the block | the part's, as since 0.15 (3y45's table, [Two cores](#two-cores)) |
+
+**Core 1's stack**: the job calls `p5_render` directly (no `track_render_x` frame): 36 + 256 + 128 (a stack voice's
+scratch) + 320 = about 740 B of its 2816, less than the bass part's own way (about 820). **The code it runs**:
+`p5_samples` and `p5_mod_samples` are in `.ram_text` (RAMTEXT 6808 B, unchanged), one copy, reached from both cores
+through `p5_render`'s function pointer, as the bass part's P5 voices have been since 3y41.
+
+### The same samples, and no shared word: evidence
+
+- **The split's sum is the unsplit render's, bit for bit.** The part's sum is 32-bit integer addition, so the order
+  and the grouping of the voices cannot change it; and the test shows that nothing else differs.
+  `tests/run_c1_thread_test.sh` (`tests/cr_c1_thread_test.c`, all 200 programs): fifteen pairs of engines, a phrase
+  of 3000 blocks with chords of up to eight notes (steals, fades, deferred notes), bass notes, the wheel, pressure,
+  a bend and a sound change under held notes. For the **seven pairs with P5 on the chord part** (P5 bass, a UNISON
+  P5 bass, FM6, VA, CZ-1, FM TONE, WHEEL as the bass) six runs give **one digest**: the job inline; the job on a
+  real second thread (twice); **the UNSPLIT render** (every chord voice in `track_render_x`, in voice order, on one
+  thread: `cr_c1_test_nosplit`, the same allocation); and two splits of the test's own on the thread (every chord
+  voice to core 1; none). The pool is never above eight, and no core renders more than four P5 voices in a block.
+- **ThreadSanitizer: 0 reports over the 15 pairs** (900 blocks each with the job on the thread), and the planted
+  word that both sides write is reported (the run can fail).
+- The emulator: `tools/emu/test_cr.sh` plays `cr_prophet_eight.txt` (eight MIDI notes, a ninth, a UNISON bass under
+  six and under eight chord notes) on a fresh unit: 8, 8 voices; the bass 4, 2, 0; **`EMU_C1=thread` gives the
+  inline job's WAV, bit for bit**; `EMU_C1=nostart`: four voices, the bass one, the chord three under it;
+  `EMU_C1=hang`: one core's WAV.
+
+What this does not show, as in 3y45: the unit's timing, a core that reads a word wrong, the caches.
+
+### Will it fit? Predicted from the unit's readings
+
+**Not measured: nothing of this has run on a unit.** From the readings of 2026-10-13: a P5 voice 385 .. 440 us at
+the peak (four: 1533 .. 1760), the tick 140 .. 360, the effects with three sends up 570 .. 720, the master 110 ..
+165; a half is 2902 us and the overload shed acts above 2466 (85 %). The half is the tick + the longer core + the
+effects + the master. "Sum" adds every stage's worst case, which do not fall in one half: the one reading there is
+of this shape (four voices on each core, three effects) was **2632 us** where the sum says 3005, so "by the reading"
+is the sum x 0.876. Without effects the fx stage is the parts' own mix: about 200 us, an inference (no reading).
+
+| chord voices (cores 0 + 1) | bass | the longer core | three effects: sum of the worst | by the reading | no effects: sum |
+| --- | --- | --- | --- | --- | --- |
+| 4 (2 + 2) | none | 770 .. 880 | 1590 .. 2125 (55 .. 73 %) | about 1860 (64 %) | 1220 .. 1605 (42 .. 55 %) |
+| 6 (3 + 3) | none | 1155 .. 1320 | 1975 .. 2565 (68 .. 88 %) | about 2250 (77 %) | 1605 .. 2045 (55 .. 70 %) |
+| 8 (4 + 4) | none | 1540 .. 1760 | 2360 .. **3005 (81 .. 104 %)** | **2632 (91 %)**, the reading | 1990 .. 2485 (69 .. 86 %) |
+| 4 (0 + 4) | P5 stack of 4 (core 1) | 1540 .. 1760 | as 8 | 2632 (91 %): this IS the reading's case | as 8 |
+| 6 (4 + 2) | P5, 2 of its stack | 1540 .. 1760 | as 8 | 2632 | as 8 |
+| 4 (2 + 2) | P5, one voice | 1155 .. 1320 (core 1: three) | 1975 .. 2565 | about 2250 (77 %) | 1605 .. 2045 |
+| 8 (4 + 4) | another engine, one voice (about 150) | 1690 .. 1910 | 2510 .. 3155 (86 .. 109 %) | about 2760 (95 %) | 2140 .. 2635 (74 .. 91 %) |
+| the first plan's fill: 4 (0 + 4) | none | 1540 .. 1760 | 2360 .. 3005 | 2632 (91 %) | 1990 .. 2485 |
+| one core: 4, no bass | | 1540 .. 1760 | as 8 on two | 2632 | as 8 |
+| one core: 3 + a P5 bass voice | | 1540 .. 1760 | as 8 on two | 2632 | as 8 |
+
+**Plainly: 4 + 4 with three effects up does not stay under the 85 % line** (2466 us), by the one reading there is
+(2632 us, 377 halves above 85 % and 7 voices shed in a few minutes), and by the sum of the worst cases it can pass
+the deadline itself (3005 of 2902). Eight voices fit with a margin only without the effects (about 2180 by the
+reading's ratio, 75 %). **No other split of eight does better**: core 0 waits for core 1, so 5 + 3 makes the longer
+side five voices (2200 us) and the half longer, whichever core has the five. What fits with three effects is
+**three voices a core, six in all** (about 2250 us, 77 %): that is the one-define change, **`-DP5_CORE=3`** (the
+pool six, a UNISON stack three; it builds and its test runs, `tests/run_prophet_test.sh`), not the default: the
+owner asked for 4 per core. What would make eight fit is core 0 not waiting idle (the effects of a block on core 0
+while core 1 still renders, the mix one block behind): not built. A four-note chord, the common case, is what gains
+now: two and two, about 1860 us where one core's was 2632.
+
+### The overload shed (`audio.c shed_check`, `shed_voice`)
+
+The half the shed times is core 0's, and core 0 waits in it for core 1's job: it is over 85 % when EITHER core's
+render is too long, so the shed sees the right core without asking which. And because the chord part's voices are
+shared out between the cores again every block, a voice given up shortens the longer side whichever part it was
+(the one exception: a bass of another engine with many voices on core 1). The order, two halves in a row above
+85 %, one voice, and one more each half while it lasts:
+
+1. a released voice, the quietest, of any part (as before);
+2. **with P5 on the bass part: a voice of the bass's stack, from the top** (never its last: the lead stays), before
+   any chord voice (`shed_last_why` 4 in `--debug`);
+3. as before: the oldest held voice that is not its part's lowest note or lead: a chord voice.
+
+Without P5 on the bass part it is (1) and (3): today's rule and today's code path. The 16-unit budget is as it was
+for every other engine; P5's two-unit voices with two cores and the pool are above.
+
+### Counters for the unit (78 PEAK, `tools/fm1_install.py --debug`, docs/FX.md)
+
+| value | |
+| --- | --- |
+| `p5_core0_voices`, `p5_core1_voices` | the most P5 voices core 0 and core 1 rendered in one block since the last read. The rule: four each. Core 1's are the bass part's P5 voices and its share of the chord's; with one core all are core 0's |
+| `p5_bass_voices` | the bass part's most P5 voices (four with two cores, one with one) |
+| `p5_bass_given_up` | held bass voices given up to the chord part |
+| `pk_part1_us` (was there) | **core 1's whole job of a half**: the bass part and its share of the chord's voices. `pk_part0_us`: core 0's own render |
+| `pk_wait_us` (was there) | core 0's longest wait for core 1 |
+| `shed_last_why` 4 | the latest shed voice was a voice of the bass's P5 stack |
+
+and a line "P5: at most .. voices rendered by core 0 and .. by core 1 ..". **To read next**: with Dual Core On, a
+four-note, a six-note and an eight-note chord of ITS PROPHET5 held, dry and with the three sends up, then the same
+with a UNISON P5 bass: `pk_block_us`, `pk_part0_us`, `pk_part1_us`, `pk_wait_us`, `shed_over_halves`,
+`shed_voices`, `stale_halves`, the four `p5_*` values, `c1_rejected`, `c1_faults`.
+
+## Level (3y46)
+
+The owner, 2026-10-13: "Since Unison on is going to bring us 5 dB over the limiter, I think we should bring engine
+down, since the limiter is going to cause chopping possibly."
+
+**(a) The engine is 6 dB lower: every sample of every voice is exactly half of 3y45's.** Melodee's "x 2" after the
+VCA is gone (`P5_OUT_SHIFT` 0; 1 is 3y45's level). After the filter and the VCA: the mixer's and the ladder's
+saturation, the filter's states and its character are what they were ([Headroom](#headroom)'s first five stages are
+unchanged). As CZ-1's in 0.19 (docs/AUDIO-QUALITY.md). Proved two ways:
+- `tests/run_prophet_test.sh`: every shipped program, a four-note chord held and released, the part's capacitor off
+  (its 32-bit state rounds): this tree's samples x 2 are `-DP5_OUT_SHIFT=1`'s, bit for bit, and no sample of the old
+  level is odd;
+- `python3 tools/p5_goldens.py --level 8472e70`: the regression built with `-DP5_OUT_SHIFT=1 -DP5_STACK_PHASE=0`
+  gives **all 49 of 8472e70's P5 goldens**: the level and the stack's start are all that changed in a program's
+  render on one core.
+
+The capacitor's "at rest" (`P5_DC_REST`) is 8 output units now, the same -70 dB under a chord.
+
+**(b) A UNISON stack: its start, its level, and no trim.**
+- **A stack is four voices at most**, on either part ([Voices](#voices)).
+- **Its voices start together** (`P5_STACK_PHASE` 1: both oscillators at phase 0 at a fresh note-on of a part in
+  UNISON). To 3y45 only a stack's first key after power-on did (the +12 dB of [Headroom](#headroom)); every later key
+  had oscillator A at whatever phases voice.c had left in the slots and oscillator B together, so a key's level lay
+  somewhere between twice and four times a voice and changed from key to key. Now a stack with DETUNE 0 and
+  Vintage 0 is one voice N times, every key, and with them it spreads as the program spreads it. **A change of the
+  stack's sound that the owner did not ask for**: it is what makes its level a thing one can match (below), and it
+  is the first key's sound he has heard; `-DP5_STACK_PHASE=0` is 3y45's.
+- **Its level does not depend on how many voices the budget gave** (the owner: "the engine also sounds quite
+  different on single core"). The voices that sound are raised to the whole stack's level, after the filter and the
+  VCA, on a straight line over a block when a voice is given up or comes back (`p5_stack_gain`, `P5_STACK_G`): n
+  voices of a stack of N play at **N / n** each (one voice of four: x 4), and at sqrt(N / n) where the program
+  takes its voices apart at once (DETUNE above 0, or no oscillator in the mixer). So a UNISON bass is as loud
+  with one core (one voice) as with two (four), and does not drop while the chord takes its voices.
+  **Measured** (`cr_prophet_test --stack`, the 40 UNISON programs of the 200 on the bass part, one key struck four
+  times, the held note's RMS, one voice against the whole stack): **within 1 dB on 26, within 2 dB on 32**; the
+  seven that are one voice N times: 0.000 dB. Not within 2 dB (the one voice LOUDER, +2.2 .. +7.1 dB: programs whose
+  voices drift apart within the note, by Vintage, Lo Freq B or Poly-Mod): 14 DIGI-RECORDR, 36 THE HATS, 75 MORSE
+  LEAD, 88 DIRTY LEAD, 153 SCI FI DROP, 197 HELICOPTER; the one voice QUIETER (-5.2, -5.6: a DETUNE of 1 or 2 that
+  has not opened yet in a short low note): 80 DUOTONE, 151 TIGHT BASS. The peaks are within 1 dB on 29. Of the
+  shipped list's five: LAGOON BASS +0.5, FEATURE BASS +0.7, UNISAWYER +1.4, UNISON GLIDE +1.6, BASSMENT (a stack of
+  one) 0. **By ear it is the owner's** (`../audio-0.22/prophet/eight/`).
+- **The trim (`P5_UNISON_TRIM`) stays OFF.** The rule set: on, if after (a) a UNISON key still peaks more than
+  about 3 dB above a four-note chord of the same program. Measured (`cr_prophet_test --unichord`, all 200 with the
+  editor's switch, a stack of four on C3 against C4 E4 G4 B4, two cores): the key is **+1.2 dB over the chord at
+  the median** (quartiles +0.5 .. +2.0, the largest +5.1; more than 3 dB on 18 of the 201, more than 6 dB on
+  none). Built as before (`-DP5_UNISON_TRIM=1`: a stack 6 dB lower still).
+
+**The new peak table** (`sh tools/p5_probe.sh levels`: every sound of each pool at velocity 127, the part's peak
+before LEVEL, dB re 32768, median / max; Clean's limiter works above about +0.5 dB in the mix):
+
+| | one key | four notes close | UNISON on one key | the limiter at the worst |
+| --- | --- | --- | --- | --- |
+| P5 (200), 3y45 | -4.1 / +10.9 | +4.8 / +11.6 | +4.9 / +11.9 | -5.2 dB |
+| **P5 (200), 3y46** | **-10.1 / +5.6** (C2: +6.4) | **-1.1 / +5.8** (wide: +6.5) | **+0.8 / +6.4** (C2: +1.0 / +6.8) | **-0.8 dB** (a UNISON key; a four-note chord does not touch it) |
+| P5 with `P5_UNISON_TRIM=1` (not built in) | | | -5.2 / +0.4 | not touched |
+| VA (25) | -3.9 / +3.0 | +5.5 / +10.4 (wide: +12.7) | -1.1 / +5.8 | -3.4 dB |
+| FM6 (25) | -6.6 / -1.5 | +2.9 / +6.9 (high: +9.9) | +3.1 / +8.0 | not touched |
+| CZ-1 (64) | -4.9 / +1.0 | +4.9 / +8.6 | +3.6 / +12.0 | -2.7 dB |
+| FM TONE (16) | -4.9 / +1.1 | +5.5 / +11.6 | +3.3 / +11.5 | -4.8 dB |
+
+(P5's "one key" maxima are UNISON programs as they load: a key is their stack.) **Where P5 now sits: under the
+others.** A four-note P5 chord was level with the VA's (+4.8 against +5.5 at the median); it is now 6.6 dB under the
+VA's and CZ-1's and 4 dB under FM6's, and P5's loudest chord (+5.8) is under FM6's loudest (+6.9). The limiter,
+which the hottest UNISON key drove 5.2 dB down, is now touched by 0.8 dB at the worst, and by no four-note chord.
+An eight-note chord, which is new, is about 3 dB over a four-note one. **Whether P5 should sit that far under the
+other engines is the owner's by ear**: the halving is what was asked; half of it back (3 dB) would need a
+multiply in the voice's output, and `-DP5_OUT_SHIFT=1 -DP5_UNISON_TRIM=1` is the other way (the chords as they
+were, a stack 6 dB down).
+
+**Stored sounds need no migration**: the level is the engine's. A session or a settings block that holds a P5
+program holds its 138 bytes and the part's LEVEL, neither of which changed; it plays 6 dB lower, as every P5 sound
+does. **Goldens: all 49 P5 renders change** (the level), the 197 of the other engines do not
+(`python3 tools/p5_goldens.py`).
+
 ## Tests
 
 - `tests/cr_prophet_test.c` (in `sh tests/run_cr_tests.sh`), on the firmware as the emulator builds it: the engine's
@@ -894,6 +1180,25 @@ erase in the same reading, and the bass part's voices (not in `--debug` yet).
   pool load and by the editor's engine switch; the session's record); the bend through the part's MIDI; the 19 pages
   (every cell sets its byte and no other, clamps, reads back; each of the 56 bytes on exactly one cell); the pool;
   SAVE refused.
+- **3y46** ([Two cores, eight voices](#two-cores-eight-voices-3y46), [Level](#level-3y46)): `cr_prophet_test`
+  `t_cores` (through `mix_block`: eight voices of ten keys, four a core, which notes; the eleventh key's fade on core
+  1; a UNISON bass and a chord of 1 .. 8 keys in both orders; a bass key under eight; a progression struck over
+  its own release with the bass's key in the chord's block; one core: 4, 3 + 1, a stack's
+  one voice and its gain; core 1 given up three ways under a chord of eight and under 4 + 4; Options > Dual Core
+  turned under held notes; the bass part to the VA and back under held chord keys; a UNISON key with one core
+  against two); `--half`, `--stack`, `--unichord`; `tests/run_prophet_test.sh` (the level's two builds; all 200:
+  the stack's and the key-over-chord figures; `-DP5_ONE_POOL=5`, `-DP5_BASS_KEEP=1`, `-DP5_CORE=3` build and run;
+  `-DP5_WAIT_SLOT=0` fails the progression's check);
+  `tests/run_c1_thread_test.sh` (15 pairs; the seven with a P5 chord against the unsplit render; the sanitizer);
+  `tests/cr_cpu1_test.c` (the start: SAFE MODE, the boot before failed, a clean boot); `tests/cr_settings_test.c`
+  (Dual Core On by default; a record's Off kept); `tests/cr_backup_test.c` (78 PEAK: 45 values);
+  `tests/install_test.py` (`--debug`'s four values and its line); `tools/emu/test_cr.sh` (`cr_prophet_eight.txt`
+  inline, on a thread, with one core, with a core that hangs; the owner's gesture with two cores, five voices, and
+  with one, four; the Dual Core block for a fresh unit that is On); `tools/emu/test_persist.sh` (Reset Settings:
+  On). `tests/target_budget.txt`: `p5_render` 50 -> 63 (a stack voice's two short loops), `p5_block` 18 -> 29
+  (the stack's count), `fm1_alnk0_irq` 16415 -> 12522 (the shed's cold path is a function of its own);
+  `p5_samples` as it was. **Not tested: anything on a unit**; two real cores' timing; the level by ear; a loop's
+  voices in the pool; MIDI program changes under held notes.
 - **3y45** ([the second reading](#the-units-second-reading-2026-10-13-3y45-the-bass-part-two-cores-the-level-the-steal)):
   `cr_prophet_test`'s "steal" checks (the fifth key's voice fades over `P5_STEAL_BLOCKS` blocks as a whole voice, the
   VCA at half after the first and 0 after the last, its oscillators running; never more than four voices; the new
@@ -946,7 +1251,18 @@ cd43720's (five voices); not rendered again.**
 ## Open decisions (the owner's)
 
 Decided on 2026-10-13 (HISTORY 3y39): the name (**P5**), **UNISON on a load**, **a trimmed list** (the mechanism;
-the 48 are provisional), and, by the unit's reading, **four voices**.
+the 48 are provisional), and, by the unit's reading, **four voices**. **Decided on 2026-10-13, later (HISTORY
+3y46)**: eight voices on two cores, four a core; a P5 bass up to four with the chord first; one core: a P5 bass one
+voice; the engine down; Dual Core On by default. That settles 4, 7, 8 and 10 below as they were asked; what 3y46
+leaves to the owner:
+
+- **The unit**: nothing of 3y46 has run there ([Will it fit?](#will-it-fit-predicted-from-the-units-readings):
+  eight voices with three effects are predicted at 91 %, above the shed's line).
+- **P5 is now the quietest engine** ([Level](#level-3y46)): 6.6 dB under the VA's chords at the median.
+- **One core: three chord voices under a P5 bass** (built beyond his rule; `-DP5_ONE_POOL=5` is four and one).
+- **Two cores: a bass key under eight chord keys is silent** (`-DP5_BASS_KEEP=1` keeps it one voice).
+- **A stack's voices start together** now, and its level law ([Level](#level-3y46)), by ear.
+- **`-DP5_CORE=3`** if eight do not fit on the unit.
 
 1. **The list itself**: the 48 were chosen from the parameters, not by ear. Edit `shipped.txt` after playing
    ([the steps](#the-shipped-list)).

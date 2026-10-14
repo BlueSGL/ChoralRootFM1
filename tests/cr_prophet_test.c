@@ -227,6 +227,188 @@ static int pcm_file(const char *path)
     return 0;
 }
 
+
+/* --stack [v] (3y46, docs/PROPHET.md "Level"): A UNISON KEY IS AS LOUD WITH ONE CORE AS WITH TWO. Every shipped program
+ * with the UNISON switch on the BASS part, one key struck four times (the first with the voices' phases as a cleared
+ * part has them, the others as the stack leaves them): with two cores (the program's whole stack sounds) and with
+ * one (ONE voice, raised to the stack's level: eng_prophet_test.c P5_STACK_G). The RMS of the held note, strikes 2
+ * to 4. Returns the largest difference in dB (0: no such program); v: a line a program */
+typedef struct { uint32_t n, n1, n2, nx; double mean, worst, wx; } p5stk_t;   /* programs, within 1 / 2 dB, the ones that
+                                                         * are one voice N times (DETUNE 0, Vintage 0, no noise, no
+                                                         * Lo Freq B) and their largest difference */
+static double stack_levels(int verbose, p5stk_t *st)
+{
+    track_t *t = &trk[1];
+    p5_patch_t p;
+    int32_t out[CTL];
+    double worst = 0, sum = 0;
+    uint32_t k, m, s, b, i, n = 0;
+    memset(st, 0, sizeof *st);
+    for (k = 1; k < NELEM(P5_TEST_PRESETS); k++) {
+        double r[2] = {0, 0};
+        uint32_t nv[2] = {0, 0};
+        int32_t pk[2] = {0, 0};
+        p5_preset_patch(k, &p);
+        if (!p.raw[P5_UNISON])
+            continue;
+        for (m = 0; m < 2u; m++) {
+            double s2 = 0;
+            uint32_t ns = 0;
+            cr_dbg.c1 = m ? C1_OFF : C1_OK;
+            vage = 0;
+            rng_state = 0x1234567u;
+            part_set(t, &p);
+            t->p[P_VOICE] = V_UNISON;
+            for (s = 0; s < 4u; s++) {
+                trk_note_on(t, 40, 100);
+                for (b = 0; b < 600u; b++) {
+                    if (b == 400u)
+                        trk_note_off(t, 40);
+                    track_render(t, out, CTL);
+                    if (b == 100u && busy(t) > nv[m])
+                        nv[m] = busy(t);
+                    if (s && b >= 20u && b < 400u)
+                        for (i = 0; i < CTL; i++, ns++)
+                            s2 += (double)out[i] * out[i];
+                    for (i = 0; i < CTL; i++)
+                        if (abs(out[i]) > pk[m])
+                            pk[m] = abs(out[i]);
+                }
+                trk_all_off(t);
+                for (b = 0; b < 4u * FS / CTL && busy(t); b++)
+                    track_render(t, out, CTL);
+            }
+            r[m] = sqrt(s2 / (ns ? ns : 1u));
+        }
+        cr_dbg.c1 = C1_OFF;
+        if (r[0] > 1.0 && r[1] > 1.0) {
+            double d = 20.0 * log10(r[1] / r[0]);
+            if (verbose)
+                printf("stack: program %03u %-12s the stack %u: two cores %u voices rms %.0f, one core %u voice rms %.0f: %+.2f dB; the peaks %d, %d: %+.2f dB\n",
+                       (unsigned)p5_preset_id(k), P5_TEST_PRESETS[k].name, (unsigned)p5_stack(t), (unsigned)nv[0], r[0],
+                       (unsigned)nv[1], r[1], d, (int)pk[0], (int)pk[1], 20.0 * log10((pk[1] + 1.0) / (pk[0] + 1.0)));
+            sum += d;
+            n++;
+            st->n1 += fabs(d) <= 1.0;
+            st->n2 += fabs(d) <= 2.0;
+            if (!p.raw[P5_UNISON_DETUNE] && !p.raw[P5_VINTAGE] && !p.raw[P5_NOISE] && !p.raw[P5_LOW_B]) {
+                st->nx++;
+                if (fabs(d) > st->wx)
+                    st->wx = fabs(d);
+            }
+            if (fabs(d) > fabs(worst))
+                worst = d;
+            if (nv[1] != 1u || nv[0] != p5_stack(t))
+                worst = 99.0;                           /* (not the voices the rules give: a failure) */
+        }
+    }
+    st->n = n;
+    st->mean = n ? sum / n : 0;
+    st->worst = worst;
+    return worst;
+}
+
+/* --unichord (3y46, docs/PROPHET.md "Level": the stack's trim, decided by this): every shipped program, velocity 127:
+ * ONE KEY ON A UNISON STACK of four (C3; the editor's switch on every program) against A FOUR-NOTE CHORD of the same
+ * program (C4 E4 G4 B4, POLY), two cores, the part's largest sample. Prints the distribution of the difference */
+static int cmp_d(const void *a, const void *b) { double x = *(const double *)a, y = *(const double *)b; return x < y ? -1 : x > y; }
+static int unichord(void)
+{
+    static const uint8_t CH[4] = {60, 64, 67, 71}, ONE[1] = {48};
+    static double d[256], pu[256], pc[256];
+    track_t *t = &trk[0];
+    p5_patch_t p;
+    uint32_t k, n = 0, over3 = 0, over6 = 0;
+    cr_dbg.c1 = C1_OK;
+    for (k = 0; k < NELEM(P5_TEST_PRESETS) && n < 256u; k++) {
+        rr_t c, u;
+        p5_preset_patch(k, &p);
+        p.raw[P5_UNISON] = 0;
+        vage = 0;
+        rng_state = 0x1234567u;
+        c = render(t, &p, CH, 4, 127, 1400, 100);
+        p.raw[P5_UNISON] = 1;
+        p.raw[P5_UNISON_COUNT] = 4;
+        vage = 0;
+        rng_state = 0x1234567u;
+        part_set(t, &p);
+        t->p[P_VOICE] = V_UNISON;
+        {   /* (render() loads the part again: the stack by hand) */
+            int32_t out[CTL], pk = 0;
+            uint32_t b, i;
+            trk_note_on(t, ONE[0], 127);
+            for (b = 0; b < 1500u; b++) {
+                if (b == 1400u)
+                    trk_note_off(t, ONE[0]);
+                track_render(t, out, CTL);
+                for (i = 0; i < CTL; i++)
+                    if (abs(out[i]) > pk)
+                        pk = abs(out[i]);
+            }
+            u.pk = pk;
+        }
+        if (c.pk < 64 || u.pk < 64)
+            continue;
+        pu[n] = 20.0 * log10(u.pk / 32768.0);
+        pc[n] = 20.0 * log10(c.pk / 32768.0);
+        d[n] = pu[n] - pc[n];
+        over3 += d[n] > 3.0;
+        over6 += d[n] > 6.0;
+        n++;
+    }
+    cr_dbg.c1 = C1_OFF;
+    if (!n)
+        return 1;
+    qsort(d, n, sizeof d[0], cmp_d);
+    qsort(pu, n, sizeof pu[0], cmp_d);
+    qsort(pc, n, sizeof pc[0], cmp_d);
+    printf("unichord: %u programs (P5_UNISON_TRIM %d): a UNISON key's peak re 32768: median %+.1f dB, max %+.1f; a four-note "
+           "chord's: median %+.1f, max %+.1f; the key over the chord of the same program: median %+.1f dB, quartiles %+.1f .. "
+           "%+.1f, max %+.1f; more than 3 dB over on %u, more than 6 dB on %u\n", (unsigned)n, P5_UNISON_TRIM, pu[n / 2u],
+           pu[n - 1u], pc[n / 2u], pc[n - 1u], d[n / 2u], d[n / 4u], d[3u * n / 4u], d[n - 1u], (unsigned)over3, (unsigned)over6);
+    return 0;
+}
+
+/* --half FILE (3y46, the level): every shipped program's fixed render with the samples as 3y45's level has them: this
+ * build's shifted up by 1 - P5_OUT_SHIFT. tests/run_prophet_test.sh builds the file with -DP5_DC_BLOCK=0 twice,
+ * P5_OUT_SHIFT 0 (this tree) and 1 (3y45's "x 2" after the VCA), and wants the two outputs to be the same bytes: every
+ * sample of every voice is exactly half of what it was, the filter's and the ladder's values what they were */
+static int half_file(const char *path)
+{
+    static const uint8_t CH[4] = {36, 55, 64, 96};
+    track_t *t = &trk[0];
+    FILE *f = fopen(path, "w");
+    p5_patch_t p;
+    int32_t out[CTL];
+    uint32_t k, b, i;
+    if (!f)
+        return 1;
+    for (k = 0; k < NELEM(P5_TEST_PRESETS); k++) {
+        uint64_t h = 1469598103934665603ull;
+        uint32_t odd = 0;
+        p5_preset_patch(k, &p);
+        vage = 0;
+        rng_state = 0x1234567u;
+        part_set(t, &p);
+        for (i = 0; i < 4u; i++)
+            trk_note_on(t, CH[i], 100);
+        for (b = 0; b < 450u; b++) {
+            if (b == 300u)
+                for (i = 0; i < 4u; i++)
+                    trk_note_off(t, CH[i]);
+            track_render(t, out, CTL);
+            for (i = 0; i < CTL; i++) {
+                odd += (uint32_t)(P5_OUT_SHIFT && (out[i] & 1));
+                out[i] = (int32_t)((uint32_t)out[i] << (1 - P5_OUT_SHIFT));
+            }
+            h = fnv(h, out, CTL);
+        }
+        fprintf(f, "program %03u %016llx odd %u\n", (unsigned)p5_preset_id(k), (unsigned long long)h, (unsigned)odd);
+    }
+    fclose(f);
+    return 0;
+}
+
 /* --idle FILE (3y45): a part with no voice skips the wheel's block (eng_prophet_test.c P5_IDLE_SKIP) and must leave
  * the same state behind: every shipped program, the wheel up and (every other program) on oscillator A's pitch with
  * the triangle and half noise, plays a chord, rings out, stays silent for a number of blocks of its own, and plays
@@ -659,6 +841,396 @@ static uint32_t g_sweep(uint32_t id, int full, int verbose, uint32_t *runs, doub
     return bad;
 }
 
+
+/* ---------------------------------------------------------------------------------------------------------------
+ * 3y46: P5's VOICES OVER THE TWO PARTS AND THE TWO CORES (eng_prophet_test.c "THE VOICES", voice.c p5_pool_*, fx.c
+ * p5x_run; docs/PROPHET.md "Voices"). Through mix_block, as the unit plays: the events, the pool, the split (the
+ * host's core 1 runs its job inline), the mix. cr_dbg.c1 says whether there are two cores */
+static uint32_t heldv(const track_t *t)
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < NVOICE; i++)
+        n += P5_HELD(&t->v[i]);
+    return n;
+}
+static uint32_t c_pool, c_core[2];                     /* the fullest pool and the most whole voices a core rendered */
+static void blocks(uint32_t n)
+{
+    int32_t o[2u * CTL];
+    while (n--) {
+        mix_block(o, CTL);
+        if (p5_pool_used() > c_pool)
+            c_pool = p5_pool_used();
+    }
+    if (cr_dbg.p5_c0 > c_core[0])
+        c_core[0] = cr_dbg.p5_c0;
+    if (cr_dbg.p5_c1 > c_core[1])
+        c_core[1] = cr_dbg.p5_c1;
+}
+static uint32_t wait_free(void)                         /* every voice of both parts ended; 0: one hangs (10 s) */
+{
+    uint32_t b;
+    for (b = 0; b < 10u * FS / CTL && (busy(&trk[0]) || busy(&trk[1])); b += 8u)
+        blocks(8);
+    return !busy(&trk[0]) && !busy(&trk[1]);
+}
+/* both parts on P5 (the chord part on pool place cpos, the bass part on bpos), a short release, nothing sounding */
+static void p5_pair(uint32_t cpos, uint32_t bpos, int two)
+{
+    uint32_t k;
+    cr_c1_test_hang = cr_c1_test_nostart = 0;
+    cr_c1_test_rejected = cr_c1_test_faults = cr_c1_seen = 0;
+    cr_dbg.c1 = two ? C1_OK : C1_OFF;
+    cr_dbg.c1_fallback = cr_dbg.c1_misreads = 0;
+    trk_all_off(&trk[0]);
+    trk_all_off(&trk[1]);
+    cu_pool_load(0, ENGI_PROPHET, cpos);
+    cu_pool_load(1, ENGI_PROPHET, bpos);
+    for (k = 0; k < 2u; k++) {
+        trk[k].engine = trk[k].eng_req;
+        trk[k].xf_on = trk[k].xf = 0;
+        memset(trk[k].v, 0, sizeof trk[k].v);
+        eng_state_clear(k);
+        p5_patch_of(&trk[k])->raw[P5_RELEASE_ON] = 1;
+        p5_patch_of(&trk[k])->raw[P5_RELEASE_AMP] = 12;
+        p5_patch_of(&trk[k])->raw[P5_GLIDE] = 0;
+    }
+    blocks(6);
+    cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = 0;
+    c_pool = c_core[0] = c_core[1] = 0;
+}
+static void t_cores(void)
+{
+    static const uint8_t K[10] = {48, 50, 52, 54, 56, 58, 60, 62, 64, 66};
+    track_t *ct = &trk[0], *bt = &trk[1];
+    p5_patch_t q;
+    uint32_t k, i, uni = 0, poly = 0, bad, m, g0;
+    for (k = 1; k < pool_count(ENGI_PROPHET) && !(uni && poly); k++) {   /* a UNISON program with a stack of four that
+                                                         * holds its note, and a POLY one */
+        p5_preset_patch(pool_entry(ENGI_PROPHET, k).fk, &q);
+        if (!uni && q.raw[P5_UNISON] && (!q.raw[P5_UNISON_COUNT] || q.raw[P5_UNISON_COUNT] >= 4u) && q.raw[P5_SUSTAIN_AMP] > 60u)
+            uni = k;
+        if (!poly && !q.raw[P5_UNISON] && q.raw[P5_SUSTAIN_AMP] > 60u && q.raw[P5_ATTACK_AMP] < 40u)
+            poly = k;
+    }
+    if (!uni || !poly) {
+        printf("     (two cores: this list has no UNISON program with a stack of four, or no POLY one: the pool's checks are not run)\n");
+        return;
+    }
+    /* ---- TWO CORES: the chord part up to eight, four on each core ---- */
+    p5_pair(poly, uni, 1);
+    for (k = 0; k < 10u; k++)
+        trk_note_on(ct, K[k], 100);
+    blocks(24);
+    for (i = 0, m = 0; i < NVOICE; i++)
+        if (P5_HELD(&ct->v[i]))
+            for (k = 0; k < 10u; k++)
+                if (ct->v[i].note == K[k])
+                    m |= 1u << k;
+    OK(trk_nvoice(ct) == 8u && voice_units(ct) == 2u && heldv(ct) == 8u && p5_sounding(ct) == 8u && voices_busy_of(ct) == 16u &&
+       m == 0x3F9u && c_pool == 8u && c_core[0] == 4u && c_core[1] == 4u,
+       "two cores: ten keys sound EIGHT voices on the chord part (two budget units each: its 16), four rendered by each "
+       "core (core 0 %u, core 1 %u at the most), the pool never above eight (%u); the bottom note and the top seven sound "
+       "(mask %03X): the oldest held voice goes, never the lowest note", (unsigned)c_core[0], (unsigned)c_core[1],
+       (unsigned)c_pool, (unsigned)m);
+    {   /* an eleventh key: the voice it takes fades as a whole voice over P5_STEAL_BLOCKS blocks, on whichever core
+         * the list gives it to (the fade's state is the voice's own: p5_voice_t.steal), and the note comes after it */
+        uint32_t st = NVOICE, nf = 0, on1 = 0, on0 = 0, started = 0, b;
+        trk_note_on(ct, 70, 100);
+        for (i = 0; i < NVOICE; i++)
+            if (ct->v[i].active && ct->v[i].stage == 4u)
+                st = i;
+        for (b = 0; b < 8u && st < NVOICE; b++) {
+            uint32_t was = ct->v[st].active && ct->v[st].stage == 4u;
+            blocks(1);
+            if (was) {
+                nf++;
+                for (i = 0; i < p5x.n; i++)
+                    if (p5x.it[i].v == &ct->v[st]) {
+                        on1 += p5x.it[i].c1;
+                        on0 += !p5x.it[i].c1;
+                    }
+            }
+            for (i = 0; i < NVOICE && !started; i++)
+                if (P5_HELD(&ct->v[i]) && ct->v[i].note == 70u)
+                    started = b + 1u;
+        }
+        OK(st < NVOICE && ct->v[0].note == 48u && nf == (P5_STEAL_BLOCKS ? P5_STEAL_BLOCKS : 1u) && on1 + on0 == nf && (on1 || !P5_STEAL_BLOCKS) &&
+           started && heldv(ct) == 8u && c_pool == 8u && c_core[0] <= 4u && c_core[1] <= 4u,
+           "two cores: an eleventh key takes the oldest held voice that is not the lowest note; it fades over %u block(s), "
+           "%u of them rendered by core 1, and the note starts after it (block %u): never more than eight voices, never more "
+           "than four on a core", (unsigned)nf, (unsigned)on1, (unsigned)started);
+    }
+    trk_all_off(ct);
+    OK(wait_free(), "two cores: every voice free after the release");
+    /* ---- the bass part's stack and the chord: THE CHORD FIRST ---- */
+    {
+        uint32_t cv[8], bv[8], refused, back;
+        static const uint8_t WANT_B[8] = {4, 4, 4, 4, 3, 2, 1, 0};
+        p5_pair(poly, uni, 1);
+        g0 = p5_bass_gave;
+        trk_note_on(bt, 36, 100);
+        blocks(6);
+        bad = p5_sounding(bt) != 4u || p5_part(1)->sg1 != 4096u;
+        for (k = 0; k < 8u; k++) {
+            trk_note_on(ct, K[k], 100);
+            blocks(6);
+            cv[k] = heldv(ct);
+            bv[k] = heldv(bt);
+            bad += cv[k] != k + 1u || bv[k] != WANT_B[k];
+            if (k == 5u)                               /* (two of four: each at twice the level, the stack's own sum) */
+                bad += p5_part(1)->sg1 != P5_STACK_G[1][3][1] && p5_part(1)->sg1 != P5_STACK_G[0][3][1];
+        }
+        OK(!bad && p5_bass_gave - g0 == 4u && c_pool == 8u && c_core[0] <= 4u && c_core[1] <= 4u,
+           "two cores, a UNISON bass (%s, four voices) and then a chord of 1 .. 8 keys: the chord has %u %u %u %u %u %u %u %u "
+           "voices, the bass %u %u %u %u %u %u %u %u: its stack thins to one and then gives its last voice before a chord "
+           "note is refused (%u held bass voices given up; the pool at most %u; the stack's voices that stay are raised to "
+           "its level)", P5_TEST_PRESETS[pool_entry(ENGI_PROPHET, uni).fk].name, (unsigned)cv[0], (unsigned)cv[1],
+           (unsigned)cv[2], (unsigned)cv[3], (unsigned)cv[4], (unsigned)cv[5], (unsigned)cv[6], (unsigned)cv[7], (unsigned)bv[0],
+           (unsigned)bv[1], (unsigned)bv[2], (unsigned)bv[3], (unsigned)bv[4], (unsigned)bv[5], (unsigned)bv[6], (unsigned)bv[7],
+           (unsigned)(p5_bass_gave - g0), (unsigned)c_pool);
+        trk_note_off(bt, 36);
+        trk_note_on(bt, 38, 100);                      /* a bass key under a chord of eight: no voice for it */
+        blocks(6);
+        refused = !p5_sounding(bt) && heldv(ct) == 8u;
+        trk_note_off(bt, 38);
+        for (k = 4; k < 8u; k++)
+            trk_note_off(ct, K[k]);
+        for (i = 0; i < 4u * FS / CTL && p5_sounding(ct) > 4u; i += 4u)
+            blocks(4);
+        trk_note_on(bt, 40, 100);
+        blocks(6);
+        back = p5_sounding(bt);
+        OK(refused && back == 4u && heldv(ct) == 4u && c_pool == 8u,
+           "two cores: a bass key under a chord of eight held keys does not sound (the chord first, always: no chord voice is "
+           "taken for it); with four chord keys let go and ended the next bass key has its four voices again");
+        trk_all_off(ct);
+        trk_all_off(bt);
+        bad = !wait_free();
+        /* the chord first, then the bass: the stack's extra voices start only into free room */
+        p5_pair(poly, uni, 1);
+        for (k = 0; k < 6u; k++)
+            trk_note_on(ct, K[k], 100);
+        blocks(8);
+        trk_note_on(bt, 36, 100);
+        blocks(6);
+        cv[0] = heldv(ct);
+        bv[0] = heldv(bt);
+        trk_note_on(ct, K[6], 100);
+        blocks(6);
+        cv[1] = heldv(ct);
+        bv[1] = heldv(bt);
+        trk_note_on(ct, K[7], 100);
+        blocks(6);
+        OK(!bad && cv[0] == 6u && bv[0] == 2u && cv[1] == 7u && bv[1] == 1u && heldv(ct) == 8u && !heldv(bt) && c_pool == 8u &&
+           c_core[0] <= 4u && c_core[1] <= 4u,
+           "two cores, a chord of six and then the UNISON bass key (the owner's case): the chord keeps its six, the bass has "
+           "two of its four; a seventh chord key: 7 and 1; an eighth: 8 and none");
+        trk_all_off(ct);
+        trk_all_off(bt);
+        OK(wait_free(), "two cores: every voice of both parts free after the release");
+    }
+    /* ---- a chord struck over its own release, with common notes, a P5 bass key in the same block (as a chord
+     * progression plays): every chord note sounds; the bass has what the chord leaves. (Found by the listening
+     * files: with every slot of the part still sounding or fading, the eighth note took one of its own chord's new
+     * notes while the bass kept a voice: voice.c voice_alloc now waits for a slot that is fading) ---- */
+    {
+        static const uint8_t CH[4][8] = {{50, 57, 62, 66, 69, 73, 76, 81}, {47, 54, 59, 62, 66, 69, 74, 78},
+                                         {43, 50, 55, 59, 62, 67, 71, 74}, {45, 52, 57, 61, 64, 69, 73, 76}};
+        static const uint8_t BASS[4] = {38, 35, 31, 33};
+        uint32_t nk, c, rep, lost[2] = {0, 0}, bmin[2] = {99, 99}, bmax[2] = {0, 0};
+        for (nk = 6; nk <= 8u; nk += 2u) {
+            p5_pair(poly, uni, 1);
+            p5_patch_of(ct)->raw[P5_RELEASE_AMP] = 90;  /* (the release rings into the next chord) */
+            for (rep = 0; rep < 2u; rep++)
+                for (c = 0; c < 4u; c++) {
+                    uint32_t x = nk == 8u, b;
+                    trk_note_on(bt, BASS[c], 100);
+                    for (k = 0; k < nk; k++)
+                        trk_note_on(ct, CH[c][k], 96);
+                    blocks(40);
+                    lost[x] += nk - heldv(ct);
+                    b = heldv(bt);
+                    if (b < bmin[x])
+                        bmin[x] = b;
+                    if (b > bmax[x])
+                        bmax[x] = b;
+                    blocks(400);
+                    for (k = 0; k < nk; k++)
+                        trk_note_off(ct, CH[c][k]);
+                    trk_note_off(bt, BASS[c]);
+                    blocks(270);
+                }
+            trk_all_off(ct);
+            trk_all_off(bt);
+            bad = !wait_free();
+        }
+        OK(!bad && !lost[0] && !lost[1] && bmin[0] == 2u && bmax[0] == 2u && !bmax[1] && c_pool <= 8u && c_core[0] <= 4u && c_core[1] <= 4u,
+           "two cores, D Bm G A twice over the ringing release with the UNISON bass's key in the chord's block: six-note "
+           "chords: %u chord notes lost, the bass %u .. %u voices; eight-note chords: %u lost, the bass %u .. %u (the chord "
+           "first: every chord note sounds)", (unsigned)lost[0], (unsigned)bmin[0], (unsigned)bmax[0], (unsigned)lost[1],
+           (unsigned)bmin[1], (unsigned)bmax[1]);
+    }
+    /* ---- ONE CORE: the chord part four, a P5 bass ONE voice, four P5 voices in all ---- */
+    {
+        uint32_t c1v, b1v, c2v, b2v, alone, galone;
+        p5_pair(poly, uni, 0);
+        trk_note_on(bt, 36, 100);
+        blocks(6);
+        alone = p5_sounding(bt);
+        galone = p5_part(1)->sg1;
+        for (k = 0; k < 4u; k++)
+            trk_note_on(ct, K[k], 100);
+        blocks(8);
+        c1v = heldv(ct);
+        b1v = heldv(bt);
+        trk_all_off(ct);
+        trk_all_off(bt);
+        bad = !wait_free();
+        for (k = 0; k < 6u; k++)                       /* six keys alone: four voices */
+            trk_note_on(ct, K[k], 100);
+        blocks(16);
+        m = heldv(ct);
+        trk_note_on(bt, 36, 100);                      /* the chord first, then the bass */
+        blocks(8);
+        c2v = heldv(ct);
+        b2v = heldv(bt);
+        OK(!bad && !cr_dualcore_active() && trk_nvoice(bt) == 1u && trk_nvoice(ct) == 4u && voice_units(ct) == 3u && alone == 1u &&
+           (galone == P5_STACK_G[1][3][0] || galone == P5_STACK_G[0][3][0]) && c1v == 3u && b1v == 1u && m == 4u && c2v == 3u &&
+           b2v == 1u && ct->v[lowest_held(ct)].note == 48u && c_pool <= P5_ONE_POOL && !c_core[1],
+           "one core: a UNISON program on the bass part plays ONE voice (raised to its stack's level: gain %u / 4096); the chord "
+           "part has four voices (six keys: %u), and with the P5 bass sounding three (the bass first: %u + %u; the chord first: "
+           "%u + %u, its lowest note kept): %u P5 voices on the one core at most", (unsigned)galone, (unsigned)m, (unsigned)c1v,
+           (unsigned)b1v, (unsigned)c2v, (unsigned)b2v, (unsigned)c_pool);
+        trk_all_off(ct);
+        trk_all_off(bt);
+        OK(wait_free(), "one core: every voice of both parts free after the release");
+    }
+    /* ---- CORE 1 GIVEN UP UNDER HELD NOTES: the one core's rules in the next block, no voice stuck or lost ---- */
+    {
+        static const char *const HOW[3] = {"a job that never answers (the 8 ms wait)", "a fault about core 1", "a second misread"};
+        uint32_t h;
+        for (h = 0; h < 3u; h++) {
+            int32_t o[2u * CTL], pk = 0;
+            uint32_t before, after_c, after_b, same, low;
+            p5_pair(poly, uni, 1);
+            if (h == 1u) {                             /* a chord of four and the bass's stack of four */
+                trk_note_on(bt, 36, 100);
+                for (k = 0; k < 4u; k++)
+                    trk_note_on(ct, K[k], 100);
+            } else {
+                for (k = 0; k < 8u; k++)
+                    trk_note_on(ct, K[k], 100);
+            }
+            blocks(40);
+            before = p5_sounding(ct) + p5_sounding(bt);
+            if (h == 0u)
+                cr_c1_test_hang = 1;
+            else if (h == 1u)
+                cr_c1_test_faults = 1;
+            else {
+                cr_c1_test_rejected = 1;               /* (the first is forgiven: core 1 kept) */
+                blocks(1);
+                bad = cr_dbg.c1 != C1_OK;
+                cr_c1_test_rejected = 2;
+            }
+            mix_block(o, CTL);                         /* the block in which it is given up: core 0 renders all of it */
+            for (i = 0; i < 2u * CTL; i++)
+                if (abs(o[i]) > pk)
+                    pk = abs(o[i]);
+            same = p5_sounding(ct) + p5_sounding(bt);
+            blocks(2);
+            after_c = p5_sounding(ct);
+            after_b = p5_sounding(bt);
+            low = lowest_held(ct);
+            OK((h != 2u || !bad) && before == 8u && cr_dbg.c1 == C1_GAVE_UP && cr_dbg.c1_fallback == 1u && !cr_dualcore_active() &&
+               same == 8u && pk > 16 && (h == 1u ? after_c == 3u && after_b == 1u : after_c == 4u && !after_b) && low < NVOICE &&
+               ct->v[low].note == 48u,
+               "core 1 given up under %s (%s): that block is core 0's, whole (%u voices, the output's peak %d); two blocks "
+               "later the one core's rules hold: the chord %u, the bass %u, the chord's lowest note kept",
+               h == 1u ? "a chord of four and a bass stack of four" : "a chord of eight", HOW[h], (unsigned)same, (int)pk,
+               (unsigned)after_c, (unsigned)after_b);
+            trk_note_on(ct, 70, 100);                  /* a key after it: one core's steal, nothing more */
+            blocks(8);
+            bad = p5_sounding(ct) + p5_sounding(bt) > P5_ONE_POOL;
+            trk_all_off(ct);
+            trk_all_off(bt);
+            OK(!bad && wait_free(), "core 1 given up: a new key steals as one core does (four P5 voices), and every voice is free after the release");
+            cr_c1_test_hang = 0;
+            cr_c1_test_faults = cr_c1_test_rejected = cr_c1_seen = 0;
+        }
+    }
+    /* ---- Options > Dual Core turned while notes sound: nothing changes until the next power-on ---- */
+    {
+        uint32_t was = (uint32_t)opt_get(O_DUALCORE), nv, nb;
+        p5_pair(poly, uni, 1);
+        for (k = 0; k < 6u; k++)
+            trk_note_on(ct, K[k], 100);
+        trk_note_on(bt, 36, 100);
+        blocks(8);
+        nv = heldv(ct);
+        nb = heldv(bt);
+        opt_set(O_DUALCORE, 0);
+        blocks(8);
+        bad = !cr_dualcore_active() || heldv(ct) != nv || heldv(bt) != nb;
+        opt_set(O_DUALCORE, 1);
+        blocks(8);
+        OK(!bad && cr_dualcore_active() && nv == 6u && nb == 2u && heldv(ct) == 6u && heldv(bt) == 2u,
+           "Options > Dual Core turned Off and On again under held notes: the cores, the chord's six voices and the bass's two "
+           "stay as they are (the option is read at power-on)");
+        opt_set(O_DUALCORE, (int32_t)was);
+        /* ---- the bass part leaves P5 and comes back under held chord keys ---- */
+        cu_pool_load(1, ENGI_VA, 1);
+        blocks(16);
+        bad = bt->engine != ENGI_VA || p5_sounding(bt);
+        trk_note_on(ct, K[6], 100);
+        trk_note_on(ct, K[7], 100);
+        trk_note_on(bt, 36, 100);
+        blocks(8);
+        bad += heldv(ct) != 8u || heldv(bt) != 1u || c_core[0] > 4u || c_core[1] > 4u;
+        trk_note_off(bt, 36);
+        cu_pool_load(1, ENGI_PROPHET, uni);
+        blocks(16);
+        p5_patch_of(bt)->raw[P5_RELEASE_ON] = 1;
+        p5_patch_of(bt)->raw[P5_RELEASE_AMP] = 12;
+        bad += bt->engine != ENGI_PROPHET || heldv(ct) != 8u;
+        trk_note_on(bt, 36, 100);
+        blocks(6);
+        bad += p5_sounding(bt) != 0u;
+        trk_note_off(bt, 36);
+        for (k = 5; k < 8u; k++)
+            trk_note_off(ct, K[k]);
+        for (i = 0; i < 4u * FS / CTL && p5_sounding(ct) > 5u; i += 4u)
+            blocks(4);
+        trk_note_on(bt, 38, 100);
+        blocks(6);
+        OK(!bad && heldv(ct) == 5u && p5_sounding(bt) == 3u && c_pool == 8u,
+           "the bass part to the VA and back to P5 under held chord keys: with a VA bass the chord has all eight (a MONO bass "
+           "of another engine takes no voice of the pool); back on P5 the bass key finds no voice under eight chord keys, and "
+           "three when three of them have ended");
+        trk_all_off(ct);
+        trk_all_off(bt);
+        OK(wait_free(), "the bass part's engine changed under held keys: no voice stuck");
+    }
+    /* ---- a UNISON key is as loud with one core as with two ---- */
+    {
+        p5stk_t st;
+        (void)stack_levels(0, &st);
+        OK(st.n && st.worst < 90.0 && st.n1 * 2u >= st.n && (!st.nx || st.wx < 0.05),
+           "level: a UNISON program on the bass part, one voice (one core) against its whole stack (two cores), the held "
+           "note's RMS: within 1 dB on %u of %u programs, within 2 dB on %u (mean %+.2f dB, the largest %+.2f dB: where the "
+           "program takes its voices apart); %u are one voice N times: the same to %.3f dB", (unsigned)st.n1, (unsigned)st.n,
+           (unsigned)st.n2, st.mean, st.worst, (unsigned)st.nx, st.wx);
+    }
+    p5_pair(poly, uni, 0);
+    cu_pool_load(1, ENGI_VA, 1);
+    cu_pool_load(0, ENGI_FM6, 1);
+    trk[0].engine = trk[0].eng_req;
+    trk[1].engine = trk[1].eng_req;
+    trk[0].xf_on = trk[0].xf = trk[1].xf_on = trk[1].xf = 0;
+    blocks(4);
+}
+
 int main(int argc, char **argv)
 {
     static const uint8_t CHORD[4] = {48, 60, 64, 67};
@@ -676,6 +1248,19 @@ int main(int argc, char **argv)
         return pcm_file(argv[2]);
     if (argc == 3 && !strcmp(argv[1], "--idle"))
         return idle_file(argv[2]);
+    if (argc == 3 && !strcmp(argv[1], "--half"))
+        return half_file(argv[2]);
+    if (argc == 2 && !strcmp(argv[1], "--unichord"))
+        return unichord();
+    if (argc >= 2 && !strcmp(argv[1], "--stack")) {
+        p5stk_t st;
+        (void)stack_levels(1, &st);
+        printf("stack: %u UNISON programs, one voice with one core against the whole stack with two (the held note's RMS): "
+               "within 1 dB on %u, within 2 dB on %u, mean %+.2f dB, the largest difference %+.2f dB; %u of them are one "
+               "voice N times (DETUNE 0, Vintage 0, no noise): the largest %.3f dB\n", (unsigned)st.n, (unsigned)st.n1,
+               (unsigned)st.n2, st.mean, st.worst, (unsigned)st.nx, st.wx);
+        return 0;
+    }
     if (argc >= 2 && (!strcmp(argv[1], "--gesture") || !strcmp(argv[1], "--gesture-sweep"))) {
         uint32_t id = argc >= 3 ? (uint32_t)atoi(argv[2]) : 16u, runs, n;
         int full = !strcmp(argv[1], "--gesture-sweep");
@@ -706,8 +1291,9 @@ int main(int argc, char **argv)
        eng_ok(ENGI_PROPHET) && !bad && NENG_SHOWN == 6 && cu_engine_melodic(ENGI_PROPHET) && cu_engine_rank(ENGI_PROPHET) == 4,
        "engine: P5 (the code's PROPHET) is 16 (appended after FM TONE's 15), shown after CZ-1 and before WHEEL, six engines to pick");
     OK(sizeof(p5_patch_t) == 138u && sizeof(p5_part_t) <= sizeof eng_state[0] && sizeof eng_state[0] == sizeof(fm6_part_t) &&
-       ENG_P5_TEST.poly == 4u && P5_POLY == 4u && p5_units(t) == 3u && ENG_P5_TEST.ownenv && ENG_P5_TEST.deep == &P5_DEEP,
-       "state: p5_part_t %u B in the parts' engine state (%u B, FM6's size: no growth); four voices (the cap) of three units (a measurement build)",
+       ENG_P5_TEST.poly == 4u && P5_CORE == 4u && P5_POLY == 8u && P5_STACK == 4u && !cr_dualcore_active() && p5_units(t) == 3u &&
+       ENG_P5_TEST.ownenv && ENG_P5_TEST.deep == &P5_DEEP,
+       "state: p5_part_t %u B in the parts' engine state (%u B, FM6's size: no growth): eight voices' state; one core: four voices (the cap) of three units",
        (unsigned)sizeof(p5_part_t), (unsigned)sizeof eng_state[0]);
 
     /* ---- INIT PROPHET, the wire format ---- */
@@ -1289,9 +1875,9 @@ int main(int argc, char **argv)
                             events_block(CTL);
                         }
                     }
-                    OK(cc[0] + cb[0] == 5u && cc[1] + cb[1] == 5u && cb[0] >= 1u && cb[1] >= 1u,
-                       "unison on load: a UNISON bass (%s) with a 4-note chord on one core: FIVE P5 voices between the two "
-                       "parts (15 of 16 units; four with four units a voice). The bass note first: the bass has %u voices, the chord %u of its notes; the chord first: "
+                    OK(cc[0] + cb[0] == P5_ONE_POOL && cc[1] + cb[1] == P5_ONE_POOL && cb[0] == 1u && cb[1] == 1u,
+                       "unison on load: a UNISON bass (%s) with a 4-note chord on one core: FOUR P5 voices between the two "
+                       "parts (3y46: the pool of one core; five ran late on the unit). The bass note first: the bass has %u voice, the chord %u of its notes; the chord first: "
                        "the chord %u, the bass %u", P5_TEST_PRESETS[lowp].name, (unsigned)cb[0], (unsigned)cc[0],
                        (unsigned)cc[1], (unsigned)cb[1]);
                     cu_pool_load(1, ENGI_VA, 1);
@@ -1964,6 +2550,7 @@ int main(int argc, char **argv)
         crf_dirty = 0;
     }
 
+    t_cores();
     printf("%s: %d checks, %d failed\n", fails ? "cr_prophet_test FAILED" : "cr_prophet_test ok", checks, fails);
     return fails != 0;
 }

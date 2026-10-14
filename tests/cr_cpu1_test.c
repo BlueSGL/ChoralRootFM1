@@ -385,11 +385,40 @@ int main(void)
         printf("  a hung job: core 0 renders part 1, the samples of one core, c1 \"%s\", the shared budget\n",
                cr_c1_name());
     }
-    {   /* the default (no settings record read: Options > Dual Core Off): core 1 never started */
+    {   /* no settings record read (a boot that never reads them; the record's default is On since 0.22,
+         * tests/cr_settings_test.c): core 1 never started */
         cr_dbg.c1 = C1_OK;
         cr_c1_boot();
-        CHECK(cr_c1_off == 1u && cr_dbg.c1 == C1_OFF && !cr_dualcore_active(), "the default: c1 %s", cr_c1_name());
-        printf("  start: the default is Dual Core Off: c1 \"%s\" (one core)\n", cr_c1_name());
+        CHECK(cr_c1_off == 1u && cr_dbg.c1 == C1_OFF && !cr_dualcore_active(), "no record read: c1 %s", cr_c1_name());
+        printf("  start: until a record says On core 1 is not started: c1 \"%s\" (one core)\n", cr_c1_name());
+    }
+    {   /* 0.22, Dual Core On by default: main.c's cr_c1_power_on. SAFE MODE: never started. THE BOOT BEFORE THIS ONE
+         * FAILED (the boot guard counted its reset): not started either, "failed", one core for this boot; the
+         * next clean power-on starts it again. A unit whose second core crashes the start is so not left in SAFE MODE */
+        cr_c1_off = 0;
+        cr_dbg.c1 = C1_OK;
+        cr_c1_power_on(1, 0);
+        CHECK(cr_dbg.c1 != C1_OK && cr_c1_off == 1u && !cr_dualcore_active(), "SAFE MODE: c1 %s", cr_c1_name());
+        cr_c1_off = 0;
+        cr_dbg.c1 = C1_OFF;
+        cr_dbg.rail_now[0] = 11;
+        cr_dbg.rail_now[1] = 3;
+        cr_c1_power_on(0, 1);
+        CHECK(cr_dbg.c1 == C1_FAILED && cr_c1_off == 1u && !cr_dualcore_active() && !strcmp(cr_c1_name(), "failed") &&
+              cr_dbg.rail_now[0] == 11u && cr_dbg.rail_now[1] == 3u,
+              "the boot before failed, Dual Core On: c1 %s, rails %u / %u", cr_c1_name(), (unsigned)cr_dbg.rail_now[0], (unsigned)cr_dbg.rail_now[1]);
+        cr_c1_off = 1;
+        cr_dbg.c1 = C1_OK;
+        cr_c1_power_on(0, 1);
+        CHECK(cr_dbg.c1 == C1_OFF && cr_c1_off == 1u, "the boot before failed, Dual Core Off: c1 %s", cr_c1_name());
+        cr_c1_off = 0;
+        cr_dbg.c1 = C1_OFF;
+        cr_c1_power_on(0, 0);
+        CHECK(cr_dbg.c1 == C1_OK && cr_c1_off == 0u && cr_dualcore_active(), "a clean boot, Dual Core On: c1 %s", cr_c1_name());
+        cr_c1_off = 1;
+        cr_dbg.c1 = C1_OFF;
+        printf("  start (0.22): SAFE MODE: not started; the boot before this one failed: not started (\"failed\", the rails as\n"
+               "  the boot loader left them, one core for this boot); a clean boot with Dual Core On: \"ok\"\n");
     }
     {   /* Dual Core On: core 1 not answering at power-on */
         cr_dbg.c1 = C1_OFF;

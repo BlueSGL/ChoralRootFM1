@@ -166,9 +166,170 @@ static void voice_kill(voice_t *v)                      /* fade out over the nex
     voice_kills++;
 }
 
+#if FELUCCA_PROPHET
+/* ---------------------------------- P5's voices over the two parts and the two cores (3y46) ---
+ * eng_prophet_test.c "THE VOICES", docs/PROPHET.md "Voices". The budget's units cannot say it (two cores: each part
+ * its own sixteen), so P5 has a POOL beside them: the chord part's and the bass part's P5 voices together.
+ *   TWO CORES   2 x P5_CORE = 8. THE CHORD FIRST: a chord note that finds the pool full takes (1) a released voice
+ *               of either part, the oldest; (2) a voice of the bass part's stack, from the top (the stack thins
+ *               towards one); (3) the bass part's last voice (P5_BASS_KEEP 0); only then one of its own (voice_alloc's
+ *               steal). A bass note takes a released voice or does without; a stack's extra voices start only into
+ *               free room. A bass of ANOTHER engine is core 1's work beside the chord's four voices there: every
+ *               P5_BASS_UNITS budget units of its sounding voices count as one voice of the pool (a MONO bass: none);
+ *   ONE CORE    P5_ONE_POOL = 4; the chord part four, the bass part one (p5_cap), and the bass's one voice before the
+ *               chord's fourth: a bass note takes a released voice, else the chord's oldest held voice that is not
+ *               its lowest note.
+ * All of it on core 0, before the hand-over (events_block): core 1 renders what it is given. p5_pool_enforce, once
+ * a block: a part above its cap or a pool above its size gives voices up at once (core 1 given up under an eight-
+ * voice chord: the next block has four; a cap that changed under held notes) */
+#define P5_IS(t) (ENGINES[(t)->engine] == &ENG_P5_TEST)
+#define P5_POOLED(t) ((uint32_t)((t) - trk) < 2u && P5_IS(t))
+#define P5_BASS_UNITS 6u                /* 16 units of an 8-voice engine are 1070 .. 1230 us on the unit (CZ-1 measured,
+                                         * the VA estimated), a P5 voice 385 .. 440: about 6 units */
+static uint32_t p5_bass_gave;           /* held bass voices given up to the chord part (78 PEAK) */
+/* the part's voices that are a whole voice's work: sounding, or stolen for a waiting note and fading as a whole voice
+ * (eng_prophet_test.c P5_STEAL_BLOCKS: the pool has no room for another voice until the fade has ended). Not a voice
+ * given up for the pool, the budget or the shed: that one is its last sample's line */
+static uint32_t p5_sounding(const track_t *t)
+{
+    const p5_part_t *s = p5_part((uint32_t)(t - trk));
+    uint32_t i, n = 0;
+    for (i = 0; i < NVOICE; i++)
+        n += t->v[i].active && (t->v[i].stage != 4u || (s && s->voice[i % P5_POLY].steal));
+    return n;
+}
+static uint32_t voice_units(const track_t *t);
+static uint32_t p5_pool_used(void)
+{
+    const track_t *bt = &trk[P5_PART_BASS];
+    uint32_t u = 0;
+    if (P5_IS(&trk[0]))
+        u += p5_sounding(&trk[0]);
+    if (P5_IS(bt))
+        u += p5_sounding(bt);
+    else if (cr_dualcore_active())
+        u += p5_sounding(bt) * voice_units(bt) / P5_BASS_UNITS;
+    return u;
+}
+static uint32_t p5_pool_size(void) { return cr_dualcore_active() ? P5_POLY : P5_ONE_POOL; }
+#define P5_HELD(v) ((v)->active && (v)->gate && (v)->stage != 4u)
+/* a held voice of part t to give up: a stack's (MONO, LEGATO, UNISON: voice 0 is the lead) from the top, a POLY
+ * part's oldest that is not its lowest note; last: the lead / the lowest note too. NVOICE: none */
+static uint32_t p5_part_victim(const track_t *t, int last)
+{
+    uint32_t i, best = NVOICE, low;
+    if (trk_vmode(t) != V_POLY) {
+        for (i = NVOICE; i-- > 1u;)
+            if (P5_HELD(&t->v[i]))
+                return i;
+        return last && P5_HELD(&t->v[0]) ? 0u : NVOICE;
+    }
+    low = lowest_held(t);
+    for (i = 0; i < NVOICE; i++)
+        if (P5_HELD(&t->v[i]) && i != low && (best == NVOICE || t->v[i].age < t->v[best].age))
+            best = i;
+    return best != NVOICE || !last ? best : low;
+}
+/* the voice the pool gives up for a new voice of part self (soft: an extra voice of a stack asks); its index, *pp its
+ * part. NVOICE: none (the caller takes one of its own, or does without) */
+static uint32_t p5_pool_victim(const track_t *self, int soft, track_t **pp)
+{
+    track_t *ct = &trk[0], *bt = &trk[P5_PART_BASS];
+    uint32_t p, i, best = NVOICE, two = (uint32_t)cr_dualcore_active(), chord = self == ct;
+    if (soft && !chord)
+        return NVOICE;                                  /* a bass stack's extra voice: only into free room */
+    for (p = 0; p < 2u; p++) {                          /* a released voice, the oldest */
+        track_t *t = &trk[p];
+        if (!P5_IS(t) || (soft && t == self))
+            continue;
+        for (i = 0; i < NVOICE; i++) {
+            const voice_t *v = &t->v[i];
+            if (v->active && !v->gate && v->stage != 4u && (best == NVOICE || v->age < (*pp)->v[best].age)) {
+                best = i;
+                *pp = t;
+            }
+        }
+    }
+    if (best != NVOICE)
+        return best;
+    if (chord && two && P5_IS(bt)) {                    /* two cores: the chord first */
+        *pp = bt;
+        return p5_part_victim(bt, !soft && !P5_BASS_KEEP);
+    }
+    if (!chord && !two && P5_IS(ct)) {                  /* one core: the bass's one voice before the chord's fourth */
+        *pp = ct;
+        return p5_part_victim(ct, 0);
+    }
+    return NVOICE;
+}
+static void voice_kill(voice_t *v);
+static void p5_pool_take(const track_t *self, track_t *vp, uint32_t k)
+{
+    if (self == &trk[0] && vp == &trk[P5_PART_BASS] && vp->v[k].gate)
+        p5_bass_gave++;
+    voice_kill(&vp->v[k]);
+}
+static __attribute__((noinline)) int p5_pool_room(track_t *t, int soft)   /* room in the pool for a voice of part t; 0: none to be had */
+{
+    while (p5_pool_used() >= p5_pool_size()) {
+        track_t *vp = 0;
+        uint32_t k = p5_pool_victim(t, soft, &vp);
+        if (k == NVOICE)
+            return 0;
+        p5_pool_take(t, vp, k);
+    }
+    return 1;
+}
+static __attribute__((noinline)) void p5_pool_enforce(void)
+{
+    uint32_t p, k, i;
+    if (!P5_IS(&trk[0]) && !P5_IS(&trk[P5_PART_BASS]))
+        return;
+    for (p = 0; p < 2u; p++) {                          /* a part above its cap */
+        track_t *t = &trk[p];
+        uint32_t cap = trk_nvoice(t), n;
+        if (!P5_IS(t) || (n = p5_sounding(t)) <= cap)
+            continue;
+        for (; n > cap; n--) {
+            for (i = 0, k = NVOICE; i < NVOICE; i++)    /* a released voice, the oldest; a held one beyond the cap's
+                                                         * slots (voice_alloc does not see it), the oldest; else as
+                                                         * the pool takes them */
+                if (t->v[i].active && !t->v[i].gate && t->v[i].stage != 4u && (k == NVOICE || t->v[i].age < t->v[k].age))
+                    k = i;
+            for (i = cap; k == NVOICE && i < NVOICE; i++)
+                if (P5_HELD(&t->v[i]))
+                    k = i;
+            if (k == NVOICE)
+                k = p5_part_victim(t, 1);
+            if (k == NVOICE)
+                break;
+            voice_kill(&t->v[k]);
+        }
+    }
+    while (p5_pool_used() > p5_pool_size()) {           /* the pool above its size */
+        track_t *vp = 0;
+        k = p5_pool_victim(&trk[0], 0, &vp);
+        if (k == NVOICE)
+            k = p5_pool_victim(&trk[P5_PART_BASS], 0, &vp);
+        if (k == NVOICE && P5_IS(&trk[0])) {
+            vp = &trk[0];
+            k = p5_part_victim(vp, 0);
+        }
+        if (k == NVOICE)
+            break;
+        p5_pool_take(&trk[0], vp, k);
+    }
+}
+#endif
+
 /* the budget is full: free room for a voice of part t. 0 = nothing to take (soft) */
 static int voice_room(track_t *t, int soft)
 {
+#if FELUCCA_PROPHET
+    if (P5_POOLED(t) && !p5_pool_room(t, soft))
+        return 0;                                       /* (P5's pool: a bass voice the chord part's voices leave no
+                                                         * room for does not start) */
+#endif
     while (voices_busy_of(t) + voice_units(t) > VBUDGET) {
         track_t *vp = 0;
         uint32_t k = voice_victim(t, soft, &vp);
@@ -262,6 +423,12 @@ static voice_t *voice_alloc(track_t *t, uint32_t note, uint32_t vel)
     const engine_t *e = ENGINES[t->engine];
     uint32_t i, np = trk_nvoice(t), best = np, low = np, nfree = 0;
     int32_t bd = 0x7FFFFFFF;
+#if FELUCCA_PROPHET
+    uint32_t nopool = 0;                                /* P5's pool is full and gives nothing: no free voice */
+#define VA_NOPOOL nopool
+#else
+#define VA_NOPOOL 0
+#endif
     if (voice_fade_steal) {                             /* already waiting for a fade: its velocity, once */
         uint32_t p = (uint32_t)(t - trk);
         for (i = 0; p < NPART && i < vsq[p].n; i++)
@@ -308,7 +475,24 @@ static voice_t *voice_alloc(track_t *t, uint32_t note, uint32_t vel)
             break;
         voice_kill(&vp->v[k]);
     }
-    if (t->p[P_ALLOC] || t->p[P_GLIDE]) {
+#if FELUCCA_PROPHET
+    if (P5_POOLED(t))                                   /* P5's pool (above): the chord first */
+        while (nfree && p5_pool_used() >= p5_pool_size()) {
+            track_t *vp = 0;
+            uint32_t k = p5_pool_victim(t, 0, &vp);
+            if (k == NVOICE) {
+                nopool = 1;
+                break;
+            }
+            if (vp == t && k < np && (!voice_fade_steal || !t->v[k].env_out)) {
+                voice_steals++;
+                return &t->v[k];                        /* our own released voice, not heard yet: in place */
+            }
+            p5_pool_take(t, vp, k);
+        }
+#endif
+    if (VA_NOPOOL) {
+    } else if (t->p[P_ALLOC] || t->p[P_GLIDE]) {
         for (i = 0; i < np; i++) {
             int32_t d = t->v[i].pitch_cur - (int32_t)note * 16;
             if (t->v[i].active)
@@ -335,12 +519,35 @@ static voice_t *voice_alloc(track_t *t, uint32_t note, uint32_t vel)
         if (t->v[i].gate && (low == np || t->v[i].note < t->v[low].note))
             low = i;
     for (i = 0; i < np; i++)                             /* oldest released (not one fading out for another part) */
-        if (!t->v[i].gate && t->v[i].stage != 4u && (best == np || t->v[i].age < t->v[best].age))
+        if (!t->v[i].gate && t->v[i].stage != 4u && (!VA_NOPOOL || t->v[i].active) &&   /* (P5's pool full: a free
+                                                         * slot is not a voice to take) */
+            (best == np || t->v[i].age < t->v[best].age))
             best = i;
     if (best == np)
         for (i = 0; i < np; i++)                         /* oldest held, not the bass */
             if (i != low && (!voice_fade_steal || t->v[i].stage != 4u) && (best == np || t->v[i].age < t->v[best].age))
                 best = i;
+#if FELUCCA_PROPHET
+    /* P5 (3y46): before a HELD voice of the part is taken: a slot of the part that is fading out and that no waiting
+     * note has claimed is free in a block or two (a voice the pool gave up for the bass's key, or for a note struck
+     * again on a voice that was fading). The note waits for that slot (vsq, nothing taken), and when it comes back
+     * the pool gives it its room: the chord first. Without this a chord struck over its own release with a P5 bass
+     * under it took one of its own new notes while the bass kept its voice */
+#ifndef P5_WAIT_SLOT
+#define P5_WAIT_SLOT 1                                  /* (0: as before it, for the test's proof) */
+#endif
+    if (P5_WAIT_SLOT && voice_fade_steal && P5_POOLED(t) && best < np && t->v[best].gate) {
+        uint32_t f = 0, pt = (uint32_t)(t - trk);
+        for (i = 0; i < np; i++)
+            f += t->v[i].active && t->v[i].stage == 4u;
+        if (f > vsq[pt].n) {
+            best = np;
+            nopool = 0;
+        }
+    }
+#endif
+    if (VA_NOPOOL && best == np)
+        return 0;                                       /* (P5's pool: none of our own to take either: no note) */
     voice_steals++;
     if (voice_fade_steal && !(best < np && !t->v[best].env_out) && vsq_push(t, note, vel)) {   /* fade it, the note
                                                          * next block (vsq); one not rendered yet (silent): in place */
@@ -592,6 +799,10 @@ static void trk_all_off(track_t *t)
 static void engine_block(track_t *t)
 {
     uint32_t i, any = 0;
+#if FELUCCA_PROPHET
+    if (t == &trk[0])
+        p5_pool_enforce();                              /* (P5's voices over the two parts: once a block) */
+#endif
     if (t->xf_on || t->eng_req != t->engine) {
         if (!t->xf_on) {
             for (i = 0; i < NVOICE; i++)
@@ -709,6 +920,24 @@ static uint8_t part_side_on;
 /* side / side_on: the part's stereo side (part_side, or core 1's own: fx.c); lfo_pre: 0 = tick the LFO here, else the
  * caller ticked it (before the hand-off to core 1, so the shared generator's draws keep one core's order: cr_cpu1.h)
  * and this is the value it had before, the one the block renders with */
+/* P5's CHORD VOICES ON TWO CORES (3y46, fx.c p5x_run, docs/PROPHET.md "Two cores"). While p5x.on (fx.c
+ * mix_parts_split: two cores, P5 on the chord part) this function, for part 0, does everything of a voice but its
+ * samples (the envelope's tick, the pitch, the matrix: the voice's vmod_t) and puts the voice on a list; p5x_run then
+ * gives a part of the list to core 1 (in the bass part's job), renders the rest here, waits and adds the two sums.
+ * A voice's render (eng_prophet_test.c p5_render) writes its own p5_voice_t and the buffer it is given, and reads the
+ * part's block (p5_block: before the voices, on core 0) and its parameters: no word is both cores' */
+#if FELUCCA_PROPHET && CR_CPU1
+#define P5_SPLIT 1
+typedef struct { voice_t *v; vmod_t m; uint8_t c1; } p5x_item_t;   /* c1: core 1 renders it */
+static struct {
+    uint8_t on;                         /* this block: part 0's voices go on the list (core 0 sets and clears it) */
+    uint8_t n, n1;                      /* voices on the list; how many of them are core 1's */
+    p5x_item_t it[NVOICE];
+} p5x __attribute__((section(".pool")));              /* (cleared at power-on with the pool; RAM is the tight region) */
+static void p5x_run(track_t *t, int32_t *out, uint32_t n);
+#else
+#define P5_SPLIT 0
+#endif
 CR_HOT_CORE static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t *side_on, uint32_t n,
                                const int32_t *lfo_pre)
 {
@@ -820,12 +1049,22 @@ CR_HOT_CORE static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *si
             mod_voice(t, v, &m, v->fine + tune_fine + bend_fine);
         /* 1/16 st and 1/4096 -> Q24 octaves: the voice's own offset (the matrix's pitch too), without TUNE and bend */
         m.plog = (m.pitch16 - tune - bend16 - v->pitch16) * 87381 + (m.fine - tune_fine - bend_fine) * 5909;
+#if P5_SPLIT
+        if (t == &trk[0] && p5x.on) {                   /* (P5 on two cores: its samples later, p5x_run) */
+            p5x.it[p5x.n].v = v;
+            p5x.it[p5x.n++].m = m;
+        } else
+#endif
         if (e->render2)                                 /* (VA: SPREAD / USPREAD, a stereo side) */
             *side_on |= (uint8_t)e->render2(t, v, out, side, n, &m);
         else
             e->render(t, v, out, n, &m);
         nr++;
     }
+#if P5_SPLIT
+    if (t == &trk[0] && p5x.on)
+        p5x_run(t, out, n);
+#endif
     if (e->post)
         e->post(t, out, n, nr);
     if (!nr && e->tail)                                 /* (P5: the part's own tail after its last voice) */

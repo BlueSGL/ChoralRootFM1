@@ -102,6 +102,11 @@ void cr_settings_defaults(cr_settings_t *s)
     }
     s->clock_mode = CRS_CLOCK_OUT;                 /* Orchid sends clock */
     s->palette = CRS_PALETTE_MOD;
+    s->view = CRS_DC_ON;                           /* Options > Dual Core On (0.22, the owner, 2026-10-13: "Lets also
+                                                    * default to using Dual Core. If users have issues, then they can
+                                                    * switch to 1 core"): a unit with no record, Reset Settings. A
+                                                    * record that is there keeps what it holds: its Off cannot be
+                                                    * told from 0.16 .. 0.21's default (docs/DUALCORE.md) */
     s->fx_on = 1;
     s->chord_sound = CRS_SOUND_DEFAULT;
     s->bass_sound = CRS_SOUND_DEFAULT;
@@ -202,8 +207,10 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(clock_mode, 0, CRS_CLOCK_IN);
     CRS_FIX(raw_sound, 0, 1);
     if ((s->view & 0x38u) || CRS_VIEW(s) > 4u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; an unknown bit
-                                                    * or view: the default) */
-        s->view = d.view;
+                                                    * or view: the default view, unlocked; Dual Core as the record
+                                                    * has it: since 0.22 the default is On, and a record's Off is
+                                                    * never turned On for it) */
+        s->view = (uint8_t)(s->view & CRS_DC_ON);
     CRS_FIX(motion, 0, 2);
     CRS_FIX(leds, 0, 1);
     CRS_FIX(fx_on, 0, 1);
@@ -651,7 +658,8 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
     fx_lowcut = 0;
     crs_last_rc = cr_settings_import(&crs_rec.cr, &crs_rec.cr, sizeof crs_rec.cr);
     crs_usb_apply(&crs_rec.cr);                    /* (before usb_start: the configuration the host first reads) */
-    cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off (the default): core 1 not started */
+    cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off: core 1 not started (On: the default
+                                                        * of a unit with no record since 0.22) */
     css_read();                                    /* the session: read here, applied by cr_settings_load */
 }
 
@@ -1293,7 +1301,8 @@ static void crs_reinit(void)
  * is needed after it (cr_settings_commit; a loop playing: cr_ui.c cu_reset stopped it first).
  * NOT touched: the panel calibration (persist_t.panel: settings_export writes the table in RAM, as every save), the
  * saved sounds and patches (upreset / va / fm6 / cz / quad stores), the loops and the slot selected, Felucca's
- * favourites. Dual Core: Off is saved; a core that this power-on started runs until the next one (cr_c1_off) */
+ * favourites. Dual Core: On is saved (the default since 0.22); the core this power-on did or did not start stays as
+ * it is until the next one (cr_c1_off) */
 static void cr_settings_reset(void)
 {
     if (!crs_loaded)

@@ -7,7 +7,9 @@
  * Felucca, <https://github.com/keremimo/melodee>, GPL-3.0-only; its code name p5_, its file name kept so that a later
  * fix there can be diffed in). Native Sequential programs (prophet_patch.c: the 133 raw bytes of a program dump), two
  * band-limited oscillators with hard sync and audio-rate Poly-Mod into a four-pole ladder with a tanh knee in two
- * characters (SSI: Rev 1/2, Curtis: Rev 3), two ADSRs, the wheel's shared modulation source. FOUR voices a part here (Melodee: five): P5_POLY, below.
+ * characters (SSI: Rev 1/2, Curtis: Rev 3), two ADSRs, the wheel's shared modulation source. Four voices a CORE here
+ * (Melodee: five a part): with two cores up to eight on the chord part, four of them rendered by each core (3y46,
+ * "THE VOICES" below).
  *
  * WHICH VERSION. Melodee's last INTEGER version: commit 8a3074b ("Lo Freq B seven octaves, free-running phase,
  * smoother saturation"), on b351a14 ("calibrate to Rev-4 demo and add 200 factory presets") and 1fbeccd. Melodee
@@ -96,6 +98,24 @@
 #ifndef P5_UNISON_TRIM
 #define P5_UNISON_TRIM 0
 #endif
+/* THE LEVEL (3y46, the owner, 2026-10-13: "Since Unison on is going to bring us 5 dB over the limiter, I think we
+ * should bring engine down, since the limiter is going to cause chopping possibly"): a voice's output is HALF of what
+ * it was to 3y45, exactly: Melodee's "x 2" after the VCA is gone (P5_OUT_SHIFT 0; 1: 3y45's level, for the proof:
+ * tests/run_prophet_test.sh renders every program both ways with the capacitor off and wants every sample of the one
+ * to be twice the other's). After the filter and the VCA: the ladder's drive and its saturation are what they were.
+ * As CZ-1's "* 2" in 0.19 (docs/AUDIO-QUALITY.md). No stored sound holds a level of the engine's: nothing to migrate */
+#ifndef P5_OUT_SHIFT
+#define P5_OUT_SHIFT 0
+#endif
+/* A UNISON STACK (3y46, "A UNISON STACK'S VOICES AND ITS LEVEL" below): P5_STACK_PHASE 1: its voices start together
+ * (0: at the phases voice.c left in the slots, as to 3y45); P5_STACK_LAW 2: the level law by the program (0: always
+ * the root, 1: always the count; tests/cr_prophet_test.c --stack measures them) */
+#ifndef P5_STACK_PHASE
+#define P5_STACK_PHASE 1
+#endif
+#ifndef P5_STACK_LAW
+#define P5_STACK_LAW 2
+#endif
 #ifdef P5_HOT                           /* (tools/p5_cost.py: its own, to build the sample loop for one program) */
 #elif P5_RAM
 #define P5_HOT static __attribute__((section(".ram_text"), noinline, used))
@@ -108,11 +128,36 @@
 #if FELUCCA_P5_FACTORY
 #include "melodee_prophet_factory.h"   /* Sequential's v1.03 programs, the shipped ones (tools/gen_prophet_factory.py) */
 #endif
-/* FOUR voices a part (P5_POLY), THREE budget units each (p5_units; a measurement build, 2026-10-13: see there).
- * Melodee's five voices of three units were measured on the owner's unit on 2026-10-13 (cd43720, a five-voice chord):
- * pk_part0_us 2033 where the listing's count said 1318 (1.54 x), pk_block_us 2814 of the half's 2902, pk_late 17,
- * stale_halves 0 (nothing heard). Four voices are about 1630 us by proportion (docs/PROPHET.md "Cost on the unit") */
-#define P5_POLY 4u
+/* THE VOICES (3y46; the owner, 2026-10-13: "lets split main P5 across both cores so we can get up to 8 voices of P5,
+ * 4 per core. If the bass is using P5, then it can use up to 4, but if main chord needs 6 voices, and bass has 4, then
+ * priority goes to the main chord engine. For Single Core, limit P5 bass to using max of 1 voice"). docs/PROPHET.md
+ * "Voices" has the table; the rules are voice.c's (p5_pool_*), the split fx.c's (p5x_run):
+ *   P5_CORE   4  the P5 voices one core renders in a block (the unit's readings: four are 1533 .. 1760 us of the
+ *                half's 2902; Melodee's five were 2033 from flash and late);
+ *   P5_POLY   8  a part's voice STATES: the chord part's voices with two cores (four on each);
+ *   P5_STACK  4  a UNISON key's voices at most, on either part, with one core or two (the owner asked for eight
+ *                voices of chords, not for a stack of eight);
+ *   the pool     TWO CORES: the chord part's and the bass part's P5 voices together are at most 2 x P5_CORE; the
+ *                chord part may have all eight, the bass part four, and the chord comes first (a bass stack thins to
+ *                one voice, then to none, before a chord note is refused or a chord voice taken).
+ *                ONE CORE (Options > Dual Core Off, or core 1 not running): the chord part four, the bass part ONE,
+ *                and P5_ONE_POOL (P5_CORE: 4) of both together: with a P5 bass sounding the chord part has three (five P5
+ *                voices on one core were the readings that ran late: 2814 us from flash; about 3050 with three
+ *                effects by the second reading). -DP5_ONE_POOL=5: four and one, the owner's words alone */
+#ifndef P5_CORE
+#define P5_CORE 4u                      /* -DP5_CORE=3: three a core, six with two cores: what the unit's readings say
+                                         * fits with three effects up (docs/PROPHET.md "Will it fit?"); not the default */
+#endif
+#define P5_POLY (2u * P5_CORE)
+#define P5_STACK (P5_CORE < 4u ? P5_CORE : 4u)
+#ifndef P5_ONE_POOL
+#define P5_ONE_POOL P5_CORE
+#endif
+_Static_assert(P5_CORE >= 2u && P5_CORE <= 4u && P5_POLY <= NVOICE / 2u, "P5_CORE: 2 .. 4 (P5_STACK_G, the voice slots)");
+#ifndef P5_BASS_KEEP
+#define P5_BASS_KEEP 0                  /* 1: with two cores the bass keeps its last voice against a chord of eight
+                                         * (the chord then has seven); 0: the chord first, always */
+#endif
 typedef struct { int32_t value; uint8_t stage; } p5_env_t;
 typedef struct {
     uint32_t phase[2];
@@ -124,7 +169,9 @@ typedef struct {
     p5_env_t filter, amp;
     uint32_t steal;                     /* the blocks left of a stolen voice's fade (P5_STEAL_BLOCKS), 0: none */
 } p5_voice_t;
-typedef struct { p5_voice_t voice[P5_POLY]; uint32_t lfo; int32_t lfo_value, last_pitch, mod_noise, dc_x1, dc_y1; int16_t wheel[CTL * P5_OVERSAMPLE]; uint16_t wheel_pitch[CTL * P5_OVERSAMPLE]; uint8_t value[55]; } p5_part_t;
+typedef struct { p5_voice_t voice[P5_POLY]; uint32_t lfo; int32_t lfo_value, last_pitch, mod_noise, dc_x1, dc_y1; int16_t wheel[CTL * P5_OVERSAMPLE]; uint16_t wheel_pitch[CTL * P5_OVERSAMPLE]; uint8_t value[55];
+    uint16_t sg0, sg1;                  /* a UNISON stack's gain over this block (Q12; 0: no stack), p5_block */
+} p5_part_t;
 static p5_part_t *p5_part(uint32_t part);         /* engines.c: shared runtime pool (0: a part without one) */
 static p5_patch_t p5_patch[NPART] __attribute__((section(".pool")));
 static uint8_t p5_ready[NPART];
@@ -269,6 +316,9 @@ static void p5_note_on(track_t *t, voice_t *v)
     if (!voice_was) {
         memset(s, 0, sizeof *s);
         s->phase[0]=v->ph[0];s->phase[1]=v->ph[1];
+#if P5_STACK_PHASE
+        if(t->p[P_VOICE]==V_UNISON)s->phase[0]=s->phase[1]=0;   /* (a stack's voices start together: "A UNISON STACK'S VOICES") */
+#endif
         s->triangle = 32767;
         /* Thermal excitation lets resonance start with the oscillator mixer
          * shut, as native self-oscillating factory programs require. */
@@ -342,6 +392,45 @@ P5_HOT void p5_mod_samples(p5_part_t *s,const uint8_t *p,uint32_t inc,int32_t am
     }
     s->lfo=phase;s->lfo_value=p5_lfo_wave(phase,p);
 }
+/* A UNISON STACK'S VOICES AND ITS LEVEL (3y46). The stack is the program's VOICES count, P5_STACK at most. How many
+ * of them SOUND is the budget's to say: all with two cores and room in the pool, ONE on the bass part with one core,
+ * fewer while the chord part needs the pool's voices. So that a key is as loud whatever it was given (the owner,
+ * 2026-10-13: "the engine also sounds quite different on single core"), the voices that sound are raised to the
+ * level of the whole stack (P5_STACK_G, Q12), after the filter and the VCA (p5_samples), on a straight line over a
+ * block when a voice of the stack is given up or comes back. Two things make that a level one can name:
+ *   THE VOICES START TOGETHER (p5_note_on: both oscillators at phase 0). To 3y45 a stack's first key after power-on
+ *     did (every slot's phase 0: the +12 dB of docs/PROPHET.md "Headroom") and every later one had oscillator A at
+ *     the phases voice.c mono_play had left in the slots and oscillator B together: a level between a voice's
+ *     x 2 and x 4 that changed from key to key and that one voice cannot stand in for. Now a stack with DETUNE 0
+ *     and Vintage 0 is one voice N times, exactly, and with them it is spread as the program spreads it;
+ *   THE LAW: n voices of a stack of N play at N / n each (one voice of four: x 4, the stack's own sum while its
+ *     voices are together), and at sqrt(N / n) where the program takes its voices apart at once: DETUNE above 0,
+ *     or no oscillator in the mixer (noise, the filter's own tone: each voice's is its own).
+ * Measured over the 38 stacks of Sequential's 200 (cr_prophet_test --stack; docs/PROPHET.md "Level"). P5_UNISON_TRIM
+ * 1 halves it all. p5_block counts, on the core that renders the part */
+static const uint16_t P5_STACK_G[2][4][4]={   /* [law][N - 1][n - 1]: 4096 x sqrt(N / n), 4096 x N / n */
+    {{4096,4096,4096,4096},{5793,4096,4096,4096},{7094,5017,4096,4096},{8192,5793,4730,4096}},
+    {{4096,4096,4096,4096},{8192,4096,4096,4096},{12288,6144,4096,4096},{16384,8192,5461,4096}}};
+static uint32_t p5_stack(const track_t *t)        /* a UNISON key's voices: the program's count, P5_STACK at most */
+{
+    const uint8_t *p=p5_patch_of(t)->raw;
+    return p[P5_UNISON] ? (uint32_t)clamp(p[P5_UNISON_COUNT]?p[P5_UNISON_COUNT]:(int32_t)P5_STACK,1,(int32_t)P5_STACK) : P5_STACK;
+}
+static void p5_stack_gain(track_t *t,p5_part_t *s)
+{
+    uint32_t i,n=0,N;
+    if(t->p[P_VOICE]!=V_UNISON){s->sg0=s->sg1=0;return;}
+    N=p5_stack(t);
+    for(i=0;i<NVOICE;i++)n+=t->v[i].active && t->v[i].stage!=4u;
+    if(!n){s->sg0=s->sg1=0;return;}
+    s->sg0=s->sg1;
+    {
+        const uint8_t *p=p5_patch_of(t)->raw;
+        uint32_t law=P5_STACK_LAW<2 ? P5_STACK_LAW : !(p[P5_UNISON_DETUNE] || !(p[P5_LEVEL_A] || p[P5_LEVEL_B]));
+        s->sg1=(uint16_t)(P5_STACK_G[law][N-1u][(n>N?N:n)-1u]>>P5_UNISON_TRIM);
+    }
+    if(!s->sg0)s->sg0=s->sg1;
+}
 static void p5_block(track_t *t)
 {
     p5_part_t *s=p5_part((uint32_t)(t-trk));const uint8_t *p=p5_patch_of(t)->raw;
@@ -356,6 +445,7 @@ static void p5_block(track_t *t)
         uint32_t i,any=0;
         for(i=0;i<NVOICE;i++)any|=t->v[i].active;
         if(!any){
+            s->sg0=s->sg1=0;
             if(!s->mod_noise)s->mod_noise=0x517953;
             for(i=0;i<CTL*P5_OVERSAMPLE;i++)(void)p5_fast_noise32(&s->mod_noise);
             s->lfo+=(P5_LFO_INC[p5_value(p,P5_LFO_RATE)]/P5_OVERSAMPLE)*(CTL*P5_OVERSAMPLE);
@@ -364,6 +454,7 @@ static void p5_block(track_t *t)
         }
     }
 #endif
+    p5_stack_gain(t,s);
     /* Raw-to-DSP clamping is part-wide; envelopes and all the voices share it. */
     for(uint32_t k=0;k<55u;k++)s->value[k]=(uint8_t)p5_value(p,k);
     uint32_t inc=P5_LFO_INC[p5_value(p,P5_LFO_RATE)]/P5_OVERSAMPLE;
@@ -371,11 +462,14 @@ static void p5_block(track_t *t)
     void (*volatile run)(p5_part_t *,const uint8_t *,uint32_t,int32_t,int32_t)=p5_mod_samples;
     run(s,p,inc,amount,p5_value(p,P5_WHEEL_MIX)*258);
 }
+#define P5_PART_BASS 1u                           /* cr_out.c CR_PART_BASS (asserted there) */
+/* the part's voices at most ("THE VOICES" above): a UNISON key its stack; the chord part 8 with two cores and 4 with
+ * one; the bass part 4 with two cores and ONE with one, whatever its mode */
 static uint32_t p5_cap(const track_t *t)
 {
-    const uint8_t *p=p5_patch_of(t)->raw;
-    return p[P5_UNISON] && t->p[P_VOICE]==V_UNISON ?
-        (uint32_t)clamp(p[P5_UNISON_COUNT]?p[P5_UNISON_COUNT]:(int32_t)P5_POLY,1,(int32_t)P5_POLY) : P5_POLY;
+    uint32_t bass=(uint32_t)(t-trk)==P5_PART_BASS,two=(uint32_t)cr_dualcore_active();
+    uint32_t n=t->p[P_VOICE]==V_UNISON ? p5_stack(t) : two && !bass ? P5_POLY : P5_CORE;
+    return bass && !two ? 1u : n;
 }
 static void p5_legato(track_t *t,voice_t *v)
 {
@@ -390,7 +484,6 @@ static void p5_legato(track_t *t,voice_t *v)
  * without the switch leaves the part's mode as the caller set it, so the next load of a poly program is POLY again;
  * the editor's UNISON cell switches between UNISON and p5_own; an engine change that keeps the part's mix
  * (cr_ui.c cu_engine_switch) takes a program's UNISON off again (p5_leave) */
-#define P5_PART_BASS 1u                           /* cr_out.c CR_PART_BASS (asserted there) */
 static uint8_t p5_own[NPART];                     /* the part's voice mode without the program's UNISON (V_POLY, V_MONO ..) */
 static void p5_track_accept(track_t *t)
 {
@@ -531,9 +624,6 @@ static inline __attribute__((always_inline)) int32_t p5_wave_gain(int32_t wave,i
     return (wave>>15)*gain+(((wave&32767)*gain)>>15);
 }
 typedef struct { int32_t f0, a0, f1, a1, ia, ib, cut, k, filter_gain, filter_velocity, amp_velocity, env_amount, pa_env, pa_b, pf_env, pf_b, pw_env, pw_b, pwm_a, pwm_b, la, lb, ln; const int16_t *wheel; const uint16_t *wheel_pitch;
-#if P5_UNISON_TRIM
-    int32_t stack;
-#endif
 } p5_render_params_t;
 P5_HOT void p5_samples(p5_voice_t *restrict s, const uint8_t *restrict p, int32_t *restrict out, uint32_t n, const vmod_t *m, const p5_render_params_t *c)
 {
@@ -616,10 +706,7 @@ P5_HOT void p5_samples(p5_voice_t *restrict s, const uint8_t *restrict p, int32_
         #endif
         int32_t gain=p5_fast_mulq15(p5_fast_mulq15(ae,amp_velocity),32767+s->amp_drift);
         P5_TAP(4,sum);
-        last=p5_fast_voice_amp(p5_fast_mulq15(sum,gain),m,i)*2;
-#if P5_UNISON_TRIM
-        if(c->stack)last>>=1;
-#endif
+        last=p5_fast_voice_amp(p5_fast_mulq15(sum,gain),m,i)<<P5_OUT_SHIFT;
         P5_TAP(5,last);
         out[i]+=last;
     }
@@ -640,7 +727,7 @@ _Static_assert(FS == 44100, "P5_DC_K: the sample rate");
  * Below that at the last voice's end nothing changes, sample for sample. -DP5_DC_REST=0x7FFFFFFF is 74eae04's
  * output (always at rest: the cut), for a measurement and for the test's proof that it fails without this */
 #ifndef P5_DC_REST
-#define P5_DC_REST (16 << 8)
+#define P5_DC_REST (16 << (7 + P5_OUT_SHIFT))     /* (3y46: 8 units of an output at half the level) */
 #endif
 static void p5_post(track_t *t,int32_t *out,uint32_t n,uint32_t nr)
 {
@@ -733,13 +820,19 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
     int32_t width_mod=m->shape-(64<<8);
     int32_t pwm_a=q[P5_PW_A]*258+t->p[P_E4]*256+width_mod, pwm_b=q[P5_PW_B]*258+t->p[P_E5]*256+width_mod;
     int32_t la=clamp(q[P5_LEVEL_A]+t->p[P_E6],0,127)*258, lb=clamp(q[P5_LEVEL_B]+t->p[P_E7],0,127)*258, ln=q[P5_NOISE]*258;
-    const p5_render_params_t c={f0,a0,f1,a1,ia,ib,cut,k,filter_gain,filter_velocity,amp_velocity,env_amount,pa_env,pa_b,pf_env,pf_b,pw_env,pw_b,pwm_a,pwm_b,la,lb,ln,part->wheel,part->wheel_pitch
-#if P5_UNISON_TRIM
-        ,t->p[P_VOICE]==V_UNISON && p5_cap(t)>1u
-#endif
-    };
+    const p5_render_params_t c={f0,a0,f1,a1,ia,ib,cut,k,filter_gain,filter_velocity,amp_velocity,env_amount,pa_env,pa_b,pf_env,pf_b,pw_env,pw_b,pwm_a,pwm_b,la,lb,ln,part->wheel,part->wheel_pitch};
     /* An indirect call crosses the XIP/RAM distance beyond direct branch range. */
     void (*volatile run)(p5_voice_t *,const uint8_t *,int32_t *,uint32_t,const vmod_t *,const p5_render_params_t *)=p5_samples;
+    if(part->sg1 && n<=CTL){
+        /* (3y46) a voice of a UNISON stack: its samples by themselves, then into the part at the stack's level
+         * (p5_stack_gain: a straight line from the last block's gain to this one's). Here and not in the sample
+         * loop: that one stays 8a3074b's but for the level, and a POLY voice pays nothing */
+        int32_t tmp[CTL],g0=part->sg0,dg=part->sg1-g0;
+        for(uint32_t i=0;i<n;i++)tmp[i]=0;
+        run(s,p,tmp,n,m,&c);
+        for(uint32_t i=0;i<n;i++)out[i]+=(tmp[i]*(g0+((dg*(int32_t)i)>>CTL_LOG2)))>>12;
+        s->last_pcm=(s->last_pcm*part->sg1)>>12;
+    }else
     run(s,p,out,n,m,&c);
     if(!v->active)s->steal=0;                         /* (the fade's last block) */
 }
@@ -921,7 +1014,7 @@ static const eng_page_t P5_PAGES[] = {
     {"WHEEL+",{P5D_S("FILTER"),P5D_NONE,P5D_NONE,P5D_NONE}},
     {"POLYMOD",{P5D_K("ENV"),P5D_K("OSC B"),P5D_S("FREQ A"),P5D_S("PW A")}},                           /* 15 MOD */
     {"POLYMOD+",{P5D_S("FILTER"),P5D_NONE,P5D_NONE,P5D_NONE}},
-    {"VOICE",{P5D_S("UNISON"),{"VOICES",F_INT,1,(int16_t)P5_POLY,(int16_t)P5_POLY,0,0},{"DETUNE",F_INT,0,7,0,0,0},P5D_K("GLIDE")}},
+    {"VOICE",{P5D_S("UNISON"),{"VOICES",F_INT,1,(int16_t)P5_STACK,(int16_t)P5_STACK,0,0},{"DETUNE",F_INT,0,7,0,0,0},P5D_K("GLIDE")}},
     {"VOICE+",{{"PRIO",F_ENUM,0,3,0,N_P5_PRIO,0},P5D_K("VINTAGE"),P5D_NONE,P5D_NONE}},
 };
 #undef P5D_K
@@ -957,7 +1050,7 @@ static int32_t p5_dref(uint32_t page,uint32_t col)                /* page column
     return P5_DKEY[page][col];
 }
 /* get: the value the engine plays, in the column's range (a switch byte other than 0: on; VOICES 0, as the factory
- * programs have it: all P5_POLY, p5_cap; a stored 5: the four there are); the byte itself stays as it is until the column is turned */
+ * programs have it: all P5_STACK, p5_stack; a stored 5: the four there are); the byte itself stays as it is until the column is turned */
 static int32_t p5_dget(const track_t *t,uint32_t page,uint32_t col)
 {
     int32_t id=p5_dref(page,col),v;
@@ -966,7 +1059,7 @@ static int32_t p5_dget(const track_t *t,uint32_t page,uint32_t col)
     d=&P5_PAGES[page].col[col];
     v=p5_patch_of(t)->raw[id];
     if(d->fmt==F_ONOFF)return v!=0;
-    if(id==P5_UNISON_COUNT && !v)return (int32_t)P5_POLY;
+    if(id==P5_UNISON_COUNT && !v)return (int32_t)P5_STACK;
     return clamp(v,d->min,d->max);
 }
 static void p5_dset(track_t *t,uint32_t page,uint32_t col,int32_t v)
@@ -994,20 +1087,19 @@ static const eng_deep_t P5_DEEP={
 };
 _Static_assert(sizeof(p5_patch_t)==138u && sizeof(p5_patch_t)<=ENG_BLOB_MAX,"the Prophet program fits the blob cap");
 
-/* The budget: THREE of the sixteen units a voice (as Melodee's; the cap of four voices a part is P5_POLY, above, not
- * the budget), so that the chord part KEEPS its four voices when a bass sounds on one core: 4 x 3 + a VA or FM6
- * bass's 2 = 14 of 16. With four units (c176dd4) a bass left the chord three voices (3 x 4 + 2). The price: a P5 BASS
- * under a P5 chord is a fifth P5 voice (4 x 3 + 3 = 15 of 16), and five voices were the reading that did not fit with
- * a margin. A MEASUREMENT BUILD (the owner, 2026-10-13): to be read on the unit (four P5 chord voices + a bass + all
- * three effects: pk_part0_us, pk_block_us, pk_late, stale_halves); it may go back to 4 */
-static uint32_t p5_units(const track_t *t) { (void)t; return 3u; }
+/* The budget. ONE CORE: THREE of the sixteen units a voice (as Melodee's), so that the chord part KEEPS its four
+ * voices when a bass of another engine sounds: 4 x 3 + a VA or FM6 bass's 2 = 14 of 16 (c176dd4's four units left it
+ * three). TWO CORES: each part has its own sixteen (voice.c VB_SAME), and the chord part's are eight voices: TWO
+ * units. How many P5 voices the two parts may have TOGETHER is not the units' to say but the pool's (voice.c
+ * p5_pool_*; "THE VOICES" above) */
+static uint32_t p5_units(const track_t *t) { (void)t; return cr_dualcore_active() ? 2u : 3u; }
 static const engine_t ENG_P5_TEST = {
     .name="P5", .page_title={"FILTER/TUNE","PW/MIX"},
     .edit={{"CUT",F_INT,-63,63,0,0,0},{"RES",F_INT,-63,63,0,0,0},
            {"TUNA",F_SEMI,-24,24,0,0,0},{"TUNB",F_SEMI,-24,24,0,0,0},
            {"PWA",F_INT,-63,63,0,0,0},{"PWB",F_INT,-63,63,0,0,0},
            {"MIXA",F_INT,-63,63,0,0,0},{"MIXB",F_INT,-63,63,0,0,0}},
-    .presets=P5_TEST_PRESETS,.npresets=NELEM(P5_TEST_PRESETS),.poly=P5_POLY,.ownenv=1,.deep=&P5_DEEP,
+    .presets=P5_TEST_PRESETS,.npresets=NELEM(P5_TEST_PRESETS),.poly=P5_CORE,.ownenv=1,.deep=&P5_DEEP,
     .note_on=p5_note_on,.render=p5_render,.done=p5_done,.block=p5_block,.units=p5_units,.cap=p5_cap,.legato=p5_legato,
 #if P5_DC_BLOCK
     .post=p5_post,.tail=p5_tail,

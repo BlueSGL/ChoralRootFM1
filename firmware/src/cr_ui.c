@@ -2814,9 +2814,10 @@ static void cu_reset(void)
     cr_settings_reset();
 #endif
     cu.opt_sel = O_STYLE;
-    cu_message(cr_c1_off ? "settings reset" : "settings reset \267 restart", CR_COL_GREEN);   /* (Dual Core was On at
-                                                   * this power-on: Off is saved, the core stops at the next) */
-    cu_trace("options: settings reset%s\n", cr_c1_off ? "" : " (Dual Core runs until the restart)");
+    cu_message(cr_c1_off ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core was Off at
+                                                   * this power-on: On, the default since 0.22, is saved, the core
+                                                   * starts at the next) */
+    cu_trace("options: settings reset%s\n", cr_c1_off ? " (Dual Core starts at the restart)" : "");
 }
 static void cu_oct_tap(uint32_t b)
 {
@@ -6046,7 +6047,7 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
-    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: Off the default, On the option; never started /
+    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: On the default since 0.22; never started /
                                                     * stopped live) */
         cu_cpy(s->label, cs.dualcore != !cr_c1_off ? "takes effect after a restart"
                          : cs.dualcore ? "bass on the second core" : "On: bass on the second core", sizeof s->label);
@@ -6900,7 +6901,7 @@ static void cr_ui_init(void)
     cs.loop_level = 100;
     cs.loop_rate = CRL_RATE_1;
     cs.metro_vol = 70;
-    cs.dualcore = 0;                              /* Options > Dual Core Off (the record's: cr_settings_load) */
+    cs.dualcore = 1;                              /* Options > Dual Core On (the record's: cr_settings_load) */
     cs.out_clean = 1;                             /* Options > Output Clean (the record's) */
     cs.usb48 = 0;                                 /* Options > USB Rate 44.1 kHz (the record's) */
     cs.names_std = 0;                             /* Options > Chord Names Orchid (the record's) */

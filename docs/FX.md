@@ -270,6 +270,14 @@ the numbers are that stretch's):
 | `pk_lag_us` | the furthest the ISR started behind its boundary (an estimate: "Late is not slow") |
 | `pk_wall_us`, `pk_t5_us` | the longest half by the clock, TIMER5 nested in it (`pk_block_us` leaves TIMER5 out), and the most TIMER5 took of one half |
 | `irq_gap_us`, `irq_gap_pc` | TIMER5 comes every 100 us: its longest gap (the interrupts were masked for about that, less 100) and the address it came back to after it (`build/choralroot.dis` names the section) |
+| `key_ons`, `key_pick_us`, `key_eng_avg_us`, `key_eng_us` | the keys' way to the engine (docs/INTEGRATION.md "Keys while a frame draws") |
+| `shed_voices`, `shed_last_voice`, `shed_last_why`, `shed_over_halves`, `shed_last_us`, `voices_faded`, `voices_stolen` | 3y44: what the overload shed did (docs/PROPHET.md "The crackle"). `shed_last_why` 4 (0.22): a voice of the bass part's P5 stack, taken before any chord voice |
+| `p5_core0_voices`, `p5_core1_voices` | 0.22 (3y46, docs/PROPHET.md "Voices"): the most P5 voices core 0 and core 1 rendered in one block. The rule is four each; core 1's are the bass part's P5 voices and its share of the chord part's. With one core everything is core 0's (at most four) |
+| `p5_bass_voices`, `p5_bass_given_up` | the bass part's most P5 voices (four with two cores, one with one), and held bass voices given up to the chord part (the chord comes first) |
+
+With Dual Core On **`pk_part1_us` is core 1's whole job of a half**: the bass part and, since 0.22, the chord part's
+P5 voices that core 1 renders; `pk_part0_us` is core 0's own render (its share of the chord's voices), `pk_wait_us`
+how long core 0 then waited for core 1. The half is the tick + the longer of the two + the effects + the master.
 
 The instrumentation is five TIMER4 reads a block. `tools/emu/perf.sh` prints the same four parts ("fx parts"), so the
 two compare line by line. The emulator's, for (l), the heaviest sound with both sends at 127:

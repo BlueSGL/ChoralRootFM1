@@ -12,6 +12,11 @@
  *   build/host/cr_c1_thread_tsan --tsan   the same phrases with the job on the thread, in this process, built with
  *                                         -fsanitize=thread: the sanitizer names every word both threads touch
  *                                         without a lock between them (tests/run_cr_tests.sh fails on any report)
+ * 3y46, P5's CHORD VOICES ON BOTH CORES (fx.c p5x_run): with P5 on the chord part core 1's job is the bass part AND a
+ * share of the chord part's voices, while this thread renders the rest. The phrase's chords are up to eight notes.
+ * For every pair with a P5 chord the output must also be (d) the UNSPLIT render's: every chord voice in
+ * track_render_x, in voice order, on one thread (cr_c1_test_nosplit: the same allocation, no sharing out), and
+ * (e), (f) that of a split of its own (cr_c1_test_share: every voice to core 1; none), the job on the thread.
  * What it cannot show: the unit's timing, its caches and its flash (a core that reads a word wrong: cr_cpu1.h's
  * validation), an interrupt on core 0 during the job, the main loop writing a parameter under both. */
 #include <os/lock.h>
@@ -43,7 +48,7 @@ static volatile int c1_plant;
 
 static int fails;
 typedef struct { uint8_t ce, be; uint16_t cpos, bpos; const char *what; } pair_t;
-static uint32_t rs, vmax[2];
+static uint32_t rs, vmax[2], pmax;                  /* pmax: P5's pool at its fullest (voice.c p5_pool_used) */
 static uint32_t rnd(uint32_t n)
 {
     rs = rs * 1664525u + 1013904223u;
@@ -52,26 +57,32 @@ static uint32_t rnd(uint32_t n)
 /* a phrase on both parts: chords of five and six notes on the chord part (more than P5's four voices: steals, the
  * fade and the deferred note), bass notes under them on part 1 (a UNISON program: the stack), the wheel, the
  * pressure, a bend on both, a sound change on each part under held notes. Returns the digest of every sample */
-static uint64_t phrase(const pair_t *p, uint32_t nb, int thread)
+/* mode: 0 the job inline, 1 on the thread, 2 inline and P5's chord voices not shared out (the reference), 3 / 4 on
+ * the thread with every chord voice given to core 1 / to core 0 */
+#define NKEYS 8u
+static uint64_t phrase(const pair_t *p, uint32_t nb, int mode)
 {
     int32_t out[2u * CTL];
     uint64_t h = 1469598103934665603ull;
     uint32_t b, i, k;
-    uint8_t held[6] = {0}, bass = 0;
+    uint8_t held[NKEYS] = {0}, bass = 0;
     rs = 0x1234567u + p->ce * 131u + p->be * 17u + p->cpos;
-    vmax[0] = vmax[1] = 0;
+    vmax[0] = vmax[1] = pmax = 0;
     cr_dbg.c1 = C1_OK;
-    cr_c1_test_thread = (uint8_t)thread;
+    cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = 0;
+    cr_c1_test_thread = (uint8_t)(mode == 1 || mode >= 3);
+    cr_c1_test_nosplit = (uint8_t)(mode == 2);
+    cr_c1_test_share = (uint8_t)(mode == 3 ? P5_POLY + 1u : mode == 4 ? 1u : 0u);
     cu_pool_load(0, p->ce, p->cpos);
     cu_pool_load(1, p->be, p->bpos);
     for (b = 0; b < nb; b++) {
         if (!(b % 37u)) {                               /* a new chord over the old one's notes */
-            for (i = 0; i < 6u; i++)
+            for (i = 0; i < NKEYS; i++)
                 if (held[i] && rnd(3)) {
                     trk_note_off(&trk[0], held[i]);
                     held[i] = 0;
                 }
-            for (i = 0; i < 6u; i++)
+            for (i = 0; i < NKEYS; i++)
                 if (!held[i] && rnd(4)) {
                     held[i] = (uint8_t)(48u + rnd(30));
                     trk_note_on(&trk[0], held[i], 60u + rnd(67));
@@ -94,6 +105,8 @@ static uint64_t phrase(const pair_t *p, uint32_t nb, int thread)
             for (k = 0; k < 2u; k++)
                 cu_pool_load(k, k ? p->be : p->ce, 1u + rnd(pool_count(k ? p->be : p->ce) - 1u));
         mix_block(out, CTL);
+        if ((P5_IS(&trk[0]) || P5_IS(&trk[1])) && p5_pool_used() > pmax)
+            pmax = p5_pool_used();
         for (k = 0; k < 2u; k++) {
             uint32_t n = 0;
             for (i = 0; i < NVOICE; i++)
@@ -111,6 +124,7 @@ static uint64_t fork_phrase(const pair_t *p, uint32_t nb, int thread)
 {
     int fd[2];
     uint64_t h = 0;
+    uint32_t c[3];
     pid_t pid;
     if (pipe(fd))
         return 0;
@@ -118,12 +132,21 @@ static uint64_t fork_phrase(const pair_t *p, uint32_t nb, int thread)
     pid = fork();
     if (!pid) {
         h = phrase(p, nb, thread);
+        c[0] = cr_dbg.p5_c0;
+        c[1] = cr_dbg.p5_c1;
+        c[2] = pmax;
         (void)!write(fd[1], &h, sizeof h);
+        (void)!write(fd[1], c, sizeof c);
         _exit(0);
     }
     close(fd[1]);
-    if (read(fd[0], &h, sizeof h) != (ssize_t)sizeof h)
+    if (read(fd[0], &h, sizeof h) != (ssize_t)sizeof h || read(fd[0], c, sizeof c) != (ssize_t)sizeof c)
         h = 0;
+    else {
+        cr_dbg.p5_c0 = c[0];                            /* (the child's counters: the most P5 voices a core rendered) */
+        cr_dbg.p5_c1 = c[1];
+        pmax = c[2];
+    }
     close(fd[0]);
     waitpid(pid, 0, 0);
     return h;
@@ -132,8 +155,8 @@ static uint64_t fork_phrase(const pair_t *p, uint32_t nb, int thread)
 int main(int argc, char **argv)
 {
     int tsan = argc >= 2 && !strcmp(argv[1], "--tsan");
-    uint32_t i, uni = 0, k, nb = tsan ? 900u : 3000u;
-    pair_t P[16];
+    uint32_t i, uni = 0, k, nb = tsan ? 900u : 3000u, nsplit = 0;
+    pair_t P[20];
     uint32_t np = 0;
     emu_flash_open();
     memset(emu_flash, 0xFF, sizeof emu_flash);
@@ -151,6 +174,9 @@ int main(int argc, char **argv)
     PAIR(ENGI_PROPHET, 2, ENGI_PROPHET, 3, "P5 chord, P5 bass");
     PAIR(ENGI_PROPHET, 1, ENGI_VA, 3, "P5 chord, VA bass");
     PAIR(ENGI_PROPHET, 3, ENGI_FM6, 2, "P5 chord, FM6 bass");
+    PAIR(ENGI_PROPHET, 4, ENGI_CZ, 4, "P5 chord, CZ-1 bass");
+    PAIR(ENGI_PROPHET, 5, ENGI_QUAD, 2, "P5 chord, FM TONE bass");
+    PAIR(ENGI_PROPHET, 6, 7u, 1, "P5 chord, WHEEL bass");
     PAIR(ENGI_FM6, 2, ENGI_PROPHET, uni ? uni : 2u, "FM6 chord, P5 bass");
     PAIR(ENGI_VA, 2, ENGI_PROPHET, 4, "VA chord, P5 bass");
     PAIR(ENGI_FM6, 5, ENGI_FM6, 3, "FM6 chord, FM6 bass");
@@ -164,13 +190,29 @@ int main(int argc, char **argv)
     for (i = 0; i < np; i++) {
         if (tsan) {
             uint64_t h = phrase(&P[i], nb, 1);
-            int ok = vmax[0] >= 3u && vmax[1] >= 1u && (i || !uni || vmax[1] == P5_POLY) && cr_c1_th_done == (i + 1u) * nb;
+            int p5c = P[i].ce == ENGI_PROPHET;
+            int ok = vmax[0] >= 3u && vmax[1] >= 1u && (i || !uni || vmax[1] == P5_STACK) && cr_c1_th_done == (i + 1u) * nb &&
+                     pmax <= P5_POLY && (!p5c || (vmax[0] > P5_CORE && cr_dbg.p5_c0 >= 2u && cr_dbg.p5_c0 <= P5_CORE && cr_dbg.p5_c1 >= 2u &&
+                               cr_dbg.p5_c1 <= P5_CORE));
             fails += !ok;
-            printf("  %s %s: %016llx (voices: chord %u, bass %u; jobs on the thread: %u)\n", ok ? "ran " : "FAIL", P[i].what,
-                   (unsigned long long)h, (unsigned)vmax[0], (unsigned)vmax[1], (unsigned)cr_c1_th_done);
+            printf("  %s %s: %016llx (voices: chord %u, bass %u; P5 voices in a block at most: core 0 %u, core 1 %u; jobs "
+                   "on the thread: %u)\n", ok ? "ran " : "FAIL", P[i].what, (unsigned long long)h, (unsigned)vmax[0],
+                   (unsigned)vmax[1], (unsigned)cr_dbg.p5_c0, (unsigned)cr_dbg.p5_c1, (unsigned)cr_c1_th_done);
         } else {
             uint64_t a = fork_phrase(&P[i], nb, 0), b = fork_phrase(&P[i], nb, 1), c = fork_phrase(&P[i], nb, 1);
-            int ok = a && a == b && a == c;
+            uint32_t c0 = cr_dbg.p5_c0, c1 = cr_dbg.p5_c1;
+            int ok = a && a == b && a == c && pmax <= P5_POLY;
+            if (P[i].ce == ENGI_PROPHET) {              /* the unsplit render, and two splits of the test's own */
+                uint64_t d = fork_phrase(&P[i], nb, 2), e = fork_phrase(&P[i], nb, 3), f = fork_phrase(&P[i], nb, 4);
+                ok = ok && a == d && a == e && a == f && c0 >= 2u && c0 <= P5_CORE && c1 >= 2u && c1 <= P5_CORE;
+                nsplit += ok;
+                printf("  %s %s: inline %016llx, on a thread %016llx, again %016llx; UNSPLIT on one thread %016llx; every chord "
+                       "voice on core 1 %016llx, none %016llx (P5 voices in a block at most: core 0 %u, core 1 %u; the pool %u)\n",
+                       ok ? "ok  " : "FAIL", P[i].what, (unsigned long long)a, (unsigned long long)b, (unsigned long long)c,
+                       (unsigned long long)d, (unsigned long long)e, (unsigned long long)f, (unsigned)c0, (unsigned)c1, (unsigned)pmax);
+                fails += !ok;
+                continue;
+            }
             fails += !ok;
             printf("  %s %s: inline %016llx, on a thread %016llx, again %016llx\n", ok ? "ok  " : "FAIL", P[i].what,
                    (unsigned long long)a, (unsigned long long)b, (unsigned long long)c);
@@ -180,6 +222,8 @@ int main(int argc, char **argv)
         printf("cr_c1_thread: %d FAILED\n", fails);
         return 1;
     }
+    if (!tsan)
+        printf("split: %u pairs with P5 on the chord part: the two cores' sums are the unsplit render's samples\n", (unsigned)nsplit);
     printf(tsan ? "cr_c1_thread: ran (the sanitizer's verdict is its own: no report above, exit 0)\n"
                 : "cr_c1_thread: all tests passed (the job on a thread renders the inline job's samples)\n");
     return 0;

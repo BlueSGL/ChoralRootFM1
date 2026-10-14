@@ -61,7 +61,7 @@ static void t_defaults(void)
        "defaults: USB Record on, USB Level Master (Felucca's)");
     ok(d.bpm == 120 && d.vel == 100 && d.playstyle == CR_PS_SIMPLE && !d.key_on && d.single == CR_SINGLE_FULL,
        "defaults: 120 BPM, velocity 100, Simple, Key Mode off, Full Octave");
-    ok(d.chord_sound == CRS_SOUND_DEFAULT && d.fx_on && d.view == 0 && d.motion == 0, "defaults: UI fields");
+    ok(d.chord_sound == CRS_SOUND_DEFAULT && d.fx_on && d.view == CRS_DC_ON && d.motion == 0, "defaults: UI fields (the view 0, Dual Core On)");
     /* the defaults are the engine's power-on state */
     cr_init(&C, &OUT);
     for (m = 0; m < CR_PM_COUNT; m++)
@@ -889,10 +889,10 @@ static void t_view_lock(void)
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VIEW(&r) == 4 && !CRS_VIEW_LOCK(&r), "v9: Scope, unlocked");
     s.view = 0x85;                                 /* a view out of range, locked */
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.view == d.view, "v9: a view out of range takes the default");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VIEW(&r) == CRS_VIEW(&d) && !CRS_VIEW_LOCK(&r), "v9: a view out of range takes the default");
     s.view = 0x12;                                 /* an unknown bit */
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.view == d.view, "v9: an unknown bit takes the default");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VIEW(&r) == CRS_VIEW(&d) && !CRS_VIEW_LOCK(&r), "v9: an unknown bit takes the default");
     s = d;                                         /* a version-8 record: its view kept, unlocked */
     s.view = 2;
     cr_settings_seal(&s);
@@ -903,7 +903,9 @@ static void t_view_lock(void)
 }
 
 /* version 12 (0.16): Options > Dual Core in bit 6 of view, set = On, default Off. v11 (0.15) had set = Off and On the
- * default: every record older than v12 loads Off whatever its bit says; the view and its lock are not touched */
+ * default: every record older than v12 loads Off whatever its bit says; the view and its lock are not touched.
+ * 0.22 (the owner, 2026-10-13): THE DEFAULT IS ON: a unit with no record (erased, zeroed, none), Reset Settings. The
+ * version stays: a record that is there keeps what it holds (its Off cannot be told from 0.16 .. 0.21's default) */
 static void crs_old(cr_settings_t *s, unsigned version)   /* s resealed as a record of an older version */
 {
     cr_settings_seal(s);
@@ -915,12 +917,18 @@ static void t_dualcore_v12(void)
     cr_settings_t s, r;
     uint8_t z[CRS_SIZE];
     cr_settings_defaults(&s);
-    ok(CRS_DUALCORE(&s) == 0 && s.view == 0, "v12 defaults: Dual Core Off (the view byte 0)");
+    ok(CRS_DUALCORE(&s) == 1 && s.view == CRS_DC_ON && CRS_VIEW(&s) == 0 && !CRS_VIEW_LOCK(&s),
+       "0.22 defaults: Dual Core On (the view byte 0x40: view 0, unlocked)");
     memset(z, 0xFF, sizeof z);                     /* no record: an erased sector, zeros, nothing */
-    ok(cr_settings_import(&r, z, sizeof z) == 0 && !CRS_DUALCORE(&r), "an erased record: defaults, Dual Core Off");
+    ok(cr_settings_import(&r, z, sizeof z) == 0 && CRS_DUALCORE(&r), "an erased record: defaults, Dual Core On");
     memset(z, 0, sizeof z);
-    ok(cr_settings_import(&r, z, sizeof z) == 0 && !CRS_DUALCORE(&r) && cr_settings_import(&r, NULL, 0) == 0 &&
-       !CRS_DUALCORE(&r), "a zeroed record, no record: defaults, Dual Core Off");
+    ok(cr_settings_import(&r, z, sizeof z) == 0 && CRS_DUALCORE(&r) && cr_settings_import(&r, NULL, 0) == 0 &&
+       CRS_DUALCORE(&r), "a zeroed record, no record: defaults, Dual Core On");
+    cr_settings_defaults(&r);
+    r.view = CRS_VIEW_BYTE(3, 1);
+    r.loop_slot = 4;
+    cr_settings_factory(&r);                       /* Options > Reset Settings */
+    ok(CRS_DUALCORE(&r) && CRS_VIEW(&r) == 0 && r.loop_slot == 4, "Reset Settings (a record with Dual Core Off): On");
     s.view = (uint8_t)(CRS_VIEW_BYTE(3, 1) | CRS_DC_ON);
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_DUALCORE(&r) && CRS_VIEW(&r) == 3 && CRS_VIEW_LOCK(&r),
@@ -930,9 +938,12 @@ static void t_dualcore_v12(void)
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && !CRS_DUALCORE(&r) && CRS_VIEW(&r) == 2, "v12: Dual Core Off kept");
     ok(cr_settings_import(&s, &r, sizeof r) == 1 && !CRS_DUALCORE(&s) && s.view == r.view, "v12: Off round trip");
-    s.view = (uint8_t)(CRS_DC_ON | 0x08u);         /* an unknown bit: the default view byte, so Off */
+    s.view = (uint8_t)(CRS_DC_ON | 0x08u);         /* an unknown bit: the default view, Dual Core as the record has it */
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && !CRS_DUALCORE(&r) && r.view == 0, "v12: an unknown view bit: defaults (Off)");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_DUALCORE(&r) && r.view == CRS_DC_ON, "v12: an unknown view bit: the default view, Dual Core kept On");
+    s.view = 0x88u;                                /* .. and a record that has it Off stays Off (0.22: the default is On) */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && !CRS_DUALCORE(&r) && r.view == 0, "v12: an unknown view bit, Dual Core Off: the default view, kept Off");
     cr_settings_defaults(&s);                      /* a version-11 record, bit 6 clear (0.15's On, its default) */
     s.view = CRS_VIEW_BYTE(4, 1);
     crs_old(&s, 11);

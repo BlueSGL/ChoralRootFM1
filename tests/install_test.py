@@ -553,7 +553,7 @@ def debug():
        "started at most 640 us behind its boundary, its longest half took 3350 us with TIMER5 nested in it (410 us" in out and
        "once came 1130 us after the one before: masked for about 1030 us, until 0x0200B2C4" in out,
        "--debug: when the ISR got to start (PEAK's values 25..30): the stale halves, the lag, TIMER5, the masked stretch")
-    ok(rc == 0 and len(I.DEBUG_PEAK) == 41 and "key_ons" not in out and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 45 and "key_ons" not in out and "pk_block_us 2580" in out and "pk_late_stage 4 (fx)" in out and
        "worst half since the last --debug: 2580 us of 2902 (88 %) over 34500 halves" in out and
        "late 12 (the latest: 2950 us, its largest stage fx)" in out and
        "down 40 / 110, delay 90 / 200, reverb 300 / 520, up 35 / 90" in out and
@@ -577,11 +577,25 @@ def debug():
        "note, asked by a half of 2611 us; voices faded out for another note, part or the shed 9, own voices taken for a "
        "new note 4" in out,
        "--debug: what the overload shed did (PEAK's values 35..41): the count, the latest voice and why, the halves above 85 %")
+    ok("p5_core0_voices" not in out and "P5: at most" not in out, "--debug: a firmware of 41 PEAK values (3y44, 3y45): no word of P5's cores")
     cr.peak[34:] = [0, 0, 0, 0, 0, 2, 1]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "shed_last_voice 0 (none)" in out and "overload: 0 halves above 85 % of the budget since the last "
        "--debug, 0 voices shed (two such halves in a row fade one); voices faded out" in out,
        "--debug: nothing shed: said so, with the voices faded and taken")
+    # 3y46: P5's voices on two cores (PEAK's values 42..45)
+    cr.peak[34:] = [1, 0x10000 | 1 << 12 | 3 << 8 | 38, 4, 5, 2500, 6, 2, 4, 4, 4, 3]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "p5_core0_voices 4" in out and "p5_core1_voices 4" in out and "p5_bass_voices 4" in out and
+       "p5_bass_given_up 3" in out and "shed_last_why 4 (a voice of the bass part's P5 stack, before any chord voice)" in out and
+       "part 1 (bass) voice 3, note 38 (D2)" in out and
+       "P5: at most 4 voices rendered by core 0 and 4 by core 1 in one block (four each is the rule), the bass part 4 at "
+       "most, 3 held bass voices given up to the chord; core 1's longest job of a half 150 us (pk_part1_us), core 0's "
+       "longest wait for it 60 us (pk_wait_us)" in out,
+       "--debug: P5 on two cores (PEAK's values 42..45): the voices a core rendered, the bass part's, given up; a shed bass voice")
+    cr.peak[41:] = [0, 0, 0, 0]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "p5_core0_voices 0" in out and "P5: at most" not in out, "--debug: no P5 voice played: the values, no line")
     cr.peak = None
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")

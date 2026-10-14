@@ -1437,7 +1437,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **USB Record** | Off, On | On | On: the computer can record the FM-1 ([USB audio recording](#usb-audio-recording)) |
 | **USB Level** | Master, Fixed | Master | Master: the recording follows the MASTER knob. Fixed: it is recorded at full level and MASTER only sets what you hear |
 | **USB Rate** | 44.1 kHz, 44.1 + 48 kHz | 44.1 kHz | 44.1 kHz: the computer records at the FM-1's own rate, as in 0.18. 44.1 + 48 kHz: the computer may also choose 48 kHz, which the FM-1 converts for it; that takes some of its processor time while a recording runs ([USB audio recording](#usb-audio-recording)). The FM-1 leaves USB for a second when you change it |
-| **Dual Core** | Off, On | Off | On: the bass plays on the chip's second core (below). Takes effect after a restart |
+| **Dual Core** | Off, On | On (a new unit; an updated unit keeps what it had) | On: the chip's second core shares the work, so more voices sound (below). Takes effect after a restart |
 | **Output** | Classic, Clean | Clean | the last stage before the headphones, the speaker and the USB recording. Classic: as 0.18 and before. Clean: 0.19's, with less distortion on chords and at low MASTER settings; a single note is a little quieter, a full chord with the bass a little louder, and everything sounds 0.7 ms later (its limiter looks ahead). You can switch while you play to compare |
 | **Version** | | | the firmware's version |
 | **Calibrate** | | | OCT+ starts the panel calibration ([Calibration](#calibration)) |
@@ -1466,18 +1466,21 @@ Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the 
   0, the bass is off, the parts' Level and Pan and the effects' settings are back at their normal values, and a
   change to a sound you had not saved is gone. The FM-1 is then as a new unit is, and stays so over a power-off:
   the reset saves itself, no SAVE held is needed after it.
-- **Dual Core** is the one setting that waits for a restart: if it was On, the message reads
-  `settings reset · restart` and the second core keeps running until you switch off and on.
+- **Dual Core** is the one setting that waits for a restart: the reset sets it On, and if it was Off the message
+  reads `settings reset · restart`: the second core starts when you switch off and on.
 
-**Dual Core.** With Dual Core Off, the default since 0.16, ChoralRoot runs on one core as the stock firmware does, and
-the chord and the bass share one budget of voices: a very full chord with the bass can cost a voice. With it On, the
-bass part plays on the second core with its own voices, so a full chord and the bass both sound whole. It is off by
-default because firmwares that run both cores are reported to crash on some FM-1s; ChoralRoot raises the core voltage
-to the chip maker's level and falls back to one core if the second misbehaves, but the margin varies from unit to
-unit. Turn it on if you want the extra voices; if your FM-1 ever crashes or resets while playing, it is the first
-thing to turn off. The value reads `On · restart` until you switch off and on. The Geek Out view shows the state:
-`c1 off`, `c1 ok ...`, or `c1 gave up · Options>Dual Core`. An update from 0.14 or 0.15, and a backup made on them,
-sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md).
+**Dual Core.** With Dual Core On, the default of a new unit since 0.22, the chip's second core shares the work: the
+bass part plays there with its own voices, so a full chord and the bass both sound whole. With it Off, ChoralRoot
+runs on one core as the stock firmware does, and the chord and the bass share one budget of voices: a very full
+chord with the bass can cost a voice. **Updating to 0.22 does not change your setting**: a unit that had Dual Core
+Off (the default from 0.16 to 0.21) still has it Off. To use the second core, set Options > Dual Core to On and
+switch off and on (or use Reset Settings). Firmwares that run both cores are reported to crash on some FM-1s;
+ChoralRoot raises the core voltage to the chip maker's level and falls back to one core if the second misbehaves,
+but the margin varies from unit to unit. **If your FM-1 ever crashes or resets while playing, set Dual Core to Off
+and switch off and on**: it is the first thing to try. If the FM-1 restarts by itself right after you switch it
+on, it comes up on one core that time (Geek Out: `c1 failed`), so that you can reach Options and set Dual Core to
+Off. The value reads `On · restart` or `Off · restart` until you switch off and on. The Geek Out view shows the
+state: `c1 off`, `c1 ok ...`, `c1 failed`, or `c1 gave up · Options>Dual Core`. More: [DUALCORE.md](DUALCORE.md).
 
 ### What the FM-1 remembers
 
@@ -1667,7 +1670,7 @@ has its old effects; the page has it for each version, from the "Going back" par
 older are not offered: they have no protected update path, and 0.14 and 0.15 stop responding after ten idle
 minutes. They remain on GitHub.
 
-Updating to 0.16 sets Options > Dual Core to Off.
+Updating to 0.16 sets Options > Dual Core to Off. Updating to 0.22 leaves it as it is (a new unit has it On).
 
 ### If an update is interrupted
 

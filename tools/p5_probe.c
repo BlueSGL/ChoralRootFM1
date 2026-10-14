@@ -677,6 +677,127 @@ static void hot(const char *dir, const char *tag)
     }
 }
 
+
+/* ------------------------------------------------- eight: the listening files of 3y46 --- */
+/* eight DIR TAG (docs/PROPHET.md "Voices", "Level"; sh tools/p5_probe.sh eight DIR): TWO CORES (the host's core 1 runs
+ * its job inline: the samples are the unit's). D, Bm, G, A in six-note and in eight-note voicings on four programs,
+ * the part's default sends, the master as the unit's; the same with a P5 bass under them (a UNISON program: its
+ * stack of four has two voices under six chord notes and NONE under eight: the chord first; and a plain one); a
+ * UNISON lead and a UNISON bass key with one core and with two. TAG names the build ("after": this tree; "before":
+ * -DP5_OUT_SHIFT=1 -DP5_STACK_PHASE=0, 3y45's level and stack) */
+static void prog_chords(const char *dir, const char *tag, uint32_t id, uint32_t nk, uint32_t bass_id)
+{
+    static const uint8_t CH[4][8] = {{50, 57, 62, 66, 69, 73, 76, 81}, {47, 54, 59, 62, 66, 69, 74, 78},
+                                     {43, 50, 55, 59, 62, 67, 71, 74}, {45, 52, 57, 61, 64, 69, 73, 76}};
+    static const uint8_t BASS[4] = {38, 35, 31, 33};
+    char name[128], pn[16];
+    uint32_t c, k, vc = 0, vb = 0, rep;
+    quiet();
+    p5_load(0, id);
+    if (bass_id)
+        p5_load(1, bass_id);
+    strcpy(pn, p5_name(id));
+    for (k = 0; pn[k]; k++)
+        if (pn[k] == ' ')
+            pn[k] = '-';
+    cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = 0;
+    wav_start();
+    rec = 1;
+    for (rep = 0; rep < 2u; rep++)
+        for (c = 0; c < 4u; c++) {
+            if (bass_id)
+                trk_note_on(&trk[1], BASS[c], 100);
+            for (k = 0; k < nk; k++)
+                trk_note_on(&trk[0], CH[c][k], 96);
+            run(40);
+            if (nact(0) > vc)
+                vc = nact(0);
+            if (bass_id && p5_sounding(&trk[1]) > vb)
+                vb = p5_sounding(&trk[1]);
+            run(1500u * FS / 1000u / CTL - 40u);
+            for (k = 0; k < nk; k++)
+                trk_note_off(&trk[0], CH[c][k]);
+            if (bass_id)
+                trk_note_off(&trk[1], BASS[c]);
+            run(200u * FS / 1000u / CTL);
+        }
+    run(2u * FS / CTL);
+    rec = 0;
+    if (bass_id)
+        snprintf(name, sizeof name, "%s-%s-p%03u-%s-bass-p%03u", tag, nk == 6u ? "six" : "eight", (unsigned)id, pn, (unsigned)bass_id);
+    else
+        snprintf(name, sizeof name, "%s-%s-p%03u-%s", tag, nk == 6u ? "six" : "eight", (unsigned)id, pn);
+    wav_save(dir, name);
+    printf("    (%u keys a chord: the chord part %u voices at the most; core 0 %u, core 1 %u P5 voices in a block at the most%s",
+           (unsigned)nk, (unsigned)vc, (unsigned)cr_dbg.p5_c0, (unsigned)cr_dbg.p5_c1, bass_id ? "" : ")\n");
+    if (bass_id)
+        printf("; the bass part (%s) %u voices at the most under the chord)\n", p5_name(bass_id), (unsigned)vb);
+}
+static void uni_phrase(const char *dir, const char *tag, uint32_t id, uint32_t part, int two, const char *what)
+{
+    static const uint8_t LEAD[12] = {62, 65, 69, 72, 74, 72, 69, 65, 67, 69, 65, 62};
+    static const uint8_t CH[4] = {57, 62, 65, 69};
+    char name[128];
+    uint32_t i;
+    quiet();
+    cr_dbg.c1 = two ? C1_OK : C1_OFF;
+    quiet();
+    p5_load(part, id);
+    if (part)
+        p5_load(0, 1);
+    wav_start();
+    rec = 1;
+    if (part)                                           /* a bass key under a held chord, four times */
+        for (i = 0; i < 4u; i++)
+            trk_note_on(&trk[0], CH[i], 80);
+    for (i = 0; i < (part ? 4u : 12u); i++) {
+        uint32_t n = part ? 38u : LEAD[i];
+        trk_note_on(&trk[part], n, 110);
+        run((part ? 700u : 260u) * FS / 1000u / CTL);
+        trk_note_off(&trk[part], n);
+        run((part ? 200u : 40u) * FS / 1000u / CTL);
+    }
+    trk_all_off(&trk[0]);
+    run(FS / CTL);
+    rec = 0;
+    snprintf(name, sizeof name, "%s-%s-p%03u-%s", tag, what, (unsigned)id, two ? "two-cores" : "one-core");
+    wav_save(dir, name);
+    printf("    (%s: the limiter down to %.1f dB at the most)\n", p5_name(id), db(lim_min, 32768));
+    cr_dbg.c1 = C1_OK;
+}
+static void eight(const char *dir, const char *tag)
+{
+    static const uint16_t PROG[4] = {1, 44, 3, 131};    /* ITS PROPHET5, CARS STRINGS, FOREVER KEYS, ICONIC BRASS */
+    uint32_t i, old = P5_OUT_SHIFT != 0;                /* (3y45's level: one program's chords and the UNISON keys) */
+    cr_dbg.c1 = C1_OK;
+    printf("eight: two cores, the part's default sends (%s; P5_OUT_SHIFT %d, P5_STACK_PHASE %d)\n", tag, P5_OUT_SHIFT, P5_STACK_PHASE);
+    for (i = 0; i < (old ? 1u : 4u); i++) {
+        prog_chords(dir, tag, PROG[i], 6, 0);
+        prog_chords(dir, tag, PROG[i], 8, 0);
+        prog_chords(dir, tag, PROG[i], 6, 111);         /* LAGOON BASS: a UNISON stack of four */
+        prog_chords(dir, tag, PROG[i], 8, 111);
+    }
+    if (!old) {
+        prog_chords(dir, tag, 1, 6, 4);                 /* FUNK BASS II: one voice */
+        prog_chords(dir, tag, 1, 8, 4);
+    }
+    lim_min = 32768;
+    uni_phrase(dir, tag, 82, 0, 1, "unison-lead");      /* UNISAWYER */
+    lim_min = 32768;
+    uni_phrase(dir, tag, 101, 0, 1, "unison-lead");     /* VELO RES LD2 */
+    lim_min = 32768;
+    uni_phrase(dir, tag, 111, 1, 1, "unison-bass-under-chord");
+    lim_min = 32768;
+    if (!old)
+        uni_phrase(dir, tag, 111, 1, 0, "unison-bass-under-chord");
+    lim_min = 32768;
+    uni_phrase(dir, tag, 99, 1, 1, "unison-bass-under-chord");     /* IMPACT BASS: one voice four times */
+    lim_min = 32768;
+    if (!old)
+        uni_phrase(dir, tag, 99, 1, 0, "unison-bass-under-chord");
+    cr_dbg.c1 = C1_OFF;
+}
+
 int main(int argc, char **argv)
 {
     emu_flash_open();
@@ -701,10 +822,14 @@ int main(int argc, char **argv)
         steal(argc >= 3 ? argv[2] : 0, argc >= 4 ? argv[3] : "now");
         return 0;
     }
+    if (argc >= 3 && !strcmp(argv[1], "eight")) {
+        eight(argv[2], argc >= 4 ? argv[3] : "after");
+        return 0;
+    }
     if (argc >= 3 && !strcmp(argv[1], "hot")) {
         hot(argv[2], argc >= 4 ? argv[3] : "now");
         return 0;
     }
-    printf("usage: p5_probe cost | levels [v] | hot DIR | steal [DIR]\n");
+    printf("usage: p5_probe cost | levels [v] | hot DIR | steal [DIR] | eight DIR [TAG]\n");
     return 2;
 }

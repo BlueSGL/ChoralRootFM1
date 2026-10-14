@@ -1,11 +1,27 @@
-# The second core: the bass part on core 1 (2026-10-09)
+# The second core: the bass part on core 1 (2026-10-09), and P5's chord voices (2026-10-13)
 
-**Status: built and host-verified (tests, emulator); not yet tried on hardware** (the FM-1 is bricked; the checklist
-at the end is for when it is back).
+**Status: the owner's unit has run with Dual Core On since 0.16** (the readings of docs/PROPHET.md and docs/FX.md
+are from it). 0.22's changes (the default, P5's chord voices on core 1) are built and host-verified, not on a unit.
 
-**Off by default since 0.16** (the user's decision, 2026-10-10: enough users of other FM-1 firmwares report crashes
-with both cores running). ChoralRoot runs on one core, as the stock firmware does, with the shared budget of 8
-voices, unless **Options > Dual Core** is turned **On** (below); everything else on this page describes that option.
+**ON BY DEFAULT SINCE 0.22** (the owner, 2026-10-13: "Lets also default to using Dual Core. If users have issues,
+then they can switch to 1 core."). From 0.16 to 0.21 it was **Off by default** (the user's decision, 2026-10-10:
+enough users of other FM-1 firmwares report crashes with both cores running: "Reliability" below, which stands as it
+was written). What the new default means, and for whom:
+
+- **A unit with no settings record** (a new unit, erased flash data) **and Options > Reset Settings: On.**
+- **A unit that has a settings record keeps what the record says.** The firmware cannot tell an Off that the player
+  chose from 0.16 .. 0.21's default Off: both are bit 6 of `view` clear in a v12 .. v15 record, and nothing else in
+  the record says whether the option was ever touched. So an update to 0.22 changes nothing on an existing unit:
+  **whoever wants the second core turns it on in Options > Dual Core and restarts** (or uses Reset Settings). The
+  release note says so. A record's Off is never turned On by the firmware (also not where a damaged view byte takes
+  its default: `cr_settings.c crs_sanitize`). Records older than v12 load Off, as since 0.16.
+- **If a unit has trouble with it**: Options > Dual Core Off, restart. That is the owner's fallback, and the
+  fail-safes below are what stands between a unit whose second core misbehaves and that menu.
+
+**What core 1 runs** (0.22): the bass part's render, as since 0.15, and, with P5 on the chord part, a share of the
+chord part's voices: at most four P5 voices a core, eight on the chord part (docs/PROPHET.md "Voices", "Two cores,
+eight voices"). With Dual Core Off, or core 1 not running, ChoralRoot runs on one core, as the stock firmware does,
+with the shared budget of 8 voices (P5: four, and a P5 bass one).
 
 The FM-1's chip (JieLi AC79 / WL82) has two pi32v2 cores. With Dual Core On, ChoralRoot starts the second one at
 power-on and, in every audio block, hands it the BASS part's render (part 1) while core 0 renders the CHORD part
@@ -82,7 +98,9 @@ the modulation matrix's state (`mod.c`). Blocks that stay on core 0 alone (`c1_s
 draws from the shared generator on a model change) and VOICE on both parts (one breath-noise generator): neither
 engine is in ChoralRoot's image since 0.18 (`FELUCCA_PHYS` / `FELUCCA_VOICE` 0), so every block splits.
 
-What runs where:
+What runs where (0.22: with P5 on the chord part, part 0's render is shared: core 1's job is part 1's render and a
+share of part 0's voices, and core 0 renders the rest of them before it waits; docs/PROPHET.md "How a block is
+rendered"):
 
 | core 0 (the audio ISR) | core 1 |
 | --- | --- |
@@ -154,8 +172,10 @@ On the device with core 1 the half is about the block less part1, plus the wait.
 
 ## Options > Dual Core (0.15; Off by default since 0.16)
 
+**0.22: the default is On** (the top of this page). The rest of this section is 0.16's, when it became Off:
+
 Options > **Dual Core: On / Off** (after USB Level; settings v12, bit 6 of `view` set = On, docs/SETTINGS.md),
-**default Off**. Why: other FM-1 firmwares' dual-core support is reported to crash for enough of their users
+**default Off** (0.16 .. 0.21). Why: other FM-1 firmwares' dual-core support is reported to crash for enough of their users
 (Melodee's investigation, "Reliability" below: the margin varies per chip) that one core, what the stock firmware runs
 and every unit was validated with, is the default; the second core is an option the user turns on. 0.15 had it On by
 default (settings v11, the bit set = Off).
@@ -211,10 +231,34 @@ one. And the overload shed sees part 1's time in the half only with one core.
 
 ## The fail-safes
 
+- **The start, with On the default (0.22; `cr_cpu1.h cr_c1_power_on`, `main.c`)**. What can go wrong at power-on and
+  what the unit then does:
+  - core 1 does not answer in 20 ms: held, `c1 failed`, one core for the session (as before). Nothing is saved: the
+    option still reads On and the next power-on tries again;
+  - **the start hangs or crashes the boot** (the breadcrumb is `BS_CPU1`, "core 1"; the watchdog or the crash's
+    reboot resets the chip within 30 s of the boot, so the boot guard counts it: `cr_bootguard.h`). **The boot that
+    follows a counted failure does not start core 1** (whatever the failed boot's stage was): it comes up on one
+    core, `c1 failed`, Options > Dual Core reads `On · restart`, the rails as the boot loader left them, and it loads
+    and saves as any boot. The player can switch Dual Core Off there, and it is saved. **Nothing switches the
+    option off by itself**: the next power-on (which clears the guard) starts the core again, and a unit whose
+    second core always fails the start so pays one failed boot (a few seconds) at every power-on until Dual Core is
+    turned Off. Without this rule such a unit would fail twice at every power-on and come up in SAFE MODE, where
+    core 1 is not started but nothing is loaded or saved: with On the default it could not have been switched Off
+    (and erasing the flash data would have given it On again). **It cannot boot-loop**: one failed boot, then a boot
+    without the core; and should that one fail too, SAFE MODE (two in a row), then the ROM's USB boot (four), as for
+    any crash;
+  - SAFE MODE: core 1 is never started, as before (the option then reads `On · restart`).
+  Tested on the host (`tests/cr_cpu1_test.c`: SAFE MODE, the boot before failed with Dual Core On and Off, a clean
+  boot); and in the emulator (`tools/emu/test_cr.sh`: a fresh unit with `--boot-fail 0 --reset-reason wdt`: a normal boot,
+  `counted 1`, `c1 failed`, one core's budget). **Not tested on a unit**:
+  a real hang in the start.
 - Core 1 does not answer in 20 ms at power-on: held, `c1 failed`, one core for the session, the shared budget.
 - A job not done in 8 ms (`fm1_cpu1_wait`): core 1 held for good, core 0 renders part 1 itself in that block (late,
   but the samples are one core's), `c1 gave up`, the shared budget from then on (the next allocations steal back to
-  it). A hang in core 1 never hangs core 0.
+  it). A hang in core 1 never hangs core 0. **With P5's chord voices on core 1 (0.22)** the job core 0 then runs
+  itself is the same one (the bass part and core 1's share of the chord's voices), and the next block has one
+  core's voice counts: `voice.c p5_pool_enforce` gives up what is above them (docs/PROPHET.md "Voices"; tested for
+  a stall, a fault and a second misread under a chord of eight).
 - A fault about core 1 (it took the exception itself, or the debug unit raised core 1's PC limit, write limit or bus
   error on core 0) no longer resets the chip: core 1 is held, core 0 resumes, `c1 gave up` (0.16: "Reliability").
   Before 0.16 it ended in the crash report and a reset, as any crash.

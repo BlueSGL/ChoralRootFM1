@@ -115,8 +115,8 @@ a run is deterministic: the same script gives the same LCD and the same audio, b
 frames of 15 ms (`--frames N`; without it, to the end of the script, else 600 frames), then prints the
 peak / rms, the block render time, the host instructions per audio block and UI frame with the device estimate
 (`EMU_CPU_LOG=PCT` lists every block above PCT % of the device's budget; `EMU_STAGES=1` adds the audio ISR's stages,
-`cpu: stages ...` (docs/DUALCORE.md); the second core is off unless the flash's settings say Options > Dual Core On
-(`cr_dualcore_on.txt` on a `--flash` file, then relaunch with it); then `EMU_C1=nostart` / `EMU_C1=hang`: it does not
+`cpu: stages ...` (docs/DUALCORE.md); the second core runs (inline: Options > Dual Core is On by default since 0.22) unless
+the flash's settings say Off (`cr_dualcore_opt.txt` on a `--flash` file, then relaunch with it); then `EMU_C1=nostart` / `EMU_C1=hang`: it does not
 answer at power-on / never finishes a job (the stub otherwise runs the bass part's job inline), `EMU_C1=thread`: the
 job runs on a real second thread while the chord part renders, as on the unit (the WAV must be the inline job's:
 `test_cr.sh`; with a ThreadSanitizer build of the firmware, `tests/run_c1_thread_test.sh`, every word both sides touch

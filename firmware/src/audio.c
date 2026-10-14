@@ -127,7 +127,14 @@ static void audio_block(int32_t *out, uint32_t n)       /* mix (fx.c), then Q15 
 
 /* Overload: two halves in a row above 85 % (the render plus TIMER5 nested in it), fade one voice over the
  * next block, and one more each half while it lasts. Keep each part's
- * lowest POLY note and MONO / LEGATO / UNISON lead, as the shared budget does. */
+ * lowest POLY note and MONO / LEGATO / UNISON lead, as the shared budget does.
+ * P5 ON TWO CORES (3y46). The half the shed times is core 0's, and core 0 waits in it for core 1's job: it is the
+ * tick + the LONGER of the two cores' renders + the effects + the master, so a half is over when either core is. And
+ * the chord part's P5 voices are shared out between the cores again every block (fx.c p5x_assign), so a voice given
+ * up shortens the longer side whichever part it was. The order with P5 on the bass part: (1) a released voice, the
+ * quietest, as before; (2) a voice of the BASS part's P5 stack, from the top (never its last: the lead stays);
+ * (3) as before, the oldest held voice that is not its part's lowest note or lead: a chord voice. Without P5 on the
+ * bass part: (1) and (3), today's rule */
 static volatile uint8_t shed_req;
 static uint8_t shed_over;                              /* bit k: the half k halves ago was over 85 % */
 #define HALF_TICKS (HALF_FRAMES * 1000000u / FS * FM1_TICKS_PER_US)   /* a half (2902 us) */
@@ -170,7 +177,25 @@ static void shed_note(const voice_t *v, uint32_t why)    /* the shed's record (a
             cr_dbg.shed_last = (1u << 16) | p << 12 | (uint32_t)(v - trk[p].v) << 8 | v->note;
 }
 
-static void shed_voice(void)
+#if FELUCCA_PROPHET
+/* a P5 bass: a voice of its stack before any chord voice (above; out of line: the ISR's code stays as it was laid) */
+static __attribute__((noinline)) int shed_p5_bass(void)
+{
+    uint32_t k;
+    if (!P5_IS(&trk[P5_PART_BASS]))
+        return 0;
+    k = p5_part_victim(&trk[P5_PART_BASS], 0);
+    if (k == NVOICE)
+        return 0;
+    shed_note(&trk[P5_PART_BASS].v[k], 4u);
+    voice_kill(&trk[P5_PART_BASS].v[k]);
+    shed_count++;
+    return 1;
+}
+#endif
+/* (out of line since 3y46: with the P5 step in it the target compiler laid this cold path behind the ISR's block
+ * loop with a branch back over it, which tests/target_budget.py reads as two more loops around the render) */
+static __attribute__((noinline)) void shed_voice(void)
 {
     uint32_t p, i;
     voice_t *best = 0;
@@ -186,6 +211,10 @@ static void shed_voice(void)
         shed_count++;
         return;
     }
+#if FELUCCA_PROPHET
+    if (shed_p5_bass())
+        return;
+#endif
     for (p = 0; p < NPART; p++) {
         const track_t *t = &trk[p];
         uint32_t mode = trk_vmode(t), low = mode == V_POLY ? lowest_held(t) : 0u;

@@ -2,6 +2,10 @@
 # SPDX-License-Identifier: GPL-3.0-only
 # P5's measurements (tools/p5_probe.c; docs/PROPHET.md "An unplayed part", "Headroom", "A stolen voice"; HISTORY 3y45):
 #   sh tools/p5_probe.sh [cost|levels|steal|all] [DIR]
+#   sh tools/p5_probe.sh eight DIR      3y46's listening files (docs/PROPHET.md "Voices", "Level"): two cores, D Bm G A
+#                                       in six- and eight-note voicings on four programs, the same with a P5 bass, a
+#                                       UNISON lead and a UNISON bass key with one core and with two: "after-*" this
+#                                       tree, "before-*" 3y45's level and stack (-DP5_OUT_SHIFT=1 -DP5_STACK_PHASE=0)
 # builds build/host/p5_probe with ALL 200 programs (and the variants a table compares) and prints the tables.
 # DIR: where the listening files go (levels: DIR/headroom, steal: DIR/steal). Needs build/gen (./build.sh or
 # tools/emu/build.sh). Not a pass / fail suite; minutes.
@@ -43,6 +47,15 @@ case $W in levels|all)
         ./build/host/p5_probe hot "$D/headroom" now
         ./build/host/p5_probe_utrim hot "$D/headroom" trim
     fi
+    ;;
+esac
+case $W in eight)
+    [ -n "$D" ] || { echo "p5_probe.sh eight DIR"; exit 2; }
+    b p5_probe
+    b p5_probe_before -DP5_OUT_SHIFT=1 -DP5_STACK_PHASE=0
+    mkdir -p "$D"
+    ./build/host/p5_probe eight "$D" after
+    ./build/host/p5_probe_before eight "$D" before
     ;;
 esac
 case $W in steal|all)

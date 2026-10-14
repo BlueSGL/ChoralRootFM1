@@ -702,7 +702,7 @@ static void crb_debug(void)
  * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[44], k = 0, i;
+    uint32_t v[48], k = 0, i;
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -750,6 +750,19 @@ static void crb_peak(void)
     cr_dbg.kill0 = voice_kills;
     cr_dbg.steal0 = voice_steals;
     cr_dbg.shed_last = cr_dbg.shed_why = cr_dbg.shed_over_n = cr_dbg.shed_us = 0;
+    /* 3y46, values 42..45: P5 on two cores (cr_cpu1.h cr_dbg): the most P5 voices core 0 and core 1 rendered in one
+     * block, the bass part's most P5 voices, held bass voices given up to the chord part. (Core 1's longest job of a
+     * half is value 3, pk_part1_us: the bass part and core 1's share of the chord's voices) */
+    v[k++] = cr_dbg.p5_c0;
+    v[k++] = cr_dbg.p5_c1;
+    v[k++] = cr_dbg.p5_bass;
+#if FELUCCA_PROPHET
+    v[k++] = p5_bass_gave - cr_dbg.gave0;
+    cr_dbg.gave0 = p5_bass_gave;
+#else
+    v[k++] = 0;
+#endif
+    cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = 0;
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

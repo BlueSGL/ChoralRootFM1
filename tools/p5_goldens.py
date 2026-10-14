@@ -6,6 +6,12 @@ shipped list"):
 
     python3 tools/p5_goldens.py            tests/golden.txt and tests/cpu_baseline.txt: P5's lines made again
     python3 tools/p5_goldens.py --check    nothing written: what would change
+    python3 tools/p5_goldens.py --level REV    0.22's level change proved against REV's goldens (a commit before it,
+                                           8472e70): the regression built with the engine's output as it was
+                                           (-DP5_OUT_SHIFT=1 -DP5_STACK_PHASE=0) must give every P5 golden of REV's
+                                           tests/golden.txt, so the level and the stack's start are ALL that 0.22
+                                           changed in a program's render on one core. Nothing written; exit 1 on a
+                                           difference
 
 P5's lines (preset/P5/NNN_NAME, cpu/P5/NNN_NAME: NNN is the program's Sequential number, 000 INIT; tests/regress.c)
 are replaced by this build's, in the pool's order, where P5's block stands in each file. Every other line stays as it
@@ -55,19 +61,31 @@ def merge(old, new, what):
 
 def main():
     check = sys.argv[1:] == ["--check"]
-    if sys.argv[1:] and not check:
+    level = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == "--level" else None
+    if sys.argv[1:] and not check and not level:
         sys.exit(__doc__)
     os.chdir(ROOT)
     W.mkdir(parents=True, exist_ok=True)
     run = lambda *c, **k: subprocess.run(c, check=True, **k)
     run(sys.executable, "tools/gen_prophet_factory.py", "build/gen/melodee_prophet_factory.h")
+    exe = "build/host/regress_p5old" if level else "build/host/regress"
     run("sh", "tests/hostcc.sh", "cc", "-O1", "-Wall", "-Wno-unused-function", "-O2", "-w", "-Ibuild/gen", "-Ifirmware/src",
-        "-o", "build/host/regress", "tests/regress.c", "-lm")
+        *(["-DP5_OUT_SHIFT=1", "-DP5_STACK_PHASE=0"] if level else []), "-o", exe, "tests/regress.c", "-lm")
     for f in ("golden.txt", "cpu_baseline.txt"):
         shutil.copyfile(ROOT / "tests" / f, W / f)
+    if level:
+        then = subprocess.run(["git", "show", f"{level}:tests/golden.txt"], check=True, stdout=subprocess.PIPE, text=True).stdout
+        (W / "golden.txt").write_text(then)
+        was = {x.split()[0]: x for x in then.splitlines() if x.startswith(MINE)}
     env = dict(os.environ, GOLDEN_UPDATE="1", BUDGET_UPDATE="1")
-    r = subprocess.run(["build/host/regress", str(W / "golden.txt"), str(W / "cpu_baseline.txt")], env=env,
+    r = subprocess.run([exe, str(W / "golden.txt"), str(W / "cpu_baseline.txt")], env=env,
                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+    if level:
+        now = {x.split()[0]: x for x in lines(W / "golden.txt") if x.startswith(MINE)}
+        same = [k for k in now if was.get(k) == now[k]]
+        print(f"p5_goldens.py --level: the engine at its level of before ({level}): {len(same)} of {len(now)} P5 goldens are "
+              f"{level}'s ({len(was)} there)")
+        return 0 if now and len(same) == len(now) else 1
     (W / "regress.log").write_text(r.stdout)
     if r.returncode:
         sys.stdout.write(r.stdout[-3000:])

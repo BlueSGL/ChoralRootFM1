@@ -1,4 +1,4 @@
-# tools/emu/perf.sh (p): a 6-key P5 chord (01 ITS PROPHET5: the SSI filter, four voices) + the P5 bass (FUNK BASS II, Sequential's program 4: place 40 of the provisional list), the default sends, held 3 s, a chord change, 3 s more (docs/PROPHET.md)
+# tools/emu/perf.sh (p): a 6-key P5 chord (01 ITS PROPHET5; two cores: six voices, one core: three) + the P5 bass (FUNK BASS II, Sequential's 4: place 40), the default sends, held 3 s, a chord change, 3 s more (docs/PROPHET.md)
 wait 300
 btn ENV down                  # the bass part's engine (docs/PRESETS.md: BASS held + EDIT, the editor's EDIT-held picker):
 wait 50

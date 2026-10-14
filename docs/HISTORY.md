@@ -2332,3 +2332,86 @@ the steal and the UNISON level by ear. **Decisions put to the owner**: docs/PROP
 0 reports, the planted word reported) and `cr_prophet_test` 85 checks. Size: XIP 511 412 B (89.2 %; +752), RAM
 81 732 (+0), POOL 316 064 (+0), RAMTEXT 6808 (+0: the sample loop is a773d30's). The package for the unit, all 200
 (`build/scratch/p5-fav/choralroot-p5-i-all200.fwsc`): 610 313 B, sha256 60e6fa78a3cefaa7...a1e3b0c0.
+
+3y46. **P5's voices on both cores, eight of them; a P5 bass shares the pool, the chord first; the engine 6 dB lower;
+Dual Core On by default (2026-10-13; 0.22 in development; on p5-j after 8472e70; nothing of it on a unit).** The
+owner, after 3y45's reading: "We need to make decisions. So lets split main P5 across both cores so we can get up to
+8 voices of P5, 4 per core. If the bass is using P5, then it can use up to 4 [voices], but if main chord needs 6
+voices, and bass has 4, then priority goes to the main chord engine. For Single Core, limit P5 bass to using max of
+1 voice. Since Unison on is going to bring us 5 dB over the limiter, I think we should bring engine down, since the
+limiter is going to cause chopping possibly. Lets also default to using Dual Core. If users have issues, then they
+can switch to 1 core."
+
+**The voices** (docs/PROPHET.md "Voices"). Two cores: the chord part up to eight, at most four P5 voices rendered
+by a core; a P5 bass up to four (a UNISON key's stack); chord and bass together at most eight, and the chord first:
+a bass stack thins to one voice and then gives its last before a chord note is refused or a chord voice taken
+(measured: the bass 4 4 4 4 3 2 1 0 under a chord of 1 .. 8 keys; a bass key under eight held chord keys does not
+sound). One core: the chord four, a P5 bass ONE voice whatever the program, and four P5 voices in all, so three
+chord voices while a P5 bass sounds. A UNISON key is four voices at most on either part. More keys than voices: the
+oldest held voice that is not the lowest note, fading over two blocks as since 3y45, on whichever core.
+
+**How** (`fx.c p5x_run`, `voice.c`). All note handling and allocation stay on core 0 before the hand-over. For the
+chord part core 0 does every voice's block but its samples and lists the voices; one job a block goes to core 1,
+as before: the bass part, then core 1's share of the list into a buffer of its own; core 0 renders the rest,
+waits, adds the two sums and runs the part's DC blocker. Sums of integers: **the output is the unsplit render's,
+bit for bit** (seven engine pairs with a P5 chord: inline, on a second thread, unsplit on one thread, every voice
+to core 1, none: one digest each; **ThreadSanitizer 0 reports over 15 pairs**, the planted word reported).
+
+**Two things built otherwise than asked for, and why.** (1) The brief had core 1 take the first four voices and
+core 0 only the fifth on. Core 0 waits for core 1 before the effects, so a half is the tick + the LONGER core + the
+effects + the master: a four-note chord all on core 1 is one core's half again (2632 us by the reading). Built: the
+split that makes the longer side shortest (2 + 2, 3 + 3, 4 + 4; the odd voice to core 1), never more than four a
+core; the first plan is `-DP5_FILL_C1_FIRST=1`. (2) One core with a P5 bass: the owner's rule is one bass voice;
+built with it: the chord three (five P5 voices on one core ran late on the unit); `-DP5_ONE_POOL=5` is four and
+one.
+
+**Predicted, not measured** (from 3y45's readings): four chord voices about 1860 us of 2902 with three effects, six
+about 2250, **eight about 2632 (91 %), above the shed's 85 %**, and by the sum of the stages' worst cases 3005. No
+other split of eight is better (the wait). What fits is three a core: `-DP5_CORE=3`, built, not the default.
+
+**The shed** (`audio.c`): the half it times is core 0's with the wait for core 1 in it, so it is over when either
+core is; with P5 on the bass part it takes a voice of the bass's stack (never the last) before any chord voice.
+
+**The level**. Every sample of every voice is exactly half of 3y45's (Melodee's x 2 after the VCA is gone; the
+filter and its saturation as they were): this tree's samples x 2 are the old level's, bit for bit, with the part's
+capacitor off, and the regression built at the old level gives all 49 of 8472e70's P5 goldens. A UNISON stack's
+voices now start together, and the voices that sound are raised to the whole stack's level (one voice of four: x 4;
+the root of that where the program detunes them), so a UNISON bass is as loud with one core as with two: within
+1 dB on 26 of the 40 UNISON programs, within 2 dB on 32, exact on the seven that are one voice N times. The stack's
+trim stays off: a UNISON key is 1.2 dB over a four-note chord of the same program at the median (the rule was 3).
+New peaks (all 200, dB re 32768, median / max): one key -10.1 / +5.6, four notes -1.1 / +5.8, a UNISON key
++0.8 / +6.4; the limiter 0.8 dB at the worst (was 5.2). **P5 is now the quietest engine**: a four-note chord 6.6 dB
+under the VA's and 4 dB under FM6's at the median. No stored sound needs a migration.
+
+**Dual Core On by default**: a unit with no settings record and Reset Settings. **A unit that has a record keeps
+what it holds**: its Off cannot be told from 0.16 .. 0.21's default, so the owner's unit and every updated unit
+stay as they are until the option is turned on (the release note says how). The start's safety net: the boot that
+follows a counted failed boot does not start core 1 ("c1 failed", one core, settings loaded and saved), so a unit
+whose second core crashes the start can be switched Off instead of ending in SAFE MODE at every power-on; nothing
+is switched off by itself.
+
+**Counters** (78 PEAK 42 .. 45, `--debug`): the most P5 voices core 0 and core 1 rendered in a block, the bass
+part's most, held bass voices given up to the chord; `pk_part1_us` is core 1's whole job.
+
+**Tests**: 17 suites pass (`CR_VERSION=0.22 sh tests/run_all.sh`); the stub's line as it was (version 3, sha256
+baee55ed142fe1cc); 0 lint findings; 246 goldens, **all 49 of P5's changed (the level), the 197 others not**;
+`cr_prophet_test` 105 checks; test_cr 971 ok, test_persist 98. Updated for the default: `tests/cr_settings_test.c`,
+`tests/cr_backup_test.c` (a Felucca record: On; 78 PEAK 45 values), `tests/cr_cpu1_test.c`, `tools/emu/test_cr.sh`
+(the Dual Core block; the owner's gesture now five voices with two cores, four with `EMU_C1=nostart`),
+`tools/emu/test_persist.sh` with `reset_set.txt` (Reset Settings: On), `tools/emu/perf.sh` (the second pass is
+Dual Core Off). `tests/target_budget.txt`: `p5_render` 50 -> 63, `p5_block` 18 -> 29, `fm1_alnk0_irq` 16415 ->
+12522 (the shed's cold path out of line). Size: XIP 515 076 B (89.8 %; +3664), RAM 81 748 (+16), POOL 316 900
+(+836), RAMTEXT 6808 (+0).
+
+**A fault of the first build of it, found by the listening files and fixed.** A chord struck over its own ringing
+release with a P5 bass's key in the same block: with every slot of the part still sounding or fading, the eighth
+note took a held voice of its own new chord while the bass kept its voice (seven chord notes and a bass voice
+where it should be eight and none). `voice.c voice_alloc` (P5 alone): a note waits for a slot that is fading
+before it takes a held voice of its own part, and the pool then gives it its room. The test's progression loses 3
+chord notes in 8 chords without it (`-DP5_WAIT_SLOT=0`, `tests/run_prophet_test.sh`) and none with it.
+
+Listening: `../audio-0.22/prophet/eight/` (README.txt; `sh tools/p5_probe.sh eight DIR`): D Bm G A in six- and
+eight-note voicings on four programs, the same with a P5 bass (two voices of the stack under six chord notes, none
+under eight: the chord first), a UNISON lead and a UNISON bass key with one core and with two, and "before" files
+at 3y45's level. The package for the unit, all 200 (`build/scratch/p5-fav/choralroot-p5-j-all200.fwsc`): 610 313 B,
+sha256 f36320a724f2eeb5...aa996753 (XIP 528 996 B, 92.2 %).

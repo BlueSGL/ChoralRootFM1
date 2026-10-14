@@ -21,6 +21,11 @@
 #    chord engine, the allocator and the mix: 600 runs over the timing of the second strike, Key Mode, five ways of
 #    going from the one chord to the other, and a unit that does not keep up (cr_prophet_test --gesture; the whole
 #    sweep, minutes: --gesture-sweep). The crackle he heard does not come about here: the runs' rules must hold.
+# 7. THE LEVEL (3y46, docs/PROPHET.md "Level"): a voice's output is exactly half of 3y45's. cr_prophet_test --half
+#    writes every shipped program's render with the samples at 3y45's scale; built with the part's capacitor off
+#    (-DP5_DC_BLOCK=0: its 32-bit state rounds) once as this tree is and once with -DP5_OUT_SHIFT=1 (3y45's "x 2"
+#    after the VCA), the two files must be the same bytes, and no sample of the old level may be odd. And one voice of
+#    a UNISON stack (one core) against the whole stack (two): cr_prophet_test --stack on the build with all 200.
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p build/host/p5_all build/host/p5_b
@@ -36,6 +41,12 @@ done
 $CC -DFELUCCA_P5_FACTORY=0 -o build/host/cr_prophet_init tests/cr_prophet_test.c -lm &
 $CC -DP5_IDLE_SKIP=0 -o build/host/cr_prophet_idle0 tests/cr_prophet_test.c -lm &
 $CC -DP5_STEAL_BLOCKS=0 -o build/host/cr_prophet_steal0 tests/cr_prophet_test.c -lm &
+$CC -DP5_DC_BLOCK=0 -o build/host/cr_prophet_half0 tests/cr_prophet_test.c -lm &
+$CC -DP5_DC_BLOCK=0 -DP5_OUT_SHIFT=1 -o build/host/cr_prophet_half1 tests/cr_prophet_test.c -lm &
+$CC -DP5_ONE_POOL=5 -o build/host/cr_prophet_pool5 tests/cr_prophet_test.c -lm &
+$CC -DP5_BASS_KEEP=1 -o build/host/cr_prophet_keep1 tests/cr_prophet_test.c -lm &
+$CC -DP5_CORE=3 -o build/host/cr_prophet_core3 tests/cr_prophet_test.c -lm &
+$CC -DP5_WAIT_SLOT=0 -o build/host/cr_prophet_wait0 tests/cr_prophet_test.c -lm &
 # (the list's directory first: its header is the one the engine's #include finds)
 sh tests/hostcc.sh cc -std=gnu11 -O2 -w -Ibuild/host/p5_all -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_prophet_all tests/cr_prophet_test.c -lm &
 sh tests/hostcc.sh cc -std=gnu11 -O2 -w -Ibuild/host/p5_b -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_prophet_b tests/cr_prophet_test.c -lm &
@@ -71,6 +82,43 @@ echo "prophet: a part with no voice skips the wheel's block (P5_IDLE_SKIP) and p
 [ -x build/host/cr_prophet_steal0 ] || { echo "run_prophet_test.sh: P5_STEAL_BLOCKS=0 did not build"; exit 1; }
 ./build/host/cr_prophet_steal0 > build/host/cr_prophet_steal0.log || { grep -a "FAIL\|failed" build/host/cr_prophet_steal0.log; exit 1; }
 echo "prophet: P5_STEAL_BLOCKS=0 (a773d30's steal) builds and passes ($(grep -ac '^ok ' build/host/cr_prophet_steal0.log) checks ok)"
+# 7. the level: every sample exactly half of 3y45's
+for n in 0 1; do
+    [ -x build/host/cr_prophet_half$n ] || { echo "run_prophet_test.sh: the level's build $n did not build"; exit 1; }
+    ./build/host/cr_prophet_half$n --half build/host/cr_prophet_half$n.txt > /dev/null
+done
+hl=$(wc -l < build/host/cr_prophet_half0.txt | tr -d ' ')
+[ "$hl" -eq $((NS + 1)) ] || { echo "run_prophet_test.sh: --half wrote $hl programs, want INIT + $NS"; exit 1; }
+if grep -qv ' odd 0$' build/host/cr_prophet_half1.txt; then
+    echo "run_prophet_test.sh: a sample of 3y45's level is odd: half of it is not exact"; grep -v ' odd 0$' build/host/cr_prophet_half1.txt | head -3; exit 1
+fi
+cmp -s build/host/cr_prophet_half0.txt build/host/cr_prophet_half1.txt || {
+    echo "run_prophet_test.sh: the engine's output is not exactly half of 3y45's (P5_OUT_SHIFT 0 against 1, the capacitor off):"
+    diff build/host/cr_prophet_half0.txt build/host/cr_prophet_half1.txt | head -5
+    exit 1
+}
+echo "prophet: the level: every sample of every voice is exactly half of 3y45's ($hl programs, a four-note chord held and released, the capacitor off: this tree's samples x 2 are P5_OUT_SHIFT=1's, bit for bit)"
+# the rules that are a switch: -DP5_ONE_POOL=5 (one core: four chord voices and the bass's one), -DP5_BASS_KEEP=1
+# (two cores: the bass keeps its last voice), -DP5_CORE=3 (three voices a core, six with two: docs/PROPHET.md "Will
+# it fit?"): they build; the test's own counts are the default's, so only the checks that do not name them are
+# asked for
+for v in pool5 keep1 core3; do
+    [ -x build/host/cr_prophet_$v ] || { echo "run_prophet_test.sh: the build '$v' did not build"; exit 1; }
+    ./build/host/cr_prophet_$v > build/host/cr_prophet_$v.log 2>&1 || true
+    grep -aq "every voice of both parts free after the release" build/host/cr_prophet_$v.log || { echo "run_prophet_test.sh: the build '$v' does not run through"; exit 1; }
+done
+echo "prophet: -DP5_ONE_POOL=5 (one core: 4 + 1), -DP5_BASS_KEEP=1 (two cores: the bass keeps a voice) and -DP5_CORE=3 (three voices a core) build and run ($(grep -ac '  FAIL' build/host/cr_prophet_pool5.log), $(grep -ac '  FAIL' build/host/cr_prophet_keep1.log) and $(grep -ac '  FAIL' build/host/cr_prophet_core3.log) of the default's counts differ, as they must)"
+c3=$(grep -a 'two cores: ten keys' build/host/cr_prophet_core3.log | sed -n 's/.*(core 0 \([0-9]*\), core 1 \([0-9]*\) at the most), the pool never above eight (\([0-9]*\)).*/\1 \2 \3/p')
+[ "$c3" = "3 3 6" ] || { echo "run_prophet_test.sh: -DP5_CORE=3: ten keys give '$c3' (core 0, core 1, the pool), want 3 3 6"; exit 1; }
+echo "prophet: -DP5_CORE=3: ten keys sound six voices, three rendered by each core"
+# the chord first, over its own release (voice.c voice_alloc: a note waits for a slot that is fading before it takes a
+# held voice of its own chord): without it (-DP5_WAIT_SLOT=0) the test's progression loses chord notes
+[ -x build/host/cr_prophet_wait0 ] || { echo "run_prophet_test.sh: -DP5_WAIT_SLOT=0 did not build"; exit 1; }
+./build/host/cr_prophet_wait0 > build/host/cr_prophet_wait0.log 2>&1 && {
+    echo "run_prophet_test.sh: without the wait for a fading slot the progression's check still passes: it proves nothing"; exit 1; }
+grep -aq 'FAIL.*D Bm G A twice over the ringing release' build/host/cr_prophet_wait0.log || {
+    echo "run_prophet_test.sh: -DP5_WAIT_SLOT=0 fails another check than the progression's:"; grep -a "  FAIL" build/host/cr_prophet_wait0.log | head -3; exit 1; }
+echo "prophet: a chord struck over its own release with a P5 bass: no chord note lost; without the wait for a fading slot (-DP5_WAIT_SLOT=0): $(grep -a 'FAIL.*D Bm G A' build/host/cr_prophet_wait0.log | sed -n 's/.*eight-note chords: \([0-9]*\) lost.*/\1/p') lost (the check fails, as it must)"
 echo "prophet: P5_STAGE36 1, 2, 4 and 7 render 8a3074b's samples ($lines renders: INIT, the $NS shipped programs, the stress programs, bit for bit)"
 [ -x build/host/cr_prophet_init ] || { echo "run_prophet_test.sh: FELUCCA_P5_FACTORY=0 did not build"; exit 1; }
 ./build/host/cr_prophet_init > build/host/cr_prophet_init.log || { grep -a "FAIL\|failed" build/host/cr_prophet_init.log; exit 1; }
@@ -85,6 +133,11 @@ for v in all b; do
 done
 ./build/host/cr_prophet_s7 --id-out build/host/cr_prophet_s.ids > /dev/null
 echo "prophet: the test passes built with all 200 ($(grep -ac '^ok ' build/host/cr_prophet_all.log) checks ok) and with a list of 7 ($(grep -ac '^ok ' build/host/cr_prophet_b.log) checks ok)"
+# 7. a UNISON key with one core against two (all 200: 40 programs with the switch)
+./build/host/cr_prophet_all --stack > build/host/cr_prophet_stack.log
+echo "prophet: $(tail -1 build/host/cr_prophet_stack.log)"
+./build/host/cr_prophet_all --unichord > build/host/cr_prophet_unichord.log
+echo "prophet: $(tail -1 build/host/cr_prophet_unichord.log)"
 # 4. the owner's gesture on Sequential's program 16
 ./build/host/cr_prophet_all --gesture 16 > build/host/cr_prophet_gesture.log || {
     echo "run_prophet_test.sh: the owner's gesture (minor + 6 + 9, then minor + 9) broke a rule:"

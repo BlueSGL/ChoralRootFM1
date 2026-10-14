@@ -165,8 +165,7 @@ void emu_fw_init(int demo)
         if (cr_dbg.prof_on)
             cr_prof_calibrate();
         CR_STAGE(BS_CPU1);
-        if (!cr_safe)
-            cr_c1_boot();
+        cr_c1_power_on(cr_safe, (int)bootguard.counted);   /* (main.c) */
     }
     atexit(emu_fw_exit);
     usb.up = 1;                                   /* a host is there: MIDI out flows (usb.c midi_out_event) */

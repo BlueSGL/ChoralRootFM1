@@ -82,11 +82,16 @@ typedef struct {
      * (0 none, else 0x10000 | part << 12 | voice << 8 | note) and why (1 released, 2 held, 3 none to give); and the
      * counts at the last read of audio.c's shed_count and voice.c's voice_kills / voice_steals */
     uint32_t shed_over_n, shed_us, shed_last, shed_why, shed0, kill0, steal0;
+    /* P5 ON TWO CORES since the last 78 PEAK read (3y46; fx.c p5x_run, voice.c p5_pool_*): the most P5 voices core 0
+     * and core 1 rendered in one block (core 1's: the bass part's P5 voices and its share of the chord part's), the
+     * most P5 voices of the bass part, and voice.c's p5_bass_gave at the last read */
+    uint32_t p5_c0, p5_c1, p5_bass, gave0;
 } cr_dbg_t;
 static cr_dbg_t cr_dbg;
-/* Options > Dual Core Off (settings v12, the default; read by cr_settings_boot before cr_c1_boot): core 1 is never
- * started this power-on, cr_dbg.c1 stays C1_OFF ("c1 off"), the shared budget. A change in Options waits for the next
- * power-on. 1 until the record says On: a build without the settings (or a boot that never reads them) is one core */
+/* Options > Dual Core Off (settings v12; On is the default of a unit with no record since 0.22, Off was from 0.16;
+ * read by cr_settings_boot before cr_c1_boot): core 1 is never started this power-on, cr_dbg.c1 stays C1_OFF
+ * ("c1 off"), the shared budget. A change in Options waits for the next power-on. 1 until the record says On: a
+ * build without the settings (or a boot that never reads them) is one core */
 static uint8_t cr_c1_off = 1;
 static const char *const CRP_NAME[CRP_N] = {"tick", "part0", "part1", "fx", "master", "wait"};
 static const char *const CRX_NAME[CRX_N] = {"down", "delay", "reverb", "up"};
@@ -113,6 +118,8 @@ static void cr_rails_now(void)
     cr_dbg.rail_now[1] = fm1_power.now[FM1_RAIL_VDC14];
 }
 static void cr_rails_init(void) { fm1_power_init(); cr_rails_now(); }       /* IRQs off: power-on */
+#define CR_C1_TEST_NOSPLIT 0
+#define CR_C1_TEST_SHARE 0
 static uint32_t cr_c1_stack_used(void)              /* the C1MK fill: the deepest word core 1's usp reached */
 {
     uint32_t i = 0;
@@ -130,6 +137,12 @@ static uint8_t cr_c1_test_hang;      /* tests: the next jobs never answer (cr_c1
 static uint8_t cr_c1_test_nostart;   /* tests: core 1 does not answer at start */
 static uint8_t cr_c1_test_late;      /* tests: the job runs at the wait (after part 0), not when handed (before it) */
 static uint32_t cr_c1_test_rejected; /* tests: core 1's misread count (the device's fm1_c1_rejected) */
+static uint8_t cr_c1_test_nosplit;   /* tests (3y46): P5's chord voices are not shared out: all in track_render_x, in
+                                      * their order, on core 0 (the reference the split's sum must equal) */
+static uint8_t cr_c1_test_share;     /* tests: k + 1: core 1 takes k of the chord part's P5 voices (all there are, if
+                                      * fewer), whatever the balance says: any split gives the same samples */
+#define CR_C1_TEST_NOSPLIT cr_c1_test_nosplit
+#define CR_C1_TEST_SHARE cr_c1_test_share
 static uint32_t cr_c1_test_faults;   /* tests: faults about core 1 (the device's fm1_c1_fault.count) */
 static void (*cr_c1_fn)(uint32_t);
 static uint32_t cr_c1_arg;
@@ -347,6 +360,29 @@ static void cr_c1_boot(void)
     cr_dbg.c1 = rc ? C1_FAILED : C1_OK;
 }
 
+/* main.c fm1_main (and the emulator's): core 1 at power-on. NOT in SAFE MODE, as before. And (0.22, Dual Core On by
+ * default) NOT WHEN THE BOOT BEFORE THIS ONE FAILED: a reset within 30 s of a boot that the boot guard counted
+ * (cr_bootguard.h `counted`: a crash's reboot or the watchdog, whatever the stage; a hang in the start itself leaves
+ * prev_stage "core 1"). That boot runs on one core ("c1 failed"; Options > Dual Core reads "On . restart"), loads and
+ * saves as any other, and the player can switch Dual Core Off there. Without this a unit whose second core crashes
+ * the start would crash twice at every power-on and come up in SAFE MODE, where nothing is saved: with On the
+ * default it could not be switched Off. Nothing is written by itself: the next power-on tries the core again */
+static void cr_c1_power_on(int safe, int counted)
+{
+    if (safe) {
+        cr_dbg.c1 = C1_OFF;
+        cr_c1_off = 1;                                  /* (the Options' value then reads "On . restart") */
+        return;
+    }
+    if (counted && !cr_c1_off) {
+        cr_c1_off = 1;
+        cr_c1_boot();                                   /* (the rails' record; C1_OFF) */
+        cr_dbg.c1 = C1_FAILED;
+        return;
+    }
+    cr_c1_boot();
+}
+
 /* end of a half buffer (audio.c): the stages into the window and the totals */
 static void cr_prof_half(void)
 {
@@ -514,6 +550,7 @@ static void cr_prof_window(void)
 #define cr_prof_t5(t0, pc) ((void)0)
 #define cr_prof_window() ((void)0)
 #define cr_c1_boot() ((void)0)
+#define cr_c1_power_on(safe, counted) ((void)0)
 #define cr_c1_stack_used() 0u
 #define cr_c1_rejected() 0u
 #define cr_c1_faults() 0u

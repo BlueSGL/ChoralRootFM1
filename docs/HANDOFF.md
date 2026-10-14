@@ -345,6 +345,23 @@ installed on the owner's Mac.
     with both parts at send 127 (by arithmetic it is reached; any engine's); `FELUCCA_PROPHET=0`'s image against
     a773d30's (the new code is behind the switch; not compared).
 
+33. **P5 on two cores, the level, Dual Core On by default (HISTORY 3y46; docs/PROPHET.md "Voices", "Two cores, eight
+    voices", "Level"; docs/DUALCORE.md)**: built on the host and in the emulators, **nothing of it on a unit**. The
+    package: `build/scratch/p5-fav/choralroot-p5-j-all200.fwsc`. **The owner's unit keeps its own Dual Core
+    setting** (the default changed for units without a record only). **To read**: with Dual Core On, a four-, a
+    six- and an eight-note chord of ITS PROPHET5, dry and with three sends up, then with a UNISON P5 bass:
+    `pk_block_us`, `pk_part0_us` (core 0's share), `pk_part1_us` (core 1's whole job), `pk_wait_us`,
+    `shed_over_halves`, `shed_voices`, `stale_halves`, `p5_core0_voices` / `p5_core1_voices` (four each is the
+    rule), `p5_bass_voices`, `p5_bass_given_up`, `c1_rejected`, `c1_faults`. **Predicted**: four voices about
+    1860 us (64 %), six about 2250 (77 %), **eight with three effects about 2632 (91 %): above the shed's line**;
+    if so, `-DP5_CORE=3` (six voices) is the build that fits. **To hear**: the engine 6 dB lower (P5 is now the
+    quietest engine: a four-note chord 6.6 dB under the VA's at the median); a UNISON key, whose voices now start
+    together; a UNISON bass with one core (one voice at its stack's level) against two;
+    `../audio-0.22/prophet/eight/`. **The owner's decisions left** (docs/PROPHET.md "Open decisions"): one core,
+    three chord voices under a P5 bass (`-DP5_ONE_POOL=5`: four and one); two cores, no bass voice under eight
+    chord keys (`-DP5_BASS_KEEP=1`); the level. **Not done**: a real hang of core 1's start on a unit (the boot
+    after a failed one comes up on one core: host-tested only); `FELUCCA_PROPHET=0`'s image against a773d30's.
+
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
 ## Facts that are easy to get wrong

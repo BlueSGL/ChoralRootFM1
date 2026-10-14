@@ -2158,10 +2158,17 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # shed, its lag in it; then voice.c's: voices faded out for another note, another part or the shed, and
               # own sounding voices taken for a new note (a five-key chord on P5's four voices: one each)
               "shed_voices", "shed_last_voice", "shed_last_why", "shed_over_halves", "shed_last_us",
-              "voices_faded", "voices_stolen"]
+              "voices_faded", "voices_stolen",
+              # 3y46 (0.22), P5's voices on two cores since the last --debug (firmware/src/fx.c p5x_run, voice.c
+              # p5_pool_*; docs/PROPHET.md "Voices"): the most P5 voices core 0 and core 1 rendered in one block
+              # (four each is the rule; core 1's: the bass part's P5 voices and its share of the chord part's), the
+              # bass part's most P5 voices, and held bass voices given up to the chord part. Core 1's longest job of
+              # a half is pk_part1_us (the bass part and core 1's share of the chord's voices); pk_wait_us is how
+              # long core 0 waited for it at most
+              "p5_core0_voices", "p5_core1_voices", "p5_bass_voices", "p5_bass_given_up"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 SHED_WHY = ["none", "a released voice, the quietest", "a held voice, the oldest that is not its part's lowest note",
-            "asked, and no voice to give"]
+            "asked, and no voice to give", "a voice of the bass part's P5 stack, before any chord voice"]
 NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 
@@ -2281,6 +2288,11 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
                  f"{d['shed_last_us']} us" if d["shed_last_why"] else "")
               + f"; voices faded out for another note, part or the shed {d['voices_faded']}, own voices taken for a new "
               f"note {d['voices_stolen']}", file=out)
+    if "p5_core0_voices" in d and (d["p5_core0_voices"] or d["p5_core1_voices"]):
+        print(f"P5: at most {d['p5_core0_voices']} voices rendered by core 0 and {d['p5_core1_voices']} by core 1 in one "
+              f"block (four each is the rule), the bass part {d['p5_bass_voices']} at most, {d['p5_bass_given_up']} held "
+              f"bass voices given up to the chord; core 1's longest job of a half {d.get('pk_part1_us', 0)} us "
+              f"(pk_part1_us), core 0's longest wait for it {d.get('pk_wait_us', 0)} us (pk_wait_us)", file=out)
     if d.get("key_ons"):
         print(f"keys: {d['key_ons']} note-ons since the last --debug; from the first closed scan (the debounce, 1.1 to 2.2 "
               f"ms, in it) the main loop posted one after {d['key_pick_us'] / 1000:.1f} ms at most, the engine had it "

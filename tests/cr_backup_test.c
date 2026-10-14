@@ -499,7 +499,7 @@ int main(void)
         CHECK(st_load(OBJ_SETTINGS, rd, sizeof *rd) == (int)sizeof *rd && rd->magic == PERSIST_MAGIC &&
               rd->panel.magic == PANEL_MAGIC && rd->cr.magic == CRS_MAGIC && rd->cr.bpm == 120,
               "Felucca: stored as PER5, Felucca's fields kept, ChoralRoot's block the defaults");
-        CHECK(!CRS_DUALCORE(&rd->cr), "Felucca: a PER4 record: Dual Core Off (the default)");
+        CHECK(CRS_DUALCORE(&rd->cr), "Felucca: a PER4 record: Dual Core On (the default of ChoralRoot's block since 0.22)");
         {   /* a 0.14 / 0.15 backup's settings (ChoralRoot's block v11: bit 6 of view clear = On, the default there, set
              * = Off): Dual Core Off on 0.16 whatever the bit says, the view and its lock kept; a 0.16 one (v12, set =
              * On) keeps what it says (cr_settings_import, docs/SETTINGS.md) */
@@ -942,13 +942,13 @@ int main(void)
         CHECK(z == 0, "DEBUG: the tail (the stub's samples) is zero where no stub ran");
     }
 
-    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 41 values (24 to its second
+    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 45 values (24 to its second
      * build; the six behind them: when the ISR got to start; then four: the keys' way to the engine; then seven, 3y44:
-     * what the overload shed did, the voices faded and taken); DEBUG keeps
+     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores); DEBUG keeps
      * its 127 ---- */
     t_begin(78);
     a = t_send(&n);
-    CHECK(a && a[0] == 1 && a[1] == 41 && n == 2u + 5u * 41u, "PEAK: 1, 41, 41 x u32 (n %u)", (unsigned)n);
+    CHECK(a && a[0] == 1 && a[1] == 45 && n == 2u + 5u * 45u, "PEAK: 1, 45, 45 x u32 (n %u)", (unsigned)n);
     t_begin(73);
     a = t_send(&n);
     CHECK(a && a[1] <= 127 && n == 2u + 5u * a[1], "DEBUG after PEAK: its own values, as before (%u; the device's 127 fill its count byte)", a ? a[1] : 0);
