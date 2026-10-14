@@ -84,7 +84,7 @@ stage (MOD FX MIX).
 
 | Rotary | In the editor |
 | --- | --- |
-| KNOB 1–4 | edit the four cells of the active lane. A detent = **5 % of the range**, enums **one by one**; SHIFT on = **one unit**. Ranges, defaults and value text are the platform's (`params.c`, `param_format`) or the deep page's (`eng_page_t` formats) |
+| KNOB 1–4 | edit the four cells of the active lane. A value is **accelerated** (§6a: a slow detent the finest step, a quick one up to 5 % of the range), enums and named choices **one by one**; SHIFT on = **snap** (§6a). Ranges, defaults and value text are the platform's (`params.c`, `param_format`) or the deep page's (`eng_page_t` formats) |
 | SELECT | the lane, across the screens (above) |
 | PRESETS | the engine picker, previewing (§7) |
 | MASTER | volume |
@@ -252,20 +252,78 @@ ENGINE, the factory presets and INIT are **not groups**: they are the engine pic
 
 GLO (printed; OPT outside) is SHIFT in the editor:
 
-- **tap** = toggle the **latched** SHIFT: its LED lit, the word `fine` small in the title line, KNOB 1–4 one unit a
-  detent until tapped again (or the editor is left);
-- **held** past HOLD_MS (or with a knob turned meanwhile) = **momentary**: fine while held; released, back to the
+- **tap** = toggle the **latched** SHIFT: its LED lit, the word `snap` small in the title line, KNOB 1–4 snap (§6a)
+  until tapped again (or the editor is left);
+- **held** past HOLD_MS (or with a knob turned meanwhile) = **momentary**: snap while held; released, back to the
   latched state (a hold never toggles it);
 - held + EDIT = chord ↔ bass sound.
 
 A **ratio pair** (a column of k names over k x k values, the value slow × k + fast: FM TONE's RATIO B, B1 × 19 +
 B2, the Digitone's hands) takes SHIFT as **its slow hand a step** (FM TONE's B1: B2 kept, B1 held at its first and
-last step) instead of a fine step: a plain detent already moves the fast hand (B2) one step, carrying into B1 on the
-wrap. The title line then reads `fine · B1` (`cr_screen_t.fine` 2: the active lane has a pair). The pair's cell is a
+last step) instead of a snap: a plain detent already moves the fast hand (B2) one step, carrying into B1 on the
+wrap. The title line then reads `snap · B1` (`cr_screen_t.fine` 2: the active lane has a pair). The pair's cell is a
 fraction, the fast hand **on top** (B2 over B1), each with two decimals (the cell's `pct` / `pct2` in quarters,
 cr_draw.c formats them); the trace and the value text read "B2/B1" ("2.00/1.00": B2 2.00, B1 1.00).
 
 While the editor is open the edit wins over OPT's outside knob functions (split point, metronome level, bass volume).
+
+Until 0.22 SHIFT was **fine** (one unit a detent against the plain 5 %); acceleration makes the plain detent fine
+when turned slowly, so SHIFT is the snap now.
+
+## 6a. Knob acceleration and OPT snap (0.22)
+
+The owner (2026-10-14): "a small turn does fine increments, a quick turn moves the parameter faster", and hold OPT
+to "do the same thing the real Digitone does when holding Func, and snap to common values". One implementation for
+every knob that edits a **value**: the sound editor of every engine (FM6, FM TONE, VA, CZ-1, P5, WHEEL and the
+platform pages), its FX group (the sends), the FX layer, the BASS layer's level and BASS + ALGORITHM, the KEY layer's
+Transpose, the PERF row and the main view's KNOB 3 / KNOB 4, Options > Velocity (`cr_pages.c` `kn_*`, `cr_ui.c`
+`cu_kval`). **Not** values, one item a detent whatever the speed: PRESETS, ALGORITHM, SELECT, the pickers and lists,
+every F_ENUM, on / off, a note name, a name list of at most 64 values (FM6's ALG and COARSE, FM TONE's RATIO A / C),
+a ratio pair (RATIO B), FM TONE's ALGO, the FX layer's divisions / ratio / sync / mode, the PERF row's division,
+direction, pattern, rotate, retrigger and hold.
+
+**Acceleration.** `cu_knob` times every detent of each knob (`kn_turn`, the UI clock `fm1_ms`); the gap since the same
+knob's previous detent picks the step from ONE table (`KN_CURVE`), in 64ths of the quickest step, which is the range
+/ 20 rounded (the detent of before 0.22: 6 of 0..127, 5 of 0..99, 10 of FM TONE's ±1.00, 6.40 of a hi-res 0..127.99):
+
+| gap since the knob's last detent | step |
+|---|---|
+| ≥ 150 ms (and the first detent, after 1 s of rest, a reversal) | the finest: one stored step (0.01 of a hi-res value, 1 of an integer) |
+| 110–149 ms | 1/64 of the quickest (at least the finest) |
+| 80–109 ms | 2/64 |
+| 60–79 ms | 4/64 |
+| 45–59 ms | 8/64 |
+| 34–44 ms | 16/64 |
+| 25–33 ms | 32/64 |
+| < 25 ms, or several detents in one UI frame | the quickest: the range / 20 |
+
+So a slow turn is fine, and a quick spin of about a turn (24 detents) crosses the range. Clamped: both ends are
+reached exactly. The emulator's scripts set the timing exactly (their clock is the firmware's): `knob KNOB1 +1`,
+`wait 300` is a slow detent, detents a frame (15 ms) apart quick ones, `knob KNOB1 +5` five in a frame (quick);
+`knobs quick` makes every detent the quickest (the scripts written for the 5 % step, tools/emu/emu.c).
+
+**OPT snap.** GLO (OPT) held while a value knob turns, and in the editor SHIFT latched too: the value goes to the next
+**target** in the turn's direction, one a detent (`kn_snap`, `kn_grid`). The targets are the multiples of the grid
+from the anchor, and both ends:
+
+| the value | targets |
+|---|---|
+| hi-res (1/100 units: FM TONE's F_C100 / F_O100 / F_C100I / F_FRQ100, core.h `FMT_HI`; a value named by its number with decimals: FM TONE's OFS "-1.00" .. "+1.00") | whole numbers (`kn_whole`: 100 steps) |
+| an LFO speed (a bipolar SPEED: FM TONE's LFO 1–3) | −64 −32 −16 −8, 8 16 32 64 (the ends past them), × 100 when hi-res |
+| semitones (F_SEMI, an offset in "st": the VA's COARSE, the part's Transpose, FM6's TRNSP; the KEY layer's Transpose) | octaves (12, around the centre) |
+| the DX7 break point (FM6's BREAK) | the Cs |
+| 0..127 | 0 16 32 48 64 80 96 112 127 |
+| centred −64..63 (F_BIPCT, F_OFS: Pan, the envelope / LFO amounts, MIX, FADE, the VA's FINE) | 0 then steps of 8 (−64 .. 56 63) |
+| another range | the nice number (1 2 4 5 8 10 16 20 25 32 50 64 100 ..) nearest to 1/8 of it (centred: 1/16): 0..99 → 10s, 0..100 → 10s, −50..50 → 5s, 0..120 → 16s, 1..1000 → 100s, 1..200 → 25s, 50..90 → 5s, −16..16 → 2s |
+| at most 17 values (FM6's FB, DETUNE, VSENS; CZ-1's levels and keys; ALGO 1..8; −8..8) | no snap: one step a detent |
+
+A named choice never snaps (one item a detent, OPT or not). OPT's other jobs are as before: OPT + PRESETS / +
+ALGORITHM change the chord / bass part's engine, OPT + KNOB 1 the split point and OPT + SELECT the click level (also
+in a layer: KNOB 1 of a layer cannot snap), OPT + SAVE, OPT tapped the Options; in the editor SHIFT + EDIT the other
+part and SHIFT + SELECT the lanes. Only OPT + a value knob changes meaning.
+
+The hook for hi-res values is `kn_whole` (cr_pages.c), the one place that asks: a format in `FMT_HI` (FM TONE's
+1/100 formats) is 100 steps a whole number; another way to declare a hi-res column goes there.
 
 ## 7. The engine picker: a preview (EDIT held, or PRESETS in the editor; main walk-through state 22)
 
@@ -323,8 +381,8 @@ sound its voice and function settings (`fm6_ustore.c`, docs/FM6.md), a CZ-1 soun
 Left: the sound's name in 13 px bold, white; a trailing **`*`** once edited (deep edits too); on the bass part
 ` · BASS` and the whole title in **orange** (`PUNCH BASS · BASS`). Right, 11 px grey, right-aligned: the group and
 what is on the knobs — `OSC 1 · A` (screen A, lane OSC 1), `OSC 2 · B`, `OSC · MIX`, `FILTER`, `ENV 1 · amp`,
-`ENV 2 · filter`, `LFO 2 · B`, `MOD 3`, `FX`, `MIX`. With SHIFT on (latched or held), the word **`fine`** (9 px,
-white) left of it (**`fine · B1`** on a lane with a ratio pair, §6). The editor's title line has no battery (it shows on the Options page only); the section text sits at the right end:
+`ENV 2 · filter`, `LFO 2 · B`, `MOD 3`, `FX`, `MIX`. With SHIFT on (latched or held), the word **`snap`** (9 px,
+white) left of it (**`snap · B1`** on a lane with a ratio pair, §6). The editor's title line has no battery (it shows on the Options page only); the section text sits at the right end:
 the header's 16 x 10 case and nub, 0–3 quarters filled, full on USB power (`cr_screen_t.batt`, 255 = none; the
 right text moves left of it).
 
@@ -464,7 +522,7 @@ For an engine whose deep pages map their columns to the matrix (`eng_deep_t.mod_
 
 | Gesture (in the editor) | Result |
 | --- | --- |
-| **ENV held + KNOB 1–4 turned** | the **ENV n last shown** (the ENV group's screen when it was last open; before that **ENV 2**) modulates the parameter under that knob: the matrix slot with that source and that destination, else the **first free slot** (SRC or DST `OFF`) gets them, and the turn steps its **AMT** (−64..63, the coarse / fine steps of §3: 6 a detent, SHIFT one). The hot cell shows `ENV2 +12` on a block in the source's colour. Trace: `mod: ENV2 -> CUT +12 slot 1` |
+| **ENV held + KNOB 1–4 turned** | the **ENV n last shown** (the ENV group's screen when it was last open; before that **ENV 2**) modulates the parameter under that knob: the matrix slot with that source and that destination, else the **first free slot** (SRC or DST `OFF`) gets them, and the turn steps its **AMT** (−64..63, accelerated as every value, §6a: 1 a slow detent, 6 a quick one; SHIFT: the snap, 0 then 8s). The hot cell shows `ENV2 +12` on a block in the source's colour. Trace: `mod: ENV2 -> CUT +12 slot 1` |
 | **LFO held + KNOB 1–4 turned** | the same with the **LFO n last shown** (its lane on the LFO stacks; before that **LFO 1**): `mod: LFO1 -> RES +6 slot 2` |
 | no free slot | the message **`matrix full`** (red), nothing changes; trace `mod: LFO1 -> CUT matrix full` |
 | a parameter that is no destination (a wave, an envelope time, a matrix column), or an engine without `mod_dst` | **`not modulatable`**; trace `mod: not modulatable` |
