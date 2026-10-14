@@ -8,13 +8,13 @@
 // No DOM: the page (manager.html) draws, this decides. Every name here is unique across fm1backup.js / fm1sounds.js:
 // make_site.py inlines them (and fm1dnsnd.js) into one script.
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
-import { nameValid, SOUND_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
+import { nameValid, SOUND_IDS, POOL_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
 import { parseDnsnd } from "./fm1dnsnd.js";
 
 // the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; five engines since 0.18: PHASE, LOFI, VOICE,
 // TRIO, NOISE and PHYS retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
 export const MANAGER_ENGINES = [12, 15, 13, 14, 7];
-export const MANAGER_IDS = [...SOUND_IDS, ...CR_LOOP_IDS];
+export const MANAGER_IDS = [...SOUND_IDS, ...POOL_IDS, ...CR_LOOP_IDS];   // (0.22: the pool's banks, 50..62)
 export const UNDO_DEPTH = 20;
 export const LOOP_FORMAT = "choralroot-loop";
 export const PACK_FORMAT = "choralroot-pack";
@@ -211,8 +211,10 @@ export function swapLoops(objs, a, b) {
 export async function readManagerObjects(request, onProgress = () => {}) {
   const manifest = bkManifest(await request([BACKUP_CMD.LIST, []], { timeout: 3000, retries: 0 }));
   const listed = new Map(manifest.map((o) => [o.id, o]));
-  if ([6, 7, 9, 10, 11, 12, 13].some((id) => !listed.has(id))) throw new Error("This firmware does not hold ChoralRoot's user sounds (ChoralRoot needed)");
-  const ids = MANAGER_IDS.filter((id) => listed.has(id)), objs = new Map(MANAGER_IDS.map((id) => [id, mgEmpty()]));
+  const pool = POOL_IDS.some((id) => listed.has(id));   // (0.22: the sound pool; the legacy objects are not listed then)
+  if (!pool && [6, 7, 9, 10, 11, 12, 13].some((id) => !listed.has(id))) throw new Error("This firmware does not hold ChoralRoot's user sounds (ChoralRoot needed)");
+  const want = MANAGER_IDS.filter((id) => (pool ? !SOUND_IDS.includes(id) : !POOL_IDS.includes(id)));
+  const ids = want.filter((id) => listed.has(id)), objs = new Map(want.map((id) => [id, mgEmpty()]));
   const total = ids.reduce((n, id) => n + listed.get(id).size, 0); let done = 0;
   for (const id of ids) {
     const o = listed.get(id), bytes = new Uint8Array(o.size);
@@ -405,8 +407,8 @@ const mgSimSound = (tpl, engine, name, patch = null) => {
   const record = mgUnB64(SOUND_TEMPLATES[tpl]); record[2] = engine;
   return { record, name, engine, kind: patchKindOf(engine), patch };
 };
-export function simObjects(count = 6) {
-  let m = new Map(MANAGER_IDS.map((id) => [id, mgEmpty()]));
+export function simObjects(count = 6, pool = false) {   // (pool: the 0.22 sound pool's objects, else 0.21's)
+  let m = new Map(MANAGER_IDS.filter((id) => (pool ? !SOUND_IDS.includes(id) : !POOL_IDS.includes(id))).map((id) => [id, mgEmpty()]));
   const czTone = Uint8Array.from({ length: 144 }, (_, i) => (i * 7) & 127);
   const put = (slot, s, f) => { m = mgMerge(m, placeSound(m, slot, s, f)); };
   put(1, mgSimSound("fm6", 12, "MY TINE"), 1);          // overwrites FM6 02 FM BELL

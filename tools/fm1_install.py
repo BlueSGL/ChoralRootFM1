@@ -1040,6 +1040,9 @@ def object_name(i):
         return f"sample slot {i - 31}"
     if 40 <= i <= 49:
         return f"loop slot {i - 39}"
+    if 50 <= i <= 62:                              # 0.22: the sound pool's banks (10 slots each, the last 121..128)
+        a = (i - 50) * 10 + 1
+        return f"user sounds {a:03d}-{min(a + 9, 128):03d}"
     return f"object {i}"
 
 
@@ -1354,19 +1357,35 @@ def run_restore(up, path, out, ask, yes):
 
 SOUND_IDS = (6, 7, 9, 10, 11, 12, 13, 22)        # the banks, the VA store, the FM6 halves, the CZ-1 halves, the FM TONE
                                                  # store (22: firmware 0.14 on; read when the FM-1 lists it)
-SOUND_SLOTS, SOUND_PER_BANK, SOUND_REC = 32, 16, 192
+SOUND_SLOTS, SOUND_PER_BANK, SOUND_REC = 128, 16, 192   # 0.22: the sound pool's 128 (LEGACY_SLOTS: 0.21's 32)
+LEGACY_SLOTS = 32
+# 0.22, the sound pool (docs/PRESETS.md "The pool"): ids 50..62, 13 banks of 10 slots of 384 bytes: the record, at 192
+# the patch's engine + 1 (0: none), at 193 its length, the patch from 196
+POOL_IDS = tuple(range(50, 63))
+POOL_PER, POOL_SLOT, POOL_HDR, POOL_DATA = 10, 384, 192, 196
+POOL_BANK = POOL_PER * POOL_SLOT                 # 3840
 ENGINE_NAMES = ("ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS", "DRUM",
-                "NOISE", "FM6", "VA", "CZ-1", "FM TONE")   # ENGINES[] (append-only; 0, 1, 4, 8, 10 retired: ANALOG
+                "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5")   # ENGINES[] (append-only; 0, 1, 4, 8, 10 retired: ANALOG
                                                           # since 0.14; 2, 3, 5, 6, 11, 9 retired in 0.18: PHASE, LOFI,
                                                           # VOICE, TRIO, NOISE, PHYS). 15: FM TONE (eng_quad.c, code name QUAD)
-ENGINE_PATCH = {12: "fm6", 13: "va", 14: "cz", 15: "quad"}  # engine -> its patch kind
-PATCH_KINDS = ("va", "fm6", "cz", "quad")
-PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 80}
+ENGINE_PATCH = {12: "fm6", 13: "va", 14: "cz", 15: "quad", 16: "p5"}  # engine -> its patch kind (P5: the pool only)
+PATCH_KINDS = ("va", "fm6", "cz", "quad", "p5")
+PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 80, "p5": 138}
+KIND_ENGINE = {k: e for e, k in ENGINE_PATCH.items()}
+
+
+def is_pool(objs):
+    """the objects are the sound pool's (0.22: any of ids 50..62), else 0.21's"""
+    return any(i in objs for i in POOL_IDS)
+
+
+def _pool_at(slot):
+    return POOL_IDS[0] + (slot - 1) // POOL_PER, ((slot - 1) % POOL_PER) * POOL_SLOT
 PATCH_ID = {"va": 9, "fm6": 10, "cz": 12, "quad": 22}   # the store (the first half for FM6 / CZ-1)
 UPB_MAGIC, VAS_MAGIC, FM6U_MAGIC, CZU_MAGIC, QUDS_MAGIC = 0x31425055, 0x31534156, 0x55364D46, 0x55315A43, 0x53445551
 BANK_SIZE = 8 + SOUND_PER_BANK * SOUND_REC     # 3080
-STORE_SIZE = {"va": 16 + SOUND_SLOTS * 110, "fm6": 16 + 16 * 128, "cz": 16 + 16 * 144,
-              "quad": 16 + SOUND_SLOTS * 80}   # 3536, 2064, 2320, 2576
+STORE_SIZE = {"va": 16 + LEGACY_SLOTS * 110, "fm6": 16 + 16 * 128, "cz": 16 + 16 * 144,
+              "quad": 16 + LEGACY_SLOTS * 80}   # 3536, 2064, 2320, 2576
 WHOLE_STORES = ("va", "quad")                  # one store of 32 (the others: two halves of 16), its used mask at 8
 SOUND_FORMAT = "choralroot-sound"
 # the factory presets of each engine (ENGINES[e]->presets[k].name) and the first of them in the engine's pool (the
@@ -1440,6 +1459,14 @@ def _new_store(kind, i):
 
 def _store_blob(objs, kind, slot):
     """the blob of `kind` stored for slot (its used bit set in a well-formed store), or None"""
+    if is_pool(objs):                              # (the pool: the slot's patch when it is that kind's)
+        i, off = _pool_at(slot)
+        b = objs.get(i, b"")
+        if len(b) != POOL_BANK or b[off + POOL_HDR] != KIND_ENGINE[kind] + 1 or b[off + POOL_HDR + 1] != PATCH_SIZE[kind]:
+            return None
+        return bytes(b[off + POOL_DATA:off + POOL_DATA + PATCH_SIZE[kind]])
+    if kind == "p5":
+        return None
     i, k, off = _store_at(kind, slot)
     b = objs.get(i, b"")
     if not _store_ok(kind, i, b) or not _u32(b, 8 if kind in WHOLE_STORES else 12) >> k & 1:
@@ -1450,6 +1477,22 @@ def _store_blob(objs, kind, slot):
 def _set_blob(objs, kind, slot, blob):
     """objs[store] with slot's blob set (bit set) or, blob None, cleared (bit cleared, bytes zeroed). An empty or
     malformed store (the FM-1 reads it as empty) is created from the header when a blob goes in, else left alone."""
+    if is_pool(objs):
+        i, off = _pool_at(slot)
+        b = objs.get(i, b"")
+        if blob is None and (len(b) != POOL_BANK or b[off + POOL_HDR] != KIND_ENGINE[kind] + 1):
+            return
+        b = bytearray(b if len(b) == POOL_BANK else bytes(POOL_BANK))
+        b[off + POOL_HDR:off + POOL_SLOT] = bytes(POOL_SLOT - POOL_HDR)
+        if blob is not None:
+            b[off + POOL_HDR], b[off + POOL_HDR + 1] = KIND_ENGINE[kind] + 1, PATCH_SIZE[kind]
+            b[off + POOL_DATA:off + POOL_DATA + len(blob)] = blob
+        objs[i] = bytes(b)
+        return
+    if kind == "p5":
+        if blob is not None:
+            raise InstallError("usage", "this FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)")
+        return
     i, k, off = _store_at(kind, slot)
     b = objs.get(i, b"")
     if not _store_ok(kind, i, b):
@@ -1467,6 +1510,16 @@ def _set_blob(objs, kind, slot, blob):
 
 def _set_record(objs, slot, rec):
     """objs[bank] with slot's record replaced; an empty or malformed bank is created when a sound goes in"""
+    if is_pool(objs):
+        i, off = _pool_at(slot)
+        b = objs.get(i, b"")
+        if len(b) != POOL_BANK:
+            if not any(rec):
+                return
+            b = bytes(POOL_BANK)
+        tail = bytes(b[off + SOUND_REC:off + POOL_SLOT]) if any(rec) else bytes(POOL_SLOT - SOUND_REC)
+        objs[i] = bytes(b[:off]) + bytes(rec) + tail + bytes(b[off + POOL_SLOT:])
+        return
     i, off = 6 + (slot - 1) // 16, 8 + ((slot - 1) % 16) * SOUND_REC
     b = objs.get(i, b"")
     if not _bank_ok(b):
@@ -1477,6 +1530,10 @@ def _set_record(objs, slot, rec):
 
 
 def _record(objs, slot):
+    if is_pool(objs):
+        i, off = _pool_at(slot)
+        b = objs.get(i, b"")
+        return bytes(b[off:off + SOUND_REC]) if len(b) == POOL_BANK else bytes(SOUND_REC)
     b = objs.get(6 + (slot - 1) // 16, b"")
     if not _bank_ok(b):
         return bytes(SOUND_REC)
@@ -1527,15 +1584,23 @@ def binding_of(bound):
     return {"overwrites": bound["pos"], "name": bound["name"]} if bound else None
 
 
+def _slot_row(objs, slot):
+    """the slot's row of parse_sound_objects; a slot past the FM-1's (0.21: 32) is a usage error"""
+    table = parse_sound_objects(objs)
+    if not 1 <= slot <= len(table):
+        raise InstallError("usage", f"slot {slot}: this FM-1 has the user slots 1..{len(table)}")
+    return table[slot - 1]
+
+
 def parse_sound_objects(objs):
     """objs: {backup id: bytes} (b"" or missing: never written) -> the 32 slots, a dict each:
     slot, used, name, engine, engineName, patch (the kind when the slot's blob is stored, else None), record, blob,
     bound (None, or the factory preset it overwrites: sound_bindings), added (used and not bound)"""
     table = []
-    for slot in range(1, SOUND_SLOTS + 1):
+    for slot in range(1, (SOUND_SLOTS if is_pool(objs) else LEGACY_SLOTS) + 1):
         r = _record(objs, slot)
         row = {"slot": slot, "used": False, "name": "", "engine": None, "engineName": "", "patch": None,
-               "record": r, "blob": None, "bound": None, "added": False}
+               "record": r, "blob": None, "bound": None, "added": False, "pool": is_pool(objs)}
         if sound_record_valid(r):
             kind = ENGINE_PATCH.get(r[2])
             blob = kind and _store_blob(objs, kind, slot)
@@ -1550,12 +1615,18 @@ def parse_sound_objects(objs):
 def sound_line(row):
     """U05  MY PAD        FM6     patch     over FM6 02 FM BELL / U07  PAD 2  VA  patch  + / U06  (empty) /
     U17  BELL          PHASE   retired   + (a record of a retired engine: kept, an added preset of the VA's pool)"""
+    lab = slot_label(row["slot"], row.get("pool", row["slot"] > 99))
     if not row["used"]:
-        return f"U{row['slot']:02d}  (empty)"
+        return f"{lab}  (empty)"
     kind = ENGINE_PATCH.get(row["engine"])
     tail = "retired" if engine_retired(row["engine"]) else "" if not kind else "patch" if row["patch"] else "no patch"
     pool = f"over {row['bound']['label']} {row['bound']['name']}" if row.get("bound") else "+"
-    return f"U{row['slot']:02d}  {row['name']:<12}  {row['engineName']:<7} {tail:<8}  {pool}"
+    return f"{lab}  {row['name']:<12}  {row['engineName']:<7} {tail:<8}  {pool}"
+
+
+def slot_label(slot, pool=True):
+    """U005 (the pool's 128, 0.22), U05 (0.21's 32)"""
+    return f"U{slot:03d}" if pool else f"U{slot:02d}"
 
 
 def sound_file_name(slot, name):
@@ -1565,7 +1636,7 @@ def sound_file_name(slot, name):
 def export_sound(objs, slot, firmware):
     """slot 1..32 -> the sound file (a dict, "choralroot-sound" version 1)"""
     import base64
-    row = parse_sound_objects(objs)[slot - 1]
+    row = _slot_row(objs, slot)
     if not row["used"]:
         raise InstallError("emptyslot", f"U{slot:02d} is empty: nothing to export")
     patch = None
@@ -1649,8 +1720,9 @@ def read_sound_file(f):
 
 
 def _changes(old, new):
-    """the objects whose bytes changed, the stores first, the banks last"""
-    return [(i, new[i]) for i in (9, 10, 11, 12, 13, 22, 6, 7) if i in new and new[i] != old.get(i, b"")]
+    """the objects whose bytes changed, the stores first, the banks last (the pool: its banks in order)"""
+    order = POOL_IDS if is_pool(new) else (9, 10, 11, 12, 13, 22, 6, 7)
+    return [(i, new[i]) for i in order if i in new and new[i] != old.get(i, b"")]
 
 
 def import_sound(objs, slot, sound):
@@ -1916,7 +1988,7 @@ def sound_from_syx(kind, patch):
 
 def export_syx(objs, slot):
     """slot 1..32 (an FM6 / CZ-1 sound with its patch) -> (the .syx bytes, the sound's name)"""
-    row = parse_sound_objects(objs)[slot - 1]
+    row = _slot_row(objs, slot)
     if not row["used"]:
         raise InstallError("emptyslot", f"U{slot:02d} is empty: nothing to export")
     if row["engine"] not in SYX_ENGINE.values():
@@ -1937,7 +2009,9 @@ def read_sounds(bl, progress=lambda done, total: None):
     """LIST, then GET of the sound objects the FM-1 lists -> {id: bytes} (an object that changed while it was read
     is read again once)"""
     for attempt in range(2):
-        man = [o for o in bk_manifest(bl.request(BK_LIST, [], 3.0)) if o["id"] in SOUND_IDS]
+        listed = bk_manifest(bl.request(BK_LIST, [], 3.0))
+        pool = any(o["id"] in POOL_IDS for o in listed)  # (0.22: the sound pool; 0.21's objects are not listed then)
+        man = [o for o in listed if o["id"] in (POOL_IDS if pool else SOUND_IDS)]
         total, done, objs, changed = sum(o["size"] for o in man), 0, {}, False
         for o in man:
             def chunk(n):
@@ -1949,6 +2023,8 @@ def read_sounds(bl, progress=lambda done, total: None):
                 changed = True
                 break
         if not changed:
+            for i in (POOL_IDS if pool else ()):
+                objs.setdefault(i, b"")             # (a bank never written: listed with size 0)
             return objs
     raise BackupError("the FM-1 changed its sounds while they were read: try again with it stopped")
 
@@ -2005,9 +2081,14 @@ def run_sounds(up, a, out, ask):
             objs = read_sounds(bl, lambda d, t: prog.put(f"reading the sounds {d * 100 // max(1, t):3d}%"))
         finally:
             prog.end()
-        if 6 not in objs or 7 not in objs:
+        if not is_pool(objs) and (6 not in objs or 7 not in objs):
             raise InstallError("nosounds", f"{version} does not list the user sound banks")
         table = parse_sound_objects(objs)
+        for op in (a.export_sound, a.import_sound, a.rename_sound, a.delete_sound, getattr(a, "export_syx", None),
+                   getattr(a, "import_syx", None)):
+            n = op and str(op[0] if isinstance(op, (list, tuple)) else op)
+            if n and n.isdigit() and int(n) > len(table):
+                raise InstallError("usage", f"slot {n}: {version} has the user slots 1..{len(table)}")
         if a.sounds:
             print(f"user sounds on {version}:", file=out)
             for row in table:
@@ -2603,6 +2684,7 @@ def run(a, backend, out, ask):
 # with the backup protocol's LIST and GET (nothing is written, no command of its own).
 
 FAV_ID, FAV_VERSION, FAV_USER, FAV_P5 = 23, 2, 0x80, 16
+FAV_USER2 = 0x81                                 # 0.22: the pool's slots 33..128 (FAV_USER's ids 32..127 in the text)
 FAV_CHORD, FAV_BASS, FAV_OPT = 0x40, 0x20, 0xFF   # version 2: tag | FAV_CHORD / FAV_BASS: the sounds typed so; the options
 FAV_ORDER = (12, 15, 13, 14, 7)                  # the engines as the FM-1 shows them (P5 comes last: its own block)
 
@@ -2638,6 +2720,10 @@ def parse_favorites_full(b):
                 dst, tag = only["bass"], tag & ~FAV_BASS
         if tag == FAV_P5:
             ids = [i for i in ids if 1 <= i <= 200]
+        if tag == FAV_USER2:                       # (0.22: one list of user slots 0..127)
+            tag, ids = FAV_USER, sorted(set(dst.get(FAV_USER, [])) | {32 + i for i in ids})
+        elif tag == FAV_USER and dst.get(FAV_USER):
+            ids = sorted(set(dst[FAV_USER]) | set(ids))
         if ids:
             dst[tag] = ids
     types = {(t, i): "chord" for t, v in only["chord"].items() for i in v}
@@ -2722,8 +2808,9 @@ def run_favorites(up, out):
 
 
 # --restore-favorites FILE (3y54): a --favorites text back into object 23, packed as cr_favs.c crf_pack does
-FAV_SEC = ((FAV_USER, 4), (7, 2), (12, 8), (13, 8), (14, 16), (15, 8), (FAV_P5, 26))   # cr_favs.c CRF_SEC, in order
-FAV_PACK_MAX = 264                               # cr_favs.c CRF_PACK_MAX (cr_backup.c refuses more)
+FAV_SEC = ((FAV_USER, 4), (FAV_USER2, 12), (7, 2), (12, 8), (13, 8), (14, 16), (15, 8), (FAV_P5, 26))   # cr_favs.c
+                                                 # CRF_SEC, in order (0.22: FAV_USER2 the pool's slots 33..128)
+FAV_PACK_MAX = 308                               # cr_favs.c CRF_PACK_MAX (cr_backup.c refuses more; 377264f: 264)
 
 
 def pack_favorites(marks, types=None, filt=False):
@@ -2732,6 +2819,11 @@ def pack_favorites(marks, types=None, filt=False):
     bytes at the end dropped, a zero bitmap not stored; the options last, only when the filter is on)"""
     types = types or {}
     sizes = dict(FAV_SEC)
+    if any(i >= 32 for i in marks.get(FAV_USER, [])) or any(t == FAV_USER and i >= 32 for t, i in types):
+        marks = dict(marks)                        # (slots 33..128: section 0x81, as the firmware packs them)
+        marks[FAV_USER2] = [i - 32 for i in marks[FAV_USER] if i >= 32] if FAV_USER in marks else []
+        marks[FAV_USER] = [i for i in marks.get(FAV_USER, []) if i < 32]
+        types = {((FAV_USER2, i - 32) if t == FAV_USER and i >= 32 else (t, i)): v for (t, i), v in types.items()}
     for tag, ids in marks.items():
         for i in ids:
             if tag not in sizes or not 0 <= i < sizes[tag] * 8 or (tag == FAV_P5 and not 1 <= i <= 200):
@@ -2784,7 +2876,7 @@ def parse_favorites_text(text):
             continue
         if body.startswith("P5:"):
             continue
-        m = re.match(r"user U(\d\d)\b(.*)$", body)
+        m = re.match(r"user U(\d\d\d?)\b(.*)$", body)
         if m and 1 <= int(m.group(1)) <= SOUND_SLOTS:
             add(FAV_USER, int(m.group(1)) - 1, m.group(2))
             continue

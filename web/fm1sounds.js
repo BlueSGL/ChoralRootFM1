@@ -9,18 +9,25 @@
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName } from "./fm1backup.js";
 import { dnsndToQuad } from "./fm1dnsnd.js";
 
-export const SOUND_IDS = [6, 7, 9, 10, 11, 12, 13, 22];
+export const SOUND_IDS = [6, 7, 9, 10, 11, 12, 13, 22];   // the legacy objects (0.21's: 32 slots, the engine stores)
 const SOUND_IDS_OPTIONAL = [22];                 // (an older ChoralRoot has no FM TONE store: read as empty)
-export const SOUND_SLOTS = 32;
+export const SOUND_SLOTS = 128;                  // 0.22, the sound pool (docs/PRESETS.md "The pool")
+export const LEGACY_SLOTS = 32;
+// 0.22, the sound pool: ids 50..62, the 13 banks of 10 slots (firmware storage.c sp_*, upool.c); a slot is 384 bytes:
+// the 192-byte record, at 192 the patch's engine + 1 (0: none), at 193 its length, the patch from 196
+export const POOL_IDS = Array.from({ length: 13 }, (_, i) => 50 + i);
+const POOL_PER = 10, POOL_SLOT = 384, POOL_BANK = POOL_PER * POOL_SLOT, POOL_HDR = 192, POOL_DATA = 196;
+export const isPool = (objs) => POOL_IDS.some((id) => (objs instanceof Map ? objs.has(id) : objs && objs[id] !== undefined));
 // ENGINES[] (append-only; 0, 1, 4, 8, 10 retired: ANALOG since 0.14, its records play on the VA; 2, 3, 5, 6, 11, 9 (PHASE,
 // LOFI, VOICE, TRIO, NOISE, PHYS) retired in 0.18: their records stay in their slots and load as the VA's init sound, a
 // stand-in). 15: FM TONE (engine 15, eng_quad.c, code name QUAD; its patch kind stays "quad")
 export const ENGINE_NAMES = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
-  "DRUM", "NOISE", "FM6", "VA", "CZ-1", "FM TONE"];
-export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 80 };
+  "DRUM", "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5"];
+export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 80, p5: 138 };
+const KIND_ENGINE = { va: 13, fm6: 12, cz: 14, quad: 15, p5: 16 };
 export const SOUND_FORMAT = "choralroot-sound";
 export const patchKindOf = (engine) =>
-  (engine === 13 ? "va" : engine === 12 ? "fm6" : engine === 14 ? "cz" : engine === 15 ? "quad" : null);
+  (engine === 13 ? "va" : engine === 12 ? "fm6" : engine === 14 ? "cz" : engine === 15 ? "quad" : engine === 16 ? "p5" : null);
 
 // the factory presets of each engine (ENGINES[e]->presets[k].name) and the first of them in the engine's pool (the
 // CZ-1's preset 0, INIT TONE, is the pool's INIT): tests/sound_templates.c prints both from the firmware, and its
@@ -67,20 +74,29 @@ const SND_STORE = {   // per kind: the object ids (VA, FM TONE: one store of 32,
   cz: { ids: [12, 13], magic: 0x55315A43, ver: 1, nslot: 16, size: 16 + 16 * 144 },
   quad: { ids: [22], magic: 0x53445551, ver: 1, nslot: 32, size: 16 + 32 * 80 },
 };
-const SND_KINDS = ["va", "fm6", "cz", "quad"];
+const SND_KINDS = ["va", "fm6", "cz", "quad", "p5"];
 const sndWhole = (kind) => kind === "va" || kind === "quad";   // one store of 32: the used mask at 8, the blob size at 12
 const sndView = (b) => new DataView(b.buffer, b.byteOffset, b.byteLength);
-const sndSlotOk = (slot) => Number.isInteger(slot) && slot >= 1 && slot <= SOUND_SLOTS;
-const sndLabel = (slot) => `U${String(slot).padStart(2, "0")}`;
+const sndSlotOk = (slot, n = SOUND_SLOTS) => Number.isInteger(slot) && slot >= 1 && slot <= n;
+// "U05" (the legacy 32), "U005" (the pool's 128): 3 digits wherever a pool slot is shown
+const sndLabel = (slot, pool = slot > 99) => `U${String(slot).padStart(pool ? 3 : 2, "0")}`;
 export const slotLabel = sndLabel;
+let sndPoolNow = false;                          // (the map last made: its labels and slot count)
 function sndCheckSlot(slot) {
-  if (!sndSlotOk(slot)) throw new Error(`Slot ${slot} is not a user slot (1..32)`);
+  const n = sndPoolNow ? SOUND_SLOTS : LEGACY_SLOTS;
+  if (!sndSlotOk(slot, n)) throw new Error(`Slot ${slot} is not a user slot (1..${n})`);
 }
-// objs: a Map or an object id -> Uint8Array (a missing id = size 0) -> a Map of the eight ids
+// objs: a Map or an object id -> Uint8Array (a missing id = size 0) -> a Map of the eight ids, or of the pool's 13
+// banks when objs holds any of them (0.22); .pool says which
 function sndMap(objs) {
   const get = (id) => (objs instanceof Map ? objs.get(id) : objs && objs[id]);
-  return new Map(SOUND_IDS.map((id) => [id, get(id) instanceof Uint8Array ? get(id) : new Uint8Array(0)]));
+  const pool = isPool(objs), m = new Map((pool ? POOL_IDS : SOUND_IDS).map((id) => [id, get(id) instanceof Uint8Array ? get(id) : new Uint8Array(0)]));
+  m.pool = pool;
+  sndPoolNow = pool;
+  return m;
 }
+const sndCopy = (before) => { const m = new Map(before); m.pool = before.pool; return m; };
+const poolAt = (slot) => ({ id: POOL_IDS[0] + Math.floor((slot - 1) / POOL_PER), off: ((slot - 1) % POOL_PER) * POOL_SLOT });
 
 // a record (192 bytes) is valid as up_valid tests it
 export function recordValid(r) {
@@ -95,6 +111,10 @@ const sndBankOk = (b) => b.length === SND_BANK_SIZE && sndView(b).getUint32(0, t
 const sndBankId = (slot) => (slot <= 16 ? 6 : 7);
 const sndRecOff = (slot) => 8 + ((slot - 1) % SND_PER_BANK) * SND_REC;
 function sndRecord(m, slot) {           // the slot's record bytes, or null (the bank is empty / not a bank)
+  if (m.pool) {
+    const p = poolAt(slot), b = m.get(p.id);
+    return b.length === POOL_BANK ? b.subarray(p.off, p.off + SND_REC) : null;
+  }
   const b = m.get(sndBankId(slot));
   return sndBankOk(b) ? b.subarray(sndRecOff(slot), sndRecOff(slot) + SND_REC) : null;
 }
@@ -114,6 +134,12 @@ function sndStoreOk(kind, b, half) {
 }
 const sndUsedOff = (kind) => (sndWhole(kind) ? 8 : 12);
 function sndBlob(m, kind, slot) {        // the slot's blob in the store of that kind, or null (no store, bit clear)
+  if (m.pool) {                          // (the pool: the slot's patch when it is that kind's)
+    const p = poolAt(slot), b = m.get(p.id);
+    if (b.length !== POOL_BANK || b[p.off + POOL_HDR] !== KIND_ENGINE[kind] + 1 || b[p.off + POOL_HDR + 1] !== PATCH_SIZE[kind]) return null;
+    return b.subarray(p.off + POOL_DATA, p.off + POOL_DATA + PATCH_SIZE[kind]);
+  }
+  if (kind === "p5") return null;        // (no P5 store before the pool)
   const p = sndPlace(kind, slot), b = m.get(p.id);
   if (!sndStoreOk(kind, b, p.half) || !(sndView(b).getUint32(sndUsedOff(kind), true) >>> p.bit & 1)) return null;
   return b.subarray(p.off, p.off + PATCH_SIZE[kind]);
@@ -125,17 +151,17 @@ export const nameValid = (name) => typeof name === "string" && /^[\x20-\x7e]{1,1
 // bound: null, or the factory preset the slot overwrites ({index, pos, label, name}: "over FM6 02 FM BELL");
 // added: a used slot that is not bound (it follows the factory presets in its engine's pool)
 export function parseSoundObjects(objs) {
-  const m = sndMap(objs);
-  const recs = Array.from({ length: SOUND_SLOTS }, (_, i) => { const r = sndRecord(m, i + 1); return r && recordValid(r) ? r : null; });
+  const m = sndMap(objs), n = m.pool ? SOUND_SLOTS : LEGACY_SLOTS, lab = (slot) => sndLabel(slot, m.pool);
+  const recs = Array.from({ length: n }, (_, i) => { const r = sndRecord(m, i + 1); return r && recordValid(r) ? r : null; });
   const binds = soundBindings(recs);
   const slots = recs.map((r, i) => {
     const slot = i + 1;
-    if (!r) return { slot, label: sndLabel(slot), used: false, name: "", engine: null, engineName: "", retired: false, kind: null, patch: null, bound: null, added: false };
+    if (!r) return { slot, label: lab(slot), used: false, name: "", engine: null, engineName: "", retired: false, kind: null, patch: null, bound: null, added: false };
     const engine = r[2], kind = patchKindOf(engine);
-    return { slot, label: sndLabel(slot), used: true, name: sndDecodeName(r), engine, engineName: ENGINE_NAMES[engine], retired: engineRetired(engine), kind,
+    return { slot, label: lab(slot), used: true, name: sndDecodeName(r), engine, engineName: ENGINE_NAMES[engine], retired: engineRetired(engine), kind,
       patch: kind && sndBlob(m, kind, slot) ? kind : null, bound: binds[i], added: !binds[i] };
   });
-  return { slots };
+  return { slots, pool: m.pool };
 }
 
 const sndB64 = (bytes) => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
@@ -211,6 +237,15 @@ function sndNewStore(kind, half) {
 }
 // the slot's blob of `kind` = blob (null: cleared). Clearing a slot whose bit is clear changes nothing (as va_store_put)
 function sndPutBlob(m, kind, slot, blob) {
+  if (m.pool) {                          // (the pool: one patch a slot, its engine named in the slot)
+    const p = poolAt(slot), old = m.get(p.id), o = p.off + POOL_HDR;
+    if (!blob && (old.length !== POOL_BANK || old[o] !== KIND_ENGINE[kind] + 1)) return;
+    const b = old.length === POOL_BANK ? old.slice() : new Uint8Array(POOL_BANK);
+    b.fill(0, o, p.off + POOL_SLOT);
+    if (blob) { b[o] = KIND_ENGINE[kind] + 1; b[o + 1] = PATCH_SIZE[kind]; b.set(blob, p.off + POOL_DATA); }
+    m.set(p.id, b); return;
+  }
+  if (kind === "p5") { if (blob) throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)"); return; }
   const p = sndPlace(kind, slot), old = m.get(p.id), ok = sndStoreOk(kind, old, p.half), uo = sndUsedOff(kind);
   if (!blob) {
     if (!ok || !(sndView(old).getUint32(uo, true) >>> p.bit & 1)) return;
@@ -227,6 +262,13 @@ function sndPutBlob(m, kind, slot, blob) {
   m.set(p.id, b);
 }
 function sndPutRecord(m, slot, rec) {   // rec null: the record zeroed (an empty or foreign bank: nothing to clear)
+  if (m.pool) {
+    const p = poolAt(slot), old = m.get(p.id);
+    if (!rec && old.length !== POOL_BANK) return;
+    const b = old.length === POOL_BANK ? old.slice() : new Uint8Array(POOL_BANK);
+    if (rec) b.set(rec, p.off); else b.fill(0, p.off, p.off + POOL_SLOT);
+    m.set(p.id, b); return;
+  }
   const id = sndBankId(slot), old = m.get(id), ok = sndBankOk(old);
   if (!rec && !ok) return;
   const b = ok ? old.slice() : sndNewBank();
@@ -235,7 +277,7 @@ function sndPutRecord(m, slot, rec) {   // rec null: the record zeroed (an empty
 }
 function sndResult(before, m) {
   const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
-  const ids = [9, 10, 11, 12, 13, 22, 6, 7].filter((id) => !same(before.get(id), m.get(id)));
+  const ids = (m.pool ? POOL_IDS : [9, 10, 11, 12, 13, 22, 6, 7]).filter((id) => !same(before.get(id), m.get(id)));
   return { changed: ids.map((id) => ({ id, bytes: m.get(id) })), objs: m };
 }
 const sndWriteName = (rec, name) => { rec.fill(0, 4, 4 + SND_NAME); for (let i = 0; i < name.length; i++) rec[4 + i] = name.charCodeAt(i); };
@@ -244,7 +286,7 @@ const sndWriteName = (rec, name) => { rec.fill(0, 4, 4 + SND_NAME); for (let i =
 export function importSound(objs, slot, sound) {
   sndCheckSlot(slot);
   if (!sound || !(sound.record instanceof Uint8Array)) sound = readSoundFile(sound);
-  const before = sndMap(objs), m = new Map(before), rec = sound.record.slice();
+  const before = sndMap(objs), m = sndCopy(before), rec = sound.record.slice();
   if (!recordValid(rec)) throw new Error("Not a valid user sound record");
   if (sound.name !== undefined && sound.name !== null) {
     if (!nameValid(sound.name)) throw new Error("A name is 1 to 12 characters (ASCII letters, digits, symbols, spaces)");
@@ -259,7 +301,7 @@ export function importSound(objs, slot, sound) {
 export function renameSound(objs, slot, name) {
   sndCheckSlot(slot);
   if (!nameValid(name)) throw new Error("A name is 1 to 12 characters (ASCII letters, digits, symbols, spaces)");
-  const before = sndMap(objs), m = new Map(before), r = sndRecord(m, slot);
+  const before = sndMap(objs), m = sndCopy(before), r = sndRecord(m, slot);
   if (!r || !recordValid(r)) throw new Error(`${sndLabel(slot)} is empty`);
   const rec = r.slice();
   sndWriteName(rec, name);
@@ -268,7 +310,7 @@ export function renameSound(objs, slot, name) {
 }
 export function deleteSound(objs, slot) {
   sndCheckSlot(slot);
-  const before = sndMap(objs), m = new Map(before);
+  const before = sndMap(objs), m = sndCopy(before);
   for (const k of SND_KINDS) sndPutBlob(m, k, slot, null);
   sndPutRecord(m, slot, null);
   return sndResult(before, m);
@@ -289,9 +331,10 @@ export async function readSounds(request, onProgress = () => {}) {
   for (let attempt = 0; ; attempt++) {
     const manifest = bkManifest(await request([BACKUP_CMD.LIST, []], { timeout: 3000, retries: 0 }));
     const listed = new Map(manifest.map((o) => [o.id, o]));
-    if (SOUND_IDS.some((id) => !listed.has(id) && !SOUND_IDS_OPTIONAL.includes(id)))
+    const pool = POOL_IDS.some((id) => listed.has(id));   // (0.22: the sound pool)
+    if (!pool && SOUND_IDS.some((id) => !listed.has(id) && !SOUND_IDS_OPTIONAL.includes(id)))
       throw new Error("This firmware does not hold the user sounds' patch stores (ChoralRoot needed)");
-    const ids = SOUND_IDS.filter((id) => listed.has(id));
+    const ids = (pool ? POOL_IDS : SOUND_IDS).filter((id) => listed.has(id));
     const total = ids.reduce((n, id) => n + listed.get(id).size, 0), objs = new Map();
     let done = 0, changed = false;
     for (const id of ids) {
@@ -308,7 +351,7 @@ export async function readSounds(request, onProgress = () => {}) {
       objs.set(id, bytes);
     }
     if (!changed) {
-      for (const id of SOUND_IDS) if (!objs.has(id)) objs.set(id, new Uint8Array(0));   // (an unlisted optional store)
+      for (const id of pool ? POOL_IDS : SOUND_IDS) if (!objs.has(id)) objs.set(id, new Uint8Array(0));   // (an unlisted optional store)
       return { objs };
     }
     if (attempt) throw new Error("The FM-1 changed during the read. Try again (stop the loop if one is saving).");
@@ -569,6 +612,13 @@ export function exportSyx(objs, slot) {
 // ---- the device manager (docs/DEVICE-MANAGER.md): a sound placed with its binding, two slots swapped, a binding moved
 // the first free user slot, 0: none
 export const firstFreeSlot = (objs) => (parseSoundObjects(objs).slots.find((s) => !s.used) || { slot: 0 }).slot;
+// 80 IMPORT (0.22): the FM-1's legacy slots (0.21's, as they are in its flash) into slots 1..32 again; -> the records
+// copied. rc 1: no legacy slots on the FM-1; rc 3: busy
+export async function importLegacySlots(request) {
+  const a = await request([80, []], { timeout: 8000, retries: 0 });
+  if (a[0]) throw sndRcError(a[0] === 1 ? 1 : a[0], "legacy slots (0.21's)");
+  return a[1];
+}
 // the record bound to factory preset index f of its engine's pool (SAVE > Overwrite: note[15] 0xA6, flags[15] f + 1);
 // f < 0: an added preset (flags 0)
 export function withBinding(record, f) {
@@ -584,7 +634,7 @@ export function placeSound(objs, slot, sound, f = -1) {
 // slot's binding only (its sound stays): f the factory preset index of its pool, -1 added
 export function bindSound(objs, slot, f) {
   sndCheckSlot(slot);
-  const before = sndMap(objs), m = new Map(before), r = sndRecord(m, slot);
+  const before = sndMap(objs), m = sndCopy(before), r = sndRecord(m, slot);
   if (!r || !recordValid(r)) throw new Error(`${sndLabel(slot)} is empty`);
   sndPutRecord(m, slot, withBinding(r, f));
   return sndResult(before, m);
@@ -595,7 +645,7 @@ export function bindSound(objs, slot, f) {
 export function swapSounds(objs, a, b) {
   sndCheckSlot(a); sndCheckSlot(b);
   if (a === b) throw new Error("Swap needs two different slots");
-  const before = sndMap(objs), m = new Map(before);
+  const before = sndMap(objs), m = sndCopy(before);
   const take = (slot) => {
     const r = sndRecord(before, slot);
     if (!r || !recordValid(r)) return null;

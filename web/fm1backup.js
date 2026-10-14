@@ -39,6 +39,10 @@ export function objectName(id) {
   if (id === 23) return "favorites";
   if (isSample(id)) return `sample slot ${id - 31}`;
   if (id >= 40 && id <= 49) return `loop slot ${id - 39}`;
+  if (id >= 50 && id <= 62) {               // 0.22, the sound pool: a bank of 10 slots (the last: 121..128)
+    const a = (id - 50) * 10 + 1;
+    return `user sounds ${String(a).padStart(3, "0")}-${String(Math.min(a + 9, 128)).padStart(3, "0")}`;
+  }
   return `object ${id}`;
 }
 export const bkU32 = (n) => Array.from({ length: 5 }, (_, i) => (n >>> (i * 7)) & (i === 4 ? 15 : 127));

@@ -9,7 +9,7 @@ import { deflateRawSync } from "node:zlib";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { parseDnsnd, dnsndToQuad, DNSND_FIELDS, DN_QUAD_RANGES, DN_QP, DN_RATIO_A, dnLz4Block } from "./fm1dnsnd.js";
-import { soundFromDnsnd, recordValid, SOUND_IDS, placeSound, parseSoundObjects, firstFreeSlot } from "./fm1sounds.js";
+import { soundFromDnsnd, recordValid, SOUND_IDS, POOL_IDS, placeSound, parseSoundObjects, firstFreeSlot } from "./fm1sounds.js";
 import { libraryItemsFromDnsnd } from "./fm1manager.js";
 
 let fails = 0;
@@ -140,6 +140,14 @@ const slot = firstFreeSlot(blank), r = placeSound(blank, slot, s);
 const row = parseSoundObjects(r.objs).slots[slot - 1];
 ok(r.changed.map((c) => c.id).join() === "22,6" && row.used && row.engineName === "FM TONE" && row.patch === "quad" && row.name === "MY TEST TONE" &&
    r.objs.get(22).subarray(16 + (slot - 1) * 80, 16 + slot * 80).every((x, i) => x === q.blob[i]), "import: placed in U01 (the FM TONE store, then the bank)");
+{   // 0.22, the sound pool: slots 1..32 taken, the import goes to U033 (bank 4, id 53) with its FM TONE patch
+  let pm = new Map(POOL_IDS.map((id) => [id, new Uint8Array(0)]));
+  for (let k = 1; k <= 32; k++) pm = placeSound(pm, k, s).objs;
+  const ps = firstFreeSlot(pm), pr = placeSound(pm, ps, s), prow = parseSoundObjects(pr.objs).slots[ps - 1], pb = pr.objs.get(53);
+  ok(ps === 33 && pr.changed.map((c) => c.id).join() === "53" && prow.used && prow.label === "U033" && prow.patch === "quad" &&
+     pb[2 * 384 + 192] === 16 && pb.subarray(2 * 384 + 196, 2 * 384 + 196 + 80).every((x, i) => x === q.blob[i]),
+     "import into the pool (0.22): U033, the first free slot after 32 taken (bank 4, slot 3: the record and the FM TONE patch)");
+}
 const items = await libraryItemsFromDnsnd("t.dnsnd", file);
 ok(items.length === 1 && items[0].engine === 15 && items[0].patch && items[0].notes.length === q.notes.length && items[0].file.dnsnd.notes.length === q.notes.length,
    "manager: a library item with its notes");

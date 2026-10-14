@@ -1168,8 +1168,8 @@ def sounds():
     rc, out, err = cli(["--sounds"], dev)
     ok(rc == 7 and "ChoralRoot" in err and "FELUCCA 1.0" in err, "--sounds on Felucca: exit 7, needs ChoralRoot")
 
-    ok(usage(["--delete-sound", "33"]) == 2 and usage(["--export-sound", "0", "x.json"]) == 2 and
-       usage(["--rename-sound", "a", "X"]) == 2, "N outside 1..32: a usage error (exit 2)")
+    ok(usage(["--export-sound", "0", "x.json"]) == 2 and
+       usage(["--rename-sound", "a", "X"]) == 2 and usage(["--delete-sound", "129"]) == 2, "N outside 1..128: a usage error (exit 2)")
     ok(usage(["--sounds", pkgfile("s.fwsc", package())]) == 2 and usage(["--sounds", "--backup", "x.json"]) == 2 and
        usage(["--sounds", "--delete-sound", "1"]) == 2 and usage(["--rename-sound", "1", "THIRTEEN CHAR"]) == 2,
        "--sounds with a package / --backup / another sound option, a bad new name: usage errors")

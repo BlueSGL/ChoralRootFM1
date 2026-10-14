@@ -9,7 +9,7 @@ import { CR_BACKUP_IDS, BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc } from
 import { SOUND_IDS, ENGINE_NAMES, PATCH_SIZE, patchKindOf, parseSoundObjects, exportSound, soundFileName, readSoundFile,
   importSound, renameSound, deleteSound, readSounds, writeSounds, recordValid, SOUND_TEMPLATES, FM6_FN_DEFAULTS, fm6BlobToVced,
   vcedToFm6Blob, fm6VcedSyx, czToneSyx, parseSyx, soundFromSyx, exportSyx, syxFileName, FACTORY_PRESETS, FACTORY_FIRST, engineRetired,
-  soundBindings, poolOf } from "./fm1sounds.js";
+  soundBindings, poolOf, POOL_IDS, isPool, swapSounds } from "./fm1sounds.js";
 import { readFileSync } from "node:fs";
 
 let fails = 0;
@@ -74,10 +74,10 @@ const source = () => new Map([
 ]);
 
 /* ------------------------------------------------------------------------ the table --- */
-ok(SOUND_IDS.join() === "6,7,9,10,11,12,13,22" && ENGINE_NAMES.length === 16 && ENGINE_NAMES[13] === "VA" && ENGINE_NAMES[14] === "CZ-1" &&
+ok(SOUND_IDS.join() === "6,7,9,10,11,12,13,22" && ENGINE_NAMES.length === 17 && ENGINE_NAMES[16] === "P5" && patchKindOf(16) === "p5" && PATCH_SIZE.p5 === 138 && ENGINE_NAMES[13] === "VA" && ENGINE_NAMES[14] === "CZ-1" &&
    ENGINE_NAMES[15] === "FM TONE" && patchKindOf(13) === "va" && patchKindOf(12) === "fm6" && patchKindOf(14) === "cz" &&
    patchKindOf(15) === "quad" && PATCH_SIZE.quad === 80 && patchKindOf(0) === null && patchKindOf(1) === null,
-   "constants: ids, 16 engines, patch kinds (FM TONE: quad, 80 bytes)");
+   "constants: ids, 17 engines (0.22: P5), patch kinds (FM TONE: quad, 80 bytes; P5: p5, 138)");
 const src = source();
 const { slots } = parseSoundObjects(src);
 const S = (n) => slots[n - 1];
@@ -96,9 +96,9 @@ ok(parseSoundObjects({}).slots.every((s) => !s.used) && parseSoundObjects({ 6: n
   const bad = bank(recs6); view(bad).setUint16(6, 15, true);
   ok(parseSoundObjects({ 6: bad }).slots.every((s) => !s.used), "parse: a bank with another slot count reads as empty");
   const r = rec(13, "X", { np: 20 }); r[16 + 5] = 192;
-  ok(!recordValid(r) && recordValid(rec(13, "X", { np: 20 })) && recordValid(rec(15, "X")) && !recordValid(rec(16, "X")) && !recordValid(rec(1, "")) &&
+  ok(!recordValid(r) && recordValid(rec(13, "X", { np: 20 })) && recordValid(rec(15, "X")) && recordValid(rec(16, "X")) && !recordValid(rec(17, "X")) && !recordValid(rec(1, "")) &&
      !recordValid(rec(1, "X", { ver: 3, np: 73 })) && recordValid(rec(1, "X", { ver: 3, np: 72 })) && !recordValid(rec(1, "X", { np: 7 })),
-     "parse: the validity test (packed > 191, engine 16, no name, np range)");
+     "parse: the validity test (packed > 191, engine 17 (P5 is 16), no name, np range)");
 }
 
 /* ---------------------------------------------------------------- export / file --- */
@@ -523,6 +523,43 @@ const QUAD_FX_V1 = "UQEBAwMjGgoAP2RkZGQAUBhIAC4ALAABAQEAAQFkACgAQAAofwAAQAAAAH8A
   const dq = device([...source()].map(([id, b]) => [id, id === 22 ? q : b]));
   const { objs: oq } = await readSounds(dq.request);
   ok(same(oq.get(22), q), "quad: the QUAD store read from the FM-1 (object 22)");
+}
+
+// ---- 0.22, the sound pool (ids 50..62, 13 banks of 10 slots of 384 bytes): 128 slots, the patch's kind from the slot
+{
+  const blank = new Map(POOL_IDS.map((id) => [id, new Uint8Array(0)]));
+  const p5 = Uint8Array.from({ length: 138 }, (_, i) => (i * 7 + 3) & 127);
+  ok(isPool(blank) && parseSoundObjects(blank).slots.length === 128 && parseSoundObjects(blank).pool &&
+     parseSoundObjects(blank).slots[99].label === "U100" && parseSoundObjects(blank).slots[4].label === "U005",
+     "pool: 128 slots, 3-digit labels (U005, U100)");
+  let r = importSound(blank, 100, { record: rec(16, "MY P5"), name: "MY P5", patch: p5 });
+  const row = parseSoundObjects(r.objs).slots[99], b = r.objs.get(59);
+  ok(r.changed.map((c) => c.id).join() === "59" && row.used && row.engineName === "P5" && row.patch === "p5" && b.length === 3840 &&
+     b[9 * 384 + 192] === 17 && b[9 * 384 + 193] === 138 && same(b.subarray(9 * 384 + 196, 9 * 384 + 196 + 138), p5),
+     "pool: a P5 sound into U100: bank 10 (id 59) written, slot 10 of it: the record, engine 16 + 1, 138, the program");
+  r = importSound(r.objs, 33, { record: rec(13, "VA 33"), name: "VA 33", patch: vaBlob(5) });
+  const file = exportSound(r.objs, 100), back = readSoundFile(JSON.stringify(file));
+  ok(file.patch.kind === "p5" && same(back.patch, p5) && same(back.record, r.objs.get(59).subarray(9 * 384, 9 * 384 + 192)),
+     "pool: export / import of U100 byte for byte (record and program)");
+  const r2 = renameSound(r.objs, 33, "RENAMED");
+  ok(parseSoundObjects(r2.objs).slots[32].name === "RENAMED" && parseSoundObjects(r2.objs).slots[32].patch === "va" && r2.changed.map((c) => c.id).join() === "53",
+     "pool: rename U033: its bank alone (id 53), the patch kept");
+  const r3 = swapSounds(r2.objs, 33, 100), s3 = parseSoundObjects(r3.objs).slots;
+  ok(s3[32].engineName === "P5" && s3[32].patch === "p5" && s3[99].name === "RENAMED" && s3[99].patch === "va" && r3.changed.map((c) => c.id).join() === "53,59",
+     "pool: swap U033 / U100: each with its own patch, two banks");
+  const r4 = deleteSound(r3.objs, 100);
+  ok(!parseSoundObjects(r4.objs).slots[99].used && r4.objs.get(59).subarray(9 * 384, 10 * 384).every((x) => !x), "pool: delete U100: the slot zeroed");
+  let threw = 0;
+  try { importSound(blank, 129, { record: rec(13, "X"), name: "X" }); } catch (e) { threw = /1\.\.128/.test(e.message); }
+  ok(threw, "pool: slot 129 refused (1..128)");
+  const legacyMap = new Map(SOUND_IDS.map((id) => [id, new Uint8Array(0)]));
+  threw = 0;
+  try { importSound(legacyMap, 1, { record: rec(16, "P5"), name: "P5", patch: p5 }); } catch (e) { threw = /0\.22/.test(e.message); }
+  ok(threw, "legacy (0.21) objects: a P5 program has no store there: refused");
+  // the FM-1 (a simulated one): LIST names the pool's ids: they are read, written back
+  const dv = device(new Map(POOL_IDS.map((id) => [id, id === 59 ? r.objs.get(59) : new Uint8Array(0)])), { ids: [1, 8, ...POOL_IDS, 23] });
+  const { objs: rd } = await readSounds(dv.request);
+  ok(isPool(rd) && same(rd.get(59), r.objs.get(59)) && parseSoundObjects(rd).slots[99].engineName === "P5", "pool: readSounds reads the pool's banks");
 }
 
 console.log(fails ? `SOUNDS TESTS FAILED (${fails})` : "sounds tests passed");
