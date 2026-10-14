@@ -115,6 +115,10 @@ static void put_hdr(uint32_t s, uint32_t bank, uint32_t seq, const uint8_t *payl
     memcpy(nor + sp_addr(s), &h, sizeof h);
 }
 
+static uint8_t bulk[ST_PAYLOAD_MAX];
+static int bulk_fill(uint32_t j, uint8_t *slot) { memcpy(slot, bulk + j * SP_SLOT, SP_SLOT); return 0; }
+static int abort_fill(uint32_t j, uint8_t *slot) { (void)slot; return j == 4 ? -3 : 0; }
+
 int main(void)
 {
     static uint8_t pa[ST_PAYLOAD_MAX], pb[ST_PAYLOAD_MAX];
@@ -135,7 +139,7 @@ int main(void)
         uint32_t slot = (k * 7u) % SP_SLOTS;
         if (k & 1) sp_prep();
         n = steps_of_save(slot);
-        CHECK(n >= 16 && n <= 17, "a save takes %ld steps", n);
+        CHECK(n >= 21 && n <= 22, "a save takes %ld steps", n);
         for (at = 0; at < n; at++) {
             if (k & 1) sp_prep();
             cut_save(slot, at, 0); total_cuts++;
@@ -179,7 +183,7 @@ int main(void)
     memset(nor, 0xFF, sizeof nor); memset(ref, 0, sizeof ref);
     fill(pa, ST_PAYLOAD_MAX); put_hdr(0, 1, 0xFFFFFFF0u, pa); memcpy(ref + ST_PAYLOAD_MAX, pa, ST_PAYLOAD_MAX);
     boot();
-    for (k = 0; k < 64; k++) cut_save(10 + (k % 20), k % 3 ? -1 : (long)(rnd() % 17), (long)rnd());
+    for (k = 0; k < 64; k++) cut_save(10 + (k % 20), k % 3 ? -1 : (long)(rnd() % 22), (long)rnd());
     CHECK(pool_is_ref() && sp_top < 0x40u, "seq wrap (top %#x)", sp_top);
 
     /* all stale: every sector a copy, most of them old ones of the same bank */
@@ -230,6 +234,25 @@ int main(void)
         CHECK(mn > 0 && mx < 2u * mn + 50u, "wear rotates (min %u max %u)", mn, mx);
     }
 
+    /* a whole bank at once (the migration's sp_commit with a fill), cut at every step; a fill that aborts */
+    fresh();
+    for (b = 0; b < 4; b++) {
+        long nb;
+        fill(bulk, ST_PAYLOAD_MAX);
+        memcpy(pa, ref + b * ST_PAYLOAD_MAX, ST_PAYLOAD_MAX);
+        for (nb = 0; nb < 22; nb++) {
+            steps = 0; cut_at = nb; cut_bytes = (long)rnd();
+            sp_commit(b, bulk_fill);
+            boot();
+            CHECK(bank_is(b, pa) || bank_is(b, bulk), "bulk bank %u cut at %ld: a mix", b, nb);
+            if (bank_is(b, bulk)) memcpy(pa, bulk, ST_PAYLOAD_MAX);
+        }
+        CHECK(sp_commit(b, bulk_fill) == 0 && (boot(), bank_is(b, bulk)), "bulk bank %u", b);
+        memcpy(ref + b * ST_PAYLOAD_MAX, bulk, ST_PAYLOAD_MAX);
+        CHECK(sp_commit(b, abort_fill) == -3 && (boot(), bank_is(b, bulk)), "an aborted fill commits nothing");
+    }
+    CHECK(pool_is_ref(), "bulk banks");
+
     /* the spare: with it pre-erased a save erases nothing; without, exactly one erase, before the first program */
     fresh();
     for (k = 0; k < 30; k++) cut_save(k * 3u % SP_SLOTS, -1, 0);
@@ -238,7 +261,7 @@ int main(void)
         CHECK(sp_prep() >= 0 && sp_ready(), "prep");
         e0 = n_erase; p0 = n_prog;
         cut_save(k, -1, 0);
-        CHECK(n_erase == e0 && n_prog - p0 == 16u, "a save on a pre-erased spare: %u erases %u programs", n_erase - e0, n_prog - p0);
+        CHECK(n_erase == e0 && n_prog - p0 == 21u, "a save on a pre-erased spare: %u erases %u programs", n_erase - e0, n_prog - p0);
         CHECK(!sp_ready(), "a save uses the spare");
         CHECK(sp_prep() == 1 || sp_prep() == 0, "prep again");
         e0 = n_erase;
@@ -248,13 +271,13 @@ int main(void)
         uint32_t e0 = n_erase, p0 = n_prog;
         steps = 0;
         cut_save(k + 50u, -1, 0);
-        CHECK(n_erase - e0 <= 1u && n_prog - p0 == 16u, "a save without a spare: %u erases", n_erase - e0);
+        CHECK(n_erase - e0 <= 1u && n_prog - p0 == 21u, "a save without a spare: %u erases", n_erase - e0);
     }
 
     /* a bank outside the pool's sectors is never touched: the sectors around stay as they are */
     {
         uint32_t c0 = st_crc32(nor + 0xB4000, 0x4000), c1 = st_crc32(nor + 0xC8000, 0x4000);
-        for (k = 0; k < 500; k++) cut_save(rnd() % SP_SLOTS, rnd() % 2 ? -1 : (long)(rnd() % 17), (long)rnd());
+        for (k = 0; k < 500; k++) cut_save(rnd() % SP_SLOTS, rnd() % 2 ? -1 : (long)(rnd() % 22), (long)rnd());
         CHECK(c0 == st_crc32(nor + 0xB4000, 0x4000) && c1 == st_crc32(nor + 0xC8000, 0x4000), "outside the pool");
     }
     /* the older firmware's own reader never sees a pool sector as one of its objects */

@@ -343,11 +343,11 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
  * LOAD (sp_scan): per bank the valid copy with the newest seq wins (serial arithmetic, so seq wraps; equal seq,
  * which this writer never makes: the lower sector); a copy whose payload CRC fails is skipped for the next newest.
  * Every save takes seq = the newest seq of ANY valid pool header + 1, so seq orders all the pool's writes.
- * SAVE (sp_save): the new copy goes to the TARGET, the first sector after the newest one (cyclic) that holds no
+ * SAVE (sp_commit, sp_write): the new copy goes to the TARGET, the first sector after the newest one (cyclic) that holds no
  * bank's current copy (16 - 13 = at least 3 such sectors, so the target always exists and wear walks round all 16);
- * if it is not blank it is erased (the only erase; st_prep's rule: sp_prep erases it ahead), then the 15 payload pages
- * are programmed from the current copy page by page through 256 bytes (st_buf), the changed bytes substituted, and the
- * commit record LAST, then everything read back. Until the header is programmed the old copy is the newest valid one;
+ * if it is not blank it is erased (the only erase; st_prep's rule: sp_prep erases it ahead), then the ten slots
+ * are programmed from the current copy slot by slot through SP_SLOT bytes of st_buf (each in the two pieces that fall
+ * in one page), the changed bytes substituted, and the commit record LAST, then everything read back. Until the header is programmed the old copy is the newest valid one;
  * after, the new one is; the old copy is left as it is until its sector becomes a target. A cut anywhere: the old
  * bank or the new one, never a mix. The legacy objects (OBJ_UPRESET0.., the engine stores) are other sectors */
 #define SP_BASE 0xB8000u
@@ -492,44 +492,46 @@ static int sp_prep(void)
 }
 static inline int sp_ready(void) { return sp_scanned && sp_spare_ok; }
 
-/* slot k's bytes [off, off + n) = src (0: zeros), the rest of its bank as it is; 0 ok, < 0 nothing changed (the
- * old copy is current; -7: written but not read back) */
-static int sp_write(uint32_t k, uint32_t off, const void *src, uint32_t n)
+/* bank b written anew (see the top): slot j's SP_SLOT bytes are the current copy's (zeros: no copy yet), then
+ * fill(j, slot) may change them in place (slot: st_buf, SP_SLOT bytes; fill must not call st_* functions that use
+ * st_buf, st_read is fine; a non-zero return aborts, nothing committed). Each slot is programmed in the pieces that
+ * fall in one page (two a slot), the commit record last. 0 ok, < 0 nothing changed (the old copy is current; -7:
+ * written but not read back) */
+static int sp_commit(uint32_t b, int (*fill)(uint32_t j, uint8_t *slot))
 {
     st_hdr_t h;
-    uint32_t b = k / SP_PER, t, old, pg, lo, hi, i, crc = 0;
+    uint32_t t, old, j, crc = 0;
     int rc;
-    if (ST_BLOCKED() || k >= SP_SLOTS || off + n > SP_SLOT)
+    if (ST_BLOCKED() || b >= SP_NBANK)
         return -1;
     sp_ensure();
     old = sp_cur[b];
     t = sp_target();
-    lo = (k % SP_PER) * SP_SLOT + off;          /* the changed bytes in the payload */
-    hi = lo + n;
     sp_spare_ok = 0;
+    sp_scanned = 0;                             /* (until the end: after any failure the next access scans) */
     if (!st_blank(sp_addr(t))) {
         st_note(0x200u + t, st_why);
         sp_erases++;
-        if ((rc = st_erase(sp_addr(t))) != 0) {
-            sp_scanned = 0;                     /* (after any failure the next access scans what is there) */
+        if ((rc = st_erase(sp_addr(t))) != 0)
             return rc;
-        }
     }
-    for (pg = 0; pg < ST_PAYLOAD_MAX; pg += 256u) {
+    for (j = 0; j < SP_PER; j++) {
+        uint32_t at = j * SP_SLOT, done = 0;
         if (old == SP_NONE)
-            memset(st_buf, 0, 256u);
-        else if (st_read(sp_addr(old) + ST_PAYLOAD_OFF + pg, st_buf, 256u)) {
-            sp_scanned = 0;
+            memset(st_buf, 0, SP_SLOT);
+        else if (st_read(sp_addr(old) + ST_PAYLOAD_OFF + at, st_buf, SP_SLOT))
             return -1;
-        }
-        for (i = 0; i < 256u; i++)
-            if (pg + i >= lo && pg + i < hi)
-                st_buf[i] = src ? ((const uint8_t *)src)[pg + i - lo] : 0u;
-        crc = st_crc_run(crc, st_buf, 256u);
-        sp_progs++;
-        if ((rc = st_prog(sp_addr(t) + ST_PAYLOAD_OFF + pg, st_buf, 256u)) != 0) {
-            sp_scanned = 0;
+        if (fill && (rc = fill(j, st_buf)) != 0)
             return rc;
+        crc = st_crc_run(crc, st_buf, SP_SLOT);
+        while (done < SP_SLOT) {                /* the pieces of the slot that fall in one page */
+            uint32_t a = at + done, n = 256u - (a & 255u);
+            if (n > SP_SLOT - done)
+                n = SP_SLOT - done;
+            sp_progs++;
+            if ((rc = st_prog(sp_addr(t) + ST_PAYLOAD_OFF + a, st_buf + done, n)) != 0)
+                return rc;
+            done += n;
         }
     }
     memset(&h, 0xFF, sizeof h);
@@ -542,20 +544,40 @@ static int sp_write(uint32_t k, uint32_t off, const void *src, uint32_t n)
     h.rsv[0] = SP_VER;
     h.hcrc = st_crc32(&h, sizeof h - 4u);
     sp_progs++;
-    if ((rc = st_prog(sp_addr(t), &h, sizeof h)) != 0) {   /* the commit record, last */
-        sp_scanned = 0;
+    if ((rc = st_prog(sp_addr(t), &h, sizeof h)) != 0)   /* the commit record, last */
         return rc;
-    }
     {
         st_hdr_t chk;
-        if (sp_head(t, &chk) || memcmp(&chk, &h, sizeof h) || sp_body(t, crc)) {
-            sp_scanned = 0;                     /* (what is valid now: the next access scans) */
+        if (sp_head(t, &chk) || memcmp(&chk, &h, sizeof h) || sp_body(t, crc))
             return -7;
-        }
     }
     sp_cur[b] = (uint8_t)t;
     sp_top = h.seq;
     sp_last = (uint8_t)t;
+    sp_scanned = 1;
     return 0;
+}
+
+/* slot k's bytes [off, off + n) = src (0: zeros), the rest of its bank as it is (sp_commit's result) */
+static struct { uint32_t j, off, n; const uint8_t *src; } sp_sub;
+static int sp_sub_fill(uint32_t j, uint8_t *slot)
+{
+    if (j == sp_sub.j) {
+        if (sp_sub.src)
+            memcpy(slot + sp_sub.off, sp_sub.src, sp_sub.n);
+        else
+            memset(slot + sp_sub.off, 0, sp_sub.n);
+    }
+    return 0;
+}
+static int sp_write(uint32_t k, uint32_t off, const void *src, uint32_t n)
+{
+    if (ST_BLOCKED() || k >= SP_SLOTS || off + n > SP_SLOT)
+        return -1;
+    sp_sub.j = k % SP_PER;
+    sp_sub.off = off;
+    sp_sub.n = n;
+    sp_sub.src = src;
+    return sp_commit(k / SP_PER, sp_sub_fill);
 }
 #endif
