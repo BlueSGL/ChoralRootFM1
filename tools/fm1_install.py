@@ -2173,7 +2173,14 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # USB capture under- or overrun (the stream restarted); the unit's clock now. (p5-g e31c096 puts other
               # values at 35..38 on its own list: merge by name, not by index)
               "erases_auto_sounding", "last_erase_why", "last_erase_obj", "last_erase_ms", "irq_gap_ms",
-              "ua_arm_gap_max_ms", "ua_cap_reset_ms", "uptime_ms"]
+              "ua_arm_gap_max_ms", "ua_cap_reset_ms", "uptime_ms",
+              # 3y50, each core's half since the last --debug (firmware/src/cr_cpu1.h cr_dbg, fx.c mix_fx_split;
+              # docs/FX.md "Each core's half"): the largest busy time of core 0 (its stages but its waits) and of core
+              # 1 (its voices' job and the reverb's), core 0's waits in one half (both joins), the effects' join
+              # alone, core 1 idle between its two jobs; which core ran which effect in the largest whole half (1 the
+              # chorus, 2 the delay, 4 the reverb ran, 8 the reverb on core 1); the reverb jobs core 1 ran
+              "pk_c0_busy_us", "pk_c1_busy_us", "pk_c0_wait_us", "pk_fx_join_us", "pk_c1_idle_us", "pk_fx_map",
+              "c1_fx_jobs"]
 ERASE_WHY = ["other (a sound saved, a store)", "automatic: the Options", "automatic: the favourites",
              "the global save (SAVE held) or Reset Settings", "the calibration / the update gesture",
              "a backup restore", "a loop slot"]

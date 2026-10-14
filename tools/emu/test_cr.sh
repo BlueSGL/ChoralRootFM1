@@ -2250,6 +2250,16 @@ if [ "${p5b:-0}" -ge 1 ]; then
 else
     bad "P5 on two cores: the shipped list has no program 111 (LAGOON BASS): name another UNISON program with a stack of four here"
 fi
+# 3y50: the reverb on core 1 (fx.c mix_fx_split): eight P5 voices with the three sends up, inline and on a thread
+FX8="$OUT/cr_p5_eight_fx"
+EMU_STAGES=1 "$EMU" --headless --script "$S/cr_prophet_eight_fx.txt" --wav "${FX8}_inline.wav" >"${FX8}_inline.log" 2>&1
+EMU_C1=thread "$EMU" --headless --script "$S/cr_prophet_eight_fx.txt" --wav "${FX8}_thread.wav" >"${FX8}_thread.log" 2>&1
+rj=$(LC_ALL=C grep -a '^cpu: stages' "${FX8}_inline.log" | sed -n 's/.*reverb jobs \([0-9]*\).*/\1/p')
+[ -s "${FX8}_inline.wav" ] && cmp -s "${FX8}_inline.wav" "${FX8}_thread.wav" && [ "${rj:-0}" -ge 1000 ] &&
+    [ "$(grep -a "^  part 0: P5" "${FX8}_inline.log" | sed -n 's/.*voices \([0-9]*\),.*/\1/p' | tr '\n' ' ')" = "8 0 " ] &&
+    ok "eight P5 voices, three sends up: the reverb on core 1 ($rj blocks), the WAV inline and with EMU_C1=thread the same, bit for bit" ||
+    bad "the reverb on core 1: ${rj:-no} reverb jobs, or the inline and the thread WAVs differ (${FX8}_*.log)"
+silent_end cr_p5_eight_fx_inline
 
 echo "P5, the click at a short release's end (3y44): the part's DC blocker discharges after the last voice, it is not cut"
 p5pos=$(python3 tools/gen_prophet_factory.py --pos 168)          # PERC ORGAN: a release of 20 ms, in the tree's list

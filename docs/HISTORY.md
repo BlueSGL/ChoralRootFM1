@@ -2484,3 +2484,35 @@ without the package; a tampered single-core file refused; the read-back; the dem
 family, backup_name, an install over the 1-core build), tests/site_test.py (make_site.py's single-core layout,
 refusal, skip). release.yml and pages.yml were not run: their YAML parsed and their changed shell steps ran locally
 on build/release-0.22 with a stub `./build.sh` and a stub `gh`. Not tested: either package on a unit.
+3y50. **The reverb on core 1, P5's coefficients once a part, word-wide memset; the oscillators' edges studied**
+(branch p5-m from cc21a2b, not pushed). After a survey of Melodee 1.4 (6da744c, cb118c9: the ideas, written anew;
+LICENSING.md), the owner approved four changes that must leave the audio bit-identical, and said: "The 4 changes all
+sound good. The current FX suite sounds pretty amazing for this tiny device, so I'd opt not to reduce the sample
+rates further yet unless we really need to." And asked: "Is their optimization we could do to the oscillator edges?
+How much would that change the sound?"
+**1. The effects off core 0's critical path** (docs/DUALCORE.md "What each core runs"). The effects need both
+parts' sends, whole only after the voices' join, so they cannot overlap the voices without a block of latency; what
+overlaps is one effect with the others. `xf_block` is now three pieces (`cr_fx.c xf_prep`, `xf_delay`,
+`xf_reverb`); with core 1 alive `fx.c mix_fx_split` hands the reverb (its half-band, lines, up-sampler, into
+`c1x_l` / `c1x_r`) to core 1 as a second job, runs the chorus and the delay, waits, adds. Each effect adds its wet
+(integers): the mix is the serial order's, bit for bit. One owner per state; the joins in a fixed order; a refused
+or failed job: core 0 runs it in that block, core 1 given up. The shed times core 0's whole half, both waits in it.
+**2. The voice split**: weighed and left as it is (every chord voice plays one program, the bass is weighed already,
+core 0's fixed work is outside the overlap: 4 + 4 is the balanced split); publishing core 1's job before core 0 has
+prepared the chord's voices needs a deeper mailbox: not done. **3. P5's coefficients** (`p5_coef_t`): worked out in
+`p5_block` once a block for the part and only when its values, a macro or the pressure changed; `p5_render` 497 ->
+366 instructions, 10 -> 8 divides a voice a block (the listing). **4.** The idle part: nothing more to skip
+(checked). `libc.c` memset / memcpy / memcmp a word at a time when aligned (`tests/cr_libc_test.c`).
+**5. The edges** (`tools/p5_edges.sh`, docs/PROPHET.md "The oscillators' edges"): a BLEP divide in 7 % (C3) .. 54 %
+(C6) of a voice's samples, by inference 0.3 .. 2 % of its cost; a 256-entry reciprocal changes the 200 programs'
+output by -13.7 dBFS peak / -49.2 dBFS RMS, one correction tap by -10.7 / -40.6: none under -90 dBFS, nothing built.
+**Predicted** (not measured): eight voices with three effects about 2400 .. 2440 us (83 .. 84 %) where the reading
+was 2632 (91 %). **Counters** (78 PEAK 55..61, docs/FX.md): `pk_c0_busy_us`, `pk_c1_busy_us`, `pk_c0_wait_us`,
+`pk_fx_join_us`, `pk_c1_idle_us`, `pk_fx_map`, `c1_fx_jobs`. Tests: the suite (246 goldens 0 changed), the threaded
+test with the three sends up on every pair and the effects-on-core-0 reference, ThreadSanitizer 0 reports, test_cr.sh
+`cr_prophet_eight_fx` (inline = `EMU_C1=thread`). Not tested: anything on a unit (the overlap's time exists only
+there: the emulator's core 1 runs a job when handed, so perf.sh's fx stage still holds the reverb).
+tests/target_budget.txt: `p5_block` 29 -> 40 (the compare's two loops), `xf_block` 129 -> 0 (its loops are in the
+new `xf_prep` 19, `xf_delay` 5, `xf_reverb` 48; `mix_fx_split` 19, `c1_fx_job` 3), `usb_poll` 159 -> 175 (untouched
+code: the compiler laid its cold bus-reset call after the return with a branch back, which the count reads as a
+loop; no path of it changed). The other lines as they were.

@@ -49,7 +49,8 @@ FUNCS = ["analog_render", "digital_render", "digital_render_legacy", "digital_re
          "mix_loop_u", "mix_loop_fu", "mix_loop_su", "mix_loop_sfu",   # sends (f), the stereo side (s), USB's tap (u)
          "perf_begin", "perf_mute", "perf_pre", "perf_block", "perf_master",   # the FX layer (perform.c), when busy
          "rev_room", "rev_spring",                # the reverb bus (fx.c): REVERB TYPE ROOM / SPRING (Felucca's: CR_FX 0)
-         "xf_block", "xf_down", "xf_up", "xd_run", "xr_run"]   # ChoralRoot's delay and reverb (cr_fx.c, CR_FX 1): the
+         "xf_block", "xf_down", "xf_up", "xd_run", "xr_run",   # ChoralRoot's delay and reverb (cr_fx.c, CR_FX 1): the
+         "xf_prep", "xf_delay", "xf_reverb", "mix_fx_split", "c1_fx_job"]   # (3y50: xf_block in three; the reverb on core 1)
                                                   # block, the half-band filters (a send down, the wet up), the delay's
                                                   # loop, the reverb's (xd_run, xr_run: a pass is one half-rate sample)
 # built only with FELUCCA_FM4=1 (DIGITAL, src/eng_digital.c; not in the default build, so not in BUDGET): absent,

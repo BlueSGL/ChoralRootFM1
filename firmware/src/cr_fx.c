@@ -924,15 +924,21 @@ CR_HOT_FX static __attribute__((noinline)) void xc_block(const int32_t *in, int3
     xc_live = any ? CHO_LEN : xc_live > n ? xc_live - n : 0u;
 }
 
-/* a block of the two sends (the mono buses of fx.c) -> the stereo wet added to ml, mr. n: CTL */
-CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int32_t *rev_in, int32_t *ml,
-                                               int32_t *mr, uint32_t n)
+/* a block of the two sends (the mono buses of fx.c) -> the stereo wet added to ml, mr. n: CTL.
+ * 3y50, THE REVERB ON EITHER CORE (fx.c mix_fx_split, docs/DUALCORE.md "What each core runs"): the block is three
+ * pieces. xf_prep (core 0: the coefficients, what runs), xf_delay (the delay's line, into ml / mr) and xf_reverb (the
+ * sends' half-band, the reverb's lines, the wet's up-sampler, into its own ml / mr). Each of the two writes only its
+ * own state (xf.d_*, xd_buf, xf.tf; xf.r_*, xf.dn[1], xf.up, xf.up_live, xf.t[1..3], xf.tr, xf.tx, xr_buf, xr_pbuf)
+ * and ADDS its wet into the mix: a sum of integers, the same whatever runs first, so the reverb can run on core 1
+ * into buffers of its own that core 0 adds afterwards, and the samples are one core's, bit for bit. xf_block is the
+ * three in a row, as to 3y48. With the delay at the half rate (CR_FX_DELAY_DS 2) the delay writes the reverb's wet
+ * buffer too: then the block stays whole on core 0 (XF_SPLIT 0) */
+#define XF_SPLIT (CR_FX_DELAY_DS == 1)
+static uint32_t xf_prep(const int32_t *dly_in, const int32_t *rev_in, uint32_t n)   /* bit 0: the delay, bit 1: the
+                                                         * reverb, bit 2: the up-sampler's tail; 0: nothing runs */
 {
-    uint32_t i, h = xf_bpm, nh = n >> 1;
-    int32_t in_d = 0, in_r = 0, any = 0;
-    int32_t *hd = xf.t[0], *hr = xf.t[1], *ol = xf.t[2], *orr = xf.t[3];
-    (void)hd;                                           /* (the delay at the full rate: no half-rate send) */
-    int dly, rev;
+    uint32_t i, h = xf_bpm;
+    int32_t in_d = 0, in_r = 0;
     for (i = 0; i < XP_N; i++)
         h = h * 31u + (uint16_t)xfp[i];
     if (h != xf.hash || !xf.on) {                       /* a parameter or the tempo moved (or power-on) */
@@ -960,33 +966,48 @@ CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, 
             in_d |= dly_in[i];
             in_r |= rev_in[i];
         }
-    dly = in_d || xf.d_live;
-    rev = in_r || xf.r_live;
-    if (!dly && !rev && !xf.up_live)
-        return;                                         /* nothing sent, the tails over: nothing runs */
-#if XF_HALF
-    for (i = 0; i < nh; i++)
+    return (uint32_t)(in_d || xf.d_live) | (uint32_t)(in_r || xf.r_live) << 1 | (uint32_t)!!xf.up_live << 2;
+}
+/* the delay (its line at FS: into ml, mr; at FS / 2: into the half-rate wet, xf.t[2..3]) */
+CR_HOT_FX static __attribute__((noinline)) void xf_delay(const int32_t *dly_in, int32_t *ml, int32_t *mr, uint32_t n)
+{
+    int32_t *hd = xf.t[0], *ol = xf.t[2], *orr = xf.t[3];
+    (void)hd; (void)ol; (void)orr;
+    /* the wow, once a block: a 0.33 Hz sine and an eighth as much of a 3.1 Hz one */
+    xf.d_ph[0] += (uint32_t)(((uint64_t)330u << 32) * CTL / (1000u * FS));
+    xf.d_ph[1] += (uint32_t)(((uint64_t)3100u << 32) * CTL / (1000u * FS));
+    xf.d_wt = ((osc_sine(xf.d_ph[0]) + (osc_sine(xf.d_ph[1]) >> 3)) * (xf.d_wow >> 3)) >> 12;
+#if CR_FX_DELAY_DS == 2
+    XF_CALL(xf_down)(&xf.dn[0], dly_in, hd, n);
+    CR_PROFX(CRX_DOWN);
+    XF_CALL(xd_run)(hd, ol, orr, n >> 1, 0);
+#else
+    XF_CALL(xd_run)(dly_in, ml, mr, n, XF_IN);
+#endif
+    CR_PROFX(CRX_DELAY);
+    if (!xf.d_live) {                                   /* silent: the half-band's last fractions with it */
+        xf_hb_clear(&xf.dn[0]);
+        xf.d_lp[0] = xf.d_lp[1] = xf.d_hp[0] = xf.d_hp[1] = 0;
+    }
+}
+/* the reverb and the half rate's up-sampler, into ml, mr. tm 0: its parts on the fx stage's marks (core 0); else
+ * (core 1's job, fx.c c1_fx_job) its own: the down-sampler's, the lines' and the up-sampler's time into tm[CRX_*],
+ * which core 0 adds to the stage's parts after the join (the marks are core 0's words) */
+#if CR_CPU1
+#define XR_MARK(k) do { if (tm) { uint32_t t_ = cr_prof_now(); tm[k] += cr_prof_less(t_ - *mk); *mk = t_; } else CR_PROFX(k); } while (0)
+#else
+#define XR_MARK(k) ((void)tm, (void)mk)
+#endif
+CR_HOT_FX static __attribute__((noinline)) void xf_reverb(const int32_t *rev_in, int32_t *ml, int32_t *mr, uint32_t n,
+                                                          int rev, uint32_t *tm, uint32_t *mk)
+{
+    uint32_t i, nh = n >> 1;
+    int32_t any = 0;
+    int32_t *hr = xf.t[1], *ol = xf.t[2], *orr = xf.t[3];
+#if XF_HALF && XF_SPLIT
+    for (i = 0; i < nh; i++)                            /* (the delay at FS: the wet buffer is the reverb's alone) */
         ol[i] = orr[i] = 0;
 #endif
-    CR_PROFX_START();                                   /* (cr_cpu1.h: the stage's parts, for 73 DEBUG and perf.sh) */
-    if (dly) {
-        /* the wow, once a block: a 0.33 Hz sine and an eighth as much of a 3.1 Hz one */
-        xf.d_ph[0] += (uint32_t)(((uint64_t)330u << 32) * CTL / (1000u * FS));
-        xf.d_ph[1] += (uint32_t)(((uint64_t)3100u << 32) * CTL / (1000u * FS));
-        xf.d_wt = ((osc_sine(xf.d_ph[0]) + (osc_sine(xf.d_ph[1]) >> 3)) * (xf.d_wow >> 3)) >> 12;
-#if CR_FX_DELAY_DS == 2
-        XF_CALL(xf_down)(&xf.dn[0], dly_in, hd, n);
-        CR_PROFX(CRX_DOWN);
-        XF_CALL(xd_run)(hd, ol, orr, nh, 0);
-#else
-        XF_CALL(xd_run)(dly_in, ml, mr, n, XF_IN);
-#endif
-        CR_PROFX(CRX_DELAY);
-        if (!xf.d_live) {                               /* silent: the half-band's last fractions with it */
-            xf_hb_clear(&xf.dn[0]);
-            xf.d_lp[0] = xf.d_lp[1] = xf.d_hp[0] = xf.d_hp[1] = 0;
-        }
-    }
     if (rev) {
         /* the four swings, once a block: lines 1 and 5 on a 0.31 Hz sine and its quarter turn, 3 and 7 on a 0.47 Hz one */
         xf.r_ph[0] += (uint32_t)(((uint64_t)310u << 32) * CTL / (1000u * FS));
@@ -995,12 +1016,12 @@ CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, 
             xf.r_mt[i] = (osc_sine(xf.r_ph[i >> 1] + ((i & 1u) << 30)) * xf.r_mod) >> 15;
 #if CR_FX_REVERB_DS == 2
         XF_CALL(xf_down)(&xf.dn[1], rev_in, hr, n);
-        CR_PROFX(CRX_DOWN);
+        XR_MARK(CRX_DOWN);
         XF_CALL(xr_run)(hr, ol, orr, nh, 0);
 #else
         XF_CALL(xr_run)(rev_in, ml, mr, n, XF_IN);
 #endif
-        CR_PROFX(CRX_REVERB);
+        XR_MARK(CRX_REVERB);
         if (!xf.r_live)
             xf_hb_clear(&xf.dn[1]);
     }
@@ -1014,12 +1035,31 @@ CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, 
     if (any || xf.up_live) {
         XF_CALL(xf_up)(&xf.up[0], ol, ml, nh);
         XF_CALL(xf_up)(&xf.up[1], orr, mr, nh);
-        CR_PROFX(CRX_UP);
+        XR_MARK(CRX_UP);
     } else {
         xf_hb_clear(&xf.up[0]);
         xf_hb_clear(&xf.up[1]);
     }
 #else
-    (void)any; (void)hd; (void)hr; (void)ol; (void)orr; (void)nh;
+    (void)any; (void)hr; (void)ol; (void)orr; (void)nh;
 #endif
+    (void)tm; (void)mk;
+}
+CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, const int32_t *rev_in, int32_t *ml,
+                                               int32_t *mr, uint32_t n)
+{
+    uint32_t f = xf_prep(dly_in, rev_in, n);
+    if (!f)
+        return;                                         /* nothing sent, the tails over: nothing runs */
+#if XF_HALF && !XF_SPLIT
+    {
+        uint32_t i;
+        for (i = 0; i < (n >> 1); i++)
+            xf.t[2][i] = xf.t[3][i] = 0;
+    }
+#endif
+    CR_PROFX_START();                                   /* (cr_cpu1.h: the stage's parts, for 73 DEBUG and perf.sh) */
+    if (f & 1u)
+        xf_delay(dly_in, ml, mr, n);
+    xf_reverb(rev_in, ml, mr, n, (int)(f >> 1 & 1u), 0, 0);
 }

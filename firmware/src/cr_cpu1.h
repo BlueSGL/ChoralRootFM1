@@ -91,6 +91,16 @@ typedef struct {
      * and core 1 rendered in one block (core 1's: the bass part's P5 voices and its share of the chord part's), the
      * most P5 voices of the bass part, and voice.c's p5_bass_gave at the last read */
     uint32_t p5_c0, p5_c1, p5_bass, gave0;
+    /* 3y50, EACH CORE'S HALF (78 PEAK's values from 55; fx.c c1_part1_job, c1_fx_job, mix_fx_split): this half's
+     * time core 1 was busy (its voices' job and the reverb's), of it the voices' job (that is in CRP_PART1 too, and
+     * not core 0's), core 1 idle between the two jobs, core 0's wait at the effects' join (in CRP_WAIT too), and
+     * which core ran which effect (fxmap: 1 the chorus, 2 the delay, 4 the reverb ran, 8 the reverb on core 1);
+     * c1_end the moment core 1's voices were done (0: not this block). Their peaks since the last read: core 0's
+     * busy time (the half's stages but CRP_WAIT, without core 1's job), core 1's, core 0's waits (both joins), the
+     * effects' join alone, core 1's idle stretch, and the map of the largest whole half (pk_wall's); the reverb jobs
+     * core 1 ran */
+    uint32_t c1_busy_cur, c1v_cur, w1_cur, fxw_cur, fxmap_cur, fxmap_last, c1_end;
+    uint32_t pk_c0_busy, pk_c1_busy, pk_w0, pk_fxw, pk_w1, pk_fxmap, c1x_jobs;
 } cr_dbg_t;
 static cr_dbg_t cr_dbg;
 /* Options > Dual Core Off (settings v12; On is the default of a unit with no record since 0.22, Off was from 0.16;
@@ -125,6 +135,7 @@ static void cr_rails_now(void)
 static void cr_rails_init(void) { fm1_power_init(); cr_rails_now(); }       /* IRQs off: power-on */
 #define CR_C1_TEST_NOSPLIT 0
 #define CR_C1_TEST_SHARE 0
+#define CR_C1_TEST_FX0 0
 static uint32_t cr_c1_stack_used(void)              /* the C1MK fill: the deepest word core 1's usp reached */
 {
     uint32_t i = 0;
@@ -148,6 +159,9 @@ static uint8_t cr_c1_test_share;     /* tests: k + 1: core 1 takes k of the chor
                                       * fewer), whatever the balance says: any split gives the same samples */
 #define CR_C1_TEST_NOSPLIT cr_c1_test_nosplit
 #define CR_C1_TEST_SHARE cr_c1_test_share
+static uint8_t cr_c1_test_fx0;       /* tests (3y50): the effects all on core 0, in xf_block's order (the reference the
+                                      * reverb on core 1 must equal) */
+#define CR_C1_TEST_FX0 cr_c1_test_fx0
 static uint32_t cr_c1_test_faults;   /* tests: faults about core 1 (the device's fm1_c1_fault.count) */
 static void (*cr_c1_fn)(uint32_t);
 static uint32_t cr_c1_arg;
@@ -410,6 +424,25 @@ static void cr_prof_half(void)
         cr_dbg.win_n = 0;
         cr_dbg.win_reset = 0;
     }
+    {   /* 3y50: each core's half (above) */
+        uint32_t c0 = 0;
+        for (k = 0; k < CRP_N; k++)
+            if (k != CRP_WAIT)
+                c0 += cr_dbg.cur[k];
+        c0 = c0 > cr_dbg.c1v_cur ? c0 - cr_dbg.c1v_cur : 0u;
+        if (c0 > cr_dbg.pk_c0_busy)
+            cr_dbg.pk_c0_busy = c0;
+        if (cr_dbg.c1_busy_cur > cr_dbg.pk_c1_busy)
+            cr_dbg.pk_c1_busy = cr_dbg.c1_busy_cur;
+        if (cr_dbg.cur[CRP_WAIT] > cr_dbg.pk_w0)
+            cr_dbg.pk_w0 = cr_dbg.cur[CRP_WAIT];
+        if (cr_dbg.fxw_cur > cr_dbg.pk_fxw)
+            cr_dbg.pk_fxw = cr_dbg.fxw_cur;
+        if (cr_dbg.w1_cur > cr_dbg.pk_w1)
+            cr_dbg.pk_w1 = cr_dbg.w1_cur;
+        cr_dbg.fxmap_last = cr_dbg.fxmap_cur;
+        cr_dbg.c1_busy_cur = cr_dbg.c1v_cur = cr_dbg.w1_cur = cr_dbg.fxw_cur = cr_dbg.fxmap_cur = 0;
+    }
     for (k = 0; k < CRP_N; k++) {
         uint32_t c = cr_dbg.cur[k];
         cr_dbg.win_sum[k] += c;
@@ -447,8 +480,10 @@ static void cr_prof_whole(uint32_t us, int late, uint32_t all, uint32_t t5, uint
     uint32_t k, m = 0;
     if (us > cr_dbg.pk_all)
         cr_dbg.pk_all = us;
-    if (all > cr_dbg.pk_wall)
+    if (all > cr_dbg.pk_wall) {
         cr_dbg.pk_wall = all;
+        cr_dbg.pk_fxmap = cr_dbg.fxmap_last;             /* (3y50: who ran which effect in the largest half) */
+    }
     if (t5 > cr_dbg.pk_t5)
         cr_dbg.pk_t5 = t5;
     /* the DAC needs block k of the four at the next boundary + k quarters of a half, and block k is written by
@@ -540,6 +575,7 @@ static void cr_prof_clear(void)
     }
     cr_dbg.pk_all = cr_dbg.pk_n = cr_dbg.late_n = cr_dbg.late_stage = cr_dbg.late_us = cr_dbg.x_busy = 0;
     cr_dbg.pk_lat = cr_dbg.pk_wall = cr_dbg.pk_t5 = cr_dbg.stale = cr_dbg.pk_t5gap = cr_dbg.pk_t5pc = cr_dbg.pk_t5gap_ms = 0;
+    cr_dbg.pk_c0_busy = cr_dbg.pk_c1_busy = cr_dbg.pk_w0 = cr_dbg.pk_fxw = cr_dbg.pk_w1 = cr_dbg.pk_fxmap = cr_dbg.c1x_jobs = 0;
 }
 static void cr_prof_window(void)
 {

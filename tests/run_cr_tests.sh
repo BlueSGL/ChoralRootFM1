@@ -65,6 +65,9 @@ t ./build/host/cr_cpu1_test
 # .. and that job on a real second thread (3y45): the inline job's samples for twelve pairs of engines (P5 on both
 # parts among them), no ThreadSanitizer report, and a planted shared word reported
 t sh tests/run_c1_thread_test.sh
+# the firmware's memset / memcpy / memcmp, a word at a time since 3y50 (firmware/src/libc.c): the host's bytes
+par_build cc -std=gnu11 -O2 -w -fno-builtin -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_libc_test tests/cr_libc_test.c
+t ./build/host/cr_libc_test
 # ChoralRoot's delay and reverb (firmware/src/cr_fx.c, docs/FX.md): the coefficients, tempo sync, the half rate's response
 # and noise, every corner stable and ending in exact silence, smooth parameter changes, the level against Felucca's
 # effects, mono, the cost; impulse responses for tools/fx_plots.py into build/fx-review

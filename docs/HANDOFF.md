@@ -371,6 +371,15 @@ installed on the owner's Mac.
     `irq_gap_us`, `ua_arm_gap_max_us`, the last USB capture under/overrun, the clock. **To read on the unit**: the next
     stutter's `--debug` gives the times; a stutter with none of them near it is not the device's. Branch p5-k, not
     pushed; p5-g (e31c096) also appends to PEAK (values 35..38 on its own list): merge by name.
+35. **The reverb on core 1, P5's coefficients once a part, word-wide memset (HISTORY 3y50; docs/DUALCORE.md "What
+    each core runs", docs/PROPHET.md "The effects off core 0's path ...")**: bit-exact (246 goldens 0 changed; the
+    threaded test: inline = thread = the effects all on core 0, every pair, three sends up; TSan clean). Predicted
+    (not measured): eight P5 voices with three effects about 2400 .. 2440 us (83 .. 84 %) where the reading was 2632.
+    The edges' study: nothing under -90 dBFS, nothing built (numbers for the owner). 78 PEAK 55..61: each core's busy
+    time, the joins' waits, `pk_fx_map`. **To read on the unit**: the `all200` package of branch p5-m
+    (`build/scratch/p5-fav/choralroot-p5-m-all200.fwsc`), 4 / 6 / 8 voices of ITS PROPHET5 with the three sends up:
+    `pk_block_us`, `pk_c0_busy_us`, `pk_c1_busy_us`, `pk_fx_join_us`, `pk_fx_map`, `shed_over_halves`. Branch p5-m,
+    not pushed; p5-l (CR_SINGLE_CORE) touches the core-1 start path: this branch does not.
 
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
