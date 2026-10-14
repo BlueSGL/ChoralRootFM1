@@ -350,67 +350,129 @@ the installer page's Sounds section (Import on a row: a `.dnsnd` always asks fir
 browser, zlib in node) of `manifest.json` (`FileType` "Sound", `Payload` the payload's name, `FirmwareVersion`,
 `ProductType`, `MetaInfo.Tags`) and the payload: a 0x23-byte header (magic `ac 11 d3 03`, "0097" at 9, the record's
 size u16le at 0x1c), an LZ4 block, a 14-byte trailer (ending `aa a1 da aa`). The record, 302 bytes: `be ef ba ce`,
-u32be version 1, a u32 of tag bits, the name (16 bytes) at 12, then the parameters as byte pairs from 30 (the coarse
-value; the second byte is the fine part on the hi-res ones). Refused with the reason: not a ZIP, no manifest, not a
-Sound, no payload, another payload magic, a record size other than 302 or a record version other than 1 ("a newer
-Digitone format (version N): not supported": the Digitone II likely differs), the record's magic, a damaged LZ4 block.
-Read with a warning: a firmware other than 1.42A, a ProductType other than `["24","30"]`, an unusual header or trailer.
+u32be version, a u32 of tag bits, the name (16 bytes) at 12, then the parameters as byte pairs from 30 (the coarse
+value; the second byte is the fine part on the hi-res ones). **Record versions**: 1 (the factory sounds, the end
+marker `ba ce f0 0c` at 279) and 5 (a sound saved on the owner's Digitone, OS 1.44, the manifest still "1.42A"; the
+marker at 298). Both have the same slots up to 168; version 5 adds 170..182 (the ratio offsets, the filter's ENV
+DELAY; zeros in version 1) and its bytes 270..297 change from save to save (not parameters). Refused with the reason:
+not a ZIP, no manifest, not a Sound, no payload, another payload magic, a record size other than 302 or a record
+version other than 1 and 5 ("a newer Digitone format (version N): not supported": the Digitone II likely differs),
+the record's magic, a damaged LZ4 block. Read with a warning: a firmware other than 1.42A, a ProductType other than
+`["24","30"]`, an unusual header or trailer.
 
-**The field table** (`DNSND_FIELDS`: name, offset, hi-res, confidence, decode, the FM TONE value it sets). Confidence:
-*verified* (the structure, the name, the LZ4: proven by decoding), *inferred* (from the ranges and the sound
-categories' means over a corpus of exports), *guess*, *unknown* (decoded for the diff tool, not imported).
+**Slot = LFO destination.** Slot s is the byte pair at offset 28 + 2 s, and LFO DEST number s modulates the parameter
+in slot s (every destination export proves one pair: DEST 17 ALGO is offset 62, DEST 51 FILTER FREQ offset 130, LFO
+2's DEST 1 LFO 1 SPEED offset 30). That places fields no single export turned ("slot" below).
+
+**The field table** (`DNSND_FIELDS`: name, offset, hi-res, confidence, decode, the FM TONE value it sets, the first
+record version that has it). Confidence: **verified** (a controlled export of the owner's changed exactly this field:
+the offset and the encoding are proved; 2026-10-14), **slot** (the offset proved by the destination numbering, the
+encoding inferred), *inferred* (the corpus's ranges, the manual), *guess*, *unknown* (decoded for the diff tool, not
+imported).
 
 | offset | Digitone | conf. | FM TONE (eng_quad.c) |
 | --- | --- | --- | --- |
-| 30 / 32 | LFO 1 / 2 SPEED (hi-res, 64 = 0) | inferred | LFO 1 / 2 SPEED, rounded |
-| 34 / 36 | MULT (0..11 synced, 12..23 fixed) | inferred | MULT, the same 24 |
-| 38 / 40 | FADE (64 = 0) | guess | FADE |
-| 42 / 44 | DEST (a number 0..66) | inferred | DEST by `DN_LFO_DEST` (none mapped yet: off, a note) |
-| 46 / 48 | WAVE TRI SINE SQR SAW EXP RMP RND | inferred | the same waves (EXP / RAMP swap places) |
-| 50 / 52 | SPH (start phase) | guess | PHASE |
-| 54 / 56 | MODE FREE TRG HLD ONE HLF | inferred | TRIG, the same five |
-| 58 / 60 | DEPTH (hi-res, 64 = 0) | inferred | DEPTH, rounded |
-| 62 | ALGO (0..7) | inferred | ALGO 1..8 |
-| 64 | RATIO C (19 steps) | inferred | RATIO C, the same index (1.00 = 3) |
-| 66 | RATIO A (36 steps) | guess | RATIO A, nearest quarter: the step table is **assumed** (0.25 .. 2 in quarters, 2.5 .. 16 in halves) |
-| (not found) | RATIO B | - | 1.00 / 1.00 (a note on every sound) |
-| 70 | HARM (hi-res, 63 = 0) | inferred | HARM -26..26 |
-| 72 | DTUN (hi-res) | inferred | DTUNE |
-| 74 | FDBK 0..127 | inferred | FDBK x 120 / 127 |
-| 76 | MIX (64 = 0) | inferred | MIX -64..63 |
-| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | inferred | ENV A / B, direct |
-| 98..108 | A DLY, A TRIG, A RESET, B DLY, B TRIG, B RESET | guess | ENV 2 / ENV 2+ |
-| 128 | filter type (5 kinds) | inferred (order guessed: LP4 LP2 BP HP2 HP4) | LP24, LP12, BP -> LP12, HP12, HP4 -> HP12 (a note for the two) |
-| 130 / 132 | FREQ / RESO (hi-res) | inferred | FREQ / RESO |
-| 134 | ENV depth (hi-res, 64 = 0) | guess | FILTER DEPTH |
-| 136..142 | filter ATK DEC SUS REL | inferred | FILTER ATK DEC SUS REL |
-| 144 / 146 | BASE (hi-res) / WIDTH | guess | BASE / WIDTH |
-| 148 / 152 / 154 / 166 | AMP ATK / DEC / SUS (hi-res) / REL (hi-res) | inferred / guess | AMP ATK DEC SUS REL |
-| 150 | AMP HOLD | guess | none: dropped (a note when not 0) |
-| 158 | PAN (64 = 0) | inferred | the record's track PAN (P_PAN) |
-| 160 | VOL (hi-res) | inferred | LEVEL |
-| 156 / 162 / 164 | delay / reverb / chorus sends | guess | not imported (the FM-1's effects are global; a note when not 0) |
-| 68, 78, 110, 168, 112..126, 188..263 | ? | unknown | - |
+| 30 / 32 | LFO 1 / 2 SPEED (hi-res, 64 = 0: 0 = -64, 127.99 = 63.99) | slot / **verified** | SPEED, rounded |
+| 34 / 36 | MULT 0..23 (0 = 1, 5 = 32, 21 22 23 = 512 1k 2k) | slot / **verified** | MULT, the same 24 (0..11 the tempo, 12..23 120 BPM: which half is which is not proved) |
+| 38 / 40 | FADE (64 = 0) | slot | FADE |
+| 42 / 44 | DEST (the table below) | **verified** | DEST by `DN_LFO_DEST` (none: off, a note) |
+| 46 / 48 | WAVE TRI SINE SQR SAW EXP RMP RND (the manual's order) | slot | the same waves (EXP / RAMP swap places) |
+| 50 / 52 | SPH (start phase) | slot | PHASE |
+| 54 / 56 | MODE FREE TRG HLD ONE HLF | slot | TRIG, the same five |
+| 58 / 60 | DEPTH (hi-res, 64 = 0) | slot | DEPTH, rounded |
+| 62 | ALGO (0..7) | slot | ALGO 1..8 |
+| 64 | RATIO C, 19 steps (0 = 0.25, 3 = 1, 4 = 2, 18 = 16) | **verified** | RATIO C, the same step |
+| 66 | RATIO A, 36 steps (0 = 0.25, 3 = 1, 9 = 2.5, 15 = 4, 25 = 8, 35 = 16) | **verified** (the six steps) | RATIO A, the nearest quarter (`DN_RATIO_A`: 0..15 in quarters fits all anchors; 16..24 and 26..34 linear between them, **not proved**: a note) |
+| 68 | RATIO B: u16be = 2 x (B1 step x 19 + B2 step) + a low bit | **verified** (four exports) | QP_RB1 / QP_RB2, the same pair (FM TONE's deep value B1 x 19 + B2). The low bit (set in 103 of the 256 factory sounds, and by the RATIO A exports) is not known: ignored |
+| 70 | HARM (hi-res, 63 = 0: 37 = -26, 89 = +26) | **verified** | HARM -26..26, rounded |
+| 72 | DTUN (hi-res 0..127) | **verified** | DTUNE |
+| 74 | FDBK, stored 0..127 (the display's 20 = 20, MAX = 127) | **verified** | FDBK x 120 / 127 (FM TONE 0..120: the scale is ours) |
+| 76 | MIX (0 = -64, 64 = 0, 127 = +63) | **verified** | MIX |
+| 78 | PHRT 0..4 (OFF ALL C A+B A+B2?) | inferred | PHRT, the same five |
+| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | **verified** | ENV A / B, direct |
+| 98 / 104 | A DLY / B DLY | slot | A DLY / B DLY |
+| 100 102 106 108 | A TRIG, A RESET, B TRIG, B RESET | inferred | ENV 2 / ENV 2+ |
+| 128 | filter TYPE: version 5 0 OFF, 1 LP2, 2 HP2, 3 LP4 | **verified** (version 5) | TYPE 1:1 (= the manual's order = FM TONE's) |
+| 128 | filter TYPE: version 1, five values 0..4 | guess (LP4 LP2 BP HP2 HP4) | LP24, LP12, BP -> LP12, HP12, HP4 -> HP12 (a note for the two) |
+| 130 / 132 | FREQ / RESO (hi-res) | **verified** | FREQ / RESO, rounded |
+| 134 | ENV depth (hi-res, 64 = 0) | **verified** | FILTER DEPTH |
+| 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC SUS REL (DEC INF: SUS 127, a note) |
+| 144 / 146 | BASE (hi-res) / WIDTH | slot | BASE / WIDTH |
+| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC SUS (DEC INF: SUS 127, a note) |
+| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL (127 INF; a timed 126.85 stays 126) |
+| 156 | DRIVE (hi-res) | **verified** | the record's DRIVE (P_DIST), rounded |
+| 158 | PAN (0 = L64, 64 = 0, 127 = R63) | **verified** | the record's PAN (P_PAN) |
+| 160 | VOL (hi-res; init 110) | **verified** | LEVEL |
+| 162 / 164 / 166 | REVERB / DELAY / CHORUS send (hi-res) | **verified** | not imported (a note when not 0) |
+| 168 | AENR (version 5: 1 on, 0 off; version 1 holds 0..15: something else) | **verified** (version 5) | none (a note when off) |
+| 174..180 | RATIO OFFSET C, A, B1, B2 (hi-res, 64 = 0; version 5) | slot (the scale not proved: +-64 read as +-1.00) | OFS C A B1 B2 (a note when not 0) |
+| 182 | the filter's ENV DELAY (version 5) | slot | FILT 2 DELAY |
+| 110, 170, 172, 186..263 | ? (110: 127 or 29; 170 / 172: 63 / 39 in the init sound) | unknown | - |
+| 112..126 | the slots of PITCH ALL .. AB DELAY (LFO-only targets): always 64 | - | - |
+
+The old table's mistakes (dn-1, inferred without ground truth): the AMP block was one slot off (it read HOLD at 150,
+DEC from SUS, SUS from REL and REL from the chorus send; there is no HOLD), the DRIVE was read as the delay send and
+the delay and chorus sends were swapped, RATIO B was not found (always 1/1), RATIO A's table was wrong from step 8 up
+(step 9 read 3.00, is 2.50; step 25 read 8.50, is 8.00), no LFO destination was mapped, and the owner's own version-5
+exports were refused.
+
+**LFO destinations** (`DN_LFO_DEST`, `DN_LFO_DEST_NAMES`; each number from one export, C042..C099, names as the record
+holds them; the number is the target's slot) -> FM TONE `QD_*`:
+
+| Digitone | FM TONE | Digitone | FM TONE | Digitone | FM TONE |
+| --- | --- | --- | --- | --- | --- |
+| 0 none | NONE | 31 B ATTACK | B ATK | 54 FILTER ATTACK | F ATK |
+| 1 3 5 9 11 13 15: LFO 1 SPEED MULT FADE WAVE SPH MODE DEPTH (LFO 2 only) | none | 32 B DECAY | B DEC | 55 FILTER DECAY | F DEC |
+| 17 ALGO | ALGO | 33 B END | B END | 56 FILTER SUSTAIN | F SUS |
+| 18 RATIO C | RAT C | 34 B LEVEL | B LEV | 57 FILTER RELEASE | F REL |
+| 19 RATIO A | RAT A | 35 A DELAY | A DLY | 58 FILTER BASE | BASE |
+| 20 RATIO B | RAT B | 38 B DELAY | B DLY | 59 FILTER WIDTH | WIDTH |
+| 21 HARM | HARM | 42 PITCH ALL | PITCH | 60..63 AMP ATTACK DECAY SUSTAIN RELEASE | AMP A D S R |
+| 22 DETUNE | DTUN | 43 PITCH A+B2 | P AB2 | 64 DRIVE | none |
+| 23 FEEDBACK | FDBK | 44 RATIO ALL | none | 65 PAN | PAN |
+| 24 MIX | MIX | 45..49 AB LEVEL ATTACK DECAY END DELAY | none | 66 VOLUME | LEVEL |
+| 27 A ATTACK | A ATK | 51 FILTER FREQ | FREQ | 67 68 69 REVERB DELAY CHORUS send | none |
+| 28 A DECAY | A DEC | 52 FILTER RESO | RESO | 73..76 RATIO C A B1 B2 OFFSET | OFS C A, OFSB1, OFSB2 |
+| 29 A END | A END | 53 FILTER ENV DEPTH | FENV | 77 FILTER ENV DELAY | none |
+| 30 A LEVEL | A LEV | | | | |
+
+77: the export's record name is "LFO FILT ENV DEC" (the file name cut to "FILT ENV DE", as C075's ENV DEPTH); read as
+the filter's ENV DELAY (the manual's Appendix C ends with "FILTER: Env. Delay", 55 is already FILTER DECAY and 77 is
+slot 182, a version-5 field): an inference. The depth's full scale per destination is FM TONE's own (docs/QUAD.md
+"LFOs"): copied 1:1, not compared.
+
+**What stays approximate** (copied 1:1 or by our own scale; only listening to the owner's reference recordings can
+settle these): the operator, filter and amp envelope times (neither the manual nor the files give the Digitone's
+time curve; FM TONE's are its own), FREQ's cutoff curve and BASE / WIDTH's (FM TONE: 30 Hz x 533^(v/127)), FDBK's
+amount (proportional, FM TONE's curve is ours), DTUN's amount (FM TONE follows the manual's description: slight to
+64, wide above), MIX's law, VOL against LEVEL (FM TONE's LEVEL^2; the Digitone's init 110, FM TONE's 100), the LFO
+depth per destination, HARM's fractions (rounded), the DRIVE's character (the FM-1's distortion), the ratio offsets'
+scale, RATIO A's unproved steps, the version-1 filter types, PHRT (inferred). The LFO rate matches by construction
+(the manual's table: SPD x MULT = 128 is one bar = FM TONE's `QUAD_LFO_K`).
 
 Every FM TONE value is clamped into the firmware's range (`DN_QUAD_RANGES` = `quad_range`; the test compares it with
 `build/host/sound_templates --quad-ranges`, and every test blob passes the firmware's own `quad_blob_ok`). What the
-Digitone file does not give keeps FM TONE's default (OFS 0, PHRT ALL, VEL 64, the KEY scalings 0, filter DELAY and
-KTRK 0, LFO 3). Lost always: the overdrive, the arpeggiator, the multimap and the sends (none decoded, or global on the
-FM-1). The record is the FM TONE template (`SOUND_TEMPLATES.quad`, pinned by `sound_templates --check`) with the name
-(cut to 12), the PAN and the macros P_E0..P_E7 set from the patch; it is added to FM TONE's pool (no binding).
+Digitone file does not give keeps FM TONE's default (VEL 64, the KEY scalings 0, KTRK 0, LFO 3; version 1: OFS 0,
+filter DELAY 0). Lost always: the arpeggiator, the multimap and the sends (global effects on the FM-1). The record is
+the FM TONE template (`SOUND_TEMPLATES.quad`, pinned by `sound_templates --check`) with the name (cut to 12), the PAN,
+the DRIVE and the macros P_E0..P_E7 set from the patch; it is added to FM TONE's pool (no binding).
 
-On the owner's 256 factory files (a local check, not in the suite): all parse, all blobs pass `quad_blob_ok`; every
-sound gets the RATIO B note, about 70 % of the LFOs lose their destination (not mapped yet), most sounds a RATIO A
-note (the assumed table) and an AMP HOLD note; about 5 notes a sound.
+On the owner's 256 factory files (a local check, not in the suite) with the corrected table: all parse, all 256 blobs
+pass `quad_blob_ok`, every LFO destination is a number of the table, every RATIO B pair is in range (0..360); the
+notes fell from 1325 (5.2 a sound) to 377 (1.5): the LFOs with a destination 349 of 371 mapped (were 0), 22 off (AB
+LEVEL 7, RATIO ALL 5, LFO 1's parameters 10 on LFO 2, DRIVE 1); RATIO A between the proved steps 25; the version-1
+filter types 63; the sends 263; DEC INF 4. The owner's 143 controlled exports (version 5): all parse (were refused),
+all pass `quad_blob_ok`.
 
 ### Refining the table (with the owner's Digitone)
 
 Export a sound, change ONE parameter on the Digitone, export again, then compare:
 `node tools/dnsnd_diff.mjs BEFORE.dnsnd AFTER.dnsnd` prints every byte of the record that differs, both values and
-the field it belongs to (`?` for an unknown offset). Then edit the one line of `DNSND_FIELDS` in `web/fm1dnsnd.js`
-(its offset, its confidence, its conversion), or add a pair to `DN_LFO_DEST` (a Digitone destination number -> an
-FM TONE `QD_*` index) or fix `DN_RATIO_A` from the RATIO A steps the Digitone shows. First worth doing: RATIO B (turn
-it and diff), the LFO destinations (one export per destination), RATIO A at a few steps, the filter type order.
+the field it belongs to (`?` for an unknown offset; an LFO destination by name; version 5's save-to-save bytes
+270..297 marked). The record keeps the full 16-character name (the file name may be cut). Then edit the one line of
+`DNSND_FIELDS` in `web/fm1dnsnd.js`. Still worth an export: RATIO A at steps 16..24 and 26..34 (a few: 17, 20, 30),
+the LFO WAVE (EXP and RMP), MULT's two halves (the dotted ones), a ratio offset at its maximum, PHRT, A / B TRIG and
+RESET, a version-1 sound's filter type re-saved on OS 1.44 (it shows its OS 1.44 type and the version-5 value).
 
 ## Decisions taken in the implementation (2026-10-07)
 

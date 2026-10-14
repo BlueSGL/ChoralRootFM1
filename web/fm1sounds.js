@@ -582,13 +582,14 @@ export function soundFromSyx(parsed, index = 1) {
 // a Digitone sound (fm1dnsnd.js parseDnsnd's result) -> an FM TONE sound as readSoundFile returns it, plus notes (what
 // was lost or approximated): the template's record with the name (cut to 12), the PAN and the macros (P_E0..P_E7 =
 // eng_quad.c QUAD_MAC's values, as quad_macros_out leaves them), added to FM TONE's pool; the patch dnsndToQuad's blob
-const SND_P_PAN = 39, SND_P_E0 = 83, SND_QUAD_MAC = [0, 1, 2, 71, 4, 5, 6, 7];
+const SND_P_DIST = 33, SND_P_PAN = 39, SND_P_E0 = 83, SND_QUAD_MAC = [0, 1, 2, 71, 4, 5, 6, 7];
 export function soundFromDnsnd(parsed) {
   if (!parsed || !parsed.params) throw new Error("Not a parsed .dnsnd");
   const q = dnsndToQuad(parsed), record = sndUnB64(SOUND_TEMPLATES.quad, "template");
   const name = syxName(Array.from(parsed.name || "", (c) => c.charCodeAt(0)), "DIGITONE");
   sndWriteName(record, name);
   record[16 + SND_P_PAN] = q.pan + 64;
+  record[16 + SND_P_DIST] = q.drive + 64;                       // the Digitone's DRIVE 0..127 -> the sound's (cr_ui.c cu_drive_load)
   SND_QUAD_MAC.forEach((i, k) => { record[16 + SND_P_E0 + k] = q.values[i] + 64; });
   record[SND_BIND_NOTE] = SND_BIND_MARK; record[SND_BIND_FLAGS] = 0;
   if (!recordValid(record) || !nameValid(name)) throw new Error("The template record is not valid");

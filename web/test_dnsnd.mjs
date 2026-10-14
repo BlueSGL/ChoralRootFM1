@@ -8,7 +8,7 @@
 import { deflateRawSync } from "node:zlib";
 import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
-import { parseDnsnd, dnsndToQuad, DNSND_FIELDS, DN_QUAD_RANGES, DN_QP, DN_RATIO_A, dnLz4Block } from "./fm1dnsnd.js";
+import { parseDnsnd, dnsndToQuad, DNSND_FIELDS, DN_QUAD_RANGES, DN_QP, DN_RATIO_A, DN_LFO_DEST, dnLz4Block } from "./fm1dnsnd.js";
 import { soundFromDnsnd, recordValid, SOUND_IDS, POOL_IDS, placeSound, parseSoundObjects, firstFreeSlot } from "./fm1sounds.js";
 import { libraryItemsFromDnsnd } from "./fm1manager.js";
 
@@ -85,14 +85,16 @@ const SET = {
   fdbk: 100, mix: 64 - 20, "envA.atk": 11, "envA.dec": 22, "envA.end": 33, "envA.lev": 44, "envB.atk": 55, "envB.dec": 66,
   "envB.end": 77, "envB.lev": 88, "envA.delay": 5, "envA.trig": 0, "envA.reset": 1, "envB.delay": 6, "envB.trig": 1, "envB.reset": 0,
   "filter.type": 2, "filter.freq": [90, 0], "filter.reso": [12, 255], "filter.env": [64 + 25, 0], "filter.atk": 3, "filter.dec": 70,
-  "filter.sus": 80, "filter.rel": 90, "filter.base": [10, 0], "filter.width": 100, "amp.atk": 7, "amp.hold": 9, "amp.dec": 57,
-  "amp.sus": [99, 0], "send.delay": [20, 0], "amp.pan": 64 - 5, "amp.vol": [101, 0], "send.reverb": [0, 0], "send.chorus": [3, 0], "amp.rel": [61, 0],
+  "filter.sus": 80, "filter.rel": 90, "filter.base": [10, 0], "filter.width": 100, "amp.atk": 7, "amp.dec": 57,
+  "amp.sus": 99, "send.delay": [20, 0], "amp.pan": 64 - 5, "amp.vol": [101, 0], "send.reverb": [0, 0], "send.chorus": [3, 0], "amp.rel": [61, 0],
+  ratioB: [0, 2 * (5 * 19 + 7)], phrt: 3, "amp.drive": [30, 0],
 };
 const file = dnsnd(record("MY TEST TONE", SET));
 const p = await parseDnsnd(file);
 ok(p.name === "MY TEST TONE" && p.version === 1 && p.firmware === "1.42A" && p.tags.join() === "test" && !p.warnings.length && p.record.length === 302,
    "parse: name, version, firmware, tags, no warnings");
-ok(p.params.algo === 6 && p.params["lfo1.speed"] === 20.5 && p.params.harm === 11 && p.confidence.algo === "inferred" && p.confidence["filter.env"] === "guess",
+ok(p.params.algo === 6 && p.params["lfo1.speed"] === 20.5 && p.params.harm === 11 && p.confidence.algo === "slot" && p.confidence["filter.env"] === "verified" &&
+   p.confidence.phrt === "inferred" && p.params.ofsC === undefined,
    "parse: the params in the Digitone's units, with their confidence");
 const pd = await parseDnsnd(dnsnd(record("MY TEST TONE", SET), { deflate: true }));
 ok(pd.record.every((x, i) => x === p.record[i]), "parse: a deflated ZIP reads the same");
@@ -100,7 +102,7 @@ const q = dnsndToQuad(p), v = q.values, L = (k, f) => 47 + k * 8 + { SPEED: 0, M
 ok(q.blob.length === 80 && q.blob[0] === 0x51 && q.blob[1] === 3 && q.blob.subarray(75).every((x) => !x), "blob: 'Q' 3, 73 values, zero padding");
 ok(v.every((x, i) => q.blob[2 + i] === x - DN_QUAD_RANGES[i][0]), "blob: each byte = value - min");
 const want = [
-  [DN_QP.ALGO, 6], [DN_QP.RC, 7], [DN_QP.RA, DN_RATIO_A[10] * 4 - 1], [DN_QP.RB1, 3], [DN_QP.RB2, 3], [DN_QP.HARM, 11], [DN_QP.DTUN, 41],
+  [DN_QP.ALGO, 6], [DN_QP.RC, 7], [DN_QP.RA, DN_RATIO_A[10] * 4 - 1], [DN_QP.RB1, 5], [DN_QP.RB2, 7], [DN_QP.HARM, 11], [DN_QP.DTUN, 41],
   [DN_QP.FDBK, Math.round(100 * 120 / 127)], [DN_QP.MIX, -20], [DN_QP.AATK, 11], [DN_QP.ADEC, 22], [DN_QP.AEND, 33], [DN_QP.ALEV, 44],
   [DN_QP.BATK, 55], [DN_QP.BDEC, 66], [DN_QP.BEND, 77], [DN_QP.BLEV, 88], [DN_QP.ADLY, 5], [DN_QP.ATRIG, 0], [DN_QP.ARST, 1],
   [DN_QP.BDLY, 6], [DN_QP.BTRIG, 1], [DN_QP.BRST, 0], [DN_QP.FTYPE, 1], [DN_QP.FREQ, 90], [DN_QP.RESO, 13], [DN_QP.FDEPTH, 25],
@@ -109,30 +111,87 @@ const want = [
   [L(0, "SPEED"), 21], [L(1, "SPEED"), -30], [L(0, "MULT"), 14], [L(1, "MULT"), 5], [L(0, "FADE"), 9], [L(1, "FADE"), -7],
   [L(0, "DEST"), 0], [L(0, "WAVE"), 5], [L(1, "WAVE"), 4], [L(0, "PHASE"), 33], [L(0, "TRIG"), 3], [L(1, "TRIG"), 1],
   [L(0, "DEPTH"), 41], [L(1, "DEPTH"), -12],
-  [L(2, "SPEED"), 16], [L(2, "MULT"), 3], [23, 1], [27, 64],                       // LFO 3, PHRT, VEL: FM TONE's defaults
+  [DN_QP.PHRT, 3], [L(2, "SPEED"), 16], [L(2, "MULT"), 3], [27, 64], [DN_QP.OFSC, 0], [DN_QP.FDLY, 0],   // LFO 3, VEL, OFS, FDLY: defaults
 ];
 const bad = want.filter(([i, x]) => v[i] !== x);
 ok(!bad.length, `convert: ${want.length} values land with their conversion`);
 bad.forEach(([i, x]) => console.log(`  value ${i}: ${v[i]}, want ${x}`));
-ok(DN_RATIO_A.length === 36 && DN_RATIO_A[3] === 1 && DN_RATIO_A[7] === 2 && DN_RATIO_A[8] === 2.5 && DN_RATIO_A[35] === 16, "convert: RATIO A's assumed table (1.00 at 3, 16 at 35)");
-ok(q.pan === -5, "convert: PAN -> the track's PAN");
+ok(DN_RATIO_A.length === 36 && [[0, 0.25], [3, 1], [9, 2.5], [15, 4], [25, 8], [35, 16]].every(([i, r]) => DN_RATIO_A[i] === r) &&
+   DN_RATIO_A.every((r, i) => !i || r > DN_RATIO_A[i - 1]), "convert: RATIO A's table holds the proved steps (0.25 1 2.5 4 8 16), rising");
+ok(q.pan === -5 && q.drive === 30, "convert: PAN and DRIVE -> the track's PAN and DRIVE");
 const has = (re) => q.notes.some((n) => re.test(n));
-ok(has(/RATIO B unknown: set to 1\.00\/1\.00/) && has(/filter type BP -> LP12/) && has(/AMP HOLD 9 dropped/) && has(/delay send 20 not imported/) &&
-   has(/chorus send 3/) && !has(/reverb send/) && has(/RATIO A step 10 read as 3\.50/), "notes: RATIO B, BP -> LP12, HOLD, the sends (0 sends say nothing), RATIO A");
+ok(has(/filter type BP \(a version-1 sound: the type order is a guess\) -> LP12/) && has(/delay send 20\.00 not imported/) &&
+   has(/chorus send 3\.00/) && !has(/reverb send/) && !has(/RATIO/) && q.notes.length === 3, "notes: BP -> LP12 (version 1), the sends (0 sends say nothing), no others");
 // clamping: out-of-range raw values
-const qc = dnsndToQuad(await parseDnsnd(dnsnd(record("CLAMP", { algo: 200, ratioC: 99, ratioA: 99, harm: [127, 255], fdbk: 255, "lfo1.mult": 90,
-  "lfo1.wave": 40, "lfo1.mode": 77, "lfo1.dest": 5, "lfo1.depth": [127, 255], "envA.trig": 9, "filter.type": 9, "amp.pan": 250 }))));
+const qc = dnsndToQuad(await parseDnsnd(dnsnd(record("CLAMP", { algo: 200, ratioC: 99, ratioA: 99, ratioB: [255, 255], harm: [127, 255], fdbk: 255, "lfo1.mult": 90,
+  "lfo1.wave": 40, "lfo1.mode": 77, "lfo1.dest": 5, "lfo2.dest": 99, "lfo1.depth": [127, 255], "envA.trig": 9, "filter.type": 9, "amp.pan": 250, "amp.drive": [255, 0] }))));
 const cv = qc.values;
-ok(cv[DN_QP.ALGO] === 8 && cv[DN_QP.RC] === 18 && cv[DN_QP.RA] === 3 && cv[DN_QP.HARM] === 26 && cv[DN_QP.FDBK] === 120 && cv[L(0, "MULT")] === 23 &&
-   cv[L(0, "WAVE")] === 0 && cv[L(0, "TRIG")] === 4 && cv[L(0, "DEST")] === 0 && cv[L(0, "DEPTH")] === 63 && cv[DN_QP.ATRIG] === 1 &&
-   cv[DN_QP.FTYPE] === 1 && qc.pan === 63, "clamp: every value inside FM TONE's range");
-ok(qc.notes.some((n) => /LFO 1 destination #5 not mapped yet: off/.test(n)), "notes: an unmapped LFO destination is off");
-const fw = firmwareOk([q.blob, qc.blob, dnsndToQuad(await parseDnsnd(dnsnd(record("ZERO")))).blob]);
-if (fw) ok(fw.join() === "ok,ok,ok", "firmware: quad_blob_ok takes the three blobs");
+ok(cv[DN_QP.ALGO] === 8 && cv[DN_QP.RC] === 18 && cv[DN_QP.RA] === 63 && cv[DN_QP.RB1] === 18 && cv[DN_QP.RB2] === 18 && cv[DN_QP.HARM] === 26 &&
+   cv[DN_QP.FDBK] === 120 && cv[L(0, "MULT")] === 23 && cv[L(0, "WAVE")] === 0 && cv[L(0, "TRIG")] === 4 && cv[L(0, "DEST")] === 0 &&
+   cv[L(1, "DEST")] === 0 && cv[L(0, "DEPTH")] === 63 && cv[DN_QP.ATRIG] === 1 && cv[DN_QP.FTYPE] === 1 && qc.pan === 63 && qc.drive === 127,
+   "clamp: every value inside FM TONE's range");
+ok(qc.notes.some((n) => /LFO 1 destination LFO1 FADE: FM TONE has none, off/.test(n)) && qc.notes.some((n) => /LFO 2 destination #99: FM TONE has none, off/.test(n)),
+   "notes: an LFO destination FM TONE lacks (named, or its number) is off");
+
+/* the encodings the owner's controlled exports proved (2026-10-14; the raw bytes as those files hold them, our own
+ * records): [field, raw (coarse or [coarse, fine]), the Digitone's value, the FM TONE value index, its value] */
+const V5 = { version: 5 };
+const PROVED = [
+  ["ratioC", 0, 0.25, DN_QP.RC, 0], ["ratioC", 4, 2, DN_QP.RC, 4], ["ratioC", 18, 16, DN_QP.RC, 18],
+  ["ratioA", 0, 0.25, DN_QP.RA, 0], ["ratioA", 9, 2.5, DN_QP.RA, 9], ["ratioA", 15, 4, DN_QP.RA, 15], ["ratioA", 25, 8, DN_QP.RA, 31], ["ratioA", 35, 16, DN_QP.RA, 63],
+  ["ratioB", [0, 41], 20, DN_QP.RB1, 1], ["ratioB", [0, 41], 20, DN_QP.RB2, 1],             // 0.50 / 0.50 (the low bit ignored)
+  ["ratioB", [0, 74], 37, DN_QP.RB2, 18], ["ratioB", [2, 178], 345, DN_QP.RB1, 18], ["ratioB", [2, 178], 345, DN_QP.RB2, 3],   // B2 16 B1 0.5; B2 1 B1 16
+  ["ratioB", [0, 115], 57, DN_QP.RB1, 3], ["ratioB", [0, 115], 57, DN_QP.RB2, 0], ["ratioB", [0, 120], 60, DN_QP.RB2, 3],   // B2 0.25 B1 1; 1 / 1
+  ["harm", [37, 0], -26, DN_QP.HARM, -26], ["harm", [63, 0], 0, DN_QP.HARM, 0], ["harm", [89, 0], 26, DN_QP.HARM, 26],
+  ["dtun", [127, 0], 127, DN_QP.DTUN, 127], ["fdbk", 20, 20, DN_QP.FDBK, 19], ["fdbk", 127, 127, DN_QP.FDBK, 120],
+  ["mix", 0, -64, DN_QP.MIX, -64], ["mix", 64, 0, DN_QP.MIX, 0], ["mix", 127, 63, DN_QP.MIX, 63],
+  ["envA.atk", 127, 127, DN_QP.AATK, 127], ["envA.dec", 0, 0, DN_QP.ADEC, 0], ["envA.end", 0, 0, DN_QP.AEND, 0], ["envA.lev", 127, 127, DN_QP.ALEV, 127],
+  ["envB.atk", 127, 127, DN_QP.BATK, 127], ["envB.dec", 127, 127, DN_QP.BDEC, 127], ["envB.end", 0, 0, DN_QP.BEND, 0], ["envB.lev", 127, 127, DN_QP.BLEV, 127],
+  ["filter.type", 0, 0, DN_QP.FTYPE, 0, V5], ["filter.type", 1, 1, DN_QP.FTYPE, 1, V5], ["filter.type", 2, 2, DN_QP.FTYPE, 2, V5], ["filter.type", 3, 3, DN_QP.FTYPE, 3, V5],
+  ["filter.freq", [64, 113], 64.44, DN_QP.FREQ, 64], ["filter.reso", [71, 174], 71.68, DN_QP.RESO, 72], ["filter.reso", [12, 34], 12.13, DN_QP.RESO, 12],
+  ["filter.env", [0, 0], -64, DN_QP.FDEPTH, -64], ["filter.env", [102, 15], 38.06, DN_QP.FDEPTH, 38], ["filter.env", [127, 0], 63, DN_QP.FDEPTH, 63],
+  ["filter.atk", 97, 97, DN_QP.FATK, 97], ["filter.dec", 6, 6, DN_QP.FDEC, 6], ["filter.dec", 126, 126, DN_QP.FDEC, 126], ["filter.sus", 127, 127, DN_QP.FSUS, 127],
+  ["filter.rel", 127, 127, DN_QP.FREL, 127], ["amp.atk", 127, 127, DN_QP.EATK, 127], ["amp.dec", 0, 0, DN_QP.EDEC, 0], ["amp.sus", 0, 0, DN_QP.ESUS, 0],
+  ["amp.rel", [126, 218], 126.85, DN_QP.EREL, 126], ["amp.rel", [127, 0], 127, DN_QP.EREL, 127], ["amp.rel", [0, 0], 0, DN_QP.EREL, 0], ["amp.vol", [100, 0], 100, DN_QP.LEVEL, 100],
+  ["lfo2.speed", [127, 254], 63.99, L(1, "SPEED"), 63], ["lfo2.speed", [0, 0], -64, L(1, "SPEED"), -64], ["lfo2.speed", [64, 0], 0, L(1, "SPEED"), 0],
+  ["lfo2.mult", 0, 0, L(1, "MULT"), 0], ["lfo2.mult", 23, 23, L(1, "MULT"), 23],
+  ["ofsC", [64, 0], 0, DN_QP.OFSC, 0, V5], ["ofsB2", [96, 0], 32, DN_QP.OFSB2, 50, V5], ["filter.delay", 40, 40, DN_QP.FDLY, 40, V5],
+];
+const provedBad = [];
+for (const [k, raw, dv, qi, qv, opt] of PROVED) {
+  const pp = await parseDnsnd(dnsnd(record("PROVED", { [k]: raw }, opt)));
+  const qq = dnsndToQuad(pp);
+  if (pp.params[k] !== dv || qq.values[qi] !== qv) provedBad.push(`${k} ${JSON.stringify(raw)}: ${pp.params[k]} (want ${dv}), FM TONE ${qq.values[qi]} (want ${qv})`);
+}
+ok(!provedBad.length, `proved encodings: ${PROVED.length} cases decode to the Digitone's value and convert`);
+provedBad.forEach((s) => console.log(`  ${s}`));
+{ // the fields the exports placed but that have no FM TONE value: DRIVE, PAN, the sends, AENR
+  const pp = await parseDnsnd(dnsnd(record("PROVED", { "amp.drive": [0, 4], "amp.pan": 0, "send.reverb": [127, 0], "send.delay": [127, 0], "send.chorus": [127, 0], "amp.reset": 0 }, V5)));
+  const qq = dnsndToQuad(pp), n = qq.notes.join("|");
+  ok(pp.params["amp.drive"] === 0.02 && qq.drive === 0 && qq.pan === -64 && /reverb send 127\.00/.test(n) && /delay send 127\.00/.test(n) && /chorus send 127\.00/.test(n) &&
+     /AMP ENV RESET off/.test(n), "proved: DRIVE (fine), PAN L64, the three sends, AENR off (version 5)");
+}
+{ // DEC 127 = INF (filter and amp): FM TONE's SUS 127
+  const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("INF", { "filter.dec": 127, "filter.sus": 10, "amp.dec": 127, "amp.sus": 20 }))));
+  ok(qq.values[DN_QP.FSUS] === 127 && qq.values[DN_QP.ESUS] === 127 && qq.values[DN_QP.FDEC] === 127 && qq.notes.length === 2, "convert: DEC INF (127) -> SUS 127, a note each");
+}
+{ // the LFO destinations: every Digitone number of the table -> FM TONE's; a version-5 record reads its own fields
+  const dests = Object.entries(DN_LFO_DEST).map(([n, q]) => [+n, q]), bad = [];
+  for (const [n, qd] of dests) {
+    const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("DEST", { "lfo1.dest": n, "lfo2.dest": n, "amp.reset": 1, ofsC: 64, ofsA: 64, ofsB1: 64, ofsB2: 64 }, V5))));
+    if (qq.values[L(0, "DEST")] !== qd || qq.values[L(1, "DEST")] !== qd || qq.notes.length) bad.push(n);
+  }
+  ok(dests.length === 40 && !bad.length && DN_LFO_DEST[17] === 3 && DN_LFO_DEST[42] === 1 && DN_LFO_DEST[66] === 38 && DN_LFO_DEST[76] === 10,
+     `LFO destinations: ${dests.length} Digitone numbers map to FM TONE's (ALGO 17, PITCH ALL 42, VOL 66 -> LEVEL, B2 OFFSET 76)`);
+}
+const v5 = await parseDnsnd(dnsnd(record("V5", { ofsA: [64 + 16, 0] }, V5)));
+ok(v5.version === 5 && v5.params.ofsA === 16 && v5.confidence.ofsA === "slot" && dnsndToQuad(v5).values[DN_QP.OFSA] === 25, "parse: a version-5 record (OS 1.44) reads, with its ratio offsets");
+const fw = firmwareOk([q.blob, qc.blob, dnsndToQuad(await parseDnsnd(dnsnd(record("ZERO")))).blob, dnsndToQuad(v5).blob]);
+if (fw) ok(fw.join() === "ok,ok,ok,ok", "firmware: quad_blob_ok takes the four blobs");
 // the import: a sound in the template's record, placed in the first free slot
 const s = soundFromDnsnd(p);
-ok(recordValid(s.record) && s.engine === 15 && s.kind === "quad" && s.name === "MY TEST TONE" && s.record[16 + 39] === 64 - 5 &&
-   s.record[16 + 83] === 64 + 6 && s.record[16 + 84] === 64 + 7 && s.record[175] === 0xA6 && s.record[191] === 0, "import: an FM TONE record (name, PAN, macros, added)");
+ok(recordValid(s.record) && s.engine === 15 && s.kind === "quad" && s.name === "MY TEST TONE" && s.record[16 + 39] === 64 - 5 && s.record[16 + 33] === 64 + 30 &&
+   s.record[16 + 83] === 64 + 6 && s.record[16 + 84] === 64 + 7 && s.record[175] === 0xA6 && s.record[191] === 0, "import: an FM TONE record (name, PAN, DRIVE, macros, added)");
 ok(soundFromDnsnd(await parseDnsnd(dnsnd(record("A NAME LONGER THAN 12")))).name === "A NAME LONGE" &&
    soundFromDnsnd(await parseDnsnd(dnsnd(record("")))).name === "DIGITONE", "import: a long name cut to 12, an empty one DIGITONE");
 const blank = new Map(SOUND_IDS.map((id) => [id, new Uint8Array(0)]));

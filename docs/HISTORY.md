@@ -2767,3 +2767,25 @@ and five marks; this firmware migrates them byte for byte, the legacy sectors' C
 migrated image, and after a 0.22 save and a mark on U033, sees its 32 slots and five marks); the P5 render digest
 after a power cycle (`cr_prophet_test`); the web and install tests' pool cases. **Not done / not tested**: anything on
 a unit; Sequential program SysEx import; a mark on U100 through the emulator's UI (the host test's).
+
+3y58. **The `.dnsnd` field table from the owner's controlled exports (2026-10-14; branch dn-2 from 7a1ceca, not
+pushed).** The owner: "Here are a bunch of controlled exports ... lets get the parameters correct then I can make
+reference recordings for a few patches" (the imported presets "don't sound right"). 143 exports from his Digitone
+(OS 1.44): BASE, the init sound, and one file per single change from it (local test material, not in the repository,
+as the factory sounds). Findings: they are **record version 5** (the factory sounds are version 1), which dn-1
+refused outright; the same slots up to 168, version 5 adds the ratio offsets and the filter's ENV DELAY; **slot s
+(offset 28 + 2 s) = LFO destination number s**, so every destination export also places a parameter. Corrected
+(`web/fm1dnsnd.js DNSND_FIELDS`, docs/SOUNDS.md ".dnsnd import"): the AMP block (it was one slot off: HOLD does not
+exist, DEC SUS REL at 150 152 154), DRIVE at 156 (was read as the delay send; now imported as the sound's DRIVE),
+the sends (reverb 162, delay 164, chorus 166), **RATIO B** at 68 (2 x (B1 x 19 + B2), FM TONE's own pair: was
+always 1/1), **RATIO A**'s table (six steps proved: 0.25 1 2.5 4 8 16 at 0 3 9 15 25 35; dn-1's was wrong from step 8),
+the filter TYPE (version 5: OFF LP2 HP2 LP4 = FM TONE's, 1:1), the **LFO destinations** (57 numbers from the exports
+and 0 none, 39 mapped to FM TONE's QD_*: ALGO, the ratios and offsets, HARM DTUN FDBK MIX, the operator envelopes, PITCH and PITCH A+B2, the
+filter, the amp, PAN, VOLUME; none for RATIO ALL, the AB macros, LFO 1 on LFO 2, DRIVE, the sends, ENV DELAY), DEC 127
+= INF on the filter and amp envelopes (-> FM TONE's SUS 127), a timed REL 126.85 no longer rounds into INF. Confidence
+"verified" for each field an export proved, "slot" for the ones the destination numbering places. On the 256 factory
+files (local): all parse and pass `quad_blob_ok`; notes 1325 -> 377 (5.2 -> 1.5 a sound); LFOs 349 of 371 mapped
+(were 0). Not proved: RATIO A's steps 16..24 / 26..34, the version-1 filter types, the LFO waves, PHRT, the ratio
+offsets' scale, the time / cutoff / level curves (the reference recordings). **Tests**: `web/test_dnsnd.mjs` (our own
+records): 63 encodings the exports proved, every mapped destination, version 5, DEC INF, DRIVE; `tools/dnsnd_diff.mjs`
+names the destinations and marks version 5's save-to-save bytes. Nothing on a unit.
