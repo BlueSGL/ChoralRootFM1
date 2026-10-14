@@ -12,6 +12,9 @@
  *                                            and 7 and compares the five outputs (the remix's optimisations are
  *                                            bit-exact), and with two shipped lists (a program renders the same
  *                                            samples wherever it stands)
+ *   build/host/cr_prophet_test --idle FILE   a digest of every shipped program played, silent, and played again (the
+ *                                            wheel up): run_prophet_test.sh compares it with P5_IDLE_SKIP=0's (a part
+ *                                            with no voice skips the wheel's block and leaves the same state, 3y45)
  *   build/host/cr_prophet_test --gesture [ID [v]]   the owner's gesture of 3y44 (minor + 6 + 9, then minor + 9 again)
  *                                            on Sequential's program ID (16) through the chord engine, the allocator
  *                                            and the mix: 600 runs, exit 1 when one breaks a rule (g_sweep, below; v:
@@ -219,6 +222,60 @@ static int pcm_file(const char *path)
     for (k = 0; k < NSTRESS; k += 3u) {
         stress(k, &p);
         fprintf(f, "stress %u %016llx\n", (unsigned)k, (unsigned long long)render(t, &p, CH, 4, 127, 60, 30).h);
+    }
+    fclose(f);
+    return 0;
+}
+
+/* --idle FILE (3y45): a part with no voice skips the wheel's block (eng_prophet_test.c P5_IDLE_SKIP) and must leave
+ * the same state behind: every shipped program, the wheel up and (every other program) on oscillator A's pitch with
+ * the triangle and half noise, plays a chord, rings out, stays silent for a number of blocks of its own, and plays
+ * again; a digest of every sample. tests/run_prophet_test.sh compares this build's file with P5_IDLE_SKIP=0's */
+static int idle_file(const char *path)
+{
+    static const uint8_t CH[4] = {36, 55, 64, 96};
+    track_t *t = &trk[0];
+    FILE *f = fopen(path, "w");
+    p5_patch_t p;
+    int32_t out[CTL];
+    uint32_t k, i, b, ph;
+    if (!f)
+        return 1;
+    for (k = 0; k < NELEM(P5_TEST_PRESETS); k++) {
+        uint64_t h = 1469598103934665603ull;
+        uint32_t idle = 0;
+        p5_preset_patch(k, &p);
+        if (k & 1u) {
+            p.raw[P5_WHEEL_FREQ_A] = 1;
+            p.raw[P5_LFO_TRI] = 1;
+            p.raw[P5_WHEEL_MIX] = 64;
+        }
+        vage = 0;
+        rng_state = 0x1234567u;
+        part_set(t, &p);
+        t->mw = 90;
+        for (b = 0; b < 37u + k % 11u; b++) {           /* (silent before the first note too) */
+            track_render(t, out, CTL);
+            h = fnv(h, out, CTL);
+        }
+        for (ph = 0; ph < 3u; ph++) {
+            for (i = 0; i < 4u; i++)
+                trk_note_on(t, CH[i], 100);
+            for (b = 0; b < 40u; b++) {
+                track_render(t, out, CTL);
+                h = fnv(h, out, CTL);
+            }
+            trk_all_off(t);
+            for (i = 0; i < NVOICE; i++)                /* (cut: the silence starts now, whatever the release) */
+                if (t->v[i].active)
+                    voice_kill(&t->v[i]);
+            for (b = 0; b < 100u + (k * 7u + ph * 13u) % 50u; b++) {
+                idle += !busy(t);
+                track_render(t, out, CTL);
+                h = fnv(h, out, CTL);
+            }
+        }
+        fprintf(f, "program %03u %016llx idle %u\n", (unsigned)p5_preset_id(k), (unsigned long long)h, (unsigned)idle);
     }
     fclose(f);
     return 0;
@@ -617,6 +674,8 @@ int main(int argc, char **argv)
     cr_ui_init();
     if (argc == 3 && !strcmp(argv[1], "--pcm"))
         return pcm_file(argv[2]);
+    if (argc == 3 && !strcmp(argv[1], "--idle"))
+        return idle_file(argv[2]);
     if (argc >= 2 && (!strcmp(argv[1], "--gesture") || !strcmp(argv[1], "--gesture-sweep"))) {
         uint32_t id = argc >= 3 ? (uint32_t)atoi(argv[2]) : 16u, runs, n;
         int full = !strcmp(argv[1], "--gesture-sweep");
@@ -904,6 +963,70 @@ int main(int argc, char **argv)
                "voices: of five keys the bottom note and the top three sound (the second from the bottom gives way; "
                "mask %02X), of six the bottom and the top three (the second and third give way; mask %02X): the oldest "
                "held voice goes, never the lowest note", (unsigned)m5, (unsigned)m6);
+        }
+        /* A STOLEN VOICE (3y45, docs/PROPHET.md "A stolen voice"): the fifth key takes the oldest held voice that is
+         * not the lowest note; that voice fades as a WHOLE VOICE over P5_STEAL_BLOCKS blocks (its oscillators run on:
+         * to a773d30 its last sample went to 0 on a straight line, one block), the new note starts when the fade has
+         * ended, and there are never more than four voices. A voice given up for the budget or by the overload shed
+         * (voice_kill alone) keeps the one-block ramp: no whole voice more in a block that cannot pay for one */
+        {
+            static const uint8_t FOUR[4] = {50, 54, 57, 61};
+            uint32_t st = NVOICE, nf = 0, vm = 0, started = 0, moved = 1, nfw = P5_STEAL_BLOCKS ? P5_STEAL_BLOCKS : 1u, sn = 0;
+            int32_t first = -1, last = -1;
+            p5_voice_t *sv;
+            events_block(CTL);
+            for (k = 0; k < 4u; k++)
+                trk_note_on(t, FOUR[k], 100);
+            for (b = 0; b < 40u; b++) {
+                track_render(t, out, CTL);
+                events_block(CTL);
+            }
+            trk_note_on(t, 66, 100);
+            for (i = 0; i < NVOICE; i++)
+                if (t->v[i].active && t->v[i].stage == 4u) {
+                    st = i;
+                    sn = t->v[i].note;
+                }
+            sv = st < NVOICE ? p5_voice(t, &t->v[st]) : 0;
+            for (b = 0; b < 12u && sv; b++) {
+                uint32_t ph = sv->phase[0], was = t->v[st].active && t->v[st].stage == 4u, on = 0;
+                track_render(t, out, CTL);
+                if (was) {
+                    nf++;
+                    if (first < 0)
+                        first = t->v[st].env_out;
+                    last = t->v[st].env_out;
+                    moved &= sv->phase[0] != ph;
+                }
+                if (busy(t) > vm)
+                    vm = busy(t);
+                events_block(CTL);
+                for (i = 0; i < NVOICE; i++)
+                    on |= t->v[i].active && t->v[i].gate && t->v[i].note == 66u;
+                if (!on)
+                    started = b + 2u;
+            }
+            OK(sv && sn == 54u && nf == nfw && last == 0 && first == (int32_t)(32767u * (nfw - 1u) / nfw) &&
+               vm <= P5_POLY && started == (nfw > 2u ? nfw : 2u) && (moved || !P5_STEAL_BLOCKS),
+               "steal: the fifth key takes the second note's voice, which fades over %u block(s) as a whole voice (the VCA "
+               "at %d after the first, 0 after the last; its oscillators run on), never more than %u voices, the new note "
+               "after %u blocks", (unsigned)nf, (int)first, (unsigned)vm, (unsigned)started);
+            /* the budget's or the shed's victim: one block, the last sample's ramp (the oscillators stand) */
+            for (st = 0; st < NVOICE && !(t->v[st].active && t->v[st].gate); st++)
+                ;
+            sv = st < NVOICE ? p5_voice(t, &t->v[st]) : 0;
+            if (sv) {
+                uint32_t ph = sv->phase[0];
+                voice_kill(&t->v[st]);
+                track_render(t, out, CTL);
+                OK(!t->v[st].active && sv->phase[0] == ph && !sv->steal,
+                   "steal: a voice given up for the budget or by the overload shed still ends in one block, on its last sample's ramp");
+            }
+            trk_all_off(t);
+            for (b = 0; b < FS / CTL && busy(t); b++) {
+                track_render(t, out, CTL);
+                events_block(CTL);
+            }
         }
         for (k = 0; k < 7u; k++)
             trk_note_on(t, 48 + 3 * k, 100);

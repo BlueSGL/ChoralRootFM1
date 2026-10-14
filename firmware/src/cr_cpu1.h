@@ -133,6 +133,71 @@ static uint32_t cr_c1_test_rejected; /* tests: core 1's misread count (the devic
 static uint32_t cr_c1_test_faults;   /* tests: faults about core 1 (the device's fm1_c1_fault.count) */
 static void (*cr_c1_fn)(uint32_t);
 static uint32_t cr_c1_arg;
+/* THE JOB ON A REAL THREAD (3y45; cr_c1_test_thread: the emulator's EMU_C1=thread, tests/cr_c1_thread_test.c): the
+ * host's stub runs core 1's job inline, so no host run could show two cores writing one thing. With this the job
+ * runs on a second thread from the hand-over to the wait, at the same time as core 0's part 0, as on the unit. What it
+ * is for: the samples must be the inline job's, bit for bit, however the two threads fall; and a build with
+ * -fsanitize=thread names every word both sides touch. Not a model of the unit's timing or of its caches */
+#if !defined(__EMSCRIPTEN__)
+#include <pthread.h>
+#define CR_C1_THREAD 1
+static uint8_t cr_c1_test_thread;
+static pthread_t cr_c1_th;
+static pthread_mutex_t cr_c1_mx = PTHREAD_MUTEX_INITIALIZER;
+static pthread_cond_t cr_c1_cv = PTHREAD_COND_INITIALIZER;
+static uint32_t cr_c1_th_posted, cr_c1_th_done;
+static uint8_t cr_c1_th_on;
+static void *cr_c1_th_main(void *x)
+{
+    (void)x;
+    for (;;) {
+        void (*fn)(uint32_t);
+        uint32_t arg;
+        pthread_mutex_lock(&cr_c1_mx);
+        while (cr_c1_th_done == cr_c1_th_posted)
+            pthread_cond_wait(&cr_c1_cv, &cr_c1_mx);
+        fn = cr_c1_fn;
+        arg = cr_c1_arg;
+        pthread_mutex_unlock(&cr_c1_mx);
+        fn(arg);
+        pthread_mutex_lock(&cr_c1_mx);
+        cr_c1_th_done++;
+        pthread_cond_broadcast(&cr_c1_cv);
+        pthread_mutex_unlock(&cr_c1_mx);
+    }
+    return 0;
+}
+static int cr_c1_th_run(void (*fn)(uint32_t), uint32_t arg)
+{
+    pthread_mutex_lock(&cr_c1_mx);
+    cr_c1_fn = fn;
+    cr_c1_arg = arg;
+    cr_c1_th_posted++;
+    pthread_cond_broadcast(&cr_c1_cv);
+    pthread_mutex_unlock(&cr_c1_mx);
+    if (!cr_c1_th_on) {
+        cr_c1_th_on = 1;
+        if (pthread_create(&cr_c1_th, 0, cr_c1_th_main, 0)) {   /* no thread: inline, as without the switch */
+            cr_c1_th_on = 0;
+            cr_c1_test_thread = 0;
+            pthread_mutex_lock(&cr_c1_mx);
+            cr_c1_th_done = cr_c1_th_posted;
+            pthread_mutex_unlock(&cr_c1_mx);
+            fn(arg);
+        }
+    }
+    return 1;
+}
+static void cr_c1_th_wait(void)
+{
+    pthread_mutex_lock(&cr_c1_mx);
+    while (cr_c1_th_done != cr_c1_th_posted)
+        pthread_cond_wait(&cr_c1_cv, &cr_c1_mx);
+    pthread_mutex_unlock(&cr_c1_mx);
+}
+#else
+#define CR_C1_THREAD 0
+#endif
 static inline uint32_t cr_prof_now(void)
 {
 #ifdef __APPLE__
@@ -144,6 +209,10 @@ static inline uint32_t cr_prof_now(void)
 }
 static int cr_c1_run(void (*fn)(uint32_t), uint32_t arg)
 {
+#if CR_C1_THREAD
+    if (cr_c1_test_thread && !cr_c1_test_hang && !cr_c1_test_late)
+        return cr_c1_th_run(fn, arg);
+#endif
     cr_c1_fn = fn;
     cr_c1_arg = arg;
     if (!cr_c1_test_hang && !cr_c1_test_late)
@@ -156,6 +225,12 @@ static int cr_c1_wait_core(void)
         return -2;
     if (cr_c1_test_hang)
         return -1;
+#if CR_C1_THREAD
+    if (cr_c1_test_thread && !cr_c1_test_late) {
+        cr_c1_th_wait();
+        return 0;
+    }
+#endif
     if (cr_c1_test_late)
         cr_c1_fn(cr_c1_arg);
     return 0;

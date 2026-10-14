@@ -62,6 +62,9 @@ t ./build/host/cr_trans_test
 # the bass part on the second core (firmware/src/cr_cpu1.h, docs/DUALCORE.md): the split bit for bit, the budgets, the fail-safes
 par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cpu1_test tests/cr_cpu1_test.c -lm
 t ./build/host/cr_cpu1_test
+# .. and that job on a real second thread (3y45): the inline job's samples for twelve pairs of engines (P5 on both
+# parts among them), no ThreadSanitizer report, and a planted shared word reported
+t sh tests/run_c1_thread_test.sh
 # ChoralRoot's delay and reverb (firmware/src/cr_fx.c, docs/FX.md): the coefficients, tempo sync, the half rate's response
 # and noise, every corner stable and ending in exact silence, smooth parameter changes, the level against Felucca's
 # effects, mono, the cost; impulse responses for tools/fx_plots.py into build/fx-review

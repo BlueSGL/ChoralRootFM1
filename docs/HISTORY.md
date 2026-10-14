@@ -2273,3 +2273,62 @@ the click's fix by ear. **Open: the crackle itself.**
 12), test_persist 98 ok, test_retired 18 ok; `test_cr.sh` also run once on an emulator built with all 200 (the
 gesture on place 16, CANNED HAPPY: exit 0). Size: XIP 510 660 B (89.1 %; +96), RAM 81 732 (+32: `cr_dbg`), POOL
 316 064 (+0). The package for the unit, all 200: 610 313 B, sha256 0ce2694a544f2efb...ab580cd3f.
+
+3y45. **P5 after the unit's second reading: what an unplayed bass part costs (and a part with no voice now costs
+FM6's idle figure), two cores proven free of a shared word on the host, the level through every stage (nothing clips;
+a UNISON key is 12 dB hot; no trim), and a stolen voice that fades (2026-10-13; 0.22 in development; on p5-i after
+a773d30).** The owner, a773d30 with all 200, Dual Core On, P5 on the chord part and selected on the bass part:
+**"Bass is on P5 but I'm not playing a bass"**; `pk_part0_us` 1760, `pk_part1_us` 1312, `pk_wait_us` 1201,
+`pk_fx_us` 682, `pk_block_us` 2632 of 2902, `shed_over_halves` 377, `shed_voices` 7, `voices_faded` 375,
+`voices_stolen` 393, `pk_late` 7, `stale_halves` 32 with `flash_erases` 6. Then: **"voice stealing is likely an
+issue. We previously did a bunch of improvements for audio quality, and some of the engines were running too hot
+causing internal clipping, this could be happening here and the engine seems very loud. ... Crackle not in the
+recording. ... I've switched to single core. The engine also sounds quite different on single core."** All of it is
+in docs/PROPHET.md "The unit's second reading"; the tool is `tools/p5_probe.c` (`sh tools/p5_probe.sh`).
+**The bass part's 1.3 ms.** The part was playing: with Bass on the bass follows every chord, and 40 of the 200
+programs carry the UNISON switch, which a load takes on the bass part too; with Dual Core On the part has its own 16
+units, so that is four voices under every chord (counted: 59 600 instructions a block, 920 us a half by the
+estimate, which reads 1.6 to 1.8 x low for this engine; one voice: 20 600, 320). An inference: the unit does not
+report the part's voices. **A fault found on the way and fixed**: a P5 part with no voice computed the wheel's 32
+samples every block, 2500 .. 2610 instructions where FM6's idle part takes 670 .. 780. Now it moves the LFO's phase
+and the wheel's noise generator alone: 640 .. 750, **the same samples bit for bit** (`P5_IDLE_SKIP`;
+`cr_prophet_test --idle` against the build with 0; no golden moved).
+**Two cores.** Read through, then run: the host's stub core can run the bass part's job on a real second thread
+(`cr_cpu1.h cr_c1_test_thread`; the emulator's `EMU_C1=thread`; `tests/cr_c1_thread_test.c`). Twelve pairs of
+engines, P5 on both parts with a UNISON bass among them: the inline job's samples, **no ThreadSanitizer report**,
+and a planted shared word reported. No engine was changed and no rule of docs/DUALCORE.md. **"Sounds quite
+different on single core" is the budget and the shed** (an inference from the code and the counters): a stack of
+four voices on the bass with two cores is one voice with one, 12 dB less; and one core carries about 3050 us of
+2902 with P5 on both parts and three effects, so the shed fades a held note after every strike.
+**Headroom.** All 200 programs, one voice, four voices in four voicings, UNISON x 4: per stage the peak against the
+limit (the table in docs/PROPHET.md). **No hard clip and no wrap anywhere**; the two tanh tables are driven up to
+3.1 dB beyond their end on a few programs, where they hold their last value (soft, the model's own); the filter's
+states stay 2.1 dB under their clamp, the part's bus has 17 dB. **So no trim and no golden for it.** What is hot:
+**one key on a UNISON program, 11 to 12 dB over the program's single voice and as loud as a four-note chord** (the
+platform's lower velocity and random phases for a stack do not reach P5: its VCA follows its own envelope and its
+oscillators take their phase before `mono_play` moves it). A proposal is built and off (`P5_UNISON_TRIM`: a stack at
+half level after the VCA); `../audio-0.22/prophet/headroom/` has the three hottest cases both ways.
+**The steal.** A fifth key's voice did not fade: P5 drew a straight line from its last sample to 0 over one block
+(Melodee's, for a victim whose replacement sounds at once). Measured over 931 steals on the 160 poly programs: on
+8.1 % of them more than 6 dB above the held chord's own largest high-frequency step (the VA's one-block fade:
+3.5 %). **Built** (`P5_STEAL_BLOCKS` 2; `engine_t.steal` / `fade`, voice.c `VOICE_STEAL_FADE`, behind
+`FELUCCA_PROPHET`): the part's own voice taken for a waiting note fades as a whole voice over two blocks and the note
+starts when the fade has ended: 1.1 %, never a fifth voice, **the note 0.7 ms later than before** (1.45 ms after
+its key). Four blocks: 0.1 % and 2.9 ms. A voice the budget takes for another part and the shed's victim keep the
+one-block line. `../audio-0.22/prophet/steal/`: before, after, four.
+**The crackle: still not reproduced and not explained.** Ruled out on the host: a word shared by the two cores'
+renders, a clip or a wrap in P5, a filter state at its clamp. Named as a guess with no evidence: a core reading a
+word wrong (docs/DUALCORE.md "Reliability") into a voice's kept filter coefficients, which would last the whole held
+note.
+**Goldens.** None changed: 246 as at a773d30 (the regression plays Felucca's in-place steal, and the idle part's
+samples are the same). `tests/target_budget.txt`: `p5_block` 7 -> 18 (the weight counts loops; the instructions
+fell). The CPU baseline is not rewritten.
+**Not done / not tested**: anything on a unit; a counter of the bass part's voices or of a filter at its clamp in
+`--debug`; the chorus send's 16-bit clamp with both parts at send 127; `FELUCCA_PROPHET=0`'s image against a773d30's;
+the steal and the UNISON level by ear. **Decisions put to the owner**: docs/PROPHET.md "Open decisions" 4, 8, 9, 10.
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders (0 changed); 0 lint findings; test_cr 957 ok (955 + the two `EMU_C1=thread` checks), test_persist
+98 ok, test_retired 18 ok; `run_cr_tests.sh` with the thread test (12 pairs the inline job's samples, ThreadSanitizer
+0 reports, the planted word reported) and `cr_prophet_test` 85 checks. Size: XIP 511 412 B (89.2 %; +752), RAM
+81 732 (+0), POOL 316 064 (+0), RAMTEXT 6808 (+0: the sample loop is a773d30's). The package for the unit, all 200
+(`build/scratch/p5-fav/choralroot-p5-i-all200.fwsc`): 610 313 B, sha256 60e6fa78a3cefaa7...a1e3b0c0.

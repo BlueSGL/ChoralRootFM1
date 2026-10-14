@@ -201,6 +201,29 @@ static voice_t *voice_reuse(track_t *t, voice_t *v)
  * block (stage 4, as a voice given up for another part) and the note waits in vsq for that block: engine_block
  * starts it on the voice the fade freed, 0.7 to 1.5 ms later. A note-off meanwhile drops it. */
 static uint8_t voice_fade_steal;
+/* 3y45: an engine may fade such a voice over more than the one block (engine_t.steal / fade: P5, whose four voices
+ * are stolen at every chord change; docs/PROPHET.md "A stolen voice"). The waiting note starts when the fade is over
+ * (engine_block). 0: no engine does (the code as before) */
+#ifndef VOICE_STEAL_FADE
+#define VOICE_STEAL_FADE FELUCCA_PROPHET
+#endif
+#if VOICE_STEAL_FADE
+/* a voice of the part is still fading (out of line: asked only while a note waits, and the audio ISR's loops stay
+ * as they were) */
+static __attribute__((noinline)) uint32_t voice_fading(const track_t *t)
+{
+    uint32_t i, f = 0;
+    for (i = 0; i < NVOICE; i++)
+        f |= t->v[i].active && t->v[i].stage == 4u;
+    return f;
+}
+/* a killed voice's level at this block's end (env_tick, stage 4), 0: its last block (out of line, as above) */
+static __attribute__((noinline)) int32_t voice_fade_level(track_t *t, voice_t *v)
+{
+    const engine_t *e = ENGINES[t->engine];
+    return e->fade ? e->fade(t, v) : 0;
+}
+#endif
 #define VSQ 8u
 static struct { uint8_t note[VSQ], vel[VSQ], armed[VSQ], n; } vsq[NPART];   /* armed: its block rendered */
 static int vsq_push(track_t *t, uint32_t note, uint32_t vel)   /* 0: full (the caller restarts in place) */
@@ -321,8 +344,13 @@ static voice_t *voice_alloc(track_t *t, uint32_t note, uint32_t vel)
     voice_steals++;
     if (voice_fade_steal && !(best < np && !t->v[best].env_out) && vsq_push(t, note, vel)) {   /* fade it, the note
                                                          * next block (vsq); one not rendered yet (silent): in place */
-        if (best < np)
+        if (best < np) {
             voice_kill(&t->v[best]);
+#if VOICE_STEAL_FADE
+            if (e->steal)
+                e->steal(t, &t->v[best]);
+#endif
+        }
         return 0;
     }
     return voice_reuse(t, &t->v[best == np ? 0 : best]);
@@ -539,6 +567,10 @@ static void trk_all_off(track_t *t)
     uint32_t i;
     for (i = 0; i < NVOICE; i++) {
         t->v[i].gate = 0;
+#if VOICE_STEAL_FADE
+        if (e->fade && t->v[i].active && t->v[i].stage == 4u)
+            continue;                                   /* (a stolen voice's fade under way goes on to its end) */
+#endif
         t->v[i].stage = t->v[i].active ? 3 : 0;
         if (t->v[i].active && e->endless && e->endless(t, &t->v[i]))
             t->v[i].stage = 4;                          /* a release that never ends (QUAD's REL INF): this
@@ -599,8 +631,14 @@ static void engine_block(track_t *t)
         if (p < NPART && vsq[p].n) {
             uint8_t nn[VSQ], vv[VSQ];
             uint32_t n = 0, k = 0;
+#if VOICE_STEAL_FADE                                    /* a longer fade still running: the notes wait for its end */
+            uint32_t hold = ENGINES[t->engine]->fade ? voice_fading(t) : 0u;
+#define VSQ_HOLD hold
+#else
+#define VSQ_HOLD 0
+#endif
             for (i = 0; i < vsq[p].n; i++) {
-                if (vsq[p].armed[i]) {
+                if (vsq[p].armed[i] && !VSQ_HOLD) {
                     nn[n] = vsq[p].note[i];
                     vv[n++] = vsq[p].vel[i];
                 } else {
@@ -641,6 +679,15 @@ static int32_t env_tick(track_t *t, voice_t *v)
         }
         break;
     case 4:                                             /* given up for another part: this block fades it */
+#if VOICE_STEAL_FADE
+        {   /* (.. or, a voice the engine fades over its own blocks: the level this block ends at, 0: the last one) */
+            int32_t g = voice_fade_level(t, v);
+            if (g) {
+                v->env = g << 9;
+                break;
+            }
+        }
+#endif
         v->env = 0;
         v->stage = 0;
         v->active = 0;
@@ -731,6 +778,9 @@ CR_HOT_CORE static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *si
                     v->stage = 0;
                     v->env = 0;
                     env = 0;
+#if VOICE_STEAL_FADE
+                } else if (v->stage == 4u) {            /* (a longer fade, engine_t.fade: env is its level) */
+#endif
                 } else {
                     v->env = 1 << 24;                   /* (the ADSR's release never ends it) */
                     env = 32767;

@@ -65,6 +65,37 @@
 #ifndef FELUCCA_P5_FACTORY
 #define FELUCCA_P5_FACTORY 1            /* Sequential's factory programs (the shipped list's) in the PRESETS list; 0: INIT alone */
 #endif
+#ifndef P5_TAP                          /* (tools/p5_probe.c: a stage's value, for the headroom table; nothing here) */
+#define P5_TAP(k, x) ((void)0)
+#endif
+#ifndef P5_IDLE_SKIP
+#define P5_IDLE_SKIP 1                  /* a part with no voice does not compute the wheel's block (p5_block); 0: it
+                                         * does, as to a773d30 (the same samples either way: tests/cr_prophet_test.c) */
+#endif
+/* A STOLEN VOICE (3y45, docs/PROPHET.md "A stolen voice"). Four voices, so a fifth note takes one, at every change
+ * of a full chord. To a773d30 that voice ended as every voice given up does here: p5_render's ramp of its LAST
+ * SAMPLE to 0 over the block (Melodee's, made for a victim whose replacement sounds in the same block: no fifth
+ * voice's cost), 0.7 ms of a straight line in place of the wave: a tick (tools/p5_probe.c steal: on 8 % of the
+ * steals over all 200 programs more than 6 dB above the largest high-frequency step of the held chord itself; the
+ * VA's one-block fade: 3 %). ChoralRoot's allocator makes the note WAIT for the voice it takes (voice.c vsq), so the
+ * voice may go on sounding meanwhile and fade as a voice does: P5_STEAL_BLOCKS blocks of the whole voice under a
+ * straight ramp of the VCA, the note after it. 2: two blocks (1.45 ms: 1 % of the steals above 6 dB; the note
+ * a block later than before, never a fifth voice); 4 / 8: 2.9 / 5.8 ms, the note that much later; 1: one block; 0:
+ * a773d30's ramp. Only for the part's own voice taken for a waiting note (engine_t.steal): a voice the budget takes for
+ * ANOTHER part's note, or the overload shed's, keeps the ramp, where a whole voice more is what the block cannot pay */
+#ifndef P5_STEAL_BLOCKS
+#define P5_STEAL_BLOCKS 2
+#endif
+/* A UNISON STACK'S LEVEL: A PROPOSAL, OFF (3y45, docs/PROPHET.md "Headroom"). The platform's UNISON plays its extra
+ * voices at a lower velocity (voice.c mono_play), which P5 does not hear (its VCA follows the program's own envelope,
+ * the velocity only with the program's VEL switch), and its voices start in phase: four voices on one key are one voice
+ * four times, +12 dB (measured: a single key on a UNISON program peaks 11 to 12 dB over the same program's one voice,
+ * as high as a four-note chord). Nothing clips or wraps there (the part's bus has 17 dB left), so nothing is trimmed.
+ * 1: a stack's voices at half level (the VCA's output, after the filter: its saturation is the single voice's), the
+ * owner's to decide by ear (tools/p5_probe.sh levels DIR writes both) */
+#ifndef P5_UNISON_TRIM
+#define P5_UNISON_TRIM 0
+#endif
 #ifdef P5_HOT                           /* (tools/p5_cost.py: its own, to build the sample loop for one program) */
 #elif P5_RAM
 #define P5_HOT static __attribute__((section(".ram_text"), noinline, used))
@@ -91,6 +122,7 @@ typedef struct {
     int32_t coeff_cut, coeff_k, coeff_g[4], coeff_inv;
     uint32_t coeff_valid;
     p5_env_t filter, amp;
+    uint32_t steal;                     /* the blocks left of a stolen voice's fade (P5_STEAL_BLOCKS), 0: none */
 } p5_voice_t;
 typedef struct { p5_voice_t voice[P5_POLY]; uint32_t lfo; int32_t lfo_value, last_pitch, mod_noise, dc_x1, dc_y1; int16_t wheel[CTL * P5_OVERSAMPLE]; uint16_t wheel_pitch[CTL * P5_OVERSAMPLE]; uint8_t value[55]; } p5_part_t;
 static p5_part_t *p5_part(uint32_t part);         /* engines.c: shared runtime pool (0: a part without one) */
@@ -233,6 +265,7 @@ static void p5_note_on(track_t *t, voice_t *v)
     p5_voice_t *s = p5_voice(t, v);
     const uint8_t *p = p5_patch_of(t)->raw;
     if (!s) return;                                   /* (no engine state: no voice, engines.c ENG_STATE_NPART) */
+    s->steal = 0;                                     /* (a fading voice struck again in place: no fade left) */
     if (!voice_was) {
         memset(s, 0, sizeof *s);
         s->phase[0]=v->ph[0];s->phase[1]=v->ph[1];
@@ -313,6 +346,24 @@ static void p5_block(track_t *t)
 {
     p5_part_t *s=p5_part((uint32_t)(t-trk));const uint8_t *p=p5_patch_of(t)->raw;
     if(!s)return;
+#if P5_IDLE_SKIP
+    /* ChoralRoot, 3y45: a part with no voice (an unplayed bass part on P5, every block of it; the chord part between
+     * phrases) needs none of the wheel's 32 samples, only where they leave the part's state: the LFO's phase (it runs
+     * free: 32 increments, mod 2^32) and the wheel's noise generator (32 steps). value[] is written again before the
+     * first voice renders (this function runs before the voices, voice.c track_render_x). The same samples as the
+     * whole block, bit for bit (docs/PROPHET.md "An unplayed part") */
+    {
+        uint32_t i,any=0;
+        for(i=0;i<NVOICE;i++)any|=t->v[i].active;
+        if(!any){
+            if(!s->mod_noise)s->mod_noise=0x517953;
+            for(i=0;i<CTL*P5_OVERSAMPLE;i++)(void)p5_fast_noise32(&s->mod_noise);
+            s->lfo+=(P5_LFO_INC[p5_value(p,P5_LFO_RATE)]/P5_OVERSAMPLE)*(CTL*P5_OVERSAMPLE);
+            s->lfo_value=p5_lfo_wave(s->lfo,p);
+            return;
+        }
+    }
+#endif
     /* Raw-to-DSP clamping is part-wide; envelopes and all the voices share it. */
     for(uint32_t k=0;k<55u;k++)s->value[k]=(uint8_t)p5_value(p,k);
     uint32_t inc=P5_LFO_INC[p5_value(p,P5_LFO_RATE)]/P5_OVERSAMPLE;
@@ -384,14 +435,17 @@ static inline __attribute__((always_inline)) int32_t p5_filter_core(p5_voice_t *
     }
     int32_t sigma=p5_m12(4096-g,p5_m12(g3,s->z[0])+p5_m12(g2,s->z[1])+p5_m12(g,s->z[2])+s->z[3]);
     input=p5_fast_mulq15(input,gain);
+    P5_TAP(1,input-p5_m12(k,sigma));
     int32_t drive=p5_fast_clamp(input-p5_m12(k,sigma),-262143,262143);
     int32_t u=(drive*reciprocal)>>13;
+    P5_TAP(2,u);
     u = p5_fast_softclip(u);
     /* Fixed four-pole stages: no indexed loop or per-stage mode branch.
      * The following poles filter an SSI stage's lookup steps, except the last. */
 #define P5_STAGE(j, clip) do { \
     int32_t delta=p5_m12(g,u-s->z[j]); \
     int32_t y=s->z[j]+delta; \
+    P5_TAP(3,y+delta); \
     s->z[j]=p5_fast_clamp(y+delta,-60000,60000); \
     u=clip(y); \
 } while(0)
@@ -476,7 +530,11 @@ static inline __attribute__((always_inline)) int32_t p5_wave_gain(int32_t wave,i
      * parts for an exact product without overflow or a target 64-bit helper. */
     return (wave>>15)*gain+(((wave&32767)*gain)>>15);
 }
-typedef struct { int32_t f0, a0, f1, a1, ia, ib, cut, k, filter_gain, filter_velocity, amp_velocity, env_amount, pa_env, pa_b, pf_env, pf_b, pw_env, pw_b, pwm_a, pwm_b, la, lb, ln; const int16_t *wheel; const uint16_t *wheel_pitch; } p5_render_params_t;
+typedef struct { int32_t f0, a0, f1, a1, ia, ib, cut, k, filter_gain, filter_velocity, amp_velocity, env_amount, pa_env, pa_b, pf_env, pf_b, pw_env, pw_b, pwm_a, pwm_b, la, lb, ln; const int16_t *wheel; const uint16_t *wheel_pitch;
+#if P5_UNISON_TRIM
+    int32_t stack;
+#endif
+} p5_render_params_t;
 P5_HOT void p5_samples(p5_voice_t *restrict s, const uint8_t *restrict p, int32_t *restrict out, uint32_t n, const vmod_t *m, const p5_render_params_t *c)
 {
     int32_t f0=c->f0;
@@ -542,6 +600,7 @@ P5_HOT void p5_samples(p5_voice_t *restrict s, const uint8_t *restrict p, int32_
             }
             s->phase[0]=na; s->phase[1]=nb;
             int32_t x=p5_wave_gain(a,la)+p5_wave_gain(b,lb)+p5_fast_mulq15(noise,ln);
+            P5_TAP(0,x);
 #if P5_STAGE36 & 2
             int32_t fc=fc_base;
             if (p[P5_POLY_FILTER]) fc+=p5_wave_gain(bn,pf_b);
@@ -556,7 +615,12 @@ P5_HOT void p5_samples(p5_voice_t *restrict s, const uint8_t *restrict p, int32_
         sum >>= 1;
         #endif
         int32_t gain=p5_fast_mulq15(p5_fast_mulq15(ae,amp_velocity),32767+s->amp_drift);
+        P5_TAP(4,sum);
         last=p5_fast_voice_amp(p5_fast_mulq15(sum,gain),m,i)*2;
+#if P5_UNISON_TRIM
+        if(c->stack)last>>=1;
+#endif
+        P5_TAP(5,last);
         out[i]+=last;
     }
     s->last_pcm=last;
@@ -586,9 +650,11 @@ static void p5_post(track_t *t,int32_t *out,uint32_t n,uint32_t nr)
     if(!nr && y>-P5_DC_REST && y<P5_DC_REST){P->dc_x1=P->dc_y1=0;return;}
     for(uint32_t i=0;i<n;i++){
         int32_t x=out[i];
+        P5_TAP(6,x);
         y=(int32_t)((int64_t)(x-x1)*256+(((int64_t)y*P5_DC_K)>>30));
         x1=x;
         out[i]=(y+128)>>8;
+        P5_TAP(7,out[i]);
     }
     P->dc_x1=x1;P->dc_y1=y;
 }
@@ -610,7 +676,8 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
      * an extra complete Prophet voice alongside the replacement track. This
      * keeps the first sample continuous and ends exactly at zero. Engine-switch
      * fades and active native releases continue through the full synth. */
-    if(!v->active && !m->amp1){
+    /* (ChoralRoot, 3y45: but the part's own voice stolen for a waiting note fades as a whole voice, s->steal) */
+    if(!v->active && !m->amp1 && !s->steal){
         if(n>1u){
             int32_t step=s->last_pcm/(int32_t)(n-1u);
             for(uint32_t i=0;i<n-1u;i++)out[i]+=s->last_pcm-step*(int32_t)i;
@@ -666,10 +733,28 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
     int32_t width_mod=m->shape-(64<<8);
     int32_t pwm_a=q[P5_PW_A]*258+t->p[P_E4]*256+width_mod, pwm_b=q[P5_PW_B]*258+t->p[P_E5]*256+width_mod;
     int32_t la=clamp(q[P5_LEVEL_A]+t->p[P_E6],0,127)*258, lb=clamp(q[P5_LEVEL_B]+t->p[P_E7],0,127)*258, ln=q[P5_NOISE]*258;
-    const p5_render_params_t c={f0,a0,f1,a1,ia,ib,cut,k,filter_gain,filter_velocity,amp_velocity,env_amount,pa_env,pa_b,pf_env,pf_b,pw_env,pw_b,pwm_a,pwm_b,la,lb,ln,part->wheel,part->wheel_pitch};
+    const p5_render_params_t c={f0,a0,f1,a1,ia,ib,cut,k,filter_gain,filter_velocity,amp_velocity,env_amount,pa_env,pa_b,pf_env,pf_b,pw_env,pw_b,pwm_a,pwm_b,la,lb,ln,part->wheel,part->wheel_pitch
+#if P5_UNISON_TRIM
+        ,t->p[P_VOICE]==V_UNISON && p5_cap(t)>1u
+#endif
+    };
     /* An indirect call crosses the XIP/RAM distance beyond direct branch range. */
     void (*volatile run)(p5_voice_t *,const uint8_t *,int32_t *,uint32_t,const vmod_t *,const p5_render_params_t *)=p5_samples;
     run(s,p,out,n,m,&c);
+    if(!v->active)s->steal=0;                         /* (the fade's last block) */
+}
+/* the stolen voice's fade (above; voice.c voice_alloc, env_tick) */
+static void p5_steal(track_t *t,voice_t *v)
+{
+    p5_voice_t *s=p5_voice(t,v);
+    if(s)s->steal=P5_STEAL_BLOCKS;
+}
+static int32_t p5_fade(track_t *t,voice_t *v)       /* the level this block ends at (Q15); 0: its last block */
+{
+    p5_voice_t *s=p5_voice(t,v);
+    if(!s || s->steal<2u)return 0;
+    s->steal--;
+    return (int32_t)(32767u*s->steal/(uint32_t)(P5_STEAL_BLOCKS?P5_STEAL_BLOCKS:1));
 }
 
 #if FELUCCA_P5_FACTORY
@@ -926,6 +1011,9 @@ static const engine_t ENG_P5_TEST = {
     .note_on=p5_note_on,.render=p5_render,.done=p5_done,.block=p5_block,.units=p5_units,.cap=p5_cap,.legato=p5_legato,
 #if P5_DC_BLOCK
     .post=p5_post,.tail=p5_tail,
+#endif
+#if P5_STEAL_BLOCKS
+    .steal=p5_steal,.fade=p5_fade,
 #endif
     .knob={P_E0,P_E1,P_CHOR,P_REV}
 };

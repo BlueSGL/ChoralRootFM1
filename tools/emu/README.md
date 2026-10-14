@@ -117,7 +117,10 @@ peak / rms, the block render time, the host instructions per audio block and UI 
 (`EMU_CPU_LOG=PCT` lists every block above PCT % of the device's budget; `EMU_STAGES=1` adds the audio ISR's stages,
 `cpu: stages ...` (docs/DUALCORE.md); the second core is off unless the flash's settings say Options > Dual Core On
 (`cr_dualcore_on.txt` on a `--flash` file, then relaunch with it); then `EMU_C1=nostart` / `EMU_C1=hang`: it does not
-answer at power-on / never finishes a job (the stub otherwise runs the bass part's job inline); `EMU_OUTPUT=classic`
+answer at power-on / never finishes a job (the stub otherwise runs the bass part's job inline), `EMU_C1=thread`: the
+job runs on a real second thread while the chord part renders, as on the unit (the WAV must be the inline job's:
+`test_cr.sh`; with a ThreadSanitizer build of the firmware, `tests/run_c1_thread_test.sh`, every word both sides touch
+is named; not in the browser emulator); `EMU_OUTPUT=classic`
 holds Options > Output at Classic whatever the settings say, `EMU_CHORUS=mono` returns the chorus as 0.18 did (one tap
 to both sides: the unit has only the stereo return), `EMU_MASTER=ADC` puts the MASTER pot at ADC (0..1023) at
 power-on (docs/AUDIO-QUALITY.md "Round 3"); `EMU_UI_LOG=N` every UI frame above N

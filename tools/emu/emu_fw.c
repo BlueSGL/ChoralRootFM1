@@ -152,6 +152,9 @@ void emu_fw_init(int demo)
         const char *c1 = getenv("EMU_C1");
         cr_c1_test_nostart = c1 && !strcmp(c1, "nostart");
         cr_c1_test_hang = c1 && !strcmp(c1, "hang");
+#if CR_C1_THREAD
+        cr_c1_test_thread = c1 && !strcmp(c1, "thread");   /* the job on a second thread (cr_cpu1.h; README.md) */
+#endif
         {   /* a unit that does not keep up (emu_firmware.h emu_shed_model) */
             const char *so = getenv("EMU_SHED_OVER"), *sa = getenv("EMU_SHED_AT");
             emu_shed_over = so ? (uint32_t)atoi(so) : 0u;

@@ -328,6 +328,23 @@ installed on the owner's Mac.
     which of `../audio-0.22/prophet/crackle/`'s files it is like. The first guess, an inference: the deadline
     (stale halves), not the engine.
 
+32. **P5 after the unit's second reading (HISTORY 3y45; docs/PROPHET.md "The unit's second reading")**: nothing of
+    it has been on a unit. The package: `build/scratch/p5-fav/choralroot-p5-i-all200.fwsc`. **To read / hear**:
+    (a) the bass part's `pk_part1_us` with Bass off (the idle part: was the wheel's whole block every block, now
+    FM6's idle cost; expect the order of FM6's 96 us), with Bass on and a program WITHOUT the UNISON switch (one
+    voice: about 500 us by the chord's ratio) and with one that has it (40 of the 200: four voices with Dual Core
+    On, about 1300; one under a chord with one core); (b) after a crackle, `c1_rejected`, `c1_faults`,
+    `stale_halves` against `flash_erases`, and whether it ever comes with Dual Core Off and Bass off; (c) the
+    steals by ear on a dark program (161 BRASS): a chord of five keys, an arpeggio over a held chord
+    (`../audio-0.22/prophet/steal/` has the host's before / after / four); (d) a UNISON program's key against a
+    chord (`../audio-0.22/prophet/headroom/`). **The owner's decisions**: docs/PROPHET.md "Open decisions" 4 (UNISON
+    on the bass part), 8 (`P5_UNISON_TRIM`), 9 (`P5_STEAL_BLOCKS` 2 or 4), 10 (P5 on both parts with one core:
+    about 105 % of the half with three effects, the shed thins the chord). **Not done**: a counter of the bass
+    part's voices and of P5's filter states at their clamp in `--debug` (the two things that would settle "a stack"
+    and "a filter that blew up" on the unit; 78 PEAK is 41 values in three tests); the chorus send's 16-bit clamp
+    with both parts at send 127 (by arithmetic it is reached; any engine's); `FELUCCA_PROPHET=0`'s image against
+    a773d30's (the new code is behind the switch; not compared).
+
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 
 ## Facts that are easy to get wrong

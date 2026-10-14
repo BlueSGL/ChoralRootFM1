@@ -178,6 +178,37 @@ Test: `tests/cr_settings_test.c t_dualcore_v12`, `tests/cr_backup_test.c` (a v11
 not start; `cr_dualcore_on.txt`: the value "Off", then "On · restart"), then on that flash, relaunched: `c1 ok`, none
 given up; `cr_dualcore_opt.txt` (back Off), a relaunch: `c1 off`; On again, a relaunch: `c1 ok`.
 
+## Two threads on the host (0.22, HISTORY 3y45)
+
+The host's stub core runs core 1's job inline (`cr_cpu1.h cr_c1_run`), so the emulator and the tests could show
+that the split's samples are one core's, but never two cores writing one thing. Since 3y45 the stub can run the job
+on a **real second thread** from the hand-over to the wait, while the first thread renders part 0, as the unit's
+two cores do (`cr_c1_test_thread`; a mutex and a condition at the two ends only, nothing between):
+
+- **the emulator**: `EMU_C1=thread` on a flash whose settings say Dual Core On. `tools/emu/test_cr.sh` plays
+  `cr_dualcore.txt` (the VA pair) and `perf_p.txt` (P5 on the chord and on the bass part) that way: the WAV must be
+  the inline job's. Not in the browser emulator (no threads there).
+- **the test**: `tests/run_c1_thread_test.sh` (`tests/cr_c1_thread_test.c`, with all 200 P5 programs). Twelve pairs
+  of engines on the two parts (P5 / P5 with a UNISON bass, P5 with FM6 and with the VA either way round, FM6 / FM6,
+  VA / VA, CZ-1 / CZ-1, FM TONE / FM TONE, FM6 / VA, CZ-1 / FM TONE), a phrase of 3000 blocks with five- and
+  six-note chords (steals, fades, deferred notes), bass notes, the wheel, pressure, a bend and a sound change under
+  held notes: (1) the output with the job on a thread is the inline job's, every sample, twice; (2) the same built
+  with **`-fsanitize=thread`: no report**; (3) with a word planted that both parts' P5 renders write
+  (`-DC1_PLANT`), the sanitizer reports that word: the proof that (2) can fail. A compiler without the sanitizer
+  skips (2) and (3) and says so.
+
+**Result (3y45): no word is shared between the two parts' renders**, for P5 on both parts and for every engine
+that ran on core 1 before it; the rule of this page ("what core 1 touches") stands and no engine had to be changed.
+The list of P5's state and whose it is: docs/PROPHET.md "Two cores".
+
+What this is not: a model of the unit's timing, of its caches, of a core that reads a word wrong ("Reliability"
+below), of an interrupt on core 0 during the job, or of the main loop writing a parameter under both (on the unit it does
+not run during the audio ISR).
+
+**The budget makes the two settings sound different with a UNISON bass** (docs/PROPHET.md "Two cores"): with core 1
+the bass part's own 16 units carry a P5 stack of four voices under a chord; with one core the stack gives way to
+one. And the overload shed sees part 1's time in the half only with one core.
+
 ## The fail-safes
 
 - Core 1 does not answer in 20 ms at power-on: held, `c1 failed`, one core for the session, the shared budget.

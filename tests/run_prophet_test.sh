@@ -34,6 +34,8 @@ for n in 0 1 2 4 7; do
     $CC -DP5_STAGE36=$n -o build/host/cr_prophet_s$n tests/cr_prophet_test.c -lm &
 done
 $CC -DFELUCCA_P5_FACTORY=0 -o build/host/cr_prophet_init tests/cr_prophet_test.c -lm &
+$CC -DP5_IDLE_SKIP=0 -o build/host/cr_prophet_idle0 tests/cr_prophet_test.c -lm &
+$CC -DP5_STEAL_BLOCKS=0 -o build/host/cr_prophet_steal0 tests/cr_prophet_test.c -lm &
 # (the list's directory first: its header is the one the engine's #include finds)
 sh tests/hostcc.sh cc -std=gnu11 -O2 -w -Ibuild/host/p5_all -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_prophet_all tests/cr_prophet_test.c -lm &
 sh tests/hostcc.sh cc -std=gnu11 -O2 -w -Ibuild/host/p5_b -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_prophet_b tests/cr_prophet_test.c -lm &
@@ -52,6 +54,23 @@ for n in 1 2 4 7; do
         exit 1
     }
 done
+# 5. an unplayed part (3y45): the wheel's block skipped while the part has no voice leaves the same samples
+[ -x build/host/cr_prophet_idle0 ] || { echo "run_prophet_test.sh: P5_IDLE_SKIP=0 did not build"; exit 1; }
+./build/host/cr_prophet_s7 --idle build/host/cr_prophet_idle1.txt > /dev/null
+./build/host/cr_prophet_idle0 --idle build/host/cr_prophet_idle0.txt > /dev/null
+il=$(wc -l < build/host/cr_prophet_idle1.txt | tr -d ' ')
+ib=$(awk '{ s += $5 } END { print s + 0 }' build/host/cr_prophet_idle1.txt)
+[ "$il" -eq $((NS + 1)) ] && [ "$ib" -gt $((il * 100)) ] || { echo "run_prophet_test.sh: --idle wrote $il programs with $ib silent blocks"; exit 1; }
+cmp -s build/host/cr_prophet_idle0.txt build/host/cr_prophet_idle1.txt || {
+    echo "run_prophet_test.sh: a part that skips the wheel's block while it has no voice plays other samples after it:"
+    diff build/host/cr_prophet_idle0.txt build/host/cr_prophet_idle1.txt | head -5
+    exit 1
+}
+echo "prophet: a part with no voice skips the wheel's block (P5_IDLE_SKIP) and plays the same samples after it ($il programs, $ib silent blocks, bit for bit)"
+# 6. a stolen voice (3y45): P5_STEAL_BLOCKS=0 is a773d30's one-block ramp, and the test's rules hold for it too
+[ -x build/host/cr_prophet_steal0 ] || { echo "run_prophet_test.sh: P5_STEAL_BLOCKS=0 did not build"; exit 1; }
+./build/host/cr_prophet_steal0 > build/host/cr_prophet_steal0.log || { grep -a "FAIL\|failed" build/host/cr_prophet_steal0.log; exit 1; }
+echo "prophet: P5_STEAL_BLOCKS=0 (a773d30's steal) builds and passes ($(grep -ac '^ok ' build/host/cr_prophet_steal0.log) checks ok)"
 echo "prophet: P5_STAGE36 1, 2, 4 and 7 render 8a3074b's samples ($lines renders: INIT, the $NS shipped programs, the stress programs, bit for bit)"
 [ -x build/host/cr_prophet_init ] || { echo "run_prophet_test.sh: FELUCCA_P5_FACTORY=0 did not build"; exit 1; }
 ./build/host/cr_prophet_init > build/host/cr_prophet_init.log || { grep -a "FAIL\|failed" build/host/cr_prophet_init.log; exit 1; }

@@ -357,6 +357,14 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
     /* optional: 1 = the voice would sound on after its release (QUAD's REL INF): trk_all_off (panic, all notes off, a
      * sound load) kills it instead of releasing it */
     int (*endless)(const struct track *t, const voice_t *v);
+    /* optional (P5, 3y45; voice.c VOICE_STEAL_FADE): a voice of the part's own taken for a note that waits for it
+     * (voice_alloc, the fade-and-defer steal) fades over the engine's own number of blocks, not one. steal: that
+     * voice was just given up; fade: asked once a block while it fades (env_tick, stage 4): the level (Q15) this
+     * block ends at, 0: this is its last block. An engine without them: one block, as ever */
+#if FELUCCA_PROPHET
+    void (*steal)(struct track *t, voice_t *v);
+    int32_t (*fade)(struct track *t, voice_t *v);
+#endif
 } engine_t;
 /* voice_start: what the voice it starts did just before (0 free, 1 released, 2 its key down: a steal or a move);
  * engine_t.note_on may read it */

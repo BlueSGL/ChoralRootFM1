@@ -2469,6 +2469,21 @@ for m in nostart hang; do
     echo "$l" | grep -q "c1 $want" && [ "${g:-0}" -ge 1 ] && ok "EMU_C1=$m: $l, one core's shared budget ($g given up)" ||
         bad "EMU_C1=$m: ${l:-none}, ${g:-?} given up"
 done
+# EMU_C1=thread (3y45): the bass part's job on a real second thread, at the same time as the chord part's render, as
+# on the unit: the WAV must be the inline job's. The VA pair of cr_dualcore.txt, and P5 on both parts (perf_p.txt)
+dcflash
+EMU_C1=thread EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/cr_dualcore.txt" --wav "$OUT/cr_dualcore_thread.wav" >"$OUT/cr_dualcore_thread.log" 2>&1
+l=$(c1line "$OUT/cr_dualcore_thread.log")
+echo "$l" | grep -q "c1 ok [1-9]" && cmp -s "$OUT/cr_dualcore.wav" "$OUT/cr_dualcore_thread.wav" &&
+    ok "EMU_C1=thread: the job on a second thread ($l), the WAV is the inline job's, bit for bit" ||
+    bad "EMU_C1=thread: ${l:-none}, or the WAV differs from the inline job's"
+dcflash
+EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/perf_p.txt" --wav "$OUT/cr_p5_dualcore.wav" >"$OUT/cr_p5_dualcore.log" 2>&1
+dcflash
+EMU_C1=thread EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/perf_p.txt" --wav "$OUT/cr_p5_dualcore_thread.wav" >"$OUT/cr_p5_dualcore_thread.log" 2>&1
+[ -s "$OUT/cr_p5_dualcore.wav" ] && cmp -s "$OUT/cr_p5_dualcore.wav" "$OUT/cr_p5_dualcore_thread.wav" &&
+    ok "EMU_C1=thread, P5 on the chord and on the bass part (perf_p.txt): the WAV is the inline job's, bit for bit" ||
+    bad "EMU_C1=thread, P5 on both parts: the WAV differs from the inline job's"
 dcflash
 EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/cr_dmaj.txt" --wav "$OUT/cr_dmaj_dualcore.wav" >"$OUT/cr_dmaj_dualcore.log" 2>&1
 LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$OUT/cr_dmaj_dualcore.log" && cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_dualcore.wav" &&
