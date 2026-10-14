@@ -18,7 +18,8 @@ export const MANAGER_IDS = [...SOUND_IDS, ...POOL_IDS, ...CR_LOOP_IDS];   // (0.
 export const UNDO_DEPTH = 20;
 export const LOOP_FORMAT = "choralroot-loop";
 export const PACK_FORMAT = "choralroot-pack";
-const MG_WRITE_ORDER = [9, 10, 11, 12, 13, 22, 6, 7, ...CR_LOOP_IDS];   // the stores before the banks, loops last
+// the stores before the banks, the pool's banks (0.22: record and patch in one), loops last
+const MG_WRITE_ORDER = [9, 10, 11, 12, 13, 22, 6, 7, ...POOL_IDS, ...CR_LOOP_IDS];
 const mgEmpty = () => new Uint8Array(0);
 const mgSame = (a, b) => (a || mgEmpty()).length === (b || mgEmpty()).length && (a || mgEmpty()).every((x, i) => x === b[i]);
 const mgB64 = (bytes) => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
@@ -80,7 +81,7 @@ export function managerPlace(objs, sound, target = null) {
   if (target && target.engine === pool && target.type === "user") { slot = target.slot; f = target.f; where = "over-user"; }
   else {
     slot = firstFreeSlot(objs);
-    if (!slot) throw new Error("All 32 user slots are used: delete or overwrite one first");
+    if (!slot) throw new Error(`All ${parseSoundObjects(objs).slots.length} user slots are used: delete or overwrite one first`);
     if (target && target.engine === pool && target.type === "factory") { f = target.f; where = "over-factory"; }
   }
   const res = placeSound(objs, slot, sound, f), m = mgMerge(objs, res);
@@ -426,6 +427,8 @@ export function simObjects(count = 6, pool = false) {   // (pool: the 0.22 sound
   m.set(43, makeLoopRecord({ sig: 1, bars: 2, layers: 1, events: 6 }));
   return m;
 }
+// the objects a 0.22 FM-1 (the sound pool) lists: the legacy sound objects replaced by the pool's banks
+export const SIM_POOL_IDS = [...CR_BACKUP_IDS.filter((id) => !SOUND_IDS.includes(id)), ...POOL_IDS];
 export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", ids = CR_BACKUP_IDS } = {}) {
   const sim = { objs: new Map(objs), log: [], staged: null, playing: false, sent: [], requests: 0 };
   sim.objs.set(1, sim.objs.get(1) || new Uint8Array(764));
@@ -448,7 +451,7 @@ export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", i
       if (op === 1) { sim.staged.bytes.push(...bkUnpack(a.slice(7), Math.min(256, sim.staged.size - bkR32(a, 2)))); return [op, id, 0]; }
       if (op === 2) {
         const v = Uint8Array.from(sim.staged.bytes), ok = v.length === sim.staged.size && (v.length ? bkCrc(v) : 0) === sim.staged.crc &&
-          (id < 40 || !v.length || loopHeader(v).valid);
+          (!CR_LOOP_IDS.includes(id) || !v.length || loopHeader(v).valid);
         sim.staged = null;
         if (!ok) return [op, id, 2];
         sim.objs.set(id, v); sim.log.push(id); return [op, id, 0];

@@ -19,7 +19,7 @@ import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObj
 import {
   selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
-  libraryItemsFromFile, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH, retiredNote,
+  libraryItemsFromFile, libraryItemsFromDnsnd, SIM_POOL_IDS, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH, retiredNote,
 } from "./fm1manager.js";
 
 let failed = 0;
@@ -233,7 +233,7 @@ ok(["eng-tabs", "dev-rows", "lib-rows", "cap", "dev-fw", "keep-all", "sel-all", 
   .every((id) => html.includes(`id="${id}"`)), "page: the panes, Place / Keep, the bottom bar, the keyboard");
 ok(html.indexOf('id="lib"') < html.indexOf('id="dev"') && html.includes("Place →") && html.includes("← Keep") && html.includes("draggable") && html.includes("shiftKey") && html.includes("metaKey") && html.includes("simObjects(30)"),
   "page: Library left, FM-1 right (Place →, ← Keep), multi-select, drag and drop, the 30-sound simulator");
-ok(html.includes('"ChoralRoot FM-1"') && html.includes("onstatechange") && html.includes('get("sim") === "1"'), "page: the port name, hot-plug, ?sim=1");
+ok(html.includes('"ChoralRoot FM-1"') && html.includes("onstatechange") && html.includes('get("sim")') && html.includes('SIM_ARG === "1"') && html.includes('SIM_ARG === "pool"'), "page: the port name, hot-plug, ?sim=1, ?sim=pool");
 ok(!/<link\s/i.test(html) && !/src="http/.test(html), "page: no external assets");
 const strip = (src) => src.replace(/^export\s+/gm, "").replace(/^import .*?;\n/gm, "");
 const lib = ["fm1backup.js", "fm1dnsnd.js", "fm1sounds.js", "fm1manager.js"].map((f) => strip(readFileSync(join(HERE, f), "utf8"))).join("\n");
@@ -265,6 +265,83 @@ ok(site.includes('"manager.html"') && site.includes("fm1manager.js") && site.inc
   ok(arc.firmware === "ChoralRoot 0.22 1-core" && r.restored.length > 0 && !r.skipped.length && sameObjs(s1.objs, s2.objs) && sameObjs(s1.objs, s3.objs) &&
      backupFileName(info.version).startsWith("choralroot-backup-"),
      `1-core: its backup restores on the standard package (${r.restored.length} objects, none skipped) and back, every object the same`);
+}
+
+/* ---------------------- 0.22, the sound pool (128 slots, ids 50..62): Place of .dnsnd items --- */
+{
+  // a self-made .dnsnd (as web/test_dnsnd.mjs builds them): a stored ZIP, the manifest and an LZ4 literal block
+  const le = (n, v) => Array.from({ length: n }, (_, i) => v >>> 8 * i & 255);
+  const crcT = Array.from({ length: 256 }, (_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ c >>> 1 : c >>> 1; return c >>> 0; });
+  const crc32 = (b) => { let c = ~0; for (const x of b) c = crcT[(c ^ x) & 255] ^ c >>> 8; return ~c >>> 0; };
+  const zip = (entries) => {
+    const parts = [], cd = []; let off = 0;
+    for (const [name, data] of entries) {
+      const nm = new TextEncoder().encode(name);
+      const head = [...le(4, 0x04034b50), 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...le(4, crc32(data)), ...le(4, data.length), ...le(4, data.length), ...le(2, nm.length), 0, 0];
+      parts.push(Uint8Array.from(head), nm, data);
+      cd.push(Uint8Array.from([...le(4, 0x02014b50), 20, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...le(4, crc32(data)), ...le(4, data.length), ...le(4, data.length), ...le(2, nm.length), 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ...le(4, off)]), nm);
+      off += head.length + nm.length + data.length;
+    }
+    const cdLen = cd.reduce((n, p) => n + p.length, 0);
+    const all = [...parts, ...cd, Uint8Array.from([...le(4, 0x06054b50), 0, 0, 0, 0, ...le(2, entries.length), ...le(2, entries.length), ...le(4, cdLen), ...le(4, off), 0, 0])];
+    const out = new Uint8Array(all.reduce((n, p) => n + p.length, 0)); let p = 0; for (const x of all) { out.set(x, p); p += x.length; }
+    return out;
+  };
+  const firstFree = (objs) => parseSoundObjects(objs).slots.find((x) => !x.used).slot;
+  const dnsnd = (name) => {
+    const d = new Uint8Array(302); d.set([0xbe, 0xef, 0xba, 0xce, 0, 0, 0, 1], 0);
+    for (let i = 0; i < name.length; i++) d[12 + i] = name.charCodeAt(i);
+    const lit = [0xF0]; let r = d.length - 15; while (r >= 255) { lit.push(255); r -= 255; } lit.push(r);   // (one LZ4 sequence of literals)
+    const hdr = new Uint8Array(0x23); hdr.set([0xac, 0x11, 0xd3, 0x03], 0); hdr.set([0x30, 0x30, 0x39, 0x37], 9); hdr.set(le(2, 302), 0x1c);
+    const tr = Uint8Array.from([0, 0, 1, 2, 3, 4, 0, 0, 0, 0x2a, 0xaa, 0xa1, 0xda, 0xaa]);
+    const pl = Uint8Array.from([...hdr, ...lit, ...d, ...tr]);
+    const man = { FormatVersion: 1, ProductType: ["24", "30"], Payload: "SND", FileType: "Sound", FirmwareVersion: "1.42A", MetaInfo: { Tags: ["test"] } };
+    return zip([["manifest.json", new TextEncoder().encode(JSON.stringify(man))], ["SND", pl]]);
+  };
+  const lib = [];
+  for (let k = 0; k < 130; k++) lib.push(...await libraryItemsFromDnsnd(`T${k}.dnsnd`, dnsnd(`DN ${String(k).padStart(3, "0")}`)));
+  ok(lib.length === 130 && lib.every((it) => it.type === "sound" && it.pool === 15), "pool: 130 self-made .dnsnd files -> 130 FM TONE library items");
+  const sim = makeSimFM1(simObjects(30, true), { version: "ChoralRoot 0.22", ids: SIM_POOL_IDS });
+  const s = new ManagerSession(sim.request); await s.read();
+  const fresh = async () => { const t = new ManagerSession(sim.request); await t.read(); return t.objs; };
+  const slotOf = (objs, n) => parseSoundObjects(objs).slots[n - 1];
+  ok(parseSoundObjects(s.objs).pool && usedSlots(s.objs) === 30, "pool: the simulated 0.22 FM-1 reads as the pool (30 of 128 used)");
+  // (a) a factory row selected: the sound takes its place, in the first free slot
+  const fac = P(s.objs)[15][1], free1 = firstFree(s.objs);
+  const a = managerPlace(s.objs, lib[0].file, fac);
+  ok(a.changed.length > 0 && a.changed.every((c) => c.id >= 50 && c.id <= 62), "pool: Place over a factory row -> pool bank writes (was: nothing changed)");
+  await s.apply(a);
+  let rb = await fresh();
+  ok(a.where === "over-factory" && a.slot === free1 && P(rb)[15][1].type === "user" && P(rb)[15][1].name === "DN 000" && slotOf(rb, free1).patch === "quad",
+     `pool: (a) DN 000 over ${fac.name}: U${free1}, bound, its FM TONE patch read back`);
+  // (b) a user slot selected: that slot
+  const u = P(s.objs)[15][1], b = managerPlace(s.objs, lib[1].file, u); await s.apply(b);
+  rb = await fresh();
+  ok(b.where === "over-user" && b.slot === u.slot && slotOf(rb, u.slot).name === "DN 001" && usedSlots(rb) === 31, "pool: (b) onto a user row: its slot overwritten, read back");
+  // (c) nothing selected: the next free slot, added
+  const free2 = firstFree(s.objs), c = managerPlace(s.objs, lib[2].file, null); await s.apply(c);
+  rb = await fresh();
+  ok(c.where === "new" && c.slot === free2 && slotOf(rb, free2).name === "DN 002" && slotOf(rb, free2).added && P(rb)[15].at(-1).name === "DN 002",
+     "pool: (c) nothing selected: the next free slot, added at the pool's end, read back");
+  // Place all: more items than free slots
+  const nfree = 128 - usedSlots(s.objs), all = managerPlaceAll(s.objs, lib.slice(3).map((it) => it.file)); await s.apply(all);
+  rb = await fresh();
+  ok(all.placed === nfree && all.skipped === 127 - nfree && usedSlots(rb) === 128 && slotOf(rb, 128).patch === "quad" && sameObjs(s.objs, rb),
+     `pool: Place all 127 into ${nfree} free slots -> ${nfree} placed, ${all.skipped} did not fit, read back the same`);
+  let full = null; try { managerPlace(rb, lib[0].file, null); } catch (e) { full = e; }
+  ok(full && /All 128 user slots/.test(full.message), "pool: 128 used -> Place refused, \"All 128 user slots\"");
+  // FM6 / CZ-1 .syx and a P5 sound file in pool mode
+  const s2 = new ManagerSession(makeSimFM1(simObjects(6, true), { version: "ChoralRoot 0.22", ids: SIM_POOL_IDS }).request); await s2.read();
+  const withFm6 = managerPlace(objs0, packs[12][3].file, null);
+  const fm6Syx = libraryItemsFromFile("f.syx", exportSyx(withFm6.objs, withFm6.slot).bytes)[0].file, czSyx = libraryItemsFromFile("c.syx", exportSyx(objs0, 2).bytes)[0].file;
+  const p5rec = readSoundFile(fm6Syx).record.slice(); p5rec[2] = 16;
+  const p5file = { format: "choralroot-sound", version: 1, name: "MY P5", engine: 16, record: Buffer.from(p5rec).toString("base64"),
+    patch: { kind: "p5", data: Buffer.from(Uint8Array.from({ length: 138 }, (_, i) => i & 63)).toString("base64") } };
+  const others = [fm6Syx, czSyx, p5file];
+  for (const f of others) {
+    const r = managerPlace(s2.objs, f, null); await s2.apply(r);
+    ok(r.changed.length && slotOf(s2.objs, r.slot).used && slotOf(s2.objs, r.slot).patch, `pool: Place ${readSoundFile(f).engineName} ${readSoundFile(f).name} -> U${r.slot}, with its patch`);
+  }
 }
 
 if (failed) { console.log(`${failed} manager test(s) FAILED`); process.exit(1); }

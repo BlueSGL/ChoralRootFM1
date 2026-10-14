@@ -190,7 +190,7 @@
 const EMBED_PACKS = (/*PACKS*/null);
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
-const SIM = new URLSearchParams(location.search).get("sim") === "1";
+const SIM_ARG = new URLSearchParams(location.search).get("sim"), SIM = SIM_ARG === "1" || SIM_ARG === "pool";   // ?sim=pool: a 0.22 FM-1 (128 slots)
 const PORT = "ChoralRoot FM-1";
 const COLORS = { 12: "#E63829", 15: "#F67918", 13: "#F6B600", 14: "#2950CD", 2: "#29B27B", 3: "#F6F2EE", 5: "#E63829", 6: "#F67918", 7: "#F6B600", 9: "#29B27B", 11: "#9A999A" };
 const colorOf = (e) => COLORS[poolOf(e)] || "#6A696A";
@@ -387,8 +387,9 @@ async function attach() {
   await readDevice();
 }
 async function startSim() {
-  sim = makeSimFM1(simObjects(30));
-  firmware = "ChoralRoot 0.15 (simulated)"; $("fw").textContent = firmware; $("connect").hidden = true;
+  const pool = SIM_ARG === "pool";
+  sim = pool ? makeSimFM1(simObjects(30, true), { version: "ChoralRoot 0.22", ids: SIM_POOL_IDS }) : makeSimFM1(simObjects(30));
+  firmware = `ChoralRoot ${pool ? "0.22" : "0.15"} (simulated)`; $("fw").textContent = firmware; $("connect").hidden = true;
   setConn("sim", "simulated FM-1"); $("needs").textContent = "Simulator: a pretend FM-1 in this page. Writes change it only until the page reloads.";
   session = new ManagerSession(sim.request);
   await readDevice("Reading the simulated FM-1…");
@@ -463,7 +464,7 @@ $("place-all").addEventListener("click", act(async () => {
   const items = libVisible().map(({ it }) => it).filter((it) => it.type === "sound");
   if (!confirm(`Place all ${items.length} sounds? ${freeSlots()} user slots are free; what does not fit is left out.`)) return;
   const res = managerPlaceAll(session.objs, items.map((it) => it.file));
-  await run("Place all", res, `Placed ${res.placed} sounds${res.skipped ? `; ${res.skipped} did not fit (32 user slots)` : ""}.`);
+  await run("Place all", res, `Placed ${res.placed} sounds${res.skipped ? `; ${res.skipped} did not fit (all ${usedSlots(session.objs)} user slots are used: delete or overwrite to place more)` : ""}.`);
 }));
 $("keep").addEventListener("click", act(() => keepRows(devSel())));
 $("keep-all").addEventListener("click", act(async () => {
