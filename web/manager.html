@@ -139,6 +139,8 @@
       <button id="place" disabled title="Put the library's selected sounds into the FM-1">Place →</button>
       <button id="keep" disabled title="Copy the FM-1's selected sounds into This browser">← Keep</button>
       <button id="place-all" disabled title="Place every sound shown, as many as fit">Place all</button>
+      <button id="replace" disabled title="The selected (or shown) sounds of this engine take its factory presets' places in pool order; the rest go into free user slots">Replace factory</button>
+      <button id="restore-factory" disabled title="Every user sound of this engine over a factory preset becomes an added sound again; the factory presets are back in their places">Restore factory order</button>
     </div>
     <section class="pane" id="dev" aria-label="Your FM-1">
       <div class="dev-head"><h2>Your FM-1</h2><span id="dev-fw"></span><span id="cap" class="cap"></span></div>
@@ -146,7 +148,7 @@
       <ol class="rows" id="dev-rows"></ol>
     </section>
   </div>
-  <p class="small">Click selects; shift-click a range, cmd / ctrl-click adds one. Drag rows within a pool to reorder (onto another sound: they swap places; onto a factory preset: it takes that place), from the library onto the FM-1 to Place, from the FM-1 onto the library to Keep.</p>
+  <p class="small">Click selects; shift-click a range, cmd / ctrl-click adds one. Drag rows within a pool to reorder (onto another sound: they swap places; onto a factory preset: it takes that place), from the library onto the FM-1 to Place (several onto a factory preset: they replace it and the factory presets after it, as Replace factory does), from the FM-1 onto the library to Keep.</p>
 
   <div class="bar">
     <button id="sel-all" disabled>Select all</button>
@@ -327,6 +329,10 @@ function refresh() {
   const vis = libVisible();
   $("place-all").disabled = !c || loops || !vis.length || !free;
   $("place-all").textContent = `Place all${vis.length && !loops ? " " + vis.length : ""}`;
+  const rItems = replaceItems();
+  $("replace").disabled = !c || loops || !rItems.length || !free;
+  $("replace").textContent = `Replace factory${rItems.length && !loops ? ` (${rItems.length})` : ""}`;
+  $("restore-factory").disabled = !c || loops || !devRows().some((r) => r.type === "user" && r.f >= 0);
   $("keep").disabled = !c || !d.length || d.some((r) => loops ? !r.used : r.type === "init" || r.type === "empty");
   $("keep").textContent = d.length > 1 ? `← Keep ${d.length}` : "← Keep";
   $("keep-all").disabled = ui.libSrc === "browser" || !ui.libItems.length;
@@ -465,6 +471,23 @@ $("place-all").addEventListener("click", act(async () => {
   if (!confirm(`Place all ${items.length} sounds? ${freeSlots()} user slots are free; what does not fit is left out.`)) return;
   const res = managerPlaceAll(session.objs, items.map((it) => it.file));
   await run("Place all", res, `Placed ${res.placed} sounds${res.skipped ? `; ${res.skipped} did not fit (all ${usedSlots(session.objs)} user slots are used: delete or overwrite to place more)` : ""}.`);
+}));
+// Replace factory: the library's selection (or every sound shown) over the open engine's factory presets, from `from`
+const replaceItems = () => (libSel().length ? libSel() : libVisible().map(({ it }) => it)).filter((it) => it.type === "sound");
+async function replaceFactory(items, from = 1) {
+  const files = items.map((it) => it.file), plan = managerReplacePlan(session.objs, ui.tab, files, from);
+  if (!plan.items.length) throw new Error(`None of the ${items.length} selected is a ${ENGINE_NAMES[ui.tab]} sound`);
+  if (!plan.replace && !plan.extra) throw new Error(plan.free ? `No factory ${ENGINE_NAMES[ui.tab]} preset left to replace` : "No free user slot: delete a user sound first");
+  if (!confirm(replaceFactoryText(plan, ui.tab, items.length))) return;
+  const res = managerReplaceFactory(session.objs, ui.tab, files, from);
+  await run("Replace factory", res, `Replaced ${res.replaced} factory ${ENGINE_NAMES[ui.tab]} sounds${res.added ? `; ${res.added} more placed` : ""}${res.refused ? `; ${res.refused} did not fit` : ""}.`, { engine: ui.tab, pos: from });
+}
+$("replace").addEventListener("click", act(() => replaceFactory(replaceItems())));
+$("restore-factory").addEventListener("click", act(async () => {
+  const e = ui.tab, n = devRows().filter((r) => r.type === "user" && r.f >= 0).length;
+  if (!confirm(`Bring back ${ENGINE_NAMES[e]}'s factory presets in their places? The ${n} user sound${n === 1 ? "" : "s"} over them stay on the FM-1, as added sounds after the factory ones.`)) return;
+  const res = managerRestoreFactory(session.objs, e);
+  await run("Restore factory order", res, `${res.restored} factory ${ENGINE_NAMES[e]} presets are back; the user sounds follow them.`, { engine: e, pos: 1 });
 }));
 $("keep").addEventListener("click", act(() => keepRows(devSel())));
 $("keep-all").addEventListener("click", act(async () => {
@@ -632,6 +655,8 @@ for (const side of ["dev", "lib"]) {
     e.preventDefault(); document.querySelectorAll(".drop").forEach((x) => x.classList.remove("drop"));
     const drag = ui.drag; ui.drag = null; if (!drag || ui.busy) return;
     const li = e.target.closest("li[data-i]"), to = li ? +li.dataset.i : null;
+    if (side === "dev" && drag.side === "lib" && to != null && libSel().length > 1 && ui.tab !== "loops" && devRows()[to].type === "factory")
+      return replaceFactory(libSel(), devRows()[to].pos);   // several onto a factory row: it and the following factory rows
     if (side === "dev" && drag.side === "lib") return placeItems(libSel(), to == null ? null : devRows()[to]);
     if (side === "lib" && drag.side === "dev") return keepRows(devSel());
     if (side === "dev" && to != null && to !== drag.i) {

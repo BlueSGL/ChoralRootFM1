@@ -391,3 +391,8 @@ it does the favourites': back up before trying such a build.
   accordingly ("SELECT: mode · OCT-: back · HOME: home"). The LEDs on the roots in PERF / FX go back to the chord's.
 - The LOOP knob row's **Quantize glyph at "none"** must read as no grid (no pulses), not a dense one: pct 0 draws an
   empty baseline; the grid densities start at 1/4.
+
+**Replace factory (the device manager, DN-3)**: binding user records to factory places in bulk (docs/DEVICE-MANAGER.md
+"Replace factory"). Nothing new in the firmware: a record bound to a factory preset takes its place in `pool_entry`
+and the preset is out of the pool until the record is deleted or unbound (Restore factory order: the records become
+added sounds). A factory preset's favourite mark stays with its place (the record over it has its key).

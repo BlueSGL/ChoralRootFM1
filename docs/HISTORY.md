@@ -2812,3 +2812,17 @@ FREE speed; DRIVE and sends offsets, off FM TONE none; a blob with F DLY is vers
 `tests/quad_ref.py` models them; the FM TONE goldens regenerate unchanged; `tools/emu/scripts/cr_quad_dest.txt` steps
 LFO 2's DEST through all 58 (test_cr checks the order; shots); `design/layouts/fm-tone.json` re-dumped. Nothing on a
 unit.
+3y59. **Replace factory: bulk import over an engine's factory presets (2026-10-14; branch dn-3 from b96c1d8, not
+pushed).** The owner: "Would be great if I could bulk import and replace the factory sounds in the process, rather than
+having to do factory ones 1 by 1." **What "takes that place" did before**: a user record bound to a factory index
+(the record's binding byte) IS that place of the pool; `cr_bank.c pool_entry` shows it instead of the factory preset,
+which leaves the pool (no shift), and comes back when the record is deleted (Reset to factory). That is already a
+per-place "hidden factory preset", kept in the pool's bank, so stable over a power cycle: **no firmware change**. Built
+(web only): `managerReplacePlan` / `managerReplaceFactory` / `managerRestoreFactory` / `replaceFactoryText`
+(fm1manager.js); the page's **Replace factory (N)** (the selection, else every sound shown, of the open engine) and
+**Restore factory order** (every user sound over a factory preset unbound: kept as added sounds, the factory presets
+back; needs no slot); several library rows dropped onto a factory row replace it and the factory rows after it.
+Places that already hold a user sound are skipped. Favourites: a mark on a factory preset is keyed by the preset (and
+a record over it has that key): the mark stays with the place, so the unit shows it on the import, and it is the
+factory sound's again after Restore; the confirm says so. Tests: test_manager.mjs (16 of 16, 5, 200 -> 16 + 112 + 72
+refused with the confirm's text, Restore, a drop onto 04, read back by a new session).

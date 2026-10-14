@@ -102,6 +102,42 @@ export function managerPlaceAll(objs, sounds) {
   }
   return { ...mgResult(new Map(objs), m), placed, skipped: sounds.length - placed };
 }
+// Replace factory (DN-3): sounds of one engine's pool over its factory presets in pool order. The pool's model needs no
+// new firmware: a user record bound to a factory index (flags[15]) IS that place of the pool and the factory preset is
+// not shown while it is there (cr_bank.c pool_entry); the factory sound stays in the firmware and comes back when the
+// record is deleted or unbound (Restore factory order). Places already holding a user sound are left as they are (they
+// are skipped, not counted). from: the first factory position to take (a drop row's pos; 1 for the button).
+// -> plan {items (of this pool), other (of other pools: left out), places (factory rows from `from`), replace, extra, refused}
+export function managerReplacePlan(objs, engine, sounds, from = 1) {
+  const items = [], other = [];
+  for (const s of sounds) { const e = s && s.engine !== undefined ? s.engine : readSoundFile(s).engine; (poolOf(e) === engine ? items : other).push(s); }
+  const places = managerPools(objs, { empty: false })[engine].filter((r) => r.type === "factory" && r.pos >= from);
+  const free = parseSoundObjects(objs).slots.filter((x) => !x.used).length;
+  const replace = Math.min(items.length, places.length, free), extra = Math.min(items.length - replace, free - replace);
+  return { items, other, places, replace, extra, refused: items.length - replace - extra, free };
+}
+export function managerReplaceFactory(objs, engine, sounds, from = 1) {
+  const p = managerReplacePlan(objs, engine, sounds, from);
+  let m = new Map(objs);
+  p.items.slice(0, p.replace + p.extra).forEach((s, k) => { m = mgMerge(m, placeSound(m, firstFreeSlot(m), s, k < p.replace ? p.places[k].f : -1)); });
+  return { ...mgResult(new Map(objs), m), replaced: p.replace, added: p.extra, refused: p.refused, other: p.other.length };
+}
+// the confirm's text for a plan
+export function replaceFactoryText(plan, engine, total) {
+  const en = ENGINE_NAMES[engine];
+  const parts = [`${plan.replace} factory ${en} sound${plan.replace === 1 ? "" : "s"} will be replaced by the first ${plan.replace} of ${total} selected`];
+  if (plan.extra) parts.push(`${plan.extra} more go into free user slots`);
+  if (plan.refused) parts.push(`${plan.refused} will not fit`);
+  if (plan.other.length) parts.push(`${plan.other.length} of other engines are left out`);
+  return `${parts.join("; ")}. The factory sounds are not deleted from the firmware: "Restore factory order" (or Delete / Reset to factory on a row) brings them back. A favourite mark on a replaced factory preset stays with its place: the FM-1 shows it on the imported sound, and it is the factory sound's again after Restore.`;
+}
+// Restore factory order: every user sound of the engine's pool bound to a factory preset becomes an added sound (kept,
+// after the factory presets, slot order); the factory presets are back in their places. No slot is needed.
+export function managerRestoreFactory(objs, engine) {
+  let m = new Map(objs), n = 0;
+  for (const r of managerPools(objs, { empty: false })[engine]) if (r.type === "user" && r.f >= 0) { m = mgMerge(m, bindSound(m, r.slot, -1)); n++; }
+  return { ...mgResult(new Map(objs), m), restored: n };
+}
 // swap two rows of the left pane: two user rows (their sounds exchange places), or a user row with a factory row of
 // its pool (the user sound takes the factory position: its binding moves; the factory preset it overwrote, if any,
 // comes back)
