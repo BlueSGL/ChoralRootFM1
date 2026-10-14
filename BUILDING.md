@@ -13,6 +13,7 @@ python3 -c 'import sys; sys.path.insert(0, "tools"); import build; build.generat
 cc -O1 -w -Ibuild/gen -Ifirmware/src -o build/host/ui_test tests/ui_test.c -lm && build/host/ui_test
 sh tools/emu/build.sh && build/host/emu          # the Mac emulator (tools/emu/README.md)
 sh tools/emu/web/build_web.sh                    # the browser emulator (needs the Emscripten SDK: tools/emu/README.md "Browser build")
+sh tools/layout/build_layout.sh && python3 tools/layout/make_page.py   # the layout viewer: build/layout-web/index.html (Emscripten; docs/LAYOUT-TOOL.md)
 sh tests/run_cr_tests.sh                         # the ChoralRoot engine tests
 sh tests/run_cr_draw.sh                          # renders every mock-up screen to build/cr_screens/
 ```

@@ -19,6 +19,10 @@
   webapp/installer/packs/     web/packs/*.json (the packs as files, to download)
   emu/                        "Try it in the browser": build/emu-web/* (made by sh tools/emu/web/build_web.sh;
                               EMU_DIR or a 4th argument overrides; missing: a warning, the site is made without it)
+  webapp/layout/              the layout viewer (docs/LAYOUT-TOOL.md): layout.html as index.html (fm1layout.js
+                              inlined) beside build/layout-web/crlayout.js and crlayout.wasm (made by
+                              sh tools/layout/build_layout.sh; LAYOUT_DIR overrides; missing: a warning, the site is
+                              made without it and the landing page has no link to it: {{LAYOUT}} is empty)
   src/                        not touched
 
   web/make_site.py build/choralroot.fwsc VERSION OUT_DIR [EMU_DIR]     (or build/choralroot-X.Y.fwsc X.Y)
@@ -102,6 +106,21 @@ def manager_page():
         if html.count(mark) != 1:
             raise SystemExit(f"manager.html must contain {mark} once; update make_site.py")
     return html.replace("/*LIB*/", lib).replace("/*PACKS*/null", json.dumps(embed, separators=(",", ":")).replace("</", "<\\/"))
+
+
+def layout_page():
+    """web/layout.html with /*LIB*/ (fm1layout.js) inlined; crlayout.js stays a file beside it (the firmware's wasm)"""
+    html = (HERE / "layout.html").read_text(encoding="utf-8")
+    if html.count("/*LIB*/") != 1:
+        raise SystemExit("layout.html must contain /*LIB*/ once; update make_site.py")
+    lib = HERE / LAYOUT_LIB                         # (not spelled as the installer's libraries are: web/test_installer.mjs
+    return html.replace("/*LIB*/", strip_module(lib.read_text(encoding="utf-8")))   # reads those from this file)
+
+
+LAYOUT_LIB = "fm1layout.js"
+LAYOUT_FILES = ("crlayout.js", "crlayout.wasm")
+LAYOUT_LINK = ('<p class="note">Every page of the sound editor, drawn by the firmware in your browser:</p>'
+               '<p class="note note-try"><a href="webapp/layout/">Layout viewer</a></p>')
 
 
 def check_package(path, raw):
@@ -226,6 +245,8 @@ def firmware_index(data, offered, product):
 def main(pkg, version, out, emu=None, packages=None, require_all=False):
     pkg, out = Path(pkg), Path(out)
     emu = Path(emu or os.environ.get("EMU_DIR") or HERE.parent / "build" / "emu-web")
+    lay = Path(os.environ.get("LAYOUT_DIR") or HERE.parent / "build" / "layout-web")
+    has_lay = all((lay / n).is_file() for n in LAYOUT_FILES)
     if packages is None:
         default = HERE.parent / "build" / "scratch" / "packages"
         packages = os.environ.get("CR_PACKAGES_DIR") or (default if default.is_dir() else None)
@@ -246,7 +267,7 @@ def main(pkg, version, out, emu=None, packages=None, require_all=False):
         if html.count(mark) != 1:
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
     index = fill({"VERSION": version, "PKG": name, "PKG_URL": "firmware/" + name, "PRODUCT": product,
-                  "NEWS": news_html(data, offered, version)})
+                  "NEWS": news_html(data, offered, version), "LAYOUT": LAYOUT_LINK if has_lay else ""})
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
     inst, fw = out / "webapp" / "installer", out / "firmware"
     for d in (inst, fw):
@@ -291,13 +312,25 @@ def main(pkg, version, out, emu=None, packages=None, require_all=False):
         print(f"warning: {emu}/index.html missing: the site is made without the browser emulator (emu/), so the "
               "landing page's 'Try it in the browser' link has no target; build it with sh tools/emu/web/build_web.sh",
               file=sys.stderr)
+    if has_lay:
+        (out / "webapp" / "layout").mkdir(parents=True, exist_ok=True)
+        lay_html = layout_page()
+        (out / "webapp" / "layout" / "index.html").write_text(lay_html, encoding="utf-8")
+        for n in LAYOUT_FILES:
+            shutil.copy(lay / n, out / "webapp" / "layout" / n)
+        lay_note = f"webapp/layout/ (index.html {len(lay_html)} B, {', '.join(LAYOUT_FILES)})"
+    else:
+        lay_note = "no webapp/layout/"
+        print(f"warning: {lay}/crlayout.js or crlayout.wasm missing: the site is made without the layout viewer "
+              "(webapp/layout/) and the landing page does not link it; build it with sh tools/layout/build_layout.sh",
+              file=sys.stderr)
     for line in notes:
         print(line)
     print(f"site: {out}: {', '.join(site)}; webapp/installer/index.html ({len(html)} B); "
           f"webapp/installer/manager.html ({len(mgr)} B, {len(pack_files)} pack files); "
           + ", ".join(f"firmware/{pkg_name(r['version'])} ({len(raw)} B, {product})" for r, raw in offered)
           + f", firmware/index.html, firmware/SHA256SUMS, firmware/LICENSE, firmware/LICENSING.md, "
-          f"firmware/LICENSES/ ({len(names)} texts + index.html); {emu_note}")
+          f"firmware/LICENSES/ ({len(names)} texts + index.html); {emu_note}; {lay_note}")
 
 
 if __name__ == "__main__":
