@@ -2826,3 +2826,18 @@ Places that already hold a user sound are skipped. Favourites: a mark on a facto
 a record over it has that key): the mark stays with the place, so the unit shows it on the import, and it is the
 factory sound's again after Restore; the confirm says so. Tests: test_manager.mjs (16 of 16, 5, 200 -> 16 + 112 + 72
 refused with the confirm's text, Restore, a drop onto 04, read back by a new session).
+
+3y60. **A full sound pool's lag: the pools' order from the name table, cached (2026-10-14; branch perf-1 from 0d227e0,
+not pushed).** The owner: "with all the user presets filled, my FM-1's UI is now very laggy." His counters had the
+audio and the keys fine. **The cause**: `cr_bank.c` worked out each pool's order (a slot's pool, its binding to a
+factory place, the first bound slot winning) from the records through `up_rec`, a 192-byte flash read each, for every
+slot on every call, the duplicate check quadratic. `tests/cr_poolperf_test.c` (128 slots: 96 FM TONE, 16 of them bound,
+32 of the other engines, a third marked): a PRESETS or ALGORITHM detent read ~5500 records (1.05 MB), with the
+favourites filter ~10900 (2.1 MB); a frame without input read nothing; an empty pool nothing. The driver reads a byte
+at a time with XIP off: around a second a detent on the unit. (377264f mirrored its 32 slots in RAM: no reads.)
+**The fix**: the binding's bytes come from `upn[]` (already in POOL), and `cbc` (RAM, 281 B) keeps each slot's pool,
+its resolved binding and the added count per engine, built again only when a line of the table changes (`upn_note`)
+or `up_gen` moves. A detent now reads the sound it loads (2 reads, ~270 bytes), frames none. XIP was weighed (the plain
+window from 0x93000 covers the pool, `fl_inval` after every erase / program keeps it coherent): docs/PRESETS.md "What
+browsing reads". New 78 PEAK values 65..68: `ui_frame_max_us`, `ui_frame_avg_us`, `flash_reads_ps`,
+`flash_read_bytes_ps` (docs/FX.md). Size: RAM +288 B, XIP +960 B, POOL unchanged.

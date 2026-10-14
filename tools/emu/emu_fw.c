@@ -242,7 +242,7 @@ static uint32_t real_us(void)
 
 void emu_fw_frame(void)                           /* main.c's loop body (choralroot.c: the same calls) */
 {
-    uint32_t t0, d;
+    uint32_t t0, d, ft0 = fm1_ticks();             /* (audio.c ui_ft: the frame's own time, as main.c) */
     fm1_irq_off();
     t0 = real_us();
     master_poll();                                /* main.c: the MASTER pot (ADC) through its IIR */
@@ -253,6 +253,7 @@ void emu_fw_frame(void)                           /* main.c's loop body (choralr
     if (d > emu_hal.ui_lock_max_us)
         emu_hal.ui_lock_max_us = d;
     cr_ui_draw();
+    ui_ft_add(ft0);
     if (!usb.sx_on && usb.sx_len >= 6u && usb.sysex[usb.sx_len - 1u] == 0xF7u && usb.sysex[1] == 0x7Du) {
         crb_handle(usb.sysex + 1, usb.sx_len - 2u);   /* our SysEx (7D 46 4C), as main.c's ed_service: the handler
                                                        * (scripts' "sysex"); the reply has no transport here */

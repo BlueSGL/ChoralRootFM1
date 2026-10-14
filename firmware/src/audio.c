@@ -32,6 +32,17 @@ static struct {
     uint32_t avg_us, max_us, max_all_us, halves, late, ui_max_ms, ui_frames;   /* the last full second */
     uint32_t late0, t0, ui_last, ui_max, ui_n;                                 /* the window being filled */
 } cpu_last;
+/* 3y60 (the owner, 2026-10-14: "with all the user presets filled, my FM-1's UI is now very laggy"): a UI frame's own
+ * time (input, LEDs, draw; main.c, emu_fw.c), the longest and the sum since 78 PEAK's last read (cr_backup.c crb_peak) */
+static struct { uint32_t max_us, sum_us, n, t0; } ui_ft;
+static void ui_ft_add(uint32_t t0_ticks)
+{
+    uint32_t us = (fm1_ticks() - t0_ticks) / FM1_TICKS_PER_US;
+    if (us > ui_ft.max_us)
+        ui_ft.max_us = us;
+    ui_ft.sum_us += us;
+    ui_ft.n++;
+}
 static void cpu_window(uint32_t now_ms)          /* once per UI frame: a frame's period, and the second's close */
 {
     uint32_t d = now_ms - cpu_last.ui_last;

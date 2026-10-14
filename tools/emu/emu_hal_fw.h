@@ -174,8 +174,12 @@ static void emu_flash_sync(uint32_t off, uint32_t n)
     fwrite(emu_flash + off, 1, n, emu_flash_f);
     fflush(emu_flash_f);
 }
+#define ST_READS_COUNTED 1
+static uint32_t st_reads, st_read_bytes;          /* (storage_hw.c's: every flash read, calls and bytes) */
 static int st_read(uint32_t off, void *dst, uint32_t n)
 {
+    st_reads++;
+    st_read_bytes += n;
     if (off > EMU_FLASH_SIZE || n > EMU_FLASH_SIZE - off)
         return -8;
     memcpy(dst, emu_flash + off, n);

@@ -37,6 +37,7 @@ static uint8_t up_work[SP_SLOT] __attribute__((aligned(4)));   /* a slot being s
 static void upn_note(uint32_t k, const up_rec_t *r)   /* slot k's line of the table from its record */
 {
     upn_t *n = &upn[k];
+    cbc.ok = 0;                                       /* (cr_bank.c: the pools' order is resolved again) */
     memset(n, 0, sizeof *n);
     if (!r || !up_valid(r))
         return;
@@ -303,6 +304,7 @@ static void upool_boot(void)                       /* persist_boot: the table; t
     uint32_t b;
     int any = 0;
     memset(upn, 0, sizeof upn);
+    cbc.ok = 0;
     upool_boot_rc = 0;
     if (!flash_ok || ST_BLOCKED())
         return;

@@ -909,7 +909,7 @@ static void crb_debug(void)
  * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[64], k = 0, i;                       /* (64 values: full; a 65th needs a larger v) */
+    uint32_t v[72], k = 0, i;                       /* (68 values; 72 room) */
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -1015,6 +1015,22 @@ static void crb_peak(void)
 #endif
     v[k++] = st_near;
     v[k++] = st_prog_us;
+    /* 3y60, values 65..68 (the owner, 2026-10-14: "with all the user presets filled, my FM-1's UI is now very laggy";
+     * docs/PRESETS.md "What browsing reads"), since the last read: a UI frame's own time (input, LEDs, draw: audio.c
+     * ui_ft) the longest and the average in us, then the flash reads (storage_hw.c st_read) per second, calls and
+     * bytes. Browsing reads no record: a full pool turned reads a sound's record and patch per load, no more */
+    {
+        static uint32_t rd0, rb0, ms0;
+        uint32_t dt = fm1_ms - ms0;
+        v[k++] = ui_ft.max_us;
+        v[k++] = ui_ft.n ? ui_ft.sum_us / ui_ft.n : 0u;
+        v[k++] = dt ? (uint32_t)((uint64_t)(st_reads - rd0) * 1000u / dt) : 0u;
+        v[k++] = dt ? (uint32_t)((uint64_t)(st_read_bytes - rb0) * 1000u / dt) : 0u;
+        rd0 = st_reads;
+        rb0 = st_read_bytes;
+        ms0 = fm1_ms;
+        ui_ft.max_us = ui_ft.sum_us = ui_ft.n = 0;
+    }
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

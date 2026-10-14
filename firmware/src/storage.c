@@ -61,6 +61,9 @@ typedef struct {
 _Static_assert(sizeof(st_hdr_t) == 32u, "storage commit record layout");
 
 static int st_read(uint32_t off, void *dst, uint32_t n);
+#ifndef ST_READS_COUNTED
+static uint32_t st_reads, st_read_bytes;       /* (a host test's own st_read: not counted) */
+#endif
 #ifndef ST_BLOCKED
 #define ST_BLOCKED() 0                         /* (core.h: SAFE MODE, the objects neither loaded nor saved) */
 #endif
