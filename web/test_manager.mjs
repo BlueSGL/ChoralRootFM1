@@ -17,7 +17,7 @@ import vm from "node:vm";
 import { captureBackup, loopHeader, deviceInfo, readBackup, restoreBackup, backupFileName } from "./fm1backup.js";
 import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObjects, recordValid } from "./fm1sounds.js";
 import {
-  selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete,
+  selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete, managerReplacePlan, managerReplaceFactory, managerRestoreFactory, replaceFactoryText,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
   libraryItemsFromFile, libraryItemsFromDnsnd, SIM_POOL_IDS, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH, retiredNote,
 } from "./fm1manager.js";
@@ -234,6 +234,7 @@ ok(["eng-tabs", "dev-rows", "lib-rows", "cap", "dev-fw", "keep-all", "sel-all", 
 ok(html.indexOf('id="lib"') < html.indexOf('id="dev"') && html.includes("Place →") && html.includes("← Keep") && html.includes("draggable") && html.includes("shiftKey") && html.includes("metaKey") && html.includes("simObjects(30)"),
   "page: Library left, FM-1 right (Place →, ← Keep), multi-select, drag and drop, the 30-sound simulator");
 ok(html.includes('"ChoralRoot FM-1"') && html.includes("onstatechange") && html.includes('get("sim")') && html.includes('SIM_ARG === "1"') && html.includes('SIM_ARG === "pool"'), "page: the port name, hot-plug, ?sim=1, ?sim=pool");
+ok(html.includes('id="replace"') && html.includes('id="restore-factory"') && html.includes("replaceFactory(libSel(), devRows()[to].pos)"), "page: Replace factory, Restore factory order, several dropped onto a factory row");
 ok(!/<link\s/i.test(html) && !/src="http/.test(html), "page: no external assets");
 const strip = (src) => src.replace(/^export\s+/gm, "").replace(/^import .*?;\n/gm, "");
 const lib = ["fm1backup.js", "fm1dnsnd.js", "fm1sounds.js", "fm1manager.js"].map((f) => strip(readFileSync(join(HERE, f), "utf8"))).join("\n");
@@ -330,6 +331,43 @@ ok(site.includes('"manager.html"') && site.includes("fm1manager.js") && site.inc
      `pool: Place all 127 into ${nfree} free slots -> ${nfree} placed, ${all.skipped} did not fit, read back the same`);
   let full = null; try { managerPlace(rb, lib[0].file, null); } catch (e) { full = e; }
   ok(full && /All 128 user slots/.test(full.message), "pool: 128 used -> Place refused, \"All 128 user slots\"");
+  // Replace factory (DN-3): an FM-1 with its 128 slots free, FM TONE's 16 factory presets replaced in pool order
+  {
+    let o0 = simObjects(30, true);
+    for (const x of parseSoundObjects(o0).slots) if (x.used) o0 = managerDelete(o0, { type: "user", slot: x.slot }).objs;
+    const lib200 = [];
+    for (let k = 0; k < 200; k++) lib200.push(...await libraryItemsFromDnsnd(`R${k}.dnsnd`, dnsnd(`RP ${String(k).padStart(3, "0")}`)));
+    const files = lib200.map((it) => it.file), nf = P(o0)[15].filter((r) => r.type === "factory").length;
+    const facNames = P(o0)[15].filter((r) => r.type === "factory").map((r) => r.name);
+    ok(usedSlots(o0) === 0 && nf === 16, "replace: the FM-1 has 128 free slots and FM TONE 16 factory presets");
+    const fresh2 = async (sim2) => { const t = new ManagerSession(sim2.request); await t.read(); return t.objs; };
+    const run2 = async (fs, from = 1) => {
+      const sim2 = makeSimFM1(o0, { version: "ChoralRoot 0.22", ids: SIM_POOL_IDS }), t = new ManagerSession(sim2.request); await t.read();
+      const res = managerReplaceFactory(t.objs, 15, fs, from); await t.apply(res);
+      return { res, rb: await fresh2(sim2), t, sim2 };      // rb: read back by a new session (the unit after a power cycle: the bank)
+    };
+    const factoryLeft = (o) => P(o)[15].filter((r) => r.type === "factory").length;
+    { const { res, rb } = await run2(files.slice(0, 16));
+      ok(res.replaced === 16 && !res.added && factoryLeft(rb) === 0 && P(rb)[15].slice(1, 17).every((r, k) => r.name === `RP ${String(k).padStart(3, "0")}` && r.overwrites === facNames[k]),
+        "replace: 16 of 16 -> FM TONE 01..16 are the imports in order, no factory preset left in the pool, read back"); }
+    { const { res, rb } = await run2(files.slice(0, 5));
+      ok(res.replaced === 5 && factoryLeft(rb) === 11 && P(rb)[15][5].name === "RP 004" && P(rb)[15][6].type === "factory" && P(rb)[15][6].name === facNames[5],
+        "replace: 5 items -> 01..05 replaced, 06..16 still factory"); }
+    { const plan = managerReplacePlan(o0, 15, files, 1), text = replaceFactoryText(plan, 15, 200);
+      ok(plan.replace === 16 && plan.extra === 112 && plan.refused === 72 && /16 factory FM TONE sounds will be replaced by the first 16 of 200 selected; 112 more go into free user slots; 72 will not fit/.test(text) && /Restore factory order/.test(text),
+        "replace: 200 items -> the confirm says 16 replaced, 112 more, 72 will not fit, and how to restore");
+      const { res, rb, t, sim2 } = await run2(files);
+      ok(res.replaced === 16 && res.added === 112 && res.refused === 72 && usedSlots(rb) === 128 && P(rb)[15].length === 1 + 16 + 112 && P(rb)[15][17].name === "RP 016" && sameObjs(t.objs, rb),
+        "replace: 200 -> 16 replaced, 112 placed after them, 72 refused, read back the same");
+      const back = managerRestoreFactory(t.objs, 15); await t.apply(back);
+      const rb2 = await fresh2(sim2), rows = P(rb2)[15];
+      ok(back.restored === 16 && factoryLeft(rb2) === 16 && rows.slice(1, 17).every((r, k) => r.name === facNames[k]) && usedSlots(rb2) === 128 && rows.length === 1 + 16 + 128 &&
+        rows.slice(17).every((r) => r.type === "user" && r.f === -1),
+        "replace: Restore factory order -> the 16 factory presets back in 01..16, all 128 imports kept as added sounds, read back"); }
+    { const { res, rb } = await run2(files.slice(0, 3), 4);
+      ok(res.replaced === 3 && P(rb)[15][3].type === "factory" && P(rb)[15][4].name === "RP 000" && P(rb)[15][6].name === "RP 002" && P(rb)[15][7].type === "factory",
+        "replace: dropped onto 04 -> 04..06 replaced, the rows before and after stay factory"); }
+  }
   // FM6 / CZ-1 .syx and a P5 sound file in pool mode
   const s2 = new ManagerSession(makeSimFM1(simObjects(6, true), { version: "ChoralRoot 0.22", ids: SIM_POOL_IDS }).request); await s2.read();
   const withFm6 = managerPlace(objs0, packs[12][3].file, null);

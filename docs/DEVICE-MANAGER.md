@@ -185,3 +185,23 @@ version's package, sha256, notes and source at its tag).
   each demo state and counts no MIDI request and no fetch.
 - **Not run:** against an FM-1, in Chrome or Edge themselves, on Android. `web/test_installer.mjs` runs the page's
   script against a simulated FM-1 in node; the look was read from headless Chromium screenshots.
+
+## Replace factory (DN-3, 2026-10-14)
+
+- **Replace factory (N)** (beside Place / Place all): the library's selection, or every sound shown when nothing is
+  selected (e.g. with "this engine only"), of the open engine's pool, over that engine's factory presets in pool order:
+  item 1 at 01, item 2 at 02, ..; more items than factory presets: the rest are placed after them as added sounds
+  until the free user slots run out; fewer: only the first N are replaced. Places already holding a user sound are
+  skipped; sounds of other engines are left out. The confirm says it all, e.g. "16 factory FM TONE sounds will be
+  replaced by the first 16 of 200 selected; 112 more go into free user slots; 72 will not fit".
+- **Drag**: several library rows dropped onto a factory row: the first takes that row, the rest the factory rows after it.
+- **What replaced means**: each import is a user record bound to the factory preset (the same as Place over one
+  factory row): the pool shows it in that place and the factory preset is not in the pool while it is there (PRESETS
+  steps through the imports where the factory sounds were). Kept in the pool's bank: survives a power cycle. The
+  factory sounds stay in the firmware.
+- **Restore factory order**: every user sound of the engine over a factory preset becomes an added sound (kept, after
+  the factory presets); the factory presets are back. Needs no free slot. Delete / Reset to factory on one row brings
+  back that one preset (and deletes the import).
+- **Favourites**: a factory preset's mark is keyed by the preset, and a record over it has the same key (PRESETS.md
+  "Favourites"): the mark stays with the place, so the unit shows the import as marked; after Restore it is the factory
+  sound's again. The manager does not edit marks; the confirm says this.
