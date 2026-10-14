@@ -127,6 +127,7 @@ enum {
                                  * 100; names[0] (if any) = the word for the top whole number (AMP REL: "INF" at
                                  * 127.00 and up); the editor protocol's fmt 18 */
 };
+#define FMT_HI(f) ((f) == F_FIX2)   /* a hundredths format (cr_pages.c kn_whole: finest step 1, whole numbers 100) */
 
 typedef struct {
     const char *label;

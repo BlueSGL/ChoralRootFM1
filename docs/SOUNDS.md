@@ -333,6 +333,12 @@ other engine's kind or of an engine the slot is not is simply the file's engine:
 
 ## .dnsnd import (Elektron Digitone sounds as FM TONE sounds; 2026-10-14)
 
+**Since FM TONE version 4 (2026-10-14, docs/QUAD.md "Ranges")** the hi-res values map 1:1 with the fine byte kept:
+FM TONE value = coarse x 100 + round(fine x 100 / 256) (minus 6400 / 6300 for the centred ones); FDBK unscaled; the
+blob written is version 4 (96 bytes). `fm1sounds.js` and `fm1_install.py` read 96-byte FM TONE patches and take an
+80-byte version 1..3 one (a sound file, a pool slot or store of before: converted, fm1dnsnd.js `quadToV4`, or zero-padded
+for the FM-1 to convert); a firmware before the pool gets version 3 in its 80-byte store (`quadToV3`).
+
 The owner: "Being able to load in Digitone presets for the FM-Tone engine in the device manager" ... "Build now, I do
 have a Digitone we can refine later." FM TONE (engine 15, docs/QUAD.md) follows the Digitone's FM voice, so most of a
 Digitone sound has a place in its patch. The decoding is ours (clean-room, from exported files; Elektron publishes no
@@ -372,21 +378,21 @@ imported).
 
 | offset | Digitone | conf. | FM TONE (eng_quad.c) |
 | --- | --- | --- | --- |
-| 30 / 32 | LFO 1 / 2 SPEED (hi-res, 64 = 0: 0 = -64, 127.99 = 63.99) | slot / **verified** | SPEED, rounded |
+| 30 / 32 | LFO 1 / 2 SPEED (hi-res, 64 = 0: 0 = -64, 127.99 = 63.99) | slot / **verified** | SPEED 1:1 (hundredths) |
 | 34 / 36 | MULT 0..23 (0 = 1, 5 = 32, 21 22 23 = 512 1k 2k) | slot / **verified** | MULT, the same 24 (0..11 the tempo, 12..23 120 BPM: which half is which is not proved) |
 | 38 / 40 | FADE (64 = 0) | slot | FADE |
 | 42 / 44 | DEST (the table below) | **verified** | DEST by `DN_LFO_DEST` (none: off, a note) |
 | 46 / 48 | WAVE TRI SINE SQR SAW EXP RMP RND (the manual's order) | slot | the same waves (EXP / RAMP swap places) |
 | 50 / 52 | SPH (start phase) | slot | PHASE |
 | 54 / 56 | MODE FREE TRG HLD ONE HLF | slot | TRIG, the same five |
-| 58 / 60 | DEPTH (hi-res, 64 = 0) | slot | DEPTH, rounded |
+| 58 / 60 | DEPTH (hi-res, 64 = 0) | slot | DEPTH 1:1 (hundredths) |
 | 62 | ALGO (0..7) | slot | ALGO 1..8 |
 | 64 | RATIO C, 19 steps (0 = 0.25, 3 = 1, 4 = 2, 18 = 16) | **verified** | RATIO C, the same step |
 | 66 | RATIO A, 36 steps (0 = 0.25, 3 = 1, 9 = 2.5, 15 = 4, 25 = 8, 35 = 16) | **verified** (the six steps) | RATIO A, the nearest quarter (`DN_RATIO_A`: 0..15 in quarters fits all anchors; 16..24 and 26..34 linear between them, **not proved**: a note) |
 | 68 | RATIO B: u16be = 2 x (B1 step x 19 + B2 step) + a low bit | **verified** (four exports) | QP_RB1 / QP_RB2, the same pair (FM TONE's deep value B1 x 19 + B2). The low bit (set in 103 of the 256 factory sounds, and by the RATIO A exports) is not known: ignored |
-| 70 | HARM (hi-res, 63 = 0: 37 = -26, 89 = +26) | **verified** | HARM -26..26, rounded |
-| 72 | DTUN (hi-res 0..127) | **verified** | DTUNE |
-| 74 | FDBK, stored 0..127 (the display's 20 = 20, MAX = 127) | **verified** | FDBK x 120 / 127 (FM TONE 0..120: the scale is ours) |
+| 70 | HARM (hi-res, 63 = 0: 37 = -26, 89 = +26) | **verified** | HARM 1:1 (-26.00..+26.00) |
+| 72 | DTUN (hi-res 0..127) | **verified** | DTUNE 1:1 (hundredths) |
+| 74 | FDBK, stored 0..127 (the display's 20 = 20, MAX = 127) | **verified** | FDBK 1:1 (FM TONE 0..127 since 2026-10-14) |
 | 76 | MIX (0 = -64, 64 = 0, 127 = +63) | **verified** | MIX |
 | 78 | PHRT 0..4 (OFF ALL C A+B A+B2?) | inferred | PHRT, the same five |
 | 82..88 / 90..96 | ENV A / B ATK DEC END LEV | **verified** | ENV A / B: ATK and DEC by the time curve (`DN_TIME_TO_QUAD`, below: extrapolated), END and LEV direct |
@@ -394,15 +400,15 @@ imported).
 | 100 102 106 108 | A TRIG, A RESET, B TRIG, B RESET | inferred | ENV 2 / ENV 2+ |
 | 128 | filter TYPE: version 5 0 OFF, 1 LP2, 2 HP2, 3 LP4 | **verified** (version 5) | TYPE 1:1 (= the manual's order = FM TONE's) |
 | 128 | filter TYPE: version 1, five values 0..4: 0 OFF, 1 LP2, 2 HP, 3 LP4, 4 LP4 | **verified** 2 3 4 (the owner's re-saves on OS 1.44), inferred 0 1 (continuity with version 5) | OFF, LP12, HP12, LP24, LP24 (a note only for a value past 4) |
-| 130 / 132 | FREQ / RESO (hi-res) | **verified** | FREQ / RESO, rounded |
-| 134 | ENV depth (hi-res, 64 = 0) | **verified** | FILTER DEPTH |
+| 130 / 132 | FREQ / RESO (hi-res) | **verified** | FREQ / RESO 1:1 (hundredths) |
+| 134 | ENV depth (hi-res, 64 = 0) | **verified** | FILTER DEPTH 1:1 (hundredths) |
 | 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC REL by the time curve (DEC 71 is a measured point), SUS direct (DEC INF: SUS 127, a note; REL INF stays 127) |
-| 144 / 146 | BASE (hi-res) / WIDTH | slot | BASE / WIDTH |
+| 144 / 146 | BASE (hi-res) / WIDTH | slot | BASE 1:1 (hundredths) / WIDTH |
 | 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC by the time curve, SUS direct (DEC INF: SUS 127, a note) |
-| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL by the time curve on the hi-res value (10.13 is a measured point; 127 INF stays 127) |
+| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL by the time curve on the hi-res value, kept in hundredths (10.13 is a measured point; 127 INF = 127.00) |
 | 156 | DRIVE (hi-res) | **verified** | the record's DRIVE (P_DIST), rounded |
 | 158 | PAN (0 = L64, 64 = 0, 127 = R63) | **verified** | the record's PAN (P_PAN) |
-| 160 | VOL (hi-res; init 110) | **verified** | LEVEL |
+| 160 | VOL (hi-res; init 110) | **verified** | LEVEL 1:1 (hundredths) |
 | 162 / 164 / 166 | REVERB / DELAY / CHORUS send (hi-res) | **verified** | not imported (a note when not 0) |
 | 168 | AENR (version 5: 1 on, 0 off; version 1 holds 0..15: something else) | **verified** (version 5) | none (a note when off) |
 | 174..180 | RATIO OFFSET C, A, B1, B2 (hi-res, 64 = 0; version 5) | slot (the scale not proved: +-64 read as +-1.00) | OFS C A B1 B2 (a note when not 0) |

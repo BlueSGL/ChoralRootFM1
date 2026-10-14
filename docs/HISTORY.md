@@ -2861,3 +2861,21 @@ or `up_gen` moves. A detent now reads the sound it loads (2 reads, ~270 bytes), 
 window from 0x93000 covers the pool, `fl_inval` after every erase / program keeps it coherent): docs/PRESETS.md "What
 browsing reads". New 78 PEAK values 65..68: `ui_frame_max_us`, `ui_frame_avg_us`, `flash_reads_ps`,
 `flash_read_bytes_ps` (docs/FX.md). Size: RAM +288 B, XIP +960 B, POOL unchanged.
+3y61. **FM TONE in the Digitone's ranges (2026-10-14; branch qd-3 from 06da731, not pushed).** The owner: "FM-Tone on
+FM-1 has many parameters in different ranges than the real Digitone which uses 0 to 127 in a bunch of places or -64 to
+63.99 for centered parameters like pan. Also a number of parameters like cutoff support decimal places to two positions
+like 23.04. Would be good if the FM-Tone's engine parameter ranges and values matched and also make it easier to
+compare parameters between both devices." "Backwards support for older FM-Tone patches not needed." Done
+(docs/QUAD.md "Ranges"): fourteen hi-res values (HARM -26.00..+26.00, DTUNE, FREQ, RESO, BASE, LEVEL 0.00..127.99, AMP
+REL with 127.00 = INF, the filter DEPTH and each LFO's SPEED and DEPTH -64.00..+63.99) stored in hundredths and shown by
+a new format `F_FIX2` (core.h, `FMT_HI` for the knob branch; params.c, cr_edit.c's cells: "42.01", "+41.34"); FDBK
+0..127; VEL, the KEYs, filter SUS, KTRK plain numbers. The patch is int16, blob version 4 (96 bytes, the hi-res values
+u16le); versions 1..3 anywhere (presets, pool slots, sessions, the legacy store, backups, sound files) are converted
+best effort (x 100, FDBK x 127 / 120); an older firmware refuses a version-4 blob (the init patch). The fine part
+reaches the DSP (cutoff Q8, the SVF's a2 to 1/32 of its Q13 step, DTUNE / BASE / AMP REL interpolated, the LFO rate
+exact); the macros HARM / DTUNE hold the coarse part. The .dnsnd importer maps the hi-res bytes 1:1 (coarse x 100 +
+round(fine x 100 / 256)). Tests: cr_quad_test (v4 round trip at every min / max / default, v3 and v1 / v2 conversion,
+every factory preset converted valid and audible, the old firmware's refusal, FREQ 42.00 vs 42.01 and five other fine
+steps render differently), cr_pool_test (a self-made 80-byte version-3 slot loads converted; the texts "42.01" "43.49"
+"+41.34" "126.85" "-64.00" INF), cr_draw_test (the FM TONE pages at their longest values: 0 lint findings), the web
+and installer tests. FM TONE's goldens regenerated (tests/quad_goldens, 12 files); no other engine's changed.

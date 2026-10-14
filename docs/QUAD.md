@@ -286,10 +286,65 @@ is still taken by `quad_track_loaded`. Blobs are written as version 3; the QUAD 
 | 8 | ENV B | B ATK, B DEC, B END, B LEV | | | | |
 | 9 | ENV 2 | A DLY, A TRIG, A RESET, PHRT | | | | |
 
-Formats: ALGO `F_INT`; RATIO C / A / B and the offsets `F_INT` with a name list (`N_QUAD_RCB`, RATIO B a pair over
-361 values); HARM, MIX, SPEED, FADE, the depths, PAN `F_OFS`; MULT, TYPE, PHRT, WAVE, TRIG, DEST `F_ENUM`; TRIG / RESET
-`F_ONOFF`; times `F_TIME` (the filter and amp REL `F_TIMEI`: 127 = INF); FREQ `F_CUTOFF`; RESO, SUS, KEY, KTRK, VEL, DRIVE `F_PCT`; FDBK, DTUNE, BASE, WIDTH, END, LEV,
-LEVEL, PHASE `F_INT`. The editor's screens: ENV 3 is one row of three cells "A Key", "B1 Key", "B2 Key".
+Formats (since 2026-10-14, "Ranges" below): ALGO `F_INT`; RATIO C / A / B and the offsets `F_INT` with a name list
+(`N_QUAD_RCB`, RATIO B a pair over 361 values); the hi-res values (HARM, DTUNE, FREQ, RESO, the filter and LFO DEPTHs,
+BASE, AMP REL, LEVEL, SPEED) `F_FIX2`; MIX, FADE, PAN `F_OFS`; MULT, TYPE, PHRT, WAVE, TRIG, DEST `F_ENUM`; TRIG /
+RESET `F_ONOFF`; times `F_TIME` (the filter REL `F_TIMEI`: 127 = INF); AMP SUS, DRIVE `F_PCT`; FDBK, WIDTH, END, LEV,
+PHASE, VEL, the KEYs, filter SUS, KTRK `F_INT` (plain 0..127 numbers, as the Digitone shows them). The editor's
+screens: ENV 3 is one row of three cells "A Key", "B1 Key", "B2 Key".
+
+### Ranges (version 4: the Digitone's, 2026-10-14)
+
+The owner (2026-10-14): "FM-Tone on FM-1 has many parameters in different ranges than the real Digitone which uses 0
+to 127 in a bunch of places or -64 to 63.99 for centered parameters like pan. Also a number of parameters like cutoff
+support decimal places to two positions like 23.04. Would be good if the FM-Tone's engine parameter ranges and values
+matched and also make it easier to compare parameters between both devices." So FM TONE shows and stores the
+Digitone's numbers. Fourteen values are hi-res (`eng_quad.c quad_hires`): stored in hundredths, shown with two
+decimals by the format `F_FIX2` (core.h, the editor protocol's fmt 18; params.c: 4201 = "42.01", a range below 0
+signed: "+41.34", "-64.00"; at most 6 characters). Their finest step is 1 (0.01), their whole-number step 100: the
+knob code steps an `F_FIX2` value that way (the knob-acceleration branch; before it, the editor's 5 % steps).
+
+| Value | Page | Range (shown) | Stored | Default | Was (version 3) |
+| --- | --- | --- | --- | --- | --- |
+| HARM | SYN 1+ | -26.00 .. +26.00 | -2600 .. 2600 | 0.00 | -26 .. 26 |
+| DTUNE | SYN 1+ | 0.00 .. 127.99 | 0 .. 12799 | 0.00 | 0 .. 127 |
+| FDBK | SYN 1+ | 0 .. 127 | 0 .. 127 | 0 | 0 .. 120 |
+| FREQ | FILTER+ | 0.00 .. 127.99 (the Digitone's number; no Hz) | 0 .. 12799 | 127.00 | 0 .. 127 (Hz) |
+| RESO | FILTER+ | 0.00 .. 127.99 | 0 .. 12799 | 0.00 | 0 .. 127 (%) |
+| DEPTH (filter env) | FILTER+ | -64.00 .. +63.99 | -6400 .. 6399 | 0.00 | -64 .. 63 |
+| BASE | FILT 2+ | 0.00 .. 127.99 | 0 .. 12799 | 0.00 | 0 .. 127 |
+| AMP REL | AMP | 0.00 .. 126.99, INF (127.00 .. 127.99) | 0 .. 12799 | 40.00 | 0 .. 126, 127 INF (a time) |
+| LEVEL | AMP+ | 0.00 .. 127.99 | 0 .. 12799 | 110.00 | 0 .. 127, 100 |
+| SPEED (LFO 1..3) | LFO n | -64.00 .. +63.99 | -6400 .. 6399 | +16.00 | -64 .. 63 |
+| DEPTH (LFO 1..3) | LFO n+ | -64.00 .. +63.99 | -6400 .. 6399 | 0.00 | -64 .. 63 |
+| VEL, A / B1 / B2 KEY, filter SUS, KTRK | | 0 .. 127 (a number, not %) | as before | | 0 .. 127 (%) |
+
+Unchanged: the ratios and their offsets (+-1.00), the waves, modes and enums, MIX -64..63, PAN and DRIVE (the part's
+parameters), FM TONE's own values (LFO 3, the key / velocity tracking, the filter envelope's delay and key track),
+WIDTH, the envelope times other than AMP REL. The macros P_E4 HARM and P_E5 DTUNE hold the coarse part (`quad_mac_val`:
+a record, the editor protocol's v14, the matrix, motion and a CC are 7-bit; a macro move sets the coarse value with
+fine 0, `quad_mac_patch`); HOME's HARM knob steps whole numbers, the deep page the hundredths.
+
+The engine uses every hundredth: FREQ as Q8 (x 256 / 100) into the multimode filter, whose coefficients
+(`quad_svf_coef`) interpolate g in Q20 and carry a2 to 1/32 of its Q13 step (FREQ 42.00 and 42.01 render differently;
+dsp.c's `tsvf_coef_k` could not resolve 0.05 % at low cutoffs); RESO (k = 8192 - RESO x 3 / 5), the envelope DEPTH
+(eF x DEPTH / 6400), BASE (`quad_bwk`: QUAD_BW_K interpolated), HARM (Q8 = x 256 / 100), DTUNE (QUAD_DT_UP / DN
+interpolated), the LFO rate (SPEED x MULT x BPM x QUAD_LFO_K / 6553600, exact in 64 bits), the LFO depth (/ 6400),
+AMP REL (ENV_EXP interpolated between its steps; 127.00 and up INF), LEVEL (squared: LEVEL^2 / 5000 = 2 x (LEVEL /
+100)^2 as before). FDBK 0..127 runs the 0..120 feedback curve ((FDBK x 120 + 63) / 127). Modulation scales for the
+hi-res destinations are x 100. The added cost on the device (the listing, 0.22 build): `quad_render` 5234 -> 5413
+instructions, the multimode filter's sample loop +2 multiplies (LP12 61 -> 69 instructions a sample), a few
+divisions a block; the host figure (`tests/run_quad_test.sh`) average 18.7 % -> 19.6 %, the worst case 30.4 % ->
+31.1 %.
+
+**Storage.** `quad_patch` is int16 (`QP_NP` = 73 values a part). Blob version 4 (`QUAD_BLOB` 96 bytes): 'Q', 4, each
+value as value - min, the hi-res ones u16 little-endian, the rest a byte (89 bytes), zeros. Versions 1..3 (80 bytes,
+`QUAD_BLOB_V3`: the factory presets' tables, the legacy QUAD store, a pool slot or a session of before, a backup's
+object 22) are converted on load, best effort (`quad_unpack`: the hi-res values x 100, FDBK x 127 / 120 rounded; 1 and
+2 through version 3 first). The pool slot of an older FM TONE sound keeps its 80 bytes until saved again
+(`up_patch_get` reads it zero-padded); a session record of 80 bytes is taken (`cr_settings.c`). The 16 factory presets
+are their version-3 tables converted (`quad_preset_patch`; to be replaced). An older firmware (version 3) refuses a
+version-4 blob in `quad_blob_ok` (its version test): the sound loads as the init patch, the slot's bytes untouched.
 
 **Presets** (retuned 2026-10-08 for the new routings and laws; a 6-note chord at LEVEL 92 peaks at 30-71 % FS; measured
 against the version-2 sounds by RMS, zero-crossing rate and the energy above ~2 kHz on a 3-note chord, 1 s):
