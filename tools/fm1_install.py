@@ -2165,7 +2165,18 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # bass part's most P5 voices, and held bass voices given up to the chord part. Core 1's longest job of
               # a half is pk_part1_us (the bass part and core 1's share of the chord's voices); pk_wait_us is how
               # long core 0 waited for it at most
-              "p5_core0_voices", "p5_core1_voices", "p5_bass_voices", "p5_bass_given_up"]
+              "p5_core0_voices", "p5_core1_voices", "p5_bass_voices", "p5_bass_given_up",
+              # 3y48 (the owner's stutter with an arp: "So not sure why it wrote to flash"), since power-on, never
+              # cleared: automatic erases started while something sounded in the second before (the rule: 0), the
+              # latest erase's writer (ERASE_WHY), object (OBJ_*; 0x100 + k a loop slot) and time (ms since power-on,
+              # 0 none); the time irq_gap_us happened (a peak, cleared with it), of ua_arm_gap_max_us, of the latest
+              # USB capture under- or overrun (the stream restarted); the unit's clock now. (p5-g e31c096 puts other
+              # values at 35..38 on its own list: merge by name, not by index)
+              "erases_auto_sounding", "last_erase_why", "last_erase_obj", "last_erase_ms", "irq_gap_ms",
+              "ua_arm_gap_max_ms", "ua_cap_reset_ms", "uptime_ms"]
+ERASE_WHY = ["other (a sound saved, a store)", "automatic: the Options", "automatic: the favourites",
+             "the global save (SAVE held) or Reset Settings", "the calibration / the update gesture",
+             "a backup restore", "a loop slot"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 SHED_WHY = ["none", "a released voice, the quietest", "a held voice, the oldest that is not its part's lowest note",
             "asked, and no voice to give", "a voice of the bass part's P5 stack, before any chord voice"]
@@ -2242,7 +2253,8 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
             print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
                                    f" (0x{d[k]:08X})" if k == "irq_gap_pc" else
                                    f" ({shed_voice_text(d[k])})" if k == "shed_last_voice" else
-                                   f" ({SHED_WHY[d[k]] if d[k] < len(SHED_WHY) else '?'})" if k == "shed_last_why" else ""),
+                                   f" ({SHED_WHY[d[k]] if d[k] < len(SHED_WHY) else '?'})" if k == "shed_last_why" else
+                                   f" ({ERASE_WHY[d[k]] if d[k] < len(ERASE_WHY) else '?'})" if k == "last_erase_why" else ""),
                   file=out)
     for k in DEBUG_USB:
         if k in d:

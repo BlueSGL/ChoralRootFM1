@@ -3006,6 +3006,14 @@ has '^save: dialog part 1 ' "$FL" && grep -q '^fav: part 1 .* on (tag 13 id [0-9
     bad "the bass: $(grep '^fav: part 1' "$FL") / $(fv 5)"
 
 echo "the SAVE menu's grammar, the favourites' filter and type (0.22, docs/PRESETS.md \"Favourites\")"
+# 3y48: a mark made while an arp plays, a backup LIST and the debug reads during it: nothing written until it is quiet
+run cr_favs_arp_list
+AL="$OUT/cr_favs_arp_list.log"
+al() { grep -a '^  flash erases with the audio stalled' "$AL" | sed -n "$1p" | awk '{print $7}'; }
+af() { grep -a '^  favs:' "$AL" | sed -n "$1p"; }
+[ "$(al 1)" = 0 ] && [ "$(al 2)" = 0 ] && [ "$(al 3)" = 0 ] && af 3 | grep -q 'pending 1' && [ "$(al 4)" = 1 ] && af 4 | grep -q 'saves 1, pending 0' &&
+    ok "a mark while an arp plays: LIST, DEBUG, PEAK, USB and 30 s of the arp write nothing; quiet: the poll writes it (one erase)" ||
+    bad "the arp and the reads: erases $(al 1) $(al 2) $(al 3) $(al 4); $(af 3) / $(af 4)"
 run cr_favfilter
 FF="$OUT/cr_favfilter.log"
 ffv() { grep -a '^  favs:' "$FF" | sed -n "$1p"; }

@@ -21,8 +21,8 @@
  *                        46 ms hole with a click at each edge (docs/INTEGRATION.md, Performance). What is written:
  *                        flash's block with the automatic fields as they are now; the MANUAL fields stay what the
  *                        last global save wrote
- *   cr_settings_save()   the automatic part now (Felucca's settings_save: the calibration, a backup's LIST, the
- *                        update gesture), still deferred while a loop plays
+ *   cr_settings_save()   the automatic part now (Felucca's settings_save: the calibration, the update gesture; not
+ *                        a backup's LIST since 3y48: a read never writes), still deferred while a loop plays
  *   cr_settings_commit() the GLOBAL SAVE (SAVE held, cr_ui.c cu_gsave; Options > Reset Settings): the whole block
  *                        and the session, now. The only writer of the manual settings and of the session
  *   cr_settings_revert() GLO + SAVE: flash's block (with the Options as they are now) and flash's session applied
@@ -1165,6 +1165,10 @@ static int crs_sounding(void)
     uint32_t i;
     if (cr_parts_busy() || cr_snap.voices || cr_snap.pending)
         return 1;
+    if (cr_snap.perf_step)                         /* 3y48: an arp / perform pattern stepping, between its steps too
+                                                    * (belt and braces: its held chord is a used voice, cr_snap.voices;
+                                                    * not cr_snap.latching, which is LOCK's mode, keys held or not) */
+        return 1;
     for (i = 0; i < SCOPE_N; i++)
         if (scope_buf[i] > CRS_QUIET_PEAK || scope_buf[i] < -CRS_QUIET_PEAK)
             return 1;
@@ -1175,6 +1179,13 @@ static int crs_sounding(void)
 /* the favourites (cr_favs.c): a mark that changed is written as an Option is: once no mark changed for CRS_QUIET_MS
  * and nothing sounded for CRS_IDLE_MS, never while a loop plays or after a restore; a flash error: again in a second.
  * (Marked while a chord rings, the write waits for the quiet: the erase would be a 45 ms hole in it) */
+/* 3y48: the writer about to erase (storage_hw.c st_why): an automatic one also notes whether anything sounded in the
+ * second before (erases_auto_sounding, 78 PEAK: the guard above makes it 0) */
+static void crs_why(uint32_t why)
+{
+    st_why = why;
+    st_why_loud = (uint32_t)(crs_sounding() || (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS);
+}
 static uint32_t crf_retry_ms;
 static uint8_t crf_failed;
 static void crf_poll(void)
@@ -1184,7 +1195,9 @@ static void crf_poll(void)
         (uint32_t)(fm1_ms - crs_loud_ms) < CRS_IDLE_MS || (uint32_t)(fm1_ms - crs_wr_ms) < CSS_GAP_MS ||
         (crf_failed && (uint32_t)(fm1_ms - crf_retry_ms) < 1000u))
         return;
+    crs_why(ST_WHY_AUTO_FAV);
     crf_failed = crf_flush() != 0;
+    st_why = ST_WHY_OTHER;
     crf_retry_ms = crs_wr_ms = fm1_ms;
 #endif
 }
@@ -1193,6 +1206,7 @@ static void crf_poll(void)
 static void cr_settings_poll(void)
 {
     cr_settings_t now;
+    uint32_t i;
     if (!crs_loaded)
         return;
     if (crs_sounding())
@@ -1217,7 +1231,10 @@ static void cr_settings_poll(void)
         return;
     if (crs_pending == 2u && (uint32_t)(fm1_ms - crs_retry_ms) < 1000u)
         return;
-    if (crs_write(0) == 0) {
+    crs_why(ST_WHY_AUTO_OPT);
+    i = (uint32_t)crs_write(0);
+    st_why = ST_WHY_OTHER;
+    if (i == 0) {
         crs_pending = 0;
     } else {
         crs_pending = 2;                           /* flash error: retry in a second */
@@ -1225,7 +1242,7 @@ static void cr_settings_poll(void)
     }
 }
 
-/* the automatic part now (Felucca's settings_save: the power-on calibration; a backup's LIST; the update gesture):
+/* the automatic part now (Felucca's settings_save: the power-on calibration; the update gesture; 3y48: not LIST):
  * still not while a loop plays. The manual settings and the session are the global save's (cr_settings_commit) */
 static void cr_settings_save(void)
 {
@@ -1239,12 +1256,14 @@ static void cr_settings_save(void)
     crs_hold_seen = settings_hold;
     crs_pending = 1;
     crs_change_ms = fm1_ms - CRS_QUIET_MS;
+    st_why = ST_WHY_SAVE;
     if (!CR_SETTINGS_BUSY() && crs_write(0) == 0)
         crs_pending = 0;
 #ifdef CR_FAVS
     if (!CR_SETTINGS_BUSY())
-        (void)crf_flush();                         /* a mark not yet written goes in too (a backup's LIST reads flash) */
+        (void)crf_flush();                         /* a mark not yet written goes in too (the update is a power cycle) */
 #endif
+    st_why = ST_WHY_OTHER;
 }
 
 /* THE GLOBAL SAVE (the owner, 2026-10-11: "Hold Save button to manually do a global save, instead of trying to
@@ -1258,6 +1277,7 @@ static int cr_settings_commit(void)
         return 0;
     crs_capture(&crs_seen);
     crs_hold_seen = settings_hold;
+    st_why = ST_WHY_GSAVE;
     if (crs_write(1) == 0)
         crs_pending = 0;
     else
@@ -1268,6 +1288,7 @@ static int cr_settings_commit(void)
     if (crf_flush() != 0)                          /* (a mark the poll has not written yet) */
         rc = -1;
 #endif
+    st_why = ST_WHY_OTHER;
     return rc;
 }
 

@@ -508,6 +508,7 @@ static inline uint32_t swing_step_len(const track_t *t, uint32_t base, uint32_t 
 /* ----------------------------------------------------------- system --- */
 #define RING_PUBLISH() __asm__ volatile("" ::: "memory")   /* slot store before the index update */
 static volatile uint32_t fm1_ms;  /* milliseconds since boot (TIMER4-based, TIMER5 ISR in main.c) */
+#define ST_NOW_MS() fm1_ms                /* (storage.c st_note, 3y48: the last erase's time) */
 /* boot-loop guard (main.c, cr_bootguard.h): crash-type resets within 30 s of a boot counted; 2 -> SAFE MODE (no flash
  * object loads), 4 -> UBOOT; a power-on clears it */
 #include "cr_bootguard.h"

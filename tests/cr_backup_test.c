@@ -942,13 +942,13 @@ int main(void)
         CHECK(z == 0, "DEBUG: the tail (the stub's samples) is zero where no stub ran");
     }
 
-    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 45 values (24 to its second
+    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 53 values (24 to its second
      * build; the six behind them: when the ISR got to start; then four: the keys' way to the engine; then seven, 3y44:
-     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores); DEBUG keeps
+     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores; then eight, 3y48: the erases' writers and times); DEBUG keeps
      * its 127 ---- */
     t_begin(78);
     a = t_send(&n);
-    CHECK(a && a[0] == 1 && a[1] == 45 && n == 2u + 5u * 45u, "PEAK: 1, 45, 45 x u32 (n %u)", (unsigned)n);
+    CHECK(a && a[0] == 1 && a[1] == 53 && n == 2u + 5u * 53u, "PEAK: 1, 53, 53 x u32 (n %u)", (unsigned)n);
     t_begin(73);
     a = t_send(&n);
     CHECK(a && a[1] <= 127 && n == 2u + 5u * a[1], "DEBUG after PEAK: its own values, as before (%u; the device's 127 fill its count byte)", a ? a[1] : 0);
@@ -1097,11 +1097,23 @@ int main(void)
         cu.msg.text[0] = 0;
         CHECK(!cu_fav_turn(0, +1) && !strcmp(cu.msg.text, "INIT: cannot be marked") && crf_count() == 1u,
               "favourites: INIT cannot be marked (a message), nothing changes");
-        CHECK(t_list() == 0 && !crf_dirty && find(man, nman, 23)->size == 2u + 2u + 1u,
-              "favourites: LIST writes a pending mark first, then lists object 23 (5 bytes: version, 1 section, FM6: 1 byte)");
+        {   /* 3y48: a READ never writes flash (LIST, GET, 73 DEBUG, 78 PEAK, 79 USB, INFO), a mark pending or not */
+            uint32_t e0 = st_erases, s0 = emu_stalls, cmd[5] = {1, 73, 78, 79, 65}, j, n;
+            for (j = 0; j < 5u; j++) {
+                t_begin(cmd[j]);
+                (void)t_send(&n);
+            }
+            CHECK(st_erases == e0 && emu_stalls == s0 && crf_dirty,
+                  "reads (3y48): INFO, DEBUG, PEAK, USB, LIST with a mark pending: no erase, the mark still to be written");
+        }
+        CHECK(t_list() == 0 && crf_dirty && find(man, nman, 23)->size == 2u + 2u + 1u,
+              "favourites: LIST lists the pending marks from RAM (3y48: nothing written; 5 bytes: version, 1 section, FM6: 1 byte)");
         rc = t_get(23, 0, 5, fav);
         CHECK(!rc && fav[0] == CRF_VER && fav[1] == 1u && fav[2] == ENGI_FM6 && fav[3] == 1u && fav[4] == 0x02u &&
-              st_crc32(fav, 5) == find(man, nman, 23)->crc, "favourites: GET 23: the object as cr_favs.c packs it");
+              st_crc32(fav, 5) == find(man, nman, 23)->crc && crf_dirty,
+              "favourites: GET 23: the object as cr_favs.c packs it (from RAM, still not written)");
+        CHECK(crf_flush() == 0 && !crf_dirty && t_list() == 0 && find(man, nman, 23)->size == 5u &&
+              t_get(23, 0, 5, other) == 0 && !memcmp(fav, other, 5), "favourites: once written, LIST / GET from flash: the same bytes");
         fn = 5;
         (void)crf_set(ENGI_FM6, 1, 0);
         (void)crf_set(13, 7, 1);
@@ -1122,6 +1134,46 @@ int main(void)
         CHECK(t_put_begin(23, 1, 0) == 1 && t_put_begin(23, CRF_PACK_MAX + 1u, 0) == 1, "favourites: a size of 1 or over 264: rc 1");
         CHECK(t_put(23, fav, 0) == 0 && crf_count() == 0u && crf_last_rc == 0, "favourites: PUT of size 0: no marks");
         CHECK(t_put(23, fav, fn) == 0 && crf_count() == 1u, "(the backup's marks again)");
+        {   /* 3y48 (the owner's arp on P5): crs_sounding sees each kind of sound, and a mark pending through a minute of
+             * it is never written by the poll; once all is quiet for CRS_IDLE_MS it is, and erases_auto_sounding stays 0 */
+            uint32_t e0, t, k, quiet = 1;
+            static const char *what[4] = {"a P5 chord voice in core 1's slots", "a held voice of the P5 bass", "an arp between its steps (no voice, nothing queued)", "a queued note"};
+            memset(scope_buf, 0, sizeof scope_buf);
+            for (k = 0; k < 2u; k++)
+                for (t = 0; t < NVOICE; t++)
+                    quiet &= !trk[k].v[t].active;
+            cr_snap.voices = cr_snap.pending = 0;
+            cr_snap.perf_step = 0;
+            CHECK(quiet && !crs_sounding(), "sounding (3y48): nothing sounds: no");
+            for (k = 0; k < 4u; k++) {
+                if (k == 0u) trk[CR_PART_CHORD].v[P5_POLY - 1u].active = 1;
+                if (k == 1u) trk[CR_PART_BASS].v[0].active = 1;
+                if (k == 2u) cr_snap.perf_step = 1;
+                if (k == 3u) cr_snap.pending = 1;
+                CHECK(crs_sounding(), "sounding (3y48): %s: yes", what[k]);
+                trk[CR_PART_CHORD].v[P5_POLY - 1u].active = 0;
+                trk[CR_PART_BASS].v[0].active = 0;
+                cr_snap.perf_step = 0;
+                cr_snap.pending = 0;
+            }
+            (void)crf_set(ENGI_FM6, 2, 1);
+            e0 = st_erases;
+            trk[CR_PART_BASS].v[0].active = 1;   /* the arp's chord through a P5 bass, a minute of it */
+            for (t = 0; t < 60000u; t += 20u) {
+                fm1_ms += 20u;
+                cr_settings_poll();
+            }
+            CHECK(st_erases == e0 && crf_dirty, "sounding (3y48): a mark pending through a minute of sound: not written");
+            trk[CR_PART_BASS].v[0].active = 0;
+            for (t = 0; t < 3000u && crf_dirty; t += 20u) {
+                fm1_ms += 20u;
+                cr_settings_poll();
+            }
+            CHECK(!crf_dirty && st_erases == e0 + 1u && st_last_why == ST_WHY_AUTO_FAV && st_last_obj == OBJ_FAVS &&
+                  st_auto_loud == 0u && t >= CRS_IDLE_MS, "sounding (3y48): quiet: written by the poll after %u ms (last writer: the favourites' poll, object 23; erases_auto_sounding 0)", (unsigned)t);
+            (void)crf_set(ENGI_FM6, 2, 0);
+            CHECK(crf_flush() == 0 && crf_count() == 1u, "(the extra mark off again)");
+        }
         /* an overwritten factory preset keeps its factory key: the mark stays through Overwrite and Reset */
         {
             uint32_t k = cb_free_slot();

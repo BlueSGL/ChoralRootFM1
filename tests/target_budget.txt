@@ -32,7 +32,7 @@ mix_loop 21
 mix_loop_f 64
 mix_loop_s 22
 mix_loop_sf 64
-mix_loop_u 35
+mix_loop_u 36
 mix_loop_fu 78
 mix_loop_su 41
 mix_loop_sfu 83

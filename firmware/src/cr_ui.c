@@ -1727,6 +1727,7 @@ static int crl_fl_save(uint32_t k, const uint8_t *src, uint32_t len)   /* storag
         return -1;
     cur = crl_fl_current(k, &h, st_buf);
     seq = cur < 0 ? 0u : h.seq;
+    st_note(0x100u + k, ST_WHY_LOOP);              /* (3y48: who erased: a loop slot) */
     copy = cur == 0 ? 1u : 0u;                     /* write the other copy, the header last */
     base = crl_fl_sector(k, copy);
     if ((rc = st_erase(base)) != 0)
@@ -1755,6 +1756,7 @@ static int crl_fl_delete(uint32_t k)
 {
     if (!flash_ok || ST_BLOCKED() || k >= CRL_SLOTS)
         return -1;
+    st_note(0x100u + k, ST_WHY_LOOP);
     return st_erase(crl_fl_sector(k, 0)) || st_erase(crl_fl_sector(k, 1)) ? -1 : 0;
 }
 static int crl_fl_ready(void) { return flash_ok && !ST_BLOCKED(); }   /* the slots can be written */

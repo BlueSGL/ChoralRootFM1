@@ -53,6 +53,29 @@ static int st_read(uint32_t off, void *dst, uint32_t n);
 #endif
 static int st_erase(uint32_t off);
 static int st_prog(uint32_t off, const void *src, uint32_t n);
+/* 3y48 (78 PEAK 46..49, totals since power-on, never cleared): who wrote last and why. The writer sets st_why
+ * before its st_save (cr_settings.c crs_why for the automatic ones: st_why_loud, something sounded in the second
+ * before; the guard should make st_auto_loud 0 always). Each st_save / loop slot write is one erase */
+#define ST_WHY_OTHER 0u                         /* a sound saved, a store's own sector .. */
+#define ST_WHY_AUTO_OPT 1u                      /* the Options poll (cr_settings_poll) */
+#define ST_WHY_AUTO_FAV 2u                      /* the favourites poll (crf_poll) */
+#define ST_WHY_GSAVE 3u                         /* the global save (SAVE held) or Reset Settings: cr_settings_commit */
+#define ST_WHY_SAVE 4u                          /* cr_settings_save: the calibration, the update gesture */
+#define ST_WHY_PUT 5u                           /* a backup's restore (PUT commit) */
+#define ST_WHY_LOOP 6u                          /* a loop slot (cr_ui.c crl_fl_save / crl_fl_delete) */
+#ifndef ST_NOW_MS
+#define ST_NOW_MS() 0u                          /* (a host test without core.h's clock) */
+#endif
+static uint32_t st_why, st_why_loud;
+static uint32_t st_last_why, st_last_obj, st_last_ms, st_auto_loud;
+static void st_note(uint32_t obj, uint32_t why)   /* an erase of obj (0x100 + k: a loop slot) is about to start */
+{
+    st_last_why = why;
+    st_last_obj = obj;
+    st_last_ms = ST_NOW_MS() | 1u;              /* (0: none yet) */
+    if (st_why_loud && (why == ST_WHY_AUTO_OPT || why == ST_WHY_AUTO_FAV))
+        st_auto_loud++;
+}
 
 static uint32_t st_crc32(const void *p, uint32_t n)   /* zlib CRC-32, 4 bits per step */
 {
@@ -164,6 +187,7 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
     base = st_sector(obj, cur == 0 ? 1u : 0u);       /* write the other copy */
     for (off = 0; off < len; off++)
         st_buf[off] = ((const uint8_t *)src)[off];    /* the driver wants RAM sources */
+    st_note(obj, st_why);
     if ((rc = st_erase(base)) != 0)
         return rc;
     for (off = 0; off < len; off += 256u) {

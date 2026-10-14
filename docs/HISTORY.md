@@ -2415,3 +2415,35 @@ eight-note voicings on four programs, the same with a P5 bass (two voices of the
 under eight: the chord first), a UNISON lead and a UNISON bass key with one core and with two, and "before" files
 at 3y45's level. The package for the unit, all 200 (`build/scratch/p5-fav/choralroot-p5-j-all200.fwsc`): 610 313 B,
 sha256 f36320a724f2eeb5...aa996753 (XIP 528 996 B, 92.2 %).
+
+3y48. **A read never writes flash; who erased and when, in `--debug`** (branch p5-k from 81fac18, not pushed). The
+owner, recording an arp on P5 program 20 WATERY PLUCK into Ableton over USB, heard three stutters about 0.1 s apart:
+"I did not do anything around then, I marked favorite maybe 30 seconds earlier. So not sure why it wrote to flash."
+The reading: `flash_erases` 3, `saves_settings` 1, `saves_session` 1, `irq_gap_us` 17 767 at 0x02016216, `stale_halves`
+15. **The PC** is `st_erase` (storage_hw.c), the instruction after the `sti` that follows `fl_erase4k_ram`: an erase
+with the interrupts off; its only callers are `st_save` (storage.c) and the loop slot writer (cr_ui.c `crl_fl_save`
+/ `crl_fl_delete`) and the CZ-1 store / slice store sectors. **The cause found**: a backup's LIST (`crb_list`)
+called `cr_settings_save` first, which wrote a pending Option or mark at once, whatever sounded: `tools/fm1_install.py
+--favorites` and every backup start with LIST. In the emulator (`cr_favs_arp_list.txt`: an arp latched, a mark made
+while it plays, LIST and the debug reads in the middle) 81fac18's LIST made **two** erases into the arp (the
+settings object and the favourites); with the fix none, and the poll writes the mark after the arp stops (one
+erase). **`crs_sounding` was not the hole**: P5's voices on core 1 and the bass stack are `trk[].v[]` slots
+(`cr_parts_busy` counts them), an arp's held voice is a used engine voice (`cr_snap.voices`), and the scope is the
+master output; it now also counts an arp or perform pattern stepping (`cr_snap.perf_step`, belt and braces; not
+`latching`, which is LOCK's mode with or without keys). **What the reading alone says** (by inference: no times were
+logged): `saves_session` 1 can only come from `cr_settings_commit` (SAVE held, or Reset Settings), which writes the
+settings, the session and the marks back to back (three erases, each about 18 ms, the programming and the read-back
+between them: about 0.1 s apart); a LIST into a pending mark gives one or two. Which it was on the unit cannot be
+told from that reading; the new counters can tell next time. **Fix**: LIST lists the Options as last written and the
+favourites from RAM when a mark is pending (`crb_favram`, `CRB_COPY_RAM`; GET serves the same bytes); nothing in
+LIST, GET, INFO, 73, 78 or 79 writes. **Counters** (78 PEAK 46..53, docs/FX.md): `erases_auto_sounding`,
+`last_erase_why` (ST_WHY_*), `last_erase_obj`, `last_erase_ms`, `irq_gap_ms`, `ua_arm_gap_max_ms`,
+`ua_cap_reset_ms`, `uptime_ms`. Peaks and totals: PEAK's ISR values, `stale_halves`, `irq_gap_us/pc/ms`, the shed's
+and P5's are cleared by the 78 read; `flash_erases`, `flash_holes`, `saves_*`, the 73 DEBUG and 79 USB values (the
+USB ones: `ua_missed_frames`, `ua_poll_max_us`, `ua_arm_gap_max_us`, `ua_armed_frame_dup`, nudges, packet counts) are
+since power-on. Tests: cr_backup_test (the reads leave the erase count and the pending mark alone, LIST/GET from RAM
+then from flash with the same bytes; crs_sounding with a P5 voice in core 1's slots, a P5 bass voice, an arp between
+steps, a queued note; a mark through a minute of sound not written, written after `CRS_IDLE_MS` of quiet, last
+writer the favourites' poll); test_cr.sh `cr_favs_arp_list`. Not tested: P5 program 20 itself in the emulator (the
+script plays FM6 TINE EP), anything on the unit. p5-g (e31c096) appends other values to PEAK on its own list:
+merge by name.

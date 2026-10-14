@@ -37,8 +37,8 @@
  *   rest stays free (storage.c's map); slot 3's the loops.
  *
  * Reads come from flash (the current copy of each A/B pair, checked at LIST) in 256-byte st_read windows: no RAM
- * copy, the audio keeps running (a loop may play). LIST first saves a pending Options change (cr_settings_save,
- * not while a loop plays). Writes are staged in cr_ui.c's cu_loop_buf (the largest object, a loop record, fits;
+ * copy, the audio keeps running (a loop may play). A read never writes flash (3y48): LIST lists the Options as last
+ * written and the favourites from RAM when a mark is not written yet. Writes are staged in cr_ui.c's cu_loop_buf (the largest object, a loop record, fits;
  * cu_loop_gen tells when the UI reused it: rc 5) and validated whole before one commit through storage.c's
  * protocol (st_save: the other copy, the header last; a loop: crl_fl_save, the same protocol): a torn write leaves
  * the previous copy. A begin or a commit while a loop plays, records or a slot load is on its way answers rc 3
@@ -106,6 +106,10 @@ static struct {
                                                       * when the host was seen to have it */
     uint32_t stub;                                   /* 77 STUB: the request the restart leaves for the stub */
 } crb;
+#define CRB_COPY_RAM 2                               /* crb.copy: served from RAM (the favourites not yet written) */
+#if defined(CR_FAVS) && CRF_FLASH
+static uint8_t crb_favram[CRF_PACK_MAX];             /* .. their packed bytes at LIST */
+#endif
 
 /* ------------------------------------------------------------------ the reply --- */
 #define CRB_OUT st_buf                               /* the reply (<= 400 bytes, written after any storage call) .. */
@@ -246,15 +250,22 @@ static void crb_list(void)
 {
     uint32_t i, crc[CRB_N];
     st_hdr_t h;
-#if CR_HAVE_SETTINGS
-    if (crs_loaded && !CR_SETTINGS_BUSY())
-        cr_settings_save();                          /* an Option not yet saved goes in first (none: no erase). The
-                                                      * manual settings and the session: as last saved (SAVE held), 0.18 */
-#endif
+    /* 3y48: a READ never writes flash (the owner, 2026-10-13, a stutter while an arp played: "I did not do anything
+     * around then ... So not sure why it wrote to flash"; until 3y48 LIST called cr_settings_save, which erased for a
+     * pending Option or favourite whatever sounded). The Options: as last written (the poll writes a change once
+     * nothing sounds); the favourites not yet written: their RAM form (crb_favram, CRB_COPY_RAM) */
     for (i = 0; i < CRB_N; i++) {
         uint32_t id = CRB_IDS[i];
         crb.copy[i] = -1;
         crb.size[i] = crc[i] = 0;
+#if defined(CR_FAVS) && CRF_FLASH
+        if (id == CRB_FAVS && crf_dirty && !ST_BLOCKED()) {
+            crb.copy[i] = CRB_COPY_RAM;
+            crb.size[i] = crf_pack(crb_favram);
+            crc[i] = st_crc32(crb_favram, crb.size[i]);
+            continue;
+        }
+#endif
         if (flash_ok && (crb.copy[i] = (int8_t)crb_current(id, &h)) >= 0) {
             crb.size[i] = h.len;
             crc[i] = h.crc;
@@ -281,6 +292,14 @@ static void crb_get(const uint8_t *a, uint32_t n)
         rc = 5;
     else if (n != 8u || a[5] > 15u || i < 0 || !count || count > 256u || off > crb.size[i] || count > crb.size[i] - off)
         rc = 1;
+#if defined(CR_FAVS) && CRF_FLASH
+    else if (crb.copy[i] == CRB_COPY_RAM) {          /* the marks as LIST packed them (RAM) */
+        uint32_t j;
+        for (j = 0; j < count; j++)
+            CRB_DATA[j] = crb_favram[off + j];
+        rc = 0;
+    }
+#endif
     else
         rc = st_read(crb_sector(a[0], (uint32_t)crb.copy[i]) + ST_PAYLOAD_OFF + off, CRB_DATA, count) ? 4u : 0u;
     crb_b(n ? a[0] : 127u);
@@ -544,7 +563,9 @@ static uint32_t crb_put(const uint8_t *a, uint32_t n)
             return 1;
         if (crb_busy())
             return 3;                                /* (the session stays: the page sends the commit again) */
+        st_why = ST_WHY_PUT;
         rc = crb_commit();
+        st_why = ST_WHY_OTHER;
         crb.put = rc == 3u;
         return rc;
     }
@@ -702,7 +723,7 @@ static void crb_debug(void)
  * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[48], k = 0, i;
+    uint32_t v[56], k = 0, i;
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -763,6 +784,25 @@ static void crb_peak(void)
     v[k++] = 0;
 #endif
     cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = 0;
+    /* 3y48, values 46..53 (the owner's stutter on P5 with an arp, 2026-10-13: "So not sure why it wrote to flash"):
+     * since power-on, never cleared: automatic erases (the Options' or favourites' poll) that started while something
+     * sounded in the second before (the rule: 0), the latest erase's writer (storage_hw.c ST_WHY_*), its object
+     * (storage.c OBJ_*, 0x100 + k a loop slot) and its time (fm1_ms; 0 none); then the time of irq_gap_us (value 28,
+     * a peak: cleared with it), of ua_arm_gap_max_us (since power-on) and of the latest capture under- or overrun
+     * (79 DEBUG's ua_underruns / ua_overruns: the USB stream restarted, a gap the host hears) */
+    v[k++] = st_auto_loud;
+    v[k++] = st_last_why;
+    v[k++] = st_last_obj;
+    v[k++] = st_last_ms;
+    v[k++] = cr_dbg.pk_t5gap_ms;
+#if FELUCCA_UAC
+    v[k++] = ua_dbg.arm_gap_ms;
+    v[k++] = ua.cap_reset_ms;
+#else
+    v[k++] = 0;
+    v[k++] = 0;
+#endif
+    v[k++] = fm1_ms;                                 /* (the clock the times above are on) */
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

@@ -116,8 +116,20 @@ open. The automatic write keeps main's rule: never while anything sounds above t
 
 **Power-on**: as the last global save left it, plus the Options as they were when the unit was last quiet. Never
 saved: the defaults. **Migration**: none; what a 0.17 unit or an earlier 0.18 build stored is "the last save".
-`cr_settings_save` (Felucca's `settings_save`: the power-on calibration, a backup's LIST, the update gesture) is the
-automatic part alone: neither a backup nor the update gesture is a global save.
+`cr_settings_save` (Felucca's `settings_save`: the power-on calibration, the update gesture) is the automatic part
+alone: the update gesture is not a global save.
+
+**When automatic writes happen (3y48)**: only from `cr_settings_poll` (the Options) and `crf_poll` (the favourites),
+once nothing changed for `CRS_QUIET_MS` (1.5 s) AND nothing sounded for `CRS_IDLE_MS` (1 s; `crs_sounding`: a voice
+of either part, P5's on either core and the bass stack included, the engine's voices and queued notes, an arp or
+perform pattern stepping, the master output above -60 dBFS), at least `CSS_GAP_MS` after the last write, never while
+a loop plays or records. **A read never writes flash**: a backup's LIST and GET, `--favorites`, `--debug` (73 DEBUG,
+78 PEAK, 79 USB) and INFO only read. Until 3y48 LIST called `cr_settings_save` first, which erased for a pending
+Option or mark whatever sounded (the owner's stutter under an arp; the emulator reproduced two erases from one LIST).
+Now LIST lists the Options as last written (a change not yet written is in the next backup after the unit was quiet)
+and the favourites from RAM when a mark is not written yet (`crb_favram`: the bytes `crf_pack` gives; GET serves
+them; a restore of them writes as any PUT does). 78 PEAK's `erases_auto_sounding` (the rule: 0) and `last_erase_why`
+/ `last_erase_obj` / `last_erase_ms` say who wrote last (docs/FX.md).
 
 ## Where it lives
 
@@ -468,7 +480,8 @@ the favourites filter's Off / On, which Options > Reset Settings therefore leave
 format and the keys). It is AUTOMATIC in the sense of [Manual and automatic](#manual-and-automatic-018): `crf_poll`
 (called from `cr_settings_poll`) writes a changed mark once no mark changed for `CRS_QUIET_MS` and nothing sounded for
 `CRS_IDLE_MS`, never while a loop plays or after a restore, and `cr_settings_commit` (SAVE held) and
-`cr_settings_save` (a backup's LIST, the update gesture) write a pending one at once. GLO + SAVE (revert) does not
+`cr_settings_save` (the calibration, the update gesture) write a pending one at once; a backup's LIST does not (3y48:
+it lists the pending marks from RAM). GLO + SAVE (revert) does not
 touch the marks; Options > Reset Settings does not either. It IS a backup object (id 23), unlike the session: marks
 are something you keep. SAFE MODE neither reads nor writes it; Flash Data erases it. Wear: one sector erase a write,
 the two copies in turn; a mark is rare.
@@ -537,7 +550,7 @@ Never reorder or remove a field. A retired field stays in place, unused.
 | `cr_settings_boot()` | `persist_boot` (cr_shim.c), the emulator's `emu_fw_init` | the flash object → Felucca's fields (panel table, palette, HOLD, LEDs) + the block; the USB settings to `usb.c` (`ua_off`) and `fx.c` (`fx_usb_fixed`) through `crs_usb_apply`, before `usb_start` builds the configuration the computer first reads |
 | `cr_settings_load()` | the end of `cr_ui_init` (**patch below**); the emulator calls it after `cr_ui_init` until then | the block → engine (IRQ off), `cr_route`, the UI mirror `cs`, motion, palette, the sounds, tempo |
 | `cr_settings_poll()` | every frame (`main.c` `settings_poll` → cr_shim.c; the emulator's `emu_fw_frame`) | captures the state (the block, and Felucca's HOLD beside it: `crs_hold_seen`, below); a change **of an automatic field** (`cr_settings_auto`; a manual one alone starts nothing) is written, as flash's block with the automatic fields of now, once nothing changed for 1.5 s and nothing has sounded for 1 s (no voice of the parts, no chord held or latched, no scheduled note, the master output under -60 dBFS: a flash erase stops the audio for ~45 ms, docs/INTEGRATION.md Performance), never while a loop plays (`CR_SETTINGS_BUSY()`), retried 1 s after a flash error, and skipped when the bytes are unchanged |
-| `cr_settings_save()` | `settings_save` (cr_shim.c): the power-on calibration; a backup's LIST; the update gesture | the automatic part now |
+| `cr_settings_save()` | `settings_save` (cr_shim.c): the power-on calibration; the update gesture (not a backup's LIST since 3y48) | the automatic part now |
 | `cr_settings_commit()` | `cr_ui.c cu_gsave_now` (SAVE held), `cr_settings_reset` | the global save: the whole block and the session, now; 0, or -1 on a flash error |
 | `cr_settings_revert()` | `cr_ui.c cu_revert` (GLO + SAVE) | flash's block (the Options of now over it) and flash's session applied as at power-on |
 | `cr_settings_reset()` | Options > Reset Settings, OCT+ twice (`cr_ui.c cu_reset`) | the defaults: into the block (`cr_settings_factory`), applied (the default sounds, `cr_settings_load` again), saved; 0.18: the session with it (the parts' own parameters, the FX parameters and the effect picked back to `cr_ui_init`'s), so what is saved is a new unit's session |

@@ -361,6 +361,13 @@ installed on the owner's Mac.
     three chord voices under a P5 bass (`-DP5_ONE_POOL=5`: four and one); two cores, no bass voice under eight
     chord keys (`-DP5_BASS_KEEP=1`); the level. **Not done**: a real hang of core 1's start on a unit (the boot
     after a failed one comes up on one core: host-tested only); `FELUCCA_PROPHET=0`'s image against a773d30's.
+34. **A read never writes flash; who erased, and when (HISTORY 3y48; docs/SETTINGS.md "When automatic writes
+    happen")**: a backup's LIST no longer calls `cr_settings_save` (it erased for a pending Option or mark whatever
+    sounded: in the emulator one LIST during an arp made two erases); LIST serves unwritten marks from RAM. 78 PEAK
+    46..53 (docs/FX.md): `erases_auto_sounding` (the rule 0), the last erase's writer / object / time, the times of
+    `irq_gap_us`, `ua_arm_gap_max_us`, the last USB capture under/overrun, the clock. **To read on the unit**: the next
+    stutter's `--debug` gives the times; a stutter with none of them near it is not the device's. Branch p5-k, not
+    pushed; p5-g (e31c096) also appends to PEAK (values 35..38 on its own list): merge by name.
 
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 

@@ -75,6 +75,7 @@ typedef struct {
     uint32_t stale;                  /* halves in which the DAC played something old: a boundary nobody served (the
                                       * ISR more than a half behind) or a half finished after the DAC had reached
                                       * its last block. THE AUDIBLE ONES; a half that is merely late is not */
+    uint32_t pk_t5gap_ms;                  /* 3y48: fm1_ms when the largest gap ended (cleared with it) */
     uint32_t t5_last, pk_t5gap, pk_t5pc;   /* TIMER5's largest gap between two entries (100 us when nothing masks
                                       * the interrupts) and where it came back to after it (main.c) */
     /* WHAT THE OVERLOAD SHED DID since the last 78 PEAK read (3y44; audio.c shed_check / shed_voice, cr_backup.c
@@ -502,12 +503,13 @@ static uint32_t cr_prof_entry(uint32_t t0, uint32_t per)
 /* main.c, TIMER5's entry (10 kHz, above everything but a fault): the gap since the last one. 100 us, unless the
  * interrupts were masked: then the gap is the masked stretch (to the tick: +-100 us) and pc where it ended (the
  * instruction after the sti: build/choralroot.dis names the section) */
-static inline void cr_prof_t5(uint32_t t0, uint32_t pc)
+static inline void cr_prof_t5(uint32_t t0, uint32_t pc, uint32_t ms)
 {
     uint32_t gap = t0 - cr_dbg.t5_last;
     if (cr_dbg.t5_last && gap > cr_dbg.pk_t5gap) {
         cr_dbg.pk_t5gap = gap;
         cr_dbg.pk_t5pc = pc;
+        cr_dbg.pk_t5gap_ms = ms | 1u;
     }
     cr_dbg.t5_last = t0 | 1u;                            /* (never 0: "no entry yet") */
 }
@@ -523,7 +525,7 @@ static void cr_prof_clear(void)
         cr_dbg.x_sum[k] = 0;
     }
     cr_dbg.pk_all = cr_dbg.pk_n = cr_dbg.late_n = cr_dbg.late_stage = cr_dbg.late_us = cr_dbg.x_busy = 0;
-    cr_dbg.pk_lat = cr_dbg.pk_wall = cr_dbg.pk_t5 = cr_dbg.stale = cr_dbg.pk_t5gap = cr_dbg.pk_t5pc = 0;
+    cr_dbg.pk_lat = cr_dbg.pk_wall = cr_dbg.pk_t5 = cr_dbg.stale = cr_dbg.pk_t5gap = cr_dbg.pk_t5pc = cr_dbg.pk_t5gap_ms = 0;
 }
 static void cr_prof_window(void)
 {
@@ -547,7 +549,7 @@ static void cr_prof_window(void)
 #define cr_prof_half() ((void)0)
 #define cr_prof_whole(us, late, all, t5, per) ((void)0)
 #define cr_prof_entry(t0, per) 0u
-#define cr_prof_t5(t0, pc) ((void)0)
+#define cr_prof_t5(t0, pc, ms) ((void)0)
 #define cr_prof_window() ((void)0)
 #define cr_c1_boot() ((void)0)
 #define cr_c1_power_on(safe, counted) ((void)0)
