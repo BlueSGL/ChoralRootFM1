@@ -148,7 +148,7 @@ function sndBlob(m, kind, slot) {        // the slot's blob in the store of that
   const p = sndPlace(kind, slot), b = m.get(p.id);
   if (!sndStoreOk(kind, b, p.half) || !(sndView(b).getUint32(sndUsedOff(kind), true) >>> p.bit & 1)) return null;
   const d = b.subarray(p.off, p.off + STORE_PATCH[kind]);
-  return kind === "quad" ? quadToV4(d) : d;   // (FM TONE: the store's version 1..3 as version 4)
+  return kind === "quad" ? quadToV4(d) : d;   // (FM TONE: the store's version 1..4 as version 5)
 }
 const sndDecodeName = (r) => { let s = ""; for (let i = 4; i < 4 + SND_NAME && r[i]; i++) s += String.fromCharCode(r[i]); return s; };
 export const nameValid = (name) => typeof name === "string" && /^[\x20-\x7e]{1,12}$/.test(name);
@@ -222,10 +222,12 @@ export function readSoundFile(file) {
     patch = sndUnB64(file.patch.data, "patch");
     if (kind === "quad" && patch.length === STORE_PATCH.quad && patch[0] === 0x51 && patch[1] >= 1 && patch[1] <= 3)
       patch = quadToV4(patch);              // (an FM TONE sound file of before 2026-10-14: converted, best effort)
+    if (kind === "quad" && patch.length === PATCH_SIZE.quad && patch[0] === 0x51 && patch[1] === 4)
+      patch = quadToV4(patch);              // (version 4, 3y61's: as version 5, the owner's corrections)
     if (patch.length !== PATCH_SIZE[kind]) throw new Error(`The sound file's ${kind} patch is ${patch.length} bytes, not ${PATCH_SIZE[kind]}`);
     if (kind === "va" && (patch[0] !== 0x56 || patch[1] < 1 || patch[1] > 3)) throw new Error("The sound file's VA patch is not a VA patch (magic or version)");
     if (kind === "fm6" && (patch[112] !== 0x46 || patch[113] !== 1)) throw new Error("The sound file's FM6 patch is not an FM6 patch (magic)");
-    if (kind === "quad" && (patch[0] !== 0x51 || patch[1] < 1 || patch[1] > 4)) throw new Error("The sound file's FM TONE patch is not an FM TONE patch (magic or version)");
+    if (kind === "quad" && (patch[0] !== 0x51 || patch[1] < 1 || patch[1] > 5)) throw new Error("The sound file's FM TONE patch is not an FM TONE patch (magic or version)");
   }
   return { record, name, engine, engineName: ENGINE_NAMES[engine], kind, patch };
 }

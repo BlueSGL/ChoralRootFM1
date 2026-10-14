@@ -230,10 +230,11 @@ assert ND == 58
 FBOP = [1, 3, 1, 3, 2, 1, 1, 2]
 
 
-# version 4 (2026-10-14, the Digitone's ranges): these values in hundredths (eng_quad.c quad_hires), FDBK 0..127. The
-# patches above are written in version 3's units (RNG); to_v4 converts them as eng_quad.c quad_v4_of_v3 does, and the
-# model runs on version 4's
-HIRES = ["HARM", "DTUN", "FREQ", "RESO", "FDEPTH", "BASE", "EREL", "LEVEL"] + \
+# version 5 (2026-10-14, the owner's corrections to version 4, the Digitone's ranges): these values in hundredths
+# (eng_quad.c quad_hires; FREQ DTUN RESO BASE top 127.00), FDBK 0..127; AMP DEC / REL 0..126 + INF (127) and LEVEL
+# whole numbers. The patches above are written in version 3's units (RNG); to_v4 converts them as eng_quad.c does, and
+# the model runs on version 5's
+HIRES = ["HARM", "DTUN", "FREQ", "RESO", "FDEPTH", "BASE"] + \
     ["L%d%s" % (k, f) for k in range(3) for f in ("SPEED", "DEPTH")]
 
 
@@ -592,15 +593,15 @@ class Voice:
                 x = 1 << 24
                 self.stage[k] = 3
         elif st == 3:
-            x += mulq16(sus - x, ENV_EXP[dec & 127])
+            if not (k == 3 and dec >= 127):      # AMP DEC 127 = INF: the level held
+                x += mulq16(sus - x, ENV_EXP[dec & 127])
         elif st == 4 or st == 5:
-            if rel >= 12700:                     # REL (hundredths) 127.00 = INF: the level held (stage 5)
+            if rel >= 127:                       # REL 127 = INF: the level held (stage 5)
                 self.stage[k] = 5
                 self.env[k] = x
                 return x >> 9
             self.stage[k] = 4
-            r0 = rel // 100
-            x -= mulq16(x, ENV_EXP[r0] + cdiv((ENV_EXP[r0 + 1] - ENV_EXP[r0]) * (rel % 100), 100))
+            x -= mulq16(x, ENV_EXP[rel])
             if x < (1 << 12):
                 x = 0
                 self.stage[k] = 0
@@ -693,14 +694,14 @@ class Voice:
                            m2("BEND", "BEND", "ABEND", 127, 0, 127) << 17, 0, m2("BDLY", "BDLY", "ABDLY", 127, 0, 127),
                            1, 0)
         eF = self.env_tick(2, mv("FATK", "FATK", 127, 0, 127), mv("FDEC", "FDEC", 127, 0, 127),
-                           mv("FSUS", "FSUS", 127, 0, 127) << 17, mv("FREL", "FREL", 127, 0, 127) * 100,
+                           mv("FSUS", "FSUS", 127, 0, 127) << 17, mv("FREL", "FREL", 127, 0, 127),
                            mv("FDLY", "FDLY", 127, 0, 127), self.gate, 1)
         eE = self.env_tick(3, mv("EATK", "EATK", 127, 0, 127), mv("EDEC", "EDEC", 127, 0, 127),
-                           mv("ESUS", "ESUS", 127, 0, 127) << 17, mv("EREL", "EREL", 12700, 0, 12799), 0, self.gate, 1)
+                           mv("ESUS", "ESUS", 127, 0, 127) << 17, mv("EREL", "EREL", 127, 0, 127), 0, self.gate, 1)
         if latest:
             self.part.pan = clamp((dst[DEST["PAN"]] * 64) >> 15, -64, 63)
         alg = mv("ALGO", "ALGO", 7, 1, 8)
-        dt = mv("DTUN", "DTUN", 12700, 0, 12799)
+        dt = mv("DTUN", "DTUN", 12700, 0, 12700)
         d0, df = dt // 100, dt % 100
         d1 = d0 + 1 if d0 < 127 else 127
         du = DT_UP[d0] + cdiv((DT_UP[d1] - DT_UP[d0]) * df, 100)
@@ -760,9 +761,9 @@ class Voice:
         l0 = [x << 16 for x in self.lv]
         dl = [((tl[j] << 16) - l0[j]) >> 5 for j in range(3)]
         fdep = mv("FDEPTH", "FENV", 12700, -6400, 6399)
-        cut = (mv("FREQ", "FREQ", 12700, 0, 12799) * 256 + 50) // 100 + cdiv(eF * fdep, 6400) + \
+        cut = (mv("FREQ", "FREQ", 12700, 0, 12700) * 256 + 50) // 100 + cdiv(eF * fdep, 6400) + \
             (((pitch16 - 960) * g("FKTRK") * 150) >> 10)
-        reso = mv("RESO", "RESO", 12700, 0, 12799)
+        reso = mv("RESO", "RESO", 12700, 0, 12700)
         fty = g("FTYPE")
         svf = fty != 0 and not (fty != 2 and cut >= (127 << 8) and not reso)
         kd = 8192 - reso * 3 // 5
@@ -771,7 +772,7 @@ class Voice:
             c1 = quad_svf_coef(cut, kd)
             if fty == 3:
                 c2 = tsvf_coef_k(cut, 8192)
-        base = mv("BASE", "BASE", 12700, 0, 12799)
+        base = mv("BASE", "BASE", 12700, 0, 12700)
         wid = mv("WIDTH", "WIDTH", 127, 0, 127)
 
         def bwk(x):                                        # BW_K at x hundredths, interpolated
@@ -779,8 +780,8 @@ class Voice:
             return BW_K[i] + cdiv((BW_K[i + 1] - BW_K[i]) * (x % 100), 100)
         hpk = bwk(base) / 65536.0 if base else 0.0
         lpk = bwk(base + wid * 100) / 65536.0 if base + wid * 100 < 12700 else 0.0
-        lvl = mv("LEVEL", "LEVEL", 12700, 0, 12799)
-        A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lvl * lvl // 5000)
+        lvl = mv("LEVEL", "LEVEL", 127, 0, 127)
+        A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lvl * lvl * 2)
         A1 = mulq15(A1, 32767)
         A0 = self.amp
         dA = (A1 - A0) >> 5

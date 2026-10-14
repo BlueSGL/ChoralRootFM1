@@ -284,7 +284,7 @@ direction, pattern, rotate, retrigger and hold.
 
 **Acceleration.** `cu_knob` times every detent of each knob (`kn_turn`, the UI clock `fm1_ms`); the gap since the same
 knob's previous detent picks the step from ONE table (`KN_CURVE`), in 64ths of the quickest step, which is the range
-/ 20 rounded (the detent of before 0.22: 6 of 0..127, 5 of 0..99, 10 of FM TONE's ±1.00, 6.40 of a hi-res 0..127.99):
+/ 20 rounded (the detent of before 0.22: 6 of 0..127, 5 of 0..99, 10 of FM TONE's ±1.00, 6.35 of a hi-res 0..127.00):
 
 | gap since the knob's last detent | step |
 |---|---|

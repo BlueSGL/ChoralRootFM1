@@ -951,18 +951,17 @@ echo "FM TONE's hi-res values (hundredths, F_FIX2) under knob acceleration and O
 run cr_quad_hires_knobs
 L="$OUT/cr_quad_hires_knobs.log"
 f=$(dv FREQ)
-[ "$f" = "12699 12698 12697 12057 11417 11400 11500 11600 " ] &&
-    ok "FREQ (0.00..127.99): slow detents 0.01 each, quick 6.40 (the range / 20); GLO held: 114.00 115.00 116.00 (whole numbers)" \
-    || bad "FREQ: '$f' (want 12699 12698 12697 12057 11417 11400 11500 11600)"
+[ "$f" = "12699 12698 12697 12062 11427 11400 11500 11600 " ] &&
+    ok "FREQ (0.00..127.00, from its top 127.00): slow detents 0.01 each, quick 6.35 (the range / 20); GLO held: 114.00 115.00 116.00 (whole numbers)" \
+    || bad "FREQ: '$f' (want 12699 12698 12697 12062 11427 11400 11500 11600)"
 s=$(dv SPEED)
 [ "$s" = "800 -800 -1600 -3200 -6400 -6400 -3200 -1600 -800 800 1600 3200 6399 6399 6399 " ] &&
     ok "LFO 1 SPEED (hi-res, min < 0): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
     || bad "SPEED under GLO: '$s'"
 r=$(dv REL)
-[ "$r" = "6201 6202 6842 7482 8122 8762 9402 10042 10682 11322 11962 12602 12799 12700 12600 12700 " ] &&
-    has 'REL 12602 -> 12799 (INF)' "$L" && has 'REL 12799 -> 12700 (INF)' "$L" && has 'REL 12700 -> 12600 (126.00)' "$L" &&
-    has 'REL 12600 -> 12700 (INF)' "$L" &&
-    ok "AMP REL: 0.01 slow, 6.40 quick to the end (INF); GLO held: 127.00 (INF), 126.00 (a number), 127.00 (INF): $OUT/cr_quad_hires_rel.ppm" \
+[ "$r" = "63 64 70 76 82 88 94 100 106 112 118 124 127 112 96 112 " ] &&
+    has 'REL 124 -> 127 (INF)' "$L" && has 'REL 127 -> 112 (112)' "$L" && has 'REL 96 -> 112 (112)' "$L" &&
+    ok "AMP REL (0..126 + INF, an integer since version 5): 1 slow, 6 quick to the end (127: INF); GLO held: the 16 grid 112 96, back 112: $OUT/cr_quad_hires_rel.ppm" \
     || bad "AMP REL: '$r'"
 
 echo "EDIT held: the engine picker as a preview (cancel / keep), its roots, PRESETS in the editor"
@@ -2461,8 +2460,8 @@ silent_end cr_quad_ratiob
 echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 61 decays; PANIC ends a held one"
 run cr_quad_inf --wav "$OUT/cr_quad_inf.wav"
 QL="$OUT/cr_quad_inf.log"
-has '^deep: part 0 page 12 AMP col 3 REL 6200 -> 12799 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 12799 -> 5759 (57.59)' "$QL" &&
-    ok "AMP: KNOB 4 to the top shows INF, back down a number (57.59: AMP REL in hundredths, F_FIX2; the script's \"knobs quick\": 6.40 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
+has '^deep: part 0 page 12 AMP col 3 REL 62 -> 127 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 127 -> 61 (61)' "$QL" &&
+    ok "AMP: KNOB 4 to the top shows INF, back down a number (61: AMP REL 0..126 + INF, F_INTI; the script's \"knobs quick\": 6 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
     bad "AMP REL INF text: $(grep '^deep:' "$QL" | head -2 | tr '\n' ' ')"
 qv() { grep "part 0:" "$QL" | sed -n "${1}p" | sed -n 's/.*voices \([0-9]*\),.*/\1/p'; }
 [ "$(qv 1)" = 1 ] && [ "$(qv 2)" = 0 ] && [ "$(qv 3)" = 1 ] && [ "$(qv 4)" = 0 ] &&

@@ -404,11 +404,11 @@ imported).
 | 134 | ENV depth (hi-res, 64 = 0) | **verified** | FILTER DEPTH 1:1 (hundredths) |
 | 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC REL by the time curve (DEC 71 is a measured point), SUS direct (DEC INF: SUS 127, a note; REL INF stays 127) |
 | 144 / 146 | BASE (hi-res) / WIDTH | slot | BASE 1:1 (hundredths) / WIDTH |
-| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC by the time curve, SUS direct (DEC INF: SUS 127, a note) |
-| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL by the time curve on the hi-res value, kept in hundredths (10.13 is a measured point; 127 INF = 127.00) |
+| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC by the time curve (below INF at most 126), SUS direct; DEC INF -> AMP DEC 127 = FM TONE's INF (version 5: the level held, no decay; until then SUS 127 and a note) |
+| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL by the time curve on the hi-res value, rounded to a whole number (version 5) but at most 126 below 127.00 (10.13 is a measured point); 127.xx INF = 127 |
 | 156 | DRIVE (hi-res) | **verified** | the record's DRIVE (P_DIST), rounded |
 | 158 | PAN (0 = L64, 64 = 0, 127 = R63) | **verified** | the record's PAN (P_PAN) |
-| 160 | VOL (hi-res; init 110) | **verified** | LEVEL 1:1 (hundredths) |
+| 160 | VOL (hi-res; init 110) | **verified** | LEVEL 1:1, rounded to a whole number (version 5: 110.40 -> 110) |
 | 162 / 164 / 166 | REVERB / DELAY / CHORUS send (hi-res) | **verified** | not imported (a note when not 0) |
 | 168 | AENR (version 5: 1 on, 0 off; version 1 holds 0..15: something else) | **verified** (version 5) | none (a note when off) |
 | 174..180 | RATIO OFFSET C, A, B1, B2 (hi-res, 64 = 0; version 5) | slot (the scale not proved: +-64 read as +-1.00) | OFS C A B1 B2 (a note when not 0) |

@@ -95,11 +95,13 @@ static void t_preset3(uint32_t k, int16_t *p)
 }
 #define quad_init_patch t_init3
 #define quad_preset_patch t_preset3
+/* a version-3 value -> the engine's (version 5: through version 4's, as an old blob's) */
+static int32_t v5_of_v3(uint32_t i, int32_t v) { return quad_clampv(i, quad_v5_of_v4(i, quad_v4_of_v3(i, v))); }
 static void to_v4(const int16_t *p, int16_t *q)
 {
     uint32_t i;
     for (i = 0; i < QP_NP; i++)
-        q[i] = quad_clampv(i, quad_v4_of_v3(i, p[i]));
+        q[i] = (int16_t)v5_of_v3(i, p[i]);
 }
 static void drv_patch4(track_t *t, const int16_t *p)
 {
@@ -216,7 +218,7 @@ static void t_blob(void)
     for (i = 0; i < QP_NP; i++)
         nh += (uint32_t)quad_hires(i);
     CHECK(QUAD_DEEP.blob_size == QUAD_BLOB && QUAD_BLOB == 96u && QUAD_BLOB_V3 == 80u && QP_NP == 73 &&
-              nh == QUAD_NHIRES && QUAD_V4_LEN == 89u && v4_off(QP_NP) == QUAD_V4_LEN && QUAD_VER == 4u,
+              nh == QUAD_NHIRES && nh == 12u && QUAD_V5_LEN == 87u && v4_off(QP_NP) == QUAD_V5_LEN && QUAD_VER == 5u,
           "blob %u bytes, %d values, %u hi-res", QUAD_DEEP.blob_size, QP_NP, nh);
     for (n = 0; n < 2000u; n++) {
         rnd_patch(p);
@@ -225,8 +227,8 @@ static void t_blob(void)
         CHECK(quad_unpack(b, q) == 1 && !memcmp(p, q, QP_NP * sizeof(int16_t)), "random patch %u: round trip differs", n);
         quad_pack(q, b2);
         CHECK(!memcmp(b, b2, QUAD_BLOB), "random patch %u: blob round trip differs", n);
-        CHECK(b[0] == 'Q' && b[1] == 4u, "magic / version");
-        for (i = QUAD_V4_LEN; i < QUAD_BLOB; i++)
+        CHECK(b[0] == 'Q' && b[1] == 5u, "magic / version");
+        for (i = QUAD_V5_LEN; i < QUAD_BLOB; i++)
             CHECK(!b[i], "padding byte %u not 0", i);
     }
     for (w = 0; w < 3u; w++) {                   /* every value at its min, its max, its default */
@@ -286,7 +288,7 @@ static void t_blob(void)
         p[QP_LFO(1, QL_SPEED)] = -64, p[QP_LFO(2, QL_DEPTH)] = 63, p[QP_FDEPTH] = -64, p[QP_MIX] = -64;
         pack_v3(p, b);
         CHECK(quad_unpack(b, q) == 1 && q[QP_HARM] == -1900 && q[QP_DTUN] == 12700 && q[QP_FDBK] == 127 &&
-                  q[QP_FREQ] == 4200 && q[QP_EREL] == 12700 && q[QP_LEVEL] == 10000 && q[QP_LFO(1, QL_SPEED)] == -6400 &&
+                  q[QP_FREQ] == 4200 && q[QP_EREL] == 127 && q[QP_LEVEL] == 100 && q[QP_LFO(1, QL_SPEED)] == -6400 &&
                   q[QP_LFO(2, QL_DEPTH)] == 6300 && q[QP_FDEPTH] == -6400 && q[QP_MIX] == -64,
               "v3: the values carried over (HARM %d FDBK %d)", q[QP_HARM], q[QP_FDBK]);
         b[2 + QP_FDBK] = 121;                    /* past version 3's FDBK */
@@ -493,16 +495,16 @@ static void t_presets(void)
         quad_blob_get(t, b);
         CHECK(quad_blob_ok(b), "%s: blob not valid", pr->name);
         for (i = 0; i < 8u; i++) {               /* (the tables in version 3's units, the patch version 4's) */
-            int32_t w = quad_v4_of_v3(QUAD_MAC[i], pr->e[i]);
+            int32_t w = v5_of_v3(QUAD_MAC[i], pr->e[i]);
             CHECK(quad_patch[0][QUAD_MAC[i]] == w && t->p[P_E0 + i] == quad_mac_val(i, w), "%s: macro %u patch %d preset %d",
                   pr->name, i, quad_patch[0][QUAD_MAC[i]], pr->e[i]);
         }
         CHECK(quad_patch[0][QP_EATK] == pr->env[0] && quad_patch[0][QP_EDEC] == pr->env[1] &&
-                  quad_patch[0][QP_ESUS] == pr->env[2] && quad_patch[0][QP_EREL] == pr->env[3] * 100,
+                  quad_patch[0][QP_ESUS] == pr->env[2] && quad_patch[0][QP_EREL] == pr->env[3],
               "%s: preset_t.env is not the amp envelope", pr->name);
         for (i = 0; QUAD_PRESET_EDITS[k][i] != 0xFFu; i += 2)
             CHECK(QUAD_PRESET_EDITS[k][i] < QP_NP && quad_patch[0][QUAD_PRESET_EDITS[k][i]] ==
-                      quad_v4_of_v3(QUAD_PRESET_EDITS[k][i], (int8_t)QUAD_PRESET_EDITS[k][i + 1]),
+                      v5_of_v3(QUAD_PRESET_EDITS[k][i], (int8_t)QUAD_PRESET_EDITS[k][i + 1]),
                   "%s: edit %u out of range", pr->name, i / 2);
         {   /* the conversion of the version-3 preset (best effort): valid, every value in range, not the init patch */
             int16_t i4[QP_NP];
@@ -653,7 +655,7 @@ static void t_ratio_b(void)
                     CHECK(q[j] == e[j], "v1 %u: value %u %d, want %d", k, j, q[j], e[j]);
             quad_blob_set(t, b);                 /* -> the patch, the macro B2; blob_get writes version 3 */
             quad_blob_get(t, b);
-            CHECK(t->p[P_E3] == V1[k].b2 && b[1] == 4u && quad_blob_ok(b), "v1 %u: blob_set / get", k);
+            CHECK(t->p[P_E3] == V1[k].b2 && b[1] == QUAD_VER && quad_blob_ok(b), "v1 %u: blob_set / get", k);
         }
         rnd_patch_v2(p);
         pack_v2(p, b, 1u);
@@ -1011,11 +1013,11 @@ static void t_rel_inf(void)
                   f0, f1, quad_vs[0][0].stage[2]);
             CHECK(sqrt(sq / CTL) > 100.0, "REL INF: silent 2 s after the note-off (RMS %.1f)", sqrt(sq / CTL));
             CHECK(ENG_QUAD.endless == quad_endless && quad_endless(t, &t->v[0]), "REL INF: not endless (the panic would not end it)");
-            quad_patch[0][QP_EREL] = 6000;         /* REL turned down from INF: it decays and ends */
+            quad_patch[0][QP_EREL] = 60;           /* REL turned down from INF: it decays and ends */
             for (n = 0; n < 4u * FS / CTL && drv_tick(t, out); n++)
                 ;
             CHECK(!t->v[0].active && !quad_vs[0][0].live, "REL INF -> 60: the held voice did not end");
-            quad_patch[0][QP_EREL] = 12700;      /* held again; a retrigger (the part's own steal) restarts it */
+            quad_patch[0][QP_EREL] = 127;        /* held again; a retrigger (the part's own steal) restarts it */
             drv_on(t, 0, 60, 100);
             for (n = 0; n < FS / 4u / CTL; n++)
                 drv_tick(t, out);
@@ -2139,24 +2141,23 @@ static void t_dests(void)
         quad_init_patch(p);
         p[QP_LFO(1, QL_DEST)] = QD_FDLY;
         quad_pack(p, b);
-        CHECK(b[1] == 4u && quad_blob_ok(b) && quad_unpack(b, q) && q[QP_LFO(1, QL_DEST)] == QD_FDLY,
-              "a blob with DEST F DLY: version 4, taken");
+        CHECK(b[1] == QUAD_VER && quad_blob_ok(b) && quad_unpack(b, q) && q[QP_LFO(1, QL_DEST)] == QD_FDLY,
+              "a blob with DEST F DLY: version 5, taken");
         CHECK(b[v4_off(QP_LFO(1, QL_DEST))] > QD_N_V3A - 1u && !old_fw_takes(b), "an older firmware refuses it");
         pack_v3(p, b);
         CHECK(quad_blob_ok(b) && quad_unpack(b, q) && q[QP_LFO(1, QL_DEST)] == QD_FDLY, "a version-3 blob with F DLY");
     }
 }
 
-/* the hi-res values' fine part reaches the sound (version 4): FREQ 42.00 and 42.01 render differently (and closer to
- * each other than 42 and 43), so do DTUNE 30.00 / 30.50, AMP REL 40.00 / 40.50 (the release), BASE, HARM, RESO, LEVEL */
+/* the hi-res values' fine part reaches the sound: FREQ 42.00 and 42.01 render differently (and closer to each other
+ * than 42 and 43), so do DTUNE 30.00 / 30.50, BASE, HARM, RESO (AMP REL and LEVEL: whole numbers since version 5) */
 static void t_fine(void)
 {
     static int32_t a[200 * CTL], b[200 * CTL], c[200 * CTL];
     static const struct { uint8_t i; int16_t v0, v1; const char *what; } F[] = {
         {QP_FREQ, 4200, 4201, "FREQ 42.00 / 42.01"}, {QP_DTUN, 3000, 3050, "DTUNE 30.00 / 30.50"},
         {QP_BASE, 4000, 4050, "BASE 40.00 / 40.50"}, {QP_HARM, -700, -750, "HARM -7.00 / -7.50"},
-        {QP_RESO, 6000, 6050, "RESO 60.00 / 60.50"}, {QP_LEVEL, 10000, 10050, "LEVEL 100.00 / 100.50"},
-        {QP_EREL, 4000, 4050, "AMP REL 40.00 / 40.50"}};
+        {QP_RESO, 6000, 6050, "RESO 60.00 / 60.50"}};
     int16_t p[QP_NP];
     uint32_t k, n;
     for (k = 0; k < NELEM(F); k++) {
@@ -2187,9 +2188,114 @@ static void t_fine(void)
     }
 }
 
+/* version 5 (the owner's corrections, 2026-10-14): the ranges; a version-4 blob converted (FREQ DTUN RESO BASE
+ * clamped to 127.00, AMP REL 126.85 -> 126, 127.xx -> 127 INF, LEVEL rounded); AMP DEC 127 = INF holds the level where
+ * the decay starts (not SUS); HARM / DTUN 12.34 kept through a save and a load (the blob), the macro its whole part */
+static void v4_pack(const int16_t *p4, uint8_t *b)  /* a version-4 blob of a version-4 patch (as 3y61 wrote it) */
+{
+    uint32_t i, o = 2;
+    memset(b, 0, QUAD_BLOB);
+    b[0] = QUAD_MAGIC;
+    b[1] = 4u;
+    for (i = 0; i < QP_NP; i++) {
+        uint32_t u = (uint32_t)(p4[i] - quad_range_v4(i).min);
+        b[o++] = (uint8_t)u;
+        if (quad_hires_v4(i))
+            b[o++] = (uint8_t)(u >> 8);
+    }
+}
+static void t_v5(void)
+{
+    static const struct { uint8_t i; int16_t lo, hi, def; } RG[] = {
+        {QP_FREQ, 0, 12700, 12700}, {QP_DTUN, 0, 12700, 0}, {QP_RESO, 0, 12700, 0}, {QP_BASE, 0, 12700, 0},
+        {QP_HARM, -2600, 2600, 0}, {QP_FDEPTH, -6400, 6399, 0}, {QP_EREL, 0, 127, 40}, {QP_EDEC, 0, 127, 64},
+        {QP_LEVEL, 0, 127, 110}, {QP_FDBK, 0, 127, 0}};
+    static const struct { int16_t rel, lev, dec, freq; int16_t wrel, wlev, wfreq; } CV[] = {
+        {12685, 11040, 127, 12799, 126, 110, 12700}, {12700, 11050, 64, 12750, 127, 111, 12700},
+        {12799, 0, 0, 4201, 127, 0, 4201}, {12649, 12799, 126, 0, 126, 127, 0}, {4049, 4950, 10, 12700, 40, 50, 12700},
+        {0, 49, 5, 1, 0, 0, 1}};
+    track_t *t = &trk[0];
+    int16_t p[QP_NP], q[QP_NP];
+    uint8_t b[QUAD_BLOB];
+    int32_t out[CTL];
+    uint32_t k, n;
+    for (k = 0; k < NELEM(RG); k++) {
+        quad_rng_t r = quad_range(RG[k].i);
+        CHECK(r.min == RG[k].lo && r.max == RG[k].hi && r.def == RG[k].def, "v5: value %u range %d..%d def %d", RG[k].i,
+              r.min, r.max, r.def);
+    }
+    CHECK(QUAD_PAGES[12].col[1].fmt == F_INTI && QUAD_PAGES[12].col[3].fmt == F_INTI &&
+              QUAD_PAGES[13].col[0].fmt == F_INT && !quad_hires(QP_EREL) && !quad_hires(QP_LEVEL),
+          "v5: AMP DEC / REL F_INTI, LEVEL F_INT");
+    for (k = 0; k < NELEM(CV); k++) {           /* version 4 -> 5 */
+        int16_t p4[QP_NP];
+        for (n = 0; n < QP_NP; n++)
+            p4[n] = quad_range_v4(n).def;
+        p4[QP_EREL] = CV[k].rel, p4[QP_LEVEL] = CV[k].lev, p4[QP_EDEC] = CV[k].dec, p4[QP_FREQ] = CV[k].freq;
+        p4[QP_DTUN] = CV[k].freq, p4[QP_RESO] = CV[k].freq, p4[QP_BASE] = CV[k].freq, p4[QP_HARM] = -1234;
+        v4_pack(p4, b);
+        CHECK(quad_blob_ok(b) && quad_unpack(b, q) == 1 && q[QP_EREL] == CV[k].wrel && q[QP_LEVEL] == CV[k].wlev &&
+                  q[QP_EDEC] == CV[k].dec && q[QP_FREQ] == CV[k].wfreq && q[QP_DTUN] == CV[k].wfreq &&
+                  q[QP_RESO] == CV[k].wfreq && q[QP_BASE] == CV[k].wfreq && q[QP_HARM] == -1234,
+              "v4 %u: REL %d LEVEL %d FREQ %d -> %d %d %d", k, CV[k].rel, CV[k].lev, CV[k].freq, q[QP_EREL], q[QP_LEVEL],
+              q[QP_FREQ]);
+    }
+    {   /* version 3 -> 5: REL 127 INF stays, LEVEL 100, DTUN 127 -> 127.00 */
+        t_init3(p);
+        p[QP_EREL] = 127, p[QP_LEVEL] = 100, p[QP_DTUN] = 127, p[QP_EDEC] = 127;
+        pack_v3(p, b);
+        CHECK(quad_unpack(b, q) == 1 && q[QP_EREL] == 127 && q[QP_LEVEL] == 100 && q[QP_DTUN] == 12700 &&
+                  q[QP_EDEC] == 127, "v3 -> v5: REL %d LEVEL %d DTUN %d", q[QP_EREL], q[QP_LEVEL], q[QP_DTUN]);
+    }
+    {   /* AMP DEC INF: the level held at 1 (the decay's start), not moving to SUS; DEC 126 decays to SUS */
+        uint32_t d;
+        for (d = 126; d <= 127u; d++) {
+            int32_t e0, e1;
+            quad_init_patch4(p);
+            p[QP_EATK] = 0, p[QP_EDEC] = (int16_t)d, p[QP_ESUS] = 20, p[QP_EREL] = 40;
+            drv_reset(t);
+            drv_patch4(t, p);
+            drv_on(t, 0, 60, 100);
+            for (n = 0; n < FS / 10u / CTL; n++)
+                drv_tick(t, out);
+            e0 = quad_vs[0][0].env[3] >> 9;
+            for (n = 0; n < 2u * FS / CTL; n++)
+                drv_tick(t, out);
+            e1 = quad_vs[0][0].env[3] >> 9;
+            if (d == 127u)
+                CHECK(e0 >= 32760 && e1 == e0 && quad_vs[0][0].stage[3] == 3u, "DEC INF: amp %d -> %d after 2 s", e0, e1);
+            else
+                CHECK(e1 < e0, "DEC 126: no decay (%d -> %d)", e0, e1);
+        }
+        t->v[0].gate = 0;                        /* DEC INF, then the note-off: REL 40 releases */
+        for (n = 0; n < 4u * FS / CTL && drv_tick(t, out); n++)
+            ;
+        CHECK(!t->v[0].active, "DEC INF: the release did not end the voice");
+    }
+    {   /* HARM / DTUN 12.34: the deep value, the macro (its whole part), a save (blob) and a load keep 12.34 */
+        track_t *u = &trk[1];
+        drv_reset(t);
+        quad_blob_preset(t, 0);
+        quad_set(t, 1, 0, 1234);                 /* SYN 1+: HARM, DTUNE */
+        quad_set(t, 1, 1, 1234);
+        quad_block(t);
+        CHECK(quad_get(t, 1, 0) == 1234 && quad_get(t, 1, 1) == 1234 && t->p[P_E4] == 12 && t->p[P_E5] == 12,
+              "HARM / DTUN 12.34: deep %d %d, macro %d %d", quad_get(t, 1, 0), quad_get(t, 1, 1), t->p[P_E4], t->p[P_E5]);
+        quad_blob_get(t, b);
+        memset(u, 0, sizeof *u);
+        u->eng_req = u->engine = ENGI_QUAD;
+        u->p[P_E4] = 12, u->p[P_E5] = 12;        /* (a record's macro bytes: the whole part) */
+        quad_blob_set(u, b);
+        quad_block(u);
+        CHECK(quad_patch[1][QP_HARM] == 1234 && quad_patch[1][QP_DTUN] == 1234 && u->p[P_E4] == 12,
+              "HARM / DTUN 12.34 after a save and a load: %d %d", quad_patch[1][QP_HARM], quad_patch[1][QP_DTUN]);
+    }
+}
+
 int main(int argc, char **argv)
 {
     t_blob();
+    t_v5();
     t_pages();
     t_set_macros();
     t_presets();

@@ -293,13 +293,15 @@ RESET `F_ONOFF`; times `F_TIME` (the filter REL `F_TIMEI`: 127 = INF); AMP SUS, 
 PHASE, VEL, the KEYs, filter SUS, KTRK `F_INT` (plain 0..127 numbers, as the Digitone shows them). The editor's
 screens: ENV 3 is one row of three cells "A Key", "B1 Key", "B2 Key".
 
-### Ranges (version 4: the Digitone's, 2026-10-14)
+### Ranges (version 5: the Digitone's, 2026-10-14, with the owner's corrections)
 
 The owner (2026-10-14): "FM-Tone on FM-1 has many parameters in different ranges than the real Digitone which uses 0
 to 127 in a bunch of places or -64 to 63.99 for centered parameters like pan. Also a number of parameters like cutoff
 support decimal places to two positions like 23.04. Would be good if the FM-Tone's engine parameter ranges and values
 matched and also make it easier to compare parameters between both devices." So FM TONE shows and stores the
-Digitone's numbers. Fourteen values are hi-res (`eng_quad.c quad_hires`): stored in hundredths, shown with two
+Digitone's numbers. The corrections the same day (version 5): "Cutoff should not go from 0 to 127.99, should go to 0
+to 127. Amp release should be integer 0-126, then INF, same with Amp Decay. Level is also integers from 0 to 127. No
+parameters should be a max of 127.99." Twelve values are hi-res (`eng_quad.c quad_hires`): stored in hundredths, shown with two
 decimals by the format `F_FIX2` (core.h, the editor protocol's fmt 18; params.c: 4201 = "42.01", a range below 0
 signed: "+41.34", "-64.00"; at most 6 characters). Their finest step is 1 (0.01), their whole-number step 100: the
 knob code steps an `F_FIX2` value that way (the knob-acceleration branch; before it, the editor's 5 % steps).
@@ -307,23 +309,42 @@ knob code steps an `F_FIX2` value that way (the knob-acceleration branch; before
 | Value | Page | Range (shown) | Stored | Default | Was (version 3) |
 | --- | --- | --- | --- | --- | --- |
 | HARM | SYN 1+ | -26.00 .. +26.00 | -2600 .. 2600 | 0.00 | -26 .. 26 |
-| DTUNE | SYN 1+ | 0.00 .. 127.99 | 0 .. 12799 | 0.00 | 0 .. 127 |
+| DTUNE | SYN 1+ | 0.00 .. 127.00 | 0 .. 12700 | 0.00 | 0 .. 127 |
 | FDBK | SYN 1+ | 0 .. 127 | 0 .. 127 | 0 | 0 .. 120 |
-| FREQ | FILTER+ | 0.00 .. 127.99 (the Digitone's number; no Hz) | 0 .. 12799 | 127.00 | 0 .. 127 (Hz) |
-| RESO | FILTER+ | 0.00 .. 127.99 | 0 .. 12799 | 0.00 | 0 .. 127 (%) |
+| FREQ | FILTER+ | 0.00 .. 127.00 (the Digitone's number; no Hz) | 0 .. 12700 | 127.00 | 0 .. 127 (Hz) |
+| RESO | FILTER+ | 0.00 .. 127.00 | 0 .. 12700 | 0.00 | 0 .. 127 (%) |
 | DEPTH (filter env) | FILTER+ | -64.00 .. +63.99 | -6400 .. 6399 | 0.00 | -64 .. 63 |
-| BASE | FILT 2+ | 0.00 .. 127.99 | 0 .. 12799 | 0.00 | 0 .. 127 |
-| AMP REL | AMP | 0.00 .. 126.99, INF (127.00 .. 127.99) | 0 .. 12799 | 40.00 | 0 .. 126, 127 INF (a time) |
-| LEVEL | AMP+ | 0.00 .. 127.99 | 0 .. 12799 | 110.00 | 0 .. 127, 100 |
+| BASE | FILT 2+ | 0.00 .. 127.00 | 0 .. 12700 | 0.00 | 0 .. 127 |
+| AMP DEC | AMP | 0 .. 126, INF (127: no decay, the level held) | 0 .. 127 | 64 | 0 .. 127 (a time) |
+| AMP REL | AMP | 0 .. 126, INF (127) (version 4: 0.00 .. 127.99) | 0 .. 127 | 40 | 0 .. 126, 127 INF (a time) |
+| LEVEL | AMP+ | 0 .. 127 (version 4: 0.00 .. 127.99) | 0 .. 127 | 110 | 0 .. 127, 100 |
 | SPEED (LFO 1..3) | LFO n | -64.00 .. +63.99 | -6400 .. 6399 | +16.00 | -64 .. 63 |
 | DEPTH (LFO 1..3) | LFO n+ | -64.00 .. +63.99 | -6400 .. 6399 | 0.00 | -64 .. 63 |
 | VEL, A / B1 / B2 KEY, filter SUS, KTRK | | 0 .. 127 (a number, not %) | as before | | 0 .. 127 (%) |
 
 Unchanged: the ratios and their offsets (+-1.00), the waves, modes and enums, MIX -64..63, PAN and DRIVE (the part's
 parameters), FM TONE's own values (LFO 3, the key / velocity tracking, the filter envelope's delay and key track),
-WIDTH, the envelope times other than AMP REL. The macros P_E4 HARM and P_E5 DTUNE hold the coarse part (`quad_mac_val`:
-a record, the editor protocol's v14, the matrix, motion and a CC are 7-bit; a macro move sets the coarse value with
-fine 0, `quad_mac_patch`); HOME's HARM knob steps whole numbers, the deep page the hundredths.
+WIDTH, the envelope times other than AMP DEC / REL. AMP DEC and REL are the format `F_INTI` (core.h, the editor
+protocol's fmt 19: a number, its max "INF"); the knob steps them 1 slow, 6 quick, OPT snaps on the 16 grid (0 16 ..
+112 127: the top is INF). **AMP DEC INF** (the Digitone's DEC 127): the amp envelope holds the level it reached at
+the attack's end (1) and never moves to SUS; the gate's end releases by REL as always (`quad_env_tick` stage 3; the
+filter envelope's DEC has no INF, its REL INF is unchanged). LEVEL's law: amplitude x 2 LEVEL^2 (Q15, from the integer).
+
+Storage: blob version 5 (96 bytes; HARM DTUN FREQ RESO filter DEPTH BASE and the LFOs' SPEED / DEPTH u16le, the rest a
+byte: 87 used). Version 4 blobs (3y61's: AMP REL and LEVEL u16 hundredths, the tops 127.99; the owner's unit has them)
+and versions 1..3 convert on load (`quad_unpack`, `quad_v5_of_v4`): FREQ DTUN RESO BASE clamped to 127.00; AMP REL
+127.00 and up -> 127 (INF), below it rounded to the nearest whole number but at most 126 (126.85 -> 126); LEVEL
+rounded (110.40 -> 110). Factory presets, pool slots, sessions, backups, sound files (web/fm1sounds.js, the importer
+web/fm1dnsnd.js `quadToV4` = `quadToV5`) and tools/fm1_install.py (versions 1..5 accepted) all go through it.
+
+The macros P_E4 HARM and P_E5 DTUNE hold the coarse part (`quad_mac_val`: a record's macro bytes, the editor
+protocol's v14, the matrix, motion and a CC are 7-bit; a macro move sets the coarse value with fine 0,
+`quad_mac_patch`). ChoralRoot has no HOME or main-view knob on the engine's macros (`engine_t.knob` is Felucca's HOME
+row, ui.c, not in ChoralRoot's build): a player turns HARM and DTUNE on the sound editor's SYN 1+ cells, the deep
+values, two decimals (0.01 slow, the range / 20 quick, OPT whole numbers). The two decimals survive a save and a load
+because the patch blob is the authority (a user slot, a pool slot, the session: the blob's hundredths are loaded, the
+macro is derived from them, `quad_macros_out`); only a CC, the matrix, motion or the web editor's macro write moves
+them in whole numbers (fine 0).
 
 The engine uses every hundredth: FREQ as Q8 (x 256 / 100) into the multimode filter, whose coefficients
 (`quad_svf_coef`) interpolate g in Q20 and carry a2 to 1/32 of its Q13 step (FREQ 42.00 and 42.01 render differently;

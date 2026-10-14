@@ -3,7 +3,7 @@
   "version": 1,
   "generated": "by lay_catalog from the firmware's built-in tables: do not edit (tools/layout/dump_catalogs.mjs writes it; read-only in step 2, docs/LAYOUT-TOOL.md). The firmware version is not in it: params_hash binds it to the parameters",
   "engine": {"index": 15, "name": "FM TONE"},
-  "params_hash": "80329c21145d6df0",
+  "params_hash": "15d9ff095ea01f26",
   "pages": [
     {
       "page": 0,
@@ -20,7 +20,7 @@
       "title": "SYN 1+",
       "cols": [
         {"short": "HARM", "fmt": "fix2", "min": -2600, "max": 2600, "def": 0, "names": null, "unit": null},
-        {"short": "DTUNE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
+        {"short": "DTUNE", "fmt": "fix2", "min": 0, "max": 12700, "def": 0, "names": null, "unit": null},
         {"short": "FDBK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "MIX", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null}
       ]
@@ -49,8 +49,8 @@
       "page": 4,
       "title": "FILTER+",
       "cols": [
-        {"short": "FREQ", "fmt": "fix2", "min": 0, "max": 12799, "def": 12700, "names": null, "unit": null},
-        {"short": "RESO", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
+        {"short": "FREQ", "fmt": "fix2", "min": 0, "max": 12700, "def": 12700, "names": null, "unit": null},
+        {"short": "RESO", "fmt": "fix2", "min": 0, "max": 12700, "def": 0, "names": null, "unit": null},
         {"short": "TYPE", "fmt": "enum", "min": 0, "max": 3, "def": 1, "names": ["OFF", "LP12", "HP12", "LP24"], "unit": null},
         {"short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
       ]
@@ -69,7 +69,7 @@
       "page": 6,
       "title": "FILT 2+",
       "cols": [
-        {"short": "BASE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null},
+        {"short": "BASE", "fmt": "fix2", "min": 0, "max": 12700, "def": 0, "names": null, "unit": null},
         {"short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 127, "names": null, "unit": null},
         null,
         null
@@ -130,16 +130,16 @@
       "title": "AMP",
       "cols": [
         {"short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-        {"short": "DEC", "fmt": "time", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
+        {"short": "DEC", "fmt": "inti", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
         {"short": "SUS", "fmt": "pct", "min": 0, "max": 127, "def": 127, "names": null, "unit": null},
-        {"short": "REL", "fmt": "fix2", "min": 0, "max": 12799, "def": 4000, "names": ["INF"], "unit": null}
+        {"short": "REL", "fmt": "inti", "min": 0, "max": 127, "def": 40, "names": null, "unit": null}
       ]
     },
     {
       "page": 13,
       "title": "AMP+",
       "cols": [
-        {"short": "LEVEL", "fmt": "fix2", "min": 0, "max": 12799, "def": 11000, "names": null, "unit": null},
+        {"short": "LEVEL", "fmt": "int", "min": 0, "max": 127, "def": 110, "names": null, "unit": null},
         {"short": "PAN", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
         {"short": "DRIVE", "fmt": "pct", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         null
@@ -240,7 +240,7 @@
               "title": "SYN 1 · B",
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 1, "col": 0, "page_title": "SYN 1+", "label": "Harm", "short": "HARM", "fmt": "fix2", "min": -2600, "max": 2600, "def": 0, "names": null, "unit": null, "style": "harm"},
-                {"knob": 2, "bind": "deep", "page": 1, "col": 1, "page_title": "SYN 1+", "label": "Dtune", "short": "DTUNE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "detune"},
+                {"knob": 2, "bind": "deep", "page": 1, "col": 1, "page_title": "SYN 1+", "label": "Dtune", "short": "DTUNE", "fmt": "fix2", "min": 0, "max": 12700, "def": 0, "names": null, "unit": null, "style": "detune"},
                 {"knob": 3, "bind": "deep", "page": 1, "col": 2, "page_title": "SYN 1+", "label": "Feedback", "short": "FDBK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "bar"},
                 {"knob": 4, "bind": "deep", "page": 1, "col": 3, "page_title": "SYN 1+", "label": "Mix", "short": "MIX", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
@@ -302,8 +302,8 @@
               "lane": 1,
               "title": "FILTER · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 4, "col": 0, "page_title": "FILTER+", "label": "Freq", "short": "FREQ", "fmt": "fix2", "min": 0, "max": 12799, "def": 12700, "names": null, "unit": null, "style": "val"},
-                {"knob": 2, "bind": "deep", "page": 4, "col": 1, "page_title": "FILTER+", "label": "Reso", "short": "RESO", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 4, "col": 0, "page_title": "FILTER+", "label": "Freq", "short": "FREQ", "fmt": "fix2", "min": 0, "max": 12700, "def": 12700, "names": null, "unit": null, "style": "val"},
+                {"knob": 2, "bind": "deep", "page": 4, "col": 1, "page_title": "FILTER+", "label": "Reso", "short": "RESO", "fmt": "fix2", "min": 0, "max": 12700, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 4, "col": 2, "page_title": "FILTER+", "label": "Type", "short": "TYPE", "fmt": "enum", "min": 0, "max": 3, "def": 1, "names": ["OFF", "LP12", "HP12", "LP24"], "unit": null, "style": "text"},
                 {"knob": 4, "bind": "deep", "page": 4, "col": 3, "page_title": "FILTER+", "label": "Env depth", "short": "DEPTH", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
@@ -335,7 +335,7 @@
               "lane": 1,
               "title": "FILTER 2 · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 6, "col": 0, "page_title": "FILT 2+", "label": "Base", "short": "BASE", "fmt": "fix2", "min": 0, "max": 12799, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 6, "col": 0, "page_title": "FILT 2+", "label": "Base", "short": "BASE", "fmt": "fix2", "min": 0, "max": 12700, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 6, "col": 1, "page_title": "FILT 2+", "label": "Width", "short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 127, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
@@ -455,16 +455,16 @@
               "title": "AMP · A",
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 12, "col": 0, "page_title": "AMP", "label": "Attack", "short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 2, "bind": "deep", "page": 12, "col": 1, "page_title": "AMP", "label": "Decay", "short": "DEC", "fmt": "time", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
+                {"knob": 2, "bind": "deep", "page": 12, "col": 1, "page_title": "AMP", "label": "Decay", "short": "DEC", "fmt": "inti", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 12, "col": 2, "page_title": "AMP", "label": "Sustain", "short": "SUS", "fmt": "pct", "min": 0, "max": 127, "def": 127, "names": null, "unit": null, "style": "num"},
-                {"knob": 4, "bind": "deep", "page": 12, "col": 3, "page_title": "AMP", "label": "Release", "short": "REL", "fmt": "fix2", "min": 0, "max": 12799, "def": 4000, "names": ["INF"], "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 12, "col": 3, "page_title": "AMP", "label": "Release", "short": "REL", "fmt": "inti", "min": 0, "max": 127, "def": 40, "names": null, "unit": null, "style": "num"}
               ]
             },
             {
               "lane": 1,
               "title": "AMP · B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 13, "col": 0, "page_title": "AMP+", "label": "Level", "short": "LEVEL", "fmt": "fix2", "min": 0, "max": 12799, "def": 11000, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 13, "col": 0, "page_title": "AMP+", "label": "Level", "short": "LEVEL", "fmt": "int", "min": 0, "max": 127, "def": 110, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 13, "col": 1, "page_title": "AMP+", "label": "Pan", "short": "PAN", "fmt": "ofs", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 13, "col": 2, "page_title": "AMP+", "label": "Drive", "short": "DRIVE", "fmt": "pct", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "none"}

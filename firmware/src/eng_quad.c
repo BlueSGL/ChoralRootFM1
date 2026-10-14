@@ -46,8 +46,9 @@
 #define QUAD_BLOB 96u            /* packed patch: 'Q', version, QP_NP values (the hi-res ones 2 bytes), zeros */
 #define QUAD_BLOB_V3 80u         /* versions 1..3's blob (the legacy store's records, older pool slots, sessions) */
 #define QUAD_MAGIC 0x51u         /* 'Q' */
-#define QUAD_VER 4u              /* 4: the Digitone's ranges (2026-10-14): quad_hires's values in hundredths (u16le),
-                                  * FDBK 0..127; 3 (the Digitone review 2026-10-08), 2 and 1 are read (quad_unpack
+#define QUAD_VER 5u              /* 5 (2026-10-14, the owner's corrections): AMP REL, AMP DEC 0..126 + INF, LEVEL
+                                  * 0..127 integers (bytes), FREQ DTUN RESO BASE top 127.00; 4: the Digitone's ranges
+                                  * (2026-10-14): the hi-res values in hundredths (u16le), FDBK 0..127; 3 (the Digitone review 2026-10-08), 2 and 1 are read (quad_unpack
                                   * converts) */
 #define QUAD_NP_V1 71u           /* version 1's values (no QP_RB2) */
 #define QUAD_NP_V2 72u           /* version 2's values (no QP_B2KEY) */
@@ -72,19 +73,21 @@ enum {
     QP_NP
 };
 #define QP_LFO(k, f) (QP_LFO0 + (k) * QL_N + (f))
-/* the hi-res fields (version 4: F_FIX2, hundredths, two bytes in the blob): HARM DTUN FREQ RESO filter DEPTH BASE,
- * AMP REL and LEVEL, each LFO's SPEED and DEPTH */
+/* the hi-res fields (version 5: F_FIX2, hundredths, two bytes in the blob): HARM DTUN FREQ RESO filter DEPTH BASE,
+ * each LFO's SPEED and DEPTH */
 static int quad_hires(uint32_t i)
 {
     if (i >= QP_LFO0 && i < QP_RB2)
         return (i - QP_LFO0) % QL_N == QL_SPEED || (i - QP_LFO0) % QL_N == QL_DEPTH;
-    return i == QP_HARM || i == QP_DTUN || i == QP_FREQ || i == QP_RESO || i == QP_FDEPTH || i == QP_BASE ||
-           i == QP_EREL || i == QP_LEVEL;
+    return i == QP_HARM || i == QP_DTUN || i == QP_FREQ || i == QP_RESO || i == QP_FDEPTH || i == QP_BASE;
 }
-#define QUAD_NHIRES 14u
-#define QUAD_V4_LEN (2u + QP_NP + QUAD_NHIRES)   /* 89: the rest of the 96 is zeros */
+/* version 4's hi-res fields: these and AMP REL, LEVEL */
+static int quad_hires_v4(uint32_t i) { return quad_hires(i) || i == QP_EREL || i == QP_LEVEL; }
+#define QUAD_NHIRES 12u
+#define QUAD_V4_LEN (2u + QP_NP + QUAD_NHIRES + 2u)   /* 89: version 4's (the rest of the 96 is zeros) */
+#define QUAD_V5_LEN (2u + QP_NP + QUAD_NHIRES)        /* 87 */
 _Static_assert(QP_NP == 73 && QP_RB2 == QUAD_NP_V1 && QP_B2KEY == QUAD_NP_V2 && QP_NP + 2u + 2u <= QUAD_BLOB_V3 &&
-               QUAD_V4_LEN <= QUAD_BLOB && QUAD_BLOB <= ENG_BLOB_MAX && QUAD_BLOB <= 160u /* CSS_BLOB */ &&
+               QUAD_V4_LEN <= QUAD_BLOB && QUAD_V5_LEN <= QUAD_BLOB && QUAD_BLOB <= ENG_BLOB_MAX && QUAD_BLOB <= 160u /* CSS_BLOB */ &&
                QUAD_BLOB <= 188u /* upool.c UPP_MAX */, "QUAD patch layout");
 /* the macros P_E0..P_E7: these patch values (RATIO B's is B2's step, the fast hand) */
 static const uint8_t QUAD_MAC[8] = {QP_ALGO, QP_RC, QP_RA, QP_RB2, QP_HARM, QP_DTUN, QP_FDBK, QP_MIX};
@@ -154,7 +157,7 @@ static const quad_algo_t QUAD_ALGO[8] = {
 #define QC_RB {"RATIO B", F_INT, 0, QUAD_NRB - 1, QUAD_RB_DEF, N_QUAD_RCB, 0}
 #define QC_RB2 {"RATIO B", F_INT, 0, QUAD_NRCB - 1, 3, N_QUAD_RCB, 0}             /* the macro P_E3: B2's step */
 #define QC_HARM {"HARM", F_FIX2, -2600, 2600, 0, 0, 0}   /* F_FIX2: hundredths (the Digitone's -26.00..+26.00) */
-#define QC_DTUN {"DTUNE", F_FIX2, 0, 12799, 0, 0, 0}
+#define QC_DTUN {"DTUNE", F_FIX2, 0, 12700, 0, 0, 0}
 #define QC_HARM_M {"HARM", F_OFS, -26, 26, 0, 0, 0}         /* the macros P_E4 / P_E5: the coarse part (quad_mac_val) */
 #define QC_DTUN_M {"DTUNE", F_INT, 0, 127, 0, 0, 0}
 #define QC_FDBK {"FDBK", F_INT, 0, 127, 0, 0, 0}
@@ -163,13 +166,12 @@ static const quad_algo_t QUAD_ALGO[8] = {
 #define QC_T(l, d) {l, F_TIME, 0, 127, d, 0, 0}
 #define QC_TI(l, d) {l, F_TIMEI, 0, 127, d, 0, 0}         /* a release: 127 = INF (it holds) */
 #define QC_FX(l, mn, mx, d) {l, F_FIX2, mn, mx, d, 0, 0}   /* hi-res: hundredths, "42.01" / "+41.34" */
-static const char *const N_QUAD_INF[2] = {"INF", 0};
-#define QC_EREL {"REL", F_FIX2, 0, 12799, 4000, N_QUAD_INF, 0}   /* AMP REL: coarse 127 (12700..12799) = INF */
+#define QC_EI(l, d) {l, F_INTI, 0, 127, d, 0, 0}   /* AMP DEC / REL: 0..126, 127 = INF */
 #define QC_P(l, d) {l, F_INT, 0, 127, d, 0, 0}
 #define QC_PCT(l, d) {l, F_PCT, 0, 127, d, 0, 0}
 #define QC_ON(l, d) {l, F_ONOFF, 0, 1, d, 0, 0}
 #define QC_PHRT {"PHRT", F_ENUM, 0, QR_N - 1, QR_ALL, N_QUAD_PHRT, 0}
-#define QC_FREQ {"FREQ", F_FIX2, 0, 12799, 12700, 0, 0}
+#define QC_FREQ {"FREQ", F_FIX2, 0, 12700, 12700, 0, 0}
 #define QC_FTYPE {"TYPE", F_ENUM, 0, QF_N - 1, QF_LP12, N_QUAD_FTYPE, 0}
 #define QC_DEPTH(l) {l, F_FIX2, -6400, 6399, 0, 0, 0}
 #define QC_PAN {"PAN", F_OFS, -64, 63, 0, 0, 0}
@@ -189,16 +191,16 @@ static const eng_page_t QUAD_PAGES[] = {
     {"SYN 1+", {QC_HARM, QC_DTUN, QC_FDBK, QC_MIX}},
     {"SYN 2", {QC_OFS("OFS C"), QC_OFS("OFS A"), QC_OFS("OFS B1"), QC_OFS("OFS B2")}},
     {"FILTER", {QC_T("ATK", 0), QC_T("DEC", 64), QC_P("SUS", 0), QC_TI("REL", 40)}},   /* 3  FILTER */
-    {"FILTER+", {QC_FREQ, QC_FX("RESO", 0, 12799, 0), QC_FTYPE, QC_DEPTH("DEPTH")}},
+    {"FILTER+", {QC_FREQ, QC_FX("RESO", 0, 12700, 0), QC_FTYPE, QC_DEPTH("DEPTH")}},
     {"FILT 2", {QC_T("DELAY", 0), QC_P("KTRK", 0), QC_NONE, QC_NONE}},
-    {"FILT 2+", {QC_FX("BASE", 0, 12799, 0), QC_P("WIDTH", 127), QC_NONE, QC_NONE}},
+    {"FILT 2+", {QC_FX("BASE", 0, 12700, 0), QC_P("WIDTH", 127), QC_NONE, QC_NONE}},
     {"ENV A", {QC_T("A ATK", 0), QC_T("A DEC", 60), QC_P("A END", 64), QC_P("A LEV", 48)}},   /* 7  ENV */
     {"ENV B", {QC_T("B ATK", 0), QC_T("B DEC", 60), QC_P("B END", 0), QC_P("B LEV", 0)}},
     {"ENV 2", {QC_T("A DLY", 0), QC_ON("A TRIG", 1), QC_ON("A RESET", 1), QC_PHRT}},
     {"ENV 2+", {QC_T("B DLY", 0), QC_ON("B TRIG", 1), QC_ON("B RESET", 1), QC_P("VEL", 64)}},
     {"ENV 3", {QC_P("A KEY", 0), QC_P("B1 KEY", 0), QC_P("B2 KEY", 0), QC_NONE}},
-    {"AMP", {QC_T("ATK", 0), QC_T("DEC", 64), QC_PCT("SUS", 127), QC_EREL}},
-    {"AMP+", {QC_FX("LEVEL", 0, 12799, 11000), QC_PAN, QC_PCT("DRIVE", 0), QC_NONE}},
+    {"AMP", {QC_T("ATK", 0), QC_EI("DEC", 64), QC_PCT("SUS", 127), QC_EI("REL", 40)}},
+    {"AMP+", {QC_P("LEVEL", 110), QC_PAN, QC_PCT("DRIVE", 0), QC_NONE}},
     {"LFO 1", {QC_SPEED, QC_MULT, QC_FADE, QC_DEST}},                       /* 14 LFO */
     {"LFO 1+", {QC_WAVE, QC_P("PHASE", 0), QC_LTRIG, QC_DEPTH("DEPTH")}},
     {"LFO 2", {QC_SPEED, QC_MULT, QC_FADE, QC_DEST}},
@@ -256,12 +258,34 @@ static quad_rng_t quad_range(uint32_t i)
     return r;
 }
 
+/* version 4's ranges: the hi-res tops 127.99, AMP REL 0..127.99 (127.xx INF), LEVEL 0..127.99 */
+static quad_rng_t quad_range_v4(uint32_t i)
+{
+    quad_rng_t r = quad_range(i);
+    if (i == QP_DTUN || i == QP_FREQ || i == QP_RESO || i == QP_BASE || i == QP_EREL || i == QP_LEVEL) {
+        r.max = 12799;
+        r.def = (int16_t)(quad_hires(i) ? r.def : r.def * 100);
+    }
+    return r;
+}
+
+/* a version-4 value of field i -> version 5's: FREQ DTUN RESO BASE clamped to 127.00 (quad_clampv), AMP REL 127.xx
+ * = INF (127), below it rounded but at most 126; LEVEL rounded */
+static int32_t quad_v5_of_v4(uint32_t i, int32_t v)
+{
+    if (i == QP_EREL)
+        return v >= 12700 ? 127 : v >= 12650 ? 126 : (v + 50) / 100;
+    if (i == QP_LEVEL)
+        return (v + 50) / 100;
+    return v;
+}
+
 /* version 3's ranges (its blob stores value - min): the hi-res fields in whole numbers (-64..63, 0..127, -26..26),
  * FDBK 0..120 */
 static quad_rng_t quad_range_v3(uint32_t i)
 {
-    quad_rng_t r = quad_range(i);
-    if (quad_hires(i)) {
+    quad_rng_t r = quad_range_v4(i);
+    if (quad_hires_v4(i)) {
         r.min = (int16_t)(r.min / 100);
         r.max = (int16_t)(r.max / 100);
         r.def = (int16_t)(r.def / 100);
@@ -274,7 +298,7 @@ static quad_rng_t quad_range_v3(uint32_t i)
 /* a version-3 value of field i -> version 4's: the hi-res x 100 (AMP REL 127 = INF stays INF), FDBK 0..120 -> 0..127 */
 static int32_t quad_v4_of_v3(uint32_t i, int32_t v)
 {
-    if (quad_hires(i))
+    if (quad_hires_v4(i))
         return v * 100;
     if (i == QP_FDBK)
         return (v * 127 + 60) / 120;
@@ -372,8 +396,8 @@ static int16_t quad_mac_patch(uint32_t k, int32_t m)
     return quad_clampv(QUAD_MAC[k], quad_hires(QUAD_MAC[k]) ? m * 100 : m);
 }
 
-/* the patch -> blob (version 4): 'Q', version, per value (value - min): the hi-res ones u16 little-endian
- * (0..12799), the rest a byte (0..200), zeros to QUAD_BLOB */
+/* the patch -> blob (version 5): 'Q', version, per value (value - min): the hi-res ones u16 little-endian
+ * (0..12700), the rest a byte (0..200), zeros to QUAD_BLOB */
 static void quad_pack(const int16_t *p, uint8_t *b)
 {
     uint32_t i, o = 2;
@@ -389,9 +413,9 @@ static void quad_pack(const int16_t *p, uint8_t *b)
         b[o++] = 0;
 }
 
-/* a valid blob: version 4 (QUAD_V4_LEN bytes in QUAD_BLOB), 3, 2 (QUAD_NP_V2 values) or 1 (QUAD_NP_V1 values, RATIO B
+/* a valid blob: version 5 / 4 (QUAD_V5_LEN / QUAD_V4_LEN bytes in QUAD_BLOB), 3, 2 (QUAD_NP_V2 values) or 1 (QUAD_NP_V1 values, RATIO B
  * 0..QUAD_NRB_V1 - 1), versions 1..3 in QUAD_BLOB_V3 bytes (the rest of a QUAD_BLOB buffer zeros). An older firmware
- * (QUAD_VER 3) refuses a version-4 blob here: it loads the init patch for it */
+ * (QUAD_VER 3 / 4) refuses a newer blob here: it loads the init patch for it */
 static int quad_blob_ok(const uint8_t *b)
 {
     uint32_t i, np, ver, o = 2;
@@ -400,10 +424,10 @@ static int quad_blob_ok(const uint8_t *b)
     ver = b[1];
     np = ver == 1u ? QUAD_NP_V1 : ver == 2u ? QUAD_NP_V2 : QP_NP;
     for (i = 0; i < np; i++) {
-        if (ver == QUAD_VER) {
-            quad_rng_t r = quad_range(i);
+        if (ver >= 4u) {
+            quad_rng_t r = ver == 4u ? quad_range_v4(i) : quad_range(i);
             uint32_t u = b[o++];
-            if (quad_hires(i))
+            if (ver == 4u ? quad_hires_v4(i) : quad_hires(i))
                 u |= (uint32_t)b[o++] << 8;
             if (u > (uint32_t)(r.max - r.min))
                 return 0;
@@ -413,7 +437,7 @@ static int quad_blob_ok(const uint8_t *b)
                 return 0;
         }
     }
-    for (i = o; i < (ver == QUAD_VER ? QUAD_BLOB : QUAD_BLOB_V3); i++)
+    for (i = o; i < (ver >= 4u ? QUAD_BLOB : QUAD_BLOB_V3); i++)
         if (b[i])
             return 0;
     return 1;
@@ -485,13 +509,15 @@ static int quad_unpack(const uint8_t *b, int16_t *p)
     quad_init_patch(p);
     if (!quad_blob_ok(b))
         return 0;
-    if (b[1] == QUAD_VER) {
-        uint32_t o = 2;
+    if (b[1] >= 4u) {
+        uint32_t o = 2, v4 = b[1] == 4u;
         for (i = 0; i < QP_NP; i++) {
             int32_t u = b[o++];
-            if (quad_hires(i))
+            if (v4 ? quad_hires_v4(i) : quad_hires(i))
                 u |= (int32_t)b[o++] << 8;
-            p[i] = (int16_t)(u + quad_range(i).min);
+            p[i] = (int16_t)(u + (v4 ? quad_range_v4(i) : quad_range(i)).min);
+            if (v4)                              /* version 4 -> 5 */
+                p[i] = quad_clampv(i, quad_v5_of_v4(i, p[i]));
         }
         return 1;
     }
@@ -507,8 +533,8 @@ static int quad_unpack(const uint8_t *b, int16_t *p)
             quad_rb_v1(b[2 + QP_RB1], p);
         quad_v2_to_v3(p);
     }
-    for (i = 0; i < QP_NP; i++)                  /* version 3's values -> version 4's (best effort: x 100, FDBK) */
-        p[i] = quad_clampv(i, quad_v4_of_v3(i, p[i]));
+    for (i = 0; i < QP_NP; i++)                  /* version 3's values -> 4's (best effort: x 100, FDBK) -> 5's */
+        p[i] = quad_clampv(i, quad_v5_of_v4(i, quad_v4_of_v3(i, p[i])));
     return 1;
 }
 
@@ -641,7 +667,7 @@ static void quad_preset_patch(uint32_t k, int16_t *p)
     if (k >= QUAD_NPRESETS)
         return;
     for (e = QUAD_PRESET_EDITS[k]; *e != 0xFFu; e += 2)
-        p[e[0]] = quad_clampv(e[0], quad_v4_of_v3(e[0], (int8_t)e[1]));   /* (the tables: version 3's values) */
+        p[e[0]] = quad_clampv(e[0], quad_v5_of_v4(e[0], quad_v4_of_v3(e[0], (int8_t)e[1])));   /* (the tables: version 3's values) */
 }
 
 /* ------------------------------------------------- deep pages, the blob --- */
@@ -945,13 +971,13 @@ static void quad_legato(track_t *t, voice_t *v)
 }
 
 /* one control tick of an envelope (Q24 x, stage st, delay progress dp): DELAY, then ATK (linear to 1), then DEC
- * (exponential to sus, Q24), held; adsr: the gate's end releases (REL, exponential to 0, then off; REL 127 = INF: the
+ * (exponential to sus, Q24; the amp envelope's DEC 127 = INF: the level held where the decay starts, no decay, the
+ * Digitone's), held; adsr: the gate's end releases (REL, exponential to 0, then off; REL 127 = INF: the
  * level held, stage 5, until REL (modulated) leaves 127, a steal or a panic: the Digitone's 0..126 + INF). Q15 */
 static int32_t quad_env_tick(quad_voice_t *s, uint32_t k, int32_t atk, int32_t dec, int32_t sus, int32_t rel,
                              int32_t dly, int gate, int adsr)
 {
-    int32_t x = s->env[k];                       /* (rel: hundredths, 12700 and up = INF; between two steps the rate is
-                                                  * interpolated: AMP REL's fine part) */
+    int32_t x = s->env[k];                       /* (rel: 0..126, 127 = INF) */
     if (adsr && !gate && s->stage[k] && s->stage[k] < 4u)
         s->stage[k] = 4;
     switch (s->stage[k]) {
@@ -968,19 +994,18 @@ static int32_t quad_env_tick(quad_voice_t *s, uint32_t k, int32_t atk, int32_t d
         }
         break;
     case 3:
+        if (k == 3u && dec >= 127)               /* AMP DEC INF: held */
+            break;
         x += mulq16(sus - x, ENV_EXP[dec & 127]);
         break;
     case 4:
     case 5:
-        if (rel >= 12700) {                      /* INF: held */
+        if (rel >= 127) {                        /* INF: held */
             s->stage[k] = 5;
             break;
         }
         s->stage[k] = 4;
-        {
-            int32_t r0 = rel / 100, e0 = (int32_t)ENV_EXP[r0];
-            x -= mulq16(x, e0 + (((int32_t)ENV_EXP[r0 + 1] - e0) * (rel % 100)) / 100);
-        }
+        x -= mulq16(x, ENV_EXP[rel]);
         if (x < (1 << 12)) {
             x = 0;
             s->stage[k] = 0;
@@ -1011,7 +1036,7 @@ static int quad_endless(const track_t *t, const voice_t *v)
 {
     uint32_t tr = quad_tr(t), i = (uint32_t)(v - t->v);
     const quad_voice_t *s = tr < QUAD_NPART && i < QUAD_POLY ? &quad_vs[tr][i] : 0;
-    return s && s->live && s->stage[3] && (quad_patch[tr][QP_EREL] >= 12700 || s->stage[3] == 5u);
+    return s && s->live && s->stage[3] && (quad_patch[tr][QP_EREL] >= 127 || s->stage[3] == 5u);
 }
 
 /* the ratio (Q16) of table value r plus the fine offset o (1/100), at least 0 */
@@ -1251,10 +1276,10 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
                        QMV2(QP_BDEC, QD_BDEC, QD_ABDEC, 127, 0, 127), QMV2(QP_BEND, QD_BEND, QD_ABEND, 127, 0, 127) << 17,
                        0, QMV2(QP_BDLY, QD_BDLY, QD_ABDLY, 127, 0, 127), 1, 0);
     eF = quad_env_tick(s, 2, QMV(QP_FATK, QD_FATK, 127, 0, 127), QMV(QP_FDEC, QD_FDEC, 127, 0, 127),
-                       QMV(QP_FSUS, QD_FSUS, 127, 0, 127) << 17, QMV(QP_FREL, QD_FREL, 127, 0, 127) * 100,
+                       QMV(QP_FSUS, QD_FSUS, 127, 0, 127) << 17, QMV(QP_FREL, QD_FREL, 127, 0, 127),
                        QMV(QP_FDLY, QD_FDLY, 127, 0, 127), v->gate, 1);
     eE = quad_env_tick(s, 3, QMV(QP_EATK, QD_EATK, 127, 0, 127), QMV(QP_EDEC, QD_EDEC, 127, 0, 127),
-                       QMV(QP_ESUS, QD_ESUS, 127, 0, 127) << 17, QMV(QP_EREL, QD_EREL, 12700, 0, 12799), 0, v->gate, 1);
+                       QMV(QP_ESUS, QD_ESUS, 127, 0, 127) << 17, QMV(QP_EREL, QD_EREL, 127, 0, 127), 0, v->gate, 1);
     if (v - t->v == t->m_vi)                     /* the part's PAN: from the latest note's voice */
     {
         quad_pan_off[tr] = (int8_t)clamp((dst[QD_PAN] * 64) >> 15, -64, 63);
@@ -1263,7 +1288,7 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     }
     /* the operators: ratios, detune, increments (PITCH: all, P AB2: A and B2, +-1 octave) */
     alg = (uint32_t)QMV(QP_ALGO, QD_ALGO, 7, 1, 8) - 1u;
-    dt = QMV(QP_DTUN, QD_DTUN, 12700, 0, 12799);   /* hundredths: between two table steps, interpolated */
+    dt = QMV(QP_DTUN, QD_DTUN, 12700, 0, 12700);   /* hundredths: between two table steps, interpolated */
     ra = QMV2(QP_RA, QD_RA, QD_RALL, 63, 0, QUAD_NRA - 1);   /* (RATIO ALL: C, A, B1, B2 each over its range) */
     rb = clamp(p[QP_RB1] * (int32_t)QUAD_NRCB + p[QP_RB2] + ((dst[QD_RB] * 180) >> 15), 0, QUAD_NRB - 1);
     if (dst[QD_RALL]) {
@@ -1330,9 +1355,9 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     dlb2 = ((tl[2] << 16) - lb2) >> CTL_LOG2;
     /* the multimode filter: FREQ, its envelope by DEPTH, key track, the LFOs */
     fdep = QMV(QP_FDEPTH, QD_FENV, 12700, -6400, 6399);          /* (hundredths: FREQ, RESO, DEPTH, BASE) */
-    cut = (QMV(QP_FREQ, QD_FREQ, 12700, 0, 12799) * 256 + 50) / 100 + (eF * fdep) / 6400 +
+    cut = (QMV(QP_FREQ, QD_FREQ, 12700, 0, 12700) * 256 + 50) / 100 + (eF * fdep) / 6400 +
           (((m->pitch16 - 60 * 16) * p[QP_FKTRK] * 150) >> 10);
-    reso = QMV(QP_RESO, QD_RESO, 12700, 0, 12799);
+    reso = QMV(QP_RESO, QD_RESO, 12700, 0, 12700);
     fty = p[QP_FTYPE];
     svf = fty != QF_OFF && !(fty != QF_HP12 && cut >= (127 << 8) && !reso);   /* LP wide open, no resonance: none */
     kd = 8192 - reso * 3 / 5;                    /* (60 a whole step) */
@@ -1341,14 +1366,14 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         if (fty == QF_LP24)
             tsvf_coef_k(&c2, cut, 8192);
     }
-    base = QMV(QP_BASE, QD_BASE, 12700, 0, 12799);
+    base = QMV(QP_BASE, QD_BASE, 12700, 0, 12700);
     wid = QMV(QP_WIDTH, QD_WIDTH, 127, 0, 127);
     hpk = base ? quad_bwk(base) : 0;
     lpk = base + wid * 100 < 12700 ? quad_bwk(base + wid * 100) : 0;
     /* the amplitude: the amp envelope x velocity (half) x LEVEL (squared), the voice's (fades, LFO -> AMP) */
     {
-        int32_t vel = v->mvel ? v->mvel : v->vel, lv = QMV(QP_LEVEL, QD_LEVEL, 12700, 0, 12799);
-        A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lv * lv / 5000);   /* (hundredths: 2 LEVEL^2) */
+        int32_t vel = v->mvel ? v->mvel : v->vel, lv = QMV(QP_LEVEL, QD_LEVEL, 127, 0, 127);
+        A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lv * lv * 2);   /* (2 LEVEL^2) */
         if (t->p[P_VOICE] == V_UNISON)
             A1 = (A1 * 13107) >> 15;             /* 2 / 5 */
         A1 = mulq15(A1, m->amp1);
