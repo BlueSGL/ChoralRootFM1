@@ -1089,6 +1089,113 @@ four-note, a six-note and an eight-note chord of ITS PROPHET5 held, dry and with
 with a UNISON P5 bass: `pk_block_us`, `pk_part0_us`, `pk_part1_us`, `pk_wait_us`, `shed_over_halves`,
 `shed_voices`, `stale_halves`, the four `p5_*` values, `c1_rejected`, `c1_faults`.
 
+## The effects off core 0's path, the part's coefficients, the edges (3y50)
+
+After a survey of Melodee 1.4 (6da744c "perf(audio): optimize DSP and share voice budget", cb118c9 "shared sends
+and lean reverb": the ideas, written anew; LICENSING.md). Everything here leaves the samples as they were: the 246
+goldens unchanged, the threaded identity test unchanged and extended.
+
+### The reverb on core 1
+
+docs/DUALCORE.md "What each core runs": after join 1 core 1 runs the reverb (its half-band, lines, up-sampler) while
+core 0 runs the chorus and the delay; join 2; the reverb's buffers added. The effects' stage on core 0 becomes the
+longer of the two sides instead of their sum. From the unit's readings (reverb avg 202 / max 273, its down- and
+up-sampler 22..98 each, so the reverb's side about 240 avg / 470 worst; the three effects with the parts' sends 570
+.. 720, so core 0's side about 250 at the worst), **by inference** the effects' part of a half shrinks by about 200
+.. 250 us when all three run.
+
+### The part's coefficients (`p5_coef_t`, `p5_coef_update`)
+
+Melodee's `p5_cache_update` pattern: what `p5_render` worked out for every voice of every block from the part's
+values alone (coarse and fine tuning, B's keyboard-off pitch and its `/127`, the glide's step, the cutoff's
+part-wide terms and the key tracking's factor, resonance -> k (`/127`) and the filter's gain, the envelope amount,
+the six Poly-Mod scales, the pulse widths, the three levels, the macros E0..E7 in all of these, the pressure on the
+cutoff) is worked out in `p5_block` **once a block for the part, and only when the values, a macro or the pressure
+changed**; each voice adds its own terms (m, the drifts, the glide, the velocity, the width's modulation). The same
+expressions; regrouped only as sums of integers (the cutoff) and one product (`d x kf x HALF`, either order: no
+overflow at 2047 x 2392), so the same integers. **How a change is seen**: `p5_block` still reads the 55 bytes every
+block and compares them with the last block's as it clamps them (any writer is seen in the next block: the editor,
+a load, MIDI, a test that writes the bytes itself), then the eight macros and the pressure. A version counter would
+skip the 55-byte loop, but every writer would have to count, and the tests and `tools/p5_probe.c` write the bytes
+directly: not taken. `-DP5_COEF_CACHE=0` is the old code (a measurement).
+
+**Counted from the listing** (`build/choralroot.dis`, the device compiler): `p5_render` 497 -> 366 instructions, 10
+-> 8 divides (each voice, each block: about 131 instructions and two divides fewer, about 0.6 us a voice a block,
+2.6 us a voice a half at 205 instructions a us; eight voices about 20 us a half, 0.7 % of it); `p5_block` 210 -> 245
+(the compare: +35 a part a block) and `p5_coef_update` 161 when a value moves. tests/target_budget.txt: `p5_block` 29
+-> 40 (the compare's two loops).
+
+### The idle part and the word-wide memset / memcpy
+
+An idle P5 part (no voice) already does only what leaves the part's state (3y45: the wheel's noise generator's 32
+steps and the LFO's phase); checked again: nothing else of `p5_block` runs, `track_render_x` clears the part's
+buffer and `p5_post` returns at rest. The 32 noise steps cannot be skipped bit-exactly (a xorshift has no cheaper
+jump than its 32 steps). Nothing more was skipped. `firmware/src/libc.c` (the device's only libc: the compiler's
+struct copies and clears, `va_render`'s 48-byte clear every voice and block, the engines' `memset` of a voice at a
+note-on) is a word at a time when both pointers are aligned, bytes for the rest: memset 20 instructions,
+memcpy 23, memcmp 25 in all; for `va_render`'s 48 bytes about 12 word stores where there were 48
+byte stores (about 100 instructions less a VA voice a block, an estimate from the loop's shape).
+`tests/cr_libc_test.c`: every alignment of both ends, lengths 0..80 and seven long ones, the host's bytes and signs.
+
+### The oscillators' edges, a study (tools/p5_edges.sh)
+
+The owner: "Is their optimization we could do to the oscillator edges? How much would that change the sound?"
+
+**Where the divide is**: `p5_fast_blep` (each saw a waveform needs: saw A, pulse A's two, B's saw / pulse / the
+triangle's square) tests whether the phase is within one increment of its wrap; only then `p5_blep_fraction`
+divides (`distance / inc`, normalised: 17..32-bit quotients) and the two-sample polynomial BLEP corrects the sample
+before and after the edge. Hard sync adds one divide (`p5_sync_fraction`) per sync edge of B. **Measured on the host**
+(all 200 programs, four-note chords root / third / fifth / octave, 1 s held + 0.125 s; per voice and second of sound):
+
+| register | BLEP tests | BLEP divides | sync divides | (the programs with sync alone, 110 voice-seconds a register: BLEP, sync) |
+| --- | --- | --- | --- | --- |
+| C3 | 166 409 | 3 079 | 32 | 4 664, 250 |
+| C4 | 166 532 | 6 109 | 63 | 9 388, 499 |
+| C5 | 166 776 | 12 173 | 126 | 18 915, 998 |
+| C6 | 167 266 | 23 783 | 252 | 37 444, 1 995 |
+
+So about 3.8 edge tests a sample (each a compare or two), and a divide in 7 % (C3) .. 54 % (C6) of the samples (in a
+sync program 0.11 .. 0.85). **Their share of a voice** (by inference: the unit's voice is about 440 us a half = 128
+samples x ~700 instructions; a divide with its fraction's code taken as about 25 instructions): C3 about 0.3 %, C4
+0.5 %, C5 1 %, C6 about 2 % (a sync program at C6 about 3 %); the 3.8 tests a sample about 2 % at every pitch.
+
+**The options, measured** (the master's output of all 200 programs at the four registers, 95.4 M samples, against
+today's):
+
+| option | what changes | peak difference | RMS difference |
+| --- | --- | --- | --- |
+| (a) the fraction from a 256-entry reciprocal of the increment's top bits, no correction step | the BLEP's position by up to 1 part in 512 | -13.7 dBFS | -49.2 dBFS |
+| (c) one correction tap (the sample after the edge) instead of two | the BLEP's shape: half of it gone, more alias | -10.7 dBFS | -40.6 dBFS |
+| (b) one reciprocal a block per oscillator | exact only while the increment is constant over the block; Poly-Mod A, the wheel's pitch, glide and the bend change it every sample | not built: an exact reciprocal of a varying divisor needs a divide or a correction step per edge, which is what (a) would add back | |
+
+The peaks are large because the filter, the drive and self-oscillation carry a small change at an edge into a
+different waveform later (the sample-level difference does not stay small); the RMS says how much on average.
+**None is under -90 dBFS: nothing was built.** An exact table reciprocal (Granlund-Montgomery: a table, one multiply,
+one correction) gives the same quotients, but costs about the divide it replaces when the unit's divide is counted
+as one instruction (`tools/p5_cost.py`'s convention): no saving worth its code. What could save the ~2 % of the edge
+TESTS bit-exactly: one test of the phase against the increment per oscillator (the saws of pulse and triangle share
+it) instead of one per saw: not built (a study for the owner).
+
+### Predicted, before and after (not measured; docs/PROPHET.md "Will it fit?"'s method)
+
+"By the reading" scales the sum of the worst cases by 0.876 (the one reading of its shape: 4 + 4, three effects:
+2632 us). After: the effects' stage less 200 .. 250 us when all three run (the reverb on core 1), the longer core
+less about 2.6 us a voice (the coefficients). Deadline 2902, the shed's line 2466.
+
+| chord voices (cores 0 + 1) | bass | three effects: before | after | no effects: before | after |
+| --- | --- | --- | --- | --- | --- |
+| 4 (2 + 2) | none | about 1860 (64 %) | about 1640 .. 1680 (57 %) | 1220 .. 1605 | -5 |
+| 6 (3 + 3) | none | about 2250 (77 %) | about 2020 .. 2060 (70 %) | 1605 .. 2045 | -8 |
+| 8 (4 + 4) | none | 2632 (91 %), the reading | **about 2400 .. 2440 (83 .. 84 %)** | 1990 .. 2485 | -10 |
+| 4 (0 + 4) or 6 (4 + 2) | P5 stack 4 / 2 (core 1) | 2632 | about 2400 .. 2440 | as 8 | -10 |
+| 4 (2 + 2) | P5, one voice | about 2250 | about 2020 .. 2060 | 1605 .. 2045 | -8 |
+| 8 (4 + 4) | another engine, one voice | about 2760 (95 %) | about 2530 .. 2570 (88 %) | 2140 .. 2635 | -10 |
+
+**Plainly**: by inference eight P5 voices with the three effects come under the 85 % line by a few tens of us
+(2400 .. 2440 against 2466), where they were over it; with another engine's bass under eight they stay over it. To
+read on the unit: 78 PEAK's `pk_block_us`, `pk_c0_busy_us`, `pk_c1_busy_us`, `pk_fx_join_us` (how long core 0
+waits for the reverb: if it is long, the reverb's side is the longer one), `pk_fx_map` 15, `shed_over_halves`.
+
 ## Level (3y46)
 
 The owner, 2026-10-13: "Since Unison on is going to bring us 5 dB over the limiter, I think we should bring engine

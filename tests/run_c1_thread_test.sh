@@ -17,6 +17,7 @@ sh tests/hostcc.sh cc -std=gnu11 -O2 -w $I -o build/host/cr_c1_thread_test tests
 ./build/host/cr_c1_thread_test > build/host/cr_c1_thread_test.log || { cat build/host/cr_c1_thread_test.log; exit 1; }
 echo "c1 thread: $(grep -c '^  ok ' build/host/cr_c1_thread_test.log) pairs of engines render the inline job's samples with the job on a second thread"
 echo "c1 thread: P5's chord voices on both cores: $(sed -n 's/^split: //p' build/host/cr_c1_thread_test.log)"
+echo "c1 thread: $(sed -n "s/^effects: //p" build/host/cr_c1_thread_test.log)"
 if ! sh tests/hostcc.sh cc -std=gnu11 -O1 -g -w -fsanitize=thread $I -o build/host/cr_c1_thread_tsan tests/cr_c1_thread_test.c -lm 2> build/host/cr_c1_thread_tsan.cc.log; then
     echo "c1 thread: skip: this compiler has no -fsanitize=thread (the sanitizer's run and its proof are not done)"
     exit 0

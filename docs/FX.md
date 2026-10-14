@@ -277,10 +277,18 @@ the numbers are that stretch's):
 | `erases_auto_sounding` | 3y48, since power-on (never cleared): automatic erases (the Options' or the favourites' poll) that started while something sounded in the second before. The rule is 0 |
 | `last_erase_why`, `last_erase_obj`, `last_erase_ms` | since power-on: the latest erase's writer (0 other: a sound saved, a store; 1 the Options' poll; 2 the favourites' poll; 3 the global save or Reset Settings; 4 the calibration or the update gesture; 5 a backup restore; 6 a loop slot), its object (storage.c `OBJ_*`, 0x100 + k a loop slot) and when (ms since power-on, 0 none) |
 | `irq_gap_ms`, `ua_arm_gap_max_ms`, `ua_cap_reset_ms`, `uptime_ms` | when `irq_gap_us` happened (a peak, cleared with it), when `ua_arm_gap_max_us` did (since power-on), the latest USB capture under- or overrun (the stream restarted: a gap the host hears), and the unit's clock at the read. A stutter in a recording with none of them near its time is not the device's |
+| `pk_c0_busy_us`, `pk_c1_busy_us` | 3y50, **each core's half** (docs/DUALCORE.md "What each core runs"): the largest busy time of core 0 (its stages but `wait`, without core 1's job) and of core 1 (its voices' job and the reverb's), each in its own worst half |
+| `pk_c0_wait_us`, `pk_fx_join_us`, `pk_c1_idle_us` | core 0's waits in one half (both joins: the same as `pk_wait_us`), of them the effects' join alone, and core 1 idle between its voices' end and the reverb's start |
+| `pk_fx_map`, `c1_fx_jobs` | which core ran which effect in the largest whole half (`pk_wall_us`'s): 1 the chorus, 2 the delay, 4 the reverb ran, 8 the reverb on core 1 (so 15: all three, the reverb on core 1; 7: all three on core 0); and the reverb jobs core 1 ran |
 
 With Dual Core On **`pk_part1_us` is core 1's whole job of a half**: the bass part and, since 0.22, the chord part's
 P5 voices that core 1 renders; `pk_part0_us` is core 0's own render (its share of the chord's voices), `pk_wait_us`
 how long core 0 then waited for core 1. The half is the tick + the longer of the two + the effects + the master.
+Since 3y50 the reverb runs on core 1 while core 0 runs the chorus and the delay: `pk_fx_us` is core 0's side of the
+effects (the sends, the chorus, the delay, the sum), `fx_reverb_*`, `fx_down_*` and `fx_up_*` are measured on core 1
+when it ran them (and added to the fx parts after the join), and `pk_wait_us` now holds both joins: the effects' join
+alone is `pk_fx_join_us`. The emulator's core 1 runs a job when it is handed (inline), so its `fx` stage still holds
+the reverb: perf.sh's figures do not show the overlap (estimates of the work, not of the unit's timing).
 
 The instrumentation is five TIMER4 reads a block. `tools/emu/perf.sh` prints the same four parts ("fx parts"), so the
 two compare line by line. The emulator's, for (l), the heaviest sound with both sends at 127:

@@ -723,7 +723,7 @@ static void crb_debug(void)
  * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[56], k = 0, i;
+    uint32_t v[64], k = 0, i;
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -803,6 +803,18 @@ static void crb_peak(void)
     v[k++] = 0;
 #endif
     v[k++] = fm1_ms;                                 /* (the clock the times above are on) */
+    /* 3y50, values 55..61 (cr_cpu1.h cr_dbg; docs/FX.md "Each core's half"): since the last read, the largest half's
+     * busy time of core 0 (its stages but its waits, without core 1's job) and of core 1 (its voices and the reverb),
+     * core 0's waits in one half (both joins: pk_wait_us's), the effects' join alone, core 1 idle between its two
+     * jobs; which core ran which effect in the largest whole half (1 chorus, 2 delay, 4 reverb ran, 8 reverb on
+     * core 1); the reverb jobs core 1 ran */
+    v[k++] = cr_dbg.pk_c0_busy / CR_PROF_PER_US;
+    v[k++] = cr_dbg.pk_c1_busy / CR_PROF_PER_US;
+    v[k++] = cr_dbg.pk_w0 / CR_PROF_PER_US;
+    v[k++] = cr_dbg.pk_fxw / CR_PROF_PER_US;
+    v[k++] = cr_dbg.pk_w1 / CR_PROF_PER_US;
+    v[k++] = cr_dbg.pk_fxmap;
+    v[k++] = cr_dbg.c1x_jobs;
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

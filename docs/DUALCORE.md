@@ -110,6 +110,50 @@ rendered"):
 | waits for core 1 | waits in RAM |
 | DIST, level, pan, sends of every part; parts 2..3; FX buses; master; USB tap; click | |
 
+### What each core runs (3y50: the reverb on core 1)
+
+Since 3y50 a block has **two** jobs for core 1 when it is alive (`cr_dbg.c1` C1_OK), both handed over and waited for
+in a fixed order on core 0:
+
+| core 0 (the audio ISR) | core 1 |
+| --- | --- |
+| the tick, events, voice allocation; both parts' matrix + LFO tick | idle |
+| (P5 chord) its share of the chord's voices; (else) part 0's render | **job 1**: part 1's render (+ its share of the P5 chord's voices) |
+| join 1 (`CRP_WAIT`) | idle |
+| DIST, level, pan, sends of parts 0 and 1 (the sends are whole from here) | idle |
+| `xf_prep` (the coefficients, what runs), then hands over job 2 | |
+| the chorus (`xc_block`), the delay (`xf_delay`) into the mix | **job 2**: the reverb (`xf_reverb`: its half-band, its eight lines, the wet's up-sampler) into `c1x_l` / `c1x_r` |
+| join 2 (`CRP_WAIT` and `fxw`), `mix += c1x` | idle |
+| the master, the USB tap, the click | |
+
+Why the reverb: the effects need the sum of both parts' sends, which exists only after join 1, so they cannot run
+under the voices without a block of latency (not bit-exact, not taken); what can overlap is one effect with the
+others. The reverb is the largest (the unit: avg 202 / max 273 us a half, plus its down- and up-sampler 22..98 each)
+and owns state no other effect touches (`xf.r_*`, `xf.dn[1]`, `xf.up`, `xf.t[1..3]`, `xf.tr`, `xf.tx`, `xr_buf`,
+`xr_pbuf`); the chorus (`fx.cho_*`, `xc`, `cho_buf`) and the delay (`xf.d_*`, `xd_buf`, `xf.tf`) stay on core 0.
+Every effect ADDS its wet into the mix (`+=`, integers, no saturation between): the reverb into buffers of its own,
+added by core 0 after the join, gives the mix that the serial order gives, bit for bit, whatever runs first (proof:
+`tests/cr_c1_thread_test.c` "effects": inline = thread = the effects all on core 0 (`cr_c1_test_fx0`), every pair of
+engines, three sends up; ThreadSanitizer clean; test_cr.sh `cr_prophet_eight_fx`: inline and `EMU_C1=thread` WAVs
+equal). A block with nothing for the reverb (no send, its tail and the up-sampler's over) hands nothing over.
+`CR_FX_DELAY_DS 2` (the delay at the half rate writes the reverb's wet buffer) keeps the whole block on core 0
+(`XF_SPLIT` 0). Dual Core Off, core 1 failed or given up: `xf_block` on core 0, the three pieces in a row, as before.
+Job 2 refused, stalled or faulted: core 1 held for good (C1_GAVE_UP) and core 0 runs the reverb itself in that block,
+as it reruns job 1.
+
+**The split of the P5 chord's voices** (3y46's rule, kept in 3y50): core 1 takes the k voices that make the longer of
+the two sides (core 1: the bass part + k voices; core 0: the rest) shortest, at most four a core, the odd one to core
+1. 3y50 looked at weighing them (the survey's item 2): every chord voice plays the part's one program, so they all
+weigh the same, and the bass part is already weighed (P5 voices as voices, another engine by its units); core 0's own
+fixed work (the tick, the sends, its effects, the master) lies **outside** the window in which the voices overlap
+(before the hand-over or after join 1), so it cannot be balanced against voices. With the measured costs the
+weighted rule gives today's 4 + 4 for 8, 3 + 3 for 6, 2 + 2 for 4 (an odd one to core 1); it was not changed.
+Publishing job 1 before core 0 has prepared all of the chord's voices (Melodee's per-job publishing) needs a mailbox
+deeper than `fm1_c1_post`'s one job (core 1's voices are prepared by core 0 in `track_render_x`): not done.
+
+The shed (`audio.c shed_check`) times core 0's whole half, both joins' waits in it: the figure that misses the
+deadline. 78 PEAK 55..61 (docs/FX.md "Each core's half") reads each core's busy time apart.
+
 The wait is inside the half's time: the CPU meter and the overload shed (`audio.c shed_check`) see the true block.
 Core 1 only works inside the audio ISR, which waits for it before it returns; core 0 turns the flash off (saves,
 updates) only with interrupts off; idle, core 1 runs from RAM. So the flash is never off under it.

@@ -169,8 +169,25 @@ typedef struct {
     p5_env_t filter, amp;
     uint32_t steal;                     /* the blocks left of a stolen voice's fade (P5_STEAL_BLOCKS), 0: none */
 } p5_voice_t;
+/* THE PART'S COEFFICIENTS (3y50, after Melodee 1.4's p5_cache_update, commit 6da744c; written anew): what p5_render
+ * worked out for every voice of every block from the part's values (value[]), the macros P_E0..7 and the pressure
+ * alone. p5_block works them out once a block for the part, and only when one of those moved (p5_coef_update): the
+ * same integers, by the same expressions, regrouped only where a sum or a product of integers is the same whatever
+ * the order (docs/PROPHET.md "The part's coefficients") */
+typedef struct {
+    int32_t coarse_a, coarse_b, pb_free, fine_b, glide_step, cut, kt, k, filter_gain, env_amount;
+    int32_t pa_env, pa_b, pf_env, pf_b, pw_env, pw_b, pwm_a, pwm_b, la, lb, ln, e2, e3;
+    int16_t e[8];                       /* the key: the macros and the pressure they were worked out for */
+    uint8_t at, ok;                     /* ok 0: never worked out (the engine's state is cleared when a part comes to P5) */
+} p5_coef_t;
 typedef struct { p5_voice_t voice[P5_POLY]; uint32_t lfo; int32_t lfo_value, last_pitch, mod_noise, dc_x1, dc_y1; int16_t wheel[CTL * P5_OVERSAMPLE]; uint16_t wheel_pitch[CTL * P5_OVERSAMPLE]; uint8_t value[55];
     uint16_t sg0, sg1;                  /* a UNISON stack's gain over this block (Q12; 0: no stack), p5_block */
+#ifndef P5_COEF_CACHE
+#define P5_COEF_CACHE 1                 /* 0: p5_render works its coefficients out per voice, as to 3y48 (a measurement) */
+#endif
+#if P5_COEF_CACHE
+    p5_coef_t c;
+#endif
 } p5_part_t;
 static p5_part_t *p5_part(uint32_t part);         /* engines.c: shared runtime pool (0: a part without one) */
 static p5_patch_t p5_patch[NPART] __attribute__((section(".pool")));
@@ -198,8 +215,17 @@ static inline __attribute__((always_inline)) uint32_t p5_fraction_q15(uint32_t d
     uint32_t value=(distance<<shift)/(inc>>(15u-shift));
     return value>32768u?32768u:value;
 }
+/* (3y50, the edges' study: tools/p5_edges.c counts the divides through P5_EDGE and builds the alternatives through
+ * P5_BLEP_FRACTION_ALT / P5_BLEP_ALT; docs/PROPHET.md "The oscillators' edges". Nothing here in any other build) */
+#ifndef P5_EDGE
+#define P5_EDGE(k, distance, inc) ((void)0)
+#endif
 static inline __attribute__((always_inline)) int32_t p5_blep_fraction(uint32_t distance,uint32_t inc)
 {
+    P5_EDGE(0, distance, inc);
+#ifdef P5_BLEP_FRACTION_ALT
+    return P5_BLEP_FRACTION_ALT(distance, inc);
+#endif
     /* At high rates the short division loses at most six Q15 correction
      * units. Low rates require normalization to avoid the earlier overflow. */
     if(inc>=(1u<<27)){
@@ -211,6 +237,10 @@ static inline __attribute__((always_inline)) int32_t p5_blep_fraction(uint32_t d
 static inline __attribute__((always_inline)) int32_t p5_fast_blep(uint32_t ph, uint32_t inc)
 {
     int32_t x;
+    P5_EDGE(2, ph, inc);
+#ifdef P5_BLEP_ALT
+    return P5_BLEP_ALT(ph, inc);
+#endif
     if (!inc)
         return 0;
     if (ph < inc) {
@@ -431,6 +461,39 @@ static void p5_stack_gain(track_t *t,p5_part_t *s)
     }
     if(!s->sg0)s->sg0=s->sg1;
 }
+#if P5_COEF_CACHE
+/* the part's coefficients (p5_coef_t): each p5_render's expression for it, statement for statement, with the voice's
+ * own terms (m, the drifts, the glide, the velocity, the width's modulation) left to the voice */
+static __attribute__((noinline)) void p5_coef_update(const track_t *t,p5_part_t *s,const uint8_t *p)
+{
+    const uint8_t *q=s->value;
+    p5_coef_t *c=&s->c;
+    int curtis=!!p[P5_FILTER_REV];
+    int32_t c0=q[P5_CUTOFF],resonance;
+    for(uint32_t k=0;k<8u;k++)c->e[k]=t->p[P_E0+k];
+    c->at=t->at;
+    c->coarse_a=(clamp(q[P5_FREQ_A],0,96)/2-12)*16;
+    c->coarse_b=(clamp(q[P5_FREQ_B],0,96)/2-12)*16;
+    c->pb_free=12*16+q[P5_FREQ_B]*108*16/127;
+    c->fine_b=q[P5_FINE_B]*100/128;
+    c->e2=t->p[P_E2]*16;
+    c->e3=t->p[P_E3]*16;
+    c->glide_step=(int32_t)(ENV_LIN[q[P5_GLIDE]]>>14);if(c->glide_step<1)c->glide_step=1;
+    /* cut: the sum's part-wide terms (+ m->cutoff + the drift + the key tracking, per voice: a sum of integers) */
+    c->cut=1618+c0*236+(curtis?0:(127-c0>66?66:127-c0)*38) + t->p[P_E0]*256 + (p[P5_PRESS_FILTER]?t->at*96:0);
+    c->kt=p5_fast_clamp(p[P5_KEY_FILTER],0,2)*P5_KEYTRACK_HALF_Q7;   /* (d * kf * HALF: one product, either order) */
+    resonance=p5_fast_clamp(q[P5_RESONANCE]+t->p[P_E1],0,127);
+    c->k=resonance*(curtis?19200:18800)/127;
+    c->filter_gain=32767-resonance*(curtis?100:45);
+    c->env_amount=q[P5_ENV_FILTER]*165;
+    c->pa_env=q[P5_POLY_ENV]*85; c->pa_b=q[P5_POLY_B]*35;
+    c->pf_env=q[P5_POLY_ENV]*226; c->pf_b=q[P5_POLY_B]*226;
+    c->pw_env=q[P5_POLY_ENV]*64; c->pw_b=q[P5_POLY_B]*258;
+    c->pwm_a=q[P5_PW_A]*258+t->p[P_E4]*256; c->pwm_b=q[P5_PW_B]*258+t->p[P_E5]*256;
+    c->la=clamp(q[P5_LEVEL_A]+t->p[P_E6],0,127)*258; c->lb=clamp(q[P5_LEVEL_B]+t->p[P_E7],0,127)*258; c->ln=q[P5_NOISE]*258;
+    c->ok=1;
+}
+#endif
 static void p5_block(track_t *t)
 {
     p5_part_t *s=p5_part((uint32_t)(t-trk));const uint8_t *p=p5_patch_of(t)->raw;
@@ -456,7 +519,20 @@ static void p5_block(track_t *t)
 #endif
     p5_stack_gain(t,s);
     /* Raw-to-DSP clamping is part-wide; envelopes and all the voices share it. */
+#if P5_COEF_CACHE
+    {
+        /* (the bytes are read every block, as before: any writer, the editor's, a load's, MIDI's or a test's own, is
+         * seen in the next block. A version counter would skip this loop, but it would need every writer to count;
+         * the compare is the loop's own cost, docs/PROPHET.md) */
+        uint32_t d=0;
+        for(uint32_t k=0;k<55u;k++){uint8_t x=(uint8_t)p5_value(p,k);d|=(uint32_t)(x^s->value[k]);s->value[k]=x;}
+        for(uint32_t k=0;k<8u;k++)d|=(uint32_t)(t->p[P_E0+k]^s->c.e[k]);
+        d|=(uint32_t)(s->c.at^t->at)|(uint32_t)(s->c.ok^1u);   /* (one test: no cold path laid behind the function) */
+        if(d)p5_coef_update(t,s,p);
+    }
+#else
     for(uint32_t k=0;k<55u;k++)s->value[k]=(uint8_t)p5_value(p,k);
+#endif
     uint32_t inc=P5_LFO_INC[p5_value(p,P5_LFO_RATE)]/P5_OVERSAMPLE;
     int32_t amount=P5_AMOUNT_Q15[clamp(p5_value(p,P5_LFO_INITIAL)+t->mw+(p[P5_PRESS_LFO]?t->at:0),0,127)];
     void (*volatile run)(p5_part_t *,const uint8_t *,uint32_t,int32_t,int32_t)=p5_mod_samples;
@@ -579,6 +655,7 @@ static inline __attribute__((always_inline)) int32_t p5_wave(uint32_t phase, uin
  * retain at least 16 significant bits; error is at most one Q15 unit. */
 static inline __attribute__((always_inline)) uint32_t p5_sync_fraction(uint32_t distance,uint32_t inc)
 {
+    P5_EDGE(1, distance, inc);
     return p5_fraction_q15(distance,inc);
 }
 static inline __attribute__((always_inline)) uint32_t p5_pw(int32_t value)
@@ -777,6 +854,25 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
     int32_t f1=p5_env_tick(&s->filter,v->gate,p,P5_ATTACK_FILTER,P5_DECAY_FILTER,P5_SUSTAIN_FILTER,P5_RELEASE_FILTER,s->env_drift,q,!curtis);
     int32_t a1=p5_env_tick(&s->amp,v->gate,p,P5_ATTACK_AMP,P5_DECAY_AMP,P5_SUSTAIN_AMP,P5_RELEASE_AMP,s->env_drift,q,0);
     s->filter_prev=f1; s->amp_prev=a1;
+#if P5_COEF_CACHE
+    const p5_coef_t *C=&part->c;
+    int32_t glide=0;
+    if(p[P5_GLIDE]){
+        int32_t target=v->pitch16,d=target-s->glide_pitch;
+        int32_t step=C->glide_step;
+        s->glide_pitch+=clamp(d,-step,step);glide=s->glide_pitch-v->pitch_cur;
+    }else s->glide_pitch=v->pitch16;
+    int32_t pitch_a = m->pitch16 + glide + C->coarse_a + C->e2;
+    int32_t pitch_b = (p[P5_KEY_B] ? m->pitch16+glide+C->coarse_b : C->pb_free) + C->e3;
+    uint32_t ia = cents_inc(pitch_a, s->drift, m->fine) / P5_OVERSAMPLE;
+    uint32_t ib = cents_inc(pitch_b, C->fine_b-s->drift, m->fine) / P5_OVERSAMPLE;
+    if (p[P5_LOW_B]) ib >>= 7;
+    int32_t filter_velocity=p[P5_VEL_FILTER] ? v->mvel*258 : 32767;
+    int32_t amp_velocity=p[P5_VEL_AMP] ? v->mvel*258 : 32767;
+    int32_t cut=C->cut + m->cutoff + s->filter_drift + (m->pitch16-36*16)*C->kt/128;
+    int32_t width_mod=m->shape-(64<<8);
+    const p5_render_params_t c={f0,a0,f1,a1,ia,ib,cut,C->k,C->filter_gain,filter_velocity,amp_velocity,C->env_amount,C->pa_env,C->pa_b,C->pf_env,C->pf_b,C->pw_env,C->pw_b,C->pwm_a+width_mod,C->pwm_b+width_mod,C->la,C->lb,C->ln,part->wheel,part->wheel_pitch};
+#else
     int32_t glide=0;
     if(p[P5_GLIDE]){
         int32_t target=v->pitch16,d=target-s->glide_pitch;
@@ -821,6 +917,7 @@ static void p5_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vm
     int32_t pwm_a=q[P5_PW_A]*258+t->p[P_E4]*256+width_mod, pwm_b=q[P5_PW_B]*258+t->p[P_E5]*256+width_mod;
     int32_t la=clamp(q[P5_LEVEL_A]+t->p[P_E6],0,127)*258, lb=clamp(q[P5_LEVEL_B]+t->p[P_E7],0,127)*258, ln=q[P5_NOISE]*258;
     const p5_render_params_t c={f0,a0,f1,a1,ia,ib,cut,k,filter_gain,filter_velocity,amp_velocity,env_amount,pa_env,pa_b,pf_env,pf_b,pw_env,pw_b,pwm_a,pwm_b,la,lb,ln,part->wheel,part->wheel_pitch};
+#endif
     /* An indirect call crosses the XIP/RAM distance beyond direct branch range. */
     void (*volatile run)(p5_voice_t *,const uint8_t *,int32_t *,uint32_t,const vmod_t *,const p5_render_params_t *)=p5_samples;
     if(part->sg1 && n<=CTL){

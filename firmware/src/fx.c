@@ -1183,9 +1183,93 @@ CR_HOT_CORE static void c1_part1_job(uint32_t n)
                 p5_render(&trk[0], p5x.it[i].v, p5x_buf, n, &p5x.it[i].m);
     }
 #endif
-    if (cr_dbg.prof_on)
-        cr_dbg.cur[CRP_PART1] += cr_prof_less(cr_prof_now() - t0);
+    if (cr_dbg.prof_on) {
+        uint32_t t1 = cr_prof_now(), d = cr_prof_less(t1 - t0);
+        cr_dbg.cur[CRP_PART1] += d;
+        if (cr_c1_split) {                              /* (on core 1: its busy time, and when it went idle) */
+            cr_dbg.c1_busy_cur += d;
+            cr_dbg.c1v_cur += d;
+            cr_dbg.c1_end = t1;
+        }
+    }
 }
+#if CR_FX && XF_SPLIT
+/* 3y50, THE REVERB ON CORE 1 (docs/DUALCORE.md "What each core runs"): once both parts are in the mix the sends are
+ * whole; core 1, done with its voices, takes the reverb (its half-band, its lines, the wet's up-sampler: the largest
+ * of the three effects, 202 us of a half on average and 273 at most on the unit) into c1x_l / c1x_r while core 0 runs
+ * the chorus and the delay; core 0 then waits for it and adds the two buffers into the mix. Sums of integers: the
+ * mix is the one core's, bit for bit (tests/cr_c1_thread_test.c "effects"). The job touches xf's reverb state alone
+ * (cr_fx.c xf_reverb), the sends it reads are not written again before the next block, and these */
+static int32_t c1x_l[CTL] __attribute__((section(".pool"))), c1x_r[CTL] __attribute__((section(".pool")));
+static uint8_t c1x_rev;                                 /* this block's reverb runs its lines (else the tail alone) */
+static uint32_t c1x_tm[CRX_N];                          /* the job's parts' times (cr_fx.c xf_reverb's tm) */
+CR_HOT_CORE static void c1_fx_job(uint32_t n)
+{
+    uint32_t i, t0 = cr_dbg.prof_on ? cr_prof_now() : 0u, mk = t0;
+    for (i = 0; i < n; i++)
+        c1x_l[i] = c1x_r[i] = 0;
+    xf_reverb(send_r, c1x_l, c1x_r, n, c1x_rev, cr_dbg.prof_on ? c1x_tm : 0, &mk);
+    if (cr_dbg.prof_on && cr_c1_split) {
+        uint32_t t1 = cr_prof_now();
+        cr_dbg.c1_busy_cur += cr_prof_less(t1 - t0);
+        if (cr_dbg.c1_end && (int32_t)(t0 - cr_dbg.c1_end) > 0)
+            cr_dbg.w1_cur += t0 - cr_dbg.c1_end;        /* (core 1 idle from its voices' end to this job) */
+        cr_dbg.c1_end = 0;
+    }
+}
+/* the effects of a block with core 1 alive: the reverb there when it has something to do (above), the chorus and the
+ * delay here, the join, the reverb's buffers added. Core 1 refusing, failing or given up: everything here, as
+ * xf_block. Returns with the stage marks as mix_block's serial path leaves them (the join's wait is CRP_WAIT's) */
+static __attribute__((noinline)) void mix_fx_split(uint32_t n)
+{
+    uint32_t f = xf_prep(send_d, send_r, n), i, k, mk = 0;
+    int ran = 0;
+    if ((f & 6u) && cr_c1_check()) {                    /* the reverb's lines or its up-sampler's tail run */
+        c1x_rev = (uint8_t)(f >> 1 & 1u);
+        for (k = 0; k < CRX_N; k++)
+            c1x_tm[k] = 0;
+        cr_c1_split = 1;
+        ran = cr_c1_run(c1_fx_job, n);
+        if (!ran)
+            cr_c1_split = 0;
+    }
+    if (!ran)
+        cr_dbg.c1_end = 0;                              /* (no reverb job: core 1's idle stretch ends with the block) */
+    xc_block(send_c, mix_l, mix_r, n);                  /* (cr_fx.c: the chorus, two taps, into the mix) */
+    cr_dbg.fxmap_cur |= 1u | (f & 1u) << 1 | (f & 6u ? 4u : 0u) | (ran ? 8u : 0u);
+    if (!f)
+        return;
+    CR_PROFX_START();
+    if (f & 1u)
+        xf_delay(send_d, mix_l, mix_r, n);
+    if (ran) {
+        CR_PROF(CRP_FX);
+        if (cr_c1_wait())                               /* 8 ms or a fault: core 1 held for good (C1_GAVE_UP) */
+            ran = 0;
+        if (cr_dbg.prof_on) {                           /* the join's wait: CRP_WAIT's, and on its own */
+            uint32_t t_ = cr_prof_now(), d = cr_prof_less(t_ - cr_dbg.mark);
+            cr_dbg.cur[CRP_WAIT] += d;
+            cr_dbg.fxw_cur += d;
+            cr_dbg.mark = t_;
+        }
+        cr_c1_split = 0;
+        if (ran) {
+            cr_dbg.c1x_jobs++;
+            for (i = 0; i < n; i++) {
+                mix_l[i] += c1x_l[i];
+                mix_r[i] += c1x_r[i];
+            }
+            for (k = 0; k < CRX_N; k++)
+                cr_dbg.xcur[k] += c1x_tm[k];
+            return;
+        }
+        cr_dbg.fxmap_cur &= ~8u;                        /* (core 1 given up: core 0 runs the job, as c1_part1_job) */
+        CR_PROFX_START();
+    }
+    xf_reverb(send_r, mix_l, mix_r, n, (int)(f >> 1 & 1u), 0, &mk);   /* (here; with nothing for the reverb: the
+                                                         * up-sampler's states cleared, as xf_block does) */
+}
+#endif
 #if P5_SPLIT
 /* WHICH CORE RENDERS WHICH OF THE CHORD PART'S P5 VOICES (3y46; docs/PROPHET.md "Two cores"). Core 0 WAITS for core 1
  * before the effects and the master, so the half's time is the tick + the LONGER of the two cores' renders + the
@@ -1322,6 +1406,7 @@ static void mix_parts_split(uint32_t n)
     uint32_t nr0;
     int ran;
     CR_PROF(CRP_FX);
+    cr_dbg.c1_end = 0;                                  /* (core 1's voices end stamp: this block's, c1_fx_job) */
     mod_begin(t0);
     c1_lfo[0] = mulq15(t0->lfo_val, t0->lfo_fade);
     track_lfo_tick(t0);
@@ -1433,9 +1518,16 @@ static void mix_block(int32_t *out, uint32_t n)
         xc_live = CHO_LEN;
     } else
 #endif
+#if CR_CPU1 && XF_SPLIT
+    if (cr_dualcore_active() && !CR_C1_TEST_FX0)
+        mix_fx_split(n);                                /* (3y50: the reverb on core 1, the chorus and the delay here) */
+    else
+#endif
+    {
         xc_block(send_c, mix_l, mix_r, n);              /* (cr_fx.c: the chorus, two taps, into the mix) */
-    xf_block(send_d, send_r, mix_l, mix_r, n);          /* (cr_fx.c: stereo, into the mix; the FX layer's master
+        xf_block(send_d, send_r, mix_l, mix_r, n);      /* (cr_fx.c: stereo, into the mix; the FX layer's master
                                                          * effects and the limiter after it, as the chorus) */
+    }
 #else
     fx_buses(send_c, send_d, send_r, wet, n);
 #endif

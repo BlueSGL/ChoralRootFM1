@@ -58,8 +58,19 @@ static uint32_t rnd(uint32_t n)
  * fade and the deferred note), bass notes under them on part 1 (a UNISON program: the stack), the wheel, the
  * pressure, a bend on both, a sound change on each part under held notes. Returns the digest of every sample */
 /* mode: 0 the job inline, 1 on the thread, 2 inline and P5's chord voices not shared out (the reference), 3 / 4 on
- * the thread with every chord voice given to core 1 / to core 0 */
+ * the thread with every chord voice given to core 1 / to core 0; 5 inline with the effects all on core 0 (3y50: the
+ * reference for the reverb on core 1, fx.c mix_fx_split). Every phrase sends to the three effects from both parts
+ * (3y50: the reverb's job runs on the thread in every block that has something for it) */
 #define NKEYS 8u
+static void sends_up(void)                          /* the three effects, both parts: up */
+{
+    uint32_t k;
+    for (k = 0; k < 2u; k++) {
+        trk[k].p[P_CHOR] = (int16_t)(70 + 20 * k);
+        trk[k].p[P_DLY] = (int16_t)(90 - 20 * k);
+        trk[k].p[P_REV] = 110;
+    }
+}
 static uint64_t phrase(const pair_t *p, uint32_t nb, int mode)
 {
     int32_t out[2u * CTL];
@@ -69,12 +80,14 @@ static uint64_t phrase(const pair_t *p, uint32_t nb, int mode)
     rs = 0x1234567u + p->ce * 131u + p->be * 17u + p->cpos;
     vmax[0] = vmax[1] = pmax = 0;
     cr_dbg.c1 = C1_OK;
-    cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = 0;
+    cr_dbg.p5_c0 = cr_dbg.p5_c1 = cr_dbg.p5_bass = cr_dbg.c1x_jobs = 0;
     cr_c1_test_thread = (uint8_t)(mode == 1 || mode >= 3);
     cr_c1_test_nosplit = (uint8_t)(mode == 2);
     cr_c1_test_share = (uint8_t)(mode == 3 ? P5_POLY + 1u : mode == 4 ? 1u : 0u);
+    cr_c1_test_fx0 = (uint8_t)(mode == 5);
     cu_pool_load(0, p->ce, p->cpos);
     cu_pool_load(1, p->be, p->bpos);
+    sends_up();
     for (b = 0; b < nb; b++) {
         if (!(b % 37u)) {                               /* a new chord over the old one's notes */
             for (i = 0; i < NKEYS; i++)
@@ -104,6 +117,8 @@ static uint64_t phrase(const pair_t *p, uint32_t nb, int mode)
         if (b == nb / 2u)                               /* another sound of each engine under the held notes */
             for (k = 0; k < 2u; k++)
                 cu_pool_load(k, k ? p->be : p->ce, 1u + rnd(pool_count(k ? p->be : p->ce) - 1u));
+        if (b == nb / 2u)
+            sends_up();
         mix_block(out, CTL);
         if ((P5_IS(&trk[0]) || P5_IS(&trk[1])) && p5_pool_used() > pmax)
             pmax = p5_pool_used();
@@ -155,7 +170,7 @@ static uint64_t fork_phrase(const pair_t *p, uint32_t nb, int thread)
 int main(int argc, char **argv)
 {
     int tsan = argc >= 2 && !strcmp(argv[1], "--tsan");
-    uint32_t i, uni = 0, k, nb = tsan ? 900u : 3000u, nsplit = 0;
+    uint32_t i, uni = 0, k, nb = tsan ? 900u : 3000u, nsplit = 0, nfx = 0, jobs0 = 0;
     pair_t P[20];
     uint32_t np = 0;
     emu_flash_open();
@@ -190,18 +205,24 @@ int main(int argc, char **argv)
     for (i = 0; i < np; i++) {
         if (tsan) {
             uint64_t h = phrase(&P[i], nb, 1);
+            uint32_t fxj = cr_dbg.c1x_jobs;
             int p5c = P[i].ce == ENGI_PROPHET;
-            int ok = vmax[0] >= 3u && vmax[1] >= 1u && (i || !uni || vmax[1] == P5_STACK) && cr_c1_th_done == (i + 1u) * nb &&
+            int ok = vmax[0] >= 3u && vmax[1] >= 1u && (i || !uni || vmax[1] == P5_STACK) && cr_c1_th_done == cr_c1_th_posted &&
+                     cr_c1_th_done - jobs0 == nb + fxj && fxj > nb / 2u &&
                      pmax <= P5_POLY && (!p5c || (vmax[0] > P5_CORE && cr_dbg.p5_c0 >= 2u && cr_dbg.p5_c0 <= P5_CORE && cr_dbg.p5_c1 >= 2u &&
                                cr_dbg.p5_c1 <= P5_CORE));
             fails += !ok;
             printf("  %s %s: %016llx (voices: chord %u, bass %u; P5 voices in a block at most: core 0 %u, core 1 %u; jobs "
                    "on the thread: %u)\n", ok ? "ran " : "FAIL", P[i].what, (unsigned long long)h, (unsigned)vmax[0],
                    (unsigned)vmax[1], (unsigned)cr_dbg.p5_c0, (unsigned)cr_dbg.p5_c1, (unsigned)cr_c1_th_done);
+            printf("  fx: %u of %u blocks ran the reverb on the thread\n", (unsigned)fxj, (unsigned)nb);
+            jobs0 = cr_c1_th_done;
         } else {
             uint64_t a = fork_phrase(&P[i], nb, 0), b = fork_phrase(&P[i], nb, 1), c = fork_phrase(&P[i], nb, 1);
             uint32_t c0 = cr_dbg.p5_c0, c1 = cr_dbg.p5_c1;
-            int ok = a && a == b && a == c && pmax <= P5_POLY;
+            uint64_t z = fork_phrase(&P[i], nb, 5);
+            int ok = a && a == b && a == c && a == z && pmax <= P5_POLY;
+            nfx += a == z;
             if (P[i].ce == ENGI_PROPHET) {              /* the unsplit render, and two splits of the test's own */
                 uint64_t d = fork_phrase(&P[i], nb, 2), e = fork_phrase(&P[i], nb, 3), f = fork_phrase(&P[i], nb, 4);
                 ok = ok && a == d && a == e && a == f && c0 >= 2u && c0 <= P5_CORE && c1 >= 2u && c1 <= P5_CORE;
@@ -224,6 +245,8 @@ int main(int argc, char **argv)
     }
     if (!tsan)
         printf("split: %u pairs with P5 on the chord part: the two cores' sums are the unsplit render's samples\n", (unsigned)nsplit);
+    if (!tsan)
+        printf("effects: %u pairs, three sends up: the reverb on core 1 gives the samples of the effects all on core 0\n", (unsigned)nfx);
     printf(tsan ? "cr_c1_thread: ran (the sanitizer's verdict is its own: no report above, exit 0)\n"
                 : "cr_c1_thread: all tests passed (the job on a thread renders the inline job's samples)\n");
     return 0;
