@@ -2174,6 +2174,59 @@ has "^picker: open part 0 $P5C" "$PL" && has "^picker: cancel part 0 -> $P5C" "$
     ok "EDIT held: the engine picker with P5 among the six, OCT- leaves the sound: $OUT/cr_prophet_epk.ppm" || bad "the picker in the editor"
 silent_end cr_prophet
 
+echo "P5, the owner's gesture (3y44, docs/PROPHET.md The crackle): minor + 6 + 9, then minor + 9 struck again over the release; and a unit that does not keep up, modelled"
+# Sequential's program 16 where this build ships it (P5_SHIPPED=all: place 16, the owner's), else place 15
+p5pos=$(python3 tools/gen_prophet_factory.py --pos 16)
+[ "${p5pos:-0}" -ge 2 ] || p5pos=15
+P5G=$(p5name "$p5pos")
+sed "s/@STEPS@/$((p5pos - 1))/" "$S/cr_prophet_crackle.txt" > "$OUT/cr_p5_crackle.txt"
+p5voices() { grep -a '^  part 0: P5' "$1" | sed -n 's/.*voices \([0-9]*\),.*/\1/p' | tr '\n' ' '; }
+p5sheds() { grep -a 'overload sheds' "$1" | tail -1 | sed -n 's/.*overload sheds \([0-9]*\)).*/\1/p'; }
+"$EMU" --headless --script "$OUT/cr_p5_crackle.txt" --wav "$OUT/cr_p5_crackle.wav" >"$OUT/cr_p5_crackle.log" 2>&1 &&
+    ok "cr_prophet_crackle: exit 0 ($(grep -c '^expect .*: ok' "$OUT/cr_p5_crackle.log") expectations met)" || bad "cr_prophet_crackle: see $OUT/cr_p5_crackle.log"
+PL="$OUT/cr_p5_crackle.log"
+has "^sound: part 0 pos $p5pos $P5G" "$PL" && ok "the chord part on P5 place $p5pos, $P5G" || bad "not P5 place $p5pos: $(grep -a '^sound: part 0' "$PL" | tail -1)"
+has 'chord Dm6 9 sounding 1 notes 62 65 69 71 76' "$PL" && has 'chord Dm9 sounding 1 notes 62 65 69 76' "$PL" &&
+    [ "$(p5voices "$PL")" = "0 4 4 4 0 " ] && [ "$(p5sheds "$PL")" = 0 ] &&
+    ok "Dm6/9 (five notes) and Dm9 struck twice over the release: four voices each time, never more, nothing shed" ||
+    bad "the gesture's voices: $(p5voices "$PL")/ sheds $(p5sheds "$PL") / $(grep -a -c 'chord Dm' "$PL") chord lines"
+# (from 3.4 s: after the first chord's attack out of silence; a burst is a click when it stands 12 times above the
+# sound before it AND the sound after it, as for CZ-1's re-strikes)
+wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_crackle.wav" --from 3.4 --both-sides | tail -1)
+echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "no crackle on the host: $wc" || bad "cr_prophet_crackle: $wc"
+silent_end cr_p5_crackle
+# a unit that does not keep up with four voices (README "Overload"): audio.c's shed fades one voice of each chord
+# (two halves in a row above 85 %), and that is all: three voices, three sheds, no voice shed and struck again
+EMU_SHED_OVER=4 "$EMU" --headless --script "$OUT/cr_p5_crackle.txt" --wav "$OUT/cr_p5_crackle_over.wav" >"$OUT/cr_p5_crackle_over.log" 2>&1 ||
+    bad "cr_prophet_crackle with EMU_SHED_OVER=4: see $OUT/cr_p5_crackle_over.log"
+PL="$OUT/cr_p5_crackle_over.log"
+gu=$(grep -a 'voices: given up' "$PL" | tail -1 | sed -n 's/.*given up \([0-9]*\).*/\1/p')
+[ "$(p5voices "$PL")" = "0 3 3 3 0 " ] && [ "$(p5sheds "$PL")" = 3 ] && [ "${gu:-99}" -le 6 ] &&
+    LC_ALL=C grep -aq '^  shed: halves over 85 % 6, last voice 1[0-9A-F]* why 2 ' "$PL" &&
+    ok "overload modelled (four voices do not fit): three voices a chord, 3 voices shed in 6 halves over 85 %, each a held voice; $gu voices faded in all (no circle)" ||
+    bad "the overload model: voices $(p5voices "$PL")/ sheds $(p5sheds "$PL") / given up ${gu:-?} / $(LC_ALL=C grep -a '^  shed:' "$PL" | tail -1)"
+wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_crackle_over.wav" --from 3.4 --both-sides | tail -1)
+echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "the shed's fades are no crackle: $wc" || bad "cr_prophet_crackle, shed: $wc"
+silent_end cr_p5_crackle_over
+
+echo "P5, the click at a short release's end (3y44): the part's DC blocker discharges after the last voice, it is not cut"
+p5pos=$(python3 tools/gen_prophet_factory.py --pos 168)          # PERC ORGAN: a release of 20 ms, in the tree's list
+if [ "${p5pos:-0}" -ge 2 ]; then
+    P5G=$(p5name "$p5pos")
+    sed "s/@STEPS@/$((p5pos - 1))/" "$S/cr_prophet_relclick.txt" > "$OUT/cr_p5_relclick.txt"
+    "$EMU" --headless --script "$OUT/cr_p5_relclick.txt" --wav "$OUT/cr_p5_relclick.wav" >"$OUT/cr_p5_relclick.log" 2>&1 &&
+        ok "cr_prophet_relclick: exit 0" || bad "cr_prophet_relclick: see $OUT/cr_p5_relclick.log"
+    has "^sound: part 0 pos $p5pos $P5G" "$OUT/cr_p5_relclick.log" && ok "the chord part on P5 place $p5pos, $P5G" ||
+        bad "not P5 place $p5pos: $(grep -a '^sound: part 0' "$OUT/cr_p5_relclick.log" | tail -1)"
+    # (four stabs, let go at 3.36, 4.36, 5.36 and 6.36 s; 74eae04: a click 22 ms after each, into the silence: 4 here)
+    wc=$(python3 tools/emu/wavclicks.py "$OUT/cr_p5_relclick.wav" --from 3.3 --both-sides | tail -1)
+    echo "$wc" | grep -q ': 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks' && ok "four stabs, no click after a release: $wc" ||
+        bad "cr_prophet_relclick: $wc"
+    silent_end cr_p5_relclick
+else
+    bad "cr_prophet_relclick: the shipped list has no program 168 (PERC ORGAN): name another with a short release here"
+fi
+
 echo "CZ-1's pops (docs/CZ1.md Pops): a chord struck again while it sounds, chord changes with common tones, the CZ-1 bass"
 rm -f "$OUT"/cz_pop*
 "$EMU" --headless --script "$S/cr_cz_pop.txt" --wav "$OUT/cz_pop.wav" >"$OUT/cz_pop.log" 2>&1 && ok "cr_cz_pop: exit 0" || bad "cr_cz_pop: see $OUT/cz_pop.log"

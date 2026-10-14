@@ -2211,3 +2211,65 @@ line); every other screen is pixel for pixel 40acb01's.
 is cached: by construction, not measured); a version-1 reader against an object over 96 bytes (read from its code;
 96 bytes: run on the host); favourites in the web Sound Manager; the browser emulator's own test has no favourites
 case; `tools/emu/perf.sh`.
+
+3y44. **P5: the owner's crackle, not reproduced; what the shed did, in `--debug`; and a click at a release's end,
+found on the way and fixed (2026-10-13; 0.22 in development; on p5-h after 74eae04).** The owner, on the unit, with
+74eae04 built with all 200 programs and Options > Dual Core On: **"On P5 though, preset 16 I was able to create some
+kind of glitch by using minor + 6 + 9 then playing chord again as minor + 9 which had a long crackling effect like the
+voice got stuck in a washing machine or something. All dry, no bass on."** The other engines were clean in the same
+session. Place 16 of all 200 is Sequential's program 16, Canned Happiness: no UNISON, no glide, no sync, resonance 0,
+the SSI filter, Poly-Mod and the wheel on A's frequency, Vintage 123, a release of 0.44 s.
+**The crackle did not come about on the host, and it is not explained** (docs/PROPHET.md "The crackle" has all of
+it). The gesture is five notes on four voices (the fifth takes a voice that has not sounded yet, in place) and then
+four notes over four releasing voices (three struck again in place; the fourth waits two blocks twice and starts
+2.9 ms late on a faded voice): read in `voice.c`, and played: 756 000 runs of the firmware's sound side on the host
+(`cr_prophet_test --gesture-sweep 16`: the chord engine's queue, the allocator, P5, the mix; four roots, the three play
+styles, Ext Addition, Key Mode, Perform's five modes, five ways from the one chord to the other, the first chord held
+1 block to 1.5 s, the second struck 0 to 1 s after and at every block up to 12), none with more than four voices, a
+circle of fades, a sustain rougher than 1.84 × the same chord struck out of silence, or anything left after the
+release; 5780 runs of the emulator with the real keys (the timing in 1 and 2 ms steps, with the sends and dry), 480
+with Dual Core On or Key Mode, and the gesture on all 200 programs. Melodee has no later integer fix: its engine is
+float after 8a3074b. **An overload, modelled** (`EMU_SHED_OVER=N`, `EMU_SHED_AT=A:B`: `audio.c`'s `shed_check` is
+given a half of 90 % when N voices sound; tools/emu/README.md), thins the chord by a voice 6 ms after each strike and
+does nothing else: no crackle, and no voice shed and struck again. What the host cannot make is a late half: the
+first guess (an inference) is the deadline, the DAC replaying a half (`stale_halves`), then the interrupts masked by a
+flash write, then the unit's own code differing from the host's.
+**What the unit can now say.** 78 PEAK grew from 34 to 41 values (`tools/fm1_install.py --debug`, with a line
+"overload: .."): `shed_voices`, `shed_last_voice` (part, voice, note), `shed_last_why` (a released voice / a held
+one / none to give), `shed_over_halves`, `shed_last_us`, and voice.c's `voices_faded` and `voices_stolen`, all since
+the last read. `voices_shed` had been on the console alone. The record is in `cr_dbg` (no new small static: 3y42's
+lesson). The steps for the unit are in docs/PROPHET.md and docs/HANDOFF.md item 31: clear, make it crackle, read;
+record it over USB at the same time (the recording is taken before the DAC: a replayed half is not in it); Dual
+Core Off; the listening files (`../audio-0.22/prophet/crackle/`, `tools/p5_crackle_listen.py`: the gesture as the
+host plays it, the shed modelled, and two files with halves replayed by editing samples).
+**The click at a release's end: another fault, found by the sweep's "silent after the release" rule on other
+programs, and fixed.** P5's part has a DC blocker (the output's coupling capacitor, 5 Hz: Melodee 7cd66fb's, in
+integers here) that started "afresh" in the block after the part's last voice ended, with whatever it held. The
+oscillators are unipolar; a VCA that closes faster than the capacitor's 32 ms leaves it holding most of the mixer's
+DC, and that went to 0 in one sample: a step of up to 27 197 (88 DIRTY LEAD: 8 dB under the chord's peak), above 100
+on 34 of the 200 programs, 10 to 130 ms after every release, in the silence. Canned Happiness holds 3 units there: **it
+is not the owner's crackle.** Now the capacitor discharges into the silent blocks and starts afresh under 16 units
+(`P5_DC_REST`); the part stays in the mix for it through a new hook, `engine_t.tail` (voice.c `track_render_x` asks
+it after `post` when no voice was rendered; P5 alone has one). The fault was in ChoralRoot's wiring of the blocker
+(when "no voice" resets it), not in the four-voice cap and not in Melodee's sample path.
+**Goldens.** 18 of the 49 P5 renders changed: the programs whose capacitor held 16 units or more when the part ran
+out of voices in the regression's phrase (168 PERC ORGAN 4096 to 8191; 10, 62, 143, 167 above 2048; 4 above 1024; 6,
+11, 55 above 512; 111, 163 above 256; 32, 46, 91, 94, 133, 135, 179 between 16 and 31: measured by building
+`regress.c` at each threshold). The other 31 and the 197 of the other engines are 74eae04's; with
+`-DP5_DC_REST=0x7FFFFFFF` (the old cut) all 246 are. The CPU baseline is not rewritten.
+**Tests.** `tests/cr_prophet_test.c`: the gesture (`--gesture`: 600 runs on program 16 in `run_prophet_test.sh`, on
+the build with all 200; `--gesture-sweep`: the 189 000 a root), "no step at the last voice's end beyond the voice's
+own last ramp" (fails with the old cut on 11 of the tree's 48 programs, largest 7359; passes with 15) and the
+silence after the capacitor's discharge; `tests/install_test.py` and `tests/cr_backup_test.c` (PEAK's 41 values, the
+overload line); the emulator: `cr_prophet_crackle.txt` (the gesture, dry: no jump, hole or burst; then with
+`EMU_SHED_OVER=4`: three voices a chord, three sheds, no circle) and `cr_prophet_relclick.txt` (PERC ORGAN, four
+stabs: `wavclicks.py` counts 4 clicks with the old cut, 0 now) with their blocks in `test_cr.sh`.
+**Not done / not tested**: anything on a unit (the package for it:
+`build/scratch/p5-fav/choralroot-p5-crackle-fix-all200.fwsc`); two real cores; a late or stale half in the firmware
+(the listening files 6 and 7 are an edit of samples); the gesture with a bass, a loop, MIDI in or the effects up;
+the click's fix by ear. **Open: the crackle itself.**
+**Verification.** `CR_VERSION=0.22 sh tests/run_all.sh`: 17 suites PASS; stub "version 3, sha256 baee55ed142fe1cc";
+246 golden renders (18 P5 lines rewritten, above); 0 lint findings; test_cr 955 ok (943 + the three new blocks'
+12), test_persist 98 ok, test_retired 18 ok; `test_cr.sh` also run once on an emulator built with all 200 (the
+gesture on place 16, CANNED HAPPY: exit 0). Size: XIP 510 660 B (89.1 %; +96), RAM 81 732 (+32: `cr_dbg`), POOL
+316 064 (+0). The package for the unit, all 200: 610 313 B, sha256 0ce2694a544f2efb...ab580cd3f.

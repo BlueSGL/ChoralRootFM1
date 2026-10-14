@@ -16,6 +16,11 @@
 #    written by one build is read by the others (--id-in): the same program comes back, at the place THAT build has
 #    it at, or from the record alone when it is not shipped there. So changing the list does not change what a saved
 #    session plays.
+# 4. THE OWNER'S GESTURE (3y44, docs/PROPHET.md "The crackle"): the build with all 200 (his build; the tree's list
+#    does not ship Sequential's program 16) plays minor + 6 + 9 and then minor + 9 again on program 16 through the
+#    chord engine, the allocator and the mix: 600 runs over the timing of the second strike, Key Mode, five ways of
+#    going from the one chord to the other, and a unit that does not keep up (cr_prophet_test --gesture; the whole
+#    sweep, minutes: --gesture-sweep). The crackle he heard does not come about here: the runs' rules must hold.
 set -e
 cd "$(dirname "$0")/.."
 mkdir -p build/host/p5_all build/host/p5_b
@@ -61,6 +66,11 @@ for v in all b; do
 done
 ./build/host/cr_prophet_s7 --id-out build/host/cr_prophet_s.ids > /dev/null
 echo "prophet: the test passes built with all 200 ($(grep -ac '^ok ' build/host/cr_prophet_all.log) checks ok) and with a list of 7 ($(grep -ac '^ok ' build/host/cr_prophet_b.log) checks ok)"
+# 4. the owner's gesture on Sequential's program 16
+./build/host/cr_prophet_all --gesture 16 > build/host/cr_prophet_gesture.log || {
+    echo "run_prophet_test.sh: the owner's gesture (minor + 6 + 9, then minor + 9) broke a rule:"
+    grep -a "GESTURE\|^gesture:" build/host/cr_prophet_gesture.log | head -8; exit 1; }
+echo "prophet: the owner's $(tail -1 build/host/cr_prophet_gesture.log)"
 # a program's samples do not depend on the list: every "program NNN" line of a list's renders is in the 200's
 for v in s7 b; do
     grep '^program ' build/host/cr_prophet_$v.pcm > build/host/cr_prophet_$v.prog

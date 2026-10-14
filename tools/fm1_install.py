@@ -2150,8 +2150,28 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # draws"): the note-ons timed; us from the first scan that saw the key closed (its debounce, 1.1 .. 2.2
               # ms, in it) to the main loop posting the note-on (the longest), and to the audio ISR applying it (the
               # average, the longest); the sound leaves the DAC one half (2.9 ms) after that
-              "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us"]
+              "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us",
+              # 3y44, what the overload shed did since the last --debug (firmware/src/audio.c shed_check / shed_voice,
+              # docs/PROPHET.md "The crackle"; voices_shed was on the console alone): voices shed; the latest one
+              # (0 none, else 0x10000 | part << 12 | voice << 8 | note) and why (SHED_WHY); the halves above 85 % of
+              # the budget (one alone sheds nothing, two in a row do); the time of the half that asked for the latest
+              # shed, its lag in it; then voice.c's: voices faded out for another note, another part or the shed, and
+              # own sounding voices taken for a new note (a five-key chord on P5's four voices: one each)
+              "shed_voices", "shed_last_voice", "shed_last_why", "shed_over_halves", "shed_last_us",
+              "voices_faded", "voices_stolen"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
+SHED_WHY = ["none", "a released voice, the quietest", "a held voice, the oldest that is not its part's lowest note",
+            "asked, and no voice to give"]
+NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def shed_voice_text(v):
+    """78 PEAK's shed_last_voice in words"""
+    if not v >> 16 & 1:
+        return "none"
+    note = v & 127
+    return (f"part {v >> 12 & 15} ({['chord', 'bass'][v >> 12 & 15] if (v >> 12 & 15) < 2 else '?'}) voice {v >> 8 & 15}, "
+            f"note {note} ({NOTE_NAMES[note % 12]}{note // 12 - 1})")
 # 79 USB's values (0.19, cr_backup.c crb_usb, docs/USB-AUDIO.md "48 kHz"; a command of its own because 73 DEBUG is
 # full; reading clears nothing; values are only appended): ChoralRoot In's rate now and in the last whole open (Hz; 0:
 # no open yet), the host's SET_CUR sampling-frequency requests and those that changed the rate, the 48 kHz packets by
@@ -2213,7 +2233,10 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
     for k in DEBUG_PEAK:
         if k in d:
             print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
-                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else ""), file=out)
+                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else
+                                   f" ({shed_voice_text(d[k])})" if k == "shed_last_voice" else
+                                   f" ({SHED_WHY[d[k]] if d[k] < len(SHED_WHY) else '?'})" if k == "shed_last_why" else ""),
+                  file=out)
     for k in DEBUG_USB:
         if k in d:
             print(f"{k} {d[k]}", file=out)
@@ -2250,6 +2273,14 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
         print(f"interrupts: TIMER5 (100 us apart) once came {d['irq_gap_us']} us after the one before"
               + (f": masked for about {d['irq_gap_us'] - 100} us, until 0x{d['irq_gap_pc']:08X} (build/choralroot.dis)"
                  if d["irq_gap_us"] > 150 else ": nothing masked them for long"), file=out)
+    if "shed_voices" in d and d.get("pk_halves"):
+        print(f"overload: {d['shed_over_halves']} halves above 85 % of the budget since the last --debug, "
+              f"{d['shed_voices']} voices shed (two such halves in a row fade one)"
+              + (f"; the latest: {shed_voice_text(d['shed_last_voice'])}, "
+                 f"{SHED_WHY[d['shed_last_why']] if d['shed_last_why'] < len(SHED_WHY) else '?'}, asked by a half of "
+                 f"{d['shed_last_us']} us" if d["shed_last_why"] else "")
+              + f"; voices faded out for another note, part or the shed {d['voices_faded']}, own voices taken for a new "
+              f"note {d['voices_stolen']}", file=out)
     if d.get("key_ons"):
         print(f"keys: {d['key_ons']} note-ons since the last --debug; from the first closed scan (the debounce, 1.1 to 2.2 "
               f"ms, in it) the main loop posted one after {d['key_pick_us'] / 1000:.1f} ms at most, the engine had it "

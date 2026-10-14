@@ -77,6 +77,11 @@ typedef struct {
                                       * its last block. THE AUDIBLE ONES; a half that is merely late is not */
     uint32_t t5_last, pk_t5gap, pk_t5pc;   /* TIMER5's largest gap between two entries (100 us when nothing masks
                                       * the interrupts) and where it came back to after it (main.c) */
+    /* WHAT THE OVERLOAD SHED DID since the last 78 PEAK read (3y44; audio.c shed_check / shed_voice, cr_backup.c
+     * crb_peak): the halves above 85 %, the time of the half that asked for the latest shed, the latest voice shed
+     * (0 none, else 0x10000 | part << 12 | voice << 8 | note) and why (1 released, 2 held, 3 none to give); and the
+     * counts at the last read of audio.c's shed_count and voice.c's voice_kills / voice_steals */
+    uint32_t shed_over_n, shed_us, shed_last, shed_why, shed0, kill0, steal0;
 } cr_dbg_t;
 static cr_dbg_t cr_dbg;
 /* Options > Dual Core Off (settings v12, the default; read by cr_settings_boot before cr_c1_boot): core 1 is never

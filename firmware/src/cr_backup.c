@@ -693,10 +693,16 @@ static void crb_debug(void)
  * over the halves in which the effects ran, and the largest), then since power-on the flash's: erases, erases that
  * cut a sounding output (holes: 0 is the rule for what the unit writes by itself; a global save, SAVE held, into a
  * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves. A command of its own because
- * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
+ * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values.
+ * 3y44, values 35..41 (the owner's crackle on P5, docs/PROPHET.md "The crackle"): WHAT THE OVERLOAD SHED DID since the
+ * last read (audio.c shed_check / shed_voice): voices shed, the latest one (0 none, else 0x10000 | part << 12 |
+ * voice << 8 | note) and why (1 a released voice, 2 a held one, 3 asked and none to give), the halves above 85 %, the
+ * time of the half that asked for the latest shed (us, its lag in it); then voice.c's: voices faded for another note
+ * or part or shed (voice_kills) and own voices taken for a new note (voice_steals). A steady count of the last two
+ * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[36], k = 0, i;
+    uint32_t v[44], k = 0, i;
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -733,6 +739,17 @@ static void crb_peak(void)
     v[k++] = CR_KLAT_AVG_US();
     v[k++] = CR_KLAT_US(cr_klat.eng);
     cr_klat.n = cr_klat.sum = cr_klat.pick = cr_klat.eng = 0;
+    v[k++] = shed_count - cr_dbg.shed0;              /* 3y44: the shed (above), 41 values */
+    v[k++] = cr_dbg.shed_last;
+    v[k++] = cr_dbg.shed_why;
+    v[k++] = cr_dbg.shed_over_n;
+    v[k++] = cr_dbg.shed_us;
+    v[k++] = voice_kills - cr_dbg.kill0;
+    v[k++] = voice_steals - cr_dbg.steal0;
+    cr_dbg.shed0 = shed_count;
+    cr_dbg.kill0 = voice_kills;
+    cr_dbg.steal0 = voice_steals;
+    cr_dbg.shed_last = cr_dbg.shed_why = cr_dbg.shed_over_n = cr_dbg.shed_us = 0;
     cr_prof_clear();
     crb_b(1);
     crb_b(k);

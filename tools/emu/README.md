@@ -193,6 +193,24 @@ EMU_STRIP_US=2700 EMU_PUMP=0 build/host/emu --headless --script tools/emu/script
 python3 tools/emu/keylat.py tools/emu/scripts/perf_d.txt     # 40 keys at random times, both ways, two strip times
 ```
 
+### Overload, modelled
+
+The host renders a half buffer in microseconds, so `audio.c`'s shed (two halves in a row above 85 % of the 2902 us
+fade a voice, one more each half while it lasts) never runs here by itself. Two switches give `shed_check` a half of
+90 % whenever a model says the unit would be over (`emu_firmware.h` `emu_shed_model`; nothing else changes, and a run
+without them is the same bytes as before):
+
+```sh
+EMU_SHED_OVER=4 build/host/emu --headless --script S    # a half that ends with 4 or more voices sounding is over
+EMU_SHED_AT=3200:3400 build/host/emu --headless --script S   # every half between 3.2 and 3.4 s of audio is over
+```
+
+The dump then has a `shed:` line (the halves over 85 %, the latest voice shed as `1PVNN` = part, voice, note in hex,
+why: 1 a released voice, 2 a held one, 3 none to give, and the half's time), beside `voices: given up N (.. overload
+sheds N)`. What is modelled is the shed's decision; no half is made late or stale, so this cannot show what a late half
+sounds like. `test_cr.sh` runs P5's five-note-then-four-note gesture with it (docs/PROPHET.md "The crackle"). On the
+unit the same counts are 78 PEAK's `shed_*` (`tools/fm1_install.py --debug`).
+
 ### test.sh
 
 `sh tools/emu/test.sh` rebuilds when a source is newer, then checks in headless mode: D4 held 300 ms

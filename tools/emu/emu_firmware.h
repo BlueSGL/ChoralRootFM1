@@ -105,6 +105,25 @@ static void mix_block(int32_t *out, uint32_t n)        /* the audio ISR's block:
     cr_click_mix(out, n);                              /* the metronome / count-in click */
     CR_PROF(CRP_MASTER);         /* the master, the USB tap, the click */
 }
+/* A UNIT THAT DOES NOT KEEP UP, MODELLED (docs/PROPHET.md "The crackle"; README "Overload"): the host renders a half
+ * in microseconds, so audio.c's shed never runs here. With one of these set (emu_fw.c reads the environment) the time
+ * shed_check is given for a half is 90 % of the budget whenever the model says the unit would be over:
+ *   EMU_SHED_OVER=N    a half that ends with N or more voices sounding (all parts; a fading one is not counted)
+ *   EMU_SHED_AT=A:B    every half between A and B ms of audio since power-on
+ * and the half's own time otherwise. What is modelled is the shed's DECISION (two such halves in a row fade a voice,
+ * one more each half while it lasts); nothing here makes a half late or stale */
+static uint32_t emu_shed_over, emu_shed_at0, emu_shed_at1, emu_shed_halves;
+static uint32_t emu_shed_model(uint32_t all)
+{
+    uint32_t p, i, n = 0, ms = (uint32_t)((uint64_t)emu_shed_halves++ * HALF_FRAMES * 1000u / FS);
+    for (p = 0; p < NPART; p++)
+        for (i = 0; i < NVOICE; i++)
+            n += trk[p].v[i].active && trk[p].v[i].stage != 4u;
+    if ((emu_shed_over && n >= emu_shed_over) || (emu_shed_at1 && ms >= emu_shed_at0 && ms < emu_shed_at1))
+        return (HALF_FRAMES * 1000000u / FS) * 90u / 100u * FM1_TICKS_PER_US;
+    return all;
+}
+#define CR_SHED_MODEL(all) (emu_shed_over || emu_shed_at1 ? emu_shed_model(all) : (all))
 #include "../../firmware/src/audio.c"                 /* fm1_alnk0_irq: the audio ISR, called per block */
 
 /* --------------------------------------------------------------------- UI --- */

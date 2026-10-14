@@ -12,6 +12,10 @@
  *                                            and 7 and compares the five outputs (the remix's optimisations are
  *                                            bit-exact), and with two shipped lists (a program renders the same
  *                                            samples wherever it stands)
+ *   build/host/cr_prophet_test --gesture [ID [v]]   the owner's gesture of 3y44 (minor + 6 + 9, then minor + 9 again)
+ *                                            on Sequential's program ID (16) through the chord engine, the allocator
+ *                                            and the mix: 600 runs, exit 1 when one breaks a rule (g_sweep, below; v:
+ *                                            every run's line); --gesture-sweep: every option and timing (minutes; G_ROOT=0..3: one root)
  *   build/host/cr_prophet_test --id-out FILE the session's record of the chord part on every shipped program, as
  *                                            cr_settings.c css_part_get writes it
  *   build/host/cr_prophet_test --fav-out FILE / --fav-in FILE   the favourites across lists (0.22): programs marked in
@@ -23,7 +27,8 @@
  * generated packed form of the shipped list = the .syx's frames of those numbers decoded; decode / encode round trip;
  * bad frames refused); the PRESETS names; the blob (138 bytes) round trip, a bad blob = INIT; every program rendered
  * through voice.c (a four-note chord held and released): sounds, no sample beyond the voices' sum, no DC after the
- * blocker, every voice free after its release, exact silence then; note-off frees the voices; a struck note again (no
+ * blocker, every voice free after its release, no step at the last voice's end (3y44: the blocker discharges, it is
+ * not cut to 0), exact silence after that; note-off frees the voices; a struck note again (no
  * click beyond the wave's own steps); the four-voice cap, the budget's units and which keys of a six-key chord sound;
  * UNISON (the editor's switch; A LOAD TAKES THE PROGRAM'S: one note of a chord on the stacked voices, which note, the
  * units; poly again on the next program; another engine; the bass part; the session's record; no hanging note) and
@@ -369,6 +374,234 @@ static double freq(track_t *t, uint32_t nb)
     return n > 1u ? (double)(n - 1u) * FS / (double)(last - first) : 0;
 }
 
+/* ------------------------------------------------- the owner's gesture (3y44) --- */
+/* "On P5 though, preset 16 I was able to create some kind of glitch by using minor + 6 + 9 then playing chord again as
+ * minor + 9 which had a long crackling effect like the voice got stuck in a washing machine or something. All dry, no
+ * bass on." (the owner, on the unit, 2026-10-13: all 200 programs, so place 16 = Sequential's program 16, Canned
+ * Happiness). Here: that gesture through the WHOLE sound side as the unit runs it (cr_out.c's queue -> cr_engine.c ->
+ * voice.c's allocator with the fade-and-defer steal -> P5 -> fx.c's mix; mix_block is the audio ISR's block), a
+ * five-note chord on four voices and then a four-note one over its release, over the engine's options and the timing
+ * of the second strike in blocks (a note is applied at a block's start: 32 samples is the finest timing there is).
+ * WHAT IS CHECKED, per run: never more than P5_POLY voices; the voices faded for another note stay bounded by the
+ * notes struck (a voice given up and taken again in a circle would count without end); the second chord's sustain is
+ * no rougher than the same chord struck from silence (the mean square of the output's third difference, the measure
+ * of tools/emu/wavclicks.py: a crackle is all high frequency); no sample-to-sample step beyond the reference's; after
+ * the release every voice free and the output exactly 0. over: a model of a unit that does not keep up (audio.c: two
+ * halves in a row above 85 % shed a voice): a half that ends with `over` or more voices sounding counts as above.
+ * IT DOES NOT REPRODUCE THE CRACKLE (docs/PROPHET.md "The crackle"): this is the sweep that says so, kept as a test */
+typedef struct { uint8_t root, style, extadd, key, perf, over, variant; uint16_t hold, gap; } gcase_t;
+typedef struct { uint32_t vmax, kills, ons, sheds, busy_end, loud_end, nblk; int32_t pk, step; double hf, hfmax; } gstat_t;
+static struct { double d3[3]; int32_t last; uint32_t over_was; } gx;
+static void g_run(uint32_t nb, const gcase_t *c, gstat_t *g, int measure)
+{
+    int32_t out[2u * CTL];
+    uint32_t b, i;
+    for (b = 0; b < nb; b++) {
+        uint32_t n = 0, snd = 0;
+        double e = 0;
+        if (c->over && !(g->nblk & 3u)) {              /* a half's start: audio.c's shed, on the model's word */
+            for (i = 0; i < NVOICE; i++)
+                snd += trk[0].v[i].active && trk[0].v[i].stage != 4u;
+            if (snd >= c->over && gx.over_was) {
+                shed_voice();
+                g->sheds++;
+            }
+            gx.over_was = snd >= c->over;
+        }
+        g->nblk++;
+        mix_block(out, CTL);
+        for (i = 0; i < NVOICE; i++)
+            n += trk[0].v[i].active;
+        if (n > g->vmax)
+            g->vmax = n;
+        g->loud_end = 0;                               /* the largest |sample| of the run's last block */
+        for (i = 0; i < CTL; i++) {
+            int32_t x = out[2u * i], d = x - gx.last;
+            double d1 = d, d2 = d1 - gx.d3[0], d3 = d2 - gx.d3[1];
+            gx.d3[0] = d1;
+            gx.d3[1] = d2;
+            gx.last = x;
+            e += d3 * d3;
+            if ((uint32_t)abs(x) > g->loud_end)
+                g->loud_end = (uint32_t)abs(x);
+            if ((uint32_t)abs(out[2u * i + 1u]) > g->loud_end)
+                g->loud_end = (uint32_t)abs(out[2u * i + 1u]);
+            if (measure) {
+                if (abs(x) > g->pk)
+                    g->pk = abs(x);
+                if (abs(d) > g->step)
+                    g->step = abs(d);
+            }
+        }
+        if (measure) {
+            g->hf += e / CTL;
+            if (e / CTL > g->hfmax)
+                g->hfmax = e / CTL;
+        }
+    }
+}
+static void g_mods(uint32_t mask, int down)            /* bit cr_mod_t */
+{
+    uint32_t m;
+    for (m = 0; m < 8u; m++)
+        if (mask >> m & 1u)
+            cr_post(CRE_MOD, m, 0, down);
+}
+#define G_M69 (1u << CR_MOD_MIN | 1u << CR_MOD_6 | 1u << CR_MOD_9)
+#define G_M9 (1u << CR_MOD_MIN | 1u << CR_MOD_9)
+#define G_SUS 500u                                     /* blocks of the second chord measured (0.36 s), after .. */
+#define G_ATT 80u                                      /* .. its attack */
+static gstat_t g_case(const gcase_t *c, int ref)
+{
+    gstat_t g;
+    uint32_t k0, o0, b;
+    memset(&g, 0, sizeof g);
+    cr_post(CRE_PLAYSTYLE, 0, 0, c->style);
+    cr_post(CRE_EXTADD, 0, 0, c->extadd);
+    cr_post(CRE_KEYMODE, c->key, 2, CR_SCALE_MINOR);   /* (D minor) */
+    cr_post(CRE_PERFORM_MODE, 0, 0, c->perf ? c->perf - 1 : 0);
+    cr_post(CRE_PERFORM, 0, 0, c->perf != 0);
+    g_run(4, c, &g, 0);
+    k0 = voice_kills;
+    o0 = cr_out_notes;
+    gx.over_was = 0;
+    if (ref) {
+        g_mods(G_M9, 1);
+        g_run(2, c, &g, 0);
+        cr_post(CRE_KEY, c->root, 100, 1);
+    } else {
+        g_mods(c->variant == 4u ? 1u << CR_MOD_MIN : G_M69, 1);
+        g_run(2, c, &g, 0);
+        cr_post(CRE_KEY, c->root, 100, 1);
+        g_run(c->hold, c, &g, 0);
+        switch (c->variant) {
+        case 0:                                        /* the 6 let go, the root struck again after gap blocks */
+            g_mods(1u << CR_MOD_6, 0);
+            cr_post(CRE_KEY, c->root, 0, 0);
+            g_run(c->gap, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 100, 1);
+            break;
+        case 1:                                        /* everything let go; minor + 9 and the root again */
+            cr_post(CRE_KEY, c->root, 0, 0);
+            g_mods(G_M69, 0);
+            g_run(c->gap, c, &g, 0);
+            g_mods(G_M9, 1);
+            g_run(1, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 100, 1);
+            break;
+        case 2:                                        /* the root held, the 6 let go under it; then the root again */
+            g_mods(1u << CR_MOD_6, 0);
+            g_run(c->gap, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 0, 0);
+            g_run(1, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 100, 1);
+            break;
+        case 3:                                        /* the second chord on another root key before the first is up */
+            g_mods(1u << CR_MOD_6, 0);
+            cr_post(CRE_KEY, c->root + 12u, 100, 1);
+            g_run(c->gap, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 0, 0);
+            cr_post(CRE_KEY, c->root + 12u, 0, 0);
+            g_run(1, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 100, 1);
+            break;
+        default:                                       /* minor alone held, the 6 and the 9 pressed into it, the 6 up */
+            g_mods(1u << CR_MOD_6 | 1u << CR_MOD_9, 1);
+            g_run(c->gap, c, &g, 0);
+            g_mods(1u << CR_MOD_6, 0);
+            g_run(c->gap, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 0, 0);
+            g_run(1, c, &g, 0);
+            cr_post(CRE_KEY, c->root, 100, 1);
+            break;
+        }
+    }
+    g_run(G_ATT, c, &g, 0);
+    g_run(G_SUS, c, &g, 1);
+    g.hf /= G_SUS;
+    cr_post(CRE_KEY, c->root, 0, 0);
+    g_mods(0xFFu, 0);
+    g_run(8, c, &g, 0);
+    cr_post(CRE_PERFORM, 0, 0, 0);                     /* (an arp's Hold keeps playing: off, and everything released) */
+    cr_post(CRE_PANIC, 0, 0, 0);
+    for (b = 0; b < 3u * FS / CTL && busy(&trk[0]); b += 16u)   /* the release: 3 s at most */
+        g_run(16, c, &g, 0);
+    g_run(64, c, &g, 0);                               /* (the limiter's look-ahead, the DC blocker's last block) */
+    g.busy_end = busy(&trk[0]) + vsq[0].n;
+    g.kills = voice_kills - k0;
+    g.ons = cr_out_notes - o0;
+    return g;
+}
+/* the chord part on Sequential's program id (place 16 of all 200), dry */
+static int g_load(uint32_t id)
+{
+    int32_t out[2u * CTL];
+    uint32_t pos = p5_preset_of(id), b;
+    if (!pos)
+        return 0;
+    cu_pool_load(0, ENGI_PROPHET, pos);
+    trk[0].p[P_REV] = trk[0].p[P_CHOR] = trk[0].p[P_DLY] = 0;   /* "All dry" */
+    cr_post(CRE_BASS, 0, 0, 0);                        /* "no bass on" */
+    for (b = 0; b < 64u; b++)
+        mix_block(out, CTL);
+    return trk[0].engine == ENGI_PROPHET && p5_patch_id(p5_patch_of(&trk[0])) == id;
+}
+/* the sweep. full: every option and timing (minutes; --gesture-sweep [ID]); else the part the test keeps (a second).
+ * Returns the runs that broke a rule; *runs, *worst (the roughest sustain against its reference) */
+static uint32_t g_sweep(uint32_t id, int full, int verbose, uint32_t *runs, double *worst)
+{
+    static const uint8_t ROOT[] = {62, 57, 67, 74};    /* D4 first: Dm6/9 = 62 65 69 71 76 */
+    static const uint16_t GAPF[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 14, 16, 20, 24, 32, 48, 64, 96, 137, 200, 411, 1378};
+    static const uint16_t GAPT[] = {0, 1, 2, 3, 4, 5, 8, 16, 137, 1378};
+    static const uint16_t HOLDF[] = {1, 2, 3, 8, 41, 411, 2067}, HOLDT[] = {3, 411};
+    gcase_t c;
+    uint32_t bad = 0, nr = full ? 4u : 1u, ns = full ? 3u : 1u, np = full ? 6u : 1u, r, h, gp, v, o;
+    *runs = 0;
+    *worst = 0;
+    if (!g_load(id))
+        return 1;
+    memset(&c, 0, sizeof c);
+    for (r = getenv("G_ROOT") ? (uint32_t)atoi(getenv("G_ROOT")) : 0u; r < (getenv("G_ROOT") ? (uint32_t)atoi(getenv("G_ROOT")) + 1u : nr); r++)
+    for (c.style = 0; c.style < ns; c.style++)
+    for (c.extadd = 0; c.extadd < (full ? 2u : 1u); c.extadd++)
+    for (c.key = 0; c.key < 2u; c.key++)
+    for (c.perf = 0; c.perf < np; c.perf++)
+    for (o = 0; o < 3u; o++) {
+        gstat_t ref;
+        c.root = ROOT[r];
+        c.over = (uint8_t)(o == 1u ? 4u : o == 2u ? 3u : 0u);
+        c.variant = 0;
+        ref = g_case(&c, 1);
+        for (v = 0; v < 5u; v++)
+        for (h = 0; h < (full ? NELEM(HOLDF) : NELEM(HOLDT)); h++)
+        for (gp = 0; gp < (full ? NELEM(GAPF) : NELEM(GAPT)); gp++) {
+            gstat_t g;
+            double rough;
+            int b;
+            c.variant = (uint8_t)v;
+            c.hold = full ? HOLDF[h] : HOLDT[h];
+            c.gap = full ? GAPF[gp] : GAPT[gp];
+            g = g_case(&c, 0);
+            rough = g.hf / (ref.hf + 1.0);
+            /* an arp or a pattern is another phrase each time, and a chord the model thinned is another chord: the
+             * roughness is compared for the plain chord on a unit that keeps up; the other rules hold for all */
+            b = g.vmax > P5_POLY || g.busy_end || g.loud_end > 4u || g.kills > 3u * g.ons + g.sheds + 4u ||
+                (!c.perf && !c.over && (rough > 4.0 || g.step > 2 * ref.step + 2000));
+            if (!c.perf && !c.over && rough > *worst)
+                *worst = rough;
+            ++*runs;
+            bad += (uint32_t)b;
+            if (b || verbose)
+                printf("%s root %u style %u extadd %u key %u perf %u over %u variant %u hold %u gap %u: voices %u, faded %u "
+                       "(shed %u) for %u notes, rough x%.2f (%.0f / %.0f), step %d (ref %d), pk %d, left %u, loud %u\n",
+                       b ? "  GESTURE" : "  gesture", c.root, c.style, c.extadd, c.key, c.perf, c.over, c.variant, c.hold, c.gap,
+                       (unsigned)g.vmax, (unsigned)g.kills, (unsigned)g.sheds, (unsigned)g.ons, rough, g.hf, ref.hf,
+                       (int)g.step, (int)ref.step, (int)g.pk, (unsigned)g.busy_end, (unsigned)g.loud_end);
+        }
+    }
+    return bad;
+}
+
 int main(int argc, char **argv)
 {
     static const uint8_t CHORD[4] = {48, 60, 64, 67};
@@ -384,6 +617,19 @@ int main(int argc, char **argv)
     cr_ui_init();
     if (argc == 3 && !strcmp(argv[1], "--pcm"))
         return pcm_file(argv[2]);
+    if (argc >= 2 && (!strcmp(argv[1], "--gesture") || !strcmp(argv[1], "--gesture-sweep"))) {
+        uint32_t id = argc >= 3 ? (uint32_t)atoi(argv[2]) : 16u, runs, n;
+        int full = !strcmp(argv[1], "--gesture-sweep");
+        double worst;
+        if (!p5_preset_of(id)) {
+            printf("gesture: program %u is not in this build's shipped list\n", (unsigned)id);
+            return 2;
+        }
+        n = g_sweep(id, full, argc >= 4, &runs, &worst);
+        printf("gesture: program %u, minor + 6 + 9 then minor + 9: %u runs, %u broke a rule; the roughest second chord "
+               "x%.2f of the same chord struck from silence\n", (unsigned)id, (unsigned)runs, (unsigned)n, worst);
+        return n != 0;
+    }
     if (argc == 3 && !strcmp(argv[1], "--id-out"))
         return id_out(argv[2]);
     if (argc == 3 && !strcmp(argv[1], "--id-in"))
@@ -513,8 +759,8 @@ int main(int argc, char **argv)
 
     /* ---- every program through voice.c: a chord held 1.5 s, released, until its voices are free ---- */
     {
-        uint32_t silent = 0, loud = 0, dc = 0, stuck = 0, nz = 0, worst = 0, quiet = 0, wk = 0;
-        int32_t maxpk = 0;
+        uint32_t silent = 0, loud = 0, dc = 0, stuck = 0, nz = 0, worst = 0, quiet = 0, wk = 0, cut = 0, tails = 0, tailmax = 0;
+        int32_t maxpk = 0, maxcut = 0;
         double maxdc = 0;
         for (k = 0; k < NELEM(P5_TEST_PRESETS); k++) {
             int32_t out[CTL];
@@ -539,12 +785,39 @@ int main(int argc, char **argv)
             cap = (uint32_t)(FS / CTL * (0.5 + 9.0 * pow(10000.0, p.raw[P5_RELEASE_AMP] / 127.0) / 1000.0));
             for (i = 0; i < 4u; i++)
                 trk_note_off(t, CHORD[i]);
-            for (b = 0; b < cap && busy(t); b++)
-                track_render(t, out, CTL);
+            {   /* the last voice's end (3y44): the part's capacitor discharges into the blocks after it (p5_post,
+                 * p5_tail); cut to 0 there, as it was, the output steps by all it held. The step from the last
+                 * sample with a voice to the next, against the largest step inside that last block (the voice's own
+                 * end: its amplifier's last ramp) */
+                int32_t last = 0, in = 0, was = 0, st;
+                for (b = 0; b < cap && busy(t); b++) {
+                    track_render(t, out, CTL);
+                    st = abs(out[0] - last);
+                    if (!busy(t)) {
+                        if (st > 2 * was + 32)
+                            cut++, printf("  program %u: a step of %d at its last voice's end (%d inside the block before)\n",
+                                          (unsigned)k, (int)st, (int)was);
+                        if (st > maxcut)
+                            maxcut = st;
+                    }
+                    for (i = 1, in = st; i < CTL; i++)
+                        if (abs(out[i] - out[i - 1u]) > in)
+                            in = abs(out[i] - out[i - 1u]);
+                    was = in;
+                    last = out[CTL - 1u];
+                }
+            }
             if (b > worst)
                 worst = b;
             if (busy(t))
                 stuck++, printf("  program %u: %u voices after %u blocks\n", (unsigned)k, (unsigned)busy(t), (unsigned)b);
+            for (b = 0; b < FS / CTL && p5_tail(t); b++)   /* the capacitor: 32 ms a time constant, at rest under 16 */
+                track_render(t, out, CTL);
+            if (b > tailmax)
+                tailmax = b;
+            tails += b != 0;
+            if (p5_tail(t))
+                stuck++, printf("  program %u: the capacitor not at rest after %u blocks\n", (unsigned)k, (unsigned)b);
             for (b = 0; b < 4u; b++) {
                 track_render(t, out, CTL);
                 for (i = 0; i < CTL; i++)
@@ -555,15 +828,18 @@ int main(int argc, char **argv)
            "(program %u; four voices' sum is at most %d)", (unsigned)NELEM(P5_TEST_PRESETS), (int)maxpk, (unsigned)wk,
            8 * VOICE_FS);
         OK(!dc, "render: no DC in a held chord (the part's blocker; the largest mean %.0f)", maxdc);
-        OK(!stuck && !nz, "render: every voice free after its release (the longest %.1f s), exact silence after",
-           worst * (double)CTL / FS);
+        OK(!stuck && !nz, "render: every voice free after its release (the longest %.1f s), exact silence after the "
+           "capacitor's discharge (%u programs have one, the longest %.0f ms)", worst * (double)CTL / FS, (unsigned)tails,
+           tailmax * 1000.0 * CTL / FS);
+        OK(!cut, "render: no step at the last voice's end beyond the voice's own last ramp (the largest %d: the part's "
+           "DC blocker is not cut to 0 there, 3y44)", (int)maxcut);
         printf("     (%u programs under 20 rms in the held chord: percussive or self-ending)\n", (unsigned)quiet);
     }
 
     /* ---- the stress programs: no sample beyond the voices' sum ---- */
     {
         static const uint8_t HI[5] = {24, 43, 60, 79, 108};
-        int32_t maxpk = 0;
+        int32_t maxpk = 0, maxcut = 0;
         for (k = 0, bad = 0; k < NSTRESS; k += 5u) {
             stress(k, &p);
             r = render(t, &p, HI, 5, 127, 40, 20);

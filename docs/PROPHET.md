@@ -518,6 +518,159 @@ by proportion: inferences until the four-voice build is read):
 held (expected about 1630 / 2410 / 0); the same with the bass on; a UNISON program (LAGOON BASS) on the chord part,
 and on the bass part under a chord.
 
+## The crackle (2026-10-13, 3y44: not reproduced, not explained)
+
+**What 3y44 did fix is another fault, found on the way: [the click at a release's end](#the-click-at-a-releases-end-3y44-found-and-fixed). It is not this crackle.**
+
+The owner, on the unit, with 74eae04 built with all 200 programs, Options > Dual Core On: **"On P5 though, preset 16 I
+was able to create some kind of glitch by using minor + 6 + 9 then playing chord again as minor + 9 which had a long
+crackling effect like the voice got stuck in a washing machine or something. All dry, no bass on."** The other
+engines were clean in the same session.
+
+**The program.** Place 16 of all 200 is Sequential's program 16, **Canned Happiness** (`CANNED HAPPY`): saw + pulse
+on oscillator A, pulse on B (fine 26), noise 13; the SSI filter (Rev 1/2), cutoff 50, **resonance 0**, full keyboard
+tracking, envelope amount 58 with velocity on the filter; filter ADSR 20 / 59 / 25 / 86, amplifier 0 / 79 / 80 / 58,
+release on (silent within 3 s of a release); Poly-Mod: the filter envelope to A's frequency (5); the wheel's source a
+triangle at rate 87, initial amount 8, on A's frequency and B's pulse width; **Vintage 123** (the loose end: each
+note-on draws a voice's pitch, cutoff, level and envelope-time offsets anew). **No UNISON, no glide, no sync**, no
+Lo Freq B; its retrigger byte is 0, which is LOW key priority and matters to a mono part only. Nothing of the kind
+that self-oscillates.
+
+**The gesture in voice.c's terms.** Minor + 6 + 9 on D4 is 62 65 69 71 76: five notes for four voices, all in one
+block. The fifth takes the oldest held voice that is not the lowest note (the 65's), which has not sounded yet and
+so is restarted in place. Minor + 9 is 62 65 69 76, struck while the first chord's four voices release: 62, 69 and
+76 are struck again on their own sounding voices (in place, the attack from the level they are at); the 65 has no
+voice, so the oldest released voice is faded over a block and the 65 waits for it (`vsq`). That voice is the 69's,
+which the 69's own note-on takes back in the same block; the 65 tries again two blocks later, fades the 71's voice
+and starts on it two blocks after that: **2.9 ms late, four voices, nothing else**. A 6 let go under a held root
+changes nothing (a sounding chord keeps its notes).
+
+**It does not happen on the host.** Tried, with the firmware's own sound side (`cr_out.c`'s queue, `cr_engine.c`,
+`voice.c` with the fade-and-defer steal, P5, `fx.c`'s mix):
+
+| what | runs | result |
+| --- | --- | --- |
+| `cr_prophet_test --gesture-sweep 16` (the host test's whole sweep, dry): four roots, play style Simple / Advanced / Free, Ext Addition both ways, Key Mode off and on, Perform off and its five modes, a unit that keeps up and two that do not (below), five ways from the one chord to the other (the 6 let go and the root again; everything let go; the 6 let go under the held root; a second root key before the first is up; the 6 and the 9 pressed into a held minor chord), the first chord held 1 block to 1.5 s, the second struck 0 to 1378 blocks (0 to 1 s; every block from 0 to 12: 32 samples is the finest timing a note has) after | 756 000 | **none broke a rule**: never more than four voices; voices faded stay bounded by the notes struck (no circle); the second chord's sustain at most 1.84 × as rough as the same chord struck out of silence (the mean square of the output's third difference; the two differ by the Vintage draws and the envelopes' phase); no step beyond the reference's; every voice free after the release and the output at rest |
+| the emulator, the real keys (`G#3` MIN, `F3` 6, `C4` 9, a root): 5 roots, hold 20 ms to 1.5 s, the second strike 1 to 40 ms and to 3 s after; with the default sends (1 ms steps), and dry (2 ms steps) | 4160 + 1620 | no tail, no saturation, the sustain within 1.9 × of the reference's |
+| the same with Options > Dual Core On (a flash file; the emulator's second core runs the bass part's job inline: **real concurrency is not modelled**), and with Key Mode on | 312 + 168 | the same; Dual Core On gives the same samples as Off |
+| the same gesture on every one of the 200 programs | 1200 | the only programs that differ from their reference by more than 2.5 × are those with a slow filter attack (FANTASTIC 5, ANOTHER OCEAN: the second strike finds the filter already open), as it should be |
+| the emulator, dry (`tools/emu/scripts/cr_prophet_crackle.txt` in `test_cr.sh`) | 1 | `wavclicks.py`: no jump, no hole, no burst inside the sound |
+
+So nothing in ChoralRoot's wiring of the engine, in the four-voice cap or in Melodee's sample path shows a fault for
+this sequence **on the host**. Melodee has no later integer fix to take: after 8a3074b its engine is float (fa64ef0);
+the two integer pieces since (the DC blocker, the packed bank) are here.
+
+**What the host cannot show, most likely first (all inference).**
+
+1. **The deadline**: halves that end after their boundary until the DAC plays an old one (`stale_halves`: 2.9 ms of
+   the sound of two halves before, spliced in). It is the one known mechanism on this unit that sounds like a "long"
+   crackle or a voice "stuck" (`6_stale_every_other.wav` and `7_stale_one_in_eight.wav` in the listening folder are
+   that, made by editing samples). For it: P5 is the dearest part there is (1533 us measured for four voices of
+   another program), this program takes the sample loop's long way (three saws' worth of edges, noise, the SSI
+   filter's seven look-ups, Poly-Mod and the wheel on A's frequency: an exponential a sample), a strike moves all four
+   filter envelopes at once (the coefficient set-up every sample), and Dual Core On adds core 0's wait for core 1 to
+   every block. Against it: dry and without a bass is the cheapest way to play it; the host's count ranks the program
+   44th of the 200 (about 1510 us for the whole half by the emulator's estimate, which has been low by up to 1.5);
+   and two halves above 85 % shed a voice, which should end an overload in 6 ms: it would have to be late without
+   being over, or over for another reason than the voices.
+2. **The interrupts masked by the main loop**: a flash write. The owner marks favourites in this build, and item 30
+   of docs/HANDOFF.md has a 17.8 ms gap read in such a session. By the code a write waits for a second of silence and
+   an erase silences the buffer first; a page program does not silence it, and a DMA left alone loops what it has
+   (`storage_hw.c`: "the DMA would loop stale audio (buzz)"). `irq_gap_us`, `flash_erases`, `flash_holes` say.
+3. **The shed itself**: a voice faded in 0.7 ms each time two halves are over. Modelled (below): it thins the chord,
+   it does not crackle, and nothing strikes a shed voice again.
+4. **A circle in the allocator** (a voice faded and taken again every other block): not found by reading, not seen
+   in any run (the test bounds the fades by the notes). `voices_faded` / `voices_stolen` would count without end.
+5. **The unit's samples are not the host's**: the device compiler's code for the sample loop (in RAM since 3y41) has
+   never been compared with the host's, sample for sample; the stage-36 identity is a host test. A recording over USB
+   decides (below).
+6. **The second core**: a slow or failing core 1 (`pk_wait_us`, the `c1` state in `--debug`).
+
+**The overload, modelled.** `EMU_SHED_OVER=N` / `EMU_SHED_AT=A:B` (tools/emu/README.md "Overload, modelled") give
+`audio.c`'s `shed_check` a half of 90 % whenever N or more voices sound (or between A and B ms); the host test has
+the same model (`over`). With four voices "not fitting", each chord of the gesture loses one held voice 6 ms after
+its strike (three sheds, six halves over, four voices faded in all); with three, two. With every half over for
+200 ms around the second strike the chord thins to its lowest note (7 sheds). **No crackle in any of them, and no
+voice shed and struck again**: a shed voice is only ever started by a new key. What is not modelled: a late or stale
+half (the files 6 and 7 are an edit of the output, not a model of the ISR).
+
+**What `--debug` says since 3y44** (78 PEAK's values 35..41, cleared by the read as the others): `shed_voices`,
+`shed_last_voice` (part, voice, note), `shed_last_why` (a released voice / a held one / none to give),
+`shed_over_halves`, `shed_last_us`, `voices_faded`, `voices_stolen`, and a line "overload: ..". Until now
+`voices_shed` was on the console alone.
+
+**To do on the unit** (`build/scratch/p5-fav/choralroot-p5-crackle-fix-all200.fwsc`: this tree with all 200; for
+the crackle it fixes nothing, it counts):
+
+1. `python3 tools/fm1_install.py --debug` once (clears the counters); P5, place 16, dry, no bass; make it crackle;
+   `--debug` again at once. Read `stale_halves`, `pk_late`, `pk_block_us`, `pk_part0_us`, `pk_wait_us`, `pk_lag_us`,
+   `irq_gap_us`, `flash_erases`, `flash_holes`, the overload line.
+   - `stale_halves` > 0: the deadline (1), or with a large `irq_gap_us` the masked interrupts (2); the `pk_*` stages
+     say whose time it was.
+   - `shed_voices` > 0 and `stale_halves` 0: the shed (3) was heard.
+   - `voices_faded` in the hundreds for a handful of chords: the circle (4).
+   - all quiet: the unit rendered it that way (5).
+2. **Record it over USB** (ChoralRoot In) while listening to the unit's own output: the recording is taken from the
+   render, before the DAC. In the recording: rendered (4, 5). Heard but not in the recording: the DAC replayed (1, 2).
+3. Options > Dual Core Off, restart, the same.
+4. Is the five-note chord needed? Minor + 9 twice; the same on place 15 and 17; does it stop when the keys are let
+   go or with the release; is the next chord clean?
+5. Which of the listening files is it like (`../audio-0.22/prophet/crackle/`, `tools/p5_crackle_listen.py`): 3 / 4
+   (a note dropping out), 6 / 7 (a buzz or a rattle over the chord)?
+
+Another branch has the automatic flash writes in hand (guess 2). **Not tested here**: anything on a unit; two real
+cores; a late half; MIDI in, the looper, a bass, the effects' tails under the gesture; velocities other than 100
+(host) and the emulator's fixed one.
+
+## The click at a release's end (3y44: found and fixed)
+
+Found by the sweep's "silent after the release" rule, on other programs than the owner's. **A fault in ChoralRoot's
+wiring of the part's DC blocker** (`p5_post`: Melodee 7cd66fb's output capacitor, 5 Hz, put into integers here; "with
+no voice it starts afresh"). Afresh was the block after the part's last voice ended, whatever the capacitor still
+held. The oscillators are unipolar, so a chord carries the mixer's DC up to the VCA; when the VCA closes faster than
+the capacitor's 32 ms, the capacitor holds most of that DC with its sign turned at the moment the last voice is
+freed, and it went to 0 in one sample:
+
+- **on 34 of the 200 programs a step above 100** (of a chord's 40 000 to 90 000), on about 20 above 1000 (a four-note chord, velocity 100), the largest
+  **27 197 on 88 DIRTY LEAD, 8 dB under the chord's peak** (50 PEDAL SWEEP 11 494, 174 FILTER MOD 9016, 168 PERC
+  ORGAN 7467), 10 to 130 ms after every release, into the silence: the programs with a short release (organs, leads,
+  basses, clavs). In the emulator's output `wavclicks.py` counts it after each of four stabs
+  (`8_click_168_perc_organ_before.wav`: 4 clicks; `_after`: 0).
+- **CANNED HAPPY does not have it** (a release of 0.44 s: the capacitor holds 3 units when its last voice ends), so
+  **this is not the owner's crackle**; and it comes once a release, not "long".
+
+**The fix** (`eng_prophet_test.c`, `voice.c`, `core.h`): the capacitor discharges into the silent blocks after the
+last voice and starts afresh once it is at rest (`P5_DC_REST`: under 16 output units, 70 dB under a chord: at most
+0.25 s). The part stays in the mix meanwhile through a new engine hook, `engine_t.tail` (asked after `post` when no
+voice was rendered: `voice.c track_render_x`; P5 alone has one); the voices are free as before, so nothing changes
+for the allocator. Where the capacitor held less than 16 at the last voice's end nothing changes, sample for
+sample. `-DP5_DC_REST=0x7FFFFFFF` is the old cut (74eae04's output: `tests/regress.c` built with it gives the 246
+committed goldens of 74eae04, every one). FM6's `fm6_post` has the same "afresh" and is left alone: its voices carry
+no DC.
+
+**Goldens: 18 of the 49 P5 renders change, the other 31 and the 197 of the other engines do not.** A golden changes
+exactly when the capacitor held 16 or more at a moment the part ran out of voices in the regression's phrase
+(measured by building `regress.c` with `P5_DC_REST` at each power of two: the golden differs from 74eae04's while
+the threshold is at or under what was held):
+
+| held at a last voice's end (output units) | programs |
+| --- | --- |
+| 4096 .. 8191 | 168 PERC ORGAN |
+| 2048 .. 4095 | 10 PDG ORGAN, 62 VINTAGE WRLY, 143 ORGANIZER, 167 SYNC I |
+| 1024 .. 2047 | 4 FUNK BASS II |
+| 512 .. 1023 | 6 STABBY BRASS, 11 CLAVICLE, 55 HYPER POLY |
+| 256 .. 511 | 111 LAGOON BASS, 163 MUTED CLAV |
+| 16 .. 31 | 32 BLINKR BELLS, 46 FAT POLYBASS, 91 FURRY TINES, 94 PINK NEON BR, 133 PRETTY PLUCK, 135 FEATURE BASS, 179 ELEC PIANO I |
+| under 16: the same samples | INIT and the other 30 |
+
+The CPU baseline (`tests/cpu_baseline.txt`) is not rewritten. Tests: `cr_prophet_test`'s "no step at the last
+voice's end beyond the voice's own last ramp" over every shipped program (with the old cut: 11 of the tree's 48
+programs fail it, 40 of the 200, the largest step 27 197; now the largest is 20) and "exact silence after the
+capacitor's discharge" (the longest 190 ms in the tree's list, 243 of all 200);
+`tools/emu/scripts/cr_prophet_relclick.txt` in `test_cr.sh` (PERC ORGAN, four stabs: no click after a release). Not
+done: by ear on a unit; the capacitor's own swing after a fast release is still there, as on the instrument (it
+is what a 5 Hz coupling does to a gated DC): only its cut is gone.
+
 ## Tests
 
 - `tests/cr_prophet_test.c` (in `sh tests/run_cr_tests.sh`), on the firmware as the emulator builds it: the engine's
@@ -538,6 +691,12 @@ and on the bass part under a chord.
 - `tests/run_prophet_test.sh`: the stage-36 identity (above), `FELUCCA_P5_FACTORY=0`, and **the list**: the test
   built with all 200 and with a list of seven passes; a program's render is the same samples in each build; a
   session record written with one list is read with another ([The shipped list](#the-shipped-list)).
+- **The owner's gesture** ([The crackle](#the-crackle-2026-10-13-3y44-not-reproduced-not-explained)):
+  `cr_prophet_test --gesture [ID]` (600 runs on Sequential's program 16, in `run_prophet_test.sh` on the build with
+  all 200; `--gesture-sweep` is the whole sweep, minutes) and `tools/emu/scripts/cr_prophet_crackle.txt` in
+  `test_cr.sh` (program 16 where the build ships it, else place 15), once as it is and once with `EMU_SHED_OVER=4`.
+  They pass before and after 3y44: **the crackle has no fix, so no test that failed before one**. The click at a
+  release's end has both ([there](#the-click-at-a-releases-end-3y44-found-and-fixed)).
 - `tests/regress.c`: P5's golden renders and CPU entries are the generated list's, named by the program's number
   (`preset/P5/044_CARS_STRINGS`, `cpu/P5/..`): **246 goldens** (197 of the other engines, untouched lines, + INIT and
   the 48). All 49 P5 hashes differ from cd43720's for the same programs: the regression's phrase ends on a five-note

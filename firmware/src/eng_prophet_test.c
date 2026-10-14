@@ -567,12 +567,23 @@ P5_HOT void p5_samples(p5_voice_t *restrict s, const uint8_t *restrict p, int32_
  * sends and the drive. With no voice it starts afresh */
 #define P5_DC_K 1072976913                       /* (1 - 2 pi 5 / FS) << 30 */
 _Static_assert(FS == 44100, "P5_DC_K: the sample rate");
+/* ChoralRoot, 3y44 (docs/PROPHET.md "The click at a release's end"): "afresh" was the block after the part's last
+ * voice ended, whatever the capacitor still held: on a program with a short release that is most of the mixer's DC
+ * with its sign turned (the capacitor's time is 32 ms), and it went to 0 in one sample: a step up to 8 dB under the
+ * chord's peak, 10 to 130 ms after every release (26 676 of 69 049 on DIRTY LEAD; 34 of the 200 programs above
+ * 100). Now the capacitor discharges into the silent blocks (p5_tail keeps the part in the mix:
+ * voice.c track_render_x) and starts afresh once it is at rest, P5_DC_REST: 16 output units, 70 dB under a chord.
+ * Below that at the last voice's end nothing changes, sample for sample. -DP5_DC_REST=0x7FFFFFFF is 74eae04's
+ * output (always at rest: the cut), for a measurement and for the test's proof that it fails without this */
+#ifndef P5_DC_REST
+#define P5_DC_REST (16 << 8)
+#endif
 static void p5_post(track_t *t,int32_t *out,uint32_t n,uint32_t nr)
 {
     p5_part_t *P=p5_part((uint32_t)(t-trk)%NPART);
     if(!P)return;
     int32_t x1=P->dc_x1,y=P->dc_y1;
-    if(!nr){P->dc_x1=P->dc_y1=0;return;}
+    if(!nr && y>-P5_DC_REST && y<P5_DC_REST){P->dc_x1=P->dc_y1=0;return;}
     for(uint32_t i=0;i<n;i++){
         int32_t x=out[i];
         y=(int32_t)((int64_t)(x-x1)*256+(((int64_t)y*P5_DC_K)>>30));
@@ -580,6 +591,11 @@ static void p5_post(track_t *t,int32_t *out,uint32_t n,uint32_t nr)
         out[i]=(y+128)>>8;
     }
     P->dc_x1=x1;P->dc_y1=y;
+}
+static uint32_t p5_tail(track_t *t)              /* no voice, and the capacitor not at rest yet (p5_post) */
+{
+    p5_part_t *P=p5_part((uint32_t)(t-trk)%NPART);
+    return P && (P->dc_x1 || P->dc_y1);
 }
 /* XIP stalls dominated Melodee's first hardware run; its hot path ran from RAM. Here: P5_RAM (above), on in a
  * device build. This function, p5_env_tick, p5_block and p5_post (a voice's and the part's block) are in flash. */
@@ -909,7 +925,7 @@ static const engine_t ENG_P5_TEST = {
     .presets=P5_TEST_PRESETS,.npresets=NELEM(P5_TEST_PRESETS),.poly=P5_POLY,.ownenv=1,.deep=&P5_DEEP,
     .note_on=p5_note_on,.render=p5_render,.done=p5_done,.block=p5_block,.units=p5_units,.cap=p5_cap,.legato=p5_legato,
 #if P5_DC_BLOCK
-    .post=p5_post,
+    .post=p5_post,.tail=p5_tail,
 #endif
     .knob={P_E0,P_E1,P_CHOR,P_REV}
 };

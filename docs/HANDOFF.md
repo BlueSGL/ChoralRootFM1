@@ -310,6 +310,23 @@ installed on the owner's Mac.
     and the type (HISTORY 3y42) are not on a unit either**: to read there: the SAVE menu's five entries and its four
     knobs, the yellow line of the read-out, and that a turn of PRESETS in P5's pool with the filter on is as quick as
     without. In the SAVE menu KNOB 1 no longer moves the entry (SELECT does): the one habit that changes.
+31. **P5's crackle on the unit: NOT reproduced, NOT explained, nothing fixed** (HISTORY 3y44; docs/PROPHET.md "The
+    crackle" has the sweep, the ranked guesses and the steps). The owner, 74eae04 with all 200, Dual Core On:
+    "preset 16 .. minor + 6 + 9 then playing chord again as minor + 9 which had a long crackling effect like the voice
+    got stuck in a washing machine .. All dry, no bass on". Place 16 is Sequential's 16, Canned Happiness (no UNISON,
+    glide, sync or resonance; Vintage 123). The host and the emulator play the gesture clean in every timing and
+    option tried, and an overload modelled (`EMU_SHED_OVER`) only thins the chord. (3y44 did fix another P5 fault it
+    met on the way, a click 10 to 130 ms after every release of a short-release program: the part's DC blocker was cut
+    to 0 when the last voice ended; 18 of the 49 P5 goldens changed for it. Canned Happiness does not have that one.)
+    **For the crackle, what 3y44 adds is the reading**:
+    78 PEAK's `shed_voices`, `shed_last_voice`, `shed_last_why`, `shed_over_halves`, `shed_last_us`, `voices_faded`,
+    `voices_stolen` in `fm1_install.py --debug`. **To do on the unit** with
+    `build/scratch/p5-fav/choralroot-p5-crackle-fix-all200.fwsc` (the name was asked for: for the crackle it counts,
+    it fixes nothing): `--debug` to clear, make it crackle, `--debug` at once (`stale_halves`, `pk_*`, `irq_gap_us`,
+    `flash_holes`, the overload line); record it over USB while it crackles (in the recording: rendered that way;
+    only on the output: the DAC replayed a half); the same with Dual Core Off; whether the five-note chord is needed;
+    which of `../audio-0.22/prophet/crackle/`'s files it is like. The first guess, an inference: the deadline
+    (stale halves), not the engine.
 
 - **WHEEL**: the owner is on the fence about cutting it. Not touched in 0.19.
 

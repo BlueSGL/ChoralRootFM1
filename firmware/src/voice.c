@@ -778,6 +778,8 @@ CR_HOT_CORE static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *si
     }
     if (e->post)
         e->post(t, out, n, nr);
+    if (!nr && e->tail)                                 /* (P5: the part's own tail after its last voice) */
+        nr = e->tail(t);
     if (fade) {
         for (i = 0; i < 8u; i++)
             t->p[P_E0 + i] = pe_new[i];

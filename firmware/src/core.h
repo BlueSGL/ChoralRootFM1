@@ -347,6 +347,9 @@ typedef struct {                 /* an engine (engines.c ENGINES[]; the eng_*.c 
     void (*mono_key)(struct track *t, uint32_t note);
     /* the part's block after its voices (FM6: Dexed's DC filter); nr: voices rendered */
     void (*post)(struct track *t, int32_t *out, uint32_t n, uint32_t nr);
+    /* asked after post when none of the part's voices was rendered: 1 = the part still sounds (P5: its output's
+     * capacitor discharging, p5_post), the mix takes the block as if a voice had */
+    uint32_t (*tail)(struct track *t);
     /* the voice cap of the part now, instead of poly */
     uint32_t (*cap)(const struct track *t);
     /* the voice budget units one of its voices takes now (default: 1 above NPOLY voices, else 2) */

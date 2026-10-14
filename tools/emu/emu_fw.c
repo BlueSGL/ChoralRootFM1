@@ -152,6 +152,12 @@ void emu_fw_init(int demo)
         const char *c1 = getenv("EMU_C1");
         cr_c1_test_nostart = c1 && !strcmp(c1, "nostart");
         cr_c1_test_hang = c1 && !strcmp(c1, "hang");
+        {   /* a unit that does not keep up (emu_firmware.h emu_shed_model) */
+            const char *so = getenv("EMU_SHED_OVER"), *sa = getenv("EMU_SHED_AT");
+            emu_shed_over = so ? (uint32_t)atoi(so) : 0u;
+            if (sa && sscanf(sa, "%u:%u", &emu_shed_at0, &emu_shed_at1) != 2)
+                emu_shed_at0 = emu_shed_at1 = 0;
+        }
         cr_dbg.prof_on = getenv("EMU_STAGES") != NULL;
         if (cr_dbg.prof_on)
             cr_prof_calibrate();
@@ -574,6 +580,10 @@ void emu_fw_dump(void)
     }
     printf("  voices: given up %u (budget fades + overload sheds %u), own voices taken for a new note %u\n",
            (unsigned)voice_kills, (unsigned)shed_count, (unsigned)voice_steals);
+    if (emu_shed_over || emu_shed_at1)            /* (the overload model alone: no line in any other run) */
+        printf("  shed: halves over 85 %% %u, last voice %05X why %u at %u us (audio.c shed_check; the model: "
+               "EMU_SHED_OVER %u, EMU_SHED_AT %u:%u)\n", (unsigned)cr_dbg.shed_over_n, (unsigned)cr_dbg.shed_last,
+               (unsigned)cr_dbg.shed_why, (unsigned)cr_dbg.shed_us, (unsigned)emu_shed_over, (unsigned)emu_shed_at0, (unsigned)emu_shed_at1);
     printf("  flash erases with the audio stalled %u (%u blocks of silence, %u ms each erase)\n", (unsigned)emu_stalls,
            (unsigned)emu_stall_blocks_all, (unsigned)EMU_ERASE_MS);
     fm1_irq_on();
