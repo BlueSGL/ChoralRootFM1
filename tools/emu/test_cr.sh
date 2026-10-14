@@ -450,7 +450,7 @@ rd() { grep -a '^  screen reads:' "$L" | sed -n "$1p" | sed 's/.* cells //'; }
     ok "two FM TONE presets with different Drive: FM6 with the part's send 12 -> 01 EP: 0 -> 10 WOBBLE: 10 -> 09 METAL: 0 (the part's send, 12, waits)" \
     || bad "FM TONE's presets' Drive: '$(drc 1)' / '$(drc 2)' / '$(drc 3)' / '$(drc 4)'"
 has '^param: part 0 ENV DRIVE 10 -> 28' "$L" && [ "$(drc 5)" = "chord FM TONE track 28 send 12 edited 1" ] && rd 5 | grep -q '1.2:Drive=28$' &&
-    has '^save: part 0 overwrite slot U01 FM TONE 10 WOBBLE rc 0' "$L" && [ "$(drc 6)" = "chord FM TONE track 28 send 12 edited 0" ] &&
+    has '^save: part 0 overwrite slot U001 FM TONE 10 WOBBLE rc 0' "$L" && [ "$(drc 6)" = "chord FM TONE track 28 send 12 edited 0" ] &&
     [ "$(drc 7)" = "chord FM TONE track 0 send 12 edited 0" ] && [ "$(drc 8)" = "chord FM TONE track 28 send 12 edited 0" ] &&
     ok "the AMP page's Drive (0..127: 10 -> 28) marks the sound edited; saved (U01, over WOBBLE), METAL: 0, back: 28 again: $OUT/cr_quad_drive_amp.ppm" \
     || bad "edit, save, away and back: '$(drc 5)' / '$(drc 6)' / '$(drc 7)' / '$(drc 8)' ($(rd 5))"
@@ -821,7 +821,7 @@ cmp -s "$OUT/cr_editor_back.ppm" "$OUT/cr_editor_again.ppm" && ok "OCT-, HOME, E
     || bad "the editor not as left: $OUT/cr_editor_back.ppm / $OUT/cr_editor_again.ppm"
 [ "$(grep -c '^edit: group MIX screen 1 lane 2 part 0' "$L")" -ge 3 ] && ok "the trace: MIX row B after SHIFT + EDIT and after EDIT again" || bad "group memory"
 has '^edit: close' "$L" && differ cr_editor_home cr_editor_again "HOME left the editor: $OUT/cr_editor_home.ppm"
-has '^save: part 0 overwrite slot U01 VA 01 LUSH PAD rc 0' "$L" && ok "SAVE SAVE (edited: Overwrite): LUSH PAD bound in U01 from the editor: $OUT/cr_editor_saved.ppm" || bad "SAVE SAVE: $(grep '^save:' "$L")"
+has '^save: part 0 overwrite slot U001 VA 01 LUSH PAD rc 0' "$L" && ok "SAVE SAVE (edited: Overwrite): LUSH PAD bound in U01 from the editor: $OUT/cr_editor_saved.ppm" || bad "SAVE SAVE: $(grep '^save:' "$L")"
 has '^expect sound .*: ok' "$L" && ok "the root keys audition in the editor" || bad "no audition"
 has '^expect led FX on .*: ok' "$L" && has '^expect led SEL dim .*: ok' "$L" && has '^expect led REC on .*: ok' "$L" &&
     ok "LEDs: the group's button lit, the others dim" || bad "editor LEDs"
@@ -956,9 +956,9 @@ silent_end cr_engine
 
 echo "SAVE: the dialog, Save as new, naming, the user slot"
 run cr_save
-has '^save: dialog part 0 TINE EP (save as new)' "$OUT/cr_save.log" && has '^save: new part 0 FM6 26 (slot U01)' "$OUT/cr_save.log" &&
+has '^save: dialog part 0 TINE EP (save as new)' "$OUT/cr_save.log" && has '^save: new part 0 FM6 26 (slot U001)' "$OUT/cr_save.log" &&
     ok "SAVE on TINE EP: the dialog, Save as new by default; OCT+: the naming screen at FM6 26: $OUT/cr_save_open.ppm $OUT/cr_save_naming.ppm" || bad "the dialog: $(grep '^save:' "$OUT/cr_save.log" | head -2)"
-has '^save: part 0 slot U01 name ADG' "$OUT/cr_save.log" && ok "D4 E4 F4, OCT+: U01 \"ADG\": $OUT/cr_save_typed.ppm" || bad "not saved"
+has '^save: part 0 slot U001 name ADG' "$OUT/cr_save.log" && ok "D4 E4 F4, OCT+: U01 \"ADG\": $OUT/cr_save_typed.ppm" || bad "not saved"
 has '^sound: part 0 pos 26 ADG' "$OUT/cr_save.log" && ok "PRESETS reaches it at FM6 26, after the 25 factory presets: $OUT/cr_save_preset.ppm" \
     || bad "U01 not at FM6 26: $(grep 'ADG' "$OUT/cr_save.log" | tail -1)"
 grep -q '^edit: .*part 1' "$OUT/cr_save.log" && has '^deep: part 1 ' "$OUT/cr_save.log" &&
@@ -1467,8 +1467,8 @@ phm 01 'LUSH PAD' 'Hold OPT to change engine' VA &&
 phm 02 BELL 'FM TONE . 02/16' '' && [ "$(grep -ac "^home read-out: part . over " "$PH")" = 6 ] &&
     ok "the sound editor's picker (no OPT + PRESETS there): the engine and the place as before, nothing over the number: $OUT/cr_pool_hint_picker.ppm" \
     || bad "the picker's read-out: $(grep -ac "^home read-out: part . over " "$PH") home read-outs of 6"
-has '^save: new part 0 FM TONE 17 (slot U01)' "$PH" && phm 17 BELL 'Hold OPT to change engine' 'FM TONE' &&
-    ok "a user's preset (slot U01, FM TONE 17): the same two lines: $OUT/cr_pool_hint_user.ppm" || bad "a user preset's read-out"
+has '^save: new part 0 FM TONE 17 (slot U001)' "$PH" && phm 17 BELL 'Hold OPT to change engine' 'FM TONE' &&
+    ok "a user's preset (slot U001, FM TONE 17): the same two lines: $OUT/cr_pool_hint_user.ppm" || bad "a user preset's read-out"
 differ cr_pool_hint_anim cr_pool_hint_chord "the read-out while its stripes fill differs from the settled one (both carry the two lines)"
 # 0.18: OPT + ALGORITHM is the bass part's engine (as OPT + PRESETS the chord part's), BASS held + ALGORITHM the bass level
 export EMU_UI_LOG=1
@@ -1848,9 +1848,9 @@ silent_end cr_fullkbd
 
 echo "user presets: Overwrite, delete, the naming keys"
 run cr_save_del
-has '^save: dialog part 0 ADG (overwrite)' "$OUT/cr_save_del.log" && has '^save: part 0 overwrite slot U01 FM6 26 ADG rc 0' "$OUT/cr_save_del.log" &&
+has '^save: dialog part 0 ADG (overwrite)' "$OUT/cr_save_del.log" && has '^save: part 0 overwrite slot U001 FM6 26 ADG rc 0' "$OUT/cr_save_del.log" &&
     ok "SAVE on a user preset: Overwrite by default, U01 rewritten, its name and place kept: $OUT/cr_save_overwrite.ppm" || bad "overwrite: $(grep '^save:' "$OUT/cr_save_del.log" | tr '\n' ' ')"
-[ "$(grep -c '^save: delete ADG?' "$OUT/cr_save_del.log")" = 2 ] && has '^save: delete slot U01 rc 0' "$OUT/cr_save_del.log" &&
+[ "$(grep -c '^save: delete ADG?' "$OUT/cr_save_del.log")" = 2 ] && has '^save: delete slot U001 rc 0' "$OUT/cr_save_del.log" &&
     has '^save: now part 0 FM6 25 PIANO' "$OUT/cr_save_del.log" &&
     ok "SAVE held 1 s in the dialog: delete? (OCT- kept it), OCT+ deleted U01, the part on FM6 25: $OUT/cr_save_delete.ppm" || bad "delete"
 [ "$(grep -c '^expect led .*: ok' "$OUT/cr_save_del.log")" = 6 ] && ok "naming: the typing keys lit (F#4: delete), G#4 dark, OCT- lit" || bad "naming LEDs"
@@ -1878,22 +1878,22 @@ s0=$(stripes "$OUT/cr_presets_init.ppm"); s5=$(stripes "$OUT/cr_presets_meter.pp
     ok "OPT + PRESETS: the engine picker (VA, 25 presets), OPT released: VA 01 LUSH PAD: $OUT/cr_presets_engine.ppm" || bad "OPT + PRESETS: $(grep '^sound: part 0 engine' "$PL" | head -1)"
 [ "$(grep -c '^sound: part 0 engine FM6 pos 5 FM PAD' "$PL")" = 2 ] && has '^sound: part 0 engine VA pos 4 SLOW STRINGS' "$PL" &&
     ok "each engine remembers its place: FM6 back on 05 FM PAD, the VA on 04 SLOW STRINGS" || bad "the per-engine memory: $(grep '^sound: part 0 engine' "$PL" | tr '\n' ' ')"
-has '^save: dialog part 0 FM PAD (save as new)' "$PL" && has '^save: new part 0 FM6 26 (slot U01)' "$PL" && has '^save: part 0 slot U01 name ADG rc 0' "$PL" &&
+has '^save: dialog part 0 FM PAD (save as new)' "$PL" && has '^save: new part 0 FM6 26 (slot U001)' "$PL" && has '^save: part 0 slot U001 name ADG rc 0' "$PL" &&
     pop '26 / ADG / FM6 · 26/26' && [ "$(stripes "$OUT/cr_presets_new.ppm")" = 26/26 ] &&
     ok "Save as new: the next place (FM6 26), PRESETS sits on it (26/26, the meter's 26 stripes lit): $OUT/cr_presets_dialog.ppm $OUT/cr_presets_naming.ppm $OUT/cr_presets_new.ppm" \
     || bad "Save as new: $(grep '^save:' "$PL" | head -3 | tr '\n' ' ') stripes $(stripes "$OUT/cr_presets_new.ppm")"
-has '^save: part 0 overwrite slot U02 FM6 02 FM BELL rc 0' "$PL" && pop '02 / FM BELL (mark) / FM6 · 02/26' &&
+has '^save: part 0 overwrite slot U002 FM6 02 FM BELL rc 0' "$PL" && pop '02 / FM BELL (mark) / FM6 · 02/26' &&
     ok "Overwrite on a factory preset: bound in U02, the number and the name kept, the mark: $OUT/cr_presets_overwrite.ppm $OUT/cr_presets_mark.ppm" || bad "Overwrite: $(grep 'overwrite' "$PL")"
-has '^save: reset FM BELL?' "$PL" && has '^save: reset slot U02 rc 0' "$PL" && has '^save: now part 0 FM6 02 FM BELL' "$PL" && pop '02 / FM BELL / FM6 · 02/26' &&
+has '^save: reset FM BELL?' "$PL" && has '^save: reset slot U002 rc 0' "$PL" && has '^save: now part 0 FM6 02 FM BELL' "$PL" && pop '02 / FM BELL / FM6 · 02/26' &&
     ok "SAVE held 1 s: reset to factory?, OCT+: the factory FM BELL back at 02 (no mark): $OUT/cr_presets_reset.ppm $OUT/cr_presets_factory.ppm" || bad "reset: $(grep '^save: reset' "$PL")"
-[ "$(grep -c '^save: part 0 slot U[0-9]* name .* rc 0' "$PL")" = 32 ] && has '^save: no free slot' "$PL" &&
-    ok "32 user presets fill the slots; the next Save as new: \"no free slot\": $OUT/cr_presets_full.ppm" || bad "no free slot: $(grep -c 'name .* rc 0' "$PL") saves"
+[ "$(grep -c '^save: part 0 slot U[0-9]* name .* rc 0' "$PL")" = 128 ] && has '^save: no free slot' "$PL" &&
+    ok "128 user sounds fill the pool's slots (0.22); the next Save as new: \"no free slot\": $OUT/cr_presets_full.ppm" || bad "no free slot: $(grep -c 'name .* rc 0' "$PL") saves"
 s0=$(stripes "$OUT/cr_presets_long_init.ppm"); s1=$(stripes "$OUT/cr_presets_long_first.ppm")
 sb=$(stripes "$OUT/cr_presets_long_before.ppm"); sl=$(stripes "$OUT/cr_presets_long_last.ppm")
-pop '00 / INIT / FM6 · 00/57' && pop '01 / TINE EP / FM6 · 01/57' && pop '56 / FM BELL / FM6 · 56/57' && pop '57 / FM BELL / FM6 · 57/57' &&
+pop '00 / INIT / FM6 · 00/153' && pop '01 / TINE EP / FM6 · 01/153' && pop '152 / FM BELL / FM6 · 152/153' && pop '153 / FM BELL / FM6 · 153/153' &&
     [ "$s0" = 0/32 ] && [ "$s1" = 1/32 ] && [ "$sb" = 31/32 ] && [ "$sl" = 32/32 ] &&
-    ok "a pool longer than the meter (57 presets, 32 stripes): none lit on INIT, one on 01, 31 on 56, every one only on 57, the last: $OUT/cr_presets_long_last.ppm" \
-    || bad "the long pool's stripes (lit/all): INIT $s0 (0/32), 01 $s1 (1/32), 56 $sb (31/32), 57 the last $sl (32/32); $(grep '^popup:' "$PL" | tail -4 | tr '\n' ' ')"
+    ok "a pool longer than the meter (153 presets, 32 stripes): none lit on INIT, one on 001, 31 on 152, every one only on 153, the last: $OUT/cr_presets_long_last.ppm" \
+    || bad "the long pool's stripes (lit/all): INIT $s0 (0/32), 001 $s1 (1/32), 152 $sb (31/32), 153 the last $sl (32/32); $(grep '^popup:' "$PL" | tail -4 | tr '\n' ' ')"
 
 echo "the sound read-out's stripes move from the place shown, not from none (cr_ui.c cu_animate, cr_draw.c cr_fill_at)"
 export EMU_UI_LOG=0
@@ -3071,7 +3071,7 @@ ffv 3 | grep -q 'favs: 2 marked, .*, filter on : 12:0c 12:2b$' && grep -a -B30 '
 [ "$(grep -a '^fav: filter' "$FF" | sed 's/^fav: filter \([a-z]*\).*/\1/' | tr '\n' ' ')" = "on off on off " ] && [ "$(fstar cr_ff_k2)" -ge 500 ] &&
     ok "KNOB 2 on Save as new: the favourites filter Off (the message \"Filter off\"), +1: On again (until this menu: the bass register): $OUT/cr_ff_k2.ppm" ||
     bad "KNOB 2: $(grep -a '^fav: filter' "$FF" | tr '\n' ' ') / yellow $(fstar cr_ff_k2)"
-has '^save: new part 0 FM6 26 (slot U01)' "$FF" && grep -a -q '^fav: part 0 .* on (tag 128 id 0, 3 marked)' "$FF" &&
+has '^save: new part 0 FM6 26 (slot U001)' "$FF" && grep -a -q '^fav: part 0 .* on (tag 128 id 0, 3 marked)' "$FF" &&
     [ "$(fsnd 18 21 | sed 's/pos 26 [A-Z0-9 ]*;/pos 26;/g')" = "0 pos 1 TINE EP;0 pos 26;0 pos 1 TINE EP;0 pos 26;" ] &&
     ok "a user sound (Save as new: FM6 26, U01) marked by its slot is one of the favourites: PRESETS turns 01, 26, 01, 26" ||
     bad "the user sound: $(fsnd 18 21) / $(grep -a '^fav: part 0 .* (tag 128' "$FF")"
@@ -3111,12 +3111,12 @@ nred() { px_count "$OUT/$1.ppm" 0 110 240 125 red; }   # the cursor's bar (rows 
     bad "the keys: $(nml 19) / $(nml 23) / $(nml 24)"
 [ "$(grep -a -c "'TINEFCAAAAAA' cursor 11 of 12" "$NM")" = 2 ] && ! grep -a -q "cursor 12 of" "$NM" &&
     [ "$(px_count "$OUT/cr_nm_full.ppm" 200 86 240 110 ink)" -lt "$(px_count "$OUT/cr_nm_full.ppm" 10 86 50 110 ink)" ] && [ "$(nred cr_nm_full)" -ge 20 ] &&
-    has '^save: part 0 slot U01 name TIN rc 0' "$NM" &&
+    has '^save: part 0 slot U001 name TIN rc 0' "$NM" &&
     ok "the maximum: SELECT right from the last character adds characters up to 12 and stops there (the name set smaller so that none is cut, the cursor on the twelfth: $OUT/cr_nm_full.ppm); nine backspaces: TIN; OCT+: saved as FM6 26 TIN" ||
     bad "the maximum: $(grep -a "cursor 1[12] of 12" "$NM" | tr '\n' ' ') / $(grep -a '^save: part' "$NM" | tr '\n' ' ')"
-grep -a -q "^name: backspace .*'' cursor 0 of 0" "$NM" && has '^save: part 0 slot U02 name  rc 0' "$NM" && [ "$(nred cr_nm_empty)" = 0 ] &&
+grep -a -q "^name: backspace .*'' cursor 0 of 0" "$NM" && has '^save: part 0 slot U002 name  rc 0' "$NM" && [ "$(nred cr_nm_empty)" = 0 ] &&
     ok "an empty name (three backspaces): no character, no cursor; OCT+ saves it as an empty name always was (the slot's automatic name): $OUT/cr_nm_empty.ppm" ||
-    bad "the empty name: $(grep -a '^save: part 0 slot U02' "$NM") / red $(nred cr_nm_empty)"
+    bad "the empty name: $(grep -a '^save: part 0 slot U002' "$NM") / red $(nred cr_nm_empty)"
 
 [ $fail -eq 0 ] && echo "PASS" || echo "FAIL"
 exit $fail

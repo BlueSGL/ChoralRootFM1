@@ -335,7 +335,7 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
     return 0;
 }
 
-#if FELUCCA_CZ && FELUCCA_QUAD
+#if FELUCCA_CZ && FELUCCA_QUAD && ((defined(UP_POOL) && UP_POOL) || defined(SP_TEST))   /* (core.h UP_POOL; tests/pool_test.c) */
 /* ---- THE SOUND POOL (ChoralRoot 0.22: docs/PRESETS.md "The pool"): FLOATING objects ----
  * 0xB8000..0xC7FFF, SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
  * a user record and one engine's patch). A sector is a bank's copy when its st_hdr_t is valid: ST_MAGIC, type SP_TYPE,
@@ -392,7 +392,7 @@ static int sp_body(uint32_t s, uint32_t crc)   /* the payload's CRC is crc: 0 (s
 
 /* the 16 commit records -> sp_cur, sp_top, sp_last (power-on; at most 16 header reads and one payload read per bank,
  * more only when a payload fails its CRC) */
-static void sp_scan(void)
+static __attribute__((unused)) void sp_scan(void)
 {
     st_hdr_t h;
     uint32_t seq[SP_NSEC], crc[SP_NSEC], s, b;
@@ -450,11 +450,11 @@ static uint32_t sp_target(void)                 /* where the next save goes (see
     }
     return 0;                                   /* (cannot happen: SP_NSEC > SP_NBANK) */
 }
-static int sp_used(uint32_t b) { sp_ensure(); return b < SP_NBANK && sp_cur[b] != SP_NONE; }
+static __attribute__((unused)) int sp_used(uint32_t b) { sp_ensure(); return b < SP_NBANK && sp_cur[b] != SP_NONE; }
 
 /* n bytes at off of slot k's SP_SLOT -> dst; a slot of a bank never written reads 0: 1, read: 0, error -1.
  * NEVER from the audio ISR (st_read) */
-static int sp_read(uint32_t k, uint32_t off, void *dst, uint32_t n)
+static __attribute__((unused)) int sp_read(uint32_t k, uint32_t off, void *dst, uint32_t n)
 {
     uint32_t b = k / SP_PER;
     if (ST_BLOCKED() || k >= SP_SLOTS || off + n > SP_SLOT)
@@ -468,7 +468,7 @@ static int sp_read(uint32_t k, uint32_t off, void *dst, uint32_t n)
 }
 
 /* the target made blank now (the quiet writes: at power-on, after a long idle): 0 it was, 1 erased, < 0 error */
-static int sp_prep(void)
+static __attribute__((unused)) int sp_prep(void)
 {
     uint32_t t;
     int rc;
@@ -497,7 +497,7 @@ static inline int sp_ready(void) { return sp_scanned && sp_spare_ok; }
  * st_buf, st_read is fine; a non-zero return aborts, nothing committed). Each slot is programmed in the pieces that
  * fall in one page (two a slot), the commit record last. 0 ok, < 0 nothing changed (the old copy is current; -7:
  * written but not read back) */
-static int sp_commit(uint32_t b, int (*fill)(uint32_t j, uint8_t *slot))
+static __attribute__((unused)) int sp_commit(uint32_t b, int (*fill)(uint32_t j, uint8_t *slot))
 {
     st_hdr_t h;
     uint32_t t, old, j, crc = 0;
@@ -570,7 +570,7 @@ static int sp_sub_fill(uint32_t j, uint8_t *slot)
     }
     return 0;
 }
-static int sp_write(uint32_t k, uint32_t off, const void *src, uint32_t n)
+static __attribute__((unused)) int sp_write(uint32_t k, uint32_t off, const void *src, uint32_t n)
 {
     if (ST_BLOCKED() || k >= SP_SLOTS || off + n > SP_SLOT)
         return -1;

@@ -1672,7 +1672,9 @@ static uint32_t cu_perf_mode(void) { return CU_PERF[cs.perf_sel].mode; }
  * 0xC8000 + (2k + copy) x 4 KiB, the record's type CRL_FL_TYPE + k (never one of storage.c's objects). */
 #define CRL_FL_BASE 0xC8000u
 #define CRL_FL_TYPE 0x4C30u
-static uint8_t cu_loop_buf[CRL_REC_MAX] __attribute__((aligned(4)));   /* a packed record */
+/* a packed record; also cr_backup.c's staging, where a sound pool bank (ST_PAYLOAD_MAX, 3840 bytes) is the largest */
+#define CU_LOOP_BUF (CRL_REC_MAX > 3840u ? CRL_REC_MAX : 3840u)
+static uint8_t cu_loop_buf[CU_LOOP_BUF] __attribute__((aligned(4)));
 static void cu_ledit_close(void);
 static uint8_t cu_loop_gen;                        /* + 1 whenever cu_loop_buf is written here (cr_backup.c stages a
                                                     * restore in it between requests: a change ends that restore) */
@@ -2454,7 +2456,7 @@ static int cu_loop_write(void)
         return 0;
     cu_loop_gen++;
     fm1_irq_off();
-    n = cr_loop_pack(&crl.d, cu_loop_buf, sizeof cu_loop_buf);
+    n = cr_loop_pack(&crl.d, cu_loop_buf, CRL_REC_MAX);
     fm1_irq_on();
     if (!n && !((cs.loop_used >> k) & 1u)) {       /* empty, and so is its slot: nothing to write */
         fm1_irq_off();
@@ -3199,7 +3201,7 @@ static void cu_save_take(void)
     track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
     uint32_t e = t->eng_req % NENGINES;
     int rc;
-    char l[4], nm[13];
+    char l[UP_LABEL], nm[13];
     if (ce.save_choice == 0u && psnd[part].kind != PK_INIT) {     /* Overwrite */
         cu_cpy(nm, psnd[part].name, sizeof nm);
         if (psnd[part].kind == PK_USER && up_used(psnd[part].slot)) {
@@ -3244,7 +3246,7 @@ static void cu_save_commit(void)
 {
     uint32_t part = ce.save_part, k = ce.slot;
     track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
-    char name[16], l[4];
+    char name[16], l[UP_LABEL];
     int rc;
     if (ce.save_step == 0u && ce.save_choice >= CU_SAVE_FAV) {   /* Favorite, the filter, the type: OCT+ saves nothing,
                                                                   * writes no slot */
@@ -3295,7 +3297,7 @@ static void cu_save_delete(void)
     uint32_t part = ce.save_part, k = psnd[part].slot, other = part ^ 1u, f, pos, n;
     track_t *t = &trk[part ? CR_PART_BASS : CR_PART_CHORD];
     uint32_t e = t->eng_req % NENGINES;
-    char l[4], b[24], pl[24];
+    char l[UP_LABEL], b[24], pl[24];
     int rc, reset = ce.del_ask == 2u;
     ce.del_ask = 0;
     if (psnd[part].kind != PK_USER || k >= UP_SLOTS)

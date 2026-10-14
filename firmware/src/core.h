@@ -103,7 +103,15 @@
                     !FELUCCA_PHASE - !FELUCCA_LOFI - !FELUCCA_VOICE - !FELUCCA_TRIO - !FELUCCA_NOISE - !FELUCCA_PHYS)
                                  /* the engines one can pick: PRESETS, the EDIT layer, the editor, in the display order
                                   * of engines.c ENGINE_ORDER (the retired slots are not among them) */
+#if FELUCCA_VA && FELUCCA_CZ && FELUCCA_QUAD
+#define UP_POOL 1                /* ChoralRoot 0.22: the sound pool (upool.c, storage.c sp_*): 128 slots shared by every
+                                  * engine, a slot the record and its engine's patch */
+#define UP_SLOTS 128u            /* user sounds (upreset.c, upool.c); 7-bit SysEx slot numbers: at most 128 */
+#else
+#define UP_POOL 0
 #define UP_SLOTS 32u             /* user presets (upreset.c) */
+#endif
+#define UP_LEGACY 32u            /* the slots of the legacy objects (0.21's: OBJ_UPRESET0 / 1 and the engine stores) */
 #define NELEM(a) (sizeof(a) / sizeof((a)[0]))
 
 /* ------------------------------------------------------- parameters --- */

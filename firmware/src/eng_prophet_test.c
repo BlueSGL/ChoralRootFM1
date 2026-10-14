@@ -1020,17 +1020,24 @@ static void p5_patch_put(track_t *t,const p5_patch_t *in)
     RING_PUBLISH();
 }
 /* ----------------------------------------------------- ChoralRoot: the program of a part --- */
+/* A user slot's program (0.22, the sound pool: upool.c): p5_user_pending = the slot + 1 being loaded (upreset.c
+ * up_values), p5_store_read its 138 bytes (0 = there is one) */
+static uint8_t p5_user_pending;
+static int (*p5_store_read)(uint32_t k, uint8_t *blob);
 /* a sound load put P5 into track t (eng_fm6.c fm6_track_loaded calls it on every load path: a factory preset,
- * a user slot, an engine change, INIT, the picker): the factory program t->preset names (0, a user slot's load and
- * INIT: INIT; a user slot has no program of its own yet, docs/PROPHET.md "Saving"). The eight macros are
- * offsets on the program (CUT RES TUNA TUNB PWA PWB MIXA MIXB), 0 in every preset. The program's UNISON switch makes
- * the part UNISON (above); a program without it leaves the mode the caller set */
+ * a user slot, an engine change, INIT, the picker): a user slot's own program (p5_user_pending: the whole program as
+ * it was saved, docs/PROPHET.md "Saving"), else the factory program t->preset names (0 and INIT: INIT; a user slot
+ * without a program: INIT). The eight macros are offsets on the program (CUT RES TUNA TUNB PWA PWB MIXA MIXB), 0 in
+ * every preset. The program's UNISON switch makes the part UNISON (above); a program without it leaves the mode the
+ * caller set */
 static void p5_track_loaded(track_t *t)
 {
-    uint32_t tr=(uint32_t)(t-trk);
+    uint32_t tr=(uint32_t)(t-trk),pend=p5_user_pending;
     p5_patch_t p;
+    p5_user_pending=0;
     if(tr>=NTRK || t->eng_req!=ENGI_PROPHET)return;
-    p5_preset_patch(t->preset,&p);
+    if(!pend || !p5_store_read || p5_store_read(pend-1u,(uint8_t *)&p) || !p5_patch_valid(&p))
+        p5_preset_patch(pend?0u:t->preset,&p);
     p5_patch_put(t,&p);
     p5_own[tr]=(uint8_t)(t->p[P_VOICE]==V_UNISON?(tr==P5_PART_BASS?V_MONO:V_POLY):t->p[P_VOICE]);
     p5_track_accept(t);

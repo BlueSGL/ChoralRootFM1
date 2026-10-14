@@ -39,6 +39,7 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 #define FELUCCA_CZ 1
 #define FELUCCA_QUAD 1
 #define ST_AHEAD 1
+#define SP_TEST 1                      /* (the sound pool: storage.c sp_*) */
 #include "../firmware/src/storage.c"
 
 static int fails;

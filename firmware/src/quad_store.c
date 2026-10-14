@@ -16,26 +16,29 @@
 #define QUAD_STORE_VER 1u
 typedef struct {
     uint32_t magic;
-    uint16_t ver, nslot;                         /* QUAD_STORE_VER, UP_SLOTS */
+    uint16_t ver, nslot;                         /* QUAD_STORE_VER, UP_LEGACY */
     uint32_t used;                               /* bit k: slot k holds a patch */
     uint16_t blob, rsv;                          /* QUAD_BLOB, 0 */
-    uint8_t p[UP_SLOTS][QUAD_BLOB];
+    uint8_t p[UP_LEGACY][QUAD_BLOB];
 } quad_store_t;
-_Static_assert(sizeof(quad_store_t) == 16u + UP_SLOTS * QUAD_BLOB && sizeof(quad_store_t) == 2576u &&
+_Static_assert(sizeof(quad_store_t) == 16u + UP_LEGACY * QUAD_BLOB && sizeof(quad_store_t) == 2576u &&
                sizeof(quad_store_t) <= 4096u - 256u, "QUAD store layout: header + 32 patches in one object");
+#if !UP_POOL
 static quad_store_t quad_store __attribute__((section(".pool")));
+#endif
 
 static int quad_store_valid(const quad_store_t *s)
 {
     uint32_t k;
-    if (s->magic != QUAD_STORE_MAGIC || s->ver != QUAD_STORE_VER || s->nslot != UP_SLOTS || s->blob != QUAD_BLOB)
+    if (s->magic != QUAD_STORE_MAGIC || s->ver != QUAD_STORE_VER || s->nslot != UP_LEGACY || s->blob != QUAD_BLOB)
         return 0;
-    for (k = 0; k < UP_SLOTS; k++)
+    for (k = 0; k < UP_LEGACY; k++)
         if (((s->used >> k) & 1u) && !quad_blob_ok(s->p[k]))
             return 0;
     return 1;
 }
 
+#if !UP_POOL       /* (since 0.22 the pool, upool.c, keeps the patches: the store above is read once, the migration) */
 #if defined(CR_TRACE) && CR_TRACE
 static uint16_t quad_crc16(const uint8_t *b)    /* the trace's "patch crc": storage.c's CRC-32, low 16 bits */
 {
@@ -46,7 +49,7 @@ static uint16_t quad_crc16(const uint8_t *b)    /* the trace's "patch crc": stor
 /* eng_quad.c quad_store_read: slot k's blob, 0 = there is one */
 static int quad_store_get(uint32_t k, uint8_t *b)
 {
-    if (k >= UP_SLOTS || quad_store.magic != QUAD_STORE_MAGIC || !((quad_store.used >> k) & 1u))
+    if (k >= UP_LEGACY || quad_store.magic != QUAD_STORE_MAGIC || !((quad_store.used >> k) & 1u))
         return 1;
     memcpy(b, quad_store.p[k], QUAD_BLOB);
 #if defined(CR_TRACE) && CR_TRACE
@@ -72,7 +75,7 @@ static int quad_store_put(uint32_t k, const uint8_t *b)
 {
     uint8_t old[QUAD_BLOB];
     uint32_t used = quad_store.used, magic = quad_store.magic;
-    if (k >= UP_SLOTS)
+    if (k >= UP_LEGACY)
         return 1;
     if (!quad_store_valid(&quad_store))
         memset(&quad_store, 0, sizeof quad_store);
@@ -83,7 +86,7 @@ static int quad_store_put(uint32_t k, const uint8_t *b)
     memcpy(old, quad_store.p[k], QUAD_BLOB);
     quad_store.magic = QUAD_STORE_MAGIC;
     quad_store.ver = QUAD_STORE_VER;
-    quad_store.nslot = UP_SLOTS;
+    quad_store.nslot = UP_LEGACY;
     quad_store.blob = QUAD_BLOB;
     quad_store.rsv = 0;
     if (b) {
@@ -147,7 +150,8 @@ static void quad_store_loading(const up_rec_t *r)
     quad_user_pending = 0;
     if (r->engine != ENGI_QUAD)
         return;
-    for (b = 0; b < UP_SLOTS / UP_PER_BANK; b++)
+    for (b = 0; b < UP_LEGACY / UP_PER_BANK; b++)
         if (r >= up_bank[b].r && r < up_bank[b].r + UP_PER_BANK)
             quad_user_pending = (uint8_t)(b * UP_PER_BANK + (uint32_t)(r - up_bank[b].r) + 1u);
 }
+#endif /* !UP_POOL */

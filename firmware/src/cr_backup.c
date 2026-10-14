@@ -57,7 +57,7 @@
 #define CRB_HDR1 0x46u
 #define CRB_HDR2 0x4Cu
 enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBUG = 73, CRB_SCREEN, CRB_CORE1_TEST, CRB_SELECT,
-       CRB_STUB, CRB_PEAK, CRB_USB };
+       CRB_STUB, CRB_PEAK, CRB_USB, CRB_IMPORT };
 #define CRB_LOOP0 40u                                /* loop slot k: id 40 + k */
 #define CRB_VA 9u
 #define CRB_FM6S 10u                                 /* 10, 11: the FM6 patch store's halves */
@@ -67,8 +67,21 @@ enum { CRB_INFO = 1, CRB_LIST = 65, CRB_GET, CRB_PUT, CRB_RESTART = 72, CRB_DEBU
 #if FELUCCA_QUAD
 #define CRB_QUAD 22u                                 /* 22: the QUAD patch store */
 #define CRB_FAVS 23u                                 /* 23: the favourites (after the sounds they mark) */
+#if UP_POOL
+/* 0.22, the sound pool (upool.c): ids 50..62 the pool's 13 banks (storage.c sp_*: a bank's ST_PAYLOAD_MAX bytes, ten
+ * slots of SP_SLOT: the record and its patch). The legacy sound objects (6, 7, 9..13, 22) are not listed any more (this
+ * firmware never writes them); a PUT of one is still taken: an older backup, imported into slots 1..32 (crb_legacy) */
+#define CRB_POOL 50u                                 /* (not 24..36: Felucca's sample ids 32..34 are refused) */
+static const uint8_t CRB_IDS[] = {1, 8, 14, 15, 16, 17, 18, 19, 20, 21, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62,
+                                  CRB_FAVS, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
+_Static_assert(SP_NBANK == 13u && CRB_POOL >= CRB_LOOP0 + CRL_SLOTS && CRB_POOL + SP_NBANK <= 64u &&
+               ST_PAYLOAD_MAX <= sizeof cu_loop_buf, "backup ids: the pool's banks 50..62 stage in cu_loop_buf");
+static int crb_is_pool(uint32_t id) { return id >= CRB_POOL && id < CRB_POOL + SP_NBANK; }
+#else
 static const uint8_t CRB_IDS[] = {1, 6, 7, 8, CRB_VA, CRB_FM6S, CRB_FM6S + 1u, CRB_CZS, CRB_CZS + 1u, 14, 15, 16, 17, 18, 19,
                                   20, 21, CRB_QUAD, CRB_FAVS, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
+static int crb_is_pool(uint32_t id) { (void)id; return 0; }
+#endif
 _Static_assert(sizeof(quad_store_t) <= CRL_REC_MAX, "backup: the QUAD store stages too");
 #else
 static const uint8_t CRB_IDS[] = {1, 6, 7, 8, CRB_VA, CRB_FM6S, CRB_FM6S + 1u, CRB_CZS, CRB_CZS + 1u, 14, 15, 16, 17, 18, 19,
@@ -79,6 +92,7 @@ static int crb_is_cz(uint32_t id) { return id >= CRB_CZS && id < CRB_CZB + CZ_BA
 #else
 static const uint8_t CRB_IDS[] = {1, 6, 7, 8, CRB_VA, CRB_FM6S, CRB_FM6S + 1u, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49};
 static int crb_is_cz(uint32_t id) { (void)id; return 0; }
+static int crb_is_pool(uint32_t id) { (void)id; return 0; }
 #endif
 #define CRB_N ((uint32_t)sizeof CRB_IDS)
 _Static_assert(CRL_SLOTS == 10u, "backup ids: 10 loop slots");
@@ -106,7 +120,8 @@ static struct {
                                                       * when the host was seen to have it */
     uint32_t stub;                                   /* 77 STUB: the request the restart leaves for the stub */
 } crb;
-#define CRB_COPY_RAM 2                               /* crb.copy: served from RAM (the favourites not yet written) */
+#define CRB_COPY_RAM 64                              /* crb.copy: served from RAM (the favourites not yet written; not a
+                                                      * copy 0 / 1 nor a pool sector 0..15) */
 #if defined(CR_FAVS) && CRF_FLASH
 static uint8_t crb_favram[CRF_PACK_MAX];             /* .. their packed bytes at LIST */
 #endif
@@ -205,8 +220,12 @@ static int crb_fm6_old(const uint8_t *raw, uint32_t len)
     return magic == FM6_BANK_MAGIC && (len == CRB_FM6_MEL || (len == CRB_FM6_FEL && raw[4] == 1u && raw[6] == 27u));
 }
 /* an A/B object (storage.c's or a loop slot's: the same commit record, another type and place) */
-static uint32_t crb_sector(uint32_t id, uint32_t copy)
+static uint32_t crb_sector(uint32_t id, uint32_t copy)   /* (a pool bank: copy is its sector, 0..15) */
 {
+#if UP_POOL
+    if (crb_is_pool(id))
+        return sp_addr(copy);
+#endif
     return crb_is_loop(id) ? crl_fl_sector(id - CRB_LOOP0, copy) : st_sector(crb_obj(id), copy);
 }
 static int crb_head(uint32_t id, uint32_t copy, st_hdr_t *h)   /* 0: a valid commit record */
@@ -224,6 +243,16 @@ static int crb_body(uint32_t id, uint32_t copy, const st_hdr_t *h)   /* the payl
 static int crb_current(uint32_t id, st_hdr_t *h)    /* storage.c st_current's choice: the newest intact copy */
 {
     st_hdr_t a, b;
+#if UP_POOL
+    if (crb_is_pool(id)) {                           /* the bank's current copy (sp_scan's choice): its sector */
+        uint32_t s;
+        sp_scan();
+        s = sp_cur[id - CRB_POOL];
+        if (s == SP_NONE || sp_head(s, h))
+            return -1;
+        return (int)s;
+    }
+#endif
     int va = crb_head(id, 0, &a) == 0, vb = crb_head(id, 1, &b) == 0;
     if (vb && (!va || (b.seq != a.seq && b.seq - a.seq < 0x80000000u)) && crb_body(id, 1, &b) == 0) {
         *h = b;
@@ -353,7 +382,9 @@ static int crb_size_ok(uint32_t id, uint32_t len)   /* a begin's size for this i
 #endif
 #endif
     if (id == CRB_VA)                                /* version 3 / 2, or version 1's 104-byte blobs */
-        return !len || len == sizeof(va_store_t) || len == 16u + UP_SLOTS * VA_BLOB1;
+        return !len || len == sizeof(va_store_t) || len == 16u + UP_LEGACY * VA_BLOB1;
+    if (crb_is_pool(id))                             /* (0: an empty bank) */
+        return !len || len == ST_PAYLOAD_MAX;
     if (crb_is_loop(id))
         return !len || (len >= CRL_REC_HDR && len <= CRL_REC_MAX);
     return 0;
@@ -365,20 +396,27 @@ static int crb_size_ok(uint32_t id, uint32_t len)   /* a begin's size for this i
  * the part follows it into that engine's pool */
 static void crb_reload(uint32_t id)
 {
-    uint32_t part, lo = 0, hi = UP_SLOTS;
+    uint32_t part, lo = 0, hi = UP_LEGACY;
     if (id == 6u)
         hi = UP_PER_BANK;
     else if (id == 7u)
         lo = UP_PER_BANK;
     else if (id == CRB_FM6S + 1u)
-        lo = UP_SLOTS / 2u;
+        lo = UP_LEGACY / 2u;
     else if (id == CRB_FM6S)
-        hi = UP_SLOTS / 2u;
+        hi = UP_LEGACY / 2u;
 #if FELUCCA_CZ
     else if (id == CRB_CZS + 1u)
-        lo = UP_SLOTS / 2u;
+        lo = UP_LEGACY / 2u;
     else if (id == CRB_CZS)
-        hi = UP_SLOTS / 2u;
+        hi = UP_LEGACY / 2u;
+#endif
+#if UP_POOL
+    else if (crb_is_pool(id)) {
+        lo = (id - CRB_POOL) * SP_PER;
+        hi = lo + SP_PER;
+    } else if (id == CRB_IMPORT)
+        ;
 #endif
     else if (id != CRB_VA && !(FELUCCA_QUAD && id == 22u))
         return;
@@ -422,6 +460,120 @@ static uint32_t crb_select(const uint8_t *a, uint32_t na)
     return 0;
 }
 
+#if UP_POOL
+/* a legacy sound object (an older backup's 6, 7, 9..13, 22) staged in CRB_RAW -> pool slots 1..32, in any order: 6 / 7
+ * the records of slots 1..16 / 17..32 (a slot's patch stays, unless its record is now empty: no patch), a store the
+ * patches of its engine (bit k set: patch k into slot k, whatever the record; bit k clear: slot k's patch cleared when
+ * it is this engine's). The loaders take a patch only when it is the record's engine's (upool.c up_patch_get), so after
+ * a whole backup each slot holds what 0.21 would load. One bank write per pool bank the object touches */
+static uint32_t crb_lid, crb_llen, crb_lbank;
+static int crb_legacy_fill(uint32_t j, uint8_t *slot)
+{
+    const uint8_t *raw = CRB_RAW;
+    uint32_t k = crb_lbank * SP_PER + j, i = k % 16u, h = k / 16u, e, n = 0, on;
+    const uint8_t *src = 0;
+    uint8_t conv[VA_BLOB];
+    if (k >= UP_LEGACY)
+        return 0;
+    if (crb_lid == 6u || crb_lid == 7u) {
+        if (h != crb_lid - 6u)
+            return 0;
+        memset(slot, 0, sizeof(up_rec_t));
+        if (crb_llen)
+            memcpy(slot, raw + 8u + i * sizeof(up_rec_t), sizeof(up_rec_t));
+        if (!up_valid((const up_rec_t *)slot))
+            memset(slot + UPP_HDR, 0, SP_SLOT - UPP_HDR);
+        return 0;
+    }
+    if (crb_lid == CRB_VA) {
+        const va_store_t *s = (const va_store_t *)raw;
+        e = ENGI_VA;
+        if ((on = crb_llen && ((s->used >> k) & 1u)) != 0) {
+            uint8_t old[VA_BLOB];
+            int8_t p[VA_NP];
+            uint32_t sz = s->ver == 1u ? VA_BLOB1 : VA_BLOB;
+            memset(old, 0, sizeof old);
+            memcpy(old, raw + 16u + k * sz, sz);
+            if (s->ver == 3u) {
+                src = raw + 16u + k * VA_BLOB;
+            } else if ((s->ver == 2u || old[1] == 1u) && va_unpack(old, p)) {
+                va_pack(p, conv);                    /* (versions 1 / 2: as va_store_v1 / _v2 converted them) */
+                src = conv;
+            }
+            n = src ? VA_BLOB : 0u;
+        }
+    } else if (crb_lid == CRB_FM6S || crb_lid == CRB_FM6S + 1u) {
+        if (h != crb_lid - CRB_FM6S)
+            return 0;
+        e = ENGI_FM6;
+        if ((on = crb_llen && ((((const fm6u_t *)raw)->used >> i) & 1u)) != 0) {
+            src = raw + 16u + i * FM6_BLOB;
+            n = FM6_BLOB;
+        }
+    } else if (crb_lid == CRB_CZS || crb_lid == CRB_CZS + 1u) {
+        if (h != crb_lid - CRB_CZS)
+            return 0;
+        e = ENGI_CZ;
+        if ((on = crb_llen && ((((const czu_t *)raw)->used >> i) & 1u)) != 0) {
+            src = raw + 16u + i * CZ_BYTES;
+            n = CZ_BYTES;
+        }
+    } else if (crb_lid == CRB_QUAD) {
+        e = ENGI_QUAD;
+        if ((on = crb_llen && ((((const quad_store_t *)raw)->used >> k) & 1u)) != 0) {
+            src = raw + 16u + k * QUAD_BLOB;
+            n = QUAD_BLOB;
+        }
+    } else {
+        return 0;
+    }
+    if (!n && slot[UPP_HDR] != e + 1u)
+        return 0;                                    /* (another engine's patch, or none: as it is) */
+    memset(slot + UPP_HDR, 0, SP_SLOT - UPP_HDR);
+    if (n) {
+        memcpy(slot + UPP_DATA, src, n);
+        slot[UPP_HDR] = (uint8_t)(e + 1u);
+        slot[UPP_HDR + 1u] = (uint8_t)n;
+    }
+    (void)on;
+    return 0;
+}
+static uint32_t crb_legacy(uint32_t id, uint32_t len)
+{
+    uint32_t b;
+    crb_lid = id;
+    crb_llen = len;
+    for (b = 0; b * SP_PER < UP_LEGACY; b++) {
+        crb_lbank = b;
+        if (sp_commit(b, crb_legacy_fill))
+            return 4;
+        fm1_wdt_feed();
+    }
+    return 0;
+}
+static const uint8_t *crb_bank_src;
+static int crb_bank_fill(uint32_t j, uint8_t *slot)  /* a pool bank's PUT: its slots as sent (0: empty) */
+{
+    if (crb_bank_src)
+        memcpy(slot, crb_bank_src + j * SP_SLOT, SP_SLOT);
+    else
+        memset(slot, 0, SP_SLOT);
+    return 0;
+}
+static int crb_bank_ok(const uint8_t *raw)          /* each slot empty or a record, its patch header sane */
+{
+    uint32_t j;
+    for (j = 0; j < SP_PER; j++) {
+        const uint8_t *s = raw + j * SP_SLOT;
+        if (s[0] == UP_USED && !up_valid((const up_rec_t *)s))
+            return 0;
+        if (s[UPP_HDR] && (s[UPP_HDR] - 1u >= NENGINES || s[UPP_HDR + 1u] != up_patch_len(s[UPP_HDR] - 1u) ||
+                           !s[UPP_HDR + 1u]))
+            return 0;
+    }
+    return 1;
+}
+#endif
 static uint32_t crb_commit(void)
 {
     uint8_t *raw = CRB_RAW;
@@ -484,10 +636,24 @@ static uint32_t crb_commit(void)
 #endif
     } else if (id == CRB_VA) {
         const va_store_t *s = (const va_store_t *)raw;
-        if (len && (s->magic != VA_STORE_MAGIC || s->nslot != UP_SLOTS ||
+        if (len && (s->magic != VA_STORE_MAGIC || s->nslot != UP_LEGACY ||
                     !(len == sizeof *s ? (s->ver == 3u && va_store_valid(s)) || (s->ver == 2u && s->blob == VA_BLOB)
                                        : s->ver == 1u && s->blob == VA_BLOB1)))
             return 2;                                /* (versions 1 / 2: converted by va_store_boot, as at power-on) */
+#if UP_POOL
+    } else if (crb_is_pool(id)) {
+        if (len && !crb_bank_ok(raw))
+            return 2;
+        if (!len && !sp_used(id - CRB_POOL))
+            return 0;                                /* (an empty bank onto none: nothing to write) */
+        crb_bank_src = len ? raw : 0;
+        if (sp_commit(id - CRB_POOL, crb_bank_fill))
+            return 4;
+        upool_table();
+        crb_reload(id);
+        ui.force = 1;
+        return 0;
+#endif
     } else if (crb_is_loop(id)) {
         uint32_t k = id - CRB_LOOP0;
         if (crl_stage_busy)
@@ -504,6 +670,26 @@ static uint32_t crb_commit(void)
     } else {
         return 1;
     }
+#if UP_POOL
+    if (id != 8u && !crb_is_cz(id)) {                /* a legacy sound object: into the pool, never to its sectors */
+        uint32_t rc = crb_legacy(id, len);
+        upool_table();
+        if (rc)
+            return rc;
+        crb_reload(id);
+        ui.force = 1;
+        return 0;
+    }
+    if (crb_is_cz(id) && id < CRB_CZB) {             /* (the CZ-1 store's halves: legacy, as above) */
+        uint32_t rc = crb_legacy(id, len);
+        upool_table();
+        if (rc)
+            return rc;
+        crb_reload(id);
+        ui.force = 1;
+        return 0;
+    }
+#endif
     if (st_save(crb_obj(id), raw, len))
         return 4;
     if (id == 8u) {                                  /* the mirror from flash; parts on a bank patch reload theirs */
@@ -1087,7 +1273,8 @@ static int crb_handle(const uint8_t *f, uint32_t n)
         crb_b(3);                                    /* backup read + restore */
         crb_b(0x43);
         crb_b(1);
-        crb_b(2);                                    /* ChoralRoot backup v2: ids 9, 40..49, RESTART; no samples */
+        crb_b(3);                                    /* ChoralRoot backup v3 (0.22): the pool's ids 50..62, 80 IMPORT (v2: ids
+                                                      * 9, 40..49, RESTART; no samples) */
         break;
     }
     case CRB_LIST:
@@ -1138,6 +1325,25 @@ static int crb_handle(const uint8_t *f, uint32_t n)
         if (na)
             return 0;
         crb_usb();
+        break;
+#endif
+#if UP_POOL
+    case CRB_IMPORT:                                 /* 80 IMPORT -> rc, count: the legacy slots (0.21's) into slots
+                                                      * 1..32 again (the device manager; upool.c upool_import). rc 0 done,
+                                                      * 1 no legacy slots, 3 busy, 4 a flash error */
+        if (na)
+            return 0;
+        {
+            int r = crb_busy() || !flash_ok ? -9 : (st_why = ST_WHY_PUT, upool_import());
+            st_why = ST_WHY_OTHER;
+            crb.listed = 0;
+            if (r >= 0) {
+                crb_reload(CRB_IMPORT);
+                ui.force = 1;
+            }
+            crb_b(r >= 0 ? 0u : r == -1 ? 1u : r == -9 ? 3u : 4u);
+            crb_b(r >= 0 ? (uint32_t)r : 0u);
+        }
         break;
 #endif
     case CRB_STUB:                                   /* (the boot stub's test and rescue requests) */
