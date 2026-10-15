@@ -421,6 +421,61 @@ static void fm1__frame(void)
     fm1_in.frames++;
 }
 
+/* the analog rows' two steps, functions of their own (not inlined: their cold paths, a conversion not done and the
+ * drive, would otherwise be laid out after the tick's body with a jump back, and tests/target_budget.py would read
+ * the whole tick as a loop, as it did TIMER5's USB work before usb.c's USB_OUTLINE) */
+static __attribute__((noinline)) void fm1__an_take(void)   /* the conversion started last tick, on column fm1_an.col
+                                                            * (the row back to an input first: the rows are read next) */
+{
+    uint32_t driven = fm1_an.driven;
+    fm1_an.pend = 0;
+    if (driven) {
+        fm1_an.driven = 0;
+        fm1__row_release(fm1_an.rowbit);
+    }
+    if (fm1_adc_done()) {
+        uint32_t v = fm1_adc_take();
+        if (fm1_an.rowbit >= 3u) {
+            fm1_an.samples++;
+            FM1_INPUT_ANALOG(fm1_an.col, fm1_an.rowbit, v, driven);
+        } else if (fm1_an.rowbit) {
+            fm1_an.batt = (uint16_t)v;
+            fm1_an.bvalid = 1;
+        } else {
+            fm1_an.master = (uint16_t)v;
+            fm1_an.mvalid = 1;
+        }
+    } else {
+        fm1_adc_abort();
+        fm1_an.timeouts++;
+    }
+}
+static __attribute__((noinline)) void fm1__an_start(uint32_t n)   /* column n is latched now: sample it until the next tick */
+{
+    uint32_t ch, rowbit;
+    if (n == 0u)
+        fm1_an.phase ^= 1u;
+    if (fm1_an.phase && n < 2u) {                  /* OCT- / OCT+'s slots: the pot and the battery */
+        ch = n ? FM1_ADC_BATT : FM1_ADC_MASTER;
+        rowbit = n;
+    } else {
+        ch = fm1_an.phase ? FM1_ADC_ROW_PA8 : FM1_ADC_ROW_PA7;
+        rowbit = fm1_an.phase ? 4u : 3u;
+    }
+    fm1_an.col = (uint8_t)n;
+    fm1_an.rowbit = (uint8_t)rowbit;
+    if (rowbit >= 3u) {
+        if (!FM1_INPUT_LED_OK(n, rowbit))
+            fm1__led_lines(0);                     /* a held key: no LED current in its column while it is read */
+        if (fm1_an.drive && FM1_INPUT_DRIVE(n, rowbit)) {
+            fm1__row_drive(rowbit, fm1_an.drive - 1u);
+            fm1_an.driven = 1;
+        }
+    }
+    fm1_adc_start(ch, fm1_an.con);
+    fm1_an.pend = 1;
+}
+
 /* one column per call, from a timer ISR (see top) */
 #define FM1__DIM_T ((FM1_LED_DIM_NS * FM1_TICKS_PER_US + 500u) / 1000u)   /* the pulse in TIMER4 ticks */
 #define FM1__DIM2_T ((FM1_LED_DIM2_NS * FM1_TICKS_PER_US + 500u) / 1000u)
@@ -437,31 +492,8 @@ static void fm1_input_tick(void)
     uint32_t t0 = fm1_ticks(), g = t0 - fm1_in_stat.last, b = 0;
     uint32_t w = 0xFFFFu ^ (1u << n) ^ (n < 2u ? 1u << (11u + n) : 0u), lit = fm1_led[p], dim = 0, dim2 = 0, k = 0;
     uint32_t faint = 0;
-    if (fm1_an.pend) {                             /* the conversion started last tick, on column p (the row back to
-                                                    * an input first: the rows are read below) */
-        uint32_t driven = fm1_an.driven;
-        fm1_an.pend = 0;
-        if (driven) {
-            fm1_an.driven = 0;
-            fm1__row_release(fm1_an.rowbit);
-        }
-        if (fm1_adc_done()) {
-            uint32_t v = fm1_adc_take();
-            if (fm1_an.rowbit >= 3u) {
-                fm1_an.samples++;
-                FM1_INPUT_ANALOG(fm1_an.col, fm1_an.rowbit, v, driven);
-            } else if (fm1_an.rowbit) {
-                fm1_an.batt = (uint16_t)v;
-                fm1_an.bvalid = 1;
-            } else {
-                fm1_an.master = (uint16_t)v;
-                fm1_an.mvalid = 1;
-            }
-        } else {
-            fm1_adc_abort();
-            fm1_an.timeouts++;
-        }
-    }
+    if (fm1_an.pend)
+        fm1__an_take();                            /* (the conversion started last tick, on column p) */
     fm1__led_lines(0);
     fm1_in_stat.last = t0;
     while (b < FM1_GAP_BINS - 1u && g >= (150u * FM1_TICKS_PER_US << b))
@@ -540,30 +572,8 @@ static void fm1_input_tick(void)
     fm1__sr_latch();                               /* column n, the lines dark */
     fm1__led_lines(fm1_led[n]);
     fm1__tick_col = (uint8_t)n;
-    if (fm1_an.con) {                              /* column n is latched now: sample it until the next tick */
-        uint32_t ch, rowbit;
-        if (n == 0u)
-            fm1_an.phase ^= 1u;
-        if (fm1_an.phase && n < 2u) {              /* OCT- / OCT+'s slots: the pot and the battery */
-            ch = n ? FM1_ADC_BATT : FM1_ADC_MASTER;
-            rowbit = n;
-        } else {
-            ch = fm1_an.phase ? FM1_ADC_ROW_PA8 : FM1_ADC_ROW_PA7;
-            rowbit = fm1_an.phase ? 4u : 3u;
-        }
-        fm1_an.col = (uint8_t)n;
-        fm1_an.rowbit = (uint8_t)rowbit;
-        if (rowbit >= 3u) {
-            if (!FM1_INPUT_LED_OK(n, rowbit))
-                fm1__led_lines(0);                 /* a held key: no LED current in its column while it is read */
-            if (fm1_an.drive && FM1_INPUT_DRIVE(n, rowbit)) {
-                fm1__row_drive(rowbit, fm1_an.drive - 1u);
-                fm1_an.driven = 1;
-            }
-        }
-        fm1_adc_start(ch, fm1_an.con);
-        fm1_an.pend = 1;
-    }
+    if (fm1_an.con)
+        fm1__an_start(n);                          /* (column n is latched now: sampled until the next tick) */
     fm1__keys(p);                                  /* its keys now: no wait for the frame's end */
     if (n == 0u)
         fm1__frame();

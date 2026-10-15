@@ -3674,12 +3674,13 @@ static int cu_layer_keys(uint32_t l)
 #endif
 /* Key velocity (cr_sense.c; docs/VELOCITY.md). With Options > Key Touch Dynamic (or Velocity + Aftertouch), a key with
  * the converter (CR_SENSE_KEYS) that plays a note waits, once debounced, for its velocity (cu_scan_keys: cu.kpend;
- * 4.4 .. 6.6 ms after the touch, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
+ * 8.8 ms after the touch sample, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
  * mod.c cr_touch_gain); a key without it plays at the keys' recent velocity (cu.ctx_vel), else at Options >
  * Velocity. Fixed: every key at Options > Velocity, as before. */
 #ifndef CR_SENSE_KEYS                              /* (the emulator, the tests: no analog rows) */
 #define CR_SENSE_KEYS 0u
-static volatile uint8_t cr_sense_vel[CU_NKEY];
+static volatile uint16_t cr_sense_land[CU_NKEY];
+static uint32_t cr_sense_take(uint32_t k) { (void)k; return 0; }
 #endif
 #define CU_VEL_WAIT_MS 12u
 static uint8_t cu_press_vel;                       /* the pending key's velocity, for cu_key_press (0: none) */
@@ -3756,7 +3757,7 @@ static void cu_key_press(uint32_t k)
 static void cu_key_release(uint32_t k)
 {
     cu.kheld &= ~(1u << k);
-    cr_sense_vel[k] = 0;
+    cr_sense_land[k] = 0;
     if (k == CU_KEY_LOCK && !cu.key_note[k] && !((cu.kpick >> k) & 1u)) {
         if (cu.b3_pend) {                          /* let go before the hold time, nothing else pressed: the tap */
             cu.b3_pend = 0;
@@ -4364,11 +4365,11 @@ static void cu_scan_keys(uint32_t ne, uint32_t km)
         uint32_t bit = 1u << k, v;
         if (!(cu.kpend & bit))
             continue;
-        v = cr_sense_vel[k];
+        v = cr_sense_take(k);
         if (!v && now - cu.kpend_t0[k] < CU_VEL_WAIT_MS)
             continue;
         cu.kpend &= ~bit;
-        cr_sense_vel[k] = 0;
+        cr_sense_land[k] = 0;
         if (v)
             cu.ctx_vel = (uint8_t)(cu.ctx_vel ? (cu.ctx_vel * 3u + v + 2u) / 4u : v);
         cu_press_vel = (uint8_t)v;
@@ -4380,13 +4381,13 @@ static void cu_scan_keys(uint32_t ne, uint32_t km)
     for (k = 0; k < CU_NKEY; k++) {
         uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
         if (!was && (is || e) && !((cu.kpend >> k) & 1u)) {
-            if (CU_KEY_SENSED(k) && !cr_sense_vel[k]) {   /* (the velocity comes 3 .. 7 ms after the debounce) */
+            if (CU_KEY_SENSED(k) && !cr_sense_land[k]) {   /* (the velocity comes 7 .. 10 ms after the debounce) */
                 cu.kpend |= 1u << k;
                 cu.kpend_t0[k] = now;
                 continue;
             }
-            cu_press_vel = cr_sense_vel[k];
-            cr_sense_vel[k] = 0;
+            cu_press_vel = (uint8_t)cr_sense_take(k);
+            cr_sense_land[k] = 0;
             if (cu_press_vel)
                 cu.ctx_vel = (uint8_t)(cu.ctx_vel ? (cu.ctx_vel * 3u + cu_press_vel + 2u) / 4u : cu_press_vel);
             cu_key_press(k);

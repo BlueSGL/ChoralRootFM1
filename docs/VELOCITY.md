@@ -10,8 +10,13 @@ routing instead of the engines' own: the editor's EXPR screen on every engine (t
 destination by an amount, mod.c's slots 3 and 4, saved with the sound; unset: VEL -> AMP at the full law, AT -> CUT
 by Aftertouch Sens; docs/EDITOR.md), which MIDI velocity and aftertouch reach too; the keys' aftertouch as the
 rest-following lean (3.5), to both parts as channel pressure and out as 0xD0 on the Perform and Bass channels,
-polyphonic aftertouch in accepted. Not built: the PA10 probe, polyphonic aftertouch out, the screen, calibration,
-the 5 kHz variant, the host tests (the owner: after the merge). The owner's readings: 689 note-ons in ten minutes,
+polyphonic aftertouch in accepted. One figure of the study is wrong: the velocity is known at the second pulled-up
+sample after the touch, with a driven sample before each, 8.8 ms after the touch sample (tests/cr_sense_test.c), not
+4.4 .. 6.6; so a sensed root's note comes 7 .. 10 ms later than before, within cu_scan_keys's 12 ms wait. Not built:
+the PA10 probe, polyphonic aftertouch out, the screen, calibration,
+the 5 kHz variant. The host tests (HISTORY 3y77): `tests/input_test.c`'s analog block, `tests/cr_sense_test.c`,
+`tests/mod_test.c`'s Key Touch cases, `tests/cr_settings_test.c`'s bits, `tools/emu/scripts/cr_expr.txt` in
+`test_cr.sh`. The owner's readings: 689 note-ons in ten minutes,
 velocity 1 .. 127, quartiles 37 / 73 / 98. The sections below are the study as written before the build.
 
 The owner: "look into https://github.com/charlesvestal/fm1-monk: he added velocity and aftertouch to the FM-1, which

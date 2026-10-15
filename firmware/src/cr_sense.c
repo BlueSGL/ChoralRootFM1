@@ -15,10 +15,12 @@
  * (SN_CURVE, Velo's 830 presses: quartiles 45 / 63 / 80 at that curve). The floor (450) is a firm landing at DRIVE 2,
  * the ceiling (896) the lightest press that seats; Velo's per-key calibration is not here (its open item).
  *
- * The result lands in cr_sense_vel[key] (1..127; 0: none yet for this press) 4.4 .. 6.6 ms after the touch sample;
- * the UI (cr_ui.c cu_scan_keys) holds a root's debounced press until it is there and clears it when it takes it.
- * The digital debounce stays the truth for pressed / released; this only adds the velocity. Every function here runs
- * in TIMER5's tick but the readers, which are the main loop's (bytes and halfwords: no locking). */
+ * The landing lands in cr_sense_land[key] (the driven reading; 0: none yet for this press) at the second pulled-up
+ * sample after the touch (a driven one before each: four samples, 8.8 ms after the touch sample;
+ * tests/cr_sense_test.c); the UI (cr_ui.c cu_scan_keys) holds a root's debounced press until it is there, maps it
+ * to the velocity (cr_sense_take: the log map runs in the main loop, so TIMER5's tick has no loop and no divide in
+ * it) and clears it. The digital debounce stays the truth for pressed / released; this only adds the velocity.
+ * cr_sense_sample and the hooks run in TIMER5's tick; the rest is the main loop's (bytes and halfwords: no locking). */
 #define SN_NKEYS 27u
 /* the keys with the converter: bit k (0 = F3 .. 19 = C5: rows PA8 and PA7) */
 #define CR_SENSE_KEYS 0x000FFFFFu
@@ -40,7 +42,7 @@ typedef struct {
     uint8_t vel;                       /* the last press's velocity */
 } sn_key_t;
 static volatile sn_key_t sn_key[SN_NKEYS];
-static volatile uint8_t cr_sense_vel[SN_NKEYS];    /* the velocity of the press in progress, once known; the UI clears it */
+static volatile uint16_t cr_sense_land[SN_NKEYS];  /* the landing of the press in progress, once known; the UI clears it */
 static volatile uint32_t sn_presses, sn_grazes;    /* console `inp` */
 
 /* log2 of x (1..1023) in Q8: the leading bit plus a 64-entry fraction table */
@@ -106,11 +108,10 @@ static void cr_sense_sample(uint32_t key, uint32_t v, uint32_t driven)
         if (v >= SN_TOUCH) {                       /* gone before the velocity sample: a graze */
             k->st = SN_OPEN;
             sn_grazes++;
-        } else if (k->dn >= SN_WAIT && v < SN_PRESS) {   /* seated: the velocity from the driven readings since */
+        } else if (k->dn >= SN_WAIT && v < SN_PRESS) {   /* seated: the landing is the lowest driven reading since */
             k->st = SN_DOWN;
             k->dland = k->dmin;
-            k->vel = k->dn ? sn_velocity(k->dmin) : 64u;
-            cr_sense_vel[key] = k->vel;
+            cr_sense_land[key] = (uint16_t)(k->dmin ? k->dmin : 1u);
             sn_presses++;
         } else if (k->since < 255u) {
             k->since++;
@@ -130,6 +131,17 @@ static void cr_sense_sample(uint32_t key, uint32_t v, uint32_t driven)
             k->st = SN_OPEN;
     }
     k->dnext = (uint8_t)(k->st != SN_OPEN);        /* a held key: the next sample driven */
+}
+
+/* main loop: the velocity of key k's press in progress, 0 while its landing is not known yet (the UI clears the landing
+ * when it takes the velocity) */
+static uint32_t cr_sense_take(uint32_t k)
+{
+    uint32_t d = k < SN_NKEYS ? cr_sense_land[k] : 0u;
+    if (!d)
+        return 0;
+    sn_key[k].vel = sn_velocity(d);
+    return sn_key[k].vel;
 }
 
 /* the tick's hooks (hal/fm1_input.h): the key at (col, rowbit) */

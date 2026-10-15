@@ -23,9 +23,11 @@
 #include <stdint.h>
 #include "fm1_gpio.h"
 
+#ifndef FM1_ADC_CON_R                          /* (tests/input_test.c: the converter as memory) */
 #define FM1_ADC_CON_R (*(volatile uint32_t *)0x13100u)
 #define FM1_ADC_RES (*(volatile uint32_t *)0x13104u)
 #define FM1_WLA_CON0 (*(volatile uint32_t *)0x11900u)
+#endif
 enum { FM1_ADC_ROW_PA7 = 0, FM1_ADC_ROW_PA8 = 1, FM1_ADC_BATT = 3, FM1_ADC_MASTER = 4 };
 #define FM1_ADC_CON(div, delay) ((uint32_t)((div) & 7u) | 8u | ((uint32_t)((delay) & 15u) << 12))
 #define FM1_ADC_CON_SDK FM1_ADC_CON(6, 15)

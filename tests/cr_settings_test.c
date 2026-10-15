@@ -1045,7 +1045,8 @@ static void t_v15(void)
     ok(CRS_NUMS(&r) == 1u && !(r.bass_on & 1u), ".. the engine's capture keeps the bit");
     s.bass_on = 4;
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.bass_on == 0, "bass_on above 3: the byte's default (0)");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.bass_on == 4 && CRS_TOUCH(&r) == 1u,
+       "bass_on 4: Key Touch Dynamic since 0.22 (bits 2..7 of the byte: docs/VELOCITY.md), kept");
     {
         unsigned old = CRS_NUMERALS;               /* what 0.21 reads: out of its 0..1, so its default */
         if (old > 1u) old = d.bass_on;
@@ -1328,11 +1329,11 @@ static void t_auto(void)
         cr_settings_auto(&z, &y);                  /* 0xFF where automatic */
         if (((const uint8_t *)&z)[i] == 0xFF) nauto++;
         else if (((const uint8_t *)&z)[i] == 0x00) nman++;
-        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 .. 4, Output, USB Rate, Chord Names, 6th with 7th) */
+        else both++;                               /* (the view's byte: bit 6 alone; pick_roots': bits 1 .. 4, Output, USB Rate, Chord Names, 6th with 7th; bass_on's: bits 2 .. 7, Key Touch and the two Sens) */
     }
-    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3, 6th with 7th in bit 4)\n", (unsigned)nauto,
+    printf("     block: %u automatic bytes, %u manual, %u shared (the view's: Dual Core in bit 6; pick_roots': Output in bit 1, USB Rate in bit 2, Chord Names in bit 3, 6th with 7th in bit 4; bass_on's: Key Touch and the Sens in bits 2 .. 7)\n", (unsigned)nauto,
            (unsigned)nman, (unsigned)both);
-    ok(nauto == 17u && both == 2u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and two bits of the block's 180 are automatic");
+    ok(nauto == 17u && both == 3u && nauto + nman + both == CRS_SIZE - 12u, "auto: 17 bytes and three bytes' bits of the block's 180 are automatic");
     m = b;
     cr_settings_auto(&m, &b);
     ok(!memcmp(&m, &b, sizeof b), "auto: copying a record's own Options into it changes nothing");
@@ -1390,6 +1391,32 @@ static void t_session_trim(void)
        "session trim: no sound stored, no table: none");
 }
 
+/* 0.22: Options > Key Touch, Velocity Sens, Aftertouch Sens in bits 2..7 of bass_on (docs/VELOCITY.md): 0 = Fixed /
+ * Mid, the defaults and every older record's; mode 3 is not a mode; automatic (the Options of now) */
+static void t_touch(void)
+{
+    cr_settings_t d, s, r, m2, o2;
+    cr_settings_defaults(&d);
+    ok(CRS_TOUCH(&d) == 0u && CRS_VSENS(&d) == 0u && CRS_ATSENS(&d) == 0u && d.bass_on == 0u, "defaults: Key Touch Fixed, both Sens Mid");
+    s = d;
+    s.bass_on = (uint8_t)(CRS_NUMERALS | CRS_TOUCH_BITS(2, 1, 2));
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 2u && CRS_VSENS(&r) == 1u && CRS_ATSENS(&r) == 2u && CRS_NUMS(&r) == 1u,
+       "Velocity + Aftertouch, Sens Low / High beside Numerals: every bit kept");
+    s.bass_on = (uint8_t)(CRS_TOUCH_BITS(3, 0, 0));
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 0u, "Key Touch 3 (not a mode): Fixed");
+    s.bass_on = 0;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 0u && CRS_VSENS(&r) == 0u, "a 0.21 record (the byte 0): Fixed, Mid");
+    cr_settings_defaults(&m2);
+    cr_settings_defaults(&o2);
+    m2.bass_on = CRS_NUMERALS;
+    o2.bass_on = CRS_TOUCH_BITS(1, 2, 1);
+    cr_settings_auto(&m2, &o2);
+    ok(m2.bass_on == (uint8_t)(CRS_NUMERALS | CRS_TOUCH_BITS(1, 2, 1)), "Key Touch and the Sens are automatic (the Options of now); Numerals stays the record's");
+}
+
 int main(void)
 {
     t_auto();
@@ -1404,6 +1431,7 @@ int main(void)
     t_loop_rec();
     t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13(); t_page2_v14();
     t_v15(); t_session(); t_session_trim(); t_session_flash();
+    t_touch();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }
