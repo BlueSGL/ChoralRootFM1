@@ -329,7 +329,10 @@ defaults (wow and Mod on, nothing gliding), a pass being one sample:
 | `xf_block` itself (the parameters' hash, clearing and looking at the half-rate block) | | | ~8 |
 | **both effects** | | | **~290** (second build on the unit: ~560 .. 600) |
 
-These are counts read off the listing, good to about a tenth; **the unit's `fx_*` will say**. The targets were the
+These are counts read off the listing, good to about a tenth; **the unit's `fx_*` will say**. It said (2026-10-14,
+`tools/perf_unit.py`, docs/INTEGRATION.md "The fx stage's parts and TIMER5"): down 20 .. 21, delay 90 .. 108,
+reverb 193 .. 198, up 34 .. 37 on average with an 8-note chord and the bass, 340 .. 385 together: the count times
+1.2 .. 1.3, the reverb 40 % of a stage of 445 .. 535. The targets were the
 reverb under 150, the delay under 100, the stage's four parts under 300: the delay meets its own, the total is at
 it, **the eight-line reverb is about 10 us over**. What would take it under and was not done because it changes the
 sound: two diffusers instead of four (-42 a pass), two swinging lines instead of four (-18). That is

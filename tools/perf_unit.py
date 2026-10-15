@@ -25,6 +25,13 @@ whole half (TIMER5 left out); tick part0 part1 fx master wait = each stage's lar
 one half; wall = the longest half by the clock, TIMER5 in it; late / stale = halves that ended after their boundary /
 in which the DAC played something old (the audible ones: 0 is the rule); gap = TIMER5's longest absence (the
 interrupts masked for about that, less 100). The emulator's estimates are not these: this is the unit.
+
+The second table, "fx parts": inside the fx stage (78 PEAK, over the halves in which the effects ran: busy), the
+sends' down-sampler, the delay, the reverb and the wet's up-sampler, average and largest; 4avg their sum against
+the stage's average (fxavg: 73 DEBUG's st_fx_us) and rest the difference (the mix loops, the chorus, DIST, the idle
+parts, xf_block's bookkeeping, TIMER5's nested ticks: docs/INTEGRATION.md "The fx stage's parts and TIMER5"); 4max
+the four largest against the stage's largest half (fxmax: not the same half). CC 123 All Notes Off goes to both
+parts before the first scenario and after the last: a run stopped half way leaves its chord held otherwise.
 """
 import argparse
 import os
@@ -104,6 +111,12 @@ class Notes:
             self.m.send_message([st, n + shift, 100 if on else 0])
         self.m.send_message([st | 1, BASS + shift, 100 if on else 0])
 
+    def all_off(self):
+        """CC 123 All Notes Off on both parts' channels (cr_out.c): a chord left held by a run that was stopped
+        half way (its note-offs never sent) would otherwise sound through every scenario, the idle one too"""
+        for ch in (0, 1):
+            self.m.send_message([0xB0 | ch, 123, 0])
+
     def close(self):
         self.m.close_port()
 
@@ -121,6 +134,27 @@ def play(notes, seconds):
 
 def row(name, d):
     return f"{name:<10}" + ''.join(f"{d.get(k, 0):>7}" for k in COLS)
+
+
+# the fx stage's parts (78 PEAK, inside the stage's time, over the halves in which the effects ran: fx_busy_halves):
+# the sends' down-sampler, the delay, the reverb, the wet's up-sampler, average / largest; then the four averages
+# against the stage's average (73 DEBUG's st_fx_us, over every half of the last second) and the four largest against
+# the stage's largest half (pk_fx_us). What is not in the four is the rest of the stage: the parts' DIST, level, pan
+# and sends (fx.c mix_part_out, the mix_loop_* variants), the idle parts, the chorus (cr_fx.c xc_block), xf_block's
+# own bookkeeping, and the TIMER5 ticks nested in it (the stage figures are wall time): docs/INTEGRATION.md
+# "Measured on the unit" counts those from the listing
+FX_COLS = ['fx_busy_halves', 'fx_down_avg_us', 'fx_down_max_us', 'fx_delay_avg_us', 'fx_delay_max_us',
+           'fx_reverb_avg_us', 'fx_reverb_max_us', 'fx_up_avg_us', 'fx_up_max_us']
+FX_HEAD = ['busy', 'down', 'dnmax', 'delay', 'dlmax', 'reverb', 'rvmax', 'up', 'upmax', '4avg', 'fxavg', 'rest',
+           '4max', 'fxmax']
+
+
+def fx_row(name, d):
+    avg = sum(d.get(k, 0) for k in FX_COLS[1::2])
+    mx = sum(d.get(k, 0) for k in FX_COLS[2::2])
+    fx_avg = d.get('st_fx_us', 0)
+    return (f"{name:<10}" + ''.join(f"{d.get(k, 0):>7}" for k in FX_COLS)
+            + f"{avg:>7}{fx_avg:>7}{fx_avg - avg:>7}{mx:>7}{d.get('pk_fx_us', 0):>7}")
 
 
 def main():
@@ -141,8 +175,11 @@ def main():
         if n not in SCENARIOS:
             p.error(f'unknown scenario {n!r} (idle fm6 va cz quad all)')
     notes = Notes(a.notes)
+    notes.all_off()
+    time.sleep(1.0)                             # (the releases of whatever was held)
     print(f"{'scenario':<10}" + ''.join(f"{h:>7}" for h in HEAD) + f"  ({a.notes} notes + bass"
           + (', recording)' if a.record else ')'))
+    rows = []
     for n in names:
         s = SCENARIOS[n]
         if s:
@@ -163,6 +200,12 @@ def main():
         if rec:
             rec.wait()
         print(row(n, d), flush=True)
+        rows.append((n, d))
+    print(f"\n{'fx parts':<10}" + ''.join(f"{h:>7}" for h in FX_HEAD)
+          + "  (us a half inside the fx stage, avg / max over the halves the effects ran; rest = fxavg - 4avg)")
+    for n, d in rows:
+        print(fx_row(n, d))
+    notes.all_off()
     notes.close()
     if not a.no_restore:
         select(a.port, 0, ENG['fm6'], 1)

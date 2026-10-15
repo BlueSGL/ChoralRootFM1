@@ -2010,6 +2010,26 @@ packages built for the owner to judge (`build/choralroot-delayhalf.fwsc`, `build
 the LCD one left on the unit. Host: `run_cr_tests.sh` ok, `install_test.py` ok. Not done: 48 kHz recording (an
 Option, not settable over USB without a restore), Dual Core Off rows (the same), the fx stage's parts under load.
 
+3y42. **The fx stage's parts and TIMER5 read on the unit (2026-10-14, later; docs/INTEGRATION.md "The fx stage's
+parts and TIMER5").** `tools/perf_unit.py` prints 78 PEAK's fx parts as a second table (down / delay / reverb / up,
+avg and max, their sum against the stage's average and largest, the rest) and sends CC 123 All Notes Off to both
+parts first (a stopped run had left an 8-note chord held: the "idle" row read part0 903). Run on the unit (the
+LCD-20 MHz variant of 1cc5972), 8 notes + bass, dry and recording. The fx stage (445 .. 535 avg, 533 .. 587 max
+dry; 651 .. 657 recording) is 75 % the four effects' parts, each the listing's count times 1.2 .. 1.3 (reverb
+193 .. 198, delay 90 .. 108, down 20, up 34 .. 37); the rest (106 .. 156) is the two mix loops with sends, the
+chorus, DIST on WOBBLE, the idle parts, `xf_block`'s bookkeeping, and TIMER5's ticks (the stage figures are wall
+time: ~40 us dry, ~65 recording). The earlier "600 .. 720" was the recording's ticks in the stage; nothing is
+hidden. The loop to work on inside it is the reverb's (40 % of the stage, 7 % of the half), but it has no cut that
+keeps the sound; the stage moves as a whole, to core 1. TIMER5: the tick is ~560 lines (2.9 us) by the listing and
+6.6 .. 7.3 us on the unit: 110 GPIO accesses a tick (the 595 shift's 96) at 35 .. 40 ns each are the difference,
+7 % of core 0; the recording's endpoint service adds 4.2 us a tick (42 us a millisecond, ~50 SIE transactions, the
+packet, the calls); a 5 kHz scan would save 3.5 % (100 us a half) at the price of the debounce times, the glow's
+pulse rate and the poll schedule; skipping the data line's unchanged writes 0.5 % for nothing. Recommendation: (1)
+the fx stage to core 1 as a whole, (2) the scan at 5 kHz, (3) the reverb's loop last. Also found: `pk_block_us`
+leaves TIMER5 out and the stages do not, so the stages' largest sum to the block plus `pk_t5_us`. Nothing flashed
+or changed on the unit; the sound and the scan untouched. Host: `python3 tools/perf_unit.py --help` runs; the table's
+code is a print. Not done: the 5 kHz scan, the data-line skip, the stage figures with TIMER5 taken out.
+
 3y43. **The delay at the half rate and the LCD at 20 MHz are the defaults (2026-10-14, the owner, after both on the
 unit: "screen at 20 MHz looks good. Delay sounded good at half rate").** `cr_fx.c CR_FX_DELAY_DS` 2 (the line halved
 with it, 3y41: POOL 72.7 %, 94 KB free: no longer the tight resource), `lcd.c LCD_BAUD` 2 (7.7 ms a strip for 12.8).
