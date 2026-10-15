@@ -13,7 +13,7 @@
       "date": "2026-10-14",
       "tag": "v0.22-beta1",
       "sha256": "540d31345665bdc2eef0337920ea8aab2a7c3103f7b5e4346bd31be1b9d43a60",
-      "sha256_1core": "320a2acbb42720b633988a77d9f74f017bdfc4a06dcc8c5f56351cd8ed5b0efb",
+      "sha256_1core": "406ae5ec5d657584e20294eb5735d6fcc2477675b2b5123f53cb533b9162f3d3",
       "title": "Beta: P5, 128 sound slots, favorites",
       "bullets": [
         "A new engine, P5: the Prophet-5 model of Melodee, with 115 of Sequential's factory programs and up to eight voices with Dual Core on.",
