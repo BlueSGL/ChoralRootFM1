@@ -2956,3 +2956,9 @@ bytes, as `ChoralRoot 0.22-beta1 1-core` (the single-core package) is 28 (hosts 
 from the end). Not changed: Options > Version's value field is 24 bytes, so the single-core beta's line there reads
 `ChoralRoot 0.22-beta1 1`; the standard package's fits. Tests: test_installer (hidden by default, shown when
 ticked, remembered, storage that throws, the stable stays the default, an FM-1 on a beta, the order), releases_test.
+**Solved (the same day; branch vs-1 from b3c2ecd, not pushed)**, the owner's rule: a version that does not fit the
+value line (23 characters) drops its leading "ChoralRoot ", so the single-core beta reads `0.22-beta1 1-core`; one
+that fits shows whole (`ChoralRoot 0.22`, `ChoralRoot 0.22 1-core`); one too long even then is cut, as before. The
+display alone (`cr_ui.c` `cu_version_text`, Options > Version's value): INFO, the backups, the splash, the installer
+keep the full string. Test: cr_backup_test (the 28-character beta, 0.22, a 23-character one, a longer one cut; this
+build's own). No golden changed.

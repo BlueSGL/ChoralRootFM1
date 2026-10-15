@@ -1023,6 +1023,20 @@ static void opt_set(uint32_t o, int32_t v)
     default: break;
     }
 }
+/* Options > Version's value (the owner, 2026-10-14; HISTORY 3y64): v whole when it fits n (the value line is
+ * cr_screen.h's value[24]: 23 characters), else without its leading "ChoralRoot ": the single-core beta's
+ * ChoralRoot 0.22-beta1 1-core (28) reads 0.22-beta1 1-core. Still too long: cut, as cu_cpy cuts. The display
+ * alone: the INFO reply over SysEx, the backups, the splash keep CR_VERSION whole */
+static void cu_version_text(char *d, const char *v, uint32_t n)
+{
+    static const char PFX[] = "ChoralRoot ";
+    uint32_t len = 0;
+    while (v[len])
+        len++;
+    if (len >= n && len > sizeof PFX - 1u && !memcmp(v, PFX, sizeof PFX - 1u))
+        v += sizeof PFX - 1u;
+    cu_cpy(d, v, n);
+}
 static void opt_text(uint32_t o, char *d, uint32_t n)
 {
     static const char *const STYLE[3] = {"Simple", "Advanced", "Free"};
@@ -1062,7 +1076,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
         cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n);
         break;
     case O_OUTPUT: cu_cpy(d, v ? "Clean" : "Classic", n); break;
-    case O_VERSION: cu_cpy(d, CR_VERSION, n); break;
+    case O_VERSION: cu_version_text(d, CR_VERSION, n); break;
     case O_CALIB: cu_cpy(d, "OCT+ starts", n); break;
     case O_RESET: cu_cpy(d, cu_reset_ask ? "OCT+ again: reset" : "all options to default", n); break;
     case O_SAFE: cu_cpy(d, "flash data skipped", n); break;
