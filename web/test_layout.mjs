@@ -326,8 +326,12 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   pl.groups[1].screens.push(L.newClassicScreen("edit8", "MORE"));
   pl.groups[1].screens[1].lanes[0].cells[0] = { param: "FILTER+:REV" };
   const pk = L.packDesign(pl, cat);
-  ok(pk.mode === "plan" && !pk.unbuildable.length && m.load(pk.bytes).ok && m.show(P5.index, 1, 1, 1, 0) > 0 && m.state().page === "MORE",
-     `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}")`);
+  // (MOD's last screen, EXPR, is a stack of two lanes the plan cannot hold: flagged, and only it, docs/LAYOUT-TOOL.md)
+  const modGi = cat.groups.findIndex((g) => g.name === "MOD"), exprSi = cat.groups[modGi].screens.findIndex((s) => s.type === "expr");
+  ok(pk.mode === "plan" && exprSi >= 0 && pk.unbuildable.length === 1 && pk.unbuildable[0].gi === modGi && pk.unbuildable[0].si === exprSi &&
+     m.load(pk.bytes).ok && m.show(P5.index, 1, 1, 1, 0) > 0 && m.state().page === "MORE",
+     `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}"); ` +
+     `not buildable: ${pk.unbuildable.map((u) => `${cat.groups[u.gi].name} ${u.si + 1}`).join(", ") || "none"} (EXPR)`);
   m.unload();
 
   // the example (item 4) and the free-screen draw API

@@ -118,7 +118,8 @@ design exactly as the unit would, and the knobs and SELECT are the unit's. Two w
 What neither can express is flagged **"not buildable yet"** and today's screen is shown in its place: a stack or a
 screen of more than two lanes in a changed group, a part parameter moved onto an engine page, a changed platform
 screen (FX, MIX, a platform MOD), a lane title or band the in-place way cannot change (a note). A group with free
-screens only keeps today's tables, unseen.
+screens only keeps today's tables, unseen. The MOD group's last screen, EXPR (0.22, type `expr`: the sound's velocity
+and aftertouch routings, no deep page), is such a stack: a plan always flags it.
 
 **Free screens: the firmware's primitives, not its editor.** The firmware has no free pages yet, so a free screen is
 drawn by preview-only calls of `layout_web.c` that use the firmware's own drawing code in the renderer's own six
@@ -301,7 +302,7 @@ compares, so they cannot rot: after a change to an engine's pages, run the dump 
     {"group": 1, "name": "FILT", "button": "SEL", "screens": [
       {"screen": 0,
        "kind": "edit8",               the renderer's screen kind: "edit8" (two rows under a band) or "stack"
-       "type": "edit",                how the editor made it: platform, stack, columns, mixer, edit, page
+       "type": "edit",                how the editor made it: platform, stack, columns, mixer, edit, page, expr
        "band": "filter",              the wide band: none, env, filter, dx, cz, algo, ade2
        "tall": false, "header": false,
        "plan": 3, "plan_band": "..",  only when the engine has a screen plan (FM TONE): its index, its band
