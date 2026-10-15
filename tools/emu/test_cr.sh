@@ -869,6 +869,16 @@ has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD D
 [ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 39' "$L")" = 2 ] &&
     ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid, one detent one unit" ||
     bad "EXPR on the VA / FM TONE: $(grep -ac '^param: part 0 MOD AMT4' "$L") AMT4 lines"
+run cr_expr_knob
+L="$OUT/cr_expr_knob.log"
+am() { grep -a '^param: part 0 MOD AMT3 ' "$L" | sed -n 's/^param: part 0 MOD AMT3 [0-9]* -> \([0-9]*\) .*/\1/p' | tr '\n' ' '; }
+[ "$(am)" = "62 61 60 59 58 52 46 40 34 33 " ] &&
+    ok "EXPR's amount steps as every value: one unit a slow detent (62 61 60 59), six a quick one (58 then 52 46 40 34), one again after a rest (33): $OUT/cr_expr_knob_slow.ppm" ||
+    bad "EXPR's amount steps: $(am)"
+[ "$(grep -ac '^param: part 0 MOD DST3 ' "$L")" = 3 ] && has '^param: part 0 MOD DST3 6 -> 7 (CHO)$' "$L" &&
+    ok "EXPR's destination: a named choice, one item a quick detent (PAN DIST CHO)" || bad "EXPR's destination: $(grep -a '^param: part 0 MOD DST3' "$L" | tail -1)"
+has '^param: part 0 MOD AMT4 40 -> 39' "$L" && has '^param: part 0 MOD AMT4 39 -> 38' "$L" &&
+    ok "the AT lane's amount the same (40 39 38): $OUT/cr_expr_knob_at.ppm" || bad "EXPR AT amount: $(grep -a '^param: part 0 MOD AMT4' "$L" | tail -1)"
 run cr_editor_map
 L="$OUT/cr_editor_map.log"
 has '^mod: ENV2 -> CUT +12 slot 1$' "$L" && ok "ENV held + KNOB 1 +2 on FILTER: mod: ENV2 -> CUT +12 slot 1 (ENV 2 by default): $OUT/cr_map_hot.ppm" || bad "ENV mapping: $(grep -m1 '^mod:' "$L")"

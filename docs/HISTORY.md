@@ -3667,3 +3667,13 @@ tagged: a note) and finds v0.22-beta1 in the list. Open, not blocking: the publi
 (docs/LAYOUT-TOOL.md says so); the release body's install text does not say a beta is behind "Show beta releases"
 (the notes above it do). Not done: anything on a unit (the panel is not device-tested: docs/HANDOFF.md); the push, the
 tag and the Pages job.
+
+3y90. **The EXPR amounts as numbers (2026-10-15; the owner, on the unit with v0.22-beta1: "for the Velocity and
+Aftertouch mod page you can't adjust the modulation in steps of 1, you should be able to and the knob should respond
+to acceleration").** What the knob did was right already: the EXPR cells are the platform's AMT3 / AMT4 parameters and
+step through `cp_dstep` -> `kn_lin` as every value in the editor does (the emulator, `cr_expr_knob.txt`: 63 62 61 60 59
+for four slow detents, 58 52 46 40 34 for five quick ones, one unit again after a rest). What the owner saw was the
+cell's text: `F_BIPCT`, a bipolar percentage of 64, so a unit moved it by one or two points and a detent never read
+as one. `cr_edit.c ce_text`: the two amounts read as the number, -64 .. +63 (`+12`, `-20`, `0`), the bar as before;
+the destination stays a named choice, one item a detent at any speed. docs/EDITOR.md's EXPR paragraph; the script in
+`test_cr.sh`. Not flashed (the designer-handoff session holds the unit).
