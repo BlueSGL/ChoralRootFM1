@@ -24,6 +24,7 @@
 #   run_tests      sh tests/run_tests.sh                (after web_emu_build)
 #   install        python3 tests/install_test.py
 #   releases       python3 tests/releases_test.py
+#   layout_gen     python3 tests/gen_layout_test.py     (the layout generator: P5's panel, the broken designs)
 #   web_backup     node web/test_backup.mjs
 #   web_manager    node web/test_manager.mjs
 #   web_sounds     node web/test_sounds.mjs
@@ -63,7 +64,7 @@ set -u
 cd "$(dirname "$0")/.." || exit 1
 export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}"
 export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
-ALL="build cr_tests cr_draw emu_build test_cr test_persist test_retired test_pool run_tests install releases web_backup web_manager web_sounds web_dnsnd web_installer web_web web_emu_build layout_build layout_test web_emu_test"
+ALL="build cr_tests cr_draw emu_build test_cr test_persist test_retired test_pool run_tests install releases layout_gen web_backup web_manager web_sounds web_dnsnd web_installer web_web web_emu_build layout_build layout_test web_emu_test"
 only=
 while [ $# -gt 0 ]; do
     case $1 in
@@ -107,6 +108,7 @@ command_of() {
         run_tests) echo "sh tests/run_tests.sh" ;;
         install) echo "python3 tests/install_test.py" ;;
         releases) echo "python3 tests/releases_test.py" ;;
+        layout_gen) echo "python3 tests/gen_layout_test.py" ;;
         web_backup) echo "node web/test_backup.mjs" ;;
         web_manager) echo "node web/test_manager.mjs" ;;
         web_sounds) echo "node web/test_sounds.mjs" ;;

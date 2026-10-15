@@ -37,6 +37,9 @@ static void lay_hk_text(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const ch
 #define GFX_HOOK_PIXELS(n) ((void)0)
 
 #include "../emu/emu_fw.c"
+/* the compiled layouts (build/gen/cr_layouts.h by tools/gen_layout.py, docs/LAYOUT-TOOL.md "Step 4"): compiled here so
+ * this build checks the header; nothing reads the tables before stage 2 (unused, so the module's bytes do not change) */
+#include "cr_layouts.h"
 
 #undef __attribute__                               /* (hostsim.c defines it away for the firmware) */
 #define LAY_EXPORT __attribute__((used, visibility("default")))

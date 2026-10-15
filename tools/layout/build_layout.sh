@@ -17,6 +17,8 @@ ROOT=$(cd "$(dirname "$0")/../.." && pwd)
 cd "$ROOT"
 # P5's factory header follows the shipped list (written only when its text changes)
 [ -d build/gen ] && python3 tools/gen_prophet_factory.py build/gen/melodee_prophet_factory.h >/dev/null
+# the compiled layouts follow their designs (tools/gen_layout.py; written only when its text changes)
+[ -d build/gen ] && python3 tools/gen_layout.py build/gen/cr_layouts.h >/dev/null
 if ! command -v emcc >/dev/null 2>&1; then
     for e in "${EMSDK:-}/emsdk_env.sh" "$HOME/emsdk/emsdk_env.sh"; do
         [ -f "$e" ] && { . "$e" >/dev/null 2>&1; break; }
@@ -24,7 +26,7 @@ if ! command -v emcc >/dev/null 2>&1; then
 fi
 command -v emcc >/dev/null 2>&1 || { echo "emcc not found: install the Emscripten SDK (~/emsdk)"; exit 1; }
 export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}
-for h in ui_fonts.h ui_icons.h ui_keycaps.h ui_palettes.h felucca_tables.h felucca_fm6.h felucca_samples.h cr_fonts.h; do
+for h in ui_fonts.h ui_icons.h ui_keycaps.h ui_palettes.h felucca_tables.h felucca_fm6.h felucca_samples.h cr_fonts.h cr_layouts.h; do
     if [ ! -f "build/gen/$h" ]; then
         echo "build/gen/$h missing: running the generate step (tools/build.py)"
         python3 tools/build.py

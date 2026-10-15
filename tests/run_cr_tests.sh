@@ -11,6 +11,8 @@ cd "$(dirname "$0")/.."
 mkdir -p build/host
 # P5's factory header follows the shipped list (assets/prophet5-factory/shipped.txt; written only when its text changes)
 [ -d build/gen ] && python3 tools/gen_prophet_factory.py build/gen/melodee_prophet_factory.h >/dev/null
+# the compiled layouts (tools/gen_layout.py: written only when its text changes)
+[ -d build/gen ] && python3 tools/gen_layout.py build/gen/cr_layouts.h >/dev/null
 . tests/par.sh
 par_init build/host/jobs_cr
 trap 'par_kill' EXIT
@@ -41,6 +43,10 @@ t ./build/host/cr_bootguard_test
 par_build cc -std=c99 -Wall -Wextra -Wno-unused-function -Werror -pedantic -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -o build/host/cr_stub_test tests/cr_stub_test.c
 t ./build/host/cr_stub_test
 t python3 tests/stub_pkg_test.py
+# the compiled layouts (build/gen/cr_layouts.h, firmware/src/cr_layout.h; docs/LAYOUT-TOOL.md "Step 4"): P5's panel as
+# records, its counts, every address within P5's pages, every element in its one lane, every string reachable
+par_build cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -Ibuild/gen -Ifirmware/src -o build/host/cr_layout_test tests/cr_layout_test.c
+t ./build/host/cr_layout_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_engine_test tests/cr_engine_test.c firmware/src/cr_engine.c
 t ./build/host/cr_engine_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_loop_test tests/cr_loop_test.c firmware/src/cr_loop.c firmware/src/cr_engine.c

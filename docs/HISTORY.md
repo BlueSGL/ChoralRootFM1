@@ -3045,3 +3045,29 @@ now (the pair flags dropped; the pair is tested on a copy). The device image is 
 `git diff --stat` shows no file under `firmware/` (tools, web, design and docs only). Not done: the firmware cannot
 draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
 firmware will copy when it gets free pages. Nothing on a unit.
+
+3y67. **The layout generator and P5's tables, stage 1 of step 4 (2026-10-15; on lay-5 after 922bb08, not pushed).** The
+owner, signing off his P5 panel: "I made my final changes and reviewed all the knob lanes and updated them. I'm happy
+with this layout, so good to build it." So the plan's stage 1 (docs/LAYOUT-TOOL.md "Step 4, the firmware: a plan"):
+`tools/gen_layout.py` compiles the designs of its `BUILD` list (`{"P5": "design/layouts/designs/p5-panel.json"}`) into
+`build/gen/cr_layouts.h`, a step of `tools/build.py`'s generate list after `gen_tables.py` and of both web builds and
+`tests/run_cr_tests.sh` (written only when its text changes). A design is checked against `design/layouts/p5.json`:
+the same params_hash, every stable id resolved to its (page, col) (`part:<id>` to (0xFF, id)), validateDesign's rules
+in the same words, and the firmware's on top (the 4 px grid and the area under the title line as errors, 24 elements,
+8 lanes of four, a bound element in exactly one lane and nothing unbound in one, a parameter once in the design, a
+pair's halves touching, the p5 style only, no band element, no classic screen in OSC .. MOD yet, FX and MIX as today,
+Latin-1 texts). The records are `firmware/src/cr_layout.h`'s (an element 14 B, a screen 38 B, an engine's header 8 B,
+one string pool); the generator resolves what p5Op would (a frame's title in capitals, its r 3 by default, a knob's
+dial 36, an led's label below, a two-LED button's names in capitals) and puts value names after their label in the
+pool (`CR_LF_NAMES`: KEYBOARD's OFF HALF FULL, REV's 1/2 and 3, PRIORITY's four), so the renderer never asks the
+engine; frames come first in a screen. **P5's panel: 73 x 14 + 8 x 38 + a pool of 453 + 8 = 1787 B of flash** (the
+plan said about 1.8 KB). Tests: `tests/gen_layout_test.py` (suite `layout_gen` of `tests/run_all.sh`): the panel
+compiles (8 screens, 73 elements, 19 lanes, the 56 parameters once), p5-osc-panel is refused, each of
+`web/test_layout.mjs` 6's 21 broken designs made the same way is refused with its own reason, 25 refusals of the
+generator's own, and its checks without the build's give validateDesign's errors word for word on all 48 designs
+(node); `tests/cr_layout_test.c` (`run_cr_tests.sh`) includes the header as C and checks the counts, every (page, col)
+within P5's 19 pages, every element in its one lane, every string NUL-terminated and every pool byte reachable, REV's
+and KEYBOARD's flags. The two web units include the header too (unused: both modules byte-identical before and
+after). The device image is unchanged: `./build.sh` before and after, sha256 of `build/choralroot.bin` 42bf2cc2..
+both times (no firmware file includes the header). Not done: stages 2..4 (the editor and the renderer, the tool on
+the firmware's renderer, the docs); nothing on a unit.

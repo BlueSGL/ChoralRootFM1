@@ -617,7 +617,9 @@ generic code every engine uses: it does not shrink.
 
 1. **The generator and the tables** (about 400 lines: `gen_layout.py`, the record structs in a new `cr_layout.h`, the
    host test): `build/gen/cr_layouts.h` from `p5-panel.json`; compiled in the host tests only; the device image
-   unchanged (sha256).
+   unchanged (sha256). **Done (3y67)**: P5's panel is 73 x 14 + 8 x 38 + a pool of 453 + 8 = **1787 B**; value names
+   follow their label in the pool (flag `CR_LF_NAMES`), `size` is also a label's px and a glyph's `CR_G_*`
+   (`firmware/src/cr_layout.h`); tests `tests/gen_layout_test.py`, `tests/cr_layout_test.c`.
 2. **The editor and the renderer on P5's free screens** (about 900 lines of C: `CE_S_FREE` in `cr_edit.c`, `CR_K_FREE`
    in `cr_draw.c`, two bytes in `cr_screen_t`): P5's editor is the owner's panel on the unit; goldens, the `cr_edit`
    test, a device build with the size line, the emulator walked through every screen. Not flashed by a subagent.
