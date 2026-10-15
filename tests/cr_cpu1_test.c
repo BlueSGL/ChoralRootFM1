@@ -418,8 +418,15 @@ static void bar(void)
     cr_c1_barred = 0;
     cr_c1_off = 1;
     cr_dbg.c1 = C1_OFF;
+    /* which crashes bar (hal/fm1_cpu1.h fm1_c1_crash_bars): core 0's debug sources, or none at all; not another
+     * master's alone (the owner's unit: axi_rd_inv in the restart's soft reset) */
+    CHECK(fm1_c1_crash_bars(0x1000u) && fm1_c1_crash_bars(0x200000u) && fm1_c1_crash_bars(0u) &&
+          fm1_c1_crash_bars(0x1010u), "a crash bars: c0_pc_limit (0x1000), c0_rd_bus_inv (0x200000), a plain CPU exception, c0 + a master");
+    CHECK(!fm1_c1_crash_bars(0x10u) && !fm1_c1_crash_bars(0x4u) && !fm1_c1_crash_bars(0x1u) && !fm1_c1_crash_bars(0xC000u),
+          "no bar: axi_rd_inv (0x10), prp_wr_limit (0x4), the watchdog (0x1), dmc / dbg pending alone");
     printf("  bar: a crash beside core 1, a watchdog reset while it ran or a give-up keep it off at the next boot (the\n"
-           "  reason told, the record cleared); a reboot, a power-on, Dual Core already Off: nothing\n");
+           "  reason told, the record cleared); a reboot, a power-on, Dual Core already Off: nothing; a crash bars only\n"
+           "  when core 0's own debug sources (or none) raised it, not another master's (axi_rd_inv at a restart)\n");
 }
 
 int main(void)

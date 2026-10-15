@@ -673,11 +673,19 @@ static void crb_debug(void)
  * over the halves in which the effects ran, and the largest), then since power-on the flash's: erases, erases that
  * cut a sounding output (holes: 0 is the rule for what the unit writes by itself; a global save, SAVE held, into a
  * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves; the 6 of when
- * the ISR got to start, the 4 of the keys' way, then why this boot kept core 1 off (cr_c1_barred). A command of its
- * own because 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
+ * the ISR got to start, the 4 of the keys' way, then why this boot kept core 1 off (cr_c1_barred), then (0.22) the
+ * last crash's record (7: count, vec, pc, rets, EMU_MSG, DBG_MSG, uptime ms), this boot's reset reason and the last
+ * reset's breadcrumb: 44 values. A command of its own because 73 DEBUG is full: its count is one 7-bit byte and it has
+ * 127 values */
 static void crb_peak(void)
 {
-    uint32_t v[36], k = 0, i;
+    uint32_t v[45], k = 0, i;
+#ifdef FM1_CRASH_MAGIC                               /* (the device: hal/fm1_irq.h; the host and the emulator have no record) */
+    int crashed = fm1_crash.magic == FM1_CRASH_MAGIC;
+#else
+    struct { uint32_t count, vec, pc, rets, emu, dbg, uptime_ms; } fm1_crash = {0, 0, 0, 0, 0, 0, 0};
+    int crashed = 0;
+#endif
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -715,6 +723,18 @@ static void crb_peak(void)
     v[k++] = CR_KLAT_US(cr_klat.eng);
     v[k++] = cr_c1_barred;                           /* why this boot kept core 1 off (cr_cpu1.h C1_BAR_*: 1 a crash beside
                                                       * it, 2 a hang, 3 gave up; 0 none): 73 DEBUG is full */
+    /* the last crash's record (hal/fm1_irq.h fm1_crash, .noinit: what the crash screen showed for 4 s, kept until a
+     * power-off; count 0: none since) and this boot's reset reason and the breadcrumb the last reset left
+     * (cr_bootguard.h): what a reporter cannot read off the screen in time (ChoralRoot#9) */
+    v[k++] = crashed ? fm1_crash.count : 0u;
+    v[k++] = crashed ? fm1_crash.vec : 0u;
+    v[k++] = crashed ? fm1_crash.pc : 0u;
+    v[k++] = crashed ? fm1_crash.rets : 0u;
+    v[k++] = crashed ? fm1_crash.emu : 0u;
+    v[k++] = crashed ? fm1_crash.dbg : 0u;
+    v[k++] = crashed ? fm1_crash.uptime_ms : 0u;
+    v[k++] = bootguard.reason;                       /* P3_RST_SRC bits 0..7, the core reset as bit 8 (bootguard_reason) */
+    v[k++] = felucca_dbg.prev_stage;                 /* BS_* (bootguard_stage_name) */
     cr_klat.n = cr_klat.sum = cr_klat.pick = cr_klat.eng = 0;
     cr_prof_clear();
     crb_b(1);

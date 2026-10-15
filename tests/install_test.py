@@ -567,8 +567,18 @@ def debug():
        "--debug: the keys' way to the engine (PEAK's values 31..34): the note-ons, the main loop's and the engine's times")
     cr.peak += [1]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
-    ok(rc == 0 and len(I.DEBUG_PEAK) == 35 and "c1_bar 1 (after a crash beside core 1)" in out,
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 44 and "c1_bar 1 (after a crash beside core 1)" in out and "last crash" not in out,
        "--debug: why this boot kept core 1 off (PEAK's value 35, c1_bar)")
+    cr.peak += [3, 1, 0x0200046E, 0x02007D80, 0, 0x00001000, 184200, 0x40, 1]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "crash_pc 33555566 (0x0200046E)" in out and "boot_reset 64 (0x00000040)" in out and
+       "boot_stage 1 (loop: input)" in out and
+       "last crash (kept until a power-off): #3, vector 1, pc 0x0200046E, rets 0x02007D80, EMU_MSG 0x00000000, "
+       "DBG_MSG 0x00001000, 184.2 s after its boot" in out,
+       "--debug: the last crash's record and the boot's reset reason (PEAK's values 36..44)")
+    cr.peak[-9] = 0
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "last crash: none since the power-on" in out, "--debug: no crash since the power-on")
     cr.peak = None
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")

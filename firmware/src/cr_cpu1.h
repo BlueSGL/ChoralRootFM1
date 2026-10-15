@@ -118,8 +118,9 @@ static uint8_t cr_c1_injected;       /* test builds: 75 CORE1_TEST injected a fa
 static void cr_rails_record(void)                   /* the boot loader's levels (P33 reads only) */
 {
     fm1_power_record();
-    cr_dbg.rail_boot[0] = fm1_power.boot[FM1_RAIL_SYSVDD];
-    cr_dbg.rail_boot[1] = fm1_power.boot[FM1_RAIL_VDC14];
+    cr_dbg.rail_boot[0] = cr_dbg.rail_now[0] = fm1_power.boot[FM1_RAIL_SYSVDD];   /* (now = boot until a raise:
+                                                                                    * Dual Core Off read 0 before) */
+    cr_dbg.rail_boot[1] = cr_dbg.rail_now[1] = fm1_power.boot[FM1_RAIL_VDC14];
 }
 static void cr_rails_now(void)
 {

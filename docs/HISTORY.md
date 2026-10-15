@@ -1965,3 +1965,29 @@ menu, the cells, the bars' colours at two pixels, six HOME taps round; `cr_arp_v
 18 % with its tick, CORE 1 3 %), `cr_geek2_one.png`. **Not done**: nothing on a unit (the RAM / POOL bars at 83 % /
 92 % are the size line's figures, not yet read off the screen); no designer mock-up in the 24-state JSON (the two
 states are in `gen_cr_screens.py`'s device list).
+
+3y40. **On the unit: the dual-core fallback end to end, a restart crash found and told apart, the crash record over
+SysEx (2026-10-14; the owner: "You can run on the FM-1 right now").** The owner's FM-1 had Dual Core On already,
+clean (8.5 M jobs, 0 rejects) at 14 / 4. The 0.22 release build installed: `c1 ok`, `rail_vdc14_now 5`, `c1_bar 0`,
+a worst half of 392 us. The `CR_CORE1_TEST` build, `core1_fault_test.py`: misread, null, stall, fault all PASS, the
+audio running, and after the injected give-up (`c1 gave up`, fallback 1) a restart boots `c1 ok` again: an injected
+failure saves nothing. `bar`: PASS: after the record a crash beside core 1 leaves and RESTART's soft reset, `c1 off`,
+`c1_bar 1 (after a crash beside core 1)`, the rails at 11 / 3; a further restart boots `c1 off` with `c1_bar 0`: the
+settings saved Off. Options > Dual Core On again by a `--restore` of the backup taken first (the record with the bit
+set; a restart), `c1 ok`. **Found on the way**: the first full run barred Dual Core by itself after the null mode:
+the next boot read `c1_bar 1` with no injected crash. No way to read the crash record off the unit (the console is
+SAFE MODE's CDC; the screen shows it 4 s), so 78 PEAK grew by nine values (`crash_count`, `crash_vec`, `crash_pc`,
+`crash_rets`, `crash_emu`, `crash_dbg`, `crash_uptime_ms`, `boot_reset`, `boot_stage`; `--debug` prints the crash in
+one line) and the record read: vector 1, pc `0x02001C38` = `fm1__p33_op`'s first instruction, rets `0x02001C9A` =
+`fm1_reboot` + 0x1A (the P33 soft-reset write of the RESTART), DBG_MSG `0x10` = `axi_rd_inv` (the SDK's
+`debug_msg[4]`: a bus master that is not a CPU read an invalid address), 37.6 s of uptime = that session's RESTART.
+So the restart itself crashes now and then (a 4 s crash screen on the way to the reboot it wanted; older than this
+work, open: HANDOFF), and the first build took it for a core 0 misread beside core 1. Fix: `fm1_c1_crash_bars`
+(hal/fm1_cpu1.h, host-tested): a crash bars only when core 0's own debug sources raised it (`FM1_DBG_C0`; fc79's
+`0x1000`, `0x200000`) or none did (a plain CPU exception); another master's alone (`FM1_DBG_PRP`: the watchdog, the
+peripherals' MMU / write limit, AXI invalid read / write, DMC / DBG pendings) gets the report and no bar. Also:
+`core1_fault_test.py`'s default mode list was refused by argparse (a list default checked against `choices` as one
+value; Python 3.11): the choices are checked by hand now; the rails' `now` read 0 with Dual Core Off (`cr_rails_record`
+sets now = boot). Host: `cr_cpu1_test` 74 checks, `cr_backup_test` (PEAK 44), `install_test.py`. The emulator suite
+was not re-run after the PEAK change (its PEAK checks are the backup test's). Not done: a power cycle by hand (the
+owner's), Geek Out 2 read off the unit's screen, the restart crash's cause.

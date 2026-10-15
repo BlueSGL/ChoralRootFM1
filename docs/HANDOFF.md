@@ -39,7 +39,13 @@ Read first: `PLAN.md` (§3 .. §5, §7), `docs/INTEGRATION.md`, the area's own d
 - The dcg hook: no `rm -rf`, no `git checkout --`, no branch deletion, no force push, no `>` to a path in a
   variable. Move aside with `mv`, write with the Write tool.
 - Never raise the core rails above SYSVDD 14 / VDC14 5 (`hal/fm1_power.h`; VDC14 4 -> 5 in 0.22 on the reports of
-  fm1-x0x#10 / #21: docs/DUALCORE.md "Reliability").
+  fm1-x0x#10 / #21, the owner's decision of 2026-10-14: docs/DUALCORE.md "Reliability").
+- Open (2026-10-14, found on the owner's unit): a RESTART (72, `crb_leave` -> `CRB_REBOOT` -> `fm1_reboot`) once
+  crashed in the soft reset's P33 write with DBG_MSG `axi_rd_inv` (a DMA still reading: the USB or the DAC?), 37.6 s
+  of uptime, with Dual Core On: a 4 s crash screen, then the reboot it wanted anyway. `fm1_install.py --debug` prints
+  the last crash's record now (PEAK 36..44). Not yet understood or fixed; the bar ignores other masters' faults
+  (`fm1_c1_crash_bars`). Look at what `CRB_REBOOT` stops before `fm1_reboot` (`fm1_fault` stops the audio first;
+  `usb_detach` alone may leave the USB DMA reading).
 - PA2 must never be driven high: it switches the key matrix off with the backlight (`hal/fm1_lcd_hw.h`).
 - The boot stub's bytes are pinned (`firmware/stub/stub.lock`): a stub change rewrites sector 0x4000 and is a
   decision, not a side effect.

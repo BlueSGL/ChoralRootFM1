@@ -2148,8 +2148,18 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us",
               # why this boot kept core 1 off although Options > Dual Core said On (firmware/src/cr_cpu1.h C1_BAR_*,
               # docs/DUALCORE.md): 0 none, 1 a crash beside it, 2 a hang, 3 it gave up (73 DEBUG is full)
-              "c1_bar"]
+              "c1_bar",
+              # 0.22: the last crash's record (hal/fm1_irq.h fm1_crash, what the crash screen shows for 4 s; kept in RAM
+              # until a power-off; crash_count 0: none), this boot's reset reason (P3_RST_SRC bits 0..7: 0 power-on, 2
+              # watchdog, 6 soft; the core reset as bit 8) and the breadcrumb the last reset left (BOOT_STAGE)
+              "crash_count", "crash_vec", "crash_pc", "crash_rets", "crash_emu", "crash_dbg", "crash_uptime_ms",
+              "boot_reset", "boot_stage"]
 C1_BAR = ["none", "after a crash beside core 1", "after a hang (watchdog) while core 1 ran", "core 1 gave up"]
+PEAK_HEX = ("irq_gap_pc", "crash_vec", "crash_pc", "crash_rets", "crash_emu", "crash_dbg", "boot_reset")
+BOOT_STAGE = {0: "none", 1: "loop: input", 2: "loop: draw", 9: "loop: idle", 10: "guard", 11: "flash probe",
+              12: "user sounds", 13: "fm6 bank", 14: "va store", 15: "fm6 store", 16: "settings", 17: "update cleanup",
+              18: "lcd", 19: "splash", 20: "input", 21: "sounds", 22: "audio", 23: "usb", 24: "uart", 25: "irqs",
+              26: "calibration", 27: "ui init", 28: "ui settings", 29: "loops", 30: "core 1"}   # cr_bootguard.h BS_*
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 # 79 USB's values (0.19, cr_backup.c crb_usb, docs/USB-AUDIO.md "48 kHz"; a command of its own because 73 DEBUG is
 # full; reading clears nothing; values are only appended): ChoralRoot In's rate now and in the last whole open (Hz; 0:
@@ -2212,8 +2222,16 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
     for k in DEBUG_PEAK:
         if k in d:
             print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
-                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else
-                                   f" ({C1_BAR[d[k]] if d[k] < len(C1_BAR) else '?'})" if k == "c1_bar" else ""), file=out)
+                                   f" (0x{d[k]:08X})" if k in PEAK_HEX else
+                                   f" ({C1_BAR[d[k]] if d[k] < len(C1_BAR) else '?'})" if k == "c1_bar" else
+                                   f" ({BOOT_STAGE.get(d[k], '?')})" if k == "boot_stage" else ""), file=out)
+    if "crash_count" in d:
+        if d["crash_count"]:
+            print(f"last crash (kept until a power-off): #{d['crash_count']}, vector {d['crash_vec']}, pc 0x{d['crash_pc']:08X}, "
+                  f"rets 0x{d['crash_rets']:08X}, EMU_MSG 0x{d['crash_emu']:08X}, DBG_MSG 0x{d['crash_dbg']:08X}, "
+                  f"{d['crash_uptime_ms'] / 1000:.1f} s after its boot (build/choralroot.dis names the section)", file=out)
+        else:
+            print("last crash: none since the power-on", file=out)
     for k in DEBUG_USB:
         if k in d:
             print(f"{k} {d[k]}", file=out)

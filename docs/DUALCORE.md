@@ -282,7 +282,15 @@ of ChoralRootFM1#9 saw exactly that ("a crash/reboot loop"). From 0.22 the unit 
   start at the next boot: 1 a crash, 2 a hang, 3 given up).
 - **Set** by `fm1_c1_fault_c` when the fault is core 0's own and core 1 is on (core 1 held, `barred` = crash, then
   the crash report as before), and by `cr_c1_give_up` (`barred` = given up: a second misread, a fault about core 1,
-  a stall), in the audio ISR, before anything reaches the settings.
+  a stall), in the audio ISR, before anything reaches the settings. **Core 0's own** means its debug-unit sources
+  (`FM1_DBG_C0`: its MMU, PC and write limits, bus-invalid fetch / read / write; fc79's records were DBG_MSG `0x1000`
+  and `0x200000`) or no source at all (a plain CPU exception: an illegal instruction read from RAM); a fault that only
+  another master raised (`FM1_DBG_PRP`: the watchdog, the peripherals' MMU and write limit, an AXI master's invalid
+  read / write, the DMC / DBG pendings) gets the crash report but no bar (`fm1_c1_crash_bars`, host-tested). Found on
+  the owner's unit on 2026-10-14: a RESTART with core 1 running once crashed in the soft reset itself (`fm1_reboot`'s
+  P33 write, uptime 37.6 s, DBG_MSG `0x10` = `axi_rd_inv`: a DMA still reading as the unit leaves), which the first
+  build took for a crash beside core 1 and barred. That restart crash is older than this work (it showed as a 4 s
+  crash screen on the way to the reboot, which nobody looked at) and is open: HANDOFF.
 - **Decided** at the next boot, `cr_c1_bar_decide` (`cr_cpu1.h`, pure, host-tested), called by `cr_c1_bar_boot`
   (with `bootguard.cls`) from `cr_settings_boot` right after the record's Dual Core bit is read, not in SAFE MODE
   (nothing is saved there, so the record is left for the next normal boot): a wrong magic (a power-on) is nothing; `barred`
@@ -311,7 +319,12 @@ the chord is released (the WAV is one core's up to it), and a relaunch on that f
 **Counters**: `--debug` (`tools/fm1_install.py`, after `c1_jobs`): `c1_rejected`, `c1_faults`, `c1_fallback` (1: core 1 given up this session),
 `rail_sysvdd_boot`, `rail_sysvdd_now`, `rail_vdc14_boot`, `rail_vdc14_now`; and, as the last value of 78 PEAK (73 DEBUG
 is full: its count is one 7-bit byte), `c1_bar` (0.22: this boot's reason core 1 was kept off, 0 none; `--debug`
-prints the reason in words). GEEK OUT: `c1 ok 123 · stk 1064 · rej 0`
+prints the reason in words), then (0.22, PEAK's values 36..44) **the last crash's record** (`hal/fm1_irq.h fm1_crash`,
+`.noinit`: what the crash screen shows for 4 s, kept until a power-off: `crash_count`, `crash_vec`, `crash_pc`,
+`crash_rets`, `crash_emu`, `crash_dbg`, `crash_uptime_ms`; `--debug` prints it as one line, with the PC to look up in
+`build/choralroot.dis`) and this boot's `boot_reset` (P3_RST_SRC bits 0..7, the core reset as bit 8) and `boot_stage`
+(the breadcrumb the last reset left, in words): what a reporter could not tell us before (ChoralRootFM1#9 has no
+crash record). GEEK OUT: `c1 ok 123 · stk 1064 · rej 0`
 (and `· flt n` once there is a fault); given up: `c1 gave up · Options>Dual Core` (the switch; 30 of the
 31 characters a line holds, hence no spaces around `>`); barred: `c1 off · after a crash`. Host: rails read 11 / 3 at
 boot (14 / 5 with Dual Core On).
@@ -349,6 +362,9 @@ the bar's decision and its boot).
    power cycle: still Off (`c1_bar 0`: the record saved it), `c1 off`. Options > Dual Core On, power cycle: `c1 ok`
    again. The in-session give-up's save (`dual core off: gave up`) has no test mode: the injected stall and fault
    deliberately do not persist (above); it is the affected units' path, as the crash itself is.
+   **Run on the owner's unit 2026-10-14 (HISTORY 3y40)**: steps 0, 1, 4 and 5 as written (the power cycle of step 5
+   as a RESTART; the screen not read); the misread / null / stall / fault modes PASS and a restart after the injected
+   give-up boots `c1 ok`; the restore of a backup taken with Dual Core On is the way to turn it On again over USB.
 
 ## Hardware checklist (when the FM-1 is back)
 

@@ -171,12 +171,18 @@ def run(port, mode, settle, do_restart):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('modes', nargs='*', default=['misread', 'null', 'stall', 'fault'],
-                   choices=[*OPS, *(f'sysvdd={n}' for n in range(6, 15)), *(f'vdc14={n}' for n in range(6))])
+    choices = [*OPS, *(f'sysvdd={n}' for n in range(6, 15)), *(f'vdc14={n}' for n in range(6))]
+    p.add_argument('modes', nargs='*', metavar='MODE',   # (argparse's choices= refuses an empty or default list as one
+                   help='one or more of: ' + ', '.join(choices) + ' (default: misread null stall fault)')   # value)
     p.add_argument('--port', help='MIDI port name (default: found as fm1_install.py finds it)')
     p.add_argument('--settle', type=float, default=31, help='seconds after a restart before injecting')
     p.add_argument('--no-restart', action='store_true', help='inject into the running session')
     a = p.parse_args()
+    if not a.modes:
+        a.modes = ['misread', 'null', 'stall', 'fault']
+    for m in a.modes:
+        if m not in choices:
+            p.error(f"invalid mode {m!r} (choose from {', '.join(choices)})")
     show('build', command(a.port, 0))       # (refuses here on a build without CR_CORE1_TEST)
     results = []
     for mode in a.modes:
