@@ -1205,16 +1205,32 @@ CR_HOT_CORE static void c1_part1_job(uint32_t n)
  * of the three effects, 202 us of a half on average and 273 at most on the unit) into c1x_l / c1x_r while core 0 runs
  * the chorus and the delay; core 0 then waits for it and adds the two buffers into the mix. Sums of integers: the
  * mix is the one core's, bit for bit (tests/cr_c1_thread_test.c "effects"). The job touches xf's reverb state alone
- * (cr_fx.c xf_reverb), the sends it reads are not written again before the next block, and these */
+ * (cr_fx.c xf_reverb), the sends it reads are not written again before the next block, and these.
+ * The delay at the half rate (XF_SPLIT_HALF, CR_FX_DELAY_DS 2: the default since 0.22) shares the half-rate wet and
+ * its up-sampler with the reverb: core 1's job is then the reverb's half-band and lines alone, into c1h_l / c1h_r at
+ * the half rate; core 0 runs the delay into xf.t[2..3], adds core 1's after the join and up-samples the sum (the
+ * up-sampler's tail alone, with no lines to run, stays on core 0: no job). The same sums of integers as xf_block */
+#if XF_SPLIT_HALF
+static int32_t c1h_l[XF_NH] __attribute__((section(".pool"))), c1h_r[XF_NH] __attribute__((section(".pool")));
+#define C1X_BITS 2u                                     /* (xf_prep's: the reverb's lines run) */
+#else
 static int32_t c1x_l[CTL] __attribute__((section(".pool"))), c1x_r[CTL] __attribute__((section(".pool")));
+#define C1X_BITS 6u                                     /* (the reverb's lines or its up-sampler's tail run) */
+#endif
 static uint8_t c1x_rev;                                 /* this block's reverb runs its lines (else the tail alone) */
 static uint32_t c1x_tm[CRX_N];                          /* the job's parts' times (cr_fx.c xf_reverb's tm) */
 CR_HOT_CORE static void c1_fx_job(uint32_t n)
 {
     uint32_t i, t0 = cr_dbg.prof_on ? cr_prof_now() : 0u, mk = t0;
+#if XF_SPLIT_HALF
+    for (i = 0; i < (n >> 1); i++)
+        c1h_l[i] = c1h_r[i] = 0;
+    xf_reverb(send_r, 0, 0, n, c1x_rev, cr_dbg.prof_on ? c1x_tm : 0, &mk, c1h_l, c1h_r, 0);
+#else
     for (i = 0; i < n; i++)
         c1x_l[i] = c1x_r[i] = 0;
-    xf_reverb(send_r, c1x_l, c1x_r, n, c1x_rev, cr_dbg.prof_on ? c1x_tm : 0, &mk);
+    xf_reverb(send_r, c1x_l, c1x_r, n, c1x_rev, cr_dbg.prof_on ? c1x_tm : 0, &mk, xf.t[2], xf.t[3], 1);
+#endif
     if (cr_dbg.prof_on && cr_c1_split) {
         uint32_t t1 = cr_prof_now();
         cr_dbg.c1_busy_cur += cr_prof_less(t1 - t0);
@@ -1230,7 +1246,8 @@ static __attribute__((noinline)) void mix_fx_split(uint32_t n)
 {
     uint32_t f = xf_prep(send_d, send_r, n), i, k, mk = 0;
     int ran = 0;
-    if ((f & 6u) && cr_c1_check()) {                    /* the reverb's lines or its up-sampler's tail run */
+    if ((f & C1X_BITS) && cr_c1_check()) {              /* the reverb's lines (or, at the full-rate delay, its
+                                                         * up-sampler's tail) run */
         c1x_rev = (uint8_t)(f >> 1 & 1u);
         for (k = 0; k < CRX_N; k++)
             c1x_tm[k] = 0;
@@ -1245,6 +1262,11 @@ static __attribute__((noinline)) void mix_fx_split(uint32_t n)
     cr_dbg.fxmap_cur |= 1u | (f & 1u) << 1 | (f & 6u ? 4u : 0u) | (ran ? 8u : 0u);
     if (!f)
         return;
+#if XF_SPLIT_HALF
+    for (i = 0; i < (n >> 1); i++)                      /* (the delay's wet and the reverb's share it: from 0, as
+                                                         * xf_block; core 1's lines are in c1h_l / c1h_r) */
+        xf.t[2][i] = xf.t[3][i] = 0;
+#endif
     CR_PROFX_START();
     if (f & 1u)
         xf_delay(send_d, mix_l, mix_r, n);
@@ -1261,19 +1283,29 @@ static __attribute__((noinline)) void mix_fx_split(uint32_t n)
         cr_c1_split = 0;
         if (ran) {
             cr_dbg.c1x_jobs++;
+            for (k = 0; k < CRX_N; k++)
+                cr_dbg.xcur[k] += c1x_tm[k];
+#if XF_SPLIT_HALF
+            for (i = 0; i < (n >> 1); i++) {            /* the reverb's wet onto the delay's, at the half rate */
+                xf.t[2][i] += c1h_l[i];
+                xf.t[3][i] += c1h_r[i];
+            }
+            CR_PROFX_START();
+            xf_reverb(send_r, mix_l, mix_r, n, 0, 0, &mk, xf.t[2], xf.t[3], 1);   /* (rev 0: the up-sampler alone) */
+#else
             for (i = 0; i < n; i++) {
                 mix_l[i] += c1x_l[i];
                 mix_r[i] += c1x_r[i];
             }
-            for (k = 0; k < CRX_N; k++)
-                cr_dbg.xcur[k] += c1x_tm[k];
+#endif
             return;
         }
         cr_dbg.fxmap_cur &= ~8u;                        /* (core 1 given up: core 0 runs the job, as c1_part1_job) */
         CR_PROFX_START();
     }
-    xf_reverb(send_r, mix_l, mix_r, n, (int)(f >> 1 & 1u), 0, &mk);   /* (here; with nothing for the reverb: the
-                                                         * up-sampler's states cleared, as xf_block does) */
+    xf_reverb(send_r, mix_l, mix_r, n, (int)(f >> 1 & 1u), 0, &mk, xf.t[2], xf.t[3], 1);   /* (here; with nothing for
+                                                         * the reverb: the up-sampler's states cleared, as xf_block
+                                                         * does) */
 }
 #endif
 #if P5_SPLIT

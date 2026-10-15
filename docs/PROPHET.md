@@ -1192,7 +1192,9 @@ core 0 runs the chorus and the delay; join 2; the reverb's buffers added. The ef
 longer of the two sides instead of their sum. From the unit's readings (reverb avg 202 / max 273, its down- and
 up-sampler 22..98 each, so the reverb's side about 240 avg / 470 worst; the three effects with the parts' sends 570
 .. 720, so core 0's side about 250 at the worst), **by inference** the effects' part of a half shrinks by about 200
-.. 250 us when all three run.
+.. 250 us when all three run. With the delay at the half rate (the default since 0.22, HISTORY 3y74 / 3y76) the
+up-sampler, which the delay's wet and the reverb's share, stays on core 0 after join 2 (about 35 us a half): core 1
+runs the reverb's half-band and lines (DUALCORE.md "What each core runs").
 
 ### The part's coefficients (`p5_coef_t`, `p5_coef_update`)
 

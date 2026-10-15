@@ -6,7 +6,8 @@
  * on Felucca's line, left and right; SLOOP 2.6's design, credited there and in LICENSING.md).
  *
  * THE RATES (build flags; docs/FX.md "Half rate or full"). CR_FX_DELAY_DS 1: the delay runs at the full 44.1 kHz,
- * straight on the send and into the mix: its repeats are heard beside the dry sound and keep its band. CR_FX_REVERB_DS
+ * straight on the send and into the mix: its repeats are heard beside the dry sound and keep its band (0.18 .. 0.21;
+ * since 0.22 the default is 2, the half rate in half the line: the owner's ear, 65 KB of POOL). CR_FX_REVERB_DS
  * 2: the reverb runs at 22.05 kHz between a half-band filter down (xf_down) and a pair of them up (xf_up): a
  * two-path polyphase all-pass (tools/fx_halfband.py: 2 + 2 first-order sections, one multiply each, -54 dB above
  * 12.5 kHz, flat to 9.5 kHz). Either can be built the other way (1 or 2) to compare.
@@ -54,7 +55,9 @@
  * (xf_coefs). Memory, all in .pool: 2 x 32768 x 2 (delay) + 16384 x 2 + 4096 x 2 (reverb) + the state. */
 
 #ifndef CR_FX_DELAY_DS
-#define CR_FX_DELAY_DS 1                 /* 1: the delay at FS; 2: at FS / 2 (a line then holds 1.49 s) */
+#define CR_FX_DELAY_DS 2                 /* 2: the delay at FS / 2 (0.22: the owner heard it on the unit 2026-10-14,
+                                          * "sounded good"; 65 KB of POOL back, XD_N below); 1: at FS, 0.18 .. 0.21's
+                                          * (CR_FX_DELAY_DS=1 ./build.sh) */
 #endif
 #ifndef CR_FX_REVERB_DS
 #define CR_FX_REVERB_DS 2                /* 2: the reverb at FS / 2; 1: at FS (twice the lines' memory and work) */
@@ -136,10 +139,15 @@ _Static_assert(CTL == 32, "cr_fx.c: a block is 32 samples (the ramps' shifts)");
 #define XF_NH (CTL / 2u)                  /* a block at the half rate */
 #define XF_IN 1u                          /* the lines' scale: the send >> 1 (xd_sat's comment) */
 
-#define XD_N 32768u                       /* a delay line, samples (int16): 0.743 s at 44.1 kHz */
+#ifndef XD_N
+#define XD_N (32768u / CR_FX_DELAY_DS)    /* a delay line, samples (int16): 0.743 s at 44.1 kHz; at the half rate
+                                           * (CR_FX_DELAY_DS 2) half the samples for the same 0.743 s, 65 KB of POOL
+                                           * back (XD_N=32768 with it: 1.49 s in the same memory) */
+#endif
 #define XD_M (XD_N - 1u)
-#define XD_MAX (XD_N - 128u)              /* the longest time: the wow's swing (<= 89 samples) and the interpolator's
-                                           * points above it */
+#define XD_MAX (XD_N - 128u / CR_FX_DELAY_DS)   /* the longest time: the wow's swing (<= 89 samples at 44.1 kHz: a
+                                           * time, so half as many at the half rate) and the interpolator's points
+                                           * above it */
 #define XD_MS_MAX (XD_MAX * 1000u / XD_FS > 1000u ? 1000u : XD_MAX * 1000u / XD_FS)   /* 740 ms (half rate: 1000) */
 
 static void xf_defaults(void)
@@ -931,9 +939,14 @@ CR_HOT_FX static __attribute__((noinline)) void xc_block(const int32_t *in, int3
  * own state (xf.d_*, xd_buf, xf.tf; xf.r_*, xf.dn[1], xf.up, xf.up_live, xf.t[1..3], xf.tr, xf.tx, xr_buf, xr_pbuf)
  * and ADDS its wet into the mix: a sum of integers, the same whatever runs first, so the reverb can run on core 1
  * into buffers of its own that core 0 adds afterwards, and the samples are one core's, bit for bit. xf_block is the
- * three in a row, as to 3y48. With the delay at the half rate (CR_FX_DELAY_DS 2) the delay writes the reverb's wet
- * buffer too: then the block stays whole on core 0 (XF_SPLIT 0) */
-#define XF_SPLIT (CR_FX_DELAY_DS == 1)
+ * three in a row, as to 3y48. With the delay at the half rate (CR_FX_DELAY_DS 2, the default since 0.22) the delay
+ * writes the reverb's wet buffer too (xf.t[2..3], one up-sampler for both): then core 1's job is the reverb's lines
+ * alone, into half-rate buffers of its own (XF_SPLIT_HALF: xf_reverb with up 0), and core 0 runs the delay into
+ * xf.t[2..3], adds core 1's after the join and runs the up-sampler (xf_reverb with rev 0): the same integer sums as
+ * the three in a row, bit for bit. The delay at the half rate with the reverb at the full one (a build switch):
+ * the block whole on core 0 (XF_SPLIT 0) */
+#define XF_SPLIT_HALF (CR_FX_DELAY_DS == 2 && CR_FX_REVERB_DS == 2)
+#define XF_SPLIT (CR_FX_DELAY_DS == 1 || XF_SPLIT_HALF)
 static uint32_t xf_prep(const int32_t *dly_in, const int32_t *rev_in, uint32_t n)   /* bit 0: the delay, bit 1: the
                                                          * reverb, bit 2: the up-sampler's tail; 0: nothing runs */
 {
@@ -992,19 +1005,22 @@ CR_HOT_FX static __attribute__((noinline)) void xf_delay(const int32_t *dly_in, 
 }
 /* the reverb and the half rate's up-sampler, into ml, mr. tm 0: its parts on the fx stage's marks (core 0); else
  * (core 1's job, fx.c c1_fx_job) its own: the down-sampler's, the lines' and the up-sampler's time into tm[CRX_*],
- * which core 0 adds to the stage's parts after the join (the marks are core 0's words) */
+ * which core 0 adds to the stage's parts after the join (the marks are core 0's words). ol / orr: the half-rate wet
+ * (xf.t[2..3]; core 1's own with XF_SPLIT_HALF); up 0: the lines alone (core 1's job with XF_SPLIT_HALF: core 0 runs
+ * the up-sampler after the join, rev 0) */
 #if CR_CPU1
 #define XR_MARK(k) do { if (tm) { uint32_t t_ = cr_prof_now(); tm[k] += cr_prof_less(t_ - *mk); *mk = t_; } else CR_PROFX(k); } while (0)
 #else
 #define XR_MARK(k) ((void)tm, (void)mk)
 #endif
 CR_HOT_FX static __attribute__((noinline)) void xf_reverb(const int32_t *rev_in, int32_t *ml, int32_t *mr, uint32_t n,
-                                                          int rev, uint32_t *tm, uint32_t *mk)
+                                                          int rev, uint32_t *tm, uint32_t *mk, int32_t *ol,
+                                                          int32_t *orr, int up)
 {
     uint32_t i, nh = n >> 1;
     int32_t any = 0;
-    int32_t *hr = xf.t[1], *ol = xf.t[2], *orr = xf.t[3];
-#if XF_HALF && XF_SPLIT
+    int32_t *hr = xf.t[1];
+#if XF_HALF && CR_FX_DELAY_DS == 1
     for (i = 0; i < nh; i++)                            /* (the delay at FS: the wet buffer is the reverb's alone) */
         ol[i] = orr[i] = 0;
 #endif
@@ -1026,6 +1042,8 @@ CR_HOT_FX static __attribute__((noinline)) void xf_reverb(const int32_t *rev_in,
             xf_hb_clear(&xf.dn[1]);
     }
 #if XF_HALF
+    if (!up)                                            /* (core 1's job, XF_SPLIT_HALF: core 0 up-samples the sum) */
+        return;
     for (i = 0; i < nh; i++)
         any |= ol[i] | orr[i];
     if (any)
@@ -1041,7 +1059,7 @@ CR_HOT_FX static __attribute__((noinline)) void xf_reverb(const int32_t *rev_in,
         xf_hb_clear(&xf.up[1]);
     }
 #else
-    (void)any; (void)hr; (void)ol; (void)orr; (void)nh;
+    (void)any; (void)hr; (void)ol; (void)orr; (void)nh; (void)up;
 #endif
     (void)tm; (void)mk;
 }
@@ -1051,7 +1069,7 @@ CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, 
     uint32_t f = xf_prep(dly_in, rev_in, n);
     if (!f)
         return;                                         /* nothing sent, the tails over: nothing runs */
-#if XF_HALF && !XF_SPLIT
+#if XF_HALF && CR_FX_DELAY_DS == 2                     /* (the delay's wet and the reverb's share it: from 0) */
     {
         uint32_t i;
         for (i = 0; i < (n >> 1); i++)
@@ -1061,5 +1079,5 @@ CR_HOT_FX static __attribute__((noinline)) void xf_block(const int32_t *dly_in, 
     CR_PROFX_START();                                   /* (cr_cpu1.h: the stage's parts, for 73 DEBUG and perf.sh) */
     if (f & 1u)
         xf_delay(dly_in, ml, mr, n);
-    xf_reverb(rev_in, ml, mr, n, (int)(f >> 1 & 1u), 0, 0);
+    xf_reverb(rev_in, ml, mr, n, (int)(f >> 1 & 1u), 0, 0, xf.t[2], xf.t[3], 1);
 }

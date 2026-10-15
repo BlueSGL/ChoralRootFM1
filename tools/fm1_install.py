@@ -2297,10 +2297,30 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # 3y60 (a full sound pool made the UI laggy; docs/PRESETS.md "What browsing reads"), since the last
               # --debug: a UI frame's own time (input, LEDs, draw) the longest and the average in us; the flash reads
               # per second (storage_hw.c st_read), calls and bytes
-              "ui_frame_max_us", "ui_frame_avg_us", "flash_reads_ps", "flash_read_bytes_ps"]
+              "ui_frame_max_us", "ui_frame_avg_us", "flash_reads_ps", "flash_read_bytes_ps",
+              # (the values below, 69..79, were 35..45 on the dual-core fallback's branch, worktree-dualcore-1:
+              # appended here by name, not by index)
+              # why this boot kept core 1 off although Options > Dual Core said On (firmware/src/cr_cpu1.h C1_BAR_*,
+              # docs/DUALCORE.md): 0 none, 1 a crash beside it, 2 a hang, 3 it gave up (73 DEBUG is full)
+              "c1_bar",
+              # 0.22: the last crash's record (hal/fm1_irq.h fm1_crash, what the crash screen shows for 4 s; kept in RAM
+              # until a power-off; crash_count 0: none), this boot's reset reason (P3_RST_SRC bits 0..7: 0 power-on, 2
+              # watchdog, 6 soft; the core reset as bit 8) and the breadcrumb the last reset left (BOOT_STAGE)
+              "crash_count", "crash_vec", "crash_pc", "crash_rets", "crash_emu", "crash_dbg", "crash_uptime_ms",
+              "boot_reset", "boot_stage",
+              # the voices the overload shed dropped since power-on (audio.c shed_voice: two halves in a row over
+              # 85 % of the 2902 us; the console's voices_shed; shed_voices above is since the last --debug): the
+              # rule is 0
+              "voices_shed"]
 ERASE_WHY = ["other (a sound saved, a store)", "automatic: the Options", "automatic: the favourites",
              "the global save (SAVE held) or Reset Settings", "the calibration / the update gesture",
              "a backup restore", "a loop slot"]
+C1_BAR = ["none", "after a crash beside core 1", "after a hang (watchdog) while core 1 ran", "core 1 gave up"]
+PEAK_HEX = ("irq_gap_pc", "crash_vec", "crash_pc", "crash_rets", "crash_emu", "crash_dbg", "boot_reset")
+BOOT_STAGE = {0: "none", 1: "loop: input", 2: "loop: draw", 9: "loop: idle", 10: "guard", 11: "flash probe",
+              12: "user sounds", 13: "fm6 bank", 14: "va store", 15: "fm6 store", 16: "settings", 17: "update cleanup",
+              18: "lcd", 19: "splash", 20: "input", 21: "sounds", 22: "audio", 23: "usb", 24: "uart", 25: "irqs",
+              26: "calibration", 27: "ui init", 28: "ui settings", 29: "loops", 30: "core 1"}   # cr_bootguard.h BS_*
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 SHED_WHY = ["none", "a released voice, the quietest", "a held voice, the oldest that is not its part's lowest note",
             "asked, and no voice to give", "a voice of the bass part's P5 stack, before any chord voice"]
@@ -2375,11 +2395,20 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
     for k in DEBUG_PEAK:
         if k in d:
             print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
-                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else
+                                   f" (0x{d[k]:08X})" if k in PEAK_HEX else
                                    f" ({shed_voice_text(d[k])})" if k == "shed_last_voice" else
                                    f" ({SHED_WHY[d[k]] if d[k] < len(SHED_WHY) else '?'})" if k == "shed_last_why" else
-                                   f" ({ERASE_WHY[d[k]] if d[k] < len(ERASE_WHY) else '?'})" if k == "last_erase_why" else ""),
+                                   f" ({ERASE_WHY[d[k]] if d[k] < len(ERASE_WHY) else '?'})" if k == "last_erase_why" else
+                                   f" ({C1_BAR[d[k]] if d[k] < len(C1_BAR) else '?'})" if k == "c1_bar" else
+                                   f" ({BOOT_STAGE.get(d[k], '?')})" if k == "boot_stage" else ""),
                   file=out)
+    if "crash_count" in d:
+        if d["crash_count"]:
+            print(f"last crash (kept until a power-off): #{d['crash_count']}, vector {d['crash_vec']}, pc 0x{d['crash_pc']:08X}, "
+                  f"rets 0x{d['crash_rets']:08X}, EMU_MSG 0x{d['crash_emu']:08X}, DBG_MSG 0x{d['crash_dbg']:08X}, "
+                  f"{d['crash_uptime_ms'] / 1000:.1f} s after its boot (build/choralroot.dis names the section)", file=out)
+        else:
+            print("last crash: none since the power-on", file=out)
     for k in DEBUG_USB:
         if k in d:
             print(f"{k} {d[k]}", file=out)

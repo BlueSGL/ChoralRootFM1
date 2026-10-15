@@ -62,6 +62,12 @@ t ./build/host/cr_trans_test
 # the bass part on the second core (firmware/src/cr_cpu1.h, docs/DUALCORE.md): the split bit for bit, the budgets, the fail-safes
 par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cpu1_test tests/cr_cpu1_test.c -lm
 t ./build/host/cr_cpu1_test
+# .. the persistent fallback inert in the single-core package (CR_SINGLE_CORE 1), and the same record barring in the
+# standard one (docs/DUALCORE.md "The persistent fallback")
+par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -DCR_SINGLE_CORE=1 -o build/host/cr_c1_bar_1core_test tests/cr_c1_bar_1core_test.c
+t ./build/host/cr_c1_bar_1core_test
+par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -DCR_SINGLE_CORE=0 -o build/host/cr_c1_bar_std_test tests/cr_c1_bar_1core_test.c
+t ./build/host/cr_c1_bar_std_test
 # .. and that job on a real second thread (3y45): the inline job's samples for twelve pairs of engines (P5 on both
 # parts among them), no ThreadSanitizer report, and a planted shared word reported
 t sh tests/run_c1_thread_test.sh

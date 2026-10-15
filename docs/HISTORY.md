@@ -2985,3 +2985,165 @@ LICENSING.md, `assets/prophet5-factory/README.md` and docs/PROPHET.md "Open deci
 115 of `shipped.txt`, the owner's decision of 2026-10-13; the other 85 are not on the site either, 3y55); PRESETS.md and
 PROPHET.md no longer say P5 cannot save; the README's status names no version that goes stale; the manual has P5 (the
 engines table, its editor pages), six engines and 128 sounds. Not done: anything on a unit; tagging and the Pages job.
+
+3y70. **Dual Core: the regulator at 1.50 V, and Off by itself after a crash beside core 1 (2026-10-14; issue #9, after
+fm1-x0x#10 / #21 and x0x 1.0.7; docs/DUALCORE.md "Why VDC14 5", "The persistent fallback").** The reports settled two
+things 0.16 could not know: VDC14 is the rail that matters (zednaked's table: 14 / 4 marginal, 11 / 5 and 15 / 5
+clean), and the misreads hit core 0 too (fc79's crash records: a vector fetched with bit 24 set, a crash in the bass
+render), where no check on core 1 can see them: the crash report reboots the unit with Dual Core still On, and the
+loop of issue #9 follows. So: `FM1_VDC14_LEVEL` / `_MAX` 5 (1.50 V; the datasheet's 1.55 V and the stock firmware's
+1.60 V above it; SYSVDD stays 14); a `.noinit` record `fm1_c1_bar` (`ran`, `barred`) set by `fm1_c1_fault_c` for a
+crash of core 0's own beside a running core 1 and by `cr_c1_give_up`, decided at the next boot by `cr_c1_bar_decide`
+(a watchdog reset while core 1 ran counts as a hang at any uptime) from `cr_settings_boot` (not in SAFE MODE), which
+keeps core 1 off, and `cr_settings_load` reads Dual Core Off and primes the automatic save (`crs_dc_bar`); `fm1_cstart`
+holds core 1 first thing (Jangada's finding). The player sees `dual core off: crash` after the splash, the reason
+under Options > Dual Core, `c1 off · after a crash` in GEEK OUT, `c1_bar` as 78 PEAK's last value (73 DEBUG is full).
+The test build: injected failures set no bar and save nothing (`cr_c1_injected`); op 7 `bar` restarts with the record
+a crash leaves. Written by an Opus agent to a brief, reviewed. Host: `cr_cpu1_test` 72 checks (the rails' steps to
+14 / 5, the bar's decision and boot), `cr_backup_test` 178 (PEAK 35 values), `run_cr_tests.sh` whole twice, the
+emulator built, `./build.sh` for both `CR_CORE1_TEST` values: XIP 84.5 %, RAM 82.8 %, POOL 91.7 %, NOINIT 228 B.
+**Not done**: nothing on a unit (the owner's runs both cores clean, and the other session had the FM-1): the device
+checklist's step 5 (`core1_fault_test.py bar` on a `CR_CORE1_TEST` build) and a word from the reporter of #9 on
+0.22 are what is left. VDC14 5 was the owner's call the same day ("My HANDOFF rule can be broken"): the rule is 14 / 5.
+**Found by 3y71's run of `test_cr.sh`**: the hung-job check ("a hung job's WAV = one core's") failed, because the
+give-up now saves Dual Core Off once the chord is released and the unit is quiet, and the emulator plays the erase as
+the device does (45 ms of silence): the WAVs part at 4.7 s. The check now compares the first 4.5 s, then asserts
+the save (one erase, `dualcore 0` in the record) and that a relaunch on that flash boots `c1 off`.
+
+3y71. **Geek Out 2: the cores' load and the memory as four meters (2026-10-14; the owner: "add a second GEEK OUT 2
+menu with meters that show each core's CPU load as well as RAM"; docs/DUALCORE.md "Geek Out 2").** A sixth view
+(`V_GEEK2`, stored 5, after Scope: an older record keeps its meaning, 0.21 reads 5 as Chord), drawn with the
+editor's tall level bars (`CR_K_EDIT8`, `tall` 2: the read-out variant in `cr_p_tall`: bright, no knob underlines,
+`pct2` a 2 px peak tick, `CR_CF_DIM` grey) under the editor's title line with the battery: CORE 0 (blue; the ISR's
+share of a half less the wait for core 1, audio.c `cpu_last` over the new `CPU_HALF_US`), CORE 1 (orange, the bass:
+`CRP_PART1`; `off` / `failed` / `gave up` grey), RAM and POOL (link-time: `_bss_end`, `_pool_*`; `CR_MEM_USED`).
+The core bars glide a quarter of the way per frame; the emulator has no link map (RAM / POOL `n/a`) and its ISR time
+is the host's, so it sums the stages (`emu_firmware.h`). The view menu's Lock moves to the seventh white root (C5).
+Written by an Opus agent to a brief, reviewed. Host: `run_cr_tests.sh` ok (`cr_settings` 234: the view 5 round
+trip), `run_cr_draw.sh` 94 screens (two device states of the view), `test_cr.sh` (`cr_geek2.txt`: the view by the
+menu, the cells, the bars' colours at two pixels, six HOME taps round; `cr_arp_view.txt` needed one more tap),
+`./build.sh` XIP 84.6 %, RAM 82.8 %, POOL 91.7 %. The device shots: `build/emu/test/cr_geek2.png` (two cores: CORE 0
+18 % with its tick, CORE 1 3 %), `cr_geek2_one.png`. **Not done**: nothing on a unit (the RAM / POOL bars at 83 % /
+92 % are the size line's figures, not yet read off the screen); no designer mock-up in the 24-state JSON (the two
+states are in `gen_cr_screens.py`'s device list).
+
+3y72. **On the unit: the dual-core fallback end to end, a restart crash found and told apart, the crash record over
+SysEx (2026-10-14; the owner: "You can run on the FM-1 right now").** The owner's FM-1 had Dual Core On already,
+clean (8.5 M jobs, 0 rejects) at 14 / 4. The 0.22 release build installed: `c1 ok`, `rail_vdc14_now 5`, `c1_bar 0`,
+a worst half of 392 us. The `CR_CORE1_TEST` build, `core1_fault_test.py`: misread, null, stall, fault all PASS, the
+audio running, and after the injected give-up (`c1 gave up`, fallback 1) a restart boots `c1 ok` again: an injected
+failure saves nothing. `bar`: PASS: after the record a crash beside core 1 leaves and RESTART's soft reset, `c1 off`,
+`c1_bar 1 (after a crash beside core 1)`, the rails at 11 / 3; a further restart boots `c1 off` with `c1_bar 0`: the
+settings saved Off. Options > Dual Core On again by a `--restore` of the backup taken first (the record with the bit
+set; a restart), `c1 ok`. **Found on the way**: the first full run barred Dual Core by itself after the null mode:
+the next boot read `c1_bar 1` with no injected crash. No way to read the crash record off the unit (the console is
+SAFE MODE's CDC; the screen shows it 4 s), so 78 PEAK grew by nine values (`crash_count`, `crash_vec`, `crash_pc`,
+`crash_rets`, `crash_emu`, `crash_dbg`, `crash_uptime_ms`, `boot_reset`, `boot_stage`; `--debug` prints the crash in
+one line) and the record read: vector 1, pc `0x02001C38` = `fm1__p33_op`'s first instruction, rets `0x02001C9A` =
+`fm1_reboot` + 0x1A (the P33 soft-reset write of the RESTART), DBG_MSG `0x10` = `axi_rd_inv` (the SDK's
+`debug_msg[4]`: a bus master that is not a CPU read an invalid address), 37.6 s of uptime = that session's RESTART.
+So the restart itself crashes now and then (a 4 s crash screen on the way to the reboot it wanted; older than this
+work, open: HANDOFF), and the first build took it for a core 0 misread beside core 1. Fix: `fm1_c1_crash_bars`
+(hal/fm1_cpu1.h, host-tested): a crash bars only when core 0's own debug sources raised it (`FM1_DBG_C0`; fc79's
+`0x1000`, `0x200000`) or none did (a plain CPU exception); another master's alone (`FM1_DBG_PRP`: the watchdog, the
+peripherals' MMU / write limit, AXI invalid read / write, DMC / DBG pendings) gets the report and no bar. Also:
+`core1_fault_test.py`'s default mode list was refused by argparse (a list default checked against `choices` as one
+value; Python 3.11): the choices are checked by hand now; the rails' `now` read 0 with Dual Core Off (`cr_rails_record`
+sets now = boot). Host: `cr_cpu1_test` 74 checks, `cr_backup_test` (PEAK 44), `install_test.py`. The emulator suite
+was not re-run after the PEAK change (its PEAK checks are the backup test's). Not done: a power cycle by hand (the
+owner's), Geek Out 2 read off the unit's screen, the restart crash's cause.
+
+3y73. **The unit's load read for real, by MIDI and SysEx (2026-10-14; the owner: "review our performance limits",
+then "you should be able to send midi in to the FM-1 and maybe sysex commands to change settings so you could put it
+in a state to fully test on device performance"; docs/INTEGRATION.md "Measured on the unit").** `tools/perf_unit.py`:
+76 SELECT puts a sound on each part, an 8-note chord goes in on channel 1 and a bass note on channel 2 (rtmidi),
+moved a semitone every 2 s; 73 DEBUG and 78 PEAK read before and after; `--record` runs ffmpeg on "ChoralRoot In";
+`--notes`, `--seconds`. 78 PEAK grew by one more value, `voices_shed` (audio.c `shed_count`: 45 values now). The
+tables are in INTEGRATION.md; what they say: a VA MORPH PAD chord overloads core 0 (part0 2280 us with 6 notes, the
+block over the half, 22 .. 40 voices shed in 20 s), FM6 TINE EP with 8 notes is at 88 % and sheds while recording,
+CZ-1 and FM TONE at 70 .. 80 %; the fx stage's worst half 600 .. 720 us (the listing's 290 was the delay and the
+reverb alone), the tick's 300 .. 400 at a chord change, TIMER5's 150 .. 230 dry and 350 .. 410 recording;
+`stale` 0 throughout (the shed, not a pop, is what an overload sounds like). The emulator's "2x headroom" was its
+own: 1.5 .. 2 x low on the renders, 2 .. 3 x on the fx stage. Also: the delay line follows its rate (`XD_N` = 32768 /
+`CR_FX_DELAY_DS`, the longest-time margin halved with it: `cr_fx_test` at both rates), so `CR_FX_DELAY_DS=2` is the
+0.743 s delay in half the POOL (72.7 % for 91.7 %); `LCD_BAUD` and `XD_N` pass through `build.py`; two variant
+packages built for the owner to judge (`build/choralroot-delayhalf.fwsc`, `build/choralroot-lcd20.fwsc`: HANDOFF),
+the LCD one left on the unit. Host: `run_cr_tests.sh` ok, `install_test.py` ok. Not done: 48 kHz recording (an
+Option, not settable over USB without a restore), Dual Core Off rows (the same), the fx stage's parts under load.
+
+3y75. **The fx stage's parts and TIMER5 read on the unit (2026-10-14, later; docs/INTEGRATION.md "The fx stage's
+parts and TIMER5").** `tools/perf_unit.py` prints 78 PEAK's fx parts as a second table (down / delay / reverb / up,
+avg and max, their sum against the stage's average and largest, the rest) and sends CC 123 All Notes Off to both
+parts first (a stopped run had left an 8-note chord held: the "idle" row read part0 903). Run on the unit (the
+LCD-20 MHz variant of 1cc5972), 8 notes + bass, dry and recording. The fx stage (445 .. 535 avg, 533 .. 587 max
+dry; 651 .. 657 recording) is 75 % the four effects' parts, each the listing's count times 1.2 .. 1.3 (reverb
+193 .. 198, delay 90 .. 108, down 20, up 34 .. 37); the rest (106 .. 156) is the two mix loops with sends, the
+chorus, DIST on WOBBLE, the idle parts, `xf_block`'s bookkeeping, and TIMER5's ticks (the stage figures are wall
+time: ~40 us dry, ~65 recording). The earlier "600 .. 720" was the recording's ticks in the stage; nothing is
+hidden. The loop to work on inside it is the reverb's (40 % of the stage, 7 % of the half), but it has no cut that
+keeps the sound; the stage moves as a whole, to core 1. TIMER5: the tick is ~560 lines (2.9 us) by the listing and
+6.6 .. 7.3 us on the unit: 110 GPIO accesses a tick (the 595 shift's 96) at 35 .. 40 ns each are the difference,
+7 % of core 0; the recording's endpoint service adds 4.2 us a tick (42 us a millisecond, ~50 SIE transactions, the
+packet, the calls); a 5 kHz scan would save 3.5 % (100 us a half) at the price of the debounce times, the glow's
+pulse rate and the poll schedule; skipping the data line's unchanged writes 0.5 % for nothing. Recommendation: (1)
+the fx stage to core 1 as a whole, (2) the scan at 5 kHz, (3) the reverb's loop last. Also found: `pk_block_us`
+leaves TIMER5 out and the stages do not, so the stages' largest sum to the block plus `pk_t5_us`. Nothing flashed
+or changed on the unit; the sound and the scan untouched. Host: `python3 tools/perf_unit.py --help` runs; the table's
+code is a print. Not done: the 5 kHz scan, the data-line skip, the stage figures with TIMER5 taken out.
+
+3y74. **The delay at the half rate and the LCD at 20 MHz are the defaults (2026-10-14, the owner, after both on the
+unit: "screen at 20 MHz looks good. Delay sounded good at half rate").** `cr_fx.c CR_FX_DELAY_DS` 2 (the line halved
+with it, 3y73: POOL 72.7 %, 94 KB free: no longer the tight resource), `lcd.c LCD_BAUD` 2 (7.7 ms a strip for 12.8).
+The old builds: `CR_FX_DELAY_DS=1`, `LCD_BAUD=4`. docs/FX.md keeps 0.18's reasoning for the full-rate delay as the
+record of why it was chosen then; EDITOR.md's LCD figures are marked as the 12 MHz build's. (3y75 is the fx-stage /
+TIMER5 profiling session's, written beside this one.) Host: `run_cr_tests.sh` (cr_fx_test at the new default),
+`test_cr.sh`, `./build.sh`: below. Not flashed by this session: the profiling session had the unit.
+
+3y76. **The dual-core fallback's branch merged into the 0.22 line (2026-10-14; branch dcm-1: 321a1de, the designer
+line, with 7980d11, worktree-dualcore-1, 3y70 .. 3y75; not pushed, not flashed).** The owner's decisions: all of that
+branch goes into 0.22-beta1; Dual Core stays **On by default** (3y46) and the fallback stays (Off and saved after a
+crash beside core 1, the message and the reason under Options > Dual Core). **As built**: a new unit (no settings
+record) and Reset Settings: On; an updated unit: what its record says (0.16 .. 0.21's Off stays Off, as 3y46); a
+power-on after a crash of core 0's own, a watchdog reset or a give-up beside a running core 1: core 1 kept off, Dual
+Core read Off and saved Off at the first quiet moment, **whatever the default** (`crs_dc_bar`; a Reset Settings in
+that power-on saves Off too) until the player sets the option. 3y46's safety net (the boot after a counted failed
+boot starts no core 1, saves nothing) and the bar sit side by side: a start that hangs leaves no bar (`ran` is set
+only once core 1 answered), and `cr_settings_boot` decides the bar before `cr_c1_power_on`, so a barred boot is
+`c1 off` with its reason. **The conflicts** (14 files): HISTORY (both: the numbers were disjoint); MANUAL, SETTINGS,
+the 0.22 notes, DUALCORE (theirs written for Off by default: rewritten for On with the fallback, the notes' Dual Core
+item in player language and their sections folded in as items; stale "Off by default" lines in SETTINGS' table,
+INTEGRATION, DUALCORE fixed); `crs_sanitize` (the view bound 5 for Geek Out 2 with this line's "a damaged view byte
+keeps the record's Dual Core"); `cr_settings_boot` (this line's comment, their bar); `cr_cpu1.h` (the host's thread
+stub and the bar's mock, both); `cr_ui.c` (Options > Dual Core: the single-core package's "1 core build" and no
+setting there, their bar cleared by the player's choice and its reason line, which the single-core package never
+shows); `cr_screen.h`, `audio.c` (both); `cr_backup.c` / `fm1_install.py` / the tests: **78 PEAK merged by name**,
+this line's 68 values first and the branch's 11 (`c1_bar`, the crash record's 7, `boot_reset`, `boot_stage`,
+`voices_shed`) appended as **69 .. 79** (they were 35 .. 45 there; `shed_voices`, value 35 here, is since the last
+read, `voices_shed` since power-on), `install_test.py` at the new places; `test_cr.sh` (the hang run's flash copied
+before the threaded runs reuse it; their 4.5 s compare and the save's checks; this line's Off-flash compare). **What
+the two did not see of each other, adapted**: (1) the delay at the half rate made `XF_SPLIT` 0, so 3y50's reverb on
+core 1 would have gone back to core 0 (about 200 us of a half: 3y50's eight P5 voices were predicted at 83 .. 84 %
+with it, 91 % without). `XF_SPLIT_HALF` (cr_fx.c, fx.c): core 1 runs the reverb's half-band and lines into half-rate
+buffers of its own (`c1h_l` / `c1h_r`), core 0 the delay into `xf.t[2..3]`, adds core 1's after the join and runs the
+one up-sampler; sums of integers, `xf_block`'s mix bit for bit (`cr_c1_thread_test` "effects" and test_cr's
+`cr_prophet_eight_fx`: inline = thread, at the default build). (2) Geek Out 2's CORE 1 was `CRP_PART1`, the voices'
+job alone; here core 1 also runs P5's chord voices (in it) and the reverb (not): CORE 1 is now core 1's busy time over
+the second (`cr_dbg.c1_avg_us` / `c1_max_us`, `c1_busy_cur` summed over the stages' window). (3) The single-core
+package: `cr_c1_bar_boot` clears a record a Standard package left and decides nothing, so it never writes Dual Core
+(`tests/cr_c1_bar_1core_test.c`, built both ways). (4) Tests that met the new default: test_cr's `EMU_C1=hang` on P5
+(a fresh unit is On, so its give-up now saves Off: the WAVs compared to 12 s, the save asserted), Geek Out 2's
+one-core run (on the Off flash: a fresh unit has two cores); `cr_backup_test` +9 (a new unit On; a new unit after a
+crash beside core 1: Off read, primed, saved; Reset Settings then: Off, and its message without "restart", which
+3y46's `cu_reset` said whenever core 1 was off: now only when On is what it saved; the next boot Off from the record; the
+player's On saved and core 1 again; SAFE MODE leaves the bar for the next boot); `tests/target_budget.txt`
+`xf_block` 0 -> 5 (the half rate's clearing loop, compiled now that it is the default; the checker divided by the 0
+budget: guarded) and `mix_fx_split` 19 -> 22 (the half-rate join's two loops). **No golden changed**: 313 renders,
+0 changed (tests/golden.txt is Felucca's effects, CR_FX 0; the delay's rate is cr_fx.c's); `tests/cr_screens_gen.h`
+(the branch's two Geek Out 2 states) regenerates byte for byte. Size: XIP 532 612 B (92.9 %; this line 530 500, the
+branch 485 124), RAM 77 588 (78.9 %; 77 524, 81 348), **POOL 238 936 (69.4 %; 304 600 = 88.5 %, 249 964 = 72.7 %)**,
+NOINIT 228; the single-core package XIP 529 396 (92.3 %), RAM 74 452, POOL 238 808. XIP is now the tightest (40 KB
+free). Stub version 3, sha256 baee55ed142fe1cc, as both. Packages: `choralroot.fwsc` sha256 25b478dfca5ba4e8...,
+the single-core one ac3dca917e255418.... `CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (21; test_cr 997
+ok, test_persist 111, 313 goldens 0 changed, the browser emulator built and its test passed). Not done: anything on a unit (the reverb on core 1 at the half rate, Geek
+Out 2's CORE 1, the bar with On the default), the release notes of rn-1 (0.22-beta1.md: the owner merges it later;
+this merge's items are in docs/releases/0.22.md).

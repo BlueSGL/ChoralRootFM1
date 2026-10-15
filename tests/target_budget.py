@@ -163,7 +163,8 @@ def main():
         state = "no budget (BUDGET_UPDATE=1 adds it)" if b is None else "ok"
         if b is not None and not os.environ.get("BUDGET_UPDATE"):
             if r["cost"] > b * (1 + TOL):
-                state = f"OVER BUDGET (+{(r['cost'] / b - 1) * 100:.0f} %, limit +{TOL * 100:.0f} %)"
+                state = (f"OVER BUDGET (+{(r['cost'] / b - 1) * 100:.0f} %, limit +{TOL * 100:.0f} %)" if b else
+                         "OVER BUDGET (the budget is 0: no loop)")
                 fail += 1
             elif r["cost"] < b * (1 - TOL):
                 state = f"note: {(r['cost'] / b - 1) * 100:.0f} % (BUDGET_UPDATE=1 to keep it)"

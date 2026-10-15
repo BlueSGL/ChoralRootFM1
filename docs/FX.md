@@ -239,14 +239,26 @@ and the impulse responses, with their spectrograms.
 | both | 222 us (7.6 %) | 417 us (14.4 %) |
 | **as built: delay full, reverb half** | | **267 us (9.2 %)** |
 
-**As built: the delay at the full rate, the reverb at half.** The delay's repeats are heard dry and bright beside the
+**Since 0.22: both at half** (the owner, 2026-10-14, after hearing `build/choralroot-delayhalf.fwsc` on the unit:
+"Delay sounded good at half rate"; `cr_fx.c CR_FX_DELAY_DS` 2, the line halved with it, "Memory at the full rate"
+below: POOL 72.7 % for 91.7 % on that branch, 69.4 % for 88.5 % on the 0.22 line after the merge of 3y76, where
+the reverb still runs on core 1 with Dual Core: DUALCORE.md "What each core runs"; `CR_FX_DELAY_DS=1 ./build.sh` is
+0.18 .. 0.21's delay). What follows is 0.18's
+reasoning for the full rate, kept as the record of why it was chosen then.
+
+**As built in 0.18: the delay at the full rate, the reverb at half.** The delay's repeats are heard dry and bright beside the
 note that made them, and the full rate costs it only 25 us on the estimate (it loses its down- and up-sampler); the
 reverb is a dark wash whose top is its own damping, and the full rate would double it (+149 us) and leave 0.37 s of
 delay in the memory that is there.
 
 **Memory at the full rate.** A second a side is 176 KB; the pool has 131 KB for the delay with 17.7 KB left free, so
 the line is 32768 samples: **0.743 s a side** (a 1/4 at 81 BPM and up; a division longer than the line plays at half).
-The owner accepted "or lower if need be". At half rate the same memory is 1.49 s.
+The owner accepted "or lower if need be". At half rate the same memory is 1.49 s. **Since 2026-10-14 the line
+follows the rate** (`XD_N` = 32768 / `CR_FX_DELAY_DS`): `CR_FX_DELAY_DS=2 ./build.sh` keeps 0.743 s in half the
+samples and gives 65 KB of POOL back (the owner: "I'd try storing the delay at half rate, but I might not like the
+sound, so it should be easy to go back": it is a build, `build/choralroot-delayhalf.fwsc`, and the release build is
+the way back); `XD_N=32768 CR_FX_DELAY_DS=2` is the 1.49 s line in the same memory. What the half rate costs the
+sound: the repeats lose what is above 11 kHz, as the reverb does (the half-band filters, "The rates" above).
 
 ### What the unit says, and the formula
 
@@ -341,7 +353,10 @@ defaults (wow and Mod on, nothing gliding), a pass being one sample:
 | `xf_block` itself (the parameters' hash, clearing and looking at the half-rate block) | | | ~8 |
 | **both effects** | | | **~290** (second build on the unit: ~560 .. 600) |
 
-These are counts read off the listing, good to about a tenth; **the unit's `fx_*` will say**. The targets were the
+These are counts read off the listing, good to about a tenth; **the unit's `fx_*` will say**. It said (2026-10-14,
+`tools/perf_unit.py`, docs/INTEGRATION.md "The fx stage's parts and TIMER5"): down 20 .. 21, delay 90 .. 108,
+reverb 193 .. 198, up 34 .. 37 on average with an 8-note chord and the bass, 340 .. 385 together: the count times
+1.2 .. 1.3, the reverb 40 % of a stage of 445 .. 535. The targets were the
 reverb under 150, the delay under 100, the stage's four parts under 300: the delay meets its own, the total is at
 it, **the eight-line reverb is about 10 us over**. What would take it under and was not done because it changes the
 sound: two diffusers instead of four (-42 a pass), two swinging lines instead of four (-18). That is

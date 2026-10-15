@@ -797,7 +797,7 @@ static void crb_debug(void)
     v[k++] = cr_dbg.c1_fallback;                     /* 1: core 1 given up this session (one core since) */
     v[k++] = cr_dbg.rail_boot[0];                    /* SYSVDD: the boot loader's, now (11 1.26 V, 14 1.35 V) */
     v[k++] = cr_dbg.rail_now[0];
-    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 4 1.45 V) */
+    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 5 1.50 V) */
     v[k++] = cr_dbg.rail_now[1];
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.avg_us[i];
@@ -900,7 +900,9 @@ static void crb_debug(void)
  * over the halves in which the effects ran, and the largest), then since power-on the flash's: erases, erases that
  * cut a sounding output (holes: 0 is the rule for what the unit writes by itself; a global save, SAVE held, into a
  * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves. A command of its own because
- * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values.
+ * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values. Values are only appended, and named by
+ * tools/fm1_install.py DEBUG_PEAK (two branches' appends are merged by name: the dual-core fallback's 35..45 are
+ * 69..79 here).
  * 3y44, values 35..41 (the owner's crackle on P5, docs/PROPHET.md "The crackle"): WHAT THE OVERLOAD SHED DID since the
  * last read (audio.c shed_check / shed_voice): voices shed, the latest one (0 none, else 0x10000 | part << 12 |
  * voice << 8 | note) and why (1 a released voice, 2 a held one, 3 asked and none to give), the halves above 85 %, the
@@ -909,7 +911,13 @@ static void crb_debug(void)
  * while a chord is only HELD would be a voice given up and taken again in a circle */
 static void crb_peak(void)
 {
-    uint32_t v[72], k = 0, i;                       /* (68 values; 72 room) */
+    uint32_t v[80], k = 0, i;                       /* (79 values; 80 room) */
+#ifdef FM1_CRASH_MAGIC                               /* (the device: hal/fm1_irq.h; the host and the emulator have no record) */
+    int crashed = fm1_crash.magic == FM1_CRASH_MAGIC;
+#else
+    struct { uint32_t count, vec, pc, rets, emu, dbg, uptime_ms; } fm1_crash = {0, 0, 0, 0, 0, 0, 0};
+    int crashed = 0;
+#endif
     v[k++] = cr_dbg.pk_all;
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.pk[i] / CR_PROF_PER_US;
@@ -1031,6 +1039,26 @@ static void crb_peak(void)
         ms0 = fm1_ms;
         ui_ft.max_us = ui_ft.sum_us = ui_ft.n = 0;
     }
+    /* 3y70 / 3y72 / 3y73, values 69..79 (the dual-core fallback's branch, its 35..45, merged by name): why this boot
+     * kept core 1 off, then the last crash's record (7: count, vec, pc, rets, EMU_MSG, DBG_MSG, uptime ms), this
+     * boot's reset reason and the last reset's breadcrumb, the voices the shed dropped since power-on */
+    v[k++] = cr_c1_barred;                           /* why this boot kept core 1 off (cr_cpu1.h C1_BAR_*: 1 a crash beside
+                                                      * it, 2 a hang, 3 gave up; 0 none): 73 DEBUG is full */
+    /* the last crash's record (hal/fm1_irq.h fm1_crash, .noinit: what the crash screen showed for 4 s, kept until a
+     * power-off; count 0: none since) and this boot's reset reason and the breadcrumb the last reset left
+     * (cr_bootguard.h): what a reporter cannot read off the screen in time (ChoralRoot#9) */
+    v[k++] = crashed ? fm1_crash.count : 0u;
+    v[k++] = crashed ? fm1_crash.vec : 0u;
+    v[k++] = crashed ? fm1_crash.pc : 0u;
+    v[k++] = crashed ? fm1_crash.rets : 0u;
+    v[k++] = crashed ? fm1_crash.emu : 0u;
+    v[k++] = crashed ? fm1_crash.dbg : 0u;
+    v[k++] = crashed ? fm1_crash.uptime_ms : 0u;
+    v[k++] = bootguard.reason;                       /* P3_RST_SRC bits 0..7, the core reset as bit 8 (bootguard_reason) */
+    v[k++] = felucca_dbg.prev_stage;                 /* BS_* (bootguard_stage_name) */
+    v[k++] = shed_count;                             /* voices dropped by the overload shed since power-on (audio.c
+                                                      * shed_voice: two halves in a row over 85 %); console voices_shed
+                                                      * (value 35, shed_voices, is since the last read) */
     cr_prof_clear();
     crb_b(1);
     crb_b(k);
@@ -1198,17 +1226,26 @@ static uint32_t crb_stub(uint32_t op)
  * Melodee, GPL-3.0). ops: 0 report; 1 a misread (the sequence read as +0x00200000 for 1 ms, as an affected unit
  * reads it); 2 a null job at rest (fn 0 and the next sequence for 1 ms: the idle crash Melodee decoded); 3 a stall (a
  * job that never returns: the 8 ms wait); 4 a fault on core 1 (a job that calls address 0); 5 the rails; 6 rail a[1]
- * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD 6..14, VDC14 0..4: never above the cap). rc: 0 done, 1 refused (core 1 not running for
- * 1..4, a level out of range for 6). Values: c1 state, jobs, rejected, faults, stalls, fallback, SYSVDD boot / now,
- * VDC14 boot / now (the registers), the fault's core / DBG_MSG / pc / rets / EMU_MSG, the last misread, audio halves,
- * the injection's time in us */
+ * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD 6..14, VDC14 0..5: never above the cap); 7 the bar: the record
+ * a crash beside core 1 leaves (fm1_c1_fault_c: C1_BAR_CRASH), then the restart 72 RESTART does (a soft reset, so the
+ * next boot decides from the reason, as after a real crash report: core 1 off, Dual Core saved Off; cr_cpu1.h
+ * cr_c1_bar_boot); its reply goes out first, but the unit leaves the bus 150 .. 500 ms after it (a tool must not
+ * count on reading it). rc: 0 done, 1 refused (core 1 not running for 1..4 and 7, a level out of range for 6).
+ * Values: c1 state, jobs, rejected, faults, stalls, fallback, SYSVDD boot / now, VDC14 boot / now (the registers), the
+ * fault's core / DBG_MSG / pc / rets / EMU_MSG, the last misread, audio halves, the injection's time in us.
+ * An injected failure is not the unit's: ops 1..4 clear the bar's reason and set cr_c1_injected (no Dual Core Off
+ * saved for a give-up this session: cr_ui.c) */
 #if CR_CPU1 && CR_CORE1_TEST && defined(FM1_HAVE_CPU1)
 static void crb_core1_test(const uint8_t *a, uint32_t na)
 {
     uint32_t op = na ? a[0] : 0u, rc = 0, waited = 0, v[18], i;
-    if (op >= 1u && op <= 4u && cr_dbg.c1 != C1_OK) {
+    if (((op >= 1u && op <= 4u) || op == 7u) && cr_dbg.c1 != C1_OK) {
         rc = 1;
+    } else if (op == 7u) {
+        cr_c1_bar_set(C1_BAR_CRASH);                 /* as fm1_c1_fault_c leaves it before the crash report */
+        crb_reboot_ask(0);                           /* .. and 72 RESTART's soft reset (crb_leave, after this reply) */
     } else if (op >= 1u && op <= 4u) {
+        cr_c1_injected = 1;                          /* (before: the audio ISR may give up during the injection) */
         uint32_t t0 = fm1_ticks();
         fm1_irq_off();                               /* the audio ISR neither hands over nor checks meanwhile */
         if (op <= 2u) {
@@ -1220,6 +1257,8 @@ static void crb_core1_test(const uint8_t *a, uint32_t na)
         waited = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
         fm1_irq_on();                                /* (an exception held while masked is taken here) */
         fm1_delay_us(2000);
+        cr_c1_bar_set(C1_BAR_NONE);                  /* an injected failure is not the unit's: no bar at the next boot
+                                                      * (the tool restarts with core 1 On, cr_cpu1.h cr_c1_bar_boot) */
     } else if (op == 6u) {
         fm1_irq_off();
         rc = na == 3u ? (uint32_t)fm1_power_goto(a[1], a[2]) : 1u;
