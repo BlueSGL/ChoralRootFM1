@@ -149,8 +149,16 @@ def versions(out, meta, want, stdout):
     the installer with a link that resolves, SHA256SUMS and firmware/index.html agreeing"""
     fw = out / "firmware"
     names = [f"choralroot-{w['version']}.fwsc" for w in want]
-    ok(sorted(p.name for p in fw.glob("*.fwsc")) == sorted(names), f"firmware/: {len(names)} package(s): {', '.join(w['version'] for w in want)}")
-    ok(all((fw / n).is_file() and sha(fw / n) == w["sha256"] for n, w in zip(names, want)), "firmware/: every package has its listed sha256")
+    # a version that lists sha256_1core publishes its single-core package beside it, unless make_site.py said it skipped
+    # that file (a local build without it)
+    ones = {w["version"]: f"choralroot-{w['version']}-1core.fwsc" for w in want if w.get("sha256_1core")}
+    skipped1 = [v for v, n in ones.items() if f"skipped: {n} (" in stdout]
+    ones = {v: n for v, n in ones.items() if v not in skipped1}
+    ok(sorted(p.name for p in fw.glob("*.fwsc")) == sorted(names + list(ones.values())),
+       f"firmware/: {len(names)} package(s): {', '.join(w['version'] for w in want)}" + (f" (+ {len(ones)} single-core)" if ones else ""))
+    ok(all((fw / n).is_file() and sha(fw / n) == w["sha256"] for n, w in zip(names, want)) and
+       all((fw / ones[w["version"]]).is_file() and sha(fw / ones[w["version"]]) == w["sha256_1core"] for w in want if w["version"] in ones),
+       "firmware/: every package has its listed sha256 (a single-core one its sha256_1core)")
     rel = (meta or {}).get("releases", [])
     ok([r.get("version") for r in rel] == [w["version"] for w in want] and all(r.get("sha256") == w["sha256"] for r, w in zip(rel, want)),
        "installer: offers exactly these versions, in this order, with these sha256")
@@ -162,13 +170,14 @@ def versions(out, meta, want, stdout):
        and all("going_back" in r for r in rel if r.get("tag") and not r.get("beta") and r["version"] != stable0),
        "installer: every listed version carries its bullets, date and tag; the older ones their going-back note")
     sums = (fw / "SHA256SUMS").read_text(encoding="utf-8").splitlines() if (fw / "SHA256SUMS").is_file() else []
-    ok(sums == [f"{w['sha256']}  {n}" for n, w in zip(names, want)], "firmware/SHA256SUMS lists them")
+    ok(sums == [x for n, w in zip(names, want) for x in [f"{w['sha256']}  {n}"] +
+                ([f"{w['sha256_1core']}  {ones[w['version']]}"] if w["version"] in ones else [])], "firmware/SHA256SUMS lists them")
     idx = (fw / "index.html").read_text(encoding="utf-8") if (fw / "index.html").is_file() else ""
     ok(all(f'href="{n}"' in idx and w["sha256"] in idx for n, w in zip(names, want))
        and all(f'/tree/{r["tag"]}"' in idx for r in rel if r.get("tag")) and all(f'href="{x}"' in idx for x in ("LICENSE", "LICENSING.md", "LICENSES/")),
        "firmware/index.html: every package, its sha256, its source at its tag, the licences")
     ok(not any(f"choralroot-{v}.fwsc" in idx or (fw / f"choralroot-{v}.fwsc").exists() for v in ("0.14", "0.15")), "firmware/: 0.14 and 0.15 are not published")
-    ok(stdout.count("skipped: ") == len(RELEASES["releases"]) - len([w for w in want if w["version"] != VERSION]),
+    ok(stdout.count("skipped: ") == len(RELEASES["releases"]) - len([w for w in want if w["version"] != VERSION]) + len(skipped1),
        "make_site.py: one \"skipped:\" line for each listed version without a package")
 
 

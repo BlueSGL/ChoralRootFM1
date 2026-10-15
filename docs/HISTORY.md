@@ -3251,3 +3251,39 @@ cr_backup_test (the reply with and without the ID, the CRC against Python's, the
 (the owner): the ID on Options > Version equals `--info`'s, stays the same after a power cycle and an install, and
 differs between two units; how macOS names two FM-1s' ports; an install with `--unit` while another FM-1 is plugged in.
 `CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (21), 313 golden renders, 0 changed; test_cr 990 ok.
+
+## 2026-10-14 (0.22-beta1 integrated)
+
+3y77. **The 0.22-beta1 integration branch (2026-10-14; branch int-1 from rn-1 9698e52, not pushed, not tagged, not
+flashed).** rn-1 (the notes, releases.json, the site, the 0.21 down-conversion; vs-1 and beta-1 in it), then with
+`--no-ff`: dcm-1 cc4c8d1 (the dual-core fallback, VDC14 1.50 V, Geek Out 2, the crash record, the delay at half rate,
+the LCD at 20 MHz: 3y70 .. 3y76), qt-1 9133b6a (FM TONE's times: 3y67 / 3y68 here), uid-1 9061bb6 (the unit ID:
+3y66). **The conflicts**: HISTORY at each merge (all entries kept; qt-1's 3y65 / 3y66 renumbered 3y67 / 3y68, as rn-1
+has 3y65 and uid-1 3y66, whose number the code's comments cite; nothing outside HISTORY named qt-1's) and
+`docs/releases/0.22.md` at dcm-1 and qt-1 (kept rn-1's pointer). Git merged the rest, read over: `cr_backup.c` (INFO's
+32-byte version, `43 01 03`, then `49 08` and the ID; 78 PEAK's 79 values), `cr_ui.c` (`cu_version_text`, the unit ID
+line under Options > Version beside the Dual Core reason line, Geek Out 2), `fm1_install.py` / `install_test.py` (PEAK
+69 .. 79 and `--info` / `--unit`), the web pages, `run_cr_tests.sh` / `test_cr.sh` (FM TONE's INIT values and the
+dual-core runs). **The notes** (`docs/releases/0.22-beta1.md`, player language): dcm-1's items moved there from 0.22.md
+(the fallback, VDC14 and `--debug`'s crash under the Dual Core item; Geek Out 2 and the faster screen in Playing and
+editing; the delay at half rate in Sounds and engines; Dual Core and Geek Out 2 in Going back to 0.21), the PENDING qt-1
+item written ("FM TONE's times are the Digitone's") and both PENDING comments removed, the unit ID under Installing and
+in Going back. **What the branches did not see of each other**: (1) qt-1 converts no saved patch (the owner), so an FM
+TONE sound saved under 0.21 keeps its time numbers and plays them on the Digitone's tables: most times longer, many
+much longer (AMP DEC 96: a T60 of 1.6 s on the old curve, 15.1 s now). The notes say so, beside "the factory sounds keep
+their timing" and "import Digitone sounds again". (2) rn-1's `quadToV3` (a sound taken to 0.21) keeps the time numbers,
+which 0.21 plays on its old 1 ms .. 10 s curve (most much shorter); no importer note says so: SOUNDS.md and the notes'
+Going back to 0.21 do. (3) `tests/site_test.py versions()` expected only the standard packages under firmware/: with a
+single-core package in the packages folder (the beta's, as `fetch_packages.py` will fetch once it is released) it
+failed "firmware/" and "SHA256SUMS"; it now expects `choralroot-X.Y-1core.fwsc` for a version that lists sha256_1core
+unless make_site.py said it skipped the file (checked three ways: no packages, the release folder, the standard package
+alone). `web/releases.json`: the beta's sha256 / sha256_1core of this build, two bullets and a note for the times and the
+fallback. **Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok, test_persist 111,
+313 golden renders 0 changed: tests/golden.txt and tests/quad_goldens are qt-1's byte for byte, tests/cr_screens_gen.h
+dcm-1's). `./build.sh --release 0.22-beta1` twice: the same SHA256SUMS; `choralroot-0.22-beta1.fwsc` sha256
+fc10688a91d1f212..., `choralroot-0.22-beta1-1core.fwsc` f4282db5aa0df404...; the apps carry `ChoralRoot 0.22-beta1`
+and `ChoralRoot 0.22-beta1 1-core`. releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1` (both sha256 match),
+site_test, test_installer; the browser emulator built as 0.22-beta1, test_web_emu PASS. Size: XIP 536 348 B (93.5 %),
+RAM 77 588 (78.9 %), POOL 238 936 (69.4 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the single-core package XIP 533 260
+(93.0 %), RAM 74 468 (75.8 %), POOL 238 808 (69.4 %), RAMTEXT 7 072. XIP is the tight one (37 KB free). Stub version 3,
+sha256 baee55ed142fe1cc. **Not done**: anything on a unit (every branch's own list stands); tagging and the Pages job.
