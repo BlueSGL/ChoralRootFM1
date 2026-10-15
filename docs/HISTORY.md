@@ -2962,3 +2962,48 @@ that fits shows whole (`ChoralRoot 0.22`, `ChoralRoot 0.22 1-core`); one too lon
 display alone (`cr_ui.c` `cu_version_text`, Options > Version's value): INFO, the backups, the splash, the installer
 keep the full string. Test: cr_backup_test (the 28-character beta, 0.22, a 23-character one, a longer one cut; this
 build's own). No golden changed.
+
+## 2026-10-14 (several FM-1s: the unit ID)
+
+3y66. **A unit ID, and fm1_install.py --unit (2026-10-14; branch uid-1 from 321a1de, not pushed).** The owner has
+several FM-1s: `fm1_install.py` found a unit by its port name ("ChoralRoot FM-1", the same on every unit) and, during
+an install, found it again by name after each restart, so with two units plugged in it could talk to the wrong one;
+and its advice for an offline port, a MIDI rescan (CoreMIDI `MIDIRestart`), restarts every MIDI port on the computer.
+**The ID** (docs/INSTALL-COMPAT.md "Several FM-1s"): 8 hex digits, the zlib CRC-32 of the SPI flash's 128-bit unique
+ID. The sources looked at: the chip's `CHIP_ID` register (the model, not the unit), the SPL's boot block (a chip id,
+a trim value and a Bluetooth MAC from the config area: not known to be per unit on the FM-1, and the block's RAM is
+not ours to trust after boot), and the flash's unique ID, which the AC79 SDK reads at every power-on of an SDK
+firmware (`cpu.a` `vm_sfc.c read_flash_id`, disassembled from the SDK's bitcode: `9Fh` and 3 bytes, then `4Bh`, four
+`00h`, 16 bytes, in one `enter_spi_code` window). ChoralRoot now issues exactly that read once at power-on, right after
+its own JEDEC check, through the same RAM driver (XIP off, interrupts masked; `hal/fm1_flash.h fl_uid_ram`, only when
+the JEDEC id is the expected Puya part, never in SAFE MODE). Read only: no flash write, nothing stored, the ID is the
+chip's and survives every install and reset. `FL_UID` is defined by the app alone, so the update loader and the boot
+stub are byte for byte as before (loader.bin, ota.bin, stub.bin sha256 unchanged; stub version 3, baee55ed142fe1cc).
+INFO appends `49 08` and the 8 digits in ASCII after `42 01 03`, `43 01 03` (none known: the reply as before); the
+hosts of before read the version to its NUL, and `editor.html` Felucca's fields from the start (3y64's "the tags are
+found from the end": no host in this repository reads them so; only cr_backup_test's check did, for a reply without
+the ID, which is unchanged). Options > Version: the line under the version
+reads `unit ID A1B2C3D4` (`no unit ID`); no new entry, no index moved. Cost: `.ram_text` +264 B, `.text` +368 B, the
+image +632 B (XIP 92.6 %), `.bss` +16 B (RAM 78.9 %), POOL nothing.
+**fm1_install.py:** `--info` asks every candidate port and lists each FM-1 with its unit ID (one FM-1: the lines of
+before plus the ID line); `--unit ID` with any command uses only the port whose INFO carries the ID (none: exit 3,
+several: exit 9), and every port taken again later is checked by it; an install with `--unit` takes update mode only
+from the one port that appeared new once the unit's own port has gone (two new ports, an ambiguous name, a port that
+answers as something else, the unit's port still there: exit 9 before anything is written), and after the write
+checks the ID again and prints it; `--unit` never rescans MIDI (`--rescan-midi --unit` refused; the advice is the
+replug). Without `--unit`, two or more FM-1s refuse a command that writes or restarts (exit 9, the new code, with the
+IDs) and a read reads the first with a note; with at most one candidate port nothing more is asked than before. Two
+ports of one name (as CoreMIDI may list two FM-1s) are kept apart as `NAME` and `NAME [2]` (`port_labels`; the worker
+opens the k-th of the name). **Web:** `deviceInfo` carries `unitId`; the installer's check shows the ID, lists several
+FM-1s and its writes refuse while several answer; the device manager asks which FM-1 to open (by number or ID), takes
+the chosen one again without asking and never moves to another by itself, and shows the ID in its header; both pair
+the k-th input of a name with its k-th output. Left: the installer asking which FM-1 and following it through an
+install's restarts (it refuses instead; the CLI does it).
+Tests: tests/install_test.py `units` (26: the tag, the labels, --info with three FM-1s, --unit for a read and a write,
+an unknown and a doubled ID, a bad one, two FM-1s without --unit, installs with --unit on the first and the second of
+two ports named alike, two new ports, the old port staying, a firmware without the ID after the install, no rescan),
+cr_backup_test (the reply with and without the ID, the CRC against Python's, the Options line), cr_draw_test
+(Options > Version with the ID line, whole), test_backup, test_manager, test_installer. To check on a unit, one first
+(the owner): the ID on Options > Version equals `--info`'s, stays the same after a power cycle and an install, and
+differs between two units; how macOS names two FM-1s' ports; an install with `--unit` while another FM-1 is plugged in.
+`CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (21), 313 golden renders, 0 changed; test_cr 990 ok.

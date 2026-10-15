@@ -205,3 +205,17 @@ version's package, sha256, notes and source at its tag).
 - **Favourites**: a factory preset's mark is keyed by the preset, and a record over it has the same key (PRESETS.md
   "Favourites"): the mark stays with the place, so the unit shows the import as marked; after Restore it is the factory
   sound's again. The manager does not edit marks; the confirm says this.
+
+## Several FM-1s (2026-10-14, HISTORY 3y66)
+
+Every FM-1's port is "ChoralRoot FM-1"; ChoralRoot gives each unit an ID (8 hex digits, the CRC-32 of its flash's
+unique ID; under Options > Version on the unit; docs/INSTALL-COMPAT.md "Several FM-1s"), which INFO now carries.
+
+- **The header** shows the version and `unit ID A1B2C3D4` (a ChoralRoot from before the ID: the version alone).
+- **Which FM-1:** the page lists the port pairs whose name holds "ChoralRoot FM-1" (`fm1manager.js managerPorts`: two
+  FM-1s may have ports of one name; the k-th input goes with the k-th output of that name). One, at the first
+  connection: opened as before. Several: each is asked INFO and the page asks which one to open, by its number in the
+  list or its unit ID (`pickUnit`); cancelled: nothing is opened ("choose an FM-1"; Connect asks again). The FM-1 opened
+  before is taken again without a question when it comes back (a hot-plug, a restart); when it leaves and another is
+  there, the page asks instead of moving to the other one by itself: a write never goes to an FM-1 that was not chosen.
+- Tests: `web/test_manager.mjs` (managerPorts, pickUnit, deviceInfo's unitId from `makeSimFM1({ unitId })`).
