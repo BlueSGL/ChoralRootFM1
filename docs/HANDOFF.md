@@ -193,8 +193,9 @@ installed on the owner's Mac.
   docs/SETTINGS.md): the KEY layer's page 2, KNOB 3: a key out of the scale plays the nearest note of the scale or of
   the chord sounding, with Key plays Notes or the Full keyboard (`cr_engine.c cr_snap_note`; bits 3 .. 4 of `key_on`,
   no version, the v14 caveat for a downgrade). Built and tested on the host and the emulator, **not device-tested**:
-  the owner tries it on the unit (Scale with Key plays Notes; Chord over a playing loop), decides the merge and the
-  reply on the issue. The emulator has no Chord case over a loop (the host test uses the pads for the sounding chord).
+  the owner tried it on the unit ("This checks out") and decides the merge and the reply on the issue. The emulator
+  has no Chord case over a loop (the host test uses the pads for the sounding chord). With it, 3y100: the Full
+  keyboard with Key Mode on follows Key plays (Chords: the key's chords on every key; Notes: as before).
 - **Digitone `.dnsnd` import** (branch dn-1, HISTORY 3y56, docs/SOUNDS.md ".dnsnd import"): built from decoded files;
   refine with the owner's Digitone by controlled exports and `node tools/dnsnd_diff.mjs` (RATIO B, the LFO
   destinations, RATIO A's steps, the filter type order are the open ones). The LFO destinations are 1:1 since

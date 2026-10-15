@@ -533,8 +533,8 @@ Priority, top down, first match wins:
   `cr_scale_mask` before anything else: no voice, no note on any stream, no gesture (so no loop event), `phys` not set
   (its release finds nothing), a latched chord not replaced. Chord keys as with Key Mode off.
 - **Snap** (0.22, GitHub issue 18; `cs.snap`, `CRE_KEYSNAP` -> `cr_set_key_snap`, `cr_keysnap_t`): Off (default) /
-  Scale / Chord, KNOB 3 of the page (grey, `CR_CF_DIM`, unless Key plays Notes or the Full keyboard: it applies only
-  where that guard does). With it the guard takes `cr_snap_note` instead of dropping the press: the nearest note of
+  Scale / Chord, KNOB 3 of the page (grey, `CR_CF_DIM`, unless Key plays Notes: it applies only where that guard
+  does). With it the guard takes `cr_snap_note` instead of dropping the press: the nearest note of
   the target (Scale: `cr_scale_mask`; Chord: the base notes of every used voice with more than one, each taken back
   by its own captured transpose, the scale's when none), d = 1 .. 11 down before up (ties go down; a chord tone the
   key already is plays as itself). The raw key keeps its place in `phys` (latching's "every key lifted",
@@ -549,7 +549,12 @@ Priority, top down, first match wins:
   key 0..26 posts `CRE_KEY` 53 + k + 12 x octave (`cu_key_press`; `cu.key_note[k]` set says "pressed as a note" to
   the release and to `cu_mods_phys`); B3 never pends (no LOCK tap, no LOCK layer); the engine marks the voice
   `CR_Z_FULL`: spec 0 / 0 whatever `mods_down` holds (LOCK's latch stays posted down and is back when the mode is
-  left), no voicing rotation, no Key chord; Key Mode on blocks out-of-scale presses as Notes does. KNOB 1 on the view
+  left), no voicing rotation for a note, no Key chord. **Since 0.22 Key plays rules there as on the Chords keyboard**
+  (the owner, 2026-10-15, after Snap): with Key plays Chords `crx_build_base` resolves the KEYMAP for a `CR_Z_FULL`
+  voice (the key's chord, the alternate chord off the scale; `crx_voic`: such a chord takes `c->voicing` and the
+  live re-voice, a note still nothing), with Key plays Notes the guard and Snap, as on the Chords keyboard; until
+  then the Full keyboard was notes with the guard whatever Key plays said (`cr_key_ex`'s guard read
+  `key_notes || full`). KNOB 1 on the view
   steps `cu.octave` (popup "octave"). The KEY layer on pick still owns the keys (`cu_key_pick`), B3 inert there.
   Step entry's "every key up" ignores the latch in this mode (and a root pressed after one was let go is the next
   step whatever is latched: docs/LOOPER.md "Step entry").

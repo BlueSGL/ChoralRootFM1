@@ -4004,3 +4004,25 @@ row, docs/releases/0.22.md "Merged after 0.22-beta2", docs/HANDOFF.md (the state
 "ChoralRoot 0.22") over 0.22-beta2, `tools/fm1_install.py build/choralroot.fwsc --backup`; the backup before it is
 `fm1-backups/choralroot-backup-20261015-keysnap.json` (the settings, the 128 user sounds, the favourites, loop slot
 1). `--info` afterwards: "ChoralRoot 0.22". Not yet played by the owner.
+
+3y100. **The Full keyboard plays the key's chords with Key plays Chords (the owner, 2026-10-15, after trying Snap on
+the unit: "when using full keyboard mode and KNOB 1 is set to chords, it does not play the triad chords in the key,
+I think it should do so with those settings"; branch claude/key-snap-a8626d).** Until now the Full keyboard was 27
+single notes whatever Key plays said, with Key Mode's guard on the notes out of the scale ("there are no chords to
+make"). Now Key plays rules there as on the Chords keyboard: with `Chords` and Key Mode on, a key plays the chord
+that belongs on its note of the scale (D in C major is Dm, G is G) and a key outside the scale its neighbouring sus
+chord, the KEYMAP's; with `Notes` it is single notes, the guard and Snap, as before. `cr_engine.c crx_build_base`
+resolves the KEYMAP for a `CR_Z_FULL` voice too (only a bass-side key, `CR_Z_BASS`, is left out); `cr_key_ex`'s
+guard reads `key_notes` alone; `crx_voic` (new): a voice's voicing is the live one for a chord, the Full keyboard's
+Key chords included, and none for a Full-keyboard or bass-side note (nothing to rotate), in `crx_start_voice`,
+`crx_transform_voice` and the live re-voice; Split Oct's lowering is for notes only, as on the Chords keyboard, so
+a chord on the left side is not lowered. KNOB 1 on the view stays the octave on the Full keyboard (the voicing set
+on the Chords keyboard applies). `cr_ui.c`: Snap's cell is grey and the faint glow shows with Key plays Notes alone
+(either keyboard); a held Full-keyboard key adds its own name to the lit keys only with Notes (with Chords the chord
+shows, as on the Chords keyboard). Tests: `s_keyplays` (G is G major, F# its alternate chord, the voicing applies,
+then Notes: the guard), `s_snap` (Snap off the Full keyboard with Chords: the alternate chord), `cr_fullkbd.txt`
+(F#3 a chord, G3 "55 59 62"). Docs: MANUAL.md's Full keyboard bullet and Snap's wording, the troubleshooting row,
+the keys table; INTEGRATION.md's Keyboard bullet; CR_ENGINE.md; releases/0.22.md; HANDOFF.md.
+**Checked**: `./build.sh` XIP 547 020 B (95.4 %, +16 B over 3y99), RAM unchanged; `sh tests/run_cr_tests.sh` green
+(cr_engine_test 2738 ok); `sh tools/emu/test_persist.sh` PASS; `sh tests/run_cr_draw.sh` green; `sh
+tools/emu/test_cr.sh`: cr_fullkbd's Key Mode entry reads "GM" for G major and F#3's Gsus, the rest as before (below).

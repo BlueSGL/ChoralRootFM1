@@ -286,7 +286,9 @@ static void crx_snapshot_spec(const cr_t *c, uint8_t *sq, uint8_t *sx)
 static void crx_build_base(const cr_t *c, cr_voice_t *v)
 {
     int q = v->sq, root = v->note_pressed, pc = v->pc_pressed;
-    if (c->key_on && !c->key_notes && !v->zone) {   /* (Key plays Notes, the Full keyboard, a bass-side key: no chord) */
+    if (c->key_on && !c->key_notes && !(v->zone & CR_Z_BASS)) {   /* (Key plays Notes, a bass-side key: no chord. The
+                                                    * Full keyboard, Key plays Chords: the key's chord, as a lone root's
+                                                    * on the Chords keyboard; until 0.22 every key there was a note) */
         int e = CR_KEYMAP[c->scale][crx_mod(v->pc_pressed - c->tonic, 12)], sh = e >> 3;
         if (sh == 1) { root--; pc = crx_mod(pc - 1, 12); }
         else if (sh == 2) { root++; pc = crx_mod(pc + 1, 12); }
@@ -725,6 +727,12 @@ static int crx_find_voice(const cr_t *c, int key)
     return -1;
 }
 
+/* the voicing a voice takes: a chord's (the Full keyboard's Key chords too); none for a single note of the Full
+ * keyboard or a bass-side note (nothing to rotate; KNOB 1 is the octave on the Full keyboard) */
+static int crx_voic(const cr_t *c, const cr_voice_t *v)
+{
+    return v->zone && !((v->zone & CR_Z_FULL) && v->rq) ? 0 : c->voicing;
+}
 /* build, register and sound a voice; bass follows it */
 static int crx_start_voice(cr_t *c, int key, int id, int vel, int pc_pressed, int note_pressed, int sq, int sx, int is_free,
                            int zone)
@@ -744,7 +752,7 @@ static int crx_start_voice(cr_t *c, int key, int id, int vel, int pc_pressed, in
     v->serial = ++c->serial;
     v->gid = ++c->gid;
     crx_build_base(c, v);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, zone ? 0 : c->voicing, v->notes);
+    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, crx_voic(c, v), v->notes);
     crx_sound_voice(c, vi);
     if (crx_bass_ok(c, v)) crx_bass_start(c, v);
     c->disp_vi = (uint8_t)vi;
@@ -814,7 +822,7 @@ static void crx_transform_voice(cr_t *c, int vi, int reattack)
 {
     cr_voice_t *v = &c->v[vi];
     crx_build_base(c, v);
-    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, v->zone ? 0 : c->voicing, v->notes);
+    v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, crx_voic(c, v), v->notes);
     crx_note_last_chord(c, vi);
     /* Full re-strike (not performing): Chord Type press (reattack) or Play Chord; else Add Note diffs. */
     if (!c->perform_on && (reattack || c->extadd == CR_EXTADD_PLAY_CHORD)) {
@@ -981,10 +989,11 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
     bit = (uint8_t)(1u << id);
     if (down) {
         cr_voice_t *v;
-        /* Key plays Notes / the Full keyboard, Key Mode on: a key out of the scale does nothing at all (its release
+        /* Key plays Notes, Key Mode on (either keyboard): a key out of the scale does nothing at all (its release
          * finds no press: phys is not set), or, with Snap, plays the nearest note of the target (cr_snap_note): the
-         * key keeps its own place in phys, the voice is the played note's, snapn says which for the release */
-        if (c->key_on && (c->key_notes || c->full) && !((cr_scale_mask(c) >> (note % 12u)) & 1u)) {
+         * key keeps its own place in phys, the voice is the played note's, snapn says which for the release. (Key
+         * plays Chords: the key's alternate chord, crx_build_base; the Full keyboard too since 0.22) */
+        if (c->key_on && c->key_notes && !((cr_scale_mask(c) >> (note % 12u)) & 1u)) {
             int sn = cr_snap_note(c, note);
             if (sn < 0) return;
             note = (uint8_t)sn;
@@ -1017,7 +1026,8 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
                 zone |= CR_Z_BASS;
             else if (c->full && c->single == CR_SINGLE_SPLIT && note < c->split_note) zone |= CR_Z_LOW;
             crx_snapshot_spec(c, &sq, &sx);   /* spec captured at note-on */
-            if (zone) sq = sx = 0;            /* the Full keyboard, a bass-side key: a single note */
+            if (zone) sq = sx = 0;            /* the Full keyboard (no chord key: Key plays Chords gives the key's
+                                               * chord in crx_build_base), a bass-side key: a single note */
             vi = crx_start_voice(c, note, id, vel, note % 12, note, sq, sx, 0, zone);
             if (vi < 0) return;
             c->lp.valid = 1; c->lp.attached = 1; c->lp.vi = (uint8_t)vi; c->lp.serial = c->v[vi].serial;
@@ -1115,7 +1125,8 @@ void cr_voicing_step(cr_t *c, int d)
     c->voicing = (int8_t)nv;
     for (i = 0; i < CR_NVOICE; i++) {
         cr_voice_t *v = &c->v[i];
-        if (!v->used || v->zone || (v->loop & CR_LOOP_FIXV)) continue;   /* (a loop step with its own voicing) */
+        if (!v->used || (v->zone && !((v->zone & CR_Z_FULL) && v->rq)) || (v->loop & CR_LOOP_FIXV))
+            continue;                              /* (a loop step with its own voicing; a note with nothing to rotate) */
         crx_hush_voice(c, i);
         v->nnotes = (uint8_t)cr_voice_apply(v->base, v->nbase, nv, v->notes);
         crx_sound_voice(c, i);

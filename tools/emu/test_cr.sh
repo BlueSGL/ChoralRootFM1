@@ -1934,9 +1934,9 @@ done
 [ "$(ky 31)" = "0 1 0" ] && [ "$(cv 31 | cut -d'|' -f5)" = " 65" ] && [ "$(ky 32)" = "0 0 0" ] && has '^kbd: knob 1 octave 1' "$L" && [ "$(kb 31)" = "full 0 77 10" ] &&
     ok "KNOB 1 on the view: the octave (+1: F3 plays 65; the read-out says octave; the voicing stays 0; the split key follows): $OUT/cr_fullkbd_octave.ppm" \
     || bad "KNOB 1 = octave: $(ky 31) $(cv 31) / $(ky 32) / $(kb 31)"
-[ "$(kl 33)" = "202020230 202202020230202202" ] && [ "$(kl 30)" = "400040000 000400040000000400" ] && [ "$(cv 35 | cut -d'|' -f1,2)" = "$(cv 34 | cut -d'|' -f1,2)" ] && [ "$(cv 35 | cut -d'|' -f1)" = 0 ] &&
-    [ "$(cv 36 | cut -d'|' -f1,3,5)" = "1|G| 55" ] &&
-    ok "Key Mode on (C major): the scale on all 27 keys (tonic mid, scale dim, the rest dark; Key Mode off: all 27 dark but the F and A keys of the two held); F#3 does nothing; G3 plays G, no chord: $OUT/cr_fullkbd_key.ppm" \
+[ "$(kl 33)" = "202020230 202202020230202202" ] && [ "$(kl 30)" = "400040000 000400040000000400" ] && [ "$(cv 35 | cut -d'|' -f1,4)" = "1|1" ] && [ "$(cv 34 | cut -d'|' -f1)" = 0 ] &&
+    [ "$(cv 36 | cut -d'|' -f1,3,5)" = "1|GM| 55 59 62" ] &&
+    ok "Key Mode on (C major), Key plays Chords: the scale on all 27 keys (tonic mid, scale dim, the rest dark; Key Mode off: all 27 dark but the F and A keys of the two held); F#3 plays its alternate chord; G3 the key's G major (0.22): $OUT/cr_fullkbd_key.ppm" \
     || bad "Key Mode on the Full keyboard: $(kl 33) / $(cv 34) / $(cv 35) / $(cv 36)"
 [ "$(kb 37)" = "full 2 65 12" ] && [ "$(pv 38 0)" = 0 ] && [ "$(pv 38 1)" = 1 ] && [ "$(pv 39 1)" = 0 ] && [ "$(pv 39 0)" -ge 1 ] && [ "$(cv 38 | cut -d'|' -f5)" = " 64" ] &&
     ok "Split Bass: the split at F4: E4 plays the bass part alone (the Bass off: ignored), F4 the chord part alone: $OUT/cr_fullkbd_splitbass.ppm" \

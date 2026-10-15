@@ -469,9 +469,12 @@ makes those roots play instead.
   latched with LOCK is kept untouched and is back, lit, when you return to `Chords`.
 - **KNOB 1** on the view changes the **octave** (the same octave as OCT- and OCT+; the read-out says `octave`),
   since there is no chord to voice. The voicing you had is kept for the Chords keyboard.
-- With Key Mode off the keyboard is chromatic. With Key Mode on, the notes outside the scale do nothing (or play the
-  nearest right note with Snap, below) and the key shows on all 27 keys (Key plays does not matter here: there are
-  no chords to make).
+- With Key Mode off the keyboard is chromatic. With Key Mode on the key shows on all 27 keys, and **Key plays**
+  decides what they do: with `Chords` every key plays the chord that belongs on its note of the scale, as a lone
+  root does on the Chords keyboard (in C major, D gives `Dm`, G gives `G`), and a key outside the scale its sus
+  chord on a neighbouring scale note; the voicing you set on the Chords keyboard applies to these chords (new in
+  0.22: until then the Full keyboard played single notes whatever Key plays said). With `Notes` the keys are single
+  notes and the notes outside the scale do nothing, or play the nearest right note with Snap (below).
 - The bass, the performance modes (an arpeggio of the notes you hold), the looper and MIDI out follow what you play
   as they follow a single note.
 - The split is at the **second F**: F3 to E4 is the left side, F4 to G5 the right. `Split Oct` plays the left side
@@ -481,7 +484,7 @@ makes those roots play instead.
 - In the KEY layer with its keys on pick, the keys still pick: a root sets the tonic, MAJ and MIN the scale (B3 does
   nothing there). With the keys on play they are the Full keyboard.
 
-**Snap: Off, Scale or Chord** (page 2, KNOB 3; off unless you turn it on). With Key plays `Notes`, or on the Full
+**Snap: Off, Scale or Chord** (page 2, KNOB 3; off unless you turn it on). With Key plays `Notes`, on either
 keyboard, a key outside the scale is a dead key: Snap gives it a right note to play, the way the Scaler app remaps
 its keyboard, so every key under your fingers plays and none leaves the key.
 
@@ -496,9 +499,9 @@ its keyboard, so every key under your fingers plays and none leaves the key.
 
 A key inside the scale always plays itself. The snapped key behaves exactly as if you had pressed the key it was
 moved to: the chord keys, the bass, the performance modes, the looper and MIDI out all see that note, and its
-release ends it even if you change the key, the chord or Snap while holding it. With Key plays `Chords` on the Chords
-keyboard the roots outside the scale have their own job (the sus chord on a neighbouring scale note) and Snap changes
-nothing: its cell is drawn grey there. The lights say what plays: with Snap on, the roots outside the scale glow
+release ends it even if you change the key, the chord or Snap while holding it. With Key plays `Chords` the keys
+outside the scale have their own job (the sus chord on a neighbouring scale note) and Snap changes nothing: its cell
+is drawn grey then. The lights say what plays: with Snap on, the roots outside the scale glow
 faintly instead of staying dark, and the note that sounds is lit on its own keys, so a snapped C# shows as the C keys
 lit ([The lights](#the-lights)). Snap is kept by a global save (SAVE held), like the page's other settings.
 
@@ -1852,7 +1855,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | Low single notes jump down an octave | Single Notes is Split Oct | KEY layer, KNOB 4: Full |
 | Some roots play a bass note instead of a chord | Single Notes is Split Bass | KEY layer, KNOB 4: Full |
 | The chord keys play notes, B3 does not lock | Keyboard is Full | KEY layer, SELECT to page 2, KNOB 2: Chords |
-| Some keys do nothing | Key Mode is on with Key plays = Notes, or on the Full keyboard: they are outside the scale | tap KEY, or KEY layer page 2 |
+| Some keys do nothing | Key Mode is on with Key plays = Notes: they are outside the scale | tap KEY, or KEY layer page 2 (Key plays, or Snap) |
 | Chord keys stay on | LOCK is on (B3 lit) | tap B3 |
 | Notes keep sounding | LATCH is on, or Strum's Hold | tap LATCH; PANIC stops everything |
 | The chord sound is silent, the bass plays | Bass Behaviour is Solo (`Bass Solo`) | BASS layer, another behaviour, or tap BASS |
@@ -1956,7 +1959,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | F#3 G#3 A#3 C#4 | DIM MIN MAJ SUS |
 | F3 G3 A3 C4 | 6 m7 M7 9 |
 | B3 | LOCK (tap: on / off; held: the LOCK layer: KNOB 1 Type key Clears / Keeps · KNOB 2 Ext keys Toggle / Pushed). With LOCK on, the only latched type pressed again alone: off (single notes, the extensions kept) |
-| F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4 |
+| F3 to G5, Keyboard = Full | 27 single notes (no chord keys, no LOCK); the split at F4. Key Mode on with Key plays Chords: the key's chords |
 | D4 to G5 | roots |
 | white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |

@@ -1950,10 +1950,20 @@ static void s_keyplays(void)
     cr_set_transpose(&C, 2);
     K(60, 1); expect("+62/127", "Full: the transpose applies");
     R(60, 1); clear(); cr_set_transpose(&C, 0);
-    cr_set_key(&C, 1, 0, CR_SCALE_MAJOR);      /* Key Mode on: blocks, whatever Key plays says; no chord */
-    K(54, 1); R(54, 1); ok(nlog == 0 && cr_voices(&C) == 0, "Full + Key Mode: F# (out of C major) does nothing");
-    K(55, 1); expect("+55/127", "Full + Key Mode: G is G, no scale chord");
+    cr_set_key(&C, 1, 0, CR_SCALE_MAJOR);      /* Key Mode on, Key plays Chords (0.22): the key's chords, as a lone
+                                                * root's on the Chords keyboard (until then: notes, the guard) */
+    K(55, 1); on_notes_sorted(b, 0); ok(!strcmp(b, "55 59 62"), "Full + Key Mode, Key plays Chords: G is the key's G major");
     R(55, 1); clear();
+    K(54, 1); ok(count('+', 0) >= 3 && cr_voices(&C) == 1 && C.v[0].rq, "Full + Key Mode, Chords: F# (out of C major) plays its alternate chord, as on the Chords keyboard");
+    R(54, 1); clear();
+    cr_voicing_step(&C, 1);
+    K(55, 1); on_notes_sorted(b, 0); ok(!strcmp(b, "59 62 67"), "Full + Key Mode, Chords: the voicing applies to the chord (a note has nothing to rotate)");
+    R(55, 1); clear(); cr_voicing_step(&C, -1);
+    cr_set_key_plays(&C, 1);                   /* Key plays Notes: the guard, single notes */
+    K(54, 1); R(54, 1); ok(nlog == 0 && cr_voices(&C) == 0, "Full + Key Mode, Notes: F# (out of C major) does nothing");
+    K(55, 1); expect("+55/127", "Full + Key Mode, Notes: G is G, no scale chord");
+    R(55, 1); clear();
+    cr_set_key_plays(&C, 0);
     cr_set_key(&C, 0, 0, CR_SCALE_MAJOR);
     cr_set_bass(&C, 1); cr_set_bass_mode(&C, CR_BASS_UNISON);   /* the bass follows as it follows a single note */
     K(60, 1); expect("+60/127 +60/127b", "Full, Bass on (Unison): the bass follows the note");
@@ -2050,11 +2060,13 @@ static void s_snap(void)
     R(63, 1); expect("-62", "Snap turned off while D# was held: its release still ends D");
     cr_set_key(&C, 1, 0, CR_SCALE_MAJOR);
     cr_set_key_snap(&C, CR_KEYSNAP_SCALE);
-    /* the Full keyboard */
-    cr_set_key_plays(&C, 0);
+    /* the Full keyboard (Key plays Notes: Snap; Chords there: the key's chords) */
     cr_set_keyboard(&C, 1, 65);
     K(54, 1); expect("+53/127", "Full + Key Mode + Scale: F# plays F");
     R(54, 1); expect("-53", ".. off");
+    cr_set_key_plays(&C, 0);
+    K(54, 1); ok(count('+', 0) >= 3, "Full + Key plays Chords: F# plays its alternate chord: Snap does not apply");
+    R(54, 1); clear();
     cr_set_keyboard(&C, 0, 65);
     K(61, 1); ok(count('+', 0) >= 3 && cr_voices(&C) == 1, "Key plays Chords: C# keeps its alternate chord: Snap does not apply");
     R(61, 1); clear();

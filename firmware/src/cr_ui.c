@@ -5060,7 +5060,7 @@ static void cr_leds(void)
     uint32_t full = cs.kbd_full && !cu_key_pick(); /* the Full keyboard: the chord block's nine keys are notes */
     uint32_t key0 = full ? 0u : CU_ROOT0;          /* the first key that plays */
     uint32_t scale = cs.key_on ? cu_scale_bits() : 0u;
-    uint32_t snapped = cs.key_on && cs.snap && (cs.key_notes || cs.kbd_full) && !cs.leds;   /* Snap (0.22): the roots
+    uint32_t snapped = cs.key_on && cs.snap && cs.key_notes && !cs.leds;   /* Snap (0.22): the roots
                                                     * out of the scale play, and glow faint for it (Glow; Stock keeps
                                                     * its two levels: the scale's keys lit, the others dark) */
     const cr_snap_t *sn = &cr_snap;
@@ -5206,9 +5206,10 @@ static void cr_leds(void)
                 pcs |= 1u << (sn->ci.notes[i] % 12u);
         for (k = 0; full && k < CU_NKEY; k++)            /* the Full keyboard: every key held that plays a note (the
                                                           * chord shown is the last one only) */
-            if (cu.key_note[k] && cu.key_note[k] != 0xFFu && (!cs.key_on || ((scale >> CU_KEY_PC(k)) & 1u)))
+            if (cu.key_note[k] && cu.key_note[k] != 0xFFu && (!cs.key_on || (cs.key_notes && ((scale >> CU_KEY_PC(k)) & 1u))))
                 pcs |= 1u << ((uint32_t)(cu.key_note[k] - 1 + 48 + cs.transpose) % 12u);
-                                                     /* (Key Mode: a key out of the scale plays nothing: dark) */
+                                                     /* (Key Mode, Notes: a key out of the scale plays nothing, or
+                                                      * Snap's note, shown by ci: dark; Chords: its chord, by ci) */
         if (sn->perform_on && sn->perf_pos >= 0 && sn->ci.sounding && !blink)
             pcs &= ~(1u << (sn->perf_note % 12u));       /* the performed note blinks (on every key of its name) */
         for (k = key0; k < CU_NKEY; k++)
@@ -5748,8 +5749,8 @@ static void cu_key_cells(cr_screen_t *s)
     uint32_t k;
     if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard, Snap, Numerals */
         s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][3].flags = CR_CF_ON;
-        s->cell[0][2].flags = (uint8_t)(CR_CF_ON | (cs.key_notes || cs.kbd_full ? 0u : CR_CF_DIM));   /* (Snap changes
-                                                    * nothing with Key plays Chords on the Chords keyboard: grey) */
+        s->cell[0][2].flags = (uint8_t)(CR_CF_ON | (cs.key_notes ? 0u : CR_CF_DIM));   /* (Snap changes nothing
+                                                    * with Key plays Chords, on either keyboard: grey) */
         cu_cpy(s->cell[0][2].label, "Snap", sizeof s->cell[0][2].label);
         cu_cpy(s->cell[0][2].value, CU_SNAP[cs.snap % 3u], sizeof s->cell[0][2].value);
         cu_cpy(s->cell[0][3].label, "Numerals", sizeof s->cell[0][3].label);
