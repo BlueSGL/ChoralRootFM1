@@ -3,7 +3,7 @@
   "version": 1,
   "generated": "by lay_catalog from the firmware's built-in tables: do not edit (tools/layout/dump_catalogs.mjs writes it; read-only in step 2, docs/LAYOUT-TOOL.md). The firmware version is not in it: params_hash binds it to the parameters",
   "engine": {"index": 15, "name": "FM TONE"},
-  "params_hash": "15d9ff095ea01f26",
+  "params_hash": "e0952d11474b40a8",
   "pages": [
     {
       "page": 0,
@@ -39,10 +39,10 @@
       "page": 3,
       "title": "FILTER",
       "cols": [
-        {"short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-        {"short": "DEC", "fmt": "time", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
+        {"short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "DEC", "fmt": "int", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
         {"short": "SUS", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-        {"short": "REL", "fmt": "timei", "min": 0, "max": 127, "def": 40, "names": null, "unit": null}
+        {"short": "REL", "fmt": "inti", "min": 0, "max": 127, "def": 40, "names": null, "unit": null}
       ]
     },
     {
@@ -59,7 +59,7 @@
       "page": 5,
       "title": "FILT 2",
       "cols": [
-        {"short": "DELAY", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "DELAY", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "KTRK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         null,
         null
@@ -79,8 +79,8 @@
       "page": 7,
       "title": "ENV A",
       "cols": [
-        {"short": "A ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-        {"short": "A DEC", "fmt": "time", "min": 0, "max": 127, "def": 60, "names": null, "unit": null},
+        {"short": "A ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "A DEC", "fmt": "int", "min": 0, "max": 127, "def": 60, "names": null, "unit": null},
         {"short": "A END", "fmt": "int", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
         {"short": "A LEV", "fmt": "int", "min": 0, "max": 127, "def": 48, "names": null, "unit": null}
       ]
@@ -89,8 +89,8 @@
       "page": 8,
       "title": "ENV B",
       "cols": [
-        {"short": "B ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-        {"short": "B DEC", "fmt": "time", "min": 0, "max": 127, "def": 60, "names": null, "unit": null},
+        {"short": "B ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "B DEC", "fmt": "int", "min": 0, "max": 127, "def": 60, "names": null, "unit": null},
         {"short": "B END", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "B LEV", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null}
       ]
@@ -99,7 +99,7 @@
       "page": 9,
       "title": "ENV 2",
       "cols": [
-        {"short": "A DLY", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "A DLY", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "A TRIG", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null},
         {"short": "A RESET", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null},
         {"short": "PHRT", "fmt": "enum", "min": 0, "max": 4, "def": 1, "names": ["OFF", "ALL", "C", "A+B", "A+B2"], "unit": null}
@@ -109,7 +109,7 @@
       "page": 10,
       "title": "ENV 2+",
       "cols": [
-        {"short": "B DLY", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "B DLY", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "B TRIG", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null},
         {"short": "B RESET", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null},
         {"short": "VEL", "fmt": "int", "min": 0, "max": 127, "def": 64, "names": null, "unit": null}
@@ -129,7 +129,7 @@
       "page": 12,
       "title": "AMP",
       "cols": [
-        {"short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+        {"short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "DEC", "fmt": "inti", "min": 0, "max": 127, "def": 64, "names": null, "unit": null},
         {"short": "SUS", "fmt": "pct", "min": 0, "max": 127, "def": 127, "names": null, "unit": null},
         {"short": "REL", "fmt": "inti", "min": 0, "max": 127, "def": 40, "names": null, "unit": null}
@@ -292,10 +292,10 @@
               "lane": 0,
               "title": "FILTER · A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 3, "col": 0, "page_title": "FILTER", "label": "Attack", "short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 2, "bind": "deep", "page": 3, "col": 1, "page_title": "FILTER", "label": "Decay", "short": "DEC", "fmt": "time", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 3, "col": 0, "page_title": "FILTER", "label": "Attack", "short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 2, "bind": "deep", "page": 3, "col": 1, "page_title": "FILTER", "label": "Decay", "short": "DEC", "fmt": "int", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 3, "col": 2, "page_title": "FILTER", "label": "Sustain", "short": "SUS", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 4, "bind": "deep", "page": 3, "col": 3, "page_title": "FILTER", "label": "Release", "short": "REL", "fmt": "timei", "min": 0, "max": 127, "def": 40, "names": null, "unit": null, "style": "num"}
+                {"knob": 4, "bind": "deep", "page": 3, "col": 3, "page_title": "FILTER", "label": "Release", "short": "REL", "fmt": "inti", "min": 0, "max": 127, "def": 40, "names": null, "unit": null, "style": "num"}
               ]
             },
             {
@@ -325,7 +325,7 @@
               "lane": 0,
               "title": "FILTER 2 · A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 5, "col": 0, "page_title": "FILT 2", "label": "Env delay", "short": "DELAY", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 5, "col": 0, "page_title": "FILT 2", "label": "Env delay", "short": "DELAY", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 5, "col": 1, "page_title": "FILT 2", "label": "Key track", "short": "KTRK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
@@ -365,8 +365,8 @@
               "lane": 0,
               "title": "ENV A/B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 7, "col": 0, "page_title": "ENV A", "label": "A Attack", "short": "A ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 2, "bind": "deep", "page": 7, "col": 1, "page_title": "ENV A", "label": "A Decay", "short": "A DEC", "fmt": "time", "min": 0, "max": 127, "def": 60, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 7, "col": 0, "page_title": "ENV A", "label": "A Attack", "short": "A ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 2, "bind": "deep", "page": 7, "col": 1, "page_title": "ENV A", "label": "A Decay", "short": "A DEC", "fmt": "int", "min": 0, "max": 127, "def": 60, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 7, "col": 2, "page_title": "ENV A", "label": "A End", "short": "A END", "fmt": "int", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "deep", "page": 7, "col": 3, "page_title": "ENV A", "label": "A Level", "short": "A LEV", "fmt": "int", "min": 0, "max": 127, "def": 48, "names": null, "unit": null, "style": "num"}
               ]
@@ -375,8 +375,8 @@
               "lane": 1,
               "title": "ENV A/B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 8, "col": 0, "page_title": "ENV B", "label": "B Attack", "short": "B ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
-                {"knob": 2, "bind": "deep", "page": 8, "col": 1, "page_title": "ENV B", "label": "B Decay", "short": "B DEC", "fmt": "time", "min": 0, "max": 127, "def": 60, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 8, "col": 0, "page_title": "ENV B", "label": "B Attack", "short": "B ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 2, "bind": "deep", "page": 8, "col": 1, "page_title": "ENV B", "label": "B Decay", "short": "B DEC", "fmt": "int", "min": 0, "max": 127, "def": 60, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 8, "col": 2, "page_title": "ENV B", "label": "B End", "short": "B END", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "deep", "page": 8, "col": 3, "page_title": "ENV B", "label": "B Level", "short": "B LEV", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"}
               ]
@@ -398,7 +398,7 @@
               "lane": 0,
               "title": "ENV 2",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 9, "col": 0, "page_title": "ENV 2", "label": "A Delay", "short": "A DLY", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 9, "col": 0, "page_title": "ENV 2", "label": "A Delay", "short": "A DLY", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 9, "col": 1, "page_title": "ENV 2", "label": "A Trig", "short": "A TRIG", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 9, "col": 2, "page_title": "ENV 2", "label": "A Reset", "short": "A RESET", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null, "style": "text"},
                 {"knob": 4, "bind": "deep", "page": 9, "col": 3, "page_title": "ENV 2", "label": "Phase", "short": "PHRT", "fmt": "enum", "min": 0, "max": 4, "def": 1, "names": ["OFF", "ALL", "C", "A+B", "A+B2"], "unit": null, "style": "text"}
@@ -408,7 +408,7 @@
               "lane": 1,
               "title": "ENV 2",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 10, "col": 0, "page_title": "ENV 2+", "label": "B Delay", "short": "B DLY", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 10, "col": 0, "page_title": "ENV 2+", "label": "B Delay", "short": "B DLY", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 10, "col": 1, "page_title": "ENV 2+", "label": "B Trig", "short": "B TRIG", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null, "style": "text"},
                 {"knob": 3, "bind": "deep", "page": 10, "col": 2, "page_title": "ENV 2+", "label": "B Reset", "short": "B RESET", "fmt": "onoff", "min": 0, "max": 1, "def": 1, "names": null, "unit": null, "style": "text"},
                 {"knob": 4, "bind": "deep", "page": 10, "col": 3, "page_title": "ENV 2+", "label": "Velocity", "short": "VEL", "fmt": "int", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"}
@@ -454,7 +454,7 @@
               "lane": 0,
               "title": "AMP · A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 12, "col": 0, "page_title": "AMP", "label": "Attack", "short": "ATK", "fmt": "time", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
+                {"knob": 1, "bind": "deep", "page": 12, "col": 0, "page_title": "AMP", "label": "Attack", "short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "num"},
                 {"knob": 2, "bind": "deep", "page": 12, "col": 1, "page_title": "AMP", "label": "Decay", "short": "DEC", "fmt": "inti", "min": 0, "max": 127, "def": 64, "names": null, "unit": null, "style": "num"},
                 {"knob": 3, "bind": "deep", "page": 12, "col": 2, "page_title": "AMP", "label": "Sustain", "short": "SUS", "fmt": "pct", "min": 0, "max": 127, "def": 127, "names": null, "unit": null, "style": "num"},
                 {"knob": 4, "bind": "deep", "page": 12, "col": 3, "page_title": "AMP", "label": "Release", "short": "REL", "fmt": "inti", "min": 0, "max": 127, "def": 40, "names": null, "unit": null, "style": "num"}

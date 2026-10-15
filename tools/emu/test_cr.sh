@@ -959,7 +959,7 @@ s=$(dv SPEED)
     ok "LFO 1 SPEED (hi-res, min < 0): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
     || bad "SPEED under GLO: '$s'"
 r=$(dv REL)
-[ "$r" = "63 64 70 76 82 88 94 100 106 112 118 124 127 112 96 112 " ] &&
+[ "$r" = "15 16 22 28 34 40 46 52 58 64 70 76 82 88 94 100 106 112 118 124 127 112 96 112 " ] &&
     has 'REL 124 -> 127 (INF)' "$L" && has 'REL 127 -> 112 (112)' "$L" && has 'REL 96 -> 112 (112)' "$L" &&
     ok "AMP REL (0..126 + INF, an integer since version 5): 1 slow, 6 quick to the end (127: INF); GLO held: the 16 grid 112 96, back 112: $OUT/cr_quad_hires_rel.ppm" \
     || bad "AMP REL: '$r'"
@@ -2469,15 +2469,15 @@ d2=$(den "$OUT/cr_quad_ratiob_b2.ppm"); d16=$(den "$OUT/cr_quad_ratiob_b16.ppm")
 differ cr_quad_ratiob_b1 cr_quad_ratiob_b2 "GLO held (the editor's SHIFT): KNOB 4 steps B1, the denominator 2.00 (B2 kept): $OUT/cr_quad_ratiob_b2.ppm"
 silent_end cr_quad_ratiob
 
-echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 61 decays; PANIC ends a held one"
+echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 19 decays; PANIC ends a held one"
 run cr_quad_inf --wav "$OUT/cr_quad_inf.wav"
 QL="$OUT/cr_quad_inf.log"
-has '^deep: part 0 page 12 AMP col 3 REL 62 -> 127 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 127 -> 61 (61)' "$QL" &&
-    ok "AMP: KNOB 4 to the top shows INF, back down a number (61: AMP REL 0..126 + INF, F_INTI; the script's \"knobs quick\": 6 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
+has '^deep: part 0 page 12 AMP col 3 REL 14 -> 127 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 127 -> 19 (19)' "$QL" &&
+    ok "AMP: KNOB 4 to the top shows INF, back down a number (19: AMP REL 0..126 + INF, F_INTI; the script's \"knobs quick\": 6 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
     bad "AMP REL INF text: $(grep '^deep:' "$QL" | head -2 | tr '\n' ' ')"
 qv() { grep "part 0:" "$QL" | sed -n "${1}p" | sed -n 's/.*voices \([0-9]*\),.*/\1/p'; }
 [ "$(qv 1)" = 1 ] && [ "$(qv 2)" = 0 ] && [ "$(qv 3)" = 1 ] && [ "$(qv 4)" = 0 ] &&
-    ok "voices: INF held 1.5 s after the release (1), REL 61 ended (0), INF held again (1), PANIC ended it (0)" ||
+    ok "voices: INF held 1.5 s after the release (1), REL 19 ended (0), INF held again (1), PANIC ended it (0)" ||
     bad "voices after the releases: $(qv 1) $(qv 2) $(qv 3) $(qv 4) (want 1 0 1 0)"
 # the WAV (its clock: note 1's onset, script 3.3 s): RMS before each release (script 3.7..4.0 s, 8.4..8.7 s) and
 # 1.2..1.5 s after it (5.2..5.5 s, 9.9..10.2 s)
@@ -2494,8 +2494,8 @@ PY
 )
 set -- $iv
 [ "${1:-0}" -gt 100 ] && [ $((${2:-0} * 10)) -gt $((${1:-0} * 3)) ] && [ "${3:-0}" -gt 100 ] && [ $((${4:-999} * 20)) -lt "${3:-0}" ] &&
-    ok "the WAV: INF 1.5 s after the release RMS ${2} (held: ${1} before), REL 61 RMS ${4} (${3} before)" ||
-    bad "the WAV: INF ${1:-?} -> ${2:-?}, REL 61 ${3:-?} -> ${4:-?} (want held, then silent)"
+    ok "the WAV: INF 1.5 s after the release RMS ${2} (held: ${1} before), REL 19 RMS ${4} (${3} before)" ||
+    bad "the WAV: INF ${1:-?} -> ${2:-?}, REL 19 ${3:-?} -> ${4:-?} (want held, then silent)"
 silent_end cr_quad_inf
 
 echo "SAFE MODE: the boot guard (firmware/src/cr_bootguard.h)"

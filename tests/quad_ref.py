@@ -15,7 +15,8 @@ firmware's; the signal path (the operators, feedback, the mix, the DC blocker, t
 amplitude) is float. The goldens: 0.3 s of two notes (C4 and G4, velocity 100, released at 0.2 s) on eight test patches
 (one per algorithm; FDBK 14: the feedback of a HARM-shaped operator (the odd algorithms) is chaotic enough above
 ~25 that the model's float and the firmware's integer part ways) and four presets: the first 2048 output samples and the RMS of each 10 ms block.
-tests/cr_quad_test.c renders the same and compares. Needs build/gen/felucca_tables.h (Felucca's tables).
+tests/cr_quad_test.c renders the same and compares. Needs build/gen/felucca_tables.h (Felucca's tables) and reads the
+envelope and fade times from firmware/src/quad_times.h (the Digitone's: tools/digitone/make_quad_times.py).
 """
 import json
 import math
@@ -25,6 +26,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 TABLES = os.path.join(ROOT, "build", "gen", "felucca_tables.h")
+TIMES = os.path.join(ROOT, "firmware", "src", "quad_times.h")
 OUT_H = os.path.join(ROOT, "firmware", "src", "quad_tables.h")
 GOLD = os.path.join(ROOT, "tests", "quad_goldens")
 FS = 44100
@@ -33,20 +35,25 @@ M32 = 0xFFFFFFFF
 
 
 # ------------------------------------------------------------------ tables
-def felucca_table(name):
-    src = open(TABLES).read()
+def felucca_table(name, path=TABLES):
+    src = open(path).read()
     m = re.search(r"\b%s\[\d*\]\s*=\s*\{(.*?)\};" % name, src, re.S)
     if not m:
-        sys.exit("quad_ref: %s not in %s (build the generated tables first)" % (name, TABLES))
-    return [int(x) for x in re.findall(r"-?\d+", m.group(1))]
+        sys.exit("quad_ref: %s not in %s (build the generated tables first)" % (name, path))
+    return [int(x) for x in re.findall(r"-?\d+", re.sub(r"/\*.*?\*/", "", m.group(1), flags=re.S))]
 
 
 SINE = felucca_table("SINE")
 PITCH_OCT = felucca_table("PITCH_OCT")
-ENV_LIN = felucca_table("ENV_LIN")
-ENV_EXP = felucca_table("ENV_EXP")
 SVF_G = felucca_table("SVF_G")
 TANH_Q15 = felucca_table("TANH_Q15")
+# the envelopes' times (quad_times.h): the attack's step and the decay's share a tick (Q24) of operator A, B, the
+# filter, the amp; the fade's 32767 x 2^16 a tick by |FADE|; DELAY: BPM x DLY_K 1/32 beats (Q24) a tick
+T_ATK = [felucca_table("QUAD_T_" + n, TIMES) for n in ("OATK", "OATK", "FATK", "AATK")]
+T_DEC = [felucca_table("QUAD_T_" + n, TIMES) for n in ("ODEC", "ODEC", "FDEC", "ADEC")]
+T_FADE = felucca_table("QUAD_T_FADE", TIMES)
+DLY_K = int(re.search(r"#define QUAD_DLY_K (\d+)u", open(TIMES).read()).group(1))
+BPM = 120
 
 # the ratio steps: C, B1 and B2 0.25 0.5 0.75 then 1..16 (19); A 0.25..16 in 0.25 (64); RATIO B (the pair) = B1 index
 # x 19 + B2 index (B2 the fast hand, the Digitone's watch: B2 runs through its steps, then B1 steps on: 361 pairs).
@@ -294,19 +301,20 @@ def merge(*ds):
     return r
 
 
-# four of eng_quad.c's presets (the C test checks these patches against its own: keep them in step)
+# four of eng_quad.c's presets (the C test checks these patches against its own: keep them in step; the times
+# re-expressed 2026-10-14 on the Digitone's tables, as eng_quad.c's)
 PRESETS = {
-    "EP": patch_of(**merge(syn(2, QRC(4), 3, QRC(4), QRC(56), 0, 12, 0, -30), env("A", 0, 78, 20, 66),
-                           env("B", 0, 52, 0, 62), dict(VEL=100, AKEY=40, B1KEY=30, B2KEY=30, PHRT=1),
-                           amp(0, 96, 40, 62, 72))),
-    "BASS": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 24, -64), env("A", 0, 62, 34, 88),
-                             env("B", 0, 50, 0, 0), flt("LP12", 92, 10, 20), fenv(0, 60, 0, 40),
-                             amp(0, 80, 100, 30, 110))),
-    "GLASS PAD": patch_of(**merge(syn(7, QRC(4), 7, QRC(16), QRC(16), 8, 40, 0, 0), env("A", 70, 90, 100, 36),
-                                  env("B", 80, 96, 60, 50), dict(PHRT=0), amp(70, 90, 120, 100, 88),
+    "EP": patch_of(**merge(syn(2, QRC(4), 3, QRC(4), QRC(56), 0, 12, 0, -30), env("A", 0, 28, 20, 66),
+                           env("B", 0, 12, 0, 62), dict(VEL=100, AKEY=40, B1KEY=30, B2KEY=30, PHRT=1),
+                           amp(0, 39, 40, 14, 72))),
+    "BASS": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 24, -64), env("A", 0, 18, 34, 88),
+                             env("B", 0, 11, 0, 0), flt("LP12", 92, 10, 20), fenv(0, 11, 0, 3),
+                             amp(0, 24, 100, 5, 110))),
+    "GLASS PAD": patch_of(**merge(syn(7, QRC(4), 7, QRC(16), QRC(16), 8, 40, 0, 0), env("A", 17, 40, 100, 36),
+                                  env("B", 23, 48, 60, 50), dict(PHRT=0), amp(53, 32, 120, 43, 88),
                                   lfo(0, 8, 3, "HARM", "SINE", 30))),
-    "WOBBLE": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 10, -64), env("A", 0, 64, 127, 60),
-                               env("B", 0, 60, 40, 0), flt("LP24", 70, 60, 0), amp(0, 80, 110, 40, 115),
+    "WOBBLE": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 10, -64), env("A", 0, 19, 127, 60),
+                               env("B", 0, 16, 40, 0), flt("LP24", 70, 60, 0), amp(0, 24, 110, 7, 115),
                                lfo(0, 32, 4, "ALEV", "TRI", 50, "TRIG"), lfo(1, 32, 4, "FREQ", "TRI", 40, "TRIG"))),
 }
 
@@ -583,25 +591,25 @@ class Voice:
         if adsr and not gate and self.stage[k] and self.stage[k] < 4:
             self.stage[k] = 4
         st = self.stage[k]
-        if st == 1:
-            self.dly[k] += ENV_LIN[dly & 127]
-            if self.dly[k] >= (1 << 24):
+        if st == 1:                              # DELAY: dly / 32 beats
+            self.dly[k] += BPM * DLY_K
+            if self.dly[k] >= (dly & 127) << 24:
                 self.stage[k] = 2
         elif st == 2:
-            x += ENV_LIN[atk & 127]
+            x += T_ATK[k][atk & 127]
             if x >= (1 << 24):
                 x = 1 << 24
                 self.stage[k] = 3
         elif st == 3:
             if not (k == 3 and dec >= 127):      # AMP DEC 127 = INF: the level held
-                x += mulq16(sus - x, ENV_EXP[dec & 127])
+                x += ((sus - x) * T_DEC[k][dec & 127]) >> 24
         elif st == 4 or st == 5:
             if rel >= 127:                       # REL 127 = INF: the level held (stage 5)
                 self.stage[k] = 5
                 self.env[k] = x
                 return x >> 9
             self.stage[k] = 4
-            x -= mulq16(x, ENV_EXP[rel])
+            x -= (x * T_DEC[k][rel] + 0xFFFFFF) >> 24   # (rounded up)
             if x < (1 << 12):
                 x = 0
                 self.stage[k] = 0
@@ -672,11 +680,11 @@ class Voice:
                 continue
             w = lfo_wave(wv, ph, self.lsl[k])
             w = cdiv(w * dep, 6400)
-            if fd:
-                f = min(32767, self.ticks * (ENV_LIN[2 * abs(fd) - 1] >> 9))
+            if fd:                                         # FADE: a linear ramp over |FADE|'s time
+                f = min(32767, (self.ticks * T_FADE[abs(fd)]) >> 16)
                 w = (w * (f if fd < 0 else 32767 - f)) >> 15
             dst[d] += w
-        if self.ticks < 0xFFFF:
+        if self.ticks < 0xFFFFFFFF:
             self.ticks += 1
         return dst
 
@@ -784,8 +792,8 @@ class Voice:
         A1 = mulq15(mulq15(eE, 32767 - (127 - vel) * 129), lvl * lvl * 2)
         A1 = mulq15(A1, 32767)
         A0 = self.amp
-        dA = (A1 - A0) >> 5
-        a = A0
+        dA = (A1 - A0) * 8                             # (the ramp in Q23: exact over the tick)
+        a = A0 * 256
         p0, p1, p2, p3 = self.ph
         fb1, fb2 = self.fb1, self.fb2
         fs = self.f[:]
@@ -879,7 +887,7 @@ class Voice:
                 y = soft_knee_f(clamp(y, -200000, 200000), 16000)
             y = clamp(y, -65535, 65535)
             a += dA
-            out[i] += y * a / 32768.0 * 6000 / 2048.0
+            out[i] += y * (a >> 8) / 32768.0 * 6000 / 2048.0
         self.ph = [p0 % 4294967296.0, p1 % 4294967296.0, p2 % 4294967296.0, p3 % 4294967296.0]
         self.fb1, self.fb2 = fb1, fb2
         self.f, self.bh, self.bl, self.dc = fs, bh, bl, dc

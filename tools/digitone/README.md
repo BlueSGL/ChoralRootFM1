@@ -55,6 +55,34 @@ no times.
   whose tails run on under the next steps, a late onset, and the tremolo-depth fade
   (finished and extrapolated).
 
+## FM TONE's times from these numbers (docs/QUAD.md "Times")
+
+- `digitone_times.json`: the Digitone's readings, derived numbers only (no audio): per envelope the measure, the
+  setup, value -> seconds (runs merged as summary.py merges them), each run's own numbers (t10 / t50 / t90, the T60,
+  the fade's), whether extrapolated; the amp attack's grid (the 0.4962 s multiples from 112 up).
+- `quad_render.c`: one FM TONE note through the firmware's own eng_quad.c on the host, to raw float32 at 44.1 kHz
+  (`build/host/quad_render`, built by make_quad_times.py and tests/run_cr_tests.sh); it can overwrite one entry of
+  quad_times.h's tables (the calibration's candidate times).
+- `make_quad_times.py`: makes `firmware/src/quad_times.h` (a table per envelope type, the fade, the delay constant)
+  of digitone_times.json and `quad_calib.json`. `--calibrate` measures FM TONE through dt_analyse.py with the
+  captures' patches (a sweep of engine times per table, inverted at the Digitone's readings) and writes quad_calib.json;
+  `--verify` plays every measured value with the header's tables and stores the residuals in quad_calib.json
+  ("verify"). Both take about a minute.
+- `test_quad_times.py` (in tests/run_cr_tests.sh): the header not stale, the amp's times, a few proxy readings, the
+  delay, the fade against digitone_times.json.
+
+After another measurement:
+
+1. `python3 tools/digitone/dt_analyse.py DIR` (DIR: the captures, outside the repository), then
+   `python3 tools/digitone/make_quad_times.py --extract DIR` (several DIRs are merged; check the diff of
+   digitone_times.json: the measures, the "extrapolated" flags, the grid's unit).
+2. `python3 tools/digitone/make_quad_times.py --calibrate` (quad_calib.json, quad_times.h), then `--verify` (the
+   residuals: amp within 1 %; read the proxies' against QUAD.md's).
+3. `python3 tests/quad_ref.py` (FM TONE's goldens), `sh tests/run_cr_tests.sh`, `GOLDEN_UPDATE=1 sh
+   tests/run_tests.sh` for tests/golden.txt's preset/FM_TONE renders only.
+4. The factory presets' times were re-expressed once (2026-10-14) for their old times on the new tables: after a
+   change of the tables, check they still sound as designed.
+
 ## Run 2 (`--set 2`, files `r2_*`, about 13 min)
 
 Run 1 left gaps and a failed fade design. Run 2 records next to run 1 in the same

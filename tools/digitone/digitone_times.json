@@ -1,0 +1,2462 @@
+{
+ "about": "The Elektron Digitone's envelope and LFO fade times, measured on the owner's unit (OS 1.44, 2026-10-14, recorded losslessly over USB at 48 kHz: tools/digitone/dt_measure.py runs 1 and 2, analysed by dt_analyse.py). Derived numbers only (no audio). Per envelope: the measure, the setup (Digitone values), per value the seconds (s: run 1 and 2 merged as summary.py merges: the mean of the measured runs, else of the extrapolated), extrapolated, and each run's own numbers. Run 1 sent HARM coarse 64 (+1.00), not 0.00: its filter and operator A captures differ from run 2's. The proxy envelopes (filter, operators) are readings of the spectral centroid, not envelope times: FM TONE is calibrated through the same reading (make_quad_times.py --calibrate).",
+ "source": "tools/digitone/make_quad_times.py --extract (dt_analyse.py analysis.json)",
+ "envelopes": {
+  "amp_attack": {
+   "measure": "rise_full",
+   "about": "the full linear rise (t90 - t10) / 0.8 of the amplitude envelope",
+   "proxy": false,
+   "setup": "ALGO 1, MIX -64 (C alone, a plain sine), A LEV 0, B LEV 0, filter OFF, C4 velocity 100; decay: SUS 0",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.002745,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.002745,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 0.000276,
+       "t50": 0.001533,
+       "t90": 0.002472,
+       "t98": 0.00286,
+       "level_at_half_t98": 0.438785,
+       "rise_full": 0.002745
+      }
+     }
+    },
+    {
+     "v": 8,
+     "s": 0.00315,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.00315,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.001083,
+       "t50": 0.002429,
+       "t90": 0.003603,
+       "t98": 0.00388,
+       "level_at_half_t98": 0.298607,
+       "rise_full": 0.00315
+      }
+     }
+    },
+    {
+     "v": 16,
+     "s": 0.009339,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.009339,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.002376,
+       "t50": 0.006149,
+       "t90": 0.009847,
+       "t98": 0.010934,
+       "level_at_half_t98": 0.43048,
+       "rise_full": 0.009339
+      }
+     }
+    },
+    {
+     "v": 24,
+     "s": 0.023902,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.023902,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.004084,
+       "t50": 0.013917,
+       "t90": 0.023205,
+       "t98": 0.02535,
+       "level_at_half_t98": 0.462994,
+       "rise_full": 0.023902
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 0.047632,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.047632,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 0.006785,
+       "t50": 0.025903,
+       "t90": 0.04489,
+       "t98": 0.048709,
+       "level_at_half_t98": 0.472712,
+       "rise_full": 0.047632
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 0.128238,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.128238,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.014647,
+       "t50": 0.065933,
+       "t90": 0.117237,
+       "t98": 0.127574,
+       "level_at_half_t98": 0.483973,
+       "rise_full": 0.128238
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 0.260516,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.260516,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 0.027761,
+       "t50": 0.132019,
+       "t90": 0.236173,
+       "t98": 0.256998,
+       "level_at_half_t98": 0.486518,
+       "rise_full": 0.260516
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 0.45133,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.45133,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.046702,
+       "t50": 0.227249,
+       "t90": 0.407767,
+       "t98": 0.443886,
+       "level_at_half_t98": 0.488231,
+       "rise_full": 0.45133
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 0.708278,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.708278,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 0.072673,
+       "t50": 0.355988,
+       "t90": 0.639295,
+       "t98": 0.696004,
+       "level_at_half_t98": 0.488712,
+       "rise_full": 0.708278
+      }
+     }
+    },
+    {
+     "v": 100,
+     "s": 0.783644,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.783644,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.079929,
+       "t50": 0.393386,
+       "t90": 0.706844,
+       "t98": 0.7695,
+       "level_at_half_t98": 0.489011,
+       "rise_full": 0.783644
+      }
+     }
+    },
+    {
+     "v": 104,
+     "s": 0.86352,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.86352,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.087956,
+       "t50": 0.433368,
+       "t90": 0.778772,
+       "t98": 0.847855,
+       "level_at_half_t98": 0.489085,
+       "rise_full": 0.86352
+      }
+     }
+    },
+    {
+     "v": 108,
+     "s": 0.948088,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.948088,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.09667,
+       "t50": 0.475886,
+       "t90": 0.855141,
+       "t98": 0.930984,
+       "level_at_half_t98": 0.489054,
+       "rise_full": 0.948088
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 1.488393,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 1.488372,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 0.150314,
+       "t50": 0.745629,
+       "t90": 1.341012,
+       "t98": 1.460179,
+       "level_at_half_t98": 0.489514,
+       "rise_full": 1.488372
+      },
+      "2": {
+       "s": 1.488415,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.150511,
+       "t50": 0.745843,
+       "t90": 1.341243,
+       "t98": 1.46033,
+       "level_at_half_t98": 0.489471,
+       "rise_full": 1.488415
+      }
+     }
+    },
+    {
+     "v": 114,
+     "s": 1.984547,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 1.984547,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.200317,
+       "t50": 0.994093,
+       "t90": 1.787955,
+       "t98": 1.946519,
+       "level_at_half_t98": 0.489501,
+       "rise_full": 1.984547
+      }
+     }
+    },
+    {
+     "v": 116,
+     "s": 2.976768,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 2.976768,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.299509,
+       "t50": 1.490251,
+       "t90": 2.680923,
+       "t98": 2.919375,
+       "level_at_half_t98": 0.489716,
+       "rise_full": 2.976768
+      }
+     }
+    },
+    {
+     "v": 118,
+     "s": 4.961847,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 4.961847,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.497515,
+       "t50": 2.48182,
+       "t90": 4.466993,
+       "t98": 4.863473,
+       "level_at_half_t98": 0.489882,
+       "rise_full": 4.961847
+      }
+     }
+    },
+    {
+     "v": 120,
+     "s": 8.929717,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 8.929717,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 0.894567,
+       "t50": 4.466349,
+       "t90": 8.03834,
+       "t98": 8.752731,
+       "level_at_half_t98": 0.489896,
+       "rise_full": 8.929717
+      }
+     }
+    },
+    {
+     "v": 122,
+     "s": 14.883435,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 14.883435,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 1.490305,
+       "t50": 7.443852,
+       "t90": 13.397053,
+       "t98": 14.588105,
+       "level_at_half_t98": 0.489911,
+       "rise_full": 14.883435
+      }
+     }
+    },
+    {
+     "v": 124,
+     "s": 20.839183,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 20.839183,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 2.086372,
+       "t50": 10.422442,
+       "t90": 18.757718,
+       "t98": 20.42475,
+       "level_at_half_t98": 0.489908,
+       "rise_full": 20.839183
+      }
+     }
+    },
+    {
+     "v": 125,
+     "s": 23.813671,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 23.813671,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 2.382575,
+       "t50": 11.909142,
+       "t90": 21.433512,
+       "t98": 23.337675,
+       "level_at_half_t98": 0.489974,
+       "rise_full": 23.813671
+      }
+     }
+    },
+    {
+     "v": 126,
+     "s": 26.787487,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 26.787581,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 2.680478,
+       "t50": 13.395747,
+       "t90": 24.110543,
+       "t98": 26.255213,
+       "level_at_half_t98": 0.489961,
+       "rise_full": 26.787581
+      },
+      "2": {
+       "s": 26.787393,
+       "extrapolated": false,
+       "capture": "r2_amp_atk",
+       "t10": 2.680829,
+       "t50": 13.397287,
+       "t90": 24.110743,
+       "t98": 26.253956,
+       "level_at_half_t98": 0.489968,
+       "rise_full": 26.787393
+      }
+     }
+    },
+    {
+     "v": 127,
+     "s": 29.77162,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 29.77162,
+       "extrapolated": false,
+       "capture": "amp_atk",
+       "t10": 2.978284,
+       "t50": 14.886686,
+       "t90": 26.79558,
+       "t98": 29.177334,
+       "level_at_half_t98": 0.489962,
+       "rise_full": 29.77162
+      }
+     }
+    }
+   ],
+   "grid": {
+    "from": 112,
+    "multiples": {
+     "112": 3,
+     "114": 4,
+     "116": 6,
+     "118": 10,
+     "120": 18,
+     "122": 30,
+     "124": 42,
+     "125": 48,
+     "126": 54,
+     "127": 60
+    },
+    "about": "from 112 up every measured full rise is an integer multiple of one unit (fitted: unit_s); the values between are interpolated on the multiples (113 = 3.5, 115 = 5, 117 = 8, 119 = 14, 121 = 24, 123 = 36)",
+    "unit_s": 0.496135,
+    "residual_pct_max": 0.014
+   }
+  },
+  "amp_decay": {
+   "measure": "T60",
+   "about": "the time to -60 dB from the dB slope (-1 .. -50 dB), else the -20/-40/-60 dB times",
+   "proxy": false,
+   "setup": "ALGO 1, MIX -64 (C alone, a plain sine), A LEV 0, B LEV 0, filter OFF, C4 velocity 100; decay: SUS 0",
+   "points": [
+    {
+     "v": 0,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "amp_dec"
+      }
+     },
+     "note": "not measurable (no reading)"
+    },
+    {
+     "v": 4,
+     "s": 0.009286,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.009286,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 0.003265,
+       "t_40db": 0.006326,
+       "t_60db": 0.009286,
+       "how": "-60 dB"
+      }
+     }
+    },
+    {
+     "v": 8,
+     "s": 0.039244,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.039244,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 0.013089,
+       "t_40db": 0.026074,
+       "t_60db": 0.03928,
+       "T60_slope": 0.039244,
+       "slope_rms_db": 0.142703,
+       "slope_span_db": 47.678059,
+       "how": "slope over 48 dB"
+      }
+     }
+    },
+    {
+     "v": 16,
+     "s": 0.192863,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.192863,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 0.063078,
+       "t_40db": 0.127384,
+       "t_60db": 0.192117,
+       "T60_slope": 0.192863,
+       "slope_rms_db": 0.048328,
+       "slope_span_db": 48.816447,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 24,
+     "s": 0.505789,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.505789,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 0.165504,
+       "t_40db": 0.334144,
+       "t_60db": 0.502643,
+       "T60_slope": 0.505789,
+       "slope_rms_db": 0.03069,
+       "slope_span_db": 48.895477,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 1.012541,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 1.012541,
+       "extrapolated": false,
+       "capture": "amp_dec",
+       "t_20db": 0.331849,
+       "t_40db": 0.66947,
+       "t_60db": 1.007377,
+       "T60_slope": 1.012541,
+       "slope_rms_db": 0.014724,
+       "slope_span_db": 48.931656,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 2.720532,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 2.720532,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 0.888856,
+       "t_40db": 1.79515,
+       "t_60db": 2.700706,
+       "T60_slope": 2.720532,
+       "slope_rms_db": 0.010671,
+       "slope_span_db": 48.962699,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 5.513023,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 5.513023,
+       "extrapolated": false,
+       "capture": "amp_dec",
+       "t_20db": 1.801125,
+       "T60_slope": 5.513023,
+       "slope_rms_db": 0.001257,
+       "slope_span_db": 20.325618,
+       "how": "slope over 20 dB"
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 9.561945,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 9.561945,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 3.128234,
+       "t_40db": 6.314388,
+       "T60_slope": 9.561945,
+       "slope_rms_db": 0.011798,
+       "slope_span_db": 48.98308,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 14.998562,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 14.998562,
+       "extrapolated": false,
+       "capture": "amp_dec",
+       "T60_slope": 14.998562,
+       "slope_rms_db": 0.004301,
+       "slope_span_db": 15.369237,
+       "how": "slope over 15 dB"
+      }
+     }
+    },
+    {
+     "v": 104,
+     "s": 18.28648,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 18.28648,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "t_20db": 5.973885,
+       "T60_slope": 18.28648,
+       "slope_rms_db": 0.009434,
+       "slope_span_db": 26.383118,
+       "how": "slope over 26 dB"
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 21.972753,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 21.972753,
+       "extrapolated": false,
+       "capture": "amp_dec",
+       "t_20db": 7.181782,
+       "T60_slope": 21.972753,
+       "slope_rms_db": 0.003154,
+       "slope_span_db": 26.729751,
+       "how": "slope over 27 dB"
+      }
+     }
+    },
+    {
+     "v": 120,
+     "s": 26.068652,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 26.068652,
+       "extrapolated": false,
+       "capture": "r2_amp_dec",
+       "T60_slope": 26.068652,
+       "slope_rms_db": 0.004188,
+       "slope_span_db": 17.816509,
+       "how": "slope over 18 dB"
+      }
+     }
+    },
+    {
+     "v": 126,
+     "s": 29.468316,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 29.468316,
+       "extrapolated": false,
+       "capture": "amp_dec",
+       "t_20db": 9.624737,
+       "t_40db": 19.442902,
+       "t_60db": 29.360981,
+       "T60_slope": 29.468316,
+       "slope_rms_db": 0.019229,
+       "slope_span_db": 48.988978,
+       "how": "slope over 49 dB"
+      }
+     }
+    }
+   ]
+  },
+  "amp_release": {
+   "measure": "T60",
+   "about": "as the decay's, from the note-off",
+   "proxy": false,
+   "setup": "ALGO 1, MIX -64 (C alone, a plain sine), A LEV 0, B LEV 0, filter OFF, C4 velocity 100; decay: SUS 0",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.00457,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.00457,
+       "extrapolated": false,
+       "capture": "amp_rel",
+       "t_20db": 0.00143,
+       "t_40db": 0.003368,
+       "t_60db": 0.00457,
+       "how": "-60 dB"
+      }
+     }
+    },
+    {
+     "v": 8,
+     "s": 0.039317,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.039317,
+       "extrapolated": false,
+       "capture": "r2_amp_rel",
+       "t_20db": 0.01427,
+       "t_40db": 0.027366,
+       "t_60db": 0.040549,
+       "T60_slope": 0.039317,
+       "slope_rms_db": 0.012901,
+       "slope_span_db": 47.236742,
+       "how": "slope over 47 dB"
+      }
+     }
+    },
+    {
+     "v": 24,
+     "s": 0.505769,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.505769,
+       "extrapolated": false,
+       "capture": "r2_amp_rel",
+       "t_20db": 0.169413,
+       "t_40db": 0.338123,
+       "t_60db": 0.507049,
+       "T60_slope": 0.505769,
+       "slope_rms_db": 0.011126,
+       "slope_span_db": 48.824249,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 1.012518,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 1.012518,
+       "extrapolated": false,
+       "capture": "amp_rel",
+       "t_20db": 0.33749,
+       "t_40db": 0.67484,
+       "t_60db": 1.011406,
+       "T60_slope": 1.012518,
+       "slope_rms_db": 0.010126,
+       "slope_span_db": 48.970502,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 2.720394,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 2.720394,
+       "extrapolated": false,
+       "capture": "r2_amp_rel",
+       "t_20db": 0.907144,
+       "t_40db": 1.813478,
+       "t_60db": 2.715815,
+       "T60_slope": 2.720394,
+       "slope_rms_db": 0.011071,
+       "slope_span_db": 48.977251,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 5.51297,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 5.51297,
+       "extrapolated": false,
+       "capture": "amp_rel",
+       "t_20db": 1.83779,
+       "T60_slope": 5.51297,
+       "slope_rms_db": 0.000925,
+       "slope_span_db": 20.798556,
+       "how": "slope over 21 dB"
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 9.55127,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 9.55127,
+       "extrapolated": false,
+       "capture": "r2_amp_rel",
+       "t_20db": 3.1859,
+       "t_40db": 6.367837,
+       "T60_slope": 9.55127,
+       "slope_rms_db": 0.012073,
+       "slope_span_db": 48.972581,
+       "how": "slope over 49 dB"
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 14.998022,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 14.998022,
+       "extrapolated": false,
+       "capture": "amp_rel",
+       "T60_slope": 14.998022,
+       "slope_rms_db": 0.000778,
+       "slope_span_db": 15.010919,
+       "how": "slope over 15 dB"
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 21.967111,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 21.967111,
+       "extrapolated": false,
+       "capture": "amp_rel",
+       "t_20db": 7.32294,
+       "T60_slope": 21.967111,
+       "slope_rms_db": 0.001328,
+       "slope_span_db": 26.313227,
+       "how": "slope over 26 dB"
+      }
+     }
+    },
+    {
+     "v": 120,
+     "s": 26.068317,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 26.068317,
+       "extrapolated": false,
+       "capture": "r2_amp_rel",
+       "T60_slope": 26.068317,
+       "slope_rms_db": 0.000865,
+       "slope_span_db": 17.416833,
+       "how": "slope over 17 dB"
+      }
+     }
+    },
+    {
+     "v": 126,
+     "s": 29.54232,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 29.54232,
+       "extrapolated": false,
+       "capture": "amp_rel",
+       "t_20db": 9.810491,
+       "t_40db": 19.652762,
+       "t_60db": 29.776972,
+       "T60_slope": 29.54232,
+       "slope_rms_db": 0.042034,
+       "slope_span_db": 48.9899,
+       "how": "slope over 49 dB"
+      }
+     }
+    }
+   ]
+  },
+  "filter_attack": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "LP4, FREQ 20, RESO 40, ENV +63, ALGO 1, A LEV 96 (ATK 0, DEC 0, END 127: held), FDBK 70, MIX -64; decay SUS 0, attack and release SUS 127 (release: AMP REL INF); run 1 also HARM +1.00",
+   "points": [
+    {
+     "v": 0,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "filt_atk",
+       "t10": 0.010543,
+       "t50": 0.01159,
+       "t90": 0.012916,
+       "first_oct": 9.947571,
+       "last_oct": 10.049747,
+       "span_oct": 0.102176,
+       "note": "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
+      },
+      "2": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "r2_filt_atk",
+       "t10": 0.012178,
+       "t50": 0.012912,
+       "t90": 0.05184,
+       "first_oct": 11.530488,
+       "last_oct": 11.525403,
+       "span_oct": -0.005084,
+       "note": "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
+      }
+     },
+     "note": "not measurable (no sweep (< 0.2 oct))"
+    },
+    {
+     "v": 16,
+     "s": 0.245586,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.245586,
+       "extrapolated": false,
+       "capture": "r2_filt_atk",
+       "t10": 0.063824,
+       "t50": 0.086184,
+       "t90": 0.245586,
+       "first_oct": 4.425401,
+       "last_oct": 11.533977,
+       "span_oct": 7.108577
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 1.284596,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 1.284596,
+       "extrapolated": false,
+       "capture": "r2_filt_atk",
+       "t10": 0.243005,
+       "t50": 0.396913,
+       "t90": 1.284596,
+       "first_oct": 4.335868,
+       "last_oct": 11.523132,
+       "span_oct": 7.187264
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 3.242321,
+     "extrapolated": true,
+     "runs": {
+      "2": {
+       "s": 3.242321,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 0.642504,
+       "t50": 1.065498,
+       "first_oct": 4.338763,
+       "last_oct": 9.157471,
+       "span_oct": 4.818708,
+       "reached_pct": 67.050917,
+       "how": "t50 x 3.04 (median t90/t50 of the finished sweeps; this one reached 67 %)"
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 6.677964,
+     "extrapolated": true,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": true,
+       "capture": "filt_atk",
+       "t10": 0.860235,
+       "t50": 1.179747,
+       "first_oct": 4.336916,
+       "last_oct": 8.034253,
+       "span_oct": 3.697336,
+       "reached_pct": 64.719863,
+       "how": "against the fastest step's end (sweep reached 65 %)"
+      },
+      "2": {
+       "s": 6.677964,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 1.241793,
+       "t50": 2.194526,
+       "first_oct": 4.348179,
+       "last_oct": 8.913755,
+       "span_oct": 4.565576,
+       "reached_pct": 63.611996,
+       "how": "t50 x 3.04 (median t90/t50 of the finished sweeps; this one reached 64 %)"
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 10.814672,
+     "extrapolated": true,
+     "runs": {
+      "2": {
+       "s": 10.814672,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 2.026902,
+       "t50": 3.553939,
+       "first_oct": 4.337218,
+       "last_oct": 8.973424,
+       "span_oct": 4.636205,
+       "reached_pct": 64.497583,
+       "how": "t50 x 3.04 (median t90/t50 of the finished sweeps; this one reached 64 %)"
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 17.294909,
+     "extrapolated": true,
+     "runs": {
+      "2": {
+       "s": 17.294909,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 3.419125,
+       "t50": 5.683488,
+       "first_oct": 4.346979,
+       "last_oct": 9.215552,
+       "span_oct": 4.868573,
+       "reached_pct": 67.822311,
+       "how": "t50 x 3.04 (median t90/t50 of the finished sweeps; this one reached 68 %)"
+      }
+     }
+    },
+    {
+     "v": 104,
+     "s": 20.381368,
+     "extrapolated": true,
+     "runs": {
+      "2": {
+       "s": 20.381368,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 4.052977,
+       "t50": 6.697766,
+       "first_oct": 4.341708,
+       "last_oct": 9.403905,
+       "span_oct": 5.062198,
+       "reached_pct": 70.467874,
+       "how": "t50 x 3.04 (median t90/t50 of the finished sweeps; this one reached 70 %)"
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 36.335111,
+     "extrapolated": true,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": true,
+       "capture": "filt_atk",
+       "t10": 4.579013,
+       "t50": 6.277511,
+       "first_oct": 4.342738,
+       "last_oct": 8.031848,
+       "span_oct": 3.68911,
+       "reached_pct": 64.641738,
+       "how": "against the fastest step's end (sweep reached 65 %)"
+      },
+      "2": {
+       "s": 36.335111,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 6.412873,
+       "t50": 11.940517,
+       "first_oct": 4.34376,
+       "last_oct": 8.992696,
+       "span_oct": 4.648936,
+       "reached_pct": 64.733601,
+       "how": "t50 x 3.04 (median t90/t50 of the finished sweeps; this one reached 65 %)"
+      }
+     }
+    },
+    {
+     "v": 120,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": null,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "t10": 16.174999,
+       "first_oct": 4.439316,
+       "last_oct": 4.635397,
+       "span_oct": 0.196081,
+       "reached_pct": 2.767132,
+       "how": "against the fastest step's end (sweep reached 3 %)",
+       "note": "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
+      }
+     },
+     "note": "not measurable (no sweep (< 0.2 oct))"
+    },
+    {
+     "v": 126,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": null,
+       "extrapolated": true,
+       "capture": "r2_filt_atk",
+       "first_oct": 4.808808,
+       "last_oct": 4.379178,
+       "span_oct": -0.429631,
+       "reached_pct": -6.396558,
+       "how": "against the fastest step's end (sweep reached -6 %)"
+      }
+     },
+     "note": "not measurable (no reading)"
+    }
+   ]
+  },
+  "filter_decay": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "LP4, FREQ 20, RESO 40, ENV +63, ALGO 1, A LEV 96 (ATK 0, DEC 0, END 127: held), FDBK 70, MIX -64; decay SUS 0, attack and release SUS 127 (release: AMP REL INF); run 1 also HARM +1.00",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.0122,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.012987,
+       "extrapolated": false,
+       "capture": "filt_dec",
+       "t10": 0.001167,
+       "t50": 0.005429,
+       "t90": 0.012987,
+       "first_oct": 7.419627,
+       "last_oct": 4.269407,
+       "span_oct": -3.15022
+      },
+      "2": {
+       "s": 0.011413,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.001458,
+       "t50": 0.003693,
+       "t90": 0.011413,
+       "first_oct": 7.994738,
+       "last_oct": 4.301584,
+       "span_oct": -3.693154
+      }
+     }
+    },
+    {
+     "v": 16,
+     "s": 0.032541,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.032541,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.006301,
+       "t50": 0.029097,
+       "t90": 0.032541,
+       "first_oct": 10.09001,
+       "last_oct": 4.278608,
+       "span_oct": -5.811403
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 0.115821,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.150261,
+       "extrapolated": false,
+       "capture": "filt_dec",
+       "t10": 0.000375,
+       "t50": 0.10434,
+       "t90": 0.150261,
+       "first_oct": 9.937392,
+       "last_oct": 4.278723,
+       "span_oct": -5.658669
+      },
+      "2": {
+       "s": 0.081381,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 1e-05,
+       "t50": 0.055896,
+       "t90": 0.081381,
+       "first_oct": 11.575023,
+       "last_oct": 4.271904,
+       "span_oct": -7.303119
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 0.232298,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.232298,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 9.5e-05,
+       "t50": 0.151716,
+       "t90": 0.232298,
+       "first_oct": 11.627952,
+       "last_oct": 4.270784,
+       "span_oct": -7.357168
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 0.492151,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.543535,
+       "extrapolated": false,
+       "capture": "filt_dec",
+       "t10": 0.000739,
+       "t50": 0.451598,
+       "t90": 0.543535,
+       "first_oct": 10.155702,
+       "last_oct": 4.274309,
+       "span_oct": -5.881394
+      },
+      "2": {
+       "s": 0.440767,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000836,
+       "t50": 0.290868,
+       "t90": 0.440767,
+       "first_oct": 11.628294,
+       "last_oct": 4.279353,
+       "span_oct": -7.348941
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 0.91314,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.91314,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000164,
+       "t50": 0.649202,
+       "t90": 0.91314,
+       "first_oct": 11.625886,
+       "last_oct": 4.292013,
+       "span_oct": -7.333873
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 1.980486,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 2.171676,
+       "extrapolated": false,
+       "capture": "filt_dec",
+       "t10": 0.000459,
+       "t50": 1.747606,
+       "t90": 2.171676,
+       "first_oct": 10.154354,
+       "last_oct": 4.285747,
+       "span_oct": -5.868607
+      },
+      "2": {
+       "s": 1.789295,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000453,
+       "t50": 1.166685,
+       "t90": 1.789295,
+       "first_oct": 11.627953,
+       "last_oct": 4.311961,
+       "span_oct": -7.315992
+      }
+     }
+    },
+    {
+     "v": 104,
+     "s": 2.663443,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 2.663443,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000211,
+       "t50": 1.785423,
+       "t90": 2.663443,
+       "first_oct": 11.563129,
+       "last_oct": 4.316645,
+       "span_oct": -7.246485
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 3.998273,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 4.29584,
+       "extrapolated": false,
+       "capture": "filt_dec",
+       "t10": 0.000978,
+       "t50": 3.554043,
+       "t90": 4.29584,
+       "first_oct": 10.157904,
+       "last_oct": 4.285153,
+       "span_oct": -5.872751
+      },
+      "2": {
+       "s": 3.700707,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000398,
+       "t50": 2.542917,
+       "t90": 3.700707,
+       "first_oct": 11.62583,
+       "last_oct": 4.297319,
+       "span_oct": -7.328511
+      }
+     }
+    },
+    {
+     "v": 120,
+     "s": 5.199256,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 5.199256,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000589,
+       "t50": 3.763833,
+       "t90": 5.199256,
+       "first_oct": 11.57338,
+       "last_oct": 4.300759,
+       "span_oct": -7.272621
+      }
+     }
+    },
+    {
+     "v": 126,
+     "s": 7.388344,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 7.908178,
+       "extrapolated": false,
+       "capture": "filt_dec",
+       "t10": 0.000447,
+       "t50": 6.524289,
+       "t90": 7.908178,
+       "first_oct": 10.154776,
+       "last_oct": 4.285582,
+       "span_oct": -5.869194
+      },
+      "2": {
+       "s": 6.868509,
+       "extrapolated": false,
+       "capture": "r2_filt_dec",
+       "t10": 0.000808,
+       "t50": 4.881327,
+       "t90": 6.868509,
+       "first_oct": 11.573448,
+       "last_oct": 4.293064,
+       "span_oct": -7.280385
+      }
+     }
+    }
+   ]
+  },
+  "filter_release": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "LP4, FREQ 20, RESO 40, ENV +63, ALGO 1, A LEV 96 (ATK 0, DEC 0, END 127: held), FDBK 70, MIX -64; decay SUS 0, attack and release SUS 127 (release: AMP REL INF); run 1 also HARM +1.00",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.010296,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.010296,
+       "extrapolated": false,
+       "capture": "filt_rel",
+       "t10": 0.001716,
+       "t50": 0.004977,
+       "t90": 0.010296,
+       "first_oct": 8.872471,
+       "last_oct": 4.269723,
+       "span_oct": -4.602747
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 0.50283,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.50283,
+       "extrapolated": false,
+       "capture": "filt_rel",
+       "t10": 0.056708,
+       "t50": 0.420722,
+       "t90": 0.50283,
+       "first_oct": 10.052159,
+       "last_oct": 4.690725,
+       "span_oct": -5.361435
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 4.139936,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 4.139936,
+       "extrapolated": false,
+       "capture": "filt_rel",
+       "t10": 0.561282,
+       "t50": 3.603741,
+       "t90": 4.139936,
+       "first_oct": 10.039115,
+       "last_oct": 4.275224,
+       "span_oct": -5.763891
+      }
+     }
+    }
+   ]
+  },
+  "op_a_attack": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "ALGO 1, A LEV 110, MIX -64, filter OFF; attack: DEC 127 END 127, decay: ATK 0 END 0; run 1 also HARM +1.00",
+   "points": [
+    {
+     "v": 0,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "opA",
+       "t10": 0.475081,
+       "t50": 1.232694,
+       "t90": 2.142755,
+       "first_oct": 10.456507,
+       "last_oct": 10.434466,
+       "span_oct": -0.022041,
+       "note": "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
+      },
+      "2": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.23193,
+       "t50": 0.751614,
+       "t90": 1.271832,
+       "first_oct": 10.495135,
+       "last_oct": 10.474634,
+       "span_oct": -0.020501,
+       "note": "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
+      }
+     },
+     "note": "not measurable (no sweep (< 0.2 oct))"
+    },
+    {
+     "v": 16,
+     "s": 0.128743,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.128743,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.06275,
+       "t50": 0.108662,
+       "t90": 0.128743,
+       "first_oct": 8.029355,
+       "last_oct": 10.475821,
+       "span_oct": 2.446466
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 0.667932,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.667932,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.321654,
+       "t50": 0.563058,
+       "t90": 0.667932,
+       "first_oct": 8.027599,
+       "last_oct": 10.484343,
+       "span_oct": 2.456744
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 1.791161,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 1.791161,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.862638,
+       "t50": 1.510679,
+       "t90": 1.791161,
+       "first_oct": 8.02719,
+       "last_oct": 10.485672,
+       "span_oct": 2.458482
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 3.62513,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 3.303493,
+       "extrapolated": true,
+       "capture": "opA",
+       "t10": 1.951944,
+       "t50": 2.431198,
+       "first_oct": 8.02977,
+       "last_oct": 9.273089,
+       "span_oct": 1.243319,
+       "reached_pct": 51.703798,
+       "how": "t50 x 1.36 (median t90/t50 of the finished sweeps; this one reached 52 %)"
+      },
+      "2": {
+       "s": 3.62513,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 1.745296,
+       "t50": 3.057681,
+       "t90": 3.62513,
+       "first_oct": 8.027817,
+       "last_oct": 10.475411,
+       "span_oct": 2.447594
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 6.28275,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 6.28275,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 3.019704,
+       "t50": 5.298829,
+       "t90": 6.28275,
+       "first_oct": 8.027149,
+       "last_oct": 10.471657,
+       "span_oct": 2.444508
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 9.852104,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 9.852104,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 4.734673,
+       "t50": 8.309374,
+       "t90": 9.852104,
+       "first_oct": 8.027813,
+       "last_oct": 10.458048,
+       "span_oct": 2.430235
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 13.777459,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 13.146761,
+       "extrapolated": false,
+       "capture": "opA",
+       "t10": 7.763107,
+       "t50": 9.675331,
+       "t90": 13.146761,
+       "first_oct": 8.029459,
+       "last_oct": 10.42127,
+       "span_oct": 2.391811
+      },
+      "2": {
+       "s": 14.408157,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 6.916357,
+       "t50": 12.148668,
+       "t90": 14.408157,
+       "first_oct": 8.027141,
+       "last_oct": 10.426228,
+       "span_oct": 2.399087
+      }
+     }
+    },
+    {
+     "v": 126,
+     "s": 19.26204,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 19.26204,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 9.248402,
+       "t50": 16.243053,
+       "t90": 19.26204,
+       "first_oct": 8.027801,
+       "last_oct": 10.396817,
+       "span_oct": 2.369016
+      }
+     }
+    }
+   ]
+  },
+  "op_a_decay": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "ALGO 1, A LEV 110, MIX -64, filter OFF; attack: DEC 127 END 127, decay: ATK 0 END 0; run 1 also HARM +1.00",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.004894,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.004643,
+       "extrapolated": false,
+       "capture": "opA",
+       "t10": 0.001215,
+       "t50": 0.002994,
+       "t90": 0.004643,
+       "first_oct": 10.218894,
+       "last_oct": 8.030884,
+       "span_oct": -2.18801
+      },
+      "2": {
+       "s": 0.005144,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.001225,
+       "t50": 0.003221,
+       "t90": 0.005144,
+       "first_oct": 10.360136,
+       "last_oct": 8.030895,
+       "span_oct": -2.329241
+      }
+     }
+    },
+    {
+     "v": 16,
+     "s": 0.043995,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.043995,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.002588,
+       "t50": 0.012949,
+       "t90": 0.043995,
+       "first_oct": 10.481348,
+       "last_oct": 8.030902,
+       "span_oct": -2.450447
+      }
+     }
+    },
+    {
+     "v": 32,
+     "s": 0.219565,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.219565,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.005601,
+       "t50": 0.055557,
+       "t90": 0.219565,
+       "first_oct": 10.53967,
+       "last_oct": 8.030911,
+       "span_oct": -2.508759
+      }
+     }
+    },
+    {
+     "v": 48,
+     "s": 0.579876,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.579876,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.011887,
+       "t50": 0.146193,
+       "t90": 0.579876,
+       "first_oct": 10.507754,
+       "last_oct": 8.037963,
+       "span_oct": -2.469791
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 1.078294,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.995679,
+       "extrapolated": false,
+       "capture": "opA",
+       "t10": 0.172226,
+       "t50": 0.659545,
+       "t90": 0.995679,
+       "first_oct": 10.446873,
+       "last_oct": 8.042349,
+       "span_oct": -2.404524
+      },
+      "2": {
+       "s": 1.160909,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.017607,
+       "t50": 0.288728,
+       "t90": 1.160909,
+       "first_oct": 10.56048,
+       "last_oct": 8.045723,
+       "span_oct": -2.514758
+      }
+     }
+    },
+    {
+     "v": 80,
+     "s": 2.00179,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 2.00179,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.028508,
+       "t50": 0.496037,
+       "t90": 2.00179,
+       "first_oct": 10.563886,
+       "last_oct": 8.050892,
+       "span_oct": -2.512993
+      }
+     }
+    },
+    {
+     "v": 96,
+     "s": 3.141567,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 3.141567,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.047252,
+       "t50": 0.782195,
+       "t90": 3.141567,
+       "first_oct": 10.549855,
+       "last_oct": 8.050589,
+       "span_oct": -2.499267
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 4.298163,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 3.978748,
+       "extrapolated": false,
+       "capture": "opA",
+       "t10": 0.671535,
+       "t50": 2.621514,
+       "t90": 3.978748,
+       "first_oct": 10.46118,
+       "last_oct": 8.034063,
+       "span_oct": -2.427117
+      },
+      "2": {
+       "s": 4.617577,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.066977,
+       "t50": 1.145371,
+       "t90": 4.617577,
+       "first_oct": 10.551265,
+       "last_oct": 8.045484,
+       "span_oct": -2.505781
+      }
+     }
+    },
+    {
+     "v": 126,
+     "s": 6.199988,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 6.199988,
+       "extrapolated": false,
+       "capture": "r2_opA",
+       "t10": 0.082048,
+       "t50": 1.527646,
+       "t90": 6.199988,
+       "first_oct": 10.568537,
+       "last_oct": 8.040832,
+       "span_oct": -2.527705
+      }
+     }
+    }
+   ]
+  },
+  "op_b_attack": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "ALGO 6 (B2 > C), B LEV 110, MIX -64, filter OFF; attack: DEC 127 END 127, decay: ATK 0 END 0 (run 1)",
+   "points": [
+    {
+     "v": 0,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "opB",
+       "t10": 0.284418,
+       "t50": 1.171346,
+       "t90": 2.165308,
+       "first_oct": 11.193307,
+       "last_oct": 11.134822,
+       "span_oct": -0.058485,
+       "note": "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
+      }
+     },
+     "note": "not measurable (no sweep (< 0.2 oct))"
+    },
+    {
+     "v": 64,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": true,
+       "capture": "opB",
+       "t10": 1.962875,
+       "first_oct": 8.026781,
+       "last_oct": 9.152269,
+       "span_oct": 1.125488,
+       "reached_pct": 36.212137,
+       "how": "against the fastest step's end (sweep reached 36 %)"
+      }
+     },
+     "note": "not measurable (no reading)"
+    },
+    {
+     "v": 112,
+     "s": 13.876468,
+     "extrapolated": true,
+     "runs": {
+      "1": {
+       "s": 13.876468,
+       "extrapolated": true,
+       "capture": "opB",
+       "t10": 7.821029,
+       "t50": 11.478756,
+       "t90": 13.876468,
+       "first_oct": 8.027504,
+       "last_oct": 10.590256,
+       "span_oct": 2.562752,
+       "reached_pct": 82.474725,
+       "how": "against the fastest step's end (sweep reached 82 %)"
+      }
+     }
+    }
+   ]
+  },
+  "op_b_decay": {
+   "measure": "t90",
+   "about": "t90 of the spectral-centroid sweep (log Hz) from the note-on (release: the note-off); t10 / t50 kept too; unfinished sweeps: against the fastest step's end, t90 = t50 x the finished sweeps' median t90 / t50 (extrapolated)",
+   "proxy": true,
+   "setup": "ALGO 6 (B2 > C), B LEV 110, MIX -64, filter OFF; attack: DEC 127 END 127, decay: ATK 0 END 0 (run 1)",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.006033,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.006033,
+       "extrapolated": false,
+       "capture": "opB",
+       "t10": 0.001887,
+       "t50": 0.004211,
+       "t90": 0.006033,
+       "first_oct": 11.326273,
+       "last_oct": 8.030885,
+       "span_oct": -3.295388
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 0.993198,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.993198,
+       "extrapolated": false,
+       "capture": "opB",
+       "t10": 0.017852,
+       "t50": 0.385516,
+       "t90": 0.993198,
+       "first_oct": 11.275682,
+       "last_oct": 8.032049,
+       "span_oct": -3.243634
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 3.948455,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 3.948455,
+       "extrapolated": false,
+       "capture": "opB",
+       "t10": 0.062643,
+       "t50": 1.528039,
+       "t90": 3.948455,
+       "first_oct": 11.278431,
+       "last_oct": 8.030975,
+       "span_oct": -3.247456
+      }
+     }
+    }
+   ]
+  },
+  "a_delay_120": {
+   "measure": "t50",
+   "about": "t50 of the centroid step: the delay",
+   "proxy": true,
+   "setup": "as op_a's attack, A ATK 0, A DELAY v, at 120 and 80 BPM (run 1)",
+   "points": [
+    {
+     "v": 16,
+     "s": 0.250506,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.250506,
+       "extrapolated": false,
+       "capture": "delay_120"
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 1.00015,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 1.00015,
+       "extrapolated": false,
+       "capture": "delay_120"
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 1.749794,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 1.749794,
+       "extrapolated": false,
+       "capture": "delay_120"
+      }
+     }
+    }
+   ],
+   "bpm": 120
+  },
+  "a_delay_80": {
+   "measure": "t50",
+   "about": "t50 of the centroid step: the delay",
+   "proxy": true,
+   "setup": "as op_a's attack, A ATK 0, A DELAY v, at 120 and 80 BPM (run 1)",
+   "points": [
+    {
+     "v": 16,
+     "s": 0.374804,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 0.374804,
+       "extrapolated": false,
+       "capture": "delay_80"
+      }
+     }
+    },
+    {
+     "v": 64,
+     "s": 1.500269,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 1.500269,
+       "extrapolated": false,
+       "capture": "delay_80"
+      }
+     }
+    },
+    {
+     "v": 112,
+     "s": 2.624983,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": 2.624983,
+       "extrapolated": false,
+       "capture": "delay_80"
+      }
+     }
+    }
+   ],
+   "bpm": 80
+  },
+  "lfo1_fade_120": {
+   "measure": "t_full",
+   "about": "the full fade of the tremolo depth (a linear ramp): the line fitted to the swing, else t90 / 0.9 of the dB depth",
+   "proxy": false,
+   "setup": "LFO 1 SIN TRG, SPEED +63.00, MULT F64 (15.75 Hz at any tempo), DEPTH +12.00 on VOLUME 64, FADE v (run 2)",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.03919,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.03919,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 0.035271,
+       "t_full": 0.03919,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 99.995673,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -4,
+     "s": 0.038463,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.038463,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 0.034617,
+       "t_full": 0.038463,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 99.997239,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -8,
+     "s": 0.038281,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "fade_120",
+       "note": "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+      },
+      "2": {
+       "s": 0.038281,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 0.034453,
+       "t_full": 0.038281,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 99.997237,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -16,
+     "s": 0.047132,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.047132,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 0.042419,
+       "t_full": 0.047132,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 99.995687,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -24,
+     "s": 0.198854,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.198854,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 0.173414,
+       "t90_lin": 0.177752,
+       "t_full": 0.198854,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 99.997247,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -32,
+     "s": 0.777528,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "fade_120",
+       "note": "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+      },
+      "2": {
+       "s": 0.777528,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 0.711696,
+       "t90_lin": 0.699395,
+       "t_full": 0.777528,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 99.998335,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -40,
+     "s": 3.109124,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 3.109124,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 2.8115,
+       "t90_lin": 2.798039,
+       "t_full": 3.109124,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 100.003881,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -48,
+     "s": 12.429639,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 12.429639,
+       "extrapolated": false,
+       "capture": "r2_fade_120",
+       "t90_db": 11.287019,
+       "t90_lin": 11.186623,
+       "t_full": 12.429639,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 100.000032,
+       "resolution_s": 0.031705,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -56,
+     "s": 49.716485,
+     "extrapolated": true,
+     "runs": {
+      "2": {
+       "s": 49.716485,
+       "extrapolated": true,
+       "capture": "r2_fade_120",
+       "t90_lin": 44.74469,
+       "t_full": 49.716485,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 38.192456,
+       "resolution_s": 0.031705,
+       "how": "extrapolated: line fitted to the swing (reached 38 %)"
+      }
+     }
+    },
+    {
+     "v": -64,
+     "s": 198.960599,
+     "extrapolated": true,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "fade_120",
+       "note": "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+      },
+      "2": {
+       "s": 198.960599,
+       "extrapolated": true,
+       "capture": "r2_fade_120",
+       "t90_lin": 179.062913,
+       "t_full": 198.960599,
+       "lfo_hz": 15.770299,
+       "final_depth_db": 13.678515,
+       "reached_pct": 9.54085,
+       "resolution_s": 0.031705,
+       "how": "extrapolated: line fitted to the swing (reached 10 %)"
+      }
+     }
+    }
+   ],
+   "bpm": 120
+  },
+  "lfo1_fade_80": {
+   "measure": "t_full",
+   "about": "the full fade of the tremolo depth (a linear ramp): the line fitted to the swing, else t90 / 0.9 of the dB depth",
+   "proxy": false,
+   "setup": "LFO 1 SIN TRG, SPEED +63.00, MULT F64 (15.75 Hz at any tempo), DEPTH +12.00 on VOLUME 64, FADE v (run 2)",
+   "points": [
+    {
+     "v": 0,
+     "s": 0.038238,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.038238,
+       "extrapolated": false,
+       "capture": "r2_fade_80",
+       "t90_db": 0.034414,
+       "t_full": 0.038238,
+       "lfo_hz": 15.768013,
+       "final_depth_db": 13.678328,
+       "reached_pct": 99.976575,
+       "resolution_s": 0.03171,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -8,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "fade_80",
+       "note": "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+      }
+     },
+     "note": "not measurable (no LFO cycle (4 ms .. 1 s) found)"
+    },
+    {
+     "v": -16,
+     "s": 0.048158,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 0.048158,
+       "extrapolated": false,
+       "capture": "r2_fade_80",
+       "t90_db": 0.043343,
+       "t_full": 0.048158,
+       "lfo_hz": 15.768013,
+       "final_depth_db": 13.678328,
+       "reached_pct": 100.007129,
+       "resolution_s": 0.03171,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -32,
+     "s": 0.77782,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "fade_80",
+       "note": "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+      },
+      "2": {
+       "s": 0.77782,
+       "extrapolated": false,
+       "capture": "r2_fade_80",
+       "t90_db": 0.711717,
+       "t90_lin": 0.699681,
+       "t_full": 0.77782,
+       "lfo_hz": 15.768013,
+       "final_depth_db": 13.678328,
+       "reached_pct": 99.99151,
+       "resolution_s": 0.03171,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -48,
+     "s": 12.430079,
+     "extrapolated": false,
+     "runs": {
+      "2": {
+       "s": 12.430079,
+       "extrapolated": false,
+       "capture": "r2_fade_80",
+       "t90_db": 11.287935,
+       "t90_lin": 11.187083,
+       "t_full": 12.430079,
+       "lfo_hz": 15.768013,
+       "final_depth_db": 13.678328,
+       "reached_pct": 100.001259,
+       "resolution_s": 0.03171,
+       "how": "measured (dB depth)"
+      }
+     }
+    },
+    {
+     "v": -64,
+     "s": null,
+     "extrapolated": false,
+     "runs": {
+      "1": {
+       "s": null,
+       "extrapolated": false,
+       "capture": "fade_80",
+       "note": "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+      }
+     },
+     "note": "not measurable (no LFO cycle (4 ms .. 1 s) found)"
+    }
+   ],
+   "bpm": 80
+  }
+ }
+}
