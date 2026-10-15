@@ -290,6 +290,9 @@ in every build that ships it.
 3. `python3 tools/p5_goldens.py`: P5's lines of `tests/golden.txt` and `tests/cpu_baseline.txt` made again, every
    other line left byte for byte (it refuses to write if a render of another engine moved). The entries are named
    by the program's number (`preset/P5/044_CARS_STRINGS`), so a program that stays keeps its line and its hash;
+   and (since 3y80, the device manager's P5 tab) `./build/host/sound_templates`' `"factory"`, `"factory_first"` and
+   `"factory_ids"` lines pasted into `web/fm1sounds.js` and `tools/fm1_install.py` (`FACTORY_PRESETS`,
+   `FACTORY_FIRST`, `FACTORY_IDS`: its `--check` in `tests/run_cr_tests.sh` fails until they hold the new list);
 4. `CR_VERSION=0.22 sh tests/run_all.sh`; then this file's table below and the size table
    (`python3 tools/gen_prophet_factory.py --list`).
 
@@ -495,7 +498,8 @@ byte and, as any load, its UNISON switch (`p5_track_loaded`: `p5_user_pending`, 
 follow the factory programs in P5's pool as other engines' do; a program change, the session, the favourites (a P5
 user sound's key is its slot; an Overwrite of a factory program keeps that program's Sequential number) and the
 filter treat them as any user sound. The Sound Manager exports and imports a P5 user sound as a sound file (patch
-kind `p5`). Sequential's program SysEx is not imported (not done: `prophet_patch.c p5_patch_decode` decodes it, the
+kind `p5`); the device manager has a P5 tab since 3y80 (the programs, P5 user sounds over them or added, the
+favourites' stars: docs/DEVICE-MANAGER.md "The P5 tab"). Sequential's program SysEx is not imported (not done: `prophet_patch.c p5_patch_decode` decodes it, the
 manager's path for it is not written). A 0.21 FM-1 has no P5 store: the tools refuse a P5 sound for it.
 
 What follows is the reasoning of before the pool (0.22's first builds), kept for the record.

@@ -27,7 +27,8 @@ of presets per engine (docs/PRESETS.md) and of loops in ten slots (docs/LOOPER.m
 Two panes under a header with the connection state (Web MIDI, "ChoralRoot FM-1"; Chrome / Edge; the installer's
 "Device not found?" text reused), the firmware version read from the device, and the Sounds / Loops tabs.
 
-**Left: Your FM-1.** Tabs per engine in the picker's order (FM6, FM TONE, VA, CZ-1, WHEEL: five since 0.18) and
+**Left: Your FM-1.** Tabs per engine in the picker's order (FM6, FM TONE, VA, CZ-1, WHEEL: five since 0.18; FM6, FM
+TONE, VA, CZ-1, P5, WHEEL on a 0.22 FM-1 since 3y80, [below](#the-p5-tab-2026-10-15-history-3y80)) and
 a **Loops** tab. A sound saved on a retired engine (PHASE, LOFI, VOICE, TRIO, NOISE, PHYS since 0.18; ANALOG) is a row of
 the VA's tab, where the FM-1 plays its stand-in, marked `PHASE · retired` in place of the patch kind; Keep gives the
 sound back as it was saved. An engine tab lists its pool exactly as PRESETS turns through it on the
@@ -233,7 +234,7 @@ to factory".
     each factory preset is back in its place, as Delete / Reset to factory does on one row. The other selected rows are
     left as they are (the dialog counts them).
   - **Restore all FM6 (N)**: every replaced preset of the open engine's pool; its added sounds stay.
-  - **Restore all engines (N)**: of the five engines' pools the manager shows (P5 is not one of them: below).
+  - **Restore all engines (N)**: of every engine's pool the manager shows (P5's too since 3y80).
   - **Restore factory order** (moved here from the middle column): the keeping one, the user sounds stay as added sounds.
   - Delete, not keep, because the single row's Reset to factory deletes, and Restore factory order already keeps. The
     dialog says both, e.g. "FM6 02 FM BELL comes back in its place. The user sound over it is deleted from the FM-1:
@@ -269,11 +270,62 @@ to factory".
   stops part-way (a loop started: rc 3; a refusal) now keeps its step too, so Undo puts back what was written
   (`ManagerSession.apply`; `writeSounds`' error carries `.written`).
 - **Progress**: the bar and the status per object ("writing the user sounds 011-020 (2 of 5)…"), then the read-back.
-- **P5**: the manager's pools are the five engines of `FACTORY_PRESETS`; a P5 record shows as an added row of the VA's
-  tab ("P5 · retired"), so a P5 sound over a P5 program is not restored by the Restore buttons (Delete all and Reset
-  empty its slot all the same).
+- **P5** (as built in 3y79): the manager's pools were the five engines of `FACTORY_PRESETS`; a P5 record showed as an
+  added row of the VA's tab ("P5 · retired"), so a P5 sound over a P5 program was not restored by the Restore buttons
+  (Delete all and Reset emptied its slot all the same). Since 3y80 P5 has its own tab, and the Restore buttons, Delete
+  all and Reset treat it as every engine ([The P5 tab](#the-p5-tab-2026-10-15-history-3y80)).
 - Model: `fm1manager.js` `managerDeleteRows`, `managerRestorePresets`, `replacedRows`, `replacedOf`, `managerDeleteAll`,
   `restorePresetsText`, `deleteAllText`, `favUserSlots`, `favsClearSlots`, `FAVS_ID`; `fm1sounds.js` `rawBindings`,
   `writeSounds`' `onObject`. `makeSimFM1` takes a pool bank as `cr_backup.c` does (`crb_bank_ok`, `crb_bank_fill`, a
   PUT of length 0) and logs every PUT begin (`sim.puts`). Tests: `web/test_manager.mjs` (the 3y79 block: a bank of
   0.21's FM TONE slots, the favourites, each bank once, the empty ones skipped, Undo, a write stopped part-way).
+
+## The P5 tab (2026-10-15, HISTORY 3y80)
+
+The owner: P5 is a current engine (engine 16, Melodee's Prophet-5 model: docs/PROPHET.md), not a retired one; until
+3y80 its user sounds were added rows of the VA's tab marked "P5 · retired".
+
+- **The tab**, after CZ-1 and before WHEEL as on the unit's picker, where the FM-1 has P5: a 0.22 FM-1 (the sound
+  pool's objects). A 0.21 FM-1 has no P5: its five tabs as before, and `?tab=P5` opens FM6 (`managerEngines`).
+- **The pool** as PRESETS turns it: 00 INIT, the shipped programs (01 ITS PROPHET5 .. 115, the unit's names), then the
+  added P5 sounds. The names come from the firmware: `tests/sound_templates.c` is now built with P5, as the unit is,
+  so `FACTORY_PRESETS["16"]` is INIT P5 and the list of `assets/prophet5-factory/shipped.txt`, `FACTORY_FIRST["16"]`
+  is 1 (`cr_bank.c pool_f0`), and the new `FACTORY_IDS["16"]` holds each program's Sequential number (the
+  favourites' key). `--check` pins the three lines in `web/fm1sounds.js` and `tools/fm1_install.py`, so a changed
+  shipped list fails `tests/run_cr_tests.sh` until they are pasted again (docs/SOUNDS.md "The binding").
+- **Over a program**: the firmware binds a P5 record to a factory program as any engine's (`cr_bank.c cb_bind_of`:
+  `flags[15]` = the program's index + 1, from 1, INIT P5 being the pool's INIT, below `npresets`; nothing P5-specific;
+  no firmware change). So a P5 user sound over a program is that program's row ("MY PROPHET over FOREVER KEYS"),
+  and Place onto a program, Swap or drag onto one, Replace factory, Restore selected / all P5 / all engines, Restore
+  factory order and Delete (Reset to factory) work on P5's rows as on every engine's. Rename, Delete, Undo the same.
+- **Files**: Keep, Save as a file and Save all user sounds give a P5 user sound as the `choralroot-sound` file the
+  installer has written since 0.22 (its whole program: patch kind `p5`, 138 bytes; a sound over a program carries
+  its `position`). A P5 file in the library (files, a pack of one's own, This browser) is listed on the P5 tab ("this
+  engine only") and goes into P5's pool. **A P5 factory program has no file**: the site offers no P5 pack (Sequential's
+  programs, no licence granted: LICENSING.md, docs/PROPHET.md "Open decisions" 2; `tools/make_packs.py` skips engine
+  16), so Keep / Save are off for those rows with the reason in their title, and Select all on P5 takes the user sounds
+  (`keepable`, `P5_NO_PACK`). To keep a program as a file: save it on the FM-1 (SAVE > Save as new), then Keep that.
+  A 0.21 FM-1 refuses a P5 sound, its record as well as its program ("ChoralRoot 0.22 or later needed": 0.21 reads a
+  record of engine 16 as an empty slot, so the next save there would take it).
+- **The favourites** are shown on every tab: a yellow star before the name where the FM-1 shows one, with C or B when
+  the sound is typed Chord or Bass (`favMarks`, `favKeyOf`, `favOf`: `cr_ui.c cu_fav_key`'s keys). P5's programs are
+  keyed by their Sequential number (object 23's section 16), so the owner's marks show on P5's rows whatever the
+  shipped list's order; a P5 user sound over a program shows that program's mark (the place's), an added one its
+  slot's. The manager never sets a mark, and its writes keep P5's section and its types byte for byte (Delete,
+  Restore, Delete all and Reset take off only the deleted user slots' own marks, as since 3y79).
+- **Audition**: SELECT with engine 16. A position past 127 (P5's added sounds after its 115 programs; the CZ-1's
+  after its 64) now sends its high bits in the fourth byte `cr_backup.c crb_select` takes; until 3y80 it wrapped.
+- **Retired** stays for the truly retired engines' records (PHASE, LOFI, VOICE, TRIO, NOISE, PHYS; ANALOG, SAMPLE,
+  GRAIN, DRUM). Colours: P5's tab is green.
+- **The simulator** (`?sim=pool`): U004 MY PROPHET over P5 03 and U007 P5 ADDED (`simP5Patch` programs), and a
+  favourites object (U003, FM6 02, P5 01..05 with 03 typed Chord). `?sim=1` (0.15) has no P5 tab.
+- Model: `fm1manager.js` `MANAGER_ENGINES` (six), `managerEngines`, `P5_ENGINE`, `favMarks`, `favKeyOf`, `favOf`,
+  `keepable`, `P5_NO_PACK`, `simP5Patch`, `selectRequest`'s fourth byte; `fm1sounds.js` `FACTORY_IDS` and the 0.21
+  refusal in `importSound`. Tests: `web/test_manager.mjs` (the 3y80 block: the pool and its stars from an object with
+  all 115 programs marked and one typed; Place over a program, its program read back byte for byte; SELECT; rename,
+  drag, Replace factory, Restore all P5, Restore factory order, Delete, Delete all and Undo, P5's marks and types
+  byte for byte after each; Keep of a program refused; a 0.21 FM-1), `web/test_sounds.mjs` (P5's table; binding over
+  P5 03 and the last program; past the end, INIT P5 and a second binding added), `tests/install_test.py` (the table
+  and the ids, the same in both clients); the built page driven in headless Chromium with `?sim=pool` and `?sim=1`.
+- Not done: a device run; P5's factory programs as files (the owner's decision: a pack would put Sequential's data on
+  the site); Sequential program SysEx import (docs/PROPHET.md "Saving").

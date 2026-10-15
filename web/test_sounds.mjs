@@ -8,7 +8,7 @@
 import { CR_BACKUP_IDS, BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc } from "./fm1backup.js";
 import { SOUND_IDS, ENGINE_NAMES, PATCH_SIZE, patchKindOf, parseSoundObjects, exportSound, soundFileName, readSoundFile,
   importSound, renameSound, deleteSound, readSounds, writeSounds, recordValid, SOUND_TEMPLATES, FM6_FN_DEFAULTS, fm6BlobToVced,
-  vcedToFm6Blob, fm6VcedSyx, czToneSyx, parseSyx, soundFromSyx, exportSyx, syxFileName, FACTORY_PRESETS, FACTORY_FIRST, engineRetired,
+  vcedToFm6Blob, fm6VcedSyx, czToneSyx, parseSyx, soundFromSyx, exportSyx, syxFileName, FACTORY_PRESETS, FACTORY_FIRST, FACTORY_IDS, engineRetired,
   soundBindings, poolOf, POOL_IDS, isPool, swapSounds } from "./fm1sounds.js";
 import { readFileSync } from "node:fs";
 import { quadToV4 } from "./fm1dnsnd.js";
@@ -451,9 +451,29 @@ const FX = {
      T[9].bound.name === "SHIMMER", "binding: DIGITAL binds in FM6's pool, a grid record never, VA 25 SHIMMER");
   ok(T[10].used && T[10].bound === null && T[10].added && T[10].engineName === "ANALOG" && T[10].retired,
      "binding: an ANALOG record (retired) binds nothing: an added preset of the VA's pool");
-  ok(Object.keys(FACTORY_PRESETS).join() === "7,12,13,14,15" && [2, 3, 5, 6, 9, 11].every((e) => poolOf(e) === 13 && engineRetired(e)) &&
-     [7, 12, 13, 14, 15].every((e) => !engineRetired(e)) && ENGINE_NAMES[2] === "PHASE" && ENGINE_NAMES[11] === "NOISE" && ENGINE_NAMES[9] === "PHYS",
-     "0.18: five engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept");
+  ok(Object.keys(FACTORY_PRESETS).join() === "7,12,13,14,15,16" && [2, 3, 5, 6, 9, 11].every((e) => poolOf(e) === 13 && engineRetired(e)) &&
+     [7, 12, 13, 14, 15, 16].every((e) => !engineRetired(e)) && ENGINE_NAMES[2] === "PHASE" && ENGINE_NAMES[11] === "NOISE" && ENGINE_NAMES[9] === "PHYS",
+     "0.18: five engines with a pool, 0.22 six (P5); PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept");
+  { // 3y80: P5's pool (engine 16): INIT P5, then the shipped programs (the firmware's names, sound_templates --check),
+    // each with its Sequential number (FACTORY_IDS, the favourites' key); a P5 record binds over a program as any
+    // engine's (cr_bank.c cb_bind_of: pool_f0 1, below npresets)
+    const n = FACTORY_PRESETS[16].length, ids = FACTORY_IDS[16];
+    const jsI = line("./fm1sounds.js", /^export const FACTORY_IDS = (.*);$/m), pyI = line("../tools/fm1_install.py", /^FACTORY_IDS = (.*)$/m);
+    ok(poolOf(16) === 16 && FACTORY_FIRST[16] === 1 && FACTORY_PRESETS[16][0] === "INIT P5" && n > 1 && ids.length === n && ids[0] === 0 &&
+       new Set(ids.slice(1)).size === n - 1 && ids.slice(1).every((x) => x >= 1 && x <= 200) && jsI && jsI === pyI,
+       `P5: the pool's table: INIT P5 and ${n - 1} programs, each its Sequential number 1..200 once; the two clients the same`);
+    const po = new Map(POOL_IDS.map((id) => [id, new Uint8Array(0)]));
+    let m = importSound(po, 1, { record: bind(rec(16, "OVER 03", { seed: 31 }), 4), name: "OVER 03", patch: Uint8Array.from({ length: 138 }, (_, i) => i & 63) }).objs;
+    m = importSound(m, 2, { record: bind(rec(16, "OVER LAST", { seed: 32 }), n), name: "OVER LAST" }).objs;
+    m = importSound(m, 3, { record: bind(rec(16, "PAST END", { seed: 33 }), n + 1), name: "PAST END" }).objs;
+    m = importSound(m, 4, { record: bind(rec(16, "ON INIT", { seed: 34 }), 1), name: "ON INIT" }).objs;
+    m = importSound(m, 5, { record: bind(rec(16, "03 AGAIN", { seed: 35 }), 4), name: "03 AGAIN" }).objs;
+    const P5 = parseSoundObjects(m).slots;
+    ok(P5[0].bound && P5[0].bound.label === "P5 03" && P5[0].bound.name === FACTORY_PRESETS[16][3] && !P5[0].retired && P5[0].patch === "p5" &&
+       P5[1].bound && P5[1].bound.label === `P5 ${String(n - 1).padStart(2, "0")}` && P5[1].bound.name === FACTORY_PRESETS[16][n - 1] &&
+       P5[2].added && P5[3].added && P5[4].added && !P5[4].retired && exportSound(m, 1).binding.overwrites === 3,
+       "P5: a record over program 03 / the last binds (over P5 03 ...); past the end, INIT P5, a second one of 03: added; not retired");
+  }
   { // a PHYS record bound to PHYS's third preset (a 0.17 slot): kept, retired, added, exports and reads back as PHYS
     const po = new Map([[6, bank({ 0: bind(rec(9, "MY PLUCK", { seed: 21 }), 3) })], [7, new Uint8Array(0)], [9, new Uint8Array(0)],
       [10, new Uint8Array(0)], [11, new Uint8Array(0)], [12, new Uint8Array(0)], [13, new Uint8Array(0)]]);

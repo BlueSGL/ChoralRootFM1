@@ -8,12 +8,17 @@
 // No DOM: the page (manager.html) draws, this decides. Every name here is unique across fm1backup.js / fm1sounds.js:
 // make_site.py inlines them (and fm1dnsnd.js) into one script.
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
-import { nameValid, SOUND_IDS, POOL_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, PATCH_SIZE, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, rawBindings, recordValid, slotLabel, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
+import { nameValid, SOUND_IDS, POOL_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, FACTORY_IDS, SOUND_TEMPLATES, SOUND_FORMAT, PATCH_SIZE, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, rawBindings, recordValid, slotLabel, isPool, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
 import { parseDnsnd } from "./fm1dnsnd.js";
 
 // the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; five engines since 0.18: PHASE, LOFI, VOICE,
-// TRIO, NOISE and PHYS retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
-export const MANAGER_ENGINES = [12, 15, 13, 14, 7];
+// TRIO, NOISE and PHYS retired, their records rows of the VA's pool with recEngine = the engine they were saved on;
+// six in 0.22: P5, engine 16, after CZ-1 (engines.c ENGINE_ORDER), its pool INIT P5 and the shipped programs)
+export const P5_ENGINE = 16;
+export const MANAGER_ENGINES = [12, 15, 13, 14, P5_ENGINE, 7];
+// the pools an FM-1 has: P5 only from 0.22 on (the sound pool's objects; a 0.21 FM-1 has no P5 and no P5 store);
+// nothing read yet: all of them
+export const managerEngines = (objs) => (objs && !isPool(objs) ? MANAGER_ENGINES.filter((e) => e !== P5_ENGINE) : MANAGER_ENGINES);
 export const FAVS_ID = 23;                       // the favourites (0.22, cr_favs.c; a firmware before it does not list 23)
 export const MANAGER_IDS = [...SOUND_IDS, ...POOL_IDS, FAVS_ID, ...CR_LOOP_IDS];   // (0.22: the pool's banks, 50..62)
 export const UNDO_DEPTH = 20;
@@ -203,6 +208,36 @@ export function favsClearSlots(bytes, slots = null) {
   if (!changed) return bytes;
   return Uint8Array.from([f.ver, out.length, ...out.flatMap((s) => [s.tag, s.data.length, ...s.data])]);
 }
+// the marks and types as the pane shows them (read only: the manager never sets a mark) -> {marks, chord, bass}: each a
+// Map tag -> Set of ids; the user slots under FAV_USER with ids 0..127 (0x81's from 32). An object the FM-1 cannot read:
+// no marks, as the FM-1 reads it
+export function favMarks(bytes) {
+  const f = favSections(bytes), out = { marks: new Map(), chord: new Map(), bass: new Map() };
+  if (f) for (const s of f.secs) {
+    if (s.tag === FAV_OPT) continue;
+    const dst = s.tag === s.base ? out.marks : s.tag & FAV_CHORD ? out.chord : out.bass;
+    const first = favFirst(s.base), tag = first >= 0 ? FAV_USER : s.base;
+    if (!dst.has(tag)) dst.set(tag, new Set());
+    for (let i = 0; i < s.data.length * 8; i++) if (s.data[i >> 3] >> (i & 7) & 1) dst.get(tag).add(Math.max(0, first) + i);
+  }
+  return out;
+}
+// a pool row's favourites key (cr_ui.c cu_fav_key): a factory preset and a user sound over one: the engine and the
+// preset's id (its index in the engine's table; P5: the program's Sequential number, FACTORY_IDS), so the mark is the
+// place's; an added user sound: its slot; INIT, an empty row: none (null)
+export function favKeyOf(row) {
+  if (!row || (row.type !== "factory" && row.type !== "user")) return null;
+  if (row.type === "user" && !(row.f >= 0)) return row.slot ? { tag: FAV_USER, id: row.slot - 1 } : null;
+  const ids = FACTORY_IDS[row.engine], id = ids ? ids[row.f] : row.f;
+  return Number.isInteger(id) && (!ids || id > 0) ? { tag: row.engine, id } : null;
+}
+// a row's mark: null (none), "both", "chord" or "bass" (its type; typed both ways, as a newer object might: both)
+export function favOf(favs, row) {
+  const k = favKeyOf(row), on = (m) => !!(m && m.get(k.tag) && m.get(k.tag).has(k.id));
+  if (!k || !favs || !on(favs.marks)) return null;
+  const c = on(favs.chord), b = on(favs.bass);
+  return c && !b ? "chord" : b && !c ? "bass" : "both";
+}
 
 // ---- deleting user sounds: each pool bank (or 0.21 object) written once, whatever the number of its slots
 const POOL_PER_BANK = 10, POOL_SLOT_BYTES = 384, POOL_USED = 0xA5;
@@ -278,7 +313,7 @@ export function restorePresetsText(rows, { selected = rows.length } = {}) {
 // Delete all user sounds (reset: false) / Reset sounds to factory (reset: true)
 export function deleteAllText(objs, { reset = false } = {}) {
   const { slots, pool } = parseSoundObjects(objs), used = slots.filter((s) => s.used), n = used.length;
-  const by = new Map(), order = [...MANAGER_ENGINES, 16];   // (the picker's order, P5, then a retired engine's records)
+  const by = new Map(), order = MANAGER_ENGINES;   // (the picker's order, then a retired engine's records)
   for (const s of used) by.set(s.engine, (by.get(s.engine) || 0) + 1);
   const rank = (e) => (order.includes(e) ? order.indexOf(e) : order.length + e);
   const mix = [...by].sort((a, b) => rank(a[0]) - rank(b[0])).map(([e, k]) => `${ENGINE_NAMES[e]} ${k}`).join(", "), range = pool ? "U001 to U128" : "U01 to U32";
@@ -325,9 +360,16 @@ export const managerKeep = (objs, row, opts = {}) => {
 };
 export function factorySoundFile(packs, engine, pos) {
   const list = packs && packs[engine], f = list && list[pos - 1];
+  if (!f && engine === P5_ENGINE) throw new Error(P5_NO_PACK);
   if (!f) throw new Error(`No factory pack entry for ${poolLabel(engine, pos)}`);
   return { ...f, factory: true, engine, position: pos };
 }
+// P5's factory programs are Sequential's (LICENSING.md): the firmware carries the shipped ones, the site offers no pack
+// of them, so a P5 factory row has no file to keep (tools/make_packs.py NO_PACK)
+export const P5_NO_PACK = "P5's factory programs are Sequential's and the site has no file of them: to keep one, save it " +
+  "on the FM-1 (SAVE > Save as new), then Keep that user sound";
+// a row Keep / Save as a file can take: a user sound, or a factory preset whose pack entry is there (none for P5's)
+export const keepable = (packs, row) => !!row && (row.type === "user" || (row.type === "factory" && !!(packs && packs[row.engine] && packs[row.engine][row.pos - 1])));
 // the packs' files by engine: [{engine, sounds}] or pack objects -> {engine: [file]}
 export function factoryFiles(packList) {
   const out = {};
@@ -579,7 +621,10 @@ export function auditionMessages(row, { bass = false } = {}) {
 // does not answer: -> {unsupported: true} (the page falls back to the program change)
 export const SELECT_CMD = 76;
 export const SELECT_RC = { 1: "the FM-1 does not have that engine", 2: "no such position in the pool", 3: "busy: stop the loop on the FM-1" };
-export const selectRequest = (row, { bass = false } = {}) => [SELECT_CMD, [bass ? 1 : 0, row.engine & 127, row.pos & 127]];
+// a position past 127 (P5's 115 programs and added sounds, CZ-1's 64 and added ones) with its high bits in a fourth
+// byte (cr_backup.c crb_select: pos | pos_hi << 7)
+export const selectRequest = (row, { bass = false } = {}) =>
+  [SELECT_CMD, [bass ? 1 : 0, row.engine & 127, row.pos & 127, ...(row.pos > 127 ? [row.pos >> 7] : [])]];
 export async function selectOnUnit(request, row, opts = {}) {
   let a;
   try { a = await request(selectRequest(row, opts), { timeout: opts.timeout || 600, retries: 0 }); }
@@ -606,6 +651,13 @@ const mgSimSound = (tpl, engine, name, patch = null) => {
   const record = mgUnB64(SOUND_TEMPLATES[tpl]); record[2] = engine;
   return { record, name, engine, kind: patchKindOf(engine), patch };
 };
+// a P5 program as the slot keeps it (prophet_patch.c p5_patch_t, 138 bytes: the 133 raw bytes, size, model 0x32, command
+// (2 a program dump, 3 the edit buffer), group, program): id, Sequential's number 1..200 (0: none, an edit buffer's)
+export function simP5Patch(id, seed = 0) {
+  const p = Uint8Array.from({ length: 138 }, (_, i) => (i * 5 + seed) & 63);
+  p[133] = 133; p[134] = 0x32; p[135] = id ? 2 : 3; p[136] = id ? Math.floor((id - 1) / 40) : 0; p[137] = id ? (id - 1) % 40 : 0;
+  return p;
+}
 export function simObjects(count = 6, pool = false) {   // (pool: the 0.22 sound pool's objects, else 0.21's)
   let m = new Map(MANAGER_IDS.filter((id) => (pool ? !SOUND_IDS.includes(id) : !POOL_IDS.includes(id))).map((id) => [id, mgEmpty()]));
   const czTone = Uint8Array.from({ length: 144 }, (_, i) => (i * 7) & 127);
@@ -613,6 +665,10 @@ export function simObjects(count = 6, pool = false) {   // (pool: the 0.22 sound
   put(1, mgSimSound("fm6", 12, "MY TINE"), 1);          // overwrites FM6 02 FM BELL
   put(2, mgSimSound("cz", 14, "CZ GLASS", czTone), -1);
   put(3, mgSimSound("fm6", 13, "WARM VA"), -1);
+  if (pool) {                                           // (0.22: P5, its programs in the pool's slots)
+    put(4, mgSimSound("fm6", P5_ENGINE, "MY PROPHET", simP5Patch(FACTORY_IDS[P5_ENGINE][3], 1)), 3);   // overwrites P5 03
+    put(7, mgSimSound("fm6", P5_ENGINE, "P5 ADDED", simP5Patch(0, 2)), -1);
+  }
   put(5, mgSimSound("fm6", 12, "BELL TOO"), -1);
   put(6, mgSimSound("fm6", 7, "WHEEL BOW"), 0);          // overwrites WHEEL 01 FULL ORGAN (PHASE 01 BRASS until 0.18)
   put(9, mgSimSound("cz", 14, "CZ BASS 2", czTone), 13); // overwrites CZ-1 13 SYNTH.BASS
@@ -623,6 +679,15 @@ export function simObjects(count = 6, pool = false) {   // (pool: the 0.22 sound
   }
   m.set(40, makeLoopRecord({ bars: 4, layers: 3, events: 24 }));
   m.set(43, makeLoopRecord({ sig: 1, bars: 2, layers: 1, events: 6 }));
+  if (pool) {                                           // (0.22: a few favourites, cr_favs.c's version 2: U003 WARM VA, FM6 02 (the
+    const bits = (ids) => {                             // place U001 holds), P5 01..05 by their Sequential numbers, P5 03 typed Chord)
+      const b = new Uint8Array(1 + (Math.max(...ids) >> 3));
+      for (const i of ids) b[i >> 3] |= 1 << (i & 7);
+      return [...b];
+    };
+    const p5 = FACTORY_IDS[P5_ENGINE], secs = [[FAV_USER, bits([2])], [12, bits([1])], [P5_ENGINE, bits(p5.slice(1, 6))], [P5_ENGINE | FAV_CHORD, bits([p5[3]])]];
+    m.set(FAVS_ID, Uint8Array.from([2, secs.length, ...secs.flatMap(([t, d]) => [t, d.length, ...d])]));
+  }
   return m;
 }
 // ---- several FM-1s (docs/DEVICE-MANAGER.md "Several FM-1s", docs/INSTALL-COMPAT.md): the manager opens one, by its unit ID
@@ -720,10 +785,10 @@ export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", i
       sim.staged = null; return [op, id, 0];
     }
     if (cmd === 72) return [0];
-    if (cmd === SELECT_CMD && sim.select !== false) {
-      const [part, e, pos] = a, pools = managerPools(sim.objs, { empty: false });
-      if (a.length !== 3 || part > 1) return null;
-      if (!pools[e]) return [1];
+    if (cmd === SELECT_CMD && sim.select !== false) {   // (crb_select: part, engine, pos [pos_hi])
+      const [part, e] = a, pos = a[2] | (a[3] || 0) << 7, pools = managerPools(sim.objs, { empty: false });
+      if ((a.length !== 3 && a.length !== 4) || part > 1) return null;
+      if (!pools[e] || !managerEngines(sim.objs).includes(e)) return [1];
       if (pos >= pools[e].length) return [2];
       if (sim.playing) return [3];
       sim.selected = { part, engine: e, pos, name: pools[e][pos].name }; return [0];

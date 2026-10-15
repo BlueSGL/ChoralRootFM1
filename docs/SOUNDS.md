@@ -87,10 +87,14 @@ builds its record with the mark and `flags[15]` = 0: an added preset of its engi
 
 **The factory names** come from the firmware, never typed: `tests/sound_templates.c` prints `"factory": {"<engine>":
 [name, ..]}` (`ENGINES[e]->presets[k].name` for every engine with `eng_ok`) and `"factory_first": {"<engine>": n}`
-(`cr_bank.c` `pool_f0`: 1 for the CZ-1, whose preset 0 INIT TONE is the pool's INIT; else 0), each compact on one
-line. Both clients embed the two strings verbatim (`FACTORY_PRESETS`, `FACTORY_FIRST`: a JSON object of strings and
-numbers is a JS and a Python literal), and its `--check` fails unless each client contains both strings, so a renamed
-or added factory preset fails the suite until they are pasted again.
+(`cr_bank.c` `pool_f0`: 1 for the CZ-1, whose preset 0 INIT TONE is the pool's INIT, and for P5, whose INIT P5 is;
+else 0), each compact on one line, and `"factory_ids": {"16": [0, 1, 2, 3, 6, ..]}`: P5's presets' favourites ids
+(their Sequential program numbers, `cr_ui.c cu_fav_key`; every other engine's id is the preset's index). Both
+clients embed the three strings verbatim (`FACTORY_PRESETS`, `FACTORY_FIRST`, `FACTORY_IDS`: a JSON object of
+strings and numbers is a JS and a Python literal), and its `--check` fails unless each client contains all three,
+so a renamed or added factory preset fails the suite until they are pasted again. Since 3y80 it is built with P5, as
+the unit is: P5's names are the shipped list's (`assets/prophet5-factory/shipped.txt`), so a changed list fails the
+check until both clients have it.
 
 Engines (`ENGINES[]`, append-only; the retired ones are never produced by this firmware but a record may carry them):
 
@@ -104,6 +108,7 @@ Engines (`ENGINES[]`, append-only; the retired ones are never produced by this f
 | 5 | VOICE (retired in 0.18) | – | 13 | VA | `va` (110 bytes) |
 | 6 | TRIO (retired in 0.18) | – | 14 | CZ-1 | `cz` (144 bytes) |
 | 7 | WHEEL | – | 15 | FM TONE | `quad` (80 bytes) |
+| | | | 16 | P5 (0.22; the pool only) | `p5` (138 bytes) |
 
 A record of a retired engine keeps its slot, its name and its engine number: the clients list it with the engine's
 name and `retired` (`--sounds`: `U17  BELL          PHASE   retired   +`; the installer page's table `PHASE · retired`;
@@ -302,7 +307,7 @@ firmware as `cr_backup_test.c` is) prints them with the fixtures as JSON:
 
 ```
 cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
-./build/host/sound_templates                                              # {"templates": {"fm6", "cz", "quad"}, "fixtures": {..., "quad_blob"}, "factory": .., "factory_first": ..}
+./build/host/sound_templates                                              # {"templates": {"fm6", "cz", "quad"}, "fixtures": {..., "quad_blob"}, "factory": .., "factory_first": .., "factory_ids": ..}
 ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py   # the embedded templates and factory names are the firmware's
 ```
 

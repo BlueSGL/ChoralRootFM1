@@ -63,6 +63,9 @@
   li.sel.factory .nm, li.sel.init .nm { color: #000; }
   .over { font-size: 12px; color: var(--orange); font-weight: 700; margin-left: 6px; }
   li.sel .over { color: #000; }
+  .star { color: var(--yellow); margin-right: 5px; font-weight: 400; }
+  .star i { font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace; font-style: normal; margin-left: 1px; vertical-align: 1px; }
+  li.sel .star { color: #000; }
   .meta { font-size: 12px; color: var(--dim); white-space: nowrap; }
   .notes { display: block; font-size: 11px; color: var(--dim); white-space: normal; line-height: 1.3; margin-top: 2px; }
   .badge { font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 4px 6px; border-radius: 2px; background: var(--cream); color: #000; }
@@ -174,7 +177,7 @@
       <ol class="rows" id="dev-rows"></ol>
     </section>
   </div>
-  <p class="small">Click selects; shift-click a range, cmd / ctrl-click adds one. Drag rows within a pool to reorder (onto another sound: they swap places; onto a factory preset: it takes that place), from the library onto the FM-1 to Place (several onto a factory preset: they replace it and the factory presets after it, as Replace factory does), from the FM-1 onto the library to Keep.</p>
+  <p class="small">Click selects; shift-click a range, cmd / ctrl-click adds one. Drag rows within a pool to reorder (onto another sound: they swap places; onto a factory preset: it takes that place), from the library onto the FM-1 to Place (several onto a factory preset: they replace it and the factory presets after it, as Replace factory does), from the FM-1 onto the library to Keep. ★ marks a favourite as the FM-1 does (C / B: typed Chord or Bass; marks are set on the FM-1, SAVE > Favorite): a factory preset's mark stays with its place, so a sound placed over it shows it.</p>
 
   <div class="bar">
     <button id="sel-all" disabled>Select all</button>
@@ -228,7 +231,7 @@ const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
 const SIM_ARG = new URLSearchParams(location.search).get("sim"), SIM = SIM_ARG === "1" || SIM_ARG === "pool";   // ?sim=pool: a 0.22 FM-1 (128 slots)
 const PORT = "ChoralRoot FM-1";
-const COLORS = { 12: "#E63829", 15: "#F67918", 13: "#F6B600", 14: "#2950CD", 2: "#29B27B", 3: "#F6F2EE", 5: "#E63829", 6: "#F67918", 7: "#F6B600", 9: "#29B27B", 11: "#9A999A" };
+const COLORS = { 12: "#E63829", 15: "#F67918", 13: "#F6B600", 14: "#2950CD", 16: "#29B27B", 2: "#29B27B", 3: "#F6F2EE", 5: "#E63829", 6: "#F67918", 7: "#F6B600", 9: "#29B27B", 11: "#9A999A" };
 const colorOf = (e) => COLORS[poolOf(e)] || "#6A696A";
 const TAB0 = (new URLSearchParams(location.search).get("tab") || "").toUpperCase();   // ?tab=loops / ?tab=CZ-1: the tab to open on
 const ui = { tab: TAB0 === "LOOPS" ? "loops" : ENGINE_NAMES.indexOf(TAB0) >= 0 && MANAGER_ENGINES.includes(ENGINE_NAMES.indexOf(TAB0)) ? ENGINE_NAMES.indexOf(TAB0) : 12,
@@ -256,8 +259,11 @@ function sendMidi(bytes) {
 }
 
 /* ---- the FM-1 pane (right) */
+// the engines of this FM-1 (P5 from 0.22 on: managerEngines); a tab it does not have: FM6's
+const engines = () => managerEngines(connected() ? session.objs : null);
 function renderTabs() {
-  const tabs = MANAGER_ENGINES.map((e) => `<button role="tab" data-e="${e}" style="--tc:${colorOf(e)}" aria-selected="${ui.tab === e}">${esc(ENGINE_NAMES[e])}</button>`);
+  if (ui.tab !== "loops" && !engines().includes(ui.tab)) { ui.tab = 12; clearSel("dev"); }
+  const tabs = engines().map((e) => `<button role="tab" data-e="${e}" style="--tc:${colorOf(e)}" aria-selected="${ui.tab === e}">${esc(ENGINE_NAMES[e])}</button>`);
   tabs.push(`<button role="tab" data-e="loops" style="--tc:#F6F2EE" aria-selected="${ui.tab === "loops"}">LOOPS</button>`);
   $("eng-tabs").innerHTML = tabs.join("");
   $("dev").style.setProperty("--c", ui.tab === "loops" ? "var(--cream)" : colorOf(ui.tab));
@@ -283,11 +289,15 @@ function renderDev() {
       `<span class="meta">${esc(loopSummary(l.header))}</span><span class="badge${l.used ? "" : " empty"}">L${String(l.slot).padStart(2, "0")}</span></li>`).join("");
     return;
   }
+  // the favourites' marks (object 23, read only): a yellow star before the name, as the FM-1 shows it; the type's letter
+  // after it when the sound is typed Chord or Bass. A factory preset's mark and a user sound's over it are the place's
+  const favs = favMarks(session.objs.get(FAVS_ID));
+  const star = (r) => { const t = favOf(favs, r); return t ? `<span class="star" title="favourite${t === "both" ? "" : ` (${t === "chord" ? "Chord" : "Bass"} only)`}">★${t === "both" ? "" : `<i>${t === "chord" ? "C" : "B"}</i>`}</span>` : ""; };
   $("dev-rows").innerHTML = rows.map((r, i) => r.type === "empty"
     ? `<li data-i="${i}" class="empty${cls(i)}"><span class="pos">${String(r.pos).padStart(2, "0")}</span><span class="nm">empty · Place here</span><span class="meta">${freeSlots()} free</span><span class="badge empty">—</span></li>`
     : `<li draggable="${r.type !== "init"}" data-i="${i}" class="${r.type}${cls(i)}${ui.swapFrom && ui.swapFrom.row && ui.swapFrom.row.engine === r.engine && ui.swapFrom.row.pos === r.pos ? " swap-src" : ""}">` +
       `<span class="pos">${String(r.pos).padStart(2, "0")}</span>` +
-      `<span class="nm">${esc(r.name)}${r.overwrites ? `<span class="over">over ${esc(r.overwrites)}</span>` : ""}</span>` +
+      `<span class="nm">${star(r)}${esc(r.name)}${r.overwrites ? `<span class="over">over ${esc(r.overwrites)}</span>` : ""}</span>` +
       `<span class="meta">${r.type === "init" ? "init" : r.type === "factory" ? "factory" : retiredNote(r.recEngine) ? esc(retiredNote(r.recEngine)) : r.kind && r.patch ? r.kind + " patch" : "macros"}</span>` +
       `<span class="badge${r.slot ? "" : " empty"}">${r.slot ? esc(r.label) : "—"}</span></li>`).join("");
 }
@@ -381,8 +391,11 @@ function refresh() {
   $("delete-all").disabled = !c || !nUsed;
   $("delete-all").textContent = `Delete all user sounds${nUsed ? ` (${nUsed})` : ""}…`;
   $("reset-factory").disabled = !c || (!nUsed && !userMarks);
-  $("keep").disabled = !c || !d.length || d.some((r) => loops ? !r.used : r.type === "init" || r.type === "empty");
+  // (a P5 factory row has no file: Sequential's programs are not on the site, fm1manager.js P5_NO_PACK)
+  const noFile = !loops && d.some((r) => r.type === "factory" && !keepable(ui.fpacks, r));
+  $("keep").disabled = !c || !d.length || noFile || d.some((r) => loops ? !r.used : r.type === "init" || r.type === "empty");
   $("keep").textContent = d.length > 1 ? `← Keep ${d.length}` : "← Keep";
+  $("keep").title = noFile ? P5_NO_PACK : "Copy the FM-1's selected sounds into This browser";
   $("keep-all").disabled = ui.libSrc === "browser" || !ui.libItems.length;
   const onLib = ui.focus === "lib";
   $("rename").disabled = onLib ? !lp || lp.type !== "sound" : !c || loops || !dp || dp.type !== "user";
@@ -390,9 +403,10 @@ function refresh() {
   $("swap").textContent = ui.swapFrom ? "Cancel swap" : "Swap with…";
   $("delete").disabled = onLib || !c || !d.length || d.some((r) => loops ? !r.used : r.type !== "user");
   $("delete").textContent = !loops && d.length === 1 && d[0].overwrites ? "Reset to factory" : d.length > 1 ? `Delete ${d.length}` : "Delete";
-  const fileSel = onLib ? l.length : !loops && d.filter((r) => r.type === "user" || r.type === "factory").length === d.length ? d.length : loops && d.every((r) => r.used) ? d.length : 0;
+  const fileSel = onLib ? l.length : !loops && d.filter((r) => keepable(ui.fpacks, r)).length === d.length ? d.length : loops && d.every((r) => r.used) ? d.length : 0;
   $("save-file").disabled = !fileSel;
-  $("save-pack").disabled = !(onLib ? l.length && l.every((x) => x.type === "sound") : !loops && d.length && d.every((r) => r.type === "user" || r.type === "factory"));
+  $("save-pack").disabled = !(onLib ? l.length && l.every((x) => x.type === "sound") : !loops && d.length && d.every((r) => keepable(ui.fpacks, r)));
+  $("save-file").title = $("save-pack").title = !onLib && noFile ? P5_NO_PACK : "";
   $("save-users").disabled = !c || !usedSlots(session.objs);
   $("sel-all").disabled = onLib ? !vis.length : !c;
   $("lib-remove").disabled = !l.length || ui.libSrc !== "browser";
@@ -561,8 +575,10 @@ async function placeItems(items, target) {
 }
 async function keepRows(rows) {
   let n = 0;
-  for (const l of rows) {
-    const file = ui.tab === "loops" ? keepLoop(session.objs, l.slot, { firmware }) : managerKeep(session.objs, l, keepOpts());
+  // (every file made before any is kept: a row that has none, a P5 factory program, stops it with nothing kept)
+  const files = rows.map((l) => ui.tab === "loops" ? keepLoop(session.objs, l.slot, { firmware }) : managerKeep(session.objs, l, keepOpts()));
+  for (const [k, l] of rows.entries()) {
+    const file = files[k];
     const item = libraryItemsFromFile("kept.json", JSON.stringify(file))[0];
     if (ui.tab === "loops") item.name = `loop ${l.slot} · ${new Date().toISOString().slice(0, 10)}`;
     await store.add({ ...item, source: "This browser" }); n++;
@@ -690,7 +706,7 @@ $("save-users").addEventListener("click", act(async () => {
 }));
 $("sel-all").addEventListener("click", () => {
   if (ui.focus === "lib") { const v = libVisible(); ui.lib = { sel: new Set(v.map(({ i }) => i)), anchor: v[0]?.i ?? null, primary: v[0]?.i ?? null }; }
-  else { const rows = devRows(); ui.dev = { sel: new Set(rows.map((r, i) => i).filter((i) => ui.tab === "loops" ? rows[i].used : rows[i].type === "user" || rows[i].type === "factory")), anchor: null, primary: null }; }
+  else { const rows = devRows(); ui.dev = { sel: new Set(rows.map((r, i) => i).filter((i) => ui.tab === "loops" ? rows[i].used : keepable(ui.fpacks, rows[i]))), anchor: null, primary: null }; }
   renderAll();
 });
 $("lib-remove").addEventListener("click", act(async () => { const l = libSel(); for (const r of l) await store.remove(r.key); say(`Removed ${l.length} from This browser.`); await loadLibrary(); }));
