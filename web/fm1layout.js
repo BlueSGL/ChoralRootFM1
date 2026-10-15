@@ -251,6 +251,11 @@ export const elementSize = (type, style) => (style === "p5" && P5_SIZE[type]) ||
 export const KNOB_SIZES = { flat: [24, 28, 32, 36, 40], p5: [28, 32, 36, 40, 44] };
 export const knobSize = (e, style) => e.size || (style === "p5" ? 36 : 32);
 export const CLASSIC_KINDS = ["edit8", "stack"];
+// a classic cell's look (core.h ENG_C_*, in its order; the catalog's cell "style"; tools/gen_layout.py CELL_STYLES): the
+// editor's rule .. and the Prophet-5's controls drawn in the cell (cr_screen.h CR_G_P5*, docs/LAYOUT-TOOL.md "Cell styles")
+export const CELL_STYLES = ["rule", "big", "ratio", "harm", "detune", "num", "val", "text", "knob", "bar", "waveph", "p5knob",
+                            "p5led", "p5led-saw", "p5led-tri", "p5led-sqr", "p5led2", "p5switch"];
+export const P5_CELL_STYLES = CELL_STYLES.filter((x) => x.startsWith("p5"));   // the designer's choice (beside the rule)
 
 // ------------------------------------------------------------- parameters ---
 const cap = (s) => (s ? s[0] + s.slice(1).toLowerCase() : "");
@@ -411,6 +416,7 @@ export function validateDesign(d, cat, opts = {}) {
             if (!pidx.has(c.param)) { err(`${at} lane ${li + 1} knob ${ci + 1}: no parameter "${c.param}"`); good = false; }
             else use(c.param, at);
             if (c.label !== undefined && c.label !== null && typeof c.label !== "string") err(`${at} lane ${li + 1} knob ${ci + 1}: a label is a text`);
+            if (c.style !== undefined && c.style !== null && !CELL_STYLES.includes(c.style)) err(`${at} lane ${li + 1} knob ${ci + 1}: style "${c.style}" (${CELL_STYLES.join(", ")})`);
           });
         });
         if (build && good && !freeGroup) {
@@ -535,7 +541,7 @@ export function packDesign(d, cat) {
   const colOf = (c) => {
     if (!c || c.fixed) return null;
     const p = params.get(c.param);
-    return p && !p.part ? { src: [p.page, p.col], label: c.label || "" } : null;
+    return p && !p.part ? { src: [p.page, p.col], label: c.label || "", style: Math.max(0, CELL_STYLES.indexOf(c.style || "rule")) } : null;
   };
   let pages = [], screens = [], sec = [];
   const mode = inPlace ? "in-place" : "plan";
@@ -621,14 +627,15 @@ export function packDesign(d, cat) {
     if (s.type === "free" && !(free && free.show.has(`${gi}.${si}`)))
       unbuildable.push({ gi, si, why: `a free screen in ${g.name}: the unit's editor has free screens in OSC .. MOD only (FX and MIX are the platform's)` });
   }));
-  // the bytes ('L' 2 engine npages pages.. section[8] nscreens screens.., the free half)
-  const b = [76, 2, cat.engine.index, pages.length];
+  // the bytes ('L' 3 engine npages pages.. section[8] nscreens screens.., the free half; a column: srcpage srccol style
+  // label, its style the cell's ENG_C_*: the plan's cell styles and, in place, cr_edit.c's ce_style_hook)
+  const b = [76, 3, cat.engine.index, pages.length];
   const str = (s) => { const u = toLatin1((s || "").slice(0, 15)); b.push(u.length, ...u); };
   for (const p of pages) {
     str(p.title);
     for (let c = 0; c < 4; c++) {
       const x = p.cols[c];
-      if (x) { b.push(x.src[0], x.src[1]); str(x.label); } else { b.push(255, 0); str(""); }
+      if (x) { b.push(x.src[0], x.src[1], x.style || 0); str(x.label); } else { b.push(255, 0, 0); str(""); }
     }
   }
   const secs = [0, 1, 2, 3, 4].map((g) => sec[g]).filter((v) => v !== undefined);

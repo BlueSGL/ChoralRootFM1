@@ -307,6 +307,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     "a lane naming no element": (d) => { d.groups[0].screens[0].lanes[0][0] = "nothing"; },
     "an element bound to a key": (d) => { d.groups[0].screens[0].elements[1].key = 12; },
     "an unknown style": (d) => { d.style = "x"; },
+    "an unknown cell style": (d) => { d.groups[1].screens[0].lanes[0].cells[0].style = "glow"; },
     "two LEDs on a 0..127 parameter": (d) => { Object.assign(d.groups[0].screens[0].elements.find((e) => e.type === "led"), { leds: 2, glyph: null, param: "OSC A:FREQ" }); },
   };
   const missed = Object.entries(broken).filter(([, f]) => { const d = free(); f(d); return L.validateDesign(d, cat).errors.length === 0; }).map(([k]) => k);
@@ -367,6 +368,68 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
      `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}"); ` +
      `not buildable: ${pk.unbuildable.map((u) => `${cat.groups[u.gi].name} ${u.si + 1}`).join(", ") || "none"} (EXPR)`);
   m.unload();
+
+  // cell styles (3y93): the Prophet-5's controls in a classic cell (cr_screen.h CR_G_P5*), through the real editor
+  {
+    const c565 = (r, g, b) => { const c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3); return [((c >> 11) * 255 / 31) | 0, (((c >> 5) & 63) * 255 / 63) | 0, ((c & 31) * 255 / 31) | 0].join(); };
+    const RED = c565(224, 58, 47), at = (rgba, x, y) => Array.from(rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join();
+    const sty = L.designFromCatalog(cat, "styles"), f1 = sty.groups[1].screens[0];
+    ["p5knob", "p5knob", "p5knob", "p5switch"].forEach((x, k) => { f1.lanes[0].cells[k].style = x; });
+    f1.lanes[1].cells[0].style = "p5led2";
+    f1.lanes[1].cells[1].style = "p5led";
+    const bk = { ...f1.lanes[1].cells[0] }; bk.style = "glow";
+    const vs = L.validateDesign(sty, cat), vb = JSON.parse(JSON.stringify(sty));
+    vb.groups[1].screens[0].lanes[1].cells[0] = bk;
+    const ps5 = L.packDesign(sty, cat);
+    ok(!vs.errors.length && L.validateDesign(vb, cat).errors.some((e) => e.includes('style "glow"')) && ps5.mode === "in-place" && m.load(ps5.bytes).ok,
+       `a design with p5 cell styles on FILT 1 (in place: ${ps5.pages} pages) is valid and loads; an unknown style is refused`);
+    const sf = frameAll(), sbad = [];
+    sf.forEach((f, i) => {
+      const t = f.t, d = L.diffCount(f.rgba, base[i].rgba), mine = t.group === 1 && t.screen === 0;
+      if (mine !== d > 0 || f.lint.findings.some((x) => x.kind !== "ellipsis")) sbad.push(`${L.tileLabel(t)}: ${d} px`);
+    });
+    ok(!sbad.length, `in place: only FILT 1's frames change (the glyphs), lint clean` + (sbad.length ? ` (${sbad.join("; ")})` : ""));
+    const aft = pidx.get("FILTER+:AFTER");
+    m.show(P5.index, 1, 1, 0, 1);
+    if (!m.pget(aft.page, aft.col)) { m.knob(2, 1); m.step(800); }
+    const fa = m.render(), sa = m.state();
+    m.knob(2, -1); m.step(800);
+    const fb = m.render(), sb = m.state();
+    ok(at(fa, 90, 206) === RED && at(fb, 90, 206) !== RED && sa.cells[1].value === "On" && sb.cells[1].value === "Off",
+       `a p5led cell (FILT 1 row B, KNOB 2 Aftertouch): its LED red when on (${at(fa, 90, 206)}), not when off (${at(fb, 90, 206)}); the value "On" / "Off" on the row`);
+    m.unload();
+    // the mock-up for the owner: design/layouts/designs/p5-rows.json, nine edit8 screens of the p5 cell styles
+    const rows = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-rows.json"), "utf8"));
+    const vr = L.validateDesign(rows, cat), rs = L.designSession(m, cat, rows, 1);
+    rs.reload();
+    const plain = JSON.parse(JSON.stringify(rows));
+    plain.groups.forEach((g) => g.screens.forEach((x) => x.lanes.forEach((l) => l.cells.forEach((c) => { if (c) delete c.style; }))));
+    const pls = L.designSession(m, cat, plain, 1);
+    const rshots = [], rbad = [];
+    let styled = 0;
+    for (const t of L.designTiles(rows)) {
+      rs.open(t.gi, t.si, t.lane);
+      const r = rs.render();
+      rshots.push(r.rgba);
+      for (const f of r.lint.findings) if (f.kind !== "ellipsis") rbad.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${f.kind} "${f.text}"`);
+      if (L.inkCount(r.rgba) < 500) rbad.push(`${t.key}: blank`);
+      if (t.group !== "FX" && t.group !== "MIX") {
+        pls.open(t.gi, t.si, t.lane);
+        if (L.diffCount(pls.render().rgba, r.rgba) > 0) styled++; else rbad.push(`${t.key}: no glyph drawn`);
+      }
+    }
+    const ragain = L.designTiles(rows).map((t) => { rs.open(t.gi, t.si, t.lane); return rs.render().rgba; });
+    rs.open(0, 0, 0);
+    const o1 = rs.render(), saw = pidx.get("OSC A:SAW");
+    ok(!vr.errors.length && rows.groups.slice(0, 5).every((g) => g.screens.every((x) => x.type === "classic" && x.kind === "edit8" && x.lanes.length === 2)) &&
+       rows.groups.slice(0, 5).reduce((n, g) => n + g.screens.length, 0) === 9 && !rbad.length && styled === 18 &&
+       ragain.every((a, i) => L.diffCount(a, rshots[i]) === 0),
+       `the p5 rows mock-up (p5-rows.json): valid, 9 edit8 screens of two rows in OSC .. MOD, ${rshots.length} screens x lanes drawn by the editor, ` +
+       `lint clean, deterministic, the glyphs on all ${styled} engine rows (against the same rows unstyled)` + (rbad.length ? ` (${rbad.slice(0, 6).join("; ")})` : ""));
+    ok(m.pget(saw.page, saw.col) === 1 && at(o1.rgba, 90, 71) === RED && o1.state.page === "OSC A",
+       `the mock-up's OSC A row A: Saw on, its LED red (${at(o1.rgba, 90, 71)}) under the saw icon`);
+    m.unload();
+  }
 
   // the example (item 4) and the free-screen draw API
   const ex = free();

@@ -91,7 +91,20 @@ enum { CR_G_NONE, CR_G_KNOB, CR_G_BAR, CR_G_WAVE, CR_G_SAW, CR_G_SQUARE, CR_G_ST
        CR_G_SYNC,                   /* pct < 1/2: a clock face (free: milliseconds); else two notes on a beam (the tempo) */
        CR_G_PING,                   /* between two walls: pct < 1/2 two level paths (stereo), else one bouncing down
                                      * from wall to wall (ping-pong) */
+       /* the Prophet-5's controls as an edit8 cell's glyph (docs/EDITOR.md section 9 "A cell"; cr_draw.c cr_p5glyph, on the p5
+        * primitives), the value on the cell's row; sized to the cell's glyph box */
+       CR_G_P5KNOB,                 /* the ticked dial (11 ticks over 270 degrees, the dark face, its rim), the pointer at
+                                     * pct; CR_CF_BIP: tick 5 lit (12 o'clock). No value inside: the cell's row has it */
+       CR_G_P5LED,                  /* the LED button: the cap with its black window, the red LED lit (pct >= 128) or a
+                                     * dim dot; pct2 the one-cycle icon over it (CR_P5I_*); a 22 px box (under a
+                                     * band): the cap only */
+       CR_G_P5LED2,                 /* the two-LED button (red: the minimum, left; yellow: the maximum, right), the
+                                     * current one lit (pct >= 128: the right); the two value names over them when
+                                     * they fit, NUL-separated in cr_cell_t.label after the label's own NUL */
+       CR_G_P5SWITCH,               /* the lever in a slot of three positions, the lever at pct (0, 1/2, 1) */
        CR_G_N };
+/* CR_G_P5LED's icon (cr_cell_t.pct2): one cycle of the wave as the panel prints it over the button */
+enum { CR_P5I_NONE, CR_P5I_SAW, CR_P5I_TRI, CR_P5I_SQUARE, CR_P5I_SINE, CR_P5I_NOISE };
 
 /* CR_G_LFOWAVE's wave (cr_cell_t.wave) */
 enum { CR_LW_TRI, CR_LW_SINE, CR_LW_SQUARE, CR_LW_SAW, CR_LW_RAMP, CR_LW_EXP, CR_LW_RANDOM, CR_LW_N };

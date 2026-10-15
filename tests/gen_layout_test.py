@@ -121,10 +121,12 @@ BROKEN = {   # name: (how, the reason's words)
     "a lane naming no element": (set_(FS + ["lanes", 0, 0], "nothing"), r'no element "nothing"'),
     "an element bound to a key": (set_(FS + ["elements", 1, "key"], 12), r"bound to a key"),
     "an unknown style": (set_(["style"], "x"), r'style "x"'),
+    "an unknown cell style": (lambda d: d["groups"][1]["screens"][0]["lanes"][0]["cells"][0].update(style="glow"), r'style "glow"'),
     "two LEDs on a 0..127 parameter": (two_leds, r"two LEDs show a parameter of two values"),
 }
-ok(len(BROKEN) == 21, f"{len(BROKEN)} broken designs, as web/test_layout.mjs 6")
-designs = {"p5-panel": panel, "p5-osc-panel": osc}
+ok(len(BROKEN) == 22, f"{len(BROKEN)} broken designs, as web/test_layout.mjs 6")
+rows = json.loads((ROOT / "design/layouts/designs/p5-rows.json").read_text(encoding="utf-8"))   # (3y93: the p5 cell styles)
+designs = {"p5-panel": panel, "p5-osc-panel": osc, "p5-rows": rows}
 for name, (how, why) in BROKEN.items():
     d = copy.deepcopy(osc)
     how(d)
@@ -240,6 +242,9 @@ else:
        f"({nw} with one)" + "".join(f"\n    {k}: py {G.warnings(designs[k])} js {jsv[k][2]}" for k in wdiff[:3]))
     ok(not jsv.get("p5-panel", [["?"]])[0] and not jsv.get("p5-panel", [0, ["?"]])[1] and all(jsv.get("broken: " + k, [0])[0] for k in BROKEN),
        "validateDesign: p5-panel valid (and buildable), each broken design refused")
+    ok(not jsv.get("p5-rows", [["?"]])[0] and jsv.get("p5-rows", [0, []])[1] and not G.validate(copy.deepcopy(rows), cat, built=False),
+       f"p5-rows (the mock-up of classic screens with p5 cell styles): valid; not buildable yet ({len(jsv.get('p5-rows', [0, []])[1])} reasons, "
+       "classic screens in OSC .. MOD)")
 
 print(f"gen_layout_test: {checks} checks, {fails} failed")
 sys.exit(1 if fails else 0)

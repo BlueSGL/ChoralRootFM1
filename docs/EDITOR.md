@@ -452,6 +452,23 @@ edit8 label then fits in 46 px. The **active** row is in the knob colours (blue,
 block is the source's colour and the value the slot's amount with the source (`ENV2 +12`, `LFO1 +24`: `hot_col`). A
 value too wide loses its space, then 2 px of size at a time (down to 9 px), then ellipsises.
 
+**The Prophet-5's controls as a cell's glyph** (3y93; the cell styles `ENG_C_P5*`, cr_screen.h `CR_G_P5*`, drawn by
+cr_draw.c `cr_p5glyph` on the p5 primitives; no engine's screens use them yet: the layout tool's mock-ups,
+docs/LAYOUT-TOOL.md "Cell styles"). Each fills the cell's glyph box (60 px wide, 34 px high without a band, 22 under
+one); the label stays on top, the value on the row under it ("64", "On", "Half", "1/2"), the knob bars and the hot
+block as for any cell:
+
+- **knob** (`CR_G_P5KNOB`): 11 ticks over the 270 degrees at the box's height (a 40 px dial; 26 under a band), the dark
+  face with its rim, a long 2 px pointer in the cell's colour at the value; centre-zero: tick 5 lit; no value inside;
+- **LED button** (`CR_G_P5LED`): a 26 x 26 cap, its black window over the pad, the 7 px red LED when on, a dim dot off;
+  `pct2` the one-cycle icon over it at the box's top (saw, triangle, pulse: CR_P5I_*), in the cell's colour on the active
+  row, else mid when on and dim when off; under a band the cap alone, 20 x 16;
+- **two LEDs** (`CR_G_P5LED2`): one 44 px cap, the minimum's LED red on the left, the maximum's yellow on the right, the
+  current one lit, the two value names (9 px) over them when they fit (they ride in `cr_cell_t.label` after its NUL);
+  under a band the cap alone;
+- **lever** (`CR_G_P5SWITCH`): a slot of three positions the box's height, the lever in the cell's colour at the
+  position (pct 0, 1/2, 1), a tick beside each.
+
 ### `edit8` — up to eight parameters
 
 Two rows of four cells (row A, row B), one of them active; an optional **wide** shape over them:

@@ -284,8 +284,15 @@ enum { ENG_C_RULE,               /* the editor's rule (the kind of the value: a 
        ENG_C_TEXT,               /* the value's text ("Free", "x16", "LP"), no bar */
        ENG_C_KNOB,               /* a knob (bipolar when the range is), the value's text */
        ENG_C_BAR,                /* a bar glyph, the number */
-       ENG_C_WAVEPH };           /* this column (an LFO wave, CR_LW_* order) and the next (its start phase, its range a
+       ENG_C_WAVEPH,             /* this column (an LFO wave, CR_LW_* order) and the next (its start phase, its range a
                                   * cycle) as one double-width cell: the wave drawn from the phase, "Tri \267 90" (degrees) */
+       /* the Prophet-5's controls as the cell's glyph (cr_screen.h CR_G_P5*), the value on the cell's row ("64", "On",
+        * "Half", "1/2", "Low R"); no engine's plan uses them yet: the layout tool's mock-ups (docs/LAYOUT-TOOL.md) */
+       ENG_C_P5KNOB,             /* the ticked dial (bipolar from 12 o'clock when the range is) */
+       ENG_C_P5LED,              /* the LED button, no icon */
+       ENG_C_P5LED_SAW, ENG_C_P5LED_TRI, ENG_C_P5LED_SQR,   /* .. with its wave's one-cycle icon over the cap */
+       ENG_C_P5LED2,             /* the two-LED button (a parameter of two values: the minimum red, the maximum yellow) */
+       ENG_C_P5SWITCH };         /* the lever of a three-position enum */
 typedef struct {
     uint8_t sec;                 /* the group: eng_deep_t.section's index (0 OSC, 1 FILTER, 2 ENV, 3 LFO, 4 MOD) */
     uint8_t pg[2];               /* row A's page, row B's (0xFF: one row) */

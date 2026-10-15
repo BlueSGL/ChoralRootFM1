@@ -157,8 +157,8 @@ an element off the grid or over the title line; the budgets; a bound element in 
 | `lay_draw_begin(title, page)`, `lay_draw_text(bold, px, x, y, s, col, align, maxw)`, `lay_draw_end()` | texts in the firmware's faces on an empty page under the title line (the contact sheets' captions): the 240 x 240 RGBA |
 | `lay_text_w(s, px, bold)` | a text's advance (the design's checks: a title that fits the header) |
 
-The packed form: `'L' 2 engine npages`, per page `tlen title` and four times `srcpage srccol llen label` (srcpage 255:
-an empty column), `section[8]`, `nscreens`, per screen `sec pg0 pg1 band tlen title`; then, with free screens, the
+The packed form: `'L' 3 engine npages`, per page `tlen title` and four times `srcpage srccol style llen label` (srcpage
+255: an empty column; style the cell's `ENG_C_*`, 'L' 2 has none), `section[8]`, `nscreens`, per screen `sec pg0 pg1 band tlen title`; then, with free screens, the
 free half: `nfs`, `nel` (2 B, little-endian), `npool` (2 B), the screens (`cr_lay_screen_t`, 38 B), the elements
 (`cr_lay_elem_t`, 14 B), the pool.
 
@@ -187,6 +187,7 @@ layouts). It binds parameters by **stable id**: `"<page title>:<short>"` for an 
          {"title": "FILTER", "cells": [
            {"param": "FILTER:RES"},
            {"param": "FILTER:CUT", "label": "Bright"},       a label of the design's own (else the editor's)
+           {"param": "FILTER:FENV", "style": "p5knob"},      a look of its own ("Cell styles", below; else the editor's)
            {"param": "FILTER:FENV"}, {"param": "FILTER:KTRK"}]},
          ..]}]},
     {"group": 0, "name": "OSC", "screens": [
@@ -288,6 +289,52 @@ node tools/layout/render_sheet.mjs design/layouts/designs/p5-panel.json design/c
 tile's lint). It is compiled into the firmware (3y86): the unit shows these very pictures. The unit's own, walked on
 the browser emulator by its panel: `design/choralroot-fm1-p5-panel-emulator.png`, made by `node
 tools/layout/emu_sheet.mjs design/choralroot-fm1-p5-panel-emulator.png` (the same tiling).
+
+### Cell styles (classic screens, 3y93)
+
+The owner (2026-10-15), on the P5 panel: "the new P5 UI just feels out of place compared with the rest of the engine
+UI's. With the frames around things the controls get tiny and hard to read, and also having 5 or six parameters on a
+row while it matches the P5, just feels weird, so I think we can redesign this, all parameters for pages follow a up to
+4 parameter per row philosophy and fill the row's width so they are big and clear, then we can use the same row
+highlighting behaviour we use in the other engine's UI." and "I want to see the layout with the row selection bars like
+we have elsewhere, the labels at the top like we have elsewhere, and then just have update knob and button glyphs
+inside instead of the bars." Then: "Why are you building it in Firmware? I'd like mockup first, and I'll want to change
+the page layouts." So the tool, not the unit, has it first:
+
+A classic cell may carry `"style"`: how the editor draws its parameter (core.h `ENG_C_*`, the names the catalog's cell
+`style` field uses): `rule` (the editor's own choice, the default), `big`, `ratio`, `harm`, `detune`, `num`, `val`,
+`text`, `knob`, `bar`, `waveph` (FM TONE's), and the Prophet-5's controls drawn in the cell's middle, sized to its
+glyph box (34 px high without a band, 22 under one; docs/EDITOR.md §9 "A cell"), the label on top, the value on the row
+under it ("64", "On", "Half", "1/2"), the row bars and the hot block the editor's as on every engine:
+
+| style | the glyph (cr_screen.h, cr_draw.c `cr_p5glyph`) |
+| --- | --- |
+| `p5knob` | `CR_G_P5KNOB`: the ticked dial (11 ticks over 270 degrees, the dark face, its rim, a long pointer at the value; bipolar: tick 5 lit), its tick ring the box's height (40 px; 26 under a band); no value inside |
+| `p5led` | `CR_G_P5LED`: the LED button, a 26 px cap (its black window, the red LED lit when on, a dim dot off); under a band the cap alone, 16 px |
+| `p5led-saw`, `p5led-tri`, `p5led-sqr` | the same with its wave's one-cycle icon (`cr_wave1`, ~10 px) over the cap at the box's top |
+| `p5led2` | `CR_G_P5LED2`: one wide cap, two LEDs (the minimum red, left; the maximum yellow, right), the current one lit; the two value names over them when they fit (not under a band) |
+| `p5switch` | `CR_G_P5SWITCH`: the lever in a slot of three positions, ticks beside it |
+
+The designer's inspector has *Style* per slot, beside its parameter and label (the editor's rule or one of the p5
+styles); the slot shows it. `validateDesign` and `tools/gen_layout.py` accept the field and refuse a name not in the
+list (the same words); the generator still refuses classic screens in OSC .. MOD, so a design of them stays "not
+buildable yet". `packDesign` carries a column's style in the packed form ('L' 3: `srcpage srccol style llen label`;
+'L' 2, without it, is still read), and `lay_load` gives it to the real editor two ways: in a plan as the screen's
+`cell[2][4]` (`ce_cell_plan`), in place through a preview-only hook beside `ce_label_hook`, `cr_edit.c`
+`ce_style_hook` (an edit8 cell of a deep parameter; the p5 styles). The unit's image has the glyphs' code and the
+styles (`ce_cell_p5`) but no engine uses them yet (the size line: docs/HISTORY.md 3y93).
+
+The owner's starting point: **`design/layouts/designs/p5-rows.json`**, a mock-up of P5's editor as the editor's own
+edit8 screens: nine screens of two rows (OSC A, OSC B; FILTER under the filter's curve, ENV 2 · filter under the
+envelope; ENV 1 · amp; LFO, WHEEL; POLYMOD, VOICE), up to four cells a row, each cell's style by its parameter's kind
+(the 0..127 knobs, VOICES, DETUNE and PRIORITY `p5knob`; the switches `p5led`, the waves' with their icon; REV
+`p5led2`; KEY TRK `p5switch`), the labels the editor's way ("Cutoff", "Env amt", "Src mix" on WHEEL: the LFO's noise
+amount, the wheel-mod source mix), a wave's buttons on one row (the owner: "OSC B SAW, TRI, PULSE must all be on same
+row, same with on the LFO page": OSC B Freq · Saw · Tri · Pulse, LFO Freq · Saw · Tri · Square, their other knobs on
+row B), FX and MIX today's. It is a plan (the OSC group has two screens, not today's three),
+so the preview packs it as one; "not buildable yet" (classic screens in OSC .. MOD), which is right for a mock-up. Its
+contact sheet, every screen x lane through the firmware's editor and renderer: `design/choralroot-fm1-p5-rows-screens.png`
+(`node tools/layout/render_sheet.mjs design/layouts/designs/p5-rows.json design/choralroot-fm1-p5-rows-screens.png`).
 
 **Not buildable yet** means: the design is valid and previewed, but the unit would not show it as designed, or the
 generator would refuse it (its reason, word for word: `validateDesign(d, cat, {build: true})` runs
@@ -451,7 +498,7 @@ design, and the per-engine table that says which patch parameter a (page, column
   click on a knob's + changes it, the contact sheet has every tile, the lists are filled) and paints a square per
   check, which the test reads from the screenshot;
 - **the designer**: a design's JSON reads back to the same model; today's layout of every engine is a valid design;
-  `validateDesign` catches each of 19 broken files (format, version, kind, params_hash, engine, header, group, screen
+  `validateDesign` catches each of 22 broken files (format, version, kind, params_hash, engine, header, group, screen
   type, a lane of three cells, a parameter, a band, an element type, a position, an id twice, a switch of four, an
   led glyph, a colour not a token, a lane naming nothing, a key binding); today's design loaded by `lay_load` gives
   all 22 P5 frames identical to the built-in tables'; a relabel changes only the label's pixels; a swap of Cutoff and
@@ -468,6 +515,13 @@ design, and the per-engine table that says which patch parameter a (page, column
   ids, no lane, 8 px off an identical box, the parameter then twice); the "order" warning: none on the panel (its LFO
   lane 1 INIT AMT, FREQ), 0.22-beta1's LFO lane warns and still builds; the flat example's one (OSC B lane 2, over two
   rows);
+- **cell styles** (3y93): today's P5 design with p5 styles on FILT 1 (Cutoff .. Env amt `p5knob`, Key trk `p5switch`,
+  Rev `p5led2`, Aftertouch `p5led`) packs in place, loads, and changes FILT 1's frames only (lint clean); the
+  Aftertouch cell's LED is the firmware's red when on and not when off, its value "On" / "Off"; a cell style not in the
+  list is refused (`validateDesign` and the generator, the same words: the 22nd broken design); the mock-up
+  `p5-rows.json`: valid, nine edit8 screens of two rows in OSC .. MOD, all 21 screens x lanes drawn by the editor, lint
+  clean, deterministic, every one of its 18 engine rows different from the same rows unstyled (the glyphs), OSC A's Saw
+  on with its LED red;
 - the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked (the
   flat example: not buildable), a knob turns a dial, **a scripted pointer drag from the element strip adds a knob on
   the grid** (drawn by the firmware), the export equals the model and validates, the contact sheet has today's and the

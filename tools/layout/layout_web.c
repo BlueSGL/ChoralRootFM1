@@ -159,7 +159,9 @@ static const char *const LAY_FMT[] = {"int", "pct", "bipct", "time", "lfohz", "c
 static const char *const LAY_STYPE[] = {"platform", "stack", "columns", "mixer", "edit", "page", "expr", "free"};   /* CE_S_* */
 static const char *const LAY_BAND[] = {"none", "env", "filter", "dx", "cz", "algo", "ade2"};         /* CR_W_* */
 static const char *const LAY_STYLE[] = {"rule", "big", "ratio", "harm", "detune", "num", "val", "text", "knob", "bar",
-                                        "waveph"};                                                    /* ENG_C_* */
+                                        "waveph", "p5knob", "p5led", "p5led-saw", "p5led-tri", "p5led-sqr", "p5led2",
+                                        "p5switch"};                                                  /* ENG_C_* */
+_Static_assert(sizeof LAY_STYLE / sizeof LAY_STYLE[0] == ENG_C_P5SWITCH + 1, "LAY_STYLE: ENG_C_*");
 static const char *const LAY_GBTN[CE_NSEC] = {"FX", "SEL", "ENV", "LFO", "SEQ", "PLAY", "REC"};   /* cr_edit.c CE_SEC_BTN:
                                                     * the buttons as the emulator names them (the panel prints the groups) */
 static const char *const LAY_PBAND[] = {"none", "env", "filter", "window", "algo", "ade2"};          /* ENG_B_* */
@@ -762,7 +764,8 @@ LAY_EXPORT const char *lay_state(void)
  * design's own labels are answered through cr_edit.c's ce_label_hook (CR_LAYOUT_PREVIEW only).
  *
  * The packed form (web/fm1layout.js packDesign), bytes:
- *   'L' 2 engine npages; per page: tlen title[tlen], 4 x (srcpage srccol llen label[llen]) (srcpage 0xFF: empty);
+ *   'L' 3 engine npages; per page: tlen title[tlen], 4 x (srcpage srccol style llen label[llen]) (srcpage 0xFF: empty;
+ *   style: the cell's ENG_C_*, the plan's cell[][] and, in place, cr_edit.c's ce_style_hook; 'L' 2: no style byte);
  *   section[8]; nscreens; per screen: sec pg0 pg1 band(ENG_B_*) tlen title[tlen]      (nscreens 0: no screen plan)
  *   then, when there are free screens, the free half: nfs, nel (2 bytes, little-endian), npool (2), the screens as
  *   cr_layout.h cr_lay_screen_t (38 B each), the elements as cr_lay_elem_t (14 B each), the string pool: the records
@@ -783,6 +786,7 @@ typedef struct {
     eng_page_t page[LA_PG];
     uint8_t src[LA_PG][4][2];
     char title[LA_PG][16], label[LA_PG][4][16];
+    uint8_t style[LA_PG][4];                       /* a column's cell style (ENG_C_*; 0 the editor's rule) */
     eng_screen_t scr[LA_SC];
     char stitle[LA_SC][16];
     uint32_t nfs, npool;                           /* the free half: its screens (0: none), its pool's bytes */
@@ -833,6 +837,13 @@ static int la_label(const track_t *t, uint32_t p, uint32_t c, char *out, uint32_
         return 0;
     snprintf(out, n, "%s", la->label[p][c & 3u]);
     return 1;
+}
+/* cr_edit.c ce_style_hook: a design's own cell style (ENG_C_*) for a column, 0 none */
+static uint32_t la_style(const track_t *t, uint32_t p, uint32_t c)
+{
+    if (!la || la->eng != eng_idx(t->eng_req) || p >= la->deep.npages)
+        return 0;
+    return la->style[p][c & 3u];
 }
 static const eng_deep_t *lay_deep_hook(const track_t *t, const eng_deep_t *builtin)
 {
@@ -904,6 +915,7 @@ static void lay_alloc(void)                        /* (lay_boot, before the snap
         la->eng = 0xFFu;
     }
     ce_label_hook = la_label;
+    ce_style_hook = la_style;
     cr_layout_hook = la_layout;
 }
 
@@ -932,7 +944,7 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
     const uint8_t *q = ptr, *end = ptr + len;
     const eng_deep_t *b;
     uint8_t sec[8];
-    uint32_t e, n, i, c, k, ns;
+    uint32_t e, n, i, c, k, ns, ver;
 #define LA_U8() (q < end ? *q++ : (uint8_t)0xFFu)
 #define LA_STR(dst, cap) do { uint32_t l_ = LA_U8(), m_; if (q + l_ > end) return la_err("short"); \
         for (m_ = 0; m_ < l_ && m_ + 1u < (cap); m_++) (dst)[m_] = (char)q[m_]; \
@@ -940,8 +952,9 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
     lay_boot();
     if (!la)
         return la_err("no memory");
-    if (len < 3u || q[0] != 'L' || q[1] != 2u)
-        return la_err("not a packed design (L 2)");
+    if (len < 3u || q[0] != 'L' || (q[1] != 2u && q[1] != 3u))
+        return la_err("not a packed design (L 3)");
+    ver = q[1];
     q += 2;
     e = LA_U8();
     la->eng = 0xFFu;
@@ -957,6 +970,7 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
         return la_err("pages: 1 .. 64");
     memset(la->page, 0, sizeof la->page);
     memset(la->label, 0, sizeof la->label);
+    memset(la->style, 0, sizeof la->style);
     for (i = 0; i < n; i++) {
         LA_STR(la->title[i], 16u);
         la->page[i].title = la->title[i];
@@ -964,6 +978,10 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
             uint32_t sp = LA_U8(), sc = LA_U8();
             la->src[i][c][0] = (uint8_t)sp;
             la->src[i][c][1] = (uint8_t)sc;
+            if (ver >= 3u) {
+                uint32_t st = LA_U8();
+                la->style[i][c] = (uint8_t)(st <= ENG_C_P5SWITCH ? st : 0u);
+            }
             LA_STR(la->label[i][c], 16u);
             if (sp != 0xFFu) {
                 if (sp >= b->npages || sc > 3u || !b->pages[sp].col[sc].label)
@@ -988,6 +1006,9 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
         h->title = la->stitle[k][0] ? la->stitle[k] : 0;
         if (h->pg[0] >= n || (h->pg[1] != 0xFFu && h->pg[1] >= n) || h->sec > 4u || h->band > ENG_B_ADE2)
             return la_err("a screen names no page");
+        for (i = 0; i < 2u; i++)                   /* the cells' styles: their columns' */
+            for (c = 0; c < 4u && h->pg[i] != 0xFFu; c++)
+                h->cell[i][c] = la->style[h->pg[i]][c];
     }
     if (q > end)
         return la_err("short");

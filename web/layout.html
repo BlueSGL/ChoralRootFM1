@@ -769,7 +769,7 @@ function dLanes() {
         row.append(el("div", { class: `slot${c ? "" : " empty"}${cur ? " cur" : ""}`, style: `--k:${kcol(k)}`, "data-slot": `${li}.${k}`,
                                title: "drop a parameter here; click to select (the inspector)",
                                onclick: () => { ds.cell = { lane: li, k }; ds.sel.clear(); if (li !== a.lane) dGo(ds.gi, ds.si, li); ds.cell = { lane: li, k }; dRender(); } },
-          c ? (c.label || (p ? p.label : c.text || "?")) : "—", el("small", { text: c ? c.param || c.fixed : `KNOB ${k + 1}` })));
+          c ? (c.label || (p ? p.label : c.text || "?")) : "—", el("small", { text: c ? (c.param || c.fixed) + (c.style ? ` · ${c.style}` : "") : `KNOB ${k + 1}` })));
       });
       row.append(el("div", { class: "ops" },
         el("button", { text: "↑", title: "lane earlier", onclick: () => li && commit((d) => { const x = d.groups[ds.gi].screens[ds.si].lanes; [x[li - 1], x[li]] = [x[li], x[li - 1]]; }) }),
@@ -837,6 +837,15 @@ function dInspector() {
       host.append(el("h3", { text: `Lane ${lane + 1}, KNOB ${k + 1}` }));
       host.append(field("Parameter", paramSel(c && c.param, (v) => set((x) => { x.lanes[lane].cells[k] = v ? { param: v } : null; }))));
       if (c && c.param) host.append(field("Label", inp(c.label || "", (v) => set((x) => { x.lanes[lane].cells[k].label = v || undefined; if (!v) delete x.lanes[lane].cells[k].label; }), { placeholder: p ? p.label : "", maxlength: 13 })));
+      if (c && c.param) {                          // the cell's look: the editor's rule, or a Prophet-5 control in the cell
+        const x = el("select", { "aria-label": "the cell's style", title: "how the cell draws its parameter: the editor's rule, or a Prophet-5 control (knob, LED button with its wave icon, two LEDs, lever) in the cell" });
+        x.append(el("option", { value: "", text: "the editor's rule" }));
+        for (const o of P5_CELL_STYLES) x.append(el("option", { value: o, text: o }));
+        if (c.style && !P5_CELL_STYLES.includes(c.style)) x.append(el("option", { value: c.style, text: c.style }));
+        x.value = c.style || "";
+        x.addEventListener("change", () => set((y) => { const cc = y.lanes[lane].cells[k]; if (x.value) cc.style = x.value; else delete cc.style; }));
+        host.append(field("Style", x));
+      }
       if (p) host.append(el("p", { class: "small", text: `${p.id}: ${p.min} .. ${p.max} (${p.fmt}); today on ${p.where || "no screen"}` }));
     } else host.append(el("p", { class: "small", text: "Click a knob slot in the lanes to bind it or give it a label; drag a parameter onto a slot." }));
     return;

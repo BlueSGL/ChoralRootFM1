@@ -3719,3 +3719,41 @@ check, the tests), docs/releases/0.22.md (a line for the next beta's notes). **C
 emulator comparison PASS (112 ok), gen_layout_test 61, `sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1002 ok,
 test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit (the owner tries
 the next build).
+
+3y93. **The Prophet-5's controls as edit8 cell glyphs, and cell styles in the layout tool: a P5 mock-up of rows (2026-10-15;
+on lay-7 from 4960b2c, not pushed, not flashed).** The owner, on the P5 panel: "the new P5 UI just feels out of place
+compared with the rest of the engine UI's. With the frames around things the controls get tiny and hard to read, and
+also having 5 or six parameters on a row while it matches the P5, just feels weird, so I think we can redesign this,
+all parameters for pages follow a up to 4 parameter per row philosophy and fill the row's width so they are big and
+clear, then we can use the same row highlighting behaviour we use in the other engine's UI." Then: "I want to see the
+layout with the row selection bars like we have elsewhere, the labels at the top like we have elsewhere, and then just
+have update knob and button glyphs inside instead of the bars." With a hand sketch (OSC B: the glyphs large, filling the
+glyph box). Then, as the firmware's pages were being re-cut: "Why are you building it in Firmware? I'd like mockup
+first, and I'll want to change the page layouts." So the page layout is left to him in the designer; what was built is
+what the designer needs to draw his mock-ups through the firmware. **Firmware**: four cell glyphs (cr_screen.h
+`CR_G_P5KNOB`, `CR_G_P5LED` with its icon in `pct2` (`CR_P5I_*`), `CR_G_P5LED2`, `CR_G_P5SWITCH`; cr_draw.c
+`cr_p5glyph` on the p5 primitives, which moved above `cr_cglyph`; `cr_cap` takes its height), sized to the edit8 cell's
+glyph box (the dial's tick ring 40 px, 26 under a band; the cap 26 px under a ~10 px wave icon, 16 px under a band with
+no icon; the two-LED cap 44 px with its names; the lever three positions the box's height), docs/EDITOR.md §9 "A cell";
+seven cell styles (core.h `ENG_C_P5KNOB`, `ENG_C_P5LED`, `ENG_C_P5LED_SAW / _TRI / _SQR`, `ENG_C_P5LED2`,
+`ENG_C_P5SWITCH`) mapped in cr_edit.c `ce_cell_p5` (from `ce_cell_plan`: the value on the row "64", "On", "Half",
+"1/2"; a two-LED cell's names after its label's NUL); a preview-only `ce_style_hook` beside `ce_label_hook`. No engine
+uses them on the unit: P5's pages, its panel (`BUILD`) and the free screens are as they were. Size: XIP 546 876 ->
+548 396 B (95.4 -> 95.6 %, +1 520 B: the glyphs' code), RAM 79.8 %, POOL 69.5 % unchanged. **The tool**: a classic
+cell's `"style"` (the catalog's style names, plus `p5knob`, `p5led`, `p5led-saw`, `p5led-tri`, `p5led-sqr`, `p5led2`,
+`p5switch`; web/fm1layout.js `CELL_STYLES`, tools/gen_layout.py the same list and words); the inspector's *Style* per
+slot; `packDesign` packs 'L' 3 (a column's style byte) and `lay_load` (tools/layout/layout_web.c) gives it to the editor
+as a plan's `cell[2][4]` or, in place, through `ce_style_hook`; the catalog names the new styles. **The mock-up**:
+`design/layouts/designs/p5-rows.json`, nine edit8 screens of two rows (OSC A, OSC B / FILTER, ENV 2 · filter / ENV 1 ·
+amp / LFO, WHEEL / POLYMOD, VOICE; the bands filter and env; the owner's rule "OSC B SAW, TRI, PULSE must all be on same
+row, same with on the LFO page": OSC B row A Freq · Saw · Tri · Pulse, row B Fine · Width · Lo freq · Keyboard, LFO row A
+Freq · Saw · Tri · Square, row B Init amt · Aftertch; Src mix on WHEEL),
+all 56 parameters, styled by kind, FX and MIX today's: valid, shipped in the designer, "not buildable yet" (classic
+screens in OSC .. MOD); its sheet `design/choralroot-fm1-p5-rows-screens.png` (21 tiles, lint clean). **Tests**:
+`web/test_layout.mjs` 6 (styles on FILT 1 in place change FILT 1's frames only, lint clean; a p5led cell's LED red on,
+not off, "On" / "Off"; an unknown cell style refused, the 22nd broken design; p5-rows valid, nine edit8 screens of two
+rows, 21 screens x lanes drawn, deterministic, the glyphs on all 18 engine rows against the same rows unstyled, OSC A's
+Saw LED red), 117 ok with the emulator comparison (P5 24 frames identical); `tests/gen_layout_test.py` 63 (the cell
+style refusal word for word, p5-rows valid and not buildable). **Checked**: `sh tests/run_all.sh` ALL SUITES PASSED (22;
+test_cr 1009 ok, test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed, P5 panel goldens 22 of 22
+unchanged). Not done: the owner's own page layout (his, in the designer); a P5 plan in the firmware when he has it.
