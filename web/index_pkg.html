@@ -645,8 +645,10 @@ $("snd-file").addEventListener("change", async () => {
     const now = sndTable[slot - 1];                // as the FM-1 holds it now (read afresh)
     if (dnNotes && !confirm(tf("sndDnConfirm", { name: sound.name, slot: label, notes: dnNotes.map((n) => "- " + n).join("\n") }))) { sayK("cancelled"); return; }
     if (now.used && !confirm(tf("sndOverwrite", { slot: label, name: now.name, new: sound.name }))) { sayK("cancelled"); return; }
-    await writeSlot(ctx, slot, importSound(ctx.objs, slot, sound).changed);
-    sayK("sndImported", `${label}: ${sound.name}`);
+    const res = importSound(ctx.objs, slot, sound);   // (res.notes: what an FM-1 before 0.22 will not have of the patch)
+    await writeSlot(ctx, slot, res.changed);
+    for (const n of res.notes) log(`sounds: ${label}: ${n}`);
+    sayK("sndImported", `${label}: ${sound.name}${res.notes.length ? ` (${res.notes.join("; ")})` : ""}`);
   });
 });
 

@@ -127,6 +127,21 @@ ok(q.blob.length === 96 && q.blob[0] === 0x51 && q.blob[1] === 5 && q.blob.subar
   ok(v3.length === 80 && v3[1] === 3 && back.length === 96 && back[1] === 5 && back[2 + DN_QP.ALGO] === q.blob[2 + DN_QP.ALGO] &&
      same(quadToV4(quadToV3(back)), back), "v3 <-> v5: 80 bytes 'Q' 3 and back to 96 'Q' 5 (stable after one round)");
 }
+{ // version 5 -> 3 for ChoralRoot 0.21 (its quad_blob_ok: DEST 0..39, so a destination added in 0.22 would make it refuse the
+  // whole patch and play INIT): such a destination becomes NONE, with a note; the others stay; AMP DEC INF and the
+  // decimals said too
+  const p5 = DN_QUAD_RANGES.map((r) => r[2]);
+  p5[L(0, "DEST")] = 25; p5[L(1, "DEST")] = 45; p5[L(2, "DEST")] = 57; p5[DN_QP.EDEC] = 127; p5[DN_QP.FREQ] = 4201;
+  const notes = [], v3 = quadToV3(dnQuadPack(p5), notes), at = (i) => v3[2 + i] + Math.trunc(DN_QUAD_RANGES[i][0] / (DN_QUAD_HIRES.includes(i) ? 100 : 1));
+  ok(v3[1] === 3 && at(L(0, "DEST")) === 25 && at(L(1, "DEST")) === 0 && at(L(2, "DEST")) === 0 && at(DN_QP.FREQ) === 42 &&
+     [...Array(3).keys()].every((k) => at(L(k, "DEST")) < 40),
+     "v5 -> v3 (0.21): LFO destinations 40..57 -> NONE (FREQ, 25, kept); every DEST under 40");
+  ok(notes.length === 4 && /LFO 2 destination LFO1 MODE: ChoralRoot 0.21 has none, off/.test(notes[0]) &&
+     /LFO 3 destination FILTER ENV DELAY: ChoralRoot 0.21 has none, off/.test(notes[1]) && /AMP DEC INF/.test(notes[2]) && /1 value with decimals rounded/.test(notes[3]),
+     `v5 -> v3 (0.21): one note each (${notes.join(" | ")})`);
+  const quiet = []; quadToV3(dnQuadPack(DN_QUAD_RANGES.map((r) => r[2])), quiet);
+  ok(!quiet.length, "v5 -> v3 (0.21): the init patch converts without a note");
+}
 { // version 4 (3y61's, the owner's unit has them) -> 5: FREQ DTUN RESO BASE clamped to 127.00, AMP REL 126.85 -> 126,
   // 127.xx -> 127 (INF), LEVEL 110.40 -> 110, the rest as it was (a self-made patch)
   const p4 = DN_QUAD_RANGES_V4.map((r) => r[2]);

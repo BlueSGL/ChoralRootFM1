@@ -68,7 +68,8 @@ const mgMerge = (objs, res) => { const m = new Map(objs); for (const [id, b] of 
 // a sound into the FM-1. target: the row selected on the left (or null). The sound goes to its own engine's pool;
 // over a factory row of that pool: a new slot bound to it; over a user row of that pool: that slot (keeping the row's
 // binding); otherwise (INIT, another pool, nothing selected) the next free slot as an added sound.
-// -> {changed, objs, slot, where: "new" | "over-factory" | "over-user"}
+// -> {changed, objs, slot, where: "new" | "over-factory" | "over-user", notes: on a firmware before the pool, what of
+// the patch it will not have (fm1sounds.js importSound)}
 export function managerPlace(objs, sound, target = null) {
   if (!sound || !(sound.record instanceof Uint8Array)) sound = { ...readSoundFile(sound), file: sound };
   const pool = poolOf(sound.engine);
@@ -85,11 +86,14 @@ export function managerPlace(objs, sound, target = null) {
     if (target && target.engine === pool && target.type === "factory") { f = target.f; where = "over-factory"; }
   }
   const res = placeSound(objs, slot, sound, f), m = mgMerge(objs, res);
-  return { ...mgResult(new Map(objs), m), slot, where };
+  return { ...mgResult(new Map(objs), m), slot, where, notes: res.notes || [] };
 }
+// a sound's notes for the confirm / the status line, with its name: ["NAME: note", ..]
+const mgNotes = (sound, res) => (res.notes || []).map((n) => `${sound && sound.name ? sound.name : "a sound"}: ${n}`);
 // several sounds (a pack): each as a new sound (added, or back over its factory position when the file names one); stops at the last free slot (-> placed, skipped counts)
 export function managerPlaceAll(objs, sounds) {
   let m = new Map(objs), placed = 0;
+  const notes = [];
   for (const s of sounds) {
     const slot = firstFreeSlot(m);
     if (!slot) break;
@@ -98,9 +102,10 @@ export function managerPlaceAll(objs, sounds) {
       const r = managerPools(m, { empty: false })[poolOf(s.engine)]?.[s.position];
       if (r && r.type === "factory") f = r.f;
     }
-    m = mgMerge(m, placeSound(m, slot, s, f)); placed++;
+    const res = placeSound(m, slot, s, f);
+    m = mgMerge(m, res); placed++; notes.push(...mgNotes(s, res));
   }
-  return { ...mgResult(new Map(objs), m), placed, skipped: sounds.length - placed };
+  return { ...mgResult(new Map(objs), m), placed, skipped: sounds.length - placed, notes };
 }
 // Replace factory (DN-3): sounds of one engine's pool over its factory presets in pool order. The pool's model needs no
 // new firmware: a user record bound to a factory index (flags[15]) IS that place of the pool and the factory preset is
@@ -119,8 +124,12 @@ export function managerReplacePlan(objs, engine, sounds, from = 1) {
 export function managerReplaceFactory(objs, engine, sounds, from = 1) {
   const p = managerReplacePlan(objs, engine, sounds, from);
   let m = new Map(objs);
-  p.items.slice(0, p.replace + p.extra).forEach((s, k) => { m = mgMerge(m, placeSound(m, firstFreeSlot(m), s, k < p.replace ? p.places[k].f : -1)); });
-  return { ...mgResult(new Map(objs), m), replaced: p.replace, added: p.extra, refused: p.refused, other: p.other.length };
+  const notes = [];
+  p.items.slice(0, p.replace + p.extra).forEach((s, k) => {
+    const res = placeSound(m, firstFreeSlot(m), s, k < p.replace ? p.places[k].f : -1);
+    m = mgMerge(m, res); notes.push(...mgNotes(s, res));
+  });
+  return { ...mgResult(new Map(objs), m), replaced: p.replace, added: p.extra, refused: p.refused, other: p.other.length, notes };
 }
 // the confirm's text for a plan
 export function replaceFactoryText(plan, engine, total) {

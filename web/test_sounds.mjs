@@ -564,6 +564,28 @@ const QUAD_FX_V1 = "UQEBAwMjGgoAP2RkZGQAUBhIAC4ALAABAQEAAQFkACgAQAAofwAAQAAAAH8A
   threw = 0;
   try { importSound(legacyMap, 1, { record: rec(16, "P5"), name: "P5", patch: p5 }); } catch (e) { threw = /0\.22/.test(e.message); }
   ok(threw, "legacy (0.21) objects: a P5 program has no store there: refused");
+  // a VA version-4 patch (0.22: FENV in hundredths, a synced RATE an index into the 42 rates) placed on a firmware before
+  // the pool, which refuses version 4 (va_blob_ok 1..3) and would play INIT: converted to version 3, with notes
+  const va4 = new Uint8Array(110), VA_FENV = 31, VA_FENVF = 103, LR = (l) => 2 + 53 + l * 5;
+  va4[0] = 0x56; va4[1] = 4;
+  va4[2 + VA_FENV] = 64 - 1; va4[2 + VA_FENVF] = 96;                     // FENV -0.04
+  va4[LR(0)] = 19; va4[LR(0) + 4] = 1;                                    // LFO 1 synced 1/4: one of 0.21's 14
+  va4[LR(1)] = 31; va4[LR(1) + 4] = 1;                                    // LFO 2 synced 1/64: 0.21's fastest is 1/32
+  va4[LR(2)] = 40; va4[LR(2) + 4] = 1;                                    // LFO 3 synced 3 ms: 1/32 too
+  va4[LR(3)] = 100;                                                       // LFO 4 free: as it is
+  const rv = importSound(legacyMap, 2, { record: rec(13, "VA FOUR"), name: "VA FOUR", patch: va4 });
+  const st = rv.objs.get(9), vb = st.subarray(16 + 110, 16 + 220), div = (r) => r * 14 >> 7;
+  ok(rv.changed.map((c) => c.id).join() === "9,6" && view(st).getUint16(4, true) === 3 && vb[0] === 0x56 && vb[1] === 3 &&
+     vb[2 + VA_FENV] === 64 && vb[2 + VA_FENVF] === 0 && div(vb[LR(0)]) === 6 && div(vb[LR(1)]) === 13 && div(vb[LR(2)]) === 13 &&
+     vb[LR(3)] === 100 && same(vb.subarray(2 + 104), va4.subarray(2 + 104)),
+     "legacy (0.21): a VA version 4 -> version 3 (FENV -0.04 -> 0, 1/4 -> division 1/4, 1/64 and 3 ms -> 1/32, a free RATE kept)");
+  ok(rv.notes.length === 3 && /FENV -0\.04: ChoralRoot 0\.21 has whole numbers, 0 instead/.test(rv.notes[0]) &&
+     /LFO 2 RATE 1\/64: .* 1\/32 instead/.test(rv.notes[1]) && /LFO 3 RATE 3ms: .* 1\/32 instead/.test(rv.notes[2]),
+     `legacy (0.21): the notes say what changed (${rv.notes.join(" | ")})`);
+  const v3same = importSound(legacyMap, 3, { record: rec(13, "VA THREE"), name: "VA THREE", patch: vaBlob(5) });
+  ok(!v3same.notes.length && same(v3same.objs.get(9).subarray(16 + 220, 16 + 330), vaBlob(5)), "legacy (0.21): a VA version 3 placed as it is, no note");
+  const pool4 = importSound(blank, 4, { record: rec(13, "VA POOL"), name: "VA POOL", patch: va4 });
+  ok(!pool4.notes.length && same(pool4.objs.get(50).subarray(3 * 384 + 196, 3 * 384 + 196 + 110), va4), "pool (0.22): a VA version 4 placed as it is");
   // the FM-1 (a simulated one): LIST names the pool's ids: they are read, written back
   const dv = device(new Map(POOL_IDS.map((id) => [id, id === 59 ? r.objs.get(59) : new Uint8Array(0)])), { ids: [1, 8, ...POOL_IDS, 23] });
   const { objs: rd } = await readSounds(dv.request);

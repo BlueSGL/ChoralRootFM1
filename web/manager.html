@@ -432,6 +432,8 @@ async function run(label, res, done, focus) {
   finally { ui.busy = false; clearSel("dev"); renderAll(); }
 }
 const act = (f) => async () => { try { await f(); } catch (e) { say(e.message, "err"); } };
+// what an FM-1 before the pool (0.21) will not have of a placed patch (fm1sounds.js importSound: converted down for it)
+const downText = (res) => (res.notes && res.notes.length ? ` On this firmware: ${res.notes.join("; ")}.` : "");
 const keepOpts = () => ({ firmware, packs: ui.fpacks });
 
 // Place: the library's selection into the FM-1; one sound onto a target row (over it), several as new sounds
@@ -445,14 +447,14 @@ async function placeItems(items, target) {
   }
   if (items.length > 1) {
     const res = managerPlaceAll(session.objs, items.map((it) => it.file));
-    return run(`Place ${items.length}`, res, `Placed ${res.placed} sound${res.placed === 1 ? "" : "s"}${res.skipped ? `; ${res.skipped} did not fit (no free slot: delete or overwrite)` : ""}.`);
+    return run(`Place ${items.length}`, res, `Placed ${res.placed} sound${res.placed === 1 ? "" : "s"}${res.skipped ? `; ${res.skipped} did not fit (no free slot: delete or overwrite)` : ""}.${downText(res)}`);
   }
   const r = items[0], t = target && target.type !== "empty" ? target : null;
   if (t && t.type === "user" && t.engine === r.pool && !confirm(`Replace ${t.label} ${t.name} with ${r.name}?`)) return;
   const res = managerPlace(session.objs, r.file, t);
   const where = res.where === "over-factory" ? "over a factory preset" : res.where === "over-user" ? `into ${slotLabel(res.slot)}` : `as a new ${ENGINE_NAMES[r.pool]} sound`;
   if (r.pool !== ui.tab) ui.tab = r.pool;
-  await run(`Place ${r.name}`, res, `Placed ${r.name} ${where} (${slotLabel(res.slot)}).`, { engine: r.pool, slot: res.slot });
+  await run(`Place ${r.name}`, res, `Placed ${r.name} ${where} (${slotLabel(res.slot)}).${downText(res)}`, { engine: r.pool, slot: res.slot });
 }
 async function keepRows(rows) {
   let n = 0;
@@ -470,7 +472,7 @@ $("place-all").addEventListener("click", act(async () => {
   const items = libVisible().map(({ it }) => it).filter((it) => it.type === "sound");
   if (!confirm(`Place all ${items.length} sounds? ${freeSlots()} user slots are free; what does not fit is left out.`)) return;
   const res = managerPlaceAll(session.objs, items.map((it) => it.file));
-  await run("Place all", res, `Placed ${res.placed} sounds${res.skipped ? `; ${res.skipped} did not fit (all ${usedSlots(session.objs)} user slots are used: delete or overwrite to place more)` : ""}.`);
+  await run("Place all", res, `Placed ${res.placed} sounds${res.skipped ? `; ${res.skipped} did not fit (all ${usedSlots(session.objs)} user slots are used: delete or overwrite to place more)` : ""}.${downText(res)}`);
 }));
 // Replace factory: the library's selection (or every sound shown) over the open engine's factory presets, from `from`
 const replaceItems = () => (libSel().length ? libSel() : libVisible().map(({ it }) => it)).filter((it) => it.type === "sound");
@@ -480,7 +482,7 @@ async function replaceFactory(items, from = 1) {
   if (!plan.replace && !plan.extra) throw new Error(plan.free ? `No factory ${ENGINE_NAMES[ui.tab]} preset left to replace` : "No free user slot: delete a user sound first");
   if (!confirm(replaceFactoryText(plan, ui.tab, items.length))) return;
   const res = managerReplaceFactory(session.objs, ui.tab, files, from);
-  await run("Replace factory", res, `Replaced ${res.replaced} factory ${ENGINE_NAMES[ui.tab]} sounds${res.added ? `; ${res.added} more placed` : ""}${res.refused ? `; ${res.refused} did not fit` : ""}.`, { engine: ui.tab, pos: from });
+  await run("Replace factory", res, `Replaced ${res.replaced} factory ${ENGINE_NAMES[ui.tab]} sounds${res.added ? `; ${res.added} more placed` : ""}${res.refused ? `; ${res.refused} did not fit` : ""}.${downText(res)}`, { engine: ui.tab, pos: from });
 }
 $("replace").addEventListener("click", act(() => replaceFactory(replaceItems())));
 $("restore-factory").addEventListener("click", act(async () => {

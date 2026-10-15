@@ -339,6 +339,17 @@ blob written is version 4 (96 bytes). `fm1sounds.js` and `fm1_install.py` read 9
 80-byte version 1..3 one (a sound file, a pool slot or store of before: converted, fm1dnsnd.js `quadToV4`, or zero-padded
 for the FM-1 to convert); a firmware before the pool gets version 3 in its 80-byte store (`quadToV3`).
 
+**A sound placed on a firmware before the pool (0.21 and older)** is converted down to what that firmware reads, and
+the result says what it will not have (`importSound`'s `notes`, one line each: the device manager's status line after
+Place / Place all / Replace factory, the installer page's message and log after Import). FM TONE (`fm1dnsnd.js
+quadToV3`): the decimals rounded, FDBK 0..127 -> 0..120, AMP DEC INF stays 127 (there the longest decay), and an LFO
+destination added in 0.22 (40..57: 0.21's `quad_blob_ok` takes 0..39 and would refuse the whole patch, which then plays
+INIT) becomes NONE. VA (`fm1sounds.js vaToV3`, version 4 -> 3, the same 110 bytes): FENV's hundredths rounded into the
+whole number (value 103 back to 0), and a synced LFO's RATE (an index into the 42 rates) becomes the nearest of
+version 3's 14 divisions by length (the ms rates, faster than all: 1/32) as the smallest 0..127 RATE version 3 reads as
+that division (RATE x 14 >> 7); the 14 themselves come back exactly (`VA_DIV3_TO_SYNC`). P5 sounds are refused there
+(no P5 store). Tests: `web/test_dnsnd.mjs` (v5 -> v3), `web/test_sounds.mjs` (a VA version 4 into 0.21's objects).
+
 The owner: "Being able to load in Digitone presets for the FM-Tone engine in the device manager" ... "Build now, I do
 have a Digitone we can refine later." FM TONE (engine 15, docs/QUAD.md) follows the Digitone's FM voice, so most of a
 Digitone sound has a place in its patch. The decoding is ours (clean-room, from exported files; Elektron publishes no

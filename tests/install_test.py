@@ -1396,6 +1396,13 @@ def bindings():
     for i, b in I.import_sound({}, 12, I.read_sound_file(e1)):
         new[i] = b
     ok(I.parse_sound_objects(new)[11]["bound"]["label"] == "FM6 02", "binding: imported alone, U12 is over FM6 02")
+    va4, why = bytes([0x56, 4]) + bytes(108), ""     # (0.22's VA version 4: a firmware before the pool would play INIT)
+    try:
+        I._set_blob({}, "va", 1, va4)
+    except I.InstallError as e:
+        why = str(e)
+    ok("older format" in why and "device manager" in why and I._set_blob({}, "va", 1, bytes([0x56, 3]) + bytes(108)) is None,
+       "a VA version 4 into a firmware before the pool: refused with the reason (version 3: taken)")
     rec, _n, _e, _p = I.sound_from_syx("cz", bytes(144))
     ok(rec[175] == 0xA6 and rec[191] == 0 and I.sound_record_valid(rec) and
        I.sound_bindings([rec]) == [None], "binding: a .syx import's record: the mark, bound to nothing (added)")

@@ -245,8 +245,53 @@ function sndNewStore(kind, half) {
   else { v.setUint16(8, half * 16, true); v.setUint16(10, STORE_PATCH[kind], true); }
   return b;
 }
-// the slot's blob of `kind` = blob (null: cleared). Clearing a slot whose bit is clear changes nothing (as va_store_put)
-function sndPutBlob(m, kind, slot, blob) {
+// ---- a VA version-4 patch for a firmware before the pool (ChoralRoot 0.21 and older: va_blob_ok takes versions 1..3,
+// and refuses a version 4 whole: the slot would play the init sound). The format allows it (the same 110 bytes, the
+// same values; eng_va.c va_unpack is the other way round): version 3, FENV a whole number (its hundredths, value
+// VA_FENVF, rounded in), a synced LFO's RATE (version 4: an index into the 42 rates, N_VA_SYNC) the nearest of version
+// 3's 14 divisions (by length; the free periods in ms, faster than all of them: the fastest, 1/32) as a RATE 0..127 that
+// version 3 reads as that division (RATE x 14 >> 7). notes: what changed, one line each. Other versions: as they are
+const VA_FENV = 31, VA_FENVF = 103, VA_LFO0 = 53, VA_LFO_N = 5, VA_NDIV3 = 14;
+const VA_SYNC_NAMES = ["8BARD", "8BAR", "8BART", "4BARD", "4BAR", "4BART", "3BARD", "3BAR", "3BART", "2BARD", "2BAR",
+  "2BART", "1BARD", "1BAR", "1BART", "1/2D", "1/2", "1/2T", "1/4D", "1/4", "1/4T", "1/8D", "1/8", "1/8T", "1/16D", "1/16",
+  "1/16T", "1/32D", "1/32", "1/32T", "1/64D", "1/64", "1/64T", "128D", "1/128", "128T", "256D", "1/256", "256T", "4ms",
+  "3ms", "2ms"];
+// each rate's length in beats (eng_va.c VA_SYNC_Q8: b bars dotted 6b, straight 4b, triplet 8b/3; a note n/d dotted x 3/2,
+// triplet x 2/3); null: a free period in ms
+const VA_SYNC_BEATS = [...[8, 4, 3, 2, 1].flatMap((b) => [6 * b, 4 * b, 8 * b / 3]),
+  ...[2, 1, 1 / 2, 1 / 4, 1 / 8, 1 / 16, 1 / 32, 1 / 64].flatMap((n) => [n * 3 / 2, n, n * 2 / 3]), null, null, null];
+const VA_DIV3_TO_SYNC = [1, 4, 10, 13, 16, 18, 19, 20, 21, 22, 23, 25, 26, 28];   // (eng_va.c: version 3's divisions)
+export function vaToV3(blob, notes = []) {
+  if (!(blob instanceof Uint8Array) || blob.length !== PATCH_SIZE.va || blob[0] !== 0x56 || blob[1] !== 4) return blob;
+  const b = blob.slice();
+  b[1] = 3;
+  const fenv = (b[2 + VA_FENV] - 64) * 100 + b[2 + VA_FENVF], whole = Math.max(-64, Math.min(63, Math.round(fenv / 100)));
+  if (b[2 + VA_FENVF]) {
+    const f = (v) => (v < 0 ? "-" : "+") + (Math.abs(v) / 100).toFixed(2);
+    notes.push(`FENV ${f(fenv)}: ChoralRoot 0.21 has whole numbers, ${whole > 0 ? "+" : ""}${whole} instead`);
+  }
+  b[2 + VA_FENV] = whole + 64;
+  b[2 + VA_FENVF] = 0;
+  for (let l = 0; l < 4; l++) {
+    const o = 2 + VA_LFO0 + l * VA_LFO_N;
+    if (!b[o + 4]) continue;                       // (SYNC off: RATE is the free rate, the same in both versions)
+    const i = Math.min(b[o], VA_SYNC_NAMES.length - 1), len = VA_SYNC_BEATS[i];
+    let d = VA_NDIV3 - 1;
+    if (len !== null) {
+      let best = Infinity;
+      VA_DIV3_TO_SYNC.forEach((s, k) => { const e = Math.abs(Math.log(len / VA_SYNC_BEATS[s])); if (e < best - 1e-12) { best = e; d = k; } });
+    }
+    const s = VA_DIV3_TO_SYNC[d];
+    if (len === null || Math.abs(VA_SYNC_BEATS[s] - len) > 1e-9)
+      notes.push(`LFO ${l + 1} RATE ${VA_SYNC_NAMES[i]}: not one of ChoralRoot 0.21's synced rates, ${VA_SYNC_NAMES[s]} instead`);
+    b[o] = Math.ceil(d * 128 / VA_NDIV3);          // (the smallest RATE that version 3 reads as division d)
+  }
+  return b;
+}
+
+// the slot's blob of `kind` = blob (null: cleared). Clearing a slot whose bit is clear changes nothing (as va_store_put).
+// notes: what a firmware before the pool will not have of the blob (the patches converted down for it), one line each
+function sndPutBlob(m, kind, slot, blob, notes = []) {
   if (m.pool) {                          // (the pool: one patch a slot, its engine named in the slot)
     const p = poolAt(slot), old = m.get(p.id), o = p.off + POOL_HDR;
     if (!blob && (old.length !== POOL_BANK || old[o] !== KIND_ENGINE[kind] + 1)) return;
@@ -256,7 +301,8 @@ function sndPutBlob(m, kind, slot, blob) {
     m.set(p.id, b); return;
   }
   if (kind === "p5") { if (blob) throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)"); return; }
-  if (kind === "quad" && blob) blob = quadToV3(blob);   // (a firmware before the pool: its store holds versions 1..3, 80 bytes)
+  if (kind === "quad" && blob) blob = quadToV3(blob, notes);   // (a firmware before the pool: its store holds versions 1..3, 80 bytes)
+  if (kind === "va" && blob) blob = vaToV3(blob, notes);       // (.. and VA versions 1..3: a version 4 would play INIT there)
   const p = sndPlace(kind, slot), old = m.get(p.id), ok = sndStoreOk(kind, old, p.half), uo = sndUsedOff(kind);
   if (!blob) {
     if (!ok || !(sndView(old).getUint32(uo, true) >>> p.bit & 1)) return;
@@ -293,7 +339,8 @@ function sndResult(before, m) {
 }
 const sndWriteName = (rec, name) => { rec.fill(0, 4, 4 + SND_NAME); for (let i = 0; i < name.length; i++) rec[4 + i] = name.charCodeAt(i); };
 
-// a sound (readSoundFile's result, or the file / its text) into slot
+// a sound (readSoundFile's result, or the file / its text) into slot. -> {changed, objs, notes}: notes, on a firmware
+// before the pool (0.21 and older), what of the patch it will not have (an FM TONE or VA patch converted down for it)
 export function importSound(objs, slot, sound) {
   sndCheckSlot(slot);
   if (!sound || !(sound.record instanceof Uint8Array)) sound = readSoundFile(sound);
@@ -305,9 +352,10 @@ export function importSound(objs, slot, sound) {
   }
   const kind = patchKindOf(rec[2]);
   if (sound.patch && (!kind || sound.patch.length !== PATCH_SIZE[kind])) throw new Error("The patch is not of the sound's engine");
-  for (const k of SND_KINDS) sndPutBlob(m, k, slot, k === kind && sound.patch ? sound.patch : null);
+  const notes = [];
+  for (const k of SND_KINDS) sndPutBlob(m, k, slot, k === kind && sound.patch ? sound.patch : null, notes);
   sndPutRecord(m, slot, rec);
-  return sndResult(before, m);
+  return { ...sndResult(before, m), notes };
 }
 export function renameSound(objs, slot, name) {
   sndCheckSlot(slot);

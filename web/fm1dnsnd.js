@@ -402,17 +402,30 @@ export function quadToV4(blob) {
 }
 export const quadToV5 = quadToV4;
 // a version-4 / 5 patch -> version 3's 80 bytes (for a firmware before the pool, whose QUAD store holds versions 1..3):
-// the hi-res values rounded to whole numbers, FDBK 0..127 -> 0..120; a version 1..3 blob as it is
-export function quadToV3(blob) {
+// the hi-res values rounded to whole numbers, FDBK 0..127 -> 0..120; an LFO destination of the 18 added in 0.22
+// (40..57: ChoralRoot 0.21's quad_blob_ok refuses the whole patch over one of them, and it would play the init sound) ->
+// NONE; a version 1..3 blob as it is. notes (an array, optional): what the older firmware will not have, one line each,
+// as the importer's notes
+export const DN_QD_V3 = 40;                       // destinations 0..39: the ones ChoralRoot 0.21 knows
+const dnQdName = (q) => { const v = Object.keys(DN_LFO_DEST).find((k) => DN_LFO_DEST[k] === q); return v === undefined ? `#${q}` : DN_LFO_DEST_NAMES[v]; };
+export function quadToV3(blob, notes = []) {
   if (!(blob instanceof Uint8Array) || blob.length !== DN_QUAD_BLOB || blob[0] !== 0x51) return blob;
   if (blob[1] !== 4 && blob[1] !== 5) return blob.slice(0, DN_QUAD_BLOB_V3);
   const p = dnQuadValues(blob), b = new Uint8Array(DN_QUAD_BLOB_V3);
   b[0] = 0x51; b[1] = 3;
+  let fine = 0;
+  for (let k = 0; k < 3; k++) {
+    const d = dnQlfo(k, "DEST");
+    if (p[d] >= DN_QD_V3) { notes.push(`LFO ${k + 1} destination ${dnQdName(p[d])}: ChoralRoot 0.21 has none, off`); p[d] = DN_QD.NONE; }
+  }
+  if (p[DN_QP.EDEC] >= 127) notes.push("AMP DEC INF: ChoralRoot 0.21 has no INF there, its longest decay instead");
   for (let i = 0; i < DN_QUAD_NP; i++) {
     const v = p[i], [mn, mx] = dnRangeV3(i);
+    if (dnHiRes(i) && v % 100) fine++;
     const w = dnHiRes(i) ? Math.round(v / 100) : i === DN_QP.FDBK ? Math.trunc((v * 120 + 63) / 127) : v;
     b[2 + i] = Math.max(mn, Math.min(mx, w)) - mn;
   }
+  if (fine) notes.push(`${fine} value${fine === 1 ? "" : "s"} with decimals rounded to whole numbers (ChoralRoot 0.21 has no decimals)`);
   return b;
 }
 // the macro value P_E0 + k of FM TONE value v (eng_quad.c quad_mac_val: HARM, DTUNE their coarse part)

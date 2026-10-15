@@ -1511,6 +1511,9 @@ def _set_blob(objs, kind, slot, blob):
             raise InstallError("usage", "this FM-1 keeps FM TONE sounds in an older format: update ChoralRoot (0.22 or "
                                "later) to add this one")
         blob = bytes(blob[:QUAD_V3])
+    if kind == "va" and blob is not None and blob[1] > 3:   # (its va_blob_ok takes 1..3: a version 4 would play INIT)
+        raise InstallError("usage", "this FM-1 keeps VA sounds in an older format: update ChoralRoot (0.22 or later) "
+                           "to add this one, or place it with the web device manager, which converts it")
     i, k, off = _store_at(kind, slot)
     b = objs.get(i, b"")
     if not _store_ok(kind, i, b):

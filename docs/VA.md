@@ -126,7 +126,10 @@ the bytes as before (the two only widened their sound-file check to versions 1..
   or a fine FENV, so every preset is the same patch in both versions and the goldens did not change.
 - An older firmware meeting a version-4 blob refuses it (its `va_blob_ok` takes versions 1..3) and loads the init
   patch with the record's macros (`va_track_loaded`: a user slot whose patch is "missing"); a sound file of version 4
-  is refused by an older page / installer ("not a VA patch (magic or version)").
+  is refused by an older page / installer ("not a VA patch (magic or version)"). Today's device manager and installer
+  page convert a version 4 down to version 3 when they place it on such a firmware (`fm1sounds.js vaToV3`: FENV
+  rounded, a synced RATE the nearest of the 14 divisions; docs/SOUNDS.md "A sound placed on a firmware before the
+  pool"), and say what changed.
 
 - version 2 (`'V'`, 2, the same 110 bytes; TYPE 0..3 at value 26, MORPH 0..127 at 103): FTYPE = (TYPE x 32 + MORPH)
   & 127, value 103 = 0. The render's position is TYPE x 32 + MORPH round the cycle in both versions, so the sound is
