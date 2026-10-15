@@ -53,6 +53,7 @@ T_ATK = [felucca_table("QUAD_T_" + n, TIMES) for n in ("OATK", "OATK", "FATK", "
 T_DEC = [felucca_table("QUAD_T_" + n, TIMES) for n in ("ODEC", "ODEC", "FDEC", "ADEC")]
 T_FADE = felucca_table("QUAD_T_FADE", TIMES)
 DLY_K = int(re.search(r"#define QUAD_DLY_K (\d+)u", open(TIMES).read()).group(1))
+OP_FLOOR = int(re.search(r"#define QUAD_OP_FLOOR (\d+)", open(TIMES).read()).group(1))   # the operators' attack: dB-linear
 BPM = 120
 
 # the ratio steps: C, B1 and B2 0.25 0.5 0.75 then 1..16 (19); A 0.25..16 in 0.25 (64); RATIO B (the pair) = B1 index
@@ -207,17 +208,17 @@ NP = len(NAMES)
 assert NP == 73
 # (min, max, def), as eng_quad.c's page columns
 RNG = {"ALGO": (1, 8, 1), "RC": (0, 18, 3), "RA": (0, 63, 3), "RB1": (0, 18, 3), "RB2": (0, 18, 3), "HARM": (-26, 26, 0),
-       "DTUN": (0, 127, 0), "FDBK": (0, 120, 0), "MIX": (-64, 63, 0), "OFSC": (-100, 100, 0), "OFSA": (-100, 100, 0),
-       "OFSB1": (-100, 100, 0), "OFSB2": (-100, 100, 0), "AATK": (0, 127, 0), "ADEC": (0, 127, 60),
-       "AEND": (0, 127, 64), "ALEV": (0, 127, 48), "BATK": (0, 127, 0), "BDEC": (0, 127, 60), "BEND": (0, 127, 0),
+       "DTUN": (0, 127, 0), "FDBK": (0, 120, 0), "MIX": (-64, 63, -64), "OFSC": (-100, 100, 0), "OFSA": (-100, 100, 0),
+       "OFSB1": (-100, 100, 0), "OFSB2": (-100, 100, 0), "AATK": (0, 127, 0), "ADEC": (0, 127, 32),
+       "AEND": (0, 127, 127), "ALEV": (0, 127, 0), "BATK": (0, 127, 0), "BDEC": (0, 127, 32), "BEND": (0, 127, 127),
        "BLEV": (0, 127, 0), "ADLY": (0, 127, 0), "ATRIG": (0, 1, 1), "ARST": (0, 1, 1), "PHRT": (0, 4, 1),
        "BDLY": (0, 127, 0), "BTRIG": (0, 1, 1), "BRST": (0, 1, 1), "VEL": (0, 127, 64), "AKEY": (0, 127, 0),
        "B1KEY": (0, 127, 0), "B2KEY": (0, 127, 0), "FATK": (0, 127, 0), "FDEC": (0, 127, 64), "FSUS": (0, 127, 0),
-       "FREL": (0, 127, 40), "FREQ": (0, 127, 127), "RESO": (0, 127, 0), "FTYPE": (0, 3, 1), "FDEPTH": (-64, 63, 0),
-       "FDLY": (0, 127, 0), "FKTRK": (0, 127, 0), "BASE": (0, 127, 0), "WIDTH": (0, 127, 127), "EATK": (0, 127, 0),
-       "EDEC": (0, 127, 64), "ESUS": (0, 127, 127), "EREL": (0, 127, 40), "LEVEL": (0, 127, 100)}
+       "FREL": (0, 127, 64), "FREQ": (0, 127, 127), "RESO": (0, 127, 0), "FTYPE": (0, 3, 1), "FDEPTH": (-64, 63, 0),
+       "FDLY": (0, 127, 0), "FKTRK": (0, 127, 0), "BASE": (0, 127, 0), "WIDTH": (0, 127, 127), "EATK": (0, 127, 8),
+       "EDEC": (0, 127, 32), "ESUS": (0, 127, 96), "EREL": (0, 127, 24), "LEVEL": (0, 127, 100)}
 for _k in range(3):
-    RNG.update({"L%dSPEED" % _k: (-64, 63, 16), "L%dMULT" % _k: (0, 23, 3), "L%dFADE" % _k: (-64, 63, 0),
+    RNG.update({"L%dSPEED" % _k: (-64, 63, 32), "L%dMULT" % _k: (0, 23, 5), "L%dFADE" % _k: (-64, 63, 0),
                 "L%dDEST" % _k: (0, 57, 0), "L%dWAVE" % _k: (0, 6, 0), "L%dPHASE" % _k: (0, 127, 0),
                 "L%dTRIG" % _k: (0, 4, 0), "L%dDEPTH" % _k: (-64, 63, 0)})
 FT = {"OFF": 0, "LP12": 1, "HP12": 2, "LP24": 3}
@@ -304,14 +305,14 @@ def merge(*ds):
 # four of eng_quad.c's presets (the C test checks these patches against its own: keep them in step; the times
 # re-expressed 2026-10-14 on the Digitone's tables, as eng_quad.c's)
 PRESETS = {
-    "EP": patch_of(**merge(syn(2, QRC(4), 3, QRC(4), QRC(56), 0, 12, 0, -30), env("A", 0, 28, 20, 66),
+    "EP": patch_of(**merge(syn(2, QRC(4), 3, QRC(4), QRC(56), 0, 12, 0, -30), env("A", 0, 29, 20, 66),
                            env("B", 0, 12, 0, 62), dict(VEL=100, AKEY=40, B1KEY=30, B2KEY=30, PHRT=1),
                            amp(0, 39, 40, 14, 72))),
     "BASS": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 24, -64), env("A", 0, 18, 34, 88),
-                             env("B", 0, 11, 0, 0), flt("LP12", 92, 10, 20), fenv(0, 11, 0, 3),
+                             env("B", 0, 11, 0, 0), flt("LP12", 92, 10, 20), fenv(0, 12, 0, 0),
                              amp(0, 24, 100, 5, 110))),
-    "GLASS PAD": patch_of(**merge(syn(7, QRC(4), 7, QRC(16), QRC(16), 8, 40, 0, 0), env("A", 17, 40, 100, 36),
-                                  env("B", 23, 48, 60, 50), dict(PHRT=0), amp(53, 32, 120, 43, 88),
+    "GLASS PAD": patch_of(**merge(syn(7, QRC(4), 7, QRC(16), QRC(16), 8, 40, 0, 0), env("A", 17, 41, 100, 36),
+                                  env("B", 24, 48, 60, 50), dict(PHRT=0), amp(53, 32, 120, 43, 88),
                                   lfo(0, 8, 3, "HARM", "SINE", 30))),
     "WOBBLE": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 10, -64), env("A", 0, 19, 127, 60),
                                env("B", 0, 16, 40, 0), flt("LP24", 70, 60, 0), amp(0, 24, 110, 7, 115),
@@ -596,7 +597,11 @@ class Voice:
             if self.dly[k] >= (dly & 127) << 24:
                 self.stage[k] = 2
         elif st == 2:
-            x += T_ATK[k][atk & 127]
+            if k < 2:                            # the operators: linear in dB from OP_FLOOR
+                x = max(x, OP_FLOOR)
+                x += (x * T_ATK[k][atk & 127]) >> 24
+            else:
+                x += T_ATK[k][atk & 127]
             if x >= (1 << 24):
                 x = 1 << 24
                 self.stage[k] = 3

@@ -942,8 +942,8 @@ o=$(dv 'OFS C')
 [ "$o" = "1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100 " ] &&
     ok "FM TONE's OFS C (-1.00 .. +1.00, 0.01 a stored step: hi-res style): slow 0.01 a detent, quick 0.10; GLO held: whole numbers (1.00, 0.00, -1.00)" \
     || bad "OFS C: '$o' (want 1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100)"
-[ "$(dv SPEED)" = "3200 6399 3200 1600 800 " ] &&
-    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along the speed list x 100, hundredths since FM TONE's ranges (16.00 -> 32.00 -> 63.99, the end; back 32.00 16.00 8.00)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
+[ "$(dv SPEED)" = "6399 6399 3200 1600 800 " ] &&
+    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along the speed list x 100, hundredths since FM TONE's ranges (from the INIT's 32.00, the Digitone's: -> 63.99, the end, 63.99; back 32.00 16.00 8.00)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
 has '^sound: part 0 engine VA pos 1 LUSH PAD' "$L" && has '^sound: part 0 engine FM TONE pos 1 EP' "$L" &&
     ok "GLO + PRESETS still changes the engine (FM6 -> VA, VA -> FM TONE)" || bad "GLO + PRESETS: no engine change"
 
@@ -955,8 +955,8 @@ f=$(dv FREQ)
     ok "FREQ (0.00..127.00, from its top 127.00): slow detents 0.01 each, quick 6.35 (the range / 20); GLO held: 114.00 115.00 116.00 (whole numbers)" \
     || bad "FREQ: '$f' (want 12699 12698 12697 12062 11427 11400 11500 11600)"
 s=$(dv SPEED)
-[ "$s" = "800 -800 -1600 -3200 -6400 -6400 -3200 -1600 -800 800 1600 3200 6399 6399 6399 " ] &&
-    ok "LFO 1 SPEED (hi-res, min < 0): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
+[ "$s" = "1600 800 -800 -1600 -3200 -6400 -3200 -1600 -800 800 1600 3200 6399 6399 6399 " ] &&
+    ok "LFO 1 SPEED (hi-res, min < 0; from the INIT's 32.00): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
     || bad "SPEED under GLO: '$s'"
 r=$(dv REL)
 [ "$r" = "15 16 22 28 34 40 46 52 58 64 70 76 82 88 94 100 106 112 118 124 127 112 96 112 " ] &&

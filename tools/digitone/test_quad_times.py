@@ -79,11 +79,15 @@ for tab, env, v in (("ADEC", "amp_decay", 32), ("ADEC", "amp_decay", 96), ("ADEC
         "REL" if tab.endswith("REL") else "DEC", v, r["T"], pt(env, v)["s"]))
 # the proxies (run 2's patches and readings)
 r = M.measure_stage("FATK", [(32, None)], times={32: T["FATK"][32]})[0][2]
-ok(within(r["t90"], pt("filter_attack", 32, "2")["t90"], 0.05),
-   "filter ATK 32: centroid t90 %.3f s, the Digitone's %.3f s" % (r["t90"], pt("filter_attack", 32, "2")["t90"]))
-r = M.measure_stage("OATK", [(64, None)], times={64: T["OATK"][64]})[0][2]
-ok(within(r["t90"], pt("op_a_attack", 64, "2")["t90"], 0.05),
-   "operator ATK 64: centroid t90 %.3f s, the Digitone's %.3f s" % (r["t90"], pt("op_a_attack", 64, "2")["t90"]))
+d = pt("filter_attack", 32, "2")
+ok(within(r["t90"], d["t90"], 0.05) and within(r["t50"], d["t50"], 0.25),
+   "filter ATK 32: centroid t50 %.3f / t90 %.3f s, the Digitone's %.3f / %.3f s" % (r["t50"], r["t90"], d["t50"], d["t90"]))
+for v in (16, 64, 126):           # the shape (linear in dB from -38 dB): t10, t50 and t90 together
+    r = M.measure_stage("OATK", [(v, None)], times={v: T["OATK"][v]})[0][2]
+    d = pt("op_a_attack", v, "2")
+    ok(all(within(r[k], d[k], 0.06) for k in ("t10", "t50", "t90")),
+       "operator ATK %d: centroid t10 %.3f / t50 %.3f / t90 %.3f s, the Digitone's %.3f / %.3f / %.3f s" % (
+           v, r["t10"], r["t50"], r["t90"], d["t10"], d["t50"], d["t90"]))
 r = M.measure_stage("ODEC", [(64, None)], times={64: T["ODEC"][64]})[0][2]
 d = pt("op_a_decay", 64, "2")
 ok(within(r["t50"], d["t50"], 0.15) and within(r["t90"], d["t90"], 0.15),
@@ -92,7 +96,7 @@ ok(within(r["t50"], d["t50"], 0.15) and within(r["t90"], d["t90"], 0.15),
 r = M.measure_stage("FDEC", [(64, None)], times={64: T["FDEC"][64]})[0][2]
 d = pt("filter_decay", 64, "2")
 g = math.sqrt(r["t50"] * r["t90"] / (d["t50"] * d["t90"]))
-ok(within(r["t50"], d["t50"], 0.6) and within(r["t90"], d["t90"], 1.5) and abs(g - 1) <= 0.25,
+ok(within(r["t50"], d["t50"], 0.15) and within(r["t90"], d["t90"], 0.15) and abs(g - 1) <= 0.1,
    "filter DEC 64: centroid t50 %.3f / t90 %.3f s, the Digitone's %.3f / %.3f s (geometric mean x %.2f)" % (
        r["t50"], r["t90"], d["t50"], d["t90"], g))
 # the delay: v / 32 beats

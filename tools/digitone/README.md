@@ -59,7 +59,10 @@ no times.
 
 - `digitone_times.json`: the Digitone's readings, derived numbers only (no audio): per envelope the measure, the
   setup, value -> seconds (runs merged as summary.py merges them), each run's own numbers (t10 / t50 / t90, the T60,
-  the fade's), whether extrapolated; the amp attack's grid (the 0.4962 s multiples from 112 up).
+  the fade's), whether extrapolated; the amp attack's grid (the 0.4962 s multiples from 112 up); for the filter and
+  the operators each step's centroid track (log2 Hz in time, thinned: `--extract` needs the captures' WAVs in DIR)
+  and an attack's reference (the fastest step's end). The filter and operator tables are calibrated on these whole
+  tracks; the operator attack's shape (linear in dB from `OP_FLOOR_DB`, -38 dB) was chosen by them (QUAD.md).
 - `quad_render.c`: one FM TONE note through the firmware's own eng_quad.c on the host, to raw float32 at 44.1 kHz
   (`build/host/quad_render`, built by make_quad_times.py and tests/run_cr_tests.sh); it can overwrite one entry of
   quad_times.h's tables (the calibration's candidate times).

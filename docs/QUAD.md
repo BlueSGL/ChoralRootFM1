@@ -255,7 +255,7 @@ part's drive), and ChoralRoot loads it, saves it and does not close it with FX o
 **The patch and the blob** (`QUAD_BLOB` 80 bytes): `'Q'` (0x51), **version 3**, a byte per value (value - min), zeros
 to 80 (73 values + 5 zero bytes). Values (index name min..max (init)): 0 ALGO 1..8 (1); 1 RATIO C 0..18 (3); 2 RATIO A
 0..63 (3); 3 RATIO B1 0..18 (3); 4 HARM -26..26 (0); 5 DTUNE 0..127 (0); 6 FDBK 0..120 (0); 7 MIX -64..63 (0); 8..11
-OFS C A B1 B2 -100..100 (0); 12..15 A ATK DEC END LEV (0 60 64 48); 16..19 B ATK DEC END LEV (0 60 0 0); 20 A DLY (0);
+OFS C A B1 B2 -100..100 (0); 12..15 A ATK DEC END LEV (0 32 127 0; until 2026-10-14 0 60 64 48); 16..19 B ATK DEC END LEV (0 60 0 0); 20 A DLY (0);
 21 A TRIG 0..1 (1); 22 A RESET 0..1 (1); 23 PHRT 0..4 (1 ALL); 24 B DLY (0); 25 B TRIG (1); 26 B RESET (1); 27 VEL (64);
 28 A KEY (0); 29 B1 KEY (0); 30..33 filter ATK DEC SUS REL (0 64 0 40; REL 127 = INF); 34 FREQ (127); 35 RESO (0); 36 TYPE 0..3 OFF
 LP12 HP12 LP24 (1); 37 DEPTH -64..63 (0); 38 F DELAY (0); 39 F KTRK (0); 40 BASE (0); 41 WIDTH (127); 42..45 amp ATK
@@ -442,28 +442,33 @@ The owner (2026-10-14): "make all the FM-Tone times match the Digitone, a wrong 
 sound". Until then the four envelopes ran on Felucca's two curves (`ENV_LIN` attacks, `ENV_EXP` decays, 1 ms .. 10 s:
 `tools/gen_tables.py`), the DELAYs on `ENV_LIN`, the LFO FADE over `ENV_LIN[2 |FADE| - 1]`. The Digitone's were
 measured on the owner's unit (OS 1.44, two runs recorded losslessly over USB at 48 kHz: `tools/digitone/`, its
-README): each envelope type has its own curve, and FM TONE now has a table per type.
+README): each envelope type has its own curve, and FM TONE now has a table per type, and the Digitone's shapes where
+the measurement shows them (the operator attack).
 
 **Where the numbers are.** `tools/digitone/digitone_times.json`: the Digitone's readings (derived numbers only, no
 audio): per envelope the measure, the setup (the patch, in Digitone values), per value the seconds, each run's own
-numbers, extrapolated or not. `tools/digitone/quad_calib.json`: our measurement of FM TONE through the same analysis
-(the calibration, the verification of every measured value). `tools/digitone/make_quad_times.py` makes
-`firmware/src/quad_times.h` of the two (regenerating after another measurement: the README). tests/run_cr_tests.sh runs
-`tools/digitone/test_quad_times.py` (the header not stale; the amp's times, the proxy readings, the delay, the fade).
+numbers and, for the filter and the operators, the centroid track itself (log2 Hz in time, thinned), extrapolated
+or not. `tools/digitone/quad_calib.json`: our measurement of FM TONE through the same analysis (the calibration, the
+verification of every measured value). `tools/digitone/make_quad_times.py` makes `firmware/src/quad_times.h` of the
+two (regenerating after another measurement: the README). tests/run_cr_tests.sh runs `tools/digitone/test_quad_times.py`
+(the header not stale; the amp's times, the operator attack's t10 / t50 / t90, the filter's and the operator decay's
+readings, the delay, the fade).
 
 **The tables** (`quad_times.h`, in flash: Q24 a control tick of 32 samples, 0.7256 ms; one look-up a tick and envelope,
-as before): an attack's step 2^24 x tick / T (T the full rise; at most 2^24: one tick), a decay's share of the way
-2^24 x (1 - 10^(-3 tick / T60)) (`x += (sus - x) x k >> 24`, 64-bit; a release's step rounded up, so the long ones
-reach the end at 2^12). The times (engine seconds):
+as before): an attack's step 2^24 x tick / T (T the full rise; at most 2^24: one tick); the operators' attack is
+**linear in dB** from `QUAD_OP_FLOOR` (-38 dB) to the top, its entry the growth a tick, 2^24 x ((1 / floor)^(tick / T)
+- 1) (`x += x x k >> 24`, from at least the floor: a restart without RESET goes on from where it is); a decay's share
+of the way 2^24 x (1 - 10^(-3 tick / T60)) (`x += (sus - x) x k >> 24`, 64-bit; a release's step rounded up, so the
+long ones reach the end at 2^12). The times (engine seconds):
 
 | value | 0 | 1 | 8 | 16 | 32 | 48 | 64 | 80 | 96 | 112 | 120 | 126 | 127 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | AMP ATK (full rise) | 3.17ms | 3.18ms | 3.24ms | 9.11ms | 47.8ms | 128ms | 261ms | 451ms | 708ms | 1.49s | 8.93s | 26.8s | 29.8s |
 | AMP DEC / REL (T60) | 5.45ms | 6.15ms | 39.5ms | 194ms | 1.02s | 2.74s | 5.54s | 9.61s | 15.1s | 22.1s | 26.2s | 29.7s | INF |
-| filter ATK (full rise) | 0.726ms | 1.07ms | 22.6ms | 299ms | 1.56s | 3.95s | 8.13s | 13.2s | 21.1s | 44.3s | 265s | 812s | 870s |
-| filter DEC / REL (T60) | 16.4ms | 19.2ms | 67ms | 190ms | 354ms | 1.04s | 1.99s | 4.28s | 8.03s | 17s | 24.6s | 32.2s | 33.6s (REL: INF) |
-| operator ATK (full rise) | 0.726ms | 1.02ms | 14.2ms | 140ms | 727ms | 1.95s | 3.94s | 6.84s | 10.7s | 15.7s | 18.5s | 21s | 21.4s |
-| operator DEC (T60) | 7.84ms | 9.27ms | 31.7ms | 111ms | 593ms | 1.56s | 3.11s | 5.35s | 8.41s | 12.3s | 14.6s | 16.5s | 16.9s |
+| filter ATK (full rise) | 0.726ms | 1.08ms | 26.1ms | 350ms | 1.36s | 4.06s | 8.36s | 15.4s | 22.9s | 48.3s | 290s | 870s | 936s |
+| filter DEC / REL (T60) | 53.5ms | 56.7ms | 84.7ms | 137ms | 408ms | 752ms | 1.78s | 4.21s | 8.02s | 15.4s | 22.4s | 30.1s | 31.6s (REL: INF) |
+| operator ATK (-38 dB to the top) | 0.726ms | 1.01ms | 13.7ms | 131ms | 674ms | 1.81s | 3.66s | 6.35s | 9.95s | 14.5s | 17.2s | 19.5s | 20s |
+| operator DEC (T60) | 9.21ms | 10.8ms | 34.8ms | 114ms | 554ms | 1.54s | 3.12s | 5.34s | 8.48s | 12.5s | 14.8s | 16.8s | 17.2s |
 
 `QUAD_T_AATK` the amp attack (linear), `QUAD_T_ADEC` the amp decay and release (one exponential curve: the Digitone's
 are equal within 0.3 % and dB-linear, 0.01..0.1 dB rms; DEC 127 and REL 127 stay INF), `QUAD_T_FATK` the filter attack
@@ -474,55 +479,61 @@ fitted 0.496135, the points within 0.014 %): 112 = 3, 114 = 4, 116 = 6, 118 = 10
 125 = 48, 126 = 54, 127 = 60 units; between them the multiples are interpolated (113 = 3.5, 115 = 5, 117 = 8, 119 =
 14, 121 = 24, 123 = 36). The shortest times are the tick's: an attack one tick (0.73 ms), a decay at once.
 
-**How each was made.** The amp: the amplitude envelope read directly (dt_analyse.py: the full linear rise (t90 - t10)
-/ 0.8 at 0 8 16 24 32 48 64 80 96 100 104 108 112 114 116 118 120 122 124 125 126 127; the T60 from the dB slope at
-4 8 16 24 32 48 64 80 96 104 112 120 126 for the decay, 0 8 24 32 48 64 80 96 112 120 126 for the release, merged).
-FM TONE's are calibrated through the same analysis all the same, which matters only at the shortest (its smear, ~3
-ms): ATK 0..8 are ~3.2 ms, the decay / release 0 a 5 ms T60 (the release 0's reading; the Digitone's DEC 0 sounds
-nothing with SUS 0: not measurable). The filter and the operators were measured **through a proxy**: the spectral
-centroid of the Digitone's output, its t10 / t50 / t90 (the setups: the filter LP4, FREQ 20, RESO 40, ENV +63, ALGO 1,
-A LEV 96 (held), FDBK 70; operator A on ALGO 1 at A LEV 110; operator B on ALGO 6, B2 > C, at B LEV 110). These are
-readings, not envelope times: FM TONE is **calibrated through the same proxy**. `make_quad_times.py --calibrate`
-renders the firmware's own code on the host (`tools/digitone/quad_render.c`) with the same patches (C4, velocity 100,
-the same gates), resamples to 48 kHz and reads it with dt_analyse.py's own functions; a sweep of candidate engine
-times gives the reading R(T) (above 0.25 s it scales with T: R = c T, c averaged over the sweep: the filter's chaotic
-FDBK 70 makes single readings scatter ~20 %), inverted at each Digitone reading. Run 2's readings (run 1 sent HARM
-+1.00, and FM TONE's HARM +1.00 does not sound as the Digitone's did: its filter opened at 1.1 kHz, ours at 3.2 kHz;
-run 1 is a cross-check). Attacks are matched on t90 (the sweep's end: where the envelope reaches the top); the decays
-on t50 and t90 together (the geometric mean of the engine times each asks for): their shapes differ (below).
+**The amp** is measured on the amplitude (dt_analyse.py: the full linear rise (t90 - t10) / 0.8 at 0 8 16 24 32 48 64 80
+96 100 104 108 112 114 116 118 120 122 124 125 126 127; the T60 from the dB slope at 4 8 16 24 32 48 64 80 96 104 112
+120 126 for the decay, 0 8 24 32 48 64 80 96 112 120 126 for the release, merged). FM TONE's are calibrated through
+the same analysis all the same, which matters only at the shortest (its smear, ~3 ms): ATK 0..8 are ~3.2 ms, the decay
+/ release 0 a 5 ms T60 (the release 0's reading; the Digitone's DEC 0 sounds nothing with SUS 0: not measurable). Its
+shapes are the Digitone's: the attack linear (the level at half the rise 0.490 on both from ATK 32 up; below, both
+readings are smeared), the decay and release dB-linear (FM TONE's slope rms <= 0.074 dB on the decay, <= 0.09 dB on the
+release to 96 and 0.16..0.31 dB at 112..126; the Digitone's 0.001..0.14).
 
-**Residuals** (FM TONE's reading at the table's time / the Digitone's - 1; `quad_calib.json` "verify"):
+**The filter and the operators** were measured **through a proxy**: the spectral centroid of the Digitone's output (the
+setups: the filter LP4, FREQ 20, RESO 40, ENV +63, ALGO 1, A LEV 96 (held), FDBK 70; operator A on ALGO 1 at A LEV 110;
+operator B on ALGO 6, B2 > C, at B LEV 110). These are readings, not envelope times: FM TONE is **calibrated through the
+same proxy, on the whole track**. `make_quad_times.py --calibrate` renders the firmware's own code on the host
+(`tools/digitone/quad_render.c`) with the same patches (C4, velocity 100), resamples to 48 kHz and reads it with
+dt_analyse.py's own functions; per measured value (run 2: run 1 sent HARM +1.00, and FM TONE's HARM +1.00 does not
+sound as the Digitone's did) the engine time is the one whose centroid track (as the share of its sweep, in time) is
+nearest the Digitone's over the Digitone's window (a 4 s render scaled in time, then a render at the time found).
+**The shapes** (the whole tracks, FM TONE's best fit against the Digitone's, rms of the share of the sweep):
+- the operator attack: the Digitone's blooms late (t10 / t50 / t90 = 0.48 / 0.84 / 1 of t90 at every value); a linear
+  attack (FM TONE's until then: 0.10 / 0.54 / 1) misses it by 0.21 rms. Linear in dB from a floor fits: -24 dB 0.12,
+  -30 dB 0.07, -36 dB 0.028, **-37 .. -39 dB 0.026**, -42 dB 0.036, -48 dB 0.058. FM TONE's operator attacks are now
+  linear in dB from -38 dB (`QUAD_OP_FLOOR`);
+- the filter decay: the curves between exponential (FM TONE's) and linear (a decay toward a target below SUS, stopped
+  at SUS) fit no better than the exponential on the part above the fundamental (0.080 of the open-to-fundamental
+  span; linear 0.114); what differs is the close: FM TONE's FREQ 20.00 is 80 Hz, and below the fundamental (261 Hz)
+  its filter closes later. FM TONE's static map (the centroid against the cutoff, a 60 s sweep) puts the Digitone's
+  FREQ 20 at about FM TONE's FREQ 0.00 (30 Hz): there **both filter tracks match whole** with FM TONE's curves (the
+  decay exponential, the attack linear; rms 0.09..0.15 and 0.04..0.08 of the sweep), and the filter release (run 1)
+  agrees with the decay's table (t90 -3 % at 64, -11 % at 112). The filter tables are calibrated with that patch
+  (FREQ 0.00 in the mirror). **The cutoff scale is not changed**: one point (FREQ 20 is ~1.4 octaves lower on the
+  Digitone) does not give a scale; a measurement of the cutoff itself (a resonant LP's peak at FREQ 0, 16, 32 .. 127)
+  would;
+- the operator decay: exponential, as FM TONE's (whole track 0.02..0.05).
 
-| envelope | statistic | residual |
-| --- | --- | --- |
-| amp attack | full rise | within 1 % at every measured value; 0: +12 % (one tick is 0.73 ms of its 2.7 ms) |
-| amp decay, release | T60 | within 1 % (release 0: 0 %) |
-| filter attack (16 .. 112) | t90 | 0 % (48 .. 112 against dt_analyse's estimate: the Digitone's sweeps were unfinished) |
-| filter decay (0 .. 126) | t50 / t90 | t50 -35 .. -58 %, t90 +66 .. +122 % (0: -17 % / -30 %) |
-| operator attack (16 .. 126) | t90 | 0 % |
-| operator decay (0 .. 126) | t50 / t90 | t50 +5 .. +10 %, t90 -7 .. -10 % (0: -13 % / +4 %) |
-| filter release, run 1 (cross-check) | t90 | 0: -55 %, 64: +19 %, 112: +40 % (HARM +1.00 not mirrored) |
-| operator B, run 1 (cross-check) | t90 | decay 0: -9 %, 64: +17 %, 112: +17 %; attack 112: +6 % (an estimate) |
-| A DELAY at 120 and 80 BPM | t50 | 0 % |
-| LFO FADE at 120 and 80 BPM | full fade | within 4 % (-4 .. -64) |
+**Residuals** (FM TONE's reading at the table's time / the Digitone's - 1, %; `quad_calib.json`):
 
-**What the proxy says about the shapes** (not modelled: FM TONE's attacks stay linear, its decays exponential):
-- the operator attack: the Digitone's centroid stays at the plain sine and blooms late (t10 / t50 / t90 = 0.48 /
-  0.84 / 1 at every value), FM TONE's rises from the start (0.10 / 0.54 / 1). Both end together; in between FM TONE's
-  modulation comes in earlier (FM TONE's centroid follows the level about linearly here: the Digitone's looks like a
-  level of (t / T)^3);
-- the filter decay: the Digitone's sweep falls to the fundamental (261 Hz) and then the filter closes fast; FM
-  TONE's (exponential in FREQ units) gets to the fundamental as fast (at DEC 64 the two tracks are within ~10 % down to
-  261 Hz) but closes below it about 2x slower. The closed filter also differs (the Digitone's centroid then ~20 Hz,
-  FM TONE's ~45 Hz: its FREQ 20 is 80 Hz; the Digitone's may be lower);
-- the filter attack: the Digitone stays closed longer before the fundamental comes through.
-A different curve (or the Digitone's cutoff scale) would be needed to match them; a measurement that reads the
-envelope itself (a resonant filter's peak frequency in time, an operator's index from its sidebands) would pin them.
+| envelope (run 2) | t10 | t50 | t90 |
+| --- | --- | --- | --- |
+| operator attack 16 .. 126 | -2 .. -4 | +1 .. +2 | -1 .. 0 |
+| operator decay 16 .. 126 (0) | +39 .. +134 (the Digitone's t10 is very early: 18 ms at 64) | +3 .. +10 (+2) | -6 .. -13 (+13) |
+| filter attack 16, 32 | -17, -52 | +4, -16 | +37, +1 |
+| filter attack 48 .. 112 (unfinished on the Digitone) | -19 .. -40 | -8 .. -17 (80: +4) | +20 .. +36 against dt_analyse's estimate (t50 x 3.04) |
+| filter decay 16 .. 126 (0) | (the onset: not a reading) | -31 .. +12 (+174) | -12 .. +29 (+15) |
+| amp attack (full rise), amp decay / release (T60) | | within 1 % (ATK 0: +12 %, one tick of 2.7 ms) | |
+| A DELAY at 120 and 80 BPM (t50) | | 0 | |
+| LFO FADE at 120 and 80 BPM (full fade) | | within 4 % | |
+
+Cross-checks (run 1): the filter release t90 0: +51 %, 64: -3 %, 112: -11 %; operator B (ALGO 6, B2 > C) decay 0: -1 %,
+64 and 112: +18 %, attack 112: +4 % (an estimate).
 
 **Above the measured values.** The filter attack from 113: the Digitone's filter attack readings are about 30x its
-amp attack's full rise at every measured value (16 .. 112: 29 .. 33x), and its sweep at 120 had reached 3 % after 30 s
-(126: nothing): the table follows the amp attack's curve x the ratio at 112 (120: 4.4 min, 126: 13.5 min). The
-operator attack 127, the decays' 127: the last segment's slope in log time (AMP DEC / REL 127: INF, the entry unused).
+amp attack's full rise at every measured value, and its sweep at 120 had reached 3 % after 30 s (126: nothing): the
+table follows the amp attack's curve x the ratio at 112 (120: 4.8 min, 126: 14.5 min; the 120 capture's partial track
+alone fits 4.4 min). The operator attack 127, the decays' 127: the last segment's slope in log time (AMP DEC / REL 127:
+INF, the entry unused).
 
 **DELAY** (A's, B's, the filter's ENV DELAY): v / 32 beats at the part's tempo (`song.g[G_BPM]`, as the LFOs': the
 tempo, tap or MIDI clock; followed while it runs): A DELAY measured exactly (120 BPM: 16 -> 0.25 s, 64 -> 1.00 s, 112
@@ -541,18 +552,24 @@ step to -1 a sample: the tail saw-toothed up to 31 LSB below its level, and a 1 
 
 **The cells** show the times as numbers 0..127, as the Digitone does (`QC_T` `F_INT`, the filter REL `F_INTI`;
 F_TIME's 1 ms .. 10 s text was the old curve's). The `.dnsnd` import takes the times 1:1 ([SOUNDS.md](SOUNDS.md)).
+**Digitone sounds imported before this change should be imported again**: their times were converted to FM TONE's
+old curve.
+
+**INIT** is the Digitone's init sound (the owner's init-sound export, decoded by web/fm1dnsnd.js, its values 1:1; the
+page columns' defaults, quad_ref.py's, the importer's base): MIX -64 (was 0), A DEC 32 (60), A END 127 (64), A LEV 0
+(48), B DEC 32 (60), B END 127 (0), the filter REL 64 (40), AMP ATK 8 (0), DEC 32 (64), SUS 96 (127), REL 24 (40), LFO 1
+and 2 SPEED 32.00 (16.00), MULT 32 (8); LFO 3 (the Digitone has two) as LFO 1 and 2. The rest was the Digitone's
+already (ALGO 1, the ratios 1.00, LP12 at FREQ 127.00, LEVEL 110, the filter ATK 0 DEC 64 SUS 0 ..).
 
 **The factory presets** were set on the old curve: each time (ATK DEC REL of ENV A, ENV B, AMP, the filter, and
-`preset_t.env`) is re-expressed as the value whose new time is nearest the old one (EP's AMP DEC 96 -> 39: 1.6 s T60,
-REL 62 -> 14: 0.14 s; BRASS's A ATK 50 -> 11: 40 ms), so they sound as they did. The init patch's values are not
-changed: they now mean the Digitone's times (T60s: AMP DEC 64 = 5.5 s, REL 40 = 1.7 s, A / B DEC 60 = 2.7 s, the filter's DEC 64
-= 2.0 s, REL 40 = 0.6 s; were 0.16, 0.03, 0.12, 0.16, 0.03 s). **Saved sounds**: the blob is unchanged (version 5, values 0..127): a saved FM TONE sound, or one
-imported from a .dnsnd before, plays its values on the new tables (a version-1 / 2 blob's FADE conversion kept "the
-same time" on the old curve only).
+`preset_t.env`) is re-expressed as the value whose new time is nearest the old one (the full time of an attack, a
+decay's T60: EP's AMP DEC 96 -> 39: 1.6 s T60, REL 62 -> 14: 0.14 s; BRASS's A ATK 50 -> 11: 39 ms), so they keep their
+designed times (an operator attack now with the Digitone's late bloom). Saved FM TONE sounds play their values on the
+new tables (the blob is unchanged, version 5: no conversion of older patches, the owner: not needed).
 
-**CPU**: one look-up a tick and envelope as before; a decay's multiply 64-bit (was `mulq16`'s two 32-bit), the fade's
-one; the amp ramp one shift a sample. Host (`tests/run_quad_test.sh`): the presets' average 1136 -> 1138 instructions a
-sample (19.4 % of the device's block), the worst case 1815 -> ~1845 (31.4 %).
+**CPU**: one look-up a tick and envelope as before; a decay's multiply 64-bit (was `mulq16`'s two 32-bit), the
+operator attack's and the fade's one; the amp ramp one shift a sample. Host (`tests/run_quad_test.sh`): the presets'
+average 1136 -> 1150 instructions a sample (19.6 % of the device's block), the worst case 1815 -> 1857 (31.6 %).
 
 ## Status (milestone 2: wired, 2026-10-08)
 

@@ -29,6 +29,7 @@ import argparse
 import json
 import math
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -152,6 +153,7 @@ def extract(paths):
               if str(p["v"]) in g["multiples"] and p["s"] and not p["extrapolated"]]
         g["unit_s"] = round(sum(m * s for m, s in ms) / sum(m * m for m, s in ms), 6)
         g["residual_pct_max"] = round(max(abs(s / (m * g["unit_s"]) - 1) for m, s in ms) * 100, 3)
+    add_tracks(out, paths)
     doc = {"about": "The Elektron Digitone's envelope and LFO fade times, measured on the owner's unit (OS 1.44, "
                     "2026-10-14, recorded losslessly over USB at 48 kHz: tools/digitone/dt_measure.py runs 1 and 2, "
                     "analysed by dt_analyse.py). Derived numbers only (no audio). Per envelope: the measure, the setup "
@@ -162,10 +164,50 @@ def extract(paths):
                     "times: FM TONE is calibrated through the same reading (make_quad_times.py --calibrate).",
            "source": "tools/digitone/make_quad_times.py --extract (dt_analyse.py analysis.json)",
            "envelopes": out}
+    txt = json.dumps(doc, indent=1)                      # (a list of numbers on one line)
+    txt = re.sub(r"\[\s*(-?[\d.]+(?:,\s*-?[\d.]+)*)\s*\]", lambda m: "[" + ",".join(
+        x.strip() for x in m.group(1).split(",")) + "]", txt)
     with open(TIMES_JSON, "w") as fh:
-        json.dump(doc, fh, indent=1)
-        fh.write("\n")
+        fh.write(txt + "\n")
     print("make_quad_times: wrote", os.path.relpath(TIMES_JSON, ROOT))
+
+
+def add_tracks(out, paths):
+    """the proxy captures' centroid tracks (dt_analyse.proxy_track, log2 Hz from the note-on / -off: derived numbers,
+    no audio) into each run's point as {"t", "y"} (every 2nd frame of the first 0.1 s, then about 100 more), an attack's
+    reference (the fastest step's end) as the envelope's track_ref; needs the captures in the directories"""
+    import glob
+    import summary
+    import dt_analyse as A
+    for d in paths:
+        for jp in sorted(glob.glob(os.path.join(d, "*.json"))):
+            if os.path.basename(jp) == "analysis.json":
+                continue
+            meta = json.load(open(jp))
+            steps = [s for s in meta.get("steps", []) if s["kind"] in ("filt_attack", "filt_decay", "filt_release",
+                                                                        "op_attack", "op_decay")]
+            if not steps or not os.path.exists(os.path.join(d, meta["wav"])):
+                continue
+            x, sr = A.load_wav(os.path.join(d, meta["wav"]))
+            t, e = A.rms_env(x, sr)
+            f, _ = A.host_map(meta, t, A.db(e))
+            ct, cc, cl = A.centroid_track(x, sr)
+            run = str(summary.run_of(meta["capture"]))
+            for s in steps:
+                name = ENV_OF[s["param"]]
+                ts, ys = A.proxy_track(s, f, ct, cc, cl)
+                if not len(ts) or name not in out:
+                    continue
+                if s["kind"] in ("filt_attack", "op_attack") and s["value"] == 0:
+                    out[name].setdefault("track_ref", {})[run] = round(float(np.median(ys[-max(3, len(ys) // 20):])), 4)
+                    continue
+                p = next((p for p in out[name]["points"] if p["v"] == s["value"]), None)
+                if not p or run not in p["runs"]:
+                    continue
+                n0 = int(np.searchsorted(ts, 0.1))
+                idx = list(range(0, n0, 2)) + list(range(n0, len(ts), max(1, (len(ts) - n0) // 100)))
+                p["runs"][run]["track"] = {"t": [round(float(ts[i]), 4) for i in idx],
+                                           "y": [round(float(ys[i]), 3) for i in idx]}
 
 
 # ------------------------------------------------------------------------------------------ curves and the header
@@ -212,6 +254,19 @@ def k_atk(T):
 def k_dec(T):
     """a decay's share of the way a tick (Q24) for a T60 of T s (0: at once)"""
     return Q24 if T <= 0 else max(1, min(Q24, int(round(Q24 * (1 - 10 ** (-3 * TICK / T))))))
+
+
+OP_FLOOR_DB = -38.0      # the operator attack: linear in dB from here to the top (the Digitone's tracks: -37..-39 best)
+OP_FLOOR = int(round(Q24 * 10 ** (OP_FLOOR_DB / 20)))
+
+
+def k_oatk(T):
+    """an operator attack's growth a tick (Q24) for a rise from OP_FLOOR to the top in T s (linear in dB)"""
+    return max(1, min(0xFFFFFFFF, int(round(Q24 * ((Q24 / OP_FLOOR) ** (TICK / max(T, TICK)) - 1)))))
+
+
+def t_oatk(k):
+    return TICK * math.log(Q24 / OP_FLOOR) / math.log(1 + k / Q24)
 
 
 def k_fade(T):
@@ -351,7 +406,7 @@ def write_header(T, calib):
             ("ADEC", "amp decay and release (one curve, dB-linear): the share of the way a tick (T60); 127 is INF", k_dec),
             ("FATK", "filter attack (linear): the step a tick", k_atk),
             ("FDEC", "filter decay and release (exponential): the share a tick", k_dec),
-            ("OATK", "operator A and B attack (linear): the step a tick", k_atk),
+            ("OATK", "operator A and B attack (linear in dB from QUAD_OP_FLOOR to the top): the growth a tick", k_oatk),
             ("ODEC", "operator A and B decay to END (exponential): the share a tick", k_dec)]
     L = ["/* generated by tools/digitone/make_quad_times.py from tools/digitone/digitone_times.json and quad_calib.json:",
          " * do not edit (python3 tools/digitone/make_quad_times.py) */",
@@ -367,13 +422,16 @@ def write_header(T, calib):
          "#endif",
          "/* DELAY v (A, B, the filter's): v / 32 beats at the part's tempo (A's measured: 120 BPM 16 -> 0.25 s, 64 -> 1.0 s;",
          " * B's and the filter's assumed the same): 1/32 beats in Q24 a tick = BPM x QUAD_DLY_K */",
-         "#define QUAD_DLY_K %du" % int(round(Q24 * 32 * CTL / (60 * FS)))]
+         "#define QUAD_DLY_K %du" % int(round(Q24 * 32 * CTL / (60 * FS))),
+         "/* the operators' attack: linear in dB from this level (Q24: %.0f dB) to the top, x += x x QUAD_T_OATK >> 24 a tick */"
+         % OP_FLOOR_DB,
+         "#define QUAD_OP_FLOOR %d" % OP_FLOOR]
     for name, about, kf in tabs:
         vals = [kf(T[name][v]) for v in range(128)]
         L.append("/* %s */" % about)
         L.append("static QUAD_TIMES_CONST uint32_t QUAD_T_%s[128] = {" % name)
         for i in range(0, 128, 8):
-            secs = " ".join(fmt_s((t_atk if kf is k_atk else t_dec)(k)) for k in vals[i:i + 8])
+            secs = " ".join(fmt_s((t_oatk if kf is k_oatk else t_atk if kf is k_atk else t_dec)(k)) for k in vals[i:i + 8])
             L.append("    " + ", ".join(str(x) for x in vals[i:i + 8]) + ",   /* %d: %s */" % (i, secs))
         L.append("};")
     fv = [0] + [k_fade(T["FADE"][d]) for d in range(1, 65)]
@@ -486,7 +544,9 @@ BASE = {"ALGO": 1, "MIX": -64, "FTYPE": 0, "RC": 3, "RA": 3, "HARM": 0, "DTUN": 
         "AATK": 0, "ADEC": 0, "AEND": 0, "ADLY": 0, "BATK": 0, "BDEC": 0, "BEND": 0, "BDLY": 0, "FREQ": 12700,
         "RESO": 0, "FDEPTH": 0, "FATK": 0, "FDEC": 0, "FSUS": 127, "FREL": 0, "FDLY": 0, "BASE": 0, "WIDTH": 127,
         "EATK": 0, "EDEC": 0, "ESUS": 127, "EREL": 0, "LEVEL": 100}
-FILT = dict(BASE, FTYPE=3, FREQ=2000, RESO=4000, FDEPTH=6300, FDBK=70, ALEV=96, AATK=0, ADEC=0, AEND=127)
+# the filter captures' FREQ 20 behaves as FM TONE's FREQ 0.00 (about 30 Hz): with it both filter tracks, attack and decay,
+# match the Digitone's whole (docs/QUAD.md "Times"; FREQ 20.00 here, 80 Hz, closes 1.4 octaves above the Digitone's)
+FILT = dict(BASE, FTYPE=3, FREQ=0, RESO=4000, FDEPTH=6300, FDBK=70, ALEV=96, AATK=0, ADEC=0, AEND=127)
 OPA = dict(BASE, ALGO=1, ALEV=110)
 OPB = dict(BASE, ALGO=6, BLEV=110)
 FADE = dict(BASE, LEVEL=64, L0DEPTH=1200, L0SPEED=6300, L0WAVE=1, L0TRIG=1, L0MULT=18, L0DEST=38)   # SIN TRG F64 VOL
@@ -524,7 +584,7 @@ def stage(tab, run="2"):
 
 
 TABLE_OF = {"ADEC_REL": "ADEC", "FDEC_REL": "FDEC", "OBATK": "OATK", "OBDEC": "ODEC"}
-KFN = {"AATK": k_atk, "ADEC": k_dec, "FATK": k_atk, "FDEC": k_dec, "OATK": k_atk, "ODEC": k_dec}
+KFN = {"AATK": k_atk, "ADEC": k_dec, "FATK": k_atk, "FDEC": k_dec, "OATK": k_oatk, "ODEC": k_dec}
 
 
 def reading(r, stat):
@@ -582,6 +642,79 @@ def reading_model(cpts):
     return c, T_of
 
 
+TRACK_TABS = {"FATK": "filter_attack", "FDEC": "filter_decay", "OATK": "op_a_attack", "ODEC": "op_a_decay"}
+RISING_K = ("filt_attack", "op_attack", "delay")
+
+
+def track_norm(ys, kind, ref=None):
+    """a centroid track as the share of its sweep (dt_analyse's first: the first 20 ms' median, a decay's maximum;
+    last: the end's median, an attack's the fastest step's end)"""
+    ys = np.asarray(ys, float)
+    n20 = max(3, int(0.02 * SR / 48))
+    first = float(np.median(ys[:n20])) if kind in RISING_K else float(ys[:n20].max())
+    if kind == "filt_release":
+        first = float(ys[0])
+    last = ref if ref is not None else float(np.median(ys[-max(3, len(ys) // 20):]))
+    return (ys - first) / (last - first)
+
+
+def fm_track(tab, T):
+    """FM TONE's centroid track of stage tab with the candidate time T (table entry 64): (t, share of the sweep)"""
+    import dt_analyse as A
+    kind, patch, gt = stage(tab)
+    base = TABLE_OF.get(tab, tab)
+    gate, tail = gt(T)
+    st = [(patch(64), kind, 64, gate, tail, ((base, 64, KFN[base](T)),), None, {})]
+    attack = kind in ("filt_attack", "op_attack")
+    if attack:
+        st = [(patch(0), kind, 0, 1.5, 0.2, (), None, {})] + st
+    x, ss = capture(st)
+    ct, cc, cl = A.centroid_track(x, SR)
+    trs = [A.proxy_track(s, lambda h: h, ct, cc, cl) for s in ss]
+    ref = float(np.median(trs[0][1][-max(3, len(trs[0][1]) // 20):])) if attack else None
+    return trs[-1][0], track_norm(trs[-1][1], kind, ref)
+
+
+def track_fit(tab, td, fd, T0, span=8.0, n=801):
+    """the time whose FM TONE track (a render at T0, scaled in time: an envelope's shape times T) is nearest the
+    Digitone's over its window: (T, the rms of the two shares of the sweep)"""
+    ts0, f0 = fm_track(tab, T0)
+    best = (T0, math.inf)
+    for lT in np.linspace(math.log(T0) - span / 2, math.log(T0) + span / 2, n):
+        T = math.exp(lT)
+        r = float(np.sqrt(np.mean((np.interp(td * T0 / T, ts0, f0, right=f0[-1]) - fd) ** 2)))
+        if r < best[1]:
+            best = (T, r)
+    return best
+
+
+def calibrate_track(E, tab):
+    """a proxy table from the whole tracks: per measured value (run 2, a sweep that got past half way) the time whose
+    track fits the Digitone's best (fitted on a 4 s render, then again on a render at that time: the smear of the
+    short ones); FM TONE's t10 / t50 / t90 there against the Digitone's"""
+    env = E[TRACK_TABS[tab]]
+    kind = stage(tab)[0]
+    ref = env.get("track_ref", {}).get("2")
+    pts = []
+    for p in env["points"]:
+        r = p["runs"].get("2")
+        if not r or "track" not in r or (r.get("reached_pct") is not None and r["reached_pct"] < 50):
+            continue
+        td = np.array(r["track"]["t"])
+        fd = track_norm(r["track"]["y"], kind, ref if kind in ("filt_attack", "op_attack") else None)
+        T1, _ = track_fit(tab, td, fd, 4.0, span=13.0, n=1100)
+        T, rms = track_fit(tab, td, fd, T1, span=2.0, n=401)
+        pts.append({"v": p["v"], "engine_s": round(T, 6), "track_rms": round(rms, 4),
+                    "digitone": {k: r[k] for k in ("t10", "t50", "t90") if r.get(k) is not None and (k != "t10" or r[k] >= 0.005) and
+                                 not (k == "t90" and r["extrapolated"])}})
+    got = measure_stage(tab, [(q["v"], q["engine_s"]) for q in pts])
+    for q, (_, _, r) in zip(pts, got):
+        q["fmtone"] = _st(r)
+        q["residual_pct"] = {k: round(100 * (q["fmtone"][k] / q["digitone"][k] - 1), 1) for k in q["digitone"]
+                             if q["fmtone"].get(k)}
+    return pts
+
+
 def calibrate(E):
     build_render()
     res = {"about": "Our own measurement of FM TONE (tools/digitone/make_quad_times.py --calibrate), the firmware's "
@@ -595,7 +728,12 @@ def calibrate(E):
                     "tables, every measured value (make_quad_times.py --verify).",
            "tick_s": TICK, "tables": {}}
     grid = [float(T) for T in np.geomspace(TICK, 12.0, 25)]
-    for tab in TABS:
+    for tab in TRACK_TABS:
+        pts = calibrate_track(E, tab)
+        res["tables"][tab] = {"method": "track", "envelope": TRACK_TABS[tab], "run": "2", "points": pts}
+        print("calibrate %s (whole track): %s" % (tab, " ".join("%d:%s r%.3f" % (
+            q["v"], "/".join("%+.0f" % x for x in q["residual_pct"].values()), q["track_rms"]) for q in pts)))
+    for tab in ("AATK", "ADEC"):
         stats = TARGETS[tab][0]
         tg = digitone_targets(E, tab)
         # (AMP DEC 0 is not measurable, the Digitone's sounds nothing there: the shared entry 0 is the release's,
@@ -679,9 +817,15 @@ def verify(E, T):
             dt = d.get("rise_full" if stat == "rise_full" and not run else stat) if stat != "s" else d["s"]
             if stat == "rise_full":
                 dt = p["s"]
-            row(tab + ("" if run in (None, "2") else " run " + run), v, dt, reading(r, stat),
-                {"stat": stat, "digitone_t": {k: d.get(k) for k in ("t10", "t50", "t90") if d.get(k) is not None},
-                 "fmtone_t": _st(r)} if tab not in ("AATK", "ADEC", "ADEC_REL") else {"stat": stat})
+            ex = {"stat": stat, "digitone_t": {k: d.get(k) for k in ("t10", "t50", "t90") if d.get(k) is not None},
+                  "fmtone_t": _st(r)}
+            if tab == "AATK":                             # the shape: the level at half the rise (0.5 = linear)
+                rr = (p["runs"].get("2") or p["runs"].get("1"))
+                ex = {"stat": stat, "level_at_half": [rr.get("level_at_half_t98"), r.get("level_at_half_t98")]}
+            elif tab in ("ADEC", "ADEC_REL"):            # dB-linear: the slope fit's rms (dB)
+                rr = (p["runs"].get("2") or p["runs"].get("1"))
+                ex = {"stat": stat, "slope_rms_db": [rr.get("slope_rms_db"), r.get("slope_rms_db")]}
+            row(tab + ("" if run in (None, "2") else " run " + run), v, dt, reading(r, stat), ex)
     for bpm in (120, 80):                                 # A DELAY: v / 32 beats
         env = E.get("a_delay_%d" % bpm)
         if not env:

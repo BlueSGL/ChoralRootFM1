@@ -897,21 +897,29 @@ static void t_golden(void)
 static double atk_ms(const uint32_t *tab, uint32_t v) { return (double)(1u << 24) / tab[v] * CTL * 1000.0 / FS; }
 static double t60_ms(const uint32_t *tab, uint32_t v) { return -3.0 * CTL * 1000.0 / FS / log10(1.0 - tab[v] / 16777216.0); }
 static uint32_t ticks_of(double ms) { return (uint32_t)(ms * FS / 1000.0 / CTL + 0.5); }
+/* an operator attack's (linear in dB from QUAD_OP_FLOOR to the top: the growth a tick) */
+static double oatk_ms(uint32_t v)
+{
+    return CTL * 1000.0 / FS * log(16777216.0 / QUAD_OP_FLOOR) / log(1.0 + QUAD_T_OATK[v] / 16777216.0);
+}
 
 static void t_env(void)
 {
     quad_voice_t s;
     uint32_t n, k;
     int32_t want;
-    /* ATK 64: linear to the top in the operator attack's time (QUAD_T_OATK[64]; the filter's and the amp's tables
-     * for the other envelopes), within a tick */
+    /* ATK 64: to the top in its table's time (the operators' linear in dB from QUAD_OP_FLOOR: QUAD_T_OATK; the
+     * filter's and the amp's linear: QUAD_T_FATK, QUAD_T_AATK), within a tick */
     for (k = 0; k < 4u; k++) {
         static const uint32_t *const TA[4] = {QUAD_T_OATK, QUAD_T_OATK, QUAD_T_FATK, QUAD_T_AATK};
         memset(&s, 0, sizeof s);
         s.stage[k] = 2;
         for (n = 0; s.stage[k] == 2 && n < 1000000u; n++)
             quad_env_tick(&s, k, 64, 60, 20 << 17, 0, 0, 1, 0);
-        CHECK(fabs(tms(n) - atk_ms(TA[k], 64)) < 0.8, "env %u ATK 64: %.1f ms, want %.1f", k, tms(n), atk_ms(TA[k], 64));
+        CHECK(fabs(tms(n) - (k < 2u ? oatk_ms(64) : atk_ms(TA[k], 64))) < 1.5 + tms(n) / 1000.0,   /* (+ 0.1 %: the
+                                                  * operators' growth a tick, truncated) */
+              "env %u ATK 64: %.1f ms, want %.1f", k,
+              tms(n), k < 2u ? oatk_ms(64) : atk_ms(TA[k], 64));
     }
     /* DEC 70 to END 20: 99 % of the way (-40 dB: 2/3 of the T60) */
     memset(&s, 0, sizeof s);
@@ -959,7 +967,7 @@ static void t_env(void)
         drv_reset(t);
         drv_patch(t, p);
         drv_on(t, 0, 60, 127);
-        for (n = 0; n < ticks_of(atk_ms(QUAD_T_OATK, 30)) + 4u; n++)
+        for (n = 0; n < ticks_of(oatk_ms(30)) + 4u; n++)
             drv_tick(t, out);
         lvl = quad_lev(100 * 4096 / 127);
         CHECK(abs(quad_vs[0][0].lv[0] - lvl) < lvl / 100, "A LEV 100: level %d, want %d", quad_vs[0][0].lv[0], lvl);
@@ -991,7 +999,7 @@ static void t_env(void)
         quad_legato(t, &t->v[0]);
         CHECK(quad_vs[0][0].stage[0] == 2 && !quad_vs[0][0].env[0], "legato, A TRIG on: not restarted");
         quad_patch[0][QP_BTRIG] = 0;
-        for (n = 0; n < ticks_of(atk_ms(QUAD_T_OATK, 30)) + 4u; n++)
+        for (n = 0; n < ticks_of(oatk_ms(30)) + 4u; n++)
             drv_tick(t, out);
         quad_legato(t, &t->v[0]);
         CHECK(quad_vs[0][0].stage[1] == 3, "legato, B TRIG off: restarted");
@@ -2229,7 +2237,7 @@ static void t_v5(void)
 {
     static const struct { uint8_t i; int16_t lo, hi, def; } RG[] = {
         {QP_FREQ, 0, 12700, 12700}, {QP_DTUN, 0, 12700, 0}, {QP_RESO, 0, 12700, 0}, {QP_BASE, 0, 12700, 0},
-        {QP_HARM, -2600, 2600, 0}, {QP_FDEPTH, -6400, 6399, 0}, {QP_EREL, 0, 127, 40}, {QP_EDEC, 0, 127, 64},
+        {QP_HARM, -2600, 2600, 0}, {QP_FDEPTH, -6400, 6399, 0}, {QP_EREL, 0, 127, 24}, {QP_EDEC, 0, 127, 32},
         {QP_LEVEL, 0, 127, 110}, {QP_FDBK, 0, 127, 0}};
     static const struct { int16_t rel, lev, dec, freq; int16_t wrel, wlev, wfreq; } CV[] = {
         {12685, 11040, 127, 12799, 126, 110, 12700}, {12700, 11050, 64, 12750, 127, 111, 12700},

@@ -165,7 +165,7 @@ static const quad_algo_t QUAD_ALGO[8] = {
 #define QC_HARM_M {"HARM", F_OFS, -26, 26, 0, 0, 0}         /* the macros P_E4 / P_E5: the coarse part (quad_mac_val) */
 #define QC_DTUN_M {"DTUNE", F_INT, 0, 127, 0, 0, 0}
 #define QC_FDBK {"FDBK", F_INT, 0, 127, 0, 0, 0}
-#define QC_MIX {"MIX", F_OFS, -64, 63, 0, 0, 0}
+#define QC_MIX {"MIX", F_OFS, -64, 63, -64, 0, 0}
 #define QC_OFS(l) {l, F_INT, -100, 100, 0, N_QUAD_OFS, 0}
 /* a time: 0..127 as a number, as the Digitone shows it (its times are quad_times.h's, docs/QUAD.md "Times": F_TIME's
  * 1 ms .. 10 s text would be another curve's) */
@@ -181,8 +181,8 @@ static const quad_algo_t QUAD_ALGO[8] = {
 #define QC_FTYPE {"TYPE", F_ENUM, 0, QF_N - 1, QF_LP12, N_QUAD_FTYPE, 0}
 #define QC_DEPTH(l) {l, F_FIX2, -6400, 6399, 0, 0, 0}
 #define QC_PAN {"PAN", F_OFS, -64, 63, 0, 0, 0}
-#define QC_SPEED {"SPEED", F_FIX2, -6400, 6399, 1600, 0, 0}
-#define QC_MULT {"MULT", F_ENUM, 0, QUAD_NMULT - 1, 3, N_QUAD_MULT, 0}
+#define QC_SPEED {"SPEED", F_FIX2, -6400, 6399, 3200, 0, 0}
+#define QC_MULT {"MULT", F_ENUM, 0, QUAD_NMULT - 1, 5, N_QUAD_MULT, 0}
 #define QC_FADE {"FADE", F_OFS, -64, 63, 0, 0, 0}
 #define QC_DEST {"DEST", F_ENUM, 0, QD_N - 1, QD_NONE, N_QUAD_DEST, 0}
 #define QC_WAVE {"WAVE", F_ENUM, 0, QW_N - 1, QW_TRI, N_QUAD_WAVE, 0}
@@ -192,20 +192,23 @@ static const quad_algo_t QUAD_ALGO[8] = {
 #define QUAD_XPAN 0xFEu          /* AMP+: the part's P_PAN */
 #define QUAD_XDIST 0xFDu         /* AMP+: the part's P_DIST (DRIVE: the sound's while the part is on FM TONE) */
 
+/* the columns' defaults are the init patch: since 2026-10-14 the Digitone's init sound (the owner's export, decoded by
+ * web/fm1dnsnd.js: MIX -64, A / B DEC 32 END 127, A LEV 0, the filter REL 64, AMP ATK 8 DEC 32 SUS 96 REL 24, LFO
+ * SPEED 32.00 MULT 32; its times are FM TONE's 1:1, docs/QUAD.md "Times"); LFO 3 (the Digitone has two) as 1 and 2 */
 static const eng_page_t QUAD_PAGES[] = {
     {"SYN 1", {QC_ALGO, QC_RC, QC_RA, QC_RB}},                              /* 0  OSC */
     {"SYN 1+", {QC_HARM, QC_DTUN, QC_FDBK, QC_MIX}},
     {"SYN 2", {QC_OFS("OFS C"), QC_OFS("OFS A"), QC_OFS("OFS B1"), QC_OFS("OFS B2")}},
-    {"FILTER", {QC_T("ATK", 0), QC_T("DEC", 64), QC_P("SUS", 0), QC_TI("REL", 40)}},   /* 3  FILTER */
+    {"FILTER", {QC_T("ATK", 0), QC_T("DEC", 64), QC_P("SUS", 0), QC_TI("REL", 64)}},   /* 3  FILTER */
     {"FILTER+", {QC_FREQ, QC_FX("RESO", 0, 12700, 0), QC_FTYPE, QC_DEPTH("DEPTH")}},
     {"FILT 2", {QC_T("DELAY", 0), QC_P("KTRK", 0), QC_NONE, QC_NONE}},
     {"FILT 2+", {QC_FX("BASE", 0, 12700, 0), QC_P("WIDTH", 127), QC_NONE, QC_NONE}},
-    {"ENV A", {QC_T("A ATK", 0), QC_T("A DEC", 60), QC_P("A END", 64), QC_P("A LEV", 48)}},   /* 7  ENV */
-    {"ENV B", {QC_T("B ATK", 0), QC_T("B DEC", 60), QC_P("B END", 0), QC_P("B LEV", 0)}},
+    {"ENV A", {QC_T("A ATK", 0), QC_T("A DEC", 32), QC_P("A END", 127), QC_P("A LEV", 0)}},   /* 7  ENV */
+    {"ENV B", {QC_T("B ATK", 0), QC_T("B DEC", 32), QC_P("B END", 127), QC_P("B LEV", 0)}},
     {"ENV 2", {QC_T("A DLY", 0), QC_ON("A TRIG", 1), QC_ON("A RESET", 1), QC_PHRT}},
     {"ENV 2+", {QC_T("B DLY", 0), QC_ON("B TRIG", 1), QC_ON("B RESET", 1), QC_P("VEL", 64)}},
     {"ENV 3", {QC_P("A KEY", 0), QC_P("B1 KEY", 0), QC_P("B2 KEY", 0), QC_NONE}},
-    {"AMP", {QC_T("ATK", 0), QC_EI("DEC", 64), QC_PCT("SUS", 127), QC_EI("REL", 40)}},
+    {"AMP", {QC_T("ATK", 8), QC_EI("DEC", 32), QC_PCT("SUS", 96), QC_EI("REL", 24)}},
     {"AMP+", {QC_P("LEVEL", 110), QC_PAN, QC_PCT("DRIVE", 0), QC_NONE}},
     {"LFO 1", {QC_SPEED, QC_MULT, QC_FADE, QC_DEST}},                       /* 14 LFO */
     {"LFO 1+", {QC_WAVE, QC_P("PHASE", 0), QC_LTRIG, QC_DEPTH("DEPTH")}},
@@ -580,32 +583,32 @@ static void quad_macros_out(track_t *t)
 #define LFO(k, sp, mu, de, w, dp) QP_LFO(k, QL_SPEED), S8(sp), QP_LFO(k, QL_MULT), mu, QP_LFO(k, QL_DEST), QD_##de, \
                                   QP_LFO(k, QL_WAVE), QW_##w, QP_LFO(k, QL_DEPTH), S8(dp)
 /* EP: X = C 1:1 under A (the body), Y = B1 direct 1.00 under B2 14.00 (the tine, short) */
-static const uint8_t QUADP_EP[] = {SYN(2, QRC(4), QRA(4), 4, 56, 0, 12, 0, -30), ENVA(0, 28, 20, 66),
+static const uint8_t QUADP_EP[] = {SYN(2, QRC(4), QRA(4), 4, 56, 0, 12, 0, -30), ENVA(0, 29, 20, 66),
     ENVB(0, 12, 0, 62), QP_VEL, 100, KEY(40, 30, 30), AMP(0, 39, 40, 14, 72), 0xFF};
 /* BELL: X = C under A 3.50, Y = B1 2.00 under B2 6.00 (two inharmonic pairs) */
 static const uint8_t QUADP_BELL[] = {SYN(2, QRC(4), QRA(14), 8, 24, 0, 20, 0, -10), ENVA(0, 43, 30, 80),
     ENVB(0, 48, 20, 70), QP_VEL, 90, KEY(30, 0, 30), AMP(0, 52, 0, 43, 80), 0xFF};
 /* BASS: C under a 1:1 A with feedback (a saw-ish modulator), X only */
 static const uint8_t QUADP_BASS[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 24, -64), ENVA(0, 18, 34, 88),
-    ENVB(0, 11, 0, 0), FLT(LP12, 92, 10, 20), FENV(0, 11, 0, 3), AMP(0, 24, 100, 5, 110), 0xFF};
+    ENVB(0, 11, 0, 0), FLT(LP12, 92, 10, 20), FENV(0, 12, 0, 0), AMP(0, 24, 100, 5, 110), 0xFF};
 /* PLUCK: B1 and B2 into A 2.00 into C, X only, everything decaying */
 static const uint8_t QUADP_PLUCK[] = {SYN(5, QRC(4), QRA(8), 12, 12, 0, 6, 0, -64), ENVA(0, 14, 0, 84),
-    ENVB(0, 8, 0, 64), KEY(40, 40, 40), AMP(0, 21, 0, 13, 72), 0xFF};
+    ENVB(0, 7, 0, 64), KEY(40, 40, 40), AMP(0, 21, 0, 13, 72), 0xFF};
 /* BRASS: C under a slow-attack 1:1 A with feedback, a little B1 */
-static const uint8_t QUADP_BRASS[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 28, -64), ENVA(11, 30, 60, 74),
-    ENVB(9, 30, 50, 10), FLT(LP12, 80, 12, 30), FENV(9, 43, 60, 11), AMP(22, 24, 110, 13, 76), 0xFF};
+static const uint8_t QUADP_BRASS[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 28, -64), ENVA(11, 31, 60, 74),
+    ENVB(9, 31, 50, 10), FLT(LP12, 80, 12, 30), FENV(9, 48, 60, 12), AMP(22, 24, 110, 13, 76), 0xFF};
 /* GLASS PAD: X = C under A 2.00 + A, Y = B1 under B2 + B2 (algorithm 7's enveloped carriers), A / B1 a little saw */
-static const uint8_t QUADP_GLASS[] = {SYN(7, QRC(4), QRA(8), 16, 16, 8, 40, 0, 0), ENVA(17, 40, 100, 36),
-    ENVB(23, 48, 60, 50), QP_PHRT, QR_OFF, AMP(53, 32, 120, 43, 88), LFO(0, 8, 3, HARM, SINE, 30), 0xFF};
+static const uint8_t QUADP_GLASS[] = {SYN(7, QRC(4), QRA(8), 16, 16, 8, 40, 0, 0), ENVA(17, 41, 100, 36),
+    ENVB(24, 48, 60, 50), QP_PHRT, QR_OFF, AMP(53, 32, 120, 43, 88), LFO(0, 8, 3, HARM, SINE, 30), 0xFF};
 /* HOLLOW: C a soft square (HARM -16) under A 2.00, Y = B1 under a little B2 */
-static const uint8_t QUADP_HOLLOW[] = {SYN(2, QRC(4), QRA(8), 4, 4, -16, 0, 0, -20), ENVA(5, 40, 80, 40),
-    ENVB(0, 30, 40, 50), AMP(16, 24, 110, 18, 76), 0xFF};
+static const uint8_t QUADP_HOLLOW[] = {SYN(2, QRC(4), QRA(8), 4, 4, -16, 0, 0, -20), ENVA(5, 41, 80, 40),
+    ENVB(0, 31, 40, 50), AMP(16, 24, 110, 18, 76), 0xFF};
 /* SQUARE LEAD: C a square (HARM -19) under a little A 2.00, X only */
-static const uint8_t QUADP_SQLEAD[] = {SYN(1, QRC(4), QRA(8), 4, 4, -19, 0, 10, -64), ENVA(0, 30, 60, 36),
+static const uint8_t QUADP_SQLEAD[] = {SYN(1, QRC(4), QRA(8), 4, 4, -19, 0, 10, -64), ENVA(0, 31, 60, 36),
     ENVB(0, 22, 20, 0), AMP(0, 18, 110, 9, 110), 0xFF};
 /* METAL: B1 7.00 (feedback) and B2 10.50 into A 1.50 into C, A detuned against B2; mostly X */
 static const uint8_t QUADP_METAL[] = {SYN(5, QRC(4), QRA(6), 28, 40, 0, 90, 20, -40), QP_OFSB2, 50,
-    ENVA(0, 48, 40, 90), ENVB(0, 40, 30, 70), AMP(0, 43, 30, 32, 70), 0xFF};
+    ENVA(0, 48, 40, 90), ENVB(0, 41, 30, 70), AMP(0, 43, 30, 32, 70), 0xFF};
 /* WOBBLE: BASS's voice through LP24, an LFO on A LEV and one on FREQ */
 static const uint8_t QUADP_WOBBLE[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 10, -64), ENVA(0, 19, 127, 60),
     ENVB(0, 16, 40, 0), FLT(LP24, 70, 60, 0), AMP(0, 24, 110, 7, 115), LFO(0, 32, 4, ALEV, TRI, 50),
@@ -620,14 +623,14 @@ static const uint8_t QUADP_STRINGS[] = {SYN(8, QRC(4), QRA(4), 4, 4, -7, 100, 35
     LFO(0, 6, 3, DTUN, SINE, 20), 0xFF};
 /* MARIMBA: C under A 4.00 and B1 10.00 (short), X only */
 static const uint8_t QUADP_MARIMBA[] = {SYN(1, QRC(4), QRA(16), 40, 40, 0, 0, 0, -64), ENVA(0, 11, 0, 64),
-    ENVB(0, 3, 0, 20), KEY(50, 50, 0), AMP(0, 24, 0, 18, 78), 0xFF};
+    ENVB(0, 2, 0, 20), KEY(50, 50, 0), AMP(0, 24, 0, 18, 78), 0xFF};
 /* DRONE: C 0.50 and B1 under A (feedback) and B2 1.50, three slow LFOs (HARM, MIX, FDBK) */
-static const uint8_t QUADP_DRONE[] = {SYN(6, QRC(2), QRA(4), 4, 4, 0, 50, 15, 0), QP_OFSB2, 50, ENVA(42, 55, 90, 44),
-    ENVB(57, 55, 80, 52), QP_PHRT, QR_OFF, AMP(44, 43, 127, 58, 74), LFO(0, 4, 3, HARM, SINE, 40),
+static const uint8_t QUADP_DRONE[] = {SYN(6, QRC(2), QRA(4), 4, 4, 0, 50, 15, 0), QP_OFSB2, 50, ENVA(43, 55, 90, 44),
+    ENVB(59, 55, 80, 52), QP_PHRT, QR_OFF, AMP(44, 43, 127, 58, 74), LFO(0, 4, 3, HARM, SINE, 40),
     LFO(1, 5, 3, MIX, TRI, 50), LFO(2, 3, 3, FDBK, SINE, 30), 0xFF};
 /* FEEDBACK: Y = B1 with heavy feedback (enveloped: B LEV 43 = B1 full, B2 off), X = C under A */
-static const uint8_t QUADP_FEEDBACK[] = {SYN(8, QRC(4), QRA(4), 4, 4, 0, 0, 42, 30), ENVA(0, 30, 40, 60),
-    ENVB(0, 30, 100, 43), AMP(0, 32, 100, 18, 72), 0xFF};
+static const uint8_t QUADP_FEEDBACK[] = {SYN(8, QRC(4), QRA(4), 4, 4, 0, 0, 42, 30), ENVA(0, 31, 40, 60),
+    ENVB(0, 31, 100, 43), AMP(0, 32, 100, 18, 72), 0xFF};
 /* NOISE-ISH: algorithm 7's A at full feedback, X = C under it + itself, through a resonant HP12 */
 static const uint8_t QUADP_NOISE[] = {SYN(7, QRC(4), QRA(4), 4, 4, 0, 0, 120, -64), ENVA(0, 16, 127, 100),
     ENVB(0, 16, 0, 0), FLT(HP12, 70, 40, 0), AMP(0, 32, 60, 24, 62), 0xFF};
@@ -980,12 +983,15 @@ static void quad_legato(track_t *t, voice_t *v)
 }
 
 /* the time tables of envelope k (0 operator A, 1 operator B, 2 filter, 3 amp; quad_times.h, the Digitone's): the
- * attack's step a tick, the decay's (and the release's) share of the way a tick, both Q24 */
+ * attack's step a tick (the operators': the level's growth a tick), the decay's (and the release's) share of the way
+ * a tick, all Q24 */
 static const uint32_t *const QUAD_TATK[4] = {QUAD_T_OATK, QUAD_T_OATK, QUAD_T_FATK, QUAD_T_AATK};
 static const uint32_t *const QUAD_TDEC[4] = {QUAD_T_ODEC, QUAD_T_ODEC, QUAD_T_FDEC, QUAD_T_ADEC};
 
 /* one control tick of an envelope (Q24 x, stage st, delay progress dp): DELAY (dly / 32 beats at the part's tempo,
- * the Digitone's: dp counts 1/32 beats in Q24), then ATK (linear to 1), then DEC (exponential to sus, Q24; the amp
+ * the Digitone's: dp counts 1/32 beats in Q24), then ATK (the filter's and the amp's linear to 1, the operators'
+ * linear in dB from QUAD_OP_FLOOR: the Digitone's centroid tracks; a restart without RESET goes on from the level it
+ * is at, at least the floor), then DEC (exponential to sus, Q24; the amp
  * envelope's DEC 127 = INF: the level held where the decay starts, no decay, the Digitone's), held; adsr: the gate's
  * end releases (REL, exponential to 0 on the decay's table, then off; REL 127 = INF: the level held, stage 5, until
  * REL (modulated) leaves 127, a steal or a panic: the Digitone's 0..126 + INF). The step of a release is rounded up,
@@ -1003,7 +1009,13 @@ static int32_t quad_env_tick(quad_voice_t *s, uint32_t k, int32_t atk, int32_t d
             s->stage[k] = 2;
         break;
     case 2:
-        x += (int32_t)QUAD_TATK[k][atk & 127];
+        if (k < 2u) {                            /* the operators: linear in dB from QUAD_OP_FLOOR (-38 dB) to the
+                                                  * top, the growth a tick (the Digitone's late bloom) */
+            x = x < QUAD_OP_FLOOR ? QUAD_OP_FLOOR : x;
+            x += (int32_t)(((int64_t)x * QUAD_TATK[k][atk & 127]) >> 24);
+        } else {
+            x += (int32_t)QUAD_TATK[k][atk & 127];
+        }
         if (x >= (1 << 24)) {
             x = 1 << 24;
             s->stage[k] = 3;

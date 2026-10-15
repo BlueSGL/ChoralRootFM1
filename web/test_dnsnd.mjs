@@ -170,7 +170,7 @@ const want = [
   [L(0, "SPEED"), 2050], [L(1, "SPEED"), -3000], [L(0, "MULT"), 14], [L(1, "MULT"), 5], [L(0, "FADE"), 9], [L(1, "FADE"), -7],
   [L(0, "DEST"), 0], [L(0, "WAVE"), 5], [L(1, "WAVE"), 4], [L(0, "PHASE"), 33], [L(0, "TRIG"), 3], [L(1, "TRIG"), 1],
   [L(0, "DEPTH"), 4078], [L(1, "DEPTH"), -1200],
-  [DN_QP.PHRT, 3], [L(2, "SPEED"), 1600], [L(2, "MULT"), 3], [27, 64], [DN_QP.OFSC, 0], [DN_QP.FDLY, 0],   // LFO 3, VEL, OFS, FDLY: defaults
+  [DN_QP.PHRT, 3], [L(2, "SPEED"), 3200], [L(2, "MULT"), 5], [27, 64], [DN_QP.OFSC, 0], [DN_QP.FDLY, 0],   // LFO 3, VEL, OFS, FDLY: defaults (the INIT: LFO 3 as the Digitone init's LFO 1 and 2)
 ];
 const bad = want.filter(([i, x]) => v[i] !== x);
 ok(!bad.length, `convert: ${want.length} values land with their conversion`);
