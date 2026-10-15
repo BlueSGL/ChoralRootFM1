@@ -3104,3 +3104,27 @@ classic screens; `cr_prophet.txt` / `test_cr.sh` and the persist scripts follow 
 first lane; OSC two screens, ENV one); `sh tests/run_all.sh` all 22 suites (313 goldens, 0 changed; test_cr 990 ok).
 Other engines: their screens are unchanged (the renders, the emulator frames of VA and FM TONE, test_cr). Not done:
 stages 3 and 4 (the tool on the firmware's renderer for any design; the manual); not tested on the unit, not flashed.
+
+3y69. **The layout tool on the firmware's editor and renderer, and the docs: step 4 done (2026-10-15; on lay-5 after
+611e3ed, not pushed).** Stages 3 and 4 of the plan. The designer no longer composes a free screen itself: `packDesign`
+packs a design's free screens into exactly the records `tools/gen_layout.py` compiles (`packFree`: the same texts,
+defaults, value names, frames first; P5's panel byte for byte the compiled table, 1784 B, checked against the module's
+new `lay_compiled`), `lay_load` installs them through the preview-only `cr_layout_hook` (`cr_layout.c` reads its tables
+through pointers in the preview only), and the unit's own CE_S_FREE / CR_K_FREE show them: the live screen, its knobs,
+SELECT and the hot mark are the unit's. `freeOps`, `p5Op` and the draw ops went away (the contact sheets' captions keep
+`lay_draw_text`). A design whose tables are not the built-in ones carries a copy of the built-in pages for its free
+screens. The badge: "buildable today" for what the unit shows and the generator would compile; else "design: not
+buildable yet" with the generator's own reason, `validateDesign(d, cat, {build: true})` holding its rules word for
+word (`tests/gen_layout_test.py` compares both modes on 48 designs): a flat design (the firmware draws the p5 look,
+so a flat design is previewed in it), a band element, an element off the grid, a classic screen beside free ones, a
+free screen in FX or MIX. Tests: `web/test_layout.mjs` 7, the packed records = the compiled ones and the loaded panel's
+75 frames = the compiled panel's, and the build reasons in the page; 6's checks of the p5 look read the firmware's
+picture now (the wave icons over their LEDs, REV's colours, the baseline rule by construction through a loaded probe);
+the Design-mode self-test opens the panel "buildable today" on the firmware's free screen, a dragged knob drawn by the
+firmware; 3 unchanged. The device image is unchanged: `./build.sh` before and after, sha256 of `build/choralroot.bin`
+ee9b2362.. both times (`cr_layout.c`'s change is the preview's). Docs: docs/LAYOUT-TOOL.md (how a free screen is
+drawn, the module's API, the five steps: 4 done, 1 folded into the generator, 5 what remains for the other engines;
+the plan replaced by what was built, with the numbers), docs/EDITOR.md (the `free` kind), the manual's P5 page (the
+panel's screens and rows), docs/HANDOFF.md (the open item), docs/releases/0.22.md (a line for the next beta's notes).
+What the owner must still do: try P5's panel on the unit (EDIT on a P5 sound: OSC, FILT, ENV, LFO, MOD; SELECT
+through the rows, KNOB 1..4). Not done: the other engines (step 5); classic screens in a built design.

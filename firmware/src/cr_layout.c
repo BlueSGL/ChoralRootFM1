@@ -9,8 +9,34 @@
 #include "cr_layouts.h"
 
 #ifdef CR_LAYOUT_PREVIEW
-/* (the layout tool's preview only: 0 = engine eng's compiled layout is not in effect, its classic pages are shown) */
-static int (*cr_layout_hook)(uint32_t eng);
+/* (the layout tool's preview only) the tables the accessors read: the compiled ones, or a design the tool loaded
+ * (tools/layout/layout_web.c lay_load). cr_layout_hook(eng) sets them and answers engine eng's layout in them (its
+ * index + 1; 0: none, the engine's classic pages are shown) */
+typedef struct {
+    const cr_layout_t *lay;
+    uint32_t nlay;
+    const cr_lay_screen_t *scr;
+    const cr_lay_elem_t *el;
+    const char *pool;
+    uint32_t npool;
+} cr_lay_tables_t;
+static const cr_lay_tables_t CR_LAY_COMPILED = {CR_LAYOUTS, CR_LAY_NENGINES, CR_LAY_SCREENS, CR_LAY_ELEMS, CR_LAY_POOL,
+                                                CR_LAY_POOL_SIZE};
+static cr_lay_tables_t cr_lt = {CR_LAYOUTS, CR_LAY_NENGINES, CR_LAY_SCREENS, CR_LAY_ELEMS, CR_LAY_POOL, CR_LAY_POOL_SIZE};
+static uint32_t (*cr_layout_hook)(uint32_t eng);
+#define CR_LT_LAYOUTS cr_lt.lay
+#define CR_LT_NENGINES cr_lt.nlay
+#define CR_LT_SCREENS cr_lt.scr
+#define CR_LT_ELEMS cr_lt.el
+#define CR_LT_POOL cr_lt.pool
+#define CR_LT_POOL_SIZE cr_lt.npool
+#else
+#define CR_LT_LAYOUTS CR_LAYOUTS          /* (a unit: the compiled tables, always) */
+#define CR_LT_NENGINES CR_LAY_NENGINES
+#define CR_LT_SCREENS CR_LAY_SCREENS
+#define CR_LT_ELEMS CR_LAY_ELEMS
+#define CR_LT_POOL CR_LAY_POOL
+#define CR_LT_POOL_SIZE CR_LAY_POOL_SIZE
 #endif
 
 /* engine eng's compiled layout (engines.c ENGINES[] index): its index + 1, 0 none */
@@ -18,20 +44,20 @@ static uint32_t cr_lay_find(uint32_t eng)
 {
     uint32_t i;
 #ifdef CR_LAYOUT_PREVIEW
-    if (cr_layout_hook && !cr_layout_hook(eng))
-        return 0;
+    if (cr_layout_hook)
+        return cr_layout_hook(eng);
 #endif
-    for (i = 0; i < CR_LAY_NENGINES; i++)
-        if (CR_LAYOUTS[i].engine == eng)
+    for (i = 0; i < CR_LT_NENGINES; i++)
+        if (CR_LT_LAYOUTS[i].engine == eng)
             return i + 1u;
     return 0;
 }
-static const cr_layout_t *cr_lay(uint32_t li) { return li && li <= CR_LAY_NENGINES ? &CR_LAYOUTS[li - 1u] : 0; }
+static const cr_layout_t *cr_lay(uint32_t li) { return li && li <= CR_LT_NENGINES ? &CR_LT_LAYOUTS[li - 1u] : 0; }
 /* layout li's screen si (index + 1), 0 none */
 static const cr_lay_screen_t *cr_lay_scr(uint32_t li, uint32_t si)
 {
     const cr_layout_t *L = cr_lay(li);
-    return L && si && si <= L->nscreens ? &CR_LAY_SCREENS[L->screen0 + si - 1u] : 0;
+    return L && si && si <= L->nscreens ? &CR_LT_SCREENS[L->screen0 + si - 1u] : 0;
 }
 /* the screens of group g (0 OSC .. 4 MOD) in layout li: how many; *si: the k-th's index + 1 (0: none) */
 static uint32_t cr_lay_group(uint32_t li, uint32_t g, uint32_t k, uint32_t *si)
@@ -40,7 +66,7 @@ static uint32_t cr_lay_group(uint32_t li, uint32_t g, uint32_t k, uint32_t *si)
     uint32_t i, n = 0;
     *si = 0;
     for (i = 0; L && i < L->nscreens; i++)
-        if (CR_LAY_SCREENS[L->screen0 + i].group == g) {
+        if (CR_LT_SCREENS[L->screen0 + i].group == g) {
             if (n == k)
                 *si = i + 1u;
             n++;
@@ -51,7 +77,7 @@ static uint32_t cr_lay_group(uint32_t li, uint32_t g, uint32_t k, uint32_t *si)
 static const cr_lay_elem_t *cr_lay_el(uint32_t li, const cr_lay_screen_t *s, uint32_t i)
 {
     const cr_layout_t *L = cr_lay(li);
-    return L && s && i < s->count ? &CR_LAY_ELEMS[L->elem0 + s->first + i] : 0;
+    return L && s && i < s->count ? &CR_LT_ELEMS[L->elem0 + s->first + i] : 0;
 }
 /* the element on lane `lane`, KNOB slot + 1: its index in the screen, CR_LAY_EMPTY none */
 static uint32_t cr_lay_slot(const cr_lay_screen_t *s, uint32_t lane, uint32_t slot)
@@ -68,14 +94,14 @@ static uint32_t cr_lay_where(const cr_lay_screen_t *s, uint32_t i)
     return CR_LAY_EMPTY;
 }
 /* a string of the pool ("" for CR_LAY_NOSTR) */
-static const char *cr_lay_str(uint32_t off) { return off < CR_LAY_POOL_SIZE ? CR_LAY_POOL + off : ""; }
+static const char *cr_lay_str(uint32_t off) { return off < CR_LT_POOL_SIZE ? CR_LT_POOL + off : ""; }
 /* the value names after an element's label (CR_LF_NAMES): the first, 0 none; the next by cr_lay_next */
 static const char *cr_lay_names(const cr_lay_elem_t *e)
 {
     const char *p;
-    if (!(e->flags & CR_LF_NAMES) || e->label >= CR_LAY_POOL_SIZE)
+    if (!(e->flags & CR_LF_NAMES) || e->label >= CR_LT_POOL_SIZE)
         return 0;
-    for (p = CR_LAY_POOL + e->label; *p; p++)
+    for (p = CR_LT_POOL + e->label; *p; p++)
         ;
     return p[1] ? p + 1 : 0;
 }

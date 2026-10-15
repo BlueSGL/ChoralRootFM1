@@ -12,7 +12,8 @@
 - the generator's own refusals (the firmware's rules: the grid, the area, the budgets, the lanes, a parameter once, a
   pair apart, a band element, a classic screen in OSC .. MOD, the flat style, FX and MIX as today ..) on p5-panel.json;
 - the same rules as validateDesign: the generator's checks without the build's (validate(.., built=False)) give
-  validateDesign's errors word for word on every design here (node, web/fm1layout.js)."""
+  validateDesign's errors word for word on every design here, and with them validateDesign(.., {build: true})'s
+  (node, web/fm1layout.js)."""
 import copy
 import json
 import re
@@ -206,18 +207,19 @@ else:
               f'const cat = JSON.parse(fs.readFileSync({json.dumps(str(ROOT / "design/layouts/p5.json"))}, "utf8"));\n'
               f'const ds = JSON.parse(fs.readFileSync({json.dumps(str(Path(tmp) / "designs.json"))}, "utf8"));\n'
               'const out = {};\n'
-              'for (const [k, d] of Object.entries(ds)) out[k] = L.validateDesign(d, cat).errors;\n'
+              'for (const [k, d] of Object.entries(ds)) out[k] = [L.validateDesign(d, cat).errors, L.validateDesign(d, cat, { build: true }).errors];\n'
               'console.log(JSON.stringify(out));\n')
         (Path(tmp) / "v.mjs").write_text(js)
         r = subprocess.run([node, str(Path(tmp) / "v.mjs")], capture_output=True, text=True)
     ok(r.returncode == 0, f"node ran validateDesign ({r.stderr.strip()[:200]})")
     jsv = json.loads(r.stdout) if r.returncode == 0 else {}
-    differ = [k for k, d in designs.items() if k in jsv and G.validate(copy.deepcopy(d), cat, built=False) != jsv[k]]
-    ok(not differ, f"the generator's checks without the build's = validateDesign's errors, word for word, on all "
-       f"{len(designs)} designs" + "".join(f"\n    {k}: py {G.validate(copy.deepcopy(designs[k]), cat, built=False)}"
-                                           f" js {jsv[k]}" for k in differ[:3]))
-    ok(not jsv.get("p5-panel", ["?"]) and all(jsv.get("broken: " + k) for k in BROKEN),
-       "validateDesign: p5-panel valid, each broken design refused")
+    for built in (False, True):
+        differ = [k for k, d in designs.items() if k in jsv and G.validate(copy.deepcopy(d), cat, built=built) != jsv[k][built]]
+        ok(not differ, f"the generator's checks {'with' if built else 'without'} the build's = validateDesign's"
+           f"{' {build: true}' if built else ''} errors, word for word, on all {len(designs)} designs" +
+           "".join(f"\n    {k}: py {G.validate(copy.deepcopy(designs[k]), cat, built=built)} js {jsv[k][built]}" for k in differ[:3]))
+    ok(not jsv.get("p5-panel", [["?"]])[0] and not jsv.get("p5-panel", [0, ["?"]])[1] and all(jsv.get("broken: " + k, [0])[0] for k in BROKEN),
+       "validateDesign: p5-panel valid (and buildable), each broken design refused")
 
 print(f"gen_layout_test: {checks} checks, {fails} failed")
 sys.exit(1 if fails else 0)

@@ -186,8 +186,9 @@
   <p class="small"><span class="pill">steps 3 and 4 of 5: the designer</span> The sound editor's pages drawn by the
     firmware's own renderer (the whole firmware, compiled to WebAssembly, on its real engines and factory sounds).
     <b>Viewer</b>: today's pages as they are. <b>Design</b>: rearrange today's pages or lay out new free screens, and
-    export the design as JSON. Designs are compiled into the firmware build later, never loaded by a unit; a free screen
-    is marked "not buildable yet" until the firmware can draw free pages.</p>
+    export the design as JSON. Every screen, free ones too, is drawn and turned by the firmware's own editor and
+    renderer, as the unit would. A design is compiled into the firmware build (tools/gen_layout.py), never loaded by a
+    unit; a screen the build would refuse (a flat free screen, a band, an element off the grid ..) says why.</p>
   <div id="status" role="status"></div>
 
   <div class="bar">
@@ -1232,7 +1233,8 @@ async function selftestDesign() {
   dSheetToggle(false);
   const k5 = Object.keys(shipped).find((x) => /p5-panel/.test(x));                                // 7: the p5-style panel
   res.push(!!k5 && dOpen(JSON.parse(JSON.stringify(shipped[k5])), "the shipped design") && $("d-style").value === "p5" &&
-           curScreen().type === "free" && ds.last && ds.last.ops.some((o) => o.op === "p5knob") && inkCount(px()) > 500);
+           curScreen().type === "free" && ds.last && ds.last.state.kind === "free" && !ds.last.unbuildable &&
+           $("d-build").textContent === "buildable today" && inkCount(px()) > 500);
   {                                                                                              // 8: copy, paste on another screen
     const src = curScreen().elements.find((e) => e.type === "knob"), u0 = ds.undo.length;
     ds.sel = new Set([src.id]);

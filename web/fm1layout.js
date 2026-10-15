@@ -68,8 +68,10 @@ export function wrap(ex) {
     // a parameter of the editor's sound by its built-in address (page, col; page 255: a part parameter, col its id)
     pget(page, col) { return ex.lay_pget(page, col); },
     ptext(page, col) { return cstr(ex.lay_ptext(page, col)); },
-    pstep(page, col, n) { return ex.lay_pstep(page, col, n); },
-    // a free page drawn by the firmware's primitives under its title line: ops (freeOps) -> 240 x 240 RGBA, a copy
+    // the compiled layout of an engine (build/gen/cr_layouts.h) as lay_load's free half: its bytes (none: empty)
+    compiled(engine) { const n = ex.lay_compiled(engine); return new Uint8Array(ex.memory.buffer, ex.lay_buf(), n).slice(); },
+    // texts drawn by the firmware's faces on an empty page under its title line (the tools' captions): ops [{op:
+    // "text", bold, px, x, y, s, col, align, maxw}] -> 240 x 240 RGBA, a copy
     draw(title, page, ops) {
       const buf = ex.lay_buf(), STR = 60000;
       let at = STR;
@@ -85,18 +87,6 @@ export function wrap(ex) {
       ex.lay_draw_begin(put(title), put(page));
       for (const o of ops) {
         if (o.op === "text") ex.lay_draw_text(o.bold ? 1 : 0, o.px, o.x, o.y, put(o.s), o.col, o.align || 0, o.maxw || 0);
-        else if (o.op === "rect") ex.lay_draw_rect(o.x, o.y, o.w, o.h, o.col, o.r || 0, o.line || 0);
-        else if (o.op === "glyph") ex.lay_draw_glyph(o.g, o.x, o.y, o.w, o.h, o.col, o.pct || 0, o.pct2 || 0, o.flags || 0);
-        else if (o.op === "knob") ex.lay_draw_knob(o.cx, o.cy, o.size, o.col, o.pct || 0, o.bip ? 1 : 0);
-        else if (o.op === "p5knob") ex.lay_draw_p5knob(o.cx, o.cy, o.size, o.face, o.rim, o.tick, o.ptr, o.pct || 0, o.bip ? 1 : 0, o.from || 0);
-        else if (o.op === "disc") ex.lay_draw_disc(o.cx16, o.cy16, o.r16, o.col);
-        else if (o.op === "wave") ex.lay_draw_wave(o.kind, o.x, o.y, o.w, o.h, o.col);
-        else if (o.op === "hbar") ex.lay_draw_hbar(o.x, o.y, o.w, o.h, o.col, o.pct || 0, o.bip ? 1 : 0);
-        else if (o.op === "band") {
-          const p = buf + 64000;
-          mem().set(Uint8Array.from((o.wv || []).concat(new Array(20).fill(0)).slice(0, 20)), p);
-          ex.lay_draw_band(o.kind, p);
-        }
       }
       const p = ex.lay_draw_end();
       return new Uint8ClampedArray(ex.memory.buffer, p, SCREEN * SCREEN * 4).slice();
@@ -107,8 +97,6 @@ export function wrap(ex) {
       mem()[p + b.length] = 0;
       return ex.lay_text_w(p, px, bold ? 1 : 0);
     },
-    // the band values of the editor's screen model now (cr_screen_t.wv)
-    wv() { return Array.from(new Uint8Array(ex.memory.buffer, ex.lay_wv(), 20)); },
     snapshotBytes() { return ex.lay_snapshot_bytes(); },
   };
 }
@@ -259,13 +247,10 @@ export const ELEMENT_SIZE = { frame: [112, 96], label: [48, 12], knob: [56, 64],
 export const STYLES = ["flat", "p5"];
 const P5_SIZE = { knob: [56, 64], switch: [56, 64], led: [40, 32] };
 export const P5_LED2_SIZE = [44, 32];   // a p5 led of two LEDs ("leds": 2)
-// the p5 led's icon: one cycle of its wave (lay_draw_wave's kinds)
-const P5_WAVE = { saw: 0, triangle: 1, square: 2, sine: 3, noise: 4 };
 export const elementSize = (type, style) => (style === "p5" && P5_SIZE[type]) || ELEMENT_SIZE[type];
 export const KNOB_SIZES = { flat: [24, 28, 32, 36, 40], p5: [28, 32, 36, 40, 44] };
 export const knobSize = (e, style) => e.size || (style === "p5" ? 36 : 32);
 export const CLASSIC_KINDS = ["edit8", "stack"];
-const DIM = COLOURS.dim, MID = COLOURS.mid, LINE = COLOURS.line, BG = COLOURS.bg, TEXT = COLOURS.text, SURF = COLOURS.surf, RED = COLOURS.red;
 
 // ------------------------------------------------------------- parameters ---
 const cap = (s) => (s ? s[0] + s.slice(1).toLowerCase() : "");
@@ -374,9 +359,16 @@ export function pasteElements(screen, clip) {
 // ---------------------------------------------------------- the design file ---
 export const formatDesign = (d) => formatLayout(d);
 export const designFileName = (d) => `${layoutFileName(d.engine.name).replace(/\.json$/, "")}-${layoutFileName(d.name || "design")}`;
-// is a design well formed, and for this catalog? -> {errors: [..], warnings: [..]} (texts)
-export function validateDesign(d, cat) {
-  const errors = [], warnings = [];
+// the groups a built design lays out as free screens (tools/gen_layout.py FREE_GROUPS); FX and MIX are the platform's
+export const FREE_GROUPS = ["OSC", "FILT", "ENV", "LFO", "MOD"];
+const latin1ok = (s) => typeof s === "string" && [...s].every((ch) => ch.codePointAt(0) < 256 && ch !== "\0");
+// is a design well formed, and for this catalog? -> {errors: [..], warnings: [..]} (texts). opts.build: the firmware's
+// rules too (tools/gen_layout.py's, word for word: the page's "not buildable" reasons; tests/gen_layout_test.py runs
+// both): the 4 px grid and the area under the title line as errors, the budgets, a bound element in exactly one lane,
+// a parameter once, a pair's halves touching, the p5 style only, no band element, no classic screen in OSC .. MOD, FX
+// and MIX as today, Latin-1 texts
+export function validateDesign(d, cat, opts = {}) {
+  const errors = [], warnings = [], build = !!opts.build;
   const err = (t) => errors.push(t), warn = (t) => warnings.push(t);
   if (!d || typeof d !== "object") return { errors: ["not a JSON object"], warnings };
   if (d.format !== FORMAT) err(`not a ${FORMAT} file`);
@@ -384,49 +376,69 @@ export function validateDesign(d, cat) {
   if (d.kind !== "design") err(`"kind" must be "design"`);
   if (!d.engine || d.engine.index !== cat.engine.index) err(`engine ${(d.engine || {}).name}: this catalog is ${cat.engine.name}`);
   if (d.params_hash !== cat.params_hash) err(`made for other parameters (params_hash ${d.params_hash}, the firmware's ${cat.params_hash})`);
-  if (d.style !== undefined && !STYLES.includes(d.style)) err(`style "${d.style}" (${STYLES.join(", ")}; none = flat)`);
+  if (d.style !== undefined && d.style !== null && !STYLES.includes(d.style)) err(`style "${d.style}" (${STYLES.join(", ")}; none = flat)`);
+  else if (build && d.style !== "p5") err(`style "${d.style || "flat"}": the firmware draws the p5 style only (a built design is "style": "p5")`);
   if (!d.header || d.header.kind !== "title-line") err(`"header" must be {"kind": "title-line"}: the shared header is the editor's title line`);
   if (!Array.isArray(d.groups)) { err(`"groups" must be a list`); return { errors, warnings }; }
   const pidx = paramIndex(paramList(cat)), gnames = new Set(cat.groups.map((g) => g.name));
-  const seenG = new Set();
+  const today = build ? new Map(designFromCatalog(cat).groups.map((g) => [g.name, g.screens.map((s) => s.lanes.map((l) => l.cells.map((c) => (c && c.param) || null)))])) : null;
+  const seenG = new Set(), used = new Map();
+  const use = (p, where) => { if (!used.has(p)) used.set(p, []); used.get(p).push(where); };
   d.groups.forEach((g, gi) => {
     const where = `group ${gi + 1} (${g && g.name})`;
     if (!g || !gnames.has(g.name)) { err(`${where}: not a group of ${cat.engine.name} (${[...gnames].join(" ")})`); return; }
     if (seenG.has(g.name)) err(`${where}: the group twice`);
     seenG.add(g.name);
     if (!Array.isArray(g.screens)) { err(`${where}: "screens" must be a list`); return; }
+    const freeGroup = FREE_GROUPS.includes(g.name);
     g.screens.forEach((s, si) => {
       const at = `${g.name} screen ${si + 1}`;
       if (!s || (s.type !== "classic" && s.type !== "free")) { err(`${at}: "type" must be "classic" or "free"`); return; }
       if (typeof s.title !== "string") err(`${at}: "title" must be a text`);
+      else if (build && (!latin1ok(s.title) || [...s.title].length > 15)) err(`${at}: the title "${s.title}" is longer than 15 characters or not Latin-1`);
       if (JSON.stringify(s).includes('"key"')) err(`${at}: nothing may be bound to a key (rule 2: the keys always play)`);
       if (s.type === "classic") {
         if (!CLASSIC_KINDS.includes(s.kind)) err(`${at}: kind "${s.kind}" (${CLASSIC_KINDS.join(", ")})`);
         if (!BANDS.includes(s.band)) err(`${at}: band "${s.band}" (${BANDS.join(", ")})`);
+        if (build && freeGroup) err(`${at}: a classic screen in ${g.name}: not built yet (OSC .. MOD are free screens; the plan form comes later)`);
         if (!Array.isArray(s.lanes) || !s.lanes.length || s.lanes.length > MAX_LANES) { err(`${at}: 1 .. ${MAX_LANES} lanes`); return; }
+        let good = true;
         s.lanes.forEach((l, li) => {
-          if (!l || !Array.isArray(l.cells) || l.cells.length !== LANE_SLOTS) { err(`${at} lane ${li + 1}: four cells (KNOB 1..4; null = empty)`); return; }
+          if (!l || !Array.isArray(l.cells) || l.cells.length !== LANE_SLOTS) { err(`${at} lane ${li + 1}: four cells (KNOB 1..4; null = empty)`); good = false; return; }
           l.cells.forEach((c, ci) => {
             if (c === null) return;
             if (c.fixed) return;
-            if (!pidx.has(c.param)) err(`${at} lane ${li + 1} knob ${ci + 1}: no parameter "${c.param}"`);
+            if (!pidx.has(c.param)) { err(`${at} lane ${li + 1} knob ${ci + 1}: no parameter "${c.param}"`); good = false; }
+            else use(c.param, at);
             if (c.label !== undefined && c.label !== null && typeof c.label !== "string") err(`${at} lane ${li + 1} knob ${ci + 1}: a label is a text`);
           });
         });
+        if (build && good && !freeGroup) {
+          const t = today.get(g.name) || [];
+          const mine = s.lanes.map((l) => l.cells.map((c) => (c && c.label ? "label" : (c && c.param) || null)));
+          if (si >= t.length || JSON.stringify(mine) !== JSON.stringify(t[si])) err(`${at}: today's platform screen: its cells cannot be moved by a design yet`);
+        }
         return;
       }
+      if (build && !freeGroup) err(`${at}: a free screen in ${g.name}: FX and MIX are the platform's`);
       if (!Array.isArray(s.elements)) { err(`${at}: "elements" must be a list`); return; }
       if (!Array.isArray(s.lanes)) { err(`${at}: "lanes" must be a list`); return; }
-      const ids = new Set();
+      const ids = new Map();
       s.elements.forEach((e, ei) => {
         const et = `${at} element ${ei + 1} (${e && e.id})`;
         if (!e || typeof e.id !== "string" || !e.id) { err(`${et}: an "id" text`); return; }
         if (ids.has(e.id)) err(`${et}: the id twice`);
-        ids.add(e.id);
+        ids.set(e.id, e);
         if (!ELEMENT_TYPES.includes(e.type)) { err(`${et}: type "${e.type}" (${ELEMENT_TYPES.join(", ")})`); return; }
         for (const k of ["x", "y", "w", "h"]) if (!Number.isInteger(e[k]) || e[k] < 0) err(`${et}: ${k} a whole number >= 0`);
-        if (["x", "y", "w", "h"].some((k) => Number.isInteger(e[k]) && e[k] % GRID)) warn(`${et}: not on the ${GRID} px grid`);
-        if (BINDABLE.has(e.type) && e.param !== null && e.param !== undefined && !pidx.has(e.param)) err(`${et}: no parameter "${e.param}"`);
+        const boxok = ["x", "y", "w", "h"].every((k) => Number.isInteger(e[k]));
+        if (boxok && ["x", "y", "w", "h"].some((k) => e[k] % GRID)) (build ? err : warn)(`${et}: not on the ${GRID} px grid`);
+        if (build && boxok && (e.y < HEADER_H || e.x + e.w > SCREEN || e.y + e.h > SCREEN || !e.w || !e.h))
+          err(`${et}: outside the design area (under the header, rows ${HEADER_H} .. 239)`);
+        if (BINDABLE.has(e.type) && e.param !== null && e.param !== undefined) {
+          if (!pidx.has(e.param)) err(`${et}: no parameter "${e.param}"`);
+          else use(e.param, `${at} ${e.id}`);
+        } else if (build && BINDABLE.has(e.type) && e.type !== "glyph") err(`${et}: a ${e.type} bound to nothing`);
         if (e.type === "switch" && ![2, 3].includes(e.positions)) err(`${et}: a switch has 2 or 3 positions`);
         if (e.type === "led" && e.labelAt !== undefined && e.labelAt !== "above" && e.labelAt !== "below") err(`${et}: "labelAt" is "above" or "below"`);
         if (e.type === "frame" && e.r !== undefined && !(Number.isInteger(e.r) && e.r >= 0 && e.r <= 12)) err(`${et}: a frame's corner radius "r" is 0 .. 12`);
@@ -438,23 +450,57 @@ export function validateDesign(d, cat) {
         }
         if (e.type === "led" && e.pair !== undefined) {
           if (e.pair !== "left" && e.pair !== "right") err(`${et}: "pair" is "left" or "right"`);
-          else {
+          else if (!build || boxok) {
             const o = s.elements.find((x) => x && x.type === "led" && x.pair === (e.pair === "left" ? "right" : "left") &&
               x.y === e.y && x.h === e.h && (e.pair === "left" ? e.x + e.w === x.x : x.x + x.w === e.x));
-            if (!o) warn(`${et}: a ${e.pair} half with no ${e.pair === "left" ? "right" : "left"} half touching it (same y and h): its cap stands alone`);
+            if (!o) (build ? err : warn)(`${et}: a ${e.pair} half with no ${e.pair === "left" ? "right" : "left"} half touching it (same y and h): its cap stands alone`);
           }
         }
         if (e.type === "led" && e.glyph && !LED_GLYPHS[e.glyph]) err(`${et}: led glyph "${e.glyph}" (${Object.keys(LED_GLYPHS).join(", ")})`);
         if (e.type === "glyph" && !GLYPHS.includes(e.glyph)) err(`${et}: glyph "${e.glyph}"`);
-        if (e.type === "band" && !BANDS.includes(e.band)) err(`${et}: band "${e.band}"`);
+        if (e.type === "band") {
+          if (!BANDS.includes(e.band)) err(`${et}: band "${e.band}"`);
+          if (build) err(`${et}: a band element: not built (the bands are the classic screens')`);
+        }
         if (e.colour !== undefined && e.colour !== "auto" && !(e.colour in COLOURS)) err(`${et}: colour "${e.colour}" is not a palette token`);
+        if (build) {
+          if (e.type === "knob" && "size" in e && !(Number.isInteger(e.size) && e.size >= 28 && e.size <= 44)) err(`${et}: a knob's dial is 28 .. 44`);
+          if (e.type === "label" && "size" in e && !(Number.isInteger(e.size) && e.size >= 6 && e.size <= 32)) err(`${et}: a label's size is 6 .. 32 px`);
+          if (e.type === "label" && !["left", "centre", "right"].includes("align" in e ? e.align : "left")) err(`${et}: "align" is "left", "centre" or "right"`);
+          if ("names" in e && !(Array.isArray(e.names) && e.names.every((n) => typeof n === "string" && n))) err(`${et}: "names" is a list of texts`);
+          for (const k of ["label", "text"])
+            if (e[k] !== undefined && e[k] !== null && !latin1ok(e[k])) err(`${et}: its ${k} is a Latin-1 text`);
+        }
       });
+      if (build) {
+        if (s.elements.length > MAX_ELEMENTS) err(`${at}: ${s.elements.length} elements: at most ${MAX_ELEMENTS}`);
+        if (!s.lanes.length || s.lanes.length > MAX_LANES) err(`${at}: ${s.lanes.length} lanes: 1 .. ${MAX_LANES}`);
+      }
+      const seen = new Map();
       s.lanes.forEach((l, li) => {
-        if (!Array.isArray(l)) { err(`${at} lane ${li + 1}: a list of element ids`); return; }
-        for (const id of l) if (id !== null && !ids.has(id)) err(`${at} lane ${li + 1}: no element "${id}"`);
+        if (!Array.isArray(l) || (build && l.length !== LANE_SLOTS)) { err(`${at} lane ${li + 1}: a list of element ids` + (build ? " (four: KNOB 1..4; null = empty)" : "")); return; }
+        for (const id of l) {
+          if (id === null) continue;
+          if (!ids.has(id)) err(`${at} lane ${li + 1}: no element "${id}"`);
+          else if (build) {
+            const e = ids.get(id);
+            if (!(BINDABLE.has(e.type) && e.param !== null && e.param !== undefined)) err(`${at} lane ${li + 1}: ${id} binds no parameter`);
+            if (seen.has(id)) err(`${at}: ${id} is in two lanes`);
+            seen.set(id, li);
+          }
+        }
       });
+      if (build)
+        for (const [id, e] of ids)
+          if (BINDABLE.has(e.type) && e.param !== null && e.param !== undefined && !seen.has(id)) err(`${at}: ${id} (${e.param}) is in no lane: no knob reaches it`);
     });
   });
+  if (build) {
+    for (const n of gnames)
+      if (FREE_GROUPS.includes(n) && !d.groups.some((g) => g && typeof g === "object" && g.name === n && Array.isArray(g.screens) && g.screens.length))
+        err(`${n}: no screens (a built design lays out every group of OSC .. MOD)`);
+    for (const [p, where] of used) if (where.length > 1) err(`${p} is bound twice in the design (${where.join(", ")}): a parameter once`);
+  }
   return { errors, warnings };
 }
 
@@ -550,7 +596,32 @@ export function packDesign(d, cat) {
             unbuildable.push({ gi, si: i, why: `today's platform screen: its cells cannot be moved by a design yet` });
         });
   }
-  // the bytes ('L' 2 engine npages pages.. section[8] nscreens screens..)
+  // the free screens of OSC .. MOD (packFree): their parameters by the built-in (page, col); a loaded table that is not
+  // the built-in one gets a copy of the built-in pages after its own (fenced off by a section) for them
+  let free = packFree(d, cat, 0), fence;
+  const mixed = new Set();
+  if (free) {
+    const identity = mode === "in-place" && pages.length === cat.pages.length && pages.every((p, i) => p.cols.every((x, k) =>
+      cat.pages[i].cols[k] ? !!x && x.src[0] === cat.pages[i].page && x.src[1] === k && !x.label : !x));
+    if (!identity) {
+      fence = pages.length;
+      for (const p of cat.pages) pages.push({ title: p.title, cols: p.cols.map((c, i) => (c ? { src: [p.page, i], label: "" } : null)) });
+      free = packFree(d, cat, fence);
+    }
+    d.groups.forEach((g, gi) => {
+      if (![...free.show.keys()].some((k) => k.startsWith(`${gi}.`))) return;
+      mixed.add(gi);
+      g.screens.forEach((s, si) => {
+        if (s.type === "classic")
+          unbuildable.push({ gi, si, why: `a classic screen beside free screens in ${g.name}: the unit's editor shows the group's free screens` });
+      });
+    });
+  }
+  d.groups.forEach((g, gi) => g.screens.forEach((s, si) => {
+    if (s.type === "free" && !(free && free.show.has(`${gi}.${si}`)))
+      unbuildable.push({ gi, si, why: `a free screen in ${g.name}: the unit's editor has free screens in OSC .. MOD only (FX and MIX are the platform's)` });
+  }));
+  // the bytes ('L' 2 engine npages pages.. section[8] nscreens screens.., the free half)
   const b = [76, 2, cat.engine.index, pages.length];
   const str = (s) => { const u = toLatin1((s || "").slice(0, 15)); b.push(u.length, ...u); };
   for (const p of pages) {
@@ -561,13 +632,102 @@ export function packDesign(d, cat) {
     }
   }
   const secs = [0, 1, 2, 3, 4].map((g) => sec[g]).filter((v) => v !== undefined);
-  for (let i = 0; i < 8; i++) b.push(i < secs.length ? secs[i] : 255);
+  if (fence !== undefined && secs.length < 5) notes.push("a group without pages: the free screens' copy of the pages is not fenced off");
+  for (let i = 0; i < 8; i++) b.push(i < secs.length ? secs[i] : i === secs.length && fence !== undefined && secs.length === 5 ? fence : 255);
   b.push(screens.length);
   for (const s of screens) { b.push(s.sec, s.pg[0], s.pg[1], s.band); str(s.title); }
-  return { bytes: Uint8Array.from(b), mode, show, unbuildable, notes, pages: pages.length, screens: screens.length };
+  const bytesClassic = Uint8Array.from(b);
+  return { bytes: free ? Uint8Array.from([...b, ...free.bytes]) : bytesClassic, bytesClassic, free: free ? free.bytes : null,
+           freeShow: free ? free.show : new Map(), mixed, mode, show, unbuildable, notes, pages: pages.length, screens: screens.length,
+           freeScreens: free ? free.screens : 0 };
 }
 
-// --------------------------------------------------------- free: drawing ---
+// ------------------------------------------------------- free: lay_load ---
+// A design's free screens as the records tools/gen_layout.py compiles (firmware/src/cr_layout.h: an element 14 B, a
+// screen 38 B, one string pool), resolved the same way (a frame's title in capitals and r 3 by default, a knob's dial
+// 36, a label's 11 px, an led's label below for two LEDs, its icon's label only when written, the parameter's label
+// when the element has none, value names after the label in the pool, frames first, page 0xFE unbound, 0xFF a part
+// parameter): for a built design byte for byte the compiled table (web/test_layout.mjs compares it with lay_compiled).
+// The firmware's editor and renderer then show them (CE_S_FREE, CR_K_FREE). page + offset: a loaded table that is not
+// the built-in one (packDesign) carries a copy of the built-in pages from `offset` on.
+// -> {bytes (the free half: nfs, nel, npool, the screens, the elements, the pool), show: Map("gi.si" -> {group, screen}),
+//     screens, elements, pool} or null (no free screen in OSC .. MOD)
+const LAY_PART = 255, LAY_NONE = 254, LAY_NOSTR = 0xffff, LAY_EMPTY = 255;
+const LF_LEDS2 = 0x8, LF_BELOW = 0x40, LF_BOLD = 0x800, LF_NAMES = 0x1000;
+export function packFree(d, cat, offset = 0) {
+  const params = paramIndex(paramList(cat)), gno = new Map(cat.groups.map((g) => [g.name, g.group]));
+  const pool = [], runs = new Map(), screens = [], elems = [], show = new Map();
+  const add = (...ss) => {
+    const run = [];
+    for (const s of ss) run.push(...toLatin1(String(s)), 0);
+    const k = run.join(",");
+    if (!runs.has(k)) { runs.set(k, pool.length); pool.push(...run); }
+    return runs.get(k);
+  };
+  const b8 = (v) => Math.max(0, Math.min(255, Number.isInteger(v) ? v : 0));
+  const record = (e, p) => {
+    const ty = e.type;
+    let page = LAY_NONE, col = 0, size = 0, r = 0, flags = 0, names = [];
+    if (p) { page = p.part ? LAY_PART : p.page + offset; col = p.col; }
+    let lab = e.label !== undefined && e.label !== null ? e.label : p ? p.label : "";
+    if (ty === "frame") { lab = String(e.text || "").toUpperCase(); r = e.r ?? 3; }
+    else if (ty === "label") {
+      lab = e.text || "";
+      size = e.size || 11;
+      flags |= ({ centre: 1, right: 2 }[e.align] || 0) << 7;
+      flags |= e.bold === false ? 0 : LF_BOLD;
+    } else if (ty === "knob") { size = e.size || 36; names = p && p.names ? [...p.names] : []; }
+    else if (ty === "switch") {
+      const n = e.positions === 3 ? 3 : 2;
+      flags |= n << 9;
+      names = Array.from({ length: n }, (_, i) => switchName(e, p, n, i));
+    } else if (ty === "led") {
+      const two = e.leds === 2, icon = !two && e.glyph;
+      if (icon) {
+        const k = Object.keys(LED_GLYPHS).indexOf(icon);
+        if (k >= 0) flags |= k + 1;
+        lab = e.label || "";
+      }
+      if (two) { flags |= LF_LEDS2; names = [0, 1].map((i) => switchName(e, p, 2, i).toUpperCase()); }
+      flags |= ({ left: 1, right: 2 }[e.pair] || 0) << 4;
+      if ("labelAt" in e ? e.labelAt === "below" : two) flags |= LF_BELOW;
+    } else if (ty === "glyph") { size = Math.max(0, GLYPHS.indexOf(e.glyph)); lab = ""; }
+    let label;
+    if (names.length) { flags |= LF_NAMES; label = add(lab, ...names.map((x) => String(x) || "?"), ""); }
+    else label = lab ? add(lab) : LAY_NOSTR;
+    return [ELEMENT_TYPES.indexOf(ty), b8(e.x), b8(e.y), b8(e.w), b8(e.h), page & 255, col & 255, size & 255, b8(r),
+            COLOURS[e.colour] || 0, flags & 255, flags >> 8, label & 255, label >> 8];
+  };
+  d.groups.forEach((g, gi) => {
+    if (!g || !FREE_GROUPS.includes(g.name) || !gno.has(g.name) || !Array.isArray(g.screens)) return;
+    let k = 0;
+    g.screens.forEach((s, si) => {
+      if (!s || s.type !== "free" || !Array.isArray(s.elements)) return;
+      const els = s.elements.filter((e) => e && ELEMENT_TYPES.includes(e.type))
+        .map((e, i) => ({ e, i })).sort((a, b) => (a.e.type === "frame" ? 0 : 1) - (b.e.type === "frame" ? 0 : 1) || a.i - b.i).map((x) => x.e);
+      if (screens.length >= 64 || elems.length + els.length > 255) return;
+      const first = elems.length, ix = new Map();
+      els.forEach((e, i) => ix.set(e.id, i));
+      for (const e of els) elems.push(record(e, BINDABLE.has(e.type) && e.param ? params.get(e.param) : null));
+      const title = add(String(s.title || ""));
+      const lanes = (Array.isArray(s.lanes) ? s.lanes : []).slice(0, MAX_LANES)
+        .map((l) => [0, 1, 2, 3].map((i) => (Array.isArray(l) && l[i] !== null && l[i] !== undefined && ix.has(l[i]) ? ix.get(l[i]) : LAY_EMPTY)));
+      screens.push({ group: gno.get(g.name), first, count: els.length, nlanes: lanes.length, title, lanes });
+      show.set(`${gi}.${si}`, { group: gno.get(g.name), screen: k++ });
+    });
+  });
+  if (!screens.length) return null;
+  const b = [screens.length, elems.length & 255, elems.length >> 8, pool.length & 255, pool.length >> 8];
+  for (const s of screens) {
+    b.push(s.group, s.first, s.count, s.nlanes, s.title & 255, s.title >> 8);
+    for (let l = 0; l < MAX_LANES; l++) b.push(...(l < s.lanes.length ? s.lanes[l] : [LAY_EMPTY, LAY_EMPTY, LAY_EMPTY, LAY_EMPTY]));
+  }
+  for (const e of elems) b.push(...e);
+  b.push(...pool);
+  return { bytes: Uint8Array.from(b), show, screens: screens.length, elements: elems.length, pool: pool.length };
+}
+
+// --------------------------------------------------------- free: lanes ---
 // where each element is on the knobs: id -> {lane, slot}; and the lane problems
 export function laneMap(screen) {
   const at = new Map(), twice = [];
@@ -576,177 +736,6 @@ export function laneMap(screen) {
     if (at.has(id)) twice.push(id); else at.set(id, { lane: li, slot: k });
   }));
   return { at, twice };
-}
-// a value's fill, Q8 of 255, as the editor's cell has it (cr_pages.c cp_q8, cr_edit.c ce_pct: the firmware's, so the
-// tool's dial and the unit's CR_K_FREE dial point the same way)
-const pctOf = (p, v) => (p && p.max > p.min ? Math.max(0, Math.min(255, Math.floor((Math.max(p.min, Math.min(p.max, v)) - p.min) * 256 / (p.max - p.min)))) : 0);
-// the free screen as draw calls (the module's lay_draw_*). value(param) -> {v, text}; opts: {lane (the active one),
-// hot (an element id: its value on a block), wv: {band: [20]}, measure(text, px, bold) -> px, style ("p5": p5Op)}
-export function freeOps(screen, params, value, opts = {}) {
-  const ops = [], { at } = laneMap(screen), active = opts.lane || 0;
-  const measure = opts.measure || ((t, px) => Math.ceil(t.length * px * 0.62));
-  const colour = (e) => {
-    const a = at.get(e.id);
-    if (e.colour && e.colour !== "auto") return COLOURS[e.colour];
-    return a && a.lane === active ? KNOB_COL[a.slot] : a ? DIM : TEXT;
-  };
-  const ordered = [...screen.elements].sort((a, b) => (a.type === "frame" ? 0 : a.type === "band" ? 1 : 2) - (b.type === "frame" ? 0 : b.type === "band" ? 1 : 2));
-  for (const e of ordered) {
-    const p = e.param ? params.get(e.param) : null, val = p ? value(p) : { v: 0, text: "" };
-    const col = colour(e), lab = e.label !== undefined && e.label !== null ? e.label : p ? p.label : "";
-    const cx = e.x + (e.w >> 1), hot = opts.hot === e.id;
-    if (opts.style === "p5" && p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit: at.get(e.id) && at.get(e.id).lane === active })) continue;
-    switch (e.type) {
-      case "frame": {
-        ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, r: e.r || 0, line: 1 });
-        if (e.text) {
-          const tw = measure(e.text, 10, true);
-          ops.push({ op: "rect", x: e.x + 4, y: e.y - 5, w: tw + 6, h: 10, col: BG });
-          ops.push({ op: "text", bold: 1, px: 10, x: e.x + 7, y: e.y + 4, s: e.text, col: MID, maxw: e.w - 12 });
-        }
-        break;
-      }
-      case "label": {
-        const align = e.align === "centre" ? 1 : e.align === "right" ? 2 : 0;
-        const x = align === 1 ? cx : align === 2 ? e.x + e.w : e.x;
-        // (p5: the baseline is the box's bottom edge, so labels on the 4 px grid line up with the knobs' and leds')
-        ops.push({ op: "text", bold: e.bold === false ? 0 : 1, px: e.size || 11, x, y: e.y + e.h - (opts.style === "p5" ? 0 : 2), s: e.text || "",
-                   col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : TEXT, align, maxw: e.w });
-        break;
-      }
-      case "knob": {
-        const size = e.size || 32;
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 10, s: lab, col, align: 1, maxw: e.w - 2 });
-        ops.push({ op: "knob", cx, cy: e.y + 13 + (size >> 1), size, col, pct: pctOf(p, val.v), bip: p && p.min < 0 && p.max > 0 });
-        if (hot) ops.push({ op: "rect", x: e.x + 3, y: e.y + e.h - 17, w: e.w - 6, h: 17, col, r: 2 });
-        ops.push({ op: "text", bold: 1, px: 12, x: cx, y: e.y + e.h - 4, s: val.text, col: hot ? BG : col, align: 1, maxw: e.w - 4 });
-        break;
-      }
-      case "switch": {
-        const n = e.positions === 3 ? 3 : 2, cur = p && p.max > p.min ? Math.round((val.v - p.min) * (n - 1) / (p.max - p.min)) : 0;
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 10, s: lab, col, align: 1, maxw: e.w - 2 });
-        for (let i = 0; i < n; i++) {
-          const y = e.y + 16 + i * 14, on = i === cur;
-          ops.push({ op: "rect", x: e.x + 4, y, w: 8, h: 8, col: on ? col : DIM, line: on ? 0 : 1 });
-          ops.push({ op: "text", bold: 1, px: 10, x: e.x + 16, y: y + 8, s: switchName(e, p, n, i), col: on ? col : DIM, maxw: e.w - 18 });
-        }
-        break;
-      }
-      case "led": {
-        const on = p ? val.v > p.min : false, lit = at.get(e.id) && at.get(e.id).lane === active ? col : on ? MID : DIM;
-        ops.push({ op: "rect", x: e.x, y: e.y + ((e.h - 8) >> 1), w: 8, h: 8, col: on ? lit : DIM, line: on ? 0 : 1 });
-        if (e.glyph && LED_GLYPHS[e.glyph]) {
-          const [g, wave] = LED_GLYPHS[e.glyph];
-          ops.push({ op: "glyph", g, x: e.x + 12, y: e.y, w: Math.min(e.w - 12, 2 * e.h), h: e.h, col: on ? lit : DIM, pct: g === 22 ? 0 : 128, pct2: g === 22 ? wave : 0 });
-          if (e.label) ops.push({ op: "text", bold: 1, px: 10, x: e.x + 14 + Math.min(e.w - 12, 2 * e.h), y: e.y + e.h - 2, s: e.label, col: on ? lit : DIM, maxw: e.w - 16 - Math.min(e.w - 12, 2 * e.h) });
-        } else {
-          ops.push({ op: "text", bold: 1, px: 10, x: e.x + 12, y: e.y + e.h - 2, s: lab, col: on ? lit : DIM, maxw: e.w - 12 });
-        }
-        break;
-      }
-      case "bar": {
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 10, s: lab, col, align: 1, maxw: e.w - 2 });
-        ops.push({ op: "hbar", x: e.x + 4, y: e.y + 14, w: e.w - 8, h: 4, col, pct: pctOf(p, val.v), bip: p && p.min < 0 && p.max > 0 });
-        if (hot) ops.push({ op: "rect", x: e.x + 3, y: e.y + e.h - 12, w: e.w - 6, h: 12, col, r: 2 });
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + e.h - 2, s: val.text, col: hot ? BG : col, align: 1, maxw: e.w - 4 });
-        break;
-      }
-      case "glyph":
-        ops.push({ op: "glyph", g: Math.max(0, GLYPHS.indexOf(e.glyph)), x: e.x, y: e.y, w: e.w, h: e.h, col, pct: p ? pctOf(p, val.v) : e.pct ?? 128 });
-        break;
-      case "band":
-        ops.push({ op: "band", kind: Math.max(0, BANDS.indexOf(e.band)), wv: (opts.wv && opts.wv[e.band]) || [] });
-        break;
-    }
-  }
-  return ops;
-}
-
-// The p5 style's one baseline rule: a text under a graphic (a knob's dial, a led's cap) sits P5_UNDER px under its
-// bottom edge, and a label element's baseline is its box's bottom edge; so boxes on the 4 px grid put every such
-// baseline on the grid too (a knob at y 44 of size 36, a led at y 60 with its label below, a label box ending at 92:
-// one row)
-export const P5_UNDER = 12;
-// The p5 style: the Prophet-5's panel drawn by the same primitives (the tool's proposal, as freeOps). A frame is a
-// rounded section box, its name in capitals in the top border; a knob a black face with a white pointer inside a printed
-// 0..10 scale, its name under it, its value inside the face (or, a name too wide, on the row under the label); an led
-// the panel's square button with its red LED, the waveform or name above; a switch a lever in a slot, the positions'
-// names beside it. The rest as flat. -> true when it drew e
-function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
-  switch (e.type) {
-    case "frame": {
-      ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, r: e.r ?? 3, line: 1 });
-      if (e.text) {
-        const t = e.text.toUpperCase(), tw = Math.min(measure(t, 10, true), e.w - 12);
-        ops.push({ op: "rect", x: cx - (tw >> 1) - 3, y: e.y - 5, w: tw + 6, h: 10, col: BG });
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 4, s: t, col: MID, align: 1, maxw: e.w - 12 });
-      }
-      return true;
-    }
-    case "knob": {
-      const size = knobSize(e, "p5"), r = (size >> 1) - 6, cy = e.y + (size >> 1), vt = val.text || "";
-      // inside when it fits (a parameter of value names: when the widest does, so the value never jumps rows)
-      const inside = Math.max(...[vt, ...((p && p.names) || [])].map((t) => measure(String(t), 9, true))) <= 2 * r - 4;
-      ops.push({ op: "p5knob", cx, cy, size, face: hot ? col : SURF, rim: MID, tick: LINE, ptr: hot ? BG : col,
-                 pct: pctOf(p, val.v), bip: p && p.min < 0 && p.max > 0, from: inside ? 70 : 30 });   // (a short pointer clears the value)
-      if (inside) ops.push({ op: "text", bold: 1, px: 9, x: cx, y: cy + 3, s: vt, col: hot ? BG : col, align: 1 });
-      ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + P5_UNDER, s: lab, col, align: 1, maxw: e.w - 2 });
-      if (!inside) {
-        if (hot) ops.push({ op: "rect", x: e.x + 3, y: e.y + size + 15, w: e.w - 6, h: 12, col, r: 2 });
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + 24, s: vt, col: hot ? BG : col, align: 1, maxw: e.w - 4 });
-      }
-      return true;
-    }
-    case "led": {
-      // a column: the rows over the cap (the icon, the two LEDs' names, the label when it is above: 12 px each), the cap
-      // (2 px under them, or at the cell's top + 2 with none), the label under it when labelAt is "below" (a two-LED
-      // button's label goes under by default: its names are on top)
-      const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM, two = e.leds === 2;
-      const icon = !two && e.glyph && LED_GLYPHS[e.glyph], below = e.labelAt ? e.labelAt === "below" : two;
-      const labTop = !!lab && !below && !icon;   // (above, an icon takes the label's place)
-      const rows = (labTop ? 1 : 0) + (icon || two ? 1 : 0), y = rows ? e.y + 12 * rows : e.y + 2;
-      // the cap, 18 high: a black window (the LEDs') over a 1 px line, the pad under it, the rim; sq: the corners on one
-      // side square (lay_draw_rect r + 64 left, + 128 right: a pair's caps meet as one)
-      const cap = (x, w, sq = 0) => {
-        ops.push({ op: "rect", x, y, w, h: 18, col: SURF, r: 2 + sq });
-        ops.push({ op: "rect", x: x + 1, y: y + 1, w: w - 2, h: 8, col: COLOURS.black });
-        ops.push({ op: "rect", x: x + 1, y: y + 9, w: w - 2, h: 1, col: LINE });
-        ops.push({ op: "rect", x, y, w, h: 18, col: MID, r: 2 + sq, line: 1 });
-      };
-      const led = (x, lit5, c) => ops.push({ op: "disc", cx16: x * 16, cy16: (y + 5) * 16, r16: lit5 ? 40 : 24, col: lit5 ? c : DIM });   // lit 5 px, off 3 px
-      // one LED; a pair's halves sit flush (the left's cap at its cell's right edge, the right's over the shared rim)
-      const cxL = two ? cx : e.pair === "left" ? e.x + e.w - 9 : e.pair === "right" ? e.x + 8 : cx;
-      const labCol = two ? col : ink;
-      if (labTop) ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: e.y + 9, s: lab, col: labCol, align: 1, maxw: e.w - 2 });
-      const top = e.y + (labTop ? 12 : 0);
-      if (two) {   // one parameter of two values: a wide cap, two LEDs (min red, max yellow), the names above them
-        const cur = on ? 1 : 0;
-        cap(cx - 15, 30);
-        [cx - 7, cx + 7].forEach((x, i) => {
-          ops.push({ op: "text", bold: 1, px: 9, x, y: top + 9, s: switchName(e, p, 2, i).toUpperCase(), col: i === cur ? (lit ? col : MID) : DIM, align: 1 });
-          led(x, i === cur, i ? COLOURS.yellow : RED);
-        });
-      } else {
-        if (icon) ops.push({ op: "wave", kind: P5_WAVE[e.glyph], x: cxL - 8, y: top, w: 16, h: 10, col: ink });
-        cap(cxL - 9, 18, e.pair === "left" ? 128 : e.pair === "right" ? 64 : 0);
-        led(cxL, on, RED);
-      }
-      if (below && lab && (two || !icon || e.label))
-        ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: y + 18 + P5_UNDER, s: lab, col: labCol, align: 1, maxw: e.w - 2 });
-      return true;
-    }
-    case "switch": {
-      const n = e.positions === 3 ? 3 : 2, cur = p && p.max > p.min ? Math.round((val.v - p.min) * (n - 1) / (p.max - p.min)) : 0;
-      const sx = e.x + 4, sy = e.y + 16;
-      ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 10, s: lab, col, align: 1, maxw: e.w - 2 });
-      ops.push({ op: "rect", x: sx, y: sy, w: 8, h: 12 * n, col: LINE, r: 2, line: 1 });
-      ops.push({ op: "rect", x: sx + 1, y: sy + 12 * cur + 2, w: 6, h: 8, col });
-      for (let i = 0; i < n; i++)
-        ops.push({ op: "text", bold: 1, px: 10, x: sx + 13, y: sy + 12 * i + 10, s: switchName(e, p, n, i), col: i === cur ? col : DIM, maxw: e.w - 18 });
-      return true;
-    }
-  }
-  return false;
 }
 // a switch's position i of n: the element's names, else the parameter's value names, else Off / On (Lo Mid Hi)
 function switchName(e, p, n, i) {
@@ -819,62 +808,68 @@ export function designTiles(d) {
 }
 
 // ------------------------------------------------------------ a session ---
-// The designer's live preview of one design on the module: classic screens through lay_load + the real editor (the
-// knobs and SELECT are the unit's), free screens through the draw API (the knobs turn the active lane's parameters by
-// the editor's own steps, SELECT moves the lane and runs on across the group's screens as the editor's does).
+// The designer's live preview of one design on the module: the design is packed (packDesign) and loaded (lay_load),
+// and the firmware's own editor and renderer show it: classic screens through its pages, free screens through its
+// CE_S_FREE / CR_K_FREE (the unit's look and knobs, pixel for pixel). The knobs and SELECT are the unit's.
 //   const s = designSession(m, cat, design, preset); s.open(gi, si, lane); s.render() -> {rgba, lint, checks, ..}
 export function designSession(m, cat, design, preset = 1) {
   const params = paramIndex(paramList(cat)), E = cat.engine.index;
-  let pack = null, at = { gi: 0, si: 0, lane: 0 }, hot = null, wv = {};
+  let pack = null, reasons = null, at = { gi: 0, si: 0, lane: 0 };
   const scr = () => design.groups[at.gi].screens[at.si];
+  const load = (bytes) => {                  // (every open: another session may have loaded its own design since)
+    const r = m.load(bytes);
+    if (!r.ok) throw new Error(`lay_load: ${r.error}`);
+  };
+  // the firmware shows this screen as designed (a free screen of OSC .. MOD, or a classic one)
+  const shown = (gi, si) => !!(pack.freeShow.get(`${gi}.${si}`) || (design.groups[gi].screens[si] || {}).type === "classic");
   const self = {
     get at() { return { ...at }; },
     get pack() { return pack; },
-    get hot() { return hot; },
-    // the design changed: pack and load its classic pages again (the place is kept)
+    // the design changed: pack and load it again (the place is kept)
     reload() {
       pack = packDesign(design, cat);
-      const r = m.load(pack.bytes);
-      if (!r.ok) throw new Error(`lay_load: ${r.error}`);
+      reasons = null;
+      load(pack.bytes);
       return self.open(at.gi, at.si, at.lane);
     },
-    // a classic screen the firmware cannot show as designed: why (today's is shown), else null
-    unbuildable(gi = at.gi, si = at.si) { const u = pack && pack.unbuildable.find((x) => x.gi === gi && x.si === si); return u ? u.why : null; },
+    // why the unit cannot show this screen as designed (today's or another is shown, or the generator would refuse
+    // it: validateDesign's build rules, tools/gen_layout.py's words), else null
+    unbuildable(gi = at.gi, si = at.si) {
+      const u = pack && pack.unbuildable.find((x) => x.gi === gi && x.si === si);
+      if (u) return u.why;
+      if (!reasons) reasons = validateDesign(design, cat, { build: true }).errors;
+      const g = design.groups[gi], pre = g ? `${g.name} screen ${si + 1}` : "";
+      const mine = reasons.find((t) => t.startsWith('style "') || [...t.matchAll(new RegExp(pre.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))]
+        .some((x) => /^([ :,)]|$)/.test(t.slice(x.index + pre.length))));
+      return mine || null;
+    },
     open(gi, si, lane = 0) {
-      if (!pack) { pack = packDesign(design, cat); m.load(pack.bytes); }
+      if (!pack) pack = packDesign(design, cat);
       at = { gi, si, lane };
-      hot = null;
       const s = scr();
       if (!s) return self;
       at.lane = Math.max(0, Math.min(lane, Math.max(1, s.lanes.length) - 1));
-      if (s.type === "classic") {
-        const p = pack.show.get(`${gi}.${si}`);
+      const key = `${gi}.${si}`, fp = pack.freeShow.get(key);
+      if (fp) {
+        load(pack.bytes);
+        m.show(E, preset, fp.group, fp.screen, at.lane);
+      } else if (s.type === "classic") {
+        const p = pack.show.get(key);
+        load(pack.mixed.has(gi) ? pack.bytesClassic : pack.bytes);
         m.show(E, preset, p ? p.group : design.groups[gi].group, p ? p.screen : 0, Math.min(at.lane, s.lanes.length - 1));
-      } else {
-        wv = {};
-        for (const b of new Set(s.elements.filter((e) => e.type === "band").map((e) => e.band))) {
-          const t = tiles(cat).find((x) => x.band === b);
-          if (t) { m.show(E, preset, t.group, t.screen, 0); wv[b] = m.wv(); }
-        }
-        if (!Object.keys(wv).length) m.show(E, preset, 0, 0, 0);
+      } else {                                   // (a free screen the editor has no place for: the group's first screen)
+        load(pack.bytes);
+        m.show(E, preset, design.groups[gi].group, 0, 0);
       }
       return self;
     },
-    // KNOB k (1..4) n detents
-    knob(k, n) {
-      const s = scr();
-      if (s.type === "classic") { m.knob(k, n); return; }
-      const id = (s.lanes[at.lane] || [])[k - 1], e = id && s.elements.find((x) => x.id === id), p = e && e.param && params.get(e.param);
-      if (!p) return;
-      m.pstep(p.page, p.col, n);
-      hot = e.id;
-    },
+    // KNOB k (1..4) n detents (the unit's editor: its step, the hot mark)
+    knob(k, n) { if (shown(at.gi, at.si)) m.knob(k, n); },
     // the 800 ms of a hot cell's mark have passed
-    cool() { hot = null; m.step(800); },
-    // SELECT n detents: the lane, on across the group's screens
+    cool() { m.step(800); },
+    // SELECT n detents: the lane, on across the group's screens (in the design's order)
     select(n) {
-      const s = scr();
-      if (s.type === "classic" && !n) return;
+      if (!n) return;
       let { gi, si, lane } = at;
       const g = design.groups[gi];
       for (let i = 0; i < Math.abs(n); i++) {
@@ -882,33 +877,20 @@ export function designSession(m, cat, design, preset = 1) {
         if (lane + d >= 0 && lane + d < nl) lane += d;
         else if (si + d >= 0 && si + d < g.screens.length) { si += d; lane = d > 0 ? 0 : Math.max(1, g.screens[si].lanes.length) - 1; }
       }
-      if (s.type === "classic" && si === at.si) { m.select(lane - at.lane); at.lane = lane; return; }
+      if (si === at.si && shown(gi, si)) { m.select(lane - at.lane); at.lane = lane; return; }
       self.open(gi, si, lane);
     },
     // the screen now: {rgba, lint (the firmware's text lint), checks (the design's), free, unbuildable, state}
     render() {
-      const s = scr();
-      if (s.type === "classic") {
-        const rgba = m.render(), st = m.state();
-        if (st.lane !== at.lane) at.lane = st.lane;
-        return { rgba, lint: m.lint(), checks: checkScreen(s, params, { measure: (t, px, b) => m.textW(t, px, b) }), free: false,
-                 unbuildable: self.unbuildable(), state: st };
-      }
-      const st = m.state();
-      const value = (p) => ({ v: m.pget(p.page, p.col), text: m.ptext(p.page, p.col) });
-      const ops = freeOps(s, params, value, { lane: at.lane, hot, wv, measure: (t, px, b) => m.textW(t, px, b), style: design.style });
-      const rgba = m.draw(st.sound, s.title, ops);
-      return { rgba, lint: m.lint(), checks: checkScreen(s, params, { measure: (t, px, b) => m.textW(t, px, b) }), free: true,
-               unbuildable: "a free screen: the firmware has no free pages yet", state: st, ops };
+      const s = scr(), rgba = m.render(), st = m.state();
+      if (shown(at.gi, at.si) && st.lane !== at.lane && st.lane < Math.max(1, s.lanes.length)) at.lane = st.lane;
+      return { rgba, lint: m.lint(), checks: checkScreen(s, params, { measure: (t, px, b) => m.textW(t, px, b) }), free: s.type === "free",
+               unbuildable: self.unbuildable(), state: st };
     },
     // the values of the four knobs of the active lane: [{label, value} | null]
     lane() {
-      const s = scr();
-      if (s.type === "classic") return m.state().cells.map((c) => (c.on ? { label: c.label, value: c.value } : null));
-      return [0, 1, 2, 3].map((k) => {
-        const id = (s.lanes[at.lane] || [])[k], e = id && s.elements.find((x) => x.id === id), p = e && e.param && params.get(e.param);
-        return p ? { label: e.label || p.label, value: m.ptext(p.page, p.col) } : null;
-      });
+      if (!shown(at.gi, at.si)) return [null, null, null, null];
+      return m.state().cells.map((c) => (c.on ? { label: c.label, value: c.value } : null));
     },
   };
   return self;

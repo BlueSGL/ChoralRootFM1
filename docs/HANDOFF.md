@@ -160,6 +160,12 @@ installed on the owner's Mac.
 
 ## Open items
 
+- **The P5 panel on the unit** (branch lay-5, HISTORY 3y67 .. 3y69, docs/LAYOUT-TOOL.md "Step 4, the firmware: what
+  was built"): P5's editor is the owner's panel (`design/layouts/designs/p5-panel.json`, compiled by
+  `tools/gen_layout.py`); built and tested on the host, the emulators and the layout tool, **not device-tested**: the
+  owner tries it on the unit. The other engines keep their classic pages. A design for another engine needs free
+  screens in OSC .. MOD in the p5 style, its layout file's `params_hash` (`design/layouts/<engine>.json`) and a line in
+  the generator's `BUILD`; the designer marks what the generator would refuse "not buildable yet", with its reason.
 - **Digitone `.dnsnd` import** (branch dn-1, HISTORY 3y56, docs/SOUNDS.md ".dnsnd import"): built from decoded files;
   refine with the owner's Digitone by controlled exports and `node tools/dnsnd_diff.mjs` (RATIO B, the LFO
   destinations, RATIO A's steps, the filter type order are the open ones). The LFO destinations are 1:1 since

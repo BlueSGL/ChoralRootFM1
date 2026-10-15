@@ -13,11 +13,12 @@ Two things make it more than a drawing program:
 - **Its output is a file the firmware build reads.** A layout is JSON in `design/layouts/`; the build turns it into
   the engine's tables. Layouts are compiled in: a unit never loads one.
 
-It is built in five steps. **Steps 2, 3 and the design side of 4 exist today**: the viewer, and the designer, in
-which today's pages can be rearranged and new free screens laid out, previewed live and exported as a design file.
-Since 3y67 / 3y68 one design is built: the owner's P5 panel (`p5-panel.json`) is compiled into the firmware
-(`tools/gen_layout.py`) and IS P5's editor on the unit (`cr_edit.c` CE_S_FREE, `cr_draw.c` CR_K_FREE; "Step 4, the
-firmware", below). What remains of step 4 is the tool drawing a design through that renderer (stage 3).
+It was built in steps ("The five steps", below). **Steps 2, 3 and 4 are done**: the viewer; the designer, in which
+today's pages are rearranged and new free screens laid out, previewed live and exported as a design file; and free
+screens in the firmware with the generator that compiles a design into the build (`tools/gen_layout.py`). The owner's
+P5 panel (`p5-panel.json`) is P5's editor on the unit (`cr_edit.c` CE_S_FREE, `cr_draw.c` CR_K_FREE), and the
+designer draws every design through that same editor and renderer, so its preview is the unit's picture ("Step 4,
+the firmware: what was built", below). Not tested on a unit yet.
 
 ## The owner's rules
 
@@ -74,9 +75,10 @@ exported as a file.
 - **Left**: the groups (the editor's buttons: OSC, FILT, ENV, LFO, MOD, FX, MIX) and their screens. The current
   screen has earlier / later, duplicate, delete and *move to* another group. *New screen*: a group and a kind (free,
   classic edit8, classic stack), or *Copy today's* page as a classic screen.
-- **Centre**: the live 240 x 240 at 2x with SELECT and the four knobs, as in the viewer, and a badge under it:
-  "buildable today" (the firmware's editor draws it as designed) or **"design: not buildable yet"** (the badge's
-  title says why). Over a free screen an editing layer on the 4 px grid: drag an element from the strip above the
+- **Centre**: the live 240 x 240 at 2x with SELECT and the four knobs, as in the viewer, drawn and turned by the
+  firmware's own editor (free screens too: "How a design is drawn"), and a badge under it: "buildable today" (the
+  unit shows it as designed and `tools/gen_layout.py` would compile it) or **"design: not buildable yet"** (the
+  badge's title says why: the generator's own words, `validateDesign(d, cat, {build: true})`). Over a free screen an editing layer on the 4 px grid: drag an element from the strip above the
   screen (frame, label, knob, switch, led, bar, glyph, band) onto it; click to select, Shift+click to add, drag to
   move, the yellow corner to resize; arrows nudge 4 px (Shift 16); Delete; Ctrl+D duplicates, Ctrl+A selects all;
   align left / top / right, spread. **Copy and paste between screens**: Ctrl+C / Cmd+C (or *copy*) keeps the
@@ -125,41 +127,35 @@ screen of more than two lanes in a changed group, a part parameter moved onto an
 screen (FX, MIX, a platform MOD), a lane title or band the in-place way cannot change (a note). A group with free
 screens only keeps today's tables, unseen.
 
-**Free screens: the firmware's primitives, not its editor.** The firmware has no free pages yet, so a free screen is
-drawn by preview-only calls of `layout_web.c` that use the firmware's own drawing code in the renderer's own six
-strips: the header by `cr_ed_title` (the real title line, the sound's name from the editor), text by `cr_text` /
-`cr_text_fit` (the unit's faces, sizes and ellipsis), the dial by `cr_cglyph` `CR_G_KNOB` (the 270-degree track and
-value arc, bipolar from 12 o'clock), bars by `cr_hbar`, waveforms and pictograms by `cr_cglyph`, the big bands by
-`cr_wide`, rectangles by `cr_fill` / `cv_rrect`, colours from `cr_rgb` (the named colours and the palette tokens).
-Values are the real engine's: `lay_pget` / `lay_ptext` (the editor's value text) and `lay_pstep` (the editor's own
-step, through the engine's `set`), so a knob turn moves the dial; the active lane is in the knob colours (blue,
-orange, white, green), the others grey, a turned value on its block for 800 ms, as the editor does. How faithful: the
-pixels of each primitive are the firmware's; the composition (where a knob's label, dial and value sit, how a switch
-or an led is drawn) is the tool's proposal (`freeOps`), which the firmware will copy when it gets free pages. A band
-element takes its values from the classic screen that has that band when the screen opens and does not follow later
-turns.
+**Free screens: the firmware's own kind.** `packDesign` packs a design's free screens of OSC .. MOD into exactly the
+records the generator compiles (`packFree`: an element 14 B, a screen 38 B, one string pool; the same texts: a frame's
+title in capitals, the defaults, the parameter's label where the element has none, value names in the pool, frames
+first; for `p5-panel.json` byte for byte the compiled table, tested against `lay_compiled`). `lay_load` installs them
+through `cr_layout.c`'s preview-only `cr_layout_hook`, so the unit's own editor and renderer show them: `cr_edit.c`
+CE_S_FREE (the lanes, KNOB 1..4, SELECT, the hot mark, the knob's step and acceleration) and `cr_draw.c` CR_K_FREE (the
+p5 look, "The p5 style"). The preview of a free screen IS the unit's picture: the loaded panel and the compiled one
+give the same 75 frames. A design whose classic tables are not the built-in ones (a plan, a moved column) carries a
+copy of the built-in pages after its own, fenced off by a section, for its free screens' parameters. What the unit
+cannot show as designed is marked "not buildable yet" with its reason: a classic screen beside free screens in one
+group (the editor shows the group's free screens), a free screen in FX or MIX, and everything the generator refuses
+(a flat style: the firmware draws the p5 look only, so a flat design is previewed in it; a band element: not drawn;
+an element off the grid or over the title line; the budgets; a bound element in no lane; a parameter twice ..).
 
-### The draw API (preview only)
+### The module's design API (preview only)
 
 | function | does |
 | --- | --- |
-| `lay_load(ptr, len)` | a packed design (below) for its engine's classic pages: `{"ok", "engine", "pages", "screens"}` or `{"ok": false, "error"}`; engine 255 unloads. Kept across `lay_show` (the tables live outside the snapshot) |
-| `lay_pget(page, col)`, `lay_ptext(page, col)`, `lay_pstep(page, col, n)` | a parameter of the editor's sound by its built-in address (page 255: a part parameter, col its `P_` id): the value, the editor's cell text (`ce_text`, since 3y68: the unit's), n detents by the editor's step (30 ms pass) |
-| `lay_draw_begin(title, page)` | a new free page under the title line (the sound's name, the page's name) |
-| `lay_draw_text(bold, px, x, y, s, col, align, maxw)` | text on baseline y (align 0 left, 1 centre, 2 right; maxw > 0: cut with an ellipsis) |
-| `lay_draw_rect(x, y, w, h, col, r, line)` | filled (r: rounded) or an outline `line` px wide (r: its corners quarter arcs, `cr_arc`); r + 64: the left corners square, r + 128: the right ones (a pair's caps) |
-| `lay_draw_glyph(g, x, y, w, h, col, pct, pct2, flags)` | a `CR_G_*` glyph in the box (pct Q8 of 255; `CR_G_LFOWAVE`: the wave in pct2) |
-| `lay_draw_knob(cx, cy, size, col, pct, bip)` | the dial |
-| `lay_draw_p5knob(cx, cy, size, face, rim, tick, ptr, pct, bip, from)` | the p5 style's knob in a size px box: the 0..10 scale (11 ticks over the 270 degrees, `cr_poly`), the face (`cr_disc`, radius size / 2 - 6, a 1 px rim), the pointer from `from` % (0: 30) to 95 % of the face's radius at CR_G_KNOB's angle |
-| `lay_draw_disc(cx16, cy16, r16, col)` | a filled disc (`cr_disc`), centre and radius Q4 (1/16 px) |
-| `lay_draw_wave(kind, x, y, w, h, col)` | one cycle of a wave in the box as a 1.5 px line (`cr_poly`), no baseline: 0 saw, 1 triangle, 2 pulse, 3 sine, 4 noise (the p5 led's icon) |
-| `lay_draw_hbar(x, y, w, h, col, pct, bip)` | the editor's small level bar |
-| `lay_draw_band(kind, wv)` | a `CR_W_*` band at its own rows (24 .. 120) with 20 values |
-| `lay_draw_end()` | draws it all in strips, to the LCD; the 240 x 240 RGBA; `lay_lint` then answers for it |
-| `lay_text_w(s, px, bold)`, `lay_wv()` | a text's advance; the editor's band values now |
+| `lay_load(ptr, len)` | a packed design (below) for its engine: its classic pages and its free screens: `{"ok", "engine", "pages", "screens", "free"}` or `{"ok": false, "error"}`; engine 255 unloads. Kept across `lay_show` (the tables live outside the snapshot) |
+| `lay_layouts(on)` | the compiled layouts (`build/gen/cr_layouts.h`: P5's panel, the unit's editor) in effect from the next `lay_show` (1), or not (0, the default: the classic derivation the catalog lists; `lay_catalog` is always that); a loaded design of the engine shows its own screens instead. Returns the previous setting |
+| `lay_compiled(engine)` | the engine's compiled layout as the packed form's free half, into `lay_buf`: its length (0: none) |
+| `lay_pget(page, col)`, `lay_ptext(page, col)` | a parameter of the editor's sound by its built-in address (page 255: a part parameter, col its `P_` id): the value, the editor's cell text (`ce_text`: the unit's) |
+| `lay_draw_begin(title, page)`, `lay_draw_text(bold, px, x, y, s, col, align, maxw)`, `lay_draw_end()` | texts in the firmware's faces on an empty page under the title line (the contact sheets' captions): the 240 x 240 RGBA |
+| `lay_text_w(s, px, bold)` | a text's advance (the design's checks: a title that fits the header) |
 
 The packed form: `'L' 2 engine npages`, per page `tlen title` and four times `srcpage srccol llen label` (srcpage 255:
-an empty column), `section[8]`, `nscreens`, per screen `sec pg0 pg1 band tlen title`.
+an empty column), `section[8]`, `nscreens`, per screen `sec pg0 pg1 band tlen title`; then, with free screens, the
+free half: `nfs`, `nel` (2 B, little-endian), `npool` (2 B), the screens (`cr_lay_screen_t`, 38 B), the elements
+(`cr_lay_elem_t`, 14 B), the pool.
 
 ## The design format, version 2
 
@@ -219,8 +215,9 @@ new sizes (p5: knob 56 x 64 with a dial of 36, led 40 x 32, switch 56 x 64), not
 
 The owner (2026-10-14): "For the prophet 5, I would like the sound editor UI to better resemble the real prophet 5
 interface." and "I'd like update glyph designs to match with the Prophet 5 knobs and layout, lets do mockups and
-Designer pages first." `"style": "p5"` composes a free screen's elements as the Prophet-5's panel (`freeOps` →
-`p5Op`, drawn by the same primitives; the classic screens and the other elements are unchanged):
+Designer pages first." `"style": "p5"` composes a free screen's elements as the Prophet-5's panel. It is the
+firmware's look (`cr_draw.c` CR_K_FREE, ported in 3y68 from the tool's first composition, `freeOps` / `p5Op`, which
+went away in 3y69): the only one the firmware draws, so a flat design is previewed in it too and is "not buildable":
 
 - **frame**: a rounded outline (`r`, default 3; 1 px, `line` or its colour), its text in capitals, 10 px bold `mid`,
   centred in the top border on a `bg` block, the border showing either side: the panel's section titles. A frame's
@@ -234,7 +231,7 @@ Designer pages first." `"style": "p5"` composes a free screen's elements as the 
   else the value goes on the row under the label (10 px, the hot block as flat's). Hot (just turned): the face fills
   with the element's colour, the value and pointer in `bg`. The label under the dial at size + 12, as written.
 - **led**: the panel's SHAPE button. On top (10 px) its icon or its label; the icon is ONE cycle of the wave as a thin
-  line, no baseline, as the panel prints it (`lay_draw_wave`, 16 x 10: the saw a ramp to 70 % and straight down, the
+  line, no baseline, as the panel prints it (`cr_draw.c cr_wave1`, 16 x 10: the saw a ramp to 70 % and straight down, the
   triangle one peak, the pulse one ⊓, the sine one hump, the noise a jag), in the lane's colour when its lane is active,
   else `mid` when on and `dim` when off. Under a 2 px gap the cap, 18 x 18 rounded (r 2, `surf`, a 1 px `mid` rim): a
   `black` window band (its top 8 px inside the rim) over a 1 px `line` row, the pad under it, and the LED centred in the
@@ -282,15 +279,15 @@ sheet, `design/choralroot-fm1-p5-panel-screens.png`, is made by
 node tools/layout/render_sheet.mjs design/layouts/designs/p5-panel.json design/choralroot-fm1-p5-panel-screens.png
 ```
 
-(any design: every screen x lane at 2x with its caption, drawn by the module; it prints each tile's lint). It is
-compiled into the firmware (3y68): the unit draws these screens with the very primitives the tool composes them from
-(`cr_draw.c` CR_K_FREE), pixel for pixel the tool's picture (`web/test_layout.mjs` 7). The unit's own, walked on the
-browser emulator: `design/choralroot-fm1-p5-panel-emulator.png`, made by `node tools/layout/emu_sheet.mjs
-design/choralroot-fm1-p5-panel-emulator.png` (the same tiling). The designer still marks a free screen "not buildable
-yet": what it previews is the design in the page, which the unit shows only once it is in the generator's `BUILD`.
+(any design: every screen x lane at 2x with its caption, through the firmware's editor and renderer; it prints each
+tile's lint). It is compiled into the firmware (3y68): the unit shows these very pictures. The unit's own, walked on
+the browser emulator by its panel: `design/choralroot-fm1-p5-panel-emulator.png`, made by `node
+tools/layout/emu_sheet.mjs design/choralroot-fm1-p5-panel-emulator.png` (the same tiling).
 
-**Not buildable yet** means: the design is valid and previewed, but the firmware cannot show it on a unit as it is.
-Every free screen is so today; a classic screen is so when the in-place and plan ways above cannot express it.
+**Not buildable yet** means: the design is valid and previewed, but the unit would not show it as designed, or the
+generator would refuse it (its reason, word for word: `validateDesign(d, cat, {build: true})` runs
+`tools/gen_layout.py`'s rules, and `tests/gen_layout_test.py` checks both say the same on 48 designs). A screen that is
+"buildable today" in a design added to the generator's `BUILD` is what the unit shows.
 
 ## The viewer (step 2)
 
@@ -464,15 +461,16 @@ design, and the per-engine table that says which patch parameter a (page, column
   on a pair that does not touch; SYNC's label (labelAt below) under its cap; a frame at r 12 leaves its corner pixel
   the background (r 13 refused); the source mix bound once, on WHEEL, in a lane, with its hint; `pasteElements` (new
   ids, no lane, 8 px off an identical box, the parameter then twice);
-- the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked, a knob
-  turns a dial, **a scripted pointer drag from the element strip adds a knob on the grid**, the export equals the
-  model and validates, the contact sheet has today's and the design's tiles, the shipped p5 panel opens in the p5
-  style and draws its knobs, a copied element pasted on another screen is in the export with a new id, selected, in
-  no lane, one undo step.
-- **the unit's free screens are the tool's** (7, 3y68): with `lay_layouts` on, every screen x lane of P5's compiled
-  panel drawn by the firmware (`CR_K_FREE`, the real editor) and every bound slot turned (its element hot; REV both
-  ways): 75 frames, each identical to the tool's composition of `p5-panel.json` (freeOps / p5Op through the draw API)
-  in the same state. And on the host (`tests/run_cr_draw.sh`): every P5 screen x lane, the hot element and REV at both
+- the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked (the
+  flat example: not buildable), a knob turns a dial, **a scripted pointer drag from the element strip adds a knob on
+  the grid** (drawn by the firmware), the export equals the model and validates, the contact sheet has today's and the
+  design's tiles, the shipped p5 panel opens on the firmware's free screen and is "buildable today", a copied element
+  pasted on another screen is in the export with a new id, selected, in no lane, one undo step.
+- **a design's free screens are the unit's** (7, 3y68 and 3y69): `packDesign`'s free half of `p5-panel.json` is the
+  compiled table byte for byte (1784 B, against `lay_compiled`); loaded by `lay_load`, every screen x lane and every
+  bound slot turned (its element hot; REV both ways): 75 frames, each identical to the compiled panel's with
+  `lay_layouts` on (and those equal the browser emulator's, 3); a flat design, a band, an element off the grid: "not
+  buildable" with the generator's reason. And on the host (`tests/run_cr_draw.sh`): every P5 screen x lane, the hot element and REV at both
   values from mock-up states with the generated table (lint clean, hashed in `tests/cr_free_golden.txt`), every slot
   turned and cooled with a partial compose equal to a whole redraw, the compose's cost; `tests/cr_p5panel_test.c`
   (`run_cr_tests.sh`): the editor on the panel (every slot, empty slots inert, SELECT).
@@ -497,151 +495,84 @@ editor uses buttons, SELECT and the knobs only, and the keys play; a design cann
 
 ## The five steps
 
-1. **The generator.** A build script that turns `design/layouts/p5.json` into P5's page tables, reproducing
-   today's 19 pages byte-identically (the device image unchanged): the proof that a layout file can be the source.
-   Needs the (page, column) to patch-parameter table in the file.
+1. **The generator** (folded into 4): `tools/gen_layout.py` compiles a design into the build. The engines' page tables
+   stay theirs (they are what `get` / `set` and the blob address); a design binds them by (page, column), checked by the
+   layout file's `params_hash`, so reproducing the pages from a layout file was not needed.
 2. **This viewer.** The preview module, the read-only page, the seed files, the tests.
 3. **Editing classic pages, and export** (done): the designer; `lay_load` shows the edited layout at once through
    the real editor; export the design JSON.
-4. **Free pages.** The design side is done: the element vocabulary (frame, label, knob, switch, led, bar, glyph,
-   band), lanes of up to four bound elements (the four knobs + SELECT grammar; no key ever: rule 2), the title line
-   as the shared header on every screen (rule 1), "not buildable yet" flags instead of refusals (rule 3), and the
-   first example, `design/layouts/designs/p5-osc-panel.json` (P5's oscillators and mixer on two free screens in the
-   spirit of the original panel: OSC A with Freq, Saw / Pulse leds, PW, Sync; the mixer; OSC B with Freq, Fine,
-   Saw / Tri / Pulse leds, PW, Lo Freq and Keyboard switches), and the p5 style with `p5-panel.json`, the whole P5
-   engine as its panel ("The p5 style"). **Remaining**: firmware support for free pages (a
-   free-page kind in `cr_screen.h` / `cr_draw.c` drawing the vocabulary as `freeOps` does, the editor's lanes over
-   bound elements) and a **build-time generator** that turns a design file into the engine's tables (pages, screen
-   plan, labels) and the free pages' element tables, so a design is compiled into the build (rule 4).
-5. **The other engines.** FM6, FM TONE, VA, CZ-1, WHEEL through the generator; FM TONE's screen plan
-   (`eng_screen_t`) becomes a layout file like the rest.
+4. **Free pages** (done, 3y66 .. 3y69): the element vocabulary (frame, label, knob, switch, led, bar, glyph, band),
+   lanes of up to four bound elements (the four knobs + SELECT grammar; no key ever: rule 2), the title line as the
+   shared header on every screen (rule 1), "not buildable yet" flags instead of refusals (rule 3), the p5 style; the
+   firmware's free screens (CE_S_FREE, CR_K_FREE) and the generator; the designer on the firmware's own renderer. P5's
+   editor on the unit is the owner's panel.
+5. **The other engines** (what remains): FM6, FM TONE, VA, CZ-1 and WHEEL keep their classic pages. A design for one
+   of them is drawn by the firmware in the designer today; to put it on the unit: free screens in OSC .. MOD in the p5
+   style (the only look the firmware draws), its layout file's `params_hash`, and a line in the generator's `BUILD`
+   (one design an engine; the generator checks it against `design/layouts/<engine>.json`). Classic screens in a built
+   design (the plan form, FM TONE's `eng_screen_t` as a layout file) are not compiled yet.
 
 In every step the layout is compiled into the build (rule 4).
 
-## Step 4, the firmware: a plan
+## Step 4, the firmware: what was built
 
-Written 2026-10-15, when the owner signed off his P5 panel: "I made my final changes and reviewed all the knob lanes
-and updated them. I'm happy with this layout, so good to build it." No firmware code exists for it yet. The design is
-`design/layouts/designs/p5-panel.json`: eight free screens over OSC .. MOD (73 elements: 29 knobs, 26 leds, 10
-frames, 7 labels, 1 switch; 19 lanes; all 56 P5 parameters), FX and MIX the platform's, style p5.
+The owner, 2026-10-15, signing off his P5 panel: "I made my final changes and reviewed all the knob lanes and updated
+them. I'm happy with this layout, so good to build it." Built in three stages on lay-5 (3y67, 3y68, 3y69) from a plan
+written that day; the design is `design/layouts/designs/p5-panel.json`: eight free screens over OSC .. MOD (73
+elements: 29 knobs, 26 leds, 10 frames, 7 labels, 1 switch; 19 lanes; all 56 P5 parameters), FX and MIX the
+platform's, style p5.
 
-### (a) The compiled form
+### The compiled form (`tools/gen_layout.py`, `firmware/src/cr_layout.h`, `cr_layout.c`)
 
-`tools/gen_layout.py` (a step of `tools/build.py`'s generate list, beside `gen_tables.py`) writes
-`build/gen/cr_layouts.h` from the designs the build ships.
+- **Which designs**: a list in the generator, `BUILD = {"P5": "design/layouts/designs/p5-panel.json"}`, not a field of
+  the design (a file the page exports must not decide what goes on a unit; rule 4). One design an engine. A step of
+  `tools/build.py`'s generate list; the emulator, the web builds and the test scripts run it too (written only when
+  its text changes).
+- **Checked at build time** against `design/layouts/<engine>.json` (today's tables, which `web/test_layout.mjs` 4 proves
+  to be the firmware's): the same `params_hash`; every stable id resolved to its built-in (page, col) (`part:<id>` to
+  (0xFF, id)); validateDesign's rules and the firmware's (the grid, the area, 24 elements, 8 lanes of four, a bound
+  element in exactly one lane, a parameter once, a pair touching, the p5 style, no band, no classic screen in OSC ..
+  MOD, FX and MIX as today, Latin-1), in the same words as `validateDesign(d, cat, {build: true})`.
+- **The records**: an element 14 B (type, x y w h, page col, size: the dial / a label's px / a glyph's `CR_G_*`, r,
+  colour, flags: the led's icon, two LEDs, pair, label below, align, positions, bold, names; the label's offset), a
+  screen 38 B (group, its elements, lanes `[8][4]`, the title's offset), an engine's header 8 B, one string pool; the
+  texts resolved as the look draws them (capitals, defaults, the parameter's label), value names after their label.
+  **P5's panel: 73 x 14 + 8 x 38 + a pool of 453 + 8 = 1787 B.** One copy, in `cr_layout.c`, with its accessors.
 
-- **Which designs.** A list in the generator: `BUILD = {"P5": "design/layouts/designs/p5-panel.json"}`. Not a field in
-  the design: the page exports designs, and a file the owner exports must not decide what goes on a unit; what is
-  built is the build's business (rule 4), reviewed where the build is. One design an engine.
-- **Validation at build time, without the firmware's FNV.** The generator reads `design/layouts/<engine>.json` (the
-  version 1 file of today's tables) and requires the design's `params_hash` to equal that file's. That file is already
-  proved to be the firmware's (`web/test_layout.mjs` 4 regenerates it from the module and compares), so the chain
-  design -> layout file -> firmware holds without porting the hash to Python. The generator resolves every stable id
-  (`"FILTER:CUT"`) through the same file's pages to its built-in address (page, col), or `part:<id>` to (0xFF, id), and
-  refuses: a `validateDesign` error (the same rules, in Python: a test runs both on every shipped and broken design), a
-  classic screen in OSC .. MOD (the plan form exists for those, later), a band element, a flat style, an element over
-  the budget. Value names (a switch's positions, a two-LED button's, a knob's named values) are taken from the layout
-  file's descriptors here, so the renderer never asks the engine.
-- **The records** (packed, no pointers but one table base):
-  - an element, 14 B: type (1), x y w h (4, px), page col (2), size (1: the dial), r (1), colour (1), flags (2: glyph
-    3 bits, leds, pair 2, labelAt, align 2, positions 2, bold), label (2: an offset in the string pool, 0xFFFF none);
-  - a screen, 38 B: group (1), first element (1), element count (1), lane count (1), title (2: an offset), lanes
-    `[8][4]` of element indices within the screen (32, 0xFF empty);
-  - an engine's layout: engine index, screen count, the screens, the elements, the string pool (labels, frame texts,
-    titles, value names, each once).
-- **P5's cost, counted from the file:** 73 x 14 = 1022 B of elements, 8 x 38 = 304 B of screens, a string pool of
-  about 460 B (50 distinct labels and texts, 387 B; 8 titles, 55 B; the names of REV and KEYBOARD), a header of 8 B:
-  **about 1.8 KB of flash**, no RAM.
+### The firmware
 
-### (b) The firmware
+- **The editor** (`cr_edit.c` CE_S_FREE): for an engine with a compiled layout, OSC .. MOD are its screens; a lane's
+  slots become the editor's refs (`CE_R_DEEP` page, col; `CE_R_TRK` a part parameter), so the knobs (step,
+  acceleration, OPT snap), SHIFT, the hot mark, `cu_edited` and the blob are the edit8 screens' unchanged; an empty
+  slot does nothing; FX and MIX stay the platform's. `ce_cell_free` adds the label, an led's on and a switch's position
+  (`pct2`); `cr_screen_t` has `fl_eng`, `fl_scr`.
+- **The renderer** (`cr_draw.c` CR_K_FREE): the title line, then the elements in the table's order (frames first): the
+  rounded frame with its title in the border, the p5 knob (11 ticks, the face, the pointer, the value inside or on the
+  row, the hot face), the LED button (one LED or two, pairs, the one-cycle wave icons), the lever switch, label, bar,
+  glyph; the active lane in the knob colours by slot, the others dim, unbound text. Per strip only the elements whose
+  rows touch it; a screen or lane change composes all six strips, a knob turn only the strips of the elements whose
+  cells changed and of the hot element before and now (a hash a cell).
+- **Cost**: XIP 530 500 -> 536 948 B (92.5 -> 93.6 %, +6448 with the tables), RAM the same, POOL +128. On the host
+  (`tests/cr_draw_test.c`): a whole compose of FILTER 364 us against edit8's FILTER 260 us; a knob turn 2 strips,
+  111 us against 89 us. Other engines' screens unchanged (their renders, the emulator's frames, test_cr).
 
-- **The editor (`cr_edit.c`).** A new screen type `CE_S_FREE` in `ce_scr`: for an engine with a compiled layout, OSC ..
-  MOD's screens are the layout's screens of that group (in order), `n` its lane count; FX and MIX stay the platform's
-  (classic, as today). `ce_view` fills `ref[lane][slot]` from the lanes: element -> (page, col) -> `ce_r(CE_R_DEEP,
-  page, col)` (a part parameter: `CE_R_TRK`). Everything that runs on `ref` is then untouched: `ce_knob` (the
-  descriptor's step and acceleration, OPT snap, SHIFT, a ratio's slow hand), the hot mark (`hot_r` / `hot_c` = lane /
-  slot), SELECT across lanes and screens, the modulation marks, `cu_edited` and the sound's blob (the parameters are the
-  engine's own, through `get` / `set` / `desc`). `ce_screen` fills `cell[lane][slot]` with `ce_cell` as for edit8
-  (label, the value's text, pct, flags), and two new bytes in `cr_screen_t`: `fl_eng`, `fl_scr` (the layout and screen,
-  + 1; 0 none).
-- **The renderer (`cr_draw.c`).** `CR_K_FREE`: a port of `freeOps` + `p5Op` + `layout_web.c`'s `ld_*` to C, drawing
-  from the const table (as it draws from the fonts: no engine state) and the screen's cells: the title line
-  (`cr_ed_title`), then per element, frames first: the frame (`ld_rline`: sides and `cr_arc` corners, r 0 .. 12; the
-  title in capitals on a `bg` block in the border); the p5 knob (11 ticks by `cr_poly`, the face by `cr_disc`, the
-  pointer from 30 % or 70 % of the radius, the value inside the face when the widest of its texts fits, else on the
-  row, the hot face); the LED button (the cap with its window and rim, square corners for a pair's inner side, one LED
-  or two (red / yellow), the one-cycle wave icons as point tables for `cr_poly`, labels above or below by the baseline
-  rule); the lever switch; label; and bar and glyph by today's `cr_hbar` / `cr_cglyph`. Colours: the active lane's
-  elements in the knob colours by slot, other bound ones `dim`, unbound `text` (the lanes are in the table). An
-  element's on / off and position come from its cell's pct; its texts from its cell and the pool.
-- **The strips.** The renderer draws in six strips of 40 rows (`CR_STRIP_H`); every primitive already clips to the
-  strip (`cr_row0` / `cr_row1`), so an element across a boundary (a 64-high knob cell always is) is drawn in each
-  strip it touches, as `ld_play` does today. Per strip, elements whose box (grown 6 px: a frame's title, a descender)
-  misses it are skipped. Which strips to compose: a free screen's lanes are not rows of the screen, so the row hashes
-  of edit8 do not apply; a screen or lane change composes all six strips, and a knob turn only the strips that the
-  turned element's box touches (and the box of the element that was hot before), with the tile hashes
-  (`cr_hash_tiles`) blitting only the tiles that changed. The cost of both is measured on the emulator before stage 2
-  ends (edit8's full compose on a screen change is the reference; the owner's rule is responsiveness first).
-- **The flat style is not compiled**: the firmware draws the p5 look only (it is the owner's, and one renderer is
-  half the code). The tool keeps "flat" for sketching and marks a flat free screen "not buildable" with that reason.
-- **FX and MIX stay classic** (the platform's screens, shared by every engine), and so do P5's classic pages in the
-  tables: `eng_page_t` stays, it is what `get` / `set` / `desc` and the blob address.
+### The tool
 
-### (c) The tool after step 4
+`packDesign` packs a design's free screens into the same records (`packFree`), `lay_load` installs them through the
+preview-only `cr_layout_hook`, and the firmware's editor and renderer show them ("How a design is drawn"); `freeOps`,
+`p5Op` and the draw ops went away (the captions' text stays). The design checks stay in JS. `lay_layouts` shows the
+compiled layouts in the module (off by default: the catalog and the viewer list today's classic pages). Stage 3
+changed no device byte (`./build.sh` before and after: sha256 of `build/choralroot.bin` ee9b2362.. both times).
 
-`lay_load` packs a design's free screens into the same records (`packDesign` gains the free half, byte for byte the
-generator's output: a host test compares the two on `p5-panel.json`) and installs them through a preview-only hook
-beside `cp_deep_hook` (`cr_layout_hook`, under `CR_LAYOUT_PREVIEW`). The editor and the renderer then show a design's
-free screens as the unit will, so the preview is the unit's picture again, knobs and SELECT included. `freeOps`, `p5Op`
-and the `lay_draw_*` ops go away (the design checks stay, in JS, for the lint list). The emulator comparison of
-`test_layout.mjs` (3) then covers free pages: the browser emulator built with P5's compiled design, driven by its panel
-alone (GLO + PRESETS to P5, EDIT, the group buttons, SELECT through every screen x lane, a knob turn on each lane), its
-LCD compared with the module's `lay_fb` after `lay_load` of the same file, pixel for pixel: the strongest proof that
-the tool and the unit agree.
+### Tests
 
-### (d) The budget
+`tests/gen_layout_test.py` (the generator on the shipped and 46 broken designs, its rules = validateDesign's with and
+without `build`), `tests/cr_layout_test.c` (the header as C), `tests/cr_p5panel_test.c` (the editor on the panel: every
+slot, empty slots inert, SELECT), `tests/run_cr_draw.sh` (22 free pictures hashed in `tests/cr_free_golden.txt`, every
+slot's partial compose equal to a whole redraw, the cost), `web/test_layout.mjs` 3 (the browser emulator equal to the
+module on P5's panel) and 7 (the packed records = the compiled ones; the loaded design's 75 frames = the compiled
+panel's), `tools/emu/test_cr.sh` (the panel's screens, CUTOFF on KNOB 2 of FILTER).
 
-Measured: the rn-1 device build of 2026-10-14 (9698e52, `./build.sh`; `build/choralroot.elf`): `.text` 511808 B,
-`.ram_text` 6680, `.c1_text` 128, `.data` 11884, `.bss` 65640, `.pool` 304600: **XIP 530500 B of 573440 (92.5 %)**,
-RAM 77524 B of 98304 (78.9 %), POOL 304600 B of 344064 (88.5 %). Free XIP: 42.9 KB. (`tests/target_budget.txt` is the
-DSP loops' cost, not the size; the size line is `tools/build.py`'s.) Estimate: P5's tables 1.8 KB; the renderer's
-free kind 4 .. 6 KB (the knob, the LED button with its icons and pairs, the frame's arcs, the switch, the dispatcher;
-the primitives exist); the editor's `CE_S_FREE` and the generator's lookup 0.5 .. 1 KB: **about 7 KB, XIP to about
-93.7 %**, no RAM beyond `cr_screen_t`'s two bytes, no POOL. If XIP goes over the line the release allows: the strings
-in one pool already shared; the wave icons as 16 point tables instead of code; the knob's ticks as a precomputed table
-of 11 angle pairs; and the free renderer reusing `cr_cglyph`'s knob arcs where it can. P5's classic derivation is
-generic code every engine uses: it does not shrink.
+### Not done
 
-### (e) Tests and proof
-
-- **Host:** `tests/gen_layout_test.py`: the generator on every shipped design and on `test_layout.mjs`'s broken ones
-  (the same errors as `validateDesign`), the byte cost printed; `tests/run_cr_draw.sh`: goldens of every P5 free screen
-  x lane, the hot element, a two-LED button at both values, a pair, from mock-up states (as `tests/gen_cr_screens.py`
-  cuts them) with the generated table; every existing golden unchanged; `tests/run_cr_tests.sh` (`cr_edit`): every lane
-  slot of the P5 design turned through the editor (the parameter moves, `cu_edited`, the hot mark on that element,
-  SELECT across lanes and screens); the size line in HISTORY.
-- **Browser:** `test_layout.mjs` (3): the emulator == the module on every P5 screen x lane, as (c).
-- **The image:** stage 1 changes no device byte (the tables are only in host builds: sha256 of `build/choralroot.bin`
-  before and after, equal, as for `CR_LAYOUT_PREVIEW` in 3y47). From stage 2 the image changes (new code); the other
-  engines are proved unchanged by their goldens, `tools/emu/test_cr.sh` and the emulator comparison of VA, FM TONE
-  and the rest (every frame identical to before), and P5's sound by `cr_engine_test` (the same blobs).
-
-### (f) Stages (a commit each)
-
-1. **The generator and the tables** (about 400 lines: `gen_layout.py`, the record structs in a new `cr_layout.h`, the
-   host test): `build/gen/cr_layouts.h` from `p5-panel.json`; compiled in the host tests only; the device image
-   unchanged (sha256). **Done (3y67)**: P5's panel is 73 x 14 + 8 x 38 + a pool of 453 + 8 = **1787 B**; value names
-   follow their label in the pool (flag `CR_LF_NAMES`), `size` is also a label's px and a glyph's `CR_G_*`
-   (`firmware/src/cr_layout.h`); tests `tests/gen_layout_test.py`, `tests/cr_layout_test.c`.
-2. **The editor and the renderer on P5's free screens** (about 900 lines of C: `CE_S_FREE` in `cr_edit.c`, `CR_K_FREE`
-   in `cr_draw.c`, two bytes in `cr_screen_t`): P5's editor is the owner's panel on the unit; goldens, the `cr_edit`
-   test, a device build with the size line, the emulator walked through every screen. Not flashed by a subagent.
-   **Done (3y68)**: XIP 530 500 -> 536 948 B (92.5 -> 93.6 %, +6448 with the 1787 B of tables), RAM the same, POOL
-   +128 (the free cells' hashes); the unit's 75 P5 frames (every screen x lane, every slot turned) equal the tool's;
-   a whole compose of FILTER on the host 364 us against edit8's FILTER 260 us, a knob turn 2 strips (111 us, edit8's 2
-   strips 89 us); the tables in one place (`firmware/src/cr_layout.c`, its accessors), the tool's preview hook
-   `cr_layout_hook` / `lay_layouts`.
-3. **The tool on the firmware's renderer** (about 300 lines: `packDesign`'s free half, the hook, `lay_load`; minus
-   `freeOps` / `p5Op` / `lay_draw_*`): the preview is the unit's; the emulator comparison over free pages.
-4. **Docs**: this file (step 4 done, the plan replaced by what was built), HISTORY, the P5 sections of docs/EDITOR.md
-   and docs/PROPHET.md (the panel's screens, their lanes and knobs), the manual's P5 page.
+On a unit: nothing yet (the owner tries it). The other engines (step 5). Classic screens in a built design.

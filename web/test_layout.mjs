@@ -379,7 +379,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   s.knob(1, 2);
   const f1 = m.pget(fq.page, fq.col), hotShot = s.render();
   s.cool();
-  ok(f1 !== f0 && L.diffCount(free0, hotShot.rgba) > 0 && hotShot.ops.some((o) => o.op === "knob") && L.diffCount(hotShot.rgba, s.render().rgba) > 0,
+  ok(f1 !== f0 && L.diffCount(free0, hotShot.rgba) > 0 && hotShot.state.kind === "free" && hotShot.state.hot === 1 && L.diffCount(hotShot.rgba, s.render().rgba) > 0,
      `free OSC A: KNOB 1 +2 turns Osc A's frequency (${f0} -> ${f1}), the dial and value move, the hot value ends`);
   s.select(1);
   ok(s.at.lane === 1 && s.lane()[0] && s.lane()[0].label === "Sync", "SELECT +1: lane 2, KNOB 1 is Sync");
@@ -404,7 +404,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     pshots.push(r.rgba);
     for (const f of r.lint.findings) pfind.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${f.kind} "${f.text}"`);
     for (const c of r.checks) pfind.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${c.kind} ${c.text}`);
-    if (t.type === "free" && (L.inkCount(r.rgba) < 500 || !r.unbuildable)) pfind.push(`${t.key}: blank or not marked`);
+    if (t.type === "free" && (L.inkCount(r.rgba) < 500 || r.unbuildable || r.state.kind !== "free")) pfind.push(`${t.key}: blank, not the firmware's free screen, or not buildable (${r.unbuildable})`);
   }
   const frees = pan.groups.flatMap((g) => g.screens.filter((x) => x.type === "free"));
   const placed = frees.flatMap((x) => x.elements.filter((e) => e.param).map((e) => e.param));
@@ -436,7 +436,9 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   const mid = box && [(box.box[0] + box.box[2]) / 2, (box.box[1] + box.box[3]) / 2];
   ok(!!mid && Math.abs(mid[0] - kcx) <= size / 2 && mid[1] >= kn.y && mid[1] <= kn.y + size,
      `a p5 knob's value "${vt}" inside its dial (${kn.id}: box ${box ? box.box.join(" ") : "none"}, the dial ${kcx - size / 2} ${kn.y} .. ${kcx + size / 2} ${kn.y + size})`);
-  const red = m.draw("", "", [{ op: "rect", x: 100, y: 100, w: 8, h: 8, col: L.COLOURS.red }]).slice((104 * 240 + 104) * 4, (104 * 240 + 104) * 4 + 3);
+  // the firmware's named colours (cr_draw.c CR_NAMED) as the LCD holds them (RGB565) and lay_render widens them
+  const rgb565 = (r, g, b) => { const c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3); return [((c >> 11) * 255 / 31) | 0, (((c >> 5) & 63) * 255 / 63) | 0, ((c & 31) * 255 / 31) | 0]; };
+  const red = rgb565(224, 58, 47);
   const lit = sA.elements.find((x) => x.type === "led" && m.pget(pidx.get(x.param).page, pidx.get(x.param).col) > pidx.get(x.param).min);
   const pix = (x, y) => Array.from(rA.rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3));
   const px4 = lit && pix(lit.x + (lit.w >> 1), lit.y + 17);   // (the LED's centre: the cap's window, 5 px under its top)
@@ -453,18 +455,19 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   for (const [gi, si] of [[0, 0], [3, 0]]) {
     ps.open(gi, si, 0);
     const r = ps.render(), q = (x, y) => Array.from(r.rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)), b0 = lum(q(0, 239));
-    r.ops.forEach((o, i) => {
-      if (o.op !== "wave" || o.kind > 2) return;
-      const d = r.ops.slice(i).find((x) => x.op === "disc");
+    for (const e of pan.groups[gi].screens[si].elements) {   // (an icon's box and its LED, as cr_draw.c CR_K_FREE places them)
+      const kind = ["saw", "triangle", "square"].indexOf(e.glyph);
+      if (e.type !== "led" || e.leds === 2 || kind < 0) continue;
+      const cxl = e.pair === "left" ? e.x + e.w - 9 : e.pair === "right" ? e.x + 8 : e.x + (e.w >> 1);
       let x0 = 999, x1 = -1;
-      for (let y = o.y; y < o.y + o.h; y++) for (let x = o.x; x < o.x + o.w; x++) if (lum(q(x, y)) - b0 > 20) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+      for (let y = e.y; y < e.y + 10; y++) for (let x = cxl - 8; x < cxl + 8; x++) if (lum(q(x, y)) - b0 > 20) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
       icons++;
-      if (!d || Math.abs((x0 + x1 + 1) / 2 - d.cx16 / 16) > 1) offc.push(`${["saw", "triangle", "square"][o.kind]} ink ${x0}..${x1}, LED ${d ? d.cx16 / 16 : "?"}`);
-    });
+      if (Math.abs((x0 + x1 + 1) / 2 - cxl) > 1) offc.push(`${e.glyph} ink ${x0}..${x1}, LED ${cxl}`);
+    }
   }
   ok(icons >= 5 && !offc.length, `the p5 leds' wave icons (${icons}: saw, triangle, square) centred over their LEDs within 1 px` + (offc.length ? ` (${offc.join("; ")})` : ""));
   // two LEDs for one parameter: FILTER+:REV, the left red at 1/2, the right yellow at 3
-  const yel = m.draw("", "", [{ op: "rect", x: 100, y: 100, w: 8, h: 8, col: L.COLOURS.yellow }]).slice((104 * 240 + 104) * 4, (104 * 240 + 104) * 4 + 3).join();
+  const yel = rgb565(242, 183, 5).join();
   const fsc = pan.groups[1].screens[0], rev = fsc.elements.find((x) => x.leds === 2), rp = pidx.get(rev.param), rcx = rev.x + (rev.w >> 1);
   const rl = fsc.lanes.findIndex((l) => l.includes(rev.id)), rk = fsc.lanes[rl].indexOf(rev.id) + 1;
   ps.open(1, 0, rl);
@@ -496,16 +499,19 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   // at y 60, its label below) on one baseline; a led at y 60 and a knob at y 44 give the same label baseline
   ps.open(0, 0, 0);
   const rb = ps.render(), words = ["FREQ", "PULSE W", "-Shape-", "SYNC"];
-  const bases = words.map((t) => { const o = rb.ops.find((x) => x.op === "text" && x.s === t); return o ? o.y : null; });
   const inkEnd = ["PULSE W", "SYNC"].map((t) => { const b = rb.lint.texts.find((x) => x.text === t); return b ? b.box[3] : null; });   // (no descenders: the ink ends on the baseline)
-  ok(bases.every((v) => v === bases[0]) && inkEnd.every((v) => v === bases[0]),
-     `the p5 baseline rule on OSC A: ${words.join(", ")} on baseline ${bases.join(", ")} (the ink of PULSE W and SYNC ends at ${inkEnd.join(", ")})`);
+  const shape = rb.lint.texts.find((x) => x.text === "-Shape-");
+  ok(inkEnd.every((v) => v === 92) && !!shape && shape.box[1] >= 80 && shape.box[3] > 92,
+     `the p5 baseline rule on OSC A: ${words.join(", ")} on baseline 92 (the ink of PULSE W and SYNC ends at ${inkEnd.join(", ")}; "-Shape-" ${shape ? shape.box.join(" ") : "?"}, its p below)`);
   const probe = { type: "free", title: "T", elements: [
     { id: "k", type: "knob", x: 8, y: 44, w: 56, h: 64, param: "OSC A:FREQ", label: "AAA", size: 36 },
     { id: "l", type: "led", x: 68, y: 60, w: 56, h: 32, param: "OSC A:SAW", label: "BBB", labelAt: "below" },
     { id: "t", type: "label", x: 128, y: 80, w: 56, h: 12, text: "CCC" }], lanes: [["k", "l", null, null]] };
-  const pops = L.freeOps(probe, pidx, () => ({ v: 0, text: "0" }), { style: "p5", measure: (t, px, b) => m.textW(t, px, b) });
-  const bl = ["AAA", "BBB", "CCC"].map((t) => pops.find((o) => o.op === "text" && o.s === t).y);
+  const probeD = JSON.parse(JSON.stringify(pan));
+  probeD.groups[0].screens = [probe];
+  const prs = L.designSession(m, cat, probeD, 1);
+  prs.reload(); prs.open(0, 0, 0);
+  const ptexts = prs.render().lint.texts, bl = ["AAA", "BBB", "CCC"].map((t) => { const b = ptexts.find((x) => x.text === t); return b ? b.box[3] : null; });
   ok(bl.every((v) => v === 92), `the rule by construction: a knob at y 44 (size 36), a led at y 60 (label below), a label box at y 80 h 12: baselines ${bl.join(", ")}`);
   const frs = pan.groups.flatMap((g) => g.screens.filter((x) => x.type === "free").flatMap((x) => x.elements.filter((e) => e.type === "frame")));
   ok(frs.length > 0 && frs.every((e) => e.r === 8), `the owner's panel: all ${frs.length} frames at r 8`);
@@ -541,38 +547,61 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
 }
 
 // ===================================================================================================== 7 ===
-// The unit's free screens (firmware/src/cr_draw.c CR_K_FREE, the compiled p5-panel.json: lay_layouts on, the real
-// editor) against the tool's composition of the same design (freeOps / p5Op through the draw API) in the same state:
-// every screen x lane, and every bound slot turned (its element hot, REV both ways): identical pixels
-console.log("the firmware's free screens against the tool's: P5's panel");
+// A design's free screens through lay_load (packDesign's free half: the records tools/gen_layout.py compiles, byte for
+// byte) on the firmware's own editor and renderer: P5's panel loaded is the compiled panel, frame for frame (every
+// screen x lane, every bound slot turned and hot, REV both ways)
+console.log("a design's free screens through the firmware: packDesign's records, lay_load, CE_S_FREE / CR_K_FREE");
 {
-  const e = ver.engines.find((x) => x.name === "P5"), cat = cats.P5, params = L.paramIndex(L.paramList(cat));
+  const e = ver.engines.find((x) => x.name === "P5"), cat = cats.P5;
   const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
-  const measure = (s, px, b) => m.textW(s, px, b);
-  const value = (p) => ({ v: m.pget(p.page, p.col), text: m.ptext(p.page, p.col) });
-  let n = 0, hot = 0, notFree = [], differ = [];
-  m.layouts(true);
-  pd.groups.forEach((g, gi) => g.screens.forEach((s, si) => {
-    if (s.type !== "free") return;
-    for (let lane = 0; lane < s.lanes.length; lane++)
+  const pk = L.packDesign(pd, cat), comp = m.compiled(e.index);
+  let first = -1;
+  for (let i = 0; i < Math.max(comp.length, pk.free ? pk.free.length : 0); i++) if (!pk.free || comp[i] !== pk.free[i]) { first = i; break; }
+  ok(comp.length > 0 && first < 0, `packDesign's free half of p5-panel.json is the compiled table (build/gen/cr_layouts.h through lay_compiled), byte for byte: ${comp.length} B (${pk.freeScreens} screens)` +
+     (first >= 0 ? ` (first difference at byte ${first} of ${comp.length} / ${pk.free ? pk.free.length : 0})` : ""));
+  const ld = m.load(pk.bytes);
+  ok(ld.ok && ld.free === 8 && pk.mode === "in-place" && !pk.unbuildable.length, `lay_load: the panel's 8 free screens and its classic FX and MIX (${JSON.stringify(ld)})`);
+  const s = L.designSession(m, cat, pd, 1);
+  let n = 0, hot = 0, differ = [], notFree = [];
+  pd.groups.forEach((g, gi) => g.screens.forEach((sc, si) => {
+    if (sc.type !== "free") return;
+    for (let lane = 0; lane < sc.lanes.length; lane++)
       for (const k of [0, 1, 2, 3, 4]) {
-        if (k && !s.lanes[lane][k - 1]) continue;
+        if (k && !sc.lanes[lane][k - 1]) continue;
+        m.unload();
+        m.layouts(true);                         // the compiled panel (the unit's)
         m.show(e.index, 1, g.group, si, lane);
         if (k) m.knob(k, k % 2 ? 1 : -1);
-        const a = m.render(), st = m.state();
-        if (st.kind !== "free" || st.page !== s.title || (k && st.hot !== k)) notFree.push(`${g.name} ${si + 1}.${lane + 1} k${k}`);
-        const ops = L.freeOps(s, params, value, { lane, hot: k ? s.lanes[lane][k - 1] : null, measure, style: pd.style });
-        const d = L.diffCount(a, m.draw(st.title, s.title, ops));
+        const a = m.render();
+        m.layouts(false);
+        s.reload();                              // the design, loaded
+        s.open(gi, si, lane);
+        if (k) s.knob(k, k % 2 ? 1 : -1);
+        const r = s.render();
+        if (r.state.kind !== "free" || r.state.page !== sc.title || (k && r.state.hot !== k) || r.unbuildable) notFree.push(`${g.name} ${si + 1}.${lane + 1} k${k}`);
+        const d = L.diffCount(a, r.rgba);
         n++;
         hot += k ? 1 : 0;
         if (d) differ.push(`${g.name} ${si + 1}.${lane + 1}${k ? ` K${k}` : ""} (${d} px)`);
       }
   }));
-  m.layouts(false);
-  ok(!notFree.length, `lay_layouts on: P5's OSC .. MOD are the panel's free screens (CR_K_FREE), the title its, the turned slot hot` +
-     (notFree.length ? ` (not: ${notFree.slice(0, 6).join(", ")})` : ""));
-  ok(n === 75 && !differ.length, `${n} frames (${n - hot} screen x lane, ${hot} with a slot turned and hot): the unit's pixels are the tool's` +
+  m.unload();
+  ok(!notFree.length, `the loaded panel: CR_K_FREE screens, the title its, the turned slot hot, buildable` + (notFree.length ? ` (not: ${notFree.slice(0, 6).join(", ")})` : ""));
+  ok(n === 75 && !differ.length, `${n} frames (${n - hot} screen x lane, ${hot} with a slot turned and hot): the loaded design's pixels are the compiled panel's` +
      (differ.length ? `\n          differ: ${differ.slice(0, 8).join("; ")}` : ""));
+  // the build rules in the page: a flat free screen, a band element, an element off the grid: "not buildable" with the
+  // generator's reason
+  const flat = JSON.parse(JSON.stringify(pd));
+  delete flat.style;
+  const band = JSON.parse(JSON.stringify(pd));
+  band.groups[2].screens[0].elements.push({ id: "bd", type: "band", x: 0, y: 160, w: 240, h: 80, band: "env" });
+  const grid = JSON.parse(JSON.stringify(pd));
+  grid.groups[0].screens[1].elements[1].x += 1;
+  const why = (dd, gi, si) => { const x = L.designSession(m, cat, dd, 1); x.reload(); x.open(gi, si, 0); return x.render().unbuildable; };
+  const w = [why(flat, 0, 0), why(band, 2, 0), why(grid, 0, 1), why(pd, 0, 1)];
+  m.unload();
+  ok(/p5 style only/.test(w[0]) && /band element/.test(w[1]) && /4 px grid/.test(w[2]) && w[3] === null,
+     `not buildable, the generator's reasons: flat "${w[0]}"; a band "${w[1]}"; off the grid "${w[2]}"; the panel's own: buildable`);
 }
 
 // ===================================================================================================== 5 ===
@@ -651,7 +680,7 @@ if (!args.has("--no-page") && fs.existsSync("/Applications/Chromium.app/Contents
     const what = ["Design mode opens the shipped P5 example (designs.js)", "a free screen is drawn and marked \"not buildable yet\"",
                   "KNOB 1's + turns a dial on the free screen", "a scripted drag from the element strip adds a knob on the 4 px grid (one undo step)",
                   "Export JSON equals the model (and validates)", "the contact sheet has today's tiles and the design's",
-                  "the shipped p5-panel opens in the p5 style and its free screen draws P5 knobs",
+                  "the shipped p5-panel opens in the p5 style on the firmware's free screen (CR_K_FREE), buildable today",
                   "copy an element, paste it on another screen: the export has it with a new id, selected, in no lane (one undo step)"];
     ok(blue(sq(8)), "the Design self-test ran to the end (the end mark is there)");
     what.forEach((w, i) => ok(green(sq(i)), `page: ${w}`));

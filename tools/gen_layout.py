@@ -10,7 +10,8 @@ What is built is this file's business, not a design's (rule 4): BUILD names one 
 against its engine's version 1 layout file (design/layouts/<engine>.json, which web/test_layout.mjs proves to be the
 firmware's): the same params_hash, every stable id resolved through its pages to the built-in (page, col), or part:<id>
 to (CR_LAY_PART, id). The rules are validateDesign's (web/fm1layout.js), in the same words, and stricter where the
-firmware must be: the 4 px grid, the area under the title line, the budgets, a bound element in exactly one lane, a
+firmware must be (validateDesign(d, cat, {build: true}) has these too, word for word: the designer's "not buildable"
+reasons; and its packDesign packs a design's free screens into these very records, byte for byte): the 4 px grid, the area under the title line, the budgets, a bound element in exactly one lane, a
 parameter once, a pair's halves touching, the p5 style only, no band element, no classic screen in OSC .. MOD (yet),
 FX and MIX the platform's as today. Value names come from the layout file's descriptors, so the renderer never asks
 the engine. The header is written only when its text changes."""

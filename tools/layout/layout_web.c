@@ -754,7 +754,7 @@ LAY_EXPORT const char *lay_state(void)
     return j_end();
 }
 
-/* ---------------------------------------- lay_load: a design's classic pages (step 3) --- */
+/* --------------------------------- lay_load: a design's classic pages and free screens (steps 3, 4) --- */
 /* cr_pages.c cp_deep() asks lay_deep_hook (CR_LAYOUT_PREVIEW only) for the engine's pages: the loaded table when there
  * is one, else the built-in. A loaded table is the design's pages: each column a copy of a built-in (page, col)'s
  * descriptor, get / set / desc / mod_dst going through to that built-in (page, col) (la_t.src), so the engine sees its
@@ -764,11 +764,18 @@ LAY_EXPORT const char *lay_state(void)
  * The packed form (web/fm1layout.js packDesign), bytes:
  *   'L' 2 engine npages; per page: tlen title[tlen], 4 x (srcpage srccol llen label[llen]) (srcpage 0xFF: empty);
  *   section[8]; nscreens; per screen: sec pg0 pg1 band(ENG_B_*) tlen title[tlen]      (nscreens 0: no screen plan)
+ *   then, when there are free screens, the free half: nfs, nel (2 bytes, little-endian), npool (2), the screens as
+ *   cr_layout.h cr_lay_screen_t (38 B each), the elements as cr_lay_elem_t (14 B each), the string pool: the records
+ *   tools/gen_layout.py compiles (lay_compiled answers the compiled ones the same way); installed through cr_layout.c
+ *   cr_layout_hook, so the firmware's own editor and renderer (CE_S_FREE, CR_K_FREE) show them
  *   engine 0xFF: the loaded table off
  * The tables live in one block allocated before the snapshot (lay_boot), outside the static data, so lay_reset (and
  * every lay_show with it) keeps them */
-#define LA_PG 64u
+#define LA_PG 160u                                 /* (a plan's pages and a copy of the built-in ones: the free half's) */
 #define LA_SC 32u
+#define LA_FS 64u                                  /* free screens, elements, the pool's bytes */
+#define LA_FE 255u
+#define LA_FP 8192u
 typedef struct {
     uint32_t eng;                                  /* the engine loaded, 0xFF none */
     uint8_t free_on;                               /* the compiled layouts in effect (lay_layouts; 0: today's pages) */
@@ -778,6 +785,11 @@ typedef struct {
     char title[LA_PG][16], label[LA_PG][4][16];
     eng_screen_t scr[LA_SC];
     char stitle[LA_SC][16];
+    uint32_t nfs, npool;                           /* the free half: its screens (0: none), its pool's bytes */
+    cr_layout_t flay;
+    cr_lay_screen_t fscr[LA_FS];
+    cr_lay_elem_t fel[LA_FE];
+    char fpool[LA_FP + 2u];
 } la_t;
 static la_t *la;
 static const eng_deep_t *la_base(void) { return la && la->eng < NENGINES ? ENGINES[la->eng]->deep : 0; }
@@ -826,9 +838,52 @@ static const eng_deep_t *lay_deep_hook(const track_t *t, const eng_deep_t *built
 {
     return la && la->eng < NENGINES && la->eng == eng_idx(t->eng_req) ? &la->deep : builtin;
 }
-/* cr_layout.c cr_layout_hook: an engine's compiled layout is shown when lay_layouts turned them on and no design of
- * the engine is loaded (lay_load: its classic pages) */
-static int la_layout(uint32_t eng) { return la && la->free_on && la->eng != eng; }
+/* cr_layout.c cr_layout_hook: a loaded design's free screens for its engine; else the compiled layouts when lay_layouts
+ * turned them on and no design of the engine is loaded (a design of classic pages only); else none */
+static uint32_t la_layout(uint32_t eng)
+{
+    uint32_t i;
+    if (la && la->eng == eng && la->nfs) {
+        cr_lt.lay = &la->flay;
+        cr_lt.nlay = 1;
+        cr_lt.scr = la->fscr;
+        cr_lt.el = la->fel;
+        cr_lt.pool = la->fpool;
+        cr_lt.npool = la->npool;
+        return 1;
+    }
+    cr_lt = CR_LAY_COMPILED;
+    if (!la || !la->free_on || la->eng == eng)
+        return 0;
+    for (i = 0; i < CR_LAY_NENGINES; i++)
+        if (CR_LAYOUTS[i].engine == eng)
+            return i + 1u;
+    return 0;
+}
+/* the compiled layout of engine e (build/gen/cr_layouts.h) as lay_load's free half, into lay_buf: its bytes (0: none).
+ * web/test_layout.mjs compares packDesign's free half with it, byte for byte */
+static uint8_t lay_in[1u << 16];
+LAY_EXPORT uint32_t lay_compiled(uint32_t e)
+{
+    uint32_t i, n = 0;
+    lay_boot();
+    for (i = 0; i < CR_LAY_NENGINES; i++)
+        if (CR_LAYOUTS[i].engine == e) {
+            const cr_layout_t *L = &CR_LAYOUTS[i];
+            lay_in[n++] = L->nscreens;
+            lay_in[n++] = (uint8_t)L->nelems;
+            lay_in[n++] = (uint8_t)(L->nelems >> 8);
+            lay_in[n++] = (uint8_t)CR_LAY_POOL_SIZE;
+            lay_in[n++] = (uint8_t)(CR_LAY_POOL_SIZE >> 8);
+            memcpy(lay_in + n, &CR_LAY_SCREENS[L->screen0], L->nscreens * sizeof(cr_lay_screen_t));
+            n += L->nscreens * (uint32_t)sizeof(cr_lay_screen_t);
+            memcpy(lay_in + n, &CR_LAY_ELEMS[L->elem0], L->nelems * sizeof(cr_lay_elem_t));
+            n += L->nelems * (uint32_t)sizeof(cr_lay_elem_t);
+            memcpy(lay_in + n, CR_LAY_POOL, CR_LAY_POOL_SIZE);
+            return n + CR_LAY_POOL_SIZE;
+        }
+    return 0;
+}
 /* the compiled layouts (build/gen/cr_layouts.h, P5's panel: the unit's editor) on (1) or off (0, the default: the
  * classic pages the catalog lists); from the next lay_show. Returns the previous setting */
 LAY_EXPORT uint32_t lay_layouts(uint32_t on)
@@ -852,15 +907,16 @@ static void lay_alloc(void)                        /* (lay_boot, before the snap
     cr_layout_hook = la_layout;
 }
 
-static uint8_t lay_in[1u << 16];
 /* where the page writes a packed layout before lay_load (up to lay_buf_size bytes), and the strings of lay_draw_* */
 LAY_EXPORT uint8_t *lay_buf(void) { return lay_in; }
 LAY_EXPORT uint32_t lay_buf_size(void) { return sizeof lay_in; }
 
 static const char *la_err(const char *e)
 {
-    if (la)
+    if (la) {
         la->eng = 0xFFu;
+        la->nfs = 0;
+    }
     j_begin();
     j_open('{');
     j_kb("ok", 0);
@@ -868,7 +924,7 @@ static const char *la_err(const char *e)
     j_close('}');
     return j_end();
 }
-/* a packed design's classic pages for its engine (above). Takes effect at the next lay_show (which starts from the
+/* a packed design's classic pages and free screens for its engine (above). Takes effect at the next lay_show (which starts from the
  * reset instance; the tables stay). {"ok": true, "engine", "pages", "screens"} or {"ok": false, "error"} (and nothing
  * loaded) */
 LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
@@ -889,6 +945,7 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
     q += 2;
     e = LA_U8();
     la->eng = 0xFFu;
+    la->nfs = 0;
     if (e == 0xFFu) {
         j_begin(); j_open('{'); j_kb("ok", 1); j_ki("engine", -1); j_close('}');
         return j_end();
@@ -934,6 +991,42 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
     }
     if (q > end)
         return la_err("short");
+    if (q < end) {                                 /* the free half */
+        uint32_t nfs = LA_U8(), nel = LA_U8(), np;
+        nel |= (uint32_t)LA_U8() << 8;
+        np = LA_U8();
+        np |= (uint32_t)LA_U8() << 8;
+        if (!nfs || nfs > LA_FS || nel > LA_FE || np > LA_FP)
+            return la_err("free screens: 1 .. 64, elements up to 255, a pool up to 8 KB");
+        if (q + nfs * sizeof(cr_lay_screen_t) + nel * sizeof(cr_lay_elem_t) + np > end)
+            return la_err("short");
+        memcpy(la->fscr, q, nfs * sizeof(cr_lay_screen_t));
+        q += nfs * sizeof(cr_lay_screen_t);
+        memcpy(la->fel, q, nel * sizeof(cr_lay_elem_t));
+        q += nel * sizeof(cr_lay_elem_t);
+        memcpy(la->fpool, q, np);
+        la->fpool[np] = la->fpool[np + 1u] = 0;  /* (a names run read past its end stops here) */
+        q += np;
+        for (k = 0; k < nfs; k++) {
+            const cr_lay_screen_t *s = &la->fscr[k];
+            if (s->first + s->count > nel || s->nlanes > CR_LAY_LANES || s->group > 4u || (s->title != CR_LAY_NOSTR && s->title >= np))
+                return la_err("a free screen names no element");
+            for (i = 0; i < CR_LAY_LANES * CR_LAY_SLOTS; i++)
+                if (s->lane[i / 4u][i % 4u] != CR_LAY_EMPTY && s->lane[i / 4u][i % 4u] >= s->count)
+                    return la_err("a lane names no element");
+        }
+        for (i = 0; i < nel; i++)
+            if (la->fel[i].type >= CR_E_N || (la->fel[i].label != CR_LAY_NOSTR && la->fel[i].label >= np))
+                return la_err("an element is not one");
+        la->flay.engine = (uint8_t)e;
+        la->flay.nscreens = (uint8_t)nfs;
+        la->flay.screen0 = 0;
+        la->flay.rsv = 0;
+        la->flay.elem0 = 0;
+        la->flay.nelems = (uint16_t)nel;
+        la->npool = np;
+        la->nfs = nfs;
+    }
     la->deep = *b;                                 /* blob, .. as the engine's; then the design's own */
     memcpy(la->deep.section, sec, sizeof sec);
     la->deep.npages = n;
@@ -951,6 +1044,7 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
     j_ki("engine", (int32_t)e);
     j_ki("pages", (int32_t)n);
     j_ki("screens", (int32_t)ns);
+    j_ki("free", (int32_t)la->nfs);
     j_close('}');
     return j_end();
 #undef LA_U8
@@ -998,54 +1092,19 @@ LAY_EXPORT const char *lay_ptext(uint32_t p, uint32_t c)
     }
     return b;
 }
-/* n detents on it, as the editor's knob steps (cp_dstep), 30 ms pass; returns the new value */
-LAY_EXPORT int32_t lay_pstep(uint32_t p, uint32_t c, int32_t n)
-{
-    track_t *t;
-    const param_desc_t *d;
-    int32_t v;
-    lay_boot();
-    t = ce_trk();
-    d = lp_desc(t, p, c);
-    if (!d)
-        return 0;
-    v = cp_dstep(d, lp_get(t, p, c), n, 0);
-    if (p == 0xFFu)
-        t->p[c] = (int16_t)v;
-    else
-        ENGINES[eng_idx(t->eng_req)]->deep->set(t, p, c, v);
-    lay_run(30);
-    return lp_get(t, p, c);
-}
-
-/* ------------------------------------------------ the free pages' drawing (step 4, preview only) --- */
-/* A design's free page is drawn by the firmware's own primitives and faces (cr_draw.c / cr_gfx.c / gfx.c) in the
- * renderer's six strips, under the editor's own title line (cr_ed_title: the sound's name left, the page's right):
- * lay_draw_begin(title, page), the calls below (recorded), lay_draw_end() draws them and answers the 240 x 240 RGBA
- * (as lay_render); lay_lint() then answers for it. Coordinates are screen pixels; colours cr_screen.h CR_COL_* (the
- * named ones and the palette's tokens) */
-enum { LD_TEXT, LD_RECT, LD_GLYPH, LD_HBAR, LD_BAND, LD_P5KNOB, LD_DISC, LD_WAVE };
+/* ------------------------------------------------ captions (the contact sheets) --- */
+/* Text drawn by the firmware's faces on an empty page under the editor's title line, for the tools' captions
+ * (tools/layout/render_sheet.mjs): lay_draw_begin(title, page), lay_draw_text .., lay_draw_end() -> the 240 x 240 RGBA
+ * (as lay_render); lay_lint() then answers for it. A design's screens are not drawn here: lay_load installs them and
+ * the firmware's editor and renderer show them (cr_edit.c CE_S_FREE, cr_draw.c CR_K_FREE) */
 typedef struct {
-    uint8_t op, col, a, b;                         /* text: bold, align; rect: radius, outline width (0: filled) */
-    int16_t x, y, w, h;                            /* text: w = maxw */
-    uint8_t px, g, pct, pct2;
-    uint16_t flags;
-    uint8_t wv[20];
-    char s[32];
+    uint8_t col, bold, align, px;
+    int16_t x, y, maxw;
+    char s[48];
 } ld_t;
-static ld_t ld[200];
+static ld_t ld[32];
 static uint32_t nld;
 static char ld_title[24], ld_page[16];
-static ld_t *ld_new(uint32_t op)
-{
-    ld_t *o;
-    if (nld >= NELEM(ld))
-        return 0;
-    o = &ld[nld++];
-    memset(o, 0, sizeof *o);
-    o->op = (uint8_t)op;
-    return o;
-}
 /* a new page: the title line's left text (the sound's name) and right text (the page's) */
 LAY_EXPORT void lay_draw_begin(const char *title, const char *page)
 {
@@ -1059,111 +1118,19 @@ LAY_EXPORT void lay_draw_begin(const char *title, const char *page)
 LAY_EXPORT void lay_draw_text(uint32_t bold, uint32_t px, int32_t x, int32_t y, const char *s, uint32_t col,
                               uint32_t align, int32_t maxw)
 {
-    ld_t *o = ld_new(LD_TEXT);
-    if (!o)
+    ld_t *o;
+    if (nld >= NELEM(ld))
         return;
-    o->a = (uint8_t)(bold ? 1 : 0);
-    o->b = (uint8_t)(align > 2u ? 0u : align);
+    o = &ld[nld++];
+    o->bold = (uint8_t)(bold ? 1 : 0);
+    o->align = (uint8_t)(align > 2u ? 0u : align);
     o->px = (uint8_t)px;
     o->x = (int16_t)x;
     o->y = (int16_t)y;
-    o->w = (int16_t)maxw;
+    o->maxw = (int16_t)maxw;
     o->col = (uint8_t)col;
     snprintf(o->s, sizeof o->s, "%s", s ? s : "");
 }
-/* a rectangle: line 0 = filled (r > 0: rounded), else an outline that many px wide (r > 0: its corners quarter arcs);
- * r + 64: the left corners square, r + 128: the right ones (two caps that meet as one) */
-LAY_EXPORT void lay_draw_rect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t r, uint32_t line)
-{
-    ld_t *o = ld_new(LD_RECT);
-    if (!o)
-        return;
-    o->x = (int16_t)x; o->y = (int16_t)y; o->w = (int16_t)w; o->h = (int16_t)h;
-    o->col = (uint8_t)col; o->a = (uint8_t)r; o->b = (uint8_t)line;
-}
-/* a cell glyph in the box (cr_cglyph: CR_G_KNOB the dial and its value arc, CR_G_BAR, CR_G_SAW, CR_G_SQUARE,
- * CR_G_WAVE, CR_G_NOISE ..; the pictograms through cr_picto), pct / pct2 Q8 of 255, flags CR_CF_* (CR_CF_BIP) */
-LAY_EXPORT void lay_draw_glyph(uint32_t g, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t pct,
-                               uint32_t pct2, uint32_t flags)
-{
-    ld_t *o = ld_new(LD_GLYPH);
-    if (!o)
-        return;
-    o->g = (uint8_t)g;
-    o->x = (int16_t)x; o->y = (int16_t)y; o->w = (int16_t)w; o->h = (int16_t)h;
-    o->col = (uint8_t)col;
-    o->pct = (uint8_t)(pct > 255u ? 255u : pct);
-    o->pct2 = (uint8_t)(pct2 > 255u ? 255u : pct2);
-    o->flags = (uint16_t)flags;
-}
-/* the knob dial (CR_G_KNOB) centred at (cx, cy), size px high */
-LAY_EXPORT void lay_draw_knob(int32_t cx, int32_t cy, int32_t size, uint32_t col, uint32_t pct, uint32_t bip)
-{
-    lay_draw_glyph(CR_G_KNOB, cx - size / 2, cy - size / 2, size, size, col, pct, 0, bip ? CR_CF_BIP : 0u);
-}
-/* a Prophet-5 knob (the "p5" style, docs/LAYOUT-TOOL.md): centred at (cx, cy) in a size px box: the printed scale
- * (11 ticks, 0..10, over the dial's 270 degrees at the box's edge, the end ticks 2 px), the face (a disc of radius
- * size / 2 - 6 in `face` with a 1 px rim in `rim`), the pointer (2 px, from `from` % of the face's radius, 0: 30 %,
- * to 95 %) at the value's angle, as CR_G_KNOB's (pct Q8 of 255); bip: tick 5 (12 o'clock) in the pointer's colour,
- * 2 px, the centre mark */
-LAY_EXPORT void lay_draw_p5knob(int32_t cx, int32_t cy, int32_t size, uint32_t face, uint32_t rim, uint32_t tick,
-                                uint32_t ptr, uint32_t pct, uint32_t bip, uint32_t from)
-{
-    ld_t *o = ld_new(LD_P5KNOB);
-    if (!o)
-        return;
-    o->x = (int16_t)cx; o->y = (int16_t)cy; o->w = (int16_t)size;
-    o->col = (uint8_t)face; o->a = (uint8_t)rim; o->b = (uint8_t)tick; o->g = (uint8_t)ptr;
-    o->pct = (uint8_t)(pct > 255u ? 255u : pct);
-    o->flags = (uint16_t)(bip ? 1u : 0u);
-    o->px = (uint8_t)(from && from < 95u ? from : 30u);
-}
-/* a filled disc (cr_disc), centre and radius Q4 (1/16 px: a centre between two pixels, a radius of 2.5 px) */
-LAY_EXPORT void lay_draw_disc(int32_t cx16, int32_t cy16, int32_t r16, uint32_t col)
-{
-    ld_t *o = ld_new(LD_DISC);
-    if (!o)
-        return;
-    o->x = (int16_t)cx16; o->y = (int16_t)cy16; o->w = (int16_t)r16;
-    o->col = (uint8_t)col;
-}
-/* ONE cycle of a waveform as a thin line in the box, no baseline (the p5 style's led icons, as the panel prints them
- * over its SHAPE buttons): kind 0 saw (a ramp to 70 %, then straight down), 1 triangle, 2 pulse, 3 sine (one hump),
- * 4 noise */
-LAY_EXPORT void lay_draw_wave(uint32_t kind, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col)
-{
-    ld_t *o = ld_new(LD_WAVE);
-    if (!o)
-        return;
-    o->g = (uint8_t)kind;
-    o->x = (int16_t)x; o->y = (int16_t)y; o->w = (int16_t)w; o->h = (int16_t)h;
-    o->col = (uint8_t)col;
-}
-/* the editor's small level bar (cr_hbar) */
-LAY_EXPORT void lay_draw_hbar(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t pct, uint32_t bip)
-{
-    ld_t *o = ld_new(LD_HBAR);
-    if (!o)
-        return;
-    o->x = (int16_t)x; o->y = (int16_t)y; o->w = (int16_t)w; o->h = (int16_t)h;
-    o->col = (uint8_t)col;
-    o->pct = (uint8_t)(pct > 255u ? 255u : pct);
-    o->flags = (uint16_t)(CR_CF_PCT | (bip ? CR_CF_BIP : 0u));
-}
-/* one of the editor's wide bands (cr_wide: CR_W_ENV, CR_W_FILTER ..) at its own place (rows 24 .. 120), its values
- * the 20 bytes at wv (cr_screen_t.wv) */
-LAY_EXPORT void lay_draw_band(uint32_t kind, const uint8_t *wv)
-{
-    ld_t *o = ld_new(LD_BAND);
-    if (!o)
-        return;
-    o->g = (uint8_t)kind;
-    if (wv)
-        memcpy(o->wv, wv, sizeof o->wv);
-}
-/* the ops are drawn by the renderer's own free-screen primitives (cr_draw.c CR_K_FREE: cr_box, cr_p5knob, cr_wave1,
- * cr_ftext): a design's picture here and the unit's are made by the same code. lay_draw_rect's r: the radius (bits
- * 0..5), 0x40 / 0x80 the left / right corners square (cr_draw.c CR_RSQL / CR_RSQR) */
 static void ld_play(void)
 {
     static cr_screen_t s;
@@ -1173,59 +1140,12 @@ static void ld_play(void)
     snprintf(s.title, sizeof s.title, "%s", ld_title);
     snprintf(s.page, sizeof s.page, "%s", ld_page);
     if (cr_in_strip(0, 26))
-        cr_ed_title(&s);                           /* the shared header: the editor's own title line */
-    for (i = 0; i < nld; i++) {
-        const ld_t *o = &ld[i];
-        uint16_t c = cr_rgb(o->col, T_TEXT);
-        switch (o->op) {
-        case LD_TEXT:
-            cr_ftext(o->x, o->y, o->s, o->px, o->a, o->b, c, o->w);
-            break;
-        case LD_RECT:
-            cr_box(o->x, o->y, o->w, o->h, c, o->a, o->b);
-            break;
-        case LD_GLYPH: {
-            cr_cell_t cl;
-            memset(&cl, 0, sizeof cl);
-            cl.flags = (uint16_t)(CR_CF_ON | o->flags);
-            cl.glyph = o->g;
-            cl.pct = o->pct;
-            cl.pct2 = o->pct2;
-            if (o->g == CR_G_LFOWAVE) {            /* (its wave: CR_LW_*, in pct2) */
-                cl.wave = o->pct2;
-                cl.pct2 = 0;
-            }
-            cr_cglyph(&cl, o->x * 16, o->y * 16, o->w * 16, o->h * 16, c);
-            break;
-        }
-        case LD_HBAR: {
-            cr_cell_t cl;
-            memset(&cl, 0, sizeof cl);
-            cl.flags = (uint16_t)(CR_CF_ON | o->flags);
-            cl.pct = o->pct;
-            cr_hbar(&cl, o->x * 16, o->w * 16, o->y * 16, o->h * 16, c);
-            break;
-        }
-        case LD_P5KNOB:
-            cr_p5knob(o->x, o->y, o->w, cr_rgb(o->col, T_SURF), cr_rgb(o->a, T_MID), cr_rgb(o->b, T_LINE),
-                      cr_rgb(o->g, T_TEXT), o->pct, o->flags & 1u, o->px);
-            break;
-        case LD_DISC:
-            cr_disc(o->x, o->y, o->w, c);
-            break;
-        case LD_WAVE:
-            cr_wave1(o->g, o->x, o->y, o->w, o->h, c);
-            break;
-        case LD_BAND:
-            s.wide = o->g;
-            memcpy(s.wv, o->wv, sizeof s.wv);
-            cr_wide(&s, CR_NAMED[CR_KC[0]]);
-            break;
-        }
-    }
+        cr_ed_title(&s);                           /* the editor's own title line */
+    for (i = 0; i < nld; i++)
+        cr_ftext(ld[i].x, ld[i].y, ld[i].s, ld[i].px, ld[i].bold, ld[i].align, cr_rgb(ld[i].col, T_TEXT), ld[i].maxw);
 }
-/* the recorded page drawn in the renderer's strips (as cr_draw: cr_cv_begin, cv_oy, the clip) and blitted to the LCD;
- * the picture as lay_render's, and lay_lint answers for it. The firmware's draw cache is told the LCD changed */
+/* the page drawn in the renderer's strips (as cr_draw: cr_cv_begin, cv_oy, the clip) and blitted to the LCD; the
+ * picture as lay_render's. The firmware's draw cache is told the LCD changed */
 LAY_EXPORT uint8_t *lay_draw_end(void)
 {
     uint32_t k;
@@ -1252,6 +1172,3 @@ LAY_EXPORT int32_t lay_text_w(const char *s, uint32_t px, uint32_t bold)
     lay_boot();
     return (cr_tw(s, px, bold ? 1 : 0) + 255) >> 8;
 }
-/* the band values the editor's screen model holds now (cu_scr.wv, 20 bytes): a free page's band takes them from the
- * classic screen that has that band */
-LAY_EXPORT const uint8_t *lay_wv(void) { lay_boot(); return cu_scr.wv; }

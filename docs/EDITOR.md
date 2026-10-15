@@ -480,6 +480,18 @@ A row label column at the left (11 px bold; white when active, else grey; as wid
 
 Used for: OSC (VA), LFO (VA), MOD.
 
+### `free` — a compiled layout's screen (P5's panel)
+
+`CR_K_FREE` (`cr_draw.c`, docs/LAYOUT-TOOL.md "The p5 style"): the title line, then the screen's placed elements from
+the compiled table (`cr_layout.c`), frames first: framed sections with their names in the border, knobs with a 0..10
+scale and the value in the face (a named value too wide for it on the row under the label), LED buttons (a wave icon
+or a name over the cap; two LEDs, red and yellow, for a parameter of two values), a lever for three positions. Every
+lane's values are drawn; the active lane's elements in the knob colours by slot (blue, orange, white, green), the
+others grey. A turned knob's face fills in its colour for 800 ms. A knob turn composes only the strips of the elements
+that changed. The layout tool draws a design's free screens through this same code (`lay_load`).
+
+Used for: P5's OSC .. MOD.
+
 ## 10. Motion: none in the editor (2026-10-06, the user's feedback from the device)
 
 The editor draws every change **at once**, in the UI frame after the detent or the tap: no slide-in of the cells
