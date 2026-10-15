@@ -965,6 +965,18 @@ r=$(dv REL)
     ok "AMP REL: 0.01 slow, 6.40 quick to the end (INF); GLO held: 127.00 (INF), 126.00 (a number), 127.00 (INF): $OUT/cr_quad_hires_rel.ppm" \
     || bad "AMP REL: '$r'"
 
+echo "VA's synced LFO RATE: the list one item a detent both ways, GLO held the straight ones; FENV in hundredths"
+run cr_va_sync_list
+L="$OUT/cr_va_sync_list.log"
+r=$(dv RATE)
+[ "$r" = "15 14 13 12 11 10 9 10 11 12 10 7 4 7 " ] && has 'SYNC1 0 -> 1 (ON)' "$L" && has 'RATE 16 -> 15 (1/2D)' "$L" &&
+    has 'RATE 12 -> 11 (2BART)' "$L" && has 'RATE 7 -> 4 (4BAR)' "$L" &&
+    ok "LFO 1 SYNC on (RATE 50 -> 1/2); slow and quick detents one item each, down and up; GLO held: 2BAR 3BAR 4BAR, back 3BAR" \
+    || bad "synced RATE: '$r' (want 15 14 13 12 11 10 9 10 11 12 10 7 4 7)"
+f=$(dv FENV)
+[ "$f" = "999 998 1000 " ] && has 'FENV 999 -> 998 (+9.98)' "$L" &&
+    ok "VA FENV (F_FIX2, -64.00..+63.99): slow detents 0.01, GLO held the whole number (+10.00)" || bad "FENV: '$f'"
+
 echo "EDIT held: the engine picker as a preview (cancel / keep), its roots, PRESETS in the editor"
 run cr_editor_pick --wav "$OUT/cr_editor_pick.wav"
 L="$OUT/cr_editor_pick.log"

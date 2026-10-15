@@ -140,7 +140,8 @@ none and keep the title rules:
 | FX | 1 | `edit8`, one row | one | Drive · Chorus · Delay · Reverb (the platform sends) | `FX` |
 | MIX | 1 | `edit8`, two rows | A, B | A: Level · Pan · Voice · Glide; B: Transpose · Detune · Priority · Gl. mode | `MIX` |
 
-With Sync on, an LFO's Rate reads as a division of the BPM (`1/8`). The VA's EDIT 1 / EDIT 2 macros are not shown:
+With Sync on, an LFO's Rate is the sync list (`deep->desc`: `8BARD` .. `1/8` .. `256T`, `4ms` `3ms` `2ms`; one item a
+detent, SHIFT / OPT the straight ones: docs/VA.md). The VA's EDIT 1 / EDIT 2 macros are not shown:
 the deep values are the truth and a deep edit writes the macro back. Unused matrix slots read `–` (the active one
 shows its source, to turn).
 
@@ -280,7 +281,17 @@ Transpose, the PERF row and the main view's KNOB 3 / KNOB 4, Options > Velocity 
 `cu_kval`). **Not** values, one item a detent whatever the speed: PRESETS, ALGORITHM, SELECT, the pickers and lists,
 every F_ENUM, on / off, a note name, a name list of at most 64 values (FM6's ALG and COARSE, FM TONE's RATIO A / C),
 a ratio pair (RATIO B), FM TONE's ALGO, the FX layer's divisions / ratio / sync / mode, the PERF row's division,
-direction, pattern, rotate, retrigger and hold.
+direction, pattern, rotate, retrigger and hold, the VA's synced LFO Rate (va-1: the sync list, 42 items).
+
+**Audited (va-1, 2026-10-14: the owner "acceleration works well some places but not others").** Every value knob of
+the VA's editor (OSC, FILT, ENV, LFO, MOD, the ENV / LFO-held mapping's AMT) and of the common groups (FX: the sends;
+MIX: Level, Pan, Glide, Transpose, Detune; the platform pages) steps through `cp_dstep` / `cu_send_step`, so all
+accelerate. The places that did not feel right were the VA's: a synced LFO Rate was a 0..127 value read as 14
+divisions (accelerated, so a slow detent often showed no change and a quick one skipped divisions): it is a list now;
+FENV was −64..63 in % of 64: hundredths now. Still one step a detent outside the editor, for the owner to confirm:
+the tempo (SELECT on the main view, 20..300 BPM, 1 BPM a detent), the PLAY menu's Level and the metronome's click
+(0..100 in fixed 5s), the PERF row's Rotate (−12..12), the KEY layer's Transpose (by choice), the FX layer's values of
+at most 21 steps (`hi − lo > 20`).
 
 **Acceleration.** `cu_knob` times every detent of each knob (`kn_turn`, the UI clock `fm1_ms`); the gap since the same
 knob's previous detent picks the step from ONE table (`KN_CURVE`), in 64ths of the quickest step, which is the range
@@ -317,7 +328,9 @@ from the anchor, and both ends:
 | another range | the nice number (1 2 4 5 8 10 16 20 25 32 50 64 100 ..) nearest to 1/8 of it (centred: 1/16): 0..99 → 10s, 0..100 → 10s, −50..50 → 5s, 0..120 → 16s, 1..1000 → 100s, 1..200 → 25s, 50..90 → 5s, −16..16 → 2s |
 | at most 17 values (FM6's FB, DETUNE, VSENS; CZ-1's levels and keys; ALGO 1..8; −8..8) | no snap: one step a detent |
 
-A named choice never snaps (one item a detent, OPT or not). OPT's other jobs are as before: OPT + PRESETS / +
+A named choice never snaps (one item a detent, OPT or not), but for a list of tempo divisions (the VA's synced LFO
+Rate, `kn_divs`: an F_ENUM `RATE` with a `1/4T` among its names): OPT steps the straight ones (a name ending in T or D
+is skipped). The VA's FENV is hi-res (`F_FIX2`): whole numbers. OPT's other jobs are as before: OPT + PRESETS / +
 ALGORITHM change the chord / bass part's engine, OPT + KNOB 1 the split point and OPT + SELECT the click level (also
 in a layer: KNOB 1 of a layer cannot snap), OPT + SAVE, OPT tapped the Options; in the editor SHIFT + EDIT the other
 part and SHIFT + SELECT the lanes. Only OPT + a value knob changes meaning.

@@ -2890,3 +2890,24 @@ F_FIX2), so FM TONE's hundredths step 0.01 slow, 6.40 quick on 0..127.99, snap t
 +-8.00 .. +-64.00, AMP REL to 127.00 (INF). The emulator's `knobs quick|real` (quick: every detent the quickest)
 keeps 15 scripts written for the old 5 % detent. The merge had no textual conflicts; test_cr.sh's knob block reads
 SPEED in hundredths; a new script cr_quad_hires_knobs checks FREQ, SPEED and AMP REL on FM TONE in real timing.
+
+3y63. **VA: FENV in hundredths, the sync list, the acceleration audit (2026-10-14; branch va-1 from 2019727, not
+pushed).** The owner: "Acceleration works well some places but not others. On the VA engine, the Envelope depth
+should support 2 decimals so you could have a small mod depth of like 0.04, and sync rates should support: anything
+below 1/256th would be in milliseconds; 1/256th (plus triplet and dotted); 1/128th; 1/64th; 1/32nd; 1/16th; 1/8th;
+1/4; 1/2; 1 bar; 2 bars; 3 bars; 4 bars; 8 bars (each plus triplet and dotted)." Done (docs/VA.md): FILTER's FENV
+(the "Env amt" on FILT, the VA's one envelope depth) is `F_FIX2` -64.00..+63.99, its hundredths in the patch's
+reserved value 103 (`VA_FENVF`); they reach the cutoff (two multiplies a voice a control tick, only when not 0). The
+matrix's AMT (any source, not VA-only envelope amounts) stays -64..63. A synced LFO RATE is an index into a list of
+42, slowest first (clockwise faster, as the free rate): 8 4 3 2 1 bars and 1/2 .. 1/256, each D / straight / T,
+then 4 3 2 ms past 256T (the owner's "below 1/256th" read as: faster than 1/256T, free periods; 2 ms is the
+fastest under the control rate's half). Its descriptor is a list (one item a detent), OPT held steps the straight
+ones (cr_pages.c `kn_divs`). Blob version 4 (the same 110 bytes): versions 1..3 convert on load (FENV x 100, a
+synced RATE to the same division); an older firmware refuses a version-4 blob (the init patch with the record's
+macros). The sound-file checks of the page and the installer take version 4. The audit of the acceleration: every
+VA and common-group value knob accelerates; the VA's synced RATE (a 0..127 value read as 14 divisions) and FENV were
+the bad places; outside the editor the tempo, the PLAY menu's Level, the click level and PERF's Rotate stay one step
+a detent (docs/EDITOR.md 6a, for the owner). Goldens: no change (no factory preset has a synced LFO or a fine FENV).
+Tests: cr_va_test (t_hires, t_lfo_sync), cr_va_sync_list in test_cr.sh, test_sounds. `va_block`'s target budget
+108 -> 121 (the synced increment, x BPM in 64 bits); `va_render`'s unchanged; design/layouts/va.json regenerated
+(FENV `fix2`).

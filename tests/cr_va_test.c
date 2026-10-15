@@ -219,8 +219,12 @@ static void t_pages(void)
             if (i == VA_X)
                 continue;
             used[i]++;
-            CHECK(d->min == va_range(i).min && d->max == va_range(i).max, "page %s col %u: range %d..%d, patch %d..%d",
-                  VA_PAGES[pg].title, c, d->min, d->max, va_range(i).min, va_range(i).max);
+            if (i == VA_FENV)                    /* (hundredths: F_FIX2, the patch's range x 100, VA_FENVF the rest) */
+                CHECK(d->fmt == F_FIX2 && d->min == va_range(i).min * 100 && d->max == va_range(i).max * 100 + 99 &&
+                      va_range(VA_FENVF).max == 99, "FENV hi-res range %d..%d", d->min, d->max);
+            else
+                CHECK(d->min == va_range(i).min && d->max == va_range(i).max, "page %s col %u: range %d..%d, patch %d..%d",
+                      VA_PAGES[pg].title, c, d->min, d->max, va_range(i).min, va_range(i).max);
             if (i != VA_OSC(0, VO_LEVEL) && (i < VA_ENV(1, 0) || i >= VA_VEL || (i - VA_ENV0) % VE_N != VE_SUS))
                 CHECK(d->def == va_range(i).def, "page %s col %u: def %d, init %d", VA_PAGES[pg].title, c, d->def,
                       va_range(i).def);
@@ -240,8 +244,19 @@ static void t_set_macros(void)
     va_blob_set(t, 0);
     va_set(t, 8, 0, 500);                         /* FILTER CUT: clamped */
     CHECK(va_get(t, 8, 0) == 127 && t->p[P_E0] == 127, "set CUT 500: %d, P_E0 %d", va_get(t, 8, 0), t->p[P_E0]);
-    va_set(t, 8, 3, -300);                        /* FENV */
-    CHECK(va_get(t, 8, 3) == -64 && t->p[P_E2] == -64, "set FENV -300: %d", va_get(t, 8, 3));
+    va_set(t, 8, 3, -30000);                      /* FENV (hundredths): clamped */
+    CHECK(va_get(t, 8, 3) == -6400 && t->p[P_E2] == -64, "set FENV -300.00: %d", va_get(t, 8, 3));
+    va_set(t, 8, 3, 4);                           /* 0.04: the whole part 0 (the macro), the hundredths 4 */
+    CHECK(va_get(t, 8, 3) == 4 && t->p[P_E2] == 0 && va_patch[0][VA_FENV] == 0 && va_patch[0][VA_FENVF] == 4,
+          "set FENV 0.04: %d", va_get(t, 8, 3));
+    va_set(t, 8, 3, -1);                          /* -0.01: -1 + 0.99 */
+    CHECK(va_get(t, 8, 3) == -1 && va_patch[0][VA_FENV] == -1 && va_patch[0][VA_FENVF] == 99, "set FENV -0.01");
+    va_set(t, 8, 3, 6399);
+    CHECK(va_get(t, 8, 3) == 6399 && t->p[P_E2] == 63, "set FENV 63.99");
+    t->p[P_E2] = 20;                              /* the macro moved: FENV 20.00 */
+    va_block(t);
+    CHECK(va_get(t, 8, 3) == 2000, "FENV macro 20: %d", va_get(t, 8, 3));
+    va_set(t, 8, 3, -6400);
     va_set(t, 9, 3, 90);                          /* FILTER+ DRIVE */
     CHECK(va_get(t, 9, 3) == 90 && t->p[P_E3] == 90, "set DRIVE 90: %d, P_E3 %d", va_get(t, 9, 3), t->p[P_E3]);
     va_set(t, 8, 2, 200);                         /* FTYPE: clamped */
@@ -351,20 +366,115 @@ static void t_env(void)
     CHECK(fabs(k * CTL * 1000.0 / FS - TIME_MS_X10[64] / 10.0) < 2.0, "HOLD 64: %.1f ms", k * CTL * 1000.0 / FS);
 }
 
+/* the version-4 sync list's lengths: beats (a note or bars), < 0: a free period in -ms */
+static double sync_beats(uint32_t i)
+{
+    static const double B[13] = {32, 16, 12, 8, 4, 2, 1, 0.5, 0.25, 0.125, 1.0 / 16, 1.0 / 32, 1.0 / 64};
+    static const double M[3] = {1.5, 1, 2.0 / 3};
+    if (i >= 39u)
+        return -(double)(4u - (i - 39u));
+    return B[i / 3u] * M[i % 3u];
+}
+
 static void t_lfo_sync(void)
 {
-    static const double BEATS[VA_NDIV] = {32, 16, 8, 4, 2, 1.5, 1, 2.0 / 3, 0.75, 0.5, 1.0 / 3, 0.25, 1.0 / 6, 0.125};
+    static const double BEATS[VA_NDIV3] = {32, 16, 8, 4, 2, 1.5, 1, 2.0 / 3, 0.75, 0.5, 1.0 / 3, 0.25, 1.0 / 6, 0.125};
     track_t *t = &trk[0];
-    uint32_t d, bpm;
+    uint32_t d, bpm, i;
+    /* every entry: its name, its period at 120 BPM within 0.1 % (60 and 300 BPM too), phase-locked over 8 bars */
+    CHECK(N_VA_SYNC[VA_NSYNC] == 0 && !strcmp(N_VA_SYNC[0], "8BARD") && !strcmp(N_VA_SYNC[19], "1/4") &&
+          !strcmp(N_VA_SYNC[38], "256T") && !strcmp(N_VA_SYNC[41], "2ms"), "sync names");
+    for (i = 0; i < VA_NSYNC; i++) {
+        CHECK(N_VA_SYNC[i] && strlen(N_VA_SYNC[i]) <= 5u, "sync name %u too long", i);
+        for (bpm = 60; bpm <= 300; bpm += bpm == 120u ? 180u : 60u) {
+            double b = sync_beats(i), want = (b > 0 ? b * 60.0 / bpm : -b / 1000.0) * FS / CTL, got;
+            int8_t p[VA_NP];
+            uint32_t inc;
+            va_init_patch(p);
+            p[VA_LFO(0, VL_SYNC)] = 1;
+            song.g[G_BPM] = (int16_t)bpm;
+            inc = va_lfo_inc(p, 0, (int32_t)i, 0);
+            got = 4294967296.0 / inc;
+            CHECK(fabs(got - want) / want < 0.001, "sync %s at %u BPM: %.3f ticks a cycle, want %.3f", N_VA_SYNC[i], bpm,
+                  got, want);
+            if (bpm == 120u && b > 0) {          /* 8 bars at 120 BPM = 16 s = 22050 ticks: the cycles it holds */
+                double cyc = 22050.0 * inc / 4294967296.0, wc = 32.0 / b;
+                CHECK(fabs(cyc - wc) < 0.001 * wc + 0.002, "sync %s: %.4f cycles in 8 bars, want %.4f", N_VA_SYNC[i],
+                      cyc, wc);
+            }
+        }
+    }
+    /* phase lock through va_block: over 8 bars at 120 BPM 1/4 ends where it started, 8BARD (12 bars, the slowest)
+     * 2/3 of its cycle on (+-0.1 % of a cycle) */
+    for (i = 0; i < 2u; i++) {
+        uint32_t n;
+        memset(t, 0, sizeof *t);
+        va_blob_set(t, 0);
+        va_patch[0][VA_LFO(0, VL_SYNC)] = 1;
+        va_patch[0][VA_LFO(0, VL_RATE)] = (int8_t)(i ? 0 : 19);
+        song.g[G_BPM] = 120;
+        va_lfo[0].ph[0] = 0;
+        va_rate_off[0][0] = 0;
+        for (n = 0; n < 22050u; n++)
+            va_block(t);
+        {
+            double ph = va_lfo[0].ph[0] / 4294967296.0, want = i ? 2.0 / 3 : 0.0, e = fabs(ph - want);
+            e = e > 0.5 ? 1.0 - e : e;
+            CHECK(e < 0.001, "sync %s: phase %.5f after 8 bars, want %.5f", N_VA_SYNC[i ? 0 : 19], ph, want);
+        }
+    }
+    /* the matrix's RATEn on a synced LFO moves along the list (+127: to its end) */
+    {
+        int8_t p[VA_NP];
+        va_init_patch(p);
+        p[VA_LFO(0, VL_SYNC)] = 1;
+        song.g[G_BPM] = 120;
+        CHECK(va_lfo_inc(p, 0, 19, 127) == va_lfo_inc(p, 0, 41, 0) && va_lfo_inc(p, 0, 19, -127) ==
+              va_lfo_inc(p, 0, 0, 0), "synced RATE + the matrix's RATE1");
+    }
+    /* version 3's divisions -> the same length in the new list; a version-3 blob converts them */
+    for (d = 0; d < VA_NDIV3; d++)
+        CHECK(fabs(sync_beats(VA_DIV3_TO_SYNC[d]) - BEATS[d]) < 1e-9, "v3 division %u -> %s", d,
+              N_VA_SYNC[VA_DIV3_TO_SYNC[d]]);
+    for (d = 0; d < 128u; d++) {
+        int8_t p[VA_NP], q[VA_NP];
+        uint8_t b[VA_BLOB];
+        va_init_patch(p);
+        p[VA_LFO(1, VL_SYNC)] = 1;
+        p[VA_LFO(1, VL_RATE)] = (int8_t)d;
+        p[VA_LFO(2, VL_RATE)] = (int8_t)d;       /* (free: kept) */
+        va_pack(p, b);
+        b[1] = 3;
+        CHECK(va_unpack(b, q) && q[VA_LFO(1, VL_RATE)] == VA_DIV3_TO_SYNC[d * VA_NDIV3 >> 7] &&
+              q[VA_LFO(2, VL_RATE)] == (int8_t)d, "v3 synced RATE %u", d);
+    }
+    /* the deep page: a synced RATE is the list (F_ENUM, its names), a free one F_LFOHZ */
+    {
+        const param_desc_t *ds;
+        memset(t, 0, sizeof *t);
+        va_blob_set(t, 0);
+        CHECK(va_desc(t, 18, 0) == 0, "free RATE: the table's column");
+        va_set(t, 22, 0, 1);                     /* SYNC on: RATE 70 (of 128) -> 22 (of 42, 1/8) */
+        CHECK(va_get(t, 18, 0) == 22, "SYNC on: RATE %d", va_get(t, 18, 0));
+        va_set(t, 22, 0, 0);
+        CHECK(va_get(t, 18, 0) == 67, "SYNC off: RATE %d", va_get(t, 18, 0));
+        va_set(t, 22, 0, 1);
+        ds = va_desc(t, 18, 0);
+        CHECK(ds && ds->fmt == F_ENUM && ds->max == (int32_t)VA_NSYNC - 1 && ds->names == N_VA_SYNC, "synced RATE desc");
+        va_set(t, 18, 0, 100);
+        CHECK(va_get(t, 18, 0) == (int32_t)VA_NSYNC - 1, "synced RATE clamps to the list");
+        va_set(t, 18, 0, 26);
+        CHECK(!strcmp(ds->names[va_get(t, 18, 0)], "1/16T"), "synced RATE text %s", ds->names[va_get(t, 18, 0)]);
+        CHECK(va_desc(t, 19, 0) == 0, "LFO 2 stays free");
+    }
     for (bpm = 60; bpm <= 180; bpm += 60)
-        for (d = 0; d < VA_NDIV; d++) {
+        for (d = 0; d < VA_NDIV3; d++) {
             uint32_t n, wraps = 0, first = 0, last = 0, prev;
             double want = BEATS[d] * 60.0 / bpm * FS / CTL, got;
             memset(t, 0, sizeof *t);
             va_blob_set(t, 0);
             va_patch[0][VA_LFO(0, VL_SYNC)] = 1;
-            va_patch[0][VA_LFO(0, VL_RATE)] = (int8_t)((d * 128u + VA_NDIV - 1u) / VA_NDIV);
-            CHECK(((uint32_t)va_patch[0][VA_LFO(0, VL_RATE)] * VA_NDIV >> 7) == d, "RATE of division %u", d);
+            va_patch[0][VA_LFO(0, VL_RATE)] = (int8_t)VA_DIV3_TO_SYNC[d];
             song.g[G_BPM] = (int16_t)bpm;
             va_lfo[0].ph[0] = 0;
             va_rate_off[0][0] = 0;
@@ -381,7 +491,7 @@ static void t_lfo_sync(void)
             }
             got = wraps > 1u ? (double)(last - first) / (wraps - 1u) : (double)first;
             CHECK(wraps >= 2u && fabs(got - want) / want < 0.01, "SYNC %s at %u BPM: %.1f ticks a cycle, want %.1f",
-                  N_VA_DIV[d], bpm, got, want);
+                  N_VA_SYNC[VA_DIV3_TO_SYNC[d]], bpm, got, want);
         }
 }
 
@@ -422,6 +532,61 @@ static void chord(uint32_t k, double secs, const int8_t *patch, int32_t *peak, i
         ;
     for (i = 0; i < NVOICE; i++)
         *voices_left += t->v[i].active;
+}
+
+/* version 4: FENV in hundredths reaches the filter. One note through LP CUT 40, ENV 2 a decay, FENV 0.00 / 0.04 /
+ * 1.00: three different sounds, 0.04 nearer 0.00 than 1.00 is; the blob carries the hundredths; every factory preset
+ * as a version-3 blob loads the same patch and sounds */
+static int32_t hr_out[3][200 * CTL];
+static void t_hires(void)
+{
+    static const int32_t F[3] = {0, 4, 100};
+    track_t *t = &trk[0];
+    int8_t p[VA_NP], q[VA_NP];
+    uint8_t b[VA_BLOB];
+    uint32_t k, n;
+    double d4 = 0, d100 = 0;
+    for (k = 0; k < 3u; k++) {
+        drv_reset(t);
+        va_init_patch(p);
+        p[VA_CUT] = 40;
+        p[VA_ENV(1, VE_DEC)] = 90;
+        p[VA_ENV(1, VE_SUS)] = 0;
+        memcpy(va_patch[0], p, VA_NP);
+        va_macros_out(t);
+        va_set(t, 8, 3, F[k]);
+        CHECK(va_get(t, 8, 3) == F[k], "FENV %d", F[k]);
+        drv_on(t, 0, 48, 100);
+        for (n = 0; n < 200u; n++)
+            drv_tick(t, hr_out[k] + n * CTL);
+    }
+    for (n = 0; n < 200u * CTL; n++) {
+        d4 += fabs((double)hr_out[1][n] - hr_out[0][n]);
+        d100 += fabs((double)hr_out[2][n] - hr_out[0][n]);
+    }
+    CHECK(d4 > 0 && d100 > 2 * d4,"FENV 0.04 against 0.00: %.0f, 1.00: %.0f", d4, d100);
+    CHECK(memcmp(hr_out[1], hr_out[2], sizeof hr_out[1]), "FENV 0.04 = 1.00");
+    va_blob_get(t, b);                           /* (FENV 1.00 now) */
+    va_set(t, 8, 3, -1234);
+    va_blob_get(t, b);
+    CHECK(b[1] == 4u && va_blob_ok(b) && va_unpack(b, q) && q[VA_FENV] == -13 && q[VA_FENVF] == 66, "blob -12.34");
+    b[2 + VA_FENVF] = 100;
+    CHECK(!va_blob_ok(b), "FENV hundredths 100 taken");
+    b[2 + VA_FENVF] = 0;
+    b[1] = 5;
+    CHECK(!va_blob_ok(b), "version 5 taken");
+    for (k = 0; k < VA_NPRESETS; k++) {
+        int32_t peak;
+        int64_t mx;
+        uint32_t left;
+        va_preset_patch(k, p);
+        va_pack(p, b);
+        b[1] = 3;                                /* (the same preset as version 3 stored it) */
+        CHECK(va_blob_ok(b) && va_unpack(b, q) && !memcmp(p, q, VA_NP), "preset %s as a v3 blob (%d)", VA_PRESETS[k].name,
+              va_blob_ok(b));
+        chord(k, 0.4, q, &peak, &mx, &left);
+        CHECK(peak > 1000, "preset %s from v3: silent (%d)", VA_PRESETS[k].name, peak);
+    }
 }
 
 static void t_render(void)
@@ -488,6 +653,8 @@ static void rnd_v1(int8_t *p, uint8_t *b)       /* a random version-1 patch and 
             mx = VD_FTYPE - 1;                   /* (version 1's destinations) */
         if (i == VA_FTYPE)
             mx = 3;                              /* (version 1's TYPE) */
+        if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_SYNC)
+            mx = 0;                              /* (free LFOs: a synced RATE converts, t_lfo_sync checks it) */
         p[i] = (int8_t)(r.min + (int32_t)(rnd() % (uint32_t)(mx - r.min + 1)));
         b[2 + i] = (uint8_t)(p[i] - r.min);
     }
@@ -559,6 +726,8 @@ static void rnd_v2(int8_t *p, uint8_t *b)
     for (i = 0; i < VA_NP; i++) {
         va_rng_t r = va_range(i);
         int32_t mx = i == VA_FTYPE ? 3 : i == VA_FRSV ? 127 : r.max;
+        if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_SYNC)
+            mx = 0;                              /* (free LFOs: a synced RATE converts, t_lfo_sync checks it) */
         p[i] = (int8_t)(r.min + (int32_t)(rnd() % (uint32_t)(mx - r.min + 1)));
         b[2 + i] = (uint8_t)(p[i] - r.min);
     }
@@ -1097,6 +1266,7 @@ int main(void)
     t_env();
     t_lfo_sync();
     t_render();
+    t_hires();
     t_v1();
     t_v2();
     t_modes();

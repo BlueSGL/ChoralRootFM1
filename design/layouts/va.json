@@ -3,7 +3,7 @@
   "version": 1,
   "generated": "by lay_catalog from the firmware's built-in tables: do not edit (tools/layout/dump_catalogs.mjs writes it; read-only in step 2, docs/LAYOUT-TOOL.md). The firmware version is not in it: params_hash binds it to the parameters",
   "engine": {"index": 13, "name": "VA"},
-  "params_hash": "7daf4ae12aa2fe92",
+  "params_hash": "c3cd9b0b94efbc52",
   "pages": [
     {
       "page": 0,
@@ -92,7 +92,7 @@
         {"short": "CUT", "fmt": "cutoff", "min": 0, "max": 127, "def": 100, "names": null, "unit": null},
         {"short": "RES", "fmt": "pct", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
         {"short": "FTYPE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": ["LP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "BP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "HP", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "NOTCH", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP"], "unit": null},
-        {"short": "FENV", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null}
+        {"short": "FENV", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null}
       ]
     },
     {
@@ -482,7 +482,7 @@
                 {"knob": 1, "bind": "deep", "page": 8, "col": 0, "page_title": "FILTER", "label": "Cutoff", "short": "CUT", "fmt": "cutoff", "min": 0, "max": 127, "def": 100, "names": null, "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 8, "col": 1, "page_title": "FILTER", "label": "Reso", "short": "RES", "fmt": "pct", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 3, "bind": "deep", "page": 8, "col": 2, "page_title": "FILTER", "label": "Ftype", "short": "FTYPE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": ["LP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "LP>BP", "BP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "BP>HP", "HP", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "HP>NT", "NOTCH", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP", "NT>LP"], "unit": null, "by_mode": true},
-                {"knob": 4, "bind": "deep", "page": 8, "col": 3, "page_title": "FILTER", "label": "Env amt", "short": "FENV", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true}
+                {"knob": 4, "bind": "deep", "page": 8, "col": 3, "page_title": "FILTER", "label": "Env amt", "short": "FENV", "fmt": "fix2", "min": -6400, "max": 6399, "def": 0, "names": null, "unit": null, "by_mode": true}
               ]
             },
             {

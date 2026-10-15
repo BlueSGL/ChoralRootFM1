@@ -27,7 +27,9 @@
 #define VA_POLY 8                /* engine_t.poly (docs/VA.md: CPU) */
 #define VA_BLOB 110u             /* packed patch: 2 bytes magic / version, VA_NP values, zero padding */
 #define VA_MAGIC 0x56u           /* 'V' */
-#define VA_VER 3u                /* 3: FTYPE 0..127 (version 2: TYPE 0..3 and MORPH 0..127; the same size) */
+#define VA_VER 4u                /* 4: FENV in hundredths (its fine part at VA_FENVF), a synced LFO RATE an index into
+                                  * N_VA_SYNC (version 3: FENV whole, a synced RATE x 14 / 128 into 14 divisions;
+                                  * version 2: TYPE 0..3 and MORPH 0..127; all the same size) */
 #define VA_BLOB1 104u            /* version 1 (before the oscillator modes, FILTER MORPH / SPREAD, USPREAD): 99 values */
 #define VA_NP1 99u
 
@@ -44,8 +46,9 @@ enum {
     VA_LFO0, VA_MOD0 = VA_LFO0 + 4 * VL_N,
     VA_OMIX = VA_MOD0 + 8 * VM_N, VA_DETUNE,
     VA_OMODE0,                                   /* version 2 (appended: version 1's values keep their places): */
-    VA_FRSV = VA_OMODE0 + 4, VA_FSPREAD, VA_USPREAD,     /* MODE of OSC 1..4, (version 2's FILTER MORPH: version 3
-                                                          * keeps it 0, FTYPE holds both), SPREAD, USPREAD */
+    VA_FENVF = VA_OMODE0 + 4, VA_FSPREAD, VA_USPREAD,    /* MODE of OSC 1..4, FENV's hundredths 0..99 (version 4:
+                                                          * FENV = VA_FENV x 100 + VA_FENVF; version 3 kept it 0,
+                                                          * version 2's FILTER MORPH), SPREAD, USPREAD */
     VA_NP
 };
 #define VA_ENV(k, f) (VA_ENV0 + (k) * VE_N + (f))
@@ -62,7 +65,9 @@ enum { VS_OFF, VS_ENV1, VS_LFO1 = VS_ENV1 + 4, VS_VEL = VS_LFO1 + 4, VS_KEY, VS_
 enum { VD_OFF, VD_PITCH, VD_PIT1, VD_LVL1 = VD_PIT1 + 4, VD_SHP1 = VD_LVL1 + 4, VD_CUT = VD_SHP1 + 4, VD_RES, VD_AMP,
        VD_PAN, VD_RATE1, VD_FTYPE = VD_RATE1 + 4, VD_DRIVE, VD_SPREAD, VD_FENV, VD_DEP1,
        VD_N = VD_DEP1 + 4 };     /* (append only: the blobs store them) */
-#define VA_NDIV 14u              /* LFO SYNC: the divisions RATE picks (va_div) */
+#define VA_FRSV VA_FENVF          /* (its name before version 4) */
+#define VA_NDIV3 14u             /* version 3's LFO SYNC divisions (a synced RATE x 14 / 128) */
+#define VA_NSYNC 42u             /* LFO SYNC since version 4: a synced RATE is an index into N_VA_SYNC (va_lfo_inc) */
 
 static const char *const N_VA_WAVE[] = {"SAW", "SQR", "TRI", "SIN", "PWM", "NOIS"};
 /* name lists of 128 values (a 0-terminated list on an F_INT 0..127 column: params.c names value v names[v]) */
@@ -90,8 +95,15 @@ static const char *const N_VA_DST[] = {"OFF", "PITCH", "PIT1", "PIT2", "PIT3", "
                                        "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN",
                                        "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV",
                                        "DEP1", "DEP2", "DEP3", "DEP4"};
-static const char *const N_VA_DIV[VA_NDIV] = {"8BAR", "4BAR", "2BAR", "1BAR", "1/2", "1/4.", "1/4", "1/4T",
-                                              "1/8.", "1/8", "1/8T", "1/16", "16T", "1/32"};
+/* a synced LFO's RATE (version 4, the owner 2026-10-14): slowest first, so turning the knob up is faster, as the free
+ * rate: 8 4 3 2 1 bars, 1/2 .. 1/256, each dotted (D, 3/2), straight, triplet (T, 2/3); past 256T free periods in
+ * ms. At most 5 characters (params.c F_ENUM): 1/128's and 1/256's T and D drop the "1/" */
+static const char *const N_VA_SYNC[VA_NSYNC + 1u] = {"8BARD", "8BAR", "8BART", "4BARD", "4BAR", "4BART", "3BARD",
+    "3BAR", "3BART", "2BARD", "2BAR", "2BART", "1BARD", "1BAR", "1BART", "1/2D", "1/2", "1/2T", "1/4D", "1/4", "1/4T",
+    "1/8D", "1/8", "1/8T", "1/16D", "1/16", "1/16T", "1/32D", "1/32", "1/32T", "1/64D", "1/64", "1/64T", "128D",
+    "1/128", "128T", "256D", "1/256", "256T", "4ms", "3ms", "2ms", 0};
+/* version 3's divisions (8BAR 4BAR 2BAR 1BAR 1/2 1/4. 1/4 1/4T 1/8. 1/8 1/8T 1/16 16T 1/32) -> their N_VA_SYNC index */
+static const uint8_t VA_DIV3_TO_SYNC[VA_NDIV3] = {1, 4, 10, 13, 16, 18, 19, 20, 21, 22, 23, 25, 26, 28};
 _Static_assert(NELEM(N_VA_SRC) == VS_N && NELEM(N_VA_DST) == VD_N && NELEM(N_VA_WAVE) == VW_N &&
                NELEM(N_VA_OMODE) == VOM_N && VN_N <= VW_N, "VA names");
 
@@ -112,7 +124,7 @@ _Static_assert(NELEM(N_VA_SRC) == VS_N && NELEM(N_VA_DST) == VD_N && NELEM(N_VA_
 #define VC_RES {"RES", F_PCT, 0, 127, 0, 0, 0}
 #define VC_DRIVE {"DRIVE", F_PCT, 0, 127, 0, 0, 0}
 #define VC_FKTRK {"KTRK", F_PCT, 0, 127, 64, 0, 0}
-#define VC_FENV {"FENV", F_BIPCT, -64, 63, 0, 0, 0}
+#define VC_FENV {"FENV", F_FIX2, -6400, 6399, 0, 0, 0}   /* hundredths: VA_FENV x 100 + VA_FENVF (va_get) */
 #define VC_ATK {"ATK", F_TIME, 0, 127, 0, 0, 0}
 #define VC_HOLD {"HOLD", F_TIME, 0, 127, 0, 0, 0}
 #define VC_DEC {"DEC", F_TIME, 0, 127, 64, 0, 0}
@@ -224,8 +236,8 @@ static va_rng_t va_range(uint32_t i)
         r.def = 64;
     } else if (i >= VA_OMODE0 && i < VA_FRSV) {
         r.max = VOM_N - 1;
-    } else if (i == VA_FRSV) {
-        r.max = 0;                                      /* (reserved) */
+    } else if (i == VA_FENVF) {
+        r.max = 99;                                     /* FENV's hundredths */
     }
     return r;
 }
@@ -299,16 +311,16 @@ static void va_pack(const int8_t *p, uint8_t *b)
 static int va_blob_ok(const uint8_t *b)
 {
     uint32_t i, np, len;
-    if (!b || b[0] != VA_MAGIC || (b[1] != VA_VER && b[1] != 2u && b[1] != 1u))
+    if (!b || b[0] != VA_MAGIC || b[1] < 1u || b[1] > VA_VER)
         return 0;
     np = b[1] == 1u ? VA_NP1 : VA_NP;
     len = b[1] == 1u ? VA_BLOB1 : VA_BLOB;
     for (i = 0; i < np; i++) {
         va_rng_t r = va_range(i);
-        if (b[1] < VA_VER && i == VA_FTYPE)
+        if (b[1] < 3u && i == VA_FTYPE)
             r.max = 3;                           /* (version 1 / 2: TYPE) */
-        else if (b[1] < VA_VER && i == VA_FRSV)
-            r.max = 127;                         /* (version 2: MORPH) */
+        else if (b[1] < VA_VER && i == VA_FENVF)
+            r.max = b[1] == 3u ? 0 : 127;        /* (version 3: 0; version 2: MORPH) */
         if (b[2 + i] > (uint32_t)(r.max - r.min))
             return 0;
     }
@@ -330,9 +342,14 @@ static int va_unpack(const uint8_t *b, int8_t *p)
     np = b[1] == 1u ? VA_NP1 : VA_NP;
     for (i = 0; i < np; i++)
         p[i] = (int8_t)(b[2 + i] + va_range(i).min);
-    if (b[1] < VA_VER) {
-        p[VA_FTYPE] = (int8_t)((b[2 + VA_FTYPE] * 32u + (b[1] == 1u ? 0u : b[2 + VA_FRSV])) & 127u);
-        p[VA_FRSV] = 0;
+    if (b[1] < 3u)
+        p[VA_FTYPE] = (int8_t)((b[2 + VA_FTYPE] * 32u + (b[1] == 1u ? 0u : b[2 + VA_FENVF])) & 127u);
+    if (b[1] < VA_VER) {                         /* versions 1..3: FENV whole (x 100: hundredths 0); a synced RATE to
+                                                  * the same division in the version-4 list */
+        p[VA_FENVF] = 0;
+        for (i = 0; i < 4u; i++)
+            if (p[VA_LFO(i, VL_SYNC)])
+                p[VA_LFO(i, VL_RATE)] = (int8_t)VA_DIV3_TO_SYNC[(uint32_t)p[VA_LFO(i, VL_RATE)] * VA_NDIV3 >> 7];
     }
     return 1;
 }
@@ -520,6 +537,10 @@ static int32_t va_get(const track_t *t, uint32_t page, uint32_t col)
     if (tr >= VA_NPART)
         return va_range(i).def;
     v = va_patch[tr][i];
+    if (i == VA_FENV)                            /* hundredths: -64.00 .. +63.99 */
+        return v * 100 + va_patch[tr][VA_FENVF];
+    if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_RATE && va_patch[tr][i + VL_SYNC])
+        return v < (int32_t)VA_NSYNC ? v : (int32_t)VA_NSYNC - 1;   /* (synced: an index into N_VA_SYNC) */
     if (i < VA_SYNC2 && i % VO_N == VO_WAVE && va_patch[tr][VA_OMODE0 + i / VO_N] == VOM_NOISE && v >= VN_N)
         v = VN_WHITE;                            /* (NOISE: a stored wave above VINYL plays WHITE) */
     return v;
@@ -535,9 +556,13 @@ static const param_desc_t VA_D_WAVE[VOM_N] = {
 };
 static const param_desc_t VA_D_SHAPE[4] = {{"MORPH", F_PCT, 0, 127, 0, 0, 0}, {"COLOR", F_PCT, 0, 127, 0, 0, 0},
                                            {"DENS", F_PCT, 0, 127, 0, 0, 0}, VC_SHAPE};
+/* LFO n's RATE with its SYNC on: the list (one item a detent: cr_pages.c kn_list; OPT snaps to the straight ones) */
+static const param_desc_t VA_D_SRATE = {"RATE", F_ENUM, 0, VA_NSYNC - 1, 19, N_VA_SYNC, 0};
 static const param_desc_t *va_desc(const track_t *t, uint32_t page, uint32_t col)
 {
     uint32_t tr = va_tr(t), k = page >> 1, mode, w;
+    if (page >= 18u && page < 22u && !col)       /* LFO n: RATE, synced or free */
+        return tr < VA_NPART && va_patch[tr][VA_LFO(page - 18u, VL_SYNC)] ? &VA_D_SRATE : 0;
     if (page >= 8u || col != (page & 1u))       /* OSC n: WAVE (col 0); OSC n+: SHAPE (col 1) */
         return 0;
     mode = tr < VA_NPART ? (uint32_t)va_patch[tr][VA_OMODE0 + k] : VOM_BASIC;
@@ -561,8 +586,21 @@ static void va_set(track_t *t, uint32_t page, uint32_t col, int32_t v)
         return;
     if (i < VA_SYNC2 && i % VO_N == VO_WAVE && va_patch[tr][VA_OMODE0 + i / VO_N] == VOM_NOISE)
         v = clamp(v, 0, VN_N - 1);               /* NOISE: WAVE is the noise type */
+    if (i == VA_FENV) {                          /* hundredths: the whole part (floor) here, the rest in VA_FENVF */
+        v = clamp(v, -6400, 6399);
+        va_patch[tr][VA_FENVF] = (int8_t)((v + 6400) % 100);
+        v = (v + 6400) / 100 - 64;
+    }
+    if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_RATE && va_patch[tr][i + VL_SYNC])
+        v = clamp(v, 0, (int32_t)VA_NSYNC - 1);  /* (synced: the list) */
     old = va_patch[tr][i];
     va_patch[tr][i] = va_clampv(i, v);
+    if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_SYNC && va_patch[tr][i] != old) {
+        int8_t *r = &va_patch[tr][i - VL_SYNC + VL_RATE];   /* SYNC switched: RATE to the same place in the other
+                                                             * scale (0..127 <-> the list), so on lands near as fast */
+        *r = (int8_t)(old ? clamp(*r, 0, (int32_t)VA_NSYNC - 1) * 128 / (int32_t)VA_NSYNC
+                          : (int32_t)*r * (int32_t)VA_NSYNC >> 7);
+    }
     if (i >= VA_OMODE0 && i < VA_FRSV && va_patch[tr][i] == VOM_NOISE && old != VOM_NOISE) {   /* -> NOISE: a type,
                                                                                                 * no key tracking */
         k = i - VA_OMODE0;
@@ -646,19 +684,30 @@ static void va_track_loaded(const track_t *ct)
 }
 
 /* ------------------------------------------------------------ the ISR --- */
-/* LFO SYNC: a division's phase increment per control tick and BPM, Q4 (2^32 * CTL / (FS * 60 * beats) * 16; at
- * 300 BPM the largest is 2.0e9) */
-static const uint32_t VA_DIV_Q4[VA_NDIV] = {25971, 51942, 103884, 207769, 415537, 554050, 831075, 1246612, 1108099,
-                                            1662149, 2493224, 3324298, 4986447, 6648596};
+/* LFO SYNC: N_VA_SYNC's phase increments per control tick (CTL = 32 samples at 44.1 kHz). A division of n / d beats:
+ * per BPM, Q8 (2^32 x 32 / (44100 x 60) / beats x 256 = 2^45 d / (2646000 n); the largest, 256T at 1/96 beat, 1.28e9;
+ * the smallest, 8BARD at 48 beats, 277k: 1/277k at 1 BPM, exact to 4e-6); x BPM >> 8 in 64 bits (256T at 300 BPM:
+ * 1.5e9, 480 Hz). Past 256T a free period of m ms (VA_MS: the increment itself, 2^32 x 32000 / (44100 m); 2 ms is
+ * 1.56e9, 500 Hz: under the control rate's half, 689 Hz) */
+#define VA_SQ8(n, d) (uint32_t)((35184372088832ull * (d) + 1323000ull * (n)) / (2646000ull * (n)))
+#define VA_MS(m) (uint32_t)((137438953472000ull + 22050ull * (m)) / (44100ull * (m)))
+#define VA_SB(b) VA_SQ8(6 * (b), 1), VA_SQ8(4 * (b), 1), VA_SQ8(8 * (b), 3)   /* b bars: dotted, straight, triplet */
+#define VA_SN(n, d) VA_SQ8(3 * (n), 2 * (d)), VA_SQ8(n, d), VA_SQ8(2 * (n), 3 * (d))   /* a note of n / d beats */
+static const uint32_t VA_SYNC_Q8[VA_NSYNC] = {VA_SB(8), VA_SB(4), VA_SB(3), VA_SB(2), VA_SB(1), VA_SN(2, 1),
+    VA_SN(1, 1), VA_SN(1, 2), VA_SN(1, 4), VA_SN(1, 8), VA_SN(1, 16), VA_SN(1, 32), VA_SN(1, 64), VA_MS(4), VA_MS(3),
+    VA_MS(2)};
+#define VA_SYNC_MS0 39u          /* N_VA_SYNC's first free period */
 
-static uint32_t va_lfo_inc(const int8_t *p, uint32_t l, int32_t rate)
+/* LFO l's increment from its RATE and the matrix's RATEn (off: +-127, a full turn of the 128 values; synced: of the
+ * list, so the same share of it) */
+static uint32_t va_lfo_inc(const int8_t *p, uint32_t l, int32_t rate, int32_t off)
 {
-    rate = clamp(rate, 0, 127);
     if (p[VA_LFO(l, VL_SYNC)]) {
-        int32_t bpm = clamp(song.g[G_BPM], 20, 300);
-        return (VA_DIV_Q4[(uint32_t)rate * VA_NDIV >> 7] * (uint32_t)bpm) >> 4;
+        uint32_t bpm = (uint32_t)clamp(song.g[G_BPM], 20, 300), i;
+        i = (uint32_t)clamp(rate + ((off * (int32_t)VA_NSYNC) >> 7), 0, (int32_t)VA_NSYNC - 1);
+        return i >= VA_SYNC_MS0 ? VA_SYNC_Q8[i] : (uint32_t)(((uint64_t)VA_SYNC_Q8[i] * bpm) >> 8);
     }
-    return LFO_INC[rate];
+    return LFO_INC[clamp(rate + off, 0, 127)];
 }
 
 static uint32_t va_xs(uint32_t s)                /* xorshift32 (S&H; its own: the shared rng is not touched) */
@@ -682,11 +731,13 @@ static void va_block(track_t *t)
         if (t->p[P_E0 + k] != va_mlast[tr][k]) {
             va_mlast[tr][k] = t->p[P_E0 + k];
             p[VA_MACRO[k]] = va_clampv(VA_MACRO[k], t->p[P_E0 + k]);
+            if (VA_MACRO[k] == VA_FENV)
+                p[VA_FENVF] = 0;                 /* (the macro is FENV's whole number) */
         }
     for (k = 0; k < 4u; k++) {
         uint32_t old = va_lfo[tr].ph[k], ph;
         int32_t x;
-        ph = va_lfo[tr].ph[k] = old + va_lfo_inc(p, k, p[VA_LFO(k, VL_RATE)] + va_rate_off[tr][k]);
+        ph = va_lfo[tr].ph[k] = old + va_lfo_inc(p, k, p[VA_LFO(k, VL_RATE)], va_rate_off[tr][k]);
         if (ph < old)
             va_lfo[tr].rnd[k] = va_xs(va_lfo[tr].rnd[k] + k);
         switch (p[VA_LFO(k, VL_WAVE)]) {
@@ -1146,6 +1197,9 @@ CR_HOT_VA static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *si
     /* the filter: cutoff from CUT, ENV 2 by FENV, KTRK, the track's (ENV / LFO -> FLT), the matrix */
     cut = (p[VA_CUT] << 8) + ((env[1] * (dfenv ? clamp(p[VA_FENV] + (dfenv >> 15), -64, 63) : p[VA_FENV])) >> 6) + (((m->pitch16 - 60 * 16) * p[VA_FKTRK] * 150) >> 10) +
           m->cutoff + (dcut >> 7);
+    if (p[VA_FENVF])                             /* FENV's hundredths: ENV 2 x f / 6400 (x 41 >> 18: 1 / 6394; a
+                                                  * voice a tick, two multiplies; 0: the sound of before, bit for bit) */
+        cut += (((env[1] * p[VA_FENVF]) >> 6) * 41) >> 12;
     kd = 8192 - clamp(p[VA_RES] + (dres >> 14), 0, 127) * 60;
     spr = dspr ? clamp(p[VA_FSPREAD] + (dspr >> 14), 0, 127) : p[VA_FSPREAD];   /* SPREAD: the left SVF's cutoff
                                                                                   * down, the right's up, +-1 octave */

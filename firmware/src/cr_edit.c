@@ -610,31 +610,6 @@ static const param_desc_t *ce_param(const track_t *t, ce_ref_t r, int32_t *v)
     return 0;
 }
 
-#ifdef ENGI_VA
-/* an LFO page's RATE reads as a division: its LFO's SYNC on (a "SYNCn" column in the LFO section, or a "SYNC" column
- * on a page of the same LFO) */
-static int ce_synced(const track_t *t, uint32_t pg)
-{
-    const eng_deep_t *d = ce_deep(t);
-    uint32_t a, b, p, n;
-    int32_t k;
-    char l[6] = "SYNC0";
-    if (!d || pg >= d->npages)
-        return 0;
-    ce_range(d, CE_LFO, &a, &b);
-    if (pg < a || pg >= b || !(n = ce_inst(d->pages[pg].title)))
-        return 0;
-    l[4] = (char)('0' + n);
-    for (p = a; p < b; p++) {
-        if ((k = cp_dcol(&d->pages[p], l)) >= 0)
-            return d->get(t, p, (uint32_t)k) != 0;
-        if (ce_inst(d->pages[p].title) == n && (k = cp_dcol(&d->pages[p], "SYNC")) >= 0)
-            return d->get(t, p, (uint32_t)k) != 0;
-    }
-    return 0;
-}
-#endif
-
 /* the value text as the mock-ups write it: "683 ms", "643 Hz", "+7", "-12", "on" (Felucca's numbers and names) */
 static void ce_text(const track_t *t, ce_ref_t r, const param_desc_t *d, int32_t v, char *out, uint32_t n)
 {
@@ -646,15 +621,9 @@ static void ce_text(const track_t *t, ce_ref_t r, const param_desc_t *d, int32_t
         return;
     }
     param_format(d, v, val, &unit);
-#ifdef ENGI_VA
-    if (r.k == CE_R_DEEP && t->eng_req == ENGI_VA && cp_eq(d->label, "RATE") && ce_synced(t, r.a)) {
-        cu_cpy(out, N_VA_DIV[(uint32_t)clamp(v, 0, 127) * VA_NDIV / 128u], n);   /* a synced LFO: a division */
-        return;
-    }
-#else
-    (void)t;
+    (void)t;                                                    /* (a synced VA LFO's RATE: its descriptor is the
+                                                                 * division list, eng_va.c va_desc) */
     (void)r;
-#endif
     if (d->fmt == F_SEMI || d->fmt == F_DB || (d->fmt == F_INT && d->unit && cu_eq(d->unit, "ct")))
         unit = "";                                              /* (coarse / fine / transpose / level: the number) */
     if (val[0] == '.') {                                        /* ".69" -> "0.69" */

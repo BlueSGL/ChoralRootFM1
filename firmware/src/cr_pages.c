@@ -147,6 +147,25 @@ static int kn_list(const param_desc_t *d)
         k++;
     return (k == n && n <= 64u) || (k > 1u && k * k == n);
 }
+/* a tempo division's name that is a triplet or dotted one ("1/4T", "1/16D", "2BART", "128D": a T or D last) */
+static int kn_td(const char *n)
+{
+    uint32_t l = n ? str_len(n) : 0u;
+    return l > 1u && (n[l - 1u] == 'T' || n[l - 1u] == 'D');
+}
+/* a list of tempo divisions with triplets and dotted ones (VA's synced LFO RATE, eng_va.c N_VA_SYNC): an F_ENUM
+ * "RATE" whose names hold "1/4T". OPT held steps the straight ones (and the free ms past them) */
+static int kn_divs(const param_desc_t *d)
+{
+    int32_t k;
+    const char *n;
+    if (d->fmt != F_ENUM || !d->names || !kn_lab(d, "RATE"))
+        return 0;
+    for (k = d->min; k <= d->max; k++)
+        if ((n = d->names[k]) != 0 && n[0] == '1' && n[1] == '/' && n[2] == '4' && n[3] == 'T' && !n[4])
+            return 1;
+    return 0;
+}
 /* THE SNAP GRID: OPT's targets are the multiples of the grid from the anchor, and both ends; 0: no snap (one step
  * a detent, as a small range steps anyway). A range's grid is the nice number nearest (geometric) to 1/8 of it
  * (centred: 1/16): 0..127 -> 16 (0 16 .. 112 127), -64..63 -> 8, 0..99 / 0..100 -> 10, -50..50 -> 5, 0..120 -> 16,
@@ -227,6 +246,15 @@ static int32_t cp_dstep(const param_desc_t *d, int32_t v0, int32_t s, uint32_t s
     }
     if (!kn_list(d))
         return snap ? kn_snap(d, v0, s) : kn_lin(v0, s, d->min, d->max);
+    if (snap && kn_divs(d)) {                            /* a tempo division list, OPT: the straight ones only */
+        for (v = clamp(v0, d->min, d->max); s > 0 && v < d->max; s--)
+            for (v++; v < d->max && kn_td(d->names[v]); v++)
+                ;
+        for (; s < 0 && v > d->min; s++)
+            for (v--; v > d->min && kn_td(d->names[v]); v--)
+                ;
+        return v;
+    }
     v = clamp(v0 + s, d->min, d->max);
     if (d->fmt == F_ENUM && v != v0)
         v = enum_step(d, v0, v);

@@ -224,7 +224,8 @@ ok(same(s1.record, recs6[0]) && s1.name === "MY PAD" && s1.engine === 13 && s1.k
   ok(throwsMsg(() => readSoundFile(mut((o) => { o.record = b64(recs6[3]); o.engine = 0; })), /not the kind of its engine ANALOG/), "file: a patch for an engine without one");
   ok(throwsMsg(() => readSoundFile(mut((o) => { o.patch.data = b64(blobs.va1.subarray(0, 100)); })), /100 bytes, not 110/), "file: wrong blob length");
   ok(throwsMsg(() => readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[0] = 0x57; o.patch.data = b64(b); })), /magic or version/) &&
-     throwsMsg(() => readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[1] = 4; o.patch.data = b64(b); })), /magic or version/), "file: VA blob magic / version");
+     throwsMsg(() => readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[1] = 5; o.patch.data = b64(b); })), /magic or version/), "file: VA blob magic / version");
+  ok(readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[1] = 4; o.patch.data = b64(b); })).patch[1] === 4, "file: a version-4 VA blob (FENV hundredths, the sync list) reads");
   const fm = exportSound(src, 2);
   ok(throwsMsg(() => readSoundFile({ ...fm, patch: { kind: "fm6", data: b64(Uint8Array.from(blobs.fm2, (b, i) => (i === 113 ? 2 : b))) } }), /FM6 patch is not/),
      "file: FM6 blob magic");
