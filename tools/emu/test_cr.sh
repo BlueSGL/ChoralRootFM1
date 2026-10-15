@@ -866,8 +866,8 @@ has '^edit: group MOD screen 3 lane 1 part 0$' "$L" && has '^param: part 0 MOD A
 has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD DST4 2 -> 3 (SHP)$' "$L" &&
     ok "SELECT: the AT lane; KNOB 2 takes its default (DST CUT) then steps it to SHP: $OUT/cr_expr_fm6_at.ppm" ||
     bad "EXPR AT lane: $(grep -a '^param: part 0 MOD DST4' "$L" | head -1)"
-[ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 34' "$L")" = 2 ] &&
-    ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid" ||
+[ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 39' "$L")" = 2 ] &&
+    ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid, one detent one unit" ||
     bad "EXPR on the VA / FM TONE: $(grep -ac '^param: part 0 MOD AMT4' "$L") AMT4 lines"
 run cr_editor_map
 L="$OUT/cr_editor_map.log"
