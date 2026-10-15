@@ -2985,3 +2985,28 @@ LICENSING.md, `assets/prophet5-factory/README.md` and docs/PROPHET.md "Open deci
 115 of `shipped.txt`, the owner's decision of 2026-10-13; the other 85 are not on the site either, 3y55); PRESETS.md and
 PROPHET.md no longer say P5 cannot save; the README's status names no version that goes stale; the manual has P5 (the
 engines table, its editor pages), six engines and 128 sounds. Not done: anything on a unit; tagging and the Pages job.
+
+3y66. **The layout tool's p5 style and P5's whole panel as a design (2026-10-14; branch lay-5 from 9698e52, not
+pushed).** The owner: "For the prophet 5, I would like the sound editor UI to better resemble the real prophet 5
+interface." and "I'd like update glyph designs to match with the Prophet 5 knobs and layout, lets do mockups and
+Designer pages first." So the mock-ups come first, in the designer. A design gets `"style"`: absent or `"flat"` (the
+look so far) or `"p5"` (`validateDesign` refuses anything else; the designer's top bar has a Style select; *New from
+today* and the first example stay flat). In the p5 style `freeOps` composes the free screens' elements as the panel
+(`p5Op`): a frame is a rounded section box with its name in capitals in the top border; a knob a face with a 1 px rim
+and a pointer inside a printed 0..10 scale of 11 ticks over the dial's 270 degrees, its name under it, its value inside
+the face when it fits (a name such as LAS R on the row under the label), the face filled in the lane's colour while
+hot; an led the panel's square button with its red LED and the waveform or name above; a switch a lever in a slot with
+the positions' names beside it. The pixels are the firmware's primitives: `layout_web.c` gains `lay_draw_p5knob`
+(`cr_poly` ticks and pointer, `cr_disc` face) and rounded outlines in `lay_draw_rect` (`cr_arc` corners); the module
+includes the firmware whole, so its static helpers are reachable and no firmware file changed. The design:
+`design/layouts/designs/p5-panel.json`, nine free screens over OSC .. MOD (OSC A with the mixer, OSC B, FILTER,
+AMPLIFIER, FILTER ENVELOPE, LFO and SHAPE, WHEEL-MOD, POLY-MOD with SOURCE AMOUNT and DESTINATION, VOICE and GLIDE), all
+56 P5 parameters placed once, FX and MIX classic as today; its contact sheet `design/choralroot-fm1-p5-panel-screens.png`
+by the new `tools/layout/render_sheet.mjs` (any design, every screen x lane at 2x, captions drawn by the module, a PNG
+on node's zlib). Tests (`web/test_layout.mjs` 6): the p5 panel valid with no warning, its 22 screens x lanes lint clean
+and deterministic, no parameter twice, all 56 placed, KNOB 1 on each of its 19 free lanes turns its parameter and
+changes the picture, a knob's value inside its dial, a lit led's dot the firmware's red; `validateDesign` refuses
+`"style": "x"`; the Design-mode self-test opens the p5 panel. The device image is byte-identical by construction:
+`git diff --stat` shows no file under `firmware/` (tools, web, design and docs only). Not done: the firmware cannot
+draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
+firmware will copy when it gets free pages. Nothing on a unit.

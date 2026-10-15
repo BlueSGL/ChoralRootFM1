@@ -244,6 +244,7 @@
   <div id="view-design" hidden>
     <div class="bar" style="border-top:0;margin-top:0">
       <label class="small">Design <input id="d-name" size="14" aria-label="the design's name"></label>
+      <label class="small" title="how the free screens' elements look: flat (the editor's) or p5 (the Prophet-5's panel)">Style <select id="d-style" aria-label="the design's element style"><option value="flat">flat</option><option value="p5">p5</option></select></label>
       <select id="d-example" aria-label="Open a design shipped with the tool"></select>
       <button id="d-today" title="a new design: today's layout, every screen classic">New from today</button>
       <button id="d-import" title="open a design JSON file">Import&hellip;</button>
@@ -622,6 +623,7 @@ function undoRedo(from, to) {
   const d = JSON.parse(from.pop());
   ds.design.groups = d.groups;
   ds.design.name = d.name;
+  if (d.style) ds.design.style = d.style; else delete ds.design.style;
   ds.sel.clear();
   afterChange();
 }
@@ -644,6 +646,7 @@ function dturn(k, n) {
 function dRender() {
   if (!ds.design) return;
   $("d-name").value = ds.design.name || "";
+  $("d-style").value = ds.design.style || "flat";
   dNav();
   dScreen();
   dLanes();
@@ -853,7 +856,7 @@ function dInspector() {
   if (e.type === "led") host.append(field("Glyph", sel(["", ...Object.keys(LED_GLYPHS)], e.glyph || "", (v) => eset((y) => { y.glyph = v || null; }))));
   if (e.type === "glyph") host.append(field("Glyph", sel(GLYPHS.slice(1), e.glyph, (v) => eset((y) => { y.glyph = v; }))));
   if (e.type === "band") host.append(field("Band", sel(BANDS.slice(1), e.band, (v) => eset((y) => { y.band = v; }))));
-  if (e.type === "knob") host.append(field("Dial size", sel(["24", "28", "32", "36", "40"], String(e.size || 32), (v) => eset((y) => { y.size = +v; }))));
+  if (e.type === "knob") { const st5 = ds.design.style === "p5" ? "p5" : "flat"; host.append(field("Dial size", sel(KNOB_SIZES[st5].map(String), String(knobSize(e, st5)), (v) => eset((y) => { y.size = +v; })))); }
   if (e.type === "label") {
     host.append(field("Size", sel(["9", "10", "11", "12", "13", "15", "17"], String(e.size || 11), (v) => eset((y) => { y.size = +v; }))));
     host.append(field("Align", sel(["left", "centre", "right"], e.align || "left", (v) => eset((y) => { y.align = v; }))));
@@ -888,7 +891,7 @@ function bindParam(id, target) {   // a parameter onto a classic slot, or onto a
   } else if (target.slot && s.type === "free") {   // onto a free lane slot: a new knob for it
     const [li, k] = target.slot.split(".").map(Number);
     commit((d) => {
-      const sc = d.groups[ds.gi].screens[ds.si], e = newElement(sc, "knob", 8, HEADER_H + 4, id);
+      const sc = d.groups[ds.gi].screens[ds.si], e = newElement(sc, "knob", 8, HEADER_H + 4, id, d.style);
       sc.elements.push(e);
       sc.lanes[li][k] = e.id;
     });
@@ -946,7 +949,7 @@ document.addEventListener("pointerup", (ev) => {
     if (s.type !== "free") { dmsg("Elements go on free screens: add one with New screen > free.", true); return; }
     let id = null;
     commit((x) => {
-      const sc = x.groups[ds.gi].screens[ds.si], e = newElement(sc, d.type, p.x, Math.max(HEADER_H + 4, p.y));
+      const sc = x.groups[ds.gi].screens[ds.si], e = newElement(sc, d.type, p.x, Math.max(HEADER_H + 4, p.y), null, x.style);
       e.x = Math.min(e.x, SCREEN - e.w); e.y = Math.min(e.y, SCREEN - e.h);
       sc.elements.push(e);
       id = e.id;
@@ -995,7 +998,7 @@ function alignSel(how) {
   if (how === "del") { commit((d) => { const sc = d.groups[ds.gi].screens[ds.si]; sc.elements = sc.elements.filter((e) => !ds.sel.has(e.id)); sc.lanes = sc.lanes.map((l) => l.map((x) => (ds.sel.has(x) ? null : x))); }); ds.sel.clear(); dRender(); return; }
   if (how === "dup") {
     const made = [];
-    commit((d) => { const sc = d.groups[ds.gi].screens[ds.si]; for (const id of ids) { const o = sc.elements.find((e) => e.id === id), e = newElement(sc, o.type, o.x + 8, o.y + 8); Object.assign(e, { ...o, id: e.id, x: Math.min(o.x + 8, SCREEN - o.w), y: Math.min(o.y + 8, SCREEN - o.h) }); if (e.param) e.param = null; sc.elements.push(e); made.push(e.id); } });
+    commit((d) => { const sc = d.groups[ds.gi].screens[ds.si]; for (const id of ids) { const o = sc.elements.find((e) => e.id === id), e = newElement(sc, o.type, o.x + 8, o.y + 8, null, d.style); Object.assign(e, { ...o, id: e.id, x: Math.min(o.x + 8, SCREEN - o.w), y: Math.min(o.y + 8, SCREEN - o.h) }); if (e.param) e.param = null; sc.elements.push(e); made.push(e.id); } });
     ds.sel = new Set(made); dRender(); return;
   }
   commit((d) => {
@@ -1100,6 +1103,7 @@ function designWire() {
   knobs("d-knobs", dturn, "d");
   for (const b of $("d-align").querySelectorAll("button")) b.addEventListener("click", () => alignSel(b.dataset.al));
   $("d-name").addEventListener("change", () => commit((d) => { d.name = $("d-name").value.trim() || "design"; }));
+  $("d-style").addEventListener("change", () => commit((d) => { if ($("d-style").value === "p5") d.style = "p5"; else delete d.style; }));
   $("d-search").addEventListener("input", dParams);
   $("d-undo").addEventListener("click", () => undoRedo(ds.undo, ds.redo));
   $("d-redo").addEventListener("click", () => undoRedo(ds.redo, ds.undo));
@@ -1194,6 +1198,9 @@ async function selftestDesign() {
   dSheetToggle(true);
   res.push($("d-sheetview").querySelectorAll("figure").length === tiles(st.cat).length + designTiles(ds.design).length);   // 6
   dSheetToggle(false);
+  const k5 = Object.keys(shipped).find((x) => /p5-panel/.test(x));                                // 7: the p5-style panel
+  res.push(!!k5 && dOpen(JSON.parse(JSON.stringify(shipped[k5])), "the shipped design") && $("d-style").value === "p5" &&
+           curScreen().type === "free" && ds.last && ds.last.ops.some((o) => o.op === "p5knob") && inkCount(px()) > 500);
   const host = $("selftest");
   host.hidden = false;
   host.dataset.result = res.map((r) => (r ? 1 : 0)).join("");

@@ -85,6 +85,7 @@ export function wrap(ex) {
         else if (o.op === "rect") ex.lay_draw_rect(o.x, o.y, o.w, o.h, o.col, o.r || 0, o.line || 0);
         else if (o.op === "glyph") ex.lay_draw_glyph(o.g, o.x, o.y, o.w, o.h, o.col, o.pct || 0, o.pct2 || 0, o.flags || 0);
         else if (o.op === "knob") ex.lay_draw_knob(o.cx, o.cy, o.size, o.col, o.pct || 0, o.bip ? 1 : 0);
+        else if (o.op === "p5knob") ex.lay_draw_p5knob(o.cx, o.cy, o.size, o.face, o.rim, o.tick, o.ptr, o.pct || 0, o.bip ? 1 : 0, o.from || 0);
         else if (o.op === "hbar") ex.lay_draw_hbar(o.x, o.y, o.w, o.h, o.col, o.pct || 0, o.bip ? 1 : 0);
         else if (o.op === "band") {
           const p = buf + 64000;
@@ -248,8 +249,15 @@ export const BINDABLE = new Set(["knob", "switch", "led", "bar", "glyph"]);
 export const LED_GLYPHS = { saw: [4, 0], square: [5, 0], triangle: [22, 0], sine: [3, 0], noise: [9, 0] };
 export const ELEMENT_SIZE = { frame: [112, 96], label: [48, 12], knob: [56, 64], switch: [56, 64], led: [52, 12],
                               bar: [56, 28], glyph: [40, 24], band: [240, 96] };
+// a design's element style ("style": absent = "flat", the editor's look; "p5" = the Prophet-5's panel: framed sections
+// titled in the border, knobs with a 0..10 scale, LED buttons, lever switches; docs/LAYOUT-TOOL.md "The p5 style")
+export const STYLES = ["flat", "p5"];
+const P5_SIZE = { knob: [56, 64], switch: [56, 64], led: [40, 28] };
+export const elementSize = (type, style) => (style === "p5" && P5_SIZE[type]) || ELEMENT_SIZE[type];
+export const KNOB_SIZES = { flat: [24, 28, 32, 36, 40], p5: [28, 32, 36, 40, 44] };
+export const knobSize = (e, style) => e.size || (style === "p5" ? 36 : 32);
 export const CLASSIC_KINDS = ["edit8", "stack"];
-const DIM = COLOURS.dim, MID = COLOURS.mid, LINE = COLOURS.line, BG = COLOURS.bg, TEXT = COLOURS.text;
+const DIM = COLOURS.dim, MID = COLOURS.mid, LINE = COLOURS.line, BG = COLOURS.bg, TEXT = COLOURS.text, SURF = COLOURS.surf, RED = COLOURS.red;
 
 // ------------------------------------------------------------- parameters ---
 const cap = (s) => (s ? s[0] + s.slice(1).toLowerCase() : "");
@@ -317,9 +325,9 @@ export function newClassicScreen(kind = "edit8", title = "NEW") {
            lanes: Array.from({ length: n }, () => ({ title, cells: [null, null, null, null] })) };
 }
 export function newFreeScreen(title = "NEW") { return { type: "free", title, elements: [], lanes: [] }; }
-// a new element of a type at (x, y), snapped; id unique in the screen
-export function newElement(screen, type, x, y, param = null) {
-  const [w, h] = ELEMENT_SIZE[type];
+// a new element of a type at (x, y), snapped; id unique in the screen; its size the design's style's
+export function newElement(screen, type, x, y, param = null, style = "flat") {
+  const [w, h] = elementSize(type, style);
   let n = screen.elements.length + 1;
   while (screen.elements.some((e) => e.id === `e${n}`)) n++;
   const e = { id: `e${n}`, type, x: snap(type === "band" ? 0 : x), y: snap(type === "band" ? 24 : y), w, h };
@@ -327,7 +335,7 @@ export function newElement(screen, type, x, y, param = null) {
   if (type === "frame" || type === "label") e.text = type === "frame" ? "SECTION" : "Label";
   if (type === "switch") e.positions = 2;
   if (type === "led") e.glyph = null;
-  if (type === "knob") e.size = 32;
+  if (type === "knob") e.size = style === "p5" ? 36 : 32;
   if (type === "glyph") e.glyph = "wave";
   if (type === "band") e.band = "env";
   return e;
@@ -347,6 +355,7 @@ export function validateDesign(d, cat) {
   if (d.kind !== "design") err(`"kind" must be "design"`);
   if (!d.engine || d.engine.index !== cat.engine.index) err(`engine ${(d.engine || {}).name}: this catalog is ${cat.engine.name}`);
   if (d.params_hash !== cat.params_hash) err(`made for other parameters (params_hash ${d.params_hash}, the firmware's ${cat.params_hash})`);
+  if (d.style !== undefined && !STYLES.includes(d.style)) err(`style "${d.style}" (${STYLES.join(", ")}; none = flat)`);
   if (!d.header || d.header.kind !== "title-line") err(`"header" must be {"kind": "title-line"}: the shared header is the editor's title line`);
   if (!Array.isArray(d.groups)) { err(`"groups" must be a list`); return { errors, warnings }; }
   const pidx = paramIndex(paramList(cat)), gnames = new Set(cat.groups.map((g) => g.name));
@@ -525,7 +534,7 @@ export function laneMap(screen) {
 }
 const pctOf = (p, v) => (p && p.max > p.min ? Math.max(0, Math.min(255, Math.round((v - p.min) * 255 / (p.max - p.min)))) : 0);
 // the free screen as draw calls (the module's lay_draw_*). value(param) -> {v, text}; opts: {lane (the active one),
-// hot (an element id: its value on a block), wv: {band: [20]}, measure(text, px, bold) -> px}
+// hot (an element id: its value on a block), wv: {band: [20]}, measure(text, px, bold) -> px, style ("p5": p5Op)}
 export function freeOps(screen, params, value, opts = {}) {
   const ops = [], { at } = laneMap(screen), active = opts.lane || 0;
   const measure = opts.measure || ((t, px) => Math.ceil(t.length * px * 0.62));
@@ -539,6 +548,7 @@ export function freeOps(screen, params, value, opts = {}) {
     const p = e.param ? params.get(e.param) : null, val = p ? value(p) : { v: 0, text: "" };
     const col = colour(e), lab = e.label !== undefined && e.label !== null ? e.label : p ? p.label : "";
     const cx = e.x + (e.w >> 1), hot = opts.hot === e.id;
+    if (opts.style === "p5" && p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit: at.get(e.id) && at.get(e.id).lane === active })) continue;
     switch (e.type) {
       case "frame": {
         ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, line: 1 });
@@ -570,9 +580,7 @@ export function freeOps(screen, params, value, opts = {}) {
         for (let i = 0; i < n; i++) {
           const y = e.y + 16 + i * 14, on = i === cur;
           ops.push({ op: "rect", x: e.x + 4, y, w: 8, h: 8, col: on ? col : DIM, line: on ? 0 : 1 });
-          const v = p ? p.min + Math.round(i * (p.max - p.min) / (n - 1)) : i;
-          const name = (e.names && e.names[i]) || (p && p.names && p.names[v - (p.fmt === "enum" ? p.min : 0)]) || (n === 2 ? ["Off", "On"][i] : ["Lo", "Mid", "Hi"][i]);
-          ops.push({ op: "text", bold: 1, px: 10, x: e.x + 16, y: y + 8, s: String(name), col: on ? col : DIM, maxw: e.w - 18 });
+          ops.push({ op: "text", bold: 1, px: 10, x: e.x + 16, y: y + 8, s: switchName(e, p, n, i), col: on ? col : DIM, maxw: e.w - 18 });
         }
         break;
       }
@@ -604,6 +612,68 @@ export function freeOps(screen, params, value, opts = {}) {
     }
   }
   return ops;
+}
+
+// The p5 style: the Prophet-5's panel drawn by the same primitives (the tool's proposal, as freeOps). A frame is a
+// rounded section box, its name in capitals in the top border; a knob a black face with a white pointer inside a printed
+// 0..10 scale, its name under it, its value inside the face (or, a name too wide, on the row under the label); an led
+// the panel's square button with its red LED, the waveform or name above; a switch a lever in a slot, the positions'
+// names beside it. The rest as flat. -> true when it drew e
+function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
+  switch (e.type) {
+    case "frame": {
+      ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, r: 3, line: 1 });
+      if (e.text) {
+        const t = e.text.toUpperCase(), tw = Math.min(measure(t, 10, true), e.w - 12);
+        ops.push({ op: "rect", x: cx - (tw >> 1) - 3, y: e.y - 5, w: tw + 6, h: 10, col: BG });
+        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 4, s: t, col: MID, align: 1, maxw: e.w - 12 });
+      }
+      return true;
+    }
+    case "knob": {
+      const size = knobSize(e, "p5"), r = (size >> 1) - 6, cy = e.y + (size >> 1), vt = val.text || "";
+      // inside when it fits (a parameter of value names: when the widest does, so the value never jumps rows)
+      const inside = Math.max(...[vt, ...((p && p.names) || [])].map((t) => measure(String(t), 9, true))) <= 2 * r - 4;
+      ops.push({ op: "p5knob", cx, cy, size, face: hot ? col : SURF, rim: MID, tick: LINE, ptr: hot ? BG : col,
+                 pct: pctOf(p, val.v), bip: p && p.min < 0 && p.max > 0, from: inside ? 70 : 30 });   // (a short pointer clears the value)
+      if (inside) ops.push({ op: "text", bold: 1, px: 9, x: cx, y: cy + 3, s: vt, col: hot ? BG : col, align: 1 });
+      ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + 12, s: lab, col, align: 1, maxw: e.w - 2 });
+      if (!inside) {
+        if (hot) ops.push({ op: "rect", x: e.x + 3, y: e.y + size + 15, w: e.w - 6, h: 12, col, r: 2 });
+        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + 24, s: vt, col: hot ? BG : col, align: 1, maxw: e.w - 4 });
+      }
+      return true;
+    }
+    case "led": {
+      const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM;
+      if (e.glyph && LED_GLYPHS[e.glyph]) {
+        const [g, wave] = LED_GLYPHS[e.glyph];
+        ops.push({ op: "glyph", g, x: cx - 10, y: e.y, w: 20, h: 10, col: ink, pct: g === 22 ? 0 : 128, pct2: g === 22 ? wave : 0 });
+      } else {
+        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 9, s: lab, col: ink, align: 1, maxw: e.w - 2 });
+      }
+      ops.push({ op: "rect", x: cx - 8, y: e.y + 14, w: 16, h: 12, col: SURF, r: 2 });
+      ops.push({ op: "rect", x: cx - 8, y: e.y + 14, w: 16, h: 12, col: MID, r: 2, line: 1 });
+      ops.push({ op: "rect", x: cx - 2, y: e.y + 12, w: 4, h: 4, col: on ? RED : DIM, line: on ? 0 : 1 });
+      return true;
+    }
+    case "switch": {
+      const n = e.positions === 3 ? 3 : 2, cur = p && p.max > p.min ? Math.round((val.v - p.min) * (n - 1) / (p.max - p.min)) : 0;
+      const sx = e.x + 4, sy = e.y + 16;
+      ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 10, s: lab, col, align: 1, maxw: e.w - 2 });
+      ops.push({ op: "rect", x: sx, y: sy, w: 8, h: 12 * n, col: LINE, r: 2, line: 1 });
+      ops.push({ op: "rect", x: sx + 1, y: sy + 12 * cur + 2, w: 6, h: 8, col });
+      for (let i = 0; i < n; i++)
+        ops.push({ op: "text", bold: 1, px: 10, x: sx + 13, y: sy + 12 * i + 10, s: switchName(e, p, n, i), col: i === cur ? col : DIM, maxw: e.w - 18 });
+      return true;
+    }
+  }
+  return false;
+}
+// a switch's position i of n: the element's names, else the parameter's value names, else Off / On (Lo Mid Hi)
+function switchName(e, p, n, i) {
+  const v = p ? p.min + Math.round(i * (p.max - p.min) / (n - 1)) : i;
+  return String((e.names && e.names[i]) || (p && p.names && p.names[v - (p.fmt === "enum" ? p.min : 0)]) || (n === 2 ? ["Off", "On"][i] : ["Lo", "Mid", "Hi"][i]));
 }
 
 // ---------------------------------------------------------- design checks ---
@@ -748,7 +818,7 @@ export function designSession(m, cat, design, preset = 1) {
       }
       const st = m.state();
       const value = (p) => ({ v: m.pget(p.page, p.col), text: m.ptext(p.page, p.col) });
-      const ops = freeOps(s, params, value, { lane: at.lane, hot, wv, measure: (t, px, b) => m.textW(t, px, b) });
+      const ops = freeOps(s, params, value, { lane: at.lane, hot, wv, measure: (t, px, b) => m.textW(t, px, b), style: design.style });
       const rgba = m.draw(st.sound, s.title, ops);
       return { rgba, lint: m.lint(), checks: checkScreen(s, params, { measure: (t, px, b) => m.textW(t, px, b) }), free: true,
                unbuildable: "a free screen: the firmware has no free pages yet", state: st, ops };

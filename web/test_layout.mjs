@@ -14,7 +14,9 @@
 // 6. The designer (steps 3 and 4): the design format's round trip and its validation; lay_load of a classic design
 //    that only relabels (every frame today's but the relabelled text), one that swaps two parameters (the knobs turn
 //    the right ones); the free-screen draw API on design/layouts/designs/p5-osc-panel.json (deterministic, lint clean,
-//    the knobs turn its parameters); and the page in Design mode (?selftest=design: a scripted drag adds an element,
+//    the knobs turn its parameters); the p5 style on design/layouts/designs/p5-panel.json (the same checks, all 56
+//    parameters placed, a knob turn on every lane, a knob's value inside its face, a lit led's red dot); and the page in
+//    Design mode (?selftest=design: a scripted drag adds an element,
 //    the export equals the model, the contact sheet has today's and the design's tiles).
 // 5. The page: web/layout.html made into TEST_TMP/page (tools/layout/make_page.py), opened from file:// by headless
 //    Chromium with ?selftest=1; the page checks itself (the canvas is drawn, a knob click changes it, the contact
@@ -274,6 +276,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     "a colour that is not a token": (d) => { d.groups[0].screens[0].elements[1].colour = "#ff0000"; },
     "a lane naming no element": (d) => { d.groups[0].screens[0].lanes[0][0] = "nothing"; },
     "an element bound to a key": (d) => { d.groups[0].screens[0].elements[1].key = 12; },
+    "an unknown style": (d) => { d.style = "x"; },
   };
   const missed = Object.entries(broken).filter(([, f]) => { const d = free(); f(d); return L.validateDesign(d, cat).errors.length === 0; }).map(([k]) => k);
   ok(!missed.length, `validateDesign catches each of ${Object.keys(broken).length} broken designs` + (missed.length ? ` (missed: ${missed.join(", ")})` : ""));
@@ -364,6 +367,56 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   ok(/^ITS|\w/.test(st0.state.sound) && st0.lint.texts.some((x) => x.text === "OSC B") && st0.lint.texts.some((x) => x.text === st0.state.sound),
      `the shared header on a free screen: the editor's title line ("${st0.state.sound}" | "OSC B")`);
   m.unload();
+
+  // the p5 style: design/layouts/designs/p5-panel.json, P5's whole engine on nine free screens in the panel's look
+  const pan = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
+  const pv = L.validateDesign(pan, cat);
+  ok(pan.style === "p5" && !pv.errors.length && !pv.warnings.length, "design/layouts/designs/p5-panel.json: style p5, valid, no warning" +
+     (pv.errors.length || pv.warnings.length ? ` (${[...pv.errors, ...pv.warnings].slice(0, 3).join("; ")})` : ""));
+  const ps = L.designSession(m, cat, pan, 1);
+  ps.reload();
+  const pshots = [], pfind = [];
+  for (const t of L.designTiles(pan)) {
+    ps.open(t.gi, t.si, t.lane);
+    const r = ps.render();
+    pshots.push(r.rgba);
+    for (const f of r.lint.findings) pfind.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${f.kind} "${f.text}"`);
+    for (const c of r.checks) pfind.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${c.kind} ${c.text}`);
+    if (t.type === "free" && (L.inkCount(r.rgba) < 500 || !r.unbuildable)) pfind.push(`${t.key}: blank or not marked`);
+  }
+  const frees = pan.groups.flatMap((g) => g.screens.filter((x) => x.type === "free"));
+  const placed = frees.flatMap((x) => x.elements.filter((e) => e.param).map((e) => e.param));
+  const engineIds = params.filter((p) => !p.part).map((p) => p.id);
+  ok(!pfind.length && !L.usedTwice(pan).length, `the p5 panel: ${pshots.length} screens x lanes rendered, lint clean, no parameter twice` +
+     (pfind.length ? `\n          ${pfind.slice(0, 10).join("\n          ")}` : ""));
+  ok(frees.length === 9 && placed.length === 56 && engineIds.length === 56 && engineIds.every((id) => placed.includes(id)),
+     `the p5 panel: ${frees.length} free screens place all ${engineIds.length} P5 parameters once (${placed.length} bound elements)`);
+  const pagain = L.designTiles(pan).map((t) => { ps.open(t.gi, t.si, t.lane); return ps.render().rgba; });
+  ok(pagain.every((a, i) => L.diffCount(a, pshots[i]) === 0), "the p5 panel drawn again: the same bytes (deterministic)");
+  const still = [];
+  let turned = 0;
+  for (const t of L.designTiles(pan).filter((x) => x.type === "free")) {
+    ps.open(t.gi, t.si, t.lane);
+    const sc = pan.groups[t.gi].screens[t.si], e = sc.elements.find((x) => x.id === sc.lanes[t.lane][0]), p = pidx.get(e.param);
+    const a = ps.render().rgba, v0 = m.pget(p.page, p.col);
+    ps.knob(1, v0 >= p.max ? -1 : 1);
+    const v1 = m.pget(p.page, p.col), b = ps.render().rgba;
+    if (v1 === v0 || !L.diffCount(a, b)) still.push(`${t.group} ${t.si + 1}.${t.lane + 1} ${e.id}`); else turned++;
+  }
+  ok(!still.length, `the p5 panel: KNOB 1 on each of ${turned} free lanes turns its parameter and changes the picture` + (still.length ? ` (not: ${still.join(", ")})` : ""));
+  // a p5 knob's value is inside its face; a lit led's dot is red
+  const sA = pan.groups[0].screens[0], kn = sA.elements.find((x) => x.type === "knob"), kp = pidx.get(kn.param);
+  ps.open(0, 0, 0);
+  const rA = ps.render(), vt = m.ptext(kp.page, kp.col), size = L.knobSize(kn, "p5"), kcx = kn.x + (kn.w >> 1);
+  const box = rA.lint.texts.find((x) => x.text === vt && x.box[1] < kn.y + size);
+  const mid = box && [(box.box[0] + box.box[2]) / 2, (box.box[1] + box.box[3]) / 2];
+  ok(!!mid && Math.abs(mid[0] - kcx) <= size / 2 && mid[1] >= kn.y && mid[1] <= kn.y + size,
+     `a p5 knob's value "${vt}" inside its dial (${kn.id}: box ${box ? box.box.join(" ") : "none"}, the dial ${kcx - size / 2} ${kn.y} .. ${kcx + size / 2} ${kn.y + size})`);
+  const red = m.draw("", "", [{ op: "rect", x: 100, y: 100, w: 8, h: 8, col: L.COLOURS.red }]).slice((104 * 240 + 104) * 4, (104 * 240 + 104) * 4 + 3);
+  const lit = sA.elements.find((x) => x.type === "led" && m.pget(pidx.get(x.param).page, pidx.get(x.param).col) > pidx.get(x.param).min);
+  const at4 = lit && (((lit.y + 13) * 240 + lit.x + (lit.w >> 1)) * 4), px4 = lit && Array.from(rA.rgba.slice(at4, at4 + 3));
+  ok(!!lit && px4.join() === Array.from(red).join(), `a lit p5 led's dot is red (${lit ? lit.id : "no lit led"}: ${px4 ? px4.join(" ") : ""}, red ${Array.from(red).join(" ")})`);
+  m.unload();
 }
 
 // ===================================================================================================== 5 ===
@@ -441,8 +494,9 @@ if (!args.has("--no-page") && fs.existsSync("/Applications/Chromium.app/Contents
     const green = (p) => p[0] < 40 && p[1] > 215 && p[2] < 40, blue = (p) => p[0] < 40 && p[1] < 40 && p[2] > 215;
     const what = ["Design mode opens the shipped P5 example (designs.js)", "a free screen is drawn and marked \"not buildable yet\"",
                   "KNOB 1's + turns a dial on the free screen", "a scripted drag from the element strip adds a knob on the 4 px grid (one undo step)",
-                  "Export JSON equals the model (and validates)", "the contact sheet has today's tiles and the design's"];
-    ok(blue(sq(6)), "the Design self-test ran to the end (the end mark is there)");
+                  "Export JSON equals the model (and validates)", "the contact sheet has today's tiles and the design's",
+                  "the shipped p5-panel opens in the p5 style and its free screen draws P5 knobs"];
+    ok(blue(sq(7)), "the Design self-test ran to the end (the end mark is there)");
     what.forEach((w, i) => ok(green(sq(i)), `page: ${w}`));
   }
 }

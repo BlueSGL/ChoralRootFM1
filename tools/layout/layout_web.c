@@ -993,7 +993,7 @@ LAY_EXPORT int32_t lay_pstep(uint32_t p, uint32_t c, int32_t n)
  * lay_draw_begin(title, page), the calls below (recorded), lay_draw_end() draws them and answers the 240 x 240 RGBA
  * (as lay_render); lay_lint() then answers for it. Coordinates are screen pixels; colours cr_screen.h CR_COL_* (the
  * named ones and the palette's tokens) */
-enum { LD_TEXT, LD_RECT, LD_GLYPH, LD_HBAR, LD_BAND };
+enum { LD_TEXT, LD_RECT, LD_GLYPH, LD_HBAR, LD_BAND, LD_P5KNOB };
 typedef struct {
     uint8_t op, col, a, b;                         /* text: bold, align; rect: radius, outline width (0: filled) */
     int16_t x, y, w, h;                            /* text: w = maxw */
@@ -1040,7 +1040,7 @@ LAY_EXPORT void lay_draw_text(uint32_t bold, uint32_t px, int32_t x, int32_t y, 
     o->col = (uint8_t)col;
     snprintf(o->s, sizeof o->s, "%s", s ? s : "");
 }
-/* a rectangle: line 0 = filled (r > 0: rounded), else an outline that many px wide */
+/* a rectangle: line 0 = filled (r > 0: rounded), else an outline that many px wide (r > 0: its corners quarter arcs) */
 LAY_EXPORT void lay_draw_rect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t r, uint32_t line)
 {
     ld_t *o = ld_new(LD_RECT);
@@ -1069,6 +1069,23 @@ LAY_EXPORT void lay_draw_knob(int32_t cx, int32_t cy, int32_t size, uint32_t col
 {
     lay_draw_glyph(CR_G_KNOB, cx - size / 2, cy - size / 2, size, size, col, pct, 0, bip ? CR_CF_BIP : 0u);
 }
+/* a Prophet-5 knob (the "p5" style, docs/LAYOUT-TOOL.md): centred at (cx, cy) in a size px box: the printed scale
+ * (11 ticks, 0..10, over the dial's 270 degrees at the box's edge, the end ticks 2 px), the face (a disc of radius
+ * size / 2 - 6 in `face` with a 1 px rim in `rim`), the pointer (2 px, from `from` % of the face's radius, 0: 30 %,
+ * to 95 %) at the value's angle, as CR_G_KNOB's (pct Q8 of 255); bip: tick 5 (12 o'clock) in the pointer's colour,
+ * 2 px, the centre mark */
+LAY_EXPORT void lay_draw_p5knob(int32_t cx, int32_t cy, int32_t size, uint32_t face, uint32_t rim, uint32_t tick,
+                                uint32_t ptr, uint32_t pct, uint32_t bip, uint32_t from)
+{
+    ld_t *o = ld_new(LD_P5KNOB);
+    if (!o)
+        return;
+    o->x = (int16_t)cx; o->y = (int16_t)cy; o->w = (int16_t)size;
+    o->col = (uint8_t)face; o->a = (uint8_t)rim; o->b = (uint8_t)tick; o->g = (uint8_t)ptr;
+    o->pct = (uint8_t)(pct > 255u ? 255u : pct);
+    o->flags = (uint16_t)(bip ? 1u : 0u);
+    o->px = (uint8_t)(from && from < 95u ? from : 30u);
+}
 /* the editor's small level bar (cr_hbar) */
 LAY_EXPORT void lay_draw_hbar(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t pct, uint32_t bip)
 {
@@ -1090,6 +1107,48 @@ LAY_EXPORT void lay_draw_band(uint32_t kind, const uint8_t *wv)
     o->g = (uint8_t)kind;
     if (wv)
         memcpy(o->wv, wv, sizeof o->wv);
+}
+/* a rounded outline lw px wide: the sides between the corners, the corners quarter arcs (cr_arc, anti-aliased) */
+static void ld_rline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, int32_t lw, uint16_t c)
+{
+    int32_t rc;
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+    rc = r * 16 - lw * 8;                          /* the line's middle, Q4 from the corner's centre */
+    cr_fill(x + r, y, w - 2 * r, lw, c);
+    cr_fill(x + r, y + h - lw, w - 2 * r, lw, c);
+    cr_fill(x, y + r, lw, h - 2 * r, c);
+    cr_fill(x + w - lw, y + r, lw, h - 2 * r, c);
+    if (rc <= 0)
+        return;
+    cr_arc((x + r) * 16, (y + r) * 16, rc, lw * 16, 32768u, 16384u, 0, 0, 0, c);
+    cr_arc((x + w - r) * 16, (y + r) * 16, rc, lw * 16, 49152u, 16384u, 0, 0, 0, c);
+    cr_arc((x + w - r) * 16, (y + h - r) * 16, rc, lw * 16, 0u, 16384u, 0, 0, 0, c);
+    cr_arc((x + r) * 16, (y + h - r) * 16, rc, lw * 16, 16384u, 16384u, 0, 0, 0, c);
+}
+/* the Prophet-5 knob (lay_draw_p5knob), Q4 inside: the angles are CR_G_KNOB's (a0 7:30, 270 degrees clockwise) */
+static void ld_p5knob(const ld_t *o)
+{
+    uint32_t a0 = 24576u, sweep = 49152u, a = a0 + sweep * (uint32_t)o->pct / 256u, k;
+    int32_t cx = o->x * 16, cy = o->y * 16, ro = o->w * 8 - 8, ri = ro - 40, rf = (o->w / 2 - 6) * 16, r0, r1;
+    uint16_t ptr = cr_rgb(o->g, T_TEXT);
+    int16_t p[4];
+    for (k = 0; k <= 10u; k++) {                   /* the scale: 0 .. 10 */
+        uint32_t ak = a0 + sweep * k / 10u;
+        int bipk = (o->flags & 1u) && k == 5u;
+        p[0] = (int16_t)(cx + ((ri * cr_cos(ak)) >> 14)); p[1] = (int16_t)(cy + ((ri * cr_sin(ak)) >> 14));
+        p[2] = (int16_t)(cx + ((ro * cr_cos(ak)) >> 14)); p[3] = (int16_t)(cy + ((ro * cr_sin(ak)) >> 14));
+        cr_poly(p, 2u, k == 0u || k == 10u || bipk ? 32 : 16, 0, 0, bipk ? ptr : cr_rgb(o->b, T_LINE));
+    }
+    if (rf < 32)
+        return;
+    cr_disc(cx, cy, rf, cr_rgb(o->a, T_MID));      /* the face and its rim */
+    cr_disc(cx, cy, rf - 16, cr_rgb(o->col, T_SURF));
+    r0 = rf * o->px / 100;                         /* the pointer */
+    r1 = rf * 95 / 100;
+    p[0] = (int16_t)(cx + ((r0 * cr_cos(a)) >> 14)); p[1] = (int16_t)(cy + ((r0 * cr_sin(a)) >> 14));
+    p[2] = (int16_t)(cx + ((r1 * cr_cos(a)) >> 14)); p[3] = (int16_t)(cy + ((r1 * cr_sin(a)) >> 14));
+    cr_poly(p, 2u, 32, 0, 0, ptr);
 }
 static void ld_play(void)
 {
@@ -1117,6 +1176,8 @@ static void ld_play(void)
                     cv_rrect(o->x, o->y, o->w, o->h, o->a, c, T_BG);
                 else
                     cr_fill(o->x, o->y, o->w, o->h, c);
+            } else if (o->a) {
+                ld_rline(o->x, o->y, o->w, o->h, o->a, o->b, c);
             } else {
                 cr_fill(o->x, o->y, o->w, o->b, c);
                 cr_fill(o->x, o->y + o->h - o->b, o->w, o->b, c);
@@ -1146,6 +1207,9 @@ static void ld_play(void)
             cr_hbar(&cl, o->x * 16, o->w * 16, o->y * 16, o->h * 16, c);
             break;
         }
+        case LD_P5KNOB:
+            ld_p5knob(o);
+            break;
         case LD_BAND:
             s.wide = o->g;
             memcpy(s.wv, o->wv, sizeof s.wv);

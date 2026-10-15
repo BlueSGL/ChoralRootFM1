@@ -67,8 +67,8 @@ index), `?view=sheet` for the contact sheet.
 work in both modes. The design is kept in the browser (localStorage, per engine; the page works without it) and is
 exported as a file.
 
-- **Top**: the design's name; *open a shipped design* (the files of `design/layouts/designs/`, e.g.
-  `p5-osc-panel`); *New from today* (today's layout, every screen classic); *Import* / *Export JSON* (a file pick and a
+- **Top**: the design's name; its *Style* (flat or p5: "The p5 style", below); *open a shipped design* (the files of
+  `design/layouts/designs/`, e.g. `p5-osc-panel`, `p5-panel`); *New from today* (today's layout, every screen classic); *Import* / *Export JSON* (a file pick and a
   download: no server); *PNG* of the screen; *Contact sheet*; the sound; *Undo* / *Redo* (Ctrl+Z, Ctrl+Shift+Z).
 - **Left**: the groups (the editor's buttons: OSC, FILT, ENV, LFO, MOD, FX, MIX) and their screens. The current
   screen has earlier / later, duplicate, delete and *move to* another group. *New screen*: a group and a kind (free,
@@ -142,9 +142,10 @@ turns.
 | `lay_pget(page, col)`, `lay_ptext(page, col)`, `lay_pstep(page, col, n)` | a parameter of the editor's sound by its built-in address (page 255: a part parameter, col its `P_` id): the value, the editor's text, n detents by the editor's step (30 ms pass) |
 | `lay_draw_begin(title, page)` | a new free page under the title line (the sound's name, the page's name) |
 | `lay_draw_text(bold, px, x, y, s, col, align, maxw)` | text on baseline y (align 0 left, 1 centre, 2 right; maxw > 0: cut with an ellipsis) |
-| `lay_draw_rect(x, y, w, h, col, r, line)` | filled (r: rounded) or an outline `line` px wide |
+| `lay_draw_rect(x, y, w, h, col, r, line)` | filled (r: rounded) or an outline `line` px wide (r: its corners quarter arcs, `cr_arc`) |
 | `lay_draw_glyph(g, x, y, w, h, col, pct, pct2, flags)` | a `CR_G_*` glyph in the box (pct Q8 of 255; `CR_G_LFOWAVE`: the wave in pct2) |
 | `lay_draw_knob(cx, cy, size, col, pct, bip)` | the dial |
+| `lay_draw_p5knob(cx, cy, size, face, rim, tick, ptr, pct, bip, from)` | the p5 style's knob in a size px box: the 0..10 scale (11 ticks over the 270 degrees, `cr_poly`), the face (`cr_disc`, radius size / 2 - 6, a 1 px rim), the pointer from `from` % (0: 30) to 95 % of the face's radius at CR_G_KNOB's angle |
 | `lay_draw_hbar(x, y, w, h, col, pct, bip)` | the editor's small level bar |
 | `lay_draw_band(kind, wv)` | a `CR_W_*` band at its own rows (24 .. 120) with 20 values |
 | `lay_draw_end()` | draws it all in strips, to the LCD; the 240 x 240 RGBA; `lay_lint` then answers for it |
@@ -165,6 +166,7 @@ layouts). It binds parameters by **stable id**: `"<page title>:<short>"` for an 
 {
   "format": "choralroot-layout", "version": 2, "kind": "design",
   "name": "osc-panel",
+  "style": "flat",                        optional: how free screens look, "flat" (the default) or "p5" (below)
   "engine": {"index": 16, "name": "P5"}, "params_hash": "f5941e824048848d",
   "header": {"kind": "title-line"},       the shared header: the editor's title line, fixed (rule 1)
   "groups": [                             the editor's groups by name (OSC FILT ENV LFO MOD FX MIX), screens in order
@@ -202,7 +204,44 @@ label, value: `size` the dial's height), `switch` (`positions` 2 or 3, the curre
 filter, dx, cz, algo, ade2, at its own rows). `param`, `label` and `colour` (a palette token: white red blue yellow
 orange green grey black bg surf text theme accent mid dim line; default `auto`) where they apply. Every bound element
 must be in exactly one lane; up to 4 a lane, 8 lanes and 24 elements a screen (the firmware's `cell[8][4]`).
-`validateDesign` lists what is wrong; the page refuses a file with errors and opens one with warnings.
+`validateDesign` lists what is wrong; the page refuses a file with errors and opens one with warnings. The design's
+`style` (absent, `"flat"` or `"p5"`; anything else is an error) changes how frame, knob, led and switch look and their
+new sizes (p5: knob 56 x 64 with a dial of 36, led 40 x 28, switch 56 x 64), not what they bind.
+
+### The p5 style
+
+The owner (2026-10-14): "For the prophet 5, I would like the sound editor UI to better resemble the real prophet 5
+interface." and "I'd like update glyph designs to match with the Prophet 5 knobs and layout, lets do mockups and
+Designer pages first." `"style": "p5"` composes a free screen's elements as the Prophet-5's panel (`freeOps` →
+`p5Op`, drawn by the same primitives; the classic screens and the other elements are unchanged):
+
+- **frame**: a rounded outline (r 3, 1 px, `line` or its colour), its text in capitals, 10 px bold `mid`, centred in
+  the top border on a `bg` block, the border showing either side: the panel's section titles.
+- **knob**: the dial box (`size`, default 36; 28 .. 44) at the cell's top: a printed scale of 11 ticks (0..10) over the
+  270 degrees at the box's edge (`line`, the end ticks 2 px), a face of radius size / 2 - 6 in `surf` with a `mid` rim,
+  a 2 px pointer in the element's colour (the lane's knob colour when its lane is active, else `dim`). The value (the
+  editor's text) sits inside the face at 9 px when it fits (2r - 4; for a parameter of value names, when the widest
+  name fits, so it never jumps rows), and the pointer is then short (70 .. 95 % of the radius) so it clears the value;
+  else the value goes on the row under the label (10 px, the hot block as flat's). Hot (just turned): the face fills
+  with the element's colour, the value and pointer in `bg`. The label under the dial at size + 12, as written.
+- **led**: the panel's button: its waveform (20 x 10) or label on top, a 16 x 12 cap (`surf`, `mid` rim) under it, and
+  a 4 x 4 LED at the cap's top edge, `red` when on, a 1 px `dim` square when off.
+- **switch**: the label on top, a slot (8 px wide, 12 px a position, rounded `line` outline) with a 6 x 8 lever in the
+  element's colour at the current position, the positions' names beside it (the current one in the element's colour).
+- label, bar, glyph and band as flat.
+
+`design/layouts/designs/p5-panel.json` is P5's whole engine in that style: nine free screens over OSC .. MOD (OSC A with
+the mixer, OSC B, FILTER, AMPLIFIER, FILTER ENVELOPE, LFO with its SHAPE, WHEEL-MOD, POLY-MOD, VOICE with GLIDE), all 56
+parameters placed once, KNOB 1..4 a lane, FX and MIX classic as today; every screen x lane lint clean. Its contact
+sheet, `design/choralroot-fm1-p5-panel-screens.png`, is made by
+
+```
+node tools/layout/render_sheet.mjs design/layouts/designs/p5-panel.json design/choralroot-fm1-p5-panel-screens.png
+```
+
+(any design: every screen x lane at 2x with its caption, drawn by the module; it prints each tile's lint). Like every
+free screen it is "not buildable yet": the composition is the tool's proposal, which the firmware will copy when it
+gets free pages.
 
 **Not buildable yet** means: the design is valid and previewed, but the firmware cannot show it on a unit as it is.
 Every free screen is so today; a classic screen is so when the in-place and plan ways above cannot express it.
@@ -368,10 +407,14 @@ design, and the per-engine table that says which patch parameter a (page, column
   all 22 P5 frames identical to the built-in tables'; a relabel changes only the label's pixels; a swap of Cutoff and
   Reso makes KNOB 1 turn the resonance and KNOB 2 the cutoff; an added screen packs as a plan and shows; the P5
   example renders every screen x lane lint clean and the same bytes twice, its knobs turn its parameters, SELECT runs
-  across its lanes and screens, its header is the title line;
+  across its lanes and screens, its header is the title line; `validateDesign` refuses a style that is not flat or
+  p5; the p5 panel (`p5-panel.json`) valid with no warning, every screen x lane lint clean and deterministic, no
+  parameter twice, all 56 placed, KNOB 1 on each of its 19 free lanes turns its parameter and changes the picture, a
+  knob's value text inside its dial, a lit led's dot the firmware's red;
 - the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked, a knob
   turns a dial, **a scripted pointer drag from the element strip adds a knob on the grid**, the export equals the
-  model and validates, the contact sheet has today's and the design's tiles.
+  model and validates, the contact sheet has today's and the design's tiles, the shipped p5 panel opens in the p5
+  style and draws its knobs.
 
 `?demo=osc|classic|sheet` opens the places the screenshots show. Not tested: the wheel handler, moving and resizing
 by drag, the keyboard shortcuts, import, the downloads (Export / PNG write a file the test does not read), the
@@ -404,7 +447,8 @@ editor uses buttons, SELECT and the knobs only, and the keys play; a design cann
    as the shared header on every screen (rule 1), "not buildable yet" flags instead of refusals (rule 3), and the
    first example, `design/layouts/designs/p5-osc-panel.json` (P5's oscillators and mixer on two free screens in the
    spirit of the original panel: OSC A with Freq, Saw / Pulse leds, PW, Sync; the mixer; OSC B with Freq, Fine,
-   Saw / Tri / Pulse leds, PW, Lo Freq and Keyboard switches). **Remaining**: firmware support for free pages (a
+   Saw / Tri / Pulse leds, PW, Lo Freq and Keyboard switches), and the p5 style with `p5-panel.json`, the whole P5
+   engine as its panel ("The p5 style"). **Remaining**: firmware support for free pages (a
    free-page kind in `cr_screen.h` / `cr_draw.c` drawing the vocabulary as `freeOps` does, the editor's lanes over
    bound elements) and a **build-time generator** that turns a design file into the engine's tables (pages, screen
    plan, labels) and the free pages' element tables, so a design is compiled into the build (rule 4).
