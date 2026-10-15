@@ -2911,3 +2911,28 @@ a detent (docs/EDITOR.md 6a, for the owner). Goldens: no change (no factory pres
 Tests: cr_va_test (t_hires, t_lfo_sync), cr_va_sync_list in test_cr.sh, test_sounds. `va_block`'s target budget
 108 -> 121 (the synced increment, x BPM in 64 bits); `va_render`'s unchanged; design/layouts/va.json regenerated
 (FENV `fix2`).
+3y63. **FM TONE's ranges corrected: no 127.99, AMP DEC / REL 0..126 + INF, LEVEL a whole number (2026-10-14; branch qd-5
+from 2019727, not pushed).** The owner: "Cutoff should not go from 0 to 127.99, should go to 0 to 127. Amp release
+should be integer 0-126, then INF, same with Amp Decay. Level is also integers from 0 to 127. No parameters should be a
+max of 127.99." And: "Harmonic and detune need to support two decimal points." Done (docs/QUAD.md "Ranges"): FREQ,
+DTUNE, RESO, BASE 0.00..127.00 (still two decimals); the centred hi-res values (-64.00..+63.99) and HARM unchanged;
+AMP DEC and AMP REL integers 0..126 + 127 = INF, a new format `F_INTI` (core.h, the editor protocol's fmt 19; params.c
+"INF" at the max, else the number); LEVEL 0..127 (default 110), the level law from the integer (2 LEVEL^2). AMP DEC
+INF (the Digitone's DEC 127): the amp envelope holds the attack's level and never decays to SUS (the importer's "SUS
+127" stand-in is gone); AMP REL INF holds as before; AMP REL's fine-part interpolation removed. Blob version 5 (96
+bytes, 87 used: AMP REL and LEVEL a byte again); version 4 (the owner's unit's imports and saved sounds) and 1..3
+convert on load: FREQ DTUN RESO BASE clamped to 127.00, AMP REL >= 127.00 -> INF, below it rounded but at most 126,
+LEVEL rounded. web/fm1dnsnd.js (ranges, `quadToV4` = `quadToV5` reads 3, 4, 5; `quadToV3` from 4 or 5), web/fm1sounds.js
+(a version-4 sound file converted, 1..5 read), tools/fm1_install.py (1..5 accepted). The importer: AMP REL by the time
+curve rounded, at most 126 below 127.00 (the Digitone's 126.85 lands at 110 by that curve; only 127.xx is INF); AMP
+DEC 127 -> 127 (INF), other decays at most 126; VOL rounded (110.40 -> 110). HARM / DTUNE: ChoralRoot has no HOME
+knob on the macros (Felucca's HOME row, ui.c, is not in its build); the sound editor's SYN 1+ cells are the deep
+values, two decimals with the acceleration (0.01 slow) and OPT whole numbers; the macro bytes stay the coarse part
+(the record's macros are bytes, the editor protocol's v14 7-bit) and the blob is the authority, so a save and a load
+keep 12.34 exactly (cr_quad_test); a CC, the matrix, motion and the web editor's macro write stay whole numbers. Tests:
+cr_quad_test (the version-5 ranges, v4 -> v5 and v3 -> v5, DEC INF holds the level and REL still releases it, REL
+INF as before, HARM / DTUN 12.34 through blob_get / blob_set), cr_pool_test (the texts "INF" at DEC / REL 127, "126",
+"110", "127.00"), test_dnsnd (v4 -> v5, DEC INF -> 127, VOL 110.40 -> 110, REL 127 -> 127), test_sounds, test_cr
+(FREQ from 127.00: 12062 11427 quick; AMP REL 63 .. 124 127 INF, OPT 112 96 112; cr_quad_inf REL 62 -> INF -> 61),
+cr_draw_test (the FM TONE pages' longest values). FM TONE's goldens regenerated (tests/quad_goldens: the patches'
+AMP REL / LEVEL now whole numbers; the renders the same); no other golden changed.

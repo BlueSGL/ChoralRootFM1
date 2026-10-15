@@ -122,10 +122,12 @@ enum {
                                  * (params.c param_format; F_FMFRQ: Melodee's operator pages, here a plain number) */
     F_TIMEI,                    /* F_TIME with 127 = "INF" (QUAD's filter REL: the release holds, the Digitone's
                                  * 0..126 + INF); the editor protocol's fmt 17 */
-    F_FIX2                      /* a hi-res value in hundredths (FM TONE, the Digitone's two decimals): 4201 = "42.01",
+    F_FIX2,                     /* a hi-res value in hundredths (FM TONE, the Digitone's two decimals): 4201 = "42.01",
                                  * a range below 0 signed ("+41.34", "-64.00"); its finest step 1, its whole-number step
                                  * 100; names[0] (if any) = the word for the top whole number (AMP REL: "INF" at
                                  * 127.00 and up); the editor protocol's fmt 18 */
+    F_INTI                      /* a number with its max = "INF" (FM TONE's AMP DEC and REL: 0..126 + INF, the
+                                 * Digitone's); the editor protocol's fmt 19 */
 };
 #define FMT_HI(f) ((f) == F_FIX2)   /* a hundredths format (cr_pages.c kn_whole: finest step 1, whole numbers 100) */
 

@@ -194,10 +194,10 @@ static int32_t enum_step(const param_desc_t *d, int32_t from, int32_t v)
 
 static uint8_t fmt_named;        /* the last param_format was a name (F_ENUM, even "4"): ui_draw.c's digits do not roll it */
 
-/* a release at INF: F_TIMEI at its max, an F_FIX2 with a word (names[0]) at its top whole number (127.00 .. 127.99) */
+/* a release at INF: F_TIMEI / F_INTI at its max, an F_FIX2 with a word (names[0]) at its top whole number (127.00 .. 127.99) */
 static int param_inf(const param_desc_t *d, int32_t v)
 {
-    return (d->fmt == F_TIMEI && v >= d->max) || (d->fmt == F_FIX2 && d->names && v >= d->max / 100 * 100);
+    return ((d->fmt == F_TIMEI || d->fmt == F_INTI) && v >= d->max) || (d->fmt == F_FIX2 && d->names && v >= d->max / 100 * 100);
 }
 
 /* value string (<= 5 chars; F_FIX2 <= 6) and unit for a parameter value */
@@ -205,7 +205,7 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
 {
     *unit = "";
     fmt_named = d->fmt == F_ENUM;
-    if (d->fmt == F_TIMEI && v >= 127) {            /* QUAD's REL: 127 = INF (the release holds), else F_TIME */
+    if ((d->fmt == F_TIMEI || d->fmt == F_INTI) && v >= d->max) {   /* QUAD's REL / DEC: 127 = INF (it holds) */
         str_cpy(val, "INF", 6);
         fmt_named = 1;
         return;
@@ -228,6 +228,10 @@ static void param_format(const param_desc_t *d, int32_t v, char *val, const char
                 val[l] = val[l - 1u];
             val[o] = '0';
         }
+        return;
+    }
+    if (d->fmt == F_INTI) {                         /* else a number */
+        fmt_int(val, v);
         return;
     }
     switch (d->fmt == F_TIMEI ? (uint8_t)F_TIME : d->fmt) {

@@ -100,8 +100,10 @@ int main(void)
         static const struct { uint8_t pg, col; int16_t v; const char *s; } TX[] = {
             {4, 0, 4201, "42.01"}, {4, 1, 4349, "43.49"}, {14, 0, 4134, "+41.34"}, {6, 0, 12685, "126.85"},
             {4, 3, -6400, "-64.00"}, {15, 3, 5, "+0.05"}, {15, 3, -5, "-0.05"}, {1, 0, 0, "0.00"}, {1, 0, -2600, "-26.00"},
-            {12, 3, 12700, "INF"}, {12, 3, 12799, "INF"}, {12, 3, 12699, "126.99"}, {13, 0, 11000, "110.00"},
-            {1, 1, 12799, "127.99"}, {1, 2, 127, "127"}, {10, 3, 64, "64"}, {3, 2, 100, "100"}};
+            {12, 3, 127, "INF"}, {12, 1, 127, "INF"}, {12, 3, 126, "126"}, {12, 1, 126, "126"}, {12, 3, 0, "0"},
+            {13, 0, 110, "110"}, {13, 0, 127, "127"}, {4, 0, 12700, "127.00"}, {4, 0, 12699, "126.99"},
+            {1, 1, 12700, "127.00"}, {1, 2, 127, "127"}, {10, 3, 64, "64"}, {3, 2, 100, "100"}};   /* (version 5: AMP DEC /
+                                                   * REL 0..126 + INF, LEVEL 0..127 whole numbers, the tops 127.00) */
         uint8_t v3[UPP_MAX], h[2];
         uint32_t j, pos, tbad = 0;
         cu_pool_load(0, ENGI_QUAD, 1);
@@ -120,7 +122,7 @@ int main(void)
         pos = pool_pos_slot(ENGI_QUAD, 127);
         cu_pool_load(0, ENGI_QUAD, pos);
         OK(quad_patch[0][QP_FREQ] == 4200 && quad_patch[0][QP_HARM] == -1900 && quad_patch[0][QP_FDBK] == 127 &&
-           quad_patch[0][QP_LEVEL] == 10000 && quad_patch[0][QP_EREL] == 12700 && quad_patch[0][QP_LFO(0, QL_SPEED)] == -1000 &&
+           quad_patch[0][QP_LEVEL] == 100 && quad_patch[0][QP_EREL] == 127 && quad_patch[0][QP_LFO(0, QL_SPEED)] == -1000 &&
            t->p[P_E4] == -19 && t->p[P_E6] == 127,
            "FM TONE: a version-3 slot loads converted (FREQ %d HARM %d FDBK %d LEVEL %d)", quad_patch[0][QP_FREQ],
            quad_patch[0][QP_HARM], quad_patch[0][QP_FDBK], quad_patch[0][QP_LEVEL]);
