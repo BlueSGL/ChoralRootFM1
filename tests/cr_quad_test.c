@@ -9,8 +9,10 @@
  * steps, the B pair sequence and its names); RATIO B's walk (0..360 one pair a step: B1 first, the carry into B2, the
  * ends, the texts); version-1 blobs and macros (RATIO B = BR x 19 + B1) converted; the routing table against the designer's ALGOS; every algorithm and
  * four presets against tests/quad_ref.py's renders (tests/quad_goldens: SNR over the first 2048 samples > 36 dB AND
- * every 10 ms block's RMS within 1.5 dB over 0.3 s); the envelopes' times (ATK, DEC to END, DELAY, LEV, TRIG, RESET,
- * the amp's release; REL INF holds, 126 decays, a kill frees it); the filter types and the base-width window; the LFOs' rates (within 2 %), direction, start
+ * every 10 ms block's RMS within 1.5 dB over 0.3 s); the envelopes' times against quad_times.h's tables (the Digitone's:
+ * each envelope's ATK, DEC to END, DELAY = v / 32 beats at 120 and 80 BPM, the amp's release; tools/digitone/
+ * test_quad_times.py checks the tables against the Digitone's readings), LEV, TRIG, RESET; REL INF holds, 126 decays, a
+ * kill frees it); the filter types and the base-width window; the LFOs' rates (within 2 %), direction, start
  * phase, ONE / HALF, waves; no int32 wrap at full feedback / levels / LFOs on every algorithm; voices end after the
  * release; a 6-note chord for 1.4 s on every preset: peak < 0.9 FS at LEVEL 92; no DC (every preset held 1 s, a plain
  * feedback operator at FDBK 0..127: the mean of 0.3..1 s under 2 % / 1 % of the RMS; regress's limit is 1.2 % FS). */
@@ -891,42 +893,69 @@ static void t_golden(void)
 }
 
 /* ------------------------------------------------------- envelopes --- */
+/* the times of quad_times.h's entries (the Digitone's, docs/QUAD.md "Times"), ms: an attack's full rise, a decay's T60 */
+static double atk_ms(const uint32_t *tab, uint32_t v) { return (double)(1u << 24) / tab[v] * CTL * 1000.0 / FS; }
+static double t60_ms(const uint32_t *tab, uint32_t v) { return -3.0 * CTL * 1000.0 / FS / log10(1.0 - tab[v] / 16777216.0); }
+static uint32_t ticks_of(double ms) { return (uint32_t)(ms * FS / 1000.0 / CTL + 0.5); }
+/* an operator attack's (linear in dB from QUAD_OP_FLOOR to the top: the growth a tick) */
+static double oatk_ms(uint32_t v)
+{
+    return CTL * 1000.0 / FS * log(16777216.0 / QUAD_OP_FLOOR) / log(1.0 + QUAD_T_OATK[v] / 16777216.0);
+}
+
 static void t_env(void)
 {
     quad_voice_t s;
-    uint32_t n;
+    uint32_t n, k;
     int32_t want;
-    /* ATK 64: linear to the top in TIME_MS_X10[64] */
+    /* ATK 64: to the top in its table's time (the operators' linear in dB from QUAD_OP_FLOOR: QUAD_T_OATK; the
+     * filter's and the amp's linear: QUAD_T_FATK, QUAD_T_AATK), within a tick */
+    for (k = 0; k < 4u; k++) {
+        static const uint32_t *const TA[4] = {QUAD_T_OATK, QUAD_T_OATK, QUAD_T_FATK, QUAD_T_AATK};
+        memset(&s, 0, sizeof s);
+        s.stage[k] = 2;
+        for (n = 0; s.stage[k] == 2 && n < 1000000u; n++)
+            quad_env_tick(&s, k, 64, 60, 20 << 17, 0, 0, 1, 0);
+        CHECK(fabs(tms(n) - (k < 2u ? oatk_ms(64) : atk_ms(TA[k], 64))) < 1.5 + tms(n) / 1000.0,   /* (+ 0.1 %: the
+                                                  * operators' growth a tick, truncated) */
+              "env %u ATK 64: %.1f ms, want %.1f", k,
+              tms(n), k < 2u ? oatk_ms(64) : atk_ms(TA[k], 64));
+    }
+    /* DEC 70 to END 20: 99 % of the way (-40 dB: 2/3 of the T60) */
     memset(&s, 0, sizeof s);
     s.stage[0] = 2;
-    for (n = 0; s.stage[0] == 2 && n < 100000u; n++)
+    for (n = 0; s.stage[0] == 2 && n < 1000000u; n++)
         quad_env_tick(&s, 0, 64, 60, 20 << 17, 0, 0, 1, 0);
-    CHECK(fabs(tms(n) - TIME_MS_X10[64] / 10.0) < 2.0, "A ATK 64: %.1f ms, want %.1f", tms(n), TIME_MS_X10[64] / 10.0);
-    /* DEC 70 to END 20: 99 % of the way in TIME_MS_X10[70] */
     want = 20 << 17;
-    for (n = 0; abs(s.env[0] - want) > ((1 << 24) - want) / 100 && n < 100000u; n++)
+    for (n = 0; abs(s.env[0] - want) > ((1 << 24) - want) / 100 && n < 1000000u; n++)
         quad_env_tick(&s, 0, 64, 70, want, 0, 0, 1, 0);
-    CHECK(fabs(tms(n) / (TIME_MS_X10[70] / 10.0) - 1.0) < 0.1, "A DEC 70: %.1f ms to 99 %%, want %.1f", tms(n),
-          TIME_MS_X10[70] / 10.0);
-    for (n = 0; n < 20000u; n++)                 /* held at END, gate or not */
+    CHECK(fabs(tms(n) / (t60_ms(QUAD_T_ODEC, 70) * 2.0 / 3.0) - 1.0) < 0.01, "A DEC 70: %.1f ms to 99 %%, want %.1f",
+          tms(n), t60_ms(QUAD_T_ODEC, 70) * 2.0 / 3.0);
+    for (n = 0; n < 40000u; n++)                 /* held at END, gate or not */
         quad_env_tick(&s, 0, 64, 70, want, 0, 0, 1, 0);
     CHECK(s.stage[0] == 3 && abs(s.env[0] - want) < (1 << 12), "END held: %d, want %d", s.env[0], want);
-    /* DELAY 50, then the attack */
-    memset(&s, 0, sizeof s);
-    s.stage[1] = 1;
-    for (n = 0; s.stage[1] == 1 && n < 100000u; n++)
-        quad_env_tick(&s, 1, 0, 60, 0, 0, 50, 1, 0);
-    CHECK(fabs(tms(n) - TIME_MS_X10[50] / 10.0) < 2.0 && s.env[1] == 0, "B DLY 50: %.1f ms, want %.1f", tms(n),
-          TIME_MS_X10[50] / 10.0);
-    /* the amp: sustain, release, off */
+    /* DELAY 50: 50 / 32 beats (781.25 ms at 120 BPM, 1171.9 at 80), then the attack */
+    for (k = 0; k < 2u; k++) {
+        song.g[G_BPM] = (int16_t)(k ? 80 : 120);
+        memset(&s, 0, sizeof s);
+        s.stage[1] = 1;
+        for (n = 0; s.stage[1] == 1 && n < 100000u; n++)
+            quad_env_tick(&s, 1, 0, 60, 0, 0, 50, 1, 0);
+        CHECK(fabs(tms(n) - 50.0 / 32.0 * 60000.0 / song.g[G_BPM]) < 0.8 && s.env[1] == 0, "B DLY 50 at %d BPM: %.1f ms, want %.1f",
+              song.g[G_BPM], tms(n), 50.0 / 32.0 * 60000.0 / song.g[G_BPM]);
+    }
+    song.g[G_BPM] = 120;
+    /* the amp: sustain, release (T60 QUAD_T_ADEC[70]: to 1/4096, -72 dB, in 1.2 of it), off */
     memset(&s, 0, sizeof s);
     s.stage[3] = 2;
     for (n = 0; n < 3u * FS / CTL; n++)
-        quad_env_tick(&s, 3, 20, 60, 90 << 17, 70, 0, 1, 1);
+        quad_env_tick(&s, 3, 20, 30, 90 << 17, 70, 0, 1, 1);
     CHECK(s.stage[3] == 3 && abs(s.env[3] - (90 << 17)) < (1 << 16), "amp sustain %d", s.env[3]);
     for (n = 0; s.stage[3] && n < 100000u; n++)
-        quad_env_tick(&s, 3, 20, 60, 90 << 17, 70, 0, 0, 1);
-    CHECK(!s.stage[3] && !s.env[3] && tms(n) < 2.0 * TIME_MS_X10[70] / 10.0, "amp REL 70 ended after %.1f ms (to 1/4096)", tms(n));
+        quad_env_tick(&s, 3, 20, 30, 90 << 17, 70, 0, 0, 1);
+    want = (int32_t)(t60_ms(QUAD_T_ADEC, 70) * 20.0 * log10((90 << 17) / 4096.0) / 60.0);   /* (SUS 90 -> 2^12) */
+    CHECK(!s.stage[3] && !s.env[3] && fabs(tms(n) / want - 1.0) < 0.03, "amp REL 70 ended after %.1f ms (to 1/4096), want %d",
+          tms(n), want);
     /* in a voice: LEV reached after the attack (velocity 127), TRIG and RESET on a retrigger */
     {
         track_t *t = &trk[0];
@@ -938,7 +967,7 @@ static void t_env(void)
         drv_reset(t);
         drv_patch(t, p);
         drv_on(t, 0, 60, 127);
-        for (n = 0; n < (uint32_t)(TIME_MS_X10[30] / 10.0 * FS / 1000 / CTL) + 4u; n++)
+        for (n = 0; n < ticks_of(oatk_ms(30)) + 4u; n++)
             drv_tick(t, out);
         lvl = quad_lev(100 * 4096 / 127);
         CHECK(abs(quad_vs[0][0].lv[0] - lvl) < lvl / 100, "A LEV 100: level %d, want %d", quad_vs[0][0].lv[0], lvl);
@@ -970,7 +999,7 @@ static void t_env(void)
         quad_legato(t, &t->v[0]);
         CHECK(quad_vs[0][0].stage[0] == 2 && !quad_vs[0][0].env[0], "legato, A TRIG on: not restarted");
         quad_patch[0][QP_BTRIG] = 0;
-        for (n = 0; n < 200u; n++)
+        for (n = 0; n < ticks_of(oatk_ms(30)) + 4u; n++)
             drv_tick(t, out);
         quad_legato(t, &t->v[0]);
         CHECK(quad_vs[0][0].stage[1] == 3, "legato, B TRIG off: restarted");
@@ -1013,10 +1042,10 @@ static void t_rel_inf(void)
                   f0, f1, quad_vs[0][0].stage[2]);
             CHECK(sqrt(sq / CTL) > 100.0, "REL INF: silent 2 s after the note-off (RMS %.1f)", sqrt(sq / CTL));
             CHECK(ENG_QUAD.endless == quad_endless && quad_endless(t, &t->v[0]), "REL INF: not endless (the panic would not end it)");
-            quad_patch[0][QP_EREL] = 60;           /* REL turned down from INF: it decays and ends */
+            quad_patch[0][QP_EREL] = 30;           /* REL turned down from INF: it decays and ends */
             for (n = 0; n < 4u * FS / CTL && drv_tick(t, out); n++)
                 ;
-            CHECK(!t->v[0].active && !quad_vs[0][0].live, "REL INF -> 60: the held voice did not end");
+            CHECK(!t->v[0].active && !quad_vs[0][0].live, "REL INF -> 30: the held voice did not end");
             quad_patch[0][QP_EREL] = 127;        /* held again; a retrigger (the part's own steal) restarts it */
             drv_on(t, 0, 60, 100);
             for (n = 0; n < FS / 4u / CTL; n++)
@@ -1902,7 +1931,7 @@ static void t_fade_phrt(void)
         drv_on(t, 0, 60, 100);
         drv_tick(t, out);
         pan[k][0] = quad_pan_off[0];
-        for (n = 0; n < (uint32_t)(TIME_MS_X10[59] / 10.0 * FS / 1000 / CTL) + 10u; n++)
+        for (n = 0; n < 32767u * 65536u / QUAD_T_FADE[30] + 10u; n++)   /* (FADE 30's ticks) */
             drv_tick(t, out);
         pan[k][1] = quad_pan_off[0];
     }
@@ -2208,7 +2237,7 @@ static void t_v5(void)
 {
     static const struct { uint8_t i; int16_t lo, hi, def; } RG[] = {
         {QP_FREQ, 0, 12700, 12700}, {QP_DTUN, 0, 12700, 0}, {QP_RESO, 0, 12700, 0}, {QP_BASE, 0, 12700, 0},
-        {QP_HARM, -2600, 2600, 0}, {QP_FDEPTH, -6400, 6399, 0}, {QP_EREL, 0, 127, 40}, {QP_EDEC, 0, 127, 64},
+        {QP_HARM, -2600, 2600, 0}, {QP_FDEPTH, -6400, 6399, 0}, {QP_EREL, 0, 127, 24}, {QP_EDEC, 0, 127, 32},
         {QP_LEVEL, 0, 127, 110}, {QP_FDBK, 0, 127, 0}};
     static const struct { int16_t rel, lev, dec, freq; int16_t wrel, wlev, wfreq; } CV[] = {
         {12685, 11040, 127, 12799, 126, 110, 12700}, {12700, 11050, 64, 12750, 127, 111, 12700},
