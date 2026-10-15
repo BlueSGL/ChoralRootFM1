@@ -4028,3 +4028,35 @@ the keys table; INTEGRATION.md's Keyboard bullet; CR_ENGINE.md; releases/0.22.md
 tools/emu/test_cr.sh`: cr_fullkbd's Key Mode entry reads "GM" for G major and F#3's Gsus, the rest as before (below).
 `sh tools/emu/test_cr.sh` PASS (1018 ok) after that. **On the unit**: flashed over the 3y99 build with a backup first
 (`fm1-backups/choralroot-backup-20261015-keysnap2.json`); `--info`: "ChoralRoot 0.22". Not yet played by the owner.
+
+## 2026-10-15 (0.22-beta3: Snap and the Full keyboard's chords released)
+
+3y101. **0.22-beta3's release tree: the notes, the card, the packages of this build (2026-10-15; branch
+claude/key-snap-a8626d from eac5401 = v0.22-beta2).** The owner, with 3y99 and 3y100 on the unit: "This checks out,
+lets tag this as v0.22-beta3 and get it released". `docs/releases/0.22-beta3.md` (new): the opening (a third beta,
+opt-in like the two before; updating from beta2 or beta1 keeps everything, going back to either loses nothing but
+Snap, which they do not know), **New since 0.22-beta2** (Snap, GitHub issue 18, 3y99; the Full keyboard's Key
+chords, 3y100), then 0.22-beta2's whole text with its "New since 0.22-beta1" section dropped (its content is in the
+body since 3y98), one bullet for both in Playing and editing, Installing for beta3 (from beta2 or beta1: the `key_on`
+caveat in a player's words, docs/SETTINGS.md), the single-core names, and "Numerals, Snap and Key Touch" in Going
+back to 0.21. `docs/releases/0.22-beta2.md` and `0.22-beta1.md` unchanged (published); `docs/releases/0.22.md` points
+at 0.22-beta3.md, its "Merged after 0.22-beta2" lines moved into the beta3 notes. `web/releases.json`: a first entry
+0.22-beta3 (`"beta": true`, v0.22-beta3, 2026-10-15, "Beta 3: Snap in Key Mode, the Full keyboard's chords"; 12
+bullets: two "New since beta 2", beta2's two "New since beta 1" merged into one, its other nine with the last two
+merged; four notes: the beta's disclaimer, from beta2 or beta1 with the Snap caveat, from 0.21, going back to 0.21),
+the beta2 and beta1 entries kept below it. docs/HANDOFF.md: the state line, the Snap item. **Built**: `./build.sh
+--release 0.22-beta3` twice, the same SHA256SUMS; `choralroot-0.22-beta3.fwsc` 6837868f7dcd9618...,
+`choralroot-0.22-beta3-1core.fwsc` 498ca109a1ccf21c...; the apps carry `ChoralRoot 0.22-beta3` and `ChoralRoot
+0.22-beta3 1-core`. Size: XIP 547 036 B of 573 440 (95.4 %), RAM 78 652 (80.0 %), POOL 238 936 (69.4 %), RAMTEXT
+7 072, NOINIT 228; the single-core package XIP 544 108 (94.9 %), RAM 75 564 (76.9 %), POOL 238 808. The firmware
+diff since v0.22-beta2 is 3y99 and 3y100 alone (the engine's snap and the Full keyboard's Key chords, the KEY page's
+cell, the LEDs, two bits of `key_on`): no record or settings format changed.
+**Checked**: `CR_VERSION=0.22-beta3 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 82 s; test_cr 1018 ok,
+test_persist 111, test_retired 18, test_pool 7, run_tests all host tests; the browser emulator built as 0.22-beta3
+and test_web_emu PASS); `CR_PACKAGES_DIR=build/release-0.22-beta3 python3 tests/releases_test.py` ALL OK; the ten
+listed packages fetched with `tools/fetch_packages.py` (curl, every sha256 as listed) and beta3's two beside them for
+`tests/site_test.py` (below). The designer-handoff session (beta1 and beta2) confirmed nothing in flight on main and
+its path: the notes file, the first entry, run_all, main pushed before the tag, the release's SHA256SUMS compared
+with the local build's afterwards.
+`python3 tests/site_test.py` with every package in build/scratch/packages: site ALL OK (42). Then main pushed and
+v0.22-beta3 tagged on the same commit, the owner's word ("lets tag this as v0.22-beta3 and get it released").
