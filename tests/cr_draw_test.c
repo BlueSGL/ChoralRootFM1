@@ -50,7 +50,9 @@ static void hk_text(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const char *
 #define FELUCCA_KEYCAPS 0                        /* as choralroot.c: no Felucca keycaps */
 #include "../firmware/src/gfx.c"
 #include "../firmware/src/cr_gfx.c"
-#include "../firmware/src/cr_layout.c"   /* the compiled layouts (build/gen/cr_layouts.h): CR_K_FREE */
+#include "../firmware/src/core.h"        /* (the compiled classic layouts are core.h eng_page_t / eng_screen_t) */
+#include "../firmware/src/cr_layout.c"   /* the compiled layouts (build/gen/cr_layouts.h): P5's rows; CR_K_FREE in the
+                                          * second build, tests/run_cr_draw.sh: the panel's table */
 #include "../firmware/src/cr_draw.c"
 #include "cr_screens_gen.h"
 #include "../firmware/src/cr_engine.h"   /* cr_chord_name: the names as the engine writes them (run_cr_draw.sh links cr_engine.c) */
@@ -246,6 +248,44 @@ static int ring_check(void)
     return !memcmp(&r, &cr_ring, sizeof r);
 }
 
+/* a hash of the picture (the goldens) */
+static uint32_t screen_hash(void)
+{
+    uint32_t h = 2166136261u, i;
+    for (i = 0; i < 240u * 240u; i++) h = (h ^ host_screen[i]) * 16777619u;
+    return h;
+}
+/* the goldens of a set of pictures: file's lines "slug hash" (write: rewrite it first) -> how many are unchanged, *seen
+ * the file's lines */
+static uint32_t goldens(const char *file, const char *what, int write, const char (*slug)[40], const uint32_t *h, uint32_t ng,
+                        uint32_t *seen)
+{
+    FILE *gf;
+    char ln[128], sl[64];
+    unsigned hv;
+    uint32_t i, same = 0;
+    *seen = 0;
+    if (write && (gf = fopen(file, "w"))) {
+        fprintf(gf, "# tests/cr_draw_test.c %s: a hash of each picture (rewritten when its variable is 1)\n", what);
+        for (i = 0; i < ng; i++) fprintf(gf, "%s %08x\n", slug[i], h[i]);
+        fclose(gf);
+    }
+    if ((gf = fopen(file, "r"))) {
+        while (fgets(ln, sizeof ln, gf))
+            if (sscanf(ln, "%63s %x", sl, &hv) == 2 && sl[0] != '#') {
+                (*seen)++;
+                for (i = 0; i < ng; i++)
+                    if (!strcmp(slug[i], sl)) {
+                        same += h[i] == hv;
+                        if (h[i] != hv) fprintf(rep, "golden %s: %08x, not %08x\n", sl, h[i], hv);
+                    }
+            }
+        fclose(gf);
+    }
+    return same;
+}
+
+#if CR_LAY_FREE
 /* ------------------------------------------------------ the free screens (CR_K_FREE) --- */
 /* a mock-up state of a compiled layout's screen si (index + 1) on lane `lane`: every bound element's cell filled from
  * seed (a knob's value and fill, an led's on, a switch's position, a named value's name), the sound "ITS PROPHET5" */
@@ -289,12 +329,6 @@ static void free_state(cr_screen_t *s, uint32_t li, uint32_t si, uint32_t lane, 
                 cl->pct = (uint8_t)(v * 256u / 127u > 255u ? 255u : v * 256u / 127u);
             }
         }
-}
-static uint32_t screen_hash(void)
-{
-    uint32_t h = 2166136261u, i;
-    for (i = 0; i < 240u * 240u; i++) h = (h ^ host_screen[i]) * 16777619u;
-    return h;
 }
 /* every screen x lane of the compiled P5 panel, its hot element, REV at both values: PPMs, the lint, the goldens
  * (tests/cr_free_golden.txt: a hash of each picture; CR_FREE_GOLDEN=1 writes it); a knob turn's partial compose against
@@ -469,6 +503,7 @@ static void free_screens(const char *dir)
         }
     }
 }
+#endif /* CR_LAY_FREE */
 
 /* the P5 cell glyphs (cr_draw.c cr_p5glyph; docs/EDITOR.md section 9): edit8 screens of them, no band (two rows, either
  * active), one lane under a band (the full-size row at 124), two lanes under a band (the 22 px box): PPMs, the lint,
@@ -616,6 +651,133 @@ static void p5cell_screens(const char *dir)
     check(name, seen == ng && same == ng);
 }
 
+#if CR_LAYC_N
+/* P5's rows (the compiled classic layout, build/gen/cr_layouts.h CR_LAYC: design/layouts/designs/p5-rows.json): every
+ * screen x lane as the editor's screen model has it, from mock-up states (cr_draw_test draws, it does not edit): the
+ * plan's title, band and rows, each bound cell its design's label (else its copy's), its p5 glyph by the cell style
+ * (cr_edit.c ce_cell_p5's), a value and a fill from a seed; the band's values from the seed. PPMs, the lint, the goldens
+ * (tests/cr_p5rows_golden.txt; CR_P5ROWS_GOLDEN=1 writes it); FILTER with its KNOB 1 hot; every bound cell turned and
+ * cooled: each partial compose leaves the screen as a whole redraw does */
+static void rows_state(cr_screen_t *s, uint32_t si, uint32_t lane, uint32_t seed)
+{
+    static const uint8_t W[6] = {CR_W_NONE, CR_W_ENV, CR_W_FILTER, CR_W_FILTER, CR_W_ALGO, CR_W_ADE2};
+    static const uint8_t G[7] = {CR_G_P5KNOB, CR_G_P5LED, CR_G_P5LED, CR_G_P5LED, CR_G_P5LED, CR_G_P5LED2, CR_G_P5SWITCH};
+    static const uint8_t I[7] = {0, CR_P5I_NONE, CR_P5I_SAW, CR_P5I_TRI, CR_P5I_SQUARE, 0, 0};
+    static const char *const SW[3] = {"Off", "Half", "Full"};
+    const cr_layc_t *L = &CR_LAYC[0];
+    const eng_screen_t *h = &CR_LAYC_SCREENS[L->screen0 + si];
+    uint32_t r, c, rows = h->pg[1] == 255u ? 1u : 2u, i;
+    cr_screen_clear(s);
+    s->kind = CR_K_EDIT8;
+    s->wide = h->band < 6u ? W[h->band] : CR_W_NONE;
+    s->n_rows = (uint8_t)rows;
+    s->active = (uint8_t)lane;
+    s->batt = 255;
+    snprintf(s->title, sizeof s->title, "ITS PROPHET5");
+    snprintf(s->page, sizeof s->page, "%s", h->title);
+    for (i = 0; i < 8u; i++) s->wv[i] = (uint8_t)((37u * (seed + i) + 11u) % 128u * 2u);
+    for (r = 0; r < rows; r++)
+        for (c = 0; c < 4u; c++) {
+            const uint8_t *src = CR_LAYC_SRC[L->page0 + h->pg[r]][c];
+            const param_desc_t *d = &CR_LAYC_PAGES[L->page0 + h->pg[r]].col[c];
+            cr_cell_t *cl = &s->cell[r][c];
+            uint32_t k = seed + r * 4u + c, st = h->cell[r][c] - ENG_C_P5KNOB, v;
+            if (src[0] == 255u) continue;
+            cl->flags = CR_CF_ON;
+            snprintf(cl->label, sizeof cl->label, "%s", h->label[r][c] ? h->label[r][c] : d->label);
+            cl->glyph = st < 7u ? G[st] : CR_G_NONE;
+            cl->pct2 = st < 7u ? I[st] : 0u;
+            if (cl->glyph == CR_G_P5KNOB) {
+                v = (37u * k + 11u) % (uint32_t)(d->max - d->min + 1) + (uint32_t)d->min;
+                snprintf(cl->value, sizeof cl->value, "%u", v);
+                cl->pct = (uint8_t)(d->max > d->min ? (v - (uint32_t)d->min) * 255u / (uint32_t)(d->max - d->min) : 0u);
+            } else if (cl->glyph == CR_G_P5SWITCH) {
+                cl->pct = (uint8_t)(k % 3u * 255u / 2u);
+                snprintf(cl->value, sizeof cl->value, "%s", SW[k % 3u]);
+            } else {
+                cl->pct = (uint8_t)(k & 1u ? 255u : 0u);
+                if (cl->glyph == CR_G_P5LED2 && d->names) {      /* the two value names after the label's NUL */
+                    size_t l = strlen(cl->label);
+                    snprintf(cl->label + l + 1, sizeof cl->label - l - 1, "%s", d->names[0]);
+                    l += strlen(d->names[0]) + 1u;
+                    snprintf(cl->label + l + 1, sizeof cl->label - l - 1, "%s", d->names[1]);
+                    snprintf(cl->value, sizeof cl->value, "%s", d->names[k & 1u]);
+                } else {
+                    snprintf(cl->value, sizeof cl->value, "%s", k & 1u ? "On" : "Off");
+                }
+            }
+        }
+}
+static void rows_screens(const char *dir)
+{
+    static cr_screen_t s, t;
+    static uint16_t part[240 * 240];
+    static char slug[48][40];
+    static uint32_t hs[48];
+    const cr_layc_t *L = &CR_LAYC[0];
+    uint32_t si, lane, ng = 0, i, k, ok = 1, f0 = nfind, turns = 0, bad = 0, same, seen, filt = 0, c;
+    int write = getenv("CR_P5ROWS_GOLDEN") && !strcmp(getenv("CR_P5ROWS_GOLDEN"), "1");
+    char name[220];
+    check("the compiled layouts: P5's rows (11 screens over 17 pages; no free layout)", CR_LAYC_N == 1u && L->nscreens == 11u &&
+          L->npages == 17u && !CR_LAYOUTS_FREE);
+    for (si = 0; si < L->nscreens; si++) {
+        const eng_screen_t *h = &CR_LAYC_SCREENS[L->screen0 + si];
+        if (!strcmp(h->title, "FILTER")) filt = si;
+        for (lane = 0; lane < (h->pg[1] == 255u ? 1u : 2u); lane++) {
+            rows_state(&s, si, lane, si + 1u);
+            render(&s, 0);
+            snprintf(slug[ng], sizeof slug[ng], "p5rows_%u_%u", si + 1u, lane + 1u);
+            lint(slug[ng], &s);
+            write_ppm(dir, slug[ng]);
+            hs[ng++] = screen_hash();
+        }
+    }
+    rows_state(&s, filt, 0, 0);                              /* FILTER: CUTOFF hot (KNOB 1) */
+    s.hot_r = 1;
+    s.hot_c = 0;
+    render(&s, 0);
+    snprintf(slug[ng], sizeof slug[ng], "p5rows_filter_hot");
+    lint(slug[ng], &s);
+    write_ppm(dir, slug[ng]);
+    hs[ng++] = screen_hash();
+    for (i = 0; i < ng; i++)
+        for (k = i + 1u; k < ng; k++)
+            if (hs[i] == hs[k]) ok = 0;
+    snprintf(name, sizeof name, "P5's rows: %u pictures (17 screen x lane, FILTER's KNOB 1 hot), all different, lint clean", ng);
+    check(name, ng == 18u && ok && nfind == f0);
+    same = goldens("tests/cr_p5rows_golden.txt", "rows_screens", write, (const char (*)[40])slug, hs, ng, &seen);
+    snprintf(name, sizeof name, "P5's rows: the goldens (tests/cr_p5rows_golden.txt): %u of %u pictures unchanged", same, ng);
+    check(name, seen == ng && same == ng);
+    for (si = 0; si < L->nscreens; si++) {          /* every bound cell turned and cooled: partial compose = a whole redraw */
+        const eng_screen_t *h = &CR_LAYC_SCREENS[L->screen0 + si];
+        for (lane = 0; lane < (h->pg[1] == 255u ? 1u : 2u); lane++)
+            for (c = 0; c < 4u; c++) {
+                if (CR_LAYC_SRC[L->page0 + h->pg[lane]][c][0] == 255u) continue;
+                rows_state(&s, si, lane, 3u);
+                render(&s, 0);
+                t = s;
+                snprintf(t.cell[lane][c].value, sizeof t.cell[lane][c].value, "%s", "127");
+                t.cell[lane][c].pct = (uint8_t)(255u - t.cell[lane][c].pct);
+                t.hot_r = (uint8_t)(lane + 1u);
+                t.hot_c = (uint8_t)c;
+                if (s.wide) t.wv[c] = (uint8_t)(255u - t.wv[c]);
+                cr_draw(&t, 0);
+                memcpy(part, host_screen, sizeof part);
+                render(&t, 0);
+                bad += memcmp(part, host_screen, sizeof part) != 0;
+                t.hot_r = 0;
+                cr_draw(&t, 0);
+                memcpy(part, host_screen, sizeof part);
+                render(&t, 0);
+                bad += memcmp(part, host_screen, sizeof part) != 0;
+                turns++;
+            }
+    }
+    snprintf(name, sizeof name, "every cell of P5's rows turned and cooled (%u): each partial compose as a whole redraw (%u differ)", turns, bad);
+    check(name, turns == 56u && !bad);
+}
+#endif
+
 int main(int argc, char **argv)
 {
     static uint16_t a[240 * 240], b[240 * 240];
@@ -624,10 +786,21 @@ int main(int argc, char **argv)
     uint32_t i, k, pal = mod_index(), worst = 0;
 
     snprintf(path, sizeof path, "%s/report.txt", dir);
-    if (!(rep = fopen(path, "w"))) { fprintf(stderr, "cr_draw_test: cannot write %s (make %s/ppm first)\n", path, dir); return 1; }
+    if (!(rep = fopen(path, argc > 2 && !strcmp(argv[2], "free") ? "a" : "w"))) {   /* (the free build: after the main one's) */
+        fprintf(stderr, "cr_draw_test: cannot write %s (make %s/ppm first)\n", path, dir);
+        return 1;
+    }
     check("the MOD palette is one of the UI palettes", pal < NPALETTES);
     check("the ring's table (firmware/src/cr_ring_table.h) is cr_ring_build's (CR_RING_GEN=1 rewrites it)", ring_check());
     palette_set(pal < NPALETTES ? pal : 0u);
+#if CR_LAY_FREE
+    if (argc > 2 && !strcmp(argv[2], "free")) {   /* (tests/run_cr_draw.sh's second build: the panel's free table) */
+        free_screens(dir);
+        fclose(rep);
+        printf("cr_draw: the free screens (P5's panel, tests/cr_free_golden.txt): %u lint findings\n", nfind);
+        return nfind || nfail ? 1 : 0;
+    }
+#endif
 
     {   /* every glyph of the big faces fits the decode buffer */
         const aafont_t *F[2] = {&AF_CRX, &AF_CRB};
@@ -2847,7 +3020,9 @@ int main(int argc, char **argv)
         check(name, found == 3u && okv && nfind == f0 && nell == e0);
     }
 
-    free_screens(dir);
+#if CR_LAYC_N
+    rows_screens(dir);
+#endif
     p5cell_screens(dir);
 
     fprintf(rep, "\n%u lint findings, %u ellipsised texts\n", nfind, nell);

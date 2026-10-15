@@ -3821,3 +3821,50 @@ the Design self-test's 10th square; tests/gen_layout_test.py 66 (the refusal, th
 tests/cr_draw_test.c (a `CR_G_N` cell: its glyph area empty). **Checked**: `sh tests/run_all.sh` ALL SUITES PASSED
 (22; test_layout 125 ok, test_cr 1009 ok, 313 golden renders 0 changed). Not done: sketches on stack screens (no
 glyph box), and the free screens' elements (their glyphs are the p5 style's).
+
+## 2026-10-15 (P5's editor from a design file: the owner's rows compiled)
+
+3y96. **P5's editor comes from a design file: the owner's rows compiled as a screen plan; the free-screen code leaves
+the unit (2026-10-15; on lay-7 after a3cd8bb, not pushed, not flashed).** The owner, on `design/layouts/designs/
+p5-rows.json`: "This layout now checks out, I updated the label text in editor. We are good to build and get into the
+firmware." **The generator** (`tools/gen_layout.py`): `BUILD = {"P5": "design/layouts/designs/p5-rows.json"}`; a
+design's classic screens of OSC .. MOD compile to exactly what web/fm1layout.js `packDesign` packs as a plan
+(`pack_classic`: a page a lane, each column a copy of the built-in descriptor with its built-in (page, col), its
+label and cell style; the sections; the screens with band and title; with free screens too, the built-in pages
+copied after the plan's, fenced off, as packDesign does), written into `build/gen/cr_layouts.h` as C: `CR_LAYC`
+(`cr_layout.h cr_layc_t`), `CR_LAYC_PAGES` (core.h `eng_page_t`), `CR_LAYC_SRC`, `CR_LAYC_SCREENS` (`eng_screen_t`:
+the cells' styles and labels); `CR_LAYOUTS_FREE` 0/1 (a built design has free screens). The build rules, in
+validateDesign's words with `{build: true}`: classic screens in OSC .. MOD allowed as the plan has them (edit8 of one or
+two lanes, a plan band, no part parameter on an engine page, Latin-1 labels and lane titles), a classic screen beside
+free ones in a group refused, FX and MIX today's, a sketch refused; `--design ENGINE=path` for the tests. **The
+firmware**: `cr_pages.c cp_deep` serves an engine with a compiled classic layout the layout's `eng_deep_t`: the
+engine's own (the blob, the presets) with the layout's 17 pages, sections and 11-screen plan, `get` / `set` / `desc` /
+`mod_dst` going through to the built-in (page, col) (`desc` answers the built-in descriptor). The tables are const;
+the `eng_deep_t` is one 52 B struct filled on first use (its function pointers and the blob's size are the engine's,
+not constants the header could name); the copied descriptors are generated from the layout file and checked field for
+field against the engine's by tests/cr_p5rows_test.c. `cr_edit.c` derives the screens from the plan, with EXPR
+appended after a plan's MOD screens (every engine's); the editor's trace names the built-in address. P5's 19 pages,
+its blob, SysEx, `cr_backup` and `params_hash` unchanged. **The free code out**: `cr_layout.c CR_LAY_FREE` (a built
+free design, or the layout tool's preview) gates the free tables, `cr_edit.c` CE_S_FREE and `cr_draw.c` CR_K_FREE (and
+its 128 B of strip hashes). **Size**: XIP 548 860 -> 546 156 B (95.7 -> 95.2 %, -2 704 B), RAM 79.8 -> 79.9 % (78 524
+B of 98 304), POOL 69.5 -> 69.4 %. **The tool**: `lay_catalog` lists P5 as the unit shows it (its 19 pages, the
+rows as its screens, each cell bound to its built-in address, `"layout"` naming the design); `design/layouts/p5.json`
+regenerated (pages and `params_hash` unchanged, the groups the rows); `lay_layouts` on by default (the Viewer shows
+the unit's rows), `lay_catalog_builtin` the classic derivation; `packDesign` packs a plan when the catalog has a
+layout; `lay_compiled` answers a classic layout in the packed form; p5-rows.json is "buildable today". **Tests**:
+web/test_layout.mjs 7: packDesign of p5-rows.json = the compiled tables byte for byte (826 B); lay_load of it = the
+compiled frames, 88 (20 screen x lane, 68 with a cell turned and hot), lay_render and the LCD; 3: the browser emulator
+walked by its panel through P5's 22 places = the module (and FILT 1 after KNOB 1 +1); 6: the in-place checks on the
+built-in derivation; tests/gen_layout_test.py (82 checks: the rows' bytes, the panel's free records and a mixed
+design's fence = packDesign's, the plan's refusals word for word); tests/cr_p5rows_test.c (replaces cr_p5panel_test.c:
+the copies against the engine's, the groups OSC 2 FILT 3 ENV 2 LFO 2 MOD 2 + EXPR, every one of the 56 cells turned
+through KNOB 1..4 at its built-in address, the 12 empty slots inert, SELECT, the blob); tests/cr_layout_test.c (the
+header after core.h); tests/run_cr_draw.sh (new goldens `tests/cr_p5rows_golden.txt`: 17 screen x lane and FILTER's
+hot cell from mock-up states, every cell turned and cooled = a whole redraw; the panel's 22 free goldens kept in a
+second build on the panel compiled apart, unchanged; the 309 earlier PPMs byte for byte the same); tools/emu
+cr_prophet.txt / test_cr.sh (FILTER KNOB 1 the cutoff, the LFO's KNOB 1 FREQ and KNOB 2 the saw's button, OSC A's row
+B KNOB 2 Mix A, fifteen screens) and test_persist's P5 runs (the cutoff on KNOB 1). The owner's sheet:
+`design/choralroot-fm1-p5-rows-emulator.png` (the unit's editor on the browser emulator, 22 tiles);
+`design/choralroot-fm1-p5-rows-screens.png` re-rendered. **Checked**: `sh tests/run_all.sh` ALL SUITES PASSED (22;
+test_layout 131 ok, gen_layout_test 82, cr_p5rows 12, cr_layout 12, test_cr 1011 ok, test_persist 111, test_retired
+18, test_pool 7, 313 golden renders 0 changed); `./build.sh` the size line above. Not tested on a unit.

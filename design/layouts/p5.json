@@ -197,6 +197,7 @@
     }
   ],
   "page_cells": 56,
+  "layout": {"design": "design/layouts/designs/p5-rows.json", "pages": 17, "screens": 11},
   "header": null,
   "groups": [
     {
@@ -211,26 +212,28 @@
           "band": "none",
           "tall": false,
           "header": false,
-          "pages": [0, 1],
+          "plan": 0,
+          "plan_band": "none",
+          "pages": [0, 1, 4],
           "lanes": [
             {
               "lane": 0,
               "title": "OSC A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 0, "col": 0, "page_title": "OSC A", "label": "Freq", "short": "FREQ", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 0, "col": 1, "page_title": "OSC A", "label": "Saw", "short": "SAW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 0, "col": 2, "page_title": "OSC A", "label": "Pulse", "short": "PULSE", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 0, "col": 3, "page_title": "OSC A", "label": "Width", "short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null}
+                {"knob": 1, "bind": "deep", "page": 0, "col": 0, "page_title": "OSC A", "label": "FREQ", "short": "FREQ", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 0, "col": 1, "page_title": "OSC A", "label": "SAW", "short": "SAW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-saw"},
+                {"knob": 3, "bind": "deep", "page": 0, "col": 2, "page_title": "OSC A", "label": "PULSE", "short": "PULSE", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-sqr"},
+                {"knob": 4, "bind": "deep", "page": 0, "col": 3, "page_title": "OSC A", "label": "P WIDTH", "short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"}
               ]
             },
             {
               "lane": 1,
               "title": "OSC A",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 1, "col": 0, "page_title": "OSC A+", "label": "Sync", "short": "SYNC", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "none"},
-                {"knob": 3, "bind": "none"},
-                {"knob": 4, "bind": "none"}
+                {"knob": 1, "bind": "deep", "page": 1, "col": 0, "page_title": "OSC A+", "label": "SYNC", "short": "SYNC", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 2, "bind": "deep", "page": 4, "col": 0, "page_title": "MIXER", "label": "MIX A", "short": "MIX A", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 4, "col": 1, "page_title": "MIXER", "label": "MIX B", "short": "MIX B", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 4, "bind": "deep", "page": 4, "col": 2, "page_title": "MIXER", "label": "NOISE", "short": "NOISE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"}
               ]
             }
           ]
@@ -242,47 +245,28 @@
           "band": "none",
           "tall": false,
           "header": false,
+          "plan": 1,
+          "plan_band": "none",
           "pages": [2, 3],
           "lanes": [
             {
               "lane": 0,
               "title": "OSC B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 2, "col": 0, "page_title": "OSC B", "label": "Freq", "short": "FREQ", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 2, "col": 1, "page_title": "OSC B", "label": "Fine", "short": "FINE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 2, "col": 2, "page_title": "OSC B", "label": "Saw", "short": "SAW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 2, "col": 3, "page_title": "OSC B", "label": "Tri", "short": "TRI", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null}
+                {"knob": 1, "bind": "deep", "page": 2, "col": 0, "page_title": "OSC B", "label": "FREQ", "short": "FREQ", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 2, "col": 2, "page_title": "OSC B", "label": "SAW", "short": "SAW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-saw"},
+                {"knob": 3, "bind": "deep", "page": 2, "col": 3, "page_title": "OSC B", "label": "TRI", "short": "TRI", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-tri"},
+                {"knob": 4, "bind": "deep", "page": 3, "col": 0, "page_title": "OSC B+", "label": "PULSE", "short": "PULSE", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-sqr"}
               ]
             },
             {
               "lane": 1,
               "title": "OSC B",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 3, "col": 0, "page_title": "OSC B+", "label": "Pulse", "short": "PULSE", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 3, "col": 1, "page_title": "OSC B+", "label": "Width", "short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 3, "col": 2, "page_title": "OSC B+", "label": "Lo freq", "short": "LOFREQ", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 3, "col": 3, "page_title": "OSC B+", "label": "Keyboard", "short": "KEYBD", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null}
-              ]
-            }
-          ]
-        },
-        {
-          "screen": 2,
-          "kind": "edit8",
-          "type": "page",
-          "band": "none",
-          "tall": false,
-          "header": false,
-          "pages": [4],
-          "lanes": [
-            {
-              "lane": 0,
-              "title": "MIXER",
-              "cells": [
-                {"knob": 1, "bind": "deep", "page": 4, "col": 0, "page_title": "MIXER", "label": "Osc A", "short": "MIX A", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 4, "col": 1, "page_title": "MIXER", "label": "Osc B", "short": "MIX B", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 4, "col": 2, "page_title": "MIXER", "label": "Noise", "short": "NOISE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "none"}
+                {"knob": 1, "bind": "deep", "page": 2, "col": 1, "page_title": "OSC B", "label": "FINE", "short": "FINE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 3, "col": 1, "page_title": "OSC B+", "label": "P WIDTH", "short": "WIDTH", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 3, "col": 2, "page_title": "OSC B+", "label": "LO FREQ", "short": "LOFREQ", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 4, "bind": "deep", "page": 3, "col": 3, "page_title": "OSC B+", "label": "KEYB", "short": "KEYBD", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"}
               ]
             }
           ]
@@ -301,26 +285,64 @@
           "band": "filter",
           "tall": false,
           "header": false,
+          "plan": 2,
+          "plan_band": "filter",
           "pages": [5, 6],
           "lanes": [
             {
               "lane": 0,
               "title": "FILTER",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 5, "col": 0, "page_title": "FILTER", "label": "Cutoff", "short": "CUT", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 5, "col": 1, "page_title": "FILTER", "label": "Reso", "short": "RES", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 5, "col": 2, "page_title": "FILTER", "label": "Env amt", "short": "FENV", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 5, "col": 3, "page_title": "FILTER", "label": "Key trk", "short": "KTRK", "fmt": "enum", "min": 0, "max": 2, "def": 0, "names": ["OFF", "HALF", "FULL"], "unit": null}
+                {"knob": 1, "bind": "deep", "page": 5, "col": 0, "page_title": "FILTER", "label": "CUTOFF", "short": "CUT", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 5, "col": 1, "page_title": "FILTER", "label": "RES", "short": "RES", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 5, "col": 2, "page_title": "FILTER", "label": "ENV AMT", "short": "FENV", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 4, "bind": "deep", "page": 6, "col": 0, "page_title": "FILTER+", "label": "REV", "short": "REV", "fmt": "enum", "min": 0, "max": 1, "def": 1, "names": ["1/2", "3"], "unit": null, "style": "p5led2"}
               ]
-            },
+            }
+          ]
+        },
+        {
+          "screen": 1,
+          "kind": "edit8",
+          "type": "edit",
+          "band": "env",
+          "tall": false,
+          "header": false,
+          "plan": 3,
+          "plan_band": "env",
+          "pages": [9],
+          "lanes": [
             {
-              "lane": 1,
-              "title": "FILTER",
+              "lane": 0,
+              "title": "ENV 2 · filter",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 6, "col": 0, "page_title": "FILTER+", "label": "Filter rev", "short": "REV", "fmt": "enum", "min": 0, "max": 1, "def": 1, "names": ["1/2", "3"], "unit": null},
-                {"knob": 2, "bind": "deep", "page": 6, "col": 1, "page_title": "FILTER+", "label": "Aftertch", "short": "AFTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "none"},
-                {"knob": 4, "bind": "none"}
+                {"knob": 1, "bind": "deep", "page": 9, "col": 0, "page_title": "ENV 2", "label": "ATTACK", "short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 9, "col": 1, "page_title": "ENV 2", "label": "DECAY", "short": "DEC", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 9, "col": 2, "page_title": "ENV 2", "label": "SUSTAIN", "short": "SUS", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 4, "bind": "deep", "page": 9, "col": 3, "page_title": "ENV 2", "label": "RELEASE", "short": "REL", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"}
+              ]
+            }
+          ]
+        },
+        {
+          "screen": 2,
+          "kind": "edit8",
+          "type": "edit",
+          "band": "none",
+          "tall": false,
+          "header": false,
+          "plan": 4,
+          "plan_band": "none",
+          "pages": [10, 5, 6],
+          "lanes": [
+            {
+              "lane": 0,
+              "title": "ENV 2 +",
+              "cells": [
+                {"knob": 1, "bind": "deep", "page": 10, "col": 0, "page_title": "ENV 2+", "label": "VELOC", "short": "VEL", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 2, "bind": "none"},
+                {"knob": 3, "bind": "deep", "page": 5, "col": 3, "page_title": "FILTER", "label": "KEY TRK", "short": "KTRK", "fmt": "enum", "min": 0, "max": 2, "def": 0, "names": ["OFF", "HALF", "FULL"], "unit": null, "style": "p5switch"},
+                {"knob": 4, "bind": "deep", "page": 6, "col": 1, "page_title": "FILTER+", "label": "AFTER", "short": "AFTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"}
               ]
             }
           ]
@@ -339,26 +361,18 @@
           "band": "env",
           "tall": false,
           "header": false,
-          "pages": [7, 8],
+          "plan": 5,
+          "plan_band": "env",
+          "pages": [7],
           "lanes": [
             {
               "lane": 0,
               "title": "ENV 1 · amp",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 7, "col": 0, "page_title": "ENV 1", "label": "Attack", "short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 7, "col": 1, "page_title": "ENV 1", "label": "Decay", "short": "DEC", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 7, "col": 2, "page_title": "ENV 1", "label": "Sustain", "short": "SUS", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 7, "col": 3, "page_title": "ENV 1", "label": "Release", "short": "REL", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null}
-              ]
-            },
-            {
-              "lane": 1,
-              "title": "ENV 1 · amp",
-              "cells": [
-                {"knob": 1, "bind": "deep", "page": 8, "col": 0, "page_title": "ENV 1+", "label": "Velocity", "short": "VEL", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 8, "col": 1, "page_title": "ENV 1+", "label": "Rel sw", "short": "RELSW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "none"},
-                {"knob": 4, "bind": "none"}
+                {"knob": 1, "bind": "deep", "page": 7, "col": 0, "page_title": "ENV 1", "label": "ATTACK", "short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 7, "col": 1, "page_title": "ENV 1", "label": "DECAY", "short": "DEC", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 7, "col": 2, "page_title": "ENV 1", "label": "SUSTAIN", "short": "SUS", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 4, "bind": "deep", "page": 7, "col": 3, "page_title": "ENV 1", "label": "RELEASE", "short": "REL", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"}
               ]
             }
           ]
@@ -367,27 +381,19 @@
           "screen": 1,
           "kind": "edit8",
           "type": "edit",
-          "band": "env",
+          "band": "none",
           "tall": false,
           "header": false,
-          "pages": [9, 10],
+          "plan": 6,
+          "plan_band": "none",
+          "pages": [8],
           "lanes": [
             {
               "lane": 0,
-              "title": "ENV 2 · filter",
+              "title": "ENV 1 +",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 9, "col": 0, "page_title": "ENV 2", "label": "Attack", "short": "ATK", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 9, "col": 1, "page_title": "ENV 2", "label": "Decay", "short": "DEC", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 9, "col": 2, "page_title": "ENV 2", "label": "Sustain", "short": "SUS", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 9, "col": 3, "page_title": "ENV 2", "label": "Release", "short": "REL", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null}
-              ]
-            },
-            {
-              "lane": 1,
-              "title": "ENV 2 · filter",
-              "cells": [
-                {"knob": 1, "bind": "deep", "page": 10, "col": 0, "page_title": "ENV 2+", "label": "Velocity", "short": "VEL", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "none"},
+                {"knob": 1, "bind": "deep", "page": 8, "col": 0, "page_title": "ENV 1+", "label": "VELOC", "short": "VEL", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 2, "bind": "deep", "page": 8, "col": 1, "page_title": "ENV 1+", "label": "REL SW", "short": "RELSW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
               ]
@@ -408,25 +414,27 @@
           "band": "none",
           "tall": false,
           "header": false,
+          "plan": 7,
+          "plan_band": "none",
           "pages": [11, 12],
           "lanes": [
             {
               "lane": 0,
               "title": "LFO",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 11, "col": 0, "page_title": "LFO", "label": "Rate", "short": "RATE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 11, "col": 1, "page_title": "LFO", "label": "Amount", "short": "AMOUNT", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 11, "col": 2, "page_title": "LFO", "label": "Noise", "short": "NOISE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 11, "col": 3, "page_title": "LFO", "label": "Aftertch", "short": "AFTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null}
+                {"knob": 1, "bind": "deep", "page": 11, "col": 0, "page_title": "LFO", "label": "FREQ", "short": "RATE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 12, "col": 0, "page_title": "LFO+", "label": "SAW", "short": "SAW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-saw"},
+                {"knob": 3, "bind": "deep", "page": 12, "col": 1, "page_title": "LFO+", "label": "TRI", "short": "TRI", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-tri"},
+                {"knob": 4, "bind": "deep", "page": 12, "col": 2, "page_title": "LFO+", "label": "SQUARE", "short": "SQUARE", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led-sqr"}
               ]
             },
             {
               "lane": 1,
               "title": "LFO",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 12, "col": 0, "page_title": "LFO+", "label": "Saw", "short": "SAW", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 12, "col": 1, "page_title": "LFO+", "label": "Tri", "short": "TRI", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 12, "col": 2, "page_title": "LFO+", "label": "Square", "short": "SQUARE", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
+                {"knob": 1, "bind": "deep", "page": 11, "col": 1, "page_title": "LFO", "label": "INIT AMT", "short": "AMOUNT", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 11, "col": 3, "page_title": "LFO", "label": "AFTER", "short": "AFTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
               ]
             }
@@ -439,24 +447,26 @@
           "band": "none",
           "tall": false,
           "header": false,
-          "pages": [13, 14],
+          "plan": 8,
+          "plan_band": "none",
+          "pages": [11, 13, 14],
           "lanes": [
             {
               "lane": 0,
               "title": "WHEEL",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 13, "col": 0, "page_title": "WHEEL", "label": "Freq A", "short": "FREQ A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 13, "col": 1, "page_title": "WHEEL", "label": "Freq B", "short": "FREQ B", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 13, "col": 2, "page_title": "WHEEL", "label": "PW A", "short": "PW A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 13, "col": 3, "page_title": "WHEEL", "label": "PW B", "short": "PW B", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null}
+                {"knob": 1, "bind": "deep", "page": 11, "col": 2, "page_title": "LFO", "label": "SRC MIX", "short": "NOISE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 13, "col": 0, "page_title": "WHEEL", "label": "FREQ A", "short": "FREQ A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 3, "bind": "deep", "page": 13, "col": 1, "page_title": "WHEEL", "label": "FREQ B", "short": "FREQ B", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 4, "bind": "deep", "page": 13, "col": 2, "page_title": "WHEEL", "label": "PW A", "short": "PW A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"}
               ]
             },
             {
               "lane": 1,
               "title": "WHEEL",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 14, "col": 0, "page_title": "WHEEL+", "label": "Filter", "short": "FILTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "none"},
+                {"knob": 1, "bind": "deep", "page": 13, "col": 3, "page_title": "WHEEL", "label": "PW B", "short": "PW B", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 2, "bind": "deep", "page": 14, "col": 0, "page_title": "WHEEL+", "label": "FILTER", "short": "FILTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
               ]
@@ -477,23 +487,25 @@
           "band": "none",
           "tall": false,
           "header": false,
+          "plan": 9,
+          "plan_band": "none",
           "pages": [15, 16],
           "lanes": [
             {
               "lane": 0,
               "title": "POLYMOD",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 15, "col": 0, "page_title": "POLYMOD", "label": "Env", "short": "ENV", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 15, "col": 1, "page_title": "POLYMOD", "label": "Osc B", "short": "OSC B", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 15, "col": 2, "page_title": "POLYMOD", "label": "Freq A", "short": "FREQ A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 15, "col": 3, "page_title": "POLYMOD", "label": "PW A", "short": "PW A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null}
+                {"knob": 1, "bind": "deep", "page": 15, "col": 0, "page_title": "POLYMOD", "label": "FILT ENV", "short": "ENV", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 15, "col": 1, "page_title": "POLYMOD", "label": "OSC B", "short": "OSC B", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 15, "col": 2, "page_title": "POLYMOD", "label": "FREQ A", "short": "FREQ A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 4, "bind": "deep", "page": 15, "col": 3, "page_title": "POLYMOD", "label": "PW A", "short": "PW A", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"}
               ]
             },
             {
               "lane": 1,
               "title": "POLYMOD",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 16, "col": 0, "page_title": "POLYMOD+", "label": "Filter", "short": "FILTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
+                {"knob": 1, "bind": "deep", "page": 16, "col": 0, "page_title": "POLYMOD+", "label": "FILTER", "short": "FILTER", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
                 {"knob": 2, "bind": "none"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
@@ -508,24 +520,26 @@
           "band": "none",
           "tall": false,
           "header": false,
+          "plan": 10,
+          "plan_band": "none",
           "pages": [17, 18],
           "lanes": [
             {
               "lane": 0,
               "title": "VOICE",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 17, "col": 0, "page_title": "VOICE", "label": "Unison", "short": "UNISON", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null},
-                {"knob": 2, "bind": "deep", "page": 17, "col": 1, "page_title": "VOICE", "label": "Voices", "short": "VOICES", "fmt": "int", "min": 1, "max": 4, "def": 4, "names": null, "unit": null},
-                {"knob": 3, "bind": "deep", "page": 17, "col": 2, "page_title": "VOICE", "label": "Detune", "short": "DETUNE", "fmt": "int", "min": 0, "max": 7, "def": 0, "names": null, "unit": null},
-                {"knob": 4, "bind": "deep", "page": 17, "col": 3, "page_title": "VOICE", "label": "Glide", "short": "GLIDE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null}
+                {"knob": 1, "bind": "deep", "page": 17, "col": 0, "page_title": "VOICE", "label": "UNISON", "short": "UNISON", "fmt": "onoff", "min": 0, "max": 1, "def": 0, "names": null, "unit": null, "style": "p5led"},
+                {"knob": 2, "bind": "deep", "page": 17, "col": 1, "page_title": "VOICE", "label": "VOICES", "short": "VOICES", "fmt": "int", "min": 1, "max": 4, "def": 4, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 3, "bind": "deep", "page": 17, "col": 2, "page_title": "VOICE", "label": "DETUNE", "short": "DETUNE", "fmt": "int", "min": 0, "max": 7, "def": 0, "names": null, "unit": null, "style": "p5knob"},
+                {"knob": 4, "bind": "deep", "page": 17, "col": 3, "page_title": "VOICE", "label": "GLIDE", "short": "GLIDE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"}
               ]
             },
             {
               "lane": 1,
               "title": "VOICE",
               "cells": [
-                {"knob": 1, "bind": "deep", "page": 18, "col": 0, "page_title": "VOICE+", "label": "Priority", "short": "PRIO", "fmt": "enum", "min": 0, "max": 3, "def": 0, "names": ["LOW", "LOW R", "LAST", "LAS R"], "unit": null},
-                {"knob": 2, "bind": "deep", "page": 18, "col": 1, "page_title": "VOICE+", "label": "Vintage", "short": "VINTAGE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null},
+                {"knob": 1, "bind": "deep", "page": 18, "col": 0, "page_title": "VOICE+", "label": "PRIORITY", "short": "PRIO", "fmt": "enum", "min": 0, "max": 3, "def": 0, "names": ["LOW", "LOW R", "LAST", "LAS R"], "unit": null, "style": "p5knob"},
+                {"knob": 2, "bind": "deep", "page": 18, "col": 1, "page_title": "VOICE+", "label": "VINTAGE", "short": "VINTAGE", "fmt": "int", "min": 0, "max": 127, "def": 0, "names": null, "unit": null, "style": "p5knob"},
                 {"knob": 3, "bind": "none"},
                 {"knob": 4, "bind": "none"}
               ]

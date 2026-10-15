@@ -210,43 +210,45 @@ knob's colour, digits 1–8 (and S) under the steps. No matrix (`not modulatable
 
 ### P5 (docs/PROPHET.md)
 
-The owner's panel (0.22 in development; engine 16, Melodee's Prophet-5; the code's name is PROPHET): his design
-`design/layouts/designs/p5-panel.json`, compiled into the build (`tools/gen_layout.py` -> `build/gen/cr_layouts.h`,
-`firmware/src/cr_layout.c`; docs/LAYOUT-TOOL.md "Step 4"). OSC .. MOD are its eight **free screens** (`CE_S_FREE`,
-drawn as `CR_K_FREE` in the panel's look: framed sections, knobs with a 0..10 scale and the value in the face, LED
-buttons with their wave icons, a lever); a lane is a SELECT stop, KNOB 1..4 the elements bound in it, the active lane's
-in the knob colours (blue, orange, white, green), the others dim. A slot with no element (–) does nothing. MOD's last
-screen is EXPR after the panel's two (a stack, as on every engine: §4 above), FX and MIX are the platform's, as for
-every engine. The labels are the panel's:
+The owner's rows (0.22 in development; engine 16, Melodee's Prophet-5; the code's name is PROPHET), **from a design
+file**: `design/layouts/designs/p5-rows.json`, laid out by the owner in the layout tool ("This layout now checks out, I
+updated the label text in editor. We are good to build and get into the firmware.") and compiled into the build
+(`tools/gen_layout.py` `BUILD` -> `build/gen/cr_layouts.h` `CR_LAYC`; docs/LAYOUT-TOOL.md "Step 4"). It is a **screen
+plan** as FM TONE's (§4 below), with pages of its own: `cr_pages.c` `cp_deep` serves P5 seventeen pages, one a lane,
+each column a copy of the built-in descriptor it binds, and `get` / `set` / `desc` go through to that column's place in
+P5's own 19 pages (the program's byte, the blob, SysEx, `cr_backup` and the layout file's hash are the engine's,
+unchanged). Eleven `edit8` screens of up to four cells a row, each cell the Prophet-5's control as its glyph (the p5
+cell styles, §9 "A cell": the ticked knob, the LED button with its wave's icon, two LEDs, the lever) and its label as
+the owner wrote it; a screen under a band has one lane, drawn at full size under the band; the others two lanes, no
+band. SELECT walks the rows and the screens of a group, KNOB 1..4 the active row's cells (blue, orange, white, green);
+an empty slot (–) does nothing. MOD's last screen is EXPR after VOICE (a stack, as on every engine), FX and MIX are the
+platform's, as for every engine:
 
-| Group | Screen (top-right text) | Lane | KNOB 1–4 |
-| --- | --- | --- | --- |
-| OSC | 1 `OSC A` (OSCILLATOR A, MIXER) | 1 | FREQ · SAW (button) · PULSE (button) · – |
-| | | 2 | – · – · PULSE W · SYNC (button) |
-| | | 3 | OSC A · OSC B · NOISE (the mixer) · – |
-| OSC | 2 `OSC B` (OSCILLATOR B) | 1 | FREQ · FINE · – · – |
-| | | 2 | – · SAW · TRI · PULSE (buttons) |
-| | | 3 | – · PULSE W · LO FREQ · KEYBOARD (buttons) |
-| FILT | 1 `FILTER` (FILTER, -ENVELOPE-) | 1 | REV (two LEDs: 1/2 red, 3 yellow) · CUTOFF · RESO · ENV AMT |
-| | | 2 | ATTACK · DECAY · SUSTAIN · RELEASE (the filter envelope, ENV 2) |
-| | | 3 | – · VELOCITY (ENV 2's) · AFTER (the filter's aftertouch) · KEYBOARD (a lever: OFF HALF FULL) |
-| ENV | 1 `ENV 1 · amp` (AMPLIFIER) | 1 | ATTACK · DECAY · SUSTAIN · RELEASE |
-| | | 2 | – · – · VELOCITY · REL SW |
-| LFO | 1 `LFO` (LFO, -SHAPE-) | 1 | FREQ · INIT AMT · – · AFTER |
-| | | 2 | – · SAW · TRI · SQUARE (buttons) |
-| LFO | 2 `WHEEL` (WHEEL-MOD) | 1 | SRC MIX (the LFO's noise amount: the wheel's source mix) · – · FREQ A · FREQ B |
-| | | 2 | – · PW A · PW B · FILTER (the wheel's destinations) |
-| MOD | 1 `POLYMOD` (POLY-MOD) | 1 | FILT ENV · OSC B (the two amounts) · – · – |
-| | | 2 | – · FREQ A · FILTER · PW A (the destinations) |
-| MOD | 2 `VOICE` (VOICE, GLIDE) | 1 | VINTAGE · – · UNISON · GLIDE |
-| | | 2 | DETUNE · VOICES · PRIORITY (LOW, LOW R, LAST, LAS R) · – |
-| MOD | 3 `EXPR · VEL`, `EXPR · AT` (not the panel's: the platform's stack) | 1, 2 | VEL / AT · Dest · Amount · – |
+| Group | Screen | Band | Lanes | KNOB 1–4 | Top-right text |
+| --- | --- | --- | --- | --- | --- |
+| OSC | 1 | none | A, B | A: FREQ (knob) · SAW (button, saw icon) · PULSE (button, pulse icon) · P WIDTH; B: SYNC (button) · MIX A · MIX B · NOISE (the mixer) | `OSC A` |
+| OSC | 2 | none | A, B | A: FREQ · SAW · TRI · PULSE (buttons with their icons); B: FINE · P WIDTH · LO FREQ · KEYB (buttons) | `OSC B` |
+| FILT | 1 | the filter's curve | one | CUTOFF · RES · ENV AMT · REV (two LEDs: 1/2, 3) | `FILTER` |
+| FILT | 2 | the envelope (ENV 2) | one | ATTACK · DECAY · SUSTAIN · RELEASE | `ENV 2 · filter` |
+| FILT | 3 | none | one | VELOC (button) · – · KEY TRK (a lever: Off, Half, Full) · AFTER (button: the filter's aftertouch) | `ENV 2 +` |
+| ENV | 1 | the envelope (ENV 1) | one | ATTACK · DECAY · SUSTAIN · RELEASE | `ENV 1 · amp` |
+| ENV | 2 | none | one | VELOC · REL SW (buttons) · – · – | `ENV 1 +` |
+| LFO | 1 | none | A, B | A: FREQ · SAW · TRI · SQUARE (buttons with their icons); B: INIT AMT · AFTER (button) · – · – | `LFO` |
+| LFO | 2 | none | A, B | A: SRC MIX (the LFO's noise amount: the wheel's source mix) · FREQ A · FREQ B · PW A; B: PW B · FILTER (the wheel's destinations, buttons) · – · – | `WHEEL` |
+| MOD | 1 | none | A, B | A: FILT ENV · OSC B (the two amounts) · FREQ A · PW A; B: FILTER (the destinations, buttons) · – · – · – | `POLYMOD` |
+| MOD | 2 | none | A, B | A: UNISON (button) · VOICES · DETUNE · GLIDE; B: PRIORITY (Low, Low R, Last, Las R) · VINTAGE · – · – | `VOICE` |
+| MOD | 3 | — | VEL, AT | the platform's stack: VEL / AT · Dest · Amount | `EXPR · VEL`, `EXPR · AT` |
 
-A cell is one byte of the program, turned by the editor's own knob code (acceleration, OPT snap, the hot mark: the
-turned knob's face filled in its colour for 800 ms); the switches read on / off, the knobs the stored 0..127 (Voices
-1..4: the engine's four voices; Unison also switches the part's voice mode). No matrix of its own ("not
-modulatable"). Tests: `tools/emu/scripts/cr_prophet.txt`, `tests/cr_p5panel_test.c` (every lane slot), `tests/cr_prophet_test.c`,
-`web/test_layout.mjs` (the unit's frames against the emulator's and the layout tool's).
+A cell is one byte of the program, turned by the editor's own knob code (acceleration, OPT snap, SHIFT, the hot block
+for 800 ms, the modulation marks); the switches read On / Off, the knobs the stored 0..127 (Voices 1..4: the engine's
+four voices; Unison also switches the part's voice mode). No matrix of its own ("not modulatable"). The editor's trace
+names the built-in page and column ("deep: part 0 page 5 FILTER col 0 CUT"). Before (0.22-beta1 and lay-5 .. lay-7):
+the owner's panel `p5-panel.json` as free screens (`CR_K_FREE`, §9), which the unit no longer carries; the layout tool
+still previews it. Tests: `tools/emu/scripts/cr_prophet.txt` (FILTER KNOB 1 the cutoff, LFO KNOB 1 FREQ and KNOB 2 the
+saw's button, OSC A's row B KNOB 2 Mix A), `tests/cr_p5rows_test.c` (every cell, empty slots, SELECT, EXPR after
+VOICE), `tests/cr_layout_test.c` (the tables), `tests/run_cr_draw.sh` (`tests/cr_p5rows_golden.txt`),
+`tests/cr_prophet_test.c`, `web/test_layout.mjs` (the unit's frames against the emulator's, and against the design
+loaded in the layout tool).
 
 ### FM TONE (docs/QUAD.md; the user-approved screens design/choralroot-fm1-quad-screens.png)
 
@@ -453,8 +455,8 @@ block is the source's colour and the value the slot's amount with the source (`E
 value too wide loses its space, then 2 px of size at a time (down to 9 px), then ellipsises.
 
 **The Prophet-5's controls as a cell's glyph** (3y93, the final look 3y94; the cell styles `ENG_C_P5*`, cr_screen.h
-`CR_G_P5*`, drawn by cr_draw.c `cr_p5glyph`; no engine's screens use them yet: the layout tool's designs,
-docs/LAYOUT-TOOL.md "Cell styles"). In a full-size cell (60 px wide, the 34 px glyph box: no band, or one lane under
+`CR_G_P5*`, drawn by cr_draw.c `cr_p5glyph`; P5's rows, §4, and the layout tool's designs, docs/LAYOUT-TOOL.md "Cell
+styles"). In a full-size cell (60 px wide, the 34 px glyph box: no band, or one lane under
 a band) they are the owner's round-5 mock-up (`design/p5-glyph-mockups-5.html`), centred 22 px under the label's
 baseline (the box's top + 12); the label stays on top, the value on the row under it ("64", "On", "Half", "1/2"), the
 knob bars and the hot block as for any cell. On the active row the glyph is in the column's colour; on a dim row the
@@ -523,17 +525,18 @@ A row label column at the left (11 px bold; white when active, else grey; as wid
 
 Used for: OSC (VA), LFO (VA), MOD.
 
-### `free` — a compiled layout's screen (P5's panel)
+### `free` — a compiled layout's free screen (the layout tool; no unit has one now)
 
-`CR_K_FREE` (`cr_draw.c`, docs/LAYOUT-TOOL.md "The p5 style"): the title line, then the screen's placed elements from
-the compiled table (`cr_layout.c`), frames first: framed sections with their names in the border, knobs with a 0..10
+`CR_K_FREE` (`cr_draw.c`, docs/LAYOUT-TOOL.md "The p5 style"), compiled only when a built design has free screens
+(`CR_LAYOUTS_FREE`) and in the layout tool's preview: none does since P5's rows (3y96). The title line, then the
+screen's placed elements from the compiled table (`cr_layout.c`), frames first: framed sections with their names in the border, knobs with a 0..10
 scale and the value in the face (a named value too wide for it on the row under the label), LED buttons (a wave icon
 or a name over the cap; two LEDs, red and yellow, for a parameter of two values), a lever for three positions. Every
 lane's values are drawn; the active lane's elements in the knob colours by slot (blue, orange, white, green), the
 others grey. A turned knob's face fills in its colour for 800 ms. A knob turn composes only the strips of the elements
 that changed. The layout tool draws a design's free screens through this same code (`lay_load`).
 
-Used for: P5's OSC .. MOD (MOD's EXPR stays a stack).
+Used for: the layout tool's free designs (`p5-panel.json`, P5's editor from 3y86 until 3y96).
 
 ## 10. Motion: none in the editor (2026-10-06, the user's feedback from the device)
 

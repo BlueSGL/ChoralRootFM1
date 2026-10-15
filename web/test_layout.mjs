@@ -3,13 +3,17 @@
 //   node web/test_layout.mjs [--no-page] [--no-emu]
 // (after sh tools/layout/build_layout.sh; the comparison with the emulator needs sh tools/emu/web/build_web.sh too)
 // 1. build/layout-web/crlayout.wasm: lay_version, lay_presets, lay_catalog of every engine (every cell bound to a
-//    parameter has a label and a range; P5: 19 pages, 56 cells), lay_load refusing what it cannot read.
+//    parameter has a label and a range; P5: 19 pages, 56 cells, its screens the compiled rows' (design/layouts/designs/
+//    p5-rows.json), its pages the engine's own), lay_load refusing what it cannot read.
 // 2. Every screen x lane of P5, VA and FM TONE on the engine's first factory sound: not blank, the same bytes when
 //    drawn twice and when shown again; a knob turn changes its cell's value and the picture and marks the cell hot
 //    (and 800 ms later the mark is gone); SELECT moves the lane.
 // 3. The same frames from the browser emulator (build/emu-web/choralroot.wasm: the firmware without the layout API,
 //    driven by its panel alone: GLO + PRESETS to the engine, EDIT, the group buttons, SELECT, a knob): the LCD's
-//    RGB565 must be identical, pixel for pixel, on every screen x lane of the three engines.
+//    RGB565 must be identical, pixel for pixel, on every screen x lane of the three engines (P5's: the compiled rows).
+// 7. P5's rows compiled (tools/gen_layout.py) and designed: packDesign's bytes of p5-rows.json are the compiled tables
+//    (lay_compiled), and lay_load of the design gives the compiled editor's frames, every screen x lane and every cell
+//    turned; a design's free screens (the owner's panel, p5-panel.json) through lay_load and the generator's reasons.
 // 4. design/layouts/*.json are what the firmware says today (tools/layout/dump_catalogs.mjs).
 // 6. The designer (steps 3 and 4): the design format's round trip and its validation; lay_load of a classic design
 //    that only relabels (every frame today's but the relabelled text), one that swaps two parameters (the knobs turn
@@ -88,6 +92,16 @@ for (const e of ver.engines) {
   ok(lost.length === 0, `${e.name}: every page cell is on a screen` + (lost.length ? ` (not shown: ${lost.join(" ")})` : ""));
 }
 ok(cats.P5.pages.length === 19 && cats.P5.page_cells === 56, `P5: ${cats.P5.pages.length} pages, ${cats.P5.page_cells} cells (19 / 56)`);
+{   // P5's screens are its compiled rows (build/gen/cr_layouts.h), its pages the engine's own; the built-in derivation apart
+  const c = cats.P5, b = m.catalogBuiltin(ver.engines.find((x) => x.name === "P5").index), ts = L.tiles(c);
+  const n = (g) => c.groups.find((x) => x.name === g).screens.length;
+  ok(c.layout && c.layout.design === "design/layouts/designs/p5-rows.json" && c.layout.pages === 17 && c.layout.screens === 11 &&
+     n("OSC") === 2 && n("FILT") === 3 && n("ENV") === 2 && n("LFO") === 2 && n("MOD") === 3 && ts.length === 22 &&
+     ts.filter((t) => t.type === "edit" && t.plan !== null).length === 17 && JSON.stringify(b.pages) === JSON.stringify(c.pages) &&
+     b.params_hash === c.params_hash && !b.layout && L.tiles(b).length === 24,
+     `P5's catalog: the compiled rows (${c.layout && c.layout.design}: OSC 2, FILT 3, ENV 2, LFO 2, MOD 2 + EXPR; ${ts.length} screen x lane), ` +
+     `the pages the engine's 19; the built-in derivation (catalogBuiltin): the same pages and params_hash, ${L.tiles(b).length} screen x lane`);
+}
 ok(L.checkLayout({ ...cats.P5, params_hash: "0".repeat(16) }, ver) !== null && L.checkLayout({ ...cats.P5, version: 2 }, ver) !== null,
    "checkLayout refuses another params_hash and another format version");
 ok(JSON.stringify(JSON.parse(L.formatLayout(cats.VA))) === JSON.stringify(cats.VA), "formatLayout: the file's text parses back to the catalog");
@@ -188,29 +202,6 @@ if (!args.has("--no-emu")) {
   else {
     const B = { FX: 0, SEL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, SEQ: 9, PLAY: 10, REC: 11 }, E = { SELECT: 0, PRESETS: 2, K1: 3 };
     const emuBytes = fs.readFileSync(emuPath);
-    // P5 on the unit is the owner's panel (the compiled layout, docs/LAYOUT-TOOL.md "Step 4"): the module's frames with
-    // the layouts on, every screen x lane of p5-panel.json (its free screens in OSC .. MOD, FX and MIX as today), and
-    // MOD's last screen after the panel's, EXPR (0.22: on every engine, cr_edit.c CE_S_EXPR)
-    const panelTiles = () => {
-      const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
-      const BTN = ["FX", "SEL", "ENV", "LFO", "SEQ", "PLAY", "REC"], e = ver.engines.find((x) => x.name === "P5");
-      m.layouts(true);
-      const out = L.designTiles(pd).map((d) => {
-        const g = pd.groups[d.gi].group, tile = { group: g, groupName: d.group, button: BTN[g], screen: d.si, lane: d.lane,
-                                                  lanes: d.lanes, title: d.title, key: d.key };
-        m.show(e.index, 1, g, d.si, d.lane);
-        return { tile, fb: m.fb(), free: m.state().kind === "free" };
-      });
-      const lastMod = out.map((f) => f.tile.group).lastIndexOf(4), ns = lastMod >= 0 ? out[lastMod].tile.screen + 1 : 0;
-      const expr = [0, 1].map((lane) => {
-        m.show(e.index, 1, 4, ns, lane);
-        return { tile: { group: 4, groupName: "MOD", button: "SEQ", screen: ns, lane, lanes: 2, title: m.state().page,
-                         key: `MOD.${ns}.${lane}` }, fb: m.fb(), free: false, expr: m.state().page.startsWith("EXPR") };
-      });
-      out.splice(lastMod + 1, 0, ...expr);
-      m.layouts(false);
-      return out;
-    };
     for (const name of THREE) {
       const e = ver.engines.find((x) => x.name === name), rank = ver.engines.indexOf(e);
       const x = await globalThis.CRLayoutModule.load(emuBytes);
@@ -226,11 +217,11 @@ if (!args.has("--no-emu")) {
       x.web_step(1500);
       tap("EDIT");
       let diff = [], n = 0, group = 0, worst = 0;
-      const walk = name === "P5" ? panelTiles() : frames[name];
+      const walk = frames[name];                // (P5: the compiled rows, the module's default and the unit's)
       if (name === "P5")
-        ok(walk.filter((f) => f.free).length === 19 && walk.filter((f) => f.expr).length === 2 && walk.length === 24,
-           `P5: the compiled panel's ${walk.length} places, ${walk.filter((f) => f.free).length} of them its free screens' lanes, ` +
-           `${walk.filter((f) => f.expr).length} MOD's EXPR after them`);
+        ok(walk.length === 22 && walk.filter((f) => f.tile.plan !== null).length === 17 &&
+           walk.filter((f) => f.tile.type === "expr").length === 2,
+           `P5: the compiled rows' ${walk.length} places (17 screen x lane of its plan, MOD's EXPR after VOICE, FX and MIX)`);
       for (const f of walk) {
         const t = f.tile;
         if (t.group !== group) { tap(t.button); group = t.group; }   // (a group opens on its first screen and lane)
@@ -247,11 +238,9 @@ if (!args.has("--no-emu")) {
       tap("SEL");
       x.web_enc(E.K1, 1);
       x.web_step(30);
-      m.layouts(name === "P5");                // (P5: KNOB 1 of the FILTER screen's first lane is REV)
-      m.show(e.index, 1, 1, 0, 0);
+      m.show(e.index, 1, 1, 0, 0);              // (P5: KNOB 1 of the FILTER screen is the cutoff)
       m.knob(1, 1);
       m.render();
-      m.layouts(false);
       const d = L.diffCount(m.fb(), fb());
       ok(d === 0 && m.state().hot === 1, `${name}: ${L.tileLabel(g1)} after KNOB 1 +1 (the hot cell): identical to the emulator's` + (d ? ` (${d} px differ)` : ""));
     }
@@ -315,18 +304,21 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   const missed = Object.entries(broken).filter(([, f]) => { const d = free(); f(d); return L.validateDesign(d, cat).errors.length === 0; }).map(([k]) => k);
   ok(!missed.length, `validateDesign catches each of ${Object.keys(broken).length} broken designs` + (missed.length ? ` (missed: ${missed.join(", ")})` : ""));
 
-  // lay_load: today's design packed in place: every frame today's
-  const frameAll = () => L.tiles(cat).map((t) => { m.show(P5.index, 1, t.group, t.screen, t.lane); return { t, rgba: m.render(), lint: m.lint() }; });
+  // lay_load: today's design packed in place: every frame today's. P5's own pages as the editor derives its screens from
+  // them (the compiled layouts off: catalogBuiltin, layouts(false)), the in-place way's ground (the rows: section 7)
+  const catB = m.catalogBuiltin(P5.index), todayB = L.designFromCatalog(catB, "today");
+  m.layouts(false);
+  const frameAll = () => L.tiles(catB).map((t) => { m.show(P5.index, 1, t.group, t.screen, t.lane); return { t, rgba: m.render(), lint: m.lint() }; });
   m.unload();
   const base = frameAll();
-  const pk0 = L.packDesign(today, cat);
+  const pk0 = L.packDesign(todayB, catB);
   ok(pk0.mode === "in-place" && m.load(pk0.bytes).ok, `today's design packs in place (${pk0.pages} pages, ${pk0.bytes.length} B) and loads`);
   const same = frameAll();
   ok(same.every((f, i) => L.diffCount(f.rgba, base[i].rgba) === 0), `loaded as today's: all ${same.length} P5 frames identical to the built-in tables'`);
   // a relabel
-  const rel = L.designFromCatalog(cat, "relabel");
+  const rel = L.designFromCatalog(catB, "relabel");
   rel.groups[1].screens[0].lanes[0].cells[1].label = "Bright";      // FILT, lane 1, KNOB 2 (Reso)
-  ok(m.load(L.packDesign(rel, cat).bytes).ok, "a design that relabels FILT's Reso loads");
+  ok(m.load(L.packDesign(rel, catB).bytes).ok, "a design that relabels FILT's Reso loads");
   const relf = frameAll();
   const bad = [];
   relf.forEach((f, i) => {
@@ -344,10 +336,10 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   });
   ok(!bad.length, "relabelled: every frame is today's but FILT 1's, which differs only where \"Reso\" became \"Bright\"" + (bad.length ? ` (${bad.join("; ")})` : ""));
   // a swap: Cutoff and Reso change knobs; KNOB 1 now turns the resonance
-  const sw = L.designFromCatalog(cat, "swap");
+  const sw = L.designFromCatalog(catB, "swap");
   const c0 = sw.groups[1].screens[0].lanes[0].cells;
   [c0[0], c0[1]] = [c0[1], c0[0]];
-  ok(m.load(L.packDesign(sw, cat).bytes).ok, "a design that swaps FILT's Cutoff and Reso loads");
+  ok(m.load(L.packDesign(sw, catB).bytes).ok, "a design that swaps FILT's Cutoff and Reso loads");
   m.show(P5.index, 1, 1, 0, 0);
   const pre = m.render(), cut = pidx.get("FILTER:CUT"), res = pidx.get("FILTER:RES");
   const lab = m.state().cells.map((c) => c.label);
@@ -359,31 +351,31 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   m.knob(2, -2);
   ok(m.pget(cut.page, cut.col) !== u0, `KNOB 2 turns the cutoff (${u0} -> ${m.pget(cut.page, cut.col)})`);
   // a structural change: the plan (a screen added to FILT, two screens of ENV merged into one lane each)
-  const pl = L.designFromCatalog(cat, "plan");
+  const pl = L.designFromCatalog(catB, "plan");
   pl.groups[1].screens.push(L.newClassicScreen("edit8", "MORE"));
   pl.groups[1].screens[1].lanes[0].cells[0] = { param: "FILTER+:REV" };
-  const pk = L.packDesign(pl, cat);
+  const pk = L.packDesign(pl, catB);
   // (MOD's last screen, EXPR, is a stack of two lanes the plan cannot hold: flagged, and only it, docs/LAYOUT-TOOL.md)
-  const modGi = cat.groups.findIndex((g) => g.name === "MOD"), exprSi = cat.groups[modGi].screens.findIndex((s) => s.type === "expr");
+  const modGi = catB.groups.findIndex((g) => g.name === "MOD"), exprSi = catB.groups[modGi].screens.findIndex((s) => s.type === "expr");
   ok(pk.mode === "plan" && exprSi >= 0 && pk.unbuildable.length === 1 && pk.unbuildable[0].gi === modGi && pk.unbuildable[0].si === exprSi &&
      m.load(pk.bytes).ok && m.show(P5.index, 1, 1, 1, 0) > 0 && m.state().page === "MORE",
      `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}"); ` +
-     `not buildable: ${pk.unbuildable.map((u) => `${cat.groups[u.gi].name} ${u.si + 1}`).join(", ") || "none"} (EXPR)`);
+     `not buildable: ${pk.unbuildable.map((u) => `${catB.groups[u.gi].name} ${u.si + 1}`).join(", ") || "none"} (EXPR)`);
   m.unload();
 
   // cell styles (3y93): the Prophet-5's controls in a classic cell (cr_screen.h CR_G_P5*), through the real editor
   {
     const c565 = (r, g, b) => { const c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3); return [((c >> 11) * 255 / 31) | 0, (((c >> 5) & 63) * 255 / 63) | 0, ((c & 31) * 255 / 31) | 0].join(); };
     const RED = c565(224, 58, 47), at = (rgba, x, y) => Array.from(rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join();
-    const sty = L.designFromCatalog(cat, "styles"), f1 = sty.groups[1].screens[0];
+    const sty = L.designFromCatalog(catB, "styles"), f1 = sty.groups[1].screens[0];
     ["p5knob", "p5knob", "p5knob", "p5switch"].forEach((x, k) => { f1.lanes[0].cells[k].style = x; });
     f1.lanes[1].cells[0].style = "p5led2";
     f1.lanes[1].cells[1].style = "p5led";
     const bk = { ...f1.lanes[1].cells[0] }; bk.style = "glow";
-    const vs = L.validateDesign(sty, cat), vb = JSON.parse(JSON.stringify(sty));
+    const vs = L.validateDesign(sty, catB), vb = JSON.parse(JSON.stringify(sty));
     vb.groups[1].screens[0].lanes[1].cells[0] = bk;
-    const ps5 = L.packDesign(sty, cat);
-    ok(!vs.errors.length && L.validateDesign(vb, cat).errors.some((e) => e.includes('style "glow"')) && ps5.mode === "in-place" && m.load(ps5.bytes).ok,
+    const ps5 = L.packDesign(sty, catB);
+    ok(!vs.errors.length && L.validateDesign(vb, catB).errors.some((e) => e.includes('style "glow"')) && ps5.mode === "in-place" && m.load(ps5.bytes).ok,
        `a design with p5 cell styles on FILT 1 (in place: ${ps5.pages} pages) is valid and loads; an unknown style is refused`);
     const sf = frameAll(), sbad = [];
     sf.forEach((f, i) => {
@@ -400,6 +392,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     ok(at(fa, 90, 206) === RED && at(fb, 90, 206) !== RED && sa.cells[1].value === "On" && sb.cells[1].value === "Off",
        `a p5led cell (FILT 1 row B, KNOB 2 Aftertouch): its LED red when on (${at(fa, 90, 206)}), not when off (${at(fb, 90, 206)}); the value "On" / "Off" on the row`);
     m.unload();
+    m.layouts(true);                            // (the compiled rows again: the module's default)
     // the owner's design: design/layouts/designs/p5-rows.json, eleven edit8 screens of the p5 cell styles (one lane under a curve)
     const rows = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-rows.json"), "utf8"));
     const vr = L.validateDesign(rows, cat), rs = L.designSession(m, cat, rows, 1);
@@ -444,10 +437,10 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     // one lane under a curve: the full-size row at 124 (the label's top 94 px under the no-band row's, the value 17 px bold to the baseline 206)
     const fg = rows.groups.findIndex((g) => g.name === "FILT");
     rs.open(fg, 0, 0);
-    const fr = rs.render(), lab = fr.lint.texts.find((x) => x.text === "Cutoff"), num = fr.state.cells[0].value;
-    const val = fr.lint.texts.find((x) => x.text === num), olab = o1.lint.texts.find((x) => x.text === "Freq");
+    const fr = rs.render(), lab = fr.lint.texts.find((x) => x.text === "CUTOFF"), num = fr.state.cells[0].value;
+    const val = fr.lint.texts.find((x) => x.text === num), olab = o1.lint.texts.find((x) => x.text === "FREQ");
     ok(fr.state.band === "filter" && fr.state.lanes === 1 && lab && val && olab && lab.box[1] - 94 === olab.box[1] && val.box[3] > 190 && val.box[3] <= 210,
-       `FILTER (one lane under the curve): the row at full size (the label's box ${lab && lab.box.join(",")}, Freq's at 30 ${olab && olab.box.join(",")}; the value to ${val && val.box[3]})`);
+       `FILTER (one lane under the curve): the row at full size (CUTOFF's box ${lab && lab.box.join(",")}, FREQ's at 30 ${olab && olab.box.join(",")}; the value to ${val && val.box[3]})`);
     // the cell under a click on the picture (the designer's click-to-select, web/layout.html)
     const ca = (st, x, y) => JSON.stringify(L.cellAt(st, x, y));
     ok(ca(o1.state, 150, 180) === '{"lane":1,"k":2}' && ca(o1.state, 10, 40) === '{"lane":0,"k":0}' && ca(o1.state, 10, 20) === "null" &&
@@ -696,48 +689,85 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
 }
 
 // ===================================================================================================== 7 ===
-// A design's free screens through lay_load (packDesign's free half: the records tools/gen_layout.py compiles, byte for
-// byte) on the firmware's own editor and renderer: P5's panel loaded is the compiled panel, frame for frame (every
-// screen x lane, every bound slot turned and hot, REV both ways)
-console.log("a design's free screens through the firmware: packDesign's records, lay_load, CE_S_FREE / CR_K_FREE");
+// P5's rows, designed and compiled, are one thing: packDesign's bytes of design/layouts/designs/p5-rows.json are the
+// tables tools/gen_layout.py compiled into the build (build/gen/cr_layouts.h, through lay_compiled), byte for byte; and
+// the design loaded by lay_load gives the compiled editor's frames (the module's own P5 screens, the unit's), every
+// screen x lane and after every cell turned (hot). A design's free screens (the owner's panel) through lay_load and the
+// generator's reasons for what it would not build
+console.log("P5's rows: the design (lay_load) and the compiled layout (build/gen/cr_layouts.h) are one; free screens through the preview");
 {
   const e = ver.engines.find((x) => x.name === "P5"), cat = cats.P5;
-  const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
-  const pk = L.packDesign(pd, cat), comp = m.compiled(e.index);
+  const rows = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-rows.json"), "utf8"));
+  const pk = L.packDesign(rows, cat), comp = m.compiled(e.index);
   let first = -1;
-  for (let i = 0; i < Math.max(comp.length, pk.free ? pk.free.length : 0); i++) if (!pk.free || comp[i] !== pk.free[i]) { first = i; break; }
-  ok(comp.length > 0 && first < 0, `packDesign's free half of p5-panel.json is the compiled table (build/gen/cr_layouts.h through lay_compiled), byte for byte: ${comp.length} B (${pk.freeScreens} screens)` +
-     (first >= 0 ? ` (first difference at byte ${first} of ${comp.length} / ${pk.free ? pk.free.length : 0})` : ""));
+  for (let i = 0; i < Math.max(comp.length, pk.bytes.length); i++) if (comp[i] !== pk.bytes[i]) { first = i; break; }
+  ok(comp.length > 0 && first < 0 && pk.mode === "plan" && !pk.free && !pk.unbuildable.length && pk.pages === 17 && pk.screens === 11,
+     `packDesign of p5-rows.json is the compiled table (lay_compiled), byte for byte: ${comp.length} B ('L' 3: ${pk.pages} pages, ${pk.screens} screens, the plan)` +
+     (first >= 0 ? ` (first difference at byte ${first} of ${comp.length} / ${pk.bytes.length})` : ""));
+  ok(!L.validateDesign(rows, cat, { build: true }).errors.length, "p5-rows.json: buildable (validateDesign's build rules, tools/gen_layout.py's)");
   const ld = m.load(pk.bytes);
-  ok(ld.ok && ld.free === 8 && pk.mode === "in-place" && !pk.unbuildable.length, `lay_load: the panel's 8 free screens and its classic FX and MIX (${JSON.stringify(ld)})`);
-  const s = L.designSession(m, cat, pd, 1);
-  let n = 0, hot = 0, differ = [], notFree = [];
-  pd.groups.forEach((g, gi) => g.screens.forEach((sc, si) => {
-    if (sc.type !== "free") return;
+  ok(ld.ok && ld.pages === 17 && ld.screens === 11 && ld.free === 0, `lay_load: the rows' 17 pages and 11 screens (${JSON.stringify(ld)})`);
+  const s = L.designSession(m, cat, rows, 1);
+  let n = 0, hot = 0;
+  const differ = [], wrong = [];
+  rows.groups.forEach((g, gi) => g.screens.forEach((sc, si) => {
     for (let lane = 0; lane < sc.lanes.length; lane++)
       for (const k of [0, 1, 2, 3, 4]) {
-        if (k && !sc.lanes[lane][k - 1]) continue;
-        m.unload();
-        m.layouts(true);                         // the compiled panel (the unit's)
+        if (k && !sc.lanes[lane].cells[k - 1]) continue;
+        m.unload();                              // the compiled rows (the module's default: the unit's editor)
         m.show(e.index, 1, g.group, si, lane);
         if (k) m.knob(k, k % 2 ? 1 : -1);
-        const a = m.render();
-        m.layouts(false);
+        const a = m.render(), fa = m.fb();
         s.reload();                              // the design, loaded
         s.open(gi, si, lane);
         if (k) s.knob(k, k % 2 ? 1 : -1);
-        const r = s.render();
-        if (r.state.kind !== "free" || r.state.page !== sc.title || (k && r.state.hot !== k) || r.unbuildable) notFree.push(`${g.name} ${si + 1}.${lane + 1} k${k}`);
-        const d = L.diffCount(a, r.rgba);
+        const r = s.render(), fb = m.fb();
+        if (r.state.kind !== "edit8" || r.state.page !== sc.title || (k && r.state.hot !== k) || r.unbuildable) wrong.push(`${g.name} ${si + 1}.${lane + 1} k${k}`);
+        const d = L.diffCount(a, r.rgba) + L.diffCount(fa, fb);
         n++;
         hot += k ? 1 : 0;
         if (d) differ.push(`${g.name} ${si + 1}.${lane + 1}${k ? ` K${k}` : ""} (${d} px)`);
       }
   }));
   m.unload();
-  ok(!notFree.length, `the loaded panel: CR_K_FREE screens, the title its, the turned slot hot, buildable` + (notFree.length ? ` (not: ${notFree.slice(0, 6).join(", ")})` : ""));
-  ok(n === 75 && !differ.length, `${n} frames (${n - hot} screen x lane, ${hot} with a slot turned and hot): the loaded design's pixels are the compiled panel's` +
+  ok(!wrong.length, "the loaded rows: edit8 screens, the design's titles, the turned cell hot, buildable" + (wrong.length ? ` (not: ${wrong.slice(0, 6).join(", ")})` : ""));
+  ok(n === 88 && !differ.length, `${n} frames (${n - hot} screen x lane, ${hot} with a cell turned and hot): the loaded design's pixels (lay_render and the LCD) are the compiled rows'` +
      (differ.length ? `\n          differ: ${differ.slice(0, 8).join("; ")}` : ""));
+  // the built-in derivation is still there for a design that keeps it: the compiled layouts off, the rows unloaded
+  m.layouts(false);
+  m.show(e.index, 1, 1, 0, 0);
+  const b0 = m.state();
+  m.layouts(true);
+  m.show(e.index, 1, 1, 0, 0);
+  const b1 = m.state();
+  ok(b0.lanes === 2 && b1.lanes === 1 && b1.page === "FILTER" && b1.cells[0].label === "CUTOFF",
+     `lay_layouts: off, FILT 1 the built-in derivation (${b0.lanes} lanes, "${b0.cells.map((c) => c.label).join(" ")}"); on (the default), the rows' FILTER (one lane, "${b1.cells.map((c) => c.label).join(" ")}")`);
+
+  // a design's free screens: the owner's panel, loaded (its free half packFree's records: tests/gen_layout_test.py compares
+  // them with the generator's, byte for byte); CR_K_FREE screens, deterministic, buildable (a built free design would set
+  // CR_LAYOUTS_FREE 1); the generator's reasons
+  const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
+  const pp = L.packDesign(pd, cat), lp = m.load(pp.bytes);
+  ok(lp.ok && lp.free === 8 && pp.mode === "in-place" && !pp.unbuildable.length && pp.free && pp.free.length > 1700,
+     `lay_load: the panel's 8 free screens (${pp.free ? pp.free.length : 0} B of records) and its classic FX and MIX (${JSON.stringify(lp)})`);
+  const ps = L.designSession(m, cat, pd, 1);
+  const notFree = [], unstable = [];
+  let nf = 0;
+  pd.groups.forEach((g, gi) => g.screens.forEach((sc, si) => {
+    if (sc.type !== "free") return;
+    for (let lane = 0; lane < sc.lanes.length; lane++) {
+      ps.reload();
+      ps.open(gi, si, lane);
+      const r = ps.render();
+      ps.open(gi, si, lane);
+      if (L.diffCount(r.rgba, ps.render().rgba)) unstable.push(`${g.name} ${si + 1}.${lane + 1}`);
+      if (r.state.kind !== "free" || r.state.page !== sc.title || r.unbuildable) notFree.push(`${g.name} ${si + 1}.${lane + 1}`);
+      nf++;
+    }
+  }));
+  m.unload();
+  ok(nf === 19 && !notFree.length && !unstable.length, `the loaded panel: ${nf} screen x lane, CR_K_FREE screens with their titles, buildable, the same bytes twice` +
+     (notFree.length + unstable.length ? ` (not: ${[...notFree, ...unstable].slice(0, 6).join(", ")})` : ""));
   // the build rules in the page: a flat free screen, a band element, an element off the grid: "not buildable" with the
   // generator's reason
   const flat = JSON.parse(JSON.stringify(pd));
@@ -748,9 +778,19 @@ console.log("a design's free screens through the firmware: packDesign's records,
   grid.groups[0].screens[1].elements[1].x += 1;
   const why = (dd, gi, si) => { const x = L.designSession(m, cat, dd, 1); x.reload(); x.open(gi, si, 0); return x.render().unbuildable; };
   const w = [why(flat, 0, 0), why(band, 2, 0), why(grid, 0, 1), why(pd, 0, 1)];
+  // and the rows': a stack in OSC, a band the plan has not, a part parameter on an engine page
+  const stk = JSON.parse(JSON.stringify(rows)), dx = JSON.parse(JSON.stringify(rows)), part = JSON.parse(JSON.stringify(rows));
+  stk.groups[0].screens[0].kind = "stack";
+  dx.groups[2].screens[0].band = "dx";
+  part.groups[0].screens[0].lanes[1].cells[3] = { param: "part:33" };
+  part.groups[5].screens[0].lanes[0].cells[0] = null;
+  const w2 = [why(stk, 0, 0), why(dx, 2, 0), why(part, 0, 0), why(rows, 0, 0)];
   m.unload();
   ok(/p5 style only/.test(w[0]) && /band element/.test(w[1]) && /4 px grid/.test(w[2]) && w[3] === null,
      `not buildable, the generator's reasons: flat "${w[0]}"; a band "${w[1]}"; off the grid "${w[2]}"; the panel's own: buildable`);
+  ok(/screen plan has edit8 screens of one or two lanes/.test(w2[0]) && /not a band of the screen plan/.test(w2[1]) &&
+     /a part parameter on an engine page/.test(w2[2]) && w2[3] === null,
+     `the rows changed: a stack "${w2[0]}"; a dx band "${w2[1]}"; a part parameter "${w2[2]}"; the rows' own: buildable`);
 }
 
 // ===================================================================================================== 5 ===

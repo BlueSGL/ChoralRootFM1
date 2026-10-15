@@ -2,12 +2,22 @@
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
 /* ChoralRoot FM-1: the compiled layouts (docs/LAYOUT-TOOL.md "Step 4"): the one copy of the tables
  * (build/gen/cr_layouts.h, written by tools/gen_layout.py) and what the editor (cr_edit.c CE_S_FREE) and the renderer
- * (cr_draw.c CR_K_FREE) read them by. Included once, before cr_draw.c, by the unity builds (choralroot.c, the
- * emulator's emu_firmware.h) and by tests/cr_draw_test.c. A layout is named by its index + 1 (cr_screen_t.fl_eng), a
- * screen by its index in its layout + 1 (fl_scr); 0 is none. */
+ * (cr_draw.c CR_K_FREE) read a free layout by. Included once, after core.h and before cr_draw.c, by the unity builds
+ * (choralroot.c, the emulator's emu_firmware.h) and by tests/cr_draw_test.c. A classic layout (CR_LAYC[]) is served by
+ * cr_pages.c cp_deep. A free layout is named by its index + 1 (cr_screen_t.fl_eng), a screen by its index in its
+ * layout + 1 (fl_scr); 0 is none. */
 #include "cr_layout.h"
 #include "cr_layouts.h"
 
+/* the free screens' editor and renderer are in this build: a built design has free screens (tools/gen_layout.py), or
+ * the layout tool's preview (its lay_load shows a design's free screens); else none of their code is compiled */
+#if CR_LAYOUTS_FREE || defined(CR_LAYOUT_PREVIEW)
+#define CR_LAY_FREE 1
+#else
+#define CR_LAY_FREE 0
+#endif
+
+#if CR_LAY_FREE
 #ifdef CR_LAYOUT_PREVIEW
 /* (the layout tool's preview only) the tables the accessors read: the compiled ones, or a design the tool loaded
  * (tools/layout/layout_web.c lay_load). cr_layout_hook(eng) sets them and answers engine eng's layout in them (its
@@ -111,3 +121,4 @@ static const char *cr_lay_next(const char *n)
         n++;
     return n[1] ? n + 1 : 0;
 }
+#endif /* CR_LAY_FREE */

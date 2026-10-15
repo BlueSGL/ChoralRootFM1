@@ -1395,18 +1395,20 @@ More: [CZ1.md](CZ1.md).
 
 ### P5
 
-P5's pages look like the Prophet-5's front panel: framed sections, knobs with a printed 0 to 10 scale and the value in
-the knob, buttons with their LED (and the wave they switch drawn over them). Each screen has two or three rows of
-controls; SELECT moves from row to row (the row on the knobs is in the knob colours, the others grey), and KNOB 1 to 4
-turn the four places of that row from left to right. A place with nothing in it does nothing.
+P5's pages are rows of up to four controls, like every engine's, each drawn as the Prophet-5's own: a knob with its
+printed scale, a button with its LED (and the wave it switches drawn over it), the filter's REV with two LEDs, a lever
+for the filter's keyboard tracking. The row on the knobs is in the knob colours, the others grey; SELECT moves from row
+to row and on to the next screen, KNOB 1 to 4 turn the row's four places from left to right. A place with nothing in it
+does nothing. The filter and the two envelopes each have a screen of their own, their curve on top and one big row
+under it.
 
 | Group | Screens: the rows, KNOB 1 to 4 (– an empty place) |
 | --- | --- |
-| OSC | (1) `OSC A`, the oscillator and the mixer: FREQ · SAW · PULSE · –; – · – · PULSE W · SYNC; OSC A · OSC B · NOISE · – (the mixer). (2) `OSC B`: FREQ · FINE · – · –; – · SAW · TRI · PULSE; – · PULSE W · LO FREQ · KEYBOARD |
-| FILT | `FILTER`, with the filter's envelope: REV (1/2 or 3: two LEDs) · CUTOFF · RESO · ENV AMT; ATTACK · DECAY · SUSTAIN · RELEASE; – · VELOCITY · AFTER · KEYBOARD (OFF, HALF, FULL: a lever) |
-| ENV | `ENV 1 · amp`, the amplifier: ATTACK · DECAY · SUSTAIN · RELEASE; – · – · VELOCITY · REL SW |
-| LFO | (1) `LFO`: FREQ · INIT AMT · – · AFTER; – · SAW · TRI · SQUARE. (2) `WHEEL`, the wheel's modulation: SRC MIX (the LFO's noise mix) · – · FREQ A · FREQ B; – · PW A · PW B · FILTER |
-| MOD | (1) `POLYMOD`: FILT ENV · OSC B (the amounts) · – · –; – · FREQ A · FILTER · PW A (where they go). (2) `VOICE`: VINTAGE · – · UNISON · GLIDE; DETUNE · VOICES (1 to 4) · PRIORITY · –. (3) `EXPR`, as on every engine: velocity and aftertouch, each Source · Dest · Amount |
+| OSC | (1) `OSC A`: FREQ · SAW · PULSE · P WIDTH; SYNC · MIX A · MIX B · NOISE (the mixer). (2) `OSC B`: FREQ · SAW · TRI · PULSE; FINE · P WIDTH · LO FREQ · KEYB |
+| FILT | (1) `FILTER`, under the filter's curve: CUTOFF · RES · ENV AMT · REV (1/2 or 3: two LEDs). (2) `ENV 2 · filter`, under its envelope: ATTACK · DECAY · SUSTAIN · RELEASE. (3) `ENV 2 +`: VELOC · – · KEY TRK (Off, Half, Full: a lever) · AFTER |
+| ENV | (1) `ENV 1 · amp`, the amplifier, under its envelope: ATTACK · DECAY · SUSTAIN · RELEASE. (2) `ENV 1 +`: VELOC · REL SW |
+| LFO | (1) `LFO`: FREQ · SAW · TRI · SQUARE; INIT AMT · AFTER. (2) `WHEEL`, the wheel's modulation: SRC MIX (the LFO's noise mix) · FREQ A · FREQ B · PW A; PW B · FILTER |
+| MOD | (1) `POLYMOD`: FILT ENV · OSC B (the amounts) · FREQ A · PW A; FILTER (where they go). (2) `VOICE`: UNISON · VOICES (1 to 4) · DETUNE · GLIDE; PRIORITY · VINTAGE. (3) `EXPR`, as on every engine: velocity and aftertouch, each Source · Dest · Amount |
 
 Each cell is a value of the Prophet-5 program itself. A program whose Unison is on loads in UNISON (one note on up to
 four stacked voices); the next one without it plays chords again. With Dual Core on the chord part has up to eight P5

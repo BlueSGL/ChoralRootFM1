@@ -33,11 +33,20 @@ export function wrap(ex) {
   return {
     ex,
     version() { return version || (version = json(ex.lay_version())); },
-    // today's built-in layout of an engine (kept: the tables do not change while the module lives). The module walks
-    // it from its reset state, so the editor is closed afterwards: show() again
+    // today's layout of an engine as the unit shows it (kept: the tables do not change while the module lives): its
+    // parameter pages the engine's own, its screens the editor's, a compiled layout's when the engine has one (P5's
+    // rows: "layout" names the design). The module walks it from its reset state, so the editor is closed afterwards:
+    // show() again
     catalog(engine) {
       if (!catalogs.has(engine)) catalogs.set(engine, json(ex.lay_catalog(engine)));
       return catalogs.get(engine);
+    },
+    // the same, but the screens the editor derives from the engine's own pages (no compiled layout: what layouts(false)
+    // shows; the designer's in-place experiments)
+    catalogBuiltin(engine) {
+      const k = `builtin.${engine}`;
+      if (!catalogs.has(k)) catalogs.set(k, json(ex.lay_catalog_builtin(engine)));
+      return catalogs.get(k);
     },
     presets(engine) { return json(ex.lay_presets(engine)).presets || []; },
     // the real editor on that sound at that place, from the reset instance; -> the screen's lanes, or throws
@@ -63,13 +72,15 @@ export function wrap(ex) {
       return json(ex.lay_load(ex.lay_buf(), n));
     },
     unload() { return this.load(new Uint8Array([76, 2, 255])); },
-    // the compiled layouts (build/gen/cr_layouts.h: P5's panel, the unit's editor) on or off (the default: today's
-    // classic pages, as the catalog lists them); from the next show(). -> the previous setting
+    // the compiled layouts (build/gen/cr_layouts.h: P5's rows, the unit's editor) on (the default: as catalog() lists
+    // them) or off (the classic derivation of the built-in pages, as catalogBuiltin() lists them); from the next
+    // show(). A loaded design shows its own screens either way. -> the previous setting
     layouts(on) { return !!this.ex.lay_layouts(on ? 1 : 0); },
     // a parameter of the editor's sound by its built-in address (page, col; page 255: a part parameter, col its id)
     pget(page, col) { return ex.lay_pget(page, col); },
     ptext(page, col) { return cstr(ex.lay_ptext(page, col)); },
-    // the compiled layout of an engine (build/gen/cr_layouts.h) as lay_load's free half: its bytes (none: empty)
+    // the compiled layout of an engine (build/gen/cr_layouts.h) in lay_load's packed form (a classic layout: its
+    // classic half, then the free half when it has free screens; free screens alone: the free half): its bytes (none: empty)
     compiled(engine) { const n = ex.lay_compiled(engine); return new Uint8Array(ex.memory.buffer, ex.lay_buf(), n).slice(); },
     // texts drawn by the firmware's faces on an empty page under its title line (the tools' captions): ops [{op:
     // "text", bold, px, x, y, s, col, align, maxw}] -> 240 x 240 RGBA, a copy
@@ -374,9 +385,10 @@ export const FREE_GROUPS = ["OSC", "FILT", "ENV", "LFO", "MOD"];
 const latin1ok = (s) => typeof s === "string" && [...s].every((ch) => ch.codePointAt(0) < 256 && ch !== "\0");
 // is a design well formed, and for this catalog? -> {errors: [..], warnings: [..]} (texts). opts.build: the firmware's
 // rules too (tools/gen_layout.py's, word for word: the page's "not buildable" reasons; tests/gen_layout_test.py runs
-// both): the 4 px grid and the area under the title line as errors, the budgets, a bound element in exactly one lane,
-// a parameter once, a pair's halves touching, the p5 style only, no band element, no classic screen in OSC .. MOD, FX
-// and MIX as today, Latin-1 texts
+// both): classic screens of OSC .. MOD as the screen plan has them (edit8 of one or two lanes, a plan band, no part
+// parameter on an engine page, no sketch glyph, not beside free screens in a group); free screens: the 4 px grid and
+// the area under the title line as errors, the budgets, a bound element in exactly one lane, a pair's halves touching,
+// no band element; a parameter once, the p5 style only, FX and MIX as today, Latin-1 texts
 export function validateDesign(d, cat, opts = {}) {
   const errors = [], warnings = [], build = !!opts.build;
   const err = (t) => errors.push(t), warn = (t) => warnings.push(t);
@@ -410,17 +422,29 @@ export function validateDesign(d, cat, opts = {}) {
       if (s.type === "classic") {
         if (!CLASSIC_KINDS.includes(s.kind)) err(`${at}: kind "${s.kind}" (${CLASSIC_KINDS.join(", ")})`);
         if (!BANDS.includes(s.band)) err(`${at}: band "${s.band}" (${BANDS.join(", ")})`);
-        if (build && freeGroup) err(`${at}: a classic screen in ${g.name}: not built yet (OSC .. MOD are free screens; the plan form comes later)`);
+        const plan = build && freeGroup;            // (OSC .. MOD: the screen plan's rules, tools/gen_layout.py's)
+        if (plan) {
+          if (CLASSIC_KINDS.includes(s.kind) && Array.isArray(s.lanes) && s.lanes.length && (s.kind !== "edit8" || s.lanes.length > 2))
+            err(`${at}: a ${s.kind} of ${s.lanes.length} lanes: the screen plan has edit8 screens of one or two lanes`);
+          if (BANDS.includes(s.band) && !(s.band in PLAN_BAND)) err(`${at}: band "${s.band}": not a band of the screen plan (${Object.keys(PLAN_BAND).join(", ")})`);
+          if (g.screens.some((x) => x && x.type === "free"))
+            err(`${at}: a classic screen beside free screens in ${g.name}: the unit's editor shows the group's free screens`);
+        }
         if (!Array.isArray(s.lanes) || !s.lanes.length || s.lanes.length > MAX_LANES) { err(`${at}: 1 .. ${MAX_LANES} lanes`); return; }
         let good = true;
         s.lanes.forEach((l, li) => {
           if (!l || !Array.isArray(l.cells) || l.cells.length !== LANE_SLOTS) { err(`${at} lane ${li + 1}: four cells (KNOB 1..4; null = empty)`); good = false; return; }
+          if (plan && l.title !== undefined && l.title !== null && !latin1ok(l.title)) err(`${at} lane ${li + 1}: its title is a Latin-1 text`);
           l.cells.forEach((c, ci) => {
             if (c === null) return;
             if (c.fixed) return;
             if (!pidx.has(c.param)) { err(`${at} lane ${li + 1} knob ${ci + 1}: no parameter "${c.param}"`); good = false; }
-            else use(c.param, at);
+            else {
+              use(c.param, at);
+              if (plan && pidx.get(c.param).part) err(`${at} lane ${li + 1} knob ${ci + 1}: ${c.param}: a part parameter on an engine page`);
+            }
             if (c.label !== undefined && c.label !== null && typeof c.label !== "string") err(`${at} lane ${li + 1} knob ${ci + 1}: a label is a text`);
+            else if (plan && typeof c.label === "string" && !latin1ok(c.label)) err(`${at} lane ${li + 1} knob ${ci + 1}: its label is a Latin-1 text`);
             if (isSketchStyle(c.style)) {           // a sketch glyph: the page draws it; the firmware cannot build it
               const sk = parseSketch(c.style);
               if (!sk) err(`${at} lane ${li + 1} knob ${ci + 1}: style "${c.style}" (the sketch glyphs: ${SKETCH_NAMES.join(", ")}; a wave -saw -tri -sqr)`);
@@ -527,8 +551,11 @@ const sameCells = (a, b) => JSON.stringify(a.map((c) => (c && (c.param || c.text
 // Pack a design's classic screens for lay_load. Two ways the firmware's own hook can show them:
 //   "in-place": every group's classic screens have today's structure (the same number, kinds and lanes): the engine's
 //       page tables are kept, with the design's parameter in each column and its labels (moves, swaps, relabels);
-//   "plan": the structure changed (screens added, removed, reordered, moved between groups): OSC .. MOD become a
-//       screen plan (core.h eng_screen_t: edit8, one or two lanes a screen, a band, a title), one page per lane.
+//   "plan": the structure changed (screens added, removed, reordered, moved between groups), or the catalog's screens
+//       are a compiled layout's (cat.layout: P5's rows; its pages are the engine's own, its screens the layout's, so
+//       "today's structure" is not the pages'): OSC .. MOD become a screen plan (core.h eng_screen_t: edit8, one or two
+//       lanes a screen, a band, a title), one page per lane: what tools/gen_layout.py compiles (the same bytes, through
+//       lay_compiled).
 // What neither can express is listed in `unbuildable` and shown as today's ("not buildable yet").
 // -> {bytes, mode, show: Map("gi.si" -> {group, screen}), unbuildable: [{gi, si, why}], notes: [..]}
 export function packDesign(d, cat) {
@@ -547,6 +574,7 @@ export function packDesign(d, cat) {
       if (s.kind !== ts.kind || s.lanes.length !== ts.lanes.length) inPlace = false;
     });
   }
+  if (cat.layout && groups.some(({ g, t }) => t.group <= 4 && classicOf(g).length)) inPlace = false;
   const colOf = (c) => {
     if (!c || c.fixed) return null;
     const p = params.get(c.param);

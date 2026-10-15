@@ -34,6 +34,112 @@ static const struct { uint8_t id; const char *label; } CP_LABEL[] = {
     {P_TRANS, "Trans"}, {P_DETUNE, "Detune"}, {P_PRIO, "Priority"}, {P_GLMODE, "Gl. mode"},
 };
 
+#if CR_LAYC_N
+/* An engine's compiled classic layout (cr_layout.h cr_layc_t, build/gen/cr_layouts.h: P5's rows, docs/LAYOUT-TOOL.md
+ * "Step 4"): its pages are the layout's (one a lane: copies of the built-in descriptors the design binds) and its
+ * screen plan the layout's; get / set / desc / mod_dst go through to each column's built-in (page, col), so the engine,
+ * its blob, SysEx and every other reader of the built-in table see the engine's own addresses. The eng_deep_t is the
+ * engine's own (the blob, the presets) with the layout's pages, sections and plan: built once, in RAM (its function
+ * pointers and the blob's size are the engine's, not constants here); the tables are const. The layout tool's preview
+ * builds the same from a design file (tools/layout/layout_web.c lay_load) */
+static eng_deep_t cp_lay_deep[CR_LAYC_N];
+static uint8_t cp_lay_ready[CR_LAYC_N];
+#ifdef CR_LAYOUT_PREVIEW
+static uint8_t cp_lay_on = 1;   /* (the layout tool's lay_layouts: the compiled layouts in effect, the default; 0: the
+                                 * classic derivation of the built-in pages) */
+#else
+#define cp_lay_on 1
+#endif
+/* engine e's classic layout: its CR_LAYC index + 1, 0 none */
+static uint32_t cp_lay_of(uint32_t e)
+{
+    uint32_t i;
+    for (i = 0; cp_lay_on && i < CR_LAYC_N; i++)
+        if (CR_LAYC[i].engine == e)
+            return i + 1u;
+    return 0;
+}
+/* the built-in (page, col) of the layout's page p, column c on track t: 1 (in *bp, *bc), 0 an empty column */
+static int cp_lay_src(const track_t *t, uint32_t p, uint32_t c, uint32_t *bp, uint32_t *bc)
+{
+    uint32_t i = cp_lay_of(eng_idx(t->eng_req));
+    const uint8_t *s;
+    if (!i || p >= CR_LAYC[i - 1u].npages || c > 3u)
+        return 0;
+    s = CR_LAYC_SRC[CR_LAYC[i - 1u].page0 + p][c];
+    if (s[0] == 0xFFu)
+        return 0;
+    *bp = s[0];
+    *bc = s[1];
+    return 1;
+}
+static const eng_deep_t *cp_lay_base(const track_t *t) { return ENGINES[eng_idx(t->eng_req)]->deep; }
+static int32_t cp_lay_get(const track_t *t, uint32_t p, uint32_t c)
+{
+    uint32_t bp, bc;
+    return cp_lay_src(t, p, c, &bp, &bc) ? cp_lay_base(t)->get(t, bp, bc) : 0;
+}
+static void cp_lay_set(track_t *t, uint32_t p, uint32_t c, int32_t v)
+{
+    uint32_t bp, bc;
+    if (cp_lay_src(t, p, c, &bp, &bc))
+        cp_lay_base(t)->set(t, bp, bc, v);
+}
+/* the descriptor the editor steps and shows: the built-in one (its range and names as the engine has them in this
+ * build); the layout's copy for an empty column */
+static const param_desc_t *cp_lay_desc(const track_t *t, uint32_t p, uint32_t c)
+{
+    const eng_deep_t *b = cp_lay_base(t);
+    uint32_t bp, bc, i = cp_lay_of(eng_idx(t->eng_req));
+    if (cp_lay_src(t, p, c, &bp, &bc))
+        return b->desc ? b->desc(t, bp, bc) : &b->pages[bp].col[bc];
+    return i && p < CR_LAYC[i - 1u].npages ? &CR_LAYC_PAGES[CR_LAYC[i - 1u].page0 + p].col[c & 3u] : 0;
+}
+static int32_t cp_lay_mod_dst(const track_t *t, uint32_t p, uint32_t c)
+{
+    uint32_t bp, bc;
+    if (p == ENG_MOD_TRK)
+        return cp_lay_base(t)->mod_dst(t, p, c);
+    return cp_lay_src(t, p, c, &bp, &bc) ? cp_lay_base(t)->mod_dst(t, bp, bc) : -1;
+}
+/* engine e's pages: its classic layout's when it has one (b: the built-in), else b */
+static const eng_deep_t *cp_lay_deep_of(uint32_t e, const eng_deep_t *b)
+{
+    uint32_t i = cp_lay_of(e);
+    eng_deep_t *d;
+    const cr_layc_t *L;
+    if (!i || !b)
+        return b;
+    d = &cp_lay_deep[--i];
+    L = &CR_LAYC[i];
+    if (!cp_lay_ready[i]) {
+        *d = *b;                                  /* the blob, the presets: the engine's */
+        d->npages = L->npages;
+        d->pages = &CR_LAYC_PAGES[L->page0];
+        memcpy(d->section, L->section, sizeof d->section);
+        d->get = cp_lay_get;
+        d->set = cp_lay_set;
+        d->desc = cp_lay_desc;
+        d->mod_dst = b->mod_dst ? cp_lay_mod_dst : 0;
+        d->screens = &CR_LAYC_SCREENS[L->screen0];
+        d->nscreens = L->nscreens;
+        cp_lay_ready[i] = 1;
+    }
+    return d;
+}
+/* (the editor's trace: the built-in page and column a column of the served pages d stands for, and its page's title) */
+static const char *cp_lay_trace_src(const track_t *t, const eng_deep_t *d, uint32_t *p, uint32_t *c)
+{
+    uint32_t bp, bc, i = cp_lay_of(eng_idx(t->eng_req));
+    if (i && d == &cp_lay_deep[i - 1u] && cp_lay_src(t, *p, *c, &bp, &bc)) {
+        *p = bp;
+        *c = bc;
+        return cp_lay_base(t)->pages[bp].title;
+    }
+    return *p < d->npages ? d->pages[*p].title : "?";
+}
+#endif
+
 /* the engine's deep pages, 0: none (the eight P_E only) */
 #ifdef CR_LAYOUT_PREVIEW
 /* (the layout tool's preview only: tools/layout/layout_web.c, docs/LAYOUT-TOOL.md. The tool may hand the editor
@@ -44,6 +150,9 @@ static const eng_deep_t *(*cp_deep_hook)(const track_t *t, const eng_deep_t *bui
 static const eng_deep_t *cp_deep(const track_t *t)
 {
     const eng_deep_t *d = ENGINES[eng_idx(t->eng_req)]->deep;
+#if CR_LAYC_N
+    d = cp_lay_deep_of(eng_idx(t->eng_req), d);  /* (a compiled classic layout: its pages and plan, above) */
+#endif
 #ifdef CR_LAYOUT_PREVIEW
     if (cp_deep_hook)
         d = cp_deep_hook(t, d);

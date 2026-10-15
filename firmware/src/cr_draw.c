@@ -2189,6 +2189,7 @@ static void cr_p_stack(const cr_screen_t *s)
     }
 }
 
+#if CR_LAY_FREE   /* (cr_layout.c: a built design's free screens, or the layout tool's preview) */
 /* ---------------------------------------------------------- the free screens --- */
 /* CR_K_FREE: a compiled layout's screen (cr_layout.c; docs/LAYOUT-TOOL.md "The p5 style"), drawn from the table and the
  * cells, never the engine: the title line, then the elements in the table's order (frames first), each composed as
@@ -2319,6 +2320,7 @@ static void cr_p_free(const cr_screen_t *s)
         if (cr_in_strip(y0, y1)) cr_free_el(s, e, cr_lay_where(ls, i));
     }
 }
+#endif /* CR_LAY_FREE */
 
 /* CR_K_KNOBROW (FORMAT.md "knobrow"): a layer screen. The panel above the lowest 72 px is a horizontal picker band
  * (the item 34 px bold in col squeezed to 170 px, its neighbours 13 px dim at the edges, the square marks under it,
@@ -2892,7 +2894,9 @@ static void cr_compose(const cr_screen_t *s, const cr_frame_t *fr)
     case CR_K_STACK: cr_p_stack(s); break;
     case CR_K_KNOBROW: cr_p_knobrow(s, fr, ph); break;
     case CR_K_LOOPMENU: cr_p_loopmenu(s, fr); break;
+#if CR_LAY_FREE
     case CR_K_FREE: cr_p_free(s); break;
+#endif
     case CR_K_GEEK: cr_p_geek(s, ph); break;
     case CR_K_TEXT: cr_p_text(s); break;
     case CR_K_BIG: cr_p_big(s, ph); break;
@@ -2927,7 +2931,9 @@ static struct {
     uint32_t tile[CR_NSTRIP][CR_NTY * CR_NTX];   /* the pixels' hashes, per strip and tile */
     uint32_t row[CR_ED_ROWS], wv, hot, ttl;   /* the editor's parts (cr_ed_strips): each row's cells, the band, the
                                                * hot cell, the title line */
+#if CR_LAY_FREE
     uint32_t fcell[CR_ED_ROWS][4];       /* a free screen's: each cell (cr_free_strips: the strips of its element) */
+#endif
     uint16_t ring;                       /* .. which was drawn */
     uint32_t dl;                         /* the corner dial drawn (dial | pulse << 16 | mode << 17 | dot << 20) */
     int8_t pos;                          /* the arp screen's sounding note drawn (cr_arp_strips) */
@@ -3090,6 +3096,7 @@ static uint32_t cr_ed_strips(const cr_screen_t *s, const uint32_t *row, uint32_t
     return m;
 }
 
+#if CR_LAY_FREE
 /* a free screen's parts changed alone (CR_K_FREE: a cell's value, the hot cell): the strips of the elements whose
  * cells changed, and of the hot element before and now */
 static uint32_t cr_free_strips(const cr_screen_t *s, const uint32_t fc[CR_ED_ROWS][4], uint32_t hot)
@@ -3108,6 +3115,7 @@ static uint32_t cr_free_strips(const cr_screen_t *s, const uint32_t fc[CR_ED_ROW
         }
     return m;
 }
+#endif
 
 /* the loop menu's moving parts changed alone (lm_lane .. lm_erase1: a playhead, a mark, the Replace span, the step
  * cursor and its blink): the middle's strips; the cursor alone (same marks and span): its old and new rows' strips */
@@ -3148,7 +3156,10 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
 {
     cr_frame_t fr;
     uint32_t sig, base, k, strips = (1u << CR_NSTRIP) - 1u, row[CR_ED_ROWS], wv, hot;
-    uint32_t ttl, ed = s->kind == CR_K_EDIT8 || s->kind == CR_K_STACK || s->kind == CR_K_FREE, i, j, o, fc[CR_ED_ROWS][4];
+    uint32_t ttl, ed = s->kind == CR_K_EDIT8 || s->kind == CR_K_STACK || s->kind == CR_K_FREE, i, j, o;
+#if CR_LAY_FREE
+    uint32_t fc[CR_ED_ROWS][4];
+#endif
     /* the struct's bytes but these (offset, size), hashed apart: the ring's fraction, the corner dial's fraction,
      * pulse, look and REC dot, the editor's parts (its cells, the hot cell, the band's values, its title line), the
      * arp screen's sounding note */
@@ -3202,8 +3213,10 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     }
     for (k = 0; k < CR_ED_ROWS; k++)
         row[k] = cr_hash(2166136261u, s->cell[k], sizeof s->cell[k]);
+#if CR_LAY_FREE
     for (k = 0; k < CR_ED_ROWS * 4u && s->kind == CR_K_FREE; k++)
         fc[k / 4u][k % 4u] = cr_hash(2166136261u, &s->cell[k / 4u][k % 4u], sizeof s->cell[0][0]);
+#endif
     wv = cr_hash(2166136261u, s->wv, sizeof s->wv);
     hot = (uint32_t)s->hot_r | (uint32_t)s->hot_c << 8 | (uint32_t)s->hot_col << 16;
     sig = cr_hash(cr_hash(cr_hash(cr_hash(cr_hash(cr_hash(base, &s->ring, sizeof s->ring), &dl, sizeof dl), row, sizeof row),
@@ -3227,9 +3240,12 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
                                                                   * it stands for): one strip */
         if (s->pos != cr_dc.pos)
             strips |= cr_arp_strips(s);                          /* the arp screen: the hop moved */
+#if CR_LAY_FREE
         if (s->kind == CR_K_FREE)
             strips |= cr_free_strips(s, fc, hot);                /* a free screen: the elements that changed */
-        else if (wv != cr_dc.wv || hot != cr_dc.hot)
+        else
+#endif
+        if (wv != cr_dc.wv || hot != cr_dc.hot)
             strips |= cr_ed_strips(s, row, wv, hot);
         else
             for (k = 0; k < CR_ED_ROWS; k++)
@@ -3270,8 +3286,10 @@ static void cr_draw(const cr_screen_t *s, uint32_t anim_ms)
     cr_dc.pos = s->pos;
     for (k = 0; k < CR_ED_ROWS; k++)
         cr_dc.row[k] = row[k];
+#if CR_LAY_FREE
     for (k = 0; k < CR_ED_ROWS * 4u && s->kind == CR_K_FREE; k++)
         cr_dc.fcell[k / 4u][k % 4u] = fc[k / 4u][k % 4u];
+#endif
     cr_dc.wv = wv;
     cr_dc.hot = hot;
     cr_dc.ttl = ttl;

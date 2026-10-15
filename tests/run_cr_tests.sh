@@ -43,9 +43,9 @@ t ./build/host/cr_bootguard_test
 par_build cc -std=c99 -Wall -Wextra -Wno-unused-function -Werror -pedantic -O1 -fsanitize=address,undefined -fno-sanitize-recover=all -o build/host/cr_stub_test tests/cr_stub_test.c
 t ./build/host/cr_stub_test
 t python3 tests/stub_pkg_test.py
-# the compiled layouts (build/gen/cr_layouts.h, firmware/src/cr_layout.h; docs/LAYOUT-TOOL.md "Step 4"): P5's panel as
-# records, its counts, every address within P5's pages, every element in its one lane, every string reachable
-par_build cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -Ibuild/gen -Ifirmware/src -o build/host/cr_layout_test tests/cr_layout_test.c
+# the compiled layouts (build/gen/cr_layouts.h, firmware/src/cr_layout.h; docs/LAYOUT-TOOL.md "Step 4"): P5's rows as
+# a screen plan over pages of its own, its counts, every column's built-in address, every parameter once, the screens
+par_build cc -std=c11 -Wall -Wextra -Wno-unused-function -Werror -pedantic -O2 -Ibuild/gen -Ifirmware/src -o build/host/cr_layout_test tests/cr_layout_test.c
 t ./build/host/cr_layout_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_engine_test tests/cr_engine_test.c firmware/src/cr_engine.c
 t ./build/host/cr_engine_test
@@ -103,10 +103,11 @@ par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/
 t ./build/host/cr_backup_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_pool_test tests/cr_pool_test.c -lm
 t ./build/host/cr_pool_test
-# the editor on P5's compiled panel (cr_edit.c CE_S_FREE, docs/LAYOUT-TOOL.md "Step 4"): the layout's screens, every lane
-# slot turned (the parameter, edited, hot, CR_K_FREE), empty slots inert, SELECT across lanes and screens
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_p5panel_test tests/cr_p5panel_test.c -lm
-t logged_last cr_p5panel_test
+# the editor on P5's compiled rows (cr_pages.c cp_deep, cr_edit.c's screen plan; docs/LAYOUT-TOOL.md "Step 4"): the
+# layout's pages (copies of the built-in descriptors), its screens (EXPR after VOICE), every cell turned (the parameter at
+# its built-in address, edited, hot), empty slots inert, SELECT across lanes and screens
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_p5rows_test tests/cr_p5rows_test.c -lm
+t logged_last cr_p5rows_test
 # a full pool's browsing: no flash read on a frame, a detent reads only the sound it loads (3y60)
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_poolperf_test tests/cr_poolperf_test.c -lm
 t ./build/host/cr_poolperf_test

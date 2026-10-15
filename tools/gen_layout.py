@@ -1,20 +1,35 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-only
 # Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca)
-"""The layout generator (docs/LAYOUT-TOOL.md "Step 4, the firmware: a plan" (a)): the designs the build ships,
-compiled into the records of firmware/src/cr_layout.h:
+"""The layout generator (docs/LAYOUT-TOOL.md "Step 4, the firmware: what was built"): the designs the build ships,
+compiled into the firmware's own tables:
 
-  python3 tools/gen_layout.py [build/gen/cr_layouts.h]      (a step of tools/build.py's generate list)
+  python3 tools/gen_layout.py [build/gen/cr_layouts.h] [--design ENGINE=path ..]   (a step of tools/build.py's generate
+                                                                                    list; --design: other designs than
+                                                                                    BUILD's, for the host tests)
 
 What is built is this file's business, not a design's (rule 4): BUILD names one design an engine. A design is checked
 against its engine's version 1 layout file (design/layouts/<engine>.json, which web/test_layout.mjs proves to be the
 firmware's): the same params_hash, every stable id resolved through its pages to the built-in (page, col), or part:<id>
 to (CR_LAY_PART, id). The rules are validateDesign's (web/fm1layout.js), in the same words, and stricter where the
 firmware must be (validateDesign(d, cat, {build: true}) has these too, word for word: the designer's "not buildable"
-reasons; and its packDesign packs a design's free screens into these very records, byte for byte): the 4 px grid, the area under the title line, the budgets, a bound element in exactly one lane, a
-parameter once, a pair's halves touching, the p5 style only, no band element, no classic screen in OSC .. MOD (yet),
-FX and MIX the platform's as today. Value names come from the layout file's descriptors, so the renderer never asks
-the engine. The header is written only when its text changes."""
+reasons). Two forms, both what web/fm1layout.js packDesign packs for the preview (web/test_layout.mjs compares them
+byte for byte through the module's lay_compiled):
+
+- CLASSIC screens of OSC .. MOD: the screen plan (packDesign's "plan"): a page of its own per lane, each column a copy
+  of the built-in descriptor it binds (core.h param_desc_t) with its built-in (page, col), the design's label and cell
+  style; the screens (core.h eng_screen_t: one or two lanes, the band, the title); the sections. firmware/src/cr_pages.c
+  cp_deep serves them as the engine's pages (get / set / desc / mod_dst through to the built-in (page, col)), so the
+  editor (cr_edit.c) derives the screens from the plan. Edit8 screens of one or two lanes, a plan band, no part
+  parameter on an engine page, no sketch glyph.
+- FREE screens (cr_layout.h's records: an element 14 B, a screen 38 B, one string pool), drawn by cr_edit.c CE_S_FREE
+  and cr_draw.c CR_K_FREE in the p5 style: the 4 px grid, the area under the title line, the budgets, a bound element
+  in exactly one lane, a parameter once, a pair's halves touching, no band element. A built design with free screens
+  sets CR_LAYOUTS_FREE 1 and the free-page editor and renderer are compiled into the unit; without, they are not (the
+  layout tool's preview has them always, CR_LAYOUT_PREVIEW). A group is one kind or the other.
+
+FX and MIX are the platform's, as today. Value names come from the layout file's descriptors. The header is written
+only when its text changes."""
 import json
 import math
 import os
@@ -23,7 +38,7 @@ import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-BUILD = {"P5": "design/layouts/designs/p5-panel.json"}
+BUILD = {"P5": "design/layouts/designs/p5-rows.json"}
 
 # web/fm1layout.js, in its order
 FORMAT, DESIGN_VERSION = "choralroot-layout", 2
@@ -35,6 +50,10 @@ GLYPHS = ["none", "knob", "bar", "wave", "saw", "square", "steps", "dots", "morp
           "lfo", "clip", "mix", "gate", "range", "arrow", "shift", "harm", "detune", "lfowave", "ratio", "tail", "pre",
           "cut", "width", "spread", "sync", "ping"]
 BANDS = ["none", "env", "filter", "dx", "cz", "algo", "ade2"]
+PLAN_BAND = {"none": 0, "env": 1, "filter": 2, "algo": 4, "ade2": 5}     # core.h ENG_B_* (fm1layout.js PLAN_BAND)
+ENG_B = ["ENG_B_NONE", "ENG_B_ENV", "ENG_B_FILTER", "ENG_B_WINDOW", "ENG_B_ALGO", "ENG_B_ADE2"]
+FMTS = ["int", "pct", "bipct", "time", "lfohz", "cutoff", "db", "semi", "enum", "bpm", "note", "onoff", "oct", "steps",
+        "ofs", "fmnote", "fmfrq", "timei", "fix2", "inti"]                # core.h F_* (the catalog's "fmt", layout_web.c)
 ELEMENT_TYPES = ["frame", "label", "knob", "switch", "led", "bar", "glyph", "band"]
 BINDABLE = {"knob", "switch", "led", "bar", "glyph"}
 LED_GLYPHS = ["saw", "square", "triangle", "sine", "noise"]
@@ -185,7 +204,8 @@ def validate(d, cat, built=True):
             if has_key(s):
                 err(f"{at}: nothing may be bound to a key (rule 2: the keys always play)")
             if s["type"] == "classic":
-                classic(s, at, g["name"], si, params, today, built, err, used)
+                mixed = any(isinstance(x, dict) and x.get("type") == "free" for x in g["screens"])
+                classic(s, at, g["name"], si, params, today, built, err, used, mixed)
             else:
                 free(s, at, g["name"], params, built, err, used)
     if built:
@@ -198,14 +218,20 @@ def validate(d, cat, built=True):
     return errors
 
 
-def classic(s, at, gname, si, params, today, built, err, used):
+def classic(s, at, gname, si, params, today, built, err, used, mixed=False):
     if s.get("kind") not in CLASSIC_KINDS:
         err(f'{at}: kind "{s.get("kind")}" ({", ".join(CLASSIC_KINDS)})')
     if s.get("band") not in BANDS:
         err(f'{at}: band "{s.get("band")}" ({", ".join(BANDS)})')
-    if built and gname in FREE_GROUPS:
-        err(f"{at}: a classic screen in {gname}: not built yet (OSC .. MOD are free screens; the plan form comes later)")
     lanes = s.get("lanes")
+    plan = built and gname in FREE_GROUPS                      # (OSC .. MOD: the screen plan's rules)
+    if plan:
+        if s.get("kind") in CLASSIC_KINDS and isinstance(lanes, list) and lanes and (s["kind"] != "edit8" or len(lanes) > 2):
+            err(f"{at}: a {s['kind']} of {len(lanes)} lanes: the screen plan has edit8 screens of one or two lanes")
+        if s.get("band") in BANDS and s["band"] not in PLAN_BAND:
+            err(f'{at}: band "{s["band"]}": not a band of the screen plan ({", ".join(PLAN_BAND)})')
+        if mixed:
+            err(f"{at}: a classic screen beside free screens in {gname}: the unit's editor shows the group's free screens")
     if not isinstance(lanes, list) or not lanes or len(lanes) > MAX_LANES:
         err(f"{at}: 1 .. {MAX_LANES} lanes")
         return
@@ -215,6 +241,8 @@ def classic(s, at, gname, si, params, today, built, err, used):
             err(f"{at} lane {li + 1}: four cells (KNOB 1..4; null = empty)")
             ok = False
             continue
+        if plan and lane.get("title") is not None and (not isinstance(lane["title"], str) or latin1(lane["title"]) is None):
+            err(f"{at} lane {li + 1}: its title is a Latin-1 text")
         for ci, c in enumerate(lane["cells"]):
             if c is None or c.get("fixed"):
                 continue
@@ -223,8 +251,12 @@ def classic(s, at, gname, si, params, today, built, err, used):
                 ok = False
             else:
                 used.setdefault(c["param"], []).append(at)
+                if plan and params[c["param"]]["part"]:
+                    err(f"{at} lane {li + 1} knob {ci + 1}: {c['param']}: a part parameter on an engine page")
             if c.get("label") is not None and not isinstance(c["label"], str):
                 err(f"{at} lane {li + 1} knob {ci + 1}: a label is a text")
+            elif plan and isinstance(c.get("label"), str) and latin1(c["label"]) is None:
+                err(f"{at} lane {li + 1} knob {ci + 1}: its label is a Latin-1 text")
             st = c.get("style")
             if isinstance(st, str) and st.startswith("sketch:"):   # a sketch glyph: the page draws it, no build has it
                 m = SKETCH_RE.match(st)
@@ -409,10 +441,11 @@ def switch_name(e, p, n, i):
     return ["Off", "On"][i] if n == 2 else ["Lo", "Mid", "Hi"][i]
 
 
-def element(e, p, pool):
-    """one element's record (cr_layout.h cr_lay_elem_t), its texts resolved as p5Op draws them"""
+def element(e, p, pool, offset=0):
+    """one element's record (cr_layout.h cr_lay_elem_t), its texts resolved as the p5 look draws them; offset: the
+    built-in pages' place in a classic layout's table (packFree's offset), 0 when the engine's own are served"""
     ty = e["type"]
-    page, col = (p["page"], p["col"]) if p else (NONE, 0)
+    page, col = ((PART if p["part"] else p["page"] + offset), p["col"]) if p else (NONE, 0)
     size = r = flags = 0
     colour = COLOURS.get(e.get("colour"), 0)
     lab = e["label"] if e.get("label") is not None else p["label"] if p else ""
@@ -454,32 +487,148 @@ def element(e, p, pool):
     return [ty, e["x"], e["y"], e["w"], e["h"], page, col, size, r, colour, flags, label]
 
 
+def copy_cols(cat_page):
+    """a built-in page's columns as a classic layout's: [{src, label, style} | None] (the design's own label none)"""
+    return [{"src": (cat_page["page"], i), "label": "", "style": 0} if c else None for i, c in enumerate(cat_page["cols"])]
+
+
+def pack_classic(d, cat, has_free):
+    """the design's classic screens of OSC .. MOD as the screen plan: web/fm1layout.js packDesign's "plan", the same
+    pages, sections and screens (and, with free screens, the copy of the built-in pages after the plan's own, fenced
+    off by a section, that their elements address). -> {pages: [{title, cols}], section: [8], screens: [{sec, pg, band,
+    title}], fence} or None (no classic screen in OSC .. MOD: the engine's own pages are served)"""
+    if not any(g["name"] in FREE_GROUPS and any(s["type"] == "classic" for s in g["screens"]) for g in d["groups"]):
+        return None
+    params = param_list(cat)
+    pages, screens, sec = [], [], {}
+
+    def col_of(c):
+        if not c or c.get("fixed"):
+            return None
+        p = params.get(c.get("param"))
+        if not p or p["part"]:
+            return None
+        st = c.get("style") or "rule"
+        return {"src": (p["page"], p["col"]), "label": c.get("label") or "",
+                "style": CELL_STYLES.index(st) if st in CELL_STYLES else 0}
+    for gno in range(5):
+        t = next((x for x in cat["groups"] if x["group"] == gno), None)
+        if not t or not any(s["pages"] for s in t["screens"]):
+            continue
+        dg = next((g for g in d["groups"] if g["name"] == t["name"]), None)
+        sec[gno] = len(pages)
+        cl = [s for s in dg["screens"] if s["type"] == "classic"] if dg else []
+        if not cl:
+            pages.append({"title": t["name"], "cols": [None] * 4})      # (a group of free screens only)
+        for s in cl:
+            pg = []
+            for lane in s["lanes"][:2]:
+                pg.append(len(pages))
+                pages.append({"title": (lane.get("title") or s.get("title") or t["name"])[:15],
+                              "cols": [col_of(c) for c in lane["cells"]]})
+            screens.append({"sec": gno, "pg": (pg[0], pg[1] if len(pg) > 1 else 255), "band": PLAN_BAND.get(s["band"], 0),
+                            "title": (s.get("title") or "")[:15]})
+    fence = None
+    if has_free:
+        fence = len(pages)
+        pages += [{"title": p["title"], "cols": copy_cols(p)} for p in cat["pages"]]
+    secs = [sec[g] for g in range(5) if g in sec]
+    section = [secs[i] if i < len(secs) else fence if i == len(secs) and fence is not None and len(secs) == 5 else 255
+               for i in range(8)]
+    return {"pages": pages, "section": section, "screens": screens, "fence": fence}
+
+
+def classic_bytes(cl, engine):
+    """a classic layout as packDesign's 'L' 3 form (its classic half): 'L' 3 engine npages, per page tlen title and four
+    times srcpage srccol style llen label, section[8], nscreens, per screen sec pg0 pg1 band tlen title"""
+    b = bytearray([76, 3, engine, len(cl["pages"])])
+
+    def text(s):
+        u = bytes(ord(ch) if ord(ch) < 256 else 63 for ch in (s or "")[:15])
+        b.append(len(u))
+        b.extend(u)
+    for p in cl["pages"]:
+        text(p["title"])
+        for c in p["cols"]:
+            if c:
+                b.extend([c["src"][0], c["src"][1], c["style"]])
+                text(c["label"])
+            else:
+                b.extend([255, 0, 0])
+                text("")
+    b.extend(cl["section"])
+    b.append(len(cl["screens"]))
+    for s in cl["screens"]:
+        b.extend([s["sec"], s["pg"][0], s["pg"][1], s["band"]])
+        text(s["title"])
+    return bytes(b)
+
+
+def free_bytes(c):
+    """a compiled design's free screens as packDesign's free half (packFree): nfs, nel, npool (2 B each, little-endian),
+    the screens (cr_lay_screen_t), the elements (cr_lay_elem_t), the pool"""
+    ne, pool = sum(len(s["elements"]) for s in c["screens"]), bytes(c["pool"].data)
+    b = bytearray([len(c["screens"]), ne & 255, ne >> 8, len(pool) & 255, len(pool) >> 8])
+    first = 0
+    for s in c["screens"]:
+        b += bytes([s["group"], first, len(s["elements"]), len(s["lanes"]), s["title"] & 255, s["title"] >> 8])
+        for lane in range(MAX_LANES):
+            b += bytes((s["lanes"][lane] + [EMPTY] * 4)[:4] if lane < len(s["lanes"]) else [EMPTY] * 4)
+        first += len(s["elements"])
+    for s in c["screens"]:
+        for ty, x, y, w, h, page, col, size, r, colour, flags, label in s["elements"]:
+            b += bytes([ELEMENT_TYPES.index(ty), x, y, w, h, page, col, size, r, colour, flags & 255, flags >> 8,
+                        label & 255, label >> 8])
+    return bytes(b + pool)
+
+
 def compile_design(d, cat):
-    """a design -> {screens: [{group, title, elements: [record], lanes, ids}], ..}; ValueError(errors) when refused"""
+    """a design -> {screens: [{group, title, elements: [record], lanes, ids}] (the free screens), pool, classic (the
+    plan, pack_classic) or None}; ValueError(errors) when refused"""
     errors = validate(d, cat)
     if errors:
         raise ValueError(errors)
     params, pool, screens = param_list(cat), Pool(), []
     gno = {g["name"]: g["group"] for g in cat["groups"]}
+    has_free = any(g["name"] in FREE_GROUPS and any(s["type"] == "free" for s in g["screens"]) for g in d["groups"])
+    cl = pack_classic(d, cat, has_free)
+    offset = cl["fence"] if cl else 0
     for g in d["groups"]:
         if g["name"] not in FREE_GROUPS:
             continue                                               # FX, MIX: the platform's, checked as today's
         for s in g["screens"]:
+            if s["type"] != "free":
+                continue
             els = sorted(s["elements"], key=lambda e: 0 if e["type"] == "frame" else 1)    # frames first (stable)
             ix = {e["id"]: i for i, e in enumerate(els)}
-            recs = [element(e, params.get(e.get("param")) if e["type"] in BINDABLE else None, pool) for e in els]
+            recs = [element(e, params.get(e.get("param")) if e["type"] in BINDABLE else None, pool, offset) for e in els]
             lanes = [[EMPTY if i is None else ix[i] for i in lane] for lane in s["lanes"]]
             screens.append(dict(group=gno[g["name"]], title=pool.add(s["title"]), elements=recs, lanes=lanes,
                                 ids=[e["id"] for e in els], name=s["title"]))
     if sum(len(s["elements"]) for s in screens) > 255 or len(screens) > 255:
         raise ValueError(["more than 255 elements or screens in an engine (cr_lay_screen_t.first is a byte)"])
-    return dict(screens=screens, pool=pool)
+    if cl and (len(cl["pages"]) > 255 or len(cl["screens"]) > 32):
+        raise ValueError(["a classic layout of more than 255 pages or 32 screens"])
+    return dict(screens=screens, pool=pool, classic=cl)
+
+
+# the classic tables' size on the unit (arm-none-eabi: param_desc_t 20 B, eng_page_t 84, eng_screen_t 52, cr_layc_t 20;
+# the source table 8 B a page; the strings counted apart)
+PAGE_B, SRC_B, PLAN_SCREEN_B, LAYC_B = 84, 8, 52, 20
 
 
 def cost(c):
     ne, ns = sum(len(s["elements"]) for s in c["screens"]), len(c["screens"])
-    return dict(screens=ns, elements=ne, lanes=sum(len(s["lanes"]) for s in c["screens"]), pool=len(c["pool"].data),
-                bytes=ne * ELEM_B + ns * SCREEN_B + HEAD_B)
+    cl = c.get("classic")
+    out = dict(screens=ns, elements=ne, lanes=sum(len(s["lanes"]) for s in c["screens"]), pool=len(c["pool"].data),
+               bytes=ne * ELEM_B + ns * SCREEN_B + HEAD_B if ns else 0)
+    if cl:
+        strs = {p["title"] for p in cl["pages"]} | {s["title"] for s in cl["screens"] if s["title"]} | \
+            {x["label"] for p in cl["pages"] for x in p["cols"] if x and x["label"]}
+        out.update(cpages=len(cl["pages"]), cscreens=len(cl["screens"]),
+                   cbytes=len(cl["pages"]) * (PAGE_B + SRC_B) + len(cl["screens"]) * PLAN_SCREEN_B + LAYC_B,
+                   cstrings=sum(len(latin1(x) or b"") + 1 for x in strs))
+    return out
 
 
 # ------------------------------------------------------------------------------------------------------ C ---
@@ -488,19 +637,98 @@ def c_str(b):
     return '"' + "".join(chr(x) if 32 <= x < 127 and chr(x) not in '"\\?' else f"\\{x:03o}" for x in b) + '"'
 
 
+def c_text(s):
+    """a text as a C string literal (Latin-1), or 0 for none"""
+    return c_str(latin1(s[:15]) if latin1(s[:15]) is not None else bytes(ord(ch) if ord(ch) < 256 else 63 for ch in s[:15])) \
+        if s else "0"
+
+
 def note(s):
     """a text for a C comment"""
     return s.encode("ascii", "replace").decode().replace("*/", "* /")
 
 
+def classic_c(built, L):
+    """the compiled classic layouts as C (core.h's types: cr_layouts.h is read after core.h)"""
+    lays = [(name, index, path, c["classic"]) for name, index, path, c in built if c.get("classic")]
+    L += ["", "/* ---- the classic layouts: an engine's editor as a screen plan over pages of its own (firmware/src/cr_pages.c",
+          " * cp_deep serves them as the engine's pages; get / set / desc / mod_dst go through to the built-in (page, col)) */",
+          f"#define CR_LAYC_N {len(lays)}u"]
+    if not lays:
+        return
+    names, pages, srcs, scrs, heads = {}, [], [], [], []
+    page0 = screen0 = 0
+
+    def names_of(v):
+        if not v:
+            return "0"
+        k = tuple(v)
+        if k not in names:
+            names[k] = f"CR_LAYC_NAMES{len(names)}"
+        return names[k]
+    for name, index, path, cl in lays:
+        cat = load_catalog(name)
+        bp = {p["page"]: p for p in cat["pages"]}
+        for i, p in enumerate(cl["pages"]):
+            cols, what = [], []
+            for c in p["cols"]:
+                if not c:
+                    cols.append("{0, 0, 0, 0, 0, 0, 0}")
+                    what.append("-")
+                    continue
+                src = bp[c["src"][0]]
+                dc = src["cols"][c["src"][1]]
+                cols.append(f'{{{c_str(latin1(dc["short"]))}, F_{dc["fmt"].upper()}, {dc["min"]}, {dc["max"]}, {dc["def"]}, '
+                            f'{names_of(dc.get("names"))}, {c_text(dc.get("unit") or "")}}}')
+                what.append(f'{src["title"]}:{dc["short"]}')
+            pages.append(f"    {{{c_text(p['title'])}, {{{', '.join(cols)}}}}},   /* {name} {i}: {note(' '.join(what))} */")
+            srcs.append("    {" + ", ".join(f"{{{c['src'][0]}, {c['src'][1]}}}" if c else "{255, 0}" for c in p["cols"]) + "},")
+        for s in cl["screens"]:
+            rows = [cl["pages"][g] if g != 255 else None for g in s["pg"]]
+            cell = "{" + ", ".join("{" + ", ".join(CELL_C[(x or {}).get("style", 0)] for x in (r["cols"] if r else [None] * 4)) + "}"
+                                   for r in rows) + "}"
+            lab = "{" + ", ".join("{" + ", ".join(c_text((x or {}).get("label", "")) for x in (r["cols"] if r else [None] * 4)) + "}"
+                                  for r in rows) + "}"
+            scrs.append(f"    {{{s['sec']}, {{{s['pg'][0]}, {s['pg'][1]}}}, {ENG_B[s['band']]}, 0, {c_text(s['title'])},\n"
+                        f"     {cell},\n     {lab}}},   /* {name} {note(s['title'])} */")
+        heads.append(f"    {{{index}, {len(cl['pages'])}, {page0}, {len(cl['screens'])}, {screen0}, "
+                     f"{{{', '.join(str(x) for x in cl['section'])}}}, {c_str(path.encode())}}},   /* {name} */")
+        page0 += len(cl["pages"])
+        screen0 += len(cl["screens"])
+    L += [f"#define CR_LAYC_NPAGES {page0}u", f"#define CR_LAYC_NSCREENS {screen0}u"]
+    for v, n in names.items():
+        L.append(f"static const char *const {n}[] = {{{', '.join(c_str(latin1(x)) for x in v)}, 0}};")
+    L += ["/* a page: its title (the lane's), its four columns: copies of the built-in descriptors (label fmt min max def",
+          " * names unit; label 0: an empty column) */",
+          f"static const eng_page_t CR_LAYC_PAGES[{page0}] = {{", *pages, "};",
+          "/* each column's built-in (page, col) (255: an empty column) */",
+          f"static const uint8_t CR_LAYC_SRC[{page0}][4][2] = {{", *srcs, "};",
+          "/* the screens: the group, rows A and B (255: one row), the band, the letter, the title, the cells' styles and",
+          " * labels (0: the editor's) */",
+          f"static const eng_screen_t CR_LAYC_SCREENS[{screen0}] = {{", *scrs, "};",
+          "/* engine, pages, the first page, screens, the first screen, the sections, the design */",
+          f"static const cr_layc_t CR_LAYC[{len(lays)}] = {{", *heads, "};"]
+
+
+CELL_C = ["ENG_C_RULE", "ENG_C_BIG", "ENG_C_RATIO", "ENG_C_HARM", "ENG_C_DETUNE", "ENG_C_NUM", "ENG_C_VAL", "ENG_C_TEXT",
+          "ENG_C_KNOB", "ENG_C_BAR", "ENG_C_WAVEPH", "ENG_C_P5KNOB", "ENG_C_P5LED", "ENG_C_P5LED_SAW", "ENG_C_P5LED_TRI",
+          "ENG_C_P5LED_SQR", "ENG_C_P5LED2", "ENG_C_P5SWITCH"]      # core.h ENG_C_*, CELL_STYLES' order
+
+
 def header(built):
     """built: [(engine name, engine index, design path, compiled)] -> the text of build/gen/cr_layouts.h"""
     pool = Pool()
+    free = [b for b in built if b[3]["screens"]]
     L = ["/* generated by tools/gen_layout.py from " + ", ".join(path for _, _, path, _ in built) + ":",
-         " * the compiled layouts (firmware/src/cr_layout.h, docs/LAYOUT-TOOL.md \"Step 4, the firmware: a plan\") */",
-         "#pragma once", '#include "cr_layout.h"']
+         " * the compiled layouts (firmware/src/cr_layout.h, docs/LAYOUT-TOOL.md \"Step 4, the firmware: what was built\").",
+         " * Read after core.h (the classic layouts are its eng_page_t / eng_screen_t) */",
+         "#pragma once", '#include "cr_layout.h"', "",
+         "/* a built design has free screens: the free-page editor and renderer are compiled in (cr_edit.c CE_S_FREE,",
+         " * cr_draw.c CR_K_FREE); the layout tool's preview has them always (CR_LAYOUT_PREVIEW) */",
+         f"#define CR_LAYOUTS_FREE {1 if free else 0}",
+         "#if CR_LAYOUTS_FREE || defined(CR_LAYOUT_PREVIEW)"]
     lays, scrs, els = [], [], []
-    for name, index, path, c in built:
+    for name, index, path, c in free:
         base = c["pool"]
         remap = {}
         for run, off in base.at.items():                           # one pool for every engine
@@ -521,27 +749,32 @@ def header(built):
                 els.append(f"    {{CR_E_{ty.upper()}, {x}, {y}, {w}, {h}, {page}, "
                            f"{col}, {size}, {r}, {colour}, 0x{flags:04x}, {remap.get(label, NOSTR)}}},   /* {note(i)} */")
             first += len(s["elements"])
+    none = "   /* (none: a placeholder) */"
     L += [f"#define CR_LAY_NENGINES {len(lays)}u", f"#define CR_LAY_NSCREENS {len(scrs)}u",
-          f"#define CR_LAY_NELEMS {len(els)}u", f"#define CR_LAY_POOL_SIZE {len(pool.data)}u",
+          f"#define CR_LAY_NELEMS {len(els)}u", f"#define CR_LAY_POOL_SIZE {len(pool.data) or 1}u",
           "/* engine, screens, the first screen, 0, the first element, elements */",
-          f"static const cr_layout_t CR_LAYOUTS[{len(lays)}] = {{", *lays, "};",
+          f"static const cr_layout_t CR_LAYOUTS[{len(lays) or 1}] = {{", *(lays or ["    {255, 0, 0, 0, 0, 0}," + none]), "};",
           "/* group, the first element, elements, lanes, the title, the lanes' elements (255: empty) */",
-          f"static const cr_lay_screen_t CR_LAY_SCREENS[{len(scrs)}] = {{", *scrs, "};",
+          f"static const cr_lay_screen_t CR_LAY_SCREENS[{len(scrs) or 1}] = {{", *(scrs or ["    {0, 0, 0, 0, 0, {{0}}}," + none]), "};",
           "/* type, x y w h, page col (254: none, 255: a part parameter), size, r, colour, flags, the label */",
-          f"static const cr_lay_elem_t CR_LAY_ELEMS[{len(els)}] = {{", *els, "};",
+          f"static const cr_lay_elem_t CR_LAY_ELEMS[{len(els) or 1}] = {{", *(els or ["    {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}," + none]), "};",
           "/* the strings, each run once, NUL-terminated (the last one's NUL is the literal's own) */",
           "static const char CR_LAY_POOL[] ="]
     runs = sorted(pool.at.items(), key=lambda kv: kv[1])
     for k, (run, off) in enumerate(runs):
         L.append(f"    {c_str(run[:-1] if k == len(runs) - 1 else run)}   /* {off} */")
+    if not runs:
+        L.append('    ""')
     L[-1] += ";"
-    L.append(f"_Static_assert(sizeof CR_LAY_POOL == CR_LAY_POOL_SIZE, \"the pool's size\");")
+    L += ["_Static_assert(sizeof CR_LAY_POOL == CR_LAY_POOL_SIZE, \"the pool's size\");", "#endif"]
+    classic_c(built, L)
     return "\n".join(L) + "\n"
 
 
-def main(out):
+def compile_build(build):
+    """{engine: design path} -> [(engine name, engine index, design path, compiled)]; SystemExit when one is refused"""
     built = []
-    for name, path in BUILD.items():
+    for name, path in build.items():
         cat = load_catalog(name)
         d = json.loads((ROOT / path).read_text(encoding="utf-8"))
         try:
@@ -553,11 +786,20 @@ def main(out):
         for t in warnings(d):
             print(f"gen_layout: {path}: warning: {t}", file=sys.stderr)
         n = cost(c)
-        print(f"gen_layout: {name} {Path(path).name}: {n['screens']} screens, {n['elements']} elements, {n['lanes']} "
-              f"lanes: {n['elements']} x {ELEM_B} + {n['screens']} x {SCREEN_B} + pool {n['pool']} + {HEAD_B} = "
-              f"{n['bytes'] + n['pool']} B of flash")
+        if c["screens"]:
+            print(f"gen_layout: {name} {Path(path).name}: {n['screens']} free screens, {n['elements']} elements, {n['lanes']} "
+                  f"lanes: {n['elements']} x {ELEM_B} + {n['screens']} x {SCREEN_B} + pool {n['pool']} + {HEAD_B} = "
+                  f"{n['bytes'] + n['pool']} B of flash")
+        if c["classic"]:
+            print(f"gen_layout: {name} {Path(path).name}: a screen plan of {n['cscreens']} screens over {n['cpages']} pages: "
+                  f"{n['cpages']} x {PAGE_B + SRC_B} + {n['cscreens']} x {PLAN_SCREEN_B} + {LAYC_B} + strings about "
+                  f"{n['cstrings']} = about {n['cbytes'] + n['cstrings']} B of flash")
         built.append((name, cat["engine"]["index"], path, c))
-    text = header(built)
+    return built
+
+
+def main(out, build=None):
+    text = header(compile_build(build or BUILD))
     o = Path(out)
     o.parent.mkdir(parents=True, exist_ok=True)
     if not o.exists() or o.read_text(encoding="latin-1") != text:
@@ -567,4 +809,12 @@ def main(out):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else ROOT / "build" / "gen" / "cr_layouts.h")
+    args, build, out = sys.argv[1:], {}, None
+    while args:
+        a = args.pop(0)
+        if a == "--design" and args:
+            k, _, v = args.pop(0).partition("=")
+            build[k] = v
+        else:
+            out = a
+    main(out or ROOT / "build" / "gen" / "cr_layouts.h", build or None)

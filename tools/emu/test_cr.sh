@@ -2213,17 +2213,27 @@ has "^sound: part 0 pos 3 $P5B" "$PL" && has "^sound: part 0 pos 4 $P5C" "$PL" &
 [ "$(grep -c '^expect sound .*: ok' "$PL")" = 4 ] && ok "the chord sounds on the three programs and after the edit" ||
     bad "P5 chord: $(grep -c '^expect sound .*: ok' "$PL") of 4"
 p5c=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$PL" | head -1)
-[ -n "$p5c" ] && [ "${p5c#* }" -lt "${p5c% *}" ] && ok "FILT (the panel's FILTER), KNOB 2 -8: $(grep -m1 '^deep: part 0 page 5' "$PL")" ||
+[ -n "$p5c" ] && [ "${p5c#* }" -lt "${p5c% *}" ] && ok "FILT (the rows' FILTER, one lane under the curve), KNOB 1 -8: $(grep -m1 '^deep: part 0 page 5' "$PL")" ||
     bad "no CUT edit: $(grep -m1 '^deep:' "$PL")"
-# the LFO's first lane left to right (3y92; 0.22-beta1 had FREQ on KNOB 1, the right-hand knob): KNOB 1 +2 turns
-# INIT AMT (col 1 AMOUNT), the cell 0.0 reads its value; KNOB 2 +2 turns FREQ (col 0 RATE), the cell 0.1 reads it, INIT
-# AMT unchanged
-p5lfo=$(grep -a '^deep: part 0 page 11 LFO \|^  screen reads: .* 0\.0:' "$PL" | head -4 | tr '\n' '|')
-p5amt=$(echo "$p5lfo" | sed -n 's/^deep: part 0 page 11 LFO col 1 AMOUNT [0-9]* -> [0-9]* (\([^)]*\)) edited|  screen reads: .* 0\.0:INIT AMT=\([^ ]*\) 0\.1:FREQ=\([^ ]*\) .*|deep: part 0 page 11 LFO col 0 RATE [0-9]* -> [0-9]* (\([^)]*\)) edited|  screen reads: .* 0\.0:INIT AMT=\([^ ]*\) 0\.1:FREQ=\([^ ]*\) .*|$/\1 \2 \3 \4 \5 \6/p')
-set -- $p5amt
-[ $# = 6 ] && [ "$1" = "$2" ] && [ "$4" = "$6" ] && [ "$5" = "$2" ] && [ "$3" != "$6" ] &&
-    ok "LFO, the first lane left to right: KNOB 1 +2 INIT AMT -> $1 (cell 0.0 '$2', FREQ '$3'), KNOB 2 +2 FREQ -> $4 (cell 0.1 '$6', INIT AMT '$5'): $OUT/cr_prophet_lfo_amt.ppm cr_prophet_lfo_freq.ppm" ||
-    bad "the LFO's first lane: $p5lfo"
+p5next() {   # p5next RE: the first trace line matching RE and the next "screen reads" line after it (the dump's)
+    awk -v re="$1" '$0 ~ re && !f { print; f = 1; next } f && /^  screen reads:/ { print; exit }' "$PL"
+}
+# P5's rows (the compiled classic layout; the trace names the built-in page and column, the engine's address): the LFO's
+# first lane, KNOB 1 +2 turns FREQ (LFO col 0 RATE), the cell 0.0 reads its value; KNOB 2 +1 the saw's button (LFO+ col 0
+# SAW), the cell 0.1 reads On; OSC A's second lane, KNOB 2 -4 Mix A (MIXER col 0), the cell 1.1 reads it
+p5f=$(p5next '^deep: part 0 page 11 LFO col 0 RATE ' | sed -n 's/^deep: part 0 page 11 LFO col 0 RATE [0-9]* -> \([0-9]*\) .*/\1/p; s/^  screen reads: .* 0\.0:FREQ=\([^ ]*\) .*/\1/p' | tr '\n' ' ')
+p5s=$(p5next '^deep: part 0 page 12 LFO\\+ col 0 SAW ' | sed -n 's/^deep: part 0 page 12 LFO+ col 0 SAW \([0-9]\) -> \([0-9]\) .*/\1 \2/p; s/^  screen reads: .* 0\.1:SAW=\([^ ]*\) .*/\1/p' | tr '\n' ' ')
+p5m=$(p5next '^deep: part 0 page 4 MIXER col 0 MIX A ' | sed -n 's/^deep: part 0 page 4 MIXER col 0 MIX A \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p; s/^  screen reads: .* 1\.1:MIX A=\([^ ]*\) .*/\1/p' | tr '\n' ' ')
+set -- $p5f
+[ $# = 2 ] && [ "$1" = "$2" ] && ok "LFO, the first lane: KNOB 1 +2 FREQ (LFO col 0 RATE) -> $1, the cell 0.0 reads '$2': $OUT/cr_prophet_lfo_freq.ppm" ||
+    bad "the LFO's KNOB 1: $p5f / $(grep -a -m1 '^deep: part 0 page 11' "$PL")"
+set -- $p5s
+[ $# = 3 ] && [ "$1" != "$2" ] && { [ "$2.$3" = 1.On ] || [ "$2.$3" = 0.Off ]; } &&
+    ok "LFO, the first lane: KNOB 2 +1 the saw's button (LFO+ col 0 SAW) $1 -> $2, the cell 0.1 reads '$3': $OUT/cr_prophet_lfo_saw.ppm" ||
+    bad "the LFO's KNOB 2: $p5s / $(grep -a -m1 '^deep: part 0 page 12' "$PL")"
+set -- $p5m
+[ $# = 3 ] && [ "$2" -lt "$1" ] && [ "$2" = "$3" ] && ok "OSC A, the second lane: KNOB 2 -4 Mix A (MIXER col 0) $1 -> $2, the cell 1.1 reads '$3': $OUT/cr_prophet_osc_mix.ppm" ||
+    bad "OSC A's KNOB 2: $p5m / $(grep -a -m1 '^deep: part 0 page 4' "$PL")"
 br=$(python3 - "$OUT/cr_prophet.wav" "$PL" <<'PY'
 import re, sys, wave, struct
 w = wave.open(sys.argv[1]); fs = w.getframerate(); ch = w.getnchannels()
@@ -2240,21 +2250,23 @@ PY
 )
 set -- $br
 [ "${3:-0}" = 1 ] && ok "the cutoff down changes the sound: brightness (HF share) $1 -> $2 (the filter closing)" || bad "the sound did not change: $br"
-# P5's editor is the owner's panel (the compiled layout, docs/LAYOUT-TOOL.md "Step 4"): FILTER's first lane (REV CUTOFF
-# RESO ENV AMT) in the knob colours (CUTOFF orange, REV blue), the amplifier's (ATTACK DECAY ..) too; nine shots, all
-# different; the pixels themselves are web/test_layout.mjs's (the emulator against the module, the tool's composition)
-p5col() {   # p5col FILE: orange and blue pixels in rows 30 .. 119
-    od -An -tu1 -v -j $((15 + 30 * 240 * 3)) -N$((240 * 90 * 3)) "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
+# P5's editor is the owner's rows (the compiled classic layout, docs/LAYOUT-TOOL.md "Step 4"): FILTER's one lane under the
+# curve (CUTOFF RES ENV AMT REV, rows 124 .. 223) in the knob colours (CUTOFF blue, RES orange), the amplifier's (ATTACK
+# DECAY ..) too; fifteen shots, all different; the pixels themselves are web/test_layout.mjs's (the emulator against the
+# module, and the module's rows against the design loaded)
+p5col() {   # p5col FILE: orange and blue pixels in rows 124 .. 223 (one lane under a band)
+    od -An -tu1 -v -j $((15 + 124 * 240 * 3)) -N$((240 * 100 * 3)) "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
         awk '{ v[n++] = $1 } END { o = 0; b = 0; for (i = 0; i + 2 < n; i += 3) { if (v[i] > 200 && v[i+1] > 80 && v[i+1] < 170 && v[i+2] < 90) o++; if (v[i] < 80 && v[i+1] < 110 && v[i+2] > 160) b++ } print o, b }'
 }
 set -- $(p5col "$OUT/cr_prophet_filter.ppm") $(p5col "$OUT/cr_prophet_env1.ppm")
-p5diff=$(for a in osc_a osc_b filter filter_cut env1 lfo wheel polymod voice; do cksum < "$OUT/cr_prophet_$a.ppm"; done | sort | uniq -d | wc -l | tr -d ' ')
+p5diff=$(for a in osc_a osc_mix osc_b filter filter_cut env2 env2p env1 env1p lfo lfo_freq lfo_saw wheel polymod voice; do cksum < "$OUT/cr_prophet_$a.ppm"; done | sort | uniq -d | wc -l | tr -d ' ')
 [ "${1:-0}" -gt 60 ] && [ "${2:-0}" -gt 30 ] && [ "${3:-0}" -gt 60 ] && [ "${4:-0}" -gt 30 ] && [ "$p5diff" = 0 ] &&
-    ok "the panel's lanes in the knob colours: FILTER $1 orange / $2 blue pixels, the amplifier $3 / $4; nine different screens: $OUT/cr_prophet_filter.ppm cr_prophet_env1.ppm" ||
-    bad "the panel's screens: FILTER $1 / $2, the amplifier $3 / $4, $p5diff pairs alike"
-has '^edit: group OSC screen 2 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL" && has '^edit: group ENV screen 1 ' "$PL" &&
+    ok "the rows' lanes in the knob colours: FILTER $1 orange / $2 blue pixels, the amplifier $3 / $4 (one lane under the band); fifteen different screens: $OUT/cr_prophet_filter.ppm cr_prophet_env1.ppm" ||
+    bad "the rows' screens: FILTER $1 / $2, the amplifier $3 / $4, $p5diff pairs alike"
+has '^edit: group OSC screen 2 ' "$PL" && has '^edit: group FILT screen 3 ' "$PL" && has '^edit: group ENV screen 2 ' "$PL" &&
     has '^edit: group LFO screen 2 ' "$PL" && has '^edit: group MOD screen 2 ' "$PL" && ! has '^edit: group OSC screen 3 ' "$PL" &&
-    ok "P5's groups, the panel's screens: OSC (OSC A with the mixer, OSC B), FILT (FILTER), ENV (the amplifier), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
+    ! has '^edit: group FILT screen 4 ' "$PL" &&
+    ok "P5's groups, the rows' screens: OSC (OSC A, OSC B), FILT (FILTER, ENV 2 · filter, ENV 2 +), ENV (ENV 1 · amp, ENV 1 +), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
     bad "P5 groups: $(grep -c '^edit: group' "$PL")"
 p5id=$(python3 tools/gen_prophet_factory.py --list | awk '$1 == 4 { print $2 }')
 p5fav=$(grep -a '^  favs:' "$PL" | tail -1)

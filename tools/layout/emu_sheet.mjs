@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-only
 // ChoralRoot FM-1: P5's editor as the unit shows it, walked on the browser emulator, as one PNG for the owner
 // (docs/LAYOUT-TOOL.md "Step 4"):
-//   node tools/layout/emu_sheet.mjs design/choralroot-fm1-p5-panel-emulator.png [--preset N] [--cols N]
+//   node tools/layout/emu_sheet.mjs design/choralroot-fm1-p5-rows-emulator.png [--preset N] [--cols N]
 // The emulator (build/emu-web/choralroot.wasm: sh tools/emu/web/build_web.sh) is driven by its panel alone: OPT +
-// PRESETS to P5 (its pool position N, default 1), EDIT, each group's button, SELECT through every screen x lane of the
-// compiled panel (design/layouts/designs/p5-panel.json: its free screens in OSC .. MOD, FX and MIX as today); its LCD
-// at each stop, tiled and captioned as tools/layout/render_sheet.mjs tiles a design (the captions drawn by the layout
-// module, build/layout-web/crlayout.wasm).
+// PRESETS to P5 (its pool position N, default 1), EDIT, each group's button, SELECT through every screen x lane the
+// unit's editor has (the layout module's catalog of P5: the compiled rows, design/layouts/designs/p5-rows.json, in OSC
+// .. MOD, MOD's EXPR after them, FX and MIX the platform's); its LCD at each stop, tiled and captioned as
+// tools/layout/render_sheet.mjs tiles a design (the captions drawn by the layout module, build/layout-web/crlayout.wasm).
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -21,7 +21,7 @@ export async function emuSheet({ preset = 1, cols = 4 } = {}) {
   await import(path.join(ROOT, "build/layout-web/crlayout.js"));
   const m = L.wrap(await globalThis.CRLayoutModule.load(fs.readFileSync(path.join(ROOT, "build/layout-web/crlayout.wasm"))));
   const ver = m.version(), rank = ver.engines.findIndex((e) => e.name === "P5");
-  const design = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
+  const cat = m.catalog(ver.engines[rank].index);
   const x = await globalThis.CRLayoutModule.load(fs.readFileSync(path.join(ROOT, "build/emu-web/choralroot.wasm")));
   const tap = (b) => { x.web_buttons(1 << B[b]); x.web_step(100); x.web_buttons(0); x.web_step(300); };
   const rgba = () => {
@@ -43,10 +43,9 @@ export async function emuSheet({ preset = 1, cols = 4 } = {}) {
   for (let k = 1; k < preset; k++) { x.web_enc(E.PRESETS, 1); x.web_step(300); }
   tap("EDIT");
   let group = 0;
-  const tiles = L.designTiles(design).map((t) => {
-    const g = design.groups[t.gi].group;
-    if (g !== group) { tap(BTN[g]); group = g; }
-    const r = { rgba: rgba(), caption: `${t.group} ${t.si + 1}.${t.lane + 1} · ${t.title}` };
+  const tiles = L.tiles(cat).map((t) => {
+    if (t.group !== group) { tap(BTN[t.group]); group = t.group; }
+    const r = { rgba: rgba(), caption: L.tileLabel(t) };
     x.web_enc(E.SELECT, 1);                    // the next lane; past the last: the next screen's first
     x.web_step(100);
     return r;

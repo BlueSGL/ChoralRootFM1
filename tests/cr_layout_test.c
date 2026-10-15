@@ -1,14 +1,20 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
 /* Host test of the compiled layouts (firmware/src/cr_layout.h, build/gen/cr_layouts.h by tools/gen_layout.py;
- * docs/LAYOUT-TOOL.md "Step 4, the firmware: a plan"): the header compiles as C, P5's panel has its counts (8 screens,
- * 73 elements, 19 lanes), every bound element is an address of P5's 19 pages and in exactly one lane, every string
- * is NUL-terminated and reachable, and the flags say what the design says (REV's two LEDs, KEYBOARD's three positions):
+ * docs/LAYOUT-TOOL.md "Step 4, the firmware: what was built"): the header compiles as C after core.h; the build has
+ * one layout, P5's rows (design/layouts/designs/p5-rows.json), a classic one: a screen plan of 11 screens over 17 pages
+ * of its own; no free layout (CR_LAYOUTS_FREE 0: the free-page editor and renderer are not in the unit). Every column
+ * names a built-in (page, col) within P5's 19 pages, each of P5's 56 parameters exactly once, its copy's label set
+ * exactly then; the sections are the groups' first pages; the screens in group order (OSC 2, FILT 3, ENV 2, LFO 2,
+ * MOD 2), a screen under a band one lane, the others two or one without a band; the styles are the p5 cell styles where
+ * a column is bound, the editor's rule where not; the labels the design's (15 characters at most):
  *   python3 tools/gen_layout.py build/gen/cr_layouts.h
- *   cc -std=c11 -Wall -Wextra -Werror -pedantic -Ibuild/gen -Ifirmware/src -o build/host/cr_layout_test tests/cr_layout_test.c
- * (tests/run_cr_tests.sh runs it. Nothing of the firmware uses the tables yet: stage 2.) */
+ *   cc -std=c11 -Wall -Wextra -Wno-unused-function -Werror -pedantic -Ibuild/gen -Ifirmware/src -o build/host/cr_layout_test tests/cr_layout_test.c
+ * (tests/run_cr_tests.sh runs it; tests/cr_p5rows_test.c runs the editor on it, the copies against the engine's own.) */
 #include <stdio.h>
 #include <string.h>
+#define __attribute__(x)                     /* (core.h's sections: the host has none) */
+#include "core.h"
 #include "cr_layouts.h"
 
 #define P5_ENGINE 16u
@@ -21,99 +27,72 @@ static void ok(int c, const char *n)
     else { failed++; printf("FAIL %s\n", n); }
 }
 
-/* the string at off: NUL-terminated inside the pool? -> its length + 1, 0 if not */
-static unsigned str_at(unsigned off)
-{
-    const char *z;
-    if (off >= CR_LAY_POOL_SIZE) return 0;
-    z = memchr(CR_LAY_POOL + off, 0, CR_LAY_POOL_SIZE - off);
-    return z ? (unsigned)(z - (CR_LAY_POOL + off)) + 1u : 0;
-}
-static unsigned char seen[CR_LAY_POOL_SIZE];
-/* mark a label (and its value names up to the empty string); -> how many strings, 0 if one runs off the pool */
-static unsigned mark(unsigned off, int names)
-{
-    unsigned n = 0, len;
-    do {
-        if (!(len = str_at(off))) return 0;
-        memset(seen + off, 1, len);
-        off += len;
-        n++;
-    } while (names && (n == 1 || len > 1));
-    return n;
-}
-static const cr_lay_elem_t *find(unsigned type, const char *label)
-{
-    unsigned i;
-    for (i = 0; i < CR_LAY_NELEMS; i++)
-        if (CR_LAY_ELEMS[i].type == type && CR_LAY_ELEMS[i].label != CR_LAY_NOSTR && str_at(CR_LAY_ELEMS[i].label) &&
-            !strcmp(CR_LAY_POOL + CR_LAY_ELEMS[i].label, label)) return &CR_LAY_ELEMS[i];
-    return 0;
-}
-
 int main(void)
 {
-    const cr_layout_t *L = &CR_LAYOUTS[0];
-    unsigned s, i, k, lanes = 0, bound = 0, inlane = 0, bad_addr = 0, bad_lane = 0, bad_str = 0, frames_first = 1;
-    const cr_lay_elem_t *e;
+    const cr_layc_t *L = &CR_LAYC[0];
+    static const uint8_t SECT[8] = {0, 4, 7, 9, 13, 255, 255, 255}, NG[5] = {2, 3, 2, 2, 2};
+    static const char *const TITLE[11] = {"OSC A", "OSC B", "FILTER", "ENV 2 \267 filter", "ENV 2 +", "ENV 1 \267 amp",
+                                          "ENV 1 +", "LFO", "WHEEL", "POLYMOD", "VOICE"};
+    unsigned p, c, s, r, n = 0, bad_src = 0, bad_scr = 0, bad_cell = 0, lanes = 0, ng[5] = {0};
+    unsigned seen[P5_PAGES][4] = {{0}};
 
-    ok(sizeof(cr_lay_elem_t) == 14u && sizeof(cr_lay_screen_t) == 38u && sizeof(cr_layout_t) == 8u, "the records: 14, 38, 8 B");
-    ok(CR_LAY_NENGINES == 1u && L->engine == P5_ENGINE, "one layout: P5's");
-    ok(L->nscreens == 8u && CR_LAY_NSCREENS == 8u && L->screen0 == 0u, "P5: 8 screens");
-    ok(L->nelems == 73u && CR_LAY_NELEMS == 73u && L->elem0 == 0u, "P5: 73 elements");
+    ok(CR_LAYOUTS_FREE == 0, "no free layout built (CR_LAYOUTS_FREE 0)");
+#ifdef CR_LAY_NENGINES
+    ok(0, "the free tables are not in a unit's header");
+#endif
+    ok(CR_LAYC_N == 1u && L->engine == P5_ENGINE && !strcmp(L->design, "design/layouts/designs/p5-rows.json"),
+       "one classic layout: P5's rows");
+    ok(L->npages == 17u && CR_LAYC_NPAGES == 17u && L->page0 == 0u, "P5: 17 pages of its own (a lane each)");
+    ok(L->nscreens == 11u && CR_LAYC_NSCREENS == 11u && L->screen0 == 0u, "P5: 11 screens");
+    ok(!memcmp(L->section, SECT, 8), "the sections: OSC 0, FILT 4, ENV 7, LFO 9, MOD 13");
+    for (p = 0; p < L->npages; p++)
+        for (c = 0; c < 4u; c++) {
+            const uint8_t *x = CR_LAYC_SRC[L->page0 + p][c];
+            const param_desc_t *d = &CR_LAYC_PAGES[L->page0 + p].col[c];
+            if (x[0] == 255u) { if (d->label) bad_src++; continue; }
+            if (x[0] >= P5_PAGES || x[1] >= 4u || !d->label || d->max < d->min || d->def < d->min || d->def > d->max) { bad_src++; continue; }
+            seen[x[0]][x[1]]++;
+            n++;
+        }
+    for (p = 0; p < P5_PAGES; p++)
+        for (c = 0; c < 4u; c++)
+            if (seen[p][c] > 1u) bad_src++;
+    ok(!bad_src && n == 56u, "every column a built-in (page, col) of P5's 19 pages with its descriptor's copy, each of the "
+       "56 parameters once, an empty column no copy");
     for (s = 0; s < L->nscreens; s++) {
-        const cr_lay_screen_t *c = &CR_LAY_SCREENS[L->screen0 + s];
-        unsigned char count[256] = {0};
-        lanes += c->nlanes;
-        if (s && (c->first != CR_LAY_SCREENS[L->screen0 + s - 1].first + CR_LAY_SCREENS[L->screen0 + s - 1].count ||
-                  c->group < CR_LAY_SCREENS[L->screen0 + s - 1].group)) bad_lane++;
-        if (c->group > 4u || c->nlanes < 1u || c->nlanes > CR_LAY_LANES) bad_lane++;
-        if (!mark(c->title, 0)) bad_str++;
-        for (k = 0; k < CR_LAY_LANES * CR_LAY_SLOTS; k++) {
-            unsigned x = c->lane[k / CR_LAY_SLOTS][k % CR_LAY_SLOTS];
-            if (x == CR_LAY_EMPTY) continue;
-            if (k / CR_LAY_SLOTS >= c->nlanes || x >= c->count) { bad_lane++; continue; }
-            count[x]++;
-            inlane++;
-        }
-        for (i = 0; i < c->count; i++) {
-            e = &CR_LAY_ELEMS[L->elem0 + c->first + i];
-            if (i && e->type == CR_E_FRAME && e[-1].type != CR_E_FRAME) frames_first = 0;
-            if (e->type >= CR_E_N || e->y < 28u || e->x + e->w > 240u || e->y + e->h > 240u) bad_addr++;
-            if (e->page == CR_LAY_NONE) { if (count[i]) bad_lane++; }
-            else {
-                bound++;
-                if (e->page >= P5_PAGES || e->col >= 4u) bad_addr++;
-                if (count[i] != 1u) bad_lane++;
+        const eng_screen_t *h = &CR_LAYC_SCREENS[L->screen0 + s];
+        unsigned rows = h->pg[1] == 255u ? 1u : 2u;
+        if (h->sec > 4u || (s && h->sec < CR_LAYC_SCREENS[L->screen0 + s - 1u].sec) || h->pg[0] >= L->npages ||
+            (rows == 2u && h->pg[1] >= L->npages) || (h->band != ENG_B_NONE && rows != 1u) || h->letter ||
+            !h->title || strcmp(h->title, TITLE[s]) || (h->sec < 4u && h->pg[0] < L->section[h->sec]) ||
+            (h->sec < 4u && h->pg[0] >= L->section[h->sec + 1u]))
+            bad_scr++;
+        if (h->sec <= 4u) ng[h->sec]++;
+        lanes += rows;
+        for (r = 0; r < 2u; r++)
+            for (c = 0; c < 4u; c++) {
+                int bound = r < rows && CR_LAYC_SRC[L->page0 + h->pg[r]][c][0] != 255u;
+                if (bound ? h->cell[r][c] < ENG_C_P5KNOB || h->cell[r][c] > ENG_C_P5SWITCH
+                          : h->cell[r][c] != ENG_C_RULE || h->label[r][c] != 0)
+                    bad_cell++;
+                if (h->label[r][c] && (!bound || strlen(h->label[r][c]) > 15u)) bad_cell++;
             }
-            if (e->label != CR_LAY_NOSTR && !mark(e->label, (e->flags & CR_LF_NAMES) != 0)) bad_str++;
-        }
     }
-    ok(lanes == 19u, "P5: 19 lanes");
-    ok(bound == 56u && inlane == 56u, "56 bound elements (all of P5's parameters), 56 lane slots");
-    ok(!bad_addr, "every element inside rows 28 .. 239, every (page, col) within P5's 19 pages");
-    ok(!bad_lane, "screens in group order, every bound element in exactly one lane, nothing else in one");
-    ok(frames_first, "a screen's frames first");
-    ok(!bad_str, "every string NUL-terminated inside the pool");
-    for (i = 0; i < CR_LAY_POOL_SIZE && seen[i]; i++) {}
-    ok(i == CR_LAY_POOL_SIZE, "every byte of the pool reachable from a label or a title");
-    /* the flags as the design says */
-    e = find(CR_E_LED, "REV");
-    ok(e && (e->flags & CR_LF_LEDS2) && (e->flags & CR_LF_BELOW) && (e->flags & CR_LF_NAMES) &&
-       !strcmp(CR_LAY_POOL + e->label + 4, "1/2") && !strcmp(CR_LAY_POOL + e->label + 8, "3"),
-       "FILTER's REV: two LEDs, the label below, the names 1/2 and 3");
-    e = find(CR_E_SWITCH, "KEYBOARD");
-    ok(e && CR_LF_POS(e->flags) == 3u && (e->flags & CR_LF_NAMES) && !strcmp(CR_LAY_POOL + e->label + 9, "OFF"),
-       "FILTER's KEYBOARD: a switch of 3 positions, OFF HALF FULL");
-    e = find(CR_E_LED, "SYNC");
-    ok(e && (e->flags & CR_LF_BELOW) && !CR_LF_ICON(e->flags) && e->page == 1u && e->col == 0u,
-       "OSC A's SYNC: an led at OSC A+ col 0, its label below");
-    ok(CR_LAY_ELEMS[3].type == CR_E_LED && CR_LF_ICON(CR_LAY_ELEMS[3].flags) == CR_LI_SAW && CR_LAY_ELEMS[3].label == CR_LAY_NOSTR,
-       "OSC A's saw: the saw icon, no label");
-    ok(CR_LAY_ELEMS[0].type == CR_E_FRAME && CR_LAY_ELEMS[0].r == 8u && !strcmp(CR_LAY_POOL + CR_LAY_ELEMS[0].label, "OSCILLATOR A"),
-       "OSC A's frame: r 8, its title in capitals");
-    printf("cr_layout: %u screens, %u elements, %u lanes, a pool of %u B: %u B; %d passed, %d failed\n", CR_LAY_NSCREENS,
-           CR_LAY_NELEMS, lanes, CR_LAY_POOL_SIZE, (unsigned)(CR_LAY_NELEMS * 14u + CR_LAY_NSCREENS * 38u + 8u + CR_LAY_POOL_SIZE),
-           passed, failed);
+    ok(!bad_scr && ng[0] == NG[0] && ng[1] == NG[1] && ng[2] == NG[2] && ng[3] == NG[3] && ng[4] == NG[4] && lanes == 17u,
+       "the screens in group order (OSC 2, FILT 3, ENV 2, LFO 2, MOD 2), their titles, a band's screen one lane, 17 lanes");
+    ok(CR_LAYC_SCREENS[2].band == ENG_B_FILTER && CR_LAYC_SCREENS[3].band == ENG_B_ENV && CR_LAYC_SCREENS[5].band == ENG_B_ENV &&
+       CR_LAYC_SCREENS[0].band == ENG_B_NONE, "FILTER under the filter's curve, ENV 2 and ENV 1 under the envelope");
+    ok(!bad_cell, "a bound cell a p5 cell style, an empty one the editor's rule and no label; labels of 15 characters at most");
+    ok(!strcmp(CR_LAYC_SCREENS[2].label[0][0], "CUTOFF") && CR_LAYC_SCREENS[2].cell[0][3] == ENG_C_P5LED2 &&
+       CR_LAYC_SRC[CR_LAYC_SCREENS[2].pg[0]][0][0] == 5u && CR_LAYC_SRC[CR_LAYC_SCREENS[2].pg[0]][0][1] == 0u,
+       "FILTER: KNOB 1 CUTOFF (FILTER col 0), KNOB 4 REV two LEDs");
+    ok(!strcmp(CR_LAYC_SCREENS[7].label[0][0], "FREQ") && CR_LAYC_SRC[CR_LAYC_SCREENS[7].pg[0]][0][0] == 11u &&
+       CR_LAYC_SRC[CR_LAYC_SCREENS[7].pg[0]][1][0] == 12u && CR_LAYC_SCREENS[7].cell[0][1] == ENG_C_P5LED_SAW,
+       "LFO lane 1: KNOB 1 FREQ (LFO col 0), KNOB 2 the saw's LED button (LFO+ col 0)");
+    ok(!strcmp(CR_LAYC_PAGES[CR_LAYC_SCREENS[4].pg[0]].col[2].label, "KTRK") && CR_LAYC_SCREENS[4].cell[0][2] == ENG_C_P5SWITCH &&
+       CR_LAYC_PAGES[CR_LAYC_SCREENS[4].pg[0]].col[2].names && !strcmp(CR_LAYC_PAGES[CR_LAYC_SCREENS[4].pg[0]].col[2].names[1], "HALF"),
+       "ENV 2 +: KNOB 3 KEY TRK, the lever, its copy's names OFF HALF FULL");
+    printf("cr_layout: P5's rows: %u screens over %u pages, %u lanes, %u bound columns; %d passed, %d failed\n",
+           L->nscreens, L->npages, lanes, n, passed, failed);
     return failed != 0;
 }

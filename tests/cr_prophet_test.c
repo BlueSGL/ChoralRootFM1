@@ -2062,8 +2062,10 @@ int main(int argc, char **argv)
         OK(!strcmp(d->pages[5].title, "FILTER") && cp_dcol(&d->pages[5], "CUT") == 0 && cp_dcol(&d->pages[5], "RES") == 1 &&
            !strcmp(d->pages[7].title, "ENV 1") && cp_dcol(&d->pages[7], "ATK") == 0 && cp_dcol(&d->pages[7], "REL") == 3 &&
            P5_DKEY[7][0] == P5_ATTACK_AMP && !strcmp(d->pages[9].title, "ENV 2") && P5_DKEY[9][3] == P5_RELEASE_FILTER &&
-           ce_plus_of(d, 0, 1) && ce_plus_of(d, 2, 3) && ce_plus_of(d, 11, 12) && ce_plus_of(d, 15, 16) && ce_deep(t) == d,
-           "pages: FILTER has CUT and RES (the curve), ENV 1 is the amplifier's ADSR and ENV 2 the filter's, the + pages pair");
+           ce_plus_of(d, 0, 1) && ce_plus_of(d, 2, 3) && ce_plus_of(d, 11, 12) && ce_plus_of(d, 15, 16) &&
+           ce_deep(t) == cp_deep(t) && cp_deep(t) != d && cp_deep(t)->blob_get == d->blob_get,
+           "pages: FILTER has CUT and RES (the curve), ENV 1 is the amplifier's ADSR and ENV 2 the filter's, the + pages pair; "
+           "the editor's pages are the compiled rows' over them (cr_pages.c cp_deep, tests/cr_p5rows_test.c), the blob the engine's");
         /* a factory program's switch bytes and VOICES 0 read as what plays */
         p5_patch_init(&p);
         p.raw[P5_SAW_A] = 7;

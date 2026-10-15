@@ -1,13 +1,21 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
-/* ChoralRoot FM-1: a compiled layout's records (docs/LAYOUT-TOOL.md "Step 4, the firmware: a plan" (a)). An engine's
- * free editor screens as the owner designed them in the layout tool, compiled in (rule 4: never loaded on a unit).
- * tools/gen_layout.py writes the tables (build/gen/cr_layouts.h: CR_LAYOUTS, CR_LAY_SCREENS, CR_LAY_ELEMS,
- * CR_LAY_POOL) from the designs of its BUILD list, checked against design/layouts/<engine>.json; nothing here is
- * written by hand. Packed, no pointers: indices into the tables and offsets into the string pool.
+/* ChoralRoot FM-1: a compiled layout's records (docs/LAYOUT-TOOL.md "Step 4, the firmware: what was built"). An
+ * engine's editor screens as the owner designed them in the layout tool, compiled in (rule 4: never loaded on a unit).
+ * tools/gen_layout.py writes the tables (build/gen/cr_layouts.h) from the designs of its BUILD list, checked against
+ * design/layouts/<engine>.json; nothing here is written by hand. Two forms:
  *
- * firmware/src/cr_layout.c holds the one copy of the tables and the accessors; the editor (cr_edit.c CE_S_FREE) shows
- * an engine's layout screens in OSC .. MOD, the renderer (cr_draw.c CR_K_FREE) draws them in the p5 style. */
+ * - a CLASSIC layout (cr_layc_t): the engine's editor as a screen plan (core.h eng_screen_t) over pages of its own
+ *   (eng_page_t: per column a copy of the built-in descriptor it binds and that column's built-in (page, col)).
+ *   firmware/src/cr_pages.c cp_deep serves it as the engine's pages, get / set / desc / mod_dst going through to the
+ *   built-in (page, col): the editor (cr_edit.c) shows the plan's screens; the blob, SysEx and the parameters stay the
+ *   engine's. P5's rows (design/layouts/designs/p5-rows.json).
+ * - FREE screens (cr_layout_t, cr_lay_screen_t, cr_lay_elem_t, one string pool: packed, no pointers: indices into the
+ *   tables and offsets into the pool): placed elements, drawn by cr_draw.c CR_K_FREE, edited by cr_edit.c CE_S_FREE.
+ *   Compiled into a unit only when a built design has them (CR_LAYOUTS_FREE 1); the layout tool's preview has them
+ *   always (CR_LAYOUT_PREVIEW: its lay_load shows a design's free screens through them).
+ *
+ * firmware/src/cr_layout.c holds the one copy of the tables and the free screens' accessors. */
 #pragma once
 #include <stdint.h>
 
@@ -70,3 +78,13 @@ typedef struct {
 _Static_assert(sizeof(cr_lay_elem_t) == 14u, "cr_lay_elem_t: 14 B");
 _Static_assert(sizeof(cr_lay_screen_t) == 38u, "cr_lay_screen_t: 38 B");
 _Static_assert(sizeof(cr_layout_t) == 8u, "cr_layout_t: 8 B");
+
+/* a classic layout (the generated CR_LAYC[]): an engine's pages CR_LAYC_PAGES[page0 ..] with their built-in sources
+ * CR_LAYC_SRC[page0 ..], its screen plan CR_LAYC_SCREENS[screen0 ..], its sections (eng_deep_t.section) */
+typedef struct {
+    uint8_t engine;             /* engines.c ENGINES[] index */
+    uint8_t npages, page0;
+    uint8_t nscreens, screen0;
+    uint8_t section[8];
+    const char *design;         /* the design file it was compiled from */
+} cr_layc_t;

@@ -145,11 +145,13 @@ static void lay_boot(void)
         memcpy(lay_snap, &__global_base, lay_snap_n);   /* (lay_snap and the allocator's state are in it) */
 }
 /* the instance as it was after power-on: every call below that says "from the reset instance" starts here */
+static void lay_layouts_apply(void);
 LAY_EXPORT void lay_reset(void)
 {
     lay_boot();
     if (lay_snap)
         memcpy(&__global_base, lay_snap, lay_snap_n);
+    lay_layouts_apply();                           /* (lay_layouts' setting lives outside the snapshot) */
 }
 LAY_EXPORT uint32_t lay_snapshot_bytes(void) { lay_boot(); return lay_snap ? lay_snap_n : 0u; }
 
@@ -339,13 +341,36 @@ LAY_EXPORT const char *lay_presets(uint32_t e)
     return j_end();
 }
 
-/* one cell of the catalog: the knob, what it is bound to, the descriptor from the engine's own table */
+/* the built-in (page, col) of the served pages d's page *p, column *c (a compiled classic layout's: its source,
+ * cr_pages.c cp_lay_src; the engine's own pages: themselves): 1, 0 an empty column */
+static int lay_bsrc(const track_t *t, const eng_deep_t *d, uint32_t *p, uint32_t *c)
+{
+#if CR_LAYC_N
+    uint32_t i = cp_lay_of(eng_idx(t->eng_req)), bp, bc;
+    if (i && d == &cp_lay_deep[i - 1u]) {
+        if (!cp_lay_src(t, *p, *c, &bp, &bc))
+            return 0;
+        *p = bp;
+        *c = bc;
+    }
+#else
+    (void)t;
+    (void)d;
+#endif
+    (void)p;
+    (void)c;
+    return 1;
+}
+/* one cell of the catalog: the knob, what it is bound to (the built-in address: a compiled classic layout's column
+ * names its source), the descriptor from the engine's own table */
 static void j_cell(const track_t *t, const eng_deep_t *d, const ce_view_t *vw, const ce_scr_t *sc, uint32_t ln,
                    uint32_t c)
 {
     ce_ref_t r = vw->ref[ln < CR_ED_ROWS ? ln : 0u][c];
     const eng_screen_t *h = ce_plan(d, vw->hs);
+    const eng_deep_t *bd = ENGINES[eng_idx(t->eng_req)]->deep;
     const param_desc_t *pd = 0;
+    uint32_t bp = 0, bc = 0;
     char lab[24];
     /* a column the view hides for this sound (an unused MOD slot shows its source only): the page's own column */
     if ((r.k == CE_R_NONE || r.k == CE_R_DASH) && d && (sc->type == CE_S_STACK || sc->type == CE_S_EDIT) &&
@@ -353,12 +378,13 @@ static void j_cell(const track_t *t, const eng_deep_t *d, const ce_view_t *vw, c
         r = ce_r(CE_R_DEEP, sc->pg[ln], c);
     j_open('{');
     j_ki("knob", (int32_t)c + 1);
-    if (r.k == CE_R_DEEP && d && r.a < d->npages) {
-        pd = &d->pages[r.a].col[r.b & 3u];
+    if (r.k == CE_R_DEEP && d && r.a < d->npages && bd && (bp = r.a, bc = r.b & 3u, lay_bsrc(t, d, &bp, &bc)) &&
+        bp < bd->npages) {
+        pd = &bd->pages[bp].col[bc];
         j_ks("bind", "deep");
-        j_ki("page", r.a);
-        j_ki("col", r.b & 3u);
-        j_ks("page_title", d->pages[r.a].title);
+        j_ki("page", (int32_t)bp);
+        j_ki("col", (int32_t)bc);
+        j_ks("page_title", bd->pages[bp].title);
     } else if (r.k == CE_R_TRK && r.a < P_COUNT) {
         pd = cp_desc(t, r.a);
         j_ks("bind", "track");
@@ -378,20 +404,31 @@ static void j_cell(const track_t *t, const eng_deep_t *d, const ce_view_t *vw, c
         j_desc(pd);
         if (h && ln < 2u)
             j_ks("style", h->cell[ln][c] < NELEM(LAY_STYLE) ? LAY_STYLE[h->cell[ln][c]] : "?");
-        if (r.k == CE_R_DEEP && d->desc)
+        if (r.k == CE_R_DEEP && bd && bd->desc)
             j_kb("by_mode", 1);        /* the engine may show another label / names by the sound's mode */
     }
     j_close('}');
 }
 
-/* today's built-in layout of engine e, read from the firmware's tables through the editor's own derivation (cr_edit.c
- * ce_scr / ce_lanes / ce_view on the engine's INIT sound), as a layout file of format 1. From the reset instance */
+/* today's layout of engine e as the unit shows it, read from the firmware's tables through the editor's own derivation
+ * (cr_edit.c ce_scr / ce_lanes / ce_view on the engine's INIT sound), as a layout file of format 1. From the reset
+ * instance. Its "pages" are always the engine's built-in parameter pages (what get / set, the blob, SysEx and the
+ * params_hash address); its "groups" are the screens the unit shows: with a compiled classic layout (P5's rows,
+ * build/gen/cr_layouts.h) the layout's screen plan, each cell bound to its built-in (page, col), and "layout" names the
+ * design. lay_catalog_builtin: the classic derivation of the built-in pages instead (no compiled layout: what the
+ * editor shows of the engine's own tables; the designer's in-place experiments) */
 static const char *lay_catalog_of(uint32_t e);
 LAY_EXPORT uint32_t lay_layouts(uint32_t on);
 LAY_EXPORT const char *lay_catalog(uint32_t e)
 {
-    uint32_t on = lay_layouts(0);                  /* (today's built-in pages: the classic derivation, never a compiled
-                                                    * layout's free screens; docs/LAYOUT-TOOL.md "Step 4") */
+    uint32_t on = lay_layouts(1);                  /* (the unit's: the compiled layouts) */
+    const char *r = lay_catalog_of(e);
+    lay_layouts(on);
+    return r;
+}
+LAY_EXPORT const char *lay_catalog_builtin(uint32_t e)
+{
+    uint32_t on = lay_layouts(0);
     const char *r = lay_catalog_of(e);
     lay_layouts(on);
     return r;
@@ -424,11 +461,12 @@ static const char *lay_catalog_of(uint32_t e)
     j_ks("name", ENGINES[e]->name);
     j_close('}');
     j_hash(e);
-    /* the parameter pages the cells bind to (core.h eng_page_t), as they are */
+    /* the parameter pages the cells bind to (core.h eng_page_t), as they are: the engine's own (a compiled classic
+     * layout's pages are views of them) */
     j_key("pages");
     j_open('[');
-    for (i = 0; cp_deep(t) && i < cp_deep(t)->npages; i++) {
-        const eng_page_t *pg = &cp_deep(t)->pages[i];
+    for (i = 0; ENGINES[e]->deep && ENGINES[e]->deep->pages && i < ENGINES[e]->deep->npages; i++) {
+        const eng_page_t *pg = &ENGINES[e]->deep->pages[i];
         j_open('{');
         j_ki("page", (int32_t)i);
         j_ks("title", pg->title);
@@ -449,6 +487,17 @@ static const char *lay_catalog_of(uint32_t e)
     }
     j_close(']');
     j_ki("page_cells", (int32_t)ncell);
+#if CR_LAYC_N
+    if (cp_lay_of(e)) {                            /* the compiled classic layout the screens are (cr_pages.c cp_deep) */
+        const cr_layc_t *L = &CR_LAYC[cp_lay_of(e) - 1u];
+        j_key("layout");
+        j_open('{');
+        j_ks("design", L->design);
+        j_ki("pages", L->npages);
+        j_ki("screens", L->nscreens);
+        j_close('}');
+    }
+#endif
     j_key("header");                               /* the owner's rule 1: one shared header on every page. Today the
                                                     * editor has none (cr_edit.c ce_screen: s->header = 0) */
     j_null();
@@ -494,8 +543,26 @@ static const char *lay_catalog_of(uint32_t e)
                     j_str(vw.head[c]);
                 j_close(']');
             }
-            j_key("pages");                        /* the deep pages behind the screen, in lane order */
+            j_key("pages");                        /* the deep pages behind the screen, in lane order (a compiled classic
+                                                    * layout's lanes: the built-in pages of their columns, in order) */
             j_open('[');
+#if CR_LAYC_N
+            if (cp_lay_of(e) && d == &cp_lay_deep[cp_lay_of(e) - 1u]) {
+                uint8_t seen[64];
+                uint32_t ns = 0, q, p, cc, bp, bc;
+                for (i = 0; sc.type == CE_S_EDIT && i < sc.n; i++)
+                    for (cc = 0; cc < 4u; cc++) {
+                        if (!cp_lay_src(t, sc.pg[i], cc, &bp, &bc))
+                            continue;
+                        for (q = 0, p = 0; q < ns; q++)
+                            p |= seen[q] == bp;
+                        if (!p && ns < sizeof seen) {
+                            seen[ns++] = (uint8_t)bp;
+                            j_int((int32_t)bp);
+                        }
+                    }
+            } else
+#endif
             for (i = 0; sc.type != CE_S_PLAT && sc.type != CE_S_EXPR && i < sc.n; i++)   /* (EXPR: no deep page) */
                 j_int(sc.pg[i]);
             j_close(']');
@@ -812,7 +879,8 @@ LAY_EXPORT const char *lay_state(void)
 #define LA_FP 8192u
 typedef struct {
     uint32_t eng;                                  /* the engine loaded, 0xFF none */
-    uint8_t free_on;                               /* the compiled layouts in effect (lay_layouts; 0: today's pages) */
+    uint8_t free_on;                               /* the compiled layouts in effect (lay_layouts: 1, the default, the
+                                                    * unit's; 0: the classic derivation of the built-in pages) */
     eng_deep_t deep;
     eng_page_t page[LA_PG];
     uint8_t src[LA_PG][4][2];
@@ -847,11 +915,12 @@ static void la_set(track_t *t, uint32_t p, uint32_t c, int32_t v)
     if (la_map(p, c, &bp, &bc))
         la_base()->set(t, bp, bc, v);
 }
+/* the descriptor the editor steps and shows: the built-in one (as cr_pages.c cp_lay_desc); the copy for an empty column */
 static const param_desc_t *la_desc(const track_t *t, uint32_t p, uint32_t c)
 {
     uint32_t bp, bc;
-    if (la_map(p, c, &bp, &bc) && la_base()->desc)
-        return la_base()->desc(t, bp, bc);
+    if (la_map(p, c, &bp, &bc))
+        return la_base()->desc ? la_base()->desc(t, bp, bc) : &la_base()->pages[bp].col[bc];
     return &la->page[p < LA_PG ? p : 0].col[c & 3u];
 }
 static int32_t la_mod_dst(const track_t *t, uint32_t p, uint32_t c)
@@ -902,13 +971,61 @@ static uint32_t la_layout(uint32_t eng)
             return i + 1u;
     return 0;
 }
-/* the compiled layout of engine e (build/gen/cr_layouts.h) as lay_load's free half, into lay_buf: its bytes (0: none).
- * web/test_layout.mjs compares packDesign's free half with it, byte for byte */
+/* the compiled layout of engine e (build/gen/cr_layouts.h) in lay_load's packed form, into lay_buf: its bytes (0:
+ * none). A classic layout: its classic half ('L' 3: the pages (title, per column the built-in (page, col), the style and
+ * the label: the plan's cell[][] and label[][] of the screen row the page is), the sections, the screens), then the
+ * free half when the engine has free screens too; free screens alone: the free half only. web/test_layout.mjs compares
+ * it with packDesign's bytes of the design the generator compiled, byte for byte */
 static uint8_t lay_in[1u << 16];
 LAY_EXPORT uint32_t lay_compiled(uint32_t e)
 {
     uint32_t i, n = 0;
     lay_boot();
+#if CR_LAYC_N
+    for (i = 0; i < CR_LAYC_N; i++)
+        if (CR_LAYC[i].engine == e) {
+            const cr_layc_t *L = &CR_LAYC[i];
+            uint32_t p, c, k, r;
+#define LC_STR(s) do { const char *s_ = (s) ? (s) : ""; uint32_t l_ = (uint32_t)strlen(s_); lay_in[n++] = (uint8_t)l_; \
+                       memcpy(lay_in + n, s_, l_); n += l_; } while (0)
+            lay_in[n++] = 'L';
+            lay_in[n++] = 3;
+            lay_in[n++] = (uint8_t)e;
+            lay_in[n++] = L->npages;
+            for (p = 0; p < L->npages; p++) {
+                const eng_page_t *pg = &CR_LAYC_PAGES[L->page0 + p];
+                const eng_screen_t *row = 0;
+                for (k = 0; k < L->nscreens && !row; k++)
+                    for (r = 0; r < 2u && !row; r++)
+                        if (CR_LAYC_SCREENS[L->screen0 + k].pg[r] == p) {
+                            row = &CR_LAYC_SCREENS[L->screen0 + k];
+                            break;
+                        }
+                r = row && row->pg[0] == p ? 0u : 1u;
+                LC_STR(pg->title);
+                for (c = 0; c < 4u; c++) {
+                    const uint8_t *src = CR_LAYC_SRC[L->page0 + p][c];
+                    lay_in[n++] = src[0];
+                    lay_in[n++] = src[0] == 0xFFu ? 0u : src[1];
+                    lay_in[n++] = row && src[0] != 0xFFu ? row->cell[r][c] : 0u;
+                    LC_STR(row && src[0] != 0xFFu ? row->label[r][c] : 0);
+                }
+            }
+            memcpy(lay_in + n, L->section, 8);
+            n += 8;
+            lay_in[n++] = L->nscreens;
+            for (k = 0; k < L->nscreens; k++) {
+                const eng_screen_t *h = &CR_LAYC_SCREENS[L->screen0 + k];
+                lay_in[n++] = h->sec;
+                lay_in[n++] = h->pg[0];
+                lay_in[n++] = h->pg[1];
+                lay_in[n++] = h->band;
+                LC_STR(h->title);
+            }
+#undef LC_STR
+            break;
+        }
+#endif
     for (i = 0; i < CR_LAY_NENGINES; i++)
         if (CR_LAYOUTS[i].engine == e) {
             const cr_layout_t *L = &CR_LAYOUTS[i];
@@ -924,18 +1041,26 @@ LAY_EXPORT uint32_t lay_compiled(uint32_t e)
             memcpy(lay_in + n, CR_LAY_POOL, CR_LAY_POOL_SIZE);
             return n + CR_LAY_POOL_SIZE;
         }
-    return 0;
+    return n;
 }
-/* the compiled layouts (build/gen/cr_layouts.h, P5's panel: the unit's editor) on (1) or off (0, the default: the
- * classic pages the catalog lists); from the next lay_show. Returns the previous setting */
+/* the compiled layouts (build/gen/cr_layouts.h: P5's rows, the unit's editor) on (1, the default: what the unit shows,
+ * as lay_catalog lists it) or off (0: the classic derivation of the built-in pages, lay_catalog_builtin); from the next
+ * lay_show. A loaded design of the engine (lay_load) shows its own screens either way. Returns the previous setting */
+static void lay_layouts_apply(void)
+{
+#if CR_LAYC_N
+    cp_lay_on = (uint8_t)(!la || la->free_on);     /* (cr_pages.c: the classic layouts served by cp_deep) */
+#endif
+}
 LAY_EXPORT uint32_t lay_layouts(uint32_t on)
 {
     uint32_t was;
     lay_boot();
     if (!la)
-        return 0;
+        return 1;
     was = la->free_on;
     la->free_on = (uint8_t)(on ? 1u : 0u);
+    lay_layouts_apply();
     return was;
 }
 static void lay_alloc(void)                        /* (lay_boot, before the snapshot) */
@@ -944,6 +1069,7 @@ static void lay_alloc(void)                        /* (lay_boot, before the snap
     if (la) {
         memset(la, 0, sizeof *la);
         la->eng = 0xFFu;
+        la->free_on = 1;                           /* (the compiled layouts: the unit's editor, the default) */
     }
     ce_label_hook = la_label;
     ce_style_hook = la_style;
@@ -1037,9 +1163,12 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
         h->title = la->stitle[k][0] ? la->stitle[k] : 0;
         if (h->pg[0] >= n || (h->pg[1] != 0xFFu && h->pg[1] >= n) || h->sec > 4u || h->band > ENG_B_ADE2)
             return la_err("a screen names no page");
-        for (i = 0; i < 2u; i++)                   /* the cells' styles: their columns' */
-            for (c = 0; c < 4u && h->pg[i] != 0xFFu; c++)
+        for (i = 0; i < 2u; i++)                   /* the cells' styles and labels: their columns' (as the compiled
+                                                    * plan has them, build/gen/cr_layouts.h) */
+            for (c = 0; c < 4u && h->pg[i] != 0xFFu; c++) {
                 h->cell[i][c] = la->style[h->pg[i]][c];
+                h->label[i][c] = la->label[h->pg[i]][c][0] ? la->label[h->pg[i]][c] : 0;
+            }
     }
     if (q > end)
         return la_err("short");
