@@ -1,5 +1,19 @@
 # Velocity and aftertouch from the FM-1's keys (study and design, 2026-10-14)
 
+**Status (2026-10-15).** Built on branch claude/monk-velocity-fa0d69 after the study below, flashed and played by the
+owner (HISTORY 3y76): the scan's ADC slot and `cr_sense.c` (sections 3.1, 3.2); the root's press waits for its
+velocity (3.3, the measured velocity, no scale); the top row at the keys' recent velocity (3.4, way 2); Options >
+**Key Touch** (Fixed, the default / Dynamic / Velocity + Aftertouch), **Velocity Sens** and **Aftertouch Sens**
+(the two entries of 3.6 became three; bits 2..7 of the block's `bass_on`); with Key Touch on, MONK-1's Touch:
+Velocity law shapes the VEL source (`mod.c cr_touch_gain`) and the level follows the sound's **Expression**
+routing instead of the engines' own: the editor's EXPR screen on every engine (the MOD group's last: VEL and AT to a
+destination by an amount, mod.c's slots 3 and 4, saved with the sound; unset: VEL -> AMP at the full law, AT -> CUT
+by Aftertouch Sens; docs/EDITOR.md), which MIDI velocity and aftertouch reach too; the keys' aftertouch as the
+rest-following lean (3.5), to both parts as channel pressure and out as 0xD0 on the Perform and Bass channels,
+polyphonic aftertouch in accepted. Not built: the PA10 probe, polyphonic aftertouch out, the screen, calibration,
+the 5 kHz variant, the host tests (the owner: after the merge). The owner's readings: 689 note-ons in ten minutes,
+velocity 1 .. 127, quartiles 37 / 73 / 98. The sections below are the study as written before the build.
+
 The owner: "look into https://github.com/charlesvestal/fm1-monk: he added velocity and aftertouch to the FM-1, which
 would be super cool to bring in to ChoralRoot." This is the study of how fm1-monk does it and the design of the same
 thing on ChoralRoot. **Nothing is built**: no code, no test, no measurement on the unit (another session holds it

@@ -739,8 +739,8 @@ static uint32_t track_render_x(track_t *t, int32_t *out, int32_t *side, uint8_t 
             if (e->amp)                                 /* the engine's own amplitude curve */
                 env = e->amp(t, v, env);
             m.envq15 = e->ownenv ? 0 : env;
-            m.amp1 = cr_touch_mode ? mulq15(env, cr_touch_gain(v->vel))   /* Options > Key Touch (mod.c) */
-                   : e->ownenv ? env : mulq15(env, v->vel * 258);
+            m.amp1 = e->ownenv || cr_touch_mode ? env : mulq15(env, v->vel * 258);   /* Key Touch on: the level follows
+                                                                                      * the EXPR routing (mod.c) */
             if (p[P_LD_AMP])
                 m.amp1 = mulq15(m.amp1, 32767 - mulq15((lfo + 32768) >> 1, p[P_LD_AMP] * 258));
             if (fade)                                   /* linear to 0 over the fade */

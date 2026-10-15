@@ -170,7 +170,9 @@ Python 3 with Pillow and fontTools, and SDL2; the device build needs Docker and 
 ## Licence
 
 GPL-3.0-only ([LICENSE](LICENSE)). Built on Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments, and its FM6
-from [Melodee](https://github.com/keremimo/melodee) by Kerem Kilic (Ellic Studio);
+from [Melodee](https://github.com/keremimo/melodee) by Kerem Kilic (Ellic Studio); the keys' velocity and aftertouch
+from [Velo](https://github.com/charlesvestal/fm1-velocity) and [MONK-1](https://github.com/charlesvestal/fm1-monk) by
+Charles Vestal (GPL-3.0-only; [docs/VELOCITY.md](docs/VELOCITY.md));
 the chord logic after the Telepathic Instruments Orchid. The firmware is all-synth (no samples in it: Felucca's
 SAMPLE engine and its CC0 instruments by Versilian Studios stay in the tree for Felucca builds); the package carries three JieLi AC79 SDK files under Apache-2.0. The bundled font, icons,
 ported DSP and SDK files keep their own licences ([LICENSES/](LICENSES/)); [LICENSING.md](LICENSING.md) has

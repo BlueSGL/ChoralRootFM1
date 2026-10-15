@@ -119,7 +119,13 @@ none and keep the title rules:
   (one name and instance: `DCW 1`, `DCW 1+`, `DCW 1 B`, ..) has R1.. and SUS / END (CZ-1); FILT and ENV pages run by
   instance and name (`PITCH 1` and `DCW 1` are two runs);
 - MOD: a stack of the slots, eight a screen, when its pages are matrix slots (SRC DST AMT); else (FM6's function
-  pages) `edit8` screens as FILT's.
+  pages) `edit8` screens as FILT's. **Then, on every engine, the EXPR screen** (0.22, docs/VELOCITY.md
+  "Expression"): a stack of two lanes, VEL and AT, each Source · Dest · Amount, the sound's velocity and
+  aftertouch routings (mod.c's matrix slots 3 and 4, saved with the sound; the destinations are the platform
+  matrix's: PITCH CUT SHP AMP PAN the sends RATE VIB E1..E8). An unset slot reads its default, `AMP auto` /
+  `CUT auto` (what Key Touch Dynamic / Velocity + Aftertouch does for a sound that routes nothing); KNOB 2 or 3
+  turned on it takes the default (DST AMP amount 63; DST CUT amount by Aftertouch Sens) and then the turn, and
+  DST `OFF` switches that default off for the sound. MIDI velocity and aftertouch reach the same sources.
 - a cell's label, value names and range come from `deep->desc(t, page, col)` when the engine gives one (the VA's
   mode-dependent WAVE / SHAPE: MORPH, NOISE, COLOR, DENS), else from the page's column; the stack's heading over a
   WAVE column stays `Wave` whatever the modes.

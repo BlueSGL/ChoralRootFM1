@@ -2037,3 +2037,38 @@ The old builds: `CR_FX_DELAY_DS=1`, `LCD_BAUD=4`. docs/FX.md keeps 0.18's reason
 record of why it was chosen then; EDITOR.md's LCD figures are marked as the 12 MHz build's. (3y75 is the fx-stage /
 TIMER5 profiling session's, written beside this one.) Host: `run_cr_tests.sh` (cr_fx_test at the new default),
 `test_cr.sh`, `./build.sh`: below. Not flashed by this session: the profiling session had the unit.
+
+## 2026-10-15 (velocity and aftertouch from the keys: Key Touch and Expression; 0.22)
+
+3y76. **Velocity and aftertouch from the FM-1's own keys (2026-10-14 / 15; the owner: "look into fm1-monk ... he
+added velocity and aftertouch to the FM-1 which would be super cool to bring in to choralroot"; docs/VELOCITY.md).**
+Charles Vestal's Velo and MONK-1 (GPL-3.0-only, credited in LICENSING.md) read the keys' carbon pills through the
+SARADC on matrix rows PA7 / PA8 (20 of the 27 note keys; the top seven, C#5 .. G5, have no converter), a touched key's
+every other sample with its row driven weakly high so the pad reads the pill, not the diode: the velocity is the
+deepest of the first two driven samples after the touch on a log scale of the resistance, the aftertouch the lean
+below the key's rest. The study and design first (the doc), then, the owner asking for a quick test on the unit, the
+builds: (1) `hal/fm1_adc.h`'s non-blocking conversion and `hal/fm1_input.h`'s ADC slot (one conversion a tick on the
+latched column's row, taken a tick later: each analog key every 2.2 ms; the MASTER pot and the battery in OCT-'s /
+OCT+'s slots, so the tick owns the converter and `master.c` / `main.c` read its samples; the drive; a held key's
+column LEDs dark on its sampled tick), `cr_sense.c` (Velo's state machine in integers: DRIVE 2, WAIT 2, the log map,
+curve 0.7, floor 450, LIGHTEST 896, no calibration), `cr_ui.c cu_scan_keys` holding a sensed root's debounced press
+until its velocity is there (12 ms at most: 3 .. 7 ms later than before), the top row at the keys' recent velocity,
+console `inp`'s readings. The owner's ten minutes: 689 note-ons, velocity 1 .. 127, quartiles 37 / 73 / 98; "not the
+best velocity sensitivity, but it's a cool add"; little heard on FM6 and CZ-1 (their own laws). (2) The owner's
+design: Options > **Key Touch** (Fixed, the default: as before, no sensing / Dynamic / Velocity + Aftertouch),
+**Velocity Sens**, **Aftertouch Sens** (Low / Mid / High; bits 2..7 of the block's `bass_on`, 0 the defaults, no
+version); MONK-1's Touch: Velocity law on the VEL source (`mod.c cr_touch_gain`: a medium press keeps its level, a
+hard one is full, a light one quiet, by the sensitivity); the pressure (MONK-1's rest-following lean, `cr_sense.c`)
+polled every 5 ms (`cu_touch_poll`) and posted as `CRE_AT`: both parts as channel pressure (mod.c's AT source), 0xD0
+out on the Perform and Bass channels, polyphonic aftertouch in accepted. (3) **Expression**: the editor's EXPR screen,
+the MOD group's last on every engine (`cr_edit.c CE_S_EXPR`: VEL and AT to a destination by an amount, mod.c's matrix
+slots 3 and 4, saved with the sound; unset, with Key Touch on, VEL -> AMP at the full law and AT -> CUT by Aftertouch
+Sens: so every engine responds, FM6 and CZ-1 included, and a sound may route them itself; MIDI's velocity and
+aftertouch reach the same sources; docs/EDITOR.md). With Key Touch on the engines' own velocity-to-level is replaced
+by the routing (`voice.c`: the level is the envelope's, the EXPR gain on it); Fixed is bit for bit the old path. Flashed
+(the second and third builds over the owner's backup, restored between; the unit left on the Expression build).
+Cost: TIMER5 about 1 us a tick more (one conversion's registers, the hook, the drive's writes); .text +~5 KB, RAM
++~1 KB (83.6 %). **Not done**: the host tests (the owner: after the merge to main), the PA10 probe for the top row,
+polyphonic aftertouch out, anything on the screen, Velo's calibration (its open item), the 5 kHz scan's
+two-conversion variant (VELOCITY.md 3.1). The emulator: `tools/emu/scripts/cr_expr.txt` (the EXPR screen on FM6, the
+VA, FM TONE; not yet in `test_cr.sh`).
