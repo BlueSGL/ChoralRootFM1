@@ -447,7 +447,11 @@ def run(caps, args):
             rig.touched.update(c["hand_keys"])
             print(f"\n== {c['name']}\nsent: {listed(base)}\nBY HAND: {hand_text(c)}\n"
                   f"CHECK on the Digitone: {check_line(c)}")
-            input("Press Enter when set (Ctrl-C to stop) ... ")
+            if c["hand"] or not checked:     # the first capture (check the screen) and by-hand ones wait
+                input("Press Enter when set (Ctrl-C to stop) ... ")
+            else:
+                print("nothing by hand: starting (Ctrl-C to stop)")
+                time.sleep(1.0)
             if not checked:
                 sound_check(rig, args.out)
                 checked = True
