@@ -25,7 +25,7 @@
   webapp/installer/packs/     web/packs/*.json (the packs as files, to download)
   emu/                        "Try it in the browser": build/emu-web/* (made by sh tools/emu/web/build_web.sh;
                               EMU_DIR or a 4th argument overrides; missing: a warning, the site is made without it)
-  webapp/layout/              the layout viewer (docs/LAYOUT-TOOL.md): layout.html as index.html (fm1layout.js
+  webapp/layout/              the layout viewer (docs/LAYOUT-TOOL.md): layout.html as index.html (fm1sketch.js, fm1layout.js
                               inlined) beside build/layout-web/crlayout.js and crlayout.wasm (made by
                               sh tools/layout/build_layout.sh; LAYOUT_DIR overrides; missing: a warning, the site is
                               made without it and the landing page has no link to it: {{LAYOUT}} is empty)
@@ -118,15 +118,16 @@ def manager_page():
 
 
 def layout_page():
-    """web/layout.html with /*LIB*/ (fm1layout.js) inlined; crlayout.js stays a file beside it (the firmware's wasm)"""
+    """web/layout.html with /*LIB*/ (fm1sketch.js, then fm1layout.js, which imports it) inlined; crlayout.js stays a file
+    beside it (the firmware's wasm)"""
     html = (HERE / "layout.html").read_text(encoding="utf-8")
     if html.count("/*LIB*/") != 1:
         raise SystemExit("layout.html must contain /*LIB*/ once; update make_site.py")
-    lib = HERE / LAYOUT_LIB                         # (not spelled as the installer's libraries are: web/test_installer.mjs
-    return html.replace("/*LIB*/", strip_module(lib.read_text(encoding="utf-8")))   # reads those from this file)
+    lib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8")) for n in LAYOUT_LIB)   # (not spelled as the
+    return html.replace("/*LIB*/", lib)             # installer's libraries are: web/test_installer.mjs reads those from this file)
 
 
-LAYOUT_LIB = "fm1layout.js"
+LAYOUT_LIB = ("fm1sketch.js", "fm1layout.js")
 LAYOUT_FILES = ("crlayout.js", "crlayout.wasm")
 LAYOUT_LINK = ('<p class="note">Every page of the sound editor, drawn by the firmware in your browser:</p>'
                '<p class="note note-try"><a href="webapp/layout/">Layout viewer</a></p>')

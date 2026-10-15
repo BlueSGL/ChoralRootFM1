@@ -1600,34 +1600,40 @@ static void ce_ptext(const param_desc_t *d, int32_t v, uint32_t style, char *out
     if (style == ENG_C_TEXT)
         ce_title_case(out, d->fmt == F_ONOFF ? 2u : 3u);   /* ("ON" -> "On"; "LP" stays) */
 }
+/* a two-LED button's value names after the text's NUL in b (n bytes): 1 when both fit, else none (zeros) */
+static int ce_p5names(char *b, uint32_t n, const param_desc_t *d)
+{
+    uint32_t l = str_len(b), i, j;
+    for (i = l + 1u; i < n; i++)
+        b[i] = 0;
+    for (i = 0; d->names && i < 2u; i++) {
+        j = str_len(d->names[i]);
+        if (l + 1u + j + 1u > n)
+            break;
+        cu_cpy(b + l + 1u, d->names[i], j + 1u);
+        l += 1u + j;
+    }
+    if (i < 2u)                                   /* (not both: none) */
+        for (i = str_len(b) + 1u; i < n; i++)
+            b[i] = 0;
+    return i == 2u;
+}
 /* a cell in one of the Prophet-5's looks (ENG_C_P5*: cr_screen.h CR_G_P5*): its glyph, pct (the dial, an LED on at
  * the maximum, the lever's position), pct2 an LED's icon, the value on the row ("64", "On", "Half", "1/2"); a two-LED
- * button's two value names after its label's NUL when they fit (cr_draw.c cr_p5glyph draws them over the LEDs) */
+ * button's two value names after its label's NUL, or when they do not fit there after its value's (cr_draw.c
+ * cr_p5glyph draws them over the LEDs) */
 static void ce_cell_p5(const param_desc_t *d, int32_t v, uint32_t st, cr_cell_t *cl)
 {
     static const uint8_t G[7] = {CR_G_P5KNOB, CR_G_P5LED, CR_G_P5LED, CR_G_P5LED, CR_G_P5LED, CR_G_P5LED2, CR_G_P5SWITCH};
     static const uint8_t I[7] = {0, CR_P5I_NONE, CR_P5I_SAW, CR_P5I_TRI, CR_P5I_SQUARE, 0, 0};
-    uint32_t k = st - ENG_C_P5KNOB < 7u ? st - ENG_C_P5KNOB : 0u, l, i, j;
+    uint32_t k = st - ENG_C_P5KNOB < 7u ? st - ENG_C_P5KNOB : 0u;
     cl->flags = (uint16_t)(CR_CF_ON | (d->min < 0 && d->max > 0 ? CR_CF_BIP : 0u));
     cl->glyph = G[k];
     cl->pct = ce_pct(d, v);
     cl->pct2 = I[k];
     ce_ptext(d, v, d->fmt == F_INT ? ENG_C_VAL : ENG_C_TEXT, cl->value, sizeof cl->value);
-    if (cl->glyph != CR_G_P5LED2)
-        return;
-    l = str_len(cl->label);
-    for (i = l + 1u; i < sizeof cl->label; i++)
-        cl->label[i] = 0;
-    for (i = 0; d->names && i < 2u; i++) {
-        j = str_len(d->names[i]);
-        if (l + 1u + j + 1u > sizeof cl->label)
-            break;
-        cu_cpy(cl->label + l + 1u, d->names[i], j + 1u);
-        l += 1u + j;
-    }
-    if (i < 2u)                                   /* (not both: none) */
-        for (i = str_len(cl->label) + 1u; i < sizeof cl->label; i++)
-            cl->label[i] = 0;
+    if (cl->glyph == CR_G_P5LED2 && !ce_p5names(cl->label, sizeof cl->label, d))
+        ce_p5names(cl->value, sizeof cl->value, d);
 }
 /* cell c of row r (of ref rf) restyled by the plan; a label of the plan's */
 static void ce_cell_plan(const track_t *t, const ce_view_t *vw, uint32_t r, uint32_t c, cr_cell_t *cl)
@@ -1777,8 +1783,11 @@ static void ce_screen(cr_screen_t *s, uint32_t now)
                 uint32_t st = ce_style_hook(t, vw.ref[r][c].a, vw.ref[r][c].b & 3u);
                 const param_desc_t *pd;
                 int32_t pv;
-                if (st >= ENG_C_P5KNOB && (pd = ce_param(t, vw.ref[r][c], &pv)))
+                if (st >= ENG_C_P5KNOB && (pd = ce_param(t, vw.ref[r][c], &pv))) {
                     ce_cell_p5(pd, pv, st, &s->cell[r][c]);
+                    if (st == ENG_C_SKETCH)               /* a sketch: the glyph box left empty (CR_G_N draws nothing) */
+                        s->cell[r][c].glyph = CR_G_N;
+                }
             }
 #endif
             if ((s->cell[r][c].flags & CR_CF_ON) && (ds = ce_dst(t, vw.ref[r][c])) > 0 && ds < (int32_t)CE_NDST && mc[ds])

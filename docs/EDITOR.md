@@ -452,22 +452,32 @@ edit8 label then fits in 46 px. The **active** row is in the knob colours (blue,
 block is the source's colour and the value the slot's amount with the source (`ENV2 +12`, `LFO1 +24`: `hot_col`). A
 value too wide loses its space, then 2 px of size at a time (down to 9 px), then ellipsises.
 
-**The Prophet-5's controls as a cell's glyph** (3y93; the cell styles `ENG_C_P5*`, cr_screen.h `CR_G_P5*`, drawn by
-cr_draw.c `cr_p5glyph` on the p5 primitives; no engine's screens use them yet: the layout tool's mock-ups,
-docs/LAYOUT-TOOL.md "Cell styles"). Each fills the cell's glyph box (60 px wide, 34 px high without a band, 22 under
-one); the label stays on top, the value on the row under it ("64", "On", "Half", "1/2"), the knob bars and the hot
-block as for any cell:
+**The Prophet-5's controls as a cell's glyph** (3y93, the final look 3y94; the cell styles `ENG_C_P5*`, cr_screen.h
+`CR_G_P5*`, drawn by cr_draw.c `cr_p5glyph`; no engine's screens use them yet: the layout tool's designs,
+docs/LAYOUT-TOOL.md "Cell styles"). In a full-size cell (60 px wide, the 34 px glyph box: no band, or one lane under
+a band) they are the owner's round-5 mock-up (`design/p5-glyph-mockups-5.html`), centred 22 px under the label's
+baseline (the box's top + 12); the label stays on top, the value on the row under it ("64", "On", "Half", "1/2"), the
+knob bars and the hot block as for any cell. On the active row the glyph is in the column's colour; on a dim row the
+editor's greys (rim line, face surf, ticks dim, the bright tick and the pointer mid):
 
-- **knob** (`CR_G_P5KNOB`): 11 ticks over the 270 degrees at the box's height (a 40 px dial; 26 under a band), the dark
-  face with its rim, a long 2 px pointer in the cell's colour at the value; centre-zero: tick 5 lit; no value inside;
-- **LED button** (`CR_G_P5LED`): a 26 x 26 cap, its black window over the pad, the 7 px red LED when on, a dim dot off;
-  `pct2` the one-cycle icon over it at the box's top (saw, triangle, pulse: CR_P5I_*), in the cell's colour on the active
-  row, else mid when on and dim when off; under a band the cap alone, 20 x 16;
-- **two LEDs** (`CR_G_P5LED2`): one 44 px cap, the minimum's LED red on the left, the maximum's yellow on the right, the
-  current one lit, the two value names (9 px) over them when they fit (they ride in `cr_cell_t.label` after its NUL);
-  under a band the cap alone;
-- **lever** (`CR_G_P5SWITCH`): a slot of three positions the box's height, the lever in the cell's colour at the
-  position (pct 0, 1/2, 1), a tick beside each.
+- **knob** (`CR_G_P5KNOB`, K6d): eleven 2 px ticks, 3 px long (r 14 .. 17), mid grey, over the 270 degrees; the tick
+  nearest the value white and 1 px longer (it matches the dial to a real P5's printed scale); a 2 px rim (r 9 .. 11) in
+  the row colour; the face the row colour at 40 % (cr_draw's `ux_mix` toward black, the mock-up's `tintOf`); a 3 px
+  white pointer from 2 px off the centre to r 8; centre-zero parameters have their zero at 12 o'clock; no value inside;
+- **LED button** (`CR_G_P5LED`, B1a): a 22 x 20 cap, its 2 px rim in the row colour, the face surf, the LED window (the
+  top 8 px inside the rim) near-black; the LED a 6 px red disc in a 2 px dark-red halo when on, a 4 px dark-red dot
+  off; `pct2` the one-cycle wave (saw, triangle, pulse: CR_P5I_*) as a 2 px line, 14 x 8, 4 px over the cap, **white
+  when on, grey (dim) when off** (mid / line on a dim row); without a wave the cap stays where it is;
+- **lever** (`CR_G_P5SWITCH`, S5): a 30 x 20 cap, the rim in the row colour, two LEDs 14 px apart counting the position
+  (Off none, Half the left, Full both), no names;
+- **two LEDs** (`CR_G_P5LED2`, R3, the filter's REV): the 30 x 20 cap, two red LEDs, the current value's lit, the two
+  value names (8 px bold, the faces scale to it) over them, the current one white, the other dim; the names ride after
+  `cr_cell_t.label`'s NUL, or after the value's when the label is too long ("Filter rev").
+
+Two lanes under a band keep the first pass's small glyphs in their 22 px box (a 26 px dial; the caps alone, 20 x 16
+and 34 x 16 with a red and a yellow LED; the lever's slot). Tests: tests/cr_draw_test.c `p5cell_screens` (goldens in
+tests/cr_p5cell_golden.txt; the lit LED, the white tick, the wave white when on, the lever's LEDs), web/test_layout.mjs
+section 6 on `design/layouts/designs/p5-rows.json`.
 
 ### `edit8` — up to eight parameters
 
@@ -486,7 +496,10 @@ Two rows of four cells (row A, row B), one of them active; an optional **wide** 
 - (FORMAT.md also has a **wave** band: two cycles across the screen, blue; not used by the drawn sections).
 
 Layout: **with a wide shape** — title 0–24, the shape 24–120, row A 124–180, row B 184–240 (label 10 px, glyph 22
-px, value 13 px bold). **Without** — row A 30–130, row B 134–234 (label 12 px, glyph 34 px, value 17 px bold).
+px, value 13 px bold); **one lane under the shape** (3y94: CZ-1's END screens, WHEEL's ENV, a design's one-lane
+screen) — its row at full size, 124–224 (label 12 px at +16, the 34 px glyph box at +26, value 17 px bold at +82, the
+bars at +98: the row without a shape moved down 94 px). **Without** — row A 30–130, row B 134–234 (label 12 px, glyph
+34 px, value 17 px bold).
 
 Used for: FILT, each ENV, FX, MIX; and every one-row group of the engines without deep pages.
 

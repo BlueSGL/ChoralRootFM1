@@ -620,7 +620,8 @@ static void cr_p_arp(const cr_screen_t *s, int32_t ph)
 /* ------------------------------------------------------ the sound editor --- */
 /* CR_K_EDIT8 and CR_K_STACK (../ChoralRootFM1Designer/FORMAT.md "Sound editor panels"): the whole screen, no
  * header. The title line (0..24), then edit8: an optional wide band (24..120: the AHDSR or the filter's response)
- * over two rows of four cells (124..180, 184..240; without the band 30..130, 134..234), or stack: column headings
+ * over two rows of four cells (124..180, 184..240; one row under it: 124..224 at full size; without the band 30..130,
+ * 134..234), or stack: column headings
  * at y 36 over N rows sharing 41..239. The active row is in the knob colours (blue orange white green) with a 2 px
  * bar under each cell, the others grey; the hot cell's value sits on a block of its colour. Cheap by design: text,
  * rectangles, small glyphs, at most two polylines of <= 12 segments in the band. No motion: a change is drawn at
@@ -1150,16 +1151,109 @@ static void cr_cap(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t sq)
     cr_box(x, y, w, h, T_MID, r + sq, 1);
 }
 
-/* a P5 cell's glyph (CR_G_P5*: docs/EDITOR.md section 9 "A cell"), filling an edit8 cell's glyph box x .. x + w, y .. y + h
- * (px; 34 high without a band, 22 with one): the knob's tick ring at the box's height, the button's cap (26 px) under
- * its wave's icon at the box's top (a 22 px box: the cap alone, 16 high). col: the knob's colour on the active row,
- * else dim (an icon or a name then mid when on) */
+/* the P5 cell glyphs' LED (docs/EDITOR.md section 9): centred on the pixel corner (x, y); lit a 6 px red disc in a
+ * 2 px dark-red halo, else a 4 px dark-red dot (the round-5 mock-up's colours, not the palette's) */
+static void cr_p5led(int32_t x, int32_t y, int on)
+{
+    if (on) cr_disc(x * 16, y * 16, 64, CR_RGB(120, 20, 10));
+    cr_disc(x * 16, y * 16, on ? 48 : 32, on ? CR_RED : CR_RGB(110, 24, 16));
+}
+/* a P5 cell's button cap, w x 20 from (cx - w / 2, y): the 2 px rim, the face (surf), the LEDs' window (its top 8 px
+ * inside the rim, near-black) */
+static void cr_p5cap(int32_t cx, int32_t y, int32_t w, uint16_t rim)
+{
+    int32_t x = cx - w / 2;
+    cr_fill(x, y, w, 20, rim);
+    cr_fill(x + 2, y + 2, w - 4, 16, T_SURF);
+    cr_fill(x + 2, y + 2, w - 4, 8, CR_NAMED[CR_COL_BLACK]);
+}
+
+/* a two-LED button's value names after the text's NUL in b (n bytes; cr_edit.c ce_cell_p5): *o, 1; none: 0 */
+static int cr_p5names(const char *b, int32_t n, const char **o)
+{
+    int32_t l = 0, i;
+    while (l < n && b[l]) l++;
+    if (l + 1 >= n || !b[l + 1]) return 0;
+    for (i = l + 1; i < n && b[i]; i++)
+        ;
+    if (i + 1 >= n || !b[i + 1]) return 0;
+    o[0] = b + l + 1;
+    o[1] = b + i + 1;
+    return 1;
+}
+/* a P5 cell's glyph (CR_G_P5*: docs/EDITOR.md section 9 "A cell"), in an edit8 cell's glyph box x .. x + w, y .. y + h
+ * (px). A full-size cell's box (34 high): the owner's round-5 mock-up (design/p5-glyph-mockups-5.html), centred on
+ * (x + w / 2, y + 12), the mock-up's 22 px under the label's baseline: K6d (the knob), B1a (the LED button and its
+ * wave), S5 (the two-LED lever), R3 (the two-LED button and its names). A 22 px box (two rows under a band): the
+ * first pass's small variants. col: the column's colour on the active row, else T_DIM (the dim row's greys) */
 static void cr_p5glyph(const cr_cell_t *c, int32_t x, int32_t y, int32_t w, int32_t h, uint16_t col)
 {
-    static const uint8_t WAVE[6] = {0, 0, 1, 2, 3, 4};  /* CR_P5I_* -> cr_wave1's kinds */
-    int32_t cx = x + (w >> 1), on = c->pct >= 128u, small = h < 30, i;
-    uint16_t ink = col != T_DIM ? col : on ? T_MID : T_DIM;
-    switch (c->glyph) {
+    static const int8_t ICON[3][9] = {           /* the 14 x 8 icons' points (x, y; a 2 px line), -1 the end */
+        {1, 7, 11, 1, 11, 7, -1}, {1, 7, 7, 1, 13, 7, -1}, {2, 7, 2, 1, 12, 1, 12, 7, -1}};
+    int32_t cx = x + (w >> 1), on = c->pct >= 128u, act = col != T_DIM, i;
+    uint16_t rim = act ? col : T_LINE;
+    if (h >= 30) {
+        int32_t cy = y + 12, cy16 = cy * 16, cx16 = cx * 16, pos = c->pct < 64u ? 0 : c->pct < 192u ? 1 : 2;
+        int16_t p[8];
+        switch (c->glyph) {
+        case CR_G_P5KNOB: {              /* K6d: 11 ticks (r 14 .. 17, 2 px; the nearest 18 and bright), the rim (r 9 ..
+                                          * 11) in the colour, the face its 40 %, the 3 px pointer (r 2 .. 8) */
+            uint32_t pct = c->pct >= 255u ? 256u : c->pct, a = 24576u + 49152u * pct / 256u, k, near = (pct * 10u + 128u) / 256u;
+            for (k = 0; k <= 10u; k++) {
+                uint32_t ak = 24576u + 49152u * k / 10u;
+                int32_t r1 = k == near ? 18 * 16 : 17 * 16;
+                p[0] = (int16_t)(cx16 + ((224 * cr_cos(ak)) >> 14)); p[1] = (int16_t)(cy16 + ((224 * cr_sin(ak)) >> 14));
+                p[2] = (int16_t)(cx16 + ((r1 * cr_cos(ak)) >> 14)); p[3] = (int16_t)(cy16 + ((r1 * cr_sin(ak)) >> 14));
+                cr_poly(p, 2u, 32, 0, 0, k == near ? (act ? CR_WHITE : T_MID) : act ? T_MID : T_DIM);
+            }
+            cr_disc(cx16, cy16, 11 * 16, rim);
+            cr_disc(cx16, cy16, 9 * 16, act ? ux_mix(col, 0, 60) : T_SURF);
+            p[0] = (int16_t)(cx16 + ((32 * cr_cos(a)) >> 14)); p[1] = (int16_t)(cy16 + ((32 * cr_sin(a)) >> 14));
+            p[2] = (int16_t)(cx16 + ((128 * cr_cos(a)) >> 14)); p[3] = (int16_t)(cy16 + ((128 * cr_sin(a)) >> 14));
+            cr_poly(p, 2u, 48, 0, 0, act ? CR_WHITE : T_MID);
+            break;
+        }
+        case CR_G_P5LED: {               /* B1a: the wave (14 x 8, 4 px over the cap: white on, grey off), the 22 x 20
+                                          * cap, its LED; no icon: the cap where it is */
+            uint32_t ic = c->pct2 % 6u, n;
+            if (ic >= CR_P5I_SAW && ic <= CR_P5I_SQUARE) {
+                const int8_t *q = ICON[ic - CR_P5I_SAW];
+                for (n = 0; q[2 * n] >= 0; n++) {
+                    p[2 * n] = (int16_t)((cx - 7 + q[2 * n]) * 16);
+                    p[2 * n + 1] = (int16_t)((cy - 15 + q[2 * n + 1]) * 16);
+                }
+                cr_poly(p, n, 32, 0, 0, on ? (act ? CR_WHITE : T_MID) : act ? T_DIM : T_LINE);
+            }
+            cr_p5cap(cx, cy - 3, 22, rim);
+            cr_p5led(cx, cy + 3, on);
+            break;
+        }
+        case CR_G_P5SWITCH:              /* S5: the 30 x 20 cap, two LEDs counting the position (none, the left, both) */
+        case CR_G_P5LED2: {              /* R3: the 30 x 20 cap, the value's LED lit; the names (8 px) over them */
+            int32_t lit[2];
+            const char *n[2] = {0, 0};
+            if (c->glyph == CR_G_P5SWITCH) {
+                lit[0] = pos >= 1;
+                lit[1] = pos == 2;
+            } else {
+                lit[0] = !on;
+                lit[1] = on;
+                if (!cr_p5names(c->label, (int32_t)sizeof c->label, n)) cr_p5names(c->value, (int32_t)sizeof c->value, n);
+                if (n[0] && cr_twpx(n[0], 8, 1) + cr_twpx(n[1], 8, 1) > 24) n[0] = n[1] = 0;
+            }
+            cr_p5cap(cx, cy - 3, 30, rim);
+            for (i = 0; i < 2; i++) {
+                if (n[i]) cr_ftext(cx + (i ? 7 : -7), cy - 8, n[i], 8, 1, CR_C, act && lit[i] ? CR_WHITE : T_DIM, 0);
+                cr_p5led(cx + (i ? 7 : -7), cy + 3, lit[i]);
+            }
+            break;
+        }
+        default:
+            break;
+        }
+        return;
+    }
+    switch (c->glyph) {                  /* the 22 px box */
     case CR_G_P5KNOB: {                  /* the largest even dial whose ring (top) and face or lower ticks fit the box */
         int32_t sz = 2 * h, top, bot;
         for (;; sz -= 2) {
@@ -1170,37 +1264,23 @@ static void cr_p5glyph(const cr_cell_t *c, int32_t x, int32_t y, int32_t w, int3
         cr_p5knob(cx, y + ((top + 8) >> 4), sz, T_SURF, T_MID, T_LINE, col, c->pct, (c->flags & CR_CF_BIP) != 0, 15u);
         break;
     }
-    case CR_G_P5LED: {                   /* the icon at the box's top, the square cap under it; small: the cap only */
-        int32_t ch = small ? 16 : 26, cw = small ? 20 : 26, cy = small ? y + (h - ch) / 2 : y + h - ch, r = small ? 32 : 56;
-        uint32_t icon = c->pct2 % 6u;
-        if (!small && icon) cr_wave1(WAVE[icon], cx - 10, y - 3, 20, 11, ink);
-        cr_cap(cx - cw / 2, cy, cw, ch, 0);
-        cr_disc(cx * 16, (cy + 1 + (ch - 2) / 4) * 16 + 8, on ? r : r * 3 / 5, on ? CR_RED : T_DIM);
+    case CR_G_P5LED: {                   /* the cap alone, 20 x 16 */
+        int32_t cy = y + (h - 16) / 2;
+        cr_cap(cx - 10, cy, 20, 16, 0);
+        cr_disc(cx * 16, (cy + 1 + 14 / 4) * 16 + 8, on ? 32 : 32 * 3 / 5, on ? CR_RED : T_DIM);
         break;
     }
-    case CR_G_P5LED2: {                  /* one wide cap, two LEDs (left red: the minimum, right yellow: the maximum) and,
-                                          * over them, the two names when they fit (after the label's NUL: cr_edit.c) */
-        int32_t ch = small ? 16 : 26, cw = small ? 34 : 44, cy = small ? y + (h - ch) / 2 : y + h - ch, d = cw / 4;
-        int32_t r = small ? 32 : 48, l = 0;
-        const char *n[2] = {0, 0};
-        while (l < (int32_t)sizeof c->label && c->label[l]) l++;
-        if (!small && l + 1 < (int32_t)sizeof c->label && c->label[l + 1]) {
-            n[0] = c->label + l + 1;
-            for (i = l + 1; i < (int32_t)sizeof c->label && c->label[i]; i++)
-                ;
-            n[1] = i + 1 < (int32_t)sizeof c->label && c->label[i + 1] ? c->label + i + 1 : 0;
-            if (!n[1] || cr_twpx(n[0], 9, 1) > 2 * d || cr_twpx(n[1], 9, 1) > 2 * d) n[0] = n[1] = 0;
-        }
-        cr_cap(cx - cw / 2, cy, cw, ch, 0);
+    case CR_G_P5LED2: {                  /* one wide cap, two LEDs (left red: the minimum, right yellow: the maximum) */
+        int32_t cy = y + (h - 16) / 2, d = 34 / 4;
+        cr_cap(cx - 17, cy, 34, 16, 0);
         for (i = 0; i < 2; i++) {
             int32_t lx = cx + (i ? d : -d), lit = i == on;
-            if (n[i]) cr_ftext(lx, y + 4, n[i], 9, 1, CR_C, lit ? ink : T_DIM, 0);
-            cr_disc(lx * 16, (cy + 1 + (ch - 2) / 4) * 16 + 8, lit ? r : r * 3 / 5, lit ? (i ? CR_YELLOW : CR_RED) : T_DIM);
+            cr_disc(lx * 16, (cy + 1 + 14 / 4) * 16 + 8, lit ? 32 : 32 * 3 / 5, lit ? (i ? CR_YELLOW : CR_RED) : T_DIM);
         }
         break;
     }
     case CR_G_P5SWITCH: {                /* a slot of three positions the box's height, the lever at the position */
-        int32_t ph = h / 3, sw = small ? 8 : 12, pos = c->pct < 64u ? 0 : c->pct < 192u ? 1 : 2, sy = y + (h - 3 * ph) / 2;
+        int32_t ph = h / 3, sw = 8, pos = c->pct < 64u ? 0 : c->pct < 192u ? 1 : 2, sy = y + (h - 3 * ph) / 2;
         cr_box(cx - sw / 2, sy, sw, 3 * ph, T_LINE, 2, 1);
         cr_box(cx - sw / 2 + 2, sy + ph * pos + 2, sw - 4, ph - 4, col, 0, 0);
         for (i = 0; i < 3; i++)          /* the positions' ticks beside the slot */
@@ -1978,8 +2058,8 @@ static void cr_p_tall(const cr_screen_t *s)
 
 static void cr_p_edit8(const cr_screen_t *s)
 {
-    int wide = s->wide != CR_W_NONE, big = !wide;
-    int32_t rowy[2], rowh = wide ? 56 : 100, ri, ci;
+    int wide = s->wide != CR_W_NONE, big = !wide || s->n_rows == 1u;   /* (one lane under a band: full size) */
+    int32_t rowy[2], rowh = big ? 100 : 56, ri, ci;
     uint32_t lpx = big ? 12u : 10u, vpx = big ? 17u : 13u;
     int32_t gh = big ? 34 : 22, ly = big ? 16 : 11, gyo = big ? 26 : 15, vyo = big ? 82 : 51;
     rowy[0] = wide ? 124 : 30;
@@ -2988,7 +3068,7 @@ static uint32_t cr_ed_row_strips(const cr_screen_t *s, uint32_t r)
         return r ? 0u : cr_strips_of(y - 2, y + CR_KR_ROW + 2);
     }
     if (s->tall || r > 1u) return (1u << CR_NSTRIP) - 1u;
-    if (s->wide) return cr_strips_of((r ? 184 : 124) - 2, (r ? 240 : 180) + 2);
+    if (s->wide) return cr_strips_of((r ? 184 : 124) - 2, (r ? 240 : s->n_rows == 1u ? 224 : 180) + 2);
     return cr_strips_of((r ? 134 : 30) - 2, (r ? 234 : 130) + 2);
 }
 /* the strips of what changed when only the editor's parts did: a row's cells, the band's values, the hot cell (its

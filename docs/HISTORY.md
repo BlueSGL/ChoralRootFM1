@@ -3757,3 +3757,63 @@ Saw LED red), 117 ok with the emulator comparison (P5 24 frames identical); `tes
 style refusal word for word, p5-rows valid and not buildable). **Checked**: `sh tests/run_all.sh` ALL SUITES PASSED (22;
 test_cr 1009 ok, test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed, P5 panel goldens 22 of 22
 unchanged). Not done: the owner's own page layout (his, in the designer); a P5 plan in the firmware when he has it.
+
+3y94. **The P5 cell glyphs as the owner chose them, one full-size row under a band, click-to-select in the designer
+(2026-10-15; on lay-7 from 22d5d31, not committed, not flashed).** Five rounds of pixel mock-ups
+(`design/p5-glyph-mockups*.html`, the round-5 sheet the specification). The owner: "K6d is winner. We need to have the
+11 lines as it helps match up a patch with a real P5"; "B1 but can the box color match the column color"; "the wave
+shape to be white when on and grey when off"; "S5 for the key track but the box outline color should match with the
+column color"; "Filter REV also uses a 2 LED button glyph design" (R3, the names 1/2 and 3 above the LEDs); "the
+parameters are being vertically resized, they should be the same height and width as the other pages". **Firmware**:
+cr_draw.c `cr_p5glyph` draws the chosen set in a full-size cell's 34 px glyph box, centred where the mock-up has it
+(22 px under the label's baseline): `CR_G_P5KNOB` K6d (eleven 2 px mid-grey ticks r 14 .. 17, the nearest white and
+1 px longer; the rim r 9 .. 11 in the row colour, the face its 40 % (`ux_mix` toward black); a 3 px white pointer r
+2 .. 8), `CR_G_P5LED` B1a (a 22 x 20 cap with the rim in the row colour, the near-black LED window, the 6 px red LED in
+a dark-red halo or a 4 px dark dot; the 14 x 8 wave, 2 px, white when on and grey when off), `CR_G_P5SWITCH` S5 (a
+30 x 20 cap, two LEDs counting Off / Half / Full), `CR_G_P5LED2` R3 (the 30 x 20 cap, two red LEDs, the names 8 px
+over them, the current one white; when the label leaves no room for the names, cr_edit.c `ce_cell_p5` puts them after
+the value's NUL: "Filter rev"); on a dim row the editor's greys; new helpers `cr_p5led`, `cr_p5cap`, `cr_p5names`; the
+22 px box (two lanes under a band) keeps the first pass's small glyphs. `cr_p_edit8`: an edit8 screen with a band and
+ONE lane draws it at full size at 124..224 (label 12 at +16, the 34 px box at +26, the value 17 bold at +82, the bars
+at +98: the no-band row moved down 94 px), `cr_ed_row_strips` the same; two lanes under a band as before. The one-lane
+band screens that exist today and change with it: CZ-1's six END screens (PITCH / DCW / DCA 1 and 2 · END: Sustain and
+End now at full size) and WHEEL's ENV (the platform's ADSR); every other frame of every engine (214 screens x lanes in
+the layout module) is byte-identical, FM TONE, VA, FM6 and CZ-1's other screens included. `ce_scr` gives `n = 1` for
+one-lane plan screens (`h->pg[1]` past the pages) and SELECT walks from such a screen to the next as between lanes
+(`ce_lanes`). Size: XIP 548 396 -> 548 860 B (95.7 %, +464 B), RAM 79.8 %, POOL 69.5 % unchanged. **The designer**:
+a click on a classic screen's picture selects that cell's slot as the slot under the screen does (web/fm1layout.js
+`cellAt` from `lay_state`'s kind, band and lanes; web/layout.html `classicSlot`). **Tests**: tests/cr_draw_test.c
+`p5cell_screens`: eight pictures (no band either row active, one lane under the filter and the env band, two lanes
+under a band, the lever Off and Full) against new goldens `tests/cr_p5cell_golden.txt` (none existed for these
+cells; `tests/cr_free_golden.txt` unchanged), the lit LED red, the nearest tick white, the saw white when on, the dim
+row's wave mid, the lever's LEDs counting, the one-lane band row equal to the no-band row moved 94 px and the two-lane
+rows at 124 / 184; web/test_layout.mjs 6 on p5-rows.json (11 edit8 screens, 20 screens x lanes, lint clean,
+deterministic, the glyphs on all 17 engine rows, the white tick, the wave white exactly when on, FILTER's full-size
+row, `cellAt`) and the Design self-test's 9th square (a click on OSC A's row B and on FILTER's one row selects the
+slot); `design/choralroot-fm1-p5-rows-screens.png` re-rendered (20 tiles, lint clean). **Checked**: test_layout 121
+ok, gen_layout_test 63, `sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1009 ok, test_persist 111, test_retired
+18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit; no engine uses the P5 glyphs yet.
+
+3y95. **Sketch glyphs in the layout designer: glyph variants drawn by the page in a cell's glyph box (2026-10-15; on
+lay-7 after 3y94, not committed).** The owner: "It doesn't have to stay that way. The designer can get a sketch layer:
+glyph variants drawn by the page itself in the cell's glyph box" — "Yes, lets support this": glyph designs tried on
+real pages before anyone writes C. **web/fm1sketch.js** (new): the mock-ups' pixel helpers on an RGBA buffer and
+every glyph of the four rounds as a registry of 29 sketches with their notes (knobs k1 .. k6, k6a .. k6e; LED buttons
+b1 .. b5, b1a .. b1d; switches s1 .. s6; two LEDs r1 .. r3; k6d, b1a, s5, r3 as chosen; a 1x 8 px face for the value
+names); `sketchBox` (the glyph box by cr_draw.c's rows), `drawSketches`. A classic cell's style `"sketch:<name>"`
+(an LED's with `-saw` `-tri` `-sqr`): `validateDesign` and tools/gen_layout.py accept a known name, refuse another
+with the list, and a build refuses every sketch ("not buildable yet: a sketch glyph (<name>); port it into the
+firmware to build", word for word in both); `packDesign` packs it as core.h `ENG_C_SKETCH` (preview only), and
+`lay_load`'s editor gives the cell the glyph `CR_G_N` (cr_edit.c under `CR_LAYOUT_PREVIEW`): label, value, bars and
+hot block, an empty glyph box; `lay_state` has every row's fills (`rows`) and the palette (`ink`).
+`designSession.render` draws the sketches into the frame, so the live screen, the contact sheet and its PNG, the
+screen's PNG and render_sheet.mjs all show them; the badge and the lint ("sketch") say why it is not buildable; the
+inspector's *Style* has a "sketch" group and shows the note. web/make_site.py inlines fm1sketch.js before
+fm1layout.js. The device image is byte for byte 3y94's (sha256 744dd15c..., XIP 548 860 B). **Tests**:
+web/test_layout.mjs 6 (sketch:k6d valid, refused by the build, deterministic, against p5knob 269 px differ in the
+cell's glyph area and none outside it, the firmware's label and value, the "sketch" finding and the badge; all 29
+sketches draw on a knob's and an LED's cell, lint clean; an unknown name or wave refused; the 23rd broken design) and
+the Design self-test's 10th square; tests/gen_layout_test.py 66 (the refusal, the build's words, the names equal);
+tests/cr_draw_test.c (a `CR_G_N` cell: its glyph area empty). **Checked**: `sh tests/run_all.sh` ALL SUITES PASSED
+(22; test_layout 125 ok, test_cr 1009 ok, 313 golden renders 0 changed). Not done: sketches on stack screens (no
+glyph box), and the free screens' elements (their glyphs are the p5 style's).

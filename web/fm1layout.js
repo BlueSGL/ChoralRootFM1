@@ -5,6 +5,7 @@
 //   tiles(catalog)      every screen x lane of a catalog, in the editor's order
 //   formatLayout(cat)   a catalog as the text of its layout file (design/layouts/<engine>.json)
 //   layoutFileName, ruleNotes, lintCounts, sheetGeometry, GROUP_KNOB_COLOURS ..
+import { SKETCH_NAMES, parseSketch, isSketchStyle, drawSketches } from "./fm1sketch.js";
 
 export const SCREEN = 240;
 export const FORMAT = "choralroot-layout";
@@ -256,6 +257,10 @@ export const CLASSIC_KINDS = ["edit8", "stack"];
 export const CELL_STYLES = ["rule", "big", "ratio", "harm", "detune", "num", "val", "text", "knob", "bar", "waveph", "p5knob",
                             "p5led", "p5led-saw", "p5led-tri", "p5led-sqr", "p5led2", "p5switch"];
 export const P5_CELL_STYLES = CELL_STYLES.filter((x) => x.startsWith("p5"));   // the designer's choice (beside the rule)
+// a sketch glyph's cell style ("sketch:<name>", web/fm1sketch.js): packed as core.h ENG_C_SKETCH (the preview's blank
+// glyph box, the page draws the sketch); never built
+export const SKETCH_STYLE = CELL_STYLES.length;
+export const sketchUnbuilt = (name) => `not buildable yet: a sketch glyph (${name}); port it into the firmware to build`;
 
 // ------------------------------------------------------------- parameters ---
 const cap = (s) => (s ? s[0] + s.slice(1).toLowerCase() : "");
@@ -416,7 +421,11 @@ export function validateDesign(d, cat, opts = {}) {
             if (!pidx.has(c.param)) { err(`${at} lane ${li + 1} knob ${ci + 1}: no parameter "${c.param}"`); good = false; }
             else use(c.param, at);
             if (c.label !== undefined && c.label !== null && typeof c.label !== "string") err(`${at} lane ${li + 1} knob ${ci + 1}: a label is a text`);
-            if (c.style !== undefined && c.style !== null && !CELL_STYLES.includes(c.style)) err(`${at} lane ${li + 1} knob ${ci + 1}: style "${c.style}" (${CELL_STYLES.join(", ")})`);
+            if (isSketchStyle(c.style)) {           // a sketch glyph: the page draws it; the firmware cannot build it
+              const sk = parseSketch(c.style);
+              if (!sk) err(`${at} lane ${li + 1} knob ${ci + 1}: style "${c.style}" (the sketch glyphs: ${SKETCH_NAMES.join(", ")}; a wave -saw -tri -sqr)`);
+              else if (build) err(`${at} lane ${li + 1} knob ${ci + 1}: ${sketchUnbuilt(sk.name)}`);
+            } else if (c.style !== undefined && c.style !== null && !CELL_STYLES.includes(c.style)) err(`${at} lane ${li + 1} knob ${ci + 1}: style "${c.style}" (${CELL_STYLES.join(", ")})`);
           });
         });
         if (build && good && !freeGroup) {
@@ -541,7 +550,8 @@ export function packDesign(d, cat) {
   const colOf = (c) => {
     if (!c || c.fixed) return null;
     const p = params.get(c.param);
-    return p && !p.part ? { src: [p.page, p.col], label: c.label || "", style: Math.max(0, CELL_STYLES.indexOf(c.style || "rule")) } : null;
+    return p && !p.part ? { src: [p.page, p.col], label: c.label || "",
+                            style: parseSketch(c.style) ? SKETCH_STYLE : Math.max(0, CELL_STYLES.indexOf(c.style || "rule")) } : null;
   };
   let pages = [], screens = [], sec = [];
   const mode = inPlace ? "in-place" : "plan";
@@ -768,6 +778,10 @@ export function checkScreen(screen, params, opts = {}) {
     }));
     if (screen.lanes.length > MAX_LANES) add("budget", `${screen.lanes.length} lanes: at most ${MAX_LANES}`);
     if (screen.kind === "edit8" && screen.lanes.length > 2) add("budget", `an edit8 screen shows two lanes`);
+    screen.lanes.forEach((l, li) => l.cells.forEach((c, ci) => {   // a sketch glyph: drawn by the page, not by a build
+      const sk = c && parseSketch(c.style);
+      if (sk) add("sketch", `lane ${li + 1} knob ${ci + 1}: ${sketchUnbuilt(sk.name)}${screen.kind === "edit8" ? "" : " (drawn on edit8 screens only)"}`);
+    }));
     return f;
   }
   const els = screen.elements, { at, twice } = laneMap(screen);
@@ -810,6 +824,20 @@ export function usedTwice(d) {
   }));
   return [...at].filter(([, w]) => w.length > 1).map(([param, where]) => ({ param, where }));
 }
+// the cell of a classic screen at (x, y), screen px (0..240), from the editor's state (lay_state: kind, band, lanes):
+// {lane, k} or null. cr_draw.c's rows: edit8 with a band 124..180 and 184..240 (one lane: 124..224, full size),
+// without 30..130 and 134..234; a stack's N rows share 41..239. Columns 60 px (KNOB 1 .. 4)
+export function cellAt(state, x, y) {
+  if (!state || x < 0 || x >= 240 || y < 0 || y >= 240) return null;
+  const n = Math.max(1, state.lanes | 0), k = Math.floor(x / 60);
+  let lane = -1;
+  if (state.kind === "stack") lane = y >= 41 ? Math.floor((y - 41) / (198 / Math.min(n, 8))) : -1;
+  else if (state.kind === "edit8") {
+    const rows = state.band && state.band !== "none" ? (n === 1 ? [[124, 224]] : [[124, 180], [184, 240]]) : [[30, 130], [134, 234]];
+    lane = rows.findIndex(([a, b]) => y >= a && y < b);
+  }
+  return lane >= 0 && lane < n ? { lane, k } : null;
+}
 // every screen x lane of a design, in order: [{gi, si, lane, lanes, type, group, title, key}]
 export function designTiles(d) {
   const out = [];
@@ -849,6 +877,9 @@ export function designSession(m, cat, design, preset = 1) {
     // why the unit cannot show this screen as designed (today's or another is shown, or the generator would refuse
     // it: validateDesign's build rules, tools/gen_layout.py's words), else null
     unbuildable(gi = at.gi, si = at.si) {
+      const sc = (design.groups[gi] || { screens: [] }).screens[si], sk = sc && sc.type === "classic" &&
+        sc.lanes.flatMap((l) => l.cells).map((c) => c && parseSketch(c.style)).find((x) => x);
+      if (sk) return `${design.groups[gi].name} screen ${si + 1}: ${sketchUnbuilt(sk.name)}`;   // (first: the badge says so)
       const u = pack && pack.unbuildable.find((x) => x.gi === gi && x.si === si);
       if (u) return u.why;
       if (!reasons) reasons = validateDesign(design, cat, { build: true }).errors;
@@ -898,6 +929,15 @@ export function designSession(m, cat, design, preset = 1) {
     render() {
       const s = scr(), rgba = m.render(), st = m.state();
       if (shown(at.gi, at.si) && st.lane !== at.lane && st.lane < Math.max(1, s.lanes.length)) at.lane = st.lane;
+      if (s.type === "classic" && shown(at.gi, at.si) && st.kind === "edit8") {   // the sketch glyphs in their boxes
+        const cells = [];
+        s.lanes.slice(0, 2).forEach((l, row) => l.cells.forEach((c, k) => {
+          if (!c || !parseSketch(c.style)) return;
+          const p = params.get(c.param);
+          cells.push({ row, k, style: c.style, names: p && p.names && p.names.length >= 2 ? p.names.slice(0, 2) : null });
+        }));
+        if (cells.length) drawSketches(rgba, st, cells);
+      }
       return { rgba, lint: m.lint(), checks: checkScreen(s, params, { measure: (t, px, b) => m.textW(t, px, b) }), free: s.type === "free",
                unbuildable: self.unbuildable(), state: st };
     },

@@ -27,6 +27,7 @@ import zlib from "node:zlib";
 import { execFileSync, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import * as L from "./fm1layout.js";
+import * as SKM from "./fm1sketch.js";
 import { staleLayoutFiles } from "../tools/layout/dump_catalogs.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -309,6 +310,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     "an unknown style": (d) => { d.style = "x"; },
     "an unknown cell style": (d) => { d.groups[1].screens[0].lanes[0].cells[0].style = "glow"; },
     "two LEDs on a 0..127 parameter": (d) => { Object.assign(d.groups[0].screens[0].elements.find((e) => e.type === "led"), { leds: 2, glyph: null, param: "OSC A:FREQ" }); },
+    "an unknown sketch glyph": (d) => { d.groups[1].screens[0].lanes[0].cells[0].style = "sketch:k9"; },
   };
   const missed = Object.entries(broken).filter(([, f]) => { const d = free(); f(d); return L.validateDesign(d, cat).errors.length === 0; }).map(([k]) => k);
   ok(!missed.length, `validateDesign catches each of ${Object.keys(broken).length} broken designs` + (missed.length ? ` (missed: ${missed.join(", ")})` : ""));
@@ -398,7 +400,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     ok(at(fa, 90, 206) === RED && at(fb, 90, 206) !== RED && sa.cells[1].value === "On" && sb.cells[1].value === "Off",
        `a p5led cell (FILT 1 row B, KNOB 2 Aftertouch): its LED red when on (${at(fa, 90, 206)}), not when off (${at(fb, 90, 206)}); the value "On" / "Off" on the row`);
     m.unload();
-    // the mock-up for the owner: design/layouts/designs/p5-rows.json, nine edit8 screens of the p5 cell styles
+    // the owner's design: design/layouts/designs/p5-rows.json, eleven edit8 screens of the p5 cell styles (one lane under a curve)
     const rows = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-rows.json"), "utf8"));
     const vr = L.validateDesign(rows, cat), rs = L.designSession(m, cat, rows, 1);
     rs.reload();
@@ -421,13 +423,71 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     const ragain = L.designTiles(rows).map((t) => { rs.open(t.gi, t.si, t.lane); return rs.render().rgba; });
     rs.open(0, 0, 0);
     const o1 = rs.render(), saw = pidx.get("OSC A:SAW");
-    ok(!vr.errors.length && rows.groups.slice(0, 5).every((g) => g.screens.every((x) => x.type === "classic" && x.kind === "edit8" && x.lanes.length === 2)) &&
-       rows.groups.slice(0, 5).reduce((n, g) => n + g.screens.length, 0) === 9 && !rbad.length && styled === 18 &&
+    const eng5 = rows.groups.slice(0, 5), scr5 = eng5.flatMap((g) => g.screens);
+    ok(!vr.errors.length && scr5.every((x) => x.type === "classic" && x.kind === "edit8") && scr5.length === 11 &&
+       scr5.filter((x) => x.band && x.band !== "none").every((x) => x.lanes.length === 1) && !rbad.length && styled === 17 &&
        ragain.every((a, i) => L.diffCount(a, rshots[i]) === 0),
-       `the p5 rows mock-up (p5-rows.json): valid, 9 edit8 screens of two rows in OSC .. MOD, ${rshots.length} screens x lanes drawn by the editor, ` +
+       `the p5 rows design (p5-rows.json): valid, 11 edit8 screens in OSC .. MOD (one lane under each curve), ${rshots.length} screens x lanes drawn by the editor, ` +
        `lint clean, deterministic, the glyphs on all ${styled} engine rows (against the same rows unstyled)` + (rbad.length ? ` (${rbad.slice(0, 6).join("; ")})` : ""));
     ok(m.pget(saw.page, saw.col) === 1 && at(o1.rgba, 90, 71) === RED && o1.state.page === "OSC A",
-       `the mock-up's OSC A row A: Saw on, its LED red (${at(o1.rgba, 90, 71)}) under the saw icon`);
+       `the design's OSC A row A: Saw on, its LED red (${at(o1.rgba, 90, 71)}) under the saw icon`);
+    // the glyphs' pixels (cr_draw.c cr_p5glyph, the round-5 mock-up): the knob's nearest tick white (the annulus of the
+    // ticks, r 13 .. 19 round (30, 68)), none on the dim row; a wave icon white exactly when its button is on
+    const WHITE = c565(246, 243, 234);
+    const count = (rgba, x0, y0, x1, y1, f) => { let n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (f(x, y) && at(rgba, x, y) === WHITE) n++; return n; };
+    const ring = (cx, cy) => (x, y) => { const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy); return d > 13 && d < 19.5; };
+    const tickA = count(o1.rgba, 8, 46, 52, 90, ring(30, 68)), tickB = count(o1.rgba, 8, 150, 52, 194, ring(30, 172));
+    const pulse = pidx.get("OSC A:PULSE"), pon = m.pget(pulse.page, pulse.col) === 1;
+    const icon = (k) => count(o1.rgba, k * 60 + 22, 52, k * 60 + 39, 62, () => true);
+    ok(tickA > 0 && tickB === 0 && icon(1) > 0 && (icon(2) > 0) === pon,
+       `the knob's nearest tick white on the active row (${tickA} px), none on the dim row; the saw's icon white when on (${icon(1)} px), the pulse's ${pon ? "on" : "off"} (${icon(2)} px)`);
+    // one lane under a curve: the full-size row at 124 (the label's top 94 px under the no-band row's, the value 17 px bold to the baseline 206)
+    const fg = rows.groups.findIndex((g) => g.name === "FILT");
+    rs.open(fg, 0, 0);
+    const fr = rs.render(), lab = fr.lint.texts.find((x) => x.text === "Cutoff"), num = fr.state.cells[0].value;
+    const val = fr.lint.texts.find((x) => x.text === num), olab = o1.lint.texts.find((x) => x.text === "Freq");
+    ok(fr.state.band === "filter" && fr.state.lanes === 1 && lab && val && olab && lab.box[1] - 94 === olab.box[1] && val.box[3] > 190 && val.box[3] <= 210,
+       `FILTER (one lane under the curve): the row at full size (the label's box ${lab && lab.box.join(",")}, Freq's at 30 ${olab && olab.box.join(",")}; the value to ${val && val.box[3]})`);
+    // the cell under a click on the picture (the designer's click-to-select, web/layout.html)
+    const ca = (st, x, y) => JSON.stringify(L.cellAt(st, x, y));
+    ok(ca(o1.state, 150, 180) === '{"lane":1,"k":2}' && ca(o1.state, 10, 40) === '{"lane":0,"k":0}' && ca(o1.state, 10, 20) === "null" &&
+       ca(fr.state, 200, 210) === '{"lane":0,"k":3}' && ca(fr.state, 200, 100) === "null" && ca(fr.state, 10, 230) === "null" &&
+       ca({ kind: "edit8", band: "env", lanes: 2 }, 70, 200) === '{"lane":1,"k":1}',
+       "cellAt: a click on the picture finds the cell by the screen's rows (no band 30 / 134, one lane under a band 124 .. 224, two 124 / 184)");
+    // sketch glyphs (3y95, web/fm1sketch.js): "sketch:<name>" on a classic cell, drawn by the page in the glyph box
+    {
+      const withStyle = (st, k = 0) => { const d = JSON.parse(JSON.stringify(rows)); d.groups[0].screens[0].lanes[0].cells[k].style = st; return d; };
+      const shot = (d) => { const x = L.designSession(m, cat, d, 1); x.reload(); x.open(0, 0, 0); return x.render(); };
+      const sk = withStyle("sketch:k6d"), vs = L.validateDesign(sk, cat), vb = L.validateDesign(sk, cat, { build: true });
+      const r1 = shot(sk), r2 = shot(sk), rf = shot(withStyle("p5knob"));
+      const clip = { x0: 0, y0: 49, x1: 60, y1: 98 }, inClip = (p) => { const x = p % 240, y = (p / 240) | 0; return x >= clip.x0 && x < clip.x1 && y >= clip.y0 && y < clip.y1; };
+      let inside = 0, outside = 0;
+      for (let p = 0; p < 240 * 240; p++) {
+        const a = p * 4, d = r1.rgba[a] !== rf.rgba[a] || r1.rgba[a + 1] !== rf.rgba[a + 1] || r1.rgba[a + 2] !== rf.rgba[a + 2];
+        if (d) { if (inClip(p)) inside++; else outside++; }
+      }
+      const texts = (r) => JSON.stringify(r.lint.texts.filter((t) => t.box[0] < 60 && t.box[1] >= 30 && t.box[1] < 130).map((t) => [t.text, t.box]));
+      ok(!vs.errors.length && vb.errors.includes("OSC screen 1 lane 1 knob 1: not buildable yet: a sketch glyph (k6d); port it into the firmware to build") &&
+         L.diffCount(r1.rgba, r2.rgba) === 0 && inside > 50 && outside === 0 && texts(r1) === texts(rf) &&
+         r1.checks.some((c) => c.kind === "sketch" && c.text === "lane 1 knob 1: not buildable yet: a sketch glyph (k6d); port it into the firmware to build") &&
+         /a sketch glyph \(k6d\)/.test(r1.unbuildable || "") && Array.isArray(r1.state.rows) && r1.state.rows.length === 2 && r1.state.ink && r1.state.ink.mid,
+         `sketch:k6d on OSC A KNOB 1: valid, refused by the build in the generator's words, drawn the same twice; against p5knob ${inside} px differ in the cell's ` +
+         `glyph area, ${outside} outside it (the label, value and bars the firmware's); the lint's "sketch" finding and the badge say so`);
+      const bad = [];
+      for (const n of SKM.SKETCH_NAMES) {           // every sketch draws in its box, on a knob's cell and on an LED's (Saw)
+        for (const k of [0, 1]) {
+          const r = shot(withStyle(`sketch:${n}${SKM.SKETCHES[n].kind === "led" && k ? "-saw" : ""}`, k)), bg = r.state.ink.bg;
+          let ink = 0;
+          for (let y = 30 + 26; y < 30 + 60; y++) for (let x = k * 60; x < k * 60 + 60; x++) { const a = (y * 240 + x) * 4; if (r.rgba[a] !== bg[0] || r.rgba[a + 1] !== bg[1] || r.rgba[a + 2] !== bg[2]) ink++; }
+          if (ink < 15 || r.lint.findings.some((f) => f.kind !== "ellipsis")) bad.push(`${n} on KNOB ${k + 1}: ${ink} px`);
+        }
+      }
+      ok(!bad.length, `all ${SKM.SKETCH_NAMES.length} sketches (${SKM.SKETCH_NAMES.join(" ")}) draw in the glyph box on a knob's cell and an LED's, lint clean` + (bad.length ? ` (${bad.join("; ")})` : ""));
+      const pk = L.packDesign(sk, cat);
+      ok(L.validateDesign(withStyle("sketch:k6d-zz"), cat).errors.some((e) => e.includes('style "sketch:k6d-zz" (the sketch glyphs: k1, k2')) && pk.bytes.length > 0 &&
+         L.validateDesign(withStyle("sketch:b1a-tri", 1), cat).errors.length === 0,
+         "an unknown sketch (or wave) refused with the list; an LED's sketch with its wave accepted");
+    }
     m.unload();
   }
 
@@ -770,8 +830,10 @@ if (!args.has("--no-page") && fs.existsSync("/Applications/Chromium.app/Contents
                   "KNOB 1's + turns a dial on the free screen", "a scripted drag from the element strip adds a knob on the 4 px grid (one undo step)",
                   "Export JSON equals the model (and validates)", "the contact sheet has today's tiles and the design's",
                   "the shipped p5-panel opens in the p5 style on the firmware's free screen (CR_K_FREE), buildable today",
-                  "copy an element, paste it on another screen: the export has it with a new id, selected, in no lane (one undo step)"];
-    ok(blue(sq(8)), "the Design self-test ran to the end (the end mark is there)");
+                  "copy an element, paste it on another screen: the export has it with a new id, selected, in no lane (one undo step)",
+                  "a click on a classic screen's picture selects that cell's slot (p5-rows: OSC A row B, FILTER's one full-size row)",
+                  "a sketch glyph on a slot (sketch:k1): the canvas changes, the badge, the lint and the inspector's note say so"];
+    ok(blue(sq(10)), "the Design self-test ran to the end (the end mark is there)");
     what.forEach((w, i) => ok(green(sq(i)), `page: ${w}`));
   }
 }

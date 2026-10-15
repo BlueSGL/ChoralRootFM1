@@ -44,6 +44,11 @@ CLASSIC_KINDS = ["edit8", "stack"]
 # Prophet-5's controls (the p5 cell glyphs, cr_screen.h CR_G_P5*)
 CELL_STYLES = ["rule", "big", "ratio", "harm", "detune", "num", "val", "text", "knob", "bar", "waveph", "p5knob", "p5led",
                "p5led-saw", "p5led-tri", "p5led-sqr", "p5led2", "p5switch"]
+# the sketch glyphs (web/fm1sketch.js SKETCH_NAMES, in its order): a cell style "sketch:<name>" (+ "-saw" "-tri" "-sqr"),
+# drawn by the layout tool's page only: valid in a design, never built (docs/LAYOUT-TOOL.md "Sketch glyphs")
+SKETCH_NAMES = ["k1", "k2", "k3", "k4", "k5", "k6", "k6a", "k6b", "k6c", "k6d", "k6e", "b1", "b2", "b3", "b4", "b5", "b1a",
+                "b1b", "b1c", "b1d", "s1", "s2", "s3", "s4", "s5", "s6", "r1", "r2", "r3"]
+SKETCH_RE = re.compile(r"^sketch:([a-z0-9]+)(?:-(saw|tri|sqr))?$")
 FREE_GROUPS = {"OSC", "FILT", "ENV", "LFO", "MOD"}          # the engine's groups (0 .. 4); FX and MIX: the platform's
 KNOB_P5 = (28, 44)                                          # the p5 knob's dial (KNOB_SIZES.p5)
 
@@ -220,8 +225,17 @@ def classic(s, at, gname, si, params, today, built, err, used):
                 used.setdefault(c["param"], []).append(at)
             if c.get("label") is not None and not isinstance(c["label"], str):
                 err(f"{at} lane {li + 1} knob {ci + 1}: a label is a text")
-            if c.get("style") is not None and c["style"] not in CELL_STYLES:
-                err(f'{at} lane {li + 1} knob {ci + 1}: style "{c["style"]}" ({", ".join(CELL_STYLES)})')
+            st = c.get("style")
+            if isinstance(st, str) and st.startswith("sketch:"):   # a sketch glyph: the page draws it, no build has it
+                m = SKETCH_RE.match(st)
+                if not m or m.group(1) not in SKETCH_NAMES:
+                    err(f'{at} lane {li + 1} knob {ci + 1}: style "{st}" (the sketch glyphs: {", ".join(SKETCH_NAMES)}; '
+                        f'a wave -saw -tri -sqr)')
+                elif built:
+                    err(f"{at} lane {li + 1} knob {ci + 1}: not buildable yet: a sketch glyph ({m.group(1)}); "
+                        f"port it into the firmware to build")
+            elif st is not None and st not in CELL_STYLES:
+                err(f'{at} lane {li + 1} knob {ci + 1}: style "{st}" ({", ".join(CELL_STYLES)})')
     if built and ok and gname not in FREE_GROUPS:
         t = today.get(gname, [])
         mine = [[(c or {}).get("param") if not (c or {}).get("label") else "label" for c in lane["cells"]] for lane in lanes]

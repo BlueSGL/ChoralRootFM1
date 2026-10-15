@@ -686,7 +686,7 @@ function dScreen() {
   ul.textContent = "";
   const li = (cls, head, text) => ul.append(el("li", { class: cls }, el("b", { text: head + " " }), text));
   for (const f of r.lint.findings) li(f.kind, f.kind, `"${f.text}" [${f.box.join(", ")}]` + (f.other ? ` / "${f.other.text}"` : ""));
-  for (const c of r.checks) li(c.kind === "title" ? "ellipsis" : c.kind === "order" ? "rule" : "", c.kind, c.text);
+  for (const c of r.checks) li(c.kind === "title" ? "ellipsis" : c.kind === "order" || c.kind === "sketch" ? "rule" : "", c.kind, c.text);
   for (const u of usedTwice(ds.design)) li("rule", "used twice", `${u.param}: ${u.where.join(", ")}`);
   if (r.unbuildable) li("rule", "not buildable yet", r.unbuildable);
   for (const n of ds.session.pack.notes) li("rule", "note", n);
@@ -768,7 +768,7 @@ function dLanes() {
         const cur = ds.cell && ds.cell.lane === li && ds.cell.k === k;
         row.append(el("div", { class: `slot${c ? "" : " empty"}${cur ? " cur" : ""}`, style: `--k:${kcol(k)}`, "data-slot": `${li}.${k}`,
                                title: "drop a parameter here; click to select (the inspector)",
-                               onclick: () => { ds.cell = { lane: li, k }; ds.sel.clear(); if (li !== a.lane) dGo(ds.gi, ds.si, li); ds.cell = { lane: li, k }; dRender(); } },
+                               onclick: () => classicSlot(li, k) },
           c ? (c.label || (p ? p.label : c.text || "?")) : "—", el("small", { text: c ? (c.param || c.fixed) + (c.style ? ` · ${c.style}` : "") : `KNOB ${k + 1}` })));
       });
       row.append(el("div", { class: "ops" },
@@ -798,6 +798,13 @@ function dLanes() {
   if (s.lanes.length < MAX_LANES)
     host.append(el("div", { class: "row" }, el("button", { text: "+ lane", onclick: () => commit((d) => d.groups[ds.gi].screens[ds.si].lanes.push([null, null, null, null])) }),
       el("span", { class: "small", text: `${s.elements.length} of ${MAX_ELEMENTS} elements, ${s.lanes.length} of ${MAX_LANES} lanes` })));
+}
+// a classic slot selected (the inspector): its lane shown; from the slot under the screen or a click on the picture
+function classicSlot(li, k) {
+  ds.sel.clear();
+  if (li !== ds.session.at.lane) dGo(ds.gi, ds.si, li);
+  ds.cell = { lane: li, k };
+  dRender();
 }
 function slotClick(li, k) {
   const s = curScreen(), id = s.lanes[li][k];
@@ -840,11 +847,21 @@ function dInspector() {
       if (c && c.param) {                          // the cell's look: the editor's rule, or a Prophet-5 control in the cell
         const x = el("select", { "aria-label": "the cell's style", title: "how the cell draws its parameter: the editor's rule, or a Prophet-5 control (knob, LED button with its wave icon, two LEDs, lever) in the cell" });
         x.append(el("option", { value: "", text: "the editor's rule" }));
-        for (const o of P5_CELL_STYLES) x.append(el("option", { value: o, text: o }));
-        if (c.style && !P5_CELL_STYLES.includes(c.style)) x.append(el("option", { value: c.style, text: c.style }));
+        const fw = el("optgroup", { label: "firmware (p5)" }), sk = el("optgroup", { label: "sketch (the page draws it; not buildable)" });
+        for (const o of P5_CELL_STYLES) fw.append(el("option", { value: o, text: o }));
+        for (const n of SKETCH_NAMES) {             // the sketch glyphs (web/fm1sketch.js): an LED's with each wave too
+          const g = SKETCHES[n];
+          sk.append(el("option", { value: `sketch:${n}`, text: `sketch:${n} · ${g.kind}`, title: g.note }));
+          if (g.kind === "led") for (const w of SKETCH_WAVES) sk.append(el("option", { value: `sketch:${n}-${w}`, text: `sketch:${n}-${w}`, title: g.note }));
+        }
+        x.append(fw, sk);
+        if (c.style && !P5_CELL_STYLES.includes(c.style) && !parseSketch(c.style)) x.append(el("option", { value: c.style, text: c.style }));
         x.value = c.style || "";
         x.addEventListener("change", () => set((y) => { const cc = y.lanes[lane].cells[k]; if (x.value) cc.style = x.value; else delete cc.style; }));
         host.append(field("Style", x));
+        const skc = parseSketch(c.style);
+        if (skc) host.append(el("p", { class: "small sketch-note", text: `sketch ${skc.name} (round ${SKETCHES[skc.name].round}): ${SKETCHES[skc.name].note} ` +
+                                       "Drawn by this page in the cell's glyph box; the unit cannot show it until it is ported into the firmware." }));
       }
       if (p) host.append(el("p", { class: "small", text: `${p.id}: ${p.min} .. ${p.max} (${p.fmt}); today on ${p.where || "no screen"}` }));
     } else host.append(el("p", { class: "small", text: "Click a knob slot in the lanes to bind it or give it a label; drag a parameter onto a slot." }));
@@ -992,6 +1009,11 @@ document.addEventListener("pointerup", (ev) => {
 });
 $("d-overlay").addEventListener("pointerdown", (ev) => {
   const rs = ev.target.closest("[data-rs]"), t = ev.target.closest("[data-el]"), s = curScreen();
+  if (s && s.type === "classic") {   // a click on a classic screen's picture: that cell's slot (as the slot under it)
+    const b = $("d-screen").getBoundingClientRect(), c = cellAt(ds.last && ds.last.state, (ev.clientX - b.left) / SCALE(), (ev.clientY - b.top) / SCALE());
+    if (c && c.lane < s.lanes.length) classicSlot(c.lane, c.k);
+    return;
+  }
   if (!s || s.type !== "free") return;
   if (!t) { ds.sel.clear(); dRender(); return; }
   const id = t.dataset.el;
@@ -1255,6 +1277,37 @@ async function selftestDesign() {
     const ex = JSON.parse(exportText()).groups[ds.gi].screens[ds.si].elements, got = ex.find((e) => !ids0.has(e.id));
     res.push(!!got && got.param === src.param && got.type === "knob" && got.id !== src.id && ds.undo.length === u0 + 1 &&
              ds.sel.has(got.id) && !curScreen().lanes.some((l) => l.includes(got.id)));
+  }
+  {                                                                                              // 9: click a cell of a classic screen
+    const kr = Object.keys(shipped).find((x) => /p5-rows/.test(x)), ovr = () => $("d-overlay").getBoundingClientRect();
+    const click = (x, y) => { const b = ovr(); $("d-overlay").dispatchEvent(new PointerEvent("pointerdown", at(b.left + x * b.width / SCREEN, b.top + y * b.height / SCREEN))); };
+    let good = !!kr && dOpen(JSON.parse(JSON.stringify(shipped[kr])), "the shipped design");
+    if (good) {
+      dGo(0, 0, 0);                                    // OSC A: two lanes, no band: row B (134..234), KNOB 3
+      click(150, 180);
+      good = !!ds.cell && ds.cell.lane === 1 && ds.cell.k === 2 && ds.session.at.lane === 1 && !!document.querySelector('[data-slot="1.2"].cur');
+      const fi = ds.design.groups.findIndex((g) => g.name === "FILT");
+      dGo(fi, 0, 0);                                   // FILTER: one lane under the band, full size (124..224), KNOB 4
+      click(200, 210);
+      good = good && ds.last.state.band !== "none" && !!ds.cell && ds.cell.lane === 0 && ds.cell.k === 3;
+      click(100, 60);                                  // the band: no cell
+      good = good && ds.cell.k === 3;
+    }
+    res.push(good);
+  }
+  {                                                                                              // 10: a sketch glyph on a slot
+    const kr = Object.keys(shipped).find((x) => /p5-rows/.test(x));
+    let good = !!kr && dOpen(JSON.parse(JSON.stringify(shipped[kr])), "the shipped design");
+    if (good) {
+      dGo(0, 0, 0);                                    // OSC A, KNOB 1 (Freq, p5knob): the firmware's K6d, then the sketch K1
+      const a = px();
+      ds.cell = { lane: 0, k: 0 };
+      commit((d) => { d.groups[0].screens[0].lanes[0].cells[0].style = "sketch:k1"; });
+      const b = px();
+      good = diffCount(a, b) > 0 && $("d-build").textContent.includes("not buildable") && /sketch glyph \(k1\)/.test($("d-build").title) &&
+             !!document.querySelector(".sketch-note") && [...$("d-lint").querySelectorAll("li")].some((li) => /a sketch glyph \(k1\)/.test(li.textContent));
+    }
+    res.push(good);
   }
   const host = $("selftest");
   host.hidden = false;

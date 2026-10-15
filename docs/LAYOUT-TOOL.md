@@ -88,7 +88,11 @@ exported as a file.
   rebind), selected and in no lane, one undo step (`pasteElements`). The shortcuts do nothing while typing. Each element in a lane wears its "lane·knob" tag in the knob's colour.
 - **Lanes**: four coloured slots a lane (KNOB 1..4); SELECT moves between lanes. On a free screen select an element,
   then click a slot (it leaves any other slot); on a classic screen drag a parameter onto a slot, or click the slot
-  and pick it in the inspector. Lanes can be added (up to 8), moved up, deleted; a classic lane has its title.
+  and pick it in the inspector. **Click a cell on a classic screen's picture** (3y94) to select its slot, the same as
+  clicking the slot under the screen (its lane shown): columns of 60 px, the rows by the screen's geometry as the
+  editor draws it (`cellAt` in fm1layout.js, from `lay_state`'s kind, band and lanes: with a band two lanes at
+  124–180 / 184–240, one lane 124–224; without a band 30–130 / 134–234; a stack's rows share 41–239); a click on the
+  title line or the band selects nothing. Lanes can be added (up to 8), moved up, deleted; a classic lane has its title.
 - **Right**: the inspector (a free element's type, parameter, label or text, x y w h, switch positions, led glyph,
   glyph, band, dial size, label size and alignment, colour: `auto` = the editor's lane colours, or a palette token;
   a classic screen's title, kind, band, and the selected slot's parameter and label) and the **parameter palette**:
@@ -187,7 +191,8 @@ layouts). It binds parameters by **stable id**: `"<page title>:<short>"` for an 
          {"title": "FILTER", "cells": [
            {"param": "FILTER:RES"},
            {"param": "FILTER:CUT", "label": "Bright"},       a label of the design's own (else the editor's)
-           {"param": "FILTER:FENV", "style": "p5knob"},      a look of its own ("Cell styles", below; else the editor's)
+           {"param": "FILTER:FENV", "style": "p5knob"},      a look of its own ("Cell styles", below; else the editor's;
+                                                             "sketch:<name>": a sketch glyph, "Sketch glyphs", below)
            {"param": "FILTER:FENV"}, {"param": "FILTER:KTRK"}]},
          ..]}]},
     {"group": 0, "name": "OSC", "screens": [
@@ -304,16 +309,18 @@ the page layouts." So the tool, not the unit, has it first:
 A classic cell may carry `"style"`: how the editor draws its parameter (core.h `ENG_C_*`, the names the catalog's cell
 `style` field uses): `rule` (the editor's own choice, the default), `big`, `ratio`, `harm`, `detune`, `num`, `val`,
 `text`, `knob`, `bar`, `waveph` (FM TONE's), and the Prophet-5's controls drawn in the cell's middle, sized to its
-glyph box (34 px high without a band, 22 under one; docs/EDITOR.md §9 "A cell"), the label on top, the value on the row
-under it ("64", "On", "Half", "1/2"), the row bars and the hot block the editor's as on every engine:
+glyph box (34 px high without a band or with one lane under a band, 22 with two lanes under a band; docs/EDITOR.md §9
+"A cell"), the label on top, the value on the row under it ("64", "On", "Half", "1/2"), the row bars and the hot block
+the editor's as on every engine. In the 34 px box they are the owner's choice from five rounds of mock-ups (3y94:
+`design/p5-glyph-mockups-5.html`), in the 22 px box the first pass's small ones:
 
 | style | the glyph (cr_screen.h, cr_draw.c `cr_p5glyph`) |
 | --- | --- |
-| `p5knob` | `CR_G_P5KNOB`: the ticked dial (11 ticks over 270 degrees, the dark face, its rim, a long pointer at the value; bipolar: tick 5 lit), its tick ring the box's height (40 px; 26 under a band); no value inside |
-| `p5led` | `CR_G_P5LED`: the LED button, a 26 px cap (its black window, the red LED lit when on, a dim dot off); under a band the cap alone, 16 px |
-| `p5led-saw`, `p5led-tri`, `p5led-sqr` | the same with its wave's one-cycle icon (`cr_wave1`, ~10 px) over the cap at the box's top |
-| `p5led2` | `CR_G_P5LED2`: one wide cap, two LEDs (the minimum red, left; the maximum yellow, right), the current one lit; the two value names over them when they fit (not under a band) |
-| `p5switch` | `CR_G_P5SWITCH`: the lever in a slot of three positions, ticks beside it |
+| `p5knob` | `CR_G_P5KNOB` (K6d): eleven grey ticks (the one nearest the value white and 1 px longer: a patch matches a real P5's scale), the rim in the row colour, the face its 40 %, a white pointer; no value inside |
+| `p5led` | `CR_G_P5LED` (B1a): a 22 x 20 cap, the rim in the row colour, the LED window, the red LED with its halo when on, a dark dot off |
+| `p5led-saw`, `p5led-tri`, `p5led-sqr` | the same with its wave's one-cycle icon (2 px, 14 x 8) 4 px over the cap: white when on, grey when off |
+| `p5led2` | `CR_G_P5LED2` (R3): a 30 x 20 cap, two red LEDs, the current value's lit, the two value names (8 px) over them, the current one white |
+| `p5switch` | `CR_G_P5SWITCH` (S5): a 30 x 20 cap, two LEDs counting the position (Off none, Half the left, Full both) |
 
 The designer's inspector has *Style* per slot, beside its parameter and label (the editor's rule or one of the p5
 styles); the slot shows it. `validateDesign` and `tools/gen_layout.py` accept the field and refuse a name not in the
@@ -324,9 +331,10 @@ buildable yet". `packDesign` carries a column's style in the packed form ('L' 3:
 `ce_style_hook` (an edit8 cell of a deep parameter; the p5 styles). The unit's image has the glyphs' code and the
 styles (`ce_cell_p5`) but no engine uses them yet (the size line: docs/HISTORY.md 3y93).
 
-The owner's starting point: **`design/layouts/designs/p5-rows.json`**, a mock-up of P5's editor as the editor's own
-edit8 screens: nine screens of two rows (OSC A, OSC B; FILTER under the filter's curve, ENV 2 · filter under the
-envelope; ENV 1 · amp; LFO, WHEEL; POLYMOD, VOICE), up to four cells a row, each cell's style by its parameter's kind
+The owner's starting point: **`design/layouts/designs/p5-rows.json`**, P5's editor as the editor's own edit8 screens:
+eleven screens (OSC A, OSC B; FILTER under the filter's curve, ENV 2 · filter under the envelope, ENV 2 +; ENV 1 · amp
+under the envelope, ENV 1 +; LFO, WHEEL; POLYMOD, VOICE; a screen under a curve holds one lane, drawn at full size,
+3y94), up to four cells a row, each cell's style by its parameter's kind
 (the 0..127 knobs, VOICES, DETUNE and PRIORITY `p5knob`; the switches `p5led`, the waves' with their icon; REV
 `p5led2`; KEY TRK `p5switch`), the labels the editor's way ("Cutoff", "Env amt", "Src mix" on WHEEL: the LFO's noise
 amount, the wheel-mod source mix), a wave's buttons on one row (the owner: "OSC B SAW, TRI, PULSE must all be on same
@@ -335,6 +343,54 @@ row B), FX and MIX today's. It is a plan (the OSC group has two screens, not tod
 so the preview packs it as one; "not buildable yet" (classic screens in OSC .. MOD), which is right for a mock-up. Its
 contact sheet, every screen x lane through the firmware's editor and renderer: `design/choralroot-fm1-p5-rows-screens.png`
 (`node tools/layout/render_sheet.mjs design/layouts/designs/p5-rows.json design/choralroot-fm1-p5-rows-screens.png`).
+
+### Sketch glyphs (classic screens, 3y95)
+
+The owner: "It doesn't have to stay that way. The designer can get a sketch layer: glyph variants drawn by the page
+itself in the cell's glyph box" — "Yes, lets support this". A **sketch glyph** is a cell glyph drawn by the page, not
+the firmware, so a glyph design can be tried on real pages, with real values, before anyone writes C. The firmware
+still draws the cell (the label, the value, the row bars, the band, the hot block); the page draws only the glyph.
+
+- **In a design**: a classic cell's `"style": "sketch:<name>"`, or for an LED button `"sketch:<name>-saw"`, `-tri`,
+  `-sqr` (its wave). The names are web/fm1sketch.js's registry: the knobs `k1` .. `k6`, `k6a` .. `k6e`; the LED
+  buttons `b1` .. `b5`, `b1a` .. `b1d`; the switches `s1` .. `s6`; two LEDs `r1` .. `r3` — every variation of the
+  owner's glyph mock-ups (`design/p5-glyph-mockups.html`, `-2`, `-3`, `-5`), each with its note; `k6d`, `b1a`, `s5` and
+  `r3` as chosen (the firmware's `p5knob`, `p5led`, `p5switch`, `p5led2`). `validateDesign` and `tools/gen_layout.py`
+  accept a known name and refuse another with the list (`style "sketch:k9" (the sketch glyphs: k1, k2, ..; a wave -saw
+  -tri -sqr)`); a build refuses every sketch: "lane n knob k: not buildable yet: a sketch glyph (<name>); port it into
+  the firmware to build" (the same words in both, `tests/gen_layout_test.py`).
+- **In the designer**: the inspector's *Style* per slot has a "sketch" group (each LED sketch also with each wave),
+  and under it the sketch's note. The screen's badge says "design: not buildable yet" with the sketch's reason; the
+  lint lists a "sketch" finding per slot.
+- **How it is drawn**: `packDesign` packs a sketch cell's style as `ENG_C_SKETCH` (core.h, the style after
+  `ENG_C_P5SWITCH`); the preview module (`lay_load`, cr_edit.c's `CR_LAYOUT_PREVIEW` hook) gives the cell the glyph
+  `CR_G_N`, which `cr_cglyph` does not draw: the cell has its label, value, bars and hot block and an empty glyph box.
+  No device build has the style (the image is byte for byte the same). After `lay_render`, `designSession.render`
+  (web/fm1layout.js) draws each sketch into the module's 240 x 240 RGBA at 1x with whole pixels
+  (`drawSketches`), so everything that shows a design screen shows it: the live screen (painted at 2x, no smoothing),
+  the contact sheet and its PNG, the screen's PNG, `tools/layout/render_sheet.mjs`. The sketch's state comes from
+  `lay_state` (its new `rows`: every row's cells' fills; `ink`: the palette's tokens and the knob colours as RGB):
+  `pct` the fill (0..1), `on` (pct >= 1/2), `pos` (thirds), the parameter's two value names, the row colour on the
+  active lane (by slot: blue, orange, white, green), the editor's greys on a dim one. The hot cell is the firmware's
+  value block; the sketch does not change.
+- **Where**: the cell's glyph box as cr_draw.c's `cr_p_edit8` has it (`sketchBox`): a full-size row (no band; or one
+  lane under a band at 124–224) its 34 px box at row + 26 (rows 30 / 134, or 124), the sketch centred at box + 12
+  (22 px under the label's baseline, as the mock-ups), drawn only in the cell's column between its label and its value
+  (row + 19 .. row + 68); two lanes under a band (rows 124–180 / 184–240) the 22 px box at row + 15, centred at
+  box + 10, drawn in row + 14 .. row + 40, the chosen four with their small forms. On edit8 screens only (a stack has
+  no glyph box: the lint says so).
+- **Add one**: write its function in web/fm1sketch.js on the pixel helpers (`p.fill`, `p.dot`, `p.ring`, `p.disc`,
+  `p.line`, `p.text`: the mock-ups' own; a 1x 8 px face for names) and a registry line (`skEntry(name, kind, round,
+  note, f)`); add the name to `SKETCH_NAMES` in tools/gen_layout.py (the test compares the lists).
+- **Make it real**: when the owner picks a sketch, port its function into cr_draw.c (as `cr_p5glyph` is K6d, B1a, S5
+  and R3), give it a cell style (core.h `ENG_C_*`, `CELL_STYLES` in both tools), and the designs that use the sketch
+  switch to that style.
+- **Tests**: web/test_layout.mjs 6 (a design with `sketch:k6d` validates, the build refuses it in the generator's
+  words, it draws the same twice, its pixels differ from `p5knob`'s only in the cell's glyph area and its label, value
+  and bars are the firmware's, the lint and the badge say so; all 29 sketches draw in a knob's and an LED's box, lint
+  clean; an unknown name or wave refused), the Design self-test's 10th square (a slot set to `sketch:k1` changes the
+  canvas, the badge, the lint and the note); tests/gen_layout_test.py (the refusal and the build's words, the names
+  equal); tests/cr_draw_test.c (a cell of glyph `CR_G_N`: label and value, its glyph area empty).
 
 **Not buildable yet** means: the design is valid and previewed, but the unit would not show it as designed, or the
 generator would refuse it (its reason, word for word: `validateDesign(d, cat, {build: true})` runs

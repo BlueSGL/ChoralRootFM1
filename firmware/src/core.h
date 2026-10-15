@@ -293,6 +293,10 @@ enum { ENG_C_RULE,               /* the editor's rule (the kind of the value: a 
        ENG_C_P5LED_SAW, ENG_C_P5LED_TRI, ENG_C_P5LED_SQR,   /* .. with its wave's one-cycle icon over the cap */
        ENG_C_P5LED2,             /* the two-LED button (a parameter of two values: the minimum red, the maximum yellow) */
        ENG_C_P5SWITCH };         /* the lever of a three-position enum */
+/* the layout tool's preview only (tools/layout/layout_web.c, cr_edit.c under CR_LAYOUT_PREVIEW): a design's sketch glyph
+ * ("sketch:<name>", web/fm1sketch.js): the cell drawn with its label, value, bars and hot block and nothing in its
+ * glyph box, which the page draws (docs/LAYOUT-TOOL.md "Sketch glyphs"); no build has it */
+#define ENG_C_SKETCH (ENG_C_P5SWITCH + 1)
 typedef struct {
     uint8_t sec;                 /* the group: eng_deep_t.section's index (0 OSC, 1 FILTER, 2 ENV, 3 LFO, 4 MOD) */
     uint8_t pg[2];               /* row A's page, row B's (0xFF: one row) */

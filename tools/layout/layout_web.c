@@ -740,6 +740,37 @@ LAY_EXPORT const char *lay_state(void)
     j_ks("band", s->wide < NELEM(LAY_BAND) ? LAY_BAND[s->wide] : "?");
     j_kb("header", s->header);
     j_ki("hot", s->hot_r ? s->hot_c + 1 : 0);
+    j_key("rows");                                   /* every row's cells' fills (the page's sketch glyphs: their state) */
+    j_open('[');
+    for (r = 0; r < s->n_rows && r < CR_ED_ROWS; r++) {
+        j_open('[');
+        for (c = 0; c < 4u; c++) {
+            j_open('{');
+            j_ki("pct", s->cell[r][c].pct);
+            j_kb("on", s->cell[r][c].flags & CR_CF_ON);
+            j_close('}');
+        }
+        j_close(']');
+    }
+    j_close(']');
+    j_key("ink");                                    /* the palette's tokens and the knob colours, as lay_render's RGBA */
+    j_open('{');
+    {
+        static const char *const TOK[] = {"bg", "surf", "text", "mid", "dim", "line", "white", "red", "yellow", "black",
+                                          "blue", "orange", "green"};
+        const uint16_t v[13] = {T_BG, T_SURF, T_TEXT, T_MID, T_DIM, T_LINE, CR_WHITE, CR_RED, CR_YELLOW,
+                                CR_NAMED[CR_COL_BLACK], CR_NAMED[CR_COL_BLUE], CR_NAMED[CR_COL_ORANGE], CR_NAMED[CR_COL_GREEN]};
+        for (c = 0; c < 13u; c++) {
+            j_key(TOK[c]);
+            j_open('[');
+            j_int((v[c] >> 11) * 255 / 31);
+            j_int(((v[c] >> 5) & 63u) * 255 / 63);
+            j_int((v[c] & 31u) * 255 / 31);
+            j_close(']');
+        }
+    }
+    j_close('}');
+    r = s->active < CR_ED_ROWS ? s->active : 0u;
     j_key("cells");
     j_open('[');
     for (c = 0; c < 4u; c++) {
@@ -980,7 +1011,7 @@ LAY_EXPORT const char *lay_load(const uint8_t *ptr, uint32_t len)
             la->src[i][c][1] = (uint8_t)sc;
             if (ver >= 3u) {
                 uint32_t st = LA_U8();
-                la->style[i][c] = (uint8_t)(st <= ENG_C_P5SWITCH ? st : 0u);
+                la->style[i][c] = (uint8_t)(st <= ENG_C_SKETCH ? st : 0u);   /* (ENG_C_SKETCH: a sketch glyph) */
             }
             LA_STR(la->label[i][c], 16u);
             if (sp != 0xFFu) {

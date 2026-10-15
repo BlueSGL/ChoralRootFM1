@@ -470,6 +470,152 @@ static void free_screens(const char *dir)
     }
 }
 
+/* the P5 cell glyphs (cr_draw.c cr_p5glyph; docs/EDITOR.md section 9): edit8 screens of them, no band (two rows, either
+ * active), one lane under a band (the full-size row at 124), two lanes under a band (the 22 px box): PPMs, the lint,
+ * the goldens (tests/cr_p5cell_golden.txt; CR_P5CELL_GOLDEN=1 writes it); the glyphs' pixels (a lit LED red, the
+ * knob's nearest tick white, a wave white when on, mid on the dim row); the one-lane band row is the no-band row
+ * moved down 94 px (label 12, the 34 px box, value 17), the two-lane one the small rows (124..180, 184..240) */
+static void p5cell_set(cr_cell_t *c, const char *label, uint32_t glyph, uint32_t pct, uint32_t pct2, const char *value)
+{
+    memset(c, 0, sizeof *c);
+    c->flags = CR_CF_ON;
+    snprintf(c->label, sizeof c->label, "%s", label);
+    snprintf(c->value, sizeof c->value, "%s", value);
+    c->glyph = (uint8_t)glyph;
+    c->pct = (uint8_t)pct;
+    c->pct2 = (uint8_t)pct2;
+    if (glyph == CR_G_P5LED2) {                  /* the two value names after the label's NUL */
+        size_t l = strlen(c->label);
+        memcpy(c->label + l + 1, "1/2", 4);
+        memcpy(c->label + l + 5, "3", 2);
+    }
+}
+static void p5cell_screen(cr_screen_t *s, uint32_t wide, uint32_t rows, uint32_t active)
+{
+    cr_screen_clear(s);
+    s->kind = CR_K_EDIT8;
+    s->wide = (uint8_t)wide;
+    s->n_rows = (uint8_t)rows;
+    s->active = (uint8_t)active;
+    s->batt = 255;
+    snprintf(s->title, sizeof s->title, "ITS PROPHET5");
+    snprintf(s->page, sizeof s->page, "%s", wide ? "FILTER" : "OSC A");
+    p5cell_set(&s->cell[0][0], "Freq", CR_G_P5KNOB, 128, 0, "64");
+    p5cell_set(&s->cell[0][1], "Saw", CR_G_P5LED, 255, CR_P5I_SAW, "On");
+    p5cell_set(&s->cell[0][2], "Tri", CR_G_P5LED, 0, CR_P5I_TRI, "Off");
+    p5cell_set(&s->cell[0][3], "Rev", CR_G_P5LED2, 0, 0, "1/2");
+    if (rows > 1u) {
+        p5cell_set(&s->cell[1][0], "Fine", CR_G_P5KNOB, 40, 0, "-12");
+        s->cell[1][0].flags |= CR_CF_BIP;
+        p5cell_set(&s->cell[1][1], "Pulse", CR_G_P5LED, 255, CR_P5I_SQUARE, "On");
+        p5cell_set(&s->cell[1][2], "Key trk", CR_G_P5SWITCH, 128, 0, "Half");
+        p5cell_set(&s->cell[1][3], "Sync", CR_G_P5LED, 0, 0, "Off");
+    }
+}
+static uint16_t p5px(int32_t x, int32_t y) { return swap16(host_screen[y * 240 + x]); }
+static void p5cell_screens(const char *dir)
+{
+    static cr_screen_t s;
+    static uint16_t a[240 * 240];
+    static const struct { const char *slug; uint32_t wide, rows, active; } V[6] = {
+        {"p5cell_full_a", CR_W_NONE, 2, 0}, {"p5cell_full_b", CR_W_NONE, 2, 1}, {"p5cell_band1", CR_W_FILTER, 1, 0},
+        {"p5cell_band1_env", CR_W_ENV, 1, 0}, {"p5cell_band2_a", CR_W_ENV, 2, 0}, {"p5cell_band2_b", CR_W_FILTER, 2, 1}};
+    static struct { char slug[40]; uint32_t h; } gold[16];
+    uint32_t ng = 0, i, k, f0 = nfind, sw[3], same = 0, seen = 0;
+    int write = getenv("CR_P5CELL_GOLDEN") && !strcmp(getenv("CR_P5CELL_GOLDEN"), "1"), y, x, okm = 1;
+    char name[220], ln[128], sl[64];
+    unsigned hv;
+    FILE *gf;
+    for (i = 0; i < 6u; i++) {
+        p5cell_screen(&s, V[i].wide, V[i].rows, V[i].active);
+        render(&s, 0);
+        lint(V[i].slug, &s);
+        write_ppm(dir, V[i].slug);
+        snprintf(gold[ng].slug, sizeof gold[ng].slug, "%s", V[i].slug);
+        gold[ng++].h = screen_hash();
+    }
+    for (k = 0; k < 3u; k++) {                   /* the lever: Off, Half, Full (none, the left, both LEDs) */
+        p5cell_screen(&s, CR_W_NONE, 2, 1);
+        s.cell[1][2].pct = (uint8_t)(k * 255u / 2u);
+        render(&s, 0);
+        sw[k] = (p5px(143, 175) == CR_RED) + (p5px(157, 175) == CR_RED) * 2u;
+        if (k == 1u) continue;                   /* (Half: p5cell_full_b) */
+        snprintf(gold[ng].slug, sizeof gold[ng].slug, "p5cell_switch_%u", k);
+        write_ppm(dir, gold[ng].slug);
+        gold[ng++].h = screen_hash();
+    }
+    p5cell_screen(&s, CR_W_NONE, 2, 0);           /* the glyphs' pixels: row A active at 30, row B dim at 134 */
+    render(&s, 0);
+    snprintf(name, sizeof name, "P5 cells: a lit LED red (%04x), the knob's nearest tick white (%04x), the saw white when on (%04x), "
+             "the dim row's square mid (%04x), the off LED dark (%04x)", p5px(90, 71), p5px(29, 52), p5px(93, 57), p5px(94, 161),
+             p5px(150, 71));
+    check(name, p5px(90, 71) == CR_RED && p5px(89, 70) == CR_RED && p5px(29, 52) == CR_WHITE && p5px(93, 57) == CR_WHITE &&
+                p5px(94, 161) == T_MID && p5px(150, 71) != CR_RED && p5px(149, 71) != CR_RED);
+    snprintf(name, sizeof name, "P5 cells: the lever's LEDs count its position (Off %u, Half %u, Full %u: none, the left, both)", sw[0], sw[1], sw[2]);
+    check(name, sw[0] == 0u && sw[1] == 1u && sw[2] == 3u);
+    {   /* one lane under a band: the no-band screen's row A moved to 124 (label 12, box 34, value 17, bar) */
+        p5cell_screen(&s, CR_W_NONE, 1, 0);
+        render(&s, 0);
+        memcpy(a, host_screen, sizeof a);
+        p5cell_screen(&s, CR_W_FILTER, 1, 0);
+        render(&s, 0);
+        for (y = 124; y < 228 && okm; y++)
+            for (x = 0; x < 240; x++)
+                if (host_screen[y * 240 + x] != a[(y - 94) * 240 + x]) { okm = 0; break; }
+        {
+            int32_t lab = -1, val = -1, lab2 = -1, val2 = -1;
+            for (i = 0; i < nbox; i++) {
+                if (!strcmp(boxes[i].s, "Freq")) lab = boxes[i].y1 - boxes[i].y0;
+                if (!strcmp(boxes[i].s, "64")) val = boxes[i].y1 - boxes[i].y0;
+            }
+            p5cell_screen(&s, CR_W_FILTER, 2, 0);
+            render(&s, 0);
+            for (i = 0; i < nbox; i++) {
+                if (!strcmp(boxes[i].s, "Freq")) lab2 = boxes[i].y0;
+                if (!strcmp(boxes[i].s, "64")) val2 = boxes[i].y1;
+            }
+            snprintf(name, sizeof name, "one lane under a band: rows 124..224 are the no-band row's (label %d px, value %d px of ink); "
+                     "two lanes: the small rows (label at %d, value to %d)", lab, val, lab2, val2);
+            check(name, okm && lab >= 9 && val >= 12 && lab2 >= 124 && lab2 < 130 && val2 > 160 && val2 <= 180);
+        }
+    }
+    {   /* the layout tool's sketch cell (core.h ENG_C_SKETCH: glyph CR_G_N): the label and value, nothing in the box */
+        uint32_t ink = 0;
+        p5cell_screen(&s, CR_W_NONE, 2, 0);
+        s.cell[0][0].glyph = CR_G_N;
+        render(&s, 0);
+        for (y = 30 + 19; y < 30 + 68; y++)
+            for (x = 0; x < 60; x++) ink += swap16(host_screen[y * 240 + x]) != T_BG;
+        for (i = 0, k = 0; i < nbox; i++) k += !strcmp(boxes[i].s, "Freq") || !strcmp(boxes[i].s, "64");
+        snprintf(name, sizeof name, "a sketch cell (glyph CR_G_N): its label and value drawn, its glyph area empty (%u px of ink)", ink);
+        check(name, ink == 0u && k == 2u);
+    }
+    for (i = 0; i < ng; i++)
+        for (k = i + 1u; k < ng; k++)
+            if (gold[i].h == gold[k].h) okm = 0;
+    snprintf(name, sizeof name, "P5 cells: %u pictures (no band, one lane and two under a band, the lever Off and Full), all different, lint clean", ng);
+    check(name, ng == 8u && okm && nfind == f0);
+    if (write && (gf = fopen("tests/cr_p5cell_golden.txt", "w"))) {
+        fprintf(gf, "# tests/cr_draw_test.c p5cell_screens: a hash of each P5 cell-glyph picture (CR_P5CELL_GOLDEN=1 rewrites)\n");
+        for (i = 0; i < ng; i++) fprintf(gf, "%s %08x\n", gold[i].slug, gold[i].h);
+        fclose(gf);
+    }
+    if ((gf = fopen("tests/cr_p5cell_golden.txt", "r"))) {
+        while (fgets(ln, sizeof ln, gf))
+            if (sscanf(ln, "%63s %x", sl, &hv) == 2 && sl[0] != '#') {
+                seen++;
+                for (i = 0; i < ng; i++)
+                    if (!strcmp(gold[i].slug, sl)) {
+                        same += gold[i].h == hv;
+                        if (gold[i].h != hv) fprintf(rep, "golden %s: %08x, not %08x\n", sl, gold[i].h, hv);
+                    }
+            }
+        fclose(gf);
+    }
+    snprintf(name, sizeof name, "P5 cells: the goldens (tests/cr_p5cell_golden.txt): %u of %u pictures unchanged", same, ng);
+    check(name, seen == ng && same == ng);
+}
+
 int main(int argc, char **argv)
 {
     static uint16_t a[240 * 240], b[240 * 240];
@@ -2702,6 +2848,7 @@ int main(int argc, char **argv)
     }
 
     free_screens(dir);
+    p5cell_screens(dir);
 
     fprintf(rep, "\n%u lint findings, %u ellipsised texts\n", nfind, nell);
     fclose(rep);

@@ -123,10 +123,21 @@ BROKEN = {   # name: (how, the reason's words)
     "an unknown style": (set_(["style"], "x"), r'style "x"'),
     "an unknown cell style": (lambda d: d["groups"][1]["screens"][0]["lanes"][0]["cells"][0].update(style="glow"), r'style "glow"'),
     "two LEDs on a 0..127 parameter": (two_leds, r"two LEDs show a parameter of two values"),
+    "an unknown sketch glyph": (lambda d: d["groups"][1]["screens"][0]["lanes"][0]["cells"][0].update(style="sketch:k9"),
+                                r'style "sketch:k9" \(the sketch glyphs: k1, '),
 }
-ok(len(BROKEN) == 22, f"{len(BROKEN)} broken designs, as web/test_layout.mjs 6")
+ok(len(BROKEN) == 23, f"{len(BROKEN)} broken designs, as web/test_layout.mjs 6")
 rows = json.loads((ROOT / "design/layouts/designs/p5-rows.json").read_text(encoding="utf-8"))   # (3y93: the p5 cell styles)
 designs = {"p5-panel": panel, "p5-osc-panel": osc, "p5-rows": rows}
+sketch = copy.deepcopy(osc)                                  # (3y95: a sketch glyph, the page's: valid, never built)
+sketch["groups"][1]["screens"][0]["lanes"][0]["cells"][0]["style"] = "sketch:k6d"
+sketch["groups"][1]["screens"][0]["lanes"][1]["cells"][1]["style"] = "sketch:b1a-saw"
+designs["sketch: k6d and b1a-saw on FILT"] = sketch
+sk_built = G.validate(copy.deepcopy(sketch), cat, built=True)
+ok(not G.validate(copy.deepcopy(sketch), cat, built=False) and
+   "FILT screen 1 lane 1 knob 1: not buildable yet: a sketch glyph (k6d); port it into the firmware to build" in sk_built and
+   "FILT screen 1 lane 2 knob 2: not buildable yet: a sketch glyph (b1a); port it into the firmware to build" in sk_built,
+   f"a design with sketch glyphs: valid; the generator refuses to build it, naming each ({[e for e in sk_built if 'sketch' in e]})")
 for name, (how, why) in BROKEN.items():
     d = copy.deepcopy(osc)
     how(d)
@@ -218,6 +229,7 @@ else:
         (Path(tmp) / "designs.json").write_text(json.dumps(designs))
         js = (f'import * as L from {json.dumps((ROOT / "web/fm1layout.js").as_uri())};\n'
               'import fs from "fs";\n'
+              f'import {{ SKETCH_NAMES }} from {json.dumps((ROOT / "web/fm1sketch.js").as_uri())};\n'
               f'const cat = JSON.parse(fs.readFileSync({json.dumps(str(ROOT / "design/layouts/p5.json"))}, "utf8"));\n'
               f'const ds = JSON.parse(fs.readFileSync({json.dumps(str(Path(tmp) / "designs.json"))}, "utf8"));\n'
               'const out = {};\n'
@@ -226,6 +238,7 @@ else:
               'L.checkScreen(s, pidx).filter((c) => c.kind === "order").map((c) => `${g.name} screen ${si + 1}: ${c.text}`) : []));\n'
               'for (const [k, d] of Object.entries(ds)) out[k] = [L.validateDesign(d, cat).errors, L.validateDesign(d, cat, { build: true }).errors,\n'
               '  L.validateDesign(d, cat).errors.length ? null : order(d)];\n'
+              'out["~sketch names"] = SKETCH_NAMES;\n'
               'console.log(JSON.stringify(out));\n')
         (Path(tmp) / "v.mjs").write_text(js)
         r = subprocess.run([node, str(Path(tmp) / "v.mjs")], capture_output=True, text=True)
@@ -242,6 +255,7 @@ else:
        f"({nw} with one)" + "".join(f"\n    {k}: py {G.warnings(designs[k])} js {jsv[k][2]}" for k in wdiff[:3]))
     ok(not jsv.get("p5-panel", [["?"]])[0] and not jsv.get("p5-panel", [0, ["?"]])[1] and all(jsv.get("broken: " + k, [0])[0] for k in BROKEN),
        "validateDesign: p5-panel valid (and buildable), each broken design refused")
+    ok(jsv.get("~sketch names") == G.SKETCH_NAMES, f"the sketch glyphs' names: tools/gen_layout.py's = web/fm1sketch.js's ({len(G.SKETCH_NAMES)})")
     ok(not jsv.get("p5-rows", [["?"]])[0] and jsv.get("p5-rows", [0, []])[1] and not G.validate(copy.deepcopy(rows), cat, built=False),
        f"p5-rows (the mock-up of classic screens with p5 cell styles): valid; not buildable yet ({len(jsv.get('p5-rows', [0, []])[1])} reasons, "
        "classic screens in OSC .. MOD)")
