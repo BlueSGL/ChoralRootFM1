@@ -1925,7 +1925,7 @@ section's bar, `firmware/SHA256SUMS` is unchanged (0.21: 93bbfe14...). Not done:
 live page on a real FM-1. The rule for next time: a page change between releases is published from a branch cut at the
 released tag, not from main, whenever main's firmware is ahead of the release.
 
-3y38. **Dual Core: the regulator at 1.50 V, and Off by itself after a crash beside core 1 (2026-10-14; issue #9, after
+3y70. **Dual Core: the regulator at 1.50 V, and Off by itself after a crash beside core 1 (2026-10-14; issue #9, after
 fm1-x0x#10 / #21 and x0x 1.0.7; docs/DUALCORE.md "Why VDC14 5", "The persistent fallback").** The reports settled two
 things 0.16 could not know: VDC14 is the rail that matters (zednaked's table: 14 / 4 marginal, 11 / 5 and 15 / 5
 clean), and the misreads hit core 0 too (fc79's crash records: a vector fetched with bit 24 set, a crash in the bass
@@ -1944,12 +1944,12 @@ emulator built, `./build.sh` for both `CR_CORE1_TEST` values: XIP 84.5 %, RAM 82
 **Not done**: nothing on a unit (the owner's runs both cores clean, and the other session had the FM-1): the device
 checklist's step 5 (`core1_fault_test.py bar` on a `CR_CORE1_TEST` build) and a word from the reporter of #9 on
 0.22 are what is left. VDC14 5 was the owner's call the same day ("My HANDOFF rule can be broken"): the rule is 14 / 5.
-**Found by 3y39's run of `test_cr.sh`**: the hung-job check ("a hung job's WAV = one core's") failed, because the
+**Found by 3y71's run of `test_cr.sh`**: the hung-job check ("a hung job's WAV = one core's") failed, because the
 give-up now saves Dual Core Off once the chord is released and the unit is quiet, and the emulator plays the erase as
 the device does (45 ms of silence): the WAVs part at 4.7 s. The check now compares the first 4.5 s, then asserts
 the save (one erase, `dualcore 0` in the record) and that a relaunch on that flash boots `c1 off`.
 
-3y39. **Geek Out 2: the cores' load and the memory as four meters (2026-10-14; the owner: "add a second GEEK OUT 2
+3y71. **Geek Out 2: the cores' load and the memory as four meters (2026-10-14; the owner: "add a second GEEK OUT 2
 menu with meters that show each core's CPU load as well as RAM"; docs/DUALCORE.md "Geek Out 2").** A sixth view
 (`V_GEEK2`, stored 5, after Scope: an older record keeps its meaning, 0.21 reads 5 as Chord), drawn with the
 editor's tall level bars (`CR_K_EDIT8`, `tall` 2: the read-out variant in `cr_p_tall`: bright, no knob underlines,
@@ -1966,7 +1966,7 @@ menu, the cells, the bars' colours at two pixels, six HOME taps round; `cr_arp_v
 92 % are the size line's figures, not yet read off the screen); no designer mock-up in the 24-state JSON (the two
 states are in `gen_cr_screens.py`'s device list).
 
-3y40. **On the unit: the dual-core fallback end to end, a restart crash found and told apart, the crash record over
+3y72. **On the unit: the dual-core fallback end to end, a restart crash found and told apart, the crash record over
 SysEx (2026-10-14; the owner: "You can run on the FM-1 right now").** The owner's FM-1 had Dual Core On already,
 clean (8.5 M jobs, 0 rejects) at 14 / 4. The 0.22 release build installed: `c1 ok`, `rail_vdc14_now 5`, `c1_bar 0`,
 a worst half of 392 us. The `CR_CORE1_TEST` build, `core1_fault_test.py`: misread, null, stall, fault all PASS, the
@@ -1992,7 +1992,7 @@ sets now = boot). Host: `cr_cpu1_test` 74 checks, `cr_backup_test` (PEAK 44), `i
 was not re-run after the PEAK change (its PEAK checks are the backup test's). Not done: a power cycle by hand (the
 owner's), Geek Out 2 read off the unit's screen, the restart crash's cause.
 
-3y41. **The unit's load read for real, by MIDI and SysEx (2026-10-14; the owner: "review our performance limits",
+3y73. **The unit's load read for real, by MIDI and SysEx (2026-10-14; the owner: "review our performance limits",
 then "you should be able to send midi in to the FM-1 and maybe sysex commands to change settings so you could put it
 in a state to fully test on device performance"; docs/INTEGRATION.md "Measured on the unit").** `tools/perf_unit.py`:
 76 SELECT puts a sound on each part, an 8-note chord goes in on channel 1 and a bass note on channel 2 (rtmidi),
@@ -2010,7 +2010,7 @@ packages built for the owner to judge (`build/choralroot-delayhalf.fwsc`, `build
 the LCD one left on the unit. Host: `run_cr_tests.sh` ok, `install_test.py` ok. Not done: 48 kHz recording (an
 Option, not settable over USB without a restore), Dual Core Off rows (the same), the fx stage's parts under load.
 
-3y42. **The fx stage's parts and TIMER5 read on the unit (2026-10-14, later; docs/INTEGRATION.md "The fx stage's
+3y75. **The fx stage's parts and TIMER5 read on the unit (2026-10-14, later; docs/INTEGRATION.md "The fx stage's
 parts and TIMER5").** `tools/perf_unit.py` prints 78 PEAK's fx parts as a second table (down / delay / reverb / up,
 avg and max, their sum against the stage's average and largest, the rest) and sends CC 123 All Notes Off to both
 parts first (a stopped run had left an 8-note chord held: the "idle" row read part0 903). Run on the unit (the
@@ -2030,10 +2030,10 @@ leaves TIMER5 out and the stages do not, so the stages' largest sum to the block
 or changed on the unit; the sound and the scan untouched. Host: `python3 tools/perf_unit.py --help` runs; the table's
 code is a print. Not done: the 5 kHz scan, the data-line skip, the stage figures with TIMER5 taken out.
 
-3y43. **The delay at the half rate and the LCD at 20 MHz are the defaults (2026-10-14, the owner, after both on the
+3y74. **The delay at the half rate and the LCD at 20 MHz are the defaults (2026-10-14, the owner, after both on the
 unit: "screen at 20 MHz looks good. Delay sounded good at half rate").** `cr_fx.c CR_FX_DELAY_DS` 2 (the line halved
-with it, 3y41: POOL 72.7 %, 94 KB free: no longer the tight resource), `lcd.c LCD_BAUD` 2 (7.7 ms a strip for 12.8).
+with it, 3y73: POOL 72.7 %, 94 KB free: no longer the tight resource), `lcd.c LCD_BAUD` 2 (7.7 ms a strip for 12.8).
 The old builds: `CR_FX_DELAY_DS=1`, `LCD_BAUD=4`. docs/FX.md keeps 0.18's reasoning for the full-rate delay as the
-record of why it was chosen then; EDITOR.md's LCD figures are marked as the 12 MHz build's. (3y42 is the fx-stage /
+record of why it was chosen then; EDITOR.md's LCD figures are marked as the 12 MHz build's. (3y75 is the fx-stage /
 TIMER5 profiling session's, written beside this one.) Host: `run_cr_tests.sh` (cr_fx_test at the new default),
 `test_cr.sh`, `./build.sh`: below. Not flashed by this session: the profiling session had the unit.
