@@ -500,7 +500,9 @@ The Geek Out view shows the transposition (`Trans +2`).
 
 Tap **LATCH** (printed LFO): what you play keeps sounding after you let go, until the next thing you play replaces
 it. `Latch` shows at the top right. With a performance mode on, LATCH is what keeps an arpeggio running with your
-hands off the keys. Tap LATCH again and the held notes stop.
+hands off the keys. Tap LATCH again and the held notes stop. A performance mode's own **Hold** (Strum's KNOB 4, the
+arp's) lights LATCH too, since it holds the sound the same way: a tap on the lit LATCH then turns that Hold off and
+the notes stop; the next tap latches as usual.
 
 LOCK and LATCH are different things: LOCK holds the **chord keys** for you, LATCH holds the **sound**.
 
@@ -622,7 +624,8 @@ When nothing is being stepped (no keys held, or Strum, Slop, Harp) the picker st
 - The two "2 Octaves" entries are the same modes with the range set to two octaves.
 - The twelve patterns: pulse, alberti, waltz, cascade, updown, syncopate, gallop, skip, ballad, stride, drive, ladder.
   The layer shows the number; KNOB 3 outside the layer shows the name too.
-- Strum's Hold keeps the strummed chord sounding after you let go, as LATCH does.
+- Strum's Hold keeps the strummed chord sounding after you let go, as LATCH does, and lights LATCH; a tap on LATCH
+  turns it off again (0.22).
 
 Outside the layer **KNOB 3** turns the mode's first parameter (the strum rate, the slop amount, the arp division,
 the pattern, the harp rate). An arpeggio stops when you let go of the keys; switch LATCH on to keep it running.

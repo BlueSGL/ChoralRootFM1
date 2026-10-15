@@ -3677,3 +3677,14 @@ cell's text: `F_BIPCT`, a bipolar percentage of 64, so a unit moved it by one or
 as one. `cr_edit.c ce_text`: the two amounts read as the number, -64 .. +63 (`+12`, `-20`, `0`), the bar as before;
 the destination stays a named choice, one item a detent at any speed. docs/EDITOR.md's EXPR paragraph; the script in
 `test_cr.sh`. Not flashed (the designer-handoff session holds the unit).
+3y91. **LATCH turns a mode's Hold off (2026-10-15; the owner, on v0.22-beta1: "strum has a hold parameter which will
+light up the lock button, however you can't control this using the lock/hold button like you can elsewhere").**
+Strum's Hold (KNOB 4 in the PERF layer; the arp's too) makes the engine latch (`cr_latching`), which lights LATCH
+(`sn->latching`), but a tap on LATCH only toggled the sticky latch (`cs.sticky`): with Hold on it turned the latch
+ON under a lit LED, and nothing short of the knob row released the chord. Now `cu_tap`'s `BT_LATCH`: with the latch
+off, a performance on and the mode's Hold set, the tap clears Hold (`cs.par[mode][CR_P_HOLD]` 0, `CRE_PARAM`:
+`cr_set_param` releases the latched voices) and the LED goes off; the next tap latches as before. Emulator:
+`tools/emu/scripts/cr_strum_hold.txt` in `test_cr.sh` (Strum picked, KNOB 4 Hold on, a chord released keeps
+sounding with LATCH lit; the tap: the trace `latch: Strum hold off`, the LED off; the next tap: `Latch` top right).
+docs/MANUAL.md "LATCH" and the Strum table. Not done: on the unit (the designer-handoff session holds it; the three
+beta fixes of the night go on together).

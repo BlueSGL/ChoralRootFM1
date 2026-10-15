@@ -542,6 +542,17 @@ case "$fl" in *"keyboard view 1"*"right 'Arp'"*) ok "Keyboard view + PERF on + a
 grep '^ui: frame.*device): arp ' "$L" | grep -qv 'device): arp view 0 ' && bad "an arp screen on another view than Chord" ||
     ok "the arp screen only on the Chord view ($(grep -c '^ui: frame.*device): arp view 0 ' "$L") frames), none on the Keyboard view"
 
+echo "Strum's Hold lights LATCH; a LATCH tap turns Hold off (the notes go); the next tap latches as before"
+export EMU_UI_LOG=0
+run cr_strum_hold
+unset EMU_UI_LOG
+L="$OUT/cr_strum_hold.log"
+has '^latch: Strum hold off' "$L" && grep -q '^expect led LFO dim .*: ok' "$L" &&
+    ok "LATCH tapped with Strum's Hold on: Hold off (the trace), the LED back to its idle glow (the engine no longer latching)" ||
+    bad "LATCH with Hold on did not turn Hold off (or the LED stayed lit)"
+[ "$(grep -c '^expect led LFO on .*: ok' "$L")" = 2 ] && ok "the next LATCH tap: the sticky latch as before (the LED lit with Hold off)" ||
+    bad "the second LATCH tap did not latch"
+
 echo "the arp screen: the Chord view's content while an arpeggio plays (the hop), and only then"
 export EMU_UI_LOG=0
 run cr_arp_view
