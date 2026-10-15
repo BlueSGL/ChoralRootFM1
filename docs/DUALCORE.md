@@ -362,7 +362,7 @@ the bar's decision and its boot).
    power cycle: still Off (`c1_bar 0`: the record saved it), `c1 off`. Options > Dual Core On, power cycle: `c1 ok`
    again. The in-session give-up's save (`dual core off: gave up`) has no test mode: the injected stall and fault
    deliberately do not persist (above); it is the affected units' path, as the crash itself is.
-   **Run on the owner's unit 2026-10-14 (HISTORY 3y40)**: steps 0, 1, 4 and 5 as written (the power cycle of step 5
+   **Run on the owner's unit 2026-10-14 (HISTORY 3y72)**: steps 0, 1, 4 and 5 as written (the power cycle of step 5
    as a RESTART; the screen not read); the misread / null / stall / fault modes PASS and a restart after the injected
    give-up boots `c1 ok`; the restore of a backup taken with Dual Core On is the way to turn it On again over USB.
 
