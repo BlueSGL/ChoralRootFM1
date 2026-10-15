@@ -6,12 +6,23 @@
 For each <capture>.wav + .json: finds the two sync-marker onsets in the audio and
 maps host time to audio time, then per step:
   attack          10/50/90 % rise times of the linear amplitude from note-on, the
-                  98 % time, and the level at half the 98 % time (0.5 = linear)
-  decay/release   times to -20/-40/-60 dB from note-on (decay) or note-off
-                  (release), relative to the peak / the level at note-off
-  filt_*, op_*    the spectral-centroid track (log Hz): 10/50/90 % of its sweep
+                  98 % time, the level at half the 98 % time (0.5 = linear) and the
+                  full ramp (t90 - t10) / 0.8. A rise that ends below the capture's
+                  plateau (the gate was short) is fitted as a line and extrapolated.
+  decay/release   T60 from the slope of a line fitted to dB vs time between -1 and
+                  -50 dB below the start (above the capture's noise floor + 15 dB);
+                  when that fall is short (< 30 ms or < 10 dB) from the -20/-40/-60 dB
+                  times instead, measured from the peak (decay) or note-off (release)
+  filt_*, op_*    the spectral-centroid track (log Hz; attacks through a 31 ms median):
+                  10/50/90 % of its sweep. An attack that ends below the fastest step's
+                  end level is measured against that level; if it never reaches 90 %,
+                  T = its t50 x the median t90/t50 of the finished sweeps (the same
+                  shape, scaled). No sweep (< 0.2 oct, value 0): T none, "instant"
   delay           time from note-on to 50 % of the centroid step
-  fade            time for the LFO's modulation depth (dB swing) to reach 90 %
+  fade            tremolo depth per LFO cycle (one-cycle windows; peak/trough in dB):
+                  time to 90 % of the full depth (the FADE 0 step's, else the step's
+                  own end); a fade that does not finish is extrapolated by a line
+                  fitted to the linear swing (peak - trough), the fade being a ramp
 Then per parameter (and tempo) fits T(v) = a*v^p and T(v) = a*10^(k v), keeps the
 better (rms residual in log10), writes analysis.json and prints a table. PNG plots
 if matplotlib is installed.
@@ -128,7 +139,7 @@ def find_onset(t, edb, t0, t1):
     seg, ts = edb[sel], t[sel]
     floor = np.percentile(seg, 5)
     peak = seg.max()
-    thr = max(floor + 20, peak - 30)
+    thr = max(floor + 10, peak - 30)    # floor + 10: a marker over an earlier release's tail
     i = np.argmax(seg >= thr)
     return float(ts[i])
 
@@ -174,7 +185,65 @@ def crossing(ts, ys, level, rising=True):
     return float(ts[i - 1] + f * (ts[i] - ts[i - 1]))
 
 
-def analyse_step(s, f, t, e, edb, ct, cc, x, sr, cl=None):
+def noise_floor(t, edb, first_marker):
+    """median level of the lead-in before the first marker (silence): the capture's noise floor"""
+    if first_marker is None:
+        return None
+    sel = (t >= 0.1) & (t <= first_marker - 0.1)
+    return float(np.median(edb[sel])) if sel.sum() > 50 else None
+
+
+def medfilt(y, k=31):
+    """running median, odd kernel k, edges padded with the median of the end half-kernels (not the end
+    values: the first centroid frame is the onset click)"""
+    if len(y) < 3:
+        return y
+    k = min(k, len(y) - (1 - len(y) % 2))
+    h = k // 2
+    yp = np.concatenate([np.full(h, np.median(y[:h + 1])), y, np.full(h, np.median(y[-h - 1:]))])
+    return np.median(np.lib.stride_tricks.sliding_window_view(yp, k), axis=1)
+
+
+PROXY = ("filt_decay", "filt_attack", "filt_release", "op_attack", "op_decay", "delay")
+RISING = ("filt_attack", "op_attack", "delay")
+
+
+def proxy_track(s, f, ct, cc, cl):
+    """the step's centroid track (log2 Hz from its reference time), frames > 40 dB below its loudest
+    dropped; attacks through a 31 ms median (run 1's filter attack crossed on noise bursts; a decay keeps
+    the raw track, its value-0 sweep lasts a few ms)"""
+    on, off, end = f(s["on"]), f(s["off"]), f(s["end"])
+    ref_t = off if s["kind"] == "filt_release" else on
+    stop = end if s["kind"] == "filt_release" else off
+    sel = (ct >= ref_t) & (ct <= stop)
+    if sel.any():  # drop frames more than 40 dB below the step's loudest (noise centroid)
+        sel &= cl >= cl[sel].max() * 1e-4
+    ys = medfilt(cc[sel]) if s["kind"] in ("filt_attack", "op_attack") else cc[sel]
+    return ct[sel] - ref_t, ys
+
+
+def slope_t60(ts, ys, ref, floor):
+    """fit dB vs time between ref - 1 dB and max(ref - 50, floor + 15) dB (the first fall through that range);
+    returns (T60, slope dB/s, span dB, rms dB, points) or None when the fall is short (< 30 ms or < 10 dB)"""
+    hi, lo = ref - 1.0, max(ref - 50.0, floor + 15.0)
+    below = np.nonzero(ys <= hi)[0]
+    if hi - lo < 10 or not len(below):
+        return None
+    i0 = int(below[0])
+    past = np.nonzero(ys[i0:] <= lo)[0]
+    i1 = i0 + (int(past[0]) if len(past) else len(ys) - i0)
+    tt, yy = ts[i0:i1], ys[i0:i1]
+    if len(tt) < 30 or yy[0] - yy.min() < 10:
+        return None
+    A = np.vstack([np.ones_like(tt), tt]).T
+    c, *_ = np.linalg.lstsq(A, yy, rcond=None)
+    if c[1] >= 0:
+        return None
+    rms = float(np.sqrt(np.mean((A @ c - yy) ** 2)))
+    return -60.0 / c[1], float(c[1]), float(yy[0] - yy.min()), rms, len(tt)
+
+
+def analyse_step(s, f, t, e, edb, ct, cc, x, sr, cl=None, noise=None):
     on, off, end = f(s["on"]), f(s["off"]), f(s["end"])
     k = s["kind"]
     r = {"param": s["param"], "value": s["value"], "kind": k}
@@ -185,12 +254,14 @@ def analyse_step(s, f, t, e, edb, ct, cc, x, sr, cl=None):
         sel = (t >= on) & (t <= off)
         ts, ys = t[sel] - on, e[sel]
         plat = np.median(ys[-max(5, len(ys) // 20):])
+        r["plateau"] = float(plat)
         for p in (10, 50, 90, 98):
             r[f"t{p}"] = crossing(ts, ys, plat * p / 100)
         if r["t98"]:
             r["level_at_half_t98"] = float(np.interp(r["t98"] / 2, ts, ys) / plat)
         r["onset_audio"] = find_onset(t, edb, on - 0.05, off)
         r["onset_lag"] = None if r["onset_audio"] is None else r["onset_audio"] - on
+        r["rise_full"] = (r["t90"] - r["t10"]) / 0.8 if r["t90"] is not None and r["t10"] is not None else None
         r["T"] = r["t90"]
     elif k in ("decay", "release"):
         ref_t = on if k == "decay" else off
@@ -203,53 +274,213 @@ def analyse_step(s, f, t, e, edb, ct, cc, x, sr, cl=None):
         else:
             ref = float(np.median(edb[(t >= off - 0.02) & (t < off)]))
             ip = 0
-        floor = float(np.percentile(edb[(t >= end) & (t <= end + 0.5)], 50)) \
-            if ((t >= end) & (t <= end + 0.5)).any() else -200
+        if noise is not None:
+            floor = noise
+        else:       # no lead-in: the level after the step (a release cut short by the gate is still sounding)
+            floor = float(np.percentile(edb[(t >= end) & (t <= end + 0.5)], 50)) \
+                if ((t >= end) & (t <= end + 0.5)).any() else -200
         r["ref_db"], r["floor_db"] = float(ref), floor
+        t0 = float(ts[ip]) if len(ts) else 0.0     # decay: from the peak (a late onset does not count)
         for d in (20, 40, 60):
             c = crossing(ts[ip:], ys[ip:], ref - d, rising=False) if ref - d > floor + 3 else None
-            r[f"t_{d}db"] = c
-        # T60 estimate: measured, else extrapolated from the deepest point (exp. decay)
-        for d in (60, 40, 20):
-            if r[f"t_{d}db"]:
-                r["T"] = r[f"t_{d}db"] * 60 / d
-                r["T_from"] = f"-{d} dB"
-                break
-        else:
-            r["T"] = None
-    elif k in ("filt_decay", "filt_attack", "filt_release", "op_attack", "op_decay", "delay"):
-        ref_t = off if k == "filt_release" else on
-        stop = end if k == "filt_release" else off
-        sel = (ct >= ref_t) & (ct <= stop)
-        if sel.any():  # drop frames more than 40 dB below the step's loudest (noise centroid)
-            sel &= cl >= cl[sel].max() * 1e-4
-        ts, ys = ct[sel] - ref_t, cc[sel]
+            r[f"t_{d}db"] = None if c is None else c - t0
+        sl = slope_t60(ts[ip:], ys[ip:], ref, floor) if len(ts) else None
+        if sl:
+            r["T60_slope"], r["slope_db_s"], r["slope_span_db"], r["slope_rms_db"], _ = sl
+            r["T"] = sl[0]
+            r["T_from"] = f"slope over {sl[2]:.0f} dB"
+        else:   # T60: measured, else extrapolated from the deepest point (exp. decay)
+            for d in (60, 40, 20):
+                if r[f"t_{d}db"]:
+                    r["T"] = r[f"t_{d}db"] * 60 / d
+                    r["T_from"] = f"-{d} dB"
+                    break
+            else:
+                r["T"] = None
+    elif k in PROXY:
+        ts, ys = proxy_track(s, f, ct, cc, cl)
         if len(ys) < 4:
             r["T"] = None
             return r
         r["centroid_hz"] = [float(2 ** ys.max()), float(2 ** ys.min())]
         nfin = max(3, len(ys) // 20)
-        first = ys[2] if k in ("filt_attack", "op_attack", "delay") else ys[: max(3, int(0.02 * sr / 48))].max()
+        n20 = max(3, int(0.02 * sr / 48))
+        first = float(np.median(ys[:n20])) if k in RISING else float(ys[:n20].max())
         if k == "filt_release":
-            first = ys[0]
-        last = np.median(ys[-nfin:])
+            first = float(ys[0])
+        last = float(np.median(ys[-nfin:]))
         span = last - first
+        r["first_oct"], r["last_oct"] = first, last
         r["span_oct"] = float(span)
         rising = span > 0
         for p in (10, 50, 90):
             r[f"t{p}"] = crossing(ts, ys, first + span * p / 100, rising=rising)
         r["T"] = r["t50"] if k == "delay" else r["t90"]
+        if abs(span) < 0.2 and k != "delay":    # the crossings would be noise
+            r["T"] = None
+            r["note"] = "no sweep (< 0.2 oct): the end state from the start (instant at value 0)"
     elif k == "fade":
-        sel = (t >= on) & (t <= off)
-        ts, ys = t[sel] - on, edb[sel]
-        w = int(0.3 / HOP)
-        depth = np.array([ys[i:i + w].max() - ys[i:i + w].min() for i in range(0, len(ys) - w, 10)])
-        dts = ts[0:len(ys) - w:10][:len(depth)] + 0.15
-        fin = np.median(depth[-max(3, len(depth) // 10):])
-        r["final_depth_db"] = float(fin)
-        r["t90"] = crossing(dts, depth, 0.9 * fin)
-        r["T"] = r["t90"]
+        r["T"] = None       # analysed per capture (fade_capture): the LFO period and the full depth
     return r
+
+
+def attack_capture(steps, rs, f, t, e):
+    """rises that end below the capture's plateau (the same sustain level for every step): fit a line to the
+    rise above 10 % of that plateau and extrapolate"""
+    plats = [r["plateau"] for r in rs if r["kind"] == "attack" and r.get("plateau")]
+    if len(plats) < 2:
+        return
+    ref = max(plats)
+    for s, r in zip(steps, rs):
+        if r["kind"] != "attack" or r["plateau"] >= 0.97 * ref:
+            continue
+        on, off = f(s["on"]), f(s["off"])
+        sel = (t >= on) & (t <= off)
+        ts, ys = t[sel] - on, e[sel]
+        m = ys >= 0.1 * ref
+        if m.sum() < 50:
+            continue
+        b, a = np.polyfit(ts[m], ys[m], 1)
+        if b <= 0:
+            continue
+        for p in (10, 50, 90, 98):
+            r[f"t{p}"] = float((p / 100 * ref - a) / b)
+        r["rise_full"] = float(ref / b)
+        r["reached_pct"] = float(100 * r["plateau"] / ref)
+        r["T"] = r["t90"]
+        r["T_from"] = f"ramp fit (rise reached {r['reached_pct']:.0f} %)"
+
+
+def proxy_capture(steps, rs, f, ct, cc, cl):
+    """attack sweeps that end below the fastest step's end level (gate too short): measured against that
+    level; if 90 % is not reached, T = t50 x the median t90/t50 of the finished sweeps"""
+    for kind in ("filt_attack", "op_attack"):
+        grp = [(s, r) for s, r in zip(steps, rs) if r["kind"] == kind and r.get("last_oct") is not None]
+        if len(grp) < 2:
+            continue
+        ref = min(grp, key=lambda sr: sr[1]["value"])[1]["last_oct"]
+        unfinished = []
+        for s, r in grp:
+            if ref - r["last_oct"] <= max(0.05, 0.05 * (ref - r["first_oct"])):
+                continue
+            ts, ys = proxy_track(s, f, ct, cc, cl)
+            span = ref - r["first_oct"]
+            if span <= 0:
+                continue
+            for p in (10, 50, 90):
+                r[f"t{p}"] = crossing(ts, ys, r["first_oct"] + span * p / 100, rising=True)
+            r["reached_pct"] = float(100 * (r["last_oct"] - r["first_oct"]) / span)
+            r["T"] = r["t90"]
+            r["T_from"] = f"against the fastest step's end (sweep reached {r['reached_pct']:.0f} %)"
+            unfinished.append(r)
+        ratios = [r["t90"] / r["t50"] for _, r in grp if r not in unfinished and r.get("T") and r.get("t50")
+                  and r["t50"] >= 0.05]
+        for r in unfinished:
+            if r["t90"] is None and r.get("t50") and ratios:
+                q = float(np.median(ratios))
+                r["T"] = r["t50"] * q
+                r["T_from"] = (f"t50 x {q:.2f} (median t90/t50 of the finished sweeps; this one reached "
+                               f"{r['reached_pct']:.0f} %)")
+
+
+def lfo_period(yd, lo=0.004, hi=1.0):
+    """the tremolo period (s) from the autocorrelation of a dB envelope (HOP spaced), None when there is no
+    clear cycle between lo and hi"""
+    y = yd - np.mean(yd)
+    n = len(y)
+    if n < 20 or not np.any(y):
+        return None
+    nf = 1 << (2 * n - 1).bit_length()
+    F = np.fft.rfft(y, nf)
+    ac = np.fft.irfft(F * np.conj(F), nf)[:n]
+    ac /= ac[0]
+    i_lo, i_hi = max(2, int(lo / HOP)), min(n // 3, int(hi / HOP))
+    if i_hi <= i_lo + 2:
+        return None
+    neg = np.nonzero(ac[i_lo:i_hi] < 0)[0]
+    if not len(neg):
+        return None
+    j0 = i_lo + int(neg[0])
+    j = j0 + int(np.argmax(ac[j0:i_hi]))
+    if ac[j] < 0.5 or j >= i_hi - 1:
+        return None
+    if 0 < j < n - 1:      # parabolic peak
+        a, b, c = ac[j - 1], ac[j], ac[j + 1]
+        d = 0.5 * (a - c) / (a - 2 * b + c) if (a - 2 * b + c) != 0 else 0.0
+        return (j + d) * HOP
+    return j * HOP
+
+
+def tremolo(ts, ys, period):
+    """one-cycle windows every 1/8 cycle: (centre times, peak, trough) of the linear envelope"""
+    n = max(3, int(round(period / HOP)))
+    if len(ys) < n + 1:
+        return np.array([]), np.array([]), np.array([])
+    w = np.lib.stride_tricks.sliding_window_view(ys, n)[::max(1, n // 8)]
+    tc = ts[: len(ys) - n + 1: max(1, n // 8)][: len(w)] + period / 2
+    return tc, w.max(axis=1), w.min(axis=1)
+
+
+def fade_capture(steps, rs, f, t, e, edb):
+    """the LFO fade: tremolo depth per cycle against the full depth (the FADE 0 step's)"""
+    idx = [i for i, r in enumerate(rs) if r["kind"] == "fade"]
+    if not idx:
+        return
+    win = {}
+    for i in idx:
+        s = steps[i]
+        on, off = f(s["on"]), f(s["off"])
+        o = find_onset(t, edb, on - 0.05, min(off, on + 0.3))
+        a = (o if o is not None else on) + 0.003
+        sel = (t >= a) & (t <= off)
+        win[i] = (t[sel] - on, e[sel], edb[sel])
+    big = max(idx, key=lambda i: np.std(win[i][2]) if len(win[i][2]) else 0)
+    period = lfo_period(win[big][2])
+    if period is None:
+        for i in idx:
+            rs[i]["note"] = "no LFO cycle (4 ms .. 1 s) found: the fade is not measurable from this capture"
+        return
+    tracks = {}
+    for i in idx:
+        ts, ys, _ = win[i]
+        tc, pk, tr = tremolo(ts, ys, period)
+        tracks[i] = (tc, 20 * np.log10(np.maximum(pk, 1e-9) / np.maximum(tr, 1e-9)), pk - tr)
+    ref = next((i for i in idx if rs[i].get("display") == 0), None)
+    ref_db = ref_sw = None
+    if ref is not None:
+        tc, dd, sw = tracks[ref]
+        m = tc >= 2 * period
+        if m.sum() >= 3:
+            ref_db, ref_sw = float(np.median(dd[m])), float(np.median(sw[m]))
+    for i in idx:
+        r = rs[i]
+        tc, dd, sw = tracks[i]
+        r["lfo_hz"] = 1.0 / period
+        r["resolution_s"] = period / 2      # the first window's centre: a faster fade reads as this
+        if len(tc) < 3:
+            r["note"] = "gate shorter than three LFO cycles"
+            continue
+        nend = max(3, len(tc) // 10)
+        end_db, end_sw = float(np.median(dd[-nend:])), float(np.median(sw[-nend:]))
+        fin_db, fin_sw = (ref_db, ref_sw) if ref_db else (end_db, end_sw)
+        r["final_depth_db"], r["end_depth_db"] = fin_db, end_db
+        r["reached_pct"] = float(100 * end_sw / fin_sw) if fin_sw > 0 else None
+        r["t90_db"] = crossing(tc, dd, 0.9 * fin_db) if fin_db > 0 else None
+        sn = sw / fin_sw if fin_sw > 0 else sw * 0
+        m = (tc >= period) & (sn >= 0.02) & (sn <= 0.85)
+        r["t90_lin"] = r["t_full"] = None
+        if m.sum() >= 4 and np.ptp(sn[m]) >= 0.03:
+            b, a = np.polyfit(tc[m], sn[m], 1)
+            if b > 0:
+                r["t90_lin"], r["t_full"] = float((0.9 - a) / b), float((1.0 - a) / b)
+        done = r["reached_pct"] is not None and r["reached_pct"] >= 90
+        if done and r["t90_db"] is not None:
+            r["T"], r["T_from"] = r["t90_db"], "measured (dB depth)"
+            if r["t_full"] is None:
+                r["t_full"] = r["t90_db"] / 0.9
+        elif r["t90_lin"] is not None:
+            r["T"] = r["t90_lin"]
+            r["T_from"] = f"extrapolated: line fitted to the swing (reached {r['reached_pct']:.0f} %)"
 
 
 def fit(points):
@@ -291,11 +522,16 @@ def analyse_dir(d, plots=True):
         edb = db(e)
         f, minfo = host_map(meta, t, edb)
         minfo["recorder"] = meta.get("recorder", "ffmpeg")
-        need_c = any(s["kind"].startswith(("filt", "op_")) or s["kind"] == "delay"
-                     for s in meta["steps"])
+        noise = noise_floor(t, edb, f(meta["markers"][0]) if meta["markers"] else None)
+        minfo["noise_db"] = noise
+        need_c = any(s["kind"] in PROXY for s in meta["steps"])
         ct, cc, cl = centroid_track(x, sr) if need_c else (None, None, None)
-        for s in meta["steps"]:
-            r = analyse_step(s, f, t, e, edb, ct, cc, x, sr, cl)
+        rs = [analyse_step(s, f, t, e, edb, ct, cc, x, sr, cl, noise) for s in meta["steps"]]
+        attack_capture(meta["steps"], rs, f, t, e)
+        if need_c:
+            proxy_capture(meta["steps"], rs, f, ct, cc, cl)
+        fade_capture(meta["steps"], rs, f, t, e, edb)
+        for r in rs:
             r["capture"] = meta["capture"]
             r["sync"] = minfo
             results.append(r)
@@ -322,9 +558,11 @@ def _f(v):
 def print_table(results, curves):
     print(f"{'capture':10s} {'param':10s} {'val':>4s} {'kind':12s} {'T (s)':>8s}  details")
     for r in results:
-        det = {k: r[k] for k in ("t10", "t50", "t90", "t_20db", "t_40db", "t_60db",
-                                 "level_at_half_t98", "span_oct") if k in r}
+        det = {k: r[k] for k in ("t10", "t50", "t90", "rise_full", "t_20db", "t_40db", "t_60db",
+                                 "slope_rms_db", "level_at_half_t98", "span_oct", "lfo_hz", "final_depth_db",
+                                 "t_full") if k in r}
         det = " ".join(f"{k}={_f(v).strip()}" for k, v in det.items())
+        det += "".join(f" [{r[k]}]" for k in ("T_from", "note") if k in r)
         print(f"{r['capture']:10s} {r['param']:10s} {r['value']:4d} {r['kind']:12s} "
               f"{_f(r.get('T'))}  {det}")
     print("\nfitted curves (rms residual in log10 units):")

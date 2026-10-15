@@ -43,6 +43,8 @@ def test_cc():
     check(dt_cc.encode("a_del", 16) == [[0xB0, 83, 16]], "A delay CC 83")
     check(dt_cc.note_on(60, 100) == [0x90, 60, 100], "note on bytes")
     check(dt_cc.all_notes_off()[0] == [0xB0, 123, 0], "all notes off")
+    check(dt_cc.encode("harm", dt_cc.HARM_ZERO) == [[0xB0, 99, 1], [0xB0, 98, 76], [0xB0, 6, 63], [0xB0, 38, 0]],
+          "HARM 0.00 -> NRPN 1/76 coarse 63, fine 0 (proved on the device 2026-10-14)")
 
 
 def test_lists():
@@ -64,14 +66,26 @@ def test_lists():
             check(True, f"{name}={v!r} refused ({e})")
 
 
-def test_plan():
-    p = subprocess.run([sys.executable, os.path.join(HERE, "dt_measure.py"), "--plan"],
+def plan_out(*args):
+    p = subprocess.run([sys.executable, os.path.join(HERE, "dt_measure.py"), "--plan", *args],
                        capture_output=True, text=True)
     last = [l for l in p.stdout.splitlines() if "captures," in l]
-    check(p.returncode == 0 and last, "--plan runs: " + (last[0] if last else p.stderr[-200:]))
-    if last:
-        mins = float(last[0].split("about ")[1].split(" min")[0])
-        check(mins < 30, f"plan under 30 min ({mins} min)")
+    check(p.returncode == 0 and last, f"--plan {' '.join(args)} runs: " + (last[0] if last else p.stderr[-200:]))
+    mins = float(last[0].split("about ")[1].split(" min")[0]) if last else 99.0
+    return p, (last[0] if last else ""), mins
+
+
+def check_hand(p):
+    hand = sorted({l.strip() for l in p.stdout.splitlines() if l.strip().startswith("by hand:")})
+    check(hand and all(h == "by hand: nothing" or all(x.startswith(("LFO1 DEST = VOLUME", "project TEMPO"))
+                                                      for x in h[9:].split("; ")) for h in hand),
+          f"by hand only DEST VOLUME and the tempo: {hand}")
+
+
+def test_plan():
+    p, last, mins = plan_out()
+    check(last.startswith("12 captures, 55 steps"), f"run 1's set unchanged: {last}")
+    check(mins < 30, f"plan under 30 min ({mins} min)")
     hand = sorted({l.strip() for l in p.stdout.splitlines() if l.strip().startswith("by hand:")})
     check(hand and all(h == "by hand: nothing" or all(x.startswith(("LFO1 DEST = VOLUME", "project TEMPO"))
                                                       for x in h[9:].split("; ")) for h in hand),
@@ -79,12 +93,43 @@ def test_plan():
     check("algo=6 mix=0 f_type=OFF" in p.stdout and "f_type=LP4" in p.stdout and "lfo1_wave=SQR" in p.stdout,
           "--plan shows the list settings sent over MIDI")
     import dt_measure
-    sets = [c["base"] for c in dt_measure.build_plan()] + [dt_measure.INIT_RESTORE]
+    sets = [c["base"] for c in dt_measure.build_plan(1) + dt_measure.build_plan(2)] + [dt_measure.INIT_RESTORE]
     try:
         n = sum(len(dt_cc.encode(k, v)) for b in sets for k, v in b.items())
-        check(True, f"every capture base and the init restore encode ({n} messages)")
+        check(True, f"every capture base (sets 1 and 2) and the init restore encode ({n} messages)")
     except (ValueError, KeyError) as e:
         check(False, f"a capture base or the init restore does not encode: {e!r}")
+    check(all(b["harm"] == 63 for b in sets), "every base and the init restore send HARM 0.00 as 63")
+    check(all(not c["name"].startswith("r2_") for c in dt_measure.build_plan(1)), "run 1's capture names unchanged")
+
+    # run 2
+    p, last, mins = plan_out("--set", "2")
+    check(mins <= 15.0, f"run 2 at most 15 min of recording ({last})")
+    check_hand(p)
+    caps = dt_measure.build_plan(2)
+    check(all(c["name"].startswith("r2_") for c in caps), "run 2's captures all named r2_*")
+    vals = {c["name"]: [s["value"] for s in c["steps"]] for c in caps}
+    check(vals["r2_amp_atk"] == sorted([100, 104, 108, 112, 114, 116, 118, 120, 122, 124, 125, 126,
+                                        8, 16, 24, 48, 80]), "run 2 amp attack values")
+    check(vals["r2_amp_dec"] == [4, 8, 16, 24, 48, 80, 104, 120] and vals["r2_amp_rel"] == [8, 24, 48, 80, 120],
+          "run 2 amp decay / release values")
+    atk = next(c for c in caps if c["name"] == "r2_amp_atk")["steps"]
+    check(all(s["gate"] >= 1.29 * dt_measure._logi(dt_measure.R1_AMP_ATK, s["value"]) for s in atk),
+          "run 2 attack gates >= 1.3 x run 1's interpolated full rise")
+    dec = [s for c in caps if c["name"] in ("r2_amp_dec", "r2_amp_rel") for s in c["steps"]]
+    check(max(max(s["gate"], s["tail"]) for s in dec) <= 8.0, "run 2 decay / release windows <= 8 s")
+    fade = {c["name"]: c for c in caps if c["group"] == "fade"}
+    disp = {n: [s["display"] for s in c["steps"]] for n, c in fade.items()}
+    check(disp.get("r2_fade_120") == [0, -4, -8, -16, -24, -32, -40, -48, -56, -64]
+          and disp.get("r2_fade_80") == [0, -16, -32, -48], f"run 2 fade values {disp}")
+    check(all(s["value"] == 64 + s["display"] for c in fade.values() for s in c["steps"]),
+          "fade CC = 64 + display")
+    b = fade["r2_fade_120"]["base"]
+    check(b["lfo1_wave"] == "SIN" and b["lfo1_mode"] == "TRG" and b["lfo1_mult"] == "F64" and b["lfo1_spd"] == 127
+          and abs(dt_measure.lfo_hz(b["lfo1_spd"], b["lfo1_mult"]) - 15.75) < 1e-9
+          and abs(dt_measure.lfo_hz(b["lfo1_spd"], b["lfo1_mult"], 80) - 15.75) < 1e-9
+          and abs(dt_measure.lfo_hz(96, "1", 120) - 1 / 8.0) < 1e-9 and abs(dt_measure.lfo_hz(96, "1", 80) - 1 / 12.0) < 1e-9,
+          "fade LFO: SIN TRG, SPD +63 x F64 = 15.75 Hz at any tempo; run 1's SPD +32 x 1 = 8 s / 12 s at 120 / 80 BPM")
 
 
 class Cap:
@@ -162,16 +207,17 @@ TAU_F = lambda v: 0.01 * 10 ** (v / 45)      # noqa: E731  log-cutoff time const
 
 
 def gen(d):
-    c = Cap("amp_atk", 80)
+    c = Cap("amp_atk", 100)
     c.marker()
-    for v in SIX:
+    for v in SIX + [127]:
         T = T_ATK(v)
         def f(g, tl, T=T):
             n = int((g + tl) * SR)
             t = np.arange(n) / SR
             env = np.minimum(t / T, 1.0) * (t < g)
             return sine(n) * env
-        c.step({"param": "amp_atk", "value": v, "kind": "attack"}, f, max(1.0, T * 1.3), 0.3)
+        # 127: a gate at 55 % of the rise (the plateau not reached): extrapolated by the ramp fit
+        c.step({"param": "amp_atk", "value": v, "kind": "attack"}, f, 0.55 * T if v == 127 else max(1.0, T * 1.3), 0.3)
     c.write(d)
 
     c = Cap("amp_dec", 90, dt_rec=True)
@@ -208,6 +254,88 @@ def gen(d):
     c.write(d)
 
 
+R2_T60 = {8: 0.03, 24: 0.5, 80: 9.4, 120: 26.0}     # run 2 style: windows <= 8 s, slope fitted
+LATE = {80: 0.075}                                   # a late onset (run 1 saw 74 ms on some notes)
+F_LFO = 15.75
+FADE_T = {0: 0.0, -16: 0.06, -32: 1.0, -40: 5.0, -64: 250.0}     # full (linear) fade times
+FADE_GATE = {0: 1.5, -16: 1.5, -32: 2.5, -40: 12.0, -64: 20.0}
+
+
+def gen2(d):
+    c = Cap("r2_amp_dec", 40, dt_rec=True)
+    c.marker()
+    for v, T in R2_T60.items():
+        def f(g, tl, T=T, lag=LATE.get(v, 0.0)):
+            n = int((g + tl) * SR)
+            t = np.arange(n) / SR - lag
+            return sine(n) * np.where(t >= 0, 10 ** (-3 * np.maximum(t, 0) / T), 0.0) * (t < g - lag)
+        c.step({"param": "amp_dec", "value": v, "kind": "decay"}, f, min(8.0, max(1.0, 1.3 * T)), 0.3)
+    c.write(d)
+    # releases keep sounding after their step (as the Digitone's do): each tail runs on under the next steps
+    # and, for the last, under the end marker
+    c = Cap("r2_amp_rel", 45, dt_rec=True)
+    c.marker()
+    for v, T in R2_T60.items():
+        def f(g, tl, T=T):
+            n = int((g + tl + 20.0) * SR)
+            t = np.arange(n) / SR
+            return sine(n) * np.where(t < g, 1.0, 10 ** (-3 * (t - g) / T))
+        c.step({"param": "amp_rel", "value": v, "kind": "release"}, f, 1.0, min(8.0, max(1.0, 1.3 * T)))
+    c.write(d)
+    # LFO fade: a 15.75 Hz sine on VOL 64 +- 24 units (amplitude ~ VOL^2), its depth ramped linearly over T
+    c = Cap("r2_fade_120", 50, dt_rec=True)
+    c.marker()
+    for disp, T in FADE_T.items():
+        def f(g, tl, T=T):
+            n = int((g + tl) * SR)
+            t = np.arange(n) / SR
+            ramp = np.ones(n) if T == 0 else np.minimum(t / T, 1.0)
+            vol = 64 + 24 * ramp * np.sin(2 * np.pi * F_LFO * t)
+            return 2 * sine(n) * (vol / 127) ** 2 * (t < g)
+        c.step({"param": "lfo1_fade", "value": 64 + disp, "display": disp, "tempo": 120, "kind": "fade"}, f,
+               FADE_GATE[disp], 0.3)
+    c.write(d)
+
+
+def test_analysis2(d):
+    """run 2's analyses on synthetic captures: slope T60, the tremolo-depth fade"""
+    gen2(d)
+    out = dt_analyse.analyse_dir(d, plots=False)
+    st = {(r["capture"], r["value"]): r for r in out["steps"]}
+    for cap in ("r2_amp_dec", "r2_amp_rel"):
+        sy = st[(cap, 8)]["sync"]
+        # the release capture's end marker sits on the last release's tail (20 dB down): its onset reads
+        # ~1 ms late; 1e-4 in the rate is 3 ms on a 26 s T60
+        tol = 1e-4 if cap == "r2_amp_rel" else 2e-5
+        check(sy["markers"] == 2 and abs(sy["rate"] - (1 + DRIFT)) < tol,
+              f"{cap}: both markers found{' (the last over a release tail)' if tol > 2e-5 else ''}, "
+              f"rate {sy.get('rate', 0):.6f}")
+        for v, T in R2_T60.items():
+            r = st[(cap, v)]
+            slope = "slope" in (r.get("T_from") or "")
+            tol = max(0.004, 0.015 * T) if slope else max(0.006, 0.05 * T)
+            check(r["T"] is not None and abs(r["T"] - T) < tol and slope == (T >= 0.5),
+                  f"{cap} v{v}: T60 {r['T'] if r['T'] is None else round(r['T'], 4)} vs {T} "
+                  f"({r.get('T_from')}{', onset 75 ms late' if cap == 'r2_amp_dec' and v in LATE else ''})")
+    fr = {r["display"]: r for r in out["steps"] if r["capture"] == "r2_fade_120"}
+    r0 = fr[0]
+    exp_db = 40 * math.log10(88 / 40)
+    check(r0.get("lfo_hz") and abs(r0["lfo_hz"] - F_LFO) < 0.1 and abs(r0["final_depth_db"] - exp_db) < 0.5,
+          f"fade: LFO {r0.get('lfo_hz', 0):.2f} Hz vs {F_LFO}, full depth {r0.get('final_depth_db', 0):.2f} dB "
+          f"vs {exp_db:.2f}")
+    res = r0.get("resolution_s", 0.032)
+    check(r0["T"] is not None and r0["T"] <= res + 0.01, f"fade 0: instant (T {r0['T']} <= resolution {res:.3f} s)")
+    for disp in (-16, -32, -40, -64):
+        r, exp = fr[disp], 0.9 * FADE_T[disp]
+        tol = max(0.035, 0.05 * exp)
+        ext = "extrapolated" in (r.get("T_from") or "")
+        check(r["T"] is not None and abs(r["T"] - exp) < tol and ext == (disp == -64),
+              f"fade {disp}: t90 {r['T'] if r['T'] is None else round(r['T'], 3)} vs {exp:.3f} ({r.get('T_from')}, "
+              f"reached {r.get('reached_pct', 0):.0f} %)")
+    r = fr[-64]
+    check(r.get("t_full") and abs(r["t_full"] - 250.0) < 12.5, f"fade -64: full fade {r.get('t_full')} vs 250 s")
+
+
 def test_analysis(d):
     gen(d)
     out = dt_analyse.analyse_dir(d, plots=False)
@@ -219,6 +347,11 @@ def test_analysis(d):
     check(sd["recorder"] == "dt_rec" and sd["markers"] == 2 and abs(sd["offset"] - MIDI_LAT) < 0.003,
           f"dt_rec float32 capture: markers {sd['markers']}, offset from host_rec_start "
           f"{sd.get('offset', 0) * 1e3:.2f} ms vs MIDI latency {MIDI_LAT * 1e3:.0f} ms")
+    r = st[("amp_atk", 127)]
+    check("ramp fit" in (r.get("T_from") or "") and abs(r["t90"] - 0.9 * T_ATK(127)) < 0.03 * 0.9 * T_ATK(127)
+          and abs(r["rise_full"] - T_ATK(127)) < 0.03 * T_ATK(127),
+          f"atk v127 gate at 55 % of the rise: t90 {r['t90']:.3f} vs {0.9 * T_ATK(127):.3f}, full "
+          f"{r['rise_full']:.3f} vs {T_ATK(127):.3f} ({r.get('T_from')})")
     for v in SIX:
         r = st[("amp_atk", v)]
         exp = 0.9 * T_ATK(v)
@@ -253,5 +386,8 @@ if __name__ == "__main__":
     d = sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="dt_test_")
     os.makedirs(d, exist_ok=True)
     test_analysis(d)
+    d2 = os.path.join(d, "run2")
+    os.makedirs(d2, exist_ok=True)
+    test_analysis2(d2)
     print(f"\n{len(fails)} failure(s); synthetic files in {d}")
     sys.exit(1 if fails else 0)

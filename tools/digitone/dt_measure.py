@@ -1,8 +1,11 @@
 #!/usr/bin/env python3
 """Measure Elektron Digitone envelope times: drive track 1 over MIDI, record USB audio.
 
-  python3 tools/digitone/dt_measure.py --plan            # print the plan, send nothing
-  python3 tools/digitone/dt_measure.py --run [--only amp_atk,amp_dec] [--out DIR]
+  python3 tools/digitone/dt_measure.py --plan [--set 2]  # print the plan, send nothing
+  python3 tools/digitone/dt_measure.py --run [--set 2] [--only amp_atk,amp_dec] [--out DIR]
+
+--set 1 (default) is run 1's capture set; --set 2 is run 2 (denser values, the redesigned
+LFO fade), its files named r2_<capture> so run 1's stay untouched in the same --out.
 
 Design: one WAV per capture (a group, or a group at one tempo) recorded by build/dt_rec
 (tools/digitone/dt_rec.c, CoreAudio, device found by name, every sample; built on
@@ -52,7 +55,7 @@ LEAD_IN = 1.5         # after the recorder starts, before the first marker
 BASE = {
     "algo": 1, "mix": 0, "f_type": "OFF", "ratio_c": 1, "ratio_a": 1,
     "lfo1_dest": "NONE", "lfo2_dest": "NONE",
-    "harm": 64, "dtun": 0, "fdbk": 0,
+    "harm": dt_cc.HARM_ZERO, "dtun": 0, "fdbk": 0,
     "a_lev": 0, "b_lev": 0, "a_atk": 0, "a_dec": 0, "a_end": 0, "a_del": 0,
     "b_atk": 0, "b_dec": 0, "b_end": 0, "b_del": 0,
     "f_freq": 127, "f_reso": 0, "f_env": 64, "f_atk": 0, "f_dec": 0, "f_sus": 127,
@@ -66,8 +69,8 @@ MARKER = {"amp_atk": 0, "amp_dec": 0, "amp_sus": 127, "amp_rel": 0}
 # The init sound's values, sent back at the end for every parameter the tool touched.
 # The Digitone cannot report its parameters over CC; these are the owner's init-sound
 # export (DigitonePresets/PresetFormat/BASE.dnsnd, OS 1.44, 2026-10-14, outside the
-# repository; decoded with web/fm1dnsnd.js), HARM as BASE's 64 (its NRPN scale is not
-# proved). Reload the sound/project without saving to be exact (README says so).
+# repository; decoded with web/fm1dnsnd.js), HARM 0.00 = 63 (dt_cc.HARM_ZERO, proved).
+# Reload the sound/project without saving to be exact (README says so).
 INIT_RESTORE = dict(BASE, **{
     "algo": 1, "mix": 0, "f_type": "LP2", "ratio_c": 1, "ratio_a": 1,
     "a_atk": 0, "a_dec": 32, "a_end": 127, "a_lev": 0,
@@ -89,8 +92,12 @@ def check_line(c):
     s = [f"ALGO {b['algo']}", "MIX -64 (assumed the X end: only C heard)",
          f"FILTER TYPE {b['f_type']}", "HARM 0.00"]
     if "lfo1_wave" in b:
-        s.append(f"LFO1 WAVE {b['lfo1_wave']} MODE {b['lfo1_mode']} MULT {b['lfo1_mult']} "
-                 "(assumed the tempo-synced one)")
+        m = str(b["lfo1_mult"])
+        s.append(f"LFO1 WAVE {b['lfo1_wave']} MODE {b['lfo1_mode']} MULT {m} " +
+                 ("(the fixed-120-BPM one, list entry {}, after 2K: assumed)".format(
+                     dt_cc.LFO_MULTS.index(m.upper()) + 1) if m.upper().startswith("F")
+                  else "(tempo-synced, proved by run 1)"))
+    s += c.get("check_extra", [])
     if c["group"] in NOT_SENT:
         s.append(NOT_SENT[c["group"]])
     return ", ".join(s)
@@ -112,8 +119,8 @@ SIX = [0, 32, 64, 96, 112, 126]
 THREE = [0, 64, 112]
 
 
-def build_plan():
-    """the captures; each one's "base" is complete (BASE with its own changes), "hand" what
+def build_plan_1():
+    """run 1's captures; each one's "base" is complete (BASE with its own changes), "hand" what
     the owner sets by hand, "hand_keys" the parameters those touch (restored at the end)"""
     caps = []
 
@@ -179,6 +186,118 @@ def build_plan():
     return caps
 
 
+# ---- run 2 ------------------------------------------------------------------------------------
+# Expected times (s) the run-2 gates are sized from, interpolated in log(T) between the points.
+R1_AMP_ATK = {0: 0.002, 32: 0.05, 64: 0.26, 96: 0.71, 112: 1.49, 126: 26.8, 127: 29.8}   # run 1 full rise
+R1_AMP_T60 = {0: 0.005, 32: 1.01, 64: 5.5, 96: 15.07, 112: 22.0, 126: 29.5}             # run 1 T60
+R1_FILT_DEC_T90 = {0: 0.013, 32: 0.15, 64: 0.54, 96: 2.17, 112: 4.3, 126: 7.9}           # run 1 centroid t90
+# Run 1's filter attacks never reached the open filter (value 0's end level): both sweeps stopped at 65 %
+# (64 in 2.5 s, 112 in 14 s; the filter passed the fundamental only at ~1.5 s / ~9 s), so run 1's filter
+# attack t90s were noise crossings. Op A's attack at 64 was at 52 % when its 2.5 s gate ended (112 just
+# finished in 14 s). These are estimates of the end of the sweep.
+EST_FILT_ATK_END = {0: 0.02, 16: 0.6, 32: 1.1, 48: 2.0, 64: 3.5, 80: 6.3, 96: 11.5, 104: 15.5, 112: 21.0,
+                    120: 28.0, 126: 35.0}
+EST_OP_ATK_END = {0: 0.01, 16: 0.5, 32: 1.0, 48: 2.0, 64: 4.0, 80: 6.3, 96: 10.0, 112: 16.0, 126: 24.0}
+R1_OP_DEC_T90 = {0: 0.005, 64: 1.0, 112: 3.98, 126: 5.9}                                 # 126 extrapolated
+LONG_CAP = 30.0         # longest filter / op attack gate: dt_analyse extrapolates an unfinished sweep
+DEC_CAP = 8.0           # amp decay / release: the slope over >= ~20 dB of the exponential is enough
+
+# LFO FADE (run 2): a fast sine tremolo on VOLUME whose per-cycle depth shows the fade ramp. Run 1's
+# raw levels (SQR, DEP +63, VOL 100): the high half sat at VOL 127 (+4.1 dB, clipped) and the low half
+# was silent, so DEP +63 swings VOL by >= 100 units: a sine at that depth clips at both ends. Hence VOL
+# 64 and DEP +12: about +-24 units if DEP +63 is +-127 (13.7 dB peak/trough), +-48 if it is +-254
+# (34 dB), unclipped either way. Run 1 also showed the fade is a linear ramp in absolute time (equal at
+# 80 and 120 BPM while that LFO's rate changed 1.5x): VOL ramped 160 units/s at -32 and 0.59 units/s
+# at -64, so the full fade takes >= 0.6 s (-32) and >= 170 s (-64): -56 and -64 cannot finish within
+# 30 s; their gates measure the ramp's slope and dt_analyse extrapolates.
+FADE_ZERO = 64          # LFO FADE (CC 109, 7-bit, -64..63): 64 = 0 assumed, not proved
+FADE2_SPD, FADE2_MULT, FADE2_DEP = 127, "F64", 64 + 12
+FADE2_GATE = {0: 1.5, 4: 1.5, 8: 1.5, 16: 1.5, 24: 1.5, 32: 2.5, 40: 12.0, 48: 30.0, 56: 20.0, 64: 20.0}
+
+
+def lfo_hz(spd_cc, mult, bpm=120.0):
+    """the manual's LFO speed table: one cycle = 128 / (SPD x MULT) whole notes; F mults at 120 BPM"""
+    spd = spd_cc - 64                     # coarse CC 127 = +63.00 (64 = 0, proved by run 1)
+    m = str(mult).upper()
+    fixed = m.startswith("F")
+    m = m[1:] if fixed else m
+    mv = int(m[:-1]) * 1024 if m.endswith("K") else int(m)
+    return abs(spd) * mv / 128 / (4 * 60 / (120.0 if fixed else bpm))
+
+
+def _logi(table, v):
+    """table {value: seconds}, interpolated (and extrapolated by the end segments) in log(T)"""
+    ks = sorted(table)
+    i = max(1, min(len(ks) - 1, next((j for j, k in enumerate(ks) if k >= v), len(ks) - 1)))
+    k0, k1 = ks[i - 1], ks[i]
+    a, b = math.log(table[k0]), math.log(table[k1])
+    return math.exp(a + (b - a) * (v - k0) / (k1 - k0))
+
+
+def build_plan_2():
+    """run 2: dense values where run 1 was coarse, long enough gates, and the redesigned fade; capture
+    files r2_<name>"""
+    caps = []
+
+    def cap(name, group, base, steps, hand=(), hand_keys=(), check_extra=()):
+        full = dict(BASE, **base)
+        for k in hand_keys:
+            full.pop(k, None)
+        caps.append({"name": "r2_" + name, "group": group, "hand": list(hand), "hand_keys": list(hand_keys),
+                     "base": full, "steps": steps, "check_extra": list(check_extra)})
+
+    def r(x):       # gates up to the next 0.1 s (never below the 1.3 x)
+        return math.ceil(x * 10 - 1e-9) / 10
+
+    atk = sorted([100, 104, 108, 112, 114, 116, 118, 120, 122, 124, 125, 126, 8, 16, 24, 48, 80])
+    cap("amp_atk", "amp_atk", {}, [
+        {"param": "amp_atk", "value": v, "set": {"amp_atk": v}, "gate": r(max(0.8, 1.3 * _logi(R1_AMP_ATK, v))),
+         "tail": 0.3, "kind": "attack"} for v in atk])
+    cap("amp_dec", "amp_dec", {"amp_sus": 0}, [
+        {"param": "amp_dec", "value": v, "set": {"amp_dec": v},
+         "gate": r(min(DEC_CAP, max(1.0, 1.3 * _logi(R1_AMP_T60, v)))), "tail": 0.3, "kind": "decay"}
+        for v in (4, 8, 16, 24, 48, 80, 104, 120)])
+    # ascending: a release tail outlives its step (run 1: it went on after AMP REL was set back to 0) and
+    # sounds under the next step, but a shorter one is >= 60 dB down before the next, longer, one is fitted
+    cap("amp_rel", "amp_rel", {}, [
+        {"param": "amp_rel", "value": v, "set": {"amp_rel": v}, "gate": 1.0,
+         "tail": r(min(DEC_CAP, max(1.0, 1.3 * _logi(R1_AMP_T60, v)))), "kind": "release"}
+        for v in (8, 24, 48, 80, 120)])
+    filt = {"f_type": "LP4", "f_freq": 20, "f_reso": 40, "f_env": 127, "fdbk": 70, "f_sus": 0,
+            "a_lev": 96, "a_atk": 0, "a_dec": 0, "a_end": 127}
+    eleven = [0, 16, 32, 48, 64, 80, 96, 104, 112, 120, 126]
+    cap("filt_dec", "filt_dec", filt, [
+        {"param": "f_dec", "value": v, "set": {"f_dec": v}, "gate": r(max(1.5, 2.0 * _logi(R1_FILT_DEC_T90, v))),
+         "tail": 0.3, "kind": "filt_decay"} for v in eleven])
+    cap("filt_atk", "filt_atk", dict(filt, f_sus=127), [
+        {"param": "f_atk", "value": v, "set": {"f_atk": v},
+         "gate": r(min(LONG_CAP, max(1.5, 1.3 * EST_FILT_ATK_END[v]))), "tail": 0.3, "kind": "filt_attack"}
+        for v in eleven])
+    nine = [0, 16, 32, 48, 64, 80, 96, 112, 126]
+    steps = [{"param": "a_atk", "value": v, "set": {"a_atk": v, "a_dec": 127, "a_end": 127},
+              "gate": r(min(LONG_CAP, max(1.5, 1.3 * EST_OP_ATK_END[v]))), "tail": 0.3, "kind": "op_attack"}
+             for v in nine]
+    steps += [{"param": "a_dec", "value": v, "set": {"a_atk": 0, "a_dec": v, "a_end": 0},
+               "gate": r(max(1.5, 2.5 * _logi(R1_OP_DEC_T90, v))), "tail": 0.3, "kind": "op_decay"}
+              for v in nine]
+    cap("opA", "opA", {"algo": 1, "a_lev": 110}, steps)
+    fade = {"vol": 64, "lfo1_dep": FADE2_DEP, "lfo1_spd": FADE2_SPD, "lfo1_wave": "SIN", "lfo1_mode": "TRG",
+            "lfo1_mult": FADE2_MULT}
+    hz = lfo_hz(FADE2_SPD, FADE2_MULT)
+    for tempo, disp in ((120, (0, -4, -8, -16, -24, -32, -40, -48, -56, -64)), (80, (0, -16, -32, -48))):
+        cap(f"fade_{tempo}", "fade", fade, [
+                {"param": "lfo1_fade", "value": max(0, FADE_ZERO + d), "display": d, "tempo": tempo,
+                 "set": {"lfo1_fade": max(0, FADE_ZERO + d)}, "gate": FADE2_GATE[-d], "tail": 0.3,
+                 "kind": "fade"} for d in disp],
+            hand=["LFO1 DEST = VOLUME (AMP VOL)", f"project TEMPO = {tempo} BPM"], hand_keys=["lfo1_dest"],
+            check_extra=[f"LFO1 SPD 63.00, DEP {FADE2_DEP - 64}.00 (a {hz:.2f} Hz sine at any tempo), VOL 64.00"])
+    return caps
+
+
+def build_plan(set_=1):
+    return build_plan_2() if set_ == 2 else build_plan_1()
+
+
 # the base's entries the plan prints on their own line (the list settings and MIX)
 LISTED = ["algo", "mix", "f_type", "ratio_c", "ratio_a", "lfo1_wave", "lfo1_mode", "lfo1_mult",
           "lfo1_dest", "lfo2_dest"]
@@ -194,6 +313,7 @@ def hand_text(c):
 
 GROUPS = ["amp_atk", "amp_dec", "amp_rel", "amp_hold", "filt_dec", "filt_atk", "filt_rel",
           "opA", "opB", "delay", "fade"]
+PREFIX = {1: "", 2: "r2_"}      # capture file names: run 2's never overwrite run 1's
 
 
 def capture_seconds(c):
@@ -203,9 +323,10 @@ def capture_seconds(c):
     return t
 
 
-def print_plan(caps):
+def print_plan(caps, set_=1):
     total = 0.0
     nsteps = 0
+    print(f"capture set {set_}" + (f": files {PREFIX[set_]}<capture>.wav/.json" if PREFIX[set_] else ""))
     for c in caps:
         d = capture_seconds(c)
         total += d
@@ -217,6 +338,7 @@ def print_plan(caps):
         for s in c["steps"]:
             nsteps += 1
             extra = f" tempo {s['tempo']}" if "tempo" in s else ""
+            extra += f" (display {s['display']:+d})" if "display" in s else ""
             print(f"   {s['param']:9s}={s['value']:3d}{extra}  set {s['set']}  note C4 v{VEL} "
                   f"gate {s['gate']:.1f} s, tail {s['tail']:.1f} s ({s['kind']})")
     print(f"\n{len(caps)} captures, {nsteps} steps, about {total/60:.1f} min of recording "
@@ -406,11 +528,11 @@ class Rig:
         self.setp({k: base[k] for k in MARKER})
 
 
-def sound_check(rig, out_dir):
+def sound_check(rig, out_dir, prefix=""):
     """one 0.5 s note recorded before the first capture: stop at once when the Digitone does not answer over
     USB MIDI or its USB audio is silent (a whole capture of silence otherwise)"""
     from dt_analyse import load_wav
-    wav = os.path.join(out_dir, "_sound_check.wav")
+    wav = os.path.join(out_dir, f"{prefix}_sound_check.wav")
     rig.start_rec(wav)
     try:
         time.sleep(1.0)
@@ -453,10 +575,10 @@ def run(caps, args):
                 print("nothing by hand: starting (Ctrl-C to stop)")
                 time.sleep(1.0)
             if not checked:
-                sound_check(rig, args.out)
+                sound_check(rig, args.out, PREFIX[args.set])
                 checked = True
             wav = os.path.join(args.out, f"{c['name']}.wav")
-            meta = {"capture": c["name"], "group": c["group"], "wav": os.path.basename(wav),
+            meta = {"capture": c["name"], "group": c["group"], "set": args.set, "wav": os.path.basename(wav),
                     "sample_rate": 48000, "note": NOTE, "velocity": VEL, "channel": args.channel,
                     "hand": c["hand"], "check": check_line(c), "base": base, "markers": [], "steps": []}
             jpath = wav[:-4] + ".json"
@@ -503,18 +625,24 @@ def main():
     ap.add_argument("--only", default="")
     ap.add_argument("--out", default=DEFAULT_OUT)
     ap.add_argument("--channel", type=int, default=1, help="track 1 MIDI channel (1-16)")
+    ap.add_argument("--set", type=int, default=1, choices=sorted(PREFIX),
+                    help="capture set: 1 = run 1 (default), 2 = run 2 (files r2_*)")
     a = ap.parse_args()
-    caps = build_plan()
+    caps = build_plan(a.set)
     if a.only:
         want = a.only.split(",")
+        have = sorted({c["group"] for c in caps})
         bad = [w for w in want if w not in GROUPS]
         if bad:
             ap.error(f"unknown group(s) {bad}; choose from {GROUPS}")
         if "amp_hold" in want:
             print("amp_hold: the original Digitone has no AMP HOLD; skipped.")
+        missing = [w for w in want if w not in have and w != "amp_hold"]
+        if missing:
+            print(f"not in set {a.set}: {missing} (set {a.set} has {have})")
         caps = [c for c in caps if c["group"] in want]
     if a.plan:
-        print_plan(caps)
+        print_plan(caps, a.set)
     else:
         run(caps, a)
 

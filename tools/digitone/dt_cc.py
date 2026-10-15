@@ -14,7 +14,12 @@ include USB.
 
 Parameters with a CC LSB column are 14-bit; they are sent as NRPN (CC99 MSB,
 CC98 LSB, CC6 value MSB, CC38 value LSB) so the fine part is set to 0 too.
-7-bit parameters are sent as plain CCs. Bipolar parameters take 64 = 0.
+7-bit parameters are sent as plain CCs. Bipolar parameters are assumed to take
+64 = 0, except HARM: HARM 0.00 is coarse 63 (HARM_ZERO; proved on the owner's
+device 2026-10-14, CC6 = 63 / CC38 = 0 shows 0.00, 64 shows non-zero; the .dnsnd
+record stores HARM 0.00 as 63 too). LFO1 SPD 64 = 0 is proved by run 1 (SPD 96
+= +32.00: the SQR period was 7.99 s at 120 BPM, 11.99 s at 80, MULT 1). The rest
+(MIX, ENV depth, PAN, LFO DEP, LFO FADE) are not proved.
 
 List parameters (LISTS below) take the value the Digitone shows, not 0..127. How
 the Digitone reads a plain 7-bit CC on the track channel for them was PROVED on the
@@ -28,8 +33,10 @@ the parameter's list.
                       sent 15 -> 4.00). Steps 16..24 and 26..34 are interpolated in that
                       table, not proved: refused here.
   LFO1 MULT, CC 108:  index into LFO_MULTS = 1 2 4 8 16 .. 2k, F1 .. F2k (sent 4 -> 16;
-                      eng_quad.c N_QUAD_MULT; only the first entries were seen, and which
-                      half is tempo-synced is not proved).
+                      eng_quad.c N_QUAD_MULT; only the first entries were seen). Index 0
+                      ("1") is tempo-synced: run 1's LFO period scaled exactly with the
+                      tempo, matching the manual's table (cycle = 128 / (SPD x MULT) whole
+                      notes). F1 .. F2k (index 12 ..) as the fixed-120-BPM half is assumed.
   LFO1 WAVE, CC 111:  TRI SIN SQR .. (sent 2 -> SQR; the rest in the manual's order).
   LFO1 MODE, CC 113:  FRE TRG HLD ONE HLF (sent 1 -> TRG).
   LFO1 DEST, CC 110:  NOT a list position (sent 5 -> "Ratio C", sent 66 -> "Amp
@@ -111,6 +118,10 @@ PARAMS = {
 # Parameters this tool never sends: the owner sets them by hand (and any LFO DEST but
 # NONE: list_value refuses it).
 HAND_ONLY = {"ratio_b"}
+
+# HARM 0.00 = NRPN 1/76 coarse 63 (not 64): proved on the owner's device 2026-10-14 (the
+# screen showed HARM non-zero with 64 all through run 1); the .dnsnd record stores 0.00 as 63.
+HARM_ZERO = 63
 
 # The list parameters' tables (the docstring: proved 2026-10-14)
 F_TYPES = ["OFF", "LP2", "HP", "LP4"]
