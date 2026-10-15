@@ -2040,7 +2040,7 @@ TIMER5 profiling session's, written beside this one.) Host: `run_cr_tests.sh` (c
 
 ## 2026-10-15 (velocity and aftertouch from the keys: Key Touch and Expression; 0.22)
 
-3y76. **Velocity and aftertouch from the FM-1's own keys (2026-10-14 / 15; the owner: "look into fm1-monk ... he
+3y81. **Velocity and aftertouch from the FM-1's own keys (2026-10-14 / 15; the owner: "look into fm1-monk ... he
 added velocity and aftertouch to the FM-1 which would be super cool to bring in to choralroot"; docs/VELOCITY.md).**
 Charles Vestal's Velo and MONK-1 (GPL-3.0-only, credited in LICENSING.md) read the keys' carbon pills through the
 SARADC on matrix rows PA7 / PA8 (20 of the 27 note keys; the top seven, C#5 .. G5, have no converter), a touched key's
@@ -2074,7 +2074,7 @@ polyphonic aftertouch out, anything on the screen, Velo's calibration (its open 
 two-conversion variant (VELOCITY.md 3.1). The emulator: `tools/emu/scripts/cr_expr.txt` (the EXPR screen on FM6, the
 VA, FM TONE; not yet in `test_cr.sh`).
 
-3y77. **The host tests for the key sensing, Key Touch and Expression (2026-10-15; the owner: "Do this task here").**
+3y82. **The host tests for the key sensing, Key Touch and Expression (2026-10-15; the owner: "Do this task here").**
 `tests/input_test.c`: the analog rows through `fm1_input_tick` with the converter as memory (one conversion a tick,
 taken at the next, on the column it was started on; every PA7 / PA8 key once per two frames, OCT- / OCT+'s slots the
 pot and the battery; a held key's every other sample driven, its row an output high at the level for the conversion
@@ -2084,7 +2084,7 @@ samples it; a conversion not done counts a timeout and the scan goes on; `con` 0
 middling, the integer log map within 6 steps of the float law over the whole driven range, the steep end the worst;
 a graze, a bounce while held, the release's two samples, two keys at once; the pressure settling, leaning, eased, let
 go, and the Sens). It measured what the study had wrong: the velocity is known at the second pulled-up sample after the
-touch, a driven one before each, 8.8 ms after the touch sample (the doc, the comments and 3y76's figure corrected). The
+touch, a driven one before each, 8.8 ms after the touch sample (the doc, the comments and 3y81's figure corrected). The
 log map moved out of TIMER5's tick with it (`cr_sense_take`, the main loop maps the landing), and the tick's two ADC
 steps are functions of their own (`fm1__an_take`, `fm1__an_start`, not inlined): `tests/target_budget.py` had read
 their cold paths, laid out after the tick with a jump back, as a loop around the whole tick (cost 11363 for a budget of

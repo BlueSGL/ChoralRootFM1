@@ -1,7 +1,7 @@
 # Velocity and aftertouch from the FM-1's keys (study and design, 2026-10-14)
 
 **Status (2026-10-15).** Built on branch claude/monk-velocity-fa0d69 after the study below, flashed and played by the
-owner (HISTORY 3y76): the scan's ADC slot and `cr_sense.c` (sections 3.1, 3.2); the root's press waits for its
+owner (HISTORY 3y81): the scan's ADC slot and `cr_sense.c` (sections 3.1, 3.2); the root's press waits for its
 velocity (3.3, the measured velocity, no scale); the top row at the keys' recent velocity (3.4, way 2); Options >
 **Key Touch** (Fixed, the default / Dynamic / Velocity + Aftertouch), **Velocity Sens** and **Aftertouch Sens**
 (the two entries of 3.6 became three; bits 2..7 of the block's `bass_on`); with Key Touch on, MONK-1's Touch:
@@ -14,7 +14,7 @@ polyphonic aftertouch in accepted. One figure of the study is wrong: the velocit
 sample after the touch, with a driven sample before each, 8.8 ms after the touch sample (tests/cr_sense_test.c), not
 4.4 .. 6.6; so a sensed root's note comes 7 .. 10 ms later than before, within cu_scan_keys's 12 ms wait. Not built:
 the PA10 probe, polyphonic aftertouch out, the screen, calibration,
-the 5 kHz variant. The host tests (HISTORY 3y77): `tests/input_test.c`'s analog block, `tests/cr_sense_test.c`,
+the 5 kHz variant. The host tests (HISTORY 3y82): `tests/input_test.c`'s analog block, `tests/cr_sense_test.c`,
 `tests/mod_test.c`'s Key Touch cases, `tests/cr_settings_test.c`'s bits, `tools/emu/scripts/cr_expr.txt` in
 `test_cr.sh`. The owner's readings: 689 note-ons in ten minutes,
 velocity 1 .. 127, quartiles 37 / 73 / 98. The sections below are the study as written before the build.
