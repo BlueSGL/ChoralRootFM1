@@ -4000,3 +4000,7 @@ playing loop (the host test's pads stand in; a loop would need a recording first
 (the table's KNOB 3 row, "Snap: Off, Scale or Chord", the lights' line), docs/SETTINGS.md (the rows, "0.22 added two
 more bits and no version, in `key_on`", the spare bits), docs/INTEGRATION.md's Snap bullet, firmware/src/CR_ENGINE.md's
 row, docs/releases/0.22.md "Merged after 0.22-beta2", docs/HANDOFF.md (the state line, an open item).
+**On the unit** (later the same evening, the owner: "Flash so I can try"): the unit runs this build (b865373,
+"ChoralRoot 0.22") over 0.22-beta2, `tools/fm1_install.py build/choralroot.fwsc --backup`; the backup before it is
+`fm1-backups/choralroot-backup-20261015-keysnap.json` (the settings, the 128 user sounds, the favourites, loop slot
+1). `--info` afterwards: "ChoralRoot 0.22". Not yet played by the owner.
