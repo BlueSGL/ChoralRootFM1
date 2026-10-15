@@ -10,7 +10,7 @@ import { existsSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { parseDnsnd, dnsndToQuad, DNSND_FIELDS, DN_QUAD_RANGES, DN_QP, DN_RATIO_A, DN_LFO_DEST, dnLz4Block, DN_TIME_TO_QUAD, dnTimeQ,
   DN_QUAD_HIRES, DN_QUAD_RANGES_V4, DN_QUAD_HIRES_V4, quadToV4, quadToV3, dnQuadPack } from "./fm1dnsnd.js";
-// AMP REL (version 5): a whole number by the time curve, below 127.00 at most 126; 127.xx = INF 127 (fm1dnsnd.js dnTRelA)
+// AMP REL (version 5): the whole number (times are 1:1), below 127.00 at most 126; 127.xx = INF 127 (fm1dnsnd.js dnTRelA)
 const R100 = (v) => v >= 127 ? 127 : Math.min(126, Math.round(dnTimeQ(v)));
 const T = (v) => DN_TIME_TO_QUAD[v], DN_RATIO_CB_OF = (i) => [0.25, 0.5, 0.75, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16][i];                       // the envelope time curve (fm1dnsnd.js DN_TIME_*)
 import { soundFromDnsnd, recordValid, SOUND_IDS, POOL_IDS, placeSound, parseSoundObjects, firstFreeSlot } from "./fm1sounds.js";
@@ -259,14 +259,16 @@ provedBad.forEach((s) => console.log(`  ${s}`));
   for (let t = 0; t <= 5; t++) { const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("FT", { "filter.type": t })))); got.push(`${qq.values[DN_QP.FTYPE]}${qq.notes.length}`); }
   ok(got.join() === "00,10,20,30,30,11", "filter type version 1: 0 OFF 1 LP12 2 HP12 3 LP24 4 LP24 (no notes), 5 unknown -> LP12 with a note");
 }
-{ // the envelope time curve: through the two measured points (SQB TK: AMP REL 10.13 -> 52..53, filter DEC 71 -> 97),
-  // 0 -> 0, rising, at most 126 (127 = INF stays for the releases)
-  ok(DN_TIME_TO_QUAD.length === 128 && T(0) === 0 && T(1) === 0 && T(71) === 97 && [52, 53].includes(Math.round(dnTimeQ(10.13))) &&
-     DN_TIME_TO_QUAD.every((x, i) => !i || x >= DN_TIME_TO_QUAD[i - 1]) && T(127) <= 126 && T(64) > 90 && T(64) < 100,
-     "envelope times: the curve holds the measured points, rises, 0 -> 0, max < 127");
-  const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("REL", { "amp.rel": [10, 33], "filter.rel": 127, "envA.end": 99, "envB.lev": 7 }))));
-  ok(qq.values[DN_QP.EREL] === R100(10.13) && qq.values[DN_QP.FREL] === 127 && qq.values[DN_QP.AEND] === 99 && qq.values[DN_QP.BLEV] === 7,
-     "envelope times: a hi-res release by the curve, REL INF stays 127, END and LEV are levels (1:1)");
+{ // the envelope times: 1:1, FM TONE's are the Digitone's since 2026-10-14 (docs/QUAD.md "Times"; the filter DEC 71 was
+  // FM TONE's 97 on the old curve); a hi-res AMP REL rounded, at most 126 below 127.00 (127 = INF stays for the releases)
+  ok(DN_TIME_TO_QUAD.length === 128 && DN_TIME_TO_QUAD.every((x, i) => x === i) && T(71) === 71 && dnTimeQ(10.13) === 10.13 &&
+     dnTimeQ(-1) === 0 && dnTimeQ(130) === 127,
+     "envelope times: 1:1 (0 -> 0, 71 -> 71, 127 -> 127)");
+  const qq = dnsndToQuad(await parseDnsnd(dnsnd(record("REL", { "amp.rel": [10, 33], "filter.rel": 127, "filter.dec": 71, "envA.atk": 71,
+    "envA.end": 99, "envB.lev": 7 }))));
+  ok(qq.values[DN_QP.EREL] === 10 && R100(10.13) === 10 && R100(126.85) === 126 && qq.values[DN_QP.FREL] === 127 && qq.values[DN_QP.FDEC] === 71 &&
+     qq.values[DN_QP.AATK] === 71 && qq.values[DN_QP.AEND] === 99 && qq.values[DN_QP.BLEV] === 7,
+     "envelope times: a hi-res release rounded (10.13 -> 10), REL INF stays 127, DEC / ATK 1:1, END and LEV are levels (1:1)");
 }
 { // the sound's OCTAVE (version 1 offset 263, version 5 offset 280, signed semitones): every ratio x 2^(oct / 12)
   const oc = async (set, opt) => dnsndToQuad(await parseDnsnd(dnsnd(record("OCT", set, opt))));

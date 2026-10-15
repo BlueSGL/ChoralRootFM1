@@ -71,16 +71,14 @@ export const DN_FTYPE_V1 = ["OFF", "LP2", "HP", "LP4", "LP4"];
 export const DN_FTYPE_V1_PROVED = [false, false, true, true, true];
 const DN_FTYPE_V1_TO_QUAD = [DN_QF.OFF, DN_QF.LP12, DN_QF.HP12, DN_QF.LP24, DN_QF.LP24];
 
-// ---- the envelope TIME curve: a Digitone time value 0..127 -> FM TONE's (one place to refine).
-// FM TONE (tools/gen_tables.py): T(v) = 10^(4 v / 127) ms, 1 ms .. 10 s; ATK linear to full in T, DEC / REL exponential,
-// -40 dB at T. The Digitone's curve is not in its manual or files; two points measured on the owner's recording of SQB TK
-// (2026-10-14, docs/SOUNDS.md "Envelope times"): AMP REL 10.13 falls 40 dB in ~45 ms = FM TONE 52.5 (renders at REL 50 /
-// 52 / 53 / 54 bracket it), and the filter DEC 71 closes like FM TONE's 97 (+-3: the centroid over 2 s). Through both, a
-// power law (T = 0 at 0): FM TONE = DN_TIME_K x log10(v) + DN_TIME_C, i.e. the Digitone's T = 2.9 s x (v / 127)^1.66.
-// Below 10 and above 71 it is extrapolated; ATK and the operator envelopes are assumed to follow the same curve
-export const DN_TIME_K = 52.6, DN_TIME_C = -0.4;
-export const dnTimeQ = (v) => v <= 0 ? 0 : Math.max(0, Math.min(126, DN_TIME_K * Math.log10(Math.min(127, v)) + DN_TIME_C));
-export const DN_TIME_TO_QUAD = Array.from({ length: 128 }, (_, v) => Math.round(dnTimeQ(v)));
+// ---- the envelope times: a Digitone time value 0..127 -> FM TONE's: 1:1. Since 2026-10-14 FM TONE's times are the
+// Digitone's, measured on the owner's unit (docs/QUAD.md "Times", tools/digitone/digitone_times.json): a table per
+// envelope type (amp attack, amp decay / release, filter attack, filter decay / release, operator attack, operator
+// decay), the DELAYs v / 32 beats, the LFO FADE's times. (Before, a power law through two points of a recording mapped
+// them onto FM TONE's old 1 ms .. 10 s curve: the Digitone's filter DEC 71 was FM TONE's 97.) A value with hundredths
+// (AMP REL) is rounded; a release's 127 is INF on both
+export const dnTimeQ = (v) => Math.max(0, Math.min(127, v));
+export const DN_TIME_TO_QUAD = Array.from({ length: 128 }, (_, v) => v);
 
 // ---- the sound's OCTAVE (the manual §9.5.10: "Sets the base octave of the Sound"): a signed byte in semitones, version
 // 1 offset 263, version 5 offset 280 (the record's tail moved by 17). Inferred: the factory corpus holds only multiples
@@ -146,7 +144,7 @@ const dnLfo = (k) => {
     [`lfo${k + 1}.depth`, 58 + 2 * k, 1, "slot", (d, o) => dnHi(d, o) - 64, dnTo100(dnQlfo(k, "DEPTH"))],
   ];
 };
-const dnT = (v) => DN_TIME_TO_QUAD[Math.max(0, Math.min(127, dnR(v)))];             // a time value (DN_TIME_TO_QUAD)
+const dnT = (v) => DN_TIME_TO_QUAD[Math.max(0, Math.min(127, dnR(v)))];             // a time value: 1:1
 const dnTRel = (v) => v >= 127 ? 127 : dnR(dnTimeQ(v));                                 // a release: 127 INF
 const dnTRelA = (v) => v >= 127 ? 127 : Math.min(126, dnR(dnTimeQ(v)));               // AMP REL: 127.xx INF, else <= 126
 const dnEnv = (x, base) => ["atk", "dec", "end", "lev"].map((f, i) => [`env${x}.${f}`, base + 2 * i, 0, "verified", dnLo,
