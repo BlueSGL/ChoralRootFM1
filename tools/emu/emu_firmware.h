@@ -133,6 +133,29 @@ static void mix_block(int32_t *out, uint32_t n)        /* the audio ISR's block:
  * with a second run, tools/emu/test_cr.sh) */
 #define CR_REBOOT() do { bootguard_settled(&bootguard); printf("reboot: guard failed %u pending %u\n", (unsigned)bootguard.failed, \
                                 (unsigned)bootguard.pending); fflush(stdout); exit(0); } while (0)
+/* GEEK OUT 2 (cr_ui.c cu_geek2). RAM and POOL: the device's link map (app.ld); the host has none: "n/a", in the grey.
+ * CORE 0: audio.c's measure is the host's wall time here (a fast host: about 0 %); with EMU_STAGES=1 the ISR's stages
+ * in device us instead (emu_fw.c: host instructions / 259), core 1's job left out, the wait in (cu_geek2 takes it
+ * off); the peak the stages' peaks summed (an upper bound) */
+#define CR_MEM_USED(r, p) ((r) = (p) = 0xFFFFFFFFu)
+#define CR_CORE0_US(avg, max) emu_core0_us(&(avg), &(max))
+static void emu_core0_us(uint32_t *avg, uint32_t *mx)
+{
+    *avg = cpu_last.avg_us;
+    *mx = cpu_last.max_us;
+#if CR_CPU1
+    if (cr_dbg.prof_on) {
+        uint32_t k;
+        *avg = *mx = 0;
+        for (k = 0; k < CRP_N; k++)
+            if (k != CRP_WAIT || cr_dbg.c1 == C1_OK)
+                if (k != CRP_PART1 || cr_dbg.c1 != C1_OK) {
+                    *avg += cr_dbg.avg_us[k];
+                    *mx += cr_dbg.max_us[k];
+                }
+    }
+#endif
+}
 #include "../../firmware/src/cr_ui.c"
 #include "../../firmware/src/cr_settings.c"           /* the settings record (after cr_ui.c and storage.c) */
 #include "../../firmware/src/fm6_store.c"             /* FM6: DX7 SysEx (Melodee's; after cr_ui.c: the editor's part) */

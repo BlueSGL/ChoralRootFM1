@@ -482,7 +482,7 @@ Roman numeral of the chord that is sounding, in blue, centred above the chord's 
 with a major third (and for sus chords, power chords and single notes), small letters for a minor third; `°` after a
 diminished chord, `+` after an augmented one. When nothing sounds there is no numeral, and the name stays where it
 is. While an arpeggio or another performance mode steps through the chord, the name sits a little lower to make room
-for the numeral. The other views (Keyboard, Notes, Geek Out, Scope) and the layers show no numeral.
+for the numeral. The other views (Keyboard, Notes, Geek Out, Scope, Geek Out 2) and the layers show no numeral.
 
 The numeral counts from the tonic to the root **as you played it**: Transpose is left out. With Transpose +1 in C
 major, the chord on C sounds as C sharp major; the name says `C#M` (what you hear) and the numeral says `I` (the
@@ -1316,7 +1316,7 @@ The whole editor: [EDITOR.md](EDITOR.md).
 
 ## 13. Views
 
-The view is what the screen shows when no layer, menu or editor is open. There are five.
+The view is what the screen shows when no layer, menu or editor is open. There are six.
 
 | View | Shows |
 | --- | --- |
@@ -1325,13 +1325,14 @@ The view is what the screen shows when no layer, menu or editor is open. There a
 | **Notes** | the chord name small and the notes as a list |
 | **Geek Out** | the chord, its notes and keyboard, and status lines: voicing and play style, bass and tempo, the audio load, the second core (`c1 off`, `c1 ok ...`), the transposition |
 | **Scope** | the waveform of the output, with the chord name small above it |
+| **Geek Out 2** (new in 0.22) | four meters: the audio load of core 0 and of core 1 (the bass part's render), the RAM and the POOL in use; the peak of the last second as a tick. With one core running, core 1's meter is grey and says why (`off`, `failed`, `gave up`) |
 
 - **HOME** tap goes back to the view from anywhere. On the view itself it steps to the next view.
-- **HOME held** for 0.6 s opens the view menu: SELECT or the white keys D4 to A4 choose the view, KNOB 1 (or B4)
+- **HOME held** for 0.6 s opens the view menu: SELECT or the white keys D4 to B4 choose the view, KNOB 1 (or C5)
   switches **Lock** on and off; OCT+, OCT-, HOME or holding HOME again closes it. With Lock on, a HOME tap never changes the view; it only goes home.
 - Options > View sets the same thing.
 
-Options > Motion (Full, Calm, Off) sets how much the screens animate; the hopping note of an arpeggio is not an animation and shows with Off too. The sound editor never animates. The other four views never change with the performance mode.
+Options > Motion (Full, Calm, Off) sets how much the screens animate; the hopping note of an arpeggio is not an animation and shows with Off too. The sound editor never animates. The other five views never change with the performance mode.
 
 ## 14. Options
 
@@ -1365,7 +1366,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **MIDI Raw Chord** | Off, ch 1 to ch 16 | Off | the channel for the plain chord, without the performance mode. From Off the first step is ch 1; choose a channel of its own (the Orchid uses 3) |
 | **Raw Chord Sound** | Off, On | Off | On: the plain chord also plays on the chord sound, under an arpeggio or pattern. With no performance mode on, every note then sounds twice |
 | **MIDI Clock** | Off, Out, In | Out | Out: sends clock, and start / stop with the loop. In: follows them |
-| **View** | Chord, Keyboard, Notes, Geek Out, Scope | Chord | the view ([Views](#13-views)) |
+| **View** | Chord, Keyboard, Notes, Geek Out, Scope, Geek Out 2 | Chord | the view ([Views](#13-views)) |
 | **Motion** | Full, Calm, Off | Full | screen animation |
 | **Chord Names** | Orchid, Standard | Orchid | how a chord is named on every screen. Orchid: by the keys held, as the Orchid does (`A` `7 9`, `JAZZ`). Standard: as a lead sheet names the notes that sound (`A9`, `Aadd9`, `A13`). Only the name changes, never the notes ([Chord names](#chord-names)) |
 | **LEDs** | Glow, Stock | Glow | Glow: idle keys glow dim, active ones are bright. Stock: the reverse |
@@ -1803,7 +1804,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |
-| white roots D4 to A4, then B4, view menu | Chord, Keyboard, Notes, Geek Out, Scope; Lock |
+| white roots D4 to B4, then C5, view menu | Chord, Keyboard, Notes, Geek Out, Scope, Geek Out 2; Lock |
 | white roots D4 to G4, BASS layer | the bass behaviour |
 | white roots D4 to F4, the SEQ key's hold menu (metronome) | 4/4, 3/4, 6/8 |
 

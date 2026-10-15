@@ -201,8 +201,8 @@ static void crs_sanitize(cr_settings_t *s)
     }
     CRS_FIX(clock_mode, 0, CRS_CLOCK_IN);
     CRS_FIX(raw_sound, 0, 1);
-    if ((s->view & 0x38u) || CRS_VIEW(s) > 4u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; an unknown bit
-                                                    * or view: the default) */
+    if ((s->view & 0x38u) || CRS_VIEW(s) > 5u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; an unknown bit
+                                                    * or view: the default; 5 Geek Out 2) */
         s->view = d.view;
     CRS_FIX(motion, 0, 2);
     CRS_FIX(leds, 0, 1);

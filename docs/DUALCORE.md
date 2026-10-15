@@ -148,6 +148,21 @@ would be the next step if the CPU is ever short.
 
 On the device with core 1 the half is about the block less part1, plus the wait.
 
+### Geek Out 2 (0.22): the loads and the memory as meters
+
+The sixth view (`V_GEEK2`, stored as view 5; after Scope in HOME's cycle, the view menu and Options > View): the
+editor's four tall level bars (`CR_K_EDIT8`, `tall` 2: the readout variant, no knob underlines, a peak tick) in the
+knob colours. **CORE 0** (blue): the audio ISR's share of core 0 over the last second, `cpu_last.avg_us` less the
+wait for core 1 (`cr_dbg.avg_us[CRP_WAIT]`, with core 1 alive) over the 2902 us half; the tick its peak (`max_us`
+less the wait's). **CORE 1** (orange: the bass part, which is what it renders): `cr_dbg.avg_us[CRP_PART1]` over the
+half while `c1 ok`, its `max_us` the tick; `off` / `failed` / `gave up` in the grey otherwise. **RAM** (white) and
+**POOL** (green): the link-time use of the two regions (`_bss_end` over the 96 KiB RAM, `_pool_end - _pool_start`
+over POOL's 0x54000): the same figures as `./build.sh`'s size line, on the unit. The shown load glides toward each
+second's figure (a quarter of the way per UI frame); the ticks jump. The title line: `GEEK OUT 2`, and `2 cores` or
+`1 core` on the right with the battery. The main loop's own share of core 0 (the UI, USB, MIDI) is not in CORE 0: the
+meter is the engine's, as GEEK OUT's `isr` figure is. Emulator: `tools/emu/scripts/cr_geek2.txt`
+(`build/emu/test/cr_geek2.ppm`, `test_cr.sh`).
+
 ## Options > Dual Core (0.15; Off by default since 0.16)
 
 Options > **Dual Core: On / Off** (after USB Level; settings v12, bit 6 of `view` set = On, docs/SETTINGS.md),
@@ -289,7 +304,9 @@ of ChoralRootFM1#9 saw exactly that ("a crash/reboot loop"). From 0.22 the unit 
   the RAM `fm1_cstart` is clearing (Jangada's finding in fm1-x0x#10; fm1-x0x does the same).
 
 What this does not do: start core 1 again by itself. A unit that was barred stays on one core until its owner turns
-Dual Core On again; the option's line says why it is Off. Host tests: `tests/cr_cpu1_test.c` section `bar`.
+Dual Core On again; the option's line says why it is Off. Host tests: `tests/cr_cpu1_test.c` section `bar`. The
+emulator (`test_cr.sh`, `EMU_C1=hang`): the give-up's message, one settings save with `dualcore 0` and its erase once
+the chord is released (the WAV is one core's up to it), and a relaunch on that flash boots `c1 off`.
 
 **Counters**: `--debug` (`tools/fm1_install.py`, after `c1_jobs`): `c1_rejected`, `c1_faults`, `c1_fallback` (1: core 1 given up this session),
 `rail_sysvdd_boot`, `rail_sysvdd_now`, `rail_vdc14_boot`, `rail_vdc14_now`; and, as the last value of 78 PEAK (73 DEBUG

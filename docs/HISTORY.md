@@ -1943,4 +1943,25 @@ a crash leaves. Written by an Opus agent to a brief, reviewed. Host: `cr_cpu1_te
 emulator built, `./build.sh` for both `CR_CORE1_TEST` values: XIP 84.5 %, RAM 82.8 %, POOL 91.7 %, NOINIT 228 B.
 **Not done**: nothing on a unit (the owner's runs both cores clean, and the other session had the FM-1): the device
 checklist's step 5 (`core1_fault_test.py bar` on a `CR_CORE1_TEST` build) and a word from the reporter of #9 on
-0.22 are what is left. The choice of 5 for VDC14 is the owner's to confirm: the HANDOFF rule was 14 / 4.
+0.22 are what is left. VDC14 5 was the owner's call the same day ("My HANDOFF rule can be broken"): the rule is 14 / 5.
+**Found by 3y39's run of `test_cr.sh`**: the hung-job check ("a hung job's WAV = one core's") failed, because the
+give-up now saves Dual Core Off once the chord is released and the unit is quiet, and the emulator plays the erase as
+the device does (45 ms of silence): the WAVs part at 4.7 s. The check now compares the first 4.5 s, then asserts
+the save (one erase, `dualcore 0` in the record) and that a relaunch on that flash boots `c1 off`.
+
+3y39. **Geek Out 2: the cores' load and the memory as four meters (2026-10-14; the owner: "add a second GEEK OUT 2
+menu with meters that show each core's CPU load as well as RAM"; docs/DUALCORE.md "Geek Out 2").** A sixth view
+(`V_GEEK2`, stored 5, after Scope: an older record keeps its meaning, 0.21 reads 5 as Chord), drawn with the
+editor's tall level bars (`CR_K_EDIT8`, `tall` 2: the read-out variant in `cr_p_tall`: bright, no knob underlines,
+`pct2` a 2 px peak tick, `CR_CF_DIM` grey) under the editor's title line with the battery: CORE 0 (blue; the ISR's
+share of a half less the wait for core 1, audio.c `cpu_last` over the new `CPU_HALF_US`), CORE 1 (orange, the bass:
+`CRP_PART1`; `off` / `failed` / `gave up` grey), RAM and POOL (link-time: `_bss_end`, `_pool_*`; `CR_MEM_USED`).
+The core bars glide a quarter of the way per frame; the emulator has no link map (RAM / POOL `n/a`) and its ISR time
+is the host's, so it sums the stages (`emu_firmware.h`). The view menu's Lock moves to the seventh white root (C5).
+Written by an Opus agent to a brief, reviewed. Host: `run_cr_tests.sh` ok (`cr_settings` 234: the view 5 round
+trip), `run_cr_draw.sh` 94 screens (two device states of the view), `test_cr.sh` (`cr_geek2.txt`: the view by the
+menu, the cells, the bars' colours at two pixels, six HOME taps round; `cr_arp_view.txt` needed one more tap),
+`./build.sh` XIP 84.6 %, RAM 82.8 %, POOL 91.7 %. The device shots: `build/emu/test/cr_geek2.png` (two cores: CORE 0
+18 % with its tick, CORE 1 3 %), `cr_geek2_one.png`. **Not done**: nothing on a unit (the RAM / POOL bars at 83 % /
+92 % are the size line's figures, not yet read off the screen); no designer mock-up in the 24-state JSON (the two
+states are in `gen_cr_screens.py`'s device list).

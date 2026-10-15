@@ -2357,15 +2357,47 @@ for m in nostart hang; do
     echo "$l" | grep -q "c1 $want" && [ "${g:-0}" -ge 1 ] && ok "EMU_C1=$m: $l, one core's shared budget ($g given up)" ||
         bad "EMU_C1=$m: ${l:-none}, ${g:-?} given up"
 done
+cp "$OUT/cr_dualcore_run_flash.bin" "$OUT/cr_dualcore_hang_flash.bin"   # (the hang run saved Dual Core Off into it: below)
 dcflash
 EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_run_flash.bin" --script "$S/cr_dmaj.txt" --wav "$OUT/cr_dmaj_dualcore.wav" >"$OUT/cr_dmaj_dualcore.log" 2>&1
 LC_ALL=C grep -aq '^cpu: stages .* c1 ok, jobs [1-9]' "$OUT/cr_dmaj_dualcore.log" && cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_dualcore.wav" &&
     ok "cr_dmaj: the split's WAV (Dual Core On) = one core's (the default), bit for bit" ||
     bad "cr_dmaj: the split's WAV differs from one core's (or core 1 did not run)"
-cmp -s "$OUT/cr_dualcore_hang.wav" "$OUT/cr_dualcore_nostart.wav" && ok "a hung job from the first block: one core's WAV" ||
-    bad "a hung job's WAV differs from one core's"
+# a hung job from the first block: core 0 renders it, one core's samples; and (0.22, docs/DUALCORE.md "The persistent
+# fallback") the give-up turns Options > Dual Core Off and the settings save it once the chord is released and the
+# unit is quiet: one erase, played as 45 ms of silence (4.7 s in), so the WAVs are compared up to there (4.5 s)
+cmp -s -n 800000 "$OUT/cr_dualcore_hang.wav" "$OUT/cr_dualcore_nostart.wav" && ok "a hung job from the first block: one core's WAV (the first 4.5 s)" ||
+    bad "a hung job's WAV differs from one core's in the first 4.5 s"
+LC_ALL=C grep -aq '^  flash: .* settings saves 1 ' "$OUT/cr_dualcore_hang.log" && LC_ALL=C grep -aq '^  settings: .* dualcore 0 ' "$OUT/cr_dualcore_hang.log" &&
+    LC_ALL=C grep -aq '^  flash erases with the audio stalled 1 ' "$OUT/cr_dualcore_hang.log" &&
+    ok "the give-up saved Dual Core Off (one settings save, one erase)" || bad "the give-up did not save Dual Core Off"
+EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_hang_flash.bin" --script "$S/cr_dualcore.txt" >"$OUT/cr_dualcore_after_hang.log" 2>&1
+l=$(c1line "$OUT/cr_dualcore_after_hang.log")
+echo "$l" | grep -q "c1 off" && ok "the power-on after the give-up: $l (the record says Off)" || bad "after the give-up: ${l:-none}"
 cmp -s "$OUT/cr_dualcore_fresh.wav" "$OUT/cr_dualcore_nostart.wav" && ok "Dual Core Off: the WAV of a core 1 that did not start" ||
     bad "Dual Core Off: the WAV differs from a core 1 that did not start"
+
+echo "GEEK OUT 2 (the sixth view): CORE 0, CORE 1, RAM, POOL as tall bars; one core: CORE 1 dim; six HOME taps round"
+g2c() { LC_ALL=C grep -a '^  screen reads:' "$1" | sed -n "$2p" | sed -n 's/.* cells //p'; }
+g2v() { LC_ALL=C grep -a '^  cr: key' "$1" | sed -n "$2p" | sed -n 's/.* view \([0-9]\) .*/\1/p'; }
+EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_geek2.txt" >"$OUT/cr_geek2_one.log" 2>&1
+[ -s "$OUT/cr_geek2.ppm" ] && mv "$OUT/cr_geek2.ppm" "$OUT/cr_geek2_one.ppm"
+c=$(g2c "$OUT/cr_geek2_one.log" 1)
+echo "$c" | grep -q '^0.0:CORE 0=[1-9][0-9]*% 0.1:CORE 1=off 0.2:RAM=n/a 0.3:POOL=n/a$' &&
+    ok "one core (Dual Core Off): $c ($OUT/cr_geek2_one.ppm)" || bad "one core: ${c:-no cells}"
+dcflash
+export EMU_STAGES=1 EMU_UI_LOG=0
+run cr_geek2 --flash "$OUT/cr_dualcore_run_flash.bin"
+unset EMU_STAGES EMU_UI_LOG
+L="$OUT/cr_geek2.log"
+c=$(g2c "$L" 1)
+has '^view: Geek Out 2' "$L" && [ "$(g2v "$L" 1)" = 5 ] && echo "$c" | grep -q '^0.0:CORE 0=[1-9][0-9]*% 0.1:CORE 1=[1-9][0-9]*% 0.2:RAM=n/a 0.3:POOL=n/a$' &&
+    ok "the view menu, B4 (the sixth white root): view: Geek Out 2, two cores: $c" || bad "Geek Out 2: view $(g2v "$L" 1), ${c:-no cells}"
+b=$(echo $(pixel "$OUT/cr_geek2.ppm" 30 202)); o=$(echo $(pixel "$OUT/cr_geek2.ppm" 90 203))
+echo "$b" | awk '{ exit !($3 > 150 && $1 < 100) }' && echo "$o" | awk '{ exit !($1 > 200 && $2 > 80 && $2 < 160 && $3 < 80) }' &&
+    ok "CORE 0's bar blue ($b), CORE 1's orange ($o): $OUT/cr_geek2.ppm" || bad "the bars' colours: CORE 0 $b, CORE 1 $o"
+[ "$(g2v "$L" 2)" = 4 ] && [ "$(g2v "$L" 3)" = 5 ] && ok "HOME tapped: five taps Scope, the sixth Geek Out 2 again (six views)" ||
+    bad "the HOME cycle: views $(g2v "$L" 2) / $(g2v "$L" 3)"
 
 echo "Options > Dual Core back Off at the next power-on (c1 off, the shared budget), On again (c1 ok)"
 DF="$OUT/cr_dualcore_flash.bin"

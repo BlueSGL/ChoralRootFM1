@@ -1707,14 +1707,16 @@ static void cr_mark(const cr_cell_t *c, int32_t x1, int32_t y0)
 }
 
 /* edit8 `tall`: one row of four level bars over the panel (the oscillator mixer): the label, a tall well filled from
- * the bottom, the value; the knob bars under them */
+ * the bottom, the value; the knob bars under them. tall 2, a read-out (Geek Out 2): bright, no knob bars, pct2 (not 0)
+ * a 2 px peak tick across the well (the cell's colour over the fill, a darker shade inside it), CR_CF_DIM in the grey */
 static void cr_p_tall(const cr_screen_t *s)
 {
     int32_t ci;
+    int ro = s->tall == 2u;
     for (ci = 0; ci < 4; ci++) {
         const cr_cell_t *c = &s->cell[0][ci];
         int32_t x = ci * 60, cx = P8(x + 30), top = 56, h = 148, f;
-        uint16_t col = cr_ccol((uint32_t)ci, s->active == 0u);
+        uint16_t col = (c->flags & CR_CF_DIM) ? cr_rgb(CR_COL_GREY, T_DIM) : cr_ccol((uint32_t)ci, ro || s->active == 0u);
         int hot = s->hot_r == 1u && s->hot_c == ci;
         if (!(c->flags & CR_CF_ON)) continue;
         if (c->label[0]) {
@@ -1726,9 +1728,14 @@ static void cr_p_tall(const cr_screen_t *s)
         f = h * (c->pct >= 255 ? 256 : c->pct) / 256;
         cr_fill(x + 18, top, 24, h - f, T_LINE);
         if (f > 0) cr_fill(x + 18, top + h - f, 24, f, col);
+        if (ro && c->pct2) {                         /* the peak: its top edge at pct2's height */
+            int32_t p = h * (c->pct2 >= 255 ? 256 : c->pct2) / 256, y = top + h - p;
+            y = y < top ? top : y > top + h - 2 ? top + h - 2 : y;
+            cr_fill(x + 18, y, 24, 2, p > f ? col : ux_mix(col, T_BG, 50));
+        }
         cr_cvalue(c, cx, P8(226), P8(60), 17, hot ? cr_hcol(s, col) : col, hot, 0);
     }
-    if (s->active == 0u)
+    if (s->active == 0u && !ro)
         for (ci = 0; ci < 4; ci++)
             if (s->cell[0][ci].flags & CR_CF_ON)
                 cr_fill(ci * 60 + 4, 236, 52, 2, cr_ccol((uint32_t)ci, 1));

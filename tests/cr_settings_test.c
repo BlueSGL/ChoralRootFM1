@@ -887,7 +887,10 @@ static void t_view_lock(void)
     s.view = CRS_VIEW_BYTE(4u, 0);
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VIEW(&r) == 4 && !CRS_VIEW_LOCK(&r), "v9: Scope, unlocked");
-    s.view = 0x85;                                 /* a view out of range, locked */
+    s.view = CRS_VIEW_BYTE(5u, 1);                 /* 0.22: Geek Out 2 (the sixth view), locked */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VIEW(&r) == 5 && CRS_VIEW_LOCK(&r), "Geek Out 2 + lock round-trip");
+    s.view = 0x86;                                 /* a view out of range, locked */
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.view == d.view, "v9: a view out of range takes the default");
     s.view = 0x12;                                 /* an unknown bit */

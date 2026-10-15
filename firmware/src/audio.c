@@ -32,6 +32,7 @@ static struct {
     uint32_t avg_us, max_us, max_all_us, halves, late, ui_max_ms, ui_frames;   /* the last full second */
     uint32_t late0, t0, ui_last, ui_max, ui_n;                                 /* the window being filled */
 } cpu_last;
+#define CPU_HALF_US (HALF_FRAMES * 1000000u / FS)   /* a half's budget, us: 2902 (console.c audio_budget_us) */
 static void cpu_window(uint32_t now_ms)          /* once per UI frame: a frame's period, and the second's close */
 {
     uint32_t d = now_ms - cpu_last.ui_last;
