@@ -3,16 +3,9 @@
   "version": 2,
   "kind": "design",
   "name": "rows",
-  "note": "a mock-up (3y93): P5's editor as the editor's own edit8 screens, rows of up to four cells, the Prophet-5's controls as the cells' glyphs (the cell styles p5knob, p5led .., p5led2, p5switch); the owner's to rearrange",
-  "engine": {
-    "index": 16,
-    "name": "P5"
-  },
+  "engine": {"index": 16, "name": "P5"},
   "params_hash": "f5941e824048848d",
-  "header": {
-    "kind": "title-line",
-    "note": "the editor's title line: the sound's name left, the page's name right (fixed)"
-  },
+  "header": {"kind": "title-line"},
   "groups": [
     {
       "group": 0,
@@ -27,51 +20,19 @@
             {
               "title": "OSC A",
               "cells": [
-                {
-                  "param": "OSC A:FREQ",
-                  "label": "Freq",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "OSC A:SAW",
-                  "label": "Saw",
-                  "style": "p5led-saw"
-                },
-                {
-                  "param": "OSC A:PULSE",
-                  "label": "Pulse",
-                  "style": "p5led-sqr"
-                },
-                {
-                  "param": "OSC A:WIDTH",
-                  "label": "Width",
-                  "style": "p5knob"
-                }
+                {"param": "OSC A:FREQ", "style": "p5knob"},
+                {"param": "OSC A:SAW", "style": "p5led-saw"},
+                {"param": "OSC A:PULSE", "style": "p5led-sqr"},
+                {"param": "OSC A:WIDTH", "style": "p5knob"}
               ]
             },
             {
               "title": "OSC A",
               "cells": [
-                {
-                  "param": "OSC A+:SYNC",
-                  "label": "Sync",
-                  "style": "p5led"
-                },
-                {
-                  "param": "MIXER:MIX A",
-                  "label": "Mix A",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "MIXER:MIX B",
-                  "label": "Mix B",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "MIXER:NOISE",
-                  "label": "Noise",
-                  "style": "p5knob"
-                }
+                {"param": "OSC A+:SYNC", "style": "p5led"},
+                {"param": "MIXER:MIX A", "label": "Mix A", "style": "p5knob"},
+                {"param": "MIXER:MIX B", "label": "Mix B", "style": "p5knob"},
+                {"param": "MIXER:NOISE", "label": "Noise", "style": "p5knob"}
               ]
             }
           ]
@@ -85,51 +46,19 @@
             {
               "title": "OSC B",
               "cells": [
-                {
-                  "param": "OSC B:FREQ",
-                  "label": "Freq",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "OSC B:SAW",
-                  "label": "Saw",
-                  "style": "p5led-saw"
-                },
-                {
-                  "param": "OSC B:TRI",
-                  "label": "Tri",
-                  "style": "p5led-tri"
-                },
-                {
-                  "param": "OSC B+:PULSE",
-                  "label": "Pulse",
-                  "style": "p5led-sqr"
-                }
+                {"param": "OSC B:FREQ", "style": "p5knob"},
+                {"param": "OSC B:SAW", "style": "p5led-saw"},
+                {"param": "OSC B:TRI", "style": "p5led-tri"},
+                {"param": "OSC B+:PULSE", "style": "p5led-sqr"}
               ]
             },
             {
               "title": "OSC B",
               "cells": [
-                {
-                  "param": "OSC B:FINE",
-                  "label": "Fine",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "OSC B+:WIDTH",
-                  "label": "Width",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "OSC B+:LOFREQ",
-                  "label": "Lo freq",
-                  "style": "p5led"
-                },
-                {
-                  "param": "OSC B+:KEYBD",
-                  "label": "Keyboard",
-                  "style": "p5led"
-                }
+                {"param": "OSC B:FINE", "style": "p5knob"},
+                {"param": "OSC B+:WIDTH", "style": "p5knob"},
+                {"param": "OSC B+:LOFREQ", "style": "p5led"},
+                {"param": "OSC B+:KEYBD", "style": "p5led"}
               ]
             }
           ]
@@ -149,43 +78,10 @@
             {
               "title": "FILTER",
               "cells": [
-                {
-                  "param": "FILTER:CUT",
-                  "label": "Cutoff",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "FILTER:RES",
-                  "label": "Reso",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "FILTER:FENV",
-                  "label": "Env amt",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "FILTER:KTRK",
-                  "label": "Key trk",
-                  "style": "p5switch"
-                }
-              ]
-            },
-            {
-              "title": "FILTER",
-              "cells": [
-                {
-                  "param": "FILTER+:REV",
-                  "label": "Rev",
-                  "style": "p5led2"
-                },
-                {
-                  "param": "FILTER+:AFTER",
-                  "label": "Aftertch",
-                  "style": "p5led"
-                },
-                null,
-                null
+                {"param": "FILTER:CUT", "style": "p5knob"},
+                {"param": "FILTER:RES", "style": "p5knob"},
+                {"param": "FILTER:FENV", "style": "p5knob"},
+                {"param": "FILTER+:REV", "style": "p5led2"}
               ]
             }
           ]
@@ -199,39 +95,27 @@
             {
               "title": "ENV 2 · filter",
               "cells": [
-                {
-                  "param": "ENV 2:ATK",
-                  "label": "Attack",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "ENV 2:DEC",
-                  "label": "Decay",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "ENV 2:SUS",
-                  "label": "Sustain",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "ENV 2:REL",
-                  "label": "Release",
-                  "style": "p5knob"
-                }
+                {"param": "ENV 2:ATK", "style": "p5knob"},
+                {"param": "ENV 2:DEC", "style": "p5knob"},
+                {"param": "ENV 2:SUS", "style": "p5knob"},
+                {"param": "ENV 2:REL", "style": "p5knob"}
               ]
-            },
+            }
+          ]
+        },
+        {
+          "type": "classic",
+          "kind": "edit8",
+          "band": "none",
+          "title": "ENV 2 +",
+          "lanes": [
             {
-              "title": "ENV 2 · filter",
+              "title": "ENV 2 +",
               "cells": [
-                {
-                  "param": "ENV 2+:VEL",
-                  "label": "Velocity",
-                  "style": "p5led"
-                },
+                {"param": "ENV 2+:VEL", "style": "p5led"},
                 null,
-                null,
-                null
+                {"param": "FILTER:KTRK", "style": "p5switch"},
+                {"param": "FILTER+:AFTER", "style": "p5led"}
               ]
             }
           ]
@@ -251,41 +135,25 @@
             {
               "title": "ENV 1 · amp",
               "cells": [
-                {
-                  "param": "ENV 1:ATK",
-                  "label": "Attack",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "ENV 1:DEC",
-                  "label": "Decay",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "ENV 1:SUS",
-                  "label": "Sustain",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "ENV 1:REL",
-                  "label": "Release",
-                  "style": "p5knob"
-                }
+                {"param": "ENV 1:ATK", "style": "p5knob"},
+                {"param": "ENV 1:DEC", "style": "p5knob"},
+                {"param": "ENV 1:SUS", "style": "p5knob"},
+                {"param": "ENV 1:REL", "style": "p5knob"}
               ]
-            },
+            }
+          ]
+        },
+        {
+          "type": "classic",
+          "kind": "edit8",
+          "band": "none",
+          "title": "ENV 1 +",
+          "lanes": [
             {
-              "title": "ENV 1 · amp",
+              "title": "ENV 1 +",
               "cells": [
-                {
-                  "param": "ENV 1+:VEL",
-                  "label": "Velocity",
-                  "style": "p5led"
-                },
-                {
-                  "param": "ENV 1+:RELSW",
-                  "label": "Rel sw",
-                  "style": "p5led"
-                },
+                {"param": "ENV 1+:VEL", "style": "p5led"},
+                {"param": "ENV 1+:RELSW", "style": "p5led"},
                 null,
                 null
               ]
@@ -307,41 +175,17 @@
             {
               "title": "LFO",
               "cells": [
-                {
-                  "param": "LFO:RATE",
-                  "label": "Freq",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "LFO+:SAW",
-                  "label": "Saw",
-                  "style": "p5led-saw"
-                },
-                {
-                  "param": "LFO+:TRI",
-                  "label": "Tri",
-                  "style": "p5led-tri"
-                },
-                {
-                  "param": "LFO+:SQUARE",
-                  "label": "Square",
-                  "style": "p5led-sqr"
-                }
+                {"param": "LFO:RATE", "label": "Freq", "style": "p5knob"},
+                {"param": "LFO+:SAW", "style": "p5led-saw"},
+                {"param": "LFO+:TRI", "style": "p5led-tri"},
+                {"param": "LFO+:SQUARE", "style": "p5led-sqr"}
               ]
             },
             {
               "title": "LFO",
               "cells": [
-                {
-                  "param": "LFO:AMOUNT",
-                  "label": "Init amt",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "LFO:AFTER",
-                  "label": "Aftertch",
-                  "style": "p5led"
-                },
+                {"param": "LFO:AMOUNT", "label": "Init amt", "style": "p5knob"},
+                {"param": "LFO:AFTER", "style": "p5led"},
                 null,
                 null
               ]
@@ -357,41 +201,17 @@
             {
               "title": "WHEEL",
               "cells": [
-                {
-                  "param": "LFO:NOISE",
-                  "label": "Src mix",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "WHEEL:FREQ A",
-                  "label": "Freq A",
-                  "style": "p5led"
-                },
-                {
-                  "param": "WHEEL:FREQ B",
-                  "label": "Freq B",
-                  "style": "p5led"
-                },
-                {
-                  "param": "WHEEL:PW A",
-                  "label": "PW A",
-                  "style": "p5led"
-                }
+                {"param": "LFO:NOISE", "label": "Src mix", "style": "p5knob"},
+                {"param": "WHEEL:FREQ A", "style": "p5led"},
+                {"param": "WHEEL:FREQ B", "style": "p5led"},
+                {"param": "WHEEL:PW A", "style": "p5led"}
               ]
             },
             {
               "title": "WHEEL",
               "cells": [
-                {
-                  "param": "WHEEL:PW B",
-                  "label": "PW B",
-                  "style": "p5led"
-                },
-                {
-                  "param": "WHEEL+:FILTER",
-                  "label": "Filter",
-                  "style": "p5led"
-                },
+                {"param": "WHEEL:PW B", "style": "p5led"},
+                {"param": "WHEEL+:FILTER", "style": "p5led"},
                 null,
                 null
               ]
@@ -413,36 +233,16 @@
             {
               "title": "POLYMOD",
               "cells": [
-                {
-                  "param": "POLYMOD:ENV",
-                  "label": "Filt env",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "POLYMOD:OSC B",
-                  "label": "Osc B",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "POLYMOD:FREQ A",
-                  "label": "Freq A",
-                  "style": "p5led"
-                },
-                {
-                  "param": "POLYMOD:PW A",
-                  "label": "PW A",
-                  "style": "p5led"
-                }
+                {"param": "POLYMOD:ENV", "label": "Filt env", "style": "p5knob"},
+                {"param": "POLYMOD:OSC B", "style": "p5knob"},
+                {"param": "POLYMOD:FREQ A", "style": "p5led"},
+                {"param": "POLYMOD:PW A", "style": "p5led"}
               ]
             },
             {
               "title": "POLYMOD",
               "cells": [
-                {
-                  "param": "POLYMOD+:FILTER",
-                  "label": "Filter",
-                  "style": "p5led"
-                },
+                {"param": "POLYMOD+:FILTER", "style": "p5led"},
                 null,
                 null,
                 null
@@ -459,41 +259,17 @@
             {
               "title": "VOICE",
               "cells": [
-                {
-                  "param": "VOICE:UNISON",
-                  "label": "Unison",
-                  "style": "p5led"
-                },
-                {
-                  "param": "VOICE:VOICES",
-                  "label": "Voices",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "VOICE:DETUNE",
-                  "label": "Detune",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "VOICE:GLIDE",
-                  "label": "Glide",
-                  "style": "p5knob"
-                }
+                {"param": "VOICE:UNISON", "style": "p5led"},
+                {"param": "VOICE:VOICES", "style": "p5knob"},
+                {"param": "VOICE:DETUNE", "style": "p5knob"},
+                {"param": "VOICE:GLIDE", "style": "p5knob"}
               ]
             },
             {
               "title": "VOICE",
               "cells": [
-                {
-                  "param": "VOICE+:PRIO",
-                  "label": "Priority",
-                  "style": "p5knob"
-                },
-                {
-                  "param": "VOICE+:VINTAGE",
-                  "label": "Vintage",
-                  "style": "p5knob"
-                },
+                {"param": "VOICE+:PRIO", "style": "p5knob"},
+                {"param": "VOICE+:VINTAGE", "style": "p5knob"},
                 null,
                 null
               ]
@@ -515,18 +291,10 @@
             {
               "title": "FX",
               "cells": [
-                {
-                  "param": "part:33"
-                },
-                {
-                  "param": "part:34"
-                },
-                {
-                  "param": "part:35"
-                },
-                {
-                  "param": "part:36"
-                }
+                {"param": "part:33"},
+                {"param": "part:34"},
+                {"param": "part:35"},
+                {"param": "part:36"}
               ]
             }
           ]
@@ -546,35 +314,19 @@
             {
               "title": "MIX",
               "cells": [
-                {
-                  "param": "part:0"
-                },
-                {
-                  "param": "part:39"
-                },
-                {
-                  "param": "part:37"
-                },
-                {
-                  "param": "part:38"
-                }
+                {"param": "part:0"},
+                {"param": "part:39"},
+                {"param": "part:37"},
+                {"param": "part:38"}
               ]
             },
             {
               "title": "MIX",
               "cells": [
-                {
-                  "param": "part:28"
-                },
-                {
-                  "param": "part:44"
-                },
-                {
-                  "param": "part:42"
-                },
-                {
-                  "param": "part:41"
-                }
+                {"param": "part:28"},
+                {"param": "part:44"},
+                {"param": "part:42"},
+                {"param": "part:41"}
               ]
             }
           ]
