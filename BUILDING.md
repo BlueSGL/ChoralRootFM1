@@ -280,7 +280,10 @@ installer hides betas until "Show beta releases" is ticked (remembered per brows
 stable entry, and the landing page presents that one (its version line, "New in", Install sentence, Download button
 and command line; `web/make_site.py front()`). The browser emulator is built from the tag, so it runs the beta: the
 landing page says so in one line under "Try it first" (`emu_line()`, from `emu/version.txt`). For X.Y final, add its entry above the beta (the
-beta's entry may stay as an older choice or be removed with its packages no longer offered).
+beta's entry may stay as an older choice or be removed with its packages no longer offered). A later beta of the same
+version (`0.22-beta2`) goes first the same way and the earlier one stays below it, still behind the switch (pages.yml
+fetches both of its packages from its own release); the later beta's notes open with what is new since the earlier
+one, then the whole of X.Y's notes so far, and `docs/releases/X.Y.md` points at the newest beta's file.
 
 Once, before the first release: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 

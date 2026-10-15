@@ -340,7 +340,11 @@ def release_site(cur):
     news = next((r for r in RELEASES["releases"] if not r.get("beta")), cur)   # (a beta is opt-in: the newest stable's news)
     ok(f'New in {news["version"]}' in html and all(escape_html(b) in html for b in news["bullets"]) and 'href="webapp/installer/"' in html,
        f"index.html: \"New in {news['version']}\" with its bullets, and the button to the installer")
-    ok(all(f'href="firmware/choralroot-{x["version"]}.fwsc"' in html for x in RELEASES["releases"]), "index.html: a download link for every version")
+    # a beta is opt-in (BUILDING.md "A beta release"): in the installer's list only, no link on the landing page
+    link = lambda x: f'href="firmware/choralroot-{x["version"]}.fwsc"' in html
+    ok(all(link(x) for x in RELEASES["releases"] if not x.get("beta"))
+       and not any(link(x) for x in RELEASES["releases"] if x.get("beta")),
+       "index.html: a download link for every stable version, none for a beta")
     emu = (ROOT / "build" / "emu-web" / "index.html").is_file()
     pages, count, bad, frags = walk(() if emu else ((out / "emu").resolve(),), out)
     for b in bad + frags:

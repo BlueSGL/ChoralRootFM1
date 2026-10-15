@@ -3887,3 +3887,54 @@ B KNOB 2 Mix A, fifteen screens) and test_persist's P5 runs (the cutoff on KNOB 
 `design/choralroot-fm1-p5-rows-screens.png` re-rendered. **Checked**: `sh tests/run_all.sh` ALL SUITES PASSED (22;
 test_layout 131 ok, gen_layout_test 82, cr_p5rows 12, cr_layout 12, test_cr 1011 ok, test_persist 111, test_retired
 18, test_pool 7, 313 golden renders 0 changed); `./build.sh` the size line above. Not tested on a unit.
+
+## 2026-10-15 (0.22-beta2: the release tree)
+
+3y98. **0.22-beta2's release tree: the notes, the card, the packages of this build (2026-10-15; branch rel-2 from
+b8f74b3, not pushed, not tagged, not flashed).** The owner wants v0.22-beta2 tagged once he has confirmed it.
+`docs/releases/0.22-beta2.md` (new): the opening (a second beta of 0.22, opt-in like beta1; updating from beta1 keeps
+everything and going back to it loses nothing: no record or settings format changed in 776c740..b8f74b3, whose
+firmware diff is the editor, the layout tables, the knobs and LATCH; P5's 19 pages, blob and `params_hash` as they
+were), **New since 0.22-beta1** (P5's rows from p5-rows.json with the owner's glyphs, 3y94, 3y95, 3y97; the knobs
+following the screen: 3y92's LFO swap, gone with the rows, which put FREQ on row A's KNOB 1 and INIT AMT on row B's;
+the EXPR amounts as numbers, 3y90; a turn's first two detents and the detents of one pass at their mean spacing,
+3y93; LATCH turning a mode's Hold off, 3y91; the one-lane band rows at full size on CZ-1's END screens and WHEEL's
+ENV, 3y95), then 0.22-beta1's whole text with those places brought up to date (P5's editor bullet: the rows, eleven
+screens; the knobs; EXPR's -64 .. +63; LATCH and the bigger rows in Playing and editing; Installing: 0.22-beta2,
+beta1 still listed below it, "From 0.22-beta1", the 1-core strings) and its one "Going back to 0.21" section as it
+was. 3y96's sketch glyphs and 3y97's free-screen code leaving the unit are not in the notes (the layout tool only;
+the published site has no layout viewer). `docs/releases/0.22-beta1.md` unchanged (published); `docs/releases/0.22.md`
+points at 0.22-beta2.md, its "Merged after 0.22-beta1" lines moved into the beta2 notes. BUILDING.md "A beta release":
+a later beta of the same version. `web/releases.json`: a first entry 0.22-beta2 (`"beta": true`, v0.22-beta2,
+2026-10-15, "Beta 2: P5's editor in rows, finer knob steps"; 12 bullets: two "New since beta 1", then 0.22's in ten,
+beta1's twelve with two pairs merged; four notes: the beta's disclaimer, from beta1, from 0.21, going back to 0.21),
+the 0.22-beta1 entry kept below it (releases_test allows two betas, each `"beta": true`, newest first; the installer
+lists both behind the switch in the file's order). **Built**: `./build.sh --release 0.22-beta2` twice, the same
+SHA256SUMS; `choralroot-0.22-beta2.fwsc` a3865f9c4fd2e2a3..., `choralroot-0.22-beta2-1core.fwsc` 6210c7df39984831...;
+the apps carry `ChoralRoot 0.22-beta2` and `ChoralRoot 0.22-beta2 1-core` (28 characters: Options > Version shows
+`0.22-beta2 1-core`, `cu_version_text`). Size: XIP 546 412 B of 573 440 (95.3 %), RAM 78 524 (79.9 %), POOL 238 936
+(69.4 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the single-core package XIP 543 340 (94.8 %), RAM 75 436 (76.7 %), POOL
+238 808 (69.4 %). Stub version 3, sha256 baee55ed142fe1cc; Python 3.11.6, Pillow 11.1.0, fontTools 4.66.1 (release.yml's
+pins). **Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1011 ok, test_persist 111,
+test_retired 18, test_pool 7, 313 golden renders 0 changed); releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta2`
+and with all ten listed packages (0.16 .. 0.21 and beta1's two copied from earlier local builds, not downloaded: all
+match); site_test alone, with the release folder, and with every package and the beta2 package as
+build/choralroot.fwsc, which runs its Pages-like build (`release_site`) on a beta first entry for the first time: its
+"a download link for every version" failed, as the landing page links the stable versions only (BUILDING.md: a beta
+is the installer's alone), so it now checks every stable version and no beta (tests/site_test.py); test_installer;
+the browser emulator built as 0.22-beta2, test_web_emu PASS. **The Pages job, simulated** (pages.yml's steps into a
+scratch folder, the packages copied in place of `gh release download`, no layout viewer): the package against its
+SHA256SUMS, 0.22-beta2 the first entry, every package and both betas' single-core ones against releases.json,
+releases_test, `make_site.py ... --require-all`, the listed files, firmware/SHA256SUMS (10 lines, all match). The
+landing page: New in 0.21, Download and the command line 0.21's, no link to a beta, and under "Try it first" "It runs
+ChoralRoot 0.22-beta2, a beta (the installer's default is 0.21)."; the installer's META 0.21. In headless Chromium
+(`?demo=idle`): the chooser without the tick 0.20 .. 0.16, with it 0.22-beta2 then 0.22-beta1, each with its Beta
+badge, Install still 0.21; 0.22-beta2 chosen: "Install ChoralRoot 0.22-beta2", "ChoralRoot 0.22-beta2 is a beta
+release, not the latest stable one (0.21 is).", Advanced (Single core) offered, the notes link
+`blob/main/docs/releases/0.22-beta2.md`. **The tag's path** (release.yml, pages.yml), read again: enough for
+v0.22-beta2 as it is (a pre-release with the notes file, the four assets and SHA256SUMS, the dispatch: a `-beta`
+version publishes); pages.yml fetches `choralroot-0.22-beta1.fwsc` and `choralroot-0.22-beta1-1core.fwsc` from
+v0.22-beta1 (its entry lists sha256_1core), so that release must keep both. Open, not blocking: the release body's
+install text does not say a beta is behind "Show beta releases"; the installer's footer reads "ChoralRoot 0.21 is a
+first public beta; ..." (its text from 0.1, filled with the page's version). Not done: anything on a unit (P5's rows
+and 3y90 .. 3y93 are not device-tested: docs/HANDOFF.md); the push, the tag and the Pages job.
