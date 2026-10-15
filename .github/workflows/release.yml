@@ -197,7 +197,9 @@ jobs:
           body_path: release-body.md
 
       - name: Publish the site (pages.yml)
-        if: ${{ !contains(env.VERSION, '-') }}
+        # a final release, or a beta (X.Y-betaN: web/releases.json lists it first with "beta": true; the installer
+        # offers it only to who ticks "Show beta releases"). Other suffixes (-rc1, ...) do not publish the site
+        if: ${{ !contains(env.VERSION, '-') || contains(env.VERSION, '-beta') }}
         env:
           GH_TOKEN: ${{ github.token }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}

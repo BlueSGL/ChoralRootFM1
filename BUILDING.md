@@ -269,6 +269,17 @@ A release is a tag `vX.Y`; GitHub Actions builds it and publishes the site.
    the first entry of `web/releases.json`; correct the file on main and run pages.yml by hand (version X.Y, ref
    main).
 
+### A beta release
+
+A beta is `X.Y-betaN` (`0.22-beta1`, tag `v0.22-beta1`); it orders after X.(Y-1) and before X.Y. The firmware reads
+`ChoralRoot 0.22-beta1`. The steps are the release's above, with `--release 0.22-beta1`, `docs/releases/0.22-beta1.md`
+and, in `web/releases.json`, the entry first with `"beta": true` (`tests/releases_test.py` requires it on every
+`-betaN` version and on no other; a beta needs no `going_back`, and the newest stable entry keeps none). The release
+is a GitHub pre-release and release.yml publishes the site as for a final one (other suffixes, `-rc1`, do not). The
+installer hides betas until "Show beta releases" is ticked (remembered per browser); its default stays the newest
+stable entry, and the landing page's "New in" tells of that one. For X.Y final, add its entry above the beta (the
+beta's entry may stay as an older choice or be removed with its packages no longer offered).
+
 Once, before the first release: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 
 When CI cannot fetch the toolchain (pkgman.jieliapp.com) or the SDK (gitee.com): build locally with

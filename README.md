@@ -20,7 +20,10 @@ FM-1 needed).
 Chrome or Edge, connect the FM-1 and press Install. The button names the version it writes (the newest), and the
 page lists what is new in it beside the button. "Other versions" under the button offers the older ones from 0.16
 on, each with its notes and a sentence on what going back means (0.15 and older are only on
-[Releases](https://github.com/Quixotic7/ChoralRootFM1/releases): no protected update path). Nothing is
+[Releases](https://github.com/Quixotic7/ChoralRootFM1/releases): no protected update path). Beta releases
+(`0.22-beta1`) are opt-in: tick "Show beta releases" under the versions to see them (the page remembers it in that
+browser). A beta may have bugs and the latest stable release can replace it at any time; Install's default is
+always the newest stable release, also when the FM-1 runs a beta. Nothing is
 installed on the computer: the page talks to the FM-1 over Web MIDI, and the firmware files come from the site
 itself (`firmware/`, with their SHA-256, which the page checks before it writes). Do not unplug while it writes; an
 interrupted install is resumed by pressing Install again (after a power loss too, from 0.16 on: see "If an install

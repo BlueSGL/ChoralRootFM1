@@ -134,6 +134,9 @@ BUILDING.md "Releasing" has them in full. The ones that are easy to forget, in o
    publish a version that is not its first entry.
 3. The browser emulator's test (Verification, above), then the tag when the owner says so.
 
+A beta (`X.Y-betaN`, opt-in in the installer): the same steps with `"beta": true` on its entry; BUILDING.md "A beta
+release".
+
 To publish the site again without a new release (a change to the pages): run pages.yml by hand with the current
 version and ref `main`. A local copy of the whole site, as Pages builds it: `python3 tools/fetch_packages.py`
 (the listed packages into `build/scratch/packages/`, checked; needs the network once), then

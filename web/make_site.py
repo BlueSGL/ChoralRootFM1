@@ -231,8 +231,11 @@ def collect(pkg, version, packages, require_all):
 
 
 def news_html(data, offered, version):
-    """the landing page's 'New in X': the current version's bullets, the links to its notes, the older versions"""
-    cur = offered[0][0]
+    """the landing page's 'New in X': the current version's bullets, the links to its notes, the older versions.
+    A beta (releases.json "beta": true) is opt-in in the installer: the landing page tells of the newest stable one"""
+    cur = next((r for r, _ in offered if not r.get("beta")), offered[0][0])
+    if cur is not offered[0][0]:
+        version = cur["version"]
     esc = html_escape
     repo = data["repo"]
     if cur.get("bullets"):
@@ -242,7 +245,7 @@ def news_html(data, offered, version):
     else:
         head = f'<h3 id="new">Version {esc(version)} <span class="sub">a local build</span></h3>'
         body, more = "", ""
-    older = [r for r, _ in offered[1:]]
+    older = [r for r, _ in offered if r is not cur and not r.get("beta")]
     if older:
         more += ("The installer also offers " + ", ".join(
             f'<a href="firmware/{esc(pkg_name(r["version"]))}" download>{esc(r["version"])}</a>' for r in older)

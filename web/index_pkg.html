@@ -63,6 +63,10 @@
   .tag.rec { background: var(--green); color: #080808; }
   .tag.old { background: var(--yellow); color: #080808; }
   .tag.has { background: var(--blue); }
+  .tag.beta, .chip .beta { background: var(--yellow); color: #080808; }
+  .chip .beta { display: inline-block; margin-top: 3px; padding: 1px 5px; border-radius: 2px; font-weight: 800; text-transform: uppercase; }
+  .betaopt { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; font-size: 15px; font-weight: 700; cursor: pointer; }
+  .betaopt input { width: 18px; height: 18px; margin: 0; }
   #go { display: block; width: 100%; margin: 0; padding: 20px 24px; background: var(--red); color: #fff;
         font-size: clamp(22px, 5.6vw, 26px); font-weight: 800; letter-spacing: -0.02em; text-align: left; }
   #go:not(:disabled):hover, .chip:not(:disabled):hover, .side:not(:disabled):hover { filter: brightness(1.12); }
@@ -180,6 +184,8 @@
         <span class="lbl" id="others-lbl" data-t="chOthers"></span>
         <div id="versions"></div>
       </div>
+      <label class="betaopt" id="beta-opt" hidden><input type="checkbox" id="show-beta"> <span data-t="betaShow"></span></label>
+      <p class="small" id="beta-note" hidden data-t="betaNote"></p>
       <details class="adv" id="adv" hidden>
         <summary data-t="advTitle"></summary>
         <p class="hw" data-t="hwTitle"></p>
@@ -339,6 +345,10 @@ const TEXT = {
     cn1core: "On your FM-1: {name}. Install writes the Standard package (both cores) back; to stay on one core, choose Single core under Advanced.",
     dnLine1: "ChoralRoot {version} (single core) is installed.",
     chOthers: "Other versions",
+    betaShow: "Show beta releases",
+    betaNote: "Beta releases are previews: they may have bugs, and the latest stable release can replace them at any time.",
+    chBeta: "Beta",
+    cnBeta: "On your FM-1: {name}, a beta release. Install writes {stable}, the latest stable release, unless you choose a beta.",
     chOlder: "0.15 and older are on GitHub.",
     chNewest: "Newest", chOld: "Older version", chHas: "On your FM-1", chDev: "Local build",
     chNoNotes: "A build that is not in the list of releases: no notes for it.",
@@ -349,6 +359,7 @@ const TEXT = {
     chNotes: "Full notes", chFile: "Download {file}", chSource: "Source at {tag}",
     planBack: "Going back to {version}: ",
     planOld: "ChoralRoot {version} is not the newest version ({newest} is).",
+    planBeta: "ChoralRoot {version} is a beta release, not the latest stable one ({newest} is). ",
     toNewest: "Back to {version}, the newest",
     cnGo: "What is on my FM-1?",
     cnTesting: "Looking for the FM-1 (nothing is written) …",
@@ -645,7 +656,14 @@ $("snd-file").addEventListener("change", async () => {
 // enabled, so nothing is ever written from a file that is not the released one.
 const tv = (k, vals) => Object.entries(vals).reduce((s, [a, v]) => s.split(`{${a}}`).join(String(v)), TEXT[lang][k]);
 const releases = Array.isArray(meta.releases) && meta.releases.length ? meta.releases : [{ version: meta.version, pkg: meta.pkg }];
-const newest = releases[0];
+// beta releases (releases.json "beta": true, versions X.Y-betaN): offered only after "Show beta releases" is ticked
+// (remembered in this browser). `newest`, the default and the recommended one, is always the newest that is not a beta
+const isBeta = (r) => !!(r && (r.beta || /-beta\d*$/i.test(String(r.version))));
+const newest = releases.find((r) => !isBeta(r)) || releases[0];
+const stables = releases.filter((r) => !isBeta(r));
+const BETA_KEY = "choralroot.showBeta";
+let showBeta = false;
+try { showBeta = localStorage.getItem(BETA_KEY) === "1"; } catch (_) { showBeta = false; }
 let sel = newest;                                // the version Install writes
 let unit = null;                                 // what was last read from the FM-1 (identify(), or { loader })
 let unitAsked = false;                           // "What is on my FM-1?" was pressed: its answer is on the page
@@ -665,11 +683,15 @@ const MONTHS = ["January", "February", "March", "April", "May", "June", "July", 
 const dateText = (iso) => { const m = /^(\d{4})-(\d\d)-(\d\d)$/.exec(iso || ""); return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]} ${m[1]}` : ""; };
 const fileOf = (r) => String(r.pkg || "").split("/").pop();
 const unitVersion = () => { const m = unit && !unit.loader && /^ChoralRoot\s+(\S+)/i.exec(unit.version || ""); return m ? m[1] : null; };
-const verNum = (v) => String(v).split(/[.-]/).map((x) => parseInt(x, 10) || 0);
+// "0.21" < "0.22-beta1" < "0.22-beta2" < "0.22": a suffixed version comes before the same version without one
+const verNum = (v) => {
+  const m = /^(\d+(?:\.\d+)*)(?:-[A-Za-z]*(\d*))?/.exec(String(v)) || ["", "0"];
+  return { n: m[1].split(".").map(Number), pre: m[2] === undefined ? Infinity : Number(m[2] || 0) };
+};
 const verCmp = (a, b) => {
   const x = verNum(a), y = verNum(b);
-  for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d; }
-  return 0;
+  for (let i = 0; i < Math.max(x.n.length, y.n.length); i++) { const d = (x.n[i] || 0) - (y.n[i] || 0); if (d) return d; }
+  return x.pre === y.pre ? 0 : x.pre < y.pre ? -1 : 1;
 };
 const ready = (meta) => say(`ChoralRoot ${meta.version} · ${meta.product}`);
 const bullets = (list, cls = "news") => (list && list.length ? `<ul class="${cls}">${list.map((b) => `<li>${esc(b)}</li>`).join("")}</ul>` : "");
@@ -688,10 +710,16 @@ const goingBack = (r) => {                       // the note applies when r is o
 
 function renderChips() {                         // "Other versions": one button each, the chosen one pressed
   const uv = unitVersion();
-  $("others").hidden = releases.length < 2;
-  $("versions").innerHTML = releases.slice(1).map((r) =>
+  const list = releases.filter((r) => r !== newest && (showBeta || !isBeta(r) || r === sel));
+  $("others").hidden = !list.length;
+  $("versions").innerHTML = list.map((r) =>
     `<button type="button" class="chip" data-ver="${esc(r.version)}" aria-pressed="${r === sel}"${writing ? " disabled" : ""}>` +
-    `<b>${esc(r.version)}</b><span>${dateText(r.date)}</span>${uv === r.version ? `<span class="has">${t("chHas")}</span>` : ""}</button>`).join("");
+    `<b>${esc(r.version)}</b><span>${dateText(r.date)}</span>${isBeta(r) ? `<span class="beta">${t("chBeta")}</span>` : ""}` +
+    `${uv === r.version ? `<span class="has">${t("chHas")}</span>` : ""}</button>`).join("");
+  $("beta-opt").hidden = !releases.some(isBeta);
+  $("show-beta").checked = showBeta;
+  $("show-beta").disabled = writing;
+  $("beta-note").hidden = !(releases.some(isBeta) && (showBeta || isBeta(sel)));
   $("newest-go").disabled = writing;
   $("var-std").disabled = $("var-1core").disabled = writing;
 }
@@ -716,7 +744,8 @@ function showUnit() {                            // the answer of "What is on my
   }
   else if (unit.kind === "choralroot") {
     const one = !!cur().one;
-    text = tv(unitOne() && !one ? "cn1core" : unitVersion() === sel.version && unitOne() === one ? "cnSame" : "cnCr", { name: unitName() });
+    text = tv(unitOne() && !one ? "cn1core" : unitVersion() === sel.version && unitOne() === one ? "cnSame" :
+      isBeta({ version: unitVersion() }) && sel === newest ? "cnBeta" : "cnCr", { name: unitName(), stable: newest.version });
   }
   else text = tv("cnOther", { name: unit.name });
   out.hidden = false; out.className = bad ? "unit bad" : "unit"; out.textContent = text;
@@ -724,7 +753,8 @@ function showUnit() {                            // the answer of "What is on my
 function renderPick() {                          // the version over the button, the button, the other versions, the notes
   const v = sel.version, back = goingBack(sel);
   $("rel").innerHTML = `<b>ChoralRoot ${esc(v)}</b>${sel.date ? " · " + dateText(sel.date) : ""}` +
-    (!sel.tag ? ` <span class="tag">${t("chDev")}</span>` : sel === newest ? ` <span class="tag rec">${t("chNewest")}</span>` : ` <span class="tag old">${t("chOld")}</span>`) +
+    (!sel.tag ? ` <span class="tag">${t("chDev")}</span>` : sel === newest ? ` <span class="tag rec">${t("chNewest")}</span>` :
+      isBeta(sel) ? ` <span class="tag beta">${t("chBeta")}</span>` : ` <span class="tag old">${t("chOld")}</span>`) +
     (unitVersion() === v ? ` <span class="tag has">${t("chHas")}</span>` : "");
   const one = !!cur().one;
   $("go").textContent = tv(one ? "installV1" : "installV", { version: v });
@@ -732,7 +762,8 @@ function renderPick() {                          // the version over the button,
   $("var-std").setAttribute("aria-pressed", String(!one));
   $("var-1core").setAttribute("aria-pressed", String(one));
   $("not-newest").hidden = sel === newest;
-  $("plan-back").textContent = sel === newest ? "" : back ? tv("planBack", { version: v }) + back.short : tv("planOld", { version: v, newest: newest.version });
+  $("plan-back").textContent = sel === newest ? "" : isBeta(sel) ? tv("planBeta", { version: v, newest: newest.version }) + t("betaNote") :
+    back ? tv("planBack", { version: v }) + back.short : tv("planOld", { version: v, newest: newest.version });
   $("newest-go").textContent = tv("toNewest", { version: newest.version });
   $("notes").innerHTML = notesOf(sel);
   renderChips();
@@ -819,14 +850,19 @@ $("variants").addEventListener("click", (e) => {
   if (b && !b.disabled) selectVariant(b.dataset.variant === "1core");
 });
 $("newest-go").addEventListener("click", () => selectVersion(newest.version));
+$("show-beta").addEventListener("change", () => {   // "Show beta releases": remembered in this browser (if it lets us)
+  showBeta = !!$("show-beta").checked;
+  try { localStorage.setItem(BETA_KEY, showBeta ? "1" : "0"); } catch (_) { /* private window, blocked storage */ }
+  if (!showBeta && isBeta(sel)) selectVersion(newest.version); else renderPick();
+});
 $("check-go").addEventListener("click", () => checkUnit());
 
 $("nomidi").hidden = canMidi;
 if (DEMO) {                                      // made-up states; see DEMO above for why nothing can reach an FM-1
   $("demo-note").hidden = false;
   const on = (v) => ({ verdict: "allow", kind: "choralroot", name: "ChoralRoot " + v, version: "ChoralRoot " + v, identity: meta.product });
-  if (DEMO === "older") sel = releases[2] || releases[releases.length - 1];
-  if (DEMO === "idle" || DEMO === "older") { unit = on((releases[1] || newest).version); unitAsked = true; }
+  if (DEMO === "older") sel = stables[2] || stables[stables.length - 1];
+  if (DEMO === "idle" || DEMO === "older") { unit = on((stables[1] || newest).version); unitAsked = true; }
   if (DEMO === "single") { oneCore = true; $("adv").open = true; }   // Advanced open, Single core picked (newest)
 }
 renderPick(); renderFiles();

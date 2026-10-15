@@ -31,7 +31,10 @@ def ok(cond, what):
 
 
 def num(v):
-    return tuple(int(x) for x in v.split("."))
+    """the order of versions: X.Y-betaN comes after X.(Y-1) and before X.Y (docs/HANDOFF.md, 'A beta release')"""
+    m = re.fullmatch(r"(\d+(?:\.\d+)*)(?:-beta(\d+))?", v)
+    base = tuple(int(x) for x in m.group(1).split("."))
+    return (base + (0,) * (3 - len(base)), int(m.group(2)) if m.group(2) else float("inf"))
 
 
 def fetch_check():
@@ -71,7 +74,9 @@ def main():
     data = json.loads(Path(os.environ.get("CR_RELEASES_JSON") or ROOT / "web" / "releases.json").read_text(encoding="utf-8"))
     rel = data["releases"]
     vers = [r["version"] for r in rel]
-    ok(len(rel) >= 1 and all(re.fullmatch(r"\d+\.\d+(\.\d+)?", v) for v in vers), f"versions: {', '.join(vers)}")
+    ok(len(rel) >= 1 and all(re.fullmatch(r"\d+\.\d+(\.\d+)?(-beta\d+)?", v) for v in vers), f"versions: {', '.join(vers)}")
+    ok(all(r.get("beta", False) is ("-beta" in r["version"]) for r in rel), 'a beta (X.Y-betaN) says "beta": true, no other entry does')
+    ok(any(not r.get("beta") for r in rel), "at least one stable release (the installer's default)")
     ok(len(set(vers)) == len(vers) and vers == sorted(vers, key=num, reverse=True), "newest first, none twice")
     minimum = data["minimum"]["version"]
     ok(minimum == "0.16" and all(num(v) >= num(minimum) for v in vers) and "0.14" not in vers and "0.15" not in vers,
@@ -99,14 +104,17 @@ def main():
         ok(4 <= len(b) <= 8 and all(isinstance(x, str) and 20 <= len(x) <= 240 for x in b) and bool(r.get("title")),
            f"{v}: a title and {len(b)} bullets (4 to 8, each one or two sentences)")
         ok(all(isinstance(x, str) and x for x in r.get("notes", [])), f"{v}: its notes are text")
-        if i == 0:
-            ok("going_back" not in r, f"{v}: the newest has no going-back note")
+        stable0 = next(x for x in rel if not x.get("beta"))
+        if r.get("beta"):
+            pass                                    # a beta: opt-in, replaced by a stable at any time; going_back optional
+        elif r is stable0:
+            ok("going_back" not in r, f"{v}: the newest stable release has no going-back note")
         else:
             g = r.get("going_back", {})
             ok(40 <= len(g.get("short", "")) <= 260 and len(g.get("points", [])) >= 2 and all(isinstance(x, str) and x for x in g.get("points", [])),
                f"{v}: what going back means (one sentence, and the points)")
     src = (ROOT / "firmware" / "src" / "choralroot.c").read_text(encoding="utf-8", errors="replace")
-    m = re.search(r'FELUCCA_VERSION\s+"ChoralRoot ([0-9.]+)"', src)
+    m = re.search(r'FELUCCA_VERSION\s+"ChoralRoot ([0-9.]+(?:-beta[0-9]+)?)"', src)
     cur = m.group(1) if m else None
     tags = subprocess.run(["git", "-C", str(ROOT), "tag", "--list", "v*"], capture_output=True, text=True).stdout.split()
     if cur and "v" + cur in tags:
@@ -125,7 +133,7 @@ def main():
                 ok(hashlib.sha256(f.read_bytes()).hexdigest() == r[key], f"{r['version']}: {f.relative_to(ROOT) if ROOT in f.parents else f} has the listed {key}")
             else:
                 print(f"skipped: {f.name} not in {pk}: its sha256 is not compared (python3 tools/fetch_packages.py)")
-    ok(all(set(r) <= {"version", "date", "tag", "sha256", "sha256_1core", "title", "bullets", "notes", "going_back"} for r in rel),
+    ok(all(set(r) <= {"version", "date", "tag", "sha256", "sha256_1core", "title", "bullets", "notes", "going_back", "beta"} for r in rel),
        "no entry has a key the site does not know (sha256_1core: optional)")
     fetch_check()
     print("releases: ALL OK" if not failed else f"releases: {failed} FAILED")

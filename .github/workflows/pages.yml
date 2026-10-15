@@ -62,8 +62,8 @@ jobs:
         run: |
           set -euo pipefail
           version="${TAG#v}"
-          if [[ "$TAG" != v* || ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]]; then
-            echo "::notice::release $TAG is not a vX.Y (or vX.Y.Z) tag: the site stays as it is (run pages.yml by hand to publish it)"
+          if [[ "$TAG" != v* || ! "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?(-beta[0-9]+)?$ ]]; then
+            echo "::notice::release $TAG is not a vX.Y, vX.Y.Z or vX.Y-betaN tag: the site stays as it is (run pages.yml by hand to publish it)"
             exit 0
           fi
           gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref "$DEFAULT_BRANCH" \

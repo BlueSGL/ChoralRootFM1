@@ -23,6 +23,8 @@
 // - Advanced > Hardware fallback (docs/DUALCORE.md "Two packages"): a release with a single-core package offers
 //   Standard / Single core; the variant chosen is the file fetched, verified and written; no choice without one; the
 //   read-back of "ChoralRoot X.Y 1-core"; ?demo=single; the version parsers on the suffixed string
+// - beta releases ("beta": true, X.Y-betaN): hidden until "Show beta releases" is ticked (localStorage), badge and
+//   note, the newest stable the default, an FM-1 on a beta told so; the version order (X.Y-1 < X.Y-betaN < X.Y)
 
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -1266,6 +1268,51 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
     ok(c.verdict === "allow" && c.kind === "choralroot" && ctx.fam(`ChoralRoot ${newest} 1-core`) === "choralroot" &&
        /^choralroot-backup-\d{8}\.json$/.test(ctx.bn(`ChoralRoot ${newest} 1-core`)) && pv && pv[1] === newest,
        `parsers: "ChoralRoot ${newest} 1-core" -> allowed as ChoralRoot, backup family choralroot, version ${pv && pv[1]}`);
+  }
+
+  // beta releases (releases.json "beta": true, X.Y-betaN): hidden until "Show beta releases" is ticked (remembered in
+  // localStorage); the newest stable stays the default; a beta orders after the stable before it, before its final
+  {
+    const BETA = "9.0-beta1", RAWB = makePackage("FM-1_920", 307);
+    const mb = await metaFor();
+    mb.releases.unshift({ version: BETA, beta: true, date: list.releases[0].date, tag: "v" + BETA, title: "A preview", bullets: ["Something new to try out early."],
+      pkg: pkgOf(BETA), size: RAWB.length, sha256: await sha256(RAWB) });
+    const pageB = pageFor(mb);
+    const fetchB = async (url) => (url === pkgOf(BETA) ? { ok: true, status: 200, arrayBuffer: async () => RAWB.buffer.slice(0) } : listFetch()(url));
+    const store = (init = {}) => { const m = { ...init }; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, m }; };
+    const st = store();
+    const p = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: fetchB, page: pageB, extra: { localStorage: st } });
+    await settle();
+    ok(!p.error && p.$["beta-opt"].hidden === false && p.$["show-beta"].checked === false && !chips(p).includes(BETA) && p.$["beta-note"].hidden === true &&
+       p.$.go.textContent === label(newest) && p.$.rel.innerHTML.includes(en.chNewest), `beta: ${BETA} hidden by default, the opt-in unticked, ${newest} (stable) the default`);
+    p.$["show-beta"].checked = true; p.$["show-beta"].fire("change");
+    ok(chips(p).split(",")[0] === BETA && p.$.versions.innerHTML.includes(`<span class="beta">${en.chBeta}</span>`) && p.$["beta-note"].hidden === false &&
+       st.m["choralroot.showBeta"] === "1" && p.$.go.textContent === label(newest), "beta: ticked -> shown with its badge and the note, remembered; stable still the default");
+    choose(p, BETA);
+    await settle();
+    ok(p.$.go.textContent === label(BETA) && p.$.rel.innerHTML.includes(en.chBeta) && p.$["plan-back"].textContent.includes(en.betaNote), "beta: chosen -> Install names it, the beta tag and note beside it");
+    p.$["show-beta"].checked = false; p.$["show-beta"].fire("change");
+    await settle();
+    ok(p.$.go.textContent === label(newest) && !chips(p).includes(BETA) && st.m["choralroot.showBeta"] === "0", "beta: unticked -> back to the stable, hidden again");
+    const q = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: fetchB, page: pageB, extra: { localStorage: store({ "choralroot.showBeta": "1" }) } });
+    await settle();
+    ok(!q.error && q.$["show-beta"].checked === true && chips(q).includes(BETA) && q.$.go.textContent === label(newest), "beta: the opt-in remembered on the next visit; stable still the default");
+    const r = runPage({ navigator: midiOf(new FakeFM1(image)), fetch: fetchB, page: pageB, extra: { localStorage: { getItem() { throw new Error("blocked"); }, setItem() { throw new Error("blocked"); } } } });
+    await settle();
+    r.$["show-beta"].checked = true; r.$["show-beta"].fire("change");
+    ok(!r.error && chips(r).includes(BETA), "beta: storage that throws -> the page works, opt-in for this visit only");
+    // a beta on the FM-1: said so, the stable still offered
+    const dB = new FakeFM1(image, { identity: "FM-1_920", bk: () => crSide(BETA) });
+    const u = runPage({ navigator: midiOf(dB), fetch: fetchB, page: pageB });
+    await settle();
+    await u.$["check-go"].fire("click");
+    await settle();
+    ok(u.$.unit.textContent === en.cnBeta.replace("{name}", "ChoralRoot " + BETA).replace("{stable}", newest) && u.$.go.textContent === label(newest),
+       `beta: an FM-1 on ${BETA} is told so, and ${newest} is still offered`);
+    const ord = scriptOf(html).match(/const verNum = [\s\S]*?\n\};\nconst verCmp = [\s\S]*?\n\};/);
+    const cmp = ord && new Function(`${ord[0]}; return verCmp;`)();
+    const sorted = ["0.22", "0.21", "0.22-beta2", "0.22-beta1", "0.21.1"].sort((a, b) => cmp(a, b));
+    ok(cmp && sorted.join() === "0.21,0.21.1,0.22-beta1,0.22-beta2,0.22", `beta: version order ${sorted.join(" < ")}`);
   }
 }
 function dateOf(iso) {

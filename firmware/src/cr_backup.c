@@ -1279,7 +1279,7 @@ static int crb_handle(const uint8_t *f, uint32_t n)
         uint32_t i;
         if (na)
             return 0;
-        for (i = 0; v[i] && i < 24u; i++)
+        for (i = 0; v[i] && i < 32u; i++)            /* a beta single-core string is 28 (hosts read to the NUL) */
             crb_b((uint8_t)v[i]);
         crb_b(0);
         for (i = 0; i < 7u; i++)

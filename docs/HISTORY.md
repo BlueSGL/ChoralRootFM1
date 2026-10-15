@@ -2936,3 +2936,23 @@ INF as before, HARM / DTUN 12.34 through blob_get / blob_set), cr_pool_test (the
 (FREQ from 127.00: 12062 11427 quick; AMP REL 63 .. 124 127 INF, OPT 112 96 112; cr_quad_inf REL 62 -> INF -> 61),
 cr_draw_test (the FM TONE pages' longest values). FM TONE's goldens regenerated (tests/quad_goldens: the patches'
 AMP REL / LEVEL now whole numbers; the renders the same); no other golden changed.
+
+## 2026-10-14 (beta releases: opt-in in the web installer)
+
+3y64. **Beta releases, opt-in (2026-10-14; branch beta-1 from 079fb37, not pushed).** The owner: "the next release
+should be marked as a beta release; beta releases should be installable from the web installer tool, but opt-in."
+**Built**: a beta is `X.Y-betaN` (tag `vX.Y-betaN`, firmware `ChoralRoot 0.22-beta1`; `tools/build.py --release`
+already took the suffix), ordered after X.(Y-1) and before X.Y. `web/releases.json` marks it `"beta": true`
+(`tests/releases_test.py`: on every `-betaN` and no other; the order; no going-back note needed). The installer
+(`web/index_pkg.html`): `newest`, the default and the one tagged Newest, is the newest entry that is not a beta;
+betas are left out of "Other versions" until "Show beta releases" (unticked, remembered in localStorage, every
+access in try/catch) is ticked, then show a Beta badge and the line that a beta may have bugs and can be replaced by
+the latest stable at any time; unticking with a beta chosen goes back to the stable one. An FM-1 that runs a beta is
+told so ("cnBeta") and Install still offers the stable. `verCmp` fixed: it read `0.22-beta1` as `0.22` (the suffix
+was 0), so a beta equalled its final; now `0.21 < 0.22-beta1 < 0.22-beta2 < 0.22`. `web/make_site.py`: the landing
+page's "New in" is the newest stable. release.yml now dispatches pages.yml for a `-beta` tag (other suffixes still
+do not); pages.yml's release trigger takes `vX.Y-betaN`. `cr_backup.c` INFO: the version string's cap 24 -> 32
+bytes, as `ChoralRoot 0.22-beta1 1-core` (the single-core package) is 28 (hosts read to the NUL, the tags are found
+from the end). Not changed: Options > Version's value field is 24 bytes, so the single-core beta's line there reads
+`ChoralRoot 0.22-beta1 1`; the standard package's fits. Tests: test_installer (hidden by default, shown when
+ticked, remembered, storage that throws, the stable stays the default, an FM-1 on a beta, the order), releases_test.
