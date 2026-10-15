@@ -8,18 +8,20 @@
 // No DOM: the page (manager.html) draws, this decides. Every name here is unique across fm1backup.js / fm1sounds.js:
 // make_site.py inlines them (and fm1dnsnd.js) into one script.
 import { BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, objectName, readBackup, CR_LOOP_IDS, CR_BACKUP_IDS, loopHeader } from "./fm1backup.js";
-import { nameValid, SOUND_IDS, POOL_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
+import { nameValid, SOUND_IDS, POOL_IDS, ENGINE_NAMES, FACTORY_PRESETS, FACTORY_FIRST, SOUND_TEMPLATES, SOUND_FORMAT, PATCH_SIZE, poolOf, engineRetired, patchKindOf, parseSoundObjects, exportSound, readSoundFile, renameSound, deleteSound, writeSounds, placeSound, bindSound, swapSounds, firstFreeSlot, rawBindings, recordValid, slotLabel, parseSyx, syxCount, soundFromSyx, soundFromDnsnd } from "./fm1sounds.js";
 import { parseDnsnd } from "./fm1dnsnd.js";
 
 // the engine picker's order (docs/PRESETS.md; the EDIT picker since 0.14; five engines since 0.18: PHASE, LOFI, VOICE,
 // TRIO, NOISE and PHYS retired, their records rows of the VA's pool with recEngine = the engine they were saved on)
 export const MANAGER_ENGINES = [12, 15, 13, 14, 7];
-export const MANAGER_IDS = [...SOUND_IDS, ...POOL_IDS, ...CR_LOOP_IDS];   // (0.22: the pool's banks, 50..62)
+export const FAVS_ID = 23;                       // the favourites (0.22, cr_favs.c; a firmware before it does not list 23)
+export const MANAGER_IDS = [...SOUND_IDS, ...POOL_IDS, FAVS_ID, ...CR_LOOP_IDS];   // (0.22: the pool's banks, 50..62)
 export const UNDO_DEPTH = 20;
 export const LOOP_FORMAT = "choralroot-loop";
 export const PACK_FORMAT = "choralroot-pack";
-// the stores before the banks, the pool's banks (0.22: record and patch in one), loops last
-const MG_WRITE_ORDER = [9, 10, 11, 12, 13, 22, 6, 7, ...POOL_IDS, ...CR_LOOP_IDS];
+// the stores before the banks, the pool's banks (0.22: record and patch in one), the favourites after the sounds they
+// mark (the backup's order), loops last
+const MG_WRITE_ORDER = [9, 10, 11, 12, 13, 22, 6, 7, ...POOL_IDS, FAVS_ID, ...CR_LOOP_IDS];
 const mgEmpty = () => new Uint8Array(0);
 const mgSame = (a, b) => (a || mgEmpty()).length === (b || mgEmpty()).length && (a || mgEmpty()).every((x, i) => x === b[i]);
 const mgB64 = (bytes) => { let s = ""; for (const b of bytes) s += String.fromCharCode(b); return btoa(s); };
@@ -141,11 +143,156 @@ export function replaceFactoryText(plan, engine, total) {
   return `${parts.join("; ")}. The factory sounds are not deleted from the firmware: "Restore factory order" (or Delete / Reset to factory on a row) brings them back. A favourite mark on a replaced factory preset stays with its place: the FM-1 shows it on the imported sound, and it is the factory sound's again after Restore.`;
 }
 // Restore factory order: every user sound of the engine's pool bound to a factory preset becomes an added sound (kept,
-// after the factory presets, slot order); the factory presets are back in their places. No slot is needed.
+// after the factory presets, slot order); the factory presets are back in their places. No slot is needed. A later slot
+// whose binding names a preset an earlier one holds (an added sound already) is unbound too: else it would take the place
 export function managerRestoreFactory(objs, engine) {
   let m = new Map(objs), n = 0;
-  for (const r of managerPools(objs, { empty: false })[engine]) if (r.type === "user" && r.f >= 0) { m = mgMerge(m, bindSound(m, r.slot, -1)); n++; }
+  const bound = new Set(managerPools(objs, { empty: false })[engine].filter((r) => r.type === "user" && r.f >= 0).map((r) => r.slot));
+  const { slots } = parseSoundObjects(objs);
+  rawBindings(objs).forEach((f, i) => {
+    if (f < 0 || !slots[i].used || poolOf(slots[i].engine) !== engine) return;
+    m = mgMerge(m, bindSound(m, i + 1, -1)); if (bound.has(i + 1)) n++;
+  });
   return { ...mgResult(new Map(objs), m), restored: n };
+}
+
+// ---- the favourites (object 23, cr_favs.c crf_pack): version 1 / 2, the number of sections, then per section a tag, a
+// length and its bytes. The user slots' sections: 0x80 (slot 1 = bit 0; ids up to 127 in 0.22) and 0x81 (slots 33..128);
+// in version 2 a tag | 0x40 holds the sounds typed Chord, | 0x20 those typed Bass; 0xFF the options (the filter). A
+// factory preset's mark is under its engine's tag, and a user record over a factory preset has that preset's key: the
+// mark is the place's, so it is the factory preset's again once the record is deleted (nothing dangles there). A user
+// slot's mark is the slot's: the FM-1's own Delete clears it (crf_slot_new), so the manager does too
+const FAV_USER = 0x80, FAV_USER2 = 0x81, FAV_OPT = 0xFF, FAV_CHORD = 0x40, FAV_BASS = 0x20;
+function favSections(bytes) {           // -> {ver, secs: [{tag, base, data}]} or null (none, another version, cut short)
+  if (!(bytes instanceof Uint8Array) || bytes.length < 2 || (bytes[0] !== 1 && bytes[0] !== 2)) return null;
+  const secs = [];
+  for (let k = 0, p = 2; k < bytes[1]; k++) {
+    if (p + 2 > bytes.length || p + 2 + bytes[p + 1] > bytes.length) return null;   // (the FM-1 reads it as no marks)
+    const tag = bytes[p], w = bytes[0] !== 1 && tag !== FAV_OPT && tag & (FAV_CHORD | FAV_BASS) ? (tag & FAV_CHORD ? FAV_CHORD : FAV_BASS) : 0;
+    secs.push({ tag, base: tag & ~w, data: bytes.subarray(p + 2, p + 2 + bytes[p + 1]) });
+    p += 2 + bytes[p + 1];
+  }
+  return { ver: bytes[0], secs };
+}
+const favFirst = (base) => (base === FAV_USER ? 0 : base === FAV_USER2 ? 32 : -1);   // the section's first slot - 1
+// the user slots marked or typed (1..128) in the object
+export function favUserSlots(bytes) {
+  const f = favSections(bytes), out = new Set();
+  if (f) for (const s of f.secs) if (favFirst(s.base) >= 0) for (let i = 0; i < s.data.length * 8; i++) if (s.data[i >> 3] >> (i & 7) & 1) out.add(favFirst(s.base) + i + 1);
+  return [...out].sort((a, b) => a - b);
+}
+// the object with the marks and types of the user slots `slots` (1..128; null: every user slot) taken off, the other
+// sections (the factory presets', P5's, the filter) byte for byte; packed as crf_pack packs (trailing zero bytes and an
+// empty section left out). An object the FM-1 cannot read (another version, cut short) is left as it is -> the bytes
+// (the same array when nothing changes)
+export function favsClearSlots(bytes, slots = null) {
+  const f = favSections(bytes);
+  if (!f) return bytes;
+  const kill = slots ? new Set(slots) : null, out = [];
+  let changed = false;
+  for (const s of f.secs) {
+    const first = favFirst(s.base);
+    if (first < 0) { out.push(s); continue; }
+    const d = s.data.slice();
+    for (let i = 0; i < d.length * 8; i++) if (!kill || kill.has(first + i + 1)) d[i >> 3] &= ~(1 << (i & 7));
+    let n = d.length;
+    while (n && !d[n - 1]) n--;
+    if (n !== s.data.length || d.some((x, i) => x !== s.data[i])) changed = true;
+    if (n) out.push({ tag: s.tag, data: d.subarray(0, n) });
+  }
+  if (!changed) return bytes;
+  return Uint8Array.from([f.ver, out.length, ...out.flatMap((s) => [s.tag, s.data.length, ...s.data])]);
+}
+
+// ---- deleting user sounds: each pool bank (or 0.21 object) written once, whatever the number of its slots
+const POOL_PER_BANK = 10, POOL_SLOT_BYTES = 384, POOL_USED = 0xA5;
+// a pool bank holding no used slot (byte 0 of a slot 0xA5: what crb_bank_fill keeps) is sent as a PUT of length 0: the
+// FM-1 writes it empty (cr_backup.c crb_commit: a bank never written stays unwritten), so no 3840 bytes go over USB
+const mgBankEmpty = (b) => !b || !b.length || Array.from({ length: POOL_PER_BANK }, (_, j) => b[j * POOL_SLOT_BYTES]).every((x) => x !== POOL_USED);
+function mgEmptyBanks(before, m) {
+  for (const id of POOL_IDS) if (!mgSame(before.get(id), m.get(id)) && mgBankEmpty(m.get(id))) m.set(id, mgEmpty());
+  return m;
+}
+// the user rows deleted at once (Delete with several selected, Restore factory presets): each slot as deleteSound
+// empties it; a row over a factory preset brings that preset back (a later slot whose binding names the same preset,
+// an added sound so far, is unbound, so that the preset itself is back, not that sound); the deleted slots' own
+// favourite marks and types go with them. -> {changed, objs, deleted: [slot], restored: [{engine, pos, name, slot}]}
+export function managerDeleteRows(objs, rows) {
+  const users = rows.filter((r) => r && r.type === "user" && r.slot);
+  const del = new Set(users.map((r) => r.slot)), restored = users.filter((r) => r.f >= 0)
+    .map((r) => ({ engine: r.engine, pos: r.pos, name: r.overwrites, slot: r.slot, f: r.f }));
+  let m = new Map(objs);
+  for (const s of del) m = mgMerge(m, deleteSound(m, s));
+  const { slots } = parseSoundObjects(objs), raw = rawBindings(objs);
+  raw.forEach((f, i) => {
+    if (f >= 0 && !del.has(i + 1) && slots[i].used && restored.some((r) => r.engine === poolOf(slots[i].engine) && r.f === f))
+      m = mgMerge(m, bindSound(m, i + 1, -1));
+  });
+  if (parseSoundObjects(objs).pool) mgEmptyBanks(objs, m);
+  if (objs.has(FAVS_ID)) m.set(FAVS_ID, favsClearSlots(objs.get(FAVS_ID), [...del]));
+  return { ...mgResult(new Map(objs), m), deleted: [...del].sort((a, b) => a - b), restored };
+}
+// the user rows over factory presets (the presets they replaced) among rows, or of every pool of `engines`
+export const replacedRows = (rows) => rows.filter((r) => r && r.type === "user" && r.f >= 0);
+export const replacedOf = (objs, engines = MANAGER_ENGINES) => {
+  const pools = managerPools(objs, { empty: false });
+  return engines.flatMap((e) => replacedRows(pools[e] || []));
+};
+// Restore factory presets (the selected, an engine's, every engine's): the user sounds over them deleted, so each factory
+// preset is back in its place, as Delete / Reset to factory does on one row. Restore factory order keeps them instead
+export const managerRestorePresets = (objs, rows) => managerDeleteRows(objs, replacedRows(rows));
+// Delete all user sounds / Reset sounds to factory: every slot of every engine (P5 and the retired engines' records
+// too) emptied, each bank that holds a used slot written once as a PUT of length 0 (the 0.21 objects: each once, as
+// deleteSound empties a slot), the banks already empty not written; the marks and types of every user slot taken off
+// (the factory presets' marks stay). With no user record every pool is INIT and the factory presets in their order.
+// -> {changed, objs, deleted: the number of sounds, restored: the factory presets that come back, banks: objects written}
+export function managerDeleteAll(objs) {
+  const { slots, pool } = parseSoundObjects(objs), used = slots.filter((s) => s.used);
+  const restored = replacedOf(objs).map((r) => ({ engine: r.engine, pos: r.pos, name: r.overwrites, slot: r.slot, f: r.f }));
+  let m = new Map(objs);
+  if (pool) { for (const id of POOL_IDS) if (!mgBankEmpty(objs.get(id))) m.set(id, mgEmpty()); }
+  else for (const s of used) m = mgMerge(m, deleteSound(m, s.slot));
+  if (objs.has(FAVS_ID)) m.set(FAVS_ID, favsClearSlots(objs.get(FAVS_ID), null));
+  const res = mgResult(new Map(objs), m);
+  return { ...res, deleted: used.length, restored, banks: res.changed.filter((c) => c.id !== FAVS_ID).length };
+}
+
+// ---- the confirms' words (the page shows them in its dialog: a title, paragraphs, the button)
+const mgList = (items, max = 6) => (items.length <= max ? items.join(", ") : `${items.slice(0, max).join(", ")} and ${items.length - max} more`);
+const mgPl = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const undoLine = (n) => `Undo puts ${n === 1 ? "it" : "them"} back in one step while this page stays open (it keeps the sounds in its memory; ` +
+  `a reload forgets them). To keep ${n === 1 ? "it" : "them"} for good, back up first:`;
+// Restore factory presets: rows = the user rows over the presets (replacedRows); selected: how many rows were selected
+export function restorePresetsText(rows, { selected = rows.length } = {}) {
+  const n = rows.length, one = n === 1;
+  const presets = rows.map((r) => `${poolLabel(r.engine, r.pos)} ${r.overwrites}`), mine = rows.map((r) => `${r.label || slotLabel(r.slot)} ${r.name}`);
+  const paras = [
+    `${mgList(presets)} ${one ? "comes" : "come"} back in ${one ? "its place" : "their places"}.`,
+    `The ${one ? "user sound" : mgPl(n, "user sound")} over ${one ? "it is" : "them are"} deleted from the FM-1: ${mgList(mine)}. ` +
+      `To keep ${one ? "it" : "them"} as ${one ? "an added sound" : "added sounds"} after the factory presets instead, cancel and use Restore factory order.`,
+  ];
+  if (selected > n) paras.push(`${selected - n} of the ${selected} selected ${selected - n === 1 ? "is" : "are"} not over a factory preset: left as ${selected - n === 1 ? "it is" : "they are"}.`);
+  paras.push("A favourite mark on a factory preset stays with it. Loops, settings and your other sounds are not touched.", undoLine(n));
+  return { title: one ? `Restore ${presets[0]}?` : `Restore ${n} factory presets?`, paras, ok: one ? "Restore it" : `Restore ${n} presets` };
+}
+// Delete all user sounds (reset: false) / Reset sounds to factory (reset: true)
+export function deleteAllText(objs, { reset = false } = {}) {
+  const { slots, pool } = parseSoundObjects(objs), used = slots.filter((s) => s.used), n = used.length;
+  const by = new Map(), order = [...MANAGER_ENGINES, 16];   // (the picker's order, P5, then a retired engine's records)
+  for (const s of used) by.set(s.engine, (by.get(s.engine) || 0) + 1);
+  const rank = (e) => (order.includes(e) ? order.indexOf(e) : order.length + e);
+  const mix = [...by].sort((a, b) => rank(a[0]) - rank(b[0])).map(([e, k]) => `${ENGINE_NAMES[e]} ${k}`).join(", "), range = pool ? "U001 to U128" : "U01 to U32";
+  const back = replacedOf(objs).length, marks = favUserSlots(objs.get(FAVS_ID)).length, w = managerDeleteAll(objs).changed.length;
+  const writes = w ? ` The FM-1 writes ${mgPl(w, "object")} for it (each bank of ten slots once), its sound pausing about 45 ms at each.` : "";
+  const favLine = `${marks ? `The favourite marks and types of your own sounds (${marks}) are taken off` : "No sound of yours is marked as a favourite"}; ` +
+    "marks on factory presets stay (each is the preset's own). Loops, settings and the favourites filter are not touched.";
+  const backLine = back ? `${mgPl(back, "factory preset")} that ${back === 1 ? "one" : "they"} replaced ${back === 1 ? "comes" : "come"} back in ${back === 1 ? "its place" : "their places"}.` : "";
+  const paras = reset
+    ? [`The FM-1's sounds go back to how they came: all ${mgPl(n, "user sound")} ${n === 1 ? "is" : "are"} deleted (${range}, every engine${mix ? `: ${mix}` : ""}), ` +
+        `every factory preset of every engine is in its place again, in the factory order, with nothing added after them.${writes}`, favLine, undoLine(n)]
+    : [`Every user sound on this FM-1 is deleted: ${mgPl(n, "sound")} in the slots ${range}, of every engine${mix ? ` (${mix})` : ""}.${writes}`,
+       ...(backLine ? [`${backLine} The factory sounds themselves are never deleted.`] : []), favLine, undoLine(n)];
+  return { title: reset ? "Reset the sounds to factory?" : `Delete all ${mgPl(n, "user sound")}?`, paras, ok: reset ? "Reset to factory" : `Delete ${mgPl(n, "sound")}` };
 }
 // swap two rows of the left pane: two user rows (their sounds exchange places), or a user row with a factory row of
 // its pool (the user sound takes the factory position: its binding moves; the factory preset it overwrote, if any,
@@ -287,31 +434,37 @@ export class ManagerSession {
   }
   async read(onProgress) { const r = await readManagerObjects(this.request, onProgress); this.objs = r.objs; this.listed = r.listed; return this.objs; }
   get canUndo() { return this.history.length > 0; }
-  async writeChanged(changed) {
+  async writeChanged(changed, opts = {}) {
     const list = changed.filter((c) => !this.listed || this.listed.includes(c.id));
-    await writeSounds(this.request, list, { busyTries: this.busyTries, onBusy: this.onBusy });
+    await writeSounds(this.request, list, { busyTries: this.busyTries, onBusy: this.onBusy, onObject: opts.onWrite });
     return list.map((c) => c.id);
   }
-  // an edit's result -> written, the set before kept for undo, read back; -> the ids written
-  async apply(res) {
+  // an edit's result -> written, the set before kept for undo, read back; -> the ids written. opts.onWrite(k, n, id):
+  // object k of n begins; opts.onRead(done, total): the read-back. A write that stops after some objects were written
+  // (busy, refused) keeps the set before as an undo step all the same: Undo puts back what was written
+  async apply(res, opts = {}) {
     if (!res.changed.length) return [];
     const before = new Map(this.objs);
+    const keep = () => { this.history.push(before); if (this.history.length > UNDO_DEPTH) this.history.shift(); };
     let ids;
-    try { ids = await this.writeChanged(res.changed); }
-    catch (e) { await this.read().catch(() => {}); throw e; }   // (a partial write: show the unit's state)
-    this.history.push(before);
-    if (this.history.length > UNDO_DEPTH) this.history.shift();
-    await this.read();
+    try { ids = await this.writeChanged(res.changed, opts); }
+    catch (e) {                                 // (a partial write: show the unit's state)
+      if (e && e.written && e.written.length) keep();
+      await this.read(opts.onRead).catch(() => {});
+      throw e;
+    }
+    keep();
+    await this.read(opts.onRead);
     return ids;
   }
   // the previous set's changed objects written back, read back; -> the ids written
-  async undo() {
+  async undo(opts = {}) {
     const prev = this.history.pop();
     if (!prev) throw new Error("Nothing to undo");
     const changed = MG_WRITE_ORDER.filter((id) => !mgSame(prev.get(id), this.objs.get(id))).map((id) => ({ id, bytes: prev.get(id) || mgEmpty() }));
-    try { await this.writeChanged(changed); }
-    catch (e) { this.history.push(prev); await this.read().catch(() => {}); throw e; }
-    await this.read();
+    try { await this.writeChanged(changed, opts); }
+    catch (e) { this.history.push(prev); await this.read(opts.onRead).catch(() => {}); throw e; }
+    await this.read(opts.onRead);
     return changed.map((c) => c.id);
   }
 }
@@ -504,8 +657,29 @@ export function pickUnit(units, { remembered = null, ask = () => null } = {}) {
 
 // the objects a 0.22 FM-1 (the sound pool) lists: the legacy sound objects replaced by the pool's banks
 export const SIM_POOL_IDS = [...CR_BACKUP_IDS.filter((id) => !SOUND_IDS.includes(id)), ...POOL_IDS];
+// a pool bank's PUT as cr_backup.c takes it (3y78): each used slot (byte 0 0xA5) a valid record whose patch header is
+// none or an engine's with that engine's length (FM TONE also 0.21's 80); unused slots are not read
+function simBankOk(v) {
+  for (let j = 0; j < POOL_PER_BANK; j++) {
+    const s = v.subarray(j * POOL_SLOT_BYTES, (j + 1) * POOL_SLOT_BYTES);
+    if (s[0] !== POOL_USED) continue;
+    if (!recordValid(s.subarray(0, 192))) return false;
+    if (!s[192]) continue;
+    const e = s[192] - 1, n = s[193], len = PATCH_SIZE[patchKindOf(e)] || 0;
+    if (e >= ENGINE_NAMES.length || !n || (n !== len && !(e === 15 && n === 80))) return false;
+  }
+  return true;
+}
+// .. and stores it (crb_bank_fill): the used slots as sent, every other slot 384 zeros; a PUT of length 0 writes the
+// bank empty (it stays a written bank: 3840 zeros), or nothing when the bank was never written
+const simBankFill = (v) => {
+  const out = new Uint8Array(POOL_PER_BANK * POOL_SLOT_BYTES);
+  for (let j = 0; j < POOL_PER_BANK && v.length; j++) if (v[j * POOL_SLOT_BYTES] === POOL_USED) out.set(v.subarray(j * POOL_SLOT_BYTES, (j + 1) * POOL_SLOT_BYTES), j * POOL_SLOT_BYTES);
+  return out;
+};
 export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", ids = CR_BACKUP_IDS, unitId = null } = {}) {
-  const sim = { objs: new Map(objs), log: [], staged: null, playing: false, sent: [], requests: 0 };
+  // log: the ids each commit wrote; puts: every PUT begin taken ({id, size}), written or not
+  const sim = { objs: new Map(objs), log: [], puts: [], staged: null, playing: false, sent: [], requests: 0 };
   sim.objs.set(1, sim.objs.get(1) || new Uint8Array(764));
   sim.handle = (cmd, a) => {
     if (cmd === 1) return [...new TextEncoder().encode(version), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3, 0x43, 1, 2,
@@ -522,7 +696,13 @@ export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", i
     if (cmd === 67) {
       const [op, id] = a;
       if ((op === 0 || op === 2) && sim.playing) return [op, id, 3];
-      if (op === 0) { sim.staged = { id, size: bkR32(a, 2), crc: bkR32(a, 7), bytes: [] }; return [op, id, ids.includes(id) && id !== 8 ? 0 : 1]; }
+      if (op === 0) {
+        const size = bkR32(a, 2), pool = POOL_IDS.includes(id);
+        sim.staged = { id, size, crc: bkR32(a, 7), bytes: [] };
+        const rc = ids.includes(id) && id !== 8 && (!pool || !size || size === POOL_PER_BANK * POOL_SLOT_BYTES) ? 0 : 1;
+        if (!rc) sim.puts.push({ id, size });
+        return [op, id, rc];
+      }
       if (!sim.staged || sim.staged.id !== id) return [op, id, 5];
       if (op === 1) { sim.staged.bytes.push(...bkUnpack(a.slice(7), Math.min(256, sim.staged.size - bkR32(a, 2)))); return [op, id, 0]; }
       if (op === 2) {
@@ -530,6 +710,11 @@ export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", i
           (!CR_LOOP_IDS.includes(id) || !v.length || loopHeader(v).valid);
         sim.staged = null;
         if (!ok) return [op, id, 2];
+        if (POOL_IDS.includes(id)) {                    // (cr_backup.c crb_commit, the pool's branch)
+          if (v.length && !simBankOk(v)) return [op, id, 2];
+          if (!v.length && !(sim.objs.get(id) || mgEmpty()).length) return [op, id, 0];   // (an empty bank onto none: nothing to write)
+          sim.objs.set(id, simBankFill(v)); sim.log.push(id); return [op, id, 0];
+        }
         sim.objs.set(id, v); sim.log.push(id); return [op, id, 0];
       }
       sim.staged = null; return [op, id, 0];

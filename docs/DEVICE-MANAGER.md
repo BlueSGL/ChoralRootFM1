@@ -199,12 +199,14 @@ version's package, sha256, notes and source at its tag).
   factory row): the pool shows it in that place and the factory preset is not in the pool while it is there (PRESETS
   steps through the imports where the factory sounds were). Kept in the pool's bank: survives a power cycle. The
   factory sounds stay in the firmware.
-- **Restore factory order**: every user sound of the engine over a factory preset becomes an added sound (kept, after
-  the factory presets); the factory presets are back. Needs no free slot. Delete / Reset to factory on one row brings
-  back that one preset (and deletes the import).
+- **Restore factory order** (since 3y79 in the FM-1 pane's "Factory presets:" row, below): every user sound of the
+  engine over a factory preset becomes an added sound (kept, after the factory presets); the factory presets are back.
+  Needs no free slot. Delete / Reset to factory on one row brings back that one preset (and deletes the import);
+  Restore selected / all (below) does that for several.
 - **Favourites**: a factory preset's mark is keyed by the preset, and a record over it has the same key (PRESETS.md
   "Favourites"): the mark stays with the place, so the unit shows the import as marked; after Restore it is the factory
-  sound's again. The manager does not edit marks; the confirm says this.
+  sound's again. Replace and Restore factory order do not edit marks; the confirm says this. (A deleted user slot's own
+  mark: below.)
 
 ## Several FM-1s (2026-10-14, HISTORY 3y66)
 
@@ -219,3 +221,59 @@ unique ID; under Options > Version on the unit; docs/INSTALL-COMPAT.md "Several 
   before is taken again without a question when it comes back (a hot-plug, a restart); when it leaves and another is
   there, the page asks instead of moving to the other one by itself: a write never goes to an FM-1 that was not chosen.
 - Tests: `web/test_manager.mjs` (managerPorts, pickUnit, deviceInfo's unitId from `makeSimFM1({ unitId })`).
+
+## Restore factory presets, Delete all, Reset to factory (2026-10-15, HISTORY 3y79)
+
+The owner: "a way to restore multiple factory presets" and "a way to quickly fully delete all user presets and reset
+to factory".
+
+- **The "Factory presets:" row** of the FM-1 pane (under the engine tabs; hidden on Loops). A replaced factory preset
+  is shown as the user row over it ("MY TINE over FM BELL"), so these act on those rows:
+  - **Restore N selected**: of the rows selected on the FM-1, the user sounds over a factory preset are deleted and
+    each factory preset is back in its place, as Delete / Reset to factory does on one row. The other selected rows are
+    left as they are (the dialog counts them).
+  - **Restore all FM6 (N)**: every replaced preset of the open engine's pool; its added sounds stay.
+  - **Restore all engines (N)**: of the five engines' pools the manager shows (P5 is not one of them: below).
+  - **Restore factory order** (moved here from the middle column): the keeping one, the user sounds stay as added sounds.
+  - Delete, not keep, because the single row's Reset to factory deletes, and Restore factory order already keeps. The
+    dialog says both, e.g. "FM6 02 FM BELL comes back in its place. The user sound over it is deleted from the FM-1:
+    U001 MY TINE. To keep it as an added sound after the factory presets instead, cancel and use Restore factory order."
+  - A later slot whose binding names a preset that an earlier slot holds (an added sound so far: the first bound slot
+    wins, `cr_bank.c cb_bound`) is unbound by a restore, else it would take the preset's place once the earlier one is
+    gone. Restore factory order now does the same (until 3y79 such a slot stayed bound and took the place).
+- **Delete all user sounds (N)…** and **Reset sounds to factory…** (the bottom bar, in red): every slot of every engine
+  emptied, U001..U128 (P5's sounds and the retired engines' records too; a 0.21 FM-1: U01..U32). With no user record
+  every pool is INIT and its factory presets in their order, so the two write the same: Delete's dialog counts the
+  sounds and the factory presets that come back, Reset's says the sounds are as the FM-1 came (every factory preset of
+  every engine in its place, in the factory order, nothing added). Reset is also offered when no sound is left but a
+  user slot still carries a mark. Loops, settings, the FM6 voice bank, the CZ-1 banks and the favourites filter are not
+  touched.
+- **What is written.** Delete all / Reset: each pool bank holding a used slot (byte 0 of a slot 0xA5) once, as a PUT of
+  length 0 (`cr_backup.c crb_commit`: the bank is written empty; a bank never written would be "nothing to write"), the
+  banks already empty not at all: at most 13 writes and no data over USB; then object 23 once. A 0.21 FM-1: each of its
+  objects (6, 7, the stores) once, as `deleteSound` empties a slot. Restore and the Delete button with several rows
+  (`managerDeleteRows`) write each bank they touch once: the bank as read, the deleted slots 384 zeros (a bank left
+  with no used slot goes as length 0). 0.21's FM TONE slots (patch header 16 / 80) are sent as read: 3y78's firmware
+  takes them; the beta built before 3y78 refuses such a bank (rc 2), which a Restore or an Undo would then report.
+- **Favourites** (object 23, now read with the sounds): a user slot's mark and type are the slot's (sections 0x80 /
+  0x81), and the FM-1's own Delete takes them off (`cr_favs.c crf_slot_new`), else the next sound placed in that slot
+  would show the mark. The manager now does the same for every slot it deletes (Delete, Restore), and Delete all / Reset
+  take off every user slot's marks and types (the dialog counts them). A factory preset's mark is the preset's, and a
+  record over it has that key: the mark stays and is the factory sound's again; P5's marks and the filter stay, byte
+  for byte. An object the FM-1 cannot read (another version, cut short) is left as it is.
+- **The dialog** (a `<dialog>`, not `confirm()`): what comes back, what is deleted (by name for a restore), the marks,
+  what is not touched, Undo, and **Back up everything** inside it (the bottom bar's backup: the file is downloaded, the
+  dialog stays open with its name). Cancel or Esc: nothing is written.
+- **Undo**: one step, as every write (the page keeps the object set before it): the banks and object 23 written back
+  byte for byte. Only while the page stays open (the dialog says so, and offers the backup for good). A write that
+  stops part-way (a loop started: rc 3; a refusal) now keeps its step too, so Undo puts back what was written
+  (`ManagerSession.apply`; `writeSounds`' error carries `.written`).
+- **Progress**: the bar and the status per object ("writing the user sounds 011-020 (2 of 5)…"), then the read-back.
+- **P5**: the manager's pools are the five engines of `FACTORY_PRESETS`; a P5 record shows as an added row of the VA's
+  tab ("P5 · retired"), so a P5 sound over a P5 program is not restored by the Restore buttons (Delete all and Reset
+  empty its slot all the same).
+- Model: `fm1manager.js` `managerDeleteRows`, `managerRestorePresets`, `replacedRows`, `replacedOf`, `managerDeleteAll`,
+  `restorePresetsText`, `deleteAllText`, `favUserSlots`, `favsClearSlots`, `FAVS_ID`; `fm1sounds.js` `rawBindings`,
+  `writeSounds`' `onObject`. `makeSimFM1` takes a pool bank as `cr_backup.c` does (`crb_bank_ok`, `crb_bank_fill`, a
+  PUT of length 0) and logs every PUT begin (`sim.puts`). Tests: `web/test_manager.mjs` (the 3y79 block: a bank of
+  0.21's FM TONE slots, the favourites, each bank once, the empty ones skipped, Undo, a write stopped part-way).

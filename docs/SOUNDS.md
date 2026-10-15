@@ -245,7 +245,10 @@ The same objects and edits in a two-pane page (the FM-1's pools per engine and l
 `web/fm1sounds.js` for it: `placeSound(objs, slot, sound, f)` imports with the binding set as SAVE > Overwrite sets it
 (`note[15]` 0xA6, `flags[15]` f + 1, or 0 for an added sound), `bindSound` moves a slot's binding, `swapSounds`
 exchanges two slots (in one pool the binding bytes stay with the slots, so the sounds exchange their places),
-`firstFreeSlot`. The factory sounds of every engine as sound files: `web/packs/` (`tools/make_packs.py`).
+`firstFreeSlot`, `rawBindings` (per slot the factory preset its binding bytes name, before the first-bound-slot-wins
+rule: a Restore unbinds a later slot naming the same preset, 3y79). Delete all / Reset to factory send each pool bank
+that holds a sound once as a PUT of length 0 (the FM-1 writes it empty), DEVICE-MANAGER.md "Restore factory presets,
+Delete all, Reset to factory". The factory sounds of every engine as sound files: `web/packs/` (`tools/make_packs.py`).
 
 ## The CLI (`tools/fm1_install.py`)
 

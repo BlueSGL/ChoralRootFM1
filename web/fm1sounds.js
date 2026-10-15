@@ -64,6 +64,12 @@ export function soundBindings(records) {
     return { index: f, pos, label: `${ENGINE_NAMES[e]} ${String(pos).padStart(2, "0")}`, name: FACTORY_PRESETS[e][f] };
   });
 }
+// per slot the factory preset index its binding bytes name (cb_bind_raw; -1: none), before soundBindings' rule: a later
+// slot naming a preset that an earlier one holds is an added preset, and takes the place when the earlier one goes
+export function rawBindings(objs) {
+  const m = sndMap(objs), n = m.pool ? SOUND_SLOTS : LEGACY_SLOTS;
+  return Array.from({ length: n }, (_, i) => { const r = sndRecord(m, i + 1); return r && recordValid(r) ? sndBindRaw(r) : -1; });
+}
 // a slot's binding as a sound file carries it: {overwrites: the pool position, name} or null (added)
 export const bindingOf = (bound) => (bound ? { overwrites: bound.pos, name: bound.name } : null);
 
@@ -423,7 +429,8 @@ export async function readSounds(request, onProgress = () => {}) {
 
 // changed: [{id, bytes}] in the order to write (importSound & co. put the stores first, the bank last). Each object:
 // PUT begin / data / commit; rc 3 (busy) retried each second opts.busyTries times (opts.onBusy() each time); a failure
-// aborts that object and stops: nothing after it is written. -> the ids written
+// aborts that object and stops: nothing after it is written (the error's .written: the ids written before it).
+// opts.onObject(k, n, id): object k of n begins (an empty object, a PUT of length 0, moves no bytes). -> the ids written
 export async function writeSounds(request, changed, opts = {}) {
   const onProgress = opts.onProgress || (() => {}), busyTries = opts.busyTries ?? 120;
   const ask = (r) => request(r, { timeout: 4000, retries: 0 });
@@ -436,21 +443,27 @@ export async function writeSounds(request, changed, opts = {}) {
   };
   const total = changed.reduce((n, o) => n + o.bytes.length, 0), written = [];
   let done = 0;
-  for (const { id, bytes } of changed) {
-    const what = objectName(id);
-    await retry(() => put([0, id, ...bkU32(bytes.length), ...bkU32(bkCrc(bytes))], what));
-    try {
-      for (let off = 0; off < bytes.length; off += SND_CHUNK) {
-        const chunk = bytes.subarray(off, off + SND_CHUNK);
-        await put([1, id, ...bkU32(off), ...bkPack(chunk)], what);
-        done += chunk.length; onProgress(done, total);
+  try {
+    for (const { id, bytes } of changed) {
+      const what = objectName(id);
+      if (opts.onObject) opts.onObject(written.length, changed.length, id);
+      await retry(() => put([0, id, ...bkU32(bytes.length), ...bkU32(bkCrc(bytes))], what));
+      try {
+        for (let off = 0; off < bytes.length; off += SND_CHUNK) {
+          const chunk = bytes.subarray(off, off + SND_CHUNK);
+          await put([1, id, ...bkU32(off), ...bkPack(chunk)], what);
+          done += chunk.length; onProgress(done, total);
+        }
+        await retry(() => put([2, id], what));
+      } catch (e) {
+        await ask([BACKUP_CMD.PUT, [3, id]]).catch(() => {});
+        throw e;
       }
-      await retry(() => put([2, id], what));
-    } catch (e) {
-      await ask([BACKUP_CMD.PUT, [3, id]]).catch(() => {});
-      throw e;
+      written.push(id);
     }
-    written.push(id);
+  } catch (e) {
+    if (e && typeof e === "object") e.written = written.slice();
+    throw e;
   }
   return written;
 }

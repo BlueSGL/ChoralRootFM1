@@ -1672,6 +1672,8 @@ stored on the FM-1 beside a library on the computer:
 - the pool of every engine as the FM-1 has it, and the ten loop slots;
 - a library: sounds kept in the browser, files, and the factory sounds as packs;
 - Place (library to FM-1), Keep (FM-1 to library), Swap, Rename, Delete, drag to reorder, Undo;
+- Restore the factory presets your sounds replaced (the selected, one engine's or every engine's), and Delete all user
+  sounds / Reset sounds to factory: each asks first and offers a backup;
 - selecting a row on the FM-1 side switches the FM-1 to that sound, so you hear it (this needs 0.16);
 - an on-screen keyboard, and Back up everything / Install a backup.
 

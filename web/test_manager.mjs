@@ -10,17 +10,23 @@
 //   deleted; Undo restores each step (written back, read back); busy (rc 3) refused with "Stop the loop" and no undo step
 // - the library: files (sound, loop, backup, .syx, pack), the store (in memory in node), the pack index and every pack
 // - audition: program change and notes; the page's shape and its script as make_site.py inlines it
+// - 3y79: Restore factory presets (selected, one engine's, every engine's), Delete all user sounds, Reset sounds to
+//   factory against the pool simulator (which takes a bank as cr_backup.c does): each bank written once, the empty ones
+//   not at all, a bank of 0.21's FM TONE slots (16 / 80) kept as read, the favourites without the deleted user slots,
+//   the confirms' words, one Undo step (also after a write stopped part-way)
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import { captureBackup, loopHeader, deviceInfo, readBackup, restoreBackup, backupFileName } from "./fm1backup.js";
-import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObjects, recordValid } from "./fm1sounds.js";
+import { FACTORY_PRESETS, FACTORY_FIRST, readSoundFile, exportSyx, parseSoundObjects, recordValid, withBinding, rawBindings, placeSound, writeSounds, POOL_IDS } from "./fm1sounds.js";
+import { quadToV3 } from "./fm1dnsnd.js";
 import {
   selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete, managerReplacePlan, managerReplaceFactory, managerRestoreFactory, replaceFactoryText,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
   libraryItemsFromFile, libraryItemsFromDnsnd, SIM_POOL_IDS, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH, retiredNote,
-  managerPorts, pickUnit,
+  managerPorts, pickUnit, favUserSlots, favsClearSlots, replacedRows, replacedOf, managerRestorePresets, managerDeleteAll, managerDeleteRows,
+  restorePresetsText, deleteAllText,
 } from "./fm1manager.js";
 
 let failed = 0;
@@ -409,6 +415,152 @@ ok(site.includes('"manager.html"') && site.includes("fm1manager.js") && site.inc
     ok(r.changed.length && slotOf(s2.objs, r.slot).used && slotOf(s2.objs, r.slot).patch, `pool: Place ${readSoundFile(f).engineName} ${readSoundFile(f).name} -> U${r.slot}, with its patch`);
   }
 }
+
+/* ---- 3y79: Restore factory presets (selected, an engine's, every engine's), Delete all user sounds, Reset to factory --- */
+{
+  const POOL = (o) => makeSimFM1(o, { version: "ChoralRoot 0.22", ids: SIM_POOL_IDS });
+  const open = async (sim) => { const t = new ManagerSession(sim.request); await t.read(); return t; };
+  const putsOf = async (sim, f) => { const k = sim.puts.length; await f(); return sim.puts.slice(k); };
+  const same = (a, b) => (a || new Uint8Array(0)).length === (b || new Uint8Array(0)).length && (a || []).every((v, i) => v === b[i]);
+  const factoryOrder = (o, e) => P(o)[e].slice(1, 1 + FACTORY_PRESETS[e].length - FACTORY_FIRST[e])
+    .every((r, k) => r.type === "factory" && r.name === FACTORY_PRESETS[e][k + FACTORY_FIRST[e]]);
+  // the FM-1: the 30-sound pool simulator (U001 FM6 02, U006 WHEEL 01, U009 CZ-1 13 over factory presets), bank 51
+  // (U011..U020) as the owner's unit has it: 0.21's FM TONE sounds as migrated, each patch the 80-byte version 3 (header
+  // 16 / 80): U011..U013 over FM TONE 01..03, U020 naming FM TONE 01 too (an added sound while U011 holds it), the
+  // rest added; bank 53 written once and empty (3840 zeros); U100 a VA sound (bank 59); the favourites: user slots 3, 5,
+  // 9 (stale: U009 is over a factory preset), 40, 45 marked, slot 5 typed Chord; FM6 02 FM BELL marked and typed Bass,
+  // P5 program 12 marked, the filter on
+  let o = simObjects(30, true);
+  const q3 = quadToV3(readSoundFile(packs[15][0].file).patch), b51 = new Uint8Array(3840);
+  ok(q3.length === 80 && q3[0] === 0x51 && q3[1] === 3, "3y79 setup: an 80-byte version-3 FM TONE patch (0.21's)");
+  for (let j = 0; j < 10; j++) {
+    const r = withBinding(readSoundFile(packs[15][j].file).record, j < 3 ? j : j === 9 ? 0 : -1);
+    b51.set(r, j * 384); b51[j * 384 + 192] = 16; b51[j * 384 + 193] = 80; b51.set(q3, j * 384 + 196);
+  }
+  o.set(51, b51); o.set(53, new Uint8Array(3840));
+  o = new Map([...o, ...placeSoundAt(o, 100, packs[13][1].file)]);
+  const FAVS = Uint8Array.from([2, 8, 0x80, 2, 0x14, 0x01, 0x81, 2, 0x80, 0x10, 0xC0, 1, 0x10, 12, 1, 0x02, 16, 2, 0x00, 0x10, 0x2C, 1, 0x02, 0xFF, 1, 1, 0x0F, 1, 0x01]);
+  o.set(23, FAVS);
+  function placeSoundAt(objs, slot, file) { return placeSound(objs, slot, file, -1).objs; }
+  const slots0 = parseSoundObjects(o).slots;
+  ok(slots0.slice(10, 20).every((x) => x.used && x.engine === 15 && x.patch === "quad") && slots0[99].used && usedSlots(o) === 31 &&
+     P(o)[15].slice(1, 4).every((r, k) => r.slot === 11 + k && r.overwrites === FACTORY_PRESETS[15][k]) && P(o)[15].some((r) => r.slot === 20 && r.f === -1),
+     "3y79 setup: U011..U020 0.21 FM TONE sounds (16 / 80), U011..U013 over FM TONE 01..03, U020 added (naming 01 too), U100");
+
+  // the favourites object: the user slots' marks and types, the factory ones kept byte for byte
+  ok(favUserSlots(FAVS).join() === "3,5,9,40,45" && favUserSlots(new Uint8Array(0)).length === 0 && favUserSlots(Uint8Array.from([3, 0])).length === 0,
+     "favourites: the user slots marked or typed (3, 5, 9, 40, 45); none, another version: none");
+  ok(same(favsClearSlots(FAVS, [5, 9]), [2, 7, 0x80, 1, 0x04, 0x81, 2, 0x80, 0x10, 12, 1, 0x02, 16, 2, 0x00, 0x10, 0x2C, 1, 0x02, 0xFF, 1, 1, 0x0F, 1, 0x01]) &&
+     same(favsClearSlots(FAVS, null), [2, 5, 12, 1, 0x02, 16, 2, 0x00, 0x10, 0x2C, 1, 0x02, 0xFF, 1, 1, 0x0F, 1, 0x01]) && favsClearSlots(FAVS, [7, 100]) === FAVS,
+     "favourites: slots 5 and 9 cleared (5's Chord type too, the section gone), all user slots cleared; factory, P5, the filter kept; nothing to clear: the same object");
+  const v1 = Uint8Array.from([1, 2, 0x80, 1, 0x05, 13, 1, 0x01]), cut = Uint8Array.from([2, 2, 0x80, 1, 0x05, 12, 4, 1]);
+  ok(same(favsClearSlots(v1, [1]), [1, 2, 0x80, 1, 0x04, 13, 1, 0x01]) && favsClearSlots(cut, null) === cut && favsClearSlots(Uint8Array.from([3, 1, 0x80, 1, 1]), null).length === 5,
+     "favourites: a version-1 object kept version 1; a cut-short object or another version left as it is (the FM-1 reads no marks)");
+
+  // the simulator takes a pool bank as the firmware does (3y78's check): 16 / 80 yes, 16 / 81 no
+  { const sim = POOL(o), bad = b51.slice(); bad[384 + 193] = 81;
+    let rc = 0; try { await writeSounds(sim.request, [{ id: 51, bytes: bad }]); } catch (e) { rc = e.rc; }
+    const good = await writeSounds(sim.request, [{ id: 51, bytes: b51 }]);
+    ok(rc === 2 && good.join() === "51" && same(sim.objs.get(51), b51), "simulator: a bank with a 16 / 81 slot refused (rc 2), with 0.21's 16 / 80 slots taken (crb_bank_ok)"); }
+
+  // (1) Restore selected: FM6 02 (U001), FM TONE 02 (U012, a 16 / 80 slot), CZ-1 13 (U009), with U005 (added) and FM6 01 (factory)
+  { const sim = POOL(o), s = await open(sim), p = P(s.objs);
+    const sel = [p[12][1], p[12][2], p[12].find((r) => r.slot === 5), p[15][2], p[14][13]], over = replacedRows(sel);
+    const text = restorePresetsText(over, { selected: sel.length }), all = text.paras.join(" ");
+    ok(over.length === 3 && text.title === "Restore 3 factory presets?" && text.ok === "Restore 3 presets" &&
+       /^FM6 02 FM BELL, FM TONE 02 BELL, CZ-1 13 SYNTH\.BASS come back in their places\./.test(all) &&
+       /The 3 user sounds over them are deleted from the FM-1: U001 MY TINE, U012 BELL, U009 CZ BASS 2\./.test(all) &&
+       /Restore factory order/.test(all) && /2 of the 5 selected are not over a factory preset/.test(all) && /Undo puts them back/.test(all) && /back up first/.test(all),
+       "restore selected: the confirm (what comes back, the 3 user sounds deleted, Restore factory order keeps them, 2 left, Undo, back up)");
+    const res = managerRestorePresets(s.objs, sel);
+    const puts = await putsOf(sim, () => s.apply(res)), rb = (await open(sim)).objs, after = sim.objs.get(51);
+    ok(res.deleted.join() === "1,9,12" && res.restored.length === 3 && puts.map((x) => `${x.id}:${x.size}`).join() === "50:3840,51:3840,23:28",
+       `restore selected: banks 50 and 51 each written once (U001 + U009 in one), then the favourites (${puts.map((x) => x.id).join(" ")})`);
+    ok(P(rb)[12][2].type === "factory" && P(rb)[12][2].name === "FM BELL" && P(rb)[15][2].type === "factory" && P(rb)[15][2].name === "BELL" &&
+       P(rb)[14][13].type === "factory" && P(rb)[14][13].name === "SYNTH.BASS" && P(rb)[12].some((r) => r.slot === 5) && P(rb)[7][1].slot === 6 &&
+       usedSlots(rb) === 28, "restore selected: the 3 factory presets back in their places, read back; U005 (added) and WHEEL 01's U006 stay");
+    ok(after.subarray(384, 768).every((x) => !x) && [0, 2, 3, 4, 5, 6, 7, 8, 9].every((j) => same(after.subarray(j * 384, (j + 1) * 384), b51.subarray(j * 384, (j + 1) * 384))),
+       "restore selected (0.21's FM TONE slots): U012 empty, the other nine slots of bank 51 as read (their 16 / 80 headers and patches)");
+    ok(favUserSlots(rb.get(23)).join() === "3,5,40,45" && same(rb.get(23).subarray(-16), FAVS.subarray(-16)),
+       "restore selected: U009's stale mark taken off with it; the factory marks, P5's and the filter as they were"); }
+
+  // (2) Restore all of one engine (FM TONE): U011, U013 and U012 deleted, U020 (naming FM TONE 01 too) unbound, not taking its place
+  { const sim = POOL(o), s = await open(sim), res = managerRestorePresets(s.objs, P(s.objs)[15]);
+    const puts = await putsOf(sim, () => s.apply(res)), rb = (await open(sim)).objs, raw = rawBindings(rb);
+    ok(res.deleted.join() === "11,12,13" && puts.map((x) => x.id).join() === "51" && factoryOrder(rb, 15) &&
+       P(rb)[15].some((r) => r.slot === 20 && r.f === -1) && raw[19] === -1 && P(rb)[12][2].slot === 1 && P(rb)[14][13].slot === 9,
+       "restore all FM TONE: 01..16 factory in order, bank 51 written once, U020 unbound (stays an added sound), FM6 / CZ-1 untouched");
+    ok(sim.objs.get(51).subarray(9 * 384 + 192, 9 * 384 + 196).join() === "16,80,0,0" && parseSoundObjects(rb).slots[19].patch === "quad",
+       "restore all FM TONE: U020 keeps its 0.21 FM TONE patch (16 / 80)"); }
+  { const r = managerRestoreFactory(o, 15);
+    ok(r.restored === 3 && factoryOrder(r.objs, 15) && rawBindings(r.objs).slice(10, 20).every((f) => f === -1) && usedSlots(r.objs) === 31,
+       "Restore factory order (fixed): U020's binding to FM TONE 01 taken off too, so the factory preset is back, all 31 kept"); }
+
+  // (3) Restore all engines: the 6 replaced presets back, two bank writes
+  { const sim = POOL(o), s = await open(sim), rows = replacedOf(s.objs), res = managerRestorePresets(s.objs, rows);
+    const puts = await putsOf(sim, () => s.apply(res)), rb = (await open(sim)).objs;
+    ok(rows.length === 6 && puts.map((x) => x.id).join() === "50,51,23" && MANAGER_ENGINES.every((e) => factoryOrder(rb, e)) && usedSlots(rb) === 25,
+       "restore all engines: FM6 02, FM TONE 01..03, CZ-1 13, WHEEL 01 back; banks 50, 51 once each; 25 sounds stay as added"); }
+
+  // (4) Delete all user sounds: the banks with a sound (50, 51, 52, 59) each once as a PUT of length 0, bank 53 (empty) and
+  // the never-written banks not at all; the favourites without the user slots; one Undo step puts it all back
+  { const sim = POOL(o), s = await open(sim), text = deleteAllText(s.objs), all = text.paras.join(" ");
+    ok(text.title === "Delete all 31 user sounds?" && text.ok === "Delete 31 sounds" && /31 sounds in the slots U001 to U128, of every engine \(FM6 \d+, /.test(all) &&
+       /6 factory presets that they replaced come back/.test(all) && /The FM-1 writes 5 objects for it \(each bank of ten slots once\), its sound pausing about 45 ms at each\./.test(all) && /favourite marks and types of your own sounds \(5\) are taken off/.test(all) &&
+       /marks on factory presets stay/.test(all) && /Undo puts them back in one step/.test(all) && /back up first/.test(all),
+       "delete all: the confirm (31 sounds, every engine, 5 writes, 6 presets back, 5 marks off, factory marks stay, Undo, back up)");
+    const res = managerDeleteAll(s.objs), steps = [];
+    const puts = await putsOf(sim, () => s.apply(res, { onWrite: (k, n, id) => steps.push(`${k}/${n}:${id}`) }));
+    const rb = (await open(sim)).objs;
+    ok(res.deleted === 31 && res.banks === 4 && res.restored.length === 6 && puts.map((x) => `${x.id}:${x.size}`).join() === "50:0,51:0,52:0,59:0,23:18" &&
+       steps.join() === "0/5:50,1/5:51,2/5:52,3/5:59,4/5:23", `delete all: 4 banks written once each as length 0, then the favourites; bank 53 and the unwritten ones skipped (${steps.join(" ")})`);
+    ok(usedSlots(rb) === 0 && MANAGER_ENGINES.every((e) => factoryOrder(rb, e) && P(rb)[e].length === FACTORY_PRESETS[e].length - FACTORY_FIRST[e] + 1) &&
+       same(rb.get(23), favsClearSlots(FAVS, null)) && sim.objs.get(50).length === 3840 && sim.objs.get(50).every((x) => !x) && sim.objs.get(54).length === 0,
+       "delete all: read back no user sound, every pool INIT + its factory presets in order; the factory marks and the filter kept; the banks written empty");
+    ok(s.history.length === 1, "delete all: one Undo step");
+    const undone = await putsOf(sim, () => s.undo());
+    ok(POOL_IDS.every((id) => same(sim.objs.get(id), o.get(id))) && same(sim.objs.get(23), FAVS) && undone.map((x) => x.id).join() === "50,51,52,59,23" &&
+       same(sim.objs.get(51), b51), "delete all, Undo: the 4 banks and the favourites written back, every bank byte for byte (0.21's 16 / 80 slots too)"); }
+
+  // (5) Reset sounds to factory: the same writes, its own words
+  { const sim = POOL(o), s = await open(sim), text = deleteAllText(s.objs, { reset: true }), all = text.paras.join(" ");
+    ok(text.title === "Reset the sounds to factory?" && text.ok === "Reset to factory" && /all 31 user sounds are deleted \(U001 to U128, every engine/.test(all) &&
+       /every factory preset of every engine is in its place again, in the factory order/.test(all) && /\(5\) are taken off/.test(all) && /back up first/.test(all),
+       "reset to factory: the confirm (every user sound deleted, the factory presets in the factory order, the user marks off, back up)");
+    await s.apply(managerDeleteAll(s.objs));
+    const rb = (await open(sim)).objs;
+    ok(usedSlots(rb) === 0 && MANAGER_ENGINES.every((e) => factoryOrder(rb, e)) && favUserSlots(rb.get(23)).length === 0 && same(rb.get(23).subarray(-3), [0x0F, 1, 0x01]),
+       "reset to factory: no user sound, every engine's factory presets in their order, no user mark, the factory marks kept");
+    ok(!managerDeleteAll(rb).changed.length, "reset to factory again: nothing to write (every bank already empty)"); }
+
+  // (6) a 0.21 FM-1 (no pool, no favourites): every object once, as deleteSound empties a slot
+  { const sim = makeSimFM1(simObjects(30)), s = await open(sim), res = managerDeleteAll(s.objs);
+    const puts = await putsOf(sim, () => s.apply(res)), rb = (await open(sim)).objs;
+    ok(usedSlots(rb) === 0 && new Set(puts.map((x) => x.id)).size === puts.length && puts.every((x) => [6, 7, 9, 10, 11, 12, 13, 22].includes(x.id)) &&
+       MANAGER_ENGINES.every((e) => factoryOrder(rb, e)), `0.21: delete all writes each of its objects once (${puts.map((x) => x.id).join(" ")}), no user sound left`); }
+
+  // (7) a write that stops part-way (the loop started after the first bank): an Undo step all the same, Undo puts it back
+  { const sim = POOL(o), req = async (r, op) => { const a = await sim.request(r, op); if (r[0] === 67 && r[1][0] === 2 && r[1][1] === 50) sim.playing = true; return a; };
+    const s = new ManagerSession(req); await s.read();
+    let err = null; try { await s.apply(managerDeleteAll(s.objs)); } catch (e) { err = e; }
+    sim.playing = false;
+    ok(err && err.rc === 3 && err.written.join() === "50" && s.history.length === 1 && usedSlots(s.objs) === 21, "a write stopped by the loop after bank 50: rc 3, .written [50], an Undo step kept");
+    await s.undo();
+    ok(POOL_IDS.every((id) => same(sim.objs.get(id), o.get(id))), "  .. Undo puts bank 50 back"); }
+
+  // (8) Delete with several selected: each bank once, the factory presets back, U020 not taking FM TONE 01
+  { const p = P(o), res = managerDeleteRows(o, [p[15][1], p[15].find((r) => r.slot === 5) || p[12].find((r) => r.slot === 5), p[12][2]]);
+    ok(res.changed.map((c) => c.id).join() === "50,51,23" && res.restored.length === 2 && P(res.objs)[15][1].type === "factory" && P(res.objs)[12][2].type === "factory" &&
+       rawBindings(res.objs)[19] === -1 && favUserSlots(res.objs.get(23)).join() === "3,9,40,45",
+       "Delete 3 (U011, U005, U001): banks 50, 51 once, FM TONE 01 and FM6 02 back (U020 unbound), U005's mark and type off"); }
+}
+
+/* ---- the page's new parts (3y79) --- */
+ok(["restore-sel", "restore-engine", "restore-every", "delete-all", "reset-factory", "dlg", "dlg-backup-go", "dlg-ok", "dlg-cancel"].every((id) => html.includes(`id="${id}"`)) &&
+   html.indexOf('id="dev-tools"') < html.indexOf('id="restore-factory"') && html.indexOf('id="restore-factory"') < html.indexOf('id="dev-rows"') &&
+   html.includes("askDialog(deleteAllText(session.objs, { reset }))") && html.includes("askDialog(restorePresetsText(over") && html.includes("managerDeleteRows(session.objs, d)") &&
+   html.includes("backupEverything()") && html.includes("showModal()"),
+   "page: the factory presets' row (Restore selected / all / all engines / factory order), Delete all, Reset to factory, the dialog with the backup");
 
 if (failed) { console.log(`${failed} manager test(s) FAILED`); process.exit(1); }
 console.log("manager tests passed");

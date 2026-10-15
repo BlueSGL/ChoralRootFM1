@@ -3302,3 +3302,40 @@ loads and SELECT plays it; FM TONE 81, VA 80, no engine: rc 2, nothing written),
 owner's bank). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok); `./build.sh --release
 0.22-beta1` twice identical: `choralroot-0.22-beta1.fwsc` be9f497bb32e8090..., `-1core` 7b98e2eabc9e653f... (in
 `web/releases.json`); releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1`, site_test, test_installer pass.
+
+## 2026-10-15 (restore factory presets, delete all user sounds)
+
+3y79. **The device manager restores several factory presets and empties the FM-1 in one go (2026-10-15; branch int-1,
+not pushed, not flashed).** The owner: "a way to restore multiple factory presets" and "a way to quickly fully delete
+all user presets and reset to factory". **Restore** (a "Factory presets:" row under the FM-1 pane's engine tabs, where
+Restore factory order moved from the middle column): the selected rows, all of the open engine, or all of every
+engine; each user sound over a factory preset is deleted and the preset is back in its place, as Delete / Reset to
+factory already did for one row (Restore factory order is the one that keeps them, and the dialog says so). A later
+slot naming the same preset (an added sound while the first bound slot held the place, `cr_bank.c cb_bound`) is
+unbound, else it took the place when the first went; Restore factory order had that fault and has the same fix
+(`fm1sounds.js rawBindings`). **Delete all user sounds…** and **Reset sounds to factory…** (the bottom bar, red): every
+slot of every engine emptied (P5's and the retired engines' records too), each pool bank that holds a sound written
+once as a PUT of length 0 (`cr_backup.c crb_commit` writes it empty; a bank never written would be "nothing to
+write"), the banks already empty not at all: at most 13 writes and no data over USB; a 0.21 FM-1 gets each of its
+objects once. With no user record every pool is INIT and its factory presets in order, so the two write the same; each
+dialog says it its own way. **Favourites**: object 23 is read with the sounds now. A user slot's mark and type are the
+slot's, and the unit's own Delete takes them off (`cr_favs.c crf_slot_new`); the manager did not, so the next sound
+placed in a deleted slot showed the old mark. Now every slot it deletes (Delete, Restore) loses them, and Delete all /
+Reset take off every user slot's marks and types; a factory preset's mark is the preset's key and stays, P5's and the
+filter too, byte for byte (`favsClearSlots`; an object the FM-1 cannot read is left alone). **The dialog** (a
+`<dialog>`): what comes back, what is deleted (by name for a restore), the marks, the writes and their 45 ms pauses,
+what is not touched, Undo, and **Back up everything** inside it (the file downloaded, the dialog left open). **Undo**:
+one step, the banks and object 23 written back byte for byte, while the page stays open; a write that stops part-way
+(the loop started after some banks: rc 3) now keeps its step, so Undo puts back what was written (`writeSounds`' error
+carries `.written`). Progress per object, then the read-back. The simulator takes a pool bank as the firmware does
+(3y78's `crb_bank_ok`, `crb_bank_fill`, a PUT of length 0) and logs every PUT begin (`sim.puts`). **No firmware
+change.** Tests: test_manager, 28 new checks (a bank of 0.21's FM TONE slots with 16 / 80 headers sent as read through
+Restore and back through Undo, 16 / 81 refused by the simulator; each bank written once, the empty and never-written
+ones skipped; the favourites object; the confirms' words; a write stopped by the loop; Delete with several rows); the
+built page driven in headless Chromium with `?sim=pool` (Restore 1 selected, Delete all with the backup taken in the
+dialog, Undo, Reset cancelled with Esc, then done; the row hidden on Loops). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21;
+test_cr 997 ok, 313 golden renders 0 changed); site_test, test_installer pass; build/site rebuilt with it. **Not done**: a device run. P5 is
+not one of the manager's pools (`FACTORY_PRESETS` has five engines): a P5 record is an added row of the VA's tab marked
+"P5 · retired", so a P5 sound over a P5 program is not restored by the Restore buttons (Delete all and Reset empty its
+slot all the same). Undo or a Restore of a bank holding 0.21's FM TONE slots needs 3y78's firmware (the beta built
+before it refuses that bank, rc 2); Delete all sends length 0 and passes there too.
