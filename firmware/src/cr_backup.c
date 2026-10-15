@@ -4,7 +4,8 @@
  * restore"). The subset of Felucca's protocol (editor.c / editor_backup.c, dropped with Felucca's UI) that the
  * installer page (web/fm1backup.js) and tools/fm1_install.py use, on ChoralRoot's objects:
  *
- *   1 INFO      "ChoralRoot <version>", no editor (0 engines), tags 42 01 03 (backup read + restore) and 43 01 02
+ *   1 INFO      "ChoralRoot <version>", no editor (0 engines), tags 42 01 03 (backup read + restore) and 43 01 02, then
+ *               (3y66) 49 08 and the unit's ID, 8 hex digits in ASCII (cr_ui.c cr_unit_id; no tag when none is known)
  *   65 LIST     1, rc, count, per object: id, size u32, crc u32 (CRC-32 zlib of the bytes GET returns)
  *   66 GET      id, offset u32, count (<= 256) -> id, rc, offset u32, count, pack7 data
  *   67 PUT      0 begin (id, size u32, crc u32) / 1 data (id, offset u32, pack7) / 2 commit (id) / 3 abort (id)
@@ -1291,6 +1292,15 @@ static int crb_handle(const uint8_t *f, uint32_t n)
         crb_b(1);
         crb_b(3);                                    /* ChoralRoot backup v3 (0.22): the pool's ids 50..62, 80 IMPORT (v2: ids
                                                       * 9, 40..49, RESTART; no samples) */
+        if (cr_unit_id[0]) {                         /* 49 08: the unit's ID, 8 hex digits in ASCII (3y66, cr_ui.c
+                                                      * cr_unit_id; none known: no tag, the reply as before). Appended:
+                                                      * the hosts read the version to its NUL, and no host reads a tag
+                                                      * by its place from the end */
+            crb_b(0x49);
+            crb_b(8);
+            for (i = 0; i < 8u; i++)
+                crb_b((uint8_t)cr_unit_id[i]);
+        }
         break;
     }
     case CRB_LIST:

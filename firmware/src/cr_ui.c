@@ -1023,6 +1023,30 @@ static void opt_set(uint32_t o, int32_t v)
     default: break;
     }
 }
+/* The unit's ID (HISTORY 3y66, docs/INSTALL-COMPAT.md "Several FM-1s"): 8 hex digits, the CRC-32 of the flash's
+ * 128-bit unique ID, which the device reads once at power-on (cr_shim.c persist_boot); "" when there is none (the
+ * emulator, SAFE MODE, a flash that answers no ID). Read only: INFO's tag 49 08 (cr_backup.c) and the line under
+ * Options > Version's value say it; tools/fm1_install.py --unit and the web pages pick a unit by it */
+static char cr_unit_id[9];
+#if FELUCCA_FLASH
+/* the flash's 16 bytes (fm1_flash.h fl_uid_ram) -> cr_unit_id: their CRC-32 (storage.c's, zlib's) as 8 hex digits.
+ * Sixteen equal bytes (00 or FF: a part that answers no ID) are no ID */
+static void cr_unit_id_set(const uint8_t *u)
+{
+    static const char HEX[] = "0123456789ABCDEF";
+    uint32_t i, c;
+    cr_unit_id[0] = 0;
+    for (i = 1; i < 16u && u[i] == u[0]; i++)
+        ;
+    if (i == 16u)
+        return;
+    c = st_crc32(u, 16u);
+    for (i = 0; i < 8u; i++)
+        cr_unit_id[i] = HEX[(c >> (28u - 4u * i)) & 15u];
+    cr_unit_id[8] = 0;
+}
+#endif
+
 /* Options > Version's value (the owner, 2026-10-14; HISTORY 3y64): v whole when it fits n (the value line is
  * cr_screen.h's value[24]: 23 characters), else without its leading "ChoralRoot ": the single-core beta's
  * ChoralRoot 0.22-beta1 1-core (28) reads 0.22-beta1 1-core. Still too long: cut, as cu_cpy cuts. The display
@@ -6092,6 +6116,11 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, cs.sixth_up ? "6 + 7: the 6th on top, a 13th" : "6 + 7: the 6th under the 7th", sizeof s->label);
     else if (cu.opt_sel == O_NAMES)                /* (docs/CHORD-NAMES.md: the same notes under either name) */
         cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
+    else if (cu.opt_sel == O_VERSION) {            /* the unit's ID under the version (3y66: several FM-1s on one
+                                                    * computer, fm1_install.py --unit) */
+        cu_cpy(s->label, cr_unit_id[0] ? "unit ID " : "no unit ID", sizeof s->label);
+        cu_cat(s->label, cr_unit_id, sizeof s->label);
+    }
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
     else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: On the default since 0.22; never started /

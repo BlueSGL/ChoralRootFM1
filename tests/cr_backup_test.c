@@ -262,6 +262,46 @@ int main(void)
     a = t_send(&n);
     CHECK(a && n > 12 && !memcmp(a, "EMU", 4) && a[n - 6] == 0x42 && a[n - 4] == 3 && a[n - 3] == 0x43 && a[n - 1] == 3,
           "INFO: version, no engines, tags 42 01 03 and 43 01 03 (0.22: the sound pool's ids)");
+    {   /* 3y66: the unit's ID. None known (the emulator reads no flash ID): no tag, the reply as before. Known: INFO
+         * ends with 49 08 and its 8 hex digits, after the same bytes as before; the hosts of before read the version
+         * to its NUL (fm1_install.py device_info, fm1backup.js deviceInfo) and editor.html Felucca's fields from the
+         * start (NTRK, CHAIN_ROWS), which are where they were. cr_unit_id_set: the CRC-32 of the flash's 16 bytes
+         * (zlib's: Python's zlib.crc32 of 03 14 25 .. F2 is 63E68B82), sixteen equal bytes no ID */
+        uint8_t was[64], u[16];
+        uint32_t wn = n < sizeof was ? n : 0, i, p, tags = 0, ok;
+        char lab[sizeof ((cr_screen_t *)0)->label];
+        cr_screen_t sc;
+        memcpy(was, a, wn);
+        ok = cr_unit_id[0] == 0;
+        for (i = 0; i < 16u; i++)
+            u[i] = (uint8_t)(i * 17u + 3u);
+        cr_unit_id_set(u);
+        ok &= !strcmp(cr_unit_id, "63E68B82");
+        t_begin(1);
+        a = t_send(&n);
+        ok &= a && wn && n == wn + 10u && !memcmp(a, was, wn) && a[wn] == 0x49 && a[wn + 1] == 8 && !memcmp(a + wn + 2, "63E68B82", 8);
+        ok &= a && !strcmp((const char *)a, "EMU");                   /* (the old hosts: the version to the NUL) */
+        for (p = a ? 4u + 7u : n; p + 2u <= n && p + 2u + a[p + 1] <= n; p += 2u + a[p + 1])   /* the tags, in order */
+            tags = tags << 8 | a[p];
+        ok &= a && p == n && tags == 0x424349u && a[4 + 5] == 0 && a[4 + 6] == 0;   /* (NTRK 0, CHAIN_ROWS 0: editor.html) */
+        memset(&sc, 0, sizeof sc);
+        cu.opt_sel = O_VERSION;
+        cu_options_screen(&sc);
+        ok &= !strcmp(sc.label, "unit ID 63E68B82");
+        memset(u, 0xFF, sizeof u);
+        cr_unit_id_set(u);
+        ok &= cr_unit_id[0] == 0;
+        t_begin(1);
+        a = t_send(&n);
+        ok &= a && n == wn && !memcmp(a, was, wn);
+        cu_options_screen(&sc);
+        memcpy(lab, sc.label, sizeof lab);
+        ok &= !strcmp(lab, "no unit ID");
+        cu.opt_sel = 0;
+        CHECK(ok, "INFO with the unit's ID (3y66): 49 08 '63E68B82' appended, the bytes before it as without, the "
+                  "version to the NUL 'EMU', the tags 42 43 49 in order; Options > Version's line 'unit ID 63E68B82'; "
+                  "16 x FF: no ID, no tag, 'no unit ID'");
+    }
     {   /* Options > Version (HISTORY 3y64): the value line holds 23 characters (cr_screen.h value[24]); a version
          * longer drops its leading "ChoralRoot ", one that fits shows whole, one too long even then is cut. INFO
          * above keeps CR_VERSION whole */
