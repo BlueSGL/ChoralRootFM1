@@ -2,7 +2,7 @@
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
 /* Host test of the sound editor on P5's compiled panel (firmware/src/cr_edit.c CE_S_FREE on cr_layout.c's tables,
  * docs/LAYOUT-TOOL.md "Step 4"), on the firmware as the emulator builds it: OSC .. MOD are the layout's screens (as
- * many, their lanes, their titles), FX and MIX the platform's; every lane slot of the design turned through the editor
+ * many, their lanes, their titles; MOD's last screen still the EXPR stack, 0.22), FX and MIX the platform's; every lane slot of the design turned through the editor
  * (ce_knob): a bound one moves its parameter (the engine's own, by its built-in page and column), marks the sound
  * edited and the slot hot, and the screen model (ce_screen) is CR_K_FREE with that hot cell; an empty slot does
  * nothing; SELECT runs across the lanes and the screens of a group and wraps; the patch blob carries the edits; another
@@ -66,13 +66,13 @@ int main(void)
     OK(li && cr_lay(li)->nscreens == 8u && ce_lay(t) == li, "P5 has its compiled layout (8 screens); the editor uses it");
     d->blob_get(t, b0);
 
-    /* the groups: the layout's screens in OSC .. MOD, the platform's in FX and MIX */
+    /* the groups: the layout's screens in OSC .. MOD (MOD's then EXPR), the platform's in FX and MIX */
     for (g = 0; g < CE_NSEC; g++) {
-        uint32_t want, si;
+        uint32_t want, si, nl = 0;
         ns = ce_scr(t, g, 0, &sc);
-        want = g <= CE_MOD ? cr_lay_group(li, g, 0, &si) : 1u;
+        want = g <= CE_MOD ? (nl = cr_lay_group(li, g, 0, &si)) + (g == CE_MOD) : 1u;
         if (ns != want || (g <= CE_MOD) != (sc.type == CE_S_FREE)) badscr++;
-        for (k = 0; g <= CE_MOD && k < ns; k++) {
+        for (k = 0; g <= CE_MOD && k < nl; k++) {
             const cr_lay_screen_t *ls;
             cr_lay_group(li, g, k, &si);
             ls = cr_lay_scr(li, si);
@@ -83,9 +83,21 @@ int main(void)
     }
     OK(!badscr && lanes == 19u, "OSC .. MOD: the layout's screens (2 1 1 2 2), %u lanes; FX and MIX: the platform's", lanes);
 
+    /* MOD's last screen: Expression (cr_edit.c CE_S_EXPR, 0.22), after the layout's, as on every engine */
+    ns = ce_scr(t, CE_MOD, 0, &sc);
+    ce_scr(t, CE_MOD, ns - 1u, &sc);
+    cx.grp[0] = CE_MOD;
+    cx.scr[0][CE_MOD] = (uint8_t)(ns - 1u);
+    cx.lane[0][CE_MOD] = 1;
+    ce_screen(&s, cu_now());
+    OK(sc.type == CE_S_EXPR && ce_lanes(t, CE_MOD, &sc) == 2u && s.kind == CR_K_STACK && s.fl_eng == 0 &&
+       !strcmp(s.page, "EXPR \267 AT") && !strcmp(s.cell[1][0].value, "AT"),
+       "MOD %u: EXPR after the panel's POLYMOD and VOICE (a stack of two lanes, \"%s\")", (unsigned)ns, s.page);
+
     /* every lane slot turned */
     for (g = 0; g <= CE_MOD; g++) {
-        ns = ce_scr(t, g, 0, &sc);
+        uint32_t si0;
+        ns = cr_lay_group(li, g, 0, &si0);          /* (the layout's screens; MOD's EXPR: above) */
         for (k = 0; k < ns; k++) {
             uint32_t si;
             const cr_lay_screen_t *ls;
@@ -138,13 +150,14 @@ int main(void)
     d->blob_get(t, b1);
     OK(memcmp(b0, b1, d->blob_size) != 0, "the patch blob carries the edits (%u bytes)", (unsigned)d->blob_size);
 
-    /* SELECT: across the lanes and the screens of each group, round to the start */
+    /* SELECT: across the lanes and the screens of each group (MOD's EXPR too), round to the start */
     for (g = 0, bad = 0; g <= CE_MOD; g++) {
-        uint32_t si, want = 0, steps = 0;
+        uint32_t want = 0, steps = 0;
+        uint32_t nlk[8];
         ns = ce_scr(t, g, 0, &sc);
-        for (k = 0; k < ns; k++) {
-            cr_lay_group(li, g, k, &si);
-            want += cr_lay_scr(li, si)->nlanes;
+        for (k = 0; k < ns && k < 8u; k++) {
+            ce_scr(t, g, k, &sc);
+            want += nlk[k] = ce_lanes(t, g, &sc);
         }
         cx.grp[0] = (uint8_t)g;
         cx.scr[0][g] = 0;
@@ -153,16 +166,14 @@ int main(void)
             uint32_t k0 = cx.scr[0][g], l0 = cx.lane[0][g];
             ce_select(1);
             steps++;
-            cr_lay_group(li, g, k0, &si);
             if (!(cx.lane[0][g] == l0 + 1u && cx.scr[0][g] == k0) &&
-                !(l0 + 1u == cr_lay_scr(li, si)->nlanes && cx.lane[0][g] == 0 && cx.scr[0][g] == (k0 + 1u) % ns))
+                !(l0 + 1u == nlk[k0] && cx.lane[0][g] == 0 && cx.scr[0][g] == (k0 + 1u) % ns))
                 bad++;
         } while ((cx.scr[0][g] || cx.lane[0][g]) && steps < 40u);
         if (steps != want) bad++;
         ce_select(-1);
         n = ns - 1u;
-        cr_lay_group(li, g, n, &si);
-        if (cx.scr[0][g] != n || cx.lane[0][g] != cr_lay_scr(li, si)->nlanes - 1u) bad++;
+        if (cx.scr[0][g] != n || cx.lane[0][g] != nlk[n] - 1u) bad++;
     }
     OK(!bad, "SELECT: lane by lane across each group's screens, wrapping; back from the first: the last lane");
 

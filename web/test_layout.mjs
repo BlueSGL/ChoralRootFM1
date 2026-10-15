@@ -188,7 +188,8 @@ if (!args.has("--no-emu")) {
     const B = { FX: 0, SEL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, SEQ: 9, PLAY: 10, REC: 11 }, E = { SELECT: 0, PRESETS: 2, K1: 3 };
     const emuBytes = fs.readFileSync(emuPath);
     // P5 on the unit is the owner's panel (the compiled layout, docs/LAYOUT-TOOL.md "Step 4"): the module's frames with
-    // the layouts on, every screen x lane of p5-panel.json (its free screens in OSC .. MOD, FX and MIX as today)
+    // the layouts on, every screen x lane of p5-panel.json (its free screens in OSC .. MOD, FX and MIX as today), and
+    // MOD's last screen after the panel's, EXPR (0.22: on every engine, cr_edit.c CE_S_EXPR)
     const panelTiles = () => {
       const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
       const BTN = ["FX", "SEL", "ENV", "LFO", "SEQ", "PLAY", "REC"], e = ver.engines.find((x) => x.name === "P5");
@@ -199,6 +200,13 @@ if (!args.has("--no-emu")) {
         m.show(e.index, 1, g, d.si, d.lane);
         return { tile, fb: m.fb(), free: m.state().kind === "free" };
       });
+      const lastMod = out.map((f) => f.tile.group).lastIndexOf(4), ns = lastMod >= 0 ? out[lastMod].tile.screen + 1 : 0;
+      const expr = [0, 1].map((lane) => {
+        m.show(e.index, 1, 4, ns, lane);
+        return { tile: { group: 4, groupName: "MOD", button: "SEQ", screen: ns, lane, lanes: 2, title: m.state().page,
+                         key: `MOD.${ns}.${lane}` }, fb: m.fb(), free: false, expr: m.state().page.startsWith("EXPR") };
+      });
+      out.splice(lastMod + 1, 0, ...expr);
       m.layouts(false);
       return out;
     };
@@ -219,8 +227,9 @@ if (!args.has("--no-emu")) {
       let diff = [], n = 0, group = 0, worst = 0;
       const walk = name === "P5" ? panelTiles() : frames[name];
       if (name === "P5")
-        ok(walk.filter((f) => f.free).length === 19 && walk.length === 22,
-           `P5: the compiled panel's ${walk.length} places, ${walk.filter((f) => f.free).length} of them its free screens' lanes`);
+        ok(walk.filter((f) => f.free).length === 19 && walk.filter((f) => f.expr).length === 2 && walk.length === 24,
+           `P5: the compiled panel's ${walk.length} places, ${walk.filter((f) => f.free).length} of them its free screens' lanes, ` +
+           `${walk.filter((f) => f.expr).length} MOD's EXPR after them`);
       for (const f of walk) {
         const t = f.tile;
         if (t.group !== group) { tap(t.button); group = t.group; }   // (a group opens on its first screen and lane)
@@ -351,8 +360,12 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   pl.groups[1].screens.push(L.newClassicScreen("edit8", "MORE"));
   pl.groups[1].screens[1].lanes[0].cells[0] = { param: "FILTER+:REV" };
   const pk = L.packDesign(pl, cat);
-  ok(pk.mode === "plan" && !pk.unbuildable.length && m.load(pk.bytes).ok && m.show(P5.index, 1, 1, 1, 0) > 0 && m.state().page === "MORE",
-     `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}")`);
+  // (MOD's last screen, EXPR, is a stack of two lanes the plan cannot hold: flagged, and only it, docs/LAYOUT-TOOL.md)
+  const modGi = cat.groups.findIndex((g) => g.name === "MOD"), exprSi = cat.groups[modGi].screens.findIndex((s) => s.type === "expr");
+  ok(pk.mode === "plan" && exprSi >= 0 && pk.unbuildable.length === 1 && pk.unbuildable[0].gi === modGi && pk.unbuildable[0].si === exprSi &&
+     m.load(pk.bytes).ok && m.show(P5.index, 1, 1, 1, 0) > 0 && m.state().page === "MORE",
+     `a screen added: packed as a screen plan (${pk.screens} screens, ${pk.pages} pages), the new screen shows ("${m.state().page}"); ` +
+     `not buildable: ${pk.unbuildable.map((u) => `${cat.groups[u.gi].name} ${u.si + 1}`).join(", ") || "none"} (EXPR)`);
   m.unload();
 
   // the example (item 4) and the free-screen draw API

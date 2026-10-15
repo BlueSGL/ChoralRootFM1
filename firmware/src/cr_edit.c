@@ -36,7 +36,8 @@
  * An engine with a compiled layout (cr_layout.c, docs/LAYOUT-TOOL.md "Step 4": P5's panel) shows its layout's FREE
  * screens in OSC .. MOD instead (CE_S_FREE, drawn as CR_K_FREE): each a lane per SELECT stop, KNOB 1..4 the elements
  * bound in it (an empty slot: nothing), the parameters the engine's own by their built-in (page, column), so the knobs,
- * SHIFT, the hot mark, cu_edited and the blob are the edit8 screens'. FX and MIX stay the platform's.
+ * SHIFT, the hot mark, cu_edited and the blob are the edit8 screens'. MOD's last screen is still EXPR (after the
+ * layout's MOD screens); FX and MIX stay the platform's.
  *
  * No motion (the user's feedback, 2026-10-06: responsiveness first; Options > Motion does not apply here): a screen,
  * a lane, a value and the wide band are drawn as they are, in the frame after the detent; only the hot cell (the one
@@ -56,7 +57,8 @@ static const uint8_t CE_SEC_BTN[CE_NSEC] = {B_FX, B_SCL, B_ENV, B_LFO, B_SEQ, B_
 /* a cell's parameter: a deep page's column, a track parameter, a fixed text, a dash (an empty column) */
 enum { CE_R_NONE, CE_R_DEEP, CE_R_TRK, CE_R_TXT, CE_R_DASH };
 typedef struct { uint8_t k, a, b; } ce_ref_t;             /* DEEP: page a, column b; TRK: id a; TXT: CE_TXT[a] */
-static const char *const CE_TXT[] = {"ENV", "LFO", "FILT", "PITCH", "SHAPE", "AMP"};
+static const char *const CE_TXT[] = {"ENV", "LFO", "FILT", "PITCH", "SHAPE", "AMP", "VEL", "AT", "CUT", "auto"};
+enum { CE_T_AMP = 5, CE_T_VEL, CE_T_AT, CE_T_CUT, CE_T_AUTO };
 static const uint8_t CE_PMOD[4][2] = {{0, 2}, {0, 3}, {0, 4}, {1, 5}};   /* the platform MOD's sources, dests */
 
 /* a screen of a group: what its lanes are */
@@ -66,6 +68,9 @@ enum { CE_S_PLAT,                         /* the platform's pages (an engine wit
        CE_S_MIXER,                        /* one lane: the LEVEL column of the pages pg[0..n) */
        CE_S_EDIT,                         /* edit8: lane i = deep page pg[i] (n <= 2) */
        CE_S_PAGE,                         /* edit8: one lane, the page pg[0] (a page of no instance: "VOICE") */
+       CE_S_EXPR,                         /* the MOD group's last screen on every engine: Expression, two lanes (the
+                                           * sound's velocity and aftertouch routings: mod.c slots 3 and 4; after a
+                                           * compiled layout's MOD screens too) */
        CE_S_FREE };                       /* a compiled layout's screen (li, ls): lane i = its lane i's elements */
 typedef struct { uint8_t type, n, pg[CR_ED_ROWS], hs, li, ls; } ce_scr_t;   /* hs: the plan's screen + 1
                                           * (eng_deep_t.screens); li, ls: the layout and its screen (cr_layout.c) + 1 */
@@ -78,6 +83,7 @@ typedef struct {
     uint8_t dp0, np, row0;                /* the band's pages (env: dp0 .. + np; filter: dp0); the first row's number */
     uint8_t hs;                           /* a screen of the engine's plan: its index + 1 (0: the title rules) */
     uint8_t li, ls;                       /* a free screen: the layout and its screen + 1 (cr_screen_t fl_eng, fl_scr) */
+    uint8_t expr;                         /* the EXPR screen (ce_knob: an unset slot takes its default when turned) */
 } ce_view_t;
 
 static struct {
@@ -232,11 +238,22 @@ static uint32_t ce_scr(const track_t *t, uint32_t g, uint32_t k, ce_scr_t *o)
             o->n = cr_lay_scr(a, p)->nlanes;
             o->li = (uint8_t)a;
             o->ls = (uint8_t)p;
+        } else if (g == CE_MOD && k == n) {      /* (MOD: the layout's screens, then Expression) */
+            o->type = CE_S_EXPR;
+            o->n = 2;
         }
-        return n;
+        return g == CE_MOD ? n + 1u : n;
     }
-    if (!d || g > CE_MOD || (g == CE_MOD && !ce_has_mod(d)))
+    if (!d || g > CE_MOD || (g == CE_MOD && !ce_has_mod(d))) {
+        if (g == CE_MOD) {                        /* the platform's routes, then Expression */
+            if (k == 1u) {
+                o->type = CE_S_EXPR;
+                o->n = 2;
+            }
+            return 2;
+        }
         return 1;
+    }
     if (d->screens) {                             /* the engine's screen plan for this group (QUAD's) */
         for (p = 0; p < d->nscreens; p++)
             if (d->screens[p].sec == g) {
@@ -299,14 +316,18 @@ static uint32_t ce_scr(const track_t *t, uint32_t g, uint32_t k, ce_scr_t *o)
         }
         return n ? n : 1u;
     }
-    if (g == CE_MOD && ce_is_matrix(d, a)) {      /* the matrix: eight slots a screen */
+    if (g == CE_MOD && ce_is_matrix(d, a)) {      /* the matrix: eight slots a screen; then Expression */
         for (p = a; p < b; p += CR_ED_ROWS, n++)
             if (n == k) {
                 o->type = CE_S_STACK;
                 for (q = p; q < b && q < p + CR_ED_ROWS; q++)
                     o->pg[o->n++] = (uint8_t)q;
             }
-        return n ? n : 1u;
+        if (n == k) {
+            o->type = CE_S_EXPR;
+            o->n = 2;
+        }
+        return n + 1u;
     }
     for (p = a; p < b; p = e) {                   /* FILT, ENV (and MOD's plain pages): the pages of one instance
                                                    * and name, two lanes a screen (CZ-1: "PITCH 1" and "DCW 1" apart) */
@@ -319,6 +340,13 @@ static uint32_t ce_scr(const track_t *t, uint32_t g, uint32_t k, ce_scr_t *o)
                 o->pg[1] = (uint8_t)(q + 1u);
                 o->n = (uint8_t)(e - q >= 2u ? 2u : 1u);
             }
+    }
+    if (g == CE_MOD) {                            /* MOD's plain pages (FM6's FUNC, CZ-1's), then Expression */
+        if (n == k) {
+            o->type = CE_S_EXPR;
+            o->n = 2;
+        }
+        return n + 1u;
     }
     return n ? n : 1u;
 }
@@ -500,6 +528,27 @@ static void ce_view(const track_t *t, uint32_t p, ce_view_t *v)
         for (c = 0; c < 4u; c++)
             v->ref[0][c] = d->pages[sc.pg[0]].col[c].label ? ce_r(CE_R_DEEP, sc.pg[0], c) : ce_r(CE_R_NONE, 0, 0);
         cu_cpy(v->right, d->pages[sc.pg[0]].title, sizeof v->right);
+        break;
+    case CE_S_EXPR:                               /* Expression: VEL and AT to a destination by an amount (mod.c slots
+                                                   * 3 and 4; an unset slot shows its default: "AMP auto" / "CUT auto") */
+        v->kind = CR_K_STACK;
+        v->n = 2;
+        v->expr = 1;
+        for (c = 0; c < 4u; c++)
+            cu_cpy(v->head[c], H_MOD[c], sizeof v->head[c]);
+        for (i = 0; i < 2u; i++) {
+            uint32_t src = i ? P_MAT_SRC : P_MVEL_SRC;
+            v->ref[i][0] = ce_r(CE_R_TXT, i ? CE_T_AT : CE_T_VEL, 0);
+            if (t->p[src]) {
+                v->ref[i][1] = ce_r(CE_R_TRK, src + 1u, 0);
+                v->ref[i][2] = ce_r(CE_R_TRK, src + 2u, 0);
+            } else {
+                v->ref[i][1] = ce_r(CE_R_TXT, i ? CE_T_CUT : CE_T_AMP, 0);
+                v->ref[i][2] = ce_r(CE_R_TXT, CE_T_AUTO, 0);
+            }
+        }
+        cu_cpy(v->right, "EXPR \267 ", sizeof v->right);
+        cu_cat(v->right, ln ? "AT" : "VEL", sizeof v->right);
         break;
     case CE_S_EDIT:                               /* FILT / ENV n: the instance's pages under the wide band */
         v->n = sc.n;
@@ -1203,6 +1252,16 @@ static void ce_knob(uint32_t knob, int32_t s, uint32_t snap)
     }
     ce_view(t, ce.part & 1u, &vw);
     r = vw.ref[vw.active][knob & 3u];
+    if (vw.expr && r.k == CE_R_TXT && (knob & 3u) >= 1u && (knob & 3u) <= 2u) {   /* an unset slot: its default
+                                                                                     * first, then the turn */
+        uint32_t src = vw.active ? P_MAT_SRC : P_MVEL_SRC;
+        fm1_irq_off();
+        t->p[src] = (int16_t)(vw.active ? MS_AT : MS_VEL);
+        t->p[src + 1u] = (int16_t)(vw.active ? MD_CUT : MD_AMP);
+        t->p[src + 2u] = (int16_t)(vw.active ? cr_touch_at_amt() : CR_TOUCH_VEL_DEF_AMT);
+        fm1_irq_on();
+        r = ce_r(CE_R_TRK, src + (knob & 3u), 0);
+    }
     if (!(d = ce_param(t, r, &v0)))
         return;
     v = cp_dstep(d, v0, s, snap || cx.shift);

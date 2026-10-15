@@ -87,10 +87,14 @@ builds its record with the mark and `flags[15]` = 0: an added preset of its engi
 
 **The factory names** come from the firmware, never typed: `tests/sound_templates.c` prints `"factory": {"<engine>":
 [name, ..]}` (`ENGINES[e]->presets[k].name` for every engine with `eng_ok`) and `"factory_first": {"<engine>": n}`
-(`cr_bank.c` `pool_f0`: 1 for the CZ-1, whose preset 0 INIT TONE is the pool's INIT; else 0), each compact on one
-line. Both clients embed the two strings verbatim (`FACTORY_PRESETS`, `FACTORY_FIRST`: a JSON object of strings and
-numbers is a JS and a Python literal), and its `--check` fails unless each client contains both strings, so a renamed
-or added factory preset fails the suite until they are pasted again.
+(`cr_bank.c` `pool_f0`: 1 for the CZ-1, whose preset 0 INIT TONE is the pool's INIT, and for P5, whose INIT P5 is;
+else 0), each compact on one line, and `"factory_ids": {"16": [0, 1, 2, 3, 6, ..]}`: P5's presets' favourites ids
+(their Sequential program numbers, `cr_ui.c cu_fav_key`; every other engine's id is the preset's index). Both
+clients embed the three strings verbatim (`FACTORY_PRESETS`, `FACTORY_FIRST`, `FACTORY_IDS`: a JSON object of
+strings and numbers is a JS and a Python literal), and its `--check` fails unless each client contains all three,
+so a renamed or added factory preset fails the suite until they are pasted again. Since 3y80 it is built with P5, as
+the unit is: P5's names are the shipped list's (`assets/prophet5-factory/shipped.txt`), so a changed list fails the
+check until both clients have it.
 
 Engines (`ENGINES[]`, append-only; the retired ones are never produced by this firmware but a record may carry them):
 
@@ -104,6 +108,7 @@ Engines (`ENGINES[]`, append-only; the retired ones are never produced by this f
 | 5 | VOICE (retired in 0.18) | – | 13 | VA | `va` (110 bytes) |
 | 6 | TRIO (retired in 0.18) | – | 14 | CZ-1 | `cz` (144 bytes) |
 | 7 | WHEEL | – | 15 | FM TONE | `quad` (80 bytes) |
+| | | | 16 | P5 (0.22; the pool only) | `p5` (138 bytes) |
 
 A record of a retired engine keeps its slot, its name and its engine number: the clients list it with the engine's
 name and `retired` (`--sounds`: `U17  BELL          PHASE   retired   +`; the installer page's table `PHASE · retired`;
@@ -245,7 +250,10 @@ The same objects and edits in a two-pane page (the FM-1's pools per engine and l
 `web/fm1sounds.js` for it: `placeSound(objs, slot, sound, f)` imports with the binding set as SAVE > Overwrite sets it
 (`note[15]` 0xA6, `flags[15]` f + 1, or 0 for an added sound), `bindSound` moves a slot's binding, `swapSounds`
 exchanges two slots (in one pool the binding bytes stay with the slots, so the sounds exchange their places),
-`firstFreeSlot`. The factory sounds of every engine as sound files: `web/packs/` (`tools/make_packs.py`).
+`firstFreeSlot`, `rawBindings` (per slot the factory preset its binding bytes name, before the first-bound-slot-wins
+rule: a Restore unbinds a later slot naming the same preset, 3y79). Delete all / Reset to factory send each pool bank
+that holds a sound once as a PUT of length 0 (the FM-1 writes it empty), DEVICE-MANAGER.md "Restore factory presets,
+Delete all, Reset to factory". The factory sounds of every engine as sound files: `web/packs/` (`tools/make_packs.py`).
 
 ## The CLI (`tools/fm1_install.py`)
 
@@ -299,7 +307,7 @@ firmware as `cr_backup_test.c` is) prints them with the fixtures as JSON:
 
 ```
 cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
-./build/host/sound_templates                                              # {"templates": {"fm6", "cz", "quad"}, "fixtures": {..., "quad_blob"}, "factory": .., "factory_first": ..}
+./build/host/sound_templates                                              # {"templates": {"fm6", "cz", "quad"}, "fixtures": {..., "quad_blob"}, "factory": .., "factory_first": .., "factory_ids": ..}
 ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py   # the embedded templates and factory names are the firmware's
 ```
 
@@ -344,7 +352,9 @@ the result says what it will not have (`importSound`'s `notes`, one line each: t
 Place / Place all / Replace factory, the installer page's message and log after Import). FM TONE (`fm1dnsnd.js
 quadToV3`): the decimals rounded, FDBK 0..127 -> 0..120, AMP DEC INF stays 127 (there the longest decay), and an LFO
 destination added in 0.22 (40..57: 0.21's `quad_blob_ok` takes 0..39 and would refuse the whole patch, which then plays
-INIT) becomes NONE. VA (`fm1sounds.js vaToV3`, version 4 -> 3, the same 110 bytes): FENV's hundredths rounded into the
+INIT) becomes NONE. The times keep their numbers: 0.21 plays them on its old 1 ms .. 10 s curve, not on 0.22's
+Digitone tables ([QUAD.md](QUAD.md) "Times"), so most come out much shorter there; no note says so (the release notes'
+"Going back to 0.21" does). VA (`fm1sounds.js vaToV3`, version 4 -> 3, the same 110 bytes): FENV's hundredths rounded into the
 whole number (value 103 back to 0), and a synced LFO's RATE (an index into the 42 rates) becomes the nearest of
 version 3's 14 divisions by length (the ms rates, faster than all: 1/32) as the smallest 0..127 RATE version 3 reads as
 that division (RATE x 14 >> 7); the 14 themselves come back exactly (`VA_DIV3_TO_SYNC`). P5 sounds are refused there
@@ -406,17 +416,17 @@ imported).
 | 74 | FDBK, stored 0..127 (the display's 20 = 20, MAX = 127) | **verified** | FDBK 1:1 (FM TONE 0..127 since 2026-10-14) |
 | 76 | MIX (0 = -64, 64 = 0, 127 = +63) | **verified** | MIX |
 | 78 | PHRT 0..4 (OFF ALL C A+B A+B2?) | inferred | PHRT, the same five |
-| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | **verified** | ENV A / B: ATK and DEC by the time curve (`DN_TIME_TO_QUAD`, below: extrapolated), END and LEV direct |
+| 82..88 / 90..96 | ENV A / B ATK DEC END LEV | **verified** | ENV A / B: ATK DEC END LEV 1:1 (the times are the Digitone's: below) |
 | 98 / 104 | A DLY / B DLY | slot | A DLY / B DLY |
 | 100 102 106 108 | A TRIG, A RESET, B TRIG, B RESET | inferred | ENV 2 / ENV 2+ |
 | 128 | filter TYPE: version 5 0 OFF, 1 LP2, 2 HP2, 3 LP4 | **verified** (version 5) | TYPE 1:1 (= the manual's order = FM TONE's) |
 | 128 | filter TYPE: version 1, five values 0..4: 0 OFF, 1 LP2, 2 HP, 3 LP4, 4 LP4 | **verified** 2 3 4 (the owner's re-saves on OS 1.44), inferred 0 1 (continuity with version 5) | OFF, LP12, HP12, LP24, LP24 (a note only for a value past 4) |
 | 130 / 132 | FREQ / RESO (hi-res) | **verified** | FREQ / RESO 1:1 (hundredths) |
 | 134 | ENV depth (hi-res, 64 = 0) | **verified** | FILTER DEPTH 1:1 (hundredths) |
-| 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC REL by the time curve (DEC 71 is a measured point), SUS direct (DEC INF: SUS 127, a note; REL INF stays 127) |
+| 136..142 | filter ATK DEC SUS REL (DEC and REL 127 = INF) | **verified** | FILTER ATK DEC REL 1:1 (the times: below), SUS direct (DEC INF: SUS 127, a note; REL INF stays 127) |
 | 144 / 146 | BASE (hi-res) / WIDTH | slot | BASE 1:1 (hundredths) / WIDTH |
-| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC by the time curve (below INF at most 126), SUS direct; DEC INF -> AMP DEC 127 = FM TONE's INF (version 5: the level held, no decay; until then SUS 127 and a note) |
-| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL by the time curve on the hi-res value, rounded to a whole number (version 5) but at most 126 below 127.00 (10.13 is a measured point); 127.xx INF = 127 |
+| 148..152 | AMP ATK DEC SUS (DEC 127 = INF) | **verified** | AMP ATK DEC 1:1 (the times: below), SUS direct; DEC INF -> AMP DEC 127 = FM TONE's INF (version 5: the level held, no decay; until then SUS 127 and a note) |
+| 154 | AMP REL (hi-res, 127 = INF) | **verified** | AMP REL the hi-res value rounded to a whole number (version 5) but at most 126 below 127.00 (10.13 -> 10); 127.xx INF = 127 |
 | 156 | DRIVE (hi-res) | **verified** | the record's DRIVE (P_DIST), rounded |
 | 158 | PAN (0 = L64, 64 = 0, 127 = R63) | **verified** | the record's PAN (P_PAN) |
 | 160 | VOL (hi-res; init 110) | **verified** | LEVEL 1:1, rounded to a whole number (version 5: 110.40 -> 110) |
@@ -508,27 +518,12 @@ carriers (C and B1, MIX between X and Y) are the Digitone's. No engine change. W
 filter (from about 0.6 s the Digitone's centroid is 71..93 Hz, FM TONE's 106..123: FREQ 42's cutoff or LP4's slope
 differ; FM TONE 30 Hz x 533^(v/127) = 238 Hz) and the level (below).
 
-**Envelope times** (`DN_TIME_K`, `DN_TIME_C`, `DN_TIME_TO_QUAD`, `dnTimeQ` in fm1dnsnd.js: the one place to refine).
-FM TONE's time value v is T(v) = 10^(4 v / 127) ms (1 ms .. 10 s; ATK a linear ramp over T, DEC and REL exponential,
--40 dB at T). The Digitone's manual gives no times. Two points from the recording: AMP REL 10.13 falls 40 dB in about
-45 ms (renders of the import at FM TONE REL 50 / 52 / 53 / 54 give 45 / 48 / 54 / 56 ms by the same measure, the
-Digitone 49): FM TONE 52.5; the filter DEC 71 (SUS 0) closes the spectrum like FM TONE's FDEC 97 +-3 (the centroid's
-fall over 2 s, best fit 96..98). A power law through both (T = 0 at 0, the Digitone's T = 2.9 s x (v / 127)^1.66):
-FM TONE = 52.6 log10(v) - 0.4, at most 126 (127 stays INF on the releases):
-
-| Digitone | 1 | 3 | 5 | 10 | 20 | 40 | 64 | 71 | 90 | 110 | 127 |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| FM TONE | 0 | 25 | 36 | 52 | 68 | 84 | 95 | 97 | 102 | 107 | 110 |
-| time | 1 ms | 6 ms | 14 ms | 43 ms | 140 ms | 440 ms | 1.0 s | 1.1 s | 1.6 s | 2.3 s | 2.9 s |
-
-Confidence: the two points within about +-1.5 FM TONE values (+-12 % in time); between them the power law is a choice
-(an exponential in v through the same points, a straight line in FM TONE values, is up to 10 values shorter at 20..40, 46 = 28 ms at 0, and past FM TONE's 10 s from about 100);
-below 10 and above 71 it is **extrapolated**, the top end most of all (a Digitone 127 might be 10 s or more: then
-long pads import short). ATK (amp, filter, ENV A / B) and the operator envelopes' DEC are assumed to follow the same
-curve (not measured: SQB TK's attacks are too short to read from this recording). Recordings that would pin it: a
-plain sine (ALGO 1, every operator level 0 but C, filter OFF, SUS 127), the key held 1 s, nothing else playing, the
-FM-1's effects off: AMP REL at 20, 40, 60, 80, 100, 120 (the decay after the key up), AMP ATK at 20, 60, 100 (the
-rise), AMP DEC at 40 and 80 with SUS 0; and one ENV A DEC at 60 on a modulated sound (C under A, A LEV 127, END 0).
+**Envelope times** (`DN_TIME_TO_QUAD`, `dnTimeQ` in fm1dnsnd.js): **1:1** since 2026-10-14. FM TONE's times are the
+Digitone's, measured on the owner's unit ([QUAD.md](QUAD.md) "Times": a table per envelope type, the DELAYs v / 32
+beats, the LFO FADE's times), so a Digitone time value is FM TONE's; the AMP REL's hundredths are rounded (at most 126
+below 127.00, 127.xx INF). Before, a power law through two points of the SQB TK recording (AMP REL 10.13 -> FM TONE
+52.5, the filter DEC 71 -> FM TONE 97) mapped them onto FM TONE's old 1 ms .. 10 s curve (HISTORY 3y60); a sound
+imported then keeps those values, which now mean the Digitone's times of the larger numbers: import it again.
 
 **Level.** The FM-1's recording of the old import against the host render of the same patch at MIDI 60 gives the
 recording chain's gain (-10.2 dB over the held note). The new import's render through that gain would be about 7 dB
@@ -586,11 +581,14 @@ RESET, a version-1 sound's filter type re-saved on OS 1.44 (it shows its OS 1.44
 ChoralRoot 0.22 keeps the user sounds in **128 slots shared by every engine** (docs/PRESETS.md "The pool"). Over the
 backup protocol they are **objects 50..62**, the pool's 13 banks: 3840 bytes each (size 0: a bank never written), ten
 slots of 384 bytes: the 192-byte record, at 192 the patch's engine + 1 (0: no patch), at 193 its length, the patch from
-196 (VA 110, FM6 128, CZ-1 144, FM TONE 80, P5 138). A slot's patch kind comes from the slot itself (`va`, `fm6`, `cz`,
-`quad`, `p5`), not from a store. The clients (`web/fm1sounds.js`, `tools/fm1_install.py`) see which an FM-1 has from its
-LIST: ids 50..62 (0.22: 128 slots, labels U001..U128) or the legacy ids 6, 7, 9..13, 22 (0.21 and before: 32 slots,
-U01..U32, unchanged). An edit writes the banks it changed (one for a slot; a swap two). A sound file is the same
-format either way (version 1; a P5 sound carries `"patch": {"kind": "p5"}`); a P5 sound cannot go to a 0.21 FM-1.
+196 (VA 110, FM6 128, CZ-1 144, FM TONE 96 or an older slot's 80, as 0.21's sounds migrated, P5 138). A slot's patch
+kind comes from the slot itself (`va`, `fm6`, `cz`, `quad`, `p5`), not from a store. A bank's commit checks each used
+slot (a valid record; no patch, or an engine's patch of that engine's length: rc 2 else, nothing written) and writes
+every other slot empty, 384 zeros, whatever was sent (3y78); a Delete sends the slot so, a placed sound starts from it.
+The clients (`web/fm1sounds.js`, `tools/fm1_install.py`) see which an FM-1 has from its LIST: ids 50..62 (0.22: 128
+slots, labels U001..U128) or the legacy ids 6, 7, 9..13, 22 (0.21 and before: 32 slots, U01..U32, unchanged). An
+edit writes the banks it changed (one for a slot; a swap two). A sound file is the same format either way (version 1;
+a P5 sound carries `"patch": {"kind": "p5"}`); a P5 sound cannot go to a 0.21 FM-1.
 `--sounds`, `--export-sound` / `--import-sound`, `--rename-sound`, `--delete-sound` take slots 1..128 (a slot past the
 FM-1's own is a usage error); `--favorites` / `--restore-favorites` name user slots `U05` .. `U128` (section 0x81 for
 33..128). The device manager's **Import the 0.21 slots** sends 80 IMPORT (-> rc, count): the FM-1 copies its legacy

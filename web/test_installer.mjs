@@ -30,7 +30,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import vm from "node:vm";
 import { logicalImage, productOf, STOCK_V15_SIZE } from "./fm1pkg.js";
-import { pack7, unpack7 } from "./fm1ota.js";
+import { pack7, unpack7, pairOutput } from "./fm1ota.js";
 import { bkU32, bkR32, bkPack, bkUnpack, bkCrc, CR_BACKUP_IDS, BACKUP_IDS } from "./fm1backup.js";
 import { readSoundFile, parseSoundObjects, parseSyx, fm6BlobToVced, fm6VcedSyx } from "./fm1sounds.js";
 
@@ -249,10 +249,11 @@ class FakeFM1 {
 }
 
 // a firmware's backup side (cr_backup.c / Felucca's editor_backup.c, as the protocol says): INFO, LIST, GET, PUT, SMP, RESTART
-function backupSide(version, ids, objs = []) {
+function backupSide(version, ids, objs = [], uid = null) {   // uid: the unit's ID (3y66: INFO's 43 01 03, 49 08 ID)
   const b = { objs: new Map(objs), log: [], staged: null, restarts: 0 };
   b.handle = (cmd, a) => {
-    if (cmd === 1) return [...new TextEncoder().encode(version), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3];
+    if (cmd === 1) return [...new TextEncoder().encode(version), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3,
+      ...(uid ? [0x43, 1, 3, 0x49, 8, ...new TextEncoder().encode(uid)] : [])];
     if (cmd === 65) {
       const out = [1, 0, ids.length];
       for (const id of ids) { const v = b.objs.get(id) || new Uint8Array(0); out.push(id, ...bkU32(v.length), ...bkU32(v.length ? bkCrc(v) : 0)); }
@@ -1319,6 +1320,38 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
     const sorted = ["0.22", "0.21", "0.22-beta2", "0.22-beta1", "0.21.1"].sort((a, b) => cmp(a, b));
     ok(cmp && sorted.join() === "0.21,0.21.1,0.22-beta1,0.22-beta2,0.22", `beta: version order ${sorted.join(" < ")}`);
   }
+}
+/* ------------ several FM-1s (docs/INSTALL-COMPAT.md "Several FM-1s"): the unit's ID shown, the writes refused --- */
+{
+  const ins = [{ name: "X", state: "connected" }, { name: "Y", state: "connected" }, { name: "X", state: "connected" }];
+  const outs = [{ name: "X", state: "connected" }, { name: "X", state: "connected" }, { name: "Y", state: "connected" }];
+  const acc = { inputs: new Map(ins.map((p, i) => ["i" + i, p])), outputs: new Map(outs.map((p, i) => ["o" + i, p])) };
+  ok(pairOutput(acc, ins[0]) === outs[0] && pairOutput(acc, ins[2]) === outs[1] && pairOutput(acc, ins[1]) === outs[2],
+     "pairOutput: two ports of one name (two FM-1s): the k-th input with the k-th output of that name; one name alone as before");
+  // two FM-1s on one Web MIDI access, their ports of the same name ("FM-1")
+  const both = (...devs) => ({ requestMIDIAccess: async () => ({
+    get inputs() { return new Map(devs.flatMap((d) => [...d.access.inputs])); },
+    get outputs() { return new Map(devs.flatMap((d) => [...d.access.outputs])); } }) });
+  const crA = backupSide("ChoralRoot 0.1", CR_BACKUP_IDS, crData(), "A1B2C3D4"), crB = backupSide("ChoralRoot 0.1", CR_BACKUP_IDS, crData(), "0F0E0D0C");
+  const A = new FakeFM1(image, { identity: "FM-1_920", bk: () => crA }), B = new FakeFM1(image, { identity: "FM-1_920", bk: () => crB });
+  const one = runPage({ navigator: both(A), fetch: pkgFetch(raw) });
+  await settle();
+  await one.$["check-go"].fire("click");
+  ok(one.$.unit.textContent.endsWith(en.cnUnitId.replace("{id}", "A1B2C3D4")) && one.$.unit.className === "unit" && A.upgrades === 0,
+     `check, one FM-1: its unit ID in the answer ("${one.$.unit.textContent}")`);
+  const p = runPage({ navigator: both(A, B), fetch: pkgFetch(raw) });
+  await settle();
+  await p.$["check-go"].fire("click");
+  ok(p.$.unit.textContent.startsWith("2 FM-1s are connected: unit ID A1B2C3D4 (ChoralRoot 0.1, port FM-1); unit ID 0F0E0D0C (ChoralRoot 0.1, port FM-1).") &&
+     p.$.unit.className === "unit", `check, two FM-1s whose ports have one name: both reached, each with its unit ID ("${p.$.unit.textContent.slice(0, 90)}…")`);
+  await p.$.go.fire("click");
+  ok(p.$.status.textContent.startsWith(en.several) && p.$.status.textContent.includes("A1B2C3D4") && p.$.status.textContent.includes("0F0E0D0C") &&
+     A.upgrades === 0 && B.upgrades === 0 && !p.downloads.length && !p.$.go.disabled, "Install, two FM-1s: refused before anything is written, both IDs said");
+  await p.$["backup-go"].fire("click");
+  const afterBackup = p.$.status.textContent;
+  await p.$["snd-read"].fire("click");
+  ok(afterBackup.startsWith(en.several) && p.$.status.textContent.startsWith(en.several) && !p.downloads.length && !crA.log.length && !crB.log.length,
+     "Back up and the Sounds, two FM-1s: refused too (the page does not pick one)");
 }
 function dateOf(iso) {
   const [y, m, d] = iso.split("-").map(Number);

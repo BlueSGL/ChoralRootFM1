@@ -153,6 +153,7 @@ void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src)
     dst->extadd = src->extadd;
     dst->secret = src->secret;
     dst->vel = src->vel;
+    dst->bass_on = (uint8_t)((dst->bass_on & 3u) | (src->bass_on & 0xFCu));   /* Key Touch and the sensitivities */
     for (i = 0; i < 3u; i++) {
         dst->midi_en[i] = src->midi_en[i];
         dst->midi_ch[i] = src->midi_ch[i];
@@ -186,7 +187,10 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
     CRS_FIX(vel, 1, 127);
-    CRS_FIX(bass_on, 0, 3);                        /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS, 0.22) */
+    CRS_FIX(bass_on, 0, 255);                      /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS; bits 2..7 Key Touch
+                                                    * and the two sensitivities, CRS_TOUCH / VSENS / ATSENS: 0.22) */
+    if ((s->bass_on & 0x0Cu) == 0x0Cu)             /* Key Touch 3: not a mode */
+        s->bass_on &= (uint8_t)~0x0Cu;
     CRS_FIX(bass_mode, 0, CR_BASS_SOLO);
     CRS_FIX(bass_voicing, -2, 4);
     CRS_FIX(perform_on, 0, 1);
@@ -208,10 +212,10 @@ static void crs_sanitize(cr_settings_t *s)
     }
     CRS_FIX(clock_mode, 0, CRS_CLOCK_IN);
     CRS_FIX(raw_sound, 0, 1);
-    if ((s->view & 0x38u) || CRS_VIEW(s) > 4u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; an unknown bit
-                                                    * or view: the default view, unlocked; Dual Core as the record
-                                                    * has it: since 0.22 the default is On, and a record's Off is
-                                                    * never turned On for it) */
+    if ((s->view & 0x38u) || CRS_VIEW(s) > 5u)    /* (v9: bit 7 the lock, v12: bit 6 Dual Core On; 5 Geek Out 2
+                                                    * since 0.22; an unknown bit or view: the default view, unlocked;
+                                                    * Dual Core as the record has it: since 0.22 the default is On,
+                                                    * and a record's Off is never turned On for it) */
         s->view = (uint8_t)(s->view & CRS_DC_ON);
     CRS_FIX(motion, 0, 2);
     CRS_FIX(leds, 0, 1);
@@ -641,6 +645,9 @@ static void css_read(void)
 }
 
 static uint8_t crs_lowcut_found;                   /* Felucca's SPEAKER setting as this power-on found it (diagnostics) */
+static uint8_t crs_dc_bar;                         /* 1: Dual Core is Off whatever the record says (cr_cpu1.h: core 1 kept
+                                                    * off after a crash beside it, or given up); the load reads Off and
+                                                    * the poll saves it. The player's own choice in Options clears it */
 static void cr_settings_boot(void)                 /* persist_boot (flash_ok known), before settings_init / panel_init */
 {
     int n = -1;
@@ -667,6 +674,14 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
     crs_usb_apply(&crs_rec.cr);                    /* (before usb_start: the configuration the host first reads) */
     cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off: core 1 not started (On: the default
                                                         * of a unit with no record since 0.22) */
+#if CR_CPU1
+#ifdef ST_BLOCKED
+    if (!ST_BLOCKED())                             /* (SAFE MODE saves nothing: the bar waits for the next boot) */
+#endif
+        cr_c1_bar_boot(bootguard.cls);             /* a crash or a hang beside core 1 last time: Off (cr_cpu1.h) */
+    if (cr_c1_barred)
+        crs_dc_bar = 1;
+#endif
     css_read();                                    /* the session: read here, applied by cr_settings_load */
 }
 
@@ -727,7 +742,8 @@ static void crs_capture(cr_settings_t *s)
     s->single = cs.single;
     s->vel = cs.vel;
     s->bass_mode = cs.bass_mode;
-    s->bass_on = cs.numerals ? CRS_NUMERALS : 0u;  /* (bit 0 always 0 here: Bass on is the session's, css_capture; an
+    s->bass_on = (uint8_t)((cs.numerals ? CRS_NUMERALS : 0u) | CRS_TOUCH_BITS(cs.touch, cs.vel_sens, cs.at_sens));
+                                                   /* (bit 0 always 0 here: Bass on is the session's, css_capture; an
                                                     * older firmware would switch the engine's bass on from it. Bit 1:
                                                     * the KEY layer's Numerals, which 0.17 .. 0.21 read as 0) */
     s->perform_on = cs.perform_on;
@@ -1052,6 +1068,10 @@ static void cr_settings_load(void)
     cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
     cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
     cs.numerals = (uint8_t)CRS_NUMS(s);
+    cs.touch = (uint8_t)CRS_TOUCH(s);              /* Options > Key Touch and the sensitivities (docs/VELOCITY.md) */
+    cs.vel_sens = (uint8_t)CRS_VSENS(s);
+    cs.at_sens = (uint8_t)CRS_ATSENS(s);
+    cu_touch_apply();
     cs.tonic = s->tonic;
     cs.scale = s->scale;
     cs.transpose = s->transpose;
@@ -1095,7 +1115,8 @@ static void cr_settings_load(void)
     cs.split = s->split_pc;
     cs.view = (uint8_t)CRS_VIEW(s);
     cs.view_lock = (uint8_t)CRS_VIEW_LOCK(s);
-    cs.dualcore = (uint8_t)CRS_DUALCORE(s);        /* (what this power-on did: cr_c1_off, cr_settings_boot) */
+    cs.dualcore = crs_dc_bar ? 0u : (uint8_t)CRS_DUALCORE(s);   /* (what this power-on did: cr_c1_off, cr_settings_boot;
+                                                    * Off after a bar, crs_dc_bar) */
     cr_motion = s->motion;
     cs.leds = s->leds;
     palette_set(s->palette < NPALETTES ? s->palette : NPALETTES - 1u);
@@ -1128,8 +1149,20 @@ static void cr_settings_load(void)
     crs_capture(&crs_seen);                        /* the state now: nothing to save until an Option changes */
     crs_hold_seen = settings_hold;
     crs_change_ms = fm1_ms;
-    crs_pending = 0;
+    /* .. but Dual Core Off after a bar with the record still On: the poll writes Off (crs_write: crs_seen's Off over
+     * flash's On), once it is quiet */
+    crs_pending = (uint8_t)(crs_dc_bar && CRS_DUALCORE(s));
 }
+
+/* cr_ui.c: core 1 given up this session (cr_cpu1.h cr_c1_give_up): Dual Core Off, saved by the poll (it sees the
+ * Option change), and Off on a revert too */
+static void cr_settings_dc_off(void)
+{
+    crs_dc_bar = 1;
+    cs.dualcore = 0;
+}
+/* cr_ui.c: the player set Options > Dual Core: the record says what they chose from here on */
+static void cr_settings_dc_user(void) { crs_dc_bar = 0; }
 
 /* the captured state (crs_seen) -> flash; 0: written (or no flash, or nothing to write). full: the whole block (the
  * global save); else flash's block with the automatic fields of the captured state: the manual ones stay as last saved */
@@ -1469,8 +1502,9 @@ static void crs_reinit(void)
  * is needed after it (cr_settings_commit; a loop playing: cr_ui.c cu_reset stopped it first).
  * NOT touched: the panel calibration (persist_t.panel: settings_export writes the table in RAM, as every save), the
  * saved sounds and patches (upreset / va / fm6 / cz / quad stores), the loops and the slot selected, Felucca's
- * favourites. Dual Core: On is saved (the default since 0.22); the core this power-on did or did not start stays as
- * it is until the next one (cr_c1_off) */
+ * favourites. Dual Core: On is saved (the default since 0.22), but Off in a power-on that kept core 1 off after a
+ * crash beside it or gave it up (crs_dc_bar: the fallback wins over the default until the player sets the Option);
+ * the core this power-on did or did not start stays as it is until the next one (cr_c1_off) */
 static void cr_settings_reset(void)
 {
     if (!crs_loaded)

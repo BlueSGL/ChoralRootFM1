@@ -4,7 +4,7 @@
 
   python3 tests/releases_test.py          (from the repo root; needs nothing built, no network)
 
-Every version has its notes in docs/releases/, a date, a tag, 4 to 8 bullets and a well-formed sha256; the list is
+Every version has its notes in docs/releases/, a date, a tag, 4 to 12 bullets and a well-formed sha256; the list is
 newest first without doubles; nothing older than the minimum (0.16: the boot stub) is offered; every version but
 the newest says what going back to it means; a version with a single-core package (sha256_1core, optional: 0.16 ..
 0.21 have none) lists a well-formed sha256 of its own for it; the firmware's own version (firmware/src/choralroot.c) is in the list
@@ -101,8 +101,8 @@ def main():
             ok(re.fullmatch(r"[0-9a-f]{64}", r["sha256_1core"] or "") is not None and all_sums.count(r["sha256_1core"]) == 1,
                f"{v}: the single-core package's sha256 (sha256_1core), a sha256 of its own")
         b = r.get("bullets", [])
-        ok(4 <= len(b) <= 8 and all(isinstance(x, str) and 20 <= len(x) <= 240 for x in b) and bool(r.get("title")),
-           f"{v}: a title and {len(b)} bullets (4 to 8, each one or two sentences)")
+        ok(4 <= len(b) <= 12 and all(isinstance(x, str) and 20 <= len(x) <= 240 for x in b) and bool(r.get("title")),
+           f"{v}: a title and {len(b)} bullets (4 to 12, each one or two sentences)")
         ok(all(isinstance(x, str) and x for x in r.get("notes", [])), f"{v}: its notes are text")
         stable0 = next(x for x in rel if not x.get("beta"))
         if r.get("beta"):

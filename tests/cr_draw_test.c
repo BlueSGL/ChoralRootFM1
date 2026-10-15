@@ -2660,6 +2660,47 @@ int main(int argc, char **argv)
         check(name, found == 2u && okv && nfind == f0 && nell == e0);
     }
 
+    {   /* Options > Version (3y66): the unit's ID on the line under the version, as cr_ui.c cu_options_screen builds it
+         * (the 24th of 26: the list's last window), with the longest version that shows whole (23 characters) and
+         * the widest digits, and without an ID: every text whole, nothing over another */
+        static const char *const ITEMS[8] = {"USB Record", "USB Level", "USB Rate", "Dual Core", "Output", "Version",
+                                             "Calibrate", "Reset Settings"};
+        static const char *const LAB[3] = {"unit ID DDDDDDDD", "unit ID A1B2C3D4", "no unit ID"};
+        static const char VAL[] = "ChoralRoot 0.22-beta1 1";
+        uint32_t v, k, j, f0 = nfind, e0 = nell, okv = 1, found = 0;
+        char name[200];
+        for (k = 0; k < CR_NSCREENS; k++)
+            if (!strcmp(CR_SCREEN_SLUGS[k], "12_opt_tapped_the_options_menu")) break;
+        for (v = 0; v < 3u && k < CR_NSCREENS; v++) {
+            cr_screen_t s = CR_SCREENS[k];
+            uint32_t got = 0;
+            memset(s.item, 0, sizeof s.item);
+            for (j = 0; j < 8u; j++) snprintf(s.item[j], sizeof s.item[j], "%s", ITEMS[j]);
+            s.n_items = 26;
+            s.item0 = 18;
+            s.sel = 23;
+            s.anim = 0;                                  /* (settled: no slide from the entry before) */
+            snprintf(s.value, sizeof s.value, "%s", VAL);
+            snprintf(s.label, sizeof s.label, "%s", LAB[v]);
+            if (strcmp(s.value, VAL) || strcmp(s.label, LAB[v])) okv = 0;   /* (the arrays hold them whole) */
+            render(&s, 0);
+            lint(v == 2u ? "options_version_no_unit_id" : "options_version_unit_id", &s);
+            for (j = 0; j < nbox; j++) {
+                uint32_t hit = !strcmp(boxes[j].s, ITEMS[5]) ? 1u : !strcmp(boxes[j].s, VAL) ? 2u : !strcmp(boxes[j].s, LAB[v]) ? 4u : 0u;
+                if (!hit) continue;
+                got |= hit;
+                if ((boxes[j].flags & 1u) || boxes[j].x0 < 0 || boxes[j].x1 > 240) okv = 0;
+            }
+            if (got != 7u) okv = 0;
+            found++;
+            if (v != 1u)
+                write_ppm(dir, v == 2u ? "options_version_no_unit_id" : "options_version_unit_id");
+        }
+        snprintf(name, sizeof name, "Options > Version: the unit's ID under the version (and 'no unit ID'): whole, on screen; %u findings, %u cut",
+                 nfind - f0, nell - e0);
+        check(name, found == 3u && okv && nfind == f0 && nell == e0);
+    }
+
     free_screens(dir);
 
     fprintf(rep, "\n%u lint findings, %u ellipsised texts\n", nfind, nell);

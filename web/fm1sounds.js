@@ -32,10 +32,13 @@ export const patchKindOf = (engine) =>
   (engine === 13 ? "va" : engine === 12 ? "fm6" : engine === 14 ? "cz" : engine === 15 ? "quad" : engine === 16 ? "p5" : null);
 
 // the factory presets of each engine (ENGINES[e]->presets[k].name) and the first of them in the engine's pool (the
-// CZ-1's preset 0, INIT TONE, is the pool's INIT): tests/sound_templates.c prints both from the firmware, and its
-// --check fails until the two lines below hold its strings verbatim (docs/SOUNDS.md "The binding")
-export const FACTORY_PRESETS = {"7":["FULL ORGAN","JAZZ PERC","GOSPEL","SOFT FLUTE","ROCK DRIVE"],"12":["TINE EP","FM BELL","FM BASS","BRASS","FM PAD","MARIMBA","FM ORGAN","FM PLUCK","DX TINE","BRASS SECT","SOLID BASS","BELLS","DX MARIMBA","CLAVINET","DRAWBARS","STRINGS","GLASS PAD","SYNC LEAD","HARP","KALIMBA","FLUTE","STEEL DRUM","SAW BASS","TUBULAR","PIANO"],"13":["LUSH PAD","WARM PAD","GLASS PAD","SLOW STRINGS","ENSEMBLE STR","SYNTH BRASS","SOFT BRASS","POLY KEYS","PWM KEYS","CLAV","SOFT LEAD","HOLLOW","BELLS","SWEEP PAD","SOFT AAH","ORGANISH","DEEP SUB","PUNCH BASS","RUBBER BASS","SYNC BASS","MORPH PAD","VINYL KEYS","WIDE STRINGS","CLOUD PAD","SHIMMER"],"14":["INIT TONE","BRASS 1","BRASS 2","BRASS 3","STRINGS 1","STRINGS 2","STRINGS 3","STRINGS 4","ORCHESTRA","ACO.GUITAR","JAZZ GUITAR","ELEC.GUITAR","SLAP BASS","SYNTH.BASS","ELEC.BASS 1","ELEC.BASS 2","HARP","BRASS 4","SAXOPHONE","CELLO","FLUTE","WHISTLE","HARMONICA","RECORDER","KOTO","PIANO 1","PIANO 2","PIANO 3","ELEC.PIANO","HONKY-TONK","FUNKY CLAV 1","FUNKY CLAV 2","HARPSICHORD","JAZZ ORGAN 1","JAZZ ORGAN 2","PIPE ORGAN 1","PIPE ORGAN 2","ACCORDION","VOICE 1","VOICE 2","VOICE 3","MUSIC BOX","VIBRAPHONE","XYLOPHONE","MARIMBA","MALLET LOG","AFRO PERC","BELLS","METALLIC","SYN STRINGS","FAT ENSEMBLE","SITAR","SYNTH.LEAD 1","SYNTH.LEAD 2","SYNTH.LEAD 3","SYNTH.LEAD 4","SWEEP 1","SYN DRUMS 1","SYN DRUMS 2","CONGA","STEEL DRUM","SWEEP 2","JET ROAR","MOTORCYCLE","TYPHOON"],"15":["EP","BELL","BASS","PLUCK","BRASS","GLASS PAD","HOLLOW","SQUARE LEAD","METAL","WOBBLE","CLAV","STRINGS","MARIMBA","DRONE","FEEDBACK","NOISE-ISH"]};
-export const FACTORY_FIRST = {"7":0,"12":0,"13":0,"14":1,"15":0};
+// CZ-1's preset 0, INIT TONE, and P5's, INIT P5, are the pools' INIT); FACTORY_IDS: a preset's favourites id where it
+// is not its index (P5: its Sequential program number, cr_ui.c cu_fav_key; P5's presets are the shipped list,
+// assets/prophet5-factory/shipped.txt): tests/sound_templates.c prints the three from the firmware built as the unit
+// is, and its --check fails until the three lines below hold its strings verbatim (docs/SOUNDS.md "The binding")
+export const FACTORY_PRESETS = {"7":["FULL ORGAN","JAZZ PERC","GOSPEL","SOFT FLUTE","ROCK DRIVE"],"12":["TINE EP","FM BELL","FM BASS","BRASS","FM PAD","MARIMBA","FM ORGAN","FM PLUCK","DX TINE","BRASS SECT","SOLID BASS","BELLS","DX MARIMBA","CLAVINET","DRAWBARS","STRINGS","GLASS PAD","SYNC LEAD","HARP","KALIMBA","FLUTE","STEEL DRUM","SAW BASS","TUBULAR","PIANO"],"13":["LUSH PAD","WARM PAD","GLASS PAD","SLOW STRINGS","ENSEMBLE STR","SYNTH BRASS","SOFT BRASS","POLY KEYS","PWM KEYS","CLAV","SOFT LEAD","HOLLOW","BELLS","SWEEP PAD","SOFT AAH","ORGANISH","DEEP SUB","PUNCH BASS","RUBBER BASS","SYNC BASS","MORPH PAD","VINYL KEYS","WIDE STRINGS","CLOUD PAD","SHIMMER"],"14":["INIT TONE","BRASS 1","BRASS 2","BRASS 3","STRINGS 1","STRINGS 2","STRINGS 3","STRINGS 4","ORCHESTRA","ACO.GUITAR","JAZZ GUITAR","ELEC.GUITAR","SLAP BASS","SYNTH.BASS","ELEC.BASS 1","ELEC.BASS 2","HARP","BRASS 4","SAXOPHONE","CELLO","FLUTE","WHISTLE","HARMONICA","RECORDER","KOTO","PIANO 1","PIANO 2","PIANO 3","ELEC.PIANO","HONKY-TONK","FUNKY CLAV 1","FUNKY CLAV 2","HARPSICHORD","JAZZ ORGAN 1","JAZZ ORGAN 2","PIPE ORGAN 1","PIPE ORGAN 2","ACCORDION","VOICE 1","VOICE 2","VOICE 3","MUSIC BOX","VIBRAPHONE","XYLOPHONE","MARIMBA","MALLET LOG","AFRO PERC","BELLS","METALLIC","SYN STRINGS","FAT ENSEMBLE","SITAR","SYNTH.LEAD 1","SYNTH.LEAD 2","SYNTH.LEAD 3","SYNTH.LEAD 4","SWEEP 1","SYN DRUMS 1","SYN DRUMS 2","CONGA","STEEL DRUM","SWEEP 2","JET ROAR","MOTORCYCLE","TYPHOON"],"15":["EP","BELL","BASS","PLUCK","BRASS","GLASS PAD","HOLLOW","SQUARE LEAD","METAL","WOBBLE","CLAV","STRINGS","MARIMBA","DRONE","FEEDBACK","NOISE-ISH"],"16":["INIT P5","ITS PROPHET5","AFTER RINGER","FOREVER KEYS","STABBY BRASS","NO WHINING","FANTASTIC 5","PDG ORGAN","CLAVICLE","BLOW BY BLOW","TAARICHOIR","REEDY STRPAD","CANNED HAPPY","SYNCHROTRILL","BORN IN 80S","STICKY PLUCK","WATERY PLUCK","BASS FACE","WHINY OPENER","SYNCTINK","TREMBL ORGAN","SCI-FI ECHO","UNICORN DRMS","COCKTAIL HR","NICE SMOOTH","TUMESC BASS","INTERNALIZED","BLINKR BELLS","UWATER TRILL","POLY MCFAT","REED EP","PIPE ORGANIS","FAT POLYBASS","CHORAL VOICE","HUM-ALONG","AFTRBLW HORN","MIDNIGHT PWM","RIPPLES","RADIO TOWERS","HARPSI-VIBE","INSTABIL PAD","VINTAGE WRLY","PRESSURE PTS","80S HORROR","NURSERYCOMP","HOUSE MOVER","VOCAL PAD","SQUARECLIFF","UNDER ICE","MARIMBA","UNISAWYER","RECORDER","GHOSTLY GLOW","UPTIGHT BASS","RAVECAVE","CELTIC MOON","MOUSE BLASTR","KYOTO","ORGAN PERC","DRM ORGONON","PLUCK HOLLOW","VELO RES LD2","REGAL MOVMNT","LOOSE SQUARE","RUBBR BUMPER","GALV BUCKET","SOFT SWELL","REVERB STRGS","LAGOON BASS","PLUCKTY DUCK","BELL TREE","RISER CHORD","TIMPANALLY","TUNED PERC","FUNKY BELLS","FEDBACK","NYLON FINGRS","FAINT MEMORY","FULL HEXAGON","ICONIC BRASS","SYNC SWELLPD","PRETTY PLUCK","FEATURE BASS","CHORUSLAYER","BETTER WAYS","BASSMENT","DENOUEMENT","SYNCWAVE","ORGANIZER","BULL BY HORN","NAIVE MELODY","POLY MORGUE","SWITCHBACK","PLUCKYNESS","CYBERIAN WND","METAL DRONE","LOW STRINGS","PERC E PIANO","FLUTES","PERC ORGAN","UNISON GLIDE","ORGAN W RES","TOY PIANO","TRUMPT FLUTE","ELEC PIANO I","OCTAVE SAWS","DELAYED HARM","ECHO REPEAT","PULSE W MOD","4THS W RES","SWEEP HARMS","SLOW SYNC","NOISE SWEEP","RES BELLS","HOLLOW SOUND","CAT"]};
+export const FACTORY_FIRST = {"7":0,"12":0,"13":0,"14":1,"15":0,"16":1};
+export const FACTORY_IDS = {"16":[0,1,2,3,6,7,8,10,11,12,13,15,16,17,18,19,20,21,23,24,25,26,27,28,29,30,31,32,34,41,43,45,46,47,51,53,54,56,59,60,61,62,65,66,67,68,70,72,77,79,82,83,85,86,87,89,92,93,95,97,100,101,103,104,107,108,109,110,111,112,113,114,115,117,120,122,123,127,128,131,132,133,135,136,137,139,140,142,143,146,147,148,150,152,156,159,162,164,165,168,169,171,172,173,179,181,183,184,185,187,188,189,194,198,199,200]};
 const SND_BIND_MARK = 0xA6, SND_BIND_NOTE = 160 + 15, SND_BIND_FLAGS = 176 + 15;
 // the pool a record is in (cr_bank.c cb_rec_engine): its engine if selectable, DIGITAL's FM6, another retired one
 // (ANALOG since 0.14; PHASE, LOFI, VOICE, TRIO, NOISE, PHYS since 0.18; SAMPLE, GRAIN, DRUM) the VA's
@@ -63,6 +66,12 @@ export function soundBindings(records) {
     const pos = f - (FACTORY_FIRST[e] || 0) + 1;
     return { index: f, pos, label: `${ENGINE_NAMES[e]} ${String(pos).padStart(2, "0")}`, name: FACTORY_PRESETS[e][f] };
   });
+}
+// per slot the factory preset index its binding bytes name (cb_bind_raw; -1: none), before soundBindings' rule: a later
+// slot naming a preset that an earlier one holds is an added preset, and takes the place when the earlier one goes
+export function rawBindings(objs) {
+  const m = sndMap(objs), n = m.pool ? SOUND_SLOTS : LEGACY_SLOTS;
+  return Array.from({ length: n }, (_, i) => { const r = sndRecord(m, i + 1); return r && recordValid(r) ? sndBindRaw(r) : -1; });
 }
 // a slot's binding as a sound file carries it: {overwrites: the pool position, name} or null (added)
 export const bindingOf = (bound) => (bound ? { overwrites: bound.pos, name: bound.name } : null);
@@ -332,6 +341,9 @@ function sndPutRecord(m, slot, rec) {   // rec null: the record zeroed (an empty
   if (rec) b.set(rec, sndRecOff(slot)); else b.fill(0, sndRecOff(slot), sndRecOff(slot) + SND_REC);
   m.set(id, b);
 }
+// the pool: the slot's 384 bytes zeroed, an empty slot as the FM-1 writes one (upool_put): a Delete sends the slot so,
+// and a sound placed starts from it, so no byte of the slot's last sound (a patch header of no kind here) stays (3y78)
+const sndClearSlot = (m, slot) => { if (m.pool) sndPutRecord(m, slot, null); };
 function sndResult(before, m) {
   const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const ids = (m.pool ? POOL_IDS : [9, 10, 11, 12, 13, 22, 6, 7]).filter((id) => !same(before.get(id), m.get(id)));
@@ -352,7 +364,11 @@ export function importSound(objs, slot, sound) {
   }
   const kind = patchKindOf(rec[2]);
   if (sound.patch && (!kind || sound.patch.length !== PATCH_SIZE[kind])) throw new Error("The patch is not of the sound's engine");
+  // (0.21 has no P5: a record of engine 16 is no record there, up_valid, so the slot would read as empty and the next
+  // save would take it: refused, with or without its program)
+  if (!m.pool && kind === "p5") throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)");
   const notes = [];
+  sndClearSlot(m, slot);
   for (const k of SND_KINDS) sndPutBlob(m, k, slot, k === kind && sound.patch ? sound.patch : null, notes);
   sndPutRecord(m, slot, rec);
   return { ...sndResult(before, m), notes };
@@ -371,7 +387,7 @@ export function deleteSound(objs, slot) {
   sndCheckSlot(slot);
   const before = sndMap(objs), m = sndCopy(before);
   for (const k of SND_KINDS) sndPutBlob(m, k, slot, null);
-  sndPutRecord(m, slot, null);
+  sndPutRecord(m, slot, null);                   // (the pool: the whole slot, 384 zeros)
   return sndResult(before, m);
 }
 
@@ -419,7 +435,8 @@ export async function readSounds(request, onProgress = () => {}) {
 
 // changed: [{id, bytes}] in the order to write (importSound & co. put the stores first, the bank last). Each object:
 // PUT begin / data / commit; rc 3 (busy) retried each second opts.busyTries times (opts.onBusy() each time); a failure
-// aborts that object and stops: nothing after it is written. -> the ids written
+// aborts that object and stops: nothing after it is written (the error's .written: the ids written before it).
+// opts.onObject(k, n, id): object k of n begins (an empty object, a PUT of length 0, moves no bytes). -> the ids written
 export async function writeSounds(request, changed, opts = {}) {
   const onProgress = opts.onProgress || (() => {}), busyTries = opts.busyTries ?? 120;
   const ask = (r) => request(r, { timeout: 4000, retries: 0 });
@@ -432,21 +449,27 @@ export async function writeSounds(request, changed, opts = {}) {
   };
   const total = changed.reduce((n, o) => n + o.bytes.length, 0), written = [];
   let done = 0;
-  for (const { id, bytes } of changed) {
-    const what = objectName(id);
-    await retry(() => put([0, id, ...bkU32(bytes.length), ...bkU32(bkCrc(bytes))], what));
-    try {
-      for (let off = 0; off < bytes.length; off += SND_CHUNK) {
-        const chunk = bytes.subarray(off, off + SND_CHUNK);
-        await put([1, id, ...bkU32(off), ...bkPack(chunk)], what);
-        done += chunk.length; onProgress(done, total);
+  try {
+    for (const { id, bytes } of changed) {
+      const what = objectName(id);
+      if (opts.onObject) opts.onObject(written.length, changed.length, id);
+      await retry(() => put([0, id, ...bkU32(bytes.length), ...bkU32(bkCrc(bytes))], what));
+      try {
+        for (let off = 0; off < bytes.length; off += SND_CHUNK) {
+          const chunk = bytes.subarray(off, off + SND_CHUNK);
+          await put([1, id, ...bkU32(off), ...bkPack(chunk)], what);
+          done += chunk.length; onProgress(done, total);
+        }
+        await retry(() => put([2, id], what));
+      } catch (e) {
+        await ask([BACKUP_CMD.PUT, [3, id]]).catch(() => {});
+        throw e;
       }
-      await retry(() => put([2, id], what));
-    } catch (e) {
-      await ask([BACKUP_CMD.PUT, [3, id]]).catch(() => {});
-      throw e;
+      written.push(id);
     }
-    written.push(id);
+  } catch (e) {
+    if (e && typeof e === "object") e.written = written.slice();
+    throw e;
   }
   return written;
 }
@@ -457,7 +480,7 @@ export async function writeSounds(request, changed, opts = {}) {
 export const SOUND_TEMPLATES = {
   fm6: "pQQMW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQEBAQEBAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
   cz: "pQQOW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQEBAQEBAQEIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-  quad: "pQQPW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQUNDQ0BAQEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",   // (FM TONE: a Digitone .dnsnd import, web/fm1dnsnd.js)
+  quad: "pQQPW1NZWCBJTVBPUlQAAKhKhpp8QEBAQHxAQEBAQEBAQEJBgEC/QEBAQEBAUEJAgEBAQEBAQEBAQEBAaEBBQb9AQEBAQEBAQEBAQEBAQL9Av0BAv0C/QEC/QL9AQL9Av0BAQUNDQ0BAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",   // (FM TONE: a Digitone .dnsnd import, web/fm1dnsnd.js)
 };
 // the FM6 function settings an imported voice gets (eng_fm6.c FM6_FNDEF bit-packed as fm6_blob_make packs them: the
 // fixture fm6_fn, = bytes 114..121 of a blob the firmware makes)
@@ -718,6 +741,7 @@ export function swapSounds(objs, a, b) {
     for (const i of [SND_BIND_NOTE, SND_BIND_FLAGS]) { const t = A.rec[i]; A.rec[i] = B.rec[i]; B.rec[i] = t; }
   }
   const put = (slot, S) => {
+    sndClearSlot(m, slot);
     for (const k of SND_KINDS) sndPutBlob(m, k, slot, S && k === S.kind && S.blob ? S.blob : null);
     sndPutRecord(m, slot, S ? S.rec : null);
   };

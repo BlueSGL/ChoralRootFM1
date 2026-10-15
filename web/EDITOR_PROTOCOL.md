@@ -612,7 +612,7 @@ each commit, no RESTART.
 
 | cmd | request | reply |
 | --- | --- | --- |
-| 1 INFO | — | version string (`ChoralRoot 0.1`), then 0 engines, P_COUNT 0, G_COUNT 0, NSTEP 0, P_E0 0, NTRK 0, CHAIN_ROWS 0, then `42 01 03` (backup read + restore) and `43 01 02` (ChoralRoot backup v2: ids 9 and 40..49, `RESTART`, no sample slots; v1, ChoralRoot 0.1, also listed 32 and 33 and answered SMP_BEGIN .. SMP_ERASE) |
+| 1 INFO | — | version string (`ChoralRoot 0.1`), then 0 engines, P_COUNT 0, G_COUNT 0, NSTEP 0, P_E0 0, NTRK 0, CHAIN_ROWS 0, then `42 01 03` (backup read + restore) and `43 01 02` (ChoralRoot backup v2: ids 9 and 40..49, `RESTART`, no sample slots; v1, ChoralRoot 0.1, also listed 32 and 33 and answered SMP_BEGIN .. SMP_ERASE; 0.22: `43 01 03`), then (2026-10-14, 3y66) `49 08` and the unit's ID, 8 hex digits in ASCII (the CRC-32 of the flash's unique ID; no tag when the unit has none, e.g. in SAFE MODE: docs/INSTALL-COMPAT.md "Several FM-1s"). Hosts read the version to its NUL and walk the tags after the 7 bytes |
 | 65 BACKUP_LIST | — | `1, rc, 27` (17 without CZ-1), then per object `id, size u32, crc u32` |
 | 66 BACKUP_GET | as above | as above (a loop may play: reads never stop anything) |
 | 67 BACKUP_PUT | as above | as above |

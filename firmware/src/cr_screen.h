@@ -142,7 +142,8 @@ typedef struct {                                                                
     uint16_t flags;                 /* CR_CF_*, the mark's colour in bits 4..7 */
     uint8_t glyph;                  /* CR_G_* */
     uint8_t pct;                    /* Q8 of 255: the glyph's / bar's fill (square: the duty) */
-    uint8_t pct2;                   /* Q8 of 255: a pictogram's second value (echoes: feedback, lfo: depth) */
+    uint8_t pct2;                   /* Q8 of 255: a pictogram's second value (echoes: feedback, lfo: depth; edit8
+                                     * tall 2: the peak tick, 0 none) */
     uint8_t wave;                   /* CR_G_LFOWAVE: CR_LW_* */
 } cr_cell_t;                        /* 32 bytes, no padding */
 typedef struct { char t[32]; uint8_t px, col, bold, center;
@@ -247,7 +248,10 @@ typedef struct {
     uint8_t hot_r, hot_c;           /* the cell just turned (a filled block behind its value): row + 1 (0: none), column */
     uint8_t hot_col;                /* .. the block's colour (NONE: the knob's; a modulation source's while mapping) */
     uint8_t wide;                   /* edit8: CR_W_* */
-    uint8_t tall;                   /* edit8: one row of tall level bars over the whole panel (the oscillator mixer) */
+    uint8_t tall;                   /* edit8: one row of tall level bars over the whole panel: 1 the oscillator mixer
+                                     * (knob colours by `active`, the knob bars under them); 2 a read-out (Geek Out 2:
+                                     * bright, no knob bars; a cell's pct2, when not 0, a peak tick across its well;
+                                     * CR_CF_DIM: the cell in the grey) */
     uint8_t fl_eng, fl_scr;         /* free: the compiled layout and its screen (cr_layout.c: index + 1; 0 none) */
     uint8_t fine;                   /* edit8 / stack: SHIFT on (OPT snap): "snap" small in the title line (2: the
                                      * lane has a ratio pair, SHIFT steps its slow hand B1: "snap \267 B1");

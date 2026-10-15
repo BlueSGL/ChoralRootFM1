@@ -475,13 +475,14 @@ static const struct { uint8_t fx, page, of; int8_t c[4]; const char *label[4]; }
 static const char *const CU_XDIV[XF_NDIV] = {"1/32", "1/16T", "1/32.", "1/16", "1/8T", "1/16.", "1/8", "1/4T", "1/8.",
                                              "1/4", "1/2T", "1/4.", "1/2"};      /* cr_fx.c XF_DIV's order */
 static const char *const CU_BASSMODE[4] = {"Chords Only", "Unison Bass", "Bass Single Notes", "Solo"};
-static const char *const CU_VIEW[5] = {"Chord", "Keyboard", "Notes", "Geek Out", "Scope"};
+static const char *const CU_VIEW[6] = {"Chord", "Keyboard", "Notes", "Geek Out", "Scope", "Geek Out 2"};
 static const char *const CU_LOOPLEN[6] = {"Free", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars"};
 static const char *const CU_SIG[CRL_NSIG] = {"4/4", "3/4", "6/8"};
 static const char *const CU_QUANT[CRL_NQUANT] = {"none", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CU_LOOP_MODE[CRL_NMODE] = {"Overwrite", "Advance", "Overdub", "Replace", "Step"};
 static const char *const CU_RATE[CRL_NRATE] = {"x1/16", "x1/12", "x1/8", "x1/6", "x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
-enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_N };
+enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_GEEK2, V_N };   /* (saved: cr_settings.h CRS_VIEW; a new
+                                                                         * view goes last, a record keeps its meaning) */
 
 static struct {
     uint8_t playstyle, extadd, secret, key_on, tonic, scale, single, vel;
@@ -526,6 +527,8 @@ static struct {
                                            * default: 44.1 kHz only, 0.18's device (usb.c UA_OFF_48) */
     uint8_t names_std;                    /* Options > Chord Names (0.20): 1 Standard, 0 Orchid, the default
                                            * (cr_engine.c cr_chord_names_set; docs/CHORD-NAMES.md) */
+    uint8_t touch, vel_sens, at_sens;     /* Options > Key Touch (0 Fixed, 1 Dynamic, 2 Velocity + Aftertouch), Velocity
+                                           * Sens and Aftertouch Sens (0 Mid, 1 Low, 2 High): docs/VELOCITY.md */
     uint8_t sixth_up;                     /* Options > 6th with 7th (0.20): 1 Octave up, 0 In place, the default
                                            * (cr_engine.c cr_set_sixth_up; docs/CHORD-NAMES.md) */
 } cs;
@@ -535,6 +538,8 @@ static void cr_settings_save(void);       /* .. the automatic part now (Felucca'
 static void cr_settings_reset(void);      /* .. Options > Reset Settings: the defaults, applied and saved */
 static int cr_settings_commit(void);      /* .. the global save (SAVE held): the whole block and the session */
 static void cr_settings_revert(void);     /* .. GLO + SAVE: what the last global save wrote, applied again */
+static void cr_settings_dc_off(void);     /* .. Dual Core Off after core 1 was given up (cr_cpu1.h), saved */
+static void cr_settings_dc_user(void);    /* .. the player set Dual Core: the record's from here on */
 #endif
 static uint8_t cr_restore_lock;            /* cr_backup.c: a settings record was restored into flash; the UI's state is
                                             * older, so no settings save until the restart (RESTART, or a power cycle) */
@@ -930,7 +935,7 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 }
 
 /* ------------------------------------------------------------- Options --- */
-enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
+enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_ATSENS, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
        O_CLOCK, O_VIEW, O_MOTION, O_NAMES, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
        O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
@@ -938,12 +943,12 @@ enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_BASSMODE, O_SINGLE, O_SPLI
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
 static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "6th with 7th",
-    "Velocity",
+    "Velocity", "Key Touch", "Velocity Sens", "Aftertouch Sens",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 2, 2, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -955,6 +960,17 @@ static uint8_t cu_reset_ask;              /* Options > Reset Settings: OCT+ pres
  * the new configuration; never under a SysEx transfer). USB Record Off: the serial console instead (usb.c
  * usb_cdc_on). USB Rate (0.19, the owner 2026-10-12): 44.1 kHz, the default, is 0.18's device; 44.1 + 48 kHz adds
  * the second rate for the computer to choose. The emulator has no USB: the settings are kept and saved only */
+/* Options > Key Touch and the sensitivities to the engine (mod.c cr_touch_*) and the scan (the driven samples off
+ * with it Fixed: hal/fm1_input.h fm1_an.drive); docs/VELOCITY.md */
+static void cu_touch_apply(void)
+{
+    cr_touch_mode = cs.touch;
+    cr_touch_vsens = cs.vel_sens;
+    cr_touch_atsens = cs.at_sens;
+#ifdef CR_SENSE_KEYS
+    fm1_an.drive = cs.touch ? SN_DRIVE : 0u;
+#endif
+}
 static void cu_usb_apply(void)
 {
     fx_usb_fixed = cs.usb_fixed;
@@ -972,6 +988,9 @@ static int32_t opt_get(uint32_t o)
     case O_SECRET: return cs.secret;
     case O_SIXTH: return cs.sixth_up;
     case O_VEL: return cs.vel;
+    case O_TOUCH: return cs.touch;
+    case O_VSENS: return cs.vel_sens;
+    case O_ATSENS: return cs.at_sens;
     case O_BASSMODE: return cs.bass_mode;
     case O_SINGLE: return cs.single;
     case O_SPLIT: return cs.split;
@@ -1000,6 +1019,9 @@ static void opt_set(uint32_t o, int32_t v)
     case O_SECRET: cs.secret = (uint8_t)v; cr_post(CRE_SECRET, 0, 0, v); break;
     case O_SIXTH: cs.sixth_up = (uint8_t)v; cr_post(CRE_SIXTH, 0, 0, v); break;   /* (the chords built from now on) */
     case O_VEL: cs.vel = (uint8_t)v; break;
+    case O_TOUCH: cs.touch = (uint8_t)v; cu_touch_apply(); break;
+    case O_VSENS: cs.vel_sens = (uint8_t)v; cu_touch_apply(); break;
+    case O_ATSENS: cs.at_sens = (uint8_t)v; cu_touch_apply(); break;
     case O_BASSMODE: cs.bass_mode = (uint8_t)v; cr_post(CRE_BASS_MODE, 0, 0, v); break;
     case O_SINGLE: cs.single = (uint8_t)v; cu_post_single(); break;
     case O_SPLIT: cs.split = (uint8_t)v; cu_post_single(); break;
@@ -1017,12 +1039,42 @@ static void opt_set(uint32_t o, int32_t v)
     case O_DUALCORE:                                  /* saved; core 1 starts (or not) at the next power-on. The
                                                        * single-core package: not a setting (the record keeps what
                                                        * it holds, for the standard package) */
-        if (!CR_SINGLE_CORE) cs.dualcore = (uint8_t)v;
+        if (CR_SINGLE_CORE)
+            break;
+        cs.dualcore = (uint8_t)v;
+        cr_c1_barred = 0;                             /* (the player decided: no word of the bar any more) */
+#if CR_HAVE_SETTINGS
+        cr_settings_dc_user();
+#endif
         break;
     case O_OUTPUT: cs.out_clean = (uint8_t)v; fx_output_set((uint32_t)v, 0); break;   /* (fx.c: faded over) */
     default: break;
     }
 }
+/* The unit's ID (HISTORY 3y66, docs/INSTALL-COMPAT.md "Several FM-1s"): 8 hex digits, the CRC-32 of the flash's
+ * 128-bit unique ID, which the device reads once at power-on (cr_shim.c persist_boot); "" when there is none (the
+ * emulator, SAFE MODE, a flash that answers no ID). Read only: INFO's tag 49 08 (cr_backup.c) and the line under
+ * Options > Version's value say it; tools/fm1_install.py --unit and the web pages pick a unit by it */
+static char cr_unit_id[9];
+#if FELUCCA_FLASH
+/* the flash's 16 bytes (fm1_flash.h fl_uid_ram) -> cr_unit_id: their CRC-32 (storage.c's, zlib's) as 8 hex digits.
+ * Sixteen equal bytes (00 or FF: a part that answers no ID) are no ID */
+static void cr_unit_id_set(const uint8_t *u)
+{
+    static const char HEX[] = "0123456789ABCDEF";
+    uint32_t i, c;
+    cr_unit_id[0] = 0;
+    for (i = 1; i < 16u && u[i] == u[0]; i++)
+        ;
+    if (i == 16u)
+        return;
+    c = st_crc32(u, 16u);
+    for (i = 0; i < 8u; i++)
+        cr_unit_id[i] = HEX[(c >> (28u - 4u * i)) & 15u];
+    cr_unit_id[8] = 0;
+}
+#endif
+
 /* Options > Version's value (the owner, 2026-10-14; HISTORY 3y64): v whole when it fits n (the value line is
  * cr_screen.h's value[24]: 23 characters), else without its leading "ChoralRoot ": the single-core beta's
  * ChoralRoot 0.22-beta1 1-core (28) reads 0.22-beta1 1-core. Still too long: cut, as cu_cpy cuts. The display
@@ -1054,6 +1106,8 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
     case O_SIXTH: cu_cpy(d, v ? "Octave up" : "In place", n); break;
     case O_VEL: cu_int(d, v, 0, n); break;
+    case O_TOUCH: cu_cpy(d, v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
+    case O_VSENS: case O_ATSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
     case O_SINGLE: cu_cpy(d, v == 2 ? "Split Bass" : v ? "Split Oct" : "Full Octave", n); break;
     case O_SPLIT: cu_cpy(d, CU_NOTE[v % 12], n); cu_cat(d, cs.single ? "" : " (Split off)", n); break;
@@ -1073,7 +1127,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_USB_RATE: cu_cpy(d, v ? "44.1 + 48 kHz" : "44.1 kHz", n); break;
     case O_DUALCORE:
         if (CR_SINGLE_CORE) { cu_cpy(d, "1 core build", n); break; }   /* (the single-core package: unavailable) */
-        cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n);
+        cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off || cr_c1_barred ? "" : " \267 restart", n);
         break;
     case O_OUTPUT: cu_cpy(d, v ? "Clean" : "Classic", n); break;
     case O_VERSION: cu_version_text(d, CR_VERSION, n); break;
@@ -1137,6 +1191,10 @@ static struct {
                                            * (Ratchet, Condition, Voicing); the first whenever it opens */
     uint8_t mlatch, mkill;                /* bit cr_mod_t: latched by LOCK; toggled off by this press (its release
                                            * does nothing) */
+    uint32_t kpend;                       /* key bits debounced down and waiting for their velocity (cu_scan_keys) */
+    uint32_t kpend_t0[CU_NKEY];           /* .. since (cu_now) */
+    uint8_t ctx_vel;                      /* the keys' recent velocity (0: none yet): what a key without the converter
+                                           * plays at (docs/VELOCITY.md "the top row") */
     uint8_t key_note[CU_NKEY];            /* root keys (the Full keyboard: every key): note + 1 sent; 0xFF: the
                                            * layer's / a picker's; 0: not pressed, or pressed as a chord key */
     int8_t octave;
@@ -1220,6 +1278,31 @@ static uint32_t cu_now(void) { return fm1_ms; }
 static inline int cr_erase_near(void)
 {
     return cr_parts_busy() || cr_snap.voices || cr_snap.pending || (uint32_t)(cu_now() - cu.last_input) < 2000u;
+}
+
+/* the keys' aftertouch, every 5 ms (cr_ui_input and the pump): the highest pressure among the held keys that play
+ * (cr_sense.c cr_sense_at), posted to the engine when it changes (CRE_AT: both parts, channel pressure out) */
+static void cu_touch_poll(void)
+{
+#ifdef CR_SENSE_KEYS
+    static uint32_t last_ms;
+    static uint8_t sent;
+    uint32_t now = cu_now(), k, v = 0;
+    if (now - last_ms < 5u)
+        return;
+    last_ms = now;
+    if (cs.touch == CR_TOUCH_VEL_AT) {
+        cr_sense_pressure_poll(now, cs.at_sens);
+        for (k = 0; k < CU_NKEY; k++)
+            if (((CR_SENSE_KEYS >> k) & 1u) && ((cu.kheld >> k) & 1u) && cu.key_note[k] && cu.key_note[k] != 0xFFu &&
+                cr_sense_at[k] > v)
+                v = cr_sense_at[k];
+    }
+    if (v != sent) {
+        sent = (uint8_t)v;
+        cr_post(CRE_AT, 0, 0, (int32_t)v);
+    }
+#endif
 }
 /* the Full keyboard's split point is a KEY: F4, the second F (key 12: F3..E4 left, F4..G5 right; the owner's,
  * 2026-10-11), fixed: the stored split point (cs.split, OPT + KNOB 1) is a pitch class and stays the Chords layout's,
@@ -2820,8 +2903,9 @@ static void cu_home_tap(void)
         cs.view = (uint8_t)((cs.view + 1u) % V_N);
 }
 
-/* HOME held CU_HOME_HOLD_MS (alone): the view menu, a picker (L_VIEW): Chord .. Scope by SELECT / the white roots, the
- * last line "Lock: On / Off" (KNOB 1, or the sixth white root); OCT+ ok, OCT- / HOME back. Not over the naming page */
+/* HOME held CU_HOME_HOLD_MS (alone): the view menu, a picker (L_VIEW): Chord .. Geek Out 2 by SELECT / the white roots,
+ * the last line "Lock: On / Off" (KNOB 1, or the seventh white root, C5); OCT+ ok, OCT- / HOME back. Not over the
+ * naming page */
 #define CU_HOME_HOLD_MS 600u
 static void cu_view_menu(void)
 {
@@ -2855,10 +2939,12 @@ static void cu_reset(void)
     cr_settings_reset();
 #endif
     cu.opt_sel = O_STYLE;
-    cu_message(cr_c1_off && !CR_SINGLE_CORE ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core was Off at
-                                                   * this power-on: On, the default since 0.22, is saved, the core
-                                                   * starts at the next) */
-    cu_trace("options: settings reset%s\n", cr_c1_off && !CR_SINGLE_CORE ? " (Dual Core starts at the restart)" : "");
+    cu_message(cr_c1_off && cs.dualcore && !CR_SINGLE_CORE ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core
+                                                   * was Off at this power-on: On, the default since 0.22, is saved,
+                                                   * the core starts at the next; but not in a power-on that kept
+                                                   * core 1 off after a crash beside it: Off is saved, cr_settings.c
+                                                   * crs_dc_bar) */
+    cu_trace("options: settings reset%s\n", cr_c1_off && cs.dualcore && !CR_SINGLE_CORE ? " (Dual Core starts at the restart)" : "");
 }
 static void cu_oct_tap(uint32_t b)
 {
@@ -3924,6 +4010,30 @@ static int cu_layer_keys(uint32_t l)
 #ifndef CU_KEY_T0
 #define CU_KEY_T0(k) fm1_in.note_t0[k]             /* the first scan that saw key k closed (hal/fm1_input.h) */
 #endif
+/* Key velocity (cr_sense.c; docs/VELOCITY.md). With Options > Key Touch Dynamic (or Velocity + Aftertouch), a key with
+ * the converter (CR_SENSE_KEYS) that plays a note waits, once debounced, for its velocity (cu_scan_keys: cu.kpend;
+ * 8.8 ms after the touch sample, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
+ * mod.c cr_touch_gain); a key without it plays at the keys' recent velocity (cu.ctx_vel), else at Options >
+ * Velocity. Fixed: every key at Options > Velocity, as before. */
+#ifndef CR_SENSE_KEYS                              /* (the emulator, the tests: no analog rows) */
+#define CR_SENSE_KEYS 0u
+static volatile uint16_t cr_sense_land[CU_NKEY];
+static uint32_t cr_sense_take(uint32_t k) { (void)k; return 0; }
+#endif
+#define CU_VEL_WAIT_MS 12u
+static uint8_t cu_press_vel;                       /* the pending key's velocity, for cu_key_press (0: none) */
+#define CU_KEY_SENSED(k) (cs.touch && ((CR_SENSE_KEYS >> (k)) & 1u) && ((k) >= CU_ROOT0 || cs.kbd_full))
+static uint32_t cu_key_vel(uint32_t k)
+{
+    uint32_t v = cu_press_vel;
+    if (!cs.touch)
+        return cs.vel;                             /* Key Touch Fixed: Options > Velocity, as before */
+    if (!v && !CU_KEY_SENSED(k))
+        v = cu.ctx_vel;
+    if (!v)
+        return cs.vel;
+    return v < 1u ? 1u : v > 127u ? 127u : v;
+}
 static void cu_key_press(uint32_t k)
 {
     uint32_t l;
@@ -3978,7 +4088,7 @@ static void cu_key_press(uint32_t k)
         int32_t n = 53 + (int32_t)k + 12 * cu.octave;
         n = n < 0 ? 0 : n > 127 ? 127 : n;
         cr_klat_post(CU_KEY_T0(k));                /* (78 PEAK: the key's way to the engine, timed) */
-        cr_post(CRE_KEY, (uint32_t)n, cs.vel, 1);
+        cr_post(CRE_KEY, (uint32_t)n, cu_key_vel(k), 1);
         cu.key_note[k] = (uint8_t)(n + 1);
     }
 }
@@ -3986,6 +4096,7 @@ static void cu_key_press(uint32_t k)
 static void cu_key_release(uint32_t k)
 {
     cu.kheld &= ~(1u << k);
+    cr_sense_land[k] = 0;
     if (k == CU_KEY_LOCK && !cu.key_note[k] && !((cu.kpick >> k) & 1u)) {
         if (cu.b3_pend) {                          /* let go before the hold time, nothing else pressed: the tap */
             cu.b3_pend = 0;
@@ -4667,16 +4778,43 @@ static void cu_calib_screen(cr_screen_t *s)
  * redraw). ne: the press edges taken, km: the keys down */
 static void cu_scan_keys(uint32_t ne, uint32_t km)
 {
-    uint32_t k;
+    uint32_t k, now = cu_now();
     for (k = 0; k < CU_NKEY; k++) {
         uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
         if (was && (e || !is))
             cu_key_release(k);
     }
+    for (k = 0; k < CU_NKEY; k++) {                /* the keys waiting for their velocity: play when it is there */
+        uint32_t bit = 1u << k, v;
+        if (!(cu.kpend & bit))
+            continue;
+        v = cr_sense_take(k);
+        if (!v && now - cu.kpend_t0[k] < CU_VEL_WAIT_MS)
+            continue;
+        cu.kpend &= ~bit;
+        cr_sense_land[k] = 0;
+        if (v)
+            cu.ctx_vel = (uint8_t)(cu.ctx_vel ? (cu.ctx_vel * 3u + v + 2u) / 4u : v);
+        cu_press_vel = (uint8_t)v;
+        cu_key_press(k);
+        cu_press_vel = 0;
+        if (!((km >> k) & 1u))
+            cu_key_release(k);
+    }
     for (k = 0; k < CU_NKEY; k++) {
         uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
-        if (!was && (is || e)) {
+        if (!was && (is || e) && !((cu.kpend >> k) & 1u)) {
+            if (CU_KEY_SENSED(k) && !cr_sense_land[k]) {   /* (the velocity comes 7 .. 10 ms after the debounce) */
+                cu.kpend |= 1u << k;
+                cu.kpend_t0[k] = now;
+                continue;
+            }
+            cu_press_vel = (uint8_t)cr_sense_take(k);
+            cr_sense_land[k] = 0;
+            if (cu_press_vel)
+                cu.ctx_vel = (uint8_t)(cu.ctx_vel ? (cu.ctx_vel * 3u + cu_press_vel + 2u) / 4u : cu_press_vel);
             cu_key_press(k);
+            cu_press_vel = 0;
             if (!is)
                 cu_key_release(k);
         }
@@ -4729,6 +4867,7 @@ static void cr_ui_pump(void)
         uint32_t ne = fm1_input_note_edges();
         cu_scan_keys(ne, fm1_in.notes);
         cu_scan_step();
+        cu_touch_poll();
         cu_pumped++;
     }
     CU_PUMP_END();
@@ -4850,6 +4989,7 @@ static void cr_ui_input(void)
         cu_lock_menu();
     }
     cu_scan_step();
+    cu_touch_poll();
     for (b = 0; b < NE; b++)
         if ((s = panel_enc(b)) != 0)
             cu_knob(b, s);
@@ -6092,9 +6232,20 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, cs.sixth_up ? "6 + 7: the 6th on top, a 13th" : "6 + 7: the 6th under the 7th", sizeof s->label);
     else if (cu.opt_sel == O_NAMES)                /* (docs/CHORD-NAMES.md: the same notes under either name) */
         cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
+    else if (cu.opt_sel == O_VERSION) {            /* the unit's ID under the version (3y66: several FM-1s on one
+                                                    * computer, fm1_install.py --unit) */
+        cu_cpy(s->label, cr_unit_id[0] ? "unit ID " : "no unit ID", sizeof s->label);
+        cu_cat(s->label, cr_unit_id, sizeof s->label);
+    }
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
-    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: On the default since 0.22; never started /
+    else if (cu.opt_sel == O_DUALCORE && !CR_SINGLE_CORE && !cs.dualcore && cr_c1_barred) {   /* (cr_cpu1.h: kept
+                                                    * off after a crash or a hang beside core 1, or given up this
+                                                    * session) */
+        static const char *const BAR[4] = {"", "off after a crash on 2 cores", "off after a hang on 2 cores",
+                                           "off: the 2nd core gave up"};
+        cu_cpy(s->label, BAR[cr_c1_barred & 3u], sizeof s->label);
+    } else if (cu.opt_sel == O_DUALCORE)           /* (docs/DUALCORE.md: On the default since 0.22; never started /
                                                     * stopped live) */
         cu_cpy(s->label, CR_SINGLE_CORE ? "the single core package"
                          : cs.dualcore != !cr_c1_off ? "takes effect after a restart"
@@ -6265,6 +6416,97 @@ static int cu_arp_layer(uint32_t now)
     return cu_arp_run(&a, now, now - cu.perf_t0 >= CU_PERF_PICK_MS);
 }
 
+/* GEEK OUT 2 (the owner, 2026-10-14): four meters, the oscillator mixer's tall bars as a read-out (cr_draw.c cr_p_tall,
+ * tall 2) under the editor's title line with the battery: CORE 0, the audio ISR's share of a half over the last second
+ * (audio.c cpu_window: its render, less its waits for core 1); CORE 1, core 1's busy time over the same second (cr_cpu1.h
+ * c1_avg_us / c1_max_us: the bass part's job with its share of P5's chord voices, and the reverb, 3y46 / 3y50; not
+ * running: dim, cr_c1_name); RAM and POOL in use (app.ld, link-time: build.sh's size line). The core
+ * bars glide a quarter of the way to the second's figure each frame (Motion Off: at once; from 0 on coming to the
+ * view), the second's peak a tick. The emulator has no link map, and its ISR's wall time is the host's: its own
+ * CR_MEM_USED and CR_CORE0_US (emu_firmware.h) */
+#ifndef CR_CORE0_US
+#define CR_CORE0_US(avg, max) ((avg) = cpu_last.avg_us, (max) = cpu_last.max_us)
+#endif
+#ifndef CR_MEM_USED
+extern uint32_t _bss_end[], _pool_start[], _pool_end[];          /* app.ld (main.c's) */
+#define CR_MEM_USED(r, p) ((r) = (uint32_t)(uintptr_t)_bss_end - 0x01C08000u, \
+                           (p) = (uint32_t)(uintptr_t)_pool_end - (uint32_t)(uintptr_t)_pool_start)   /* (RAM's origin) */
+#endif
+#define CU_RAM_BYTES 98304u                       /* app.ld: RAM 96 KiB, POOL 0x54000 */
+#define CU_POOL_BYTES 0x54000u
+static void cu_g2_cell(cr_cell_t *c, const char *label, uint32_t pct, uint32_t peak, uint32_t v100)
+{
+    char b[8];
+    c->flags = CR_CF_ON | CR_CF_PCT;
+    c->glyph = CR_G_BAR;
+    cu_cpy(c->label, label, sizeof c->label);
+    c->pct = (uint8_t)(pct > 255u ? 255u : pct);
+    c->pct2 = (uint8_t)(peak > 255u ? 255u : peak);
+    cu_int(b, (int32_t)v100, 0, sizeof b);
+    cu_cat(b, "%", sizeof b);
+    cu_cpy(c->value, b, sizeof c->value);
+}
+static void cu_geek2(cr_screen_t *s, uint32_t now)
+{
+    static uint32_t shown[2], seen;              /* the core bars as shown (Q12 of a half), the last frame here */
+    uint32_t us[2], pk[2], k, ram, pool, dual = 0;
+    CR_CORE0_US(us[0], pk[0]);
+    us[1] = pk[1] = 0;
+#if CR_CPU1
+    if (cr_dbg.c1 == C1_OK) {
+        dual = 1;
+        us[0] = us[0] > cr_dbg.avg_us[CRP_WAIT] ? us[0] - cr_dbg.avg_us[CRP_WAIT] : 0u;
+        pk[0] = pk[0] > cr_dbg.max_us[CRP_WAIT] ? pk[0] - cr_dbg.max_us[CRP_WAIT] : 0u;
+        us[1] = cr_dbg.c1_avg_us;                /* (its voices and the reverb: not CRP_PART1 alone, the voices') */
+        pk[1] = cr_dbg.c1_max_us;
+    }
+#endif
+    if (now - seen > 200u)                       /* (back on the view: the bars rise from 0) */
+        shown[0] = shown[1] = 0;
+    seen = now;
+    for (k = 0; k < 2u; k++) {
+        uint32_t t = us[k] >= CPU_HALF_US ? 4096u : us[k] * 4096u / CPU_HALF_US;
+        int32_t d = (int32_t)t - (int32_t)shown[k];
+        shown[k] = cr_motion == CR_MOTION_OFF || (d > -8 && d < 8) ? t : (uint32_t)((int32_t)shown[k] + d / 4);
+    }
+    s->kind = CR_K_EDIT8;
+    s->header = 0;                               /* (its own title line, as the editor's) */
+    s->ring_on = 0;
+    s->tall = 2;
+    s->n_rows = 1;
+    s->active = 0;
+    s->batt = (uint8_t)cu_batt();
+    cu_cpy(s->title, "GEEK OUT 2", sizeof s->title);
+    s->title_col = CR_COL_WHITE;
+    cu_cpy(s->page, dual ? "2 cores" : "1 core", sizeof s->page);
+    cu_g2_cell(&s->cell[0][0], "CORE 0", shown[0] >> 4, pk[0] * 256u / CPU_HALF_US,
+               (us[0] * 100u + CPU_HALF_US / 2u) / CPU_HALF_US);
+    if (dual)
+        cu_g2_cell(&s->cell[0][1], "CORE 1", shown[1] >> 4, pk[1] * 256u / CPU_HALF_US,
+                   (us[1] * 100u + CPU_HALF_US / 2u) / CPU_HALF_US);
+    else {                                       /* one core: core 1's word, in the grey */
+        cu_g2_cell(&s->cell[0][1], "CORE 1", 0, 0, 0);
+        s->cell[0][1].flags |= CR_CF_DIM;
+#if CR_CPU1
+        cu_cpy(s->cell[0][1].value, cr_c1_name(), sizeof s->cell[0][1].value);
+#else
+        cu_cpy(s->cell[0][1].value, "off", sizeof s->cell[0][1].value);
+#endif
+    }
+    CR_MEM_USED(ram, pool);
+    if (ram == 0xFFFFFFFFu) {                    /* (no link map: the emulator) */
+        for (k = 2; k < 4u; k++) {
+            cu_g2_cell(&s->cell[0][k], k == 2u ? "RAM" : "POOL", 0, 0, 0);
+            s->cell[0][k].flags |= CR_CF_DIM;
+            cu_cpy(s->cell[0][k].value, "n/a", sizeof s->cell[0][k].value);
+        }
+        return;
+    }
+    cu_g2_cell(&s->cell[0][2], "RAM", ram * 256u / CU_RAM_BYTES, 0, (ram * 100u + CU_RAM_BYTES / 2u) / CU_RAM_BYTES);
+    cu_g2_cell(&s->cell[0][3], "POOL", pool * 256u / CU_POOL_BYTES, 0,
+               (pool * 100u + CU_POOL_BYTES / 2u) / CU_POOL_BYTES);
+}
+
 static void cu_view_screen(cr_screen_t *s, uint32_t now)
 {
     const cr_snap_t *sn = &cr_snap;
@@ -6288,6 +6530,9 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
         return;
     }
     switch (cs.view) {
+    case V_GEEK2:                                 /* four meters: the two cores, RAM, POOL */
+        cu_geek2(s, now);
+        break;
     case V_SCOPE:                                 /* the sound itself: one bold line, the chord small on top */
         s->kind = CR_K_SCOPE;
         s->col = CR_COL_WHITE;
@@ -6372,6 +6617,10 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
                 cu_cat(s->lines[3].t, " \267 stk ", sizeof s->lines[3].t);
                 cu_int(b, (int32_t)cr_dbg.c1_stack, 0, sizeof b);
                 cu_cat(s->lines[3].t, b, sizeof s->lines[3].t);
+            }
+            if (cr_dbg.c1 == C1_OFF && cr_c1_barred) {         /* kept off: why ("c1 off \267 after a crash") */
+                cu_cat(s->lines[3].t, " \267 ", sizeof s->lines[3].t);
+                cu_cat(s->lines[3].t, cr_c1_bar_name(), sizeof s->lines[3].t);
             }
             if (cr_dbg.c1 == C1_GAVE_UP)                       /* the way out: the switch (docs/DUALCORE.md) */
                 cu_cat(s->lines[3].t, " \267 Options>Dual Core", sizeof s->lines[3].t);   /* (30 chars of the 31 a line holds) */
@@ -6790,6 +7039,23 @@ static void cr_ui_frame(void)                      /* after the scan: the engine
 #if CR_CPU1
     if (cr_dbg.c1 == C1_OK)
         cr_dbg.c1_stack = cr_c1_stack_used();      /* core 1's stack high-water mark (its C1MK fill) */
+    {   /* core 1 kept off at boot (cr_cpu1.h cr_c1_bar_boot): told once, after the splash; given up this session
+         * (cr_c1_give_up): Dual Core Off, saved (a restart keeps one core either way: the .noinit bar) */
+        static uint8_t cu_c1_told, cu_c1_seen;
+        static const char *const MSG[4] = {"", "dual core off: crash", "dual core off: hang", "dual core off: gave up"};
+        if (cr_dbg.c1_fallback && !cu_c1_seen && !CR_C1_INJECTED()) {   /* (an injected failure, a CR_CORE1_TEST
+                                                    * build's 75 CORE1_TEST, is not the unit's: nothing saved) */
+            cu_c1_seen = cu_c1_told = 1;
+            cr_c1_barred = C1_BAR_GAVE_UP;
+#if CR_HAVE_SETTINGS
+            cr_settings_dc_off();
+#endif
+            cu_message(MSG[C1_BAR_GAVE_UP], CR_COL_RED);
+        } else if (cr_c1_barred && !cu_c1_told && cu_now() - cu_boot_ms >= CR_SPLASH_MS) {
+            cu_c1_told = 1;
+            cu_message(MSG[cr_c1_barred & 3u], CR_COL_RED);
+        }
+    }
 #endif
     if (cpk.on && cu.lock != L_EDIT)               /* the picker closed another way (OPT, SAVE, BASS + EDIT): kept */
         cu_pick_end(1);

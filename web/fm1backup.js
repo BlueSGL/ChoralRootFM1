@@ -220,12 +220,25 @@ export async function restoreBackup(request, file, onProgress = () => {}, opts =
   }
   return { ...archive, restored, skipped };
 }
-// INFO -> {version, family}; null when the firmware does not answer (stock, an update loader)
+// the unit's ID in ChoralRoot's INFO reply (cr_backup.c CRB_INFO, docs/INSTALL-COMPAT.md "Several FM-1s"): after the
+// version's NUL, Felucca's 7 bytes (no engines), the tagged fields (tag, length, value): 42 01 03, 43 01 03, then 49 08
+// and the ID's 8 hex digits -> "A1B2C3D4"; null without that tag (a ChoralRoot from before it, SAFE MODE)
+export function unitIdOf(a) {
+  let p = a.indexOf(0);
+  if (p < 0) return null;
+  for (p += 8; p + 2 <= a.length && p + 2 + a[p + 1] <= a.length; p += 2 + a[p + 1]) {
+    const v = String.fromCharCode(...a.slice(p + 2, p + 2 + a[p + 1]));
+    if (a[p] === 0x49 && /^[0-9A-F]{8}$/.test(v)) return v;
+  }
+  return null;
+}
+// INFO -> {version, family, unitId (ChoralRoot's, or null)}; null when the firmware does not answer (stock, an update loader)
 export async function deviceInfo(request) {
   let a;
   try { a = await request([BACKUP_CMD.INFO, []], { timeout: 1500, retries: 0 }); } catch (_) { return null; }
   const end = a.indexOf(0), version = String.fromCharCode(...a.slice(0, end < 0 ? a.length : end));
-  return { version, family: backupFamily(version) };
+  const family = backupFamily(version);
+  return { version, family, unitId: family === "choralroot" ? unitIdOf(a) : null };
 }
 // ChoralRoot: restart after a restore, so everything restored loads from flash (its settings wait for it)
 export async function restartDevice(request) {

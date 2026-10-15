@@ -147,6 +147,13 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+/* the key sensing's hooks into the scan (cr_sense.c, below): velocity from the analog rows (docs/VELOCITY.md) */
+static void cr_sense_hook(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven);
+static int cr_sense_drive_hook(uint32_t col, uint32_t rowbit);
+static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit);
+#define FM1_INPUT_ANALOG(c, r, v, d) cr_sense_hook(c, r, v, d)
+#define FM1_INPUT_DRIVE(c, r) cr_sense_drive_hook(c, r)
+#define FM1_INPUT_LED_OK(c, r) cr_sense_led_ok_hook(c, r)
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
@@ -167,6 +174,7 @@
 #include "engines.c"             /* dsp.c, the eng_*.c files */
 #include "params.c"
 #include "mod.c"
+#include "cr_sense.c"             /* the keys' velocity and pressure from their contact resistance (Velo's sensing) */
 #include "voice.c"
 #include "slicer.c"
 #define mix_block fx_mix_block   /* fx.c's mix; audio.c gets ChoralRoot's (below) */
@@ -225,6 +233,7 @@ static void mix_block(int32_t *out, uint32_t n)   /* the audio ISR's block: the 
 #include "cr_draw.c"             /* the screens (cr_screen.h) */
 #include "cr_anim.c"
 #if FELUCCA_FLASH                /* storage before the sounds: upreset.c reads / writes its banks */
+#define FL_UID 1                 /* fm1_flash.h fl_uid_ram: the flash's unique ID, the unit's ID (cr_shim.c persist_boot) */
 #include "fm1_flash.h"
 static int cr_erase_near(void);  /* cr_ui.c: a voice is active or an input came within 2 s (78 PEAK erases_near) */
 #define ST_NEAR_NOW() cr_erase_near()

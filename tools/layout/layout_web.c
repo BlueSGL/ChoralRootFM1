@@ -156,7 +156,7 @@ LAY_EXPORT uint32_t lay_snapshot_bytes(void) { lay_boot(); return lay_snap ? lay
 /* ------------------------------------------------------------ the built-in tables --- */
 static const char *const LAY_FMT[] = {"int", "pct", "bipct", "time", "lfohz", "cutoff", "db", "semi", "enum", "bpm",
                                       "note", "onoff", "oct", "steps", "ofs", "fmnote", "fmfrq", "timei", "fix2", "inti"};
-static const char *const LAY_STYPE[] = {"platform", "stack", "columns", "mixer", "edit", "page", "free"};   /* CE_S_* */
+static const char *const LAY_STYPE[] = {"platform", "stack", "columns", "mixer", "edit", "page", "expr", "free"};   /* CE_S_* */
 static const char *const LAY_BAND[] = {"none", "env", "filter", "dx", "cz", "algo", "ade2"};         /* CR_W_* */
 static const char *const LAY_STYLE[] = {"rule", "big", "ratio", "harm", "detune", "num", "val", "text", "knob", "bar",
                                         "waveph"};                                                    /* ENG_C_* */
@@ -494,7 +494,7 @@ static const char *lay_catalog_of(uint32_t e)
             }
             j_key("pages");                        /* the deep pages behind the screen, in lane order */
             j_open('[');
-            for (i = 0; sc.type != CE_S_PLAT && i < sc.n; i++)
+            for (i = 0; sc.type != CE_S_PLAT && sc.type != CE_S_EXPR && i < sc.n; i++)   /* (EXPR: no deep page) */
                 j_int(sc.pg[i]);
             j_close(']');
             j_key("lanes");

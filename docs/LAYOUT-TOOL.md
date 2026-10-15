@@ -125,7 +125,8 @@ design exactly as the unit would, and the knobs and SELECT are the unit's. Two w
 What neither can express is flagged **"not buildable yet"** and today's screen is shown in its place: a stack or a
 screen of more than two lanes in a changed group, a part parameter moved onto an engine page, a changed platform
 screen (FX, MIX, a platform MOD), a lane title or band the in-place way cannot change (a note). A group with free
-screens only keeps today's tables, unseen.
+screens only keeps today's tables, unseen. The MOD group's last screen, EXPR (0.22, type `expr`: the sound's velocity
+and aftertouch routings, no deep page), is such a stack: a plan always flags it.
 
 **Free screens: the firmware's own kind.** `packDesign` packs a design's free screens of OSC .. MOD into exactly the
 records the generator compiles (`packFree`: an element 14 B, a screen 38 B, one string pool; the same texts: a frame's
@@ -134,7 +135,8 @@ first; for `p5-panel.json` byte for byte the compiled table, tested against `lay
 through `cr_layout.c`'s preview-only `cr_layout_hook`, so the unit's own editor and renderer show them: `cr_edit.c`
 CE_S_FREE (the lanes, KNOB 1..4, SELECT, the hot mark, the knob's step and acceleration) and `cr_draw.c` CR_K_FREE (the
 p5 look, "The p5 style"). The preview of a free screen IS the unit's picture: the loaded panel and the compiled one
-give the same 75 frames. A design whose classic tables are not the built-in ones (a plan, a moved column) carries a
+give the same 75 frames. MOD's EXPR screen (0.22) follows a design's MOD screens, on the unit and in the preview;
+it is the platform's and never in a design. A design whose classic tables are not the built-in ones (a plan, a moved column) carries a
 copy of the built-in pages after its own, fenced off by a section, for its free screens' parameters. What the unit
 cannot show as designed is marked "not buildable yet" with its reason: a classic screen beside free screens in one
 group (the editor shows the group's free screens), a free screen in FX or MIX, and everything the generator refuses
@@ -216,8 +218,8 @@ new sizes (p5: knob 56 x 64 with a dial of 36, led 40 x 32, switch 56 x 64), not
 The owner (2026-10-14): "For the prophet 5, I would like the sound editor UI to better resemble the real prophet 5
 interface." and "I'd like update glyph designs to match with the Prophet 5 knobs and layout, lets do mockups and
 Designer pages first." `"style": "p5"` composes a free screen's elements as the Prophet-5's panel. It is the
-firmware's look (`cr_draw.c` CR_K_FREE, ported in 3y68 from the tool's first composition, `freeOps` / `p5Op`, which
-went away in 3y69): the only one the firmware draws, so a flat design is previewed in it too and is "not buildable":
+firmware's look (`cr_draw.c` CR_K_FREE, ported in 3y86 from the tool's first composition, `freeOps` / `p5Op`, which
+went away in 3y87): the only one the firmware draws, so a flat design is previewed in it too and is "not buildable":
 
 - **frame**: a rounded outline (`r`, default 3; 1 px, `line` or its colour), its text in capitals, 10 px bold `mid`,
   centred in the top border on a `bg` block, the border showing either side: the panel's section titles. A frame's
@@ -280,7 +282,7 @@ node tools/layout/render_sheet.mjs design/layouts/designs/p5-panel.json design/c
 ```
 
 (any design: every screen x lane at 2x with its caption, through the firmware's editor and renderer; it prints each
-tile's lint). It is compiled into the firmware (3y68): the unit shows these very pictures. The unit's own, walked on
+tile's lint). It is compiled into the firmware (3y86): the unit shows these very pictures. The unit's own, walked on
 the browser emulator by its panel: `design/choralroot-fm1-p5-panel-emulator.png`, made by `node
 tools/layout/emu_sheet.mjs design/choralroot-fm1-p5-panel-emulator.png` (the same tiling).
 
@@ -384,7 +386,7 @@ compares, so they cannot rot: after a change to an engine's pages, run the dump 
     {"group": 1, "name": "FILT", "button": "SEL", "screens": [
       {"screen": 0,
        "kind": "edit8",               the renderer's screen kind: "edit8" (two rows under a band) or "stack"
-       "type": "edit",                how the editor made it: platform, stack, columns, mixer, edit, page
+       "type": "edit",                how the editor made it: platform, stack, columns, mixer, edit, page, expr
        "band": "filter",              the wide band: none, env, filter, dx, cz, algo, ade2
        "tall": false, "header": false,
        "plan": 3, "plan_band": "..",  only when the engine has a screen plan (FM TONE): its index, its band
@@ -435,8 +437,8 @@ design, and the per-engine table that says which patch parameter a (page, column
 - **the frames equal the emulator's.** The browser emulator's module (`build/emu-web/choralroot.wasm`: the same
   firmware without the layout API or the hook) is driven by its panel alone (GLO + PRESETS to the engine, EDIT, the
   group buttons, SELECT) through every screen x lane of the three engines, and its LCD (RGB565) is compared with
-  `lay_fb` pixel for pixel: 88 frames, identical; and one more per engine after a knob turn, the hot cell included.
-  P5's are its compiled panel's since 3y68 (`lay_layouts` on: its 19 free lanes, FX and MIX; REV after KNOB 1 +1);
+  `lay_fb` pixel for pixel: 94 frames, identical; and one more per engine after a knob turn, the hot cell included.
+  P5's are its compiled panel's since 3y86 (`lay_layouts` on: its 19 free lanes, MOD's EXPR after them, FX and MIX; REV after KNOB 1 +1);
   This is the cheapest exact reference: `tests/run_cr_draw.sh`'s PPMs are drawn from mock-up states, not from the
   editor on a sound, so they have no frame for the same state;
 - the lint on every screen x lane of every engine: no text off the screen or overlapping (cut texts are printed as
@@ -466,7 +468,7 @@ design, and the per-engine table that says which patch parameter a (page, column
   the grid** (drawn by the firmware), the export equals the model and validates, the contact sheet has today's and the
   design's tiles, the shipped p5 panel opens on the firmware's free screen and is "buildable today", a copied element
   pasted on another screen is in the export with a new id, selected, in no lane, one undo step.
-- **a design's free screens are the unit's** (7, 3y68 and 3y69): `packDesign`'s free half of `p5-panel.json` is the
+- **a design's free screens are the unit's** (7, 3y86 and 3y87): `packDesign`'s free half of `p5-panel.json` is the
   compiled table byte for byte (1784 B, against `lay_compiled`); loaded by `lay_load`, every screen x lane and every
   bound slot turned (its element hot; REV both ways): 75 frames, each identical to the compiled panel's with
   `lay_layouts` on (and those equal the browser emulator's, 3); a flat design, a band, an element off the grid: "not
@@ -501,7 +503,7 @@ editor uses buttons, SELECT and the knobs only, and the keys play; a design cann
 2. **This viewer.** The preview module, the read-only page, the seed files, the tests.
 3. **Editing classic pages, and export** (done): the designer; `lay_load` shows the edited layout at once through
    the real editor; export the design JSON.
-4. **Free pages** (done, 3y66 .. 3y69): the element vocabulary (frame, label, knob, switch, led, bar, glyph, band),
+4. **Free pages** (done, 3y84 .. 3y87): the element vocabulary (frame, label, knob, switch, led, bar, glyph, band),
    lanes of up to four bound elements (the four knobs + SELECT grammar; no key ever: rule 2), the title line as the
    shared header on every screen (rule 1), "not buildable yet" flags instead of refusals (rule 3), the p5 style; the
    firmware's free screens (CE_S_FREE, CR_K_FREE) and the generator; the designer on the firmware's own renderer. P5's
@@ -517,7 +519,7 @@ In every step the layout is compiled into the build (rule 4).
 ## Step 4, the firmware: what was built
 
 The owner, 2026-10-15, signing off his P5 panel: "I made my final changes and reviewed all the knob lanes and updated
-them. I'm happy with this layout, so good to build it." Built in three stages on lay-5 (3y67, 3y68, 3y69) from a plan
+them. I'm happy with this layout, so good to build it." Built in three stages on lay-5 (3y85, 3y86, 3y87) from a plan
 written that day; the design is `design/layouts/designs/p5-panel.json`: eight free screens over OSC .. MOD (73
 elements: 29 knobs, 26 leds, 10 frames, 7 labels, 1 switch; 19 lanes; all 56 P5 parameters), FX and MIX the
 platform's, style p5.
@@ -544,7 +546,8 @@ platform's, style p5.
 - **The editor** (`cr_edit.c` CE_S_FREE): for an engine with a compiled layout, OSC .. MOD are its screens; a lane's
   slots become the editor's refs (`CE_R_DEEP` page, col; `CE_R_TRK` a part parameter), so the knobs (step,
   acceleration, OPT snap), SHIFT, the hot mark, `cu_edited` and the blob are the edit8 screens' unchanged; an empty
-  slot does nothing; FX and MIX stay the platform's. `ce_cell_free` adds the label, an led's on and a switch's position
+  slot does nothing; MOD's last screen is still EXPR (0.22, `CE_S_EXPR`: after the layout's MOD screens, as on every
+  engine; a design never holds it); FX and MIX stay the platform's. `ce_cell_free` adds the label, an led's on and a switch's position
   (`pct2`); `cr_screen_t` has `fl_eng`, `fl_scr`.
 - **The renderer** (`cr_draw.c` CR_K_FREE): the title line, then the elements in the table's order (frames first): the
   rounded frame with its title in the border, the p5 knob (11 ticks, the face, the pointer, the value inside or on the
@@ -568,7 +571,7 @@ changed no device byte (`./build.sh` before and after: sha256 of `build/choralro
 
 `tests/gen_layout_test.py` (the generator on the shipped and 46 broken designs, its rules = validateDesign's with and
 without `build`), `tests/cr_layout_test.c` (the header as C), `tests/cr_p5panel_test.c` (the editor on the panel: every
-slot, empty slots inert, SELECT), `tests/run_cr_draw.sh` (22 free pictures hashed in `tests/cr_free_golden.txt`, every
+slot, empty slots inert, SELECT, MOD's EXPR after the panel), `tests/run_cr_draw.sh` (22 free pictures hashed in `tests/cr_free_golden.txt`, every
 slot's partial compose equal to a whole redraw, the cost), `web/test_layout.mjs` 3 (the browser emulator equal to the
 module on P5's panel) and 7 (the packed records = the compiled ones; the loaded design's 75 frames = the compiled
 panel's), `tools/emu/test_cr.sh` (the panel's screens, CUTOFF on KNOB 2 of FILTER).

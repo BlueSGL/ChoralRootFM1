@@ -78,7 +78,7 @@ want=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralro
 [ -n "${CR_VERSION:-}" ] && want=$(grep -a -m1 "^  version:" "$L" | sed -n "s/.* build '\(.*\)'$/\1/p")   # (a release build of the emulator)
 vo=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*options '\([^']*\)'.*/\1/p")
 vi=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*identity '\([^']*\)'.*/\1/p")
-[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 23 of 2[0-9] 'Version' value '$want'" "$L" &&
+[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 26 of 2[0-9] 'Version' value '$want'" "$L" &&
     ok "Options > Version '$vo' = the identity over SysEx '$vi' = the build's ($want): $OUT/cr_version.ppm" \
     || bad "the version: Options '$vo', identity '$vi', choralroot.c '$want'"
 lits=$(grep -n '"ChoralRoot [0-9]' firmware/src/*.c firmware/src/*.h firmware/hal/*.h tools/emu/*.c tools/emu/*.h tools/emu/web/*.c 2>/dev/null | grep -v '^firmware/src/choralroot.c:[0-9]*:#define FELUCCA_VERSION ')
@@ -858,6 +858,17 @@ set -- $lag
     || bad "lag: $2 of $1 detents drawn in the next frame, max $3 frames (EMU_UI_LOG=0: $L)"
 awk -v c="$4" -v s="$5" 'BEGIN { exit !(c <= 4.0 && s <= 4.0) }' && ok "UI frame of a detent: cutoff on FILTER max $4 M host instructions, OSC level on the stack max $5 M (<= 4 M, ~15 ms device)" \
     || bad "a detent's UI frame: cutoff $4 M, OSC level $5 M (> 4 M)"
+run cr_expr
+L="$OUT/cr_expr.log"
+has '^edit: group MOD screen 3 lane 1 part 0$' "$L" && has '^param: part 0 MOD AMT3 63 -> 51' "$L" &&
+    ok "EXPR on FM6: the MOD group's third screen; KNOB 3 on the unset VEL slot takes its default (AMT 63) then the turn: $OUT/cr_expr_fm6_vel.ppm" ||
+    bad "EXPR on FM6: $(grep -a '^param: part 0 MOD AMT3' "$L" | head -1)"
+has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD DST4 2 -> 3 (SHP)$' "$L" &&
+    ok "SELECT: the AT lane; KNOB 2 takes its default (DST CUT) then steps it to SHP: $OUT/cr_expr_fm6_at.ppm" ||
+    bad "EXPR AT lane: $(grep -a '^param: part 0 MOD DST4' "$L" | head -1)"
+[ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 39' "$L")" = 2 ] &&
+    ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid, one detent one unit" ||
+    bad "EXPR on the VA / FM TONE: $(grep -ac '^param: part 0 MOD AMT4' "$L") AMT4 lines"
 run cr_editor_map
 L="$OUT/cr_editor_map.log"
 has '^mod: ENV2 -> CUT +12 slot 1$' "$L" && ok "ENV held + KNOB 1 +2 on FILTER: mod: ENV2 -> CUT +12 slot 1 (ENV 2 by default): $OUT/cr_map_hot.ppm" || bad "ENV mapping: $(grep -m1 '^mod:' "$L")"
@@ -942,8 +953,8 @@ o=$(dv 'OFS C')
 [ "$o" = "1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100 " ] &&
     ok "FM TONE's OFS C (-1.00 .. +1.00, 0.01 a stored step: hi-res style): slow 0.01 a detent, quick 0.10; GLO held: whole numbers (1.00, 0.00, -1.00)" \
     || bad "OFS C: '$o' (want 1 2 3 4 14 24 34 44 54 64 74 84 94 100 0 -100)"
-[ "$(dv SPEED)" = "3200 6399 3200 1600 800 " ] &&
-    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along the speed list x 100, hundredths since FM TONE's ranges (16.00 -> 32.00 -> 63.99, the end; back 32.00 16.00 8.00)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
+[ "$(dv SPEED)" = "6399 6399 3200 1600 800 " ] &&
+    ok "FM TONE's LFO 1 SPEED (bipolar): GLO held snaps along the speed list x 100, hundredths since FM TONE's ranges (from the INIT's 32.00, the Digitone's: -> 63.99, the end, 63.99; back 32.00 16.00 8.00)" || bad "LFO SPEED under GLO: '$(dv SPEED)'"
 has '^sound: part 0 engine VA pos 1 LUSH PAD' "$L" && has '^sound: part 0 engine FM TONE pos 1 EP' "$L" &&
     ok "GLO + PRESETS still changes the engine (FM6 -> VA, VA -> FM TONE)" || bad "GLO + PRESETS: no engine change"
 
@@ -955,11 +966,11 @@ f=$(dv FREQ)
     ok "FREQ (0.00..127.00, from its top 127.00): slow detents 0.01 each, quick 6.35 (the range / 20); GLO held: 114.00 115.00 116.00 (whole numbers)" \
     || bad "FREQ: '$f' (want 12699 12698 12697 12062 11427 11400 11500 11600)"
 s=$(dv SPEED)
-[ "$s" = "800 -800 -1600 -3200 -6400 -6400 -3200 -1600 -800 800 1600 3200 6399 6399 6399 " ] &&
-    ok "LFO 1 SPEED (hi-res, min < 0): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
+[ "$s" = "1600 800 -800 -1600 -3200 -6400 -3200 -1600 -800 800 1600 3200 6399 6399 6399 " ] &&
+    ok "LFO 1 SPEED (hi-res, min < 0; from the INIT's 32.00): GLO held snaps along +-8.00 16.00 32.00 64.00 (the ends -64.00, +63.99)" \
     || bad "SPEED under GLO: '$s'"
 r=$(dv REL)
-[ "$r" = "63 64 70 76 82 88 94 100 106 112 118 124 127 112 96 112 " ] &&
+[ "$r" = "15 16 22 28 34 40 46 52 58 64 70 76 82 88 94 100 106 112 118 124 127 112 96 112 " ] &&
     has 'REL 124 -> 127 (INF)' "$L" && has 'REL 127 -> 112 (112)' "$L" && has 'REL 96 -> 112 (112)' "$L" &&
     ok "AMP REL (0..126 + INF, an integer since version 5): 1 slow, 6 quick to the end (127: INF); GLO held: the 16 grid 112 96, back 112: $OUT/cr_quad_hires_rel.ppm" \
     || bad "AMP REL: '$r'"
@@ -2299,9 +2310,14 @@ if [ "${p5b:-0}" -ge 1 ]; then
         ok "one core (EMU_C1=nostart): the chord part four voices; the UNISON bass ONE voice, and under it the chord three (four P5 voices on the one core)" ||
         bad "P5 on one core: the chord part's voices $(pv "$OUT/cr_p5_eight_one.log" 0)/ the bass part's $(pv "$OUT/cr_p5_eight_one.log" 1)"
     EMU_C1=hang "$EMU" --headless --script "$OUT/cr_p5_eight.txt" --wav "$OUT/cr_p5_eight_hang.wav" >"$OUT/cr_p5_eight_hang.log" 2>&1
-    cmp -s "$OUT/cr_p5_eight_hang.wav" "$OUT/cr_p5_eight_one.wav" &&
-        ok "core 1 never answering a job (EMU_C1=hang): given up in the first block, one core's rules and one core's WAV" ||
-        bad "EMU_C1=hang on P5: the WAV differs from one core's"
+    # (the give-up turns Dual Core Off and the settings save it once the unit is quiet after the last release: one
+    # erase, played as 45 ms of silence about 12.4 s in (docs/DUALCORE.md "The persistent fallback"; a fresh unit is
+    # On since 0.22): the WAVs are compared up to 12 s, and the save is asserted)
+    cmp -s -n 2116844 "$OUT/cr_p5_eight_hang.wav" "$OUT/cr_p5_eight_one.wav" &&
+        LC_ALL=C grep -aq '^  flash: .* settings saves 1 ' "$OUT/cr_p5_eight_hang.log" &&
+        LC_ALL=C grep -aq '^  settings: .* dualcore 0 ' "$OUT/cr_p5_eight_hang.log" &&
+        ok "core 1 never answering a job (EMU_C1=hang): given up in the first block, one core's rules and one core's WAV (the first 12 s), Dual Core Off saved" ||
+        bad "EMU_C1=hang on P5: the WAV differs from one core's in the first 12 s, or Dual Core Off was not saved"
 else
     bad "P5 on two cores: the shipped list has no program 111 (LAGOON BASS): name another UNISON program with a stack of four here"
 fi
@@ -2474,15 +2490,15 @@ d2=$(den "$OUT/cr_quad_ratiob_b2.ppm"); d16=$(den "$OUT/cr_quad_ratiob_b16.ppm")
 differ cr_quad_ratiob_b1 cr_quad_ratiob_b2 "GLO held (the editor's SHIFT): KNOB 4 steps B1, the denominator 2.00 (B2 kept): $OUT/cr_quad_ratiob_b2.ppm"
 silent_end cr_quad_ratiob
 
-echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 61 decays; PANIC ends a held one"
+echo "FM TONE's release INF: AMP REL 127 reads INF, a released note sounds on; REL 19 decays; PANIC ends a held one"
 run cr_quad_inf --wav "$OUT/cr_quad_inf.wav"
 QL="$OUT/cr_quad_inf.log"
-has '^deep: part 0 page 12 AMP col 3 REL 62 -> 127 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 127 -> 61 (61)' "$QL" &&
-    ok "AMP: KNOB 4 to the top shows INF, back down a number (61: AMP REL 0..126 + INF, F_INTI; the script's \"knobs quick\": 6 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
+has '^deep: part 0 page 12 AMP col 3 REL 14 -> 127 (INF)' "$QL" && has '^deep: part 0 page 12 AMP col 3 REL 127 -> 19 (19)' "$QL" &&
+    ok "AMP: KNOB 4 to the top shows INF, back down a number (19: AMP REL 0..126 + INF, F_INTI; the script's \"knobs quick\": 6 a detent, the range / 20): $OUT/cr_quad_inf_amp.ppm" ||
     bad "AMP REL INF text: $(grep '^deep:' "$QL" | head -2 | tr '\n' ' ')"
 qv() { grep "part 0:" "$QL" | sed -n "${1}p" | sed -n 's/.*voices \([0-9]*\),.*/\1/p'; }
 [ "$(qv 1)" = 1 ] && [ "$(qv 2)" = 0 ] && [ "$(qv 3)" = 1 ] && [ "$(qv 4)" = 0 ] &&
-    ok "voices: INF held 1.5 s after the release (1), REL 61 ended (0), INF held again (1), PANIC ended it (0)" ||
+    ok "voices: INF held 1.5 s after the release (1), REL 19 ended (0), INF held again (1), PANIC ended it (0)" ||
     bad "voices after the releases: $(qv 1) $(qv 2) $(qv 3) $(qv 4) (want 1 0 1 0)"
 # the WAV (its clock: note 1's onset, script 3.3 s): RMS before each release (script 3.7..4.0 s, 8.4..8.7 s) and
 # 1.2..1.5 s after it (5.2..5.5 s, 9.9..10.2 s)
@@ -2499,8 +2515,8 @@ PY
 )
 set -- $iv
 [ "${1:-0}" -gt 100 ] && [ $((${2:-0} * 10)) -gt $((${1:-0} * 3)) ] && [ "${3:-0}" -gt 100 ] && [ $((${4:-999} * 20)) -lt "${3:-0}" ] &&
-    ok "the WAV: INF 1.5 s after the release RMS ${2} (held: ${1} before), REL 61 RMS ${4} (${3} before)" ||
-    bad "the WAV: INF ${1:-?} -> ${2:-?}, REL 61 ${3:-?} -> ${4:-?} (want held, then silent)"
+    ok "the WAV: INF 1.5 s after the release RMS ${2} (held: ${1} before), REL 19 RMS ${4} (${3} before)" ||
+    bad "the WAV: INF ${1:-?} -> ${2:-?}, REL 19 ${3:-?} -> ${4:-?} (want held, then silent)"
 silent_end cr_quad_inf
 
 echo "SAFE MODE: the boot guard (firmware/src/cr_bootguard.h)"
@@ -2597,6 +2613,7 @@ for m in nostart hang; do
     echo "$l" | grep -q "c1 $want" && [ "${g:-0}" -ge 1 ] && ok "EMU_C1=$m: $l, one core's shared budget ($g given up)" ||
         bad "EMU_C1=$m: ${l:-none}, ${g:-?} given up"
 done
+cp "$OUT/cr_dualcore_run_flash.bin" "$OUT/cr_dualcore_hang_flash.bin"   # (the hang run saved Dual Core Off into it: below)
 # EMU_C1=thread (3y45): the bass part's job on a real second thread, at the same time as the chord part's render, as
 # on the unit: the WAV must be the inline job's. The VA pair of cr_dualcore.txt, and P5 on both parts (perf_p.txt)
 dcflash
@@ -2621,12 +2638,44 @@ EMU_C1=nostart EMU_UI_LOG=0 "$EMU" --headless --script "$S/cr_dmaj.txt" --wav "$
 cmp -s "$OUT/cr_dmaj.wav" "$OUT/cr_dmaj_onecore.wav" &&
     ok "cr_dmaj: the split's WAV (two cores) = one core's (EMU_C1=nostart), bit for bit" ||
     bad "cr_dmaj: the split's WAV differs from one core's"
-cmp -s "$OUT/cr_dualcore_hang.wav" "$OUT/cr_dualcore_nostart.wav" && ok "a hung job from the first block: one core's WAV" ||
-    bad "a hung job's WAV differs from one core's"
+# a hung job from the first block: core 0 renders it, one core's samples; and (0.22, docs/DUALCORE.md "The persistent
+# fallback") the give-up turns Options > Dual Core Off and the settings save it once the chord is released and the
+# unit is quiet: one erase, played as 45 ms of silence (4.7 s in), so the WAVs are compared up to there (4.5 s)
+cmp -s -n 800000 "$OUT/cr_dualcore_hang.wav" "$OUT/cr_dualcore_nostart.wav" && ok "a hung job from the first block: one core's WAV (the first 4.5 s)" ||
+    bad "a hung job's WAV differs from one core's in the first 4.5 s"
+LC_ALL=C grep -aq '^  flash: .* settings saves 1 ' "$OUT/cr_dualcore_hang.log" && LC_ALL=C grep -aq '^  settings: .* dualcore 0 ' "$OUT/cr_dualcore_hang.log" &&
+    LC_ALL=C grep -aq '^  flash erases with the audio stalled 1 ' "$OUT/cr_dualcore_hang.log" &&
+    ok "the give-up saved Dual Core Off (one settings save, one erase)" || bad "the give-up did not save Dual Core Off"
+EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_dualcore_hang_flash.bin" --script "$S/cr_dualcore.txt" >"$OUT/cr_dualcore_after_hang.log" 2>&1
+l=$(c1line "$OUT/cr_dualcore_after_hang.log")
+echo "$l" | grep -q "c1 off" && ok "the power-on after the give-up: $l (the record says Off)" || bad "after the give-up: ${l:-none}"
 cmp -s "$OUT/cr_dualcore_offrun.wav" "$OUT/cr_dualcore_nostart.wav" && ok "Dual Core Off: the WAV of a core 1 that did not start" ||
     bad "Dual Core Off: the WAV differs from a core 1 that did not start"
 cmp -s "$OUT/cr_dualcore_fresh.wav" "$OUT/cr_dualcore.wav" && ok "a fresh unit: the WAV of a flash set to Dual Core On" ||
     bad "a fresh unit's WAV differs from a flash set to Dual Core On"
+
+echo "GEEK OUT 2 (the sixth view): CORE 0, CORE 1, RAM, POOL as tall bars; one core: CORE 1 dim; six HOME taps round"
+g2c() { LC_ALL=C grep -a '^  screen reads:' "$1" | sed -n "$2p" | sed -n 's/.* cells //p'; }
+g2v() { LC_ALL=C grep -a '^  cr: key' "$1" | sed -n "$2p" | sed -n 's/.* view \([0-9]\) .*/\1/p'; }
+cp "$DCOFF" "$OUT/cr_geek2_off_flash.bin"      # (0.22: a fresh unit is two cores; one core is the Off flash's)
+EMU_STAGES=1 EMU_UI_LOG=0 "$EMU" --headless --flash "$OUT/cr_geek2_off_flash.bin" --script "$S/cr_geek2.txt" >"$OUT/cr_geek2_one.log" 2>&1
+[ -s "$OUT/cr_geek2.ppm" ] && mv "$OUT/cr_geek2.ppm" "$OUT/cr_geek2_one.ppm"
+c=$(g2c "$OUT/cr_geek2_one.log" 1)
+echo "$c" | grep -q '^0.0:CORE 0=[1-9][0-9]*% 0.1:CORE 1=off 0.2:RAM=n/a 0.3:POOL=n/a$' &&
+    ok "one core (Dual Core Off): $c ($OUT/cr_geek2_one.ppm)" || bad "one core: ${c:-no cells}"
+dcflash
+export EMU_STAGES=1 EMU_UI_LOG=0
+run cr_geek2 --flash "$OUT/cr_dualcore_run_flash.bin"
+unset EMU_STAGES EMU_UI_LOG
+L="$OUT/cr_geek2.log"
+c=$(g2c "$L" 1)
+has '^view: Geek Out 2' "$L" && [ "$(g2v "$L" 1)" = 5 ] && echo "$c" | grep -q '^0.0:CORE 0=[1-9][0-9]*% 0.1:CORE 1=[1-9][0-9]*% 0.2:RAM=n/a 0.3:POOL=n/a$' &&
+    ok "the view menu, B4 (the sixth white root): view: Geek Out 2, two cores: $c" || bad "Geek Out 2: view $(g2v "$L" 1), ${c:-no cells}"
+b=$(echo $(pixel "$OUT/cr_geek2.ppm" 30 202)); o=$(echo $(pixel "$OUT/cr_geek2.ppm" 90 203))
+echo "$b" | awk '{ exit !($3 > 150 && $1 < 100) }' && echo "$o" | awk '{ exit !($1 > 200 && $2 > 80 && $2 < 160 && $3 < 80) }' &&
+    ok "CORE 0's bar blue ($b), CORE 1's orange ($o): $OUT/cr_geek2.ppm" || bad "the bars' colours: CORE 0 $b, CORE 1 $o"
+[ "$(g2v "$L" 2)" = 4 ] && [ "$(g2v "$L" 3)" = 5 ] && ok "HOME tapped: five taps Scope, the sixth Geek Out 2 again (six views)" ||
+    bad "the HOME cycle: views $(g2v "$L" 2) / $(g2v "$L" 3)"
 
 echo "Options > Dual Core back Off at the next power-on (c1 off, the shared budget), On again (c1 ok)"
 DF="$OUT/cr_dualcore_flash.bin"
@@ -2828,7 +2877,7 @@ run cr_opt_keys --wav "$OUT/cr_opt_keys.wav"
 L="$OUT/cr_opt_keys.log"
 dl() { LC_ALL=C grep -a "^  $1" "$L" | sed -n "$2p"; }   # dl PREFIX N: the Nth dump's line that starts with PREFIX
 oe() { dl 'options:' "$1" | sed 's/^  options: //'; }
-[ "$(oe 1)" = "open 1 entry 2 of 26 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
+[ "$(oe 1)" = "open 1 entry 2 of 29 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
     dl 'cr: voices' 2 | grep -q '^  cr: voices 1 pending 0 notes-out 3 chord DM sounding 1 notes 62 66 69' &&
     dl 'loopv:' 2 | grep -q 'stream-notes main 3 ' && ! has 'expect.*FAILED' "$L" &&
     ok "MAJ + D4 with the menu open: D major sounds (62 66 69), three notes out on MIDI" \
@@ -2856,20 +2905,21 @@ echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &
     ok "no jump, no silent hole, no click at either change (5.3 .. 8.3 s)" || bad "Output switched under a chord struck in the menu: $wc_"
 sh_() { dl 'settings:' "$1" | sed -n 's/.* now \([0-9A-F]*\) .*/\1/p'; }
 echo "$(oe 8)" | grep -q "'Reset Settings' value 'OCT+ again: reset'" && [ "$(oe 9)" = "$(oe 8)" ] && [ -n "$(sh_ 8)" ] && [ "$(sh_ 9)" = "$(sh_ 8)" ] &&
-    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 38)" = "open 1 entry 2 of 26 'Secret Chords' value 'Simple'" ] &&
+    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 41)" = "open 1 entry 2 of 29 'Secret Chords' value 'Simple'" ] &&
     ! grep -aq 'settings reset' "$L" &&
     ok "Reset Settings asked (OCT+ once): five keys neither confirm nor cancel it; OCT- leaves, nothing was reset (Secret Chords still Simple)" \
-    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 38)'"
-echo "$(oe 11)" | grep -q "^open 1 entry 24 of 26 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
+    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 41)'"
+echo "$(oe 11)" | grep -q "^open 1 entry 27 of 29 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
     || bad "Calibrate and the keys: '$(oe 11)' $(grep -a -m1 '^calib:' "$L")"
 n=0; i=0
-while [ $i -le 25 ]; do
-    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 26 '" && n=$((n + 1))
+while [ $i -le 28 ]; do
+    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 29 '" && n=$((n + 1))
     i=$((i + 1))
 done
-[ $n = 26 ] && echo "$(oe 37)" | grep -q "'Reset Settings'" && echo "$(oe 15)" | grep -q "entry 3 of 26 '6th with 7th' value 'In place'" &&
-    ok "every entry by SELECT alone: 26 of 26, Play Style to Reset Settings (6th with 7th the fourth, after Secret Chords)" \
-    || bad "the entries by SELECT: $n of 26"
+[ $n = 29 ] && echo "$(oe 40)" | grep -q "'Reset Settings'" && echo "$(oe 15)" | grep -q "entry 3 of 29 '6th with 7th' value 'In place'" &&
+    echo "$(oe 17)" | grep -q "entry 5 of 29 'Key Touch' value 'Fixed'" && echo "$(oe 19)" | grep -q "entry 7 of 29 'Aftertouch Sens' value 'Mid'" &&
+    ok "every entry by SELECT alone: 29 of 29, Play Style to Reset Settings (6th with 7th the fourth; Key Touch, Velocity Sens, Aftertouch Sens after Velocity)" \
+    || bad "the entries by SELECT: $n of 29"
 grep -aq '^loop: loop recorded (state 2 layers 1 events 1 ' "$L" && ok "a take played with the menu open is recorded (armed on the view, one chord)" \
     || bad "the looper with the Options open: $(grep -a '^loop:' "$L" | tail -2 | tr '\n' ' ')"
 silent_end cr_opt_keys
@@ -2879,10 +2929,10 @@ run cr_usb_rate
 L="$OUT/cr_usb_rate.log"
 ur() { dl 'usb-rate:' "$1" | sed 's/^  usb-rate: //; s/ (.*pick_roots \([0-9]*\))/ \1/'; }
 ul() { dl 'screen reads:' "$1" | sed -n "s/.*label '\([^']*\)'.*/\1/p"; }
-[ "$(oe 1)" = "open 1 entry 20 of 26 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
+[ "$(oe 1)" = "open 1 entry 23 of 29 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
     ok "a new unit: USB Rate is the entry after USB Level, 44.1 kHz ('48 kHz: not offered'), the record's bit clear" \
     || bad "USB Rate on a new unit: '$(oe 1)' / $(ur 1) / '$(ul 1)'"
-[ "$(oe 2)" = "open 1 entry 20 of 26 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
+[ "$(oe 2)" = "open 1 entry 23 of 29 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
     [ "$(ul 2)" = "the computer picks the rate" ] && [ "$(oe 3)" = "$(oe 1)" ] && [ "$(ur 3)" = "48k 0 0" ] &&
     ok "KNOB 1 +1: 44.1 + 48 kHz ('the computer picks the rate'), bit 2 of the record's byte; -1: 44.1 kHz again" \
     || bad "USB Rate turned: '$(oe 2)' / $(ur 2) / '$(ul 2)' then '$(oe 3)' / $(ur 3)"
@@ -2900,8 +2950,8 @@ sn_() { LC_ALL=C grep -aq " name '$1' " "$L"; }                    # the name a 
     [ "$(cb 1)" = "0 0 0" ] && sn_ 'A||7 9' && sn_ 'A||9' && sn_ 'A|sus|m7 9' &&
     ok "a new unit names as the Orchid does: A + 7 + 9 'A7 9', A + 9 'A9', Asus + 7 + 9 'Asus m7 9' (the engine's and the screen's)" \
     || bad "Orchid names: '$(cn 1)' / '$(cn 2)' / '$(cn 3)' / $(cb 1)"
-[ "$(oe 4)" = "open 1 entry 15 of 26 'Chord Names' value 'Orchid'" ] && [ "$(ul 4)" = "A7 9 $(printf '\267') A9 $(printf '\267') Asus m7 9" ] &&
-    [ "$(oe 5)" = "open 1 entry 15 of 26 'Chord Names' value 'Standard'" ] && [ "$(ul 5)" = "A9 $(printf '\267') Aadd9 $(printf '\267') A9sus4" ] &&
+[ "$(oe 4)" = "open 1 entry 18 of 29 'Chord Names' value 'Orchid'" ] && [ "$(ul 4)" = "A7 9 $(printf '\267') A9 $(printf '\267') Asus m7 9" ] &&
+    [ "$(oe 5)" = "open 1 entry 18 of 29 'Chord Names' value 'Standard'" ] && [ "$(ul 5)" = "A9 $(printf '\267') Aadd9 $(printf '\267') A9sus4" ] &&
     [ "$(cb 5)" = "1 1 1" ] &&
     ok "Chord Names is the entry after Motion: Orchid; KNOB 1 +1: Standard (the engine told, bit 3 of the record's byte), the same three chords under it" \
     || bad "the Chord Names entry: '$(oe 4)' / '$(ul 4)' then '$(oe 5)' / '$(ul 5)' / $(cb 5)"
@@ -2909,7 +2959,7 @@ sn_() { LC_ALL=C grep -aq " name '$1' " "$L"; }                    # the name a 
     sn_ 'A||add9' && sn_ 'A||9sus4' &&
     ok "Standard: A + 7 + 9 'A9', A + 9 'Aadd9', Asus + 7 + 9 'A9sus4', each with the notes it had under Orchid" \
     || bad "Standard names: '$(cn 6)' / '$(cn 7)' / '$(cn 8)'"
-[ "$(oe 9)" = "open 1 entry 15 of 26 'Chord Names' value 'Orchid'" ] && [ "$(cb 9)" = "0 0 0" ] && [ "$(cn 10)" = "A9|1|69 73 76 83" ] &&
+[ "$(oe 9)" = "open 1 entry 18 of 29 'Chord Names' value 'Orchid'" ] && [ "$(cb 9)" = "0 0 0" ] && [ "$(cn 10)" = "A9|1|69 73 76 83" ] &&
     ok "KNOB 1 -1: Orchid again, A + 9 reads 'A9' again" || bad "back to Orchid: '$(oe 9)' / $(cb 9) / '$(cn 10)'"
 differ cr_chord_names_opt_orchid cr_chord_names_opt_standard "Chord Names: the two values' screens differ"
 differ cr_chord_names_orchid cr_chord_names_standard "A + 7 + 9: the Chord view differs under the two namings"
@@ -2936,8 +2986,8 @@ kl() { dl 'key leds:' "$1" | sed -n 's/^  key leds:\([0-9]* [0-9]*\) .*/\1/p'; }
 [ "$(cn 1)" = "A7 6|1|69 73 76 78 79" ] && [ "$(sx 1)" = "0 0 0" ] && sn_ 'A||7 6' &&
     ok "a new unit plays the 6th in place, as the Orchid does: A + 7 + 6 is A C# E F# G (69 73 76 78 79), named 'A7 6'" \
     || bad "In place: '$(cn 1)' / $(sx 1)"
-[ "$(oe 2)" = "open 1 entry 3 of 26 '6th with 7th' value 'In place'" ] && [ "$(ul 2)" = "6 + 7: the 6th under the 7th" ] &&
-    [ "$(oe 3)" = "open 1 entry 3 of 26 '6th with 7th' value 'Octave up'" ] && [ "$(ul 3)" = "6 + 7: the 6th on top, a 13th" ] && [ "$(sx 3)" = "1 1 1" ] &&
+[ "$(oe 2)" = "open 1 entry 3 of 29 '6th with 7th' value 'In place'" ] && [ "$(ul 2)" = "6 + 7: the 6th under the 7th" ] &&
+    [ "$(oe 3)" = "open 1 entry 3 of 29 '6th with 7th' value 'Octave up'" ] && [ "$(ul 3)" = "6 + 7: the 6th on top, a 13th" ] && [ "$(sx 3)" = "1 1 1" ] &&
     ok "6th with 7th is the entry after Secret Chords: In place; KNOB 1 +1: Octave up (the engine told, bit 4 of the record's byte), each with its line" \
     || bad "the 6th with 7th entry: '$(oe 2)' / '$(ul 2)' then '$(oe 3)' / '$(ul 3)' / $(sx 3)"
 [ "$(cn 4)" = "A7 6|1|69 73 76 78 79" ] && dl 'part 0:' 4 | grep -q 'voices 5,' && [ "$(dl 'parts busy' 5 | sed -n 's/.*parts busy \([0-9]*\).*/\1/p')" = 0 ] &&
@@ -2952,7 +3002,7 @@ kl() { dl 'key leds:' "$1" | sed -n 's/^  key leds:\([0-9]* [0-9]*\) .*/\1/p'; }
     || bad "the key LEDs: '$(kl 1)' / '$(kl 6)'"
 [ "$(cn 10)" = "A7 6|1|69 73 76 78 79" ] && [ "$(cn 11)" = "A7 6|1|69 73 76 79 90" ] &&
     ok "KNOB 1 -1 on the view: the voicing takes the top note, the 13th, down an octave; +1: back" || bad "the voicing: '$(cn 10)' / '$(cn 11)'"
-[ "$(oe 12)" = "open 1 entry 3 of 26 '6th with 7th' value 'In place'" ] && [ "$(sx 12)" = "0 0 0" ] && [ "$(cn 13)" = "A7 6|1|69 73 76 78 79" ] &&
+[ "$(oe 12)" = "open 1 entry 3 of 29 '6th with 7th' value 'In place'" ] && [ "$(sx 12)" = "0 0 0" ] && [ "$(cn 13)" = "A7 6|1|69 73 76 78 79" ] &&
     ok "KNOB 1 -1 in the Options: In place again, A + 7 + 6 as at first" || bad "back to In place: '$(oe 12)' / $(sx 12) / '$(cn 13)'"
 differ cr_sixth_opt_off cr_sixth_opt_on "6th with 7th: the two values' screens differ"
 differ cr_sixth_off cr_sixth_on "A + 7 + 6: the Chord view's notes differ under the two settings"

@@ -119,7 +119,13 @@ none and keep the title rules:
   (one name and instance: `DCW 1`, `DCW 1+`, `DCW 1 B`, ..) has R1.. and SUS / END (CZ-1); FILT and ENV pages run by
   instance and name (`PITCH 1` and `DCW 1` are two runs);
 - MOD: a stack of the slots, eight a screen, when its pages are matrix slots (SRC DST AMT); else (FM6's function
-  pages) `edit8` screens as FILT's.
+  pages) `edit8` screens as FILT's. **Then, on every engine, the EXPR screen** (0.22, docs/VELOCITY.md
+  "Expression"): a stack of two lanes, VEL and AT, each Source · Dest · Amount, the sound's velocity and
+  aftertouch routings (mod.c's matrix slots 3 and 4, saved with the sound; the destinations are the platform
+  matrix's: PITCH CUT SHP AMP PAN the sends RATE VIB E1..E8). An unset slot reads its default, `AMP auto` /
+  `CUT auto` (what Key Touch Dynamic / Velocity + Aftertouch does for a sound that routes nothing); KNOB 2 or 3
+  turned on it takes the default (DST AMP amount 63; DST CUT amount by Aftertouch Sens) and then the turn, and
+  DST `OFF` switches that default off for the sound. MIDI velocity and aftertouch reach the same sources.
 - a cell's label, value names and range come from `deep->desc(t, page, col)` when the engine gives one (the VA's
   mode-dependent WAVE / SHAPE: MORPH, NOISE, COLOR, DENS), else from the page's column; the stack's heading over a
   WAVE column stays `Wave` whatever the modes.
@@ -206,8 +212,9 @@ The owner's panel (0.22 in development; engine 16, Melodee's Prophet-5; the code
 `firmware/src/cr_layout.c`; docs/LAYOUT-TOOL.md "Step 4"). OSC .. MOD are its eight **free screens** (`CE_S_FREE`,
 drawn as `CR_K_FREE` in the panel's look: framed sections, knobs with a 0..10 scale and the value in the face, LED
 buttons with their wave icons, a lever); a lane is a SELECT stop, KNOB 1..4 the elements bound in it, the active lane's
-in the knob colours (blue, orange, white, green), the others dim. A slot with no element (–) does nothing. FX and MIX
-are the platform's, as for every engine. The labels are the panel's:
+in the knob colours (blue, orange, white, green), the others dim. A slot with no element (–) does nothing. MOD's last
+screen is EXPR after the panel's two (a stack, as on every engine: §4 above), FX and MIX are the platform's, as for
+every engine. The labels are the panel's:
 
 | Group | Screen (top-right text) | Lane | KNOB 1–4 |
 | --- | --- | --- | --- |
@@ -230,6 +237,7 @@ are the platform's, as for every engine. The labels are the panel's:
 | | | 2 | – · FREQ A · FILTER · PW A (the destinations) |
 | MOD | 2 `VOICE` (VOICE, GLIDE) | 1 | VINTAGE · – · UNISON · GLIDE |
 | | | 2 | DETUNE · VOICES · PRIORITY (LOW, LOW R, LAST, LAS R) · – |
+| MOD | 3 `EXPR · VEL`, `EXPR · AT` (not the panel's: the platform's stack) | 1, 2 | VEL / AT · Dest · Amount · – |
 
 A cell is one byte of the program, turned by the editor's own knob code (acceleration, OPT snap, the hot mark: the
 turned knob's face filled in its colour for 800 ms); the switches read on / off, the knobs the stored 0..127 (Voices
@@ -490,7 +498,7 @@ lane's values are drawn; the active lane's elements in the knob colours by slot 
 others grey. A turned knob's face fills in its colour for 800 ms. A knob turn composes only the strips of the elements
 that changed. The layout tool draws a design's free screens through this same code (`lay_load`).
 
-Used for: P5's OSC .. MOD.
+Used for: P5's OSC .. MOD (MOD's EXPR stays a stack).
 
 ## 10. Motion: none in the editor (2026-10-06, the user's feedback from the device)
 
@@ -506,7 +514,8 @@ instrument (the chord squeeze, the pickers, the meters, the stripes) and changes
 Measured with `tools/emu/scripts/cr_editor_lag.txt` (LUSH PAD, FILT, KNOB 1 20 detents in 1 s, then the OSC stack's
 KNOB 2 10 detents) under `EMU_UI_LOG=0` (every UI frame: its host instructions, the strips drawn / blitted, the
 bytes sent, the band's values); tools/emu/test_cr.sh checks it. Device time = host instructions / 258 µs; the LCD's
-SPI runs at 12 MHz (lcd.c `LCD_BAUD` 4): 0.67 µs a byte, 12.8 ms a 240 × 40 strip.
+SPI ran at 12 MHz (lcd.c `LCD_BAUD` 4): 0.67 µs a byte, 12.8 ms a 240 × 40 strip; **since 0.22 at 20 MHz** (`LCD_BAUD`
+2, the owner's eye on the unit 2026-10-14: 0.4 µs a byte, 7.7 ms a strip; the figures below are the 12 MHz build's).
 
 | | before | after |
 | --- | --- | --- |
@@ -532,7 +541,8 @@ What made it fast:
    canvas), so the next strip is composed while the SPI sends this one. Before, gfx.c `cv_begin` waited for the last
    strip's DMA (`lcd_sync`) before drawing the next: every blitted strip cost its 12.8 ms of SPI on top of the drawing.
    lcd.c itself (Felucca's) is unchanged: it already leaves a transfer running; raising its SPI clock (`LCD_BAUD` 2 =
-   20 MHz) would cut the SPI time further but needs a check on the device.
+   20 MHz) would cut the SPI time further but needs a check on the device. 2026-10-14: built, looked at on the owner's
+   unit ("looks good"), the default since (lcd.c `LCD_BAUD` 2; `LCD_BAUD=4 ./build.sh` is the 12 MHz build).
 
 ## 11. LEDs
 

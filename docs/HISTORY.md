@@ -2986,7 +2986,494 @@ LICENSING.md, `assets/prophet5-factory/README.md` and docs/PROPHET.md "Open deci
 PROPHET.md no longer say P5 cannot save; the README's status names no version that goes stale; the manual has P5 (the
 engines table, its editor pages), six engines and 128 sounds. Not done: anything on a unit; tagging and the Pages job.
 
-3y66. **The layout tool's p5 style and P5's whole panel as a design (2026-10-14; branch lay-5 from 9698e52, not
+3y70. **Dual Core: the regulator at 1.50 V, and Off by itself after a crash beside core 1 (2026-10-14; issue #9, after
+fm1-x0x#10 / #21 and x0x 1.0.7; docs/DUALCORE.md "Why VDC14 5", "The persistent fallback").** The reports settled two
+things 0.16 could not know: VDC14 is the rail that matters (zednaked's table: 14 / 4 marginal, 11 / 5 and 15 / 5
+clean), and the misreads hit core 0 too (fc79's crash records: a vector fetched with bit 24 set, a crash in the bass
+render), where no check on core 1 can see them: the crash report reboots the unit with Dual Core still On, and the
+loop of issue #9 follows. So: `FM1_VDC14_LEVEL` / `_MAX` 5 (1.50 V; the datasheet's 1.55 V and the stock firmware's
+1.60 V above it; SYSVDD stays 14); a `.noinit` record `fm1_c1_bar` (`ran`, `barred`) set by `fm1_c1_fault_c` for a
+crash of core 0's own beside a running core 1 and by `cr_c1_give_up`, decided at the next boot by `cr_c1_bar_decide`
+(a watchdog reset while core 1 ran counts as a hang at any uptime) from `cr_settings_boot` (not in SAFE MODE), which
+keeps core 1 off, and `cr_settings_load` reads Dual Core Off and primes the automatic save (`crs_dc_bar`); `fm1_cstart`
+holds core 1 first thing (Jangada's finding). The player sees `dual core off: crash` after the splash, the reason
+under Options > Dual Core, `c1 off · after a crash` in GEEK OUT, `c1_bar` as 78 PEAK's last value (73 DEBUG is full).
+The test build: injected failures set no bar and save nothing (`cr_c1_injected`); op 7 `bar` restarts with the record
+a crash leaves. Written by an Opus agent to a brief, reviewed. Host: `cr_cpu1_test` 72 checks (the rails' steps to
+14 / 5, the bar's decision and boot), `cr_backup_test` 178 (PEAK 35 values), `run_cr_tests.sh` whole twice, the
+emulator built, `./build.sh` for both `CR_CORE1_TEST` values: XIP 84.5 %, RAM 82.8 %, POOL 91.7 %, NOINIT 228 B.
+**Not done**: nothing on a unit (the owner's runs both cores clean, and the other session had the FM-1): the device
+checklist's step 5 (`core1_fault_test.py bar` on a `CR_CORE1_TEST` build) and a word from the reporter of #9 on
+0.22 are what is left. VDC14 5 was the owner's call the same day ("My HANDOFF rule can be broken"): the rule is 14 / 5.
+**Found by 3y71's run of `test_cr.sh`**: the hung-job check ("a hung job's WAV = one core's") failed, because the
+give-up now saves Dual Core Off once the chord is released and the unit is quiet, and the emulator plays the erase as
+the device does (45 ms of silence): the WAVs part at 4.7 s. The check now compares the first 4.5 s, then asserts
+the save (one erase, `dualcore 0` in the record) and that a relaunch on that flash boots `c1 off`.
+
+3y71. **Geek Out 2: the cores' load and the memory as four meters (2026-10-14; the owner: "add a second GEEK OUT 2
+menu with meters that show each core's CPU load as well as RAM"; docs/DUALCORE.md "Geek Out 2").** A sixth view
+(`V_GEEK2`, stored 5, after Scope: an older record keeps its meaning, 0.21 reads 5 as Chord), drawn with the
+editor's tall level bars (`CR_K_EDIT8`, `tall` 2: the read-out variant in `cr_p_tall`: bright, no knob underlines,
+`pct2` a 2 px peak tick, `CR_CF_DIM` grey) under the editor's title line with the battery: CORE 0 (blue; the ISR's
+share of a half less the wait for core 1, audio.c `cpu_last` over the new `CPU_HALF_US`), CORE 1 (orange, the bass:
+`CRP_PART1`; `off` / `failed` / `gave up` grey), RAM and POOL (link-time: `_bss_end`, `_pool_*`; `CR_MEM_USED`).
+The core bars glide a quarter of the way per frame; the emulator has no link map (RAM / POOL `n/a`) and its ISR time
+is the host's, so it sums the stages (`emu_firmware.h`). The view menu's Lock moves to the seventh white root (C5).
+Written by an Opus agent to a brief, reviewed. Host: `run_cr_tests.sh` ok (`cr_settings` 234: the view 5 round
+trip), `run_cr_draw.sh` 94 screens (two device states of the view), `test_cr.sh` (`cr_geek2.txt`: the view by the
+menu, the cells, the bars' colours at two pixels, six HOME taps round; `cr_arp_view.txt` needed one more tap),
+`./build.sh` XIP 84.6 %, RAM 82.8 %, POOL 91.7 %. The device shots: `build/emu/test/cr_geek2.png` (two cores: CORE 0
+18 % with its tick, CORE 1 3 %), `cr_geek2_one.png`. **Not done**: nothing on a unit (the RAM / POOL bars at 83 % /
+92 % are the size line's figures, not yet read off the screen); no designer mock-up in the 24-state JSON (the two
+states are in `gen_cr_screens.py`'s device list).
+
+3y72. **On the unit: the dual-core fallback end to end, a restart crash found and told apart, the crash record over
+SysEx (2026-10-14; the owner: "You can run on the FM-1 right now").** The owner's FM-1 had Dual Core On already,
+clean (8.5 M jobs, 0 rejects) at 14 / 4. The 0.22 release build installed: `c1 ok`, `rail_vdc14_now 5`, `c1_bar 0`,
+a worst half of 392 us. The `CR_CORE1_TEST` build, `core1_fault_test.py`: misread, null, stall, fault all PASS, the
+audio running, and after the injected give-up (`c1 gave up`, fallback 1) a restart boots `c1 ok` again: an injected
+failure saves nothing. `bar`: PASS: after the record a crash beside core 1 leaves and RESTART's soft reset, `c1 off`,
+`c1_bar 1 (after a crash beside core 1)`, the rails at 11 / 3; a further restart boots `c1 off` with `c1_bar 0`: the
+settings saved Off. Options > Dual Core On again by a `--restore` of the backup taken first (the record with the bit
+set; a restart), `c1 ok`. **Found on the way**: the first full run barred Dual Core by itself after the null mode:
+the next boot read `c1_bar 1` with no injected crash. No way to read the crash record off the unit (the console is
+SAFE MODE's CDC; the screen shows it 4 s), so 78 PEAK grew by nine values (`crash_count`, `crash_vec`, `crash_pc`,
+`crash_rets`, `crash_emu`, `crash_dbg`, `crash_uptime_ms`, `boot_reset`, `boot_stage`; `--debug` prints the crash in
+one line) and the record read: vector 1, pc `0x02001C38` = `fm1__p33_op`'s first instruction, rets `0x02001C9A` =
+`fm1_reboot` + 0x1A (the P33 soft-reset write of the RESTART), DBG_MSG `0x10` = `axi_rd_inv` (the SDK's
+`debug_msg[4]`: a bus master that is not a CPU read an invalid address), 37.6 s of uptime = that session's RESTART.
+So the restart itself crashes now and then (a 4 s crash screen on the way to the reboot it wanted; older than this
+work, open: HANDOFF), and the first build took it for a core 0 misread beside core 1. Fix: `fm1_c1_crash_bars`
+(hal/fm1_cpu1.h, host-tested): a crash bars only when core 0's own debug sources raised it (`FM1_DBG_C0`; fc79's
+`0x1000`, `0x200000`) or none did (a plain CPU exception); another master's alone (`FM1_DBG_PRP`: the watchdog, the
+peripherals' MMU / write limit, AXI invalid read / write, DMC / DBG pendings) gets the report and no bar. Also:
+`core1_fault_test.py`'s default mode list was refused by argparse (a list default checked against `choices` as one
+value; Python 3.11): the choices are checked by hand now; the rails' `now` read 0 with Dual Core Off (`cr_rails_record`
+sets now = boot). Host: `cr_cpu1_test` 74 checks, `cr_backup_test` (PEAK 44), `install_test.py`. The emulator suite
+was not re-run after the PEAK change (its PEAK checks are the backup test's). Not done: a power cycle by hand (the
+owner's), Geek Out 2 read off the unit's screen, the restart crash's cause.
+
+3y73. **The unit's load read for real, by MIDI and SysEx (2026-10-14; the owner: "review our performance limits",
+then "you should be able to send midi in to the FM-1 and maybe sysex commands to change settings so you could put it
+in a state to fully test on device performance"; docs/INTEGRATION.md "Measured on the unit").** `tools/perf_unit.py`:
+76 SELECT puts a sound on each part, an 8-note chord goes in on channel 1 and a bass note on channel 2 (rtmidi),
+moved a semitone every 2 s; 73 DEBUG and 78 PEAK read before and after; `--record` runs ffmpeg on "ChoralRoot In";
+`--notes`, `--seconds`. 78 PEAK grew by one more value, `voices_shed` (audio.c `shed_count`: 45 values now). The
+tables are in INTEGRATION.md; what they say: a VA MORPH PAD chord overloads core 0 (part0 2280 us with 6 notes, the
+block over the half, 22 .. 40 voices shed in 20 s), FM6 TINE EP with 8 notes is at 88 % and sheds while recording,
+CZ-1 and FM TONE at 70 .. 80 %; the fx stage's worst half 600 .. 720 us (the listing's 290 was the delay and the
+reverb alone), the tick's 300 .. 400 at a chord change, TIMER5's 150 .. 230 dry and 350 .. 410 recording;
+`stale` 0 throughout (the shed, not a pop, is what an overload sounds like). The emulator's "2x headroom" was its
+own: 1.5 .. 2 x low on the renders, 2 .. 3 x on the fx stage. Also: the delay line follows its rate (`XD_N` = 32768 /
+`CR_FX_DELAY_DS`, the longest-time margin halved with it: `cr_fx_test` at both rates), so `CR_FX_DELAY_DS=2` is the
+0.743 s delay in half the POOL (72.7 % for 91.7 %); `LCD_BAUD` and `XD_N` pass through `build.py`; two variant
+packages built for the owner to judge (`build/choralroot-delayhalf.fwsc`, `build/choralroot-lcd20.fwsc`: HANDOFF),
+the LCD one left on the unit. Host: `run_cr_tests.sh` ok, `install_test.py` ok. Not done: 48 kHz recording (an
+Option, not settable over USB without a restore), Dual Core Off rows (the same), the fx stage's parts under load.
+
+3y75. **The fx stage's parts and TIMER5 read on the unit (2026-10-14, later; docs/INTEGRATION.md "The fx stage's
+parts and TIMER5").** `tools/perf_unit.py` prints 78 PEAK's fx parts as a second table (down / delay / reverb / up,
+avg and max, their sum against the stage's average and largest, the rest) and sends CC 123 All Notes Off to both
+parts first (a stopped run had left an 8-note chord held: the "idle" row read part0 903). Run on the unit (the
+LCD-20 MHz variant of 1cc5972), 8 notes + bass, dry and recording. The fx stage (445 .. 535 avg, 533 .. 587 max
+dry; 651 .. 657 recording) is 75 % the four effects' parts, each the listing's count times 1.2 .. 1.3 (reverb
+193 .. 198, delay 90 .. 108, down 20, up 34 .. 37); the rest (106 .. 156) is the two mix loops with sends, the
+chorus, DIST on WOBBLE, the idle parts, `xf_block`'s bookkeeping, and TIMER5's ticks (the stage figures are wall
+time: ~40 us dry, ~65 recording). The earlier "600 .. 720" was the recording's ticks in the stage; nothing is
+hidden. The loop to work on inside it is the reverb's (40 % of the stage, 7 % of the half), but it has no cut that
+keeps the sound; the stage moves as a whole, to core 1. TIMER5: the tick is ~560 lines (2.9 us) by the listing and
+6.6 .. 7.3 us on the unit: 110 GPIO accesses a tick (the 595 shift's 96) at 35 .. 40 ns each are the difference,
+7 % of core 0; the recording's endpoint service adds 4.2 us a tick (42 us a millisecond, ~50 SIE transactions, the
+packet, the calls); a 5 kHz scan would save 3.5 % (100 us a half) at the price of the debounce times, the glow's
+pulse rate and the poll schedule; skipping the data line's unchanged writes 0.5 % for nothing. Recommendation: (1)
+the fx stage to core 1 as a whole, (2) the scan at 5 kHz, (3) the reverb's loop last. Also found: `pk_block_us`
+leaves TIMER5 out and the stages do not, so the stages' largest sum to the block plus `pk_t5_us`. Nothing flashed
+or changed on the unit; the sound and the scan untouched. Host: `python3 tools/perf_unit.py --help` runs; the table's
+code is a print. Not done: the 5 kHz scan, the data-line skip, the stage figures with TIMER5 taken out.
+
+3y74. **The delay at the half rate and the LCD at 20 MHz are the defaults (2026-10-14, the owner, after both on the
+unit: "screen at 20 MHz looks good. Delay sounded good at half rate").** `cr_fx.c CR_FX_DELAY_DS` 2 (the line halved
+with it, 3y73: POOL 72.7 %, 94 KB free: no longer the tight resource), `lcd.c LCD_BAUD` 2 (7.7 ms a strip for 12.8).
+The old builds: `CR_FX_DELAY_DS=1`, `LCD_BAUD=4`. docs/FX.md keeps 0.18's reasoning for the full-rate delay as the
+record of why it was chosen then; EDITOR.md's LCD figures are marked as the 12 MHz build's. (3y75 is the fx-stage /
+TIMER5 profiling session's, written beside this one.) Host: `run_cr_tests.sh` (cr_fx_test at the new default),
+`test_cr.sh`, `./build.sh`: below. Not flashed by this session: the profiling session had the unit.
+
+3y76. **The dual-core fallback's branch merged into the 0.22 line (2026-10-14; branch dcm-1: 321a1de, the designer
+line, with 7980d11, worktree-dualcore-1, 3y70 .. 3y75; not pushed, not flashed).** The owner's decisions: all of that
+branch goes into 0.22-beta1; Dual Core stays **On by default** (3y46) and the fallback stays (Off and saved after a
+crash beside core 1, the message and the reason under Options > Dual Core). **As built**: a new unit (no settings
+record) and Reset Settings: On; an updated unit: what its record says (0.16 .. 0.21's Off stays Off, as 3y46); a
+power-on after a crash of core 0's own, a watchdog reset or a give-up beside a running core 1: core 1 kept off, Dual
+Core read Off and saved Off at the first quiet moment, **whatever the default** (`crs_dc_bar`; a Reset Settings in
+that power-on saves Off too) until the player sets the option. 3y46's safety net (the boot after a counted failed
+boot starts no core 1, saves nothing) and the bar sit side by side: a start that hangs leaves no bar (`ran` is set
+only once core 1 answered), and `cr_settings_boot` decides the bar before `cr_c1_power_on`, so a barred boot is
+`c1 off` with its reason. **The conflicts** (14 files): HISTORY (both: the numbers were disjoint); MANUAL, SETTINGS,
+the 0.22 notes, DUALCORE (theirs written for Off by default: rewritten for On with the fallback, the notes' Dual Core
+item in player language and their sections folded in as items; stale "Off by default" lines in SETTINGS' table,
+INTEGRATION, DUALCORE fixed); `crs_sanitize` (the view bound 5 for Geek Out 2 with this line's "a damaged view byte
+keeps the record's Dual Core"); `cr_settings_boot` (this line's comment, their bar); `cr_cpu1.h` (the host's thread
+stub and the bar's mock, both); `cr_ui.c` (Options > Dual Core: the single-core package's "1 core build" and no
+setting there, their bar cleared by the player's choice and its reason line, which the single-core package never
+shows); `cr_screen.h`, `audio.c` (both); `cr_backup.c` / `fm1_install.py` / the tests: **78 PEAK merged by name**,
+this line's 68 values first and the branch's 11 (`c1_bar`, the crash record's 7, `boot_reset`, `boot_stage`,
+`voices_shed`) appended as **69 .. 79** (they were 35 .. 45 there; `shed_voices`, value 35 here, is since the last
+read, `voices_shed` since power-on), `install_test.py` at the new places; `test_cr.sh` (the hang run's flash copied
+before the threaded runs reuse it; their 4.5 s compare and the save's checks; this line's Off-flash compare). **What
+the two did not see of each other, adapted**: (1) the delay at the half rate made `XF_SPLIT` 0, so 3y50's reverb on
+core 1 would have gone back to core 0 (about 200 us of a half: 3y50's eight P5 voices were predicted at 83 .. 84 %
+with it, 91 % without). `XF_SPLIT_HALF` (cr_fx.c, fx.c): core 1 runs the reverb's half-band and lines into half-rate
+buffers of its own (`c1h_l` / `c1h_r`), core 0 the delay into `xf.t[2..3]`, adds core 1's after the join and runs the
+one up-sampler; sums of integers, `xf_block`'s mix bit for bit (`cr_c1_thread_test` "effects" and test_cr's
+`cr_prophet_eight_fx`: inline = thread, at the default build). (2) Geek Out 2's CORE 1 was `CRP_PART1`, the voices'
+job alone; here core 1 also runs P5's chord voices (in it) and the reverb (not): CORE 1 is now core 1's busy time over
+the second (`cr_dbg.c1_avg_us` / `c1_max_us`, `c1_busy_cur` summed over the stages' window). (3) The single-core
+package: `cr_c1_bar_boot` clears a record a Standard package left and decides nothing, so it never writes Dual Core
+(`tests/cr_c1_bar_1core_test.c`, built both ways). (4) Tests that met the new default: test_cr's `EMU_C1=hang` on P5
+(a fresh unit is On, so its give-up now saves Off: the WAVs compared to 12 s, the save asserted), Geek Out 2's
+one-core run (on the Off flash: a fresh unit has two cores); `cr_backup_test` +9 (a new unit On; a new unit after a
+crash beside core 1: Off read, primed, saved; Reset Settings then: Off, and its message without "restart", which
+3y46's `cu_reset` said whenever core 1 was off: now only when On is what it saved; the next boot Off from the record; the
+player's On saved and core 1 again; SAFE MODE leaves the bar for the next boot); `tests/target_budget.txt`
+`xf_block` 0 -> 5 (the half rate's clearing loop, compiled now that it is the default; the checker divided by the 0
+budget: guarded) and `mix_fx_split` 19 -> 22 (the half-rate join's two loops). **No golden changed**: 313 renders,
+0 changed (tests/golden.txt is Felucca's effects, CR_FX 0; the delay's rate is cr_fx.c's); `tests/cr_screens_gen.h`
+(the branch's two Geek Out 2 states) regenerates byte for byte. Size: XIP 532 612 B (92.9 %; this line 530 500, the
+branch 485 124), RAM 77 588 (78.9 %; 77 524, 81 348), **POOL 238 936 (69.4 %; 304 600 = 88.5 %, 249 964 = 72.7 %)**,
+NOINIT 228; the single-core package XIP 529 396 (92.3 %), RAM 74 452, POOL 238 808. XIP is now the tightest (40 KB
+free). Stub version 3, sha256 baee55ed142fe1cc, as both. Packages: `choralroot.fwsc` sha256 25b478dfca5ba4e8...,
+the single-core one ac3dca917e255418.... `CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (21; test_cr 997
+ok, test_persist 111, 313 goldens 0 changed, the browser emulator built and its test passed). Not done: anything on a unit (the reverb on core 1 at the half rate, Geek
+Out 2's CORE 1, the bar with On the default), the release notes of rn-1 (0.22-beta1.md: the owner merges it later;
+this merge's items are in docs/releases/0.22.md).
+
+## 2026-10-14 (FM TONE's times: the Digitone's, measured)
+
+3y67. **FM TONE's envelope, delay and fade times are the Digitone's (2026-10-14; branch qt-1 from b3c2ecd + the
+Digitone measurement tools qd-5, not pushed; 3y65 there, renumbered at the merge into int-1).** The owner: "make all the FM-Tone times match the Digitone, a wrong
+time will have a big effect on the sound". The Digitone was measured on the owner's unit (OS 1.44, two runs recorded
+losslessly over USB: `tools/digitone/dt_measure.py`, `dt_rec`, `dt_analyse.py`, `summary.py`, merged here from qd-5);
+its numbers (derived, no audio) are `tools/digitone/digitone_times.json` (`make_quad_times.py --extract`). **Built**
+([QUAD.md](QUAD.md) "Times"): FM TONE's four envelopes ran on Felucca's `ENV_LIN` / `ENV_EXP` (1 ms .. 10 s), the
+DELAYs on `ENV_LIN`, the LFO FADE over `ENV_LIN[2 |FADE| - 1]`; now `firmware/src/quad_times.h` (generated by
+`tools/digitone/make_quad_times.py` from digitone_times.json and `quad_calib.json`) has a table per envelope type,
+Q24 a tick: the amp attack (a linear full rise; from 112 up the measured grid of 0.4962 s multiples, 112 = 3 .. 127 =
+60), the amp decay = release (one exponential, T60), the filter attack, the filter decay = release, the operator
+attack and decay (A's and B's); the decays' multiply is 64-bit (the share in Q24, a release's step rounded up). The
+amp was measured on the amplitude (FM TONE within 1 % of every measured value, ATK 0's one-tick grain aside); the
+filter and the operators only through the spectral centroid: FM TONE is calibrated through the same proxy
+(`--calibrate`: the firmware's code rendered on the host by `tools/digitone/quad_render.c` with the captures' patches,
+read at 48 kHz by dt_analyse's own functions; attacks on t90, the decays on t50 and t90 together; run 2's readings).
+Residuals: filter and operator attack t90 0 %; the operator decay t50 +5..+10 % / t90 -7..-10 %; the filter decay t50
+-35..-58 % / t90 +66..+122 %: the shapes differ (the Digitone's operator attack blooms late, its filter closes fast
+once past the fundamental), which one time cannot match (not modelled; QUAD.md says what a measurement would need).
+The filter attack above 112 follows the amp attack's curve (its readings are ~30x the amp's at every measured
+value; its 120 had reached 3 % after 30 s). The DELAYs (A, B, the filter's): v / 32 beats at the part's tempo (A's
+measured exactly; B's and the filter's assumed). The LFO FADE: the measured full fades (0.047 s at 16 .. 12.4 s at
+48, 49.7 / 199 s at 56 / 64 extrapolated; 2^(|FADE| / 4) x 3.04 ms), the fade-out assumed the same; the voice's
+`ticks` 32 bits. The amp's per-sample ramp is Q23 (Q15 >> 5 floored a slow decay's step: its tail saw-toothed, a 1 s
+T60 read 2.2 % short). The time cells are numbers 0..127 (`F_INT`, the filter REL `F_INTI`; F_TIME's text was the
+old curve's). The .dnsnd import takes the times 1:1 (`DN_TIME_TO_QUAD`; the power law of 3y60 is gone; SOUNDS.md).
+The 16 factory presets' times re-expressed on the new tables, each the value nearest its old time (they sound as
+designed; tests/quad_ref.py's four copies too); the init patch's values and the blob (version 5) unchanged: saved
+sounds play their values on the new tables. CPU: the host figure 1136 -> 1138 instructions a sample (the worst case
+1815 -> ~1845). Tests: cr_quad_test (every envelope's ATK against its table, DEC to END, DELAY at 120 and 80 BPM,
+the amp's release; the fade's ticks), `tools/digitone/test_quad_times.py` in run_cr_tests.sh (quad_times.h not stale;
+AMP ATK 64 / 112 / 126, DEC 32 / 96, REL 64 within 2 % of the Digitone's; the filter ATK 32 and operator ATK 64 t90
+within 5 %, the operator DEC 64 t50 / t90 within 15 %, the filter DEC 64 within its residuals; A DELAY 64 at 120 / 80
+BPM within 1 %; FADE -32 within 5 %), test_dnsnd (1:1). Goldens: FM TONE's only (tests/quad_goldens, regenerated by
+tests/quad_ref.py; tests/golden.txt's 16 preset/FM_TONE renders); no other golden changed.
+
+3y68. **FM TONE's shapes from the whole tracks, the INIT the Digitone's (2026-10-14; branch qt-1, not pushed; 3y66
+there).** The
+coordinator: matching two points of a different curve is not enough. **Built** ([QUAD.md](QUAD.md) "Times"): the
+Digitone's centroid tracks are kept in `tools/digitone/digitone_times.json` (derived numbers, thinned) and the filter and
+operator tables are calibrated on the whole track (`make_quad_times.py --calibrate`: per value the time whose FM TONE
+track, as the share of its sweep, is nearest the Digitone's). **The operator attack** is linear in dB from -38 dB
+(`QUAD_OP_FLOOR`; a linear attack missed the Digitone's late bloom by 0.21 rms of the sweep, -37..-39 dB fit 0.026):
+t10 / t50 / t90 within -4 / +2 / -1 % at every measured value (a linear one at the same
+t90: t10 -79 %, t50 -36 %). **The filter decay** stays exponential (between it and linear none fits the bright part better); the
+Digitone's FREQ 20 behaves as FM TONE's FREQ 0.00 (~30 Hz, 1.4 octaves lower than its 80 Hz): there both filter
+tracks match whole with FM TONE's curves, so the filter tables are calibrated with that mirror patch (decay t50 -31 ..
++12 %, t90 -12 .. +29 %, were -35 .. -58 / +66 .. +122; the release, run 1, -3 % / -11 % at 64 / 112, were +19 / +40);
+the cutoff scale is not changed (one point; QUAD.md says what would measure it). The amp's shapes checked: the attack
+linear (the level at half the rise 0.490 on both), the decay and release dB-linear. The factory presets' operator and
+filter times re-expressed again on the new tables (each keeps its full time / T60). **INIT** is the Digitone's init
+sound (the owner's export decoded by web/fm1dnsnd.js, 1:1): MIX -64, A / B DEC 32 END 127, A LEV 0, the filter REL 64,
+AMP ATK 8 DEC 32 SUS 96 REL 24, LFO SPEED 32.00 MULT 32 (eng_quad.c's column defaults, tests/quad_ref.py, the
+importer's base `DN_QUAD_RANGES`, the clients' FM TONE record template). docs/releases/0.22.md and QUAD.md: Digitone
+sounds imported before should be imported again (no conversion of older patches: the owner). CPU: the host figure
+1136 -> 1150 instructions a sample (the worst case 1857). Goldens: FM TONE's only (tests/quad_goldens, the 16
+preset/FM_TONE lines of tests/golden.txt); design/layouts/fm-tone.json (the defaults) and the FM TONE pack follow.
+
+## 2026-10-14 (several FM-1s: the unit ID)
+
+3y66. **A unit ID, and fm1_install.py --unit (2026-10-14; branch uid-1 from 321a1de, not pushed).** The owner has
+several FM-1s: `fm1_install.py` found a unit by its port name ("ChoralRoot FM-1", the same on every unit) and, during
+an install, found it again by name after each restart, so with two units plugged in it could talk to the wrong one;
+and its advice for an offline port, a MIDI rescan (CoreMIDI `MIDIRestart`), restarts every MIDI port on the computer.
+**The ID** (docs/INSTALL-COMPAT.md "Several FM-1s"): 8 hex digits, the zlib CRC-32 of the SPI flash's 128-bit unique
+ID. The sources looked at: the chip's `CHIP_ID` register (the model, not the unit), the SPL's boot block (a chip id,
+a trim value and a Bluetooth MAC from the config area: not known to be per unit on the FM-1, and the block's RAM is
+not ours to trust after boot), and the flash's unique ID, which the AC79 SDK reads at every power-on of an SDK
+firmware (`cpu.a` `vm_sfc.c read_flash_id`, disassembled from the SDK's bitcode: `9Fh` and 3 bytes, then `4Bh`, four
+`00h`, 16 bytes, in one `enter_spi_code` window). ChoralRoot now issues exactly that read once at power-on, right after
+its own JEDEC check, through the same RAM driver (XIP off, interrupts masked; `hal/fm1_flash.h fl_uid_ram`, only when
+the JEDEC id is the expected Puya part, never in SAFE MODE). Read only: no flash write, nothing stored, the ID is the
+chip's and survives every install and reset. `FL_UID` is defined by the app alone, so the update loader and the boot
+stub are byte for byte as before (loader.bin, ota.bin, stub.bin sha256 unchanged; stub version 3, baee55ed142fe1cc).
+INFO appends `49 08` and the 8 digits in ASCII after `42 01 03`, `43 01 03` (none known: the reply as before); the
+hosts of before read the version to its NUL, and `editor.html` Felucca's fields from the start (3y64's "the tags are
+found from the end": no host in this repository reads them so; only cr_backup_test's check did, for a reply without
+the ID, which is unchanged). Options > Version: the line under the version
+reads `unit ID A1B2C3D4` (`no unit ID`); no new entry, no index moved. Cost: `.ram_text` +264 B, `.text` +368 B, the
+image +632 B (XIP 92.6 %), `.bss` +16 B (RAM 78.9 %), POOL nothing.
+**fm1_install.py:** `--info` asks every candidate port and lists each FM-1 with its unit ID (one FM-1: the lines of
+before plus the ID line); `--unit ID` with any command uses only the port whose INFO carries the ID (none: exit 3,
+several: exit 9), and every port taken again later is checked by it; an install with `--unit` takes update mode only
+from the one port that appeared new once the unit's own port has gone (two new ports, an ambiguous name, a port that
+answers as something else, the unit's port still there: exit 9 before anything is written), and after the write
+checks the ID again and prints it; `--unit` never rescans MIDI (`--rescan-midi --unit` refused; the advice is the
+replug). Without `--unit`, two or more FM-1s refuse a command that writes or restarts (exit 9, the new code, with the
+IDs) and a read reads the first with a note; with at most one candidate port nothing more is asked than before. Two
+ports of one name (as CoreMIDI may list two FM-1s) are kept apart as `NAME` and `NAME [2]` (`port_labels`; the worker
+opens the k-th of the name). **Web:** `deviceInfo` carries `unitId`; the installer's check shows the ID, lists several
+FM-1s and its writes refuse while several answer; the device manager asks which FM-1 to open (by number or ID), takes
+the chosen one again without asking and never moves to another by itself, and shows the ID in its header; both pair
+the k-th input of a name with its k-th output. Left: the installer asking which FM-1 and following it through an
+install's restarts (it refuses instead; the CLI does it).
+Tests: tests/install_test.py `units` (26: the tag, the labels, --info with three FM-1s, --unit for a read and a write,
+an unknown and a doubled ID, a bad one, two FM-1s without --unit, installs with --unit on the first and the second of
+two ports named alike, two new ports, the old port staying, a firmware without the ID after the install, no rescan),
+cr_backup_test (the reply with and without the ID, the CRC against Python's, the Options line), cr_draw_test
+(Options > Version with the ID line, whole), test_backup, test_manager, test_installer. To check on a unit, one first
+(the owner): the ID on Options > Version equals `--info`'s, stays the same after a power cycle and an install, and
+differs between two units; how macOS names two FM-1s' ports; an install with `--unit` while another FM-1 is plugged in.
+`CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (21), 313 golden renders, 0 changed; test_cr 990 ok.
+
+## 2026-10-14 (0.22-beta1 integrated)
+
+3y77. **The 0.22-beta1 integration branch (2026-10-14; branch int-1 from rn-1 9698e52, not pushed, not tagged, not
+flashed).** rn-1 (the notes, releases.json, the site, the 0.21 down-conversion; vs-1 and beta-1 in it), then with
+`--no-ff`: dcm-1 cc4c8d1 (the dual-core fallback, VDC14 1.50 V, Geek Out 2, the crash record, the delay at half rate,
+the LCD at 20 MHz: 3y70 .. 3y76), qt-1 9133b6a (FM TONE's times: 3y67 / 3y68 here), uid-1 9061bb6 (the unit ID:
+3y66). **The conflicts**: HISTORY at each merge (all entries kept; qt-1's 3y65 / 3y66 renumbered 3y67 / 3y68, as rn-1
+has 3y65 and uid-1 3y66, whose number the code's comments cite; nothing outside HISTORY named qt-1's) and
+`docs/releases/0.22.md` at dcm-1 and qt-1 (kept rn-1's pointer). Git merged the rest, read over: `cr_backup.c` (INFO's
+32-byte version, `43 01 03`, then `49 08` and the ID; 78 PEAK's 79 values), `cr_ui.c` (`cu_version_text`, the unit ID
+line under Options > Version beside the Dual Core reason line, Geek Out 2), `fm1_install.py` / `install_test.py` (PEAK
+69 .. 79 and `--info` / `--unit`), the web pages, `run_cr_tests.sh` / `test_cr.sh` (FM TONE's INIT values and the
+dual-core runs). **The notes** (`docs/releases/0.22-beta1.md`, player language): dcm-1's items moved there from 0.22.md
+(the fallback, VDC14 and `--debug`'s crash under the Dual Core item; Geek Out 2 and the faster screen in Playing and
+editing; the delay at half rate in Sounds and engines; Dual Core and Geek Out 2 in Going back to 0.21), the PENDING qt-1
+item written ("FM TONE's times are the Digitone's") and both PENDING comments removed, the unit ID under Installing and
+in Going back. **What the branches did not see of each other**: (1) qt-1 converts no saved patch (the owner), so an FM
+TONE sound saved under 0.21 keeps its time numbers and plays them on the Digitone's tables: most times longer, many
+much longer (AMP DEC 96: a T60 of 1.6 s on the old curve, 15.1 s now). The notes say so, beside "the factory sounds keep
+their timing" and "import Digitone sounds again". (2) rn-1's `quadToV3` (a sound taken to 0.21) keeps the time numbers,
+which 0.21 plays on its old 1 ms .. 10 s curve (most much shorter); no importer note says so: SOUNDS.md and the notes'
+Going back to 0.21 do. (3) `tests/site_test.py versions()` expected only the standard packages under firmware/: with a
+single-core package in the packages folder (the beta's, as `fetch_packages.py` will fetch once it is released) it
+failed "firmware/" and "SHA256SUMS"; it now expects `choralroot-X.Y-1core.fwsc` for a version that lists sha256_1core
+unless make_site.py said it skipped the file (checked three ways: no packages, the release folder, the standard package
+alone). `web/releases.json`: the beta's sha256 / sha256_1core of this build, two bullets and a note for the times and the
+fallback. **Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok, test_persist 111,
+313 golden renders 0 changed: tests/golden.txt and tests/quad_goldens are qt-1's byte for byte, tests/cr_screens_gen.h
+dcm-1's). `./build.sh --release 0.22-beta1` twice: the same SHA256SUMS; `choralroot-0.22-beta1.fwsc` sha256
+fc10688a91d1f212..., `choralroot-0.22-beta1-1core.fwsc` f4282db5aa0df404...; the apps carry `ChoralRoot 0.22-beta1`
+and `ChoralRoot 0.22-beta1 1-core`. releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1` (both sha256 match),
+site_test, test_installer; the browser emulator built as 0.22-beta1, test_web_emu PASS. Size: XIP 536 348 B (93.5 %),
+RAM 77 588 (78.9 %), POOL 238 936 (69.4 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the single-core package XIP 533 260
+(93.0 %), RAM 74 468 (75.8 %), POOL 238 808 (69.4 %), RAMTEXT 7 072. XIP is the tight one (37 KB free). Stub version 3,
+sha256 baee55ed142fe1cc. **Not done**: anything on a unit (every branch's own list stands); tagging and the Pages job.
+
+## 2026-10-15 (the device manager's Delete refused on the unit)
+
+3y78. **A pool bank with 0.21's FM TONE sounds is taken again (2026-10-15; branch int-1, not pushed, not flashed).** The
+owner's unit on 0.22-beta1: a Delete in U011..U020 answered "The FM-1 refused the user sounds 011-020 (rc 2)". Those
+slots hold 0.21's FM TONE sounds as migrated, 80-byte version-3 patches that `upool.c up_patch_get` loads, but
+`cr_backup.c crb_bank_ok` took only today's 96 and checked every slot's header, used or not, so no PUT of that bank
+passed. Now a used slot's header is checked as `up_patch_get` reads it (FM TONE 96 or 80, else rc 2) and an unused slot
+is not read and is written as 384 zeros (`crb_bank_fill`). The clients already sent a deleted slot whole empty (not just
+its used byte); a placed or swapped sound now starts from an empty slot too (`fm1sounds.js`, `fm1_install.py`). Tests:
+cr_backup_test d3 (a deleted slot's stale 16 / 80 header and junk: rc 0, read back empty; a used 80-byte FM TONE slot
+loads and SELECT plays it; FM TONE 81, VA 80, no engine: rc 2, nothing written), test_sounds and install_test (the
+owner's bank). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok); `./build.sh --release
+0.22-beta1` twice identical: `choralroot-0.22-beta1.fwsc` be9f497bb32e8090..., `-1core` 7b98e2eabc9e653f... (in
+`web/releases.json`); releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1`, site_test, test_installer pass.
+
+## 2026-10-15 (restore factory presets, delete all user sounds)
+
+3y79. **The device manager restores several factory presets and empties the FM-1 in one go (2026-10-15; branch int-1,
+not pushed, not flashed).** The owner: "a way to restore multiple factory presets" and "a way to quickly fully delete
+all user presets and reset to factory". **Restore** (a "Factory presets:" row under the FM-1 pane's engine tabs, where
+Restore factory order moved from the middle column): the selected rows, all of the open engine, or all of every
+engine; each user sound over a factory preset is deleted and the preset is back in its place, as Delete / Reset to
+factory already did for one row (Restore factory order is the one that keeps them, and the dialog says so). A later
+slot naming the same preset (an added sound while the first bound slot held the place, `cr_bank.c cb_bound`) is
+unbound, else it took the place when the first went; Restore factory order had that fault and has the same fix
+(`fm1sounds.js rawBindings`). **Delete all user sounds…** and **Reset sounds to factory…** (the bottom bar, red): every
+slot of every engine emptied (P5's and the retired engines' records too), each pool bank that holds a sound written
+once as a PUT of length 0 (`cr_backup.c crb_commit` writes it empty; a bank never written would be "nothing to
+write"), the banks already empty not at all: at most 13 writes and no data over USB; a 0.21 FM-1 gets each of its
+objects once. With no user record every pool is INIT and its factory presets in order, so the two write the same; each
+dialog says it its own way. **Favourites**: object 23 is read with the sounds now. A user slot's mark and type are the
+slot's, and the unit's own Delete takes them off (`cr_favs.c crf_slot_new`); the manager did not, so the next sound
+placed in a deleted slot showed the old mark. Now every slot it deletes (Delete, Restore) loses them, and Delete all /
+Reset take off every user slot's marks and types; a factory preset's mark is the preset's key and stays, P5's and the
+filter too, byte for byte (`favsClearSlots`; an object the FM-1 cannot read is left alone). **The dialog** (a
+`<dialog>`): what comes back, what is deleted (by name for a restore), the marks, the writes and their 45 ms pauses,
+what is not touched, Undo, and **Back up everything** inside it (the file downloaded, the dialog left open). **Undo**:
+one step, the banks and object 23 written back byte for byte, while the page stays open; a write that stops part-way
+(the loop started after some banks: rc 3) now keeps its step, so Undo puts back what was written (`writeSounds`' error
+carries `.written`). Progress per object, then the read-back. The simulator takes a pool bank as the firmware does
+(3y78's `crb_bank_ok`, `crb_bank_fill`, a PUT of length 0) and logs every PUT begin (`sim.puts`). **No firmware
+change.** Tests: test_manager, 28 new checks (a bank of 0.21's FM TONE slots with 16 / 80 headers sent as read through
+Restore and back through Undo, 16 / 81 refused by the simulator; each bank written once, the empty and never-written
+ones skipped; the favourites object; the confirms' words; a write stopped by the loop; Delete with several rows); the
+built page driven in headless Chromium with `?sim=pool` (Restore 1 selected, Delete all with the backup taken in the
+dialog, Undo, Reset cancelled with Esc, then done; the row hidden on Loops). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21;
+test_cr 997 ok, 313 golden renders 0 changed); site_test, test_installer pass; build/site rebuilt with it. **Not done**: a device run. P5 is
+not one of the manager's pools (`FACTORY_PRESETS` has five engines): a P5 record is an added row of the VA's tab marked
+"P5 · retired", so a P5 sound over a P5 program is not restored by the Restore buttons (Delete all and Reset empty its
+slot all the same). Undo or a Restore of a bank holding 0.21's FM TONE slots needs 3y78's firmware (the beta built
+before it refuses that bank, rc 2); Delete all sends length 0 and passes there too.
+
+## 2026-10-15 (the device manager's P5 tab)
+
+3y80. **The device manager has a P5 tab (2026-10-15; branch p5m-1, not pushed, not flashed).** The owner: P5 is a
+current engine (engine 16, Melodee's Prophet-5 model), and its user sounds were added rows of the VA's tab marked
+"P5 · retired" (3y79). Now, on a 0.22 FM-1, a **P5 tab** after CZ-1 as on the unit's picker (a 0.21 FM-1 has no P5:
+its five tabs, `managerEngines`): 00 INIT, the shipped programs 01 .. 115 under the unit's names, then the added P5
+sounds. The names come from the firmware: `tests/sound_templates.c` is built with P5 now, as the unit is (until now
+with `FELUCCA_PROPHET=0`), its `"factory"` / `"factory_first"` hold P5's INIT P5 and the shipped list, and a new
+`"factory_ids"` line holds each program's Sequential number, the favourites' key; `--check` pins the three lines in
+`web/fm1sounds.js` and `tools/fm1_install.py` (`FACTORY_IDS` new in both), so a changed shipped list fails
+`run_cr_tests.sh` until they are pasted (docs/PROPHET.md's steps say so). Its templates and the five engines'
+`--packs` are the same either way. **Binding**: the firmware binds a P5 record over a program as any engine's
+(`cr_bank.c cb_bind_of`, P5's `pool_f0` 1); **no firmware change**. So "MY PROPHET over FOREVER KEYS" is P5 03's row,
+and Place onto a program, Swap / drag, Replace factory, Restore selected / all P5 / all engines, Restore factory order,
+Delete (Reset to factory), Rename, Delete all, Reset and Undo act on P5 as on every engine (`fm1_install.py` lists P5
+sounds in P5's pool too, "over P5 03 FOREVER KEYS", no longer `retired`). **Files**: a P5 user sound keeps and saves as
+the installer's sound file (its 138-byte program, patch kind `p5`); P5 files in the library go to the P5 tab. **A P5
+factory program has no file**: the site offers no P5 pack (Sequential's programs, LICENSING.md; `tools/make_packs.py`
+skips engine 16), so Keep / Save are off for those rows with the reason in the title (`keepable`, `P5_NO_PACK`) and
+Select all takes the user sounds. A 0.21 FM-1 now refuses a P5 sound's record too, not only its program (0.21 reads
+engine 16 as an empty slot). **The favourites are shown** on every tab: a yellow star where the unit shows one, C / B
+for a sound typed Chord / Bass (`favMarks`, `favKeyOf`, `favOf`, the keys of `cr_ui.c cu_fav_key`: P5's by
+Sequential number, a sound over a program the program's, an added one its slot's). The manager never sets a mark; its
+writes keep object 23's P5 section and types byte for byte. **SELECT** sends a position past 127 with its high bits
+in the fourth byte `crb_select` takes (P5's added sounds after 115, the CZ-1's after 64; it wrapped before). The
+simulator's pool (`?sim=pool`) has U004 MY PROPHET over P5 03, U007 P5 ADDED and a few marks. Tests: test_manager (a
+P5 block of 19 checks: the pool, the stars from an object with all 115 programs marked, Place over a program and
+its program read back, SELECT, rename, drag, Replace factory, Restore all P5, Restore factory order, Delete, Delete all
+and Undo with P5's marks byte for byte, Keep of a program refused, a 0.21 FM-1; the 3y79 counts with P5 03 restored
+too), test_sounds (P5's table, binding), install_test (the tables of both clients); the built page driven in headless
+Chromium (`?sim=pool`, `?sim=1`: the tabs, the stars, Keep refused on a program, Restore, Place over P5 07, Delete all,
+Undo). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok, 313 golden renders 0 changed; `sound_templates: ok`); build/site rebuilt with the new manager. docs: DEVICE-MANAGER.md "The P5 tab", SOUNDS.md, PROPHET.md, the beta's notes. **Not done**: a device
+run; P5's factory programs as files (the owner's decision: a pack would put Sequential's data on the site). **Seen, not
+changed**: marking a P5 user sound on the unit while it plays keys the mark by the program number in the sound's own
+bytes (`cu_fav_part_key`, `p5_patch_id`), while PRESETS and the manager show a sound over a program with that place's
+program's mark (`cu_fav_key`, `p5_preset_id`): the two differ when a sound made from one program is placed over
+another's place (possible from the manager); the committed `web/packs` are older than the firmware (the VA's patches
+version 3, some FM TONE values: `tools/make_packs.py` writes them differently today, P5 aside).
+
+## 2026-10-15 (velocity and aftertouch from the keys: Key Touch and Expression; 0.22)
+
+3y81. **Velocity and aftertouch from the FM-1's own keys (2026-10-14 / 15; the owner: "look into fm1-monk ... he
+added velocity and aftertouch to the FM-1 which would be super cool to bring in to choralroot"; docs/VELOCITY.md).**
+Charles Vestal's Velo and MONK-1 (GPL-3.0-only, credited in LICENSING.md) read the keys' carbon pills through the
+SARADC on matrix rows PA7 / PA8 (20 of the 27 note keys; the top seven, C#5 .. G5, have no converter), a touched key's
+every other sample with its row driven weakly high so the pad reads the pill, not the diode: the velocity is the
+deepest of the first two driven samples after the touch on a log scale of the resistance, the aftertouch the lean
+below the key's rest. The study and design first (the doc), then, the owner asking for a quick test on the unit, the
+builds: (1) `hal/fm1_adc.h`'s non-blocking conversion and `hal/fm1_input.h`'s ADC slot (one conversion a tick on the
+latched column's row, taken a tick later: each analog key every 2.2 ms; the MASTER pot and the battery in OCT-'s /
+OCT+'s slots, so the tick owns the converter and `master.c` / `main.c` read its samples; the drive; a held key's
+column LEDs dark on its sampled tick), `cr_sense.c` (Velo's state machine in integers: DRIVE 2, WAIT 2, the log map,
+curve 0.7, floor 450, LIGHTEST 896, no calibration), `cr_ui.c cu_scan_keys` holding a sensed root's debounced press
+until its velocity is there (12 ms at most: the velocity is known 8.8 ms after the touch sample, the host test
+measured, so the note comes 7 .. 10 ms later than before), the top row at the keys' recent velocity,
+console `inp`'s readings. The owner's ten minutes: 689 note-ons, velocity 1 .. 127, quartiles 37 / 73 / 98; "not the
+best velocity sensitivity, but it's a cool add"; little heard on FM6 and CZ-1 (their own laws). (2) The owner's
+design: Options > **Key Touch** (Fixed, the default: as before, no sensing / Dynamic / Velocity + Aftertouch),
+**Velocity Sens**, **Aftertouch Sens** (Low / Mid / High; bits 2..7 of the block's `bass_on`, 0 the defaults, no
+version); MONK-1's Touch: Velocity law on the VEL source (`mod.c cr_touch_gain`: a medium press keeps its level, a
+hard one is full, a light one quiet, by the sensitivity); the pressure (MONK-1's rest-following lean, `cr_sense.c`)
+polled every 5 ms (`cu_touch_poll`) and posted as `CRE_AT`: both parts as channel pressure (mod.c's AT source), 0xD0
+out on the Perform and Bass channels, polyphonic aftertouch in accepted. (3) **Expression**: the editor's EXPR screen,
+the MOD group's last on every engine (`cr_edit.c CE_S_EXPR`: VEL and AT to a destination by an amount, mod.c's matrix
+slots 3 and 4, saved with the sound; unset, with Key Touch on, VEL -> AMP at the full law and AT -> CUT by Aftertouch
+Sens: so every engine responds, FM6 and CZ-1 included, and a sound may route them itself; MIDI's velocity and
+aftertouch reach the same sources; docs/EDITOR.md). With Key Touch on the engines' own velocity-to-level is replaced
+by the routing (`voice.c`: the level is the envelope's, the EXPR gain on it); Fixed is bit for bit the old path. Flashed
+(the second and third builds over the owner's backup, restored between; the unit left on the Expression build).
+Cost: TIMER5 about 1 us a tick more (one conversion's registers, the hook, the drive's writes); .text +~5 KB, RAM
++~1 KB (83.6 %). **Not done**: the host tests (the owner: after the merge to main), the PA10 probe for the top row,
+polyphonic aftertouch out, anything on the screen, Velo's calibration (its open item), the 5 kHz scan's
+two-conversion variant (VELOCITY.md 3.1). The emulator: `tools/emu/scripts/cr_expr.txt` (the EXPR screen on FM6, the
+VA, FM TONE; not yet in `test_cr.sh`).
+
+3y82. **The host tests for the key sensing, Key Touch and Expression (2026-10-15; the owner: "Do this task here").**
+`tests/input_test.c`: the analog rows through `fm1_input_tick` with the converter as memory (one conversion a tick,
+taken at the next, on the column it was started on; every PA7 / PA8 key once per two frames, OCT- / OCT+'s slots the
+pot and the battery; a held key's every other sample driven, its row an output high at the level for the conversion
+and an input again with the drive bits clear before the rows are read; its column's LED lines dark on the tick that
+samples it; a conversion not done counts a timeout and the scan goes on; `con` 0 starts nothing).
+`tests/cr_sense_test.c` (new, `run_cr_tests.sh`): Velo's curves on `cr_sense.c` (a hard hit 127; a gentle press
+middling, the integer log map within 6 steps of the float law over the whole driven range, the steep end the worst;
+a graze, a bounce while held, the release's two samples, two keys at once; the pressure settling, leaning, eased, let
+go, and the Sens). It measured what the study had wrong: the velocity is known at the second pulled-up sample after the
+touch, a driven one before each, 8.8 ms after the touch sample (the doc, the comments and 3y81's figure corrected). The
+log map moved out of TIMER5's tick with it (`cr_sense_take`, the main loop maps the landing), and the tick's two ADC
+steps are functions of their own (`fm1__an_take`, `fm1__an_start`, not inlined): `tests/target_budget.py` had read
+their cold paths, laid out after the tick with a jump back, as a loop around the whole tick (cost 11363 for a budget of
+4511; 4503 now). `usb_poll`'s budget 159 -> 175: not its code but the layout, the new globals pushing part of the USB
+state past the byte offsets its loads use (+9 instructions, the same two spans). `tests/mod_test.c`: the law at the
+three sensitivities, Fixed bit for bit the old path, the default VEL -> AMP and AT -> CUT, an explicit slot instead,
+DST OFF. `tests/cr_settings_test.c`: the Key Touch bits kept beside Numerals, mode 3 fixed, a 0.21 record Fixed / Mid,
+the automatic copy; the byte is shared now (its two counts updated). `tools/emu/test_cr.sh`: `cr_expr.txt`'s checks;
+and the three Options entries after Velocity moved every entry from Bass Behaviour on by three: 20 scripts' `SELECT`
+walks, `cr_opt_keys.txt`'s walk (29 entries) and the entry numbers in `test_cr.sh` / `test_persist.sh`, as 3y30 did for
+one. `run_cr_tests.sh`, `run_tests.sh` and `test_cr.sh` all pass.
+
+## 2026-10-15 (the P5 tab and the velocity line integrated)
+
+3y83. **The device manager's P5 tab merged onto main's velocity line (2026-10-15; branch m-2 from origin/main cbda9d6,
+not pushed, not tagged, not flashed).** origin/main (the 0.22-beta1 line, the velocity / aftertouch merge 705a10d, the
+EXPR amount check), then with `--no-ff` p5m-1 7f947a5 (3y80, from eda684f). **The conflict**: HISTORY only (3y80
+first, then the velocity session's 3y81 / 3y82, all kept). The rest merged by itself, read over: `run_cr_tests.sh`
+(the velocity side's `cr_sense_test`, p5m-1's `sound_templates` built with P5), `docs/releases/0.22-beta1.md` (both
+sides' bullets); `fm1_install.py`, `install_test.py` and the web tests were p5m-1's alone. **What main's tests had not
+caught** (both from 705a10d, not the merge): (1) `test_persist`'s two-package run walked to Options > Dual Core and
+Version at entries 21 / 23: the three Key Touch entries moved them to 24 / 26 (`persist_1core_opt.txt`, the two
+greps), as the velocity session had done for every other walk. (2) `layout_test`: `design/layouts/*.json` lacked the
+MOD group's EXPR screen (written again: `dump_catalogs.mjs`); `layout_web.c lay_catalog` named the screen `?` and
+listed the previous screen's pages as its own (FM TONE's EXPR said 18 / 19, LFO pages, so an in-place pack took 18 as
+MOD's first page): now type `expr`, no pages; and a plan always flags EXPR, a stack of two lanes, "not buildable yet"
+(the plan holds edit8 screens of one or two lanes), so the plan check accepts that one entry (docs/LAYOUT-TOOL.md).
+Both deterministic, not the load. **The notes** (`docs/releases/0.22-beta1.md`, read end to end): velocity and
+aftertouch in the opening sentence; the stray blank line before the velocity bullet gone; "With Dynamic on" -> "With
+Key Touch on" (Velocity + Aftertouch too); Going back's Numerals bullet now Numerals and Key Touch: 0.21 reads their
+byte (`bass_on`, `CRS_FIX(bass_on, 0, 1)`) as out of range and keeps 0 in its copy of the record (`crs_rec`,
+sanitised in place), so its next settings write, SAVE held or any Option changed, leaves Numerals off and Key Touch
+Fixed / Mid for the return (read from v0.21's `cr_settings.c`, not run; the old line said SAVE held only). One Going
+back section. `web/releases.json`: the beta's sha256 / sha256_1core of this build; no velocity bullet, the entry has
+8, `releases_test`'s most. **Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 1001 ok,
+test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed, `sound_templates: ok`). `./build.sh
+--release 0.22-beta1` twice: the same SHA256SUMS; `choralroot-0.22-beta1.fwsc` 2029c797f63e29ac...,
+`choralroot-0.22-beta1-1core.fwsc` 9d9eec6d9d028128...; the apps carry `ChoralRoot 0.22-beta1` and `ChoralRoot
+0.22-beta1 1-core`. releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1` (both sha256 match), site_test,
+test_installer; the browser emulator built as 0.22-beta1, test_web_emu PASS; site_test again (build/site the last).
+Size: XIP 540 300 B (94.2 %), RAM 78 476 (79.8 %), POOL 238 936 (69.4 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the
+single-core package XIP 537 660 (93.8 %), RAM 75 372 (76.7 %), POOL 238 808 (69.4 %). XIP is the tight one (32 KB
+free). Stub version 3, sha256 baee55ed142fe1cc. **Not done**: anything on a unit (3y80's and 3y81's lists stand);
+tagging and the Pages job.
+
+## 2026-10-15 (the layout tool's p5 style; P5's panel compiled into the firmware: step 4)
+
+3y84. **The layout tool's p5 style and P5's whole panel as a design (2026-10-14; branch lay-5 from 9698e52, not
 pushed).** The owner: "For the prophet 5, I would like the sound editor UI to better resemble the real prophet 5
 interface." and "I'd like update glyph designs to match with the Prophet 5 knobs and layout, lets do mockups and
 Designer pages first." So the mock-ups come first, in the designer. A design gets `"style"`: absent or `"flat"` (the
@@ -3046,7 +3533,7 @@ now (the pair flags dropped; the pair is tested on a copy). The device image is 
 draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
 firmware will copy when it gets free pages. Nothing on a unit.
 
-3y67. **The layout generator and P5's tables, stage 1 of step 4 (2026-10-15; on lay-5 after 922bb08, not pushed).** The
+3y85. **The layout generator and P5's tables, stage 1 of step 4 (2026-10-15; on lay-5 after 922bb08, not pushed).** The
 owner, signing off his P5 panel: "I made my final changes and reviewed all the knob lanes and updated them. I'm happy
 with this layout, so good to build it." So the plan's stage 1 (docs/LAYOUT-TOOL.md "Step 4, the firmware: a plan"):
 `tools/gen_layout.py` compiles the designs of its `BUILD` list (`{"P5": "design/layouts/designs/p5-panel.json"}`) into
@@ -3072,7 +3559,7 @@ after). The device image is unchanged: `./build.sh` before and after, sha256 of 
 both times (no firmware file includes the header). Not done: stages 2..4 (the editor and the renderer, the tool on
 the firmware's renderer, the docs); nothing on a unit.
 
-3y68. **P5's editor is the owner's panel: the editor and the renderer on a compiled layout, stage 2 of step 4
+3y86. **P5's editor is the owner's panel: the editor and the renderer on a compiled layout, stage 2 of step 4
 (2026-10-15; on lay-5 after 5cf2a6d, not pushed, not tested on the unit).** The owner: "I'm happy with this layout, so
 good to build it." EDIT on a P5 part now shows his `p5-panel.json` as the unit's own screens: OSC (OSC A with the
 mixer, OSC B), FILT (FILTER with the filter envelope), ENV (the amplifier), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE), in
@@ -3105,7 +3592,7 @@ first lane; OSC two screens, ENV one); `sh tests/run_all.sh` all 22 suites (313 
 Other engines: their screens are unchanged (the renders, the emulator frames of VA and FM TONE, test_cr). Not done:
 stages 3 and 4 (the tool on the firmware's renderer for any design; the manual); not tested on the unit, not flashed.
 
-3y69. **The layout tool on the firmware's editor and renderer, and the docs: step 4 done (2026-10-15; on lay-5 after
+3y87. **The layout tool on the firmware's editor and renderer, and the docs: step 4 done (2026-10-15; on lay-5 after
 611e3ed, not pushed).** Stages 3 and 4 of the plan. The designer no longer composes a free screen itself: `packDesign`
 packs a design's free screens into exactly the records `tools/gen_layout.py` compiles (`packFree`: the same texts,
 defaults, value names, frames first; P5's panel byte for byte the compiled table, 1784 B, checked against the module's
@@ -3128,3 +3615,17 @@ the plan replaced by what was built, with the numbers), docs/EDITOR.md (the `fre
 panel's screens and rows), docs/HANDOFF.md (the open item), docs/releases/0.22.md (a line for the next beta's notes).
 What the owner must still do: try P5's panel on the unit (EDIT on a P5 sound: OSC, FILT, ENV, LFO, MOD; SELECT
 through the rows, KNOB 1..4). Not done: the other engines (step 5); classic screens in a built design.
+
+3y88. **The panel line merged onto main's beta line (2026-10-15; lay-5 ba88b05 merged with origin/main fc02a79).**
+The owner: "The new UI designs for the P5 are good. Lets get this merged in with everything, then lets tag and
+release the build as v0.22-beta1." Five conflicts: `cr_screen.h` (main's `tall` 2, the Geek Out 2 read-out, beside
+`fl_eng` / `fl_scr`), `cr_edit.c` (`CE_S_EXPR` 6 then `CE_S_FREE` 7; an engine with a compiled layout gets EXPR as
+MOD's last screen after the design's, so P5's MOD is POLYMOD, VOICE, EXPR), `tests/cr_draw_test.c` (both sides'
+tests), `tools/layout/layout_web.c` (`LAY_STYPE` with `expr` and `free`), HISTORY (3y66 .. 3y69 of the panel line
+renumbered 3y84 .. 3y87 after main's 3y83). EXPR on P5 is the platform's stack in the platform's look, after the
+panel; the design file does not hold it. P5's `params_hash` is unchanged; `tests/cr_p5panel_test.c` and
+`web/test_layout.mjs` 3 walk EXPR's two lanes too (24 places on the emulator, all identical). Verified: run_all 22
+suites green (313 goldens 0 changed, test_cr 1001 ok), test_layout with the emulator, gen_layout_test 58. **Size:
+XIP 546 780 B of 573 440 (95.4 %)**, RAM 79.8 %, POOL 69.5 %: main alone was 94.2 %, the panel's tables and code
+6.5 KB; about 26 KB of XIP left. Open for the release: docs/releases/0.22.md's line says the panel is "merged after
+0.22-beta1"; if the beta is tagged on this merge, the beta's notes and the installer card should carry the panel.

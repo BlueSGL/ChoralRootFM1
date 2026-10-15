@@ -44,6 +44,7 @@ from a layer: it goes with the layer (manual).
 | Secret Chords | Options | block `secret` | **automatic** |
 | 6th with 7th (0.20) | Options | block `pick_roots` bit 4 | **automatic** |
 | Velocity | Options | block `vel` | **automatic** |
+| Key Touch, Velocity Sens, Aftertouch Sens (docs/VELOCITY.md) | Options | block `bass_on` bits 2..7 (`CRS_TOUCH`, `CRS_VSENS`, `CRS_ATSENS`; 0 = Fixed / Mid, the defaults: no version) | **automatic** |
 | MIDI Perform, MIDI Bass, MIDI Raw Chord | Options | block `midi_en[3]`, `midi_ch[3]` | **automatic** |
 | Raw Chord Sound | Options | block `raw_sound` | **automatic** |
 | MIDI Clock | Options | block `clock_mode` | **automatic** |
@@ -270,7 +271,7 @@ The block has its own header:
 | midi_en[3], midi_ch[3] | per stream MAIN BASS RAW | on, on, **RAW off**; channels 1 / 2 / 3 |
 | clock_mode | Off / **Out** / In | **Out** (Orchid sends clock) |
 | raw_sound | RAW also plays part 0 | off |
-| view, motion, leds | view bits 0..2: Chord / Keyboard / Notes / Geek Out / Scope (Options > View, HOME held's menu); **v9: bit 7 the view lock** (`CRS_VIEW` / `CRS_VIEW_LOCK` / `CRS_VIEW_BYTE`; locked: HOME tap never cycles the view); **v12: bit 6 Options > Dual Core On** (`CRS_DC_ON`, `CRS_DUALCORE`; set = On: core 1 started at power-on, docs/DUALCORE.md; v11, 0.15, had the bit the other way round: set = Off, On the default), another bit or view: the default; Full/Calm/Off, Glow/Stock | Chord, unlocked, Dual Core **Off**, Full, Glow; a v1..v8 record: its view, unlocked; a v1..v11 record: Dual Core Off, whatever its bit 6 |
+| view, motion, leds | view bits 0..2: Chord / Keyboard / Notes / Geek Out / Scope / **Geek Out 2 (5; 0.22**: four meters, docs/DUALCORE.md "Geek Out 2"; a firmware up to 0.21 finds 5 out of range and reads Chord) (Options > View, HOME held's menu); **v9: bit 7 the view lock** (`CRS_VIEW` / `CRS_VIEW_LOCK` / `CRS_VIEW_BYTE`; locked: HOME tap never cycles the view); **v12: bit 6 Options > Dual Core On** (`CRS_DC_ON`, `CRS_DUALCORE`; set = On: core 1 started at power-on, docs/DUALCORE.md; v11, 0.15, had the bit the other way round: set = Off, On the default), another bit or view: the default; Full/Calm/Off, Glow/Stock | Chord, unlocked, Dual Core **On** (0.22, a unit with no record and Reset Settings; Off 0.16 .. 0.21; a view byte out of range keeps the record's Dual Core), Full, Glow; a v1..v8 record: its view, unlocked; a v1..v11 record: Dual Core Off, whatever its bit 6 |
 | palette | gfx.c index, 0xFF = MOD | **MOD** |
 | fx_on | 0/1 | on |
 | chord_sound | v6: the chord part's sound, (engine << 8) \| its pool position (docs/PRESETS.md); 0xFFFF = the UI's default. v1..5: an old list position, read as the default | FM6 TINE EP |
@@ -285,7 +286,8 @@ The block has its own header:
 The reserve is used up by v6 (`rsv[20]` became `pool_pos`), and v8 took the last free byte (`rsv_usb`, packed with two
 fields), v9 put the view lock in the view's byte (bit 7; an older firmware reads a locked record's view as out of
 range, Chord), v11 put Dual Core in bit 6 of the same byte, set = Off, and v12 (0.16) turned it round: set = On, so
-that a fresh, erased or zeroed record reads Off, the default since 0.16 (the same caveat: an older firmware reads an
+that a fresh, erased or zeroed record reads Off, the default from 0.16 to 0.21 (since 0.22 the default is On:
+`cr_settings_defaults` sets the bit for a unit with no record and Reset Settings; a record's Off stays Off) (the same caveat: an older firmware reads an
 On record's view as Chord; 0.15 reads a v12 record's bit its own way, On as Off and Off as On, until it is set there),
 and v13 (0.17) put the KEY layer's keys in bit 5 of `loop_rec`, next to the other "what do the keys do in this menu"
 bit, and the LOCK layer's two styles in its bits 6 and 7 (the caveat here: a firmware older than v13 takes a record
@@ -689,6 +691,12 @@ every save does), the favourites, and every other flash object but the session (
 TONE patches and banks, the loops): `test_persist.sh` compares the flash outside the settings object and the
 session's pair byte for byte and the panel table inside it. Dual Core: On is saved (the default since 0.22); `cr_c1_off` is read at power-on only, so a
 second core that this power-on did not start starts at the restart (the message says `restart`). In SAFE MODE the entry works on the session only (`ST_BLOCKED`: no write).
+Dual Core is also written Off by the unit itself (0.22, docs/DUALCORE.md "The persistent fallback"): after a crash,
+a watchdog reset or a give-up with the second core running, `cr_settings_boot` keeps core 1 off and `cr_settings_load`
+reads the option as Off and primes the automatic save (`crs_dc_bar`), so the record's bit 6 is cleared at the next
+quiet moment; the user's own Options > Dual Core clears the bar (`cr_settings_dc_user`). The fallback wins over the
+default: a Reset Settings in that power-on saves Off, not On (`crs_dc_bar` still set). The single-core package never
+bars (`cr_c1_bar_boot`: core 1 never starts there) and so never writes Dual Core.
 Tests: `tests/cr_settings_test.c t_factory`, `reset_set.txt` / `reset_do.txt` / `reset_check.txt`.
 
 ## Power-on calibration

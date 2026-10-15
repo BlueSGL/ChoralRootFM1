@@ -128,6 +128,10 @@ extern void isr_timer5(void);
 
 static void timer5_start(void)                 /* OSC /4 = 6 MHz, PRD 600 -> 10 kHz */
 {
+#ifdef CR_SENSE_KEYS
+    fm1_an.drive = SN_DRIVE;                       /* the analog rows (docs/VELOCITY.md): the tick owns the converter */
+    fm1_an.con = FM1_ADC_CON_SCAN;
+#endif
     fm1_timer5_start(isr_timer5, 4);   /* above ALNK0 (3): the scan nests into the render (see fm1_timer5_irq) */
 }
 
@@ -230,6 +234,9 @@ static void dbg_boot(void)
     CR_STAGE(BS_GUARD);
 }
 
+/* the pot: the scan's sample once TIMER5 owns the converter (hal/fm1_input.h fm1_an; -1 until its first), the
+ * blocking read before (master_boot, under the splash) */
+#define MASTER_POT_READ() (fm1_an.con ? (fm1_an.mvalid ? (int32_t)fm1_an.master : -1) : fm1_adc_read(FM1_ADC_MASTER))
 #include "master.c"              /* the MASTER pot: read before the audio starts (0.19; Felucca 1.1.5, #137) */
 
 static void fm1_main(void)
@@ -302,7 +309,7 @@ static void fm1_main(void)
         if (fm1_ms > BG_SETTLE_MS && bootguard.pending)  /* a crash or hang in the first 30 s counts */
             bootguard_settled(&bootguard);              /* (SAFE MODE stays for this session: cr_safe) */
         {
-            int32_t b = fm1_adc_read(FM1_ADC_BATT);     /* battery: slow IIR */
+            int32_t b = fm1_an.bvalid ? (int32_t)fm1_an.batt : -1;   /* battery (the scan's sample): slow IIR */
             if (b > 0)
                 song.batt_raw = song.batt_raw ? song.batt_raw + (b - song.batt_raw) / 32 : b;
         }
@@ -389,6 +396,9 @@ static void fm1_main(void)
 void fm1_cstart(void)
 {
     uint32_t *s, *d, p3, src, wdt, mode;
+#if CR_CPU1 && defined(FM1_HAVE_CPU1)
+    fm1_cpu1_halt();                            /* core 1 held before the RAM below is cleared (hal/fm1_cpu1.h) */
+#endif
     fm1_time_init();
     fm1_reset_reason();
     p3 = fm1_boot.p3_rst;

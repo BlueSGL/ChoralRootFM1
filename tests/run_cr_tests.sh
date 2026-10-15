@@ -57,17 +57,29 @@ t ./build/host/cr_settings_test
 # write, an unknown version, ids out of range (docs/PRESETS.md "Favourites")
 par_build cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_favs_test tests/cr_favs_test.c
 t ./build/host/cr_favs_test
+par_build cc -O1 -Wall -Wno-unused-function -o build/host/cr_sense_test tests/cr_sense_test.c -lm
+t ./build/host/cr_sense_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -Ibuild/gen -o build/host/cr_va_test tests/cr_va_test.c -lm
 t ./build/host/cr_va_test
 # QUAD (docs/QUAD.md): blob, pages, ratios, the routings, against tests/quad_ref.py's goldens, envelopes, filters, LFOs,
 # presets; an int32 wrap aborts (the sanitizer). The CPU figure: tests/run_quad_test.sh
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -fsanitize=signed-integer-overflow -fno-sanitize-recover=all -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/cr_quad_test tests/cr_quad_test.c -lm
 t ./build/host/cr_quad_test
+# FM TONE's times against the Digitone's (docs/QUAD.md "Times"): quad_times.h not stale, the amp envelope's times, the
+# proxy readings, the delay, the fade, through the measurement's own analysis (tools/digitone/dt_analyse.py; numpy)
+par_build cc -std=c99 -O2 -w -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/quad_render tools/digitone/quad_render.c -lm
+t python3 tools/digitone/test_quad_times.py
 par_build cc -std=c99 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_trans_test tests/cr_trans_test.c -lm
 t ./build/host/cr_trans_test
 # the bass part on the second core (firmware/src/cr_cpu1.h, docs/DUALCORE.md): the split bit for bit, the budgets, the fail-safes
 par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cpu1_test tests/cr_cpu1_test.c -lm
 t ./build/host/cr_cpu1_test
+# .. the persistent fallback inert in the single-core package (CR_SINGLE_CORE 1), and the same record barring in the
+# standard one (docs/DUALCORE.md "The persistent fallback")
+par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -DCR_SINGLE_CORE=1 -o build/host/cr_c1_bar_1core_test tests/cr_c1_bar_1core_test.c
+t ./build/host/cr_c1_bar_1core_test
+par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -DCR_SINGLE_CORE=0 -o build/host/cr_c1_bar_std_test tests/cr_c1_bar_1core_test.c
+t ./build/host/cr_c1_bar_std_test
 # .. and that job on a real second thread (3y45): the inline job's samples for twelve pairs of engines (P5 on both
 # parts among them), no ThreadSanitizer report, and a planted shared word reported
 t sh tests/run_c1_thread_test.sh
@@ -140,11 +152,11 @@ par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/
 t logged_last cr_usbtap_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_midi_test tests/cr_midi_test.c
 t ./build/host/cr_midi_test
-# the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md). Built without
-# P5: the Sound Manager and fm1_install.py do not know engine 16 yet (its store and their support are phase B,
-# docs/PROPHET.md "Saving"; no P5 record can be saved until then). With it this check names what they lack: the
-# engine's name and its presets
-par_build cc -std=gnu11 -O1 -w -DFELUCCA_PROPHET=0 -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
+# the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md), and their factory
+# tables the firmware's. Built with P5, as the unit is (3y80, the device manager's P5 tab; until then without it): the
+# clients hold P5's shipped programs (INIT P5, then assets/prophet5-factory/shipped.txt's list) and their Sequential
+# numbers, the favourites' keys; when the list changes this check says what to paste
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
 t ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py
 
 for id in $par_order; do

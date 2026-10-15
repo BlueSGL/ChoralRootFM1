@@ -290,6 +290,9 @@ in every build that ships it.
 3. `python3 tools/p5_goldens.py`: P5's lines of `tests/golden.txt` and `tests/cpu_baseline.txt` made again, every
    other line left byte for byte (it refuses to write if a render of another engine moved). The entries are named
    by the program's number (`preset/P5/044_CARS_STRINGS`), so a program that stays keeps its line and its hash;
+   and (since 3y80, the device manager's P5 tab) `./build/host/sound_templates`' `"factory"`, `"factory_first"` and
+   `"factory_ids"` lines pasted into `web/fm1sounds.js` and `tools/fm1_install.py` (`FACTORY_PRESETS`,
+   `FACTORY_FIRST`, `FACTORY_IDS`: its `--check` in `tests/run_cr_tests.sh` fails until they hold the new list);
 4. `CR_VERSION=0.22 sh tests/run_all.sh`; then this file's table below and the size table
    (`python3 tools/gen_prophet_factory.py --list`).
 
@@ -465,7 +468,7 @@ EDIT on a P5 part shows **the owner's panel** (2026-10-15: "I'm happy with this 
 design `design/layouts/designs/p5-panel.json`, compiled into the firmware (docs/LAYOUT-TOOL.md "Step 4"; the screens
 and their lanes: docs/EDITOR.md §4 "P5"). Eight screens laid out as the Prophet-5's panel: OSC (OSC A with the mixer,
 OSC B), FILT (the filter with its envelope), ENV (the amplifier), LFO (the LFO with its SHAPE buttons, WHEEL), MOD
-(POLY-MOD, VOICE with GLIDE); FX and MIX the platform's. A cell is one raw byte of the program, named and ranged as
+(POLY-MOD, VOICE with GLIDE, then the EXPR screen every engine has: docs/EDITOR.md); FX and MIX the platform's. A cell is one raw byte of the program, named and ranged as
 Melodee's panel (`prophet_edit.h P5_PANEL`); turning it writes that byte only. The engine's 19 deep pages are still its
 tables (`get` / `set` / the blob address them); the panel binds every one of the 56 controls that change the sound once:
 
@@ -497,7 +500,8 @@ byte and, as any load, its UNISON switch (`p5_track_loaded`: `p5_user_pending`, 
 follow the factory programs in P5's pool as other engines' do; a program change, the session, the favourites (a P5
 user sound's key is its slot; an Overwrite of a factory program keeps that program's Sequential number) and the
 filter treat them as any user sound. The Sound Manager exports and imports a P5 user sound as a sound file (patch
-kind `p5`). Sequential's program SysEx is not imported (not done: `prophet_patch.c p5_patch_decode` decodes it, the
+kind `p5`); the device manager has a P5 tab since 3y80 (the programs, P5 user sounds over them or added, the
+favourites' stars: docs/DEVICE-MANAGER.md "The P5 tab"). Sequential's program SysEx is not imported (not done: `prophet_patch.c p5_patch_decode` decodes it, the
 manager's path for it is not written). A 0.21 FM-1 has no P5 store: the tools refuse a P5 sound for it.
 
 What follows is the reasoning of before the pool (0.22's first builds), kept for the record.
@@ -1194,7 +1198,9 @@ core 0 runs the chorus and the delay; join 2; the reverb's buffers added. The ef
 longer of the two sides instead of their sum. From the unit's readings (reverb avg 202 / max 273, its down- and
 up-sampler 22..98 each, so the reverb's side about 240 avg / 470 worst; the three effects with the parts' sends 570
 .. 720, so core 0's side about 250 at the worst), **by inference** the effects' part of a half shrinks by about 200
-.. 250 us when all three run.
+.. 250 us when all three run. With the delay at the half rate (the default since 0.22, HISTORY 3y74 / 3y76) the
+up-sampler, which the delay's wet and the reverb's share, stays on core 0 after join 2 (about 35 us a half): core 1
+runs the reverb's half-band and lines (DUALCORE.md "What each core runs").
 
 ### The part's coefficients (`p5_coef_t`, `p5_coef_update`)
 
