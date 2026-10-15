@@ -35,6 +35,15 @@ the FM-1 restarts and the installed identity is checked.
   fm1_install.py --export-syx N FILE     (an FM6 voice / CZ-1 tone as .syx: DX7 single voice / Casio tone dump)
   fm1_install.py --import-syx N FILE [--voice V] [--yes]   (a DX7 voice or bank, or a CZ-1 tone, into slot N)
 
+Several FM-1s on one computer (docs/INSTALL-COMPAT.md "Several FM-1s"): --info lists every FM-1 it finds, each with its
+unit ID (ChoralRoot from 0.22: 8 hex digits, also under Options > Version on the unit). --unit ID, with any command,
+uses only the FM-1 whose INFO answers with that ID (none or several: exit 3 / 9, nothing done); an install with --unit
+takes the update mode only from the one MIDI port that appears when that FM-1 restarts, and checks the ID again when it
+is back; it never rescans MIDI. Without --unit, while several FM-1s answer, a command that writes to an FM-1 or
+restarts it is refused (exit 9) with their IDs; a read-only one reads the first, as with one FM-1, and says so.
+  fm1_install.py --info                       (every FM-1: its port, identity, version, unit ID)
+  fm1_install.py PACKAGE.fwsc --unit A1B2C3D4 (the same with every command)
+
 An install that was interrupted (the cable, the battery): on a ChoralRoot with the boot stub (docs/BOOT-SAFETY.md;
 from 0.16 on, 0.15 and older do not have it) the FM-1 comes back in update mode at the next power-on (three LED flashes, a black screen): run
 the install again to finish it. The same on purpose, on a working unit too: hold OCT- alone while switching on,
@@ -62,7 +71,9 @@ Exit codes: 0 done, 1 cancelled or other error, 2 bad arguments or package,
 loader / no restart), 6 wrong model, or another identity after the install,
 7 the backup, restore or sound write failed (or the firmware has no backup protocol, or is not ChoralRoot for the
 sounds), 8 the running firmware is one ChoralRoot
-is not installed over (Sloop, the Felucca 0.x betas, unknown ones: docs/INSTALL-COMPAT.md; --force overrides).
+is not installed over (Sloop, the Felucca 0.x betas, unknown ones: docs/INSTALL-COMPAT.md; --force overrides), 9 several
+FM-1s where one is needed: connected without --unit for a command that writes or restarts, several ports answering with
+the --unit ID, or more than one new port (or a new port that cannot be told apart) at an install's restart with --unit.
 
 No MIDI call can hold the tool: the ports are opened, listed and closed in worker processes, each wait has a bound,
 and a port that does not open or answer in time is given up with the codes above (3 not found, 4 lost, 5 no restart)
@@ -79,6 +90,7 @@ import subprocess
 import sys
 import threading
 import time
+from collections import Counter
 
 HS_QUERY = bytes([0xF0, 0x00, 0x32, 0x45, 0x00, 0x00, 0x00, 0x40, 0x7F, 0xF7])
 UPGRADE = bytes([0xF0, 0x22, 0x24, 0x35, 0x7F, 0xF7])
@@ -104,7 +116,7 @@ DELAY = {"open": 0.3, "start": 2.0, "reply": 0.01, "loader": 3.0, "reboot": 3.0,
 
 EXIT = {"usage": 2, "badpkg": 2, "badbackup": 2, "notfound": 3, "model": 6, "lost": 4, "stopped": 4, "badreq": 4,
         "nobackup": 7, "backup": 7, "nosounds": 7, "unsupported": 8, "badsound": 2,
-        "noloader": 5, "noreturn": 5, "mismatch": 6}
+        "noloader": 5, "noreturn": 5, "mismatch": 6, "several": 9}
 
 
 class InstallError(Exception):
@@ -390,20 +402,22 @@ def midi_worker(stuck):
         if tag == b"r":
             return str(getattr(rtmidi, "rescan", midi_rescan)()).encode()
         if tag == b"o":
-            names = json.loads(data)
+            names = json.loads(data)                      # (port_labels' names: "NAME [2]", the second NAME)
             if names[0] is not None:
                 inp = rtmidi.MidiIn()
                 inp.ignore_types(sysex=False, timing=True, active_sense=True)   # SysEx in; the clock stays out
-                inp.open_port(inp.get_ports().index(names[0]))
+                k = port_index(inp.get_ports(), names[0])
+                inp.open_port(inp.get_ports().index(names[0]) if k is None else k)   # (not there: ValueError)
             if names[1] is not None:
                 out = rtmidi.MidiOut()
-                out.open_port(out.get_ports().index(names[1]))
+                k = port_index(out.get_ports(), names[1])
+                out.open_port(out.get_ports().index(names[1]) if k is None else k)
         elif tag == b"s":
             out.send_message(data)
         elif tag == b"l":
             # asked of the open port: the list is the process's own, a client made for the question would see the
             # same; and no client comes and goes while an answer is on its way (the tool asks every DELAY gone)
-            if names[0] in inp.get_ports() if inp else names[1] in out.get_ports():
+            if (port_index(inp.get_ports(), names[0]) if inp else port_index(out.get_ports(), names[1])) is not None:
                 return b"\0"
             taken()                                       # gone: what it sent before it left, first
             return b"\1"
@@ -596,7 +610,7 @@ class MidiBackend:
 
     def names(self, k):
         r = self.ask(b"n", "the list of the MIDI ports")
-        return [] if r[:1] == b"!" else list(dict.fromkeys(json.loads(r)[k]))
+        return [] if r[:1] == b"!" else port_labels(json.loads(r)[k])    # (two ports of one name: both, the 2nd "[2]")
 
     def input_names(self):
         return self.names(0)
@@ -665,6 +679,29 @@ class Link:
                 pass
 
 
+def port_labels(raw):
+    """the ports as the tool names and opens them: a name that several ports share (two FM-1s: "ChoralRoot FM-1"
+    twice, as CoreMIDI may list them) is the first one's, " [2]", " [3]" ... are added to the next ones', in the
+    system's order; a name of one port stays as it is (one FM-1: the names are the system's)"""
+    seen, out = {}, []
+    for n in raw:
+        k = seen[n] = seen.get(n, 0) + 1
+        out.append(n if k == 1 else f"{n} [{k}]")
+    return out
+
+
+def port_index(raw, label):
+    """the index in the system's list `raw` of the port `label` names (port_labels), or None"""
+    labels = port_labels(raw)
+    return labels.index(label) if label in labels else None
+
+
+def port_base(label):
+    """the system's name of the port a label names (port_labels: " [k]" off, k >= 2)"""
+    m = re.fullmatch(r"(.*) \[(\d+)\]", label)
+    return m[1] if m and int(m[2]) >= 2 else label
+
+
 def pair_output(name, outs):
     if name in outs:
         return name
@@ -680,6 +717,47 @@ def pair_output(name, outs):
 class Device:
     def __init__(self, link, ident, name):
         self.link, self.id, self.name = link, ident, name
+
+
+class Probe:
+    """what one port answered (Updater.survey): the identity, and from a running firmware its INFO (version, family,
+    unit ID or None; None: no backup protocol)"""
+
+    def __init__(self, name, ident, info):
+        self.name, self.ident, self.info = name, ident, info
+
+    @property
+    def uid(self):
+        return self.info[2] if self.info else None
+
+    @property
+    def version(self):
+        return self.info[0] if self.info else None
+
+
+def id_text(p):
+    """a probe's unit ID in words (--info)"""
+    if p.uid:
+        return p.uid
+    if p.ident.loader:
+        return "none in update mode"
+    if not p.info:
+        return "none (no INFO answer: the stock firmware, or another without the backup protocol)"
+    return "none (not ChoralRoot: ChoralRoot from 0.22 has one)" if p.info[1] != "choralroot" else \
+        "none (a ChoralRoot from before the unit ID: an update brings it)"
+
+
+def units_text(probes):
+    """one line per FM-1: port, identity, version, unit ID"""
+    w = max(len(p.name) for p in probes)
+    return "\n".join(f"  {p.name:<{w}}  {p.ident.text:<12}  {p.version or ('update mode' if p.ident.loader else '-'):<20}  "
+                     f"unit ID {p.uid or 'none'}" for p in probes)
+
+
+def several_text(probes, what):
+    return (f"{len(probes)} FM-1s are connected: name the FM-1 {what} with --unit ID (fm1_install.py --info lists "
+            f"them):\n{units_text(probes)}\n  An FM-1 without a unit ID (update mode, the stock firmware, another firmware, "
+            "a ChoralRoot from before the unit ID) cannot be named: unplug the other FM-1s and run this again.")
 
 
 def handshake(link, tries=3):
@@ -699,10 +777,152 @@ def handshake(link, tries=3):
 
 
 class Updater:
-    def __init__(self, backend, port=None):
+    """unit (--unit ID): only the FM-1 whose INFO answers with that ID is used (select(): the port it is on, found
+    before the first command; mine(): every port a command or a wait takes is checked again). acting: the command
+    writes to the FM-1 or restarts it; without --unit it is refused while several FM-1s answer (ready())"""
+
+    def __init__(self, backend, port=None, unit=None, acting=False, out=None):
         self.backend = backend
         self.port = port
         self.gave_up = None                       # the last MIDI call that did not return within its bound
+        self.unit = unit.upper() if unit else None
+        self.acting, self.out, self.checked = acting, out, False
+        self.only = None                          # --unit: the port the unit is on (select; after a restart, verify)
+        self.loader_port = None                   # --unit: the update-mode port its restart brought (wait_new)
+        self.fresh = None                         # --unit: the ports before the last restart (a Counter of the
+        #                                           system's names), for a firmware that comes back without an ID
+        self.unverified = None                    # --unit: what came back without an ID and was taken (fresh)
+
+    def ready(self):
+        """once, before the first port a command takes: --unit finds its unit (select); without it, several FM-1s
+        refuse a command that writes or restarts, and a read-only one says which it reads. With at most one
+        candidate port nothing is asked: one FM-1 runs as it always has"""
+        if self.checked:
+            return
+        self.checked = True
+        if self.unit:
+            p = self.select()
+            if self.out:
+                print(f"unit {self.unit}: {p.version} ({p.ident.text}) on port {p.name}", file=self.out)
+            return
+        if len(self.candidates(True)) < 2:
+            return
+        fm1 = [p for p in self.survey(True)[0] if model_of(p.ident.text) == "FM-1"]
+        if len(fm1) < 2:
+            return
+        if self.acting:
+            raise InstallError("several", several_text(fm1, "this command is for"))
+        if self.out:
+            print(f"note: {len(fm1)} FM-1s are connected; this reads the first that answers, as with one (--unit ID "
+                  f"names one):\n{units_text(fm1)}", file=self.out)
+
+    def survey(self, only_port=True):
+        """every candidate port asked the identity and (a running firmware) INFO, each link closed again ->
+        ([Probe of each port that answered], [the ports that did not])"""
+        outs = self.names(outs=True)
+        ins = self.names() if outs else []
+        got, silent = [], []
+        for name in self.candidates(only_port, ins, every=True) if outs else []:
+            out = pair_output(name, outs)
+            link = self.open(name, out) if out else None
+            ident = info = None
+            if link:
+                try:
+                    ident = handshake(link, 2)
+                    info = device_info(BackupLink(link), with_id=True) if ident and not ident.loader else None
+                finally:
+                    link.close()
+            if ident:
+                got.append(Probe(name, ident, info))
+            else:
+                silent.append(name)
+        return got, silent
+
+    def select(self):
+        """--unit: the one port whose FM-1 answers INFO with the ID -> its Probe (self.only). None, or several:
+        InstallError (exit 3, 9), nothing sent to any FM-1 but the identity and INFO questions"""
+        probes, _silent = self.survey(True)
+        hits = [p for p in probes if p.uid == self.unit]
+        if len(hits) == 1:
+            self.only = hits[0].name
+            return hits[0]
+        if hits:
+            raise InstallError("several", f"{len(hits)} ports answer with unit ID {self.unit}: "
+                                          f"{', '.join(p.name for p in hits)}; nothing was done")
+        seen = f"\n  what answered:\n{units_text(probes)}" if probes else ""
+        raise InstallError("notfound", f"no FM-1 answers with unit ID {self.unit}{seen}\n  An FM-1 in update mode or "
+                                       "without ChoralRoot's unit ID cannot be named: unplug the other FM-1s and run "
+                                       "this without --unit")
+
+    def mine(self, link, ident, name, ins):
+        """--unit: is the FM-1 on this port the unit? A running firmware: its INFO's ID. Update mode (no ID): only
+        the one port the switch brought (wait_new). A firmware that answers without an ID (one installed that has
+        none): only as the one new port since the restart (self.fresh), whose name no other port has"""
+        if not self.unit:
+            return True
+        if ident.loader:
+            return name == self.loader_port
+        info = device_info(BackupLink(link), with_id=True)
+        if info and info[2]:
+            return info[2] == self.unit
+        if self.unverified and name == self.only:     # (taken so after the install's restart: verify)
+            return True
+        if self.fresh is None:
+            return False
+        now, b = Counter(port_base(n) for n in ins), port_base(name)
+        if now[b] > self.fresh[b] and now[b] == 1:
+            self.unverified = f"{ident.text}" + (f" {info[0]}" if info else "")
+            return True
+        return False
+
+    def ports(self):
+        """the system's port names now, as a Counter (two FM-1s of one name: that name twice)"""
+        return Counter(port_base(n) for n in self.names())
+
+    def wait_new(self, before, target, secs):
+        """--unit, after the unit was asked to restart into update mode: the one MIDI port that appeared since
+        `before` (self.ports() while it was there), once the unit's own port (`target`) has gone -> the Device of
+        its update loader, or None in secs. Before anything is written, InstallError (exit 9) when more than one
+        new port appears, when the new port's name is another port's too, when it answers as something else than
+        an update loader, or when the unit's port is still there beside it (twice in a row)"""
+        end, tb, stay = time.monotonic() + secs, port_base(target), 0
+        while time.monotonic() < end:
+            now = self.ports()
+            new, gone = now - before, before - now
+            if sum(new.values()) > 1:
+                raise InstallError("several", f"more than one new MIDI port appeared while this FM-1 restarted into "
+                                              f"update mode ({', '.join(sorted(new.elements()))}): which one is its "
+                                              "update mode is not known, and nothing was written. Unplug the other "
+                                              "FM-1s, then run the install again without --unit: the FM-1 stays in "
+                                              "update mode until it is done")
+            if new:
+                name = next(iter(new))
+                if not gone[tb]:
+                    stay += 1
+                    if stay >= 2:
+                        raise InstallError("several", f"a new MIDI port appeared ({name}) while this FM-1's port "
+                                                      f"({target}) is still there: nothing was written. Unplug the "
+                                                      "other FM-1s and run the install again without --unit")
+                elif now[name] > 1:
+                    raise InstallError("several", f"the new MIDI port has the name of another port ({name}): which "
+                                                  "is this FM-1's update mode is not known, and nothing was written. "
+                                                  "Unplug the other FM-1s and run the install again without --unit")
+                else:
+                    outs = self.names(outs=True)
+                    out = pair_output(name, outs) if outs else None
+                    link = self.open(name, out) if out else None
+                    ident = handshake(link, 2) if link else None
+                    if ident and ident.loader:
+                        self.loader_port = name
+                        return Device(link, ident, name)
+                    if link:
+                        link.close()
+                    if ident:
+                        raise InstallError("several", f"the new MIDI port {name} answers as {ident.text}, not as an "
+                                                      "update loader: nothing was written. Unplug the other FM-1s "
+                                                      "and run the install again without --unit")
+            time.sleep(min(DELAY["retry"], max(0, end - time.monotonic())))
+        return None
 
     def names(self, outs=False):
         """the MIDI inputs (or outputs); none when the backend does not answer within the bound"""
@@ -742,6 +962,11 @@ class Updater:
         k = k if done and k else {}
         stuck = [n for n, off in k.get("midi", []) if off and n in k.get("usb", []) and
                  (PORT_RE.search(n) or (self.port and self.port.lower() in n.lower()))]
+        if stuck and self.unit:                   # (a rescan restarts every MIDI port of the computer, the other
+            #                                       FM-1s' too: with --unit the advice is the replug alone)
+            return (f"{stuck[0]} is on the USB bus, but its MIDI port is known to CoreMIDI as offline: unplug this "
+                    "FM-1's USB cable and plug it in again (with --unit nothing rescans MIDI: that would restart "
+                    "every MIDI port on this computer)")
         return (f"{stuck[0]} is on the USB bus, but its MIDI port is known to CoreMIDI as offline: Audio MIDI Setup > "
                 "MIDI Studio > Rescan MIDI (or fm1_install.py --rescan-midi), or replug the cable") if stuck else ""
 
@@ -762,8 +987,12 @@ class Updater:
                 (f"; {self.gave_up} did not return in time: replug the FM-1, or restart the computer"
                  if self.gave_up else "") + (f". {off}" if off else ""))
 
-    def candidates(self, only_port):
-        names = self.names()
+    def candidates(self, only_port, names=None, every=False):
+        """the ports to try, in order (names: the inputs, when already listed). With --unit, once its port is known
+        (self.only), only_port means that port alone (every: all the same)"""
+        names = self.names() if names is None else names
+        if self.only and only_port and not every:
+            return [n for n in names if n == self.only]
         if self.port:
             mine = [n for n in names if self.port.lower() in n.lower()]
             if only_port:
@@ -772,9 +1001,12 @@ class Updater:
         return [n for n in names if PORT_RE.search(n)]
 
     def find(self, want=None, only_port=True, end=None):
-        """the first matching port that answers the handshake (and want(identity)); no port is tried after `end`"""
+        """the first matching port that answers the handshake (and want(identity)); no port is tried after `end`.
+        With --unit only the unit's (mine)"""
+        self.ready()
         outs = self.names(outs=True)
-        for name in self.candidates(only_port) if outs else []:   # (no output, or no list in time: nothing to pair)
+        ins = self.names() if outs else []
+        for name in self.candidates(only_port, ins) if outs else []:   # (no output, or no list in time: nothing to pair)
             out = pair_output(name, outs)
             if not out or (end is not None and time.monotonic() >= end):
                 continue
@@ -782,7 +1014,7 @@ class Updater:
             if not link:
                 continue
             ident = handshake(link, 2)
-            if ident and (want is None or want(ident)):
+            if ident and (want is None or want(ident)) and self.mine(link, ident, name, ins):
                 return Device(link, ident, name)
             link.close()
         return None
@@ -835,6 +1067,7 @@ class Updater:
     def check(self, dev, image, step):
         """step 1: the running firmware checks the package and starts the loader"""
         step("start", dev.id.text)
+        before = self.ports() if self.unit else None    # (--unit: the ports while the unit is still there)
         dev.link.send(UPGRADE)
         time.sleep(DELAY["start"])
         served, finished, lost = self.serve(dev.link, image, FINISH_CHECK, DELAY["idle_check"],
@@ -846,7 +1079,15 @@ class Updater:
                                f"{served} requests; nothing was written")
         step("loader")
         time.sleep(DELAY["loader"])
-        ota = self.wait_for(lambda i: i.loader, DELAY["wait_loader"])
+        if self.unit:                             # only the one port its restart brings (wait_new)
+            ota = self.wait_new(before, dev.name, DELAY["wait_loader"])
+        else:
+            ota = self.wait_for(lambda i: i.loader, DELAY["wait_loader"])
+        if not ota and self.unit:
+            what = self.waited(DELAY["wait_loader"], "the one new MIDI port of this FM-1's update mode")
+            raise InstallError("noloader", f"the update loader did not appear ({what}). Unplug the other FM-1s, replug "
+                                           "this one and run the install again without --unit (in update mode it "
+                                           "has no ID): it stays in update mode until it is done")
         if not ota:
             what = self.waited(DELAY["wait_loader"], "a MIDI port that answers the identity query as ota-...")
             raise InstallError("noloader", f"the update loader did not appear ({what}). Replug the USB cable and "
@@ -856,6 +1097,8 @@ class Updater:
     def write(self, ota, image, step):
         """step 2: the loader reads and writes the whole package, then restarts"""
         step("write", 0)
+        if self.unit:
+            self.fresh = self.ports()             # (the ports before the restart into the new firmware: mine)
         ota.link.send(UPGRADE)
         time.sleep(DELAY["start"])
         served, finished, lost = self.serve(ota.link, image, FINISH_WRITE, DELAY["idle_write"],
@@ -870,6 +1113,12 @@ class Updater:
     def back(self):
         """the firmware after a restart -> Device (wait_for's bound), or the error that says what was waited for"""
         back = self.wait_for(lambda i: not i.loader, DELAY["wait_reboot"])
+        if not back and self.unit:
+            what = self.waited(DELAY["wait_reboot"], f"a MIDI port that answers INFO with unit ID {self.unit}")
+            raise InstallError("noreturn", f"the FM-1 with unit ID {self.unit} did not come back ({what}): unplug "
+                                           "and replug it (or power-cycle it), then fm1_install.py --info. A firmware "
+                                           "without the unit ID that came back under another FM-1's port name cannot "
+                                           "be told apart")
         if not back:
             what = self.waited(DELAY["wait_reboot"], "a MIDI port that answers the identity query as the firmware")
             raise InstallError("noreturn", f"the FM-1 did not come back ({what}): power-cycle it")
@@ -880,9 +1129,15 @@ class Updater:
         time.sleep(DELAY["reboot"])
         back = self.back()
         back.link.close()
+        if self.unit:                             # (the unit's port from now on: a restore after the install)
+            self.only, self.loader_port, self.fresh = back.name, None, None
         if back.id.text != product:
             raise InstallError("mismatch", f"written, but the FM-1 reports {back.id.text} (expected {product})")
         step("done", back.id.text)
+        if self.unit:
+            step("unit", f"unit ID {self.unit}: the same FM-1 after the restart (port {back.name})" if not self.unverified
+                 else f"unit ID: none from {self.unverified}, the firmware now on it; it is the one MIDI port that "
+                      f"appeared at the restart ({back.name}), taken as this FM-1")
         return back.id.text
 
     def install(self, dev, image, product, step=lambda *a: None):
@@ -1097,13 +1352,34 @@ def bk_manifest(a):
     return out
 
 
-def device_info(bl):
-    """INFO -> (version, family), or None when the firmware does not answer"""
+UNIT_TAG = 0x49                                   # INFO's tag of the unit's ID (cr_backup.c CRB_INFO, 3y66)
+
+
+def unit_id_of(a):
+    """the unit's ID in ChoralRoot's INFO reply -> "A1B2C3D4", or None. The reply: the version, its NUL, Felucca's 7
+    bytes (no engines), then tagged fields, tag len value: 42 01 03, 43 01 03, and from 3y66 49 08 and the ID's 8 hex
+    digits (none known: no tag). Hosts before it read the version to its NUL and nothing after it"""
+    if 0 not in a:
+        return None
+    p = a.index(0) + 8
+    while p + 2 <= len(a) and p + 2 + a[p + 1] <= len(a):
+        v = bytes(a[p + 2:p + 2 + a[p + 1]])
+        if a[p] == UNIT_TAG and re.fullmatch(rb"[0-9A-F]{8}", v):
+            return v.decode()
+        p += 2 + a[p + 1]
+    return None
+
+
+def device_info(bl, with_id=False):
+    """INFO -> (version, family), with_id: (version, family, the unit's ID or None); None when the firmware does not
+    answer"""
     try:
         a = bl.request(BK_INFO, [], DELAY["info"])
     except BackupError:
         return None
     v = bytes(a[:a.index(0)] if 0 in a else a).decode("latin-1")
+    if with_id:
+        return v, family(v), unit_id_of(a) if family(v) == "choralroot" else None
     return v, family(v)
 
 
@@ -2200,6 +2476,8 @@ def load_package(path, force):
 def not_found(up):
     names = up.names()
     where = f"no MIDI port matching {up.port!r} answered" if up.port else "FM-1 not found"
+    if up.unit:
+        where = f"the FM-1 with unit ID {up.unit} was not found"
     stuck = (f"\n  {up.gave_up} did not return within its bound ({DELAY['port']:g} s): replug the FM-1, or restart "
              "the computer") if up.gave_up else ""
     off = up.offline()
@@ -2219,7 +2497,7 @@ class Progress:
         else:
             self.end()
             msg = {"start": f"starting the update on {a}", "loader": "switching to update mode",
-                   "reboot": "restarting", "done": f"done: the FM-1 runs {a}"}[k]
+                   "reboot": "restarting", "done": f"done: the FM-1 runs {a}", "unit": a}[k]
             print(msg, file=self.out, flush=True)
 
     def put(self, s):
@@ -2482,6 +2760,7 @@ def run_stub(up, what, out):
     dev = up.find()
     if not dev or dev.id.loader:
         raise not_found(up)
+    before = up.ports() if up.unit else None     # (--unit: its update mode is the one port its restart brings)
     t0, r, unseen = time.monotonic(), None, None
     try:
         r = BackupLink(dev.link).request(BK_STUB, [1 if what == "test" else 2], 1.5)
@@ -2511,7 +2790,10 @@ def run_stub(up, what, out):
         return 0 < vals[0] < (time.monotonic() - t0) * 1000 + 1000, vals
 
     if what == "rescue":
-        back = up.wait_for(lambda i: True, DELAY["wait_reboot"])
+        if up.unit:                               # update mode has no ID: the one new port; else the firmware by its ID
+            back = up.wait_new(before, dev.name, DELAY["wait_reboot"]) or up.find(lambda i: not i.loader, False)
+        else:
+            back = up.wait_for(lambda i: True, DELAY["wait_reboot"])
         if not back:
             w = up.waited(DELAY["wait_reboot"], "a MIDI port that answers the identity query")
             raise InstallError("noreturn", f"nothing came back on USB-MIDI ({w}): no ota-FM-1 and no FM-1. One "
@@ -2569,8 +2851,47 @@ def run_stub(up, what, out):
     return 0
 
 
+def acting_op(a):
+    """the commands that write to an FM-1, restart it or change what it plays: with several FM-1s they need --unit"""
+    return bool(a.package or a.restore or a.import_sound or a.import_syx or a.rename_sound or a.delete_sound or
+                getattr(a, "restore_favorites", None) or getattr(a, "stub", None) or getattr(a, "select", None) or
+                getattr(a, "screen", None))
+
+
+def info_lines(p, out):
+    """--info, one FM-1"""
+    mode = "update loader (update not finished)" if p.ident.loader else "running"
+    print(f"{p.ident.text}  [{mode}]  port: {p.name}" + (f"  version: {p.version}" if p.info else ""), file=out)
+    print(f"unit ID: {id_text(p)}", file=out)
+    if not p.ident.loader:
+        verdict, _kind, name = classify_firmware(p.ident.text, p.version)
+        print(f"ChoralRoot can be installed over {name}" if verdict == "allow" else
+              f"ChoralRoot is not installed over {name} (docs/INSTALL-COMPAT.md)", file=out)
+
+
+def run_info(up, out):
+    """--info: every FM-1 that answers (with --unit: that one), its identity, version and unit ID"""
+    if up.unit:
+        probes, silent = [up.select()], []
+    else:
+        probes, silent = up.survey(True)
+    if not probes:
+        raise not_found(up)
+    for k, p in enumerate(probes):
+        if k:
+            print(file=out)
+        info_lines(p, out)
+    if len(probes) > 1:
+        ids = [p.uid or "none" for p in probes]
+        print(f"\n{len(probes)} FM-1s connected (unit IDs {', '.join(ids)}): --unit ID names the one a command is for",
+              file=out)
+        if silent:
+            print(f"no answer on: {', '.join(silent)}", file=out)
+    return 0
+
+
 def run(a, backend, out, ask):
-    up = Updater(backend, a.port)
+    up = Updater(backend, a.port, getattr(a, "unit", None), acting_op(a), out)
     if getattr(a, "rescan_midi", False):
         why = up.rescan()
         if why:
@@ -2640,18 +2961,7 @@ def run(a, backend, out, ask):
                     usb=[usb[k] for k in DEBUG_USB if k in usb])
         return 0
     if a.info:
-        dev = up.find()
-        if not dev:
-            raise not_found(up)
-        info = None if dev.id.loader else device_info(BackupLink(dev.link))
-        dev.link.close()
-        mode = "update loader (update not finished)" if dev.id.loader else "running"
-        print(f"{dev.id.text}  [{mode}]  port: {dev.name}" + (f"  version: {info[0]}" if info else ""), file=out)
-        if not dev.id.loader:
-            verdict, _kind, name = classify_firmware(dev.id.text, info and info[0])
-            print(f"ChoralRoot can be installed over {name}" if verdict == "allow" else
-                  f"ChoralRoot is not installed over {name} (docs/INSTALL-COMPAT.md)", file=out)
-        return 0
+        return run_info(up, out)
     if not a.package:                             # backup and / or restore only
         if a.backup:
             run_backup(up, a.backup, out)
@@ -3003,6 +3313,9 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
                          "print its --debug lines; rescue = restart into update mode, as OCT- held at power-on (to "
                          "leave update mode: install a package, or switch the FM-1 off and on)")
     ap.add_argument("--port", metavar="NAME", help="MIDI port to use (part of its name)")
+    ap.add_argument("--unit", metavar="ID", help="only the FM-1 with this unit ID (8 hex digits, any case: --info, or "
+                                                 "Options > Version on the unit; ChoralRoot from 0.22), with any "
+                                                 "command; for several FM-1s on one computer")
     ap.add_argument("--yes", action="store_true", help="do not ask for confirmation")
     ap.add_argument("--force", action="store_true", help="install a package without the Felucca loader marker, or over a "
                                                          "firmware ChoralRoot does not support installing over (at your own risk)")
@@ -3040,7 +3353,7 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     if len(ops) > 1:
         ap.error(f"{' and '.join(ops)}: one sound operation at a time")
     if ops and (a.package or a.info or a.backup or a.restore):
-        ap.error(f"{ops[0]} goes alone (with --port, --yes): not with a package, --info, --backup or --restore")
+        ap.error(f"{ops[0]} goes alone (with --port, --unit, --yes): not with a package, --info, --backup or --restore")
 
     def slot_of(v):
         if not re.fullmatch(r"\d+", v) or not 1 <= int(v) <= SOUND_SLOTS:
@@ -3078,6 +3391,11 @@ def main(argv=None, backend=None, out=sys.stdout, ask=ask_tty):
     if a.rescan_midi and (a.stub or a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore
                           or ops):
         ap.error("--rescan-midi goes alone")
+    if a.unit is not None and not re.fullmatch(r"[0-9A-Fa-f]{8}", a.unit):
+        ap.error(f"--unit: a unit ID is 8 hex digits (fm1_install.py --info shows them), not {a.unit!r}")
+    if a.unit and a.rescan_midi:
+        ap.error("--rescan-midi restarts every MIDI port on this computer, the other FM-1s' too: not with --unit "
+                 "(unplug and replug the FM-1 instead)")
     if not (a.rescan_midi or a.stub or a.select or a.screen or a.debug or a.info or a.package or a.backup or a.restore
             or ops or a.favorites or a.restore_favorites):
         ap.error("give a PACKAGE.fwsc, --backup FILE, --restore FILE, --info, --sounds, --screen off|on or --select")
