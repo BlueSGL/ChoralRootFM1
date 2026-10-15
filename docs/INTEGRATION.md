@@ -1292,7 +1292,7 @@ anyway), the LEDs and the screen model. The pump is not called there: those run 
   pump adds a pointer test a glyph); the audio ISR's static cost 14739 -> 14748 (tests/target_budget.py).
 
 **On the unit**: 78 PEAK (`fm1_install.py --debug`) appends `key_ons`, `key_pick_us`, `key_eng_avg_us`,
-`key_eng_us` (cr_out.c `cr_klat`): the note-ons timed since the last read, and from the first scan that saw the key
+`key_eng_us` (cr_out.c `cr_klat`; 0.22 appends `c1_bar` after them, docs/DUALCORE.md "The persistent fallback"): the note-ons timed since the last read, and from the first scan that saw the key
 closed (the debounce in it): the longest until the main loop posted the note-on, the average and the longest until
 the audio ISR applied it. Expected: `key_pick_us` 1.1 to 2.2 ms plus the longest stretch above, `key_eng_us` up to
 2.9 ms more; a `key_pick_us` of a frame's length would mean a key waited for a redraw.

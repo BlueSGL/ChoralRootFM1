@@ -1924,3 +1924,23 @@ its own section), dispatched with version 0.21 and that commit as ref. Checked l
 section's bar, `firmware/SHA256SUMS` is unchanged (0.21: 93bbfe14...). Not done: an install or a return to stock from the
 live page on a real FM-1. The rule for next time: a page change between releases is published from a branch cut at the
 released tag, not from main, whenever main's firmware is ahead of the release.
+
+3y38. **Dual Core: the regulator at 1.50 V, and Off by itself after a crash beside core 1 (2026-10-14; issue #9, after
+fm1-x0x#10 / #21 and x0x 1.0.7; docs/DUALCORE.md "Why VDC14 5", "The persistent fallback").** The reports settled two
+things 0.16 could not know: VDC14 is the rail that matters (zednaked's table: 14 / 4 marginal, 11 / 5 and 15 / 5
+clean), and the misreads hit core 0 too (fc79's crash records: a vector fetched with bit 24 set, a crash in the bass
+render), where no check on core 1 can see them: the crash report reboots the unit with Dual Core still On, and the
+loop of issue #9 follows. So: `FM1_VDC14_LEVEL` / `_MAX` 5 (1.50 V; the datasheet's 1.55 V and the stock firmware's
+1.60 V above it; SYSVDD stays 14); a `.noinit` record `fm1_c1_bar` (`ran`, `barred`) set by `fm1_c1_fault_c` for a
+crash of core 0's own beside a running core 1 and by `cr_c1_give_up`, decided at the next boot by `cr_c1_bar_decide`
+(a watchdog reset while core 1 ran counts as a hang at any uptime) from `cr_settings_boot` (not in SAFE MODE), which
+keeps core 1 off, and `cr_settings_load` reads Dual Core Off and primes the automatic save (`crs_dc_bar`); `fm1_cstart`
+holds core 1 first thing (Jangada's finding). The player sees `dual core off: crash` after the splash, the reason
+under Options > Dual Core, `c1 off · after a crash` in GEEK OUT, `c1_bar` as 78 PEAK's last value (73 DEBUG is full).
+The test build: injected failures set no bar and save nothing (`cr_c1_injected`); op 7 `bar` restarts with the record
+a crash leaves. Written by an Opus agent to a brief, reviewed. Host: `cr_cpu1_test` 72 checks (the rails' steps to
+14 / 5, the bar's decision and boot), `cr_backup_test` 178 (PEAK 35 values), `run_cr_tests.sh` whole twice, the
+emulator built, `./build.sh` for both `CR_CORE1_TEST` values: XIP 84.5 %, RAM 82.8 %, POOL 91.7 %, NOINIT 228 B.
+**Not done**: nothing on a unit (the owner's runs both cores clean, and the other session had the FM-1): the device
+checklist's step 5 (`core1_fault_test.py bar` on a `CR_CORE1_TEST` build) and a word from the reporter of #9 on
+0.22 are what is left. The choice of 5 for VDC14 is the owner's to confirm: the HANDOFF rule was 14 / 4.

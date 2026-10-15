@@ -183,6 +183,9 @@ given up; `cr_dualcore_opt.txt` (back Off), a relaunch: `c1 off`; On again, a re
 - A fault about core 1 (it took the exception itself, or the debug unit raised core 1's PC limit, write limit or bus
   error on core 0) no longer resets the chip: core 1 is held, core 0 resumes, `c1 gave up` (0.16: "Reliability").
   Before 0.16 it ended in the crash report and a reset, as any crash.
+- A crash of core 0 while core 1 runs, a watchdog reset while it ran, or a give-up: the next boot keeps core 1 off
+  and saves Options > Dual Core Off, with a message and the reason under the option (0.22: "The persistent
+  fallback"). Before 0.22 the saved On started core 1 again at every reboot: the crash loop of ChoralRootFM1#9.
 - Host tests: `tests/cr_cpu1_test.c` (the split bit for bit for 3 x 3 preset pairs, the job before and after part
   0; 8 + 8 voices with core 1, 8 without; a job that never answers; the default: never started; no answer at start).
   The emulator, on a flash with Dual Core On: `EMU_C1=nostart` / `EMU_C1=hang` (`tools/emu/test_cr.sh`,
@@ -202,9 +205,24 @@ bad while both cores run. A healthy unit ran both cores clean down to SYSVDD 6 (
 
 **The rails** (`firmware/hal/fm1_power.h`; P33's analog registers through `fm1_sys.h`'s existing `fm1_p33_read` /
 `fm1_p33_write`: P3_ANA_CON9 SYSVDD 0.93 V + 30 mV a step, CON6 VDC14 1.25 V + 50 mV a step, CON5 VDDIO read only).
-With Dual Core On, `cr_c1_boot` (power-on, IRQs off) records the boot loader's levels, then raises VDC14 to 4
-(1.45 V) and SYSVDD to 14 (1.35 V), a step every 100 us, never lowering, **before** core 1 starts. With Dual Core Off
-(the default; or SAFE MODE) the rails stay as the boot loader left them: the stock behaviour, the safe baseline.
+With Dual Core On, `cr_c1_boot` (power-on, IRQs off) records the boot loader's levels, then raises VDC14 to 5
+(1.50 V; 4 = 1.45 V until 0.22) and SYSVDD to 14 (1.35 V), a step every 100 us, never lowering, **before** core 1
+starts. With Dual Core Off (the default; or SAFE MODE) the rails stay as the boot loader left them: the stock
+behaviour, the safe baseline.
+
+**Why VDC14 5 (0.22; fm1-x0x#10 and #21, ChoralRootFM1#9).** The reports after 0.16 settled which rail matters.
+zednaked (Jangada), on a unit that misreads, 5-minute runs under load: 11 / 3, 12 / 3 and 13 / 3 fault in about 6 s;
+11 / 4 ran 90 s; **14 / 4 ran once and failed once** (misreads from 40 s, a fault at 3.5 min); 11 / 5 clean; 15 / 5
+clean for 15 minutes (1.23 M blocks, 0 misreads). fc79, on fm1-x0x 1.0.6 with both cores at 14 / 4: a core 0 crash
+every few minutes, decoded to misreads on **core 0** (the TIMER5 vector fetched as `0x0300046E` for `0x0200046E`, bit
+24 set; a crash inside the bass render with a flipped high address bit): nothing core 1's check word or its fault
+catch can see, since core 0 takes the exception and the crash report reboots the unit. So 14 / 4, what 0.16 chose
+as JieLi's own levels for this clock, is exactly the marginal setting, and the raise of the regulator is what the
+affected units needed: fm1-x0x 1.0.7 ships VDC14 5 with SYSVDD left at 11 (Charles Vestal, 2026-10-14), Jangada
+15 / 5. The AC791N datasheet gives 1.55 V as this rail's limit, and fc79's read of the stock V15 firmware found it
+runs the unit at VDC14 7 (1.60 V) and SYSVDD 15 (1.38 V) all the time, so 1.50 V is inside both what the maker's
+sheet allows and what the unit ships with. SYSVDD stays at 14: it did not matter in zednaked's table, and the
+user's decision after Charles Vestal's review (below) stands for it.
 
 **The validation** (`firmware/hal/fm1_cpu1.h fm1_c1_post / fm1_c1_poll`): core 0 writes fn, arg and a check word
 (`FM1_C1_CHECK`: fn ^ arg ^ seq * 0x9E3779B1 ^ a constant), then the sequence number. Core 1 keeps the count of
@@ -217,11 +235,13 @@ request read wrong is retried on the next look.
 - the first misread (an audio block that finds new ones in `fm1_c1_rejected`: one burst is one event) is counted and
   core 1 keeps working;
 - a second misread (a later block), or any fault or stall: core 1 held for good, `c1 gave up`, one core with the
-  shared budget (the existing path), `cr_dbg.c1_fallback` 1 for the session (RAM only: nothing goes to the settings).
+  shared budget (the existing path), `cr_dbg.c1_fallback` 1 for the session; **since 0.22 the UI then turns Options >
+  Dual Core Off and the settings save it** ("The persistent fallback" below): the next power-on is one core.
 **No voltage escalation.** The PR raises SYSVDD to 15 (1.38 V) and VDC14 to 5 (1.50 V) after the first misread; the
-user decided against it after Charles Vestal's review of the PR (device safety): no rail is ever set above 14 / 4
-(1.35 V / 1.45 V, JieLi's own levels for this clock). `fm1_power.h` caps them as hard maxima (`FM1_SYSVDD_MAX`,
-`FM1_VDC14_MAX`), the test build's rail op included.
+user decided against it after Charles Vestal's review of the PR (device safety): the rails go to their levels once,
+at power-on, and no rail is ever set above the cap: 14 / 4 (1.35 V / 1.45 V, JieLi's own levels for this clock) in
+0.16 .. 0.21, **14 / 5 (1.35 V / 1.50 V) since 0.22** (the paragraph "Why VDC14 5" above). `fm1_power.h` caps them
+as hard maxima (`FM1_SYSVDD_MAX`, `FM1_VDC14_MAX`), the test build's rail op included.
 The stall timeout stays our 8 ms (the PR uses 10 ms). A faulted or stalled job's block is rendered by core 0 as
 before (core 1 is held first, so nothing races it).
 
@@ -231,36 +251,87 @@ exception on core 0 and ended in `fm1_fault_c`'s crash report. Now: DBG_MSG with
 16..18): core 1 held, the fault recorded (core, DBG_MSG, EMU_MSG, pc, rets), DBG_MSG cleared, core 0 resumes as an
 ISR return; core 1 took it itself (`cnum` 1): recorded, it holds itself; core 0's echo of that is swallowed once.
 Core 0's own bits still give the crash report; so does a 17th fault (a hold that did not take). A build without
-core 1 (CR_CPU1 0) links `fm1_vec.S`'s weak `fm1_c1_fault_c`: the crash report, as before.
+core 1 (CR_CPU1 0) links `fm1_vec.S`'s weak `fm1_c1_fault_c`: the crash report, as before. Since 0.22 a crash of
+core 0's own while core 1 runs first holds core 1 and bars it (below), then the crash report.
+
+### The persistent fallback (0.22; ChoralRootFM1#9, after fm1-x0x 1.0.7)
+
+The reports' crash is core 0's: the misread hits its fetch or its data, the crash report reboots the unit, the
+settings still say Dual Core On, core 1 starts again, and the unit crashes again until the boot guard's second count
+puts it in SAFE MODE (where core 1 is never started), and after the next power-on the loop starts over. The reporter
+of ChoralRootFM1#9 saw exactly that ("a crash/reboot loop"). From 0.22 the unit decides for itself, as fm1-x0x
+1.0.7 does:
+
+- **The record** `fm1_c1_bar` (`hal/fm1_cpu1.h`, `.noinit`: a warm reset keeps it, a power-off leaves garbage behind
+  a magic): `ran` (core 1 started and answered this boot: set by `fm1_cpu1_start`) and `barred` (why core 1 must not
+  start at the next boot: 1 a crash, 2 a hang, 3 given up).
+- **Set** by `fm1_c1_fault_c` when the fault is core 0's own and core 1 is on (core 1 held, `barred` = crash, then
+  the crash report as before), and by `cr_c1_give_up` (`barred` = given up: a second misread, a fault about core 1,
+  a stall), in the audio ISR, before anything reaches the settings.
+- **Decided** at the next boot, `cr_c1_bar_decide` (`cr_cpu1.h`, pure, host-tested), called by `cr_c1_bar_boot`
+  (with `bootguard.cls`) from `cr_settings_boot` right after the record's Dual Core bit is read, not in SAFE MODE
+  (nothing is saved there, so the record is left for the next normal boot): a wrong magic (a power-on) is nothing; `barred`
+  is its reason; `ran` with a **watchdog** reset is a hang (a WDT reset is never intentional, so it counts at any
+  uptime, unlike the boot guard's 30 s; a soft reset without `barred` is an intentional reboot or an update: nothing).
+  Then the record is cleared for this boot. If the record said On, the decision sets `cr_c1_off` (core 1 is not
+  started) and `cr_c1_barred` (the reason, for the UI); if it already said Off there is nothing to do.
+- **Saved**: `cr_settings_load` reads Dual Core as Off while `cr_c1_barred` stands (`crs_dc_bar`) and primes the
+  automatic save, so the settings' next quiet moment writes the record with bit 6 clear: the power-on after that is
+  one core from the record itself. The user's own Options > Dual Core sets the bit again (`cr_settings_dc_user`
+  clears the bar). SAFE MODE writes nothing, as ever; the bar in `.noinit` holds through its soft reboot.
+- **Shown**: a message after the splash (`dual core off: crash` / `hang` / `gave up`, red), the line under Options >
+  Dual Core (`off after a crash on 2 cores`, `off after a hang on 2 cores`, `off: the 2nd core gave up`), GEEK OUT's
+  core line (`c1 off · after a crash`), and `fm1_install.py --debug`'s `c1_bar` (78 PEAK's last value).
+- **The test build** (`CR_CORE1_TEST`): an injected misread, stall or fault (ops 1..4) is not the unit's, so it sets
+  no bar and the UI does not turn the option Off for it (`core1_fault_test.py` restarts between its modes with Dual
+  Core On); op 7 `bar` leaves the bar as a crash would and restarts: the boot path end to end on a healthy unit.
+- **The halt at reset** (`fm1_cstart`, first statement: `fm1_cpu1_halt`): a core 1 the reset did not hold would read
+  the RAM `fm1_cstart` is clearing (Jangada's finding in fm1-x0x#10; fm1-x0x does the same).
+
+What this does not do: start core 1 again by itself. A unit that was barred stays on one core until its owner turns
+Dual Core On again; the option's line says why it is Off. Host tests: `tests/cr_cpu1_test.c` section `bar`.
 
 **Counters**: `--debug` (`tools/fm1_install.py`, after `c1_jobs`): `c1_rejected`, `c1_faults`, `c1_fallback` (1: core 1 given up this session),
-`rail_sysvdd_boot`, `rail_sysvdd_now`, `rail_vdc14_boot`, `rail_vdc14_now`. GEEK OUT: `c1 ok 123 · stk 1064 · rej 0`
+`rail_sysvdd_boot`, `rail_sysvdd_now`, `rail_vdc14_boot`, `rail_vdc14_now`; and, as the last value of 78 PEAK (73 DEBUG
+is full: its count is one 7-bit byte), `c1_bar` (0.22: this boot's reason core 1 was kept off, 0 none; `--debug`
+prints the reason in words). GEEK OUT: `c1 ok 123 · stk 1064 · rej 0`
 (and `· flt n` once there is a fault); given up: `c1 gave up · Options>Dual Core` (the switch; 30 of the
-31 characters a line holds, hence no spaces around `>`). Host: rails read 11 / 3 at boot (14 / 4 with Dual Core On).
+31 characters a line holds, hence no spaces around `>`); barred: `c1 off · after a crash`. Host: rails read 11 / 3 at
+boot (14 / 5 with Dual Core On).
 
 **The test build** `CR_CORE1_TEST` (`cr_cpu1.h`, 0 by default; never in a release): SysEx command 75 CORE1_TEST
 (`cr_backup.c`): 0 report, 1 a misread, 2 a null job at rest, 3 a stall, 4 a fault on core 1 (a job that calls
-address 0), 5 the rails, 6 a rail to a level (down too; SYSVDD 6..14, VDC14 0..4: never above the cap). Any other build answers "unsupported"
+address 0), 5 the rails, 6 a rail to a level (down too; SYSVDD 6..14, VDC14 0..5: never above the cap), 7 the bar (0.22:
+the record a crash beside core 1 leaves, then 72 RESTART's soft reset; `core1_fault_test.py bar`, not in its default
+list: it leaves Dual Core Off). Any other build answers "unsupported"
 (the byte 127) and `tools/core1_fault_test.py` refuses to run. `build.py` passes no arbitrary defines, so to build it
 set the default in `firmware/src/cr_cpu1.h` to 1 (`#define CR_CORE1_TEST 1`), `./build.sh`, keep the package
 (`build/choralroot-core1test.fwsc`), set it back to 0 and rebuild. The user runs it on the device, not the agents.
 
 Host tests: `tests/cr_cpu1_test.c` section 4 (the mailbox validation; the escalation's states and through the audio
-blocks, the rails never above 14 / 4; the boot rails On / Off; the rails' steps on a mock P33: one step a write, VDC14 first, never lower, capped at 14 / 4).
+blocks, the rails never above 14 / 5; the boot rails On / Off; the rails' steps on a mock P33: one step a write, VDC14 first, never lower, capped at 14 / 5;
+the bar's decision and its boot).
 
 ### Device checklist (0.16)
 
 0. The release build as installed (Dual Core Off, the default; after an update from 0.15 too): `c1 off`, `c1_state 0`,
    the rails' now equal their boot levels (11, 3); Options > Dual Core reads Off.
 1. Options > Dual Core On ("On · restart"), power cycle: `fm1_install.py --debug` shows `rail_sysvdd_boot 11`,
-   `rail_sysvdd_now 14`, `rail_vdc14_boot 3`, `rail_vdc14_now 4`, `c1_state 1`, `c1_rejected 0`, `c1_faults 0`.
-   GEEK OUT: `c1 ok <jobs> · stk <n> · rej 0`.
+   `rail_sysvdd_now 14`, `rail_vdc14_boot 3`, `rail_vdc14_now 5` (4 until 0.21), `c1_state 1`, `c1_rejected 0`,
+   `c1_faults 0`, `c1_bar 0`. GEEK OUT: `c1 ok <jobs> · stk <n> · rej 0`.
 2. Dual Core Off, power cycle: the rails' now equal their boot levels (11, 3), `c1 off`.
 3. A long chord session (an 8-note chord + bass, 30 minutes or more, USB recording on): `rej` stays 0 (a unit that
    misreads shows `rej` rising; a second time `c1 gave up · Options>Dual Core`, `c1_fallback 1`; tell us), no crash.
 4. On a `CR_CORE1_TEST` build: `python3 tools/core1_fault_test.py` (misread, null, stall, fault; each restarts the
    FM-1 and waits 31 s): every mode PASS, the audio running throughout, no reset. `python3 tools/core1_fault_test.py
    power` reads the rails. Then flash the release build back.
+5. The persistent fallback (0.22), on the `CR_CORE1_TEST` build with Dual Core On and `c1 ok`: `python3
+   tools/core1_fault_test.py bar` (op 7: the bar left as a crash beside core 1 would leave it, then a restart). After
+   the restart: the message `dual core off: crash` after the splash, Options > Dual Core reads Off with `off after a
+   crash on 2 cores` under it, GEEK OUT `c1 off · after a crash`, `fm1_install.py --debug` `c1_bar 1`, `c1_state 0`;
+   power cycle: still Off (`c1_bar 0`: the record saved it), `c1 off`. Options > Dual Core On, power cycle: `c1 ok`
+   again. The in-session give-up's save (`dual core off: gave up`) has no test mode: the injected stall and fault
+   deliberately do not persist (above); it is the affected units' path, as the crash itself is.
 
 ## Hardware checklist (when the FM-1 is back)
 

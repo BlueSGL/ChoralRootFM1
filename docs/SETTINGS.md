@@ -574,6 +574,10 @@ every save does), the favourites, and every other flash object but the session (
 TONE patches and banks, the loops): `test_persist.sh` compares the flash outside the settings object and the
 session's pair byte for byte and the panel table inside it. Dual Core: Off is saved; `cr_c1_off` is read at power-on only, so a running second core runs until
 the restart (the message says `restart`). In SAFE MODE the entry works on the session only (`ST_BLOCKED`: no write).
+Dual Core is also written Off by the unit itself (0.22, docs/DUALCORE.md "The persistent fallback"): after a crash,
+a watchdog reset or a give-up with the second core running, `cr_settings_boot` keeps core 1 off and `cr_settings_load`
+reads the option as Off and primes the automatic save (`crs_dc_bar`), so the record's bit 6 is cleared at the next
+quiet moment; the user's own Options > Dual Core clears the bar (`cr_settings_dc_user`).
 Tests: `tests/cr_settings_test.c t_factory`, `reset_set.txt` / `reset_do.txt` / `reset_check.txt`.
 
 ## Power-on calibration

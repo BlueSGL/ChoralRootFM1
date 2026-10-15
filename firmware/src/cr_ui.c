@@ -535,6 +535,8 @@ static void cr_settings_save(void);       /* .. the automatic part now (Felucca'
 static void cr_settings_reset(void);      /* .. Options > Reset Settings: the defaults, applied and saved */
 static int cr_settings_commit(void);      /* .. the global save (SAVE held): the whole block and the session */
 static void cr_settings_revert(void);     /* .. GLO + SAVE: what the last global save wrote, applied again */
+static void cr_settings_dc_off(void);     /* .. Dual Core Off after core 1 was given up (cr_cpu1.h), saved */
+static void cr_settings_dc_user(void);    /* .. the player set Dual Core: the record's from here on */
 #endif
 static uint8_t cr_restore_lock;            /* cr_backup.c: a settings record was restored into flash; the UI's state is
                                             * older, so no settings save until the restart (RESTART, or a power cycle) */
@@ -1009,7 +1011,13 @@ static void opt_set(uint32_t o, int32_t v)
     case O_USB_IN: cs.usb_in = (uint8_t)v; cu_usb_apply(); break;
     case O_USB_LEVEL: cs.usb_fixed = (uint8_t)v; cu_usb_apply(); break;
     case O_USB_RATE: cs.usb48 = (uint8_t)v; cu_usb_apply(); break;
-    case O_DUALCORE: cs.dualcore = (uint8_t)v; break;   /* saved; core 1 starts (or not) at the next power-on */
+    case O_DUALCORE:                              /* saved; core 1 starts (or not) at the next power-on */
+        cs.dualcore = (uint8_t)v;
+        cr_c1_barred = 0;                         /* (the player decided: no word of the bar any more) */
+#if CR_HAVE_SETTINGS
+        cr_settings_dc_user();
+#endif
+        break;
     case O_OUTPUT: cs.out_clean = (uint8_t)v; fx_output_set((uint32_t)v, 0); break;   /* (fx.c: faded over) */
     default: break;
     }
@@ -1048,7 +1056,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_USB_IN: cu_cpy(d, ONOFF[v & 1], n); break;
     case O_USB_LEVEL: cu_cpy(d, v ? "Fixed" : "Master", n); break;
     case O_USB_RATE: cu_cpy(d, v ? "44.1 + 48 kHz" : "44.1 kHz", n); break;
-    case O_DUALCORE: cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n); break;
+    case O_DUALCORE: cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off || cr_c1_barred ? "" : " \267 restart", n); break;
     case O_OUTPUT: cu_cpy(d, v ? "Clean" : "Classic", n); break;
     case O_VERSION: cu_cpy(d, CR_VERSION, n); break;
     case O_CALIB: cu_cpy(d, "OCT+ starts", n); break;
@@ -5696,7 +5704,12 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
-    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: Off the default, On the option; never started /
+    else if (cu.opt_sel == O_DUALCORE && !cs.dualcore && cr_c1_barred) {   /* (cr_cpu1.h: kept off after a crash
+                                                    * or a hang beside core 1, or given up this session) */
+        static const char *const BAR[4] = {"", "off after a crash on 2 cores", "off after a hang on 2 cores",
+                                           "off: the 2nd core gave up"};
+        cu_cpy(s->label, BAR[cr_c1_barred & 3u], sizeof s->label);
+    } else if (cu.opt_sel == O_DUALCORE)           /* (docs/DUALCORE.md: Off the default, On the option; never started /
                                                     * stopped live) */
         cu_cpy(s->label, cs.dualcore != !cr_c1_off ? "takes effect after a restart"
                          : cs.dualcore ? "bass on the second core" : "On: bass on the second core", sizeof s->label);
@@ -5948,6 +5961,10 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
                 cu_cat(s->lines[3].t, " \267 stk ", sizeof s->lines[3].t);
                 cu_int(b, (int32_t)cr_dbg.c1_stack, 0, sizeof b);
                 cu_cat(s->lines[3].t, b, sizeof s->lines[3].t);
+            }
+            if (cr_dbg.c1 == C1_OFF && cr_c1_barred) {         /* kept off: why ("c1 off \267 after a crash") */
+                cu_cat(s->lines[3].t, " \267 ", sizeof s->lines[3].t);
+                cu_cat(s->lines[3].t, cr_c1_bar_name(), sizeof s->lines[3].t);
             }
             if (cr_dbg.c1 == C1_GAVE_UP)                       /* the way out: the switch (docs/DUALCORE.md) */
                 cu_cat(s->lines[3].t, " \267 Options>Dual Core", sizeof s->lines[3].t);   /* (30 chars of the 31 a line holds) */
@@ -6364,6 +6381,23 @@ static void cr_ui_frame(void)                      /* after the scan: the engine
 #if CR_CPU1
     if (cr_dbg.c1 == C1_OK)
         cr_dbg.c1_stack = cr_c1_stack_used();      /* core 1's stack high-water mark (its C1MK fill) */
+    {   /* core 1 kept off at boot (cr_cpu1.h cr_c1_bar_boot): told once, after the splash; given up this session
+         * (cr_c1_give_up): Dual Core Off, saved (a restart keeps one core either way: the .noinit bar) */
+        static uint8_t cu_c1_told, cu_c1_seen;
+        static const char *const MSG[4] = {"", "dual core off: crash", "dual core off: hang", "dual core off: gave up"};
+        if (cr_dbg.c1_fallback && !cu_c1_seen && !CR_C1_INJECTED()) {   /* (an injected failure, a CR_CORE1_TEST
+                                                    * build's 75 CORE1_TEST, is not the unit's: nothing saved) */
+            cu_c1_seen = cu_c1_told = 1;
+            cr_c1_barred = C1_BAR_GAVE_UP;
+#if CR_HAVE_SETTINGS
+            cr_settings_dc_off();
+#endif
+            cu_message(MSG[C1_BAR_GAVE_UP], CR_COL_RED);
+        } else if (cr_c1_barred && !cu_c1_told && cu_now() - cu_boot_ms >= CR_SPLASH_MS) {
+            cu_c1_told = 1;
+            cu_message(MSG[cr_c1_barred & 3u], CR_COL_RED);
+        }
+    }
 #endif
     if (cpk.on && cu.lock != L_EDIT)               /* the picker closed another way (OPT, SAVE, BASS + EDIT): kept */
         cu_pick_end(1);

@@ -2145,7 +2145,11 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # draws"): the note-ons timed; us from the first scan that saw the key closed (its debounce, 1.1 .. 2.2
               # ms, in it) to the main loop posting the note-on (the longest), and to the audio ISR applying it (the
               # average, the longest); the sound leaves the DAC one half (2.9 ms) after that
-              "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us"]
+              "key_ons", "key_pick_us", "key_eng_avg_us", "key_eng_us",
+              # why this boot kept core 1 off although Options > Dual Core said On (firmware/src/cr_cpu1.h C1_BAR_*,
+              # docs/DUALCORE.md): 0 none, 1 a crash beside it, 2 a hang, 3 it gave up (73 DEBUG is full)
+              "c1_bar"]
+C1_BAR = ["none", "after a crash beside core 1", "after a hang (watchdog) while core 1 ran", "core 1 gave up"]
 LATE_STAGE = ["none", "tick", "part0", "part1", "fx", "master", "wait"]
 # 79 USB's values (0.19, cr_backup.c crb_usb, docs/USB-AUDIO.md "48 kHz"; a command of its own because 73 DEBUG is
 # full; reading clears nothing; values are only appended): ChoralRoot In's rate now and in the last whole open (Hz; 0:
@@ -2208,7 +2212,8 @@ def print_debug(vals, out, stub_only=False, peak=(), usb=()):
     for k in DEBUG_PEAK:
         if k in d:
             print(f"{k} {d[k]}" + (f" ({LATE_STAGE[d[k]] if d[k] < len(LATE_STAGE) else '?'})" if k == "pk_late_stage" else
-                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else ""), file=out)
+                                   f" (0x{d[k]:08X})" if k == "irq_gap_pc" else
+                                   f" ({C1_BAR[d[k]] if d[k] < len(C1_BAR) else '?'})" if k == "c1_bar" else ""), file=out)
     for k in DEBUG_USB:
         if k in d:
             print(f"{k} {d[k]}", file=out)

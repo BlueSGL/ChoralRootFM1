@@ -120,6 +120,12 @@ static uint8_t fm1_c1_on;                       /* started and answering: core 0
  * the faulting core's EMU_MSG, its pc and rets */
 static struct { volatile uint32_t count; uint32_t echoes, cpu, dbg, emu, pc, rets; } fm1_c1_fault;
 static volatile uint32_t fm1_c1_stalls;         /* jobs not done in 8 ms */
+/* the bar (docs/DUALCORE.md "Reliability"; ChoralRoot#9, fm1-x0x#21): survives a warm reset (.noinit, as fm1_crash in
+ * fm1_irq.h), read by cr_cpu1.h cr_c1_bar_boot at the next boot. ran: core 1 was started and answered in this boot;
+ * barred: why core 1 must not start at the next boot (0 none, else cr_cpu1.h's C1_BAR_*: 1 crash, 2 hang, 3 gave up) */
+#define FM1_C1_BAR_MAGIC 0x43314241u            /* "C1BA" */
+struct fm1_c1_bar { uint32_t magic, ran, barred; };
+struct fm1_c1_bar fm1_c1_bar __attribute__((section(".noinit")));
 
 void fm1_c1_main(void);
 void FM1_C1_TEXT __attribute__((noreturn, used)) fm1_c1_main(void)
@@ -138,6 +144,17 @@ static void fm1_cpu1_hold(void)
     FM1_C1_CON &= ~0x8u;
     FM1_C1_SYNC();
     fm1_c1_on = 0;
+}
+
+/* main.c fm1_cstart, first thing at every reset, before the .bss / .pool / RAM-text copies: a core 1 the reset did
+ * not hold would read the RAM being cleared (Jangada, fm1-x0x#10; fm1-x0x does the same). Registers only */
+static void fm1_cpu1_halt(void) { fm1_cpu1_hold(); }
+
+/* core 1 must not start at the next boot: why (cr_cpu1.h C1_BAR_*) */
+static void fm1_cpu1_bar(uint32_t why)
+{
+    fm1_c1_bar.magic = FM1_C1_BAR_MAGIC;
+    fm1_c1_bar.barred = why;
 }
 
 /* 0 = core 1 runs and answered; else it is held again. The top of RAM must be writable
@@ -171,6 +188,8 @@ static int fm1_cpu1_start(void)
         fm1_cpu1_hold();
         return -1;
     }
+    fm1_c1_bar.magic = FM1_C1_BAR_MAGIC;        /* (a crash or a hang from here on is one beside core 1) */
+    fm1_c1_bar.ran = 1;
     fm1_c1_on = 1;
     return 0;
 }
@@ -278,7 +297,14 @@ static void fm1_c1_test_fault(uint32_t u) { void (*volatile z)(uint32_t) = 0; z(
 void fm1_c1_fault_c(uint32_t *f);
 void fm1_c1_fault_c(uint32_t *f)
 {
-    if (!fm1_c1_fault_take(f))
+    if (!fm1_c1_fault_take(f)) {
+        if (fm1_c1_on) {                            /* core 0's own beside a running core 1: the misread the reports
+                                                     * describe (ChoralRoot#9, fm1-x0x#21); the next boot keeps core 1
+                                                     * off and saves Dual Core Off (cr_cpu1.h cr_c1_bar_boot) */
+            fm1_cpu1_hold();
+            fm1_cpu1_bar(1u /* C1_BAR_CRASH */);
+        }
         fm1_fault_c(f);                             /* the crash report: never returns */
+    }
 }
 #endif

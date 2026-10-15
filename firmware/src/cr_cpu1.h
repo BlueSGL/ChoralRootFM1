@@ -13,17 +13,22 @@
  *     cr_dbg.c1 = C1_GAVE_UP, the shared budget again.
  * Reliability (docs/DUALCORE.md, after Melodee PR 21 "fix(dual-core): raise the core supply and survive CPU1
  * misreads, faults and stalls", Kerem Kilic / Melodee, GPL-3.0): with Dual Core On the core rails go up at power-on
- * (hal/fm1_power.h: SYSVDD 14 = 1.35 V, VDC14 4 = 1.45 V) before core 1 starts; core 1 runs only a request it read
+ * (hal/fm1_power.h: SYSVDD 14 = 1.35 V, VDC14 5 = 1.50 V) before core 1 starts; core 1 runs only a request it read
  * right (hal/fm1_cpu1.h fm1_c1_poll; a misread is counted, never run); a fault about core 1 holds it and core 0 goes
  * on (fm1_c1_fault_c). The escalation (cr_c1_assess): a first misread is counted and core 1 keeps working; a second
  * misread (a later block that sees new ones), or any fault or stall: C1_GAVE_UP, cr_dbg.c1_fallback = 1. The rails
- * are never raised past 14 / 4 (the user's decision after Charles Vestal's review of the PR: device safety).
+ * are never raised past 14 / 5 (device safety: hal/fm1_power.h has the reports' evidence for VDC14 5).
+ * The persistent fallback (ChoralRoot#9, fm1-x0x#21: some units' misreads hit core 0 too, which none of the above
+ * catches): a crash on core 0 beside a running core 1, a watchdog reset while core 1 ran, or a give-up leave a .noinit
+ * record (hal/fm1_cpu1.h fm1_c1_bar); the next boot keeps core 1 off and saves Dual Core Off (cr_c1_bar_boot,
+ * cr_settings.c), and the player is told (cr_c1_barred: the message after the splash, Options, GEEK OUT).
  * While core 1 is alive (C1_OK) each of parts 0 and 1 has its own budget of VBUDGET units (voice.c voices_busy).
  * CR_CPU1 0 (felucca.c, tests/hostsim.c, tests/regress.c): none of this, the code as before. The emulator builds it
  * with 1 and a stub core that runs the job at once, when handed (before part 0: the split must not depend on the
  * order of the two renders). */
 #pragma once
 #include <stdint.h>
+#include "cr_bootguard.h"                /* (BG_RST_*: cr_c1_bar_decide) */
 #ifndef CR_CPU1
 #define CR_CPU1 0
 #endif
@@ -83,6 +88,13 @@ static cr_dbg_t cr_dbg;
  * started this power-on, cr_dbg.c1 stays C1_OFF ("c1 off"), the shared budget. A change in Options waits for the next
  * power-on. 1 until the record says On: a build without the settings (or a boot that never reads them) is one core */
 static uint8_t cr_c1_off = 1;
+/* why this boot kept core 1 off although the record said On (cr_c1_bar_boot), or gave it up this session (cr_ui.c);
+ * C1_BAR_NONE otherwise. The UI reads it (the message after the splash, Options > Dual Core, GEEK OUT) */
+enum { C1_BAR_NONE, C1_BAR_CRASH, C1_BAR_HANG, C1_BAR_GAVE_UP };
+static uint8_t cr_c1_barred;
+#ifndef FM1_C1_BAR_MAGIC
+#define FM1_C1_BAR_MAGIC 0x43314241u     /* "C1BA": hal/fm1_cpu1.h's record (the host's mock below) */
+#endif
 static const char *const CRP_NAME[CRP_N] = {"tick", "part0", "part1", "fx", "master", "wait"};
 static const char *const CRX_NAME[CRX_N] = {"down", "delay", "reverb", "up"};
 
@@ -96,6 +108,13 @@ static int cr_c1_wait_core(void) { return fm1_cpu1_wait(); }
 static void cr_c1_hold(void) { fm1_cpu1_hold(); }
 static inline uint32_t cr_c1_rejected(void) { return fm1_c1_rejected; }
 static inline uint32_t cr_c1_faults(void) { return fm1_c1_fault.count; }
+static struct fm1_c1_bar *cr_c1_bar_rec(void) { return &fm1_c1_bar; }   /* the bar (.noinit) */
+static void cr_c1_bar_set(uint32_t why) { fm1_cpu1_bar(why); }
+#if CR_CORE1_TEST
+static uint8_t cr_c1_injected;       /* test builds: 75 CORE1_TEST injected a failure this session (cr_backup.c): a give-up
+                                      * is then not the unit's, cr_ui.c does not save Dual Core Off for it */
+#define CR_C1_INJECTED() (cr_c1_injected != 0)
+#endif
 static void cr_rails_record(void)                   /* the boot loader's levels (P33 reads only) */
 {
     fm1_power_record();
@@ -128,6 +147,10 @@ static uint32_t cr_c1_test_rejected; /* tests: core 1's misread count (the devic
 static uint32_t cr_c1_test_faults;   /* tests: faults about core 1 (the device's fm1_c1_fault.count) */
 static void (*cr_c1_fn)(uint32_t);
 static uint32_t cr_c1_arg;
+struct fm1_c1_bar { uint32_t magic, ran, barred; };
+static struct fm1_c1_bar cr_c1_bar_mock;  /* tests: the device's .noinit bar record (hal/fm1_cpu1.h fm1_c1_bar) */
+static struct fm1_c1_bar *cr_c1_bar_rec(void) { return &cr_c1_bar_mock; }
+static void cr_c1_bar_set(uint32_t why) { cr_c1_bar_mock.magic = FM1_C1_BAR_MAGIC; cr_c1_bar_mock.barred = why; }
 static inline uint32_t cr_prof_now(void)
 {
 #ifdef __APPLE__
@@ -164,7 +187,7 @@ static void cr_rails_record(void) { cr_dbg.rail_boot[0] = cr_dbg.rail_now[0] = 1
 static void cr_rails_init(void)
 {
     if (cr_dbg.rail_now[0] < 14u) cr_dbg.rail_now[0] = 14;
-    if (cr_dbg.rail_now[1] < 4u) cr_dbg.rail_now[1] = 4;
+    if (cr_dbg.rail_now[1] < 5u) cr_dbg.rail_now[1] = 5;
 }
 #endif
 
@@ -203,6 +226,37 @@ static void cr_c1_give_up(void)
     cr_c1_hold();
     cr_dbg.c1 = C1_GAVE_UP;
     cr_dbg.c1_fallback = 1;
+    cr_c1_bar_set(C1_BAR_GAVE_UP);                      /* (a reset before Dual Core Off is saved: still off next boot) */
+}
+
+/* ------------------------------------------------ the bar: core 1 kept off after a crash beside it --- */
+/* the next boot's decision on the bar record (hal/fm1_cpu1.h fm1_c1_bar) and this boot's reset class (cr_bootguard.h):
+ * not the record (a power-on's garbage) -> none; a reason left (a crash beside core 1, a give-up) -> that; core 1 ran
+ * and the watchdog reset the unit -> a hang (never intentional, whatever the uptime); a soft reset without a reason
+ * (a reboot, an update) or a power-on -> none */
+static uint32_t cr_c1_bar_decide(uint32_t magic, uint32_t ran, uint32_t barred, uint32_t rst_cls)
+{
+    if (magic != FM1_C1_BAR_MAGIC)
+        return C1_BAR_NONE;
+    if (barred >= C1_BAR_CRASH && barred <= C1_BAR_GAVE_UP)
+        return barred;
+    if (ran && rst_cls == BG_RST_WDT)
+        return C1_BAR_HANG;
+    return C1_BAR_NONE;
+}
+/* once a boot (cr_settings.c cr_settings_boot, after cr_c1_off is read from the settings, before cr_c1_boot; not in
+ * SAFE MODE). rst_cls: bootguard.cls. The record cleared for this boot's `ran`; a bar with the record On: core 1 off
+ * this boot, cr_c1_barred says why (cr_settings.c then saves Dual Core Off) */
+static void cr_c1_bar_boot(uint32_t rst_cls)
+{
+    struct fm1_c1_bar *r = cr_c1_bar_rec();
+    uint32_t d = cr_c1_bar_decide(r->magic, r->ran, r->barred, rst_cls);
+    r->ran = r->barred = 0;
+    r->magic = FM1_C1_BAR_MAGIC;
+    if (d != C1_BAR_NONE && !cr_c1_off) {
+        cr_c1_off = 1;
+        cr_c1_barred = (uint8_t)d;
+    }
 }
 /* each block before the hand-over (fx.c): 1 = core 1 may take it */
 static int cr_c1_check(void)
@@ -439,6 +493,16 @@ static void cr_prof_window(void)
 #define cr_c1_faults() 0u
 #endif
 
+#ifndef CR_C1_INJECTED
+#define CR_C1_INJECTED() 0               /* (release and host builds: no injection) */
+#endif
+
+/* GEEK OUT's / Options' words for why core 1 was kept off (cr_c1_barred) */
+static const char *cr_c1_bar_name(void)
+{
+    static const char *const N[4] = {"", "after a crash", "after a hang", "gave up"};
+    return N[cr_c1_barred & 3u];
+}
 /* GEEK OUT's / the console's word for core 1 */
 static const char *cr_c1_name(void)
 {

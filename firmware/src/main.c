@@ -386,6 +386,9 @@ static void fm1_main(void)
 void fm1_cstart(void)
 {
     uint32_t *s, *d, p3, src, wdt, mode;
+#if CR_CPU1 && defined(FM1_HAVE_CPU1)
+    fm1_cpu1_halt();                            /* core 1 held before the RAM below is cleared (hal/fm1_cpu1.h) */
+#endif
     fm1_time_init();
     fm1_reset_reason();
     p3 = fm1_boot.p3_rst;

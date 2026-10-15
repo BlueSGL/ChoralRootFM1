@@ -570,7 +570,7 @@ static void crb_debug(void)
     v[k++] = cr_dbg.c1_fallback;                     /* 1: core 1 given up this session (one core since) */
     v[k++] = cr_dbg.rail_boot[0];                    /* SYSVDD: the boot loader's, now (11 1.26 V, 14 1.35 V) */
     v[k++] = cr_dbg.rail_now[0];
-    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 4 1.45 V) */
+    v[k++] = cr_dbg.rail_boot[1];                    /* VDC14 (3 1.40 V, 5 1.50 V) */
     v[k++] = cr_dbg.rail_now[1];
     for (i = 0; i < CRP_N; i++)
         v[k++] = cr_dbg.avg_us[i];
@@ -672,8 +672,9 @@ static void crb_debug(void)
  * the late halves and the latest one's largest stage and time, the halves counted, the fx stage's parts (the average
  * over the halves in which the effects ran, and the largest), then since power-on the flash's: erases, erases that
  * cut a sounding output (holes: 0 is the rule for what the unit writes by itself; a global save, SAVE held, into a
- * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves. A command of its own because
- * 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
+ * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves; the 6 of when
+ * the ISR got to start, the 4 of the keys' way, then why this boot kept core 1 off (cr_c1_barred). A command of its
+ * own because 73 DEBUG is full: its count is one 7-bit byte and it has 127 values */
 static void crb_peak(void)
 {
     uint32_t v[36], k = 0, i;
@@ -712,6 +713,8 @@ static void crb_peak(void)
     v[k++] = CR_KLAT_US(cr_klat.pick);
     v[k++] = CR_KLAT_AVG_US();
     v[k++] = CR_KLAT_US(cr_klat.eng);
+    v[k++] = cr_c1_barred;                           /* why this boot kept core 1 off (cr_cpu1.h C1_BAR_*: 1 a crash beside
+                                                      * it, 2 a hang, 3 gave up; 0 none): 73 DEBUG is full */
     cr_klat.n = cr_klat.sum = cr_klat.pick = cr_klat.eng = 0;
     cr_prof_clear();
     crb_b(1);
@@ -880,17 +883,26 @@ static uint32_t crb_stub(uint32_t op)
  * Melodee, GPL-3.0). ops: 0 report; 1 a misread (the sequence read as +0x00200000 for 1 ms, as an affected unit
  * reads it); 2 a null job at rest (fn 0 and the next sequence for 1 ms: the idle crash Melodee decoded); 3 a stall (a
  * job that never returns: the 8 ms wait); 4 a fault on core 1 (a job that calls address 0); 5 the rails; 6 rail a[1]
- * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD 6..14, VDC14 0..4: never above the cap). rc: 0 done, 1 refused (core 1 not running for
- * 1..4, a level out of range for 6). Values: c1 state, jobs, rejected, faults, stalls, fallback, SYSVDD boot / now,
- * VDC14 boot / now (the registers), the fault's core / DBG_MSG / pc / rets / EMU_MSG, the last misread, audio halves,
- * the injection's time in us */
+ * (0 SYSVDD, 1 VDC14) to level a[2], down too (SYSVDD 6..14, VDC14 0..5: never above the cap); 7 the bar: the record
+ * a crash beside core 1 leaves (fm1_c1_fault_c: C1_BAR_CRASH), then the restart 72 RESTART does (a soft reset, so the
+ * next boot decides from the reason, as after a real crash report: core 1 off, Dual Core saved Off; cr_cpu1.h
+ * cr_c1_bar_boot); its reply goes out first, but the unit leaves the bus 150 .. 500 ms after it (a tool must not
+ * count on reading it). rc: 0 done, 1 refused (core 1 not running for 1..4 and 7, a level out of range for 6).
+ * Values: c1 state, jobs, rejected, faults, stalls, fallback, SYSVDD boot / now, VDC14 boot / now (the registers), the
+ * fault's core / DBG_MSG / pc / rets / EMU_MSG, the last misread, audio halves, the injection's time in us.
+ * An injected failure is not the unit's: ops 1..4 clear the bar's reason and set cr_c1_injected (no Dual Core Off
+ * saved for a give-up this session: cr_ui.c) */
 #if CR_CPU1 && CR_CORE1_TEST && defined(FM1_HAVE_CPU1)
 static void crb_core1_test(const uint8_t *a, uint32_t na)
 {
     uint32_t op = na ? a[0] : 0u, rc = 0, waited = 0, v[18], i;
-    if (op >= 1u && op <= 4u && cr_dbg.c1 != C1_OK) {
+    if (((op >= 1u && op <= 4u) || op == 7u) && cr_dbg.c1 != C1_OK) {
         rc = 1;
+    } else if (op == 7u) {
+        cr_c1_bar_set(C1_BAR_CRASH);                 /* as fm1_c1_fault_c leaves it before the crash report */
+        crb_reboot_ask(0);                           /* .. and 72 RESTART's soft reset (crb_leave, after this reply) */
     } else if (op >= 1u && op <= 4u) {
+        cr_c1_injected = 1;                          /* (before: the audio ISR may give up during the injection) */
         uint32_t t0 = fm1_ticks();
         fm1_irq_off();                               /* the audio ISR neither hands over nor checks meanwhile */
         if (op <= 2u) {
@@ -902,6 +914,8 @@ static void crb_core1_test(const uint8_t *a, uint32_t na)
         waited = (fm1_ticks() - t0) / FM1_TICKS_PER_US;
         fm1_irq_on();                                /* (an exception held while masked is taken here) */
         fm1_delay_us(2000);
+        cr_c1_bar_set(C1_BAR_NONE);                  /* an injected failure is not the unit's: no bar at the next boot
+                                                      * (the tool restarts with core 1 On, cr_cpu1.h cr_c1_bar_boot) */
     } else if (op == 6u) {
         fm1_irq_off();
         rc = na == 3u ? (uint32_t)fm1_power_goto(a[1], a[2]) : 1u;

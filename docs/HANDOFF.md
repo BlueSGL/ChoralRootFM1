@@ -38,7 +38,8 @@ Read first: `PLAN.md` (§3 .. §5, §7), `docs/INTEGRATION.md`, the area's own d
   preview pane, launch entry `fm1-designer`).
 - The dcg hook: no `rm -rf`, no `git checkout --`, no branch deletion, no force push, no `>` to a path in a
   variable. Move aside with `mv`, write with the Write tool.
-- Never raise the core rails above SYSVDD 14 / VDC14 4 (`hal/fm1_power.h`).
+- Never raise the core rails above SYSVDD 14 / VDC14 5 (`hal/fm1_power.h`; VDC14 4 -> 5 in 0.22 on the reports of
+  fm1-x0x#10 / #21: docs/DUALCORE.md "Reliability").
 - PA2 must never be driven high: it switches the key matrix off with the backlight (`hal/fm1_lcd_hw.h`).
 - The boot stub's bytes are pinned (`firmware/stub/stub.lock`): a stub change rewrites sector 0x4000 and is a
   decision, not a side effect.

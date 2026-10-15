@@ -627,6 +627,9 @@ static void css_read(void)
 }
 
 static uint8_t crs_lowcut_found;                   /* Felucca's SPEAKER setting as this power-on found it (diagnostics) */
+static uint8_t crs_dc_bar;                         /* 1: Dual Core is Off whatever the record says (cr_cpu1.h: core 1 kept
+                                                    * off after a crash beside it, or given up); the load reads Off and
+                                                    * the poll saves it. The player's own choice in Options clears it */
 static void cr_settings_boot(void)                 /* persist_boot (flash_ok known), before settings_init / panel_init */
 {
     int n = -1;
@@ -652,6 +655,14 @@ static void cr_settings_boot(void)                 /* persist_boot (flash_ok kno
     crs_last_rc = cr_settings_import(&crs_rec.cr, &crs_rec.cr, sizeof crs_rec.cr);
     crs_usb_apply(&crs_rec.cr);                    /* (before usb_start: the configuration the host first reads) */
     cr_c1_off = (uint8_t)!CRS_DUALCORE(&crs_rec.cr);   /* Options > Dual Core Off (the default): core 1 not started */
+#if CR_CPU1
+#ifdef ST_BLOCKED
+    if (!ST_BLOCKED())                             /* (SAFE MODE saves nothing: the bar waits for the next boot) */
+#endif
+        cr_c1_bar_boot(bootguard.cls);             /* a crash or a hang beside core 1 last time: Off (cr_cpu1.h) */
+    if (cr_c1_barred)
+        crs_dc_bar = 1;
+#endif
     css_read();                                    /* the session: read here, applied by cr_settings_load */
 }
 
@@ -1030,7 +1041,8 @@ static void cr_settings_load(void)
     cs.split = s->split_pc;
     cs.view = (uint8_t)CRS_VIEW(s);
     cs.view_lock = (uint8_t)CRS_VIEW_LOCK(s);
-    cs.dualcore = (uint8_t)CRS_DUALCORE(s);        /* (what this power-on did: cr_c1_off, cr_settings_boot) */
+    cs.dualcore = crs_dc_bar ? 0u : (uint8_t)CRS_DUALCORE(s);   /* (what this power-on did: cr_c1_off, cr_settings_boot;
+                                                    * Off after a bar, crs_dc_bar) */
     cr_motion = s->motion;
     cs.leds = s->leds;
     palette_set(s->palette < NPALETTES ? s->palette : NPALETTES - 1u);
@@ -1063,8 +1075,20 @@ static void cr_settings_load(void)
     crs_capture(&crs_seen);                        /* the state now: nothing to save until an Option changes */
     crs_hold_seen = settings_hold;
     crs_change_ms = fm1_ms;
-    crs_pending = 0;
+    /* .. but Dual Core Off after a bar with the record still On: the poll writes Off (crs_write: crs_seen's Off over
+     * flash's On), once it is quiet */
+    crs_pending = (uint8_t)(crs_dc_bar && CRS_DUALCORE(s));
 }
+
+/* cr_ui.c: core 1 given up this session (cr_cpu1.h cr_c1_give_up): Dual Core Off, saved by the poll (it sees the
+ * Option change), and Off on a revert too */
+static void cr_settings_dc_off(void)
+{
+    crs_dc_bar = 1;
+    cs.dualcore = 0;
+}
+/* cr_ui.c: the player set Options > Dual Core: the record says what they chose from here on */
+static void cr_settings_dc_user(void) { crs_dc_bar = 0; }
 
 /* the captured state (crs_seen) -> flash; 0: written (or no flash, or nothing to write). full: the whole block (the
  * global save); else flash's block with the automatic fields of the captured state: the manual ones stay as last saved */

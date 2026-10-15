@@ -1408,12 +1408,15 @@ Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the 
 **Dual Core.** With Dual Core Off, the default since 0.16, ChoralRoot runs on one core as the stock firmware does, and
 the chord and the bass share one budget of voices: a very full chord with the bass can cost a voice. With it On, the
 bass part plays on the second core with its own voices, so a full chord and the bass both sound whole. It is off by
-default because firmwares that run both cores are reported to crash on some FM-1s; ChoralRoot raises the core voltage
-to the chip maker's level and falls back to one core if the second misbehaves, but the margin varies from unit to
-unit. Turn it on if you want the extra voices; if your FM-1 ever crashes or resets while playing, it is the first
-thing to turn off. The value reads `On · restart` until you switch off and on. The Geek Out view shows the state:
-`c1 off`, `c1 ok ...`, or `c1 gave up · Options>Dual Core`. An update from 0.14 or 0.15, and a backup made on them,
-sets it Off; switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md).
+default because firmwares that run both cores are reported to crash on some FM-1s; ChoralRoot raises the core
+regulator to 1.50 V (0.22; the level the other FM-1 firmwares settled on) before the second core starts, and falls
+back to one core if the second misbehaves, but the margin varies from unit to unit. Turn it on if you want the extra
+voices. **If the FM-1 crashes, hangs or gives the second core up while Dual Core is On, it turns the option Off by
+itself** (0.22): after the restart the screen says `dual core off: crash` (or `hang`, `gave up`), the line under
+Options > Dual Core says why it is Off, and it stays Off over power cycles until you turn it On again. The value reads
+`On · restart` until you switch off and on. The Geek Out view shows the state: `c1 off`, `c1 ok ...`, `c1 gave up ·
+Options>Dual Core`, or `c1 off · after a crash`. An update from 0.14 or 0.15, and a backup made on them, sets it Off;
+switch it on again if you used it. More: [DUALCORE.md](DUALCORE.md).
 
 ### What the FM-1 remembers
 
@@ -1728,7 +1731,8 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | Voices drop while the computer records, not otherwise | the computer records at 48 kHz, which the FM-1 converts | choose 44 100 Hz on the computer, or Options > USB Rate: `44.1 kHz` |
 | The FM-1 became a `WL82 UBOOT1.00` disk | no update loader is stored on it and update mode was asked for (OCT- at power-on, or OCT- + OCT+ + HOME for 5 s) | switch off and on |
 | The screen went black with three flashes while I played | OCT-, OCT+ and HOME were held for 5 s: update mode | switch off and on; nothing was written |
-| The FM-1 crashes or resets while playing | with Dual Core On, possibly the second core | Options > Dual Core: Off, switch off and on; please report it either way |
+| The FM-1 crashes or resets while playing | with Dual Core On, possibly the second core | since 0.22 the FM-1 turns Dual Core Off by itself after a crash (`dual core off: crash` after the restart); on 0.21 and before: Options > Dual Core: Off, switch off and on. Please report it either way |
+| `dual core off: crash` (or `hang`, `gave up`) after a restart | the FM-1 crashed, hung or lost the second core while Dual Core was On: this unit cannot run both cores at this speed | nothing to do: it runs on one core now, as the default; Options > Dual Core shows why it is Off. Please tell us (`fm1_install.py --debug`) |
 | Buttons or knobs are mixed up | the panel table is wrong | [Calibration](#calibration) |
 
 ## 18. Quick reference
