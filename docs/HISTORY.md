@@ -3006,7 +3006,13 @@ by the new `tools/layout/render_sheet.mjs` (any design, every screen x lane at 2
 on node's zlib). Tests (`web/test_layout.mjs` 6): the p5 panel valid with no warning, its 22 screens x lanes lint clean
 and deterministic, no parameter twice, all 56 placed, KNOB 1 on each of its 19 free lanes turns its parameter and
 changes the picture, a knob's value inside its dial, a lit led's dot the firmware's red; `validateDesign` refuses
-`"style": "x"`; the Design-mode self-test opens the p5 panel. The device image is byte-identical by construction:
+`"style": "x"`; the Design-mode self-test opens the p5 panel. **The same day, the buttons again**: the owner sent a
+close-up of the panel's SHAPE buttons, "I'd like the buttons to look more like these and also have simple waveshape
+designs that match." The p5 led is now that button (40 x 32): an 18 x 18 cap with a black window band holding the LED
+(a 5 px red disc lit, a 3 px dim dot off) over the pad, and above it ONE cycle of its wave as a thin line with no
+baseline (saw, triangle, pulse, sine, noise; `lay_draw_wave` on `cr_poly`, the dot by `lay_draw_disc` on `cr_disc`)
+instead of the firmware's two-cycle glyphs; the panel's leds are 32 high (two frames grew 4 px), still lint clean; a
+test checks the saw icon is drawn and the window is darker than the pad. The device image is byte-identical by construction:
 `git diff --stat` shows no file under `firmware/` (tools, web, design and docs only). Not done: the firmware cannot
 draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
 firmware will copy when it gets free pages. Nothing on a unit.

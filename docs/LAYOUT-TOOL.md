@@ -146,6 +146,8 @@ turns.
 | `lay_draw_glyph(g, x, y, w, h, col, pct, pct2, flags)` | a `CR_G_*` glyph in the box (pct Q8 of 255; `CR_G_LFOWAVE`: the wave in pct2) |
 | `lay_draw_knob(cx, cy, size, col, pct, bip)` | the dial |
 | `lay_draw_p5knob(cx, cy, size, face, rim, tick, ptr, pct, bip, from)` | the p5 style's knob in a size px box: the 0..10 scale (11 ticks over the 270 degrees, `cr_poly`), the face (`cr_disc`, radius size / 2 - 6, a 1 px rim), the pointer from `from` % (0: 30) to 95 % of the face's radius at CR_G_KNOB's angle |
+| `lay_draw_disc(cx16, cy16, r16, col)` | a filled disc (`cr_disc`), centre and radius Q4 (1/16 px) |
+| `lay_draw_wave(kind, x, y, w, h, col)` | one cycle of a wave in the box as a 1.5 px line (`cr_poly`), no baseline: 0 saw, 1 triangle, 2 pulse, 3 sine, 4 noise (the p5 led's icon) |
 | `lay_draw_hbar(x, y, w, h, col, pct, bip)` | the editor's small level bar |
 | `lay_draw_band(kind, wv)` | a `CR_W_*` band at its own rows (24 .. 120) with 20 values |
 | `lay_draw_end()` | draws it all in strips, to the LCD; the 240 x 240 RGBA; `lay_lint` then answers for it |
@@ -206,7 +208,7 @@ orange green grey black bg surf text theme accent mid dim line; default `auto`) 
 must be in exactly one lane; up to 4 a lane, 8 lanes and 24 elements a screen (the firmware's `cell[8][4]`).
 `validateDesign` lists what is wrong; the page refuses a file with errors and opens one with warnings. The design's
 `style` (absent, `"flat"` or `"p5"`; anything else is an error) changes how frame, knob, led and switch look and their
-new sizes (p5: knob 56 x 64 with a dial of 36, led 40 x 28, switch 56 x 64), not what they bind.
+new sizes (p5: knob 56 x 64 with a dial of 36, led 40 x 32, switch 56 x 64), not what they bind.
 
 ### The p5 style
 
@@ -224,8 +226,13 @@ Designer pages first." `"style": "p5"` composes a free screen's elements as the 
   name fits, so it never jumps rows), and the pointer is then short (70 .. 95 % of the radius) so it clears the value;
   else the value goes on the row under the label (10 px, the hot block as flat's). Hot (just turned): the face fills
   with the element's colour, the value and pointer in `bg`. The label under the dial at size + 12, as written.
-- **led**: the panel's button: its waveform (20 x 10) or label on top, a 16 x 12 cap (`surf`, `mid` rim) under it, and
-  a 4 x 4 LED at the cap's top edge, `red` when on, a 1 px `dim` square when off.
+- **led**: the panel's SHAPE button. On top (10 px) its icon or its label; the icon is ONE cycle of the wave as a thin
+  line, no baseline, as the panel prints it (`lay_draw_wave`, 16 x 10: the saw a ramp to 70 % and straight down, the
+  triangle one peak, the pulse one ⊓, the sine one hump, the noise a jag), in the lane's colour when its lane is active,
+  else `mid` when on and `dim` when off. Under a 2 px gap the cap, 18 x 18 rounded (r 2, `surf`, a 1 px `mid` rim): a
+  `black` window band (its top 8 px inside the rim) over a 1 px `line` row, the pad under it, and the LED centred in the
+  window: a 5 px `red` disc when on, a 3 px `dim` dot when off. The owner (2026-10-14), with a photo of the buttons:
+  "I'd like the buttons to look more like these and also have simple waveshape designs that match."
 - **switch**: the label on top, a slot (8 px wide, 12 px a position, rounded `line` outline) with a 6 x 8 lever in the
   element's colour at the current position, the positions' names beside it (the current one in the element's colour).
 - label, bar, glyph and band as flat.
@@ -410,7 +417,8 @@ design, and the per-engine table that says which patch parameter a (page, column
   across its lanes and screens, its header is the title line; `validateDesign` refuses a style that is not flat or
   p5; the p5 panel (`p5-panel.json`) valid with no warning, every screen x lane lint clean and deterministic, no
   parameter twice, all 56 placed, KNOB 1 on each of its 19 free lanes turns its parameter and changes the picture, a
-  knob's value text inside its dial, a lit led's dot the firmware's red;
+  knob's value text inside its dial, a lit led's dot the firmware's red, a saw led's one-cycle icon drawn over its cap
+  and the cap's window darker than its pad;
 - the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked, a knob
   turns a dial, **a scripted pointer drag from the element strip adds a knob on the grid**, the export equals the
   model and validates, the contact sheet has today's and the design's tiles, the shipped p5 panel opens in the p5

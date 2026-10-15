@@ -414,8 +414,15 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
      `a p5 knob's value "${vt}" inside its dial (${kn.id}: box ${box ? box.box.join(" ") : "none"}, the dial ${kcx - size / 2} ${kn.y} .. ${kcx + size / 2} ${kn.y + size})`);
   const red = m.draw("", "", [{ op: "rect", x: 100, y: 100, w: 8, h: 8, col: L.COLOURS.red }]).slice((104 * 240 + 104) * 4, (104 * 240 + 104) * 4 + 3);
   const lit = sA.elements.find((x) => x.type === "led" && m.pget(pidx.get(x.param).page, pidx.get(x.param).col) > pidx.get(x.param).min);
-  const at4 = lit && (((lit.y + 13) * 240 + lit.x + (lit.w >> 1)) * 4), px4 = lit && Array.from(rA.rgba.slice(at4, at4 + 3));
+  const pix = (x, y) => Array.from(rA.rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3));
+  const px4 = lit && pix(lit.x + (lit.w >> 1), lit.y + 17);   // (the LED's centre: the cap's window, 5 px under its top)
   ok(!!lit && px4.join() === Array.from(red).join(), `a lit p5 led's dot is red (${lit ? lit.id : "no lit led"}: ${px4 ? px4.join(" ") : ""}, red ${Array.from(red).join(" ")})`);
+  // a p5 led's icon: one cycle of its wave over the cap (not blank); the cap's window darker than its pad
+  const saw = sA.elements.find((x) => x.type === "led" && x.glyph === "saw"), scx = saw.x + (saw.w >> 1), bgp = pix(0, 239).join();
+  let ink = 0;
+  for (let y = saw.y; y < saw.y + 10; y++) for (let x = scx - 8; x < scx + 8; x++) ink += pix(x, y).join() !== bgp;
+  const lum = (c) => c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11, win = pix(scx - 7, saw.y + 14), pad = pix(scx, saw.y + 25);
+  ok(ink >= 10 && lum(win) < lum(pad), `a p5 led's saw icon is drawn over its cap (${ink} px of ink), its window darker than its pad (${win.join(" ")} < ${pad.join(" ")})`);
   m.unload();
 }
 

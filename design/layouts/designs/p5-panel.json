@@ -18,10 +18,10 @@
           "elements": [
             {"id": "fa", "type": "frame", "x": 4, "y": 36, "w": 232, "h": 84, "text": "Oscillator A"},
             {"id": "a_freq", "type": "knob", "x": 8, "y": 44, "w": 56, "h": 64, "param": "OSC A:FREQ", "label": "FREQ", "size": 36},
-            {"id": "a_saw", "type": "led", "x": 68, "y": 48, "w": 32, "h": 28, "param": "OSC A:SAW", "glyph": "saw"},
-            {"id": "a_pulse", "type": "led", "x": 100, "y": 48, "w": 32, "h": 28, "param": "OSC A:PULSE", "glyph": "square"},
+            {"id": "a_saw", "type": "led", "x": 68, "y": 48, "w": 32, "h": 32, "param": "OSC A:SAW", "glyph": "saw"},
+            {"id": "a_pulse", "type": "led", "x": 100, "y": 48, "w": 32, "h": 32, "param": "OSC A:PULSE", "glyph": "square"},
             {"id": "a_pw", "type": "knob", "x": 136, "y": 44, "w": 56, "h": 64, "param": "OSC A:WIDTH", "label": "PULSE W", "size": 36},
-            {"id": "a_sync", "type": "led", "x": 196, "y": 48, "w": 36, "h": 28, "param": "OSC A+:SYNC", "label": "SYNC"},
+            {"id": "a_sync", "type": "led", "x": 196, "y": 48, "w": 36, "h": 32, "param": "OSC A+:SYNC", "label": "SYNC"},
             {"id": "fm", "type": "frame", "x": 4, "y": 136, "w": 232, "h": 84, "text": "Mixer"},
             {"id": "m_a", "type": "knob", "x": 20, "y": 144, "w": 56, "h": 64, "param": "MIXER:MIX A", "label": "OSC A", "size": 36},
             {"id": "m_b", "type": "knob", "x": 92, "y": 144, "w": 56, "h": 64, "param": "MIXER:MIX B", "label": "OSC B", "size": 36},
@@ -40,9 +40,9 @@
             {"id": "fb", "type": "frame", "x": 4, "y": 36, "w": 232, "h": 168, "text": "Oscillator B"},
             {"id": "b_freq", "type": "knob", "x": 8, "y": 44, "w": 56, "h": 64, "param": "OSC B:FREQ", "label": "FREQ", "size": 36},
             {"id": "b_fine", "type": "knob", "x": 64, "y": 44, "w": 56, "h": 64, "param": "OSC B:FINE", "label": "FINE", "size": 36},
-            {"id": "b_saw", "type": "led", "x": 128, "y": 48, "w": 40, "h": 28, "param": "OSC B:SAW", "glyph": "saw"},
-            {"id": "b_tri", "type": "led", "x": 184, "y": 48, "w": 40, "h": 28, "param": "OSC B:TRI", "glyph": "triangle"},
-            {"id": "b_pulse", "type": "led", "x": 16, "y": 132, "w": 40, "h": 28, "param": "OSC B+:PULSE", "glyph": "square"},
+            {"id": "b_saw", "type": "led", "x": 128, "y": 48, "w": 40, "h": 32, "param": "OSC B:SAW", "glyph": "saw"},
+            {"id": "b_tri", "type": "led", "x": 184, "y": 48, "w": 40, "h": 32, "param": "OSC B:TRI", "glyph": "triangle"},
+            {"id": "b_pulse", "type": "led", "x": 16, "y": 132, "w": 40, "h": 32, "param": "OSC B+:PULSE", "glyph": "square"},
             {"id": "b_pw", "type": "knob", "x": 64, "y": 128, "w": 56, "h": 64, "param": "OSC B+:WIDTH", "label": "PULSE W", "size": 36},
             {"id": "b_lo", "type": "switch", "x": 120, "y": 128, "w": 56, "h": 44, "param": "OSC B+:LOFREQ", "label": "LO FREQ", "positions": 2, "names": ["OFF", "ON"]},
             {"id": "b_kb", "type": "switch", "x": 176, "y": 128, "w": 56, "h": 44, "param": "OSC B+:KEYBD", "label": "KEYBOARD", "positions": 2, "names": ["OFF", "ON"]}
@@ -68,7 +68,7 @@
             {"id": "f_env", "type": "knob", "x": 120, "y": 44, "w": 56, "h": 64, "param": "FILTER:FENV", "label": "ENV AMT", "size": 36},
             {"id": "f_kb", "type": "switch", "x": 176, "y": 44, "w": 56, "h": 56, "param": "FILTER:KTRK", "label": "KEYBOARD", "positions": 3},
             {"id": "f_rev", "type": "switch", "x": 8, "y": 128, "w": 56, "h": 44, "param": "FILTER+:REV", "label": "REV", "positions": 2},
-            {"id": "f_at", "type": "led", "x": 64, "y": 132, "w": 56, "h": 28, "param": "FILTER+:AFTER", "label": "AFTER"}
+            {"id": "f_at", "type": "led", "x": 64, "y": 132, "w": 56, "h": 32, "param": "FILTER+:AFTER", "label": "AFTER"}
           ],
           "lanes": [
             ["f_cut", "f_res", "f_env", "f_kb"],
@@ -90,8 +90,8 @@
             {"id": "e1_d", "type": "knob", "x": 64, "y": 44, "w": 56, "h": 64, "param": "ENV 1:DEC", "label": "DECAY", "size": 36},
             {"id": "e1_s", "type": "knob", "x": 120, "y": 44, "w": 56, "h": 64, "param": "ENV 1:SUS", "label": "SUSTAIN", "size": 36},
             {"id": "e1_r", "type": "knob", "x": 176, "y": 44, "w": 56, "h": 64, "param": "ENV 1:REL", "label": "RELEASE", "size": 36},
-            {"id": "e1_vel", "type": "led", "x": 8, "y": 120, "w": 56, "h": 28, "param": "ENV 1+:VEL", "label": "VELOCITY"},
-            {"id": "e1_rs", "type": "led", "x": 64, "y": 120, "w": 56, "h": 28, "param": "ENV 1+:RELSW", "label": "REL SW"}
+            {"id": "e1_vel", "type": "led", "x": 8, "y": 120, "w": 56, "h": 32, "param": "ENV 1+:VEL", "label": "VELOCITY"},
+            {"id": "e1_rs", "type": "led", "x": 64, "y": 120, "w": 56, "h": 32, "param": "ENV 1+:RELSW", "label": "REL SW"}
           ],
           "lanes": [
             ["e1_a", "e1_d", "e1_s", "e1_r"],
@@ -107,7 +107,7 @@
             {"id": "e2_d", "type": "knob", "x": 64, "y": 44, "w": 56, "h": 64, "param": "ENV 2:DEC", "label": "DECAY", "size": 36},
             {"id": "e2_s", "type": "knob", "x": 120, "y": 44, "w": 56, "h": 64, "param": "ENV 2:SUS", "label": "SUSTAIN", "size": 36},
             {"id": "e2_r", "type": "knob", "x": 176, "y": 44, "w": 56, "h": 64, "param": "ENV 2:REL", "label": "RELEASE", "size": 36},
-            {"id": "e2_vel", "type": "led", "x": 8, "y": 120, "w": 56, "h": 28, "param": "ENV 2+:VEL", "label": "VELOCITY"}
+            {"id": "e2_vel", "type": "led", "x": 8, "y": 120, "w": 56, "h": 32, "param": "ENV 2+:VEL", "label": "VELOCITY"}
           ],
           "lanes": [
             ["e2_a", "e2_d", "e2_s", "e2_r"],
@@ -128,11 +128,11 @@
             {"id": "l_rate", "type": "knob", "x": 8, "y": 44, "w": 56, "h": 64, "param": "LFO:RATE", "label": "FREQ", "size": 36},
             {"id": "l_amt", "type": "knob", "x": 64, "y": 44, "w": 56, "h": 64, "param": "LFO:AMOUNT", "label": "INIT AMT", "size": 36},
             {"id": "l_noise", "type": "knob", "x": 120, "y": 44, "w": 56, "h": 64, "param": "LFO:NOISE", "label": "NOISE", "size": 36},
-            {"id": "l_at", "type": "led", "x": 176, "y": 48, "w": 56, "h": 28, "param": "LFO:AFTER", "label": "AFTER"},
-            {"id": "fs", "type": "frame", "x": 4, "y": 136, "w": 232, "h": 48, "text": "Shape"},
-            {"id": "l_saw", "type": "led", "x": 32, "y": 148, "w": 40, "h": 28, "param": "LFO+:SAW", "glyph": "saw"},
-            {"id": "l_tri", "type": "led", "x": 100, "y": 148, "w": 40, "h": 28, "param": "LFO+:TRI", "glyph": "triangle"},
-            {"id": "l_sq", "type": "led", "x": 168, "y": 148, "w": 40, "h": 28, "param": "LFO+:SQUARE", "glyph": "square"}
+            {"id": "l_at", "type": "led", "x": 176, "y": 48, "w": 56, "h": 32, "param": "LFO:AFTER", "label": "AFTER"},
+            {"id": "fs", "type": "frame", "x": 4, "y": 136, "w": 232, "h": 52, "text": "Shape"},
+            {"id": "l_saw", "type": "led", "x": 32, "y": 148, "w": 40, "h": 32, "param": "LFO+:SAW", "glyph": "saw"},
+            {"id": "l_tri", "type": "led", "x": 100, "y": 148, "w": 40, "h": 32, "param": "LFO+:TRI", "glyph": "triangle"},
+            {"id": "l_sq", "type": "led", "x": 168, "y": 148, "w": 40, "h": 32, "param": "LFO+:SQUARE", "glyph": "square"}
           ],
           "lanes": [
             ["l_rate", "l_amt", "l_noise", "l_at"],
@@ -143,13 +143,13 @@
           "type": "free",
           "title": "WHEEL",
           "elements": [
-            {"id": "fw", "type": "frame", "x": 4, "y": 36, "w": 232, "h": 96, "text": "Wheel-mod"},
+            {"id": "fw", "type": "frame", "x": 4, "y": 36, "w": 232, "h": 100, "text": "Wheel-mod"},
             {"id": "w_dst", "type": "label", "x": 8, "y": 44, "w": 224, "h": 12, "text": "DESTINATION", "size": 9, "align": "centre", "colour": "mid"},
-            {"id": "w_fa", "type": "led", "x": 8, "y": 60, "w": 56, "h": 28, "param": "WHEEL:FREQ A", "label": "FREQ A"},
-            {"id": "w_fb", "type": "led", "x": 64, "y": 60, "w": 56, "h": 28, "param": "WHEEL:FREQ B", "label": "FREQ B"},
-            {"id": "w_pa", "type": "led", "x": 120, "y": 60, "w": 56, "h": 28, "param": "WHEEL:PW A", "label": "PW A"},
-            {"id": "w_pb", "type": "led", "x": 176, "y": 60, "w": 56, "h": 28, "param": "WHEEL:PW B", "label": "PW B"},
-            {"id": "w_f", "type": "led", "x": 8, "y": 96, "w": 56, "h": 28, "param": "WHEEL+:FILTER", "label": "FILTER"}
+            {"id": "w_fa", "type": "led", "x": 8, "y": 60, "w": 56, "h": 32, "param": "WHEEL:FREQ A", "label": "FREQ A"},
+            {"id": "w_fb", "type": "led", "x": 64, "y": 60, "w": 56, "h": 32, "param": "WHEEL:FREQ B", "label": "FREQ B"},
+            {"id": "w_pa", "type": "led", "x": 120, "y": 60, "w": 56, "h": 32, "param": "WHEEL:PW A", "label": "PW A"},
+            {"id": "w_pb", "type": "led", "x": 176, "y": 60, "w": 56, "h": 32, "param": "WHEEL:PW B", "label": "PW B"},
+            {"id": "w_f", "type": "led", "x": 8, "y": 96, "w": 56, "h": 32, "param": "WHEEL+:FILTER", "label": "FILTER"}
           ],
           "lanes": [
             ["w_fa", "w_fb", "w_pa", "w_pb"],
@@ -171,9 +171,9 @@
             {"id": "p_dst", "type": "label", "x": 120, "y": 44, "w": 112, "h": 12, "text": "DESTINATION", "size": 9, "align": "centre", "colour": "mid"},
             {"id": "p_env", "type": "knob", "x": 8, "y": 60, "w": 56, "h": 64, "param": "POLYMOD:ENV", "label": "FILT ENV", "size": 36},
             {"id": "p_oscb", "type": "knob", "x": 64, "y": 60, "w": 56, "h": 64, "param": "POLYMOD:OSC B", "label": "OSC B", "size": 36},
-            {"id": "p_fa", "type": "led", "x": 120, "y": 64, "w": 56, "h": 28, "param": "POLYMOD:FREQ A", "label": "FREQ A"},
-            {"id": "p_pa", "type": "led", "x": 176, "y": 64, "w": 56, "h": 28, "param": "POLYMOD:PW A", "label": "PW A"},
-            {"id": "p_f", "type": "led", "x": 120, "y": 100, "w": 56, "h": 28, "param": "POLYMOD+:FILTER", "label": "FILTER"}
+            {"id": "p_fa", "type": "led", "x": 120, "y": 64, "w": 56, "h": 32, "param": "POLYMOD:FREQ A", "label": "FREQ A"},
+            {"id": "p_pa", "type": "led", "x": 176, "y": 64, "w": 56, "h": 32, "param": "POLYMOD:PW A", "label": "PW A"},
+            {"id": "p_f", "type": "led", "x": 120, "y": 100, "w": 56, "h": 32, "param": "POLYMOD+:FILTER", "label": "FILTER"}
           ],
           "lanes": [
             ["p_env", "p_oscb", "p_fa", "p_pa"],
@@ -185,7 +185,7 @@
           "title": "VOICE",
           "elements": [
             {"id": "fv", "type": "frame", "x": 4, "y": 36, "w": 164, "h": 168, "text": "Voice"},
-            {"id": "v_uni", "type": "led", "x": 8, "y": 48, "w": 52, "h": 28, "param": "VOICE:UNISON", "label": "UNISON"},
+            {"id": "v_uni", "type": "led", "x": 8, "y": 48, "w": 52, "h": 32, "param": "VOICE:UNISON", "label": "UNISON"},
             {"id": "v_voices", "type": "knob", "x": 60, "y": 44, "w": 52, "h": 64, "param": "VOICE:VOICES", "label": "VOICES", "size": 36},
             {"id": "v_det", "type": "knob", "x": 112, "y": 44, "w": 52, "h": 64, "param": "VOICE:DETUNE", "label": "DETUNE", "size": 36},
             {"id": "fg", "type": "frame", "x": 176, "y": 36, "w": 60, "h": 84, "text": "Glide"},

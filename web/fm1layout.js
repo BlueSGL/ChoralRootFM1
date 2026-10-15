@@ -86,6 +86,8 @@ export function wrap(ex) {
         else if (o.op === "glyph") ex.lay_draw_glyph(o.g, o.x, o.y, o.w, o.h, o.col, o.pct || 0, o.pct2 || 0, o.flags || 0);
         else if (o.op === "knob") ex.lay_draw_knob(o.cx, o.cy, o.size, o.col, o.pct || 0, o.bip ? 1 : 0);
         else if (o.op === "p5knob") ex.lay_draw_p5knob(o.cx, o.cy, o.size, o.face, o.rim, o.tick, o.ptr, o.pct || 0, o.bip ? 1 : 0, o.from || 0);
+        else if (o.op === "disc") ex.lay_draw_disc(o.cx16, o.cy16, o.r16, o.col);
+        else if (o.op === "wave") ex.lay_draw_wave(o.kind, o.x, o.y, o.w, o.h, o.col);
         else if (o.op === "hbar") ex.lay_draw_hbar(o.x, o.y, o.w, o.h, o.col, o.pct || 0, o.bip ? 1 : 0);
         else if (o.op === "band") {
           const p = buf + 64000;
@@ -252,7 +254,9 @@ export const ELEMENT_SIZE = { frame: [112, 96], label: [48, 12], knob: [56, 64],
 // a design's element style ("style": absent = "flat", the editor's look; "p5" = the Prophet-5's panel: framed sections
 // titled in the border, knobs with a 0..10 scale, LED buttons, lever switches; docs/LAYOUT-TOOL.md "The p5 style")
 export const STYLES = ["flat", "p5"];
-const P5_SIZE = { knob: [56, 64], switch: [56, 64], led: [40, 28] };
+const P5_SIZE = { knob: [56, 64], switch: [56, 64], led: [40, 32] };
+// the p5 led's icon: one cycle of its wave (lay_draw_wave's kinds)
+const P5_WAVE = { saw: 0, triangle: 1, square: 2, sine: 3, noise: 4 };
 export const elementSize = (type, style) => (style === "p5" && P5_SIZE[type]) || ELEMENT_SIZE[type];
 export const KNOB_SIZES = { flat: [24, 28, 32, 36, 40], p5: [28, 32, 36, 40, 44] };
 export const knobSize = (e, style) => e.size || (style === "p5" ? 36 : 32);
@@ -646,15 +650,15 @@ function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
     }
     case "led": {
       const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM;
-      if (e.glyph && LED_GLYPHS[e.glyph]) {
-        const [g, wave] = LED_GLYPHS[e.glyph];
-        ops.push({ op: "glyph", g, x: cx - 10, y: e.y, w: 20, h: 10, col: ink, pct: g === 22 ? 0 : 128, pct2: g === 22 ? wave : 0 });
-      } else {
-        ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 9, s: lab, col: ink, align: 1, maxw: e.w - 2 });
-      }
-      ops.push({ op: "rect", x: cx - 8, y: e.y + 14, w: 16, h: 12, col: SURF, r: 2 });
-      ops.push({ op: "rect", x: cx - 8, y: e.y + 14, w: 16, h: 12, col: MID, r: 2, line: 1 });
-      ops.push({ op: "rect", x: cx - 2, y: e.y + 12, w: 4, h: 4, col: on ? RED : DIM, line: on ? 0 : 1 });
+      if (e.glyph && LED_GLYPHS[e.glyph]) ops.push({ op: "wave", kind: P5_WAVE[e.glyph], x: cx - 8, y: e.y, w: 16, h: 10, col: ink });
+      else ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 9, s: lab, col: ink, align: 1, maxw: e.w - 2 });
+      // the cap, 18 x 18 under a 2 px gap: a black window (the LED's) over a 1 px line, the pad under it, the rim
+      const y = e.y + 12;
+      ops.push({ op: "rect", x: cx - 9, y, w: 18, h: 18, col: SURF, r: 2 });
+      ops.push({ op: "rect", x: cx - 8, y: y + 1, w: 16, h: 8, col: COLOURS.black });
+      ops.push({ op: "rect", x: cx - 8, y: y + 9, w: 16, h: 1, col: LINE });
+      ops.push({ op: "rect", x: cx - 9, y, w: 18, h: 18, col: MID, r: 2, line: 1 });
+      ops.push({ op: "disc", cx16: cx * 16, cy16: (y + 5) * 16, r16: on ? 40 : 24, col: on ? RED : DIM });   // lit 5 px, off 3 px
       return true;
     }
     case "switch": {

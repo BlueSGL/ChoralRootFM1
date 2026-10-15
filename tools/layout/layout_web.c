@@ -993,7 +993,7 @@ LAY_EXPORT int32_t lay_pstep(uint32_t p, uint32_t c, int32_t n)
  * lay_draw_begin(title, page), the calls below (recorded), lay_draw_end() draws them and answers the 240 x 240 RGBA
  * (as lay_render); lay_lint() then answers for it. Coordinates are screen pixels; colours cr_screen.h CR_COL_* (the
  * named ones and the palette's tokens) */
-enum { LD_TEXT, LD_RECT, LD_GLYPH, LD_HBAR, LD_BAND, LD_P5KNOB };
+enum { LD_TEXT, LD_RECT, LD_GLYPH, LD_HBAR, LD_BAND, LD_P5KNOB, LD_DISC, LD_WAVE };
 typedef struct {
     uint8_t op, col, a, b;                         /* text: bold, align; rect: radius, outline width (0: filled) */
     int16_t x, y, w, h;                            /* text: w = maxw */
@@ -1086,6 +1086,27 @@ LAY_EXPORT void lay_draw_p5knob(int32_t cx, int32_t cy, int32_t size, uint32_t f
     o->flags = (uint16_t)(bip ? 1u : 0u);
     o->px = (uint8_t)(from && from < 95u ? from : 30u);
 }
+/* a filled disc (cr_disc), centre and radius Q4 (1/16 px: a centre between two pixels, a radius of 2.5 px) */
+LAY_EXPORT void lay_draw_disc(int32_t cx16, int32_t cy16, int32_t r16, uint32_t col)
+{
+    ld_t *o = ld_new(LD_DISC);
+    if (!o)
+        return;
+    o->x = (int16_t)cx16; o->y = (int16_t)cy16; o->w = (int16_t)r16;
+    o->col = (uint8_t)col;
+}
+/* ONE cycle of a waveform as a thin line in the box, no baseline (the p5 style's led icons, as the panel prints them
+ * over its SHAPE buttons): kind 0 saw (a ramp to 70 %, then straight down), 1 triangle, 2 pulse, 3 sine (one hump),
+ * 4 noise */
+LAY_EXPORT void lay_draw_wave(uint32_t kind, int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col)
+{
+    ld_t *o = ld_new(LD_WAVE);
+    if (!o)
+        return;
+    o->g = (uint8_t)kind;
+    o->x = (int16_t)x; o->y = (int16_t)y; o->w = (int16_t)w; o->h = (int16_t)h;
+    o->col = (uint8_t)col;
+}
 /* the editor's small level bar (cr_hbar) */
 LAY_EXPORT void lay_draw_hbar(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t pct, uint32_t bip)
 {
@@ -1150,6 +1171,31 @@ static void ld_p5knob(const ld_t *o)
     p[2] = (int16_t)(cx + ((r1 * cr_cos(a)) >> 14)); p[3] = (int16_t)(cy + ((r1 * cr_sin(a)) >> 14));
     cr_poly(p, 2u, 32, 0, 0, ptr);
 }
+/* lay_draw_wave: the cycle's points (Q4) inside the box less half the line (1.5 px: 24 Q4, as CR_G_KNOB's pointer is
+ * 38 for 2.4 px), drawn by cr_poly */
+static void ld_wave(const ld_t *o, uint16_t c)
+{
+    static const int8_t NOISE[6] = {60, 10, 85, 30, 100, 45};   /* (x %, y %) is i * 20 %, NOISE[i] % down */
+    int32_t x0 = o->x * 16 + 12, y0 = o->y * 16 + 12, w = o->w * 16 - 24, h = o->h * 16 - 24;
+    int16_t p[2 * 9];
+    uint32_t np = 0, k;
+#define LD_PT(fx, fy) (p[2 * np] = (int16_t)(x0 + (fx)), p[2 * np + 1] = (int16_t)(y0 + (fy)), np++)
+    switch (o->g) {
+    case 0: LD_PT(0, h); LD_PT(w * 7 / 10, 0); LD_PT(w * 7 / 10, h); break;
+    case 1: LD_PT(0, h); LD_PT(w / 2, 0); LD_PT(w, h); break;
+    case 2: LD_PT(w * 15 / 100, h); LD_PT(w * 15 / 100, 0); LD_PT(w * 85 / 100, 0); LD_PT(w * 85 / 100, h); break;
+    case 3:
+        for (k = 0; k <= 8u; k++)                  /* half a turn of sine in 8 segments */
+            LD_PT(w * (int32_t)k / 8, h - ((h * cr_sin(k * 32768u / 8u)) >> 14));
+        break;
+    default:
+        for (k = 0; k < 6u; k++)
+            LD_PT(w * (int32_t)k / 5, h * NOISE[k] / 100);
+        break;
+    }
+#undef LD_PT
+    cr_poly(p, np, 24, 0, 0, c);
+}
 static void ld_play(void)
 {
     static cr_screen_t s;
@@ -1209,6 +1255,12 @@ static void ld_play(void)
         }
         case LD_P5KNOB:
             ld_p5knob(o);
+            break;
+        case LD_DISC:
+            cr_disc(o->x, o->y, o->w, c);
+            break;
+        case LD_WAVE:
+            ld_wave(o, c);
             break;
         case LD_BAND:
             s.wide = o->g;
