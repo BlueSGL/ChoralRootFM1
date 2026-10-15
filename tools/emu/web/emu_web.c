@@ -56,9 +56,6 @@ static int web_fflush(FILE *f) { return f == WEB_FLASH_F ? 0 : fflush(f); }
 #define fflush web_fflush
 
 #include "../emu_fw.c"
-/* the compiled layouts (build/gen/cr_layouts.h by tools/gen_layout.py, docs/LAYOUT-TOOL.md "Step 4"): compiled here so
- * this build checks the header; nothing reads the tables before stage 2 (unused, so the module's bytes do not change) */
-#include "cr_layouts.h"
 
 #undef fopen
 #undef fread

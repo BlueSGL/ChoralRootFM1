@@ -31,6 +31,10 @@ enum { CR_K_NONE, CR_K_STRIPES, CR_K_CHORD, CR_K_PICKER, CR_K_METER, CR_K_KEYBOA
        CR_K_KNOBROW,                /* a layer: a horizontal picker band over one row of four knob cells (cell[0]) */
        CR_K_LOOPMENU,               /* the looper's PLAY menu (docs/LOOPER-MODES.md): the slot strip, the record mode,
                                      * the middle (a big text, the record timeline, the step grid), the knob row */
+       CR_K_FREE,                   /* the sound editor: a compiled layout's free screen (cr_layout.h; docs/LAYOUT-TOOL.md
+                                     * "Step 4"): its elements drawn in the p5 style from the table, cell[lane][slot] every
+                                     * lane's values (pct2: an led's on, a switch's position), `active` the lane on the
+                                     * knobs, fl_eng / fl_scr the layout and screen */
        CR_K_N };
 
 /* CR_K_LOOPMENU's middle (lm_mid) */
@@ -244,6 +248,7 @@ typedef struct {
     uint8_t hot_col;                /* .. the block's colour (NONE: the knob's; a modulation source's while mapping) */
     uint8_t wide;                   /* edit8: CR_W_* */
     uint8_t tall;                   /* edit8: one row of tall level bars over the whole panel (the oscillator mixer) */
+    uint8_t fl_eng, fl_scr;         /* free: the compiled layout and its screen (cr_layout.c: index + 1; 0 none) */
     uint8_t fine;                   /* edit8 / stack: SHIFT on (OPT snap): "snap" small in the title line (2: the
                                      * lane has a ratio pair, SHIFT steps its slow hand B1: "snap \267 B1");
                                      * `batt` (0..4, 4 = charging; 255 = none): edit8 / stack draw the header's battery

@@ -33,6 +33,10 @@
  * instead: each screen one or two pages under a band (ENG_B_*), its title, each cell's label and style (ENG_C_*: big
  * numbers, the ratio fraction, harm / detune glyphs, a wave + phase span cell); an engine without a MOD section (QUAD)
  * has the platform's MOD routes. VA, FM6 and CZ-1 have no plan: their screens are as before.
+ * An engine with a compiled layout (cr_layout.c, docs/LAYOUT-TOOL.md "Step 4": P5's panel) shows its layout's FREE
+ * screens in OSC .. MOD instead (CE_S_FREE, drawn as CR_K_FREE): each a lane per SELECT stop, KNOB 1..4 the elements
+ * bound in it (an empty slot: nothing), the parameters the engine's own by their built-in (page, column), so the knobs,
+ * SHIFT, the hot mark, cu_edited and the blob are the edit8 screens'. FX and MIX stay the platform's.
  *
  * No motion (the user's feedback, 2026-10-06: responsiveness first; Options > Motion does not apply here): a screen,
  * a lane, a value and the wide band are drawn as they are, in the frame after the detent; only the hot cell (the one
@@ -61,8 +65,10 @@ enum { CE_S_PLAT,                         /* the platform's pages (an engine wit
        CE_S_TRANS,                        /* a stack: lane i = column i of the one page pg[0] ("LFO SYN") */
        CE_S_MIXER,                        /* one lane: the LEVEL column of the pages pg[0..n) */
        CE_S_EDIT,                         /* edit8: lane i = deep page pg[i] (n <= 2) */
-       CE_S_PAGE };                       /* edit8: one lane, the page pg[0] (a page of no instance: "VOICE") */
-typedef struct { uint8_t type, n, pg[CR_ED_ROWS], hs; } ce_scr_t;   /* hs: the plan's screen + 1 (eng_deep_t.screens) */
+       CE_S_PAGE,                         /* edit8: one lane, the page pg[0] (a page of no instance: "VOICE") */
+       CE_S_FREE };                       /* a compiled layout's screen (li, ls): lane i = its lane i's elements */
+typedef struct { uint8_t type, n, pg[CR_ED_ROWS], hs, li, ls; } ce_scr_t;   /* hs: the plan's screen + 1
+                                          * (eng_deep_t.screens); li, ls: the layout and its screen (cr_layout.c) + 1 */
 
 typedef struct {
     uint8_t kind, n, active, wide, tall;  /* CR_K_EDIT8 / STACK, rows, the row on the knobs, CR_W_*, the mixer */
@@ -71,6 +77,7 @@ typedef struct {
     char right[16];                       /* the title line's right text */
     uint8_t dp0, np, row0;                /* the band's pages (env: dp0 .. + np; filter: dp0); the first row's number */
     uint8_t hs;                           /* a screen of the engine's plan: its index + 1 (0: the title rules) */
+    uint8_t li, ls;                       /* a free screen: the layout and its screen + 1 (cr_screen_t fl_eng, fl_scr) */
 } ce_view_t;
 
 static struct {
@@ -100,6 +107,8 @@ static const eng_deep_t *ce_deep(const track_t *t)
     }
     return d;
 }
+/* the engine's compiled layout (cr_layout.c): its index + 1, 0 none (an engine without deep pages has none) */
+static uint32_t ce_lay(const track_t *t) { return ce_deep(t) ? cr_lay_find(eng_idx(t->eng_req)) : 0u; }
 /* the engine's MOD group is its own pages (else the platform's routes) */
 static int ce_has_mod(const eng_deep_t *d) { return d && d->section[4] != 0xFFu; }
 /* the plan's screen of a view / a scan, 0 none */
@@ -216,7 +225,16 @@ static uint32_t ce_scr(const track_t *t, uint32_t g, uint32_t k, ce_scr_t *o)
     uint32_t a, b, p, q, e, n = 0;
     o->type = CE_S_PLAT;
     o->n = 0;
-    o->hs = 0;
+    o->hs = o->li = o->ls = 0;
+    if (d && g <= CE_MOD && (a = ce_lay(t)) != 0 && (n = cr_lay_group(a, g, k, &p)) != 0) {   /* the compiled layout */
+        if (p) {
+            o->type = CE_S_FREE;
+            o->n = cr_lay_scr(a, p)->nlanes;
+            o->li = (uint8_t)a;
+            o->ls = (uint8_t)p;
+        }
+        return n;
+    }
     if (!d || g > CE_MOD || (g == CE_MOD && !ce_has_mod(d)))
         return 1;
     if (d->screens) {                             /* the engine's screen plan for this group (QUAD's) */
@@ -442,6 +460,21 @@ static void ce_view(const track_t *t, uint32_t p, ce_view_t *v)
         if (k > 1u)
             v->right[str_len(v->right) - 1u] = (char)('A' + k);
         break;
+    case CE_S_FREE: {                             /* a compiled layout's screen: lane i's slots, its title */
+        const cr_lay_screen_t *ls = cr_lay_scr(sc.li, sc.ls);
+        v->kind = CR_K_FREE;
+        v->n = sc.n;
+        v->li = sc.li;
+        v->ls = sc.ls;
+        for (i = 0; i < sc.n && i < CR_ED_ROWS; i++)
+            for (c = 0; c < 4u; c++) {
+                const cr_lay_elem_t *e = cr_lay_el(sc.li, ls, cr_lay_slot(ls, i, c));
+                v->ref[i][c] = !e || e->page == CR_LAY_NONE ? ce_r(CE_R_NONE, 0, 0)
+                             : e->page == CR_LAY_PART ? ce_r(CE_R_TRK, e->col, 0) : ce_r(CE_R_DEEP, e->page, e->col);
+            }
+        cu_cpy(v->right, cr_lay_str(ls->title), sizeof v->right);
+        break;
+    }
     case CE_S_TRANS:                              /* "LFO SYN": lane i = its column i */
         v->kind = CR_K_STACK;
         v->n = sc.n;
@@ -1569,6 +1602,30 @@ static uint32_t ce_span_col(const track_t *t, const ce_view_t *vw, uint32_t r)
     return 4u;
 }
 
+/* a free screen's cell (cr_layout.h): its element's label, pct2 its state (an led: 1 on, its value above the minimum;
+ * a switch: its position, 0 .. positions - 1, the value's nearest), CR_CF_BIP for a range across 0. The look is the
+ * renderer's, by the element (cr_draw.c CR_K_FREE) */
+static void ce_cell_free(const track_t *t, const ce_view_t *vw, uint32_t r, uint32_t c, cr_cell_t *cl)
+{
+    const cr_lay_screen_t *ls = cr_lay_scr(vw->li, vw->ls);
+    const cr_lay_elem_t *e = cr_lay_el(vw->li, ls, cr_lay_slot(ls, r, c));
+    const param_desc_t *d;
+    int32_t v = 0, span;
+    if (!e || !(cl->flags & CR_CF_ON) || !(d = ce_param(t, vw->ref[r][c], &v)))
+        return;
+    cu_cpy(cl->label, cr_lay_str(e->label), sizeof cl->label);
+    cl->flags = (uint16_t)(CR_CF_ON | (d->min < 0 && d->max > 0 ? CR_CF_BIP : 0u));
+    cl->glyph = CR_G_NONE;
+    v = clamp(v, d->min, d->max);
+    span = d->max - d->min;
+    if (e->type == CR_E_SWITCH) {                 /* (Math.round of web/fm1layout.js p5Op: the nearest position) */
+        int32_t n1 = CR_LF_POS(e->flags) == 3u ? 2 : 1;
+        cl->pct2 = (uint8_t)(span > 0 ? ((v - d->min) * n1 * 2 + span) / (2 * span) : 0);
+    } else {
+        cl->pct2 = (uint8_t)(v > d->min);
+    }
+}
+
 static void ce_screen(cr_screen_t *s, uint32_t now)
 {
     track_t *t = ce_trk();
@@ -1598,6 +1655,8 @@ static void ce_screen(cr_screen_t *s, uint32_t now)
     s->active = vw.active;
     s->wide = vw.wide;
     s->tall = vw.tall;
+    s->fl_eng = vw.li;
+    s->fl_scr = vw.ls;
     for (c = 0; c < 4u; c++)
         cu_cpy(s->head[c], vw.head[c], sizeof s->head[c]);
     ce_marks(t, mc);
@@ -1607,6 +1666,8 @@ static void ce_screen(cr_screen_t *s, uint32_t now)
         for (c = 0; c < 4u; c++) {
             int32_t ds;
             ce_cell(t, &vw, vw.ref[r][c], &s->cell[r][c]);
+            if (vw.kind == CR_K_FREE)
+                ce_cell_free(t, &vw, r, c, &s->cell[r][c]);
             if (vw.hs)
                 ce_cell_plan(t, &vw, r, c, &s->cell[r][c]);
             if ((s->cell[r][c].flags & CR_CF_ON) && (ds = ce_dst(t, vw.ref[r][c])) > 0 && ds < (int32_t)CE_NDST && mc[ds])

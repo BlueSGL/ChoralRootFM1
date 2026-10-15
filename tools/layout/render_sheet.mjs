@@ -52,6 +52,14 @@ export async function renderSheet(design, { preset = 1, cols = 4, scale = 2 } = 
     const lint = r.lint.findings.map((f) => `${f.kind} "${f.text}"`).concat(r.checks.map((c) => `${c.kind}: ${c.text}`));
     return { t, rgba: r.rgba, lint, caption: `${t.group} ${t.si + 1}.${t.lane + 1} · ${t.title}` };
   });
+  const title = `${design.engine.name} · ${design.name}${design.style ? " · style " + design.style : ""}`;
+  return { ...composeSheet(m, title, tiles, { cols, scale }), tiles };
+}
+
+// the tiles ({rgba: 240 x 240 RGBA, caption}) in a grid at `scale` (nearest neighbour), each captioned under it and the
+// sheet titled, the texts drawn by the module m (the firmware's face) -> {png, width, height} (tools/layout/emu_sheet.mjs
+// tiles the emulator's frames the same way)
+export function composeSheet(m, title, tiles, { cols = 4, scale = 2 } = {}) {
   // a caption: a text drawn by the module on a free page (rows CAP0 .. CAP0 + CAPH: below the title line)
   const CAP0 = 60, CAPH = 16;
   const strip = (text, px) => m.draw("", "", [{ op: "text", bold: 1, px, x: 2, y: CAP0 + 12, s: text, col: L.COLOURS.text, maxw: 236 }]);
@@ -69,13 +77,13 @@ export async function renderSheet(design, { preset = 1, cols = 4, scale = 2 } = 
         out[(Y * W + X) * 3] = rgba[k]; out[(Y * W + X) * 3 + 1] = rgba[k + 1]; out[(Y * W + X) * 3 + 2] = rgba[k + 2];
       }
   };
-  blit(strip(`${design.engine.name} · ${design.name}${design.style ? " · style " + design.style : ""}`, 12), 0, CAP0, 240, CAPH, gap, gap);
+  blit(strip(title, 12), 0, CAP0, 240, CAPH, gap, gap);
   tiles.forEach((x, i) => {
     const dx = gap + (i % cols) * (T + gap), dy = top + Math.floor(i / cols) * (T + cap + gap);
     blit(x.rgba, 0, 0, 240, 240, dx, dy);
     blit(strip(x.caption, 11), 0, CAP0, 240, CAPH, dx, dy + T + 2);
   });
-  return { png: encodePng(W, H, out), tiles, width: W, height: H };
+  return { png: encodePng(W, H, out), width: W, height: H };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

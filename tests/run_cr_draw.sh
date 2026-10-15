@@ -16,6 +16,7 @@ export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/l
 if [ ! -f build/gen/cr_fonts.h ] || [ ! -f build/gen/ui_palettes.h ] || ! grep -q '"MOD"' build/gen/ui_palettes.h; then
     python3 -c 'import sys; sys.path.insert(0, "tools"); import build; build.generate()'
 fi
+python3 tools/gen_layout.py build/gen/cr_layouts.h >/dev/null   # (the compiled layouts: CR_K_FREE's table)
 python3 tests/gen_cr_screens.py
 OUT=build/cr_screens
 mkdir -p "$OUT/ppm" build/host

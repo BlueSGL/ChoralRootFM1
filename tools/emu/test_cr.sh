@@ -2181,7 +2181,7 @@ has "^sound: part 0 pos 3 $P5B" "$PL" && has "^sound: part 0 pos 4 $P5C" "$PL" &
 [ "$(grep -c '^expect sound .*: ok' "$PL")" = 4 ] && ok "the chord sounds on the three programs and after the edit" ||
     bad "P5 chord: $(grep -c '^expect sound .*: ok' "$PL") of 4"
 p5c=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$PL" | head -1)
-[ -n "$p5c" ] && [ "${p5c#* }" -lt "${p5c% *}" ] && ok "FILT, KNOB 1 -8: $(grep -m1 '^deep: part 0 page 5' "$PL")" ||
+[ -n "$p5c" ] && [ "${p5c#* }" -lt "${p5c% *}" ] && ok "FILT (the panel's FILTER), KNOB 2 -8: $(grep -m1 '^deep: part 0 page 5' "$PL")" ||
     bad "no CUT edit: $(grep -m1 '^deep:' "$PL")"
 br=$(python3 - "$OUT/cr_prophet.wav" "$PL" <<'PY'
 import re, sys, wave, struct
@@ -2199,16 +2199,21 @@ PY
 )
 set -- $br
 [ "${3:-0}" = 1 ] && ok "the cutoff down changes the sound: brightness (HF share) $1 -> $2 (the filter closing)" || bad "the sound did not change: $br"
-orange=$(od -An -tu1 -v -j $((15 + 30 * 240 * 3)) -N$((240 * 90 * 3)) "$OUT/cr_prophet_filter.ppm" | tr -s ' \n' '\n\n' | grep -v '^$' |
-    awk '{ v[n++] = $1 } END { c = 0; for (i = 0; i + 2 < n; i += 3) if (v[i] > 200 && v[i+1] > 80 && v[i+1] < 170 && v[i+2] < 90) c++; print c }')
-white=$(od -An -tu1 -v -j $((15 + 30 * 240 * 3)) -N$((240 * 70 * 3)) "$OUT/cr_prophet_env1.ppm" | tr -s ' \n' '\n\n' | grep -v '^$' |
-    awk '{ v[n++] = $1 } END { c = 0; for (i = 0; i + 2 < n; i += 3) if (v[i] > 200 && v[i+1] > 200 && v[i+2] > 200) c++; print c }')
-[ "${orange:-0}" -gt 200 ] && [ "${white:-0}" -gt 300 ] &&
-    ok "the filter's curve under FILT ($orange orange pixels) and the amplifier's ADSR under ENV 1 ($white white): $OUT/cr_prophet_filter.ppm cr_prophet_env1.ppm" ||
-    bad "no band: filter $orange, env $white"
-has '^edit: group OSC screen 3 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL" && has '^edit: group ENV screen 2 ' "$PL" &&
-    has '^edit: group LFO screen 2 ' "$PL" && has '^edit: group MOD screen 2 ' "$PL" &&
-    ok "P5's groups: OSC (OSC A, OSC B, MIXER), FILT, ENV 1 / ENV 2, LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
+# P5's editor is the owner's panel (the compiled layout, docs/LAYOUT-TOOL.md "Step 4"): FILTER's first lane (REV CUTOFF
+# RESO ENV AMT) in the knob colours (CUTOFF orange, REV blue), the amplifier's (ATTACK DECAY ..) too; nine shots, all
+# different; the pixels themselves are web/test_layout.mjs's (the emulator against the module, the tool's composition)
+p5col() {   # p5col FILE: orange and blue pixels in rows 30 .. 119
+    od -An -tu1 -v -j $((15 + 30 * 240 * 3)) -N$((240 * 90 * 3)) "$1" | tr -s ' \n' '\n\n' | grep -v '^$' |
+        awk '{ v[n++] = $1 } END { o = 0; b = 0; for (i = 0; i + 2 < n; i += 3) { if (v[i] > 200 && v[i+1] > 80 && v[i+1] < 170 && v[i+2] < 90) o++; if (v[i] < 80 && v[i+1] < 110 && v[i+2] > 160) b++ } print o, b }'
+}
+set -- $(p5col "$OUT/cr_prophet_filter.ppm") $(p5col "$OUT/cr_prophet_env1.ppm")
+p5diff=$(for a in osc_a osc_b filter filter_cut env1 lfo wheel polymod voice; do cksum < "$OUT/cr_prophet_$a.ppm"; done | sort | uniq -d | wc -l | tr -d ' ')
+[ "${1:-0}" -gt 60 ] && [ "${2:-0}" -gt 30 ] && [ "${3:-0}" -gt 60 ] && [ "${4:-0}" -gt 30 ] && [ "$p5diff" = 0 ] &&
+    ok "the panel's lanes in the knob colours: FILTER $1 orange / $2 blue pixels, the amplifier $3 / $4; nine different screens: $OUT/cr_prophet_filter.ppm cr_prophet_env1.ppm" ||
+    bad "the panel's screens: FILTER $1 / $2, the amplifier $3 / $4, $p5diff pairs alike"
+has '^edit: group OSC screen 2 ' "$PL" && has '^edit: group FILT screen 1 ' "$PL" && has '^edit: group ENV screen 1 ' "$PL" &&
+    has '^edit: group LFO screen 2 ' "$PL" && has '^edit: group MOD screen 2 ' "$PL" && ! has '^edit: group OSC screen 3 ' "$PL" &&
+    ok "P5's groups, the panel's screens: OSC (OSC A with the mixer, OSC B), FILT (FILTER), ENV (the amplifier), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE): $OUT/cr_prophet_*.ppm" ||
     bad "P5 groups: $(grep -c '^edit: group' "$PL")"
 p5id=$(python3 tools/gen_prophet_factory.py --list | awk '$1 == 4 { print $2 }')
 p5fav=$(grep -a '^  favs:' "$PL" | tail -1)

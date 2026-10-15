@@ -2,9 +2,10 @@
 # place 01 (the shipped list's first program: assets/prophet5-factory/shipped.txt; test_cr.sh reads the names of the
 # places from tools/gen_prophet_factory.py --list); the picker's read-out while OPT is held (shot: six engines).
 # MAJ + D4 held 1.5 s, released. PRESETS +2: place 03, the chord again; PRESETS +1: place 04, the chord again.
-# EDIT: the editor's groups, a shot each: OSC (OSC A, OSC B, MIXER), FILT (the filter's curve), ENV (ENV 1 the
-# amplifier's, ENV 2 the filter's), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE). On FILT: KNOB 1 -8: the cutoff down
-# ("deep: part 0 page 5 FILTER col 0 CUT"), the chord again: it sounds, darker. SAVE (0.22, the sound pool): the
+# EDIT: the editor's groups, a shot each: P5's compiled panel (docs/LAYOUT-TOOL.md "Step 4"): OSC (OSC A with the
+# mixer, OSC B), FILT (FILTER with the filter envelope), ENV (the amplifier), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE).
+# On FILTER's first lane (REV CUTOFF RESO ENV AMT): KNOB 2 -8: the cutoff down ("deep: part 0 page 5 FILTER col 0
+# CUT"), the chord again: it sounds, darker. SAVE (0.22, the sound pool): the
 # dialog's five entries, on Overwrite (the sound is edited; shot); SELECT -1 stays there; KNOB 4 +1 marks the program
 # (shot: the star); OCT+: Overwrite, the edited program saved into U001 over place 04 (shot: the message); OCT-.
 # EDIT held: the engine picker in the editor (shot: P5 among the six). OCT-, EDIT. The last dump's "favs:" line has
@@ -54,13 +55,10 @@ shot build/emu/test/cr_prophet_osc_a.ppm
 btn FX
 wait 400
 shot build/emu/test/cr_prophet_osc_b.ppm
-btn FX
-wait 400
-shot build/emu/test/cr_prophet_mixer.ppm
 btn SEL
 wait 400
 shot build/emu/test/cr_prophet_filter.ppm
-knob KNOB1 -8
+knob KNOB2 -8
 wait 300
 shot build/emu/test/cr_prophet_filter_cut.ppm
 key F3 down
@@ -74,9 +72,6 @@ wait 2500
 btn ENV
 wait 400
 shot build/emu/test/cr_prophet_env1.ppm
-btn ENV
-wait 400
-shot build/emu/test/cr_prophet_env2.ppm
 btn LFO
 wait 400
 shot build/emu/test/cr_prophet_lfo.ppm

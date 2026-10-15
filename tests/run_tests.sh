@@ -160,6 +160,7 @@ OUT=build/host
 mkdir -p "$OUT"
 # P5's factory header follows the shipped list (assets/prophet5-factory/shipped.txt; written only when its text changes)
 [ -d build/gen ] && python3 tools/gen_prophet_factory.py build/gen/melodee_prophet_factory.h >/dev/null
+[ -d build/gen ] && python3 tools/gen_layout.py build/gen/cr_layouts.h >/dev/null   # (the compiled layouts)
 . tests/par.sh
 par_init "$OUT/jobs"
 CC="${CC:-cc} -O1 -Wall -Wno-unused-function"

@@ -461,22 +461,24 @@ build with the shorter list (`tests/run_prophet_test.sh`: marked with one list, 
 
 ## The editor
 
-EDIT on a P5 part shows its 19 deep pages through the editor's title rules (docs/EDITOR.md §4; no screen plan, no
-change in `cr_edit.c`). A cell is one raw byte of the program, named and ranged as Melodee's panel (`prophet_edit.h
-P5_PANEL`); turning it writes that byte only. All 56 controls that change the sound:
+EDIT on a P5 part shows **the owner's panel** (2026-10-15: "I'm happy with this layout, so good to build it."): his
+design `design/layouts/designs/p5-panel.json`, compiled into the firmware (docs/LAYOUT-TOOL.md "Step 4"; the screens
+and their lanes: docs/EDITOR.md §4 "P5"). Eight screens laid out as the Prophet-5's panel: OSC (OSC A with the mixer,
+OSC B), FILT (the filter with its envelope), ENV (the amplifier), LFO (the LFO with its SHAPE buttons, WHEEL), MOD
+(POLY-MOD, VOICE with GLIDE); FX and MIX the platform's. A cell is one raw byte of the program, named and ranged as
+Melodee's panel (`prophet_edit.h P5_PANEL`); turning it writes that byte only. The engine's 19 deep pages are still its
+tables (`get` / `set` / the blob address them); the panel binds every one of the 56 controls that change the sound once:
 
-| Group | Screen | KNOB 1–4 (lane A / lane B) |
+| Group | Screen | KNOB 1–4, a lane a row |
 | --- | --- | --- |
-| OSC | `OSC A` | Freq · Saw · Pulse · Width / Sync |
-| OSC | `OSC B` | Freq · Fine · Saw · Tri / Pulse · Width · Lo freq · Keyboard |
-| OSC | `MIXER` | Osc A · Osc B · Noise |
-| FILT | `FILTER`, under the filter's curve | Cutoff · Reso · Env amt · Key trk (OFF HALF FULL) / Filter rev (1/2: the SSI model, 3: the Curtis) · Aftertch |
-| ENV | `ENV 1 · amp`, under its ADSR | Attack · Decay · Sustain · Release / Velocity · Rel sw (the RELEASE switch: both envelopes') |
-| ENV | `ENV 2 · filter`, under its ADSR | Attack · Decay · Sustain · Release / Velocity |
-| LFO | `LFO` | Rate · Amount (the wheel's initial amount) · Noise (its mix) · Aftertch / Saw · Tri · Square |
-| LFO | `WHEEL` | Freq A · Freq B · PW A · PW B / Filter (the wheel's five destinations) |
-| MOD | `POLYMOD` | Env · Osc B (the two amounts) · Freq A · PW A / Filter (the three destinations) |
-| MOD | `VOICE` | Unison (it switches the part: [UNISON](#unison)) · Voices (1..4) · Detune (0..7) · Glide / Priority (LOW, LOW R, LAST, LAS R: R retriggers) · Vintage |
+| OSC | `OSC A` | FREQ · SAW · PULSE · – / – · – · PULSE W · SYNC / OSC A · OSC B · NOISE (the mixer) · – |
+| OSC | `OSC B` | FREQ · FINE · – · – / – · SAW · TRI · PULSE / – · PULSE W · LO FREQ · KEYBOARD |
+| FILT | `FILTER` | REV (1/2: the SSI model, 3: the Curtis; two LEDs) · CUTOFF · RESO · ENV AMT / ATTACK · DECAY · SUSTAIN · RELEASE (ENV 2) / – · VELOCITY (ENV 2) · AFTER · KEYBOARD (OFF HALF FULL, a lever) |
+| ENV | `ENV 1 · amp` | ATTACK · DECAY · SUSTAIN · RELEASE / – · – · VELOCITY · REL SW (the RELEASE switch: both envelopes') |
+| LFO | `LFO` | FREQ · INIT AMT (the wheel's initial amount) · – · AFTER / – · SAW · TRI · SQUARE |
+| LFO | `WHEEL` | SRC MIX (the LFO's noise amount: the wheel-mod's source mix) · – · FREQ A · FREQ B / – · PW A · PW B · FILTER |
+| MOD | `POLYMOD` | FILT ENV · OSC B (the two amounts) · – · – / – · FREQ A · FILTER · PW A (the three destinations) |
+| MOD | `VOICE` | VINTAGE · – · UNISON (it switches the part: [UNISON](#unison)) · GLIDE / DETUNE (0..7) · VOICES (1..4) · PRIORITY (LOW, LOW R, LAST, LAS R: R retriggers) · – |
 
 The 57th panel byte, BEND (the program's own bend range), has no cell: the part bends by the channel's range. A switch
 byte other than 0 reads "on", VOICES 0 (as most factory programs have it) reads 4, and so does a stored 5: what plays. Value names are at most

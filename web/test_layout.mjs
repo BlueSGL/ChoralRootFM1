@@ -187,6 +187,21 @@ if (!args.has("--no-emu")) {
   else {
     const B = { FX: 0, SEL: 1, ENV: 2, LFO: 3, EDIT: 4, GLO: 5, SEQ: 9, PLAY: 10, REC: 11 }, E = { SELECT: 0, PRESETS: 2, K1: 3 };
     const emuBytes = fs.readFileSync(emuPath);
+    // P5 on the unit is the owner's panel (the compiled layout, docs/LAYOUT-TOOL.md "Step 4"): the module's frames with
+    // the layouts on, every screen x lane of p5-panel.json (its free screens in OSC .. MOD, FX and MIX as today)
+    const panelTiles = () => {
+      const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
+      const BTN = ["FX", "SEL", "ENV", "LFO", "SEQ", "PLAY", "REC"], e = ver.engines.find((x) => x.name === "P5");
+      m.layouts(true);
+      const out = L.designTiles(pd).map((d) => {
+        const g = pd.groups[d.gi].group, tile = { group: g, groupName: d.group, button: BTN[g], screen: d.si, lane: d.lane,
+                                                  lanes: d.lanes, title: d.title, key: d.key };
+        m.show(e.index, 1, g, d.si, d.lane);
+        return { tile, fb: m.fb(), free: m.state().kind === "free" };
+      });
+      m.layouts(false);
+      return out;
+    };
     for (const name of THREE) {
       const e = ver.engines.find((x) => x.name === name), rank = ver.engines.indexOf(e);
       const x = await globalThis.CRLayoutModule.load(emuBytes);
@@ -202,7 +217,11 @@ if (!args.has("--no-emu")) {
       x.web_step(1500);
       tap("EDIT");
       let diff = [], n = 0, group = 0, worst = 0;
-      for (const f of frames[name]) {
+      const walk = name === "P5" ? panelTiles() : frames[name];
+      if (name === "P5")
+        ok(walk.filter((f) => f.free).length === 19 && walk.length === 22,
+           `P5: the compiled panel's ${walk.length} places, ${walk.filter((f) => f.free).length} of them its free screens' lanes`);
+      for (const f of walk) {
         const t = f.tile;
         if (t.group !== group) { tap(t.button); group = t.group; }   // (a group opens on its first screen and lane)
         const d = L.diffCount(f.fb, fb());
@@ -218,9 +237,11 @@ if (!args.has("--no-emu")) {
       tap("SEL");
       x.web_enc(E.K1, 1);
       x.web_step(30);
+      m.layouts(name === "P5");                // (P5: KNOB 1 of the FILTER screen's first lane is REV)
       m.show(e.index, 1, 1, 0, 0);
       m.knob(1, 1);
       m.render();
+      m.layouts(false);
       const d = L.diffCount(m.fb(), fb());
       ok(d === 0 && m.state().hot === 1, `${name}: ${L.tileLabel(g1)} after KNOB 1 +1 (the hot cell): identical to the emulator's` + (d ? ` (${d} px differ)` : ""));
     }
@@ -517,6 +538,41 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
      again2[0].x === clip[0].x + 8 && again2[0].y === clip[0].y + 8 && L.usedTwice(pd).some((u) => u.param === "OSC A:FREQ"),
      `pasteElements: ${pasted.map((x) => x.id).join(", ")} on FILTER at their places, in no lane; the same again lands 8 px off (${again2[0].x}, ${again2[0].y}); the lint sees the parameter twice`);
   m.unload();
+}
+
+// ===================================================================================================== 7 ===
+// The unit's free screens (firmware/src/cr_draw.c CR_K_FREE, the compiled p5-panel.json: lay_layouts on, the real
+// editor) against the tool's composition of the same design (freeOps / p5Op through the draw API) in the same state:
+// every screen x lane, and every bound slot turned (its element hot, REV both ways): identical pixels
+console.log("the firmware's free screens against the tool's: P5's panel");
+{
+  const e = ver.engines.find((x) => x.name === "P5"), cat = cats.P5, params = L.paramIndex(L.paramList(cat));
+  const pd = JSON.parse(fs.readFileSync(path.join(ROOT, "design/layouts/designs/p5-panel.json"), "utf8"));
+  const measure = (s, px, b) => m.textW(s, px, b);
+  const value = (p) => ({ v: m.pget(p.page, p.col), text: m.ptext(p.page, p.col) });
+  let n = 0, hot = 0, notFree = [], differ = [];
+  m.layouts(true);
+  pd.groups.forEach((g, gi) => g.screens.forEach((s, si) => {
+    if (s.type !== "free") return;
+    for (let lane = 0; lane < s.lanes.length; lane++)
+      for (const k of [0, 1, 2, 3, 4]) {
+        if (k && !s.lanes[lane][k - 1]) continue;
+        m.show(e.index, 1, g.group, si, lane);
+        if (k) m.knob(k, k % 2 ? 1 : -1);
+        const a = m.render(), st = m.state();
+        if (st.kind !== "free" || st.page !== s.title || (k && st.hot !== k)) notFree.push(`${g.name} ${si + 1}.${lane + 1} k${k}`);
+        const ops = L.freeOps(s, params, value, { lane, hot: k ? s.lanes[lane][k - 1] : null, measure, style: pd.style });
+        const d = L.diffCount(a, m.draw(st.title, s.title, ops));
+        n++;
+        hot += k ? 1 : 0;
+        if (d) differ.push(`${g.name} ${si + 1}.${lane + 1}${k ? ` K${k}` : ""} (${d} px)`);
+      }
+  }));
+  m.layouts(false);
+  ok(!notFree.length, `lay_layouts on: P5's OSC .. MOD are the panel's free screens (CR_K_FREE), the title its, the turned slot hot` +
+     (notFree.length ? ` (not: ${notFree.slice(0, 6).join(", ")})` : ""));
+  ok(n === 75 && !differ.length, `${n} frames (${n - hot} screen x lane, ${hot} with a slot turned and hot): the unit's pixels are the tool's` +
+     (differ.length ? `\n          differ: ${differ.slice(0, 8).join("; ")}` : ""));
 }
 
 // ===================================================================================================== 5 ===

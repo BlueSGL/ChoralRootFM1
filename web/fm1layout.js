@@ -62,6 +62,9 @@ export function wrap(ex) {
       return json(ex.lay_load(ex.lay_buf(), n));
     },
     unload() { return this.load(new Uint8Array([76, 2, 255])); },
+    // the compiled layouts (build/gen/cr_layouts.h: P5's panel, the unit's editor) on or off (the default: today's
+    // classic pages, as the catalog lists them); from the next show(). -> the previous setting
+    layouts(on) { return !!this.ex.lay_layouts(on ? 1 : 0); },
     // a parameter of the editor's sound by its built-in address (page, col; page 255: a part parameter, col its id)
     pget(page, col) { return ex.lay_pget(page, col); },
     ptext(page, col) { return cstr(ex.lay_ptext(page, col)); },
@@ -574,7 +577,9 @@ export function laneMap(screen) {
   }));
   return { at, twice };
 }
-const pctOf = (p, v) => (p && p.max > p.min ? Math.max(0, Math.min(255, Math.round((v - p.min) * 255 / (p.max - p.min)))) : 0);
+// a value's fill, Q8 of 255, as the editor's cell has it (cr_pages.c cp_q8, cr_edit.c ce_pct: the firmware's, so the
+// tool's dial and the unit's CR_K_FREE dial point the same way)
+const pctOf = (p, v) => (p && p.max > p.min ? Math.max(0, Math.min(255, Math.floor((Math.max(p.min, Math.min(p.max, v)) - p.min) * 256 / (p.max - p.min)))) : 0);
 // the free screen as draw calls (the module's lay_draw_*). value(param) -> {v, text}; opts: {lane (the active one),
 // hot (an element id: its value on a block), wv: {band: [20]}, measure(text, px, bold) -> px, style ("p5": p5Op)}
 export function freeOps(screen, params, value, opts = {}) {

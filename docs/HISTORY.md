@@ -3071,3 +3071,36 @@ and KEYBOARD's flags. The two web units include the header too (unused: both mod
 after). The device image is unchanged: `./build.sh` before and after, sha256 of `build/choralroot.bin` 42bf2cc2..
 both times (no firmware file includes the header). Not done: stages 2..4 (the editor and the renderer, the tool on
 the firmware's renderer, the docs); nothing on a unit.
+
+3y68. **P5's editor is the owner's panel: the editor and the renderer on a compiled layout, stage 2 of step 4
+(2026-10-15; on lay-5 after 5cf2a6d, not pushed, not tested on the unit).** The owner: "I'm happy with this layout, so
+good to build it." EDIT on a P5 part now shows his `p5-panel.json` as the unit's own screens: OSC (OSC A with the
+mixer, OSC B), FILT (FILTER with the filter envelope), ENV (the amplifier), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE), in
+the panel's look (framed sections, knobs with a 0..10 scale and the value in the face, LED buttons with one-cycle wave
+icons, REV's two LEDs, KEYBOARD's lever), 19 lanes on SELECT, KNOB 1..4 the elements bound in the lane (an empty slot
+does nothing), the active lane in the knob colours; FX and MIX as every engine's. The tables are in one place,
+`firmware/src/cr_layout.c` (the generated `cr_layouts.h` and its accessors, included once by the unity builds and the
+draw test). `cr_edit.c` CE_S_FREE: for an engine with a compiled layout, OSC .. MOD are its screens; a lane's slots
+become the editor's refs (`ce_r(CE_R_DEEP, page, col)`, a part parameter CE_R_TRK), so the knob code, SHIFT and OPT
+snap, the acceleration, the hot mark, `cu_edited` and the blob are the edit8 screens' unchanged; `ce_cell_free` adds
+the element's label, an led's on and a switch's position (pct2). `cr_screen_t` gains `fl_eng`, `fl_scr`; `cr_draw.c`
+CR_K_FREE ports `freeOps` + `p5Op` + `layout_web.c`'s drawing (`cr_box`, `cr_rline`, `cr_p5knob`, `cr_wave1`,
+`cr_cap`), the layout tool's draw API now calling these very functions. The strips: a screen or lane change composes
+all six; a knob turn only the strips of the elements whose cells changed and of the hot element before and now
+(`cr_free_strips`, a hash a cell: FILTER's CUTOFF 2 strips). Cost on the host (`tests/cr_draw_test.c`, a quiet run): a
+whole compose of FILTER 364 us against edit8's FILTER 260 us; a knob turn 111 us (2 strips) against 89 us (2). **Size:
+XIP 530 500 -> 536 948 B (92.5 -> 93.6 %, +6448 with the 1787 B of tables), RAM 77 524 the same, POOL +128 (the cells'
+hashes)**; no fallback was needed. The layout tool: `lay_layouts(on)` (the preview's `cr_layout_hook`: off by default,
+so the catalog and the viewer list today's classic pages; a loaded design shows its own), `lay_ptext` the editor's cell
+text (`ce_text`), `fm1layout.js pctOf` the firmware's `cp_q8`; `tools/layout/emu_sheet.mjs` walks the browser
+emulator through every P5 screen x lane: `design/choralroot-fm1-p5-panel-emulator.png` for the owner. Tests:
+`web/test_layout.mjs` 7, the unit's 75 P5 frames (every screen x lane, every bound slot turned and hot) identical to
+the tool's composition of the design, and 3, the browser emulator driven by its panel equal to the module on P5's 22
+places and after KNOB 1 (REV); `tests/run_cr_draw.sh`, 22 free pictures from mock-up states lint clean and hashed
+(`tests/cr_free_golden.txt`), every slot's partial compose equal to a whole redraw, the 272 renders before
+byte-identical; `tests/cr_p5panel_test.c` (`run_cr_tests.sh`): the layout's screens in each group, all 56 bound slots
+turned (the parameter, edited, hot, CR_K_FREE), the 20 empty ones inert, SELECT across lanes and screens, the VA's
+classic screens; `cr_prophet.txt` / `test_cr.sh` and the persist scripts follow the panel (CUTOFF is KNOB 2 of FILTER's
+first lane; OSC two screens, ENV one); `sh tests/run_all.sh` all 22 suites (313 goldens, 0 changed; test_cr 990 ok).
+Other engines: their screens are unchanged (the renders, the emulator frames of VA and FM TONE, test_cr). Not done:
+stages 3 and 4 (the tool on the firmware's renderer for any design; the manual); not tested on the unit, not flashed.

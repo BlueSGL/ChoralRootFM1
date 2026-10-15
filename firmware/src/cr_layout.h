@@ -6,7 +6,8 @@
  * CR_LAY_POOL) from the designs of its BUILD list, checked against design/layouts/<engine>.json; nothing here is
  * written by hand. Packed, no pointers: indices into the tables and offsets into the string pool.
  *
- * Stage 1: the records and the tables only; the editor (CE_S_FREE) and the renderer (CR_K_FREE) come in stage 2. */
+ * firmware/src/cr_layout.c holds the one copy of the tables and the accessors; the editor (cr_edit.c CE_S_FREE) shows
+ * an engine's layout screens in OSC .. MOD, the renderer (cr_draw.c CR_K_FREE) draws them in the p5 style. */
 #pragma once
 #include <stdint.h>
 

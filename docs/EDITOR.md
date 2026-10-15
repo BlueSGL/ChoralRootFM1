@@ -201,20 +201,41 @@ knob's colour, digits 1–8 (and S) under the steps. No matrix (`not modulatable
 
 ### P5 (docs/PROPHET.md)
 
-From the title rules, no screen plan (0.22 in development; engine 16, Melodee's Prophet-5; the code's name is PROPHET):
+The owner's panel (0.22 in development; engine 16, Melodee's Prophet-5; the code's name is PROPHET): his design
+`design/layouts/designs/p5-panel.json`, compiled into the build (`tools/gen_layout.py` -> `build/gen/cr_layouts.h`,
+`firmware/src/cr_layout.c`; docs/LAYOUT-TOOL.md "Step 4"). OSC .. MOD are its eight **free screens** (`CE_S_FREE`,
+drawn as `CR_K_FREE` in the panel's look: framed sections, knobs with a 0..10 scale and the value in the face, LED
+buttons with their wave icons, a lever); a lane is a SELECT stop, KNOB 1..4 the elements bound in it, the active lane's
+in the knob colours (blue, orange, white, green), the others dim. A slot with no element (–) does nothing. FX and MIX
+are the platform's, as for every engine. The labels are the panel's:
 
-| Group | Screen | Kind | Lanes | KNOB 1–4 | Top-right text |
-| --- | --- | --- | --- | --- | --- |
-| OSC | 1, 2 | `edit8`, two rows | A, B | A: Freq · Saw · Pulse · Width; B: Sync (`OSC A`, `OSC A+`); A: Freq · Fine · Saw · Tri; B: Pulse · Width · Lo freq · Keyboard (`OSC B`, `OSC B+`) | `OSC A`, `OSC B` |
-| OSC | 3 | `edit8`, one row | MIXER | Osc A · Osc B · Noise (no `OSC · MIX` bars: the pages have no instance number) | `MIXER` |
-| FILT | 1 | `edit8`, the filter curve | A, B | A: Cutoff · Reso · Env amt · Key trk; B: Filter rev (1/2, 3) · Aftertch | `FILTER` |
-| ENV | 1, 2 | `edit8`, the AHDSR of that envelope | A, B | A: Attack · Decay · Sustain · Release; B: Velocity (· Rel sw on ENV 1) | `ENV 1 · amp`, `ENV 2 · filter` |
-| LFO | 1, 2 | `edit8`, two rows | A, B | A: Rate · Amount · Noise · Aftertch; B: Saw · Tri · Square (`LFO`, `LFO+`); A: Freq A · Freq B · PW A · PW B; B: Filter (`WHEEL`, `WHEEL+`) | `LFO`, `WHEEL` |
-| MOD | 1, 2 | `edit8`, two rows | A, B | A: Env · Osc B · Freq A · PW A; B: Filter (`POLYMOD`, `POLYMOD+`); A: Unison · Voices · Detune · Glide; B: Priority · Vintage (`VOICE`, `VOICE+`) | `POLYMOD`, `VOICE` |
+| Group | Screen (top-right text) | Lane | KNOB 1–4 |
+| --- | --- | --- | --- |
+| OSC | 1 `OSC A` (OSCILLATOR A, MIXER) | 1 | FREQ · SAW (button) · PULSE (button) · – |
+| | | 2 | – · – · PULSE W · SYNC (button) |
+| | | 3 | OSC A · OSC B · NOISE (the mixer) · – |
+| OSC | 2 `OSC B` (OSCILLATOR B) | 1 | FREQ · FINE · – · – |
+| | | 2 | – · SAW · TRI · PULSE (buttons) |
+| | | 3 | – · PULSE W · LO FREQ · KEYBOARD (buttons) |
+| FILT | 1 `FILTER` (FILTER, -ENVELOPE-) | 1 | REV (two LEDs: 1/2 red, 3 yellow) · CUTOFF · RESO · ENV AMT |
+| | | 2 | ATTACK · DECAY · SUSTAIN · RELEASE (the filter envelope, ENV 2) |
+| | | 3 | – · VELOCITY (ENV 2's) · AFTER (the filter's aftertouch) · KEYBOARD (a lever: OFF HALF FULL) |
+| ENV | 1 `ENV 1 · amp` (AMPLIFIER) | 1 | ATTACK · DECAY · SUSTAIN · RELEASE |
+| | | 2 | – · – · VELOCITY · REL SW |
+| LFO | 1 `LFO` (LFO, -SHAPE-) | 1 | FREQ · INIT AMT · – · AFTER |
+| | | 2 | – · SAW · TRI · SQUARE (buttons) |
+| LFO | 2 `WHEEL` (WHEEL-MOD) | 1 | SRC MIX (the LFO's noise amount: the wheel's source mix) · – · FREQ A · FREQ B |
+| | | 2 | – · PW A · PW B · FILTER (the wheel's destinations) |
+| MOD | 1 `POLYMOD` (POLY-MOD) | 1 | FILT ENV · OSC B (the two amounts) · – · – |
+| | | 2 | – · FREQ A · FILTER · PW A (the destinations) |
+| MOD | 2 `VOICE` (VOICE, GLIDE) | 1 | VINTAGE · – · UNISON · GLIDE |
+| | | 2 | DETUNE · VOICES · PRIORITY (LOW, LOW R, LAST, LAS R) · – |
 
-A cell is one byte of the program; the switches read on / off, the knobs the stored 0..127 (Voices 1..4: the engine's
-four voices; Unison also switches the part's voice mode). No matrix of its own
-("not modulatable"). Tests: `tools/emu/scripts/cr_prophet.txt`, `tests/cr_prophet_test.c`.
+A cell is one byte of the program, turned by the editor's own knob code (acceleration, OPT snap, the hot mark: the
+turned knob's face filled in its colour for 800 ms); the switches read on / off, the knobs the stored 0..127 (Voices
+1..4: the engine's four voices; Unison also switches the part's voice mode). No matrix of its own ("not
+modulatable"). Tests: `tools/emu/scripts/cr_prophet.txt`, `tests/cr_p5panel_test.c` (every lane slot), `tests/cr_prophet_test.c`,
+`web/test_layout.mjs` (the unit's frames against the emulator's and the layout tool's).
 
 ### FM TONE (docs/QUAD.md; the user-approved screens design/choralroot-fm1-quad-screens.png)
 

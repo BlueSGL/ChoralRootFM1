@@ -91,6 +91,10 @@ par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/
 t ./build/host/cr_backup_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_pool_test tests/cr_pool_test.c -lm
 t ./build/host/cr_pool_test
+# the editor on P5's compiled panel (cr_edit.c CE_S_FREE, docs/LAYOUT-TOOL.md "Step 4"): the layout's screens, every lane
+# slot turned (the parameter, edited, hot, CR_K_FREE), empty slots inert, SELECT across lanes and screens
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_p5panel_test tests/cr_p5panel_test.c -lm
+t logged_last cr_p5panel_test
 # a full pool's browsing: no flash read on a frame, a detent reads only the sound it loads (3y60)
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_poolperf_test tests/cr_poolperf_test.c -lm
 t ./build/host/cr_poolperf_test

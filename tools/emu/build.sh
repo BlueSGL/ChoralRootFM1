@@ -12,7 +12,9 @@ export DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib${DYLD_FALLBACK_LIBRARY_PATH:
 # P5's factory header follows the shipped list (assets/prophet5-factory/shipped.txt): made again every time (written
 # only when its text changes, so nothing is compiled again for it)
 [ -d build/gen ] && python3 tools/gen_prophet_factory.py build/gen/melodee_prophet_factory.h >/dev/null
-for h in ui_fonts.h ui_icons.h ui_keycaps.h ui_palettes.h felucca_tables.h felucca_fm6.h melodee_cz1.h melodee_prophet_factory.h felucca_samples.h; do
+# the compiled layouts follow their designs (tools/gen_layout.py; written only when its text changes)
+[ -d build/gen ] && python3 tools/gen_layout.py build/gen/cr_layouts.h >/dev/null
+for h in ui_fonts.h ui_icons.h ui_keycaps.h ui_palettes.h felucca_tables.h felucca_fm6.h melodee_cz1.h melodee_prophet_factory.h felucca_samples.h cr_layouts.h; do
     if [ ! -f "build/gen/$h" ]; then
         echo "build/gen/$h missing: running the generate step (tools/build.py)"
         python3 tools/build.py

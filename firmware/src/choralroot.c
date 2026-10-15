@@ -221,6 +221,7 @@ static void mix_block(int32_t *out, uint32_t n)   /* the audio ISR's block: the 
 #include "icons.c"               /* (1: Felucca's parameter icons; nothing of ChoralRoot's UI calls them) */
 #endif
 #include "cr_gfx.c"              /* scalable text + shapes on gfx.c (build/gen/cr_fonts.h) */
+#include "cr_layout.c"            /* the compiled layouts (build/gen/cr_layouts.h): P5's panel */
 #include "cr_draw.c"             /* the screens (cr_screen.h) */
 #include "cr_anim.c"
 #if FELUCCA_FLASH                /* storage before the sounds: upreset.c reads / writes its banks */

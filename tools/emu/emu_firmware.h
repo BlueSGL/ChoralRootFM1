@@ -143,6 +143,7 @@ static uint32_t emu_shed_model(uint32_t all)
 #include "../../firmware/src/gfx.c"
 #include "../../firmware/src/panel.c"
 #include "../../firmware/src/cr_gfx.c"                /* (includes build/gen/cr_fonts.h) */
+#include "../../firmware/src/cr_layout.c"             /* the compiled layouts (build/gen/cr_layouts.h) */
 #include "../../firmware/src/cr_draw.c"               /* (includes cr_screen.h) */
 #include "../../firmware/src/cr_anim.c"
 #define ST_AHEAD 1                                    /* (choralroot.c's: the erase ahead) */

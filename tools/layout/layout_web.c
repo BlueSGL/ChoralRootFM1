@@ -37,9 +37,6 @@ static void lay_hk_text(int32_t x0, int32_t y0, int32_t x1, int32_t y1, const ch
 #define GFX_HOOK_PIXELS(n) ((void)0)
 
 #include "../emu/emu_fw.c"
-/* the compiled layouts (build/gen/cr_layouts.h by tools/gen_layout.py, docs/LAYOUT-TOOL.md "Step 4"): compiled here so
- * this build checks the header; nothing reads the tables before stage 2 (unused, so the module's bytes do not change) */
-#include "cr_layouts.h"
 
 #undef __attribute__                               /* (hostsim.c defines it away for the firmware) */
 #define LAY_EXPORT __attribute__((used, visibility("default")))
@@ -159,7 +156,7 @@ LAY_EXPORT uint32_t lay_snapshot_bytes(void) { lay_boot(); return lay_snap ? lay
 /* ------------------------------------------------------------ the built-in tables --- */
 static const char *const LAY_FMT[] = {"int", "pct", "bipct", "time", "lfohz", "cutoff", "db", "semi", "enum", "bpm",
                                       "note", "onoff", "oct", "steps", "ofs", "fmnote", "fmfrq", "timei", "fix2", "inti"};
-static const char *const LAY_STYPE[] = {"platform", "stack", "columns", "mixer", "edit", "page"};   /* CE_S_* */
+static const char *const LAY_STYPE[] = {"platform", "stack", "columns", "mixer", "edit", "page", "free"};   /* CE_S_* */
 static const char *const LAY_BAND[] = {"none", "env", "filter", "dx", "cz", "algo", "ade2"};         /* CR_W_* */
 static const char *const LAY_STYLE[] = {"rule", "big", "ratio", "harm", "detune", "num", "val", "text", "knob", "bar",
                                         "waveph"};                                                    /* ENG_C_* */
@@ -387,7 +384,17 @@ static void j_cell(const track_t *t, const eng_deep_t *d, const ce_view_t *vw, c
 
 /* today's built-in layout of engine e, read from the firmware's tables through the editor's own derivation (cr_edit.c
  * ce_scr / ce_lanes / ce_view on the engine's INIT sound), as a layout file of format 1. From the reset instance */
+static const char *lay_catalog_of(uint32_t e);
+LAY_EXPORT uint32_t lay_layouts(uint32_t on);
 LAY_EXPORT const char *lay_catalog(uint32_t e)
+{
+    uint32_t on = lay_layouts(0);                  /* (today's built-in pages: the classic derivation, never a compiled
+                                                    * layout's free screens; docs/LAYOUT-TOOL.md "Step 4") */
+    const char *r = lay_catalog_of(e);
+    lay_layouts(on);
+    return r;
+}
+static const char *lay_catalog_of(uint32_t e)
 {
     const eng_deep_t *d;
     track_t *t;
@@ -726,7 +733,8 @@ LAY_EXPORT const char *lay_state(void)
     j_ki("lanes", s->n_rows);
     j_ks("title", s->title);
     j_ks("page", s->page);
-    j_ks("kind", s->kind == CR_K_STACK ? "stack" : s->kind == CR_K_EDIT8 ? "edit8" : "other");
+    j_ks("kind", s->kind == CR_K_STACK ? "stack" : s->kind == CR_K_EDIT8 ? "edit8" : s->kind == CR_K_FREE ? "free" : "other");
+    j_ki("free", s->kind == CR_K_FREE ? s->fl_scr : 0);   /* (a compiled layout's screen + 1, 0: none) */
     j_ks("band", s->wide < NELEM(LAY_BAND) ? LAY_BAND[s->wide] : "?");
     j_kb("header", s->header);
     j_ki("hot", s->hot_r ? s->hot_c + 1 : 0);
@@ -763,6 +771,7 @@ LAY_EXPORT const char *lay_state(void)
 #define LA_SC 32u
 typedef struct {
     uint32_t eng;                                  /* the engine loaded, 0xFF none */
+    uint8_t free_on;                               /* the compiled layouts in effect (lay_layouts; 0: today's pages) */
     eng_deep_t deep;
     eng_page_t page[LA_PG];
     uint8_t src[LA_PG][4][2];
@@ -817,6 +826,21 @@ static const eng_deep_t *lay_deep_hook(const track_t *t, const eng_deep_t *built
 {
     return la && la->eng < NENGINES && la->eng == eng_idx(t->eng_req) ? &la->deep : builtin;
 }
+/* cr_layout.c cr_layout_hook: an engine's compiled layout is shown when lay_layouts turned them on and no design of
+ * the engine is loaded (lay_load: its classic pages) */
+static int la_layout(uint32_t eng) { return la && la->free_on && la->eng != eng; }
+/* the compiled layouts (build/gen/cr_layouts.h, P5's panel: the unit's editor) on (1) or off (0, the default: the
+ * classic pages the catalog lists); from the next lay_show. Returns the previous setting */
+LAY_EXPORT uint32_t lay_layouts(uint32_t on)
+{
+    uint32_t was;
+    lay_boot();
+    if (!la)
+        return 0;
+    was = la->free_on;
+    la->free_on = (uint8_t)(on ? 1u : 0u);
+    return was;
+}
 static void lay_alloc(void)                        /* (lay_boot, before the snapshot) */
 {
     la = (la_t *)malloc(sizeof *la);
@@ -825,6 +849,7 @@ static void lay_alloc(void)                        /* (lay_boot, before the snap
         la->eng = 0xFFu;
     }
     ce_label_hook = la_label;
+    cr_layout_hook = la_layout;
 }
 
 static uint8_t lay_in[1u << 16];
@@ -956,18 +981,21 @@ LAY_EXPORT int32_t lay_pget(uint32_t p, uint32_t c)
     t = ce_trk();
     return lp_desc(t, p, c) ? lp_get(t, p, c) : 0;
 }
-/* the value's text as the editor makes it (cp_value: "2.1k", "SAW", "+50%"): a C string */
+/* the value's text as the editor's cell shows it (cr_edit.c ce_text: "64", "683 ms", "on"): a C string */
 LAY_EXPORT const char *lay_ptext(uint32_t p, uint32_t c)
 {
-    static char b[24];
+    static char b[sizeof ((cr_cell_t *)0)->value];
     track_t *t;
     const param_desc_t *d;
     lay_boot();
     t = ce_trk();
     d = lp_desc(t, p, c);
     b[0] = 0;
-    if (d)
-        cp_value(d, lp_get(t, p, c), b, sizeof b);
+    if (d) {                                       /* (the editor's cell text, cr_edit.c ce_text: the unit's own) */
+        ce_ref_t r = p == 0xFFu ? ce_r(CE_R_TRK, c, 0) : ce_r(CE_R_DEEP, p, c);
+        int32_t snd = ce_send_ref(t, r);
+        ce_text(t, r, d, snd >= 0 ? cu_send(t == &trk[CR_PART_BASS], (uint32_t)snd) : lp_get(t, p, c), b, sizeof b);
+    }
     return b;
 }
 /* n detents on it, as the editor's knob steps (cp_dstep), 30 ms pass; returns the new value */
@@ -1133,97 +1161,9 @@ LAY_EXPORT void lay_draw_band(uint32_t kind, const uint8_t *wv)
     if (wv)
         memcpy(o->wv, wv, sizeof o->wv);
 }
-/* lay_draw_rect's r: the radius (bits 0..5), LD_SQL / LD_SQR: the left / right corners square (two caps that meet) */
-#define LD_SQL 0x40u
-#define LD_SQR 0x80u
-/* a rounded outline lw px wide: the sides between the corners, the corners quarter arcs (cr_arc, anti-aliased); sq:
- * LD_SQL / LD_SQR */
-static void ld_rline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, int32_t lw, uint32_t sq, uint16_t c)
-{
-    int32_t rc, l, rr;
-    if (r > w / 2) r = w / 2;
-    if (r > h / 2) r = h / 2;
-    rc = r * 16 - lw * 8;                          /* the line's middle, Q4 from the corner's centre */
-    l = sq & LD_SQL ? 0 : r;
-    rr = sq & LD_SQR ? 0 : r;
-    cr_fill(x + l, y, w - l - rr, lw, c);
-    cr_fill(x + l, y + h - lw, w - l - rr, lw, c);
-    cr_fill(x, y + l, lw, h - 2 * l, c);
-    cr_fill(x + w - lw, y + rr, lw, h - 2 * rr, c);
-    if (rc <= 0)
-        return;
-    if (l) {
-        cr_arc((x + r) * 16, (y + r) * 16, rc, lw * 16, 32768u, 16384u, 0, 0, 0, c);
-        cr_arc((x + r) * 16, (y + h - r) * 16, rc, lw * 16, 16384u, 16384u, 0, 0, 0, c);
-    }
-    if (rr) {
-        cr_arc((x + w - r) * 16, (y + r) * 16, rc, lw * 16, 49152u, 16384u, 0, 0, 0, c);
-        cr_arc((x + w - r) * 16, (y + h - r) * 16, rc, lw * 16, 0u, 16384u, 0, 0, 0, c);
-    }
-}
-/* the Prophet-5 knob (lay_draw_p5knob), Q4 inside: the angles are CR_G_KNOB's (a0 7:30, 270 degrees clockwise) */
-static void ld_p5knob(const ld_t *o)
-{
-    uint32_t a0 = 24576u, sweep = 49152u, a = a0 + sweep * (uint32_t)o->pct / 256u, k;
-    int32_t cx = o->x * 16, cy = o->y * 16, ro = o->w * 8 - 8, ri = ro - 40, rf = (o->w / 2 - 6) * 16, r0, r1;
-    uint16_t ptr = cr_rgb(o->g, T_TEXT);
-    int16_t p[4];
-    for (k = 0; k <= 10u; k++) {                   /* the scale: 0 .. 10 */
-        uint32_t ak = a0 + sweep * k / 10u;
-        int bipk = (o->flags & 1u) && k == 5u;
-        p[0] = (int16_t)(cx + ((ri * cr_cos(ak)) >> 14)); p[1] = (int16_t)(cy + ((ri * cr_sin(ak)) >> 14));
-        p[2] = (int16_t)(cx + ((ro * cr_cos(ak)) >> 14)); p[3] = (int16_t)(cy + ((ro * cr_sin(ak)) >> 14));
-        cr_poly(p, 2u, k == 0u || k == 10u || bipk ? 32 : 16, 0, 0, bipk ? ptr : cr_rgb(o->b, T_LINE));
-    }
-    if (rf < 32)
-        return;
-    cr_disc(cx, cy, rf, cr_rgb(o->a, T_MID));      /* the face and its rim */
-    cr_disc(cx, cy, rf - 16, cr_rgb(o->col, T_SURF));
-    r0 = rf * o->px / 100;                         /* the pointer */
-    r1 = rf * 95 / 100;
-    p[0] = (int16_t)(cx + ((r0 * cr_cos(a)) >> 14)); p[1] = (int16_t)(cy + ((r0 * cr_sin(a)) >> 14));
-    p[2] = (int16_t)(cx + ((r1 * cr_cos(a)) >> 14)); p[3] = (int16_t)(cy + ((r1 * cr_sin(a)) >> 14));
-    cr_poly(p, 2u, 32, 0, 0, ptr);
-}
-/* lay_draw_wave: the cycle's points (Q4) inside the box less half the line (1.5 px: 24 Q4, as CR_G_KNOB's pointer is
- * 38 for 2.4 px), their extent centred in the box (a saw's drop is not at the box's edge: centred, it sits over the
- * cap's middle), drawn by cr_poly */
-static void ld_wave(const ld_t *o, uint16_t c)
-{
-    static const int8_t NOISE[6] = {60, 10, 85, 30, 100, 45};   /* (x %, y %) is i * 20 %, NOISE[i] % down */
-    int32_t x0 = o->x * 16 + 12, y0 = o->y * 16 + 12, w = o->w * 16 - 24, h = o->h * 16 - 24;
-    int16_t p[2 * 9];
-    uint32_t np = 0, k;
-#define LD_PT(fx, fy) (p[2 * np] = (int16_t)(x0 + (fx)), p[2 * np + 1] = (int16_t)(y0 + (fy)), np++)
-    switch (o->g) {
-    case 0: LD_PT(0, h); LD_PT(w * 8 / 10, 0); LD_PT(w * 8 / 10, h); break;
-    case 1: LD_PT(0, h); LD_PT(w / 2, 0); LD_PT(w, h); break;
-    case 2: LD_PT(w * 15 / 100, h); LD_PT(w * 15 / 100, 0); LD_PT(w * 85 / 100, 0); LD_PT(w * 85 / 100, h); break;
-    case 3:
-        for (k = 0; k <= 8u; k++)                  /* half a turn of sine in 8 segments */
-            LD_PT(w * (int32_t)k / 8, h - ((h * cr_sin(k * 32768u / 8u)) >> 14));
-        break;
-    default:
-        for (k = 0; k < 6u; k++)
-            LD_PT(w * (int32_t)k / 5, h * NOISE[k] / 100);
-        break;
-    }
-#undef LD_PT
-    {
-        int32_t a = 32767, b = -32768, t = 32767, u = -32768, dx, dy;
-        for (k = 0; k < np; k++) {
-            a = p[2 * k] < a ? p[2 * k] : a; b = p[2 * k] > b ? p[2 * k] : b;
-            t = p[2 * k + 1] < t ? p[2 * k + 1] : t; u = p[2 * k + 1] > u ? p[2 * k + 1] : u;
-        }
-        dx = (2 * x0 + w - a - b) / 2;
-        dy = (2 * y0 + h - t - u) / 2;
-        for (k = 0; k < np; k++) {
-            p[2 * k] = (int16_t)(p[2 * k] + dx);
-            p[2 * k + 1] = (int16_t)(p[2 * k + 1] + dy);
-        }
-    }
-    cr_poly(p, np, 24, 0, 0, c);
-}
+/* the ops are drawn by the renderer's own free-screen primitives (cr_draw.c CR_K_FREE: cr_box, cr_p5knob, cr_wave1,
+ * cr_ftext): a design's picture here and the unit's are made by the same code. lay_draw_rect's r: the radius (bits
+ * 0..5), 0x40 / 0x80 the left / right corners square (cr_draw.c CR_RSQL / CR_RSQR) */
 static void ld_play(void)
 {
     static cr_screen_t s;
@@ -1239,30 +1179,10 @@ static void ld_play(void)
         uint16_t c = cr_rgb(o->col, T_TEXT);
         switch (o->op) {
         case LD_TEXT:
-            if (o->w > 0)
-                cr_text_fit(P8(o->x), P8(o->y), o->s, o->px, o->a, o->b, c, T_BG, P8(o->w));
-            else
-                cr_text(P8(o->x), P8(o->y), o->s, o->px, o->a, o->b, 4096, c, T_BG, 0);
+            cr_ftext(o->x, o->y, o->s, o->px, o->a, o->b, c, o->w);
             break;
         case LD_RECT:
-            if (!o->b) {
-                if (o->a & 63u) {
-                    cv_rrect(o->x, o->y, o->w, o->h, o->a & 63u, c, T_BG);
-                    if (o->a & LD_SQL)
-                        cr_fill(o->x, o->y, o->a & 63u, o->h, c);
-                    if (o->a & LD_SQR)
-                        cr_fill(o->x + o->w - (o->a & 63u), o->y, o->a & 63u, o->h, c);
-                } else {
-                    cr_fill(o->x, o->y, o->w, o->h, c);
-                }
-            } else if (o->a & 63u) {
-                ld_rline(o->x, o->y, o->w, o->h, o->a & 63u, o->b, o->a & (LD_SQL | LD_SQR), c);
-            } else {
-                cr_fill(o->x, o->y, o->w, o->b, c);
-                cr_fill(o->x, o->y + o->h - o->b, o->w, o->b, c);
-                cr_fill(o->x, o->y, o->b, o->h, c);
-                cr_fill(o->x + o->w - o->b, o->y, o->b, o->h, c);
-            }
+            cr_box(o->x, o->y, o->w, o->h, c, o->a, o->b);
             break;
         case LD_GLYPH: {
             cr_cell_t cl;
@@ -1287,13 +1207,14 @@ static void ld_play(void)
             break;
         }
         case LD_P5KNOB:
-            ld_p5knob(o);
+            cr_p5knob(o->x, o->y, o->w, cr_rgb(o->col, T_SURF), cr_rgb(o->a, T_MID), cr_rgb(o->b, T_LINE),
+                      cr_rgb(o->g, T_TEXT), o->pct, o->flags & 1u, o->px);
             break;
         case LD_DISC:
             cr_disc(o->x, o->y, o->w, c);
             break;
         case LD_WAVE:
-            ld_wave(o, c);
+            cr_wave1(o->g, o->x, o->y, o->w, o->h, c);
             break;
         case LD_BAND:
             s.wide = o->g;
