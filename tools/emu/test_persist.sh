@@ -513,17 +513,17 @@ crl() { dl "$1" 'cr: key' "$2" | sed -n 's/.* perform \([0-9]\) mode \([0-9]\) b
 want_state="voicing 2 octave -1 bass 1 lock 1 latched 44"
 want_cr="perform 1 mode 2 bass 1 sound 18 voicing 2 octave -1 view 0 layer 0 options 0"
 # (the FX block by tag, cr_settings.h CSS_FXP_*: 4, 5 the chorus; 26..29 the bass part's sends (reverb 10); 25, 10..17
-# the delay: 10 its division 6 -> 8 (1/8.), 12 its spread 0 -> 1 (3:4), 13 its feedback 58 -> 40, 15 its mode 1 -> 0
-# (Stereo), 16 its tone 70 -> 82; 18..24 the reverb; amt: the chord part's sends, the delay's turned 25 -> 43,
-# three detents of 6; 30 the chorus's Width (0.21) 127 -> 115, two detents of 6: several detents in a frame are
-# quick ones, the range / 20 each, firmware/src/cr_pages.c kn_turn)
-want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 43 0 sends 35 45 43 0 par 4=40 5=60 26=10 27=0 28=0 29=0 25=91 10=8 11=0 12=1 13=40 14=1 15=0 16=82 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127 30=115"
+# the delay: 10 its division 6 -> 8 (1/8.), 12 its spread 0 -> 1 (3:4), 13 its feedback 58 -> 55, 15 its mode 1 -> 0
+# (Stereo), 16 its tone 70 -> 72; 18..24 the reverb; amt: the chord part's sends, the delay's turned 25 -> 33,
+# a flick of three detents in one frame: one, one, six; 30 the chorus's Width (0.21) 127 -> 125, two in one frame:
+# a turn's first two detents count one, the rest the range / 20 each (firmware/src/cr_pages.c kn_turn, 3y93))
+want_fx="  session fx: on 1 sel 2 (Delay 2/2) amt 35 45 33 0 sends 35 45 33 0 par 4=40 5=60 26=10 27=0 28=0 29=0 25=91 10=8 11=0 12=1 13=55 14=1 15=0 16=72 17=24 18=88 19=56 20=52 21=16 22=56 23=60 24=127 30=125"
 c1=$(dl "$S1" 'session chord:' 2); b1=$(dl "$S1" 'session bass:' 2)
 [ "$(sx "$S1" 2 6)" = "$want_state" ] && [ "$(crl "$S1" 2)" = "$want_cr" ] && [ "$(dl "$S1" 'session fx:' 2)" = "$want_fx" ] &&
     echo "$c1" | grep -q 'FM6 / TINE EP edited 1 kind 1 crc [0-9A-F]* level 92 pan 0' &&
-    echo "$b1" | grep -q 'VA / DEEP SUB edited 1 kind 1 crc [0-9A-F]* level 68 pan 0' &&
+    echo "$b1" | grep -q 'VA / DEEP SUB edited 1 kind 1 crc [0-9A-F]* level 78 pan 0' &&
     dl "$S1" 'loop: state' 2 | grep -q 'state 1 cap 0 layers 1 events 2 .* slot 3 .* used 004 ' &&
-    ok "session run 1: the state set: both sounds edited (not saved), Bass on at level 68 (KNOB 4 -4 in a frame: 6 a detent), Delay picked and set, Arpeggiate on, voicing +2, octave -1, LOCK with MAJ + M7, a loop in slot 3" \
+    ok "session run 1: the state set: both sounds edited (not saved), Bass on at level 78 (KNOB 4 -4 in a frame: one, one, six, six), Delay picked and set, Arpeggiate on, voicing +2, octave -1, LOCK with MAJ + M7, a loop in slot 3" \
     || bad "session run 1: $(sx "$S1" 2 6) / $(crl "$S1" 2) / $(dl "$S1" 'session fx:' 2) / $c1 / $b1"
 [ "$(sx "$S1" 1 1)" = 0 ] && [ "$(sx "$S1" 1 5)" = 1 ] && dl "$S1" 'flash:' 1 | grep -q ', 0 writes, settings saves 0 ' &&
     dl "$S1" 'loop: state' 1 | grep -q ' used 000 ' &&
@@ -645,22 +645,22 @@ rm -f "$QF" "$Q1" "$Q2"
 "$EMU" --headless --flash "$QF" --script "$S/quad_drive_check.txt" >"$Q2" 2>&1 || bad "FM TONE drive run 2: exit status"
 qd() { dl "$1" 'drive:' "$2" | sed 's/^  drive: //'; }
 qf() { dl "$1" 'session fx:' "$2" | sed -n 's/^  session fx: on \([01]\) .* amt \([0-9 ]*\) sends \([0-9 ]*\) par.* 29=\([0-9]*\) .*/on \1 amt \2 sends \3 bass-send \4/p'; }
-want_d="chord FM TONE track 28 send 12 edited 1 | bass FM TONE track 24 send 18 edited 1"
-want_f="on 0 amt 35 45 25 12 sends 0 0 0 28 bass-send 18"
+want_d="chord FM TONE track 18 send 2 edited 1 | bass FM TONE track 14 send 8 edited 1"
+want_f="on 0 amt 35 45 25 2 sends 0 0 0 18 bass-send 8"
 [ "$(qd "$Q1" 1)" = "$want_d" ] && [ "$(qf "$Q1" 1)" = "$want_f" ] && [ "$(sx "$Q1" 1 1)" = 1 ] && [ "$(sx "$Q1" 1 5)" = 0 ] &&
-    ok "FM TONE drive run 1: both parts on FM TONE, their Drives edited (28, 24) and saved to no preset, FX off, the parts' own sends 12 / 18 behind; SAVE held: the session written" \
+    ok "FM TONE drive run 1: both parts on FM TONE, their Drives edited (18, 14: a turn's first two detents count one) and saved to no preset, FX off, the parts' own sends 2 / 8 behind; SAVE held: the session written" \
     || bad "FM TONE drive run 1: $(qd "$Q1" 1) / $(qf "$Q1" 1) / $(sv "$Q1" 1)"
 [ "$(qd "$Q2" 1)" = "$want_d" ] && [ "$(qf "$Q2" 1)" = "$want_f" ] && [ "$(sx "$Q2" 1 2)" = current ] &&
     [ "$(sx "$Q2" 1 3)" = "$(sx "$Q1" 1 3)" ] && [ "$(sx "$Q2" 1 5)" = 0 ] &&
     [ "$(dl "$Q2" 'session chord:' 1)" = "$(dl "$Q1" 'session chord:' 1)" ] && [ "$(dl "$Q2" 'session bass:' 1)" = "$(dl "$Q1" 'session bass:' 1)" ] &&
-    ok "FM TONE drive run 2 (a relaunch): as it sounded when saved: the Drives 28 / 24 with FX off, both sounds still edited, the session's checksum the stored one ($(sx "$Q2" 1 3))" \
+    ok "FM TONE drive run 2 (a relaunch): as it sounded when saved: the Drives 18 / 14 with FX off, both sounds still edited, the session's checksum the stored one ($(sx "$Q2" 1 3))" \
     || bad "FM TONE drive run 2: $(qd "$Q2" 1) / $(qf "$Q2" 1) / $(sv "$Q2" 1)"
-[ "$(qd "$Q2" 2)" = "chord FM TONE track 40 send 12 edited 1 | bass FM TONE track 24 send 18 edited 1" ] && [ "$(sx "$Q2" 2 5)" = 1 ] &&
+[ "$(qd "$Q2" 2)" = "chord FM TONE track 20 send 2 edited 1 | bass FM TONE track 14 send 8 edited 1" ] && [ "$(sx "$Q2" 2 5)" = 1 ] &&
     grep -aq '^save: reverted' "$Q2" && [ "$(qd "$Q2" 3)" = "$want_d" ] && [ "$(qf "$Q2" 3)" = "$want_f" ] && [ "$(sx "$Q2" 3 5)" = 0 ] &&
-    ok "a Drive turned (28 -> 40), GLO + SAVE held: the revert: 28 / 24 with FX off again, nothing pending" \
+    ok "a Drive turned (18 -> 20), GLO + SAVE held: the revert: 18 / 14 with FX off again, nothing pending" \
     || bad "FM TONE drive, the revert: $(qd "$Q2" 2) -> $(qd "$Q2" 3) / $(qf "$Q2" 3)"
-[ "$(qd "$Q2" 4)" = "chord track 12 send 12 edited 0 | bass track 18 send 18 edited 0" ] &&
-    ok "both parts switched to the VA, FX on: the parts' own drive sends as before FM TONE (12, 18), kept by the session beside the sounds' Drives" \
+[ "$(qd "$Q2" 4)" = "chord track 2 send 2 edited 0 | bass track 8 send 8 edited 0" ] &&
+    ok "both parts switched to the VA, FX on: the parts' own drive sends as before FM TONE (2, 8), kept by the session beside the sounds' Drives" \
     || bad "FM TONE drive, the parts' sends after the relaunch: $(qd "$Q2" 4)"
 [ "$(qd "$Q2" 5)" = "chord track 0 send 0 edited 0 | bass track 0 send 0 edited 0" ] && dl "$Q2" 'session chord:' 5 | grep -q 'FM6 / TINE EP edited 0' && dl "$Q2" 'session bass:' 5 | grep -q 'VA / DEEP SUB edited 0' &&
     ok "Options > Reset Settings from FM TONE on both parts: a new unit's sounds, no drive anywhere" \

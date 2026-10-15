@@ -77,7 +77,7 @@ ok(c["classic"] is None, "p5-panel: no classic screen in OSC .. MOD, no classic 
 osc_base = refusals(copy.deepcopy(osc))
 ok(osc_base == ['style "flat": the firmware draws the p5 style only (a built design is "style": "p5")'],
    f"p5-osc-panel: refused for the flat style only (its classic screens in FILT .. MOD: a plan) ({osc_base})")
-rows = json.loads((ROOT / "design/layouts/designs/p5-rows.json").read_text(encoding="utf-8"))   # (3y93: the p5 cell styles)
+rows = json.loads((ROOT / "design/layouts/designs/p5-rows.json").read_text(encoding="utf-8"))   # (3y94: the p5 cell styles)
 ok(G.BUILD == {"P5": "design/layouts/designs/p5-rows.json"}, f"BUILD: P5's rows ({G.BUILD})")
 cr = G.compile_design(copy.deepcopy(rows), cat)
 cl, nr = cr["classic"], G.cost(cr)
@@ -155,7 +155,7 @@ BROKEN = {   # name: (how, the reason's words)
 }
 ok(len(BROKEN) == 23, f"{len(BROKEN)} broken designs, as web/test_layout.mjs 6")
 designs = {"p5-panel": panel, "p5-osc-panel": osc, "p5-rows": rows}
-sketch = copy.deepcopy(osc)                                  # (3y95: a sketch glyph, the page's: valid, never built)
+sketch = copy.deepcopy(osc)                                  # (3y96: a sketch glyph, the page's: valid, never built)
 sketch["groups"][1]["screens"][0]["lanes"][0]["cells"][0]["style"] = "sketch:k6d"
 sketch["groups"][1]["screens"][0]["lanes"][1]["cells"][1]["style"] = "sketch:b1a-saw"
 designs["sketch: k6d and b1a-saw on FILT"] = sketch

@@ -180,7 +180,7 @@ installed on the owner's Mac.
 
 ## Open items
 
-- **P5's rows on the unit** (branch lay-7, HISTORY 3y96, docs/LAYOUT-TOOL.md "Step 4, the firmware: what was
+- **P5's rows on the unit** (branch lay-7, HISTORY 3y97, docs/LAYOUT-TOOL.md "Step 4, the firmware: what was
   built"): P5's editor is the owner's rows (`design/layouts/designs/p5-rows.json`, compiled by `tools/gen_layout.py` as
   a screen plan over pages of its own, served by `cr_pages.c cp_deep`); it replaced the panel of lay-5 (3y85 .. 3y87),
   whose free-screen editor and renderer are no longer in the unit (the layout tool keeps previewing free designs).

@@ -3720,7 +3720,26 @@ emulator comparison PASS (112 ok), gen_layout_test 61, `sh tests/run_all.sh` ALL
 test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit (the owner tries
 the next build).
 
-3y93. **The Prophet-5's controls as edit8 cell glyphs, and cell styles in the layout tool: a P5 mock-up of rows (2026-10-15;
+3y93. **A turn's first two detents count one (2026-10-15; the owner, still on the beta1 build: "The Expression knob:
+may have acceleration but I cannot move it in small steps of 1").** The curve itself leaves a 128-range value at one
+unit down to 45 ms between detents (KN_CURVE: two at 34 .. 44, three at 25 .. 33, six under 25), which a hand turn
+does not reach; but the unit reads a knob once a main-loop pass (`cr_ui.c` `fm1_enc_take` in `cr_ui_input`), and two
+detents of a hand turn that land in one editor redraw come as one call with s = 2, which `kn_turn` reads as 16 ms / 2
+= the quickest: six units at once. `cr_pages.c kn_turn`: a turn's first `KN_FIRST` (2) detents are the finest step
+whatever their timing (a turn begins after a rest of a second or a reversal, `kn.run`; `kn.first`: of a pass's
+detents, those that begin the turn, which `kn_lin` steps one and the rest at the speed's step: a flick of three in
+one pass is one, one, six), so a nudge or the first two clicks of any turn are one, and a spin accelerates from its
+third detent on; the emulator's "knobs quick" overrides it as before (`cr_fx_global.txt` says so now: its checks count
+six a detent), and `cr_bass_engine.txt`'s +3 in a frame reads 92 -> 100 (was 110). And detents that arrive in one pass count their mean spacing over it (the time since the previous
+detent / n) instead of 16 ms / n: two in a 38 ms redraw are 19 ms apart (quick), two in a 100 ms pass 50 ms (one unit
+each); the first pass of a turn still takes a frame, 16 ms. The designer-handoff session, asked for the unit's detent
+timing: nothing was measured there, KN_CURVE was chosen by design and judged by feel; a cutoff detent's frame was
+25 .. 38 ms before the 20 MHz LCD, so a moderate turn under load does deliver two detents a pass. `cr_expr_knob.txt` now times detents like a hand (90 ms: one each), like a spin (20 ms: one, one, six,
+six) and two in one frame after a rest (one each); `cr_knob_accel.txt`'s runs are unchanged (their quick runs follow
+slow detents). docs/EDITOR.md 6a. Not flashed: whether the number display (3y90) already reads as one per detent on
+the unit, and whether this rule is what the owner's hand needed, is for the next build on the unit.
+
+3y94. **The Prophet-5's controls as edit8 cell glyphs, and cell styles in the layout tool: a P5 mock-up of rows (2026-10-15;
 on lay-7 from 4960b2c, not pushed, not flashed).** The owner, on the P5 panel: "the new P5 UI just feels out of place
 compared with the rest of the engine UI's. With the frames around things the controls get tiny and hard to read, and
 also having 5 or six parameters on a row while it matches the P5, just feels weird, so I think we can redesign this,
@@ -3758,7 +3777,7 @@ style refusal word for word, p5-rows valid and not buildable). **Checked**: `sh 
 test_cr 1009 ok, test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed, P5 panel goldens 22 of 22
 unchanged). Not done: the owner's own page layout (his, in the designer); a P5 plan in the firmware when he has it.
 
-3y94. **The P5 cell glyphs as the owner chose them, one full-size row under a band, click-to-select in the designer
+3y95. **The P5 cell glyphs as the owner chose them, one full-size row under a band, click-to-select in the designer
 (2026-10-15; on lay-7 from 22d5d31, not committed, not flashed).** Five rounds of pixel mock-ups
 (`design/p5-glyph-mockups*.html`, the round-5 sheet the specification). The owner: "K6d is winner. We need to have the
 11 lines as it helps match up a patch with a real P5"; "B1 but can the box color match the column color"; "the wave
@@ -3798,8 +3817,8 @@ glyphs to be moved down vertically so they align": K6d's centre moved 6 px down 
 LEDs) in the 34 px box, the small form unchanged, the knob sketches (fm1sketch.js) with it; goldens p5cell_full_a,
 _full_b, _band1, _band1_env, _switch_0, _switch_2 rewritten (the two-lane band pictures unchanged).
 
-3y95. **Sketch glyphs in the layout designer: glyph variants drawn by the page in a cell's glyph box (2026-10-15; on
-lay-7 after 3y94, not committed).** The owner: "It doesn't have to stay that way. The designer can get a sketch layer:
+3y96. **Sketch glyphs in the layout designer: glyph variants drawn by the page in a cell's glyph box (2026-10-15; on
+lay-7 after 3y95, not committed).** The owner: "It doesn't have to stay that way. The designer can get a sketch layer:
 glyph variants drawn by the page itself in the cell's glyph box" — "Yes, lets support this": glyph designs tried on
 real pages before anyone writes C. **web/fm1sketch.js** (new): the mock-ups' pixel helpers on an RGBA buffer and
 every glyph of the four rounds as a registry of 29 sketches with their notes (knobs k1 .. k6, k6a .. k6e; LED buttons
@@ -3813,7 +3832,7 @@ hot block, an empty glyph box; `lay_state` has every row's fills (`rows`) and th
 `designSession.render` draws the sketches into the frame, so the live screen, the contact sheet and its PNG, the
 screen's PNG and render_sheet.mjs all show them; the badge and the lint ("sketch") say why it is not buildable; the
 inspector's *Style* has a "sketch" group and shows the note. web/make_site.py inlines fm1sketch.js before
-fm1layout.js. The device image is byte for byte 3y94's (sha256 744dd15c..., XIP 548 860 B). **Tests**:
+fm1layout.js. The device image is byte for byte 3y95's (sha256 744dd15c..., XIP 548 860 B). **Tests**:
 web/test_layout.mjs 6 (sketch:k6d valid, refused by the build, deterministic, against p5knob 269 px differ in the
 cell's glyph area and none outside it, the firmware's label and value, the "sketch" finding and the badge; all 29
 sketches draw on a knob's and an LED's cell, lint clean; an unknown name or wave refused; the 23rd broken design) and
@@ -3824,7 +3843,7 @@ glyph box), and the free screens' elements (their glyphs are the p5 style's).
 
 ## 2026-10-15 (P5's editor from a design file: the owner's rows compiled)
 
-3y96. **P5's editor comes from a design file: the owner's rows compiled as a screen plan; the free-screen code leaves
+3y97. **P5's editor comes from a design file: the owner's rows compiled as a screen plan; the free-screen code leaves
 the unit (2026-10-15; on lay-7 after a3cd8bb, not pushed, not flashed).** The owner, on `design/layouts/designs/
 p5-rows.json`: "This layout now checks out, I updated the label text in editor. We are good to build and get into the
 firmware." **The generator** (`tools/gen_layout.py`): `BUILD = {"P5": "design/layouts/designs/p5-rows.json"}`; a

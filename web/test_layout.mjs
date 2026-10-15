@@ -363,7 +363,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
      `not buildable: ${pk.unbuildable.map((u) => `${catB.groups[u.gi].name} ${u.si + 1}`).join(", ") || "none"} (EXPR)`);
   m.unload();
 
-  // cell styles (3y93): the Prophet-5's controls in a classic cell (cr_screen.h CR_G_P5*), through the real editor
+  // cell styles (3y94): the Prophet-5's controls in a classic cell (cr_screen.h CR_G_P5*), through the real editor
   {
     const c565 = (r, g, b) => { const c = ((r >> 3) << 11) | ((g >> 2) << 5) | (b >> 3); return [((c >> 11) * 255 / 31) | 0, (((c >> 5) & 63) * 255 / 63) | 0, ((c & 31) * 255 / 31) | 0].join(); };
     const RED = c565(224, 58, 47), at = (rgba, x, y) => Array.from(rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join();
@@ -447,7 +447,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
        ca(fr.state, 200, 210) === '{"lane":0,"k":3}' && ca(fr.state, 200, 100) === "null" && ca(fr.state, 10, 230) === "null" &&
        ca({ kind: "edit8", band: "env", lanes: 2 }, 70, 200) === '{"lane":1,"k":1}',
        "cellAt: a click on the picture finds the cell by the screen's rows (no band 30 / 134, one lane under a band 124 .. 224, two 124 / 184)");
-    // sketch glyphs (3y95, web/fm1sketch.js): "sketch:<name>" on a classic cell, drawn by the page in the glyph box
+    // sketch glyphs (3y96, web/fm1sketch.js): "sketch:<name>" on a classic cell, drawn by the page in the glyph box
     {
       const withStyle = (st, k = 0) => { const d = JSON.parse(JSON.stringify(rows)); d.groups[0].screens[0].lanes[0].cells[k].style = st; return d; };
       const shot = (d) => { const x = L.designSession(m, cat, d, 1); x.reload(); x.open(0, 0, 0); return x.render(); };
