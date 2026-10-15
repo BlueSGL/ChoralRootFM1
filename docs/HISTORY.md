@@ -3629,3 +3629,41 @@ suites green (313 goldens 0 changed, test_cr 1001 ok), test_layout with the emul
 XIP 546 780 B of 573 440 (95.4 %)**, RAM 79.8 %, POOL 69.5 %: main alone was 94.2 %, the panel's tables and code
 6.5 KB; about 26 KB of XIP left. Open for the release: docs/releases/0.22.md's line says the panel is "merged after
 0.22-beta1"; if the beta is tagged on this merge, the beta's notes and the installer card should carry the panel.
+
+## 2026-10-15 (0.22-beta1 with the P5 panel: the release tree)
+
+3y89. **0.22-beta1's release tree: the P5 panel in the notes and on the card, the packages of this build (2026-10-15;
+branch rel-1 from 48349dd, not pushed, not tagged, not flashed).** The owner: "Lets get this merged in with everything,
+then lets tag and release the build as v0.22-beta1." (3y88). `docs/releases/0.22-beta1.md`, read end to end: P5's
+bullet (Sounds and engines) gets the panel as its first point, in place of its list of pages (which had both envelopes
+under ENV): the editor drawn as the Prophet-5's front panel, EDIT's eight screens in their groups (OSC A with the mixer
+and OSC B, the filter with its envelope, ENV the amplifier, the LFO and the wheel, Poly-Mod and the voice, then EXPR),
+SELECT from row to row and KNOB 1 to 4 that row's places, an empty place inert (docs/MANUAL.md's P5 page). One Going
+back section, unchanged: 0.21 has no P5, so the panel leaves nothing there (the editor's place is not saved).
+`docs/releases/0.22.md`: the "Merged after 0.22-beta1" line removed (the beta carries it); still the pointer.
+`web/releases.json`: the card has 12 bullets, releases_test's most, so the panel joins P5's bullet (187 characters);
+the date 2026-10-15; sha256 / sha256_1core of this build. **Built**: `./build.sh --release 0.22-beta1` twice, the
+same SHA256SUMS; `choralroot-0.22-beta1.fwsc` 16d52533ffd06f1e..., `choralroot-0.22-beta1-1core.fwsc`
+6cc9a4cda5bae515...; the apps carry `ChoralRoot 0.22-beta1` and `ChoralRoot 0.22-beta1 1-core`. Size: XIP 546 796 B
+of 573 440 (95.4 %, 26 KB free), RAM 78 476 (79.8 %), POOL 239 064 (69.5 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the
+single-core package XIP 544 124 (94.9 %), RAM 75 372 (76.7 %), POOL 238 936 (69.4 %). Stub version 3, sha256
+baee55ed142fe1cc. This Mac's Python 3.11.6, Pillow 11.1.0 and fontTools 4.66.1 are release.yml's pins, so CI should
+make the same files. **Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1001 ok,
+test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed); releases_test with
+`CR_PACKAGES_DIR=build/release-0.22-beta1` (both sha256 match) and with every listed package (0.16 .. 0.21 from
+earlier local copies, all matching); site_test alone, with the release folder and with every package;
+test_installer; the browser emulator built as 0.22-beta1, test_web_emu PASS. **The Pages job, simulated**: pages.yml's
+steps for 0.22-beta1 into a scratch folder (the package against SHA256SUMS, releases.json's first entry, `make_site.py
+... --packages ... --require-all` without the layout viewer, as the job builds none). The landing page's version line,
+Install, Download, command line and New in are 0.21's; the installer's own version is 0.21, and its chooser lists
+0.22-beta1 only with "Show beta releases" ticked (headless Chromium, `?demo=idle`: then first, with its badge and the
+beta note, Install still 0.21); both beta packages are in `firmware/` with the listed sha256 (its SHA256SUMS: 8 lines,
+all match); under "Try it first": "It runs ChoralRoot 0.22-beta1, a beta (the installer's default is 0.21)."; the
+notes links are `blob/main/docs/releases/<version>.md`. **The tag's path, read again** (release.yml, pages.yml): the
+notes file, the four assets and SHA256SUMS, a pre-release, the dispatch of pages.yml (a `-beta` version publishes),
+the first-entry check and `--require-all` all hold for v0.22-beta1; releases_test itself does not ask for the first
+entry (pages.yml's own check does), and on the tag's tree it reads the firmware's default `ChoralRoot 0.22` (not
+tagged: a note) and finds v0.22-beta1 in the list. Open, not blocking: the published site has no layout viewer
+(docs/LAYOUT-TOOL.md says so); the release body's install text does not say a beta is behind "Show beta releases"
+(the notes above it do). Not done: anything on a unit (the panel is not device-tested: docs/HANDOFF.md); the push, the
+tag and the Pages job.
