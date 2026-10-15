@@ -295,6 +295,9 @@ export function paramList(cat) {
   return out;
 }
 export const paramIndex = (params) => new Map(params.map((p) => [p.id, p]));
+// what a parameter is on the original instrument when its id does not say (the designer's palette: its search and
+// its second line only)
+export const PARAM_HINTS = { "LFO:NOISE": "wheel-mod source mix" };
 const addrKey = (page, col) => `${page}.${col}`;
 
 // ------------------------------------------------------------ new designs ---
@@ -346,6 +349,24 @@ export function newElement(screen, type, x, y, param = null, style = "flat") {
   return e;
 }
 export const snap = (v) => Math.round(v / GRID) * GRID;
+// copy and paste between screens: elements (copies) onto a screen at their own places, with fresh ids, in no lane; an
+// element that would land exactly on an identical box moves 8 px right and down (again, until free). -> the new elements
+export function pasteElements(screen, clip) {
+  const made = [];
+  let n = screen.elements.length + 1;
+  for (const o of clip) {
+    const e = JSON.parse(JSON.stringify(o));
+    while (screen.elements.some((x) => x.id === `e${n}`)) n++;
+    e.id = `e${n++}`;
+    for (let k = 0; k < 30 && screen.elements.some((x) => x.x === e.x && x.y === e.y && x.w === e.w && x.h === e.h); k++) {
+      e.x = Math.min(e.x + 8, SCREEN - e.w);
+      e.y = Math.min(e.y + 8, SCREEN - e.h);
+    }
+    screen.elements.push(e);
+    made.push(e);
+  }
+  return made;
+}
 
 // ---------------------------------------------------------- the design file ---
 export const formatDesign = (d) => formatLayout(d);
@@ -404,6 +425,8 @@ export function validateDesign(d, cat) {
         if (["x", "y", "w", "h"].some((k) => Number.isInteger(e[k]) && e[k] % GRID)) warn(`${et}: not on the ${GRID} px grid`);
         if (BINDABLE.has(e.type) && e.param !== null && e.param !== undefined && !pidx.has(e.param)) err(`${et}: no parameter "${e.param}"`);
         if (e.type === "switch" && ![2, 3].includes(e.positions)) err(`${et}: a switch has 2 or 3 positions`);
+        if (e.type === "led" && e.labelAt !== undefined && e.labelAt !== "above" && e.labelAt !== "below") err(`${et}: "labelAt" is "above" or "below"`);
+        if (e.type === "frame" && e.r !== undefined && !(Number.isInteger(e.r) && e.r >= 0 && e.r <= 12)) err(`${et}: a frame's corner radius "r" is 0 .. 12`);
         if (e.type === "led" && e.leds !== undefined && ![1, 2].includes(e.leds)) err(`${et}: "leds" is 1 or 2`);
         if (e.type === "led" && e.leds === 2) {
           const lp = pidx.get(e.param);
@@ -570,7 +593,7 @@ export function freeOps(screen, params, value, opts = {}) {
     if (opts.style === "p5" && p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit: at.get(e.id) && at.get(e.id).lane === active })) continue;
     switch (e.type) {
       case "frame": {
-        ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, line: 1 });
+        ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, r: e.r || 0, line: 1 });
         if (e.text) {
           const tw = measure(e.text, 10, true);
           ops.push({ op: "rect", x: e.x + 4, y: e.y - 5, w: tw + 6, h: 10, col: BG });
@@ -641,7 +664,7 @@ export function freeOps(screen, params, value, opts = {}) {
 function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
   switch (e.type) {
     case "frame": {
-      ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, r: 3, line: 1 });
+      ops.push({ op: "rect", x: e.x, y: e.y, w: e.w, h: e.h, col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : LINE, r: e.r ?? 3, line: 1 });
       if (e.text) {
         const t = e.text.toUpperCase(), tw = Math.min(measure(t, 10, true), e.w - 12);
         ops.push({ op: "rect", x: cx - (tw >> 1) - 3, y: e.y - 5, w: tw + 6, h: 10, col: BG });
@@ -664,9 +687,15 @@ function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
       return true;
     }
     case "led": {
-      const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM, y = e.y + 12;
-      // the cap under a 2 px gap, 18 high: a black window (the LEDs') over a 1 px line, the pad under it, the rim; sq:
-      // the corners on one side square (lay_draw_rect r + 64 left, + 128 right: a pair's caps meet as one)
+      // a column: the rows over the cap (the icon, the two LEDs' names, the label when it is above: 12 px each), the cap
+      // (2 px under them, or at the cell's top + 2 with none), the label under it when labelAt is "below" (a two-LED
+      // button's label goes under by default: its names are on top)
+      const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM, two = e.leds === 2;
+      const icon = !two && e.glyph && LED_GLYPHS[e.glyph], below = e.labelAt ? e.labelAt === "below" : two;
+      const labTop = !!lab && !below && !icon;   // (above, an icon takes the label's place)
+      const rows = (labTop ? 1 : 0) + (icon || two ? 1 : 0), y = rows ? e.y + 12 * rows : e.y + 2;
+      // the cap, 18 high: a black window (the LEDs') over a 1 px line, the pad under it, the rim; sq: the corners on one
+      // side square (lay_draw_rect r + 64 left, + 128 right: a pair's caps meet as one)
       const cap = (x, w, sq = 0) => {
         ops.push({ op: "rect", x, y, w, h: 18, col: SURF, r: 2 + sq });
         ops.push({ op: "rect", x: x + 1, y: y + 1, w: w - 2, h: 8, col: COLOURS.black });
@@ -674,22 +703,25 @@ function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
         ops.push({ op: "rect", x, y, w, h: 18, col: MID, r: 2 + sq, line: 1 });
       };
       const led = (x, lit5, c) => ops.push({ op: "disc", cx16: x * 16, cy16: (y + 5) * 16, r16: lit5 ? 40 : 24, col: lit5 ? c : DIM });   // lit 5 px, off 3 px
-      if (e.leds === 2) {   // one parameter of two values: a wide cap, two LEDs (min red, max yellow), the names above them
+      // one LED; a pair's halves sit flush (the left's cap at its cell's right edge, the right's over the shared rim)
+      const cxL = two ? cx : e.pair === "left" ? e.x + e.w - 9 : e.pair === "right" ? e.x + 8 : cx;
+      const labCol = two ? col : ink;
+      if (labTop) ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: e.y + 9, s: lab, col: labCol, align: 1, maxw: e.w - 2 });
+      const top = e.y + (labTop ? 12 : 0);
+      if (two) {   // one parameter of two values: a wide cap, two LEDs (min red, max yellow), the names above them
         const cur = on ? 1 : 0;
         cap(cx - 15, 30);
         [cx - 7, cx + 7].forEach((x, i) => {
-          ops.push({ op: "text", bold: 1, px: 9, x, y: e.y + 9, s: switchName(e, p, 2, i).toUpperCase(), col: i === cur ? (lit ? col : MID) : DIM, align: 1 });
+          ops.push({ op: "text", bold: 1, px: 9, x, y: top + 9, s: switchName(e, p, 2, i).toUpperCase(), col: i === cur ? (lit ? col : MID) : DIM, align: 1 });
           led(x, i === cur, i ? COLOURS.yellow : RED);
         });
-        if (e.h >= 44 && lab) ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 42, s: lab, col, align: 1, maxw: e.w - 2 });
-        return true;
+      } else {
+        if (icon) ops.push({ op: "wave", kind: P5_WAVE[e.glyph], x: cxL - 8, y: top, w: 16, h: 10, col: ink });
+        cap(cxL - 9, 18, e.pair === "left" ? 128 : e.pair === "right" ? 64 : 0);
+        led(cxL, on, RED);
       }
-      // one LED; a pair's halves sit flush (the left's cap at its cell's right edge, the right's over the shared rim)
-      const cxL = e.pair === "left" ? e.x + e.w - 9 : e.pair === "right" ? e.x + 8 : cx;
-      if (e.glyph && LED_GLYPHS[e.glyph]) ops.push({ op: "wave", kind: P5_WAVE[e.glyph], x: cxL - 8, y: e.y, w: 16, h: 10, col: ink });
-      else ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: e.y + 9, s: lab, col: ink, align: 1, maxw: e.w - 2 });
-      cap(cxL - 9, 18, e.pair === "left" ? 128 : e.pair === "right" ? 64 : 0);
-      led(cxL, on, RED);
+      if (below && lab && (two || !icon || e.label))
+        ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: y + 29, s: lab, col: labCol, align: 1, maxw: e.w - 2 });
       return true;
     }
     case "switch": {

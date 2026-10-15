@@ -3021,7 +3021,17 @@ FILTER's REV, which was a lever; two leds may pair (`"pair"`) into one wide cap 
 triangle beside the single square (`lay_draw_rect`'s r + 64 / + 128 square a cap's inner corners); OSC B's LO FREQ and
 KEYBOARD are buttons now (FILTER's three-position KEYBOARD stays a lever). P5 has no sample-and-hold LFO parameter, so
 no such button. Tests: the icons centred within 1 px, REV yellow at 3 and red at 1/2, the pair's caps touching,
-`validateDesign` refusing two LEDs on a 0..127 parameter and warning on a pair apart. The device image is byte-identical by construction:
+`validateDesign` refusing two LEDs on a 0..127 parameter and warning on a pair apart. **Then the owner's own panel (2026-10-15)**: he
+edited `p5-panel.json` in the page (ENV 2 into FILT, his frame titles, SHAPE labels, VOICE rearranged, an unbound SRC
+MIX knob on WHEEL) and asked: "I need a way to copy/paste elements between pages. Also for buttons like SYNC on OSC A I
+need a way to change the label between above(like it is now) and below(How I want it). The prophet's panel also has
+rounded edges on it's frames, so I'd like an option to be able to do that too to match. Wheel Mod also has an option on
+real prophet for source mix which I added but didn't see a parameter for." His design is kept; the page copies and
+pastes elements between screens (Ctrl+C / Ctrl+V, copy / paste buttons: new ids, no lane, one undo step); a led's
+`labelAt` puts its label under the cap (his SYNC); a frame's `r` (0 .. 12) rounds it (his frames r 6); the source mix
+is P5's `LFO:NOISE` (the LFO noise amount is the wheel-mod's source mix), now on his SRC MIX knob in WHEEL's lane 2 and
+off the LFO screen, with a palette hint. Two moves to make his file pass: the LFO's TRI back against SAW (x 168 → 148)
+so the pair is one cap again, and the LFO's NOISE knob removed. The device image is byte-identical by construction:
 `git diff --stat` shows no file under `firmware/` (tools, web, design and docs only). Not done: the firmware cannot
 draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
 firmware will copy when it gets free pages. Nothing on a unit.

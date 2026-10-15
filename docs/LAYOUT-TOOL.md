@@ -78,7 +78,11 @@ exported as a file.
   title says why). Over a free screen an editing layer on the 4 px grid: drag an element from the strip above the
   screen (frame, label, knob, switch, led, bar, glyph, band) onto it; click to select, Shift+click to add, drag to
   move, the yellow corner to resize; arrows nudge 4 px (Shift 16); Delete; Ctrl+D duplicates, Ctrl+A selects all;
-  align left / top / right, spread. Each element in a lane wears its "lane·knob" tag in the knob's colour.
+  align left / top / right, spread. **Copy and paste between screens**: Ctrl+C / Cmd+C (or *copy*) keeps the
+  selected elements in the page's clipboard (and puts them on the system's as JSON text when the browser lets it);
+  Ctrl+V / Cmd+V (or *paste*) puts them on the current free screen at their places (8 px off where an identical box
+  is already), with new ids, everything else kept (the parameter too: the lint then says it is twice, for you to
+  rebind), selected and in no lane, one undo step (`pasteElements`). The shortcuts do nothing while typing. Each element in a lane wears its "lane·knob" tag in the knob's colour.
 - **Lanes**: four coloured slots a lane (KNOB 1..4); SELECT moves between lanes. On a free screen select an element,
   then click a slot (it leaves any other slot); on a classic screen drag a parameter onto a slot, or click the slot
   and pick it in the inspector. Lanes can be added (up to 8), moved up, deleted; a classic lane has its title.
@@ -217,8 +221,10 @@ interface." and "I'd like update glyph designs to match with the Prophet 5 knobs
 Designer pages first." `"style": "p5"` composes a free screen's elements as the Prophet-5's panel (`freeOps` →
 `p5Op`, drawn by the same primitives; the classic screens and the other elements are unchanged):
 
-- **frame**: a rounded outline (r 3, 1 px, `line` or its colour), its text in capitals, 10 px bold `mid`, centred in
-  the top border on a `bg` block, the border showing either side: the panel's section titles.
+- **frame**: a rounded outline (`r`, default 3; 1 px, `line` or its colour), its text in capitals, 10 px bold `mid`,
+  centred in the top border on a `bg` block, the border showing either side: the panel's section titles. A frame's
+  `r` (0 .. 12; the inspector's *Corners*, 0 .. 12 in steps of 2) rounds it in either style (flat: square without);
+  the owner's panel uses 6.
 - **knob**: the dial box (`size`, default 36; 28 .. 44) at the cell's top: a printed scale of 11 ticks (0..10) over the
   270 degrees at the box's edge (`line`, the end ticks 2 px), a face of radius size / 2 - 6 in `surf` with a `mid` rim,
   a 2 px pointer in the element's colour (the lane's knob colour when its lane is active, else `dim`). The value (the
@@ -244,13 +250,22 @@ Designer pages first." `"style": "p5"` composes a free screen's elements as the 
   icon over its own LED: the LFO's saw | triangle button. The inspector has LEDs (1, 2) and Pair selects. The owner:
   "Good except some buttons don't have the waveform centered, example photo. The prophet also has some buttons with 2
   LEDS: Filter REV; LFO Shape; Sample And Hold LFO." (P5 has no sample-and-hold LFO parameter: no such button.)
+  **The label above or below** (`"labelAt"`, the inspector's *Label at*): above (the default; a two-LED button's
+  default is below, its names being on top) or below: the cap moves up (to the cell's top + 2, or under the icon or
+  the names) and the label is printed under it, 10 px bold, centred. With a glyph the icon stays on top and only an
+  explicit label goes under. OSC A's SYNC is so, as the owner asked.
 - **switch**: the label on top, a slot (8 px wide, 12 px a position, rounded `line` outline) with a 6 x 8 lever in the
   element's colour at the current position, the positions' names beside it (the current one in the element's colour).
 - label, bar, glyph and band as flat.
 
 `design/layouts/designs/p5-panel.json` is P5's whole engine in that style: nine free screens over OSC .. MOD (OSC A with
 the mixer, OSC B, FILTER, AMPLIFIER, FILTER ENVELOPE, LFO with its SHAPE, WHEEL-MOD, POLY-MOD, VOICE with GLIDE), all 56
-parameters placed once, KNOB 1..4 a lane, FX and MIX classic as today; every screen x lane lint clean. Its contact
+parameters placed once, KNOB 1..4 a lane, FX and MIX classic as today; every screen x lane lint clean. Since
+2026-10-15 it is the owner's own (edited in the page: ENV 2 in FILT, his frames' titles, SHAPE labels, VOICE
+rearranged), with frames of r 6. The wheel-mod's SOURCE MIX is `LFO:NOISE`: P5's LFO noise amount IS the Prophet's
+wheel-mod source mix (LFO to noise; docs/PROPHET.md, the LFO page "Noise (its mix)"), so the WHEEL screen's "SRC MIX"
+knob is bound to it and the LFO screen has no NOISE knob; the palette shows it with the hint "(wheel-mod source mix)"
+(`PARAM_HINTS`). Its contact
 sheet, `design/choralroot-fm1-p5-panel-screens.png`, is made by
 
 ```
@@ -431,11 +446,14 @@ design, and the per-engine table that says which patch parameter a (page, column
   knob's value text inside its dial, a lit led's dot the firmware's red, a saw led's one-cycle icon drawn over its cap
   and the cap's window darker than its pad, every wave icon's ink centred over its LED within 1 px, REV's two LEDs
   (yellow at 3, red at 1/2), a pair's caps touching; `validateDesign` refuses two LEDs on a 0..127 parameter and warns
-  on a pair that does not touch;
+  on a pair that does not touch; SYNC's label (labelAt below) under its cap; a frame at r 12 leaves its corner pixel
+  the background (r 13 refused); the source mix bound once, on WHEEL, in a lane, with its hint; `pasteElements` (new
+  ids, no lane, 8 px off an identical box, the parameter then twice);
 - the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked, a knob
   turns a dial, **a scripted pointer drag from the element strip adds a knob on the grid**, the export equals the
   model and validates, the contact sheet has today's and the design's tiles, the shipped p5 panel opens in the p5
-  style and draws its knobs.
+  style and draws its knobs, a copied element pasted on another screen is in the export with a new id, selected, in
+  no lane, one undo step.
 
 `?demo=osc|classic|sheet` opens the places the screenshots show. Not tested: the wheel handler, moving and resizing
 by drag, the keyboard shortcuts, import, the downloads (Export / PNG write a file the test does not read), the

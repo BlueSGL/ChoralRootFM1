@@ -289,6 +289,8 @@
             <button data-al="right" title="align the selected: right edges">right &#8677;</button>
             <button data-al="hspace" title="the selected spread evenly, left to right">spread</button>
             <button data-al="dup" title="duplicate the selected (Ctrl+D)">duplicate</button>
+            <button data-al="copy" title="copy the selected (Ctrl+C / Cmd+C), to paste on any screen">copy</button>
+            <button data-al="paste" title="paste the copied elements on this screen at their places, in no lane (Ctrl+V / Cmd+V)">paste</button>
             <button data-al="del" title="delete the selected (Delete)">delete</button>
           </div>
           <div class="knobs" id="d-knobs"></div>
@@ -858,7 +860,9 @@ function dInspector() {
     host.append(field("LEDs", sel(["1", "2"], String(e.leds || 1), (v) => eset((y) => {
       if (v === "2") { y.leds = 2; y.glyph = null; if (ds.design.style === "p5") { y.w = Math.max(y.w, P5_LED2_SIZE[0]); y.h = Math.max(y.h, P5_LED2_SIZE[1]); } } else delete y.leds; }))));
     host.append(field("Pair", sel(["", "left", "right"], e.pair || "", (v) => eset((y) => { if (v) y.pair = v; else delete y.pair; }))));
+    host.append(field("Label at", sel(["above", "below"], e.labelAt || (e.leds === 2 ? "below" : "above"), (v) => eset((y) => { y.labelAt = v; }))));
   }
+  if (e.type === "frame") host.append(field("Corners", sel(["", "0", "2", "4", "6", "8", "10", "12"], e.r === undefined ? "" : String(e.r), (v) => eset((y) => { if (v === "") delete y.r; else y.r = +v; }))));
   if (e.type === "glyph") host.append(field("Glyph", sel(GLYPHS.slice(1), e.glyph, (v) => eset((y) => { y.glyph = v; }))));
   if (e.type === "band") host.append(field("Band", sel(BANDS.slice(1), e.band, (v) => eset((y) => { y.band = v; }))));
   if (e.type === "knob") { const st5 = ds.design.style === "p5" ? "p5" : "flat"; host.append(field("Dial size", sel(KNOB_SIZES[st5].map(String), String(knobSize(e, st5)), (v) => eset((y) => { y.size = +v; })))); }
@@ -878,10 +882,11 @@ function dParams() {
     else s.elements.forEach((e) => e.param && used.add(e.param));
   let last = null, n = 0;
   for (const p of ds.params) {
-    if (q && !`${p.label} ${p.id} ${p.pageTitle}`.toLowerCase().includes(q)) continue;
+    const hint = PARAM_HINTS[p.id] || "";
+    if (q && !`${p.label} ${p.id} ${p.pageTitle} ${hint}`.toLowerCase().includes(q)) continue;
     if (p.pageTitle !== last) { host.append(el("h4", { text: p.pageTitle })); last = p.pageTitle; }
     const d = el("div", { class: "p" + (used.has(p.id) ? " used" : ""), "data-param": p.id, title: `${p.id}: ${p.min} .. ${p.max} (${p.fmt}). Drag onto a slot or an element; click to bind the selection` },
-      el("span", { text: p.label }), el("small", { text: p.short }));
+      el("span", { text: p.label }), el("small", { text: hint ? `${p.short} (${hint})` : p.short }));
     d.addEventListener("pointerdown", (ev) => startDrag(ev, { kind: "param", id: p.id, text: p.label }));
     host.append(d);
     n++;
@@ -997,6 +1002,7 @@ function dPalette() {
   }
 }
 function alignSel(how) {
+  if (how === "copy" || how === "paste") return clipboard(how);
   const s = curScreen();
   if (!s || s.type !== "free" || !ds.sel.size) return;
   const ids = [...ds.sel];
@@ -1018,6 +1024,25 @@ function alignSel(how) {
     }
   });
 }
+// copy: the selected elements into the page's clipboard (and the system's as JSON text when it lets us; no error if not);
+// paste: onto the current free screen at their places (pasteElements: fresh ids, no lane), one undo step
+function clipboard(how) {
+  const s = curScreen();
+  if (!s || s.type !== "free") { if (how === "paste") dmsg("Elements are pasted on a free screen.", true); return; }
+  if (how === "copy") {
+    if (!ds.sel.size) return;
+    ds.clip = JSON.parse(JSON.stringify(s.elements.filter((e) => ds.sel.has(e.id))));
+    try { if (navigator.clipboard) navigator.clipboard.writeText(JSON.stringify({ "choralroot-elements": ds.clip })).catch(() => {}); } catch (e) { /* not allowed: the page's own clipboard is enough */ }
+    dmsg(`${ds.clip.length} element(s) copied: open a screen and paste (Ctrl+V).`);
+    return;
+  }
+  if (!ds.clip || !ds.clip.length) { dmsg("Nothing copied yet: select elements and copy (Ctrl+C).", true); return; }
+  let made = [];
+  commit((d) => { made = pasteElements(d.groups[ds.gi].screens[ds.si], ds.clip).map((e) => e.id); });
+  ds.sel = new Set(made);
+  dmsg(`${made.length} element(s) pasted, in no lane: put them in lanes and rebind as needed.`);
+  dRender();
+}
 document.addEventListener("keydown", (ev) => {
   if (st.mode !== "design" || !ds.design) return;
   if (ev.target.closest && ev.target.closest("input, select, textarea, .dial")) return;
@@ -1028,6 +1053,8 @@ document.addEventListener("keydown", (ev) => {
   if (!s || s.type !== "free") return;
   if (mod && ev.key.toLowerCase() === "a") { ev.preventDefault(); ds.sel = new Set(s.elements.map((e) => e.id)); dRender(); return; }
   if (mod && ev.key.toLowerCase() === "d") { ev.preventDefault(); alignSel("dup"); return; }
+  if (mod && ev.key.toLowerCase() === "c" && ds.sel.size) { ev.preventDefault(); clipboard("copy"); return; }
+  if (mod && ev.key.toLowerCase() === "v") { ev.preventDefault(); clipboard("paste"); return; }
   if (!ds.sel.size) return;
   if (ev.key === "Delete" || ev.key === "Backspace") { ev.preventDefault(); alignSel("del"); return; }
   const step = ev.shiftKey ? 16 : GRID, mv = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[ev.key];
@@ -1206,6 +1233,18 @@ async function selftestDesign() {
   const k5 = Object.keys(shipped).find((x) => /p5-panel/.test(x));                                // 7: the p5-style panel
   res.push(!!k5 && dOpen(JSON.parse(JSON.stringify(shipped[k5])), "the shipped design") && $("d-style").value === "p5" &&
            curScreen().type === "free" && ds.last && ds.last.ops.some((o) => o.op === "p5knob") && inkCount(px()) > 500);
+  {                                                                                              // 8: copy, paste on another screen
+    const src = curScreen().elements.find((e) => e.type === "knob"), u0 = ds.undo.length;
+    ds.sel = new Set([src.id]);
+    clipboard("copy");
+    const g2 = ds.design.groups.findIndex((g, i) => i !== ds.gi && g.screens.some((s) => s.type === "free"));
+    dGo(g2, ds.design.groups[g2].screens.findIndex((s) => s.type === "free"));
+    const ids0 = new Set(curScreen().elements.map((e) => e.id));
+    clipboard("paste");
+    const ex = JSON.parse(exportText()).groups[ds.gi].screens[ds.si].elements, got = ex.find((e) => !ids0.has(e.id));
+    res.push(!!got && got.param === src.param && got.type === "knob" && got.id !== src.id && ds.undo.length === u0 + 1 &&
+             ds.sel.has(got.id) && !curScreen().lanes.some((l) => l.includes(got.id)));
+  }
   const host = $("selftest");
   host.hidden = false;
   host.dataset.result = res.map((r) => (r ? 1 : 0)).join("");

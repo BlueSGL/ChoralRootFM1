@@ -463,6 +463,34 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   const apart = JSON.parse(JSON.stringify(pan));
   apart.groups[3].screens[0].elements.find((x) => x.pair === "right").x += 4;
   ok(L.validateDesign(apart, cat).warnings.some((w) => /half/.test(w)), "validateDesign warns on a pair whose halves do not touch");
+  // a led's label below its cap (labelAt): OSC A's SYNC
+  const syn = sA.elements.find((x) => x.labelAt === "below");
+  ps.open(0, 0, 0);
+  const sb = syn && ps.render().lint.texts.find((x) => x.text === syn.label);
+  ok(!!sb && sb.box[1] >= syn.y + 20 && sb.box[3] <= syn.y + syn.h + 3,
+     `labelAt "below": ${syn ? syn.id : "no element"}'s "${syn && syn.label}" under its cap (text rows ${sb ? sb.box[1] + " .. " + sb.box[3] : "?"}, the cap ends at ${syn ? syn.y + 20 : "?"})`);
+  // a frame's corner radius: at r 12 the corner pixel is the background, the side is drawn
+  const r12 = JSON.parse(JSON.stringify(pan)), fr = r12.groups[0].screens[0].elements.find((x) => x.type === "frame");
+  fr.r = 12;
+  const rs = L.designSession(m, cat, r12, 1);
+  rs.reload(); rs.open(0, 0, 0);
+  const rr12 = rs.render(), q12 = (x, y) => Array.from(rr12.rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join();
+  ok(L.validateDesign(r12, cat).errors.length === 0 && q12(fr.x + 2, fr.y + 2) === q12(0, 239) && q12(fr.x, fr.y + (fr.h >> 1)) !== q12(0, 239) &&
+     L.validateDesign({ ...r12, groups: [{ ...r12.groups[0], screens: [{ ...r12.groups[0].screens[0], elements: [{ ...fr, r: 13 }] }] }] }, cat).errors.length > 0,
+     `a frame's corners at r 12 (${fr.id}): the corner pixel is the background, the side drawn; r 13 refused`);
+  // the wheel-mod source mix: LFO:NOISE on WHEEL, in a lane, not on the LFO screen; the palette's hint
+  const srcm = pan.groups.flatMap((g) => g.screens.filter((x) => x.type === "free").map((x) => ({ x, e: x.elements.find((e) => e.param === "LFO:NOISE") }))).filter((t) => t.e);
+  ok(srcm.length === 1 && srcm[0].x.title === "WHEEL" && srcm[0].x.lanes.some((l) => l.includes(srcm[0].e.id)) && /source mix/.test(L.PARAM_HINTS["LFO:NOISE"]),
+     `the wheel-mod source mix: LFO:NOISE once, on ${srcm[0] ? srcm[0].x.title : "?"} ("${srcm[0] ? srcm[0].e.label : ""}"), in a lane; the palette's hint "${L.PARAM_HINTS["LFO:NOISE"]}"`);
+  // paste: copies onto another screen, fresh ids, no lane, an identical box moved 8 px
+  const pd = JSON.parse(JSON.stringify(pan)), from = pd.groups[0].screens[0], to = pd.groups[1].screens[0];
+  const clip = from.elements.filter((x) => x.id === "a_freq" || x.id === "a_sync");
+  const pasted = L.pasteElements(to, clip), again2 = L.pasteElements(to, clip.slice(0, 1));
+  const idsTo = to.elements.map((x) => x.id);
+  ok(pasted.length === 2 && pasted.every((x, i) => x.param === clip[i].param && x.x === clip[i].x && x.y === clip[i].y && x.labelAt === clip[i].labelAt) &&
+     new Set(idsTo).size === idsTo.length && !to.lanes.flat().some((x) => pasted.some((y) => y.id === x)) &&
+     again2[0].x === clip[0].x + 8 && again2[0].y === clip[0].y + 8 && L.usedTwice(pd).some((u) => u.param === "OSC A:FREQ"),
+     `pasteElements: ${pasted.map((x) => x.id).join(", ")} on FILTER at their places, in no lane; the same again lands 8 px off (${again2[0].x}, ${again2[0].y}); the lint sees the parameter twice`);
   m.unload();
 }
 
@@ -542,8 +570,9 @@ if (!args.has("--no-page") && fs.existsSync("/Applications/Chromium.app/Contents
     const what = ["Design mode opens the shipped P5 example (designs.js)", "a free screen is drawn and marked \"not buildable yet\"",
                   "KNOB 1's + turns a dial on the free screen", "a scripted drag from the element strip adds a knob on the 4 px grid (one undo step)",
                   "Export JSON equals the model (and validates)", "the contact sheet has today's tiles and the design's",
-                  "the shipped p5-panel opens in the p5 style and its free screen draws P5 knobs"];
-    ok(blue(sq(7)), "the Design self-test ran to the end (the end mark is there)");
+                  "the shipped p5-panel opens in the p5 style and its free screen draws P5 knobs",
+                  "copy an element, paste it on another screen: the export has it with a new id, selected, in no lane (one undo step)"];
+    ok(blue(sq(8)), "the Design self-test ran to the end (the end mark is there)");
     what.forEach((w, i) => ok(green(sq(i)), `page: ${w}`));
   }
 }
