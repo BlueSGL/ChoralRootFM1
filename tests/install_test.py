@@ -1357,10 +1357,14 @@ def bindings():
        ff["14"] == 1 and ff["12"] == 0 and not any(e in fp for e in ("0", "1", "4", "8", "10")) and I.pool_of(1) == 12 and
        I.pool_of(0) == 13 and I.pool_of(8) == 13 and I.pool_of(14) == 14,
        "binding: the factory table (the firmware's, --check), retired engines' pools (ANALOG's: the VA's)")
-    ok(sorted(fp, key=int) == ["7", "12", "13", "14", "15"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 9, 11)) and
-       not any(I.engine_retired(e) for e in (7, 12, 13, 14, 15)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE" and
+    ok(sorted(fp, key=int) == ["7", "12", "13", "14", "15", "16"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 9, 11)) and
+       not any(I.engine_retired(e) for e in (7, 12, 13, 14, 15, 16)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE" and
        I.ENGINE_NAMES[9] == "PHYS",
-       "0.18: five engines with a pool; PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept")
+       "0.18: five engines with a pool, 0.22 six (P5); PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept")
+    p5n, p5i = fp["16"], I.FACTORY_IDS["16"]
+    ok(ff["16"] == 1 and p5n[0] == "INIT P5" and len(p5i) == len(p5n) and p5i[0] == 0 and len(set(p5i[1:])) == len(p5i) - 1 and
+       I.pool_of(16) == 16 and all(1 <= x <= 200 for x in p5i[1:]),
+       f"binding: P5's pool (3y80): INIT P5, then the {len(p5n) - 1} shipped programs, each with its Sequential number (the favourites' key)")
     pobjs = {6: sound_bank({0: bind(sound_rec(9, "MY PLUCK", seed=21), 3)}), 7: b"", 9: b"", 10: b"", 11: b"", 12: b"", 13: b""}
     pt = I.parse_sound_objects(pobjs)
     ok(pt[0]["used"] and pt[0]["bound"] is None and pt[0]["added"] and pt[0]["engineName"] == "PHYS" and
@@ -1370,8 +1374,9 @@ def bindings():
     js = (ROOT / "web" / "fm1sounds.js").read_text()
     jf = re.search(r"^export const FACTORY_PRESETS = (.*);$", js, re.M)
     js1 = re.search(r"^export const FACTORY_FIRST = (.*);$", js, re.M)
-    ok(jf and js1 and json.loads(jf.group(1)) == fp and json.loads(js1.group(1)) == ff,
-       "binding: fm1_install.py and fm1sounds.js embed the same factory table")
+    jsi = re.search(r"^export const FACTORY_IDS = (.*);$", js, re.M)
+    ok(jf and js1 and jsi and json.loads(jf.group(1)) == fp and json.loads(js1.group(1)) == ff and json.loads(jsi.group(1)) == I.FACTORY_IDS,
+       "binding: fm1_install.py and fm1sounds.js embed the same factory table (and P5's Sequential numbers)")
     unmarked = bytearray(sound_rec(12, "OLD", seed=4))
     unmarked[191] = 4
     recs = {0: bind(sound_rec(12, "MY BELL", seed=2), 2),        # U01 over FM6 02 FM BELL

@@ -140,11 +140,11 @@ par_build cc -std=gnu11 -O2 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/
 t logged_last cr_usbtap_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_midi_test tests/cr_midi_test.c
 t ./build/host/cr_midi_test
-# the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md). Built without
-# P5: the Sound Manager and fm1_install.py do not know engine 16 yet (its store and their support are phase B,
-# docs/PROPHET.md "Saving"; no P5 record can be saved until then). With it this check names what they lack: the
-# engine's name and its presets
-par_build cc -std=gnu11 -O1 -w -DFELUCCA_PROPHET=0 -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
+# the sound templates the clients embed for .syx imports are the firmware's defaults (docs/SOUNDS.md), and their factory
+# tables the firmware's. Built with P5, as the unit is (3y80, the device manager's P5 tab; until then without it): the
+# clients hold P5's shipped programs (INIT P5, then assets/prophet5-factory/shipped.txt's list) and their Sequential
+# numbers, the favourites' keys; when the list changes this check says what to paste
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
 t ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py
 
 for id in $par_order; do

@@ -3339,3 +3339,42 @@ not one of the manager's pools (`FACTORY_PRESETS` has five engines): a P5 record
 "P5 · retired", so a P5 sound over a P5 program is not restored by the Restore buttons (Delete all and Reset empty its
 slot all the same). Undo or a Restore of a bank holding 0.21's FM TONE slots needs 3y78's firmware (the beta built
 before it refuses that bank, rc 2); Delete all sends length 0 and passes there too.
+
+## 2026-10-15 (the device manager's P5 tab)
+
+3y80. **The device manager has a P5 tab (2026-10-15; branch p5m-1, not pushed, not flashed).** The owner: P5 is a
+current engine (engine 16, Melodee's Prophet-5 model), and its user sounds were added rows of the VA's tab marked
+"P5 · retired" (3y79). Now, on a 0.22 FM-1, a **P5 tab** after CZ-1 as on the unit's picker (a 0.21 FM-1 has no P5:
+its five tabs, `managerEngines`): 00 INIT, the shipped programs 01 .. 115 under the unit's names, then the added P5
+sounds. The names come from the firmware: `tests/sound_templates.c` is built with P5 now, as the unit is (until now
+with `FELUCCA_PROPHET=0`), its `"factory"` / `"factory_first"` hold P5's INIT P5 and the shipped list, and a new
+`"factory_ids"` line holds each program's Sequential number, the favourites' key; `--check` pins the three lines in
+`web/fm1sounds.js` and `tools/fm1_install.py` (`FACTORY_IDS` new in both), so a changed shipped list fails
+`run_cr_tests.sh` until they are pasted (docs/PROPHET.md's steps say so). Its templates and the five engines'
+`--packs` are the same either way. **Binding**: the firmware binds a P5 record over a program as any engine's
+(`cr_bank.c cb_bind_of`, P5's `pool_f0` 1); **no firmware change**. So "MY PROPHET over FOREVER KEYS" is P5 03's row,
+and Place onto a program, Swap / drag, Replace factory, Restore selected / all P5 / all engines, Restore factory order,
+Delete (Reset to factory), Rename, Delete all, Reset and Undo act on P5 as on every engine (`fm1_install.py` lists P5
+sounds in P5's pool too, "over P5 03 FOREVER KEYS", no longer `retired`). **Files**: a P5 user sound keeps and saves as
+the installer's sound file (its 138-byte program, patch kind `p5`); P5 files in the library go to the P5 tab. **A P5
+factory program has no file**: the site offers no P5 pack (Sequential's programs, LICENSING.md; `tools/make_packs.py`
+skips engine 16), so Keep / Save are off for those rows with the reason in the title (`keepable`, `P5_NO_PACK`) and
+Select all takes the user sounds. A 0.21 FM-1 now refuses a P5 sound's record too, not only its program (0.21 reads
+engine 16 as an empty slot). **The favourites are shown** on every tab: a yellow star where the unit shows one, C / B
+for a sound typed Chord / Bass (`favMarks`, `favKeyOf`, `favOf`, the keys of `cr_ui.c cu_fav_key`: P5's by
+Sequential number, a sound over a program the program's, an added one its slot's). The manager never sets a mark; its
+writes keep object 23's P5 section and types byte for byte. **SELECT** sends a position past 127 with its high bits
+in the fourth byte `crb_select` takes (P5's added sounds after 115, the CZ-1's after 64; it wrapped before). The
+simulator's pool (`?sim=pool`) has U004 MY PROPHET over P5 03, U007 P5 ADDED and a few marks. Tests: test_manager (a
+P5 block of 19 checks: the pool, the stars from an object with all 115 programs marked, Place over a program and
+its program read back, SELECT, rename, drag, Replace factory, Restore all P5, Restore factory order, Delete, Delete all
+and Undo with P5's marks byte for byte, Keep of a program refused, a 0.21 FM-1; the 3y79 counts with P5 03 restored
+too), test_sounds (P5's table, binding), install_test (the tables of both clients); the built page driven in headless
+Chromium (`?sim=pool`, `?sim=1`: the tabs, the stars, Keep refused on a program, Restore, Place over P5 07, Delete all,
+Undo). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok, 313 golden renders 0 changed; `sound_templates: ok`); build/site rebuilt with the new manager. docs: DEVICE-MANAGER.md "The P5 tab", SOUNDS.md, PROPHET.md, the beta's notes. **Not done**: a device
+run; P5's factory programs as files (the owner's decision: a pack would put Sequential's data on the site). **Seen, not
+changed**: marking a P5 user sound on the unit while it plays keys the mark by the program number in the sound's own
+bytes (`cu_fav_part_key`, `p5_patch_id`), while PRESETS and the manager show a sound over a program with that place's
+program's mark (`cu_fav_key`, `p5_preset_id`): the two differ when a sound made from one program is placed over
+another's place (possible from the manager); the committed `web/packs` are older than the firmware (the VA's patches
+version 3, some FM TONE values: `tools/make_packs.py` writes them differently today, P5 aside).
