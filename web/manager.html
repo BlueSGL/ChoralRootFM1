@@ -201,6 +201,7 @@ const ui = { tab: TAB0 === "LOOPS" ? "loops" : ENGINE_NAMES.indexOf(TAB0) >= 0 &
   dev: { sel: new Set(), anchor: null, primary: null }, lib: { sel: new Set(), anchor: null, primary: null }, focus: "dev",
   swapFrom: null, libSrc: "browser", libItems: [], packs: [], fileItems: null, filePacks: [], fpacks: {}, busy: false, drag: null };
 let session = null, firmware = "", link = null, output = null, sim = null, store = new LibraryStore();
+let unitId = null;                               // the unit's ID of the FM-1 opened (3y66; null: none, or no ID)
 
 function say(text, cls = "") { $("status").textContent = text; $("status").className = cls; }
 const progress = (d, t) => { $("bar").value = t ? (d / t) * 100 : 0; };
@@ -373,21 +374,38 @@ async function connectMidi() {
   await attach();
 }
 async function attach() {
-  const find = (m) => [...m.values()].find((p) => p.name && p.name.includes(PORT) && p.state !== "disconnected");
-  const input = find(midiAccess.inputs), out = find(midiAccess.outputs);
-  if (link && input && out && link.input === input && link.output === out) return;
+  const pairs = managerPorts(midiAccess, PORT);   // (two FM-1s: two pairs of one name, docs/DEVICE-MANAGER.md)
+  if (link && pairs.some((p) => p.input === link.input && p.output === link.output)) return;
   if (link) { link.close(); link = null; }
-  if (!input || !out) {
+  const off = (state, msg, kind) => {
     session = null; output = null; firmware = ""; $("fw").textContent = "";
-    setConn("off", "FM-1 not found"); say('Connect the FM-1 over USB: the page waits for the port "ChoralRoot FM-1".'); renderAll(); return;
+    setConn("off", state); say(msg, kind); renderAll();
+  };
+  if (!pairs.length) { off("FM-1 not found", 'Connect the FM-1 over USB: the page waits for the port "ChoralRoot FM-1".'); return; }
+  let pick = pairs[0];
+  if (pairs.length > 1 || unitId) {               // several, or not the first open: which one, by its unit ID (pickUnit)
+    const units = [];
+    for (const p of pairs) {
+      const c = new BackupConnection(p.input, p.output);
+      let i = null;
+      try { i = await deviceInfo((r, o) => c.request(r, o)); } finally { c.close(); }
+      units.push({ ...p, version: i && i.version, unitId: i && i.unitId });
+    }
+    pick = pickUnit(units, { remembered: unitId, ask: (text) => prompt(text, "1") });
+    if (!pick) {
+      off("choose an FM-1", `${units.length > 1 ? "Several FM-1s are connected" : `The FM-1 with unit ID ${unitId} is not connected`}: ` +
+        "press Connect and choose one by its unit ID (Options > Version on the FM-1), or unplug the others.", "err");
+      return;
+    }
   }
-  link = new BackupConnection(input, out); output = out;
+  link = new BackupConnection(pick.input, pick.output); output = pick.output;
   const request = (r, o) => link.request(r, o);
   const info = await deviceInfo(request);
   if (!info || info.family !== "choralroot") {
     setConn("off", info ? info.version : "no answer"); say("The FM-1 does not answer as ChoralRoot: install it with the installer first.", "err"); return;
   }
-  firmware = info.version; $("fw").textContent = firmware;
+  firmware = info.version; unitId = info.unitId || null;
+  $("fw").textContent = firmware + (unitId ? ` \u00b7 unit ID ${unitId}` : "");
   session = new ManagerSession(request);
   setConn("on", "connected");
   await readDevice();

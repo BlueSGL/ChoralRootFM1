@@ -20,6 +20,7 @@ import {
   selectOnUnit, selectRequest, playingText, managerDrop, factorySoundFile, factoryFiles, usedSlots, makePack, packFileName, userSoundsPack, renameSoundFile, MANAGER_ENGINES, managerPools, managerLoops, loopSummary, managerPlace, managerPlaceAll, managerSwap, managerRename, managerDelete, managerReplacePlan, managerReplaceFactory, managerRestoreFactory, replaceFactoryText,
   managerKeep, keepLoop, readLoopFile, placeLoop, deleteLoop, swapLoops, ManagerSession, makeSimFM1, simObjects, makeLoopRecord,
   libraryItemsFromFile, libraryItemsFromDnsnd, SIM_POOL_IDS, LibraryStore, loadPackIndex, loadPack, auditionMessages, noteMessage, midiText, writeErrorText, UNDO_DEPTH, retiredNote,
+  managerPorts, pickUnit,
 } from "./fm1manager.js";
 
 let failed = 0;
@@ -225,6 +226,31 @@ ssim.select = false;
 ok((await selectOnUnit(ssim.request, pad)).unsupported === true, "select: an older firmware (no reply) -> unsupported (the program change fallback)");
 ok(/manager_select|selectOnUnit/.test(readFileSync(join(HERE, "manager.html"), "utf8")) && readFileSync(join(HERE, "manager.html"), "utf8").includes("reselect("), "page: rows select on the unit, writes re-select the affected row");
 
+/* ------------- several FM-1s (docs/DEVICE-MANAGER.md "Several FM-1s"): the unit's ID, which one to open --- */
+{
+  const withId = makeSimFM1(new Map(), { version: "ChoralRoot 0.22", unitId: "A1B2C3D4" });
+  const info = await deviceInfo(withId.request), old = await deviceInfo(makeSimFM1(new Map()).request);
+  ok(info.unitId === "A1B2C3D4" && info.version === "ChoralRoot 0.22" && info.family === "choralroot" && old.unitId === null && old.version === "ChoralRoot 0.15",
+     "deviceInfo: the unit's ID from INFO's tag 49 08 (a firmware before it: null; the version as before)");
+  const P = "ChoralRoot FM-1", port = (name, state = "connected") => ({ name, state });
+  const ins = [port(P), port("IAC Bus 1"), port(P), port(P, "disconnected")], outs = [port("IAC Bus 1"), port(P), port(P)];
+  const acc = { inputs: new Map(ins.map((x, i) => [i, x])), outputs: new Map(outs.map((x, i) => [i, x])) };
+  const pairs = managerPorts(acc, P);
+  ok(pairs.length === 2 && pairs[0].input === ins[0] && pairs[0].output === outs[1] && pairs[1].input === ins[2] && pairs[1].output === outs[2],
+     "managerPorts: two FM-1s with ports of one name: two pairs, the k-th input with the k-th output (a disconnected port left out)");
+  const A = { unitId: "A1B2C3D4", version: "ChoralRoot 0.22" }, B = { unitId: "0F0E0D0C", version: "ChoralRoot 0.22" }, C = { unitId: null, version: "ChoralRoot 0.21" };
+  const asked = [];
+  const ask = (answer) => (text) => { asked.push(text); return answer; };
+  ok(pickUnit([A], { ask: ask("2") }) === A && !asked.length, "pickUnit: one FM-1, none opened before: it, nothing asked (as always)");
+  ok(pickUnit([A, B], { remembered: "0F0E0D0C", ask: ask(null) }) === B && !asked.length, "pickUnit: the one opened before, there again: it, nothing asked");
+  ok(pickUnit([A, B, C], { ask: ask("0f0e0d0c") }) === B && asked.at(-1).includes("3 FM-1s are connected") && asked.at(-1).includes("1   unit ID A1B2C3D4") &&
+     asked.at(-1).includes("3   no unit ID   ChoralRoot 0.21"), "pickUnit: several: asked with the list, answered by an ID (any case)");
+  ok(pickUnit([A, B], { ask: ask("2") }) === B && pickUnit([A, B], { ask: ask(null) }) === null && pickUnit([A, B], { ask: ask("7") }) === null,
+     "pickUnit: answered by a number; cancelled or no such entry: none (the page opens nothing, never the first by itself)");
+  ok(pickUnit([A], { remembered: "0F0E0D0C", ask: ask(null) }) === null && asked.at(-1).startsWith("The FM-1 with unit ID 0F0E0D0C is not connected. One FM-1 is connected."),
+     "pickUnit: the FM-1 opened before left and another is there: asked, not moved to it by itself");
+}
+
 /* -------------------------------------------------------------- the page --- */
 const html = readFileSync(join(HERE, "manager.html"), "utf8");
 const count = (sub) => html.split(sub).length - 1;
@@ -233,6 +259,8 @@ ok(["eng-tabs", "dev-rows", "lib-rows", "cap", "dev-fw", "keep-all", "sel-all", 
   .every((id) => html.includes(`id="${id}"`)), "page: the panes, Place / Keep, the bottom bar, the keyboard");
 ok(html.indexOf('id="lib"') < html.indexOf('id="dev"') && html.includes("Place →") && html.includes("← Keep") && html.includes("draggable") && html.includes("shiftKey") && html.includes("metaKey") && html.includes("simObjects(30)"),
   "page: Library left, FM-1 right (Place →, ← Keep), multi-select, drag and drop, the 30-sound simulator");
+ok(html.includes("managerPorts(midiAccess, PORT)") && html.includes("pickUnit(units, { remembered: unitId") && html.includes("unit ID ${unitId}"),
+   "page: several FM-1s: the pairs of the port name, which one asked by its unit ID, the ID in the header");
 ok(html.includes('"ChoralRoot FM-1"') && html.includes("onstatechange") && html.includes('get("sim")') && html.includes('SIM_ARG === "1"') && html.includes('SIM_ARG === "pool"'), "page: the port name, hot-plug, ?sim=1, ?sim=pool");
 ok(html.includes('id="replace"') && html.includes('id="restore-factory"') && html.includes("replaceFactory(libSel(), devRows()[to].pos)"), "page: Replace factory, Restore factory order, several dropped onto a factory row");
 ok(!/<link\s/i.test(html) && !/src="http/.test(html), "page: no external assets");

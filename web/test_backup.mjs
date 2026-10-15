@@ -5,7 +5,7 @@
 // validation before the first write, restore order (live music last) and abort on a failed chunk;
 // ChoralRoot's objects (9 the VA patches, 40..49 the loops), a ChoralRoot round trip, busy retries, RESTART,
 // and the archives across firmwares (Felucca -> ChoralRoot, ChoralRoot -> Felucca: the settings record cut back).
-import { BACKUP_IDS, CR_BACKUP_IDS, BACKUP_CMD, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, readBackup, captureBackup,
+import { BACKUP_IDS, CR_BACKUP_IDS, BACKUP_CMD, unitIdOf, bkU32, bkR32, bkPack, bkUnpack, bkCrc, bkManifest, readBackup, captureBackup,
   restoreBackup, deviceInfo, restartDevice, backupFileName, backupFamily, objectName } from "./fm1backup.js";
 
 let fails = 0;
@@ -101,7 +101,14 @@ const crObjs = [[1, per(S5, PER5, 7)], [6, rnd(3080, 8)], [8, rnd(3612, 9)], [9,
 {
   const cr = device(crObjs, crOpt);
   const info = await deviceInfo(cr.request);
-  ok(info && info.version === "ChoralRoot 0.1" && info.family === "choralroot", "choralroot: INFO -> version, family");
+  ok(info && info.version === "ChoralRoot 0.1" && info.family === "choralroot" && info.unitId === null, "choralroot: INFO -> version, family (no unit ID tag: null)");
+  const enc = (t) => [...new TextEncoder().encode(t)];
+  const a = [...enc("ChoralRoot 0.22"), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3, 0x43, 1, 3, 0x49, 8, ...enc("A1B2C3D4")];
+  const felInfoReply = [...enc("FELUCCA v1.0"), 0, 2, 90, 4, 16, 82, ...enc("FM6"), 0, ...enc("VA"), 0, 4, 16, 0x55, 1, 3, 0x4D, 1, 64, 1, 0x42, 1, 3];
+  const withTag = await deviceInfo(async () => a), felInfo = await deviceInfo(async () => felInfoReply);
+  ok(unitIdOf(a) === "A1B2C3D4" && unitIdOf(a.slice(0, -10)) === null && unitIdOf(a.slice(0, -1)) === null && unitIdOf(felInfoReply) === null &&
+     withTag.version === "ChoralRoot 0.22" && withTag.unitId === "A1B2C3D4" && felInfo.version === "FELUCCA v1.0" && felInfo.unitId === null,
+     "unitIdOf / deviceInfo: INFO's 49 08 and 8 hex digits after 42 / 43 (3y66); none without it or cut short; Felucca: none, the version as before");
   const crFile = await captureBackup(cr.request, info.version);
   ok(crFile.objects.map((o) => o.id).join() === CR_BACKUP_IDS.join() && crFile.objects.find((o) => o.id === 9).size === 3536 &&
      crFile.objects.find((o) => o.id === 49).size === 3602 && crFile.objects.find((o) => o.id === 41).size === 0 &&

@@ -69,12 +69,13 @@ class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None, bk=None):
+                 stall_after=None, bad_addr=None, bk=None, name_after="Felucca"):
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
         self.bk = bk                              # bk(identity): the firmware's backup side (BackupSide) or None
-        self.stall_after, self.bad_addr = stall_after, bad_addr
+        self.stall_after, self.bad_addr, self.name_after = stall_after, bad_addr, name_after
         self.served = self.bad = self.upgrades = 0
         self.sent, self.links, self.gen, self.lock = [], [], 0, threading.Lock()
+        self.bus = None                           # a FakeBus it is on (several FM-1s)
         self.boot(identity, name)
 
     def boot(self, identity, name):
@@ -82,6 +83,8 @@ class FakeFM1:
             self.gen += 1
             self.identity, self.name, self.connected = identity, name, True
             self.waiting, self.queue = None, []
+        if self.bus:                              # (a restarted unit is a new device: its ports come last)
+            self.bus.again(self)
 
     def input_names(self):
         return [self.name] if self.connected else []
@@ -134,7 +137,7 @@ class FakeFM1:
             if addr == I.FINISH_CHECK:
                 threading.Timer(0.05, self.boot, ("ota-FM-1_900", "Felucca Update")).start()
             elif addr == I.FINISH_WRITE:
-                threading.Timer(0.05, self.boot, (self.after_write, "Felucca")).start()
+                threading.Timer(0.05, self.boot, (self.after_write, self.name_after)).start()
             else:
                 self.next()
 
@@ -150,13 +153,15 @@ class FakeFM1:
 class BackupSide:
     """a firmware's backup commands (cr_backup.c / Felucca's editor_backup.c as the protocol says)"""
 
-    def __init__(self, version, ids, objs=(), busy=0):
+    def __init__(self, version, ids, objs=(), busy=0, uid=None):
         self.version, self.ids, self.objs, self.busy = version, ids, dict(objs), busy
         self.log, self.staged, self.restarts = [], None, 0
+        self.uid = uid                            # the unit's ID (3y66): INFO's tags 43 01 03 and 49 08 ID after 42
 
     def handle(self, cmd, a):
         if cmd == I.BK_INFO:
-            return [*self.version.encode(), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3]
+            return [*self.version.encode(), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3] + \
+                ([0x43, 1, 3, 0x49, 8, *self.uid.encode()] if self.uid else [])
         if cmd == I.BK_LIST:
             out = [1, 0, len(self.ids)]
             for i in self.ids:
@@ -1931,8 +1936,208 @@ def favorites():
     ok(rc == 0 and fresh.objs.get(I.FAV_ID) == data, "--restore of it onto 0.22: the favourites are back")
 
 
+# ------------------------------------------------ several FM-1s, the unit's ID ---
+# 3y66 (docs/INSTALL-COMPAT.md "Several FM-1s"): INFO's tag 49 08 and the unit's ID; --info lists every FM-1;
+# --unit ID picks one by it; an install with --unit takes update mode only from the one new port; never a MIDI
+# rescan with --unit; without --unit, several FM-1s refuse a command that writes or restarts.
+
+class FakeBus:
+    """a MIDI backend with several FakeFM1s on it (several FM-1s on one computer): their ports in the system's
+    order, two of one name both listed (the tool's port_labels: the second "NAME [2]"); a unit that restarts comes
+    back at the end of the list, as a new device. known(): CoreMIDI's view for offline(); rescan() counted"""
+
+    def __init__(self, *units, known=None):
+        self.units, self.rescans, self.seen = [], 0, known or {}
+        for u in units:
+            self.plug(u)
+
+    def plug(self, u):
+        u.bus = self
+        self.units.append(u)
+
+    def again(self, u):
+        if u in self.units:
+            self.units.remove(u)
+            self.units.append(u)
+
+    def input_names(self):
+        return I.port_labels([u.name for u in list(self.units) if u.connected])
+
+    output_names = input_names
+
+    def open(self, in_name, out_name):
+        live = [u for u in list(self.units) if u.connected]
+        k = I.port_index([u.name for u in live], in_name)
+        if k is None or in_name != out_name:
+            raise IOError("no such port")
+        return live[k].open(live[k].name, live[k].name)
+
+    def known(self):
+        return self.seen
+
+    def rescan(self):
+        self.rescans += 1
+        return None
+
+
+def cr_unit(uid, image=b"", name="ChoralRoot FM-1", version="ChoralRoot 0.22", objs=(), uid_after=None):
+    """a ChoralRoot FM-1 with its unit ID (None: a ChoralRoot from before it); after an install it runs FM-1_920
+    again under the same name, with uid_after's ID ("": none) or its own"""
+    side = BackupSide(version, I.CR_IDS, objs, uid=uid)
+    dev = FakeFM1(image, identity="FM-1_920", name=name, after_write="FM-1_920", name_after=name,
+                  bk=lambda i: None if i.startswith("ota-") else side)
+    dev.side = side
+    if uid_after is not None:
+        dev.boot, boot = (lambda identity, n: (setattr(side, "uid", uid_after or None)
+                                                if not identity.startswith("ota-") and dev.upgrades == 2 else None)
+                          or boot(identity, n)), dev.boot
+    return dev
+
+
+def units():
+    import json
+
+    def ucli(args, dev):                          # (a usage error: argparse's exit 2 and its line)
+        err = io.StringIO()
+        old, sys.stderr = sys.stderr, err
+        try:
+            return I.main(args, backend=dev, out=io.StringIO(), ask=lambda _p: True), "", err.getvalue()
+        except SystemExit as e:
+            return e.code, "", err.getvalue()
+        finally:
+            sys.stderr = old
+    # the INFO reply: the ID after the tags, old parsers' version to the NUL
+    a = list(b"ChoralRoot 0.22") + [0] * 8 + [0x42, 1, 3, 0x43, 1, 3, 0x49, 8, *b"A1B2C3D4"]
+    old = a[:-10]
+    fel = list(b"FELUCCA v1.0") + [0, 2, 90, 4, 16, 82, *b"FM6", 0, *b"VA", 0, 4, 16, 0x55, 1, 3, 0x4D, 1, 64, 1, 0x42, 1, 3]
+    ok(I.unit_id_of(a) == "A1B2C3D4" and I.unit_id_of(old) is None and I.unit_id_of(fel) is None and
+       I.unit_id_of(a[:-1]) is None and I.unit_id_of(a[:-10] + [0x49, 8, *b"a1b2c3d4"]) is None,
+       "unit_id_of: 49 08 and 8 hex digits after 42 / 43; none without the tag, cut short, in lower case, Felucca's")
+    ok(bytes(a[:a.index(0)]).decode() == "ChoralRoot 0.22" and I.device_info(type("B", (), {"request": lambda s, *x: a})())
+       == ("ChoralRoot 0.22", "choralroot") and I.device_info(type("B", (), {"request": lambda s, *x: a})(), with_id=True)
+       == ("ChoralRoot 0.22", "choralroot", "A1B2C3D4"), "device_info: the version to the NUL as before; with_id the ID too")
+    ok(I.port_labels(["ChoralRoot FM-1", "IAC", "ChoralRoot FM-1"]) == ["ChoralRoot FM-1", "IAC", "ChoralRoot FM-1 [2]"]
+       and I.port_index(["ChoralRoot FM-1", "IAC", "ChoralRoot FM-1"], "ChoralRoot FM-1 [2]") == 2 and
+       I.port_index(["ChoralRoot FM-1"], "ChoralRoot FM-1 [2]") is None and I.port_base("ChoralRoot FM-1 [2]") ==
+       "ChoralRoot FM-1" and I.port_labels(["A", "B"]) == ["A", "B"],
+       "port_labels: a name two ports share, the second 'NAME [2]'; one port's name as it is; port_index, port_base")
+
+    # --info: every FM-1, each with its ID; a stock one without
+    A, B = cr_unit("A1B2C3D4"), cr_unit("0F0E0D0C")
+    S = FakeFM1(b"", identity="FM-1_015", name="FM-1")
+    rc, out, err = cli(["--info"], FakeBus(A, B, S))
+    ok(rc == 0 and out.count("FM-1_920  [running]") == 2 and "port: ChoralRoot FM-1  version: ChoralRoot 0.22\nunit ID: A1B2C3D4"
+       in out and "port: ChoralRoot FM-1 [2]  version: ChoralRoot 0.22\nunit ID: 0F0E0D0C" in out and
+       "FM-1_015  [running]  port: FM-1\nunit ID: none (no INFO answer" in out and
+       "3 FM-1s connected (unit IDs A1B2C3D4, 0F0E0D0C, none)" in out and A.upgrades == B.upgrades == 0,
+       "--info: three FM-1s, two of one port name: each with its port, version and unit ID (the stock one: none)")
+    rc, out, err = cli(["--info"], FakeBus(cr_unit("A1B2C3D4")))
+    ok(rc == 0 and out == "FM-1_920  [running]  port: ChoralRoot FM-1  version: ChoralRoot 0.22\nunit ID: A1B2C3D4\n"
+       "ChoralRoot can be installed over ChoralRoot 0.22\n", "--info, one FM-1: the lines of before and its unit ID")
+    rc, out, err = cli(["--info", "--unit", "0f0e0d0c"], FakeBus(A, B, S))
+    ok(rc == 0 and "unit ID: 0F0E0D0C" in out and "A1B2C3D4" not in out.split("\n", 1)[1] and "FM-1_015" not in out,
+       "--info --unit 0f0e0d0c (any case): that unit alone")
+
+    # --unit picks the right one, for a read and for a write; none, or two answering with it: refused
+    A = cr_unit("A1B2C3D4", objs={6: fill(3080, 1)}.items())
+    B = cr_unit("0F0E0D0C", objs={6: fill(3080, 2)}.items())
+    path = TMP / "b.json"
+    rc, out, err = cli(["--backup", str(path), "--unit", "0f0e0d0c"], FakeBus(A, B))
+    f = json.loads(path.read_text()) if path.exists() else {"objects": []}
+    got = {o["id"]: o["data"] for o in f["objects"] if o["size"]}
+    import base64
+    ok(rc == 0 and base64.b64decode(got.get(6, "")) == fill(3080, 2) and "unit 0F0E0D0C: ChoralRoot 0.22 (FM-1_920) on port "
+       "ChoralRoot FM-1 [2]" in out, "--backup --unit (the second of two of one port name): its objects, said which")
+    rc, out, err = cli(["--restore", str(path), "--yes", "--unit", "A1B2C3D4"], FakeBus(A, B))
+    ok(rc == 0 and A.side.objs[6] == fill(3080, 2) and A.side.restarts == 1 and not B.side.log and B.side.restarts == 0,
+       "--restore --unit: written to that FM-1 alone (the other: nothing written, no restart)")
+    puts = lambda: sum(d.startswith(I.BK_HDR + bytes([I.BK_PUT])) for d in A.sent + B.sent)   # noqa: E731
+    n0 = puts()
+    rc, out, err = cli(["--delete-sound", "1", "--yes", "--unit", "CCCC0003"], FakeBus(A, B))
+    ok(rc == 3 and "no FM-1 answers with unit ID CCCC0003" in err and "A1B2C3D4" in err and "0F0E0D0C" in err and
+       puts() == n0,
+       "--unit an ID no FM-1 has: exit 3, the IDs that answered listed, nothing written")
+    twin = cr_unit("A1B2C3D4")
+    rc, out, err = cli(["--sounds", "--unit", "A1B2C3D4"], FakeBus(A, twin))
+    ok(rc == 9 and "2 ports answer with unit ID A1B2C3D4" in err, "--unit an ID two ports answer with: exit 9, nothing done")
+    n0 = len(A.sent)
+    rc, out, err = ucli(["--info", "--unit", "A1B2C3"], FakeBus(A))
+    ok(rc == 2 and "8 hex digits" in err and len(A.sent) == n0, "--unit not 8 hex digits: exit 2 before any MIDI")
+
+    # without --unit, two FM-1s: a write or a restart refused with their IDs, a read reads the first and says so
+    raw = package("FM-1_920")
+    image = I.logical_image(raw)
+    p = pkgfile("units.fwsc", raw)
+    A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image)
+    for args in ([p, "--yes"], ["--delete-sound", "1", "--yes"], ["--restore", str(path), "--yes"], ["--stub", "test"]):
+        rc, out, err = cli(args, FakeBus(A, B))
+        ok(rc == 9 and "2 FM-1s are connected" in err and "--unit" in err and "A1B2C3D4" in err and "0F0E0D0C" in err and
+           A.upgrades == B.upgrades == 0 and not A.side.log and not B.side.log,
+           f"two FM-1s, no --unit: {args[0] if args[0] != p else 'an install'} refused (exit 9), both IDs listed, nothing sent but questions")
+    rc, out, err = cli(["--sounds"], FakeBus(A, B))
+    ok(rc == 0 and "note: 2 FM-1s are connected" in out and "user sounds on ChoralRoot 0.22" in out,
+       "two FM-1s, no --unit: --sounds (a read) reads the first, as with one, and says that two are there")
+    rc, out, err = cli([p, "--yes"], FakeBus(cr_unit("A1B2C3D4", image), FakeFM1(image, identity="FM-1_015")))
+    ok(rc == 9 and "unit ID none" in err, "a ChoralRoot and a stock FM-1, no --unit: an install refused (the stock one: no ID)")
+
+    # an install with --unit: update mode only from the one new port, the ID checked when it is back
+    for target in ("second", "first"):
+        A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image)
+        T, O = (B, A) if target == "second" else (A, B)
+        rc, out, err = cli([p, "--yes", "--unit", T.side.uid.lower()], FakeBus(A, B))
+        ok(rc == 0 and T.upgrades == 2 and T.bad == 0 and T.identity == "FM-1_920" and O.upgrades == 0 and
+           not any(d == I.UPGRADE for d in O.sent) and f"unit ID {T.side.uid}: the same FM-1 after the restart" in out and
+           "done: the FM-1 runs FM-1_920" in out,
+           f"install --unit, the {target} of two ports named alike: that FM-1 through its update mode and back, its ID "
+           "checked; the other got no upgrade")
+    A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image)
+    bus = FakeBus(A, B)
+    C = FakeFM1(image, identity="FM-1_015", name="FM-1")
+    boot = B.boot
+    B.boot = lambda identity, n: boot(identity, n) or (bus.plug(C) if identity.startswith("ota-") else None)
+    rc, out, err = cli([p, "--yes", "--unit", "0F0E0D0C"], bus)
+    ok(rc == 9 and "more than one new MIDI port appeared" in err and "nothing was written" in err and B.upgrades == 1 and
+       B.identity.startswith("ota-") and A.upgrades == 0 and C.upgrades == 0,
+       "install --unit, two new ports at the restart (another FM-1 plugged in): exit 9, the loader never asked to write")
+    A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image)
+    bus = FakeBus(A, B)
+    L = FakeFM1(image, identity="ota-FM-1_900", name="Felucca Update")
+    L.connected = False
+    bus.plug(L)
+    B.boot = lambda identity, n: setattr(L, "connected", True) if identity.startswith("ota-") else None
+    rc, out, err = cli([p, "--yes", "--unit", "0F0E0D0C"], bus)
+    ok(rc == 9 and "is still there" in err and "nothing was written" in err and L.upgrades == 0 and B.upgrades == 1,
+       "install --unit, a new port while the FM-1's own stays: exit 9, nothing written")
+
+    # the firmware installed has no ID: the one new port of another name is taken (said so); one of the other
+    # FM-1's name cannot be told apart (exit 5)
+    A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image, uid_after="")
+    B.name_after = "FM-1"
+    rc, out, err = cli([p, "--yes", "--unit", "0F0E0D0C"], FakeBus(A, B))
+    ok(rc == 0 and B.upgrades == 2 and "unit ID: none from FM-1_920 ChoralRoot 0.22" in out and "taken as this FM-1" in out,
+       "install --unit, a firmware without the ID after it under a new port name: taken as the unit, said so")
+    A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image, uid_after="")
+    rc, out, err = cli([p, "--yes", "--unit", "0F0E0D0C"], FakeBus(A, B))
+    ok(rc == 5 and "with unit ID 0F0E0D0C did not come back" in err and B.upgrades == 2,
+       "install --unit, a firmware without the ID under the other FM-1's port name: not taken (exit 5, --info to check)")
+
+    # never a MIDI rescan with --unit: refused as an option, and the advice for an offline port is the replug
+    seen = {"midi": [["ChoralRoot FM-1", True]], "usb": ["ChoralRoot FM-1"]}
+    A, B = cr_unit("A1B2C3D4", image), cr_unit("0F0E0D0C", image)
+    bus = FakeBus(A, B, known=seen)
+    rc, out, err = ucli(["--rescan-midi", "--unit", "A1B2C3D4"], bus)
+    ok(rc == 2 and "every MIDI port" in err and bus.rescans == 0, "--rescan-midi --unit: refused (exit 2), nothing rescanned")
+    boot = B.boot
+    B.boot = lambda identity, n: boot(identity, n) or (setattr(B, "connected", False) if not identity.startswith("ota-") else None)
+    rc, out, err = cli([p, "--yes", "--unit", "0F0E0D0C"], bus)
+    ok(rc == 5 and "unplug this FM-1's USB cable" in err and "Rescan MIDI" not in err and "--rescan-midi" not in err and
+       bus.rescans == 0, "install --unit, the FM-1 offline after the write: exit 5, unplug and replug said, no rescan")
+    rc, out, err = cli([p, "--yes"], FakeBus(cr_unit("A1B2C3D4", image), known=seen))
+    ok(rc == 0, "one FM-1, no --unit: the install as before")
+
+
 PHASES = [wire, exits, backups, screen, debug, uac, stub, stuck, midi_side, select, sounds, syx, bindings, favorites, installs,
-          errors, against_js, guard, against_js_guard, official]
+          errors, against_js, guard, against_js_guard, official, units]
 
 
 def run_phases():
