@@ -29,8 +29,8 @@
             {"id": "e11", "type": "label", "x": 68, "y": 80, "w": 64, "h": 12, "text": "-Shape-", "align": "centre"}
           ],
           "lanes": [
-            ["a_freq", "a_saw", "a_pulse", "a_pw"],
-            ["a_sync", null, null, null],
+            ["a_freq", "a_saw", "a_pulse", null],
+            [null, null, "a_pw", "a_sync"],
             ["m_a", "m_b", "m_n", null]
           ]
         },
@@ -50,8 +50,9 @@
             {"id": "e10", "type": "label", "x": 120, "y": 80, "w": 112, "h": 12, "text": "-SHAPE-", "align": "centre"}
           ],
           "lanes": [
-            ["b_freq", "b_fine", "b_saw", "b_tri"],
-            ["b_pulse", "b_pw", "b_lo", "b_kb"]
+            ["b_freq", "b_fine", null, null],
+            [null, "b_saw", "b_tri", "b_pulse"],
+            [null, "b_pw", "b_lo", "b_kb"]
           ]
         }
       ]
@@ -69,7 +70,7 @@
             {"id": "f_res", "type": "knob", "x": 116, "y": 44, "w": 56, "h": 64, "param": "FILTER:RES", "label": "RESO", "size": 36},
             {"id": "f_env", "type": "knob", "x": 176, "y": 44, "w": 56, "h": 64, "param": "FILTER:FENV", "label": "ENV AMT", "size": 36},
             {"id": "f_kb", "type": "switch", "x": 176, "y": 180, "w": 56, "h": 56, "param": "FILTER:KTRK", "label": "KEYBOARD", "positions": 3},
-            {"id": "f_rev", "type": "led", "x": 8, "y": 52, "w": 44, "h": 44, "param": "FILTER+:REV", "label": "REV", "leds": 2},
+            {"id": "f_rev", "type": "led", "x": 8, "y": 48, "w": 44, "h": 44, "param": "FILTER+:REV", "label": "REV", "leds": 2},
             {"id": "f_at", "type": "led", "x": 120, "y": 196, "w": 56, "h": 32, "param": "FILTER+:AFTER", "label": "AFTER", "labelAt": "below"},
             {"id": "e8", "type": "knob", "x": 8, "y": 112, "w": 56, "h": 56, "param": "ENV 2:ATK", "label": "ATTACK", "size": 36},
             {"id": "e9", "type": "knob", "x": 64, "y": 112, "w": 56, "h": 56, "param": "ENV 2:DEC", "label": "DECAY", "size": 36},
@@ -79,9 +80,9 @@
             {"id": "e13", "type": "label", "x": 8, "y": 168, "w": 224, "h": 12, "text": "-ENVELOPE-", "align": "centre"}
           ],
           "lanes": [
-            ["f_cut", "f_res", "f_env", "f_kb"],
-            ["f_rev", "f_at", "e12", null],
-            ["e8", "e9", "e10", "e11"]
+            ["f_rev", "f_cut", "f_res", "f_env"],
+            ["e8", "e9", "e10", "e11"],
+            [null, "e12", "f_at", "f_kb"]
           ]
         }
       ]
@@ -104,7 +105,7 @@
           ],
           "lanes": [
             ["e1_a", "e1_d", "e1_s", "e1_r"],
-            ["e1_vel", "e1_rs", null, null]
+            [null, null, "e1_vel", "e1_rs"]
           ]
         }
       ]
@@ -128,7 +129,7 @@
           ],
           "lanes": [
             ["l_rate", "l_amt", null, "l_at"],
-            ["l_saw", "l_tri", "l_sq", null]
+            [null, "l_saw", "l_tri", "l_sq"]
           ]
         },
         {
@@ -145,8 +146,8 @@
             {"id": "e8", "type": "knob", "x": 8, "y": 60, "w": 56, "h": 64, "param": "LFO:NOISE", "size": 36, "label": "SRC MIX"}
           ],
           "lanes": [
-            ["w_fa", "w_fb", "w_pa", "w_pb"],
-            ["w_f", "e8", null, null]
+            ["e8", null, "w_fa", "w_fb"],
+            [null, "w_pa", "w_pb", "w_f"]
           ]
         }
       ]
@@ -160,17 +161,17 @@
           "title": "POLYMOD",
           "elements": [
             {"id": "fp", "type": "frame", "x": 4, "y": 32, "w": 236, "h": 196, "text": "Poly-mod", "r": 8},
-            {"id": "p_src", "type": "label", "x": 8, "y": 44, "w": 112, "h": 12, "text": "SOURCE AMOUNT", "size": 9, "align": "centre", "colour": "mid"},
-            {"id": "p_dst", "type": "label", "x": 92, "y": 172, "w": 112, "h": 12, "text": "DESTINATION", "size": 9, "align": "centre", "colour": "mid"},
-            {"id": "p_env", "type": "knob", "x": 8, "y": 60, "w": 56, "h": 64, "param": "POLYMOD:ENV", "label": "FILT ENV", "size": 36},
-            {"id": "p_oscb", "type": "knob", "x": 64, "y": 60, "w": 56, "h": 64, "param": "POLYMOD:OSC B", "label": "OSC B", "size": 36},
-            {"id": "p_fa", "type": "led", "x": 68, "y": 136, "w": 56, "h": 32, "param": "POLYMOD:FREQ A", "label": "FREQ A", "labelAt": "below"},
-            {"id": "p_pa", "type": "led", "x": 180, "y": 136, "w": 56, "h": 32, "param": "POLYMOD:PW A", "label": "PW A", "labelAt": "below"},
-            {"id": "p_f", "type": "led", "x": 124, "y": 136, "w": 56, "h": 32, "param": "POLYMOD+:FILTER", "label": "FILTER", "labelAt": "below"}
+            {"id": "p_src", "type": "label", "x": 8, "y": 96, "w": 112, "h": 12, "text": "-SOURCE AMOUNT-", "size": 9, "align": "centre", "colour": "mid"},
+            {"id": "p_dst", "type": "label", "x": 68, "y": 156, "w": 168, "h": 12, "text": "-DESTINATION-", "size": 9, "align": "centre", "colour": "mid"},
+            {"id": "p_env", "type": "knob", "x": 8, "y": 40, "w": 56, "h": 56, "param": "POLYMOD:ENV", "label": "FILT ENV", "size": 36},
+            {"id": "p_oscb", "type": "knob", "x": 64, "y": 40, "w": 56, "h": 56, "param": "POLYMOD:OSC B", "label": "OSC B", "size": 36},
+            {"id": "p_fa", "type": "led", "x": 68, "y": 120, "w": 56, "h": 32, "param": "POLYMOD:FREQ A", "label": "FREQ A", "labelAt": "below"},
+            {"id": "p_pa", "type": "led", "x": 180, "y": 120, "w": 56, "h": 32, "param": "POLYMOD:PW A", "label": "PW A", "labelAt": "below"},
+            {"id": "p_f", "type": "led", "x": 124, "y": 120, "w": 56, "h": 32, "param": "POLYMOD+:FILTER", "label": "FILTER", "labelAt": "below"}
           ],
           "lanes": [
-            ["p_env", "p_oscb", "p_fa", "p_pa"],
-            ["p_f", null, null, null]
+            ["p_env", "p_oscb", null, null],
+            [null, "p_fa", "p_f", "p_pa"]
           ]
         },
         {
@@ -187,8 +188,8 @@
             {"id": "v_vint", "type": "knob", "x": 8, "y": 36, "w": 52, "h": 64, "param": "VOICE+:VINTAGE", "label": "VINTAGE", "size": 36}
           ],
           "lanes": [
-            ["v_uni", "v_voices", "v_det", "v_glide"],
-            ["v_prio", "v_vint", null, null]
+            ["v_vint", null, "v_uni", "v_glide"],
+            ["v_det", "v_voices", "v_prio", null]
           ]
         }
       ]

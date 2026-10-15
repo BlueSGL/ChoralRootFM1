@@ -398,13 +398,15 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   let turned = 0;
   for (const t of L.designTiles(pan).filter((x) => x.type === "free")) {
     ps.open(t.gi, t.si, t.lane);
-    const sc = pan.groups[t.gi].screens[t.si], e = sc.elements.find((x) => x.id === sc.lanes[t.lane][0]), p = pidx.get(e.param);
+    // the lane's first bound slot and its knob (a lane may start with empty slots)
+    const sc = pan.groups[t.gi].screens[t.si], k = sc.lanes[t.lane].findIndex((x) => x !== null);
+    const e = sc.elements.find((x) => x.id === sc.lanes[t.lane][k]), p = pidx.get(e.param);
     const a = ps.render().rgba, v0 = m.pget(p.page, p.col);
-    ps.knob(1, v0 >= p.max ? -1 : 1);
+    ps.knob(k + 1, v0 >= p.max ? -1 : 1);
     const v1 = m.pget(p.page, p.col), b = ps.render().rgba;
-    if (v1 === v0 || !L.diffCount(a, b)) still.push(`${t.group} ${t.si + 1}.${t.lane + 1} ${e.id}`); else turned++;
+    if (v1 === v0 || !L.diffCount(a, b)) still.push(`${t.group} ${t.si + 1}.${t.lane + 1} KNOB ${k + 1} ${e.id}`); else turned++;
   }
-  ok(!still.length, `the p5 panel: KNOB 1 on each of ${turned} free lanes turns its parameter and changes the picture` + (still.length ? ` (not: ${still.join(", ")})` : ""));
+  ok(!still.length, `the p5 panel: the first bound knob of each of ${turned} free lanes turns its parameter and changes the picture` + (still.length ? ` (not: ${still.join(", ")})` : ""));
   // a p5 knob's value is inside its face; a lit led's dot is red
   const sA = pan.groups[0].screens[0], kn = sA.elements.find((x) => x.type === "knob"), kp = pidx.get(kn.param);
   ps.open(0, 0, 0);
