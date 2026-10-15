@@ -40,6 +40,19 @@ Read first: `PLAN.md` (§3 .. §5, §7), `docs/INTEGRATION.md`, the area's own d
   variable. Move aside with `mv`, write with the Write tool.
 - Never raise the core rails above SYSVDD 14 / VDC14 5 (`hal/fm1_power.h`; VDC14 4 -> 5 in 0.22 on the reports of
   fm1-x0x#10 / #21, the owner's decision of 2026-10-14: docs/DUALCORE.md "Reliability").
+- **The unit's load, read 2026-10-14** (`tools/perf_unit.py`; docs/INTEGRATION.md "Measured on the unit"): a VA
+  MORPH PAD chord (6 or 8 notes + the bass) overloads core 0 (part0 2280 us, the shed drops voices); FM6 TINE EP
+  with 8 notes is at 88 % and sheds while recording; CZ-1 and FM TONE at 70 .. 80 %. The fx stage's worst half is
+  600 .. 720 us (its parts under load not yet read: `--debug`'s `fx_*`), TIMER5's 150 .. 230 dry and 350 .. 410 while
+  recording. "The host says 2x headroom" (INTEGRATION.md) is the emulator's: on the unit the pads have none. The
+  levers: the effects or half the chord part's voices on core 1 (designs in docs/FX.md, docs/DUALCORE.md), TIMER5's
+  scan rate (an LED level's pulse is a time constant: halving the tick halves the dim levels' duty, FM1_LED_*_NS
+  would double; the lit LEDs keep their duty), the fx stage's parts.
+- Two variant builds to judge by ear and eye, not merged into the defaults: `build/choralroot-delayhalf.fwsc`
+  (`CR_FX_DELAY_DS=2`: the delay at 22.05 kHz in half the line, 65 KB of POOL back, the repeats lose what is above
+  11 kHz) and `build/choralroot-lcd20.fwsc` (`LCD_BAUD=2`: the LCD's SPI at 20 MHz, 7.7 ms a strip for 12.8; the panel
+  is ST7789-class, whose sheet gives 16 MHz: it either draws right or shows garbage, and the release build is the way
+  back). The release build is what the unit runs.
 - Open (2026-10-14, found on the owner's unit): a RESTART (72, `crb_leave` -> `CRB_REBOOT` -> `fm1_reboot`) once
   crashed in the soft reset's P33 write with DBG_MSG `axi_rd_inv` (a DMA still reading: the USB or the DAC?), 37.6 s
   of uptime, with Dual Core On: a 4 s crash screen, then the reboot it wanted anyway. `fm1_install.py --debug` prints

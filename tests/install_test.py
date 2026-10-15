@@ -567,7 +567,7 @@ def debug():
        "--debug: the keys' way to the engine (PEAK's values 31..34): the note-ons, the main loop's and the engine's times")
     cr.peak += [1]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
-    ok(rc == 0 and len(I.DEBUG_PEAK) == 44 and "c1_bar 1 (after a crash beside core 1)" in out and "last crash" not in out,
+    ok(rc == 0 and len(I.DEBUG_PEAK) == 45 and "c1_bar 1 (after a crash beside core 1)" in out and "last crash" not in out,
        "--debug: why this boot kept core 1 off (PEAK's value 35, c1_bar)")
     cr.peak += [3, 1, 0x0200046E, 0x02007D80, 0, 0x00001000, 184200, 0x40, 1]
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
@@ -579,6 +579,9 @@ def debug():
     cr.peak[-9] = 0
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "last crash: none since the power-on" in out, "--debug: no crash since the power-on")
+    cr.peak += [2]
+    rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
+    ok(rc == 0 and "voices_shed 2" in out, "--debug: the voices the overload shed dropped (PEAK's value 45)")
     cr.peak = None
     rc, out, err = cli(["--debug"], FakeFM1(b"", identity="FM-1_920", bk=lambda _i: cr))
     ok(rc == 0 and "pk_block_us" not in out and "stub_ms" in out, "--debug on a firmware without 78 PEAK: 73's values alone")

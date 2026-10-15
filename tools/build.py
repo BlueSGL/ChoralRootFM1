@@ -264,7 +264,10 @@ def build_app(stub):
     # the delay's and the reverb's rate (1 full, 2 half) and their loops in RAM (docs/FX.md "Half rate or full"): for
     # the builds that are measured against each other on the unit; unset: firmware/src/cr_fx.c's defaults
     for flag, ok in (("CR_FX_DELAY_DS", ("1", "2")), ("CR_FX_REVERB_DS", ("1", "2")), ("CR_FX_RAM", ("0", "1")),
-                     ("CR_FX_LITE", ("0", "1"))):
+                     ("CR_FX_LITE", ("0", "1")),
+                     ("XD_N", ("16384", "32768")),      # the delay line's samples (cr_fx.c: 32768 / CR_FX_DELAY_DS)
+                     ("LCD_BAUD", ("2", "3", "4", "5"))):   # the LCD's SPI clock, 60 MHz / (BAUD + 1): 4 = 12 MHz (lcd.c),
+                                                        # 2 = 20 MHz (docs/EDITOR.md "Responsiveness": to try on the unit)
         v = os.environ.get(flag)
         if v in ok:
             flags.append(f"-D{flag}={v}")

@@ -409,7 +409,8 @@ What made it fast:
    canvas), so the next strip is composed while the SPI sends this one. Before, gfx.c `cv_begin` waited for the last
    strip's DMA (`lcd_sync`) before drawing the next: every blitted strip cost its 12.8 ms of SPI on top of the drawing.
    lcd.c itself (Felucca's) is unchanged: it already leaves a transfer running; raising its SPI clock (`LCD_BAUD` 2 =
-   20 MHz) would cut the SPI time further but needs a check on the device.
+   20 MHz) would cut the SPI time further but needs a check on the device. 2026-10-14: `LCD_BAUD=2 ./build.sh` builds
+   it (`build/choralroot-lcd20.fwsc`, left on the owner's unit to look at: HANDOFF).
 
 ## 11. LEDs
 

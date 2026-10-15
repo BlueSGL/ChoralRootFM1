@@ -1991,3 +1991,21 @@ value; Python 3.11): the choices are checked by hand now; the rails' `now` read 
 sets now = boot). Host: `cr_cpu1_test` 74 checks, `cr_backup_test` (PEAK 44), `install_test.py`. The emulator suite
 was not re-run after the PEAK change (its PEAK checks are the backup test's). Not done: a power cycle by hand (the
 owner's), Geek Out 2 read off the unit's screen, the restart crash's cause.
+
+3y41. **The unit's load read for real, by MIDI and SysEx (2026-10-14; the owner: "review our performance limits",
+then "you should be able to send midi in to the FM-1 and maybe sysex commands to change settings so you could put it
+in a state to fully test on device performance"; docs/INTEGRATION.md "Measured on the unit").** `tools/perf_unit.py`:
+76 SELECT puts a sound on each part, an 8-note chord goes in on channel 1 and a bass note on channel 2 (rtmidi),
+moved a semitone every 2 s; 73 DEBUG and 78 PEAK read before and after; `--record` runs ffmpeg on "ChoralRoot In";
+`--notes`, `--seconds`. 78 PEAK grew by one more value, `voices_shed` (audio.c `shed_count`: 45 values now). The
+tables are in INTEGRATION.md; what they say: a VA MORPH PAD chord overloads core 0 (part0 2280 us with 6 notes, the
+block over the half, 22 .. 40 voices shed in 20 s), FM6 TINE EP with 8 notes is at 88 % and sheds while recording,
+CZ-1 and FM TONE at 70 .. 80 %; the fx stage's worst half 600 .. 720 us (the listing's 290 was the delay and the
+reverb alone), the tick's 300 .. 400 at a chord change, TIMER5's 150 .. 230 dry and 350 .. 410 recording;
+`stale` 0 throughout (the shed, not a pop, is what an overload sounds like). The emulator's "2x headroom" was its
+own: 1.5 .. 2 x low on the renders, 2 .. 3 x on the fx stage. Also: the delay line follows its rate (`XD_N` = 32768 /
+`CR_FX_DELAY_DS`, the longest-time margin halved with it: `cr_fx_test` at both rates), so `CR_FX_DELAY_DS=2` is the
+0.743 s delay in half the POOL (72.7 % for 91.7 %); `LCD_BAUD` and `XD_N` pass through `build.py`; two variant
+packages built for the owner to judge (`build/choralroot-delayhalf.fwsc`, `build/choralroot-lcd20.fwsc`: HANDOFF),
+the LCD one left on the unit. Host: `run_cr_tests.sh` ok, `install_test.py` ok. Not done: 48 kHz recording (an
+Option, not settable over USB without a restore), Dual Core Off rows (the same), the fx stage's parts under load.

@@ -675,8 +675,8 @@ static void crb_debug(void)
  * sounding output counts here too: the player's own press, 0.18), the settings' and the session's saves; the 6 of when
  * the ISR got to start, the 4 of the keys' way, then why this boot kept core 1 off (cr_c1_barred), then (0.22) the
  * last crash's record (7: count, vec, pc, rets, EMU_MSG, DBG_MSG, uptime ms), this boot's reset reason and the last
- * reset's breadcrumb: 44 values. A command of its own because 73 DEBUG is full: its count is one 7-bit byte and it has
- * 127 values */
+ * reset's breadcrumb, the voices the shed dropped since power-on: 45 values. A command of its own because 73 DEBUG is
+ * full: its count is one 7-bit byte and it has 127 values */
 static void crb_peak(void)
 {
     uint32_t v[45], k = 0, i;
@@ -735,6 +735,8 @@ static void crb_peak(void)
     v[k++] = crashed ? fm1_crash.uptime_ms : 0u;
     v[k++] = bootguard.reason;                       /* P3_RST_SRC bits 0..7, the core reset as bit 8 (bootguard_reason) */
     v[k++] = felucca_dbg.prev_stage;                 /* BS_* (bootguard_stage_name) */
+    v[k++] = shed_count;                             /* voices dropped by the overload shed since power-on (audio.c
+                                                      * shed_voice: two halves in a row over 85 %); console voices_shed */
     cr_klat.n = cr_klat.sum = cr_klat.pick = cr_klat.eng = 0;
     cr_prof_clear();
     crb_b(1);

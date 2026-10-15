@@ -1056,6 +1056,65 @@ Felucca's 5.4 %); nothing there is worth moving to the UI frame. The host says t
 `cpu` readout is the proof (XIP cache misses, the nested TIMER5 and USB audio are not in the host figure; perf.sh's
 (u) line estimates the USB recording at ~31 us a half, 1.1 %, without the SIE accesses: docs/USB-AUDIO.md).
 
+### Measured on the unit (2026-10-14, `tools/perf_unit.py`)
+
+The owner: "you should be able to send midi in to the FM-1 and maybe sysex commands to change settings so you could
+put it in a state to fully test on device performance". `python3 tools/perf_unit.py [all | idle fm6 va cz quad]
+[--seconds 20] [--notes 8] [--record]` does that over USB alone: 76 SELECT puts the sounds on the parts, an 8-note
+chord (C3 E3 G3 B3 D4 F#4 A4 C5) goes in on the Perform channel and a bass note on the Bass channel, moved up a
+semitone every 2 s so voices are stolen as in playing, and 73 DEBUG / 78 PEAK are read before (the read clears the
+worst cases) and after. `--record` runs ffmpeg on "ChoralRoot In" through the scenario. The parts are put back on
+the power-on sounds at the end. **These are the unit's numbers, not the emulator's.** Worst halves (us of 2902) over
+20 s, Dual Core On (the bass on core 1: its `part1` is not in `block`), the 0.22 build of f71bbb5 plus the shed
+counter; `shed` is the voices the overload shed dropped (cumulative over the runs: the difference is the run's):
+
+| 8 notes + bass | block | tick | part0 | part1 | fx | master | t5 | wall | late | stale | shed (+) | avg | p0 avg | fx avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| idle | 233 | 63 | 50 | 44 | 48 | 80 | 25 | 253 | 0 | 0 | 0 | 158 | 22 | 24 |
+| fm6: TINE EP + DEEP SUB | 2580 | 353 | 1647 | 476 | 649 | 111 | 197 | 2777 | 0 | 0 | 0 | 1706 | 1136 | 525 |
+| va: MORPH PAD + PUNCH BASS | **3121** | 315 | **2293** | 355 | 611 | 112 | 232 | 3351 | 23 | 0 | **+26** | 2062 | 1539 | 510 |
+| cz: JET ROAR + SYNTH.BASS | 2271 | 295 | 1439 | 374 | 608 | 103 | 169 | 2433 | 0 | 0 | 0 | 1565 | 1047 | 488 |
+| quad: WOBBLE + BASS | 2345 | 237 | 1509 | 322 | 642 | 103 | 170 | 2515 | 0 | 0 | 0 | 1577 | 1061 | 488 |
+
+| 6 notes + bass | block | part0 | fx | t5 | late | shed (+) | avg | p0 avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fm6 | 2444 | 1521 | 633 | 194 | 0 | 0 | 1645 | 1031 |
+| va | **3102** | **2280** | 637 | 230 | 18 | **+22** | 2211 | 1686 |
+| cz | 2032 | 1169 | 594 | 150 | 0 | 0 | 1569 | 1041 |
+| quad | 1993 | 1157 | 645 | 145 | 0 | 0 | 1585 | 1032 |
+
+| 8 notes + bass, recording at 44.1 kHz | block | tick | part0 | fx | master | t5 | wall | late | shed (+) | avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fm6 | 2737 | 404 | 1726 | 720 | 172 | **349** | 3084 | 5 | **+12** | 1646 |
+| va | 3217 | 323 | 2397 | 705 | 160 | **407** | 3625 | 40 | **+40** | 1813 |
+
+What it says:
+
+- **A VA MORPH PAD chord does not fit one core**: 2280 us of part0 alone with 6 notes, an average half of 2211 (76 %),
+  peaks over the half (3100), and the shed drops voices (22 in 20 s with 6 notes, 40 more while recording). The pad's
+  two MORPH oscillators cost about 280 us a voice on the unit; docs/VA.md's "38 / 54 %" was the emulator's.
+- **FM6 TINE EP with 8 notes is at 88 %** (average 59 %), and sheds once a recording runs. A 6-note chord is 84 %.
+  About 200 us a voice on the unit.
+- **CZ-1 and FM TONE sit at 70 .. 80 % worst**, 54 % average: comfortable, no shed.
+- **The fx stage's worst half is 600 .. 720 us (21 .. 25 %), its average about 500**: not the 290 the listing counts
+  for the delay and the reverb; the stage also holds the parts' DIST, level, pan and sends, the idle parts, the
+  chorus and the buses. The next step is `--debug`'s `fx_*` parts under this load to see which.
+- **The engine tick peaks at 300 .. 400 us** at a chord change (8 note-ons, the stealing, the fades), against 7 .. 100
+  on the emulator's scenarios.
+- **TIMER5 takes 150 .. 230 us of the worst half dry (5 .. 8 %) and 350 .. 410 while recording (12 .. 14 %)**: the
+  scan and the USB polls, the recording's endpoint service on top (HANDOFF item 23, now read).
+- **The bass on core 1 costs core 0 nothing** (the wait 9 .. 41 us) and would add 300 .. 500 us to every row with
+  Dual Core Off.
+- **`stale` stayed 0 throughout**: even at 108 % the DAC never played something old; the late halves (up to 40 in 20 s)
+  were caught up and the shed took voices instead. The audible effect of an overload is a voice dropping out, not a
+  pop.
+
+Against "the host says the ISR has 2x headroom" above: on the unit the heaviest pads have none, and an 8-note chord on
+the lighter engines has 10 .. 25 %. The emulator was 1.5 to 2 times optimistic for the renders (FM6 and VA) and 2 to
+3 times for the fx stage. Dual Core, when it holds, is the one lever already built: moving the effects (600 .. 700
+us worst) or half the chord part's voices (1100 .. 2300) to core 1 are the two designs in docs/FX.md "If the unit
+still wants less" and docs/DUALCORE.md.
+
 ### What was found and fixed
 
 1. **Flash erases under sound** (`cr_settings.c`). A settings change (sound, tempo, FX, bass, perform parameter,

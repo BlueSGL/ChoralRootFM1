@@ -2153,7 +2153,10 @@ DEBUG_PEAK = ["pk_block_us", "pk_tick_us", "pk_part0_us", "pk_part1_us", "pk_fx_
               # until a power-off; crash_count 0: none), this boot's reset reason (P3_RST_SRC bits 0..7: 0 power-on, 2
               # watchdog, 6 soft; the core reset as bit 8) and the breadcrumb the last reset left (BOOT_STAGE)
               "crash_count", "crash_vec", "crash_pc", "crash_rets", "crash_emu", "crash_dbg", "crash_uptime_ms",
-              "boot_reset", "boot_stage"]
+              "boot_reset", "boot_stage",
+              # the voices the overload shed dropped since power-on (audio.c shed_voice: two halves in a row over
+              # 85 % of the 2902 us; the console's voices_shed): the rule is 0
+              "voices_shed"]
 C1_BAR = ["none", "after a crash beside core 1", "after a hang (watchdog) while core 1 ran", "core 1 gave up"]
 PEAK_HEX = ("irq_gap_pc", "crash_vec", "crash_pc", "crash_rets", "crash_emu", "crash_dbg", "boot_reset")
 BOOT_STAGE = {0: "none", 1: "loop: input", 2: "loop: draw", 9: "loop: idle", 10: "guard", 11: "flash probe",

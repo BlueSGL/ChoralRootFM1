@@ -246,7 +246,12 @@ delay in the memory that is there.
 
 **Memory at the full rate.** A second a side is 176 KB; the pool has 131 KB for the delay with 17.7 KB left free, so
 the line is 32768 samples: **0.743 s a side** (a 1/4 at 81 BPM and up; a division longer than the line plays at half).
-The owner accepted "or lower if need be". At half rate the same memory is 1.49 s.
+The owner accepted "or lower if need be". At half rate the same memory is 1.49 s. **Since 2026-10-14 the line
+follows the rate** (`XD_N` = 32768 / `CR_FX_DELAY_DS`): `CR_FX_DELAY_DS=2 ./build.sh` keeps 0.743 s in half the
+samples and gives 65 KB of POOL back (the owner: "I'd try storing the delay at half rate, but I might not like the
+sound, so it should be easy to go back": it is a build, `build/choralroot-delayhalf.fwsc`, and the release build is
+the way back); `XD_N=32768 CR_FX_DELAY_DS=2` is the 1.49 s line in the same memory. What the half rate costs the
+sound: the repeats lose what is above 11 kHz, as the reverb does (the half-band filters, "The rates" above).
 
 ### What the unit says, and the formula
 

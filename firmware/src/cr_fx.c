@@ -132,10 +132,15 @@ _Static_assert(CTL == 32, "cr_fx.c: a block is 32 samples (the ramps' shifts)");
 #define XF_NH (CTL / 2u)                  /* a block at the half rate */
 #define XF_IN 1u                          /* the lines' scale: the send >> 1 (xd_sat's comment) */
 
-#define XD_N 32768u                       /* a delay line, samples (int16): 0.743 s at 44.1 kHz */
+#ifndef XD_N
+#define XD_N (32768u / CR_FX_DELAY_DS)    /* a delay line, samples (int16): 0.743 s at 44.1 kHz; at the half rate
+                                           * (CR_FX_DELAY_DS 2) half the samples for the same 0.743 s, 65 KB of POOL
+                                           * back (XD_N=32768 with it: 1.49 s in the same memory) */
+#endif
 #define XD_M (XD_N - 1u)
-#define XD_MAX (XD_N - 128u)              /* the longest time: the wow's swing (<= 89 samples) and the interpolator's
-                                           * points above it */
+#define XD_MAX (XD_N - 128u / CR_FX_DELAY_DS)   /* the longest time: the wow's swing (<= 89 samples at 44.1 kHz: a
+                                           * time, so half as many at the half rate) and the interpolator's points
+                                           * above it */
 #define XD_MS_MAX (XD_MAX * 1000u / XD_FS > 1000u ? 1000u : XD_MAX * 1000u / XD_FS)   /* 740 ms (half rate: 1000) */
 
 static void xf_defaults(void)
