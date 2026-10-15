@@ -125,7 +125,10 @@ none and keep the title rules:
   matrix's: PITCH CUT SHP AMP PAN the sends RATE VIB E1..E8). An unset slot reads its default, `AMP auto` /
   `CUT auto` (what Key Touch Dynamic / Velocity + Aftertouch does for a sound that routes nothing); KNOB 2 or 3
   turned on it takes the default (DST AMP amount 63; DST CUT amount by Aftertouch Sens) and then the turn, and
-  DST `OFF` switches that default off for the sound. MIDI velocity and aftertouch reach the same sources.
+  DST `OFF` switches that default off for the sound. MIDI velocity and aftertouch reach the same sources. The
+  amounts read as numbers, -64 .. +63 (not the percentage the platform's bipolar amounts show elsewhere), so a
+  detent reads as one; they step as every value does (§ "Knob acceleration and OPT snap": one unit a slow detent,
+  up to six a quick one).
 - a cell's label, value names and range come from `deep->desc(t, page, col)` when the engine gives one (the VA's
   mode-dependent WAVE / SHAPE: MORPH, NOISE, COLOR, DENS), else from the page's column; the stack's heading over a
   WAVE column stays `Wave` whatever the modes.

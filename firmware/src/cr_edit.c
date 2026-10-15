@@ -702,6 +702,12 @@ static void ce_text(const track_t *t, ce_ref_t r, const param_desc_t *d, int32_t
         cu_send_text(v, out, n);
         return;
     }
+    if (r.k == CE_R_TRK && (r.a == P_MVEL_SRC + 2u || r.a == P_MAT_SRC + 2u)) {   /* the EXPR amounts: the number
+                                                                 * (-64 .. +63), a detent reads as one (the owner,
+                                                                 * 2026-10-15: the percentage moved by one or two) */
+        cu_int(out, v, 1, n);
+        return;
+    }
     param_format(d, v, val, &unit);
     (void)t;                                                    /* (a synced VA LFO's RATE: its descriptor is the
                                                                  * division list, eng_va.c va_desc) */

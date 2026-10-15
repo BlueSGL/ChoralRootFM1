@@ -542,6 +542,17 @@ case "$fl" in *"keyboard view 1"*"right 'Arp'"*) ok "Keyboard view + PERF on + a
 grep '^ui: frame.*device): arp ' "$L" | grep -qv 'device): arp view 0 ' && bad "an arp screen on another view than Chord" ||
     ok "the arp screen only on the Chord view ($(grep -c '^ui: frame.*device): arp view 0 ' "$L") frames), none on the Keyboard view"
 
+echo "Strum's Hold lights LATCH; a LATCH tap turns Hold off (the notes go); the next tap latches as before"
+export EMU_UI_LOG=0
+run cr_strum_hold
+unset EMU_UI_LOG
+L="$OUT/cr_strum_hold.log"
+has '^latch: Strum hold off' "$L" && grep -q '^expect led LFO dim .*: ok' "$L" &&
+    ok "LATCH tapped with Strum's Hold on: Hold off (the trace), the LED back to its idle glow (the engine no longer latching)" ||
+    bad "LATCH with Hold on did not turn Hold off (or the LED stayed lit)"
+[ "$(grep -c '^expect led LFO on .*: ok' "$L")" = 2 ] && ok "the next LATCH tap: the sticky latch as before (the LED lit with Hold off)" ||
+    bad "the second LATCH tap did not latch"
+
 echo "the arp screen: the Chord view's content while an arpeggio plays (the hop), and only then"
 export EMU_UI_LOG=0
 run cr_arp_view
@@ -869,6 +880,16 @@ has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD D
 [ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 39' "$L")" = 2 ] &&
     ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid, one detent one unit" ||
     bad "EXPR on the VA / FM TONE: $(grep -ac '^param: part 0 MOD AMT4' "$L") AMT4 lines"
+run cr_expr_knob
+L="$OUT/cr_expr_knob.log"
+am() { grep -a '^param: part 0 MOD AMT3 ' "$L" | sed -n 's/^param: part 0 MOD AMT3 [0-9]* -> \([0-9]*\) .*/\1/p' | tr '\n' ' '; }
+[ "$(am)" = "62 61 60 59 58 52 46 40 34 33 " ] &&
+    ok "EXPR's amount steps as every value: one unit a slow detent (62 61 60 59), six a quick one (58 then 52 46 40 34), one again after a rest (33): $OUT/cr_expr_knob_slow.ppm" ||
+    bad "EXPR's amount steps: $(am)"
+[ "$(grep -ac '^param: part 0 MOD DST3 ' "$L")" = 3 ] && has '^param: part 0 MOD DST3 6 -> 7 (CHO)$' "$L" &&
+    ok "EXPR's destination: a named choice, one item a quick detent (PAN DIST CHO)" || bad "EXPR's destination: $(grep -a '^param: part 0 MOD DST3' "$L" | tail -1)"
+has '^param: part 0 MOD AMT4 40 -> 39' "$L" && has '^param: part 0 MOD AMT4 39 -> 38' "$L" &&
+    ok "the AT lane's amount the same (40 39 38): $OUT/cr_expr_knob_at.ppm" || bad "EXPR AT amount: $(grep -a '^param: part 0 MOD AMT4' "$L" | tail -1)"
 run cr_editor_map
 L="$OUT/cr_editor_map.log"
 has '^mod: ENV2 -> CUT +12 slot 1$' "$L" && ok "ENV held + KNOB 1 +2 on FILTER: mod: ENV2 -> CUT +12 slot 1 (ENV 2 by default): $OUT/cr_map_hot.ppm" || bad "ENV mapping: $(grep -m1 '^mod:' "$L")"

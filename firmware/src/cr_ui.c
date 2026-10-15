@@ -2793,10 +2793,22 @@ static void cu_tap(uint32_t b)                    /* a button tapped (released b
         cu_trace("bass: %s (sound %u, %s)\n", cs.bass_on ? "on" : "off", (unsigned)cs.bass_sound,
                  CU_BASSMODE[cs.bass_mode & 3u]);
         break;
-    case BT_LATCH:
+    case BT_LATCH: {
+        uint32_t mode = CU_PERF[cs.perf_sel].mode;
+        if (!cs.sticky && cs.perform_on && cs.par[mode][CR_P_HOLD]) {   /* the mode's Hold (Strum's KNOB 4, the arp's)
+                                                   * lit the button: a tap turns Hold off and the held notes go, as a
+                                                   * tap on a lit LATCH does (the owner, 2026-10-15: "you can't control
+                                                   * this using the lock/hold button like you can elsewhere"); the next
+                                                   * tap latches as before */
+            cs.par[mode][CR_P_HOLD] = 0;
+            cr_post(CRE_PARAM, mode, CR_P_HOLD, 0);   /* (cr_engine.c: Hold off releases the latched voices) */
+            cu_trace("latch: %s hold off\n", CU_PERF[cs.perf_sel].short_name);
+            break;
+        }
         cs.sticky ^= 1u;
         cr_post(CRE_STICKY, 0, 0, cs.sticky);
         break;
+    }
     case BT_OPT:
         if (cu.lock == L_LOOP) {                  /* the PLAY menu: GLO toggles its keys (play / the slots): no
                                                    * Options from here; the loop editor: the keys play, nothing */
