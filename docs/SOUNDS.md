@@ -573,11 +573,14 @@ RESET, a version-1 sound's filter type re-saved on OS 1.44 (it shows its OS 1.44
 ChoralRoot 0.22 keeps the user sounds in **128 slots shared by every engine** (docs/PRESETS.md "The pool"). Over the
 backup protocol they are **objects 50..62**, the pool's 13 banks: 3840 bytes each (size 0: a bank never written), ten
 slots of 384 bytes: the 192-byte record, at 192 the patch's engine + 1 (0: no patch), at 193 its length, the patch from
-196 (VA 110, FM6 128, CZ-1 144, FM TONE 80, P5 138). A slot's patch kind comes from the slot itself (`va`, `fm6`, `cz`,
-`quad`, `p5`), not from a store. The clients (`web/fm1sounds.js`, `tools/fm1_install.py`) see which an FM-1 has from its
-LIST: ids 50..62 (0.22: 128 slots, labels U001..U128) or the legacy ids 6, 7, 9..13, 22 (0.21 and before: 32 slots,
-U01..U32, unchanged). An edit writes the banks it changed (one for a slot; a swap two). A sound file is the same
-format either way (version 1; a P5 sound carries `"patch": {"kind": "p5"}`); a P5 sound cannot go to a 0.21 FM-1.
+196 (VA 110, FM6 128, CZ-1 144, FM TONE 96 or an older slot's 80, as 0.21's sounds migrated, P5 138). A slot's patch
+kind comes from the slot itself (`va`, `fm6`, `cz`, `quad`, `p5`), not from a store. A bank's commit checks each used
+slot (a valid record; no patch, or an engine's patch of that engine's length: rc 2 else, nothing written) and writes
+every other slot empty, 384 zeros, whatever was sent (3y78); a Delete sends the slot so, a placed sound starts from it.
+The clients (`web/fm1sounds.js`, `tools/fm1_install.py`) see which an FM-1 has from its LIST: ids 50..62 (0.22: 128
+slots, labels U001..U128) or the legacy ids 6, 7, 9..13, 22 (0.21 and before: 32 slots, U01..U32, unchanged). An
+edit writes the banks it changed (one for a slot; a swap two). A sound file is the same format either way (version 1;
+a P5 sound carries `"patch": {"kind": "p5"}`); a P5 sound cannot go to a 0.21 FM-1.
 `--sounds`, `--export-sound` / `--import-sound`, `--rename-sound`, `--delete-sound` take slots 1..128 (a slot past the
 FM-1's own is a usage error); `--favorites` / `--restore-favorites` name user slots `U05` .. `U128` (section 0x81 for
 33..128). The device manager's **Import the 0.21 slots** sends 80 IMPORT (-> rc, count): the FM-1 copies its legacy

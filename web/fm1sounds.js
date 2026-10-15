@@ -332,6 +332,9 @@ function sndPutRecord(m, slot, rec) {   // rec null: the record zeroed (an empty
   if (rec) b.set(rec, sndRecOff(slot)); else b.fill(0, sndRecOff(slot), sndRecOff(slot) + SND_REC);
   m.set(id, b);
 }
+// the pool: the slot's 384 bytes zeroed, an empty slot as the FM-1 writes one (upool_put): a Delete sends the slot so,
+// and a sound placed starts from it, so no byte of the slot's last sound (a patch header of no kind here) stays (3y78)
+const sndClearSlot = (m, slot) => { if (m.pool) sndPutRecord(m, slot, null); };
 function sndResult(before, m) {
   const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
   const ids = (m.pool ? POOL_IDS : [9, 10, 11, 12, 13, 22, 6, 7]).filter((id) => !same(before.get(id), m.get(id)));
@@ -353,6 +356,7 @@ export function importSound(objs, slot, sound) {
   const kind = patchKindOf(rec[2]);
   if (sound.patch && (!kind || sound.patch.length !== PATCH_SIZE[kind])) throw new Error("The patch is not of the sound's engine");
   const notes = [];
+  sndClearSlot(m, slot);
   for (const k of SND_KINDS) sndPutBlob(m, k, slot, k === kind && sound.patch ? sound.patch : null, notes);
   sndPutRecord(m, slot, rec);
   return { ...sndResult(before, m), notes };
@@ -371,7 +375,7 @@ export function deleteSound(objs, slot) {
   sndCheckSlot(slot);
   const before = sndMap(objs), m = sndCopy(before);
   for (const k of SND_KINDS) sndPutBlob(m, k, slot, null);
-  sndPutRecord(m, slot, null);
+  sndPutRecord(m, slot, null);                   // (the pool: the whole slot, 384 zeros)
   return sndResult(before, m);
 }
 
@@ -718,6 +722,7 @@ export function swapSounds(objs, a, b) {
     for (const i of [SND_BIND_NOTE, SND_BIND_FLAGS]) { const t = A.rec[i]; A.rec[i] = B.rec[i]; B.rec[i] = t; }
   }
   const put = (slot, S) => {
+    sndClearSlot(m, slot);
     for (const k of SND_KINDS) sndPutBlob(m, k, slot, S && k === S.kind && S.blob ? S.blob : null);
     sndPutRecord(m, slot, S ? S.rec : null);
   };

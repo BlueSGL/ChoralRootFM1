@@ -557,6 +557,31 @@ const QUAD_FX_V1 = "UQEBAwMjGgoAP2RkZGQAUBhIAC4ALAABAQEAAQFkACgAQAAofwAAQAAAAH8A
      "pool: swap U033 / U100: each with its own patch, two banks");
   const r4 = deleteSound(r3.objs, 100);
   ok(!parseSoundObjects(r4.objs).slots[99].used && r4.objs.get(59).subarray(9 * 384, 10 * 384).every((x) => !x), "pool: delete U100: the slot zeroed");
+  { // 3y78, the owner's unit (0.22-beta1: "The FM-1 refused the user sounds 011-020 (rc 2)"): U011..U020 FM TONE sounds
+    // migrated from 0.21, each patch the 80-byte version 3 (header 16 / 80). A Delete sends that bank alone, the deleted
+    // slot whole empty (384 zeros, as the FM-1 writes one), the other nine as read; a sound placed or swapped into a
+    // slot starts from an empty slot (a patch header of no kind left there is not kept)
+    const q3 = Uint8Array.from(Buffer.from(QUAD_FX, "base64")), bk = new Uint8Array(3840);
+    for (let j = 0; j < 10; j++) {
+      bk.set(rec(15, `TONE ${j + 11}`, { seed: j }), j * 384);
+      bk[j * 384 + 192] = 16; bk[j * 384 + 193] = 80; bk.set(q3, j * 384 + 196);
+    }
+    const at51 = (b) => new Map(POOL_IDS.map((id) => [id, id === 51 ? b : new Uint8Array(0)]));
+    const d = deleteSound(at51(bk), 15), db = d.changed.length === 1 && d.changed[0].id === 51 ? d.changed[0].bytes : null;
+    ok(parseSoundObjects(at51(bk)).slots.slice(10, 20).every((x) => x.used && x.patch === "quad") && db &&
+       db.subarray(4 * 384, 5 * 384).every((x) => !x) && same(db.subarray(0, 4 * 384), bk.subarray(0, 4 * 384)) &&
+       same(db.subarray(5 * 384), bk.subarray(5 * 384)) && !parseSoundObjects(d.objs).slots[14].used,
+       "pool (3y78): delete U015 among 80-byte FM TONE slots: bank 51 alone, U015 384 zeros, the other nine as read");
+    const st = bk.slice(), wheel = rec(7, "WHEEL", { seed: 3 });
+    st[5 * 384 + 192] = 9; st[5 * 384 + 193] = 33;                       // U016: a patch header of no kind (GRAIN's)
+    st.set(wheel, 6 * 384); st.fill(0, 6 * 384 + 192, 7 * 384);           // U017: a WHEEL sound (no patch)
+    const pl = importSound(at51(st), 16, { record: wheel, name: "WHEEL" }).objs.get(51);
+    const sw = swapSounds(at51(st), 16, 17).objs.get(51);
+    ok(same(pl.subarray(5 * 384, 5 * 384 + 192), wheel) && pl.subarray(5 * 384 + 192, 6 * 384).every((x) => !x) &&
+       same(sw.subarray(5 * 384, 5 * 384 + 192), wheel) && sw.subarray(5 * 384 + 192, 6 * 384).every((x) => !x) &&
+       sw[6 * 384 + 2] === 15 && sw.subarray(6 * 384 + 192, 7 * 384).every((x) => !x),
+       "pool (3y78): a sound placed / swapped into a slot starts from an empty slot (a stale header of no kind gone)");
+  }
   let threw = 0;
   try { importSound(blank, 129, { record: rec(13, "X"), name: "X" }); } catch (e) { threw = /1\.\.128/.test(e.message); }
   ok(threw, "pool: slot 129 refused (1..128)");

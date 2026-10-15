@@ -15,7 +15,9 @@
  * defaults, the banks and the FM6 bank as they are (Felucca 1.0's 27-slot FM6 bank too, imported at the next boot),
  * ids 0 / 2..5 / 32..34 refused, the SMP_* commands unanswered; the Sounds (docs/SOUNDS.md): single slots imported,
  * renamed, deleted and replaced by another engine through whole-object PUTs, usable at once (name, engine, patch), a
- * bad blob / bank header refused with nothing written, LIST's sizes and CRCs; SCREEN (74: off / on); SELECT (76: ok, a bad
+ * bad blob / bank header refused with nothing written, LIST's sizes and CRCs; a pool bank as the device manager sends
+ * one (3y78: a used FM TONE slot's 80-byte patch taken and loaded, a deleted slot's stale bytes written as zeros, a
+ * wrong patch length refused); SCREEN (74: off / on); SELECT (76: ok, a bad
  * part / engine / position, busy) and the reload of a playing part after a PUT of its slot (its patch CRC); RESTART. */
 #include <os/lock.h>
 #include <pthread.h>
@@ -759,6 +761,64 @@ int main(void)
                   quad_store_get(6, out) == 0 && !memcmp(out, qb, QUAD_BLOB), "sounds: QUAD: a bad blob / a wrong size refused, the patch kept");
             CHECK(t_list() == 0 && !find(man, nman, 22) && find(man, nman, 50)->size == ST_PAYLOAD_MAX,
                   "sounds: LIST: the QUAD store went into the pool (bank 1, id 50), not to its own object");
+        }
+        /* d3 (3y78): a pool bank PUT as the device manager sends one (the owner's unit, 0.22-beta1: "The FM-1 refused
+         * the user sounds 011-020 (rc 2)" on a Delete): the bank as read, with an FM TONE slot migrated from 0.21 (an
+         * 80-byte version-3 patch) among its slots, and a deleted slot that still holds its bytes. The check is
+         * up_patch_get's: a used slot's patch header names its length (FM TONE: 96, or the older 80), an unused slot is
+         * not read and is written empty (zeros, as upool_put erases one) */
+        {
+            static uint8_t pb[SP_PER * SP_SLOT], got[SP_PER * SP_SLOT], bad3[SP_PER * SP_SLOT], z[SP_SLOT];
+            uint8_t qb2[QUAD_BLOB], lb[QUAD_BLOB];
+            int16_t lp[QP_NP], wp[QP_NP];
+            uint32_t erases, pos, ok = 1, off;
+            qb_v3(qb2);
+            for (i = 0; i < QP_NP; i += 3u)
+                qb2[2 + i] = 0;                      /* (another version-3 patch than the init: each third value its min) */
+            ok &= quad_blob_ok(qb2) && quad_unpack(qb2, wp) && t_list() == 0 && find(man, nman, 50)->size == sizeof pb;
+            for (off = 0; ok && off < sizeof pb; off += 256u)
+                ok &= t_get(50, off, 256u, pb + off) == 0;
+            ok &= pb[6 * SP_SLOT] == UP_USED && pb[6 * SP_SLOT + UPP_HDR] == ENGI_QUAD + 1u &&
+                  pb[6 * SP_SLOT + UPP_HDR + 1] == QUAD_BLOB_V3 && pb[4 * SP_SLOT + UPP_HDR + 1] == VA_BLOB;
+            CHECK(ok, "sounds: d3: bank 1 read: U07 FM TONE with an 80-byte patch, U05 VA");
+            memset(pb + 6 * SP_SLOT + UPP_DATA, 0, SP_SLOT - UPP_DATA);
+            memcpy(pb + 6 * SP_SLOT + UPP_DATA, qb2, QUAD_BLOB_V3);   /* U07: a used FM TONE slot, an 80-byte v3 patch */
+            memcpy(pb + 8 * SP_SLOT, pb + 6 * SP_SLOT, SP_SLOT);
+            pb[8 * SP_SLOT] = 0;                     /* U09: deleted, its record and its 16 / 80 patch header left */
+            memset(pb + 9 * SP_SLOT, 0x5A, SP_SLOT); /* U10: not used, any bytes (its "header" 0x5A 0x5A) */
+            memset(z, 0, sizeof z);
+            CHECK(t_put(50, pb, sizeof pb) == 0, "sounds: d3: a bank with a deleted slot's stale FM TONE header and a used "
+                                                 "FM TONE slot of 80 bytes: accepted (rc 0)");
+            ok = up_used(6) && up_used(4) && !up_used(8) && !up_used(9) && t_list() == 0 &&
+                 find(man, nman, 50)->size == sizeof got;
+            for (off = 0; ok && off < sizeof got; off += 256u)
+                ok &= t_get(50, off, 256u, got + off) == 0;
+            CHECK(ok && !memcmp(got + 8 * SP_SLOT, z, SP_SLOT) && !memcmp(got + 9 * SP_SLOT, z, SP_SLOT) &&
+                  !memcmp(got + 6 * SP_SLOT, pb + 6 * SP_SLOT, SP_SLOT) && !memcmp(got + 4 * SP_SLOT, pb + 4 * SP_SLOT, SP_SLOT),
+                  "sounds: d3: U09 and U10 read back empty (384 zeros), U07 and U05 as sent");
+            memset(lb, 0, sizeof lb);
+            CHECK(quad_store_read && quad_store_read(6, lb) == 0 && !memcmp(lb, qb2, QUAD_BLOB) && quad_unpack(lb, lp) &&
+                  !memcmp(lp, wp, sizeof lp), "sounds: d3: U07's 80-byte patch loads (the version-3 values converted)");
+            pos = pool_pos_slot(ENGI_QUAD, 6);
+            t_begin(76); t_b(0); t_b(ENGI_QUAD); t_b(pos);
+            a = t_send(&n);
+            CHECK(pos && a && n == 1 && a[0] == 0 && trk[CR_PART_CHORD].eng_req == ENGI_QUAD && psnd[0].kind == PK_USER &&
+                  psnd[0].slot == 6 && !memcmp(quad_patch[CR_PART_CHORD], wp, sizeof wp),
+                  "sounds: d3: SELECT chord FM TONE U07: the part plays its patch");
+            erases = sp_erases + sp_progs;
+            memcpy(bad3, pb, sizeof pb);
+            bad3[6 * SP_SLOT + UPP_HDR + 1] = QUAD_BLOB_V3 + 1u;   /* U07 (FM TONE): 81, neither 96 nor 80 */
+            ok = t_put(50, bad3, sizeof bad3) == 2;
+            memcpy(bad3, pb, sizeof pb);
+            bad3[4 * SP_SLOT + UPP_HDR + 1] = QUAD_BLOB_V3;        /* U05 (VA): 80, FM TONE's older length, not the VA's */
+            ok &= t_put(50, bad3, sizeof bad3) == 2;
+            memcpy(bad3, pb, sizeof pb);
+            bad3[6 * SP_SLOT + UPP_HDR] = NENGINES + 1u;            /* U07: a patch of no engine */
+            ok &= t_put(50, bad3, sizeof bad3) == 2;
+            memset(lb, 0, sizeof lb);
+            CHECK(ok && sp_erases + sp_progs == erases && up_used(6) && quad_store_read(6, lb) == 0 && !memcmp(lb, qb2, QUAD_BLOB),
+                  "sounds: d3: a used slot's patch of a wrong length for its engine (FM TONE 81, VA 80) or of no engine: "
+                  "rc 2, nothing written");
         }
         /* e: refusals */
         memcpy(&bad_v, &vs, sizeof vs);

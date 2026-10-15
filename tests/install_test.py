@@ -1433,6 +1433,26 @@ def bindings():
     ok(rec[175] == 0xA6 and rec[191] == 0 and I.sound_record_valid(rec) and
        I.sound_bindings([rec]) == [None], "binding: a .syx import's record: the mark, bound to nothing (added)")
     ok("added" in I.__doc__ and "over FM6 02 FM BELL" in I.__doc__, "binding: --help says what --sounds shows")
+    # 3y78 (0.22, the pool): U011..U020 FM TONE sounds migrated from 0.21 (an 80-byte version-3 patch, header 16 / 80).
+    # --delete-sound U015 writes that bank alone, U015 384 zeros, the other nine as read; a sound imported into a slot
+    # starts from an empty slot (a patch header of no kind left there is not kept)
+    bk = bytearray(I.POOL_BANK)
+    for j in range(10):
+        o = j * I.POOL_SLOT
+        bk[o:o + I.SOUND_REC] = sound_rec(15, f"TONE {j + 11}", seed=j)
+        bk[o + I.POOL_HDR], bk[o + I.POOL_HDR + 1] = 16, 80
+        bk[o + I.POOL_DATA:o + I.POOL_DATA + 80] = bytes([0x51, 3]) + bytes(78)
+    at51 = lambda b: {i: (bytes(b) if i == 51 else b"") for i in I.POOL_IDS}
+    ch = I.delete_sound(at51(bk), 15)
+    db = ch[0][1] if [i for i, _ in ch] == [51] else b""
+    ok(db[4 * 384:5 * 384] == bytes(384) and db[:4 * 384] == bk[:4 * 384] and db[5 * 384:] == bk[5 * 384:],
+       "pool (3y78): delete U015 among 80-byte FM TONE slots: bank 51 alone, U015 384 zeros, the other nine as read")
+    bk[5 * 384 + I.POOL_HDR], bk[5 * 384 + I.POOL_HDR + 1] = 9, 33   # U016: a patch header of no kind (GRAIN's)
+    wheel = sound_rec(7, "WHEEL", seed=3)
+    ch = I.import_sound(at51(bk), 16, (wheel, "WHEEL", 7, None))
+    pb = ch[0][1] if [i for i, _ in ch] == [51] else b""
+    ok(pb[5 * 384:5 * 384 + 192] == wheel and pb[5 * 384 + 192:6 * 384] == bytes(192),
+       "pool (3y78): a sound imported into a slot starts from an empty slot (a stale header of no kind gone)")
 
 
 # ------------------------------------------------ MIDI calls that never return ---

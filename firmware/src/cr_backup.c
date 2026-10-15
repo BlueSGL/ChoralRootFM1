@@ -553,23 +553,34 @@ static uint32_t crb_legacy(uint32_t id, uint32_t len)
     return 0;
 }
 static const uint8_t *crb_bank_src;
-static int crb_bank_fill(uint32_t j, uint8_t *slot)  /* a pool bank's PUT: its slots as sent (0: empty) */
+/* a pool bank's PUT (0: empty): its used slots as sent, every other slot written empty (zeros, as upool_put erases
+ * one), so a deleted slot's bytes (the device manager sends the bank as read) never stay in flash (3y78) */
+static int crb_bank_fill(uint32_t j, uint8_t *slot)
 {
-    if (crb_bank_src)
-        memcpy(slot, crb_bank_src + j * SP_SLOT, SP_SLOT);
+    const uint8_t *s = crb_bank_src ? crb_bank_src + j * SP_SLOT : 0;
+    if (s && s[0] == UP_USED)
+        memcpy(slot, s, SP_SLOT);
     else
         memset(slot, 0, SP_SLOT);
     return 0;
 }
-static int crb_bank_ok(const uint8_t *raw)          /* each slot empty or a record, its patch header sane */
+/* each slot unused (its bytes not read: crb_bank_fill empties it) or a record whose patch header is one up_patch_get
+ * takes: none, or an engine's with that engine's length (FM TONE: also an older slot's 80-byte version 1..3 blob,
+ * which eng_quad.c converts; 3y78: 0.22-beta1 refused a bank holding one, the slots 0.21's FM TONE sounds migrated to) */
+static int crb_bank_ok(const uint8_t *raw)
 {
-    uint32_t j;
+    uint32_t j, e, n;
     for (j = 0; j < SP_PER; j++) {
         const uint8_t *s = raw + j * SP_SLOT;
-        if (s[0] == UP_USED && !up_valid((const up_rec_t *)s))
+        if (s[0] != UP_USED)
+            continue;
+        if (!up_valid((const up_rec_t *)s))
             return 0;
-        if (s[UPP_HDR] && (s[UPP_HDR] - 1u >= NENGINES || s[UPP_HDR + 1u] != up_patch_len(s[UPP_HDR] - 1u) ||
-                           !s[UPP_HDR + 1u]))
+        if (!s[UPP_HDR])
+            continue;
+        e = s[UPP_HDR] - 1u;
+        n = s[UPP_HDR + 1u];
+        if (e >= NENGINES || !n || (n != up_patch_len(e) && !(e == ENGI_QUAD && n == QUAD_BLOB_V3)))
             return 0;
     }
     return 1;

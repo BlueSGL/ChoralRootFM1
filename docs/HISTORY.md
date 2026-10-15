@@ -3287,3 +3287,18 @@ site_test, test_installer; the browser emulator built as 0.22-beta1, test_web_em
 RAM 77 588 (78.9 %), POOL 238 936 (69.4 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the single-core package XIP 533 260
 (93.0 %), RAM 74 468 (75.8 %), POOL 238 808 (69.4 %), RAMTEXT 7 072. XIP is the tight one (37 KB free). Stub version 3,
 sha256 baee55ed142fe1cc. **Not done**: anything on a unit (every branch's own list stands); tagging and the Pages job.
+
+## 2026-10-15 (the device manager's Delete refused on the unit)
+
+3y78. **A pool bank with 0.21's FM TONE sounds is taken again (2026-10-15; branch int-1, not pushed, not flashed).** The
+owner's unit on 0.22-beta1: a Delete in U011..U020 answered "The FM-1 refused the user sounds 011-020 (rc 2)". Those
+slots hold 0.21's FM TONE sounds as migrated, 80-byte version-3 patches that `upool.c up_patch_get` loads, but
+`cr_backup.c crb_bank_ok` took only today's 96 and checked every slot's header, used or not, so no PUT of that bank
+passed. Now a used slot's header is checked as `up_patch_get` reads it (FM TONE 96 or 80, else rc 2) and an unused slot
+is not read and is written as 384 zeros (`crb_bank_fill`). The clients already sent a deleted slot whole empty (not just
+its used byte); a placed or swapped sound now starts from an empty slot too (`fm1sounds.js`, `fm1_install.py`). Tests:
+cr_backup_test d3 (a deleted slot's stale 16 / 80 header and junk: rc 0, read back empty; a used 80-byte FM TONE slot
+loads and SELECT plays it; FM TONE 81, VA 80, no engine: rc 2, nothing written), test_sounds and install_test (the
+owner's bank). `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 997 ok); `./build.sh --release
+0.22-beta1` twice identical: `choralroot-0.22-beta1.fwsc` be9f497bb32e8090..., `-1core` 7b98e2eabc9e653f... (in
+`web/releases.json`); releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1`, site_test, test_installer pass.

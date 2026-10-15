@@ -2029,6 +2029,8 @@ def import_sound(objs, slot, sound):
     the other kinds' blobs of that slot are cleared (as the FM-1 does when a sound is saved)."""
     rec, _name, _engine, patch = sound
     new = dict(objs)
+    if is_pool(new):                               # (the pool: from an empty slot, no byte of the last sound kept)
+        _set_record(new, slot, bytes(SOUND_REC))
     for kind in PATCH_KINDS:
         _set_blob(new, kind, slot, patch[1] if patch and patch[0] == kind else None)
     _set_record(new, slot, rec)
@@ -2048,6 +2050,7 @@ def rename_sound(objs, slot, name):
 
 
 def delete_sound(objs, slot):
+    """the pool: the whole slot sent empty (384 zeros, as the FM-1 writes one), the bank's other slots as read"""
     new = dict(objs)
     for kind in PATCH_KINDS:
         _set_blob(new, kind, slot, None)
