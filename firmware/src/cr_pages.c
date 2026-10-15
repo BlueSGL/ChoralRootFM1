@@ -69,26 +69,43 @@ static const struct { uint16_t ms; uint8_t share; } KN_CURVE[] = {
 static struct {
     uint32_t t[8];                        /* each knob role's last detent (fm1_ms; 0: none yet) */
     int8_t dir[8];                        /* .. its direction */
+    uint8_t run[8];                       /* .. detents since the turn began (a rest or a reversal starts one) */
+    uint8_t first;                        /* of the detents being handled, how many begin a turn (the finest step) */
     uint8_t share;                        /* the detent being handled: KN_CURVE's share */
     uint8_t snap;                         /* .. OPT held (cr_ui.c cu_shift) */
 } kn;
-/* a turn of knob role (s detents this frame) at now: its speed for the kn_* below */
+#define KN_FIRST 2u                       /* a turn's first detents count the finest step whatever their speed */
+/* a turn of knob role (s detents this frame) at now: its speed for the kn_* below. A turn's first KN_FIRST detents
+ * are the finest step whatever their timing (the owner, 2026-10-15, on the EXPR amounts: "I cannot move it in small
+ * steps of 1"): on the unit the knob is read once a main-loop pass, and two detents of a hand turn that land in
+ * one editor redraw read as a quick turn (16 ms / 2) and stepped six; so a single nudge, or the first two clicks of
+ * any turn, are always one, and a spin accelerates from its third detent on (kn.first: of a pass's detents, those
+ * that begin the turn; kn_lin steps them one and the rest at the speed's step) */
 static void kn_turn(uint32_t role, int32_t s, uint32_t now, uint32_t snap)
 {
     uint32_t r = role & 7u, n = (uint32_t)(s < 0 ? -s : s), gap = now - kn.t[r], k = 0;
     int8_t dir = (int8_t)(s < 0 ? -1 : 1);
+    int fresh;
     if (!n)
         return;
-    if (n > 1u)
-        gap = 16u / n;                    /* (several detents in one UI frame (16 ms): that quick) */
-    else if (!kn.t[r] || gap > 1000u || dir != kn.dir[r])
-        gap = 1000u;                      /* (the first detent, after a rest, a reversal: slow) */
+    fresh = !kn.t[r] || gap > 1000u || dir != kn.dir[r];   /* the first detent, after a rest, a reversal */
+    if (fresh)
+        kn.run[r] = 0;
+    if (n > 1u)                           /* several detents in one pass: their mean spacing over the pass (a long
+                                           * pass, a redraw or a save, is not a spin; the first pass: a frame, 16 ms) */
+        gap = (fresh ? 16u : gap) / n;
+    else if (fresh)
+        gap = 1000u;                      /* (slow) */
     while (gap < KN_CURVE[k].ms)
         k++;
     kn.share = KN_CURVE[k].share;
+    kn.first = (uint8_t)(kn.run[r] < KN_FIRST ? (n < KN_FIRST - kn.run[r] ? n : KN_FIRST - kn.run[r]) : 0u);
+    kn.run[r] = (uint8_t)(kn.run[r] + n > 255u ? 255u : kn.run[r] + n);
 #ifdef KN_QUICK
-    if (KN_QUICK())                       /* (the emulator: a script's "knobs quick", tools/emu/emu_hooks.h) */
+    if (KN_QUICK()) {                     /* (the emulator: a script's "knobs quick", tools/emu/emu_hooks.h) */
         kn.share = 64;
+        kn.first = 0;
+    }
 #endif
     kn.snap = (uint8_t)(snap != 0);
     kn.t[r] = now ? now : 1u;
@@ -99,7 +116,9 @@ static void kn_turn(uint32_t role, int32_t s, uint32_t now, uint32_t snap)
 static int32_t kn_lin(int32_t v0, int32_t s, int32_t lo, int32_t hi)
 {
     int32_t st = (int32_t)(((hi - lo) * (int32_t)kn.share + 10 * 64) / (20 * 64));
-    return clamp(v0 + s * (st < 1 ? 1 : st), lo, hi);
+    int32_t n = s < 0 ? -s : s, f = (int32_t)kn.first < n ? (int32_t)kn.first : n, d;
+    d = f + (n - f) * (st < 1 ? 1 : st);      /* the turn's first detents one, the rest at the speed's step */
+    return clamp(v0 + (s < 0 ? -d : d), lo, hi);
 }
 /* THE HI-RES HOOK: the stored steps of a whole number (1: none). A hi-res parameter stores 1/100 units (its finest
  * step 0.01, a whole number 100 steps: OPT snaps to whole numbers; LFO speeds to the speed list x 100). Declared by

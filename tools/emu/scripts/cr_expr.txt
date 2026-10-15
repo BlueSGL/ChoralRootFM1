@@ -2,7 +2,8 @@
 # lanes, VEL and AT to a destination by an amount (mod.c's matrix slots 3 and 4). An unset slot reads "AMP auto" /
 # "CUT auto"; KNOB 2 or 3 turned on it takes the default (SRC VEL / AT, DST AMP / CUT, AMT 63 / 40) and then the
 # turn. On FM6 (TINE EP, the power-on sound): MOD (SEQ) tap once past its FUNC screens lands on EXPR; KNOB 3 -2: the
-# VEL amount (the trace "param: part 0 MOD AMT3 63 -> ..."); SELECT +1: the AT lane; KNOB 2 +1: its DST from CUT.
+# VEL amount (the trace "param: part 0 MOD AMT3 63 -> 61": two detents at once, a turn's first two count one); SELECT +1:
+# the AT lane; KNOB 2 +1: its DST from CUT.
 # Then the VA (OPT + PRESETS +2: LUSH PAD; the editor re-enters at MOD, screen 0: one tap to EXPR) and FM TONE (-1 back:
 # MOD screen 1 remembered is its EXPR): the same screen after their own MOD screens, KNOB 3 -1 each.
 wait 600

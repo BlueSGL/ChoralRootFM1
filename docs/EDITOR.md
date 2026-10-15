@@ -315,6 +315,15 @@ every F_ENUM, on / off, a note name, a name list of at most 64 values (FM6's ALG
 a ratio pair (RATIO B), FM TONE's ALGO, the FX layer's divisions / ratio / sync / mode, the PERF row's division,
 direction, pattern, rotate, retrigger and hold, the VA's synced LFO Rate (va-1: the sync list, 42 items).
 
+**A turn's first two detents are always the finest step** (2026-10-15; `kn_turn` `KN_FIRST`, the owner on the EXPR
+amounts: "I cannot move it in small steps of 1"). The unit reads a knob once a main-loop pass, and two detents of a
+hand turn that land in one editor redraw read as a quick turn (16 ms / 2, whatever the pass took) and stepped a
+128-range value by six. So a nudge, or the first two clicks of any turn (after a rest of a second or a reversal), count
+one, a spin accelerates from its third detent on (a flick of three in one pass: one, one, then the speed's step), and
+detents that arrive together count their mean spacing over the pass they arrived in (two in a 38 ms redraw: 19 ms
+apart, quick; two in a 100 ms pass: 50 ms, one unit each); `tools/emu/scripts/cr_expr_knob.txt` times detents like a hand (90 ms), like a spin (20 ms)
+and two in one frame.
+
 **Audited (va-1, 2026-10-14: the owner "acceleration works well some places but not others").** Every value knob of
 the VA's editor (OSC, FILT, ENV, LFO, MOD, the ENV / LFO-held mapping's AMT) and of the common groups (FX: the sends;
 MIX: Level, Pan, Glide, Transpose, Detune; the platform pages) steps through `cp_dstep` / `cu_send_step`, so all
@@ -338,7 +347,7 @@ knob's previous detent picks the step from ONE table (`KN_CURVE`), in 64ths of t
 | 45–59 ms | 8/64 |
 | 34–44 ms | 16/64 |
 | 25–33 ms | 32/64 |
-| < 25 ms, or several detents in one UI frame | the quickest: the range / 20 |
+| < 25 ms | the quickest: the range / 20 (several detents in one pass count their mean spacing over the pass: two in a 38 ms redraw are 19 ms apart, two in a 100 ms save 50) |
 
 So a slow turn is fine, and a quick spin of about a turn (24 detents) crosses the range. Clamped: both ends are
 reached exactly. The emulator's scripts set the timing exactly (their clock is the firmware's): `knob KNOB1 +1`,

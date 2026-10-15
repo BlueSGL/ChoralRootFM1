@@ -871,8 +871,8 @@ awk -v c="$4" -v s="$5" 'BEGIN { exit !(c <= 4.0 && s <= 4.0) }' && ok "UI frame
     || bad "a detent's UI frame: cutoff $4 M, OSC level $5 M (> 4 M)"
 run cr_expr
 L="$OUT/cr_expr.log"
-has '^edit: group MOD screen 3 lane 1 part 0$' "$L" && has '^param: part 0 MOD AMT3 63 -> 51' "$L" &&
-    ok "EXPR on FM6: the MOD group's third screen; KNOB 3 on the unset VEL slot takes its default (AMT 63) then the turn: $OUT/cr_expr_fm6_vel.ppm" ||
+has '^edit: group MOD screen 3 lane 1 part 0$' "$L" && has '^param: part 0 MOD AMT3 63 -> 61' "$L" &&
+    ok "EXPR on FM6: the MOD group's third screen; KNOB 3 on the unset VEL slot takes its default (AMT 63) then the turn (two detents at once: a turn's first two count one): $OUT/cr_expr_fm6_vel.ppm" ||
     bad "EXPR on FM6: $(grep -a '^param: part 0 MOD AMT3' "$L" | head -1)"
 has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD DST4 2 -> 3 (SHP)$' "$L" &&
     ok "SELECT: the AT lane; KNOB 2 takes its default (DST CUT) then steps it to SHP: $OUT/cr_expr_fm6_at.ppm" ||
@@ -883,8 +883,8 @@ has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD D
 run cr_expr_knob
 L="$OUT/cr_expr_knob.log"
 am() { grep -a '^param: part 0 MOD AMT3 ' "$L" | sed -n 's/^param: part 0 MOD AMT3 [0-9]* -> \([0-9]*\) .*/\1/p' | tr '\n' ' '; }
-[ "$(am)" = "62 61 60 59 58 52 46 40 34 33 " ] &&
-    ok "EXPR's amount steps as every value: one unit a slow detent (62 61 60 59), six a quick one (58 then 52 46 40 34), one again after a rest (33): $OUT/cr_expr_knob_slow.ppm" ||
+[ "$(am)" = "62 61 60 59 58 52 46 40 34 33 34 35 41 47 45 44 43 42 " ] &&
+    ok "EXPR's amount steps as every value: one unit a slow detent (62 61 60 59), six a quick one (58 then 52 46 40 34), one after a rest (33); a quick reversal's first two detents one (34 35) then six (41 47); two detents in one frame after a rest one each (45); a hand turn at 90 ms one each (44 43 42): $OUT/cr_expr_knob_slow.ppm" ||
     bad "EXPR's amount steps: $(am)"
 [ "$(grep -ac '^param: part 0 MOD DST3 ' "$L")" = 3 ] && has '^param: part 0 MOD DST3 6 -> 7 (CHO)$' "$L" &&
     ok "EXPR's destination: a named choice, one item a quick detent (PAN DIST CHO)" || bad "EXPR's destination: $(grep -a '^param: part 0 MOD DST3' "$L" | tail -1)"
@@ -1571,12 +1571,12 @@ has '^engine pick: bass CZ-1 (64 presets)' "$BE" && has '^sound: part 1 engine C
     ok "GLO held + ALGORITHM back: VA at the place it had there (01 LUSH PAD)" || bad "GLO + ALGORITHM back: $(bp 1 3)"
 [ "$(bp 0 4)" = "FM TONE / EP 92" ] && [ "$(bp 1 4)" = "VA / LUSH PAD 92" ] && [ "$(grep -ac '^engine pick: FM TONE' "$BE")" = 1 ] &&
     ok "GLO held + PRESETS still changes the chord part's engine alone (FM TONE EP; the bass part VA LUSH PAD)" || bad "GLO + PRESETS: $(bp 0 4) / $(bp 1 4)"
-[ "$(bp 1 5)" = "VA / LUSH PAD 110" ] && [ "$(bp 0 5)" = "FM TONE / EP 92" ] && [ "$(bc 5)" = "1 2 0" ] && has '^bass: level 110 (BASS + ALGORITHM)$' "$BE" &&
-    grep -a '^ui: frame.* meter ' "$BE" | grep -aq "value '110' .*label 'bass level'" &&
-    ok "BASS held + ALGORITHM +3 (three detents in a frame: quick, 6 each): the bass level 92 -> 110 with the 'bass level' meter; no layer, the bass still on (no tap), its engine and sound as they were: $OUT/cr_bass_engine_level.ppm" \
+[ "$(bp 1 5)" = "VA / LUSH PAD 100" ] && [ "$(bp 0 5)" = "FM TONE / EP 92" ] && [ "$(bc 5)" = "1 2 0" ] && has '^bass: level 100 (BASS + ALGORITHM)$' "$BE" &&
+    grep -a '^ui: frame.* meter ' "$BE" | grep -aq "value '100' .*label 'bass level'" &&
+    ok "BASS held + ALGORITHM +3 (three detents in a frame: a turn's first two count one, the third quick, 6): the bass level 92 -> 100 with the 'bass level' meter; no layer, the bass still on (no tap), its engine and sound as they were: $OUT/cr_bass_engine_level.ppm" \
     || bad "BASS + ALGORITHM: $(bp 1 5) cr '$(bc 5)'"
 [ "$(bp 1 6)" = "VA / LUSH PAD 98" ] && [ "$(bc 6)" = "1 2 4" ] && has '^bass: level 98 (BASS + ALGORITHM, layer)$' "$BE" &&
-    ok "BASS held past the hold time (its layer open) + ALGORITHM -2 with BASS still down: the level in the layer (110 -> 98), never the bass sound: $OUT/cr_bass_engine_layer.ppm" \
+    ok "BASS held past the hold time (its layer open) + ALGORITHM -2 with BASS still down: the level in the layer (a reversal: one each, 100 -> 98), never the bass sound: $OUT/cr_bass_engine_layer.ppm" \
     || bad "BASS held past the hold time + ALGORITHM: $(bp 1 6) cr '$(bc 6)'"
 [ "$(bp 1 7)" = "VA / WARM PAD 98" ] && [ "$(bc 7)" = "1 3 4" ] &&
     ok "the BASS layer open, BASS not held: ALGORITHM is the bass sound's as before (02 WARM PAD)" || bad "ALGORITHM in the BASS layer: $(bp 1 7)"

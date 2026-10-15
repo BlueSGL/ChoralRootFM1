@@ -3719,3 +3719,22 @@ check, the tests), docs/releases/0.22.md (a line for the next beta's notes). **C
 emulator comparison PASS (112 ok), gen_layout_test 61, `sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1002 ok,
 test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit (the owner tries
 the next build).
+
+3y93. **A turn's first two detents count one (2026-10-15; the owner, still on the beta1 build: "The Expression knob:
+may have acceleration but I cannot move it in small steps of 1").** The curve itself leaves a 128-range value at one
+unit down to 45 ms between detents (KN_CURVE: two at 34 .. 44, three at 25 .. 33, six under 25), which a hand turn
+does not reach; but the unit reads a knob once a main-loop pass (`cr_ui.c` `fm1_enc_take` in `cr_ui_input`), and two
+detents of a hand turn that land in one editor redraw come as one call with s = 2, which `kn_turn` reads as 16 ms / 2
+= the quickest: six units at once. `cr_pages.c kn_turn`: a turn's first `KN_FIRST` (2) detents are the finest step
+whatever their timing (a turn begins after a rest of a second or a reversal, `kn.run`; `kn.first`: of a pass's
+detents, those that begin the turn, which `kn_lin` steps one and the rest at the speed's step: a flick of three in
+one pass is one, one, six), so a nudge or the first two clicks of any turn are one, and a spin accelerates from its
+third detent on; the emulator's "knobs quick" overrides it as before (`cr_fx_global.txt` says so now: its checks count
+six a detent), and `cr_bass_engine.txt`'s +3 in a frame reads 92 -> 100 (was 110). And detents that arrive in one pass count their mean spacing over it (the time since the previous
+detent / n) instead of 16 ms / n: two in a 38 ms redraw are 19 ms apart (quick), two in a 100 ms pass 50 ms (one unit
+each); the first pass of a turn still takes a frame, 16 ms. The designer-handoff session, asked for the unit's detent
+timing: nothing was measured there, KN_CURVE was chosen by design and judged by feel; a cutoff detent's frame was
+25 .. 38 ms before the 20 MHz LCD, so a moderate turn under load does deliver two detents a pass. `cr_expr_knob.txt` now times detents like a hand (90 ms: one each), like a spin (20 ms: one, one, six,
+six) and two in one frame after a rest (one each); `cr_knob_accel.txt`'s runs are unchanged (their quick runs follow
+slow detents). docs/EDITOR.md 6a. Not flashed: whether the number display (3y90) already reads as one per detent on
+the unit, and whether this rule is what the owner's hand needed, is for the next build on the unit.
