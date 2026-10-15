@@ -44,8 +44,8 @@
             {"id": "b_tri", "type": "led", "x": 184, "y": 48, "w": 40, "h": 32, "param": "OSC B:TRI", "glyph": "triangle"},
             {"id": "b_pulse", "type": "led", "x": 16, "y": 132, "w": 40, "h": 32, "param": "OSC B+:PULSE", "glyph": "square"},
             {"id": "b_pw", "type": "knob", "x": 64, "y": 128, "w": 56, "h": 64, "param": "OSC B+:WIDTH", "label": "PULSE W", "size": 36},
-            {"id": "b_lo", "type": "switch", "x": 120, "y": 128, "w": 56, "h": 44, "param": "OSC B+:LOFREQ", "label": "LO FREQ", "positions": 2, "names": ["OFF", "ON"]},
-            {"id": "b_kb", "type": "switch", "x": 176, "y": 128, "w": 56, "h": 44, "param": "OSC B+:KEYBD", "label": "KEYBOARD", "positions": 2, "names": ["OFF", "ON"]}
+            {"id": "b_lo", "type": "led", "x": 120, "y": 132, "w": 56, "h": 32, "param": "OSC B+:LOFREQ", "label": "LO FREQ"},
+            {"id": "b_kb", "type": "led", "x": 176, "y": 132, "w": 56, "h": 32, "param": "OSC B+:KEYBD", "label": "KEYBOARD"}
           ],
           "lanes": [
             ["b_freq", "b_fine", "b_saw", "b_tri"],
@@ -67,7 +67,7 @@
             {"id": "f_res", "type": "knob", "x": 64, "y": 44, "w": 56, "h": 64, "param": "FILTER:RES", "label": "RESO", "size": 36},
             {"id": "f_env", "type": "knob", "x": 120, "y": 44, "w": 56, "h": 64, "param": "FILTER:FENV", "label": "ENV AMT", "size": 36},
             {"id": "f_kb", "type": "switch", "x": 176, "y": 44, "w": 56, "h": 56, "param": "FILTER:KTRK", "label": "KEYBOARD", "positions": 3},
-            {"id": "f_rev", "type": "switch", "x": 8, "y": 128, "w": 56, "h": 44, "param": "FILTER+:REV", "label": "REV", "positions": 2},
+            {"id": "f_rev", "type": "led", "x": 12, "y": 132, "w": 44, "h": 44, "param": "FILTER+:REV", "label": "REV", "leds": 2},
             {"id": "f_at", "type": "led", "x": 64, "y": 132, "w": 56, "h": 32, "param": "FILTER+:AFTER", "label": "AFTER"}
           ],
           "lanes": [
@@ -130,9 +130,9 @@
             {"id": "l_noise", "type": "knob", "x": 120, "y": 44, "w": 56, "h": 64, "param": "LFO:NOISE", "label": "NOISE", "size": 36},
             {"id": "l_at", "type": "led", "x": 176, "y": 48, "w": 56, "h": 32, "param": "LFO:AFTER", "label": "AFTER"},
             {"id": "fs", "type": "frame", "x": 4, "y": 136, "w": 232, "h": 52, "text": "Shape"},
-            {"id": "l_saw", "type": "led", "x": 32, "y": 148, "w": 40, "h": 32, "param": "LFO+:SAW", "glyph": "saw"},
-            {"id": "l_tri", "type": "led", "x": 100, "y": 148, "w": 40, "h": 32, "param": "LFO+:TRI", "glyph": "triangle"},
-            {"id": "l_sq", "type": "led", "x": 168, "y": 148, "w": 40, "h": 32, "param": "LFO+:SQUARE", "glyph": "square"}
+            {"id": "l_saw", "type": "led", "x": 80, "y": 148, "w": 20, "h": 32, "param": "LFO+:SAW", "glyph": "saw", "pair": "left"},
+            {"id": "l_tri", "type": "led", "x": 100, "y": 148, "w": 20, "h": 32, "param": "LFO+:TRI", "glyph": "triangle", "pair": "right"},
+            {"id": "l_sq", "type": "led", "x": 132, "y": 148, "w": 32, "h": 32, "param": "LFO+:SQUARE", "glyph": "square"}
           ],
           "lanes": [
             ["l_rate", "l_amt", "l_noise", "l_at"],

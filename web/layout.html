@@ -854,6 +854,11 @@ function dInspector() {
   for (const k of ["x", "y", "w", "h"]) host.append(field(k, inp(e[k], (v) => eset((y) => { y[k] = Math.max(0, snap(+v || 0)); }), { type: "number", step: GRID })));
   if (e.type === "switch") host.append(field("Positions", sel(["2", "3"], String(e.positions), (v) => eset((y) => { y.positions = +v; }))));
   if (e.type === "led") host.append(field("Glyph", sel(["", ...Object.keys(LED_GLYPHS)], e.glyph || "", (v) => eset((y) => { y.glyph = v || null; }))));
+  if (e.type === "led") {   // (the p5 style: two LEDs for one parameter of two values; two leds whose caps meet as one)
+    host.append(field("LEDs", sel(["1", "2"], String(e.leds || 1), (v) => eset((y) => {
+      if (v === "2") { y.leds = 2; y.glyph = null; if (ds.design.style === "p5") { y.w = Math.max(y.w, P5_LED2_SIZE[0]); y.h = Math.max(y.h, P5_LED2_SIZE[1]); } } else delete y.leds; }))));
+    host.append(field("Pair", sel(["", "left", "right"], e.pair || "", (v) => eset((y) => { if (v) y.pair = v; else delete y.pair; }))));
+  }
   if (e.type === "glyph") host.append(field("Glyph", sel(GLYPHS.slice(1), e.glyph, (v) => eset((y) => { y.glyph = v; }))));
   if (e.type === "band") host.append(field("Band", sel(BANDS.slice(1), e.band, (v) => eset((y) => { y.band = v; }))));
   if (e.type === "knob") { const st5 = ds.design.style === "p5" ? "p5" : "flat"; host.append(field("Dial size", sel(KNOB_SIZES[st5].map(String), String(knobSize(e, st5)), (v) => eset((y) => { y.size = +v; })))); }

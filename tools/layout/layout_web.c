@@ -1040,7 +1040,8 @@ LAY_EXPORT void lay_draw_text(uint32_t bold, uint32_t px, int32_t x, int32_t y, 
     o->col = (uint8_t)col;
     snprintf(o->s, sizeof o->s, "%s", s ? s : "");
 }
-/* a rectangle: line 0 = filled (r > 0: rounded), else an outline that many px wide (r > 0: its corners quarter arcs) */
+/* a rectangle: line 0 = filled (r > 0: rounded), else an outline that many px wide (r > 0: its corners quarter arcs);
+ * r + 64: the left corners square, r + 128: the right ones (two caps that meet as one) */
 LAY_EXPORT void lay_draw_rect(int32_t x, int32_t y, int32_t w, int32_t h, uint32_t col, uint32_t r, uint32_t line)
 {
     ld_t *o = ld_new(LD_RECT);
@@ -1129,23 +1130,33 @@ LAY_EXPORT void lay_draw_band(uint32_t kind, const uint8_t *wv)
     if (wv)
         memcpy(o->wv, wv, sizeof o->wv);
 }
-/* a rounded outline lw px wide: the sides between the corners, the corners quarter arcs (cr_arc, anti-aliased) */
-static void ld_rline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, int32_t lw, uint16_t c)
+/* lay_draw_rect's r: the radius (bits 0..5), LD_SQL / LD_SQR: the left / right corners square (two caps that meet) */
+#define LD_SQL 0x40u
+#define LD_SQR 0x80u
+/* a rounded outline lw px wide: the sides between the corners, the corners quarter arcs (cr_arc, anti-aliased); sq:
+ * LD_SQL / LD_SQR */
+static void ld_rline(int32_t x, int32_t y, int32_t w, int32_t h, int32_t r, int32_t lw, uint32_t sq, uint16_t c)
 {
-    int32_t rc;
+    int32_t rc, l, rr;
     if (r > w / 2) r = w / 2;
     if (r > h / 2) r = h / 2;
     rc = r * 16 - lw * 8;                          /* the line's middle, Q4 from the corner's centre */
-    cr_fill(x + r, y, w - 2 * r, lw, c);
-    cr_fill(x + r, y + h - lw, w - 2 * r, lw, c);
-    cr_fill(x, y + r, lw, h - 2 * r, c);
-    cr_fill(x + w - lw, y + r, lw, h - 2 * r, c);
+    l = sq & LD_SQL ? 0 : r;
+    rr = sq & LD_SQR ? 0 : r;
+    cr_fill(x + l, y, w - l - rr, lw, c);
+    cr_fill(x + l, y + h - lw, w - l - rr, lw, c);
+    cr_fill(x, y + l, lw, h - 2 * l, c);
+    cr_fill(x + w - lw, y + rr, lw, h - 2 * rr, c);
     if (rc <= 0)
         return;
-    cr_arc((x + r) * 16, (y + r) * 16, rc, lw * 16, 32768u, 16384u, 0, 0, 0, c);
-    cr_arc((x + w - r) * 16, (y + r) * 16, rc, lw * 16, 49152u, 16384u, 0, 0, 0, c);
-    cr_arc((x + w - r) * 16, (y + h - r) * 16, rc, lw * 16, 0u, 16384u, 0, 0, 0, c);
-    cr_arc((x + r) * 16, (y + h - r) * 16, rc, lw * 16, 16384u, 16384u, 0, 0, 0, c);
+    if (l) {
+        cr_arc((x + r) * 16, (y + r) * 16, rc, lw * 16, 32768u, 16384u, 0, 0, 0, c);
+        cr_arc((x + r) * 16, (y + h - r) * 16, rc, lw * 16, 16384u, 16384u, 0, 0, 0, c);
+    }
+    if (rr) {
+        cr_arc((x + w - r) * 16, (y + r) * 16, rc, lw * 16, 49152u, 16384u, 0, 0, 0, c);
+        cr_arc((x + w - r) * 16, (y + h - r) * 16, rc, lw * 16, 0u, 16384u, 0, 0, 0, c);
+    }
 }
 /* the Prophet-5 knob (lay_draw_p5knob), Q4 inside: the angles are CR_G_KNOB's (a0 7:30, 270 degrees clockwise) */
 static void ld_p5knob(const ld_t *o)
@@ -1172,7 +1183,8 @@ static void ld_p5knob(const ld_t *o)
     cr_poly(p, 2u, 32, 0, 0, ptr);
 }
 /* lay_draw_wave: the cycle's points (Q4) inside the box less half the line (1.5 px: 24 Q4, as CR_G_KNOB's pointer is
- * 38 for 2.4 px), drawn by cr_poly */
+ * 38 for 2.4 px), their extent centred in the box (a saw's drop is not at the box's edge: centred, it sits over the
+ * cap's middle), drawn by cr_poly */
 static void ld_wave(const ld_t *o, uint16_t c)
 {
     static const int8_t NOISE[6] = {60, 10, 85, 30, 100, 45};   /* (x %, y %) is i * 20 %, NOISE[i] % down */
@@ -1181,7 +1193,7 @@ static void ld_wave(const ld_t *o, uint16_t c)
     uint32_t np = 0, k;
 #define LD_PT(fx, fy) (p[2 * np] = (int16_t)(x0 + (fx)), p[2 * np + 1] = (int16_t)(y0 + (fy)), np++)
     switch (o->g) {
-    case 0: LD_PT(0, h); LD_PT(w * 7 / 10, 0); LD_PT(w * 7 / 10, h); break;
+    case 0: LD_PT(0, h); LD_PT(w * 8 / 10, 0); LD_PT(w * 8 / 10, h); break;
     case 1: LD_PT(0, h); LD_PT(w / 2, 0); LD_PT(w, h); break;
     case 2: LD_PT(w * 15 / 100, h); LD_PT(w * 15 / 100, 0); LD_PT(w * 85 / 100, 0); LD_PT(w * 85 / 100, h); break;
     case 3:
@@ -1194,6 +1206,19 @@ static void ld_wave(const ld_t *o, uint16_t c)
         break;
     }
 #undef LD_PT
+    {
+        int32_t a = 32767, b = -32768, t = 32767, u = -32768, dx, dy;
+        for (k = 0; k < np; k++) {
+            a = p[2 * k] < a ? p[2 * k] : a; b = p[2 * k] > b ? p[2 * k] : b;
+            t = p[2 * k + 1] < t ? p[2 * k + 1] : t; u = p[2 * k + 1] > u ? p[2 * k + 1] : u;
+        }
+        dx = (2 * x0 + w - a - b) / 2;
+        dy = (2 * y0 + h - t - u) / 2;
+        for (k = 0; k < np; k++) {
+            p[2 * k] = (int16_t)(p[2 * k] + dx);
+            p[2 * k + 1] = (int16_t)(p[2 * k + 1] + dy);
+        }
+    }
     cr_poly(p, np, 24, 0, 0, c);
 }
 static void ld_play(void)
@@ -1218,12 +1243,17 @@ static void ld_play(void)
             break;
         case LD_RECT:
             if (!o->b) {
-                if (o->a)
-                    cv_rrect(o->x, o->y, o->w, o->h, o->a, c, T_BG);
-                else
+                if (o->a & 63u) {
+                    cv_rrect(o->x, o->y, o->w, o->h, o->a & 63u, c, T_BG);
+                    if (o->a & LD_SQL)
+                        cr_fill(o->x, o->y, o->a & 63u, o->h, c);
+                    if (o->a & LD_SQR)
+                        cr_fill(o->x + o->w - (o->a & 63u), o->y, o->a & 63u, o->h, c);
+                } else {
                     cr_fill(o->x, o->y, o->w, o->h, c);
-            } else if (o->a) {
-                ld_rline(o->x, o->y, o->w, o->h, o->a, o->b, c);
+                }
+            } else if (o->a & 63u) {
+                ld_rline(o->x, o->y, o->w, o->h, o->a & 63u, o->b, o->a & (LD_SQL | LD_SQR), c);
             } else {
                 cr_fill(o->x, o->y, o->w, o->b, c);
                 cr_fill(o->x, o->y + o->h - o->b, o->w, o->b, c);

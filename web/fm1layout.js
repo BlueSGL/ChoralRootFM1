@@ -255,6 +255,7 @@ export const ELEMENT_SIZE = { frame: [112, 96], label: [48, 12], knob: [56, 64],
 // titled in the border, knobs with a 0..10 scale, LED buttons, lever switches; docs/LAYOUT-TOOL.md "The p5 style")
 export const STYLES = ["flat", "p5"];
 const P5_SIZE = { knob: [56, 64], switch: [56, 64], led: [40, 32] };
+export const P5_LED2_SIZE = [44, 32];   // a p5 led of two LEDs ("leds": 2)
 // the p5 led's icon: one cycle of its wave (lay_draw_wave's kinds)
 const P5_WAVE = { saw: 0, triangle: 1, square: 2, sine: 3, noise: 4 };
 export const elementSize = (type, style) => (style === "p5" && P5_SIZE[type]) || ELEMENT_SIZE[type];
@@ -403,6 +404,20 @@ export function validateDesign(d, cat) {
         if (["x", "y", "w", "h"].some((k) => Number.isInteger(e[k]) && e[k] % GRID)) warn(`${et}: not on the ${GRID} px grid`);
         if (BINDABLE.has(e.type) && e.param !== null && e.param !== undefined && !pidx.has(e.param)) err(`${et}: no parameter "${e.param}"`);
         if (e.type === "switch" && ![2, 3].includes(e.positions)) err(`${et}: a switch has 2 or 3 positions`);
+        if (e.type === "led" && e.leds !== undefined && ![1, 2].includes(e.leds)) err(`${et}: "leds" is 1 or 2`);
+        if (e.type === "led" && e.leds === 2) {
+          const lp = pidx.get(e.param);
+          if (lp && lp.max - lp.min !== 1) err(`${et}: two LEDs show a parameter of two values (${e.param}: ${lp.min} .. ${lp.max})`);
+          if (e.glyph) err(`${et}: two LEDs have their names above them, no glyph`);
+        }
+        if (e.type === "led" && e.pair !== undefined) {
+          if (e.pair !== "left" && e.pair !== "right") err(`${et}: "pair" is "left" or "right"`);
+          else {
+            const o = s.elements.find((x) => x && x.type === "led" && x.pair === (e.pair === "left" ? "right" : "left") &&
+              x.y === e.y && x.h === e.h && (e.pair === "left" ? e.x + e.w === x.x : x.x + x.w === e.x));
+            if (!o) warn(`${et}: a ${e.pair} half with no ${e.pair === "left" ? "right" : "left"} half touching it (same y and h): its cap stands alone`);
+          }
+        }
         if (e.type === "led" && e.glyph && !LED_GLYPHS[e.glyph]) err(`${et}: led glyph "${e.glyph}" (${Object.keys(LED_GLYPHS).join(", ")})`);
         if (e.type === "glyph" && !GLYPHS.includes(e.glyph)) err(`${et}: glyph "${e.glyph}"`);
         if (e.type === "band" && !BANDS.includes(e.band)) err(`${et}: band "${e.band}"`);
@@ -649,16 +664,32 @@ function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
       return true;
     }
     case "led": {
-      const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM;
-      if (e.glyph && LED_GLYPHS[e.glyph]) ops.push({ op: "wave", kind: P5_WAVE[e.glyph], x: cx - 8, y: e.y, w: 16, h: 10, col: ink });
-      else ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 9, s: lab, col: ink, align: 1, maxw: e.w - 2 });
-      // the cap, 18 x 18 under a 2 px gap: a black window (the LED's) over a 1 px line, the pad under it, the rim
-      const y = e.y + 12;
-      ops.push({ op: "rect", x: cx - 9, y, w: 18, h: 18, col: SURF, r: 2 });
-      ops.push({ op: "rect", x: cx - 8, y: y + 1, w: 16, h: 8, col: COLOURS.black });
-      ops.push({ op: "rect", x: cx - 8, y: y + 9, w: 16, h: 1, col: LINE });
-      ops.push({ op: "rect", x: cx - 9, y, w: 18, h: 18, col: MID, r: 2, line: 1 });
-      ops.push({ op: "disc", cx16: cx * 16, cy16: (y + 5) * 16, r16: on ? 40 : 24, col: on ? RED : DIM });   // lit 5 px, off 3 px
+      const on = p ? val.v > p.min : false, ink = lit ? col : on ? MID : DIM, y = e.y + 12;
+      // the cap under a 2 px gap, 18 high: a black window (the LEDs') over a 1 px line, the pad under it, the rim; sq:
+      // the corners on one side square (lay_draw_rect r + 64 left, + 128 right: a pair's caps meet as one)
+      const cap = (x, w, sq = 0) => {
+        ops.push({ op: "rect", x, y, w, h: 18, col: SURF, r: 2 + sq });
+        ops.push({ op: "rect", x: x + 1, y: y + 1, w: w - 2, h: 8, col: COLOURS.black });
+        ops.push({ op: "rect", x: x + 1, y: y + 9, w: w - 2, h: 1, col: LINE });
+        ops.push({ op: "rect", x, y, w, h: 18, col: MID, r: 2 + sq, line: 1 });
+      };
+      const led = (x, lit5, c) => ops.push({ op: "disc", cx16: x * 16, cy16: (y + 5) * 16, r16: lit5 ? 40 : 24, col: lit5 ? c : DIM });   // lit 5 px, off 3 px
+      if (e.leds === 2) {   // one parameter of two values: a wide cap, two LEDs (min red, max yellow), the names above them
+        const cur = on ? 1 : 0;
+        cap(cx - 15, 30);
+        [cx - 7, cx + 7].forEach((x, i) => {
+          ops.push({ op: "text", bold: 1, px: 9, x, y: e.y + 9, s: switchName(e, p, 2, i).toUpperCase(), col: i === cur ? (lit ? col : MID) : DIM, align: 1 });
+          led(x, i === cur, i ? COLOURS.yellow : RED);
+        });
+        if (e.h >= 44 && lab) ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + 42, s: lab, col, align: 1, maxw: e.w - 2 });
+        return true;
+      }
+      // one LED; a pair's halves sit flush (the left's cap at its cell's right edge, the right's over the shared rim)
+      const cxL = e.pair === "left" ? e.x + e.w - 9 : e.pair === "right" ? e.x + 8 : cx;
+      if (e.glyph && LED_GLYPHS[e.glyph]) ops.push({ op: "wave", kind: P5_WAVE[e.glyph], x: cxL - 8, y: e.y, w: 16, h: 10, col: ink });
+      else ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: e.y + 9, s: lab, col: ink, align: 1, maxw: e.w - 2 });
+      cap(cxL - 9, 18, e.pair === "left" ? 128 : e.pair === "right" ? 64 : 0);
+      led(cxL, on, RED);
       return true;
     }
     case "switch": {

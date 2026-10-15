@@ -142,7 +142,7 @@ turns.
 | `lay_pget(page, col)`, `lay_ptext(page, col)`, `lay_pstep(page, col, n)` | a parameter of the editor's sound by its built-in address (page 255: a part parameter, col its `P_` id): the value, the editor's text, n detents by the editor's step (30 ms pass) |
 | `lay_draw_begin(title, page)` | a new free page under the title line (the sound's name, the page's name) |
 | `lay_draw_text(bold, px, x, y, s, col, align, maxw)` | text on baseline y (align 0 left, 1 centre, 2 right; maxw > 0: cut with an ellipsis) |
-| `lay_draw_rect(x, y, w, h, col, r, line)` | filled (r: rounded) or an outline `line` px wide (r: its corners quarter arcs, `cr_arc`) |
+| `lay_draw_rect(x, y, w, h, col, r, line)` | filled (r: rounded) or an outline `line` px wide (r: its corners quarter arcs, `cr_arc`); r + 64: the left corners square, r + 128: the right ones (a pair's caps) |
 | `lay_draw_glyph(g, x, y, w, h, col, pct, pct2, flags)` | a `CR_G_*` glyph in the box (pct Q8 of 255; `CR_G_LFOWAVE`: the wave in pct2) |
 | `lay_draw_knob(cx, cy, size, col, pct, bip)` | the dial |
 | `lay_draw_p5knob(cx, cy, size, face, rim, tick, ptr, pct, bip, from)` | the p5 style's knob in a size px box: the 0..10 scale (11 ticks over the 270 degrees, `cr_poly`), the face (`cr_disc`, radius size / 2 - 6, a 1 px rim), the pointer from `from` % (0: 30) to 95 % of the face's radius at CR_G_KNOB's angle |
@@ -232,7 +232,18 @@ Designer pages first." `"style": "p5"` composes a free screen's elements as the 
   else `mid` when on and `dim` when off. Under a 2 px gap the cap, 18 x 18 rounded (r 2, `surf`, a 1 px `mid` rim): a
   `black` window band (its top 8 px inside the rim) over a 1 px `line` row, the pad under it, and the LED centred in the
   window: a 5 px `red` disc when on, a 3 px `dim` dot when off. The owner (2026-10-14), with a photo of the buttons:
-  "I'd like the buttons to look more like these and also have simple waveshape designs that match."
+  "I'd like the buttons to look more like these and also have simple waveshape designs that match." The icon's drawn
+  extent (its points' box) is centred over the LED, not its 16 x 10 box (the saw's drop would pull it aside).
+  **Two LEDs** (`"leds": 2`, 44 x 32; only for a parameter of two values, onoff or an enum of two, and no `glyph`):
+  one wide cap (30 x 18) with two LEDs at 1/4 and 3/4 of its window, the left `red` (the minimum), the right `yellow`
+  (the maximum), the current one lit, the other a `dim` dot; the two names (the enum's, else `names`, else OFF / ON),
+  9 px, over their LEDs, the current one in the element's colour; a cell 44 high or more prints the label under the
+  cap. The panel's FILTER REV. **A pair** (`"pair": "left"` / `"right"` on two single leds that touch: the left's x + w
+  is the right's x, the same y and h; `validateDesign` warns otherwise): the left's cap sits at its cell's right edge,
+  the right's over the shared rim, their inner corners square, so they read as one wide cap with two windows, each
+  icon over its own LED: the LFO's saw | triangle button. The inspector has LEDs (1, 2) and Pair selects. The owner:
+  "Good except some buttons don't have the waveform centered, example photo. The prophet also has some buttons with 2
+  LEDS: Filter REV; LFO Shape; Sample And Hold LFO." (P5 has no sample-and-hold LFO parameter: no such button.)
 - **switch**: the label on top, a slot (8 px wide, 12 px a position, rounded `line` outline) with a 6 x 8 lever in the
   element's colour at the current position, the positions' names beside it (the current one in the element's colour).
 - label, bar, glyph and band as flat.
@@ -418,7 +429,9 @@ design, and the per-engine table that says which patch parameter a (page, column
   p5; the p5 panel (`p5-panel.json`) valid with no warning, every screen x lane lint clean and deterministic, no
   parameter twice, all 56 placed, KNOB 1 on each of its 19 free lanes turns its parameter and changes the picture, a
   knob's value text inside its dial, a lit led's dot the firmware's red, a saw led's one-cycle icon drawn over its cap
-  and the cap's window darker than its pad;
+  and the cap's window darker than its pad, every wave icon's ink centred over its LED within 1 px, REV's two LEDs
+  (yellow at 3, red at 1/2), a pair's caps touching; `validateDesign` refuses two LEDs on a 0..127 parameter and warns
+  on a pair that does not touch;
 - the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked, a knob
   turns a dial, **a scripted pointer drag from the element strip adds a knob on the grid**, the export equals the
   model and validates, the contact sheet has today's and the design's tiles, the shipped p5 panel opens in the p5

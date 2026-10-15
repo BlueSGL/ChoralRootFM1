@@ -277,6 +277,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     "a lane naming no element": (d) => { d.groups[0].screens[0].lanes[0][0] = "nothing"; },
     "an element bound to a key": (d) => { d.groups[0].screens[0].elements[1].key = 12; },
     "an unknown style": (d) => { d.style = "x"; },
+    "two LEDs on a 0..127 parameter": (d) => { Object.assign(d.groups[0].screens[0].elements.find((e) => e.type === "led"), { leds: 2, glyph: null, param: "OSC A:FREQ" }); },
   };
   const missed = Object.entries(broken).filter(([, f]) => { const d = free(); f(d); return L.validateDesign(d, cat).errors.length === 0; }).map(([k]) => k);
   ok(!missed.length, `validateDesign catches each of ${Object.keys(broken).length} broken designs` + (missed.length ? ` (missed: ${missed.join(", ")})` : ""));
@@ -423,6 +424,45 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   for (let y = saw.y; y < saw.y + 10; y++) for (let x = scx - 8; x < scx + 8; x++) ink += pix(x, y).join() !== bgp;
   const lum = (c) => c[0] * 0.3 + c[1] * 0.59 + c[2] * 0.11, win = pix(scx - 7, saw.y + 14), pad = pix(scx, saw.y + 25);
   ok(ink >= 10 && lum(win) < lum(pad), `a p5 led's saw icon is drawn over its cap (${ink} px of ink), its window darker than its pad (${win.join(" ")} < ${pad.join(" ")})`);
+  // every wave icon's ink (in its own 16 x 10 box: a pair's icons are neighbours) centred over its LED within a pixel
+  const offc = [];
+  let icons = 0;
+  for (const [gi, si] of [[0, 0], [3, 0]]) {
+    ps.open(gi, si, 0);
+    const r = ps.render(), q = (x, y) => Array.from(r.rgba.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)), b0 = lum(q(0, 239));
+    r.ops.forEach((o, i) => {
+      if (o.op !== "wave" || o.kind > 2) return;
+      const d = r.ops.slice(i).find((x) => x.op === "disc");
+      let x0 = 999, x1 = -1;
+      for (let y = o.y; y < o.y + o.h; y++) for (let x = o.x; x < o.x + o.w; x++) if (lum(q(x, y)) - b0 > 20) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); }
+      icons++;
+      if (!d || Math.abs((x0 + x1 + 1) / 2 - d.cx16 / 16) > 1) offc.push(`${["saw", "triangle", "square"][o.kind]} ink ${x0}..${x1}, LED ${d ? d.cx16 / 16 : "?"}`);
+    });
+  }
+  ok(icons >= 5 && !offc.length, `the p5 leds' wave icons (${icons}: saw, triangle, square) centred over their LEDs within 1 px` + (offc.length ? ` (${offc.join("; ")})` : ""));
+  // two LEDs for one parameter: FILTER+:REV, the left red at 1/2, the right yellow at 3
+  const yel = m.draw("", "", [{ op: "rect", x: 100, y: 100, w: 8, h: 8, col: L.COLOURS.yellow }]).slice((104 * 240 + 104) * 4, (104 * 240 + 104) * 4 + 3).join();
+  const fsc = pan.groups[1].screens[0], rev = fsc.elements.find((x) => x.leds === 2), rp = pidx.get(rev.param), rcx = rev.x + (rev.w >> 1);
+  const rl = fsc.lanes.findIndex((l) => l.includes(rev.id)), rk = fsc.lanes[rl].indexOf(rev.id) + 1;
+  ps.open(1, 0, rl);
+  ps.knob(rk, rp.max - m.pget(rp.page, rp.col));
+  let rr = ps.render().rgba;
+  const ledAt = (rgba, x) => Array.from(rgba.slice(((rev.y + 17) * 240 + x) * 4, ((rev.y + 17) * 240 + x) * 4 + 3)).join();
+  const atMax = [m.ptext(rp.page, rp.col), ledAt(rr, rcx + 7), ledAt(rr, rcx - 7)];
+  ps.knob(rk, -1);
+  rr = ps.render().rgba;
+  const atMin = [m.ptext(rp.page, rp.col), ledAt(rr, rcx - 7), ledAt(rr, rcx + 7)];
+  ok(atMax[1] === yel && atMax[2] !== atMax[1] && atMin[1] === Array.from(red).join() && atMin[2] !== atMin[1],
+     `two LEDs (${rev.id}): at "${atMax[0]}" the right one yellow (${atMax[1]}), at "${atMin[0]}" the left one red (${atMin[1]}), the other off`);
+  // a pair's caps meet as one: the shared rim and the top edge across the seam are drawn, not the background
+  const lsc = pan.groups[3].screens[0], pL = lsc.elements.find((x) => x.pair === "left"), seam = pL.x + pL.w;
+  ps.open(3, 0, 0);
+  const rq = ps.render().rgba, q2 = (x, y) => Array.from(rq.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join(), bgq = q2(0, 239);
+  ok(q2(seam - 1, pL.y + 26) !== bgq && q2(seam - 1, pL.y + 12) !== bgq && q2(seam, pL.y + 12) !== bgq && q2(seam - 2, pL.y + 12) !== bgq,
+     `a pair's two caps touch (${pL.id} | its right half at x ${seam}: the shared rim ${q2(seam - 1, pL.y + 26)}, not the background ${bgq})`);
+  const apart = JSON.parse(JSON.stringify(pan));
+  apart.groups[3].screens[0].elements.find((x) => x.pair === "right").x += 4;
+  ok(L.validateDesign(apart, cat).warnings.some((w) => /half/.test(w)), "validateDesign warns on a pair whose halves do not touch");
   m.unload();
 }
 

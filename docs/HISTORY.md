@@ -3012,7 +3012,16 @@ designs that match." The p5 led is now that button (40 x 32): an 18 x 18 cap wit
 (a 5 px red disc lit, a 3 px dim dot off) over the pad, and above it ONE cycle of its wave as a thin line with no
 baseline (saw, triangle, pulse, sine, noise; `lay_draw_wave` on `cr_poly`, the dot by `lay_draw_disc` on `cr_disc`)
 instead of the firmware's two-cycle glyphs; the panel's leds are 32 high (two frames grew 4 px), still lint clean; a
-test checks the saw icon is drawn and the window is darker than the pad. The device image is byte-identical by construction:
+test checks the saw icon is drawn and the window is darker than the pad. **And once more**: "Good except some buttons don't have the
+waveform centered, example photo. The prophet also has some buttons with 2 LEDS: Filter REV; LFO Shape; Sample And
+Hold LFO." and "OSC B should also use the same button design for Low Freq and Keyboard Tracking." Each icon's drawn
+extent is now centred over its LED (the saw spans 80 % of the box, then is centred); a led may have two LEDs for one
+parameter of two values (`"leds": 2`: one wide cap, red for the minimum, yellow for the maximum, the names over them):
+FILTER's REV, which was a lever; two leds may pair (`"pair"`) into one wide cap with two windows: the LFO's saw |
+triangle beside the single square (`lay_draw_rect`'s r + 64 / + 128 square a cap's inner corners); OSC B's LO FREQ and
+KEYBOARD are buttons now (FILTER's three-position KEYBOARD stays a lever). P5 has no sample-and-hold LFO parameter, so
+no such button. Tests: the icons centred within 1 px, REV yellow at 3 and red at 1/2, the pair's caps touching,
+`validateDesign` refusing two LEDs on a 0..127 parameter and warning on a pair apart. The device image is byte-identical by construction:
 `git diff --stat` shows no file under `firmware/` (tools, web, design and docs only). Not done: the firmware cannot
 draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
 firmware will copy when it gets free pages. Nothing on a unit.
