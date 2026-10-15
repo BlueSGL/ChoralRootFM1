@@ -210,7 +210,8 @@ The package identity becomes `FM-1_920` and the version string `ChoralRoot X.Y`.
 `FELUCCA_VERSION` in `firmware/src/choralroot.c` (the dev tree reads as the next tag, `ChoralRoot 0.17`;
 `./build.sh --release X.Y` passes `-DFELUCCA_VERSION="ChoralRoot X.Y"`); `cr_ui.h`'s `CR_VERSION` is that macro (until
 2026-10-12 a literal of its own, `"ChoralRoot 0.1"`, which Options > Version showed on every build). Shown from it:
-the splash (`cr_ui.c cu_stripes`, `cr_shim.c cr_splash`), Options > Version (`opt_text`), the identity over SysEx
+the splash (`cr_ui.c cu_stripes`, `cr_shim.c cr_splash`), Options > Version (`opt_text`; longer than its 23
+characters, as the single-core beta's 28, without the leading `ChoralRoot `: `cu_version_text`), the identity over SysEx
 (`cr_backup.c CRB_INFO`: `fm1_install.py --info`, the installer, the device manager), the console (`console.c`).
 The emulators build with the same string (`tools/emu/build.sh`, `tools/emu/web/build_web.sh`: choralroot.c's define,
 or `CR_VERSION=X.Y`; `cr_ui.c` refuses to compile without it; `emu_firmware.h` falls back to `"EMU"` for the host

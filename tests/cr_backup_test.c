@@ -262,6 +262,24 @@ int main(void)
     a = t_send(&n);
     CHECK(a && n > 12 && !memcmp(a, "EMU", 4) && a[n - 6] == 0x42 && a[n - 4] == 3 && a[n - 3] == 0x43 && a[n - 1] == 3,
           "INFO: version, no engines, tags 42 01 03 and 43 01 03 (0.22: the sound pool's ids)");
+    {   /* Options > Version (HISTORY 3y64): the value line holds 23 characters (cr_screen.h value[24]); a version
+         * longer drops its leading "ChoralRoot ", one that fits shows whole, one too long even then is cut. INFO
+         * above keeps CR_VERSION whole */
+        char d[sizeof ((cr_screen_t *)0)->value], o[sizeof d];
+        uint32_t ok = sizeof d == 24u;
+        cu_version_text(d, "ChoralRoot 0.22-beta1 1-core", sizeof d);   /* (28: the single-core beta) */
+        ok &= !strcmp(d, "0.22-beta1 1-core");
+        cu_version_text(d, "ChoralRoot 0.22", sizeof d);
+        ok &= !strcmp(d, "ChoralRoot 0.22");
+        cu_version_text(d, "ChoralRoot 0.22-beta1 1", sizeof d);        /* (23: fits exactly) */
+        ok &= !strcmp(d, "ChoralRoot 0.22-beta1 1");
+        cu_version_text(d, "ChoralRoot 0.22-beta12 1-core and more", sizeof d);
+        ok &= !strcmp(d, "0.22-beta12 1-core and ");
+        opt_text(O_VERSION, o, sizeof o);
+        ok &= !strcmp(o, CR_VERSION);
+        CHECK(ok, "Options > Version: 'ChoralRoot 0.22-beta1 1-core' (28) shows '0.22-beta1 1-core', 'ChoralRoot 0.22' "
+                  "and a 23-character one whole, a longer one cut at 23; this build's '%s' as it is", CR_VERSION);
+    }
     t_begin(2); t_b(0); t_b(0);
     CHECK(!t_send(&n), "an editor command (GET 2) gets no reply");
 
