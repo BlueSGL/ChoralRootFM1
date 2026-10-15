@@ -3437,3 +3437,36 @@ the automatic copy; the byte is shared now (its two counts updated). `tools/emu/
 and the three Options entries after Velocity moved every entry from Bass Behaviour on by three: 20 scripts' `SELECT`
 walks, `cr_opt_keys.txt`'s walk (29 entries) and the entry numbers in `test_cr.sh` / `test_persist.sh`, as 3y30 did for
 one. `run_cr_tests.sh`, `run_tests.sh` and `test_cr.sh` all pass.
+
+## 2026-10-15 (the P5 tab and the velocity line integrated)
+
+3y83. **The device manager's P5 tab merged onto main's velocity line (2026-10-15; branch m-2 from origin/main cbda9d6,
+not pushed, not tagged, not flashed).** origin/main (the 0.22-beta1 line, the velocity / aftertouch merge 705a10d, the
+EXPR amount check), then with `--no-ff` p5m-1 7f947a5 (3y80, from eda684f). **The conflict**: HISTORY only (3y80
+first, then the velocity session's 3y81 / 3y82, all kept). The rest merged by itself, read over: `run_cr_tests.sh`
+(the velocity side's `cr_sense_test`, p5m-1's `sound_templates` built with P5), `docs/releases/0.22-beta1.md` (both
+sides' bullets); `fm1_install.py`, `install_test.py` and the web tests were p5m-1's alone. **What main's tests had not
+caught** (both from 705a10d, not the merge): (1) `test_persist`'s two-package run walked to Options > Dual Core and
+Version at entries 21 / 23: the three Key Touch entries moved them to 24 / 26 (`persist_1core_opt.txt`, the two
+greps), as the velocity session had done for every other walk. (2) `layout_test`: `design/layouts/*.json` lacked the
+MOD group's EXPR screen (written again: `dump_catalogs.mjs`); `layout_web.c lay_catalog` named the screen `?` and
+listed the previous screen's pages as its own (FM TONE's EXPR said 18 / 19, LFO pages, so an in-place pack took 18 as
+MOD's first page): now type `expr`, no pages; and a plan always flags EXPR, a stack of two lanes, "not buildable yet"
+(the plan holds edit8 screens of one or two lanes), so the plan check accepts that one entry (docs/LAYOUT-TOOL.md).
+Both deterministic, not the load. **The notes** (`docs/releases/0.22-beta1.md`, read end to end): velocity and
+aftertouch in the opening sentence; the stray blank line before the velocity bullet gone; "With Dynamic on" -> "With
+Key Touch on" (Velocity + Aftertouch too); Going back's Numerals bullet now Numerals and Key Touch: 0.21 reads their
+byte (`bass_on`, `CRS_FIX(bass_on, 0, 1)`) as out of range and keeps 0 in its copy of the record (`crs_rec`,
+sanitised in place), so its next settings write, SAVE held or any Option changed, leaves Numerals off and Key Touch
+Fixed / Mid for the return (read from v0.21's `cr_settings.c`, not run; the old line said SAVE held only). One Going
+back section. `web/releases.json`: the beta's sha256 / sha256_1core of this build; no velocity bullet, the entry has
+8, `releases_test`'s most. **Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (21; test_cr 1001 ok,
+test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed, `sound_templates: ok`). `./build.sh
+--release 0.22-beta1` twice: the same SHA256SUMS; `choralroot-0.22-beta1.fwsc` 2029c797f63e29ac...,
+`choralroot-0.22-beta1-1core.fwsc` 9d9eec6d9d028128...; the apps carry `ChoralRoot 0.22-beta1` and `ChoralRoot
+0.22-beta1 1-core`. releases_test with `CR_PACKAGES_DIR=build/release-0.22-beta1` (both sha256 match), site_test,
+test_installer; the browser emulator built as 0.22-beta1, test_web_emu PASS; site_test again (build/site the last).
+Size: XIP 540 300 B (94.2 %), RAM 78 476 (79.8 %), POOL 238 936 (69.4 %), RAMTEXT 7 072 of 24 576, NOINIT 228; the
+single-core package XIP 537 660 (93.8 %), RAM 75 372 (76.7 %), POOL 238 808 (69.4 %). XIP is the tight one (32 KB
+free). Stub version 3, sha256 baee55ed142fe1cc. **Not done**: anything on a unit (3y80's and 3y81's lists stand);
+tagging and the Pages job.
