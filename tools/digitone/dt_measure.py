@@ -14,8 +14,11 @@ time linearly, which removes recorder start latency, MIDI and audio latency and
 clock drift. dt_rec also reports the host time of the first sample (host_rec_start
 in the JSON). The JSON next to the WAV holds every event.
 
-Parameters the MIDI map cannot set (ALGO, RATIOs, FILTER TYPE, LFO DEST/WAVE/
-MULT/MODE, tempo) are asked for by hand before the capture; press Enter.
+Every capture sets its list parameters itself (ALGO, FILTER TYPE, RATIO C / A, the
+LFO WAVE / MODE / MULT and DEST NONE: dt_cc.LISTS, proved on the device 2026-10-14)
+and MIX at the X end. What MIDI cannot set (LFO1 DEST = VOLUME for the fade
+captures, the tempo) is asked for by hand after the base is sent, with a line of
+values to check on the screen; press Enter.
 """
 import argparse
 import json
@@ -41,8 +44,14 @@ GAP = 0.7             # silence after each step's tail
 MARK_GATE = 0.08
 LEAD_IN = 1.5         # after the recorder starts, before the first marker
 
-# Plain sine: operator C only, filter open, no mod, no sends, LFOs at depth 0.
+# Plain sine: operator C only, filter off, no mod, no sends, LFOs at depth 0 and DEST NONE.
+# ALGO 1 (firmware/src/eng_quad.c QUAD_ALGO, docs/QUAD.md): A>C, B2>B1, B1>C, X = C alone,
+# Y = B1 direct (at full level whatever B LEV): MIX at the X end mutes it. With A LEV and
+# B LEV 0 nothing modulates C. MIX 0 = -64, assumed the X end (the init sound's MIX: its
+# plain sine on ALGO 1 says so); the prompt asks the owner to check it.
 BASE = {
+    "algo": 1, "mix": 0, "f_type": "OFF", "ratio_c": 1, "ratio_a": 1,
+    "lfo1_dest": "NONE", "lfo2_dest": "NONE",
     "harm": 64, "dtun": 0, "fdbk": 0,
     "a_lev": 0, "b_lev": 0, "a_atk": 0, "a_dec": 0, "a_end": 0, "a_del": 0,
     "b_atk": 0, "b_dec": 0, "b_end": 0, "b_del": 0,
@@ -54,32 +63,37 @@ BASE = {
 }
 MARKER = {"amp_atk": 0, "amp_dec": 0, "amp_sus": 127, "amp_rel": 0}
 
-# Values of the owner's init sound we send back at the end. The Digitone cannot
-# report its parameters over CC, so these are the documented init-sound values
-# as best known; the owner should reload the sound/project without saving to be
-# exact (README says so).
+# The init sound's values, sent back at the end for every parameter the tool touched.
+# The Digitone cannot report its parameters over CC; these are the owner's init-sound
+# export (DigitonePresets/PresetFormat/BASE.dnsnd, OS 1.44, 2026-10-14, outside the
+# repository; decoded with web/fm1dnsnd.js), HARM as BASE's 64 (its NRPN scale is not
+# proved). Reload the sound/project without saving to be exact (README says so).
 INIT_RESTORE = dict(BASE, **{
-    "a_lev": 0, "b_lev": 0, "a_atk": 0, "a_dec": 64, "a_end": 0,
-    "b_atk": 0, "b_dec": 64, "b_end": 0, "f_dec": 64, "f_sus": 0, "f_rel": 64,
-    "amp_atk": 0, "amp_dec": 64, "amp_sus": 127, "amp_rel": 24,
+    "algo": 1, "mix": 0, "f_type": "LP2", "ratio_c": 1, "ratio_a": 1,
+    "a_atk": 0, "a_dec": 32, "a_end": 127, "a_lev": 0,
+    "b_atk": 0, "b_dec": 32, "b_end": 127, "b_lev": 0,
+    "f_atk": 0, "f_dec": 64, "f_sus": 0, "f_rel": 64,
+    "amp_atk": 8, "amp_dec": 32, "amp_sus": 96, "amp_rel": 24, "vol": 110,
     "chr_send": 0, "del_send": 0, "rev_send": 0,
+    "lfo1_spd": 96, "lfo1_mult": 32, "lfo1_wave": "TRI", "lfo1_mode": "FRE", "lfo1_dest": "NONE",
+    "lfo2_spd": 96, "lfo2_mult": 32, "lfo2_wave": "TRI", "lfo2_mode": "FRE", "lfo2_dest": "NONE",
 })
 
-HAND_SINE = ("Track 1: FILTER TYPE = OFF (or LP4 with FREQ 127); pick an ALGO where only "
-             "operator C is heard with MIX fully to C's output; RATIO C = 1.00; check "
-             "HARM reads 0.00; LFO DEST = none on both LFOs.")
-HAND_FILT = ("Track 1: FILTER TYPE = LP4 (4-pole lowpass); ALGO/RATIO as for the sine "
-             "(only C audible, RATIO C 1.00). FEEDBACK is set over MIDI to add harmonics.")
-HAND_OPA = ("Track 1: ALGO where operator A modulates carrier C and C alone is heard "
-            "(e.g. ALGO 1, MIX to C); RATIO C 1.00, RATIO A 1.00 (or 2.00); FILTER TYPE OFF.")
-HAND_OPB = ("Track 1: ALGO where operator group B modulates carrier C (MIX to C); "
-            "RATIO B 1.00/1.00; FILTER TYPE OFF.")
-HAND_FADE = ("Track 1: LFO1 DEST = AMP VOL (volume), WAVE = SQR, MODE = TRG, MULT = 1 "
-             "(BPM); FILTER TYPE OFF; only C audible.")
+# shown with the list settings: what dt_cc cannot set and the script does not change
+NOT_SENT = {"opB": "RATIO B 1.00/1.00 (the init sound's; not sent)"}
 
 
-def tempo_note(t):
-    return f" Set the project TEMPO to {t} BPM."
+def check_line(c):
+    """the values the owner confirms on the screen after the base is sent"""
+    b = c["base"]
+    s = [f"ALGO {b['algo']}", "MIX -64 (assumed the X end: only C heard)",
+         f"FILTER TYPE {b['f_type']}", "HARM 0.00"]
+    if "lfo1_wave" in b:
+        s.append(f"LFO1 WAVE {b['lfo1_wave']} MODE {b['lfo1_mode']} MULT {b['lfo1_mult']} "
+                 "(assumed the tempo-synced one)")
+    if c["group"] in NOT_SENT:
+        s.append(NOT_SENT[c["group"]])
+    return ", ".join(s)
 
 
 def _hold_attack(v):
@@ -99,54 +113,83 @@ THREE = [0, 64, 112]
 
 
 def build_plan():
+    """the captures; each one's "base" is complete (BASE with its own changes), "hand" what
+    the owner sets by hand, "hand_keys" the parameters those touch (restored at the end)"""
     caps = []
 
-    def cap(name, group, hand, base, steps):
-        caps.append({"name": name, "group": group, "hand": hand, "base": base,
-                     "steps": steps})
+    def cap(name, group, base, steps, hand=(), hand_keys=()):
+        full = dict(BASE, **base)
+        for k in hand_keys:          # set by hand: the script must not overwrite it
+            full.pop(k, None)
+        caps.append({"name": name, "group": group, "hand": list(hand), "hand_keys": list(hand_keys),
+                     "base": full, "steps": steps})
 
-    cap("amp_atk", "amp_atk", HAND_SINE, {}, [
+    # amp: ALGO 1 (BASE): C alone on X, a plain sine
+    cap("amp_atk", "amp_atk", {}, [
         {"param": "amp_atk", "value": v, "set": {"amp_atk": v}, "gate": _hold_attack(v),
          "tail": 0.3, "kind": "attack"} for v in SIX + [127]])
-    cap("amp_dec", "amp_dec", HAND_SINE, {"amp_sus": 0}, [
+    cap("amp_dec", "amp_dec", {"amp_sus": 0}, [
         {"param": "amp_dec", "value": v, "set": {"amp_dec": v}, "gate": _hold_decay(v),
          "tail": 0.3, "kind": "decay"} for v in SIX])
-    cap("amp_rel", "amp_rel", HAND_SINE, {}, [
+    cap("amp_rel", "amp_rel", {}, [
         {"param": "amp_rel", "value": v, "set": {"amp_rel": v}, "gate": 1.0,
          "tail": _hold_decay(v), "kind": "release"} for v in SIX])
-    filt = {"f_freq": 20, "f_reso": 40, "f_env": 127, "fdbk": 70, "f_sus": 0}
-    cap("filt_dec", "filt_dec", HAND_FILT, filt, [
+    # filter: LP4 on ALGO 1's C, made bright by A>C at a held level (A LEV 96, END 127; the
+    # feedback operator of ALGO 1 is A, so FDBK 70 only sounds through A: with A LEV 0 the
+    # filter would sweep a bare sine)
+    filt = {"f_type": "LP4", "f_freq": 20, "f_reso": 40, "f_env": 127, "fdbk": 70, "f_sus": 0,
+            "a_lev": 96, "a_atk": 0, "a_dec": 0, "a_end": 127}
+    cap("filt_dec", "filt_dec", filt, [
         {"param": "f_dec", "value": v, "set": {"f_dec": v}, "gate": _hold_filter(v),
          "tail": 0.3, "kind": "filt_decay"} for v in SIX])
-    cap("filt_atk", "filt_atk", HAND_FILT, dict(filt, f_sus=127), [
+    cap("filt_atk", "filt_atk", dict(filt, f_sus=127), [
         {"param": "f_atk", "value": v, "set": {"f_atk": v}, "gate": _hold_filter(v),
          "tail": 0.3, "kind": "filt_attack"} for v in THREE])
-    cap("filt_rel", "filt_rel", HAND_FILT, dict(filt, f_sus=127, amp_rel=127), [
+    cap("filt_rel", "filt_rel", dict(filt, f_sus=127, amp_rel=127), [
         {"param": "f_rel", "value": v, "set": {"f_rel": v}, "gate": 1.0,
          "tail": min(_hold_filter(v), 14.0), "kind": "filt_release"} for v in THREE])
-    for op, hand in (("a", HAND_OPA), ("b", HAND_OPB)):
+    # opA: ALGO 1 (A>C, X = C; B LEV 0 keeps B1 out of C). opB: ALGO 6 (A>C, A>B1, B2>C,
+    # B2>B1, X = C; A LEV 0): B2 alone modulates C, one envelope stage as A's in opA
+    # (ALGO 1's B is the chain B2>B1>C, both under ENV B)
+    for op, algo in (("a", 1), ("b", 6)):
         g = "op" + op.upper()
-        base = {f"{op}_lev": 110}
+        base = {"algo": algo, f"{op}_lev": 110}
         steps = [{"param": f"{op}_atk", "value": v,
                   "set": {f"{op}_atk": v, f"{op}_dec": 127, f"{op}_end": 127},
                   "gate": _hold_filter(v), "tail": 0.3, "kind": "op_attack"} for v in THREE]
         steps += [{"param": f"{op}_dec", "value": v,
                    "set": {f"{op}_atk": 0, f"{op}_dec": v, f"{op}_end": 0},
                    "gate": _hold_filter(v), "tail": 0.3, "kind": "op_decay"} for v in THREE]
-        cap(g, g, hand, base, steps)
+        cap(g, g, base, steps)
+    # A's DELAY (tempo-synced): as opA
     for tempo in (120, 80):
-        cap(f"delay_{tempo}", "delay", HAND_OPA + tempo_note(tempo),
-            {"a_lev": 110, "a_atk": 0, "a_dec": 127, "a_end": 127}, [
+        cap(f"delay_{tempo}", "delay", {"a_lev": 110, "a_atk": 0, "a_dec": 127, "a_end": 127}, [
                 {"param": "a_del", "value": v, "tempo": tempo, "set": {"a_del": v},
-                 "gate": 8.0, "tail": 0.3, "kind": "delay"} for v in (16, 64, 112)])
-    # LFO fade-in: bipolar, CC 64 = no fade, below 64 = fade in. Display -8, -32, -64.
+                 "gate": 8.0, "tail": 0.3, "kind": "delay"} for v in (16, 64, 112)],
+            hand=[f"project TEMPO = {tempo} BPM"])
+    # LFO fade-in on the plain sine: bipolar, CC 64 = no fade, below 64 = fade in. Display -8,
+    # -32, -64. LFO1 DEST = VOLUME is set by hand (dt_cc knows only NONE), LFO2's NONE.
     for tempo in (120, 80):
-        cap(f"fade_{tempo}", "fade", HAND_FADE + tempo_note(tempo),
-            {"lfo1_dep": 127, "lfo1_spd": 96}, [
+        cap(f"fade_{tempo}", "fade",
+            {"lfo1_dep": 127, "lfo1_spd": 96, "lfo1_wave": "SQR", "lfo1_mode": "TRG", "lfo1_mult": 1}, [
                 {"param": "lfo1_fade", "value": v, "display": v - 64, "tempo": tempo,
                  "set": {"lfo1_fade": v}, "gate": 12.0, "tail": 0.3, "kind": "fade"}
-                for v in (56, 32, 0)])
+                for v in (56, 32, 0)],
+            hand=["LFO1 DEST = VOLUME (AMP VOL)", f"project TEMPO = {tempo} BPM"], hand_keys=["lfo1_dest"])
     return caps
+
+
+# the base's entries the plan prints on their own line (the list settings and MIX)
+LISTED = ["algo", "mix", "f_type", "ratio_c", "ratio_a", "lfo1_wave", "lfo1_mode", "lfo1_mult",
+          "lfo1_dest", "lfo2_dest"]
+
+
+def listed(base):
+    return " ".join(f"{k}={base[k]}" for k in LISTED if k in base)
+
+
+def hand_text(c):
+    return "; ".join(c["hand"]) if c["hand"] else "nothing"
 
 
 GROUPS = ["amp_atk", "amp_dec", "amp_rel", "amp_hold", "filt_dec", "filt_atk", "filt_rel",
@@ -167,8 +210,10 @@ def print_plan(caps):
         d = capture_seconds(c)
         total += d
         print(f"\n== capture {c['name']}  ({d:.0f} s)")
-        print(f"   by hand: {c['hand']}")
-        print(f"   base over MIDI: {dict(BASE, **c['base'])}")
+        print(f"   lists over MIDI: {listed(c['base'])}")
+        print(f"   by hand: {hand_text(c)}")
+        print(f"   check: {check_line(c)}")
+        print(f"   base over MIDI: { {k: v for k, v in c['base'].items() if k not in LISTED} }")
         for s in c["steps"]:
             nsteps += 1
             extra = f" tempo {s['tempo']}" if "tempo" in s else ""
@@ -177,9 +222,13 @@ def print_plan(caps):
     print(f"\n{len(caps)} captures, {nsteps} steps, about {total/60:.1f} min of recording "
           f"(plus the hand-set prompts).")
     print("amp_hold: the original Digitone has no AMP HOLD parameter; skipped.")
-    print("At the end the tool sends the init-sound values back for every parameter it "
-          "touched (best known values; reload the sound without saving to be exact).")
+    print(END_NOTE)
     return total
+
+
+END_NOTE = ("At the end the tool sends the init sound's values back (the owner's BASE.dnsnd export) for every "
+            "parameter it touched, the list parameters too, and LFO1 DEST NONE after a fade capture; the tempo "
+            "is not restored. Reload the sound without saving to be exact.")
 
 
 def find_audio_index(name=DEVICE):
@@ -393,17 +442,19 @@ def run(caps, args):
     checked = False
     try:
         for c in caps:
-            base = dict(BASE, **c["base"])
-            print(f"\n== {c['name']}\nBY HAND: {c['hand']}")
+            base = c["base"]
+            rig.setp(base)          # first, so the check line below reads what was sent
+            rig.touched.update(c["hand_keys"])
+            print(f"\n== {c['name']}\nsent: {listed(base)}\nBY HAND: {hand_text(c)}\n"
+                  f"CHECK on the Digitone: {check_line(c)}")
             input("Press Enter when set (Ctrl-C to stop) ... ")
-            rig.setp(base)
             if not checked:
                 sound_check(rig, args.out)
                 checked = True
             wav = os.path.join(args.out, f"{c['name']}.wav")
             meta = {"capture": c["name"], "group": c["group"], "wav": os.path.basename(wav),
                     "sample_rate": 48000, "note": NOTE, "velocity": VEL, "channel": args.channel,
-                    "hand": c["hand"], "base": base, "markers": [], "steps": []}
+                    "hand": c["hand"], "check": check_line(c), "base": base, "markers": [], "steps": []}
             jpath = wav[:-4] + ".json"
             try:
                 meta.update(rig.start_rec(wav))
@@ -436,7 +487,7 @@ def run(caps, args):
         restore = {k: INIT_RESTORE[k] for k in rig.touched if k in INIT_RESTORE}
         rig.setp(restore)
         print(f"sent init values back for {len(restore)} parameters: {sorted(restore)}")
-        print("For an exact restore reload the track's sound/project without saving.")
+        print("Not restored: the tempo. For an exact restore reload the track's sound/project without saving.")
 
 
 def main():

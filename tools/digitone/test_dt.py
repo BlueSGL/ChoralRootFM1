@@ -41,13 +41,27 @@ def test_cc():
                                          [0xB0, 38, 0]], "f_freq hi-res as NRPN 1/20")
     check(dt_cc.encode("lfo1_dep", 64)[1] == [0xB0, 98, 55], "lfo1 depth NRPN LSB 55")
     check(dt_cc.encode("a_del", 16) == [[0xB0, 83, 16]], "A delay CC 83")
-    try:
-        dt_cc.encode("f_type", 1)
-        check(False, "f_type refused")
-    except ValueError:
-        check(True, "f_type refused (hand-set)")
     check(dt_cc.note_on(60, 100) == [0x90, 60, 100], "note on bytes")
     check(dt_cc.all_notes_off()[0] == [0xB0, 123, 0], "all notes off")
+
+
+def test_lists():
+    """the list encoders against the owner's device test (2026-10-14): value sent -> what the Digitone showed"""
+    proved = [("algo", 4, 90, 3), ("algo", 7, 90, 6), ("f_type", "HP", 74, 2), ("ratio_c", 8, 91, 10),
+              ("ratio_a", 1.5, 92, 5), ("ratio_a", 4, 92, 15), ("lfo1_mult", 16, 108, 4),
+              ("lfo1_wave", "SQR", 111, 2), ("lfo1_mode", "TRG", 113, 1), ("lfo1_dest", "NONE", 110, 0),
+              ("lfo2_wave", "SQR", 117, 2)]
+    for name, shown, cc, sent in proved:
+        got = dt_cc.encode(name, shown)
+        check(got == [[0xB0, cc, sent]], f"{name} {shown} -> CC {cc} = {sent} (got {got})")
+    check(dt_cc.encode("ratio_c", 1, channel=3) == [[0xB2, 91, 3]], "ratio_c 1.00 -> 3 on channel 3")
+    for name, v in (("ratio_c", 1.3), ("ratio_a", 4.4), ("algo", 9), ("f_type", 1), ("lfo1_dest", "VOLUME"),
+                    ("lfo1_wave", "SQUARE"), ("ratio_b", 64)):
+        try:
+            dt_cc.encode(name, v)
+            check(False, f"{name}={v!r} refused")
+        except ValueError as e:
+            check(True, f"{name}={v!r} refused ({e})")
 
 
 def test_plan():
@@ -58,6 +72,19 @@ def test_plan():
     if last:
         mins = float(last[0].split("about ")[1].split(" min")[0])
         check(mins < 30, f"plan under 30 min ({mins} min)")
+    hand = sorted({l.strip() for l in p.stdout.splitlines() if l.strip().startswith("by hand:")})
+    check(hand and all(h == "by hand: nothing" or all(x.startswith(("LFO1 DEST = VOLUME", "project TEMPO"))
+                                                      for x in h[9:].split("; ")) for h in hand),
+          f"by hand only DEST VOLUME and the tempo: {hand}")
+    check("algo=6 mix=0 f_type=OFF" in p.stdout and "f_type=LP4" in p.stdout and "lfo1_wave=SQR" in p.stdout,
+          "--plan shows the list settings sent over MIDI")
+    import dt_measure
+    sets = [c["base"] for c in dt_measure.build_plan()] + [dt_measure.INIT_RESTORE]
+    try:
+        n = sum(len(dt_cc.encode(k, v)) for b in sets for k, v in b.items())
+        check(True, f"every capture base and the init restore encode ({n} messages)")
+    except (ValueError, KeyError) as e:
+        check(False, f"a capture base or the init restore does not encode: {e!r}")
 
 
 class Cap:
@@ -221,6 +248,7 @@ def test_analysis(d):
 
 if __name__ == "__main__":
     test_cc()
+    test_lists()
     test_plan()
     d = sys.argv[1] if len(sys.argv) > 1 else tempfile.mkdtemp(prefix="dt_test_")
     os.makedirs(d, exist_ok=True)

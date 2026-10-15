@@ -6,7 +6,10 @@ no times.
 
 - `dt_cc.py`: the Digitone's track MIDI CC/NRPN map (manual OS 1.44, Appendix B:
   <https://www.elektron.se/wp-content/uploads/2026/10/Digitone-User-Manual_ENG_OS1.44_260930.pdf>).
-  14-bit parameters go out as NRPN, 7-bit ones as CC. `python3 tools/digitone/dt_cc.py`
+  14-bit parameters go out as NRPN, 7-bit ones as CC. The list parameters (ALGO,
+  FILTER TYPE, RATIO C / A, LFO MULT / WAVE / MODE, LFO DEST NONE) take the value the
+  Digitone shows; their CC value is the list position, proved on the owner's Digitone
+  on 2026-10-14 (the module docstring has the values). `python3 tools/digitone/dt_cc.py`
   prints the table and example bytes.
 - `dt_measure.py`: sets a plain-sine base patch on track 1 over MIDI, plays one C4
   (velocity 100) per measured value, records the Digitone's USB audio with
@@ -37,7 +40,8 @@ no times.
   LFO fade times; fits T(v) as a power law and as an exponential 10^(kv), keeps the
   better; writes `analysis.json` (raw points + fits) and PNG plots if matplotlib is
   installed.
-- `test_dt.py`: no hardware: CC/NRPN bytes, `--plan`, and the analysis on synthetic
+- `test_dt.py`: no hardware: CC/NRPN bytes, the list encoders against the owner's
+  device test, `--plan` (its by-hand lines), and the analysis on synthetic
   captures with known times (simulated 0.37 s recorder latency and 25 ppm drift; one
   capture written as dt_rec's float32 WAV with `host_rec_start`).
 
@@ -46,12 +50,21 @@ no times.
 1. Digitone SETTINGS > MIDI CONFIG > PORT CONFIG: RECEIVE NOTES and RECEIVE CC/NRPN
    on, INPUT FROM includes USB; CHANNELS: TRACK 1 CHANNEL = 1 (or pass `--channel`).
    Audio over USB on.
-2. Track 1 holds the init sound. The script asks for the settings MIDI cannot make
-   (ALGO, RATIOs, FILTER TYPE, LFO DEST/WAVE/MODE/MULT, tempo) before each capture
-   and waits for Enter.
-3. At the end it sends back init-sound values for every parameter it changed. The
-   Digitone cannot report its values, so these are best-known init values: reload
-   the sound/project without saving for an exact restore.
+2. Track 1 holds the init sound. Each capture sends its whole base first, the list
+   parameters included: ALGO 1 (X = operator C alone; opB uses ALGO 6, where B2
+   modulates C), MIX at -64 (assumed the X end, so only X is heard), FILTER TYPE
+   OFF (LP4 for the filter captures), RATIO C and A 1.00, both LFO DESTs NONE (the
+   fade captures: LFO1 WAVE SQR, MODE TRG, MULT 1). Then it prints what is still by
+   hand and a line to check on the screen, and waits for Enter:
+   - fade captures: LFO1 DEST = VOLUME (DEST over CC is not solved) and the tempo;
+   - delay captures: the tempo;
+   - every capture: check ALGO, MIX at the X end, FILTER TYPE, HARM 0.00 (opB also
+     RATIO B 1.00/1.00, the init value: RATIO B is not sent).
+3. At the end it sends back the init sound's values for every parameter it changed
+   (the list parameters and, after a fade capture, LFO1 DEST NONE too), taken from
+   the owner's init-sound export (`DigitonePresets/PresetFormat/BASE.dnsnd`, outside
+   the repository). The tempo is not restored. Reload the sound/project without
+   saving for an exact restore.
 4. Permission: allow the script in `.claude/settings.local.json` like the existing
    `fm1_install.py` rule, e.g. `"Bash(python3 tools/digitone/dt_measure.py:*)"`.
 
