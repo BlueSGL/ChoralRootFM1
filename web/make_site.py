@@ -4,8 +4,12 @@
 """Make the site (GitHub Pages):
 
   index.html, site.css, img/,  the landing page and the manual: web/site/** copied, {{VERSION}} {{PKG}}
-  InterTight.woff2, OFL.txt    {{PKG_URL}} {{PRODUCT}} {{NEWS}} filled in index.html (an unknown {{...}} fails);
-                              {{NEWS}} is "New in VER": the version's bullets from web/releases.json
+  InterTight.woff2, OFL.txt    {{PKG_URL}} {{PRODUCT}} {{NEWS}} {{LAYOUT}} {{EMU_NOTE}} filled in index.html (an
+                              unknown {{...}} fails); {{NEWS}} is "New in VER": the version's bullets from
+                              web/releases.json. When VERSION is a beta ("beta": true), the landing page and the
+                              installer's own lines name the newest stable version offered (front()); the beta is in
+                              the installer's list only, behind "Show beta releases". {{EMU_NOTE}}: a line saying the
+                              browser emulator runs a beta when its version.txt says so (emu_line())
   firmware/choralroot-X.Y.fwsc the packages: the current version's (PKG) and every other version of
                               web/releases.json found in the packages folder, each checked against the sha256
                               in releases.json; for a version that lists sha256_1core, its single-core package
@@ -230,6 +234,37 @@ def collect(pkg, version, packages, require_all):
     return data, out, product, notes, one
 
 
+def front(offered, version):
+    """the version the landing page (its version line, Install sentence, Download button, command line) and the
+    installer's own lines (its META version and package) present: VERSION, unless VERSION is a beta (releases.json
+    "beta": true) and a stable version is offered; then the newest stable one. A beta is opt-in (BUILDING.md "A beta
+    release"): it is in the installer's list, behind "Show beta releases", and nowhere else"""
+    cur = next((r for r, _ in offered if r["version"] == version), None)
+    if cur is None or not cur.get("beta"):
+        return version
+    return next((r["version"] for r, _ in offered if not r.get("beta")), version)
+
+
+def emu_version(emu):
+    """the version the browser emulator in EMU runs: its version.txt (tools/emu/web/build_web.sh writes the firmware's
+    "ChoralRoot X.Y"), None when there is no such file"""
+    f = Path(emu) / "version.txt"
+    m = re.fullmatch(r"ChoralRoot\s+(\S+)", f.read_text(encoding="utf-8").strip()) if f.is_file() else None
+    return m.group(1) if m else None
+
+
+def emu_line(data, offered, emu):
+    """{{EMU_NOTE}}: one short line under "Try it first" when the emulator runs a beta (the owner, 2026-10-14: nothing
+    on the page may suggest the beta is what the installer writes), else nothing"""
+    v = emu_version(emu)
+    entry = next((r for r in data["releases"] if r["version"] == v), None)
+    if not v or not (re.search(r"-beta\d+$", v) or (entry and entry.get("beta"))):
+        return ""
+    stable = next((r["version"] for r, _ in offered if not r.get("beta")), None)
+    tail = f" (the installer's default is {html_escape(stable)})" if stable and stable != v else ""
+    return f'<p class="note note-beta">It runs ChoralRoot {html_escape(v)}, a beta{tail}.</p>'
+
+
 def news_html(data, offered, version):
     """the landing page's 'New in X': the current version's bullets, the links to its notes, the older versions.
     A beta (releases.json "beta": true) is opt-in in the installer: the landing page tells of the newest stable one"""
@@ -298,8 +333,9 @@ def main(pkg, version, out, emu=None, packages=None, require_all=False):
         strip_module((HERE / "fm1backup.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1dnsnd.js").read_text(encoding="utf-8")) + "\n" + \
         strip_module((HERE / "fm1sounds.js").read_text(encoding="utf-8"))
-    name = pkg_name(version)
-    meta = json.dumps({"version": version, "product": product, "pkg": "../../firmware/" + name, "repo": data["repo"],
+    shown = front(offered, version)                 # (VERSION, or the newest stable one when VERSION is a beta)
+    name = pkg_name(shown)
+    meta = json.dumps({"version": shown, "product": product, "pkg": "../../firmware/" + name, "repo": data["repo"],
                        "minimum": data["minimum"],
                        "releases": [{**{k: x for k, x in r.items() if k != "sha256_1core"},
                                      "pkg": "../../firmware/" + pkg_name(r["version"]), "size": len(raw),
@@ -311,8 +347,9 @@ def main(pkg, version, out, emu=None, packages=None, require_all=False):
     for mark in ("/*LIB*/", "/*META*/"):
         if html.count(mark) != 1:
             raise SystemExit(f"index_pkg.html must contain {mark} once; update make_site.py")
-    index = fill({"VERSION": version, "PKG": name, "PKG_URL": "firmware/" + name, "PRODUCT": product,
-                  "NEWS": news_html(data, offered, version), "LAYOUT": LAYOUT_LINK if has_lay else ""})
+    index = fill({"VERSION": shown, "PKG": name, "PKG_URL": "firmware/" + name, "PRODUCT": product,
+                  "NEWS": news_html(data, offered, version), "LAYOUT": LAYOUT_LINK if has_lay else "",
+                  "EMU_NOTE": emu_line(data, offered, emu) if (emu / "index.html").is_file() else ""})
     html = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
     inst, fw = out / "webapp" / "installer", out / "firmware"
     for d in (inst, fw):

@@ -263,6 +263,61 @@ def one_core():
     lst.unlink()
 
 
+def beta_site():
+    """a beta published (releases.json "beta": true; BUILDING.md "A beta release"): the landing page's version line,
+    Install sentence, Download button, command line and "New in", and the installer's own version (its META, whose
+    version the beta disclaimer names), are the newest stable version's; the beta is only in the installer's list. With
+    a browser emulator that runs the beta, one line under "Try it first" says so; one that runs a stable: no line.
+    A made-up list (CR_RELEASES_JSON): 9.9-beta1 = build/choralroot.fwsc, 9.8 its stable, as the Pages job builds it"""
+    pk, out, lst, emu = (SCRATCH / "site-beta-packages", SCRATCH / "site-beta", SCRATCH / "site-beta-releases.json",
+                         SCRATCH / "site-beta-emu")
+    for d in (pk, out, emu):
+        if d.exists():
+            shutil.rmtree(d)
+    pk.mkdir(parents=True)
+    emu.mkdir(parents=True)
+    old = bytearray(PKG.read_bytes())
+    old[-1] ^= 0x33                                 # (another body, the same identity and loader)
+    (pk / "choralroot-9.8.fwsc").write_bytes(old)
+    base = {k: x for k, x in RELEASES["releases"][-1].items() if k not in ("going_back", "beta", "sha256_1core")}
+    beta = {**base, "version": "9.9-beta1", "beta": True, "tag": "v9.9-beta1", "sha256": sha(PKG),
+            "bullets": ["Something to try out early, behind the opt-in."]}
+    stable = {**base, "version": "9.8", "tag": "v9.8", "sha256": hashlib.sha256(old).hexdigest(),
+              "bullets": ["The stable one: what a visitor gets without the opt-in."]}
+    lst.write_text(json.dumps({**RELEASES, "releases": [beta, stable]}), encoding="utf-8")
+    env = {**os.environ, "CR_RELEASES_JSON": str(lst)}
+    run = lambda *a: subprocess.run([sys.executable, str(ROOT / "web" / "make_site.py"), *map(str, a)], capture_output=True, text=True, env=env)
+    (emu / "index.html").write_text("<!doctype html><title>emu</title>\n", encoding="utf-8")
+    (emu / "version.txt").write_text("ChoralRoot 9.9-beta1\n", encoding="utf-8")
+    r = run(PKG, "9.9-beta1", out, emu, "--packages", pk, "--require-all")
+    if not ok(r.returncode == 0, "beta: make_site.py --require-all builds the site for 9.9-beta1"):
+        print(r.stdout + r.stderr)
+        return
+    html = (out / "index.html").read_text(encoding="utf-8")
+    meta = read_meta((out / "webapp" / "installer" / "index.html").read_text(encoding="utf-8")) or {}
+    body = html.split("-->", 2)[-1]                 # (past the page's head comments, which name the placeholders)
+    ok("Version 9.8:" in body and "Install 9.8 directly" in body and 'href="firmware/choralroot-9.8.fwsc" download>Download '
+       '<span class="pkg">choralroot-9.8.fwsc</span>' in body and 'fm1_install.py <span class="nw">choralroot-9.8.fwsc</span>' in body
+       and "New in 9.8" in body and "Version 9.9-beta1" not in body and "Install 9.9-beta1" not in body
+       and 'href="firmware/choralroot-9.9-beta1.fwsc" download>Download' not in body,
+       "beta: the landing page's version, Install, Download, command line and New in are 9.8's")
+    rel = meta.get("releases") or []
+    ok(meta.get("version") == "9.8" and meta.get("pkg") == "../../firmware/choralroot-9.8.fwsc" and
+       [x.get("version") for x in rel] == ["9.9-beta1", "9.8"] and rel[0].get("beta") is True and
+       (out / "firmware" / "choralroot-9.9-beta1.fwsc").is_file() and (out / "firmware" / "choralroot-9.8.fwsc").is_file(),
+       "beta: the installer's own version is 9.8 (its disclaimer); 9.9-beta1 is in its list, marked beta, its file published")
+    ok('<p class="note note-beta">It runs ChoralRoot 9.9-beta1, a beta (the installer\'s default is 9.8).</p>' in body,
+       "beta: the emulator runs the beta: one line under Try it first says so")
+    (emu / "version.txt").write_text("ChoralRoot 9.8\n", encoding="utf-8")
+    shutil.rmtree(out)
+    r = run(PKG, "9.9-beta1", out, emu, "--packages", pk, "--require-all")
+    ok(r.returncode == 0 and "note-beta" not in (out / "index.html").read_text(encoding="utf-8"),
+       "beta: an emulator that runs a stable version: no such line")
+    for d in (pk, out, emu):
+        shutil.rmtree(d)
+    lst.unlink()
+
+
 def release_site(cur):
     """the site as the Pages job builds it: the newest release as the current version, every listed version required"""
     out = SCRATCH / "site-release"
@@ -332,7 +387,8 @@ def main():
     versions(OUT, meta, [{"version": VERSION, "sha256": sha(PKG)}] + here, r.stdout)
     refusals()
     one_core()
-    cur = next((r for r in RELEASES["releases"] if r["sha256"] == sha(PKG)), None)
+    beta_site()
+    cur =next((r for r in RELEASES["releases"] if r["sha256"] == sha(PKG)), None)
     if cur is not None and cur is RELEASES["releases"][0] and len(here) == len(RELEASES["releases"]):
         release_site(cur)
     else:

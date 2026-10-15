@@ -277,7 +277,9 @@ and, in `web/releases.json`, the entry first with `"beta": true` (`tests/release
 `-betaN` version and on no other; a beta needs no `going_back`, and the newest stable entry keeps none). The release
 is a GitHub pre-release and release.yml publishes the site as for a final one (other suffixes, `-rc1`, do not). The
 installer hides betas until "Show beta releases" is ticked (remembered per browser); its default stays the newest
-stable entry, and the landing page's "New in" tells of that one. For X.Y final, add its entry above the beta (the
+stable entry, and the landing page presents that one (its version line, "New in", Install sentence, Download button
+and command line; `web/make_site.py front()`). The browser emulator is built from the tag, so it runs the beta: the
+landing page says so in one line under "Try it first" (`emu_line()`, from `emu/version.txt`). For X.Y final, add its entry above the beta (the
 beta's entry may stay as an older choice or be removed with its packages no longer offered).
 
 Once, before the first release: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
