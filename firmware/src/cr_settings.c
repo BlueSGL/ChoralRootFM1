@@ -146,6 +146,7 @@ void cr_settings_auto(cr_settings_t *dst, const cr_settings_t *src)
     dst->extadd = src->extadd;
     dst->secret = src->secret;
     dst->vel = src->vel;
+    dst->bass_on = (uint8_t)((dst->bass_on & 3u) | (src->bass_on & 0xFCu));   /* Key Touch and the sensitivities */
     for (i = 0; i < 3u; i++) {
         dst->midi_en[i] = src->midi_en[i];
         dst->midi_ch[i] = src->midi_ch[i];
@@ -179,7 +180,10 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
     CRS_FIX(vel, 1, 127);
-    CRS_FIX(bass_on, 0, 3);                        /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS, 0.22) */
+    CRS_FIX(bass_on, 0, 255);                      /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS; bits 2..7 Key Touch
+                                                    * and the two sensitivities, CRS_TOUCH / VSENS / ATSENS: 0.22) */
+    if ((s->bass_on & 0x0Cu) == 0x0Cu)             /* Key Touch 3: not a mode */
+        s->bass_on &= (uint8_t)~0x0Cu;
     CRS_FIX(bass_mode, 0, CR_BASS_SOLO);
     CRS_FIX(bass_voicing, -2, 4);
     CRS_FIX(perform_on, 0, 1);
@@ -723,7 +727,8 @@ static void crs_capture(cr_settings_t *s)
     s->single = cs.single;
     s->vel = cs.vel;
     s->bass_mode = cs.bass_mode;
-    s->bass_on = cs.numerals ? CRS_NUMERALS : 0u;  /* (bit 0 always 0 here: Bass on is the session's, css_capture; an
+    s->bass_on = (uint8_t)((cs.numerals ? CRS_NUMERALS : 0u) | CRS_TOUCH_BITS(cs.touch, cs.vel_sens, cs.at_sens));
+                                                   /* (bit 0 always 0 here: Bass on is the session's, css_capture; an
                                                     * older firmware would switch the engine's bass on from it. Bit 1:
                                                     * the KEY layer's Numerals, which 0.17 .. 0.21 read as 0) */
     s->perform_on = cs.perform_on;
@@ -998,6 +1003,10 @@ static void cr_settings_load(void)
     cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
     cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
     cs.numerals = (uint8_t)CRS_NUMS(s);
+    cs.touch = (uint8_t)CRS_TOUCH(s);              /* Options > Key Touch and the sensitivities (docs/VELOCITY.md) */
+    cs.vel_sens = (uint8_t)CRS_VSENS(s);
+    cs.at_sens = (uint8_t)CRS_ATSENS(s);
+    cu_touch_apply();
     cs.tonic = s->tonic;
     cs.scale = s->scale;
     cs.transpose = s->transpose;

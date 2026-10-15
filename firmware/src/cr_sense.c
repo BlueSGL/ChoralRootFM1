@@ -20,6 +20,8 @@
  * The digital debounce stays the truth for pressed / released; this only adds the velocity. Every function here runs
  * in TIMER5's tick but the readers, which are the main loop's (bytes and halfwords: no locking). */
 #define SN_NKEYS 27u
+/* the keys with the converter: bit k (0 = F3 .. 19 = C5: rows PA8 and PA7) */
+#define CR_SENSE_KEYS 0x000FFFFFu
 #define SN_TOUCH 900u
 #define SN_PRESS 400u
 #define SN_RELEASE 600u
@@ -145,7 +147,58 @@ static int cr_sense_drive_hook(uint32_t col, uint32_t rowbit)
 static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit)   /* the key is open: its column's LEDs may be lit */
 {
     int id = FM1_KEYMAP[rowbit][col];
-    return id < 14 || sn_key[id - 14].st == SN_OPEN;
+    return cr_touch_mode == CR_TOUCH_FIXED || id < 14 || sn_key[id - 14].st == SN_OPEN;
 }
-/* the keys with the converter: bit k (0 = F3 .. 19 = C5: rows PA8 and PA7) */
-#define CR_SENSE_KEYS 0x000FFFFFu
+
+/* Aftertouch (MONK-1's ui.c pressure(), in integers): pressing harder than the key RESTS. A key goes on settling
+ * after it lands, so each held key's rest follows its driven reading down for SN_P_SETTLE ms, then creeps after it,
+ * and comes up at once when the key is eased. The lean is the pill's resistance below its rest in octaves (Q8:
+ * 256 = one octave; the reading less SN_DBASE is the resistance): SN_P_DEAD is noise, SN_P_SPAN (Aftertouch Sens:
+ * Low 0.63, Mid 0.46, High 0.29 octave) is 127. Smoothed over ~30 ms. cr_sense_pressure_poll runs in the main loop
+ * every 5 ms (cr_ui.c cu_touch_poll) and leaves each held key's pressure in cr_sense_at[]. */
+#define SN_P_SETTLE 250u
+#define SN_P_DEAD 10u
+static const uint16_t SN_P_SPAN[3] = {118, 161, 74};   /* Mid, Low, High */
+static uint16_t sn_p_base16[SN_NKEYS];                 /* the rest, x16 */
+static uint16_t sn_p_s[SN_NKEYS];                      /* the smoothed pressure, Q8 */
+static uint32_t sn_p_t0[SN_NKEYS];
+static uint8_t sn_p_on[SN_NKEYS];
+static volatile uint8_t cr_sense_at[SN_NKEYS];         /* each key's pressure 0..127 (0 when up) */
+static void cr_sense_pressure_poll(uint32_t now_ms, uint32_t sens)
+{
+    uint32_t k, span = SN_P_SPAN[sens > 2u ? 0u : sens];
+    for (k = 0; k < SN_NKEYS; k++) {
+        uint32_t d, d16, lean, lb, ld, x;
+        if (!((CR_SENSE_KEYS >> k) & 1u))
+            continue;
+        if (sn_key[k].st != SN_DOWN || !sn_key[k].dn) {
+            sn_p_on[k] = 0;
+            sn_p_s[k] = 0;
+            cr_sense_at[k] = 0;
+            continue;
+        }
+        d = sn_key[k].d > SN_DBASE + 1u ? sn_key[k].d - SN_DBASE : 1u;
+        d16 = d << 4;
+        if (!sn_p_on[k]) {
+            sn_p_on[k] = 1;
+            sn_p_base16[k] = (uint16_t)d16;
+            sn_p_t0[k] = now_ms;
+        }
+        if (d16 > sn_p_base16[k]) {
+            sn_p_base16[k] = (uint16_t)d16;                /* eased off: that is the rest now */
+        } else if (now_ms - sn_p_t0[k] < SN_P_SETTLE) {
+            sn_p_base16[k] = (uint16_t)(sn_p_base16[k] - (sn_p_base16[k] - d16) / 4u);
+        } else if (sn_p_base16[k] > d16) {
+            uint32_t step = (sn_p_base16[k] - d16) >> 10;
+            sn_p_base16[k] = (uint16_t)(sn_p_base16[k] - (step ? step : 1u));
+        }
+        lb = sn_log2(sn_p_base16[k] >> 4);
+        ld = sn_log2(d);
+        lean = lb > ld ? lb - ld : 0u;
+        x = lean > SN_P_DEAD ? ((lean - SN_P_DEAD) * 127u + span / 2u) / span : 0u;
+        if (x > 127u)
+            x = 127u;
+        sn_p_s[k] = (uint16_t)(sn_p_s[k] + (((int32_t)(x << 8) - (int32_t)sn_p_s[k]) * 11) / 64);
+        cr_sense_at[k] = (uint8_t)((sn_p_s[k] + 128u) >> 8);
+    }
+}

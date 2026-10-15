@@ -527,6 +527,8 @@ static struct {
                                            * default: 44.1 kHz only, 0.18's device (usb.c UA_OFF_48) */
     uint8_t names_std;                    /* Options > Chord Names (0.20): 1 Standard, 0 Orchid, the default
                                            * (cr_engine.c cr_chord_names_set; docs/CHORD-NAMES.md) */
+    uint8_t touch, vel_sens, at_sens;     /* Options > Key Touch (0 Fixed, 1 Dynamic, 2 Velocity + Aftertouch), Velocity
+                                           * Sens and Aftertouch Sens (0 Mid, 1 Low, 2 High): docs/VELOCITY.md */
     uint8_t sixth_up;                     /* Options > 6th with 7th (0.20): 1 Octave up, 0 In place, the default
                                            * (cr_engine.c cr_set_sixth_up; docs/CHORD-NAMES.md) */
 } cs;
@@ -928,7 +930,7 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 }
 
 /* ------------------------------------------------------------- Options --- */
-enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
+enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_ATSENS, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
        O_CLOCK, O_VIEW, O_MOTION, O_NAMES, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
        O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
@@ -936,12 +938,12 @@ enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_BASSMODE, O_SINGLE, O_SPLI
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
 static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "6th with 7th",
-    "Velocity",
+    "Velocity", "Key Touch", "Velocity Sens", "Aftertouch Sens",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 2, 2, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -953,6 +955,17 @@ static uint8_t cu_reset_ask;              /* Options > Reset Settings: OCT+ pres
  * the new configuration; never under a SysEx transfer). USB Record Off: the serial console instead (usb.c
  * usb_cdc_on). USB Rate (0.19, the owner 2026-10-12): 44.1 kHz, the default, is 0.18's device; 44.1 + 48 kHz adds
  * the second rate for the computer to choose. The emulator has no USB: the settings are kept and saved only */
+/* Options > Key Touch and the sensitivities to the engine (mod.c cr_touch_*) and the scan (the driven samples off
+ * with it Fixed: hal/fm1_input.h fm1_an.drive); docs/VELOCITY.md */
+static void cu_touch_apply(void)
+{
+    cr_touch_mode = cs.touch;
+    cr_touch_vsens = cs.vel_sens;
+    cr_touch_atsens = cs.at_sens;
+#ifdef CR_SENSE_KEYS
+    fm1_an.drive = cs.touch ? SN_DRIVE : 0u;
+#endif
+}
 static void cu_usb_apply(void)
 {
     fx_usb_fixed = cs.usb_fixed;
@@ -970,6 +983,9 @@ static int32_t opt_get(uint32_t o)
     case O_SECRET: return cs.secret;
     case O_SIXTH: return cs.sixth_up;
     case O_VEL: return cs.vel;
+    case O_TOUCH: return cs.touch;
+    case O_VSENS: return cs.vel_sens;
+    case O_ATSENS: return cs.at_sens;
     case O_BASSMODE: return cs.bass_mode;
     case O_SINGLE: return cs.single;
     case O_SPLIT: return cs.split;
@@ -998,6 +1014,9 @@ static void opt_set(uint32_t o, int32_t v)
     case O_SECRET: cs.secret = (uint8_t)v; cr_post(CRE_SECRET, 0, 0, v); break;
     case O_SIXTH: cs.sixth_up = (uint8_t)v; cr_post(CRE_SIXTH, 0, 0, v); break;   /* (the chords built from now on) */
     case O_VEL: cs.vel = (uint8_t)v; break;
+    case O_TOUCH: cs.touch = (uint8_t)v; cu_touch_apply(); break;
+    case O_VSENS: cs.vel_sens = (uint8_t)v; cu_touch_apply(); break;
+    case O_ATSENS: cs.at_sens = (uint8_t)v; cu_touch_apply(); break;
     case O_BASSMODE: cs.bass_mode = (uint8_t)v; cr_post(CRE_BASS_MODE, 0, 0, v); break;
     case O_SINGLE: cs.single = (uint8_t)v; cu_post_single(); break;
     case O_SPLIT: cs.split = (uint8_t)v; cu_post_single(); break;
@@ -1040,6 +1059,8 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
     case O_SIXTH: cu_cpy(d, v ? "Octave up" : "In place", n); break;
     case O_VEL: cu_int(d, v, 0, n); break;
+    case O_TOUCH: cu_cpy(d, v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
+    case O_VSENS: case O_ATSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
     case O_SINGLE: cu_cpy(d, v == 2 ? "Split Bass" : v ? "Split Oct" : "Full Octave", n); break;
     case O_SPLIT: cu_cpy(d, CU_NOTE[v % 12], n); cu_cat(d, cs.single ? "" : " (Split off)", n); break;
@@ -1192,6 +1213,30 @@ static void cu_pick_end(int keep);
 static void cu_epk_commit(void);
 static uint32_t cu_layer(void);
 static uint32_t cu_now(void) { return fm1_ms; }
+/* the keys' aftertouch, every 5 ms (cr_ui_input and the pump): the highest pressure among the held keys that play
+ * (cr_sense.c cr_sense_at), posted to the engine when it changes (CRE_AT: both parts, channel pressure out) */
+static void cu_touch_poll(void)
+{
+#ifdef CR_SENSE_KEYS
+    static uint32_t last_ms;
+    static uint8_t sent;
+    uint32_t now = cu_now(), k, v = 0;
+    if (now - last_ms < 5u)
+        return;
+    last_ms = now;
+    if (cs.touch == CR_TOUCH_VEL_AT) {
+        cr_sense_pressure_poll(now, cs.at_sens);
+        for (k = 0; k < CU_NKEY; k++)
+            if (((CR_SENSE_KEYS >> k) & 1u) && ((cu.kheld >> k) & 1u) && cu.key_note[k] && cu.key_note[k] != 0xFFu &&
+                cr_sense_at[k] > v)
+                v = cr_sense_at[k];
+    }
+    if (v != sent) {
+        sent = (uint8_t)v;
+        cr_post(CRE_AT, 0, 0, (int32_t)v);
+    }
+#endif
+}
 /* the Full keyboard's split point is a KEY: F4, the second F (key 12: F3..E4 left, F4..G5 right; the owner's,
  * 2026-10-11), fixed: the stored split point (cs.split, OPT + KNOB 1) is a pitch class and stays the Chords layout's,
  * untouched (Split Oct and Split Bass there: the roots whose pitch class is below it, in every octave). The engine
@@ -3627,25 +3672,27 @@ static int cu_layer_keys(uint32_t l)
 #ifndef CU_KEY_T0
 #define CU_KEY_T0(k) fm1_in.note_t0[k]             /* the first scan that saw key k closed (hal/fm1_input.h) */
 #endif
-/* Key velocity (cr_sense.c; docs/VELOCITY.md). A key with the converter (CR_SENSE_KEYS) that plays a note waits, once
- * debounced, for its velocity (cu_scan_keys: cu.kpend; 4.4 .. 6.6 ms after the touch, CU_VEL_WAIT_MS at most), and
- * plays at it scaled so that a medium press (~64) lands at Options > Velocity: vel x cs.vel / 64. A key without it
- * plays at the keys' recent velocity (cu.ctx_vel), else at Options > Velocity. */
+/* Key velocity (cr_sense.c; docs/VELOCITY.md). With Options > Key Touch Dynamic (or Velocity + Aftertouch), a key with
+ * the converter (CR_SENSE_KEYS) that plays a note waits, once debounced, for its velocity (cu_scan_keys: cu.kpend;
+ * 4.4 .. 6.6 ms after the touch, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
+ * mod.c cr_touch_gain); a key without it plays at the keys' recent velocity (cu.ctx_vel), else at Options >
+ * Velocity. Fixed: every key at Options > Velocity, as before. */
 #ifndef CR_SENSE_KEYS                              /* (the emulator, the tests: no analog rows) */
 #define CR_SENSE_KEYS 0u
 static volatile uint8_t cr_sense_vel[CU_NKEY];
 #endif
 #define CU_VEL_WAIT_MS 12u
 static uint8_t cu_press_vel;                       /* the pending key's velocity, for cu_key_press (0: none) */
-#define CU_KEY_SENSED(k) (((CR_SENSE_KEYS >> (k)) & 1u) && ((k) >= CU_ROOT0 || cs.kbd_full))
+#define CU_KEY_SENSED(k) (cs.touch && ((CR_SENSE_KEYS >> (k)) & 1u) && ((k) >= CU_ROOT0 || cs.kbd_full))
 static uint32_t cu_key_vel(uint32_t k)
 {
     uint32_t v = cu_press_vel;
+    if (!cs.touch)
+        return cs.vel;                             /* Key Touch Fixed: Options > Velocity, as before */
     if (!v && !CU_KEY_SENSED(k))
         v = cu.ctx_vel;
     if (!v)
         return cs.vel;
-    v = (v * cs.vel + 32u) / 64u;
     return v < 1u ? 1u : v > 127u ? 127u : v;
 }
 static void cu_key_press(uint32_t k)
@@ -4396,6 +4443,7 @@ static void cr_ui_pump(void)
         uint32_t ne = fm1_input_note_edges();
         cu_scan_keys(ne, fm1_in.notes);
         cu_scan_step();
+        cu_touch_poll();
         cu_pumped++;
     }
     CU_PUMP_END();
@@ -4517,6 +4565,7 @@ static void cr_ui_input(void)
         cu_lock_menu();
     }
     cu_scan_step();
+    cu_touch_poll();
     for (b = 0; b < NE; b++)
         if ((s = panel_enc(b)) != 0)
             cu_knob(b, s);

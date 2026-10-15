@@ -37,6 +37,29 @@ _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST 
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
 #define NMSLOT 4u
 #define MS_VOICE(s) ((s) >= MS_ENV && (s) <= MS_RAND)             /* a value per voice */
+
+/* Options > Key Touch (ChoralRoot, docs/VELOCITY.md; the UI writes these, the ISR reads them): with it Fixed the
+ * voices play as before (the linear velocity of the engines without their own envelope, the patch's law in FM6, VA,
+ * FM TONE, nothing in CZ-1); Dynamic (and Velocity + Aftertouch) puts one velocity law on every engine's level, after
+ * the engine, MONK-1's Touch: Velocity: level = (1 - s) + s x 1.6 x (vel / 127)^2, clamped to 1, s = Velocity Sens
+ * (Low 1/4, Mid 1/2, High 1): a medium press (~100) keeps its level, a hard one is full, a light one is quiet.
+ * Velocity + Aftertouch also routes the part's aftertouch (t->at: the keys' pressure or MIDI's) to the cutoff by
+ * Aftertouch Sens (AMT 24 / 40 / 63) unless the sound's matrix routes AT itself. MIDI notes get the same law. */
+enum { CR_TOUCH_FIXED, CR_TOUCH_VEL, CR_TOUCH_VEL_AT };
+static volatile uint8_t cr_touch_mode, cr_touch_vsens, cr_touch_atsens;   /* sens: 0 Mid, 1 Low, 2 High */
+static int32_t cr_touch_gain(uint32_t vel)        /* Q15 */
+{
+    static const uint16_t S[3] = {16384, 8192, 32767};
+    int32_t x = (int32_t)(vel > 127u ? 127u : vel) * 258, c = (((x * x) >> 15) * 52429) >> 15;   /* 1.6 x^2 */
+    if (c > 32767)
+        c = 32767;
+    return 32767 - (((32767 - c) * (int32_t)S[cr_touch_vsens > 2u ? 0u : cr_touch_vsens]) >> 15);
+}
+static int32_t cr_touch_at_amt(void)
+{
+    static const int8_t A[3] = {40, 24, 63};
+    return A[cr_touch_atsens > 2u ? 0u : cr_touch_atsens];
+}
 #define MS_BIPOLAR(s) ((s) == MS_LFO || (s) == MS_KEY || (s) == MS_RAND)
 
 /* the track parameter of a per-block destination */
@@ -122,11 +145,16 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
     const int16_t *p = t->p;
     int32_t lfo, off[NMSLOT];
     uint32_t k, j;
+    int at_def = cr_touch_mode == CR_TOUCH_VEL_AT && t->at;   /* the default AT -> CUT (above), unless a slot routes AT */
     MODP(t).on = 0;
     for (k = 0; k < NMSLOT; k++)
         if (p[P_M1SRC + 3u * k] && p[P_M1DST + 3u * k] && p[P_M1AMT + 3u * k])
             break;
-    if (k == NMSLOT)
+    if (at_def)
+        for (j = 0; j < NMSLOT; j++)
+            if (p[P_M1SRC + 3u * j] == MS_AT && p[P_M1DST + 3u * j] && p[P_M1AMT + 3u * j])
+                at_def = 0;
+    if (k == NMSLOT && !at_def)
         return 0;
     lfo = mulq15(t->lfo_val, t->lfo_fade);              /* (the LFO of the block before: track_render ticks it) */
     MODP(t).on = 1;
@@ -165,6 +193,9 @@ static __attribute__((noinline)) int mod_begin(track_t *t)
             off[j] += (((x * a) >> 6) * (pd->max - pd->min)) >> 15;
         }
     }
+    if (at_def)
+        mod_voice_add(MS_AT, MD_CUT, t->at * 258, cr_touch_at_amt(), &MODP(t).pit, &MODP(t).cut, &MODP(t).shp,
+                      &MODP(t).gain);
     for (j = 0; j < MODP(t).nk; j++) {
         uint32_t id = MODP(t).kid[j];
         const param_desc_t *pd = id >= P_E0 ? &ENGINES[t->engine]->edit[id - P_E0] : &TP[id];
