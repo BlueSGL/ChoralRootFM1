@@ -16,6 +16,7 @@ MULT/MODE, tempo) are asked for by hand before the capture; press Enter.
 """
 import argparse
 import json
+import math
 import os
 import re
 import signal
@@ -252,6 +253,27 @@ class Rig:
         self.setp({k: base[k] for k in MARKER})
 
 
+def sound_check(rig, out_dir):
+    """one 0.5 s note recorded before the first capture: stop at once when the Digitone does not answer over
+    USB MIDI or its USB audio is silent (a whole capture of silence otherwise)"""
+    from dt_analyse import load_wav
+    wav = os.path.join(out_dir, "_sound_check.wav")
+    ff = subprocess.Popen(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "avfoundation",
+                           "-i", f":{rig.aidx}", "-t", "2.5", "-ar", "48000", "-c:a", "pcm_s24le", wav])
+    time.sleep(1.0)
+    rig.send(dt_cc.note_on(NOTE, VEL, rig.ch))
+    time.sleep(0.5)
+    rig.send(dt_cc.note_off(NOTE, rig.ch))
+    ff.wait()
+    x, _ = load_wav(wav)
+    peak = 20 * math.log10(max(float(abs(x).max()), 1e-12))
+    if peak < -60:
+        raise SystemExit(f"sound check: peak {peak:.0f} dBFS from '{DEVICE}' after a note on channel {rig.ch}. "
+                         "Check MIDI CONFIG > PORT CONFIG (INPUT FROM USB or MIDI+USB, RECEIVE NOTES and "
+                         "RECEIVE CC/NRPN on), the track's channel (--channel), and that the track is not muted.")
+    print(f"sound check: peak {peak:.0f} dBFS, ok")
+
+
 def run(caps, args):
     os.makedirs(args.out, exist_ok=True)
     rig = Rig(args.channel, args.out)
@@ -262,12 +284,16 @@ def run(caps, args):
         raise KeyboardInterrupt
     signal.signal(signal.SIGINT, on_sig)
     rig.panic()
+    checked = False
     try:
         for c in caps:
             base = dict(BASE, **c["base"])
             print(f"\n== {c['name']}\nBY HAND: {c['hand']}")
             input("Press Enter when set (Ctrl-C to stop) ... ")
             rig.setp(base)
+            if not checked:
+                sound_check(rig, args.out)
+                checked = True
             wav = os.path.join(args.out, f"{c['name']}.wav")
             meta = {"capture": c["name"], "group": c["group"], "wav": os.path.basename(wav),
                     "sample_rate": 48000, "note": NOTE, "velocity": VEL, "channel": args.channel,

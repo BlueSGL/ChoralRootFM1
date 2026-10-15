@@ -21,7 +21,6 @@ import json
 import math
 import os
 import sys
-import wave
 
 import numpy as np
 
@@ -29,10 +28,31 @@ HOP = 0.001     # envelope hop, s
 WIN = 0.001     # envelope smoothing window, s
 
 
+def read_riff(path):
+    """(rate, channels, sample width, PCM bytes) of a PCM WAV, also WAVE_FORMAT_EXTENSIBLE (ffmpeg's 24-bit
+    header), which the wave module of Python 3.11 refuses"""
+    with open(path, "rb") as fh:
+        d = fh.read()
+    if d[:4] != b"RIFF" or d[8:12] != b"WAVE":
+        raise ValueError(f"{path}: not a WAV file")
+    i, fmt, data = 12, None, None
+    while i + 8 <= len(d):
+        cid, size = d[i:i + 4], int.from_bytes(d[i + 4:i + 8], "little")
+        body = d[i + 8:i + 8 + size]
+        if cid == b"fmt ":
+            fmt = body
+        elif cid == b"data":
+            data = body
+        i += 8 + size + (size & 1)
+    if fmt is None or data is None:
+        raise ValueError(f"{path}: no fmt or data chunk")
+    ch, sr = int.from_bytes(fmt[2:4], "little"), int.from_bytes(fmt[4:8], "little")
+    sw = int.from_bytes(fmt[14:16], "little") // 8
+    return sr, ch, sw, data[:len(data) - len(data) % (ch * sw)]
+
+
 def load_wav(path):
-    with wave.open(path, "rb") as w:
-        sr, ch, sw, n = w.getframerate(), w.getnchannels(), w.getsampwidth(), w.getnframes()
-        raw = w.readframes(n)
+    sr, ch, sw, raw = read_riff(path)
     if sw == 3:
         b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
         x = (b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16))
