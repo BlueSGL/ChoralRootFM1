@@ -5,7 +5,8 @@
 # EDIT: the editor's groups, a shot each: P5's compiled panel (docs/LAYOUT-TOOL.md "Step 4"): OSC (OSC A with the
 # mixer, OSC B), FILT (FILTER with the filter envelope), ENV (the amplifier), LFO (LFO, WHEEL), MOD (POLYMOD, VOICE).
 # On FILTER's first lane (REV CUTOFF RESO ENV AMT): KNOB 2 -8: the cutoff down ("deep: part 0 page 5 FILTER col 0
-# CUT"), the chord again: it sounds, darker. SAVE (0.22, the sound pool): the
+# CUT"), the chord again: it sounds, darker. On LFO's first lane: KNOB 1 +2 (INIT AMT, the left knob), a dump and
+# a shot; KNOB 2 +2 (FREQ), a dump and a shot (3y92: 0.22-beta1 had them reversed). SAVE (0.22, the sound pool): the
 # dialog's five entries, on Overwrite (the sound is edited; shot); SELECT -1 stays there; KNOB 4 +1 marks the program
 # (shot: the star); OCT+: Overwrite, the edited program saved into U001 over place 04 (shot: the message); OCT-.
 # EDIT held: the engine picker in the editor (shot: P5 among the six). OCT-, EDIT. The last dump's "favs:" line has
@@ -75,6 +76,14 @@ shot build/emu/test/cr_prophet_env1.ppm
 btn LFO
 wait 400
 shot build/emu/test/cr_prophet_lfo.ppm
+knob KNOB1 +2                 # the LFO's first lane, left to right (3y92): KNOB 1 INIT AMT, KNOB 2 FREQ
+wait 300
+dump
+shot build/emu/test/cr_prophet_lfo_amt.ppm
+knob KNOB2 +2
+wait 300
+dump
+shot build/emu/test/cr_prophet_lfo_freq.ppm
 btn LFO
 wait 400
 shot build/emu/test/cr_prophet_wheel.ppm

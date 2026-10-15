@@ -98,6 +98,9 @@ exported as a file.
   design's checks: a parameter twice on a screen or in the design, a bound element in no lane or in two, a lane of
   more than four, two elements overlapping (frames excepted), outside the area under the header, more than 24
   elements or 8 lanes, a title wider than the header's right side (112 px), and the "not buildable yet" reasons.
+  One is a warning (yellow), not an error: **order**, "lane n: its slots are not left to right (KNOB 1..4 should follow
+  the screen)", when a free lane's bound slots' x goes back (0.22-beta1's LFO lane had FREQ, the right-hand knob, on
+  KNOB 1; 3y92). `tools/gen_layout.py` prints it as a warning and builds; it changes no error.
 - **Contact sheet**: per group, today's screens x lanes beside the design's; a click on a design tile opens it; one
   PNG of the whole sheet.
 
@@ -462,7 +465,9 @@ design, and the per-engine table that says which patch parameter a (page, column
   (yellow at 3, red at 1/2), a pair's caps touching; `validateDesign` refuses two LEDs on a 0..127 parameter and warns
   on a pair that does not touch; SYNC's label (labelAt below) under its cap; a frame at r 12 leaves its corner pixel
   the background (r 13 refused); the source mix bound once, on WHEEL, in a lane, with its hint; `pasteElements` (new
-  ids, no lane, 8 px off an identical box, the parameter then twice);
+  ids, no lane, 8 px off an identical box, the parameter then twice); the "order" warning: none on the panel (its LFO
+  lane 1 INIT AMT, FREQ), 0.22-beta1's LFO lane warns and still builds; the flat example's one (OSC B lane 2, over two
+  rows);
 - the page in Design mode (`?selftest=design`): the shipped example opens, a free screen is drawn and marked (the
   flat example: not buildable), a knob turns a dial, **a scripted pointer drag from the element strip adds a knob on
   the grid** (drawn by the firmware), the export equals the model and validates, the contact sheet has today's and the
@@ -570,11 +575,14 @@ changed no device byte (`./build.sh` before and after: sha256 of `build/choralro
 ### Tests
 
 `tests/gen_layout_test.py` (the generator on the shipped and 46 broken designs, its rules = validateDesign's with and
-without `build`), `tests/cr_layout_test.c` (the header as C), `tests/cr_p5panel_test.c` (the editor on the panel: every
-slot, empty slots inert, SELECT, MOD's EXPR after the panel), `tests/run_cr_draw.sh` (22 free pictures hashed in `tests/cr_free_golden.txt`, every
+without `build`; its warnings = checkScreen's "order" findings, 0.22-beta1's LFO lane warns and builds),
+`tests/cr_layout_test.c` (the header as C), `tests/cr_p5panel_test.c` (the editor on the panel: every
+slot, empty slots inert, SELECT, MOD's EXPR after the panel, the LFO's first lane: KNOB 1 INIT AMT, KNOB 2 FREQ, the hot
+element INIT AMT left of FREQ), `tests/run_cr_draw.sh` (22 free pictures hashed in `tests/cr_free_golden.txt`, every
 slot's partial compose equal to a whole redraw, the cost), `web/test_layout.mjs` 3 (the browser emulator equal to the
 module on P5's panel) and 7 (the packed records = the compiled ones; the loaded design's 75 frames = the compiled
-panel's), `tools/emu/test_cr.sh` (the panel's screens, CUTOFF on KNOB 2 of FILTER).
+panel's), `tools/emu/test_cr.sh` (the panel's screens, CUTOFF on KNOB 2 of FILTER, INIT AMT on KNOB 1 and FREQ on KNOB 2 of
+the LFO with the cells' value texts).
 
 ### Not done
 

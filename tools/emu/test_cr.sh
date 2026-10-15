@@ -2194,6 +2194,15 @@ has "^sound: part 0 pos 3 $P5B" "$PL" && has "^sound: part 0 pos 4 $P5C" "$PL" &
 p5c=$(sed -n 's/^deep: part 0 page 5 FILTER col 0 CUT \([0-9]*\) -> \([0-9]*\) .*/\1 \2/p' "$PL" | head -1)
 [ -n "$p5c" ] && [ "${p5c#* }" -lt "${p5c% *}" ] && ok "FILT (the panel's FILTER), KNOB 2 -8: $(grep -m1 '^deep: part 0 page 5' "$PL")" ||
     bad "no CUT edit: $(grep -m1 '^deep:' "$PL")"
+# the LFO's first lane left to right (3y92; 0.22-beta1 had FREQ on KNOB 1, the right-hand knob): KNOB 1 +2 turns
+# INIT AMT (col 1 AMOUNT), the cell 0.0 reads its value; KNOB 2 +2 turns FREQ (col 0 RATE), the cell 0.1 reads it, INIT
+# AMT unchanged
+p5lfo=$(grep -a '^deep: part 0 page 11 LFO \|^  screen reads: .* 0\.0:' "$PL" | head -4 | tr '\n' '|')
+p5amt=$(echo "$p5lfo" | sed -n 's/^deep: part 0 page 11 LFO col 1 AMOUNT [0-9]* -> [0-9]* (\([^)]*\)) edited|  screen reads: .* 0\.0:INIT AMT=\([^ ]*\) 0\.1:FREQ=\([^ ]*\) .*|deep: part 0 page 11 LFO col 0 RATE [0-9]* -> [0-9]* (\([^)]*\)) edited|  screen reads: .* 0\.0:INIT AMT=\([^ ]*\) 0\.1:FREQ=\([^ ]*\) .*|$/\1 \2 \3 \4 \5 \6/p')
+set -- $p5amt
+[ $# = 6 ] && [ "$1" = "$2" ] && [ "$4" = "$6" ] && [ "$5" = "$2" ] && [ "$3" != "$6" ] &&
+    ok "LFO, the first lane left to right: KNOB 1 +2 INIT AMT -> $1 (cell 0.0 '$2', FREQ '$3'), KNOB 2 +2 FREQ -> $4 (cell 0.1 '$6', INIT AMT '$5'): $OUT/cr_prophet_lfo_amt.ppm cr_prophet_lfo_freq.ppm" ||
+    bad "the LFO's first lane: $p5lfo"
 br=$(python3 - "$OUT/cr_prophet.wav" "$PL" <<'PY'
 import re, sys, wave, struct
 w = wave.open(sys.argv[1]); fs = w.getframerate(); ch = w.getnchannels()

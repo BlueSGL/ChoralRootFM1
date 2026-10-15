@@ -128,7 +128,7 @@
             {"id": "e10", "type": "label", "x": 124, "y": 80, "w": 108, "h": 12, "text": "-SHAPE-", "align": "centre"}
           ],
           "lanes": [
-            ["l_rate", "l_amt", null, "l_at"],
+            ["l_amt", "l_rate", null, "l_at"],
             [null, "l_saw", "l_tri", "l_sq"]
           ]
         },

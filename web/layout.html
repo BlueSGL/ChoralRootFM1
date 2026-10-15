@@ -686,7 +686,7 @@ function dScreen() {
   ul.textContent = "";
   const li = (cls, head, text) => ul.append(el("li", { class: cls }, el("b", { text: head + " " }), text));
   for (const f of r.lint.findings) li(f.kind, f.kind, `"${f.text}" [${f.box.join(", ")}]` + (f.other ? ` / "${f.other.text}"` : ""));
-  for (const c of r.checks) li(c.kind === "title" ? "ellipsis" : "", c.kind, c.text);
+  for (const c of r.checks) li(c.kind === "title" ? "ellipsis" : c.kind === "order" ? "rule" : "", c.kind, c.text);
   for (const u of usedTwice(ds.design)) li("rule", "used twice", `${u.param}: ${u.where.join(", ")}`);
   if (r.unbuildable) li("rule", "not buildable yet", r.unbuildable);
   for (const n of ds.session.pack.notes) li("rule", "note", n);

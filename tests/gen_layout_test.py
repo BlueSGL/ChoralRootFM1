@@ -11,6 +11,8 @@
   (an error the unbroken file does not have, matching the reason's words);
 - the generator's own refusals (the firmware's rules: the grid, the area, the budgets, the lanes, a parameter once, a
   pair apart, a band element, a classic screen in OSC .. MOD, the flat style, FX and MIX as today ..) on p5-panel.json;
+- a warning, not a refusal: a lane whose slots are not left to right (0.22-beta1's LFO lane) builds and warns, the
+  shipped panel does not; the warnings are checkScreen's "order" findings word for word (node);
 - the same rules as validateDesign: the generator's checks without the build's (validate(.., built=False)) give
   validateDesign's errors word for word on every design here, and with them validateDesign(.., {build: true})'s
   (node, web/fm1layout.js)."""
@@ -195,6 +197,16 @@ el(paired, "LFO", "l_saw").update(pair="left")
 el(paired, "LFO", "l_tri").update(pair="right", x=148)
 ok(not refusals(paired), "a pair whose halves touch: built")
 
+# ----------------------------------------------------------- a warning, not a refusal: KNOB 1..4 left to right ---
+beta1 = copy.deepcopy(panel)           # 0.22-beta1's LFO lane 1: FREQ (x 64) on KNOB 1, INIT AMT (x 8) on KNOB 2
+scr(beta1, "LFO")["lanes"][0] = ["l_rate", "l_amt", None, "l_at"]
+designs["warn: the LFO lane of 0.22-beta1"] = beta1
+ok(scr(panel, "LFO")["lanes"][0] == ["l_amt", "l_rate", None, "l_at"] and not G.warnings(panel),
+   f"p5-panel: every lane left to right, no warning ({G.warnings(panel)})")
+ok(not refusals(beta1) and G.warnings(beta1) == ["LFO screen 1: lane 1: its slots are not left to right "
+                                                 "(KNOB 1..4 should follow the screen)"],
+   f"0.22-beta1's LFO lane: built, with the order warning ({G.warnings(beta1)})")
+
 # -------------------------------------------------------------------- the same rules as validateDesign (JS) ---
 node = shutil.which("node")
 if not node:
@@ -207,7 +219,11 @@ else:
               f'const cat = JSON.parse(fs.readFileSync({json.dumps(str(ROOT / "design/layouts/p5.json"))}, "utf8"));\n'
               f'const ds = JSON.parse(fs.readFileSync({json.dumps(str(Path(tmp) / "designs.json"))}, "utf8"));\n'
               'const out = {};\n'
-              'for (const [k, d] of Object.entries(ds)) out[k] = [L.validateDesign(d, cat).errors, L.validateDesign(d, cat, { build: true }).errors];\n'
+              'const pidx = L.paramIndex(L.paramList(cat));\n'
+              'const order = (d) => d.groups.flatMap((g) => g.screens.flatMap((s, si) => s.type === "free" ? '
+              'L.checkScreen(s, pidx).filter((c) => c.kind === "order").map((c) => `${g.name} screen ${si + 1}: ${c.text}`) : []));\n'
+              'for (const [k, d] of Object.entries(ds)) out[k] = [L.validateDesign(d, cat).errors, L.validateDesign(d, cat, { build: true }).errors,\n'
+              '  L.validateDesign(d, cat).errors.length ? null : order(d)];\n'
               'console.log(JSON.stringify(out));\n')
         (Path(tmp) / "v.mjs").write_text(js)
         r = subprocess.run([node, str(Path(tmp) / "v.mjs")], capture_output=True, text=True)
@@ -218,6 +234,10 @@ else:
         ok(not differ, f"the generator's checks {'with' if built else 'without'} the build's = validateDesign's"
            f"{' {build: true}' if built else ''} errors, word for word, on all {len(designs)} designs" +
            "".join(f"\n    {k}: py {G.validate(copy.deepcopy(designs[k]), cat, built=built)} js {jsv[k][built]}" for k in differ[:3]))
+    wdiff = [k for k, d in designs.items() if k in jsv and jsv[k][2] is not None and G.warnings(copy.deepcopy(d)) != jsv[k][2]]
+    nw = sum(1 for k in designs if k in jsv and jsv[k][2])
+    ok(not wdiff and nw >= 2, f"the generator's warnings = checkScreen's \"order\" findings, word for word, on every valid design "
+       f"({nw} with one)" + "".join(f"\n    {k}: py {G.warnings(designs[k])} js {jsv[k][2]}" for k in wdiff[:3]))
     ok(not jsv.get("p5-panel", [["?"]])[0] and not jsv.get("p5-panel", [0, ["?"]])[1] and all(jsv.get("broken: " + k, [0])[0] for k in BROKEN),
        "validateDesign: p5-panel valid (and buildable), each broken design refused")
 

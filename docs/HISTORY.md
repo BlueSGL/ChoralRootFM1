@@ -3667,3 +3667,34 @@ tagged: a note) and finds v0.22-beta1 in the list. Open, not blocking: the publi
 (docs/LAYOUT-TOOL.md says so); the release body's install text does not say a beta is behind "Show beta releases"
 (the notes above it do). Not done: anything on a unit (the panel is not device-tested: docs/HANDOFF.md); the push, the
 tag and the Pages job.
+
+## 2026-10-15 (0.22-beta1 on the unit: P5's LFO lane)
+
+3y92. **P5's LFO screen: KNOB 1 is INIT AMT and KNOB 2 FREQ, as they sit; a design check for lanes out of order
+(2026-10-15; on lay-6 from 776c740, not pushed, not flashed).** The owner, trying v0.22-beta1 on the unit: "P5 LFO page
+FREQ and INIT AMT are reversed on the knobs." Cause: in `design/layouts/designs/p5-panel.json` the LFO screen's first
+lane was `["l_rate", "l_amt", null, "l_at"]` while INIT AMT (`l_amt`) sits at x 8 and FREQ (`l_rate`) at x 64, so
+KNOB 1 turned the right-hand knob; every other lane of the panel runs left to right. Fixed: the lane is `["l_amt",
+"l_rate", null, "l_at"]`, nothing else in the file (formatDesign's round trip equal). The compiled table is the same
+bytes reordered (the lane's two element indices swap): the size line unchanged, XIP 546 780 B of 573 440 (95.4 %), RAM
+79.8 %, POOL 69.5 %. **The check**: `checkScreen` (web/fm1layout.js) has kind `order`, a warning (yellow in the lint
+list), not an error: "lane n: its slots are not left to right (KNOB 1..4 should follow the screen)" when a free lane's
+bound slots' x goes back; `tools/gen_layout.py` `warnings()` prints the same words as "gen_layout: <design>: warning:
+<group> screen n: lane n: .." and builds (validateDesign's errors unchanged, so gen_layout_test's word-for-word
+comparison holds). The flat example `p5-osc-panel.json` has one (OSC B lane 2 runs over two rows, the top row's
+right end first); left as it is (it is not built), and test_layout's "lint clean" on it now leaves `order` out and
+checks that one warning instead. **Tests**: `web/test_layout.mjs` 6 (the panel: no order warning, LFO lane 1 l_amt
+l_rate; 0.22-beta1's lane warns once with the three ids and still builds; the example's one warning);
+`tests/gen_layout_test.py` 61 checks (0.22-beta1's lane builds with the warning, the panel has none; the generator's
+warnings = checkScreen's order findings word for word on every valid design); `tests/cr_p5panel_test.c` 11 checks (the
+LFO's first lane: KNOB 1 on LFO:AMOUNT, KNOB 2 on LFO:RATE; after KNOB 1 the hot element is INIT AMT at x 8, left of
+FREQ at x 64, and FREQ unmoved; KNOB 2 moves FREQ only; on 0.22-beta1's table all three fail);
+`tools/emu/scripts/cr_prophet.txt` + `test_cr.sh` (on P5's LFO screen KNOB 1 +2 logs "page 11 LFO col 1 AMOUNT" and
+the dump's cell 0.0 "INIT AMT" reads its value, KNOB 2 +2 "col 0 RATE" and cell 0.1 "FREQ", INIT AMT unchanged:
+cr_prophet_lfo_amt.ppm, cr_prophet_lfo_freq.ppm). Goldens: `tests/cr_free_golden.txt` p5free_5_1 and p5free_5_2 (the
+LFO screen's two lanes: the mock-up values and, on lane 1, the knob colours follow the slot), no other. The sheets
+`design/choralroot-fm1-p5-panel-screens.png` and `-emulator.png` re-rendered. Docs: docs/LAYOUT-TOOL.md (the order
+check, the tests), docs/releases/0.22.md (a line for the next beta's notes). **Checked**: test_layout with the
+emulator comparison PASS (112 ok), gen_layout_test 61, `sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1002 ok,
+test_persist 111, test_retired 18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit (the owner tries
+the next build).

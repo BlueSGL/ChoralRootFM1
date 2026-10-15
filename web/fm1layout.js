@@ -746,7 +746,8 @@ function switchName(e, p, n, i) {
 // ---------------------------------------------------------- design checks ---
 const boxOf = (e) => [e.x, e.y, e.x + e.w, e.y + e.h];
 const meet = (a, b) => a[0] < b[2] && b[0] < a[2] && a[1] < b[3] && b[1] < a[3];
-// the design's own checks of a screen (beside the firmware's text lint): [{kind, text, ids?}]
+// the design's own checks of a screen (beside the firmware's text lint): [{kind, text, ids?}]; kind "order" is a
+// warning (the page shows it yellow; tools/gen_layout.py prints it and builds)
 // opts.measure(text, px, bold): the header's right text width (the module's lay_text_w)
 export function checkScreen(screen, params, opts = {}) {
   const f = [], add = (kind, text, ids) => f.push({ kind, text, ids });
@@ -767,6 +768,12 @@ export function checkScreen(screen, params, opts = {}) {
   if (screen.lanes.length > MAX_LANES) add("budget", `${screen.lanes.length} lanes: at most ${MAX_LANES}`);
   screen.lanes.forEach((l, li) => { if (l.filter((x) => x !== null).length > LANE_SLOTS) add("lane", `lane ${li + 1} has ${l.length} elements: four knobs`); });
   for (const id of new Set(twice)) add("lane", `${id} is in two lanes`, [id]);
+  // a warning: KNOB 1..4 follow the screen left to right (the bound slots' x never goes back)
+  screen.lanes.forEach((l, li) => {
+    const xs = l.map((id) => id !== null && els.find((e) => e.id === id)).filter((e) => e && Number.isFinite(e.x));
+    if (xs.some((e, i) => i && e.x < xs[i - 1].x))
+      add("order", `lane ${li + 1}: its slots are not left to right (KNOB 1..4 should follow the screen)`, xs.map((e) => e.id));
+  });
   const used = new Map();
   for (const e of els) {
     if (BINDABLE.has(e.type) && e.param) {

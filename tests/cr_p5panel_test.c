@@ -5,7 +5,7 @@
  * many, their lanes, their titles; MOD's last screen still the EXPR stack, 0.22), FX and MIX the platform's; every lane slot of the design turned through the editor
  * (ce_knob): a bound one moves its parameter (the engine's own, by its built-in page and column), marks the sound
  * edited and the slot hot, and the screen model (ce_screen) is CR_K_FREE with that hot cell; an empty slot does
- * nothing; SELECT runs across the lanes and the screens of a group and wraps; the patch blob carries the edits; another
+ * nothing; the LFO's first lane left to right (KNOB 1 INIT AMT, KNOB 2 FREQ: 3y92); SELECT runs across the lanes and the screens of a group and wraps; the patch blob carries the edits; another
  * engine (the VA) keeps its classic screens. */
 #include <os/lock.h>
 #include <pthread.h>
@@ -93,6 +93,51 @@ int main(void)
     OK(sc.type == CE_S_EXPR && ce_lanes(t, CE_MOD, &sc) == 2u && s.kind == CR_K_STACK && s.fl_eng == 0 &&
        !strcmp(s.page, "EXPR \267 AT") && !strcmp(s.cell[1][0].value, "AT"),
        "MOD %u: EXPR after the panel's POLYMOD and VOICE (a stack of two lanes, \"%s\")", (unsigned)ns, s.page);
+
+    /* the LFO screen's first lane, left to right (3y92; 0.22-beta1 had them reversed, the owner: "P5 LFO page FREQ and
+     * INIT AMT are reversed on the knobs"): KNOB 1 turns LFO:AMOUNT (INIT AMT), KNOB 2 LFO:RATE (FREQ), and the
+     * element hot after KNOB 1 is the one labelled INIT AMT, left of the FREQ knob */
+    {
+        uint32_t si, pl, x0, x1;
+        const cr_lay_screen_t *ls;
+        const cr_lay_elem_t *e0, *e1, *eh;
+        int32_t a0, r0, a1, r1, a2, r2;
+        for (pl = 0; pl < d->npages && strcmp(d->pages[pl].title, "LFO"); pl++)
+            ;
+        cr_lay_group(li, CE_LFO, 0, &si);
+        ls = cr_lay_scr(li, si);
+        x0 = cr_lay_slot(ls, 0, 0);
+        x1 = cr_lay_slot(ls, 0, 1);
+        e0 = x0 == CR_LAY_EMPTY ? 0 : cr_lay_el(li, ls, x0);
+        e1 = x1 == CR_LAY_EMPTY ? 0 : cr_lay_el(li, ls, x1);
+        OK(pl < d->npages && !strcmp(d->pages[pl].col[0].label, "RATE") && !strcmp(d->pages[pl].col[1].label, "AMOUNT") &&
+           e0 && e1 && e0->page == pl && e0->col == 1u && e1->page == pl && e1->col == 0u,
+           "LFO lane 1: KNOB 1 on LFO:AMOUNT, KNOB 2 on LFO:RATE (page %u: KNOB 1 col %d, KNOB 2 col %d)", (unsigned)pl,
+           e0 ? e0->col : -1, e1 ? e1->col : -1);
+        cx.grp[0] = CE_LFO;
+        cx.scr[0][CE_LFO] = 0;
+        cx.lane[0][CE_LFO] = 0;
+        cx.hot_r = 0;
+        a0 = d->get(t, pl, 1);
+        r0 = d->get(t, pl, 0);
+        ce_knob(0, a0 >= d->pages[pl].col[1].max ? -1 : 1, 0);
+        a1 = d->get(t, pl, 1);
+        r1 = d->get(t, pl, 0);
+        ce_screen(&s, cu_now());
+        eh = cx.hot_r == 1u && cx.hot_c < 4u && cr_lay_slot(ls, 0, cx.hot_c) != CR_LAY_EMPTY
+                 ? cr_lay_el(li, ls, cr_lay_slot(ls, 0, cx.hot_c)) : 0;
+        OK(a1 != a0 && r1 == r0 && eh && e1 && !strcmp(cr_lay_str(eh->label), "INIT AMT") &&
+           !strcmp(cr_lay_str(e1->label), "FREQ") && eh->x < e1->x && s.hot_r == 1u && s.hot_c == 0u &&
+           !strcmp(s.cell[0][0].label, "INIT AMT"),
+           "LFO KNOB 1: INIT AMT moves (%d -> %d), FREQ stays (%d); the hot element \"%s\" at x %u, left of FREQ at x %u",
+           (int)a0, (int)a1, (int)r0, eh ? cr_lay_str(eh->label) : "-", eh ? eh->x : 0u, e1 ? e1->x : 0u);
+        ce_knob(1, r1 >= d->pages[pl].col[0].max ? -1 : 1, 0);
+        a2 = d->get(t, pl, 1);
+        r2 = d->get(t, pl, 0);
+        ce_screen(&s, cu_now());
+        OK(r2 != r1 && a2 == a1 && cx.hot_c == 1u && !strcmp(s.cell[0][1].label, "FREQ"),
+           "LFO KNOB 2: FREQ moves (%d -> %d), INIT AMT stays (%d)", (int)r1, (int)r2, (int)a1);
+    }
 
     /* every lane slot turned */
     for (g = 0; g <= CE_MOD; g++) {

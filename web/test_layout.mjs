@@ -380,11 +380,14 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     const r = s.render();
     shots.push(r.rgba);
     for (const f of r.lint.findings) findings.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${f.kind} "${f.text}"`);
-    for (const c of r.checks) findings.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${c.kind} ${c.text}`);
+    for (const c of r.checks) if (c.kind !== "order") findings.push(`${t.group} ${t.si + 1}.${t.lane + 1}: ${c.kind} ${c.text}`);
     if (t.type === "free" && (L.inkCount(r.rgba) < 500 || !r.unbuildable)) findings.push(`${t.key}: blank or not marked`);
   }
   ok(!findings.length && L.usedTwice(ex).length === 0, `the example: ${shots.length} screens x lanes rendered, lint clean (text, overlap, lanes, budget, header), no parameter twice` +
      (findings.length ? `\n          ${findings.slice(0, 10).join("\n          ")}` : ""));
+  // its one "order" warning (a warning: the example's OSC B lane 2 runs over two rows, the top row's right end first)
+  const exOrder = ex.groups.flatMap((g) => g.screens.flatMap((x, si) => x.type === "free" ? L.checkScreen(x, pidx).filter((c) => c.kind === "order").map((c) => `${g.name} ${si + 1} ${c.text}`) : []));
+  ok(exOrder.length === 1 && exOrder[0].startsWith("OSC 2 lane 2: its slots are not left to right"), `the example's only "order" warning: OSC B lane 2 (${exOrder.join("; ")})`);
   const again = L.designTiles(ex).map((t) => { s.open(t.gi, t.si, t.lane); return s.render().rgba; });
   ok(again.every((a, i) => L.diffCount(a, shots[i]) === 0), "the example drawn again: the same bytes (deterministic)");
   s.open(0, 0, 0);
@@ -408,6 +411,16 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   const pv = L.validateDesign(pan, cat);
   ok(pan.style === "p5" && !pv.errors.length && !pv.warnings.length, "design/layouts/designs/p5-panel.json: style p5, valid, no warning" +
      (pv.errors.length || pv.warnings.length ? ` (${[...pv.errors, ...pv.warnings].slice(0, 3).join("; ")})` : ""));
+  // KNOB 1..4 follow the screen left to right ("order", a warning): the shipped panel has none; its LFO lane 1 is
+  // INIT AMT, FREQ (x 8, 64); 0.22-beta1's (FREQ on KNOB 1, INIT AMT on KNOB 2: "reversed on the knobs") warns, and builds
+  const orderOf = (d) => d.groups.flatMap((g) => g.screens.flatMap((x, si) => x.type === "free" ? L.checkScreen(x, pidx).filter((c) => c.kind === "order").map((c) => ({ at: `${g.name} ${si + 1}`, ...c })) : []));
+  const lfo0 = pan.groups.find((g) => g.name === "LFO").screens[0], beta1 = JSON.parse(JSON.stringify(pan));
+  beta1.groups.find((g) => g.name === "LFO").screens[0].lanes[0] = ["l_rate", "l_amt", null, "l_at"];
+  const oP = orderOf(pan), oB = orderOf(beta1), bv = L.validateDesign(beta1, cat, { build: true });
+  ok(!oP.length && lfo0.lanes[0].join() === "l_amt,l_rate,,l_at" && oB.length === 1 && oB[0].at === "LFO 1" &&
+     oB[0].text === "lane 1: its slots are not left to right (KNOB 1..4 should follow the screen)" && oB[0].ids.join() === "l_rate,l_amt,l_at" &&
+     !bv.errors.length && !bv.warnings.length,
+     `"order": the p5 panel's lanes left to right (LFO lane 1 ${lfo0.lanes[0].join(" ")}); 0.22-beta1's LFO lane warns (${oB.map((c) => `${c.at}: ${c.text}`).join("; ") || "nothing"}), still buildable (${bv.errors.join("; ")})`);
   const ps = L.designSession(m, cat, pan, 1);
   ps.reload();
   const pshots = [], pfind = [];

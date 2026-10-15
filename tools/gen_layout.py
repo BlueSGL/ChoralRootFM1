@@ -340,6 +340,23 @@ def free(s, at, gname, params, built, err, used):
                 err(f"{at}: {i} ({e['param']}) is in no lane: no knob reaches it")
 
 
+def warnings(d):
+    """the design checks that warn and do not refuse (web/fm1layout.js checkScreen's, the same words, after the screen):
+    "order", a free lane whose bound slots' x goes back (KNOB 1..4 should follow the screen left to right) -> [texts]"""
+    out = []
+    for g in d.get("groups") or []:
+        for si, s in enumerate(g.get("screens") or [] if isinstance(g, dict) else []):
+            if not isinstance(s, dict) or s.get("type") != "free":
+                continue
+            ids = {e.get("id"): e for e in s.get("elements") or [] if isinstance(e, dict)}
+            for li, lane in enumerate(s.get("lanes") or []):
+                xs = [ids[i]["x"] for i in (lane if isinstance(lane, list) else []) if i is not None and i in ids and is_int(ids[i].get("x"))]
+                if any(b < a for a, b in zip(xs, xs[1:])):
+                    out.append(f"{g.get('name')} screen {si + 1}: lane {li + 1}: its slots are not left to right "
+                               "(KNOB 1..4 should follow the screen)")
+    return out
+
+
 # ------------------------------------------------------------------------------------------------ records ---
 class Pool:
     """the string pool: each run once (a label, or a label and its value names up to an empty string)"""
@@ -513,6 +530,8 @@ def main(out):
             for t in e.args[0]:
                 print(f"gen_layout: {path}: {t}", file=sys.stderr)
             raise SystemExit(f"gen_layout: {path} refused ({len(e.args[0])} errors)")
+        for t in warnings(d):
+            print(f"gen_layout: {path}: warning: {t}", file=sys.stderr)
         n = cost(c)
         print(f"gen_layout: {name} {Path(path).name}: {n['screens']} screens, {n['elements']} elements, {n['lanes']} "
               f"lanes: {n['elements']} x {ELEM_B} + {n['screens']} x {SCREEN_B} + pool {n['pool']} + {HEAD_B} = "
