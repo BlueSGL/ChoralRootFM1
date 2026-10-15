@@ -9,12 +9,20 @@ part with two cores, four with one** ([Voices](#voices), 3y46). It came here by 
 ChoralRoot 0.14-dev that Rosen sent ("the Prophet 5 Engine from Melodee that was added sounds really nice and is
 perfect for chords").
 
-**The name.** A player sees **P5** everywhere (the engine pickers, the pool's read-out, the editor, "P5: no save
-yet", the emulator's traces): the owner's name for it, 2026-10-13 ("we can name in P5"). The code, the switches and
+**The name.** A player sees **P5** everywhere (the engine pickers, the pool's read-out, the editor, the save dialog,
+the emulator's traces): the owner's name for it, 2026-10-13 ("we can name in P5"). The code, the switches and
 this file keep their names (`FELUCCA_PROPHET`, `ENGI_PROPHET`, `eng_prophet_test.c`, `p5_`); "Prophet" below means the
 instrument and Sequential's data.
 
-**Where it stands, 3y46** (2026-10-13): the chord part's voices are rendered by BOTH cores (eight voices, four a
+**Where it stands (0.22-beta1, 2026-10-14).** P5 ships in the release with the **115 programs of
+`assets/prophet5-factory/shipped.txt`** (the owner's favourites of Sequential's 200, 3y51; the other 85 are neither in
+a release nor on the site: [Open decisions](#open-decisions-the-owners) 2). Its sounds **save** like every engine's
+since the sound pool (3y57, [Saving](#saving)); eight voices on two cores, the bass always keeping one (3y46, 3y53),
+four and a one-voice bass on one core; the owner has played the eight-voice build on his unit (3y53: six- to
+eight-note chords with the effects up, 0 late, 0 stale, 0 shed). Open: the crackle of 3y44 (not reproduced on the
+host, not explained), and Sequential program SysEx import.
+
+**Where it stood, 3y46** (2026-10-13): the chord part's voices are rendered by BOTH cores (eight voices, four a
 core), a P5 bass shares that pool with the chord first, one core plays four and a P5 bass one, the engine is 6 dB
 lower, and Options > Dual Core is On on a new unit. All of it on the host and in the emulators; **nothing of 3y46 has
 run on a unit**. [Voices](#voices), [Two cores, eight voices](#two-cores-eight-voices-3y46), [Level](#level-3y46).
@@ -1455,8 +1463,11 @@ leaves to the owner:
 
 1. **The list itself**: the 48 were chosen from the parameters, not by ear. Edit `shipped.txt` after playing
    ([the steps](#the-shipped-list)).
-2. **Sequential's data in a release at all** (`FELUCCA_P5_FACTORY`): the data are Sequential's ("no licence granted",
-   as Melodee words it and as ChoralRoot words Casio's CZ-1 tones). 48 programs are 4.7 KB of flash, 200 are 18.6.
+2. ~~**Sequential's data in a release at all** (`FELUCCA_P5_FACTORY`): the data are Sequential's ("no licence
+   granted", as Melodee words it and as ChoralRoot words Casio's CZ-1 tones). 48 programs are 4.7 KB of flash, 200 are
+   18.6.~~ **Decided (the owner, 2026-10-13, HISTORY 3y51):** a release ships exactly the 115 programs that
+   `assets/prophet5-factory/shipped.txt` lists (his favourites), not the other 85; and those 85 are not offered on the
+   site either (2026-10-14, 3y55). The data stay Sequential's (LICENSING.md).
 3. **The unit again**: the four-voice build's counters ([To read next](#does-it-fit)), and UNISON by ear, on the
    chord part and on the bass.
 4. **A UNISON bass** is four voices thick alone and one voice under a chord on one core ([UNISON](#unison)): the

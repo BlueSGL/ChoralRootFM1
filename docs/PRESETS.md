@@ -107,12 +107,14 @@ it, no way to save over a factory sound). Mock-ups: `design/choralroot-fm1-prese
 - **A place in this pool is not a program's identity**: the list may change between builds. A program is known by
   its Sequential number (1..200), which it carries in its own bytes; the session keeps the program itself and finds
   its place again from that number (docs/PROPHET.md).
-- **A load takes the program's UNISON switch** (5 of the 48): a chord on such a program sounds one note on up to four
+- **A load takes the program's UNISON switch** (18 of the shipped 115): a chord on such a program sounds one note on up to four
   stacked voices; the next program without the switch is poly again (docs/PROPHET.md "UNISON").
 - The programs are dry; they play with the part's sends, which no sound load touches (the model above).
-- **It is the first pool that cannot grow yet: a P5 part's SAVE menu has the three favourites' entries alone**
-  (Favorite, Favorites filter, Favorite type; 0.22; until then the tap was refused), and OCT+ there is refused ("P5: no save yet"): the engine has no store for its program
-  (phase B). Its edits live in the part and in the session. A P5 program's mark is on its Sequential number.
+- **It grows as every pool does since the sound pool (3y57)**: SAVE on a P5 part has the five entries, and Overwrite
+  or Save as new keeps the whole 138-byte program in one of the 128 slots ([The pool](#the-pool-022-128-user-slots-shared-by-every-engine);
+  docs/PROPHET.md "Saving"). (Before the pool its SAVE menu had the three favourites' entries alone and OCT+ said
+  "P5: no save yet": there was no store for the program.) Its edits also live in the part and in the session. A
+  factory program's mark is on its Sequential number, a P5 user sound's on its slot.
 - Left as it is for phase B: the settings record has no slot for P5's per-engine pool position (`cr_settings.c
   crs_slot`), so after a power cycle a part that comes back to P5 from another engine lands on 01 (the sound a part
   was playing at power-off does come back: the session). A pool's place, an engine's preset count and a track's
@@ -217,7 +219,8 @@ trying one keeps the marks with everything else.
 
 **On the unit.**
 
-- **The SAVE menu** (`cr_ui.c cu_knob`, `cu_save_screen`). Five entries; a P5 part's menu has the last three:
+- **The SAVE menu** (`cr_ui.c cu_knob`, `cu_save_screen`). Five entries, on every engine (P5's too since the sound
+  pool, 3y57; before it a P5 part's menu had the last three alone, `cu_save_favonly`, and OCT+ said "P5: no save yet"):
 
   | entry | the big word (its value) | KNOB 1 |
   | --- | --- | --- |
@@ -231,11 +234,10 @@ trying one keeps the marks with everything else.
   (left Off, right On), **KNOB 3** the sound's type (as KNOB 1 on entry 5, the auto-mark included), **KNOB 4** the
   mark (right on, left off; it never changes the type). On an entry that does not show what the knob changed, a
   yellow message says it for a moment (`Filter on`, `Type: Chord`); the star by the name shows the mark on every
-  entry. **OCT+** (and SAVE again) saves on entries 1 and 2 only; on 3 .. 5 OCT+ does nothing (a P5 part: "P5: no
-  save yet") and SAVE again closes; OCT- closes. The look is the dialog's: the big word, the entries next to it
+  entry. **OCT+** (and SAVE again) saves on entries 1 and 2 only; on 3 .. 5 OCT+ does nothing and SAVE again closes; OCT- closes. The look is the dialog's: the big word, the entries next to it
   small (`Filter off`, `Type: Chord`), the sound's name with its star, a line that names the entry (`FM6 ·
   favorite`, `favorites filter` or, with the filter on and no favourite of the part in its engine, `no favorites
-  here: all`; `favorite type` or `type · not a favorite`), five dots (three on P5), and the footer `K1 change · K2
+  here: all`; `favorite type` or `type · not a favorite`), five dots, and the footer `K1 change · K2
   filter · K3 type · K4 favorite` on entries 3 .. 5 (the knobs' names spelled out do not fit the line; entries 1 and
   2 keep `OCT+: save · OCT-: cancel`, where the three knobs work all the same). Over the red question (SAVE held)
   the four knobs do nothing; the naming page has its own (below).

@@ -1,6 +1,7 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.21 on the M-VAVE FM-1. It is written for someone who owns an FM-1, has installed ChoralRoot with
+For ChoralRoot 0.22 on the M-VAVE FM-1 (0.22 is in beta; 0.21 is the latest stable release, and what is new in 0.22
+is marked so). It is written for someone who owns an FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
 
@@ -98,7 +99,7 @@ a hold opens its layer. [Layers](#5-layers) has the rules.
 **Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place:
 the engine in orange (`FM6`), the number big (`02`), the name (`FM BELL`), a stripe for every preset of the engine,
 and `Hold OPT to change engine`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
-(FM6, FM TONE, VA, CZ-1 and WHEEL). Let go of OPT and the engine you stopped on is loaded.
+(FM6, FM TONE, VA, CZ-1, P5 and WHEEL). Let go of OPT and the engine you stopped on is loaded.
 
 **Add the bass.** Tap **BASS** (printed ENV). A bass note now plays under every chord, and `Bass` shows at the top
 right. ALGORITHM changes the bass sound. Tap BASS again to switch it off.
@@ -1059,7 +1060,7 @@ More detail: [LOOPER.md](LOOPER.md), [LOOPER-MODES.md](LOOPER-MODES.md).
 ## 11. Sounds
 
 ChoralRoot plays two sounds at once: the **chord sound** (PRESETS) and the **bass sound** (ALGORITHM). Each belongs
-to one of five engines.
+to one of six engines.
 
 ### The engines
 
@@ -1069,6 +1070,7 @@ to one of five engines.
 | **FM TONE** | four-operator FM in the style of the Digitone | 16 |
 | **VA** | ChoralRoot's virtual analog: four oscillators, a morphing filter, four envelopes, four LFOs, a modulation matrix, stereo | 25 |
 | **CZ-1** | Casio CZ-1 phase distortion, with Casio's own 64 tones | 64 |
+| **P5** | a Prophet-5 model (Melodee's engine; new in 0.22): two oscillators with sync and Poly-Mod into a four-pole filter, two envelopes, the wheel's modulation; Sequential's own programs | 115 |
 | **WHEEL** | a tonewheel organ with nine drawbars | 5 |
 
 This is the order in which the instrument shows them. Up to 0.17 there were six more, PHASE, LOFI, VOICE, TRIO,
@@ -1127,7 +1129,7 @@ Hold **EDIT**. The engine picker opens and stays (EDIT blinks). It is a preview:
 
 | Control | In the engine picker |
 | --- | --- |
-| SELECT | the five engines, one at a time, in the order of the table above (FM6 ... WHEEL). The sound moves to that engine and keeps its envelope and mix |
+| SELECT | the six engines, one at a time, in the order of the table above (FM6 ... WHEEL). The sound moves to that engine and keeps its envelope and mix |
 | KNOB 1 (or PRESETS) | the engine's pool, as PRESETS |
 | KNOB 2 | INIT: the engine's plain starting sound (`init sound`) |
 | the root keys and the chord keys | play, as always: you hear every engine and preset as you turn to it |
@@ -1227,8 +1229,8 @@ needed), and they are part of a backup. Deleting one of your sounds removes its 
 To **delete** a sound you added, or to **reset** a factory preset you saved over: open the save dialog on it and hold
 SAVE for a second. The screen asks `delete?` or `reset to factory?`; OCT+ does it, OCT- keeps it.
 
-There is room for **32 saved sounds** in all, shared by the engines and the two parts (`no free slot` when they are
-used up). A saved sound holds the engine's whole patch, its envelopes and modulation. (It also holds four send values, which are no longer used: the sends are the part's. An FM TONE sound's Drive is the one that is used: [FM TONE's Drive](#fm-tones-drive).)
+There is room for **128 saved sounds** in all (32 until 0.21), numbered U001 to U128, shared by the engines and the
+two parts (`no free slot` when they are used up). A saved sound holds the engine's whole patch, its envelopes and modulation. (It also holds four send values, which are no longer used: the sends are the part's. An FM TONE sound's Drive is the one that is used: [FM TONE's Drive](#fm-tones-drive).)
 Changes you have not saved are lost when you load another sound. A **global save** (SAVE held) keeps each part's
 sound as it is, edited or not, without making it a preset: the FM-1 comes back with it after a power-off, and GLO +
 SAVE brings it back (new in 0.18). The pool still holds the sound as it was saved as a preset, so turning PRESETS
@@ -1387,6 +1389,21 @@ line then reads `snap · B1`. More: [QUAD.md](QUAD.md) (the engine's working nam
 | MOD | `TONE`: Line · Mod · Oct |
 
 More: [CZ1.md](CZ1.md).
+
+### P5
+
+| Group | Screens |
+| --- | --- |
+| OSC | (1) `OSC A`: Freq · Saw · Pulse · Width, and Sync. (2) `OSC B`: Freq · Fine · Saw · Tri, and Pulse · Width · Lo freq · Keyboard. (3) `MIXER`: Osc A · Osc B · Noise |
+| FILT | `FILTER`, under the filter curve: Cutoff · Reso · Env amt · Key trk, and Filter rev (1/2 or 3) · Aftertouch |
+| ENV | `ENV 1 · amp` and `ENV 2 · filter`, each the envelope's shape over Attack · Decay · Sustain · Release, and Velocity (ENV 1 also the Release switch) |
+| LFO | (1) `LFO`: Rate · Amount · Noise · Aftertouch, and the Saw · Tri · Square switches. (2) `WHEEL`: where the wheel's modulation goes: Freq A · Freq B · PW A · PW B, and Filter |
+| MOD | (1) `POLYMOD`: the Env and Osc B amounts, and Freq A · PW A · Filter. (2) `VOICE`: Unison · Voices (1 to 4) · Detune · Glide, and Priority · Vintage |
+
+Each cell is a value of the Prophet-5 program itself. A program whose Unison is on loads in UNISON (one note on up to
+four stacked voices); the next one without it plays chords again. With Dual Core on the chord part has up to eight P5
+voices, and a P5 bass up to four with the chord first (it always keeps one); with one core, four, three while a P5
+bass sounds. More: [PROPHET.md](PROPHET.md).
 
 ### WHEEL
 
@@ -1658,7 +1675,7 @@ against a simulated FM-1. More: [DEVICE-MANAGER.md](DEVICE-MANAGER.md).
 
 The installer page (<https://quixotic7.github.io/ChoralRootFM1/>) has **Back up** and **Restore**:
 
-- A backup is one `.json` file with everything stored on the FM-1: the settings, the 32 saved sounds with their
+- A backup is one `.json` file with everything stored on the FM-1: the settings, the saved sounds with their
   patches, the ten loops, the FM6 voice bank and the CZ-1 banks.
 - Restore checks the file, writes it back and restarts the FM-1. Stop any loop first.
 - Install saves a backup before it writes, unless you skip it.
@@ -1812,7 +1829,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | In the engine picker the white keys no longer choose the engine | they always play now, so that you hear what you turn to | SELECT steps the engines |
 | After updating to 0.18 the reverb and the delay sound different | they are new, and start at their defaults | [FX](#8-fx) |
 | My edit is gone | unsaved changes are lost with the next sound, and at power-off unless you held SAVE | SAVE tap to make it a preset; SAVE held to keep the part as it is |
-| `no free slot` | all 32 saved sounds are used | delete one (SAVE held in the save dialog), or use the device manager |
+| `no free slot` | all 128 saved sounds are used | delete one (SAVE held in the save dialog), or use the device manager |
 | A setting did not survive switching off | it was not saved: only the Options are stored by themselves (a moment after the instrument falls quiet, never while a loop plays) | hold SAVE before switching off |
 | My loop is gone after switching off | loops are no longer saved when they stop | hold SAVE; moving to another slot also saves the loop you leave |
 | I recorded over a loop I liked | | GLO + SAVE held for a second: the loop as last saved is back (with everything else as last saved) |

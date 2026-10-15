@@ -2962,3 +2962,26 @@ that fits shows whole (`ChoralRoot 0.22`, `ChoralRoot 0.22 1-core`); one too lon
 display alone (`cr_ui.c` `cu_version_text`, Options > Version's value): INFO, the backups, the splash, the installer
 keep the full string. Test: cr_backup_test (the 28-character beta, 0.22, a 23-character one, a longer one cut; this
 build's own). No golden changed.
+
+3y65. **0.22-beta1 prepared short of the tag (2026-10-14; branch rn-1 from b3c2ecd, vs-1 merged, not pushed, not
+tagged).** `docs/releases/0.22-beta1.md`: the release text (release.yml reads `docs/releases/<version>.md`), every
+player-visible change since v0.21 grouped as Sounds and engines / Playing and editing / Saving and favorites /
+Installing, and one "Going back to 0.21"; a `PENDING qt-1` comment holds the FM TONE envelope-times item until that
+branch is merged. `docs/releases/0.22.md` points to it (one text while the betas run). `web/releases.json`: 0.22-beta1
+first, `"beta": true`, the sha256 and sha256_1core of `./build.sh --release 0.22-beta1` at b3c2ecd's firmware (built
+twice: the same SHA256SUMS; to be rebuilt after any firmware change, qt-1 first). Tests that took the list's first
+entry for the default (`web/test_installer.mjs`, `tests/site_test.py`) take the newest stable now. **Found and fixed on
+the way**: (1) the Pages job for a beta would have made the landing page offer the beta as THE download (its version
+line, Install sentence, Download button, command line and the installer's META were the published version's; only
+"New in" knew about betas): `web/make_site.py front()` gives them the newest stable version offered (`tests/site_test.py
+beta_site`). (2) The browser emulator is built from the tag, so for a beta it runs the beta (the owner decides whether
+to keep that): `build_web.sh` writes `emu/version.txt`, and the landing page says so in one line under "Try it first"
+(`emu_line()`). (3) Sounds placed on a firmware before the pool (0.21): `quadToV3` kept FM TONE's LFO destinations
+40..57, which 0.21's `quad_blob_ok` refuses (the whole patch played INIT), and a VA version 4 went into 0.21's store as
+it was (refused there: INIT). Now the destination becomes NONE and the VA patch is converted to version 3 (`vaToV3`:
+FENV rounded, a synced RATE the nearest of the 14 divisions), and `importSound` returns notes that the device manager
+and the installer page show; `tools/fm1_install.py` refuses a VA version 4 there with the reason. (4) Docs closed:
+LICENSING.md, `assets/prophet5-factory/README.md` and docs/PROPHET.md "Open decisions" 2 (a release ships exactly the
+115 of `shipped.txt`, the owner's decision of 2026-10-13; the other 85 are not on the site either, 3y55); PRESETS.md and
+PROPHET.md no longer say P5 cannot save; the README's status names no version that goes stale; the manual has P5 (the
+engines table, its editor pages), six engines and 128 sounds. Not done: anything on a unit; tagging and the Pages job.

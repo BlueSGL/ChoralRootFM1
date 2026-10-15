@@ -99,8 +99,11 @@ Installing firmware is at your own risk.
 
 ## Status
 
-A public beta, at version 0.21 ([docs/releases/](docs/releases/) has the notes of every version). What is in it; the
-[manual](docs/MANUAL.md) says how to play each part:
+A public beta. The latest stable release is the one the web installer installs by default; the next version, while in
+beta, is offered there too, behind "Show beta releases" ([docs/releases/](docs/releases/) has the notes of every
+version, betas included; [Releases](https://github.com/Quixotic7/ChoralRootFM1/releases) the files). This tree is the
+newest version, so it may be ahead of the stable release. What is in it; the [manual](docs/MANUAL.md) says how to play
+each part:
 
 - **Chords**: the chord block on the keybed (DIM MIN MAJ SUS on the black keys F#3 G#3 A#3 C#4, 6 m7 M7 9 on the
   white keys F3 G3 A3 C4, B3 = LOCK), roots on D4..G5, voicing on KNOB 1, Key Mode, the Simple / Advanced / Free play
@@ -112,13 +115,15 @@ A public beta, at version 0.21 ([docs/releases/](docs/releases/) has the notes o
 - **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
   PLAY menu; from 0.18 on saving is manual: a loop is written by the global save (SAVE held) or when its slot is
   left with unsaved changes (up to 0.17: at every stop) ([docs/LOOPER.md](docs/LOOPER.md)).
-- **Five engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
+- **Six engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
   import, [docs/FM6.md](docs/FM6.md)), FM TONE (engine 15, `eng_quad.c`, code name QUAD: four-operator FM in the style
   of the Digitone, aligned with the Digitone manual's algorithms, carrier levels and controls,
-  [docs/QUAD.md](docs/QUAD.md)), VA ([docs/VA.md](docs/VA.md)), CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), WHEEL.
+  [docs/QUAD.md](docs/QUAD.md)), VA ([docs/VA.md](docs/VA.md)), CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), P5
+  (Melodee's Prophet-5 model with 115 of Sequential's factory programs, 0.22, [docs/PROPHET.md](docs/PROPHET.md)), WHEEL.
   (PHASE, LOFI, VOICE, TRIO, NOISE and PHYS, Felucca's, are retired since 0.18: a sound saved on one stays in its
   slot and plays as a stand-in on the VA.) (Felucca's ANALOG is retired since 0.14: the VA replaces it; an ANALOG sound
-  saved before loads on the VA.) One preset pool per engine (INIT, the factory presets, yours), 32 saved sounds, the
+  saved before loads on the VA.) One preset pool per engine (INIT, the factory presets, yours), 128 saved sounds shared
+  by every engine (32 until 0.21), favourites with a filter, the
   sound editor ([docs/PRESETS.md](docs/PRESETS.md), [docs/EDITOR.md](docs/EDITOR.md)).
 - **Views**: Chord, Keyboard, Notes, Geek Out, Scope; Options, one setting per screen.
 - **MIDI**: three streams out over USB (performance on channel 1, bass on 2, the raw chord off by default), MIDI in

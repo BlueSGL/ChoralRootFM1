@@ -25,5 +25,6 @@ it: the 200). A program's number in `shipped.txt` is its place in the `.syx`, 1.
 alone and none of this data in the image.
 
 The programs are Sequential's (Sequential LLC, 2020-2025). They are included as sound data for compatibility with the
-instrument; no licence is granted for them by this project, and whether a ChoralRoot release carries them is not
-decided (docs/PROPHET.md "Open decisions").
+instrument; no licence is granted for them by this project. A ChoralRoot release carries exactly the 115 that
+`shipped.txt` lists (the owner's decision, 2026-10-13: his favourites), not the other 85, which the site does not offer
+either (docs/PROPHET.md "Open decisions" 2).
