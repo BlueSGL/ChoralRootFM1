@@ -4026,3 +4026,5 @@ the keys table; INTEGRATION.md's Keyboard bullet; CR_ENGINE.md; releases/0.22.md
 **Checked**: `./build.sh` XIP 547 020 B (95.4 %, +16 B over 3y99), RAM unchanged; `sh tests/run_cr_tests.sh` green
 (cr_engine_test 2738 ok); `sh tools/emu/test_persist.sh` PASS; `sh tests/run_cr_draw.sh` green; `sh
 tools/emu/test_cr.sh`: cr_fullkbd's Key Mode entry reads "GM" for G major and F#3's Gsus, the rest as before (below).
+`sh tools/emu/test_cr.sh` PASS (1018 ok) after that. **On the unit**: flashed over the 3y99 build with a backup first
+(`fm1-backups/choralroot-backup-20261015-keysnap2.json`); `--info`: "ChoralRoot 0.22". Not yet played by the owner.
