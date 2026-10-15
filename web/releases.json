@@ -8,6 +8,30 @@
   },
   "releases": [
     {
+      "version": "0.22-beta1",
+      "beta": true,
+      "date": "2026-10-14",
+      "tag": "v0.22-beta1",
+      "sha256": "540d31345665bdc2eef0337920ea8aab2a7c3103f7b5e4346bd31be1b9d43a60",
+      "sha256_1core": "320a2acbb42720b633988a77d9f74f017bdfc4a06dcc8c5f56351cd8ed5b0efb",
+      "title": "Beta: P5, 128 sound slots, favorites",
+      "bullets": [
+        "A new engine, P5: the Prophet-5 model of Melodee, with 115 of Sequential's factory programs and up to eight voices with Dual Core on.",
+        "128 sound slots shared by all engines (until now 32): your 32 sounds are copied over at the first start. P5 sounds can be saved too.",
+        "Favorites: mark any sound in the SAVE menu, give it a type (Both, Chord or Bass) and turn the filter on to step through your favorites only.",
+        "FM TONE in the Digitone's ranges, with two decimals where the Digitone has them and all 57 LFO destinations; Digitone .dnsnd sounds import in the device manager.",
+        "The knobs accelerate: slow for fine steps, quick for big ones. Hold OPT to snap to round values.",
+        "The VA's filter envelope depth has two decimals, and a synced LFO has 42 rates, from 8 bars to 1/256 and a few milliseconds.",
+        "Chord numerals in Key Mode (KEY layer, page 2), and a cursor for naming a sound.",
+        "Dual Core is on for a new FM-1 and after Reset Settings; a Single core package is offered under Advanced for FM-1s that have trouble with it."
+      ],
+      "notes": [
+        "A beta: it may have bugs, and the next stable release, 0.22, replaces it. Please report problems on GitHub.",
+        "Updating from 0.21 keeps your settings, sounds and loops. FM TONE sounds from before are converted to the new ranges: close, not always exact.",
+        "Going back to 0.21 later finds its 32 sounds as they were when you updated; the sounds saved on the beta, P5 and the favorites are not there (they wait for your return). The full notes have the rest."
+      ]
+    },
+    {
       "version": "0.21",
       "date": "2026-10-12",
       "tag": "v0.21",

@@ -157,8 +157,9 @@ def versions(out, meta, want, stdout):
     inst = out / "webapp" / "installer"
     ok(all((inst / r["pkg"]).resolve() == (fw / n).resolve() and (inst / r["pkg"]).is_file() and r.get("size") == (fw / n).stat().st_size
            for r, n in zip(rel, names)), "installer: every version's package link resolves to its file")
+    stable0 = next(r["version"] for r in RELEASES["releases"] if not r.get("beta"))   # (a beta: no going-back note)
     ok(all(r.get("bullets") and r.get("date") and r.get("tag") for r in rel if r["version"] != VERSION)
-       and all("going_back" in r for r in rel if r.get("tag") and r["version"] != RELEASES["releases"][0]["version"]),
+       and all("going_back" in r for r in rel if r.get("tag") and not r.get("beta") and r["version"] != stable0),
        "installer: every listed version carries its bullets, date and tag; the older ones their going-back note")
     sums = (fw / "SHA256SUMS").read_text(encoding="utf-8").splitlines() if (fw / "SHA256SUMS").is_file() else []
     ok(sums == [f"{w['sha256']}  {n}" for n, w in zip(names, want)], "firmware/SHA256SUMS lists them")
@@ -223,6 +224,7 @@ def one_core():
     top = {**RELEASES["releases"][0], "version": "9.9", "tag": "v9.9", "sha256": sha(PKG),
            "sha256_1core": hashlib.sha256(one).hexdigest()}
     top.pop("going_back", None)
+    top.pop("beta", None)                           # (9.9 is a stable version, whatever the first entry is)
     lst.write_text(json.dumps({**RELEASES, "releases": [top] + RELEASES["releases"]}), encoding="utf-8")
     env = {**os.environ, "CR_RELEASES_JSON": str(lst)}
     run = lambda *a: subprocess.run([sys.executable, str(ROOT / "web" / "make_site.py"), *map(str, a)], capture_output=True, text=True, env=env)
@@ -271,8 +273,9 @@ def release_site(cur):
     page = (out / "webapp" / "installer" / "index.html").read_text(encoding="utf-8")
     versions(out, read_meta(page), RELEASES["releases"], r.stdout)
     html = (out / "index.html").read_text(encoding="utf-8")
-    ok(f'New in {cur["version"]}' in html and all(escape_html(b) in html for b in cur["bullets"]) and 'href="webapp/installer/"' in html,
-       f"index.html: \"New in {cur['version']}\" with its bullets, and the button to the installer")
+    news = next((r for r in RELEASES["releases"] if not r.get("beta")), cur)   # (a beta is opt-in: the newest stable's news)
+    ok(f'New in {news["version"]}' in html and all(escape_html(b) in html for b in news["bullets"]) and 'href="webapp/installer/"' in html,
+       f"index.html: \"New in {news['version']}\" with its bullets, and the button to the installer")
     ok(all(f'href="firmware/choralroot-{x["version"]}.fwsc"' in html for x in RELEASES["releases"]), "index.html: a download link for every version")
     emu = (ROOT / "build" / "emu-web" / "index.html").is_file()
     pages, count, bad, frags = walk(() if emu else ((out / "emu").resolve(),), out)

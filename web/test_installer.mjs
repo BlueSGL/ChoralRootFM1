@@ -845,8 +845,12 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
   // the page with the metadata make_site.py writes for the real list: every version of web/releases.json, each with a
   // package of its own here (same identity, different bytes) and that package's sha256
   const list = JSON.parse(readFileSync(join(HERE, "releases.json"), "utf8"));
-  const vers = list.releases.map((r) => r.version), newest = vers[0], older = vers[2] || vers[vers.length - 1];
-  const RAW = Object.fromEntries(vers.map((v, i) => [v, makePackage("FM-1_920", 17 * (i + 1))]));
+  // vers: what the page offers by default, the stable versions (newest: the default); a beta of the list ("beta": true)
+  // is hidden until "Show beta releases" is ticked (the beta block below). all: every version, betas too (the meta,
+  // the packages here, the files list)
+  const all = list.releases.map((r) => r.version);
+  const vers = list.releases.filter((r) => !r.beta).map((r) => r.version), newest = vers[0], older = vers[2] || vers[vers.length - 1];
+  const RAW = Object.fromEntries(all.map((v, i) => [v, makePackage("FM-1_920", 17 * (i + 1))]));
   const pkgOf = (v) => `../../firmware/choralroot-${v}.fwsc`;
   const metaFor = async (tamper = null) => ({ version: newest, product: "FM-1_920", pkg: pkgOf(newest), repo: list.repo, minimum: list.minimum,
     releases: await Promise.all(list.releases.map(async (r) => ({ ...r, pkg: pkgOf(r.version), size: RAW[r.version].length,
@@ -856,7 +860,7 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
   const fetched = [];
   const listFetch = (over = {}) => async (url) => {
     fetched.push(url);
-    const v = vers.find((x) => pkgOf(x) === url), b = v && (over[v] || RAW[v]);
+    const v = all.find((x) => pkgOf(x) === url), b = v && (over[v] || RAW[v]);
     return b ? { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }
       : { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
   };
@@ -924,8 +928,8 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
        html.includes('<a href="https://github.com/Quixotic7/ChoralRootFM1/releases" target="_blank" rel="noopener" data-t="chOlder">') && en.chOlder === "0.15 and older are on GitHub.",
        "other versions: 0.14 and 0.15 are not offered; one line links the releases on GitHub");
     const f = p.$.files.innerHTML;
-    ok(vers.every((x) => f.includes(`href="${pkgOf(x)}" download`) && f.includes(`/tree/v${x}"`) && f.includes(`/docs/releases/${x}.md"`)) &&
-       count(f, "<code>sha256 ") === vers.length && p.$["safe-note"].textContent === list.minimum.boot_safe,
+    ok(all.every((x) => f.includes(`href="${pkgOf(x)}" download`) && f.includes(`/tree/v${x}"`) && f.includes(`/docs/releases/${x}.md"`)) &&
+       count(f, "<code>sha256 ") === all.length && p.$["safe-note"].textContent === list.minimum.boot_safe,
        "the files: a download link, the sha256, the full notes and the source at its tag for each version");
     await p.$.go.fire("click");
     ok(dev.identity === "FM-1_920" && dev.bad === 0 && dev.served > 8 && p.$.status.textContent === en.done &&
@@ -1168,14 +1172,15 @@ ok(html.includes('data-t="darkRescue"') && /hold OCT- alone and switch it on/.te
     const RAW1 = makePackage("FM-1_920", 211);
     const meta1 = async (tamper1 = false) => {
       const m = await metaFor();
-      m.releases[0] = { ...m.releases[0], pkg_1core: pkg1Of(newest), sha256_1core: tamper1 ? "0".repeat(64) : await sha256(RAW1), size_1core: RAW1.length };
+      const i0 = m.releases.findIndex((r) => r.version === newest);   // (the default: the newest stable, after any beta)
+      m.releases[i0] = { ...m.releases[i0], pkg_1core: pkg1Of(newest), sha256_1core: tamper1 ? "0".repeat(64) : await sha256(RAW1), size_1core: RAW1.length };
       return m;
     };
     const page1 = pageFor(await meta1());
     const got = [];
     const fetch1 = async (url) => {
       got.push(url);
-      const b = url === pkg1Of(newest) ? RAW1 : RAW[vers.find((x) => pkgOf(x) === url)];
+      const b = url === pkg1Of(newest) ? RAW1 : RAW[all.find((x) => pkgOf(x) === url)];
       return b ? { ok: true, status: 200, arrayBuffer: async () => b.buffer.slice(b.byteOffset, b.byteOffset + b.length) }
         : { ok: false, status: 404, arrayBuffer: async () => new ArrayBuffer(0) };
     };
