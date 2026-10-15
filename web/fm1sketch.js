@@ -14,7 +14,8 @@
 // The glyphs are design/p5-glyph-mockups.html (round 1: K1 .. K6, B1 .. B5, S1 .. S3), -2 (K6a .. K6e, B1a .. B1d,
 // S4 .. S6), -3 (R1 .. R3) and -5 (K6d, B1a and S5 as chosen), drawn as there: the glyph centred 22 px under the
 // label's baseline (box.y + 12; the 22 px box: box.y + 10), so a sketch may reach a few pixels over the box (the
-// mock-ups' dials do); the page composites only the cell's column between its label and its value.
+// mock-ups' dials do; a knob in the 34 px box at box.y + 18, level with the buttons' LEDs, as the firmware's K6d since
+// the owner asked); the page composites only the cell's column between its label and its value.
 // To add one: a function here and a SK_REGISTRY line (its name lower case, a letter and a number, its note); a chosen
 // sketch becomes a firmware glyph by porting its function into cr_draw.c (cr_p5glyph is K6d / B1a / S5 / R3's).
 
@@ -250,7 +251,8 @@ export const SKETCH_WAVES = ["saw", "tri", "sqr"];
 // the registry's entries: {name, kind, round, note, draw(p, box, state)}
 export const SKETCHES = Object.fromEntries([...SK_REGISTRY].map(([k, v]) => [k, {
   name: v.name, kind: v.kind, round: v.round, note: v.note,
-  draw: (p, box, st) => v.f(p, box.x + (box.w >> 1), box.y + (box.h >= 30 ? 12 : 10), { ...st, C: { ...SK_MOCK, ...(st.C || {}) }, small: box.h < 30 }),
+  // (a knob in the 34 px box 6 px lower, level with the buttons' LEDs: the firmware's CR_G_P5KNOB, the owner's)
+  draw: (p, box, st) => v.f(p, box.x + (box.w >> 1), box.y + (box.h >= 30 ? (v.kind === "knob" ? 18 : 12) : 10), { ...st, C: { ...SK_MOCK, ...(st.C || {}) }, small: box.h < 30 }),
 }]));
 // a cell style -> {name, icon} when it is a known sketch ("sketch:k6d", "sketch:b1a-saw"), else null
 export function parseSketch(style) {

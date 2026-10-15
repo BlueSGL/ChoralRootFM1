@@ -432,11 +432,11 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
     ok(m.pget(saw.page, saw.col) === 1 && at(o1.rgba, 90, 71) === RED && o1.state.page === "OSC A",
        `the design's OSC A row A: Saw on, its LED red (${at(o1.rgba, 90, 71)}) under the saw icon`);
     // the glyphs' pixels (cr_draw.c cr_p5glyph, the round-5 mock-up): the knob's nearest tick white (the annulus of the
-    // ticks, r 13 .. 19 round (30, 68)), none on the dim row; a wave icon white exactly when its button is on
+    // ticks, r 13 .. 19 round (30, 74): box + 18, level with the LEDs), none on the dim row; a wave icon white exactly when its button is on
     const WHITE = c565(246, 243, 234);
     const count = (rgba, x0, y0, x1, y1, f) => { let n = 0; for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (f(x, y) && at(rgba, x, y) === WHITE) n++; return n; };
     const ring = (cx, cy) => (x, y) => { const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy); return d > 13 && d < 19.5; };
-    const tickA = count(o1.rgba, 8, 46, 52, 90, ring(30, 68)), tickB = count(o1.rgba, 8, 150, 52, 194, ring(30, 172));
+    const tickA = count(o1.rgba, 8, 52, 52, 96, ring(30, 74)), tickB = count(o1.rgba, 8, 156, 52, 200, ring(30, 178));
     const pulse = pidx.get("OSC A:PULSE"), pon = m.pget(pulse.page, pulse.col) === 1;
     const icon = (k) => count(o1.rgba, k * 60 + 22, 52, k * 60 + 39, 62, () => true);
     ok(tickA > 0 && tickB === 0 && icon(1) > 0 && (icon(2) > 0) === pon,

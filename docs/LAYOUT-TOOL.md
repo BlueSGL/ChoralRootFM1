@@ -375,7 +375,8 @@ still draws the cell (the label, the value, the row bars, the band, the hot bloc
   value block; the sketch does not change.
 - **Where**: the cell's glyph box as cr_draw.c's `cr_p_edit8` has it (`sketchBox`): a full-size row (no band; or one
   lane under a band at 124–224) its 34 px box at row + 26 (rows 30 / 134, or 124), the sketch centred at box + 12
-  (22 px under the label's baseline, as the mock-ups), drawn only in the cell's column between its label and its value
+  (22 px under the label's baseline, as the mock-ups; a knob at box + 18, level with the buttons' LEDs, as the
+  firmware's K6d), drawn only in the cell's column between its label and its value
   (row + 19 .. row + 68); two lanes under a band (rows 124–180 / 184–240) the 22 px box at row + 15, centred at
   box + 10, drawn in row + 14 .. row + 40, the chosen four with their small forms. On edit8 screens only (a stack has
   no glyph box: the lint says so).

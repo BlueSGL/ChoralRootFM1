@@ -1183,7 +1183,7 @@ static int cr_p5names(const char *b, int32_t n, const char **o)
 }
 /* a P5 cell's glyph (CR_G_P5*: docs/EDITOR.md section 9 "A cell"), in an edit8 cell's glyph box x .. x + w, y .. y + h
  * (px). A full-size cell's box (34 high): the owner's round-5 mock-up (design/p5-glyph-mockups-5.html), centred on
- * (x + w / 2, y + 12), the mock-up's 22 px under the label's baseline: K6d (the knob), B1a (the LED button and its
+ * (x + w / 2, y + 12), the mock-up's 22 px under the label's baseline (the knob 6 px lower, level with the LEDs): K6d (the knob), B1a (the LED button and its
  * wave), S5 (the two-LED lever), R3 (the two-LED button and its names). A 22 px box (two rows under a band): the
  * first pass's small variants. col: the column's colour on the active row, else T_DIM (the dim row's greys) */
 static void cr_p5glyph(const cr_cell_t *c, int32_t x, int32_t y, int32_t w, int32_t h, uint16_t col)
@@ -1197,8 +1197,10 @@ static void cr_p5glyph(const cr_cell_t *c, int32_t x, int32_t y, int32_t w, int3
         int16_t p[8];
         switch (c->glyph) {
         case CR_G_P5KNOB: {              /* K6d: 11 ticks (r 14 .. 17, 2 px; the nearest 18 and bright), the rim (r 9 ..
-                                          * 11) in the colour, the face its 40 %, the 3 px pointer (r 2 .. 8) */
+                                          * 11) in the colour, the face its 40 %, the 3 px pointer (r 2 .. 8); centred 6 px
+                                          * lower than the buttons' (box + 18: level with their LEDs, the owner's) */
             uint32_t pct = c->pct >= 255u ? 256u : c->pct, a = 24576u + 49152u * pct / 256u, k, near = (pct * 10u + 128u) / 256u;
+            cy16 += 6 * 16;
             for (k = 0; k <= 10u; k++) {
                 uint32_t ak = 24576u + 49152u * k / 10u;
                 int32_t r1 = k == near ? 18 * 16 : 17 * 16;

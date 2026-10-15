@@ -547,9 +547,9 @@ static void p5cell_screens(const char *dir)
     p5cell_screen(&s, CR_W_NONE, 2, 0);           /* the glyphs' pixels: row A active at 30, row B dim at 134 */
     render(&s, 0);
     snprintf(name, sizeof name, "P5 cells: a lit LED red (%04x), the knob's nearest tick white (%04x), the saw white when on (%04x), "
-             "the dim row's square mid (%04x), the off LED dark (%04x)", p5px(90, 71), p5px(29, 52), p5px(93, 57), p5px(94, 161),
+             "the dim row's square mid (%04x), the off LED dark (%04x)", p5px(90, 71), p5px(29, 58), p5px(93, 57), p5px(94, 161),
              p5px(150, 71));
-    check(name, p5px(90, 71) == CR_RED && p5px(89, 70) == CR_RED && p5px(29, 52) == CR_WHITE && p5px(93, 57) == CR_WHITE &&
+    check(name, p5px(90, 71) == CR_RED && p5px(89, 70) == CR_RED && p5px(29, 58) == CR_WHITE && p5px(93, 57) == CR_WHITE &&
                 p5px(94, 161) == T_MID && p5px(150, 71) != CR_RED && p5px(149, 71) != CR_RED);
     snprintf(name, sizeof name, "P5 cells: the lever's LEDs count its position (Off %u, Half %u, Full %u: none, the left, both)", sw[0], sw[1], sw[2]);
     check(name, sw[0] == 0u && sw[1] == 1u && sw[2] == 3u);

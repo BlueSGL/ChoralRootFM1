@@ -3792,7 +3792,11 @@ deterministic, the glyphs on all 17 engine rows, the white tick, the wave white 
 row, `cellAt`) and the Design self-test's 9th square (a click on OSC A's row B and on FILTER's one row selects the
 slot); `design/choralroot-fm1-p5-rows-screens.png` re-rendered (20 tiles, lint clean). **Checked**: test_layout 121
 ok, gen_layout_test 63, `sh tests/run_all.sh` ALL SUITES PASSED (22; test_cr 1009 ok, test_persist 111, test_retired
-18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit; no engine uses the P5 glyphs yet.
+18, test_pool 7, 313 golden renders 0 changed). Not done: on the unit; no engine uses the P5 glyphs yet. Then the
+owner, on OSC A: "the knob glyphs are vertically too high and not aligned with the button glyphs. I would like the knob
+glyphs to be moved down vertically so they align": K6d's centre moved 6 px down (box + 18, level with the buttons'
+LEDs) in the 34 px box, the small form unchanged, the knob sketches (fm1sketch.js) with it; goldens p5cell_full_a,
+_full_b, _band1, _band1_env, _switch_0, _switch_2 rewritten (the two-lane band pictures unchanged).
 
 3y95. **Sketch glyphs in the layout designer: glyph variants drawn by the page in a cell's glyph box (2026-10-15; on
 lay-7 after 3y94, not committed).** The owner: "It doesn't have to stay that way. The designer can get a sketch layer:
