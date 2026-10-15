@@ -390,7 +390,7 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   const engineIds = params.filter((p) => !p.part).map((p) => p.id);
   ok(!pfind.length && !L.usedTwice(pan).length, `the p5 panel: ${pshots.length} screens x lanes rendered, lint clean, no parameter twice` +
      (pfind.length ? `\n          ${pfind.slice(0, 10).join("\n          ")}` : ""));
-  ok(frees.length === 9 && placed.length === 56 && engineIds.length === 56 && engineIds.every((id) => placed.includes(id)),
+  ok(frees.length >= 8 && placed.length === 56 && engineIds.length === 56 && engineIds.every((id) => placed.includes(id)),
      `the p5 panel: ${frees.length} free screens place all ${engineIds.length} P5 parameters once (${placed.length} bound elements)`);
   const pagain = L.designTiles(pan).map((t) => { ps.open(t.gi, t.si, t.lane); return ps.render().rgba; });
   ok(pagain.every((a, i) => L.diffCount(a, pshots[i]) === 0), "the p5 panel drawn again: the same bytes (deterministic)");
@@ -454,15 +454,38 @@ console.log("the designer: the design format, lay_load, the free-screen draw API
   const atMin = [m.ptext(rp.page, rp.col), ledAt(rr, rcx - 7), ledAt(rr, rcx + 7)];
   ok(atMax[1] === yel && atMax[2] !== atMax[1] && atMin[1] === Array.from(red).join() && atMin[2] !== atMin[1],
      `two LEDs (${rev.id}): at "${atMax[0]}" the right one yellow (${atMax[1]}), at "${atMin[0]}" the left one red (${atMin[1]}), the other off`);
-  // a pair's caps meet as one: the shared rim and the top edge across the seam are drawn, not the background
-  const lsc = pan.groups[3].screens[0], pL = lsc.elements.find((x) => x.pair === "left"), seam = pL.x + pL.w;
-  ps.open(3, 0, 0);
-  const rq = ps.render().rgba, q2 = (x, y) => Array.from(rq.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join(), bgq = q2(0, 239);
+  // a pair's caps meet as one: the shared rim and the top edge across the seam are drawn, not the background (the LFO's
+  // SAW and TRI made a pair in a copy: the owner's panel has them as single buttons)
+  const paired = JSON.parse(JSON.stringify(pan)), lsc = paired.groups[3].screens[0];
+  const pL = lsc.elements.find((x) => x.param === "LFO+:SAW"), pR = lsc.elements.find((x) => x.param === "LFO+:TRI"), seam = pL.x + pL.w;
+  Object.assign(pL, { pair: "left" });
+  Object.assign(pR, { pair: "right", x: seam, y: pL.y, h: pL.h });
+  const pss = L.designSession(m, cat, paired, 1);
+  pss.reload(); pss.open(3, 0, 0);
+  const rq = pss.render().rgba, q2 = (x, y) => Array.from(rq.slice((y * 240 + x) * 4, (y * 240 + x) * 4 + 3)).join(), bgq = q2(0, 239);
   ok(q2(seam - 1, pL.y + 26) !== bgq && q2(seam - 1, pL.y + 12) !== bgq && q2(seam, pL.y + 12) !== bgq && q2(seam - 2, pL.y + 12) !== bgq,
      `a pair's two caps touch (${pL.id} | its right half at x ${seam}: the shared rim ${q2(seam - 1, pL.y + 26)}, not the background ${bgq})`);
-  const apart = JSON.parse(JSON.stringify(pan));
+  ok(!L.validateDesign(paired, cat).warnings.length, "validateDesign: a pair that touches, no warning");
+  const apart = JSON.parse(JSON.stringify(paired));
   apart.groups[3].screens[0].elements.find((x) => x.pair === "right").x += 4;
   ok(L.validateDesign(apart, cat).warnings.some((w) => /half/.test(w)), "validateDesign warns on a pair whose halves do not touch");
+  // the p5 baseline rule: OSC A's FREQ and PULSE W (knobs at y 44), "-Shape-" (a label box ending at 92) and SYNC (a led
+  // at y 60, its label below) on one baseline; a led at y 60 and a knob at y 44 give the same label baseline
+  ps.open(0, 0, 0);
+  const rb = ps.render(), words = ["FREQ", "PULSE W", "-Shape-", "SYNC"];
+  const bases = words.map((t) => { const o = rb.ops.find((x) => x.op === "text" && x.s === t); return o ? o.y : null; });
+  const inkEnd = ["PULSE W", "SYNC"].map((t) => { const b = rb.lint.texts.find((x) => x.text === t); return b ? b.box[3] : null; });   // (no descenders: the ink ends on the baseline)
+  ok(bases.every((v) => v === bases[0]) && inkEnd.every((v) => v === bases[0]),
+     `the p5 baseline rule on OSC A: ${words.join(", ")} on baseline ${bases.join(", ")} (the ink of PULSE W and SYNC ends at ${inkEnd.join(", ")})`);
+  const probe = { type: "free", title: "T", elements: [
+    { id: "k", type: "knob", x: 8, y: 44, w: 56, h: 64, param: "OSC A:FREQ", label: "AAA", size: 36 },
+    { id: "l", type: "led", x: 68, y: 60, w: 56, h: 32, param: "OSC A:SAW", label: "BBB", labelAt: "below" },
+    { id: "t", type: "label", x: 128, y: 80, w: 56, h: 12, text: "CCC" }], lanes: [["k", "l", null, null]] };
+  const pops = L.freeOps(probe, pidx, () => ({ v: 0, text: "0" }), { style: "p5", measure: (t, px, b) => m.textW(t, px, b) });
+  const bl = ["AAA", "BBB", "CCC"].map((t) => pops.find((o) => o.op === "text" && o.s === t).y);
+  ok(bl.every((v) => v === 92), `the rule by construction: a knob at y 44 (size 36), a led at y 60 (label below), a label box at y 80 h 12: baselines ${bl.join(", ")}`);
+  const frs = pan.groups.flatMap((g) => g.screens.filter((x) => x.type === "free").flatMap((x) => x.elements.filter((e) => e.type === "frame")));
+  ok(frs.length > 0 && frs.every((e) => e.r === 8), `the owner's panel: all ${frs.length} frames at r 8`);
   // a led's label below its cap (labelAt): OSC A's SYNC
   const syn = sA.elements.find((x) => x.labelAt === "below");
   ps.open(0, 0, 0);

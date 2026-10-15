@@ -3031,7 +3031,17 @@ pastes elements between screens (Ctrl+C / Ctrl+V, copy / paste buttons: new ids,
 `labelAt` puts its label under the cap (his SYNC); a frame's `r` (0 .. 12) rounds it (his frames r 6); the source mix
 is P5's `LFO:NOISE` (the LFO noise amount is the wheel-mod's source mix), now on his SRC MIX knob in WHEEL's lane 2 and
 off the LFO screen, with a palette hint. Two moves to make his file pass: the LFO's TRI back against SAW (x 168 → 148)
-so the pair is one cap again, and the LFO's NOISE knob removed. The device image is byte-identical by construction:
+so the pair is one cap again, and the LFO's NOISE knob removed. **His next pass (the same day)**: "Update all corners
+for frames of P5 to 8. I've adjust the parameters how I want. One thing I don't love is that the labels across
+different parameters and labels don't vertically align, picture for example "-Shape-" is a couple pixels up off grid,
+same with SYNC while FREQ and PULSE W are right on the grid." and "The Filter envelop parameters also now all in one
+page." The p5 style gets one baseline rule: a text under a dial or a cap sits 12 px under its bottom edge and a label
+element's baseline is its box's bottom, so boxes on the 4 px grid put their labels on one grid row (OSC A's FREQ,
+PULSE W, "-Shape-" and SYNC now share baseline 92; the page's hint line says so). His file: every frame r 8; the
+"-SHAPE-" labels of OSC B and LFO up 4 px (y 84 → 80) onto their knobs' baseline; the FILTER screen's filter envelope
+in a third lane and its VELOCITY in lane 2; the four envelope knobs' cells 64 → 56 high (their values sit in the face)
+so "-ENVELOPE-" no longer overlaps them; the LFO's SAW and TRI, spaced apart again by him, are three single buttons
+now (the pair flags dropped; the pair is tested on a copy). The device image is byte-identical by construction:
 `git diff --stat` shows no file under `firmware/` (tools, web, design and docs only). Not done: the firmware cannot
 draw free pages yet, so every p5 screen is "not buildable yet"; the composition is the tool's proposal, which the
 firmware will copy when it gets free pages. Nothing on a unit.

@@ -256,13 +256,22 @@ Designer pages first." `"style": "p5"` composes a free screen's elements as the 
   explicit label goes under. OSC A's SYNC is so, as the owner asked.
 - **switch**: the label on top, a slot (8 px wide, 12 px a position, rounded `line` outline) with a 6 x 8 lever in the
   element's colour at the current position, the positions' names beside it (the current one in the element's colour).
-- label, bar, glyph and band as flat.
+- label, bar, glyph and band as flat, but a label's baseline is its box's bottom edge.
 
-`design/layouts/designs/p5-panel.json` is P5's whole engine in that style: nine free screens over OSC .. MOD (OSC A with
-the mixer, OSC B, FILTER, AMPLIFIER, FILTER ENVELOPE, LFO with its SHAPE, WHEEL-MOD, POLY-MOD, VOICE with GLIDE), all 56
+**One baseline rule** (`P5_UNDER`): a text under a graphic (a knob's dial, a led's cap) sits 12 px under its bottom
+edge, and a label element's baseline is its box's bottom edge, so elements placed on the 4 px grid put their labels'
+baselines on the grid and in line: a knob of size 36 at y 44, a led at y 60 with its label below (cap y + 2 .. y + 20,
+label at y + 32: a 32-high cell's bottom) and a label box at y 80, 12 high, all have their baseline at 92. The owner:
+"One thing I don't love is that the labels across different parameters and labels don't vertically align, picture for
+example "-Shape-" is a couple pixels up off grid, same with SYNC while FREQ and PULSE W are right on the grid." (A
+label above a cap, a switch's texts and a two-LED button's names are as before.)
+
+`design/layouts/designs/p5-panel.json` is P5's whole engine in that style: eight free screens over OSC .. MOD (OSC A
+with the mixer, OSC B, FILTER with the filter envelope, AMPLIFIER, LFO with its SHAPE, WHEEL-MOD, POLY-MOD, VOICE with
+GLIDE), all 56
 parameters placed once, KNOB 1..4 a lane, FX and MIX classic as today; every screen x lane lint clean. Since
 2026-10-15 it is the owner's own (edited in the page: ENV 2 in FILT, his frames' titles, SHAPE labels, VOICE
-rearranged), with frames of r 6. The wheel-mod's SOURCE MIX is `LFO:NOISE`: P5's LFO noise amount IS the Prophet's
+rearranged, the filter envelope on the FILTER screen in a third lane), with frames of r 8. The wheel-mod's SOURCE MIX is `LFO:NOISE`: P5's LFO noise amount IS the Prophet's
 wheel-mod source mix (LFO to noise; docs/PROPHET.md, the LFO page "Noise (its mix)"), so the WHEEL screen's "SRC MIX"
 knob is bound to it and the LFO screen has no NOISE knob; the palette shows it with the hint "(wheel-mod source mix)"
 (`PARAM_HINTS`). Its contact
@@ -442,7 +451,7 @@ design, and the per-engine table that says which patch parameter a (page, column
   example renders every screen x lane lint clean and the same bytes twice, its knobs turn its parameters, SELECT runs
   across its lanes and screens, its header is the title line; `validateDesign` refuses a style that is not flat or
   p5; the p5 panel (`p5-panel.json`) valid with no warning, every screen x lane lint clean and deterministic, no
-  parameter twice, all 56 placed, KNOB 1 on each of its 19 free lanes turns its parameter and changes the picture, a
+  parameter twice, all 56 placed, KNOB 1 on each of its free lanes turns its parameter and changes the picture, a
   knob's value text inside its dial, a lit led's dot the firmware's red, a saw led's one-cycle icon drawn over its cap
   and the cap's window darker than its pad, every wave icon's ink centred over its LED within 1 px, REV's two LEDs
   (yellow at 3, red at 1/2), a pair's caps touching; `validateDesign` refuses two LEDs on a 0..127 parameter and warns

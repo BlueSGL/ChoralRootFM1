@@ -604,7 +604,8 @@ export function freeOps(screen, params, value, opts = {}) {
       case "label": {
         const align = e.align === "centre" ? 1 : e.align === "right" ? 2 : 0;
         const x = align === 1 ? cx : align === 2 ? e.x + e.w : e.x;
-        ops.push({ op: "text", bold: e.bold === false ? 0 : 1, px: e.size || 11, x, y: e.y + e.h - 2, s: e.text || "",
+        // (p5: the baseline is the box's bottom edge, so labels on the 4 px grid line up with the knobs' and leds')
+        ops.push({ op: "text", bold: e.bold === false ? 0 : 1, px: e.size || 11, x, y: e.y + e.h - (opts.style === "p5" ? 0 : 2), s: e.text || "",
                    col: e.colour && e.colour !== "auto" ? COLOURS[e.colour] : TEXT, align, maxw: e.w });
         break;
       }
@@ -656,6 +657,11 @@ export function freeOps(screen, params, value, opts = {}) {
   return ops;
 }
 
+// The p5 style's one baseline rule: a text under a graphic (a knob's dial, a led's cap) sits P5_UNDER px under its
+// bottom edge, and a label element's baseline is its box's bottom edge; so boxes on the 4 px grid put every such
+// baseline on the grid too (a knob at y 44 of size 36, a led at y 60 with its label below, a label box ending at 92:
+// one row)
+export const P5_UNDER = 12;
 // The p5 style: the Prophet-5's panel drawn by the same primitives (the tool's proposal, as freeOps). A frame is a
 // rounded section box, its name in capitals in the top border; a knob a black face with a white pointer inside a printed
 // 0..10 scale, its name under it, its value inside the face (or, a name too wide, on the row under the label); an led
@@ -679,7 +685,7 @@ function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
       ops.push({ op: "p5knob", cx, cy, size, face: hot ? col : SURF, rim: MID, tick: LINE, ptr: hot ? BG : col,
                  pct: pctOf(p, val.v), bip: p && p.min < 0 && p.max > 0, from: inside ? 70 : 30 });   // (a short pointer clears the value)
       if (inside) ops.push({ op: "text", bold: 1, px: 9, x: cx, y: cy + 3, s: vt, col: hot ? BG : col, align: 1 });
-      ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + 12, s: lab, col, align: 1, maxw: e.w - 2 });
+      ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + P5_UNDER, s: lab, col, align: 1, maxw: e.w - 2 });
       if (!inside) {
         if (hot) ops.push({ op: "rect", x: e.x + 3, y: e.y + size + 15, w: e.w - 6, h: 12, col, r: 2 });
         ops.push({ op: "text", bold: 1, px: 10, x: cx, y: e.y + size + 24, s: vt, col: hot ? BG : col, align: 1, maxw: e.w - 4 });
@@ -721,7 +727,7 @@ function p5Op(ops, e, { p, val, col, lab, cx, hot, measure, lit }) {
         led(cxL, on, RED);
       }
       if (below && lab && (two || !icon || e.label))
-        ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: y + 29, s: lab, col: labCol, align: 1, maxw: e.w - 2 });
+        ops.push({ op: "text", bold: 1, px: 10, x: cxL, y: y + 18 + P5_UNDER, s: lab, col: labCol, align: 1, maxw: e.w - 2 });
       return true;
     }
     case "switch": {
