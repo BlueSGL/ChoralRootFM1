@@ -367,6 +367,8 @@ const TEXT = {
     cnSame: "On your FM-1: {name}, the version selected. Installing it again is allowed; nothing that is saved changes.",
     cnOther: "On your FM-1: {name}. ChoralRoot can be installed over it; Install saves a backup first when that firmware can give one.",
     cnLoader: "The FM-1 is in update mode ({identity}): an update was interrupted, or update mode was started on purpose. Press Install: it finishes the write.",
+    cnUnitId: " Unit ID {id} (also under Options > Version on the FM-1).",
+    cnSeveral: "{n} FM-1s are connected: {list}. Install, Back up, Restore and the Sounds work with one FM-1 at a time on this page: unplug the others first. (tools/fm1_install.py --unit ID picks one by its unit ID; the device manager asks which one.)",
     badhash: "The file for ChoralRoot {version} is not the released one (its SHA-256 does not match). Nothing was written. Reload the page.",
     intTitle: "The install stopped. The FM-1 is not lost.",
     intEarly: "If it stopped before \"Switching to update mode\", nothing was written and the FM-1 runs what it ran: replug the USB cable and press Install again.",
@@ -404,6 +406,7 @@ const TEXT = {
     denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
     notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
     model: "The connected device is not an FM-1.",
+    several: "Several FM-1s are connected, and this page does not pick one: nothing was written. Unplug the others and press again (or use tools/fm1_install.py --unit ID, or the device manager, which asks which one). Connected: ",
     lost: "The USB connection was lost. Replug it and press Install again.",
     noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
     noreturn: "The FM-1 did not come back. Power-cycle it.",
@@ -538,7 +541,27 @@ async function identify(up) {
   const link = new BackupConnection(input, output);
   let info = null;
   try { info = await deviceInfo((r, o) => link.request(r, o)); } finally { link.close(); }
-  return { ...classifyFirmware(id.text, info && info.version), identity: id.text, version: info && info.version };
+  return { ...classifyFirmware(id.text, info && info.version), identity: id.text, version: info && info.version, unitId: info && info.unitId };
+}
+// several FM-1s (docs/INSTALL-COMPAT.md "Several FM-1s"): every FM-1 that answers, with its INFO (version, unit ID)
+async function fm1Units(up) {
+  const list = await up.all((id) => id.model.replace(/^ota-/i, "") === "FM-1");
+  for (const u of list) {
+    u.info = null;
+    if (/^ota-/i.test(u.id.model)) continue;
+    const c = new BackupConnection(u.input, u.output);
+    try { u.info = await deviceInfo((r, o) => c.request(r, o)); } finally { c.close(); }
+  }
+  return list;
+}
+const unitsText = (list) => list.map((u) => `${u.info && u.info.unitId ? "unit ID " + u.info.unitId : "no unit ID"} ` +
+  `(${u.info ? u.info.version : u.id.text}, port ${u.name})`).join("; ");
+// before Install, Back up, Restore, the Sounds and the return to V15: one FM-1 as always; several FM-1s refuse (the page
+// would not know which one it writes: it does not take the first). One candidate port: nothing is asked
+async function oneFm1(up) {
+  if (up.candidates().length < 2) return;
+  const list = await fm1Units(up);
+  if (list.length > 1) throw coded("several", unitsText(list));
 }
 const failSay = (e) => {
   if (e && e.code && TEXT[lang][e.code]) sayK(e.code, e.code === "noBackup" ? "" : e.detail || "");
@@ -569,7 +592,9 @@ async function soundsRun(fn) {
   try {
     let midi;
     try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
-    const link = await openBackup(new Updater(midi, log));
+    const up = new Updater(midi, log);
+    await oneFm1(up);
+    const link = await openBackup(up);
     try {
       const req = (r, o) => link.request(r, o), info = await deviceInfo(req);
       if (!info || info.family !== "choralroot") { sayK("sndNeedCr"); log(`sounds: ${info ? info.version : "no INFO answer"}: not ChoralRoot`); return; }
@@ -735,7 +760,8 @@ function notesOf(r) {                            // what the version brought; fo
 function showUnit() {                            // the answer of "What is on my FM-1?"
   const out = $("unit");
   let bad = false, text;
-  if (!unit) { bad = true; text = t("notfound"); }
+  if (unit && unit.several) text = unit.several;  // (several FM-1s: each with its unit ID; the writes refuse)
+  else if (!unit) { bad = true; text = t("notfound"); }
   else if (unit.loader) text = tv("cnLoader", { identity: unit.identity });
   else if (unit.verdict === "refuse") { bad = true; text = refusalText(unit.name); }
   else if (installedV) {
@@ -748,6 +774,7 @@ function showUnit() {                            // the answer of "What is on my
       isBeta({ version: unitVersion() }) && sel === newest ? "cnBeta" : "cnCr", { name: unitName(), stable: newest.version });
   }
   else text = tv("cnOther", { name: unit.name });
+  if (unit && unit.unitId) text += tv("cnUnitId", { id: unit.unitId });
   out.hidden = false; out.className = bad ? "unit bad" : "unit"; out.textContent = text;
 }
 function renderPick() {                          // the version over the button, the button, the other versions, the notes
@@ -787,6 +814,14 @@ async function checkUnit() {
     let midi;
     try { midi = await midiAccess(); } catch (e) { unit = null; said = t("denied"); return; }
     const up = new Updater(midi, log);
+    if (up.candidates().length > 1) {            // several FM-1s: each with its unit ID (nothing is written)
+      const list = await fm1Units(up);
+      if (list.length > 1) {
+        unit = { several: tv("cnSeveral", { n: list.length, list: unitsText(list) }) };
+        log(`check: ${list.length} FM-1s: ${unitsText(list)}`);
+        return;
+      }
+    }
     const dev = await up.find();
     unit = null;
     if (!dev) return;
@@ -892,6 +927,7 @@ $("go").addEventListener("click", async () => {
   catch (e) { sayK("denied"); lockInstaller(false); return; }
   try {
     const up = new Updater(midi, log);
+    await oneFm1(up);                            // (several FM-1s: refused, nothing written)
     const total = 74 + 1167;
     const step = (k, a) => {
       log(`${k} ${a ?? ""}`);
@@ -949,7 +985,9 @@ $("backup-go").addEventListener("click", async () => {
   try {
     let midi;
     try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
-    await takeBackup(new Updater(midi, log));
+    const up = new Updater(midi, log);
+    await oneFm1(up);
+    await takeBackup(up);
   } catch (e) { failSay(e); }
   finally { lockInstaller(false); }
 });
@@ -971,7 +1009,9 @@ $("restore-go").addEventListener("click", async () => {
     if (!confirm(t("restoreConfirm"))) return;
     let midi;
     try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
-    await restoreArchive(new Updater(midi, log), arc);
+    const up = new Updater(midi, log);
+    await oneFm1(up);
+    await restoreArchive(up, arc);
   } catch (e) { failSay(e); }
   finally { lockInstaller(false); }
 });
@@ -1028,6 +1068,7 @@ $("stock-go").addEventListener("click", async () => {
     let midi;
     try { midi = await midiAccess(); } catch (e) { sayK("denied"); return; }
     const up = new Updater(midi, log);
+    await oneFm1(up);
     const reads = Math.ceil(selected.image.length / 512);
     const bar = (v) => { const b = $("stock-bar"); b.value = Math.max(Number(b.value) || 0, Math.min(99, v)); };
     const step = (k, n) => {

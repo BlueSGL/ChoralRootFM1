@@ -463,13 +463,44 @@ export function simObjects(count = 6, pool = false) {   // (pool: the 0.22 sound
   m.set(43, makeLoopRecord({ sig: 1, bars: 2, layers: 1, events: 6 }));
   return m;
 }
+// ---- several FM-1s (docs/DEVICE-MANAGER.md "Several FM-1s", docs/INSTALL-COMPAT.md): the manager opens one, by its unit ID
+// the port pairs whose name holds `port`: each input with the output of its name, the k-th input of a name with the
+// k-th output of it (two FM-1s may have ports of one name) -> [{input, output}]
+export function managerPorts(access, port) {
+  const live = (m) => [...m.values()].filter((p) => p.name && p.name.includes(port) && p.state !== "disconnected");
+  const ins = live(access.inputs), outs = live(access.outputs);
+  return ins.map((input) => {
+    const k = ins.filter((i) => i.name === input.name).indexOf(input), output = outs.filter((o) => o.name === input.name)[k];
+    return output ? { input, output } : null;
+  }).filter(Boolean);
+}
+// which FM-1 to open: units [{unitId, version, ...}] as INFO answered. One, and none opened before: it, as always. The
+// one opened before (remembered, its ID), when it is there again: it, without a question. Else asked (ask(text) -> the
+// answer: a number of the list or a unit ID; null: none): the page never takes the first of several, and never moves
+// to another FM-1 by itself when the one it had leaves -> the unit, or null
+export function pickUnit(units, { remembered = null, ask = () => null } = {}) {
+  if (!units.length) return null;
+  const known = remembered && units.find((u) => u.unitId === remembered);
+  if (known) return known;
+  if (units.length === 1 && !remembered) return units[0];
+  const lines = units.map((u, k) => `${k + 1}   ${u.unitId ? "unit ID " + u.unitId : "no unit ID"}   ${u.version || "no answer (not ChoralRoot?)"}`);
+  const head = remembered && !units.some((u) => u.unitId === remembered)
+    ? `The FM-1 with unit ID ${remembered} is not connected. ` : "";
+  const a = ask(`${head}${units.length === 1 ? "One FM-1 is" : `${units.length} FM-1s are`} connected. Which one should the device ` +
+    `manager open? Type its number or its unit ID (Options > Version on the FM-1):\n${lines.join("\n")}`);
+  if (a == null) return null;
+  const s = String(a).trim().toUpperCase();
+  return units.find((u) => u.unitId && u.unitId === s) || (/^\d+$/.test(s) ? units[Number(s) - 1] : null) || null;
+}
+
 // the objects a 0.22 FM-1 (the sound pool) lists: the legacy sound objects replaced by the pool's banks
 export const SIM_POOL_IDS = [...CR_BACKUP_IDS.filter((id) => !SOUND_IDS.includes(id)), ...POOL_IDS];
-export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", ids = CR_BACKUP_IDS } = {}) {
+export function makeSimFM1(objs = simObjects(), { version = "ChoralRoot 0.15", ids = CR_BACKUP_IDS, unitId = null } = {}) {
   const sim = { objs: new Map(objs), log: [], staged: null, playing: false, sent: [], requests: 0 };
   sim.objs.set(1, sim.objs.get(1) || new Uint8Array(764));
   sim.handle = (cmd, a) => {
-    if (cmd === 1) return [...new TextEncoder().encode(version), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3, 0x43, 1, 2];
+    if (cmd === 1) return [...new TextEncoder().encode(version), 0, 0, 0, 0, 0, 0, 0, 0, 0x42, 1, 3, 0x43, 1, 2,
+      ...(unitId ? [0x49, 8, ...new TextEncoder().encode(unitId)] : [])];   // (3y66: the unit's ID)
     if (cmd === 65) {
       const out = [1, 0, ids.length];
       for (const id of ids) { const v = sim.objs.get(id) || mgEmpty(); out.push(id, ...bkU32(v.length), ...bkU32(v.length ? bkCrc(v) : 0)); }
