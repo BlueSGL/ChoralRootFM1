@@ -29,8 +29,9 @@ WIN = 0.001     # envelope smoothing window, s
 
 
 def read_riff(path):
-    """(rate, channels, sample width, PCM bytes) of a PCM WAV, also WAVE_FORMAT_EXTENSIBLE (ffmpeg's 24-bit
-    header), which the wave module of Python 3.11 refuses"""
+    """(rate, channels, sample width, sample bytes, float?) of a WAV: integer PCM, IEEE float (dt_rec's
+    32-bit float), also WAVE_FORMAT_EXTENSIBLE (ffmpeg's 24-bit header), which the wave module of Python
+    3.11 refuses"""
     with open(path, "rb") as fh:
         d = fh.read()
     if d[:4] != b"RIFF" or d[8:12] != b"WAVE":
@@ -46,14 +47,21 @@ def read_riff(path):
         i += 8 + size + (size & 1)
     if fmt is None or data is None:
         raise ValueError(f"{path}: no fmt or data chunk")
+    tag = int.from_bytes(fmt[0:2], "little")
+    if tag == 0xFFFE and len(fmt) >= 26:     # EXTENSIBLE: the sub-format GUID starts with the real tag
+        tag = int.from_bytes(fmt[24:26], "little")
     ch, sr = int.from_bytes(fmt[2:4], "little"), int.from_bytes(fmt[4:8], "little")
     sw = int.from_bytes(fmt[14:16], "little") // 8
-    return sr, ch, sw, data[:len(data) - len(data) % (ch * sw)]
+    return sr, ch, sw, data[:len(data) - len(data) % (ch * sw)], tag == 3
 
 
 def load_wav(path):
-    sr, ch, sw, raw = read_riff(path)
-    if sw == 3:
+    sr, ch, sw, raw, is_float = read_riff(path)
+    if is_float:
+        if sw != 4:
+            raise ValueError(f"float sample width {sw}")
+        x = np.frombuffer(raw, "<f4").astype(np.float64)
+    elif sw == 3:
         b = np.frombuffer(raw, np.uint8).reshape(-1, 3).astype(np.int32)
         x = (b[:, 0] | (b[:, 1] << 8) | (b[:, 2] << 16))
         x = np.where(x >= 1 << 23, x - (1 << 24), x) / float(1 << 23)
@@ -127,7 +135,9 @@ def find_onset(t, edb, t0, t1):
 
 def host_map(meta, t, edb):
     """Return f(host) -> audio seconds from the marker onsets."""
-    h0 = meta.get("host_ff_start", meta["markers"][0] - 1.5)
+    # host time of audio sample 0: dt_rec reports it (host_rec_start); ffmpeg captures only have the
+    # launch time. Either way it only places the first marker's search window.
+    h0 = meta.get("host_rec_start", meta.get("host_ff_start", meta["markers"][0] - 1.5))
     found = []
     off = None   # audio - host offset, known after the first marker
     for m in meta["markers"]:
@@ -273,9 +283,14 @@ def analyse_dir(d, plots=True):
         if not os.path.exists(wav):
             continue
         x, sr = load_wav(wav)
+        rs = meta.get("rec_stats") or {}
+        if rs.get("overruns"):
+            print(f"!! {meta['capture']}: the recorder reported {rs['overruns']} discontinuities "
+                  f"({rs.get('zero_filled')} frames zero-filled, {rs.get('dropped')} dropped)")
         t, e = rms_env(x, sr)
         edb = db(e)
         f, minfo = host_map(meta, t, edb)
+        minfo["recorder"] = meta.get("recorder", "ffmpeg")
         need_c = any(s["kind"].startswith(("filt", "op_")) or s["kind"] == "delay"
                      for s in meta["steps"])
         ct, cc, cl = centroid_track(x, sr) if need_c else (None, None, None)

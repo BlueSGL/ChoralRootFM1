@@ -7,6 +7,7 @@ synthetic captures with known times (with simulated ffmpeg start latency and dri
 import json
 import math
 import os
+import struct
 import subprocess
 import sys
 import tempfile
@@ -62,13 +63,20 @@ def test_plan():
 class Cap:
     """Builds one synthetic capture: host timeline -> audio buffer."""
 
-    def __init__(self, name, total):
+    def __init__(self, name, total, dt_rec=False):
+        """dt_rec: written like build/dt_rec (32-bit float WAV, host_rec_start = host time of sample 0)
+        instead of ffmpeg (24-bit PCM, launch time only)"""
         self.name = name
         self.h0 = 1000.0
+        self.dt_rec = dt_rec
         self.x = np.random.default_rng(1).normal(0, 3e-5, int(total * SR))
         self.meta = {"capture": name, "group": name, "wav": name + ".wav",
-                     "sample_rate": SR, "host_ff_start": self.h0, "markers": [],
-                     "steps": []}
+                     "sample_rate": SR, "markers": [], "steps": []}
+        if dt_rec:
+            self.meta.update(recorder="dt_rec", host_rec_start=self.h0 + LAT,
+                             rec_stats={"frames": len(self.x), "overruns": 0})
+        else:
+            self.meta["host_ff_start"] = self.h0
         self.h = self.h0 + 1.5
 
     def a(self, host):
@@ -97,6 +105,15 @@ class Cap:
     def write(self, d):
         self.marker()
         y = np.clip(self.x, -1, 1)
+        if self.dt_rec:     # stereo float32, fmt chunk of 18 bytes + fact chunk, as dt_rec.c writes
+            pcm = np.repeat(y.astype("<f4")[:, None], 2, axis=1).tobytes()
+            fmt = struct.pack("<HHIIHHH", 3, 2, SR, SR * 8, 8, 32, 0)
+            body = (b"WAVE" + b"fmt " + struct.pack("<I", len(fmt)) + fmt + b"fact" +
+                    struct.pack("<II", 4, len(y)) + b"data" + struct.pack("<I", len(pcm)) + pcm)
+            with open(os.path.join(d, self.name + ".wav"), "wb") as fh:
+                fh.write(b"RIFF" + struct.pack("<I", len(body)) + body)
+            json.dump(self.meta, open(os.path.join(d, self.name + ".json"), "w"))
+            return
         q = np.round(y * (2 ** 23 - 1)).astype(np.int32)
         b = np.stack([q & 255, (q >> 8) & 255, (q >> 16) & 255], 1).astype(np.uint8)
         with wave.open(os.path.join(d, self.name + ".wav"), "wb") as w:
@@ -130,7 +147,7 @@ def gen(d):
         c.step({"param": "amp_atk", "value": v, "kind": "attack"}, f, max(1.0, T * 1.3), 0.3)
     c.write(d)
 
-    c = Cap("amp_dec", 90)
+    c = Cap("amp_dec", 90, dt_rec=True)
     c.marker()
     for v in SIX:
         T = T_DEC(v)
@@ -171,6 +188,10 @@ def test_analysis(d):
     sync = out["steps"][0]["sync"]
     check(sync["markers"] == 2 and abs(sync["rate"] - (1 + DRIFT)) < 2e-5,
           f"two markers found, drift rate {sync.get('rate'):.6f}")
+    sd = st[("amp_dec", 0)]["sync"]
+    check(sd["recorder"] == "dt_rec" and sd["markers"] == 2 and abs(sd["offset"] - MIDI_LAT) < 0.003,
+          f"dt_rec float32 capture: markers {sd['markers']}, offset from host_rec_start "
+          f"{sd.get('offset', 0) * 1e3:.2f} ms vs MIDI latency {MIDI_LAT * 1e3:.0f} ms")
     for v in SIX:
         r = st[("amp_atk", v)]
         exp = 0.9 * T_ATK(v)

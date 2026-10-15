@@ -4,12 +4,15 @@
   python3 tools/digitone/dt_measure.py --plan            # print the plan, send nothing
   python3 tools/digitone/dt_measure.py --run [--only amp_atk,amp_dec] [--out DIR]
 
-Design: one WAV per capture (a group, or a group at one tempo) recorded by ffmpeg
-(avfoundation, device found by name, 48 kHz). Every capture starts and ends with a
-sync marker note (amp ATK 0, short gate). Note events are logged in host time
-(time.monotonic); dt_analyse.py finds the two marker onsets in the audio and maps
-host time -> audio time linearly, which removes ffmpeg start latency, MIDI and
-audio latency and clock drift. The JSON next to the WAV holds every event.
+Design: one WAV per capture (a group, or a group at one tempo) recorded by build/dt_rec
+(tools/digitone/dt_rec.c, CoreAudio, device found by name, every sample; built on
+first use). ffmpeg avfoundation is only a fallback, with a warning: it drops about
+10 % of the samples on this Mac. Every capture starts and ends with a sync marker
+note (amp ATK 0, short gate). Note events are logged in host time (time.monotonic);
+dt_analyse.py finds the two marker onsets in the audio and maps host time -> audio
+time linearly, which removes recorder start latency, MIDI and audio latency and
+clock drift. dt_rec also reports the host time of the first sample (host_rec_start
+in the JSON). The JSON next to the WAV holds every event.
 
 Parameters the MIDI map cannot set (ALGO, RATIOs, FILTER TYPE, LFO DEST/WAVE/
 MULT/MODE, tempo) are asked for by hand before the capture; press Enter.
@@ -22,18 +25,21 @@ import re
 import signal
 import subprocess
 import sys
+import threading
 import time
 
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
 import dt_cc  # noqa: E402
 
 DEFAULT_OUT = "/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/DigitoneRecordings/times/"
 DEVICE = "Elektron Digitone"
+DT_REC = os.path.join(os.path.dirname(os.path.dirname(HERE)), "build", "dt_rec")
 NOTE, VEL = 60, 100
 SETTLE = 0.3          # after parameter changes, before the note
 GAP = 0.7             # silence after each step's tail
 MARK_GATE = 0.08
-LEAD_IN = 1.5         # after ffmpeg start, before the first marker
+LEAD_IN = 1.5         # after the recorder starts, before the first marker
 
 # Plain sine: operator C only, filter open, no mod, no sends, LFOs at depth 0.
 BASE = {
@@ -190,6 +196,114 @@ def find_audio_index(name=DEVICE):
     raise SystemExit(f"audio input '{name}' not found in ffmpeg avfoundation list")
 
 
+def build_dt_rec():
+    """build/dt_rec, (re)built from dt_rec.c when missing or older; None when it cannot be built"""
+    src = os.path.join(HERE, "dt_rec.c")
+    if not os.path.exists(DT_REC) or os.path.getmtime(DT_REC) < os.path.getmtime(src):
+        p = subprocess.run(["sh", os.path.join(HERE, "build_rec.sh")], capture_output=True, text=True)
+        if p.returncode != 0:
+            sys.stderr.write(p.stdout + p.stderr)
+    return DT_REC if os.access(DT_REC, os.X_OK) else None
+
+
+FFMPEG_WARNING = """
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+!! WARNING: build/dt_rec is missing and could not be built (tools/digitone/build_rec.sh).
+!! Recording with ffmpeg avfoundation, which DROPS ABOUT 10 % OF THE SAMPLES on this
+!! Mac: envelope times measured from these WAVs are wrong. Fix the build and re-run.
+!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+"""
+
+
+class Recorder:
+    """Records the named CoreAudio input to a WAV: build/dt_rec (every sample, reports the host time of
+    sample 0 and any discontinuity), or ffmpeg avfoundation as a loudly warned fallback."""
+
+    def __init__(self, device=DEVICE):
+        self.dev = device
+        self.exe = build_dt_rec()
+        self.p = None
+        if self.exe is None:
+            sys.stderr.write(FFMPEG_WARNING)
+            self.aidx = find_audio_index(device)
+            return
+        # probe: opens the device and stops at once (EOF on stdin); exit 2 lists the input devices
+        p = subprocess.run([self.exe, device, "/dev/null"], stdin=subprocess.DEVNULL,
+                           capture_output=True, text=True, timeout=20)
+        if p.returncode != 0:
+            raise SystemExit(f"dt_rec cannot record '{device}' (exit {p.returncode}):\n{p.stderr}")
+
+    def start(self, wav):
+        """start recording; returns the JSON fields: recorder, host_rec_launch and host_rec_start (dt_rec,
+        host time of the first sample) or host_ff_start (ffmpeg: launch time only)"""
+        t = time.monotonic()
+        if self.exe is None:
+            self.p = subprocess.Popen(
+                ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "avfoundation",
+                 "-i", f":{self.aidx}", "-ar", "48000", "-c:a", "pcm_s24le", wav],
+                stdin=subprocess.PIPE)
+            return {"recorder": "ffmpeg", "host_rec_launch": t, "host_ff_start": t}
+        self.p = subprocess.Popen([self.exe, self.dev, wav], stdin=subprocess.PIPE,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        self.lines = []
+        self.got = threading.Event()
+
+        def read_out(p=self.p):
+            for line in p.stdout:
+                self.lines.append(line.split())
+                self.got.set()
+            self.got.set()
+        self.reader = threading.Thread(target=read_out, daemon=True)
+        self.reader.start()
+        if not self.got.wait(5.0) or not self.lines or self.lines[0][0] != "start":
+            err = self._kill()
+            raise SystemExit(f"dt_rec: no audio from '{self.dev}' within 5 s:\n{err}")
+        return {"recorder": "dt_rec", "host_rec_launch": t, "host_rec_start": float(self.lines[0][1])}
+
+    def _kill(self):
+        p, self.p = self.p, None
+        p.kill()
+        p.wait()
+        return p.stderr.read()      # stdout belongs to the reader thread
+
+    def stop(self):
+        """stop at this host time; returns dt_rec's counts (frames, overruns, ...) or {} for ffmpeg"""
+        p, self.p = self.p, None
+        if p is None:
+            return {}
+        if self.exe is None:
+            if p.poll() is None:
+                try:
+                    p.communicate(b"q", timeout=10)
+                except Exception:
+                    p.kill()
+            return {}
+        try:
+            p.stdin.write("q\n")
+            p.stdin.close()
+        except OSError:
+            pass
+        try:
+            p.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+        self.reader.join(2)
+        err = p.stderr.read()
+        end = next((ln for ln in self.lines if ln and ln[0] == "frames"), None)
+        if end is None:
+            print(f"!! dt_rec ended without its frame count (exit {p.returncode}):\n{err}")
+            return {"error": err.strip(), "exit": p.returncode}
+        st = {k: int(v) for k, v in zip(end[0:-2:2], end[1:-2:2])}
+        st["host_rec_end"] = float(end[-1])
+        st["exit"] = p.returncode
+        if st["overruns"] or p.returncode:
+            print(f"!! dt_rec: {st['overruns']} discontinuities (ring {st['ring']}, sample-time jumps "
+                  f"{st['jumps']}, render errors {st['errors']}; {st['zero_filled']} frames zero-filled, "
+                  f"{st['dropped']} dropped), exit {p.returncode}: this capture's timing is suspect\n{err}")
+        return st
+
+
 class Rig:
     def __init__(self, channel, out_dir):
         import rtmidi
@@ -201,8 +315,7 @@ class Rig:
         if not idx:
             raise SystemExit(f"MIDI out '{DEVICE}' not found: {ports}")
         self.mo.open_port(idx[0])
-        self.aidx = find_audio_index()
-        self.ff = None
+        self.rec = Recorder(DEVICE)
         self.touched = set()
 
     def send(self, msg):
@@ -220,20 +333,11 @@ class Rig:
             self.send(m)
         self.send(dt_cc.note_off(NOTE, self.ch))
 
-    def start_ff(self, wav):
-        self.ff = subprocess.Popen(
-            ["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "avfoundation",
-             "-i", f":{self.aidx}", "-ar", "48000", "-c:a", "pcm_s24le", wav],
-            stdin=subprocess.PIPE)
-        return time.monotonic()
+    def start_rec(self, wav):
+        return self.rec.start(wav)
 
-    def stop_ff(self):
-        if self.ff and self.ff.poll() is None:
-            try:
-                self.ff.communicate(b"q", timeout=10)
-            except Exception:
-                self.ff.kill()
-        self.ff = None
+    def stop_rec(self):
+        return self.rec.stop()
 
     def note(self, gate, log):
         t_on = time.monotonic()
@@ -258,13 +362,15 @@ def sound_check(rig, out_dir):
     USB MIDI or its USB audio is silent (a whole capture of silence otherwise)"""
     from dt_analyse import load_wav
     wav = os.path.join(out_dir, "_sound_check.wav")
-    ff = subprocess.Popen(["ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-f", "avfoundation",
-                           "-i", f":{rig.aidx}", "-t", "2.5", "-ar", "48000", "-c:a", "pcm_s24le", wav])
-    time.sleep(1.0)
-    rig.send(dt_cc.note_on(NOTE, VEL, rig.ch))
-    time.sleep(0.5)
-    rig.send(dt_cc.note_off(NOTE, rig.ch))
-    ff.wait()
+    rig.start_rec(wav)
+    try:
+        time.sleep(1.0)
+        rig.send(dt_cc.note_on(NOTE, VEL, rig.ch))
+        time.sleep(0.5)
+        rig.send(dt_cc.note_off(NOTE, rig.ch))
+        time.sleep(1.0)
+    finally:
+        rig.stop_rec()
     x, _ = load_wav(wav)
     peak = 20 * math.log10(max(float(abs(x).max()), 1e-12))
     if peak < -60:
@@ -300,7 +406,7 @@ def run(caps, args):
                     "hand": c["hand"], "base": base, "markers": [], "steps": []}
             jpath = wav[:-4] + ".json"
             try:
-                meta["host_ff_start"] = rig.start_ff(wav)
+                meta.update(rig.start_rec(wav))
                 time.sleep(LEAD_IN)
                 rig.marker(base, meta["markers"])
                 for s in c["steps"]:
@@ -318,15 +424,15 @@ def run(caps, args):
                 rig.marker(base, meta["markers"])
             finally:
                 rig.panic()
-                rig.stop_ff()
+                meta["rec_stats"] = rig.stop_rec()
                 with open(jpath, "w") as f:
                     json.dump(meta, f, indent=1)
                 print(f"  wrote {wav} + {os.path.basename(jpath)}")
     except KeyboardInterrupt:
-        print("\nstopped: all notes off, ffmpeg stopped, JSON written for the partial capture")
+        print("\nstopped: all notes off, recorder stopped, JSON written for the partial capture")
     finally:
         rig.panic()
-        rig.stop_ff()
+        rig.stop_rec()
         restore = {k: INIT_RESTORE[k] for k in rig.touched if k in INIT_RESTORE}
         rig.setp(restore)
         print(f"sent init values back for {len(restore)} parameters: {sorted(restore)}")
