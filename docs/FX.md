@@ -239,7 +239,12 @@ and the impulse responses, with their spectrograms.
 | both | 222 us (7.6 %) | 417 us (14.4 %) |
 | **as built: delay full, reverb half** | | **267 us (9.2 %)** |
 
-**As built: the delay at the full rate, the reverb at half.** The delay's repeats are heard dry and bright beside the
+**Since 0.22: both at half** (the owner, 2026-10-14, after hearing `build/choralroot-delayhalf.fwsc` on the unit:
+"Delay sounded good at half rate"; `cr_fx.c CR_FX_DELAY_DS` 2, the line halved with it, "Memory at the full rate"
+below: POOL 72.7 % for 91.7 %; `CR_FX_DELAY_DS=1 ./build.sh` is 0.18 .. 0.21's delay). What follows is 0.18's
+reasoning for the full rate, kept as the record of why it was chosen then.
+
+**As built in 0.18: the delay at the full rate, the reverb at half.** The delay's repeats are heard dry and bright beside the
 note that made them, and the full rate costs it only 25 us on the estimate (it loses its down- and up-sampler); the
 reverb is a dark wash whose top is its own damping, and the full rate would double it (+149 us) and leave 0.37 s of
 delay in the memory that is there.

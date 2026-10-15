@@ -2009,3 +2009,11 @@ own: 1.5 .. 2 x low on the renders, 2 .. 3 x on the fx stage. Also: the delay li
 packages built for the owner to judge (`build/choralroot-delayhalf.fwsc`, `build/choralroot-lcd20.fwsc`: HANDOFF),
 the LCD one left on the unit. Host: `run_cr_tests.sh` ok, `install_test.py` ok. Not done: 48 kHz recording (an
 Option, not settable over USB without a restore), Dual Core Off rows (the same), the fx stage's parts under load.
+
+3y43. **The delay at the half rate and the LCD at 20 MHz are the defaults (2026-10-14, the owner, after both on the
+unit: "screen at 20 MHz looks good. Delay sounded good at half rate").** `cr_fx.c CR_FX_DELAY_DS` 2 (the line halved
+with it, 3y41: POOL 72.7 %, 94 KB free: no longer the tight resource), `lcd.c LCD_BAUD` 2 (7.7 ms a strip for 12.8).
+The old builds: `CR_FX_DELAY_DS=1`, `LCD_BAUD=4`. docs/FX.md keeps 0.18's reasoning for the full-rate delay as the
+record of why it was chosen then; EDITOR.md's LCD figures are marked as the 12 MHz build's. (3y42 is the fx-stage /
+TIMER5 profiling session's, written beside this one.) Host: `run_cr_tests.sh` (cr_fx_test at the new default),
+`test_cr.sh`, `./build.sh`: below. Not flashed by this session: the profiling session had the unit.

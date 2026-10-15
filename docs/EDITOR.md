@@ -383,7 +383,8 @@ instrument (the chord squeeze, the pickers, the meters, the stripes) and changes
 Measured with `tools/emu/scripts/cr_editor_lag.txt` (LUSH PAD, FILT, KNOB 1 20 detents in 1 s, then the OSC stack's
 KNOB 2 10 detents) under `EMU_UI_LOG=0` (every UI frame: its host instructions, the strips drawn / blitted, the
 bytes sent, the band's values); tools/emu/test_cr.sh checks it. Device time = host instructions / 258 µs; the LCD's
-SPI runs at 12 MHz (lcd.c `LCD_BAUD` 4): 0.67 µs a byte, 12.8 ms a 240 × 40 strip.
+SPI ran at 12 MHz (lcd.c `LCD_BAUD` 4): 0.67 µs a byte, 12.8 ms a 240 × 40 strip; **since 0.22 at 20 MHz** (`LCD_BAUD`
+2, the owner's eye on the unit 2026-10-14: 0.4 µs a byte, 7.7 ms a strip; the figures below are the 12 MHz build's).
 
 | | before | after |
 | --- | --- | --- |
@@ -409,8 +410,8 @@ What made it fast:
    canvas), so the next strip is composed while the SPI sends this one. Before, gfx.c `cv_begin` waited for the last
    strip's DMA (`lcd_sync`) before drawing the next: every blitted strip cost its 12.8 ms of SPI on top of the drawing.
    lcd.c itself (Felucca's) is unchanged: it already leaves a transfer running; raising its SPI clock (`LCD_BAUD` 2 =
-   20 MHz) would cut the SPI time further but needs a check on the device. 2026-10-14: `LCD_BAUD=2 ./build.sh` builds
-   it (`build/choralroot-lcd20.fwsc`, left on the owner's unit to look at: HANDOFF).
+   20 MHz) would cut the SPI time further but needs a check on the device. 2026-10-14: built, looked at on the owner's
+   unit ("looks good"), the default since (lcd.c `LCD_BAUD` 2; `LCD_BAUD=4 ./build.sh` is the 12 MHz build).
 
 ## 11. LEDs
 

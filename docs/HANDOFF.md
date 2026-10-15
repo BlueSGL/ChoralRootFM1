@@ -48,11 +48,11 @@ Read first: `PLAN.md` (§3 .. §5, §7), `docs/INTEGRATION.md`, the area's own d
   levers: the effects or half the chord part's voices on core 1 (designs in docs/FX.md, docs/DUALCORE.md), TIMER5's
   scan rate (an LED level's pulse is a time constant: halving the tick halves the dim levels' duty, FM1_LED_*_NS
   would double; the lit LEDs keep their duty), the fx stage's parts.
-- Two variant builds to judge by ear and eye, not merged into the defaults: `build/choralroot-delayhalf.fwsc`
-  (`CR_FX_DELAY_DS=2`: the delay at 22.05 kHz in half the line, 65 KB of POOL back, the repeats lose what is above
-  11 kHz) and `build/choralroot-lcd20.fwsc` (`LCD_BAUD=2`: the LCD's SPI at 20 MHz, 7.7 ms a strip for 12.8; the panel
-  is ST7789-class, whose sheet gives 16 MHz: it either draws right or shows garbage, and the release build is the way
-  back). The release build is what the unit runs.
+- Two changes the owner judged on the unit 2026-10-14 and made the defaults the same evening: the delay at the half
+  rate in half the line (`cr_fx.c CR_FX_DELAY_DS` 2: "sounded good"; POOL 72.7 % for 91.7 %; `CR_FX_DELAY_DS=1
+  ./build.sh` is the old delay) and the LCD's SPI at 20 MHz (`lcd.c LCD_BAUD` 2: "looks good"; the panel's sheet gives
+  16 MHz: a unit whose screen misdraws goes back with `LCD_BAUD=4 ./build.sh`, and that would be worth a report).
+  POOL is no longer the tight resource: 94 KB free.
 - Open (2026-10-14, found on the owner's unit): a RESTART (72, `crb_leave` -> `CRB_REBOOT` -> `fm1_reboot`) once
   crashed in the soft reset's P33 write with DBG_MSG `axi_rd_inv` (a DMA still reading: the USB or the DAC?), 37.6 s
   of uptime, with Dual Core On: a 4 s crash screen, then the reboot it wanted anyway. `fm1_install.py --debug` prints
@@ -133,7 +133,7 @@ sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.1
   lines are in the script's head and in docs/AUDIO-QUALITY.md "Classic is 0.18's, bit for bit"; "What Classic's
   guarantee is now" there says what the two parts of the script prove since the stereo chorus.
 
-POOL is the tight resource: read it off the size line.
+POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back: 72.7 %); read it off the size line.
 
 ## Release steps
 

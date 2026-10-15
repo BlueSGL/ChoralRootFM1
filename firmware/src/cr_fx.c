@@ -6,7 +6,8 @@
  * on Felucca's line, left and right; SLOOP 2.6's design, credited there and in LICENSING.md).
  *
  * THE RATES (build flags; docs/FX.md "Half rate or full"). CR_FX_DELAY_DS 1: the delay runs at the full 44.1 kHz,
- * straight on the send and into the mix: its repeats are heard beside the dry sound and keep its band. CR_FX_REVERB_DS
+ * straight on the send and into the mix: its repeats are heard beside the dry sound and keep its band (0.18 .. 0.21;
+ * since 0.22 the default is 2, the half rate in half the line: the owner's ear, 65 KB of POOL). CR_FX_REVERB_DS
  * 2: the reverb runs at 22.05 kHz between a half-band filter down (xf_down) and a pair of them up (xf_up): a
  * two-path polyphase all-pass (tools/fx_halfband.py: 2 + 2 first-order sections, one multiply each, -54 dB above
  * 12.5 kHz, flat to 9.5 kHz). Either can be built the other way (1 or 2) to compare.
@@ -54,7 +55,9 @@
  * (xf_coefs). Memory, all in .pool: 2 x 32768 x 2 (delay) + 16384 x 2 + 4096 x 2 (reverb) + the state. */
 
 #ifndef CR_FX_DELAY_DS
-#define CR_FX_DELAY_DS 1                 /* 1: the delay at FS; 2: at FS / 2 (a line then holds 1.49 s) */
+#define CR_FX_DELAY_DS 2                 /* 2: the delay at FS / 2 (0.22: the owner heard it on the unit 2026-10-14,
+                                          * "sounded good"; 65 KB of POOL back, XD_N below); 1: at FS, 0.18 .. 0.21's
+                                          * (CR_FX_DELAY_DS=1 ./build.sh) */
 #endif
 #ifndef CR_FX_REVERB_DS
 #define CR_FX_REVERB_DS 2                /* 2: the reverb at FS / 2; 1: at FS (twice the lines' memory and work) */
