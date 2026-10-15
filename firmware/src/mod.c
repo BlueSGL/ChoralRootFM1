@@ -37,6 +37,40 @@ _Static_assert(NELEM(N_MSRC) == MS_N && NELEM(N_MDST) == MD_N, "N_MSRC / N_MDST 
 _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 == P_FM1_ATK, "matrix slots: 3 ids each");
 #define NMSLOT 4u
 #define MS_VOICE(s) ((s) >= MS_ENV && (s) <= MS_RAND)             /* a value per voice */
+
+/* Options > Key Touch (ChoralRoot, docs/VELOCITY.md; the UI writes these, the ISR reads them): with it Fixed the
+ * voices play as before (the linear velocity of the engines without their own envelope, the patch's law in FM6, VA,
+ * FM TONE, nothing in CZ-1); Dynamic (and Velocity + Aftertouch) puts one velocity law on every engine's level, after
+ * the engine, MONK-1's Touch: Velocity: level = (1 - s) + s x 1.6 x (vel / 127)^2, clamped to 1, s = Velocity Sens
+ * (Low 1/4, Mid 1/2, High 1): a medium press (~100) keeps its level, a hard one is full, a light one is quiet.
+ * Velocity + Aftertouch also routes the part's aftertouch (t->at: the keys' pressure or MIDI's) to the cutoff by
+ * Aftertouch Sens (AMT 24 / 40 / 63) unless the sound's matrix routes AT itself. MIDI notes get the same law. */
+enum { CR_TOUCH_FIXED, CR_TOUCH_VEL, CR_TOUCH_VEL_AT };
+static volatile uint8_t cr_touch_mode, cr_touch_vsens, cr_touch_atsens;   /* sens: 0 Mid, 1 Low, 2 High */
+static int32_t cr_touch_gain(uint32_t vel)        /* Q15 */
+{
+    static const uint16_t S[3] = {16384, 8192, 32767};
+    int32_t x = (int32_t)(vel > 127u ? 127u : vel) * 258, c = (((x * x) >> 15) * 52429) >> 15;   /* 1.6 x^2 */
+    if (c > 32767)
+        c = 32767;
+    return 32767 - (((32767 - c) * (int32_t)S[cr_touch_vsens > 2u ? 0u : cr_touch_vsens]) >> 15);
+}
+static int32_t cr_touch_at_amt(void)
+{
+    static const int8_t A[3] = {40, 24, 63};
+    return A[cr_touch_atsens > 2u ? 0u : cr_touch_atsens];
+}
+/* the VEL source's value (Q15): the velocity as it is with Key Touch Fixed, the law above with it on */
+static int32_t cr_touch_vsrc(uint32_t vel) { return cr_touch_mode ? cr_touch_gain(vel) : (int32_t)vel * 258; }
+/* Expression (the editor's EXPR screen of every engine, docs/VELOCITY.md): the matrix's slots 3 and 4 are the sound's
+ * velocity and aftertouch routings, SRC fixed to VEL and AT, DST and AMT the sound's (saved with it). A slot whose SRC
+ * is still 0 (every sound until its EXPR cell is turned) takes the default with Key Touch on: VEL -> AMP at the full
+ * law (Dynamic and Velocity + Aftertouch), AT -> CUT by Aftertouch Sens (Velocity + Aftertouch); with Key Touch Fixed
+ * nothing, as before. An explicit slot applies whatever Key Touch says (MIDI's velocity and aftertouch reach the same
+ * sources), so a sound may route them itself; DST OFF switches its default off. */
+#define P_MVEL_SRC P_M3SRC
+#define P_MAT_SRC P_M4SRC
+#define CR_TOUCH_VEL_DEF_AMT 63
 #define MS_BIPOLAR(s) ((s) == MS_LFO || (s) == MS_KEY || (s) == MS_RAND)
 
 /* the track parameter of a per-block destination */
@@ -52,8 +86,8 @@ static struct {                  /* a part's matrix in its block (mix_part) */
     uint8_t amp;                 /* an AMP slot: the voice gain applies */
     uint8_t nv, nk;              /* voice terms, per-block parameters held */
     int32_t pit, cut, shp, gain; /* per voice, from the per-track sources (gain Q15) */
-    uint8_t vsrc[NMSLOT], vdst[NMSLOT];
-    int8_t vamt[NMSLOT];
+    uint8_t vsrc[NMSLOT + 1u], vdst[NMSLOT + 1u];   /* (+ 1: the default VEL -> AMP) */
+    int8_t vamt[NMSLOT + 1u];
     uint8_t kid[NMSLOT];         /* per-block: the parameter, its stored value */
     int16_t keep[NMSLOT];
 } mod_tab[NPART];                  /* per part: ChoralRoot's core 1 renders part 1 while core 0 renders part 0
@@ -80,7 +114,7 @@ CR_HOT_CORE static int32_t mod_tsrc(const track_t *t, uint32_t s, int32_t lfo)
     case MS_ENV:
         return t->m_env;
     case MS_VEL:
-        return t->m_vel * 258;
+        return cr_touch_vsrc(t->m_vel);
     case MS_KEY:
         return mod_key(t->m_key);
     case MS_RAND:
@@ -122,11 +156,13 @@ CR_HOT_CORE static __attribute__((noinline)) int mod_begin(track_t *t)
     const int16_t *p = t->p;
     int32_t lfo, off[NMSLOT];
     uint32_t k, j;
+    int vel_def = cr_touch_mode != CR_TOUCH_FIXED && !p[P_MVEL_SRC];       /* the defaults (cr_touch_vsrc, above) */
+    int at_def = cr_touch_mode == CR_TOUCH_VEL_AT && t->at && !p[P_MAT_SRC];
     MODP(t).on = 0;
     for (k = 0; k < NMSLOT; k++)
         if (p[P_M1SRC + 3u * k] && p[P_M1DST + 3u * k] && p[P_M1AMT + 3u * k])
             break;
-    if (k == NMSLOT)
+    if (k == NMSLOT && !vel_def && !at_def)
         return 0;
     lfo = mulq15(t->lfo_val, t->lfo_fade);              /* (the LFO of the block before: track_render ticks it) */
     MODP(t).on = 1;
@@ -165,6 +201,15 @@ CR_HOT_CORE static __attribute__((noinline)) int mod_begin(track_t *t)
             off[j] += (((x * a) >> 6) * (pd->max - pd->min)) >> 15;
         }
     }
+    if (vel_def) {
+        MODP(t).amp = 1;
+        MODP(t).vsrc[MODP(t).nv] = MS_VEL;
+        MODP(t).vdst[MODP(t).nv] = MD_AMP;
+        MODP(t).vamt[MODP(t).nv++] = CR_TOUCH_VEL_DEF_AMT;
+    }
+    if (at_def)
+        mod_voice_add(MS_AT, MD_CUT, t->at * 258, cr_touch_at_amt(), &MODP(t).pit, &MODP(t).cut, &MODP(t).shp,
+                      &MODP(t).gain);
     for (j = 0; j < MODP(t).nk; j++) {
         uint32_t id = MODP(t).kid[j];
         const param_desc_t *pd = id >= P_E0 ? &ENGINES[t->engine]->edit[id - P_E0] : &TP[id];
@@ -193,7 +238,7 @@ CR_HOT_CORE static __attribute__((noinline)) void mod_voice(track_t *t, voice_t 
         t->m_env = env;                                 /* ENV of the latest note, for per-block destinations */
     for (k = 0; k < MODP(t).nv; k++) {
         uint32_t s = MODP(t).vsrc[k];
-        int32_t x = s == MS_ENV ? env : s == MS_VEL ? v->mvel * 258 : s == MS_KEY ? mod_key(v->note) : v->mrnd;
+        int32_t x = s == MS_ENV ? env : s == MS_VEL ? cr_touch_vsrc(v->mvel) : s == MS_KEY ? mod_key(v->note) : v->mrnd;
         mod_voice_add(s, MODP(t).vdst[k], x, MODP(t).vamt[k], &pit, &cut, &shp, &gain);
     }
     if (pit) {

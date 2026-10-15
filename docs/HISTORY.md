@@ -3339,3 +3339,61 @@ not one of the manager's pools (`FACTORY_PRESETS` has five engines): a P5 record
 "P5 · retired", so a P5 sound over a P5 program is not restored by the Restore buttons (Delete all and Reset empty its
 slot all the same). Undo or a Restore of a bank holding 0.21's FM TONE slots needs 3y78's firmware (the beta built
 before it refuses that bank, rc 2); Delete all sends length 0 and passes there too.
+## 2026-10-15 (velocity and aftertouch from the keys: Key Touch and Expression; 0.22)
+
+3y81. **Velocity and aftertouch from the FM-1's own keys (2026-10-14 / 15; the owner: "look into fm1-monk ... he
+added velocity and aftertouch to the FM-1 which would be super cool to bring in to choralroot"; docs/VELOCITY.md).**
+Charles Vestal's Velo and MONK-1 (GPL-3.0-only, credited in LICENSING.md) read the keys' carbon pills through the
+SARADC on matrix rows PA7 / PA8 (20 of the 27 note keys; the top seven, C#5 .. G5, have no converter), a touched key's
+every other sample with its row driven weakly high so the pad reads the pill, not the diode: the velocity is the
+deepest of the first two driven samples after the touch on a log scale of the resistance, the aftertouch the lean
+below the key's rest. The study and design first (the doc), then, the owner asking for a quick test on the unit, the
+builds: (1) `hal/fm1_adc.h`'s non-blocking conversion and `hal/fm1_input.h`'s ADC slot (one conversion a tick on the
+latched column's row, taken a tick later: each analog key every 2.2 ms; the MASTER pot and the battery in OCT-'s /
+OCT+'s slots, so the tick owns the converter and `master.c` / `main.c` read its samples; the drive; a held key's
+column LEDs dark on its sampled tick), `cr_sense.c` (Velo's state machine in integers: DRIVE 2, WAIT 2, the log map,
+curve 0.7, floor 450, LIGHTEST 896, no calibration), `cr_ui.c cu_scan_keys` holding a sensed root's debounced press
+until its velocity is there (12 ms at most: the velocity is known 8.8 ms after the touch sample, the host test
+measured, so the note comes 7 .. 10 ms later than before), the top row at the keys' recent velocity,
+console `inp`'s readings. The owner's ten minutes: 689 note-ons, velocity 1 .. 127, quartiles 37 / 73 / 98; "not the
+best velocity sensitivity, but it's a cool add"; little heard on FM6 and CZ-1 (their own laws). (2) The owner's
+design: Options > **Key Touch** (Fixed, the default: as before, no sensing / Dynamic / Velocity + Aftertouch),
+**Velocity Sens**, **Aftertouch Sens** (Low / Mid / High; bits 2..7 of the block's `bass_on`, 0 the defaults, no
+version); MONK-1's Touch: Velocity law on the VEL source (`mod.c cr_touch_gain`: a medium press keeps its level, a
+hard one is full, a light one quiet, by the sensitivity); the pressure (MONK-1's rest-following lean, `cr_sense.c`)
+polled every 5 ms (`cu_touch_poll`) and posted as `CRE_AT`: both parts as channel pressure (mod.c's AT source), 0xD0
+out on the Perform and Bass channels, polyphonic aftertouch in accepted. (3) **Expression**: the editor's EXPR screen,
+the MOD group's last on every engine (`cr_edit.c CE_S_EXPR`: VEL and AT to a destination by an amount, mod.c's matrix
+slots 3 and 4, saved with the sound; unset, with Key Touch on, VEL -> AMP at the full law and AT -> CUT by Aftertouch
+Sens: so every engine responds, FM6 and CZ-1 included, and a sound may route them itself; MIDI's velocity and
+aftertouch reach the same sources; docs/EDITOR.md). With Key Touch on the engines' own velocity-to-level is replaced
+by the routing (`voice.c`: the level is the envelope's, the EXPR gain on it); Fixed is bit for bit the old path. Flashed
+(the second and third builds over the owner's backup, restored between; the unit left on the Expression build).
+Cost: TIMER5 about 1 us a tick more (one conversion's registers, the hook, the drive's writes); .text +~5 KB, RAM
++~1 KB (83.6 %). **Not done**: the host tests (the owner: after the merge to main), the PA10 probe for the top row,
+polyphonic aftertouch out, anything on the screen, Velo's calibration (its open item), the 5 kHz scan's
+two-conversion variant (VELOCITY.md 3.1). The emulator: `tools/emu/scripts/cr_expr.txt` (the EXPR screen on FM6, the
+VA, FM TONE; not yet in `test_cr.sh`).
+
+3y82. **The host tests for the key sensing, Key Touch and Expression (2026-10-15; the owner: "Do this task here").**
+`tests/input_test.c`: the analog rows through `fm1_input_tick` with the converter as memory (one conversion a tick,
+taken at the next, on the column it was started on; every PA7 / PA8 key once per two frames, OCT- / OCT+'s slots the
+pot and the battery; a held key's every other sample driven, its row an output high at the level for the conversion
+and an input again with the drive bits clear before the rows are read; its column's LED lines dark on the tick that
+samples it; a conversion not done counts a timeout and the scan goes on; `con` 0 starts nothing).
+`tests/cr_sense_test.c` (new, `run_cr_tests.sh`): Velo's curves on `cr_sense.c` (a hard hit 127; a gentle press
+middling, the integer log map within 6 steps of the float law over the whole driven range, the steep end the worst;
+a graze, a bounce while held, the release's two samples, two keys at once; the pressure settling, leaning, eased, let
+go, and the Sens). It measured what the study had wrong: the velocity is known at the second pulled-up sample after the
+touch, a driven one before each, 8.8 ms after the touch sample (the doc, the comments and 3y81's figure corrected). The
+log map moved out of TIMER5's tick with it (`cr_sense_take`, the main loop maps the landing), and the tick's two ADC
+steps are functions of their own (`fm1__an_take`, `fm1__an_start`, not inlined): `tests/target_budget.py` had read
+their cold paths, laid out after the tick with a jump back, as a loop around the whole tick (cost 11363 for a budget of
+4511; 4503 now). `usb_poll`'s budget 159 -> 175: not its code but the layout, the new globals pushing part of the USB
+state past the byte offsets its loads use (+9 instructions, the same two spans). `tests/mod_test.c`: the law at the
+three sensitivities, Fixed bit for bit the old path, the default VEL -> AMP and AT -> CUT, an explicit slot instead,
+DST OFF. `tests/cr_settings_test.c`: the Key Touch bits kept beside Numerals, mode 3 fixed, a 0.21 record Fixed / Mid,
+the automatic copy; the byte is shared now (its two counts updated). `tools/emu/test_cr.sh`: `cr_expr.txt`'s checks;
+and the three Options entries after Velocity moved every entry from Bass Behaviour on by three: 20 scripts' `SELECT`
+walks, `cr_opt_keys.txt`'s walk (29 entries) and the entry numbers in `test_cr.sh` / `test_persist.sh`, as 3y30 did for
+one. `run_cr_tests.sh`, `run_tests.sh` and `test_cr.sh` all pass.

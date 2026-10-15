@@ -147,6 +147,13 @@
 #include "fm1_sys.h"
 #include "fm1_irq.h"
 #include "fm1_guard.h"
+/* the key sensing's hooks into the scan (cr_sense.c, below): velocity from the analog rows (docs/VELOCITY.md) */
+static void cr_sense_hook(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven);
+static int cr_sense_drive_hook(uint32_t col, uint32_t rowbit);
+static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit);
+#define FM1_INPUT_ANALOG(c, r, v, d) cr_sense_hook(c, r, v, d)
+#define FM1_INPUT_DRIVE(c, r) cr_sense_drive_hook(c, r)
+#define FM1_INPUT_LED_OK(c, r) cr_sense_led_ok_hook(c, r)
 #include "fm1_input.h"
 #include "fm1_timer.h"
 #include "fm1_audio.h"
@@ -167,6 +174,7 @@
 #include "engines.c"             /* dsp.c, the eng_*.c files */
 #include "params.c"
 #include "mod.c"
+#include "cr_sense.c"             /* the keys' velocity and pressure from their contact resistance (Velo's sensing) */
 #include "voice.c"
 #include "slicer.c"
 #define mix_block fx_mix_block   /* fx.c's mix; audio.c gets ChoralRoot's (below) */

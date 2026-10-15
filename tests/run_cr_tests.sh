@@ -51,6 +51,8 @@ t ./build/host/cr_settings_test
 # write, an unknown version, ids out of range (docs/PRESETS.md "Favourites")
 par_build cc -std=c11 -Wall -Wextra -Werror -pedantic -O2 -o build/host/cr_favs_test tests/cr_favs_test.c
 t ./build/host/cr_favs_test
+par_build cc -O1 -Wall -Wno-unused-function -o build/host/cr_sense_test tests/cr_sense_test.c -lm
+t ./build/host/cr_sense_test
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -Ibuild/gen -o build/host/cr_va_test tests/cr_va_test.c -lm
 t ./build/host/cr_va_test
 # QUAD (docs/QUAD.md): blob, pages, ratios, the routings, against tests/quad_ref.py's goldens, envelopes, filters, LFOs,

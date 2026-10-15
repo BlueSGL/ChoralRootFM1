@@ -58,6 +58,15 @@
  * every older record and 0 is the default: no version, nothing to migrate. Manual (SAVE held), as the page's others */
 #define CRS_NUMERALS 0x02u
 #define CRS_NUMS(s) (((unsigned)(s)->bass_on & CRS_NUMERALS) ? 1u : 0u)
+/* Options > Key Touch, Velocity Sens, Aftertouch Sens (0.22; docs/VELOCITY.md) ride in bits 2..7 of the same byte:
+ * bits 2-3 Key Touch (0 Fixed, the default: the keys send Options > Velocity, no sensing; 1 Dynamic: the keys'
+ * velocity; 2 Velocity + Aftertouch), bits 4-5 Velocity Sens and bits 6-7 Aftertouch Sens (0 Mid, the default; 1 Low;
+ * 2 High). 0 in every older record and 0 is the default: no version, nothing to migrate; a firmware up to 0.21 finds
+ * 4..255 out of range and takes its default for the byte (Numerals off) until it is set there */
+#define CRS_TOUCH(s) (((unsigned)(s)->bass_on >> 2) & 3u)
+#define CRS_VSENS(s) (((unsigned)(s)->bass_on >> 4) & 3u)
+#define CRS_ATSENS(s) (((unsigned)(s)->bass_on >> 6) & 3u)
+#define CRS_TOUCH_BITS(t, v, a) ((uint8_t)(((t) & 3u) << 2 | ((v) & 3u) << 4 | ((a) & 3u) << 6))
 enum { CRS_CLOCK_OFF, CRS_CLOCK_OUT, CRS_CLOCK_IN };
 enum { CRS_NONE = 0xFF };               /* out part: no part */
 enum { CRS_USB_MASTER, CRS_USB_FIXED };
