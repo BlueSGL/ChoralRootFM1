@@ -32,6 +32,7 @@ static struct {
     uint32_t avg_us, max_us, max_all_us, halves, late, ui_max_ms, ui_frames;   /* the last full second */
     uint32_t late0, t0, ui_last, ui_max, ui_n;                                 /* the window being filled */
 } cpu_last;
+#define CPU_HALF_US (HALF_FRAMES * 1000000u / FS)   /* a half's budget, us: 2902 (console.c audio_budget_us) */
 /* 3y60 (the owner, 2026-10-14: "with all the user presets filled, my FM-1's UI is now very laggy"): a UI frame's own
  * time (input, LEDs, draw; main.c, emu_fw.c), the longest and the sum since 78 PEAK's last read (cr_backup.c crb_peak) */
 static struct { uint32_t max_us, sum_us, n, t0; } ui_ft;

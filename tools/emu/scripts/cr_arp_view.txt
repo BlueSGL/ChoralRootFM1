@@ -68,6 +68,8 @@ dump                          # 8: the Keyboard view, the arp running: unchanged
 btn D4 up
 key F3 up
 wait 300
+btn HOME                      # Keyboard -> Notes -> Geek Out -> Scope -> Geek Out 2 -> Chord
+wait 200
 btn HOME
 wait 200
 btn HOME

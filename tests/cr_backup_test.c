@@ -994,13 +994,16 @@ int main(void)
         CHECK(z == 0, "DEBUG: the tail (the stub's samples) is zero where no stub ran");
     }
 
-    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 68 values (24 to its second
+    /* ---- PEAK (78, 0.18): the audio ISR's worst cases since the last read: version 1, 79 values (24 to its second
      * build; the six behind them: when the ISR got to start; then four: the keys' way to the engine; then seven, 3y44:
-     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores; then eight, 3y48: the erases' writers and times; then seven, 3y50: each core's half; then four, 3y52: the quiet writes; then four, 3y60: the UI frame and the flash reads); DEBUG keeps
-     * its 127 ---- */
+     * what the overload shed did, the voices faded and taken; then four, 3y46: P5 on two cores; then eight, 3y48: the
+     * erases' writers and times; then seven, 3y50: each core's half; then four, 3y52: the quiet writes; then four,
+     * 3y60: the UI frame and the flash reads; then eleven, the dual-core fallback's branch (its 35..45, merged by
+     * name): c1_bar, why this boot kept core 1 off, the last crash's record, the reset, the breadcrumb, the voices
+     * shed since power-on); DEBUG keeps its 127 ---- */
     t_begin(78);
     a = t_send(&n);
-    CHECK(a && a[0] == 1 && a[1] == 68 && n == 2u + 5u * 68u, "PEAK: 1, 68, 68 x u32 (n %u)", (unsigned)n);
+    CHECK(a && a[0] == 1 && a[1] == 79 && n == 2u + 5u * 79u, "PEAK: 1, 79, 79 x u32 (n %u)", (unsigned)n);
     t_begin(73);
     a = t_send(&n);
     CHECK(a && a[1] <= 127 && n == 2u + 5u * a[1], "DEBUG after PEAK: its own values, as before (%u; the device's 127 fill its count byte)", a ? a[1] : 0);
@@ -1256,6 +1259,73 @@ int main(void)
         (void)crf_set(ENGI_FM6, 1, 0);
         (void)crf_flush();
         cu_pool_load(0, ENGI_FM6, 1);
+        cr_restore_lock = (uint8_t)keep_lock;
+    }
+
+    /* ---- Dual Core: On by default (0.22, 3y46) and the persistent fallback's Off over it (3y70; cr_cpu1.h
+     * cr_c1_bar_boot, cr_settings.c crs_dc_bar): a new unit (no settings record) boots On; with the bar a crash
+     * beside core 1 leaves, the same new unit keeps core 1 off, reads Off and the poll saves Off once it is quiet,
+     * whatever the default; Reset Settings in that power-on saves Off too; the player's On clears the bar ---- */
+    {
+        uint32_t t, keep_lock = cr_restore_lock;
+        persist_t *rd = (persist_t *)cu_loop_buf;
+        cr_restore_lock = 0;
+        memset(scope_buf, 0, sizeof scope_buf);
+        for (k = 0; k < 2u; k++)
+            for (t = 0; t < NVOICE; t++)
+                trk[k].v[t].active = 0;
+        cr_snap.voices = cr_snap.pending = cr_snap.perf_step = 0;
+#define DC_NEW_UNIT() do { (void)st_erase(st_sector(OBJ_SETTINGS, 0)); (void)st_erase(st_sector(OBJ_SETTINGS, 1)); } while (0)
+#define DC_BOOT() do { cr_c1_off = 1; cr_c1_barred = 0; crs_dc_bar = 0; cr_settings_boot(); cr_settings_load(); } while (0)
+#define DC_QUIET() do { for (t = 0; t < 8000u && crs_pending; t += 20u) { fm1_ms += 20u; cr_settings_poll(); } } while (0)
+        DC_NEW_UNIT();
+        memset(&cr_c1_bar_mock, 0, sizeof cr_c1_bar_mock);
+        DC_BOOT();
+        CHECK(st_load(OBJ_SETTINGS, rd, sizeof *rd) <= 0 && CRS_DUALCORE(&crs_rec.cr) && !cr_c1_off && !cr_c1_barred &&
+              cs.dualcore == 1u && !crs_pending, "Dual Core: a new unit (no record): On, core 1 to start, nothing to save");
+        DC_NEW_UNIT();
+        cr_c1_bar_mock.magic = FM1_C1_BAR_MAGIC;     /* (as fm1_c1_fault_c leaves it: a crash of core 0's own beside core 1) */
+        cr_c1_bar_mock.ran = 1;
+        cr_c1_bar_mock.barred = C1_BAR_CRASH;
+        DC_BOOT();
+        CHECK(cr_c1_off && cr_c1_barred == C1_BAR_CRASH && crs_dc_bar && cs.dualcore == 0u && crs_pending &&
+              !cr_c1_bar_mock.barred && !cr_c1_bar_mock.ran,
+              "Dual Core: a new unit after a crash beside core 1: core 1 kept off, Off read over the default On, the save primed, the record cleared");
+        DC_QUIET();
+        CHECK(!crs_pending && st_load(OBJ_SETTINGS, rd, sizeof *rd) == (int)sizeof *rd && !CRS_DUALCORE(&rd->cr),
+              "Dual Core: .. the poll saved Off once quiet (after %u ms)", (unsigned)t);
+        cu_reset();                                  /* (Options > Reset Settings, confirmed) */
+        CHECK(cs.dualcore == 0u && st_load(OBJ_SETTINGS, rd, sizeof *rd) == (int)sizeof *rd && !CRS_DUALCORE(&rd->cr) &&
+              !strcmp(cu.msg.text, "settings reset"),
+              "Dual Core: Reset Settings in the barred power-on: Off saved, not the default On (the fallback wins); the message '%s' (no restart)",
+              cu.msg.text);
+        DC_BOOT();
+        CHECK(cr_c1_off && !cr_c1_barred && !crs_dc_bar && cs.dualcore == 0u && !crs_pending,
+              "Dual Core: the next power-on: Off from the record itself, no word of the bar");
+        opt_set(O_DUALCORE, 1);
+        CHECK(cs.dualcore == 1u && !crs_dc_bar && !cr_c1_barred, "Dual Core: the player's On (Options): the record's from here on");
+        crs_pending = 1;
+        crs_change_ms = fm1_ms;
+        DC_QUIET();
+        DC_BOOT();
+        CHECK(!cr_c1_off && cs.dualcore == 1u && !cr_c1_barred, "Dual Core: .. saved, and the next power-on starts core 1");
+        DC_NEW_UNIT();
+        cr_c1_bar_mock.magic = FM1_C1_BAR_MAGIC;     /* (a give-up: cr_c1_give_up's reason) */
+        cr_c1_bar_mock.ran = 1;
+        cr_c1_bar_mock.barred = C1_BAR_GAVE_UP;
+        cr_safe = 1;                                 /* SAFE MODE: the bar waits (nothing is saved there) */
+        DC_BOOT();
+        CHECK(cr_c1_bar_mock.barred == C1_BAR_GAVE_UP && !cr_c1_barred && !crs_dc_bar,
+              "Dual Core: SAFE MODE leaves the bar for the next normal boot");
+        cr_safe = 0;
+        DC_BOOT();
+        CHECK(cr_c1_off && cr_c1_barred == C1_BAR_GAVE_UP && cs.dualcore == 0u && !cr_c1_bar_mock.barred,
+              "Dual Core: .. which keeps core 1 off (gave up)");
+        DC_QUIET();
+        memset(&cr_c1_bar_mock, 0, sizeof cr_c1_bar_mock);
+#undef DC_NEW_UNIT
+#undef DC_BOOT
+#undef DC_QUIET
         cr_restore_lock = (uint8_t)keep_lock;
     }
 

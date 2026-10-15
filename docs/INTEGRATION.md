@@ -228,7 +228,7 @@ units' identities for the installers' tests, not the firmware's version.
 
 Felucca has four `track_t` parts sharing a budget of 8 voices (since Melodee's voice model, 16 units: an FM6 voice
 takes one, any other two; FM6 plays up to 8 voices a part here, the other engines their 8 shared; with Options > Dual
-Core On, Off by default, the bass part has a budget of its own: docs/DUALCORE.md). ChoralRoot uses two:
+Core On, the default of a new unit since 0.22, the bass part has a budget of its own: docs/DUALCORE.md). ChoralRoot uses two:
 
 | part | engine role | fed by |
 | --- | --- | --- |
@@ -744,7 +744,7 @@ its deep pages under the cz band and the tone store; `cr_cz.txt`, `cz_persist_*.
   register, sound, level), EDIT (the engine picker; KNOB 1 the engine's sounds). Knobs: KNOB 1 voicing, KNOB 2 bass
   voicing, KNOB 3 the mode's main parameter, KNOB 4 FX amount, PRESETS the chord sound (Felucca's factory presets of
   the melodic engines, POLY), ALGORITHM the bass (presets named BASS / ACID; 0 = OFF), SELECT tempo (in a picker:
-  move); OPT + ALGORITHM the bass part's engine (wherever ALGORITHM alone is the bass sound: `cu_epk_ok`, docs/PRESETS.md), BASS held + ALGORITHM the bass level. Options: a picker of 24 settings (USB Record and USB Level since 0.14, USB Rate since 0.19, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, Off by default since 0.16, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
+  move); OPT + ALGORITHM the bass part's engine (wherever ALGORITHM alone is the bass sound: `cu_epk_ok`, docs/PRESETS.md), BASS held + ALGORITHM the bass level. Options: a picker of 24 settings (USB Record and USB Level since 0.14, USB Rate since 0.19, docs/USB-AUDIO.md; Dual Core On / Off since 0.15, Off by default from 0.16 to 0.21, On since 0.22, at the next power-on, docs/DUALCORE.md), KNOB 1 sets. `cr_build_screen` in the order
   of section 5 (PANIC / message, knob meter 900 ms, layer, page, Options, the stripes (the splash; the screensaver after 3 min without input; the screen off after 10 min), the View: CHORD,
   KEYBOARD, NOTES, GEEK OUT, SCOPE; perform on never swaps the chosen view: it shows in the PERF LED and the top
   line's right text, and on the Chord view an arpeggio or a pattern playing shows the arp screen in its place:
@@ -1059,6 +1059,169 @@ Felucca's 5.4 %); nothing there is worth moving to the UI frame. The host says t
 `cpu` readout is the proof (XIP cache misses, the nested TIMER5 and USB audio are not in the host figure; perf.sh's
 (u) line estimates the USB recording at ~31 us a half, 1.1 %, without the SIE accesses: docs/USB-AUDIO.md).
 
+### Measured on the unit (2026-10-14, `tools/perf_unit.py`)
+
+The owner: "you should be able to send midi in to the FM-1 and maybe sysex commands to change settings so you could
+put it in a state to fully test on device performance". `python3 tools/perf_unit.py [all | idle fm6 va cz quad]
+[--seconds 20] [--notes 8] [--record]` does that over USB alone: 76 SELECT puts the sounds on the parts, an 8-note
+chord (C3 E3 G3 B3 D4 F#4 A4 C5) goes in on the Perform channel and a bass note on the Bass channel, moved up a
+semitone every 2 s so voices are stolen as in playing, and 73 DEBUG / 78 PEAK are read before (the read clears the
+worst cases) and after. `--record` runs ffmpeg on "ChoralRoot In" through the scenario. The parts are put back on
+the power-on sounds at the end. **These are the unit's numbers, not the emulator's.** Worst halves (us of 2902) over
+20 s, Dual Core On (the bass on core 1: its `part1` is not in `block`), the 0.22 build of f71bbb5 plus the shed
+counter; `shed` is the voices the overload shed dropped (cumulative over the runs: the difference is the run's):
+
+| 8 notes + bass | block | tick | part0 | part1 | fx | master | t5 | wall | late | stale | shed (+) | avg | p0 avg | fx avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| idle | 233 | 63 | 50 | 44 | 48 | 80 | 25 | 253 | 0 | 0 | 0 | 158 | 22 | 24 |
+| fm6: TINE EP + DEEP SUB | 2580 | 353 | 1647 | 476 | 649 | 111 | 197 | 2777 | 0 | 0 | 0 | 1706 | 1136 | 525 |
+| va: MORPH PAD + PUNCH BASS | **3121** | 315 | **2293** | 355 | 611 | 112 | 232 | 3351 | 23 | 0 | **+26** | 2062 | 1539 | 510 |
+| cz: JET ROAR + SYNTH.BASS | 2271 | 295 | 1439 | 374 | 608 | 103 | 169 | 2433 | 0 | 0 | 0 | 1565 | 1047 | 488 |
+| quad: WOBBLE + BASS | 2345 | 237 | 1509 | 322 | 642 | 103 | 170 | 2515 | 0 | 0 | 0 | 1577 | 1061 | 488 |
+
+| 6 notes + bass | block | part0 | fx | t5 | late | shed (+) | avg | p0 avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fm6 | 2444 | 1521 | 633 | 194 | 0 | 0 | 1645 | 1031 |
+| va | **3102** | **2280** | 637 | 230 | 18 | **+22** | 2211 | 1686 |
+| cz | 2032 | 1169 | 594 | 150 | 0 | 0 | 1569 | 1041 |
+| quad | 1993 | 1157 | 645 | 145 | 0 | 0 | 1585 | 1032 |
+
+| 8 notes + bass, recording at 44.1 kHz | block | tick | part0 | fx | master | t5 | wall | late | shed (+) | avg |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fm6 | 2737 | 404 | 1726 | 720 | 172 | **349** | 3084 | 5 | **+12** | 1646 |
+| va | 3217 | 323 | 2397 | 705 | 160 | **407** | 3625 | 40 | **+40** | 1813 |
+
+What it says:
+
+- **A VA MORPH PAD chord does not fit one core**: 2280 us of part0 alone with 6 notes, an average half of 2211 (76 %),
+  peaks over the half (3100), and the shed drops voices (22 in 20 s with 6 notes, 40 more while recording). The pad's
+  two MORPH oscillators cost about 280 us a voice on the unit; docs/VA.md's "38 / 54 %" was the emulator's.
+- **FM6 TINE EP with 8 notes is at 88 %** (average 59 %), and sheds once a recording runs. A 6-note chord is 84 %.
+  About 200 us a voice on the unit.
+- **CZ-1 and FM TONE sit at 70 .. 80 % worst**, 54 % average: comfortable, no shed.
+- **The fx stage's worst half is 600 .. 720 us (21 .. 25 %), its average about 500**: not the 290 the listing counts
+  for the delay and the reverb; the stage also holds the parts' DIST, level, pan and sends, the idle parts, the
+  chorus and the buses. Read apart below ("The fx stage's parts and TIMER5"): the four effects' parts are 75 % of
+  it, the rest is five small loops and TIMER5's ticks, and the 600 .. 720 were the recording's ticks in it.
+- **The engine tick peaks at 300 .. 400 us** at a chord change (8 note-ons, the stealing, the fades), against 7 .. 100
+  on the emulator's scenarios.
+- **TIMER5 takes 150 .. 230 us of the worst half dry (5 .. 8 %) and 350 .. 410 while recording (12 .. 14 %)**: the
+  scan and the USB polls, the recording's endpoint service on top (HANDOFF item 23, now read; the tick counted
+  below: 7 us a tick, 60 % of it the 595 shift's GPIO accesses, the recording 4.2 us a tick more).
+- **The bass on core 1 costs core 0 nothing** (the wait 9 .. 41 us) and would add 300 .. 500 us to every row with
+  Dual Core Off.
+- **`stale` stayed 0 throughout**: even at 108 % the DAC never played something old; the late halves (up to 40 in 20 s)
+  were caught up and the shed took voices instead. The audible effect of an overload is a voice dropping out, not a
+  pop.
+
+Against "the host says the ISR has 2x headroom" above: on the unit the heaviest pads have none, and an 8-note chord on
+the lighter engines has 10 .. 25 %. The emulator was 1.5 to 2 times optimistic for the renders (FM6 and VA) and 2 to
+3 times for the fx stage. Dual Core, when it holds, is the one lever already built: moving the effects (600 .. 700
+us worst) or half the chord part's voices (1100 .. 2300) to core 1 are the two designs in docs/FX.md "If the unit
+still wants less" and docs/DUALCORE.md.
+
+#### The fx stage's parts and TIMER5 (2026-10-14, later: `perf_unit.py`'s second table)
+
+`tools/perf_unit.py` now prints 78 PEAK's fx parts for each scenario (its second table: the sends' down-sampler,
+the delay, the reverb and the wet's up-sampler, average / largest over the halves in which the effects ran; `4avg`
+their sum against the stage's average `fxavg`, 73 DEBUG's `st_fx_us`; `rest` the difference; `4max` the four
+largest against the stage's largest half, which is not the same half), and it sends CC 123 to both parts first: a
+chord that a stopped run had left held made the first "idle" row an 8-note one (part0 903 us). The unit ran the
+LCD-20 MHz variant of 1cc5972 (the same code where it matters), Dual Core On, 8 notes + bass, 20 s a scenario:
+
+| us a half | fx max | fx avg | down avg / max | delay | reverb | up | the four, avg / max | the rest, avg / of the max |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| fm6 | 587 | 490 | 33 / 57 | 98 / 131 | 198 / 234 | 37 / 60 | 366 / 482 | 124 / 105 |
+| va | 566 | 467 | 21 / 47 | 102 / 130 | 193 / 228 | 34 / 52 | 350 / 457 | 117 / 109 |
+| cz | 533 | 448 | 20 / 40 | 94 / 122 | 193 / 229 | 34 / 59 | 341 / 450 | 107 / 83 |
+| quad | 579 | 444 | 20 / 40 | 90 / 120 | 194 / 234 | 34 / 54 | 338 / 448 | 106 / 131 |
+| fm6, recording | 657 | 504 | 37 / 96 | 104 / 179 | 206 / 280 | 38 / 104 | 385 / 659 | 119 / 0 |
+| va, recording | 651 | 534 | 31 / 78 | 108 / 166 | 203 / 273 | 36 / 85 | 378 / 602 | 156 / 49 |
+
+The whole rows (block, tick, part0 ...) were within 5 % of the tables above; TIMER5 read 195 / 230 / 150 / 166 dry
+and 329 / 396 recording, the two recording rows late 1 / 40 and shed +10 / +40.
+
+**The fx stage.**
+
+- **The four parts are the listing's count times 1.2 .. 1.3** (docs/FX.md "The cost on the unit"): the reverb
+  193 .. 198 for ~160 counted, the delay 90 .. 108 for ~70 (its largest, 120 .. 131, is the time gliding under
+  the wow), the down-sampler 20 .. 21 and the up-sampler 34 .. 37 for 20 and 31 (fm6's down 33 / 57 runs the same
+  code as the others' 20 / 40 and was not chased). Together 340 .. 385 of the stage's 445 .. 535 average: 75 %.
+- **The rest, 106 .. 156 a half, is five small things and TIMER5**, none worth more than 40: the two parts' level,
+  pan and sends loop (`fx.c mix_loop_f`, 65 lines a sample, 128 samples, both parts send in every scenario: ~80 by
+  the lines), the chorus where a sound sends to it (`cr_fx.c xc_block`, 52 lines a sample: ~32; TINE EP and MORPH
+  PAD do, the bass sounds do not, and with nothing in the line the loop returns after a 4-line scan), DIST where it
+  is on (`track_dist`, inlined into `mix_part_out`: 51 lines a sample, ~32; WOBBLE's DRIVE 10 is the only one of
+  the eight sounds), the idle parts 2 and 3 (`track_lfo_tick`, ~4), `xf_block`'s own hash, scans and clears (~8),
+  `mix_part_out`'s straight code (~6), and **TIMER5's ticks**: the stage figures are wall time (`CR_PROF` takes
+  TIMER4's difference; only `pk_block_us` has the nested ticks taken out, `shed_check`), and 5 .. 6 ticks fall into
+  a 500 us stage: ~40 dry, ~65 recording. The lines over-count these short loops by about a third (fm6's sum is
+  ~165 against 124 read) the way they under-count the effects' loops, and at this precision DIST and the chorus do
+  not show in the rest (quad 106 with DIST and no chorus, cz 107 with neither, fm6 124 with the chorus).
+- **The stage's largest half (533 .. 587 dry, 651 .. 657 recording) is not a loop.** It is the parts' own largest
+  halves (each 30 .. 40 over its average) and the TIMER5 ticks that fall in it: recording, each part's largest rises
+  by 40 .. 50 and the stage's by 70 .. 90, while the averages move by 5 .. 10. The four parts plus the rest account
+  for the stage at the average and at the largest: nothing is hidden in it.
+- **The loop to work on inside the stage is the reverb's sample loop** (`cr_fx.c xr_run`: 513 lines a pass, 64
+  passes a half: 193 .. 198 us, 40 % of the stage, 7 % of the half); the delay's (`xd_run`, 90 .. 108) is next, and
+  everything else in the stage is under 40 us a piece. Neither has a cut left that keeps the sound (FX.md: two
+  diffusers instead of four, -42 lines a pass; two swinging lines, -18): what the reverb can give without a change
+  of sound is a few tens of microseconds, 1 .. 2 % of the half. The stage as a whole (445 .. 535, 15 .. 18 %) is
+  the lever, and it moves only as a whole: to core 1 (docs/FX.md "If the unit still wants less", docs/DUALCORE.md;
+  the bass takes 300 .. 500 of core 1's 2902).
+- A profiler note: because the stages are wall time and the block is not, the stages' largest halves sum to more
+  than the block by about `pk_t5_us` (fm6 dry: 359 + 1627 + 587 + 124 + 16 = 2713 against 2509 + 195).
+
+**TIMER5** (`main.c fm1_timer5_irq`, `hal/fm1_input.h fm1_input_tick` inlined into it).
+
+- **What a tick runs, from the listing** (`build/choralroot.dis`; a tick nested in the render, a column with no
+  LED pulse, the keys idle, not a frame's end): about 560 lines. The ISR wrapper 7 (`fm1_isr.S`: the pushes, the
+  call, the pops, csync, rti); the entry, the gap statistics, the lines dark and the rows' read 112; the 595 shift
+  (`fm1__sr_bits`: 11 lines a bit, 16 bits) 181; the latch, the LED lines and the column's bookkeeping 35; the four
+  rows' debounce (`fm1__key` inlined, 28 a row) 112; the cost statistics, the millisecond accumulator, the USB and
+  UART schedule and the call 66; `ua_service_paced` with the stream closed 47 (39 more every 250 us: `ua_service`
+  finds `cap_alt` 0). The encoders' frame, every 11th tick, is 317 lines: 29 a tick. So 590 .. 600 lines, 2.9 us at
+  205 a microsecond (HANDOFF 23 counted "about 600").
+- **What the unit reads: 6.6 .. 7.3 us a nested tick** (`pk_t5_us` over the ticks in the half's wall time: fm6
+  195 / 27, va 230 / 33, cz 150 / 22, quad 166 / 25). The other 4 us are the GPIO: a tick makes **110 accesses of
+  PA's and PH's registers** (the shift's 16 bits at three read-modify-writes each, 96; the latch 4; the LED lines
+  twice, 8; the rows 2; a column with a faint, dim or dim2 pulse adds a clock read and two writes of the lines)
+  and 5 .. 6 reads of TIMER4: about 35 .. 40 ns an access, the peripheral bus's price. **The 595 shift is about 60 %
+  of the tick**, the scan's own code 40 %.
+- **What it costs: 7 % of core 0** (10 000 ticks at 7 us: 203 us of a 2902 us half; the 150 .. 230 read above are
+  the ticks nested in halves of 2100 .. 3350 us wall). A tick that is not nested also runs `usb_poll` (every 5th)
+  and the UART MIDI poll (every 5th): main-loop time, not the half's.
+- **The recording's endpoint service: 4.2 us a tick more** (329 / 29 and 396 / 35 = 11.3 a nested tick), **42 us a
+  millisecond, 4.2 % of core 0** (the 350 .. 410 read above). A millisecond of streaming runs ten ticks' `ua_tx_fill`
+  (an SIE INDEX write and a TXCSR read each: has the host taken the packet) and the audio ISR's own 1.4 calls
+  (`ua_isr_service`, four a half, most gated by the 250 us pace: 73 DEBUG `ua_isr_calls` 62 940 in 45.7 s of
+  streaming, `ua_isr_gated` 51 161), four `ua_service` (`ua_hw_poll`: two fills, three FRAME reads, `ua_tx_prepare`),
+  one packet of 528 / 540 bytes packed from the capture ring (`ua_transmit`: 45 frames x 6 channels, ~2000 lines,
+  ~10 us) and handed to the DMA (`fm1_usb_ep_send`: two register writes). That is about 50 SIE transactions a
+  millisecond (`sie_rd` / `sie_wr`: a start and a wait for done, about half a microsecond each: ~25 us), the packet
+  ~10 and the calls' own lines ~7. `ua_service_max_us` 91 is the longest single service seen.
+- **A 5 kHz scan would save half the ticks: 35 ms a second, 3.5 % of core 0, about 100 us of a half** (0.6 % more
+  while recording: TIMER5's fills halve, the packet does not). What it changes: a frame becomes 2.2 ms, so a press
+  is seen after 4.4 ms (`FM1_DEB_PRESS` 2 frames; 1 keeps 2.2 but admits one stray closed sample) and a release
+  after 17.6 (`FM1_DEB_RELEASE` 8: halve it); the lit LEDs keep their 1/11 duty at 455 Hz (over the 200 Hz rule);
+  the dim, dim2 and faint pulses come 455 times a second instead of 910, half the glow unless their widths double,
+  and a doubled dim2 makes the wait on a tonic column ~14 us instead of ~5; the encoders are sampled 455 times a
+  second (a detent is four transitions: fine at hand speed); `sub % 5` has to be re-spaced to keep USB at 2 kHz and
+  the UART poll within its FIFO. **Cheaper and without any of that**: the shift writes the data line on every bit
+  (16 of its 48 read-modify-writes) though `w` is all ones but one or two bits; writing it only where the bit
+  changes saves ~14 accesses, 0.5 us a tick, 0.5 % of core 0. The clock's edges stay read-modify-writes: write-only
+  edges latched the neighbouring column (fm1_input.h).
+
+**Recommendation.** Core 0's half goes to the chord part's render (1300 .. 2300: what overloads), the fx stage
+(445 .. 535, 15 .. 18 %), TIMER5 (~200, 7 %; 11 % recording), the engine tick (220 .. 400 at a chord change) and
+the master (~120). In the order of what a change buys: (1) **the fx stage to core 1, as a whole** (docs/FX.md's
+second design): 450 .. 650 us off every half, the one change that makes a MORPH PAD chord fit, and core 1 has the
+room; (2) **the scan at 5 kHz**: 100 us, 3.5 %, with the debounce and the pulse widths re-tuned and the owner's
+feel of the keys and the glow checked, or the data line's writes skipped for 0.5 % with no change to feel; (3)
+inside the stage, the reverb's loop: 1 .. 2 % at best, and only with a change of sound. Not worth doing: the mix
+loops, the chorus, the idle parts (each under 40 us, and the lines over-count them). Nothing was changed on the unit
+for this: a measurement and a reading.
+
 ### What was found and fixed
 
 1. **Flash erases under sound** (`cr_settings.c`). A settings change (sound, tempo, FX, bass, perform parameter,
@@ -1295,7 +1458,7 @@ anyway), the LEDs and the screen model. The pump is not called there: those run 
   pump adds a pointer test a glyph); the audio ISR's static cost 14739 -> 14748 (tests/target_budget.py).
 
 **On the unit**: 78 PEAK (`fm1_install.py --debug`) appends `key_ons`, `key_pick_us`, `key_eng_avg_us`,
-`key_eng_us` (cr_out.c `cr_klat`): the note-ons timed since the last read, and from the first scan that saw the key
+`key_eng_us` (cr_out.c `cr_klat`; 0.22 appends `c1_bar` after them, docs/DUALCORE.md "The persistent fallback"): the note-ons timed since the last read, and from the first scan that saw the key
 closed (the debounce in it): the longest until the main loop posted the note-on, the average and the longest until
 the audio ISR applied it. Expected: `key_pick_us` 1.1 to 2.2 ms plus the longest stretch above, `key_eng_us` up to
 2.9 ms more; a `key_pick_us` of a frame's length would mean a key waited for a redraw.

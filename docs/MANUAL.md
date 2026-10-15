@@ -482,7 +482,7 @@ Roman numeral of the chord that is sounding, in blue, centred above the chord's 
 with a major third (and for sus chords, power chords and single notes), small letters for a minor third; `°` after a
 diminished chord, `+` after an augmented one. When nothing sounds there is no numeral, and the name stays where it
 is. While an arpeggio or another performance mode steps through the chord, the name sits a little lower to make room
-for the numeral. The other views (Keyboard, Notes, Geek Out, Scope) and the layers show no numeral.
+for the numeral. The other views (Keyboard, Notes, Geek Out, Scope, Geek Out 2) and the layers show no numeral.
 
 The numeral counts from the tonic to the root **as you played it**: Transpose is left out. With Transpose +1 in C
 major, the chord on C sounds as C sharp major; the name says `C#M` (what you hear) and the numeral says `I` (the
@@ -1404,7 +1404,7 @@ The whole editor: [EDITOR.md](EDITOR.md).
 
 ## 13. Views
 
-The view is what the screen shows when no layer, menu or editor is open. There are five.
+The view is what the screen shows when no layer, menu or editor is open. There are six.
 
 | View | Shows |
 | --- | --- |
@@ -1413,13 +1413,14 @@ The view is what the screen shows when no layer, menu or editor is open. There a
 | **Notes** | the chord name small and the notes as a list |
 | **Geek Out** | the chord, its notes and keyboard, and status lines: voicing and play style, bass and tempo, the audio load, the second core (`c1 off`, `c1 ok ...`), the transposition |
 | **Scope** | the waveform of the output, with the chord name small above it |
+| **Geek Out 2** (new in 0.22) | four meters: the audio load of core 0 and of core 1 (the bass part, its share of a Prophet chord's voices and the reverb), the RAM and the POOL in use; the peak of the last second as a tick. With one core running, core 1's meter is grey and says why (`off`, `failed`, `gave up`) |
 
 - **HOME** tap goes back to the view from anywhere. On the view itself it steps to the next view.
-- **HOME held** for 0.6 s opens the view menu: SELECT or the white keys D4 to A4 choose the view, KNOB 1 (or B4)
+- **HOME held** for 0.6 s opens the view menu: SELECT or the white keys D4 to B4 choose the view, KNOB 1 (or C5)
   switches **Lock** on and off; OCT+, OCT-, HOME or holding HOME again closes it. With Lock on, a HOME tap never changes the view; it only goes home.
 - Options > View sets the same thing.
 
-Options > Motion (Full, Calm, Off) sets how much the screens animate; the hopping note of an arpeggio is not an animation and shows with Off too. The sound editor never animates. The other four views never change with the performance mode.
+Options > Motion (Full, Calm, Off) sets how much the screens animate; the hopping note of an arpeggio is not an animation and shows with Off too. The sound editor never animates. The other five views never change with the performance mode.
 
 ## 14. Options
 
@@ -1453,7 +1454,7 @@ Tap **OPT** (printed GLO). One setting fills the screen:
 | **MIDI Raw Chord** | Off, ch 1 to ch 16 | Off | the channel for the plain chord, without the performance mode. From Off the first step is ch 1; choose a channel of its own (the Orchid uses 3) |
 | **Raw Chord Sound** | Off, On | Off | On: the plain chord also plays on the chord sound, under an arpeggio or pattern. With no performance mode on, every note then sounds twice |
 | **MIDI Clock** | Off, Out, In | Out | Out: sends clock, and start / stop with the loop. In: follows them |
-| **View** | Chord, Keyboard, Notes, Geek Out, Scope | Chord | the view ([Views](#13-views)) |
+| **View** | Chord, Keyboard, Notes, Geek Out, Scope, Geek Out 2 | Chord | the view ([Views](#13-views)) |
 | **Motion** | Full, Calm, Off | Full | screen animation |
 | **Chord Names** | Orchid, Standard | Orchid | how a chord is named on every screen. Orchid: by the keys held, as the Orchid does (`A` `7 9`, `JAZZ`). Standard: as a lead sheet names the notes that sound (`A9`, `Aadd9`, `A13`). Only the name changes, never the notes ([Chord names](#chord-names)) |
 | **LEDs** | Glow, Stock | Glow | Glow: idle keys glow dim, active ones are bright. Stock: the reverse |
@@ -1491,7 +1492,8 @@ Anything else cancels: OCT-, HOME, turning SELECT to another entry, closing the 
   change to a sound you had not saved is gone. The FM-1 is then as a new unit is, and stays so over a power-off:
   the reset saves itself, no SAVE held is needed after it.
 - **Dual Core** is the one setting that waits for a restart: the reset sets it On, and if it was Off the message
-  reads `settings reset · restart`: the second core starts when you switch off and on.
+  reads `settings reset · restart`: the second core starts when you switch off and on. Right after the FM-1 turned
+  Dual Core off by itself (below), the reset keeps it Off until you switch it On in Options.
 
 **Dual Core.** With Dual Core On, the default of a new unit since 0.22, the chip's second core shares the work: the
 bass part plays there with its own voices, so a full chord and the bass both sound whole. With it Off, ChoralRoot
@@ -1499,12 +1501,17 @@ runs on one core as the stock firmware does, and the chord and the bass share on
 chord with the bass can cost a voice. **Updating to 0.22 does not change your setting**: a unit that had Dual Core
 Off (the default from 0.16 to 0.21) still has it Off. To use the second core, set Options > Dual Core to On and
 switch off and on (or use Reset Settings). Firmwares that run both cores are reported to crash on some FM-1s;
-ChoralRoot raises the core voltage to the chip maker's level and falls back to one core if the second misbehaves,
-but the margin varies from unit to unit. **If your FM-1 ever crashes or resets while playing, set Dual Core to Off
-and switch off and on**: it is the first thing to try. If the FM-1 restarts by itself right after you switch it
-on, it comes up on one core that time (Geek Out: `c1 failed`), so that you can reach Options and set Dual Core to
-Off. The value reads `On · restart` or `Off · restart` until you switch off and on. The Geek Out view shows the
-state: `c1 off`, `c1 ok ...`, `c1 failed`, or `c1 gave up · Options>Dual Core`. More: [DUALCORE.md](DUALCORE.md).
+ChoralRoot raises the core regulator to 1.50 V (0.22; the level the other FM-1 firmwares settled on) before the
+second core starts and falls back to one core if the second misbehaves, but the margin varies from unit to unit.
+**If the FM-1 crashes, hangs or gives the second core up while Dual Core is On, it turns the option Off by itself**
+(0.22): after the restart the screen says `dual core off: crash` (or `hang`, `gave up`), the line under Options >
+Dual Core says why it is Off, and it stays Off over power cycles until you turn it On again. If your FM-1 ever
+crashes or resets while playing and Dual Core is still On, set it to Off and switch off and on: it is the first
+thing to try. If the FM-1 restarts by itself right after you switch it on, it comes up on one core that time (Geek
+Out: `c1 failed`), so that you can reach Options and set Dual Core to Off. The value reads `On · restart` or
+`Off · restart` until you switch off and on. The Geek Out view shows the state: `c1 off`, `c1 ok ...`, `c1 failed`,
+`c1 gave up · Options>Dual Core`, or `c1 off · after a crash`; Geek Out 2 shows each core's load as a meter. More:
+[DUALCORE.md](DUALCORE.md).
 
 **The single core package.** If your FM-1 crashes or freezes with the standard package, and setting Dual Core to
 Off is not enough (or you cannot reach Options), install the **Single core** package: in the web installer open
@@ -1828,7 +1835,8 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | Voices drop while the computer records, not otherwise | the computer records at 48 kHz, which the FM-1 converts | choose 44 100 Hz on the computer, or Options > USB Rate: `44.1 kHz` |
 | The FM-1 became a `WL82 UBOOT1.00` disk | no update loader is stored on it and update mode was asked for (OCT- at power-on, or OCT- + OCT+ + HOME for 5 s) | switch off and on |
 | The screen went black with three flashes while I played | OCT-, OCT+ and HOME were held for 5 s: update mode | switch off and on; nothing was written |
-| The FM-1 crashes or resets while playing | with Dual Core On, possibly the second core | Options > Dual Core: Off, switch off and on; please report it either way |
+| The FM-1 crashes or resets while playing | with Dual Core On, possibly the second core | since 0.22 the FM-1 turns Dual Core Off by itself after a crash (`dual core off: crash` after the restart); on 0.21 and before: Options > Dual Core: Off, switch off and on. Please report it either way |
+| `dual core off: crash` (or `hang`, `gave up`) after a restart | the FM-1 crashed, hung or lost the second core while Dual Core was On: this unit cannot run both cores at this speed | nothing to do: it runs on one core now, as the default; Options > Dual Core shows why it is Off. Please tell us (`fm1_install.py --debug`) |
 | Buttons or knobs are mixed up | the panel table is wrong | [Calibration](#calibration) |
 
 ## 18. Quick reference
@@ -1899,7 +1907,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | white roots D4 to F5, PLAY menu with its keys on loops (GLO) | loop slots 1 to 10 |
 | D#4, F#4, PLAY menu with its keys on loops | clear the loop (hold 1 s), undo |
 | white roots, naming a sound | letters and digits; D#4 a space; F#4 delete |
-| white roots D4 to A4, then B4, view menu | Chord, Keyboard, Notes, Geek Out, Scope; Lock |
+| white roots D4 to B4, then C5, view menu | Chord, Keyboard, Notes, Geek Out, Scope, Geek Out 2; Lock |
 | white roots D4 to G4, BASS layer | the bass behaviour |
 | white roots D4 to F4, the SEQ key's hold menu (metronome) | 4/4, 3/4, 6/8 |
 

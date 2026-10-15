@@ -36,7 +36,7 @@ mix_loop_u 36
 mix_loop_fu 78
 mix_loop_su 41
 mix_loop_sfu 83
-xf_block 0
+xf_block 5
 xf_down 65
 xf_up 49
 xd_run 3738
@@ -44,5 +44,5 @@ xr_run 1974
 xf_prep 19
 xf_delay 5
 xf_reverb 48
-mix_fx_split 19
+mix_fx_split 22
 c1_fx_job 3

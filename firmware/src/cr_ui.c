@@ -475,13 +475,14 @@ static const struct { uint8_t fx, page, of; int8_t c[4]; const char *label[4]; }
 static const char *const CU_XDIV[XF_NDIV] = {"1/32", "1/16T", "1/32.", "1/16", "1/8T", "1/16.", "1/8", "1/4T", "1/8.",
                                              "1/4", "1/2T", "1/4.", "1/2"};      /* cr_fx.c XF_DIV's order */
 static const char *const CU_BASSMODE[4] = {"Chords Only", "Unison Bass", "Bass Single Notes", "Solo"};
-static const char *const CU_VIEW[5] = {"Chord", "Keyboard", "Notes", "Geek Out", "Scope"};
+static const char *const CU_VIEW[6] = {"Chord", "Keyboard", "Notes", "Geek Out", "Scope", "Geek Out 2"};
 static const char *const CU_LOOPLEN[6] = {"Free", "1 bar", "2 bars", "4 bars", "8 bars", "16 bars"};
 static const char *const CU_SIG[CRL_NSIG] = {"4/4", "3/4", "6/8"};
 static const char *const CU_QUANT[CRL_NQUANT] = {"none", "1/4", "1/8", "1/8T", "1/16", "1/16T", "1/32"};
 static const char *const CU_LOOP_MODE[CRL_NMODE] = {"Overwrite", "Advance", "Overdub", "Replace", "Step"};
 static const char *const CU_RATE[CRL_NRATE] = {"x1/16", "x1/12", "x1/8", "x1/6", "x1/4", "x1/2", "x3/4", "x1", "x1.5", "x2", "x4"};
-enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_N };
+enum { V_CHORD, V_KEYBOARD, V_NOTES, V_GEEK, V_SCOPE, V_GEEK2, V_N };   /* (saved: cr_settings.h CRS_VIEW; a new
+                                                                         * view goes last, a record keeps its meaning) */
 
 static struct {
     uint8_t playstyle, extadd, secret, key_on, tonic, scale, single, vel;
@@ -535,6 +536,8 @@ static void cr_settings_save(void);       /* .. the automatic part now (Felucca'
 static void cr_settings_reset(void);      /* .. Options > Reset Settings: the defaults, applied and saved */
 static int cr_settings_commit(void);      /* .. the global save (SAVE held): the whole block and the session */
 static void cr_settings_revert(void);     /* .. GLO + SAVE: what the last global save wrote, applied again */
+static void cr_settings_dc_off(void);     /* .. Dual Core Off after core 1 was given up (cr_cpu1.h), saved */
+static void cr_settings_dc_user(void);    /* .. the player set Dual Core: the record's from here on */
 #endif
 static uint8_t cr_restore_lock;            /* cr_backup.c: a settings record was restored into flash; the UI's state is
                                             * older, so no settings save until the restart (RESTART, or a power cycle) */
@@ -1017,7 +1020,13 @@ static void opt_set(uint32_t o, int32_t v)
     case O_DUALCORE:                                  /* saved; core 1 starts (or not) at the next power-on. The
                                                        * single-core package: not a setting (the record keeps what
                                                        * it holds, for the standard package) */
-        if (!CR_SINGLE_CORE) cs.dualcore = (uint8_t)v;
+        if (CR_SINGLE_CORE)
+            break;
+        cs.dualcore = (uint8_t)v;
+        cr_c1_barred = 0;                             /* (the player decided: no word of the bar any more) */
+#if CR_HAVE_SETTINGS
+        cr_settings_dc_user();
+#endif
         break;
     case O_OUTPUT: cs.out_clean = (uint8_t)v; fx_output_set((uint32_t)v, 0); break;   /* (fx.c: faded over) */
     default: break;
@@ -1073,7 +1082,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_USB_RATE: cu_cpy(d, v ? "44.1 + 48 kHz" : "44.1 kHz", n); break;
     case O_DUALCORE:
         if (CR_SINGLE_CORE) { cu_cpy(d, "1 core build", n); break; }   /* (the single-core package: unavailable) */
-        cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off ? "" : " \267 restart", n);
+        cu_cpy(d, ONOFF[v & 1], n); cu_cat(d, (v & 1) == !cr_c1_off || cr_c1_barred ? "" : " \267 restart", n);
         break;
     case O_OUTPUT: cu_cpy(d, v ? "Clean" : "Classic", n); break;
     case O_VERSION: cu_version_text(d, CR_VERSION, n); break;
@@ -2820,8 +2829,9 @@ static void cu_home_tap(void)
         cs.view = (uint8_t)((cs.view + 1u) % V_N);
 }
 
-/* HOME held CU_HOME_HOLD_MS (alone): the view menu, a picker (L_VIEW): Chord .. Scope by SELECT / the white roots, the
- * last line "Lock: On / Off" (KNOB 1, or the sixth white root); OCT+ ok, OCT- / HOME back. Not over the naming page */
+/* HOME held CU_HOME_HOLD_MS (alone): the view menu, a picker (L_VIEW): Chord .. Geek Out 2 by SELECT / the white roots,
+ * the last line "Lock: On / Off" (KNOB 1, or the seventh white root, C5); OCT+ ok, OCT- / HOME back. Not over the
+ * naming page */
 #define CU_HOME_HOLD_MS 600u
 static void cu_view_menu(void)
 {
@@ -2855,10 +2865,12 @@ static void cu_reset(void)
     cr_settings_reset();
 #endif
     cu.opt_sel = O_STYLE;
-    cu_message(cr_c1_off && !CR_SINGLE_CORE ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core was Off at
-                                                   * this power-on: On, the default since 0.22, is saved, the core
-                                                   * starts at the next) */
-    cu_trace("options: settings reset%s\n", cr_c1_off && !CR_SINGLE_CORE ? " (Dual Core starts at the restart)" : "");
+    cu_message(cr_c1_off && cs.dualcore && !CR_SINGLE_CORE ? "settings reset \267 restart" : "settings reset", CR_COL_GREEN);   /* (Dual Core
+                                                   * was Off at this power-on: On, the default since 0.22, is saved,
+                                                   * the core starts at the next; but not in a power-on that kept
+                                                   * core 1 off after a crash beside it: Off is saved, cr_settings.c
+                                                   * crs_dc_bar) */
+    cu_trace("options: settings reset%s\n", cr_c1_off && cs.dualcore && !CR_SINGLE_CORE ? " (Dual Core starts at the restart)" : "");
 }
 static void cu_oct_tap(uint32_t b)
 {
@@ -6094,7 +6106,13 @@ static void cu_options_screen(cr_screen_t *s)
         cu_cpy(s->label, cs.names_std ? "A9 \267 Aadd9 \267 A9sus4" : "A7 9 \267 A9 \267 Asus m7 9", sizeof s->label);
     else if (cu.opt_sel == O_OUTPUT)               /* (docs/AUDIO-QUALITY.md: 0.19's output chain against 0.18's) */
         cu_cpy(s->label, cs.out_clean ? "0.19: linear, MASTER last" : "0.18: limiter, soft clip", sizeof s->label);
-    else if (cu.opt_sel == O_DUALCORE)             /* (docs/DUALCORE.md: On the default since 0.22; never started /
+    else if (cu.opt_sel == O_DUALCORE && !CR_SINGLE_CORE && !cs.dualcore && cr_c1_barred) {   /* (cr_cpu1.h: kept
+                                                    * off after a crash or a hang beside core 1, or given up this
+                                                    * session) */
+        static const char *const BAR[4] = {"", "off after a crash on 2 cores", "off after a hang on 2 cores",
+                                           "off: the 2nd core gave up"};
+        cu_cpy(s->label, BAR[cr_c1_barred & 3u], sizeof s->label);
+    } else if (cu.opt_sel == O_DUALCORE)           /* (docs/DUALCORE.md: On the default since 0.22; never started /
                                                     * stopped live) */
         cu_cpy(s->label, CR_SINGLE_CORE ? "the single core package"
                          : cs.dualcore != !cr_c1_off ? "takes effect after a restart"
@@ -6265,6 +6283,97 @@ static int cu_arp_layer(uint32_t now)
     return cu_arp_run(&a, now, now - cu.perf_t0 >= CU_PERF_PICK_MS);
 }
 
+/* GEEK OUT 2 (the owner, 2026-10-14): four meters, the oscillator mixer's tall bars as a read-out (cr_draw.c cr_p_tall,
+ * tall 2) under the editor's title line with the battery: CORE 0, the audio ISR's share of a half over the last second
+ * (audio.c cpu_window: its render, less its waits for core 1); CORE 1, core 1's busy time over the same second (cr_cpu1.h
+ * c1_avg_us / c1_max_us: the bass part's job with its share of P5's chord voices, and the reverb, 3y46 / 3y50; not
+ * running: dim, cr_c1_name); RAM and POOL in use (app.ld, link-time: build.sh's size line). The core
+ * bars glide a quarter of the way to the second's figure each frame (Motion Off: at once; from 0 on coming to the
+ * view), the second's peak a tick. The emulator has no link map, and its ISR's wall time is the host's: its own
+ * CR_MEM_USED and CR_CORE0_US (emu_firmware.h) */
+#ifndef CR_CORE0_US
+#define CR_CORE0_US(avg, max) ((avg) = cpu_last.avg_us, (max) = cpu_last.max_us)
+#endif
+#ifndef CR_MEM_USED
+extern uint32_t _bss_end[], _pool_start[], _pool_end[];          /* app.ld (main.c's) */
+#define CR_MEM_USED(r, p) ((r) = (uint32_t)(uintptr_t)_bss_end - 0x01C08000u, \
+                           (p) = (uint32_t)(uintptr_t)_pool_end - (uint32_t)(uintptr_t)_pool_start)   /* (RAM's origin) */
+#endif
+#define CU_RAM_BYTES 98304u                       /* app.ld: RAM 96 KiB, POOL 0x54000 */
+#define CU_POOL_BYTES 0x54000u
+static void cu_g2_cell(cr_cell_t *c, const char *label, uint32_t pct, uint32_t peak, uint32_t v100)
+{
+    char b[8];
+    c->flags = CR_CF_ON | CR_CF_PCT;
+    c->glyph = CR_G_BAR;
+    cu_cpy(c->label, label, sizeof c->label);
+    c->pct = (uint8_t)(pct > 255u ? 255u : pct);
+    c->pct2 = (uint8_t)(peak > 255u ? 255u : peak);
+    cu_int(b, (int32_t)v100, 0, sizeof b);
+    cu_cat(b, "%", sizeof b);
+    cu_cpy(c->value, b, sizeof c->value);
+}
+static void cu_geek2(cr_screen_t *s, uint32_t now)
+{
+    static uint32_t shown[2], seen;              /* the core bars as shown (Q12 of a half), the last frame here */
+    uint32_t us[2], pk[2], k, ram, pool, dual = 0;
+    CR_CORE0_US(us[0], pk[0]);
+    us[1] = pk[1] = 0;
+#if CR_CPU1
+    if (cr_dbg.c1 == C1_OK) {
+        dual = 1;
+        us[0] = us[0] > cr_dbg.avg_us[CRP_WAIT] ? us[0] - cr_dbg.avg_us[CRP_WAIT] : 0u;
+        pk[0] = pk[0] > cr_dbg.max_us[CRP_WAIT] ? pk[0] - cr_dbg.max_us[CRP_WAIT] : 0u;
+        us[1] = cr_dbg.c1_avg_us;                /* (its voices and the reverb: not CRP_PART1 alone, the voices') */
+        pk[1] = cr_dbg.c1_max_us;
+    }
+#endif
+    if (now - seen > 200u)                       /* (back on the view: the bars rise from 0) */
+        shown[0] = shown[1] = 0;
+    seen = now;
+    for (k = 0; k < 2u; k++) {
+        uint32_t t = us[k] >= CPU_HALF_US ? 4096u : us[k] * 4096u / CPU_HALF_US;
+        int32_t d = (int32_t)t - (int32_t)shown[k];
+        shown[k] = cr_motion == CR_MOTION_OFF || (d > -8 && d < 8) ? t : (uint32_t)((int32_t)shown[k] + d / 4);
+    }
+    s->kind = CR_K_EDIT8;
+    s->header = 0;                               /* (its own title line, as the editor's) */
+    s->ring_on = 0;
+    s->tall = 2;
+    s->n_rows = 1;
+    s->active = 0;
+    s->batt = (uint8_t)cu_batt();
+    cu_cpy(s->title, "GEEK OUT 2", sizeof s->title);
+    s->title_col = CR_COL_WHITE;
+    cu_cpy(s->page, dual ? "2 cores" : "1 core", sizeof s->page);
+    cu_g2_cell(&s->cell[0][0], "CORE 0", shown[0] >> 4, pk[0] * 256u / CPU_HALF_US,
+               (us[0] * 100u + CPU_HALF_US / 2u) / CPU_HALF_US);
+    if (dual)
+        cu_g2_cell(&s->cell[0][1], "CORE 1", shown[1] >> 4, pk[1] * 256u / CPU_HALF_US,
+                   (us[1] * 100u + CPU_HALF_US / 2u) / CPU_HALF_US);
+    else {                                       /* one core: core 1's word, in the grey */
+        cu_g2_cell(&s->cell[0][1], "CORE 1", 0, 0, 0);
+        s->cell[0][1].flags |= CR_CF_DIM;
+#if CR_CPU1
+        cu_cpy(s->cell[0][1].value, cr_c1_name(), sizeof s->cell[0][1].value);
+#else
+        cu_cpy(s->cell[0][1].value, "off", sizeof s->cell[0][1].value);
+#endif
+    }
+    CR_MEM_USED(ram, pool);
+    if (ram == 0xFFFFFFFFu) {                    /* (no link map: the emulator) */
+        for (k = 2; k < 4u; k++) {
+            cu_g2_cell(&s->cell[0][k], k == 2u ? "RAM" : "POOL", 0, 0, 0);
+            s->cell[0][k].flags |= CR_CF_DIM;
+            cu_cpy(s->cell[0][k].value, "n/a", sizeof s->cell[0][k].value);
+        }
+        return;
+    }
+    cu_g2_cell(&s->cell[0][2], "RAM", ram * 256u / CU_RAM_BYTES, 0, (ram * 100u + CU_RAM_BYTES / 2u) / CU_RAM_BYTES);
+    cu_g2_cell(&s->cell[0][3], "POOL", pool * 256u / CU_POOL_BYTES, 0,
+               (pool * 100u + CU_POOL_BYTES / 2u) / CU_POOL_BYTES);
+}
+
 static void cu_view_screen(cr_screen_t *s, uint32_t now)
 {
     const cr_snap_t *sn = &cr_snap;
@@ -6288,6 +6397,9 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
         return;
     }
     switch (cs.view) {
+    case V_GEEK2:                                 /* four meters: the two cores, RAM, POOL */
+        cu_geek2(s, now);
+        break;
     case V_SCOPE:                                 /* the sound itself: one bold line, the chord small on top */
         s->kind = CR_K_SCOPE;
         s->col = CR_COL_WHITE;
@@ -6372,6 +6484,10 @@ static void cu_view_screen(cr_screen_t *s, uint32_t now)
                 cu_cat(s->lines[3].t, " \267 stk ", sizeof s->lines[3].t);
                 cu_int(b, (int32_t)cr_dbg.c1_stack, 0, sizeof b);
                 cu_cat(s->lines[3].t, b, sizeof s->lines[3].t);
+            }
+            if (cr_dbg.c1 == C1_OFF && cr_c1_barred) {         /* kept off: why ("c1 off \267 after a crash") */
+                cu_cat(s->lines[3].t, " \267 ", sizeof s->lines[3].t);
+                cu_cat(s->lines[3].t, cr_c1_bar_name(), sizeof s->lines[3].t);
             }
             if (cr_dbg.c1 == C1_GAVE_UP)                       /* the way out: the switch (docs/DUALCORE.md) */
                 cu_cat(s->lines[3].t, " \267 Options>Dual Core", sizeof s->lines[3].t);   /* (30 chars of the 31 a line holds) */
@@ -6790,6 +6906,23 @@ static void cr_ui_frame(void)                      /* after the scan: the engine
 #if CR_CPU1
     if (cr_dbg.c1 == C1_OK)
         cr_dbg.c1_stack = cr_c1_stack_used();      /* core 1's stack high-water mark (its C1MK fill) */
+    {   /* core 1 kept off at boot (cr_cpu1.h cr_c1_bar_boot): told once, after the splash; given up this session
+         * (cr_c1_give_up): Dual Core Off, saved (a restart keeps one core either way: the .noinit bar) */
+        static uint8_t cu_c1_told, cu_c1_seen;
+        static const char *const MSG[4] = {"", "dual core off: crash", "dual core off: hang", "dual core off: gave up"};
+        if (cr_dbg.c1_fallback && !cu_c1_seen && !CR_C1_INJECTED()) {   /* (an injected failure, a CR_CORE1_TEST
+                                                    * build's 75 CORE1_TEST, is not the unit's: nothing saved) */
+            cu_c1_seen = cu_c1_told = 1;
+            cr_c1_barred = C1_BAR_GAVE_UP;
+#if CR_HAVE_SETTINGS
+            cr_settings_dc_off();
+#endif
+            cu_message(MSG[C1_BAR_GAVE_UP], CR_COL_RED);
+        } else if (cr_c1_barred && !cu_c1_told && cu_now() - cu_boot_ms >= CR_SPLASH_MS) {
+            cu_c1_told = 1;
+            cu_message(MSG[cr_c1_barred & 3u], CR_COL_RED);
+        }
+    }
 #endif
     if (cpk.on && cu.lock != L_EDIT)               /* the picker closed another way (OPT, SAVE, BASS + EDIT): kept */
         cu_pick_end(1);
