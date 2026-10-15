@@ -769,13 +769,23 @@ int cr_latching(const cr_t *c)
 {
     return c->sticky || (c->perform_on && c->par[c->perform_mode][CR_P_HOLD]);
 }
+/* Snap: a held key plays this note (not its own) */
+static int crx_snapped_to(const cr_t *c, int note)
+{
+    int i;
+    if (c->snapn_n)
+        for (i = 0; i < 128; i++)
+            if (c->snapn[i] == note + 1) return 1;
+    return 0;
+}
 static void crx_latch_sync(cr_t *c)
 {
     int i;
     if (cr_latching(c)) return;
     for (i = 0; i < CR_MAX_VOICES; i++) {
         const cr_voice_t *v = &c->v[i];
-        if (v->used && !(c->phys[v->key] & (1u << v->id))) crx_kill_voice(c, i);   /* latched, not held */
+        if (v->used && !(c->phys[v->key] & (1u << v->id)) && !crx_snapped_to(c, v->key))
+            crx_kill_voice(c, i);   /* latched, not held */
     }
 }
 
@@ -964,7 +974,7 @@ void cr_tick(cr_t *c, uint32_t now_ms)
 
 void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
 {
-    uint8_t bit;
+    uint8_t bit, raw = note;
     int vi;
     if (note > 127) return;
     id &= 7u;
@@ -972,12 +982,18 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
     if (down) {
         cr_voice_t *v;
         /* Key plays Notes / the Full keyboard, Key Mode on: a key out of the scale does nothing at all (its release
-         * finds no press: phys is not set) */
-        if (c->key_on && (c->key_notes || c->full) && !((cr_scale_mask(c) >> (note % 12u)) & 1u)) return;
+         * finds no press: phys is not set), or, with Snap, plays the nearest note of the target (cr_snap_note): the
+         * key keeps its own place in phys, the voice is the played note's, snapn says which for the release */
+        if (c->key_on && (c->key_notes || c->full) && !((cr_scale_mask(c) >> (note % 12u)) & 1u)) {
+            int sn = cr_snap_note(c, note);
+            if (sn < 0) return;
+            note = (uint8_t)sn;
+        }
         /* Once every key of a latched gesture has been lifted, the first press of the next gesture replaces
          * the latched group instead of adding to it. */
         if (cr_latching(c) && c->phys_n == 0) crx_clear_manual_voices(c);
-        if (!(c->phys[note] & bit)) { c->phys[note] |= bit; c->phys_n++; }
+        if (!(c->phys[raw] & bit)) { c->phys[raw] |= bit; c->phys_n++; }
+        if (note != raw && !c->snapn[raw]) { c->snapn[raw] = (uint8_t)(note + 1u); c->snapn_n++; }
         vi = crx_find_voice(c, note);
         if (vi >= 0 && c->v[vi].is_free) { crx_kill_voice(c, vi); vi = -1; }   /* a real press replaces a Free voice */
         if (vi >= 0) {
@@ -1008,8 +1024,16 @@ void cr_key_ex(cr_t *c, uint8_t note, uint8_t id, uint8_t vel, int down)
         }
         crx_note_last_chord(c, vi);
     } else {
-        if (c->phys[note] & bit) { c->phys[note] &= (uint8_t)~bit; c->phys_n--; }
+        if (c->phys[raw] & bit) { c->phys[raw] &= (uint8_t)~bit; c->phys_n--; }
         crx_rec_commit(c);
+        if (c->snapn[raw]) {                      /* a key Snap moved: the note it plays (the key, the chord, Snap may
+                                                   * have changed since) ... */
+            note = (uint8_t)(c->snapn[raw] - 1u);
+            c->snapn[raw] = 0;
+            c->snapn_n--;
+            if (c->phys[note] & bit) return;      /* .. held as itself too: it stays */
+        }
+        if (crx_snapped_to(c, note)) return;      /* another held key plays it: it stays */
         vi = crx_find_voice(c, note);
         if (cr_latching(c)) {                     /* it sounds on: a looper is told the key is up (CR_G_KEYUP) */
             if (vi >= 0 && c->v[vi].id == id && !c->v[vi].is_free) crx_gesture(c, vi, CR_G_KEYUP);
@@ -1161,6 +1185,35 @@ void cr_set_single_notes(cr_t *c, cr_single_t mode, int split_pc)
     c->split_pc = (uint8_t)crx_clamp(split_pc, 0, 11);
 }
 void cr_set_key_plays(cr_t *c, int notes) { c->key_notes = (uint8_t)(notes != 0); }
+void cr_set_key_snap(cr_t *c, cr_keysnap_t mode)
+{
+    c->snap = (uint8_t)((int)mode >= CR_KEYSNAP_OFF && (int)mode <= CR_KEYSNAP_CHORD ? mode : CR_KEYSNAP_OFF);
+}
+/* Snap (0.22, GitHub issue 18): the target as a pitch-class mask. Scale: the scale's notes. Chord: the base notes of
+ * every voice sounding with more than one (the player's chord, a pad's, a loop's), each taken back by its own
+ * captured transpose (the keys arrive before Transpose: the tone comes out where it sounds); the scale's when none.
+ * Then the nearest: d = 1 .. 11, down before up, so ties go down (C# in C major plays C; over C E G, D# plays E, A#
+ * plays C). A chord tone the key already is (out of the scale: a borrowed chord's) plays as itself */
+int cr_snap_note(const cr_t *c, uint8_t note)
+{
+    uint16_t m = 0;
+    int d, i, k;
+    if (!c->snap || !c->key_on || note > 127) return -1;
+    if (c->snap == CR_KEYSNAP_CHORD)
+        for (i = 0; i < CR_NVOICE; i++) {
+            const cr_voice_t *v = &c->v[i];
+            if (!v->used || v->nbase < 2u) continue;
+            for (k = 0; k < v->nbase; k++) m |= (uint16_t)(1u << crx_mod((int)v->base[k] - v->transpose, 12));
+        }
+    if (!m) m = cr_scale_mask(c);
+    if (!m) return -1;
+    if ((m >> (note % 12u)) & 1u) return note;
+    for (d = 1; d < 12; d++) {
+        if (note >= d && ((m >> ((note - d) % 12u)) & 1u)) return note - d;
+        if (note + d <= 127 && ((m >> ((note + d) % 12u)) & 1u)) return note + d;
+    }
+    return -1;
+}
 void cr_set_keyboard(cr_t *c, int full, int split_note)
 {
     c->full = (uint8_t)(full != 0);

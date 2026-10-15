@@ -3938,3 +3938,65 @@ v0.22-beta1 (its entry lists sha256_1core), so that release must keep both. Open
 install text does not say a beta is behind "Show beta releases"; the installer's footer reads "ChoralRoot 0.21 is a
 first public beta; ..." (its text from 0.1, filled with the page's version). Not done: anything on a unit (P5's rows
 and 3y90 .. 3y93 are not device-tested: docs/HANDOFF.md); the push, the tag and the Pages job.
+
+## 2026-10-15 (Key Mode's Snap: GitHub issue 18)
+
+3y99. **Snap: a key out of the scale plays the nearest right note (GitHub issue 18, aTanguay; 2026-10-15; branch
+claude/key-snap-a8626d from eac5401, not merged, not flashed).** The request: with Key plays Notes or the Full
+keyboard a key outside the scale is silent, a dead key under the fingers; the Scaler app remaps such keys to a
+nearby right note. The owner's comment there: with Key plays Chords the out-of-scale keys already play the ORC-1's
+alternate chords; nothing for single notes or the full keyboard. **The design, written before the build.** One
+setting, **Snap**, on the KEY layer's page 2, KNOB 3 (empty until now): `Off` (the default: silent, as it was),
+`Scale` (the nearest note of the key's scale), `Chord` (the nearest tone of the chord sounding now; the scale's note
+when no chord sounds). It applies where Key Mode treats the roots as notes, Key plays Notes and the Full keyboard;
+with Key plays Chords on the Chords keyboard the cell is drawn grey (`CR_CF_DIM`: it changes nothing there) and the
+out-of-scale roots keep their alternate chords. A key in the scale is never snapped. **The engine does it**
+(`cr_engine.c`, pure, host-tested): `cr_snap_note` builds the target as a pitch-class mask (Scale: `cr_scale_mask`;
+Chord: the base notes of every voice sounding with more than one of them, the player's, a pad's, a loop's, each
+taken back by its own captured transpose, since the keys arrive before Transpose; the scale when that is empty) and
+walks d = 1 .. 11, down before up, so ties go down (C# in C major plays C, D# plays D; over C E G, D# plays E and A#
+plays C; a chord tone out of the scale, a borrowed chord's, plays as itself). In `cr_key_ex` the guard that dropped
+the press takes the snapped note instead: the raw key keeps its place in `phys` (latching's "every key lifted", the
+pads' commit), the voice is the played note's, and `snapn[raw]` remembers raw -> played + 1 so the release ends the
+right note whatever changed while it was held (the key, the scale, the chord, Snap itself); a played note that
+another held key also plays, as itself or snapped onto it, stays until the last of them is lifted (`crx_latch_sync`
+counts a snapped key as held). MIDI out, the looper, the bass, the performance modes and the Chord view see the
+played note, as if its key had been pressed. **The setting**: bits 3 .. 4 of `key_on` (`CRS_SNAP`, `CRS_SNAP_BITS`;
+`crs_sanitize` 0 .. 23), 0 = Off in every older record, no version: manual (SAVE held) as the page's others;
+`CRE_KEYSNAP` -> `cr_set_key_snap`. The caveat, docs/SETTINGS.md: 0.17 .. 0.22-beta2 read `key_on` against 0 .. 7,
+so a record saved with Snap on reads there as Key Mode off, Key plays Chords, Keyboard Chords until set again (the
+same as v14's Notes / Full), nothing else; the other homes looked at (a bit of `scale`: Major there; `single`: Full
+Octave there) cost a setting too and are not Key Mode's byte. **The lights** (Glow): with Snap on, the roots out of
+the scale glow faint instead of dark, under the scale's low glow and the tonic's middle level: they play now; the
+sounding note is lit on the keys of its name as ever, so a snapped C# shows as the C keys lit. Stock keeps its two
+levels (the scale's keys lit, the others dark: lighting them would hide the key).
+**Built.** `cr_engine.h` / `cr_engine.c`: `cr_t.snap` (in the padding byte after the three streams: `sizeof(cr_t)`
+only grows by `snapn[128]` + `snapn_n`), `cr_keysnap_t` (`CR_KEYSNAP_OFF / SCALE / CHORD`; the name `cr_snap_t` is
+the UI's snapshot's, found by the device build), `cr_set_key_snap`, `cr_snap_note`, `crx_snapped_to`,
+`cr_key_ex`'s press and release as designed, `crx_latch_sync`. `cr_out.c`: `CRE_KEYSNAP`. `cr_settings.h` /
+`cr_settings.c`: `CRS_SNAP`, `CRS_SNAP_BITS`, `CRS_KEY_MAX` (23) in `crs_sanitize`, apply / capture / the glue
+both ways. `cr_ui.c`: `cs.snap`, `CU_SNAP`, KNOB 3 of the page (`cu_layer_knob`: the trace "key: knob 3 snap
+Scale"), the cell (`cu_key_cells`: grey unless Key plays Notes or the Full keyboard), `cr_leds`' faint glow in both
+root loops (the KEY layer on pick too, "the key as everywhere"). `tools/emu/emu_fw.c`: the `kbd:` dump line ends
+"snap N" (test_cr.sh's and test_persist.sh's parsers of it follow). **Tests**: `tests/cr_engine_test.c s_snap` (37
+checks: the mask and the ends of the range, Scale's ties, a key in the scale, MIN + C# = Cm, a note two keys play in
+both orders, the key / Snap changed while held, the Full keyboard, Key plays Chords untouched, the latch going off,
+the arp stepping the played note, Chord over a pad's C and Fm, the tie down, the borrowed chord's tone, Transpose,
+a Snap out of range; `cr_t.snap`'s place); `tests/cr_settings_test.c t_snap` (the 24 bytes' round trip, 24 .. 255,
+apply / capture, manual, 0.17 .. 0.22-beta2's rule, a v14 record; `t_page2_v14`'s unknown byte is 24 now);
+`tests/cr_draw_test.c`'s KEY page 2 picture draws Snap grey on KNOB 3; `tools/emu/scripts/cr_key_snap.txt` and its
+test_cr.sh entry (the knob's three values in the UI and the engine, the faint glow 212212121231212212, D#4 playing
+D with D's keys lit over its faint, Chord's fallback to the scale, Off again dark and silent). **Checked**:
+`./build.sh` (the toolchain and the SDK from `$HOME/.jieli/toolchain` and `$HOME/fw-AC79_AIoT_SDK`): XIP 547 004 B
+of 573 440 (95.4 %; 0.22-beta2: 546 412, +592 B), RAM 78 652 (80.0 %; +128 B: `snapn`), POOL 238 936 (69.4 %),
+RAMTEXT 7 072, NOINIT 228; `sh tests/run_cr_tests.sh` green (cr_engine_test 2722 ok, cr_settings 251 ok);
+`sh tools/emu/test_cr.sh` PASS (1018 ok; cr_key_snap's six entries and its ten expectations), `sh tools/emu/test_persist.sh`
+PASS (111; its KEY page 2 literal reads the dump line's "snap 0"), `sh tests/run_cr_draw.sh` green (KEY page 2's
+Snap cell grey on KNOB 3; every golden unchanged). The emulator's "expect silence" counts the samples since the
+previous check, so a note's release tail trips it: the script's Off case is checked on the engine's dump (voices 0,
+notes-out unchanged) instead. **Not done**: anything on a unit (the unit is the
+designer-handoff session's); the merge and the reply on the issue are the owner's; an emulator case of Chord over a
+playing loop (the host test's pads stand in; a loop would need a recording first). Docs: docs/MANUAL.md "Key Mode"
+(the table's KNOB 3 row, "Snap: Off, Scale or Chord", the lights' line), docs/SETTINGS.md (the rows, "0.22 added two
+more bits and no version, in `key_on`", the spare bits), docs/INTEGRATION.md's Snap bullet, firmware/src/CR_ENGINE.md's
+row, docs/releases/0.22.md "Merged after 0.22-beta2", docs/HANDOFF.md (the state line, an open item).

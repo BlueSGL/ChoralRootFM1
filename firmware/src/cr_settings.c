@@ -180,7 +180,8 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(playstyle, 0, CR_PS_FREE);
     CRS_FIX(extadd, 0, 1);
     CRS_FIX(secret, 0, CR_SECRET_ALL);
-    CRS_FIX(key_on, 0, 7);                         /* (v14: bit 1 Key plays Notes, bit 2 the Full keyboard) */
+    CRS_FIX(key_on, 0, (int)CRS_KEY_MAX);          /* (v14: bit 1 Key plays Notes, bit 2 the Full keyboard; 0.22:
+                                                    * bits 3 .. 4 Snap 0 .. 2, CRS_SNAP) */
     CRS_FIX(tonic, 0, 11);
     CRS_FIX(scale, 0, 1);
     CRS_FIX(transpose, -24, 24);
@@ -498,6 +499,7 @@ void cr_settings_apply(const cr_settings_t *s, cr_t *c, cr_settings_out_t *o)
     cr_set_sixth_up(c, (int)CRS_SIXTH(s));         /* Options > 6th with 7th (bit 4 of pick_roots) */
     cr_set_key(c, (int)CRS_KEY_ON(s), s->tonic, (cr_scale_t)s->scale);
     cr_set_key_plays(c, (int)CRS_KEY_PLAYS(s));
+    cr_set_key_snap(c, (cr_keysnap_t)CRS_SNAP(s));
     cr_set_keyboard(c, (int)CRS_KEYBOARD(s), c->split_note);   /* (the split key: the UI's, with its octave) */
     cr_set_transpose(c, s->transpose);
     cr_set_single_notes(c, (cr_single_t)s->single, s->split_pc);
@@ -534,7 +536,7 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
     s->extadd = c->extadd;
     s->secret = c->secret;
     s->pick_roots = (uint8_t)((s->pick_roots & (uint8_t)~CRS_SIXTH_UP) | (c->sixth_up ? CRS_SIXTH_UP : 0u));
-    s->key_on = CRS_KEY_BYTE(c->key_on, c->key_notes, c->full);
+    s->key_on = (uint8_t)(CRS_KEY_BYTE(c->key_on, c->key_notes, c->full) | CRS_SNAP_BITS(c->snap));
     s->tonic = c->tonic;
     s->scale = c->scale;
     s->transpose = c->transpose;
@@ -735,7 +737,7 @@ static void crs_capture(cr_settings_t *s)
     s->playstyle = cs.playstyle;
     s->extadd = cs.extadd;
     s->secret = cs.secret;
-    s->key_on = CRS_KEY_BYTE(cs.key_on, cs.key_notes, cs.kbd_full);
+    s->key_on = (uint8_t)(CRS_KEY_BYTE(cs.key_on, cs.key_notes, cs.kbd_full) | CRS_SNAP_BITS(cs.snap));
     s->tonic = cs.tonic;
     s->scale = cs.scale;
     s->transpose = cs.transpose;
@@ -1067,6 +1069,7 @@ static void cr_settings_load(void)
     cs.key_on = (uint8_t)CRS_KEY_ON(s);
     cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
     cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
+    cs.snap = (uint8_t)CRS_SNAP(s);
     cs.numerals = (uint8_t)CRS_NUMS(s);
     cs.touch = (uint8_t)CRS_TOUCH(s);              /* Options > Key Touch and the sensitivities (docs/VELOCITY.md) */
     cs.vel_sens = (uint8_t)CRS_VSENS(s);

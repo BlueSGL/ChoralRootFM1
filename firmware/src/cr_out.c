@@ -393,6 +393,7 @@ enum {
     CRE_SINGLE,       /* a: cr_single_t, v: split point 0..11 */
     CRE_KEYPLAYS,     /* v: Key plays 0 Chords, 1 Notes */
     CRE_KEYBOARD,     /* a: 1 the Full keyboard, v: the split key's MIDI note */
+    CRE_KEYSNAP,      /* v: Snap 0 Off, 1 Scale, 2 Chord (cr_set_key_snap) */
     CRE_LOOP,         /* a: LP_*, b / v: its argument */
     CRE_AT            /* v: the keys' aftertouch 0..127 (cr_ui.c cu_touch_poll): both parts, channel pressure out */
 };
@@ -533,6 +534,7 @@ static void cr_apply(const cr_ev_in_t *e)
     case CRE_SINGLE: cr_set_single_notes(&cr, (cr_single_t)e->a, e->v); break;
     case CRE_KEYPLAYS: cr_set_key_plays(&cr, e->v); break;
     case CRE_KEYBOARD: cr_set_keyboard(&cr, e->a, e->v); break;
+    case CRE_KEYSNAP: cr_set_key_snap(&cr, (cr_keysnap_t)e->v); break;
     case CRE_LOOP: cr_loop_op(e); break;
     case CRE_AT: cr_touch_at((uint32_t)e->v); break;
     default: break;

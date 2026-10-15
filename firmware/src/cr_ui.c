@@ -148,6 +148,7 @@ static int cu_has(const char *s, const char *w)                /* w occurs in s 
 }
 
 static const char *const CU_NOTE[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
+static const char *const CU_SNAP[3] = {"Off", "Scale", "Chord"};   /* the KEY layer's Snap (cr_keysnap_t) */
 
 /* --------------------------------------------------------------- sounds --- */
 /* PRESETS turns through the pool of the chord part's engine (cr_bank.c pool_*), ALGORITHM the bass part's (position 0
@@ -514,6 +515,9 @@ static struct {
                                            * roots out of the scale and generates no chord; v14) */
     uint8_t kbd_full;                     /* .. Keyboard: 0 Chords (the chord block + 18 roots), 1 Full (27 single-note
                                            * keys, no chord block, no LOCK; v14) */
+    uint8_t snap;                         /* .. Snap (KNOB 3; 0.22, cr_keysnap_t): with Key plays Notes / the Full
+                                           * keyboard a root out of the scale plays the nearest note of the scale (1)
+                                           * or of the chord sounding (2) instead of nothing (0, the default) */
     uint8_t numerals;                     /* .. Numerals (KNOB 4; 0.22): 1 = the Chord view shows the sounding chord's
                                            * Roman numeral above its name (cu_numeral); 0 Off, the default */
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
@@ -3627,7 +3631,7 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
     int32_t v;
     switch (l) {
     case L_KEY:
-        if (cu.kpage) {                            /* page 2: KEY PLAYS, KEYBOARD, NUMERALS on KNOB 4 (KNOB 3: nothing) */
+        if (cu.kpage) {                            /* page 2: KEY PLAYS, KEYBOARD, SNAP, NUMERALS */
             if (knob == 0) {
                 cs.key_notes = (uint8_t)(s > 0);
                 cr_post(CRE_KEYPLAYS, 0, 0, cs.key_notes);
@@ -3636,11 +3640,16 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                 cs.kbd_full = (uint8_t)(s > 0);
                 cu_post_kbd();
                 cu_trace("key: knob 2 keyboard %s\n", cs.kbd_full ? "full" : "chords");
-            } else if (knob == 3) {                /* NUMERALS: the chord's Roman numeral on the Chord view (display only) */
+            } else if (knob == 2) {                /* SNAP: Off / Scale / Chord (a root out of the scale, with Key plays
+                                                    * Notes or the Full keyboard: the engine, cr_snap_note) */
+                v = (int32_t)cs.snap + s;
+                cs.snap = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+                cr_post(CRE_KEYSNAP, 0, 0, cs.snap);
+                cu_trace("key: knob 3 snap %s\n", CU_SNAP[cs.snap]);
+            } else {                               /* NUMERALS: the chord's Roman numeral on the Chord view (display only) */
                 cs.numerals = (uint8_t)(s > 0);
                 cu_trace("key: knob 4 numerals %s\n", cs.numerals ? "on" : "off");
-            } else
-                break;
+            }
             cu_hot_set(L_KEY, knob);
             break;
         }
@@ -5051,6 +5060,9 @@ static void cr_leds(void)
     uint32_t full = cs.kbd_full && !cu_key_pick(); /* the Full keyboard: the chord block's nine keys are notes */
     uint32_t key0 = full ? 0u : CU_ROOT0;          /* the first key that plays */
     uint32_t scale = cs.key_on ? cu_scale_bits() : 0u;
+    uint32_t snapped = cs.key_on && cs.snap && (cs.key_notes || cs.kbd_full) && !cs.leds;   /* Snap (0.22): the roots
+                                                    * out of the scale play, and glow faint for it (Glow; Stock keeps
+                                                    * its two levels: the scale's keys lit, the others dark) */
     const cr_snap_t *sn = &cr_snap;
     if (cu.msg.big == 1u && (int32_t)(cu.msg.until - now) > 0) {   /* panic: everything flashes */
         for (k = 0; k < 41u; k++)
@@ -5174,6 +5186,8 @@ static void cr_leds(void)
                 cu_led(cs.leds ? own : nm, 14u + k, 1);
             else if ((scale >> pc) & 1u)
                 cu_led(nd, 14u + k, 1);
+            else if (snapped)
+                cu_led(nf, 14u + k, 1);
         }
     } else if (cu.page == PG_SAVE && ce.save_step) {     /* naming: the keys that type lit (the letters, D#4 space) */
         for (k = CU_ROOT0; k < CU_NKEY; k++)
@@ -5210,9 +5224,9 @@ static void cr_leds(void)
          * glowed (the low level); Stock keeps that (its idle keys lit: its two levels are the stock firmware's
          * picture, not the glow's). Key Mode on (the owner, 2026-10-11): the
          * key shows on them: a note of the scale glows (low), the tonic's keys at the middle level (fm1_led_dim2),
-         * a key out of the scale is dark; a sounding note is lit over it (nl). Until then only the black keys out of
-         * the scale went dark: every white key glowed whatever the key. Stock has two levels: below, the scale's
-         * keys lit (the tonic as the rest), the others dark */
+         * a key out of the scale is dark, or glows faint when Snap makes it play (0.22); a sounding note is lit over
+         * it (nl). Until then only the black keys out of the scale went dark: every white key glowed whatever the
+         * key. Stock has two levels: below, the scale's keys lit (the tonic as the rest), the others dark */
         for (k = key0; k < CU_NKEY; k++) {
             uint32_t pc = CU_KEY_PC(k);                  /* (the octave shift keeps the pitch class) */
             if (!cs.key_on)
@@ -5221,6 +5235,8 @@ static void cr_leds(void)
                 cu_led(nm, 14u + k, 1);
             else if ((scale >> pc) & 1u)
                 cu_led(nd, 14u + k, 1);
+            else if (snapped)
+                cu_led(nf, 14u + k, 1);
         }
         for (k = key0; k < CU_NKEY; k++)                 /* PLAN 6: the loop's notes glow dim (not the player's), on
                                                           * every key of their names too */
@@ -5730,8 +5746,12 @@ static void cu_key_cells(cr_screen_t *s)
 {
     static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
     uint32_t k;
-    if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard; KNOB 3 free; KNOB 4 Numerals */
+    if (cu.kpage) {                                /* page 2 (SELECT): Key plays, Keyboard, Snap, Numerals */
         s->cell[0][0].flags = s->cell[0][1].flags = s->cell[0][3].flags = CR_CF_ON;
+        s->cell[0][2].flags = (uint8_t)(CR_CF_ON | (cs.key_notes || cs.kbd_full ? 0u : CR_CF_DIM));   /* (Snap changes
+                                                    * nothing with Key plays Chords on the Chords keyboard: grey) */
+        cu_cpy(s->cell[0][2].label, "Snap", sizeof s->cell[0][2].label);
+        cu_cpy(s->cell[0][2].value, CU_SNAP[cs.snap % 3u], sizeof s->cell[0][2].value);
         cu_cpy(s->cell[0][3].label, "Numerals", sizeof s->cell[0][3].label);
         cu_cpy(s->cell[0][3].value, cs.numerals ? "On" : "Off", sizeof s->cell[0][3].value);
         cu_cpy(s->cell[0][0].label, "Key plays", sizeof s->cell[0][0].label);

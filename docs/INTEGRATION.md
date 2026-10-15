@@ -532,6 +532,19 @@ Priority, top down, first match wins:
   resolves no chord (`crx_build_base` skips the KEYMAP) and `cr_key_ex` drops a press whose pitch class is not in
   `cr_scale_mask` before anything else: no voice, no note on any stream, no gesture (so no loop event), `phys` not set
   (its release finds nothing), a latched chord not replaced. Chord keys as with Key Mode off.
+- **Snap** (0.22, GitHub issue 18; `cs.snap`, `CRE_KEYSNAP` -> `cr_set_key_snap`, `cr_keysnap_t`): Off (default) /
+  Scale / Chord, KNOB 3 of the page (grey, `CR_CF_DIM`, unless Key plays Notes or the Full keyboard: it applies only
+  where that guard does). With it the guard takes `cr_snap_note` instead of dropping the press: the nearest note of
+  the target (Scale: `cr_scale_mask`; Chord: the base notes of every used voice with more than one, each taken back
+  by its own captured transpose, the scale's when none), d = 1 .. 11 down before up (ties go down; a chord tone the
+  key already is plays as itself). The raw key keeps its place in `phys` (latching's "every key lifted",
+  `crx_rec_commit`), the voice is the played note's (`crx_find_voice` by it: a second key onto a sounding note
+  retriggers it, as a second press of that note would), `snapn[raw]` = played + 1 (`snapn_n` of them) tells the
+  release which note to end whatever changed meanwhile; a note another held key plays, as itself (`phys`) or snapped
+  onto it (`crx_snapped_to`), stays until the last of them is up; `crx_latch_sync` counts a snapped key as held. The
+  streams, the gesture (the looper), the bass and the performance modes see the played note. The LEDs: `cr_leds`
+  glows the roots out of the scale faint (`nf`) while Snap applies, Glow only. `tests/cr_engine_test.c s_snap`,
+  `tools/emu/scripts/cr_key_snap.txt`.
 - **Keyboard** (`cs.kbd_full`, `CRE_KEYBOARD` -> `cr_set_keyboard(full, split_note)`): Chords / Full. Full: every
   key 0..26 posts `CRE_KEY` 53 + k + 12 x octave (`cu_key_press`; `cu.key_note[k]` set says "pressed as a note" to
   the release and to `cu_mods_phys`); B3 never pends (no LOCK tap, no LOCK layer); the engine marks the voice

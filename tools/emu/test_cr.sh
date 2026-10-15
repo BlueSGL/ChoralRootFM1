@@ -1836,11 +1836,11 @@ silent_end cr_key_leds
 # the KEY layer's page 2 (SELECT) and Key plays: Chords / Notes
 run cr_key_page
 L="$OUT/cr_key_page.log"
-kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\) keyboard \([a-z]*\) single \([0-9]\) split-note \([0-9]*\) page \([0-9]\) (engine: notes \([01]\) full \([01]\) single \([0-9]\))$/\1 \2 \3 \5 \6\7\8/p'; }
+kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\) keyboard \([a-z]*\) single \([0-9]\) split-note \([0-9]*\) page \([0-9]\) (engine: notes \([01]\) full \([01]\) single \([0-9]\) snap [0-9])$/\1 \2 \3 \5 \6\7\8/p'; }
 cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3|\4|\5/p'; }
 bp() { grep -a '^  cr: key' "$L" | sed -n "$1p" | sed -n 's/.* bpm \([0-9]*\) .*/\1/p'; }
 [ "$(kb 1)" = "chords chords 0 1 000" ] && [ "$(kb 2)" = "chords chords 0 2 000" ] && [ "$(bp 2)" = 120 ] && [ "$(kb 4)" = "notes chords 0 1 100" ] &&
-    has '^key: cells Key plays Keyboard - Numerals' "$L" && [ "$(grep -ac '^key: page' "$L")" = 3 ] &&
+    has '^key: cells Key plays Keyboard Snap Numerals' "$L" && [ "$(grep -ac '^key: page' "$L")" = 3 ] &&
     ok "KEY held: page 1; SELECT: page 2 (Key plays, Keyboard; the tempo untouched), past the last page: stays; back: page 1: $OUT/cr_key_page2.ppm" \
     || bad "the page turn: $(kb 1) / $(kb 2) bpm $(bp 2) / $(kb 4)"
 differ cr_key_page1 cr_key_page2 "the two pages differ on screen"
@@ -1854,6 +1854,27 @@ differ cr_key_page2 cr_key_page2_notes "KNOB 1 on page 2: Key plays Notes: $OUT/
     ok "Chords again: D4 is Dm, D#4 its altered chord" || bad "back to Chords: $(cv 11) / $(cv 12)"
 [ "$(grep -c '^expect .*: ok' "$L")" = 6 ] && ! has 'expect.*FAILED' "$L" && ok "its sound and LED expectations" || bad "cr_key_page expectations"
 silent_end cr_key_page
+# Key Mode's Snap (0.22, GitHub issue 18): page 2's KNOB 3; a root out of the scale plays the nearest note of the scale
+# (ties down) with Key plays Notes, glows faint for it; Chord with nothing sounding falls back to the scale; Off: as before
+run cr_key_snap
+L="$OUT/cr_key_snap.log"
+ks() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*(engine: notes \([01]\) full \([01]\) single \([0-9]\) snap \([0-9]\))$/\1\4/p'; }
+cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3|\4|\5/p'; }
+kl() { grep -a '^  key leds:' "$L" | sed -n "$1p" | sed -n 's/.*key leds:\([0-9]*\) \([0-9]*\) .*/\2/p'; }
+[ "$(ks 1)" = 11 ] && [ "$(ks 6)" = 12 ] && [ "$(ks 7)" = 12 ] && [ "$(ks 9)" = 10 ] &&
+    has '^key: knob 3 snap Scale' "$L" && has '^key: knob 3 snap Chord' "$L" && has '^key: knob 3 snap Off' "$L" &&
+    has '^key: cells Key plays Keyboard Snap Numerals' "$L" &&
+    ok "KEY page 2, KNOB 3: Snap Scale, Chord (the last value: stays), Off, in the UI and in the engine: $OUT/cr_key_snap_page.ppm" \
+    || bad "the Snap knob: $(ks 1) / $(ks 6) / $(ks 7) / $(ks 9)"
+[ "$(kl 2)" = 212212121231212212 ] && ok "Snap on, C major: the roots out of the scale glow faint (they play now), the scale dim, the tonic mid" \
+    || bad "the Snap glow: $(kl 2)"
+[ "$(cv 3)" = "1|1|D|1| 62" ] && [ "$(cv 4 | cut -d'|' -f1,4)" = "0|0" ] && [ "$(cv 5)" = "1|2|D|1| 62" ] && [ "$(kl 3)" = 412212121231412212 ] &&
+    ok "Scale: D#4 plays D (ties go down): one voice, the note out, D's keys lit over its faint; up: off; D4 itself as ever" \
+    || bad "Scale: $(cv 3) / $(cv 4) / $(cv 5) / leds $(kl 3)"
+[ "$(cv 8)" = "1|3|F|1| 65" ] && ok "Chord with nothing sounding: F#4 plays the scale's F" || bad "Chord's fallback: $(cv 8)"
+[ "$(cv 10 | cut -d'|' -f1,2,4)" = "0|3|0" ] && [ "$(kl 9)" = 202202020230202202 ] && [ "$(grep -c '^expect .*: ok' "$L")" = 10 ] && ! has 'expect.*FAILED' "$L" &&
+    ok "Snap Off again: D#4 dark and silent (no voice, no note out), as before" || bad "Snap Off: $(cv 10) / leds $(kl 9) / $(grep -a 'expect.*FAILED' "$L" | head -3)"
+silent_end cr_key_snap
 
 # the KEY layer's Numerals (0.22, GitHub issue 1): page 2, KNOB 4; the chord's Roman numeral in blue above the chord
 # name on the Chord view (3y34), counted from the root as played (Transpose taken out)
@@ -1892,7 +1913,7 @@ silent_end cr_numerals
 # the Full keyboard
 run cr_fullkbd
 L="$OUT/cr_fullkbd.log"
-kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\) keyboard \([a-z]*\) single \([0-9]\) split-note \([0-9]*\) page \([0-9]\) (engine: notes \([01]\) full \([01]\) single \([0-9]\))$/\2 \3 \4 \7\8/p'; }
+kb() { grep -a '^  kbd:' "$L" | sed -n "$1p" | sed -n 's/.*kbd: plays \([a-z]*\) keyboard \([a-z]*\) single \([0-9]\) split-note \([0-9]*\) page \([0-9]\) (engine: notes \([01]\) full \([01]\) single \([0-9]\) snap [0-9])$/\2 \3 \4 \7\8/p'; }
 cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\1|\2|\3|\4|\5/p'; }
 lt() { grep -a '^  lock: on' "$L" | sed -n "$1p" | sed -n 's/.*lock: on \([01]\) latched \(..\) .*/\1 \2/p'; }
 pv() { grep -a "^  part $2:" "$L" | sed -n "$1p" | sed -n 's/.* voices \([0-9]*\),.*/\1/p'; }

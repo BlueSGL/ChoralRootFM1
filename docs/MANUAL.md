@@ -221,7 +221,8 @@ the scale, an idle button), middle (the tonic) and fully lit. With Key Mode off 
 that sound are lit (and a playing loop's notes glow), so the chord keys' faint row is all that shows on an idle
 keyboard; on the Full keyboard all 27 keys are dark until played. With Key Mode on the roots show the key, wherever they play (on the views, in the PERF, FX and LOCK
 layers, in the KEY layer too): the notes of the scale glow at the low level, the tonic's keys at a middle level, the
-roots outside the scale are dark, white or black, and the notes that sound are fully lit over it. So a glance tells
+roots outside the scale are dark, white or black (they glow faintly when Snap makes them play: [Key
+Mode](#key-mode)), and the notes that sound are fully lit over it. So a glance tells
 you that Key Mode is on, which key it is, and where the tonic sits. The layers that use the root keys for something
 else (the loop slots, the pickers, naming) show their own map instead. The Options are not one of them: the keys
 play there and show what plays.
@@ -417,10 +418,11 @@ Hold KEY to open the **KEY layer**:
 | KNOB 2 | Scale: Major or Minor |
 | KNOB 3 | Transpose, -24 to +24 semitones. It moves everything you play from then on, in or out of Key Mode |
 | KNOB 4 | Single: Full, Split Oct or Split Bass (below) |
-| SELECT | turns the layer's page: page 1 is the four settings above, page 2 has Key plays, Keyboard and Numerals (below). The top line says `1/2` or `2/2`. SELECT does not change the tempo in this layer |
+| SELECT | turns the layer's page: page 1 is the four settings above, page 2 has Key plays, Keyboard, Snap and Numerals (below). The top line says `1/2` or `2/2`. SELECT does not change the tempo in this layer |
 | KNOB 1, page 2 | **Key plays**: Chords or Notes |
 | KNOB 2, page 2 | **Keyboard**: Chords or Full |
-| KNOB 4, page 2 | **Numerals**: Off or On (KNOB 3 does nothing on this page) |
+| KNOB 3, page 2 | **Snap**: Off, Scale or Chord |
+| KNOB 4, page 2 | **Numerals**: Off or On |
 | OPT (printed GLO) tap | switches the keys between **pick** and **play** (below). It does not open the Options from here |
 | OCT-, OCT+, HOME, KEY held again | close the layer |
 
@@ -457,7 +459,8 @@ pick. The choice is kept by a global save (SAVE held). OPT held with KNOB 1 is s
 **Key plays: Chords or Notes** (page 2, KNOB 1). `Chords` is Key Mode as described above: a lone root plays the
 scale's chord. `Notes` keeps Key Mode as a guide and a guard only: the roots and the chord keys behave exactly as
 with Key Mode off (a lone root is a single note, a chord key gives its chord), but a root outside the scale does
-nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still shows on the root keys.
+nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still shows on the root keys. Snap (below)
+makes those roots play instead.
 
 **Keyboard: Chords or Full** (page 2, KNOB 2). `Chords` is the usual keybed: nine chord keys and eighteen roots.
 `Full` turns all 27 keys, F3 to G5, into an ordinary chromatic keyboard playing single notes of the chord part:
@@ -466,8 +469,9 @@ nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still sh
   latched with LOCK is kept untouched and is back, lit, when you return to `Chords`.
 - **KNOB 1** on the view changes the **octave** (the same octave as OCT- and OCT+; the read-out says `octave`),
   since there is no chord to voice. The voicing you had is kept for the Chords keyboard.
-- With Key Mode off the keyboard is chromatic. With Key Mode on, the notes outside the scale do nothing and the key
-  shows on all 27 keys (Key plays does not matter here: there are no chords to make).
+- With Key Mode off the keyboard is chromatic. With Key Mode on, the notes outside the scale do nothing (or play the
+  nearest right note with Snap, below) and the key shows on all 27 keys (Key plays does not matter here: there are
+  no chords to make).
 - The bass, the performance modes (an arpeggio of the notes you hold), the looper and MIDI out follow what you play
   as they follow a single note.
 - The split is at the **second F**: F3 to E4 is the left side, F4 to G5 the right. `Split Oct` plays the left side
@@ -476,6 +480,27 @@ nothing at all: no sound, no MIDI, nothing in a loop, no light. The key still sh
   is not changed by it.
 - In the KEY layer with its keys on pick, the keys still pick: a root sets the tonic, MAJ and MIN the scale (B3 does
   nothing there). With the keys on play they are the Full keyboard.
+
+**Snap: Off, Scale or Chord** (page 2, KNOB 3; off unless you turn it on). With Key plays `Notes`, or on the Full
+keyboard, a key outside the scale is a dead key: Snap gives it a right note to play, the way the Scaler app remaps
+its keyboard, so every key under your fingers plays and none leaves the key.
+
+- `Off`: as described above, a key outside the scale is silent.
+- `Scale`: the key plays the nearest note of the scale. Between two notes of the scale it goes down, so it is
+  predictable: in C major C# plays C, D# plays D, F# plays F, G# plays G and A# plays A.
+- `Chord`: the key plays the nearest tone of the chord that is sounding right now, yours or a playing loop's,
+  whichever way is nearer (over C major, D# plays E and A# plays C; midway between two tones it goes down), so a
+  melody over a chord or a loop can hardly miss. When no chord sounds it does what `Scale` does. A tone of the
+  sounding chord that is itself outside the scale, say the A flat of an F minor borrowed into C major, plays as it
+  is.
+
+A key inside the scale always plays itself. The snapped key behaves exactly as if you had pressed the key it was
+moved to: the chord keys, the bass, the performance modes, the looper and MIDI out all see that note, and its
+release ends it even if you change the key, the chord or Snap while holding it. With Key plays `Chords` on the Chords
+keyboard the roots outside the scale have their own job (the sus chord on a neighbouring scale note) and Snap changes
+nothing: its cell is drawn grey there. The lights say what plays: with Snap on, the roots outside the scale glow
+faintly instead of staying dark, and the note that sounds is lit on its own keys, so a snapped C# shows as the C keys
+lit ([The lights](#the-lights)). Snap is kept by a global save (SAVE held), like the page's other settings.
 
 **Numerals: Off or On** (page 2, KNOB 4; off unless you turn it on). With Key Mode on, the Chord view shows the
 Roman numeral of the chord that is sounding, in blue, centred above the chord's name: in C major `I` for C, `V` for G

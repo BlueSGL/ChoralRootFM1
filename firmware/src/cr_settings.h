@@ -50,6 +50,16 @@
 #define CRS_KEY_PLAYS(s) (((unsigned)(s)->key_on & CRS_KEY_NOTES) ? 1u : 0u)
 #define CRS_KEYBOARD(s) (((unsigned)(s)->key_on & CRS_KBD_FULL) ? 1u : 0u)
 #define CRS_KEY_BYTE(on, notes, full) ((uint8_t)(((on) ? 1u : 0u) | ((notes) ? CRS_KEY_NOTES : 0u) | ((full) ? CRS_KBD_FULL : 0u)))
+/* The KEY layer's page 2 "Snap" (0.22, GitHub issue 18: a key out of the scale plays the nearest note of the scale or
+ * of the chord sounding, with Key plays Notes / the Full keyboard; 0 Off, the default / 1 Scale / 2 Chord,
+ * cr_keysnap_t) rides in bits 3 .. 4 of the same byte: 0 in every older record and 0 is the default: no version,
+ * nothing to migrate. A firmware from 0.17 to 0.22-beta2 checks the byte against 0 .. 7 and takes its default for a
+ * record with Snap on: Key Mode off, Key plays Chords, Keyboard Chords there, until set again (as with v14's Notes /
+ * Full, docs/SETTINGS.md); the other 0 / 1 bytes looked at would cost the scale or Single instead, away from Key
+ * Mode's byte. Manual (SAVE held), as the page's others */
+#define CRS_SNAP(s) (((unsigned)(s)->key_on >> 3) & 3u)
+#define CRS_SNAP_BITS(v) ((uint8_t)(((v) & 3u) << 3))
+#define CRS_KEY_MAX 23u                 /* crs_sanitize: bits 0 .. 4 with Snap 0 .. 2 (24 .. 31 would be Snap 3) */
 /* The KEY layer's page 2 "Numerals" (0.22: the chord's Roman numeral beside the key on the top line; Off, the default
  * / On) rides in bit 1 of bass_on. That byte's bit 0 is always written 0 since v15 (Bass on is the session's), and
  * every firmware from 0.17 to 0.21 reads the byte with CRS_FIX(bass_on, 0, 1), default 0: it finds 2 out of range and
@@ -126,7 +136,8 @@ typedef struct {
     uint32_t check;                     /* FNV-1a over bytes [12, size) */
     /* version 1 */
     uint8_t playstyle, extadd, secret, key_on;       /* cr_playstyle_t, cr_extadd_t, cr_secret_t, Key Mode (bit 0;
-                                                      * v14: bit 1 Key plays Notes, bit 2 the Full keyboard) */
+                                                      * v14: bit 1 Key plays Notes, bit 2 the Full keyboard; 0.22:
+                                                      * bits 3 .. 4 Snap, CRS_SNAP) */
     uint8_t tonic, scale;                            /* 0..11, cr_scale_t */
     int8_t transpose;                                /* -24..24 */
     uint8_t single;                                  /* cr_single_t: Full Octave / Split Oct / (v14) 2 Split Bass */

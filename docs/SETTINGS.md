@@ -65,6 +65,7 @@ from a layer: it goes with the layer (manual).
 | the view's lock | the view menu | block `view` bit 7 | manual |
 | Key Mode, tonic, scale | KEY tap, the KEY layer | block `key_on` bit 0, `tonic`, `scale` | manual |
 | Key plays, Keyboard | the KEY layer's page 2 | block `key_on` bits 1 / 2 | manual |
+| Snap (0.22) | the KEY layer's page 2, KNOB 3 | block `key_on` bits 3 .. 4 | manual |
 | Numerals (0.22) | the KEY layer's page 2, KNOB 4 | block `bass_on` bit 1 | manual |
 | the KEY layer's keys (pick / play) | GLO in the KEY layer | block `loop_rec` bit 5 | manual |
 | Transpose | the KEY layer | block `transpose` | manual |
@@ -245,6 +246,20 @@ line: the old binaries were not run). Manual, as the page's other two: not in `c
 and the backup tools carry the block as 192 opaque bytes and decode no field of it (`web/fm1backup.js`,
 `tools/fm1_install.py`: `CR_BLOCK`), so they need not know the bit.
 
+**0.22 added two more bits and no version, in `key_on`**: the KEY layer's Snap (page 2, KNOB 3: a key out of the
+scale plays the nearest note of the scale or of the chord sounding, with Key plays Notes or the Full keyboard; Off,
+the default, is 0; GitHub issue 18, HISTORY 3y99) in bits 3 .. 4 (`CRS_SNAP`, `CRS_SNAP_BITS`; `crs_sanitize`'s range
+for the byte is 0 .. 23, `CRS_KEY_MAX`: a Snap of 3 is out of range with the higher bits). 0 in every older record
+and 0 is the default: nothing to migrate. **The caveat is v14's**: every firmware from 0.17 to 0.22-beta2 checks the
+byte against 0 .. 7 (`CRS_FIX(key_on, 0, 7)`), so after a downgrade with Snap on it reads Key Mode as off, Key plays
+Chords and Keyboard Chords, until they are set again there, and nothing else; with Snap Off the record reads as
+before. The byte was chosen as Key Mode's own, next to the two settings it belongs with; the other homes looked at
+cost a setting too on the way back (`scale`'s upper bits: Major there; `single`'s: Full Octave there) and not the
+one the player would look for. `cr_settings_apply` gives the engine `cr_set_key_snap(CRS_SNAP(s))`,
+`cr_settings_capture` and the glue write the bits with `CRS_KEY_BYTE`'s; `tests/cr_settings_test.c t_snap` checks
+the 24 bytes' round trip, 24 .. 255 to the default, apply / capture, that it is manual, and the older firmwares' rule
+(modelled from their `CRS_FIX` line). Manual, as the page's others: not in `cr_settings_auto`.
+
 ## The ChoralRoot block (`cr_settings_t`, `CRS_SIZE` = 192 bytes)
 
 The block has its own header:
@@ -257,7 +272,7 @@ The block has its own header:
 | field | range | default |
 | --- | --- | --- |
 | playstyle / extadd / secret | Simple–Free / Add Note, Play Chord / Off, Simple, All | Simple, Add Note, Off |
-| key_on, tonic, scale | bit 0 Key Mode 0/1 (**v14: bit 1 the KEY layer's Key plays**, 0 Chords / 1 Notes, `CRS_KEY_NOTES`, `cs.key_notes`; **bit 2 its Keyboard**, 0 Chords / 1 Full, `CRS_KBD_FULL`, `cs.kbd_full`; `CRS_KEY_ON` / `CRS_KEY_PLAYS` / `CRS_KEYBOARD` / `CRS_KEY_BYTE`; a higher bit: the byte's default), 0..11, Major/Minor | off, Chords, Chords, C, Major; a v1..v13 record: its Key Mode, Chords, Chords |
+| key_on, tonic, scale | bit 0 Key Mode 0/1 (**v14: bit 1 the KEY layer's Key plays**, 0 Chords / 1 Notes, `CRS_KEY_NOTES`, `cs.key_notes`; **bit 2 its Keyboard**, 0 Chords / 1 Full, `CRS_KBD_FULL`, `cs.kbd_full`; `CRS_KEY_ON` / `CRS_KEY_PLAYS` / `CRS_KEYBOARD` / `CRS_KEY_BYTE`; **0.22: bits 3 .. 4 its Snap**, 0 Off / 1 Scale / 2 Chord, `CRS_SNAP`, `CRS_SNAP_BITS`, `cs.snap`, `cr_keysnap_t`; a higher bit or a Snap of 3, 24 .. 255: the byte's default, `CRS_KEY_MAX`), 0..11, Major/Minor | off, Chords, Chords, Off, C, Major; a v1..v13 record: its Key Mode, Chords, Chords, Off |
 | transpose | −24..24 | 0 |
 | single, split_pc | 0 Full Octave / 1 Split Oct ("Split" until v14) / **v14: 2 Split Bass**, 0..11 (the Chords layout's split, a pitch class; the Full keyboard splits at F4, fixed, not stored) | Full Octave, F (5) |
 | vel | 1..127 (the keys' velocity) | 100 |
@@ -300,7 +315,8 @@ left seven bits unused), 0 = the defaults, and Single's 2 is a new value of an e
 have to grow. The caveat is the same kind: **a firmware older than v14 checks `key_on` and `single` against 0..1**,
 so after a downgrade with Key plays = Notes or Keyboard = Full it reads Key Mode as off (whatever it was), and with
 Single = Split Bass it reads Full Octave; each until set again there, nothing else is touched, and with the three at
-their defaults (and Single Full or Split Oct) an older firmware reads the record as before. Bits 3..7 of `key_on`
+their defaults (and Single Full or Split Oct) an older firmware reads the record as before. 0.22 took bits 3 .. 4
+of `key_on` for Snap (above: the same caveat). Bits 5..7 of `key_on`
 and the upper bits of the other 0 / 1 bytes (`scale`, `sticky`, `raw_sound`, `fx_on`, ...) are what is left for
 flags; a field that needs a byte of its own goes into the session record (below), which has room.
 

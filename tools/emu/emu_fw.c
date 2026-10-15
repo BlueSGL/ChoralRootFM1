@@ -375,10 +375,10 @@ void emu_fw_dump(void)
            (unsigned)cs.key_on, (unsigned)cs.tonic, (unsigned)cs.scale, (unsigned)cr.perform_on,
            (unsigned)cr.perform_mode, (unsigned)cr.bass_on, (unsigned)cs.bass_sound, (int)cr.voicing, (int)cu.octave,
            (unsigned)cs.bpm, (unsigned)cs.view, (unsigned)cu_layer(), (unsigned)cu.opt_open, (unsigned)cs.key_play);
-    printf("  kbd: plays %s keyboard %s single %u split-note %u page %u (engine: notes %u full %u single %u)\n",
+    printf("  kbd: plays %s keyboard %s single %u split-note %u page %u (engine: notes %u full %u single %u snap %u)\n",
            cs.key_notes ? "notes" : "chords", cs.kbd_full ? "full" : "chords", (unsigned)cs.single,
            (unsigned)cr.split_note, (unsigned)cu.kpage + 1u, (unsigned)cr.key_notes, (unsigned)cr.full,
-           (unsigned)cr.single);
+           (unsigned)cr.single, (unsigned)cr.snap);
     {                                               /* the KEY layer's Numerals and what the Chord view shows for it now */
         char rn[CR_NUMERAL_MAX];
         cu_numeral(rn);

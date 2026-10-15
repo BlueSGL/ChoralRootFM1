@@ -10,7 +10,7 @@ chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32) is tagg
 published as the latest and not on the site; its notes, `web/releases.json`'s first entry (package sha256
 93bbfe14...) and the manual's first line say 0.21. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.22"
 (`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
-3y33, 3y34; and, not in the notes yet, a sixth engine in its first phase: P5 (the code's PROPHET), Melodee's
+3y33, 3y34, and its Snap, 3y99, on a branch; and, not in the notes yet, a sixth engine in its first phase: P5 (the code's PROPHET), Melodee's
 Prophet-5, HISTORY 3y38, 3y39, docs/PROPHET.md: on the host and in the emulators; the owner played its first build,
 cd43720, on the unit once, and that reading made it four voices; open items 26 and 27; and favourites, HISTORY 3y40,
 docs/PRESETS.md "Favourites": a mark on any sound, in the notes; not on a unit yet; open item 28). The owner's unit runs what
@@ -189,6 +189,12 @@ installed on the owner's Mac.
   the plan has them (edit8 of one or two lanes, a plan band) or free screens, its layout file's `params_hash`
   (`design/layouts/<engine>.json`) and a line in the generator's `BUILD`; the designer marks what the generator would
   refuse "not buildable yet", with its reason.
+- **Snap on the unit** (branch claude/key-snap-a8626d, HISTORY 3y99, GitHub issue 18; docs/MANUAL.md "Key Mode",
+  docs/SETTINGS.md): the KEY layer's page 2, KNOB 3: a key out of the scale plays the nearest note of the scale or of
+  the chord sounding, with Key plays Notes or the Full keyboard (`cr_engine.c cr_snap_note`; bits 3 .. 4 of `key_on`,
+  no version, the v14 caveat for a downgrade). Built and tested on the host and the emulator, **not device-tested**:
+  the owner tries it on the unit (Scale with Key plays Notes; Chord over a playing loop), decides the merge and the
+  reply on the issue. The emulator has no Chord case over a loop (the host test uses the pads for the sounding chord).
 - **Digitone `.dnsnd` import** (branch dn-1, HISTORY 3y56, docs/SOUNDS.md ".dnsnd import"): built from decoded files;
   refine with the owner's Digitone by controlled exports and `node tools/dnsnd_diff.mjs` (RATIO B, the LFO
   destinations, RATIO A's steps, the filter type order are the open ones). The LFO destinations are 1:1 since

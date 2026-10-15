@@ -1549,7 +1549,8 @@ int main(int argc, char **argv)
     }
 
     {   /* the KEY layer's two pages (0.17): page 1 with Single = "Split Bass" (the longest value: inside its cell),
-         * page 2: Key plays / Keyboard on KNOB 1 / 2, KNOB 3 free (a dash), Numerals on KNOB 4 (0.22); the label carries the page,
+         * page 2: Key plays / Keyboard on KNOB 1 / 2, Snap on KNOB 3 (0.22; grey with Key plays Chords on the Chords
+         * keyboard, as here), Numerals on KNOB 4 (0.22); the label carries the page,
          * the footer "SELECT: page" */
         static const char *const LB[4] = {"Tonic", "Scale", "Transpose", "Single"};
         static const char *const VA[4] = {"D", "Minor", "+0", "Full"};
@@ -1592,6 +1593,9 @@ int main(int argc, char **argv)
         for (k = 0; k < 4u; k++)
             memset(&s.cell[0][k], 0, sizeof s.cell[0][k]);
         s.cell[0][0].flags = s.cell[0][1].flags = s.cell[0][3].flags = CR_CF_ON;
+        s.cell[0][2].flags = CR_CF_ON | CR_CF_DIM;
+        snprintf(s.cell[0][2].label, sizeof s.cell[0][2].label, "Snap");
+        snprintf(s.cell[0][2].value, sizeof s.cell[0][2].value, "Scale");
         snprintf(s.cell[0][3].label, sizeof s.cell[0][3].label, "Numerals");
         snprintf(s.cell[0][3].value, sizeof s.cell[0][3].value, "On");
         snprintf(s.cell[0][0].label, sizeof s.cell[0][0].label, "Key plays");
@@ -1606,8 +1610,8 @@ int main(int argc, char **argv)
         for (y = ry; y < 240u && y < ry + 72u; y++)
             for (x = 0; x < 240u; x++)
                 if (host_screen[y * 240u + x] != bg) { if (x < 120u) c01++; else if (x < 180u) c2++; else c3++; }
-        snprintf(name, sizeof name, "KEY page 2: Key plays / Keyboard drawn (%u ink px), KNOB 3 a dash (%u), KNOB 4 Numerals (%u)", c01, c2, c3);
-        check(name, c01 > 200u && c2 > 0u && c2 * 8u < c01 && c3 > 80u);
+        snprintf(name, sizeof name, "KEY page 2: Key plays / Keyboard drawn (%u ink px), KNOB 3 Snap, grey (%u), KNOB 4 Numerals (%u)", c01, c2, c3);
+        check(name, c01 > 200u && c2 > 80u && c3 > 80u);
     }
 
     {   /* the numeral on the Chord view (0.22, the KEY layer's Numerals; the owner, 2026-10-12: "render in the Blue

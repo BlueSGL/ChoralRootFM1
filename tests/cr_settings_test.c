@@ -821,7 +821,7 @@ static void t_page2_v14(void)
     }
     ok(k == 8u, "v14: Key Mode / Key plays / Keyboard: the eight combinations round-trip");
     s = d;
-    s.key_on = 8;                                  /* an unknown bit: the byte's defaults */
+    s.key_on = 24;                                 /* an unknown value (8 .. 23 are Snap's since 0.22): the byte's defaults */
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.key_on == 0, "v14: key_on out of range takes the defaults");
     s = d;
@@ -1438,6 +1438,61 @@ static void t_touch(void)
     ok(m2.bass_on == (uint8_t)(CRS_NUMERALS | CRS_TOUCH_BITS(1, 2, 1)), "Key Touch and the Sens are automatic (the Options of now); Numerals stays the record's");
 }
 
+/* 0.22, GitHub issue 18: the KEY layer's Snap in bits 3 .. 4 of key_on (CRS_SNAP, CRS_SNAP_BITS): Off (0) by default
+ * and in every older record, no version; round-trips with the v14 bits; applies to and is captured from the engine;
+ * manual (SAVE held); and the rule 0.17 .. 0.22-beta2 apply to the byte (their CRS_FIX(key_on, 0, 7): modelled here,
+ * the old binaries were not run) reads a record with Snap on as the byte's defaults there: Key Mode off, Key plays
+ * Chords, Keyboard Chords, until set again (the v14 caveat, docs/SETTINGS.md) */
+static void t_snap(void)
+{
+    cr_settings_t d, s, r, m, o2;
+    cr_settings_out_t o;
+    cr_t E;
+    unsigned k;
+    cr_settings_defaults(&d);
+    ok(CRS_SNAP(&d) == 0u && CRS_VERSION == 15u && CRS_KEY_MAX == 23u, "Snap: Off by default, no settings version for it");
+    for (k = 0; k <= CRS_KEY_MAX; k++) {           /* Snap 0 .. 2 with the eight v14 combinations */
+        s = d;
+        s.key_on = (uint8_t)k;
+        cr_settings_seal(&s);
+        if (cr_settings_import(&r, &s, sizeof s) != 1 || r.key_on != k || CRS_SNAP(&r) != (k >> 3) ||
+            CRS_KEY_ON(&r) != (k & 1u) || CRS_KEY_PLAYS(&r) != ((k >> 1) & 1u) || CRS_KEYBOARD(&r) != ((k >> 2) & 1u))
+            break;
+    }
+    ok(k == CRS_KEY_MAX + 1u, "Snap Off / Scale / Chord with Key Mode, Key plays and Keyboard: the 24 bytes round-trip");
+    for (k = CRS_KEY_MAX + 1u; k < 256u; k++) {    /* Snap 3, a higher bit: the byte's defaults */
+        s = d;
+        s.key_on = (uint8_t)k;
+        cr_settings_seal(&s);
+        if (cr_settings_import(&r, &s, sizeof s) != 1 || r.key_on != 0u) break;
+    }
+    ok(k == 256u, "key_on 24 .. 255 (a Snap of 3, a higher bit): the byte's defaults");
+    s = d;
+    s.key_on = (uint8_t)(CRS_KEY_BYTE(1, 1, 0) | CRS_SNAP_BITS(CR_KEYSNAP_CHORD));
+    cr_settings_seal(&s);
+    cr_init(&E, 0);
+    cr_settings_apply(&s, &E, &o);
+    ok(E.snap == CR_KEYSNAP_CHORD && E.key_on == 1 && E.key_notes == 1 && !E.full, "apply: Snap Chord with Key Mode on and Key plays Notes");
+    r = d;
+    cr_settings_capture(&r, &E, &o);
+    ok(r.key_on == s.key_on, "capture(apply(s)): the byte back, Snap in it");
+    m = d; o2 = d;
+    o2.key_on = (uint8_t)(1u | CRS_SNAP_BITS(CR_KEYSNAP_SCALE));
+    cr_settings_auto(&m, &o2);
+    ok(m.key_on == 0u, "Snap is manual (SAVE held), as the page's others: cr_settings_auto leaves the byte");
+    {
+        unsigned old = 1u | CRS_SNAP_BITS(CR_KEYSNAP_SCALE);   /* what 0.17 .. 0.22-beta2 read: out of their 0 .. 7 */
+        if (old > 7u) old = d.key_on;
+        ok(old == 0u, "0.17 .. 0.22-beta2 read a Snap-on record as key_on 0: Key Mode off, Chords, Chords there, until set again");
+    }
+    s = d;                                         /* a v14 record: its byte read as today (no older writer set the bits) */
+    s.key_on = 5;
+    cr_settings_seal(&s);
+    s.version = 14;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && r.key_on == 5u && CRS_SNAP(&r) == 0u, "a v14 record: Key Mode on, the Full keyboard, Snap Off");
+}
+
 int main(void)
 {
     t_auto();
@@ -1453,6 +1508,7 @@ int main(void)
     t_view_lock(); t_hold_v10(); t_dualcore_v12(); t_key_keys_v13(); t_page2_v14();
     t_v15(); t_session(); t_session_trim(); t_session_flash();
     t_touch();
+    t_snap();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

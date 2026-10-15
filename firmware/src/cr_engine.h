@@ -157,6 +157,10 @@ typedef struct {
                                       * padding before bpm: cr_t keeps its size */
     uint16_t bpm;
     uint8_t stream_on[CR_NSTREAM];
+    uint8_t snap;                    /* Snap (0.22, cr_keysnap_t): with Key plays Notes / the Full keyboard a key out of
+                                      * the scale plays the nearest note of the scale (Scale) or of the chord
+                                      * sounding (Chord; the scale's when none) instead of nothing (cr_snap_note);
+                                      * in the padding after the three streams: cr_t keeps its size */
     int16_t par[CR_PM_COUNT][CR_P_COUNT];
     /* runtime */
     cr_out_t out;
@@ -165,8 +169,11 @@ typedef struct {
     uint32_t clk_anchor, clk_units;  /* global transport anchor (ms) and 1/24-beat units rebased so far */
     uint16_t clk_rem;
     uint8_t reg[CR_NSTREAM][128];    /* note registry: refcount per (stream, note) (design.md 17) */
-    uint8_t phys[128];               /* physically held root presses: bit id per note */
+    uint8_t phys[128];               /* physically held root presses: bit id per note (the key pressed, before Snap) */
     uint8_t phys_n;
+    uint8_t snapn[128];              /* a held key Snap moved: the note it plays + 1 (0: plays itself); its release
+                                      * ends that note, whatever the key, the chord or Snap have become since */
+    uint8_t snapn_n;                 /* .. how many */
     uint8_t mods_down, qstack[CR_NMOD], qn;
     uint8_t lock, mods_touch;                      /* LOCK (cr_mod_lock): the chord keys physically held (cr_mod_touch) */
     cr_voice_t v[CR_NVOICE];         /* [0, CR_MAX_VOICES): keyed voices; then one per pad */
@@ -237,6 +244,10 @@ void cr_set_key_plays(cr_t *c, int notes);
  * streams alone; Bass on / off and the Bass Behaviour are ignored while it is on (no bass follows anything: it is
  * played by hand). New gestures only. */
 void cr_set_keyboard(cr_t *c, int full, int split_note);
+typedef enum { CR_KEYSNAP_OFF, CR_KEYSNAP_SCALE, CR_KEYSNAP_CHORD } cr_keysnap_t;
+void cr_set_key_snap(cr_t *c, cr_keysnap_t mode);   /* 0.22: Snap (new presses only) */
+int  cr_snap_note(const cr_t *c, uint8_t note);  /* the note a key out of the scale plays with Snap: the nearest of
+                                                  * the target (ties go down), or -1 (Snap off, no target) */
 void cr_set_bass(cr_t *c, int enabled);
 void cr_set_bass_mode(cr_t *c, cr_bassmode_t m);
 void cr_set_perform(cr_t *c, int enabled);         /* restarts sounding voices, flushes a Hold latch */
