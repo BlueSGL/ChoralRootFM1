@@ -4618,3 +4618,14 @@ dropped glyph). **Pixel-exact**: the 335 pictures `tests/run_cr_draw.sh` renders
 tree's renders before the change (0 differ); `text_ref_test` 2754 strings, 0 pixels differ; `text_spacing_test` ok;
 `ui_test` all passed; `cr_draw_test`'s Solfège check no longer counts CRB's extras by hand (it asks `glyph_at`). Size:
 `XIP 528 332 -> 522 332 B` (92.1 -> 91.1 %); RAM and POOL unchanged.
+
+3y128. **The flash diet, 5: the kerning pairs by rows (same day).** Each face kept its kerning as sorted 16-bit keys
+(a << 8 | b) and a byte delta, 3 B a pair. Now the pairs are grouped by their first glyph's table index: `AF_<N>_KROW`
+(a 16-bit start a glyph, the last entry the count), `AF_<N>_KB` (the second character, each row by code), `AF_<N>_KD`
+(the delta): 2 B a pair and 2 B a glyph. `gfx.c kern` finds the first glyph with `glyph_at` and searches its row;
+`aafont_t` has `krow` and `kb` where it had `kkey`; `tools/gen_aa_font.py` writes the rows (the same pairs: the
+ellipsis' were never kept), `tests/text_spacing_test.py` reads them back into its (a << 8 | b) map and
+`tests/text_ref_test.c`'s reference kern reads the rows plainly. S's kerning 2283 -> 1720 B, M 2433 -> 1820, CRB
+2781 -> 2054, CRX 303 -> 278. **Pixel-exact**: the 335 draw renders byte for byte the same; `text_ref_test` 2754
+strings, 0 end pens and 0 pixels differ; `text_spacing_test` ok; `ui_test` all passed. Size: `XIP 522 332 -> 520 460
+B` (91.1 -> 90.8 %); RAM and POOL unchanged.
