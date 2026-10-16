@@ -1644,9 +1644,10 @@ ENGINE_NAMES = ("ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO",
                 "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5")   # ENGINES[] (append-only; 0, 1, 4, 8, 10 retired: ANALOG
                                                           # since 0.14; 2, 3, 5, 6, 11, 9 retired in 0.18: PHASE, LOFI,
                                                           # VOICE, TRIO, NOISE, PHYS). 15: FM TONE (eng_quad.c, code name QUAD)
-ENGINE_PATCH = {12: "fm6", 13: "va", 14: "cz", 15: "quad", 16: "p5"}  # engine -> its patch kind (P5: the pool only)
-PATCH_KINDS = ("va", "fm6", "cz", "quad", "p5")
-PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 96, "p5": 138}
+ENGINE_PATCH = {12: "fm6", 13: "va", 14: "cz", 15: "quad", 16: "p5", 8: "grain"}  # engine -> its patch kind (P5,
+                                                                                  # GRAIN: the pool only)
+PATCH_KINDS = ("va", "fm6", "cz", "quad", "p5", "grain")
+PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 96, "p5": 138, "grain": 20}
 # a kind's blob in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; versions 4 and 5, 2026-10-14: 96
 # bytes, the hi-res values in hundredths; the FM-1 converts a version 4 on load). A version 1..3 blob is zero-padded to 96 (the firmware converts it on load)
 STORE_PATCH = dict(PATCH_SIZE, quad=80)
@@ -1757,7 +1758,7 @@ def _store_blob(objs, kind, slot):
             return None
         d = bytes(b[off + POOL_DATA:off + POOL_DATA + n])
         return _quad96(d) if kind == "quad" else d
-    if kind == "p5":
+    if kind in ("p5", "grain"):                    # (the pool only: no store before it)
         return None
     i, k, off = _store_at(kind, slot)
     b = objs.get(i, b"")
@@ -1785,6 +1786,10 @@ def _set_blob(objs, kind, slot, blob):
     if kind == "p5":
         if blob is not None:
             raise InstallError("usage", "this FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)")
+        return
+    if kind == "grain":
+        if blob is not None:
+            raise InstallError("usage", "this FM-1 keeps no GRAIN sounds (a ChoralRoot with the GRAIN engine needed)")
         return
     if kind == "quad" and blob is not None:        # (a firmware before the pool keeps versions 1..3, 80 bytes)
         if blob[1] > 3:

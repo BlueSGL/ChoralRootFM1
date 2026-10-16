@@ -199,6 +199,7 @@ static void params_by_count(int16_t *out, const int16_t *in, uint32_t np, const 
 }
 
 /* engine indices the stores name (engines.c ENGINES[]: append-only) */
+#define ENGI_GRAIN 8u            /* GRAIN (eng_grain.c; ChoralRoot 0.22: back in slot 8 over its own material) */
 #define ENGI_PHYS 9u
 #define ENGI_DRUM 10u
 /* PHYS MODEL DRUM (MODEL 4, before 1.0) -> the DRUM engine, its E values in place: {MODEL, TUNE, TONE, DECY,

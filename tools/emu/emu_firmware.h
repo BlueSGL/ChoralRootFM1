@@ -31,10 +31,13 @@
 #define FELUCCA_PROPHET 1                             /* as choralroot.c: Melodee's Prophet-5 engine (16) */
 #endif
 #ifndef FELUCCA_SAMPLE
-#define FELUCCA_SAMPLE 0                              /* as choralroot.c: SAMPLE, GRAIN, DRUM retired */
+#define FELUCCA_SAMPLE 0                              /* as choralroot.c: SAMPLE, DRUM retired */
 #endif
 #ifndef FELUCCA_GRAIN
-#define FELUCCA_GRAIN 0
+#define FELUCCA_GRAIN 1                               /* as choralroot.c: GRAIN (8) over its own material (0.22) */
+#endif
+#ifndef GRAIN_ASYNC
+#define GRAIN_ASYNC 1                                 /* as choralroot.c: its renders from the idle hook (emu_fw_idle) */
 #endif
 #ifndef FELUCCA_DRUM
 #define FELUCCA_DRUM 0

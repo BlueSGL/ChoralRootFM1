@@ -23,13 +23,13 @@ export const isPool = (objs) => POOL_IDS.some((id) => (objs instanceof Map ? obj
 // stand-in). 15: FM TONE (engine 15, eng_quad.c, code name QUAD; its patch kind stays "quad")
 export const ENGINE_NAMES = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
   "DRUM", "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5"];
-export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 96, p5: 138 };
+export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 96, p5: 138, grain: 20 };
 // a kind's record in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; version 4 since 2026-10-14: 96)
 const STORE_PATCH = { ...PATCH_SIZE, quad: 80 };
-const KIND_ENGINE = { va: 13, fm6: 12, cz: 14, quad: 15, p5: 16 };
+const KIND_ENGINE = { va: 13, fm6: 12, cz: 14, quad: 15, p5: 16, grain: 8 };
 export const SOUND_FORMAT = "choralroot-sound";
 export const patchKindOf = (engine) =>
-  (engine === 13 ? "va" : engine === 12 ? "fm6" : engine === 14 ? "cz" : engine === 15 ? "quad" : engine === 16 ? "p5" : null);
+  (engine === 13 ? "va" : engine === 12 ? "fm6" : engine === 14 ? "cz" : engine === 15 ? "quad" : engine === 16 ? "p5" : engine === 8 ? "grain" : null);
 
 // the factory presets of each engine (ENGINES[e]->presets[k].name) and the first of them in the engine's pool (the
 // CZ-1's preset 0, INIT TONE, and P5's, INIT P5, are the pools' INIT); FACTORY_IDS: a preset's favourites id where it
@@ -85,7 +85,7 @@ const SND_STORE = {   // per kind: the object ids (VA, FM TONE: one store of 32,
   cz: { ids: [12, 13], magic: 0x55315A43, ver: 1, nslot: 16, size: 16 + 16 * 144 },
   quad: { ids: [22], magic: 0x53445551, ver: 1, nslot: 32, size: 16 + 32 * 80 },
 };
-const SND_KINDS = ["va", "fm6", "cz", "quad", "p5"];
+const SND_KINDS = ["va", "fm6", "cz", "quad", "p5", "grain"];
 const sndWhole = (kind) => kind === "va" || kind === "quad";   // one store of 32: the used mask at 8, the blob size at 12
 const sndView = (b) => new DataView(b.buffer, b.byteOffset, b.byteLength);
 const sndSlotOk = (slot, n = SOUND_SLOTS) => Number.isInteger(slot) && slot >= 1 && slot <= n;
@@ -153,7 +153,7 @@ function sndBlob(m, kind, slot) {        // the slot's blob in the store of that
     const d = b.subarray(p.off + POOL_DATA, p.off + POOL_DATA + n);
     return kind === "quad" ? quadToV4(d) : d;
   }
-  if (kind === "p5") return null;        // (no P5 store before the pool)
+  if (kind === "p5" || kind === "grain") return null;        // (no P5 or GRAIN store before the pool)
   const p = sndPlace(kind, slot), b = m.get(p.id);
   if (!sndStoreOk(kind, b, p.half) || !(sndView(b).getUint32(sndUsedOff(kind), true) >>> p.bit & 1)) return null;
   const d = b.subarray(p.off, p.off + STORE_PATCH[kind]);
@@ -310,6 +310,7 @@ function sndPutBlob(m, kind, slot, blob, notes = []) {
     m.set(p.id, b); return;
   }
   if (kind === "p5") { if (blob) throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)"); return; }
+  if (kind === "grain") { if (blob) throw new Error("This FM-1 keeps no GRAIN sounds (a ChoralRoot with the GRAIN engine needed)"); return; }
   if (kind === "quad" && blob) blob = quadToV3(blob, notes);   // (a firmware before the pool: its store holds versions 1..3, 80 bytes)
   if (kind === "va" && blob) blob = vaToV3(blob, notes);       // (.. and VA versions 1..3: a version 4 would play INIT there)
   const p = sndPlace(kind, slot), old = m.get(p.id), ok = sndStoreOk(kind, old, p.half), uo = sndUsedOff(kind);
@@ -367,6 +368,7 @@ export function importSound(objs, slot, sound) {
   // (0.21 has no P5: a record of engine 16 is no record there, up_valid, so the slot would read as empty and the next
   // save would take it: refused, with or without its program)
   if (!m.pool && kind === "p5") throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)");
+  if (!m.pool && kind === "grain") throw new Error("This FM-1 keeps no GRAIN sounds (a ChoralRoot with the GRAIN engine needed)");
   const notes = [];
   sndClearSlot(m, slot);
   for (const k of SND_KINDS) sndPutBlob(m, k, slot, k === kind && sound.patch ? sound.patch : null, notes);

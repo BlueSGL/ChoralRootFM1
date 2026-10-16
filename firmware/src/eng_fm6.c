@@ -317,6 +317,9 @@ static void fm6_track_loaded(const track_t *ct)
 #if FELUCCA_PROPHET
     p5_track_loaded(t);
 #endif
+#if FELUCCA_GRAIN
+    grain_track_loaded(t);
+#endif
     fm6_user_pending = 0;
     if (tr >= NTRK || t->eng_req != ENGI_FM6)
         return;

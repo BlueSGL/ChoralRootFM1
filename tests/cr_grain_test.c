@@ -1,7 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-only
  * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca) */
-/* Host test of GRAIN's source generator (firmware/src/grain_src.c, docs/GRAIN.md step 1), no HAL: the generator on
- * core.h, dsp.c and felucca_tables.h.
+/* Host test of GRAIN (firmware/src/grain_src.c, the generator: docs/GRAIN.md step 1; firmware/src/eng_grain.c, the
+ * engine and its render scheduler: steps 2 and 3), no HAL: on core.h, dsp.c and felucca_tables.h with a minimal voice
+ * driver (voice.c's block: the engine's block, then each voice's render under the platform's amplitude).
  *   sh tests/run_cr_tests.sh          (or: cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -Ibuild/gen
  *                                      -o build/host/cr_grain_test tests/cr_grain_test.c -lm && build/host/cr_grain_test)
  * Checks: every family at a grid of TONE x MOTION x SEED (800 renders) renders a whole buffer whose peak is GS_PEAK
@@ -12,7 +13,16 @@
  * family; the root pitch a family reports; the knobs' masking (TYPE wraps, TONE / MOTION / SEED take seven bits);
  * eight seeds a family give eight different buffers; the 24 sketch settings (tools/grain_sketch.c SRC_SET) hash to
  * the goldens of tests/cr_grain_golden.txt (GOLDEN_UPDATE=1 rewrites it: on purpose, review the diff) and, where
- * build/grain-sketch/src-*.wav exists, equal the WAV heard byte for byte; the host time a render (information). */
+ * build/grain-sketch/src-*.wav exists, equal the WAV heard byte for byte; the host time a render (information).
+ * The engine (sections 5 ..): the blob's round trip and a bad blob; the pages' map, get / set, the macros both ways;
+ * the presets' macros as their patches; the engine on two static buffers: no grain reads outside its buffer at
+ * extreme knobs, the pool's shares, MORPH 0 / 127 / 64 (A alone, B alone, both), the rate's cap, the window's
+ * continuity over block boundaries (a DC buffer: the output is the window), 1.4 s of a 6-note chord on every preset
+ * (no int32 wrap, peak under 0.9 FS at LEVEL 92, the grains gone after the voices); the scheduler (GRAIN_ASYNC 1,
+ * the unit's path, the audio tick and the poll called in turn): a load renders both sources, a knob change locks
+ * the source, its grains fade and end, the other source's play on, no grain starts on it, the render lands in
+ * slices and the buffer equals the generator's, latest wins (a change mid-render restarts; ten changes in a row
+ * render at most twice), a second part on GRAIN shares and does not render, the old Felucca record's mapping. */
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -28,10 +38,25 @@
 #define FELUCCA_VA 1
 #define FELUCCA_CZ 1
 #define FELUCCA_QUAD 1
+#define FELUCCA_SAMPLE 0         /* as choralroot.c: eng_grain.c brings its own pow2_q16 */
 #include "felucca_tables.h"
 #include "../firmware/src/core.h"
 #include "../firmware/src/dsp.c"
-#include "../firmware/src/grain_src.c"
+#define GRAIN_ASYNC 1
+static void fm1_irq_off(void) {}
+static void fm1_irq_on(void) {}
+#include "../firmware/src/eng_grain.c"
+static gp_part_t grain_pool[GRAIN_NPART];
+static gp_part_t *grain_part(uint32_t part) { return part < GRAIN_NPART ? &grain_pool[part] : 0; }
+#ifndef ENGI_FM6
+#define ENGI_FM6 12u
+#endif
+static uint32_t rs = 12345u;
+static uint32_t rnd(void)
+{
+    rs = rs * 1664525u + 1013904223u;
+    return rs >> 8;
+}
 
 static int fails, checks;
 #define CHECK(c, ...)                                   \
@@ -218,12 +243,504 @@ static void t_time(void)
     printf("\n");
 }
 
+
+/* ============================================================================= the engine === */
+/* the voice driver: voice.c's block for an engine under the platform's amplitude (the ADSR held open) */
+static void drv_reset(void)
+{
+    memset(trk, 0, sizeof trk);
+    memset(grain_pool, 0, sizeof grain_pool);
+    memset(grain_patch, 0, sizeof grain_patch);
+    memset(grain_mlast, 0, sizeof grain_mlast);
+    trk[0].p[P_VOICE] = V_POLY;
+    trk[1].p[P_VOICE] = V_MONO;
+    trk[0].eng_req = trk[0].engine = ENGI_GRAIN;
+    trk[1].eng_req = trk[1].engine = ENGI_FM6;
+    grs.req = grs.lock = grs.ack = 0;
+    grs.stage = 0;
+    memset(grs.cur, 0xFF, sizeof grs.cur);
+    memset(grs.want, 0, sizeof grs.want);
+}
+static void drv_on(track_t *t, uint32_t i, uint32_t note)
+{
+    voice_t *v = &t->v[i];
+    int sounding = v->active;
+    v->note = (uint8_t)note;
+    v->vel = v->mvel = 100;
+    v->gate = v->active = 1;
+    v->stage = 1;
+    v->age = i + 1u;
+    v->pitch16 = v->pitch_cur = (int32_t)note * 16;
+    if (!sounding)
+        v->env = v->env_out = 0;
+    grain_note_on(t, v);
+    v->env = 1 << 24;
+}
+/* the audio side's block: the tick (the ISR's, core 0), the part's block, its voices; the poll is the test's */
+static uint32_t drv_tick(track_t *t, int32_t *out, int32_t shape)
+{
+    uint32_t i, nr = 0;
+    memset(out, 0, CTL * sizeof *out);
+    grain_tick();
+    grain_block(t);
+    for (i = 0; i < NVOICE; i++) {
+        voice_t *v = &t->v[i];
+        vmod_t m;
+        if (!v->active)
+            continue;
+        memset(&m, 0, sizeof m);
+        m.amp0 = m.amp1 = 32767;
+        m.pitch16 = v->pitch_cur;
+        m.inc = pitch_inc((uint32_t)m.pitch16);
+        m.shape = shape;
+        grain_render(t, v, out, CTL, &m);
+        nr++;
+    }
+    return nr;
+}
+/* the main loop and the audio side in turn until nothing is pending (at most n turns); returns the polls it took */
+static uint32_t settle(uint32_t n)
+{
+    uint32_t k;
+    int32_t out[CTL];
+    for (k = 0; k < n; k++) {                    /* (a first tick always: it is what posts a load's request) */
+        drv_tick(&trk[0], out, 64 << 8);
+        grain_poll();
+        if (!grs.req && !grs.stage)
+            break;
+    }
+    return k + 1u;
+}
+static uint32_t grains_on(const gp_part_t *P, const int16_t *src)   /* the part's grains reading src (0: any) */
+{
+    uint32_t i, n = 0;
+    for (i = 0; i < GP_NG; i++)
+        n += P->g[i].owner && (!src || P->g[i].src == src);
+    return n;
+}
+
+/* ---- 5. the blob, the pages, the macros, the presets */
+static void t_patch(void)
+{
+    track_t *t = &trk[0];
+    uint8_t b[GRAIN_BLOB];
+    int8_t p[GQ_NP], q[GQ_NP];
+    uint32_t n, i, pg, c;
+    drv_reset();
+    for (n = 0; n < 500u; n++) {
+        for (i = 0; i < GQ_NP; i++)
+            p[i] = (int8_t)(grain_min(i) + (int32_t)(rnd() % (uint32_t)(grain_max(i) - grain_min(i) + 1)));
+        grain_pack(p, b);
+        CHECK(b[0] == GRAIN_MAGIC && b[1] == GRAIN_VER, "blob head");
+        CHECK(grain_unpack(b, q) && !memcmp(p, q, GQ_NP), "blob round trip %u", n);
+        for (i = GQ_NP + 2u; i < GRAIN_BLOB; i++)
+            CHECK(!b[i], "blob padding");
+    }
+    b[0] = 0;
+    CHECK(!grain_unpack(b, q), "a bad magic");
+    grain_blob_set(t, b);
+    CHECK(!memcmp(grain_patch[0], GRAIN_DEF, GQ_NP), "a bad blob -> the init patch");
+    grain_blob_set(t, 0);
+    CHECK(!memcmp(grain_patch[0], GRAIN_DEF, GQ_NP), "no blob -> the init patch");
+    for (i = 0; i < 8u; i++)
+        CHECK(t->p[P_E0 + i] == GRAIN_DEF[GRAIN_MAC[i]] && t->p[P_E0 + i] == ENG_GRAIN.edit[i].def,
+              "macro %u out: %d (def %d / %d)", i, t->p[P_E0 + i], GRAIN_DEF[GRAIN_MAC[i]], ENG_GRAIN.edit[i].def);
+    /* the pages: every column a patch value in range or a track parameter; get / set round trip; set clamps */
+    for (pg = 0; pg < GRAIN_NPAGES; pg++)
+        for (c = 0; c < 4u; c++) {
+            const param_desc_t *d = &GRAIN_PAGES[pg].col[c];
+            uint32_t m = GRAIN_MAP[pg][c];
+            if (m == GQ_X) {
+                CHECK(!d->label, "page %u col %u: empty column with a label", pg, c);
+                continue;
+            }
+            CHECK(d->label != 0, "page %u col %u: no label", pg, c);
+            if (m & 0x80u) {
+                CHECK((m & 0x7Fu) < P_E0, "page %u col %u: track id %u", pg, c, m & 0x7Fu);
+                grain_set(t, pg, c, d->max + 50);
+                CHECK(grain_get(t, pg, c) == d->max && t->p[m & 0x7Fu] == d->max, "page %u col %u: track set clamps", pg, c);
+                grain_set(t, pg, c, d->min - 50);
+                CHECK(grain_get(t, pg, c) == d->min, "page %u col %u: track set clamps low", pg, c);
+                continue;
+            }
+            CHECK(m < GQ_NP && d->min == grain_min(m) && d->max == grain_max(m) && d->def == GRAIN_DEF[m],
+                  "page %u col %u: range %d..%d def %d against the patch's %d..%d %d", pg, c, d->min, d->max, d->def,
+                  grain_min(m), grain_max(m), GRAIN_DEF[m]);
+            grain_set(t, pg, c, d->max + 50);
+            CHECK(grain_get(t, pg, c) == d->max, "page %u col %u: set clamps", pg, c);
+            grain_set(t, pg, c, d->min - 50);
+            CHECK(grain_get(t, pg, c) == d->min, "page %u col %u: set clamps low", pg, c);
+            grain_set(t, pg, c, d->def);
+            CHECK(grain_get(t, pg, c) == d->def, "page %u col %u: round trip", pg, c);
+        }
+    CHECK(GRAIN_DEEP.section[0] == 0 && GRAIN_DEEP.section[1] == 4 && GRAIN_DEEP.section[2] == 5 &&
+          GRAIN_DEEP.section[3] == 6 && GRAIN_DEEP.section[4] == 0xFF, "the sections OSC FILTER ENV LFO");
+    /* the macros both ways: set writes P_E; a P_E change reaches the patch in block() */
+    grain_set(t, 3, 0, 77);                      /* GRAIN+'s MORPH */
+    CHECK(t->p[P_E4] == 77 && grain_patch[0][GQ_MORPH] == 77, "set -> P_E4 (MORPH)");
+    t->p[P_E5] = 33;                             /* SIZE by the knob */
+    grain_block(t);
+    CHECK(grain_patch[0][GQ_SIZE] == 33 && grain_get(t, 2, 0) == 33, "P_E5 -> SIZE in block");
+    t->p[P_E0] = 99;                             /* TYPE out of range: clamped into the patch */
+    grain_block(t);
+    CHECK(grain_patch[0][GQ_TYPE1] == GS_NTYPE - 1, "P_E0 clamps to the last type");
+    /* the presets: their macros are their patches' */
+    for (n = 0; n < GRAIN_NPRESETS; n++) {
+        grain_blob_preset(t, n);
+        for (i = 0; i < 8u; i++)
+            CHECK(t->p[P_E0 + i] == GRAIN_PRESETS[n].e[i], "%s: macro %u", GRAIN_PRESETS[n].name, i);
+        for (i = 0; i < GQ_NP; i++)
+            CHECK(grain_patch[0][i] >= grain_min(i) && grain_patch[0][i] <= grain_max(i), "%s: value %u out of range",
+                  GRAIN_PRESETS[n].name, i);
+    }
+    /* a part above the two: the defaults, nothing written */
+    CHECK(grain_get(&trk[2], 0, 0) == GRAIN_DEF[GQ_TYPE1], "part 2 reads the defaults");
+    grain_set(&trk[2], 0, 1, 5);
+    CHECK(grain_get(&trk[2], 0, 1) == GRAIN_DEF[GQ_TONE1], "part 2 is not written");
+    /* track_loaded: a preset's macros on the track bring its patch; INIT's macros the init patch; an old Felucca
+     * record (pend, no blob) its grain knobs mapped */
+    drv_reset();
+    t->preset = 3;
+    for (i = 0; i < 8u; i++)
+        t->p[P_E0 + i] = GRAIN_PRESETS[3].e[i];
+    grain_track_loaded(t);
+    CHECK(!memcmp(grain_patch[0], GRAIN_PP[3], GQ_NP), "track_loaded: the preset's patch");
+    t->preset = 0;
+    for (i = 0; i < 8u; i++)
+        t->p[P_E0 + i] = ENG_GRAIN.edit[i].def;
+    t->p[P_E1] = 100;
+    grain_track_loaded(t);
+    CHECK(grain_patch[0][GQ_TONE1] == 100 && grain_patch[0][GQ_TYPE2] == GT_BELL, "track_loaded: init + the macros");
+    grain_user_pending = 1;
+    grain_store_read = 0;
+    {
+        static const int16_t OLD[8] = {2, 50, 92, 88, -7, 40, 14, 100};   /* SRC POS SIZE DENS PTCH SPRD RAND TONE */
+        for (i = 0; i < 8u; i++)
+            t->p[P_E0 + i] = OLD[i];
+    }
+    grain_track_loaded(t);
+    CHECK(grain_patch[0][GQ_SIZE] == 92 && grain_patch[0][GQ_DENS] == 88 && grain_patch[0][GQ_POS] == 50 &&
+          grain_patch[0][GQ_SPRD] == 40 && grain_patch[0][GQ_PITCH] == -7 && grain_patch[0][GQ_RAND] == 14 &&
+          grain_patch[0][GQ_CUT] == 100 && grain_patch[0][GQ_TYPE1] == GT_DRONE, "an old record's grain knobs mapped");
+    CHECK(!grain_user_pending, "pending cleared");
+}
+
+/* ---- 6. the engine on two static buffers */
+static void t_engine(void)
+{
+    track_t *t = &trk[0];
+    gp_part_t *P = grain_part(0);
+    int32_t out[CTL];
+    uint32_t i, n, k;
+    static const uint8_t CH[6] = {62, 66, 69, 71, 73, 76};
+    drv_reset();
+    grain_blob_preset(t, 0);
+    n = settle(200);
+    CHECK(!grs.req && !grs.stage && grs.renders >= 2u, "a load renders both sources (%u turns)", n);
+    CHECK(!memcmp(grs.cur[0], grs.want[0], 4) && !memcmp(grs.cur[1], grs.want[1], 4), "the buffers hold the knobs");
+    CHECK(grs.root16[0] == GS_ROOT16 && grs.root16[1] == GS_ROOT16, "roots");
+    /* extreme knobs: no grain reads outside its buffer; grains come and go */
+    {
+        static const int8_t EXT[][6] = {   /* SIZE DENS POS SPRD RAND PITCH */
+            {127, 127, 0, 127, 127, 24}, {127, 127, 127, 127, 127, -24}, {0, 127, 0, 0, 0, 24}, {0, 127, 127, 0, 0, -24},
+            {127, 0, 64, 0, 127, 0}, {64, 127, 127, 127, 127, 24}};
+        uint32_t e, worst = 0;
+        for (e = 0; e < NELEM(EXT); e++) {
+            int8_t *p = grain_patch[0];
+            drv_reset();
+            grain_blob_preset(t, 0);
+            p[GQ_SIZE] = EXT[e][0];
+            p[GQ_DENS] = EXT[e][1];
+            p[GQ_POS] = EXT[e][2];
+            p[GQ_SPRD] = EXT[e][3];
+            p[GQ_RAND] = EXT[e][4];
+            p[GQ_PITCH] = EXT[e][5];
+            p[GQ_MORPH] = 64;
+            p[GQ_SCAN] = 127;
+            grain_macros_out(t);
+            settle(200);
+            for (i = 0; i < 6; i++)
+                drv_on(t, i, e & 1u ? 96u : 24u);
+            for (n = 0; n < 2u * FS / CTL; n++) {
+                drv_tick(t, out, 64 << 8);
+                for (k = 0; k < GP_NG; k++)
+                    if (P->g[k].owner) {
+                        const gp_grain_t *g = &P->g[k];
+                        CHECK(g->pos <= GS_N && (g->src == grain_buf[0] || g->src == grain_buf[1]), "ext %u: grain %u pos %u", e, k, g->pos);
+                        CHECK(g->step >= 256u && g->step <= GP_STEP_MAX, "ext %u: step %u", e, g->step);
+                        worst = grains_on(P, 0) > worst ? grains_on(P, 0) : worst;
+                    }
+            }
+            CHECK(worst <= GP_NG, "the pool");
+        }
+    }
+    /* the pool's shares: one voice may hold the pool; six voices up to 2 .. 16 / 6 each */
+    drv_reset();
+    grain_blob_preset(t, 0);
+    grain_patch[0][GQ_DENS] = 127;
+    grain_patch[0][GQ_SIZE] = 127;
+    settle(200);
+    drv_on(t, 0, 60);
+    for (n = 0; n < FS / CTL; n++)
+        drv_tick(t, out, 64 << 8);
+    CHECK(grains_on(P, 0) >= 8u, "one voice fills the pool (%u)", grains_on(P, 0));
+    for (i = 1; i < 6; i++)
+        drv_on(t, i, CH[i]);
+    for (n = 0; n < FS / CTL; n++) {
+        drv_tick(t, out, 64 << 8);
+        for (i = 0; i < 6; i++) {
+            uint32_t mine = 0;
+            for (k = 0; k < GP_NG; k++)
+                mine += P->g[k].owner == i + 1u;
+            CHECK(mine <= GP_NG, "voice %u: %u grains", i, mine);
+        }
+    }
+    CHECK(grains_on(P, 0) <= GP_NG, "the pool at six voices");
+    /* MORPH: 0 all A, 127 all B, 64 both, by the knob and by the matrix's SHP */
+    {
+        static const int32_t M[3] = {0, 127, 64};
+        for (k = 0; k < 3; k++) {
+            uint32_t na = 0, nb = 0;
+            drv_reset();
+            grain_blob_preset(t, 0);
+            grain_patch[0][GQ_MORPH] = (int8_t)M[k];
+            grain_patch[0][GQ_DENS] = 110;
+            grain_macros_out(t);
+            settle(200);
+            drv_on(t, 0, 60);
+            drv_on(t, 1, 67);
+            for (n = 0; n < FS / CTL; n++) {
+                drv_tick(t, out, 64 << 8);
+                na += grains_on(P, grain_buf[0]);
+                nb += grains_on(P, grain_buf[1]);
+            }
+            CHECK(k != 0 || (na && !nb), "MORPH 0: A %u B %u", na, nb);
+            CHECK(k != 1 || (!na && nb), "MORPH 127: A %u B %u", na, nb);
+            CHECK(k != 2 || (na && nb && na > nb / 2 && nb > na / 2), "MORPH 64: A %u B %u", na, nb);
+        }
+        drv_reset();
+        grain_blob_preset(t, 0);
+        grain_patch[0][GQ_MORPH] = 0;
+        grain_macros_out(t);
+        settle(200);
+        drv_on(t, 0, 60);
+        {
+            uint32_t na = 0, nb = 0;
+            for (n = 0; n < FS / CTL; n++) {
+                drv_tick(t, out, 127 << 8);  /* SHP full up: MORPH 0 + 63 */
+                na += grains_on(P, grain_buf[0]);
+                nb += grains_on(P, grain_buf[1]);
+            }
+            CHECK(na && nb, "SHP moves MORPH: A %u B %u", na, nb);
+        }
+    }
+    /* the rate's cap: C7 and PITCH +24 reads two source samples an output sample */
+    drv_reset();
+    grain_blob_preset(t, 0);
+    grain_patch[0][GQ_PITCH] = 24;
+    grain_patch[0][GQ_RAND] = 0;
+    grain_macros_out(t);
+    settle(200);
+    drv_on(t, 0, 96);
+    drv_tick(t, out, 64 << 8);
+    CHECK(grains_on(P, 0) == 1u && P->g[0].step == GP_STEP_MAX, "the cap: step %u", P->g[0].step);
+    drv_reset();
+    grain_blob_preset(t, 0);
+    grain_patch[0][GQ_RAND] = 0;
+    grain_macros_out(t);
+    settle(200);
+    drv_on(t, 0, 60);
+    drv_tick(t, out, 64 << 8);
+    CHECK(P->g[0].step == (uint32_t)(1 << 15), "C4 at the root reads half a source sample an output sample: %u", P->g[0].step);
+    drv_on(t, 1, 48);
+    drv_tick(t, out, 64 << 8);
+    CHECK(P->g[1].step == (uint32_t)(1 << 14), "C3: a quarter: %u", P->g[1].step);
+    /* the window's continuity: a DC buffer under one grain at a time, the filter open: the output is the window;
+     * the jump at a block boundary is no more than within a block */
+    drv_reset();
+    grain_blob_preset(t, 0);
+    grain_patch[0][GQ_DENS] = 0;                 /* one grain a second */
+    grain_patch[0][GQ_SIZE] = 64;
+    grain_patch[0][GQ_SPRD] = 0;
+    grain_patch[0][GQ_RAND] = 0;
+    grain_patch[0][GQ_MORPH] = 0;
+    grain_patch[0][GQ_SCAN] = 0;
+    grain_patch[0][GQ_CUT] = 127;
+    grain_patch[0][GQ_RES] = 0;
+    grain_macros_out(t);
+    settle(200);
+    for (i = 0; i < GS_N; i++)
+        grain_buf[0][i] = 20000;
+    drv_on(t, 0, 60);
+    {
+        int32_t prev = 0, jin = 0, jedge = 0, peak = 0;
+        for (n = 0; n < 20u; n++) {
+            drv_tick(t, out, 64 << 8);
+            for (i = 0; i < CTL; i++) {
+                int32_t d = out[i] - prev;
+                d = d < 0 ? -d : d;
+                if (n || i) {
+                    if (i == 0)
+                        jedge = d > jedge ? d : jedge;
+                    else
+                        jin = d > jin ? d : jin;
+                }
+                prev = out[i];
+                peak = out[i] > peak ? out[i] : peak;
+            }
+        }
+        CHECK(peak > 1000, "the window sounds (peak %d)", peak);
+        CHECK(jedge <= jin * 2 + 2, "a block boundary jumps %d, within a block %d", jedge, jin);
+    }
+    /* every preset: 1.4 s of a 6-note chord at LEVEL 92: no int32 wrap, under 0.9 FS, not silent, then the voices off
+     * and the grains gone */
+    for (k = 0; k < GRAIN_NPRESETS; k++) {
+        int64_t mx = 0;
+        int32_t peak = 0;
+        drv_reset();
+        grain_blob_preset(t, k);
+        settle(200);
+        for (i = 0; i < 6; i++)
+            drv_on(t, i, CH[i]);
+        for (n = 0; n < (uint32_t)(1.4 * FS / CTL); n++) {
+            drv_tick(t, out, 64 << 8);
+            for (i = 0; i < CTL; i++) {
+                int64_t a = llabs((int64_t)out[i]);
+                int32_t x = ((out[i] >> 2) * LEVEL_Q12[92]) >> 10;
+                x = x < 0 ? -x : x;
+                mx = a > mx ? a : mx;
+                peak = x > peak ? x : peak;
+            }
+        }
+        if (getenv("VERBOSE"))
+            printf("  %-11s peak %5.1f %% FS (part at LEVEL 92)\n", GRAIN_PRESETS[k].name, peak * 100.0 / 32768);
+        CHECK(mx < (1 << 30), "%s: |sum| %lld near the int32 wrap", GRAIN_PRESETS[k].name, (long long)mx);
+        CHECK(peak < 0.9 * 32768, "%s: peak %d >= 0.9 FS", GRAIN_PRESETS[k].name, peak);
+        CHECK(peak > 300, "%s: silent (peak %d)", GRAIN_PRESETS[k].name, peak);
+        for (i = 0; i < 6; i++)
+            t->v[i].active = 0;
+        drv_tick(t, out, 64 << 8);
+        CHECK(!grains_on(P, 0), "%s: %u grains left after the voices", GRAIN_PRESETS[k].name, grains_on(P, 0));
+    }
+}
+
+/* ---- 7. the scheduler (the unit's path: the tick and the poll in turn) */
+static void t_scheduler(void)
+{
+    track_t *t = &trk[0];
+    gp_part_t *P = grain_part(0);
+    int32_t out[CTL];
+    uint32_t i, n, polls, before, na, nb;
+    static int16_t ref[GS_N];
+    gs_t g;
+    drv_reset();
+    grain_blob_preset(t, 0);
+    settle(200);
+    before = grs.renders;
+    /* grains on both sources sounding; A's TONE moves: a request, the lock, A's grains killed and gone after one
+     * block, B's untouched, nothing starts on A, the render in slices, the buffer the generator's, the unlock */
+    grain_patch[0][GQ_MORPH] = 64;
+    grain_patch[0][GQ_DENS] = 127;
+    grain_macros_out(t);
+    drv_on(t, 0, 60);
+    drv_on(t, 1, 67);
+    for (n = 0; n < FS / 4 / CTL; n++)
+        drv_tick(t, out, 64 << 8);
+    na = grains_on(P, grain_buf[0]);
+    nb = grains_on(P, grain_buf[1]);
+    CHECK(na && nb, "both sources sounding (A %u B %u)", na, nb);
+    grain_patch[0][GQ_TONE1] = 100;
+    grain_macros_out(t);
+    drv_tick(t, out, 64 << 8);                   /* the tick sees the knob */
+    CHECK(grs.req == 1u && !grs.lock, "a request for A");
+    grain_poll();                                /* stage 0: the lock */
+    CHECK(grs.lock == 1u && grs.stage == 1u && !grs.req, "A locked");
+    drv_tick(t, out, 64 << 8);                   /* the tick acknowledges: A's grains fade this block */
+    CHECK(grs.ack == 1u, "the fade acknowledged");
+    CHECK(!grains_on(P, grain_buf[0]), "A's grains gone after the block (%u)", grains_on(P, grain_buf[0]));
+    CHECK(grains_on(P, grain_buf[1]) >= 1u, "B's grains stay (%u)", grains_on(P, grain_buf[1]));
+    grain_poll();                                /* stage 1: the block that faded them is not over */
+    CHECK(grs.stage == 1u, "the poll waits for the fade's block");
+    for (n = 0; n < 8u; n++) {                   /* no grain starts on A while it is locked */
+        drv_tick(t, out, 64 << 8);
+        CHECK(!grains_on(P, grain_buf[0]), "a grain on the locked A");
+    }
+    for (polls = 0; grs.stage && polls < 100u; polls++) {
+        grain_poll();
+        drv_tick(t, out, 64 << 8);
+        if (grs.lock)
+            CHECK(!grains_on(P, grain_buf[0]), "a grain on A during its render");
+    }
+    CHECK(!grs.stage && !grs.lock && grs.renders == before + 1u, "rendered (%u polls)", polls);
+    CHECK(polls >= GS_N / GRAIN_SLICE && polls <= GS_N / GRAIN_SLICE + 2u, "%u polls for %u slices", polls, GS_N / GRAIN_SLICE);
+    gs_begin(&g, GT_DRONE, 100, 64, 0);
+    while (gs_step(&g, ref, GS_N) < GS_N)
+        ;
+    gs_finish(ref);
+    CHECK(!memcmp(ref, grain_buf[0], sizeof ref), "the buffer is the generator's");
+    CHECK(grs.cur[0][1] == 100, "the knobs held");
+    for (n = 0; n < 8u; n++)
+        drv_tick(t, out, 64 << 8);
+    CHECK(grains_on(P, grain_buf[0]) > 0, "A's grains come back");
+    /* latest wins: a change mid-render restarts on the new values */
+    before = grs.renders;
+    grain_patch[0][GQ_SEED1] = 5;
+    grain_macros_out(t);
+    drv_tick(t, out, 64 << 8);
+    grain_poll();
+    drv_tick(t, out, 64 << 8);
+    grain_poll();
+    drv_tick(t, out, 64 << 8);
+    grain_poll();                                /* rendering: a slice or two in */
+    grain_poll();
+    CHECK(grs.stage == 2u, "mid-render");
+    grain_patch[0][GQ_SEED1] = 9;
+    grain_macros_out(t);
+    n = settle(200);
+    CHECK(grs.renders == before + 1u, "one render for the two changes (%u)", grs.renders - before);
+    gs_begin(&g, GT_DRONE, 100, 64, 9);
+    while (gs_step(&g, ref, GS_N) < GS_N)
+        ;
+    gs_finish(ref);
+    CHECK(!memcmp(ref, grain_buf[0], sizeof ref), "the latest knobs' buffer");
+    /* ten changes in a row, a poll between each: at most two renders */
+    before = grs.renders;
+    for (i = 0; i < 10u; i++) {
+        grain_patch[0][GQ_TONE2] = (int8_t)(10 + 10 * i);
+        grain_macros_out(t);
+        drv_tick(t, out, 64 << 8);
+        grain_poll();
+    }
+    settle(400);
+    CHECK(grs.renders - before <= 2u, "ten changes: %u renders", grs.renders - before);
+    CHECK(grs.cur[1][1] == 100, "the last one held");
+    /* a second part on GRAIN shares: its knobs render nothing */
+    trk[1].eng_req = trk[1].engine = ENGI_GRAIN;
+    grain_blob_preset(&trk[1], 5);
+    before = grs.renders;
+    settle(200);
+    CHECK(grs.renders == before && grs.owner == 1u, "part 1's sources do not render (owner %u)", grs.owner);
+    trk[0].eng_req = trk[0].engine = ENGI_FM6;   /* the chord part leaves GRAIN: the bass part owns */
+    drv_tick(t, out, 64 << 8);
+    CHECK(grs.owner == 2u && grs.req, "the bass part owns and asks");
+    settle(400);
+    CHECK(grs.renders == before + 2u && grs.cur[0][0] == GRAIN_PP[5][GQ_TYPE1], "its sources rendered");
+    /* a part on GRAIN with the same knobs as the buffers: no render */
+    before = grs.renders;
+    for (n = 0; n < 10u; n++)
+        drv_tick(t, out, 64 << 8);
+    CHECK(grs.renders == before && !grs.req, "nothing to render");
+}
+
 int main(void)
 {
     t_grid();
     t_knobs();
     t_golden();
     t_time();
+    t_patch();
+    t_engine();
+    t_scheduler();
     printf("cr_grain_test: %d checks, %d failed%s\n", checks, fails, fails ? "" : " ok");
     return fails ? 1 : 0;
 }

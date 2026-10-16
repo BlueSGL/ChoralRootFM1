@@ -1,53 +1,302 @@
 /* SPDX-License-Identifier: GPL-3.0-only
+ * Copyright (C) 2026 ChoralRoot FM-1 contributors (a fork of Felucca); the grain player after Felucca's GRAIN,
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
-/* GRAIN: a granular engine over the SAMPLE material. Felucca's own design.
+/* GRAIN: a granular engine over material it renders itself (docs/GRAIN.md; ChoralRoot, FELUCCA_GRAIN; engine 8).
  *
- * Source: the SAMPLE sets (built in, IMA ADPCM in flash) and the user slots USR1..3 (XIP), the
- * same zones across the keyboard as SAMPLE: a note picks its zone, its pitch sets the grain
- * playback rate against the zone's root. Needs eng_sample.c (zones, ADPCM tables, pow2_q16).
+ * The material: two buffers of GS_N samples at GS_RATE (grain_src.c: 743 ms at 22.05 kHz, 32 KB each, POOL), the
+ * sound's sources A and B, each rendered from four knobs (TYPE TONE MOTION SEED) by the generator, deterministic.
+ * The sound stores the knobs, never audio. The buffers are one pair for the unit: the first part on GRAIN (the chord
+ * part when it is) owns them, its source knobs render them; a second part on GRAIN plays the same two with its own
+ * grain knobs and MORPH.
  *
- * Decoding: no RAM copy of the source. Grains decode the ADPCM on demand from a seek index: the
- * decoder state (predictor, step index) every GR_SEG = 256 source samples of every zone of the
- * part's SRC, 3 bytes an entry (GR_NIDX entries a part: PERC, the biggest built-in set, needs
- * ~1020; a full user slot ~650; zones past the capacity stay silent). A zone always starts at the
- * state (0, 0), so zones index independently. The index is built in the block hook, one entry
- * (256 decodes) per part and block, the zones of the sounding voices first: a 1 s zone is ready
- * in ~60 ms, PERC (24 zones) in ~0.7 s. A grain starts at its exact sample: the state of the
- * entry below, then up to 255 decodes skipped. A forward grain then decodes as it plays (one
- * decode per source sample); a reverse grain reads a 128-sample window that it refills from the
- * index as it moves down (about two decodes per source sample). A SRC change or a new upload into
- * the slot (smp_user_gen) rebuilds the index.
+ * The player (Felucca's eng_grain.c over RAM: no ADPCM decoder, no seek index): a pool of GP_NG grains a part, shared
+ * by its voices (a voice's share GP_NG / sounding voices, at least 2), at most GP_POLY voices. A grain: a source (A or
+ * B: MORPH is the share of a voice's grains that read B, spread evenly over them), a position, a length (SIZE, 10 ..
+ * 393 ms), a rate (the note against its source's root, PITCH, a random detune), a direction, a Hann window (table,
+ * linear interpolation), a level 1 / sqrt(overlap). A voice starts its grains DENS times a second (1 .. 98 /s; SPRD
+ * jitters the interval); POS (+ SCAN: a slow triangle over the buffer) is the centre, SPRD the random spread round it.
+ * RAND: the random detune (quadratic, up to +-1 octave) and the share of reversed grains (up to 50 %). The matrix's
+ * SHP moves MORPH, its FLT the SVF's CUT (CUT RES a voice); the platform's ADSR is the voice's amplitude.
  *
- * Grains: a pool of GR_NG per part, shared by its voices (each voice may hold its share of the
- * pool: GR_NG / sounding voices, at least 2), at most GR_POLY voices. A grain: position, length
- * (SIZE, 10..390 ms), rate (note, PITCH, a random detune), direction, a Hann window (table, linear
- * interpolation) and a level 1 / sqrt(overlap). A voice starts its grains DENS times a second
- * (1..98 /s; SPRD also jitters the interval); POS (0..100 % of the zone, + the track's SHP
- * modulation: an LFO scans, ENV -> SHP sweeps) is the centre, SPRD the random spread around it
- * (SPRD 0: a frozen position). RAND: the random detune (quadratic, up to +-1 octave) and the
- * share of reversed grains (up to 50 %). TONE: a one-pole low-pass (+ the track's FLT
- * modulation), as SAMPLE's CUT. A grain is fitted into its zone (shortened if the zone is short).
+ * The render (docs/GRAIN.md section 1): grain_tick, once a block on core 0 (fx.c mix_block, before the parts render),
+ * compares the owner's source knobs with what the buffers hold and posts a request; the main loop's grain_poll (main.c's
+ * idle loop, the emulator's idle) renders in slices of GRAIN_SLICE samples: it locks the source, the next tick fades
+ * the grains reading it (the other source's play on) and no grain starts on it, the poll waits a block, renders, swaps
+ * the knobs in and unlocks. Latest wins: a knob turned during a render restarts it. GRAIN_ASYNC 0 (hostsim, regress,
+ * the tests: no main loop): the tick renders synchronously, whole.
  *
- * Cost bound: the grain rate is capped at 2 source samples per output sample (max 2 decodes, 4
- * for a reverse grain); a grain only starts while the part's grains decode at most GR_LOAD_MAX
- * (8) source samples per output sample in all (a reverse grain counts twice); at most one grain
- * start per voice and block (<= 255 skipped decodes), one index entry per block. Host count, one
- * part, worst settings: ~1050 instructions / sample (~1170 while the PERC index builds), against
- * PHASE WIRE 1510, TRIO CHIP CHOIR 1455, WHEEL FULL ORGAN 1413 (8 keys, no sends). State: per part the grain pool, the reverse windows and the index
- * (gr_p, in the pool section); per voice s[0] the zone, s[1] the countdown to the next grain,
- * s[2] the low-pass, voice_t's phases are unused. */
-#define GR_POLY 3                /* voices per part */
-#define GR_NG 12                 /* grains per part */
-#define GR_SEG_LOG2 8
-#define GR_SEG (1u << GR_SEG_LOG2)   /* seek index interval, source samples */
-#define GR_NIDX 1024             /* seek index entries per part (PERC: 1001) */
-#define GR_MAXZ 32               /* zones per set (PERC has 24, a user slot <= 16) */
-#define GR_RB 128                /* reverse window, source samples */
-#define GR_STEP_MAX (2u << 16)   /* grain rate cap: 2 source samples per output sample */
-#define GR_LOAD_MAX (8u << 16)   /* decodes per output sample of all a part's grains (a reverse grain counts twice) */
+ * State: the patch (grain_patch, GQ_NP values a part), the macros as last seen, the pool (gp_part_t, eng_state's
+ * union), the scheduler (grs); per voice s[0] the countdown to the next grain, s[1] MORPH's count, s[2..3] the filter. */
+#include "grain_src.c"
+#ifndef ENGI_GRAIN
+#define ENGI_GRAIN 8u
+#endif
+#ifndef GRAIN_ASYNC
+#define GRAIN_ASYNC 0            /* 1: the renders in slices from the main loop (grain_poll: the unit, the emulator);
+                                  * 0: a render completes inside the block that asks for it (a host without a main loop) */
+#endif
+#define GRAIN_NPART 2u           /* parts with a GRAIN patch (ChoralRoot: chord, bass) */
+#define GP_NG 16                 /* grains a part */
+#define GP_POLY 8                /* engine_t.poly */
+#define GP_STEP_MAX (2u << 16)   /* the rate's cap: two source samples an output sample */
+#define GP_RATE_Q16 ((GS_RATE << 16) / 44100u)
+#define GRAIN_SLICE 1024u        /* samples a poll (DRONE, the heaviest: 1.6 .. 2.4 ms on the unit) */
+#define GRAIN_BLOB 20u           /* 'G', version, GQ_NP values, zeros */
+#define GRAIN_MAGIC 0x47u
+#define GRAIN_VER 1u
 
+/* --------------------------------------------------------- the patch --- */
+enum { GQ_TYPE1, GQ_TONE1, GQ_MOTION1, GQ_SEED1, GQ_TYPE2, GQ_TONE2, GQ_MOTION2, GQ_SEED2,   /* SRC 1, SRC 2 */
+       GQ_SIZE, GQ_DENS, GQ_POS, GQ_SPRD,                                                    /* GRAIN */
+       GQ_MORPH, GQ_RAND, GQ_PITCH, GQ_SCAN,                                                 /* GRAIN+ */
+       GQ_CUT, GQ_RES,                                                                       /* FILTER */
+       GQ_NP };
+_Static_assert(GQ_NP + 2u <= GRAIN_BLOB, "GRAIN patch layout");
+/* the macros P_E0..P_E7: source A's four, then MORPH SIZE DENS POS */
+static const uint8_t GRAIN_MAC[8] = {GQ_TYPE1, GQ_TONE1, GQ_MOTION1, GQ_SEED1, GQ_MORPH, GQ_SIZE, GQ_DENS, GQ_POS};
+static const int8_t GRAIN_DEF[GQ_NP] = {GT_DRONE, 64, 64, 0, GT_BELL, 64, 64, 0, 92, 88, 50, 40, 0, 14, 0, 30, 100, 20};
+static int8_t grain_patch[GRAIN_NPART][GQ_NP];
+static int16_t grain_mlast[GRAIN_NPART][8];      /* P_E0..P_E7 as last put in the patch */
+static uint8_t grain_user_pending;               /* upool.c up_loading: a GRAIN user slot + 1 is being loaded */
+static int (*grain_store_read)(uint32_t k, uint8_t *b);   /* upool.c: slot k's GRAIN patch, 0 = there is one */
+
+static inline int32_t grain_min(uint32_t i) { return i == GQ_PITCH ? -24 : 0; }
+static inline int32_t grain_max(uint32_t i) { return i == GQ_PITCH ? 24 : i == GQ_TYPE1 || i == GQ_TYPE2 ? GS_NTYPE - 1 : 127; }
+static inline int8_t grain_clampv(uint32_t i, int32_t v) { return (int8_t)clamp(v, grain_min(i), grain_max(i)); }
+static uint32_t grain_tr(const track_t *t) { return (uint32_t)(t - trk); }
+
+/* the deep pages' columns (the UI contract, docs/GRAIN.md section 3) */
+#define GC_TYPE(d) {"TYPE", F_ENUM, 0, GS_NTYPE - 1, d, GS_TYPE_NAMES, 0}
+#define GC_TONE {"TONE", F_PCT, 0, 127, 64, 0, 0}
+#define GC_MOTION {"MOTION", F_PCT, 0, 127, 64, 0, 0}
+#define GC_SEED {"SEED", F_INT, 0, 127, 0, 0, 0}
+#define GC_SIZE {"SIZE", F_PCT, 0, 127, 92, 0, 0}
+#define GC_DENS {"DENS", F_PCT, 0, 127, 88, 0, 0}
+#define GC_POS {"POS", F_PCT, 0, 127, 50, 0, 0}
+#define GC_SPRD {"SPRD", F_PCT, 0, 127, 40, 0, 0}
+#define GC_MORPH {"MORPH", F_PCT, 0, 127, 0, 0, 0}
+#define GC_RAND {"RAND", F_PCT, 0, 127, 14, 0, 0}
+#define GC_PITCH {"PITCH", F_SEMI, -24, 24, 0, 0, 0}
+#define GC_SCAN {"SCAN", F_PCT, 0, 127, 30, 0, 0}
+#define GC_CUT {"CUT", F_CUTOFF, 0, 127, 100, 0, 0}
+#define GC_RES {"RES", F_PCT, 0, 127, 20, 0, 0}
+#define GC_NONE {0, 0, 0, 0, 0, 0, 0}
+/* the platform's envelope and LFO as pages of the engine (the editor wants the sections OSC FILTER ENV LFO: cr_edit.c
+ * ce_deep): the track's P_ATK .. P_REL and P_LRATE P_LWAVE P_LD_PIT P_LD_FLT, as params.c TP[] describes them */
+static const char *const GRAIN_N_LWAVE[] = {"SIN", "TRI", "SAW", "SQR", "S&H"};
+#define GC_ATK {"ATK", F_TIME, 0, 127, 10, 0, 0}
+#define GC_DEC {"DEC", F_TIME, 0, 127, 70, 0, 0}
+#define GC_SUS {"SUS", F_PCT, 0, 127, 90, 0, 0}
+#define GC_REL {"REL", F_TIME, 0, 127, 60, 0, 0}
+#define GC_LRATE {"RATE", F_LFOHZ, 0, 127, 60, 0, 0}
+#define GC_LWAVE {"WAVE", F_ENUM, 0, 4, 0, GRAIN_N_LWAVE, 0}
+#define GC_LPIT {"PIT", F_BIPCT, -64, 63, 0, 0, 0}
+#define GC_LFLT {"FLT", F_BIPCT, -64, 63, 0, 0, 0}
+static const eng_page_t GRAIN_PAGES[] = {
+    {"SRC 1", {GC_TYPE(GT_DRONE), GC_TONE, GC_MOTION, GC_SEED}},   /* 0 OSC: a stack of the two sources */
+    {"SRC 2", {GC_TYPE(GT_BELL), GC_TONE, GC_MOTION, GC_SEED}},
+    {"GRAIN", {GC_SIZE, GC_DENS, GC_POS, GC_SPRD}},                /* 2 .. one edit8 screen of two lanes */
+    {"GRAIN+", {GC_MORPH, GC_RAND, GC_PITCH, GC_SCAN}},
+    {"FILTER", {GC_CUT, GC_RES, GC_NONE, GC_NONE}},                /* 4 FILTER: the curve */
+    {"ENV", {GC_ATK, GC_DEC, GC_SUS, GC_REL}},                     /* 5 ENV: the platform's ADSR */
+    {"LFO", {GC_LRATE, GC_LWAVE, GC_LPIT, GC_LFLT}},               /* 6 LFO: the platform's */
+};
+#define GRAIN_NPAGES ((uint32_t)NELEM(GRAIN_PAGES))
+#define GQ_X 0xFFu               /* an empty column */
+#define GQ_T(id) (0x80u | (id))  /* a track parameter */
+static const uint8_t GRAIN_MAP[NELEM(GRAIN_PAGES)][4] = {
+    {GQ_TYPE1, GQ_TONE1, GQ_MOTION1, GQ_SEED1},
+    {GQ_TYPE2, GQ_TONE2, GQ_MOTION2, GQ_SEED2},
+    {GQ_SIZE, GQ_DENS, GQ_POS, GQ_SPRD},
+    {GQ_MORPH, GQ_RAND, GQ_PITCH, GQ_SCAN},
+    {GQ_CUT, GQ_RES, GQ_X, GQ_X},
+    {GQ_T(P_ATK), GQ_T(P_DEC), GQ_T(P_SUS), GQ_T(P_REL)},
+    {GQ_T(P_LRATE), GQ_T(P_LWAVE), GQ_T(P_LD_PIT), GQ_T(P_LD_FLT)},
+};
+_Static_assert(P_LD_FLT < 0x7F, "GRAIN_MAP's track ids");
+
+static void grain_init_patch(int8_t *p) { memcpy(p, GRAIN_DEF, GQ_NP); }
+static void grain_macros_out(track_t *t)
+{
+    uint32_t tr = grain_tr(t), k;
+    if (tr >= GRAIN_NPART)
+        return;
+    for (k = 0; k < 8u; k++) {
+        int16_t v = grain_patch[tr][GRAIN_MAC[k]];
+        t->p[P_E0 + k] = v;
+        grain_mlast[tr][k] = v;
+    }
+}
+static int32_t grain_get(const track_t *t, uint32_t page, uint32_t col)
+{
+    uint32_t tr = grain_tr(t), i;
+    if (page >= GRAIN_NPAGES || col > 3u || (i = GRAIN_MAP[page][col]) == GQ_X)
+        return 0;
+    if (i & 0x80u)
+        return t->p[i & 0x7Fu];
+    return tr < GRAIN_NPART ? grain_patch[tr][i] : GRAIN_DEF[i];
+}
+static void grain_set(track_t *t, uint32_t page, uint32_t col, int32_t v)
+{
+    uint32_t tr = grain_tr(t), i, k;
+    if (page >= GRAIN_NPAGES || col > 3u || (i = GRAIN_MAP[page][col]) == GQ_X)
+        return;
+    if (i & 0x80u) {                             /* a track parameter: the column's range */
+        const param_desc_t *d = &GRAIN_PAGES[page].col[col];
+        t->p[i & 0x7Fu] = (int16_t)clamp(v, d->min, d->max);
+        RING_PUBLISH();
+        return;
+    }
+    if (tr >= GRAIN_NPART)
+        return;
+    grain_patch[tr][i] = grain_clampv(i, v);
+    for (k = 0; k < 8u; k++)                     /* a macro's value: the track's P_E too (grain_block sees no change) */
+        if (GRAIN_MAC[k] == i) {
+            t->p[P_E0 + k] = grain_patch[tr][i];
+            RING_PUBLISH();
+            grain_mlast[tr][k] = grain_patch[tr][i];
+        }
+}
+/* the patch <-> the blob: 'G', version, the values as bytes (PITCH signed), zeros */
+static void grain_pack(const int8_t *p, uint8_t *b)
+{
+    uint32_t i;
+    memset(b, 0, GRAIN_BLOB);
+    b[0] = GRAIN_MAGIC;
+    b[1] = GRAIN_VER;
+    for (i = 0; i < GQ_NP; i++)
+        b[2 + i] = (uint8_t)p[i];
+}
+static int grain_unpack(const uint8_t *b, int8_t *p)      /* 1 = a valid blob */
+{
+    uint32_t i;
+    if (!b || b[0] != GRAIN_MAGIC || b[1] != GRAIN_VER)
+        return 0;
+    for (i = 0; i < GQ_NP; i++)
+        p[i] = grain_clampv(i, (int8_t)b[2 + i]);
+    return 1;
+}
+static void grain_blob_get(const track_t *t, uint8_t *out)
+{
+    uint32_t tr = grain_tr(t);
+    int8_t p[GQ_NP];
+    if (tr < GRAIN_NPART)
+        grain_pack(grain_patch[tr], out);
+    else {
+        grain_init_patch(p);
+        grain_pack(p, out);
+    }
+}
+static void grain_blob_set(track_t *t, const uint8_t *in)
+{
+    uint32_t tr = grain_tr(t);
+    int8_t p[GQ_NP];
+    if (tr >= GRAIN_NPART)
+        return;
+    if (!grain_unpack(in, p))
+        grain_init_patch(p);
+    memcpy(grain_patch[tr], p, GQ_NP);
+    grain_macros_out(t);
+}
+
+/* ------------------------------------------------------------ presets --- */
+/* the pool after INIT (docs/PRESETS.md): each preset's patch (the sources' TYPE TONE MOTION SEED twice, SIZE DENS
+ * POS SPRD, MORPH RAND PITCH SCAN, CUT RES) once, as a list; preset_t takes its macros from the same list (GM), with
+ * the ADSR and the sends */
+#define GP_CLOUD_PAD GT_DRONE, 64, 64, 0, GT_BELL, 64, 64, 0, 92, 88, 50, 40, 40, 14, 0, 30, 100, 20
+#define GP_SHIMMER GT_BELL, 64, 64, 0, GT_BELL, 104, 104, 11, 70, 100, 30, 30, 64, 24, 12, 20, 110, 10
+#define GP_BREATH_PAD GT_BREATH, 64, 64, 0, GT_VOWEL, 64, 20, 3, 92, 88, 50, 40, 64, 10, 0, 30, 96, 30
+#define GP_FROZEN GT_VOWEL, 28, 20, 3, GT_BREATH, 28, 20, 3, 108, 72, 40, 0, 0, 10, 0, 12, 92, 10
+#define GP_STRUM GT_PLUCK, 64, 100, 0, GT_METAL, 64, 64, 0, 60, 80, 20, 30, 0, 10, 0, 0, 110, 0
+#define GP_SWARM GT_CHIRP, 64, 64, 0, GT_SWEEP, 64, 64, 0, 48, 110, 50, 60, 64, 60, 0, 50, 120, 20
+#define GP_ACID_DUST GT_SWEEP, 104, 104, 11, GT_PLUCK, 104, 104, 11, 30, 118, 50, 80, 40, 40, 0, 60, 127, 40
+#define GP_GLITCH GT_METAL, 64, 64, 0, GT_DRONE, 64, 64, 0, 24, 112, 64, 100, 64, 90, 0, 0, 127, 0
+static const int8_t GRAIN_PP[][GQ_NP] = {
+    {GP_CLOUD_PAD}, {GP_SHIMMER}, {GP_BREATH_PAD}, {GP_FROZEN}, {GP_STRUM}, {GP_SWARM}, {GP_ACID_DUST}, {GP_GLITCH},
+};
+/* the macros of a patch list: source A's four, MORPH SIZE DENS POS (GRAIN_MAC's order) */
+#define GM_(t1, n1, m1, s1, t2, n2, m2, s2, sz, dn, ps, sp, mo, ra, pi, sc, cu, re) {t1, n1, m1, s1, mo, sz, dn, ps}
+#define GM(...) GM_(__VA_ARGS__)
+static const preset_t GRAIN_PRESETS[] = {
+    /* name, the macros, {A D S R}, fenv, mono */
+    {"CLOUD PAD", GM(GP_CLOUD_PAD), {70, 90, 120, 90}, 0, 0, FX(0, 40, 25, 85), PAT(5)},
+    {"SHIMMER", GM(GP_SHIMMER), {30, 90, 110, 90}, 0, 0, FX(0, 50, 40, 90), PAT(7)},
+    {"BREATH PAD", GM(GP_BREATH_PAD), {60, 90, 120, 100}, 0, 0, FX(0, 30, 30, 90), PAT(5)},
+    {"FROZEN", GM(GP_FROZEN), {50, 100, 127, 100}, 0, 0, FX(0, 30, 20, 95), PAT(5)},
+    {"STRUM", GM(GP_STRUM), {0, 70, 100, 60}, 0, 0, FX(0, 20, 30, 60), PAT(3)},
+    {"SWARM", GM(GP_SWARM), {10, 80, 110, 70}, 0, 0, FX(0, 30, 40, 70), PAT(4)},
+    {"ACID DUST", GM(GP_ACID_DUST), {0, 60, 90, 40}, 0, 0, FX(20, 0, 40, 30), PAT(1)},
+    {"GLITCH", GM(GP_GLITCH), {0, 70, 100, 30}, 0, 0, FX(10, 0, 50, 25), PAT(4)},
+};
+#define GRAIN_NPRESETS ((uint32_t)NELEM(GRAIN_PRESETS))
+_Static_assert(NELEM(GRAIN_PP) == NELEM(GRAIN_PRESETS), "GRAIN presets");
+static void grain_blob_preset(track_t *t, uint32_t k)
+{
+    uint32_t tr = grain_tr(t);
+    if (tr >= GRAIN_NPART)
+        return;
+    memcpy(grain_patch[tr], GRAIN_PP[k < GRAIN_NPRESETS ? k : 0], GQ_NP);
+    grain_macros_out(t);
+}
+
+/* a sound load put GRAIN into track t (eng_fm6.c fm6_track_loaded calls it on every load path: a factory preset, a
+ * user slot, INIT, an engine switch): its patch. A user slot (grain_user_pending, upool.c up_loading): its stored
+ * patch; a slot without one is a Felucca GRAIN record (SRC POS SIZE DENS PTCH SPRD RAND TONE as its P_E): INIT's
+ * sources with its SIZE DENS POS SPRD PITCH RAND and TONE as CUT; else a preset whose macros the track holds: its
+ * patch; else the init patch with the track's macros on it (INIT) */
+static void grain_track_loaded(const track_t *ct)
+{
+    track_t *t = (track_t *)ct;
+    uint32_t tr = grain_tr(t), pend = grain_user_pending, k;
+    uint8_t b[GRAIN_BLOB];
+    int8_t p[GQ_NP];
+    grain_user_pending = 0;
+    if (tr >= GRAIN_NPART || t->eng_req != ENGI_GRAIN)
+        return;
+    if (pend && grain_store_read && !grain_store_read(pend - 1u, b) && grain_unpack(b, p)) {
+        memcpy(grain_patch[tr], p, GQ_NP);
+        grain_macros_out(t);
+        return;
+    }
+    grain_init_patch(p);
+    if (pend) {                                  /* an old record: Felucca's eight in their old places */
+        p[GQ_SIZE] = grain_clampv(GQ_SIZE, t->p[P_E2]);
+        p[GQ_DENS] = grain_clampv(GQ_DENS, t->p[P_E3]);
+        p[GQ_POS] = grain_clampv(GQ_POS, t->p[P_E1]);
+        p[GQ_SPRD] = grain_clampv(GQ_SPRD, t->p[P_E5]);
+        p[GQ_PITCH] = grain_clampv(GQ_PITCH, t->p[P_E4]);
+        p[GQ_RAND] = grain_clampv(GQ_RAND, t->p[P_E6]);
+        p[GQ_CUT] = grain_clampv(GQ_CUT, t->p[P_E7]);
+        memcpy(grain_patch[tr], p, GQ_NP);
+        grain_macros_out(t);
+        return;
+    }
+    if (t->preset < GRAIN_NPRESETS) {
+        for (k = 0; k < 8u && t->p[P_E0 + k] == GRAIN_PRESETS[t->preset].e[k]; k++)
+            ;
+        if (k == 8u) {
+            grain_blob_preset(t, t->preset);
+            return;
+        }
+    }
+    for (k = 0; k < 8u; k++)
+        p[GRAIN_MAC[k]] = grain_clampv(GRAIN_MAC[k], t->p[P_E0 + k]);
+    memcpy(grain_patch[tr], p, GQ_NP);
+    grain_macros_out(t);
+}
+
+/* -------------------------------------------------------------- the player --- */
+#if !FELUCCA_SAMPLE
+/* 2^(i/192), Q16: pitch ratios in 1/16 semitones, d16 >= -3072 (eng_sample.c's, when SAMPLE is not built) */
+static uint32_t pow2_q16(int32_t d16)
+{
+    uint32_t u = (uint32_t)(d16 + 192 * 16), oct = u / 192u;
+    uint32_t r = pitch_inc(1600 + u % 192u) / (pitch_inc(1600) >> 16);
+    return oct >= 16u ? r << (oct - 16u) : r >> (16u - oct);
+}
+#endif
 /* sin^2(pi i / 256), Q15: the grain window */
-static const int16_t GR_HANN[257] = {
+static const int16_t GP_HANN[257] = {
     0, 5, 20, 44, 79, 123, 177, 241, 315, 398, 491, 593, 705, 827, 958, 1098,
     1247, 1406, 1573, 1749, 1935, 2128, 2331, 2542, 2761, 2989, 3224, 3468, 3719, 3978, 4244, 4518,
     4799, 5086, 5381, 5682, 5990, 6304, 6624, 6950, 7281, 7618, 7961, 8308, 8660, 9017, 9379, 9744,
@@ -67,244 +316,119 @@ static const int16_t GR_HANN[257] = {
     0,
 };
 /* grain level by overlap (grains sounding at once on average): 1 / sqrt(n), Q15 */
-static const int16_t GR_NORM[GR_NG + 1] = {32767, 32767, 23170, 18918, 16384, 14654, 13377,
-                                           12385, 11585, 10922, 10362, 9880, 9459};
-
+static const int16_t GP_NORM[GP_NG + 1] = {32767, 32767, 23170, 18918, 16384, 14654, 13377, 12385, 11585, 10922,
+                                           10362, 9880, 9459, 9088, 8757, 8460, 8192};
 typedef struct {
-    const smp_zone_t *z;
-    uint32_t pos;                /* forward: the next sample to decode; reverse: the index of a */
+    const int16_t *src;          /* the buffer it reads (A or B) */
+    uint32_t pos;                /* forward: the next source sample to fetch; reverse: the index of a */
     int32_t frac;                /* Q16 between a and b */
-    uint32_t step;               /* Q16 source samples per output sample */
-    uint32_t wph, winc;          /* window phase: one turn = the grain */
-    uint32_t left;               /* output samples to go */
-    int32_t a, b;                /* the two source samples around the read position */
-    int32_t pred, idx;           /* ADPCM state (forward) */
-    uint32_t rlo;                /* reverse: the source index of rb[0] */
-    int32_t gain;                /* Q15 */
+    uint32_t step;               /* Q16 source samples an output sample */
+    uint32_t wph, winc, left;    /* window phase (one turn = the grain), output samples to go */
+    int32_t a, b, gain;
     uint8_t owner;               /* voice index + 1, 0 = free */
-    uint8_t rev;
-    uint8_t zl;                  /* its zone in the set */
-} gr_grain_t;
-
+    uint8_t rev, kill;           /* kill: its buffer is about to be rendered: fade over this block */
+} gp_grain_t;
 typedef struct {
-    gr_grain_t g[GR_NG];
-    int16_t rb[GR_NG][GR_RB];    /* reverse windows */
-    int16_t ipred[GR_NIDX];      /* seek index: the state before sample k * GR_SEG of a zone */
-    uint8_t iidx[GR_NIDX];
-    uint16_t zbase[GR_MAXZ], zcnt[GR_MAXZ], zdone[GR_MAXZ];   /* entries of a zone: first, all, built */
-    uint32_t stamp;              /* what the index was built for (user slots: smp_user_gen) */
+    gp_grain_t g[GP_NG];
+    uint32_t scan;               /* SCAN's phase */
     int32_t rng;
-    uint8_t src;                 /* SRC + 1 the index holds, 0 = none */
-    uint8_t nz;
-} gr_part_t;
-static gr_part_t gr_p[NPART] __attribute__((section(".pool")));
+} gp_part_t;
+static gp_part_t *grain_part(uint32_t part);     /* engines.c: eng_state's member, 0 for a part without one */
+static int16_t grain_buf[2][GS_N] __attribute__((section(".pool")));   /* the sources A and B */
 
-static uint32_t gr_part(const track_t *t) { return (uint32_t)(t - trk) % NPART; }
-static uint32_t gr_nz(uint32_t src) { return src < SMP_NSETS ? SMP_SETS[src].nz : usr_nz[(src - SMP_NSETS) % SMP_USER_SLOTS]; }
-static const smp_zone_t *gr_zone(uint32_t src, uint32_t zl)
-{
-    return src < SMP_NSETS ? &SMP_ZONES[SMP_SETS[src].z0 + zl] : &usr_zone[(src - SMP_NSETS) % SMP_USER_SLOTS][zl & 15u];
-}
-static uint32_t gr_stamp(uint32_t src)
-{
-    return src < SMP_NSETS ? 0u : usr_nz[(src - SMP_NSETS) % SMP_USER_SLOTS] ? smp_user_gen : 0xFFFFFFFFu;
-}
-static inline uint32_t gr_rnd(gr_part_t *P) { return noise32(&P->rng); }
-static inline uint32_t gr_scale(uint32_t n, uint32_t f16) { return (n >> 16) * f16 + (((n & 0xFFFFu) * f16) >> 16); }
+/* the scheduler: the audio side (grain_tick, core 0) posts; the main loop (grain_poll) renders */
+static struct {
+    volatile uint8_t req;        /* bit k: source k is to be rendered */
+    volatile uint8_t lock;       /* bit k: source k is being rendered: no grain starts on it (the poll holds it) */
+    volatile uint8_t ack;        /* bit k: the audio side saw the lock and faded the grains on it */
+    volatile uint32_t blocks;    /* audio blocks seen (grain_tick) */
+    volatile uint32_t fade_block;   /* the block that faded them: the poll writes once the next has begun */
+    volatile int32_t root16[2];  /* each buffer's root pitch (PLUCK's is off C4) */
+    uint8_t cur[2][4];           /* the knobs each buffer holds (or is being rendered toward); 0xFF: nothing yet */
+    uint8_t want[2][4];          /* what the owner's patch asks */
+    uint8_t stage, which;        /* the poll's: 0 idle, 1 locked and waiting for the fade, 2 rendering `which` */
+    uint8_t owner;               /* the part whose sources render + 1, 0 none */
+    uint32_t renders;            /* renders completed (the tests, GEEK OUT) */
+    gs_t g;
+} grs = {0, 0, 0, 0, 0, {GS_ROOT16, GS_ROOT16}, {{0xFF, 0xFF, 0xFF, 0xFF}, {0xFF, 0xFF, 0xFF, 0xFF}}, {{0}}, 0, 0, 0, 0, {0}};
 
-/* one IMA ADPCM sample of zone z at index pos */
-static inline int32_t gr_dec(const smp_zone_t *z, uint32_t pos, int32_t *pred, int32_t *idx)
+static inline uint32_t gp_scale(uint32_t n, uint32_t f16) { return (n >> 16) * f16 + (((n & 0xFFFFu) * f16) >> 16); }
+static inline int32_t gp_win(uint32_t wph)
 {
-    uint32_t b = SMP_DATA[z->off + (pos >> 1)], code = (pos & 1u) ? (b >> 4) : (b & 15u);
-    int32_t step = IMA_STEP[*idx], vd = step >> 3;
-    if (code & 4u)
-        vd += step;
-    if (code & 2u)
-        vd += step >> 1;
-    if (code & 1u)
-        vd += step >> 2;
-    *pred = clamp(*pred + ((code & 8u) ? -vd : vd), -32768, 32767);
-    *idx = clamp(*idx + IMA_IDX[code & 7u], 0, 88);
-    return *pred;
+    uint32_t wi = wph >> 24;
+    return GP_HANN[wi] + (((GP_HANN[wi + 1u] - GP_HANN[wi]) * (int32_t)((wph >> 9) & 0x7FFFu)) >> 15);
 }
 
-/* the zone of a note (as SAMPLE: the last zone that holds it; a built-in set falls back to its
- * first zone, a user slot stays silent), -1 = none */
-static int32_t gr_find(uint32_t src, uint32_t note)
+/* start a grain of voice v (vi) at its interval iv (for the overlap's level); morph the voice's MORPH now (0 .. 127);
+ * pos_q8 the centre (POS + SCAN), 0 .. 127 << 8 */
+static void gp_spawn(gp_part_t *P, const int8_t *p, voice_t *v, uint32_t vi, const vmod_t *m, uint32_t iv,
+                     int32_t morph, int32_t pos_q8)
 {
-    uint32_t i, nz = gr_nz(src);
-    int32_t zl = src < SMP_NSETS ? 0 : -1;
-    for (i = 0; i < nz && i < GR_MAXZ; i++) {
-        const smp_zone_t *z = gr_zone(src, i);
-        if (note >= z->lo && note <= z->hi)
-            zl = (int32_t)i;
-    }
-    return zl;
-}
-
-static void gr_reset(gr_part_t *P, uint32_t src, uint32_t stamp)
-{
-    uint32_t i, tot = 0, nz = gr_nz(src);
-    P->src = (uint8_t)(src + 1u);
-    P->stamp = stamp;
-    P->nz = (uint8_t)(nz < GR_MAXZ ? nz : GR_MAXZ);
-    for (i = 0; i < GR_NG; i++)
-        P->g[i].owner = 0;
-    for (i = 0; i < P->nz; i++) {
-        uint32_t c = (gr_zone(src, i)->n + GR_SEG - 1u) >> GR_SEG_LOG2;
-        if (tot + c > GR_NIDX)
-            c = 0;                                  /* past the capacity: silent */
-        P->zbase[i] = (uint16_t)tot;
-        P->zcnt[i] = (uint16_t)c;
-        P->zdone[i] = c ? 1u : 0u;
-        if (c) {
-            P->ipred[tot] = 0;                      /* a zone starts at the state (0, 0) */
-            P->iidx[tot] = 0;
-        }
-        tot += c;
-    }
-}
-
-/* one index entry: the zone of a sounding voice first, else the first one not done */
-static void gr_build(gr_part_t *P, const track_t *t)
-{
-    uint32_t i, zl = GR_MAXZ, k, e, pos;
-    int32_t pred, idx;
-    const smp_zone_t *z;
-    for (i = 0; i < GR_POLY && zl == GR_MAXZ; i++) {
-        int32_t vz = t->v[i].s[0];
-        if (t->v[i].active && vz >= 0 && vz < P->nz && P->zdone[vz] < P->zcnt[vz])
-            zl = (uint32_t)vz;
-    }
-    for (i = 0; i < P->nz && zl == GR_MAXZ; i++)
-        if (P->zdone[i] < P->zcnt[i])
-            zl = i;
-    if (zl == GR_MAXZ)
-        return;
-    z = gr_zone(P->src - 1u, zl);
-    k = P->zdone[zl];
-    e = P->zbase[zl] + k - 1u;
-    pred = P->ipred[e];
-    idx = P->iidx[e];
-    pos = (k - 1u) << GR_SEG_LOG2;
-    for (i = 0; i < GR_SEG; i++)
-        gr_dec(z, pos + i, &pred, &idx);
-    P->ipred[e + 1u] = (int16_t)pred;
-    P->iidx[e + 1u] = (uint8_t)idx;
-    P->zdone[zl] = (uint16_t)(k + 1u);
-}
-
-/* the decoder at sample p of zone zl (p's entry must be built) */
-static void gr_seek(const gr_part_t *P, const smp_zone_t *z, uint32_t zl, uint32_t p, int32_t *pred, int32_t *idx)
-{
-    uint32_t e = P->zbase[zl] + (p >> GR_SEG_LOG2), q;
-    *pred = P->ipred[e];
-    *idx = P->iidx[e];
-    for (q = p & ~(GR_SEG - 1u); q < p; q++)
-        gr_dec(z, q, pred, idx);
-}
-
-/* reverse: decode [hi - GR_RB + 1, hi] into the grain's window */
-static void gr_fill(const gr_part_t *P, gr_grain_t *g, int16_t *rb, uint32_t zl, uint32_t hi)
-{
-    uint32_t lo = hi >= GR_RB - 1u ? hi - (GR_RB - 1u) : 0u, q;
-    int32_t pred, idx;
-    gr_seek(P, g->z, zl, lo, &pred, &idx);
-    for (q = lo; q <= hi; q++)
-        rb[q - lo] = (int16_t)gr_dec(g->z, q, &pred, &idx);
-    g->rlo = lo;
-}
-
-/* start a grain of voice vi (zone zl) */
-static void gr_spawn(gr_part_t *P, const track_t *t, uint32_t vi, uint32_t zl, uint32_t iv, const vmod_t *m)
-{
-    const int16_t *p = t->p;
-    const smp_zone_t *z = gr_zone(P->src - 1u, zl);
-    gr_grain_t *g = 0;
-    uint32_t i, n = z->n, len, step, span, c, sp, r1 = gr_rnd(P), r2 = gr_rnd(P), ov, rev;
-    int32_t d16, amt, posq, pos;
-    for (i = 0; i < GR_NG && !g; i++)
+    gp_grain_t *g = 0;
+    uint32_t i, n = GS_N, len, step, span, c, sp, r1, r2, ov, rev, which;
+    int32_t d16, amt, pos;
+    for (i = 0; i < GP_NG && !g; i++)
         if (!P->g[i].owner)
             g = &P->g[i];
-    if (!g || n < 8u || !P->zcnt[zl])
+    if (!g)
         return;
-    /* length: 441 * 2^(SIZE / 24) output samples (10 ms .. 390 ms) */
-    len = (441u * pow2_q16(p[P_E2] * 8)) >> 16;
-    /* rate: the note against the zone's root, PITCH, the random detune (RAND^2, up to +-1 oct) */
-    amt = p[P_E6] * p[P_E6] * 192 / (127 * 127);
-    d16 = m->pitch16 - z->root16 + p[P_E4] * 16 + (((int32_t)(r1 & 0xFFFFu) - 32768) * amt >> 15);
-    step = (pow2_q16(clamp(d16, -1536, 576)) >> 8) * (z->rate >> 8);
-    step = step > GR_STEP_MAX ? GR_STEP_MAX : step < 256u ? 256u : step;
-    rev = ((r1 >> 16) & 255u) < (uint32_t)p[P_E6];  /* RAND 127: half of them */
-    span = (len * step) >> 16;                      /* source samples the grain reads */
-    if (span + 3u > n) {                            /* a short zone: shorter grain */
+    v->s[1] += morph;                            /* the voice's grains read B in MORPH's share, spread evenly */
+    which = v->s[1] >= 127 ? 1u : 0u;
+    if (which)
+        v->s[1] -= 127;
+    if ((grs.lock >> which) & 1u)                /* its buffer is being rendered: this grain is not */
+        return;
+    r1 = noise32(&P->rng);
+    r2 = noise32(&P->rng);
+    len = (441u * pow2_q16(p[GQ_SIZE] * 8)) >> 16;         /* 10 .. 393 ms */
+    amt = p[GQ_RAND] * p[GQ_RAND] * 192 / (127 * 127);
+    d16 = m->pitch16 - grs.root16[which] + p[GQ_PITCH] * 16 + (((int32_t)(r1 & 0xFFFFu) - 32768) * amt >> 15);
+    step = (pow2_q16(clamp(d16, -1536, 576)) >> 8) * (GP_RATE_Q16 >> 8);
+    step = step > GP_STEP_MAX ? GP_STEP_MAX : step < 256u ? 256u : step;
+    rev = ((r1 >> 16) & 255u) < (uint32_t)p[GQ_RAND];       /* RAND 127: half of them */
+    span = (len * (step >> 4)) >> 12;
+    if (span + 3u > n) {
         span = n - 3u;
         len = (span << 8) / (step >> 8);
     }
     if (len < 16u)
         return;
-    /* position: POS (+ the SHP modulation) is the centre, SPRD the random spread */
-    posq = clamp((p[P_E1] << 8) + m->shape - (64 << 8), 0, 127 << 8);
-    c = gr_scale(n - 1u, (uint32_t)posq * 65535u / (127u << 8));
-    sp = gr_scale(n, (uint32_t)p[P_E5] * 516u);
-    pos = (int32_t)c + (int32_t)gr_scale(sp, r2 & 0xFFFFu) - (int32_t)(sp >> 1);
-    if (rev)
-        pos = clamp(pos, (int32_t)span, (int32_t)n - 2);
-    else
-        pos = clamp(pos, 0, (int32_t)(n - 3u - span));
-    if ((uint32_t)pos >> GR_SEG_LOG2 >= P->zdone[zl])
-        return;                                     /* not indexed yet */
-    for (i = 0, c = step << rev; i < GR_NG; i++)    /* the part's decode load: a cap on the cost */
-        if (P->g[i].owner)
-            c += P->g[i].step << P->g[i].rev;
-    if (c > GR_LOAD_MAX)
-        return;
-    g->z = z;
+    c = gp_scale(n - 1u, (uint32_t)clamp(pos_q8, 0, 127 << 8) * 65535u / (127u << 8));
+    sp = gp_scale(n, (uint32_t)p[GQ_SPRD] * 516u);
+    pos = (int32_t)c + (int32_t)gp_scale(sp, r2 & 0xFFFFu) - (int32_t)(sp >> 1);
+    pos = rev ? clamp(pos, (int32_t)span, (int32_t)n - 2) : clamp(pos, 0, (int32_t)(n - 3u - span));
+    g->src = grain_buf[which];
     g->step = step;
     g->frac = 0;
     g->wph = 0;
     g->winc = 0xFFFFFFFFu / len;
     g->left = len;
     g->rev = (uint8_t)rev;
-    g->zl = (uint8_t)zl;
+    g->kill = 0;
     ov = len / (iv ? iv : 1u);
-    g->gain = GR_NORM[ov < 1u ? 1u : ov > GR_NG ? GR_NG : ov];
+    g->gain = GP_NORM[ov < 1u ? 1u : ov > GP_NG ? GP_NG : ov];
     g->owner = (uint8_t)(vi + 1u);
-    if (rev) {
-        int16_t *rb = P->rb[g - P->g];
-        g->pos = (uint32_t)pos;
-        gr_fill(P, g, rb, zl, (uint32_t)pos + 1u);
-        g->a = rb[g->pos - g->rlo];
-        g->b = rb[g->pos + 1u - g->rlo];
-    } else {
-        gr_seek(P, z, zl, (uint32_t)pos, &g->pred, &g->idx);
-        g->a = gr_dec(z, (uint32_t)pos, &g->pred, &g->idx);
-        g->b = gr_dec(z, (uint32_t)pos + 1u, &g->pred, &g->idx);
-        g->pos = (uint32_t)pos + 2u;
-    }
+    g->a = g->src[pos];
+    g->b = g->src[pos + 1];
+    g->pos = rev ? (uint32_t)pos : (uint32_t)pos + 2u;
 }
 
-static inline int32_t gr_win(uint32_t wph)         /* the Hann window, Q15 */
-{
-    uint32_t wi = wph >> 24;
-    return GR_HANN[wi] + (((GR_HANN[wi + 1u] - GR_HANN[wi]) * (int32_t)((wph >> 9) & 0x7FFFu)) >> 15);
-}
-
-/* one grain into acc; returns 0 when it ended. The window (times the grain's level) is a
- * linear ramp over the block between its exact values at the block's ends. */
-static int gr_run(gr_part_t *P, gr_grain_t *g, int32_t *acc, uint32_t n)
+/* one grain into acc over n samples; returns 0 when it ended. The window (times the grain's level) ramps linearly
+ * over the block between its exact values at the block's ends; a killed grain ramps to 0 and ends here */
+static int gp_run(gp_grain_t *g, int32_t *acc, uint32_t n)
 {
     uint32_t i, m = n < g->left ? n : g->left, step = g->step, pos = g->pos;
     int32_t a = g->a, b = g->b, frac = g->frac, w0, w1, wq, dq;
-    const smp_zone_t *z = g->z;
-    w0 = mulq15(gr_win(g->wph), g->gain);
+    const int16_t *src = g->src;
+    if (g->kill)
+        g->left = m;
+    w0 = mulq15(gp_win(g->wph), g->gain);
     g->wph += g->winc * m;
     g->left -= m;
-    w1 = g->left ? mulq15(gr_win(g->wph), g->gain) : 0;
+    w1 = g->left ? mulq15(gp_win(g->wph), g->gain) : 0;
     wq = w0 * 1024;
     dq = m == CTL ? ((w1 - w0) * 1024) >> CTL_LOG2 : m ? (w1 - w0) * 1024 / (int32_t)m : 0;
     if (!g->rev) {
-        int32_t pred = g->pred, idx = g->idx;
         for (i = 0; i < m; i++) {
             int32_t s = a + (((b - a) * (frac >> 1)) >> 15);
             acc[i] += (s * (wq >> 10)) >> 15;
@@ -313,13 +437,10 @@ static int gr_run(gr_part_t *P, gr_grain_t *g, int32_t *acc, uint32_t n)
             while (frac >= 65536) {
                 frac -= 65536;
                 a = b;
-                b = pos < z->n ? gr_dec(z, pos++, &pred, &idx) : a;
+                b = pos < GS_N ? src[pos++] : a;
             }
         }
-        g->pred = pred;
-        g->idx = idx;
     } else {
-        int16_t *rb = P->rb[g - P->g];
         for (i = 0; i < m; i++) {
             int32_t s = a + (((b - a) * (frac >> 1)) >> 15);
             acc[i] += (s * (wq >> 10)) >> 15;
@@ -328,12 +449,8 @@ static int gr_run(gr_part_t *P, gr_grain_t *g, int32_t *acc, uint32_t n)
             while (frac < 0) {
                 frac += 65536;
                 b = a;
-                if (pos) {                          /* (fitted: always) */
-                    pos--;
-                    if (pos < g->rlo)
-                        gr_fill(P, g, rb, g->zl, pos);
-                }
-                a = rb[pos - g->rlo];
+                if (pos)
+                    a = src[--pos];
             }
         }
     }
@@ -348,104 +465,233 @@ static int gr_run(gr_part_t *P, gr_grain_t *g, int32_t *acc, uint32_t n)
 
 static void grain_note_on(track_t *t, voice_t *v)
 {
-    gr_part_t *P = &gr_p[gr_part(t)];
-    uint32_t vi = (uint32_t)(v - t->v) % NVOICE, i;
-    v->s[0] = gr_find((uint32_t)t->p[P_E0] % SMP_NALL, v->note);
-    v->s[1] = 0;                                    /* the first grain at once */
-    if (!v->env) {                                  /* a fresh voice: no grains left from before */
-        for (i = 0; i < GR_NG; i++)
-            if (P->g[i].owner == vi + 1u)
-                P->g[i].owner = 0;
-        v->s[2] = 0;
+    uint32_t tr = grain_tr(t), vi = (uint32_t)(v - t->v) % NVOICE, i;
+    gp_part_t *P = tr < GRAIN_NPART ? grain_part(tr) : 0;
+    v->s[0] = 0;                                 /* the first grain at once */
+    v->s[1] = 63;                                /* a half-way MORPH: the first grain A's, the second B's */
+    if (!v->env) {                               /* a fresh voice: no grains left from before, the filter clear */
+        if (P)
+            for (i = 0; i < GP_NG; i++)
+                if (P->g[i].owner == vi + 1u)
+                    P->g[i].owner = 0;
+        v->s[2] = v->s[3] = 0;
     }
 }
 
-/* per part and block: the index follows SRC (and a new upload), grains of ended voices go,
- * one index entry is built */
+/* SCAN's phase increment a block: a round of the buffer in 20 s (SCAN 1) .. 0.5 s (127), 0 off */
+static uint32_t grain_scan_inc(int32_t scan)
+{
+    return scan ? (((155834u >> 4) * (pow2_q16(scan * 8) >> 4)) >> 8) : 0u;
+}
+
+/* per part and block: the macros into the patch, grains of ended voices go, SCAN moves */
 static void grain_block(track_t *t)
 {
-    gr_part_t *P = &gr_p[gr_part(t)];
-    uint32_t src = (uint32_t)t->p[P_E0] % SMP_NALL, st = gr_stamp(src), i;
+    uint32_t tr = grain_tr(t), k;
+    gp_part_t *P;
+    int8_t *p;
+    if (tr >= GRAIN_NPART || !(P = grain_part(tr)))
+        return;
+    p = grain_patch[tr];
+    for (k = 0; k < 8u; k++)                     /* a knob, the editor, the matrix, motion moved a macro */
+        if (t->p[P_E0 + k] != grain_mlast[tr][k]) {
+            grain_mlast[tr][k] = t->p[P_E0 + k];
+            p[GRAIN_MAC[k]] = grain_clampv(GRAIN_MAC[k], t->p[P_E0 + k]);
+        }
     if (!P->rng)
         P->rng = 0x2545F491;
-    if (P->src != src + 1u || P->stamp != st) {
-        gr_reset(P, src, st);
-        for (i = 0; i < NVOICE; i++)
-            if (t->v[i].active)
-                t->v[i].s[0] = gr_find(src, t->v[i].note);
-    }
-    for (i = 0; i < GR_NG; i++)
-        if (P->g[i].owner && !t->v[(P->g[i].owner - 1u) % NVOICE].active)
-            P->g[i].owner = 0;
-    gr_build(P, t);
+    for (k = 0; k < GP_NG; k++)
+        if (P->g[k].owner && !t->v[(P->g[k].owner - 1u) % NVOICE].active)
+            P->g[k].owner = 0;
+    P->scan += grain_scan_inc(p[GQ_SCAN]);
 }
 
 static void grain_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const vmod_t *m)
 {
-    gr_part_t *P = &gr_p[gr_part(t)];
-    const int16_t *p = t->p;
-    uint32_t vi = (uint32_t)(v - t->v) % NVOICE, i, mine = 0, nact = 0, iv;
-    int32_t zl = v->s[0], acc[CTL], lp, y = v->s[2];
+    uint32_t tr = grain_tr(t), vi = (uint32_t)(v - t->v) % NVOICE, i, mine = 0, nact = 0, iv, share;
+    gp_part_t *P = tr < GRAIN_NPART ? grain_part(tr) : 0;
+    const int8_t *p;
+    int32_t acc[CTL], morph, pos_q8, ic1 = v->s[2], ic2 = v->s[3];
+    tsvf_t f;
+    if (!P)
+        return;
+    p = grain_patch[tr];
     if (n > CTL)
         n = CTL;
-    if (zl < 0 || zl >= P->nz || P->src != (uint32_t)p[P_E0] % SMP_NALL + 1u) {
-        if (zl < 0)
-            v->active = 0;                          /* a user slot key with no zone: silent */
-        return;
-    }
     for (i = 0; i < n; i++)
         acc[i] = 0;
-    for (i = 0; i < GR_POLY; i++)
+    for (i = 0; i < NVOICE; i++)
         nact += t->v[i].active;
-    for (i = 0; i < GR_NG; i++)
+    for (i = 0; i < GP_NG; i++)
         if (P->g[i].owner == vi + 1u)
-            mine += gr_run(P, &P->g[i], acc, n);
-    /* the next grain: DENS a second, 1..98 /s (SPRD jitters the interval) */
-    iv = (44100u * pow2_q16(-p[P_E3] * 10)) >> 16;
-    v->s[1] -= (int32_t)n;
-    if (v->s[1] <= 0) {
-        uint32_t r = gr_rnd(P);
-        int32_t j = (((int32_t)(r & 0xFFFFu) - 32768) * p[P_E5]) / 254;   /* +-SPRD / 2, Q15 */
-        v->s[1] += (int32_t)iv + mulq15((int32_t)iv, j);
-        if (v->s[1] < 0)
-            v->s[1] = 0;
-        if (mine < (nact > 1u ? (GR_NG / nact > 2u ? GR_NG / nact : 2u) : GR_NG))
-            gr_spawn(P, t, vi, (uint32_t)zl, iv, m);
+            mine += (uint32_t)gp_run(&P->g[i], acc, n);
+    iv = (44100u * pow2_q16(-p[GQ_DENS] * 10)) >> 16;      /* the next grain: DENS a second, 1 .. 98 /s */
+    v->s[0] -= (int32_t)n;
+    if (v->s[0] <= 0) {
+        uint32_t r = noise32(&P->rng);
+        int32_t j = (((int32_t)(r & 0xFFFFu) - 32768) * p[GQ_SPRD]) / 254;   /* +-SPRD / 2, Q15 */
+        v->s[0] += (int32_t)iv + mulq15((int32_t)iv, j);
+        if (v->s[0] < 0)
+            v->s[0] = 0;
+        share = nact > 1u ? (GP_NG / nact > 2u ? GP_NG / nact : 2u) : GP_NG;
+        morph = clamp((p[GQ_MORPH] << 8) + m->shape - (64 << 8), 0, 127 << 8) >> 8;   /* the matrix's SHP */
+        pos_q8 = (p[GQ_POS] << 8) + (p[GQ_SCAN] ? (osc_tri(P->scan) * (64 << 8)) >> 15 : 0);
+        if (mine < share)
+            gp_spawn(P, p, v, vi, m, iv, morph, pos_q8);
     }
-    lp = 4000 + ((clamp((p[P_E7] << 8) + m->cutoff, 0, 127 << 8) * 28767) >> 15);
+    tsvf_coef(&f, clamp((p[GQ_CUT] << 8) + m->cutoff, 0, 127 << 8), p[GQ_RES]);
     for (i = 0; i < n; i++) {
-        y += mulq15(clamp(acc[i], -65535, 65535) - y, lp);
-        out[i] += voice_amp(y, m, i) << 1;
+        int32_t y = tsvf_lp(&f, clamp(acc[i], -65535, 65535), &ic1, &ic2);
+        out[i] += voice_amp(clamp(y, -32767, 32767), m, i);
     }
-    v->s[2] = y;
+    v->s[2] = ic1;
+    v->s[3] = ic2;
 }
 
-static const preset_t GRAIN_PRESETS[] = {
-    /* name, {SRC, POS, SIZE, DENS, PTCH, SPRD, RAND, TONE}, {A D S R}, fenv, mono */
-    {"CLOUD PAD", {2, 50, 92, 88, 0, 40, 14, 100}, {70, 90, 120, 90}, 0, 0, FX(0, 40, 25, 85), PAT(5)},
-    {"GLITCH", {3, 64, 24, 112, 0, 100, 90, 127}, {0, 70, 100, 30}, 0, 0, FX(10, 0, 50, 25), PAT(4)},
-    {"FROZEN", {0, 40, 108, 72, 0, 0, 10, 92}, {50, 100, 127, 100}, 0, 0, FX(0, 30, 20, 95), PAT(5)},
-    {"SHIMMER", {0, 30, 70, 100, 12, 30, 24, 110}, {30, 90, 110, 90}, 0, 0, FX(0, 50, 40, 90), PAT(7)},
+/* ---------------------------------------------------------- the render --- */
+/* the main loop's slice (GRAIN_ASYNC): lock, wait for the fade, render, unlock; latest wins */
+static void grain_render_whole(uint32_t k);
+#if GRAIN_ASYNC
+static void fm1_irq_off(void);                   /* (hal/fm1_irq.h's, the emulator's: defined after this file) */
+static void fm1_irq_on(void);
+static void grain_poll(void)
+{
+    uint32_t k = grs.which, bit = 1u << k;
+    switch (grs.stage) {
+    case 0:
+        if (!grs.req)
+            return;
+        k = (grs.req & 1u) ? 0u : 1u;
+        bit = 1u << k;
+        grs.which = (uint8_t)k;
+        memcpy(grs.cur[k], grs.want[k], 4);
+        fm1_irq_off();
+        grs.req &= (uint8_t)~bit;
+        grs.ack &= (uint8_t)~bit;
+        grs.lock |= bit;
+        fm1_irq_on();
+        grs.stage = 1;
+        return;
+    case 1:
+        if (!(grs.ack & bit) || grs.blocks == grs.fade_block)   /* the block that faded them must be over */
+            return;
+        gs_begin(&grs.g, grs.cur[k][0], grs.cur[k][1], grs.cur[k][2], grs.cur[k][3]);
+        grs.stage = 2;
+        /* fall through */
+    default:
+        if (memcmp(grs.cur[k], grs.want[k], 4)) {              /* a knob moved meanwhile: start over on the new values */
+            memcpy(grs.cur[k], grs.want[k], 4);
+            fm1_irq_off();
+            grs.req &= (uint8_t)~bit;
+            fm1_irq_on();
+            gs_begin(&grs.g, grs.cur[k][0], grs.cur[k][1], grs.cur[k][2], grs.cur[k][3]);
+        }
+        if (gs_step(&grs.g, grain_buf[k], GRAIN_SLICE) < GS_N)
+            return;
+        gs_finish(grain_buf[k]);
+        grs.root16[k] = grs.g.root16;
+        grs.renders++;
+        fm1_irq_off();
+        grs.lock &= (uint8_t)~bit;
+        grs.ack &= (uint8_t)~bit;
+        fm1_irq_on();
+        grs.stage = 0;
+        return;
+    }
+}
+#endif
+/* a whole render here and now (GRAIN_ASYNC 0: the audio side itself, no grain reads meanwhile) */
+static void grain_render_whole(uint32_t k)
+{
+    memcpy(grs.cur[k], grs.want[k], 4);
+    grs.req &= (uint8_t)~(1u << k);
+    gs_begin(&grs.g, grs.cur[k][0], grs.cur[k][1], grs.cur[k][2], grs.cur[k][3]);
+    while (gs_step(&grs.g, grain_buf[k], GS_N) < GS_N)
+        ;
+    gs_finish(grain_buf[k]);
+    grs.root16[k] = grs.g.root16;
+    grs.renders++;
+}
+
+/* once an audio block, on core 0, before the parts render (fx.c mix_block): the owner's source knobs against the
+ * buffers; a locked source's grains fade */
+static void grain_tick(void)
+{
+    uint32_t k, part, own = 0;
+    grs.blocks++;
+    for (part = 0; part < GRAIN_NPART && !own; part++)
+        if (trk[part].eng_req == ENGI_GRAIN || trk[part].engine == ENGI_GRAIN)
+            own = part + 1u;
+    grs.owner = (uint8_t)own;
+    if (own) {
+        const int8_t *p = grain_patch[own - 1u];
+        for (k = 0; k < 2; k++) {
+            uint8_t w[4] = {(uint8_t)p[GQ_TYPE1 + 4 * k], (uint8_t)p[GQ_TONE1 + 4 * k], (uint8_t)p[GQ_MOTION1 + 4 * k],
+                            (uint8_t)p[GQ_SEED1 + 4 * k]};
+            memcpy(grs.want[k], w, 4);
+            if (memcmp(w, grs.cur[k], 4))          /* (not what the buffer holds, nor what renders toward) */
+                grs.req |= (uint8_t)(1u << k);
+        }
+    }
+    if (grs.lock & ~grs.ack) {                   /* a source about to be rendered: its grains fade over this block */
+        for (part = 0; part < GRAIN_NPART; part++) {
+            gp_part_t *P = grain_part(part);
+            if (P)
+                for (k = 0; k < GP_NG; k++)
+                    if (P->g[k].owner && ((grs.lock & ~grs.ack) >> (P->g[k].src == grain_buf[1])) & 1u)
+                        P->g[k].kill = 1;
+        }
+        grs.fade_block = grs.blocks;
+        grs.ack |= grs.lock;
+    }
+#if !GRAIN_ASYNC
+    while (grs.req) {                            /* no main loop: render now, whole (no grain reads meanwhile) */
+        k = (grs.req & 1u) ? 0u : 1u;
+        for (part = 0; part < GRAIN_NPART; part++) {
+            gp_part_t *P = grain_part(part);
+            uint32_t i;
+            if (P)
+                for (i = 0; i < GP_NG; i++)
+                    if (P->g[i].owner && P->g[i].src == grain_buf[k])
+                        P->g[i].owner = 0;
+        }
+        grain_render_whole(k);
+    }
+#endif
+}
+
+static const eng_deep_t GRAIN_DEEP = {
+    .npages = NELEM(GRAIN_PAGES),
+    .pages = GRAIN_PAGES,
+    .section = {0, 4, 5, 6, 0xFF, 0xFF, 0xFF, 0xFF},
+    .get = grain_get,
+    .set = grain_set,
+    .blob_size = GRAIN_BLOB,
+    .blob_get = grain_blob_get,
+    .blob_set = grain_blob_set,
+    .blob_preset = grain_blob_preset,
 };
 
 static const engine_t ENG_GRAIN = {
     .name = "GRAIN",
-    .page_title = {"GRAN", "SPRY"},
+    .page_title = {"SRC", "GRAIN"},
     .edit = {
-        {"SRC", F_ENUM, 0, SMP_NALL - 1, 0, SMP_ALL_NAMES, 0},
-        {"POS", F_PCT, 0, 127, 32, 0, 0},
-        {"SIZE", F_PCT, 0, 127, 80, 0, 0},
-        {"DENS", F_PCT, 0, 127, 80, 0, 0},
-        {"PTCH", F_SEMI, -24, 24, 0, 0, 0},
-        {"SPRD", F_PCT, 0, 127, 30, 0, 0},
-        {"RAND", F_PCT, 0, 127, 10, 0, 0},
-        {"TONE", F_PCT, 0, 127, 127, 0, 0},
+        GC_TYPE(GT_DRONE),
+        GC_TONE,
+        GC_MOTION,
+        GC_SEED,
+        GC_MORPH,
+        GC_SIZE,
+        GC_DENS,
+        GC_POS,
     },
     .presets = GRAIN_PRESETS,
     .npresets = NELEM(GRAIN_PRESETS),
+    .knob = {P_E4, P_E5, P_E6, P_E7},
+    .poly = GP_POLY,
+    .sampled = 1,
     .note_on = grain_note_on,
     .render = grain_render,
-    .knob = {P_E1, P_E2, P_E3, P_E5},
-    .poly = GR_POLY,
     .block = grain_block,
+    .deep = &GRAIN_DEEP,
 };

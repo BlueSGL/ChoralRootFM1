@@ -272,6 +272,9 @@ void emu_fw_idle(void)                            /* main.c: the input scan whil
     fm1_irq_off();
     cr_ui_input();
     fm1_irq_on();
+#if FELUCCA_GRAIN
+    grain_poll();                                 /* main.c's idle loop: GRAIN's render, a slice a turn */
+#endif
 }
 
 void emu_fw_audio(int16_t *out, uint32_t frames)  /* the ALNK0 ISR, one half buffer per EMU_BLOCK */

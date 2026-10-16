@@ -2,8 +2,8 @@
  * Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments */
 /* Engine table (order = PRESETS browsing order and the engine numbers of the editor protocol), the
  * factory patterns (SEQ > PATTERNS) and the parts' sounds at power-on. */
-#if (FELUCCA_GRAIN || FELUCCA_SLICE) && !FELUCCA_SAMPLE
-#error "GRAIN and SLICE play the SAMPLE engine's sets: FELUCCA_GRAIN / FELUCCA_SLICE need FELUCCA_SAMPLE"
+#if FELUCCA_SLICE && !FELUCCA_SAMPLE
+#error "SLICE plays the SAMPLE engine's sets: FELUCCA_SLICE needs FELUCCA_SAMPLE"
 #endif
 #include "dsp.c"
 #if FELUCCA_ANALOG
@@ -30,7 +30,8 @@ static inline int32_t pd_cos(uint32_t ph16) { return -sine_i(((ph16 & 0xFFFFu) <
 #endif
 #include "eng_wheel.c"
 #if FELUCCA_GRAIN
-#include "eng_grain.c"
+#include "eng_grain.c"          /* GRAIN: grains over material it renders itself (grain_src.c; docs/GRAIN.md); ChoralRoot
+                                 * 0.22: engine 8 again, Felucca's player over RAM, no SAMPLE needed */
 #endif
 #if FELUCCA_PHYS
 #include "eng_phys.c"           /* PHYS: DaisySP physical models (phys_dsp.c, MIT; retired on ChoralRoot since 0.18:
@@ -86,6 +87,9 @@ static union {
 #endif
     drw_part_t wheel;
     fm6_part_t fm6;
+#if FELUCCA_GRAIN
+    gp_part_t grain;             /* GRAIN's pool of 16 grains (eng_grain.c; its two buffers are grain_buf's) */
+#endif
 #if FELUCCA_CZ
     cz_part_t cz;                /* CZ-1's voices: six envelopes each, vibrato, noise */
 #endif
@@ -103,6 +107,9 @@ static drw_part_t *drw_of(const track_t *t)
     return part < ENG_STATE_NPART ? &eng_state[part].wheel : 0;
 }
 static fm6_part_t *fm6_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].fm6 : 0; }
+#if FELUCCA_GRAIN
+static gp_part_t *grain_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].grain : 0; }
+#endif
 #if FELUCCA_CZ
 static cz_part_t *cz_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].cz : 0; }
 /* CZ-1's envelope definitions of a part's tone (eng_cz.c cz_defs_t, 412 B a part): not in eng_state, where another

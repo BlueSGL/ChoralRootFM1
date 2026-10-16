@@ -4125,3 +4125,48 @@ string's loop held (TONE 0: -766 after normalizing): the shifts round to nearest
 files; the sources' mean now under 0.03 %); `python3 tools/grain_cost.py`; `sh tests/run_cr_tests.sh` (below).
 `sh tests/run_cr_tests.sh` exit 0 (every suite as before, cr_grain_test 4330 checks ok). Not run: `./build.sh`'s
 size line cannot change (no file includes grain_src.c); no device access.
+
+3y105. **GRAIN steps 2 to 4: the engine in the firmware (the owner, 2026-10-15: "Ok, continue and do steps 2 to 4";
+branch claude/grain-engine-f724f9; docs/GRAIN.md section 6).** `firmware/src/eng_grain.c` replaced: Felucca's GRAIN
+player (the pool of grains shared by a part's voices, the Hann window, the 1 / sqrt(overlap) level, SIZE DENS POS SPRD
+RAND, the block-wise window ramp) over two RAM buffers rendered by `grain_src.c` (sources A and B, 2 x 32 KB of POOL,
+`grain_buf`), no ADPCM decoder, no seek index, no SAMPLE: a grain reads A or B by MORPH (the share spread evenly over a
+voice's grains, `s[1]`), its rate the note against its source's root, PITCH and RAND's detune, at most two source
+samples an output sample; SCAN moves POS as a slow triangle; the SVF a voice (CUT RES, `s[2..3]`); the platform's ADSR
+through `voice_amp`; GP_NG 16, GP_POLY 8, `sampled`. The patch: 18 values (`GQ_*`: the two sources' TYPE TONE MOTION
+SEED, SIZE DENS POS SPRD, MORPH RAND PITCH SCAN, CUT RES), the P_E macros TYPE TONE MOTION SEED | MORPH SIZE DENS POS
+both ways as the VA's, the 20-byte blob ('G', 1, the values), seven deep pages (SRC 1, SRC 2, GRAIN, GRAIN+, FILTER,
+and ENV / LFO over the track's P_ATK .. P_REL and P_LRATE P_LWAVE P_LD_PIT P_LD_FLT: cr_edit.c's ce_deep wants the
+sections OSC FILTER ENV LFO; MOD the platform's routes), eight presets after INIT (CLOUD PAD, SHIMMER, BREATH PAD,
+FROZEN, STRUM, SWARM, ACID DUST, GLITCH), `grain_track_loaded` on every load path (a slot's blob; a Felucca GRAIN
+record's SIZE DENS POS SPRD PITCH RAND TONE mapped onto INIT's sources; a preset's patch; INIT + the macros). The
+scheduler: `grain_tick` once a block on core 0 (fx.c mix_block, after events_block: the first part on GRAIN owns the
+buffers, its source knobs against what they hold, a request a source; a locked source's grains `kill`ed, ramped to 0
+over the block by gp_run, no grain starts on it), `grain_poll` from main.c's idle loop and the emulator's emu_fw_idle
+(GRAIN_ASYNC 1: lock, the fade's block out, 1024 samples a turn, the knobs swapped in, unlock; a change mid-render
+restarts), the whole render inside the tick where no main loop runs (GRAIN_ASYNC 0: hostsim, regress, the host
+units). The platform: `FELUCCA_GRAIN 1` and `GRAIN_ASYNC 1` in choralroot.c and the emulator, `ENGI_GRAIN 8u`
+(core.h), `eng_state`'s `grain` member and `grain_part` (engines.c; the SAMPLE `#error` now SLICE's alone), the pool's
+kind `grain` (upool.c: `up_patch_len`, `up_read_grain`, `grain_store_read`, `grain_user_pending`), eng_fm6.c's
+track_loaded chain, the tools (web/fm1sounds.js and tools/fm1_install.py: the kind, 20 bytes, the pool only;
+docs/SOUNDS.md's table), the editor mock (web/editor.html: GRAIN's new knobs and presets). Tests: `tests/cr_grain_test.c`
+sections 5 .. 7 (the blob, the pages, the macros, the presets, `track_loaded`; the engine on static buffers: extreme
+knobs never read outside a buffer, the shares, MORPH 0 / 127 / 64 and SHP, the rate's cap, the window's continuity
+over a block boundary, 1.4 s of a 6-note chord on every preset at 27 .. 69 % FS; the scheduler: the lock, the fade,
+the other source untouched, the slices, latest wins, ten changes at most two renders, the shared bass part, the owner
+moving), `tests/golden.txt` and `cpu_baseline.txt` (the old GRAIN's four lines replaced by the eight presets'; the
+other lines untouched), `tests/cr_fm6_test.c` (seven engines shown: GRAIN after WHEEL), Felucca's `tests/ui_test.c`
+(GRAIN's first knob is no longer SAMPLE's set list), `tools/emu/test_retired.sh` (its pre-cut 0.17 build with
+-DFELUCCA_GRAIN=0: 0.17 had none, and the settings' eleven engine slots do not hold a twelfth). Found on the way: the
+device compiler refuses an initializer that reads another const array (the presets' macros come from the same list
+as their patches, by a variadic macro); `fm1_irq_off` / `_on` are defined after engines.c in the emulator (declared in
+eng_grain.c). Not done: a settings slot for GRAIN's remembered pool place (CRS_SLOT_ENG has none for GRAIN, as for P5);
+the wave band (step 5); the unit (step 6).
+**Checked**: `./build.sh` XIP 559 652 B of 573 440 (97.6 %, +12 632 over da1f8e2), RAM 79 028 (80.4 %), POOL 304 472
+(88.5 %: the two buffers); `cr_grain_test` 283 901 checks ok; `sh tests/run_cr_tests.sh` exit 0; `sh
+tests/run_tests.sh`: every suite but `releases` (the tag v0.22-beta4, pushed by the release session meanwhile, is not
+in this branch's web/releases.json: not GRAIN's), regress 317 renders 0 changed, 0 health failures, 0 over budget, web
+tests passed (the mock equals the firmware); `node web/test_sounds.mjs`, `test_backup.mjs`, `python3
+tests/install_test.py` pass; `sh tools/emu/build.sh && sh tools/emu/test_cr.sh` every check ok (test_retired.sh PASS
+after its pre-cut flag), `sh tools/emu/test_persist.sh` PASS. Not run: the browser emulator's test, the layout tool's;
+no device access (the unit holds the beta4 release work).

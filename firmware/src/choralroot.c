@@ -53,7 +53,12 @@
 #define FELUCCA_SAMPLE 0         /* no SAMPLE engine, no sample sets in the image (engine 4: a retired slot) */
 #endif
 #ifndef FELUCCA_GRAIN
-#define FELUCCA_GRAIN 0          /* no GRAIN engine (engine 8: a retired slot; frees its 27 KB POOL) */
+#define FELUCCA_GRAIN 1          /* the GRAIN engine (engine 8), 0.22: grains over material it renders itself from four
+                                  * knobs (eng_grain.c, grain_src.c, docs/GRAIN.md); two 32 KB buffers of POOL. Retired
+                                  * with SAMPLE from 2026-10-07 until then */
+#endif
+#ifndef GRAIN_ASYNC
+#define GRAIN_ASYNC 1            /* GRAIN renders its buffers in slices from main.c's idle loop (grain_poll) */
 #endif
 #ifndef FELUCCA_DRUM
 #define FELUCCA_DRUM 0           /* no DRUM engine (engine 10: a retired slot; frees its kit's POOL) */

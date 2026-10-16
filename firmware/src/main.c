@@ -389,6 +389,9 @@ static void fm1_main(void)
 #if FELUCCA_OTA
             ed_service();                       /* editor replies without waiting for the next frame */
 #endif
+#if FELUCCA_GRAIN
+            grain_poll();                       /* GRAIN's render, a slice a turn (eng_grain.c, docs/GRAIN.md) */
+#endif
         }
     }
 }
