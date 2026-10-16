@@ -223,14 +223,17 @@ static uint32_t emu_probe_rise(uint32_t vel)      /* the probe's rise above its 
             return r;
     return SN_P_HI;
 }
+static void emu_probe_feed(uint32_t held)         /* the top row through the probe (every 3 ms: the unit's 3.3) */
+{
+    uint32_t k;
+    for (k = SN_TOP0; k < SN_TOP0 + SN_NTOP; k++) {
+        uint32_t down = (held >> k) & 1u, vel = emu_hal.key_vel[k] ? emu_hal.key_vel[k] : 100u;
+        cr_sense_probe(k, down ? EMU_PROBE_BASE + emu_probe_rise(vel) : EMU_PROBE_BASE, down);
+    }
+}
 static void emu_touch_feed(uint32_t ms, uint32_t held)
 {
     uint32_t k;
-    for (k = SN_TOP0; k < SN_TOP0 + SN_NTOP; k++)  /* the top row through the probe: every 4 ms (the unit: 3.3) */
-        if ((ms & 3u) == 0u) {
-            uint32_t down = (held >> k) & 1u, vel = emu_hal.key_vel[k] ? emu_hal.key_vel[k] : 100u;
-            cr_sense_probe(k, down ? EMU_PROBE_BASE + emu_probe_rise(vel) : EMU_PROBE_BASE, down);
-        }
     for (k = 0; k < 20u; k++) {                    /* the keys on the analog rows */
         volatile sn_key_t *s = &sn_key[k];
         if (!((held >> k) & 1u)) {
@@ -303,8 +306,11 @@ void emu_fw_tick(uint32_t ms)
         __atomic_fetch_or(&host_notes, down, __ATOMIC_SEQ_CST);
     fm1_in.buttons = in_btn;
     fm1_in.notes = in_key;
-    if ((ms & 1u) == 0u)                          /* the analog rows' samples, every 2 ms (the unit: 2.2) */
+    if (fm1_an.probe ? ms % 3u == 0u : (ms & 1u) == 0u)   /* the analog rows' samples: every 2 ms (the unit: 2.2), every
+                                                    * 3 while the top row's probe takes a third frame phase (3.3) */
         emu_touch_feed(ms, in_key);
+    if (fm1_an.probe && ms % 3u == 1u)            /* the probe's readings, between them */
+        emu_probe_feed(in_key);
     for (i = 0; i < EMU_NENC; i++) {
         int32_t s = __atomic_exchange_n(&emu_hal.enc[i], 0, __ATOMIC_SEQ_CST);
         if (s && !dead)

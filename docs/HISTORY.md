@@ -4557,7 +4557,17 @@ input and PA6 driven on the tick and both back at the take, the pressed state pa
 frame), `cr_sense_test.c`'s probe case (a touch reads ~20, a firm press 127, let go 0), `cr_settings_test` (mode 3
 kept). Not flashed; XIP 96.4 %.
 
-3y124. **0.24-beta1's release tree (2026-10-16; branch rel-24b1 from 646abb5, not pushed, not tagged, not flashed).**
+3y124. **The velocity's wait with the probe on (2026-10-16; the designer-handoff session's release agent, reading
+3y123 before v0.24-beta1: "the probe's third frame phase moves the lower keys' analog-row sampling from 2.2 ms to
+3.3 ms, so F3..C5's velocity arrives ~13 ms after the touch instead of ~8.8 ms, but cu_scan_keys still waits only
+12 ms").** Real: four samples at 3.3 ms are 13.2 ms after the touch sample, up to 16.5 after the contact, 15.4 after
+the earliest debounce; past the wait a press played at the recent velocity, so a soft and a hard F3 .. C5 would have
+read alike on the unit. `CU_VEL_WAIT_MS` 12 -> 18. The emulator feeds the analog rows every 3 ms while the probe is
+on (it fed every 2), so `cr_touch.txt`'s "30 sensed" / "120 sensed" now stand for the probe's cadence. The better
+answer, not built: the probe's phase only while a top key is down (its baseline kept from a slower cycle), which would
+give the lower keys their 2.2 ms back.
+
+3y125. **0.24-beta1's release tree (2026-10-16; branch rel-24b1 from 646abb5, not pushed, not tagged, not flashed).**
 The owner: "tag latest Velocity improvements as v0.24-beta1". What is new since v0.23 (`git log v0.23..`: 3y123 alone
 for the player; 3y122's tail is the release's record): the top seven keys sensing velocity through the PA10 probe, Key
 Touch's fourth value Vel + Poly AT, GEEK OUT 2's `VEL / AT` line, and a sensed key without a reading in time playing at
