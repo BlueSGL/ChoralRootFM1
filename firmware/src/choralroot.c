@@ -151,6 +151,8 @@
 static void cr_sense_hook(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven);
 static int cr_sense_drive_hook(uint32_t col, uint32_t rowbit);
 static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit);
+static void cr_sense_probe_hook(uint32_t col, uint32_t v, uint32_t pressed);
+#define FM1_INPUT_PROBE(c, v, p) cr_sense_probe_hook(c, v, p)
 #define FM1_INPUT_ANALOG(c, r, v, d) cr_sense_hook(c, r, v, d)
 #define FM1_INPUT_DRIVE(c, r) cr_sense_drive_hook(c, r)
 #define FM1_INPUT_LED_OK(c, r) cr_sense_led_ok_hook(c, r)

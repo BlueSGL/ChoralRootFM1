@@ -922,8 +922,8 @@ atmax() { grep -a '^touch: at ' "$L" | sed 's/touch: at //' | sort -n | tail -1;
 [ "$(tk 9 1)" = "100 fixed" ] && [ "$(tk 9 2)" = "30 sensed" ] && [ "$(tk 9 3)" = "120 sensed" ] &&
     ok "the keys' velocity in the emulator: Key Touch Fixed plays D4 at Options > Velocity (100); Velocity + Aftertouch: D4 at 30 plays 30, at 120 plays 120 (the sensing's own path, cr_sense.c fed by emu_touch_feed)" ||
     bad "touch velocity: '$(tk 9 1)' / '$(tk 9 2)' / '$(tk 9 3)'"
-echo "$(tk 26 1)" | grep -q ' context$' && [ "$(tk 26 1 | cut -d' ' -f1)" -gt 40 ] && [ "$(tk 26 1 | cut -d' ' -f1)" -lt 110 ] &&
-    ok "G5 (the top row, no converter): the keys' recent velocity, the context ($(tk 26 1))" || bad "the top row's velocity: '$(tk 26 1)'"
+echo "$(tk 26 1)" | grep -q ' sensed$' && [ "$(tk 26 1 | cut -d' ' -f1)" -ge 56 ] && [ "$(tk 26 1 | cut -d' ' -f1)" -le 78 ] &&
+    ok "G5 (the top row): its velocity through the PA10 probe's model, 64 read as $(tk 26 1 | cut -d' ' -f1) (the probe's curve, quantised)" || bad "the top row's velocity: '$(tk 26 1)'"
 [ "$(atmax)" -ge 65 ] && [ "$(atmax)" -le 85 ] && [ "$(grep -a '^touch: at ' "$L" | tail -1)" = "touch: at 0" ] &&
     ok "a lean of 60 % on the held D4 after it settled: aftertouch up to $(atmax) (60 % of the span, smoothed), eased: back to 0" ||
     bad "aftertouch: max $(atmax), last $(grep -a '^touch: at ' "$L" | tail -1)"

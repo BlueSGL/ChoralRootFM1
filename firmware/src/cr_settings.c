@@ -191,8 +191,6 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(vel, 1, 127);
     CRS_FIX(bass_on, 0, 255);                      /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS; bits 2..7 Key Touch
                                                     * and the two sensitivities, CRS_TOUCH / VSENS / ATSENS: 0.22) */
-    if ((s->bass_on & 0x0Cu) == 0x0Cu)             /* Key Touch 3: not a mode */
-        s->bass_on &= (uint8_t)~0x0Cu;
     CRS_FIX(bass_mode, 0, CR_BASS_SOLO);
     CRS_FIX(bass_voicing, -2, 4);
     CRS_FIX(perform_on, 0, 1);

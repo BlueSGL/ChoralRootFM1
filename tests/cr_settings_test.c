@@ -1431,7 +1431,7 @@ static void t_touch(void)
        "Velocity + Aftertouch, Sens Low / High beside Numerals: every bit kept");
     s.bass_on = (uint8_t)(CRS_TOUCH_BITS(3, 0, 0));
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 0u, "Key Touch 3 (not a mode): Fixed");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 3u, "Key Touch 3: Vel + Poly AT (a mode since 3y123), kept");
     s.bass_on = 0;
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 0u && CRS_VSENS(&r) == 0u, "a 0.21 record (the byte 0): Fixed, Mid");

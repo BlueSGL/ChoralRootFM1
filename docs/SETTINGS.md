@@ -44,7 +44,7 @@ from a layer: it goes with the layer (manual).
 | Secret Chords | Options | block `secret` | **automatic** |
 | 6th with 7th (0.20) | Options | block `pick_roots` bit 4 | **automatic** |
 | Velocity | Options | block `vel` | **automatic** |
-| Key Touch, Velocity Sens, Aftertouch Sens (docs/VELOCITY.md) | Options | block `bass_on` bits 2..7 (`CRS_TOUCH`, `CRS_VSENS`, `CRS_ATSENS`; 0 = Fixed / Mid, the defaults: no version) | **automatic** |
+| Key Touch (Fixed, Dynamic, Vel + Aftertouch, Vel + Poly AT), Velocity Sens, Aftertouch Sens (docs/VELOCITY.md) | Options | block `bass_on` bits 2..7 (`CRS_TOUCH`, `CRS_VSENS`, `CRS_ATSENS`; 0 = Fixed / Mid, the defaults: no version) | **automatic** |
 | Velocity Curve -3 .. +3 (docs/VELOCITY.md "fm1-ctl") | Options | block `pick_roots` bits 5..7 (`CRS_VCURVE`, two's complement; 0 = 0, the default: no version) | **automatic** |
 | MIDI Perform, MIDI Bass, MIDI Raw Chord | Options | block `midi_en[3]`, `midi_ch[3]` | **automatic** |
 | Raw Chord Sound | Options | block `raw_sound` | **automatic** |

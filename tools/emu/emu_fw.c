@@ -214,9 +214,23 @@ static uint16_t emu_land_for(uint32_t vel)        /* the smallest driven reading
     cr_touch_curve = curve;
     return (uint16_t)best;
 }
+#define EMU_PROBE_BASE 770u                        /* PA10 at rest (Velo: the LED conducting on the pull-up) */
+static uint32_t emu_probe_rise(uint32_t vel)      /* the probe's rise above its baseline that the curve reads as vel */
+{
+    uint32_t r;
+    for (r = 0; r < SN_P_HI; r++)
+        if (sn_probe_velocity(r) >= vel)
+            return r;
+    return SN_P_HI;
+}
 static void emu_touch_feed(uint32_t ms, uint32_t held)
 {
     uint32_t k;
+    for (k = SN_TOP0; k < SN_TOP0 + SN_NTOP; k++)  /* the top row through the probe: every 4 ms (the unit: 3.3) */
+        if ((ms & 3u) == 0u) {
+            uint32_t down = (held >> k) & 1u, vel = emu_hal.key_vel[k] ? emu_hal.key_vel[k] : 100u;
+            cr_sense_probe(k, down ? EMU_PROBE_BASE + emu_probe_rise(vel) : EMU_PROBE_BASE, down);
+        }
     for (k = 0; k < 20u; k++) {                    /* the keys on the analog rows */
         volatile sn_key_t *s = &sn_key[k];
         if (!((held >> k) & 1u)) {

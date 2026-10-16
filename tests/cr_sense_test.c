@@ -218,6 +218,30 @@ int main(void)
             release(k);
         }
     }
+    {   /* the top row through the probe: a baseline while open, the peak above it while pressed, two readings in
+         * and the velocity may be taken; a touch of 20 reads light, a firm 43 full; let go: nothing */
+        uint32_t kk = 26, v20, v43, i;
+        for (i = 0; i < 8u; i++)
+            cr_sense_probe(kk, 770u, 0);
+        check("the probe: no velocity while open", cr_sense_take(kk) == 0u);
+        cr_sense_probe(kk, 790u, 1);
+        check("one reading in: not yet", cr_sense_take(kk) == 0u);
+        cr_sense_probe(kk, 790u, 1);
+        v20 = cr_sense_take(kk);
+        cr_sense_land[kk] = 0;
+        cr_sense_probe(kk, 770u, 0);
+        cr_sense_probe(kk, 770u, 0);
+        cr_sense_probe(kk, 813u, 1);
+        cr_sense_probe(kk, 810u, 1);
+        v43 = cr_sense_take(kk);
+        cr_sense_land[kk] = 0;
+        cr_sense_probe(kk, 770u, 0);
+        {
+            char what[96];
+            snprintf(what, sizeof what, "the probe's map: a touch (+20) reads %u, a firm press (+43) %u, let go 0", (unsigned)v20, (unsigned)v43);
+            check(what, v20 >= 15u && v20 <= 25u && v43 == 127u && cr_sense_take(kk) == 0u);
+        }
+    }
     printf("sense: %u samples; %s\n", (unsigned)samples, fails ? "FAILED" : "all ok");
     return fails != 0;
 }

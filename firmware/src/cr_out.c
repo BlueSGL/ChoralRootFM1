@@ -363,13 +363,22 @@ static const cr_out_t CR_OUT = {cr_cb_note_on, cr_cb_note_off, cr_cb_all_off, 0,
  * AT -> CUT of Velocity + Aftertouch), and it goes out as channel pressure on the Perform and Bass channels */
 static void cr_touch_at(uint32_t v)
 {
-    uint32_t s;
+    uint32_t s, n;
     v &= 0x7Fu;
     mod_midi(&trk[0], 0xD0u, v, 0);
     mod_midi(&trk[1], 0xD0u, v, 0);
-    for (s = 0; s < 2u; s++)
-        if (cr_route.midi_en[s])
+    for (s = 0; s < 2u; s++) {
+        if (!cr_route.midi_en[s])
+            continue;
+        if (cr_touch_mode == CR_TOUCH_VEL_POLY) {   /* Vel + Poly AT: each sounding note's, on the channel its note-on
+                                                     * used (one value: the chord is one finger's) */
+            for (n = 0; n < 128u; n++)
+                if (CR_OCH(s, n))
+                    cr_midi(0xA0u | (CR_OCH(s, n) - 1u), n, v);
+        } else {
             cr_midi(0xD0u | (cr_route.ch[s] & 15u), v, 0);
+        }
+    }
 }
 
 /* ------------------------------------------------------------ the queue --- */

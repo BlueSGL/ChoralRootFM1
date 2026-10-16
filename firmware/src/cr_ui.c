@@ -996,7 +996,7 @@ static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Sec
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 2, 2, 6, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 3, 2, 6, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -1018,6 +1018,7 @@ static void cu_touch_apply(void)
 #ifdef CR_SENSE_KEYS
     cr_touch_curve = (uint8_t)(cs.vel_curve + 3);
     fm1_an.drive = cs.touch ? SN_DRIVE : 0u;
+    fm1_an.probe = cs.touch ? 1u : 0u;             /* the top row's probe: a third frame phase while the keys sense */
 #endif
 }
 static void cu_usb_apply(void)
@@ -1157,7 +1158,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
     case O_SIXTH: cu_cpy(d, v ? "Octave up" : "In place", n); break;
     case O_VEL: cu_int(d, v, 0, n); break;
-    case O_TOUCH: cu_cpy(d, v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
+    case O_TOUCH: cu_cpy(d, v == 3 ? "Vel + Poly AT" : v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
     case O_VSENS: case O_ATSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
     case O_VCURVE: cu_int(d, v - 3, 1, n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
@@ -1245,8 +1246,9 @@ static struct {
                                            * does nothing) */
     uint32_t kpend;                       /* key bits debounced down and waiting for their velocity (cu_scan_keys) */
     uint32_t kpend_t0[CU_NKEY];           /* .. since (cu_now) */
-    uint8_t ctx_vel;                      /* the keys' recent velocity (0: none yet): what a key without the converter
-                                           * plays at (docs/VELOCITY.md "the top row") */
+    uint8_t ctx_vel;                      /* the keys' recent velocity (0: none yet): what a sensed key whose reading
+                                           * did not come plays at (docs/VELOCITY.md "the top row") */
+    uint8_t last_vel, last_at;            /* the last key's velocity and the aftertouch now (GEEK OUT 2's line) */
     uint8_t key_note[CU_NKEY];            /* root keys (the Full keyboard: every key): note + 1 sent; 0xFF: the
                                            * layer's / a picker's; 0: not pressed, or pressed as a chord key */
     int8_t octave;
@@ -1343,15 +1345,16 @@ static void cu_touch_poll(void)
     if (now - last_ms < 5u)
         return;
     last_ms = now;
-    if (cs.touch == CR_TOUCH_VEL_AT) {
+    if (cs.touch >= CR_TOUCH_VEL_AT) {
         cr_sense_pressure_poll(now, cs.at_sens);
         for (k = 0; k < CU_NKEY; k++)
-            if (((CR_SENSE_KEYS >> k) & 1u) && ((cu.kheld >> k) & 1u) && cu.key_note[k] && cu.key_note[k] != 0xFFu &&
+            if (((CR_SENSE_AT_KEYS >> k) & 1u) && ((cu.kheld >> k) & 1u) && cu.key_note[k] && cu.key_note[k] != 0xFFu &&
                 cr_sense_at[k] > v)
                 v = cr_sense_at[k];
     }
     if (v != sent) {
         sent = (uint8_t)v;
+        cu.last_at = (uint8_t)v;
         cr_post(CRE_AT, 0, 0, (int32_t)v);
         cu_trace("touch: at %u\n", (unsigned)v);
     }
@@ -4120,10 +4123,11 @@ static uint8_t cu_press_vel;                       /* the pending key's velocity
 static uint32_t cu_key_vel(uint32_t k)
 {
     uint32_t v = cu_press_vel;
+    (void)k;
     if (!cs.touch)
         return cs.vel;                             /* Key Touch Fixed: Options > Velocity, as before */
-    if (!v && !CU_KEY_SENSED(k))
-        v = cu.ctx_vel;
+    if (!v)
+        v = cu.ctx_vel;                            /* (no reading in time: the keys' recent velocity) */
     if (!v)
         return cs.vel;
     return v < 1u ? 1u : v > 127u ? 127u : v;
@@ -4183,6 +4187,7 @@ static void cu_key_press(uint32_t k)
         n = n < 0 ? 0 : n > 127 ? 127 : n;
         cr_klat_post(CU_KEY_T0(k));                /* (78 PEAK: the key's way to the engine, timed) */
         cr_post(CRE_KEY, (uint32_t)n, cu_key_vel(k), 1);
+        cu.last_vel = (uint8_t)cu_key_vel(k);
         cu_trace("touch: key %u vel %u%s\n", (unsigned)k, (unsigned)cu_key_vel(k), cs.touch ? cu_press_vel ? " sensed" : " context" : " fixed");
         cu.key_note[k] = (uint8_t)(n + 1);
     }
@@ -6588,7 +6593,16 @@ static void cu_geek2(cr_screen_t *s, uint32_t now)
     s->batt = (uint8_t)cu_batt();
     cu_cpy(s->title, "GEEK OUT 2", sizeof s->title);
     s->title_col = CR_COL_WHITE;
-    cu_cpy(s->page, dual ? "2 cores" : "1 core", sizeof s->page);
+    if (cs.touch) {                              /* the keys sensing: the last key's velocity, the aftertouch now */
+        char b[8];
+        cu_cpy(s->page, "VEL ", sizeof s->page);
+        cu_int(b, cu.last_vel, 0, sizeof b);
+        cu_cat(s->page, b, sizeof s->page);
+        cu_cat(s->page, " AT ", sizeof s->page);
+        cu_int(b, cu.last_at, 0, sizeof b);
+        cu_cat(s->page, b, sizeof s->page);
+    } else
+        cu_cpy(s->page, dual ? "2 cores" : "1 core", sizeof s->page);
     cu_g2_cell(&s->cell[0][0], "CORE 0", shown[0] >> 4, pk[0] * 256u / CPU_HALF_US,
                (us[0] * 100u + CPU_HALF_US / 2u) / CPU_HALF_US);
     if (dual)

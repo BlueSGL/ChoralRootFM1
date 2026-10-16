@@ -80,7 +80,8 @@
 #define CRS_SOL(s) (((unsigned)(s)->scale & CRS_SOLFEGE) ? 1u : 0u)
 /* Options > Key Touch, Velocity Sens, Aftertouch Sens (0.22; docs/VELOCITY.md) ride in bits 2..7 of the same byte:
  * bits 2-3 Key Touch (0 Fixed, the default: the keys send Options > Velocity, no sensing; 1 Dynamic: the keys'
- * velocity; 2 Velocity + Aftertouch), bits 4-5 Velocity Sens and bits 6-7 Aftertouch Sens (0 Mid, the default; 1 Low;
+ * velocity; 2 Velocity + Aftertouch; 3 Vel + Poly AT: the same, the pressure out as polyphonic aftertouch), bits 4-5
+ * Velocity Sens and bits 6-7 Aftertouch Sens (0 Mid, the default; 1 Low;
  * 2 High). 0 in every older record and 0 is the default: no version, nothing to migrate; a firmware up to 0.21 finds
  * 4..255 out of range and takes its default for the byte (Numerals off) until it is set there */
 #define CRS_TOUCH(s) (((unsigned)(s)->bass_on >> 2) & 3u)

@@ -4535,3 +4535,24 @@ the site"): `v0.23` on 5755de8 (main), pushed; release.yml built it and publishe
 with the eight files, its SHA256SUMS the same as this build's (choralroot-0.23.fwsc a779884b..., -1core a7d424ed...);
 pages.yml deployed the site: the landing page "Version 0.23", "Install 0.23", "New in 0.23", `firmware/` with both
 0.23 packages, the browser emulator "ChoralRoot 0.23".
+
+3y123. **The top row's probe, Vel + Poly AT, the readout (2026-10-16; the owner: "Yes: bring in the top row's PA10
+probe, poly aftertouch out and the velocity / pressure readout"; the last three of fm1-ctl's pieces, docs/VELOCITY.md).**
+`hal/fm1_input.h`: with `fm1_an.probe` (Key Touch on) a third frame phase samples row PA6's seven keys through PA10,
+SARADC channel 2: for that tick PA10 is an input with its pull-up and PA6 an output driven high at the weakest level
+(`fm1__pa10_probe`, `fm1__row_drive(2, 0)`), both back at the take before the rows are read, `FM1_INPUT_PROBE(col, v,
+pressed)` with the digital scan's view of the key; the buttons' four columns start nothing; the analog rows then
+come every third frame (3.3 ms). `cr_sense.c cr_sense_probe`: each key's open baseline (smoothed while open) and the
+peak above it since the press; the velocity 1 + 126 (peak / 43)^2.4 (CTL-1's ends and curve: a touch ~20 reads
+light, firm presses pile up at 43..45), taken by `cr_sense_take` once two readings are in; `CR_SENSE_KEYS` now all
+27 keys, `CR_SENSE_AT_KEYS` the twenty with the converter (the probe cannot tell a lean). **Vel + Poly AT**: Key
+Touch's fourth value (bits 2..3 of `bass_on` at 3, which read as "not a mode" before): as Velocity + Aftertouch, the
+pressure out as polyphonic aftertouch to every sounding note of the Perform and Bass streams on the channel its note-on
+used (`cr_out.c cr_touch_at`; one value: the chord is one finger's), the parts hearing it as channel pressure as
+before. **The readout**: GEEK OUT 2's title line, while the keys sense, `VEL 73 AT 42` (the last key's velocity,
+`cu.last_vel`; the aftertouch now, `cu.last_at`) in place of "2 cores". The emulator models the probe (`emu_fw.c`:
+a top key's rise from its velocity, the curve inverted; `cr_touch.txt`: G5 at 64 reads 67, "sensed" now, not the
+context). Tests: `input_test.c`'s probe block (the phase every third frame, the seven columns on channel 2, PA10 an
+input and PA6 driven on the tick and both back at the take, the pressed state passed, the analog rows every third
+frame), `cr_sense_test.c`'s probe case (a touch reads ~20, a firm press 127, let go 0), `cr_settings_test` (mode 3
+kept). Not flashed; XIP 96.4 %.

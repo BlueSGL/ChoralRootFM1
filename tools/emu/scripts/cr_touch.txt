@@ -2,8 +2,8 @@
 # emu_touch_feed: a key the script holds "down VEL" lands at the driven reading the map gives that velocity, a "lean"
 # presses it harder). Key Touch Fixed (a new unit): D4 at 30 plays at Options > Velocity, 100, at once. Options >
 # Key Touch (entry 5) to Velocity + Aftertouch: D4 at 30 plays at 30 (the trace "touch: key 9 vel 30 sensed"),
-# about 9 ms after the key went down; at 120, 120; G5 (a top key, no converter) at the keys' recent velocity (the
-# context: "touch: key 26 vel 53 context"); a lean of 60 % on a held D4 after it has settled: aftertouch up to ~73
+# about 9 ms after the key went down; at 120, 120; G5 (a top key, no converter) through the PA10 probe's model at 64
+# ("touch: key 26 vel 67 sensed": the probe's curve, quantised); a lean of 60 % on a held D4 after it has settled: aftertouch up to ~73
 # ("touch: at N"; 60 % of the span, smoothed), eased to 0: back to 0. Velocity Curve +3 (entry 7): the same press
 # (30 on Velo's scale) reads 15.
 wait 600
