@@ -12,8 +12,8 @@ Options > Velocity Curve (3y112), Solfège numerals (3y118), FM TONE at the othe
 (3y119, 3y120) and the pool bank fix (3y121); `docs/releases/0.23.md` is its notes, `web/releases.json`'s newest
 stable entry is 0.23 (package sha256 a779884b..., single-core a7d424ed...) and 0.22 has its going-back note; the
 manual's first line and the README's "New in 0.23" say 0.23; the tag v0.23 is 5755de8. **0.24-beta1's release tree**
-(HISTORY 3y124: 3y123's velocity work; not tagged yet) lists 0.24-beta1 first in `web/releases.json` with `"beta":
-true` (sha256 efaebdf1..., single-core bab98b02...), notes `docs/releases/0.24-beta1.md`, `docs/releases/0.24.md`
+(HISTORY 3y125: 3y123's velocity work with 3y124's wait; not tagged yet) lists 0.24-beta1 first in
+`web/releases.json` with `"beta": true` (sha256 409cfc6f..., single-core 570a73bf...), notes `docs/releases/0.24-beta1.md`, `docs/releases/0.24.md`
 the pointer to them. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24" (`firmware/src/choralroot.c`; the 0.22 betas'
 trees read 0.22). The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py
 --info`.

@@ -4567,47 +4567,51 @@ on (it fed every 2), so `cr_touch.txt`'s "30 sensed" / "120 sensed" now stand fo
 answer, not built: the probe's phase only while a top key is down (its baseline kept from a slower cycle), which would
 give the lower keys their 2.2 ms back.
 
-3y125. **0.24-beta1's release tree (2026-10-16; branch rel-24b1 from 646abb5, not pushed, not tagged, not flashed).**
-The owner: "tag latest Velocity improvements as v0.24-beta1". What is new since v0.23 (`git log v0.23..`: 3y123 alone
-for the player; 3y122's tail is the release's record): the top seven keys sensing velocity through the PA10 probe, Key
-Touch's fourth value Vel + Poly AT, GEEK OUT 2's `VEL / AT` line, and a sensed key without a reading in time playing at
-the context velocity instead of Options > Velocity (`cu_key_vel`). The Velocity Curve is 0.23's (3y112), not new.
-`FELUCCA_VERSION` "ChoralRoot 0.24" (the dev build reads as the next stable version, as the 0.22 betas' trees read
-0.22; HANDOFF's state line says so). `docs/releases/0.24-beta1.md`: the opening (a first beta of 0.24, opt-in, may
-have bugs, 0.24 replaces it; updating from 0.23 keeps everything; with Key Touch Fixed nothing changes); Playing (the
-top seven: velocity, coarser than F3 .. C5, no aftertouch, the Velocity Curve not theirs, Velocity Sens is; Vel + Poly
-AT; Geek Out 2's line; the context velocity); Installing (the opt-in, from 0.22 or older, the single-core package and
-its shortened version line); Going back to 0.23 (0.23's `crs_sanitize` reads Key Touch 3 as "not a mode" and clears
-bits 2..3 alone: Fixed there, the sensitivities, the Curve and Numerals kept; once 0.23 saves its settings, Fixed on
-return; 0.22 the same, plus 0.23's own notes). `docs/releases/0.24.md` started as the pointer to it (no 0.24.md
-existed, so no "merged after 0.23" lines to fold in). `web/releases.json`: 0.24-beta1 first, `"beta": true`, 6
-bullets, 3 notes (the beta disclaimer first); 0.23 stays the newest stable, without a going-back note. Nothing in
-make_site.py, the installer or the tests assumes a beta is of the stable version: `front()`, `news_html()` and
-`emu_line()` take the first entry without `"beta"`, the page's `newest` the same, and site_test's `beta_site` (9.9-beta1
-over 9.8) and test_installer's 9.0-beta1 already are betas of a newer version; no change. **Built**: `./build.sh
---release 0.24-beta1` twice (the first folder moved aside), the same SHA256SUMS: `choralroot-0.24-beta1.fwsc`
-efaebdf12c9a1c96..., `choralroot-0.24-beta1-1core.fwsc` bab98b0243e19dab...; the apps carry `ChoralRoot 0.24-beta1` and
-`ChoralRoot 0.24-beta1 1-core` (Options > Version: `0.24-beta1 1-core`, `cu_version_text`); the stub version 3,
-baee55ed142fe1cc. Size: XIP 552 876 B of 573 440 (96.4 %), RAM 78 752 (80.1 %), POOL 239 180 (69.5 %), RAMTEXT 7 072
-of 24 576; the single-core package XIP 550 364 (96.0 %), RAM 75 616 (76.9 %), POOL 239 052 (69.5 %). Python 3.11.6,
-Pillow 11.1.0, fontTools 4.66.1: release.yml's pins. **Checked**: `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES
-PASSED (22 suites, 109 s; test_cr 1056 ok, test_persist 113, test_retired 18, test_pool 7; 313 goldens unchanged; 0
-lint); releases_test ALL OK with `CR_PACKAGES_DIR=build/release-0.24-beta1` (both sha256 match) and with all 20 listed
-packages (copied from earlier worktrees' build folders, each only with its listed sha256; nothing downloaded);
-site_test ALL OK alone, and with the beta package as `build/choralroot.fwsc` and every package (`--require-all`
-builds the site for 0.24-beta1: "New in 0.23", a download link for every stable version and none for a beta);
-test_installer; the browser emulator built as 0.24-beta1, test_web_emu PASS. **The Pages job, simulated** (its steps
-from local files into build/scratch, no layout viewer as the job builds none): SHA256SUMS against the package, the
-first entry 0.24-beta1, all 13 versions' packages and the 7 single-core ones with their sha256, `make_site.py
---require-all`; the landing page "Version 0.23", "Install 0.23 directly", "New in 0.23", its Download and command line
-0.23's, no beta's line or link; under Try it first "It runs ChoralRoot 0.24-beta1, a beta (the installer's default is
-0.23)."; the installer's own version 0.23; its list 0.24-beta1 (beta), 0.23, 0.22, 0.22-beta4 .. beta1 (beta), 0.21 ..
-0.16; firmware/SHA256SUMS 20 lines, all match; the notes links `blob/main/docs/releases/<version>.md`. In headless
-Chromium (`?demo=idle`): Install reads "Install ChoralRoot 0.23" and the chips have no beta; with the opt-in stored,
-0.24-beta1 first with its badge, then 0.22 and its four betas, the beta note shown, Install still 0.23. **Open, for
-the unit before the tag**: with Key Touch on the probe's third phase puts the analog rows at 3.3 ms instead of 2.2, so
-F3 .. C5's landing (four samples after the touch, `cr_sense.c`) comes ~13 ms after the touch sample instead of 8.8,
-while `cu_scan_keys` still waits `CU_VEL_WAIT_MS` 12 ms from the debounce (its comment: 7 .. 10 ms, the two-phase
-figure); presses that miss it play at the context velocity. The emulator feeds a sample a millisecond and cannot
-show it (its `touch: ... sensed|context` trace is the emulator's only); on the unit, soft and hard presses of F3 ..
-C5 read on Geek Out 2's `VEL` (or as MIDI velocities) would: near one value, the context, if they miss it.
+3y125. **0.24-beta1's release tree (2026-10-16; branch rel-24b1 from 646abb5, then origin/main 4fd569b merged in; not
+pushed, not tagged, not flashed).** The owner: "tag latest Velocity improvements as v0.24-beta1". What is new since
+v0.23 (`git log v0.23..`: 3y123 and 3y124 for the player; 3y122's tail is the release's record): the top seven keys
+sensing velocity through the PA10 probe, Key Touch's fourth value Vel + Poly AT, GEEK OUT 2's `VEL / AT` line, and
+the probe's price, the lower keys read every 3.3 ms, so with Key Touch on an F3 .. C5 note waits ~13 ms after the
+touch sample for its velocity instead of 8.8 (3y124's `CU_VEL_WAIT_MS` 18 covers it) and a top key a few ms for its
+two probe readings (it played at the debounce before). The Velocity Curve is 0.23's (3y112), not new. `cu_key_vel`'s
+fallback to the context velocity for a sensed key without a reading (3y123) is left out of the notes: with the 18 ms
+wait no ordinary press reaches it. This release agent's reading of 3y123 found the 12 ms wait too short (4 samples
+at 3.3 ms against a wait from the debounce); the velocity session fixed it on main as 3y124 (4fd569b), merged here
+(HISTORY's one conflict: theirs kept as 3y124, this entry renumbered from 3y124; the first commit of this branch,
+ba915e6, still names it 3y124 in its message). `FELUCCA_VERSION` "ChoralRoot 0.24" (the dev build reads as the next
+stable version, as the 0.22 betas' trees read 0.22; HANDOFF's state line says so). `docs/releases/0.24-beta1.md`: the
+opening (a first beta of 0.24, opt-in, may have bugs, 0.24 replaces it; updating from 0.23 keeps everything; with Key
+Touch Fixed nothing changes); Playing (the top seven: velocity, coarser than F3 .. C5, no aftertouch, the Velocity
+Curve not theirs, Velocity Sens is; Vel + Poly AT; Geek Out 2's line; notes a few ms later with Key Touch on);
+Installing (the opt-in, from 0.22 or older, the single-core package and its shortened version line); Going back to
+0.23 (0.23's `crs_sanitize` reads Key Touch 3 as "not a mode" and clears bits 2..3 alone: Fixed there, the
+sensitivities, the Curve and Numerals kept; once 0.23 saves its settings, Fixed on return; 0.22 the same, plus 0.23's
+own notes). `docs/releases/0.24.md` started as the pointer to it (no 0.24.md existed, so no "merged after 0.23"
+lines to fold in). `web/releases.json`: 0.24-beta1 first, `"beta": true`, 6 bullets, 3 notes (the beta disclaimer
+first); 0.23 stays the newest stable, without a going-back note. Nothing in make_site.py, the installer or the tests
+assumes a beta is of the stable version: `front()`, `news_html()` and `emu_line()` take the first entry without
+`"beta"`, the page's `newest` the same, and site_test's `beta_site` (9.9-beta1 over 9.8) and test_installer's
+9.0-beta1 already are betas of a newer version; no change. **Built** from the merged tree: `./build.sh --release
+0.24-beta1` twice (the first folder moved aside), the same SHA256SUMS: `choralroot-0.24-beta1.fwsc`
+409cfc6fcbc9a00a..., `choralroot-0.24-beta1-1core.fwsc` 570a73bf0d78c4e8... (before the merge: efaebdf1... /
+bab98b02..., replaced); the apps carry `ChoralRoot 0.24-beta1` and `ChoralRoot 0.24-beta1 1-core` (Options > Version:
+`0.24-beta1 1-core`, `cu_version_text`); the stub version 3, baee55ed142fe1cc. Size: XIP 552 876 B of 573 440
+(96.4 %), RAM 78 752 (80.1 %), POOL 239 180 (69.5 %), RAMTEXT 7 072 of 24 576; the single-core package XIP 550 364
+(96.0 %), RAM 75 616 (76.9 %), POOL 239 052 (69.5 %). Python 3.11.6, Pillow 11.1.0, fontTools 4.66.1: release.yml's
+pins. **Checked** (on the merged tree, after the notes, releases.json and HANDOFF were final): `CR_VERSION=0.24 sh
+tests/run_all.sh` ALL SUITES PASSED (22 suites, 81 s; test_cr 1056 ok, test_persist 113, test_retired 18, test_pool
+7; 313 goldens unchanged; 0 lint); releases_test ALL OK with `CR_PACKAGES_DIR=build/release-0.24-beta1` (both sha256
+match) and with all 20 listed packages (copied from earlier worktrees' build folders, each only with its listed
+sha256; nothing downloaded); site_test ALL OK alone, and with the beta package as `build/choralroot.fwsc` and every
+package (`--require-all` builds the site for 0.24-beta1: "New in 0.23", a download link for every stable version and
+none for a beta); test_installer; the browser emulator built as 0.24-beta1, test_web_emu PASS. **The Pages job,
+simulated** (its steps from local files into build/scratch, no layout viewer as the job builds none): SHA256SUMS
+against the package, the first entry 0.24-beta1, all 13 versions' packages and the 7 single-core ones with their
+sha256, `make_site.py --require-all`; the landing page "Version 0.23", "Install 0.23 directly", "New in 0.23", its
+Download and command line 0.23's, no beta's line or link; under Try it first "It runs ChoralRoot 0.24-beta1, a beta
+(the installer's default is 0.23)."; the installer's own version 0.23; its list 0.24-beta1 (beta), 0.23, 0.22,
+0.22-beta4 .. beta1 (beta), 0.21 .. 0.16; firmware/SHA256SUMS 20 lines, all match; the notes links
+`blob/main/docs/releases/<version>.md`. In headless Chromium (`?demo=idle`): Install reads "Install ChoralRoot 0.23"
+and the chips have no beta; with the opt-in stored, 0.24-beta1 first with its badge, then 0.22 and its four betas, the
+beta note shown, Install still 0.23. Still for the unit: the 18 ms wait and the top row's velocity are not yet played
+on an FM-1.
