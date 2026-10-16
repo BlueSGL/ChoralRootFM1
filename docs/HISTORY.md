@@ -4720,4 +4720,6 @@ read as main's build reads, not as the file had them). `tests/run_cr_tests.sh`: 
 377264f's headers with 377264f's own generators (it copied this tree's `build/gen`, whose font and CZ-1 shapes the old
 sources no longer read), with the Homebrew library path set in the script (`/bin/sh` drops `DYLD_*`). `docs/HANDOFF.md` "POOL was the tight
 resource" says where the figures stand. Suites on the final tree: `run_cr_tests.sh`, `run_cr_draw.sh` (335 pictures
-byte for byte main's), `tools/emu/test_cr.sh` 1056 ok, `run_all.sh` (below). Nothing flashed, nothing pushed.
+byte for byte main's), `tools/emu/test_cr.sh` 1056 ok, `run_all.sh` (below). Nothing flashed, nothing pushed. Then main moved to 54467ac (v0.24-beta1, 3y124 .. 3y125):
+merged in (c8522a6; the seven entries renumbered 3y126 .. 3y132), the same size lines to the byte, `run_all` ALL SUITES
+PASSED (22 suites).

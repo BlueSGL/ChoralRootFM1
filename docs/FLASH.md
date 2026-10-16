@@ -10,7 +10,7 @@ time must not cost the audio ISR anything (the heavy pads have no headroom on th
 moving; one change a commit, its size line before and after in the commit message; costs on the unit counted from
 the listing (`build/choralroot.dis`, about 205 instructions a microsecond), not estimated.
 
-The baseline: main 646abb5 (v0.23 + HISTORY 3y123), `XIP 552 860 B of 573 440 (96.4 %), RAM 78 752 (80.1 %), POOL
+The baseline: main 646abb5 (v0.23 + HISTORY 3y123; main 54467ac, v0.24-beta1, builds to the same bytes of XIP, RAM and POOL), `XIP 552 860 B of 573 440 (96.4 %), RAM 78 752 (80.1 %), POOL
 239 180 (69.5 %)`.
 
 ## What was done
