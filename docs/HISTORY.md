@@ -4530,4 +4530,8 @@ s; test_cr 1056 ok, test_persist 113, test_retired 18, test_pool 7; 313 goldens;
 from this build) then `tests/site_test.py` site ALL OK (`make_site.py --require-all` builds the site for 0.23) and
 `CR_PACKAGES_DIR=build/scratch/packages python3 tests/releases_test.py` ALL OK. Not in this release: GRAIN (its own
 branch). Known gap, not new: the manual has no Options section for Key Touch, Velocity Sens or the Curve (its line on
-velocity still says the keys sense none). The tag v0.23 waits for the owner's word.
+velocity still says the keys sense none). **Released** (the owner: "Tag it: push v0.23 and publish the release and
+the site"): `v0.23` on 5755de8 (main), pushed; release.yml built it and published the full release "ChoralRoot 0.23"
+with the eight files, its SHA256SUMS the same as this build's (choralroot-0.23.fwsc a779884b..., -1core a7d424ed...);
+pages.yml deployed the site: the landing page "Version 0.23", "Install 0.23", "New in 0.23", `firmware/` with both
+0.23 packages, the browser emulator "ChoralRoot 0.23".

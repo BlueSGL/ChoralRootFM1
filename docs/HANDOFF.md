@@ -5,14 +5,13 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.22 (`git tag`; v0.22 is the latest stable release, on the site as the installer's
+Released: v0.1 and v0.11 .. v0.23 (`git tag`; v0.23 is the latest stable release, on the site as the installer's
 default, notes in `docs/releases/`), and the betas v0.22-beta1 .. v0.22-beta4 (GitHub pre-releases; the installer
-lists them behind "Show beta releases"). **0.23 is prepared for release** (HISTORY 3y122): main after v0.22 with
+lists them behind "Show beta releases"). **0.23 is released** (2026-10-16, HISTORY 3y122): main after v0.22 with
 Options > Velocity Curve (3y112), Solfège numerals (3y118), FM TONE at the other engines' level and without pops
 (3y119, 3y120) and the pool bank fix (3y121); `docs/releases/0.23.md` is its notes, `web/releases.json`'s first entry
 is 0.23 (package sha256 a779884b..., single-core a7d424ed...) and 0.22 has its going-back note; the manual's first line
-and the README's "New in 0.23" say 0.23. The tag (v0.23, which starts release.yml and the site) waits for the owner's
-word. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.23" (`firmware/src/choralroot.c`); the next version's work starts by
+and the README's "New in 0.23" say 0.23; the tag v0.23 is 5755de8. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.23" (`firmware/src/choralroot.c`); the next version's work starts by
 setting it to 0.24. The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py
 --info`.
 
@@ -20,7 +19,7 @@ setting it to 0.24. The owner's unit runs what the orchestrator last flashed: ch
 
 | folder | what | remote |
 | --- | --- | --- |
-| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1, v0.11 .. v0.22 and v0.22-beta1 .. beta4 (v0.23: see above) |
+| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1, v0.11 .. v0.23 and v0.22-beta1 .. beta4 |
 | `ChoralRootFM1Designer/` | the mock-up designer (MIT); PNG sheets in Git LFS | github.com/Quixotic7/MvaveFM1-Designer |
 | `MvaveFM1Unbricker/` | the recovery tools, `TRANSPORTER-GUIDE.md` | github.com/Quixotic7/MvaveFM1Unbricker |
 | `FM-1-transporter/`, `jl-uboot-tool/`, `MVaveOfficial/`, `Felucca/`, `melodee/`, `sloop-fm1/`, `fm1-x0x/` | upstream tools and references | read-only |
