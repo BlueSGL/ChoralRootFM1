@@ -2327,6 +2327,14 @@ static void cu_ledit_move(int32_t s)               /* PRESETS: the cursor, a ste
     c = ((int32_t)cu_le.c0 + s) % n;
     cu.le_cell = (uint16_t)(c < 0 ? c + n : c);
     cu_le_sync();
+    /* the step preview (GitHub issue 8; the owner, 2026-10-15: "turn preset knob in the step editor, if the step has
+     * notes, it plays"): the step the cursor lands on is heard once while the loop is stopped, as the loop would
+     * play it, on the loop's voices (cr_loop_ed_preview, in the engine's thread as the keys are); a step without
+     * notes ends the one sounding; while the loop plays nothing is struck (the loop is heard). Nothing is written,
+     * REC is not armed, the position does not move */
+    cr_post(CRE_LOOP, LP_PREVIEW, 0, 0);
+    cu_trace("loopedit: preview step %u notes %u %s\n", (unsigned)cu_le.c0 + 1u, (unsigned)cu_le.cnt,
+             crl.state == CRL_PLAYING ? "playing" : "stopped");
 }
 static void cu_ledit_clear(void)                   /* REC: the step's notes go */
 {
