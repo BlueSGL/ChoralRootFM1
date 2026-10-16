@@ -4105,4 +4105,7 @@ grammar with two text cells (as the LOCK layer's), its picture `build/emu/test/c
 **Checked**: `./build.sh` (the size line above); `sh tests/run_cr_tests.sh` green (cr_fx_test all ok, cr_settings
 252); `sh tools/emu/test_cr.sh` PASS (1028 ok); `sh tests/run_cr_draw.sh` green (313 goldens, 0 changed);
 `sh tools/emu/test_persist.sh` PASS (111); `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites,
-74 s). Not on the unit: the designer-handoff session holds it.
+74 s). **On the unit** (the owner, 2026-10-15: "Please flash to the device"): this build (1bc909d, "ChoralRoot 0.22")
+over 0.22-beta3, `tools/fm1_install.py build/choralroot.fwsc --backup --yes`, the backup before it
+`fm1-backups/choralroot-backup-20261015-filter.json` (the settings, the 128 user sounds, the favourites, loop slot
+1); `--info` afterwards: "ChoralRoot 0.22". Not yet played by the owner.
