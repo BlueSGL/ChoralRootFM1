@@ -1,6 +1,6 @@
 # GRAIN: a granular engine over material it makes itself (design, 2026-10-15)
 
-**Status: built through step 4 (2026-10-15, HISTORY 3y102 .. 3y105): the engine is in the firmware as engine 8
+**Status: built through step 4 (2026-10-15, HISTORY 3y106 .. 3y109): the engine is in the firmware as engine 8
 (`firmware/src/eng_grain.c` over `grain_src.c`), with its pages, presets, blob, scheduler and the platform's wiring,
 tested on the host and in the emulator; not yet on the unit, not yet with the wave band (step 5), its presets not yet
 by ear (step 6).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
@@ -238,7 +238,7 @@ CZ-1 1.7, P5 1.54) given as x 1.5. The baseline is main da1f8e2's size line: XIP
 | the engine's glue: `engine_t`, the pages and `eng_deep_t`, `block()` with the request / swap, the blob get / set, the presets (9 x ~24 B), the old-record mapping | ~2.5 .. 3 KB | estimate from the VA's and QUAD's glue |
 | the wave band in `cr_draw.c` | ~1 KB | estimate (the filter band is 0.8 KB) |
 | **the engine** | **~11 .. 12 KB: XIP 547 020 -> ~559 000 B, 97.4 .. 97.6 %, 14 .. 15 KB left** (the estimate) | |
-| **as built (step 4, 3y105)** | **XIP 559 652 B (97.6 %): +12 632 B, 13 788 B left; RAM 79 028 (+376), POOL 304 472 (+65 536, 88.5 %)** | `./build.sh`'s size line |
+| **as built (step 4, 3y109)** | **XIP 559 652 B (97.6 %): +12 632 B, 13 788 B left; RAM 79 028 (+376), POOL 304 472 (+65 536, 88.5 %)** | `./build.sh`'s size line |
 
 The tightest resource. `FELUCCA_SIZE`'s minsize pass (tools/size_fns.py) can take the generator's set-up code
 (`gs_begin`, 1.2 KB, runs once a render) if XIP is wanted back.
@@ -342,7 +342,7 @@ Open questions:
 
 ## 6. Steps, each with its test
 
-1. **Done (2026-10-15, HISTORY 3y104). The generator in the firmware's tree**: `firmware/src/grain_src.c` from
+1. **Done (2026-10-15, HISTORY 3y108). The generator in the firmware's tree**: `firmware/src/grain_src.c` from
    `tools/grain_sketch.c`'s `gs_*` (the sketch tool includes it). `tests/cr_grain_test.c` (in `run_cr_tests.sh`,
    with `-fsanitize=signed-integer-overflow,shift`): 800 renders of a TONE x MOTION x SEED grid a family (the peak
    28 000 within the gain's rounding, or under it when the gain capped at 8: 17 of 800; the mean under 1 % of full
@@ -350,7 +350,7 @@ Open questions:
    knobs' masking, eight seeds a family all different, the 24 sketch settings against `tests/cr_grain_golden.txt`
    (GOLDEN_UPDATE=1 rewrites it) and against the sketch WAVs where present, the host time a render. Nothing is in
    the image yet (no file includes it): the size line is da1f8e2's.
-2. **Done (3y105). The player as an engine on two static buffers**: `eng_grain.c` (`gp_*`; `engine_t`: `note_on`,
+2. **Done (3y109). The player as an engine on two static buffers**: `eng_grain.c` (`gp_*`; `engine_t`: `note_on`,
    `render`, `block`, `poly 8`, `sampled`), the two buffers `grain_buf[2]` in POOL, MORPH's choice in `gp_spawn`
    (the voice's count in `s[1]`), SCAN (the part's phase), the SVF a voice in `s[2..3]`, the platform's amplitude
    through `voice_amp`. Test `tests/cr_grain_test.c` section 6 (the driver: the tick, the part's block, each voice
@@ -361,7 +361,7 @@ Open questions:
    one), 1.4 s of a 6-note chord on each preset (no int32 wrap, 27 .. 69 % FS at LEVEL 92, not silent, the grains
    gone after the voices). `tests/regress.c`: the eight presets' goldens and CPU lines (`tests/golden.txt`,
    `tests/cpu_baseline.txt`: the old GRAIN's four lines replaced).
-3. **Done (3y105). The render scheduler**: `grain_tick` once a block on core 0 (`fx.c mix_block`, before any part
+3. **Done (3y109). The render scheduler**: `grain_tick` once a block on core 0 (`fx.c mix_block`, before any part
    renders: the owner's source knobs against what the buffers hold, a request a source; a locked source's grains
    killed: `gp_run` ramps them to 0 over the block), `grain_poll` in `main.c`'s idle loop and the emulator's
    `emu_fw_idle` (GRAIN_ASYNC 1: lock, wait for the fade's block to end, render 1024 samples a turn, swap the knobs
@@ -373,7 +373,7 @@ Open questions:
    shares (no render from its knobs) and owns when the chord part leaves GRAIN; same knobs render nothing. Not
    written: a two-thread ThreadSanitizer run (the flags are `volatile` bytes behind `fm1_irq_off`; the emulator's
    audio thread and main thread exercise the two sides in `test_cr.sh`).
-4. **Done (3y105). The platform**: `ENGINES[8]` (`FELUCCA_GRAIN 1` in choralroot.c and the emulator, Felucca's
+4. **Done (3y109). The platform**: `ENGINES[8]` (`FELUCCA_GRAIN 1` in choralroot.c and the emulator, Felucca's
    default; `GRAIN_ASYNC 1` there), `engines.c`'s SAMPLE `#error` for SLICE alone, `eng_state`'s `grain` member,
    `ENGI_GRAIN 8u` (core.h), the deep pages (`SRC 1`, `SRC 2`, `GRAIN`, `GRAIN+`, `FILTER`, and `ENV` / `LFO` as pages
    over the track's P_ATK .. P_REL and P_LRATE P_LWAVE P_LD_PIT P_LD_FLT, since the editor wants the four sections:

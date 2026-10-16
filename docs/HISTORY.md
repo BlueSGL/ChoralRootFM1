@@ -4061,7 +4061,7 @@ with the local build's afterwards.
 `python3 tests/site_test.py` with every package in build/scratch/packages: site ALL OK (42). Then main pushed and
 v0.22-beta3 tagged on the same commit, the owner's word ("lets tag this as v0.22-beta3 and get it released").
 
-3y102. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
+3y106. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
 2026-10-15: "Could the grain synth have a way to generate its own samples from a couple knobs to quickly get a variety
 of interesting samples to work with?"; branch claude/grain-engine-f724f9 from da1f8e2 = v0.22-beta3). No firmware
 code; nothing flashed; the owner decides after hearing the sketches.** `docs/GRAIN.md` (new): the source generator
@@ -4086,7 +4086,7 @@ the finish pass's high-pass, the fundamental at C4, the centroid and level movin
 say) and over the scenes (every one sounding through the hold and silent at the end); `python3 tools/grain_cost.py`
 (.text 7420 B, .rodata 4192 with the shared tables). Not run: the suites (no firmware changed). No device access.
 
-3y103. **GRAIN: two sources and MORPH (the owner, 2026-10-15, on the first sketches: "I like these test wavs, What
+3y107. **GRAIN: two sources and MORPH (the owner, 2026-10-15, on the first sketches: "I like these test wavs, What
 would be really cool is if you could generate two waves, each with their own settings, and then there's a parameter
 to morph between them"; branch claude/grain-engine-f724f9).** docs/GRAIN.md: a sound has sources A and B (TYPE TONE
 MOTION SEED each, two 32 KB buffers: the same 64 KB of POOL as before, now one part's; a bass part on GRAIN shares
@@ -4106,7 +4106,7 @@ the env scenes start on B and settle on A, the half scenes sit between; `python3
 **Decided** (the owner, later the same evening, after hearing the morph files): "Keep the granular morph (each grain
 reads A or B by MORPH's share) as designed." The crossfade stays a comparison in the sketches only; GRAIN.md says so.
 
-3y104. **GRAIN step 1: the source generator in the firmware's tree with its test (the owner, 2026-10-15: "Go ahead
+3y108. **GRAIN step 1: the source generator in the firmware's tree with its test (the owner, 2026-10-15: "Go ahead
 with step 1 of docs/GRAIN.md"; branch claude/grain-engine-f724f9).** `firmware/src/grain_src.c` (new): the eight
 families' `gs_begin` / `gs_step` / `gs_finish` moved out of `tools/grain_sketch.c`, which includes it (the sketches
 heard are the firmware's generator byte for byte; the sketch keeps the player and `pow2_q16`); `GS_API` / `GS_FAM`
@@ -4126,7 +4126,7 @@ files; the sources' mean now under 0.03 %); `python3 tools/grain_cost.py`; `sh t
 `sh tests/run_cr_tests.sh` exit 0 (every suite as before, cr_grain_test 4330 checks ok). Not run: `./build.sh`'s
 size line cannot change (no file includes grain_src.c); no device access.
 
-3y105. **GRAIN steps 2 to 4: the engine in the firmware (the owner, 2026-10-15: "Ok, continue and do steps 2 to 4";
+3y109. **GRAIN steps 2 to 4: the engine in the firmware (the owner, 2026-10-15: "Ok, continue and do steps 2 to 4";
 branch claude/grain-engine-f724f9; docs/GRAIN.md section 6).** `firmware/src/eng_grain.c` replaced: Felucca's GRAIN
 player (the pool of grains shared by a part's voices, the Hann window, the 1 / sqrt(overlap) level, SIZE DENS POS SPRD
 RAND, the block-wise window ramp) over two RAM buffers rendered by `grain_src.c` (sources A and B, 2 x 32 KB of POOL,
