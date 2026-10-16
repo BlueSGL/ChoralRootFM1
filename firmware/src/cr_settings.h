@@ -126,7 +126,13 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
  * writes that); with it clear the byte is in its range and is read as before */
 #define CRS_SIXTH_UP 0x10u
 #define CRS_SIXTH(s) (((unsigned)(s)->pick_roots & CRS_SIXTH_UP) ? 1u : 0u)
-#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD | CRS_SIXTH_UP)   /* the byte's automatic bits (cr_settings_auto) */
+/* Options > Velocity Curve (0.22; docs/VELOCITY.md "fm1-ctl") rides in bits 5..7 of the same byte: the curve -3 .. +3
+ * as three bits of two's complement (0 = 0, the default: every older record's, no version; 5 6 7 = -3 -2 -1; 4 is
+ * not a value and reads as -3). A firmware up to 3y93 finds 32..255 out of range and takes its default for the byte */
+#define CRS_VCURVE_BITS 0xE0u
+#define CRS_VCURVE(s) ((int)(((unsigned)(s)->pick_roots >> 5) & 7u) >= 4 ? (int)(((unsigned)(s)->pick_roots >> 5) & 7u) - 8 : (int)(((unsigned)(s)->pick_roots >> 5) & 7u))
+#define CRS_VCURVE_OF(k) ((uint8_t)(((unsigned)(k) & 7u) << 5))
+#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD | CRS_SIXTH_UP | CRS_VCURVE_BITS)   /* the byte's automatic bits (cr_settings_auto) */
 
 typedef struct {
     /* header (12 bytes) */

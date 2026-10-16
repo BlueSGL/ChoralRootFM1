@@ -4354,3 +4354,18 @@ step OK; the landing page "Version 0.22", "Install 0.22", "New in 0.22" with the
 `blob/main/docs/releases/0.22.md`, no emulator line; the hosted 0.22 packages with the new sha256s
 (`firmware/SHA256SUMS`, `firmware/index.html`). Not done: the tag, the push, the release, the site; nothing flashed by
 this session.
+
+3y112. **fm1-ctl read, and Options > Velocity Curve (2026-10-15; the owner: "Charles has said that his repo fm1-ctl has
+the best velocity and aftertouch implementation ... see what the improvements are and if we can bring them in").**
+Read at `de372e7`: CTL-1's sensing is MONK-1's byte for byte (`sense.c` plus a settable floor and a top-row curve;
+`fm1_input.h`, `fm1_adc.h` identical), tuned by playing on his unit: the firm end at 530 (DRIVE 2's 450 sat under
+his firm presses, his hardest hit topped out near 95; the owner's unit reaches 127 with ours), a Curve -5 .. +5 on
+the map's exponent, the top row through the PA10 probe at 0 / 43 / 2.40 (the probe on every key tried and dropped: a
+light press moves it 8 counts), Aftertouch Off / Poly / Channel with poly per note of a chord key, AT sens -5 .. +5,
+a Touch page with velocity and pressure bars, and a host emulator that plays a key at a velocity by inverting the
+map (`host/ctl_host.c land_for`). The comparison, line by line, in docs/VELOCITY.md "fm1-ctl". Brought in first:
+**Velocity Curve** -3 .. +3 (the entry after Velocity Sens; `cr_sense.c SN_CURVES`, seven tables of the map at 0.7 x
+2^(0.2 k); bits 5..7 of `pick_roots` as two's complement, 0 the default, no version; `cr_settings_test`'s cases).
+The entry moved every Options entry from Aftertouch Sens on by one: the 20 walk scripts, `cr_opt_keys.txt` (30
+entries) and the runners' numbers, as 3y93 did. Next, if the owner wants them: the emulator's velocity model, the
+top row's probe, poly aftertouch out, the readout.

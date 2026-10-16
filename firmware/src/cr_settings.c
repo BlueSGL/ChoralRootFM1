@@ -225,7 +225,9 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(metro_sig, 0, 2);
     CRS_FIX(metro_vol, 0, 100);
     CRS_FIX(loop_slot, 0, 9);
-    CRS_FIX(pick_roots, 0, 31);                    /* (bit 1: Output Classic, CRS_OUT_CLASSIC; bit 2: USB Rate, CRS_USB_48K;
+    CRS_FIX(pick_roots, 0, 255);                   /* (bits 5..7: Velocity Curve, CRS_VCURVE) */
+    if (((s->pick_roots >> 5) & 7u) == 4u)         /* -4: not a curve: -3 */
+        s->pick_roots = (uint8_t)((s->pick_roots & 0x1Fu) | (5u << 5));                    /* (bit 1: Output Classic, CRS_OUT_CLASSIC; bit 2: USB Rate, CRS_USB_48K;
                                                     * bit 3: Chord Names Standard, CRS_NAMES_STD; bit 4: 6th with 7th
                                                     * Octave up, CRS_SIXTH_UP) */
     CRS_FIX(usb_in, 0, 1);
@@ -771,7 +773,8 @@ static void crs_capture(cr_settings_t *s)
     s->loop_rec = (uint8_t)(CRS_LOOP_REC(cs.loop_mode, cs.loop_keys) | (cs.key_play ? CRS_KEY_PLAY : 0u) |
                             (cs.lock_keep ? CRS_LOCK_KEEP : 0u) | (cs.lock_push ? CRS_LOCK_PUSH : 0u));
     s->pick_roots = (uint8_t)((cs.out_clean ? 0u : CRS_OUT_CLASSIC) | (cs.usb48 ? CRS_USB_48K : 0u) |
-                              (cs.names_std ? CRS_NAMES_STD : 0u) | (cs.sixth_up ? CRS_SIXTH_UP : 0u));   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
+                              (cs.names_std ? CRS_NAMES_STD : 0u) | (cs.sixth_up ? CRS_SIXTH_UP : 0u) |
+                              CRS_VCURVE_OF(cs.vel_curve));   /* (bit 0 reserved since 0.18: the engine picker's roots always play; written
                                                     * as "play", so an older firmware reading this record plays too) */
     s->usb_in = cs.usb_in;
     s->usb_level = cs.usb_fixed;
@@ -1077,6 +1080,7 @@ static void cr_settings_load(void)
     cs.snap = (uint8_t)CRS_SNAP(s);
     cs.numerals = (uint8_t)CRS_NUMS(s);
     cs.touch = (uint8_t)CRS_TOUCH(s);              /* Options > Key Touch and the sensitivities (docs/VELOCITY.md) */
+    cs.vel_curve = (int8_t)CRS_VCURVE(s);
     cs.vel_sens = (uint8_t)CRS_VSENS(s);
     cs.at_sens = (uint8_t)CRS_ATSENS(s);
     cu_touch_apply();

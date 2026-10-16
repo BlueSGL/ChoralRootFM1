@@ -333,7 +333,8 @@ static void t_version(void)
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 0, "pick_roots 0 (the roots play) kept");
     s.pick_roots = 33;
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range (bit 5 up): the default");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 33 && CRS_VCURVE(&r) == 1,
+       "pick_roots 33: bit 5 is Velocity Curve +1 since 3y112 (it read as out of range before), kept");
     /* 0.19: Options > Output in bit 1 of that byte (CRS_OUT_CLASSIC): clear = Clean, the default and every older
      * record's; set = Classic, kept beside the retired bit 0 */
     cr_settings_defaults(&s);
@@ -1440,6 +1441,23 @@ static void t_touch(void)
     o2.bass_on = CRS_TOUCH_BITS(1, 2, 1);
     cr_settings_auto(&m2, &o2);
     ok(m2.bass_on == (uint8_t)(CRS_NUMERALS | CRS_TOUCH_BITS(1, 2, 1)), "Key Touch and the Sens are automatic (the Options of now); Numerals stays the record's");
+    /* Velocity Curve: bits 5..7 of pick_roots, -3 .. +3 as two's complement */
+    s = d;
+    s.pick_roots = (uint8_t)(CRS_SIXTH_UP | CRS_VCURVE_OF(-2));
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VCURVE(&r) == -2 && CRS_SIXTH(&r) == 1u, "Velocity Curve -2 beside 6th with 7th: both kept");
+    s.pick_roots = CRS_VCURVE_OF(3);
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VCURVE(&r) == 3, "Velocity Curve +3");
+    s.pick_roots = (uint8_t)(4u << 5);
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VCURVE(&r) == -3, "the bits at -4 (not a curve): -3");
+    ok(CRS_VCURVE(&d) == 0, "defaults: Velocity Curve 0");
+    cr_settings_defaults(&m2);
+    cr_settings_defaults(&o2);
+    o2.pick_roots = CRS_VCURVE_OF(1);
+    cr_settings_auto(&m2, &o2);
+    ok(CRS_VCURVE(&m2) == 1, "Velocity Curve is automatic (an Option)");
 }
 
 /* 0.22, GitHub issue 18: the KEY layer's Snap in bits 3 .. 4 of key_on (CRS_SNAP, CRS_SNAP_BITS): Off (0) by default

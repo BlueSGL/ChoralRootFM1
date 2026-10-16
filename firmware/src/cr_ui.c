@@ -538,6 +538,7 @@ static struct {
                                            * (cr_engine.c cr_chord_names_set; docs/CHORD-NAMES.md) */
     uint8_t touch, vel_sens, at_sens;     /* Options > Key Touch (0 Fixed, 1 Dynamic, 2 Velocity + Aftertouch), Velocity
                                            * Sens and Aftertouch Sens (0 Mid, 1 Low, 2 High): docs/VELOCITY.md */
+    int8_t vel_curve;                     /* Options > Velocity Curve -3 .. +3 (0: Velo's 0.7; the map's exponent x 2^(0.2 k)) */
     uint8_t sixth_up;                     /* Options > 6th with 7th (0.20): 1 Octave up, 0 In place, the default
                                            * (cr_engine.c cr_set_sixth_up; docs/CHORD-NAMES.md) */
 } cs;
@@ -978,7 +979,7 @@ static void cu_route(void)                        /* Options > MIDI: channels an
 }
 
 /* ------------------------------------------------------------- Options --- */
-enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_ATSENS, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
+enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_VCURVE, O_ATSENS, O_BASSMODE, O_SINGLE, O_SPLIT, O_CH_MAIN, O_CH_BASS, O_CH_RAW, O_RAW_SOUND,
        O_CLOCK, O_VIEW, O_MOTION, O_NAMES, O_LEDS, O_HOLD, O_USB_IN, O_USB_LEVEL, O_USB_RATE, O_DUALCORE, O_OUTPUT, O_VERSION,
        O_CALIB,
        O_RESET,                           /* Reset Settings: the last entry of a normal session */
@@ -986,12 +987,12 @@ enum { O_STYLE, O_EXTADD, O_SECRET, O_SIXTH, O_VEL, O_TOUCH, O_VSENS, O_ATSENS, 
        O_N };
 #define O_N_NORMAL O_SAFE                 /* Safe Mode and Flash Data: listed in SAFE MODE only (core.h cr_safe) */
 static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Secret Chords", "6th with 7th",
-    "Velocity", "Key Touch", "Velocity Sens", "Aftertouch Sens",
+    "Velocity", "Key Touch", "Velocity Sens", "Velocity Curve", "Aftertouch Sens",
     "Bass Behaviour", "Single Notes", "Split Point", "MIDI Perform", "MIDI Bass", "MIDI Raw Chord", "Raw Chord Sound",
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 2, 2, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 2, 2, 6, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -1011,6 +1012,7 @@ static void cu_touch_apply(void)
     cr_touch_vsens = cs.vel_sens;
     cr_touch_atsens = cs.at_sens;
 #ifdef CR_SENSE_KEYS
+    cr_touch_curve = (uint8_t)(cs.vel_curve + 3);
     fm1_an.drive = cs.touch ? SN_DRIVE : 0u;
 #endif
 }
@@ -1033,6 +1035,7 @@ static int32_t opt_get(uint32_t o)
     case O_VEL: return cs.vel;
     case O_TOUCH: return cs.touch;
     case O_VSENS: return cs.vel_sens;
+    case O_VCURVE: return cs.vel_curve + 3;
     case O_ATSENS: return cs.at_sens;
     case O_BASSMODE: return cs.bass_mode;
     case O_SINGLE: return cs.single;
@@ -1064,6 +1067,7 @@ static void opt_set(uint32_t o, int32_t v)
     case O_VEL: cs.vel = (uint8_t)v; break;
     case O_TOUCH: cs.touch = (uint8_t)v; cu_touch_apply(); break;
     case O_VSENS: cs.vel_sens = (uint8_t)v; cu_touch_apply(); break;
+    case O_VCURVE: cs.vel_curve = (int8_t)(v - 3); cu_touch_apply(); break;
     case O_ATSENS: cs.at_sens = (uint8_t)v; cu_touch_apply(); break;
     case O_BASSMODE: cs.bass_mode = (uint8_t)v; cr_post(CRE_BASS_MODE, 0, 0, v); break;
     case O_SINGLE: cs.single = (uint8_t)v; cu_post_single(); break;
@@ -1151,6 +1155,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_VEL: cu_int(d, v, 0, n); break;
     case O_TOUCH: cu_cpy(d, v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
     case O_VSENS: case O_ATSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
+    case O_VCURVE: cu_int(d, v - 3, 1, n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
     case O_SINGLE: cu_cpy(d, v == 2 ? "Split Bass" : v ? "Split Oct" : "Full Octave", n); break;
     case O_SPLIT: cu_cpy(d, CU_NOTE[v % 12], n); cu_cat(d, cs.single ? "" : " (Split off)", n); break;

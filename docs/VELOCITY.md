@@ -41,6 +41,11 @@ the owner's unit already reaches the full range with ours. The order, if wanted:
 it also makes the floor tunable by feel), the emulator's velocity model (it makes the rest testable), the top row's
 probe, poly aftertouch out, the readout.
 
+**Brought in (2026-10-15, after the reading): Options > Velocity Curve** -3 .. +3, the entry after Velocity Sens:
+the map's exponent 0.7 x 2^(0.2 k) (seven tables, `cr_sense.c SN_CURVES`; x 1.5 at +3, / 1.5 at -3: higher, you play
+harder to reach 127; lower, softer playing reaches it), which moves the velocity the keys send, MIDI included,
+where Velocity Sens shapes the level after it. Stored in bits 5..7 of the block's `pick_roots` (docs/SETTINGS.md).
+
 The owner: "look into https://github.com/charlesvestal/fm1-monk: he added velocity and aftertouch to the FM-1, which
 would be super cool to bring in to ChoralRoot." This is the study of how fm1-monk does it and the design of the same
 thing on ChoralRoot. **Nothing is built**: no code, no test, no measurement on the unit (another session holds it
