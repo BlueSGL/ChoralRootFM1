@@ -145,7 +145,7 @@ none and keep the title rules:
 | LFO | 1 | `stack`, 4 rows | LFO 1–4 | Rate · Wave · Depth · Fade | `LFO 1 · A` |
 | LFO | 2 | `stack`, 4 rows | LFO 1–4 | Sync (`LFO SYN`, column n) | `LFO 1 · B` |
 | LFO | 3 | `edit8`, one row | one (the `VOICE` page, the LFO section's last: a page of its own) | Uspread (USPREAD, the unison's stereo spread: docs/VA.md); KNOB 2–4 blank | `VOICE` |
-| MOD | 1 | `stack`, 8 rows, text only | slots 1–8 | Source · Dest · Amount (bipolar) | `MOD 3` |
+| MOD | 1 | `stack`, 8 rows, text only | slots 1–8 | Source · Dest · Amount (bipolar; hundredths, `+0.30` `+12.00`: tenths below 6, whole numbers from 6, docs/VA.md "matrix") | `MOD 3` |
 | FX | 1 | `edit8`, one row | one | Drive · Chorus · Delay · Reverb (the platform sends) | `FX` |
 | MIX | 1 | `edit8`, two rows | A, B | A: Level · Pan · Voice · Glide; B: Transpose · Detune · Priority · Gl. mode | `MIX` |
 
@@ -373,7 +373,7 @@ from the anchor, and both ends:
 
 A named choice never snaps (one item a detent, OPT or not), but for a list of tempo divisions (the VA's synced LFO
 Rate, `kn_divs`: an F_ENUM `RATE` with a `1/4T` among its names): OPT steps the straight ones (a name ending in T or D
-is skipped). The VA's FENV is hi-res (`F_FIX2`): whole numbers. OPT's other jobs are as before: OPT + PRESETS / +
+is skipped). The VA's FENV and its matrix's AMT are hi-res (`F_FIX2`): whole numbers. OPT's other jobs are as before: OPT + PRESETS / +
 ALGORITHM change the chord / bass part's engine, OPT + KNOB 1 the split point and OPT + SELECT the click level (also
 in a layer: KNOB 1 of a layer cannot snap), OPT + SAVE, OPT tapped the Options; in the editor SHIFT + EDIT the other
 part and SHIFT + SELECT the lanes. Only OPT + a value knob changes meaning.
@@ -625,7 +625,7 @@ For an engine whose deep pages map their columns to the matrix (`eng_deep_t.mod_
 
 | Gesture (in the editor) | Result |
 | --- | --- |
-| **ENV held + KNOB 1–4 turned** | the **ENV n last shown** (the ENV group's screen when it was last open; before that **ENV 2**) modulates the parameter under that knob: the matrix slot with that source and that destination, else the **first free slot** (SRC or DST `OFF`) gets them, and the turn steps its **AMT** (−64..63, accelerated as every value, §6a: 1 a slow detent, 6 a quick one; SHIFT: the snap, 0 then 8s). The hot cell shows `ENV2 +12` on a block in the source's colour. Trace: `mod: ENV2 -> CUT +12 slot 1` |
+| **ENV held + KNOB 1–4 turned** | the **ENV n last shown** (the ENV group's screen when it was last open; before that **ENV 2**) modulates the parameter under that knob: the matrix slot with that source and that destination, else the **first free slot** (SRC or DST `OFF`) gets them, and the turn steps its **AMT** (−64..63, accelerated as every value, §6a: a slow detent 0.1 below 6 and 1 from 6, a quick one 6.35 to the last value it passed, 6 from 0; SHIFT: the snap, whole numbers; the VA's AMT steps in tenths below 6 since 2026-10-15, GitHub issue 13). The hot cell shows `ENV2 +12` (`LFO1 +0.3` in tenths) on a block in the source's colour. Trace: `mod: ENV2 -> CUT +12 slot 1` |
 | **LFO held + KNOB 1–4 turned** | the same with the **LFO n last shown** (its lane on the LFO stacks; before that **LFO 1**): `mod: LFO1 -> RES +6 slot 2` |
 | no free slot | the message **`matrix full`** (red), nothing changes; trace `mod: LFO1 -> CUT matrix full` |
 | a parameter that is no destination (a wave, an envelope time, a matrix column), or an engine without `mod_dst` | **`not modulatable`**; trace `mod: not modulatable` |

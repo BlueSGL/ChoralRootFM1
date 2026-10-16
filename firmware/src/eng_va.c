@@ -25,11 +25,14 @@
 #endif
 #define VA_NPART 2u              /* parts with a VA patch (ChoralRoot: chord, bass) */
 #define VA_POLY 8                /* engine_t.poly (docs/VA.md: CPU) */
-#define VA_BLOB 110u             /* packed patch: 2 bytes magic / version, VA_NP values, zero padding */
+#define VA_BLOB 110u             /* packed patch: 2 bytes magic / version, VA_NP values (version 4: 106 and 2 zero
+                                  * bytes, where version 5 keeps the matrix's fine flags) */
 #define VA_MAGIC 0x56u           /* 'V' */
-#define VA_VER 4u                /* 4: FENV in hundredths (its fine part at VA_FENVF), a synced LFO RATE an index into
-                                  * N_VA_SYNC (version 3: FENV whole, a synced RATE x 14 / 128 into 14 divisions;
-                                  * version 2: TYPE 0..3 and MORPH 0..127; all the same size) */
+#define VA_VER 5u                /* 5: the matrix's fine amounts (VA_MFINE0 / VA_MFINE1 in version 4's padding: a
+                                  * slot's AMT in tenths; va_pack writes 5 only with one, else 4); 4: FENV in hundredths
+                                  * (its fine part at VA_FENVF), a synced LFO RATE an index into N_VA_SYNC (version 3:
+                                  * FENV whole, a synced RATE x 14 / 128 into 14 divisions; version 2: TYPE 0..3 and
+                                  * MORPH 0..127; all the same size) */
 #define VA_BLOB1 104u            /* version 1 (before the oscillator modes, FILTER MORPH / SPREAD, USPREAD): 99 values */
 #define VA_NP1 99u
 
@@ -49,12 +52,15 @@ enum {
     VA_FENVF = VA_OMODE0 + 4, VA_FSPREAD, VA_USPREAD,    /* MODE of OSC 1..4, FENV's hundredths 0..99 (version 4:
                                                           * FENV = VA_FENV x 100 + VA_FENVF; version 3 kept it 0,
                                                           * version 2's FILTER MORPH), SPREAD, USPREAD */
+    VA_MFINE0, VA_MFINE1,                        /* version 5: the matrix's fine flags, bit k of MFINE0 slot k + 1
+                                                  * (1..7), bit 0 of MFINE1 slot 8: the slot's AMT is in tenths
+                                                  * (-5.9 .. +5.9, va_set; 0: whole, as before) */
     VA_NP
 };
 #define VA_ENV(k, f) (VA_ENV0 + (k) * VE_N + (f))
 #define VA_LFO(k, f) (VA_LFO0 + (k) * VL_N + (f))
 #define VA_MOD(k, f) (VA_MOD0 + (k) * VM_N + (f))
-_Static_assert(VA_NP == 106 && VA_OMODE0 == VA_NP1 && VA_NP + 2u <= VA_BLOB && VA_BLOB <= 128u &&
+_Static_assert(VA_NP == 108 && VA_OMODE0 == VA_NP1 && VA_NP + 2u == VA_BLOB && VA_BLOB <= 128u &&
                VA_NP1 + 2u <= VA_BLOB1, "VA patch layout");
 
 enum { VW_SAW, VW_SQR, VW_TRI, VW_SIN, VW_PWM, VW_NOIS, VW_N };
@@ -138,7 +144,8 @@ _Static_assert(NELEM(N_VA_SRC) == VS_N && NELEM(N_VA_DST) == VD_N && NELEM(N_VA_
 #define VC_LSYNC(l) {l, F_ONOFF, 0, 1, 0, 0, 0}
 #define VC_SRC {"SRC", F_ENUM, 0, VS_N - 1, 0, N_VA_SRC, 0}
 #define VC_DST {"DST", F_ENUM, 0, VD_N - 1, 0, N_VA_DST, 0}
-#define VC_AMT {"AMT", F_BIPCT, -64, 63, 0, 0, 0}
+#define VC_AMT {"AMT", F_FIX2, -6400, 6300, 0, 0, 0}   /* hundredths: tenths below 6, whole numbers from 6 (va_get /
+                                                         * va_set; the patch's AMT -64..63 and its fine flag) */
 #define VC_NONE {0, 0, 0, 0, 0, 0, 0}
 #define VA_X 0xFFu               /* an empty column */
 
@@ -238,6 +245,8 @@ static va_rng_t va_range(uint32_t i)
         r.max = VOM_N - 1;
     } else if (i == VA_FENVF) {
         r.max = 99;                                     /* FENV's hundredths */
+    } else if (i == VA_MFINE1) {
+        r.max = 1;                                      /* (slot 8's fine flag; MFINE0: 0..127, slots 1..7) */
     }
     return r;
 }
@@ -293,21 +302,22 @@ static int8_t va_clampv(uint32_t i, int32_t v)
     return (int8_t)(v < r.min ? r.min : v > r.max ? r.max : v);
 }
 
-/* the patch -> blob (7-bit bytes: value - min) */
+/* the patch -> blob (7-bit bytes: value - min). Version 5 only when a matrix slot is in tenths; else version 4, byte
+ * for byte as before (its last 2 bytes 0): a sound without a fine amount still loads on a firmware of version 4 */
 static void va_pack(const int8_t *p, uint8_t *b)
 {
     uint32_t i;
     b[0] = VA_MAGIC;
-    b[1] = VA_VER;
+    b[1] = p[VA_MFINE0] || p[VA_MFINE1] ? VA_VER : 4u;
     for (i = 0; i < VA_NP; i++)
         b[2 + i] = (uint8_t)(va_clampv(i, p[i]) - va_range(i).min);
     for (i = 2 + VA_NP; i < VA_BLOB; i++)
         b[i] = 0;
 }
 
-/* a valid blob: version 3 or 2 (VA_BLOB bytes, VA_NP values; version 2: TYPE 0..3 where FTYPE is, MORPH 0..127
- * where version 3 keeps a 0) or version 1 (its first VA_BLOB1 bytes, VA_NP1 values; the ranges of version 1's values
- * only grew: SRC / DST gained names at the end) */
+/* a valid blob: version 5 .. 2 (VA_BLOB bytes, VA_NP values; versions 2..4: the last 2 are padding, 0; version 2:
+ * TYPE 0..3 where FTYPE is, MORPH 0..127 where version 3 keeps a 0) or version 1 (its first VA_BLOB1 bytes, VA_NP1
+ * values; the ranges of version 1's values only grew: SRC / DST gained names at the end) */
 static int va_blob_ok(const uint8_t *b)
 {
     uint32_t i, np, len;
@@ -319,8 +329,10 @@ static int va_blob_ok(const uint8_t *b)
         va_rng_t r = va_range(i);
         if (b[1] < 3u && i == VA_FTYPE)
             r.max = 3;                           /* (version 1 / 2: TYPE) */
-        else if (b[1] < VA_VER && i == VA_FENVF)
+        else if (b[1] < 4u && i == VA_FENVF)
             r.max = b[1] == 3u ? 0 : 127;        /* (version 3: 0; version 2: MORPH) */
+        else if (b[1] < 5u && i >= VA_MFINE0)
+            r.max = 0;                           /* (versions 2..4: the padding) */
         if (b[2 + i] > (uint32_t)(r.max - r.min))
             return 0;
     }
@@ -344,7 +356,7 @@ static int va_unpack(const uint8_t *b, int8_t *p)
         p[i] = (int8_t)(b[2 + i] + va_range(i).min);
     if (b[1] < 3u)
         p[VA_FTYPE] = (int8_t)((b[2 + VA_FTYPE] * 32u + (b[1] == 1u ? 0u : b[2 + VA_FENVF])) & 127u);
-    if (b[1] < VA_VER) {                         /* versions 1..3: FENV whole (x 100: hundredths 0); a synced RATE to
+    if (b[1] < 4u) {                             /* versions 1..3: FENV whole (x 100: hundredths 0); a synced RATE to
                                                   * the same division in the version-4 list */
         p[VA_FENVF] = 0;
         for (i = 0; i < 4u; i++)
@@ -516,6 +528,39 @@ static void va_preset_patch(uint32_t k, int8_t *p)
 }
 
 /* ------------------------------------------------- deep pages, the blob --- */
+/* the matrix's fine amounts (version 5; the owner and issue 13, 2026-10-15: "the effect of 1 % is too powerful"): a
+ * slot's AMT is whole (-64 .. 63, as before) or, with its fine flag, in tenths (-5.9 .. +5.9: the render takes
+ * a tenth of it, VA_AMX). The AMT column reads hundredths (F_FIX2): -64.00 .. +63.00, tenths below 6, whole from 6 */
+static uint32_t va_mfine(const int8_t *p, uint32_t k)
+{
+    return k < 7u ? ((uint32_t)p[VA_MFINE0] >> k) & 1u : (uint32_t)p[VA_MFINE1] & 1u;
+}
+static void va_mfine_put(int8_t *p, uint32_t k, uint32_t on)
+{
+    int8_t *f = &p[k < 7u ? VA_MFINE0 : VA_MFINE1];
+    uint32_t b = k < 7u ? 1u << k : 1u;
+    *f = (int8_t)(on ? (uint32_t)*f | b : (uint32_t)*f & ~b);
+}
+/* the AMT column's values (hundredths) at or below v, at or above v: tenths between -6 and 6, whole numbers outside */
+static int32_t va_amt_floor(int32_t v)
+{
+    int32_t g = v > -600 && v < 600 ? 10 : 100;
+    return v >= 0 ? v / g * g : -((-v + g - 1) / g * g);
+}
+static int32_t va_amt_ceil(int32_t v) { return -va_amt_floor(-v); }
+/* a turn of the AMT column from old to v: a value between two moves on from old to the next one its way (a slow
+ * detent's 0.01: a tenth below 6, a whole above), a larger one stops at the last it passed (a quick detent's 6.35: 6,
+ * the whole amounts' step of before) */
+static int32_t va_amt_q(int32_t v, int32_t old)
+{
+    int32_t r = v = clamp(v, -6400, 6300);
+    if (v > old && (r = va_amt_floor(v)) <= old)
+        r = va_amt_ceil(old + 1);
+    else if (v < old && (r = va_amt_ceil(v)) >= old)
+        r = va_amt_floor(old - 1);
+    return clamp(r, -6400, 6300);
+}
+
 /* the patch value of page column (page, col) for part tr, VA_X = none. OSC n's WAVE column follows MODE: BASIC the
  * wave, MORPH the morph position (an alias of SHAPE: KNOB 1 morphs the wave), NOISE the noise type (WAVE's value) */
 static uint32_t va_index(uint32_t tr, uint32_t page, uint32_t col)
@@ -539,6 +584,8 @@ static int32_t va_get(const track_t *t, uint32_t page, uint32_t col)
     v = va_patch[tr][i];
     if (i == VA_FENV)                            /* hundredths: -64.00 .. +63.99 */
         return v * 100 + va_patch[tr][VA_FENVF];
+    if (i >= VA_MOD0 && i < VA_OMIX && (i - VA_MOD0) % VM_N == VM_AMT)   /* hundredths: tenths or whole */
+        return v * (va_mfine(va_patch[tr], (i - VA_MOD0) / VM_N) ? 10 : 100);
     if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_RATE && va_patch[tr][i + VL_SYNC])
         return v < (int32_t)VA_NSYNC ? v : (int32_t)VA_NSYNC - 1;   /* (synced: an index into N_VA_SYNC) */
     if (i < VA_SYNC2 && i % VO_N == VO_WAVE && va_patch[tr][VA_OMODE0 + i / VO_N] == VOM_NOISE && v >= VN_N)
@@ -593,6 +640,12 @@ static void va_set(track_t *t, uint32_t page, uint32_t col, int32_t v)
     }
     if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_RATE && va_patch[tr][i + VL_SYNC])
         v = clamp(v, 0, (int32_t)VA_NSYNC - 1);  /* (synced: the list) */
+    if (i >= VA_MOD0 && i < VA_OMIX && (i - VA_MOD0) % VM_N == VM_AMT) {   /* hundredths: tenths or whole */
+        k = (i - VA_MOD0) / VM_N;
+        v = va_amt_q(v, va_patch[tr][i] * (va_mfine(va_patch[tr], k) ? 10 : 100));
+        va_mfine_put(va_patch[tr], k, v % 100 != 0);
+        v = v % 100 ? v / 10 : v / 100;
+    }
     old = va_patch[tr][i];
     va_patch[tr][i] = va_clampv(i, v);
     if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_SYNC && va_patch[tr][i] != old) {
@@ -980,12 +1033,16 @@ static inline int32_t va_svf(const tsvf_t *c, int32_t x, int32_t *ic1, int32_t *
         }                                                                  \
     }
 
+/* a matrix term x (a source x a slot's AMT, +-2^21) of slot k with the fine flags mf: a slot in tenths takes a tenth
+ * (x 205 / 2048, 0.1 % over; +-4.3e8), a whole one x itself, bit for bit as before version 5 */
+#define VA_AMX(x, mf, k) ((((mf) >> (k)) & 1u) ? ((x) * 205) >> 11 : (x))
+
 /* a voice's block: out gets the mono (the mid), side (0: none) the stereo side of SPREAD / USPREAD; 1 = side got
  * something */
 CR_HOT_VA static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *side, uint32_t n, const vmod_t *m)
 {
     va_voice_t *s = va_voice(t, v);
-    uint32_t tr = va_tr(t), k, i, wrap = 0, osc_on = 0, vinyl = 0;
+    uint32_t tr = va_tr(t), k, i, wrap = 0, osc_on = 0, vinyl = 0, mf;
     const int8_t *p;
     int32_t src[VS_N], dpit = 0, dosc[3][4] = {{0}}, dcut = 0, dres = 0, dpan = 0, drate[4] = {0}, dfm = 0, gain = 32767;
     int32_t ddrv = 0, dspr = 0, dfenv = 0;
@@ -1012,12 +1069,13 @@ CR_HOT_VA static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *si
     src[VS_KEY] = clamp(((int32_t)v->note - 60) * 512, -32767, 32767);
     src[VS_RAND] = v->mrnd;
     src[VS_MODW] = t->mw * 258;
+    mf = (uint32_t)p[VA_MFINE0] | (uint32_t)p[VA_MFINE1] << 7;   /* the slots in tenths (0: none, as before) */
     if (va_lfo[tr].depmod) {                     /* DEP1..4 first: the LFOs' depths, then the LFOs as sources */
         int32_t ddep[4] = {0};
         for (k = 0; k < 8u; k++) {
             uint32_t sr = (uint32_t)p[VA_MOD(k, VM_SRC)], d = (uint32_t)p[VA_MOD(k, VM_DST)];
             if (d >= VD_DEP1 && d < VD_N && sr && sr < VS_N)
-                ddep[d - VD_DEP1] += src[sr] * p[VA_MOD(k, VM_AMT)];
+                ddep[d - VD_DEP1] += VA_AMX(src[sr] * p[VA_MOD(k, VM_AMT)], mf, k);
         }
         for (k = 0; k < 4u; k++)
             if (ddep[k]) {
@@ -1033,7 +1091,7 @@ CR_HOT_VA static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *si
         int32_t am = p[VA_MOD(k, VM_AMT)], x;
         if (!sr || !d || !am || sr >= VS_N || d >= VD_N)
             continue;
-        x = src[sr] * am;                        /* Q15 x amount: +-2^21 */
+        x = VA_AMX(src[sr] * am, mf, k);         /* Q15 x amount: +-2^21 */
         if (d == VD_PITCH)
             dpit += x;
         else if (d < VD_LVL1)
@@ -1049,7 +1107,7 @@ CR_HOT_VA static int va_render(track_t *t, voice_t *v, int32_t *out, int32_t *si
         else if (d == VD_AMP) {
             int32_t u = sr >= VS_LFO1 && sr < VS_VEL ? (src[sr] + 32768) >> 1 : sr >= VS_KEY ? (src[sr] + 32768) >> 1 : src[sr];
             u = clamp(u, 0, 32767);
-            gain = mulq15(gain, clamp(32767 - (am > 0 ? ((32767 - u) * am) >> 6 : (u * -am) >> 6), 0, 32767));
+            gain = mulq15(gain, clamp(32767 - (VA_AMX(am > 0 ? (32767 - u) * am : u * -am, mf, k) >> 6), 0, 32767));
         } else if (d == VD_PAN)
             dpan += x;
         else if (d == VD_FTYPE)

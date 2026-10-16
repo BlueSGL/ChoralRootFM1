@@ -4199,3 +4199,51 @@ installer's default is 0.21)"; `emu/version.txt` "ChoralRoot 0.22-beta4". The in
 (`?demo=idle`): with the opt-in off the chips are 0.20 .. 0.16, with it on 0.22-beta4, beta3, beta2, beta1, then
 0.20 .. 0.16, Install names 0.21 both ways; the notes link is `blob/main/docs/releases/0.22-beta4.md` (the
 installer's and `firmware/index.html`'s); beta4's two packages are on the site with the listed sha256s.
+
+## 2026-10-15 (after 0.22-beta4: the VA matrix's fine amounts)
+
+3y110. **The VA matrix's amounts in tenths below 6 (GitHub issue 13, Apieceofbluesky, 2026-10-13: "If you want to
+modulate pitch with LFO, the lowest setting 1% is already a lot of modulation"; the owner, 2026-10-15: "for the VA
+engine's mod matrix, you should be able to adjust the modulation amount in smaller amounts, the effect of 1% is too
+powerful"; branch claude/va-mod-fine-9aa43c from 5e1e8a7 = v0.22-beta4).** (3y106 .. 3y109 are the grain session's.)
+The VA's own 8-slot matrix (eng_va.c, not the platform's mod.c) had AMT -64..63 shown as F_BIPCT (v x 100 / 64), so
+its smallest step, "1 %", was AMT 1: on PITCH at a full source 18.75 ct (+-18.75 ct of vibrato from a full LFO; the
+render's pitch resolution is 1/256 st, 0.39 ct, so the engine could go much finer). **Weighed**: (a) a curve on the
+stored AMT (the first steps small) changes every saved sound with a matrix slot, the factory presets' vibratos
+(AMT 2 .. 4 on PITCH) among them: refused; (b) a finer scale for PITCH alone loses its +-12 st unless it is curved
+too, and migrates every pitch slot inexactly: refused; (c) a finer step near zero, chosen: a slot's AMT is whole as
+before, or in tenths with a per-slot **fine flag**. The 7-bit blob has no room for a hi-res AMT (8 more bytes would
+change VA_BLOB, the stores, the pool, the backups), but version 4's two padding bytes hold the 8 flags: patch values
+106 `VA_MFINE0` (slots 1..7, bit k) and 107 `VA_MFINE1` (slot 8), `VA_NP` 106 -> 108, the blob still 110 bytes, version
+5. A slot in tenths renders a tenth of its stored number (`VA_AMX`: x 205 >> 11, 0.1 % over, +-4.3e8 at most; in the
+matrix's x, the DEPn sums and AMP's gain), a whole one exactly as before. **The column**: AMT `F_FIX2` -6400..6300
+(hundredths, FENV's format: the web editor and cr_edit already draw it, OPT snaps whole numbers); `va_get` = AMT x 10
+or x 100, `va_set` through `va_amt_q`: the values are tenths between -6 and 6 and whole numbers outside (so -5.9 ..
++5.9 by 0.1, then 6 .. 63), a value between two moves on from the old one to the next in its direction (a slow
+detent's 0.01: a tenth below 6, a whole above, as before) and a bigger move stops at the last value it passed (a
+quick detent's 6.35: 6, the whole amounts' quick step of before; the quick mapping's `mod: ENV2 -> CUT +12` scripts
+unchanged). It reads `+0.30`, `+12.00` on the MOD stack; the quick mapping's hot cell and trace drop the zeros
+(`cr_edit.c ce_amt_text`: `LFO1 +0.3`, `ENV2 +12`). Depths at a full source on PITCH: 0.1 1.9 ct, 0.5 9.4, 1 18.75,
+6 112.5, 63 1181. **Saved sounds**: `va_pack` writes version 5 only when a slot is in tenths, else version 4 byte for
+byte, so an untouched sound keeps its bytes and still loads on beta4; `va_blob_ok` takes 1..5 (versions 2..4 with
+those two bytes 0, as their padding was); `va_unpack`'s version-3 conversion now keys on `< 4` (it keyed on VA_VER).
+A version-5 blob on 0.22-beta4 or earlier plays INIT there (its `va_blob_ok` takes 1..4). `web/fm1sounds.js` and
+`tools/fm1_install.py` take versions 1..5; `vaToV3` (a sound placed on 0.21) rounds a fine AMT to its nearest whole
+number with a note ("MOD 2 AMT +0.3: ChoralRoot 0.21 has whole amounts, 0 instead"). **Bit for bit**: the new
+`cr_va_test t_coarse_golden` hashes render2's mid and side of every factory preset and 64 random patches with 8
+random whole slots (3 notes, 0.25 s each) and compares it with the hash taken at 5e1e8a7 before any change
+(0xe63bae86); a 0.05 % change of the whole path moves it (tried, reverted). Not a platform matrix change: mod.c, the
+EXPR screen and the other engines are as they were. etyrnal's comment on the issue (time values as BPM-synced
+musical subdivisions) is a separate feature, not built here.
+**Tests**: `cr_va_test t_fine` (the column's turns, each slot's flag, the flags through the blob, a fine-free sound as
+version 4 read back as it is, the pitch in cents at 0.1 .. 63 within 1 ct and rising, AMP by 0.5 / 5.9 / 6, every
+destination from 8 fine slots at a blob's -6.4 / +6.3); `t_blob`, `t_pages`, `t_set_macros`, `t_hires`, `t_v1`, `t_v2`
+for the new layout; `tools/emu/scripts/cr_va_mod_fine.txt` in test_cr.sh (LUSH PAD's MOD 2, LFO2 -> PITCH 3: slow
+detents 2.90 .. 2.60, a reversal's first two a tenth, quick 9 and 15, a slow one above 6 a whole, GLO whole; LFO held
++ KNOB 2 on FILT: `mod: LFO1 -> RES +0.1 slot 3`); `web/test_sounds.mjs` (a version 5 into 0.21's objects; a version
+6 refused). Docs: VA.md (matrix, formats, the patch and the blob, tests), EDITOR.md (MOD, the snap, the quick
+mapping), MANUAL.md (MOD), SOUNDS.md, releases/0.22.md "Merged after 0.22-beta4".
+**Checked**: `./build.sh` XIP 549 756 B of 573 440 (95.9 %, +640 B over 5e1e8a7's 549 116), RAM 78 652 (unchanged), POOL
+239 180 (+4); `sh tests/run_cr_tests.sh` green (cr_va_test 231 895 checks); `sh tools/emu/test_cr.sh` PASS (1044 ok,
++2); `sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 67 s; 313 goldens 0 changed; design/layouts/va.json regenerated
+by `tools/layout/dump_catalogs.mjs`: the AMT columns' format). Not on the unit, not pushed: the owner's word first.
