@@ -5352,8 +5352,8 @@ pushed: the orchestrator pushes main and the tags v0.24-beta3 and v0.24-beta3-sm
 (genkigenki's follow-up PR; branch smk37-stock-mapping on origin/main 268d3d6, 0.24-beta3).** The stock firmware keeps its key,
 knob and fader mapping in USRFLASH (settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000, every 0x5000) and trusts
 it while its end marker `usrdata` at 0xEAFF8 is there. 0.24-beta2-smk37 and beta3-smk37 clear the CZ-1 bank and loop sectors there
-at the owner change and left the marker, so after a return to stock every key sent one note; and its FL_TAIL began at
-0xEA000, the marker's sector. Six commits: `FL_TAIL` 0xEB000..0xF1FFF (an assert keeps it after the marker's sector),
+at the owner change and leave the marker, so after a return to stock every key sends one note; and their FL_TAIL
+begins at 0xEA000, the marker's sector (v0.24-beta3-smk37 is 268d3d6: FL_TAIL unchanged). Seven commits: `FL_TAIL` 0xEB000..0xF1FFF (an assert keeps it after the marker's sector),
 the pool as three runs in `sp_addr` (0xB6000 x5, 0xE6000 x4, 0xEB000 x7), `ST_SMK_REGIONS` with the third; genkigenki's
 78ed3ab and b533d87 from the SMK branch (`cherry-pick -x`, adapted): an owner change keeps an intact stock mapping
 (the pool's FL_DATA and FL_TAIL runs cleared as before), the marker's sector erased once before the first erase in
@@ -5370,11 +5370,12 @@ host compiler emsdk's clang): `smk_flash_test` (the marker sector, the tail, the
 no window or region) and `smk_owner_test` (the intact mapping kept at the owner change and the next boot, the release
 once, the layout check, the release at boot over other data, the old pool sector's move, once, cut, onto a written
 sector 15, the stock marker's sector left alone; nothing else written) pass. `CR_VERSION=0.24 sh tests/run_all.sh`
-gives the same verdicts on this branch and on 4ecd5be in the same environment: 14 suites pass (build, install,
+gives the same verdicts on this branch and on 268d3d6 in the same environment: 14 suites pass (build, install,
 layout_gen, the web suites, web_emu_build, layout_build/test, web_emu_smk, web_emu_test); run_tests passes all but
-FX layer effects, releases (the local tag `v0.24-beta2-smk37`, as 3y150) and site, the same on both, with the SMK hooks
+FX layer effects, releases (`releases_test.py` cannot read the local SMK tags, as 3y150) and site, the same on both, with the SMK hooks
 green (the three models' packages too) and 317 golden renders unchanged; cr_tests, cr_draw and the native emulator's
 suites do not build or match there (no ASan runtime, no SDL / CoreMIDI, the draw goldens). The FM-1 build is
-byte-identical to 4ecd5be's (choralroot.fwsc be30540a.., choralroot.bin d6ae0aa7.., ota.bin ab3242c8.., stub.bin
+byte-identical to 268d3d6's (choralroot.fwsc 0654f106.., choralroot.bin 3d5d0805.., ota.bin ab3242c8.., stub.bin
 4e33bfbb.., the ELFs too). `BOARD=smk37 [MODEL=elite|mke] ./build.sh`: Pro 34821d76..ca05, Elite 467ae6da..6a44,
-MKE-P37 70c5e472..b2b0; XIP 538 564 B (Elite 538 580), RAM 80 940, POOL 306 196. Not run on an SMK-37 yet.
+MKE-P37 70c5e472..b2b0; XIP 538 564 B (Elite 538 580), RAM 80 940, POOL 306 196. Installed on an SMK-37 Pro over
+another firmware: it starts; the way back to the stock firmware is not yet tested on this build.
