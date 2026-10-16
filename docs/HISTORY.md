@@ -4506,3 +4506,28 @@ unit runs this build, `tools/fm1_install.py build/choralroot.fwsc --backup ... -
 `fm1-backups/choralroot-backup-20261016-bankfix.json`. `--info` afterwards "ChoralRoot 0.22"; `--sounds` reads U033 DARK
 HAZE (GRAIN, retired here) and U034 empty, as before. **The owner on the unit, 2026-10-16** (3y119 .. 3y121 together):
 "I have tried this, the Digitone engine sounds great now and patches sound good no clicks or pops".
+
+## 2026-10-16 (0.23's release tree)
+
+3y122. **0.23's release tree (2026-10-16; the owner: "Lets get this merged to main, then I'd like a v0.23 release with this
+in it").** The branch claude/fmtone-quality-b02d3f merged with main (c754172: 3y112 Velocity Curve, 3y113 the
+emulator's velocity, 3y118 Solfège; HISTORY's end the one conflict, both kept in number order) and pushed to main as
+2c0234c after `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites; test_cr 1056 ok, 313 goldens
+unchanged). Then the release tree on it: `FELUCCA_VERSION` "ChoralRoot 0.23"; `docs/releases/0.23.md` (FM TONE's level
+and pops, Velocity Curve, Solfège, the bank fix; Installing; Going back to 0.22: FM TONE 6 dB louder with its pops, a
+sound saved from a factory FM TONE preset 6 dB louder there, a Velocity Curve other than 0 makes 0.22 reset Output, USB
+Rate, Chord Names and 6th with 7th, since it shares their byte and 0.22 checks the byte against 0 .. 31; Solfège reads
+as Numerals off and Major); `docs/releases/0.22.md`'s "New in 0.23-beta1" paragraph (no such tag was made) replaced by a
+pointer to 0.23; the manual's first line, README's "New in 0.23", HANDOFF's state and XIP figure; `web/releases.json`: 0.23
+first (6 bullets, 2 notes, sha256 a779884b458b9ba9..., sha256_1core a7d424edce02111f...), 0.22's `going_back` (one
+sentence, four points). **Built**: `./build.sh --release 0.23` twice (the first folder moved aside), the same SHA256SUMS:
+`choralroot-0.23.fwsc` a779884b..., `choralroot-0.23-1core.fwsc` a7d424ed...; the apps carry `ChoralRoot 0.23` and
+`ChoralRoot 0.23 1-core`; the stub version 3, baee55ed142fe1cc. Size: XIP 552 412 B of 573 440 (96.3 %), RAM 78 684
+(80.0 %), POOL 239 180 (69.5 %); the single-core package XIP 549 500 (95.8 %), RAM 75 564 (76.9 %), POOL 239 052. The plain
+`./build.sh` makes the same package. **Checked**: `CR_VERSION=0.23 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 76
+s; test_cr 1056 ok, test_persist 113, test_retired 18, test_pool 7; 313 goldens; 0 lint; the browser emulator
+"ChoralRoot 0.23"); `tools/fetch_packages.py` (the 16 published packages, each with its listed sha256, and 0.23's two
+from this build) then `tests/site_test.py` site ALL OK (`make_site.py --require-all` builds the site for 0.23) and
+`CR_PACKAGES_DIR=build/scratch/packages python3 tests/releases_test.py` ALL OK. Not in this release: GRAIN (its own
+branch). Known gap, not new: the manual has no Options section for Key Touch, Velocity Sens or the Curve (its line on
+velocity still says the keys sense none). The tag v0.23 waits for the owner's word.

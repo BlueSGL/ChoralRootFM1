@@ -133,6 +133,9 @@ each part:
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.23** ([docs/releases/0.23.md](docs/releases/0.23.md)): FM TONE at the other engines' level and without
+  pops on its voices; Options > Velocity Curve; Solfège numerals in Key Mode; the device manager places sounds next to
+  one saved on another build.
 - **New in 0.22** ([docs/releases/0.22.md](docs/releases/0.22.md)): P5, a sixth engine; 128 sound slots shared by
   every engine and favourites with a filter; FM TONE in the Digitone's ranges and times, with Digitone `.dnsnd`
   import; the VA matrix's amounts in tenths below 6; Snap and numerals in Key Mode; velocity and aftertouch from the keys (Options > Key Touch) and a per-sound

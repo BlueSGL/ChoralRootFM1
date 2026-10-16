@@ -8,6 +8,26 @@
   },
   "releases": [
     {
+      "version": "0.23",
+      "date": "2026-10-16",
+      "tag": "v0.23",
+      "sha256": "a779884b458b9ba921e201127e0d2ca2fbef6349c89464a0de40b9fbfc48f51d",
+      "sha256_1core": "a7d424edce02111fb8afe3e4b11148ea9136853ac9dac49834ab061668aefb23",
+      "title": "FM TONE at the right level and without pops, Velocity Curve, Solfège",
+      "bullets": [
+        "FM TONE plays at the other engines' level: INIT and imported Digitone sounds were 4 to 9 dB louder; the factory presets sound as they did.",
+        "No more pops on FM TONE's voices when a chord is struck again, when chords sharing notes change, or when an arpeggio runs over its own tails.",
+        "Imported Digitone sounds no longer click where an envelope or an LFO switches a filter in or out, and MIX moved by an LFO is smooth.",
+        "Options > Velocity Curve (-3 to +3): how hard you play to reach the loudest notes, MIDI velocity included.",
+        "Key Mode's Numerals has a third value, Solfège: the chord's degree as a movable-do syllable (SOL, la, ti°) in the numeral's place.",
+        "The device manager places sounds again in a group of ten that holds a sound saved on another build (it was refused with rc 2)."
+      ],
+      "notes": [
+        "Updating from 0.22 keeps your settings, sounds, loops and favorites.",
+        "FM TONE sounds at the Digitone's own levels (INIT, imported sounds and those made from them) play about 6 dB quieter, as loud as the other engines; BASS, SQUARE LEAD and WOBBLE are about 3.5 dB softer."
+      ]
+    },
+    {
       "version": "0.22",
       "date": "2026-10-15",
       "tag": "v0.22",
@@ -33,7 +53,16 @@
         "FM TONE sounds from before 0.22 are converted to the new ranges (close, not always exact) and keep their time numbers, which now mean the Digitone's times: mostly longer.",
         "Coming from 0.20, you also get 0.21's chorus: Depth no longer pops while you turn it, and KNOB 3 of the Chorus page sets its Width.",
         "The 0.22 betas stay listed behind Show beta releases; 0.22 is 0.22-beta4 with the VA's finer modulation amounts. A VA sound saved with an amount in tenths plays INIT on a beta."
-      ]
+      ],
+      "going_back": {
+        "short": "Your settings, sounds, loops and favorites stay. FM TONE is 6 dB louder again with its pops, and 0.23's Velocity Curve and Solfège are not there.",
+        "points": [
+          "INIT, imported and your own FM TONE sounds play as in 0.22, pops included; a sound saved in 0.23 from a factory FM TONE preset plays about 6 dB louder.",
+          "A Velocity Curve other than 0 is not read, and 0.22 then resets Output, USB Rate, Chord Names and 6th with 7th to their defaults: set the Curve to 0 before going back.",
+          "Numerals on Solfège: 0.22 shows no numeral and reads the scale as Major until you set them again.",
+          "A sound saved on another build (a GRAIN test sound) blocks its group of ten in the device manager again."
+        ]
+      }
     },
     {
       "version": "0.22-beta4",
