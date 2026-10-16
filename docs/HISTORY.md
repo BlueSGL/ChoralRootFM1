@@ -4486,3 +4486,5 @@ test short of a catalog): `design/layouts/grain.json` (new, `node tools/layout/d
 `tools/layout/build_layout.sh`): GRAIN's built-in layout as the designer sees it, OSC a stack of SRC 1 / SRC 2 and
 the GRAIN / GRAIN+ edit8, FILT with the filter band, ENV with the AHDSR band over the track's envelope, LFO, the
 platform's MOD routes; `--check`: 7 layout files are the firmware's.
+`CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 75 s; test_cr 1044 ok, test_persist 111,
+test_retired 18, test_pool 7, the layout test with the seven catalogs).
