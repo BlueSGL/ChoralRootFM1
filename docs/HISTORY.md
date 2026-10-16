@@ -4105,3 +4105,23 @@ the env scenes start on B and settle on A, the half scenes sit between; `python3
 (+36: MORPH's choice), gp_run's loops unchanged (26 + 9). No firmware code; nothing flashed.
 **Decided** (the owner, later the same evening, after hearing the morph files): "Keep the granular morph (each grain
 reads A or B by MORPH's share) as designed." The crossfade stays a comparison in the sketches only; GRAIN.md says so.
+
+3y104. **GRAIN step 1: the source generator in the firmware's tree with its test (the owner, 2026-10-15: "Go ahead
+with step 1 of docs/GRAIN.md"; branch claude/grain-engine-f724f9).** `firmware/src/grain_src.c` (new): the eight
+families' `gs_begin` / `gs_step` / `gs_finish` moved out of `tools/grain_sketch.c`, which includes it (the sketches
+heard are the firmware's generator byte for byte; the sketch keeps the player and `pow2_q16`); `GS_API` / `GS_FAM`
+default to static. Not compiled into the image yet (nothing includes it: the size line is da1f8e2's).
+`tests/cr_grain_test.c` (new, in `run_cr_tests.sh` after cr_quad_test, `-std=c99 -Wall -Wextra -Werror -pedantic
+-fsanitize=signed-integer-overflow,shift`): 800 renders of a TONE x MOTION x SEED grid a family (peak 28 000 within
+the Q12 gain's rounding or below it when the gain capped at 8, the mean under 1 % of full scale, RMS over 1 %, the
+same bytes twice, slices of 512 as one call), slices of one sample, each family's root, the knobs' masking, eight
+seeds a family all different, the 24 sketch settings against `tests/cr_grain_golden.txt` (new; GOLDEN_UPDATE=1
+rewrites it) and against `build/grain-sketch/src-*.wav` where present, the host time a render. **Found by the test and
+fixed**: `gs_finish`'s high-pass floored its shift and settled at -88 raw (an 8x gain made that -700, 2 % of full scale,
+in every quiet buffer); PLUCK's loop floored two shifts the same way, and its low-passed noise burst carried a mean the
+string's loop held (TONE 0: -766 after normalizing): the shifts round to nearest now and the burst has a 70 Hz blocker
+(a slow DC tracker inside the loop was tried and not needed). PLUCK's loop is 58 instructions a sample (49), the core
+7500 B (7456); GRAIN.md's tables follow. **Checked**: `cr_grain_test` 4330 checks ok; the sketches re-rendered (130
+files; the sources' mean now under 0.03 %); `python3 tools/grain_cost.py`; `sh tests/run_cr_tests.sh` (below).
+`sh tests/run_cr_tests.sh` exit 0 (every suite as before, cr_grain_test 4330 checks ok). Not run: `./build.sh`'s
+size line cannot change (no file includes grain_src.c); no device access.

@@ -65,6 +65,9 @@ t ./build/host/cr_va_test
 # presets; an int32 wrap aborts (the sanitizer). The CPU figure: tests/run_quad_test.sh
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -fsanitize=signed-integer-overflow -fno-sanitize-recover=all -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/cr_quad_test tests/cr_quad_test.c -lm
 t ./build/host/cr_quad_test
+# GRAIN's source generator (firmware/src/grain_src.c, docs/GRAIN.md step 1): the grid, slices, goldens, the sketch WAVs
+par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -fsanitize=signed-integer-overflow,shift -fno-sanitize-recover=all -Ibuild/gen -o build/host/cr_grain_test tests/cr_grain_test.c -lm
+t ./build/host/cr_grain_test
 # FM TONE's times against the Digitone's (docs/QUAD.md "Times"): quad_times.h not stale, the amp envelope's times, the
 # proxy readings, the delay, the fade, through the measurement's own analysis (tools/digitone/dt_analyse.py; numpy)
 par_build cc -std=c99 -O2 -w -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/quad_render tools/digitone/quad_render.c -lm

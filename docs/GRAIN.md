@@ -1,7 +1,9 @@
 # GRAIN: a granular engine over material it makes itself (design, 2026-10-15)
 
-**Status: a design and listenable sketches, no firmware code.** Branch `claude/grain-engine-f724f9` from main da1f8e2
-(v0.22-beta3). The owner decides after hearing the sketches (`build/grain-sketch/`, below). The owner's words: "Could the
+**Status: the design, listenable sketches, and step 1 built: the generator is in the firmware's tree
+(`firmware/src/grain_src.c`, not yet compiled into the image) with its host test (`tests/cr_grain_test.c`, in
+`run_cr_tests.sh`).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the
+sketches (`build/grain-sketch/`, below), kept the granular morph, and said go for step 1. The owner's words: "Could the
 grain synth have a way to generate its own samples from a couple knobs to quickly get a variety of interesting samples to
 work with?"
 
@@ -65,7 +67,7 @@ felucca_tables.h `pitch_inc`, `SVF_G`), all int32, every family one loop over th
 
 | TYPE | what it is | TONE | MOTION | SEED | instructions a sample (device listing) | render, ms at 205 / us (x 1.5: the unit's factor so far) |
 | --- | --- | --- | --- | --- | --- | --- |
-| PLUCK | a Karplus-Strong string, the buffer its own delay line (period 84 samples: C4 + 6 ct) | the burst's and the loop's brightness | the decay; above 64 a strum of re-plucks (two .. five) | the burst | 49 | 3.9 / 5.9 |
+| PLUCK | a Karplus-Strong string, the buffer its own delay line (period 84 samples: C4 + 6 ct) | the burst's and the loop's brightness | the decay; above 64 a strum of re-plucks (two .. five) | the burst | 58 | 4.6 / 6.9 |
 | DRONE | three detuned saws (the third a pulse on odd seeds) and a sub sine through the SVF, its cutoff swept by a triangle LFO | the cutoff's centre | the detune (0.1 .. 2.4 %) and the sweep's rate (0.25 .. 4 Hz) | phases, the pulse's width, the resonance | 327 | 26 / 39 |
 | BELL | two-operator FM, the modulator at an inharmonic ratio, the index decaying | the index (0.4 .. 8 rad) | the index's decay (600 .. 40 ms); above 64 a second pair beats against the first | the ratio (twelve) | 100 | 8.0 / 12 |
 | BREATH | white noise through a resonant band-pass whose centre wanders under a tremolo | the centre (300 Hz .. 6.5 kHz) | the wander's depth, the tremolo's rate and depth | the walk, the resonance | 129 | 10 / 16 |
@@ -74,14 +76,18 @@ felucca_tables.h `pitch_inc`, `SVF_G`), all int32, every family one loop over th
 | VOWEL | a narrow pulse with vibrato through three band-passes at a vowel's formants, travelling round A E I O U | where on the cycle it starts | how far it travels (still .. two rounds) and the vibrato's depth | the vowel order, the vibrato's rate | 296 | 24 / 36 |
 | METAL | six sine partials at inharmonic ratios, each decaying at its own rate, a noise strike | the partials' spread (1.5 .. 8) and the strike | the decay (900 .. 80 ms) | the ratios, the levels | ~187 | 15 / 22 |
 
-Every render ends with one pass (`gs_finish`, 23 instructions a sample, 1.8 ms): a one-pole high-pass at 20 Hz takes
-the DC out (PLUCK's loop and SWEEP's pulse carry some) and the buffer is normalized to a peak of 28 000 (a gain of at
-most 8). So every buffer has the same peak; the RMS differs by family (CHIRP 0.59, PLUCK 0.12: table in
+Every render ends with one pass (`gs_finish`, 24 instructions a sample, 1.9 ms): a one-pole high-pass at 20 Hz takes
+the DC out (SWEEP's pulse carries some) and the buffer is normalized to a peak of 28 000 (a gain of at most 8). The
+shifts that feed back are rounded to nearest, not floored: a floored shift's bias integrates (the high-pass settled at
+-88 raw, which an 8x gain made -700, 2 % of full scale, in every quiet buffer; PLUCK's loop would hold its bias as
+long as the string rings), and PLUCK's noise burst goes through a 70 Hz blocker of its own, since the string's loop
+holds the burst's mean as DC. Step 1's test found both. So every buffer has the same peak; the RMS differs by family (CHIRP 0.59, PLUCK 0.12: table in
 `build/grain-sketch/INDEX.md`), which the part LEVEL and the presets' trims take care of as for every engine.
 
-The code is `tools/grain_sketch.c` (`gs_*`), written as the firmware would have it: `gs_begin(knobs)`, `gs_step(n)`
-renders the next n samples from the state it keeps, `gs_finish()`. The firmware takes the same functions; the
-sketches' WAVs are the goldens of step 1.
+The code is `firmware/src/grain_src.c` (`gs_*`; step 1, 2026-10-15): `gs_begin(knobs)`, `gs_step(n)` renders the
+next n samples from the state it keeps, `gs_finish()`. `tools/grain_sketch.c` includes it, so the sketches heard are
+the firmware's generator byte for byte; `tests/cr_grain_test.c` holds the 24 sketch settings' hashes as goldens
+(`tests/cr_grain_golden.txt`) and compares the sketch WAVs with its own renders.
 
 ### Two sources and MORPH
 
@@ -221,11 +227,11 @@ CZ-1 1.7, P5 1.54) given as x 1.5. The baseline is main da1f8e2's size line: XIP
 
 | piece | bytes | from |
 | --- | --- | --- |
-| the generator: `gs_begin` (the eight families' set-up, inlined) | 1246 | the listing |
-| the eight family loops | 4514 (PLUCK 198, DRONE 1124, BELL 368, BREATH 460, CHIRP 386, SWEEP 846, VOWEL 950, METAL 182) | the listing |
-| `gs_step`, `gs_finish`, `pow2_q16` | 348 | the listing |
-| the player: `gp_spawn` (MORPH's choice among it), `gp_run`, `gp_voice_block`, `gp_voice_on`, `gp_init` | 1316 | the listing |
-| **the core** | **7456 B of .text** (7130 before the per-family split; 7420 before MORPH) | `objdump -h` |
+| the generator: `gs_begin` (the eight families' set-up, inlined) | 1250 | the listing |
+| the eight family loops | 4550 (PLUCK 234, DRONE 1124, BELL 368, BREATH 460, CHIRP 386, SWEEP 846, VOWEL 950, METAL 182) | the listing |
+| `gs_step`, `gs_finish` | 264 | the listing |
+| the player: `gp_spawn` (MORPH's choice among it), `gp_run`, `gp_voice_block`, `gp_voice_on`, `gp_init`, `pow2_q16` | 1404 | the listing |
+| **the core** | **7500 B of .text** (7130 before the per-family split; 7420 before MORPH; 7456 before step 1's rounding and PLUCK's blocker) | `objdump -h` |
 | its own tables: the Hann window 514, the norms 34, the ratios 24, the vowels 30 | ~600 B of .rodata (the listing's 4192 includes `SINE`, `TANH_Q15`, `SVF_G`, `PITCH_OCT`, which the firmware has) | |
 | the engine's glue: `engine_t`, the pages and `eng_deep_t`, `block()` with the request / swap, the blob get / set, the presets (9 x ~24 B), the old-record mapping | ~2.5 .. 3 KB | estimate from the VA's and QUAD's glue |
 | the wave band in `cr_draw.c` | ~1 KB | estimate (the filter band is 0.8 KB) |
@@ -269,7 +275,7 @@ sound, never past 16.
 
 | TYPE | ms a buffer (x 1 / x 1.5) | slices of 1024 (ms a slice, x 1.5) |
 | --- | --- | --- |
-| PLUCK | 3.9 / 5.9 | 16 x 0.4 |
+| PLUCK | 4.6 / 6.9 | 16 x 0.4 |
 | BELL | 8.0 / 12 | 16 x 0.7 |
 | CHIRP | 8.2 / 12 | 16 x 0.8 |
 | BREATH | 10 / 16 | 16 x 1.0 |
@@ -277,7 +283,7 @@ sound, never past 16.
 | SWEEP | 19 / 29 | 16 x 1.8 |
 | VOWEL | 24 / 36 | 16 x 2.2 |
 | DRONE | 26 / 39 | 16 x 2.4 |
-| + `gs_finish` | 1.8 / 2.7 | one pass |
+| + `gs_finish` | 1.9 / 2.9 | one pass |
 
 In the main loop's idle time: no cost to the audio half; a UI frame slips by one slice at most (2.4 ms of a 15 ms
 frame). A sound load renders A then B: twice the table's figure, 8 .. 80 ms. On the host (`tools/grain_sketch.c`, -O2, Apple silicon) a buffer renders in 0.1 .. 0.3 ms: the host says
@@ -333,11 +339,14 @@ Open questions:
 
 ## 6. Steps, each with its test
 
-1. **The generator in the firmware's tree**: `firmware/src/grain_src.c` from `tools/grain_sketch.c`'s `gs_*` (the
-   sketch tool then includes it instead of its own copy). Test `tests/cr_grain_test.c` section 1: every family at a
-   grid of TONE x MOTION x SEED renders (no sample past the clamp, DC under 0.5 %, peak 28 000), slices of 512 equal
-   one call of 16 384 bit for bit, the 24 sketch settings hash to goldens recorded from the sketches' WAVs, and the
-   host time a family (information). `./build.sh` with the file compiled but unreferenced: nothing in the size line.
+1. **Done (2026-10-15, HISTORY 3y104). The generator in the firmware's tree**: `firmware/src/grain_src.c` from
+   `tools/grain_sketch.c`'s `gs_*` (the sketch tool includes it). `tests/cr_grain_test.c` (in `run_cr_tests.sh`,
+   with `-fsanitize=signed-integer-overflow,shift`): 800 renders of a TONE x MOTION x SEED grid a family (the peak
+   28 000 within the gain's rounding, or under it when the gain capped at 8: 17 of 800; the mean under 1 % of full
+   scale; RMS over 1 %; the same bytes twice; slices of 512 equal one call), slices of one sample, the roots, the
+   knobs' masking, eight seeds a family all different, the 24 sketch settings against `tests/cr_grain_golden.txt`
+   (GOLDEN_UPDATE=1 rewrites it) and against the sketch WAVs where present, the host time a render. Nothing is in
+   the image yet (no file includes it): the size line is da1f8e2's.
 2. **The player as an engine on two static buffers**: `eng_grain.c` (`gp_*`, `engine_t`: `note_on`, `render`,
    `block`, `poly 8`, `sampled`, `keep`), A and B filled once by the generator at boot, MORPH. Test section 2 (a
    `cr_va_test`-style driver): no grain reads outside its buffer at any SIZE / POS / SPRD / PITCH / RAND, the pool's
