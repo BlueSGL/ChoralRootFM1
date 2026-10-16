@@ -4598,3 +4598,6 @@ designer-handoff session flashed): the unit runs 359d59a (the package 5f356e0d..
 rebuild), `--unit 5BD75BE3`, a full backup first (`fm1-backups/fm1-backup-2026-10-16-before-grain-fix.json`); after
 boot 128 sounds, c1_faults 0, c1_fallback 0. main is f54850e (v0.23) meanwhile: the branch merges it before any merge
 to main (the releases test's tag), after the flash diet lands (the owner's choice over a larger slot).
+**The owner** (2026-10-16, on 359d59a): "This Grain engine is fantastic! I'd like to get it merged in, but we'll decide
+post flash diet." So: the branch waits for the flash diet (the session "Flash diet: room for GRAIN in the 573 KB slot",
+from main f54850e = v0.23), then merges main and goes in on the owner's word.
