@@ -86,7 +86,15 @@ an invented meaning:
 ## Install
 
 Have M-Vave's stock package for your model and M-UPGRADE ready first (see [Going back](#going-back-to-the-stock-firmware)).
-Connect the keyboard by USB and run, with the package for your model:
+
+**From the browser** (Chrome or Edge on a computer): the SMK-37 test installer, a page of the project's site that no
+other page links (the maintainer sends testers the link). Tick that you accept the risk, connect the keyboard and
+press Install: it picks your model's package (a Starrykey 37 Play gets the Pro's), checks its checksum before writing,
+backs up a keyboard that already runs ChoralRoot to a file first, and finishes an interrupted install. It refuses an
+FM-1 and other firmwares' update modes. The Single core choice above the button is for a keyboard that crashes or
+freezes with the standard package.
+
+**From the command line**: connect the keyboard by USB and run, with the package for your model:
 
 ```sh
 python3 tools/fm1_install.py choralroot-0.24-beta2-smk37.fwsc
@@ -97,7 +105,7 @@ keyboard: an SMK-37 package is refused on an FM-1 and an FM-1 package on an SMK-
 the resume of an interrupted one, which checks the update loader's model too). Any SMK-37 model's package may go on any
 SMK-37 model (one hardware); install your own model's, so M-Vave's updater still knows the unit. As on the FM-1, an
 install that was interrupted resumes: switch the keyboard on (or hold OCTAVE- while switching on) and run the install
-again. The project's web installer offers FM-1 releases only.
+again. The project's main web installer offers FM-1 releases only.
 
 **The first start** clears the stock firmware's settings and any other firmware's data in ChoralRoot's flash areas (the
 store's owner tag, [Storage](#storage)); this takes a few seconds once. A unit that ran genkigenki's earlier ChoralRoot
@@ -172,7 +180,8 @@ BOARD=smk37 MODEL=mke ./build.sh       # build/choralroot-smk37-mke.fwsc
 ```
 
 A release names the board in its version (`--release X.Y-smk37`; one without it is refused) and collects the three
-models in `build/release-smk37/`, with the `-1core` twins, `SHA256SUMS`, this file and the licences:
+models in `build/release-smk37/`, with the `-1core` twins, `SHA256SUMS`, this file and the licences (publishing it:
+[BUILDING.md](BUILDING.md) "An SMK-37 test release"):
 
 ```sh
 BOARD=smk37 ./build.sh --release 0.24-beta2-smk37

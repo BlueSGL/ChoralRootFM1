@@ -382,10 +382,11 @@ if command -v node >/dev/null 2>&1; then
     run "web pages: editor protocol + samples, package builder, update protocol" node web/test_web.mjs
     run "web backup: capture, validation before writes, restore order" node web/test_backup.mjs
     run "web installer: the page against a simulated FM-1 (node, no browser)" node web/test_installer.mjs
+    run "web SMK-37 test installer: the page against simulated SMK-37s (node, no browser)" node web/test_smk_installer.mjs
     run "web sounds: slots as files, bindings, .syx" node web/test_sounds.mjs
     run "web device manager: pools, place / keep / swap / undo, loops, packs (simulated FM-1)" node web/test_manager.mjs
 else
-    skip "web tests: editor, backup, installer, sounds, device manager (no node)"
+    skip "web tests: editor, backup, installer, SMK-37 installer, sounds, device manager (no node)"
 fi
 
 run "releases: web/releases.json (the versions the installer offers) against docs/releases and the tags" \

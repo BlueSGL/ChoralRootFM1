@@ -298,6 +298,33 @@ version (`0.22-beta2`) goes first the same way and the earlier one stays below i
 fetches both of its packages from its own release); the later beta's notes open with what is new since the earlier
 one, then the whole of X.Y's notes so far, and `docs/releases/X.Y.md` points at the newest beta's file.
 
+### An SMK-37 test release
+
+The SMK-37 community test builds ([SMK37.md](SMK37.md)) have their own version, list, page and tag: the version is
+the FM-1 version they are built from with `-smk37` after it (`0.24-beta2-smk37`), the list `web/releases-smk37.json`
+(never `web/releases.json`), the page the SMK-37 test installer at
+<https://quixotic7.github.io/ChoralRootFM1/webapp/smk37/> (`web/smk37.html`), which no page of the site links: the
+link goes to the testers who accept the risk.
+
+1. Build the three models locally, twice, and compare `build/release-smk37/SHA256SUMS`:
+   `BOARD=smk37 ./build.sh --release X.Y-smk37`, then `MODEL=elite`, then `MODEL=mke` (six packages, their apps,
+   `SHA256SUMS` over all twelve, `SMK37.md`, the licences). Add the version first in `web/releases-smk37.json`: its
+   `base` (the FM-1 version of `web/releases.json` it is built from), date, tag `vX.Y-smk37`, a title, 2 to 12
+   bullets and the notes for players, and each model's `sha256` and `sha256_1core` (`pro` is
+   `choralroot-X.Y-smk37.fwsc`, `elite` the `-elite` one, `mke` the `-mke` one). `python3 tests/releases_test.py`
+   checks it and the files. Commit on main before the tag (pages.yml runs from main and builds the site from the
+   tag's tree).
+2. `git tag vX.Y-smk37 && git push origin vX.Y-smk37`. release.yml builds the three models on ubuntu, checks their
+   sha256s against `web/releases-smk37.json`, creates the **pre-release** `vX.Y-smk37` ("ChoralRoot X.Y-smk37 for the
+   SMK-37 (community test)") with the six packages, their apps, `SHA256SUMS`, the licences and `SMK37.md`, and starts
+   pages.yml for the FM-1's current version (the first entry of `web/releases.json`, as it is) from the SMK tag: the
+   FM-1 site stays as it was, and `webapp/smk37/` offers the new build. A pre-release never becomes the latest
+   release, and the FM-1 installer never lists an SMK build.
+3. pages.yml fetches every version of `web/releases-smk37.json` from its own release (`choralroot-X.Y-smk37*.fwsc`)
+   and `web/make_site.py --smk-packages build/smk-packages --require-all` checks each package's sha256 and identity
+   (the model's `_9xx`, Felucca's loader) and writes `webapp/smk37/` and `firmware/smk37/`; the job fails when a page
+   of the site links the SMK page.
+
 Once, before the first release: Settings → Pages → Build and deployment → Source: **GitHub Actions**.
 
 When CI cannot fetch the toolchain (pkgman.jieliapp.com) or the SDK (gitee.com): build locally with

@@ -5116,3 +5116,29 @@ SMK), before a release exists. The smallest safe way: a pre-release made by hand
 `v` (`smk37-0.24-beta2`), the files of `build/release-smk37/` (LICENSES zipped): `release.yml` does not run (tags
 `v*`), `pages.yml`'s `redispatch` exits at "not a vX.Y ... tag: the site stays as it is", a pre-release never becomes
 the latest release, and `web/releases.json` (FM-1 only) is not touched.
+
+3y146. **The SMK-37 test installer and the SMK tags (2026-10-16; the owner: "Can we create a separate installer page
+for the website that is for the SMK firmware, it won't be linked from the main ChoralRoot page. Then from this we can
+release the firmware with our build tags and can send the install link to SMK testers who are fine with the risk.").**
+This replaces 3y145's publishing proposal (a pre-release by hand under a non-`v` tag). **The page**: `web/smk37.html`,
+written by `web/make_site.py` to `webapp/smk37/index.html` (fm1pkg.js, fm1ota.js, fm1backup.js and its META inlined;
+noindex, linked from no page): the risk box to tick first (a test build the maintainer has not run, M-UPGRADE and
+the stock package at hand, the first start's clearing, the cable, own risk), the version, Standard / Single core,
+Install. Install finds one keyboard (two: refused), refuses an FM-1, ChanceTheMaker's SMK firmware, a firmware the
+installers' SMK table refuses and another firmware's update mode, picks the model's package (a Starrykey 37 Play or
+another SMK-37 name: the Pro's, with the same-keyboard rule), checks its sha256 against the list and its identity
+before anything is sent, backs up a keyboard running ChoralRoot to a file first, and finishes an interrupted install
+with its loader's model's package. **The list**: `web/releases-smk37.json` (0.24-beta2-smk37 on 0.24-beta2, the six
+sha256s of 3y145's build), checked by `tests/releases_test.py` (the shape, the base in web/releases.json, the tag,
+each package's own sha256, the files in build/release-smk37; the FM-1's list names no SMK build; the SMK tags left
+out of the FM-1's tag check). **The site**: `make_site.py --smk-packages DIR` (default build/release-smk37) checks every
+listed package (sha256, the model's `_9xx` identity, Felucca's loader) before anything is written and writes
+`firmware/smk37/` (the packages, SHA256SUMS, index.html); a local build without them makes no SMK page.
+**CI**: release.yml takes `vX.Y[-suffix]-smk37` (and refuses any other version naming the SMK): the three models built,
+their sha256s checked against web/releases-smk37.json, a pre-release with the twelve files, SHA256SUMS, the licences
+and SMK37.md, then pages.yml started for web/releases.json's first entry (the FM-1 site unchanged) from the SMK tag;
+pages.yml fetches each listed SMK version's packages from its release, passes them to make_site.py and fails when a
+page links the SMK page. pages.yml runs from main, so the branch is merged before the first SMK tag. **Tests**:
+`web/test_smk_installer.mjs` (in run_tests.sh: the page against simulated SMK-37s, 32 checks), `tests/site_test.py`'s
+SMK part (9 checks: the page and its META, firmware/smk37/, no other page linking it, the refusals before any write).
+BUILDING.md "An SMK-37 test release", SMK37.md's install section. Not pushed, not tagged.
