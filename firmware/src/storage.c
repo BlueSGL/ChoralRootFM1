@@ -589,9 +589,9 @@ static int sp_body(uint32_t s, uint32_t crc)   /* the payload's CRC is crc: 0 (s
 }
 
 #if BOARD_SMK37
-/* 0.24-beta2-smk37's FL_TAIL began at 0xEA000, the stock marker's sector: its pool sector 9 was there, its 10..15 are
- * this build's 9..14 as they are (a pool sector carries no number). A valid pool commit record at 0xEA000 is moved to
- * sector 15 (0xF1000, never written by that build) when that is blank: the pages copied, the record's page last, read
+/* 0.24-beta2-smk37's and 0.24-beta3-smk37's FL_TAIL began at 0xEA000, the stock marker's sector: their pool sector 9
+ * was there, their 10..15 are this build's 9..14 as they are (a pool sector carries no number). A valid pool commit
+ * record at 0xEA000 is moved to sector 15 (0xF1000, never written by those builds) when that is blank: the pages copied, the record's page last, read
  * back; then 0xEA000 is erased (FL_STOCKTAG, its one erase). A cut before the erase: the next scan finds the same
  * copy at 0xF1000 and erases 0xEA000. Once a power-on (sp_scan). */
 static uint8_t sp_old_done;

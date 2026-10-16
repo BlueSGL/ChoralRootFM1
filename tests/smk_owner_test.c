@@ -8,7 +8,7 @@
  * and the sound pool's runs (0xB4000..0xBAFFF, 0xE6000..0xE9FFF, 0xEB000..0xF1FFF); USRFLASH's last sector 0xEA000,
  * the free tail's rest (0xF2000..0xF3FFF), the stock resources and key_mac stay as they are. The stock firmware's
  * mapping in USRFLASH: kept while intact, its marker sector 0xEA000 erased (only ever erased) before ChoralRoot's
- * first write there and at boot over other data; 0.24-beta2-smk37's pool sector at 0xEA000 moved to 0xF1000. */
+ * first write there and at boot over other data; 0.24-beta2/beta3-smk37's pool sector at 0xEA000 moved to 0xF1000. */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -211,7 +211,7 @@ int main(void)
     tag_erases = 0;
     st_owner_check();
     check("no marker: nothing more erased than before", store_erased() && tag_erases == 0);
-    {   /* 0.24-beta2-smk37's pool sector 9 at 0xEA000 (FL_TAIL from there): moved to sector 15, 0xF1000 */
+    {   /* 0.24-beta2/beta3-smk37's pool sector 9 at 0xEA000 (FL_TAIL from there): moved to sector 15, 0xF1000 */
         st_hdr_t h;
         uint8_t old[0x1000];
         uint32_t i;

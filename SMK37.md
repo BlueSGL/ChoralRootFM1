@@ -141,7 +141,8 @@ the places of genkigenki's port; 0.24's favourites and sound pool take what was 
 the port's USRFLASH window: the unlisted flash after the stock USRFLASH. The stock USRFLASH's last sector (0xEA000)
 holds the stock firmware's end marker (`usrdata` at 0xEAFF8): ChoralRoot only ever erases that sector, once, before
 its first write into USRFLASH, or at a start that finds the marker over anything but the intact stock mapping. A
-pool sector that 0.24-beta2-smk37 kept there (its pool began at 0xEA000) moves to 0xF1000 at the first start.
+pool sector that 0.24-beta2-smk37 or 0.24-beta3-smk37 kept there (their pool began at 0xEA000) moves to 0xF1000 at
+the first start.
 
 | Flash | What | Window |
 | --- | --- | --- |
