@@ -5378,4 +5378,4 @@ suites do not build or match there (no ASan runtime, no SDL / CoreMIDI, the draw
 byte-identical to 268d3d6's (choralroot.fwsc 0654f106.., choralroot.bin 3d5d0805.., ota.bin ab3242c8.., stub.bin
 4e33bfbb.., the ELFs too). `BOARD=smk37 [MODEL=elite|mke] ./build.sh`: Pro 34821d76..ca05, Elite 467ae6da..6a44,
 MKE-P37 70c5e472..b2b0; XIP 538 564 B (Elite 538 580), RAM 80 940, POOL 306 196. Installed on an SMK-37 Pro over
-another firmware: it starts; the way back to the stock firmware is not yet tested on this build.
+another firmware: it starts.
