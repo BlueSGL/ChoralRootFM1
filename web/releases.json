@@ -8,6 +8,29 @@
   },
   "releases": [
     {
+      "version": "0.24-beta2",
+      "beta": true,
+      "date": "2026-10-16",
+      "tag": "v0.24-beta2",
+      "sha256": "3aebea9608cde7f67813a274f0193c1c3e2bbdb4fcbacae6e073474cfc98505f",
+      "sha256_1core": "17788180f245c58646dba17dcd19bf564f641c6ec375f3ab8429dd0d40db6c2e",
+      "title": "Beta: GRAIN, a granular synth that makes its own sound",
+      "bullets": [
+        "A new engine, GRAIN: clouds of short grains read from two sources, A and B, that it makes itself. No samples to load: each source comes from four knobs (TYPE, one of eight families from PLUCK to METAL; TONE; MOTION; SEED).",
+        "MORPH goes from A to B grain by grain: each grain reads one source, so in between the two materials interleave instead of crossfading.",
+        "SIZE, DENS, POS, SPRD, RAND, PITCH and SCAN shape the grains; SCAN moves through the material by itself, forward or in reverse, from very slow to fast.",
+        "The VA's filter, an envelope for the volume and one for modulation, two LFOs that can sync to the tempo, and an eight-slot modulation matrix with the VA's fine amounts.",
+        "A wave band on the editor's SRC and GRAIN screens draws the two sources, POS and the spread, with every sounding grain moving across them.",
+        "Eight presets: CLOUD PAD, SHIMMER, BREATH PAD, FROZEN, STRUM, SWARM, ACID DUST and GLITCH.",
+        "Everything of 0.24-beta1 is in it: velocity on the top seven keys, Vel + Poly AT, the touch on Geek Out 2. The firmware also got smaller, with no change to any sound or screen."
+      ],
+      "notes": [
+        "A beta: it may have bugs, and the next stable release, 0.24, replaces it. Please report problems on GitHub.",
+        "Updating from 0.24-beta1 or 0.23 keeps your settings, sounds, loops and favorites.",
+        "Going back to 0.24-beta1 or 0.23: GRAIN sounds you saved stay in their slots untouched but play the VA's init sound there (at the end of the VA's list, under their names), and are GRAIN again when you come back, unless you save over them there. The full notes have the rest."
+      ]
+    },
+    {
       "version": "0.24-beta1",
       "beta": true,
       "date": "2026-10-16",

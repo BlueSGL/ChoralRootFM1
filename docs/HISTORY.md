@@ -4989,3 +4989,70 @@ script, not kept): `U033  DARK HAZE  GRAIN  patch  +` (before: "no patch"), the 
 **Size**: `./build.sh` XIP 537 068 B (93.7 %), RAM 80 176, POOL 333 900: the same bytes as 9fc83fa (the two compares fit the
 slot). `sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 85 s; cr_pool_test 50 checks, test_cr 1061 ok, 317 golden renders unchanged, the browser emulator built and timed); the package build/choralroot.fwsc sha256 f093f9bccee29fc8... (610 313 B). Not flashed: the owner wants it built and flashed (the designer-handoff session,
 a backup first); the unit runs 9fc83fa. docs/GRAIN.md's status line and size table.
+
+## 2026-10-16 (main eb223df on the unit; 0.24-beta2's release tree)
+
+3y140. **Main eb223df on the unit (2026-10-16, evening).** The designer-handoff session flashed main eb223df (3y139's
+version-1 GRAIN record fix on top of the GRAIN merge) on the owner's word, `--unit 5BD75BE3`, a full backup first:
+`fm1-backups/fm1-backup-2026-10-16-before-main-eb223df.json` (in
+`/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/fm1-backups/`). U033 DARK HAZE, the sound saved on the first GRAIN
+build (a 20-byte version-1 record), loads again there. The owner on GRAIN: "This Grain engine is fantastic!"; then
+"I'd like to get the grain engine into v0.24-beta2" (3y141).
+
+3y141. **0.24-beta2's release tree (2026-10-16; branch claude/rel-24b2-bde7c3 from origin/main eb223df; not pushed, not
+tagged, not flashed).** The owner: "I'd like to get the grain engine into v0.24-beta2". What is new since v0.24-beta1
+(`git log v0.24-beta1..eb223df`): the flash diet (3y126 .. 3y132: no audible or visual change, one sentence in the
+notes) and GRAIN (3y133 .. 3y139), the headline; 3y139's version-1 record concerns the owner's test builds only and
+is left out of the notes. `docs/releases/0.24-beta2.md`: the opening (the second beta of 0.24, opt-in, may have bugs,
+0.24 replaces it, updating from 0.24-beta1 or 0.23 keeps everything); "New since 0.24-beta1: GRAIN" (what it is, the
+two sources' TYPE TONE MOTION SEED and the eight families, MORPH as a granular blend, the grain knobs and SCAN, the
+filter, ENV 1 / ENV 2, the LFOs, the matrix and quick modulation, the pages group by group, the wave band, the eight
+presets, the chord and bass parts sharing one pair of sources, notes above C6 not rising, the clients carrying GRAIN
+sounds; the diet's sentence); 0.24-beta1's Playing section as it was; Installing (the opt-in, from 0.24-beta1 / 0.23,
+from 0.22 or older, the single-core package's version line); "Going back to 0.24-beta1 or 0.23" (below).
+`docs/releases/0.24.md` points at 0.24-beta2.md. `docs/MANUAL.md`: a GRAIN section after WHEEL (the groups' screens,
+the knobs, the matrix, the wave band, the shared sources, the presets: from GRAIN.md and `eng_grain.c GRAIN_PAGES` /
+`GRAIN_SCREENS`), GRAIN in the engine table, the OPT + PRESETS list, the picker's SELECT row, the engines' count
+(seven; the introduction still said five), quick modulation "the VA, and GRAIN" (`grain_mod_dst`), the references
+row. README's engine list (seven), `docs/PRESETS.md`'s pool list, `docs/EDITOR.md` (a GRAIN section in "Groups per
+engine class", the knob list, the picker's "not in" list without GRAIN), `docs/INTEGRATION.md` (a paragraph after
+PHYS's: GRAIN shown again, `NENG_SHOWN` 7, how an older build treats its records; the all-synth flags' note).
+`docs/HANDOFF.md`: the state (v0.24-beta1 tagged, the diet, GRAIN, this tree, tagged = not yet), the size paragraph
+at main's figures (POOL 97.0 %: laid out by the linker, so it cannot fail in use, but its 10 KB are now the limit for
+an added buffer), an Open-items line for GRAIN at the unit (GRAIN.md step 6). `web/releases.json`: 0.24-beta2 first,
+`"beta": true`, 7 bullets, 3 notes (the beta disclaimer first, then updating, then going back); 0.23 stays the newest
+stable, 0.24-beta1 below the new entry unchanged.
+**Going back, how it was established.** The code of v0.24-beta1 (v0.23's `upool.c`, `cr_bank.c`, `upreset.c`,
+`cr_backup.c`, `engines.c` are the same bytes; `cr_ui.c`'s load path the same): `FELUCCA_GRAIN 0` puts engine 8 in
+`ENG_RETIRED`; `cr_bank.c cb_pool_of` places such a record in the VA's pool as an added preset; `cr_ui.c cu_load_user`
+loads the VA's init sound for it with `engine retired: init sound` (no ATK / REL carried: that is for the six of 0.18);
+`upool.c up_patch_len(8)` is 0, so the 64-byte patch is never read, and nothing writes the slot on a load; the slot
+is rewritten only by a save over it (`up_store`: then the stand-in's VA sound), a delete, or a rename (`up_rename`'s
+`up_va_keep`: the stored patch copied as it is). A backup's bank with a GRAIN slot restores there since 3y121's
+`crb_bank_ok` (in v0.23, not in v0.22: 90d0b8f is not an ancestor of v0.22, so 0.22 refuses such a bank with rc 2).
+Then on the emulator, in scratch (not committed): v0.24-beta1 `git archive`d with its own generated headers and
+emulator; eb223df's emulator on a fresh flash saved GRAIN CLOUD PAD as U001 "ADG", put the bass on GRAIN SHIMMER and
+did the global save (`pool_image.py`: `U001 8 ADG rec 8464ed28 patch - 64 658a6222`); beta1's emulator on that flash
+started on FM6 TINE EP / VA DEEP SUB (Bass still on), VA 26 was "ADG" (`load: slot 1 engine 8 retired -> INIT on VA`,
+the message, the chords sounding) and the slot's record and patch CRCs were unchanged; eb223df's emulator again: the
+session applied with both parts on GRAIN (U001 ADG, SHIMMER), GRAIN 09 "ADG" loaded its stored patch (`grain: load slot 1
+patch crc 6222`). The notes say exactly that: GRAIN sounds stay untouched at the end of the VA's list, play its init
+sound with the message, are GRAIN again on 0.24-beta2 unless saved over or deleted there (a rename keeps them); a part
+left on GRAIN starts on TINE EP / DEEP SUB; a backup restores onto 0.24-beta1 / 0.23, not onto 0.22. Not checked: a
+favourite mark on a GRAIN factory preset across 0.24-beta1 (the user slots' marks are by slot).
+**Built**: `./build.sh --release 0.24-beta2` twice (the first folder moved aside to `build/release-0.24-beta2.first`),
+the same SHA256SUMS: `choralroot-0.24-beta2.fwsc` 3aebea9608cde7f6..., `choralroot-0.24-beta2-1core.fwsc`
+17788180f245c586...; the apps carry `ChoralRoot 0.24-beta2` and `ChoralRoot 0.24-beta2 1-core`; the stub version 3,
+baee55ed142fe1cc. Size: XIP 537 084 B of 573 440 (93.7 %), RAM 80 176 (81.6 %), POOL 333 900 of 344 064 (97.0 %),
+RAMTEXT 7 072 of 24 576; the single-core package XIP 534 280 (93.2 %), RAM 77 052 (78.4 %), POOL 333 772 (97.0 %).
+**Checked** (on this tree, after the notes, releases.json and HANDOFF were final): `CR_VERSION=0.24 sh tests/run_all.sh`
+ALL SUITES PASSED (22 suites, 85 s; test_cr 1061 ok, test_persist 113, test_retired 18, test_pool 7; 317 golden
+renders, 0 changed; 0 lint; the plain build's size line main's to the byte); `CR_PACKAGES_DIR=build/release-0.24-beta2
+python3 tests/releases_test.py` ALL OK (both sha256 match), and with all 22 listed packages (copied from earlier
+worktrees' build folders, each only with its listed sha256; nothing downloaded); the browser emulator built as
+0.24-beta2 (`emu/version.txt` "ChoralRoot 0.24-beta2"), `node tools/emu/web/test_web_emu.mjs` PASS (bit-exact against
+the native emulator); `tests/site_test.py` site ALL OK with the beta package as `build/choralroot.fwsc` and every
+package (`--require-all` builds the site for 0.24-beta2: the landing page "Version 0.23", "Install 0.23", "New in
+0.23", under Try it first "It runs ChoralRoot 0.24-beta2, a beta (the installer's default is 0.23)."; `firmware/`
+with both betas' packages); `node web/test_installer.mjs` passed. Not pushed, not tagged, not flashed: the tag is the
+owner's "tag it".

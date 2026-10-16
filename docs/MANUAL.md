@@ -43,7 +43,7 @@ How the manual names things:
 ChoralRoot turns the FM-1 into a chord instrument in the manner of the Telepathic Instruments Orchid. The left end of
 the keybed says what kind of chord you want, the rest of the keybed plays its root, and the instrument builds the
 chord, voices it and writes its name on the screen. Around that it has a bass part that follows the chords,
-performance modes (strum, arpeggio, patterns), effects, a looper that records chords, five synth engines with a deep
+performance modes (strum, arpeggio, patterns), effects, a looper that records chords, seven synth engines with a deep
 sound editor, MIDI out on three channels and USB audio recording.
 
 What it is not:
@@ -99,7 +99,7 @@ a hold opens its layer. [Layers](#5-layers) has the rules.
 **Change the sound.** Turn PRESETS: the next sound of the same engine loads at once, and the screen shows its place:
 the engine in orange (`FM6`), the number big (`02`), the name (`FM BELL`), a stripe for every preset of the engine,
 and `Hold OPT to change engine`. To change the engine, hold **OPT** (printed GLO) and turn PRESETS: the engines pass by
-(FM6, FM TONE, VA, CZ-1, P5 and WHEEL). Let go of OPT and the engine you stopped on is loaded.
+(FM6, FM TONE, VA, CZ-1, P5, WHEEL and, from 0.24-beta2, GRAIN). Let go of OPT and the engine you stopped on is loaded.
 
 **Add the bass.** Tap **BASS** (printed ENV). A bass note now plays under every chord, and `Bass` shows at the top
 right. ALGORITHM changes the bass sound. Tap BASS again to switch it off.
@@ -1122,7 +1122,7 @@ More detail: [LOOPER.md](LOOPER.md), [LOOPER-MODES.md](LOOPER-MODES.md).
 ## 11. Sounds
 
 ChoralRoot plays two sounds at once: the **chord sound** (PRESETS) and the **bass sound** (ALGORITHM). Each belongs
-to one of six engines.
+to one of seven engines (six before 0.24-beta2).
 
 ### The engines
 
@@ -1134,6 +1134,7 @@ to one of six engines.
 | **CZ-1** | Casio CZ-1 phase distortion, with Casio's own 64 tones | 64 |
 | **P5** | a Prophet-5 model (Melodee's engine; new in 0.22): two oscillators with sync and Poly-Mod into a four-pole filter, two envelopes, the wheel's modulation; Sequential's own programs | 115 |
 | **WHEEL** | a tonewheel organ with nine drawbars | 5 |
+| **GRAIN** | a granular synth (new in 0.24-beta2): clouds of grains read from two sources, A and B, that it makes itself from four knobs each, MORPH between them; the VA's filter, two envelopes, two LFOs and a modulation matrix | 8 |
 
 This is the order in which the instrument shows them. Up to 0.17 there were six more, PHASE, LOFI, VOICE, TRIO,
 NOISE and PHYS; they are retired (see [Sounds from outside](#sounds-from-outside) for what happens to a sound saved on one). At power-on the chord sound is the one of your last global save (on a
@@ -1191,7 +1192,7 @@ Hold **EDIT**. The engine picker opens and stays (EDIT blinks). It is a preview:
 
 | Control | In the engine picker |
 | --- | --- |
-| SELECT | the six engines, one at a time, in the order of the table above (FM6 ... WHEEL). The sound moves to that engine and keeps its envelope and mix |
+| SELECT | the seven engines, one at a time, in the order of the table above (FM6 ... GRAIN). The sound moves to that engine and keeps its envelope and mix |
 | KNOB 1 (or PRESETS) | the engine's pool, as PRESETS |
 | KNOB 2 | INIT: the engine's plain starting sound (`init sound`) |
 | the root keys and the chord keys | play, as always: you hear every engine and preset as you turn to it |
@@ -1407,7 +1408,7 @@ does, follow the link.
 | LFO | (1) the four LFOs as rows: Rate · Wave · Depth · Fade. (2) their Sync. (3) `VOICE`: Uspread, the stereo spread of a unison |
 | MOD | the modulation matrix: eight rows of Source · Dest · Amount. The Amount goes from -64 to +63; below 6 either way it moves in tenths (a slow turn: +0.1, +0.2 ..), from 6 in whole steps, so a gentle vibrato is a small number: LFO to PITCH at +0.5 is about 9 cents with the LFO at full depth, +1 about 19 |
 
-**Quick modulation** (the VA only): hold **ENV** or **LFO** and turn a knob. The envelope or LFO you last looked at
+**Quick modulation** (the VA, and GRAIN from 0.24-beta2): hold **ENV** or **LFO** and turn a knob. The envelope or LFO you last looked at
 (ENV 2 or LFO 1 if none yet) now modulates the parameter under that knob, and the turn sets the amount; the cell
 shows `LFO1 +20`. A modulated parameter carries a small mark in its cell (yellow for an envelope, red for an LFO,
 white for several sources). **OCT- held + a knob** removes every modulation of that parameter (`cleared`). The
@@ -1485,6 +1486,52 @@ WHEEL has one screen in each group:
 | ENV | Attack · Decay · Sustain · Release, under the envelope's shape |
 | LFO | Rate · Wave · Vibrato · Wah |
 | MOD | four fixed routes with an Amount each: ENV to FILT, ENV to PITCH, ENV to SHAPE, LFO to AMP |
+
+### GRAIN
+
+New in 0.24-beta2. GRAIN plays clouds of short grains read from two sources, **A** and **B**, that it makes itself:
+each is about three quarters of a second of sound, made from four knobs whenever the sound loads or one of those
+knobs turns (a moment's work; the grains on the other source keep sounding meanwhile). A GRAIN sound stores its knobs,
+never audio. **MORPH** blends A into B grain by grain: each grain reads one of the two, MORPH sets how many read B
+(0: A alone, 127: B alone), so in between the two materials interleave rather than crossfade.
+
+| Group | Screens |
+| --- | --- |
+| OSC | (1) `SRC`, two lanes under the wave band: `SRC 1` (source A) and `SRC 2` (source B), each TYPE · TONE · MOTION · SEED. (2) `GRAIN`, two lanes under the wave band: SIZE · DENS · POS · SPRD, and (`GRAIN+`) MORPH · RAND · PITCH · SCAN |
+| FILT | the VA's filter under its curve: (1) `FILTER`: CUT · RES · FTYPE · DRIVE. (2) `FILTER+`: KTRK |
+| ENV | (1) `ENV 1 · amp`, the volume: ATK · DEC · SUS · REL. (2) `ENV 2 · mod`, an envelope for the matrix: ATK · DEC · SUS · REL. Each under the envelope's shape |
+| LFO | (1) `LFO 1` and `LFO 2` as rows: RATE · WAVE · DEPTH · FADE. (2) `LFO SYN`: SYNC1 · SYNC2 |
+| MOD | `MOD 1` to `MOD 8`, the matrix's eight slots: SRC · DST · AMT; then `EXPR`, as on every engine |
+
+- **The source knobs.** **TYPE** picks one of eight families: PLUCK (a plucked string), DRONE (detuned saws under a
+  moving filter), BELL (two-operator FM), BREATH (filtered noise), CHIRP (sweeping sines), SWEEP (a driven saw through
+  a sweeping filter), VOWEL (a voice moving round A E I O U) and METAL (inharmonic partials with a strike). **TONE** is
+  the brightness or colour within the family, **MOTION** how the material moves over its length (decay, sweep,
+  vibrato, strums), **SEED** a variant: the same SEED always makes the same material.
+- **The grain knobs.** **SIZE** is a grain's length (about 10 ms to 0.4 s), **DENS** how many grains start each second
+  (1 to about 100), **POS** where in the material they start, **SPRD** how far round POS they scatter. **RAND** detunes
+  the grains at random and plays some of them in reverse; **PITCH** transposes, -24 to +24 semitones. **SCAN** moves
+  POS through the material by itself: right of 0 forward, left of 0 in reverse, very slowly near 0 (a pass in about
+  two minutes) and faster further out (about half a second at the ends); 0 holds POS still.
+- **The filter** is the VA's: **CUT**, **RES**, **FTYPE** (low-pass, band-pass, high-pass and notch, with the blends
+  in between), **DRIVE** before it, and **KTRK**, how far the cutoff follows the note.
+- **The LFOs** have the VA's waves; **FADE** brings an LFO in after the note starts. With **SYNC** on, RATE steps
+  through the VA's tempo divisions.
+- **The matrix.** Each slot sends a **SRC** (ENV1, ENV2, LFO1, LFO2, VEL, KEY, RAND, MODW: the mod wheel, CC 1 over
+  MIDI) to a **DST** (MORPH, POS, SIZE, DENS, SPRD, RAND, PITCH, SCAN, CUT, RES, FTYPE, DRIVE, RATE1, RATE2, DEP1,
+  DEP2, AMP) by **AMT**, -64 to +63, which moves in tenths below 6 either way and in whole steps from 6, as the VA's.
+  Quick modulation works as on the VA: hold ENV or LFO and turn a knob.
+- **The wave band.** On the SRC screen it draws the active lane's source, and redraws when a turn of its knobs has
+  made it anew. On the GRAIN screen it draws both, A in blue and B in orange, each as bright as MORPH gives it; POS is a
+  white line (SCAN moves it), SPRD a green span round it, and every sounding grain a bright line of its source's
+  colour, travelling as it reads.
+- **Chord and bass share the sources.** The FM-1 holds one pair: the chord sound's when it is on GRAIN (else the bass
+  sound's). With both on GRAIN the bass plays the chord sound's A and B through its own grain knobs, MORPH, filter
+  and envelopes.
+- Notes are pitched from the material up to C6; above C6 they stop rising.
+
+The factory presets: CLOUD PAD, SHIMMER, BREATH PAD, FROZEN, STRUM, SWARM, ACID DUST, GLITCH. More:
+[GRAIN.md](GRAIN.md).
 
 The whole editor: [EDITOR.md](EDITOR.md).
 
@@ -2013,7 +2060,7 @@ SELECT: the next lane. KNOB 1 to KNOB 4: the lane's values. PRESETS: the engine 
 | Subject | Document |
 | --- | --- |
 | The sound editor in full | [EDITOR.md](EDITOR.md) |
-| The engines | [VA.md](VA.md), [FM6.md](FM6.md), [QUAD.md](QUAD.md) (FM TONE), [CZ1.md](CZ1.md) |
+| The engines | [VA.md](VA.md), [FM6.md](FM6.md), [QUAD.md](QUAD.md) (FM TONE), [CZ1.md](CZ1.md), [PROPHET.md](PROPHET.md) (P5), [GRAIN.md](GRAIN.md) |
 | Presets and saved sounds | [PRESETS.md](PRESETS.md), [SOUNDS.md](SOUNDS.md) |
 | The looper | [LOOPER.md](LOOPER.md), [LOOPER-MODES.md](LOOPER-MODES.md) |
 | What is stored, and how | [SETTINGS.md](SETTINGS.md) |

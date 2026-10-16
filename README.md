@@ -115,11 +115,12 @@ each part:
 - **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
   PLAY menu; from 0.18 on saving is manual: a loop is written by the global save (SAVE held) or when its slot is
   left with unsaved changes (up to 0.17: at every stop) ([docs/LOOPER.md](docs/LOOPER.md)).
-- **Six engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
+- **Seven engines**, in the picker's order: FM6 (Melodee's: DX7 voices rendered as Dexed renders them, DX7 SysEx
   import, [docs/FM6.md](docs/FM6.md)), FM TONE (engine 15, `eng_quad.c`, code name QUAD: four-operator FM in the style
   of the Digitone, aligned with the Digitone manual's algorithms, carrier levels and controls,
   [docs/QUAD.md](docs/QUAD.md)), VA ([docs/VA.md](docs/VA.md)), CZ-1 (Melodee's, [docs/CZ1.md](docs/CZ1.md)), P5
-  (Melodee's Prophet-5 model with 115 of Sequential's factory programs, 0.22, [docs/PROPHET.md](docs/PROPHET.md)), WHEEL.
+  (Melodee's Prophet-5 model with 115 of Sequential's factory programs, 0.22, [docs/PROPHET.md](docs/PROPHET.md)), WHEEL,
+  GRAIN (a granular synth over two sources it makes itself, MORPH between them; 0.24-beta2, [docs/GRAIN.md](docs/GRAIN.md)).
   (PHASE, LOFI, VOICE, TRIO, NOISE and PHYS, Felucca's, are retired since 0.18: a sound saved on one stays in its
   slot and plays as a stand-in on the VA.) (Felucca's ANALOG is retired since 0.14: the VA replaces it; an ANALOG sound
   saved before loads on the VA.) One preset pool per engine (INIT, the factory presets, yours), 128 saved sounds shared
