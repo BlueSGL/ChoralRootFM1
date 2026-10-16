@@ -8,7 +8,8 @@
 #                                        and the SMK-37 test builds of web/releases-smk37.json (each version's
 #                                        six packages from its own release vX.Y-smk37: the unlinked SMK-37 test
 #                                        installer, webapp/smk37/, SMK37.md),
-#                                        build the browser emulator (Emscripten, build/emu-web -> emu/),
+#                                        build the browser emulators (Emscripten, build/emu-web -> emu/, and the
+#                                        SMK-37's build/emu-web-smk37 -> webapp/smk37/emu/),
 #                                        web/make_site.py --require-all, deploy to Pages
 #   release published                 -> starts the dispatch above from the default branch (the github-pages
 #                                        environment only accepts deployments from it), the site built from the tag
@@ -210,6 +211,7 @@ jobs:
           python3 -c 'import sys; sys.path.insert(0, "tools"); import build; build.generate()'
           CR_VERSION="$VERSION" sh tools/emu/web/build_web.sh
           node tools/emu/web/test_web_emu.mjs
+          node tools/emu/web/test_web_emu_smk.mjs --no-page   # the SMK-37 emulator (webapp/smk37/emu/)
 
       - name: Make the site (web/make_site.py)
         run: |
@@ -239,14 +241,16 @@ jobs:
           done < build/packages/list.txt
           (cd build/site/firmware && sha256sum -c SHA256SUMS)
           if [ -s build/smk-packages/list.txt ]; then   # the SMK-37 test installer and its packages
-            for f in webapp/smk37/index.html firmware/smk37/index.html firmware/smk37/SHA256SUMS; do
+            for f in webapp/smk37/index.html webapp/smk37/emu/index.html webapp/smk37/emu/choralroot-smk37.wasm \
+                     firmware/smk37/index.html firmware/smk37/SHA256SUMS; do
               if [ ! -s "build/site/$f" ]; then
                 echo "::error::build/site/$f is missing"
                 exit 1
               fi
             done
             (cd build/site/firmware/smk37 && sha256sum -c SHA256SUMS)
-            if grep -l "smk37" build/site/index.html build/site/webapp/installer/index.html build/site/firmware/index.html; then
+            if grep -l "smk37" build/site/index.html build/site/webapp/installer/index.html build/site/firmware/index.html \
+                   build/site/emu/index.html; then
               echo "::error::a page of the site links the SMK-37 test installer (it is for the testers' link only)"
               exit 1
             fi

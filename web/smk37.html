@@ -10,7 +10,8 @@
      identities. Install picks the connected keyboard's model (a Starrykey 37 Play, or another name of the SMK-37: the
      Pro's package), checks the package's sha256 and identity before any write, and refuses an FM-1, another SMK
      firmware's updater and a firmware the installers do not install over. A keyboard already in ChoralRoot's update
-     mode (an interrupted install) is finished with its loader's model's package. -->
+     mode (an interrupted install) is finished with its loader's model's package. EMU: make_site.py's link to the SMK-37
+     browser emulator beside it (webapp/smk37/emu/), when the site has it. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -98,6 +99,7 @@
   </div>
   <label class="accept"><input type="checkbox" id="accept"><span data-t="accept"></span></label>
 
+  <!--EMU-->
   <p id="rel"></p>
   <div class="row" id="versions"></div>
   <div class="row" id="variants"></div>

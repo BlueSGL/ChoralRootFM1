@@ -83,6 +83,14 @@ an invented meaning:
   IN, the PB1 battery input) are never driven by the SMK build (genkigenki's board layer, `hal/smk_input.h`,
   `hal/fm1_lcd_hw.h`, the boot stub).
 
+## Try it in the browser
+
+The SMK-37 build runs in an emulator in the browser, with the SMK-37 Pro's panel: the keys (struck low on a key loud,
+high soft), the pads lit as the firmware lights them, K1..K8, the faders, the wheels, the buttons by their SMK names,
+the computer keyboard and Web MIDI. <https://quixotic7.github.io/ChoralRootFM1/webapp/smk37/emu/> (the SMK-37 test
+installer links it too). It is the same firmware as the packages (`BOARD_SMK37`) on a modelled panel
+(`tools/emu/emu_smk_hal.h`): the feel of the real keys and pads is the unit's to tell.
+
 ## Install
 
 Have M-Vave's stock package for your model and M-UPGRADE ready first (see [Going back](#going-back-to-the-stock-firmware)).

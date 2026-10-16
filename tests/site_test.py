@@ -21,7 +21,8 @@ The SMK-37 test installer (web/releases-smk37.json, SMK37.md): built from made-u
 under the three models' identities) and a made-up list (CR_SMK_RELEASES_JSON): webapp/smk37/index.html with the three
 models' packages in its META, firmware/smk37/ with each package, SHA256SUMS and index.html, linked from no other page;
 a wrong sha256, an FM-1 package in an SMK model's place and a missing package with --require-all refused before
-anything is written; a local build without the packages makes no SMK page.
+anything is written; a local build without the packages makes no SMK page. With build/emu-web-smk37 (build_web.sh):
+the SMK-37 emulator at webapp/smk37/emu/ (noindex), linked from the SMK page and from no FM-1 page.
 """
 import hashlib
 import json
@@ -412,6 +413,15 @@ def smk_site():
        (fw / "index.html").is_file(), "SMK: firmware/smk37/: the six packages, SHA256SUMS, index.html")
     others = [out / "index.html", out / "webapp" / "installer" / "index.html", out / "webapp" / "installer" / "manager.html",
               out / "firmware" / "index.html"]
+    emu_src = ROOT / "build" / "emu-web-smk37"
+    if (emu_src / "index.html").is_file():
+        eh = (out / "webapp" / "smk37" / "emu" / "index.html")
+        ok(eh.is_file() and (eh.parent / "choralroot-smk37.wasm").is_file() and 'href="emu/"' in ph and
+           'content="noindex, nofollow"' in eh.read_text(encoding="utf-8"),
+           "SMK: webapp/smk37/emu/ (the SMK-37 emulator, noindex), linked from the SMK page")
+        others.append(out / "emu" / "index.html") if (out / "emu" / "index.html").is_file() else None
+    else:
+        print(f"skip: {emu_src.relative_to(ROOT)} missing: the SMK emulator not checked (sh tools/emu/web/build_web.sh)")
     ok(all("smk37" not in p.read_text(encoding="utf-8") for p in others) and
        not any(n.startswith("choralroot-9.9-smk37") for n in os.listdir(out / "firmware")),
        "SMK: no other page links it, the FM-1's firmware/ holds no SMK package")

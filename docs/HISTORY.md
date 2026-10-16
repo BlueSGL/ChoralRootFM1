@@ -5190,3 +5190,47 @@ SMK-37 port, 3y142 .. 3y146, its list and tag): `CR_VERSION=0.24 sh tests/run_al
 the SMK session's six 0.24-beta2-smk37 packages in build/release-smk37 for the site check (copied from its build
 folder, each at its listed sha256). `BOARD=smk37 ./build.sh`: XIP 537 736 B (93.8 %), RAM 80 940 (82.3 %), POOL
 306 196 (89.0 %); the FM-1's as above. Not flashed, not pushed.
+
+## 2026-10-16 (the SMK-37 in the browser)
+
+3y151. **The SMK-37 browser emulator's module (2026-10-16; the owner: "Can we get a web emulator for the SMK? Here's
+one that works https://genkigenki.github.io/smk37/vector37-sim/"; genkigenki's GPL-3.0 Vector37 simulator as the
+reference for the panel).** `sh tools/emu/web/build_web.sh` builds a second module beside the FM-1's:
+`build/emu-web-smk37/choralroot-smk37.wasm`, `tools/emu/web/emu_web.c` with `EMU_SMK37=1 BOARD_SMK37=1` (the version
+"... -smk37"). The seam is the SMK's own input layer: `tools/emu/emu_smk_hal.h` (included by `emu_hal_fw.h` instead
+of its FM-1 keys and LEDs) includes `firmware/hal/smk_input.h` with `SMK_INPUT_HOST` (no fm1_time.h, the emulator's
+lock: the only change to the header, preprocessor only) and runs its frame and analog logic unchanged on a modelled
+panel: every 1.6 ms the matrix the scan would read (a key's contact 1 at once, contact 2 after the time the factory
+curve reads as the velocity asked; the buttons, held at least 8 ms; the knobs as quadrature states held two frames
+each), every 100 us one of the 24 analog slots (a pad's reading for its velocity, the faders, the wheels, the pedal
+unplugged, the battery full); `padled_set` keeps the pads' colours. `emu_firmware.h` leaves out cr_sense.c and
+`fm1_an` for the SMK and renames hostsim.c's two-field `fm1_in` there; `emu_fw.c`'s tick runs the model, its frame
+calls `cr_smk_frame`, its idle `cr_smk_wheels` (as main.c), its init the factory curves' defaults. `web_smk_*`
+exports take the panel and give the button LEDs, the pads' colours, K1's volume and the screen's state. Unchanged:
+the FM-1 browser module (choralroot.wasm e8172f98..., before and after) and the native emulator (build/host/emu
+ca31b1df...), `EMU_SMK37` unset there; the SMK packages (the six sha256s of v0.24-beta2-smk37 rebuilt on this tree).
+
+3y152. **The SMK-37 emulator's page and its place on the site.** `tools/emu/web/smk/` (index.html, smk.js,
+worklet.js): the FM-1 emulator page's look, the SMK-37 Pro's arrangement after Vector37 (credited on the page): the
+wheels (pitch springs back), the screen at 240 x 240, its six buttons, K1..K8 over the 16 pads (each lit in the
+firmware's colour, brighter than sent), the faders over the 2 x 6 buttons, the 37 keys; every button by its SMK name
+and its ChoralRoot role, every key, pad and button down while a pointer, a computer key or a latch (right-click)
+holds it, the velocity from where a key or pad is struck (low loud, high soft; Shift soft); the FM-1 emulator's
+computer keys on the SMK's parts (F1..F4, 2..5, Tab the chord pads; A .. ] and W .. P the keys C4..G5; F5..F10,
+7..= the buttons; , . < >, ` KNOB BANK, / FADER BANK; PgUp / PgDn, the arrows the knobs; Z X OCTAVE, End panic); Web
+MIDI, the flash in IndexedDB ("choralroot-smk37"), Start, the load meter, ?demo. `web/make_site.py` copies it to
+`webapp/smk37/emu/` beside the SMK-37 test installer (noindex), whose page links it (`<!--EMU-->`); no FM-1 page does.
+pages.yml builds it with the FM-1's, runs its test and fails when an FM-1 page (the emulator's too) links the SMK.
+SMK37.md "Try it in the browser", BUILDING.md, tools/emu/README.md.
+
+3y153. **Its test and the checks.** `node tools/emu/web/test_web_emu_smk.mjs` (run_all's new suite `web_emu_smk`, after
+web_emu_build; it measures no real time): boots and draws; MAJ's pad and C4: C major sounds (notes 60 64 67), the
+screen's chord name "C M", the note-ons out over MIDI, MAJ's pad lit bright; G4 soft 20 < hard 127 out (the two
+contacts, Key Touch Dynamic); K1 turns the volume down; SCALE (KEY) lights; the same input twice gives the same
+samples; a headless Chromium screenshot of ?demo (build/emu-web-smk37-test/page.png; its processes stopped by their
+PID), 16 checks. tests/site_test.py: webapp/smk37/emu/ with its wasm, noindex, linked from the SMK page and from no FM-1
+page; the link walk over every page, the emulator's included. `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED
+(23 suites, 98 s: the 22 and web_emu_smk; test_cr 1061 ok; 317 golden renders unchanged; 0 lint; test_web_emu PASS,
+bit-exact with the native emulator); `BOARD=smk37 [MODEL=elite|mke] ./build.sh --release 0.24-beta2-smk37`: the six
+packages' sha256s those of web/releases-smk37.json; `./build.sh` last: XIP 537 068, the package f093f9bc... (main's).
+Not pushed.

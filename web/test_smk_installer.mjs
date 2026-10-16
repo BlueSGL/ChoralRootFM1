@@ -34,7 +34,8 @@ function makePackage(product, seed = 0) {          // (as test_installer.mjs: 20
 }
 
 /* ---------------------------------------------------------------- the shape --- */
-ok(count(html, "/*LIB*/") === 1 && count(html, "/*META*/") === 1, "page: /*LIB*/ and /*META*/ exactly once");
+ok(count(html, "/*LIB*/") === 1 && count(html, "/*META*/") === 1 && count(html, "<!--EMU-->") === 1,
+   "page: /*LIB*/, /*META*/ and <!--EMU--> (make_site.py's link to the emulator) exactly once");
 ok(count(html, "<script") === 1 && count(html, '<script type="module">') === 1, "page: one <script type=\"module\">");
 ok(/<meta name="robots" content="noindex, nofollow">/.test(html), "page: noindex, nofollow (it is not linked from the site)");
 ok(!html.includes("webapp/installer") && !html.includes("../installer/"), "page: no link to the FM-1 installer");
