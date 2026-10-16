@@ -4095,3 +4095,7 @@ POOL 238 936; `sh tests/run_cr_tests.sh` green (cr_loop_test 483 ok, +13; cr_eng
 tools/emu/test_cr.sh` PASS (1031 ok, +13: every older loop-editor script as before, their PRESETS moves now sounding
 a step while stopped changed none of their checks); `sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 75 s). No
 screen changed (the draw goldens as they were). Not on the unit, not pushed: the owner's word first.
+**On the unit** (the owner, right after: "Is this on device can I try it? Please flash"): the unit runs this build
+(7398951, "ChoralRoot 0.22") over the 3dd4d6d Snap build, `tools/fm1_install.py build/choralroot.fwsc --backup`; the
+backup before it is `fm1-backups/choralroot-backup-20261015-steppreview.json` (the settings, the 128 user sounds, the
+favourites, loop slot 1). `--info` afterwards: "ChoralRoot 0.22". Not yet played by the owner.
