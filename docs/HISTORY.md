@@ -4475,3 +4475,9 @@ the clients' factory preset table (`web/fm1sounds.js`, `tools/fm1_install.py`: G
 XIP 561 540 B (97.9 %), RAM 79 028 (80.4 %), POOL 304 712 (88.6 %); `sh tests/run_cr_tests.sh`, `sh
 tests/run_tests.sh`, `sh tools/emu/test_cr.sh`, `test_persist.sh`, `node web/test_sounds.mjs`, `test_backup.mjs`,
 `python3 tests/install_test.py`: all pass (the host suites' last run below).
+**Then again** (the release session, 2026-10-15, after v0.22 stable: "renumber to 3y112 onwards and rebase or merge
+onto a11e0ca"): 3y106 .. 3y109 became 3y112 .. 3y115 (GRAIN.md's references too), origin/main a11e0ca (v0.22) merged
+in (HISTORY.md the one conflict: main's 3y106, 3y110, 3y111 before these). `./build.sh` XIP 562 196 B (98.0 %), RAM
+79 028 (80.4 %), POOL 304 716 (88.6 %); the clients' tests pass (`node web/test_sounds.mjs`, `test_backup.mjs`,
+`python3 tests/install_test.py`); the host and emulator suites below.
+`sh tests/run_cr_tests.sh` exit 0, `sh tests/run_tests.sh` exit 0, `sh tools/emu/build.sh && test_cr.sh && test_persist.sh` PASS.
