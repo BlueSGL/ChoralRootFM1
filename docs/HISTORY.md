@@ -5056,3 +5056,63 @@ package (`--require-all` builds the site for 0.24-beta2: the landing page "Versi
 0.23", under Try it first "It runs ChoralRoot 0.24-beta2, a beta (the installer's default is 0.23)."; `firmware/`
 with both betas' packages); `node web/test_installer.mjs` passed. Not pushed, not tagged, not flashed: the tag is the
 owner's "tag it".
+
+## 2026-10-16 (the SMK-37 port onto 0.24-beta2)
+
+3y142. **genkigenki's SMK-37 target on main (2026-10-16; branch claude/smk37-port-5704f3 from origin/main 52889ba,
+v0.24-beta2; not pushed).** The owner: "We port it: start a session that brings genkigenki's SMK-37 commits onto main
+52889ba, keeps the FM-1 build byte-identical, redoes the SMK flash map for the pool and favourites, and builds SMK
+packages for a community test." genkigenki (M. Geisler, genkigenki / makkuro) opened PR #14 on 2026-10-13: an M-Vave
+SMK-37 build target (`BOARD=smk37`, `MODEL=elite` / `mke`), nine commits on aa5875a (0.22's dev tree, before the sound
+pool and the favourites), with its board layer (`hal/smk_input.h`, the SMK half of `hal/fm1_flash_map.h`, the LCD and
+pad LEDs in `hal/fm1_lcd_hw.h` / `lcd.c`), the SMK flash map with its protected ranges, the boot stub's SMK variant and
+locks, the installers' SMK rules (`tools/fm1_install.py`, `web/fm1ota.js`, `web/fm1pkg.js`: the model rule on every
+path, the resume too, long identities, other SMK firmwares refused) and its tests (`smk_flash_test`, `smk_owner_test`,
+`smk_pkg_test.py`, the hooks in `run_tests.sh`). Main was 204 commits further on (dual core, the pool, the favourites,
+the PA10 velocity probe, the P5 rows editor, the flash diet, GRAIN). The nine commits are kept as they are, genkigenki
+the author, by a merge (fb09dea) that resolves eleven files where main had moved: main's key-sensing hooks go with
+`fm1_input.h` in the FM-1 branch; Options keep main's Key Touch rows; the LEDs keep main's Snap glow under the PR's
+`CU_LK(k)` ids; `build.py` keeps main's single-core package under the PR's per-board stem; `fm1ota.js` keeps main's
+several-FM-1s `candidates()` with the PR's `PORT_RE`; `install_test.py`'s phases both. `./build.sh --release
+0.24-beta2` on the merge: the released bytes (3aebea96..505f, 17788180..c2e).
+
+3y143. **The SMK storage for 0.24 (c50f229).** The SMK needs 76 data sectors (20 objects x 2, the pool's 16, the ten
+loop slots' 20) and the owner tag; FL_DATA (30) and FL_SMP (40) hold 70. What 0.22 stored keeps genkigenki's places,
+so a unit that ran the PR's build keeps its data and its legacy objects migrate into the pool; new: OBJ_FAVS at
+0xB4000 / 0xB5000, the pool as two runs, 0xB6000..0xBAFFF (5) and 0xE6000..0xF0FFF (11: FL_SMP's last 4, then 7 of
+the free tail the PR names, `FL_TAIL` 0xEA000..0xF0FFF in `FL_STORE_OK` with its own `_Static_assert`; 0xF1000..0xF3FFF
+stay free). `storage.c`: `sp_addr`'s two runs, an assert per run, `ST_SMK_REGIONS` with the favourites and both runs
+(the owner change and Options > Flash Data). `smk_flash_test`: every OBJ_* id's A and B copy and every pool sector in
+`FL_STORE_OK` / `FL_GUARD`, outside `FL_PROTECTED` and FL_OTA, no two sharing a sector, 76 in all, nothing from
+0xF1000; `smk_owner_test`: the new regions, the tail's rest, USR and key_mac untouched. The table is SMK37.md's
+"Storage". Not changed, seen on the way: the FM-1's Options > Flash Data (cr_ui.c cu_flash_erase) does not list the
+sound pool (0xB8000..0xC7FFF), so a Flash Data erase in SAFE MODE leaves the pool's sounds on an FM-1 (a follow-up:
+the fix changes the FM-1's bytes).
+
+3y144. **The SMK board on 0.24's features (d594b74, c52ad71).** Velocity: main's Options > Key Touch on the SMK too,
+Dynamic its default (the keys' two contacts through the unit's factory curve, `smk_input.h key_vel`, for the 27
+middle keys and the ten outer ones), Fixed Options > Velocity (1..127); the PR's Velocity 0 "keys" goes, and a block
+with it is read as Dynamic. Key Touch stops at Dynamic (no key pressure); Velocity Curve and Aftertouch Sens read "FM-1
+only". The FM-1's analog key sensing (`cr_sense.c`, `fm1_an`, the PA7 / PA8 rows and the PA10 probe) is not in the SMK
+build: PA8 / PA10 are the SMK's mux inputs. MASTER and the battery come from `smk_input.h` as in the PR. The SAVE menu's
+and the naming help's knob names: K5..K8 on the SMK. INFO's version up to 40 characters on the SMK. Dual core builds
+with the FM-1's rails (VDC14 5; the guide gives the same chip, clock tree and boot config, and says nothing about the
+SMK's rails); GRAIN and every engine are in. `tools/build.py`: an SMK release names the board in its version
+(`BOARD=smk37 ./build.sh --release 0.24-beta2-smk37`: "ChoralRoot 0.24-beta2-smk37", "... 1-core"), refused without
+it (and an FM-1 release with it), the three models together in `build/release-smk37/`. SMK37.md for 0.24-beta2
+(community-tested, not tested by the maintainer; the controls, install, M-UPGRADE, storage, safety, what to test,
+genkigenki's credit); README's SMK line.
+
+3y145. **The SMK test packages and the checks (this tree).** Built twice, the same SHA256SUMS
+(`build/release-smk37/`): Pro `choralroot-0.24-beta2-smk37.fwsc` 043c56f0..0a12, `-1core` 000bc5ce..78d3; Elite
+`-elite` ac2ff66a..0ce6, `-elite-1core` e218593e..4ebb0; MKE-P37 `-mke` 830981c3..d342, `-mke-1core` 994be9f4..d707.
+Size: Pro and Elite XIP 537 064 B of 573 440 (93.7 %), MKE-P37 537 048; RAM 80 940 (82.3 %), POOL 333 900 of 344 064
+(97.0 %) for all three; the 1-core packages XIP 533 396 (93.0 %), RAM 77 800, POOL 333 772. The FM-1:
+`./build.sh --release 0.24-beta2` gives 0.24-beta2's sha256s on the final tree. `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 103 s; test_cr 1061 ok, test_persist 113, test_retired 18, test_pool 7; 317 golden renders unchanged; 0 lint), with the SMK hooks of `run_tests.sh` green: `smk_flash_test`, `smk_owner_test`, `smk_pkg_test.py` on the made package and on the three models' `BOARD=smk37 [MODEL=...] ./build.sh` packages, the SMK M-UPGRADE entry for the three models, the SMK update loader. Not flashed: there is no
+SMK-37 here; SMK37.md's "What to test" is the list for the testers.
+**Publishing** (proposed, nothing pushed): a tag `v0.24-beta2-smk37` fails `release.yml`'s version check (one suffix
+only) and publishes nothing; a one-suffix `v...smk...` tag now fails at `build.py` (an FM-1 release never names the
+SMK), before a release exists. The smallest safe way: a pre-release made by hand with a tag that does not start with
+`v` (`smk37-0.24-beta2`), the files of `build/release-smk37/` (LICENSES zipped): `release.yml` does not run (tags
+`v*`), `pages.yml`'s `redispatch` exits at "not a vX.Y ... tag: the site stays as it is", a pre-release never becomes
+the latest release, and `web/releases.json` (FM-1 only) is not touched.
