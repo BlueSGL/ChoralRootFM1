@@ -1,7 +1,7 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.22 on the M-VAVE FM-1 (0.22 is in beta; 0.21 is the latest stable release, and what is new in 0.22
-is marked so). It is written for someone who owns an FM-1, has installed ChoralRoot with
+For ChoralRoot 0.22 on the M-VAVE FM-1 (what is new in 0.22 is marked so). It is written for someone who owns an
+FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
 
@@ -1767,7 +1767,7 @@ The FM-1 updates on its own battery, and the installer cannot read how full it i
 ### Updating
 
 Open the installer, <https://quixotic7.github.io/ChoralRootFM1/webapp/installer/> (the red button on the site), in
-Chrome or Edge on a computer, connect the FM-1 and press **Install ChoralRoot 0.19**. That is all of it: the page
+Chrome or Edge on a computer, connect the FM-1 and press **Install ChoralRoot 0.22**. That is all of it: the page
 finds the FM-1, saves a backup first, switches the FM-1 to update mode, writes the firmware and restarts it. About
 two minutes. Safari and Firefox cannot install (the page says so); Chrome on Android has what it takes but is not
 tested.
@@ -1780,14 +1780,15 @@ over), and after an install it reads the version back.
 Your saved sounds, loops and settings are kept. What you have not saved is not: hold SAVE first.
 Options > Version shows what is installed.
 
-**Going back to an older version:** under the button, **Other versions** offers 0.18, 0.17 and 0.16. One click on
+**Going back to an older version:** under the button, **Other versions** offers 0.21 down to 0.16. One click on
 one of them shows its date, what it brought and what going back to it means, and the button now says, for example,
-"Install ChoralRoot 0.17", with the going-back sentence above it. "Back to 0.19, the newest" undoes the choice. The
+"Install ChoralRoot 0.21", with the going-back sentence above it. "Back to 0.22, the newest" undoes the choice. The
 install is the same. Your saved sounds and loops stay; what the older version does not know it ignores or plays
-without (an older version has no Options > Output; 0.17 plays a loop without the steps' ratchets and conditions and
-has its old effects; the page has it for each version, from the "Going back" parts of the release notes). 0.15 and
-older are not offered: they have no protected update path, and 0.14 and 0.15 stop responding after ten idle
-minutes. They remain on GitHub.
+without (0.21 has no P5 and no favorites and shows its own 32 sound slots; 0.18 and older have no
+Options > Output; the page has it for each version, from the "Going back" parts of the release notes). Beta releases
+are listed there too once you tick **Show beta releases** (the page remembers it in that browser); the button's
+default stays the newest stable release. 0.15 and older are not offered: they have no protected update path, and
+0.14 and 0.15 stop responding after ten idle minutes. They remain on GitHub.
 
 Updating to 0.16 sets Options > Dual Core to Off. Updating to 0.22 leaves it as it is (a new unit has it On).
 

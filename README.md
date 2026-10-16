@@ -111,7 +111,7 @@ each part:
 - **Layers** that lock open on a hold (KEY, PERF, FX, BASS, SEQ for the metronome, LOOP), each a picker over a row of four knob
   cells; OCT- or HOME closes them.
 - **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,
-  a stereo chorus, a stereo delay, drive), a metronome.
+  a stereo chorus, a stereo delay, drive, and a low and high cut on the whole sound), a metronome.
 - **The looper**: it records chords, ten slots, five record modes (Overwrite, Advance, Overdub, Replace, Step), the
   PLAY menu; from 0.18 on saving is manual: a loop is written by the global save (SAVE held) or when its slot is
   left with unsaved changes (up to 0.17: at every stop) ([docs/LOOPER.md](docs/LOOPER.md)).
@@ -125,7 +125,7 @@ each part:
   saved before loads on the VA.) One preset pool per engine (INIT, the factory presets, yours), 128 saved sounds shared
   by every engine (32 until 0.21), favourites with a filter, the
   sound editor ([docs/PRESETS.md](docs/PRESETS.md), [docs/EDITOR.md](docs/EDITOR.md)).
-- **Views**: Chord, Keyboard, Notes, Geek Out, Scope; Options, one setting per screen.
+- **Views**: Chord, Keyboard, Notes, Geek Out, Scope, Geek Out 2; Options, one setting per screen.
 - **MIDI**: three streams out over USB (performance on channel 1, bass on 2, the raw chord off by default), MIDI in
   on the parts (USB and TRS), clock both ways.
   **USB audio recording** (Melodee's, class compliant, no driver): the computer records the FM-1 through **ChoralRoot
@@ -133,6 +133,12 @@ each part:
   and Felucca 1.1.5) at 48 kHz too when Options > USB Rate offers it; Options > USB Record switches it (Off:
   the serial console instead) ([docs/USB-AUDIO.md](docs/USB-AUDIO.md)).
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
+- **New in 0.22** ([docs/releases/0.22.md](docs/releases/0.22.md)): P5, a sixth engine; 128 sound slots shared by
+  every engine and favourites with a filter; FM TONE in the Digitone's ranges and times, with Digitone `.dnsnd`
+  import; Snap and numerals in Key Mode; velocity and aftertouch from the keys (Options > Key Touch) and a per-sound
+  EXPR screen; knobs that accelerate; a master Filter (the FX layer's eighth page); the loop editor's step preview;
+  Dual Core on by default, at 1.50 V, off by itself after a crash, and a single-core package; Geek Out 2; the unit
+  ID; the device manager's P5 tab and bulk restore.
 - **New in 0.21** ([docs/releases/0.21.md](docs/releases/0.21.md)): the chorus no longer clicks while Depth turns,
   and its page has a Width knob (KNOB 3) for the stereo spread ([docs/FX.md](docs/FX.md)).
 - **New in 0.20** ([docs/releases/0.20.md](docs/releases/0.20.md)): Options > Chord Names (the Orchid's names, the

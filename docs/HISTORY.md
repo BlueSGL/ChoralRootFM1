@@ -4199,3 +4199,70 @@ installer's default is 0.21)"; `emu/version.txt` "ChoralRoot 0.22-beta4". The in
 (`?demo=idle`): with the opt-in off the chips are 0.20 .. 0.16, with it on 0.22-beta4, beta3, beta2, beta1, then
 0.20 .. 0.16, Install names 0.21 both ways; the notes link is `blob/main/docs/releases/0.22-beta4.md` (the
 installer's and `firmware/index.html`'s); beta4's two packages are on the site with the listed sha256s.
+
+## 2026-10-15 (0.22: the stable release's tree)
+
+3y106. **0.22's release tree: the notes of everything since 0.20, the card, the packages of this build (2026-10-15;
+branch rel-22 from 5e1e8a7 = origin/main = v0.22-beta4).** The owner: "tag the latest now as v0.22 ... Release notes
+should cover everything new since 0.20". Prepared for the tag; not tagged, not pushed (the tag, the push and the site
+follow the owner's confirmation). origin/main did not move while this was done: no merge, and the code is beta4's
+byte for byte apart from the version string. `docs/releases/0.22.md` is the notes now (no longer the pointer): a
+summary (what 0.22 is, that it covers everything since 0.20 with 0.21's chorus, that updating from 0.20, 0.21 or a
+0.22 beta keeps settings, sounds and loops), the three things that are different without the player doing anything
+(FM TONE's conversion and times, the knobs' acceleration with SHIFT snapping, the delay's repeats above 11 kHz), then
+Sounds and engines (P5 with its rows editor, UNISON, voices, level; FM TONE's ranges, conversion, 57 LFO destinations,
+the Digitone's times; the VA's FENV and sync rates), The effects (the master Filter in full; 0.21's Width; the delay
+at half rate), Playing and editing (Numerals, Snap, the Full keyboard's chords, Key Touch, EXPR, the knobs'
+acceleration and the first-detents rule, OPT snap, the loop editor's step preview in full, the rows under a curve),
+Dual Core and the screen (on by default, the crash fallback, 1.50 V, `--debug`'s last crash; Geek Out 2; the LCD at
+20 MHz), Saving and favorites, On the computer (`.dnsnd` import, Replace factory, Restore / Delete all, the P5 tab, the
+unit ID), Fixes (0.21's Depth without pops, fewer flash pauses, LATCH releasing a Hold), Installing (from 0.21 or 0.20;
+from a beta: 0.22 is beta4 under its final name, the betas stay behind the switch; the single-core package, `ChoralRoot
+0.22 1-core`, which fits Options > Version whole), Going back to 0.21 (beta4's section; 0.21 keeps its own Width) and
+Going back to 0.20 (the same, and 0.20 has no Width: checked, `git diff v0.20 v0.21` is the chorus alone; 0.20's FX
+block is 24 entries as 0.21's, so the Filter caveat is the same). Taken out against beta4's text: the beta framing,
+"New since 0.22-beta3" (folded in), "Going back to an earlier beta" (one line and a link to beta4's notes), and
+"Digitone sounds imported before: import them again" (no release ever imported with translated times: the `.dnsnd`
+import and the Digitone's times are both in v0.22-beta1, and 0.21 had no import). The layout tool is not in the notes:
+the published site has none (pages.yml builds no layout viewer). The beta notes files are unchanged. `web/releases.json`:
+a first entry 0.22 (no `beta`, v0.22, 2026-10-15, "P5, 128 sound slots, favorites, velocity and a Filter on everything",
+12 bullets, four notes: updating, FM TONE's conversion, 0.21's chorus for a 0.20 player, the betas), the four beta
+entries kept below it in their order (releases_test's order puts X.Y above X.Y-betaN; the installer lists a beta older
+than the newest stable behind the switch like any other, and BUILDING.md lets them stay), and 0.21 gets its
+`going_back` (one sentence and six points from the notes' "Going back to 0.21"). docs/MANUAL.md: the first line (no
+beta wording), Updating's button and Other versions (0.21 .. 0.16, the betas behind "Show beta releases"). README:
+"New in 0.22", Geek Out 2 among the views, the Filter among the effects (the Status keeps no version number, 3y65).
+docs/HANDOFF.md: the state, the tags in the repos table, XIP's figure. **A test fixed**: `tests/site_test.py`'s
+`escape_html` did not escape quotes, `make_site.py`'s `html.escape` does, so the release site's "New in" check failed
+on 0.22's first bullet (an apostrophe); it uses `html.escape` now (the first time the check met a stable entry with an
+apostrophe: it runs only when `build/choralroot.fwsc` is a listed release and every package is there). **Built**:
+`./build.sh --release 0.22` twice (the first folder moved aside), the same SHA256SUMS; `choralroot-0.22.fwsc`
+62427c3139c31042..., `choralroot-0.22-1core.fwsc` c68a5f73258720fe...; the apps carry `ChoralRoot 0.22` and `ChoralRoot
+0.22 1-core`; the stub version 3, sha256 baee55ed142fe1cc. Size: XIP 549 116 B of 573 440 (95.8 %), RAM 78 652
+(80.0 %), POOL 239 176 (69.5 %), RAMTEXT 7 072, NOINIT 228; the single-core package XIP 546 188 (95.2 %), RAM 75 564
+(76.9 %), POOL 239 048 (69.5 %). The plain `./build.sh` makes the same package (the tree's default version is 0.22).
+**Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 92 s; test_cr 1041 ok, test_persist
+111, test_retired 18, test_pool 7, all host tests, 313 goldens 0 changed, web_installer and the browser emulator's test
+PASS, `emu/version.txt` "ChoralRoot 0.22"); `CR_PACKAGES_DIR=build/release-0.22 python3 tests/releases_test.py` ALL OK.
+**The Pages job simulated** for 0.22 (`build/scratch/rel22/pages_sim.sh`): the sixteen listed packages taken from local
+folders (0.16 .. 0.21 and beta1 .. beta3 from `.claude/worktrees/key-snap-a8626d/build/scratch/packages`, beta4's from
+its release worktree, 0.22's from `build/release-0.22`), each copied only with its listed sha256, nothing downloaded;
+the first-entry check, every sha256, releases_test, `web/make_site.py build/release-0.22/choralroot-0.22.fwsc 0.22 SITE
+--packages PKGS --require-all` (no layout viewer, as the job), the job's file checks and `firmware/SHA256SUMS` all OK;
+`CR_PACKAGES_DIR=PKGS python3 tests/site_test.py` site ALL OK (57; with the Pages-like build, "New in 0.22" with its
+bullets). The landing page: "Version 0.22", "Install 0.22", "New in 0.22" with the 0.22 bullets, the notes link
+`blob/main/docs/releases/0.22.md`, the installer also offers 0.21 .. 0.16 (no beta link), no emulator line (the
+emulator runs 0.22: no beta wording). The installer, headless Chromium (`?demo=idle`, copies of the built page with the
+opt-in set before its script): Install ChoralRoot 0.22 (Newest) both ways; opt-in off, the chips are 0.21 .. 0.16; on,
+0.22-beta4, beta3, beta2, beta1 (each with its Beta badge), then 0.21 .. 0.16; 0.21 shows "Going back to 0.21" with its
+sentence and points; beta4 picked: "a beta release, not the latest stable one (0.22 is)"; the notes link
+`blob/main/docs/releases/0.22.md` (also `firmware/index.html`'s); both 0.22 packages on the site with the listed sha256s.
+**The tag's path, read** (release.yml, pages.yml): the notes file is cat'ed into the release body, the four assets and
+SHA256SUMS are attached, a `v0.22` without a suffix dispatches pages.yml, which finds 0.22 first and every listed
+package on its release; but release.yml made every 0.x release a GitHub pre-release (`startsWith(version, '0.')`), so
+v0.22 would have been a pre-release, as v0.21 was when it was tagged (HANDOFF's state then; it is the stable release
+now): changed in a commit of its own (a pre-release only for `X.Y-suffix`; BUILDING.md says so), which can be dropped
+to keep the old rule and set v0.22 as the latest release by hand. HISTORY
+numbers: the branch claude/grain-engine-f724f9 (not merged) uses 3y106 .. 3y109 for GRAIN; its merge renumbers them
+after this one. Not done: anything on a unit (nothing flashed; the code is beta4's), the tag, the push, the release and the
+site.
