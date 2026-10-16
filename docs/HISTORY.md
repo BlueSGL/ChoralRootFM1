@@ -5547,3 +5547,8 @@ the SUS pair, m7, LOCK on LFO, `Dsus` `m7`, no battery); not linked from the sit
 One new open question (16): play at the pair when nothing more can change it, or always at the window's close. The
 mock-ups: the window's timeline redrawn (the root waits, Dsus at the close), rule B's re-strike at the close, the FM-1
 panel picture in place of the G5 message.
+**Question 16, the same evening: "Play at the pair. Then we're good to build it."** A root waiting in an open window
+plays as soon as nothing more can change the chord: at the pair (G# and A# both held) with Secret Chords not applying,
+when all three type keys are held with them applying, otherwise at the window's close; rule B's sounding chord and
+LOCK's latch change at the same moment. Every question of docs/CHORD-LAYOUT.md is answered: the design is ready to
+build. The mock-ups' two timelines redrawn (Dsus at the pair, 30 ms).
