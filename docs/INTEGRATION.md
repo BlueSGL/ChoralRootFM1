@@ -386,8 +386,9 @@ the selected effect's amount, PRESETS → sound ±1 (loads at once, as Felucca's
 ALGORITHM → bass sound ±1 (position 0 = OFF), SELECT → tempo ±1 (in a picker: move; on an
 EDIT page: next page). Every knob turn also sets `ui.popup = {knob, until_ms}` so the view shows
 the knob's meter/dial for 900 ms (§5) — except in the FX layer, a **knob row** (`CR_K_KNOBROW`, `cu_fx_cells`): the
-effect's picker over KNOB 1–4's cells. Since 0.18 (docs/FX.md) the layer has seven pages (`CU_FXP`: `cs.fx_sel` the
-effect, `cs.fx_page` its page or `CU_FXPG_SENDS`; SELECT steps them, the label carries "1/2"): Sends Drive Chorus
+effect's picker over KNOB 1–4's cells. Since 0.18 (docs/FX.md) the layer has eight pages (`CU_FXP`: `cs.fx_sel` the
+effect, `cs.fx_page` its page, `CU_FXPG_SENDS` or `CU_FXPG_FILTER`; SELECT steps them, the label carries "1/2"; the
+eighth, Filter Low cut High cut Slope Filter, is 0.22's master filter, docs/FX.md "The master filter"): Sends Drive Chorus
 Delay Reverb (the chord part's four, as the editor's FX group: `cu_send`), Reverb 1 Size Damp Decay Send, Reverb 2
 Pre-delay Mod Low cut Width, Chorus Rate Depth Width Send, Delay 1 Time Spread Feedback Send, Delay 2 Sync Mode Tone Wow,
 Drive – – – Send. A cell is a global parameter (`cr_fx.c xfp[]`, or the chorus's `song.g`), or "Send" =

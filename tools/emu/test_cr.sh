@@ -436,6 +436,41 @@ bsr() { grep -a '^  editor fx bass:' "$L" | sed -n "$1p" | sed -n 's/.* REV \([0
     || bad "the bass part's sends: $(cel 30 Reverb) $(bsr 30), $(cel 31 Reverb) $(bsr 31), $(cel 32 Reverb), $(cel 33 Reverb), popup '$(pop 34)' ($(bsr 34))"
 
 echo "FM TONE's Drive is its preset's and sounds with FX off; another engine's is the part's send (docs/FX.md \"FM TONE's Drive\")"
+echo "the master filter (0.22, GitHub issue 16; docs/FX.md \"The master filter\"): the FX layer's Filter page, the sound through it"
+run cr_fx_filter --wav "$OUT/cr_fx_filter.wav"
+L="$OUT/cr_fx_filter.log"
+has '^fx: filter' "$L" && has '^fx: cells Low cut High cut Slope Filter' "$L" &&
+    ok "FX held, SELECT +7: the Filter page, Low cut / High cut / Slope / Filter on KNOB 1..4: $OUT/cr_fx_filter.ppm" || bad "no Filter page"
+has '^fx: knob 2 Filter high cut 0' "$L" && differ cr_fx_filter cr_fx_filter_high "KNOB 2 to the end: the high cut in at 200 Hz (its cell hot), the Filter cell On by itself: $OUT/cr_fx_filter_high.ppm"
+has '^fx: knob 4 Filter filter 0' "$L" && differ cr_fx_filter_high cr_fx_filter_off "KNOB 4 -1: Filter Off, the cutoffs kept: $OUT/cr_fx_filter_off.ppm"
+has '^fx: knob 1 Filter low cut 72' "$L" && differ cr_fx_filter_off cr_fx_filter_low "KNOB 1 +12: the low cut in at 277 Hz, Filter On again: $OUT/cr_fx_filter_low.ppm"
+has '^fx: knob 3 Filter slope 0' "$L" && differ cr_fx_filter_low cr_fx_filter_slope "KNOB 3 -1: Slope 6 dB: $OUT/cr_fx_filter_slope.ppm"
+differ cr_fx_filter_slope cr_fx_filter_fxoff "FX tapped off: the Filter cell reads Off (the filter is out with the effects): $OUT/cr_fx_filter_fxoff.ppm"
+grep -a '^  session fx:' "$L" | tail -1 | grep -q ' 31=72 32=0 33=0 34=1' &&
+    ok "the session's FX block holds the four (tags 31 .. 34: low cut 72, high cut 0, slope 6 dB, on), written only off their defaults" \
+    || bad "the filter's tags: $(grep -a '^  session fx:' "$L" | tail -1 | sed 's/.* par //')"
+# the WAV: the D major chord (TINE EP: its three notes, little above them) held with the filter Off (0.4 s from 0.2 s
+# into the hold), then through the 200 Hz high cut at 12 dB: D4, F#4 and A4 (Goertzel over 0.4 s) as a part of
+# themselves without the filter: the formula's 53, 41 and 33 % (two poles at 311 Hz), falling with the pitch
+wv=$(python3 - "$OUT/cr_fx_filter.wav" <<'PY'
+import sys, wave, struct, math
+w = wave.open(sys.argv[1]); sr = w.getframerate(); ch = w.getnchannels()
+raw = w.readframes(w.getnframes()); x = struct.unpack('<%dh' % (len(raw) // 2), raw)
+def band(t0, t1, f):
+    a, b = int(t0 * sr), int(t1 * sr); k = 2 * math.cos(2 * math.pi * f / sr); s1 = s2 = 0.0
+    for i in range(a, b):
+        s = (x[i * ch] + x[i * ch + ch - 1]) / 2 + k * s1 - s2; s2 = s1; s1 = s
+    return math.sqrt(max(s1 * s1 + s2 * s2 - k * s1 * s2, 0)) / (b - a)
+print(*('%d' % (100 * band(4.58, 4.98, f) / max(band(1.74, 2.14, f), 1e-9)) for f in (293.66, 369.99, 440.0)), '%.0f' % band(1.74, 2.14, 369.99))
+PY
+)
+set -- $wv
+[ "${1:-100}" -ge 45 ] && [ "${1:-100}" -le 70 ] && [ "${2:-100}" -ge 30 ] && [ "${2:-100}" -le 55 ] && [ "${3:-100}" -ge 20 ] && [ "${3:-100}" -le 42 ] &&
+    [ "${3:-100}" -lt "${2:-100}" ] && [ "${2:-100}" -lt "${1:-100}" ] && [ "${4:-0}" -ge 200 ] &&
+    ok "the WAV: through the 200 Hz high cut the chord's D4 is ${1}% of itself without the filter, F#4 ${2}%, A4 ${3}% (the formula: 53, 41, 33)" \
+    || bad "the WAV: D4 ${1:-?}%, F#4 ${2:-?}%, A4 ${3:-?}% of the chord without the filter (F#4 there: ${4:-?})"
+silent_end cr_fx_filter
+
 run cr_quad_drive
 L="$OUT/cr_quad_drive.log"
 drv() { grep -a '^  drive:' "$L" | sed -n "$1p" | sed 's/^  drive: //'; }

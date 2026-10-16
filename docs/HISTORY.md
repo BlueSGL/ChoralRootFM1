@@ -4060,3 +4060,49 @@ its path: the notes file, the first entry, run_all, main pushed before the tag, 
 with the local build's afterwards.
 `python3 tests/site_test.py` with every package in build/scratch/packages: site ALL OK (42). Then main pushed and
 v0.22-beta3 tagged on the same commit, the owner's word ("lets tag this as v0.22-beta3 and get it released").
+
+## 2026-10-15 (the master filter: GitHub issue 16)
+
+3y103. **A low cut and a high cut on the master: the FX layer's Filter page (GitHub issue 16, etyrnal; 2026-10-15;
+branch claude/master-eq-433034 from da1f8e2 = v0.22-beta3, not merged, not flashed).** The request: "many of the
+patches contain a lot of harsh upper tones", a soft pad is hard to get, "a simple single knob lpf/hpf" to dial out
+what competes with the bass or takes from a singer. The owner's comment there: a final EQ or simple band-pass in the
+FX section, apart from the engines; before the FX chain or after it? **The design** (docs/FX.md "The master filter"):
+an eighth page of the FX layer, **Filter**, past Drive: Low cut (Off, 20 Hz .. 2 kHz), High cut (200 Hz .. 16 kHz,
+Off), Slope (6 / 12 dB an octave) and Filter (Off / On) on KNOB 1 .. 4, Off on a new unit; a cutoff turned switches
+the filter and FX on as a send turned does, KNOB 4 takes it out and back with the cutoffs kept, FX off takes it out
+with the effects. It runs on the stereo mix **after the effects and before the master** (`fx.c mix_block`:
+`xq_block` between `xf_block` and `out_master`): the reverb's and the delay's wash is tamed with the parts, and the
+limiter and the clip see what the filter leaves instead of limiting first; a cut per part (beside each part's
+drive) is the alternative named in the issue reply, not built (twice the cost, nothing on the wash). **The
+arithmetic** (`cr_fx.c xq_*`): a cut is one or two one-pole stages in a row, k in Q12, the low cut's stage x minus
+its low-pass, every product keeping its remainder (`xf_rs`; a 20 Hz cut's k is 15 of 4096: without it the stage
+stops 270 units short, an offset); the knob reads the pair's -3 dB corner (the poles at 1.554 x it at 12 dB); the
+mix into a cut held to +-3 x full scale (the limiter is 15 dB into its work there). **Off touches nothing**: the
+block returns before a read; the master is bit for bit what it was. A cut switched in or out fades over 16 blocks
+(11.6 ms, Options > Output's fade), a cutoff turned eases its k an eighth of itself a block (an octave in 6), the
+slope the same way (the second stage's k to 4096 = y = x, then skipped; a quarter-of-the-way ease, the first try,
+stepped the stage's slew by a third on a slope change: a 1.5 x step under a tone). The four parameters are `xfp[]`'s
+(`XP_FLOW .. XP_FON`, after `XP_NFX`: the delay's hash leaves them alone), the session's tags 31 .. 34
+(`CSS_FXP_XQ_*`), **written only off their defaults** (`CSS_FXG`'s `opt`): `css_fx_t`'s `par[]` grew from 24 entries
+to 28 into `rsv_fx` (20 -> 4 bytes; 108 -> 124; every other field where it was, `CSS_FX_VERSION` unchanged), so a
+unit that never touched the filter writes 23 entries and an older firmware reads its record as before, while one
+with more than 24 makes an older firmware take the FX block's defaults (SETTINGS.md). The picker: six items, the
+page's tag `CSS_FXE_FILTER` 7, `CU_FXPG_FILTER` beside `CU_FXPG_SENDS` (`cs.fx_sel` stays the effect last picked),
+`cu_fx_pgname` for the traces and the emulator's dump. **Cost on the unit** (the listing, `tools/fx_loops.py
+xq_cut`, at 205 a us): a 12 dB cut 22 .. 24 instructions a sample a side, 27 .. 30 us a half; both at 12 dB 57 us
+(the "under 40" asked for holds at 6 dB: 41; one cut, the issue's case, is 1 % of the half); Off ~40 instructions.
+XIP 548 732 B (95.7 %, +1712), RAM unchanged, POOL +240 B. **Tests**: `cr_fx_test.c t_filter` (Off bit-exact four
+ways and after a cut was in; 2 cuts x 3 corners x 2 slopes x 3 frequencies against the one-pole formula within
+0.3 dB; the extremes bounded and exactly 0 after silence; the sweep and the toggles under a tone, no step over the
+tone's by 3 %; the host's cost 132 / 1280 / 2560 a half), `tools/emu/scripts/cr_fx_filter.txt` (the page, the
+knobs, the tags, the WAV: a D major chord through the 200 Hz high cut, D4 58 %, F#4 42 %, A4 29 % of themselves for
+the formula's 53, 41, 33), `cr_settings_test.c` (the layout: `fx` at 68, `part` at 196, 126 bytes of reserve). Docs:
+FX.md (the section, the table's row, decisions 28 and 29), MANUAL.md section 8 (The Filter page, the table, a
+troubleshooting row), SETTINGS.md (the inventory, the tags' row, the block's size), INTEGRATION.md, releases/0.22.md
+("Merged after 0.22-beta3", with the going-back note), HANDOFF.md. No draw fixture: the page is the knob row's
+grammar with two text cells (as the LOCK layer's), its picture `build/emu/test/cr_fx_filter*.ppm`.
+**Checked**: `./build.sh` (the size line above); `sh tests/run_cr_tests.sh` green (cr_fx_test all ok, cr_settings
+252); `sh tools/emu/test_cr.sh` PASS (1028 ok); `sh tests/run_cr_draw.sh` green (313 goldens, 0 changed);
+`sh tools/emu/test_persist.sh` PASS (111); `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites,
+74 s). Not on the unit: the designer-handoff session holds it.

@@ -1003,9 +1003,80 @@ both limiters at rest and the delay empty, and fades in (`out_fade`, `out_master
 ChoralRoot's unit) and Felucca's own builds always run Classic. `EMU_OUTPUT=classic` holds the emulator at Classic
 whatever the settings say (`tools/emu/classic_exact.sh`).
 
+## The master filter (0.22)
+
+GitHub issue 16 (etyrnal, 2026-10-14): "Many of the patches contain a lot of harsh upper tones", and softening a pad,
+clearing what competes with the bass, or leaving room for a singer wants "a simple single knob lpf/hpf". The owner's
+answer there: a final EQ or band-pass in the FX section, apart from the engines; before the FX chain or after it?
+
+**What it is**: a **low cut** and a **high cut** on the stereo master, the eighth page of the FX layer, **Filter**
+(SELECT past Drive): Low cut (Off, then 20 Hz .. 2 kHz), High cut (200 Hz .. 16 kHz, then Off), Slope (6 or 12 dB an
+octave) and Filter (Off / On) on KNOB 1 .. 4. Both cuts in is a band-pass. A new unit has it Off with both cuts at
+their Off ends; **turning a cutoff switches the filter on** (and FX, as a send turned does), so the knob is heard at
+once; KNOB 4 switches it off and on again with the cutoffs kept, to compare. FX off takes it out with the effects
+(its cell reads Off). The four are the instrument's, like every effect parameter: no sound load touches them, the
+global save keeps them (SETTINGS.md: tags 31 .. 34).
+
+**Where in the chain, and why**: after the effects and before the master (`fx.c mix_block`: `xq_block` on the mix
+after `xf_block`, before `out_master`). So the reverb's and the delay's wash is tamed with the parts (a high cut
+softens the tail too, a low cut takes the reverb's mud with the chord's), and the limiter and the clip see what the
+filter leaves: a low cut makes room under the limiter's threshold instead of being limited first. Before the
+effects it would have left the wash as bright as it was and the limiter working on a signal the filter then changed.
+The other place the request could go, **a cut per part** (in each part's chain beside its drive, before its sends),
+is not built: it costs twice over for the same ear (both parts, every voice), has no effect on the wash, and the
+issue's cases are all "the whole sound" cases; it stays an option if a player wants the bass full under a cut chord
+(the issue reply says so). Nothing of it is in the engines: every engine keeps its own filter.
+
+**The arithmetic** (`cr_fx.c xq_*`): a cut is one stage (6 dB) or two in a row (12 dB) of a one-pole, `y += k (x -
+y)` with k in Q12, the low cut's stage `x` minus its low-pass. The knob reads the cut's -3 dB corner: two identical
+poles are 3 dB down at 0.6436 of their own corner, so at 12 dB the poles sit at 1.554 x the knob. Every product keeps
+its remainder (`xf_rs`, as every loop in the file): no dead band at a low k (a 20 Hz cut's k is 15 of 4096: without
+the remainder its stage would stop 270 units short and leave a DC offset of that), no offset, exact zeros after
+silence. The mix into a cut is held to +-3 x full scale (`XQ_MAX` 98304: the Classic limiter is 15 dB into its work
+by then, the Clean one 11.5 dB; the products fit 32 bits with the second stage's difference at 4 x that). **Off
+touches nothing**: with FX off, Filter Off, or both cuts at their Off ends, `xq_block` returns before it reads a
+sample and its states are at rest: the master is bit for bit what it was (`cr_fx_test.c`: the defaults, FX off,
+Filter Off, On with both cuts Off, and again after a cut was in). A cut switched in or out **fades**, its wet share
+a straight line across each block over 16 blocks (11.6 ms, Options > Output's fade), the stages running from rest
+under it; a cutoff turned **eases**, the k in use moving an eighth of itself towards the knob's each block (an
+octave in 6 blocks: no zipper; the test sweeps the high cut from Off to 200 Hz and back under a tone, a detent every
+20 ms, and no sample step exceeds the tone's own by 3 %). The slope eases the same way: the second stage's k goes to
+4096 (y = x exactly) when 12 dB goes to 6 and the stage is skipped once there; 6 to 12 starts it at its input and
+eases its k down. (An ease of a quarter of the way a block, the first try, stepped the second stage's slew by a
+third at once on a slope change: a 1.5 x step under a tone. The geometric ease was the fix.) Only a cut that is in
+costs anything.
+
+**The cost on the unit** (the listing, `python3 tools/fx_loops.py build/choralroot.dis xq_cut`, at 205 instructions
+a microsecond; the unit's `fx_*` will say, as for the effects: the fx stage's figure includes it, between `up` and
+the master):
+
+| a cut's loop, a sample a side | instructions | both sides, a half of 128 | us |
+| --- | --- | --- | --- |
+| low cut, 6 dB | 17 | 4352 | 21 |
+| low cut, 12 dB | 24 | 6144 | 30 |
+| high cut, 6 dB | 16 | 4096 | 20 |
+| high cut, 12 dB | 22 | 5632 | 27 |
+| both at 12 dB (a band-pass) | | 11776 | **57** |
+| both at 6 dB | | 8448 | 41 |
+| Off (the hash of four values, nothing else) | | ~40 | 0.2 |
+
+One cut at 12 dB, the issue's case, is 27 .. 30 us of the half's 2902 (1 %); the band-pass at 12 dB is 57, the
+"under 40" asked for only at 6 dB. The remainder is 2 of a stage's 6 instructions and the clamp 3 of a loop's: no
+cheaper loop keeps the project's arithmetic. A fade's block costs the loop plus a copy and a mix (18 a sample).
+The host's count (`cr_fx_test.c`, a guard): off 132 instructions a half, one 12 dB cut 1280, both 2560. XIP +1712 B
+(the four loops, the fade, the block, the page), POOL +240 B (`xq`: the states and a fade's block of 32).
+
+**Tests**: `tests/cr_fx_test.c t_filter` (above: Off bit-exact four ways and after a cut was in; each cut at three
+corners x two slopes x three frequencies against the one-pole's own formula within 0.3 dB, both sides the same; both
+cuts at their far ends with a square at the clamp and noise over it, bounded and exactly 0 within a second of
+silence; the sweep and the toggles under a tone; the cost); `tools/emu/scripts/cr_fx_filter.txt` (the page, the
+knobs, the cells, the session's four tags, and the WAV: a D major chord with the filter Off, then through the 200 Hz
+high cut, its D4, F#4 and A4 at the formula's 53, 41 and 33 % of themselves, falling with the pitch);
+`tests/cr_settings_test.c` (the block's four new entries took `rsv_fx`'s bytes, every other field where it was).
+
 ## The FX layer
 
-SELECT steps seven pages; the picker shows the page's name (Sends, or the effect) over five marks, the label an
+SELECT steps eight pages; the picker shows the page's name (Sends, the effect, or Filter) over six marks, the label an
 effect's page (`fx · on · 1/2`). The layer opens on Sends on a new unit and after a reset or a revert with nothing
 saved; otherwise on the page it was left on (the session's `fx.sel`, a tag a page: `CSS_FXE_SENDS` is the new one,
 6. A record written before it names an effect's page and opens there; an older firmware that reads a record naming
@@ -1020,6 +1091,7 @@ Sends does not know the tag and keeps Reverb 1).
 | Delay 1 | Time (echoes) | Spread (spread) | Feedback (echoes) | Send (mix) |
 | Delay 2 | Sync (sync) | Mode (ping) | Tone (moon) | Wow (lfo) |
 | Drive | – | – | – | Send (clip) |
+| Filter (0.22) | Low cut (cut) | High cut (moon) | Slope (text: 6 dB / 12 dB) | Filter (text: Off / On) |
 
 **Sends** (the owner, 2026-10-12: "I also really like in this sound editor page being able to set the send levels for
 each FX, so I think when you enter the FX menu from main the first page should also show the 4 FX send levels for
@@ -1105,3 +1177,9 @@ the far wall's direction turned round.
     nothing is stored that depends on them.
 26. **CZ-1 is as it was**: its options are listed, none built.
 27. **Six more values in SysEx 78 PEAK** (30 for 24); a host that reads 24 sees the same 24.
+28. **The master filter sits after the effects and before the master** (0.22, "The master filter"), not before the
+    effects and not per part; **one-pole stages, 6 or 12 dB, no resonance** (a resonant two-pole with the same
+    arithmetic was 55 us a side at 12 dB by the count); **turning a cutoff switches it on**; **its four session tags
+    are written only off their defaults** (the FX block grew from 24 entries to 28 into `rsv_fx`; a firmware before
+    0.22 reading a record with more than 24 takes that block's defaults, SETTINGS.md).
+29. **The clamp at 3 x full scale** before a cut (`XQ_MAX`): a sample out there is already 15 dB into the limiter.
