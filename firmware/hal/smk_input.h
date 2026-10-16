@@ -32,7 +32,11 @@
  * way to the engine, cr_out.c cr_klat). */
 #pragma once
 #include <stdint.h>
+#ifndef SMK_INPUT_HOST                 /* (the browser emulator, tools/emu/emu_smk_hal.h: its own clock and lock; it
+                                        * runs the frame and analog logic below on a modelled matrix, never the
+                                        * register functions) */
 #include "fm1_time.h"
+#endif
 #include "fm1_gpio.h"
 #include "fm1_cc.h"
 
@@ -622,6 +626,7 @@ static void fm1_input_scan(void)
 }
 
 /* ------------------------------------------------------- main-loop API --- */
+#ifndef SMK_INPUT_HOST
 static inline uint32_t fm1__lock(void)
 {
     __asm__ volatile("cli" ::: "memory");
@@ -632,6 +637,7 @@ static inline void fm1__unlock(uint32_t v)
     (void)v;
     __asm__ volatile("csync\n\tsti" ::: "memory");
 }
+#endif
 
 static int32_t fm1_enc_take(uint32_t e)
 {

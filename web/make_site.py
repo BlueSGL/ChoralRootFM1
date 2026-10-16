@@ -38,6 +38,9 @@
                               CR_SMK_PACKAGES_DIR; build/release-smk37 when it exists) holds them; a local build skips
                               a version whose files are not all there, --require-all stops. No version offered: no
                               SMK page (a line says so)
+  webapp/smk37/emu/           the SMK-37 browser emulator beside it: build/emu-web-smk37/* (sh tools/emu/web/build_web.sh;
+                              SMK_EMU_DIR overrides; missing: a warning, the page is made without it and without the
+                              link to it: smk37.html's <!--EMU--> is empty); linked from the SMK page alone (noindex)
   src/                        not touched
 
   web/make_site.py build/choralroot.fwsc VERSION OUT_DIR [EMU_DIR]     (or build/choralroot-X.Y.fwsc X.Y)
@@ -384,9 +387,16 @@ def smk_collect(smk, require_all):
     return data, out, notes
 
 
-def smk_site(out, collected):
-    """webapp/smk37/index.html and firmware/smk37/ (see the top) from smk_collect's answer; -> the line to print"""
+SMK_EMU_LINK = ('<p class="small"><b><a href="emu/">Try it in the browser first</a></b>: the SMK-37 build in an emulator '
+                '(the panel with the mouse or the computer keyboard; no keyboard needed).</p>')
+
+
+def smk_site(out, collected, emu=None):
+    """webapp/smk37/index.html, webapp/smk37/emu/ and firmware/smk37/ (see the top) from smk_collect's answer; -> the
+    line to print"""
     data, offered, notes = collected
+    emu = Path(emu or os.environ.get("SMK_EMU_DIR") or HERE.parent / "build" / "emu-web-smk37")
+    has_emu = (emu / "index.html").is_file() and (emu / "choralroot-smk37.wasm").is_file()
     for line in notes:
         print(line)
     fw, inst = out / "firmware" / "smk37", out / "webapp" / "smk37"
@@ -430,16 +440,26 @@ def smk_site(out, collected):
         '<a href="../LICENSE">LICENSE</a>, <a href="../LICENSING.md">LICENSING.md</a>, <a href="../LICENSES/">LICENSES/</a>; '
         'the source of each version is the repository at its tag.</p><ul>' + "".join(rows) + "</ul>\n", encoding="utf-8")
     html = (HERE / "smk37.html").read_text(encoding="utf-8")
-    for mark in ("/*LIB*/", "/*META*/"):
+    for mark in ("/*LIB*/", "/*META*/", "<!--EMU-->"):
         if html.count(mark) != 1:
             raise SystemExit(f"smk37.html must contain {mark} once; update make_site.py")
     lib = "\n".join(strip_module((HERE / n).read_text(encoding="utf-8")) for n in SMK_LIB)
     meta = json.dumps({"repo": data["repo"], "releases": rels}, ensure_ascii=False,
                       separators=(",", ":")).replace("</", "<\\/")
-    page = html.replace("/*LIB*/", lib).replace("/*META*/", meta)
+    page = html.replace("/*LIB*/", lib).replace("/*META*/", meta).replace("<!--EMU-->", SMK_EMU_LINK if has_emu else "")
     (inst / "index.html").write_text(page, encoding="utf-8")
+    if has_emu:
+        (inst / "emu").mkdir(exist_ok=True)
+        emu_files = sorted(f.name for f in emu.iterdir() if f.is_file() and not f.name.startswith("."))
+        for n in emu_files:
+            shutil.copy(emu / n, inst / "emu" / n)
+        emu_note = f"webapp/smk37/emu/ ({', '.join(emu_files)})"
+    else:
+        emu_note = "no webapp/smk37/emu/"
+        print(f"warning: {emu}/index.html or choralroot-smk37.wasm missing: the SMK page is made without its emulator "
+              "(sh tools/emu/web/build_web.sh builds it)", file=sys.stderr)
     return (f"webapp/smk37/index.html ({len(page)} B, " + ", ".join(r["version"] for r, _ in offered) +
-            f"), firmware/smk37/ ({len(sums)} packages, SHA256SUMS, index.html)")
+            f"), firmware/smk37/ ({len(sums)} packages, SHA256SUMS, index.html), {emu_note}")
 
 
 SMK_LIB = ("fm1pkg.js", "fm1ota.js", "fm1backup.js")
