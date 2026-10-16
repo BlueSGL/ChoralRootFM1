@@ -68,6 +68,11 @@
  * every older record and 0 is the default: no version, nothing to migrate. Manual (SAVE held), as the page's others */
 #define CRS_NUMERALS 0x02u
 #define CRS_NUMS(s) (((unsigned)(s)->bass_on & CRS_NUMERALS) ? 1u : 0u)
+/* Its third value, Solfege (GitHub issue 15: the same degree as DO RE MI ..), has no bit here: the block has none left
+ * that 0.22 would ignore (bit 0 of this byte would switch 0.22's engine bass on; every other byte is range-checked
+ * whole, so a bit in it costs a setting there). The bit above says the degree is shown (On or Solfege) and the
+ * session's numerals_sol says how; both are written by the same global save (SAVE held), so Numerals stays manual.
+ * 0.22 reads Solfege as On (the Roman numeral) and nothing else; 0.17 .. 0.21 as Off, as they read On */
 /* Options > Key Touch, Velocity Sens, Aftertouch Sens (0.22; docs/VELOCITY.md) ride in bits 2..7 of the same byte:
  * bits 2-3 Key Touch (0 Fixed, the default: the keys send Options > Velocity, no sensing; 1 Dynamic: the keys'
  * velocity; 2 Velocity + Aftertouch), bits 4-5 Velocity Sens and bits 6-7 Aftertouch Sens (0 Mid, the default; 1 Low;
@@ -244,8 +249,8 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
  * CR_BLOCK), so the block keeps its size and its layout and an older firmware reads a v15 block as it read v14's.
  * The record has its own header (magic, version, size, check: FNV-1a over [12, size)), the block's import rules (a
  * shorter, older record over the defaults; a longer, newer one by its prefix; anything else: the defaults = the unit as
- * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 142 of them unused today (46 in the
- * state, 20 after the FX block, 8 in each part, 60 at the end).
+ * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 125 of them unused today (45 in the
+ * state, 4 after the FX block, 8 in each part, 60 at the end).
  * `bind`: the CRC of the settings object in flash when the session was written (0: none). The session is used at
  * power-on if the settings block was read as current (written by a v15 firmware: an older one in between would have
  * left its own version there) or, with any other block, if the settings object is still the one the session was
@@ -328,7 +333,10 @@ typedef struct {
                                          * -5 x1/8, -4 x1/6 (those four since 2026-10-11), -3 x1/4, -2 x1/2,
                                          * -1 x3/4, 0 x1, 1 x1.5, 2 x2, 3 x4 (cr_loop.h CRL_NRATE; 0 = the default, so
                                          * a record written before it reads x1: no migration) */
-    uint8_t rsv[46];
+    uint8_t numerals_sol;               /* 1: the KEY layer's Numerals is Solfege (GitHub issue 15): the block's bit
+                                         * (CRS_NUMERALS) says the Chord view shows the degree, this byte how; read
+                                         * only with that bit set (0: the Roman numeral, every older record's) */
+    uint8_t rsv[45];
     css_fx_t fx;
     uint8_t rsv_fx[4];
     css_part_t part[2];                 /* chord, bass */

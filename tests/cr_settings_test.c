@@ -1105,6 +1105,7 @@ static void css_fill(cr_session_t *x)              /* a recognisable session: ev
     x->voicing = 2; x->octave = -1; x->bass_on = 1; x->lock = 1;
     x->latched = (uint8_t)((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7));
     x->loop_rate = 2;                              /* x2 */
+    x->numerals_sol = 1;                           /* the KEY layer's Numerals: Solfege */
     x->fx.sel = CSS_FXE_DELAY;
     x->fx.amt[CSS_FXE_REVERB] = 30; x->fx.amt[CSS_FXE_CHORUS] = 0; x->fx.amt[CSS_FXE_DELAY] = 99; x->fx.amt[CSS_FXE_DRIVE] = 127;
     cr_session_fx_set(x, CSS_FXP_DTIME, 5);
@@ -1136,17 +1137,22 @@ static void t_session(void)
        !SD.bass_on && !SD.lock && !SD.latched && !SD.part[0].valid && !SD.part[1].valid && SD.fx.version == CSS_FX_VERSION &&
        SD.fx.n == 0 && SD.fx.sel == CSS_FXE_REVERB && SD.fx.amt[0] == CSS_FX_NONE && SD.fx.amt[CSS_NFXE - 1] == CSS_FX_NONE,
        "session defaults: nothing stored (the unit as it powered on until 0.17: bass off, voicing 0, the sounds' own sends)");
-    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 126u &&
+    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 125u &&
        CSS_NFXP - 27 == 1 && CSS_NP - 91 == 5,
-       "session: 126 bytes of reserve (142 until 0.22's master filter took 16 of rsv_fx), 1 free FX parameter entry of 28, 5 free part parameters");
+       "session: 125 bytes of reserve (142 until 0.22's master filter took 16 of rsv_fx and Solfege 1 of rsv), 1 free FX parameter entry of 28, 5 free part parameters");
     ok(SD.loop_rate == 0 && (const uint8_t *)&SD.loop_rate - (const uint8_t *)&SD == 21,
        "session: the loop's Rate, byte 21 (the first of the old reserve), 0 = x1: a record written before it reads x1");
+    /* GitHub issue 15: the KEY layer's Numerals = Solfege, the block's bit (On) and this byte. Byte 22, the next of the
+     * old reserve: 0 in every older record, which reads the Roman numeral (the block's bit alone decides On / Off) */
+    ok(SD.numerals_sol == 0 && (const uint8_t *)&SD.numerals_sol - (const uint8_t *)&SD == 22,
+       "session: Numerals' Solfege, byte 22 (the old reserve's next), 0 = the Roman numeral: an older record reads On as On");
     /* every item round-trips */
     css_fill(&SX);
     rc = cr_session_import(&SR, &SX, sizeof SX);
     ok(rc == 1 && !memcmp(&SR, &SX, sizeof SX), "session: every item round-trips, byte for byte (rc 1)");
-    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 && SR.loop_rate == 2 &&
-       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)), "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7, the loop's Rate x2");
+    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 && SR.loop_rate == 2 && SR.numerals_sol == 1 &&
+       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)),
+       "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7, the loop's Rate x2, Numerals' Solfege");
     ok(SR.fx.sel == CSS_FXE_DELAY && SR.fx.amt[CSS_FXE_DELAY] == 99 && SR.fx.amt[CSS_FXE_DRIVE] == 127 && SR.fx.n == 3 &&
        cr_session_fx_get(&SR, CSS_FXP_DTIME, &v) && v == 5 && cr_session_fx_get(&SR, CSS_FXP_DFDBK, &v) && v == 77 &&
        cr_session_fx_get(&SR, CSS_FXP_RSIZE, &v) && v == 12 && !cr_session_fx_get(&SR, CSS_FXP_CRATE, &v),
@@ -1259,6 +1265,9 @@ static void t_session(void)
     SX.loop_rate = -3;
     cr_session_seal(&SX);
     ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == -3, "session: Rate x1/4 kept");
+    SX.numerals_sol = 2;
+    cr_session_seal(&SX);
+    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.numerals_sol == 0, "session: an unknown Numerals style (2): the Roman numeral");
     css_fill(&SX);
     SX.lock = 0;                                   /* a latch without LOCK cannot be */
     cr_session_seal(&SX);

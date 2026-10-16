@@ -67,7 +67,7 @@ from a layer: it goes with the layer (manual).
 | Key Mode, tonic, scale | KEY tap, the KEY layer | block `key_on` bit 0, `tonic`, `scale` | manual |
 | Key plays, Keyboard | the KEY layer's page 2 | block `key_on` bits 1 / 2 | manual |
 | Snap (0.22) | the KEY layer's page 2, KNOB 3 | block `key_on` bits 3 .. 4 | manual |
-| Numerals (0.22) | the KEY layer's page 2, KNOB 4 | block `bass_on` bit 1 | manual |
+| Numerals (0.22; its Solfège after 0.22) | the KEY layer's page 2, KNOB 4 | block `bass_on` bit 1 (shown); session `numerals_sol` (Solfège) | manual |
 | the KEY layer's keys (pick / play) | GLO in the KEY layer | block `loop_rec` bit 5 | manual |
 | Transpose | the KEY layer | block `transpose` | manual |
 | the LOCK layer's two settings | B3 held | block `loop_rec` bits 6 / 7 | manual |
@@ -261,6 +261,26 @@ one the player would look for. `cr_settings_apply` gives the engine `cr_set_key_
 the 24 bytes' round trip, 24 .. 255 to the default, apply / capture, that it is manual, and the older firmwares' rule
 (modelled from their `CRS_FIX` line). Manual, as the page's others: not in `cr_settings_auto`.
 
+**Numerals' third value, Solfège (after 0.22; GitHub issue 15), took a byte of the session, not a bit of the
+block.** KNOB 4 reads Off / On / Solfège (the degree as DO RE MI .., docs/CHORD-NAMES.md "Solfège"). The block has no
+bit left that 0.22 would read past: `bass_on`'s bit 0 is the only one not in use, and 0.18 .. 0.22's
+`cr_settings_apply` gives the engine Bass on from it (`cr_set_bass(c, s->bass_on & 1u)`) while the session's
+`css_apply` only ever turns the bass on, so 0.22 would play a bass its UI shows off; every other byte is range-checked
+whole by 0.22's `crs_sanitize`, so a new bit in it costs that byte's setting there (`key_on`: Key Mode, Key plays,
+Keyboard, Snap; `scale`: Major; `vel`: Velocity; `metro_sig`: 4/4 ..). So the value is split the way the screen
+reads it: **bit 1 of `bass_on` stays "the degree is shown"** (set for On and for Solfège) and the session's
+**`numerals_sol`** (byte 22, the next of the state's reserve after `loop_rate`; 0 / 1, anything else 0) says
+**how** (1 = the syllable). `crs_capture` writes the bit as `cs.numerals != 0`, `css_capture` the byte as
+`cs.numerals == 2`; `cr_settings_load` reads the bit (0 / 1) and `css_apply`, which runs after it, makes it 2 when the
+byte is set and the bit is too. Both records are written by the global save alone (SAVE held; the session since
+2026-10-11), so Numerals stays manual as a whole. **What an older firmware reads**: 0.22 finds the bit and ignores
+the session's reserve: **Solfège reads as On** (the Roman numeral) and nothing else changes; 0.17 .. 0.21 read the
+bit as Off, as they read On. **Coming back**: a 0.22 global save writes the session's reserve as 0, so Solfège is On
+until set again; a session not used at power-on (`bind` does not match: a restore, a downgrade in between) reads as
+the Roman numeral too. Reset Settings: Off (the block's default; the session captured after it has the byte 0).
+`tests/cr_settings_test.c t_session` checks the byte's place, default, round trip and range;
+`tools/emu/test_persist.sh` sets Solfège, saves, relaunches and reads `SOL` for G in C major.
+
 ## The ChoralRoot block (`cr_settings_t`, `CRS_SIZE` = 192 bytes)
 
 The block has its own header:
@@ -277,7 +297,7 @@ The block has its own header:
 | transpose | −24..24 | 0 |
 | single, split_pc | 0 Full Octave / 1 Split Oct ("Split" until v14) / **v14: 2 Split Bass**, 0..11 (the Chords layout's split, a pitch class; the Full keyboard splits at F4, fixed, not stored) | Full Octave, F (5) |
 | vel | 1..127 (the keys' velocity) | 100 |
-| bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
+| bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range; set for Solfège too, which the session's `numerals_sol` tells apart) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
 | bass_mode, bass_voicing | Chords Only..Solo, −2..4 octaves | Chords Only, 0 |
 | perform_on, perform_mode, perf_sel | 0/1, Strum..Harp, the PERF layer's entry 0..6 | off, Strum, 0 |
 | sticky | latch | off |
@@ -434,7 +454,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | every entry of Options (Play Style .. Dual Core, Hold Time) | yes | yes | block; Hold Time in Felucca's `bold` |
 | the panel calibration | yes | yes | Felucca's `panel` in the settings object |
 | Key Mode, tonic, scale, Transpose | yes | yes | block `key_on`, `tonic`, `scale`, `transpose` |
-| the KEY layer: its keys (pick / play), Key plays, Keyboard, Numerals (0.22: `bass_on` bit 1), Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
+| the KEY layer: its keys (pick / play), Key plays, Keyboard, Numerals (0.22: `bass_on` bit 1; its Solfège: session `numerals_sol`), Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
 | the KEY layer's page, the PLAY menu's page | no | **no, on purpose** | page 1 whenever the layer opens (`cu.kpage`, `cu.lpage`) |
 | the performance mode, its parameters, Perform on | yes | yes | block `perform_mode`, `perf_sel`, `par`, `perform_on` |
 | LATCH on | yes | yes | block `sticky` |
@@ -483,10 +503,11 @@ Header: `magic` `CSS1`, `version` (`CSS_VERSION`, 1), `size`, `check` (FNV-1a ov
 | bass_on | 0/1 | 0 |
 | lock, latched | 0/1, bit `cr_mod_t` (cleared when `lock` is 0) | off, none |
 | loop_rate | -7..3: the loop's Rate in steps from x1 (x1/16 x1/12 x1/8 x1/6 x1/4 x1/2 x3/4 **x1** x1.5 x2 x4; `cr_loop.h CRL_NRATE`; -7 .. -4 since 2026-10-11: a 0.18 dev build of before reads them as x1); the first byte of the old reserve, so a record written before it reads 0 = x1 with no migration | 0 (x1) |
+| numerals_sol | 0/1 (after 0.22, GitHub issue 15): 1 = the KEY layer's Numerals is Solfège, read only with the block's `bass_on` bit 1 set; byte 22, the next of the old reserve, so a record written before it reads 0 = the Roman numeral with no migration | 0 |
 | fx (`css_fx_t`, 124 bytes: 108 until 0.22, when `par[]` grew by four entries into `rsv_fx`, which is 4 bytes now) | the FX sub-block, below | nothing stored |
 | part[2] (`css_part_t`, 384 bytes each: chord, bass) | `valid`; `eng`, `preset`, `user`, `trim` (the part's `track_t` fields; **`trim` is written and, since 0.19, not read**: a part put back takes the trim of its pool entry from the running firmware's table, `cr_session_part_trim`: a factory preset its `CB_TRIM` row, a user preset bound to one that row, an added user preset and INIT none, as `cu_pool_load`, so a row removed or added by an update holds for a session saved before it); `edited`, `kind`, `fk`, `slot`, `name` (the UI's `cu_snd_t`: the pool entry the sound came from); `np` and `p[96]` (the writer's `P_COUNT`, 91 today, and every parameter: the engine's eight, the envelopes, the LFO, the modulation, the sends, **Level and Pan**); `nblob` and `blob[160]` (the engine's deep patch, `ENG_BLOB_MAX`: FM6 128, VA 110, CZ-1 144, FM TONE 80; none on the other engines) | not valid: the pool's sound (the block's `chord_sound` / `bass_sound`) |
 
-**Reserve: 142 bytes of the 1024** (46 after the state, 20 after the FX block, 8 in each part, 60 at the end), 1 of
+**Reserve: 125 bytes of the 1024** (45 after the state since `numerals_sol`; 4 after the FX block since 0.22's master filter took 16, 8 in each part, 60 at the end), 1 of
 the FX block's 24 parameter entries (23 are stored since 0.21) and 5 of a part's 96 parameters; and the object holds 3840 bytes, so `CSS_SIZE`
 itself can grow: the import takes a shorter (older) record over the defaults and a longer (newer) one by its prefix,
 and no other firmware and no tool reads this object.

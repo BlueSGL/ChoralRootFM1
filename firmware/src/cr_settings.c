@@ -432,6 +432,7 @@ static void css_sanitize(cr_session_t *x)
     if (x->voicing < -12 || x->voicing > 12) x->voicing = 0;   /* (cr_engine.c CR_VOICE_MIN / MAX: cr_voicing_step clamps) */
     if (x->octave < -2 || x->octave > 2) x->octave = 0;
     if (x->bass_on > 1u) x->bass_on = 0;
+    if (x->numerals_sol > 1u) x->numerals_sol = 0; /* (an unknown style: the Roman numeral) */
     if (x->lock > 1u) x->lock = 0;
     if (!x->lock) x->latched = 0;                  /* (the latch belongs to LOCK) */
     if (x->loop_rate < -7 || x->loop_rate > 3)
@@ -974,6 +975,7 @@ static void css_capture(cr_session_t *x)
     x->lock = cu.clock != 0u;
     x->latched = x->lock ? cu.mlatch : 0u;
     x->loop_rate = (int8_t)((int)cs.loop_rate - (int)CRL_RATE_1);
+    x->numerals_sol = cs.numerals == 2u;           /* (the block's bit: cs.numerals != 0, crs_capture) */
     x->fx.sel = CSS_FXS[cu_fx_pg()];
     for (i = 0; i < CU_NFX; i++)
         x->fx.amt[CSS_FXE[i]] = (uint8_t)(cs.fx_amt[i] & 127u);
@@ -1016,6 +1018,8 @@ static void css_apply(const cr_session_t *x)
     fm1_irq_on();
     cu.octave = x->octave;                         /* (cu_post_kbd follows: the split key's note moves with it) */
     cs.loop_rate = (uint8_t)((int)x->loop_rate + (int)CRL_RATE_1);   /* (cu_loop_conf posts it with the looper's) */
+    if (cs.numerals && x->numerals_sol)            /* the KEY layer's Numerals: On in the block, Solfege here */
+        cs.numerals = 2;
     if (x->bass_on) {                              /* v15: the bass comes back on, on its sound (ALGORITHM's place:
                                                     * cu_pos_sync) */
         cs.bass_on = 1;
@@ -1078,7 +1082,7 @@ static void cr_settings_load(void)
     cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
     cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
     cs.snap = (uint8_t)CRS_SNAP(s);
-    cs.numerals = (uint8_t)CRS_NUMS(s);
+    cs.numerals = (uint8_t)CRS_NUMS(s);            /* (Off / On; Solfege: the session's numerals_sol, css_apply) */
     cs.touch = (uint8_t)CRS_TOUCH(s);              /* Options > Key Touch and the sensitivities (docs/VELOCITY.md) */
     cs.vel_curve = (int8_t)CRS_VCURVE(s);
     cs.vel_sens = (uint8_t)CRS_VSENS(s);

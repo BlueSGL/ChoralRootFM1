@@ -4381,3 +4381,29 @@ alternating as the key asks; `lean KEY PCT` presses it harder once its rest has 
 `touch: key K vel V sensed|context|fixed` as a key plays and `touch: at N` as the pressure changes. `cr_touch.txt`
 (`test_cr.sh`): Fixed plays 100, Velocity + Aftertouch plays 30 and 120 as given, G5 the context, a 60 % lean reads
 ~73 and eases to 0, Velocity Curve +3 reads the same press as 15. tools/emu/README.md has the two commands.
+
+3y118. **Numerals: Off / On / Solfège (GitHub issue 15, shinobi, 2026-10-13: "No support for Fixed Do Solfege";
+2026-10-15, the owner: "all I want is to have an option where 'Numerals' is currently on the Key Menu to be able to do
+solfège notation for the scale degrees, so it now becomes 3 options: off, on, solfège").** The KEY layer's page 2,
+KNOB 4, has a third value: Solfège shows the numeral's degree as a movable-do syllable in the numeral's place on the
+Chord view (the same blue, 16 px, centred above the name; the arp screen too): `DO RE MI FA SOL LA TI` for I .. VII
+from the tonic in either scale (A minor's C is `MI`, its `III`), the case the numeral's (`SOL` with a major third,
+`sol` with a minor one: the whole word, as V / v), `°` and `+` the numeral's, a root between two degrees with the
+numeral's `b` / `#` before it (`#FA`, `bTI`; the chromatic syllables DI RI FI SI LI / RA ME SE LE TE named in
+docs/CHORD-NAMES.md "Solfège" as the alternative not taken). `cr_engine.c`: `cr_chord_numeral` and the new
+`cr_chord_solfege` are one function (`crx_degree`) with two spellings; `cr_ui.c cu_numeral` picks one, the picker
+(`CU_NUMS`) reads Off / On / Solfège and stops at both ends, the trace says `key: knob 4 numerals solfege`. The
+longest syllable is 4 characters, so the screen's `numeral[6]` is unchanged. The cell's è is one extra glyph in CRB
+(`tools/gen_aa_font.py CRB_EXTRAS`, 249 B). **Storage**: no block bit was free at no cost (`bass_on` bit 0 would turn
+0.22's engine bass on; any other byte's new bit resets that byte's setting in 0.22), so bit 1 of `bass_on` keeps
+"shown" (On and Solfège) and the session's new `numerals_sol` (byte 22, from `rsv`, 46 -> 45) says "as a syllable";
+both are written by the global save alone, so the setting stays manual. 0.22 reads Solfège as On, 0.17 .. 0.21 as
+Off (docs/SETTINGS.md). Fixed do (Do = C, the note names) is a different thing, an Options > Chord Names value, not
+built. **Tests**: `tests/cr_engine_test.c s_solfege` (C major and A minor at all 12 roots, the marks, other tonics;
+all 2304 cells ended, the longest 4, each with its numeral's accidental, case and mark); `tests/cr_draw_test.c` (the
+syllables in the numeral's gap, the widest `#MI+` 39 px, 2 px clear; the KEY page's `Solfège` whole in its cell:
+`key_page2_solfege`); `tests/cr_settings_test.c t_session` (the byte's place, default, round trip, range);
+`tools/emu/scripts/cr_solfege.txt` (`test_cr.sh`: the picker; SOL re ti° in C major; DO with Transpose +1; fa and MI
+in A minor; back to On: iv, the same notes) and `persist_solfege_set.txt` / `_check.txt` (`test_persist.sh`: saved,
+relaunched, `SOL`). XIP 550652 B of 573440 (+320 B). Docs: MANUAL.md (Numerals, the KEY page table, the quick
+reference), CHORD-NAMES.md "Solfège", SETTINGS.md, releases/0.22.md (a next-release line under Numerals).
