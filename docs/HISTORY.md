@@ -4481,3 +4481,8 @@ in (HISTORY.md the one conflict: main's 3y106, 3y110, 3y111 before these). `./bu
 79 028 (80.4 %), POOL 304 716 (88.6 %); the clients' tests pass (`node web/test_sounds.mjs`, `test_backup.mjs`,
 `python3 tests/install_test.py`); the host and emulator suites below.
 `sh tests/run_cr_tests.sh` exit 0, `sh tests/run_tests.sh` exit 0, `sh tools/emu/build.sh && test_cr.sh && test_persist.sh` PASS.
+**And** (the designer-handoff session, on its rebuild of 70bb639: byte-identical package, 21 of 22 suites, the layout
+test short of a catalog): `design/layouts/grain.json` (new, `node tools/layout/dump_catalogs.mjs` after
+`tools/layout/build_layout.sh`): GRAIN's built-in layout as the designer sees it, OSC a stack of SRC 1 / SRC 2 and
+the GRAIN / GRAIN+ edit8, FILT with the filter band, ENV with the AHDSR band over the track's envelope, LFO, the
+platform's MOD routes; `--check`: 7 layout files are the firmware's.
