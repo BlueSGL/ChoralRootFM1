@@ -1,4 +1,4 @@
-# ChoralRoot 0.22 (issue 13, 3y106): the VA matrix's fine amounts. AMT reads hundredths (F_FIX2): tenths below 6,
+# ChoralRoot 0.22 (issue 13, 3y110): the VA matrix's fine amounts. AMT reads hundredths (F_FIX2): tenths below 6,
 # whole numbers from 6 (firmware/src/eng_va.c va_amt_q; docs/VA.md "matrix").
 # 1. VA (GLO + PRESETS +2: LUSH PAD), EDIT, MOD (SEQ): slot 1; SELECT +1: slot 2 (LFO2 -> PITCH +3.00, the vibrato).
 # 2. KNOB 3 AMT: 4 slow detents down (300 ms apart: the finest step): 2.90 2.80 2.70 2.60, a tenth each.

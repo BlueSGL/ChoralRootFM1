@@ -1270,7 +1270,7 @@ static void t_dst2(void)
 
 /* the sound of every saved matrix, bit for bit: a hash (FNV-1a) of render2's mid and side for every factory preset
  * and 64 random patches with all 8 slots active (random SRC, DST, AMT -64..63, whole), 0.25 s of a 3-note chord
- * each. VA_GOLD was computed at 5e1e8a7 (0.22-beta4, before the fine amounts, 3y106): the fine amounts must not move
+ * each. VA_GOLD was computed at 5e1e8a7 (0.22-beta4, before the fine amounts, 3y110): the fine amounts must not move
  * a whole one. (Its own generator: the patches do not depend on the tests before it.) */
 #define VA_GOLD 0xe63bae86u
 #define VA_NP4 106u                              /* (version 4's values: the random patches use these) */

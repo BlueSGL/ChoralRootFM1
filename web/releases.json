@@ -11,8 +11,8 @@
       "version": "0.22",
       "date": "2026-10-15",
       "tag": "v0.22",
-      "sha256": "62427c3139c310421abd87c2ef6ad8e4e3b0735a78dd8396538c55ecd9835946",
-      "sha256_1core": "c68a5f73258720fe8a7317f22a654d2050e91b757597a20879442edbd2d616b6",
+      "sha256": "1728d97e567c0f8c5efd44b6832be152f54865dfdd7eafb27b468d1223cbe992",
+      "sha256_1core": "5a64e5bf4b2d9b7808bffb65bf5eb680bcba493b305083a2276a300504401d98",
       "title": "P5, 128 sound slots, favorites, velocity and a Filter on everything",
       "bullets": [
         "A new engine, P5: the Prophet-5 model of Melodee, with 115 of Sequential's factory programs, an editor drawn as the Prophet-5's own knobs and switches, and up to eight voices with Dual Core on.",
@@ -22,7 +22,7 @@
         "A Filter on the whole sound (the FX layer's eighth page): a low cut and a high cut after the effects, 6 or 12 dB an octave, Off until you turn a cutoff; KNOB 4 takes it out and back to compare.",
         "Snap in Key Mode: a key outside the scale plays the nearest scale note or chord tone instead of staying silent; with Key plays Chords the Full keyboard plays the key's chords; chord numerals on the Chord view.",
         "Velocity and aftertouch from the FM-1's own keys (Options > Key Touch), and per sound an EXPR screen that sends velocity and aftertouch where you want.",
-        "The knobs accelerate: slow for fine steps, quick for big ones, a turn's first two clicks always the finest; hold OPT to snap to round values. The VA's filter envelope depth has two decimals, a synced LFO 42 rates.",
+        "The knobs accelerate (slow for fine steps, quick for big ones; hold OPT to snap to round values); the VA's modulation amounts step in tenths below 6, its filter envelope depth has two decimals, a synced LFO 42 rates.",
         "The loop editor previews a step: with the loop stopped, turning PRESETS onto a step plays it as the loop would (its length, voicing and ratchet); nothing is recorded.",
         "Dual Core is on for a new FM-1 and after Reset Settings, runs at 1.50 V and turns itself off after a crash; a Single core package is offered under Advanced for FM-1s that have trouble with it.",
         "The device manager has a P5 tab and restores or deletes sounds in bulk; several FM-1s on one computer each have a unit ID (Options > Version).",
@@ -32,7 +32,7 @@
         "Updating from 0.21, 0.20 or any 0.22 beta keeps your settings, sounds and loops; from 0.21 or 0.20 your 32 sounds are copied into U001 to U032 at the first start.",
         "FM TONE sounds from before 0.22 are converted to the new ranges (close, not always exact) and keep their time numbers, which now mean the Digitone's times: mostly longer.",
         "Coming from 0.20, you also get 0.21's chorus: Depth no longer pops while you turn it, and KNOB 3 of the Chorus page sets its Width.",
-        "The 0.22 betas stay listed behind Show beta releases; 0.22 is 0.22-beta4 under its final name."
+        "The 0.22 betas stay listed behind Show beta releases; 0.22 is 0.22-beta4 with the VA's finer modulation amounts. A VA sound saved with an amount in tenths plays INIT on a beta."
       ]
     },
     {

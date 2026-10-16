@@ -259,7 +259,7 @@ function sndNewStore(kind, half) {
 // same values; eng_va.c va_unpack is the other way round): version 3, FENV a whole number (its hundredths, value
 // VA_FENVF, rounded in), a synced LFO's RATE (version 4: an index into the 42 rates, N_VA_SYNC) the nearest of version
 // 3's 14 divisions (by length; the free periods in ms, faster than all of them: the fastest, 1/32) as a RATE 0..127 that
-// version 3 reads as that division (RATE x 14 >> 7). A version 5 (the matrix's fine amounts, 3y106: values 106 / 107
+// version 3 reads as that division (RATE x 14 >> 7). A version 5 (the matrix's fine amounts, 3y110: values 106 / 107
 // flag the slots whose AMT is in tenths) too: each such AMT the nearest whole number, the flags 0 (version 3's
 // padding). notes: what changed, one line each. Other versions: as they are
 const VA_FENV = 31, VA_FENVF = 103, VA_LFO0 = 53, VA_LFO_N = 5, VA_NDIV3 = 14, VA_MOD0 = 73, VA_MFINE0 = 106;

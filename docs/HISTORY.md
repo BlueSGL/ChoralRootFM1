@@ -4318,3 +4318,39 @@ by `tools/layout/dump_catalogs.mjs`: the AMT columns' format). Not on the unit, 
 0.22") over the build it ran before, `tools/fm1_install.py build/choralroot.fwsc --backup ... --yes`; the backup before it
 is `fm1-backups/choralroot-backup-20261015-vafine.json` (the settings, the 128 user sounds, the favourites, loop slot
 1). `--info` afterwards: "ChoralRoot 0.22".
+
+## 2026-10-15 (0.22's release tree with the VA matrix's fine amounts)
+
+3y111. **0.22's release tree again, with 3y110 merged (2026-10-15; rel-22).** The owner tried the VA matrix's fine
+amounts (GitHub issue 13, 3y110, claude/va-mod-fine-9aa43c: b8baff6 the code, 0c7ef6d its HISTORY) on the unit and
+wants them in 0.22: merged with `--no-ff` over 3y106's two commits (the release.yml commit kept); HISTORY kept both
+entries; `docs/releases/0.22.md` kept the release text, and the branch's "Merged after 0.22-beta4" item went into it:
+a bullet "VA: finer modulation amounts" in Sounds and engines (what the player sees: the Amount reads as its own
+number, -64.00 .. +63.00, instead of a percentage, `+50%` becoming `+32.00`; below 6 either way a slow turn steps
+tenths, +0.10 .. +5.90, then whole steps; a quick turn still jumps 0 -> 6 -> 12; SHIFT snaps whole numbers; LFO to
+PITCH at +0.50 about 9 cents against 19 for the old smallest step; the quick mapping shows `LFO1 +0.3`; every VA sound
+plays as before), the device manager's rounding for a sound taken to 0.21 (+0.30 -> 0, +2.60 -> 3: `vaToV3`), and
+Installing's "From a 0.22 beta" (0.22 is beta4 with this one change; on every beta a VA sound saved with an Amount in
+tenths plays INIT: their `va_blob_ok` takes versions 1..4, and `va_pack` writes version 5 only with a fine slot). The
+going-back sections otherwise hold as written: 0.21 shows its own 32 slots, and "a part left on an FM TONE or VA sound
+in its 0.22 form" already covers a version-5 VA in the session. The card: the knobs' bullet and the VA's merged into
+one ("the VA's modulation amounts step in tenths below 6, ..."; still 12 bullets, the longest 216 characters), the
+betas' note says 0.22 is beta4 with the fine amounts and that such a sound plays INIT on a beta. README's "New in
+0.22", HANDOFF's state. Three comments of the branch named its HISTORY entry 3y106 (its number before the grain
+session's took 3y106 .. 3y109; this tree's release entry is 3y106 on main): `web/fm1sounds.js`, `tests/cr_va_test.c`,
+`tools/emu/scripts/cr_va_mod_fine.txt` say 3y110 now. **Built**: `./build.sh --release 0.22` twice (the first folder
+moved aside; 3y106's packages kept in `build/scratch/rel22/release-0.22-pre-va`), the same SHA256SUMS;
+`choralroot-0.22.fwsc` 1728d97e567c0f8c..., `choralroot-0.22-1core.fwsc` 5a64e5bf4b2d9b78...; the apps carry
+`ChoralRoot 0.22` and `ChoralRoot 0.22 1-core`; the stub version 3, baee55ed142fe1cc. Size: XIP 549 756 B of 573 440
+(95.9 %), RAM 78 652 (80.0 %), POOL 239 180 (69.5 %); the single-core package XIP 546 844 (95.4 %), RAM 75 564
+(76.9 %), POOL 239 052 (69.5 %). **Checked** (after every edit but this entry): `CR_VERSION=0.22 sh tests/run_all.sh`
+ALL SUITES PASSED (22 suites, 80 s; test_cr 1044 ok, test_persist 111, test_retired 18, test_pool 7, all host tests,
+313 goldens 0 changed); `CR_PACKAGES_DIR=build/release-0.22 python3 tests/releases_test.py` ALL OK; with the sixteen
+listed packages (collected again, each only with its listed sha256, nothing downloaded) releases_test ALL OK with all
+sixteen compared, `tests/site_test.py` site ALL OK (57, the Pages-like build's "New in 0.22" among them); `node
+web/test_installer.mjs` passed; `CR_VERSION=0.22 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs`
+PASS (`emu/version.txt` "ChoralRoot 0.22"). The Pages job simulated again (`build/scratch/rel22/pages_sim.sh`): every
+step OK; the landing page "Version 0.22", "Install 0.22", "New in 0.22" with the card's bullets, the notes link
+`blob/main/docs/releases/0.22.md`, no emulator line; the hosted 0.22 packages with the new sha256s
+(`firmware/SHA256SUMS`, `firmware/index.html`). Not done: the tag, the push, the release, the site; nothing flashed by
+this session.

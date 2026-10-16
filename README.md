@@ -135,7 +135,7 @@ each part:
 - **On the computer**: the web installer with backup, restore and sounds as files, and the web device manager.
 - **New in 0.22** ([docs/releases/0.22.md](docs/releases/0.22.md)): P5, a sixth engine; 128 sound slots shared by
   every engine and favourites with a filter; FM TONE in the Digitone's ranges and times, with Digitone `.dnsnd`
-  import; Snap and numerals in Key Mode; velocity and aftertouch from the keys (Options > Key Touch) and a per-sound
+  import; the VA matrix's amounts in tenths below 6; Snap and numerals in Key Mode; velocity and aftertouch from the keys (Options > Key Touch) and a per-sound
   EXPR screen; knobs that accelerate; a master Filter (the FX layer's eighth page); the loop editor's step preview;
   Dual Core on by default, at 1.50 V, off by itself after a crash, and a single-core package; Geek Out 2; the unit
   ID; the device manager's P5 tab and bulk restore.
