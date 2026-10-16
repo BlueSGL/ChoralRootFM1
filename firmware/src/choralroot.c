@@ -199,7 +199,9 @@ static void cr_sense_probe_hook(uint32_t col, uint32_t v, uint32_t pressed);
 #include "engines.c"             /* dsp.c, the eng_*.c files */
 #include "params.c"
 #include "mod.c"
+#if !BOARD_SMK37                 /* (SMK-37: the keys' two contacts give the velocity, hal/smk_input.h) */
 #include "cr_sense.c"             /* the keys' velocity and pressure from their contact resistance (Velo's sensing) */
+#endif
 #include "voice.c"
 #include "slicer.c"
 #define mix_block fx_mix_block   /* fx.c's mix; audio.c gets ChoralRoot's (below) */

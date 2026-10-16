@@ -91,9 +91,14 @@ static uint32_t cu_white_key(uint32_t idx)        /* the inverse: white root idx
 #define CU_BTN_MASK 0x3FFFFu
 #define CU_ENC0 1u                                 /* (K1 is MASTER, smk_input.h: never a role) */
 #define CU_NENC FM1_NENC
-#define CU_VEL(k) (cs.vel ? cs.vel : fm1_in.key_vel[SMK_KEY_F3 + (k)])   /* Options > Velocity 0: the keys' */
-#define CU_VEL_MIN 0                               /* Options > Velocity: 0 "keys" (the default), 1..127 fixed */
-#define CU_VEL_DEF 0
+#define CU_TOUCH_MAX 1                             /* Options > Key Touch: Fixed, Dynamic (the keys' two contacts:
+                                                    * smk_input.h key_vel); no pressure, so no aftertouch modes */
+#define CU_VCURVE_MAX 0                            /* Velocity Curve, Aftertouch Sens: the FM-1's sensing (cr_sense.c) */
+#define CU_ATSENS_MAX 0
+#define CU_K1 "K5"                                 /* on-screen knob names: KNOB 1..4 are K5..K8 here (K1 is MASTER) */
+#define CU_K2 "K6"
+#define CU_K3 "K7"
+#define CU_K4 "K8"
 /* The SMK-37's extras (SMK37.md). The keybed plays: all 37 keys are roots (the chord block's nine keys too,
  * CU_FN_KEYS 0), and the chord block's keys are on the pads: the top row's left half the chord types (DIM MIN MAJ
  * SUS), the bottom row's the extensions (6 m7 M7 9), then LOCK. A pad is its key: held while it is held (cu_pheld, the
@@ -118,9 +123,13 @@ static uint8_t cu_fbank, cu_fbank_new = 1;         /* FADER BANK: 0 the chord pa
 #define CU_BTN_MASK 0x3FFFu
 #define CU_ENC0 0u
 #define CU_NENC 7u
-#define CU_VEL(k) cs.vel
-#define CU_VEL_MIN 1
-#define CU_VEL_DEF 100
+#define CU_TOUCH_MAX 3
+#define CU_VCURVE_MAX 6
+#define CU_ATSENS_MAX 2
+#define CU_K1 "K1"
+#define CU_K2 "K2"
+#define CU_K3 "K3"
+#define CU_K4 "K4"
 #define CU_FN_KEYS 1                               /* the chord block's keys: chord functions (and B3 LOCK) */
 #endif
 
@@ -1038,7 +1047,7 @@ static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Sec
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 3, 2, 6, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, CU_TOUCH_MAX, 2, CU_VCURVE_MAX, CU_ATSENS_MAX, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -1105,7 +1114,7 @@ static int32_t opt_get(uint32_t o)
 }
 static void opt_set(uint32_t o, int32_t v)
 {
-    v = v < (o == O_VEL ? CU_VEL_MIN : 0) ? (o == O_VEL ? CU_VEL_MIN : 0) : v > O_MAX[o] ? O_MAX[o] : v;
+    v = v < (o == O_VEL ? 1 : 0) ? (o == O_VEL ? 1 : 0) : v > O_MAX[o] ? O_MAX[o] : v;
     switch (o) {
     case O_STYLE: cs.playstyle = (uint8_t)v; cr_post(CRE_PLAYSTYLE, 0, 0, v); break;
     case O_EXTADD: cs.extadd = (uint8_t)v; cr_post(CRE_EXTADD, 0, 0, v); break;
@@ -1199,14 +1208,15 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_EXTADD: cu_cpy(d, EXTADD[v & 1], n); break;
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
     case O_SIXTH: cu_cpy(d, v ? "Octave up" : "In place", n); break;
-#if BOARD_SMK37
-    case O_VEL: if (v) cu_int(d, v, 0, n); else cu_cpy(d, "keys", n); break;   /* (0: as the keys play) */
-#else
     case O_VEL: cu_int(d, v, 0, n); break;
-#endif
     case O_TOUCH: cu_cpy(d, v == 3 ? "Vel + Poly AT" : v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
+#if BOARD_SMK37
+    case O_VCURVE: case O_ATSENS: cu_cpy(d, "FM-1 only", n); break;   /* (CU_VCURVE_MAX, CU_ATSENS_MAX) */
+    case O_VSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
+#else
     case O_VSENS: case O_ATSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
     case O_VCURVE: cu_int(d, v - 3, 1, n); break;
+#endif
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
     case O_SINGLE: cu_cpy(d, v == 2 ? "Split Bass" : v ? "Split Oct" : "Full Octave", n); break;
     case O_SPLIT: cu_cpy(d, CU_NOTE[v % 12], n); cu_cat(d, cs.single ? "" : " (Split off)", n); break;
@@ -3364,7 +3374,7 @@ static void cu_edit_open(uint32_t part) { ce_open(part); }
  * is a Save as new (and the old one deleted). SAVE held 1 s in the dialog: "reset to factory?" on an overwritten
  * factory preset, "delete?" on an added one; OCT+ does it. No free slot: "no free slot". Every user preset is one of
  * the pool's 128 slots (upool.c, 0.22; 32 records before) (cr_bank.c cb_store writes the binding) */
-#define CU_SAVE_FOOT "K1 change \267 K2 filter \267 K3 type \267 K4 favorite"   /* (KNOB 1 .. 4: spelled out they are wider
+#define CU_SAVE_FOOT CU_K1 " change \267 " CU_K2 " filter \267 " CU_K3 " type \267 " CU_K4 " favorite"   /* (KNOB 1 .. 4: spelled out they are wider
                                                                                 * than the line) */
 static const char *const CU_SAVE_NAME[CU_SAVE_N] = {"overwrite", "save as new", "favorite", "filter", "type"};   /* (the traces) */
 /* the part's engine has no store for its sound: its menu has the three favourites' entries alone, and OCT+ is refused.
@@ -4188,6 +4198,10 @@ static uint32_t cu_key_vel(uint32_t k)
     (void)k;
     if (!cs.touch)
         return cs.vel;                             /* Key Touch Fixed: Options > Velocity, as before */
+#if BOARD_SMK37
+    v = fm1_in.key_vel[SMK_KEY_F3 + k];            /* SMK-37 (Dynamic): the key's two contacts and its factory curve
+                                                    * (smk_input.h), known when the note starts */
+#endif
     if (!v)
         v = cu.ctx_vel;                            /* (no reading in time: the keys' recent velocity) */
     if (!v)
@@ -5074,7 +5088,9 @@ static void cu_smk_xkey(uint32_t kb, uint32_t vel)
         int32_t n = 48 + (int32_t)kb + 12 * cu.octave;
         n = n < 0 ? 0 : n > 127 ? 127 : n;
         cr_klat_post(fm1_in.ks_t1[kb]);
-        cr_post(CRE_KEY, (uint32_t)n, cs.vel ? cs.vel : vel, 1);
+        vel = cs.touch ? vel : cs.vel;             /* (Options > Key Touch, as cu_key_vel) */
+        cr_post(CRE_KEY, (uint32_t)n, vel, 1);
+        cu.last_vel = (uint8_t)vel;
         cu_xnote[x] = (uint8_t)(n + 1);
     }
 }
@@ -6859,10 +6875,10 @@ static void cu_save_screen(cr_screen_t *s, uint32_t now)
     s->lines[1].bold = 1;
     s->lines[1].cur = (uint8_t)(cn.len ? cn.cur + 1u : 0u);   /* the cursor: under its character (no name: none) */
     s->lines[2].px = 12;
-    cu_cpy(s->lines[3].t, "SELECT: cursor \267 K1: letter", sizeof s->lines[3].t);
+    cu_cpy(s->lines[3].t, "SELECT: cursor \267 " CU_K1 ": letter", sizeof s->lines[3].t);
     s->lines[3].px = 12;
     s->lines[3].col = CR_COL_GREY;
-    cu_cpy(s->lines[4].t, "keys: letters \267 K4 left: delete", sizeof s->lines[4].t);
+    cu_cpy(s->lines[4].t, "keys: letters \267 " CU_K4 " left: delete", sizeof s->lines[4].t);
     s->lines[4].px = 12;
     s->lines[4].col = CR_COL_GREY;
     s->n_lines = 5;
@@ -7703,7 +7719,7 @@ static void cr_ui_init(void)
     cs.bass_mode = cr.bass_mode;
     cs.perform_on = cr.perform_on;
     cs.sticky = cr.sticky;
-    cs.vel = CU_VEL_DEF;
+    cs.vel = 100;
     for (m = 0; m < CR_PM_COUNT; m++)
         for (p = 0; p < CR_P_COUNT; p++)
             cs.par[m][p] = (int16_t)cr_get_param(&cr, (cr_pmode_t)m, (cr_eparam_t)p);
