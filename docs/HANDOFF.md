@@ -6,24 +6,26 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 ## State in three sentences
 
 Released: v0.1 and v0.11 .. v0.23 (`git tag`; v0.23 is the latest stable release, on the site as the installer's
-default, notes in `docs/releases/`), and the betas v0.22-beta1 .. v0.22-beta4 and v0.24-beta1 (v0.24-beta1 on 54467ac:
-the top row's velocity, Vel + Poly AT, Geek Out 2's touch, HISTORY 3y123 .. 3y125; GitHub pre-releases, listed by the
-installer behind "Show beta releases"). Since v0.24-beta1 main has gained the flash diet (HISTORY 3y126 .. 3y132,
-docs/FLASH.md: XIP 96.4 -> 90.3 %, no audible or visual change) and the GRAIN engine (3y133 .. 3y139, docs/GRAIN.md:
-a granular synth over two sources it renders itself, MORPH, its own matrix, two LFOs, ENV 2, the VA's filter, the wave
-band; a sound saved on the first GRAIN build loads again, 3y139), and the owner's unit runs main eb223df (3y140).
-**0.24-beta2's release tree** (HISTORY 3y141; tagged: not yet) lists 0.24-beta2 first in `web/releases.json` with
-`"beta": true` (sha256 3aebea96..., single-core 17788180...), notes `docs/releases/0.24-beta2.md` (GRAIN, then
-0.24-beta1's notes, going back to 0.24-beta1 / 0.23), `docs/releases/0.24.md` the pointer to them; 0.23 stays the
-newest stable entry. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24" (`firmware/src/choralroot.c`; the 0.22 betas'
-trees read 0.22). The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py
---info`.
+default, notes in `docs/releases/`), the betas v0.22-beta1 .. v0.22-beta4, v0.24-beta1 (54467ac: the top row's velocity,
+Vel + Poly AT, Geek Out 2's touch, HISTORY 3y123 .. 3y125) and v0.24-beta2 (52889ba: GRAIN, 3y133 .. 3y141), GitHub
+pre-releases listed by the installer behind "Show beta releases"; and the SMK-37 community test build
+v0.24-beta2-smk37 (898fa5c, 3y142 .. 3y146: its own list `web/releases-smk37.json` and the unlinked page
+`webapp/smk37/`, SMK37.md). Since v0.24-beta2 main has gained the SMK-37 browser emulator (3y151 .. 3y153,
+`webapp/smk37/emu/`), FM TONE's HARM read from flash with a mirror (3y150: POOL 97.0 -> 89.0 %, the same sound bit for
+bit, the HARM presets about +9 % of the render) and SAFE MODE's Flash Data erasing the sound pool (3y154).
+**0.24-beta3's release tree** (HISTORY 3y156; tagged: not yet) lists 0.24-beta3 first in `web/releases.json` with
+`"beta": true` (sha256 cdb6a2b5..., single-core 7e17f335...) and 0.24-beta3-smk37 first in `web/releases-smk37.json`;
+notes `docs/releases/0.24-beta3.md` (Flash Data, FM TONE's memory, the SMK-37 builds, then 0.24-beta2's and
+0.24-beta1's notes, going back to 0.24-beta2 / 0.24-beta1 / 0.23), `docs/releases/0.24.md` the pointer to them; 0.23
+stays the newest stable entry. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24" (`firmware/src/choralroot.c`; the
+0.22 betas' trees read 0.22). The owner's unit runs what the orchestrator last flashed (0.24-beta3's package, 3y157):
+check with `python3 tools/fm1_install.py --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
 
 | folder | what | remote |
 | --- | --- | --- |
-| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1, v0.11 .. v0.23, v0.22-beta1 .. beta4 and v0.24-beta1 |
+| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1, v0.11 .. v0.23, v0.22-beta1 .. beta4, v0.24-beta1, v0.24-beta2 and v0.24-beta2-smk37 |
 | `ChoralRootFM1Designer/` | the mock-up designer (MIT); PNG sheets in Git LFS | github.com/Quixotic7/MvaveFM1-Designer |
 | `MvaveFM1Unbricker/` | the recovery tools, `TRANSPORTER-GUIDE.md` | github.com/Quixotic7/MvaveFM1Unbricker |
 | `FM-1-transporter/`, `jl-uboot-tool/`, `MVaveOfficial/`, `Felucca/`, `melodee/`, `sloop-fm1/`, `fm1-x0x/` | upstream tools and references | read-only |
@@ -144,8 +146,9 @@ sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.1
 POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back), again with GRAIN (97.0 %
 on eb223df, beside the flash diet's 27.7 KB of FM TONE HARM cycles), and less so since 3y150: FM TONE reads its HARM
 waves from the halves in flash with a mirror (the owner's choice, docs/FLASH.md; the HARM presets about +9 % of the
-render). The size line is XIP 537 788 B of 573 440 (93.8 %), RAM 80 176 (81.6 %), POOL 306 196 of 344 064 (89.0 %:
-GRAIN's two 32 KB source buffers the largest part); 0.24-beta2's release build (eb223df) was XIP 537 084, POOL 333 900.
+render). The size line is XIP 537 804 B of 573 440 (93.8 %), RAM 80 176 (81.6 %), POOL 306 196 of 344 064 (89.0 %:
+GRAIN's two 32 KB source buffers the largest part); 0.24-beta3's release build XIP 537 820 (its longer version string),
+0.24-beta2's (eb223df) XIP 537 084, POOL 333 900.
 POOL is laid out by the linker, so a full POOL cannot fail in use, but tools/build.py refuses a build with under 8 KB
 spare: about 29 KB can still be added. Read them off the size line.
 

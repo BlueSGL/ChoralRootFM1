@@ -5268,3 +5268,64 @@ on an untouched origin/main checkout too). `BOARD=smk37 ./build.sh`: the package
 ddf87622f1aed69a..., 651 496 B). `./build.sh` last: XIP 537 804 B of 573 440 (93.8 %; main 537 788, +16), RAM 80 176
 (81.6 %), POOL 306 196 of 344 064 (89.0 %), RAMTEXT 7 072 of 24 576; the package sha256 5f1102a1b82c7174... (610 313 B),
 the stub baee55ed142fe1cc. Not pushed, not flashed.
+
+## 2026-10-16 (0.24-beta3's release tree; the FM-1 and the SMK-37)
+
+3y156. **0.24-beta3's release tree (2026-10-16; branch rel-24b3 from origin/main 8a2f1a3, in the main checkout; not
+pushed, not tagged).** The owner: "Merge in the safe mode flash data fix, then flash it, then tag v0.24-beta3 and get
+the emulator out", then "SMK testers get beta3 build too. Flash is ok to do". What is new since v0.24-beta2
+(`git log v0.24-beta2..8a2f1a3`): SAFE MODE's Flash Data erasing the sound pool (3y154), FM TONE's HARM read from flash
+with a mirror (3y150), the SMK-37 port, its test installer and browser emulator (3y142 .. 3y146, 3y151 .. 3y153; the
+FM-1's bytes unchanged by them: every other firmware change since v0.24-beta2 is under `BOARD_SMK37` or host-only).
+`docs/releases/0.24-beta3.md`: the opening (the third beta of 0.24, opt-in, may have bugs, 0.24 replaces it, updating
+from 0.24-beta2 / beta1 / 0.23 keeps everything); "New since 0.24-beta2": Flash Data clears the saved sounds (all 128
+slots, a backup first), FM TONE's memory (about 27 KB of working memory, every sound the same; a dense chord on a HARM
+preset, GLASS PAD DRONE HOLLOW CLAV STRINGS SQUARE LEAD, up to about 9 % more of FM TONE's render), the SMK-37 builds
+(a link to SMK37.md, nothing more); then 0.24-beta2's GRAIN and 0.24-beta1's Playing as they were; Installing; "Going
+back to 0.24-beta2, 0.24-beta1 or 0.23". **Going back, checked**: 3y150 changes a read path only (no stored format, the
+values bit for bit); 3y154 changes which sectors Flash Data erases, nothing that is written or read; the firmware diff
+`v0.24-beta2..8a2f1a3 -- firmware/` touches no stored format on the FM-1 (cr_settings.c and cr_backup.c only under
+`BOARD_SMK37`). So going back to 0.24-beta2 changes nothing for saved data (its Flash Data keeps the sounds), and going
+back to 0.24-beta1 / 0.23 is 0.24-beta2's section (GRAIN sounds, a part on GRAIN, backups, Key Touch) unchanged.
+`docs/releases/0.24.md` points at 0.24-beta3.md; its "Merged after 0.24-beta2" (3y154's sentence) is in the notes now.
+`web/releases.json`: 0.24-beta3 first, `"beta": true`, 5 bullets, 3 notes (the beta disclaimer first); 0.23 stays the
+newest stable, 0.24-beta2 and beta1 below unchanged. The FM-1 bullets name SMK37.md as text (no link: no FM-1 page
+links the SMK page; lowercase `smk37` appears on none, pages.yml's check). **The SMK-37 build**: `web/releases-smk37.json`
+0.24-beta3-smk37 first (base 0.24-beta3, tag v0.24-beta3-smk37, 4 bullets, 3 notes, the six sha256s below);
+0.24-beta2-smk37 stays below it. SMK37.md: the status line (a community test build of 0.24-beta3) and every package
+name / version line at 0.24-beta3-smk37. Updating from 0.24-beta2-smk37 keeps everything: `898fa5c..8a2f1a3 --
+firmware/` is eng_quad.c / eng_fm6.c (3y150), cr_ui.c (3y154's FM-1 list and asserts, in the FM-1's `#else`) and
+smk_input.h's `SMK_INPUT_HOST` (preprocessor, the emulator's). HANDOFF: the state (v0.24-beta2 and v0.24-beta2-smk37
+tagged, what main gained since, this tree), the size paragraph (main's XIP 537 804, this release's 537 820), the
+repos table's tags.
+**Built**: `./build.sh --release 0.24-beta3` twice (the first folder moved aside to `build/release-0.24-beta3.first`),
+the same SHA256SUMS: `choralroot-0.24-beta3.fwsc` cdb6a2b53894800284872f44979ad1549903643bd558e69c61dd2675d9722cf6,
+`choralroot-0.24-beta3-1core.fwsc` 7e17f335d61ee1e8d8ca05c4fed15dd5d625ad19dfb0e3a62bcf75a00f917eb9 (610 313 B each);
+the apps carry `ChoralRoot 0.24-beta3` and `ChoralRoot 0.24-beta3 1-core`; the stub version 3, baee55ed142fe1cc. Size:
+XIP 537 820 B of 573 440 (93.8 %), RAM 80 176 (81.6 %), POOL 306 196 of 344 064 (89.0 %), RAMTEXT 7 072 of 24 576; the
+single-core package XIP 535 016 (93.3 %), RAM 77 052 (78.4 %), POOL 306 068 (89.0 %). `BOARD=smk37 [MODEL=elite|mke]
+./build.sh --release 0.24-beta3-smk37` twice (the first `build/release-smk37` moved aside to `build/release-smk37.first`),
+the same SHA256SUMS: Pro `choralroot-0.24-beta3-smk37.fwsc` dd6d7cff..cb0, `-1core` 0cd17c86..2c8; Elite `-elite`
+f2ee166d..2d3, `-elite-1core` 2c027cea..3a2; MKE-P37 `-mke` 66af1d7f..0c0, `-mke-1core` 4c1704b2..107 (651 496 /
+651 500 / 651 492 B); the apps `ChoralRoot 0.24-beta3-smk37` (`... 1-core`). Size: Pro and Elite XIP 537 784 (93.8 %),
+MKE-P37 537 768, RAM 80 940 (82.3 %), POOL 306 196 (89.0 %); the 1-core packages XIP 534 116 (93.1 %), RAM 77 800, POOL
+306 068. `./build.sh` last: XIP 537 804, the package 5f1102a1b82c7174... (3y154's).
+**Checked** (on this tree): `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED (23 suites, 120 s; test_cr 1063 ok,
+test_persist 113, test_retired 18, test_pool 7; 317 golden renders, 0 changed; 0 lint; web_emu_test and web_emu_smk
+PASS), with `CR_PACKAGES_DIR` the 24 listed FM-1 packages (rel-24b2's 22, copied from its worktree's
+build/scratch/packages, and this build's two) and `CR_SMK_PACKAGES_DIR` the twelve listed SMK packages (the smk37-port
+worktree's six 0.24-beta2-smk37, checked against its SHA256SUMS, and this build's six); `CR_PACKAGES_DIR=
+build/release-0.24-beta3 python3 tests/releases_test.py` ALL OK (both sha256s, the SMK list's six against
+build/release-smk37), and with all 36 packages ALL OK, none skipped. The browser emulator built as 0.24-beta3
+(`emu/version.txt` "ChoralRoot 0.24-beta3", the SMK's "ChoralRoot 0.24-beta3-smk37"): `node tools/emu/web/test_web_emu.mjs`
+PASS (bit-exact against the native emulator), `node tools/emu/web/test_web_emu_smk.mjs` PASS. `tests/site_test.py` site ALL
+OK (67 checks) with the beta package as `build/choralroot.fwsc` and every package: `--require-all` builds the site for
+0.24-beta3 (the landing page on 0.23, under Try it first "It runs ChoralRoot 0.24-beta3, a beta (the installer's default
+is 0.23)."; `firmware/` 15 versions + 9 single-core); in that site `webapp/smk37/` offers 0.24-beta3-smk37 and
+0.24-beta2-smk37 and links `emu/`, `webapp/smk37/emu/` holds the SMK emulator (0.24-beta3-smk37), `firmware/smk37/` the
+twelve packages; no other page links either. **CI**: release.yml takes `v0.24-beta3-smk37` (the `-smk37` pattern),
+builds the three models (`MODEL=pro|elite|mke`), checks their sha256s against web/releases-smk37.json at the tag (listed
+here) and starts pages.yml for web/releases.json's first entry, 0.24-beta3. pages.yml downloads every listed version's
+packages from its release (the FM-1's and the SMK's), so a pages run fails while either v0.24-beta3 or
+v0.24-beta3-smk37 has no release yet: push both tags; the run started by the later release succeeds, or run pages.yml
+by hand (version 0.24-beta3, ref main) once both releases exist.

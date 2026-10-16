@@ -8,6 +8,27 @@
   },
   "releases": [
     {
+      "version": "0.24-beta3",
+      "beta": true,
+      "date": "2026-10-16",
+      "tag": "v0.24-beta3",
+      "sha256": "cdb6a2b53894800284872f44979ad1549903643bd558e69c61dd2675d9722cf6",
+      "sha256_1core": "7e17f335d61ee1e8d8ca05c4fed15dd5d625ad19dfb0e3a62bcf75a00f917eb9",
+      "title": "Beta: Flash Data clears the saved sounds, a lighter FM TONE",
+      "bullets": [
+        "SAFE MODE's Flash Data now erases your saved sounds too (all 128 user slots), as the manual always said: since 0.22 it erased the settings, favorites and loops but kept every saved sound. Back up first if you want them again.",
+        "FM TONE uses about 27 KB less working memory, room for more engines or effects later. Every sound plays exactly as before.",
+        "A full chord on an FM TONE preset that uses HARM (GLASS PAD, DRONE, HOLLOW, CLAV, STRINGS, SQUARE LEAD) takes slightly more of the processor, up to about 9 % more for FM TONE's part.",
+        "ChoralRoot now also comes as a community test build for the M-Vave SMK-37 (see SMK37.md in the repository).",
+        "Everything of 0.24-beta2 and 0.24-beta1 is in it: GRAIN, velocity on the top seven keys, Vel + Poly AT, the touch on Geek Out 2."
+      ],
+      "notes": [
+        "A beta: it may have bugs, and the next stable release, 0.24, replaces it. Please report problems on GitHub.",
+        "Updating from 0.24-beta2, 0.24-beta1 or 0.23 keeps your settings, sounds, loops and favorites.",
+        "Going back to 0.24-beta2 changes nothing for your data. Going back to 0.24-beta1 or 0.23: GRAIN sounds you saved stay in their slots untouched but play the VA's init sound there, and are GRAIN again when you come back. The full notes have the rest."
+      ]
+    },
+    {
       "version": "0.24-beta2",
       "beta": true,
       "date": "2026-10-16",

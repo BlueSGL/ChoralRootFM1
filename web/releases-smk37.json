@@ -3,6 +3,38 @@
   "repo": "https://github.com/Quixotic7/ChoralRootFM1",
   "releases": [
     {
+      "version": "0.24-beta3-smk37",
+      "base": "0.24-beta3",
+      "date": "2026-10-16",
+      "tag": "v0.24-beta3-smk37",
+      "title": "ChoralRoot 0.24-beta3 on the SMK-37: the second community test build",
+      "bullets": [
+        "ChoralRoot 0.24-beta3 on the M-Vave SMK-37 Pro, SMK-37 Elite, MKE-P37 and Starrykey 37 Play, with everything of the first test build.",
+        "FM TONE uses about 27 KB less working memory with an identical sound; a full chord on a HARM preset (GLASS PAD, DRONE, HOLLOW, CLAV, STRINGS, SQUARE LEAD) takes slightly more of the processor.",
+        "0.24-beta3's fix for the FM-1's SAFE MODE Flash Data (it now clears the saved sounds) was already how the SMK-37 build worked.",
+        "genkigenki's port (the fm1-to-smk37 guide), brought onto 0.24-beta3."
+      ],
+      "notes": [
+        "Community-tested, not tested by the maintainer: please report what works and what does not on GitHub.",
+        "Updating from 0.24-beta2-smk37 keeps your settings, sounds, loops and favourites. The first start from the stock firmware clears its settings; a keyboard that ran genkigenki's earlier ChoralRoot build keeps its sounds.",
+        "Going back: 0.24-beta2-smk37 at any time, with nothing changed for your data; or M-VAVE's package for your model with M-UPGRADE. The calibration is never written."
+      ],
+      "packages": {
+        "pro": {
+          "sha256": "dd6d7cff1c58ec8704eb2aeb1ec2e69786a12bb0a6a90d10ab78ec3a14a57cb0",
+          "sha256_1core": "0cd17c86cf9b4e6f871d2d8d2ed2ef445b903d08962f99ee6907cd24a2a462c8"
+        },
+        "elite": {
+          "sha256": "f2ee166d40d5932ba39f3a578ce765d8d1f2978523c5cd62b0b9e9e441ad72bb",
+          "sha256_1core": "2c027cea4d5678179c7c4862982661f505c6b01c9bdcf08cac5b3482e67ee3a2"
+        },
+        "mke": {
+          "sha256": "66af1d7faa3e5d0e4cf9c1ecd11005995b7842b08745e2dff79e01aa6659b0c0",
+          "sha256_1core": "4c1704b2b00dcc791f2f24c14c7ce4965de668937044a38da59cde04affff107"
+        }
+      }
+    },
+    {
       "version": "0.24-beta2-smk37",
       "base": "0.24-beta2",
       "date": "2026-10-16",
