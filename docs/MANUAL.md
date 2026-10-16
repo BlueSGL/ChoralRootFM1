@@ -1396,7 +1396,7 @@ does, follow the link.
 | FILT | the filter curve over two lanes: Cutoff · Reso · Ftype · Env amt, and Key trk · Spread · Drive |
 | ENV | four screens, `ENV 1 · amp`, `ENV 2 · filter`, `ENV 3 · free`, `ENV 4 · free`, each the envelope's shape over Attack · Decay · Sustain · Release and Hold (ENV 1 also Velocity) |
 | LFO | (1) the four LFOs as rows: Rate · Wave · Depth · Fade. (2) their Sync. (3) `VOICE`: Uspread, the stereo spread of a unison |
-| MOD | the modulation matrix: eight rows of Source · Dest · Amount |
+| MOD | the modulation matrix: eight rows of Source · Dest · Amount. The Amount goes from -64 to +63; below 6 either way it moves in tenths (a slow turn: +0.1, +0.2 ..), from 6 in whole steps, so a gentle vibrato is a small number: LFO to PITCH at +0.5 is about 9 cents with the LFO at full depth, +1 about 19 |
 
 **Quick modulation** (the VA only): hold **ENV** or **LFO** and turn a knob. The envelope or LFO you last looked at
 (ENV 2 or LFO 1 if none yet) now modulates the parameter under that knob, and the turn sets the amount; the cell

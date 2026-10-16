@@ -224,7 +224,7 @@ ok(same(s1.record, recs6[0]) && s1.name === "MY PAD" && s1.engine === 13 && s1.k
   ok(throwsMsg(() => readSoundFile(mut((o) => { o.record = b64(recs6[3]); o.engine = 0; })), /not the kind of its engine ANALOG/), "file: a patch for an engine without one");
   ok(throwsMsg(() => readSoundFile(mut((o) => { o.patch.data = b64(blobs.va1.subarray(0, 100)); })), /100 bytes, not 110/), "file: wrong blob length");
   ok(throwsMsg(() => readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[0] = 0x57; o.patch.data = b64(b); })), /magic or version/) &&
-     throwsMsg(() => readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[1] = 5; o.patch.data = b64(b); })), /magic or version/), "file: VA blob magic / version");
+     throwsMsg(() => readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[1] = 6; o.patch.data = b64(b); })), /magic or version/), "file: VA blob magic / version");
   ok(readSoundFile(mut((o) => { const b = blobs.va1.slice(); b[1] = 4; o.patch.data = b64(b); })).patch[1] === 4, "file: a version-4 VA blob (FENV hundredths, the sync list) reads");
   const fm = exportSound(src, 2);
   ok(throwsMsg(() => readSoundFile({ ...fm, patch: { kind: "fm6", data: b64(Uint8Array.from(blobs.fm2, (b, i) => (i === 113 ? 2 : b))) } }), /FM6 patch is not/),
@@ -629,6 +629,17 @@ const QUAD_FX_V1 = "UQEBAwMjGgoAP2RkZGQAUBhIAC4ALAABAQEAAQFkACgAQAAofwAAQAAAAH8A
      `legacy (0.21): the notes say what changed (${rv.notes.join(" | ")})`);
   const v3same = importSound(legacyMap, 3, { record: rec(13, "VA THREE"), name: "VA THREE", patch: vaBlob(5) });
   ok(!v3same.notes.length && same(v3same.objs.get(9).subarray(16 + 220, 16 + 330), vaBlob(5)), "legacy (0.21): a VA version 3 placed as it is, no note");
+  // a VA version 5 (3y106: the matrix's fine amounts, slots 2 and 8 in tenths, flags at values 106 / 107): on 0.21
+  // version 3, those AMTs the nearest whole number, the flags 0, a note each; a whole AMT kept
+  const va5 = va4.slice(), AMT = (k) => 2 + 73 + 3 * k + 2;
+  va5[1] = 5; va5[2 + 31] = 64; va5[2 + 103] = 0; for (let l = 0; l < 3; l++) va5[LR(l) + 4] = 0;
+  va5[AMT(0)] = 64 + 7; va5[AMT(1)] = 64 + 3; va5[AMT(7)] = 64 - 25; va5[2 + 106] = 2; va5[2 + 107] = 1;
+  const rv5 = importSound(legacyMap, 5, { record: rec(13, "VA FIVE"), name: "VA FIVE", patch: va5 });
+  const v5 = rv5.objs.get(9).subarray(16 + 4 * 110, 16 + 5 * 110);
+  ok(v5[1] === 3 && v5[AMT(0)] === 64 + 7 && v5[AMT(1)] === 64 && v5[AMT(7)] === 64 - 3 && !v5[2 + 106] && !v5[2 + 107] &&
+     rv5.notes.length === 2 && /MOD 2 AMT \+0\.3: .* whole amounts, 0 instead/.test(rv5.notes[0]) &&
+     /MOD 8 AMT -2\.5: .* -3 instead/.test(rv5.notes[1]),
+     `legacy (0.21): a VA version 5 -> version 3, its fine amounts whole (${rv5.notes.join(" | ")})`);
   const pool4 = importSound(blank, 4, { record: rec(13, "VA POOL"), name: "VA POOL", patch: va4 });
   ok(!pool4.notes.length && same(pool4.objs.get(50).subarray(3 * 384 + 196, 3 * 384 + 196 + 110), va4), "pool (0.22): a VA version 4 placed as it is");
   // the FM-1 (a simulated one): LIST names the pool's ids: they are read, written back

@@ -1085,13 +1085,26 @@ static uint32_t ce_src_col(const char *n)
 {
     return cp_has(n, "ENV") ? CR_COL_YELLOW : cp_has(n, "LFO") ? CR_COL_RED : CR_COL_BLUE;
 }
-/* "ENV2 -> CUT +12 slot 1" (the trace, the hot cell's "ENV2 +12") */
-static void ce_amt_text(char *o, const char *src, int32_t v, uint32_t n)
+/* "ENV2 -> CUT +12 slot 1" (the trace, the hot cell's "ENV2 +12"); an amount column in hundredths (F_FIX2: the VA's
+ * AMT, tenths below 6) without its zeros: "LFO1 +0.3", "LFO1 +12" */
+static void ce_amt_text(char *o, const char *src, const param_desc_t *c, int32_t v, uint32_t n)
 {
     char b[8];
+    uint32_t u = (uint32_t)(v < 0 ? -v : v);
     cu_cpy(o, src, n);
     cu_cat(o, " ", n);
-    cu_int(b, v, 1, sizeof b);
+    if (c->fmt != F_FIX2 || !(u % 100u)) {
+        cu_int(b, c->fmt == F_FIX2 ? v / 100 : v, 1, sizeof b);
+        cu_cat(o, b, n);
+        return;
+    }
+    cu_cat(o, v < 0 ? "-" : "+", n);
+    cu_int(b, (int32_t)(u / 100u), 0, sizeof b);
+    cu_cat(o, b, n);
+    b[0] = '.';
+    b[1] = (char)('0' + u / 10u % 10u);
+    b[2] = (char)(u % 10u ? '0' + u % 10u : 0);
+    b[3] = 0;
     cu_cat(o, b, n);
 }
 
@@ -1155,7 +1168,7 @@ static void ce_map(uint32_t knob, int32_t s, uint32_t snap, uint32_t env)
     cx.hot_t0 = cu_now();
     cx.hot_slot = (uint8_t)(use.pg + 1u);
     cx.hot_src = (uint8_t)src;
-    ce_amt_text(tx, nm, amt, sizeof tx);
+    ce_amt_text(tx, nm, &d->pages[use.pg].col[(uint32_t)use.ca], amt, sizeof tx);
     cu_trace("mod: %s -> %s %s slot %u\n", nm, ce_name_of(d, use.pg, (uint32_t)use.cd, dst), tx + str_len(nm) + 1u,
              (unsigned)(use.pg - a + 1u));
     (void)tx;
@@ -1850,7 +1863,8 @@ static void ce_screen(cr_screen_t *s, uint32_t now)
             cr_cell_t *hc = &s->cell[(cx.hot_r - 1u) % CR_ED_ROWS][cx.hot_c & 3u];
             if (d && cx.hot_slot - 1u < d->npages && ce_slot(d, cx.hot_slot - 1u, &sl)) {
                 const char *nm = ce_name_of(d, sl.pg, (uint32_t)sl.cs, cx.hot_src);
-                ce_amt_text(hc->value, nm, d->get(t, sl.pg, (uint32_t)sl.ca), sizeof hc->value);
+                ce_amt_text(hc->value, nm, &d->pages[sl.pg].col[(uint32_t)sl.ca], d->get(t, sl.pg, (uint32_t)sl.ca),
+                            sizeof hc->value);
                 s->hot_col = (uint8_t)ce_src_col(nm);
             }
         }

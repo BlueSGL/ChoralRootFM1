@@ -1042,6 +1042,14 @@ r=$(dv RATE)
 f=$(dv FENV)
 [ "$f" = "999 998 1000 " ] && has 'FENV 999 -> 998 (+9.98)' "$L" &&
     ok "VA FENV (F_FIX2, -64.00..+63.99): slow detents 0.01, GLO held the whole number (+10.00)" || bad "FENV: '$f'"
+run cr_va_mod_fine
+L="$OUT/cr_va_mod_fine.log"
+a=$(dv AMT)
+[ "$a" = "290 280 270 260 270 280 900 1500 1400 1300 " ] && has 'AMT 300 -> 290 (+2.90)' "$L" && has 'AMT 1500 -> 1400 (+14.00)' "$L" &&
+    ok "VA matrix AMT (issue 13: hundredths, tenths below 6): slow detents a tenth (2.90 .. 2.60), a reversal's first two a tenth, quick ones 6.35 to whole numbers (9 15), slow above 6 a whole (14), GLO held whole (13)" \
+    || bad "VA AMT: '$a' (want 290 280 270 260 270 280 900 1500 1400 1300)"
+has '^mod: LFO1 -> RES +0.1 slot 3$' "$L" && ok "LFO held + KNOB 2, one slow detent: mod: LFO1 -> RES +0.1 (the hot cell's tenths)" \
+    || bad "fine mapping: $(grep -a '^mod:' "$L")"
 
 echo "EDIT held: the engine picker as a preview (cancel / keep), its roots, PRESETS in the editor"
 run cr_editor_pick --wav "$OUT/cr_editor_pick.wav"
