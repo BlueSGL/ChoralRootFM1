@@ -5365,3 +5365,18 @@ the FM-1's) and the beta site's --require-all; the count leaves the SMK lines ou
 (the beta, the single core, the Pages build) run on an empty SMK list (no_smk_env), smk_site() keeping its own.
 `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (23 suites, 86 s; test_cr 1063 ok, 317 golden renders
 unchanged); `./build.sh` last: XIP 537 804, the package 5f1102a1... (main's).
+
+3y159. **The SMK-37 emulator in the keyboard's colours (2026-10-16; the owner on 18b0100: "Layout is better, can you make
+the color scheme match the real one with orange knobs and keys").** `tools/emu/web/smk/index.html`, the panel alone (the
+header, Start, the help strip keep the site's look), after the photo of the SMK-37 Pro: the body mid grey (#7B7F85, a
+lighter top face) with dark grey print for every label (the ChoralRoot roles too); the wheels as orange ridged
+rollers in dark wells, the faders' caps orange in dark slots, the knobs orange caps with a dark pointer (the knob the
+computer keys turn: a white ring); the six buttons under the screen and the 2 x 6 block orange with dark print; the
+pads cream (#F1EDE6) with a soft shadow; white naturals and orange sharps; the screen black in a thin dark bezel. The
+lit states on the new colours: a lit button a near-white fill with a white glow (SEQ PLAY green / red as before); a
+pad the firmware's colour through the cream (`smk.js`: the colour as a tint, faint .. glow levels a light one, lit
+nearly the colour itself with a glow of it and light print on a dark one); a held key, pad or button outlined in the
+dark print, a key down a light orange (a sharp a darker one). `?demo` now shows its held C4 and MAJ pad on the page
+too (the pressed look in screenshots). Checked headless at 1920 and 1280 px (build/emu-web-smk37-test/page-1920.png,
+page-1280.png); `node tools/emu/web/test_web_emu_smk.mjs` PASS; `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES
+PASSED (23 suites, 88 s); `./build.sh` last (the package 5f1102a1..., main's).

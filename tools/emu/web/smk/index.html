@@ -13,6 +13,9 @@
   --ground: #080808; --cream: #F6F2EE; --red: #E63829; --orange: #F67918; --yellow: #F6B600;
   --blue: #2950CD; --green: #29B27B; --grey: #6A696A; --dark: #313031; --text: #D9D5D1;
   --body: #1B1B1B; --bed: #101010; --cap: #2E2D2E;
+  /* the SMK-37 Pro's own colours (the panel only): the grey body, its dark print, the orange parts, the cream pads */
+  --smk-body: #7B7F85; --smk-face: #868A90; --smk-edge: #5E6268; --smk-print: #232529; --smk-print2: #3A3D42;
+  --smk-orange: #F26A1B; --smk-orange-hi: #FF8A45; --smk-orange-lo: #C9530F; --smk-pad: #F1EDE6; --smk-slot: #2A2C30;
 }
 * { box-sizing: border-box; }
 html, body { margin: 0; background: var(--ground); color: var(--text); }
@@ -39,59 +42,78 @@ button { font: inherit; }
  * over the 16 pads (a pad column under each knob; the block takes the width that is left), the faders over the 2 x 6
  * buttons; the keybed under the whole band. Under 900 px the band wraps: wheels and screen, then knobs and pads, then
  * faders and buttons; the keybed stays full width */
-.smk { background: var(--body); border: 2px solid #2A2A2A; border-radius: 28px; padding: 18px 20px 20px; user-select: none;
+.smk { background: linear-gradient(180deg, var(--smk-face), var(--smk-body) 60%); border: 2px solid var(--smk-edge);
+       border-radius: 28px; padding: 18px 20px 20px; user-select: none; box-shadow: inset 0 1px 0 #ffffff33;
        -webkit-user-select: none; touch-action: none; }
 .top { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 20px clamp(16px, 2vw, 40px); align-items: start; }
 .blk { display: flex; gap: 14px; align-items: flex-start; }
-.lab { text-align: center; color: var(--grey); font-size: 11px; font-weight: 800; letter-spacing: .06em; margin-top: 5px; }
+.lab { text-align: center; color: var(--smk-print); font-size: 11px; font-weight: 800; letter-spacing: .06em; margin-top: 5px; }
 input.v { writing-mode: vertical-lr; direction: rtl; -webkit-appearance: none; appearance: none; background: transparent;
           width: 40px; height: 168px; margin: 0; cursor: pointer; }
 .faders input.v { height: clamp(96px, 7.5vw, 150px); }
-input.v::-webkit-slider-runnable-track { width: 8px; border-radius: 4px; background: var(--bed); border: 1px solid #000; }
-input.v::-moz-range-track { width: 8px; border-radius: 4px; background: var(--bed); border: 1px solid #000; }
-input.v::-webkit-slider-thumb { -webkit-appearance: none; width: 34px; height: 16px; border-radius: 3px; background: var(--cap);
-          border: 2px solid var(--cream); margin-left: -14px; }
-input.v::-moz-range-thumb { width: 30px; height: 12px; border-radius: 3px; background: var(--cap); border: 2px solid var(--cream); }
-input.v.w::-webkit-slider-thumb { height: 34px; border-color: var(--yellow); }
-input.v.w::-moz-range-thumb { height: 30px; border-color: var(--yellow); }
+/* the faders: orange caps in dark slots; the wheels: orange rollers in their dark wells */
+input.v::-webkit-slider-runnable-track { width: 8px; border-radius: 4px; background: var(--smk-slot); border: 1px solid #1b1c1f; }
+input.v::-moz-range-track { width: 8px; border-radius: 4px; background: var(--smk-slot); border: 1px solid #1b1c1f; }
+input.v::-webkit-slider-thumb { -webkit-appearance: none; width: 34px; height: 16px; border-radius: 3px; margin-left: -14px;
+          background: linear-gradient(180deg, var(--smk-orange-hi), var(--smk-orange) 45%, var(--smk-orange-lo));
+          border: 1px solid #7a2f06; box-shadow: 0 2px 3px #0006; }
+input.v::-moz-range-thumb { width: 30px; height: 12px; border-radius: 3px; background: var(--smk-orange); border: 1px solid #7a2f06; }
+input.v.w::-webkit-slider-runnable-track { width: 30px; border-radius: 8px; background: var(--smk-slot); }
+input.v.w::-moz-range-track { width: 30px; border-radius: 8px; background: var(--smk-slot); }
+input.v.w::-webkit-slider-thumb { width: 30px; height: 60px; border-radius: 10px; margin-left: -1px;
+          background: repeating-linear-gradient(180deg, var(--smk-orange) 0 5px, var(--smk-orange-lo) 5px 7px); }
+input.v.w::-moz-range-thumb { width: 28px; height: 56px; border-radius: 10px; background: var(--smk-orange); }
 .scr { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
-.lcdbox { background: #000; padding: 6px; border: 3px solid var(--dark); }
+.lcdbox { background: #000; padding: 6px; border: 2px solid #1c1d20; border-radius: 6px; }
 #lcd { display: block; width: 240px; height: 240px; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
 @media (min-width: 2400px) { #lcd { width: 480px; height: 480px; } }   /* (whole pixels: 1x, 2x on a very wide window) */
 .nav { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
-.b { border: 1.5px solid #000; border-radius: 5px; background: var(--cap); color: var(--cream); cursor: pointer; text-align: center;
+.b { border: 1px solid #7a2f06; border-radius: 5px; background: var(--smk-orange); color: var(--smk-print); cursor: pointer; text-align: center;
+     box-shadow: inset 0 1px 0 #ffffff40, 0 1px 2px #0005;
      font-size: 10.5px; font-weight: 800; padding: 4px 2px; min-height: 42px; display: flex; flex-direction: column;
      justify-content: center; line-height: 1.15; position: relative; }
-.b small { display: block; color: var(--grey); font-size: 9.5px; font-weight: 700; }
+.b small { display: block; color: #3d1a06; opacity: .75; font-size: 9.5px; font-weight: 700; }
 .b kbd, .key kbd, .pad kbd { position: absolute; right: 3px; bottom: 2px; font: 700 8px/1 "Inter Tight", system-ui, sans-serif;
-     color: #8C8B8C; background: none; padding: 0; }
-.b.lit { background: var(--cream); color: #111; }
-.b.lit small { color: #444; }
-.b.red { background: var(--red); color: #fff; }
-.b.green { background: var(--green); color: #111; }
-.b.held, .pad.held, .key.held { outline: 2px solid var(--yellow); outline-offset: -2px; }
+     color: #00000088; background: none; padding: 0; }
+/* a lit button: its LED shines through, a near-white fill with a white glow; SEQ PLAY green / red */
+.b.lit { background: #FFF4EA; color: var(--smk-print); box-shadow: 0 0 12px 2px #ffffffcc, inset 0 0 6px #ffb37a; }
+.b.lit small { color: #6b3410; }
+.b.red { background: var(--red); color: #fff; box-shadow: 0 0 12px 2px #ff6a5a99; }
+.b.red small, .b.red kbd { color: #ffffffcc; }
+.b.green { background: #7CF0B4; color: #10261a; box-shadow: 0 0 12px 2px #7cf0b499; }
+.b.held, .pad.held { outline: 2px solid var(--smk-print); outline-offset: -3px; }
+.key.held { outline: 2px solid var(--smk-print); outline-offset: -3px; }
 .mid { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); row-gap: 10px; }
 .knob { display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: ns-resize; touch-action: none; }
-.knob .dial { width: 50px; height: 50px; border-radius: 50%; background: #262526; border: 3px dotted #3E3D3E; position: relative; }
+/* the knobs: orange caps (a highlight on top, a dark pointer) */
+.knob .dial { width: 50px; height: 50px; border-radius: 50%; position: relative; border: 1px solid #7a2f06;
+              background: radial-gradient(circle at 38% 30%, var(--smk-orange-hi), var(--smk-orange) 55%, var(--smk-orange-lo));
+              box-shadow: 0 3px 4px #0006, inset 0 -2px 3px #0003; }
 .knob .dial::after { content: ""; position: absolute; left: 50%; top: 4px; width: 3px; height: 15px; margin-left: -1.5px;
-                     background: var(--cream); border-radius: 2px; transform-origin: 50% 18px; transform: rotate(var(--a, 0deg)); }
-.knob.sel .dial { border-color: var(--yellow); }
-.knob b { font-size: 12px; font-weight: 900; color: var(--c); }
-.knob small { color: var(--grey); font-size: 9.5px; font-weight: 700; text-align: center; line-height: 1.1; min-height: 2.2em; }
-.pad { aspect-ratio: 1.45; min-height: 40px; margin: 0 clamp(3px, 0.4vw, 8px); border-radius: 7px; border: 2px solid #000; background: #0c0c0c; cursor: pointer; position: relative; }
-.pad i { position: absolute; left: 6px; right: 4px; top: 4px; overflow: hidden; font-style: normal; color: #ffffffbb;
-         font-size: clamp(9px, 0.72vw, 13px); font-weight: 800;
-         text-shadow: 0 0 3px #000; line-height: 1.1; }
+                     background: #3b1606; border-radius: 2px; transform-origin: 50% 20px; transform: rotate(var(--a, 0deg)); }
+.knob.sel .dial { box-shadow: 0 0 0 3px #fff, 0 3px 4px #0006; }
+.knob b { font-size: 12px; font-weight: 900; color: var(--smk-print); }
+.knob small { color: var(--smk-print2); font-size: 9.5px; font-weight: 700; text-align: center; line-height: 1.1; min-height: 2.2em; }
+/* the pads: cream, a soft shadow; lit, the firmware's colour through them (smk.js: --pc, --pa, a glow when bright) */
+.pad { aspect-ratio: 1.45; min-height: 40px; margin: 0 clamp(3px, 0.4vw, 8px); border-radius: 5px; border: 1px solid #b9b3a8;
+       background: linear-gradient(rgba(var(--pc, 255, 255, 255), var(--pa, 0)), rgba(var(--pc, 255, 255, 255), var(--pa, 0))), var(--smk-pad);
+       box-shadow: 0 3px 5px #0005, inset 0 -3px 0 #0000001a; cursor: pointer; position: relative; }
+.pad i { position: absolute; left: 6px; right: 4px; top: 4px; overflow: hidden; font-style: normal; color: var(--smk-print);
+         font-size: clamp(9px, 0.72vw, 13px); font-weight: 800; line-height: 1.1; }
 .rgt { display: flex; flex-direction: column; gap: 10px; width: clamp(300px, 24vw, 470px); }
 .faders { display: flex; justify-content: space-around; }
 .grid6 { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 6px; }
-.keys { position: relative; height: clamp(130px, 11vw, 240px); display: flex; margin-top: 18px; touch-action: none; }
+.keys { position: relative; height: clamp(130px, 11vw, 240px); display: flex; margin-top: 18px; touch-action: none;
+        background: #3a3d42; padding: 2px; border-radius: 4px; }
 .key { cursor: pointer; border-radius: 0 0 7px 7px; position: relative; }
-.key.w { flex: 1; border: 1.5px solid #000; margin: 0 1px; background: #E9E5E1; }
-.key.b { position: absolute; top: 0; height: 62%; border: 1.5px solid #000; background: #1d1c1d; z-index: 2; }
-.key.w.down { background: var(--yellow); }
-.key.b.down { background: var(--orange); }
+/* the keybed: white naturals, orange sharps; a key down shows darker (the white ones a light orange) */
+.key.w { flex: 1; border: 1px solid #9a9da2; margin: 0 1px; background: linear-gradient(180deg, #fbfbfa, #f1f0ee); box-shadow: inset 0 -4px 0 #0000000d; }
+.key.b { position: absolute; top: 0; height: 62%; border: 1px solid #7a2f06; z-index: 2;
+         background: linear-gradient(180deg, var(--smk-orange-lo), var(--smk-orange) 20%, var(--smk-orange)); box-shadow: 0 3px 4px #0005; }
+.key.w.down { background: #FFD7B5; }
+.key.b.down { background: #A9440C; }
 .key.w kbd { color: #6A696A; }
+.key.b kbd { color: #3d1a06; }
 .key span { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 9px; font-weight: 700; color: #8C8B8C; }
 .bar label { font-weight: 700; color: var(--cream); font-size: 14px; display: flex; gap: 6px; align-items: center; }
 .bar [hidden] { display: none; }

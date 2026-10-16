@@ -223,16 +223,17 @@
       e.classList.toggle("green", b === 16 && !!leds[16]);
       e.classList.toggle("red", !!red && !leds[16]);
     }
-    for (let p = 0; p < 16; p++) {                           // the LEDs' colours, brighter than sent (they are dim)
+    for (let p = 0; p < 16; p++) {                           // the LEDs' colours through the cream pads
       const c = pads[p];
       let r = (c >> 16) & 255, g = (c >> 8) & 255, b = c & 255;
-      const k = Math.min(2.3, 255 / Math.max(1, r, g, b));
+      const lvl = Math.max(r, g, b), k = 255 / Math.max(1, lvl);   // (the firmware's levels: 4 faint .. 110 lit)
       r = Math.round(r * k); g = Math.round(g * k); b = Math.round(b * k);
-      const lvl = Math.max((c >> 16) & 255, (c >> 8) & 255, c & 255), col = `rgb(${r},${g},${b})`;
-      padEl[p].style.background = lvl ? `rgba(${r},${g},${b},${Math.min(1, 0.25 + lvl / 110)})` : "#0c0c0c";
-      padEl[p].style.boxShadow = lvl >= 80 ? `0 0 16px ${col}` : "";
-      padEl[p].firstChild.style.color = lvl >= 80 && r + g + b > 400 ? "#111" : "";   // (a bright pad: a dark label)
-      padEl[p].firstChild.style.textShadow = lvl >= 80 && r + g + b > 400 ? "none" : "";
+      const e = padEl[p], bright = lvl >= 80, lum = 0.3 * r + 0.59 * g + 0.11 * b;
+      e.style.setProperty("--pc", `${r}, ${g}, ${b}`);
+      e.style.setProperty("--pa", lvl ? (bright ? (lum > 235 ? 0.55 : 0.92) : Math.min(0.45, 0.12 + lvl / 110)) : 0);
+      e.style.boxShadow = bright ? `0 0 18px 3px rgba(${r},${g},${b},0.9), 0 3px 5px #0005` : "";
+      e.style.borderColor = bright ? `rgb(${r},${g},${b})` : "";
+      e.firstChild.style.color = bright && lum < 140 ? "#fff" : "";   // (light print on a dark lit colour)
     }
   };
   const drawMaster = () => knobEl[0].firstChild.style.setProperty("--a", (master / 1023 - 0.5) * 270 + "deg");
@@ -291,7 +292,10 @@
       }
       ex.web_boot();
       ex.web_step(600);
-      if (/demo/.test(location.search)) { ex.web_smk_pad(2, 100); ex.web_step(30); ex.web_smk_key(12, 100); ex.web_step(700); }
+      if (/demo/.test(location.search)) {          // (and the page shows them held: the pressed look in screenshots)
+        ex.web_smk_pad(2, 100); ex.web_step(30); ex.web_smk_key(12, 100); ex.web_step(700);
+        keyEl[12].classList.add("down", "held"); padEl[2].classList.add("held");
+      }
       if (node) return;
       drawFb(new Uint16Array(mem.buffer, ex.web_fb(), 57600));
       drawLights(new Uint8Array(mem.buffer, ex.web_smk_leds(), 19), new Uint32Array(mem.buffer, ex.web_smk_pads(), 16));
