@@ -5616,13 +5616,16 @@ static void cu_safe_screen(cr_screen_t *s)
 }
 
 /* Options > Flash Data (SAFE MODE, OCT+ twice): erase every data object ChoralRoot keeps (not the firmware, not the
- * update area, not the free sample sectors 0xB6000..0xC7FFF) and reboot; the boot after it loads nothing (an
+ * update area) and reboot; the boot after it loads nothing (an
  * erased flash: factory sounds, default settings, calibration from RAM or the default). The regions: the stores and
  * FM6 bank copy A 0x97000..0x9FFFF (storage.c st_sector: VA store, FM6 stores, the project slots, 0x9F000), the loop
  * slots 0xC8000..0xDBFFF (CRL_FL_BASE), the user sound banks 0xDC000..0xDFFFF, the settings A / B and FM6 bank
  * copy B 0xFC000..0xFEFFF; FELUCCA_CZ: the CZ-1 tone store's second half and the eight CZ-1 banks 0xA0000..0xB1FFF;
  * FELUCCA_QUAD: the QUAD patch store 0xB2000..0xB3FFF, the session 0xB4000..0xB5FFF (0.18) and the favourites
- * 0xB6000..0xB7FFF (0.22: marks on sounds that are gone would name whatever takes their slots) */
+ * 0xB6000..0xB7FFF (0.22: marks on sounds that are gone would name whatever takes their slots); UP_POOL: the sound
+ * pool 0xB8000..0xC7FFF (storage.c sp_*, the user sounds since 0.22: until 0.24-beta2 it was left out, so the sounds
+ * stayed). On a full build that is all of 0x97000..0xDFFFF and 0xFC000..0xFEFFF, 76 sectors; the asserts below
+ * tie the list to storage.c's map */
 #ifndef CR_REBOOT
 #define CR_REBOOT() do { bootguard_settled(&bootguard); usb_detach(); fm1_delay_ms(30); fm1_reboot(); } while (0)
 #endif
@@ -5636,7 +5639,17 @@ static void cu_flash_erase(void)
 #if FELUCCA_QUAD
                                     {0xB2000u, 6u},    /* (storage.c: OBJ_QUADSTORE, OBJ_SESSION, OBJ_FAVS) */
 #endif
+#if UP_POOL && FELUCCA_FLASH
+                                    {SP_BASE, SP_NSEC},   /* (storage.c sp_*: the sound pool's 16 sectors) */
+#endif
     };
+#if FELUCCA_CZ && FELUCCA_QUAD && FELUCCA_FLASH
+    _Static_assert(OBJ_COUNT == 20u && OBJ_FAVS + 1u == OBJ_COUNT, "Flash Data: a new storage object needs a place here");
+#endif
+#if UP_POOL && FELUCCA_FLASH
+    _Static_assert(SP_BASE == 0xB2000u + 6u * ST_SECTOR && SP_BASE + SP_NSEC * ST_SECTOR == CRL_FL_BASE,
+                   "Flash Data: the pool lies between the favourites and the loop slots");
+#endif
     cr_screen_t *es = &cu_scr;                     /* (the frame's screen, in the pool: off the stack and out of
                                                     * RAM; after this comes the reboot) */
     uint32_t r, k, n = 0, total = 0, bad = 0;

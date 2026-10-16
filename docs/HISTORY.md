@@ -5056,3 +5056,33 @@ package (`--require-all` builds the site for 0.24-beta2: the landing page "Versi
 0.23", under Try it first "It runs ChoralRoot 0.24-beta2, a beta (the installer's default is 0.23)."; `firmware/`
 with both betas' packages); `node web/test_installer.mjs` passed. Not pushed, not tagged, not flashed: the tag is the
 owner's "tag it".
+
+3y142. **SAFE MODE's Flash Data erases the sound pool (2026-10-16; from main 52889ba, the 0.24-beta2 release tree; not
+pushed, not flashed; a new build, not 0.24-beta2).** Found by the SMK-37 port session while it placed the SMK's
+storage: the SMK build's Flash Data and owner change erase `ST_SMK_REGIONS`, which include the favourites and both of
+the pool's runs, but the FM-1's list in `cr_ui.c cu_flash_erase` stopped at the favourites (0xB2000, 6 sectors) and
+left out the sound pool 0xB8000..0xC7FFF (`storage.c` `SP_BASE`, `SP_NSEC` 16; `upool.c`: the 128 user slots since
+0.22). So on 0.22 .. 0.24-beta2 a Flash Data erased the legacy sound objects (0x97000.., 0xDC000..) and the favourites
+but kept every user sound, while MANUAL said it erases the stored sounds and PRESETS.md that it erases the marks "with
+the sounds". Flash Data's job is to erase the data objects (a unit that crashes on its data gets a clean start), the
+pool is one of them, and its marks were already being erased for the reason that marks on sounds that are gone would
+name the wrong slots; the boot after it now finds neither a pool bank nor a legacy object, so `upool_boot`'s migration
+has nothing to import. `cu_flash_erase`: `{SP_BASE, SP_NSEC}` under `UP_POOL && FELUCCA_FLASH`; two asserts tie the
+list to `storage.c`: `OBJ_COUNT == 20` with `OBJ_FAVS` last (a new object needs a place in the list) and the pool lying
+between the favourites' end and `CRL_FL_BASE`. On the full build the list is now all of 0x97000..0xDFFFF and
+0xFC000..0xFEFFF: 76 sectors (60 before); the head comment's "not the free sample sectors 0xB6000..0xC7FFF" (wrong
+since the favourites) is gone. `tools/emu/test_cr.sh`'s SAFE MODE block: a sound saved into the pool first
+(`scripts/cr_safe_sound.txt`: SAVE, OCT+, OCT+ on TINE EP, U001; `pool_image.py pool` lists it), the erase's line
+"76 sectors", the region check 0xA0000 + 40 sectors (through the pool), and `pool_image.py pool` empty after it.
+Docs: MANUAL's SAFE MODE line (the saved sounds, all 128 slots, the favourites; "0.22 to 0.24-beta2 left the saved
+sounds in place"), PRESETS.md (76 sectors), SETTINGS.md's pool section (Flash Data erases it; what 0.22 .. 0.24-beta2
+did), HANDOFF (76 sectors), `docs/releases/0.24.md` "Merged after 0.24-beta2" (a player's sentence for the next
+notes). The SMK-37 port branch (claude/smk37-port-5704f3) keeps its own list (`ST_SMK_REGIONS`); its `#else` branch
+in `cu_flash_erase` is this list, so a merge takes this one; its HISTORY numbers 3y142 .. 3y145 collide with this
+entry's and get renumbered at whichever merge comes second.
+**Built and checked**: `./build.sh` (plain): XIP 537 068 B of 573 440 (93.7 %), RAM 80 176 (81.6 %), POOL 333 900 of
+344 064 (97.0 %), RAMTEXT 7 072 of 24 576: main's line to the byte (the list's two words fit in the existing
+alignment), other bytes (package sha256 8f45e0bd9ba19662..., 610 313 B); the stub unchanged (baee55ed142fe1cc).
+`CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 77 s; test_cr 1063 ok, 2 more than 3y141's
+1061: the sound in the pool before, none after; test_persist 113, test_retired 18, test_pool 7; 317 golden renders,
+0 changed; 0 lint).

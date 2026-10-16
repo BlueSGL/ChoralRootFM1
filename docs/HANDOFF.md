@@ -513,7 +513,8 @@ installed on the owner's Mac.
   under it, KNOB 4 left deletes it, every other knob inert (`cu_name_knob`, first thing in `cu_knob`); a key goes in
   after the cursor; the cursor is `cr_line_t.cur`, a
   steady bar.
-- **SAFE MODE's Flash Data** erases 60 sectors (`cr_ui.c cu_flash_erase`; 58 until the favourites).
+- **SAFE MODE's Flash Data** erases 76 sectors (`cr_ui.c cu_flash_erase`: 0x97000..0xDFFFF and 0xFC000..0xFEFFF; 60
+  until the sound pool joined after 0.24-beta2, 58 until the favourites).
 - **Backup object ids** (`cr_backup.c`'s head): 1 settings, 6 / 7 user banks, 8 the FM6 bank, 9 the VA store,
   10 / 11 FM6, 12 / 13 CZ-1, 14 .. 21 the CZ banks, 22 FM TONE, 23 the favourites (0.22; a firmware before it does not
   list 23 and the clients skip it there), 40 .. 49 the loop slots. The session is not in a backup.

@@ -2699,6 +2699,10 @@ SF="$OUT/cr_safe_flash.bin"
 rm -f "$SF"
 "$EMU" --headless --flash "$SF" --script "$S/persist_set.txt" >"$OUT/cr_safe_data.log" 2>&1   # data: 137 BPM, Advanced
 grep -q 'settings saves 1 ' "$OUT/cr_safe_data.log" && ok "a flash with data (persist_set: 137 BPM saved)" || bad "no data saved"
+"$EMU" --headless --flash "$SF" --script "$S/cr_safe_sound.txt" >"$OUT/cr_safe_sound.log" 2>&1   # .. and a sound in the pool
+pool_before=$(python3 tools/emu/pool_image.py pool "$SF")
+has '^save: part 0 slot U001 name TINE EP' "$OUT/cr_safe_sound.log" && [ -n "$pool_before" ] &&
+    ok "a user sound in the pool too (U01 TINE EP: $(echo "$pool_before" | head -1))" || bad "no sound saved: $(grep -m1 '^save:' "$OUT/cr_safe_sound.log")"
 cp "$SF" "$OUT/cr_safe_flash_before.bin"
 run cr_safe --flash "$SF" --boot-fail 1 --reset-reason wdt --boot-stage 13 --wav "$OUT/cr_safe.wav"
 L="$OUT/cr_safe.log"
@@ -2720,14 +2724,16 @@ differ cr_safe_options cr_safe_erase_entry "Options opens on Safe Mode; SELECT +
 differ cr_safe_erase_entry cr_safe_erase_ask "OCT+ once: the confirmation (OCT+ again): $OUT/cr_safe_erase_ask.ppm"
 "$EMU" --headless --flash "$SF" --script "$S/cr_safe_erase.txt" --boot-fail 1 --reset-reason wdt >"$OUT/cr_safe_erase.log" 2>&1
 st=$?
-[ $st = 0 ] && has '^safe: flash data erased, 60 sectors, 0 failed: reboot' "$OUT/cr_safe_erase.log" &&
+[ $st = 0 ] && has '^safe: flash data erased, 76 sectors, 0 failed: reboot' "$OUT/cr_safe_erase.log" &&
     has '^reboot: guard failed 0 pending 0' "$OUT/cr_safe_erase.log" &&
-    ok "OCT+ twice: 60 data sectors erased (36 + the CZ-1's 18 + FM TONE's 2 + the session's 2 + the favourites' 2), reboot with the guard clear" || bad "erase: exit $st, $(grep -m1 'safe:\|reboot' "$OUT/cr_safe_erase.log")"
+    ok "OCT+ twice: 76 data sectors erased (36 + the CZ-1's 18 + FM TONE's 2 + the session's 2 + the favourites' 2 + the sound pool's 16), reboot with the guard clear" || bad "erase: exit $st, $(grep -m1 'safe:\|reboot' "$OUT/cr_safe_erase.log")"
 ff=$(python3 -c "
 import sys; d = open(sys.argv[1], 'rb').read()
-r = [(0x97000, 9), (0xA0000, 22), (0xC8000, 20), (0xDC000, 4), (0xFC000, 3)]   # (0xB4000 / 0xB5000: the session, 0.18)
+r = [(0x97000, 9), (0xA0000, 40), (0xC8000, 20), (0xDC000, 4), (0xFC000, 3)]   # (0xB4000: the session, 0xB6000 the favourites, 0xB8000.. the pool)
 print(int(all(d[a:a + n * 4096] == b'\xff' * (n * 4096) for a, n in r) and d[:0x93000] == open(sys.argv[2], 'rb').read()[:0x93000]))" "$SF" "$OUT/cr_safe_flash_before.bin")
 [ "$ff" = 1 ] && ok "the data regions read erased, the firmware area as before" || bad "flash after the erase"
+[ -z "$(python3 tools/emu/pool_image.py pool "$SF")" ] && ok "the sound pool holds no sound after it (0.24: the pool was left out until 0.24-beta2)" ||
+    bad "the pool after the erase: $(python3 tools/emu/pool_image.py pool "$SF" | head -1)"
 "$EMU" --headless --flash "$SF" --script "$S/persist_check.txt" >"$OUT/cr_safe_after.log" 2>&1
 has '^boot: normal reset power-on failed 0' "$OUT/cr_safe_after.log" && has 'bpm 120 ' "$OUT/cr_safe_after.log" &&
     has ' style 0 ' "$OUT/cr_safe_after.log" && ! has ' style 1 ' "$OUT/cr_safe_after.log" &&

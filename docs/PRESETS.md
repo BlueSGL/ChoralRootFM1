@@ -198,7 +198,8 @@ which it also reads as none: by reading its code, not run). A backup taken befor
 **When it is written.** By itself, as an Option is: once no mark changed for 1.5 s and nothing has sounded for 1 s,
 never while a loop plays (`cr_settings.c crf_poll`: the erase holds the audio 45 ms, so a mark made under a ringing
 chord waits for the quiet); also with the global save (SAVE held) and before a backup's LIST. Not in SAFE MODE.
-Options > Reset Settings leaves the marks; SAFE MODE's Flash Data erases them with the sounds (60 sectors now).
+Options > Reset Settings leaves the marks; SAFE MODE's Flash Data erases them with the sounds (76 sectors now: the pool's 16 joined after 0.24-beta2, which left
+the sounds in place).
 
 **Backup.** Object id **23**, "favorites" (`cr_backup.c`, `web/fm1backup.js`, `tools/fm1_install.py`). A firmware
 before 0.22 does not list 23, the clients write only what the FM-1 lists, so restoring a 0.22 backup there leaves the

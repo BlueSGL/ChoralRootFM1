@@ -1902,7 +1902,8 @@ in SAFE MODE: a yellow `SAFE MODE` screen, and `Safe mode` in red on the top lin
 - The installer and Back up still work, so you can save a backup.
 - Switching off and on tries the stored data again.
 - Options opens on two extra entries. **Safe Mode** is information. **Flash Data**, OCT+ twice, erases the stored
-  settings, sounds and loops (not the firmware) and restarts.
+  settings, the saved sounds (all 128 user slots), the favourites and the loops (not the firmware) and restarts.
+  (0.22 to 0.24-beta2 left the saved sounds in place.)
 - If SAFE MODE itself crashes twice in a row, the FM-1 falls back to the chip's USB boot (the `WL82 UBOOT1.00`
   disk); switch off and on.
 
