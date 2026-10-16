@@ -4247,3 +4247,7 @@ mapping), MANUAL.md (MOD), SOUNDS.md, releases/0.22.md "Merged after 0.22-beta4"
 239 180 (+4); `sh tests/run_cr_tests.sh` green (cr_va_test 231 895 checks); `sh tools/emu/test_cr.sh` PASS (1044 ok,
 +2); `sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 67 s; 313 goldens 0 changed; design/layouts/va.json regenerated
 by `tools/layout/dump_catalogs.mjs`: the AMT columns' format). Not on the unit, not pushed: the owner's word first.
+**On the unit** (the owner: "flash b8baff6 on the unit, backup first"): the unit runs this build (b8baff6, "ChoralRoot
+0.22") over the build it ran before, `tools/fm1_install.py build/choralroot.fwsc --backup ... --yes`; the backup before it
+is `fm1-backups/choralroot-backup-20261015-vafine.json` (the settings, the 128 user sounds, the favourites, loop slot
+1). `--info` afterwards: "ChoralRoot 0.22".
