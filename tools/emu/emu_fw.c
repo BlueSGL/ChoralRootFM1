@@ -448,7 +448,7 @@ void emu_fw_dump(void)
     {                                               /* the KEY layer's Numerals and what the Chord view shows for it now */
         char rn[CR_NUMERAL_MAX];
         cu_numeral(rn);
-        printf("  numerals: %s shown \"%s\"\n", cs.numerals ? "on" : "off", rn);
+        printf("  numerals: %s shown \"%s\"\n", CU_NUMS_TR[cs.numerals % 3u], rn);
     }
     printf("  lock: on %u latched %02X type-key %s ext-keys %s\n", (unsigned)cu.clock, (unsigned)cu.mlatch,
            cs.lock_keep ? "keeps" : "clears", cs.lock_push ? "pushed" : "toggle");   /* (latched: bit cr_mod_t) */

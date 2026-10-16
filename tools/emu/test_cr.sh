@@ -2003,6 +2003,25 @@ r=$(rows cr_numerals_off cr_numerals_major)
 differ cr_numerals_arp cr_numerals_minor "the arp screen is not the chord view"
 silent_end cr_numerals
 
+# Numerals = Solfege (GitHub issue 15): KNOB 4's third value; the numeral's degree as a movable-do syllable in its place
+run cr_solfege
+L="$OUT/cr_solfege.log"
+nm() { grep -a '^  numerals:' "$L" | sed -n "$1p" | sed -n 's/.*numerals: \([a-z]*\) shown "\(.*\)"$/\1|\2/p'; }
+cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\3|\4|\5/p'; }
+has '^key: knob 4 numerals on' "$L" && [ "$(grep -ac '^key: knob 4 numerals solfege' "$L")" = 2 ] && [ "$(nm 1)" = "solfege|" ] &&
+    ok "KEY page 2, KNOB 4: Off, On, Solfege, and it stays at Solfege: $OUT/cr_solfege_page2.ppm" || bad "the picker: $(nm 1)"
+[ "$(nm 2)|$(cv 2 | cut -d'|' -f1)" = "solfege|SOL|GM" ] && [ "$(nm 3)" = "solfege|re" ] &&
+    [ "$(nm 4)|$(cv 4 | cut -d'|' -f1)" = "$(printf 'solfege|ti\260|Bdim')" ] &&
+    ok "C major: G is SOL, Dm re, Bdim ti with the degree sign: $OUT/cr_solfege_major.ppm, $OUT/cr_solfege_dim.ppm" \
+    || bad "C major: $(nm 2) $(cv 2) / $(nm 3) / $(nm 4)"
+[ "$(nm 5)|$(cv 5 | cut -d'|' -f1)" = "solfege|DO|C#M" ] &&
+    ok "Transpose +1, the tonic chord played: C#M sounds, DO (movable do: the degree played)" || bad "Transpose: $(nm 5) $(cv 5)"
+[ "$(nm 6)" = "solfege|fa" ] && [ "$(nm 7)|$(cv 7 | cut -d'|' -f1)" = "solfege|MI|CM" ] &&
+    ok "A minor: Do is A; Dm is fa, C is MI (the scale's third degree): $OUT/cr_solfege_minor.ppm" || bad "A minor: $(nm 6) / $(nm 7)"
+[ "$(nm 8)" = "on|iv" ] && [ "$(cv 8)" = "$(cv 6)" ] &&
+    ok "KNOB 4 back to On: the Roman numeral (iv) for the same Dm, the same notes (display only)" || bad "back to On: $(nm 8) $(cv 8) / $(cv 6)"
+silent_end cr_solfege
+
 # the Full keyboard
 run cr_fullkbd
 L="$OUT/cr_fullkbd.log"

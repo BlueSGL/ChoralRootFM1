@@ -149,6 +149,9 @@ static int cu_has(const char *s, const char *w)                /* w occurs in s 
 
 static const char *const CU_NOTE[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const CU_SNAP[3] = {"Off", "Scale", "Chord"};   /* the KEY layer's Snap (cr_keysnap_t) */
+static const char *const CU_NUMS[3] = {"Off", "On", "Solf\350ge"};   /* .. its Numerals (cs.numerals; \350: e grave,
+                                                    * CRB's extra) */
+static const char *const CU_NUMS_TR[3] = {"off", "on", "solfege"};
 
 /* --------------------------------------------------------------- sounds --- */
 /* PRESETS turns through the pool of the chord part's engine (cr_bank.c pool_*), ALGORITHM the bass part's (position 0
@@ -524,7 +527,8 @@ static struct {
                                            * keyboard a root out of the scale plays the nearest note of the scale (1)
                                            * or of the chord sounding (2) instead of nothing (0, the default) */
     uint8_t numerals;                     /* .. Numerals (KNOB 4; 0.22): 1 = the Chord view shows the sounding chord's
-                                           * Roman numeral above its name (cu_numeral); 0 Off, the default */
+                                           * Roman numeral above its name (cu_numeral); 2 (GitHub issue 15) the same
+                                           * degree as a solfege syllable there; 0 Off, the default */
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
                                            * (0: clears them, today's); the extension keys are pushed as the type
                                            * keys are (0: toggles, today's) */
@@ -3703,9 +3707,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                 cs.snap = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
                 cr_post(CRE_KEYSNAP, 0, 0, cs.snap);
                 cu_trace("key: knob 3 snap %s\n", CU_SNAP[cs.snap]);
-            } else {                               /* NUMERALS: the chord's Roman numeral on the Chord view (display only) */
-                cs.numerals = (uint8_t)(s > 0);
-                cu_trace("key: knob 4 numerals %s\n", cs.numerals ? "on" : "off");
+            } else {                               /* NUMERALS: Off / On (the chord's Roman numeral on the Chord view) /
+                                                    * Solfege (the same degree as a syllable; display only) */
+                v = (int32_t)cs.numerals + s;
+                cs.numerals = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+                cu_trace("key: knob 4 numerals %s\n", CU_NUMS_TR[cs.numerals]);
             }
             cu_hot_set(L_KEY, knob);
             break;
@@ -5385,16 +5391,18 @@ static uint32_t cu_batt(void)
     return song.batt_raw >= 591 ? 3u : song.batt_raw >= 561 ? 2u : song.batt_raw >= 531 ? 1u : 0u;
 }
 
-/* the KEY layer's Numerals (0.22): the sounding chord's Roman numeral in the key, "" when there is none to show (the
- * option or Key Mode off, nothing sounding). The root is the one PLAYED: the name's (cr_chord_info: Key Mode
- * resolved, transposed) less the Transpose inside it, so the tonic chord reads I at any Transpose (the owner,
- * 2026-10-12; with Transpose +1 in C the name says C#M and the numeral I) */
+/* the KEY layer's Numerals (0.22): the sounding chord's Roman numeral in the key (Solfege, GitHub issue 15: the same
+ * degree as a syllable, cr_chord_solfege), "" when there is none to show (the option or Key Mode off, nothing
+ * sounding). The root is the one PLAYED: the name's (cr_chord_info: Key Mode resolved, transposed) less the Transpose
+ * inside it, so the tonic chord reads I (DO) at any Transpose (the owner, 2026-10-12; with Transpose +1 in C the name
+ * says C#M and the numeral I) */
 static void cu_numeral(char b[CR_NUMERAL_MAX])
 {
     const cr_chord_info_t *ci = &cr_snap.ci;
     b[0] = 0;
     if (cs.numerals && cs.key_on && ci->valid && ci->sounding)
-        cr_chord_numeral((uint8_t)(((int)ci->root_pc - ci->transpose) % 12 + 12), ci->quality, cs.tonic, cs.scale, b);
+        (cs.numerals == 2u ? cr_chord_solfege : cr_chord_numeral)((uint8_t)(((int)ci->root_pc - ci->transpose) % 12 + 12),
+                                                                 ci->quality, cs.tonic, cs.scale, b);
 }
 /* .. on the Chord view, blue, centred above the chord name (cr_draw.c cr_p_chord, cr_p_arp). numeral_on is the
  * layout (the arp's name sits lower to make room): set by the two settings alone, not by a chord sounding, so the
@@ -5822,7 +5830,7 @@ static void cu_key_cells(cr_screen_t *s)
         cu_cpy(s->cell[0][2].label, "Snap", sizeof s->cell[0][2].label);
         cu_cpy(s->cell[0][2].value, CU_SNAP[cs.snap % 3u], sizeof s->cell[0][2].value);
         cu_cpy(s->cell[0][3].label, "Numerals", sizeof s->cell[0][3].label);
-        cu_cpy(s->cell[0][3].value, cs.numerals ? "On" : "Off", sizeof s->cell[0][3].value);
+        cu_cpy(s->cell[0][3].value, CU_NUMS[cs.numerals % 3u], sizeof s->cell[0][3].value);
         cu_cpy(s->cell[0][0].label, "Key plays", sizeof s->cell[0][0].label);
         cu_cpy(s->cell[0][0].value, cs.key_notes ? "Notes" : "Chords", sizeof s->cell[0][0].value);
         cu_cpy(s->cell[0][1].label, "Keyboard", sizeof s->cell[0][1].label);
