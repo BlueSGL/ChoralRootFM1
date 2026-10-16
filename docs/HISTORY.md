@@ -4574,3 +4574,8 @@ docs/SOUNDS.md), `design/layouts/grain.json` regenerated.
 tests' mock against the firmware; test_cr 1054 ok with the GRAIN section's eleven screenshots, test_persist 111,
 test_retired 18; the layout tool's test and its generator's). The size pass over the whole of GRAIN measured: 80 B
 (not taken). Not on the unit: the unit runs 70bb639 (the first build); the owner's word flashes this one.
+**On the unit** (the owner, 2026-10-16: "Lets flash the latest Grain engine so I can test"; the designer-handoff
+session flashed, by the rule): the unit runs this branch's 8c92b51 (the package b17ff708..., byte-identical to that
+session's rebuild, its run_all green too) over 70bb639, `--unit 5BD75BE3`, a full backup first
+(`fm1-backups/fm1-backup-2026-10-16-before-grain2.json`); after boot 128 sounds, c1_faults 0, c1_fallback 0. Not yet
+played by the owner.
