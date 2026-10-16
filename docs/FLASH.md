@@ -23,12 +23,13 @@ The baseline: main 646abb5 (v0.23 + HISTORY 3y123; main 54467ac, v0.24-beta1, bu
 | 3y129 | the fonts' Latin-1 extras ((c), the umlauts) nothing prints leave S, M and CRB | -6 000 | 0 | 0 | none (UI) | the 335 draw renders byte for byte the same, `text_ref_test` 0 pixels differ, `text_spacing_test`, `ui_test` |
 | 3y130 | the kerning pairs grouped by their first glyph (`AF_<N>_KROW` / `_KB` / `_KD`): 2 B a pair for 3 | -1 872 | 0 | 0 | none (UI) | the same four |
 | 3y131 | more of the main loop built for size (`tools/size_fns.py`: the stores, the backup, the pool, the layouts, the engines' load paths, `fm1_main`): 676 -> 824 functions minsize | -2 816 | 0 | 0 | none: 295 audio-side functions keep their instruction counts | listing against listing; the suites |
+| 3y150 (after the diet, the owner's choice) | FM TONE's HARM read from the halves in flash with a mirror (`eng_quad.c quad_hw`); `quad_harm` and its power-on build (3y126's) removed | +720 | 0 | -27 704 | the HARM presets: GLASS PAD +9.4 %, DRONE +9.1 % on the host; `quad_render` 16 732 -> 17 552 B | `cr_quad_test` 31 466 (the mirror read checked at every point), 317 goldens |
 
 ## What was rejected, and why
 
 | candidate | what it would save | why not |
 | --- | --- | --- |
-| HARM read with a mirror (the second half read reversed and negated a sample at a time, bit for bit the same values) | XIP -12.1 KB with nothing moved to POOL | `quad_render` +1.7 KB; the two HARM presets' host count +26 % (GLASS PAD 1209 -> 1520, DRONE 1183 -> 1503 instructions a sample): FM TONE's 8-note chords on the unit have no room for it while recording |
+| HARM read with a mirror (the second half read reversed and negated a sample at a time, bit for bit the same values) | XIP -12.1 KB with nothing moved to POOL | `quad_render` +1.7 KB; the two HARM presets' host count +26 % (GLASS PAD 1209 -> 1520, DRONE 1183 -> 1503 instructions a sample): FM TONE's 8-note chords on the unit have no room for it while recording. **Taken since (3y150)**, in a leaner form (+149 / +143 instructions a sample, about +9 %), below |
 | `CZ_RECIP` as two halves (x >= 1024 in 16 bits less 32 768) | XIP -1 632 (the table -2 044, the code +412) | the ramped loops of `cz_native_line_mv` grew 4 .. 6 instructions a sample (7 340 -> 7 690 B; `cz_native_noise` 554 -> 612): about 50 us a half for 8 voices with their DCW moving, for 1.6 KB |
 | the value-name lists of FM TONE's RATIO / OFFSET columns (`N_QUAD_OFS` 2 KB) formatted at run time | ~2.3 KB | the F_INT-with-names path is read in `params.c`, `cr_pages.c`, `cr_edit.c` and the editor protocol's catalog (`web/test_web.mjs` compares it): too wide a change for 2 KB |
 | `eng_page_t` / `param_desc_t` packed tighter (12 KB of `*_PAGES`) | ~3 KB | the struct is already 20 B a column (int16 ranges, a byte format); only `unit` could go, into a union with `names` |
@@ -68,7 +69,18 @@ Where the 35 KB came from: FM TONE's HARM halves 13.7 KB, FM6's tables 6.5, the 
 rows 1.9), CZ-1's bank 4.3, the main loop built for size 2.8. Of the asked-for 40 KB, 35 is in; the rest of the list
 (docs/FLASH.md "rejected") was measured and turned down for its cost in the ISR or in POOL / RAM.
 
-**POOL is the next wall**, and the owner decides it: the HARM cycles (27.7 KB) in POOL buy 13.7 KB of XIP at zero ISR
+**POOL was the next wall, and the owner decided it (3y150): HARM by mirror read.** Having played 8-note FM TONE chords
+with every effect on (Geek Out 2 about 65 % on the average, peaks of 80 to 90 %): "I am fine with that trade and think
+the mirror read is pretty reasonable. I'd like to keep things open for potentially more engines or FX." The reason:
+POOL's 27.7 KB of HARM cycles bought XIP that the slot no longer needs as badly (36 KB spare with GRAIN), while POOL at
+97.0 % left 2 KB for anything new. The read was written again, leaner than the rejected one: both halves read the same
+pair of stored points (`u = (ph ^ s) >> 23`, s the phase's sign), so the slope is shared and only the start flips
+(`l - ((l + h) & s)`): `quad_render` +820 B (16 732 -> 17 552; the rejected one +1.7 KB), GLASS PAD 1593 -> 1742
+(+9.4 %), DRONE 1575 -> 1718 (+9.1 %) host instructions a sample, measured the same day (+149 and +143; the rejected
+one added 311 and 320). Size: XIP 537 068 -> 537 788
+B (93.7 -> 93.8 %), RAM 80 176 unchanged, **POOL 333 900 -> 306 196 B (97.0 -> 89.0 %): 37.0 KB left**.
+
+What the owner weighed before (3y132): the HARM cycles (27.7 KB) in POOL buy 13.7 KB of XIP at zero ISR
 cost. The two other ways out were built and measured: (a) HARM read with a mirror, bit-exact, XIP -12.1 KB, POOL
 untouched, FM TONE's HARM presets +26 % of the render (rejected above); (b) HARM whole in flash as before (XIP margin
 with GRAIN 22.6 KB, POOL 89.0 %). Anything else that wants POOL (a fifth P5 voice, the effects on core 1, a longer

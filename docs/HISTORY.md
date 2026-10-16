@@ -5056,3 +5056,46 @@ package (`--require-all` builds the site for 0.24-beta2: the landing page "Versi
 0.23", under Try it first "It runs ChoralRoot 0.24-beta2, a beta (the installer's default is 0.23)."; `firmware/`
 with both betas' packages); `node web/test_installer.mjs` passed. Not pushed, not tagged, not flashed: the tag is the
 owner's "tag it".
+
+3y150. **FM TONE reads its HARM waves from the halves in flash with a mirror; the POOL copy is gone (2026-10-16; branch
+claude/harm-mirror-f62c8b from origin/main 52889ba).** The owner, having played 8-note FM TONE chords with every effect
+on (Geek Out 2 about 65 % on the average, peaks of 80 to 90 %), chose the read 3y126 had rejected: "I am fine with that
+trade and think the mirror read is pretty reasonable. I'd like to keep things open for potentially more engines or FX."
+POOL stood at 97.0 % (2 KB addable under tools/build.py's 8 KB floor), flash at 93.7 % with 36 KB spare. The rejected
+build was not kept (not on claude/flash-diet-18ea3f, its reflog, its worktree or the repository's unreachable commits:
+only its description), so the read was written again, leaner: `eng_quad.c quad_hw` reads `QUAD_HARM` (the stored
+first halves, 27 x 257) directly. In the second half of a cycle (s = the phase's sign, -1) the two points around the
+phase are the first half's pair at u = 511 - i and u + 1, swapped and negated; `u = (ph ^ s) >> 23` gives i or 511 - i
+with one xor, so both halves read the same pair (l, h) at the same offsets, the slope h - l is the same, and only the
+start flips: `l - ((l + h) & s)` (branchless; the fraction from the phase as before). The values are bit for bit the
+whole cycle's. Removed: `quad_harm` (27 702 B of POOL), `quad_init` (its build, inlined into `eng_fm6.c fm6_init`:
+`fm6_init` 408 -> 316 B) and its calls in `eng_fm6.c`, `tests/hostsim.c`, `tests/cr_quad_test.c` and
+`tools/digitone/quad_render.c` (nothing else needed it). **Bit-exact**: `cr_quad_test` 31 466 checks, 0 failed; its
+mirror check now goes through the read: every point of every wave, at ten fractions across the step (0, 1, 2, 255, 256,
+8191, 16384, 24575, 32766, 32767, with noise in the phase's unused low byte) and six shares of the next wave (0 .. 32767),
+829 440 reads, each equal to the old whole cycle's interpolation (a +1 in the second half's rounding makes 83 of them differ:
+the check bites); the golden renders of `tests/regress.c` (317 now) 0 changed; the draw goldens unchanged (run_all below).
+**Cost.** `quad_render` 16 732 -> 17 552 B in `build/choralroot.dis` (+820; the rejected read +1.7 KB). Its per-sample
+loops, one per algorithm and HARM case, in instructions (the static span, both crossfade paths): HARM + (A and B1 read
+the tables) 112 .. 130 -> 133 .. 155, GLASS PAD's algorithm 7 120 -> 133, DRONE's algorithm 6 127 -> 144; HARM - (C)
+97 .. 115 -> 109 .. 129, algorithm 6 109 -> 124; no HARM 83 .. 98 -> 81 .. 103, the eight together 749 -> 748, but
+not each the same: the loops' source is unchanged and the compiler spills differently across the one function, so
+algorithm 5's (METAL) grew 96 -> 103 (six more stack accesses) and the others moved -3 .. +2. Host count
+(`tests/regress.c`, instructions a 44.1 kHz sample, the same day, three runs each, within 0.2 %): GLASS PAD 1593 ->
+1742 (+9.4 %), DRONE 1575 -> 1718 (+9.1 %) (the rejected read added 311 and 320 to its day's 1209 and 1183: +26 %);
+HOLLOW +3.9 %, CLAV +2.9 %, STRINGS +2.0 %, SQUARE LEAD +0.5 % (HARM -: one table, and their whole steps skip the
+second); the presets without HARM -3.8 .. 0 % (EP and BELL the same, FEEDBACK the most). `tests/cpu_baseline.txt`: the
+six HARM presets' lines from a `BUDGET_UPDATE=1` run (GLASS PAD 1498 -> 1744, DRONE 1472 -> 1718, HOLLOW 1300 -> 1481,
+SQUARE LEAD 1354 -> 1503, CLAV 1629 -> 1834, STRINGS 1630 -> 1837); the other lines as they were (as 3y118 did for
+GRAIN): the stored figures are 6 .. 9 % below this Mac's today for unchanged code (GLASS PAD read 1593 on main), so the
+jump in those six lines is part machine, part mirror. `tests/target_budget.txt` `quad_render` 7172 -> 6458 (BUDGET_UPDATE
+=1; only that line moved): the instructions in its loops rose 3865 -> 4066, but the tool's nesting heuristic (a backward
+branch spanning a whole HARM group counted as an outer loop) weighs a different span now, as 3y132 noted. On the unit
+the HARM presets' 8-note chords cost the render about 9 % more than on main; the owner's 65 % (peaks 80 .. 90) was read
+on main. Size: `XIP 537 068 -> 537 788 B` (93.7 -> 93.8 %), `RAM 80 176` unchanged, `POOL 333 900 -> 306 196 B`
+(97.0 -> 89.0 %: 37.0 KB left, ~29 KB addable). docs/FLASH.md (the account: taken, the owner's words, the reason; the
+POOL line), docs/QUAD.md "HARM" and "CPU", HANDOFF's size paragraph. **Checked**: `CR_VERSION=0.24 sh tests/run_all.sh`
+20 of 22 suites passed (cr_draw 160 ok, its goldens unchanged; test_cr 1061 ok, test_persist 113, test_retired 18,
+test_pool 7; 317 golden renders, 0 changed; 0 lint); `releases` failed, and `run_tests` with it, on a local tag
+another session made (`v0.24-beta2-smk37`, 898fa5c: `releases_test.py`'s `num` cannot read it), not on this change:
+with that one tag skipped (a throwaway copy of the test) releases is ALL OK. Not flashed, not pushed.

@@ -1142,33 +1142,22 @@ static int32_t quad_bwk(int32_t x)
     return k0 + (((int32_t)QUAD_BW_K[i + 1] - k0) * (x % 100)) / 100;
 }
 
-/* the HARM waves, whole cycles (QUAD_HN points and the first again), built at power-on by quad_init from the stored
- * halves (quad_tables.h QUAD_HARM: the points 0 .. 256; every wave is a sum of sines, so f(512 - i) = -f(i) exactly,
- * tests/quad_ref.py checks every point). In POOL (27.7 KB), not XIP: the render reads SRAM, and the half in flash is
- * 13.9 KB less than the whole was (3y123). A mirror in the read (the second half read reversed and negated a sample at
- * a time) was built first and rejected: bit-exact, but +26 % on the HARM presets' host count */
-static int16_t quad_harm[QUAD_NHARM][QUAD_HN + 1] __attribute__((section(".pool")));
-static void quad_init(void)
-{
-    uint32_t k, i;
-    for (k = 0; k < QUAD_NHARM; k++) {
-        for (i = 0; i <= QUAD_HN / 2u; i++)
-            quad_harm[k][i] = QUAD_HARM[k][i];
-        for (i = 1; i < QUAD_HN / 2u; i++)
-            quad_harm[k][QUAD_HN - i] = (int16_t)-QUAD_HARM[k][i];
-        quad_harm[k][QUAD_HN] = quad_harm[k][0];
-    }
-}
-
-/* the HARM wave: tables a and b (HARM's neighbours, one index), b's share f (Q15) */
+/* the HARM wave: tables a and b (HARM's neighbours, one index), b's share f (Q15). The tables are the stored first
+ * halves (quad_tables.h QUAD_HARM: the points 0 .. 256 of 512; every wave is a sum of sines, so f(512 - i) = -f(i)
+ * exactly, tests/quad_ref.py checks every point), read from flash with a mirror: in the second half (s = -1) the
+ * pair of points around the phase is the pair at u = 511 - i, u + 1 of the first, swapped and negated, so the slope
+ * h - l is the same and the start is -h (l - ((l + h) & s), branchless): bit for bit the whole cycle's values
+ * (cr_quad_test checks every point). The whole cycles were built into POOL at power-on (3y126, 27.7 KB) until 3y150 */
 static inline int32_t quad_hw(const int16_t *a, const int16_t *b, int32_t f, uint32_t ph)
 {
-    uint32_t i = ph >> 23;
-    int32_t fr = (int32_t)((ph >> 8) & 0x7FFFu), x0 = a[i], x = x0 + (((a[i + 1u] - x0) * fr) >> 15), y0, y;
+    int32_t s = (int32_t)ph >> 31, fr = (int32_t)((ph >> 8) & 0x7FFFu), l, h, x, y;
+    uint32_t u = (ph ^ (uint32_t)s) >> 23;
+    l = a[u], h = a[u + 1u];
+    x = l - ((l + h) & s) + (((h - l) * fr) >> 15);
     if (!f)
         return x;
-    y0 = b[i];
-    y = y0 + (((b[i + 1u] - y0) * fr) >> 15);
+    l = b[u], h = b[u + 1u];
+    y = l - ((l + h) & s) + (((h - l) * fr) >> 15);
     return x + (((y - x) * f) >> 15);
 }
 
@@ -1277,7 +1266,7 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     int32_t hq, dt, mix, ra, rb, cut, kd, reso, gy, gq, dgq, fbq, hf, fdep, base, wid;
     int32_t la, lb1, lb2, dla, dlb1, dlb2, tl[3], hpk, lpk, svf, fty, fb1, fb2, bh, bl;
     uint32_t fon, fon0;
-    const int16_t *ha_t = quad_harm[0], *hb_t = quad_harm[0];
+    const int16_t *ha_t = QUAD_HARM[0], *hb_t = QUAD_HARM[0];
     uint32_t p0, p1, p2, p3, i0, i1, i2, i3;
     int32_t acc[CTL], dry[CTL];
     quad_svf_t c;
@@ -1413,8 +1402,8 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     if (hq) {
         int32_t h = hq < 0 ? -hq : hq, t0 = h >> 8, t1 = t0 < 26 ? t0 + 1 : 26;
         hf = t1 > t0 ? (h & 255) << 7 : 0;
-        ha_t = quad_harm[t0];
-        hb_t = quad_harm[t1];
+        ha_t = QUAD_HARM[t0];
+        hb_t = QUAD_HARM[t1];
     }
     fbq = quad_fbq((QMV(QP_FDBK, QD_FDBK, 127, 0, 127) * 120 + 63) / 127);   /* (0..127: the 0..120 curve) */
     mix = QMV(QP_MIX, QD_MIX, 127, -64, 63);

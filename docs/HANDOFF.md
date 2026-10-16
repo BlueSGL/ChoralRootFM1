@@ -141,11 +141,13 @@ sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.1
   lines are in the script's head and in docs/AUDIO-QUALITY.md "Classic is 0.18's, bit for bit"; "What Classic's
   guarantee is now" there says what the two parts of the script prove since the stereo chorus.
 
-POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back) and is again since GRAIN:
-main's size line (eb223df; 0.24-beta2's release build 16 B more of XIP for its longer version string, its
-single-core package XIP 534 280 B, 93.2 %) is XIP 537 068 B of 573 440 (93.7 %), RAM 80 176 (81.6 %), POOL 333 900 of 344 064 (97.0 %: GRAIN's two 32 KB source buffers beside
-the flash diet's 27.7 KB of FM TONE HARM cycles). POOL is laid out by the linker, so 97 % cannot fail in use, but its
-10 KB left are now the limit for any added buffer (docs/FLASH.md has the two ways out). Read them off the size line.
+POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back), again with GRAIN (97.0 %
+on eb223df, beside the flash diet's 27.7 KB of FM TONE HARM cycles), and less so since 3y150: FM TONE reads its HARM
+waves from the halves in flash with a mirror (the owner's choice, docs/FLASH.md; the HARM presets about +9 % of the
+render). The size line is XIP 537 788 B of 573 440 (93.8 %), RAM 80 176 (81.6 %), POOL 306 196 of 344 064 (89.0 %:
+GRAIN's two 32 KB source buffers the largest part); 0.24-beta2's release build (eb223df) was XIP 537 084, POOL 333 900.
+POOL is laid out by the linker, so a full POOL cannot fail in use, but tools/build.py refuses a build with under 8 KB
+spare: about 29 KB can still be added. Read them off the size line.
 
 ## Release steps
 
