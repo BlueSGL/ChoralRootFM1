@@ -93,7 +93,8 @@ grain pitched against its own buffer's root. It costs nothing a sample (a grain 
 choice is 28 bytes of code in `gp_spawn`) and nothing of memory beyond the second buffer. The other way, every grain
 reading both buffers at its position and mixing them by MORPH, is a plain crossfade (two layers that fade; a second
 fetch a sample, +30 % a grain): the sketches render it beside the granular morph for two pairs (`-sweep-xfade.wav`)
-so the owner can hear the difference, and it is not the design.
+so the owner can hear the difference, and it is not the design. **Decided** (the owner, 2026-10-15, after hearing
+them: "Keep the granular morph (each grain reads A or B by MORPH's share) as designed").
 
 **MORPH is a modulation destination**: the platform's SHP destination of the track envelope, the LFO and the matrix
 binds to MORPH (Felucca's GRAIN bound SHP to POS; POS has SCAN now). ENV -> MORPH with a sound whose B is a PLUCK
@@ -314,7 +315,8 @@ Open questions:
    the chord part's): proposed, since its own pair would be another 64 KB. Or the bass part gets one buffer of its
    own (32 KB, 98 % POOL: no).
 2b. **MORPH's spread**: evenly over a voice's grains (A B A B at 64: proposed, the sketches) or at random (a
-   cloudier middle, pure ends the same)? And SHP -> MORPH (proposed) or SHP -> POS as Felucca?
+   cloudier middle, pure ends the same)? And SHP -> MORPH (proposed) or SHP -> POS as Felucca? (The granular morph
+   itself, against the crossfade, is decided: the owner keeps it.)
 3. **The families**: which of the eight to keep, drop or replace after hearing `seeds-*.wav`; the names (PLUCK DRONE
    BELL BREATH CHIRP SWEEP VOWEL METAL are five characters or fewer but BREATH, which the picker can show as BREATH
    in its big type and the cell as BRTH); the knob names TONE MOTION SEED (or COLOR, MOVE, VAR).

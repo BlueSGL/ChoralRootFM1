@@ -4103,3 +4103,5 @@ INDEX.md section. **Checked**: the 130 files render in 0.3 s; a numpy pass over 
 centre moves from A's to B's over the hold (SWEEP bright -> PLUCK bright 715 -> 2017 Hz, DRONE -> BELL 667 -> 335),
 the env scenes start on B and settle on A, the half scenes sit between; `python3 tools/grain_cost.py`: .text 7456 B
 (+36: MORPH's choice), gp_run's loops unchanged (26 + 9). No firmware code; nothing flashed.
+**Decided** (the owner, later the same evening, after hearing the morph files): "Keep the granular morph (each grain
+reads A or B by MORPH's share) as designed." The crossfade stays a comparison in the sketches only; GRAIN.md says so.
