@@ -4446,4 +4446,7 @@ it again. A wrong length for an engine that has a patch (FM TONE 81, VA 80), an 
 the slot are refused as before. **Test**: `cr_backup_test` d3 (U03 a GRAIN sound with 20 bytes: rc 0, read back as
 sent, no patch read; past the slot: rc 2), which fails on the tree before it. **Checked**: `./build.sh` XIP 551 516 B
 (96.2 %, +32), RAM and POOL unchanged, the stub baee55ed142fe1cc; `sh tests/run_cr_tests.sh` green;
-`sh tools/emu/test_persist.sh` PASS. Not on the unit yet.
+`sh tools/emu/test_persist.sh` PASS. **On the unit** (the owner: "Yes, flash 90d0b8f on the unit, backup first"): the
+unit runs this build, `tools/fm1_install.py build/choralroot.fwsc --backup ... --yes`; the backup before it is
+`fm1-backups/choralroot-backup-20261016-bankfix.json`. `--info` afterwards "ChoralRoot 0.22"; `--sounds` reads U033 DARK
+HAZE (GRAIN, retired here) and U034 empty, as before. The owner's Place into 031 .. 040 is the check.
