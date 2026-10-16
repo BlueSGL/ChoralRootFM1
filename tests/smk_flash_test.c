@@ -4,9 +4,10 @@
 /* ChoralRoot on the M-Vave SMK-37, the flash map (build with -DBOARD_SMK37=1): every 4 KiB sector of the 1 MiB part
  * through the app's allow-list (FL_RANGE_OK / FL_GUARD, fm1_flash.h), the update loader's (loader.c) and ldr_core.c's
  * record window: none of them may ever reach the head 0x0-0x3FFF, BTIF / USRTRIM 0xC0000-0xC1FFF, USR 0xF4000-0xFDFFF
- * or key_mac 0xFF000-; every stored object (storage.c), the CZ-1 banks, the loop slots, the owner tag and the OTA
- * staging (ota.c, the boot stub's view of it) lie inside the allowed windows, apart from each other; ranges that wrap
- * or straddle a boundary are refused. */
+ * or key_mac 0xFF000-; every stored object (storage.c: each OBJ_* id's A and B copy, the favourites too), the CZ-1
+ * banks, the loop slots, every one of the sound pool's 16 floating sectors (sp_addr), the owner tag and the OTA staging
+ * (ota.c, the boot stub's view of it) lie inside the allowed windows (FL_STORE_OK) and outside every protected range
+ * (FL_PROTECTED), apart from each other; ranges that wrap or straddle a boundary are refused. */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -18,6 +19,7 @@
 #include "fm1_flash_map.h"
 #define FELUCCA_CZ 1
 #define FELUCCA_QUAD 1
+#define SP_TEST 1                                           /* storage.c's sound pool (sp_addr), as tests/pool_test.c */
 
 static int st_read(uint32_t off, void *dst, uint32_t n) { (void)off; (void)dst; (void)n; return -1; }
 static int st_erase(uint32_t off) { (void)off; return -1; }
@@ -61,40 +63,69 @@ int main(void)
     check("no protected sector passes the app's allow-list (erase, page)", leak_app == 0);
     check("no protected sector passes the loader's allow-list", leak_ldr == 0);
     check("the RAM driver's own net (FL_PROTECTED) covers every protected sector", leak_guard == 0);
-    check("straddling ranges refused: 0xBF000+0x2000, 0xE9000+0x2000, 0x3000+0x2000",
-          !FL_GUARD(0xBF000u, 0x2000u) && !FL_GUARD(0xE9000u, 0x2000u) && !LDR_RANGE_OK(0xBF000u, 0x2000u) &&
+    check("straddling ranges refused: 0xBF000+0x2000, 0xE9000+0x2000, 0xF0000+0x2000, 0xF3000+0x2000, 0x3000+0x2000",
+          !FL_GUARD(0xBF000u, 0x2000u) && !FL_GUARD(0xE9000u, 0x2000u) && !FL_GUARD(0xF0000u, 0x2000u) &&
+          !FL_GUARD(0xF3000u, 0x2000u) && FL_PROTECTED(0xF3000u, 0x2000u) && !LDR_RANGE_OK(0xBF000u, 0x2000u) &&
           !LDR_RANGE_OK(0x3000u, 0x2000u) && FL_PROTECTED(0xBF000u, 0x2000u) && FL_PROTECTED(0x3F00u, 0x200u));
     check("wrapping ranges refused (off + n past 4 GiB)",
           !FL_GUARD(0xBB000u, 0xFFFFF000u) && !LDR_RANGE_OK(0x9D000u, 0xFFFFFF00u) && FL_PROTECTED(0xBB000u, 0xFFFFF000u));
-    check("app windows: FL_DATA 0x9D000-0xBAFFF, FL_OTA 0xBB000-0xBFFFF, USRFLASH 0xC2000-0xE9FFF",
+    check("app windows: FL_DATA 0x9D000-0xBAFFF, FL_OTA 0xBB000-0xBFFFF, USRFLASH 0xC2000-0xE9FFF, FL_TAIL 0xEA000-0xF0FFF",
           FL_GUARD(0x9D000u, 0x1000u) && FL_GUARD(0xBA000u, 0x1000u) && FL_GUARD(0xBF000u, 0x1000u) &&
-          FL_GUARD(0xC2000u, 0x1000u) && FL_GUARD(0xE9000u, 0x1000u) && !FL_GUARD(0xEA000u, 0x1000u) &&
-          !FL_GUARD(0x9C000u, 0x1000u) && allowed == (0xC0000u - 0x9D000u + 0xEA000u - 0xC2000u) / 0x1000u);
+          FL_GUARD(0xC2000u, 0x1000u) && FL_GUARD(0xE9000u, 0x1000u) && FL_GUARD(0xEA000u, 0x1000u) &&
+          FL_GUARD(0xF0000u, 0x1000u) && !FL_GUARD(0xF1000u, 0x1000u) && !FL_GUARD(0xF3000u, 0x1000u) &&
+          !FL_GUARD(0x9C000u, 0x1000u) && allowed == (0xC0000u - 0x9D000u + 0xF1000u - 0xC2000u) / 0x1000u &&
+          FL_TAIL_LO == FL_SMP_HI && FL_TAIL_HI <= FL_USRRES_LO);
     check("loader: app area 0x4000-0x9CFFF, records 0x9D000-0xBFFFF only",
           LDR_RANGE_OK(0x4000u, 0x1000u) && LDR_RANGE_OK(0x9C000u, 0x1000u) && LDR_RANGE_OK(0xBF000u, 0x1000u) &&
           !LDR_RANGE_OK(0xC0000u, 0x1000u) && FL_REC_HI == 0xC0000u);
 
-    /* who holds each sector: the objects (A/B), the loop slots, the owner tag, the staging */
+    /* who holds each sector: the objects (A/B), the loop slots, the pool, the owner tag, the staging */
     memset(owner, 0, sizeof owner);
     ok = 1;
     for (o = 0; o < OBJ_COUNT; o++)
         for (c = 0; c < 2u; c++) {
             s = st_sector(o, c);
-            ok &= FL_STORE_OK(s, 0x1000u) && !(s & 0xFFFu) && !owner[s >> 12] && in_regions(s);
+            if (!(FL_STORE_OK(s, 0x1000u) && !FL_PROTECTED(s, 0x1000u) && FL_GUARD(s, 0x1000u) && !(s & 0xFFFu) &&
+                  !owner[s >> 12] && in_regions(s) && !FL_IN(s, 0x1000u, FL_OTA_LO, FL_OTA_HI))) {
+                printf("smk flash: object %u copy %u at 0x%05X: outside the store, protected or shared\n",
+                       (unsigned)o, (unsigned)c, (unsigned)s);
+                ok = 0;
+            }
             owner[s >> 12] = (uint8_t)(1u + o);
         }
-    check("storage.c: all 19 objects (A/B) in the store's windows, no two share a sector", ok && OBJ_COUNT == 19u);
+    check("storage.c: all 20 objects (A/B, OBJ_FAVS too) in FL_STORE_OK, none protected, no two share a sector",
+          ok && OBJ_COUNT == 20u && OBJ_FAVS == 19u);
+    check("the favourites 0xB4000 / 0xB5000, the session 0xAD000 / 0xAE000",
+          st_sector(OBJ_FAVS, 0) == 0xB4000u && st_sector(OBJ_FAVS, 1) == 0xB5000u &&
+          st_sector(OBJ_SESSION, 0) == 0xAD000u && st_sector(OBJ_SESSION, 1) == 0xAE000u);
+    for (k = 0, ok = 1; k < SP_NSEC; k++) {
+        s = sp_addr(k);
+        if (!(FL_STORE_OK(s, 0x1000u) && !FL_PROTECTED(s, 0x1000u) && FL_GUARD(s, 0x1000u) && !(s & 0xFFFu) &&
+              !owner[s >> 12] && in_regions(s) && !FL_IN(s, 0x1000u, FL_OTA_LO, FL_OTA_HI))) {
+            printf("smk flash: pool sector %u at 0x%05X: outside the store, protected or shared\n", (unsigned)k, (unsigned)s);
+            ok = 0;
+        }
+        owner[s >> 12] = 0xE0;
+    }
+    check("the sound pool: all 16 sectors (sp_addr) in FL_STORE_OK, none protected, apart from every object",
+          ok && SP_NSEC == 16u && sp_addr(0) == 0xB6000u && sp_addr(4) == 0xBA000u && sp_addr(5) == 0xE6000u &&
+          sp_addr(15) == 0xF0000u);
     for (k = 0, ok = 1; k < 2u * LOOP_SLOTS; k++) {
         s = ST_SMK_LOOPS + k * ST_SECTOR;
         ok &= FL_IN(s, 0x1000u, FL_SMP_LO, FL_SMP_HI) && !owner[s >> 12] && in_regions(s);
         owner[s >> 12] = 0xF0;
     }
-    check("the ten loop slots (A/B) in USRFLASH, apart from every object", ok && ST_SMK_LOOPS == 0xD2000u);
+    check("the ten loop slots (A/B) in USRFLASH, apart from every object and the pool", ok && ST_SMK_LOOPS == 0xD2000u);
+    for (s = 0, k = 0; s < 0x100000u; s += 0x1000u)
+        k += owner[s >> 12] != 0;
+    check("76 data sectors in all (20 objects x 2, 16 pool, 20 loop)", k == 76u);
     check("the owner tag 0xAF000: in FL_DATA, nobody else's, never cleared as data",
           ST_OWNER_OFF == 0xAF000u && FL_STORE_OK(ST_OWNER_OFF, 0x1000u) && !owner[0xAF] && !in_regions(ST_OWNER_OFF));
     for (s = FL_OTA_LO, ok = 1; s < FL_OTA_HI; s += 0x1000u)
         ok &= !owner[s >> 12] && !in_regions(s);
-    check("the OTA staging 0xBB000-0xBFFFF: no data, never cleared as data", ok);
+    for (s = 0xF1000u; s < 0x100000u; s += 0x1000u)
+        ok &= !owner[s >> 12] && !in_regions(s);
+    check("the OTA staging 0xBB000-0xBFFFF and everything from 0xF1000: no data, never cleared as data", ok);
     for (k = 0, ok = 1; k < sizeof ST_SMK_REGIONS / sizeof ST_SMK_REGIONS[0]; k++)
         for (s = ST_SMK_REGIONS[k][0]; s < ST_SMK_REGIONS[k][0] + ST_SMK_REGIONS[k][1] * ST_SECTOR; s += 0x1000u)
             ok &= FL_STORE_OK(s, 0x1000u) && owner[s >> 12] != 0;

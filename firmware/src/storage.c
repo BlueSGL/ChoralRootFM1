@@ -40,7 +40,8 @@
  * flash); 0xB4000 / 0xB5000 the session (cr_settings.c, OBJ_SESSION: where the unit was left, 0.18);
  * 0xB6000 / 0xB7000 the favourites (cr_favs.c, OBJ_FAVS: the marked sounds, 0.22);
  * 0xB8000..0xC7FFF the sound pool (0.22: the sp_* section at the end, upool.c: 13 banks of 10 user slots floating over
- * these 16 sectors). Since 0.22 the user preset banks, the VA / FM6 / CZ-1 tone / QUAD stores above are LEGACY: read once
+ * these 16 sectors). SMK-37 (BOARD_SMK37): none of these places; every object, the favourites, the pool's sectors and the
+ * loop slots have their own there (the SMK section at st_sector below; SMK37.md "Storage"). Since 0.22 the user preset banks, the VA / FM6 / CZ-1 tone / QUAD stores above are LEGACY: read once
  * (the migration), never written */
 enum { OBJ_SETTINGS, OBJ_PROJECT0, OBJ_UPRESET0 = OBJ_PROJECT0 + 4, OBJ_FM6BANK = OBJ_UPRESET0 + 2,
 #if FELUCCA_CZ && FELUCCA_QUAD
@@ -111,35 +112,56 @@ static uint32_t st_crc_run(uint32_t crc, const void *p, uint32_t n)
 static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n); }
 
 #if BOARD_SMK37
-/* SMK-37: the FM-1's places are taken by the SMK's own areas (its app area ends at 0x9CFFF, its settings area is the
- * stock resources): every object moves, A/B neighbours as on the FM-1. In FL_DATA (0x9D000..0xBAFFF, the stock VM):
- * the VA store, the FM6 stores and the CZ-1 store's first half (OBJ_PROJECT0..+3) 0x9D000..0xA4FFF, the user sound
- * banks 0xA5000..0xA8FFF, the FM6 bank 0xA9000 / 0xAA000, the settings 0xAB000 / 0xAC000, the session 0xAD000 /
- * 0xAE000; the store owner tag 0xAF000 (st_owner_check: the same place in every ported firmware); the CZ-1 store's
- * second half 0xB0000 / 0xB1000, the QUAD store 0xB2000 / 0xB3000; 0xB4000..0xBAFFF spare. In USRFLASH (FL_SMP,
- * 0xC2000..0xE9FFF, the stock's user area: ChoralRoot has no samples) the eight CZ-1 banks 0xC2000..0xD1FFF and the
- * loop slots from 0xD2000 (cr_ui.c CRL_FL_BASE). Never near BTIF / USRTRIM (0xC0000..0xC1FFF), the stock resources
- * (0xF4000..) or key_mac (0xFF000). */
+/* SMK-37 (SMK37.md "Storage"; genkigenki's layout of PR #14 for what 0.22 stored, kept so that a unit that ran it keeps
+ * its data, and 0.24's favourites and sound pool added in what was free). The FM-1's places are the SMK's own areas
+ * (its app area ends at 0x9CFFF, its settings area is the stock resources): every object moves, A/B neighbours as on
+ * the FM-1. Only inside hal/fm1_flash_map.h's windows FL_DATA, FL_SMP and FL_TAIL (FL_STORE_OK), never in FL_OTA
+ * (0xBB000..0xBFFFF, the update's staging), BTIF / USRTRIM (0xC0000..0xC1FFF), the stock resources (0xF4000..0xFDFFF)
+ * or key_mac (0xFF000..).
+ *   FL_DATA 0x9D000..0xBAFFF (the stock VM, 30 sectors)
+ *     0x9D000..0xA4FFF  OBJ_PROJECT0..+3: the VA store, the FM6 stores, the CZ-1 tone store's slots 1..16 (legacy)
+ *     0xA5000..0xA8FFF  OBJ_UPRESET0 / +1: the user sound banks of 0.21 (legacy)
+ *     0xA9000 / 0xAA000 OBJ_FM6BANK          0xAB000 / 0xAC000 OBJ_SETTINGS     0xAD000 / 0xAE000 OBJ_SESSION
+ *     0xAF000           the store owner tag (st_owner_check: the same place in every ported firmware)
+ *     0xB0000 / 0xB1000 OBJ_CZSTORE1 (legacy) 0xB2000 / 0xB3000 OBJ_QUADSTORE (legacy)
+ *     0xB4000 / 0xB5000 OBJ_FAVS (0.24 on the SMK)
+ *     0xB6000..0xBAFFF  the sound pool's sectors 0..4 (sp_*, below)
+ *   FL_SMP 0xC2000..0xE9FFF (USRFLASH, the stock's user area, 40 sectors: ChoralRoot has no samples)
+ *     0xC2000..0xD1FFF  OBJ_CZBANK0..+7      0xD2000..0xE5FFF the loop slots (cr_ui.c CRL_FL_BASE, 2 x CRL_SLOTS)
+ *     0xE6000..0xE9FFF  the sound pool's sectors 5..8
+ *   FL_TAIL 0xEA000..0xF0FFF (the free tail after it, 7 of its 10 sectors)
+ *     0xEA000..0xF0FFF  the sound pool's sectors 9..15 (0xF1000..0xF3FFF stay free)
+ * The pool's 16 floating sectors are two runs (sp_addr): 5 in FL_DATA, 11 from 0xE6000 on. */
 #define ST_SMK_BASE 0x9D000u
 #define ST_SMK_PAIRS 9u                        /* the pairs below the owner tag */
 #define ST_SMK_SECTORS (2u * ST_SMK_PAIRS)
-#define ST_SMK_HIGH 0xB0000u                   /* the pairs above it */
-#define ST_SMK_HIGH_SECTORS 4u
+#define ST_SMK_HIGH 0xB0000u                   /* the pairs above it: CZ-1 store 2, QUAD store, the favourites */
+#define ST_SMK_HIGH_SECTORS 6u
 #define ST_SMK_CZB 0xC2000u                    /* the CZ-1 banks, in USRFLASH */
 #define ST_SMK_CZB_SECTORS 16u
 #define ST_SMK_LOOPS 0xD2000u                  /* the loop slots (cr_ui.c CRL_FL_BASE), in USRFLASH */
 #define ST_SMK_LOOP_SECTORS 20u
-/* every place of ChoralRoot's data on the SMK (base, sectors): the owner check and Options > Flash Data clear these */
+#define ST_SMK_POOL0 0xB6000u                  /* the sound pool: sectors 0 .. ST_SMK_POOL0_N - 1 in FL_DATA */
+#define ST_SMK_POOL0_N 5u
+#define ST_SMK_POOL1 0xE6000u                  /* .. the rest from the end of FL_SMP into FL_TAIL */
+#define ST_SMK_POOL1_N 11u
+/* every place of ChoralRoot's data on the SMK (base, sectors): the owner check and Options > Flash Data clear these
+ * (the owner tag is not one of them) */
 static const uint32_t ST_SMK_REGIONS[][2] = {{ST_SMK_BASE, ST_SMK_SECTORS}, {ST_SMK_HIGH, ST_SMK_HIGH_SECTORS},
-                                             {ST_SMK_CZB, ST_SMK_CZB_SECTORS}, {ST_SMK_LOOPS, ST_SMK_LOOP_SECTORS}};
+                                             {ST_SMK_CZB, ST_SMK_CZB_SECTORS}, {ST_SMK_LOOPS, ST_SMK_LOOP_SECTORS},
+                                             {ST_SMK_POOL0, ST_SMK_POOL0_N}, {ST_SMK_POOL1, ST_SMK_POOL1_N}};
 #if FELUCCA_CZ && FELUCCA_QUAD
-_Static_assert(OBJ_COUNT == 19u && OBJ_SESSION + 1u == OBJ_COUNT, "SMK store: a new object needs a place");
+_Static_assert(OBJ_COUNT == 20u && OBJ_FAVS + 1u == OBJ_COUNT, "SMK store: a new object needs a place");
 #endif
-_Static_assert(ST_SMK_BASE + ST_SMK_SECTORS * ST_SECTOR == 0xAF000u, "SMK store: the objects end at the owner tag");
-_Static_assert(ST_SMK_HIGH >= 0xAF000u + ST_SECTOR && ST_SMK_HIGH + ST_SMK_HIGH_SECTORS * ST_SECTOR <= 0xBB000u,
-               "SMK store: past FL_DATA");
-_Static_assert(ST_SMK_CZB >= 0xC2000u && ST_SMK_CZB + ST_SMK_CZB_SECTORS * ST_SECTOR <= ST_SMK_LOOPS &&
-               ST_SMK_LOOPS + ST_SMK_LOOP_SECTORS * ST_SECTOR <= 0xEA000u, "SMK store: past FL_SMP");
+_Static_assert(ST_SMK_BASE == FL_DATA_LO && ST_SMK_BASE + ST_SMK_SECTORS * ST_SECTOR == 0xAF000u,
+               "SMK store: the objects end at the owner tag");
+_Static_assert(ST_SMK_HIGH >= 0xAF000u + ST_SECTOR && ST_SMK_HIGH + ST_SMK_HIGH_SECTORS * ST_SECTOR <= ST_SMK_POOL0,
+               "SMK store: the pairs above the owner tag run into the pool");
+_Static_assert(ST_SMK_POOL0 + ST_SMK_POOL0_N * ST_SECTOR <= FL_DATA_HI, "SMK store: the pool's first run past FL_DATA");
+_Static_assert(ST_SMK_CZB >= FL_SMP_LO && ST_SMK_CZB + ST_SMK_CZB_SECTORS * ST_SECTOR <= ST_SMK_LOOPS &&
+               ST_SMK_LOOPS + ST_SMK_LOOP_SECTORS * ST_SECTOR <= ST_SMK_POOL1, "SMK store: past the loops");
+_Static_assert(ST_SMK_POOL1 + ST_SMK_POOL1_N * ST_SECTOR <= FL_TAIL_HI && FL_SMP_HI == FL_TAIL_LO &&
+               ST_SMK_POOL1 >= FL_SMP_LO, "SMK store: the pool's second run past FL_TAIL");
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
     copy &= 1u;
@@ -148,6 +170,8 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return ST_SMK_BASE + (8u * 2u + copy) * ST_SECTOR;
     if (obj == OBJ_QUADSTORE)
         return ST_SMK_HIGH + (2u + copy) * ST_SECTOR;
+    if (obj == OBJ_FAVS)
+        return ST_SMK_HIGH + (4u + copy) * ST_SECTOR;
 #endif
 #if FELUCCA_CZ
     if (obj == OBJ_CZSTORE1)
@@ -170,7 +194,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
  * build.py; ChoralRoot: CHORAL). Ours: load as ever. None (erased): data written before the tag existed, kept only
  * with FELUCCA_DATA_UNTAGGED_OK (0 here: the SMK build never had untagged data, so an erased tag with objects
  * present is another firmware's). Another family's: clear every place ChoralRoot keeps data in (the objects, the
- * CZ-1 banks and the loop slots: st_smk_clear) and take the store. Calibration, BT pairing and key_mac are outside
+ * CZ-1 banks, the loop slots, the favourites and the sound pool: st_smk_clear) and take the store. Calibration, BT pairing and key_mac are outside
  * them: never touched. Called first in persist_boot (cr_shim.c), before any store read; never in SAFE MODE. */
 #ifndef FELUCCA_DATA_FAMILY
 #define FELUCCA_DATA_FAMILY "CHORAL"
@@ -449,7 +473,7 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
 
 #if FELUCCA_CZ && FELUCCA_QUAD && ((defined(UP_POOL) && UP_POOL) || defined(SP_TEST))   /* (core.h UP_POOL; tests/pool_test.c) */
 /* ---- THE SOUND POOL (ChoralRoot 0.22: docs/PRESETS.md "The pool"): FLOATING objects ----
- * 0xB8000..0xC7FFF, SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
+ * 0xB8000..0xC7FFF (SMK-37: two runs, sp_addr), SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
  * a user record and one engine's patch). A sector is a bank's copy when its st_hdr_t is valid: ST_MAGIC, type SP_TYPE,
  * slot = the logical bank, len ST_PAYLOAD_MAX, rsv[0] SP_VER, the header CRC; and its payload's CRC matches.
  * LOAD (sp_scan): per bank the valid copy with the newest seq wins (serial arithmetic, so seq wraps; equal seq,
@@ -480,7 +504,15 @@ static uint8_t sp_scanned, sp_spare_ok;         /* sp_scan ran; the target is kn
 static uint32_t sp_erases, sp_progs;            /* (the host test's counters: erases and programs by the pool) */
 
 static inline int sp_newer(uint32_t a, uint32_t b) { return a != b && a - b < 0x80000000u; }
+#if BOARD_SMK37
+_Static_assert(ST_SMK_POOL0_N + ST_SMK_POOL1_N == SP_NSEC, "SMK store: the pool's two runs hold its sectors");
+static uint32_t sp_addr(uint32_t s)             /* (SMK-37: two runs, ST_SMK_POOL0 / ST_SMK_POOL1 above) */
+{
+    return s < ST_SMK_POOL0_N ? ST_SMK_POOL0 + s * ST_SECTOR : ST_SMK_POOL1 + (s - ST_SMK_POOL0_N) * ST_SECTOR;
+}
+#else
 static uint32_t sp_addr(uint32_t s) { return SP_BASE + s * ST_SECTOR; }
+#endif
 
 static int sp_head(uint32_t s, st_hdr_t *h)    /* sector s holds a valid pool commit record: 0 */
 {
