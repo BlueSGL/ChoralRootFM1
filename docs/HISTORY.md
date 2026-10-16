@@ -4407,4 +4407,5 @@ syllables in the numeral's gap, the widest `#MI+` 39 px, 2 px clear; the KEY pag
 `tools/emu/scripts/cr_solfege.txt` (`test_cr.sh`: the picker; SOL re ti° in C major; DO with Transpose +1; fa and MI
 in A minor; back to On: iv, the same notes) and `persist_solfege_set.txt` / `_check.txt` (`test_persist.sh`: saved,
 relaunched, `SOL`). XIP 550652 B of 573440 (+320 B). Docs: MANUAL.md (Numerals, the KEY page table, the quick
-reference), CHORD-NAMES.md "Solfège", SETTINGS.md, releases/0.22.md (a next-release line under Numerals).
+reference), CHORD-NAMES.md "Solfège", SETTINGS.md, releases/0.22.md (a line under Numerals: new in 0.23-beta1).
+Flashed to the owner's unit 2026-10-16 (1c0cf1c); the owner: "This is great, lets merge this in for v0.23beta1".
