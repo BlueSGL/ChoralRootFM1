@@ -236,6 +236,28 @@
       e.firstChild.style.color = bright && lum < 140 ? "#fff" : "";   // (light print on a dark lit colour)
     }
   };
+  // the screen's size (index.html's #lcd): the unit's share of the panel, or "Big screen" (remembered in this browser)
+  const BIG_KEY = "choralroot-smk37-bigscreen";
+  const sizeScreen = () => {
+    const dpr = window.devicePixelRatio || 1, big = $("big").checked;
+    let css, crisp = true;
+    if (big) css = innerWidth >= 2400 ? 480 : 240;
+    else {
+      const want = Math.max(120, 0.066 * $("smk").clientWidth);   // (the photo: the square under the glass, 6.6 % of the panel)
+      const n = Math.floor((want * dpr) / 240);                    // whole device pixels: n of them a firmware pixel
+      if (n >= 1) css = (n * 240) / dpr;
+      else { css = Math.round(want); crisp = false; }
+    }
+    lcd.style.width = lcd.style.height = css + "px";
+    lcd.classList.toggle("smooth", !crisp);
+  };
+  try { $("big").checked = localStorage.getItem(BIG_KEY) === "1"; } catch {}
+  if (/[?&]big/.test(location.search)) $("big").checked = true;   // (?big: for screenshots)
+  $("big").addEventListener("change", () => {
+    try { localStorage.setItem(BIG_KEY, $("big").checked ? "1" : "0"); } catch {}
+    sizeScreen();
+  });
+  addEventListener("resize", sizeScreen);
   const drawMaster = () => knobEl[0].firstChild.style.setProperty("--a", (master / 1023 - 0.5) * 270 + "deg");
 
   // ------------------------------------------------------------------------- the flash (IndexedDB) ---
@@ -391,6 +413,7 @@
 
   drawSel();
   drawMaster();
+  sizeScreen();
   g2.fillStyle = "#000";
   g2.fillRect(0, 0, 240, 240);
 })();

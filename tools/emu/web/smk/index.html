@@ -65,8 +65,13 @@ input.v.w::-webkit-slider-thumb { width: 30px; height: 60px; border-radius: 10px
 input.v.w::-moz-range-thumb { width: 28px; height: 56px; border-radius: 10px; background: var(--smk-orange); }
 .scr { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .lcdbox { background: #000; padding: 6px; border: 2px solid #1c1d20; border-radius: 6px; }
+/* the screen: 240 x 240 (ST7789V, square). By default its share of the panel as on the unit, the glass about as wide
+ * as the 2 x 3 buttons under it: at whole device pixels where that size allows (a retina display: 120 CSS px is 1:1),
+ * else scaled smoothly; "Big screen": 240 CSS px (480 from 2400 px wide), whole pixels (smk.js sizeScreen) */
 #lcd { display: block; width: 240px; height: 240px; image-rendering: pixelated; image-rendering: crisp-edges; background: #000; }
-@media (min-width: 2400px) { #lcd { width: 480px; height: 480px; } }   /* (whole pixels: 1x, 2x on a very wide window) */
+#lcd.smooth { image-rendering: auto; }
+.nav .b { font-size: 9.5px; min-height: 36px; }
+.nav .b small { font-size: 8.5px; }
 .nav { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }   /* (2 x 3 as on the unit: KNOB BANK | FADER BANK,
                                                                         * < | >, OCTAVE- | OCTAVE+; the screen's width) */
 .b { border: 1px solid #7a2f06; border-radius: 5px; background: var(--smk-orange); color: var(--smk-print); cursor: pointer; text-align: center;
@@ -116,6 +121,7 @@ input.v.w::-moz-range-thumb { width: 28px; height: 56px; border-radius: 10px; ba
 .key.w kbd { color: #6A696A; }
 .key.b kbd { color: #3d1a06; }
 .key span { position: absolute; left: 0; right: 0; bottom: 14px; text-align: center; font-size: 9px; font-weight: 700; color: #8C8B8C; }
+.bar label input { width: 18px; height: 18px; margin: 0; accent-color: var(--orange); }
 .bar label { font-weight: 700; color: var(--cream); font-size: 14px; display: flex; gap: 6px; align-items: center; }
 .bar [hidden] { display: none; }
 select { background: var(--dark); color: var(--cream); border: 0; padding: 8px 10px; max-width: 220px; font: inherit; }
@@ -165,6 +171,7 @@ footer { margin-top: 24px; font-size: 13px; color: var(--grey); text-align: cent
     <label hidden>Out <select id="mout"><option value="">none</option></select></label>
     <label hidden>In <select id="min"><option value="">none</option></select></label>
     <button id="reset" class="btn" title="forget the saved settings and sounds (this browser only)">Reset flash</button>
+    <label title="the screen larger than on the keyboard, at whole pixels"><input type="checkbox" id="big"> Big screen</label>
   </div>
   <section class="legend" aria-label="Computer keyboard">
     <div style="background:#F6F2EE"><h3>Chord pads</h3><p><kbd>F1</kbd>&ndash;<kbd>F4</kbd> DIM MIN MAJ SUS &middot; <kbd>2</kbd>&ndash;<kbd>5</kbd> 6 m7 M7 9 &middot; <kbd>Tab</kbd> LOCK &middot; the mode pads with the mouse</p></div>

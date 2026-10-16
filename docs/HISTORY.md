@@ -5386,3 +5386,17 @@ buttons under the screen are a block of two columns and three rows, as wide as t
 bottom labels are too blurred to read and the guide (01-hardware.md 5.3) lists the buttons' ids, not their places, so
 those two rows follow the hardware ids' order (0 1, 2 3, 4 5). PNGs again at 1920 and 1280 px; test_web_emu_smk PASS;
 run_all ALL SUITES PASSED (23 suites); `./build.sh` last.
+Then the screen's size (the owner: "the screen is big and doesn't match with aspect of real device. Maybe the
+emulator has checkbox to enable big screen"). The facts: the SMK-37 Pro's LCD is an ST7789V at 240 x 240, square, no
+window offset (genkigenki's docs/01-hardware.md section 3, verified on a unit; its physical size is not given there);
+`hal/fm1_lcd_hw.h` and the SMK part of `src/lcd.c` drive it as 240 x 240, and the emulator's framebuffer is 240 x 240:
+no mismatch in the firmware. The photo's screen looks landscape because its black glass is a little wider than the
+square picture under it and the photo is taken from above at an angle (the pads and keys are as shortened). The page
+showed it at 240 CSS px, far larger than its share of the panel. Now: by default the square at the unit's share, 6.6 %
+of the panel's width (120 CSS px at least), the glass about as wide as the 2 x 3 buttons under it, at whole device
+pixels where that size allows (a retina display: 120 CSS px is the firmware's pixels 1:1), else scaled smoothly;
+"Big screen" beside Reset flash: 240 CSS px (480 from 2400 px wide), whole pixels, as before; the choice kept in
+localStorage (try / catch); `?big` ticks it for screenshots; the six buttons' print a size smaller to fit the narrower
+block. PNGs at 1920 and 1280 px (device scale 2), 1920 with Big screen and 1920 at scale 1:
+build/emu-web-smk37-test/page-1920.png, page-1280.png, page-1920-big.png, page-1920-dpr1.png. test_web_emu_smk PASS;
+run_all ALL SUITES PASSED (23 suites); `./build.sh` last.
