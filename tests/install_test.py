@@ -1354,13 +1354,13 @@ def bindings():
         return bytes(r)
     fp, ff = I.FACTORY_PRESETS, I.FACTORY_FIRST
     ok(fp["12"][1] == "FM BELL" and len(fp["12"]) == 25 and fp["14"][0] == "INIT TONE" and len(fp["14"]) == 65 and
-       ff["14"] == 1 and ff["12"] == 0 and not any(e in fp for e in ("0", "1", "4", "8", "10")) and I.pool_of(1) == 12 and
-       I.pool_of(0) == 13 and I.pool_of(8) == 13 and I.pool_of(14) == 14,
+       ff["14"] == 1 and ff["12"] == 0 and not any(e in fp for e in ("0", "1", "4", "10")) and I.pool_of(1) == 12 and
+       I.pool_of(0) == 13 and I.pool_of(8) == 8 and len(fp["8"]) == 8 and I.pool_of(14) == 14,
        "binding: the factory table (the firmware's, --check), retired engines' pools (ANALOG's: the VA's)")
-    ok(sorted(fp, key=int) == ["7", "12", "13", "14", "15", "16"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 9, 11)) and
-       not any(I.engine_retired(e) for e in (7, 12, 13, 14, 15, 16)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE" and
+    ok(sorted(fp, key=int) == ["7", "8", "12", "13", "14", "15", "16"] and all(I.pool_of(e) == 13 and I.engine_retired(e) for e in (2, 3, 5, 6, 9, 11)) and
+       not any(I.engine_retired(e) for e in (7, 8, 12, 13, 14, 15, 16)) and I.ENGINE_NAMES[2] == "PHASE" and I.ENGINE_NAMES[11] == "NOISE" and
        I.ENGINE_NAMES[9] == "PHYS",
-       "0.18: five engines with a pool, 0.22 six (P5); PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept")
+       "0.18: five engines with a pool, 0.22 seven (P5, GRAIN); PHASE, LOFI, VOICE, TRIO, NOISE, PHYS retired (the VA's pool), their names kept")
     p5n, p5i = fp["16"], I.FACTORY_IDS["16"]
     ok(ff["16"] == 1 and p5n[0] == "INIT P5" and len(p5i) == len(p5n) and p5i[0] == 0 and len(set(p5i[1:])) == len(p5i) - 1 and
        I.pool_of(16) == 16 and all(1 <= x <= 200 for x in p5i[1:]),

@@ -4309,3 +4309,14 @@ tests passed (the mock equals the firmware); `node web/test_sounds.mjs`, `test_b
 tests/install_test.py` pass; `sh tools/emu/build.sh && sh tools/emu/test_cr.sh` every check ok (test_retired.sh PASS
 after its pre-cut flag), `sh tools/emu/test_persist.sh` PASS. Not run: the browser emulator's test, the layout tool's;
 no device access (the unit holds the beta4 release work).
+**Then** (the release session, 2026-10-15: "renumber yours to 3y106 onwards before any merge, and base the merge on
+5e1e8a7"): the GRAIN entries 3y102 .. 3y105 became 3y106 .. 3y109 (docs/GRAIN.md's references too), origin/main
+5e1e8a7 (v0.22-beta4) merged into the branch (HISTORY.md the one conflict: main's 3y103 .. 3y105 before these). On the
+merged tree: `grain_tick` out of line (`noinline`: its own line in the target-cost test, not the audio ISR's, which it
+had grown past the +10 %: `tests/target_budget.py`'s defaults grain_render 843, grain_block 28, grain_tick 99);
+`tests/cr_prophet_test.c` (seven engines shown; the engine-state union's host padding for the pool's pointers);
+the clients' factory preset table (`web/fm1sounds.js`, `tools/fm1_install.py`: GRAIN's eight, from
+`sound_templates`) and their tests (`web/test_sounds.mjs`, `tests/install_test.py`: engine 8 has a pool). `./build.sh`
+XIP 561 540 B (97.9 %), RAM 79 028 (80.4 %), POOL 304 712 (88.6 %); `sh tests/run_cr_tests.sh`, `sh
+tests/run_tests.sh`, `sh tools/emu/test_cr.sh`, `test_persist.sh`, `node web/test_sounds.mjs`, `test_backup.mjs`,
+`python3 tests/install_test.py`: all pass (the host suites' last run below).

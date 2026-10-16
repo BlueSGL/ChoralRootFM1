@@ -5,7 +5,8 @@
 tested on the host and in the emulator; not yet on the unit, not yet with the wave band (step 5), its presets not yet
 by ear (step 6).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
 (`build/grain-sketch/`, below), kept the granular morph, and said go for steps 1 to 4. The build's size line: XIP
-559 652 B of 573 440 (97.6 %), RAM 79 028 (80.4 %), POOL 304 472 (88.5 %). The owner's words: "Could the
+559 652 B of 573 440 (97.6 %), RAM 79 028 (80.4 %), POOL 304 472 (88.5 %) over da1f8e2; merged on main 5e1e8a7
+(v0.22-beta4: the master filter and the step preview) XIP 561 540 B (97.9 %), POOL 304 712 (88.6 %). The owner's words: "Could the
 grain synth have a way to generate its own samples from a couple knobs to quickly get a variety of interesting samples to
 work with?"
 

@@ -614,8 +614,8 @@ static void grain_render_whole(uint32_t k)
 }
 
 /* once an audio block, on core 0, before the parts render (fx.c mix_block): the owner's source knobs against the
- * buffers; a locked source's grains fade */
-static void grain_tick(void)
+ * buffers; a locked source's grains fade. Out of line: its own line in tests/target_budget.txt, not the ISR's */
+static __attribute__((noinline)) void grain_tick(void)
 {
     uint32_t k, part, own = 0;
     grs.blocks++;
