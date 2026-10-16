@@ -65,6 +65,10 @@ t ./build/host/cr_va_test
 # presets; an int32 wrap aborts (the sanitizer). The CPU figure: tests/run_quad_test.sh
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -fsanitize=signed-integer-overflow -fno-sanitize-recover=all -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/cr_quad_test tests/cr_quad_test.c -lm
 t ./build/host/cr_quad_test
+# FM TONE's pops (docs/QUAD.md "Pops"): every factory sound and INIT through eight scenarios (retriggers, chord changes,
+# steals, arps) at C2 and C4: no jump, no hole, no operator restarted under the voice's level, no wrap (the sanitizer)
+par_build cc -O2 -w -fsanitize=signed-integer-overflow -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src -o build/host/quad_pops tests/quad_pops.c -lm
+t ./build/host/quad_pops check
 # FM TONE's times against the Digitone's (docs/QUAD.md "Times"): quad_times.h not stale, the amp envelope's times, the
 # proxy readings, the delay, the fade, through the measurement's own analysis (tools/digitone/dt_analyse.py; numpy)
 par_build cc -std=c99 -O2 -w -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/quad_render tools/digitone/quad_render.c -lm

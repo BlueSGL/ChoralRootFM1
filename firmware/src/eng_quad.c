@@ -101,6 +101,15 @@ enum { QW_TRI, QW_SINE, QW_SQR, QW_SAW, QW_RAMP, QW_EXP, QW_RAND, QW_N };   /* L
 enum { QT_FREE, QT_TRIG, QT_HOLD, QT_ONE, QT_HALF, QT_N };                 /* LFO TRIG */
 enum { QR_OFF, QR_ALL, QR_C, QR_AB, QR_AB2, QR_N };                        /* PHRT: the operators reset at a note */
 static const uint8_t QUAD_PHRT_MASK[QR_N] = {0, 0xF, 0x1, 0xE, 0xA};       /* (bit 0 C, 1 A, 2 B1, 3 B2) */
+/* PHRT on a voice that sounds (struck again, a chord's common tone): an operator of the set restarts at 0 only where
+ * no one hears it (quad_phrt_mask): as a carrier, the voice under QUAD_PHRT_QUIET (its envelope x level for an enveloped
+ * one); as a modulator, its level under QUAD_PHRT_QMOD (Q15) */
+#ifndef QUAD_PHRT_QUIET
+#define QUAD_PHRT_QUIET 328      /* -40 dB */
+#endif
+#ifndef QUAD_PHRT_QMOD
+#define QUAD_PHRT_QMOD 16        /* -66 dB: a phase step of 0.013 rad in what it modulates */
+#endif
 enum {                                                                     /* LFO DEST (the Digitone's App. C) */
     QD_NONE, QD_PITCH, QD_PAB2, QD_ALGO, QD_RC, QD_RA, QD_RB, QD_OFSC, QD_OFSA, QD_OFSB1, QD_OFSB2, QD_HARM, QD_DTUN,
     QD_FDBK, QD_MIX, QD_ALEV, QD_BLEV, QD_AATK, QD_ADEC, QD_AEND, QD_BATK, QD_BDEC, QD_BEND, QD_ADLY, QD_BDLY,
@@ -370,7 +379,14 @@ typedef struct {
     uint32_t lof;                                /* LFO 1 FREE: its phase's lead from L1SPD / L1MUL (LFO 2, 3) */
     uint8_t lstop;                               /* bit k: LFO k (ONE / HALF) has stopped */
     uint8_t live;
+    uint8_t fon;                                 /* the filters running in the last block: bit 0 the multimode, 1 the
+                                                  * base-width high-pass, 2 its low-pass (QUAD_FON_NEW: a fresh voice,
+                                                  * none before it); a filter switched in or out crossfades its block */
+    int8_t mixp;                                 /* MIX in the last block (QUAD_MIX_NEW: a fresh voice): ramped over
+                                                  * the block to this block's */
 } quad_voice_t;
+#define QUAD_FON_NEW 0xFFu
+#define QUAD_MIX_NEW (-128)
 static quad_voice_t quad_vs[QUAD_NPART][QUAD_POLY] __attribute__((section(".pool")));
 
 static uint32_t quad_tr(const track_t *t) { return (uint32_t)(t - trk); }
@@ -584,56 +600,56 @@ static void quad_macros_out(track_t *t)
                                   QP_LFO(k, QL_WAVE), QW_##w, QP_LFO(k, QL_DEPTH), S8(dp)
 /* EP: X = C 1:1 under A (the body), Y = B1 direct 1.00 under B2 14.00 (the tine, short) */
 static const uint8_t QUADP_EP[] = {SYN(2, QRC(4), QRA(4), 4, 56, 0, 12, 0, -30), ENVA(0, 29, 20, 66),
-    ENVB(0, 12, 0, 62), QP_VEL, 100, KEY(40, 30, 30), AMP(0, 39, 40, 14, 72), 0xFF};
+    ENVB(0, 12, 0, 62), QP_VEL, 100, KEY(40, 30, 30), AMP(0, 39, 40, 14, 102), 0xFF};
 /* BELL: X = C under A 3.50, Y = B1 2.00 under B2 6.00 (two inharmonic pairs) */
 static const uint8_t QUADP_BELL[] = {SYN(2, QRC(4), QRA(14), 8, 24, 0, 20, 0, -10), ENVA(0, 43, 30, 80),
-    ENVB(0, 48, 20, 70), QP_VEL, 90, KEY(30, 0, 30), AMP(0, 52, 0, 43, 80), 0xFF};
+    ENVB(0, 48, 20, 70), QP_VEL, 90, KEY(30, 0, 30), AMP(0, 52, 0, 43, 113), 0xFF};
 /* BASS: C under a 1:1 A with feedback (a saw-ish modulator), X only */
 static const uint8_t QUADP_BASS[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 24, -64), ENVA(0, 18, 34, 88),
-    ENVB(0, 11, 0, 0), FLT(LP12, 92, 10, 20), FENV(0, 12, 0, 0), AMP(0, 24, 100, 5, 110), 0xFF};
+    ENVB(0, 11, 0, 0), FLT(LP12, 92, 10, 20), FENV(0, 12, 0, 0), AMP(0, 24, 100, 5, 127), 0xFF};
 /* PLUCK: B1 and B2 into A 2.00 into C, X only, everything decaying */
 static const uint8_t QUADP_PLUCK[] = {SYN(5, QRC(4), QRA(8), 12, 12, 0, 6, 0, -64), ENVA(0, 14, 0, 84),
-    ENVB(0, 7, 0, 64), KEY(40, 40, 40), AMP(0, 21, 0, 13, 72), 0xFF};
+    ENVB(0, 7, 0, 64), KEY(40, 40, 40), AMP(0, 21, 0, 13, 102), 0xFF};
 /* BRASS: C under a slow-attack 1:1 A with feedback, a little B1 */
 static const uint8_t QUADP_BRASS[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 28, -64), ENVA(11, 31, 60, 74),
-    ENVB(9, 31, 50, 10), FLT(LP12, 80, 12, 30), FENV(9, 48, 60, 12), AMP(22, 24, 110, 13, 76), 0xFF};
+    ENVB(9, 31, 50, 10), FLT(LP12, 80, 12, 30), FENV(9, 48, 60, 12), AMP(22, 24, 110, 13, 107), 0xFF};
 /* GLASS PAD: X = C under A 2.00 + A, Y = B1 under B2 + B2 (algorithm 7's enveloped carriers), A / B1 a little saw */
 static const uint8_t QUADP_GLASS[] = {SYN(7, QRC(4), QRA(8), 16, 16, 8, 40, 0, 0), ENVA(17, 41, 100, 36),
-    ENVB(24, 48, 60, 50), QP_PHRT, QR_OFF, AMP(53, 32, 120, 43, 88), LFO(0, 8, 3, HARM, SINE, 30), 0xFF};
+    ENVB(24, 48, 60, 50), QP_PHRT, QR_OFF, AMP(53, 32, 120, 43, 124), LFO(0, 8, 3, HARM, SINE, 30), 0xFF};
 /* HOLLOW: C a soft square (HARM -16) under A 2.00, Y = B1 under a little B2 */
 static const uint8_t QUADP_HOLLOW[] = {SYN(2, QRC(4), QRA(8), 4, 4, -16, 0, 0, -20), ENVA(5, 41, 80, 40),
-    ENVB(0, 31, 40, 50), AMP(16, 24, 110, 18, 76), 0xFF};
+    ENVB(0, 31, 40, 50), AMP(16, 24, 110, 18, 107), 0xFF};
 /* SQUARE LEAD: C a square (HARM -19) under a little A 2.00, X only */
 static const uint8_t QUADP_SQLEAD[] = {SYN(1, QRC(4), QRA(8), 4, 4, -19, 0, 10, -64), ENVA(0, 31, 60, 36),
-    ENVB(0, 22, 20, 0), AMP(0, 18, 110, 9, 110), 0xFF};
+    ENVB(0, 22, 20, 0), AMP(0, 18, 110, 9, 127), 0xFF};
 /* METAL: B1 7.00 (feedback) and B2 10.50 into A 1.50 into C, A detuned against B2; mostly X */
 static const uint8_t QUADP_METAL[] = {SYN(5, QRC(4), QRA(6), 28, 40, 0, 90, 20, -40), QP_OFSB2, 50,
-    ENVA(0, 48, 40, 90), ENVB(0, 41, 30, 70), AMP(0, 43, 30, 32, 70), 0xFF};
+    ENVA(0, 48, 40, 90), ENVB(0, 41, 30, 70), AMP(0, 43, 30, 32, 99), 0xFF};
 /* WOBBLE: BASS's voice through LP24, an LFO on A LEV and one on FREQ */
 static const uint8_t QUADP_WOBBLE[] = {SYN(1, QRC(4), QRA(4), 4, 4, 0, 0, 10, -64), ENVA(0, 19, 127, 60),
-    ENVB(0, 16, 40, 0), FLT(LP24, 70, 60, 0), AMP(0, 24, 110, 7, 115), LFO(0, 32, 4, ALEV, TRI, 50),
+    ENVB(0, 16, 40, 0), FLT(LP24, 70, 60, 0), AMP(0, 24, 110, 7, 127), LFO(0, 32, 4, ALEV, TRI, 50),
     LFO(1, 32, 4, FREQ, TRI, 40), QP_LFO(0, QL_TRIG), QT_TRIG, QP_LFO(1, QL_TRIG), QT_TRIG, 0xFF};
 /* CLAV: X = C (HARM -15: 1 + 3) under A 3.00, Y = B1 1.00 under B2 4.00, through HP12 */
 static const uint8_t QUADP_CLAV[] = {SYN(2, QRC(4), QRA(12), 4, 16, -15, 0, 0, 0), ENVA(0, 11, 10, 90),
-    ENVB(0, 10, 0, 80), FLT(HP12, 30, 20, 0), AMP(0, 18, 0, 8, 90), 0xFF};
+    ENVB(0, 10, 0, 80), FLT(HP12, 30, 20, 0), AMP(0, 18, 0, 8, 127), 0xFF};
 /* STRINGS: X = C a saw (HARM -7) + B2 detuned, Y = B1 with feedback 35 (a second saw), both enveloped at B LEV 127;
  * DTUN by an LFO */
 static const uint8_t QUADP_STRINGS[] = {SYN(8, QRC(4), QRA(4), 4, 4, -7, 100, 35, 0), ENVA(0, 16, 0, 0),
-    ENVB(0, 16, 127, 127), QP_PHRT, QR_OFF, FLT(LP12, 96, 8, 0), AMP(53, 32, 115, 39, 80),
+    ENVB(0, 16, 127, 127), QP_PHRT, QR_OFF, FLT(LP12, 96, 8, 0), AMP(53, 32, 115, 39, 113),
     LFO(0, 6, 3, DTUN, SINE, 20), 0xFF};
 /* MARIMBA: C under A 4.00 and B1 10.00 (short), X only */
 static const uint8_t QUADP_MARIMBA[] = {SYN(1, QRC(4), QRA(16), 40, 40, 0, 0, 0, -64), ENVA(0, 11, 0, 64),
-    ENVB(0, 2, 0, 20), KEY(50, 50, 0), AMP(0, 24, 0, 18, 78), 0xFF};
+    ENVB(0, 2, 0, 20), KEY(50, 50, 0), AMP(0, 24, 0, 18, 110), 0xFF};
 /* DRONE: C 0.50 and B1 under A (feedback) and B2 1.50, three slow LFOs (HARM, MIX, FDBK) */
 static const uint8_t QUADP_DRONE[] = {SYN(6, QRC(2), QRA(4), 4, 4, 0, 50, 15, 0), QP_OFSB2, 50, ENVA(43, 55, 90, 44),
-    ENVB(59, 55, 80, 52), QP_PHRT, QR_OFF, AMP(44, 43, 127, 58, 74), LFO(0, 4, 3, HARM, SINE, 40),
+    ENVB(59, 55, 80, 52), QP_PHRT, QR_OFF, AMP(44, 43, 127, 58, 105), LFO(0, 4, 3, HARM, SINE, 40),
     LFO(1, 5, 3, MIX, TRI, 50), LFO(2, 3, 3, FDBK, SINE, 30), 0xFF};
 /* FEEDBACK: Y = B1 with heavy feedback (enveloped: B LEV 43 = B1 full, B2 off), X = C under A */
 static const uint8_t QUADP_FEEDBACK[] = {SYN(8, QRC(4), QRA(4), 4, 4, 0, 0, 42, 30), ENVA(0, 31, 40, 60),
-    ENVB(0, 31, 100, 43), AMP(0, 32, 100, 18, 72), 0xFF};
+    ENVB(0, 31, 100, 43), AMP(0, 32, 100, 18, 102), 0xFF};
 /* NOISE-ISH: algorithm 7's A at full feedback, X = C under it + itself, through a resonant HP12 */
 static const uint8_t QUADP_NOISE[] = {SYN(7, QRC(4), QRA(4), 4, 4, 0, 0, 120, -64), ENVA(0, 16, 127, 100),
-    ENVB(0, 16, 0, 0), FLT(HP12, 70, 40, 0), AMP(0, 32, 60, 24, 62), 0xFF};
+    ENVB(0, 16, 0, 0), FLT(HP12, 70, 40, 0), AMP(0, 32, 60, 24, 88), 0xFF};
 
 /* {ALGO, RATIO C, RATIO A, RATIO B (B2's step), HARM, DTUNE, FDBK, MIX}: the macros as the patch has them
  * (cr_quad_test checks); env: the amp envelope (QUAD's own: the platform ADSR is not used). FX(drive, chorus, delay,
@@ -927,6 +943,28 @@ static void quad_lfo_on(track_t *t, quad_voice_t *s, const int16_t *p)
     s->ticks = 0;
 }
 
+/* PHRT's operators (mask) that may restart at 0 in voice s, which sounds: those no one hears. An operator restarted
+ * under the voice's level stepped its wave (the pops of docs/QUAD.md "Pops": a carrier's step, or a modulator's in the
+ * carrier's phase); one that is silent restarts as on a fresh note, so its attack is the patch's (a modulator that
+ * starts at an arbitrary phase as its level leaps up in a tick bursts) */
+static uint32_t quad_phrt_mask(const quad_voice_t *s, const int16_t *p, uint32_t mask)
+{
+    const quad_algo_t *al = &QUAD_ALGO[(uint32_t)clamp(p[QP_ALGO], 1, 8) - 1u];
+    int32_t a = s->amp < 0 ? -s->amp : s->amp;
+    uint32_t k, out = al->x | al->y, mods = al->mod[0] | al->mod[1] | al->mod[2] | al->mod[3];
+    for (k = 0; k < 4u; k++) {
+        int32_t lv = k ? s->lv[k - 1u] : 32767, heard = 0;
+        lv = lv < 0 ? -lv : lv;
+        if ((out >> k) & 1u)                     /* a carrier: direct (C always), or at its envelope x level */
+            heard = ((al->env >> k) & 1u ? (int32_t)(((int64_t)a * lv) >> 15) : a) >= QUAD_PHRT_QUIET;
+        if (((mods >> k) & 1u || k == al->fb) && lv >= QUAD_PHRT_QMOD && a >= QUAD_PHRT_QUIET)
+            heard = 1;                           /* a modulator (or the feedback operator) of a voice that sounds */
+        if (heard)
+            mask &= ~(1u << k);
+    }
+    return mask;
+}
+
 static void quad_note_on(track_t *t, voice_t *v)
 {
     quad_voice_t *s = quad_voice(t, v);
@@ -937,6 +975,8 @@ static void quad_note_on(track_t *t, voice_t *v)
     p = quad_patch[quad_tr(t)];
     fresh = (!v->env && !v->env_out) || !s->live;
     mask = QUAD_PHRT_MASK[(uint32_t)p[QP_PHRT] % QR_N];
+    if (!fresh)
+        mask = quad_phrt_mask(s, p, mask);
     for (k = 0; k < 4u; k++)                     /* PHRT: these operators restart at 0 (OFF: all run on, even on a
                                                   * fresh voice) */
         if ((mask >> k) & 1u)
@@ -950,12 +990,14 @@ static void quad_note_on(track_t *t, voice_t *v)
         s->f1 = s->f2 = s->f3 = s->f4 = 0;
         s->bh = s->bl = 0;
         s->dc = 0;
+        s->fon = QUAD_FON_NEW;
+        s->mixp = QUAD_MIX_NEW;
         quad_env_start(s, 0, p[QP_ADLY], 1);
         quad_env_start(s, 1, p[QP_BDLY], 1);
     } else {                                     /* a retrigger: TRIG restarts the operator envelopes (RESET: from
                                                   * 0, else from where they are) */
-        if (mask)
-            s->fb1 = s->fb2 = 0;
+        if ((mask >> QUAD_ALGO[(uint32_t)clamp(p[QP_ALGO], 1, 8) - 1u].fb) & 1u)
+            s->fb1 = s->fb2 = 0;                 /* (the feedback operator restarted: its history with it) */
         if (p[QP_ATRIG])
             quad_env_start(s, 0, p[QP_ADLY], p[QP_ARST]);
         if (p[QP_BTRIG])
@@ -1148,7 +1190,8 @@ static void quad_svf_coef(quad_svf_t *c, int32_t cut, int32_t k)
 #define QFB() ((uint32_t)((fb1 + fb2) * fbq) << 2)
 #define QLV(y, l) (((y) * (l)) >> 15)
 /* the operator loop of one algorithm: the level ramps, BODY (sets X, Y and yf, the feedback operator's wave), the
- * feedback memory, the phases, MIX (X .. Y, gx + gy = 1) at half scale into acc */
+ * feedback memory, the phases, MIX (X .. Y, gx + gy = 1: Y's gain gq ramped over the block, Q16) at half scale into
+ * acc */
 #define QUAD_LOOP(BODY)                                                    \
     for (i = 0; i < n; i++) {                                              \
         int32_t LA, LB1, LB2, X, Y, yf, y1, ya, o;                         \
@@ -1166,7 +1209,8 @@ static void quad_svf_coef(quad_svf_t *c, int32_t cut, int32_t k)
         p1 += i1;                                                          \
         p2 += i2;                                                          \
         p3 += i3;                                                          \
-        acc[i] = ((X * gx) + (Y * gy)) >> 16;                              \
+        gq += dgq;                                                         \
+        acc[i] = ((X * (32766 - (gq >> 16))) + (Y * (gq >> 16))) >> 16;   \
     }
 /* the eight routings (QUAD_ALGO; "direct" carriers at full level, "env" at their envelope x level) */
 #define QUAD_ALGOS                                                                                          \
@@ -1212,11 +1256,12 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     uint32_t tr = quad_tr(t), k, i, alg, inc[4], bAll, bAB2;
     const int16_t *p;
     int32_t eA, eB, eF, eE, dst[QD_N], A0, A1, dA, a, x, y;
-    int32_t hq, dt, mix, ra, rb, cut, kd, reso, gx, gy, fbq, hf, fdep, base, wid;
+    int32_t hq, dt, mix, ra, rb, cut, kd, reso, gy, gq, dgq, fbq, hf, fdep, base, wid;
     int32_t la, lb1, lb2, dla, dlb1, dlb2, tl[3], hpk, lpk, svf, fty, fb1, fb2, bh, bl;
+    uint32_t fon, fon0;
     const int16_t *ha_t = QUAD_HARM[0], *hb_t = QUAD_HARM[0];
     uint32_t p0, p1, p2, p3, i0, i1, i2, i3;
-    int32_t acc[CTL];
+    int32_t acc[CTL], dry[CTL];
     quad_svf_t c;
     tsvf_t c2;
     if (!s || !s->live || n > CTL)
@@ -1356,7 +1401,13 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     fbq = quad_fbq((QMV(QP_FDBK, QD_FDBK, 127, 0, 127) * 120 + 63) / 127);   /* (0..127: the 0..120 curve) */
     mix = QMV(QP_MIX, QD_MIX, 127, -64, 63);
     gy = (64 + mix) * 258;                       /* -64: X alone, 63: Y alone (gx + gy = 32766) */
-    gx = 32766 - gy;
+    {   /* from the last block's MIX to this one's over the block (a step of MIX, an LFO's RAMP or SQR on it, stepped
+         * the output between two samples); the same gain when it stays */
+        int32_t g0 = s->mixp == QUAD_MIX_NEW ? gy : (64 + s->mixp) * 258;
+        gq = g0 * 65536;
+        dgq = ((gy - g0) * 65536) >> CTL_LOG2;
+        s->mixp = (int8_t)mix;
+    }
     /* the operator levels: envelope x LEV (A: squared; B: the B LEV law, squared) x velocity x key scaling, Q15 */
     {
         int32_t vel = v->mvel ? v->mvel : v->vel, velf = 32767 - ((p[QP_VEL] * (127 - vel) * 2080) >> 10), j, u1, u2;
@@ -1390,15 +1441,20 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
     fty = p[QP_FTYPE];
     svf = fty != QF_OFF && !(fty != QF_HP12 && cut >= (127 << 8) && !reso);   /* LP wide open, no resonance: none */
     kd = 8192 - reso * 3 / 5;                    /* (60 a whole step) */
-    if (svf) {
-        quad_svf_coef(&c, cut, kd);
-        if (fty == QF_LP24)
-            tsvf_coef_k(&c2, cut, 8192);
-    }
     base = QMV(QP_BASE, QD_BASE, 12700, 0, 12700);
     wid = QMV(QP_WIDTH, QD_WIDTH, 127, 0, 127);
     hpk = base ? quad_bwk(base) : 0;
     lpk = base + wid * 100 < 12700 ? quad_bwk(base + wid * 100) : 0;
+    /* the filters running now (fon) and in the last block (fon0): one switched in or out (an envelope or an LFO taking
+     * the multimode past its open top, BASE to 0, BASE + WIDTH to the top) runs this block too and crossfades (below) */
+    fon = (svf ? 1u : 0u) | (hpk ? 2u : 0u) | (lpk ? 4u : 0u);
+    fon0 = s->fon == QUAD_FON_NEW ? fon : s->fon;
+    s->fon = (uint8_t)fon;
+    if ((fon | fon0) & 1u) {
+        quad_svf_coef(&c, cut, kd);
+        if (fty == QF_LP24)
+            tsvf_coef_k(&c2, cut, 8192);
+    }
     /* the amplitude: the amp envelope x velocity (half) x LEVEL (squared), the voice's (fades, LFO -> AMP) */
     {
         int32_t vel = v->mvel ? v->mvel : v->vel, lv = QMV(QP_LEVEL, QD_LEVEL, 127, 0, 127);
@@ -1444,31 +1500,70 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
 #undef WB1
     }
     /* the DC blocker (QUAD_DC_K), then the base-width filter (BASE: a one-pole high-pass, BASE + WIDTH: a one-pole
-     * low-pass, Q8 states): the manual's order, base-width before the multimode */
+     * low-pass, Q8 states): the manual's order, base-width before the multimode. A pole switched out runs its last
+     * block at its end of the range and fades out over it (the high-pass's state then 0); one switched in starts
+     * from the state its input implies (the high-pass from 0, the low-pass at the input): no step either way */
     {
         int32_t d = s->dc;
+        uint32_t sw = (fon ^ fon0) & 6u;
         bh = s->bh, bl = s->bl;
-        for (i = 0; i < n; i++) {
-            x = acc[i];
-            d += (int32_t)(((((int64_t)x << 12) - d) * QUAD_DC_K) >> 16);
-            y = x - ((d + 2048) >> 12);
-            if (hpk) {
-                bh += (int32_t)(((int64_t)((y << 8) - bh) * hpk) >> 16);
-                y -= bh >> 8;
+        if (!sw) {
+            for (i = 0; i < n; i++) {
+                x = acc[i];
+                d += (int32_t)(((((int64_t)x << 12) - d) * QUAD_DC_K) >> 16);
+                y = x - ((d + 2048) >> 12);
+                if (hpk) {
+                    bh += (int32_t)(((int64_t)((y << 8) - bh) * hpk) >> 16);
+                    y -= bh >> 8;
+                }
+                if (lpk) {
+                    bl += (int32_t)(((int64_t)((y << 8) - bl) * lpk) >> 16);
+                    y = bl >> 8;
+                }
+                acc[i] = y;
             }
-            if (lpk) {
-                bl += (int32_t)(((int64_t)((y << 8) - bl) * lpk) >> 16);
-                y = bl >> 8;
+        } else {                                 /* a pole switched in or out: this block's fades (0 .. 1) */
+            int32_t hk = hpk ? hpk : sw & 2u ? QUAD_BW_K[0] : 0, lk = lpk ? lpk : sw & 4u ? quad_bwk(12699) : 0;
+            int32_t nf = n > 1u ? (int32_t)n - 1 : 1;
+            if ((sw & 4u) && lpk)
+                bl = INT32_MIN;                  /* (in: at its first input) */
+            for (i = 0; i < n; i++) {
+                x = acc[i];
+                d += (int32_t)(((((int64_t)x << 12) - d) * QUAD_DC_K) >> 16);
+                y = x - ((d + 2048) >> 12);
+                if (hk) {
+                    bh += (int32_t)(((int64_t)((y << 8) - bh) * hk) >> 16);
+                    y -= hpk ? bh >> 8 : (int32_t)(((int64_t)(bh >> 8) * (nf - (int32_t)i)) / nf);
+                }
+                if (lk) {
+                    if (bl == INT32_MIN)
+                        bl = y << 8;
+                    bl += (int32_t)(((int64_t)((y << 8) - bl) * lk) >> 16);
+                    y = lpk ? bl >> 8 : (bl >> 8) + (int32_t)(((int64_t)(y - (bl >> 8)) * (int32_t)i) / nf);
+                }
+                acc[i] = y;
             }
-            acc[i] = y;
+            if ((sw & 2u) && !hpk)
+                bh = 0;                          /* (out: the high-pass from rest when it comes back) */
         }
         s->dc = d;
         s->bh = bh, s->bl = bl;
     }
     /* the multimode SVF, a loop per type (LP12 v2, HP12 x - kd v1 - v2, LP24 a plain LP12 then the resonant one; the
-     * products rounded: truncation's bias, integrated, was DC), the soft knee after it */
-    if (svf) {
+     * products rounded: truncation's bias, integrated, was DC), the soft knee after it. Switched in (its envelope or
+     * an LFO bringing a wide-open LP down): its states start at the input (the LP's at the input, the band's at 0)
+     * and its output fades in over the block; switched out: its last block fades out to the input */
+    if ((fon | fon0) & 1u) {
         int32_t ic1 = s->f1, ic2 = s->f2, ic3 = s->f3, ic4 = s->f4;
+        uint32_t sw = (fon ^ fon0) & 1u;
+        if (sw) {
+            for (i = 0; i < n; i++)
+                dry[i] = acc[i];
+            if (svf) {
+                ic1 = ic3 = 0;
+                ic2 = ic4 = acc[0];
+            }
+        }
 #define QUAD_SVF(PRE, Y)                                                   \
     for (i = 0; i < n; i++) {                                              \
         int32_t v1, v2, v3;                                                \
@@ -1491,13 +1586,23 @@ static void quad_render(track_t *t, voice_t *v, int32_t *out, uint32_t n, const 
         else
             QUAD_SVF(, v2)
 #undef QUAD_SVF
+        if (sw) {                                /* in: dry -> filtered, out: filtered -> dry */
+            int32_t nf = n > 1u ? (int32_t)n - 1 : 1;
+            for (i = 0; i < n; i++) {
+                int32_t g = svf ? (int32_t)i : nf - (int32_t)i;
+                acc[i] = dry[i] + (int32_t)(((int64_t)(acc[i] - dry[i]) * g) / nf);
+            }
+        }
         s->f1 = ic1, s->f2 = ic2, s->f3 = ic3, s->f4 = ic4;
     }
-    /* the amplitude */
+    /* the amplitude, into the part at the engine's output scale: >> 12, 6 dB under the >> 11 of before 2026-10-16. At
+     * the Digitone's levels (VOL 100 .. 127: INIT's 110, a .dnsnd import's own) a sound was 6 dB over the other
+     * engines' (tests/va_levels.c loud / dnsnd; docs/QUAD.md "Level"); the factory presets' LEVELs went up by the same
+     * 6 dB (x 1.41 on the squared law), so they reach the part, its DRIVE among it, as before */
     for (i = 0; i < n; i++) {
         y = clamp(acc[i], -65535, 65535);
         a += dA;
-        out[i] += (mulq15(y, a >> 8) * (VOICE_FS / 4)) >> 11;
+        out[i] += (mulq15(y, a >> 8) * (VOICE_FS / 4)) >> 12;
     }
     s->ph[0] = p0, s->ph[1] = p1, s->ph[2] = p2, s->ph[3] = p3;
     s->fb1 = fb1, s->fb2 = fb2;

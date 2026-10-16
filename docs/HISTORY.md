@@ -4354,3 +4354,77 @@ step OK; the landing page "Version 0.22", "Install 0.22", "New in 0.22" with the
 `blob/main/docs/releases/0.22.md`, no emulator line; the hosted 0.22 packages with the new sha256s
 (`firmware/SHA256SUMS`, `firmware/index.html`). Not done: the tag, the push, the release, the site; nothing flashed by
 this session.
+
+## 2026-10-16 (FM TONE's level and its pops)
+
+3y119. **FM TONE's level: the engine 6 dB lower, its presets where they were (branch claude/fmtone-quality-b02d3f
+from a11e0ca = v0.22; 3y112, 3y113, 3y118 are main's, 3y114 .. 3y117 GRAIN's).** The owner, 2026-10-15: "The new
+Digitone Engine is quite a bit louder than the other engines and has some various sound quality issues like pops and
+clicks on the voices. I'd like to get this fixed." **Measured** (`tests/va_levels.c` new modes `loud` and `dnsnd`;
+`tools/dnsnd_list.mjs` turns a folder of `.dnsnd` into their FM TONE blobs through the device manager's own
+`dnsndToQuad`): BS.1770-4 integrated loudness of every sound of FM TONE, the VA, FM6, CZ-1 and P5, and of the 256
+Digitone factory sounds imported, as a player hears them at power-on (Output Clean, MASTER as at power-on, LEVEL 104,
+sends 0, the sound's Drive, velocity 100): a held 6-note chord, a phrase of four 4-note chords, single notes (no
+limiter). Medians, held / phrase / notes LUFS, 0.22: FM TONE's 16 presets -18.8 / -20.0 / -25.8; VA -16.2 / -17.7 /
+-23.9; FM6 -28.6 / -21.2 / -27.6; CZ-1 -27.8 / -22.7 / -28.1; P5 -24.5 / -23.5 / -29.0; **FM TONE INIT** (LEVEL 110, the
+Digitone's VOL default) a single voice -16.1; **the 256 imports** -17.2 / -17.6 / -20.9. The factory presets were not
+the loud ones (voiced at AMP LEVEL 62 .. 90 on the squared law, 90 being 6 dB under 127); everything at the Digitone's own
+levels was, 4 to 9 dB over the other engines' medians: the engine, not a few sounds, so not trims (ChoralRoot has none
+of Sloop's kind; `CB_TRIM` is empty) and never the master. **Fixed**: `eng_quad.c quad_render` adds a voice into its
+part `>> 12` (was `>> 11`), and the 16 presets' AMP LEVEL x 1.41 (EP 72 -> 102 .. NOISE-ISH 62 -> 88; the list in
+docs/QUAD.md "Level"), so 13 of them are within 0.1 dB of where they were and reach the part's DRIVE as before; BASS,
+SQUARE LEAD, WOBBLE stop at 127 and are 3.3 .. 3.5 dB quieter (in the VA basses' range; SQUARE LEAD still FM TONE's
+loudest). **Where**: before the DRIVE. The Digitone's own drive is before its VOLUME (manual OS 1.44, Appendix A.1,
+§11.9.5); ChoralRoot's is the part's DIST after FM TONE's amp, the platform's insert with a make-up set for every
+engine's level. A first try scaled after it (`fx.c mix_part`, reverted): a driven import kept its tone, but a strongly
+driven FM TONE sound came out 6 dB under the same Drive on any other engine and EP at Drive 127 played at 92 % of its
+RMS at Drive 0 (`test_cr.sh` "FM TONE's Drive with FX off is heard" wants > 120 %). Before it, a driven import is less
+saturated than in 0.22 and falls 2 .. 4 dB instead of 6. **After**: INIT's voice -22.1; the imports -21.2 / -21.6 /
+-26.7 (Drive 0: -22.1 / -22.2 / -27.4; Drive 40 .. 127: -19.6 / -19.9 / -22.6), inside the other engines' spread; every
+VA, FM6, CZ-1 and P5 line of the two runs the same. The table per preset: docs/AUDIO-QUALITY.md "FM TONE's level".
+The import is unchanged (a sound keeps its VOL as LEVEL). **Goldens**: the 16 `preset/FM_TONE/*` of tests/golden.txt
+rewritten on purpose (this and 3y120; the other 297 unchanged); `tests/quad_ref.py`'s model at `>> 12` and its four
+presets' LEVELs, its 12 goldens written again (the 8 algorithm patches at half their size, the 4 presets as before).
+
+3y120. **FM TONE's pops: a voice struck again no longer restarts what is heard; a filter switched within a note and
+MIX by an LFO no longer step (same branch).** Looked for as CZ-1's were (docs/CZ1.md "Pops"): the new
+`tests/quad_pops.c` renders one FM TONE sound through eight scenarios (hold, retrig, retrig-gap, change, steal, arp,
+restrike, arp-up; four chords; C2 C4 C6; velocity 100, 127: 3264 runs for the presets and INIT, 2048 for the imports)
+and reads the dry mix (jumps, two-sided clicks, holes: cz_pops.c's measures) and the engine's state at each block's
+events (an operator restarted under the voice's level, the amplitude set back, RESET, the filters cleared);
+`QUAD_TRACE` and `QUAD_LIST` explain a run. **0.22**: presets + INIT 92 runs with a jump (INIT 68, HOLLOW 24), 1560 with
+an operator restarted while heard; imports 78 with a jump (29 sounds), 1379. **Three causes, with the samples**:
+(1) PHRT (ALL by default) set the operators' phases to 0 on a voice that still sounded (a chord struck again, a common
+tone of a chord change, an arp's note over its own tail, a MONO line), while its amp envelope went on from its level:
+INIT's C2 chord struck again at 300 ms, sample 13216, the dry mix -10212 -> -435, voice 0 at half scale, phases
+`8dbead80` -> 0. Now `quad_phrt_mask`: such a voice restarts only the operators no one hears (a carrier under -40 dB,
+an enveloped one at its envelope x level; a modulator under -66 dB), the others run on; restarting the silent ones is
+kept, since a decayed modulator at an arbitrary phase bursts when its envelope leaps up (the first try, keeping all of
+a voice over -60 dB, made PLUCK and BASS click). (2) A filter switched in or out within a note: the multimode, skipped
+while an LP is wide open, came back with its states at 0 (A067 EXPLORING at 512, A210 PREACHY at 3361: the output to 0
+at once); the base-width high-pass, off at BASE 0, let its low band back at once when an LFO took BASE there (A126
+WAVETABELS at 106112). Now a filter switched in starts from the state its input implies and a switch either way
+crossfades over its block (`quad_voice_t.fon`). (3) MIX by an LFO stepped at every block's edge (A087 HEXAGON's RAMP):
+now ramped over the block (`quad_voice_t.mixp`). (2) and (3) are bit for bit where nothing switches or moves: against
+the same tree with the two neutralized, every run of the presets and INIT has the same dry mix but DRONE's (an LFO on
+MIX), and 42 of the 256 imports differ (those that move a filter or MIX). **After**: presets + INIT 0 jumps, 0
+restarts heard, clicks 410 -> 247; imports 3 jumps (A132 S-MACHINE: its HARM-shaped feedback operator, chaotic by
+design), clicks 267 -> 125. The clicks left are the sounds' own attacks (MARIMBA as loud from silence as struck again;
+PLUCK, BASS at C2), BRASS's feedback cusp (one a period), and the platform's fade steal (voice.c, one block, every
+engine). RESET (an operator envelope from 0 on a sounding voice) is the Digitone's and stays: off in every run, the
+click count did not move. **Tests**: `quad_pops check` in `tests/run_cr_tests.sh` (presets and INIT, every scenario,
+chords 0 and 2, C2 and C4, velocity 127: 544 runs, 12 s; fails on a wrap, a jump, a hole, a restart heard: 0 here, 258
+on a11e0ca); `cr_quad_test t_switch` (the multimode by its envelope, the high-pass and the low-pass by an LFO, MIX by a
+square: the largest sample step near a switch against the rest of the note 0.86 .. 0.99; without the fix 39, 38, 8.7,
+5.1) and PHRT's checks rewritten (a sounding voice runs on, a silent B2 under a heard C restarts, a voice released under
+-40 dB restarts all). **Cost on the unit** (`tools/fx_loops.py` against a11e0ca's listing): the 24 operator loops +6.2
+instructions a sample on average (MIX's ramp), the DC / base-width loop 40 -> 39, the SVF loops the same: about 30 us of
+the 2902 us half for 8 voices (+1.0 %). **Size**: XIP 549 756 -> 551 484 B (96.2 %, +1728), RAM 78 652 and POOL 239 180
+unchanged (the two fields fit the voice's padding); the stub version 3, baee55ed142fe1cc. Docs: QUAD.md "Level" and
+"Pops" (and PHRT, the output scale), AUDIO-QUALITY.md "FM TONE's level" and "How to measure". **What to listen for on
+the unit**: an INIT or imported FM TONE sound about as loud as a VA pad (the factory presets as they were; BASS, SQUARE
+LEAD, WOBBLE a little softer); a chord struck again or changed with common tones, an arp over its own tails, a MONO
+line on INIT / HOLLOW / EP: no pop; an imported sound with a filter envelope or an LFO on BASE or MIX (EXPLORING,
+PREACHY, WAVETABELS, HEXAGON): no click where the filter opens or closes. **Checked**: `CR_VERSION=0.22 sh
+tests/run_all.sh` ALL SUITES PASSED (22 suites, 102 s; 313 goldens, the 16 FM TONE ones as rewritten here; 0 lint;
+test_cr 1044 ok, test_persist 111, test_retired 18, test_pool 7). Not run: anything on the device; not pushed.
