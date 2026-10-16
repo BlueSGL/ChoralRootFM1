@@ -4200,7 +4200,7 @@ installer's default is 0.21)"; `emu/version.txt` "ChoralRoot 0.22-beta4". The in
 0.20 .. 0.16, Install names 0.21 both ways; the notes link is `blob/main/docs/releases/0.22-beta4.md` (the
 installer's and `firmware/index.html`'s); beta4's two packages are on the site with the listed sha256s.
 
-3y106. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
+3y112. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
 2026-10-15: "Could the grain synth have a way to generate its own samples from a couple knobs to quickly get a variety
 of interesting samples to work with?"; branch claude/grain-engine-f724f9 from da1f8e2 = v0.22-beta3). No firmware
 code; nothing flashed; the owner decides after hearing the sketches.** `docs/GRAIN.md` (new): the source generator
@@ -4225,7 +4225,7 @@ the finish pass's high-pass, the fundamental at C4, the centroid and level movin
 say) and over the scenes (every one sounding through the hold and silent at the end); `python3 tools/grain_cost.py`
 (.text 7420 B, .rodata 4192 with the shared tables). Not run: the suites (no firmware changed). No device access.
 
-3y107. **GRAIN: two sources and MORPH (the owner, 2026-10-15, on the first sketches: "I like these test wavs, What
+3y113. **GRAIN: two sources and MORPH (the owner, 2026-10-15, on the first sketches: "I like these test wavs, What
 would be really cool is if you could generate two waves, each with their own settings, and then there's a parameter
 to morph between them"; branch claude/grain-engine-f724f9).** docs/GRAIN.md: a sound has sources A and B (TYPE TONE
 MOTION SEED each, two 32 KB buffers: the same 64 KB of POOL as before, now one part's; a bass part on GRAIN shares
@@ -4245,7 +4245,7 @@ the env scenes start on B and settle on A, the half scenes sit between; `python3
 **Decided** (the owner, later the same evening, after hearing the morph files): "Keep the granular morph (each grain
 reads A or B by MORPH's share) as designed." The crossfade stays a comparison in the sketches only; GRAIN.md says so.
 
-3y108. **GRAIN step 1: the source generator in the firmware's tree with its test (the owner, 2026-10-15: "Go ahead
+3y114. **GRAIN step 1: the source generator in the firmware's tree with its test (the owner, 2026-10-15: "Go ahead
 with step 1 of docs/GRAIN.md"; branch claude/grain-engine-f724f9).** `firmware/src/grain_src.c` (new): the eight
 families' `gs_begin` / `gs_step` / `gs_finish` moved out of `tools/grain_sketch.c`, which includes it (the sketches
 heard are the firmware's generator byte for byte; the sketch keeps the player and `pow2_q16`); `GS_API` / `GS_FAM`
@@ -4265,7 +4265,7 @@ files; the sources' mean now under 0.03 %); `python3 tools/grain_cost.py`; `sh t
 `sh tests/run_cr_tests.sh` exit 0 (every suite as before, cr_grain_test 4330 checks ok). Not run: `./build.sh`'s
 size line cannot change (no file includes grain_src.c); no device access.
 
-3y109. **GRAIN steps 2 to 4: the engine in the firmware (the owner, 2026-10-15: "Ok, continue and do steps 2 to 4";
+3y115. **GRAIN steps 2 to 4: the engine in the firmware (the owner, 2026-10-15: "Ok, continue and do steps 2 to 4";
 branch claude/grain-engine-f724f9; docs/GRAIN.md section 6).** `firmware/src/eng_grain.c` replaced: Felucca's GRAIN
 player (the pool of grains shared by a part's voices, the Hann window, the 1 / sqrt(overlap) level, SIZE DENS POS SPRD
 RAND, the block-wise window ramp) over two RAM buffers rendered by `grain_src.c` (sources A and B, 2 x 32 KB of POOL,
@@ -4309,8 +4309,8 @@ tests passed (the mock equals the firmware); `node web/test_sounds.mjs`, `test_b
 tests/install_test.py` pass; `sh tools/emu/build.sh && sh tools/emu/test_cr.sh` every check ok (test_retired.sh PASS
 after its pre-cut flag), `sh tools/emu/test_persist.sh` PASS. Not run: the browser emulator's test, the layout tool's;
 no device access (the unit holds the beta4 release work).
-**Then** (the release session, 2026-10-15: "renumber yours to 3y106 onwards before any merge, and base the merge on
-5e1e8a7"): the GRAIN entries 3y102 .. 3y105 became 3y106 .. 3y109 (docs/GRAIN.md's references too), origin/main
+**Then** (the release session, 2026-10-15: "renumber yours to 3y112 onwards before any merge, and base the merge on
+5e1e8a7"): the GRAIN entries 3y102 .. 3y105 became 3y112 .. 3y115 (docs/GRAIN.md's references too), origin/main
 5e1e8a7 (v0.22-beta4) merged into the branch (HISTORY.md the one conflict: main's 3y103 .. 3y105 before these). On the
 merged tree: `grain_tick` out of line (`noinline`: its own line in the target-cost test, not the audio ISR's, which it
 had grown past the +10 %: `tests/target_budget.py`'s defaults grain_render 843, grain_block 28, grain_tick 99);
