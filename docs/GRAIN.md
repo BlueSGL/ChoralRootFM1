@@ -46,7 +46,7 @@ is version 2, 64 bytes; a version-1 record (the first build's 20 bytes) loads wi
 | "The LFO needs to be able to be switched to sync with rates matching the VA engine" | two LFOs of the engine's (`LFO 1`, `LFO 2`: RATE WAVE DEPTH FADE; `LFO SYN`: SYNC1 SYNC2), the VA's waves (SIN TRI SAW SQR S&H), its free rates and, synced, its list (N_VA_SYNC: 8BARD .. 256T, 4 / 3 / 2 ms) with the same rescale when SYNC switches; FADE from the note, a voice; DEPn and RATEn as destinations |
 | "Need to be able to change scan between forward and reverse and be able to make it scan very slowly" | SCAN -64 .. +63 (`F_BIPCT`): the sign the direction, a ramp over the whole buffer (POS the start), a round in about 110 s at 1, halving every 8, 0.47 s at 64; 0 holds |
 | "The generated A/B waveforms and also the combined morphed one" | the wave band (`ENG_B_WAVE`, `cr_draw.c CR_W_WAVE`, the data from `eng_grain.c grain_wave`): on the SRC screen the active lane's buffer (A on SRC 1, B on SRC 2) in white; on the GRAIN screen both at once, A blue and B orange, each as bright as MORPH gives it (MORPH 0: A alone bright; 127: B); SPRD a dim green span round POS, POS a white line that moves with SCAN |
-| "animated grains moving across the waveform" | every grain sounding on the part is a bright vertical line of its source's colour at its place in the buffer, as strong as its window is open: they travel as they read (forward or reversed), appear and fade with DENS and SIZE; the band redraws every frame while the screen is open |
+| "animated grains moving across the waveform" | every grain sounding on the part is a bright vertical line of its source's colour at its place in the buffer, as strong as its window is open: they travel as they read (forward or reversed), appear and fade with DENS and SIZE; the band redraws every third frame while the screen is open (20 a second; a redraw is ~100 lines over the LCD), and holds while a source renders |
 | "Filter should use the same filter from VA engine" | the VA's SVF a voice (`va_fweights`, `va_svf`: FTYPE 0 .. 127 round LP BP HP NOTCH with the crossfade between, CUT RES, DRIVE's pre-filter tanh 1x .. 4x, KTRK round C4, the same knee), on the `FILTER` (CUT RES FTYPE DRIVE) and `FILTER+` (KTRK) pages under the filter band |
 
 Also: `ENV 1` and `ENV 2` are plan screens (so ENV 2 reads "ENV 2 · mod", not the title rules' "filter"); the window is
@@ -146,11 +146,13 @@ MORPH sits at the other end is not heard at all.
   a request during a render restarts it on the new values at its next slice; a knob turned through ten detents
   renders once or twice, not ten times.
 - **Where: core 0's main loop, in slices.** `main.c`'s loop draws a frame every 15 ms and waits the rest of the
-  frame in an idle loop (`while (fm1_ms - m < 15u) { ui_input(); ed_service(); }`). A `cr_grain_poll()` there
-  renders one slice of 1024 samples a turn (DRONE, the heaviest: 1.6 ms, 2.4 with the unit's factor; PLUCK 0.25 ms)
-  and returns, so the keys are still read every slice; the idle loop runs several slices a frame. The audio ISR
-  preempts the main loop as it preempts a frame's drawing: **the audio never waits for the render**. A whole buffer
-  is 16 slices: DRONE lands in 26 .. 40 ms of main-loop time, inside two or three frames; PLUCK in one.
+  frame in an idle loop (`while (fm1_ms - m < 15u) { ui_input(); ed_service(); }`). `grain_poll()` renders one slice
+  of 1024 samples a call (DRONE, the heaviest: 1.6 ms, 2.4 with the unit's factor; PLUCK 0.25 ms) and returns: once
+  right after every frame's draw, whatever the frame cost, and once a turn of the idle loop (3y119: on the unit a
+  frame that fills its 15 ms, the wave band's redraw, left the idle loop no turn and the knobs' renders waited for a
+  page change). The audio ISR preempts the main loop as it preempts a frame's drawing: **the audio never waits for
+  the render**. A whole buffer is 16 slices: DRONE lands in 26 .. 40 ms of main-loop time when the frames are cheap,
+  within 16 frames (a quarter of a second) when they are not; PLUCK in one or two.
 - **The swap**: the slices write the scratch (the other part's buffer, or in place with the fade: above). When the
   render is done, `block()` (the audio ISR) sees the ready flag at a block boundary and takes the new pointer; the
   grains in flight hold their own `src` pointer and finish on the old buffer; the next render waits for the pool to

@@ -383,6 +383,11 @@ static void fm1_main(void)
         ui_leds();
         ui_draw();
         ui_ft_add(ft0);
+#if FELUCCA_GRAIN
+        grain_poll();                           /* GRAIN's render: a slice every frame whatever the frame cost (a frame
+                                                 * that fills its 15 ms, the wave band's, leaves the idle loop below no
+                                                 * turn: 3y119), and a slice a turn of the idle loop */
+#endif
         felucca_dbg.stage = BS_LOOP_IDLE;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */
             ui_input();

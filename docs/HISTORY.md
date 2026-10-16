@@ -4579,3 +4579,17 @@ session flashed, by the rule): the unit runs this branch's 8c92b51 (the package 
 session's rebuild, its run_all green too) over 70bb639, `--unit 5BD75BE3`, a full backup first
 (`fm1-backups/fm1-backup-2026-10-16-before-grain2.json`); after boot 128 sounds, c1_faults 0, c1_fallback 0. Not yet
 played by the owner.
+
+3y119. **GRAIN's renders no longer wait for a page change (the owner, 2026-10-16, on the second-phase build: "I've tried
+this out and it's great! Few issues: When adjust the A/B waveforms the waveforms don't actually generate until I've
+switched to a different page and back. They should regenerate as I change parameters so I can hear the changes").**
+The cause: the renders ran only from main.c's idle loop, and on the unit the wave band's redraw every frame (about 100
+lines over the LCD's SPI: most of a 15 ms frame) left the loop no turn while the SRC or GRAIN screen was open, so a
+knob's render waited until the screen changed and the frames got cheap (the emulator polls every millisecond of its
+own, so it never showed it). `main.c`: `grain_poll()` once right after every frame's draw as well, whatever the frame
+cost (a slice is at most ~2.4 ms); `cr_edit.c`: the band's frame count moves every third frame (the grains at 20 a
+second) and not at all while a source renders (`cr_wave_t.lock`), so the render gets the frames and the band shows the
+new buffer when it lands. docs/GRAIN.md's render paragraph and the band's row.
+**Checked**: `./build.sh` XIP 569 216 B (99.3 %), RAM 80 112, POOL 306 196; `CR_VERSION=0.22 sh tests/run_all.sh`:
+every suite but `releases` (a tag v0.23 on the remote that this branch's web/releases.json does not list yet: not
+GRAIN's; the next merge with main brings it), test_cr 1054 ok. Not on the unit: the owner's word flashes it.

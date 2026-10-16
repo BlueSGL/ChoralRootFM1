@@ -1550,12 +1550,17 @@ static uint32_t ce_band_plan(const track_t *t, const ce_view_t *vw, uint8_t *o)
                                                    * GRAIN screen both, morphed; the part; a count that moves every
                                                    * frame, so the band (the grains over the buffers) redraws each one */
         static uint8_t tick;
+        const cr_wave_t *w;
 #if FELUCCA_GRAIN
         cr_wave_src = grain_wave;
 #endif
         o[0] = (uint8_t)(vw->hs == 1u ? (vw->active ? 1u : 0u) : 2u);
         o[1] = (uint8_t)(ce.part ? CR_PART_BASS : CR_PART_CHORD);
-        o[2] = tick++;
+        w = cr_wave_src ? cr_wave_src(o[1]) : 0;
+        /* the grains move at a third of the frame rate (a band redraw is ~100 lines over the LCD, most of a frame:
+         * every frame would leave the renders no idle time), and not at all while a source renders: the render gets
+         * the frames, the band shows the new buffer when it lands (3y119) */
+        o[2] = w && w->lock ? 0xFFu : (uint8_t)((tick++ / 3u) & 0x7Fu);
         return 3;
     }
     if (h->band == ENG_B_FILTER || h->band == ENG_B_WINDOW) {
