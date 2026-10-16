@@ -161,7 +161,7 @@ t ./build/host/cr_midi_test
 # tables the firmware's. Built with P5, as the unit is (3y80, the device manager's P5 tab; until then without it): the
 # clients hold P5's shipped programs (INIT P5, then assets/prophet5-factory/shipped.txt's list) and their Sequential
 # numbers, the favourites' keys; when the list changes this check says what to paste
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -DCZ_FACTORY_RAW -o build/host/sound_templates tests/sound_templates.c -lm
 t ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py
 
 for id in $par_order; do

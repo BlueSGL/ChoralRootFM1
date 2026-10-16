@@ -137,8 +137,10 @@ sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.1
   lines are in the script's head and in docs/AUDIO-QUALITY.md "Classic is 0.18's, bit for bit"; "What Classic's
   guarantee is now" there says what the two parts of the script prove since the stereo chorus.
 
-POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back: 69.4 % after the merge of 3y76, 88.5 % before it on the 0.22 line); XIP is the tightest now (96.3 % in the 0.23 release build, 552 412 B of
-573 440; POOL 69.5 %, RAM 80.0 %). Read them off the size line.
+POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back: 69.4 % after the merge of 3y76, 88.5 % before it on the 0.22 line); XIP is the tightest (96.3 % in the 0.23 release build, 552 412 B of
+573 440; POOL 69.5 %, RAM 80.0 %), and the flash diet of 2026-10-16 (docs/FLASH.md, HISTORY 3y124 .. 3y130) took it to
+90.3 % (517 644 B) with POOL at 77.6 % (FM TONE's HARM cycles live there now) and RAM unchanged: GRAIN's merge has its
+room. Read them off the size line.
 
 ## Release steps
 

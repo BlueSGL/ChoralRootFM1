@@ -4642,3 +4642,23 @@ listing, none changed its instruction count across this change (checked listing 
 3 664 -> 3 410 (their inlined callees, now minsize), `fm6_track_loaded` 1 210 -> 1 156, `quad_unpack` 686 -> 606. The UI frame's cost on the
 unit is not read here (the emulator compiles the same sources at -O2 on the host: `perf.sh`'s UI column cannot see
 this); the owner's `pk_*` readout would. Size: `XIP 520 460 -> 517 644 B` (90.8 -> 90.3 %); RAM and POOL unchanged.
+
+3y130. **The flash diet's account (same day; docs/FLASH.md).** Six commits (3y124 .. 3y129) took main's image from
+`XIP 552 860 B (96.4 %)` to `517 644 B (90.3 %)`: -35 216 B, RAM unchanged, POOL 239 180 -> 266 884 B (69.5 -> 77.6 %:
+FM TONE's HARM cycles). A throwaway merge of GRAIN's branch (80465ac, "merges whole, no cuts") onto the diet, built and
+not committed: `XIP 537 068 B (93.7 %)`, 36 372 B of margin where GRAIN's own build had 3.8 KB; `RAM 80 176 (81.6 %)`;
+`POOL 333 900 (97.0 %)`, 10.2 KB left: POOL is the next wall, and FLASH.md puts the owner's two ways out beside it (the
+HARM mirror in the read, bit-exact, +26 % on the HARM presets' render; or HARM whole in flash again, XIP margin 22.6
+KB with GRAIN, POOL 89 %). Rejected after building and measuring: the HARM mirror, `CZ_RECIP` in two halves (+4 .. 6
+instructions a ramped CZ sample for 1.6 KB); not attempted, with the reasons in the table: the value-name lists
+formatted at run time, the page descriptors packed, fewer font phases, `cr_ring` / `CZ_CARRIER` into POOL.
+`tests/target_budget.txt` is rewritten from the final listing (`BUDGET_UPDATE=1`): the tool weighs an instruction x4 a
+loop level and finds the levels by backward branches, and `fm6_render` (4 364 -> 42 969) and `quad_render` (67 230 ->
+3 453) changed their outer branch structure between builds while their per-sample loops kept their length to an
+instruction (the listing compared span by span; `va_render`, `xd_run`, `xr_run`, the ISR's lines moved 1 .. 3 % and
+read as main's build reads, not as the file had them). `tests/run_cr_tests.sh`: `sound_templates` compiles with
+`-DCZ_FACTORY_RAW` too (it reads a factory tone's name; missed in 3y126). `tools/emu/test_pool.sh` generates
+377264f's headers with 377264f's own generators (it copied this tree's `build/gen`, whose font and CZ-1 shapes the old
+sources no longer read), with the Homebrew library path set in the script (`/bin/sh` drops `DYLD_*`). `docs/HANDOFF.md` "POOL was the tight
+resource" says where the figures stand. Suites on the final tree: `run_cr_tests.sh`, `run_cr_draw.sh` (335 pictures
+byte for byte main's), `tools/emu/test_cr.sh` 1056 ok, `run_all.sh` (below). Nothing flashed, nothing pushed.
