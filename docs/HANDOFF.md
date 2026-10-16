@@ -9,10 +9,13 @@ Released: v0.1 and v0.11 .. v0.23 (`git tag`; v0.23 is the latest stable release
 default, notes in `docs/releases/`), and the betas v0.22-beta1 .. v0.22-beta4 (GitHub pre-releases; the installer
 lists them behind "Show beta releases"). **0.23 is released** (2026-10-16, HISTORY 3y122): main after v0.22 with
 Options > Velocity Curve (3y112), Solfège numerals (3y118), FM TONE at the other engines' level and without pops
-(3y119, 3y120) and the pool bank fix (3y121); `docs/releases/0.23.md` is its notes, `web/releases.json`'s first entry
-is 0.23 (package sha256 a779884b..., single-core a7d424ed...) and 0.22 has its going-back note; the manual's first line
-and the README's "New in 0.23" say 0.23; the tag v0.23 is 5755de8. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.23" (`firmware/src/choralroot.c`); the next version's work starts by
-setting it to 0.24. The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py
+(3y119, 3y120) and the pool bank fix (3y121); `docs/releases/0.23.md` is its notes, `web/releases.json`'s newest
+stable entry is 0.23 (package sha256 a779884b..., single-core a7d424ed...) and 0.22 has its going-back note; the
+manual's first line and the README's "New in 0.23" say 0.23; the tag v0.23 is 5755de8. **0.24-beta1's release tree**
+(HISTORY 3y124: 3y123's velocity work; not tagged yet) lists 0.24-beta1 first in `web/releases.json` with `"beta":
+true` (sha256 efaebdf1..., single-core bab98b02...), notes `docs/releases/0.24-beta1.md`, `docs/releases/0.24.md`
+the pointer to them. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24" (`firmware/src/choralroot.c`; the 0.22 betas'
+trees read 0.22). The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py
 --info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)

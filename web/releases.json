@@ -8,6 +8,28 @@
   },
   "releases": [
     {
+      "version": "0.24-beta1",
+      "beta": true,
+      "date": "2026-10-16",
+      "tag": "v0.24-beta1",
+      "sha256": "efaebdf12c9a1c96a7fea1c0f116dbed1e97b125e6a11c80c76ae12d435c34ed",
+      "sha256_1core": "bab98b0243e19dabfea1ffe61939fe71488cae5a05d5a9d2db01aa2ab4c28944",
+      "title": "Beta: velocity on the top seven keys, poly aftertouch out, the touch on Geek Out 2",
+      "bullets": [
+        "The top seven keys (C#5 to G5) sense velocity with Key Touch on, as F3 to C5 do; until now they followed the velocity you had been playing.",
+        "They are read another way (Charles Vestal's method, from MONK-1 and CTL-1): a touch plays softly, a firm press at or near the top. No aftertouch on them, and Velocity Curve does not change them.",
+        "Options > Key Touch has a fourth value, Vel + Poly AT: as Vel + Aftertouch, with the pressure sent over MIDI as polyphonic aftertouch to each sounding note instead of channel pressure.",
+        "Geek Out 2's title line shows the last key's velocity and the pressure now (VEL 73 AT 42) while Key Touch is on, in place of the cores' count.",
+        "A key whose velocity is not read in time plays at the velocity of your recent playing instead of Options > Velocity.",
+        "With Key Touch at Fixed (the default) nothing changes: every key plays at Options > Velocity, as in 0.23."
+      ],
+      "notes": [
+        "A beta: it may have bugs, and the next stable release, 0.24, replaces it. Please report problems on GitHub.",
+        "Updating from 0.23 keeps your settings, sounds, loops and favorites.",
+        "Going back to 0.23 reads Vel + Poly AT as Key Touch Fixed; once 0.23 saves its settings (you hold SAVE or change an Option there), Key Touch is Fixed when you come back. The full notes have the rest."
+      ]
+    },
+    {
       "version": "0.23",
       "date": "2026-10-16",
       "tag": "v0.23",
