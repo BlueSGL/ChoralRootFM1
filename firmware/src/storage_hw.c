@@ -77,6 +77,10 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
     const uint8_t *p = src;
     if (!FL_STORE_OK(off, n))                   /* only inside the storage areas */
         return -8;
+#if BOARD_SMK37
+    if (st_in_usrflash(off))
+        st_stock_release();                     /* a sector the stock layout leaves erased is written unerased */
+#endif
     while (n) {                                 /* (fm1_flash.h fl_write, with the chip's time kept) */
         uint32_t chunk = 256u - (off & 0xFFu), took = 0, f;
         int rc;

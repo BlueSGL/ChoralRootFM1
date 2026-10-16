@@ -218,8 +218,8 @@ static uint8_t st_owner_cleared;                /* (the console says so) */
  * trusts the area while the marker is there and never rebuilds it, so after a return to stock ChoralRoot's banks and
  * loops would be its key, knob and fader mapping (every key one note). So: an intact stock mapping is kept (it reads
  * as empty banks and loops), and the marker is released (its sector erased: the stock firmware rebuilds its factory
- * mapping at its next start) before ChoralRoot's first erase in USRFLASH (storage_hw.c st_erase) and at boot when it
- * stands over anything else (st_owner_check: ours, an older build's, another firmware's). */
+ * mapping at its next start) before ChoralRoot's first erase or program in USRFLASH (storage_hw.c st_erase, st_prog)
+ * and at boot when it stands over anything else (st_owner_check: ours, an older build's, another firmware's). */
 static int st_stock_tagged(void)
 {
     static const uint8_t TAG[8] = {'u', 's', 'r', 'd', 'a', 't', 'a', 0};
