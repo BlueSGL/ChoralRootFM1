@@ -312,6 +312,9 @@ int cr_chord_names(void);
  * "bVII", "vii\260", "III+"; a single note (CR_Q_NONE): upper case. Pure; display only (cr_engine.c) */
 #define CR_NUMERAL_MAX 6
 void cr_chord_numeral(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, char buf[CR_NUMERAL_MAX]);
+/* .. the same degree as a movable-do solfege syllable (Do = the tonic; GitHub issue 15): "SOL", "re", "ti\260", "#FA"
+ * (the numeral's accidental, case and marks; the longest "#FA\260", 4 characters) */
+void cr_chord_solfege(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, char buf[CR_NUMERAL_MAX]);
 void cr_note_name(uint8_t note, char buf[5]);     /* "C#4" (MIDI 60 = C4) */
 uint16_t cr_scale_mask(const cr_t *c);             /* bit pc = in the scale; 0 when Key Mode is off */
 uint8_t cr_mods_held(const cr_t *c);               /* bit m = physically held */

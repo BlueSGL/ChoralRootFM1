@@ -57,7 +57,7 @@
 #define GP_RATE_Q16 ((GS_RATE << 16) / 44100u)
 #define GRAIN_SLICE 1024u        /* samples a poll (DRONE, the heaviest: 1.6 .. 2.4 ms on the unit) */
 #define GRAIN_BLOB 64u           /* 'G', version, GQ_NP values, zeros */
-#define GRAIN_BLOB_V1 20u        /* version 1 (3y117's first build): the first 18 values */
+#define GRAIN_BLOB_V1 20u        /* version 1 (3y136's first build): the first 18 values */
 #define GRAIN_MAGIC 0x47u
 #define GRAIN_VER 2u             /* 2: the filter's FTYPE DRIVE KTRK, ENV 2, two LFOs with SYNC, the matrix and its fine
                                   * flags, SCAN bipolar (version 1's 0 .. 127 forward triangle: halved, forward) */

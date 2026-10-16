@@ -3,7 +3,7 @@
 /* What the VA (eng_va.c) and GRAIN (eng_grain.c) share, in every build whatever the engine flags (engines.c includes it
  * after dsp.c): the filter's type weights and its SVF step (FTYPE's LP BP HP NOTCH cycle), the LFO sync list and its
  * phase increments, the matrix amounts' fine rule (tenths below 6: va_amt_q, VA_AMX), the names of the filter
- * positions and the LFO waves, a xorshift. Moved out of eng_va.c as they were (3y118: GRAIN's second phase); nothing
+ * positions and the LFO waves, a xorshift. Moved out of eng_va.c as they were (3y137: GRAIN's second phase); nothing
  * here is an engine. */
 #ifndef VA_COMMON_C
 #define VA_COMMON_C

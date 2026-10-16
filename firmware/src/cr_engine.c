@@ -1570,22 +1570,35 @@ void cr_chord_name(uint8_t root_pc, uint8_t quality, uint8_t ext, char root[3], 
  * of its root above the tonic (major 0 2 4 5 7 9 11, natural minor 0 2 3 5 7 8 10 = I .. VII); a root between two
  * degrees is the neighbour with an accidental (major bII bIII #IV bVI bVII, minor bII #III #IV #VI #VII); lower case
  * with a minor third (MIN, DIM, MIN + SUS), upper case otherwise (a single note too); DIM ends in the degree sign
- * (Latin-1 0xB0), the augmented chord in "+". No extensions: the name beside it has them. Display only */
-void cr_chord_numeral(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, char buf[CR_NUMERAL_MAX])
+ * (Latin-1 0xB0), the augmented chord in "+". No extensions: the name beside it has them. Display only.
+ * The same degree spelt as movable-do solfege (Numerals = Solfege, GitHub issue 15): DO RE MI FA SOL LA TI for I .. VII
+ * from the tonic in either scale (A minor's C is MI as it is III), the accidental, the case and the marks the
+ * numeral's: "SOL", "re", "ti\260", "#FA", "bTI" (docs/MANUAL.md "Numerals") */
+static void crx_degree(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, const char *const nm[7],
+                       char buf[CR_NUMERAL_MAX])
 {
-    static const char *const RN[7] = { "I", "II", "III", "IV", "V", "VI", "VII" };
     /* per semitone above the tonic: the degree 0..6 | 0x10 flat | 0x20 sharp */
     static const uint8_t DEG[2][12] = {
         { 0, 0x11, 1, 0x12, 2, 3, 0x23, 4, 0x15, 5, 0x16, 6 },
         { 0, 0x11, 1, 2, 0x22, 3, 0x23, 4, 5, 0x25, 6, 0x26 } };
     uint8_t d = DEG[scale == CR_SCALE_MINOR][(root_pc % 12u + 12u - tonic % 12u) % 12u];
-    const char *n = RN[d & 7u];
+    const char *n = nm[d & 7u];
     int i = 0, low = quality == CR_Q_MIN || quality == CR_Q_DIM || quality == CR_Q_MIN4;
     if (d & 0x30u) buf[i++] = d & 0x10u ? 'b' : '#';
     while (*n) buf[i++] = (char)(low ? *n++ | 0x20 : *n++);
     if (quality == CR_Q_DIM) buf[i++] = (char)0xB0;
     else if (quality == CR_Q_AUG) buf[i++] = '+';
     buf[i] = 0;
+}
+void cr_chord_numeral(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, char buf[CR_NUMERAL_MAX])
+{
+    static const char *const RN[7] = { "I", "II", "III", "IV", "V", "VI", "VII" };
+    crx_degree(root_pc, quality, tonic, scale, RN, buf);
+}
+void cr_chord_solfege(uint8_t root_pc, uint8_t quality, uint8_t tonic, uint8_t scale, char buf[CR_NUMERAL_MAX])
+{
+    static const char *const SO[7] = { "DO", "RE", "MI", "FA", "SOL", "LA", "TI" };
+    crx_degree(root_pc, quality, tonic, scale, SO, buf);
 }
 
 void cr_note_name(uint8_t note, char buf[5])

@@ -5,25 +5,24 @@ The current state only. What was done, when and why (the lettered items 3b .. 3y
 
 ## State in three sentences
 
-Released: v0.1 and v0.11 .. v0.21 (`git tag`; v0.21 is the latest stable release, on the site as the installer's
+Released: v0.1 and v0.11 .. v0.23 (`git tag`; v0.23 is the latest stable release, on the site as the installer's
 default, notes in `docs/releases/`), and the betas v0.22-beta1 .. v0.22-beta4 (GitHub pre-releases; the installer
-lists them behind "Show beta releases"; beta4 is 5e1e8a7, HISTORY 3y105). **0.22 is prepared for release and NOT
-TAGGED** (HISTORY 3y106, 3y111): the code is 0.22-beta4's with one change merged, the VA matrix's amounts in tenths
-below 6 (GitHub issue 13, HISTORY 3y110; the owner tried it on the unit and wants it in 0.22); `docs/releases/0.22.md`
-is its notes (everything since 0.20: P5 with the owner's rows editor, 128 slots, favourites, FM TONE in the
-Digitone's ranges and times, `.dnsnd` import, the VA's fine amounts, Key Touch and EXPR, knob acceleration, Numerals
-and Snap, the master Filter, the loop editor's step preview, Dual Core on by default with the crash fallback and
-1.50 V, Geek Out 2, the unit ID, the device manager's tools, and 0.21's chorus), `web/releases.json`'s first entry is
-0.22 (package sha256 1728d97e..., single-core 5a64e5bf...) above the four betas, and 0.21 has its going-back note; the manual's first line and the
-README's "New in 0.22" say 0.22. The tag, the release and the site wait for the owner's word. The tree's
-`FELUCCA_VERSION` is "ChoralRoot 0.22" (`firmware/src/choralroot.c`); the next version's work starts by setting it to
-0.23. The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py --info`.
+lists them behind "Show beta releases"). **0.23 is released** (2026-10-16, HISTORY 3y122): main after v0.22 with
+Options > Velocity Curve (3y112), Solfège numerals (3y118), FM TONE at the other engines' level and without pops
+(3y119, 3y120) and the pool bank fix (3y121); `docs/releases/0.23.md` is its notes, `web/releases.json`'s newest
+stable entry is 0.23 (package sha256 a779884b..., single-core a7d424ed...) and 0.22 has its going-back note; the
+manual's first line and the README's "New in 0.23" say 0.23; the tag v0.23 is 5755de8. **0.24-beta1's release tree**
+(HISTORY 3y125: 3y123's velocity work with 3y124's wait; not tagged yet) lists 0.24-beta1 first in
+`web/releases.json` with `"beta": true` (sha256 409cfc6f..., single-core 570a73bf...), notes `docs/releases/0.24-beta1.md`, `docs/releases/0.24.md`
+the pointer to them. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.24" (`firmware/src/choralroot.c`; the 0.22 betas'
+trees read 0.22). The owner's unit runs what the orchestrator last flashed: check with `python3 tools/fm1_install.py
+--info`.
 
 ## Repos and folders (all under `/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/`)
 
 | folder | what | remote |
 | --- | --- | --- |
-| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1, v0.11 .. v0.21 and v0.22-beta1 .. beta4 (v0.22: see above) |
+| `ChoralRootFM1/` | the firmware, the Mac emulator, the web installer, manager and site | github.com/Quixotic7/ChoralRootFM1, main, tags v0.1, v0.11 .. v0.23 and v0.22-beta1 .. beta4 |
 | `ChoralRootFM1Designer/` | the mock-up designer (MIT); PNG sheets in Git LFS | github.com/Quixotic7/MvaveFM1-Designer |
 | `MvaveFM1Unbricker/` | the recovery tools, `TRANSPORTER-GUIDE.md` | github.com/Quixotic7/MvaveFM1Unbricker |
 | `FM-1-transporter/`, `jl-uboot-tool/`, `MVaveOfficial/`, `Felucca/`, `melodee/`, `sloop-fm1/`, `fm1-x0x/` | upstream tools and references | read-only |
@@ -141,8 +140,10 @@ sh tools/emu/classic_exact.sh build/scratch/ref18 # Output Classic against a 0.1
   lines are in the script's head and in docs/AUDIO-QUALITY.md "Classic is 0.18's, bit for bit"; "What Classic's
   guarantee is now" there says what the two parts of the script prove since the stereo chorus.
 
-POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back: 69.4 % after the merge of 3y76, 88.5 % before it on the 0.22 line); XIP is the tightest now (95.9 % in the 0.22 release build, 549 756 B of
-573 440; POOL 69.5 %, RAM 80.0 %). Read them off the size line.
+POOL was the tight resource until 2026-10-14 (the delay at the half rate gave 65 KB back: 69.4 % after the merge of 3y76, 88.5 % before it on the 0.22 line); XIP is the tightest (96.3 % in the 0.23 release build, 552 412 B of
+573 440; POOL 69.5 %, RAM 80.0 %), and the flash diet of 2026-10-16 (docs/FLASH.md, HISTORY 3y126 .. 3y132) took it to
+90.3 % (517 644 B) with POOL at 77.6 % (FM TONE's HARM cycles live there now) and RAM unchanged: GRAIN's merge has its
+room. Read them off the size line.
 
 ## Release steps
 

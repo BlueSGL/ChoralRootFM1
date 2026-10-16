@@ -182,13 +182,16 @@ def write_header():
     arr("QUAD_DT_DN", "int16_t", DT_DN, 16)
     L.append("/* HARM: 0 the sine, 1..26 the Digitone's series (docs/QUAD.md \"HARM\": saw build-up 1..7, saw reduction")
     L.append(" * 8..13, odd/even 14, square build-up 15..19, square reduction 20..23, bell 24..26), additive, peak 32767;")
-    L.append(" * %d points and the first again (no wrap in the interpolation). Flash (XIP): %.1f KB */" %
-             (HN, len(HARM) * (HN + 1) * 2 / 1024.0))
-    L.append("static const int16_t QUAD_HARM[%d][%d] = {" % (len(HARM), HN + 1))
+    L.append(" * %d points a cycle, of which the first half and its end point, 0 .. %d, are stored: every wave is a sum of" % (HN, HN // 2))
+    L.append(" * sines, so f(%d - i) = -f(i) exactly (quad_ref.py checks every point), and eng_quad.c quad_hw reads the second" % HN)
+    L.append(" * half as the first, reversed and negated. Flash (XIP): %.1f KB (the whole cycle was %.1f) */" %
+             (len(HARM) * (HN // 2 + 1) * 2 / 1024.0, len(HARM) * (HN + 1) * 2 / 1024.0))
+    L.append("static const int16_t QUAD_HARM[%d][%d] = {" % (len(HARM), HN // 2 + 1))
     for t in HARM:
+        assert all(t[HN - i] == -t[i] for i in range(1, HN)) and t[0] == 0 and t[HN // 2] == 0, "a HARM wave is not odd-symmetric"
         L.append("    {")
-        for i in range(0, HN + 1, 16):
-            L.append("        " + ", ".join(str(v) for v in t[i:i + 16]) + ",")
+        for i in range(0, HN // 2 + 1, 16):
+            L.append("        " + ", ".join(str(v) for v in t[i:min(i + 16, HN // 2 + 1)]) + ",")
         L.append("    },")
     L.append("};")
     with open(OUT_H, "w") as f:
@@ -303,19 +306,20 @@ def merge(*ds):
 
 
 # four of eng_quad.c's presets (the C test checks these patches against its own: keep them in step; the times
-# re-expressed 2026-10-14 on the Digitone's tables, as eng_quad.c's)
+# re-expressed 2026-10-14 on the Digitone's tables, as eng_quad.c's; the LEVELs +6 dB on 2026-10-16, as eng_quad.c's,
+# whose output is 6 dB lower: docs/QUAD.md "Level")
 PRESETS = {
     "EP": patch_of(**merge(syn(2, QRC(4), 3, QRC(4), QRC(56), 0, 12, 0, -30), env("A", 0, 29, 20, 66),
                            env("B", 0, 12, 0, 62), dict(VEL=100, AKEY=40, B1KEY=30, B2KEY=30, PHRT=1),
-                           amp(0, 39, 40, 14, 72))),
+                           amp(0, 39, 40, 14, 102))),
     "BASS": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 24, -64), env("A", 0, 18, 34, 88),
                              env("B", 0, 11, 0, 0), flt("LP12", 92, 10, 20), fenv(0, 12, 0, 0),
-                             amp(0, 24, 100, 5, 110))),
+                             amp(0, 24, 100, 5, 127))),
     "GLASS PAD": patch_of(**merge(syn(7, QRC(4), 7, QRC(16), QRC(16), 8, 40, 0, 0), env("A", 17, 41, 100, 36),
-                                  env("B", 24, 48, 60, 50), dict(PHRT=0), amp(53, 32, 120, 43, 88),
+                                  env("B", 24, 48, 60, 50), dict(PHRT=0), amp(53, 32, 120, 43, 124),
                                   lfo(0, 8, 3, "HARM", "SINE", 30))),
     "WOBBLE": patch_of(**merge(syn(1, QRC(4), 3, QRC(4), QRC(4), 0, 0, 10, -64), env("A", 0, 19, 127, 60),
-                               env("B", 0, 16, 40, 0), flt("LP24", 70, 60, 0), amp(0, 24, 110, 7, 115),
+                               env("B", 0, 16, 40, 0), flt("LP24", 70, 60, 0), amp(0, 24, 110, 7, 127),
                                lfo(0, 32, 4, "ALEV", "TRI", 50, "TRIG"), lfo(1, 32, 4, "FREQ", "TRI", 40, "TRIG"))),
 }
 
@@ -892,7 +896,7 @@ class Voice:
                 y = soft_knee_f(clamp(y, -200000, 200000), 16000)
             y = clamp(y, -65535, 65535)
             a += dA
-            out[i] += y * (a >> 8) / 32768.0 * 6000 / 2048.0
+            out[i] += y * (a >> 8) / 32768.0 * 6000 / 4096.0   # (>> 12: the engine's output scale since 2026-10-16)
         self.ph = [p0 % 4294967296.0, p1 % 4294967296.0, p2 % 4294967296.0, p3 % 4294967296.0]
         self.fb1, self.fb2 = fb1, fb2
         self.f, self.bh, self.bl, self.dc = fs, bh, bl, dc

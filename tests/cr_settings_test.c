@@ -1431,7 +1431,7 @@ static void t_touch(void)
        "Velocity + Aftertouch, Sens Low / High beside Numerals: every bit kept");
     s.bass_on = (uint8_t)(CRS_TOUCH_BITS(3, 0, 0));
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 0u, "Key Touch 3 (not a mode): Fixed");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 3u, "Key Touch 3: Vel + Poly AT (a mode since 3y123), kept");
     s.bass_on = 0;
     cr_settings_seal(&s);
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_TOUCH(&r) == 0u && CRS_VSENS(&r) == 0u, "a 0.21 record (the byte 0): Fixed, Mid");
@@ -1465,6 +1465,58 @@ static void t_touch(void)
  * manual (SAVE held); and the rule 0.17 .. 0.22-beta2 apply to the byte (their CRS_FIX(key_on, 0, 7): modelled here,
  * the old binaries were not run) reads a record with Snap on as the byte's defaults there: Key Mode off, Key plays
  * Chords, Keyboard Chords, until set again (the v14 caveat, docs/SETTINGS.md) */
+/* GitHub issue 15: the KEY layer's Numerals = Solfege in bit 7 of scale (CRS_SOLFEGE), a bit of its own apart from
+ * bass_on's On: off by default and in every older record; round-trips beside either scale; the engine gets the scale
+ * without it and its capture keeps it; an out-of-range scale keeps the bit; manual; and the rule 0.17 .. 0.22 apply
+ * to the byte (their CRS_FIX(scale, 0, 1), default Major: modelled, the old binaries were not run) */
+static void t_solfege(void)
+{
+    cr_settings_t d, s, r;
+    cr_settings_out_t o;
+    cr_t E;
+    unsigned sc;
+    cr_settings_defaults(&d);
+    ok(!CRS_SOL(&d) && CRS_SCALE(&d) == CR_SCALE_MAJOR && CRS_VERSION == 15u, "Solfege: off by default, no settings version for it");
+    for (sc = 0; sc < 2u; sc++) {
+        s = d;
+        s.scale = (uint8_t)(CRS_SOLFEGE | sc);
+        s.tonic = 9;
+        cr_settings_seal(&s);
+        ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SOL(&r) && CRS_SCALE(&r) == sc && !CRS_NUMS(&r) &&
+           r.bass_on == 0, sc ? "Solfege round-trips with A minor (bit 7 of scale), bass_on untouched"
+                              : "Solfege round-trips with A major (bit 7 of scale), bass_on untouched");
+        cr_init(&E, &OUT);
+        cr_settings_apply(&r, &E, &o);
+        ok(E.scale == sc && E.key_on == 0 && E.bass_on == 0, sc ? ".. the engine gets minor without the bit" : ".. the engine gets major without the bit");
+        cr_settings_capture(&r, &E, &o);
+        ok(CRS_SOL(&r) && CRS_SCALE(&r) == sc, ".. and its capture keeps the bit");
+    }
+    s = d;
+    s.scale = (uint8_t)(CRS_SOLFEGE | 5u);         /* an unknown scale: Major, the bit kept */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SOL(&r) && CRS_SCALE(&r) == CR_SCALE_MAJOR, "scale 5 with Solfege: Major, Solfege kept");
+    s.scale = 0x7Fu;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.scale == CR_SCALE_MAJOR, "scale 127: Major, no Solfege");
+    {
+        unsigned old = CRS_SOLFEGE | CR_SCALE_MINOR;   /* what 0.17 .. 0.22 read: out of their 0..1, so Major */
+        if (old > 1u) old = d.scale;
+        ok(old == CR_SCALE_MAJOR, "0.17 .. 0.22 read a Solfege byte as Major (the scale lost there, nothing else)");
+    }
+    s = d;                                         /* an older record: whatever its version, the bit is 0 */
+    s.scale = CR_SCALE_MINOR;
+    cr_settings_seal(&s);
+    s.version = 14;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_SOL(&r) && CRS_SCALE(&r) == CR_SCALE_MINOR, "a version-14 minor record: no Solfege");
+    {                                              /* manual: the automatic save does not carry it */
+        cr_settings_t a = d, m = d;
+        a.scale = CRS_SOLFEGE;
+        cr_settings_auto(&m, &a);
+        ok(!CRS_SOL(&m), "Solfege is manual (SAVE held), as Numerals");
+    }
+}
+
 static void t_snap(void)
 {
     cr_settings_t d, s, r, m, o2;
@@ -1531,6 +1583,7 @@ int main(void)
     t_v15(); t_session(); t_session_trim(); t_session_flash();
     t_touch();
     t_snap();
+    t_solfege();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

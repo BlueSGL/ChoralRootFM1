@@ -45,7 +45,8 @@ _Static_assert(P_M2SRC == P_M1SRC + 3 && P_M4AMT == P_M1SRC + 11 && P_M4AMT + 1 
  * (Low 1/4, Mid 1/2, High 1): a medium press (~100) keeps its level, a hard one is full, a light one is quiet.
  * Velocity + Aftertouch also routes the part's aftertouch (t->at: the keys' pressure or MIDI's) to the cutoff by
  * Aftertouch Sens (AMT 24 / 40 / 63) unless the sound's matrix routes AT itself. MIDI notes get the same law. */
-enum { CR_TOUCH_FIXED, CR_TOUCH_VEL, CR_TOUCH_VEL_AT };
+enum { CR_TOUCH_FIXED, CR_TOUCH_VEL, CR_TOUCH_VEL_AT, CR_TOUCH_VEL_POLY };   /* POLY: as VEL_AT, the pressure out as
+                                                                              * polyphonic aftertouch (cr_out.c) */
 static volatile uint8_t cr_touch_mode, cr_touch_vsens, cr_touch_atsens;   /* sens: 0 Mid, 1 Low, 2 High */
 static int32_t cr_touch_gain(uint32_t vel)        /* Q15 */
 {
@@ -157,7 +158,7 @@ CR_HOT_CORE static __attribute__((noinline)) int mod_begin(track_t *t)
     int32_t lfo, off[NMSLOT];
     uint32_t k, j;
     int vel_def = cr_touch_mode != CR_TOUCH_FIXED && !p[P_MVEL_SRC];       /* the defaults (cr_touch_vsrc, above) */
-    int at_def = cr_touch_mode == CR_TOUCH_VEL_AT && t->at && !p[P_MAT_SRC];
+    int at_def = cr_touch_mode >= CR_TOUCH_VEL_AT && t->at && !p[P_MAT_SRC];
     MODP(t).on = 0;
     for (k = 0; k < NMSLOT; k++)
         if (p[P_M1SRC + 3u * k] && p[P_M1DST + 3u * k] && p[P_M1AMT + 3u * k])

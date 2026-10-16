@@ -289,6 +289,9 @@ static void va_track_loaded(const track_t *t);   /* eng_va.c: VA's patch on the 
 #if FELUCCA_CZ
 static void cz_track_loaded(track_t *t);         /* eng_cz.c: CZ-1's tone on the same load paths */
 static void cz_init(void);
+#if FELUCCA_QUAD
+static void quad_init(void);                     /* eng_quad.c (after this file): its power-on tables */
+#endif
 #endif
 #if FELUCCA_QUAD
 static void quad_track_loaded(const track_t *t); /* eng_quad.c: QUAD's patch on the same load paths */
@@ -336,15 +339,20 @@ static void fm6_track_loaded(const track_t *ct)
     fm6_load_slot(tr, (uint32_t)clamp(t->p[P_E7], 0, FM6_NSLOT - 1));
 }
 
-/* power-on: every track the init voice (what a project stores for the tracks that never played FM6), the
- * function settings Dexed's (a project or the template loaded then brings its own) */
+/* power-on (main.c felucca_init and cr_ui.c cr_ui_init: the unit, the emulator and the layout tool alike): every track
+ * the init voice (what a project stores for the tracks that never played FM6), the function settings Dexed's (a
+ * project or the template loaded then brings its own); the other engines' power-on work hangs here too */
 static void fm6_init(void)
 {
     uint8_t v[FP_SIZE + 1u];
     uint32_t tr;
+    fm6_tables_init();                           /* the RAM tables (build/gen/felucca_tables.h: FM6_SIN by Dexed's rotation) */
     fm6_fn_reset();
 #if FELUCCA_CZ
     cz_init();                                   /* (CZ-1: every part the init tone) */
+#endif
+#if FELUCCA_QUAD
+    quad_init();                                 /* (FM TONE: its HARM waves, whole cycles in POOL; eng_quad.c) */
 #endif
     fm6_unpack(FM6_INIT, v);
     for (tr = 0; tr < NTRK; tr++) {

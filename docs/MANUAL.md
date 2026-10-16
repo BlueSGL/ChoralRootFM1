@@ -1,6 +1,6 @@
 # ChoralRoot FM-1: the manual
 
-For ChoralRoot 0.22 on the M-VAVE FM-1 (what is new in 0.22 is marked so). It is written for someone who owns an
+For ChoralRoot 0.23 on the M-VAVE FM-1 (what is new in 0.22 is marked so; 0.23's: [releases/0.23.md](releases/0.23.md)). It is written for someone who owns an
 FM-1, has installed ChoralRoot with
 the web installer and wants to play it. Nothing here needs the design documents; where one goes deeper, the manual
 links to it.
@@ -422,7 +422,7 @@ Hold KEY to open the **KEY layer**:
 | KNOB 1, page 2 | **Key plays**: Chords or Notes |
 | KNOB 2, page 2 | **Keyboard**: Chords or Full |
 | KNOB 3, page 2 | **Snap**: Off, Scale or Chord |
-| KNOB 4, page 2 | **Numerals**: Off or On |
+| KNOB 4, page 2 | **Numerals**: Off, On or Solfège |
 | OPT (printed GLO) tap | switches the keys between **pick** and **play** (below). It does not open the Options from here |
 | OCT-, OCT+, HOME, KEY held again | close the layer |
 
@@ -505,7 +505,7 @@ is drawn grey then. The lights say what plays: with Snap on, the roots outside t
 faintly instead of staying dark, and the note that sounds is lit on its own keys, so a snapped C# shows as the C keys
 lit ([The lights](#the-lights)). Snap is kept by a global save (SAVE held), like the page's other settings.
 
-**Numerals: Off or On** (page 2, KNOB 4; off unless you turn it on). With Key Mode on, the Chord view shows the
+**Numerals: Off, On or Solfège** (page 2, KNOB 4; off unless you turn it on). With Key Mode on, the Chord view shows the
 Roman numeral of the chord that is sounding, in blue, centred above the chord's name: in C major `I` for C, `V` for G
 (and for G7 and G9: the extensions stay with the name), `vi` for Am; in A minor `iv` for Dm. Capitals for a chord
 with a major third (and for sus chords, power chords and single notes), small letters for a minor third; `°` after a
@@ -519,6 +519,15 @@ degree you played). So the tonic chord always reads `I`. A chord played back by 
 that is set now. A root that is not a note of the scale gets a `b` or a `#` (`bVII`); in Key Mode the keys cannot
 play one, because a key outside the scale plays a chord on a scale note, so you will see one only when the key is
 changed under a sounding chord or under a loop. Numerals changes nothing you hear.
+
+**Solfège** shows the same degree as a solfège syllable in the numeral's place, with Do on the tonic whatever the
+key (movable do): `DO RE MI FA SOL LA TI` for I to VII. In C major G is `SOL`, Dm `re`, Am `la`; in A minor Am is
+`do`, Dm `fa` and C `MI` (the scale's third note, as its numeral is `III`). The syllable follows the numeral's rules:
+capitals for a chord with a major third, small letters for a minor third (`SOL` for G, `sol` for Gm), `°` after a
+diminished chord (`ti°`), `+` after an augmented one, a `b` or `#` before a root that is not a note of the scale
+(`#FA`, `bTI`), and the tonic chord is `DO` at any Transpose. Fixed do, where Do is always the note C (the note
+names used in Italy, France, Spain and elsewhere), is a different thing: this setting does not rename the notes or
+the chord.
 
 Key plays, Keyboard, Numerals and Single are kept by a global save (SAVE held), like the rest of the KEY layer.
 
@@ -1929,7 +1938,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | Button (printed label) | ChoralRoot | Tap | Hold |
 | --- | --- | --- | --- |
 | FX | FX | effects on / off (in its layer too) | FX layer: SELECT the page (Sends · Reverb 1 · Reverb 2 · Chorus · Delay 1 · Delay 2 · Drive) · KNOB 1-4 its cells (Sends: the chord part's drive, chorus, delay and reverb sends; KNOB 4 on an effect's first page: its Send) |
-| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · 4 Numerals (Off / On) · GLO: the keys pick / play |
+| SEL | KEY | Key Mode on / off | KEY layer: a root = tonic · MAJ / MIN = scale · KNOB 1 Tonic · 2 Scale · 3 Transpose · 4 Single (Full / Split Oct / Split Bass) · SELECT: page 2: KNOB 1 Key plays (Chords / Notes) · 2 Keyboard (Chords / Full) · 4 Numerals (Off / On / Solfège) · GLO: the keys pick / play |
 | ENV | BASS | bass on / off | BASS layer: SELECT behaviour · KNOB 1 Behaviour · 2 Register · 3 Sound · 4 Level. Held + EDIT: edit the bass sound. Held + SAVE: save it |
 | LFO | LATCH | latch on / off | |
 | EDIT | EDIT | the sound editor; in it: leave | the engine picker: SELECT engine · KNOB 1 presets · KNOB 2 init · the keys play · OCT+ keep · OCT- cancel |

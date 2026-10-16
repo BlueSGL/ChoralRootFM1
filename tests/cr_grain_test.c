@@ -351,7 +351,7 @@ static void t_patch(void)
         for (i = 0; i < 8u; i++)
             CHECK(t->p[P_E0 + i] == init[GRAIN_MAC[i]] && t->p[P_E0 + i] == ENG_GRAIN.edit[i].def,
                   "macro %u out: %d (def %d / %d)", i, t->p[P_E0 + i], init[GRAIN_MAC[i]], ENG_GRAIN.edit[i].def);
-        /* a version-1 blob (the first build on the unit, 3y117): its 18 values, the rest the defaults, SCAN halved */
+        /* a version-1 blob (the first build on the unit, 3y136): its 18 values, the rest the defaults, SCAN halved */
         memset(v1, 0, sizeof v1);
         v1[0] = GRAIN_MAGIC;
         v1[1] = 1;

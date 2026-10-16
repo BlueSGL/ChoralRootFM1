@@ -819,6 +819,34 @@ int main(void)
             CHECK(ok && sp_erases + sp_progs == erases && up_used(6) && quad_store_read(6, lb) == 0 && !memcmp(lb, qb2, QUAD_BLOB),
                   "sounds: d3: a used slot's patch of a wrong length for its engine (FM TONE 81, VA 80) or of no engine: "
                   "rc 2, nothing written");
+            /* (3y121: the owner's unit, after a GRAIN build: "Place DIGIT-ONE: The FM-1 refused the user sounds 031-040
+             * (rc 2)": U33 a GRAIN sound with the GRAIN build's 20-byte patch.) A used slot whose patch is of an engine
+             * this build keeps none for (engine 8 while GRAIN was retired; with GRAIN built, 3y133 .., PHYS (9), retired):
+             * accepted, its bytes as sent, the slot used, no patch read for it; a length past the slot's room still refused */
+#if FELUCCA_GRAIN
+#define UPE_NONE ENGI_PHYS
+#else
+#define UPE_NONE 8u
+#endif
+            memcpy(bad3, pb, sizeof pb);
+            memset(bad3 + 2 * SP_SLOT, 0, SP_SLOT);
+            memcpy(bad3 + 2 * SP_SLOT, pb + 4 * SP_SLOT, UPP_HDR);      /* U03: U05's record .. */
+            bad3[2 * SP_SLOT + 2] = UPE_NONE;                           /* .. of the engine without a patch here */
+            bad3[2 * SP_SLOT + UPP_HDR] = UPE_NONE + 1u;
+            bad3[2 * SP_SLOT + UPP_HDR + 1] = 20u;
+            for (i = 0; i < 20u; i++)
+                bad3[2 * SP_SLOT + UPP_DATA + i] = (uint8_t)(0x30u + i);
+            ok = up_patch_len(UPE_NONE) == 0 && t_put(50, bad3, sizeof bad3) == 0 && up_used(2) && up_used(6) && t_list() == 0;
+            for (off = 0; ok && off < sizeof got; off += 256u)
+                ok &= t_get(50, off, 256u, got + off) == 0;
+            ok &= !memcmp(got + 2 * SP_SLOT, bad3 + 2 * SP_SLOT, SP_SLOT) && !memcmp(got + 6 * SP_SLOT, pb + 6 * SP_SLOT, SP_SLOT);
+            memset(lb, 0x77, sizeof lb);
+            ok &= up_read_engine(2, lb, UPE_NONE) == 1 && up_read_engine(2, lb, ENGI_QUAD) == 1;
+            CHECK(ok, "sounds: d3: U03 a sound of an engine with no patch here (a 20-byte patch of a retired engine, as "
+                      "GRAIN's on a build without it, 3y121): accepted (rc 0), read back as sent, no patch read for it");
+            bad3[2 * SP_SLOT + UPP_HDR + 1] = (uint8_t)(UPP_MAX + 1u);
+            CHECK(t_put(50, bad3, sizeof bad3) == 2, "sounds: d3: .. its length past the slot's room: rc 2");
+            CHECK(t_put(50, pb, sizeof pb) == 0 && !up_used(2), "sounds: d3: the bank as before (U03 empty again)");
         }
         /* e: refusals */
         memcpy(&bad_v, &vs, sizeof vs);

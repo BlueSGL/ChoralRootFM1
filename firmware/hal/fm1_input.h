@@ -98,6 +98,19 @@
 #ifndef FM1_INPUT_LED_OK
 #define FM1_INPUT_LED_OK(col, rowbit) 1
 #endif
+/* The top row's probe (MONK-1 / CTL-1): the seven keys of row PA6 (columns 0..6: notes 20..26) have no converter;
+ * with fm1_an.probe set a third frame phase samples them through PA10, the LED line of row PA6, which is SARADC
+ * channel 2: for that tick PA10 is an input with its pull-up (the LED in column n passes a little current, so PA10
+ * reads the column's low level plus the LED's drop) and PA6 is driven high at the weakest level, so a pressed PA6
+ * key sends a current through its pill into the column and lifts the 595 output's low level: the harder the press,
+ * the more (~20 counts at a touch, 43..45 firm: the weak driver's current limit, a compressor). The analog rows then
+ * come every third frame (3.3 ms). FM1_INPUT_PROBE(col, v, pressed) gets each reading with the digital scan's last
+ * view of that key. Columns 7..10 of PA6 are buttons: nothing is started on their ticks of the probe phase. */
+#ifndef FM1_INPUT_PROBE
+#define FM1_INPUT_PROBE(col, v, pressed) ((void)0)
+#endif
+#define FM1_ADC_LED_PA10 2u
+#define FM1_PROBE_COLS 7u
 #ifndef FM1_INPUT_NOW
 #define FM1_INPUT_NOW() fm1_ticks()   /* the press stats' clock (input_test.c: simulated) */
 #endif
@@ -178,7 +191,9 @@ static volatile struct {
     uint8_t pend, col, rowbit;   /* a conversion runs for (col, rowbit); rowbit 0 = the pot, 1 = the battery */
     uint8_t drive;               /* 0 off; 1..4: driven samples (FM1_INPUT_DRIVE) at strength drive - 1 */
     uint8_t driven;              /* the pending conversion's row is driven high (restored at the take) */
-    uint8_t phase;               /* the frame's parity: 0 PA7, 1 PA8 */
+    uint8_t phase;               /* the frame's phase: 0 PA7, 1 PA8, 2 the top row's probe (fm1_an.probe) */
+    uint8_t probe;               /* the probe on: three phases */
+    uint8_t probing;             /* the pending conversion is the probe (PA10 and PA6 to restore at the take) */
     uint8_t mvalid, bvalid;      /* master / batt have been sampled once */
     uint16_t master, batt;       /* the MASTER pot and the battery, 0..1023 */
     uint16_t timeouts;           /* conversions not done after a tick (the settings too slow) */
@@ -187,9 +202,9 @@ static volatile struct {
 
 /* rowbit 3 = PA7, 4 = PA8 driven high as an output at strength 0..3 (HD0 bit 0, HD bit 1), and back to an input
  * with its pull-up (the drive bits cleared: the LED pins keep theirs, fm1_input_init) */
-static void fm1__row_drive(uint32_t rowbit, uint32_t strength)
+static void fm1__row_drive(uint32_t rowbit, uint32_t strength)   /* rowbit 3 PA7, 4 PA8, 2 PA6 (the probe) */
 {
-    uint32_t m = 1u << (rowbit == 3u ? 7 : 8);
+    uint32_t m = 1u << (rowbit == 3u ? 7 : rowbit == 4u ? 8 : 6);
     if (strength & 1u)
         FM1_PR(FM1_PA, FM1_HD0) |= m;
     else
@@ -203,7 +218,7 @@ static void fm1__row_drive(uint32_t rowbit, uint32_t strength)
 }
 static void fm1__row_release(uint32_t rowbit)
 {
-    uint32_t m = 1u << (rowbit == 3u ? 7 : 8);
+    uint32_t m = 1u << (rowbit == 3u ? 7 : rowbit == 4u ? 8 : 6);
     FM1_PR(FM1_PA, FM1_DIR) |= m;                  /* an input again, its pull-up as fm1_input_init left it */
     FM1_PR(FM1_PA, FM1_HD0) &= ~m;
     FM1_PR(FM1_PA, FM1_HD) &= ~m;
@@ -424,18 +439,39 @@ static void fm1__frame(void)
 /* the analog rows' two steps, functions of their own (not inlined: their cold paths, a conversion not done and the
  * drive, would otherwise be laid out after the tick's body with a jump back, and tests/target_budget.py would read
  * the whole tick as a loop, as it did TIMER5's USB work before usb.c's USB_OUTLINE) */
+/* PA10 (the LED line of row PA6): an input with a pull-up for the probe, an output again after */
+static void fm1__pa10_probe(int on)
+{
+    uint32_t m = 1u << 10;
+    if (on) {
+        FM1_PR(FM1_PA, FM1_OUT) &= ~m;
+        FM1_PR(FM1_PA, FM1_PU) |= m;
+        FM1_PR(FM1_PA, FM1_DIR) |= m;
+    } else {
+        FM1_PR(FM1_PA, FM1_PU) &= ~m;
+        FM1_PR(FM1_PA, FM1_DIR) &= ~m;
+    }
+}
 static __attribute__((noinline)) void fm1__an_take(void)   /* the conversion started last tick, on column fm1_an.col
                                                             * (the row back to an input first: the rows are read next) */
 {
-    uint32_t driven = fm1_an.driven;
+    uint32_t driven = fm1_an.driven, probing = fm1_an.probing;
     fm1_an.pend = 0;
     if (driven) {
         fm1_an.driven = 0;
         fm1__row_release(fm1_an.rowbit);
     }
+    if (probing) {
+        fm1_an.probing = 0;
+        fm1__row_release(2u);
+        fm1__pa10_probe(0);
+    }
     if (fm1_adc_done()) {
         uint32_t v = fm1_adc_take();
-        if (fm1_an.rowbit >= 3u) {
+        if (probing) {
+            fm1_an.samples++;
+            FM1_INPUT_PROBE(fm1_an.col, v, (fm1_in.raw[fm1_an.col] >> 2) & 1u);
+        } else if (fm1_an.rowbit >= 3u) {
             fm1_an.samples++;
             FM1_INPUT_ANALOG(fm1_an.col, fm1_an.rowbit, v, driven);
         } else if (fm1_an.rowbit) {
@@ -454,7 +490,20 @@ static __attribute__((noinline)) void fm1__an_start(uint32_t n)   /* column n is
 {
     uint32_t ch, rowbit;
     if (n == 0u)
-        fm1_an.phase ^= 1u;
+        fm1_an.phase = (uint8_t)(fm1_an.phase + 1u >= (fm1_an.probe ? 3u : 2u) ? 0u : fm1_an.phase + 1u);
+    if (fm1_an.phase == 2u) {                      /* the top row's probe: PA6's keys through PA10 (above) */
+        if (n >= FM1_PROBE_COLS)
+            return;                                /* (a button's column: nothing) */
+        fm1__led_lines(fm1_led[n] & ~(1u << 2));   /* row 2's LED line is the input now */
+        fm1__pa10_probe(1);
+        fm1__row_drive(2u, 0u);                    /* the weakest level whatever the drive is: the probe's scale */
+        fm1_an.col = (uint8_t)n;
+        fm1_an.rowbit = 2u;
+        fm1_an.probing = 1;
+        fm1_adc_start(FM1_ADC_LED_PA10, fm1_an.con);
+        fm1_an.pend = 1;
+        return;
+    }
     if (fm1_an.phase && n < 2u) {                  /* OCT- / OCT+'s slots: the pot and the battery */
         ch = n ? FM1_ADC_BATT : FM1_ADC_MASTER;
         rowbit = n;

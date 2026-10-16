@@ -50,6 +50,19 @@ where Velocity Sens shapes the level after it. Stored in bits 5..7 of the block'
 Curve 0 gives 30 (the map inverted over its table), 300 pulled up, and `lean D4 60` presses it 60 % of the way to
 full aftertouch once its rest has settled; the UI's traces `touch: key K vel V sensed|context|fixed` and `touch: at
 N` are what `cr_touch.txt` checks in `test_cr.sh` (tools/emu/README.md).
+**And the other three (2026-10-16, the owner: "Yes: bring in the top row's PA10 probe, poly aftertouch out and the
+velocity / pressure readout")**: the top row through the PA10 probe (`hal/fm1_input.h`: a third frame phase while
+Key Touch is on, PA10 an input with its pull-up and PA6 driven at the weakest level for the tick, the analog rows then
+every 3.3 ms; `cr_sense.c cr_sense_probe`: each key's open baseline and the peak above it, CTL-1's ends 0 / 43 and
+curve 2.40, the velocity taken once two readings are in; C#5 .. G5 sense velocity, no aftertouch); **Vel + Poly AT**,
+Key Touch's fourth value (the pressure out as polyphonic aftertouch to every sounding note of the Perform and Bass
+streams, `cr_out.c cr_touch_at`; the parts hear it as before); and the readout on **GEEK OUT 2**'s title line while
+the keys sense, `VEL 73 AT 42` (the last key's velocity, the aftertouch now) in place of the cores' count. The
+emulator models the probe too (`emu_touch_feed`: a top key's rise from its velocity, the analog rows every 3 ms
+while it runs). The probe's price: the analog rows every 3.3 ms, so the lower keys' velocity is known 13.2 ms after
+the touch sample instead of 8.8, and `cu_scan_keys` waits 18 ms for it (12 before: the designer-handoff session's
+release agent caught the miss, 3y124). Still not here: Velo's per-key
+calibration, a probe that tells light presses, anything faster than WAIT 2.
 
 The owner: "look into https://github.com/charlesvestal/fm1-monk: he added velocity and aftertouch to the FM-1, which
 would be super cool to bring in to ChoralRoot." This is the study of how fm1-monk does it and the design of the same

@@ -1,9 +1,9 @@
 # GRAIN: a granular engine over material it makes itself (design, 2026-10-15)
 
-**Status: built through step 5 (2026-10-15 / 16, HISTORY 3y114 .. 3y118): the engine is in the firmware as engine 8
-(`firmware/src/eng_grain.c` over `grain_src.c`), on the unit since 3y117's build, and since the owner's first listening
-(3y118, below: "The second phase") with its own matrix, two synced LFOs, ENV 2, the VA's filter, a bipolar SCAN and
-the wave band; its presets not yet by ear (step 6).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
+**Status: built through step 5 (2026-10-15 / 16, HISTORY 3y133 .. 3y137): the engine is in the firmware as engine 8
+(`firmware/src/eng_grain.c` over `grain_src.c`), on the unit since 3y136's build, and since the owner's first listening
+(3y137, below: "The second phase") with its own matrix, two synced LFOs, ENV 2, the VA's filter, a bipolar SCAN and
+the wave band; its presets not yet by ear (step 6). Merged on main d75523e (v0.24-beta1 with the flash diet) on the owner's word, 2026-10-16: XIP 537 068 B (93.7 %), POOL 97.0 % (the size table).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
 (`build/grain-sketch/`, below), kept the granular morph, and said go for steps 1 to 4. The build's size line: XIP
 559 652 B of 573 440 (97.6 %), RAM 79 028 (80.4 %), POOL 304 472 (88.5 %) over da1f8e2; merged on main 5e1e8a7
 (v0.22-beta4: the master filter and the step preview) XIP 561 540 B (97.9 %), POOL 304 712 (88.6 %); on main a11e0ca
@@ -35,7 +35,7 @@ quarter of a VA pad's.
 
 ## The second phase (the owner, 2026-10-16, after the first build on the unit)
 
-"Grain engine has been tested, good start": the owner's list, and what was built for it (HISTORY 3y118; the patch
+"Grain engine has been tested, good start": the owner's list, and what was built for it (HISTORY 3y137; the patch
 is version 2, 64 bytes; a version-1 record (the first build's 20 bytes) loads with the new values at their defaults):
 
 | the owner | built |
@@ -148,7 +148,7 @@ MORPH sits at the other end is not heard at all.
 - **Where: core 0's main loop, in slices.** `main.c`'s loop draws a frame every 15 ms and waits the rest of the
   frame in an idle loop (`while (fm1_ms - m < 15u) { ui_input(); ed_service(); }`). `grain_poll()` renders one slice
   of 1024 samples a call (DRONE, the heaviest: 1.6 ms, 2.4 with the unit's factor; PLUCK 0.25 ms) and returns: once
-  right after every frame's draw, whatever the frame cost, and once a turn of the idle loop (3y119: on the unit a
+  right after every frame's draw, whatever the frame cost, and once a turn of the idle loop (3y138: on the unit a
   frame that fills its 15 ms, the wave band's redraw, left the idle loop no turn and the knobs' renders waited for a
   page change). The audio ISR preempts the main loop as it preempts a frame's drawing: **the audio never waits for
   the render**. A whole buffer is 16 slices: DRONE lands in 26 .. 40 ms of main-loop time when the frames are cheap,
@@ -271,7 +271,8 @@ CZ-1 1.7, P5 1.54) given as x 1.5. The baseline is main da1f8e2's size line: XIP
 | the engine's glue: `engine_t`, the pages and `eng_deep_t`, `block()` with the request / swap, the blob get / set, the presets (9 x ~24 B), the old-record mapping | ~2.5 .. 3 KB | estimate from the VA's and QUAD's glue |
 | the wave band in `cr_draw.c` | ~1 KB | estimate (the filter band is 0.8 KB) |
 | **the engine** | **~11 .. 12 KB: XIP 547 020 -> ~559 000 B, 97.4 .. 97.6 %, 14 .. 15 KB left** (the estimate) | |
-| **as built (step 4, 3y117)** | **XIP 559 652 B (97.6 %): +12 632 B, 13 788 B left; RAM 79 028 (+376), POOL 304 472 (+65 536, 88.5 %)** | `./build.sh`'s size line |
+| **as built (step 4, 3y136)** | **XIP 559 652 B (97.6 %): +12 632 B, 13 788 B left; RAM 79 028 (+376), POOL 304 472 (+65 536, 88.5 %)** | `./build.sh`'s size line |
+| **merged on main d75523e (v0.24-beta1 with the flash diet, 3y126 .. 3y132; the second phase in)** | **XIP 537 068 B (93.7 %), 36 372 B left; RAM 80 176 (81.6 %), POOL 333 900 (97.0 %, 10 164 B left: the diet's HARM cycles, 27.7 KB, live in POOL now)** | `./build.sh`'s size line, the byte the diet session measured |
 
 The tightest resource. `FELUCCA_SIZE`'s minsize pass (tools/size_fns.py) can take the generator's set-up code
 (`gs_begin`, 1.2 KB, runs once a render) if XIP is wanted back.
@@ -375,7 +376,7 @@ Open questions:
 
 ## 6. Steps, each with its test
 
-1. **Done (2026-10-15, HISTORY 3y116). The generator in the firmware's tree**: `firmware/src/grain_src.c` from
+1. **Done (2026-10-15, HISTORY 3y135). The generator in the firmware's tree**: `firmware/src/grain_src.c` from
    `tools/grain_sketch.c`'s `gs_*` (the sketch tool includes it). `tests/cr_grain_test.c` (in `run_cr_tests.sh`,
    with `-fsanitize=signed-integer-overflow,shift`): 800 renders of a TONE x MOTION x SEED grid a family (the peak
    28 000 within the gain's rounding, or under it when the gain capped at 8: 17 of 800; the mean under 1 % of full
@@ -383,7 +384,7 @@ Open questions:
    knobs' masking, eight seeds a family all different, the 24 sketch settings against `tests/cr_grain_golden.txt`
    (GOLDEN_UPDATE=1 rewrites it) and against the sketch WAVs where present, the host time a render. Nothing is in
    the image yet (no file includes it): the size line is da1f8e2's.
-2. **Done (3y117). The player as an engine on two static buffers**: `eng_grain.c` (`gp_*`; `engine_t`: `note_on`,
+2. **Done (3y136). The player as an engine on two static buffers**: `eng_grain.c` (`gp_*`; `engine_t`: `note_on`,
    `render`, `block`, `poly 8`, `sampled`), the two buffers `grain_buf[2]` in POOL, MORPH's choice in `gp_spawn`
    (the voice's count in `s[1]`), SCAN (the part's phase), the SVF a voice in `s[2..3]`, the platform's amplitude
    through `voice_amp`. Test `tests/cr_grain_test.c` section 6 (the driver: the tick, the part's block, each voice
@@ -394,7 +395,7 @@ Open questions:
    one), 1.4 s of a 6-note chord on each preset (no int32 wrap, 27 .. 69 % FS at LEVEL 92, not silent, the grains
    gone after the voices). `tests/regress.c`: the eight presets' goldens and CPU lines (`tests/golden.txt`,
    `tests/cpu_baseline.txt`: the old GRAIN's four lines replaced).
-3. **Done (3y117). The render scheduler**: `grain_tick` once a block on core 0 (`fx.c mix_block`, before any part
+3. **Done (3y136). The render scheduler**: `grain_tick` once a block on core 0 (`fx.c mix_block`, before any part
    renders: the owner's source knobs against what the buffers hold, a request a source; a locked source's grains
    killed: `gp_run` ramps them to 0 over the block), `grain_poll` in `main.c`'s idle loop and the emulator's
    `emu_fw_idle` (GRAIN_ASYNC 1: lock, wait for the fade's block to end, render 1024 samples a turn, swap the knobs
@@ -406,7 +407,7 @@ Open questions:
    shares (no render from its knobs) and owns when the chord part leaves GRAIN; same knobs render nothing. Not
    written: a two-thread ThreadSanitizer run (the flags are `volatile` bytes behind `fm1_irq_off`; the emulator's
    audio thread and main thread exercise the two sides in `test_cr.sh`).
-4. **Done (3y117). The platform**: `ENGINES[8]` (`FELUCCA_GRAIN 1` in choralroot.c and the emulator, Felucca's
+4. **Done (3y136). The platform**: `ENGINES[8]` (`FELUCCA_GRAIN 1` in choralroot.c and the emulator, Felucca's
    default; `GRAIN_ASYNC 1` there), `engines.c`'s SAMPLE `#error` for SLICE alone, `eng_state`'s `grain` member,
    `ENGI_GRAIN 8u` (core.h), the deep pages (`SRC 1`, `SRC 2`, `GRAIN`, `GRAIN+`, `FILTER`, and `ENV` / `LFO` as pages
    over the track's P_ATK .. P_REL and P_LRATE P_LWAVE P_LD_PIT P_LD_FLT, since the editor wants the four sections:
@@ -421,7 +422,7 @@ Open questions:
    `test_retired.sh` (its pre-cut build without GRAIN, as 0.17 was). Not done: a settings slot for GRAIN's remembered
    pool place (`cr_settings.c CRS_SLOT_ENG`: eleven slots, none for GRAIN, as none for P5: the part lands on its
    first preset after a power cycle).
-5. **Done (3y118). The editor**: the plan's SRC and GRAIN screens under the wave band (`cr_draw.c cr_wave_band`:
+5. **Done (3y137). The editor**: the plan's SRC and GRAIN screens under the wave band (`cr_draw.c cr_wave_band`:
    the envelopes, both buffers on the GRAIN screen coloured by MORPH, POS, SPRD, the grains as moving lines), ENV 1 /
    ENV 2 under the AHDSR, the rest by the title rules; `tools/emu/scripts/cr_grain.txt` and its `test_cr.sh` section
    (eleven screenshots); `design/layouts/grain.json` regenerated. Tests: `tools/emu/scripts/cr_grain.txt`

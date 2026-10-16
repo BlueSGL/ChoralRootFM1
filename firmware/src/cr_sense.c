@@ -16,14 +16,18 @@
  * the ceiling (896) the lightest press that seats; Velo's per-key calibration is not here (its open item).
  *
  * The landing lands in cr_sense_land[key] (the driven reading; 0: none yet for this press) at the second pulled-up
- * sample after the touch (a driven one before each: four samples, 8.8 ms after the touch sample;
- * tests/cr_sense_test.c); the UI (cr_ui.c cu_scan_keys) holds a root's debounced press until it is there, maps it
+ * sample after the touch (a driven one before each: four samples, 8.8 ms after the touch sample at 2.2 ms a sample,
+ * 13.2 ms while the top row's probe takes a third frame phase; tests/cr_sense_test.c); the UI (cr_ui.c cu_scan_keys) holds a root's debounced press until it is there, maps it
  * to the velocity (cr_sense_take: the log map runs in the main loop, so TIMER5's tick has no loop and no divide in
  * it) and clears it. The digital debounce stays the truth for pressed / released; this only adds the velocity.
  * cr_sense_sample and the hooks run in TIMER5's tick; the rest is the main loop's (bytes and halfwords: no locking). */
 #define SN_NKEYS 27u
-/* the keys with the converter: bit k (0 = F3 .. 19 = C5: rows PA8 and PA7) */
-#define CR_SENSE_KEYS 0x000FFFFFu
+/* the keys that sense: bit k; 0 = F3 .. 19 = C5 the converter's rows PA8 and PA7 (velocity and aftertouch), 20 = C#5
+ * .. 26 = G5 the top row through the PA10 probe (velocity alone: CR_SENSE_AT_KEYS) */
+#define CR_SENSE_KEYS 0x07FFFFFFu
+#define CR_SENSE_AT_KEYS 0x000FFFFFu
+#define SN_TOP0 20u
+#define SN_NTOP 7u
 #define SN_TOUCH 900u
 #define SN_PRESS 400u
 #define SN_RELEASE 600u
@@ -142,15 +146,62 @@ static void cr_sense_sample(uint32_t key, uint32_t v, uint32_t driven)
     k->dnext = (uint8_t)(k->st != SN_OPEN);        /* a held key: the next sample driven */
 }
 
+/* The top row's probe (hal/fm1_input.h; CTL-1's ends and curve): each key keeps its open baseline (smoothed while
+ * the digital scan sees it open) and the peak above it since the press; velocity = 1 + 126 x^2.4 with x = the peak
+ * / SN_P_HI (43: firm presses pile up at 43..45, the weak driver's current limit; a touch ~20, a light press 27..36),
+ * once two probe readings of the press are in (the second comes ~3.3 ms after the first). Velocity alone, no
+ * aftertouch (the probe cannot tell a lean: CTL-1 tried it on every key). */
+#define SN_P_HI 43u
+static const uint8_t SN_PROBE_CURVE[65] = {1, 1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 6, 6, 7, 8, 9, 10, 11, 12,
+    13, 14, 16, 17, 18, 20, 21, 23, 25, 27, 29, 31, 33, 35, 37, 39, 42, 44, 47, 50, 52, 55, 58, 61, 64, 67, 71, 74, 78,
+    81, 85, 89, 92, 96, 100, 105, 109, 113, 118, 122, 127};
+typedef struct {
+    uint16_t v, base16, peak;          /* the last reading; the open baseline x 16; the peak above it since the press */
+    uint8_t down, n;                   /* pressed (the digital scan's view); readings since */
+} sn_probe_t;
+static volatile sn_probe_t sn_probe[SN_NTOP];
+static void cr_sense_probe(uint32_t key, uint32_t v, uint32_t pressed)   /* the tick's: key 20 .. 26 */
+{
+    volatile sn_probe_t *p;
+    if (key < SN_TOP0 || key >= SN_TOP0 + SN_NTOP)
+        return;
+    p = &sn_probe[key - SN_TOP0];
+    p->v = (uint16_t)v;
+    if (!p->base16)
+        p->base16 = (uint16_t)(v << 4);
+    if (!pressed) {
+        p->down = 0;
+        p->peak = 0;
+        p->n = 0;
+        p->base16 = (uint16_t)(p->base16 + (((int32_t)v << 4) - (int32_t)p->base16) / 8);
+    } else {
+        uint32_t base = p->base16 >> 4, rel = v > base ? v - base : 0u;
+        p->down = 1;
+        if (p->n < 255u)
+            p->n++;
+        if (rel > p->peak)
+            p->peak = (uint16_t)rel;
+        if (p->n == 2u)                             /* two readings in: the velocity may be taken (cr_sense_take) */
+            cr_sense_land[key] = 1;
+    }
+}
+static uint8_t sn_probe_velocity(uint32_t peak)
+{
+    uint32_t i = peak * 64u / SN_P_HI;
+    return SN_PROBE_CURVE[i > 64u ? 64u : i];
+}
 /* main loop: the velocity of key k's press in progress, 0 while its landing is not known yet (the UI clears the landing
- * when it takes the velocity) */
+ * when it takes the velocity); a top key's from the probe's peak */
 static uint32_t cr_sense_take(uint32_t k)
 {
     uint32_t d = k < SN_NKEYS ? cr_sense_land[k] : 0u;
     if (!d)
         return 0;
-    sn_key[k].vel = sn_velocity(d);
-    return sn_key[k].vel;
+    if (k >= SN_TOP0)
+        sn_key[k].vel = sn_probe[k - SN_TOP0].down ? sn_probe_velocity(sn_probe[k - SN_TOP0].peak) : 0u;
+    else
+        sn_key[k].vel = sn_velocity(d);
+    return sn_key[k].vel ? sn_key[k].vel : 1u;
 }
 
 #ifndef CR_SENSE_NO_HOOKS                        /* (the emulator feeds cr_sense_sample itself: tools/emu/emu_fw.c) */
@@ -170,6 +221,12 @@ static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit)   /* the key is o
 {
     int id = FM1_KEYMAP[rowbit][col];
     return cr_touch_mode == CR_TOUCH_FIXED || id < 14 || sn_key[id - 14].st == SN_OPEN;
+}
+static void cr_sense_probe_hook(uint32_t col, uint32_t v, uint32_t pressed)   /* a probe reading: the key of row PA6 */
+{
+    int id = FM1_KEYMAP[2][col];
+    if (id >= 14)
+        cr_sense_probe((uint32_t)id - 14u, v, pressed);
 }
 #endif
 

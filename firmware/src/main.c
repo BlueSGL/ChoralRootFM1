@@ -174,7 +174,7 @@ static void felucca_init(void)
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
     undo_depth++;                             /* (no undo copy of the power-on loads) */
-    fm6_init();                               /* every track's FM6 patch: the init voice */
+    fm6_init();                               /* every track's FM6 patch: the init voice (and the engines' tables) */
     for (i = 0; i < NTRK; i++) {
         track_t *t = &trk[i];
         track_defaults(t);
@@ -386,7 +386,7 @@ static void fm1_main(void)
 #if FELUCCA_GRAIN
         grain_poll();                           /* GRAIN's render: a slice every frame whatever the frame cost (a frame
                                                  * that fills its 15 ms, the wave band's, leaves the idle loop below no
-                                                 * turn: 3y119), and a slice a turn of the idle loop */
+                                                 * turn: 3y138), and a slice a turn of the idle loop */
 #endif
         felucca_dbg.stage = BS_LOOP_IDLE;
         while (fm1_ms - m < 15u) {                               /* ~60 UI frames/s at most */

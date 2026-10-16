@@ -922,8 +922,8 @@ atmax() { grep -a '^touch: at ' "$L" | sed 's/touch: at //' | sort -n | tail -1;
 [ "$(tk 9 1)" = "100 fixed" ] && [ "$(tk 9 2)" = "30 sensed" ] && [ "$(tk 9 3)" = "120 sensed" ] &&
     ok "the keys' velocity in the emulator: Key Touch Fixed plays D4 at Options > Velocity (100); Velocity + Aftertouch: D4 at 30 plays 30, at 120 plays 120 (the sensing's own path, cr_sense.c fed by emu_touch_feed)" ||
     bad "touch velocity: '$(tk 9 1)' / '$(tk 9 2)' / '$(tk 9 3)'"
-echo "$(tk 26 1)" | grep -q ' context$' && [ "$(tk 26 1 | cut -d' ' -f1)" -gt 40 ] && [ "$(tk 26 1 | cut -d' ' -f1)" -lt 110 ] &&
-    ok "G5 (the top row, no converter): the keys' recent velocity, the context ($(tk 26 1))" || bad "the top row's velocity: '$(tk 26 1)'"
+echo "$(tk 26 1)" | grep -q ' sensed$' && [ "$(tk 26 1 | cut -d' ' -f1)" -ge 56 ] && [ "$(tk 26 1 | cut -d' ' -f1)" -le 78 ] &&
+    ok "G5 (the top row): its velocity through the PA10 probe's model, 64 read as $(tk 26 1 | cut -d' ' -f1) (the probe's curve, quantised)" || bad "the top row's velocity: '$(tk 26 1)'"
 [ "$(atmax)" -ge 65 ] && [ "$(atmax)" -le 85 ] && [ "$(grep -a '^touch: at ' "$L" | tail -1)" = "touch: at 0" ] &&
     ok "a lean of 60 % on the held D4 after it settled: aftertouch up to $(atmax) (60 % of the span, smoothed), eased: back to 0" ||
     bad "aftertouch: max $(atmax), last $(grep -a '^touch: at ' "$L" | tail -1)"
@@ -2002,6 +2002,25 @@ r=$(rows cr_numerals_off cr_numerals_major)
 [ "$(nm 10)" = "on|iv" ] && ok "the arp stepping on the Chord view: the numeral with it (iv): $OUT/cr_numerals_arp.ppm" || bad "the arp: $(nm 10)"
 differ cr_numerals_arp cr_numerals_minor "the arp screen is not the chord view"
 silent_end cr_numerals
+
+# Numerals = Solfege (GitHub issue 15): KNOB 4's third value; the numeral's degree as a movable-do syllable in its place
+run cr_solfege
+L="$OUT/cr_solfege.log"
+nm() { grep -a '^  numerals:' "$L" | sed -n "$1p" | sed -n 's/.*numerals: \([a-z]*\) shown "\(.*\)"$/\1|\2/p'; }
+cv() { grep -a '^  cr: voices' "$L" | sed -n "$1p" | sed -n 's/.*cr: voices \([0-9]*\) .* notes-out \([0-9]*\) chord \(.*\) sounding \([01]\) notes\(.*\)$/\3|\4|\5/p'; }
+has '^key: knob 4 numerals on' "$L" && [ "$(grep -ac '^key: knob 4 numerals solfege' "$L")" = 2 ] && [ "$(nm 1)" = "solfege|" ] &&
+    ok "KEY page 2, KNOB 4: Off, On, Solfege, and it stays at Solfege: $OUT/cr_solfege_page2.ppm" || bad "the picker: $(nm 1)"
+[ "$(nm 2)|$(cv 2 | cut -d'|' -f1)" = "solfege|SOL|GM" ] && [ "$(nm 3)" = "solfege|re" ] &&
+    [ "$(nm 4)|$(cv 4 | cut -d'|' -f1)" = "$(printf 'solfege|ti\260|Bdim')" ] &&
+    ok "C major: G is SOL, Dm re, Bdim ti with the degree sign: $OUT/cr_solfege_major.ppm, $OUT/cr_solfege_dim.ppm" \
+    || bad "C major: $(nm 2) $(cv 2) / $(nm 3) / $(nm 4)"
+[ "$(nm 5)|$(cv 5 | cut -d'|' -f1)" = "solfege|DO|C#M" ] &&
+    ok "Transpose +1, the tonic chord played: C#M sounds, DO (movable do: the degree played)" || bad "Transpose: $(nm 5) $(cv 5)"
+[ "$(nm 6)" = "solfege|fa" ] && [ "$(nm 7)|$(cv 7 | cut -d'|' -f1)" = "solfege|MI|CM" ] &&
+    ok "A minor: Do is A; Dm is fa, C is MI (the scale's third degree): $OUT/cr_solfege_minor.ppm" || bad "A minor: $(nm 6) / $(nm 7)"
+[ "$(nm 8)" = "on|iv" ] && [ "$(cv 8)" = "$(cv 6)" ] &&
+    ok "KNOB 4 back to On: the Roman numeral (iv) for the same Dm, the same notes (display only)" || bad "back to On: $(nm 8) $(cv 8) / $(cv 6)"
+silent_end cr_solfege
 
 # the Full keyboard
 run cr_fullkbd

@@ -68,6 +68,10 @@ t ./build/host/cr_quad_test
 # GRAIN's source generator (firmware/src/grain_src.c, docs/GRAIN.md step 1): the grid, slices, goldens, the sketch WAVs
 par_build cc -std=c99 -Wall -Wextra -Werror -pedantic -O2 -fsanitize=signed-integer-overflow,shift -fno-sanitize-recover=all -Ibuild/gen -o build/host/cr_grain_test tests/cr_grain_test.c -lm
 t ./build/host/cr_grain_test
+# FM TONE's pops (docs/QUAD.md "Pops"): every factory sound and INIT through eight scenarios (retriggers, chord changes,
+# steals, arps) at C2 and C4: no jump, no hole, no operator restarted under the voice's level, no wrap (the sanitizer)
+par_build cc -O2 -w -fsanitize=signed-integer-overflow -fno-sanitize-recover=all -Ibuild/gen -Ifirmware/src -o build/host/quad_pops tests/quad_pops.c -lm
+t ./build/host/quad_pops check
 # FM TONE's times against the Digitone's (docs/QUAD.md "Times"): quad_times.h not stale, the amp envelope's times, the
 # proxy readings, the delay, the fade, through the measurement's own analysis (tools/digitone/dt_analyse.py; numpy)
 par_build cc -std=c99 -O2 -w -DFELUCCA_QUAD=1 -Ibuild/gen -o build/host/quad_render tools/digitone/quad_render.c -lm
@@ -102,7 +106,7 @@ t logged_count_last cr_fx_test build/fx-review
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_align_test tests/cr_align_test.c -lm
 t align
 # backup / restore SysEx (cr_backup.c) on the emulator's firmware build (tools/emu/emu_firmware.h; macOS: os_unfair_lock)
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_backup_test tests/cr_backup_test.c -lm
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -DCZ_FACTORY_RAW -o build/host/cr_backup_test tests/cr_backup_test.c -lm
 t ./build/host/cr_backup_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_pool_test tests/cr_pool_test.c -lm
 t ./build/host/cr_pool_test
@@ -122,7 +126,7 @@ t ./build/host/cr_restart_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_fm6_test tests/cr_fm6_test.c -lm
 t logged_last cr_fm6_test
 # CZ-1 (Melodee's engine, docs/CZ1.md): Casio's tones, the blob, Casio SysEx, the banks, the deep pages, the tone store
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cz_test tests/cr_cz_test.c -lm
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -DCZ_FACTORY_RAW -o build/host/cr_cz_test tests/cr_cz_test.c -lm
 t logged_last cr_cz_test
 # P5 (Melodee's Prophet-5 engine, docs/PROPHET.md): Sequential's bank against its .syx, the blob, every shipped program
 # through voice.c, the four voices, UNISON (a load takes the program's), GLIDE, the bend, the deep pages, the pool, SAVE
@@ -160,7 +164,7 @@ t ./build/host/cr_midi_test
 # tables the firmware's. Built with P5, as the unit is (3y80, the device manager's P5 tab; until then without it): the
 # clients hold P5's shipped programs (INIT P5, then assets/prophet5-factory/shipped.txt's list) and their Sequential
 # numbers, the favourites' keys; when the list changes this check says what to paste
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/sound_templates tests/sound_templates.c -lm
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -DCZ_FACTORY_RAW -o build/host/sound_templates tests/sound_templates.c -lm
 t ./build/host/sound_templates --check web/fm1sounds.js tools/fm1_install.py
 
 for id in $par_order; do

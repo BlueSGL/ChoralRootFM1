@@ -44,7 +44,7 @@ from a layer: it goes with the layer (manual).
 | Secret Chords | Options | block `secret` | **automatic** |
 | 6th with 7th (0.20) | Options | block `pick_roots` bit 4 | **automatic** |
 | Velocity | Options | block `vel` | **automatic** |
-| Key Touch, Velocity Sens, Aftertouch Sens (docs/VELOCITY.md) | Options | block `bass_on` bits 2..7 (`CRS_TOUCH`, `CRS_VSENS`, `CRS_ATSENS`; 0 = Fixed / Mid, the defaults: no version) | **automatic** |
+| Key Touch (Fixed, Dynamic, Vel + Aftertouch, Vel + Poly AT), Velocity Sens, Aftertouch Sens (docs/VELOCITY.md) | Options | block `bass_on` bits 2..7 (`CRS_TOUCH`, `CRS_VSENS`, `CRS_ATSENS`; 0 = Fixed / Mid, the defaults: no version) | **automatic** |
 | Velocity Curve -3 .. +3 (docs/VELOCITY.md "fm1-ctl") | Options | block `pick_roots` bits 5..7 (`CRS_VCURVE`, two's complement; 0 = 0, the default: no version) | **automatic** |
 | MIDI Perform, MIDI Bass, MIDI Raw Chord | Options | block `midi_en[3]`, `midi_ch[3]` | **automatic** |
 | Raw Chord Sound | Options | block `raw_sound` | **automatic** |
@@ -67,7 +67,7 @@ from a layer: it goes with the layer (manual).
 | Key Mode, tonic, scale | KEY tap, the KEY layer | block `key_on` bit 0, `tonic`, `scale` | manual |
 | Key plays, Keyboard | the KEY layer's page 2 | block `key_on` bits 1 / 2 | manual |
 | Snap (0.22) | the KEY layer's page 2, KNOB 3 | block `key_on` bits 3 .. 4 | manual |
-| Numerals (0.22) | the KEY layer's page 2, KNOB 4 | block `bass_on` bit 1 | manual |
+| Numerals (0.22; its Solfège after 0.22) | the KEY layer's page 2, KNOB 4 | block `bass_on` bit 1 (On); `scale` bit 7 (Solfège) | manual |
 | the KEY layer's keys (pick / play) | GLO in the KEY layer | block `loop_rec` bit 5 | manual |
 | Transpose | the KEY layer | block `transpose` | manual |
 | the LOCK layer's two settings | B3 held | block `loop_rec` bits 6 / 7 | manual |
@@ -261,6 +261,25 @@ one the player would look for. `cr_settings_apply` gives the engine `cr_set_key_
 the 24 bytes' round trip, 24 .. 255 to the default, apply / capture, that it is manual, and the older firmwares' rule
 (modelled from their `CRS_FIX` line). Manual, as the page's others: not in `cr_settings_auto`.
 
+**Numerals' third value, Solfège (after 0.22; GitHub issue 15), is one bit of its own and no version, in
+`scale`.** KNOB 4 reads Off / On / Solfège (the degree as DO RE MI .., docs/CHORD-NAMES.md "Solfège"). The owner
+(2026-10-16): "Add a new bit for the Solfège mode. don't mix it with bass". So On stays bit 1 of `bass_on` and
+Solfège is **bit 7 of `scale`** (`CRS_SOLFEGE`; the scale is bits 0 .. 6, `CRS_SCALE`, which leaves room for more
+scales), each written alone: Off neither, On `CRS_NUMERALS`, Solfège `CRS_SOLFEGE` (if a record had both, Solfège
+wins). 0 in every older record and 0 is the default: nothing to migrate. **What an older firmware reads**: every
+firmware from 0.17 to 0.22 checks the byte against 0 .. 1 (`CRS_FIX(scale, 0, 1)`, read in `git show v0.17:` ..
+`v0.22:firmware/src/cr_settings.c`), so after a downgrade with Solfège saved it reads **the scale as Major and
+Numerals as Off**, until set again there, and nothing else; without Solfège the byte is one it knows. The byte was
+chosen as the KEY layer's own; a bit of the bass byte was ruled out by the owner (and its bit 0 would switch 0.18 ..
+0.22's engine bass on), `key_on`'s would cost Key Mode, Key plays, Keyboard and Snap there, `tonic`'s the key. Steps
+3, 5 and 6: `crs_sanitize` takes the scale from bits 0 .. 6 (an unknown one: Major, the bit kept);
+`cr_settings_apply` gives the engine `CRS_SCALE(s)` and `cr_settings_capture` keeps bit 7; the glue
+(`crs_capture` / `cr_settings_load`) writes it from `cs.numerals == 2` and reads `cs.numerals` from the two bits;
+`tests/cr_settings_test.c t_solfege` checks the round trip with both scales, the engine's side, an unknown scale, that
+it is manual, an older record, and the older firmwares' rule (modelled from their `CRS_FIX` line);
+`tools/emu/test_persist.sh` sets Solfège, saves, relaunches and reads `SOL` for G in C major. Manual, as the page's
+others: not in `cr_settings_auto`.
+
 ## The ChoralRoot block (`cr_settings_t`, `CRS_SIZE` = 192 bytes)
 
 The block has its own header:
@@ -273,11 +292,11 @@ The block has its own header:
 | field | range | default |
 | --- | --- | --- |
 | playstyle / extadd / secret | Simple–Free / Add Note, Play Chord / Off, Simple, All | Simple, Add Note, Off |
-| key_on, tonic, scale | bit 0 Key Mode 0/1 (**v14: bit 1 the KEY layer's Key plays**, 0 Chords / 1 Notes, `CRS_KEY_NOTES`, `cs.key_notes`; **bit 2 its Keyboard**, 0 Chords / 1 Full, `CRS_KBD_FULL`, `cs.kbd_full`; `CRS_KEY_ON` / `CRS_KEY_PLAYS` / `CRS_KEYBOARD` / `CRS_KEY_BYTE`; **0.22: bits 3 .. 4 its Snap**, 0 Off / 1 Scale / 2 Chord, `CRS_SNAP`, `CRS_SNAP_BITS`, `cs.snap`, `cr_keysnap_t`; a higher bit or a Snap of 3, 24 .. 255: the byte's default, `CRS_KEY_MAX`), 0..11, Major/Minor | off, Chords, Chords, Off, C, Major; a v1..v13 record: its Key Mode, Chords, Chords, Off |
+| key_on, tonic, scale | bit 0 Key Mode 0/1 (**v14: bit 1 the KEY layer's Key plays**, 0 Chords / 1 Notes, `CRS_KEY_NOTES`, `cs.key_notes`; **bit 2 its Keyboard**, 0 Chords / 1 Full, `CRS_KBD_FULL`, `cs.kbd_full`; `CRS_KEY_ON` / `CRS_KEY_PLAYS` / `CRS_KEYBOARD` / `CRS_KEY_BYTE`; **0.22: bits 3 .. 4 its Snap**, 0 Off / 1 Scale / 2 Chord, `CRS_SNAP`, `CRS_SNAP_BITS`, `cs.snap`, `cr_keysnap_t`; a higher bit or a Snap of 3, 24 .. 255: the byte's default, `CRS_KEY_MAX`), 0..11, Major/Minor (bits 0..6; **bit 7 after 0.22: the KEY layer's Numerals Solfège**, `CRS_SOLFEGE`, `CRS_SCALE` / `CRS_SOL`; an unknown scale: Major, the bit kept) | off, Chords, Chords, Off, C, Major; a v1..v13 record: its Key Mode, Chords, Chords, Off |
 | transpose | −24..24 | 0 |
 | single, split_pc | 0 Full Octave / 1 Split Oct ("Split" until v14) / **v14: 2 Split Bass**, 0..11 (the Chords layout's split, a pitch class; the Full keyboard splits at F4, fixed, not stored) | Full Octave, F (5) |
 | vel | 1..127 (the keys' velocity) | 100 |
-| bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
+| bass_on | bit 0: 0/1; **bit 1 (0.22): the KEY layer's Numerals**, 0 Off / 1 On (`CRS_NUMERALS`, `CRS_NUMS`, the UI's `cs.numerals`; 0 .. 3 in range; Solfège is `scale`'s bit 7, not this byte's) | **0**. Bit 0 is always written 0: until 0.17 the rule was "the bass is off at every power-on"; since 0.18 (v15) Bass on is kept, in the session (`bass_on` there), because a firmware older than v15 would switch the engine's bass on from this byte with its own UI still showing off |
 | bass_mode, bass_voicing | Chords Only..Solo, −2..4 octaves | Chords Only, 0 |
 | perform_on, perform_mode, perf_sel | 0/1, Strum..Harp, the PERF layer's entry 0..6 | off, Strum, 0 |
 | sticky | latch | off |
@@ -434,7 +453,7 @@ and where it lives. "block" is `cr_settings_t` above, "session" is `cr_session_t
 | every entry of Options (Play Style .. Dual Core, Hold Time) | yes | yes | block; Hold Time in Felucca's `bold` |
 | the panel calibration | yes | yes | Felucca's `panel` in the settings object |
 | Key Mode, tonic, scale, Transpose | yes | yes | block `key_on`, `tonic`, `scale`, `transpose` |
-| the KEY layer: its keys (pick / play), Key plays, Keyboard, Numerals (0.22: `bass_on` bit 1), Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
+| the KEY layer: its keys (pick / play), Key plays, Keyboard, Numerals (0.22: `bass_on` bit 1; its Solfège: `scale` bit 7), Single, the split | yes | yes | block `loop_rec` bit 5, `key_on` bits 1 / 2, `single`, `split_pc` |
 | the KEY layer's page, the PLAY menu's page | no | **no, on purpose** | page 1 whenever the layer opens (`cu.kpage`, `cu.lpage`) |
 | the performance mode, its parameters, Perform on | yes | yes | block `perform_mode`, `perf_sel`, `par`, `perform_on` |
 | LATCH on | yes | yes | block `sticky` |
@@ -486,7 +505,7 @@ Header: `magic` `CSS1`, `version` (`CSS_VERSION`, 1), `size`, `check` (FNV-1a ov
 | fx (`css_fx_t`, 124 bytes: 108 until 0.22, when `par[]` grew by four entries into `rsv_fx`, which is 4 bytes now) | the FX sub-block, below | nothing stored |
 | part[2] (`css_part_t`, 384 bytes each: chord, bass) | `valid`; `eng`, `preset`, `user`, `trim` (the part's `track_t` fields; **`trim` is written and, since 0.19, not read**: a part put back takes the trim of its pool entry from the running firmware's table, `cr_session_part_trim`: a factory preset its `CB_TRIM` row, a user preset bound to one that row, an added user preset and INIT none, as `cu_pool_load`, so a row removed or added by an update holds for a session saved before it); `edited`, `kind`, `fk`, `slot`, `name` (the UI's `cu_snd_t`: the pool entry the sound came from); `np` and `p[96]` (the writer's `P_COUNT`, 91 today, and every parameter: the engine's eight, the envelopes, the LFO, the modulation, the sends, **Level and Pan**); `nblob` and `blob[160]` (the engine's deep patch, `ENG_BLOB_MAX`: FM6 128, VA 110, CZ-1 144, FM TONE 80; none on the other engines) | not valid: the pool's sound (the block's `chord_sound` / `bass_sound`) |
 
-**Reserve: 142 bytes of the 1024** (46 after the state, 20 after the FX block, 8 in each part, 60 at the end), 1 of
+**Reserve: 126 bytes of the 1024** (46 after the state; 4 after the FX block since 0.22's master filter took 16, 8 in each part, 60 at the end), 1 of
 the FX block's 24 parameter entries (23 are stored since 0.21) and 5 of a part's 96 parameters; and the object holds 3840 bytes, so `CSS_SIZE`
 itself can grow: the import takes a shorter (older) record over the defaults and a longer (newer) one by its prefix,
 and no other firmware and no tool reads this object.

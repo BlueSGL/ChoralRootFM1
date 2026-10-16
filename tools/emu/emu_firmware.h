@@ -98,7 +98,7 @@
  * velocities and leans instead of the scan's hooks; the scan's analog state it would switch is a stub here */
 #define CR_SENSE_NO_HOOKS 1
 #include "../../firmware/src/cr_sense.c"
-static struct { uint8_t drive; } fm1_an;
+static struct { uint8_t drive, probe; } fm1_an;
 #include "../../firmware/src/cr_engine.h"
 #include "../../firmware/src/cr_engine.c"
 #undef cr_param_t

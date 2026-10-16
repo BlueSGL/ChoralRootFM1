@@ -149,6 +149,9 @@ static int cu_has(const char *s, const char *w)                /* w occurs in s 
 
 static const char *const CU_NOTE[12] = {"C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"};
 static const char *const CU_SNAP[3] = {"Off", "Scale", "Chord"};   /* the KEY layer's Snap (cr_keysnap_t) */
+static const char *const CU_NUMS[3] = {"Off", "On", "Solf\350ge"};   /* .. its Numerals (cs.numerals; \350: e grave,
+                                                    * CRB's extra) */
+static const char *const CU_NUMS_TR[3] = {"off", "on", "solfege"};
 
 /* --------------------------------------------------------------- sounds --- */
 /* PRESETS turns through the pool of the chord part's engine (cr_bank.c pool_*), ALGORITHM the bass part's (position 0
@@ -524,7 +527,8 @@ static struct {
                                            * keyboard a root out of the scale plays the nearest note of the scale (1)
                                            * or of the chord sounding (2) instead of nothing (0, the default) */
     uint8_t numerals;                     /* .. Numerals (KNOB 4; 0.22): 1 = the Chord view shows the sounding chord's
-                                           * Roman numeral above its name (cu_numeral); 0 Off, the default */
+                                           * Roman numeral above its name (cu_numeral); 2 (GitHub issue 15) the same
+                                           * degree as a solfege syllable there; 0 Off, the default */
     uint8_t lock_keep, lock_push;         /* the LOCK layer (B3 held; v13): a type key keeps the latched extensions
                                            * (0: clears them, today's); the extension keys are pushed as the type
                                            * keys are (0: toggles, today's) */
@@ -992,7 +996,7 @@ static const char *const O_NAME[O_N] = {"Play Style", "Extension Addition", "Sec
     "MIDI Clock", "View", "Motion", "Chord Names", "LEDs", "Hold Time", "USB Record", "USB Level", "USB Rate", "Dual Core", "Output",
     "Version",
     "Calibrate", "Reset Settings", "Safe Mode", "Flash Data"};
-static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 2, 2, 6, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
+static const int16_t O_MAX[O_N] = {2, 1, 2, 1, 127, 3, 2, 6, 2, 3, 2, 11, 16, 16, 16, 1, 2, V_N - 1, CR_MOTION_N - 1, 1, 1, 3, 1, 1, 1,
                                    1, 1, 0, 0, 0, 0, 0};
 static uint32_t cu_opt_n(void) { return cr_safe ? O_N : O_N_NORMAL; }
 static uint8_t cu_erase_ask;              /* Options > Flash Data: OCT+ pressed once (the second erases) */
@@ -1014,6 +1018,7 @@ static void cu_touch_apply(void)
 #ifdef CR_SENSE_KEYS
     cr_touch_curve = (uint8_t)(cs.vel_curve + 3);
     fm1_an.drive = cs.touch ? SN_DRIVE : 0u;
+    fm1_an.probe = cs.touch ? 1u : 0u;             /* the top row's probe: a third frame phase while the keys sense */
 #endif
 }
 static void cu_usb_apply(void)
@@ -1153,7 +1158,7 @@ static void opt_text(uint32_t o, char *d, uint32_t n)
     case O_SECRET: cu_cpy(d, SECRET[v % 3], n); break;
     case O_SIXTH: cu_cpy(d, v ? "Octave up" : "In place", n); break;
     case O_VEL: cu_int(d, v, 0, n); break;
-    case O_TOUCH: cu_cpy(d, v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
+    case O_TOUCH: cu_cpy(d, v == 3 ? "Vel + Poly AT" : v == 2 ? "Vel + Aftertouch" : v ? "Dynamic" : "Fixed", n); break;
     case O_VSENS: case O_ATSENS: cu_cpy(d, v == 2 ? "High" : v ? "Low" : "Mid", n); break;
     case O_VCURVE: cu_int(d, v - 3, 1, n); break;
     case O_BASSMODE: cu_cpy(d, CU_BASSMODE[v & 3], n); break;
@@ -1241,8 +1246,9 @@ static struct {
                                            * does nothing) */
     uint32_t kpend;                       /* key bits debounced down and waiting for their velocity (cu_scan_keys) */
     uint32_t kpend_t0[CU_NKEY];           /* .. since (cu_now) */
-    uint8_t ctx_vel;                      /* the keys' recent velocity (0: none yet): what a key without the converter
-                                           * plays at (docs/VELOCITY.md "the top row") */
+    uint8_t ctx_vel;                      /* the keys' recent velocity (0: none yet): what a sensed key whose reading
+                                           * did not come plays at (docs/VELOCITY.md "the top row") */
+    uint8_t last_vel, last_at;            /* the last key's velocity and the aftertouch now (GEEK OUT 2's line) */
     uint8_t key_note[CU_NKEY];            /* root keys (the Full keyboard: every key): note + 1 sent; 0xFF: the
                                            * layer's / a picker's; 0: not pressed, or pressed as a chord key */
     int8_t octave;
@@ -1339,15 +1345,16 @@ static void cu_touch_poll(void)
     if (now - last_ms < 5u)
         return;
     last_ms = now;
-    if (cs.touch == CR_TOUCH_VEL_AT) {
+    if (cs.touch >= CR_TOUCH_VEL_AT) {
         cr_sense_pressure_poll(now, cs.at_sens);
         for (k = 0; k < CU_NKEY; k++)
-            if (((CR_SENSE_KEYS >> k) & 1u) && ((cu.kheld >> k) & 1u) && cu.key_note[k] && cu.key_note[k] != 0xFFu &&
+            if (((CR_SENSE_AT_KEYS >> k) & 1u) && ((cu.kheld >> k) & 1u) && cu.key_note[k] && cu.key_note[k] != 0xFFu &&
                 cr_sense_at[k] > v)
                 v = cr_sense_at[k];
     }
     if (v != sent) {
         sent = (uint8_t)v;
+        cu.last_at = (uint8_t)v;
         cr_post(CRE_AT, 0, 0, (int32_t)v);
         cu_trace("touch: at %u\n", (unsigned)v);
     }
@@ -3703,9 +3710,11 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
                 cs.snap = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
                 cr_post(CRE_KEYSNAP, 0, 0, cs.snap);
                 cu_trace("key: knob 3 snap %s\n", CU_SNAP[cs.snap]);
-            } else {                               /* NUMERALS: the chord's Roman numeral on the Chord view (display only) */
-                cs.numerals = (uint8_t)(s > 0);
-                cu_trace("key: knob 4 numerals %s\n", cs.numerals ? "on" : "off");
+            } else {                               /* NUMERALS: Off / On (the chord's Roman numeral on the Chord view) /
+                                                    * Solfege (the same degree as a syllable; display only) */
+                v = (int32_t)cs.numerals + s;
+                cs.numerals = (uint8_t)(v < 0 ? 0 : v > 2 ? 2 : v);
+                cu_trace("key: knob 4 numerals %s\n", CU_NUMS_TR[cs.numerals]);
             }
             cu_hot_set(L_KEY, knob);
             break;
@@ -4100,7 +4109,7 @@ static int cu_layer_keys(uint32_t l)
 #endif
 /* Key velocity (cr_sense.c; docs/VELOCITY.md). With Options > Key Touch Dynamic (or Velocity + Aftertouch), a key with
  * the converter (CR_SENSE_KEYS) that plays a note waits, once debounced, for its velocity (cu_scan_keys: cu.kpend;
- * 8.8 ms after the touch sample, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
+ * 8.8 ms after the touch sample, 13.2 with the probe on, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
  * mod.c cr_touch_gain); a key without it plays at the keys' recent velocity (cu.ctx_vel), else at Options >
  * Velocity. Fixed: every key at Options > Velocity, as before. */
 #ifndef CR_SENSE_KEYS                              /* (the emulator, the tests: no analog rows) */
@@ -4108,16 +4117,20 @@ static int cu_layer_keys(uint32_t l)
 static volatile uint16_t cr_sense_land[CU_NKEY];
 static uint32_t cr_sense_take(uint32_t k) { (void)k; return 0; }
 #endif
-#define CU_VEL_WAIT_MS 12u
+#define CU_VEL_WAIT_MS 18u                         /* the velocity is known four samples after the touch sample: 8.8 ms at
+                                                    * 2.2 ms a sample, 13.2 with the top row's probe on (a third frame
+                                                    * phase: every 3.3 ms), the touch sample up to one sample after the
+                                                    * contact, the debounce 1.1 .. 2.2 ms after it: 15.4 ms at most */
 static uint8_t cu_press_vel;                       /* the pending key's velocity, for cu_key_press (0: none) */
 #define CU_KEY_SENSED(k) (cs.touch && ((CR_SENSE_KEYS >> (k)) & 1u) && ((k) >= CU_ROOT0 || cs.kbd_full))
 static uint32_t cu_key_vel(uint32_t k)
 {
     uint32_t v = cu_press_vel;
+    (void)k;
     if (!cs.touch)
         return cs.vel;                             /* Key Touch Fixed: Options > Velocity, as before */
-    if (!v && !CU_KEY_SENSED(k))
-        v = cu.ctx_vel;
+    if (!v)
+        v = cu.ctx_vel;                            /* (no reading in time: the keys' recent velocity) */
     if (!v)
         return cs.vel;
     return v < 1u ? 1u : v > 127u ? 127u : v;
@@ -4177,6 +4190,7 @@ static void cu_key_press(uint32_t k)
         n = n < 0 ? 0 : n > 127 ? 127 : n;
         cr_klat_post(CU_KEY_T0(k));                /* (78 PEAK: the key's way to the engine, timed) */
         cr_post(CRE_KEY, (uint32_t)n, cu_key_vel(k), 1);
+        cu.last_vel = (uint8_t)cu_key_vel(k);
         cu_trace("touch: key %u vel %u%s\n", (unsigned)k, (unsigned)cu_key_vel(k), cs.touch ? cu_press_vel ? " sensed" : " context" : " fixed");
         cu.key_note[k] = (uint8_t)(n + 1);
     }
@@ -4893,7 +4907,7 @@ static void cu_scan_keys(uint32_t ne, uint32_t km)
     for (k = 0; k < CU_NKEY; k++) {
         uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
         if (!was && (is || e) && !((cu.kpend >> k) & 1u)) {
-            if (CU_KEY_SENSED(k) && !cr_sense_land[k]) {   /* (the velocity comes 7 .. 10 ms after the debounce) */
+            if (CU_KEY_SENSED(k) && !cr_sense_land[k]) {   /* (the velocity comes 7 .. 15 ms after the debounce) */
                 cu.kpend |= 1u << k;
                 cu.kpend_t0[k] = now;
                 continue;
@@ -5385,16 +5399,18 @@ static uint32_t cu_batt(void)
     return song.batt_raw >= 591 ? 3u : song.batt_raw >= 561 ? 2u : song.batt_raw >= 531 ? 1u : 0u;
 }
 
-/* the KEY layer's Numerals (0.22): the sounding chord's Roman numeral in the key, "" when there is none to show (the
- * option or Key Mode off, nothing sounding). The root is the one PLAYED: the name's (cr_chord_info: Key Mode
- * resolved, transposed) less the Transpose inside it, so the tonic chord reads I at any Transpose (the owner,
- * 2026-10-12; with Transpose +1 in C the name says C#M and the numeral I) */
+/* the KEY layer's Numerals (0.22): the sounding chord's Roman numeral in the key (Solfege, GitHub issue 15: the same
+ * degree as a syllable, cr_chord_solfege), "" when there is none to show (the option or Key Mode off, nothing
+ * sounding). The root is the one PLAYED: the name's (cr_chord_info: Key Mode resolved, transposed) less the Transpose
+ * inside it, so the tonic chord reads I (DO) at any Transpose (the owner, 2026-10-12; with Transpose +1 in C the name
+ * says C#M and the numeral I) */
 static void cu_numeral(char b[CR_NUMERAL_MAX])
 {
     const cr_chord_info_t *ci = &cr_snap.ci;
     b[0] = 0;
     if (cs.numerals && cs.key_on && ci->valid && ci->sounding)
-        cr_chord_numeral((uint8_t)(((int)ci->root_pc - ci->transpose) % 12 + 12), ci->quality, cs.tonic, cs.scale, b);
+        (cs.numerals == 2u ? cr_chord_solfege : cr_chord_numeral)((uint8_t)(((int)ci->root_pc - ci->transpose) % 12 + 12),
+                                                                 ci->quality, cs.tonic, cs.scale, b);
 }
 /* .. on the Chord view, blue, centred above the chord name (cr_draw.c cr_p_chord, cr_p_arp). numeral_on is the
  * layout (the arp's name sits lower to make room): set by the two settings alone, not by a chord sounding, so the
@@ -5822,7 +5838,7 @@ static void cu_key_cells(cr_screen_t *s)
         cu_cpy(s->cell[0][2].label, "Snap", sizeof s->cell[0][2].label);
         cu_cpy(s->cell[0][2].value, CU_SNAP[cs.snap % 3u], sizeof s->cell[0][2].value);
         cu_cpy(s->cell[0][3].label, "Numerals", sizeof s->cell[0][3].label);
-        cu_cpy(s->cell[0][3].value, cs.numerals ? "On" : "Off", sizeof s->cell[0][3].value);
+        cu_cpy(s->cell[0][3].value, CU_NUMS[cs.numerals % 3u], sizeof s->cell[0][3].value);
         cu_cpy(s->cell[0][0].label, "Key plays", sizeof s->cell[0][0].label);
         cu_cpy(s->cell[0][0].value, cs.key_notes ? "Notes" : "Chords", sizeof s->cell[0][0].value);
         cu_cpy(s->cell[0][1].label, "Keyboard", sizeof s->cell[0][1].label);
@@ -6580,7 +6596,16 @@ static void cu_geek2(cr_screen_t *s, uint32_t now)
     s->batt = (uint8_t)cu_batt();
     cu_cpy(s->title, "GEEK OUT 2", sizeof s->title);
     s->title_col = CR_COL_WHITE;
-    cu_cpy(s->page, dual ? "2 cores" : "1 core", sizeof s->page);
+    if (cs.touch) {                              /* the keys sensing: the last key's velocity, the aftertouch now */
+        char b[8];
+        cu_cpy(s->page, "VEL ", sizeof s->page);
+        cu_int(b, cu.last_vel, 0, sizeof b);
+        cu_cat(s->page, b, sizeof s->page);
+        cu_cat(s->page, " AT ", sizeof s->page);
+        cu_int(b, cu.last_at, 0, sizeof b);
+        cu_cat(s->page, b, sizeof s->page);
+    } else
+        cu_cpy(s->page, dual ? "2 cores" : "1 core", sizeof s->page);
     cu_g2_cell(&s->cell[0][0], "CORE 0", shown[0] >> 4, pk[0] * 256u / CPU_HALF_US,
                (us[0] * 100u + CPU_HALF_US / 2u) / CPU_HALF_US);
     if (dual)

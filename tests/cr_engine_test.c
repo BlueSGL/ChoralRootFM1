@@ -2918,11 +2918,72 @@ static void s_numerals(void)
     ok(!strcmp(b, "V") && !strcmp(r, "G") && s[0], "numerals: G7 9 in C major is V, the extensions stay with the name");
 }
 
+/* GitHub issue 15: Numerals = Solfege, the same degree as a movable-do syllable (Do = the tonic): cr_chord_solfege.
+ * All 12 roots in C major and in A minor (the scale's chords and the roots between), the marks, another tonic, and
+ * every cell agreeing with the numeral on the accidental, the case and the mark */
+static unsigned s_degree_marks(const char *d)   /* the accidental, the case and the mark of a numeral / syllable */
+{
+    unsigned acc = d[0] == '#' ? 1u : d[0] == 'b' ? 2u : 0u, n = (unsigned)strlen(d);
+    unsigned char last = (unsigned char)d[n - 1];
+    return acc | (d[acc ? 1 : 0] & 0x20u ? 4u : 0u) | (last == 0xB0u ? 8u : last == '+' ? 16u : 0u);
+}
+static void s_solfege(void)
+{
+    static const struct { uint8_t tonic, scale, root, q; const char *want; } T[] = {
+        /* C major: the scale's chords, then the roots between (the numeral's bII bIII #iv bVI bVII) */
+        {0, CR_SCALE_MAJOR, 0, CR_Q_MAJ, "DO"},     {0, CR_SCALE_MAJOR, 2, CR_Q_MIN, "re"},
+        {0, CR_SCALE_MAJOR, 4, CR_Q_MIN, "mi"},     {0, CR_SCALE_MAJOR, 5, CR_Q_MAJ, "FA"},
+        {0, CR_SCALE_MAJOR, 7, CR_Q_MAJ, "SOL"},    {0, CR_SCALE_MAJOR, 9, CR_Q_MIN, "la"},
+        {0, CR_SCALE_MAJOR, 11, CR_Q_DIM, "ti\260"},
+        {0, CR_SCALE_MAJOR, 1, CR_Q_MAJ, "bRE"},    {0, CR_SCALE_MAJOR, 3, CR_Q_MAJ, "bMI"},
+        {0, CR_SCALE_MAJOR, 6, CR_Q_DIM, "#fa\260"}, {0, CR_SCALE_MAJOR, 8, CR_Q_MAJ, "bLA"},
+        {0, CR_SCALE_MAJOR, 10, CR_Q_MAJ, "bTI"},
+        /* the case and the marks: by the third, as the numeral's */
+        {0, CR_SCALE_MAJOR, 7, CR_Q_SUS, "SOL"},    {0, CR_SCALE_MAJOR, 7, CR_Q_POW, "SOL"},
+        {0, CR_SCALE_MAJOR, 7, CR_Q_NONE, "SOL"},   {0, CR_SCALE_MAJOR, 7, CR_Q_AUG, "SOL+"},
+        {0, CR_SCALE_MAJOR, 2, CR_Q_MIN4, "re"},    {0, CR_SCALE_MAJOR, 7, CR_Q_MIN, "sol"},
+        {0, CR_SCALE_MAJOR, 7, CR_Q_DIM, "sol\260"},
+        /* A minor (natural): Do is A, the degree is the scale's (C is MI as it is III) */
+        {9, CR_SCALE_MINOR, 9, CR_Q_MIN, "do"},     {9, CR_SCALE_MINOR, 11, CR_Q_DIM, "re\260"},
+        {9, CR_SCALE_MINOR, 0, CR_Q_MAJ, "MI"},     {9, CR_SCALE_MINOR, 2, CR_Q_MIN, "fa"},
+        {9, CR_SCALE_MINOR, 4, CR_Q_MAJ, "SOL"},    {9, CR_SCALE_MINOR, 4, CR_Q_MIN, "sol"},
+        {9, CR_SCALE_MINOR, 5, CR_Q_MAJ, "LA"},     {9, CR_SCALE_MINOR, 7, CR_Q_MAJ, "TI"},
+        {9, CR_SCALE_MINOR, 10, CR_Q_MAJ, "bRE"},   {9, CR_SCALE_MINOR, 1, CR_Q_MAJ, "#MI"},
+        {9, CR_SCALE_MINOR, 3, CR_Q_MAJ, "#FA"},    {9, CR_SCALE_MINOR, 6, CR_Q_MIN, "#la"},
+        {9, CR_SCALE_MINOR, 8, CR_Q_DIM, "#ti\260"}, {9, CR_SCALE_MINOR, 1, CR_Q_AUG, "#MI+"},
+        /* another tonic: movable do, so G major's D is SOL and F# minor's F# is do */
+        {7, CR_SCALE_MAJOR, 2, CR_Q_MAJ, "SOL"},    {6, CR_SCALE_MINOR, 6, CR_Q_MIN, "do"},
+        {5, CR_SCALE_MAJOR, 0, CR_Q_MAJ, "SOL"},    {5, CR_SCALE_MAJOR, 5, CR_Q_MAJ, "DO"},
+    };
+    char b[CR_NUMERAL_MAX], rn[CR_NUMERAL_MAX];
+    unsigned i, bad = 0, t, sc, pc, qq, longest = 0, agree = 0;
+    for (i = 0; i < sizeof T / sizeof T[0]; i++) {
+        cr_chord_solfege(T[i].root, T[i].q, T[i].tonic, T[i].scale, b);
+        if (strcmp(b, T[i].want)) { printf("  solfege %u: \"%s\", want \"%s\"\n", i, b, T[i].want); bad++; }
+    }
+    ok(!bad, "solfege: C major DO re mi FA SOL la ti(deg), bRE bMI #fa(deg) bLA bTI; A minor do re(deg) MI fa SOL LA TI, "
+             "bRE #MI #FA #la #ti(deg); G major's D is SOL");
+    for (bad = 0, t = 0; t < 12u; t++)             /* every cell ends inside the buffer, and reads as its numeral does */
+        for (sc = 0; sc < 2u; sc++)
+            for (pc = 0; pc < 12u; pc++)
+                for (qq = 0; qq < CR_Q_COUNT; qq++) {
+                    memset(b, 0x55, sizeof b);
+                    cr_chord_solfege((uint8_t)pc, (uint8_t)qq, (uint8_t)t, (uint8_t)sc, b);
+                    cr_chord_numeral((uint8_t)pc, (uint8_t)qq, (uint8_t)t, (uint8_t)sc, rn);
+                    if (!memchr(b, 0, sizeof b) || !b[0]) { bad++; continue; }
+                    if (strlen(b) > longest) longest = (unsigned)strlen(b);
+                    agree += s_degree_marks(b) == s_degree_marks(rn);
+                }
+    ok(!bad && longest == 4u && agree == 12u * 2u * 12u * CR_Q_COUNT,
+       "solfege: all 2304 cells written and ended (the longest: 4 characters), each with its numeral's accidental, case and mark");
+}
+
 int main(void)
 {
     s_tables();
     s_names_std();
     s_numerals();
+    s_solfege();
     s_sixth_tables();
     run_suite(1000, 0, "1ms");
     run_suite(2902, 0, "2.9ms");

@@ -990,9 +990,34 @@ static void t_env(void)
         e0 = (int32_t)quad_vs[0][0].ph[0];
         drv_on(t, 0, 67, 127);
         CHECK((int32_t)quad_vs[0][0].ph[0] == e0 && e0, "PHASE RESET off: phase reset");
-        quad_patch[0][QP_PHRT] = QR_ALL;
-        drv_on(t, 0, 69, 127);
-        CHECK(!quad_vs[0][0].ph[0] && !quad_vs[0][0].ph[2], "PHASE RESET on: phases %u", quad_vs[0][0].ph[0]);
+        quad_patch[0][QP_PHRT] = QR_ALL;         /* PHRT ALL on a voice that sounds: what is heard runs on (C, the
+                                                  * direct carrier B1, A and B2 modulating), a silent operator restarts
+                                                  * (docs/QUAD.md "Pops") */
+        drv_tick(t, out);
+        {
+            uint32_t ph0[4];
+            memcpy(ph0, quad_vs[0][0].ph, sizeof ph0);
+            drv_on(t, 0, 69, 127);
+            CHECK(!memcmp(quad_vs[0][0].ph, ph0, sizeof ph0) && ph0[0], "PHASE RESET on a sounding voice: restarted");
+            quad_patch[0][QP_BLEV] = 0;          /* B2 silent (B LEV 0: B1 at 0 too, but B1 is algorithm 1's direct Y) */
+            for (n = 0; n < 4u; n++)
+                drv_tick(t, out);
+            memcpy(ph0, quad_vs[0][0].ph, sizeof ph0);
+            drv_on(t, 0, 71, 127);
+            CHECK(quad_vs[0][0].ph[0] == ph0[0] && quad_vs[0][0].ph[1] == ph0[1] && quad_vs[0][0].ph[2] == ph0[2] &&
+                  !quad_vs[0][0].ph[3] && ph0[3], "PHASE RESET on, B2 silent: C %u A %u B1 %u B2 %u", quad_vs[0][0].ph[0],
+                  quad_vs[0][0].ph[1], quad_vs[0][0].ph[2], quad_vs[0][0].ph[3]);
+            quad_patch[0][QP_BLEV] = 90;
+            t->v[0].gate = 0;                    /* released down to under -40 dB (still sounding): all restart */
+            for (n = 0; n < 20000u && (quad_vs[0][0].amp >= 328 || !quad_vs[0][0].amp); n++)
+                drv_tick(t, out);
+            CHECK(quad_vs[0][0].amp > 0 && quad_vs[0][0].amp < 328 && quad_vs[0][0].stage[3], "the release: amp %d",
+                  quad_vs[0][0].amp);
+            drv_on(t, 0, 72, 127);
+            CHECK(!quad_vs[0][0].ph[0] && !quad_vs[0][0].ph[1] && !quad_vs[0][0].ph[2] && !quad_vs[0][0].ph[3],
+                  "PHASE RESET on a quiet voice: phases %u %u %u %u", quad_vs[0][0].ph[0], quad_vs[0][0].ph[1],
+                  quad_vs[0][0].ph[2], quad_vs[0][0].ph[3]);
+        }
         quad_patch[0][QP_ATRIG] = 1;             /* legato with TRIG on: A restarts */
         for (n = 0; n < 200u; n++)
             drv_tick(t, out);
@@ -1799,20 +1824,30 @@ static void t_harm(void)
     CHECK(HSAME(8, -64, 0, 26, (p[QP_ALEV] = 0, p[QP_BLEV] = 127, p[QP_BEND] = 127)), "HARM +26: B2 shaped");
     CHECK(HSAME(3, -64, 0, 20, (p[QP_ALEV] = 0)), "HARM +20: algo 3's X (C + B2) shaped");
 #undef HSAME
-    /* the tables: the fundamental first, each wave its own, a step between two is between them */
+    /* the tables (the first half of a cycle stored, quad_harm the whole, built by quad_init): the fundamental first,
+     * each wave its own, a step between two is between them, the stored ends are the odd symmetry's zeros */
     for (k = 1; k < QUAD_NHARM; k++) {
         double a1 = 0, d = 0;
         uint32_t i;
         for (i = 0; i < QUAD_HN; i++) {
-            a1 += QUAD_HARM[k][i] * sin(2.0 * M_PI * i / QUAD_HN);
-            d += fabs((double)QUAD_HARM[k][i] - QUAD_HARM[k - 1][i]);
+            a1 += quad_harm[k][i] * sin(2.0 * M_PI * i / QUAD_HN);
+            d += fabs((double)quad_harm[k][i] - quad_harm[k - 1][i]);
         }
-        CHECK(a1 > 0.3 * 32767 * QUAD_HN / 2 && d / QUAD_HN > 100.0 && QUAD_HARM[k][QUAD_HN] == QUAD_HARM[k][0],
+        CHECK(a1 > 0.3 * 32767 * QUAD_HN / 2 && d / QUAD_HN > 100.0 && QUAD_HARM[k][0] == 0 && QUAD_HARM[k][QUAD_HN / 2u] == 0,
               "HARM wave %u: fundamental %.2f, apart %.0f", k, a1 / (32767.0 * QUAD_HN / 2), d / QUAD_HN);
     }
+    {   /* quad_init: the whole cycle is the stored half, then the half reversed and negated, then the first point */
+        int bad = 0;
+        uint32_t i;
+        for (k = 0; k < QUAD_NHARM; k++)
+            for (i = 0; i <= QUAD_HN; i++)
+                if (quad_harm[k][i] != (i <= QUAD_HN / 2u ? QUAD_HARM[k][i] : -QUAD_HARM[k][QUAD_HN - i]))
+                    bad = 1;
+        CHECK(!bad, "HARM tables: quad_init builds every whole cycle from its stored half");
+    }
     {
-        int32_t x = quad_hw(QUAD_HARM[19], QUAD_HARM[20], 16384, 0x10000000u), a = quad_hw(QUAD_HARM[19], QUAD_HARM[19], 0, 0x10000000u),
-                b = quad_hw(QUAD_HARM[20], QUAD_HARM[20], 0, 0x10000000u);
+        int32_t x = quad_hw(quad_harm[19], quad_harm[20], 16384, 0x10000000u), a = quad_hw(quad_harm[19], quad_harm[19], 0, 0x10000000u),
+                b = quad_hw(quad_harm[20], quad_harm[20], 0, 0x10000000u);
         CHECK(abs(x - (a + b) / 2) <= 1, "HARM halfway: %d between %d and %d", x, a, b);
     }
 }
@@ -1915,6 +1950,78 @@ static void t_keys(void)
 }
 
 /* LFO FADE (- in, + out) seen through PAN (the latest voice's), PHRT (OFF keeps the phases of a fresh voice) */
+/* a filter switched in or out within a note, and MIX moved, make no step (docs/QUAD.md "Pops"): the largest sample step
+ * within a block of each switch against the largest anywhere else in the note. Before 2026-10-16 the multimode came
+ * back with its states at 0 (the output to 0 at once: 2 of the 256 Digitone factory sounds, A067, A210), the
+ * base-width high-pass let its low band back at once (A126), MIX stepped at a block's edge (A087's RAMP) */
+static double sw_ratio(const int16_t *p, uint32_t note, uint32_t bit, uint32_t *nsw)
+{
+    track_t *t = &trk[0];
+    static int32_t o[FS * 6u / 5u + CTL];
+    static uint8_t near[FS * 6u / 5u / CTL + 2u];
+    int32_t out[CTL], dn = 0, de = 0;
+    uint32_t nb = FS * 6u / 5u / CTL, b, i, f0 = 0;
+    drv_reset(t);
+    drv_patch(t, p);
+    drv_on(t, 0, note, 127);
+    memset(near, 0, sizeof near);
+    *nsw = 0;
+    for (b = 0; b < nb; b++) {
+        int32_t g = quad_vs[0][0].mixp;
+        drv_tick(t, out);
+        memcpy(o + b * CTL, out, sizeof out);
+        if (b && (bit ? ((quad_vs[0][0].fon ^ f0) & bit) != 0 : quad_vs[0][0].mixp != g)) {
+            (*nsw)++;
+            near[b] = near[b + 1u] = 1;
+            near[b - 1u] = 1;
+        }
+        f0 = quad_vs[0][0].fon;
+    }
+    for (i = (uint32_t)(0.05 * FS); i < nb * CTL; i++) {   /* (after the attack) */
+        int32_t d = abs(o[i] - o[i - 1u]);
+        if (near[i / CTL])
+            dn = d > dn ? d : dn;
+        else
+            de = d > de ? d : de;
+    }
+    return de ? (double)dn / de : 99;
+}
+static void t_switch(void)
+{
+    int16_t p[QP_NP];
+    uint32_t n;
+    double r;
+    quad_init_patch(p);                          /* the multimode: the envelope takes LP12 past its top, then down */
+    p[QP_FTYPE] = QF_LP12, p[QP_FREQ] = 60, p[QP_RESO] = 0, p[QP_FDEPTH] = 63;   /* (version-3 units) */
+    p[QP_FATK] = 0, p[QP_FDEC] = 40, p[QP_FSUS] = 0;
+    r = sw_ratio(p, 36, 1u, &n);
+    if (getenv("VERBOSE"))
+        printf("  switch: multimode %u x %.2f\n", n, r);
+    CHECK(n >= 1u && r < 1.25, "the multimode switched in: %u switches, the step near them x %.2f", n, r);
+    quad_init_patch(p);                          /* the base-width high-pass: an LFO takes BASE through 0, four times */
+    p[QP_FTYPE] = QF_OFF;
+    p[QP_LFO(0, QL_DEST)] = QD_BASE, p[QP_LFO(0, QL_WAVE)] = QW_TRI, p[QP_LFO(0, QL_SPEED)] = 63;
+    p[QP_LFO(0, QL_MULT)] = 4, p[QP_LFO(0, QL_DEPTH)] = 10;
+    r = sw_ratio(p, 36, 2u, &n);
+    if (getenv("VERBOSE"))
+        printf("  switch: high-pass %u x %.2f\n", n, r);
+    CHECK(n >= 4u && r < 1.5, "the high-pass switched: %u switches, the step near them x %.2f", n, r);
+    p[QP_BASE] = 20, p[QP_WIDTH] = 100;          /* .. its low-pass: BASE + WIDTH through the top */
+    p[QP_LFO(0, QL_DEST)] = QD_WIDTH, p[QP_LFO(0, QL_DEPTH)] = 63;
+    r = sw_ratio(p, 36, 4u, &n);
+    if (getenv("VERBOSE"))
+        printf("  switch: low-pass %u x %.2f\n", n, r);
+    CHECK(n >= 4u && r < 1.5, "the low-pass switched: %u switches, the step near them x %.2f", n, r);
+    quad_init_patch(p);                          /* MIX by a square LFO: X (C) and Y (B1 an octave up) in turns */
+    p[QP_FTYPE] = QF_OFF, p[QP_RB1] = 4;
+    p[QP_LFO(0, QL_DEST)] = QD_MIX, p[QP_LFO(0, QL_WAVE)] = QW_SQR, p[QP_LFO(0, QL_SPEED)] = 63;
+    p[QP_LFO(0, QL_MULT)] = 4, p[QP_LFO(0, QL_DEPTH)] = 63;
+    r = sw_ratio(p, 84, 0u, &n);
+    if (getenv("VERBOSE"))
+        printf("  switch: MIX %u x %.2f\n", n, r);
+    CHECK(n >= 4u && r < 1.5, "MIX by a square: %u changes, the step near them x %.2f", n, r);
+}
+
 static void t_fade_phrt(void)
 {
     track_t *t = &trk[0];
@@ -2323,6 +2430,7 @@ static void t_v5(void)
 
 int main(int argc, char **argv)
 {
+    quad_init();                                 /* (the HARM tables in RAM: main.c felucca_init's) */
     t_blob();
     t_v5();
     t_pages();
@@ -2348,6 +2456,7 @@ int main(int argc, char **argv)
     t_dtun_fdbk();
     t_keys();
     t_fade_phrt();
+    t_switch();
     t_dests();
     if (argc > 1 && !strcmp(argv[1], "cpu"))
         t_cpu();

@@ -214,6 +214,23 @@ static uint16_t emu_land_for(uint32_t vel)        /* the smallest driven reading
     cr_touch_curve = curve;
     return (uint16_t)best;
 }
+#define EMU_PROBE_BASE 770u                        /* PA10 at rest (Velo: the LED conducting on the pull-up) */
+static uint32_t emu_probe_rise(uint32_t vel)      /* the probe's rise above its baseline that the curve reads as vel */
+{
+    uint32_t r;
+    for (r = 0; r < SN_P_HI; r++)
+        if (sn_probe_velocity(r) >= vel)
+            return r;
+    return SN_P_HI;
+}
+static void emu_probe_feed(uint32_t held)         /* the top row through the probe (every 3 ms: the unit's 3.3) */
+{
+    uint32_t k;
+    for (k = SN_TOP0; k < SN_TOP0 + SN_NTOP; k++) {
+        uint32_t down = (held >> k) & 1u, vel = emu_hal.key_vel[k] ? emu_hal.key_vel[k] : 100u;
+        cr_sense_probe(k, down ? EMU_PROBE_BASE + emu_probe_rise(vel) : EMU_PROBE_BASE, down);
+    }
+}
 static void emu_touch_feed(uint32_t ms, uint32_t held)
 {
     uint32_t k;
@@ -289,8 +306,11 @@ void emu_fw_tick(uint32_t ms)
         __atomic_fetch_or(&host_notes, down, __ATOMIC_SEQ_CST);
     fm1_in.buttons = in_btn;
     fm1_in.notes = in_key;
-    if ((ms & 1u) == 0u)                          /* the analog rows' samples, every 2 ms (the unit: 2.2) */
+    if (fm1_an.probe ? ms % 3u == 0u : (ms & 1u) == 0u)   /* the analog rows' samples: every 2 ms (the unit: 2.2), every
+                                                    * 3 while the top row's probe takes a third frame phase (3.3) */
         emu_touch_feed(ms, in_key);
+    if (fm1_an.probe && ms % 3u == 1u)            /* the probe's readings, between them */
+        emu_probe_feed(in_key);
     for (i = 0; i < EMU_NENC; i++) {
         int32_t s = __atomic_exchange_n(&emu_hal.enc[i], 0, __ATOMIC_SEQ_CST);
         if (s && !dead)
@@ -451,7 +471,7 @@ void emu_fw_dump(void)
     {                                               /* the KEY layer's Numerals and what the Chord view shows for it now */
         char rn[CR_NUMERAL_MAX];
         cu_numeral(rn);
-        printf("  numerals: %s shown \"%s\"\n", cs.numerals ? "on" : "off", rn);
+        printf("  numerals: %s shown \"%s\"\n", CU_NUMS_TR[cs.numerals % 3u], rn);
     }
     printf("  lock: on %u latched %02X type-key %s ext-keys %s\n", (unsigned)cu.clock, (unsigned)cu.mlatch,
            cs.lock_keep ? "keeps" : "clears", cs.lock_push ? "pushed" : "toggle");   /* (latched: bit cr_mod_t) */

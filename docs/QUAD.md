@@ -167,7 +167,11 @@ steps (the manual's §11.3.4); 0 = 0.25/0.25 and 360 = 16/16 hold. The text is `
 **DTUN** (`QUAD_DT_UP` / `QUAD_DT_DN`): A up and B2 down by `6 x d / 64` cents up to 64, `6 + 44 x ((d - 64) / 63)^2`
 above (16 cents at 96, 50 at 127); C and B1 untouched. Increments: `pitch inc x ratio (Q16) x detune (Q16)` in 64-bit.
 
-**HARM.** 27 tables x 513 int16 (512 points and the wrap point; 27.1 KB `const`, XIP flash; was 15 x 1025, 30.8 KB):
+**HARM.** 27 tables x 513 int16 (512 points and the wrap point): in flash as 27 x 257 (the first half of each cycle and
+its end point, 13.5 KB `const`; was 27 x 513, 27.1 KB, and 15 x 1025, 30.8 KB before that), the whole cycles built at
+power-on into POOL (`eng_quad.c quad_init`, `quad_harm`, 27.7 KB): every wave is a sum of sines, so f(512 - i) = -f(i)
+exactly (`tests/quad_ref.py` asserts it point by point; HISTORY 3y126). The render reads the POOL copy, so it reads SRAM
+where it read XIP flash through the cache, and its code is byte for byte what it was:
 0 the sine, 1..26 the manual's series, additive (sine phases, the fundamental at 1, each wave scaled to a peak of
 32767). The recipes (harmonic: amplitude; `tests/quad_ref.py harm_recipes`):
 
@@ -207,7 +211,10 @@ right edge (`wv[6]`). No factory preset uses 127 (none had it): the goldens do n
 **Envelopes.** Operator A and B: DELAY, ATK (linear), DEC (exponential to END), held (attack-decay-end; the times the
 Digitone's since 2026-10-14: "Times"); TRIG / RESET
 as before (unchanged by the review). **PHRT** (`QP_PHRT`, value 23) OFF ALL C A+B A+B2: at every note-on (a fresh voice
-too) the set's phases go to 0, the others run on from where the voice left them (OFF: none reset).
+too) the set's phases go to 0, the others run on from where the voice left them (OFF: none reset). Since 2026-10-16
+("Pops" below) a voice that still sounds when it is struck again restarts only the operators of the set that no one
+hears (`quad_phrt_mask`): a carrier while the voice is under -40 dB (an enveloped carrier at its envelope x level), a
+modulator while its level is under -66 dB; the others run on.
 
 **LFOs** (three, per voice, control rate). Rate `f = SPEED x MULT / 128 x BPM / 240 Hz` (`QUAD_LFO_K`, 64-bit; SPEED x
 MULT = 128 is a bar: SPEED 32 x 4 = 0.5 Hz at 120 BPM): MULT 0..11 `1 2 4 .. 512 1k 2k` at the part's tempo
@@ -332,6 +339,8 @@ protocol's fmt 19: a number, its max "INF"); the knob steps them 1 slow, 6 quick
 112 127: the top is INF). **AMP DEC INF** (the Digitone's DEC 127): the amp envelope holds the level it reached at
 the attack's end (1) and never moves to SUS; the gate's end releases by REL as always (`quad_env_tick` stage 3; the
 filter envelope's DEC has no INF, its REL INF is unchanged). LEVEL's law: amplitude x 2 LEVEL^2 (Q15, from the integer).
+The voice goes into the part at the engine's output scale, `>> 12` (6 dB under the `>> 11` before 2026-10-16: "Level"
+below).
 
 Storage: blob version 5 (96 bytes; HARM DTUN FREQ RESO filter DEPTH BASE and the LFOs' SPEED / DEPTH u16le, the rest a
 byte: 87 used). Version 4 blobs (3y61's: AMP REL and LEVEL u16 hundredths, the tops 127.99; the owner's unit has them)
@@ -421,7 +430,7 @@ destinations, FADE, RAND slew, every filter type): no int32 wrap, the voices end
 float model and the integer engine part ways.)
 
 **CPU** (`tests/regress.c`, host instructions a sample, 8 voices): the 16 presets average 1491 (v2: 1510); the heaviest
-WOBBLE 1880 (LP24; v2's WOBBLE 1684), STRINGS 1630 (v2 1891). HARM's tables are 27.1 KB in XIP flash (v2: 30.8 KB);
+WOBBLE 1880 (LP24; v2's WOBBLE 1684), STRINGS 1630 (v2 1891). HARM's tables are 13.5 KB in XIP flash since 3y126 (27.1 before, v2: 30.8 KB) and 27.7 KB of POOL;
 HARM + reads two tables for A and B1 (two operators a sample instead of v2's carriers).
 **For the wiring (milestone 2).** core.h: `FELUCCA_QUAD` (0 by default, 1 in choralroot.c, the emulator,
 tests/regress.c), `NENGINES += FELUCCA_QUAD`, `ENGI_QUAD` = 15 (after CZ-1, 14; eng_quad.c defaults it to 15u when core.h
@@ -570,6 +579,101 @@ new tables (the blob is unchanged, version 5: no conversion of older patches, th
 **CPU**: one look-up a tick and envelope as before; a decay's multiply 64-bit (was `mulq16`'s two 32-bit), the
 operator attack's and the fade's one; the amp ramp one shift a sample. Host (`tests/run_quad_test.sh`): the presets'
 average 1136 -> 1150 instructions a sample (19.6 % of the device's block), the worst case 1815 -> 1857 (31.6 %).
+
+## Level (2026-10-16)
+
+The owner, 2026-10-15: "The new Digitone Engine is quite a bit louder than the other engines." Measured with
+`tests/va_levels.c loud` and `dnsnd` (docs/AUDIO-QUALITY.md "FM TONE's level"): BS.1770 integrated loudness (K-weighted,
+gated) of every sound as a player hears it at power-on (Output Clean, MASTER as at power-on, the part at LEVEL 104,
+the sends 0, FM TONE's Drive its sound's, velocity 100), three phrases: a 6-note chord held 6 s, four 4-note chords
+struck a second apart, the chords' top notes alone (one voice, so no limiter).
+
+- **The 16 factory presets were not louder**: their medians (-18.8 / -20.0 / -25.8 LUFS: held, phrase, notes) sat
+  between the VA's (-16.2 / -17.7 / -23.9) and FM6's, CZ-1's and P5's (-28.6 .. -24.5 / -23.5 .. -21.2 / -29.0 ..
+  -27.6). They were voiced at AMP LEVEL 62 .. 90 on the squared law (LEVEL 90 is 6 dB under 127).
+- **The sounds at the Digitone's own levels were**: INIT (LEVEL 110, the Digitone's VOL default) a single voice -16.1
+  LUFS against -22.1 .. -29.0 for the other engines' medians; the 256 Digitone factory sounds through the `.dnsnd`
+  import (VOL 100 .. 127, as their own) -17.2 / -17.6 / -20.9, 4 to 9 dB over the other engines' medians and 1.6 to 5 dB
+  over FM TONE's own presets. A user sound made from INIT, or imported, is what the owner heard.
+- **Fixed at the engine's output scale**, not with trims (the whole engine was hot, not a few sounds) and not at the
+  master: `quad_render` adds the voice `>> 12` where it added `>> 11`, every voice 6 dB lower into its part, and the 16
+  presets' AMP LEVEL x 1.41 (EP 72 -> 102, BELL 80 -> 113, PLUCK 72 -> 102, BRASS 76 -> 107, GLASS PAD 88 -> 124,
+  HOLLOW 76 -> 107, METAL 70 -> 99, CLAV 90 -> 127, STRINGS 80 -> 113, MARIMBA 78 -> 110, DRONE 74 -> 105, FEEDBACK
+  72 -> 102, NOISE-ISH 62 -> 88): 13 of them within 0.1 dB of where they were, and into the part's DRIVE as before.
+  BASS, SQUARE LEAD and WOBBLE were at 110 / 110 / 115 and stop at 127: 3.5 dB quieter (WOBBLE 3.3 to 3.5 with its
+  drive), still in the range of the VA's basses; SQUARE LEAD was the loudest FM TONE sound and still is.
+- **Before the drive, not after it.** The Digitone's order is FM -> overdrive -> base-width -> multimode -> amp
+  (the manual, OS 1.44: Appendix A.1 and §11.9.5 DRV, "the signal entering the filter"; VOLUME after the drive);
+  ChoralRoot's is FM -> filters -> amp (LEVEL) -> the part's DIST, the platform's insert every engine feeds, its
+  make-up set for their levels. A scale after the DIST (tried:
+  `fx.c mix_part`) kept a driven import's tone but made every strongly driven FM TONE sound 6 dB quieter than the same
+  DIST on any other engine, and turning Drive up on a factory preset made it quieter (`test_cr.sh`'s "FM TONE's Drive
+  with FX off is heard": EP at Drive 127 92 % of its RMS at Drive 0, the check wants over 120 %). Before it, FM TONE
+  reaches the DIST as the other engines do: a driven import is less saturated than in 0.22 and its level falls by
+  2 .. 4 dB instead of 6 (the 64 with Drive 40 .. 127: -17.4 / -17.8 / -19.2 -> -19.6 / -19.9 / -22.6).
+- **After**: the 256 imports -21.2 / -21.6 / -26.7 (Drive 0: -22.1 / -22.2 / -27.4), INIT's voice -22.1; the other
+  engines bit for bit (every VA, FM6, CZ-1 and P5 line of the two runs the same; 297 of the 313 goldens unchanged, the
+  16 FM TONE ones rewritten). The import (web/fm1dnsnd.js) is unchanged: a sound keeps its VOL as LEVEL.
+
+## Pops (2026-10-16)
+
+The owner: "various sound quality issues like pops and clicks on the voices". Looked for as CZ-1's were (docs/CZ1.md
+"Pops"): `tests/quad_pops.c` renders one FM TONE sound on part 0 (LEVEL 104, its Drive, Output Clean, ChoralRoot's
+fade steal) through eight scenarios (hold, retrig, retrig-gap, change, steal, arp, restrike, arp-up) on four chords at
+C2, C4, C6 and velocity 100 / 127 (3264 runs for the 16 presets and INIT; `list`: the 256 imports, chord 1 at C4), and
+looks in the dry mix for **jumps** (a sample step 4 x the largest the tone makes around it: cz_pops.c's measure),
+**clicks** (a two-sided burst of the third difference), **holes**, and in the engine's state at each block's events for a
+step the render plays at its first sample: an operator restarted under the voice's level (**phase**), the amplitude
+set back (**amp**), an operator envelope restarted from 0 (**oplev**, RESET), the filters cleared (**filt**).
+`QUAD_TRACE=A,B` prints every voice's state at each block between two samples, `QUAD_LIST=FILE` plays an import.
+
+**What was found (0.22, a11e0ca):**
+
+| | jumps | clicks | phase | oplev | amp, filt, holes |
+| --- | --- | --- | --- | --- | --- |
+| 16 presets + INIT, 3264 runs | 92 (INIT 68, HOLLOW 24) | 410 | 1560 | 1502 | 0 |
+| 256 imports, 2048 runs | 78 (29 sounds) | 267 | 1379 | 1101 | 0, 0, 1 |
+
+1. **PHRT on a voice that still sounds** (the pops). A note struck again while its voice sounds (the same chord again, a
+   chord change's common tone, an arp's note over its own tail, a MONO line) set the phases of PHRT's operators
+   (ALL by default) to 0 under the voice's level; the amp envelope goes on from its level (QUAD's design), so the wave
+   stepped. INIT, C2 chord struck again at 300 ms (`quad_pops one 16 1 1 36 100`): at sample 13216 the dry mix goes
+   -10212 -> -435, 13 x the largest step of the tone around it; voice 0 at amplitude 16944 (half scale), its phases
+   `8dbead80` -> 0. A sine-like carrier shows it most (INIT, HOLLOW); a bright one hides it under its own edges.
+   **Fixed** (`quad_phrt_mask`): such a voice restarts only the operators no one hears (above). Restarting a silent
+   one is kept on purpose: a decayed modulator that comes back at an arbitrary phase as its envelope leaps up in a
+   tick bursts (PLUCK and BASS showed it with the first try, which kept every phase of a voice over -60 dB).
+2. **A filter switched in or out within a note** (imports). The multimode is skipped while an LP is wide open with no
+   resonance; an envelope or an LFO bringing it down switched it in with its states at 0: the output fell to 0 at
+   once (A067 EXPLORING, LP24 with its envelope: sample 512; A210 PREACHY: 3361). The base-width high-pass is off at
+   BASE 0: an LFO taking BASE to 0 let the low band back at once (A126 WAVETABELS: 106112, a block's edge). **Fixed**:
+   a filter switched in starts from the state its input implies (the LP's at the input, the band's at 0; the
+   high-pass from rest) and a switch either way crossfades over its block (`quad_voice_t.fon`); a sound whose filters
+   never switch renders bit for bit as before (checked: the same dry mix in every run of the 16 presets but DRONE).
+3. **MIX by an LFO** stepped at every block's edge (a RAMP or SQR on it a full step: A087 HEXAGON). **Fixed**: MIX is
+   ramped over the block as the operator levels are (`quad_voice_t.mixp`); a MIX that does not move gives the same
+   samples. DRONE (an LFO on MIX) is the one preset whose renders change for it.
+
+**After:** presets + INIT 0 jumps, 247 clicks, 0 phase; imports 3 jumps (A132 S-MACHINE: its HARM-shaped feedback
+operator, chaotic by design: the tone), 125 clicks, 0 phase. **What the clicks left are**: the sounds' own
+attacks (MARIMBA's mallet as loud on a fresh note from silence as on a retrigger, PLUCK and BASS at C2: a bright first
+cycle after an attack at ATK 0), BRASS's feedback cusp (one a period, 452 samples apart at G2, while its A envelope
+rises), and the platform's fade steal (voice.c: a stolen voice fades over one block, the kink of 0.7 ms: x 12 .. 31
+on INIT's sine, the same on every engine). **RESET** (oplev) restarting a sounding voice's operator envelope from 0 is
+the Digitone's and is kept: with it off in every run the click count did not move (256 / 261).
+
+`quad_pops check` (in `tests/run_cr_tests.sh`): every preset and INIT, every scenario, chords 0 and 2, C2 and C4,
+velocity 127 (544 runs, 12 s): fails on a wrap (the sanitizer), a jump, a hole, or a phase / amp / filt step. On
+a11e0ca: 258 of the 544 fail. `cr_quad_test t_switch`: the multimode switched in by its envelope, the high-pass and
+the low-pass switched by an LFO, MIX by a square LFO: the largest sample step within a block of each switch against
+the largest anywhere else in the note, 0.86 .. 0.99 (without the fix 39, 38, 8.7 and 5.1).
+
+**Cost on the unit** (`tools/fx_loops.py build/choralroot.dis quad_render` against a11e0ca's build, ~205 instructions
+a microsecond): the 24 operator loops 6.2 instructions a sample more on average (+0 .. +12: MIX's ramp), the DC and
+base-width loop 40 -> 39 when no pole switches (a block that switches runs a loop of its own, 63), the SVF's three
+loops 101 / 78 / 69 -> 100 / 75 / 70, the crossfade 14 in a switching block only: about 3.7 us a voice a half, 30 us
+for 8 voices of the 2902 us half (+1.0 %). XIP and RAM: see HISTORY 3y120; POOL the same (the two fields fit the voice's
+padding).
 
 ## Status (milestone 2: wired, 2026-10-08)
 
