@@ -4085,3 +4085,21 @@ the sketch compiles with `cc -O2` and renders the 104 files in 0.2 s; a numpy pa
 the finish pass's high-pass, the fundamental at C4, the centroid and level moving with TONE and MOTION as the families
 say) and over the scenes (every one sounding through the hold and silent at the end); `python3 tools/grain_cost.py`
 (.text 7420 B, .rodata 4192 with the shared tables). Not run: the suites (no firmware changed). No device access.
+
+3y103. **GRAIN: two sources and MORPH (the owner, 2026-10-15, on the first sketches: "I like these test wavs, What
+would be really cool is if you could generate two waves, each with their own settings, and then there's a parameter
+to morph between them"; branch claude/grain-engine-f724f9).** docs/GRAIN.md: a sound has sources A and B (TYPE TONE
+MOTION SEED each, two 32 KB buffers: the same 64 KB of POOL as before, now one part's; a bass part on GRAIN shares
+them) and MORPH 0 .. 127, a granular blend: each grain reads A or B, the share spread evenly over a voice's grains
+(64: A B A B), pure at the ends, each grain pitched against its own root, no cost a sample (28 B of code in
+gp_spawn, a pointer a grain); MORPH is the SHP modulation destination (ENV -> MORPH: B's attack into A's body); the
+pages are SRC 1 / SRC 2 (a stack of two lanes), GRAIN, GRAIN+ (MORPH RAND PITCH SCAN: REV folded back into RAND),
+FILTER; the blob 20 B; the P_E macros TYPE TONE MOTION SEED | MORPH SIZE DENS POS; the wave band shows both buffers
+on the GRAIN screen with the grains' ticks in A's or B's half; a re-render goes in place with a fade of that
+source's grains (no scratch buffer); the questions and steps follow. tools/grain_sketch.c: gp_part_t holds two
+sources, gp_spawn chooses by MORPH (gp_voice_t.macc), a crossfade comparison (gp_par_t.xfade, GP_XFADE: the sketches
+only, out of the device compile); 26 morph scenes (eight pairs x half / sweep / env, two -sweep-xfade) and their
+INDEX.md section. **Checked**: the 130 files render in 0.3 s; a numpy pass over the morph scenes: the sweeps' spectral
+centre moves from A's to B's over the hold (SWEEP bright -> PLUCK bright 715 -> 2017 Hz, DRONE -> BELL 667 -> 335),
+the env scenes start on B and settle on A, the half scenes sit between; `python3 tools/grain_cost.py`: .text 7456 B
+(+36: MORPH's choice), gp_run's loops unchanged (26 + 9). No firmware code; nothing flashed.

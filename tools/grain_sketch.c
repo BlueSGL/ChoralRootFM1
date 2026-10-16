@@ -5,7 +5,7 @@
  * ADPCM decoder), rendered to WAVs for the owner to hear before the engine is built.
  *
  *   cc -O2 -w -Ibuild/gen -o build/host/grain_sketch tools/grain_sketch.c -lm
- *   build/host/grain_sketch build/grain-sketch              (the WAVs and INDEX.md there; ~100 files, ~25 MB)
+ *   build/host/grain_sketch build/grain-sketch              (the WAVs and INDEX.md there; ~130 files, ~30 MB)
  *   build/host/grain_sketch build/grain-sketch src          (the sources and the seed tours only, no granulation)
  *
  * The core (gs_* the generator, gp_* the player) is written as the firmware would have it: int32 fixed point, no
@@ -480,6 +480,7 @@ GS_API int32_t gs_finish(int16_t *buf)
 #define GP_POLY 6
 #define GP_STEP_MAX (2u << 16)   /* the rate's cap: two source samples an output sample */
 #define GP_RATE_Q16 ((GS_RATE << 16) / 44100u)   /* 0.5 */
+#define GP_XFADE (!GS_UNIT)      /* the crossfade comparison (gp_par_t.xfade): the sketches only, not the design */
 /* sin^2(pi i / 256), Q15: the grain window (eng_grain.c GR_HANN) */
 static const int16_t GP_HANN[257] = {
     0, 5, 20, 44, 79, 123, 177, 241, 315, 398, 491, 593, 705, 827, 958, 1098,
@@ -509,18 +510,26 @@ typedef struct {
     uint32_t step;               /* Q16 source samples an output sample */
     uint32_t wph, winc, left;    /* window phase (one turn = the grain), output samples to go */
     int32_t a, b, gain;
+    const int16_t *src;          /* the buffer it reads: source A's or B's (MORPH) */
+#if GP_XFADE
+    const int16_t *src2;         /* xfade: the other one, mixed in per fetch (the comparison, not the design) */
+    int32_t mix;                 /* xfade: B's share, Q15 */
+#endif
     uint8_t owner, rev;
 } gp_grain_t;
 typedef struct {
     gp_grain_t g[GP_NG];
-    const int16_t *src;          /* the part's buffer (GS_N samples) */
-    int32_t root16;
+    const int16_t *src[2];       /* the part's two buffers, A and B (GS_N samples each) */
+    int32_t root16[2];
     int32_t rng;
 } gp_part_t;
-typedef struct { int32_t size, dens, pos_q8, sprd, rnd, pitch, cut, res; } gp_par_t;   /* the grain knobs */
+/* the grain knobs; morph 0 .. 127: the share of grains that read B (0 all A, 127 all B); xfade 1: instead every
+ * grain reads both buffers at its position and mixes them by morph (a plain crossfade, for the comparison) */
+typedef struct { int32_t size, dens, pos_q8, sprd, rnd, pitch, cut, res, morph, xfade; } gp_par_t;
 typedef struct {
     uint8_t active;
     int32_t note16, next;        /* the note; output samples to the next grain */
+    int32_t macc;                /* MORPH's share spread evenly over the voice's grains (a Bresenham count) */
     tsvf_t f;
     int32_t ic1, ic2;
 } gp_voice_t;
@@ -532,30 +541,42 @@ static inline int32_t gp_win(uint32_t wph)
     return GP_HANN[wi] + (((GP_HANN[wi + 1u] - GP_HANN[wi]) * (int32_t)((wph >> 9) & 0x7FFFu)) >> 15);
 }
 
-GS_API void gp_init(gp_part_t *P, const int16_t *src, int32_t root16)
+GS_API void gp_init(gp_part_t *P, const int16_t *srca, int32_t roota, const int16_t *srcb, int32_t rootb)
 {
     uint32_t i;
     for (i = 0; i < GP_NG; i++)
         P->g[i].owner = 0;
-    P->src = src;
-    P->root16 = root16;
+    P->src[0] = srca;
+    P->src[1] = srcb;
+    P->root16[0] = roota;
+    P->root16[1] = rootb;
     P->rng = 0x2545F491;
 }
 
-/* start a grain of voice vi (note16) with the interval iv between grains (for the overlap's level) */
-GS_API void gp_spawn(gp_part_t *P, const gp_par_t *p, uint32_t vi, int32_t note16, uint32_t iv)
+/* start a grain of voice v (vi) with the interval iv between grains (for the overlap's level). MORPH: the voice's
+ * grains read A or B in the share morph / 127, spread evenly (0.5: A B A B ..), so the ends are pure and the
+ * middle is a granular blend; the grain's rate is against its own source's root */
+GS_API void gp_spawn(gp_part_t *P, const gp_par_t *p, uint32_t vi, gp_voice_t *v, uint32_t iv)
 {
     gp_grain_t *g = 0;
-    uint32_t i, n = GS_N, len, step, span, c, sp, r1 = noise32(&P->rng), r2 = noise32(&P->rng), ov, rev;
-    int32_t d16, amt, pos;
+    uint32_t i, n = GS_N, len, step, span, c, sp, r1 = noise32(&P->rng), r2 = noise32(&P->rng), ov, rev, which;
+    int32_t d16, amt, pos, note16 = v->note16;
     for (i = 0; i < GP_NG && !g; i++)
         if (!P->g[i].owner)
             g = &P->g[i];
     if (!g)
         return;
+    v->macc += p->morph;
+    which = v->macc >= 127 ? 1u : 0u;
+    if (which)
+        v->macc -= 127;
+#if GP_XFADE
+    if (p->xfade)
+        which = 0;
+#endif
     len = (441u * pow2_q16(p->size * 8)) >> 16;              /* 10 .. 393 ms */
     amt = p->rnd * p->rnd * 192 / (127 * 127);
-    d16 = note16 - P->root16 + p->pitch * 16 + (((int32_t)(r1 & 0xFFFFu) - 32768) * amt >> 15);
+    d16 = note16 - P->root16[which] + p->pitch * 16 + (((int32_t)(r1 & 0xFFFFu) - 32768) * amt >> 15);
     step = (pow2_q16(clamp(d16, -1536, 576)) >> 8) * (GP_RATE_Q16 >> 8);
     step = step > GP_STEP_MAX ? GP_STEP_MAX : step < 256u ? 256u : step;
     rev = ((r1 >> 16) & 255u) < (uint32_t)p->rnd;            /* RAND 127: half of them */
@@ -579,15 +600,26 @@ GS_API void gp_spawn(gp_part_t *P, const gp_par_t *p, uint32_t vi, int32_t note1
     ov = len / (iv ? iv : 1u);
     g->gain = GP_NORM[ov < 1u ? 1u : ov > GP_NG ? GP_NG : ov];
     g->owner = (uint8_t)(vi + 1u);
+    g->src = P->src[which];
+#if GP_XFADE
+    g->src2 = p->xfade ? P->src[1] : 0;
+    g->mix = p->morph * 32767 / 127;
+#endif
     if (rev) {
         g->pos = (uint32_t)pos;
-        g->a = P->src[pos];
-        g->b = P->src[pos + 1];
+        g->a = g->src[pos];
+        g->b = g->src[pos + 1];
     } else {
-        g->a = P->src[pos];
-        g->b = P->src[pos + 1];
+        g->a = g->src[pos];
+        g->b = g->src[pos + 1];
         g->pos = (uint32_t)pos + 2u;
     }
+#if GP_XFADE
+    if (g->src2) {
+        g->a += ((g->src2[pos] - g->a) * g->mix) >> 15;
+        g->b += ((g->src2[pos + 1] - g->b) * g->mix) >> 15;
+    }
+#endif
 }
 
 /* one grain into acc over n samples; returns 0 when it ended. The window (times the grain's level) ramps linearly
@@ -596,7 +628,50 @@ GS_API int gp_run(gp_part_t *P, gp_grain_t *g, int32_t *acc, uint32_t n)
 {
     uint32_t i, m = n < g->left ? n : g->left, step = g->step, pos = g->pos;
     int32_t a = g->a, b = g->b, frac = g->frac, w0, w1, wq, dq;
-    const int16_t *src = P->src;
+    const int16_t *src = g->src;
+#if GP_XFADE
+    if (g->src2) {                                           /* the crossfade comparison: both buffers a fetch */
+        const int16_t *s2 = g->src2;
+        int32_t mix = g->mix;
+        w0 = mulq15(gp_win(g->wph), g->gain);
+        g->wph += g->winc * m;
+        g->left -= m;
+        w1 = g->left ? mulq15(gp_win(g->wph), g->gain) : 0;
+        wq = w0 * 1024;
+        dq = m == CTL ? ((w1 - w0) * 1024) >> CTL_LOG2 : m ? (w1 - w0) * 1024 / (int32_t)m : 0;
+        for (i = 0; i < m; i++) {
+            int32_t s = a + (((b - a) * (frac >> 1)) >> 15);
+            acc[i] += (s * (wq >> 10)) >> 15;
+            wq += dq;
+            if (!g->rev) {
+                frac += (int32_t)step;
+                while (frac >= 65536) {
+                    frac -= 65536;
+                    a = b;
+                    b = pos < GS_N ? src[pos] + (((s2[pos] - src[pos]) * mix) >> 15) : a;
+                    pos++;
+                }
+            } else {
+                frac -= (int32_t)step;
+                while (frac < 0) {
+                    frac += 65536;
+                    b = a;
+                    if (pos) {
+                        pos--;
+                        a = src[pos] + (((s2[pos] - src[pos]) * mix) >> 15);
+                    }
+                }
+            }
+        }
+        g->pos = pos;
+        g->a = a;
+        g->b = b;
+        g->frac = frac;
+        if (!g->left)
+            g->owner = 0;
+        return g->left != 0;
+    }
+#endif
     w0 = mulq15(gp_win(g->wph), g->gain);
     g->wph += g->winc * m;
     g->left -= m;
@@ -659,7 +734,7 @@ GS_API void gp_voice_block(gp_part_t *P, const gp_par_t *p, gp_voice_t *v, uint3
             v->next = 0;
         share = nact > 1u ? (GP_NG / nact > 2u ? GP_NG / nact : 2u) : GP_NG;
         if (mine < share)
-            gp_spawn(P, p, vi, v->note16, iv);
+            gp_spawn(P, p, vi, v, iv);
     }
     tsvf_coef(&v->f, p->cut << 8, p->res);
     for (i = 0; i < CTL; i++)
@@ -676,6 +751,7 @@ GS_API void gp_voice_on(gp_part_t *P, gp_voice_t *v, uint32_t vi, int32_t note16
     v->active = 1;
     v->note16 = note16;
     v->next = 0;
+    v->macc = 63;                                            /* the first grain of a half-way morph is A's, the second B's */
     v->ic1 = v->ic2 = 0;
 }
 
@@ -711,19 +787,23 @@ static const struct { const char *name; gp_par_t p; int scan; const char *what; 
 static const uint8_t CHORD[4] = {48, 55, 60, 64};             /* C3 G3 C4 E4 */
 #define SCENE_S 3.0
 #define OFF_S 2.2
+#define MSCENE_S 4.0             /* the morph scenes: longer */
+#define MOFF_S 3.4
+enum { M_STATIC, M_SWEEP, M_ENV };   /* MORPH over the scene: the knob as set; 0 -> 127 over the hold; 127 -> 0 in 0.6 s */
 
-/* the granulated scene: a 4-note chord held OFF_S seconds on the buffer, SCENE_S seconds rendered at 44.1 kHz,
- * normalized to -2 dBFS; returns the peak before normalizing (Q15 of one voice's scale) */
-static int32_t scene(const int16_t *buf, int32_t root16, const gp_par_t *par, int scan, const char *path)
+/* the granulated scene: a 4-note chord held off_s seconds on the buffers A and B, len_s seconds rendered at
+ * 44.1 kHz, normalized to -2 dBFS; returns the peak before normalizing (Q15 of one voice's scale) */
+static int32_t scene(const int16_t *A, int32_t rootA, const int16_t *B, int32_t rootB, const gp_par_t *par, int scan,
+                     int mmode, double len_s, double off_s, const char *path)
 {
     static gp_part_t P;
     gp_voice_t v[4];
     gp_par_t p = *par;
-    uint32_t nb = (uint32_t)(SCENE_S * FS / CTL), b, i, k, offb = (uint32_t)(OFF_S * FS / CTL), nact = 4;
+    uint32_t nb = (uint32_t)(len_s * FS / CTL), b, i, k, offb = (uint32_t)(off_s * FS / CTL), nact = 4;
     double *mix = calloc(nb * CTL, sizeof *mix), pk = 1;
     int16_t *out = malloc(nb * CTL * sizeof *out);
     int32_t env[4], tmp[CTL];
-    gp_init(&P, buf, root16);
+    gp_init(&P, A, rootA, B, rootB);
     memset(v, 0, sizeof v);
     for (k = 0; k < 4; k++) {
         gp_voice_on(&P, &v[k], k, CHORD[k] * 16);
@@ -734,7 +814,11 @@ static int32_t scene(const int16_t *buf, int32_t root16, const gp_par_t *par, in
         if (scan == 1)
             p.pos_q8 = par->pos_q8 + (int32_t)(25 * 256 * sin(2 * M_PI * 0.3 * t));
         else if (scan == 2)
-            p.pos_q8 = (10 << 8) + (int32_t)((80 << 8) * t / SCENE_S);
+            p.pos_q8 = (10 << 8) + (int32_t)((80 << 8) * t / len_s);
+        if (mmode == M_SWEEP)
+            p.morph = t < off_s ? (int32_t)(127 * t / off_s) : 127;
+        else if (mmode == M_ENV)
+            p.morph = t < 0.6 ? 127 - (int32_t)(127 * t / 0.6) : 0;
         if (b == offb)
             nact = 0;
         for (k = 0; k < 4; k++) {
@@ -796,7 +880,8 @@ int main(int argc, char **argv)
                  "%.1f s, %.0f s in all.\n\n", GS_N, GS_RATE, 1000.0 * GS_N / GS_RATE, OFF_S, SCENE_S);
     fprintf(idx, "## Files\n\n- `src-<family>-<setting>.wav`: the buffer as rendered (the material the grains read).\n"
                  "- `seeds-<family>.wav`: the same family at TONE 64 MOTION 64, SEED 0 .. 7 in a row, 100 ms apart: what SEED gives.\n"
-                 "- `gran-<family>-<setting>-<grains>.wav`: the buffer granulated.\n\n");
+                 "- `gran-<family>-<setting>-<grains>.wav`: the buffer granulated.\n"
+                 "- `morph-<A>-<B>-<how>.wav`: two buffers under one voice, MORPH between them (below).\n\n");
     fprintf(idx, "## The source settings\n\n| setting | TONE | MOTION | SEED |\n| --- | --- | --- | --- |\n");
     for (s = 0; s < 3; s++)
         fprintf(idx, "| %s | %u | %u | %u |\n", SRC_SET[s].name, SRC_SET[s].tone, SRC_SET[s].motion, SRC_SET[s].seed);
@@ -840,7 +925,7 @@ int main(int argc, char **argv)
                 continue;
             for (k = 0; k < 3; k++) {
                 snprintf(path, sizeof path, "%s/gran-%s-%s-%s.wav", dir, fam, SRC_SET[s].name, GRAN_SET[k].name);
-                scene(buf, g.root16, &GRAN_SET[k].p, GRAN_SET[k].scan, path);
+                scene(buf, g.root16, buf, g.root16, &GRAN_SET[k].p, GRAN_SET[k].scan, M_STATIC, SCENE_S, OFF_S, path);
             }
         }
         for (s = 0; s < 8; s++) {                         /* the seed tour */
@@ -854,10 +939,66 @@ int main(int argc, char **argv)
         snprintf(path, sizeof path, "%s/seeds-%s.wav", dir, fam);
         wav_write(path, tour, 8 * (GS_N + 2205), GS_RATE);
     }
+    if (!src_only) {
+        /* two sources and MORPH (the owner, 2026-10-15: "generate two waves, each with their own settings, and then
+         * there's a parameter to morph between them"): eight pairs, the pad grains, MORPH swept A -> B over the
+         * hold, held half way, and falling B -> A in 0.6 s (what an envelope on MORPH does); for two pairs the
+         * crossfade comparison (every grain mixes both buffers) beside the granular morph */
+        static const struct { uint8_t ta, sa, tb, sb; } PAIRS[8] = {
+            {GT_PLUCK, 0, GT_VOWEL, 0}, {GT_DRONE, 0, GT_BELL, 0}, {GT_BREATH, 0, GT_METAL, 0},
+            {GT_CHIRP, 1, GT_SWEEP, 0}, {GT_BELL, 1, GT_BELL, 2}, {GT_VOWEL, 1, GT_BREATH, 1},
+            {GT_METAL, 1, GT_DRONE, 1}, {GT_SWEEP, 2, GT_PLUCK, 2}};
+        static const char *const SHORT[3] = {"", ".dark", ".bright"};
+        static const char *const MNAME[3] = {"half", "sweep", "env"};
+        static int16_t bufb[GS_N];
+        gs_t gb;
+        fprintf(idx, "\n## Two sources, MORPH\n\n`morph-<A>-<B>-<how>.wav`: the pad grains over two buffers; each grain reads A or "
+                     "B, the share set by MORPH and spread evenly over a voice's grains (0.5: A B A B ..). `half`: MORPH 64 held; "
+                     "`sweep`: 0 -> 127 over the %.1f s hold; `env`: 127 -> 0 in the first 0.6 s (an envelope on MORPH: B's attack "
+                     "into A's body). `-xfade`: the comparison, every grain mixing both buffers at its position by MORPH (a plain "
+                     "crossfade; costs a second fetch a sample).\n\n| A | B | files |\n| --- | --- | --- |\n", MOFF_S);
+        for (k = 0; k < 8; k++) {
+            char fa[24], fb[24];
+            uint32_t m;
+            gs_begin(&g, PAIRS[k].ta, SRC_SET[PAIRS[k].sa].tone, SRC_SET[PAIRS[k].sa].motion, SRC_SET[PAIRS[k].sa].seed);
+            while (gs_step(&g, buf, GS_N) < GS_N)
+                ;
+            gs_finish(buf);
+            gs_begin(&gb, PAIRS[k].tb, SRC_SET[PAIRS[k].sb].tone, SRC_SET[PAIRS[k].sb].motion, SRC_SET[PAIRS[k].sb].seed);
+            while (gs_step(&gb, bufb, GS_N) < GS_N)
+                ;
+            gs_finish(bufb);
+            for (i = 0; GS_TYPE_NAMES[PAIRS[k].ta][i]; i++)
+                fa[i] = (char)(GS_TYPE_NAMES[PAIRS[k].ta][i] | 32);
+            fa[i] = 0;
+            strcat(fa, SHORT[PAIRS[k].sa]);
+            for (i = 0; GS_TYPE_NAMES[PAIRS[k].tb][i]; i++)
+                fb[i] = (char)(GS_TYPE_NAMES[PAIRS[k].tb][i] | 32);
+            fb[i] = 0;
+            strcat(fb, SHORT[PAIRS[k].sb]);
+            for (m = 0; m < 3; m++) {
+                gp_par_t pp = GRAN_SET[0].p;
+                pp.morph = 64;
+                snprintf(path, sizeof path, "%s/morph-%s-%s-%s.wav", dir, fa, fb, MNAME[m]);
+                scene(buf, g.root16, bufb, gb.root16, &pp, GRAN_SET[0].scan, (int)m, MSCENE_S, MOFF_S, path);
+            }
+            if (k < 2) {
+                gp_par_t pp = GRAN_SET[0].p;
+                pp.xfade = 1;
+                snprintf(path, sizeof path, "%s/morph-%s-%s-sweep-xfade.wav", dir, fa, fb);
+                scene(buf, g.root16, bufb, gb.root16, &pp, GRAN_SET[0].scan, M_SWEEP, MSCENE_S, MOFF_S, path);
+            }
+            fprintf(idx, "| %s %s | %s %s | `morph-%s-%s-{half,sweep,env}.wav`%s |\n", GS_TYPE_NAMES[PAIRS[k].ta],
+                    SRC_SET[PAIRS[k].sa].name, GS_TYPE_NAMES[PAIRS[k].tb], SRC_SET[PAIRS[k].sb].name, fa, fb,
+                    k < 2 ? ", `-sweep-xfade.wav`" : "");
+            printf("morph %s -> %s\n", fa, fb);
+        }
+    }
     fprintf(idx, "\n## Listening order\n\n1. `seeds-*.wav`, one a family: is the family worth having, does SEED give variety.\n"
                  "2. `src-*-mid.wav` against `-dark-slow` and `-bright-fast`: do TONE and MOTION move it where expected.\n"
                  "3. `gran-*-pad.wav`: the sound of the engine as a pad; then `-frozen` (the scan through the material) and "
-                 "`-glitch`.\n\nThe granulated scenes have no reverb, no delay and a plain 30 ms / 400 ms envelope: the unit adds "
+                 "`-glitch`.\n4. `morph-*-sweep.wav`: one material becoming another; `-env` for what an envelope on MORPH gives; "
+                 "`-sweep-xfade` against `-sweep` for the two ways to blend.\n\nThe granulated scenes have no reverb, no delay and a plain 30 ms / 400 ms envelope: the unit adds "
                  "its effects and the sound's ADSR.\n");
     fclose(idx);
     printf("wrote %s/INDEX.md\n", dir);
