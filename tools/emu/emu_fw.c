@@ -101,6 +101,7 @@ static uint32_t in_btn, in_key;      /* the debounced state the tick delivers */
 static uint32_t btn_ms[32], key_ms[32];/* ms each went down */
 /* the MASTER pot as the unit reads it (hal/fm1_adc.h: 0..1023), and main.c's own two functions on it
  * (firmware/src/master.c): the pot's level before the first block (master_boot), then smoothed a frame (master_poll) */
+#if !EMU_SMK37                                    /* (the SMK-37: K1's virtual pot, hal/smk_input.h) */
 #define FM1_ADC_MASTER 0u
 static int32_t fm1_adc_read(uint32_t ch)
 {
@@ -108,6 +109,7 @@ static int32_t fm1_adc_read(uint32_t ch)
     (void)ch;
     return a < 0 ? 0 : a > 1023 ? 1023 : a;
 }
+#endif
 #include "../../firmware/src/master.c"
 
 void emu_fw_init(int demo)
@@ -146,6 +148,9 @@ void emu_fw_init(int demo)
             emu_hal.master = 724;
         master_boot();
     }
+#if EMU_SMK37
+    emu_smk_init();                               /* main.c's fm1_input_init (SMK-37: the factory curves' defaults) */
+#endif
     cr_ui_init();                                 /* the engine, the sounds, the record applied (cr_settings_load) */
     {   /* the second core (main.c, docs/DUALCORE.md): the stub runs the bass part's job when handed. EMU_C1=nostart: it
          * does not answer at power-on; EMU_C1=hang: it answers, then never finishes a job (8 ms: core 0 does it).
@@ -184,6 +189,7 @@ void emu_fw_init(int demo)
     emu_hal.ready = 1;
 }
 
+#if !EMU_SMK37
 /* The key sensing as the FM-1 would read it (cr_sense.c, fed here instead of by the scan's hooks; after fm1-ctl's
  * host/ctl_host.c): a key the script holds at a velocity lands at the driven reading the map gives that velocity
  * (the map inverted over its table), reads 300 pulled up (seated), and, once its rest has settled (SN_P_SETTLE and
@@ -264,9 +270,22 @@ static void emu_touch_feed(uint32_t ms, uint32_t held)
     }
 }
 
+#endif /* !EMU_SMK37 */
+
 /* the 1 ms timer: what fm1_timer5_irq / fm1_input_tick give the main loop */
 void emu_fw_tick(uint32_t ms)
 {
+#if EMU_SMK37                                     /* the SMK-37: its input layer's ten scan ticks (emu_smk_hal.h) */
+    fm1_irq_off();
+    if (emu_sim)
+        emu_sim_us = ms * 1000u;
+    if ((int32_t)(ms - fm1_ms) > 0)
+        fm1_ms = ms;
+    emu_smk_tick(ms);
+    fm1_irq_on();
+    return;
+#endif
+#if !EMU_SMK37
     uint32_t b, k, i, down, dead;
     fm1_irq_off();
     dead = emu_hal.pa2;
@@ -317,6 +336,7 @@ void emu_fw_tick(uint32_t ms)
             __atomic_fetch_add(&host_enc[i], s, __ATOMIC_SEQ_CST);
     }
     fm1_irq_on();
+#endif
 }
 
 static uint32_t real_us(void)
@@ -334,6 +354,9 @@ void emu_fw_frame(void)                           /* main.c's loop body (choralr
     master_poll();                                /* main.c: the MASTER pot (ADC) through its IIR */
     cr_ui_input();
     cr_ui_frame();                                /* the engine's snapshot, the LEDs */
+#if EMU_SMK37
+    cr_smk_frame();                               /* main.c (SMK-37): the faders, the wheels; the pads' colours */
+#endif
     d = real_us() - t0;
     fm1_irq_on();
     if (d > emu_hal.ui_lock_max_us)
@@ -358,6 +381,9 @@ void emu_fw_idle(void)                            /* main.c: the input scan whil
     fm1_irq_off();
     cr_ui_input();
     fm1_irq_on();
+#if EMU_SMK37
+    cr_smk_wheels();                              /* main.c (SMK-37): the bends follow the wheel, not the screen */
+#endif
 #if FELUCCA_GRAIN
     grain_poll();                                 /* main.c's idle loop: GRAIN's render, a slice a turn */
 #endif
@@ -423,6 +449,16 @@ void emu_fw_dump(void)
 {
     uint32_t c, i;
     fm1_irq_off();
+#if EMU_SMK37                                     /* (the SMK-37: its keys, buttons, button LEDs and pads) */
+    printf("fm1_in: notes %07X buttons %05X keys %010llX  fm1_ms %u  frames %u\n  button leds:", (unsigned)fm1_in.notes,
+           (unsigned)fm1_in.buttons, (unsigned long long)fm1_in.keys, (unsigned)fm1_ms, (unsigned)fm1_in.frames);
+    for (c = 0; c < SMK_NLED; c++)
+        printf("%u", (unsigned)fm1_led[c]);
+    printf("\n  pads:");
+    for (c = 0; c < EMU_SMK_NPAD; c++)
+        printf(" %06X", (unsigned)emu_smk.pad_rgb[c]);
+    printf("\n");
+#else
     printf("fm1_in: notes %07X buttons %04X  fm1_ms %u  pending edges %04X / notes %07X\n",
            (unsigned)fm1_in.notes, (unsigned)fm1_in.buttons, (unsigned)fm1_ms, (unsigned)host_pressed,
            (unsigned)host_notes);
@@ -447,6 +483,7 @@ void emu_fw_dump(void)
         printf("%s%u", i == 9u ? " " : "", (unsigned)lv);
     }
     printf("  (F3..C4 D4..G5: 0 off 1 faint 2 dim 3 mid 4 lit)\n");
+#endif
     for (i = 0; i < 2u; i++) {
         uint32_t v, n = 0;
         for (v = 0; v < NVOICE; v++)

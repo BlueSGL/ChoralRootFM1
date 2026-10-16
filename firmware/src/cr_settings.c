@@ -85,7 +85,11 @@ void cr_settings_defaults(cr_settings_t *s)
     s->single = CR_SINGLE_FULL;
     s->split_pc = 5;
     s->vel = 100;
+#if BOARD_SMK37
+    s->bass_on = CRS_TOUCH_BITS(1u, 0u, 0u);       /* SMK-37: Key Touch Dynamic, the keys' velocity (SMK37.md) */
+#else
     s->bass_on = 0;                                /* (always 0 in the block: Bass on is the session's, cr_settings.h) */
+#endif
     s->bass_mode = CR_BASS_CHORDS_ONLY;
     s->perform_mode = CR_PM_STRUM;
     s->bpm = 120;
@@ -188,6 +192,11 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(transpose, -24, 24);
     CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
+#if BOARD_SMK37
+    if (!s->vel)                                   /* the SMK builds of 0.22 (PR #14): Velocity 0 "keys", the keys'
+                                                    * velocity; since 0.24 that is Key Touch Dynamic (Velocity 100) */
+        s->bass_on = (uint8_t)((s->bass_on & 3u) | CRS_TOUCH_BITS(1u, CRS_VSENS(s), 0u));
+#endif
     CRS_FIX(vel, 1, 127);
     CRS_FIX(bass_on, 0, 255);                      /* (bit 1: the KEY layer's Numerals, CRS_NUMERALS; bits 2..7 Key Touch
                                                     * and the two sensitivities, CRS_TOUCH / VSENS / ATSENS: 0.22) */

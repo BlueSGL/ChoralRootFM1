@@ -67,7 +67,6 @@ int main(int argc, char **argv)
     uint32_t n, nt, ton, toff, i;
     FILE *fo;
     int a;
-    quad_init();                                 /* (the HARM tables in RAM: main.c felucca_init's) */
     if (argc < 5) {
         fprintf(stderr, "usage: quad_render OUT.f32 TOTAL_S ON_S OFF_S [bpm=N] [NAME=VALUE ...] [T:TABLE:INDEX=VALUE ...]\n");
         return 2;

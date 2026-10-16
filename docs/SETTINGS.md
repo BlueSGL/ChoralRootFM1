@@ -579,7 +579,8 @@ every other object. The same commit protocol as every object: the other copy is 
 last, so a write torn by the power switch leaves the previous session in charge (`t_session_flash`).
 
 - **SAFE MODE** neither reads nor writes it (`ST_BLOCKED`), and Options > Flash Data erases it with the rest
-  (`cr_ui.c cu_flash_erase`: 60 sectors since 0.22, with the favourites' two; 58 until then).
+  (`cr_ui.c cu_flash_erase`: 76 sectors after 0.24-beta2, with the sound pool's 16; 60 from 0.22, with the
+  favourites' two; 58 until then).
 - **Backup**: it is NOT a backup object (no new id; `web/fm1backup.js`, the manager and `tools/fm1_install.py` are
   unchanged). A backup holds what you keep (settings, saved sounds, loops), not where the unit happened to be. A
   settings object restored over SysEx empties the session (`cr_backup.c crb_commit`: a zero-length object), so the

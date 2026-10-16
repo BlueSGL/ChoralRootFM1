@@ -5057,7 +5057,187 @@ package (`--require-all` builds the site for 0.24-beta2: the landing page "Versi
 with both betas' packages); `node web/test_installer.mjs` passed. Not pushed, not tagged, not flashed: the tag is the
 owner's "tag it".
 
-3y142. **SAFE MODE's Flash Data erases the sound pool (2026-10-16; from main 52889ba, the 0.24-beta2 release tree; not
+## 2026-10-16 (the SMK-37 port onto 0.24-beta2)
+
+3y142. **genkigenki's SMK-37 target on main (2026-10-16; branch claude/smk37-port-5704f3 from origin/main 52889ba,
+v0.24-beta2; not pushed).** The owner: "We port it: start a session that brings genkigenki's SMK-37 commits onto main
+52889ba, keeps the FM-1 build byte-identical, redoes the SMK flash map for the pool and favourites, and builds SMK
+packages for a community test." genkigenki (M. Geisler, genkigenki / makkuro) opened PR #14 on 2026-10-13: an M-Vave
+SMK-37 build target (`BOARD=smk37`, `MODEL=elite` / `mke`), nine commits on aa5875a (0.22's dev tree, before the sound
+pool and the favourites), with its board layer (`hal/smk_input.h`, the SMK half of `hal/fm1_flash_map.h`, the LCD and
+pad LEDs in `hal/fm1_lcd_hw.h` / `lcd.c`), the SMK flash map with its protected ranges, the boot stub's SMK variant and
+locks, the installers' SMK rules (`tools/fm1_install.py`, `web/fm1ota.js`, `web/fm1pkg.js`: the model rule on every
+path, the resume too, long identities, other SMK firmwares refused) and its tests (`smk_flash_test`, `smk_owner_test`,
+`smk_pkg_test.py`, the hooks in `run_tests.sh`). Main was 204 commits further on (dual core, the pool, the favourites,
+the PA10 velocity probe, the P5 rows editor, the flash diet, GRAIN). The nine commits are kept as they are, genkigenki
+the author, by a merge (fb09dea) that resolves eleven files where main had moved: main's key-sensing hooks go with
+`fm1_input.h` in the FM-1 branch; Options keep main's Key Touch rows; the LEDs keep main's Snap glow under the PR's
+`CU_LK(k)` ids; `build.py` keeps main's single-core package under the PR's per-board stem; `fm1ota.js` keeps main's
+several-FM-1s `candidates()` with the PR's `PORT_RE`; `install_test.py`'s phases both. `./build.sh --release
+0.24-beta2` on the merge: the released bytes (3aebea96..505f, 17788180..c2e).
+
+3y143. **The SMK storage for 0.24 (c50f229).** The SMK needs 76 data sectors (20 objects x 2, the pool's 16, the ten
+loop slots' 20) and the owner tag; FL_DATA (30) and FL_SMP (40) hold 70. What 0.22 stored keeps genkigenki's places,
+so a unit that ran the PR's build keeps its data and its legacy objects migrate into the pool; new: OBJ_FAVS at
+0xB4000 / 0xB5000, the pool as two runs, 0xB6000..0xBAFFF (5) and 0xE6000..0xF0FFF (11: FL_SMP's last 4, then 7 of
+the free tail the PR names, `FL_TAIL` 0xEA000..0xF0FFF in `FL_STORE_OK` with its own `_Static_assert`; 0xF1000..0xF3FFF
+stay free). `storage.c`: `sp_addr`'s two runs, an assert per run, `ST_SMK_REGIONS` with the favourites and both runs
+(the owner change and Options > Flash Data). `smk_flash_test`: every OBJ_* id's A and B copy and every pool sector in
+`FL_STORE_OK` / `FL_GUARD`, outside `FL_PROTECTED` and FL_OTA, no two sharing a sector, 76 in all, nothing from
+0xF1000; `smk_owner_test`: the new regions, the tail's rest, USR and key_mac untouched. The table is SMK37.md's
+"Storage". Not changed, seen on the way: the FM-1's Options > Flash Data (cr_ui.c cu_flash_erase) does not list the
+sound pool (0xB8000..0xC7FFF), so a Flash Data erase in SAFE MODE leaves the pool's sounds on an FM-1 (a follow-up:
+the fix changes the FM-1's bytes).
+
+3y144. **The SMK board on 0.24's features (d594b74, c52ad71).** Velocity: main's Options > Key Touch on the SMK too,
+Dynamic its default (the keys' two contacts through the unit's factory curve, `smk_input.h key_vel`, for the 27
+middle keys and the ten outer ones), Fixed Options > Velocity (1..127); the PR's Velocity 0 "keys" goes, and a block
+with it is read as Dynamic. Key Touch stops at Dynamic (no key pressure); Velocity Curve and Aftertouch Sens read "FM-1
+only". The FM-1's analog key sensing (`cr_sense.c`, `fm1_an`, the PA7 / PA8 rows and the PA10 probe) is not in the SMK
+build: PA8 / PA10 are the SMK's mux inputs. MASTER and the battery come from `smk_input.h` as in the PR. The SAVE menu's
+and the naming help's knob names: K5..K8 on the SMK. INFO's version up to 40 characters on the SMK. Dual core builds
+with the FM-1's rails (VDC14 5; the guide gives the same chip, clock tree and boot config, and says nothing about the
+SMK's rails); GRAIN and every engine are in. `tools/build.py`: an SMK release names the board in its version
+(`BOARD=smk37 ./build.sh --release 0.24-beta2-smk37`: "ChoralRoot 0.24-beta2-smk37", "... 1-core"), refused without
+it (and an FM-1 release with it), the three models together in `build/release-smk37/`. SMK37.md for 0.24-beta2
+(community-tested, not tested by the maintainer; the controls, install, M-UPGRADE, storage, safety, what to test,
+genkigenki's credit); README's SMK line.
+
+3y145. **The SMK test packages and the checks (this tree).** Built twice, the same SHA256SUMS
+(`build/release-smk37/`): Pro `choralroot-0.24-beta2-smk37.fwsc` 043c56f0..0a12, `-1core` 000bc5ce..78d3; Elite
+`-elite` ac2ff66a..0ce6, `-elite-1core` e218593e..4ebb0; MKE-P37 `-mke` 830981c3..d342, `-mke-1core` 994be9f4..d707.
+Size: Pro and Elite XIP 537 064 B of 573 440 (93.7 %), MKE-P37 537 048; RAM 80 940 (82.3 %), POOL 333 900 of 344 064
+(97.0 %) for all three; the 1-core packages XIP 533 396 (93.0 %), RAM 77 800, POOL 333 772. The FM-1:
+`./build.sh --release 0.24-beta2` gives 0.24-beta2's sha256s on the final tree. `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 103 s; test_cr 1061 ok, test_persist 113, test_retired 18, test_pool 7; 317 golden renders unchanged; 0 lint), with the SMK hooks of `run_tests.sh` green: `smk_flash_test`, `smk_owner_test`, `smk_pkg_test.py` on the made package and on the three models' `BOARD=smk37 [MODEL=...] ./build.sh` packages, the SMK M-UPGRADE entry for the three models, the SMK update loader. Not flashed: there is no
+SMK-37 here; SMK37.md's "What to test" is the list for the testers.
+**Publishing** (proposed, nothing pushed): a tag `v0.24-beta2-smk37` fails `release.yml`'s version check (one suffix
+only) and publishes nothing; a one-suffix `v...smk...` tag now fails at `build.py` (an FM-1 release never names the
+SMK), before a release exists. The smallest safe way: a pre-release made by hand with a tag that does not start with
+`v` (`smk37-0.24-beta2`), the files of `build/release-smk37/` (LICENSES zipped): `release.yml` does not run (tags
+`v*`), `pages.yml`'s `redispatch` exits at "not a vX.Y ... tag: the site stays as it is", a pre-release never becomes
+the latest release, and `web/releases.json` (FM-1 only) is not touched.
+
+3y146. **The SMK-37 test installer and the SMK tags (2026-10-16; the owner: "Can we create a separate installer page
+for the website that is for the SMK firmware, it won't be linked from the main ChoralRoot page. Then from this we can
+release the firmware with our build tags and can send the install link to SMK testers who are fine with the risk.").**
+This replaces 3y145's publishing proposal (a pre-release by hand under a non-`v` tag). **The page**: `web/smk37.html`,
+written by `web/make_site.py` to `webapp/smk37/index.html` (fm1pkg.js, fm1ota.js, fm1backup.js and its META inlined;
+noindex, linked from no page): the risk box to tick first (a test build the maintainer has not run, M-UPGRADE and
+the stock package at hand, the first start's clearing, the cable, own risk), the version, Standard / Single core,
+Install. Install finds one keyboard (two: refused), refuses an FM-1, ChanceTheMaker's SMK firmware, a firmware the
+installers' SMK table refuses and another firmware's update mode, picks the model's package (a Starrykey 37 Play or
+another SMK-37 name: the Pro's, with the same-keyboard rule), checks its sha256 against the list and its identity
+before anything is sent, backs up a keyboard running ChoralRoot to a file first, and finishes an interrupted install
+with its loader's model's package. **The list**: `web/releases-smk37.json` (0.24-beta2-smk37 on 0.24-beta2, the six
+sha256s of 3y145's build), checked by `tests/releases_test.py` (the shape, the base in web/releases.json, the tag,
+each package's own sha256, the files in build/release-smk37; the FM-1's list names no SMK build; the SMK tags left
+out of the FM-1's tag check). **The site**: `make_site.py --smk-packages DIR` (default build/release-smk37) checks every
+listed package (sha256, the model's `_9xx` identity, Felucca's loader) before anything is written and writes
+`firmware/smk37/` (the packages, SHA256SUMS, index.html); a local build without them makes no SMK page.
+**CI**: release.yml takes `vX.Y[-suffix]-smk37` (and refuses any other version naming the SMK): the three models built,
+their sha256s checked against web/releases-smk37.json, a pre-release with the twelve files, SHA256SUMS, the licences
+and SMK37.md, then pages.yml started for web/releases.json's first entry (the FM-1 site unchanged) from the SMK tag;
+pages.yml fetches each listed SMK version's packages from its release, passes them to make_site.py and fails when a
+page links the SMK page. pages.yml runs from main, so the branch is merged before the first SMK tag. **Tests**:
+`web/test_smk_installer.mjs` (in run_tests.sh: the page against simulated SMK-37s, 32 checks), `tests/site_test.py`'s
+SMK part (9 checks: the page and its META, firmware/smk37/, no other page linking it, the refusals before any write).
+BUILDING.md "An SMK-37 test release", SMK37.md's install section. Not pushed, not tagged.
+
+3y150. **FM TONE reads its HARM waves from the halves in flash with a mirror; the POOL copy is gone (2026-10-16; branch
+claude/harm-mirror-f62c8b from origin/main 52889ba).** The owner, having played 8-note FM TONE chords with every effect
+on (Geek Out 2 about 65 % on the average, peaks of 80 to 90 %), chose the read 3y126 had rejected: "I am fine with that
+trade and think the mirror read is pretty reasonable. I'd like to keep things open for potentially more engines or FX."
+POOL stood at 97.0 % (2 KB addable under tools/build.py's 8 KB floor), flash at 93.7 % with 36 KB spare. The rejected
+build was not kept (not on claude/flash-diet-18ea3f, its reflog, its worktree or the repository's unreachable commits:
+only its description), so the read was written again, leaner: `eng_quad.c quad_hw` reads `QUAD_HARM` (the stored
+first halves, 27 x 257) directly. In the second half of a cycle (s = the phase's sign, -1) the two points around the
+phase are the first half's pair at u = 511 - i and u + 1, swapped and negated; `u = (ph ^ s) >> 23` gives i or 511 - i
+with one xor, so both halves read the same pair (l, h) at the same offsets, the slope h - l is the same, and only the
+start flips: `l - ((l + h) & s)` (branchless; the fraction from the phase as before). The values are bit for bit the
+whole cycle's. Removed: `quad_harm` (27 702 B of POOL), `quad_init` (its build, inlined into `eng_fm6.c fm6_init`:
+`fm6_init` 408 -> 316 B) and its calls in `eng_fm6.c`, `tests/hostsim.c`, `tests/cr_quad_test.c` and
+`tools/digitone/quad_render.c` (nothing else needed it). **Bit-exact**: `cr_quad_test` 31 466 checks, 0 failed; its
+mirror check now goes through the read: every point of every wave, at ten fractions across the step (0, 1, 2, 255, 256,
+8191, 16384, 24575, 32766, 32767, with noise in the phase's unused low byte) and six shares of the next wave (0 .. 32767),
+829 440 reads, each equal to the old whole cycle's interpolation (a +1 in the second half's rounding makes 83 of them differ:
+the check bites); the golden renders of `tests/regress.c` (317 now) 0 changed; the draw goldens unchanged (run_all below).
+**Cost.** `quad_render` 16 732 -> 17 552 B in `build/choralroot.dis` (+820; the rejected read +1.7 KB). Its per-sample
+loops, one per algorithm and HARM case, in instructions (the static span, both crossfade paths): HARM + (A and B1 read
+the tables) 112 .. 130 -> 133 .. 155, GLASS PAD's algorithm 7 120 -> 133, DRONE's algorithm 6 127 -> 144; HARM - (C)
+97 .. 115 -> 109 .. 129, algorithm 6 109 -> 124; no HARM 83 .. 98 -> 81 .. 103, the eight together 749 -> 748, but
+not each the same: the loops' source is unchanged and the compiler spills differently across the one function, so
+algorithm 5's (METAL) grew 96 -> 103 (six more stack accesses) and the others moved -3 .. +2. Host count
+(`tests/regress.c`, instructions a 44.1 kHz sample, the same day, three runs each, within 0.2 %): GLASS PAD 1593 ->
+1742 (+9.4 %), DRONE 1575 -> 1718 (+9.1 %) (the rejected read added 311 and 320 to its day's 1209 and 1183: +26 %);
+HOLLOW +3.9 %, CLAV +2.9 %, STRINGS +2.0 %, SQUARE LEAD +0.5 % (HARM -: one table, and their whole steps skip the
+second); the presets without HARM -3.8 .. 0 % (EP and BELL the same, FEEDBACK the most). `tests/cpu_baseline.txt`: the
+six HARM presets' lines from a `BUDGET_UPDATE=1` run (GLASS PAD 1498 -> 1744, DRONE 1472 -> 1718, HOLLOW 1300 -> 1481,
+SQUARE LEAD 1354 -> 1503, CLAV 1629 -> 1834, STRINGS 1630 -> 1837); the other lines as they were (as 3y118 did for
+GRAIN): the stored figures are 6 .. 9 % below this Mac's today for unchanged code (GLASS PAD read 1593 on main), so the
+jump in those six lines is part machine, part mirror. `tests/target_budget.txt` `quad_render` 7172 -> 6458 (BUDGET_UPDATE
+=1; only that line moved): the instructions in its loops rose 3865 -> 4066, but the tool's nesting heuristic (a backward
+branch spanning a whole HARM group counted as an outer loop) weighs a different span now, as 3y132 noted. On the unit
+the HARM presets' 8-note chords cost the render about 9 % more than on main; the owner's 65 % (peaks 80 .. 90) was read
+on main. Size: `XIP 537 068 -> 537 788 B` (93.7 -> 93.8 %), `RAM 80 176` unchanged, `POOL 333 900 -> 306 196 B`
+(97.0 -> 89.0 %: 37.0 KB left, ~29 KB addable). docs/FLASH.md (the account: taken, the owner's words, the reason; the
+POOL line), docs/QUAD.md "HARM" and "CPU", HANDOFF's size paragraph. **Checked**: `CR_VERSION=0.24 sh tests/run_all.sh`
+20 of 22 suites passed (cr_draw 160 ok, its goldens unchanged; test_cr 1061 ok, test_persist 113, test_retired 18,
+test_pool 7; 317 golden renders, 0 changed; 0 lint); `releases` failed, and `run_tests` with it, on a local tag
+another session made (`v0.24-beta2-smk37`, 898fa5c: `releases_test.py`'s `num` cannot read it), not on this change:
+with that one tag skipped (a throwaway copy of the test) releases is ALL OK. **Merged with origin/main 898fa5c** (the
+SMK-37 port, 3y142 .. 3y146, its list and tag): `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED (22 suites,
+86 s; test_cr 1061 ok, test_persist 113, test_retired 18, test_pool 7; 317 golden renders, 0 changed; 0 lint), with
+the SMK session's six 0.24-beta2-smk37 packages in build/release-smk37 for the site check (copied from its build
+folder, each at its listed sha256). `BOARD=smk37 ./build.sh`: XIP 537 736 B (93.8 %), RAM 80 940 (82.3 %), POOL
+306 196 (89.0 %); the FM-1's as above. Not flashed, not pushed.
+
+## 2026-10-16 (the SMK-37 in the browser)
+
+3y151. **The SMK-37 browser emulator's module (2026-10-16; the owner: "Can we get a web emulator for the SMK? Here's
+one that works https://genkigenki.github.io/smk37/vector37-sim/"; genkigenki's GPL-3.0 Vector37 simulator as the
+reference for the panel).** `sh tools/emu/web/build_web.sh` builds a second module beside the FM-1's:
+`build/emu-web-smk37/choralroot-smk37.wasm`, `tools/emu/web/emu_web.c` with `EMU_SMK37=1 BOARD_SMK37=1` (the version
+"... -smk37"). The seam is the SMK's own input layer: `tools/emu/emu_smk_hal.h` (included by `emu_hal_fw.h` instead
+of its FM-1 keys and LEDs) includes `firmware/hal/smk_input.h` with `SMK_INPUT_HOST` (no fm1_time.h, the emulator's
+lock: the only change to the header, preprocessor only) and runs its frame and analog logic unchanged on a modelled
+panel: every 1.6 ms the matrix the scan would read (a key's contact 1 at once, contact 2 after the time the factory
+curve reads as the velocity asked; the buttons, held at least 8 ms; the knobs as quadrature states held two frames
+each), every 100 us one of the 24 analog slots (a pad's reading for its velocity, the faders, the wheels, the pedal
+unplugged, the battery full); `padled_set` keeps the pads' colours. `emu_firmware.h` leaves out cr_sense.c and
+`fm1_an` for the SMK and renames hostsim.c's two-field `fm1_in` there; `emu_fw.c`'s tick runs the model, its frame
+calls `cr_smk_frame`, its idle `cr_smk_wheels` (as main.c), its init the factory curves' defaults. `web_smk_*`
+exports take the panel and give the button LEDs, the pads' colours, K1's volume and the screen's state. Unchanged:
+the FM-1 browser module (choralroot.wasm e8172f98..., before and after) and the native emulator (build/host/emu
+ca31b1df...), `EMU_SMK37` unset there; the SMK packages (the six sha256s of v0.24-beta2-smk37 rebuilt on this tree).
+
+3y152. **The SMK-37 emulator's page and its place on the site.** `tools/emu/web/smk/` (index.html, smk.js,
+worklet.js): the FM-1 emulator page's look, the SMK-37 Pro's arrangement after Vector37 (credited on the page): the
+wheels (pitch springs back), the screen at 240 x 240, its six buttons, K1..K8 over the 16 pads (each lit in the
+firmware's colour, brighter than sent), the faders over the 2 x 6 buttons, the 37 keys; every button by its SMK name
+and its ChoralRoot role, every key, pad and button down while a pointer, a computer key or a latch (right-click)
+holds it, the velocity from where a key or pad is struck (low loud, high soft; Shift soft); the FM-1 emulator's
+computer keys on the SMK's parts (F1..F4, 2..5, Tab the chord pads; A .. ] and W .. P the keys C4..G5; F5..F10,
+7..= the buttons; , . < >, ` KNOB BANK, / FADER BANK; PgUp / PgDn, the arrows the knobs; Z X OCTAVE, End panic); Web
+MIDI, the flash in IndexedDB ("choralroot-smk37"), Start, the load meter, ?demo. `web/make_site.py` copies it to
+`webapp/smk37/emu/` beside the SMK-37 test installer (noindex), whose page links it (`<!--EMU-->`); no FM-1 page does.
+pages.yml builds it with the FM-1's, runs its test and fails when an FM-1 page (the emulator's too) links the SMK.
+SMK37.md "Try it in the browser", BUILDING.md, tools/emu/README.md.
+
+3y153. **Its test and the checks.** `node tools/emu/web/test_web_emu_smk.mjs` (run_all's new suite `web_emu_smk`, after
+web_emu_build; it measures no real time): boots and draws; MAJ's pad and C4: C major sounds (notes 60 64 67), the
+screen's chord name "C M", the note-ons out over MIDI, MAJ's pad lit bright; G4 soft 20 < hard 127 out (the two
+contacts, Key Touch Dynamic); K1 turns the volume down; SCALE (KEY) lights; the same input twice gives the same
+samples; a headless Chromium screenshot of ?demo (build/emu-web-smk37-test/page.png; its processes stopped by their
+PID), 16 checks. tests/site_test.py: webapp/smk37/emu/ with its wasm, noindex, linked from the SMK page and from no FM-1
+page; the link walk over every page, the emulator's included. `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED
+(23 suites, 98 s: the 22 and web_emu_smk; test_cr 1061 ok; 317 golden renders unchanged; 0 lint; test_web_emu PASS,
+bit-exact with the native emulator); `BOARD=smk37 [MODEL=elite|mke] ./build.sh --release 0.24-beta2-smk37`: the six
+packages' sha256s those of web/releases-smk37.json; `./build.sh` last: XIP 537 068, the package f093f9bc... (main's).
+Not pushed.
+
+## 2026-10-16 (Flash Data and the sound pool)
+
+3y154. **SAFE MODE's Flash Data erases the sound pool (2026-10-16; from main 52889ba, the 0.24-beta2 release tree; not
 pushed, not flashed; a new build, not 0.24-beta2).** Found by the SMK-37 port session while it placed the SMK's
 storage: the SMK build's Flash Data and owner change erase `ST_SMK_REGIONS`, which include the favourites and both of
 the pool's runs, but the FM-1's list in `cr_ui.c cu_flash_erase` stopped at the favourites (0xB2000, 6 sectors) and
@@ -5076,13 +5256,15 @@ since the favourites) is gone. `tools/emu/test_cr.sh`'s SAFE MODE block: a sound
 "76 sectors", the region check 0xA0000 + 40 sectors (through the pool), and `pool_image.py pool` empty after it.
 Docs: MANUAL's SAFE MODE line (the saved sounds, all 128 slots, the favourites; "0.22 to 0.24-beta2 left the saved
 sounds in place"), PRESETS.md (76 sectors), SETTINGS.md's pool section (Flash Data erases it; what 0.22 .. 0.24-beta2
-did), HANDOFF (76 sectors), `docs/releases/0.24.md` "Merged after 0.24-beta2" (a player's sentence for the next
-notes). The SMK-37 port branch (claude/smk37-port-5704f3) keeps its own list (`ST_SMK_REGIONS`); its `#else` branch
-in `cu_flash_erase` is this list, so a merge takes this one; its HISTORY numbers 3y142 .. 3y145 collide with this
-entry's and get renumbered at whichever merge comes second.
-**Built and checked**: `./build.sh` (plain): XIP 537 068 B of 573 440 (93.7 %), RAM 80 176 (81.6 %), POOL 333 900 of
-344 064 (97.0 %), RAMTEXT 7 072 of 24 576: main's line to the byte (the list's two words fit in the existing
-alignment), other bytes (package sha256 8f45e0bd9ba19662..., 610 313 B); the stub unchanged (baee55ed142fe1cc).
-`CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 77 s; test_cr 1063 ok, 2 more than 3y141's
-1061: the sound in the pool before, none after; test_persist 113, test_retired 18, test_pool 7; 317 golden renders,
-0 changed; 0 lint).
+did), HANDOFF and SETTINGS.md's session line (76 sectors), `docs/releases/0.24.md` "Merged after 0.24-beta2" (a player's sentence for the next
+notes). The SMK-37 build keeps its own list (`ST_SMK_REGIONS`, 3y142 .. 3y145), which already has both of the pool's runs.
+Merged with origin/main 4ecd5be (the SMK-37 port, its installer and emulator, the HARM mirror read; the SMK's
+`ST_SMK_REGIONS` side of `cu_flash_erase` untouched, this list and its asserts in the FM-1's `#else`; this entry was
+3y142 on its branch). **Built and checked** on the merge: `CR_VERSION=0.24 sh tests/run_all.sh` ALL SUITES PASSED
+(23 suites, 84 s; test_cr 1063 ok, 2 more than main's 1061: the sound in the pool before, none after; test_persist
+113, test_retired 18, test_pool 7; 317 golden renders, 0 changed; 0 lint; with `build/release-smk37` copied from the
+smk37-port worktree, every package at its listed sha256: without it `site_test.py`'s two `--require-all` checks fail,
+on an untouched origin/main checkout too). `BOARD=smk37 ./build.sh`: the package's bytes main's (sha256
+ddf87622f1aed69a..., 651 496 B). `./build.sh` last: XIP 537 804 B of 573 440 (93.8 %; main 537 788, +16), RAM 80 176
+(81.6 %), POOL 306 196 of 344 064 (89.0 %), RAMTEXT 7 072 of 24 576; the package sha256 5f1102a1b82c7174... (610 313 B),
+the stub baee55ed142fe1cc. Not pushed, not flashed.

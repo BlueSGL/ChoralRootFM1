@@ -7,6 +7,9 @@ static uint8_t flash_ok;                 /* JEDEC id matched at boot (persist_bo
 /* 3y60: every flash read since power-on, calls and bytes (78 PEAK's st_reads_ps: the UI must not read per frame) */
 #define ST_READS_COUNTED 1
 static uint32_t st_reads, st_read_bytes;
+#if BOARD_SMK37
+#define ST_FEED() fm1_wdt_feed()                 /* storage.c st_smk_clear: many erases in a row */
+#endif
 static int st_read(uint32_t off, void *dst, uint32_t n)   /* 256-byte IRQ-off windows: audio keeps up */
 {
     uint8_t *d = dst;

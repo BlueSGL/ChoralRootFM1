@@ -94,9 +94,6 @@ static void host_tracks_init(void)                /* as felucca_init: defaults, 
 {
     uint32_t i, k;
     fm6_tables_init();                            /* FM6's RAM tables (eng_fm6.c fm6_init: FM6_SIN, the log-sine halves) */
-#if FELUCCA_QUAD
-    quad_init();                                  /* FM TONE's HARM tables in RAM (main.c felucca_init) */
-#endif
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
     for (k = 0; k < NTRK; k++) {
