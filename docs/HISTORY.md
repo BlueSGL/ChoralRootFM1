@@ -4590,3 +4590,18 @@ loops the same length to an instruction (1146 -> 1151 instructions in all, the r
 budget tool's nesting heuristic now reads its outer structure differently, see 3y130). Size: `XIP 539 132 -> 532 620
 B` (94.0 -> 92.9 %), `.data 11 900 -> 2 668`, `.bss 66 852 -> 76 084`, `RAM 78 752` unchanged, POOL unchanged.
 `docs/FM6.md` "Memory" and `docs/FX.md`'s table say so.
+
+3y126. **The flash diet, 3: CZ-1's factory tones packed (same day).** Casio's 64 native tones (`CZ_FACTORY`, 64 x 144 B =
+9216 B of XIP) are now four LZ4 blocks, a bank of 16 tones each (`tools/gen_cz1_factory.py` packs them with
+`tools/lz4blk.py`, the loader's block format: `CZ_FACTORY_LZ4` 4660 B, `CZ_FACTORY_OFF`), unpacked where they are read:
+`cz_bank_default` unpacks a bank straight into the bank cache's 16 tones (`eng_cz.c cz_factory_bank`; `cz_patch_t` is
+its raw bytes, so they are contiguous), `cz_factory_tone` unpacks the tone's bank into 2.3 KB of the main loop's stack
+and copies the tone out (the load paths of `cz_track_loaded`: the main loop, never the ISR). The decoder is
+`cz_patch.h cz_lz4_block` (252 B with the bank function); a malformed block stops where it is. The tests that compare
+against the tones as they are compile with `-DCZ_FACTORY_RAW`, which keeps the plain table in the header for them
+(`run_cr_tests.sh`: `cr_cz_test`, `cr_backup_test`). **Bit-exact**: `cr_cz_test` 48 checks (a new one: all 128 reads,
+each bank's 16 tones and each tone alone, are Casio's bytes), `cr_backup_test` 230, the 313 golden renders unchanged.
+Size: `XIP 532 620 -> 528 332 B` (92.9 -> 92.1 %); RAM and POOL unchanged. **Rejected on the way** (built, measured,
+reverted): `CZ_RECIP` as two halves (x >= 1024 fits 16 bits less 32 768): XIP -1 632 B, but the ramped loops of
+`cz_native_line_mv` grew 4 .. 6 instructions a sample (7 340 -> 7 690 B; `cz_native_noise` 554 -> 612): about 50 us
+a half for 8 voices with their DCW moving, a cost in the ISR for 1.6 KB (docs/FLASH.md has the table).

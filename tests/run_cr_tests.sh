@@ -103,7 +103,7 @@ t logged_count_last cr_fx_test build/fx-review
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_align_test tests/cr_align_test.c -lm
 t align
 # backup / restore SysEx (cr_backup.c) on the emulator's firmware build (tools/emu/emu_firmware.h; macOS: os_unfair_lock)
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_backup_test tests/cr_backup_test.c -lm
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -DCZ_FACTORY_RAW -o build/host/cr_backup_test tests/cr_backup_test.c -lm
 t ./build/host/cr_backup_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_pool_test tests/cr_pool_test.c -lm
 t ./build/host/cr_pool_test
@@ -123,7 +123,7 @@ t ./build/host/cr_restart_test
 par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_fm6_test tests/cr_fm6_test.c -lm
 t logged_last cr_fm6_test
 # CZ-1 (Melodee's engine, docs/CZ1.md): Casio's tones, the blob, Casio SysEx, the banks, the deep pages, the tone store
-par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -o build/host/cr_cz_test tests/cr_cz_test.c -lm
+par_build cc -std=gnu11 -O1 -w -Ibuild/gen -Ifirmware/src -Itests -DCZ_FACTORY_RAW -o build/host/cr_cz_test tests/cr_cz_test.c -lm
 t logged_last cr_cz_test
 # P5 (Melodee's Prophet-5 engine, docs/PROPHET.md): Sequential's bank against its .syx, the blob, every shipped program
 # through voice.c, the four voices, UNISON (a load takes the program's), GLIDE, the bend, the deep pages, the pool, SAVE
