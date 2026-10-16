@@ -24,6 +24,7 @@ export const isPool = (objs) => POOL_IDS.some((id) => (objs instanceof Map ? obj
 export const ENGINE_NAMES = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
   "DRUM", "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5"];
 export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 96, p5: 138, grain: 64 };
+const GRAIN_V1 = 20;                     // GRAIN's first build's record (version 1): the FM-1 converts it on load
 // a kind's record in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; version 4 since 2026-10-14: 96)
 const STORE_PATCH = { ...PATCH_SIZE, quad: 80 };
 const KIND_ENGINE = { va: 13, fm6: 12, cz: 14, quad: 15, p5: 16, grain: 8 };
@@ -149,7 +150,7 @@ function sndBlob(m, kind, slot) {        // the slot's blob in the store of that
     const p = poolAt(slot), b = m.get(p.id);
     const n = b.length === POOL_BANK ? b[p.off + POOL_HDR + 1] : 0;   // (FM TONE: an older slot's 80-byte patch)
     if (b.length !== POOL_BANK || b[p.off + POOL_HDR] !== KIND_ENGINE[kind] + 1 ||
-        (n !== PATCH_SIZE[kind] && !(kind === "quad" && n === STORE_PATCH.quad))) return null;
+        (n !== PATCH_SIZE[kind] && !(kind === "quad" && n === STORE_PATCH.quad) && !(kind === "grain" && n === GRAIN_V1))) return null;
     const d = b.subarray(p.off + POOL_DATA, p.off + POOL_DATA + n);
     return kind === "quad" ? quadToV4(d) : d;
   }
@@ -233,6 +234,9 @@ export function readSoundFile(file) {
       patch = quadToV4(patch);              // (an FM TONE sound file of before 2026-10-14: converted, best effort)
     if (kind === "quad" && patch.length === PATCH_SIZE.quad && patch[0] === 0x51 && patch[1] === 4)
       patch = quadToV4(patch);              // (version 4, 3y61's: as version 5, the owner's corrections)
+    if (kind === "grain" && patch.length === GRAIN_V1 && patch[0] === 0x47 && patch[1] === 1) {
+      const v2 = new Uint8Array(PATCH_SIZE.grain); v2.set(patch); patch = v2;   // (a GRAIN sound file of the first build: zero-padded, the FM-1 converts it)
+    }
     if (patch.length !== PATCH_SIZE[kind]) throw new Error(`The sound file's ${kind} patch is ${patch.length} bytes, not ${PATCH_SIZE[kind]}`);
     if (kind === "va" && (patch[0] !== 0x56 || patch[1] < 1 || patch[1] > 5)) throw new Error("The sound file's VA patch is not a VA patch (magic or version)");
     if (kind === "fm6" && (patch[112] !== 0x46 || patch[113] !== 1)) throw new Error("The sound file's FM6 patch is not an FM6 patch (magic)");

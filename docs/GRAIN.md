@@ -3,7 +3,7 @@
 **Status: built through step 5 (2026-10-15 / 16, HISTORY 3y133 .. 3y137): the engine is in the firmware as engine 8
 (`firmware/src/eng_grain.c` over `grain_src.c`), on the unit since 3y136's build, and since the owner's first listening
 (3y137, below: "The second phase") with its own matrix, two synced LFOs, ENV 2, the VA's filter, a bipolar SCAN and
-the wave band; its presets not yet by ear (step 6). Merged on main d75523e (v0.24-beta1 with the flash diet) on the owner's word, 2026-10-16: XIP 537 068 B (93.7 %), POOL 97.0 % (the size table).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
+the wave band; its presets not yet by ear (step 6). Merged on main d75523e (v0.24-beta1 with the flash diet) on the owner's word, 2026-10-16: XIP 537 068 B (93.7 %), POOL 97.0 % (the size table). A sound saved on the first build (a 20-byte version-1 record, the owner's U033 DARK HAZE) loads again since 3y139: the pool's reader takes that length beside the 64-byte version 2.** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
 (`build/grain-sketch/`, below), kept the granular morph, and said go for steps 1 to 4. The build's size line: XIP
 559 652 B of 573 440 (97.6 %), RAM 79 028 (80.4 %), POOL 304 472 (88.5 %) over da1f8e2; merged on main 5e1e8a7
 (v0.22-beta4: the master filter and the step preview) XIP 561 540 B (97.9 %), POOL 304 712 (88.6 %); on main a11e0ca
@@ -273,6 +273,7 @@ CZ-1 1.7, P5 1.54) given as x 1.5. The baseline is main da1f8e2's size line: XIP
 | **the engine** | **~11 .. 12 KB: XIP 547 020 -> ~559 000 B, 97.4 .. 97.6 %, 14 .. 15 KB left** (the estimate) | |
 | **as built (step 4, 3y136)** | **XIP 559 652 B (97.6 %): +12 632 B, 13 788 B left; RAM 79 028 (+376), POOL 304 472 (+65 536, 88.5 %)** | `./build.sh`'s size line |
 | **merged on main d75523e (v0.24-beta1 with the flash diet, 3y126 .. 3y132; the second phase in)** | **XIP 537 068 B (93.7 %), 36 372 B left; RAM 80 176 (81.6 %), POOL 333 900 (97.0 %, 10 164 B left: the diet's HARM cycles, 27.7 KB, live in POOL now)** | `./build.sh`'s size line, the byte the diet session measured |
+| **3y139: the first build's 20-byte version-1 records read again (upool.c, cr_backup.c, the installer, the web page)** | **XIP 537 068 B (93.7 %), the same bytes to the slot: a compare in the pool's reader and the restore's check** | `./build.sh`'s size line |
 
 The tightest resource. `FELUCCA_SIZE`'s minsize pass (tools/size_fns.py) can take the generator's set-up code
 (`gs_begin`, 1.2 KB, runs once a render) if XIP is wanted back.

@@ -74,8 +74,10 @@ static int up_patch_get(uint32_t k, uint32_t e, uint8_t *b, uint32_t n)
 {
     uint8_t h[4];
     if (!up_used(k) || n > UPP_MAX || sp_read(k, UPP_HDR, h, 4) != 0 || h[0] != e + 1u ||
-        (h[1] != n && !(e == ENGI_QUAD && h[1] == QUAD_BLOB_V3)))   /* (FM TONE: an older slot's 80-byte version 1..3
-                                                                     * blob, the rest zeros; eng_quad.c converts it) */
+        (h[1] != n && !(e == ENGI_QUAD && h[1] == QUAD_BLOB_V3) &&         /* (FM TONE: an older slot's 80-byte version 1..3
+                                                                     * blob, the rest zeros; eng_quad.c converts it; GRAIN:
+                                                                     * the first build's 20-byte version 1, 3y139) */
+         !(FELUCCA_GRAIN && e == ENGI_GRAIN && h[1] == GRAIN_BLOB_V1)))
         return 1;
     memset(b, 0, n);
     return sp_read(k, UPP_DATA, b, h[1]) != 0;

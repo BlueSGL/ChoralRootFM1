@@ -1652,6 +1652,7 @@ PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 96, "p5": 138, "grain": 
 # bytes, the hi-res values in hundredths; the FM-1 converts a version 4 on load). A version 1..3 blob is zero-padded to 96 (the firmware converts it on load)
 STORE_PATCH = dict(PATCH_SIZE, quad=80)
 QUAD_V3 = 80
+GRAIN_V1 = 20                                       # GRAIN's first build's record (version 1; the FM-1 converts it on load)
 
 
 def _quad96(b):
@@ -1754,7 +1755,8 @@ def _store_blob(objs, kind, slot):
         b = objs.get(i, b"")
         n = b[off + POOL_HDR + 1] if len(b) == POOL_BANK else 0
         if len(b) != POOL_BANK or b[off + POOL_HDR] != KIND_ENGINE[kind] + 1 or \
-                (n != PATCH_SIZE[kind] and not (kind == "quad" and n == QUAD_V3)):   # (an older FM TONE slot: 80)
+                (n != PATCH_SIZE[kind] and not (kind == "quad" and n == QUAD_V3)
+                 and not (kind == "grain" and n == GRAIN_V1)):   # (an older FM TONE slot: 80; a GRAIN slot of the first build: 20)
             return None
         d = bytes(b[off + POOL_DATA:off + POOL_DATA + n])
         return _quad96(d) if kind == "quad" else d
@@ -2015,6 +2017,8 @@ def read_sound_file(f):
         data = b64(patch.get("data"), "the patch data")
         if kind == "quad" and len(data) == QUAD_V3 and data[:1] == b"Q" and 1 <= data[1] <= 3:
             data = _quad96(data)                   # (an FM TONE sound file of before 2026-10-14: the FM-1 converts it)
+        if kind == "grain" and len(data) == GRAIN_V1 and data[:1] == b"G" and data[1] == 1:
+            data = bytes(data) + bytes(PATCH_SIZE["grain"] - GRAIN_V1)   # (a GRAIN sound file of the first build: zero-padded, the FM-1 converts it)
         if len(data) != PATCH_SIZE[kind]:
             raise bad(f"the {kind} patch is {len(data)} bytes, not {PATCH_SIZE[kind]}")
         if kind == "va" and (data[0] != 0x56 or not 1 <= data[1] <= 5):

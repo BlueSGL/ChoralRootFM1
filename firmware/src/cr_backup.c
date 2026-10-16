@@ -584,7 +584,8 @@ static int crb_bank_ok(const uint8_t *raw)
         e = s[UPP_HDR] - 1u;
         n = s[UPP_HDR + 1u];
         if (e >= NENGINES || !n || n > UPP_MAX ||
-            (up_patch_len(e) && n != up_patch_len(e) && !(e == ENGI_QUAD && n == QUAD_BLOB_V3)))
+            (up_patch_len(e) && n != up_patch_len(e) && !(e == ENGI_QUAD && n == QUAD_BLOB_V3) &&
+             !(FELUCCA_GRAIN && e == ENGI_GRAIN && n == GRAIN_BLOB_V1)))   /* (GRAIN's 20-byte version 1 too, 3y139) */
             return 0;
     }
     return 1;

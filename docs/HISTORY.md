@@ -4963,3 +4963,29 @@ the two ways out if POOL must give), the byte the diet session measured on its t
 build/choralroot.fwsc sha256 9048db3c960e2bd4... (610 313 B). `sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 71 s; cr_tests
 with cr_grain_test 285 036 checks and cr_backup_test 230; 317 golden renders unchanged; test_cr 1061 ok, test_persist
 113, test_retired 18, test_pool 7; the browser emulator built and timed). Not flashed: the unit runs 0.24-beta1.
+
+3y139. **A GRAIN sound saved on the first GRAIN build loads again: the pool reads its 20-byte version-1 record (the
+owner, 2026-10-16, after main 9fc83fa on the unit: U033 DARK HAZE listed "no patch" by `fm1_install.py --sounds`; "Yes:
+have the grain session make the version-1 GRAIN record fix (pool reader, installer, web page, a pool test)").** The
+cause: GRAIN's first build (3y136, 70bb639 on the unit) saved 20-byte version-1 patch records; the second phase
+(3y137) made the patch 64 bytes (version 2) and `eng_grain.c grain_unpack` converts a version 1 it is handed, but
+`upool.c up_patch_get` hands over a slot's record only when its stored length is the engine's blob size (the one
+exception FM TONE's older 80), so a 20-byte GRAIN record never reached the engine: the slot loaded as an old Felucca
+record, INIT's sources with the record's eight macro bytes in Felucca's places (TYPE TONE MOTION SEED MORPH SIZE DENS
+POS landing on POS SIZE DENS PITCH SPRD RAND CUT), a scrambled INIT, and `--sounds` said "no patch" by the same rule;
+a re-save would have written that scrambled sound over the record. **Now**: `core.h GRAIN_BLOB_V1 20` (from eng_grain.c);
+`upool.c up_patch_get` takes a GRAIN slot of that length as it takes FM TONE's 80 (the 64-byte buffer zeroed first, the
+20 read into it; `grain_unpack` sees version 1: the 18 values, SCAN halved and forward, the rest INIT's);
+`cr_backup.c`'s check of a restored bank takes it too (so the backup taken before the flash, with U033's record,
+restores onto this build); `tools/fm1_install.py` lists such a slot with its patch (`GRAIN_V1`), exports it as it is and
+zero-pads a 20-byte version-1 sound file to 64 on import (the FM-1 converts it); `web/fm1sounds.js` the same (`sndBlob`,
+the sound file's import). **Test**: `tests/cr_pool_test.c`: GRAIN in the every-engine round trip (a 64-byte version 2
+saved into U128, read back byte for byte after a power cycle, loaded through PRESETS) and a slot made of the first
+build (`'G', 1`, 18 values some past their ranges, SCAN 100, the header's length 20): after a power cycle the pool reads
+the record with zeros after it, and loading it gives the sound the first build saved (every value `grain_unpack`'s,
+SCAN 50, the eight macros on the track), 50 checks. The installer's listing exercised on the host over the backup
+`fm1-backups/fm1-backup-2026-10-16-before-grain-fix.json` through tests/install_test.py's fake FM-1 (a scratch
+script, not kept): `U033  DARK HAZE  GRAIN  patch  +` (before: "no patch"), the record `'G', 1` of length 20.
+**Size**: `./build.sh` XIP 537 068 B (93.7 %), RAM 80 176, POOL 333 900: the same bytes as 9fc83fa (the two compares fit the
+slot). `sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 85 s; cr_pool_test 50 checks, test_cr 1061 ok, 317 golden renders unchanged, the browser emulator built and timed); the package build/choralroot.fwsc sha256 f093f9bccee29fc8... (610 313 B). Not flashed: the owner wants it built and flashed (the designer-handoff session,
+a backup first); the unit runs 9fc83fa. docs/GRAIN.md's status line and size table.
