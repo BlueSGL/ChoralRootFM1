@@ -333,7 +333,8 @@ static void t_version(void)
     ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 0, "pick_roots 0 (the roots play) kept");
     s.pick_roots = 33;
     cr_settings_seal(&s);
-    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 1, "pick_roots out of range (bit 5 up): the default");
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.pick_roots == 33 && CRS_VCURVE(&r) == 1,
+       "pick_roots 33: bit 5 is Velocity Curve +1 since 3y112 (it read as out of range before), kept");
     /* 0.19: Options > Output in bit 1 of that byte (CRS_OUT_CLASSIC): clear = Clean, the default and every older
      * record's; set = Classic, kept beside the retired bit 0 */
     cr_settings_defaults(&s);
@@ -1440,6 +1441,23 @@ static void t_touch(void)
     o2.bass_on = CRS_TOUCH_BITS(1, 2, 1);
     cr_settings_auto(&m2, &o2);
     ok(m2.bass_on == (uint8_t)(CRS_NUMERALS | CRS_TOUCH_BITS(1, 2, 1)), "Key Touch and the Sens are automatic (the Options of now); Numerals stays the record's");
+    /* Velocity Curve: bits 5..7 of pick_roots, -3 .. +3 as two's complement */
+    s = d;
+    s.pick_roots = (uint8_t)(CRS_SIXTH_UP | CRS_VCURVE_OF(-2));
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VCURVE(&r) == -2 && CRS_SIXTH(&r) == 1u, "Velocity Curve -2 beside 6th with 7th: both kept");
+    s.pick_roots = CRS_VCURVE_OF(3);
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VCURVE(&r) == 3, "Velocity Curve +3");
+    s.pick_roots = (uint8_t)(4u << 5);
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_VCURVE(&r) == -3, "the bits at -4 (not a curve): -3");
+    ok(CRS_VCURVE(&d) == 0, "defaults: Velocity Curve 0");
+    cr_settings_defaults(&m2);
+    cr_settings_defaults(&o2);
+    o2.pick_roots = CRS_VCURVE_OF(1);
+    cr_settings_auto(&m2, &o2);
+    ok(CRS_VCURVE(&m2) == 1, "Velocity Curve is automatic (an Option)");
 }
 
 /* 0.22, GitHub issue 18: the KEY layer's Snap in bits 3 .. 4 of key_on (CRS_SNAP, CRS_SNAP_BITS): Off (0) by default
@@ -1447,6 +1465,58 @@ static void t_touch(void)
  * manual (SAVE held); and the rule 0.17 .. 0.22-beta2 apply to the byte (their CRS_FIX(key_on, 0, 7): modelled here,
  * the old binaries were not run) reads a record with Snap on as the byte's defaults there: Key Mode off, Key plays
  * Chords, Keyboard Chords, until set again (the v14 caveat, docs/SETTINGS.md) */
+/* GitHub issue 15: the KEY layer's Numerals = Solfege in bit 7 of scale (CRS_SOLFEGE), a bit of its own apart from
+ * bass_on's On: off by default and in every older record; round-trips beside either scale; the engine gets the scale
+ * without it and its capture keeps it; an out-of-range scale keeps the bit; manual; and the rule 0.17 .. 0.22 apply
+ * to the byte (their CRS_FIX(scale, 0, 1), default Major: modelled, the old binaries were not run) */
+static void t_solfege(void)
+{
+    cr_settings_t d, s, r;
+    cr_settings_out_t o;
+    cr_t E;
+    unsigned sc;
+    cr_settings_defaults(&d);
+    ok(!CRS_SOL(&d) && CRS_SCALE(&d) == CR_SCALE_MAJOR && CRS_VERSION == 15u, "Solfege: off by default, no settings version for it");
+    for (sc = 0; sc < 2u; sc++) {
+        s = d;
+        s.scale = (uint8_t)(CRS_SOLFEGE | sc);
+        s.tonic = 9;
+        cr_settings_seal(&s);
+        ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SOL(&r) && CRS_SCALE(&r) == sc && !CRS_NUMS(&r) &&
+           r.bass_on == 0, sc ? "Solfege round-trips with A minor (bit 7 of scale), bass_on untouched"
+                              : "Solfege round-trips with A major (bit 7 of scale), bass_on untouched");
+        cr_init(&E, &OUT);
+        cr_settings_apply(&r, &E, &o);
+        ok(E.scale == sc && E.key_on == 0 && E.bass_on == 0, sc ? ".. the engine gets minor without the bit" : ".. the engine gets major without the bit");
+        cr_settings_capture(&r, &E, &o);
+        ok(CRS_SOL(&r) && CRS_SCALE(&r) == sc, ".. and its capture keeps the bit");
+    }
+    s = d;
+    s.scale = (uint8_t)(CRS_SOLFEGE | 5u);         /* an unknown scale: Major, the bit kept */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SOL(&r) && CRS_SCALE(&r) == CR_SCALE_MAJOR, "scale 5 with Solfege: Major, Solfege kept");
+    s.scale = 0x7Fu;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.scale == CR_SCALE_MAJOR, "scale 127: Major, no Solfege");
+    {
+        unsigned old = CRS_SOLFEGE | CR_SCALE_MINOR;   /* what 0.17 .. 0.22 read: out of their 0..1, so Major */
+        if (old > 1u) old = d.scale;
+        ok(old == CR_SCALE_MAJOR, "0.17 .. 0.22 read a Solfege byte as Major (the scale lost there, nothing else)");
+    }
+    s = d;                                         /* an older record: whatever its version, the bit is 0 */
+    s.scale = CR_SCALE_MINOR;
+    cr_settings_seal(&s);
+    s.version = 14;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_SOL(&r) && CRS_SCALE(&r) == CR_SCALE_MINOR, "a version-14 minor record: no Solfege");
+    {                                              /* manual: the automatic save does not carry it */
+        cr_settings_t a = d, m = d;
+        a.scale = CRS_SOLFEGE;
+        cr_settings_auto(&m, &a);
+        ok(!CRS_SOL(&m), "Solfege is manual (SAVE held), as Numerals");
+    }
+}
+
 static void t_snap(void)
 {
     cr_settings_t d, s, r, m, o2;
@@ -1513,6 +1583,7 @@ int main(void)
     t_v15(); t_session(); t_session_trim(); t_session_flash();
     t_touch();
     t_snap();
+    t_solfege();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

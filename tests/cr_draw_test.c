@@ -1612,6 +1612,27 @@ int main(int argc, char **argv)
                 if (host_screen[y * 240u + x] != bg) { if (x < 120u) c01++; else if (x < 180u) c2++; else c3++; }
         snprintf(name, sizeof name, "KEY page 2: Key plays / Keyboard drawn (%u ink px), KNOB 3 Snap, grey (%u), KNOB 4 Numerals (%u)", c01, c2, c3);
         check(name, c01 > 200u && c2 > 80u && c3 > 80u);
+        {   /* Numerals' third value (GitHub issue 15): "Solf\350ge" (e grave: CRB's extra) whole in its cell, every glyph
+             * drawn (more ink than "On"), the other cells as they were */
+            static uint16_t on[240u * 240u];
+            uint32_t j, cut = 0, got = 0, c3s = 0, other = 0;
+            memcpy(on, host_screen, sizeof on);
+            snprintf(s.cell[0][3].value, sizeof s.cell[0][3].value, "Solf\350ge");
+            lint("key_page2_solfege", &s);
+            render(&s, 0);
+            write_ppm(dir, "key_page2_solfege");
+            for (j = 0; j < nbox; j++)
+                if (!strcmp(boxes[j].s, "Solf\350ge")) { got++; cut |= boxes[j].flags & 1u; got += 10u * (boxes[j].x0 < 180 || boxes[j].x1 > 240); }
+            for (y = 0; y < 240u; y++)
+                for (x = 0; x < 240u; x++) {
+                    if (y >= ry && y < ry + 72u && x >= 180u && host_screen[y * 240u + x] != bg) c3s++;
+                    if (x < 180u && host_screen[y * 240u + x] != on[y * 240u + x]) other++;
+                }
+            snprintf(name, sizeof name, "KEY page 2: Numerals \"Solf\350ge\" whole in KNOB 4's cell (%u ink px against %u for On), the other cells untouched",
+                     c3s, c3);
+            check(name, got == 1u && !cut && c3s > c3 + 60u && !other && strlen("Solf\350ge") < sizeof s.cell[0][3].value &&
+                  AF_CRB.nex == 11u && AF_CRB_EX[10] == 0xE8u);
+        }
     }
 
     {   /* the numeral on the Chord view (0.22, the KEY layer's Numerals; the owner, 2026-10-12: "render in the Blue
@@ -1633,6 +1654,16 @@ int main(int argc, char **argv)
             {"numeral_arp_longest", "Key: G# minor", "G#", "m", "add4", "#vii\260", "arp 1/8", 1, 1},
             {"numeral_arp_idle", "Key: C", "G", "", "7", "", "arp 1/8", 1, 1},
             {"numeral_arp_off", "Key: C", "G", "", "7", "", "arp 1/8", 1, 0},
+            /* Numerals = Solfege (GitHub issue 15): the syllable in the numeral's place, the same checks; the widest
+             * syllables (a caps SOL with a mark, an accidental with a mark) over the tallest names */
+            {"solfege_major", "Key: C", "G", "", "7", "SOL", "", 0, 1},
+            {"solfege_minor", "Key: A minor", "D", "m", "", "fa", "", 0, 1},
+            {"solfege_dim", "Key: C", "B", "dim", "", "ti\260", "", 0, 1},
+            {"solfege_wide", "Key: G# minor", "G#", "m", "add4", "#fa\260", "voicing +12", 0, 1},
+            {"solfege_aug", "Key: A minor", "C#", "+", "", "#MI+", "voicing +12", 0, 1},
+            {"solfege_sol_aug", "Key: C", "G#", "+", "add4", "SOL+", "voicing +12", 0, 1},
+            {"solfege_arp", "Key: C", "G", "", "7", "SOL", "arp 1/8", 1, 1},
+            {"solfege_arp_wide", "Key: G# minor", "G#", "m", "add4", "#MI+", "arp 1/8", 1, 1},
         };
         enum { NN = sizeof N / sizeof N[0] };
         static uint16_t pic[NN][240u * 240u], bare[240u * 240u];
@@ -1690,7 +1721,7 @@ int main(int argc, char **argv)
             if (top - n1 - 1u < gap_name) gap_name = top - n1 - 1u;
             if (x1 - x0 + 1u > w_max) w_max = x1 - x0 + 1u;
         }
-        snprintf(name, sizeof name, "numeral: blue, centred, in the gap: %u px under the top line, %u over the name; the widest %u px",
+        snprintf(name, sizeof name, "numeral / solfege: blue, centred, in the gap: %u px under the top line, %u over the name; the widest %u px",
                  gap_top, gap_name, w_max);
         check(name, !bad && gap_top >= 2u && gap_name >= 2u && nfind == f0);
         check("numeral: the big name does not move (numeral_on, nothing sounding = the picture without Numerals)",

@@ -4355,6 +4355,61 @@ step OK; the landing page "Version 0.22", "Install 0.22", "New in 0.22" with the
 (`firmware/SHA256SUMS`, `firmware/index.html`). Not done: the tag, the push, the release, the site; nothing flashed by
 this session.
 
+3y112. **fm1-ctl read, and Options > Velocity Curve (2026-10-15; the owner: "Charles has said that his repo fm1-ctl has
+the best velocity and aftertouch implementation ... see what the improvements are and if we can bring them in").**
+Read at `de372e7`: CTL-1's sensing is MONK-1's byte for byte (`sense.c` plus a settable floor and a top-row curve;
+`fm1_input.h`, `fm1_adc.h` identical), tuned by playing on his unit: the firm end at 530 (DRIVE 2's 450 sat under
+his firm presses, his hardest hit topped out near 95; the owner's unit reaches 127 with ours), a Curve -5 .. +5 on
+the map's exponent, the top row through the PA10 probe at 0 / 43 / 2.40 (the probe on every key tried and dropped: a
+light press moves it 8 counts), Aftertouch Off / Poly / Channel with poly per note of a chord key, AT sens -5 .. +5,
+a Touch page with velocity and pressure bars, and a host emulator that plays a key at a velocity by inverting the
+map (`host/ctl_host.c land_for`). The comparison, line by line, in docs/VELOCITY.md "fm1-ctl". Brought in first:
+**Velocity Curve** -3 .. +3 (the entry after Velocity Sens; `cr_sense.c SN_CURVES`, seven tables of the map at 0.7 x
+2^(0.2 k); bits 5..7 of `pick_roots` as two's complement, 0 the default, no version; `cr_settings_test`'s cases).
+The entry moved every Options entry from Aftertouch Sens on by one: the 20 walk scripts, `cr_opt_keys.txt` (30
+entries) and the runners' numbers, as 3y93 did. Next, if the owner wants them: the emulator's velocity model, the
+top row's probe, poly aftertouch out, the readout.
+
+3y113. **The emulator plays a key at a velocity and leans on it (2026-10-15; fm1-ctl's `host/ctl_host.c`, the
+second of its pieces brought in).** `cr_sense.c` is compiled into `tools/emu` (its scan hooks left out,
+`CR_SENSE_NO_HOOKS`; the scan's analog state a stub) and `emu_fw.c emu_touch_feed` feeds it every 2 ms from the
+script's keys, as the FM-1 would read them: a key held `down VEL` lands at the driven reading the map at Velocity
+Curve 0 gives that velocity (the map inverted over its table: the script's velocity is the press's strength on
+Velo's scale, so another Curve reads the same press differently), 300 pulled up, driven and pulled-up samples
+alternating as the key asks; `lean KEY PCT` presses it harder once its rest has settled, by PCT of the span, so
+`cu_touch_poll` reads that pressure; a key with no velocity lands at 100, a key let go reads 1023. `cr_ui.c` traces
+`touch: key K vel V sensed|context|fixed` as a key plays and `touch: at N` as the pressure changes. `cr_touch.txt`
+(`test_cr.sh`): Fixed plays 100, Velocity + Aftertouch plays 30 and 120 as given, G5 the context, a 60 % lean reads
+~73 and eases to 0, Velocity Curve +3 reads the same press as 15. tools/emu/README.md has the two commands.
+
+3y118. **Numerals: Off / On / Solfège (GitHub issue 15, shinobi, 2026-10-13: "No support for Fixed Do Solfege";
+2026-10-15, the owner: "all I want is to have an option where 'Numerals' is currently on the Key Menu to be able to do
+solfège notation for the scale degrees, so it now becomes 3 options: off, on, solfège").** The KEY layer's page 2,
+KNOB 4, has a third value: Solfège shows the numeral's degree as a movable-do syllable in the numeral's place on the
+Chord view (the same blue, 16 px, centred above the name; the arp screen too): `DO RE MI FA SOL LA TI` for I .. VII
+from the tonic in either scale (A minor's C is `MI`, its `III`), the case the numeral's (`SOL` with a major third,
+`sol` with a minor one: the whole word, as V / v), `°` and `+` the numeral's, a root between two degrees with the
+numeral's `b` / `#` before it (`#FA`, `bTI`; the chromatic syllables DI RI FI SI LI / RA ME SE LE TE named in
+docs/CHORD-NAMES.md "Solfège" as the alternative not taken). `cr_engine.c`: `cr_chord_numeral` and the new
+`cr_chord_solfege` are one function (`crx_degree`) with two spellings; `cr_ui.c cu_numeral` picks one, the picker
+(`CU_NUMS`) reads Off / On / Solfège and stops at both ends, the trace says `key: knob 4 numerals solfege`. The
+longest syllable is 4 characters, so the screen's `numeral[6]` is unchanged. The cell's è is one extra glyph in CRB
+(`tools/gen_aa_font.py CRB_EXTRAS`, 249 B). **Storage**: a bit of its own, bit 7 of the block's `scale`
+(`CRS_SOLFEGE`; the scale is bits 0 .. 6), apart from the bass byte (the owner, 2026-10-16: "Add a new bit for the
+Solfège mode. don't mix it with bass"; the first cut kept On's `bass_on` bit 1 for both and a session byte for the
+style, not merged). On writes `bass_on` bit 1 alone, Solfège `scale` bit 7 alone. 0 in every older record, no
+version; 0.17 .. 0.22 check `scale` against 0 .. 1, so a downgrade with Solfège saved reads the scale as Major and
+Numerals as Off there, nothing else (docs/SETTINGS.md). Fixed do (Do = C, the note names) is a different thing, an
+Options > Chord Names value, not built. **Tests**: `tests/cr_engine_test.c s_solfege` (C major and A minor at all 12 roots, the marks, other tonics;
+all 2304 cells ended, the longest 4, each with its numeral's accidental, case and mark); `tests/cr_draw_test.c` (the
+syllables in the numeral's gap, the widest `#MI+` 39 px, 2 px clear; the KEY page's `Solfège` whole in its cell:
+`key_page2_solfege`); `tests/cr_settings_test.c t_solfege` (both scales, the engine's side, an unknown scale, manual, an older record, the older firmwares' rule);
+`tools/emu/scripts/cr_solfege.txt` (`test_cr.sh`: the picker; SOL re ti° in C major; DO with Transpose +1; fa and MI
+in A minor; back to On: iv, the same notes) and `persist_solfege_set.txt` / `_check.txt` (`test_persist.sh`: saved,
+relaunched, `SOL`). XIP 550652 B of 573440 (+320 B). Docs: MANUAL.md (Numerals, the KEY page table, the quick
+reference), CHORD-NAMES.md "Solfège", SETTINGS.md, releases/0.22.md (a line under Numerals: new in 0.23-beta1).
+Flashed to the owner's unit 2026-10-16 (1c0cf1c); the owner: "This is great, lets merge this in for v0.23beta1".
+
 ## 2026-10-16 (FM TONE's level and its pops)
 
 3y119. **FM TONE's level: the engine 6 dB lower, its presets where they were (branch claude/fmtone-quality-b02d3f

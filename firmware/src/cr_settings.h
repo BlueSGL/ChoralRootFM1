@@ -68,6 +68,16 @@
  * every older record and 0 is the default: no version, nothing to migrate. Manual (SAVE held), as the page's others */
 #define CRS_NUMERALS 0x02u
 #define CRS_NUMS(s) (((unsigned)(s)->bass_on & CRS_NUMERALS) ? 1u : 0u)
+/* Its third value, Solfege (GitHub issue 15: the same degree as DO RE MI ..), is a bit of its own, apart from the bass
+ * byte (the owner, 2026-10-16: "Add a new bit for the Solfege mode. don't mix it with bass"): bit 7 of `scale`
+ * (CRS_SOLFEGE; the scale itself is bits 0..6, CRS_SCALE, room for more scales). Off: neither bit; On: CRS_NUMERALS
+ * alone; Solfege: CRS_SOLFEGE alone (set, it wins over the other). 0 in every older record and 0 is the default: no
+ * version, nothing to migrate. Every firmware from 0.17 to 0.22 checks the byte against 0 .. 1 (CRS_FIX(scale, 0,
+ * 1)), so after a downgrade with Solfege saved it reads the scale as Major and Numerals as Off until set again,
+ * nothing else; without Solfege the byte is one it knows. Manual (SAVE held), as the page's others */
+#define CRS_SOLFEGE 0x80u
+#define CRS_SCALE(s) ((unsigned)(s)->scale & 0x7Fu)
+#define CRS_SOL(s) (((unsigned)(s)->scale & CRS_SOLFEGE) ? 1u : 0u)
 /* Options > Key Touch, Velocity Sens, Aftertouch Sens (0.22; docs/VELOCITY.md) ride in bits 2..7 of the same byte:
  * bits 2-3 Key Touch (0 Fixed, the default: the keys send Options > Velocity, no sensing; 1 Dynamic: the keys'
  * velocity; 2 Velocity + Aftertouch), bits 4-5 Velocity Sens and bits 6-7 Aftertouch Sens (0 Mid, the default; 1 Low;
@@ -126,7 +136,13 @@ enum { CRS_USB_MASTER, CRS_USB_FIXED };
  * writes that); with it clear the byte is in its range and is read as before */
 #define CRS_SIXTH_UP 0x10u
 #define CRS_SIXTH(s) (((unsigned)(s)->pick_roots & CRS_SIXTH_UP) ? 1u : 0u)
-#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD | CRS_SIXTH_UP)   /* the byte's automatic bits (cr_settings_auto) */
+/* Options > Velocity Curve (0.22; docs/VELOCITY.md "fm1-ctl") rides in bits 5..7 of the same byte: the curve -3 .. +3
+ * as three bits of two's complement (0 = 0, the default: every older record's, no version; 5 6 7 = -3 -2 -1; 4 is
+ * not a value and reads as -3). A firmware up to 3y93 finds 32..255 out of range and takes its default for the byte */
+#define CRS_VCURVE_BITS 0xE0u
+#define CRS_VCURVE(s) ((int)(((unsigned)(s)->pick_roots >> 5) & 7u) >= 4 ? (int)(((unsigned)(s)->pick_roots >> 5) & 7u) - 8 : (int)(((unsigned)(s)->pick_roots >> 5) & 7u))
+#define CRS_VCURVE_OF(k) ((uint8_t)(((unsigned)(k) & 7u) << 5))
+#define CRS_PICK_AUTO (CRS_OUT_CLASSIC | CRS_USB_48K | CRS_NAMES_STD | CRS_SIXTH_UP | CRS_VCURVE_BITS)   /* the byte's automatic bits (cr_settings_auto) */
 
 typedef struct {
     /* header (12 bytes) */
@@ -138,7 +154,8 @@ typedef struct {
     uint8_t playstyle, extadd, secret, key_on;       /* cr_playstyle_t, cr_extadd_t, cr_secret_t, Key Mode (bit 0;
                                                       * v14: bit 1 Key plays Notes, bit 2 the Full keyboard; 0.22:
                                                       * bits 3 .. 4 Snap, CRS_SNAP) */
-    uint8_t tonic, scale;                            /* 0..11, cr_scale_t */
+    uint8_t tonic, scale;                            /* 0..11, cr_scale_t (bits 0..6; bit 7: Numerals' Solfege,
+                                                      * CRS_SOLFEGE, after 0.22) */
     int8_t transpose;                                /* -24..24 */
     uint8_t single;                                  /* cr_single_t: Full Octave / Split Oct / (v14) 2 Split Bass */
     uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (bit 0 always written 0: a firmware
@@ -238,8 +255,8 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
  * CR_BLOCK), so the block keeps its size and its layout and an older firmware reads a v15 block as it read v14's.
  * The record has its own header (magic, version, size, check: FNV-1a over [12, size)), the block's import rules (a
  * shorter, older record over the defaults; a longer, newer one by its prefix; anything else: the defaults = the unit as
- * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 142 of them unused today (46 in the
- * state, 20 after the FX block, 8 in each part, 60 at the end).
+ * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 126 of them unused today (46 in the
+ * state, 4 after the FX block, 8 in each part, 60 at the end).
  * `bind`: the CRC of the settings object in flash when the session was written (0: none). The session is used at
  * power-on if the settings block was read as current (written by a v15 firmware: an older one in between would have
  * left its own version there) or, with any other block, if the settings object is still the one the session was

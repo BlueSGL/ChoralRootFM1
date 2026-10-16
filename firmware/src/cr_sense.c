@@ -59,10 +59,19 @@ static uint32_t sn_log2(uint32_t x)
     f = ((x << 6) >> n) & 63u;                     /* the mantissa's top six bits */
     return (n << 8) + SN_LOG2F[f];
 }
-/* velocity = 1 + 126 (1 - t)^0.7 at t = i / 64 */
-static const uint8_t SN_CURVE[65] = {127, 126, 124, 123, 121, 120, 119, 117, 116, 114, 113, 111, 110, 108, 107, 106,
-    104, 103, 101, 99, 98, 96, 95, 93, 92, 90, 88, 87, 85, 84, 82, 80, 79, 77, 75, 73, 72, 70, 68, 66, 64, 63, 61, 59,
-    57, 55, 53, 51, 49, 47, 44, 42, 40, 38, 35, 33, 30, 28, 25, 22, 19, 16, 12, 8, 1};
+/* velocity = 1 + 126 (1 - t)^c at t = i / 64, c = 0.7 x 2^(0.2 k) for Options > Velocity Curve k = -3 .. +3 (the
+ * table k + 3; fm1-ctl's Curve, x 2 at +5: here x 1.5 at +3): higher, you play harder to reach 127; lower, softer
+ * playing reaches it. Generated: round(1 + 126 (1 - i / 64)^c) */
+static const uint8_t SN_CURVES[7][65] = {
+    /* -3: 0.462 */ {127, 126, 125, 124, 123, 122, 121, 120, 119, 118, 117, 116, 115, 114, 113, 112, 111, 110, 109, 108, 107, 106, 105, 104, 102, 101, 100, 99, 98, 96, 95, 94, 92, 91, 90, 88, 87, 86, 84, 83, 81, 80, 78, 76, 75, 73, 71, 69, 67, 65, 63, 61, 59, 57, 54, 52, 49, 46, 43, 40, 36, 32, 26, 19, 1},
+    /* -2: 0.531 */ {127, 126, 125, 124, 123, 122, 121, 119, 118, 117, 116, 115, 114, 113, 112, 110, 109, 108, 107, 106, 104, 103, 102, 100, 99, 98, 97, 95, 94, 92, 91, 90, 88, 87, 85, 84, 82, 81, 79, 78, 76, 74, 73, 71, 69, 67, 65, 63, 61, 59, 57, 55, 53, 51, 48, 46, 43, 40, 37, 34, 30, 26, 21, 15, 1},
+    /* -1: 0.609 */ {127, 126, 125, 123, 122, 121, 120, 118, 117, 116, 115, 113, 112, 111, 109, 108, 107, 105, 104, 103, 101, 100, 98, 97, 96, 94, 93, 91, 90, 88, 87, 85, 84, 82, 80, 79, 77, 75, 74, 72, 70, 69, 67, 65, 63, 61, 59, 57, 55, 53, 51, 49, 46, 44, 42, 39, 36, 34, 31, 28, 24, 21, 16, 11, 1},
+    /* +0: 0.700 */ {127, 126, 124, 123, 121, 120, 119, 117, 116, 114, 113, 111, 110, 108, 107, 106, 104, 103, 101, 99, 98, 96, 95, 93, 92, 90, 88, 87, 85, 84, 82, 80, 79, 77, 75, 73, 72, 70, 68, 66, 64, 63, 61, 59, 57, 55, 53, 51, 49, 47, 44, 42, 40, 38, 35, 33, 30, 28, 25, 22, 19, 16, 12, 8, 1},
+    /* +1: 0.804 */ {127, 125, 124, 122, 121, 119, 117, 116, 114, 113, 111, 109, 108, 106, 104, 103, 101, 99, 98, 96, 94, 93, 91, 89, 87, 86, 84, 82, 80, 79, 77, 75, 73, 71, 70, 68, 66, 64, 62, 60, 58, 56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 29, 27, 25, 22, 20, 17, 15, 12, 9, 5, 1},
+    /* +2: 0.924 */ {127, 125, 123, 122, 120, 118, 116, 114, 112, 111, 109, 107, 105, 103, 101, 99, 98, 96, 94, 92, 90, 88, 86, 85, 83, 81, 79, 77, 75, 73, 71, 69, 67, 66, 64, 62, 60, 58, 56, 54, 52, 50, 48, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 19, 17, 15, 13, 11, 8, 6, 4, 1},
+    /* +3: 1.061 */ {127, 125, 123, 121, 119, 117, 115, 112, 110, 108, 106, 104, 102, 100, 98, 96, 94, 92, 90, 88, 86, 84, 82, 80, 78, 75, 73, 71, 69, 67, 65, 63, 61, 59, 57, 55, 53, 51, 49, 47, 46, 44, 42, 40, 38, 36, 34, 32, 30, 28, 26, 24, 22, 20, 19, 17, 15, 13, 11, 9, 8, 6, 4, 3, 1},
+};
+static volatile uint8_t cr_touch_curve = 3;        /* Options > Velocity Curve + 3 (the UI writes it) */
 static uint8_t sn_velocity(uint32_t d)
 {
     uint32_t l0 = sn_log2(SN_FLOOR - SN_DBASE), l1 = sn_log2(SN_CEIL - SN_DBASE), l, i;
@@ -72,7 +81,7 @@ static uint8_t sn_velocity(uint32_t d)
         return 1;
     l = sn_log2(d - SN_DBASE);
     i = ((l - l0) * 64u + (l1 - l0) / 2u) / (l1 - l0);
-    return SN_CURVE[i > 64u ? 64u : i];
+    return SN_CURVES[cr_touch_curve > 6u ? 3u : cr_touch_curve][i > 64u ? 64u : i];
 }
 
 static void sn_driven(volatile sn_key_t *k, uint32_t v)
@@ -144,6 +153,7 @@ static uint32_t cr_sense_take(uint32_t k)
     return sn_key[k].vel;
 }
 
+#ifndef CR_SENSE_NO_HOOKS                        /* (the emulator feeds cr_sense_sample itself: tools/emu/emu_fw.c) */
 /* the tick's hooks (hal/fm1_input.h): the key at (col, rowbit) */
 static void cr_sense_hook(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven)
 {
@@ -161,6 +171,7 @@ static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit)   /* the key is o
     int id = FM1_KEYMAP[rowbit][col];
     return cr_touch_mode == CR_TOUCH_FIXED || id < 14 || sn_key[id - 14].st == SN_OPEN;
 }
+#endif
 
 /* Aftertouch (MONK-1's ui.c pressure(), in integers): pressing harder than the key RESTS. A key goes on settling
  * after it lands, so each held key's rest follows its driven reading down for SN_P_SETTLE ms, then creeps after it,

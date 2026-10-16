@@ -171,10 +171,10 @@ grep -aq '^save: part 0 slot U001 name ADG rc 0' "$R1" && [ "$(sf "$R1" 1)" = "s
     [ -n "$changed" ] && [ "$changed" = "$(sn "$R2" 1)" ] && [ "$(bpm "$R2")" != "" ] && grep -aq ' bpm 137 ' "$R2" &&
     ok "reset run 1 / 2: U01 saved; Advanced, 137 BPM, Key Mode on, Motion Off, Hold Time, Dual Core Off stored and back after a relaunch" \
     || bad "reset: the changed settings: $(sf "$R1" 1) / $changed / $(sn "$R2" 1)"
-[ "$(ov "$R2" 2)" = "1 28 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 28 of 29 " "$R2" &&
-    ok "Reset Settings is the last Options entry (28 of 28): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
-[ "$(ov "$R2" 3)" = "1 28 Reset Settings: OCT+ again: reset" ] && [ "$(ov "$R2" 4)" = "1 28 Reset Settings: all options to default" ] &&
-    [ "$(ov "$R2" 5)" = "0 28 Reset Settings: all options to default" ] && [ "$(ov "$R2" 6)" = "1 28 Reset Settings: all options to default" ] &&
+[ "$(ov "$R2" 2)" = "1 29 Reset Settings: all options to default" ] && grep -aq "options: open 1 entry 29 of 30 " "$R2" &&
+    ok "Reset Settings is the last Options entry (29 of 29): $OUT/reset_entry.ppm" || bad "the entry: $(ov "$R2" 2)"
+[ "$(ov "$R2" 3)" = "1 29 Reset Settings: OCT+ again: reset" ] && [ "$(ov "$R2" 4)" = "1 29 Reset Settings: all options to default" ] &&
+    [ "$(ov "$R2" 5)" = "0 29 Reset Settings: all options to default" ] && [ "$(ov "$R2" 6)" = "1 29 Reset Settings: all options to default" ] &&
     [ "$(sn "$R2" 3)" = "$changed" ] && [ "$(sn "$R2" 4)" = "$changed" ] && [ "$(sn "$R2" 5)" = "$changed" ] && [ "$(sn "$R2" 6)" = "$changed" ] &&
     ! grep -a '^options: settings reset' "$R2" | sed -n 2p | grep -q . &&
     ok "OCT+ asks (OCT+ again); another entry cancels; OCT- leaves and cancels; the menu reopened is not armed; nothing reset: $OUT/reset_ask.ppm" \
@@ -380,6 +380,19 @@ grep -q 'kbd: plays notes keyboard full single 2 ' "$OUT/persist_page2_1.log" &&
     [ "$(grep '^  part 1:' "$OUT/persist_page2_2.log" | sed -n 3p | sed -n 's/.* voices \([0-9]*\),.*/\1/p')" = 0 ] &&
     ok "KEY page 2 run 2: the three back after a relaunch (UI and engine), Numerals On with them; B3 a bass note of the left side, F4 the chord part" \
     || bad "KEY page 2 run 2: $(grep '  kbd:' "$OUT/persist_page2_2.log" | head -1)"
+
+# the KEY layer's Numerals = Solfege (GitHub issue 15): bit 7 of the block's scale (CRS_SOLFEGE), its own bit;
+# run 1 sets it and saves (SAVE held), run 2 (the same file): Solfege at power-on, G4 in C major reads SOL
+NFLASH=$OUT/persist_solfege_flash.bin
+rm -f "$NFLASH" "$OUT"/persist_solfege_1.log "$OUT"/persist_solfege_2.log
+"$EMU" --headless --flash "$NFLASH" --script "$S/persist_solfege_set.txt" >"$OUT/persist_solfege_1.log" 2>&1 || bad "Solfege run 1: exit status"
+"$EMU" --headless --flash "$NFLASH" --script "$S/persist_solfege_check.txt" >"$OUT/persist_solfege_2.log" 2>&1 || bad "Solfege run 2: exit status"
+grep -q '^  numerals: solfege ' "$OUT/persist_solfege_1.log" && grep -q "settings saves 1 " "$OUT/persist_solfege_1.log" &&
+    ok "Numerals Solfege run 1: KNOB 4 +2 on KEY page 2, the settings saved once" || bad "Solfege run 1: $(grep '^  numerals:' "$OUT/persist_solfege_1.log")"
+[ "$(grep -c '^  numerals: solfege ' "$OUT/persist_solfege_2.log")" = 2 ] && grep -q '^  numerals: solfege shown "SOL"' "$OUT/persist_solfege_2.log" &&
+    grep -q '(record: current)' "$OUT/persist_solfege_2.log" &&
+    ok "Numerals Solfege run 2: back after a relaunch (scale's bit 7); G4 in C major reads SOL" \
+    || bad "Solfege run 2: $(grep '^  numerals:' "$OUT/persist_solfege_2.log" | tr '\n' ' ')"
 
 # the engine picker's roots always play (0.18; until then Settings pick_roots, KNOB 4 in the picker: the byte is
 # reserved now, written 0): run 1 turns KNOB 4 there (nothing) and plays D4; run 2 (the same file) the same
@@ -745,8 +758,8 @@ ffl "$X4" 1 | grep -q 'favs: 2 marked, saves 0, pending 0 (at power-on: read), f
 # the single-core package: Options, the version, one core on a flash whose record says Dual Core On
 EMU_UI_LOG=1 "$E1" --headless --flash "$XF" --script "$S/persist_1core_opt.txt" >"$X5" 2>&1 || bad "two packages, Options: exit status"
 want1="$(grep -a -m1 '^  version:' "$X5" | sed -n "s/.* build '\(.*\)'$/\1/p") 1-core"
-grep -aq "^  options: open 1 entry 24 of 2[0-9] 'Dual Core' value '1 core build'" "$X5" &&
-    grep -aq "^  options: open 1 entry 26 of 2[0-9] 'Version' value '$want1'" "$X5" &&
+grep -aq "^  options: open 1 entry 25 of 3[0-9] 'Dual Core' value '1 core build'" "$X5" &&
+    grep -aq "^  options: open 1 entry 27 of 3[0-9] 'Version' value '$want1'" "$X5" &&
     grep -a -m1 '^  version:' "$X5" | grep -q "options '$want1' identity '$want1' " &&
     ok "the single-core package: Options > Dual Core '1 core build' (KNOB 1 changes nothing), Version and the SysEx identity '$want1': $OUT/persist_1core_opt.ppm, persist_1core_version.ppm" ||
     bad "the single-core package's Options: $(grep -a 'options: open 1' "$X5" | tr '\n' ' ') / $(grep -a -m1 '^  version:' "$X5")"
