@@ -4601,3 +4601,5 @@ to main (the releases test's tag), after the flash diet lands (the owner's choic
 **The owner** (2026-10-16, on 359d59a): "This Grain engine is fantastic! I'd like to get it merged in, but we'll decide
 post flash diet." So: the branch waits for the flash diet (the session "Flash diet: room for GRAIN in the 573 KB slot",
 from main f54850e = v0.23), then merges main and goes in on the owner's word.
+**And** (the owner, 2026-10-16, on the cuts offered: "Naw, lets keep GRAIN as is, not cuts"): GRAIN merges whole, its
+eight families, two LFOs and ENV 2; the room comes from the flash diet.
