@@ -4488,3 +4488,7 @@ the GRAIN / GRAIN+ edit8, FILT with the filter band, ENV with the AHDSR band ove
 platform's MOD routes; `--check`: 7 layout files are the firmware's.
 `CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 75 s; test_cr 1044 ok, test_persist 111,
 test_retired 18, test_pool 7, the layout test with the seven catalogs).
+**On the unit** (the owner, 2026-10-15: "Lets flash and try it"; the designer-handoff session flashed, by the rule): the
+unit runs this branch's 70bb639 (the package 520cd81c..., byte-identical to that session's rebuild) over the released
+0.22, `--unit 5BD75BE3`, a full backup first (`fm1-backups/fm1-backup-2026-10-15-before-grain.json`); after boot 128
+sounds present, `--debug` c1_state 1, c1_faults 0, c1_fallback 0. Not yet played by the owner.
