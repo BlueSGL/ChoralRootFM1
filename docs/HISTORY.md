@@ -4098,4 +4098,5 @@ screen changed (the draw goldens as they were). Not on the unit, not pushed: the
 **On the unit** (the owner, right after: "Is this on device can I try it? Please flash"): the unit runs this build
 (7398951, "ChoralRoot 0.22") over the 3dd4d6d Snap build, `tools/fm1_install.py build/choralroot.fwsc --backup`; the
 backup before it is `fm1-backups/choralroot-backup-20261015-steppreview.json` (the settings, the 128 user sounds, the
-favourites, loop slot 1). `--info` afterwards: "ChoralRoot 0.22". Not yet played by the owner.
+favourites, loop slot 1). `--info` afterwards: "ChoralRoot 0.22". The owner, after trying it: "This checks out, merge
+it": merged to main (a fast-forward of the branch: origin/main was still da1f8e2).
