@@ -19,7 +19,7 @@
   const KNOB = [["K1", "VOLUME", "#F6F2EE"], ["K2", "SELECT &middot; BPM", "#F6B600"], ["K3", "ALGORITHM &middot; BASS SND", "#F67918"],
     ["K4", "PRESETS &middot; SOUND", "#F6F2EE"], ["K5", "KNOB 1 &middot; VOICING", "#2950CD"], ["K6", "KNOB 2 &middot; BASS VOICE", "#F67918"],
     ["K7", "KNOB 3 &middot; PERFORM", "#F6F2EE"], ["K8", "KNOB 4 &middot; FX", "#29B27B"]];
-  const PAD = ["DIM", "MIN", "MAJ", "SUS", "Strum", "Strum 2 Oct", "Slop", "Harp", "6", "m7", "M7", "9", "LOCK", "Arpeggiate", "Arp 2 Oct", "Pattern"];
+  const PAD = ["DIM", "MIN", "MAJ", "SUS", "Strum", "Strum 2 Oct", "Slop", "Harp", "6", "m7", "M7", "9", "LOCK", "Arp", "Arp 2 Oct", "Pattern"];
   const FADER = ["DRIVE", "CHORUS", "DELAY", "REVERB"];
   const NOTE = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
   // the computer keyboard (the FM-1 emulator's map, ../keymap.js, on the SMK's parts): kind, hardware id

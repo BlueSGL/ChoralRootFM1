@@ -146,9 +146,18 @@ def read_meta(page):
         return None
 
 
-def make(args):
+def make(args, env=None):
     return subprocess.run([sys.executable, str(ROOT / "web" / "make_site.py"), *map(str, args)],
-                          capture_output=True, text=True)
+                          capture_output=True, text=True, env=env)
+
+
+def no_smk_env(env=None):
+    """the FM-1's --require-all builds without the SMK-37 list (smk_site() checks that part on its own list): an empty
+    web/releases-smk37.json, so that no SMK package of the tree's list is required of them"""
+    f = SCRATCH / "site-smk-none.json"
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps({"about": "none", "repo": RELEASES["repo"], "releases": []}), encoding="utf-8")
+    return {**(env or os.environ), "CR_SMK_RELEASES_JSON": str(f)}
 
 
 def versions(out, meta, want, stdout):
@@ -184,7 +193,7 @@ def versions(out, meta, want, stdout):
        and all(f'/tree/{r["tag"]}"' in idx for r in rel if r.get("tag")) and all(f'href="{x}"' in idx for x in ("LICENSE", "LICENSING.md", "LICENSES/")),
        "firmware/index.html: every package, its sha256, its source at its tag, the licences")
     ok(not any(f"choralroot-{v}.fwsc" in idx or (fw / f"choralroot-{v}.fwsc").exists() for v in ("0.14", "0.15")), "firmware/: 0.14 and 0.15 are not published")
-    ok(stdout.count("skipped: ") == len(RELEASES["releases"]) - len([w for w in want if w["version"] != VERSION]) + len(skipped1),
+    ok(stdout.count("skipped: ") - stdout.count("skipped: SMK ") == len(RELEASES["releases"]) - len([w for w in want if w["version"] != VERSION]) + len(skipped1),
        "make_site.py: one \"skipped:\" line for each listed version without a package")
 
 
@@ -242,7 +251,7 @@ def one_core():
     top.pop("going_back", None)
     top.pop("beta", None)                           # (9.9 is a stable version, whatever the first entry is)
     lst.write_text(json.dumps({**RELEASES, "releases": [top] + RELEASES["releases"]}), encoding="utf-8")
-    env = {**os.environ, "CR_RELEASES_JSON": str(lst)}
+    env = no_smk_env({**os.environ, "CR_RELEASES_JSON": str(lst)})
     run = lambda *a: subprocess.run([sys.executable, str(ROOT / "web" / "make_site.py"), *map(str, a)], capture_output=True, text=True, env=env)
     r = run(PKG, "9.9", out, "--packages", pk)
     if not ok(r.returncode == 0, "1-core: make_site.py builds a release with a single-core package"):
@@ -301,7 +310,7 @@ def beta_site():
     stable = {**base, "version": "9.8", "tag": "v9.8", "sha256": hashlib.sha256(old).hexdigest(),
               "bullets": ["The stable one: what a visitor gets without the opt-in."]}
     lst.write_text(json.dumps({**RELEASES, "releases": [beta, stable]}), encoding="utf-8")
-    env = {**os.environ, "CR_RELEASES_JSON": str(lst)}
+    env = no_smk_env({**os.environ, "CR_RELEASES_JSON": str(lst)})
     run = lambda *a: subprocess.run([sys.executable, str(ROOT / "web" / "make_site.py"), *map(str, a)], capture_output=True, text=True, env=env)
     (emu / "index.html").write_text("<!doctype html><title>emu</title>\n", encoding="utf-8")
     (emu / "version.txt").write_text("ChoralRoot 9.9-beta1\n", encoding="utf-8")
@@ -337,7 +346,7 @@ def beta_site():
 def release_site(cur):
     """the site as the Pages job builds it: the newest release as the current version, every listed version required"""
     out = SCRATCH / "site-release"
-    r = make([PKG, cur["version"], out, "--packages", PACKAGES, "--require-all"])
+    r = make([PKG, cur["version"], out, "--packages", PACKAGES, "--require-all"], env=no_smk_env())
     if not ok(r.returncode == 0, f"make_site.py --require-all builds the site for {cur['version']} (build/scratch/site-release)"):
         print(r.stdout + r.stderr)
         return

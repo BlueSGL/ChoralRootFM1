@@ -5345,3 +5345,23 @@ FM-1_920", "unit ID 5BD75BE3: the same FM-1 after the restart". After: `--info` 
 version: ChoralRoot 0.24-beta3`, unit ID 5BD75BE3; `--sounds` all 128 slots read on ChoralRoot 0.24-beta3 (83 hold a
 sound), U033 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0. Not tagged, not
 pushed: the orchestrator pushes main and the tags v0.24-beta3 and v0.24-beta3-smk37.
+
+3y158. **The SMK-37 emulator laid out as the keyboard (2026-10-16; the owner, with a screenshot of the page and a photo of
+the SMK-37 Pro: "Our emulator looks like that, The SMK looks like the second image. I'd like our emulator layout to
+match. The emulated version should also use the whole width of the page.").** `tools/emu/web/smk/index.html`: the
+panel is one band as on the unit, a grid of three columns: the PITCH and MOD wheels beside the screen with its six
+buttons in a 2 x 3 block under it; K1..K8 in one row over the 16 pads in two rows of eight, a pad column under each
+knob, the block taking the width that is left (the pads keep their shape: aspect ratio 1.45); the four faders over the
+2 x 6 buttons (24 vw, 300 .. 470 px); the 37 keys full width under the whole band (11 vw high, 130 .. 240 px). No
+max-width: the page uses the window's width. The screen at whole pixels: 240 px, 480 from 2400 px wide (until now 360
+from 1700, a 1.5 scale). Under 900 px the band wraps into wheels and screen, knobs and pads, faders and buttons, the
+keybed staying full width. The pads' labels scale with the window and stay inside their pad; Arpeggiate's pad reads
+Arp beside Arp 2 Oct. Colours, labels with the ChoralRoot roles, key hints, the computer keys and every behaviour as
+they were. Checked headless (Chromium --headless=new, stopped by its PID) at 1920, 1280 and 800 px:
+build/emu-web-smk37-test/page-1920.png, page-1280.png, page-800.png. `node tools/emu/web/test_web_emu_smk.mjs` PASS (its
+screenshot reads no positions). tests/site_test.py, found on the way: its FM-1 checks took in the SMK list of the tree (web/releases-smk37.json, now
+with 0.24-beta3-smk37 too): a worktree without every listed SMK package failed the "skipped:" count (an SMK line among
+the FM-1's) and the beta site's --require-all; the count leaves the SMK lines out, and the FM-1's --require-all builds
+(the beta, the single core, the Pages build) run on an empty SMK list (no_smk_env), smk_site() keeping its own.
+`CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (23 suites, 86 s; test_cr 1063 ok, 317 golden renders
+unchanged); `./build.sh` last: XIP 537 804, the package 5f1102a1... (main's).
