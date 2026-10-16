@@ -129,9 +129,10 @@ static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n
  *   FL_SMP 0xC2000..0xE9FFF (USRFLASH, the stock's user area, 40 sectors: ChoralRoot has no samples)
  *     0xC2000..0xD1FFF  OBJ_CZBANK0..+7      0xD2000..0xE5FFF the loop slots (cr_ui.c CRL_FL_BASE, 2 x CRL_SLOTS)
  *     0xE6000..0xE9FFF  the sound pool's sectors 5..8
- *   FL_TAIL 0xEA000..0xF0FFF (the free tail after it, 7 of its 10 sectors)
- *     0xEA000..0xF0FFF  the sound pool's sectors 9..15 (0xF1000..0xF3FFF stay free)
- * The pool's 16 floating sectors are two runs (sp_addr): 5 in FL_DATA, 11 from 0xE6000 on. */
+ *   0xEA000 (USRFLASH's last sector: the stock firmware's end marker, no data of ChoralRoot's)
+ *   FL_TAIL 0xEB000..0xF1FFF (the free tail after it, 7 of its 9 sectors)
+ *     0xEB000..0xF1FFF  the sound pool's sectors 9..15 (0xF2000..0xF3FFF stay free)
+ * The pool's 16 floating sectors are three runs (sp_addr): 5 in FL_DATA, 4 at FL_SMP's end, 7 in FL_TAIL. */
 #define ST_SMK_BASE 0x9D000u
 #define ST_SMK_PAIRS 9u                        /* the pairs below the owner tag */
 #define ST_SMK_SECTORS (2u * ST_SMK_PAIRS)
@@ -143,13 +144,16 @@ static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n
 #define ST_SMK_LOOP_SECTORS 20u
 #define ST_SMK_POOL0 0xB6000u                  /* the sound pool: sectors 0 .. ST_SMK_POOL0_N - 1 in FL_DATA */
 #define ST_SMK_POOL0_N 5u
-#define ST_SMK_POOL1 0xE6000u                  /* .. the rest from the end of FL_SMP into FL_TAIL */
-#define ST_SMK_POOL1_N 11u
+#define ST_SMK_POOL1 0xE6000u                  /* .. sectors 5..8 at the end of FL_SMP */
+#define ST_SMK_POOL1_N 4u
+#define ST_SMK_POOL2 0xEB000u                  /* .. sectors 9..15 in FL_TAIL */
+#define ST_SMK_POOL2_N 7u
 /* every place of ChoralRoot's data on the SMK (base, sectors): the owner check and Options > Flash Data clear these
  * (the owner tag is not one of them) */
 static const uint32_t ST_SMK_REGIONS[][2] = {{ST_SMK_BASE, ST_SMK_SECTORS}, {ST_SMK_HIGH, ST_SMK_HIGH_SECTORS},
                                              {ST_SMK_CZB, ST_SMK_CZB_SECTORS}, {ST_SMK_LOOPS, ST_SMK_LOOP_SECTORS},
-                                             {ST_SMK_POOL0, ST_SMK_POOL0_N}, {ST_SMK_POOL1, ST_SMK_POOL1_N}};
+                                             {ST_SMK_POOL0, ST_SMK_POOL0_N}, {ST_SMK_POOL1, ST_SMK_POOL1_N},
+                                             {ST_SMK_POOL2, ST_SMK_POOL2_N}};
 #if FELUCCA_CZ && FELUCCA_QUAD
 _Static_assert(OBJ_COUNT == 20u && OBJ_FAVS + 1u == OBJ_COUNT, "SMK store: a new object needs a place");
 #endif
@@ -160,8 +164,9 @@ _Static_assert(ST_SMK_HIGH >= 0xAF000u + ST_SECTOR && ST_SMK_HIGH + ST_SMK_HIGH_
 _Static_assert(ST_SMK_POOL0 + ST_SMK_POOL0_N * ST_SECTOR <= FL_DATA_HI, "SMK store: the pool's first run past FL_DATA");
 _Static_assert(ST_SMK_CZB >= FL_SMP_LO && ST_SMK_CZB + ST_SMK_CZB_SECTORS * ST_SECTOR <= ST_SMK_LOOPS &&
                ST_SMK_LOOPS + ST_SMK_LOOP_SECTORS * ST_SECTOR <= ST_SMK_POOL1, "SMK store: past the loops");
-_Static_assert(ST_SMK_POOL1 + ST_SMK_POOL1_N * ST_SECTOR <= FL_TAIL_HI && FL_SMP_HI == FL_TAIL_LO &&
-               ST_SMK_POOL1 >= FL_SMP_LO, "SMK store: the pool's second run past FL_TAIL");
+_Static_assert(ST_SMK_POOL1 + ST_SMK_POOL1_N * ST_SECTOR == FL_SMP_HI, "SMK store: the pool's second run past FL_SMP");
+_Static_assert(ST_SMK_POOL2 == FL_TAIL_LO && ST_SMK_POOL2 + ST_SMK_POOL2_N * ST_SECTOR <= FL_TAIL_HI,
+               "SMK store: the pool's third run outside FL_TAIL");
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
     copy &= 1u;
@@ -473,7 +478,7 @@ static int st_save(uint32_t obj, const void *src, uint32_t len)
 
 #if FELUCCA_CZ && FELUCCA_QUAD && ((defined(UP_POOL) && UP_POOL) || defined(SP_TEST))   /* (core.h UP_POOL; tests/pool_test.c) */
 /* ---- THE SOUND POOL (ChoralRoot 0.22: docs/PRESETS.md "The pool"): FLOATING objects ----
- * 0xB8000..0xC7FFF (SMK-37: two runs, sp_addr), SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
+ * 0xB8000..0xC7FFF (SMK-37: three runs, sp_addr), SP_NSEC sectors, hold SP_NBANK logical banks of SP_PER slots of SP_SLOT bytes (upool.c: a slot is
  * a user record and one engine's patch). A sector is a bank's copy when its st_hdr_t is valid: ST_MAGIC, type SP_TYPE,
  * slot = the logical bank, len ST_PAYLOAD_MAX, rsv[0] SP_VER, the header CRC; and its payload's CRC matches.
  * LOAD (sp_scan): per bank the valid copy with the newest seq wins (serial arithmetic, so seq wraps; equal seq,
@@ -505,10 +510,13 @@ static uint32_t sp_erases, sp_progs;            /* (the host test's counters: er
 
 static inline int sp_newer(uint32_t a, uint32_t b) { return a != b && a - b < 0x80000000u; }
 #if BOARD_SMK37
-_Static_assert(ST_SMK_POOL0_N + ST_SMK_POOL1_N == SP_NSEC, "SMK store: the pool's two runs hold its sectors");
-static uint32_t sp_addr(uint32_t s)             /* (SMK-37: two runs, ST_SMK_POOL0 / ST_SMK_POOL1 above) */
+_Static_assert(ST_SMK_POOL0_N + ST_SMK_POOL1_N + ST_SMK_POOL2_N == SP_NSEC, "SMK store: the pool's runs hold its sectors");
+static uint32_t sp_addr(uint32_t s)             /* (SMK-37: three runs, ST_SMK_POOL0 / 1 / 2 above) */
 {
-    return s < ST_SMK_POOL0_N ? ST_SMK_POOL0 + s * ST_SECTOR : ST_SMK_POOL1 + (s - ST_SMK_POOL0_N) * ST_SECTOR;
+    if (s < ST_SMK_POOL0_N)
+        return ST_SMK_POOL0 + s * ST_SECTOR;
+    s -= ST_SMK_POOL0_N;
+    return s < ST_SMK_POOL1_N ? ST_SMK_POOL1 + s * ST_SECTOR : ST_SMK_POOL2 + (s - ST_SMK_POOL1_N) * ST_SECTOR;
 }
 #else
 static uint32_t sp_addr(uint32_t s) { return SP_BASE + s * ST_SECTOR; }

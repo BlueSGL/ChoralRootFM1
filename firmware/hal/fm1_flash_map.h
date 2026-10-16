@@ -32,9 +32,9 @@
  *   0xC1000-0xC1FFF  USRTRIM (key/pad/wheel calibration, "trimdat")   NEVER
  *   0xC2000-0xE9FFF  USRFLASH: the CZ-1 banks, the loop slots, the sound pool's sectors 5..8 (storage.c, cr_ui.c)
  *                                                                                  FL_SMP
- *   0xEA000-0xF0FFF  the free tail (USRFLASH's last sector, then unlisted): the sound pool's sectors 9..15 (0.24)
- *                                                                                  FL_TAIL
- *   0xF1000-0xF3FFF  free (unlisted), unused
+ *   0xEA000-0xEAFFF  USRFLASH's last sector: the stock firmware's end marker; no data of ChoralRoot's
+ *   0xEB000-0xF1FFF  the free tail (unlisted): the sound pool's sectors 9..15 (0.24)       FL_TAIL
+ *   0xF2000-0xF3FFF  free (unlisted), unused
  *   0xF4000-0xFDFFF  USR (stock resources; kept for a rollback)   NEVER
  *   0xFE000-0xFEFFF  free, unused
  *   0xFF000-0xFFFFF  key_mac                        NEVER
@@ -57,8 +57,8 @@
 #define FL_OTA_HI       0x000C0000u
 #define FL_SMP_LO       0x000C2000u                /* USRFLASH: the CZ-1 banks, the loop slots */
 #define FL_SMP_HI       0x000EA000u
-#define FL_TAIL_LO      0x000EA000u                /* the free tail after FL_SMP: the sound pool's last 7 sectors */
-#define FL_TAIL_HI      0x000F1000u
+#define FL_TAIL_LO      0x000EB000u                /* the free tail after USRFLASH: the sound pool's last 7 sectors */
+#define FL_TAIL_HI      0x000F2000u
 /* a window [lo, hi) is allowed: sector aligned, non-empty, and clear of every protected range */
 #define FL_WIN_SAFE(lo, hi) ((lo) % 0x1000u == 0u && (hi) % 0x1000u == 0u && (lo) < (hi) && \
                              (lo) >= FL_HEAD_HI && (hi) <= FL_KEYMAC_LO && \
@@ -69,6 +69,7 @@ _Static_assert(FL_WIN_SAFE(FL_OTA_LO, FL_OTA_HI), "SMK: FL_OTA overlaps a protec
 _Static_assert(FL_WIN_SAFE(FL_SMP_LO, FL_SMP_HI), "SMK: FL_SMP overlaps a protected range");
 _Static_assert(FL_WIN_SAFE(FL_TAIL_LO, FL_TAIL_HI) && FL_TAIL_HI <= FL_USRRES_LO,
                "SMK: FL_TAIL overlaps a protected range (the stock resources from 0xF4000)");
+_Static_assert(FL_TAIL_LO == FL_SMP_HI + 0x1000u, "SMK: FL_TAIL starts after USRFLASH's last sector (0xEA000)");
 _Static_assert(FL_WIN_SAFE(FL_APP_LO, FL_APP_HI), "SMK: FL_APP overlaps a protected range");
 _Static_assert(FL_WIN_SAFE(FL_REC_LO, FL_REC_HI), "SMK: FL_REC overlaps a protected range");
 _Static_assert(FL_REC_HI == FL_CAL_LO && FL_OTA_HI <= FL_REC_HI && FL_OTA_LO >= FL_REC_LO,
@@ -76,7 +77,7 @@ _Static_assert(FL_REC_HI == FL_CAL_LO && FL_OTA_HI <= FL_REC_HI && FL_OTA_LO >= 
 _Static_assert(FL_DATA_HI <= FL_OTA_LO && FL_APP_HI <= FL_DATA_LO, "SMK: windows overlap");
 /* the update loader (loader.c): the app area, and records only in the VM below BTIF */
 #define FL_LDR_RANGE_OK(off, n) (FL_IN(off, n, FL_APP_LO, FL_APP_HI) || FL_IN(off, n, FL_REC_LO, FL_REC_HI))
-/* ChoralRoot's own store: FL_DATA, USRFLASH and the tail after it */
+/* ChoralRoot's own store: FL_DATA, USRFLASH and the tail after its last sector */
 #define FL_STORE_OK(off, n) (FL_IN(off, n, FL_DATA_LO, FL_DATA_HI) || FL_IN(off, n, FL_SMP_LO, FL_SMP_HI) || \
                              FL_IN(off, n, FL_TAIL_LO, FL_TAIL_HI))
 #ifndef FL_RANGE_OK

@@ -5,8 +5,8 @@
  * simulated flash with another firmware's store, an untagged one and ChoralRoot's own; only ChoralRoot's data sectors
  * (ST_SMK_REGIONS) and the tag sector are ever erased, ours is kept, the staging area, the calibration and the rest
  * are never touched. The family is FELUCCA_DATA_FAMILY (build.py: CHORAL). 0.24: the regions take in the favourites
- * and the sound pool's two runs (0xB4000..0xBAFFF, 0xE6000..0xF0FFF); the free tail after them (0xF1000..0xF3FFF),
- * the stock resources and key_mac stay as they are. */
+ * and the sound pool's runs (0xB4000..0xBAFFF, 0xE6000..0xE9FFF, 0xEB000..0xF1FFF); USRFLASH's last sector 0xEA000,
+ * the free tail's rest (0xF2000..0xF3FFF), the stock resources and key_mac stay as they are. */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -64,8 +64,10 @@ static void fill(void)
                                                     * the pool's first run */
     memset(nor + 0xBB000, 0x55, 0x5000);           /* the staging (the loader the stub hands over to): never */
     memset(nor + 0xC1000, 0x33, 0x1000);           /* USRTRIM: never touched */
-    memset(nor + 0xC2000, 0x44, 0x2F000);          /* the CZ-1 banks, the loop slots, the pool's second run */
-    memset(nor + 0xF1000, 0x66, 0x3000);           /* the rest of the free tail: not ChoralRoot's, never touched */
+    memset(nor + 0xC2000, 0x44, 0x28000);          /* the CZ-1 banks, the loop slots, the pool's second run */
+    memset(nor + 0xEA000, 0x99, 0x1000);           /* USRFLASH's last sector (the stock marker's): not ChoralRoot's */
+    memset(nor + 0xEB000, 0x44, 0x7000);           /* the pool's third run, in FL_TAIL */
+    memset(nor + 0xF2000, 0x66, 0x2000);           /* the rest of the free tail: not ChoralRoot's, never touched */
     memset(nor + 0xF4000, 0x77, 0xA000);           /* USR, the stock resources: never touched */
     memset(nor + 0xFF000, 0x88, 0x1000);           /* key_mac: never touched */
 }
@@ -79,11 +81,13 @@ static int all(uint32_t lo, uint32_t hi, uint8_t v)
 }
 static int store_erased(void)
 {
-    return all(0x9D000, 0xAF000, 0xFF) && all(0xB0000, 0xBB000, 0xFF) && all(0xC2000, 0xF1000, 0xFF);
+    return all(0x9D000, 0xAF000, 0xFF) && all(0xB0000, 0xBB000, 0xFF) && all(0xC2000, 0xEA000, 0xFF) &&
+           all(0xEB000, 0xF2000, 0xFF);
 }
 static int others_kept(void)
 {
-    return all(0xBB000, 0xC0000, 0x55) && all(0xC1000, 0xC2000, 0x33) && all(0xF1000, 0xF4000, 0x66) &&
+    return all(0xBB000, 0xC0000, 0x55) && all(0xC1000, 0xC2000, 0x33) && all(0xEA000, 0xEB000, 0x99) &&
+           all(0xF2000, 0xF4000, 0x66) &&
            all(0xF4000, 0xFE000, 0x77) && all(0xFF000, 0x100000, 0x88);
 }
 static int tagged(void)
@@ -103,7 +107,7 @@ int main(void)
     st_owner_check();
     check("another family's store (FELUCCA): every ChoralRoot data sector cleared, tagged ours",
           store_erased() && st_owner_cleared && tagged());
-    check("... the staging, the calibration (USRTRIM), the free tail's rest, USR and key_mac untouched", others_kept());
+    check("... the staging, USRTRIM, 0xEA000, the free tail's rest, USR and key_mac untouched", others_kept());
     fill();
     memcpy(nor + 0xAF000, "SMK37DATASLOOP\0", 16);
     st_owner_cleared = 0;
@@ -113,10 +117,12 @@ int main(void)
     fill();
     st_owner_check();                              /* tag the store ours (an untagged one: cleared first) */
     memset(nor + 0x9D000, 0x11, 0x12000);
-    memset(nor + 0xC2000, 0x44, 0x2F000);
+    memset(nor + 0xC2000, 0x44, 0x28000);
+    memset(nor + 0xEB000, 0x44, 0x7000);
     st_owner_cleared = 0;
     st_owner_check();
-    check("our own store: kept as it is", all(0x9D000, 0xAF000, 0x11) && all(0xC2000, 0xF1000, 0x44) &&
+    check("our own store: kept as it is", all(0x9D000, 0xAF000, 0x11) && all(0xC2000, 0xEA000, 0x44) &&
+          all(0xEB000, 0xF2000, 0x44) &&
           !st_owner_cleared && tagged());
     fill();
     st_owner_check();
