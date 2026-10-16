@@ -5482,3 +5482,37 @@ SMK37.md: the packages, the version a player sees, the install command, the rele
 six packages' sha256s against build/release-smk37); run_tests' SMK hooks (smk_flash_test, smk_owner_test, the package
 tests) green; `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES PASSED (23 suites, 90 s); `./build.sh` last (the FM-1
 package 5f1102a1..., main's). Not tagged, not pushed (the orchestrator tags v0.24-beta3-smk37.1 and pushes main).
+
+## 2026-10-16 (the chord layouts: Classic and FM-1, the design)
+
+3y155. **Options > Chord Layout: Classic / FM-1, designed (docs/CHORD-LAYOUT.md; no firmware).** The owner wants a
+second layout for the FM-1's keybed and settled it with the orchestrator; their decisions, recorded as decided: Classic
+(today's, the Orchid's) stays the default. FM-1: F#3 G#3 A#3 = DIM MIN MAJ, F3 G3 A3 B3 = 6 m7 M7 9, C4 .. G5 roots (20:
+C4 and C#4 become roots), **SUS = G# + A# held together, always** (one finger on both), whatever Secret Chords says;
+with Secret Chords on each secret chord keeps its Classic key (F# + G# + A# the power chord, F# + G# m add4, F# + A#
+augmented), off: only the pair combines, the other pairs last pressed wins. **The combine window** (the owner: "maybe
+even 50ms or more"): a chord starts at once, and a partner landing within the window makes it SUS in place, the third
+moving to the fourth, no restrike; a G# or A# held from earlier never waits; an Option, 30 .. 80 ms, default 50.
+**LOCK on LFO** (tap on / off, held the LOCK layer), **GLO + LFO = LATCH**; a latched SUS is two lit keys and the same
+pair again alone switches it off; the LFO light steady for LOCK, pulsing while LATCH is on; `Latch` stays on the
+screen; no LOCK inside the sound editor (LFO is the editor's there: fine). The picking keys in layers stay on D4 ..
+G5 in both layouts (the default, a question the owner may revisit). MIDI in that plays the keys follows the layout.
+**The Full keyboard, both layouts**: KNOB 1 is the voicing (the octave stays on OCT- / OCT+); a new Option, Full
+keyboard shortcuts (Off): F#5 the layout's chord keys on the low keys, G5 a chord on every key (the latch's, else Key
+Mode's), both toggling on a quick press and switching while held on a long one, the roots ending at F5 while the chord
+keys show, F3 .. F5 notes. Unchanged: loops (chords, not keys), the looper, chord names, the voicing rules, Key Mode's
+scale picks on G#3 / A#3. **Found in the code**: no MIDI message plays the keys today (`cr_out.c cr_midi_in` sends the
+Perform channel's notes to the sound directly, `trk_note_on`; the emulators' MIDI goes the same way), so decision 7 is
+a rule for any later path (enter at `cu_key_press`); the calibration names no key (buttons and knobs by their print:
+nothing to change); `web/editor.html` has no keybed (its CHRD / VOIC are Felucca's). The doc works out the window
+(the gesture from the key's scan stamp, the amend as Add Note's diff with Play Chord ignored, the looper amending its
+event by serial, the root-and-pair orders, Advanced / Free, LOCK's pre-gesture latch, Key Mode), the combo table, the
+UI-to-engine resolver (and a held-not-pressed `CRE_MOD` down so a pair let go one key at a time does not re-strike),
+the settings (six spare bits of the block's `sticky`: layout bit 1, shortcuts bit 2, window bits 3 .. 6 as (ms - 50) /
+5; zero the defaults, no version; an older firmware's `CRS_FIX(sticky, 0, 1)` reads such a byte as LATCH off and stays
+Classic; hidden on the SMK-37), every place that reads the chord block's keys with what it needs, the cost (estimated
+XIP +2.5 .. 4 KB of ~36 KB, RAM ~24 B, settings and session 0 bytes), the tests the build needs and 15 open questions.
+The pictures: `design/chord-layout-mockups.html` (the LCD at 240 x 240 in the MOD palette and Inter Tight; the
+keybeds with their LED levels) rendered with headless Chromium to `design/chord-layout-mockups.png`: the two layouts,
+the three Options, the LOCK layer from LFO, the LFO light blinking / pulsing, SUS latched, the window's timeline, a
+secret chord, the Full keyboard with the shortcuts and the chord keys showing (both layouts). Not built, not pushed.
