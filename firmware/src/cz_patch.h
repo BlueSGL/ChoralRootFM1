@@ -10,7 +10,7 @@
 typedef struct { uint8_t raw[CZ_BYTES]; } cz_patch_t;
 
 /* an LZ4 block (tools/lz4blk.py's format: literals and matches, no frame) into dst, n bytes: the factory bank's tones
- * (melodee_cz1.h CZ_FACTORY_LZ4, 3y127). The packer's blocks are well formed; a bad one leaves the rest of dst as it
+ * (melodee_cz1.h CZ_FACTORY_LZ4, 3y129). The packer's blocks are well formed; a bad one leaves the rest of dst as it
  * was and stops at its end */
 static void cz_lz4_block(const uint8_t *src, uint32_t len, uint8_t *dst, uint32_t n)
 {

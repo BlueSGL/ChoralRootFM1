@@ -4557,7 +4557,66 @@ input and PA6 driven on the tick and both back at the take, the pressed state pa
 frame), `cr_sense_test.c`'s probe case (a touch reads ~20, a firm press 127, let go 0), `cr_settings_test` (mode 3
 kept). Not flashed; XIP 96.4 %.
 
-3y124. **The flash diet, 1: FM TONE's HARM tables halved in flash (2026-10-16; the owner: "Lets roll with the diet":
+3y124. **The velocity's wait with the probe on (2026-10-16; the designer-handoff session's release agent, reading
+3y123 before v0.24-beta1: "the probe's third frame phase moves the lower keys' analog-row sampling from 2.2 ms to
+3.3 ms, so F3..C5's velocity arrives ~13 ms after the touch instead of ~8.8 ms, but cu_scan_keys still waits only
+12 ms").** Real: four samples at 3.3 ms are 13.2 ms after the touch sample, up to 16.5 after the contact, 15.4 after
+the earliest debounce; past the wait a press played at the recent velocity, so a soft and a hard F3 .. C5 would have
+read alike on the unit. `CU_VEL_WAIT_MS` 12 -> 18. The emulator feeds the analog rows every 3 ms while the probe is
+on (it fed every 2), so `cr_touch.txt`'s "30 sensed" / "120 sensed" now stand for the probe's cadence. The better
+answer, not built: the probe's phase only while a top key is down (its baseline kept from a slower cycle), which would
+give the lower keys their 2.2 ms back.
+
+3y125. **0.24-beta1's release tree (2026-10-16; branch rel-24b1 from 646abb5, then origin/main 4fd569b merged in; not
+pushed, not tagged, not flashed).** The owner: "tag latest Velocity improvements as v0.24-beta1". What is new since
+v0.23 (`git log v0.23..`: 3y123 and 3y124 for the player; 3y122's tail is the release's record): the top seven keys
+sensing velocity through the PA10 probe, Key Touch's fourth value Vel + Poly AT, GEEK OUT 2's `VEL / AT` line, and
+the probe's price, the lower keys read every 3.3 ms, so with Key Touch on an F3 .. C5 note waits ~13 ms after the
+touch sample for its velocity instead of 8.8 (3y124's `CU_VEL_WAIT_MS` 18 covers it) and a top key a few ms for its
+two probe readings (it played at the debounce before). The Velocity Curve is 0.23's (3y112), not new. `cu_key_vel`'s
+fallback to the context velocity for a sensed key without a reading (3y123) is left out of the notes: with the 18 ms
+wait no ordinary press reaches it. This release agent's reading of 3y123 found the 12 ms wait too short (4 samples
+at 3.3 ms against a wait from the debounce); the velocity session fixed it on main as 3y124 (4fd569b), merged here
+(HISTORY's one conflict: theirs kept as 3y124, this entry renumbered from 3y124; the first commit of this branch,
+ba915e6, still names it 3y124 in its message). `FELUCCA_VERSION` "ChoralRoot 0.24" (the dev build reads as the next
+stable version, as the 0.22 betas' trees read 0.22; HANDOFF's state line says so). `docs/releases/0.24-beta1.md`: the
+opening (a first beta of 0.24, opt-in, may have bugs, 0.24 replaces it; updating from 0.23 keeps everything; with Key
+Touch Fixed nothing changes); Playing (the top seven: velocity, coarser than F3 .. C5, no aftertouch, the Velocity
+Curve not theirs, Velocity Sens is; Vel + Poly AT; Geek Out 2's line; notes a few ms later with Key Touch on);
+Installing (the opt-in, from 0.22 or older, the single-core package and its shortened version line); Going back to
+0.23 (0.23's `crs_sanitize` reads Key Touch 3 as "not a mode" and clears bits 2..3 alone: Fixed there, the
+sensitivities, the Curve and Numerals kept; once 0.23 saves its settings, Fixed on return; 0.22 the same, plus 0.23's
+own notes). `docs/releases/0.24.md` started as the pointer to it (no 0.24.md existed, so no "merged after 0.23"
+lines to fold in). `web/releases.json`: 0.24-beta1 first, `"beta": true`, 6 bullets, 3 notes (the beta disclaimer
+first); 0.23 stays the newest stable, without a going-back note. Nothing in make_site.py, the installer or the tests
+assumes a beta is of the stable version: `front()`, `news_html()` and `emu_line()` take the first entry without
+`"beta"`, the page's `newest` the same, and site_test's `beta_site` (9.9-beta1 over 9.8) and test_installer's
+9.0-beta1 already are betas of a newer version; no change. **Built** from the merged tree: `./build.sh --release
+0.24-beta1` twice (the first folder moved aside), the same SHA256SUMS: `choralroot-0.24-beta1.fwsc`
+409cfc6fcbc9a00a..., `choralroot-0.24-beta1-1core.fwsc` 570a73bf0d78c4e8... (before the merge: efaebdf1... /
+bab98b02..., replaced); the apps carry `ChoralRoot 0.24-beta1` and `ChoralRoot 0.24-beta1 1-core` (Options > Version:
+`0.24-beta1 1-core`, `cu_version_text`); the stub version 3, baee55ed142fe1cc. Size: XIP 552 876 B of 573 440
+(96.4 %), RAM 78 752 (80.1 %), POOL 239 180 (69.5 %), RAMTEXT 7 072 of 24 576; the single-core package XIP 550 364
+(96.0 %), RAM 75 616 (76.9 %), POOL 239 052 (69.5 %). Python 3.11.6, Pillow 11.1.0, fontTools 4.66.1: release.yml's
+pins. **Checked** (on the merged tree, after the notes, releases.json and HANDOFF were final): `CR_VERSION=0.24 sh
+tests/run_all.sh` ALL SUITES PASSED (22 suites, 81 s; test_cr 1056 ok, test_persist 113, test_retired 18, test_pool
+7; 313 goldens unchanged; 0 lint); releases_test ALL OK with `CR_PACKAGES_DIR=build/release-0.24-beta1` (both sha256
+match) and with all 20 listed packages (copied from earlier worktrees' build folders, each only with its listed
+sha256; nothing downloaded); site_test ALL OK alone, and with the beta package as `build/choralroot.fwsc` and every
+package (`--require-all` builds the site for 0.24-beta1: "New in 0.23", a download link for every stable version and
+none for a beta); test_installer; the browser emulator built as 0.24-beta1, test_web_emu PASS. **The Pages job,
+simulated** (its steps from local files into build/scratch, no layout viewer as the job builds none): SHA256SUMS
+against the package, the first entry 0.24-beta1, all 13 versions' packages and the 7 single-core ones with their
+sha256, `make_site.py --require-all`; the landing page "Version 0.23", "Install 0.23 directly", "New in 0.23", its
+Download and command line 0.23's, no beta's line or link; under Try it first "It runs ChoralRoot 0.24-beta1, a beta
+(the installer's default is 0.23)."; the installer's own version 0.23; its list 0.24-beta1 (beta), 0.23, 0.22,
+0.22-beta4 .. beta1 (beta), 0.21 .. 0.16; firmware/SHA256SUMS 20 lines, all match; the notes links
+`blob/main/docs/releases/<version>.md`. In headless Chromium (`?demo=idle`): Install reads "Install ChoralRoot 0.23"
+and the chips have no beta; with the opt-in stored, 0.24-beta1 first with its badge, then 0.22 and its four betas, the
+beta note shown, Install still 0.23. Still for the unit: the 18 ms wait and the top row's velocity are not yet played
+on an FM-1.
+
+3y126. **The flash diet, 1: FM TONE's HARM tables halved in flash (2026-10-16; the owner: "Lets roll with the diet":
 GRAIN fills the slot to 99.3 % when merged, and the slot stays as it is).** The 27 HARM waves (`quad_tables.h
 QUAD_HARM`, 27 x 513 int16, 27.1 KB of XIP) are each a sum of sines, so every wave is exactly odd about half a cycle:
 f(512 - i) = -f(i) at every point, which `tests/quad_ref.py` now asserts and stores the first half of (27 x 257,
@@ -4575,7 +4634,7 @@ FM TONE's 8-note chords on the unit (70 .. 80 % of the half dry) have no room fo
 "HARM" and "CPU" say so. The budget tool's `quad_render` line (`tests/target_budget.txt` 67 230) reads 3 453 for
 main's build and this one alike: the file's figure is stale, not touched here.
 
-3y125. **The flash diet, 2: FM6's RAM tables no longer stored in flash (same day).** Three of Dexed's five RAM tables
+3y127. **The flash diet, 2: FM6's RAM tables no longer stored in flash (same day).** Three of Dexed's five RAM tables
 (`.data`: copied from the image at power-on, so each cost its bytes twice) are now made at power-on by
 `fm6_tables_init` (generated into `build/gen/felucca_tables.h` by `tools/gen_tables.py`, called first thing in
 `eng_fm6.c fm6_init`, `hostsim.c host_tracks_init` and `tests/sound_templates.c`): `FM6_SIN` (4100 B) by sin.cc's
@@ -4587,11 +4646,11 @@ it), so the table is bit for bit the one the generator computed and `FM6_SIN_CHE
 reads) stay. **Bit-exact**: `fm6_test` all checks ok (a new one: the checksum, the odd symmetry, the mirrors),
 `cr_fm6_test` 44, the 313 golden renders unchanged, 0 CPU entries over budget. `fm6_render`'s listing: the per-sample
 loops the same length to an instruction (1146 -> 1151 instructions in all, the register allocation moved; the
-budget tool's nesting heuristic now reads its outer structure differently, see 3y130). Size: `XIP 539 132 -> 532 620
+budget tool's nesting heuristic now reads its outer structure differently, see 3y132). Size: `XIP 539 132 -> 532 620
 B` (94.0 -> 92.9 %), `.data 11 900 -> 2 668`, `.bss 66 852 -> 76 084`, `RAM 78 752` unchanged, POOL unchanged.
 `docs/FM6.md` "Memory" and `docs/FX.md`'s table say so.
 
-3y126. **The flash diet, 3: CZ-1's factory tones packed (same day).** Casio's 64 native tones (`CZ_FACTORY`, 64 x 144 B =
+3y128. **The flash diet, 3: CZ-1's factory tones packed (same day).** Casio's 64 native tones (`CZ_FACTORY`, 64 x 144 B =
 9216 B of XIP) are now four LZ4 blocks, a bank of 16 tones each (`tools/gen_cz1_factory.py` packs them with
 `tools/lz4blk.py`, the loader's block format: `CZ_FACTORY_LZ4` 4660 B, `CZ_FACTORY_OFF`), unpacked where they are read:
 `cz_bank_default` unpacks a bank straight into the bank cache's 16 tones (`eng_cz.c cz_factory_bank`; `cz_patch_t` is
@@ -4606,7 +4665,7 @@ reverted): `CZ_RECIP` as two halves (x >= 1024 fits 16 bits less 32 768): XIP -1
 `cz_native_line_mv` grew 4 .. 6 instructions a sample (7 340 -> 7 690 B; `cz_native_noise` 554 -> 612): about 50 us
 a half for 8 voices with their DCW moving, a cost in the ISR for 1.6 KB (docs/FLASH.md has the table).
 
-3y127. **The flash diet, 4: the fonts' unused extra glyphs (same day).** The S, M and CRB faces carried Felucca's
+3y129. **The flash diet, 4: the fonts' unused extra glyphs (same day).** The S, M and CRB faces carried Felucca's
 Latin-1 extras beyond ASCII: (c) and the umlauts Ä Ö Ü ä ö ü (`tools/gen_aa_font.py EXTRAS`), for Felucca's about
 screen (`ui_menu.c`, not in ChoralRoot's unit). No string of the unit prints them (grep: the one non-ASCII literal is
 `cr_ui.c`'s "Solfège", CRB's own extra), a sound's name cannot hold them (`cr_name.c CN_SET`; the stores keep ASCII
@@ -4619,7 +4678,7 @@ tree's renders before the change (0 differ); `text_ref_test` 2754 strings, 0 pix
 `ui_test` all passed; `cr_draw_test`'s Solfège check no longer counts CRB's extras by hand (it asks `glyph_at`). Size:
 `XIP 528 332 -> 522 332 B` (92.1 -> 91.1 %); RAM and POOL unchanged.
 
-3y128. **The flash diet, 5: the kerning pairs by rows (same day).** Each face kept its kerning as sorted 16-bit keys
+3y130. **The flash diet, 5: the kerning pairs by rows (same day).** Each face kept its kerning as sorted 16-bit keys
 (a << 8 | b) and a byte delta, 3 B a pair. Now the pairs are grouped by their first glyph's table index: `AF_<N>_KROW`
 (a 16-bit start a glyph, the last entry the count), `AF_<N>_KB` (the second character, each row by code), `AF_<N>_KD`
 (the delta): 2 B a pair and 2 B a glyph. `gfx.c kern` finds the first glyph with `glyph_at` and searches its row;
@@ -4630,7 +4689,7 @@ ellipsis' were never kept), `tests/text_spacing_test.py` reads them back into it
 strings, 0 end pens and 0 pixels differ; `text_spacing_test` ok; `ui_test` all passed. Size: `XIP 522 332 -> 520 460
 B` (91.1 -> 90.8 %); RAM and POOL unchanged.
 
-3y129. **The flash diet, 6: more of the main loop built for size (same day).** `tools/size_fns.py` marks the
+3y131. **The flash diet, 6: more of the main loop built for size (same day).** `tools/size_fns.py` marks the
 main-loop functions minsize (about -Oz) and leaves the rest at -Os (3y25). The list grows by the files that run in
 the main loop only (the backup, the compiled layouts, the pool, the FM6 and CZ-1 stores and banks, the legacy CZ
 format, the FM TONE / VA / P5 patch stores, the FM4 conversion: `SIZE_FILES`) and by named functions of the engines'
@@ -4638,12 +4697,12 @@ files, whose other functions render or tick in the ISR (`SIZE_FUNCS`: a sound lo
 pages' get / set, which the engine picks up in its block; and `fm1_main` itself, the main loop). 676 -> 824 functions
 built for size. The audio side is untouched: of 295 render, block, tick, ISR, mix and effects functions in the
 listing, none changed its instruction count across this change (checked listing against listing; `fm6_render`'s
-+5 is 3y125's). `fm1_main` 16 154 -> 14 728 B, `ed_service` 6 994 -> 6 200, `cr_ui_input` 8 162 -> 7 396, `cu_pool_load`
++5 is 3y127's). `fm1_main` 16 154 -> 14 728 B, `ed_service` 6 994 -> 6 200, `cr_ui_input` 8 162 -> 7 396, `cu_pool_load`
 3 664 -> 3 410 (their inlined callees, now minsize), `fm6_track_loaded` 1 210 -> 1 156, `quad_unpack` 686 -> 606. The UI frame's cost on the
 unit is not read here (the emulator compiles the same sources at -O2 on the host: `perf.sh`'s UI column cannot see
 this); the owner's `pk_*` readout would. Size: `XIP 520 460 -> 517 644 B` (90.8 -> 90.3 %); RAM and POOL unchanged.
 
-3y130. **The flash diet's account (same day; docs/FLASH.md).** Six commits (3y124 .. 3y129) took main's image from
+3y132. **The flash diet's account (same day; docs/FLASH.md).** Six commits (3y126 .. 3y131) took main's image from
 `XIP 552 860 B (96.4 %)` to `517 644 B (90.3 %)`: -35 216 B, RAM unchanged, POOL 239 180 -> 266 884 B (69.5 -> 77.6 %:
 FM TONE's HARM cycles). A throwaway merge of GRAIN's branch (80465ac, "merges whole, no cuts") onto the diet, built and
 not committed: `XIP 537 068 B (93.7 %)`, 36 372 B of margin where GRAIN's own build had 3.8 KB; `RAM 80 176 (81.6 %)`;
@@ -4657,7 +4716,7 @@ loop level and finds the levels by backward branches, and `fm6_render` (4 364 ->
 3 453) changed their outer branch structure between builds while their per-sample loops kept their length to an
 instruction (the listing compared span by span; `va_render`, `xd_run`, `xr_run`, the ISR's lines moved 1 .. 3 % and
 read as main's build reads, not as the file had them). `tests/run_cr_tests.sh`: `sound_templates` compiles with
-`-DCZ_FACTORY_RAW` too (it reads a factory tone's name; missed in 3y126). `tools/emu/test_pool.sh` generates
+`-DCZ_FACTORY_RAW` too (it reads a factory tone's name; missed in 3y128). `tools/emu/test_pool.sh` generates
 377264f's headers with 377264f's own generators (it copied this tree's `build/gen`, whose font and CZ-1 shapes the old
 sources no longer read), with the Homebrew library path set in the script (`/bin/sh` drops `DYLD_*`). `docs/HANDOFF.md` "POOL was the tight
 resource" says where the figures stand. Suites on the final tree: `run_cr_tests.sh`, `run_cr_draw.sh` (335 pictures

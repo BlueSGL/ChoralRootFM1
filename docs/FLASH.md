@@ -17,12 +17,12 @@ The baseline: main 646abb5 (v0.23 + HISTORY 3y123), `XIP 552 860 B of 573 440 (9
 
 | HISTORY | change | XIP | RAM | POOL | audio ISR | proof |
 | --- | --- | --- | --- | --- | --- | --- |
-| 3y124 | FM TONE's 27 HARM waves stored as their first half (odd symmetry, exact), whole cycles built into POOL at power-on (`eng_quad.c quad_init`) | -13 728 | 0 | +27 704 | none: `quad_render` byte for byte the same (it reads SRAM now) | `cr_quad_test` 31 466 (+ the mirror check), 313 goldens |
-| 3y125 | FM6's `FM6_SIN` built at power-on by Dexed's integer rotation; `FM6_MKI_LOG` / `FM6_OPL_LOG` mirrored from stored quarters (`fm6_tables_init`) | -6 512 | 0 (`.data` -> `.bss`) | 0 | none: the per-sample loops the same length | `fm6_test` (+ the checksum check), `cr_fm6_test`, 313 goldens |
-| 3y126 | CZ-1's 64 factory tones packed, a bank of 16 an LZ4 block (`tools/lz4blk.py`), unpacked where a bank or a tone is read (`cz_patch.h cz_lz4_block`, `eng_cz.c cz_factory_bank`) | -4 288 | 0 | 0 | none (the unpack runs in the main loop's load paths, ~2.3 KB of its stack) | `cr_cz_test` 128 of 128 tones, `cr_backup_test`, 313 goldens |
-| 3y127 | the fonts' Latin-1 extras ((c), the umlauts) nothing prints leave S, M and CRB | -6 000 | 0 | 0 | none (UI) | the 335 draw renders byte for byte the same, `text_ref_test` 0 pixels differ, `text_spacing_test`, `ui_test` |
-| 3y128 | the kerning pairs grouped by their first glyph (`AF_<N>_KROW` / `_KB` / `_KD`): 2 B a pair for 3 | -1 872 | 0 | 0 | none (UI) | the same four |
-| 3y129 | more of the main loop built for size (`tools/size_fns.py`: the stores, the backup, the pool, the layouts, the engines' load paths, `fm1_main`): 676 -> 824 functions minsize | -2 816 | 0 | 0 | none: 295 audio-side functions keep their instruction counts | listing against listing; the suites |
+| 3y126 | FM TONE's 27 HARM waves stored as their first half (odd symmetry, exact), whole cycles built into POOL at power-on (`eng_quad.c quad_init`) | -13 728 | 0 | +27 704 | none: `quad_render` byte for byte the same (it reads SRAM now) | `cr_quad_test` 31 466 (+ the mirror check), 313 goldens |
+| 3y127 | FM6's `FM6_SIN` built at power-on by Dexed's integer rotation; `FM6_MKI_LOG` / `FM6_OPL_LOG` mirrored from stored quarters (`fm6_tables_init`) | -6 512 | 0 (`.data` -> `.bss`) | 0 | none: the per-sample loops the same length | `fm6_test` (+ the checksum check), `cr_fm6_test`, 313 goldens |
+| 3y128 | CZ-1's 64 factory tones packed, a bank of 16 an LZ4 block (`tools/lz4blk.py`), unpacked where a bank or a tone is read (`cz_patch.h cz_lz4_block`, `eng_cz.c cz_factory_bank`) | -4 288 | 0 | 0 | none (the unpack runs in the main loop's load paths, ~2.3 KB of its stack) | `cr_cz_test` 128 of 128 tones, `cr_backup_test`, 313 goldens |
+| 3y129 | the fonts' Latin-1 extras ((c), the umlauts) nothing prints leave S, M and CRB | -6 000 | 0 | 0 | none (UI) | the 335 draw renders byte for byte the same, `text_ref_test` 0 pixels differ, `text_spacing_test`, `ui_test` |
+| 3y130 | the kerning pairs grouped by their first glyph (`AF_<N>_KROW` / `_KB` / `_KD`): 2 B a pair for 3 | -1 872 | 0 | 0 | none (UI) | the same four |
+| 3y131 | more of the main loop built for size (`tools/size_fns.py`: the stores, the backup, the pool, the layouts, the engines' load paths, `fm1_main`): 676 -> 824 functions minsize | -2 816 | 0 | 0 | none: 295 audio-side functions keep their instruction counts | listing against listing; the suites |
 
 ## What was rejected, and why
 
@@ -49,16 +49,16 @@ imported DX7 or Casio name any ASCII 32..126):
 | CRX (104 px, the chord name) | 30 of its 37: `#+-0-9ABCDEFGIMNPTdimsu` | ` .?JWZb` (b, the flat, is drawn whenever a flat chord sounds: the corpus has none; the seven stay) |
 | CRB (40 px, bold) | 80: ` #%&()*+-./0-9:>A-Z_a-z`, the ellipsis, the degree sign, the middle dot, e grave | `!"$',;<=?@[\]^\`{|}~`, the Latin-1 extras |
 
-Dropped (3y127): the Latin-1 extras no screen prints and no name can hold. Kept: every ASCII glyph (a name can hold
+Dropped (3y129): the Latin-1 extras no screen prints and no name can hold. Kept: every ASCII glyph (a name can hold
 it), `?` (the fallback glyph), CRX's seven.
 
 ## The account
 
 The audio side, main's listing against the diet's: of 295 render, block, tick, ISR, mix and effects functions, one
-changed its instruction count, `fm6_render` 1146 -> 1151 (3y125: the register allocation of its set-up, the
+changed its instruction count, `fm6_render` 1146 -> 1151 (3y127: the register allocation of its set-up, the
 per-sample loops the same length span by span).
 
-| | main 646abb5 | after the diet (3342d18 + 3y130) | GRAIN merged on the diet (throwaway merge of 80465ac, built, not committed) |
+| | main 646abb5 | after the diet (3342d18 + 3y132) | GRAIN merged on the diet (throwaway merge of 80465ac, built, not committed) |
 | --- | --- | --- | --- |
 | XIP | 552 860 B (96.4 %) | 517 644 B (90.3 %): **-35 216 B** | 537 068 B (93.7 %): **36 372 B of margin** (GRAIN's own build had 3.8 KB) |
 | RAM | 78 752 B (80.1 %) | 78 752 B (80.1 %) | 80 176 B (81.6 %) |
@@ -75,6 +75,6 @@ with GRAIN 22.6 KB, POOL 89.0 %). Anything else that wants POOL (a fifth P5 voic
 delay line) now competes with GRAIN's two 32 KB buffers.
 
 **Not done, by the rules**: nothing flashed, nothing pushed (the designer-handoff session holds the unit); the UI
-frame's cost on the unit after 3y129 is not read (the emulator cannot see the device compiler's -Oz; the owner's
-`pk_*` readout would); `tests/target_budget.txt` rewritten from the final listing (3y130: the tool's nesting heuristic
+frame's cost on the unit after 3y131 is not read (the emulator cannot see the device compiler's -Oz; the owner's
+`pk_*` readout would); `tests/target_budget.txt` rewritten from the final listing (3y132: the tool's nesting heuristic
 reads `fm6_render` and `quad_render` differently now, their per-sample loops the same length).

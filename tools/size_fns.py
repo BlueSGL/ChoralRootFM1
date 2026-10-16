@@ -22,7 +22,7 @@ SIZE_FILES = ["ui.c", "favorites.c", "icons.c", "ui_graph.c", "ui_draw.c", "ui_m
               # ChoralRoot's UI, screens and stores (not cr_engine.c, cr_out.c, cr_loop.c: they tick in the audio ISR)
               "cr_ui.c", "cr_edit.c", "cr_draw.c", "cr_gfx.c", "cr_pages.c", "cr_bank.c", "cr_name.c", "cr_settings.c",
               "cr_anim.c", "cr_shim.c", "cr_favs.c",
-              # the flash diet (HISTORY 3y129): the stores, the backup, the pool, the layouts: main loop too
+              # the flash diet (HISTORY 3y131): the stores, the backup, the pool, the layouts: main loop too
               "cr_backup.c", "cr_layout.c", "upool.c", "fm6_store.c", "fm6_bank.c", "fm6_ustore.c", "cz_store.c", "cz_bank.c",
               "cz_ustore.c", "cz_legacy.h", "quad_store.c", "va_store.c", "prophet_patch.c", "fm4_convert.c"]
 # .. and these functions of files whose other functions render or tick in the ISR: the main loop's (a sound load, a

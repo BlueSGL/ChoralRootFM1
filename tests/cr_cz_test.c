@@ -187,7 +187,7 @@ int main(void)
        !bad, "engine: CZ-1 is 14 (after VA's 13; Melodee: 15), shown after the VA (0.14)");
     for (k = 0, bad = 0; k < CZ_FACTORY_N; k++)
         bad += !cz_patch_valid(CZ_FACTORY[k]);
-    {   /* the packed bank (3y127): every tone unpacked (cz_factory_bank, cz_factory_tone) is the tone as it is */
+    {   /* the packed bank (3y129): every tone unpacked (cz_factory_bank, cz_factory_tone) is the tone as it is */
         uint8_t bank[16u * CZ_BYTES], one[CZ_BYTES];
         uint32_t j, n = 0;
         for (j = 0; j < CZ_FACTORY_BANKS; j++) {

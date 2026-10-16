@@ -56,7 +56,7 @@ def tones():
 def main(path):
     ts = tones()
     # the tones packed, a bank (16 tones, 2304 B) an LZ4 block (tools/lz4blk.py's block format, the loader's):
-    # cz_patch.h cz_factory_bank unpacks one into a bank's 16 tones (HISTORY 3y127: 4660 B where the tones were 9216)
+    # cz_patch.h cz_factory_bank unpacks one into a bank's 16 tones (HISTORY 3y129: 4660 B where the tones were 9216)
     blocks = []
     for k in range(0, len(ts), 16):
         raw = b"".join(ts[k:k + 16])

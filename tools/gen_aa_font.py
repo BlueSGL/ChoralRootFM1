@@ -39,7 +39,7 @@ import aa_raster as ar  # noqa: E402
 
 FONTS = Path(__file__).resolve().parents[1] / "fonts"
 LOCAL_INTER = os.path.expanduser("~/Library/Fonts/Inter.ttc")   # 4.001: 0 Regular, 10 Medium, 12 SemiBold
-# the extra glyphs beyond ASCII: the degree sign, the middle dot and the ellipsis (gfx.c text_fit). Until HISTORY 3y128 also
+# the extra glyphs beyond ASCII: the degree sign, the middle dot and the ellipsis (gfx.c text_fit). Until HISTORY 3y130 also
 # (c) and the umlauts A: O: U: a: o: u: of Felucca's about screen (ui_menu.c, not in ChoralRoot's unit): no string of the unit
 # printed them, a sound's name cannot hold them (cr_name.c CN_SET; the stores keep ASCII 32..126), 5.1 KB of flash
 EXTRAS = [0xB0, 0xB7, 0x2026]           # deg . (Latin-1), ...
@@ -214,7 +214,7 @@ def emit(face, tracking, gamma, kern_min):
     # the kerning pairs (a, b) -> delta, both in Latin-1 (the ellipsis' pairs were never kept), grouped by a's glyph index
     # (ASCII first .. last, then the extras in their order): AF_N_KROW[i] .. AF_N_KROW[i + 1] are glyph i's pairs in AF_N_KB
     # (b's code, ascending) and AF_N_KD (the delta, 1/16 px): 2 B a pair and 2 B a glyph, where a 16-bit key cost a pair 3
-    # (HISTORY 3y129; gfx.c kern reads them)
+    # (HISTORY 3y131; gfx.c kern reads them)
     codes = list(range(first, last + 1)) + [CODE.get(c, c) for c in extras]
     index = {c: i for i, c in enumerate(codes)}
     pairs = sorted((index[ord(a)], ord(b), d) for (a, b), d in r["kern"].items() if ord(a) < 256 and ord(b) < 256)

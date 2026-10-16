@@ -175,7 +175,7 @@ def fm6_tables():
         assert abs(u * c - v * s) < 1 << 62 and abs(u * s + v * c) < 1 << 62 and abs(u) < 1 << 31 and abs(v) < 1 << 31
     # FM6_SIN is not stored: the rotation above is integer arithmetic, so fm6_tables_init (below, run at power-on and by
     # the host programs' set-up) rebuilds it bit for bit in RAM (.bss; it was .data: the same RAM, 4.1 KB of flash less,
-    # HISTORY 3y125). The table here is what it must produce (tests/fm6_test.c compares)
+    # HISTORY 3y127). The table here is what it must produce (tests/fm6_test.c compares)
     L += ["/* FM6_SIN: 1025 points of a Q24 sine (sin.cc's rotation), built by fm6_tables_init; FM6_SIN_C / _S its step */",
           f"#define FM6_SIN_C {c}", f"#define FM6_SIN_S {s}",
           # a checksum of the table it must produce: sum of (i + 1) x FM6_SIN[i] in 32 bits (tests/fm6_test.c)

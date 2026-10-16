@@ -205,7 +205,7 @@ static double centroid(const double *y, uint32_t a)       /* the spectral centro
     return den > 0 ? num / den : 0;
 }
 
-/* the RAM tables (HISTORY 3y125): FM6_SIN, built at power-on by Dexed's integer rotation (fm6_tables_init), is the
+/* the RAM tables (HISTORY 3y127): FM6_SIN, built at power-on by Dexed's integer rotation (fm6_tables_init), is the
  * table tools/gen_tables.py computes (FM6_SIN_CHECK: the sum of (i + 1) x FM6_SIN[i] in 32 bits), odd about half a
  * cycle and 0 at 0, 512 and 1024; FM6_MKI_LOG and FM6_OPL_LOG are their stored quarters mirrored */
 static void tables(void)

@@ -4109,7 +4109,7 @@ static int cu_layer_keys(uint32_t l)
 #endif
 /* Key velocity (cr_sense.c; docs/VELOCITY.md). With Options > Key Touch Dynamic (or Velocity + Aftertouch), a key with
  * the converter (CR_SENSE_KEYS) that plays a note waits, once debounced, for its velocity (cu_scan_keys: cu.kpend;
- * 8.8 ms after the touch sample, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
+ * 8.8 ms after the touch sample, 13.2 with the probe on, CU_VEL_WAIT_MS at most) and plays at it, as measured (the level's law is the voice's:
  * mod.c cr_touch_gain); a key without it plays at the keys' recent velocity (cu.ctx_vel), else at Options >
  * Velocity. Fixed: every key at Options > Velocity, as before. */
 #ifndef CR_SENSE_KEYS                              /* (the emulator, the tests: no analog rows) */
@@ -4117,7 +4117,10 @@ static int cu_layer_keys(uint32_t l)
 static volatile uint16_t cr_sense_land[CU_NKEY];
 static uint32_t cr_sense_take(uint32_t k) { (void)k; return 0; }
 #endif
-#define CU_VEL_WAIT_MS 12u
+#define CU_VEL_WAIT_MS 18u                         /* the velocity is known four samples after the touch sample: 8.8 ms at
+                                                    * 2.2 ms a sample, 13.2 with the top row's probe on (a third frame
+                                                    * phase: every 3.3 ms), the touch sample up to one sample after the
+                                                    * contact, the debounce 1.1 .. 2.2 ms after it: 15.4 ms at most */
 static uint8_t cu_press_vel;                       /* the pending key's velocity, for cu_key_press (0: none) */
 #define CU_KEY_SENSED(k) (cs.touch && ((CR_SENSE_KEYS >> (k)) & 1u) && ((k) >= CU_ROOT0 || cs.kbd_full))
 static uint32_t cu_key_vel(uint32_t k)
@@ -4904,7 +4907,7 @@ static void cu_scan_keys(uint32_t ne, uint32_t km)
     for (k = 0; k < CU_NKEY; k++) {
         uint32_t was = (cu.kheld >> k) & 1u, is = (km >> k) & 1u, e = (ne >> k) & 1u;
         if (!was && (is || e) && !((cu.kpend >> k) & 1u)) {
-            if (CU_KEY_SENSED(k) && !cr_sense_land[k]) {   /* (the velocity comes 7 .. 10 ms after the debounce) */
+            if (CU_KEY_SENSED(k) && !cr_sense_land[k]) {   /* (the velocity comes 7 .. 15 ms after the debounce) */
                 cu.kpend |= 1u << k;
                 cu.kpend_t0[k] = now;
                 continue;

@@ -32,7 +32,7 @@ if [ ! -f "$OLD/firmware/src/upreset.c" ]; then
 fi
 mkdir -p "$OLD/build"
 # 377264f's generated headers from ITS OWN generators (this tree's build/gen no longer has the shapes its sources
-# read: the flash diet, HISTORY 3y124 .. 3y130, changed the fonts' kerning tables and packed CZ-1's factory tones)
+# read: the flash diet, HISTORY 3y126 .. 3y132, changed the fonts' kerning tables and packed CZ-1's factory tones)
 export DYLD_FALLBACK_LIBRARY_PATH="${DYLD_FALLBACK_LIBRARY_PATH:-/opt/homebrew/lib}"   # (Pillow's Raqm; /bin/sh drops it)
 [ -d "$OLD/build/gen" ] || (cd "$OLD" && python3 -c 'import sys; sys.path.insert(0, "tools"); import build; build.generate()') >/dev/null || exit 1
 OABS=$(cd "$OLD" && pwd)
