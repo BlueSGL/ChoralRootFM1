@@ -5516,3 +5516,19 @@ The pictures: `design/chord-layout-mockups.html` (the LCD at 240 x 240 in the MO
 keybeds with their LED levels) rendered with headless Chromium to `design/chord-layout-mockups.png`: the two layouts,
 the three Options, the LOCK layer from LFO, the LFO light blinking / pulsing, SUS latched, the window's timeline, a
 secret chord, the Full keyboard with the shortcuts and the chord keys showing (both layouts). Not built, not pushed.
+**The owner's answers, the same day (the second round; folded into this entry, which had not left its branch).**
+"Mockups are good." Decided: Classic stays exactly as it is (LFO is LATCH, no GLO combo); FM-1's LATCH is GLO held,
+then LFO, and only that order (LFO held, then GLO is the LOCK layer), and holding GLO must never open the Options, only
+a quick click (today's code already: `cu_scan` marks GLO past the hold time opened, its release is no tap); the pulse
+as designed; the secret combos use the window ("Probably"); the KEY layer on pick needs no combo (the pair's second
+key within the window is ignored); **wait the window before changing what already sounds** ("I don't want to hear it
+quickly play a MIN then a SUS when I am intending to do a SUS chord"): rule B, a sounding chord (Advanced / Free over
+a held root, LOCK's latch with roots held) changes once, at the pair or the window's close, while a new chord still
+starts at once (rule A); the names Chord Keys, SUS Window, Full K Shorts; the window 5 ms a detent and hidden in
+Classic; **MIDI Keys**, with the FM-1's own key map (Options > MIDI Keys, Off / ch 1 .. 16 skipping the parts'
+channels: notes 53 .. 79 press F3 .. G5 through `cu_key_press`, a 64-entry ISR-to-UI queue that never drops a
+note-off, `raw_sound` bits 1 .. 5 in the block, an older firmware reading Raw Chord Sound off); a layout change
+releases the keys held. Still open, explained in the doc: 1 (picking keys on D4), 6 (a type key just after the root
+in Simple), 9 (G5 with the shortcuts on and nothing to play: the answer given is the shortcuts-off case), 10 (G5's
+starting state), 14 (the panel pictures). The mock-ups: the four Options under their new names, MIDI Keys, the LATCH
+gesture's text, rule B's timeline.

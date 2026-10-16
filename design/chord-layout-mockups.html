@@ -27,7 +27,7 @@
 </style>
 </head>
 <body>
-<h1>Chord Layout: Classic and FM-1</h1>
+<h1>Chord Layout (Chord Keys): Classic and FM-1</h1>
 <p>The design in docs/CHORD-LAYOUT.md, decided 2026-10-16. Screens at the FM-1's 240 x 240 pixels, enlarged 2x; the
 keybeds are diagrams of the 27 keys with each key's light at its level and the top row of buttons.</p>
 <div class="legend">Key lights:
@@ -42,13 +42,14 @@ finger, B3 is the 9, LOCK moves to LFO, C4 and C#4 are roots (20 instead of 18).
 <div class="row" id="layouts"></div>
 
 <h2>2. The Options</h2>
-<p>Chord Layout after Secret Chords, Combine Window after it (grey in Classic), Full Shortcuts after Split Point. All
-three automatic; hidden on the SMK-37.</p>
+<p>The owner's names (second round): Chord Keys after Secret Chords, SUS Window after it (listed only in FM-1), Full K
+Shorts after Split Point, MIDI Keys after MIDI Raw Chord. All four automatic; hidden on the SMK-37.</p>
 <div class="row" id="options"></div>
 
-<h2>3. LOCK on LFO, LATCH on GLO + LFO</h2>
+<h2>3. FM-1: LOCK on LFO, LATCH on GLO held + LFO (Classic unchanged)</h2>
 <p>LFO tap: LOCK on / off (the LFO light lit, steady). LFO held: the LOCK layer (LFO blinks as an open layer's button).
-GLO held + LFO: LATCH; while LATCH is on the LFO light pulses (lit, middle, glow, middle, 300 ms each); with LOCK on
+GLO held, then LFO: LATCH (LFO held, then GLO: the LOCK layer; GLO held alone never opens the Options, only a
+quick click does); while LATCH is on the LFO light pulses (lit, middle, glow, middle, 300 ms each); with LOCK on
 as well it pulses between lit and middle.</p>
 <div class="row" id="lock"></div>
 <div class="row" id="lock2" style="margin-top:16px"></div>
@@ -59,6 +60,7 @@ as well it pulses between lit and middle.</p>
 release. The window: a chord starts at once; the partner landing within it moves only the third to the fourth.</p>
 <div class="row" id="sus"></div>
 <div class="row" id="sus2" style="margin-top:16px"></div>
+<div class="row" id="sus3" style="margin-top:16px"></div>
 
 <h2>5. The Full keyboard with the shortcuts on</h2>
 <p>F3 .. F5 are notes (25). F#5: the layout's chord keys on the low keys, the roots ending at F5; G5: a chord on every
@@ -290,6 +292,35 @@ function timeline() {
   return svg;
 }
 
+// rule B (the owner's 2nd round): Advanced, D4 sounding from before; the pair changes it once, at its decision
+function timelineB() {
+  const width = 722, height = 236, x0 = 140, msx = 7.0;
+  const svg = el("svg", { width, height, viewBox: `0 0 ${width} ${height}` });
+  el("rect", { x: 0, y: 0, width, height, fill: "#0b0b0d" }, svg);
+  const X = (ms) => x0 + ms * msx;
+  el("rect", { x: X(0), y: 8, width: 50 * msx, height: height - 40, fill: "#F2B705", opacity: 0.10 }, svg);
+  txt(svg, X(25), 22, "the window: 50 ms from G#3's press", 11.5, "#F2B705", 800);
+  [["D4 (root)", -10, 80, "#9A999A"], ["G#3 (MIN)", 0, 80, "#F6F3EA"], ["A#3 (MAJ)", 31, 80, "#F6F3EA"]].forEach(([s, a, b, col], i) => {
+    const y = 40 + i * 22;
+    txt(svg, x0 - 8, y + 9, s, 11, col, 700, "end");
+    el("rect", { x: X(Math.max(a, -1)), y, width: X(b) - X(Math.max(a, -1)), height: 12, rx: 3, fill: col, opacity: 0.85 }, svg);
+  });
+  txt(svg, x0 - 8, 122, "sounds:", 11, "#8A8A92", 700, "end");
+  [["D", 31], ["F# / G", 31], ["A", 31]].forEach(([n, at, col, old], i) => {
+    const y = 130 + i * 18;
+    txt(svg, x0 - 8, y + 9, n, 11, "#F6F3EA", 700, "end");
+    el("rect", { x: X(-1), y, width: X(31) - X(-1), height: 10, rx: 3, fill: "#F6F3EA", opacity: 0.45 }, svg);
+  });
+  [["D", 130], ["G", 148], ["A", 166]].forEach(([n, y]) => {
+    el("rect", { x: X(31) + 2, y, width: X(80) - X(31) - 2, height: 10, rx: 3, fill: n === "G" ? "#F07A1A" : "#F6F3EA", opacity: 0.8 }, svg);
+  });
+  txt(svg, X(-1), 194, "D major from before", 10.5, "#9A999A", 700, "start");
+  txt(svg, X(31) + 4, 194, "one re-strike, as Dsus (no Dm between)", 10.5, "#F07A1A", 700, "start");
+  txt(svg, X(10), 112, "G#3: nothing yet", 10.5, "#F6F3EA", 700, "start");
+  for (let ms = 0; ms <= 80; ms += 10) { el("rect", { x: X(ms), y: height - 30, width: 1, height: 5, fill: "#555" }, svg); txt(svg, X(ms), height - 14, ms + " ms", 10, "#77767c", 600); }
+  return svg;
+}
+
 async function draw() {
   try { await document.fonts.load('800 40px "Inter Tight"'); await document.fonts.load('500 14px "Inter Tight"'); } catch (e) {}
 
@@ -304,14 +335,14 @@ async function draw() {
 
   // 2. the Options (four in a row: 1.5x)
   SC = 1.5;
-  card("options", "Chord Layout: FM-1", optionsPage("Chord Layout", "FM-1", "Combine Window", 3),
+  card("options", "Chord Keys: FM-1 (the Chord Layout)", optionsPage("Chord Keys", "FM-1", "SUS Window", 3),
        "Classic / FM-1, default Classic. After Secret Chords. Settings block: <code>sticky</code> bit 1.");
-  card("options", "Combine Window: 50 ms", optionsPage("Combine Window", "50 ms", "6th with 7th", 4),
-       "30 .. 80 ms, 5 ms a detent, default 50. <code>sticky</code> bits 3..6: (ms - 50) / 5.");
-  card("options", "Combine Window in Classic", optionsPage("Combine Window", "50 ms", "6th with 7th", 4, { grey: 1, under: "FM-1 layout" }),
-       "Grey while the layout is Classic (as Snap's cell where it does not apply); still settable.");
-  card("options", "Full Shortcuts: On", optionsPage("Full Shortcuts", "On", "MIDI Perform", 13),
-       "Off / On, default Off. After Split Point. <code>sticky</code> bit 2. An older firmware reads the byte as LATCH off and Classic.");
+  card("options", "SUS Window: 50 ms", optionsPage("SUS Window", "50 ms", "6th with 7th", 4),
+       "30 .. 80 ms, 5 ms a detent, default 50. Listed only while Chord Keys is FM-1. <code>sticky</code> bits 3..6.");
+  card("options", "Full K Shorts: On", optionsPage("Full K Shorts", "On", "MIDI Perform", 13),
+       "Full keyboard shortcuts, Off / On, default Off. After Split Point. <code>sticky</code> bit 2.");
+  card("options", "MIDI Keys: ch 5", optionsPage("MIDI Keys", "ch 5", "MIDI Clock", 17),
+       "Off, ch 1 .. 16 (the parts' channels skipped), default Off. Notes 53 .. 79 press F3 .. G5 through the layout. <code>raw_sound</code> bits 1..5.");
 
   SC = S;
   // 3. LOCK and LATCH
@@ -345,6 +376,9 @@ async function draw() {
     led: { ...faint(range(0, 6)), 1: "lit", 3: "lit", ...litNames([2, 5, 7], 7, 26) }, held: [1, 3], pair: [3, 5, "SUS"],
     roles: ["FX", "KEY", "BASS", "LOCK", "EDIT", "OPT"] }),
     "Each secret chord keeps its Classic key: m add4 keeps MIN (G#), augmented keeps MAJ (A#), the power chord is DIM + the pair. Secret off: these pairs are last pressed wins.", "kb");
+
+  card("sus3", "Rule B: Advanced, a root already sounding (the owner, 2nd round)", timelineB(),
+       "D4 held, D major sounding. G#3 changes nothing yet; A#3 completes the pair inside the window: one re-strike, as Dsus, and no Dm is ever heard. Had A#3 not come, D4 would re-strike as Dm when the window closed (50 ms after G#3). LOCK's latch with roots held changes the same way, once.");
 
   // 5. the Full keyboard
   card("full", "Full, shortcuts on, chord keys hidden", keybed({ keys: { 25: ["CHRD", "fn"], 26: ["ALL", "fn"] },

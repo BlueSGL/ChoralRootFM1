@@ -1,6 +1,8 @@
 # Chord Layout: Classic and FM-1 (the design)
 
-Status: **design, decided by the owner on 2026-10-16** (HISTORY 3y155). No firmware implements it yet. The pictures
+Status: **design, decided by the owner on 2026-10-16** (HISTORY 3y155, with the owner's answers to its open questions
+the same day: [the second round](#the-second-round-the-owners-answers-to-the-open-questions-2026-10-16)).
+No firmware implements it yet. The pictures
 are in [design/chord-layout-mockups.html](../design/chord-layout-mockups.html) (rendered:
 [design/chord-layout-mockups.png](../design/chord-layout-mockups.png)).
 
@@ -8,7 +10,8 @@ Today's chord keys follow the Orchid ([MANUAL.md "3. The panel"](MANUAL.md#the-k
 ["4. Chords"](MANUAL.md#4-chords)). The owner wants a second layout that fits the FM-1's keybed and their hand: the
 three small black keys of the left end are the chord types, SUS is two of them pressed with one finger, the four
 white keys are the extensions, LOCK moves to a button, and two more keys become roots. **Options > Chord Layout**
-chooses between the two: **Classic** (today's, the default) and **FM-1**.
+chooses between the two (on the screen: **Chord Keys**): **Classic** (today's, the default, unchanged in every
+gesture) and **FM-1**.
 
 Contents: [The decisions](#the-owners-decisions-2026-10-16) · [The two layouts](#the-two-layouts) ·
 [The Options](#the-options-and-where-they-are-kept) · [The combo table](#the-combo-table) ·
@@ -50,6 +53,34 @@ Recorded as decided; the sections below work them out.
    happens with F#5's chord keys showing.
 9. **Unchanged**: loops (they store chords, not keys), the looper, chord names, the voicing rules, Key Mode's scale
    picks (MAJ and MIN in the KEY layer are still A#3 and G#3).
+
+### The second round: the owner's answers to the open questions (2026-10-16)
+
+The owner saw the mock-ups ("Mockups are good") and answered the first round's open questions; the numbers are those
+of [Open questions](#open-questions), which now says what is decided and what still waits.
+
+- **2. Classic stays exactly as it is now.** LFO is LATCH there, a tap; GLO + LFO stays unused in Classic. No
+  gesture of Classic changes.
+- **3. GLO held, then LFO = LATCH (FM-1), and only that order.** Holding GLO must not bring up the Options; only a
+  quick click of GLO does. Holding LFO brings up the LOCK layer, so the reverse (LFO held, then GLO) is not LATCH:
+  it is a combo that opens the LOCK layer. (Found in the code: today already, GLO held past the Hold Time never opens
+  the Options: `cr_ui.c cu_scan` line 5404 marks the hold "opened" and the release is no tap; this is kept and tested.)
+- **4. The LATCH pulse** as designed (lit, middle, glow, middle, 300 ms each; with LOCK on, lit ↔ middle).
+- **5. The secret combos use the window too** ("Probably"): adopted, to be confirmed on the unit.
+- **7. The KEY layer (keys on pick) needs no combo**: G#3 and A#3 are the scale keys there and nothing else; a
+  one-finger pair picks once (the first key's pick stands; the second within the window is ignored).
+- **8. Wait the window before changing what already sounds** ("I don't want to hear it quickly play a MIN then a SUS
+  when I am intending to do a SUS chord"). A type key that would change a chord already sounding (LOCK's latch with
+  roots held in Advanced or Free, and Advanced / Free's type change over a held root) waits for the window or for
+  the pair, then makes one change. A new chord still starts at once (decision 4).
+- **11. The names on the screen**: **Chord Keys** (the Chord Layout option), **SUS Window** (the combine window),
+  **Full K Shorts** (Full keyboard shortcuts).
+- **12. SUS Window: 5 ms a detent, hidden in Classic.**
+- **13. MIDI Keys: yes**, with the same key layout as on the FM-1's keybed ([MIDI in](#midi-in)).
+- **15. A layout change releases the keys held**, as designed.
+
+Still waiting for the owner: 1 (picking keys), 6 (a type key just after the root in Simple), 9 (G5 with nothing to
+play), 10 (G5's starting state), 14 (the panel pictures); explained in [Open questions](#open-questions).
 
 ## The two layouts
 
@@ -93,18 +124,20 @@ F#3); what moves is SUS (from its own key to the pair), 9 (C4 to B3) and LOCK (B
 
 ## The Options, and where they are kept
 
-Three new entries. On the SMK-37 build all three are hidden (`BOARD_SMK37`: its 37 keys are all roots, the chord
+Four new entries. On the SMK-37 build all four are hidden (`BOARD_SMK37`: its 37 keys are all roots, the chord
 block is on its pads, `CU_FN_KEYS` 0; the bits are kept as they are and read as the defaults there).
 
-| Entry (screen name) | Values | Default | Place in the list | What it does |
+| Entry (the screen's name, the owner's 2nd round) | Values | Default | Place in the list | What it does |
 | --- | --- | --- | --- | --- |
-| **Chord Layout** | Classic, FM-1 | Classic | after Secret Chords | which keys are the chord keys (above) |
-| **Combine Window** | 30 .. 80 ms, 5 ms a detent | 50 ms | after Chord Layout | [the combine window](#the-combine-window). Drawn grey with `FM-1 layout` under it while the layout is Classic (as the KEY layer draws Snap grey where it does not apply); it can still be set |
-| **Full Shortcuts** (the manual: "Full keyboard shortcuts") | Off, On | Off | after Split Point | [F#5 and G5 on the Full keyboard](#the-full-keyboard-both-layouts) |
+| **Chord Keys** (the Chord Layout) | Classic, FM-1 | Classic | after Secret Chords | which keys are the chord keys (above) |
+| **SUS Window** (the combine window) | 30 .. 80 ms, 5 ms a detent (11 values) | 50 ms | after Chord Keys, **listed only while Chord Keys is FM-1** (SELECT skips it in Classic; its value is kept) | [the combine window](#the-combine-window) |
+| **Full K Shorts** (Full keyboard shortcuts) | Off, On | Off | after Split Point | [F#5 and G5 on the Full keyboard](#the-full-keyboard-both-layouts) |
+| **MIDI Keys** | Off, ch 1 .. ch 16 (the channels of MIDI Perform and MIDI Bass skipped) | Off | after MIDI Raw Chord | notes 53 .. 79 on that channel press the FM-1's keys F3 .. G5 through the active layout ([MIDI in](#midi-in)) |
 
-All three are **automatic** settings ([SETTINGS.md "Manual and automatic"](SETTINGS.md#manual-and-automatic-018)),
+All four are **automatic** settings ([SETTINGS.md "Manual and automatic"](SETTINGS.md#manual-and-automatic-018)),
 like every Option: written by `cr_settings_poll` when the unit is quiet, reset by Options > Reset Settings (Classic,
-50 ms, Off).
+50 ms, Off, Off). The list is the only place in the Options that hides an entry by another's value (`cu_opt_n`'s
+walk skips `O_SUSWIN` while the layout is Classic; the dots row counts what is listed).
 
 **Changing the layout.** The new map takes over at once. Every chord-block key held at that moment is released under
 the old map first (its `CRE_MOD` up, a held root's note off, as the KEY layer's Keyboard switch does); what LOCK has
@@ -113,15 +146,15 @@ C4 in Classic and on G#3 + A#3 and B3 in FM-1. LOCK itself stays as it was (on o
 
 ### The settings block: `sticky`
 
-`cr_settings_t` keeps its 192 bytes and its version (15). The three settings take six spare bits of `sticky`, the
-LATCH byte (its bit 0, manual, `CRS_FIX(sticky, 0, 1)` today):
+`cr_settings_t` keeps its 192 bytes and its version (15). Three of the settings take six spare bits of `sticky`,
+the LATCH byte (its bit 0, manual, `CRS_FIX(sticky, 0, 1)` today); MIDI Keys takes five of `raw_sound` (below):
 
 | bits of `sticky` | field | values | 0 means |
 | --- | --- | --- | --- |
 | 0 | LATCH on (as today) | 0 / 1 | off |
-| 1 | Chord Layout (`CRS_LAYOUT_FM1`) | 0 Classic, 1 FM-1 | Classic |
-| 2 | Full Shortcuts (`CRS_FULL_SHORT`) | 0 Off, 1 On | Off |
-| 3 .. 6 | Combine Window (`CRS_COMBINE`) | (ms - 50) / 5, 4-bit two's complement, -4 .. +6 | 50 ms |
+| 1 | Chord Keys, the layout (`CRS_LAYOUT_FM1`) | 0 Classic, 1 FM-1 | Classic |
+| 2 | Full K Shorts (`CRS_FULL_SHORT`) | 0 Off, 1 On | Off |
+| 3 .. 6 | SUS Window (`CRS_SUSWIN`) | (ms - 50) / 5, 4-bit two's complement, -4 .. +6 | 50 ms |
 | 7 | free | | |
 
 - **Zero is every default**, so there is no migration and no version bump: every older record reads Classic, 50 ms,
@@ -135,11 +168,17 @@ LATCH byte (its bit 0, manual, `CRS_FIX(sticky, 0, 1)` today):
   into the byte instead of writing it whole, or the new bits would be lost or switch LATCH on.
 - **A downgrade.** Every older firmware checks the byte with `CRS_FIX(sticky, 0, 1)`: with any new bit set it takes
   the byte's default, LATCH off, and touches nothing else. So an older firmware ignores the layout and starts in
-  Classic; the one thing it loses is a LATCH left on at the last save (it is off then). With the three settings at
+  Classic; the one thing it loses is a LATCH left on at the last save (it is off then). With the three `sticky` settings at
   their defaults the byte is one it knows. That firmware's next save writes the byte without the bits; back on the
   newer firmware the unit is Classic, 50 ms, Off.
 - Why this byte: `pick_roots` and `bass_on` are full (Velocity Curve, Key Touch), and an older firmware that met a
   bit in `key_on` would reset Key Mode, in `scale` the scale, in `fx_on` the effects. `sticky` costs only LATCH.
+- **MIDI Keys: `raw_sound` bits 1 .. 5** (`CRS_MIDI_KEYS`: 0 Off, 1 .. 16 the channel; bit 0 stays Raw Chord Sound;
+  bits 6, 7 free). Zero is the default, so no version, no migration. The engine maps this byte too
+  (`cr_settings_apply` line 527 and the route at 535 must read `raw_sound & 1`; `cr_settings_capture` line 570 must
+  merge its bit 0 into the byte), the glue maps bits 1 .. 5 to `cs.midi_keys`. An older firmware's
+  `CRS_FIX(raw_sound, 0, 1)` reads a byte with a channel set as Raw Chord Sound Off (its default) and touches nothing
+  else; with MIDI Keys Off the byte is one it knows. `CRS_RAW_AUTO`: the whole byte is automatic (both are Options).
 - **The session** (`cr_session_t`) needs nothing new: LOCK's latch is `latched` (bits `cr_mod_t`) as today, and the
   FM-1's lit keys are derived from it (the map is one to one: SUS = G# + A#; MIN + SUS = F# + G#; MAJ + SUS = F# + A#;
   DIM + SUS = all three; any other set as Classic's keys). Backups carry the block as ever (the same 192 bytes).
@@ -189,7 +228,7 @@ every MIN and MAJ chord by the window. The owner's rule instead: **play at once,
 
 **The gesture.** A type key pressed while no type key is held opens a *gesture* at that key's press time (the scan
 stamp `fm1_in.note_t0[k]`, `CU_KEY_T0`: not the UI frame, so the window does not move with the frame rate). It stays
-open for the window (Options > Combine Window, 30 .. 80 ms, default 50). A type key pressed while the gesture is open
+open for the window (Options > SUS Window, 30 .. 80 ms, default 50). A type key pressed while the gesture is open
 joins it; if that completes the pair (or, with secret applying, one of the secret combos above), the chords the
 gesture's first key started or re-typed are **amended in place**:
 
@@ -209,51 +248,60 @@ gesture's first key started or re-typed are **amended in place**:
 - **The looper** records the chord as SUS from its start: the engine reports the gesture again with the same serial
   (`cr_out_t.gesture`), and `cr_loop.c` takes a report with a serial it already holds as an amendment of that event,
   not as a new one. A loop therefore never plays the MIN-then-SUS flicker.
-- When the window closes the gesture closes. **A G# or A# held from earlier never waits**: its gesture closed long
-  ago, so a root pressed then plays MIN or MAJ at once, and a partner pressed later is an ordinary type press (Simple:
-  it changes nothing sounding, it is SUS for the next root; Advanced and Free: a type change to SUS, re-struck as any
-  type press is). Nothing ever waits for a partner.
+**Two rules** (the owner's decisions 4 and, in the second round, 8):
+
+- **A: a chord that starts while the gesture is open starts at once** with the gesture's keys as they are held (G#
+  alone: MIN), and is amended in place when the pair (or a secret combo) completes. A new chord never waits.
+- **B: a chord that was already sounding when the gesture began is not touched until the gesture is decided**: the
+  pair (or combo) completes, or the window closes with the key alone. Then it changes **once**: to SUS when the pair
+  completed, to MIN or MAJ when the window closed on one key (the owner: "I don't want to hear it quickly play a MIN
+  then a SUS when I am intending to do a SUS chord"). This covers Advanced and Free's type change over a held root
+  and LOCK's latch with roots held. The price: in Advanced and Free a lone G# or A# re-types a held root up to the
+  window later than today (50 ms by default). Only the keys that can combine wait this way: G# and A#, and F# while
+  secret applies; an extension key, or F# with secret not applying, acts at its press as today.
+
+When the window closes the gesture closes. **A G# or A# held from earlier never waits**: its gesture closed long
+ago, so a root pressed then plays MIN or MAJ at once, and a partner pressed later completes the pair at once (SUS for
+the next root; in Simple nothing sounding changes; in Advanced and Free a type change to SUS, re-struck at once as any
+type press is, since the pair is already decided). Nothing that starts ever waits for a partner.
 
 **The root and the pair together** (R = the root, a and b the pair's keys, all within a few ms):
 
 | Order | Simple | Advanced, Free |
 | --- | --- | --- |
 | a, b, R | SUS (the pair was complete) | SUS |
-| a, R, b (b within the window of a) | MIN or MAJ at R, SUS in place at b | the same |
-| a, R, b (b after the window) | MIN or MAJ, and it stays (Simple: fixed at R) | MIN or MAJ at R, then SUS re-struck at b (a type change) |
-| R, a, b | a single note, fixed at R (Key Mode, Key plays Chords: the scale's chord), as in Classic today when a type key lands after the root | a re-strikes R as MIN or MAJ (a type press), b within the window: SUS in place; one strike in all |
+| a, R, b (b within the window of a) | MIN or MAJ at R, SUS in place at b (rule A) | the same |
+| a, R, b (b after the window) | MIN or MAJ, and it stays (Simple: fixed at R) | MIN or MAJ at R, then SUS re-struck at b (a type change, the pair decided at once) |
+| R, a, b (b within the window of a) | a single note, fixed at R (Key Mode, Key plays Chords: the scale's chord), as in Classic today when a type key lands after the root ([Open questions](#open-questions) 6) | R sounds from before the gesture (rule B): nothing at a; at b R is re-struck once, as SUS |
+| R, a (no partner) | a single note, fixed at R | R re-struck as MIN or MAJ when the window closes |
 
-The R, a, b row is today's Classic behaviour in Simple (no type grace after a root); see
-[Open questions](#open-questions) 6.
+**Advanced and Free type changes.** A type press with a root held re-types it (today's rule: a re-strike), once the
+gesture is decided (rule B): the pair pressed over a held root gives one re-strike, as SUS. Free with no root held: the
+first key sounds the last root again at once as MIN or MAJ (a new sound: rule A), the partner within the window makes
+it SUS in place, and the chord stops when the last chord key is let go, as today. Extension keys pressed during the
+window are ordinary extension presses (Add Note adds, Play Chord re-strikes), at their press.
 
-**Advanced and Free type changes.** A type press with a root held re-strikes it as that type (today's rule); the pair
-pressed together over a held root gives that one re-strike (by its first key) and then the in-place SUS. Free with no
-root held: the first key sounds the last root again as MIN or MAJ, the partner within the window makes it SUS in
-place, and the chord stops when the last chord key is let go, as today. Extension keys pressed during the window are
-ordinary extension presses (Add Note adds, Play Chord re-strikes), before or after the amend.
-
-**With LOCK on** (FM-1). The type keys latch as gestures:
+**With LOCK on** (FM-1). The type keys latch as gestures, and the latch changes once the gesture is decided:
 
 - The pair pressed and let go latches SUS (G#3 and A#3 lit). Keys held together latch together, as today.
-- A type key pressed with nothing held replaces the latch at its press (today's rule, Clears / Keeps as the LOCK
-  layer says). The latch as it was before the gesture is kept for the window, so the gesture is judged whole: G#
-  pressed over a latched SUS first makes it MIN, and A# landing within the window turns the gesture into "the same
-  pair again": the latch before it comes back (SUS, its extensions), and **the pair goes off when let go** (the
-  owner's rule: "pressing that same pair again on its own switches it off, as one type key does today"; its
-  extensions stay lit and wait for a type, as today). The secret combos latch and go off the same way (F# + G# again
-  alone: m add4 off).
-- In Simple nothing sounds from these changes (the latch is for the next root). In Advanced and Free, roots held
-  follow the latch at once (`crx_lock_sync`): the pair pressed over held roots re-strikes them once and amends in
-  place; switching a latched SUS off with roots held can let a MIN sound for the window before the roots fall back to
-  single notes at the release ([Open questions](#open-questions) 8).
-- A single type key over a latched pair replaces it as any type key does (F# alone over SUS is DIM, not the power
-  chord: the power chord is the three held together or latched together).
+- A type key pressed with nothing held opens a gesture; the latch is left as it is until the gesture is decided
+  (rule B). Decided as the **same set again** (the pair over a latched SUS; F# + G# over a latched m add4; G# alone,
+  the window closed, over a latched MIN): the latch stays and that type **goes off when let go** (the owner's rule:
+  "pressing that same pair again on its own switches it off, as one type key does today"; its extensions stay lit and
+  wait for a type, as today). Decided as **another set**: it replaces the latch (Clears / Keeps as the LOCK layer
+  says). Because nothing changes before the decision, G# landing first over a latched SUS never sounds a MIN.
+- In Simple nothing sounding changes (the latch is for the next root). In Advanced and Free, roots held follow the
+  latch at the decision (`crx_lock_sync`, one re-strike when the type changed). A root pressed during the window
+  starts at once with the gesture's keys and the extensions the latch keeps (rule A).
+- A single type key over a latched pair replaces it as any type key does, at the window's close (F# alone over SUS is
+  DIM, not the power chord: the power chord is the three held together or latched together).
 
 **Key Mode.** A held type overrides the scale's choice as today, so the pair gives SUS on any root and a lone G#
 gives MIN; the window works the same over the scale's chords (a root pressed just before a lone G# in Simple keeps the
-scale's chord). Key plays Notes and Snap are untouched. In the KEY layer with its keys on pick, G#3 and A#3 pick the
-scale at the press, as today ([Open questions](#open-questions) 7 for the one-finger pair there); with its keys on
-play they are the FM-1 chord keys.
+scale's chord). Key plays Notes and Snap are untouched. **The KEY layer with its keys on pick needs no combo** (the
+owner, 2nd round): G#3 and A#3 are its scale keys and nothing else; the first one pressed picks the scale at once,
+and the other pressed within the window of it is ignored, so a one-finger pair picks once. With its keys on play
+they are the FM-1 chord keys, with the window.
 
 **Classic** has no window: none of this applies to it (two Classic type keys still combine only as secret chords,
 by the engine, with no in-place amend).
@@ -265,7 +313,9 @@ by the engine, with no in-place amend).
 | LOCK on / off | B3 tap | **LFO tap** |
 | the LOCK layer | B3 held past Hold Time | **LFO held past Hold Time**, as a layer button: it stays open, **LFO blinks**, OCT- / OCT+ / HOME / LFO held again close it, holding another layer button switches to that layer |
 | LOCK + a chord in one motion | B3 down, then a chord key: LOCK's tap at that moment (`cu.b3_pend`) | the same rule on LFO: a key pressed while LFO is down (before the hold time) is LOCK's tap at that moment, no layer; a knob or a button meanwhile opens the layer (a combo, as every layer button) |
-| LATCH on / off | LFO tap | **GLO held, then LFO** (as GLO + SEQ is the metronome and GLO + REC the record mode): LFO is swallowed, GLO's release opens no Options |
+| LATCH on / off | LFO tap (unchanged: the owner, 2nd round; GLO + LFO stays unused in Classic) | **GLO held, then LFO**, and only in that order (as GLO + SEQ is the metronome and GLO + REC the record mode): LFO is swallowed, GLO's release opens no Options |
+| LFO held, then GLO | (LFO is LATCH: a tap's button, no layer; GLO meanwhile: nothing, as today) | **the LOCK layer opens** (a combo on a held layer button, `cu_activity`); GLO is swallowed: no LATCH, no Options (the owner: "the reverse combo of hold LFO then GLO doesn't work") |
+| GLO held alone | the Options open **only on a quick click** (released before Hold Time with nothing else touched); held past it, nothing opens | the same. This is today's code in both layouts (`cr_ui.c cu_scan` line 5404: GLO past the hold time is marked opened, `cu_opened` has no layer for it, and its release is no tap); kept, and a test pins it |
 | the LOCK layer's footer | `B: on/off · OCT-: back · HOME: home` | `LFO: on/off · OCT-: back · HOME: home` |
 | the screen | `lock` and `Latch` at the top right, as today | the same words; `lock` also shows on the Full keyboard now (LOCK works there) |
 | in the sound editor | B3 works | LFO is the editor's LFO group button and GLO its SHIFT: LOCK and LATCH cannot be switched there (decided: fine). The keys still play the latch |
@@ -316,12 +366,26 @@ same firmware queue (`emu_fw_midi_in`), so the same holds there. The only things
 outside are the emulators' computer-keyboard maps and scripts (`KM_KEY`, firmware key index = MIDI note - 53), and
 those send key indices, which the firmware reads through the active layout by itself.
 
-**The change.** Nothing to change for the layout today: MIDI notes do not play keys. The rule for whatever does
-(decision 7): a path that plays the FM-1's keys from MIDI must enter at `cu_key_press` / `cu_key_release` with the
-key index (note - 53 - 12 x octave), never post `CRE_MOD` or `CRE_KEY` itself, so that the layout, the window, LOCK,
-the Full keyboard's shortcuts and the picking maps all follow. Whether such a mode is wanted (a channel whose notes
-53 .. 79 press the keys, for driving the chord block from another keyboard) is
-[Open questions](#open-questions) 13.
+**The change: Options > MIDI Keys** (the owner, 2nd round: "use the same key layouts as on the FM-1 keyboard").
+A channel whose notes press the FM-1's own keys, so another keyboard (or a sequencer) plays ChoralRoot exactly as the
+keybed does: the chord keys, the roots, the active layout, the SUS window, LOCK, Key Mode, the Full keyboard and its
+shortcuts, the picking maps in layers.
+
+| | |
+| --- | --- |
+| **The map** | MIDI note n = the FM-1's key n - 53: **53 .. 79 = F3 .. G5**, the keybed's own notes. So in FM-1, 54 / 56 / 58 = DIM / MIN / MAJ, 56 + 58 together = SUS, 53 / 55 / 57 / 59 = 6 / m7 / M7 / 9, 60 .. 79 the roots; in Classic, 54 56 58 61 = DIM MIN MAJ SUS, 53 55 57 60 = 6 m7 M7 9, 59 = LOCK, 62 .. 79 the roots. OCT- / OCT+ shift the roots as for the keys (the map is by key, not by pitch). Notes outside 53 .. 79: ignored |
+| **The channel** | Options > MIDI Keys: Off (default), ch 1 .. ch 16; the values skip the channels of MIDI Perform and MIDI Bass (a channel is either the keys or a part's notes, never both; setting MIDI Perform or MIDI Bass to the Keys' channel switches MIDI Keys Off, with the message `MIDI Keys off`). On that channel only notes act (note on, note off, note on with velocity 0); CC 123 / 120 release every key MIDI holds; everything else on it is ignored |
+| **The velocity** | the note's velocity plays the key's sound (as Key Touch Dynamic's measured velocity does: `cu_press_vel`), whatever Key Touch says; the chord keys ignore it as they do today |
+| **The path** | `cr_midi.c crm_map` returns a new kind, `CRM_KEY` (key index, velocity, down), for the MIDI Keys channel, checked before the parts' channels. `cr_out.c cr_midi_in` (the audio ISR) puts it on a **queue of its own**, `cr_mkq` (64 entries, ISR → UI), not on `cr_min_q` (32 entries, which drops on a burst: a lost note-off would hang a key). When it is full a note-on is dropped, never a note-off (an off for a key MIDI does not hold is ignored). The UI drains it in `cr_ui_input` before `cu_scan_keys`, and calls `cu_key_press` / `cu_key_release` with the key index: from there it is a key like the panel's |
+| **Held by both** | a key is down while the panel or MIDI holds it (`cu.kheld` from the scan, `cu.kmidi` from MIDI; the press acts at the first, the release at the last), so a key pressed on the keybed and over MIDI at once is one press |
+| **The timing** | the window measures from the message's arrival stamp (`midi_in_ms`, as the clock follower uses), so a DAW's pair 20 ms apart combines as the keybed's does |
+| **The lights, the screen** | as for the keybed: the keys MIDI holds light as held keys, the chord shows |
+| **MIDI out** | what the keys play goes out as the keybed's does (the Perform / Bass / Raw channels). Since MIDI Keys can never be the Perform or Bass channel, a computer that echoes ChoralRoot's output back does not press keys, unless it remaps that output onto the MIDI Keys channel |
+| **The SMK-37** | hidden (its keybed is not the FM-1's) |
+| **The emulators** | nothing to add: their Web MIDI and CoreMIDI inputs reach the firmware's MIDI in already; a script's `midi 90 3A 64` presses A#3 |
+
+The rule for any other path stays: enter at `cu_key_press` / `cu_key_release` with the key index (note - 53), never
+post `CRE_MOD` or `CRE_KEY` directly.
 
 ## The Full keyboard (both layouts)
 
@@ -332,7 +396,7 @@ KNOB 1 is the octave, and with Key Mode on and Key plays Chords every key plays 
 there (Key plays Chords; G5 below), and the octave is on OCT- / OCT+ already. The read-out says `voicing`; a single
 note ignores the voicing, as on the Chords keyboard. (`cr_ui.c` line 4737's Full-keyboard branch goes.)
 
-**Options > Full Shortcuts** (Off by default). Off: the Full keyboard is as today, but for KNOB 1. On:
+**Options > Full K Shorts** (Full keyboard shortcuts, Off by default). Off: the Full keyboard is as today, but for KNOB 1. On:
 
 | Key | Job |
 | --- | --- |
@@ -392,11 +456,11 @@ Found in the code (2026-10-16, origin/main 4ecd5be). "Needs" is the build's work
 | `cr_ui.c:63` `CU_ROOT0` (9), `:67` `cu_white_idx`, `:76` `cu_white_key` | the first root; the white roots' index from D4 | `cu_root0()` (9 / 7) for "plays"; `CU_PICK0` 9 for the pick maps ([Picking keys](#picking-keys-in-layers)) |
 | `cr_ui.c:3706` `CU_KEY_LOCK` 6, `CU_KEY_MIN` 3, `CU_KEY_MAJ` 5 | B3 = LOCK; the KEY layer's scale keys | LOCK key only in Classic; MIN / MAJ unchanged |
 | `cr_ui.c:4018` `cu_mods_phys` | the chord keys held → `cr_mod_t` bits (LOCK's `CRE_MODTOUCH`) | through the resolver in FM-1 |
-| `cr_ui.c:4063 .. 4165` `cu_lock_menu`, `cu_lock_tap`, `cu_mod_press`, `cu_mod_release` | LOCK, its layer, the latch's reset / toggle / push rules | the type-key gesture: the pair as one type, the pre-gesture latch kept for the window, "the same pair again" off; the silent down |
+| `cr_ui.c:4063 .. 4165` `cu_lock_menu`, `cu_lock_tap`, `cu_mod_press`, `cu_mod_release` | LOCK, its layer, the latch's reset / toggle / push rules | the type-key gesture: the pair as one type, rules A and B (a sounding chord and the latch change once, at the decision), "the same set again" off; the silent down; the KEY layer's pick ignoring the pair's second key |
 | `cr_ui.c:4194` `CU_KEY_SENSED` | velocity sensing for keys `>= CU_ROOT0` (or Full) | `cu_root0()`: C4, C#4 get their velocity in FM-1 (all 27 keys have the converter, `cr_sense.c CR_SENSE_KEYS` 0x07FFFFFF) |
 | `cr_ui.c:4211` `cu_key_press` (B3 at 4217 .. 4226, the chord block at 4231, the layers at 4239, naming at 4245, the note at 4262) | where a key goes | B3 → LOCK only in Classic; the chord block by `cu_root0()`; F#5 / G5 shortcuts on the Full keyboard; the root note formula unchanged |
 | `cr_ui.c:4272` `cu_key_release` | the same, released | the same |
-| `cr_ui.c:4296` `cu_btn_press`, `cu_tap` | LFO tap = LATCH; GLO + LFO nothing | FM-1: LFO tap = LOCK, LFO a layer button (`L_BTN[L_LOCK]` = `BT_LATCH`, line 50), LFO + key = LOCK's tap now, GLO + LFO = LATCH |
+| `cr_ui.c:4296` `cu_btn_press`, `cu_tap` | LFO tap = LATCH; GLO + LFO nothing | FM-1 only: LFO tap = LOCK, LFO a layer button (`L_BTN[L_LOCK]` = `BT_LATCH`, line 50), LFO + key = LOCK's tap now, GLO held + LFO = LATCH (LFO held + GLO: the LOCK layer). Classic: untouched |
 | `cr_ui.c:5412` (FM-1), `:5208` (SMK) `b3_pend` hold | B3 held past Hold Time: the LOCK layer | Classic only; FM-1 through the layer-button path |
 | `cr_ui.c:4737` KNOB 1 | the octave on the Full keyboard | the voicing everywhere |
 | `cr_ui.c:5004` `cu_scan_step` | step entry's "keys up" | unchanged (kheld and the latch) |
@@ -405,12 +469,15 @@ Found in the code (2026-10-16, origin/main 4ecd5be). "Needs" is the build's work
 | `cr_ui.c:6471`, `:7242` | "a root held" (`kheld >> CU_ROOT0`) | `cu_root0()`, and the Full keyboard's 25 |
 | `cr_ui.c:6631` the KEY layer's screen | the tonic marked on D4 .. G5 | unchanged (`CU_PICK0`) |
 | `cr_ui.c:6676` the LOCK layer's screen | footer `B: on/off` | `LFO: on/off` in FM-1 |
-| `cr_ui.c:1037` Options (`O_*`, `O_NAME`, `O_MAX`, the get / set / text switches at 1087, 1119, 1207) | the entries | three entries; hidden on the SMK |
+| `cr_ui.c:1037` Options (`O_*`, `O_NAME`, `O_MAX`, the get / set / text switches at 1087, 1119, 1207), `cu_opt_n` | the entries | four entries (Chord Keys, SUS Window, Full K Shorts, MIDI Keys); SUS Window skipped in Classic; MIDI Keys skipping the parts' channels; all four hidden on the SMK |
+| `cr_ui.c:1024` `cu_route`, Options > MIDI Perform / Bass | the parts' channels to `cr_route` | `cr_route.keys_ch` (MIDI Keys, 0 = off); a part set to the Keys' channel switches MIDI Keys off |
+| `cr_midi.c:76` `crm_map`, `cr_out.c:661` `cr_midi_in` | the parts' notes to `midi_event`, CCs and programs to `cr_min_q` | `CRM_KEY` for the MIDI Keys channel (notes 53 .. 79; CC 120 / 123: all keys up), checked first; the new queue `cr_mkq` (64, ISR → UI, never dropping a note-off) |
+| `cr_ui.c` `cr_ui_input` (the scan) | the keybed's edges to `cu_scan_keys` | drains `cr_mkq` first: `cu_key_press` / `cu_key_release` with the key index and the note's velocity; `cu.kmidi` beside `cu.kheld` |
 | `cr_ui.c:111` `CU_PAD_FN` (SMK) | pads → chord block keys | unchanged (Classic's table; the layout hidden there) |
 | `cr_engine.c` `cr_mod_ex` (1060), `crx_modifier_press` (865), `crx_transform_voice`, `crx_build_base`, `crx_secret_quality` (253) | types, secrets, re-strikes, the Full keyboard's zones | a held-not-pressed down; the amend (no reattack, Play Chord ignored, voices flagged by the gesture); `cr_set_full_chords`; the secret rule unchanged |
 | `cr_out.c:443` `CRE_MOD` (a: the mod, b: quiet, v: down) | the UI → engine queue | the two flags on `CRE_MOD` (silent, amend), `CRE_COMBINE_END`, `CRE_FULLCHORD` |
 | `cr_loop.c` the gesture capture | one event a gesture serial | a repeated serial amends its event |
-| `cr_settings.h` / `.c` `sticky` (167; 208, 525, 560, 764, 1104) | LATCH | the bits, the mask, the merge (above) |
+| `cr_settings.h` / `.c` `sticky` (167; 208, 525, 560, 764, 1104), `raw_sound` (173; 166, 223, 527, 535, 570) | LATCH; Raw Chord Sound | the bits, the masks, the merges (above) |
 | **the calibration** (`cr_ui.c:4796`, `panel.c:12 B_NAME`) | teaches the buttons (printed names: FX SCL ENV LFO EDIT GLO ...) and the knobs; the keys are not calibrated and no key is named there | **nothing**: it names LFO by its print, which does not change |
 | `tools/emu/keymap.c` (the native emulator) | F1 .. F4 = keys 1 3 5 8, 2 .. 5 = keys 0 2 4 7, Tab = key 6, its comment and `--help` say DIM MIN MAJ SUS / 6 m7 M7 9 / LOCK; the panel draws note names, not chord labels (`emu.c:380`) | the keys stay (they are indices); the comment and `--help` say both layouts (FM-1: F1 F2 F3 = DIM MIN MAJ, F2 + F3 = SUS, 2 3 4 Tab = 6 m7 M7 9, F4 / W and 5 / A = the roots C#4 / C4, F8 (LFO) = LOCK, F10 (GLO) held + F8 = LATCH) |
 | `tools/emu/web/keymap.js` `CHORD`, `tools/emu/web/emu.js:27, 54` | the sticker labels on keys 0 .. 8 and their colours | a `CHORD_FM1` map ({0: 6, 1: DIM, 2: m7, 3: MIN, 4: M7, 5: MAJ, 6: 9}) and the label switched by the firmware's layout (a `web_*` export of `cs.layout`, read each frame as the LEDs are); the LFO button's role label LOCK in FM-1 |
@@ -422,10 +489,11 @@ Found in the code (2026-10-16, origin/main 4ecd5be). "Needs" is the build's work
 | `web/site/index.html:107 .. 131` | the panel picture's alt text, the keybed SVG (CHORD BLOCK / ROOTS D4 … G5), the chord block SVG, the text on chord types, LOCK and secret chords | a second keybed / chord block picture for FM-1 and a sentence on the Option; the alt text |
 | `web/site/img/panel-main.png`, `design/choralroot-fm1-panels.png` (`design/make_mockups.py`) | the panel with the Classic sticker | an FM-1 sticker variant ([Open questions](#open-questions) 14) |
 | `design/make_mockups.py`, `make_layers_mockups.py`, `make_looper_mockups.py` | the designer sheets' chord block | Classic as they are; the FM-1's are this page's mock-ups |
-| `docs/MANUAL.md` | 3 The keybed (table and drawing), The buttons (LFO), The knobs (KNOB 1 on Full), The lights (B3), 4 Types and extensions, LOCK, Secret chords, Key Mode's Full keyboard, LATCH, 14 Options, 18 Quick reference (Buttons, Keys) | an FM-1 column or paragraph in each; the three Options |
-| `docs/manual/*.png` | `layer-key.png` (the tonic on D4 .. G5), `options.png` (Play Style), `chord.png` | unchanged; new: the Chord Layout option and the FM-1 LOCK layer's footer |
+| `docs/MANUAL.md` | 3 The keybed (table and drawing), The buttons (LFO), The knobs (KNOB 1 on Full), The lights (B3), 4 Types and extensions, LOCK, Secret chords, Key Mode's Full keyboard, LATCH, 14 Options, 18 Quick reference (Buttons, Keys) | an FM-1 column or paragraph in each; the four Options |
+| `docs/manual/*.png` | `layer-key.png` (the tonic on D4 .. G5), `options.png` (Play Style), `chord.png` | unchanged; new: the Chord Keys option and the FM-1 LOCK layer's footer |
 | Felucca's own UI (`perform.c:7`, `seq.c:390`, `ui_layer.c:7`, `ui_name.c:17`) | Felucca's black-key mutes and naming | not ChoralRoot's keys: nothing |
-| `docs/SETTINGS.md` | the block's table, the "every setting" table | `sticky`'s bits, the three automatic settings |
+| `docs/SETTINGS.md` | the block's table, the "every setting" table | `sticky`'s and `raw_sound`'s bits, the four automatic settings |
+| `docs/MANUAL.md` "MIDI in" (15) | the Perform / Bass channels' notes play the sound | a MIDI Keys line: the map 53 .. 79 = F3 .. G5 through the layout |
 
 ## Cost
 
@@ -434,10 +502,10 @@ Estimates, to be measured by the build (`tools/build.py`'s report, docs/FLASH.md
 
 | | Estimate | What |
 | --- | --- | --- |
-| **XIP** | +2.5 .. 4 KB | the resolver and the gesture (about 1 KB), LOCK on LFO and GLO + LFO (0.3 KB), the LED changes and the pulse (0.5 KB), the three Options with their strings (0.4 KB), the Full keyboard's shortcuts and `cr_set_full_chords` (0.8 KB), the engine's silent down and amend (0.4 KB), the loop's amendment (0.2 KB), the settings bits (0.1 KB) |
-| **RAM** | about +24 B .bss | `cs.layout`, `cs.combine`, `cs.full_short`; the gesture's start and its first key, the latch before it (2 B), the shortcut keys' press times (8 B) and states. The engine: a flag bit in `cr_voice_t`'s padding and the gesture flag in `cr_t`'s (as the streams' flags were: `cr_t` keeps its size); if no padding is left, +8 B |
+| **XIP** | +3 .. 5 KB | the resolver and the gesture with rules A and B (about 1.2 KB), LOCK on LFO and GLO + LFO (0.3 KB), the LED changes and the pulse (0.5 KB), the four Options with their strings (0.5 KB), the Full keyboard's shortcuts and `cr_set_full_chords` (0.8 KB), the engine's silent down and amend (0.4 KB), the loop's amendment (0.2 KB), MIDI Keys (`CRM_KEY`, the queue, the drain, the second held mask: 0.5 KB), the settings bits (0.1 KB) |
+| **RAM** | about +160 B .bss | MIDI Keys' queue `cr_mkq` (64 x 2 B: key and velocity with the down bit) and `cu.kmidi` (4 B); `cs.layout`, `cs.suswin`, `cs.full_short`, `cs.midi_keys`; the gesture's start and its first key, the latch before it (2 B), the shortcut keys' press times (8 B) and states. The engine: a flag bit in `cr_voice_t`'s padding and the gesture flag in `cr_t`'s (as the streams' flags were: `cr_t` keeps its size); if no padding is left, +8 B |
 | **POOL** | 0 | |
-| **Settings** | 0 bytes | six spare bits of the block's `sticky`; the session record unchanged |
+| **Settings** | 0 bytes | six spare bits of the block's `sticky`, five of `raw_sound`; the session record unchanged |
 | **Flash data** | 0 | no new object, no new sector |
 | **CPU** | negligible | a compare a scan while a gesture is open; the amend is Add Note's diff, once |
 
@@ -449,7 +517,8 @@ Host (`tests/`):
    out of range reads 50 ms and keeps the other bits; the bits are automatic, bit 0 manual (the `CRS_STICKY_AUTO`
    merge); `cr_settings_apply` gives the engine `sticky & 1`, capture keeps the bits; Reset Settings gives the
    defaults; the older firmwares' rule modelled (`CRS_FIX(sticky, 0, 1)`: an FM-1 record reads LATCH off, nothing
-   else touched).
+   else touched). `raw_sound`'s MIDI Keys bits the same way (round trip, 0 / 1 read Off, a channel above 16 reads
+   Off, the engine gets `raw_sound & 1`, an older firmware reads Raw Chord Sound Off).
 2. `cr_engine_test`: the silent down does not re-strike (Advanced, Free, LOCK on and off); the amend, MIN → SUS and
    MAJ → SUS: one note-off (the third) and one note-on (the fourth) and no other event, in Simple, Advanced, Free,
    Add Note and Play Chord, at every voicing -12 .. +12, with 6th with 7th Octave up, with every extension set; the
@@ -458,7 +527,9 @@ Host (`tests/`):
    `cr_set_full_chords` (a zone voice takes the latched spec; off: as today).
 3. `cr_loop_test`: a gesture reported twice with one serial is one event, with the amended type; playback has no
    flicker.
-4. `cr_midi_test`, `midi_control_test`: unchanged (MIDI notes still bypass the keys in either layout).
+4. `cr_midi_test`: `crm_map` gives `CRM_KEY` for notes 53 .. 79 on the MIDI Keys channel (on, off, on at velocity
+   0; CC 120 / 123 all up), nothing for notes outside it or other messages on it, and the parts' channels as before;
+   MIDI Keys Off: exactly today's mapping. `midi_control_test` unchanged.
 
 Emulator scripts (`tools/emu/test_cr.sh`, with the layout set through the Options first; every existing script runs
 in Classic untouched, the regression guard):
@@ -468,57 +539,94 @@ in Classic untouched, the regression guard):
 6. The window, by the scripts' ms timing: the pair 20, 49 ms apart over a root pressed between them: SUS in place
    (the third's note-off and the fourth's note-on on MIDI out, no other note); 51 ms apart at the default: MIN stays
    (Simple), SUS re-struck (Advanced); the window at 30 and 80; the R, a, b order; a G# held for a second then a root:
-   MIN at once; Free with no root held; a pair released one key at a time (no re-strike, the next root MIN).
+   MIN at once; Free with no root held; a pair released one key at a time (no re-strike, the next root MIN). Rule B:
+   Advanced with a root held, the pair 20 ms apart: one re-strike, as SUS, and no MIN note-on ever goes out; G# alone:
+   the re-strike as MIN at the window's close and not before; an extension key during the window acts at its press.
+   The KEY layer on pick: G#3 then A#3 20 ms later picks minor and stays minor; 80 ms later picks major.
 7. LOCK: LFO tap on / off (`lock`, the LFO light lit), LFO held: the layer, LFO blinking, its footer; LFO + a chord key:
    LOCK's tap at once; GLO + LFO: LATCH (`Latch`, the light pulsing: `expect_led` at its four phases), LOCK + LATCH
    (pulse lit / middle); the pair latched: G#3 and A#3 lit; the same pair again alone: off at the release, its
    extensions still lit; the secret combos latched and off; Clears / Keeps and Toggle / Pushed with the pair; LOCK
-   not switchable in the sound editor; PANIC clears it.
+   not switchable in the sound editor; PANIC clears it. LOCK with roots held in Advanced: the latched pair pressed
+   again: no MIN sounds, the roots fall back at the release. The buttons: GLO held past Hold Time alone opens no
+   Options (both layouts), a quick click does; LFO held, then GLO: the LOCK layer, no LATCH, no Options; Classic: LFO
+   tap is LATCH and GLO + LFO does nothing, as today.
 8. Picking keys: the loop slots, naming, the KEY layer's tonic on D4 .. G5 in both layouts, C4 / C#4 dark and silent
    in those maps and playing in the others; the KEY layer's MAJ / MIN.
 9. The layout switch: from the Options with keys held (released), with a latch (kept, its lights moved: SUS + 9 on
    C#4 + C4, then G#3 + A#3 + B3).
-10. The Full keyboard: KNOB 1 is the voicing (both layouts, shortcuts Off and On); Full Shortcuts On: F#5 tap / hold
+10. The Full keyboard: KNOB 1 is the voicing (both layouts, shortcuts Off and On); Full K Shorts On: F#5 tap / hold
     (the chord keys, the roots ending at F5, both layouts), G5 tap / hold (the latch's chord, the Key Mode chord, the
     message with neither), the split, LOCK on the Full keyboard (FM-1 by LFO; Classic B3 with the chord keys
     showing), the lights of F#5 and G5.
-11. `test_persist.sh`: FM-1, a window of 65 ms and the shortcuts On come back after a power cycle without SAVE held
-    (automatic); LOCK with SUS latched in FM-1 comes back lit on G#3 and A#3 after a global save.
-12. The browser emulator: `test_web_emu.mjs` bit-exact with the native one as ever; the sticker labels follow the
+11. MIDI Keys (scripts' `midi` lines): ch 5, FM-1: 56 + 58 then 62: D sus, as the keys; 56 and 58 36 ms apart over
+    62: SUS in place; Classic: 61 is SUS, 59 LOCK's tap; notes 52 and 80 do nothing; the velocity plays; a key held on
+    the panel and over MIDI is one press, released at the last; CC 123 releases every MIDI key; a burst of 100 notes:
+    no key left held; the values skip the parts' channels, and MIDI Perform set to ch 5 switches MIDI Keys Off; MIDI
+    Keys Off: notes on that channel do what they do today.
+12. `test_persist.sh`: FM-1, a SUS Window of 65 ms, Full K Shorts On and MIDI Keys ch 5 come back after a power cycle
+    without SAVE held (automatic); LOCK with SUS latched in FM-1 comes back lit on G#3 and A#3 after a global save.
+13. The browser emulator: `test_web_emu.mjs` bit-exact with the native one as ever; the sticker labels follow the
     layout; `test_web_emu_smk.mjs` unchanged (the Options hidden). `BOARD=smk37 ./build.sh` builds.
-13. Size: `tools/build.py`'s report against the estimate; docs/FLASH.md's account.
+14. Size: `tools/build.py`'s report against the estimate; docs/FLASH.md's account.
 
 On the unit (the owner): the one-finger pair at 50 ms (and whether 40 or 60 suits better), the pulse's look, LFO as
 LOCK in the hands.
 
 ## Open questions
 
-1. **Picking keys** (decision 6): they stay on D4 .. G5 in both layouts, and C4 / C#4 do nothing in the pick maps.
-   What it means: the loop slots, the naming letters, the KEY layer's tonic and the pickers keep the keys they have
-   today; only playing uses the two new roots. The alternative is to shift the maps to start at C4 in FM-1 (one more
-   slot key, the letters one key left), which changes where everything is between the layouts. Keep D4 .. G5?
-2. **GLO + LFO in Classic**: unused today and in this design. Make it LATCH in both layouts (one gesture to learn),
-   or leave Classic exactly as it is?
-3. **LFO first, then GLO**: in this design only GLO held then LFO is LATCH (as GLO + SEQ, GLO + REC); LFO held then
-   GLO is a combo that opens the LOCK layer. Should either order be LATCH (as GLO + SAVE's revert)?
-4. **The LATCH pulse**: lit, middle, glow, middle at 300 ms (1.2 s), and with LOCK on as well lit ↔ middle. Right rate
-   and depth on the unit?
-5. **The window for the secret combos**: designed to apply the same in-place rule to F# with G# or A# (Secret on).
-   The decision names the pair only; confirm the secret combos too?
-6. **A root just before the type keys in Simple** stays a single note (or the scale's chord), as in Classic today.
-   Should the window also catch a type key landing just after the root (in both layouts, or FM-1 only)?
-7. **The KEY layer on pick**: G#3 and A#3 pick the scale at the press, so a one-finger pair there picks minor and then
-   major (the second key wins). Ignore the second key of a pair within the window there?
-8. **LOCK, Advanced / Free, roots held**: the latched pair pressed again re-types the held roots to MIN for up to the
-   window before going off at the release. Acceptable, or should a type key over a latched pair wait the window
-   before the held roots follow (sound changes only, never a new chord's start)?
-9. **G5 with no latch and Key Mode off**: designed as "nothing, a message". Or major triads, or the last chord played?
-10. **G5's state**: designed to start from Key plays each time the Full keyboard is entered, not stored. Keep it in
-    the session instead?
-11. **The names on the screen**: `Chord Layout`, `Combine Window` (or `SUS Window`), `Full Shortcuts`.
-12. **The window's step**: 5 ms (11 values) or 10 ms (6); and grey in Classic or hidden there.
-13. **MIDI that plays the keys**: none exists today (the Perform channel plays the sound directly). Wanted, as a
-    mode or a channel where notes 53 .. 79 press the FM-1's keys through the active layout?
-14. **The sticker pictures**: one panel picture per layout for the site and the manual, or one picture with both?
-15. **The layout switch with keys held**: designed to release them (a held chord stops). Or keep each key's job until
-    it is let go?
+The first round's fifteen, with the owner's answers (2026-10-16, second round). The five still open are explained
+below the table.
+
+| # | Question | Status |
+| --- | --- | --- |
+| 1 | Picking keys stay on D4 .. G5 in FM-1? | **open** (explained below) |
+| 2 | GLO + LFO in Classic | **decided**: Classic stays exactly as it is; LFO is LATCH, no GLO combo |
+| 3 | Which order is LATCH | **decided**: GLO held, then LFO; holding GLO never opens the Options (only a quick click); LFO held, then GLO is the LOCK layer |
+| 4 | The LATCH pulse | **decided**: as designed |
+| 5 | The window for the secret combos | **decided** ("probably"): yes; confirm on the unit |
+| 6 | A type key just after the root in Simple | **open** (explained below) |
+| 7 | The KEY layer's pick and the one-finger pair | **decided**: no combo there; the pair's second key within the window is ignored |
+| 8 | LOCK / Advanced: a MIN heard before SUS | **decided**: wait the window (rule B) |
+| 9 | G5 with no latch and Key Mode off | **open**: the answer ("it should play a G5 root if the shortcuts are off") is how G5 already behaves with the shortcuts Off; the question is about them On (below) |
+| 10 | G5's starting state | **open** (explained below) |
+| 11 | The names | **decided**: Chord Keys, SUS Window, Full K Shorts |
+| 12 | The window's step, Classic | **decided**: 5 ms; hidden in Classic |
+| 13 | MIDI that plays the keys | **decided**: yes, the FM-1's key map ([MIDI in](#midi-in)) |
+| 14 | The panel pictures | **open** (explained below) |
+| 15 | The layout change with keys held | **decided**: released |
+
+**1. Picking keys.** On the view every root key plays. In some layers the root keys pick something instead: in the
+PLAY menu (Keys = Loops) the white keys D4, E4, F4 .. C5 are loop slots 1 .. 10 and D#4 / F#4 are CLEAR / UNDO; in
+the naming dialog the white keys type letters, D#4 is a space, F#4 deletes; in the KEY layer a root sets the tonic.
+Those maps start at D4 because D4 is Classic's first root. In FM-1, C4 and C#4 are roots too. The question is only
+what C4 and C#4 do in those maps: the design leaves every map where it is (slot 1 is D4 in both layouts, C4 and C#4
+dark and silent in the maps), so the two layouts pick with the same keys. The alternative shifts the maps down to
+C4 in FM-1 (slot 1 on C4, the letters one key lower, one more white key for them), so the maps start on the first
+root in both layouts but sit in different places between them. The recommendation is to keep D4.
+
+**6. A type key just after the root, in Simple.** In Simple a chord is fixed the moment the root goes down. If the
+root lands a few ms before the chord key (a sloppy "together"), the root plays a single note (or, with Key Mode, the
+scale's chord), and the chord key that lands just after it changes nothing. That is Classic's behaviour today and
+stays so (Classic is unchanged). With the one-finger pair it can bite more often in FM-1: root, then G#, then A#, all
+within 30 ms, gives a single note. The question: in FM-1, should a type key landing within the SUS Window **after**
+a root still make that root's chord, in place (the third and fifth added to the sounding root, no restrike), as rule
+A amends? Yes makes "together" forgiving in either order; no keeps Simple's rule word for word (type first, then
+root).
+
+**9. G5 with the shortcuts On, nothing latched, Key Mode off.** With Full K Shorts Off, G5 is a plain note (the
+answer given; already the design). With them On, G5 is the "chord on every key" switch, and its chord is the latched
+chord, else Key Mode's. When there is neither, what should the keys play with G5 on: single notes and a message
+(the design's proposal), major chords, or the last chord played?
+
+**10. G5's starting state.** G5 is a switch (chords on every key / single notes). Something must decide where it
+starts when you enter the Full keyboard (KEY layer, Keyboard: Full) or switch the unit on. The design: it starts on
+when Key Mode is on with Key plays Chords (which already plays a chord on every Full key today, so nothing changes
+for those players) and off otherwise, and is not saved. The alternative: remember its last state, also over a power
+cycle (the session, written by SAVE held, like LOCK's latch).
+
+**14. The panel pictures.** The site (`web/site/index.html`: the panel photo with ChoralRoot's labels,
+`img/panel-main.png`, and its keybed drawings) and the manual's keybed drawing show Classic's labels: DIM MIN MAJ SUS
+on F#3 G#3 A#3 C#4, LOCK on B3, LATCH on LFO. FM-1's labels differ (SUS over two keys, 9 on B3, LOCK on LFO, two more
+roots). The question is only about those pictures: a second picture for FM-1 beside the Classic one, or one picture
+that shows both layouts' labels (e.g. FM-1's in a second colour)? The firmware does not depend on it.
