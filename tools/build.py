@@ -18,8 +18,12 @@ After the checks it prints the section sizes against the XIP slot and the RAM / 
 
 BOARD=smk37 (or --board smk37) builds ChoralRoot for the M-Vave SMK-37: -DBOARD_SMK37=1 for the app, the loader and
 the boot stub, identity SMK-37 Pro_920 (constant, as the FM-1's), the SMK flash layout (fm1pkg_make.py), the SMK
-stub's own lock (firmware/stub/stub_smk37.lock), and the package build/choralroot-smk37.fwsc
-(choralroot-smk37-X.Y.fwsc for a release). The default stays the FM-1.
+stub's own lock (firmware/stub/stub_smk37.lock), and the package build/choralroot-smk37.fwsc. The default stays the FM-1.
+An SMK release names its board in its version, which every reader shows (--release X.Y-smk37, e.g. 0.24-beta2-smk37:
+"ChoralRoot 0.24-beta2-smk37"; one without "smk37" is refused, so that an SMK package never reads as the FM-1 release
+of the same number), and goes to build/release-smk37/ for the three models together: choralroot-X.Y-smk37.fwsc, its
+-app.bin, the -1core pair, the Elite's and the MKE-P37's with -elite / -mke after the version, SHA256SUMS over every
+package and app there, SMK37.md and the licences (another version's files there are dropped).
 MODEL=elite / mke (or --model) with smk37: the same build under the SMK-37 Elite's or the MKE-P37's model name
 (identity SMK-37 Elite_920 / MKE-P37_920, the loader's and the update record's name too; -DSMK_MODEL), so M-Vave's
 updater still takes that unit's factory package; build/choralroot-smk37-elite.fwsc, -mke.fwsc. The boot stub holds
@@ -549,11 +553,20 @@ def main():
     name = f"{stem}.fwsc"
     if a.release:                   # the identity stays FM-1_920: only the version string and the names change
         m = re.fullmatch(r"\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)?", a.release)   # the identity never encodes it
+        if BOARD != "fm1":          # (an SMK test build: X.Y-suffix-smk37 too, the board in the version)
+            m = re.fullmatch(r"\d+\.\d+(?:\.\d+)?(?:-[A-Za-z0-9.]+)*", a.release)
+            if m and BOARD not in a.release.lower():
+                raise SystemExit(f"--release {a.release}: an SMK-37 release names the board, e.g. {a.release}-{BOARD}")
+        elif m and "smk" in a.release.lower():
+            raise SystemExit(f"--release {a.release}: an FM-1 release never names the SMK (BOARD=smk37 for that)")
         if not m:
             raise SystemExit(f"--release {a.release}: use X.Y, X.Y.Z or X.Y-suffix")
         VERSION = "ChoralRoot " + a.release.lower()      # e.g. ChoralRoot 1.0, ChoralRoot 1.1-rc1
         name = f"{stem}-{a.release}.fwsc"
         name1 = f"{stem}-{a.release}-1core.fwsc"     # the single-core package (docs/DUALCORE.md "Two packages")
+        if BOARD != "fm1":          # choralroot-X.Y-smk37[-elite|-mke][-1core].fwsc
+            tag = f"{UNIT}-{a.release}" + stem[len(BOARD_STEM[BOARD]):]
+            name, name1 = f"{tag}.fwsc", f"{tag}-1core.fwsc"
     fm1pkg_make.SDK = a.sdk
     for rel, sha in SDK_SHA256.items():          # fail early without the SDK
         if hashlib.sha256(fm1pkg_make.sdk_file(rel)).hexdigest() != sha:
@@ -602,7 +615,21 @@ def main():
     print(f"loader   {LDR / 'ota.bin'}  {len(ota)} B")
     print(f"package  {OUT / name}  {len(pkg)} B, identity {PRODUCT}" + (" (single core)" if single_env and not a.release else "") +
           (f", board {BOARD}" if BOARD != "fm1" else ""))
-    if a.release:                   # what a release carries: the package, the app and every licence they need
+    if a.release and BOARD != "fm1":   # the SMK test build: the three models in one folder (above)
+        rel = OUT / f"release-{BOARD}"
+        rel.mkdir(parents=True, exist_ok=True)
+        for f in rel.iterdir():         # another version's packages and apps go (this one's other models stay)
+            if f.is_file() and f.name.endswith((".fwsc", "-app.bin")) and not f.name.startswith(f"{UNIT}-{a.release}"):
+                f.unlink()
+        (rel / "LICENSES").mkdir(exist_ok=True)
+        files = ((name, pkg), (name[:-5] + "-app.bin", bytes(img)), (name1, one[0]), (name1[:-5] + "-app.bin", one[1]))
+        for n, b in files:
+            (rel / n).write_bytes(b)
+        sums = sorted(f.name for f in rel.iterdir() if f.is_file() and f.name.endswith((".fwsc", "-app.bin")))
+        (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256((rel / n).read_bytes()).hexdigest()}  {n}\n"
+                                                for n in sums))
+        shutil.copy(SRC / "SMK37.md", rel / "SMK37.md")
+    elif a.release:                 # what a release carries: the package, the app and every licence they need
         rel = OUT / f"release-{a.release}"
         shutil.rmtree(rel, ignore_errors=True)
         (rel / "LICENSES").mkdir(parents=True)
@@ -612,6 +639,7 @@ def main():
         for n, b in files:
             (rel / n).write_bytes(b)
         (rel / "SHA256SUMS").write_text("".join(f"{hashlib.sha256(b).hexdigest()}  {n}\n" for n, b in files))
+    if a.release:
         for f in sorted((SRC / "LICENSES").glob("*.txt")):
             shutil.copy(f, rel / "LICENSES" / f.name)
         for doc in ("LICENSE", "LICENSING.md"):

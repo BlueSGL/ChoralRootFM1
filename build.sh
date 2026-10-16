@@ -7,6 +7,7 @@
 #   CR_SINGLE_CORE=1 ./build.sh     (build/choralroot.fwsc as the single-core package)
 #   BOARD            target board: fm1 (default) or smk37 (M-Vave SMK-37 -> build/choralroot-smk37.fwsc; SMK37.md)
 #   MODEL            smk37: pro (default), elite or mke: the model name the keyboard reports
+#   BOARD=smk37 ./build.sh --release X.Y-smk37   (the SMK test build: build/release-smk37/, the three models together)
 #   JIELI_TOOLCHAIN  JieLi Linux toolchain (default: ~/.jieli/toolchain)
 #   AC79_SDK         JieLi AC79 SDK checkout (default: ~/fw-AC79_AIoT_SDK if present, else tools/sdk: the three files, vendored)
 set -e

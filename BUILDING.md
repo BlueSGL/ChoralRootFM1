@@ -91,7 +91,10 @@ under the SMK-37 Elite's or the MKE-P37's model name (`build/choralroot-smk37-el
 `build/choralroot-smk37-mke.fwsc`), so M-Vave's updater still takes that unit's factory package; the Starrykey 37 Play
 uses the Pro build. Each model's boot stub has its lock (`firmware/stub/stub_smk37*.lock`: the stub's update record
 names the model). The intermediate files (`build/choralroot.bin`, `build/loader/ota.bin`, `build/choralroot.dis`) are
-shared: build the FM-1 again before `tests/run_tests.sh`. The default stays the FM-1, byte for byte.
+shared: build the FM-1 again before `tests/run_tests.sh`. The default stays the FM-1, byte for byte. An SMK release names the
+board in its version (`BOARD=smk37 [MODEL=...] ./build.sh --release 0.24-beta2-smk37`: "ChoralRoot 0.24-beta2-smk37";
+`--release` without `smk37` is refused for the SMK, and with it for the FM-1) and collects the three models' packages,
+apps and `-1core` twins in `build/release-smk37/` with one `SHA256SUMS` ([SMK37.md](SMK37.md) "Build").
 
 `build.sh` sets `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` itself on macOS (macOS drops `DYLD_*` variables
 on the way into `/bin/sh`); calling `python3 tools/build.py` directly needs it exported.
