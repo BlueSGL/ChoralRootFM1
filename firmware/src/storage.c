@@ -213,13 +213,13 @@ static uint8_t st_owner_cleared;                /* (the console says so) */
 #ifndef ST_FEED
 #define ST_FEED() ((void)0)                     /* (the device: the watchdog, between erases) */
 #endif
-/* The stock firmware's mapping in USRFLASH (global settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000; the
- * end marker "usrdata\0" at 0xEAFF8, FL_STOCKTAG): the stock firmware trusts the area while the marker is there and
- * never rebuilds it, so after a return to stock ChoralRoot's banks and loops would be its key, knob and fader
- * mapping (every key one note). So: an owner change keeps an intact stock mapping (it reads as empty banks and
- * loops), and the marker is released (its sector erased: the stock firmware rebuilds its factory mapping at its
- * next start) before ChoralRoot's first erase or write in USRFLASH (storage_hw.c st_erase) and at an owner change
- * that finds the marker over another firmware's data. */
+/* The stock firmware's mapping in USRFLASH (global settings at 0xC2000, magic A3 3A; 8 presets from 0xC3000 every
+ * 0x5000, 0x29E3 bytes each, the rest erased; the end marker "usrdata\0" at 0xEAFF8, FL_STOCKTAG): the stock firmware
+ * trusts the area while the marker is there and never rebuilds it, so after a return to stock ChoralRoot's banks and
+ * loops would be its key, knob and fader mapping (every key one note). So: an intact stock mapping is kept (it reads
+ * as empty banks and loops), and the marker is released (its sector erased: the stock firmware rebuilds its factory
+ * mapping at its next start) before ChoralRoot's first erase in USRFLASH (storage_hw.c st_erase) and at boot when it
+ * stands over anything else (st_owner_check: ours, an older build's, another firmware's). */
 static int st_stock_tagged(void)
 {
     static const uint8_t TAG[8] = {'u', 's', 'r', 'd', 'a', 't', 'a', 0};
@@ -232,22 +232,32 @@ static int st_stock_tagged(void)
             return 0;
     return 1;
 }
-static int st_stock_intact(void)                /* the marker over the stock layout (its global settings' magic) */
+static int st_stock_intact(void)                /* the marker over the stock layout */
 {
-    uint8_t h[2];
-    return st_stock_tagged() && !st_read(FL_SMP_LO, h, 2) && h[0] == 0xA3u && h[1] == 0x3Au;
+    uint8_t b[8];
+    uint32_t n, k, i, ff;
+    if (!st_stock_tagged() || st_read(FL_SMP_LO, b, 2) || b[0] != 0xA3u || b[1] != 0x3Au)
+        return 0;
+    for (n = 0; n < 8u; n++)                    /* each preset: its head written, its last two sectors erased */
+        for (k = 0; k < 3u; k++) {
+            if (st_read(FL_SMP_LO + 0x1000u + n * 0x5000u + (k ? 0x2000u + k * 0x1000u : 0u), b, 8))
+                return 0;
+            for (ff = 1, i = 0; i < 8u; i++)
+                ff &= b[i] == 0xFFu;
+            if (ff != (k != 0u))
+                return 0;
+        }
+    return 1;
 }
 static void st_stock_release(void)              /* erase the marker's sector, once: later calls find no marker */
 {
     if (st_stock_tagged())
         st_erase(FL_STOCKTAG_LO);
 }
-static int st_in_usrflash(uint32_t off) { return off >= FL_SMP_LO && off < FL_SMP_HI; }
+static inline int st_in_usrflash(uint32_t off) { return off >= FL_SMP_LO && off < FL_SMP_HI; }
 static void st_smk_clear(void)
 {
     uint32_t r, k, keep = st_stock_intact();   /* the stock mapping: kept until ChoralRoot stores something there */
-    if (!keep)
-        st_stock_release();                     /* the marker over another firmware's data: let the stock rebuild */
     for (r = 0; r < sizeof ST_SMK_REGIONS / sizeof ST_SMK_REGIONS[0]; r++)
         for (k = 0; k < ST_SMK_REGIONS[r][1]; k++) {
             if (keep && st_in_usrflash(ST_SMK_REGIONS[r][0]))
@@ -263,6 +273,8 @@ static void st_owner_check(void)
     uint32_t i, erased = 1, ours = 1;
     for (i = 0; i < 16u; i++)
         want[i] = i < 9u ? (uint8_t)"SMK37DATA"[i] : i - 9u < sizeof FAM - 1u ? (uint8_t)FAM[i - 9u] : 0u;
+    if (!st_stock_intact())
+        st_stock_release();                     /* the marker over anything but the stock mapping: let it rebuild */
     if (st_read(ST_OWNER_OFF, tag, 16))
         return;
     for (i = 0; i < 16u; i++) {

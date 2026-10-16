@@ -84,6 +84,28 @@ static int all(uint32_t lo, uint32_t hi, uint8_t v)
             return 0;
     return 1;
 }
+static void stock(void)                            /* the stock mapping as V016 writes it */
+{
+    uint32_t n;
+    memset(nor + 0xC2000, 0xFF, 0x29000);
+    memset(nor + 0xC2000, 0x07, 0x86);
+    nor[0xC2000] = 0xA3; nor[0xC2001] = 0x3A;
+    for (n = 0; n < 8u; n++) {
+        memset(nor + 0xC3000 + n * 0x5000, 0x01, 0x29E3);
+        nor[0xC3000 + n * 0x5000 + 4] = 0x7F;
+    }
+    memcpy(nor + 0xEAFF8, "usrdata", 8);
+}
+static int is_stock(void)
+{
+    uint8_t keep[0x29000];
+    int same;
+    memcpy(keep, nor + 0xC2000, sizeof keep);
+    stock();
+    same = !memcmp(keep, nor + 0xC2000, sizeof keep);
+    memcpy(nor + 0xC2000, keep, sizeof keep);
+    return same;
+}
 static int store_erased(void)
 {
     return all(0x9D000, 0xAF000, 0xFF) && all(0xB0000, 0xBB000, 0xFF) && all(0xC2000, 0xEA000, 0xFF) &&
@@ -133,24 +155,35 @@ int main(void)
     st_owner_check();
     check("an untagged store (FELUCCA_DATA_UNTAGGED_OK 0): cleared, tagged", store_erased() && tagged() &&
           others_kept());
-    /* the stock firmware's mapping in USRFLASH (marker "usrdata" at 0xEAFF8, A3 3A at 0xC2000) */
+    /* the stock firmware's mapping in USRFLASH (01-hardware 2.3) */
     fill();
-    memset(nor + 0xC2000, 0x00, 0x28000);          /* (made-up presets) */
-    nor[0xC2000] = 0xA3; nor[0xC2001] = 0x3A;
-    memset(nor + 0xEA000, 0xFF, 0x1000);
-    memcpy(nor + 0xEAFF8, "usrdata", 8);
+    stock();
     memcpy(nor + 0xAF000, "SMK37DATASLOOP\0", 16);
     tag_erases = usr_before_tag = 0;
     st_owner_cleared = 0;
     st_owner_check();
     check("owner change over the intact stock mapping: the store cleared, USRFLASH and its marker kept",
-          all(0x9D000, 0xAF000, 0xFF) && all(0xB0000, 0xB4000, 0xFF) && nor[0xC2000] == 0xA3 && all(0xC2002, 0xEA000, 0x00) &&
-          !memcmp(nor + 0xEAFF8, "usrdata", 8) && tag_erases == 0 && st_stock_tagged() && st_stock_intact() && tagged());
+          all(0x9D000, 0xAF000, 0xFF) && all(0xB0000, 0xB4000, 0xFF) && is_stock() && tag_erases == 0 &&
+          st_stock_tagged() && st_stock_intact() && tagged());
+    st_owner_check();
+    check("... and at the next boot (ours now)", is_stock() && tag_erases == 0);
     st_stock_release();                            /* ChoralRoot's first write into USRFLASH (storage_hw.c st_erase) */
     check("first write into USRFLASH: the marker sector erased, once", all(0xEA000, 0xEB000, 0xFF) && tag_erases == 1 &&
           !st_stock_tagged());
     st_stock_release();
     check("... and only once", tag_erases == 1);
+    {
+        static const uint32_t HIT[] = {0xC2000u, 0xC3000u, 0xC6000u, 0xDB000u, 0xE5000u, 0xEA000u};
+        uint32_t h, ok = 1;
+        for (h = 0; h < sizeof HIT / sizeof HIT[0]; h++) {
+            stock();
+            nor[HIT[h]] = 0x5A;                    /* one sector of the stock layout overwritten */
+            if (HIT[h] == 0xC3000u)
+                memset(nor + 0xC3000, 0xFF, 0x1000);   /* (an erased preset head) */
+            ok &= !st_stock_intact();
+        }
+        check("the stock layout checked: its settings' magic, each preset's head and erased tail", ok);
+    }
     fill();
     memset(nor + 0xEA000, 0xFF, 0x1000);
     memcpy(nor + 0xEAFF8, "usrdata", 8);           /* the marker over another firmware's data (0x44): broken stock */
@@ -159,6 +192,13 @@ int main(void)
     st_owner_check();
     check("owner change, marker over another firmware's data: marker released first, then the store cleared",
           store_erased() && all(0xEA000, 0xEB000, 0xFF) && tag_erases == 1 && usr_before_tag == 0 && tagged());
+    stock();
+    memset(nor + 0xD2000, 0x44, 0x5000);           /* an older ChoralRoot's loop slots over the stock presets */
+    tag_erases = 0;
+    st_owner_cleared = 0;
+    st_owner_check();
+    check("our own store, the marker over our data (an older build): marker released at boot, data kept",
+          tag_erases == 1 && !st_stock_tagged() && all(0xD2000, 0xD7000, 0x44) && !st_owner_cleared && tagged());
     fill();
     memset(nor + 0xEA000, 0xFF, 0x1000);
     tag_erases = 0;
