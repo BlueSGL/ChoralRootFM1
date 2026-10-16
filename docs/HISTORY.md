@@ -4394,15 +4394,16 @@ docs/CHORD-NAMES.md "Solfège" as the alternative not taken). `cr_engine.c`: `cr
 `cr_chord_solfege` are one function (`crx_degree`) with two spellings; `cr_ui.c cu_numeral` picks one, the picker
 (`CU_NUMS`) reads Off / On / Solfège and stops at both ends, the trace says `key: knob 4 numerals solfege`. The
 longest syllable is 4 characters, so the screen's `numeral[6]` is unchanged. The cell's è is one extra glyph in CRB
-(`tools/gen_aa_font.py CRB_EXTRAS`, 249 B). **Storage**: no block bit was free at no cost (`bass_on` bit 0 would turn
-0.22's engine bass on; any other byte's new bit resets that byte's setting in 0.22), so bit 1 of `bass_on` keeps
-"shown" (On and Solfège) and the session's new `numerals_sol` (byte 22, from `rsv`, 46 -> 45) says "as a syllable";
-both are written by the global save alone, so the setting stays manual. 0.22 reads Solfège as On, 0.17 .. 0.21 as
-Off (docs/SETTINGS.md). Fixed do (Do = C, the note names) is a different thing, an Options > Chord Names value, not
-built. **Tests**: `tests/cr_engine_test.c s_solfege` (C major and A minor at all 12 roots, the marks, other tonics;
+(`tools/gen_aa_font.py CRB_EXTRAS`, 249 B). **Storage**: a bit of its own, bit 7 of the block's `scale`
+(`CRS_SOLFEGE`; the scale is bits 0 .. 6), apart from the bass byte (the owner, 2026-10-16: "Add a new bit for the
+Solfège mode. don't mix it with bass"; the first cut kept On's `bass_on` bit 1 for both and a session byte for the
+style, not merged). On writes `bass_on` bit 1 alone, Solfège `scale` bit 7 alone. 0 in every older record, no
+version; 0.17 .. 0.22 check `scale` against 0 .. 1, so a downgrade with Solfège saved reads the scale as Major and
+Numerals as Off there, nothing else (docs/SETTINGS.md). Fixed do (Do = C, the note names) is a different thing, an
+Options > Chord Names value, not built. **Tests**: `tests/cr_engine_test.c s_solfege` (C major and A minor at all 12 roots, the marks, other tonics;
 all 2304 cells ended, the longest 4, each with its numeral's accidental, case and mark); `tests/cr_draw_test.c` (the
 syllables in the numeral's gap, the widest `#MI+` 39 px, 2 px clear; the KEY page's `Solfège` whole in its cell:
-`key_page2_solfege`); `tests/cr_settings_test.c t_session` (the byte's place, default, round trip, range);
+`key_page2_solfege`); `tests/cr_settings_test.c t_solfege` (both scales, the engine's side, an unknown scale, manual, an older record, the older firmwares' rule);
 `tools/emu/scripts/cr_solfege.txt` (`test_cr.sh`: the picker; SOL re ti° in C major; DO with Transpose +1; fa and MI
 in A minor; back to On: iv, the same notes) and `persist_solfege_set.txt` / `_check.txt` (`test_persist.sh`: saved,
 relaunched, `SOL`). XIP 550652 B of 573440 (+320 B). Docs: MANUAL.md (Numerals, the KEY page table, the quick

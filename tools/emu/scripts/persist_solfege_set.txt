@@ -1,5 +1,5 @@
 # test_persist.sh, Numerals = Solfege run 1 (GitHub issue 15): Key Mode on (C major), the KEY layer's page 2: KNOB 4
-# to Solfege (the block's bit 1 of bass_on, On, and the session's numerals_sol); OCT-; SAVE held: the global save
+# to Solfege (bit 7 of the block's scale, CRS_SOLFEGE); OCT-; SAVE held: the global save
 wait 500
 btn SEL                       # tap: Key Mode on
 wait 300

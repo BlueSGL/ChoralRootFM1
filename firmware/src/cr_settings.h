@@ -68,11 +68,16 @@
  * every older record and 0 is the default: no version, nothing to migrate. Manual (SAVE held), as the page's others */
 #define CRS_NUMERALS 0x02u
 #define CRS_NUMS(s) (((unsigned)(s)->bass_on & CRS_NUMERALS) ? 1u : 0u)
-/* Its third value, Solfege (GitHub issue 15: the same degree as DO RE MI ..), has no bit here: the block has none left
- * that 0.22 would ignore (bit 0 of this byte would switch 0.22's engine bass on; every other byte is range-checked
- * whole, so a bit in it costs a setting there). The bit above says the degree is shown (On or Solfege) and the
- * session's numerals_sol says how; both are written by the same global save (SAVE held), so Numerals stays manual.
- * 0.22 reads Solfege as On (the Roman numeral) and nothing else; 0.17 .. 0.21 as Off, as they read On */
+/* Its third value, Solfege (GitHub issue 15: the same degree as DO RE MI ..), is a bit of its own, apart from the bass
+ * byte (the owner, 2026-10-16: "Add a new bit for the Solfege mode. don't mix it with bass"): bit 7 of `scale`
+ * (CRS_SOLFEGE; the scale itself is bits 0..6, CRS_SCALE, room for more scales). Off: neither bit; On: CRS_NUMERALS
+ * alone; Solfege: CRS_SOLFEGE alone (set, it wins over the other). 0 in every older record and 0 is the default: no
+ * version, nothing to migrate. Every firmware from 0.17 to 0.22 checks the byte against 0 .. 1 (CRS_FIX(scale, 0,
+ * 1)), so after a downgrade with Solfege saved it reads the scale as Major and Numerals as Off until set again,
+ * nothing else; without Solfege the byte is one it knows. Manual (SAVE held), as the page's others */
+#define CRS_SOLFEGE 0x80u
+#define CRS_SCALE(s) ((unsigned)(s)->scale & 0x7Fu)
+#define CRS_SOL(s) (((unsigned)(s)->scale & CRS_SOLFEGE) ? 1u : 0u)
 /* Options > Key Touch, Velocity Sens, Aftertouch Sens (0.22; docs/VELOCITY.md) ride in bits 2..7 of the same byte:
  * bits 2-3 Key Touch (0 Fixed, the default: the keys send Options > Velocity, no sensing; 1 Dynamic: the keys'
  * velocity; 2 Velocity + Aftertouch), bits 4-5 Velocity Sens and bits 6-7 Aftertouch Sens (0 Mid, the default; 1 Low;
@@ -149,7 +154,8 @@ typedef struct {
     uint8_t playstyle, extadd, secret, key_on;       /* cr_playstyle_t, cr_extadd_t, cr_secret_t, Key Mode (bit 0;
                                                       * v14: bit 1 Key plays Notes, bit 2 the Full keyboard; 0.22:
                                                       * bits 3 .. 4 Snap, CRS_SNAP) */
-    uint8_t tonic, scale;                            /* 0..11, cr_scale_t */
+    uint8_t tonic, scale;                            /* 0..11, cr_scale_t (bits 0..6; bit 7: Numerals' Solfege,
+                                                      * CRS_SOLFEGE, after 0.22) */
     int8_t transpose;                                /* -24..24 */
     uint8_t single;                                  /* cr_single_t: Full Octave / Split Oct / (v14) 2 Split Bass */
     uint8_t split_pc, vel, bass_on, bass_mode;       /* 0..11; key velocity 1..127; (bit 0 always written 0: a firmware
@@ -249,7 +255,7 @@ static inline void crs_pool_set(cr_settings_t *s, unsigned part, unsigned r, uin
  * CR_BLOCK), so the block keeps its size and its layout and an older firmware reads a v15 block as it read v14's.
  * The record has its own header (magic, version, size, check: FNV-1a over [12, size)), the block's import rules (a
  * shorter, older record over the defaults; a longer, newer one by its prefix; anything else: the defaults = the unit as
- * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 125 of them unused today (45 in the
+ * 0.17 powered on) and real reserve: CSS_SIZE is 1024 of the object's 3840 bytes, 126 of them unused today (46 in the
  * state, 4 after the FX block, 8 in each part, 60 at the end).
  * `bind`: the CRC of the settings object in flash when the session was written (0: none). The session is used at
  * power-on if the settings block was read as current (written by a v15 firmware: an older one in between would have
@@ -333,10 +339,7 @@ typedef struct {
                                          * -5 x1/8, -4 x1/6 (those four since 2026-10-11), -3 x1/4, -2 x1/2,
                                          * -1 x3/4, 0 x1, 1 x1.5, 2 x2, 3 x4 (cr_loop.h CRL_NRATE; 0 = the default, so
                                          * a record written before it reads x1: no migration) */
-    uint8_t numerals_sol;               /* 1: the KEY layer's Numerals is Solfege (GitHub issue 15): the block's bit
-                                         * (CRS_NUMERALS) says the Chord view shows the degree, this byte how; read
-                                         * only with that bit set (0: the Roman numeral, every older record's) */
-    uint8_t rsv[45];
+    uint8_t rsv[46];
     css_fx_t fx;
     uint8_t rsv_fx[4];
     css_part_t part[2];                 /* chord, bass */

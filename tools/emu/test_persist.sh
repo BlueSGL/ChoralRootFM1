@@ -381,7 +381,7 @@ grep -q 'kbd: plays notes keyboard full single 2 ' "$OUT/persist_page2_1.log" &&
     ok "KEY page 2 run 2: the three back after a relaunch (UI and engine), Numerals On with them; B3 a bass note of the left side, F4 the chord part" \
     || bad "KEY page 2 run 2: $(grep '  kbd:' "$OUT/persist_page2_2.log" | head -1)"
 
-# the KEY layer's Numerals = Solfege (GitHub issue 15): the block's bit 1 of bass_on (On) and the session's numerals_sol;
+# the KEY layer's Numerals = Solfege (GitHub issue 15): bit 7 of the block's scale (CRS_SOLFEGE), its own bit;
 # run 1 sets it and saves (SAVE held), run 2 (the same file): Solfege at power-on, G4 in C major reads SOL
 NFLASH=$OUT/persist_solfege_flash.bin
 rm -f "$NFLASH" "$OUT"/persist_solfege_1.log "$OUT"/persist_solfege_2.log
@@ -391,7 +391,7 @@ grep -q '^  numerals: solfege ' "$OUT/persist_solfege_1.log" && grep -q "setting
     ok "Numerals Solfege run 1: KNOB 4 +2 on KEY page 2, the settings saved once" || bad "Solfege run 1: $(grep '^  numerals:' "$OUT/persist_solfege_1.log")"
 [ "$(grep -c '^  numerals: solfege ' "$OUT/persist_solfege_2.log")" = 2 ] && grep -q '^  numerals: solfege shown "SOL"' "$OUT/persist_solfege_2.log" &&
     grep -q '(record: current)' "$OUT/persist_solfege_2.log" &&
-    ok "Numerals Solfege run 2: back after a relaunch (the block's On and the session's style); G4 in C major reads SOL" \
+    ok "Numerals Solfege run 2: back after a relaunch (scale's bit 7); G4 in C major reads SOL" \
     || bad "Solfege run 2: $(grep '^  numerals:' "$OUT/persist_solfege_2.log" | tr '\n' ' ')"
 
 # the engine picker's roots always play (0.18; until then Settings pick_roots, KNOB 4 in the picker: the byte is

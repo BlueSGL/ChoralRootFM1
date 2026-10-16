@@ -473,9 +473,9 @@ case and mark).
 - **Fixed do** (Do = C always: the note names of the Romance-language countries, what the issue's title says) is a
   different thing, a naming of the notes and so a value of Options > Chord Names, not of Numerals. Not built.
 
-Stored as the numeral is, plus one byte: the block's bit 1 of `bass_on` says the degree is shown (On or Solfège) and
-the session's `numerals_sol` says how (docs/SETTINGS.md "Solfège"); both are written by the global save (SAVE held).
-0.22 reads Solfège as On.
+Stored in a bit of its own, bit 7 of the settings block's `scale` (`CRS_SOLFEGE`; On stays bit 1 of `bass_on`, and
+each is written alone: docs/SETTINGS.md), saved with SAVE held. 0.17 .. 0.22 read a saved Solfège as Numerals Off
+with the scale Major.
 
 ## Where the option is stored
 

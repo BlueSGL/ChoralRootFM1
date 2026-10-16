@@ -1105,7 +1105,6 @@ static void css_fill(cr_session_t *x)              /* a recognisable session: ev
     x->voicing = 2; x->octave = -1; x->bass_on = 1; x->lock = 1;
     x->latched = (uint8_t)((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7));
     x->loop_rate = 2;                              /* x2 */
-    x->numerals_sol = 1;                           /* the KEY layer's Numerals: Solfege */
     x->fx.sel = CSS_FXE_DELAY;
     x->fx.amt[CSS_FXE_REVERB] = 30; x->fx.amt[CSS_FXE_CHORUS] = 0; x->fx.amt[CSS_FXE_DELAY] = 99; x->fx.amt[CSS_FXE_DRIVE] = 127;
     cr_session_fx_set(x, CSS_FXP_DTIME, 5);
@@ -1137,22 +1136,17 @@ static void t_session(void)
        !SD.bass_on && !SD.lock && !SD.latched && !SD.part[0].valid && !SD.part[1].valid && SD.fx.version == CSS_FX_VERSION &&
        SD.fx.n == 0 && SD.fx.sel == CSS_FXE_REVERB && SD.fx.amt[0] == CSS_FX_NONE && SD.fx.amt[CSS_NFXE - 1] == CSS_FX_NONE,
        "session defaults: nothing stored (the unit as it powered on until 0.17: bass off, voicing 0, the sounds' own sends)");
-    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 125u &&
+    ok(sizeof SD.rsv + sizeof SD.rsv_fx + 2u * sizeof SD.part[0].rsv + sizeof SD.rsv_end == 126u &&
        CSS_NFXP - 27 == 1 && CSS_NP - 91 == 5,
-       "session: 125 bytes of reserve (142 until 0.22's master filter took 16 of rsv_fx and Solfege 1 of rsv), 1 free FX parameter entry of 28, 5 free part parameters");
+       "session: 126 bytes of reserve (142 until 0.22's master filter took 16 of rsv_fx), 1 free FX parameter entry of 28, 5 free part parameters");
     ok(SD.loop_rate == 0 && (const uint8_t *)&SD.loop_rate - (const uint8_t *)&SD == 21,
        "session: the loop's Rate, byte 21 (the first of the old reserve), 0 = x1: a record written before it reads x1");
-    /* GitHub issue 15: the KEY layer's Numerals = Solfege, the block's bit (On) and this byte. Byte 22, the next of the
-     * old reserve: 0 in every older record, which reads the Roman numeral (the block's bit alone decides On / Off) */
-    ok(SD.numerals_sol == 0 && (const uint8_t *)&SD.numerals_sol - (const uint8_t *)&SD == 22,
-       "session: Numerals' Solfege, byte 22 (the old reserve's next), 0 = the Roman numeral: an older record reads On as On");
     /* every item round-trips */
     css_fill(&SX);
     rc = cr_session_import(&SR, &SX, sizeof SX);
     ok(rc == 1 && !memcmp(&SR, &SX, sizeof SX), "session: every item round-trips, byte for byte (rc 1)");
-    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 && SR.loop_rate == 2 && SR.numerals_sol == 1 &&
-       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)),
-       "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7, the loop's Rate x2, Numerals' Solfege");
+    ok(SR.voicing == 2 && SR.octave == -1 && SR.bass_on == 1 && SR.lock == 1 && SR.loop_rate == 2 &&
+       SR.latched == ((1u << CR_MOD_MAJ) | (1u << CR_MOD_MAJ7)), "session: voicing +2, octave -1, Bass on, LOCK with MAJ + M7, the loop's Rate x2");
     ok(SR.fx.sel == CSS_FXE_DELAY && SR.fx.amt[CSS_FXE_DELAY] == 99 && SR.fx.amt[CSS_FXE_DRIVE] == 127 && SR.fx.n == 3 &&
        cr_session_fx_get(&SR, CSS_FXP_DTIME, &v) && v == 5 && cr_session_fx_get(&SR, CSS_FXP_DFDBK, &v) && v == 77 &&
        cr_session_fx_get(&SR, CSS_FXP_RSIZE, &v) && v == 12 && !cr_session_fx_get(&SR, CSS_FXP_CRATE, &v),
@@ -1265,9 +1259,6 @@ static void t_session(void)
     SX.loop_rate = -3;
     cr_session_seal(&SX);
     ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.loop_rate == -3, "session: Rate x1/4 kept");
-    SX.numerals_sol = 2;
-    cr_session_seal(&SX);
-    ok(cr_session_import(&SR, &SX, sizeof SX) == 1 && SR.numerals_sol == 0, "session: an unknown Numerals style (2): the Roman numeral");
     css_fill(&SX);
     SX.lock = 0;                                   /* a latch without LOCK cannot be */
     cr_session_seal(&SX);
@@ -1474,6 +1465,58 @@ static void t_touch(void)
  * manual (SAVE held); and the rule 0.17 .. 0.22-beta2 apply to the byte (their CRS_FIX(key_on, 0, 7): modelled here,
  * the old binaries were not run) reads a record with Snap on as the byte's defaults there: Key Mode off, Key plays
  * Chords, Keyboard Chords, until set again (the v14 caveat, docs/SETTINGS.md) */
+/* GitHub issue 15: the KEY layer's Numerals = Solfege in bit 7 of scale (CRS_SOLFEGE), a bit of its own apart from
+ * bass_on's On: off by default and in every older record; round-trips beside either scale; the engine gets the scale
+ * without it and its capture keeps it; an out-of-range scale keeps the bit; manual; and the rule 0.17 .. 0.22 apply
+ * to the byte (their CRS_FIX(scale, 0, 1), default Major: modelled, the old binaries were not run) */
+static void t_solfege(void)
+{
+    cr_settings_t d, s, r;
+    cr_settings_out_t o;
+    cr_t E;
+    unsigned sc;
+    cr_settings_defaults(&d);
+    ok(!CRS_SOL(&d) && CRS_SCALE(&d) == CR_SCALE_MAJOR && CRS_VERSION == 15u, "Solfege: off by default, no settings version for it");
+    for (sc = 0; sc < 2u; sc++) {
+        s = d;
+        s.scale = (uint8_t)(CRS_SOLFEGE | sc);
+        s.tonic = 9;
+        cr_settings_seal(&s);
+        ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SOL(&r) && CRS_SCALE(&r) == sc && !CRS_NUMS(&r) &&
+           r.bass_on == 0, sc ? "Solfege round-trips with A minor (bit 7 of scale), bass_on untouched"
+                              : "Solfege round-trips with A major (bit 7 of scale), bass_on untouched");
+        cr_init(&E, &OUT);
+        cr_settings_apply(&r, &E, &o);
+        ok(E.scale == sc && E.key_on == 0 && E.bass_on == 0, sc ? ".. the engine gets minor without the bit" : ".. the engine gets major without the bit");
+        cr_settings_capture(&r, &E, &o);
+        ok(CRS_SOL(&r) && CRS_SCALE(&r) == sc, ".. and its capture keeps the bit");
+    }
+    s = d;
+    s.scale = (uint8_t)(CRS_SOLFEGE | 5u);         /* an unknown scale: Major, the bit kept */
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && CRS_SOL(&r) && CRS_SCALE(&r) == CR_SCALE_MAJOR, "scale 5 with Solfege: Major, Solfege kept");
+    s.scale = 0x7Fu;
+    cr_settings_seal(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 1 && r.scale == CR_SCALE_MAJOR, "scale 127: Major, no Solfege");
+    {
+        unsigned old = CRS_SOLFEGE | CR_SCALE_MINOR;   /* what 0.17 .. 0.22 read: out of their 0..1, so Major */
+        if (old > 1u) old = d.scale;
+        ok(old == CR_SCALE_MAJOR, "0.17 .. 0.22 read a Solfege byte as Major (the scale lost there, nothing else)");
+    }
+    s = d;                                         /* an older record: whatever its version, the bit is 0 */
+    s.scale = CR_SCALE_MINOR;
+    cr_settings_seal(&s);
+    s.version = 14;
+    s.check = crs_check(&s);
+    ok(cr_settings_import(&r, &s, sizeof s) == 2 && !CRS_SOL(&r) && CRS_SCALE(&r) == CR_SCALE_MINOR, "a version-14 minor record: no Solfege");
+    {                                              /* manual: the automatic save does not carry it */
+        cr_settings_t a = d, m = d;
+        a.scale = CRS_SOLFEGE;
+        cr_settings_auto(&m, &a);
+        ok(!CRS_SOL(&m), "Solfege is manual (SAVE held), as Numerals");
+    }
+}
+
 static void t_snap(void)
 {
     cr_settings_t d, s, r, m, o2;
@@ -1540,6 +1583,7 @@ int main(void)
     t_v15(); t_session(); t_session_trim(); t_session_flash();
     t_touch();
     t_snap();
+    t_solfege();
     printf("cr_settings: %d passed, %d failed\n", passed, failed);
     return failed ? 1 : 0;
 }

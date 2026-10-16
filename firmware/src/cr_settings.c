@@ -183,7 +183,8 @@ static void crs_sanitize(cr_settings_t *s)
     CRS_FIX(key_on, 0, (int)CRS_KEY_MAX);          /* (v14: bit 1 Key plays Notes, bit 2 the Full keyboard; 0.22:
                                                     * bits 3 .. 4 Snap 0 .. 2, CRS_SNAP) */
     CRS_FIX(tonic, 0, 11);
-    CRS_FIX(scale, 0, 1);
+    if (CRS_SCALE(s) > CR_SCALE_MINOR)             /* (bits 0..6 the scale; bit 7 Numerals' Solfege, CRS_SOLFEGE: kept) */
+        s->scale = (uint8_t)((s->scale & CRS_SOLFEGE) | d.scale);
     CRS_FIX(transpose, -24, 24);
     CRS_FIX(single, 0, CR_SINGLE_SPLIT_BASS);      /* (v14: 2 Split Bass) */
     CRS_FIX(split_pc, 0, 11);
@@ -432,7 +433,6 @@ static void css_sanitize(cr_session_t *x)
     if (x->voicing < -12 || x->voicing > 12) x->voicing = 0;   /* (cr_engine.c CR_VOICE_MIN / MAX: cr_voicing_step clamps) */
     if (x->octave < -2 || x->octave > 2) x->octave = 0;
     if (x->bass_on > 1u) x->bass_on = 0;
-    if (x->numerals_sol > 1u) x->numerals_sol = 0; /* (an unknown style: the Roman numeral) */
     if (x->lock > 1u) x->lock = 0;
     if (!x->lock) x->latched = 0;                  /* (the latch belongs to LOCK) */
     if (x->loop_rate < -7 || x->loop_rate > 3)
@@ -500,7 +500,7 @@ void cr_settings_apply(const cr_settings_t *s, cr_t *c, cr_settings_out_t *o)
     cr_set_ext_addition(c, (cr_extadd_t)s->extadd);
     cr_set_secret(c, (cr_secret_t)s->secret);
     cr_set_sixth_up(c, (int)CRS_SIXTH(s));         /* Options > 6th with 7th (bit 4 of pick_roots) */
-    cr_set_key(c, (int)CRS_KEY_ON(s), s->tonic, (cr_scale_t)s->scale);
+    cr_set_key(c, (int)CRS_KEY_ON(s), s->tonic, (cr_scale_t)CRS_SCALE(s));
     cr_set_key_plays(c, (int)CRS_KEY_PLAYS(s));
     cr_set_key_snap(c, (cr_keysnap_t)CRS_SNAP(s));
     cr_set_keyboard(c, (int)CRS_KEYBOARD(s), c->split_note);   /* (the split key: the UI's, with its octave) */
@@ -541,7 +541,7 @@ void cr_settings_capture(cr_settings_t *s, const cr_t *c, const cr_settings_out_
     s->pick_roots = (uint8_t)((s->pick_roots & (uint8_t)~CRS_SIXTH_UP) | (c->sixth_up ? CRS_SIXTH_UP : 0u));
     s->key_on = (uint8_t)(CRS_KEY_BYTE(c->key_on, c->key_notes, c->full) | CRS_SNAP_BITS(c->snap));
     s->tonic = c->tonic;
-    s->scale = c->scale;
+    s->scale = (uint8_t)((s->scale & CRS_SOLFEGE) | c->scale);   /* (bit 7: Numerals' Solfege, the UI's) */
     s->transpose = c->transpose;
     s->single = c->single;
     s->split_pc = c->split_pc;
@@ -742,15 +742,16 @@ static void crs_capture(cr_settings_t *s)
     s->secret = cs.secret;
     s->key_on = (uint8_t)(CRS_KEY_BYTE(cs.key_on, cs.key_notes, cs.kbd_full) | CRS_SNAP_BITS(cs.snap));
     s->tonic = cs.tonic;
-    s->scale = cs.scale;
+    s->scale = (uint8_t)(cs.scale | (cs.numerals == 2u ? CRS_SOLFEGE : 0u));   /* (bit 7: Numerals' Solfege) */
     s->transpose = cs.transpose;
     s->single = cs.single;
     s->vel = cs.vel;
     s->bass_mode = cs.bass_mode;
-    s->bass_on = (uint8_t)((cs.numerals ? CRS_NUMERALS : 0u) | CRS_TOUCH_BITS(cs.touch, cs.vel_sens, cs.at_sens));
+    s->bass_on = (uint8_t)((cs.numerals == 1u ? CRS_NUMERALS : 0u) | CRS_TOUCH_BITS(cs.touch, cs.vel_sens, cs.at_sens));
                                                    /* (bit 0 always 0 here: Bass on is the session's, css_capture; an
                                                     * older firmware would switch the engine's bass on from it. Bit 1:
-                                                    * the KEY layer's Numerals, which 0.17 .. 0.21 read as 0) */
+                                                    * the KEY layer's Numerals On, which 0.17 .. 0.21 read as 0;
+                                                    * Solfege is scale's bit 7, not this byte's) */
     s->perform_on = cs.perform_on;
     s->perf_sel = cs.perf_sel;
     s->sticky = cs.sticky;
@@ -975,7 +976,6 @@ static void css_capture(cr_session_t *x)
     x->lock = cu.clock != 0u;
     x->latched = x->lock ? cu.mlatch : 0u;
     x->loop_rate = (int8_t)((int)cs.loop_rate - (int)CRL_RATE_1);
-    x->numerals_sol = cs.numerals == 2u;           /* (the block's bit: cs.numerals != 0, crs_capture) */
     x->fx.sel = CSS_FXS[cu_fx_pg()];
     for (i = 0; i < CU_NFX; i++)
         x->fx.amt[CSS_FXE[i]] = (uint8_t)(cs.fx_amt[i] & 127u);
@@ -1018,8 +1018,6 @@ static void css_apply(const cr_session_t *x)
     fm1_irq_on();
     cu.octave = x->octave;                         /* (cu_post_kbd follows: the split key's note moves with it) */
     cs.loop_rate = (uint8_t)((int)x->loop_rate + (int)CRL_RATE_1);   /* (cu_loop_conf posts it with the looper's) */
-    if (cs.numerals && x->numerals_sol)            /* the KEY layer's Numerals: On in the block, Solfege here */
-        cs.numerals = 2;
     if (x->bass_on) {                              /* v15: the bass comes back on, on its sound (ALGORITHM's place:
                                                     * cu_pos_sync) */
         cs.bass_on = 1;
@@ -1082,14 +1080,14 @@ static void cr_settings_load(void)
     cs.key_notes = (uint8_t)CRS_KEY_PLAYS(s);
     cs.kbd_full = (uint8_t)CRS_KEYBOARD(s);
     cs.snap = (uint8_t)CRS_SNAP(s);
-    cs.numerals = (uint8_t)CRS_NUMS(s);            /* (Off / On; Solfege: the session's numerals_sol, css_apply) */
+    cs.numerals = (uint8_t)(CRS_SOL(s) ? 2u : CRS_NUMS(s));   /* Off / On (bass_on bit 1) / Solfege (scale bit 7) */
     cs.touch = (uint8_t)CRS_TOUCH(s);              /* Options > Key Touch and the sensitivities (docs/VELOCITY.md) */
     cs.vel_curve = (int8_t)CRS_VCURVE(s);
     cs.vel_sens = (uint8_t)CRS_VSENS(s);
     cs.at_sens = (uint8_t)CRS_ATSENS(s);
     cu_touch_apply();
     cs.tonic = s->tonic;
-    cs.scale = s->scale;
+    cs.scale = (uint8_t)CRS_SCALE(s);
     cs.transpose = s->transpose;
     cs.single = s->single;
     cs.vel = s->vel;
