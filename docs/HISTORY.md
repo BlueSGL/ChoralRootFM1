@@ -4629,3 +4629,16 @@ ellipsis' were never kept), `tests/text_spacing_test.py` reads them back into it
 2781 -> 2054, CRX 303 -> 278. **Pixel-exact**: the 335 draw renders byte for byte the same; `text_ref_test` 2754
 strings, 0 end pens and 0 pixels differ; `text_spacing_test` ok; `ui_test` all passed. Size: `XIP 522 332 -> 520 460
 B` (91.1 -> 90.8 %); RAM and POOL unchanged.
+
+3y129. **The flash diet, 6: more of the main loop built for size (same day).** `tools/size_fns.py` marks the
+main-loop functions minsize (about -Oz) and leaves the rest at -Os (3y25). The list grows by the files that run in
+the main loop only (the backup, the compiled layouts, the pool, the FM6 and CZ-1 stores and banks, the legacy CZ
+format, the FM TONE / VA / P5 patch stores, the FM4 conversion: `SIZE_FILES`) and by named functions of the engines'
+files, whose other functions render or tick in the ISR (`SIZE_FUNCS`: a sound load, a blob's pack / unpack, the deep
+pages' get / set, which the engine picks up in its block; and `fm1_main` itself, the main loop). 676 -> 824 functions
+built for size. The audio side is untouched: of 295 render, block, tick, ISR, mix and effects functions in the
+listing, none changed its instruction count across this change (checked listing against listing; `fm6_render`'s
++5 is 3y125's). `fm1_main` 16 154 -> 14 728 B, `ed_service` 6 994 -> 6 200, `cr_ui_input` 8 162 -> 7 396, `cu_pool_load`
+3 664 -> 3 410 (their inlined callees, now minsize), `fm6_track_loaded` 1 210 -> 1 156, `quad_unpack` 686 -> 606. The UI frame's cost on the
+unit is not read here (the emulator compiles the same sources at -O2 on the host: `perf.sh`'s UI column cannot see
+this); the owner's `pk_*` readout would. Size: `XIP 520 460 -> 517 644 B` (90.8 -> 90.3 %); RAM and POOL unchanged.
