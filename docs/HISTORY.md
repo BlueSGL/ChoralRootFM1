@@ -4149,3 +4149,53 @@ screen changed (the draw goldens as they were). Not on the unit, not pushed: the
 backup before it is `fm1-backups/choralroot-backup-20261015-steppreview.json` (the settings, the 128 user sounds, the
 favourites, loop slot 1). `--info` afterwards: "ChoralRoot 0.22". The owner, after trying it: "This checks out, merge
 it": merged to main (a fast-forward of the branch: origin/main was still da1f8e2).
+
+## 2026-10-15 (0.22-beta4: the master filter and the step preview, the release tree)
+
+3y105. **0.22-beta4's release tree: the notes, the card, the packages of this build (2026-10-15; branch rel-4 from
+fd90447 = origin/main, both 3y103 and 3y104 merged).** Prepared for the owner's word; not tagged, not pushed (the tag
+and the push follow the owner's confirmation). `docs/releases/0.22-beta4.md` (new): the opening (a fourth beta,
+opt-in like the three before; updating from beta3, beta2 or beta1 keeps everything, going back to one of them loses
+the Filter and, with it in use, the effects' settings, and on beta2 and beta1 Snap), **New since 0.22-beta3** (the
+FX layer's Filter page, GitHub issue 16, 3y103; the loop editor's step preview, GitHub issue 8, 3y104: from
+docs/releases/0.22.md "Merged after 0.22-beta3", checked against HISTORY, MANUAL.md section 8 and "The loop editor",
+FX.md "The master filter", LOOPER.md "Step preview" and `git log v0.22-beta3..HEAD`, which holds these two and their
+unit flashes alone), then 0.22-beta3's whole text with its "New since 0.22-beta2" section dropped and its two
+bullets (Snap; the Full keyboard's chords) in Playing and editing in place of the short one that pointed at it, one
+short bullet each for the Filter (Sounds and engines) and the step preview (Playing and editing), Installing for
+beta4 (from beta3, beta2 or beta1; **Going back to an earlier beta**: the Filter unknown there and, below, the record
+caveat; Snap's on beta2 and beta1), the single-core names, and a "The Filter" point in Going back to 0.21. **The
+record caveat** (cr_settings.h, SETTINGS.md): the session's FX block grew from 24 entries to 28 (`css_fx_t` 108 ->
+124 into `rsv_fx`, `CSS_FX_VERSION` unchanged), the filter's tags 31 .. 34 written only off their defaults; 0.21 and
+the three betas have `CSS_NFXP` 24 and take the FX block's defaults (the effects' settings, the chord part's sends)
+on a record with more than 24, so a unit whose Filter page had two or more values changed when SAVE was last held
+goes back with those at their defaults (one value changed, or none: as before); the notes say "turning a cutoff is
+enough" (a cutoff turned switches Filter On: two values). The session is written by SAVE held alone, so once the
+older firmware holds SAVE the Filter is Off on the return. The settings block, the loop record and the sound pool are
+as in beta3. `docs/releases/0.22-beta3.md`, `0.22-beta2.md`, `0.22-beta1.md` unchanged (published);
+`docs/releases/0.22.md` points at 0.22-beta4.md, its "Merged after 0.22-beta3" lines moved into the beta4 notes.
+`web/releases.json`: a first entry 0.22-beta4 (`"beta": true`, v0.22-beta4, 2026-10-15, "Beta 4: a Filter on
+everything, the loop editor's step preview"; 12 bullets: two "New since beta 3", beta3's two "New since beta 2"
+merged into one, its other ten with the knobs' and the VA's merged; five notes: the beta's disclaimer, from beta3,
+beta2 or beta1 with the Filter caveat, Snap's on beta2 and beta1, from 0.21, going back to 0.21), the beta3, beta2
+and beta1 entries kept below it; the installer's default stays 0.21. docs/HANDOFF.md: the state line. **Built**:
+`./build.sh --release 0.22-beta4` twice (the first folder moved aside), the same SHA256SUMS;
+`choralroot-0.22-beta4.fwsc` 28beab0dd7d0ba92..., `choralroot-0.22-beta4-1core.fwsc` 80d3b7583788ce6d...; the
+apps carry `ChoralRoot 0.22-beta4` and `ChoralRoot 0.22-beta4 1-core`; the stub version 3, sha256 baee55ed142fe1cc.
+Size: XIP 549 132 B of 573 440 (95.8 %), RAM 78 652 (80.0 %), POOL 239 176 (69.5 %), RAMTEXT 7 072, NOINIT 228; the
+single-core package XIP 546 236 (95.3 %), RAM 75 564 (76.9 %), POOL 239 048 (69.5 %).
+**Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 88 s; test_cr 1041 ok,
+test_persist 111, test_retired 18, test_pool 7, run_tests all host tests, 313 goldens 0 changed, web_installer and
+the browser emulator's test PASS); `CR_PACKAGES_DIR=build/release-0.22-beta4 python3 tests/releases_test.py` ALL OK;
+the fourteen listed packages taken from a local folder (`.claude/worktrees/key-snap-a8626d/build/scratch/packages`,
+the three earlier betas' and 0.16 .. 0.21, each copied only with its listed sha256; nothing downloaded) beside
+beta4's two: releases_test ALL OK with every sha256 compared, `python3 tests/site_test.py` site ALL OK (42).
+`CR_VERSION=0.22-beta4 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs` PASS. **The Pages job
+simulated** for 0.22-beta4 (its steps, in a scratch folder): releases_test, `web/make_site.py
+build/release-0.22-beta4/choralroot-0.22-beta4.fwsc 0.22-beta4 SITE --packages PKGS --require-all`, the job's file
+checks, `firmware/SHA256SUMS` all OK. The landing page shows 0.21 (its version line, "New in 0.21", the download,
+the notes link) and mentions the beta once, the emulator's line: "It runs ChoralRoot 0.22-beta4, a beta (the
+installer's default is 0.21)"; `emu/version.txt` "ChoralRoot 0.22-beta4". The installer, headless Chromium
+(`?demo=idle`): with the opt-in off the chips are 0.20 .. 0.16, with it on 0.22-beta4, beta3, beta2, beta1, then
+0.20 .. 0.16, Install names 0.21 both ways; the notes link is `blob/main/docs/releases/0.22-beta4.md` (the
+installer's and `firmware/index.html`'s); beta4's two packages are on the site with the listed sha256s.

@@ -10,7 +10,7 @@ chorus: no clicks while Depth turns, the Width knob; HISTORY 3y31, 3y32) is tagg
 published as the latest and not on the site; its notes, `web/releases.json`'s first entry (package sha256
 93bbfe14...) and the manual's first line say 0.21. The tree's `FELUCCA_VERSION` is "ChoralRoot 0.22"
 (`firmware/src/choralroot.c`): 0.22 is in development (`docs/releases/0.22.md`: the KEY layer's Numerals, HISTORY
-3y33, 3y34, its Snap and the Full keyboard's chords, 3y99, 3y100, released as v0.22-beta3, 3y101; the master filter, GitHub issue 16, 3y103, branch claude/master-eq-433034, not merged, not flashed; and, not in the notes yet, a sixth engine in its first phase: P5 (the code's PROPHET), Melodee's
+3y33, 3y34, its Snap and the Full keyboard's chords, 3y99, 3y100, released as v0.22-beta3, 3y101; the master filter, GitHub issue 16, 3y103, and the loop editor's step preview, GitHub issue 8, 3y104, released as v0.22-beta4, 3y105; and, not in the notes yet, a sixth engine in its first phase: P5 (the code's PROPHET), Melodee's
 Prophet-5, HISTORY 3y38, 3y39, docs/PROPHET.md: on the host and in the emulators; the owner played its first build,
 cd43720, on the unit once, and that reading made it four voices; open items 26 and 27; and favourites, HISTORY 3y40,
 docs/PRESETS.md "Favourites": a mark on any sound, in the notes; not on a unit yet; open item 28). The owner's unit runs what
