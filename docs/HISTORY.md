@@ -4200,6 +4200,161 @@ installer's default is 0.21)"; `emu/version.txt` "ChoralRoot 0.22-beta4". The in
 0.20 .. 0.16, Install names 0.21 both ways; the notes link is `blob/main/docs/releases/0.22-beta4.md` (the
 installer's and `firmware/index.html`'s); beta4's two packages are on the site with the listed sha256s.
 
+## 2026-10-15 (0.22: the stable release's tree)
+
+3y106. **0.22's release tree: the notes of everything since 0.20, the card, the packages of this build (2026-10-15;
+branch rel-22 from 5e1e8a7 = origin/main = v0.22-beta4).** The owner: "tag the latest now as v0.22 ... Release notes
+should cover everything new since 0.20". Prepared for the tag; not tagged, not pushed (the tag, the push and the site
+follow the owner's confirmation). origin/main did not move while this was done: no merge, and the code is beta4's
+byte for byte apart from the version string. `docs/releases/0.22.md` is the notes now (no longer the pointer): a
+summary (what 0.22 is, that it covers everything since 0.20 with 0.21's chorus, that updating from 0.20, 0.21 or a
+0.22 beta keeps settings, sounds and loops), the three things that are different without the player doing anything
+(FM TONE's conversion and times, the knobs' acceleration with SHIFT snapping, the delay's repeats above 11 kHz), then
+Sounds and engines (P5 with its rows editor, UNISON, voices, level; FM TONE's ranges, conversion, 57 LFO destinations,
+the Digitone's times; the VA's FENV and sync rates), The effects (the master Filter in full; 0.21's Width; the delay
+at half rate), Playing and editing (Numerals, Snap, the Full keyboard's chords, Key Touch, EXPR, the knobs'
+acceleration and the first-detents rule, OPT snap, the loop editor's step preview in full, the rows under a curve),
+Dual Core and the screen (on by default, the crash fallback, 1.50 V, `--debug`'s last crash; Geek Out 2; the LCD at
+20 MHz), Saving and favorites, On the computer (`.dnsnd` import, Replace factory, Restore / Delete all, the P5 tab, the
+unit ID), Fixes (0.21's Depth without pops, fewer flash pauses, LATCH releasing a Hold), Installing (from 0.21 or 0.20;
+from a beta: 0.22 is beta4 under its final name, the betas stay behind the switch; the single-core package, `ChoralRoot
+0.22 1-core`, which fits Options > Version whole), Going back to 0.21 (beta4's section; 0.21 keeps its own Width) and
+Going back to 0.20 (the same, and 0.20 has no Width: checked, `git diff v0.20 v0.21` is the chorus alone; 0.20's FX
+block is 24 entries as 0.21's, so the Filter caveat is the same). Taken out against beta4's text: the beta framing,
+"New since 0.22-beta3" (folded in), "Going back to an earlier beta" (one line and a link to beta4's notes), and
+"Digitone sounds imported before: import them again" (no release ever imported with translated times: the `.dnsnd`
+import and the Digitone's times are both in v0.22-beta1, and 0.21 had no import). The layout tool is not in the notes:
+the published site has none (pages.yml builds no layout viewer). The beta notes files are unchanged. `web/releases.json`:
+a first entry 0.22 (no `beta`, v0.22, 2026-10-15, "P5, 128 sound slots, favorites, velocity and a Filter on everything",
+12 bullets, four notes: updating, FM TONE's conversion, 0.21's chorus for a 0.20 player, the betas), the four beta
+entries kept below it in their order (releases_test's order puts X.Y above X.Y-betaN; the installer lists a beta older
+than the newest stable behind the switch like any other, and BUILDING.md lets them stay), and 0.21 gets its
+`going_back` (one sentence and six points from the notes' "Going back to 0.21"). docs/MANUAL.md: the first line (no
+beta wording), Updating's button and Other versions (0.21 .. 0.16, the betas behind "Show beta releases"). README:
+"New in 0.22", Geek Out 2 among the views, the Filter among the effects (the Status keeps no version number, 3y65).
+docs/HANDOFF.md: the state, the tags in the repos table, XIP's figure. **A test fixed**: `tests/site_test.py`'s
+`escape_html` did not escape quotes, `make_site.py`'s `html.escape` does, so the release site's "New in" check failed
+on 0.22's first bullet (an apostrophe); it uses `html.escape` now (the first time the check met a stable entry with an
+apostrophe: it runs only when `build/choralroot.fwsc` is a listed release and every package is there). **Built**:
+`./build.sh --release 0.22` twice (the first folder moved aside), the same SHA256SUMS; `choralroot-0.22.fwsc`
+62427c3139c31042..., `choralroot-0.22-1core.fwsc` c68a5f73258720fe...; the apps carry `ChoralRoot 0.22` and `ChoralRoot
+0.22 1-core`; the stub version 3, sha256 baee55ed142fe1cc. Size: XIP 549 116 B of 573 440 (95.8 %), RAM 78 652
+(80.0 %), POOL 239 176 (69.5 %), RAMTEXT 7 072, NOINIT 228; the single-core package XIP 546 188 (95.2 %), RAM 75 564
+(76.9 %), POOL 239 048 (69.5 %). The plain `./build.sh` makes the same package (the tree's default version is 0.22).
+**Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 92 s; test_cr 1041 ok, test_persist
+111, test_retired 18, test_pool 7, all host tests, 313 goldens 0 changed, web_installer and the browser emulator's test
+PASS, `emu/version.txt` "ChoralRoot 0.22"); `CR_PACKAGES_DIR=build/release-0.22 python3 tests/releases_test.py` ALL OK.
+**The Pages job simulated** for 0.22 (`build/scratch/rel22/pages_sim.sh`): the sixteen listed packages taken from local
+folders (0.16 .. 0.21 and beta1 .. beta3 from `.claude/worktrees/key-snap-a8626d/build/scratch/packages`, beta4's from
+its release worktree, 0.22's from `build/release-0.22`), each copied only with its listed sha256, nothing downloaded;
+the first-entry check, every sha256, releases_test, `web/make_site.py build/release-0.22/choralroot-0.22.fwsc 0.22 SITE
+--packages PKGS --require-all` (no layout viewer, as the job), the job's file checks and `firmware/SHA256SUMS` all OK;
+`CR_PACKAGES_DIR=PKGS python3 tests/site_test.py` site ALL OK (57; with the Pages-like build, "New in 0.22" with its
+bullets). The landing page: "Version 0.22", "Install 0.22", "New in 0.22" with the 0.22 bullets, the notes link
+`blob/main/docs/releases/0.22.md`, the installer also offers 0.21 .. 0.16 (no beta link), no emulator line (the
+emulator runs 0.22: no beta wording). The installer, headless Chromium (`?demo=idle`, copies of the built page with the
+opt-in set before its script): Install ChoralRoot 0.22 (Newest) both ways; opt-in off, the chips are 0.21 .. 0.16; on,
+0.22-beta4, beta3, beta2, beta1 (each with its Beta badge), then 0.21 .. 0.16; 0.21 shows "Going back to 0.21" with its
+sentence and points; beta4 picked: "a beta release, not the latest stable one (0.22 is)"; the notes link
+`blob/main/docs/releases/0.22.md` (also `firmware/index.html`'s); both 0.22 packages on the site with the listed sha256s.
+**The tag's path, read** (release.yml, pages.yml): the notes file is cat'ed into the release body, the four assets and
+SHA256SUMS are attached, a `v0.22` without a suffix dispatches pages.yml, which finds 0.22 first and every listed
+package on its release; but release.yml made every 0.x release a GitHub pre-release (`startsWith(version, '0.')`), so
+v0.22 would have been a pre-release, as v0.21 was when it was tagged (HANDOFF's state then; it is the stable release
+now): changed in a commit of its own (a pre-release only for `X.Y-suffix`; BUILDING.md says so), which can be dropped
+to keep the old rule and set v0.22 as the latest release by hand. HISTORY
+numbers: the branch claude/grain-engine-f724f9 (not merged) uses 3y106 .. 3y109 for GRAIN; its merge renumbers them
+after this one. Not done: anything on a unit (nothing flashed; the code is beta4's), the tag, the push, the release and the
+site.
+
+## 2026-10-15 (after 0.22-beta4: the VA matrix's fine amounts)
+
+3y110. **The VA matrix's amounts in tenths below 6 (GitHub issue 13, Apieceofbluesky, 2026-10-13: "If you want to
+modulate pitch with LFO, the lowest setting 1% is already a lot of modulation"; the owner, 2026-10-15: "for the VA
+engine's mod matrix, you should be able to adjust the modulation amount in smaller amounts, the effect of 1% is too
+powerful"; branch claude/va-mod-fine-9aa43c from 5e1e8a7 = v0.22-beta4).** (3y106 .. 3y109 are the grain session's.)
+The VA's own 8-slot matrix (eng_va.c, not the platform's mod.c) had AMT -64..63 shown as F_BIPCT (v x 100 / 64), so
+its smallest step, "1 %", was AMT 1: on PITCH at a full source 18.75 ct (+-18.75 ct of vibrato from a full LFO; the
+render's pitch resolution is 1/256 st, 0.39 ct, so the engine could go much finer). **Weighed**: (a) a curve on the
+stored AMT (the first steps small) changes every saved sound with a matrix slot, the factory presets' vibratos
+(AMT 2 .. 4 on PITCH) among them: refused; (b) a finer scale for PITCH alone loses its +-12 st unless it is curved
+too, and migrates every pitch slot inexactly: refused; (c) a finer step near zero, chosen: a slot's AMT is whole as
+before, or in tenths with a per-slot **fine flag**. The 7-bit blob has no room for a hi-res AMT (8 more bytes would
+change VA_BLOB, the stores, the pool, the backups), but version 4's two padding bytes hold the 8 flags: patch values
+106 `VA_MFINE0` (slots 1..7, bit k) and 107 `VA_MFINE1` (slot 8), `VA_NP` 106 -> 108, the blob still 110 bytes, version
+5. A slot in tenths renders a tenth of its stored number (`VA_AMX`: x 205 >> 11, 0.1 % over, +-4.3e8 at most; in the
+matrix's x, the DEPn sums and AMP's gain), a whole one exactly as before. **The column**: AMT `F_FIX2` -6400..6300
+(hundredths, FENV's format: the web editor and cr_edit already draw it, OPT snaps whole numbers); `va_get` = AMT x 10
+or x 100, `va_set` through `va_amt_q`: the values are tenths between -6 and 6 and whole numbers outside (so -5.9 ..
++5.9 by 0.1, then 6 .. 63), a value between two moves on from the old one to the next in its direction (a slow
+detent's 0.01: a tenth below 6, a whole above, as before) and a bigger move stops at the last value it passed (a
+quick detent's 6.35: 6, the whole amounts' quick step of before; the quick mapping's `mod: ENV2 -> CUT +12` scripts
+unchanged). It reads `+0.30`, `+12.00` on the MOD stack; the quick mapping's hot cell and trace drop the zeros
+(`cr_edit.c ce_amt_text`: `LFO1 +0.3`, `ENV2 +12`). Depths at a full source on PITCH: 0.1 1.9 ct, 0.5 9.4, 1 18.75,
+6 112.5, 63 1181. **Saved sounds**: `va_pack` writes version 5 only when a slot is in tenths, else version 4 byte for
+byte, so an untouched sound keeps its bytes and still loads on beta4; `va_blob_ok` takes 1..5 (versions 2..4 with
+those two bytes 0, as their padding was); `va_unpack`'s version-3 conversion now keys on `< 4` (it keyed on VA_VER).
+A version-5 blob on 0.22-beta4 or earlier plays INIT there (its `va_blob_ok` takes 1..4). `web/fm1sounds.js` and
+`tools/fm1_install.py` take versions 1..5; `vaToV3` (a sound placed on 0.21) rounds a fine AMT to its nearest whole
+number with a note ("MOD 2 AMT +0.3: ChoralRoot 0.21 has whole amounts, 0 instead"). **Bit for bit**: the new
+`cr_va_test t_coarse_golden` hashes render2's mid and side of every factory preset and 64 random patches with 8
+random whole slots (3 notes, 0.25 s each) and compares it with the hash taken at 5e1e8a7 before any change
+(0xe63bae86); a 0.05 % change of the whole path moves it (tried, reverted). Not a platform matrix change: mod.c, the
+EXPR screen and the other engines are as they were. etyrnal's comment on the issue (time values as BPM-synced
+musical subdivisions) is a separate feature, not built here.
+**Tests**: `cr_va_test t_fine` (the column's turns, each slot's flag, the flags through the blob, a fine-free sound as
+version 4 read back as it is, the pitch in cents at 0.1 .. 63 within 1 ct and rising, AMP by 0.5 / 5.9 / 6, every
+destination from 8 fine slots at a blob's -6.4 / +6.3); `t_blob`, `t_pages`, `t_set_macros`, `t_hires`, `t_v1`, `t_v2`
+for the new layout; `tools/emu/scripts/cr_va_mod_fine.txt` in test_cr.sh (LUSH PAD's MOD 2, LFO2 -> PITCH 3: slow
+detents 2.90 .. 2.60, a reversal's first two a tenth, quick 9 and 15, a slow one above 6 a whole, GLO whole; LFO held
++ KNOB 2 on FILT: `mod: LFO1 -> RES +0.1 slot 3`); `web/test_sounds.mjs` (a version 5 into 0.21's objects; a version
+6 refused). Docs: VA.md (matrix, formats, the patch and the blob, tests), EDITOR.md (MOD, the snap, the quick
+mapping), MANUAL.md (MOD), SOUNDS.md, releases/0.22.md "Merged after 0.22-beta4".
+**Checked**: `./build.sh` XIP 549 756 B of 573 440 (95.9 %, +640 B over 5e1e8a7's 549 116), RAM 78 652 (unchanged), POOL
+239 180 (+4); `sh tests/run_cr_tests.sh` green (cr_va_test 231 895 checks); `sh tools/emu/test_cr.sh` PASS (1044 ok,
++2); `sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 67 s; 313 goldens 0 changed; design/layouts/va.json regenerated
+by `tools/layout/dump_catalogs.mjs`: the AMT columns' format). Not on the unit, not pushed: the owner's word first.
+**On the unit** (the owner: "flash b8baff6 on the unit, backup first"): the unit runs this build (b8baff6, "ChoralRoot
+0.22") over the build it ran before, `tools/fm1_install.py build/choralroot.fwsc --backup ... --yes`; the backup before it
+is `fm1-backups/choralroot-backup-20261015-vafine.json` (the settings, the 128 user sounds, the favourites, loop slot
+1). `--info` afterwards: "ChoralRoot 0.22".
+
+## 2026-10-15 (0.22's release tree with the VA matrix's fine amounts)
+
+3y111. **0.22's release tree again, with 3y110 merged (2026-10-15; rel-22).** The owner tried the VA matrix's fine
+amounts (GitHub issue 13, 3y110, claude/va-mod-fine-9aa43c: b8baff6 the code, 0c7ef6d its HISTORY) on the unit and
+wants them in 0.22: merged with `--no-ff` over 3y106's two commits (the release.yml commit kept); HISTORY kept both
+entries; `docs/releases/0.22.md` kept the release text, and the branch's "Merged after 0.22-beta4" item went into it:
+a bullet "VA: finer modulation amounts" in Sounds and engines (what the player sees: the Amount reads as its own
+number, -64.00 .. +63.00, instead of a percentage, `+50%` becoming `+32.00`; below 6 either way a slow turn steps
+tenths, +0.10 .. +5.90, then whole steps; a quick turn still jumps 0 -> 6 -> 12; SHIFT snaps whole numbers; LFO to
+PITCH at +0.50 about 9 cents against 19 for the old smallest step; the quick mapping shows `LFO1 +0.3`; every VA sound
+plays as before), the device manager's rounding for a sound taken to 0.21 (+0.30 -> 0, +2.60 -> 3: `vaToV3`), and
+Installing's "From a 0.22 beta" (0.22 is beta4 with this one change; on every beta a VA sound saved with an Amount in
+tenths plays INIT: their `va_blob_ok` takes versions 1..4, and `va_pack` writes version 5 only with a fine slot). The
+going-back sections otherwise hold as written: 0.21 shows its own 32 slots, and "a part left on an FM TONE or VA sound
+in its 0.22 form" already covers a version-5 VA in the session. The card: the knobs' bullet and the VA's merged into
+one ("the VA's modulation amounts step in tenths below 6, ..."; still 12 bullets, the longest 216 characters), the
+betas' note says 0.22 is beta4 with the fine amounts and that such a sound plays INIT on a beta. README's "New in
+0.22", HANDOFF's state. Three comments of the branch named its HISTORY entry 3y106 (its number before the grain
+session's took 3y106 .. 3y109; this tree's release entry is 3y106 on main): `web/fm1sounds.js`, `tests/cr_va_test.c`,
+`tools/emu/scripts/cr_va_mod_fine.txt` say 3y110 now. **Built**: `./build.sh --release 0.22` twice (the first folder
+moved aside; 3y106's packages kept in `build/scratch/rel22/release-0.22-pre-va`), the same SHA256SUMS;
+`choralroot-0.22.fwsc` 1728d97e567c0f8c..., `choralroot-0.22-1core.fwsc` 5a64e5bf4b2d9b78...; the apps carry
+`ChoralRoot 0.22` and `ChoralRoot 0.22 1-core`; the stub version 3, baee55ed142fe1cc. Size: XIP 549 756 B of 573 440
+(95.9 %), RAM 78 652 (80.0 %), POOL 239 180 (69.5 %); the single-core package XIP 546 844 (95.4 %), RAM 75 564
+(76.9 %), POOL 239 052 (69.5 %). **Checked** (after every edit but this entry): `CR_VERSION=0.22 sh tests/run_all.sh`
+ALL SUITES PASSED (22 suites, 80 s; test_cr 1044 ok, test_persist 111, test_retired 18, test_pool 7, all host tests,
+313 goldens 0 changed); `CR_PACKAGES_DIR=build/release-0.22 python3 tests/releases_test.py` ALL OK; with the sixteen
+listed packages (collected again, each only with its listed sha256, nothing downloaded) releases_test ALL OK with all
+sixteen compared, `tests/site_test.py` site ALL OK (57, the Pages-like build's "New in 0.22" among them); `node
+web/test_installer.mjs` passed; `CR_VERSION=0.22 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs`
+PASS (`emu/version.txt` "ChoralRoot 0.22"). The Pages job simulated again (`build/scratch/rel22/pages_sim.sh`): every
+step OK; the landing page "Version 0.22", "Install 0.22", "New in 0.22" with the card's bullets, the notes link
+`blob/main/docs/releases/0.22.md`, no emulator line; the hosted 0.22 packages with the new sha256s
+(`firmware/SHA256SUMS`, `firmware/index.html`). Not done: the tag, the push, the release, the site; nothing flashed by
+this session.
+
 3y112. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
 2026-10-15: "Could the grain synth have a way to generate its own samples from a couple knobs to quickly get a variety
 of interesting samples to work with?"; branch claude/grain-engine-f724f9 from da1f8e2 = v0.22-beta3). No firmware

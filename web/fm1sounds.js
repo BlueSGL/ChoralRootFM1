@@ -234,7 +234,7 @@ export function readSoundFile(file) {
     if (kind === "quad" && patch.length === PATCH_SIZE.quad && patch[0] === 0x51 && patch[1] === 4)
       patch = quadToV4(patch);              // (version 4, 3y61's: as version 5, the owner's corrections)
     if (patch.length !== PATCH_SIZE[kind]) throw new Error(`The sound file's ${kind} patch is ${patch.length} bytes, not ${PATCH_SIZE[kind]}`);
-    if (kind === "va" && (patch[0] !== 0x56 || patch[1] < 1 || patch[1] > 4)) throw new Error("The sound file's VA patch is not a VA patch (magic or version)");
+    if (kind === "va" && (patch[0] !== 0x56 || patch[1] < 1 || patch[1] > 5)) throw new Error("The sound file's VA patch is not a VA patch (magic or version)");
     if (kind === "fm6" && (patch[112] !== 0x46 || patch[113] !== 1)) throw new Error("The sound file's FM6 patch is not an FM6 patch (magic)");
     if (kind === "quad" && (patch[0] !== 0x51 || patch[1] < 1 || patch[1] > 5)) throw new Error("The sound file's FM TONE patch is not an FM TONE patch (magic or version)");
   }
@@ -259,8 +259,10 @@ function sndNewStore(kind, half) {
 // same values; eng_va.c va_unpack is the other way round): version 3, FENV a whole number (its hundredths, value
 // VA_FENVF, rounded in), a synced LFO's RATE (version 4: an index into the 42 rates, N_VA_SYNC) the nearest of version
 // 3's 14 divisions (by length; the free periods in ms, faster than all of them: the fastest, 1/32) as a RATE 0..127 that
-// version 3 reads as that division (RATE x 14 >> 7). notes: what changed, one line each. Other versions: as they are
-const VA_FENV = 31, VA_FENVF = 103, VA_LFO0 = 53, VA_LFO_N = 5, VA_NDIV3 = 14;
+// version 3 reads as that division (RATE x 14 >> 7). A version 5 (the matrix's fine amounts, 3y110: values 106 / 107
+// flag the slots whose AMT is in tenths) too: each such AMT the nearest whole number, the flags 0 (version 3's
+// padding). notes: what changed, one line each. Other versions: as they are
+const VA_FENV = 31, VA_FENVF = 103, VA_LFO0 = 53, VA_LFO_N = 5, VA_NDIV3 = 14, VA_MOD0 = 73, VA_MFINE0 = 106;
 const VA_SYNC_NAMES = ["8BARD", "8BAR", "8BART", "4BARD", "4BAR", "4BART", "3BARD", "3BAR", "3BART", "2BARD", "2BAR",
   "2BART", "1BARD", "1BAR", "1BART", "1/2D", "1/2", "1/2T", "1/4D", "1/4", "1/4T", "1/8D", "1/8", "1/8T", "1/16D", "1/16",
   "1/16T", "1/32D", "1/32", "1/32T", "1/64D", "1/64", "1/64T", "128D", "1/128", "128T", "256D", "1/256", "256T", "4ms",
@@ -271,8 +273,19 @@ const VA_SYNC_BEATS = [...[8, 4, 3, 2, 1].flatMap((b) => [6 * b, 4 * b, 8 * b / 
   ...[2, 1, 1 / 2, 1 / 4, 1 / 8, 1 / 16, 1 / 32, 1 / 64].flatMap((n) => [n * 3 / 2, n, n * 2 / 3]), null, null, null];
 const VA_DIV3_TO_SYNC = [1, 4, 10, 13, 16, 18, 19, 20, 21, 22, 23, 25, 26, 28];   // (eng_va.c: version 3's divisions)
 export function vaToV3(blob, notes = []) {
-  if (!(blob instanceof Uint8Array) || blob.length !== PATCH_SIZE.va || blob[0] !== 0x56 || blob[1] !== 4) return blob;
+  if (!(blob instanceof Uint8Array) || blob.length !== PATCH_SIZE.va || blob[0] !== 0x56 || blob[1] < 4 || blob[1] > 5)
+    return blob;
   const b = blob.slice();
+  if (b[1] === 5) {
+    const fl = b[2 + VA_MFINE0] | (b[2 + VA_MFINE0 + 1] & 1) << 7;
+    for (let k = 0; k < 8; k++) {
+      if (!(fl >> k & 1)) continue;
+      const o = 2 + VA_MOD0 + 3 * k + 2, t = b[o] - 64, whole = Math.max(-64, Math.min(63, Math.sign(t) * Math.round(Math.abs(t) / 10)));
+      notes.push(`MOD ${k + 1} AMT ${t < 0 ? "-" : "+"}${(Math.abs(t) / 10).toFixed(1)}: ChoralRoot 0.21 has whole amounts, ${whole > 0 ? "+" : ""}${whole} instead`);
+      b[o] = whole + 64;
+    }
+    b[2 + VA_MFINE0] = b[2 + VA_MFINE0 + 1] = 0;
+  }
   b[1] = 3;
   const fenv = (b[2 + VA_FENV] - 64) * 100 + b[2 + VA_FENVF], whole = Math.max(-64, Math.min(63, Math.round(fenv / 100)));
   if (b[2 + VA_FENVF]) {
@@ -312,7 +325,7 @@ function sndPutBlob(m, kind, slot, blob, notes = []) {
   if (kind === "p5") { if (blob) throw new Error("This FM-1 keeps no P5 programs (ChoralRoot 0.22 or later needed)"); return; }
   if (kind === "grain") { if (blob) throw new Error("This FM-1 keeps no GRAIN sounds (a ChoralRoot with the GRAIN engine needed)"); return; }
   if (kind === "quad" && blob) blob = quadToV3(blob, notes);   // (a firmware before the pool: its store holds versions 1..3, 80 bytes)
-  if (kind === "va" && blob) blob = vaToV3(blob, notes);       // (.. and VA versions 1..3: a version 4 would play INIT there)
+  if (kind === "va" && blob) blob = vaToV3(blob, notes);       // (.. and VA versions 1..3: a version 4 or 5 would play INIT there)
   const p = sndPlace(kind, slot), old = m.get(p.id), ok = sndStoreOk(kind, old, p.half), uo = sndUsedOff(kind);
   if (!blob) {
     if (!ok || !(sndView(old).getUint32(uo, true) >>> p.bit & 1)) return;

@@ -160,8 +160,13 @@ static void t_blob(void)
     b2[2 + VA_OSC(0, VO_WAVE)] = 99;
     CHECK(va_unpack(b2, q) == 0 && !memcmp(q, init, VA_NP), "out-of-range value: not the init patch");
     memcpy(b2, b, VA_BLOB);
-    b2[VA_BLOB - 1u] = 1;
-    CHECK(va_unpack(b2, q) == 0 && !memcmp(q, init, VA_NP), "padding not 0: not the init patch");
+    b2[VA_BLOB - 1u] = 2;                        /* (version 5: slot 8's fine flag, 0..1) */
+    CHECK(va_unpack(b2, q) == 0 && !memcmp(q, init, VA_NP), "slot 8's fine flag 2: not the init patch");
+    memcpy(b2, b, VA_BLOB);
+    b2[1] = 4;
+    b2[VA_BLOB - 2u] = 1;
+    b2[VA_BLOB - 1u] = 0;
+    CHECK(va_unpack(b2, q) == 0 && !memcmp(q, init, VA_NP), "version 4, padding not 0: not the init patch");
     memset(b2, 0xFF, sizeof b2);
     CHECK(va_unpack(b2, q) == 0, "erased flash (0xFF): taken as a patch");
     {   /* blob_set on a track: bad -> init, macros out */
@@ -222,6 +227,10 @@ static void t_pages(void)
             if (i == VA_FENV)                    /* (hundredths: F_FIX2, the patch's range x 100, VA_FENVF the rest) */
                 CHECK(d->fmt == F_FIX2 && d->min == va_range(i).min * 100 && d->max == va_range(i).max * 100 + 99 &&
                       va_range(VA_FENVF).max == 99, "FENV hi-res range %d..%d", d->min, d->max);
+            else if (pg >= 24u && c == 2u)       /* (AMT: hundredths, the patch's whole range x 100; version 5) */
+                CHECK(d->fmt == F_FIX2 && d->min == va_range(i).min * 100 && d->max == va_range(i).max * 100 &&
+                      va_range(VA_MFINE0).max == 127 && va_range(VA_MFINE1).max == 1, "AMT hi-res range %d..%d",
+                      d->min, d->max);
             else
                 CHECK(d->min == va_range(i).min && d->max == va_range(i).max, "page %s col %u: range %d..%d, patch %d..%d",
                       VA_PAGES[pg].title, c, d->min, d->max, va_range(i).min, va_range(i).max);
@@ -231,7 +240,8 @@ static void t_pages(void)
         }
     }
     for (i = 0; i < VA_NP; i++)
-        CHECK(used[i] == (i == VA_OMIX || i == VA_DETUNE || i == VA_FRSV ? 0u : 1u), "patch value %u on %u page columns",
+        CHECK(used[i] == (i == VA_OMIX || i == VA_DETUNE || i == VA_FRSV || i >= VA_MFINE0 ? 0u : 1u),
+              "patch value %u on %u page columns",
               i, used[i]);
 }
 
@@ -266,8 +276,9 @@ static void t_set_macros(void)
     CHECK(va_get(t, 9, 1) == 0 && va_patch[0][VA_FRSV] == 0, "FILTER+ empty column");
     va_set(t, 0, 0, 9);                           /* OSC 1 WAVE */
     CHECK(va_get(t, 0, 0) == VW_N - 1, "set WAVE 9: %d", va_get(t, 0, 0));
-    va_set(t, 24, 2, 100);                        /* MOD 1 AMT */
-    CHECK(va_get(t, 24, 2) == 63, "set AMT 100: %d", va_get(t, 24, 2));
+    va_set(t, 24, 2, 9999);                       /* MOD 1 AMT (hundredths): clamped */
+    CHECK(va_get(t, 24, 2) == 6300 && va_patch[0][VA_MOD(0, VM_AMT)] == 63, "set AMT 99.99: %d", va_get(t, 24, 2));
+    va_set(t, 24, 2, 0);
     va_set(t, 1, 3, 5);                           /* an empty column: nothing */
     CHECK(va_get(t, 1, 3) == 0, "empty column reads %d", va_get(t, 1, 3));
     va_set(t, 99, 0, 5);
@@ -573,8 +584,8 @@ static void t_hires(void)
     b[2 + VA_FENVF] = 100;
     CHECK(!va_blob_ok(b), "FENV hundredths 100 taken");
     b[2 + VA_FENVF] = 0;
-    b[1] = 5;
-    CHECK(!va_blob_ok(b), "version 5 taken");
+    b[1] = VA_VER + 1u;
+    CHECK(!va_blob_ok(b), "version 6 taken");
     for (k = 0; k < VA_NPRESETS; k++) {
         int32_t peak;
         int64_t mx;
@@ -676,7 +687,7 @@ static void t_v1(void)
         CHECK(!memcmp(p, q, VA_NP1), "v1 blob %u: an old value changed", n);
         CHECK(!memcmp(q + VA_NP1, init + VA_NP1, VA_NP - VA_NP1), "v1 blob %u: the new values are not the init", n);
         va_pack(q, b2);
-        CHECK(b2[1] == VA_VER && va_blob_ok(b2) && va_unpack(b2, p) && !memcmp(p, q, VA_NP), "v1 blob %u -> v2", n);
+        CHECK(b2[1] == 4u && va_blob_ok(b2) && va_unpack(b2, p) && !memcmp(p, q, VA_NP), "v1 blob %u -> v2", n);
     }
     rnd_v1(p, b1);
     b1[VA_BLOB1 - 1u] = 1;
@@ -708,7 +719,7 @@ static void t_v1(void)
                 continue;
             }
             keep[k][VA_FTYPE] = (int8_t)(32 * keep[k][VA_FTYPE]);
-            CHECK(has && va_unpack(b, q) && b[1] == VA_VER && !memcmp(q, keep[k], VA_NP1) &&
+            CHECK(has && va_unpack(b, q) && b[1] == 4u && !memcmp(q, keep[k], VA_NP1) &&
                       !memcmp(q + VA_NP1, init + VA_NP1, VA_NP - VA_NP1), "store v1 slot %u: patch changed", k);
         }
         CHECK(!va_store_v1((int)sizeof va_store), "store v2 taken as v1");
@@ -725,7 +736,7 @@ static void rnd_v2(int8_t *p, uint8_t *b)
     b[1] = 2;
     for (i = 0; i < VA_NP; i++) {
         va_rng_t r = va_range(i);
-        int32_t mx = i == VA_FTYPE ? 3 : i == VA_FRSV ? 127 : r.max;
+        int32_t mx = i == VA_FTYPE ? 3 : i == VA_FRSV ? 127 : i >= VA_MFINE0 ? 0 : r.max;   /* (MFINE: padding) */
         if (i >= VA_LFO0 && i < VA_MOD0 && (i - VA_LFO0) % VL_N == VL_SYNC)
             mx = 0;                              /* (free LFOs: a synced RATE converts, t_lfo_sync checks it) */
         p[i] = (int8_t)(r.min + (int32_t)(rnd() % (uint32_t)(mx - r.min + 1)));
@@ -751,7 +762,7 @@ static void t_v2(void)
             p[VA_FRSV] = 0;
             CHECK(!memcmp(p, q, VA_NP), "v2 %s MORPH %u: another value changed", N_VA_FTYPE[ty], m);
             va_pack(q, b3);
-            CHECK(b3[1] == VA_VER && va_blob_ok(b3) && va_unpack(b3, r) && !memcmp(q, r, VA_NP), "v2 -> v3 round trip");
+            CHECK(b3[1] == 4u && va_blob_ok(b3) && va_unpack(b3, r) && !memcmp(q, r, VA_NP), "v2 -> v3 round trip");
         }
     rnd_v2(p, b2);
     b2[2 + VA_FTYPE] = 4;
@@ -792,7 +803,7 @@ static void t_v2(void)
                 CHECK(!has, "store v2 slot %u: should be empty", k);
                 continue;
             }
-            CHECK(has && b[1] == VA_VER && va_unpack(b, q) && !memcmp(q, keep[k], VA_NP), "store v2 slot %u: patch changed",
+            CHECK(has && b[1] == 4u && va_unpack(b, q) && !memcmp(q, keep[k], VA_NP), "store v2 slot %u: patch changed",
                   k);
         }
         CHECK(!va_store_v2((int)sizeof va_store), "store v3 taken as v2");
@@ -1257,6 +1268,208 @@ static void t_dst2(void)
     }
 }
 
+/* the sound of every saved matrix, bit for bit: a hash (FNV-1a) of render2's mid and side for every factory preset
+ * and 64 random patches with all 8 slots active (random SRC, DST, AMT -64..63, whole), 0.25 s of a 3-note chord
+ * each. VA_GOLD was computed at 5e1e8a7 (0.22-beta4, before the fine amounts, 3y110): the fine amounts must not move
+ * a whole one. (Its own generator: the patches do not depend on the tests before it.) */
+#define VA_GOLD 0xe63bae86u
+#define VA_NP4 106u                              /* (version 4's values: the random patches use these) */
+static uint32_t gr_s = 777u;
+static uint32_t gr_rnd(void)
+{
+    gr_s = gr_s * 1664525u + 1013904223u;
+    return gr_s >> 8;
+}
+static uint32_t gold_hash(const int8_t *patch, uint32_t k, uint32_t h)
+{
+    static const uint8_t CH[3] = {57, 64, 71};
+    track_t *t = &trk[0];
+    int32_t out[CTL];
+    uint32_t n, i;
+    drv_reset(t);
+    if (patch) {
+        memcpy(va_patch[0], patch, VA_NP);
+        va_macros_out(t);
+    } else {
+        va_blob_preset(t, k);
+    }
+    for (i = 0; i < 3u; i++)
+        drv_on(t, i, CH[i], 40u + 40u * i);
+    for (n = 0; n < (uint32_t)(0.25 * FS / CTL); n++) {
+        drv_tick(t, out);
+        for (i = 0; i < CTL; i++) {
+            uint32_t a = (uint32_t)out[i], b = (uint32_t)drv_sbuf[i], j;
+            for (j = 0; j < 4u; j++)
+                h = (h ^ ((a >> (8u * j)) & 255u)) * 16777619u;
+            for (j = 0; j < 4u; j++)
+                h = (h ^ ((b >> (8u * j)) & 255u)) * 16777619u;
+        }
+    }
+    return h;
+}
+static void t_coarse_golden(void)
+{
+    int8_t p[VA_NP];
+    uint32_t h = 2166136261u, k, i;
+    drv_side = 1;
+    for (k = 0; k < VA_NPRESETS; k++)
+        h = gold_hash(0, k, h);
+    for (k = 0; k < 64u; k++) {
+        va_init_patch(p);
+        for (i = 0; i < VA_NP4; i++) {
+            va_rng_t r = va_range(i);
+            p[i] = (int8_t)(r.min + (int32_t)(gr_rnd() % (uint32_t)(r.max - r.min + 1)));
+        }
+        p[VA_ENV(0, VE_ATK)] = 0;                /* (heard from the start) */
+        p[VA_ENV(0, VE_SUS)] = 127;
+        p[VA_OSC(0, VO_LEVEL)] = 110;
+        for (i = 0; i < 8u; i++) {
+            p[VA_MOD(i, VM_SRC)] = (int8_t)(1u + gr_rnd() % (VS_N - 1u));
+            p[VA_MOD(i, VM_DST)] = (int8_t)(1u + gr_rnd() % (VD_N - 1u));
+            p[VA_MOD(i, VM_AMT)] =
+                (int8_t)(gr_rnd() % 2u ? 1 + (int32_t)(gr_rnd() % 63u) : -1 - (int32_t)(gr_rnd() % 64u));
+        }
+        h = gold_hash(p, 0, h);
+    }
+    drv_side = 0;
+    if (getenv("VERBOSE") || VA_GOLD == 0u)
+        printf("  coarse golden: 0x%08x\n", h);
+    CHECK(h == VA_GOLD, "the whole amounts' sound moved: hash 0x%08x, 5e1e8a7's 0x%08x", h, VA_GOLD);
+}
+
+/* version 5, the matrix's fine amounts (issue 13): the AMT column in hundredths, tenths below 6, whole numbers from
+ * 6; a slow detent a tenth below 6, a whole above; the fine flags in the blob; the pitch depth in cents at a full
+ * source (VEL 127 -> PITCH): a whole step 18.75 ct as before, a tenth 1.9 ct; AMP by a tenth; the extremes */
+static int32_t fine_inc(int32_t amt)            /* OSC 1's increment, note 69, VEL 127 -> PITCH by amt (hundredths) */
+{
+    track_t *t = &trk[0];
+    int32_t out[CTL];
+    drv_reset(t);
+    va_init_patch(va_patch[0]);
+    va_macros_out(t);
+    va_set(t, 24, 0, VS_VEL);
+    va_set(t, 24, 1, VD_PITCH);
+    va_set(t, 24, 2, amt);
+    drv_on(t, 0, 69, 127);
+    drv_tick(t, out);
+    return t->v[0].s[3];
+}
+static double fine_rms(int32_t amt)             /* VEL 127 -> AMP by amt: the level after the attack */
+{
+    track_t *t = &trk[0];
+    int32_t out[CTL];
+    double e = 0;
+    uint32_t n, i;
+    drv_reset(t);
+    va_init_patch(va_patch[0]);
+    va_macros_out(t);
+    va_set(t, 24, 0, VS_VEL);
+    va_set(t, 24, 1, VD_AMP);
+    va_set(t, 24, 2, amt);
+    drv_on(t, 0, 57, 127);
+    for (n = 0; n < 60u; n++) {
+        drv_tick(t, out);
+        for (i = 0; n >= 20u && i < CTL; i++)
+            e += (double)out[i] * out[i];
+    }
+    return sqrt(e / (40.0 * CTL));
+}
+static void t_fine(void)
+{
+    /* turns: from, by -> to (hundredths); a slow detent is 1 (0.01), a quick one 635 (the range / 20) */
+    static const int16_t TURN[][3] = {{0, 1, 10}, {10, 1, 20}, {20, -1, 10}, {10, -1, 0}, {0, -1, -10}, {590, 1, 600},
+        {600, 1, 700}, {700, -1, 600}, {600, -1, 590}, {-590, -1, -600}, {-600, -1, -700}, {-700, 1, -600},
+        {-600, 1, -590}, {0, 635, 600}, {600, 635, 1200}, {0, 1270, 1200}, {0, -635, -600}, {1200, -635, 570},
+        {6300, 1, 6300}, {6200, 635, 6300}, {-6400, -1, -6400}, {300, 0, 300}, {0, 45, 40}, {0, 999, 900},
+        {0, 55, 50}, {0, 3333, 3300}};
+    /* the pitch depth at a full source: whole amounts as before (18.75 ct a step, 63: 1181 ct), tenths a tenth */
+    static const int16_t PIT[] = {10, 50, 90, 100, 590, 600, 1200, 6300, -10, -590, -6400};
+    track_t *t = &trk[0];
+    int8_t p[VA_NP], q[VA_NP];
+    uint8_t b[VA_BLOB];
+    uint32_t k, s, d;
+    int32_t inc0, left, peak;
+    int64_t mx;
+    double r0, r, last = 0;
+    drv_reset(t);
+    va_init_patch(va_patch[0]);
+    for (k = 0; k < NELEM(TURN); k++) {
+        va_set(t, 25, 2, TURN[k][0]);
+        va_set(t, 25, 2, TURN[k][0] + TURN[k][1]);
+        CHECK(va_get(t, 25, 2) == TURN[k][2], "AMT %d by %d: %d, want %d", TURN[k][0], TURN[k][1], va_get(t, 25, 2),
+              TURN[k][2]);
+        CHECK(va_patch[0][VA_MFINE0] == (TURN[k][2] % 100 ? 2 : 0) && !va_patch[0][VA_MFINE1] &&
+                  va_patch[0][VA_MOD(1, VM_AMT)] == (TURN[k][2] % 100 ? TURN[k][2] / 10 : TURN[k][2] / 100),
+              "AMT %d: slot 2's flag %d, AMT %d", TURN[k][2], va_patch[0][VA_MFINE0], va_patch[0][VA_MOD(1, VM_AMT)]);
+    }
+    va_set(t, 25, 2, 0);
+    for (s = 0; s < 8u; s++)                     /* each slot's own flag: MFINE0 bits 0..6, MFINE1 bit 0 */
+        va_set(t, 24u + s, 2, s & 1u ? -(int32_t)(10u + 10u * s) : (int32_t)(10u + 10u * s));
+    CHECK(va_patch[0][VA_MFINE0] == 127 && va_patch[0][VA_MFINE1] == 1, "8 fine slots: flags %d %d",
+          va_patch[0][VA_MFINE0], va_patch[0][VA_MFINE1]);
+    va_blob_get(t, b);
+    CHECK(b[1] == 5u && b[2 + VA_MFINE0] == 127 && b[2 + VA_MFINE1] == 1 && va_blob_ok(b) && va_unpack(b, q) &&
+              !memcmp(q, va_patch[0], VA_NP), "the fine flags through the blob");
+    memcpy(p, va_patch[0], VA_NP);
+    va_init_patch(va_patch[0]);
+    va_blob_set(t, b);
+    for (s = 0; s < 8u; s++)
+        CHECK(va_get(t, 24u + s, 2) == (s & 1u ? -(int32_t)(10u + 10u * s) : (int32_t)(10u + 10u * s)),
+              "slot %u from the blob: %d", s + 1u, va_get(t, 24u + s, 2));
+    va_set(t, 31, 2, 1200);
+    CHECK(va_patch[0][VA_MFINE1] == 0 && va_patch[0][VA_MFINE0] == 127, "slot 8 whole: its flag off, the others kept");
+    /* a sound without a fine amount: version 4, byte for byte as 0.22-beta4 wrote it, and read back as it is (a synced
+     * RATE past version 3's divisions, FENV's hundredths: no version-3 conversion) */
+    va_init_patch(p);
+    p[VA_LFO(0, VL_SYNC)] = 1;
+    p[VA_LFO(0, VL_RATE)] = 30;
+    p[VA_FENVF] = 66;
+    p[VA_MOD(0, VM_SRC)] = VS_LFO1;
+    p[VA_MOD(0, VM_DST)] = VD_PITCH;
+    p[VA_MOD(0, VM_AMT)] = 3;
+    va_pack(p, b);
+    CHECK(b[1] == 4u && !b[2 + VA_MFINE0] && !b[2 + VA_MFINE1] && va_blob_ok(b) && va_unpack(b, q) &&
+              !memcmp(p, q, VA_NP), "no fine amount: a version-4 blob, read back as it is");
+    /* the pitch (the render's own resolution: 1/256 st floored, then the fine factor's linear step: within 1 ct) */
+    inc0 = fine_inc(0);
+    for (k = 0; k < NELEM(PIT); k++) {
+        double c = 1200.0 * log2((double)fine_inc(PIT[k]) / inc0), want = PIT[k] / 100.0 * 18.75;
+        if (getenv("VERBOSE"))
+            printf("  AMT %+6.2f -> PITCH %+8.2f ct (%+8.2f)\n", PIT[k] / 100.0, c, want);
+        CHECK(fabs(c - want) < 1.0 + fabs(want) * 0.002, "AMT %.2f: %.2f ct, want %.2f", PIT[k] / 100.0, c, want);
+        CHECK(k == 0 || PIT[k] < 0 || c > last, "AMT %.2f: %.2f ct, not above AMT %.2f's %.2f", PIT[k] / 100.0, c,
+              PIT[k - 1] / 100.0, last);
+        last = c;
+    }
+    /* AMP: VEL 127 closing it by 0.5, 5.9, 6 */
+    r0 = fine_rms(0);
+    r = fine_rms(-50) / r0;
+    CHECK(fabs(r - (1 - 0.5 / 64)) < 0.002, "AMP -0.5: level %.4f, want %.4f", r, 1 - 0.5 / 64);
+    r = fine_rms(-590) / r0;
+    CHECK(fabs(r - (1 - 5.9 / 64)) < 0.002, "AMP -5.9: level %.4f, want %.4f", r, 1 - 5.9 / 64);
+    r = fine_rms(-600) / r0;
+    CHECK(fabs(r - (1 - 6.0 / 64)) < 0.002, "AMP -6: level %.4f, want %.4f", r, 1 - 6.0 / 64);
+    /* the extremes: every destination from every slot in tenths, a blob's -6.4 and +6.3 too (no overflow, the voices
+     * end) */
+    drv_side = 1;
+    for (d = 1; d < VD_N; d++)
+        for (k = 0; k < 2u; k++) {
+            va_init_patch(p);
+            p[VA_ENV(0, VE_SUS)] = 127;
+            for (s = 0; s < 8u; s++) {
+                p[VA_MOD(s, VM_SRC)] = (int8_t)(1u + (s + d) % (VS_N - 1u));
+                p[VA_MOD(s, VM_DST)] = (int8_t)d;
+                p[VA_MOD(s, VM_AMT)] = (int8_t)(k ? 63 : -64);
+            }
+            p[VA_MFINE0] = 127;
+            p[VA_MFINE1] = 1;
+            chord(0, 0.3, p, &peak, &mx, (uint32_t *)&left);
+            CHECK(mx < (1 << 30) && !left, "fine extremes DST %s %s: |sum| %lld, voices %d", N_VA_DST[d], k ? "+" : "-",
+                  (long long)mx, left);
+        }
+    drv_side = 0;
+}
+
 int main(void)
 {
     t_blob();
@@ -1275,6 +1488,8 @@ int main(void)
     t_fmorph_spread();
     t_extremes2();
     t_dst2();
+    t_coarse_golden();
+    t_fine();
     printf("cr_va_test: %d checks, %d failed\n", checks, fails);
     return fails ? 1 : 0;
 }

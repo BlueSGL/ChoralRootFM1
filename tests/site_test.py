@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import time
+from html import escape as html_escape
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
@@ -353,7 +354,8 @@ def release_site(cur):
 
 
 def escape_html(s):
-    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    """as web/make_site.py writes a bullet (html.escape: quotes too, so a bullet with an apostrophe, 0.22's, matches)"""
+    return html_escape(s)
 
 
 def main():

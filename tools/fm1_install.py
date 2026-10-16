@@ -1796,7 +1796,7 @@ def _set_blob(objs, kind, slot, blob):
             raise InstallError("usage", "this FM-1 keeps FM TONE sounds in an older format: update ChoralRoot (0.22 or "
                                "later) to add this one")
         blob = bytes(blob[:QUAD_V3])
-    if kind == "va" and blob is not None and blob[1] > 3:   # (its va_blob_ok takes 1..3: a version 4 would play INIT)
+    if kind == "va" and blob is not None and blob[1] > 3:   # (its va_blob_ok takes 1..3: a version 4 / 5 would play INIT)
         raise InstallError("usage", "this FM-1 keeps VA sounds in an older format: update ChoralRoot (0.22 or later) "
                            "to add this one, or place it with the web device manager, which converts it")
     i, k, off = _store_at(kind, slot)
@@ -2017,8 +2017,8 @@ def read_sound_file(f):
             data = _quad96(data)                   # (an FM TONE sound file of before 2026-10-14: the FM-1 converts it)
         if len(data) != PATCH_SIZE[kind]:
             raise bad(f"the {kind} patch is {len(data)} bytes, not {PATCH_SIZE[kind]}")
-        if kind == "va" and (data[0] != 0x56 or not 1 <= data[1] <= 4):
-            raise bad("not a VA patch (its first bytes are not 'V' and a version 1..4)")
+        if kind == "va" and (data[0] != 0x56 or not 1 <= data[1] <= 5):
+            raise bad("not a VA patch (its first bytes are not 'V' and a version 1..5)")
         if kind == "fm6" and (data[112] != 0x46 or data[113] != 1):
             raise bad("not an FM6 patch (bytes 112, 113 are not 'F', 1)")
         if kind == "quad" and (data[0] != 0x51 or not 1 <= data[1] <= 5 or (data[1] < 4 and any(data[80:]))):

@@ -3,7 +3,7 @@
   "version": 1,
   "generated": "by lay_catalog from the firmware's built-in tables: do not edit (tools/layout/dump_catalogs.mjs writes it; read-only in step 2, docs/LAYOUT-TOOL.md). The firmware version is not in it: params_hash binds it to the parameters",
   "engine": {"index": 13, "name": "VA"},
-  "params_hash": "c3cd9b0b94efbc52",
+  "params_hash": "79cc2c49b170c732",
   "pages": [
     {
       "page": 0,
@@ -251,7 +251,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -261,7 +261,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -271,7 +271,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -281,7 +281,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -291,7 +291,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -301,7 +301,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -311,7 +311,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     },
@@ -321,7 +321,7 @@
       "cols": [
         {"short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null},
         {"short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null},
-        {"short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null},
+        {"short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null},
         null
       ]
     }
@@ -783,7 +783,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 24, "col": 0, "page_title": "MOD 1", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 24, "col": 1, "page_title": "MOD 1", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 24, "col": 2, "page_title": "MOD 1", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 24, "col": 2, "page_title": "MOD 1", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -793,7 +793,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 25, "col": 0, "page_title": "MOD 2", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 25, "col": 1, "page_title": "MOD 2", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 25, "col": 2, "page_title": "MOD 2", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 25, "col": 2, "page_title": "MOD 2", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -803,7 +803,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 26, "col": 0, "page_title": "MOD 3", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 26, "col": 1, "page_title": "MOD 3", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 26, "col": 2, "page_title": "MOD 3", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 26, "col": 2, "page_title": "MOD 3", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -813,7 +813,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 27, "col": 0, "page_title": "MOD 4", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 27, "col": 1, "page_title": "MOD 4", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 27, "col": 2, "page_title": "MOD 4", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 27, "col": 2, "page_title": "MOD 4", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -823,7 +823,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 28, "col": 0, "page_title": "MOD 5", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 28, "col": 1, "page_title": "MOD 5", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 28, "col": 2, "page_title": "MOD 5", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 28, "col": 2, "page_title": "MOD 5", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -833,7 +833,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 29, "col": 0, "page_title": "MOD 6", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 29, "col": 1, "page_title": "MOD 6", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 29, "col": 2, "page_title": "MOD 6", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 29, "col": 2, "page_title": "MOD 6", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -843,7 +843,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 30, "col": 0, "page_title": "MOD 7", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 30, "col": 1, "page_title": "MOD 7", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 30, "col": 2, "page_title": "MOD 7", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 30, "col": 2, "page_title": "MOD 7", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             },
@@ -853,7 +853,7 @@
               "cells": [
                 {"knob": 1, "bind": "deep", "page": 31, "col": 0, "page_title": "MOD 8", "label": "Source", "short": "SRC", "fmt": "enum", "min": 0, "max": 12, "def": 0, "names": ["OFF", "ENV1", "ENV2", "ENV3", "ENV4", "LFO1", "LFO2", "LFO3", "LFO4", "VEL", "KEY", "RAND", "MODW"], "unit": null, "by_mode": true},
                 {"knob": 2, "bind": "deep", "page": 31, "col": 1, "page_title": "MOD 8", "label": "Dest", "short": "DST", "fmt": "enum", "min": 0, "max": 29, "def": 0, "names": ["OFF", "PITCH", "PIT1", "PIT2", "PIT3", "PIT4", "LVL1", "LVL2", "LVL3", "LVL4", "SHP1", "SHP2", "SHP3", "SHP4", "CUT", "RES", "AMP", "PAN", "RATE1", "RATE2", "RATE3", "RATE4", "FTYPE", "DRIVE", "SPRD", "FENV", "DEP1", "DEP2", "DEP3", "DEP4"], "unit": null, "by_mode": true},
-                {"knob": 3, "bind": "deep", "page": 31, "col": 2, "page_title": "MOD 8", "label": "Amount", "short": "AMT", "fmt": "bipct", "min": -64, "max": 63, "def": 0, "names": null, "unit": null, "by_mode": true},
+                {"knob": 3, "bind": "deep", "page": 31, "col": 2, "page_title": "MOD 8", "label": "Amount", "short": "AMT", "fmt": "fix2", "min": -6400, "max": 6300, "def": 0, "names": null, "unit": null, "by_mode": true},
                 {"knob": 4, "bind": "none"}
               ]
             }
