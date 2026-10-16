@@ -5532,3 +5532,18 @@ releases the keys held. Still open, explained in the doc: 1 (picking keys on D4)
 in Simple), 9 (G5 with the shortcuts on and nothing to play: the answer given is the shortcuts-off case), 10 (G5's
 starting state), 14 (the panel pictures). The mock-ups: the four Options under their new names, MIDI Keys, the LATCH
 gesture's text, rule B's timeline.
+**The third round, the same evening.** Picking keys stay on D4 .. G5 (the recommendation). **A root waits for an open
+window** (the owner: "if root detected and no top row chord keys are pushed, only root plays. If root detected and
+there are top key chord keys being pushed, then ask, has the window passed? If the window has passed, play the chord,
+if the window is still in progress, nothing plays until window is complete, adding a delay"): decision 4's "start at
+once, amend in place" is gone, every gesture is decided at the window's close and its chord starts (or re-types) once,
+so the engine amend and the looper's amendment are dropped from the design (the estimate falls to +2.5 .. 4.5 KB XIP;
+the UI holds the waiting roots, `cu.kwait`). G5 plays nothing while the shortcuts are on; with G5 on and nothing to
+play the keys play single notes as normal (no message). G5's starting state as proposed. **A second panel picture for
+FM-1**: `web/site/img/panel-main-fm1.png` (1757 x 1072, the Classic picture's crop at (76, 121)), the designer's own
+plate export (ChoralRootFM1Designer `index.html ?design=..&export=plate`, run from a scratch server, the designer repo
+untouched) of `design/site-plate-main-fm1.json` (its `site-plate-main-seq.json` with FM-1's labels, MIN and MAJ lit as
+the SUS pair, m7, LOCK on LFO, `Dsus` `m7`, no battery); not linked from the site until the firmware has the layout.
+One new open question (16): play at the pair when nothing more can change it, or always at the window's close. The
+mock-ups: the window's timeline redrawn (the root waits, Dsus at the close), rule B's re-strike at the close, the FM-1
+panel picture in place of the G5 message.

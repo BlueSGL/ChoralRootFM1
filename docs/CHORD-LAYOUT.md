@@ -36,6 +36,8 @@ Recorded as decided; the sections below work them out.
 4. **The combine window** ("maybe even 50ms or more"): a chord starts at once with what is held. If G#'s or A#'s
    partner lands within the window, the sounding chord becomes SUS in place, only its third moving to the fourth,
    with no restrike. A G# or A# held from earlier never waits. The window is an Option, 30 .. 80 ms, default 50.
+   (**Replaced in the second and third rounds**: a root pressed inside an open window waits for it and plays once;
+   nothing is amended in place: [the combine window](#the-combine-window).)
 5. **LOCK in FM-1**: LFO tap = LOCK on / off; LFO held = the LOCK layer; **GLO + LFO = LATCH**. A latched SUS shows
    as two lit keys, and pressing that same pair again on its own switches it off (as one type key does today). The
    LFO light shows LOCK steadily; while LATCH is on it pulses. The screen's `Latch` stays. LOCK cannot be switched
@@ -72,15 +74,33 @@ of [Open questions](#open-questions), which now says what is decided and what st
 - **8. Wait the window before changing what already sounds** ("I don't want to hear it quickly play a MIN then a SUS
   when I am intending to do a SUS chord"). A type key that would change a chord already sounding (LOCK's latch with
   roots held in Advanced or Free, and Advanced / Free's type change over a held root) waits for the window or for
-  the pair, then makes one change. A new chord still starts at once (decision 4).
+  the pair, then makes one change. A new chord still starts at once (decision 4; superseded in the third round:
+  a root inside an open window waits too, and every decision falls at the window's close).
 - **11. The names on the screen**: **Chord Keys** (the Chord Layout option), **SUS Window** (the combine window),
   **Full K Shorts** (Full keyboard shortcuts).
 - **12. SUS Window: 5 ms a detent, hidden in Classic.**
 - **13. MIDI Keys: yes**, with the same key layout as on the FM-1's keybed ([MIDI in](#midi-in)).
 - **15. A layout change releases the keys held**, as designed.
 
-Still waiting for the owner: 1 (picking keys), 6 (a type key just after the root in Simple), 9 (G5 with nothing to
-play), 10 (G5's starting state), 14 (the panel pictures); explained in [Open questions](#open-questions).
+### The third round (2026-10-16)
+
+The five questions the second round left open, answered:
+
+- **1. Picking keys stay where they are** (D4 .. G5 in both layouts; C4 and C#4 do nothing in the pick maps).
+- **6. A root waits for an open window** (the owner: "if root detected and no top row chord keys are pushed, only
+  root plays. If root detected and there are top key chord keys being pushed, then ask, has the window passed? If
+  the window has passed, play the chord, if the window is still in progress, nothing plays until window is complete,
+  adding a delay"). This replaces decision 4's "start at once, amend in place": nothing is amended any more
+  ([the combine window](#the-combine-window)). A root that lands before any type key stays a single note in Simple.
+- **9. G5 plays nothing when the shortcuts are on** (it is a switch); with G5 on and nothing to play (no latch, Key
+  Mode off) the keys play single notes, as normal (no message).
+- **10. G5's starting state as proposed**: on when Key Mode is on with Key plays Chords, otherwise off; not saved.
+- **14. A second panel picture for FM-1**: `web/site/img/panel-main-fm1.png` (1757 x 1072, the Classic picture's
+  size and crop), rendered by the designer's own plate export from `design/site-plate-main-fm1.json` (the Classic
+  plate's one-state design with FM-1's labels: MIN and MAJ lit as the SUS pair, m7 latched, LOCK on the LFO button,
+  `Dsus` `m7` on the screen). The site links it when the firmware has the layout.
+
+One new question from answer 6 is in [Open questions](#open-questions) (16).
 
 ## The two layouts
 
@@ -210,7 +230,7 @@ held types, `crx_secret_quality` unchanged). A small resolver in `cr_ui.c` turns
 `cr_mod_t` set the engine would see from Classic's keys for the chord in the table, and posts the difference (ups
 first, quietly, then the downs):
 
-- the pair completes: MIN or MAJ up, SUS down (in place: [the window](#the-combine-window));
+- the gesture decided as the pair: MIN or MAJ up, SUS down (at the window's close: [the window](#the-combine-window));
 - with secret applying, F# with the pair or one of it: DIM / MIN / MAJ and SUS as the table's Classic column, so the
   engine's secret rule names the chord; without, each key posts its own type in press order and the pair posts SUS;
 - **a key of the pair let go while the other stays**: SUS up and the remaining type down **without a press** (a new
@@ -223,88 +243,76 @@ through the key table), not from the engine's `mods_active`, which would light A
 
 ## The combine window
 
-One finger on G# and A# never lands on both in the same scan. Waiting for the second key before playing would delay
-every MIN and MAJ chord by the window. The owner's rule instead: **play at once, then fix in place.**
+One finger on G# and A# never lands on both in the same scan. The first round's design played at once and fixed the
+chord in place (decision 4); the owner's later answers replaced that with **wait, then play once** (8 in the second
+round, 6 in the third:
+"If root detected and no top row chord keys are pushed, only root plays. If root detected and there are top key
+chord keys being pushed, then ask, has the window passed? If the window has passed, play the chord, if the window is
+still in progress, nothing plays until window is complete, adding a delay"). Nothing is ever amended in place, so
+no MIN is heard on the way to a SUS.
 
-**The gesture.** A type key pressed while no type key is held opens a *gesture* at that key's press time (the scan
-stamp `fm1_in.note_t0[k]`, `CU_KEY_T0`: not the UI frame, so the window does not move with the frame rate). It stays
-open for the window (Options > SUS Window, 30 .. 80 ms, default 50). A type key pressed while the gesture is open
-joins it; if that completes the pair (or, with secret applying, one of the secret combos above), the chords the
-gesture's first key started or re-typed are **amended in place**:
+**The gesture.** A top-row type key (F#3, G#3, A#3) pressed while no type key is held opens a *gesture* at that key's
+press time (the scan stamp `fm1_in.note_t0[k]`, `CU_KEY_T0`; a MIDI key's arrival stamp: not the UI frame, so the
+window does not move with the frame rate). It stays open for the window (Options > SUS Window, 30 .. 80 ms, default
+50). Type keys pressed while it is open join it. **When the window closes the gesture is decided**: the type keys
+held then are the chord type, by [the combo table](#the-combo-table) (the pair SUS, with Secret Chords applying the
+secret combos, a lone key its own type). Extension keys never open a gesture and act at their press, as today.
 
-- Only the notes that differ move: MIN or MAJ to SUS moves the third to the fourth and nothing else (the fourth lies
-  between the third and the fifth, so at any KNOB 1 voicing, -12 .. +12, it takes the third's place in the voiced
-  order: exactly one note off and one note on). With secret applying: MIN to m add4 moves the fifth to the fourth,
-  MAJ to augmented the fifth to the sharp fifth, DIM to the power chord its third and flat fifth to the fifth and
-  octave, SUS to the power chord its fourth to the octave.
-- **No restrike, in every play style and under both Extension Addition settings.** Play Chord re-strikes on an
-  *extension* change; this is not one: the pair is one gesture, and a second strike 20 ms after the first is a flam.
-  The amend is `crx_transform_voice` with no reattack and Play Chord ignored (a new flag), the path Add Note already
-  takes (`crx_sync_owner`: note-offs and note-ons for the difference only).
-- Everything downstream sees the amend as Add Note's diff does: the voices, MIDI out (the third's note-off, the
-  fourth's note-on), the RAW stream, a running performance mode (the arp's and pattern's running phase substitutes the
-  note, `crx_build_clocked_seq`; a strum not yet past the third plays the fourth), the bass (its root does not move),
-  the chord name (it changes to `Dsus` without the new-chord motion) and the keys' lights.
-- **The looper** records the chord as SUS from its start: the engine reports the gesture again with the same serial
-  (`cr_out_t.gesture`), and `cr_loop.c` takes a report with a serial it already holds as an amendment of that event,
-  not as a new one. A loop therefore never plays the MIN-then-SUS flicker.
-**Two rules** (the owner's decisions 4 and, in the second round, 8):
+**A root.** When a root key goes down (the keybed, MIDI Keys, the Full keyboard's roots with the chord keys showing):
 
-- **A: a chord that starts while the gesture is open starts at once** with the gesture's keys as they are held (G#
-  alone: MIN), and is amended in place when the pair (or a secret combo) completes. A new chord never waits.
-- **B: a chord that was already sounding when the gesture began is not touched until the gesture is decided**: the
-  pair (or combo) completes, or the window closes with the key alone. Then it changes **once**: to SUS when the pair
-  completed, to MIN or MAJ when the window closed on one key (the owner: "I don't want to hear it quickly play a MIN
-  then a SUS when I am intending to do a SUS chord"). This covers Advanced and Free's type change over a held root
-  and LOCK's latch with roots held. The price: in Advanced and Free a lone G# or A# re-types a held root up to the
-  window later than today (50 ms by default). Only the keys that can combine wait this way: G# and A#, and F# while
-  secret applies; an extension key, or F# with secret not applying, acts at its press as today.
+| At the root's press | It plays |
+| --- | --- |
+| no type key held (nothing latched; or LOCK's latch with no type key pushed) | **at once**: the root alone (a single note; with Key Mode, Key plays Chords, the scale's chord; with LOCK, the latched chord), as today. A type key pressed after it changes nothing in Simple (today's rule) |
+| type keys held, their gesture's window **closed** | **at once**: the chord of the keys held (a G# held from earlier: MIN at once; it never waits) |
+| type keys held, their gesture's window **still open** | **nothing yet**: the root waits, and plays the decided chord **when the window closes**, with its own velocity. Several roots pressed in the window all start together then. A root let go before that still plays, as a short chord ended at once (a stab is not lost) |
 
-When the window closes the gesture closes. **A G# or A# held from earlier never waits**: its gesture closed long
-ago, so a root pressed then plays MIN or MAJ at once, and a partner pressed later completes the pair at once (SUS for
-the next root; in Simple nothing sounding changes; in Advanced and Free a type change to SUS, re-struck at once as any
-type press is, since the pair is already decided). Nothing that starts ever waits for a partner.
+So the delay is the rest of the window: a root pressed 10 ms after G# sounds 40 ms later at the default 50 ms; a root
+pressed with chord keys held from before sounds at once. [Open questions](#open-questions) 16: playing at the pair
+when nothing more can change it.
 
-**The root and the pair together** (R = the root, a and b the pair's keys, all within a few ms):
+**What already sounds** (rule B, answer 8). A chord sounding when a gesture opens is not touched until the window
+closes; then it changes **once**, to the decided type: Advanced and Free's type change over a held root (one
+re-strike), LOCK's latch with roots held in Advanced and Free (`crx_lock_sync`, one re-strike when the type
+changed). Free with no root held: a type key sounds the last root again, and that waits for the window like a root
+(it is a chord's start). Simple: a type key never changes what sounds (today's rule).
+
+**Everything after the decision is today's code**: the chord starts (or re-types) once, so the voices, MIDI out, the
+RAW stream, the performance modes, the bass, the chord name, the lights and the looper see one ordinary chord; no
+engine amend, no looper amendment. The looper records the chord when it sounds (what you heard).
+
+**The root and the pair together** (R = the root, a and b the pair's keys; W = the window, from a's press):
 
 | Order | Simple | Advanced, Free |
 | --- | --- | --- |
-| a, b, R | SUS (the pair was complete) | SUS |
-| a, R, b (b within the window of a) | MIN or MAJ at R, SUS in place at b (rule A) | the same |
-| a, R, b (b after the window) | MIN or MAJ, and it stays (Simple: fixed at R) | MIN or MAJ at R, then SUS re-struck at b (a type change, the pair decided at once) |
-| R, a, b (b within the window of a) | a single note, fixed at R (Key Mode, Key plays Chords: the scale's chord), as in Classic today when a type key lands after the root ([Open questions](#open-questions) 6) | R sounds from before the gesture (rule B): nothing at a; at b R is re-struck once, as SUS |
-| R, a (no partner) | a single note, fixed at R | R re-struck as MIN or MAJ when the window closes |
+| a, b, R, all within W | R waits; SUS at W | the same |
+| a, R, b, both within W | R waits; SUS at W | the same |
+| a, R within W, no b | R waits; MIN or MAJ at W | the same |
+| a, then R after W | MIN or MAJ at once | the same |
+| a, R after W, then b | MIN or MAJ at once; b changes nothing sounding (SUS for the next root) | MIN or MAJ at once; b opens no gesture (a is held, its window long closed): the pair is decided at b, SUS re-struck at once |
+| R, then a, b within W of a | R alone at once (a single note, or Key Mode's chord), and it stays | R alone at once; at a's W, R re-struck once, as SUS (rule B) |
 
-**Advanced and Free type changes.** A type press with a root held re-types it (today's rule: a re-strike), once the
-gesture is decided (rule B): the pair pressed over a held root gives one re-strike, as SUS. Free with no root held: the
-first key sounds the last root again at once as MIN or MAJ (a new sound: rule A), the partner within the window makes
-it SUS in place, and the chord stops when the last chord key is let go, as today. Extension keys pressed during the
-window are ordinary extension presses (Add Note adds, Play Chord re-strikes), at their press.
-
-**With LOCK on** (FM-1). The type keys latch as gestures, and the latch changes once the gesture is decided:
+**With LOCK on** (FM-1). The type keys latch as gestures, decided when the window closes:
 
 - The pair pressed and let go latches SUS (G#3 and A#3 lit). Keys held together latch together, as today.
-- A type key pressed with nothing held opens a gesture; the latch is left as it is until the gesture is decided
-  (rule B). Decided as the **same set again** (the pair over a latched SUS; F# + G# over a latched m add4; G# alone,
-  the window closed, over a latched MIN): the latch stays and that type **goes off when let go** (the owner's rule:
-  "pressing that same pair again on its own switches it off, as one type key does today"; its extensions stay lit and
-  wait for a type, as today). Decided as **another set**: it replaces the latch (Clears / Keeps as the LOCK layer
-  says). Because nothing changes before the decision, G# landing first over a latched SUS never sounds a MIN.
-- In Simple nothing sounding changes (the latch is for the next root). In Advanced and Free, roots held follow the
-  latch at the decision (`crx_lock_sync`, one re-strike when the type changed). A root pressed during the window
-  starts at once with the gesture's keys and the extensions the latch keeps (rule A).
-- A single type key over a latched pair replaces it as any type key does, at the window's close (F# alone over SUS is
-  DIM, not the power chord: the power chord is the three held together or latched together).
+- A type key pressed with nothing held opens a gesture; the latch is left as it is until the window closes. Decided as
+  the **same set again** (the pair over a latched SUS; F# + G# over a latched m add4; G# alone over a latched MIN): the
+  latch stays and that type **goes off when let go** (the owner's rule: "pressing that same pair again on its own
+  switches it off, as one type key does today"; its extensions stay lit and wait for a type, as today). Decided as
+  **another set**: it replaces the latch (Clears / Keeps as the LOCK layer says). G# landing first over a latched
+  SUS never sounds a MIN.
+- A root pressed during the window waits and plays the decided latch; roots already held follow at the decision
+  (Advanced, Free), once.
+- A single type key over a latched pair replaces it as any type key does (F# alone over SUS is DIM, not the power
+  chord: the power chord is the three held together or latched together).
 
-**Key Mode.** A held type overrides the scale's choice as today, so the pair gives SUS on any root and a lone G#
-gives MIN; the window works the same over the scale's chords (a root pressed just before a lone G# in Simple keeps the
-scale's chord). Key plays Notes and Snap are untouched. **The KEY layer with its keys on pick needs no combo** (the
-owner, 2nd round): G#3 and A#3 are its scale keys and nothing else; the first one pressed picks the scale at once,
-and the other pressed within the window of it is ignored, so a one-finger pair picks once. With its keys on play
-they are the FM-1 chord keys, with the window.
+**Key Mode.** A held type overrides the scale's choice as today: the pair gives SUS on any root, a lone G# MIN, and a
+root with no type key pushed plays the scale's chord at once. Key plays Notes and Snap are untouched. **The KEY layer
+with its keys on pick needs no combo** (the owner, 2nd round): G#3 and A#3 are its scale keys and nothing else; the
+first one pressed picks the scale at once, and the other pressed within the window of it is ignored, so a one-finger
+pair picks once. With its keys on play they are the FM-1 chord keys, with the window.
 
 **Classic** has no window: none of this applies to it (two Classic type keys still combine only as secret chords,
-by the engine, with no in-place amend).
+by the engine, at the root's press, as today).
 
 ## LOCK and LATCH in FM-1
 
@@ -418,7 +426,7 @@ note ignores the voicing, as on the Chords keyboard. (`cr_ui.c` line 4737's Full
   type and extensions, the lit keys) **if there is one, otherwise Key Mode's chord for that key** (as Key plays Chords
   plays it). G5's state starts, each time the Full keyboard is entered, from today's behaviour: on when Key Mode is
   on with Key plays Chords, off otherwise; G5 then switches it. With neither a latch nor Key Mode, G5 lights but the
-  keys stay single notes and the message `no chord: LOCK or Key Mode` shows ([Open questions](#open-questions) 9).
+  keys play single notes, as normal (the owner, 3rd round). G5 itself never plays a note while the shortcuts are on.
   With the chord keys showing the roots already follow the Chords keyboard's rules (a lone root plays the latch or
   the scale's chord), so G5's state only matters for the note keys. The engine: a Full-keyboard voice (`zone` set)
   takes the latched spec (`mods_down`'s type and extensions) instead of none while G5 is lit (a new flag,
@@ -438,7 +446,7 @@ note ignores the voicing, as on the Chords keyboard. (`cr_ui.c` line 4737's Full
 
 - **Loops** store chords (`cr_mod_t` type and extensions with the root), not keys: a loop recorded in one layout
   plays the same in the other. The looper, its modes, its editor, its step entry ("every key up after a chord": the
-  FM-1's pair counts as keys up when both are) are unchanged; the one addition is the gesture amendment above.
+  FM-1's pair counts as keys up when both are) are unchanged.
 - **Chord names** (Orchid and Standard), CHORD-NAMES.md; the secret chords keep their names (`D5`, `D+`, `Dm add4`).
 - **The voicing rules**, KNOB 1, 6th with 7th, the octave.
 - **Key Mode's scale picks**: MAJ and MIN in the KEY layer are A#3 and G#3 in both layouts.
@@ -456,7 +464,7 @@ Found in the code (2026-10-16, origin/main 4ecd5be). "Needs" is the build's work
 | `cr_ui.c:63` `CU_ROOT0` (9), `:67` `cu_white_idx`, `:76` `cu_white_key` | the first root; the white roots' index from D4 | `cu_root0()` (9 / 7) for "plays"; `CU_PICK0` 9 for the pick maps ([Picking keys](#picking-keys-in-layers)) |
 | `cr_ui.c:3706` `CU_KEY_LOCK` 6, `CU_KEY_MIN` 3, `CU_KEY_MAJ` 5 | B3 = LOCK; the KEY layer's scale keys | LOCK key only in Classic; MIN / MAJ unchanged |
 | `cr_ui.c:4018` `cu_mods_phys` | the chord keys held → `cr_mod_t` bits (LOCK's `CRE_MODTOUCH`) | through the resolver in FM-1 |
-| `cr_ui.c:4063 .. 4165` `cu_lock_menu`, `cu_lock_tap`, `cu_mod_press`, `cu_mod_release` | LOCK, its layer, the latch's reset / toggle / push rules | the type-key gesture: the pair as one type, rules A and B (a sounding chord and the latch change once, at the decision), "the same set again" off; the silent down; the KEY layer's pick ignoring the pair's second key |
+| `cr_ui.c:4063 .. 4165` `cu_lock_menu`, `cu_lock_tap`, `cu_mod_press`, `cu_mod_release` | LOCK, its layer, the latch's reset / toggle / push rules | the type-key gesture: the pair as one type, the waiting roots and rule B (a root in an open window, a sounding chord and the latch change once, at the window's close), "the same set again" off; the silent down; the KEY layer's pick ignoring the pair's second key |
 | `cr_ui.c:4194` `CU_KEY_SENSED` | velocity sensing for keys `>= CU_ROOT0` (or Full) | `cu_root0()`: C4, C#4 get their velocity in FM-1 (all 27 keys have the converter, `cr_sense.c CR_SENSE_KEYS` 0x07FFFFFF) |
 | `cr_ui.c:4211` `cu_key_press` (B3 at 4217 .. 4226, the chord block at 4231, the layers at 4239, naming at 4245, the note at 4262) | where a key goes | B3 → LOCK only in Classic; the chord block by `cu_root0()`; F#5 / G5 shortcuts on the Full keyboard; the root note formula unchanged |
 | `cr_ui.c:4272` `cu_key_release` | the same, released | the same |
@@ -474,9 +482,10 @@ Found in the code (2026-10-16, origin/main 4ecd5be). "Needs" is the build's work
 | `cr_midi.c:76` `crm_map`, `cr_out.c:661` `cr_midi_in` | the parts' notes to `midi_event`, CCs and programs to `cr_min_q` | `CRM_KEY` for the MIDI Keys channel (notes 53 .. 79; CC 120 / 123: all keys up), checked first; the new queue `cr_mkq` (64, ISR → UI, never dropping a note-off) |
 | `cr_ui.c` `cr_ui_input` (the scan) | the keybed's edges to `cu_scan_keys` | drains `cr_mkq` first: `cu_key_press` / `cu_key_release` with the key index and the note's velocity; `cu.kmidi` beside `cu.kheld` |
 | `cr_ui.c:111` `CU_PAD_FN` (SMK) | pads → chord block keys | unchanged (Classic's table; the layout hidden there) |
-| `cr_engine.c` `cr_mod_ex` (1060), `crx_modifier_press` (865), `crx_transform_voice`, `crx_build_base`, `crx_secret_quality` (253) | types, secrets, re-strikes, the Full keyboard's zones | a held-not-pressed down; the amend (no reattack, Play Chord ignored, voices flagged by the gesture); `cr_set_full_chords`; the secret rule unchanged |
-| `cr_out.c:443` `CRE_MOD` (a: the mod, b: quiet, v: down) | the UI → engine queue | the two flags on `CRE_MOD` (silent, amend), `CRE_COMBINE_END`, `CRE_FULLCHORD` |
-| `cr_loop.c` the gesture capture | one event a gesture serial | a repeated serial amends its event |
+| `cr_engine.c` `cr_mod_ex` (1060), `crx_modifier_press` (865), `crx_transform_voice`, `crx_build_base`, `crx_secret_quality` (253) | types, secrets, re-strikes, the Full keyboard's zones | a held-not-pressed down; `cr_set_full_chords`; the secret rule unchanged (no amend: the UI waits and posts one change) |
+| `cr_out.c:443` `CRE_MOD` (a: the mod, b: quiet, v: down) | the UI → engine queue | the silent flag on `CRE_MOD`; `CRE_FULLCHORD` |
+| `cr_loop.c` the gesture capture | one event a gesture serial | nothing (one chord a gesture, as today) |
+| `cr_ui.c` `cu_key_press`, `cu_scan` (the waiting roots) | a root plays at its press | a root pressed inside an open gesture is held back (`cu.kwait` bits, its velocity, its release if it comes first) and posted at the window's close, every waiting root in one batch; the gesture's timer checked each scan |
 | `cr_settings.h` / `.c` `sticky` (167; 208, 525, 560, 764, 1104), `raw_sound` (173; 166, 223, 527, 535, 570) | LATCH; Raw Chord Sound | the bits, the masks, the merges (above) |
 | **the calibration** (`cr_ui.c:4796`, `panel.c:12 B_NAME`) | teaches the buttons (printed names: FX SCL ENV LFO EDIT GLO ...) and the knobs; the keys are not calibrated and no key is named there | **nothing**: it names LFO by its print, which does not change |
 | `tools/emu/keymap.c` (the native emulator) | F1 .. F4 = keys 1 3 5 8, 2 .. 5 = keys 0 2 4 7, Tab = key 6, its comment and `--help` say DIM MIN MAJ SUS / 6 m7 M7 9 / LOCK; the panel draws note names, not chord labels (`emu.c:380`) | the keys stay (they are indices); the comment and `--help` say both layouts (FM-1: F1 F2 F3 = DIM MIN MAJ, F2 + F3 = SUS, 2 3 4 Tab = 6 m7 M7 9, F4 / W and 5 / A = the roots C#4 / C4, F8 (LFO) = LOCK, F10 (GLO) held + F8 = LATCH) |
@@ -487,7 +496,7 @@ Found in the code (2026-10-16, origin/main 4ecd5be). "Needs" is the build's work
 | `tools/emu/web/smk/` (the SMK page) | pads | nothing (hidden there) |
 | `web/editor.html` | no keybed; its "chord keys" (lines 1211, 1749: `CHRD`, `VOIC`) are Felucca's sequencer parameters, not ChoralRoot's chord block | **nothing** |
 | `web/site/index.html:107 .. 131` | the panel picture's alt text, the keybed SVG (CHORD BLOCK / ROOTS D4 … G5), the chord block SVG, the text on chord types, LOCK and secret chords | a second keybed / chord block picture for FM-1 and a sentence on the Option; the alt text |
-| `web/site/img/panel-main.png`, `design/choralroot-fm1-panels.png` (`design/make_mockups.py`) | the panel with the Classic sticker | an FM-1 sticker variant ([Open questions](#open-questions) 14) |
+| `web/site/img/panel-main.png`, `design/choralroot-fm1-panels.png` (`design/make_mockups.py`) | the panel with the Classic sticker | done: `web/site/img/panel-main-fm1.png` from `design/site-plate-main-fm1.json` (the 3rd round); the site links it when the firmware ships the layout |
 | `design/make_mockups.py`, `make_layers_mockups.py`, `make_looper_mockups.py` | the designer sheets' chord block | Classic as they are; the FM-1's are this page's mock-ups |
 | `docs/MANUAL.md` | 3 The keybed (table and drawing), The buttons (LFO), The knobs (KNOB 1 on Full), The lights (B3), 4 Types and extensions, LOCK, Secret chords, Key Mode's Full keyboard, LATCH, 14 Options, 18 Quick reference (Buttons, Keys) | an FM-1 column or paragraph in each; the four Options |
 | `docs/manual/*.png` | `layer-key.png` (the tonic on D4 .. G5), `options.png` (Play Style), `chord.png` | unchanged; new: the Chord Keys option and the FM-1 LOCK layer's footer |
@@ -502,12 +511,12 @@ Estimates, to be measured by the build (`tools/build.py`'s report, docs/FLASH.md
 
 | | Estimate | What |
 | --- | --- | --- |
-| **XIP** | +3 .. 5 KB | the resolver and the gesture with rules A and B (about 1.2 KB), LOCK on LFO and GLO + LFO (0.3 KB), the LED changes and the pulse (0.5 KB), the four Options with their strings (0.5 KB), the Full keyboard's shortcuts and `cr_set_full_chords` (0.8 KB), the engine's silent down and amend (0.4 KB), the loop's amendment (0.2 KB), MIDI Keys (`CRM_KEY`, the queue, the drain, the second held mask: 0.5 KB), the settings bits (0.1 KB) |
-| **RAM** | about +160 B .bss | MIDI Keys' queue `cr_mkq` (64 x 2 B: key and velocity with the down bit) and `cu.kmidi` (4 B); `cs.layout`, `cs.suswin`, `cs.full_short`, `cs.midi_keys`; the gesture's start and its first key, the latch before it (2 B), the shortcut keys' press times (8 B) and states. The engine: a flag bit in `cr_voice_t`'s padding and the gesture flag in `cr_t`'s (as the streams' flags were: `cr_t` keeps its size); if no padding is left, +8 B |
+| **XIP** | +2.5 .. 4.5 KB | the resolver, the gesture and the waiting roots (about 1.2 KB), LOCK on LFO and GLO + LFO (0.3 KB), the LED changes and the pulse (0.5 KB), the four Options with their strings (0.5 KB), the Full keyboard's shortcuts and `cr_set_full_chords` (0.8 KB), the engine's silent down (0.1 KB), MIDI Keys (`CRM_KEY`, the queue, the drain, the second held mask: 0.5 KB), the settings bits (0.1 KB) |
+| **RAM** | about +160 B .bss | MIDI Keys' queue `cr_mkq` (64 x 2 B: key and velocity with the down bit) and `cu.kmidi` (4 B); `cs.layout`, `cs.suswin`, `cs.full_short`, `cs.midi_keys`; the gesture's start and its keys, the waiting roots (`cu.kwait` 4 B, their velocities 27 B), the shortcut keys' press times (8 B) and states. The engine: nothing (`cr_t` keeps its size) |
 | **POOL** | 0 | |
 | **Settings** | 0 bytes | six spare bits of the block's `sticky`, five of `raw_sound`; the session record unchanged |
 | **Flash data** | 0 | no new object, no new sector |
-| **CPU** | negligible | a compare a scan while a gesture is open; the amend is Add Note's diff, once |
+| **CPU** | negligible | a compare a scan while a gesture is open |
 
 ## The tests the build will need
 
@@ -519,14 +528,10 @@ Host (`tests/`):
    defaults; the older firmwares' rule modelled (`CRS_FIX(sticky, 0, 1)`: an FM-1 record reads LATCH off, nothing
    else touched). `raw_sound`'s MIDI Keys bits the same way (round trip, 0 / 1 read Off, a channel above 16 reads
    Off, the engine gets `raw_sound & 1`, an older firmware reads Raw Chord Sound Off).
-2. `cr_engine_test`: the silent down does not re-strike (Advanced, Free, LOCK on and off); the amend, MIN → SUS and
-   MAJ → SUS: one note-off (the third) and one note-on (the fourth) and no other event, in Simple, Advanced, Free,
-   Add Note and Play Chord, at every voicing -12 .. +12, with 6th with 7th Octave up, with every extension set; the
-   secret amends (MIN → m add4, MAJ → aug, DIM → power, SUS → power) diff only their notes; with a performance mode
-   (arp, pattern, strum) the running sequence substitutes; voices not flagged by the gesture are untouched;
-   `cr_set_full_chords` (a zone voice takes the latched spec; off: as today).
-3. `cr_loop_test`: a gesture reported twice with one serial is one event, with the amended type; playback has no
-   flicker.
+2. `cr_engine_test`: the silent down does not re-strike (Advanced, Free, LOCK on and off) and the next root takes
+   it; `cr_set_full_chords` (a zone voice takes the latched spec; off: as today).
+3. `cr_loop_test`: unchanged (a waiting root records as one chord, at the time it sounded: the emulator's scripts
+   check it).
 4. `cr_midi_test`: `crm_map` gives `CRM_KEY` for notes 53 .. 79 on the MIDI Keys channel (on, off, on at velocity
    0; CC 120 / 123 all up), nothing for notes outside it or other messages on it, and the parts' channels as before;
    MIDI Keys Off: exactly today's mapping. `midi_control_test` unchanged.
@@ -536,11 +541,13 @@ in Classic untouched, the regression guard):
 
 5. The keys: in FM-1 C4 and C#4 play 60 and 61; B3 adds the 9; F#3, G#3, A#3 alone DIM MIN MAJ; G#3 + A#3 SUS; the
    combo table's every row, Secret Chords Off, Simple (with Play Style Simple and Advanced) and All.
-6. The window, by the scripts' ms timing: the pair 20, 49 ms apart over a root pressed between them: SUS in place
-   (the third's note-off and the fourth's note-on on MIDI out, no other note); 51 ms apart at the default: MIN stays
-   (Simple), SUS re-struck (Advanced); the window at 30 and 80; the R, a, b order; a G# held for a second then a root:
-   MIN at once; Free with no root held; a pair released one key at a time (no re-strike, the next root MIN). Rule B:
-   Advanced with a root held, the pair 20 ms apart: one re-strike, as SUS, and no MIN note-on ever goes out; G# alone:
+6. The window, by the scripts' ms timing, every row of the root-and-pair table: G#, D4 10 ms later, A# at 30 ms:
+   nothing goes out until 50 ms, then Dsus's note-ons at once (MIDI out and the voices), and never an F; G# and D4
+   with no A#: Dm at 50 ms; a root with no type key: at once; G# held for a second, then a root: Dm at once; several
+   roots in the window start together; a root let go at 20 ms still plays (a short chord); the window at 30 and 80;
+   the loop records the chord at 50 ms; Free with no root held waits too; a pair released one key at a time (no
+   re-strike, the next root MIN). Rule B: Advanced with a root held, the pair 20 ms apart: one re-strike, as SUS, at
+   the window's close, and no MIN note-on ever goes out; G# alone:
    the re-strike as MIN at the window's close and not before; an extension key during the window acts at its press.
    The KEY layer on pick: G#3 then A#3 20 ms later picks minor and stays minor; 80 ms later picks major.
 7. LOCK: LFO tap on / off (`lock`, the LFO light lit), LFO held: the layer, LFO blinking, its footer; LFO + a chord key:
@@ -560,7 +567,7 @@ in Classic untouched, the regression guard):
     message with neither), the split, LOCK on the Full keyboard (FM-1 by LFO; Classic B3 with the chord keys
     showing), the lights of F#5 and G5.
 11. MIDI Keys (scripts' `midi` lines): ch 5, FM-1: 56 + 58 then 62: D sus, as the keys; 56 and 58 36 ms apart over
-    62: SUS in place; Classic: 61 is SUS, 59 LOCK's tap; notes 52 and 80 do nothing; the velocity plays; a key held on
+    62: Dsus once, at the window's close; Classic: 61 is SUS, 59 LOCK's tap; notes 52 and 80 do nothing; the velocity plays; a key held on
     the panel and over MIDI is one press, released at the last; CC 123 releases every MIDI key; a burst of 100 notes:
     no key left held; the values skip the parts' channels, and MIDI Perform set to ch 5 switches MIDI Keys Off; MIDI
     Keys Off: notes on that channel do what they do today.
@@ -575,58 +582,31 @@ LOCK in the hands.
 
 ## Open questions
 
-The first round's fifteen, with the owner's answers (2026-10-16, second round). The five still open are explained
-below the table.
+The first round's fifteen, with the owner's answers (2026-10-16, second and third rounds), and one new one.
 
 | # | Question | Status |
 | --- | --- | --- |
-| 1 | Picking keys stay on D4 .. G5 in FM-1? | **open** (explained below) |
+| 1 | Picking keys stay on D4 .. G5 in FM-1? | **decided** (3rd round): yes, they stay |
 | 2 | GLO + LFO in Classic | **decided**: Classic stays exactly as it is; LFO is LATCH, no GLO combo |
 | 3 | Which order is LATCH | **decided**: GLO held, then LFO; holding GLO never opens the Options (only a quick click); LFO held, then GLO is the LOCK layer |
 | 4 | The LATCH pulse | **decided**: as designed |
 | 5 | The window for the secret combos | **decided** ("probably"): yes; confirm on the unit |
-| 6 | A type key just after the root in Simple | **open** (explained below) |
+| 6 | A type key just after the root in Simple | **decided** (3rd round): a root with no type key pushed plays alone; a root inside an open window waits for it to close, then plays the chord |
 | 7 | The KEY layer's pick and the one-finger pair | **decided**: no combo there; the pair's second key within the window is ignored |
 | 8 | LOCK / Advanced: a MIN heard before SUS | **decided**: wait the window (rule B) |
-| 9 | G5 with no latch and Key Mode off | **open**: the answer ("it should play a G5 root if the shortcuts are off") is how G5 already behaves with the shortcuts Off; the question is about them On (below) |
-| 10 | G5's starting state | **open** (explained below) |
+| 9 | G5 with no latch and Key Mode off | **decided** (3rd round): G5 plays nothing with the shortcuts on; the keys play single notes as normal |
+| 10 | G5's starting state | **decided** (3rd round): as proposed, from Key plays, not saved |
 | 11 | The names | **decided**: Chord Keys, SUS Window, Full K Shorts |
 | 12 | The window's step, Classic | **decided**: 5 ms; hidden in Classic |
 | 13 | MIDI that plays the keys | **decided**: yes, the FM-1's key map ([MIDI in](#midi-in)) |
-| 14 | The panel pictures | **open** (explained below) |
+| 14 | The panel pictures | **decided** (3rd round): a second picture for FM-1, made |
 | 15 | The layout change with keys held | **decided**: released |
+| 16 | A root waiting for a pair already complete | **open** (below) |
 
-**1. Picking keys.** On the view every root key plays. In some layers the root keys pick something instead: in the
-PLAY menu (Keys = Loops) the white keys D4, E4, F4 .. C5 are loop slots 1 .. 10 and D#4 / F#4 are CLEAR / UNDO; in
-the naming dialog the white keys type letters, D#4 is a space, F#4 deletes; in the KEY layer a root sets the tonic.
-Those maps start at D4 because D4 is Classic's first root. In FM-1, C4 and C#4 are roots too. The question is only
-what C4 and C#4 do in those maps: the design leaves every map where it is (slot 1 is D4 in both layouts, C4 and C#4
-dark and silent in the maps), so the two layouts pick with the same keys. The alternative shifts the maps down to
-C4 in FM-1 (slot 1 on C4, the letters one key lower, one more white key for them), so the maps start on the first
-root in both layouts but sit in different places between them. The recommendation is to keep D4.
-
-**6. A type key just after the root, in Simple.** In Simple a chord is fixed the moment the root goes down. If the
-root lands a few ms before the chord key (a sloppy "together"), the root plays a single note (or, with Key Mode, the
-scale's chord), and the chord key that lands just after it changes nothing. That is Classic's behaviour today and
-stays so (Classic is unchanged). With the one-finger pair it can bite more often in FM-1: root, then G#, then A#, all
-within 30 ms, gives a single note. The question: in FM-1, should a type key landing within the SUS Window **after**
-a root still make that root's chord, in place (the third and fifth added to the sounding root, no restrike), as rule
-A amends? Yes makes "together" forgiving in either order; no keeps Simple's rule word for word (type first, then
-root).
-
-**9. G5 with the shortcuts On, nothing latched, Key Mode off.** With Full K Shorts Off, G5 is a plain note (the
-answer given; already the design). With them On, G5 is the "chord on every key" switch, and its chord is the latched
-chord, else Key Mode's. When there is neither, what should the keys play with G5 on: single notes and a message
-(the design's proposal), major chords, or the last chord played?
-
-**10. G5's starting state.** G5 is a switch (chords on every key / single notes). Something must decide where it
-starts when you enter the Full keyboard (KEY layer, Keyboard: Full) or switch the unit on. The design: it starts on
-when Key Mode is on with Key plays Chords (which already plays a chord on every Full key today, so nothing changes
-for those players) and off otherwise, and is not saved. The alternative: remember its last state, also over a power
-cycle (the session, written by SAVE held, like LOCK's latch).
-
-**14. The panel pictures.** The site (`web/site/index.html`: the panel photo with ChoralRoot's labels,
-`img/panel-main.png`, and its keybed drawings) and the manual's keybed drawing show Classic's labels: DIM MIN MAJ SUS
-on F#3 G#3 A#3 C#4, LOCK on B3, LATCH on LFO. FM-1's labels differ (SUS over two keys, 9 on B3, LOCK on LFO, two more
-roots). The question is only about those pictures: a second picture for FM-1 beside the Classic one, or one picture
-that shows both layouts' labels (e.g. FM-1's in a second colour)? The firmware does not depend on it.
+**16. Play at the pair, or always at the window's close?** As written (the owner's words), a root inside an open
+window waits until the window is complete. When the pair completes early (G#, A# 10 ms apart, the root at 15 ms),
+nothing more can change the chord **while Secret Chords does not apply** (only F# could still join, and only as a
+secret combo), so the chord could start at the pair instead of at 50 ms. The design waits the full window (the
+owner's rule as given); the alternative starts the chord as soon as the gesture can no longer change: at the pair
+with Secret Chords off, at the window's close with them on (F# might still make the power chord). It saves up to the
+window's length on the common SUS chord.

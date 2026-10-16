@@ -57,12 +57,12 @@ as well it pulses between lit and middle.</p>
 
 <h2>4. SUS latched, and the combine window</h2>
 <p>A latched SUS shows as two lit keys, G#3 and A#3; the same pair pressed again on its own switches it off at the
-release. The window: a chord starts at once; the partner landing within it moves only the third to the fourth.</p>
+release. The SUS Window: a root pressed while it is open waits for it to close, then the decided chord plays once.</p>
 <div class="row" id="sus"></div>
 <div class="row" id="sus2" style="margin-top:16px"></div>
 <div class="row" id="sus3" style="margin-top:16px"></div>
 
-<h2>5. The Full keyboard with the shortcuts on</h2>
+<h2>5. The Full keyboard with the shortcuts on, and the FM-1 panel picture</h2>
 <p>F3 .. F5 are notes (25). F#5: the layout's chord keys on the low keys, the roots ending at F5; G5: a chord on every
 key (the latched chord, else Key Mode's). Both toggle on a quick press, switch only while held on a long one. KNOB 1
 is the voicing on the Full keyboard, in both layouts.</p>
@@ -264,31 +264,28 @@ function card(parent, title, node, cap, cls = "") {
   document.getElementById(parent).appendChild(d);
 }
 
-// the combine window: a timeline of keys and the notes they sound
+// the window (3rd round): a root pressed in an open window waits, and the decided chord plays once at its close
 function timeline() {
-  const width = 722, height = 236, x0 = 70, msx = 7.2;
+  const width = 722, height = 236, x0 = 140, msx = 7.0;
   const svg = el("svg", { width, height, viewBox: `0 0 ${width} ${height}` });
   el("rect", { x: 0, y: 0, width, height, fill: "#0b0b0d" }, svg);
   const X = (ms) => x0 + ms * msx;
   el("rect", { x: X(0), y: 8, width: 50 * msx, height: height - 40, fill: "#F2B705", opacity: 0.10 }, svg);
   txt(svg, X(25), 22, "the window: 50 ms from G#3's press", 11.5, "#F2B705", 800);
-  const rows = [["G#3 (MIN)", 0, 80, "#F6F3EA"], ["D4 (root)", 9, 80, "#9A999A"], ["A#3 (MAJ)", 31, 80, "#F6F3EA"]];
-  rows.forEach(([s, a, b, col], i) => {
+  [["G#3 (MIN)", 0, "#F6F3EA"], ["D4 (root)", 10, "#9A999A"], ["A#3 (MAJ)", 30, "#F6F3EA"]].forEach(([s, a, col], i) => {
     const y = 40 + i * 22;
     txt(svg, x0 - 8, y + 9, s, 11, col, 700, "end");
-    el("rect", { x: X(a), y, width: X(b) - X(a), height: 12, rx: 3, fill: col, opacity: 0.85 }, svg);
+    el("rect", { x: X(a), y, width: X(80) - X(a), height: 12, rx: 3, fill: col, opacity: 0.85 }, svg);
   });
-  const notes = [["D", 9, 80, "#F6F3EA"], ["F (the third)", 9, 31, "#F6F3EA"], ["G (the fourth)", 31, 80, "#F07A1A"], ["A", 9, 80, "#F6F3EA"]];
+  txt(svg, X(10) + 4, 112, "D4 waits: nothing sounds", 10.5, "#F6F3EA", 700, "start");
   txt(svg, x0 - 8, 122, "sounds:", 11, "#8A8A92", 700, "end");
-  notes.forEach(([s, a, b, col], i) => {
+  [["D", "#F6F3EA"], ["G", "#F07A1A"], ["A", "#F6F3EA"]].forEach(([n, col], i) => {
     const y = 130 + i * 18;
-    txt(svg, x0 - 8, y + 9, s.split(" ")[0], 11, col, 700, "end");
-    el("rect", { x: X(a), y, width: X(b) - X(a), height: 10, rx: 3, fill: col, opacity: 0.7 }, svg);
-    if (s.includes("(")) txt(svg, X(b) + 6, y + 9, s.slice(s.indexOf("(")), 10, col, 600, "start");
+    txt(svg, x0 - 8, y + 9, n, 11, col, 700, "end");
+    el("rect", { x: X(50), y, width: X(80) - X(50), height: 10, rx: 3, fill: col, opacity: 0.8 }, svg);
   });
+  txt(svg, X(50) + 4, 194, "Dsus, once, at the close", 10.5, "#F07A1A", 700, "start");
   for (let ms = 0; ms <= 80; ms += 10) { el("rect", { x: X(ms), y: height - 30, width: 1, height: 5, fill: "#555" }, svg); txt(svg, X(ms), height - 14, ms + " ms", 10, "#77767c", 600); }
-  txt(svg, X(9), 112, "Dm at once", 10.5, "#F6F3EA", 700, "start");
-  txt(svg, X(31), 112, "Dsus in place: F off, G on; D and A ring on", 10.5, "#F07A1A", 700, "start");
   return svg;
 }
 
@@ -306,17 +303,17 @@ function timelineB() {
     el("rect", { x: X(Math.max(a, -1)), y, width: X(b) - X(Math.max(a, -1)), height: 12, rx: 3, fill: col, opacity: 0.85 }, svg);
   });
   txt(svg, x0 - 8, 122, "sounds:", 11, "#8A8A92", 700, "end");
-  [["D", 31], ["F# / G", 31], ["A", 31]].forEach(([n, at, col, old], i) => {
+  [["D", 50], ["F# / G", 50], ["A", 50]].forEach(([n, at, col, old], i) => {
     const y = 130 + i * 18;
     txt(svg, x0 - 8, y + 9, n, 11, "#F6F3EA", 700, "end");
-    el("rect", { x: X(-1), y, width: X(31) - X(-1), height: 10, rx: 3, fill: "#F6F3EA", opacity: 0.45 }, svg);
+    el("rect", { x: X(-1), y, width: X(50) - X(-1), height: 10, rx: 3, fill: "#F6F3EA", opacity: 0.45 }, svg);
   });
   [["D", 130], ["G", 148], ["A", 166]].forEach(([n, y]) => {
-    el("rect", { x: X(31) + 2, y, width: X(80) - X(31) - 2, height: 10, rx: 3, fill: n === "G" ? "#F07A1A" : "#F6F3EA", opacity: 0.8 }, svg);
+    el("rect", { x: X(50) + 2, y, width: X(80) - X(50) - 2, height: 10, rx: 3, fill: n === "G" ? "#F07A1A" : "#F6F3EA", opacity: 0.8 }, svg);
   });
   txt(svg, X(-1), 194, "D major from before", 10.5, "#9A999A", 700, "start");
-  txt(svg, X(31) + 4, 194, "one re-strike, as Dsus (no Dm between)", 10.5, "#F07A1A", 700, "start");
-  txt(svg, X(10), 112, "G#3: nothing yet", 10.5, "#F6F3EA", 700, "start");
+  txt(svg, X(50) + 4, 194, "one re-strike, as Dsus", 10.5, "#F07A1A", 700, "start");
+  txt(svg, X(10), 112, "G#3, A#3: nothing changes yet", 10.5, "#F6F3EA", 700, "start");
   for (let ms = 0; ms <= 80; ms += 10) { el("rect", { x: X(ms), y: height - 30, width: 1, height: 5, fill: "#555" }, svg); txt(svg, X(ms), height - 14, ms + " ms", 10, "#77767c", 600); }
   return svg;
 }
@@ -370,15 +367,15 @@ async function draw() {
     roles: ["FX", "KEY", "BASS", "LOCK", "EDIT", "OPT"], btn: { LFO: { lv: "lit" } },
     note: "G#3 + A#3 again, alone: SUS off at the release" }),
     "The latched SUS is two lit keys. Root keys: every key of D, G, A, C (C4 is a root now, so it lights too).", "kb");
-  card("sus2", "The combine window (Simple, Add Note or Play Chord alike)", timeline(),
-       "G#3, then D4 9 ms later: Dm sounds at once. A#3 lands 31 ms after G#3, inside the window: the chord becomes Dsus in place, F off and G on, no restrike; MIDI out sends just those two. A loop records Dsus. Had A#3 landed at 60 ms (past the window), Simple would keep Dm and Advanced would re-strike as Dsus.");
+  card("sus2", "The SUS Window (the owner, 3rd round): a root in an open window waits", timeline(),
+       "G#3, then D4 10 ms later: the window is still open, so nothing sounds. A#3 lands at 30 ms. At 50 ms the window closes and Dsus plays, once, every play style alike: no Dm is ever heard. A root with no type key pushed plays at once; a root pressed with type keys held from before the window plays at once.");
   card("sus2", "FM-1, Secret Chords on: F#3 + G#3 = m add4", keybed({ keys: FM1,
     led: { ...faint(range(0, 6)), 1: "lit", 3: "lit", ...litNames([2, 5, 7], 7, 26) }, held: [1, 3], pair: [3, 5, "SUS"],
     roles: ["FX", "KEY", "BASS", "LOCK", "EDIT", "OPT"] }),
     "Each secret chord keeps its Classic key: m add4 keeps MIN (G#), augmented keeps MAJ (A#), the power chord is DIM + the pair. Secret off: these pairs are last pressed wins.", "kb");
 
   card("sus3", "Rule B: Advanced, a root already sounding (the owner, 2nd round)", timelineB(),
-       "D4 held, D major sounding. G#3 changes nothing yet; A#3 completes the pair inside the window: one re-strike, as Dsus, and no Dm is ever heard. Had A#3 not come, D4 would re-strike as Dm when the window closed (50 ms after G#3). LOCK's latch with roots held changes the same way, once.");
+       "D4 held, D major sounding. G#3 and A#3 change nothing yet; when the window closes (50 ms after G#3) D4 re-strikes once, as Dsus, and no Dm is ever heard. Without A#3 it would re-strike as Dm then. LOCK's latch with roots held changes the same way, once.");
 
   // 5. the Full keyboard
   card("full", "Full, shortcuts on, chord keys hidden", keybed({ keys: { 25: ["CHRD", "fn"], 26: ["ALL", "fn"] },
@@ -396,8 +393,9 @@ async function draw() {
     "In Classic LOCK is B3, a note while the chord keys are hidden: it latches with F#5's chord keys showing (here LOCK on, MAJ latched).", "kb");
   card("full2", "The message when F#5 switches", chordView("C", "M", "", [["C4"], ["E4"], ["G4"]], "lock", { msg: "chord keys", size: 90 }),
        "A quick press toggles (the box: <code>chord keys</code> / <code>notes</code>); a long press switches only while held. G5: <code>chords</code> / <code>single notes</code>.");
-  card("full3", "G5 with no latch and Key Mode off", chordView("F", "", "", [["F4"]], "", { msg: "no chord: LOCK or Key Mode", msgCol: PAL.orange, size: 90 }),
-       "Proposed (open question 9): G5 lights, the keys stay single notes. KNOB 1 is the voicing on the Full keyboard.");
+  { const im = document.createElement("img"); im.src = "../web/site/img/panel-main-fm1.png"; im.width = 1040; im.alt = "The FM-1 panel with the FM-1 chord keys";
+    card("full3", "The site's second panel picture: the FM-1 chord keys (web/site/img/panel-main-fm1.png)", im,
+         "The owner, 3rd round: a second picture for the FM-1 mode. The designer's plate export of design/site-plate-main-fm1.json: MIN and MAJ lit as the SUS pair, m7, LOCK on the LFO button, Dsus m7 on the screen. The site links it when the firmware has the layout."); }
   document.body.dataset.ready = "1";
 }
 draw();
