@@ -4427,4 +4427,8 @@ LEAD, WOBBLE a little softer); a chord struck again or changed with common tones
 line on INIT / HOLLOW / EP: no pop; an imported sound with a filter envelope or an LFO on BASE or MIX (EXPLORING,
 PREACHY, WAVETABELS, HEXAGON): no click where the filter opens or closes. **Checked**: `CR_VERSION=0.22 sh
 tests/run_all.sh` ALL SUITES PASSED (22 suites, 102 s; 313 goldens, the 16 FM TONE ones as rewritten here; 0 lint;
-test_cr 1044 ok, test_persist 111, test_retired 18, test_pool 7). Not run: anything on the device; not pushed.
+test_cr 1044 ok, test_persist 111, test_retired 18, test_pool 7). Not pushed.
+**On the unit** (the owner, 2026-10-16: "lets flash this so I can try"): the unit runs this build (2e2dfaa's package,
+`tools/fm1_install.py build/choralroot.fwsc --backup ... --yes` over ChoralRoot 0.22); the backup before it is
+`fm1-backups/choralroot-backup-20261016-fmtone.json` (the settings, the 128 user sounds, the favourites, loop slot 1).
+`--info` afterwards: "ChoralRoot 0.22" (the version string is the tree's), the user sounds read back.
