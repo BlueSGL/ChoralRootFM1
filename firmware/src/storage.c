@@ -110,6 +110,112 @@ static uint32_t st_crc_run(uint32_t crc, const void *p, uint32_t n)
 }
 static uint32_t st_crc32(const void *p, uint32_t n) { return st_crc_run(0u, p, n); }
 
+#if BOARD_SMK37
+/* SMK-37: the FM-1's places are taken by the SMK's own areas (its app area ends at 0x9CFFF, its settings area is the
+ * stock resources): every object moves, A/B neighbours as on the FM-1. In FL_DATA (0x9D000..0xBAFFF, the stock VM):
+ * the VA store, the FM6 stores and the CZ-1 store's first half (OBJ_PROJECT0..+3) 0x9D000..0xA4FFF, the user sound
+ * banks 0xA5000..0xA8FFF, the FM6 bank 0xA9000 / 0xAA000, the settings 0xAB000 / 0xAC000, the session 0xAD000 /
+ * 0xAE000; the store owner tag 0xAF000 (st_owner_check: the same place in every ported firmware); the CZ-1 store's
+ * second half 0xB0000 / 0xB1000, the QUAD store 0xB2000 / 0xB3000; 0xB4000..0xBAFFF spare. In USRFLASH (FL_SMP,
+ * 0xC2000..0xE9FFF, the stock's user area: ChoralRoot has no samples) the eight CZ-1 banks 0xC2000..0xD1FFF and the
+ * loop slots from 0xD2000 (cr_ui.c CRL_FL_BASE). Never near BTIF / USRTRIM (0xC0000..0xC1FFF), the stock resources
+ * (0xF4000..) or key_mac (0xFF000). */
+#define ST_SMK_BASE 0x9D000u
+#define ST_SMK_PAIRS 9u                        /* the pairs below the owner tag */
+#define ST_SMK_SECTORS (2u * ST_SMK_PAIRS)
+#define ST_SMK_HIGH 0xB0000u                   /* the pairs above it */
+#define ST_SMK_HIGH_SECTORS 4u
+#define ST_SMK_CZB 0xC2000u                    /* the CZ-1 banks, in USRFLASH */
+#define ST_SMK_CZB_SECTORS 16u
+#define ST_SMK_LOOPS 0xD2000u                  /* the loop slots (cr_ui.c CRL_FL_BASE), in USRFLASH */
+#define ST_SMK_LOOP_SECTORS 20u
+/* every place of ChoralRoot's data on the SMK (base, sectors): the owner check and Options > Flash Data clear these */
+static const uint32_t ST_SMK_REGIONS[][2] = {{ST_SMK_BASE, ST_SMK_SECTORS}, {ST_SMK_HIGH, ST_SMK_HIGH_SECTORS},
+                                             {ST_SMK_CZB, ST_SMK_CZB_SECTORS}, {ST_SMK_LOOPS, ST_SMK_LOOP_SECTORS}};
+#if FELUCCA_CZ && FELUCCA_QUAD
+_Static_assert(OBJ_COUNT == 19u && OBJ_SESSION + 1u == OBJ_COUNT, "SMK store: a new object needs a place");
+#endif
+_Static_assert(ST_SMK_BASE + ST_SMK_SECTORS * ST_SECTOR == 0xAF000u, "SMK store: the objects end at the owner tag");
+_Static_assert(ST_SMK_HIGH >= 0xAF000u + ST_SECTOR && ST_SMK_HIGH + ST_SMK_HIGH_SECTORS * ST_SECTOR <= 0xBB000u,
+               "SMK store: past FL_DATA");
+_Static_assert(ST_SMK_CZB >= 0xC2000u && ST_SMK_CZB + ST_SMK_CZB_SECTORS * ST_SECTOR <= ST_SMK_LOOPS &&
+               ST_SMK_LOOPS + ST_SMK_LOOP_SECTORS * ST_SECTOR <= 0xEA000u, "SMK store: past FL_SMP");
+static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
+{
+    copy &= 1u;
+#if FELUCCA_CZ && FELUCCA_QUAD
+    if (obj == OBJ_SESSION)
+        return ST_SMK_BASE + (8u * 2u + copy) * ST_SECTOR;
+    if (obj == OBJ_QUADSTORE)
+        return ST_SMK_HIGH + (2u + copy) * ST_SECTOR;
+#endif
+#if FELUCCA_CZ
+    if (obj == OBJ_CZSTORE1)
+        return ST_SMK_HIGH + copy * ST_SECTOR;
+    if (obj >= OBJ_CZBANK0)
+        return ST_SMK_CZB + ((obj - OBJ_CZBANK0) * 2u + copy) * ST_SECTOR;
+#endif
+    if (obj == OBJ_SETTINGS)
+        return ST_SMK_BASE + (7u * 2u + copy) * ST_SECTOR;
+    if (obj == OBJ_FM6BANK)
+        return ST_SMK_BASE + (6u * 2u + copy) * ST_SECTOR;
+    if (obj >= OBJ_UPRESET0)
+        return ST_SMK_BASE + ((4u + obj - OBJ_UPRESET0) * 2u + copy) * ST_SECTOR;
+    return ST_SMK_BASE + ((obj - OBJ_PROJECT0) * 2u + copy) * ST_SECTOR;
+}
+
+/* The owner of the store. Several FM-1 firmwares are ported to the SMK-37 with the same board layer and this same
+ * store area, each with its own object formats: a firmware must never parse another's data. The sector after the
+ * objects (0xAF000, the same place in every port) holds "SMK37DATA" + the firmware family (FELUCCA_DATA_FAMILY,
+ * build.py; ChoralRoot: CHORAL). Ours: load as ever. None (erased): data written before the tag existed, kept only
+ * with FELUCCA_DATA_UNTAGGED_OK (0 here: the SMK build never had untagged data, so an erased tag with objects
+ * present is another firmware's). Another family's: clear every place ChoralRoot keeps data in (the objects, the
+ * CZ-1 banks and the loop slots: st_smk_clear) and take the store. Calibration, BT pairing and key_mac are outside
+ * them: never touched. Called first in persist_boot (cr_shim.c), before any store read; never in SAFE MODE. */
+#ifndef FELUCCA_DATA_FAMILY
+#define FELUCCA_DATA_FAMILY "CHORAL"
+#endif
+#ifndef FELUCCA_DATA_UNTAGGED_OK
+#define FELUCCA_DATA_UNTAGGED_OK 0
+#endif
+#define ST_OWNER_OFF 0xAF000u
+_Static_assert(ST_OWNER_OFF == ST_SMK_BASE + ST_SMK_SECTORS * ST_SECTOR, "SMK store owner: the sector after the objects");
+static uint8_t st_owner_cleared;                /* (the console says so) */
+#ifndef ST_FEED
+#define ST_FEED() ((void)0)                     /* (the device: the watchdog, between erases) */
+#endif
+static void st_smk_clear(void)
+{
+    uint32_t r, k;
+    for (r = 0; r < sizeof ST_SMK_REGIONS / sizeof ST_SMK_REGIONS[0]; r++)
+        for (k = 0; k < ST_SMK_REGIONS[r][1]; k++) {
+            ST_FEED();
+            st_erase(ST_SMK_REGIONS[r][0] + k * ST_SECTOR);
+        }
+}
+static void st_owner_check(void)
+{
+    static const char FAM[] = FELUCCA_DATA_FAMILY;
+    uint8_t tag[16], want[16];
+    uint32_t i, erased = 1, ours = 1;
+    for (i = 0; i < 16u; i++)
+        want[i] = i < 9u ? (uint8_t)"SMK37DATA"[i] : i - 9u < sizeof FAM - 1u ? (uint8_t)FAM[i - 9u] : 0u;
+    if (st_read(ST_OWNER_OFF, tag, 16))
+        return;
+    for (i = 0; i < 16u; i++) {
+        erased &= tag[i] == 0xFFu;
+        ours &= tag[i] == want[i];
+    }
+    if (ours)
+        return;
+    if (!erased || !FELUCCA_DATA_UNTAGGED_OK) {     /* another firmware's store (or untagged data): clear it */
+        st_smk_clear();
+        st_owner_cleared = 1;
+    }
+    st_erase(ST_OWNER_OFF);
+    st_prog(ST_OWNER_OFF, want, 16);
+}
+#else
 static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy A (0) / B (1) */
 {
     if (obj == OBJ_SETTINGS)
@@ -134,6 +240,7 @@ static uint32_t st_sector(uint32_t obj, uint32_t copy)  /* flash offset of copy 
         return 0xDC000u + (obj - OBJ_UPRESET0) * 2u * ST_SECTOR + copy * ST_SECTOR;
     return 0x97000u + (obj - OBJ_PROJECT0) * 2u * ST_SECTOR + copy * ST_SECTOR;
 }
+#endif /* BOARD_SMK37 */
 
 static uint8_t st_buf[ST_PAYLOAD_MAX] __attribute__((aligned(4)));
 

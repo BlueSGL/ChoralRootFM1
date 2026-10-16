@@ -83,6 +83,16 @@ On Linux x86-64 the toolchain runs natively and Docker is not needed.
 `JIELI_TOOLCHAIN` and `AC79_SDK` override the default locations
 (`~/.jieli/toolchain`, `~/fw-AC79_AIoT_SDK`).
 
+Target board: `BOARD=smk37 ./build.sh` (or `./build.sh --board smk37`) builds ChoralRoot for the M-Vave SMK-37
+([SMK37.md](SMK37.md)): `-DBOARD_SMK37=1` for the app, the update loader and the boot stub, identity `SMK-37 Pro_920`,
+the SMK flash layout (PRCT 0x9D000, the stock region table with USRTRIM / USRFLASH; the stub, the body and the marker at
+the FM-1's places) and the package `build/choralroot-smk37.fwsc`. `MODEL=elite` or `MODEL=mke` builds the same firmware
+under the SMK-37 Elite's or the MKE-P37's model name (`build/choralroot-smk37-elite.fwsc`,
+`build/choralroot-smk37-mke.fwsc`), so M-Vave's updater still takes that unit's factory package; the Starrykey 37 Play
+uses the Pro build. Each model's boot stub has its lock (`firmware/stub/stub_smk37*.lock`: the stub's update record
+names the model). The intermediate files (`build/choralroot.bin`, `build/loader/ota.bin`, `build/choralroot.dis`) are
+shared: build the FM-1 again before `tests/run_tests.sh`. The default stays the FM-1, byte for byte.
+
 `build.sh` sets `DYLD_FALLBACK_LIBRARY_PATH=/opt/homebrew/lib` itself on macOS (macOS drops `DYLD_*` variables
 on the way into `/bin/sh`); calling `python3 tools/build.py` directly needs it exported.
 
