@@ -5380,3 +5380,9 @@ dark print, a key down a light orange (a sharp a darker one). `?demo` now shows 
 too (the pressed look in screenshots). Checked headless at 1920 and 1280 px (build/emu-web-smk37-test/page-1920.png,
 page-1280.png); `node tools/emu/web/test_web_emu_smk.mjs` PASS; `CR_VERSION=0.24 sh tests/run_all.sh`: ALL SUITES
 PASSED (23 suites, 88 s); `./build.sh` last (the package 5f1102a1..., main's).
+Then (the owner: "The layout of the 6 keys below the screen don't match real SMK which is 2 columns, 3 rows"): the six
+buttons under the screen are a block of two columns and three rows, as wide as the screen: KNOB BANK | FADER BANK,
+< | >, OCTAVE- | OCTAVE+. The photo settles the shape and the middle row (its two one-character labels); its top and
+bottom labels are too blurred to read and the guide (01-hardware.md 5.3) lists the buttons' ids, not their places, so
+those two rows follow the hardware ids' order (0 1, 2 3, 4 5). PNGs again at 1920 and 1280 px; test_web_emu_smk PASS;
+run_all ALL SUITES PASSED (23 suites); `./build.sh` last.

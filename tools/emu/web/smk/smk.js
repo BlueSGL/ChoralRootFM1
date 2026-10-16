@@ -43,7 +43,7 @@
   const post = (m) => node && node.port.postMessage(m);
   const SOFT = 40;
 
-  // buttons: under the screen (2 x 3), under the faders (2 x 6)
+  // buttons: under the screen (two columns, three rows: KNOB BANK FADER BANK, < >, OCTAVE- OCTAVE+), under the faders (2 x 6)
   const btnEl = [];
   const button = (b, parent) => {
     const e = mk("div", "b", `${BTN[b][0]}<small>${BTN[b][1]}</small>` + (hint("btn", b) ? `<kbd>${hint("btn", b)}</kbd>` : ""));
