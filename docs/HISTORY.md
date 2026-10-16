@@ -4449,4 +4449,5 @@ sent, no patch read; past the slot: rc 2), which fails on the tree before it. **
 `sh tools/emu/test_persist.sh` PASS. **On the unit** (the owner: "Yes, flash 90d0b8f on the unit, backup first"): the
 unit runs this build, `tools/fm1_install.py build/choralroot.fwsc --backup ... --yes`; the backup before it is
 `fm1-backups/choralroot-backup-20261016-bankfix.json`. `--info` afterwards "ChoralRoot 0.22"; `--sounds` reads U033 DARK
-HAZE (GRAIN, retired here) and U034 empty, as before. The owner's Place into 031 .. 040 is the check.
+HAZE (GRAIN, retired here) and U034 empty, as before. **The owner on the unit, 2026-10-16** (3y119 .. 3y121 together):
+"I have tried this, the Digitone engine sounds great now and patches sound good no clicks or pops".
