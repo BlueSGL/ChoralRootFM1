@@ -141,6 +141,8 @@ own clock in ms from power-on; commands run in order and only `wait` (and the ti
 | `wait MS` | move the clock on: `200`, `200ms`, `1.5s` (`frames N` = N x 15 ms) |
 | `key KEY down` / `key KEY up` | a computer key of the map, as if typed: `key S down` (D4), `key RETURN up`, `key UP down` |
 | `key KEY [MS]` | press KEY for MS (default 100) ms; the clock moves on by MS |
+| `btn KEY down VEL`, `btn KEY MS VEL` | a note key held (or pressed MS) **at velocity VEL**, 1..127: with Options > Key Touch on, the sensing (firmware/src/cr_sense.c, fed by `emu_fw.c emu_touch_feed`) reads the key as landing with that velocity on Velo's scale at Velocity Curve 0, about 9 ms after it went down (a key with no velocity given lands at 100; Key Touch Fixed ignores it) |
+| `lean KEY PCT` | a held note key pressed harder: PCT (0..100) of full aftertouch, once its rest has settled (~300 ms after it landed); `lean KEY 0` eases off. The traces: `touch: key K vel V sensed|context|fixed` as a key plays, `touch: at N` as the pressure changes |
 | `btn NAME [down\|up\|MS]` | a panel control by name: `FX SEL ENV LFO EDIT GLO HOME SAVE ARP SEQ PLAY REC OCT- OCT+` or a note key `F3`..`G5` (`D#4`); default a 100 ms tap |
 | `knob NAME +-N` | turn `SELECT ALGORITHM PRESETS KNOB1..KNOB4` N detents (+ clockwise); `MASTER`: N x 16 of 1023 |
 | `master ADC` | set the MASTER pot, 0..1023 |

@@ -94,6 +94,11 @@
 /* cr_engine.h's cr_param_t (the perform parameter enum) and cr_screen.h's (a params column) share a name: the
  * engine's is renamed in this unit (cr_out.c / cr_ui.c call it cr_eparam_t) */
 #define cr_param_t cr_eparam_t
+/* the key sensing (firmware/src/cr_sense.c, docs/VELOCITY.md), as the unit has it, fed by emu_fw.c from the script's
+ * velocities and leans instead of the scan's hooks; the scan's analog state it would switch is a stub here */
+#define CR_SENSE_NO_HOOKS 1
+#include "../../firmware/src/cr_sense.c"
+static struct { uint8_t drive; } fm1_an;
 #include "../../firmware/src/cr_engine.h"
 #include "../../firmware/src/cr_engine.c"
 #undef cr_param_t

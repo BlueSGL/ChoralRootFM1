@@ -4355,6 +4355,33 @@ step OK; the landing page "Version 0.22", "Install 0.22", "New in 0.22" with the
 (`firmware/SHA256SUMS`, `firmware/index.html`). Not done: the tag, the push, the release, the site; nothing flashed by
 this session.
 
+3y112. **fm1-ctl read, and Options > Velocity Curve (2026-10-15; the owner: "Charles has said that his repo fm1-ctl has
+the best velocity and aftertouch implementation ... see what the improvements are and if we can bring them in").**
+Read at `de372e7`: CTL-1's sensing is MONK-1's byte for byte (`sense.c` plus a settable floor and a top-row curve;
+`fm1_input.h`, `fm1_adc.h` identical), tuned by playing on his unit: the firm end at 530 (DRIVE 2's 450 sat under
+his firm presses, his hardest hit topped out near 95; the owner's unit reaches 127 with ours), a Curve -5 .. +5 on
+the map's exponent, the top row through the PA10 probe at 0 / 43 / 2.40 (the probe on every key tried and dropped: a
+light press moves it 8 counts), Aftertouch Off / Poly / Channel with poly per note of a chord key, AT sens -5 .. +5,
+a Touch page with velocity and pressure bars, and a host emulator that plays a key at a velocity by inverting the
+map (`host/ctl_host.c land_for`). The comparison, line by line, in docs/VELOCITY.md "fm1-ctl". Brought in first:
+**Velocity Curve** -3 .. +3 (the entry after Velocity Sens; `cr_sense.c SN_CURVES`, seven tables of the map at 0.7 x
+2^(0.2 k); bits 5..7 of `pick_roots` as two's complement, 0 the default, no version; `cr_settings_test`'s cases).
+The entry moved every Options entry from Aftertouch Sens on by one: the 20 walk scripts, `cr_opt_keys.txt` (30
+entries) and the runners' numbers, as 3y93 did. Next, if the owner wants them: the emulator's velocity model, the
+top row's probe, poly aftertouch out, the readout.
+
+3y113. **The emulator plays a key at a velocity and leans on it (2026-10-15; fm1-ctl's `host/ctl_host.c`, the
+second of its pieces brought in).** `cr_sense.c` is compiled into `tools/emu` (its scan hooks left out,
+`CR_SENSE_NO_HOOKS`; the scan's analog state a stub) and `emu_fw.c emu_touch_feed` feeds it every 2 ms from the
+script's keys, as the FM-1 would read them: a key held `down VEL` lands at the driven reading the map at Velocity
+Curve 0 gives that velocity (the map inverted over its table: the script's velocity is the press's strength on
+Velo's scale, so another Curve reads the same press differently), 300 pulled up, driven and pulled-up samples
+alternating as the key asks; `lean KEY PCT` presses it harder once its rest has settled, by PCT of the span, so
+`cu_touch_poll` reads that pressure; a key with no velocity lands at 100, a key let go reads 1023. `cr_ui.c` traces
+`touch: key K vel V sensed|context|fixed` as a key plays and `touch: at N` as the pressure changes. `cr_touch.txt`
+(`test_cr.sh`): Fixed plays 100, Velocity + Aftertouch plays 30 and 120 as given, G5 the context, a 60 % lean reads
+~73 and eases to 0, Velocity Curve +3 reads the same press as 15. tools/emu/README.md has the two commands.
+
 3y114. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
 2026-10-15: "Could the grain synth have a way to generate its own samples from a couple knobs to quickly get a variety
 of interesting samples to work with?"; branch claude/grain-engine-f724f9 from da1f8e2 = v0.22-beta3). No firmware

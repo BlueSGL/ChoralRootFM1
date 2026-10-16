@@ -78,7 +78,7 @@ want=$(sed -n 's/^#define FELUCCA_VERSION "\(.*\)".*/\1/p' firmware/src/choralro
 [ -n "${CR_VERSION:-}" ] && want=$(grep -a -m1 "^  version:" "$L" | sed -n "s/.* build '\(.*\)'$/\1/p")   # (a release build of the emulator)
 vo=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*options '\([^']*\)'.*/\1/p")
 vi=$(grep -a -m1 '^  version:' "$L" | sed -n "s/.*identity '\([^']*\)'.*/\1/p")
-[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 26 of 2[0-9] 'Version' value '$want'" "$L" &&
+[ -n "$want" ] && [ "$vo" = "$want" ] && [ "$vi" = "$want" ] && grep -aq "^  options: open 1 entry 27 of 3[0-9] 'Version' value '$want'" "$L" &&
     ok "Options > Version '$vo' = the identity over SysEx '$vi' = the build's ($want): $OUT/cr_version.ppm" \
     || bad "the version: Options '$vo', identity '$vi', choralroot.c '$want'"
 lits=$(grep -n '"ChoralRoot [0-9]' firmware/src/*.c firmware/src/*.h firmware/hal/*.h tools/emu/*.c tools/emu/*.h tools/emu/web/*.c 2>/dev/null | grep -v '^firmware/src/choralroot.c:[0-9]*:#define FELUCCA_VERSION ')
@@ -915,6 +915,20 @@ has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD D
 [ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 39' "$L")" = 2 ] &&
     ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid, one detent one unit" ||
     bad "EXPR on the VA / FM TONE: $(grep -ac '^param: part 0 MOD AMT4' "$L") AMT4 lines"
+run cr_touch
+L="$OUT/cr_touch.log"
+tk() { grep -a "^touch: key $1 vel " "$L" | sed -n "$2p" | sed 's/^touch: key [0-9]* vel //'; }
+atmax() { grep -a '^touch: at ' "$L" | sed 's/touch: at //' | sort -n | tail -1; }
+[ "$(tk 9 1)" = "100 fixed" ] && [ "$(tk 9 2)" = "30 sensed" ] && [ "$(tk 9 3)" = "120 sensed" ] &&
+    ok "the keys' velocity in the emulator: Key Touch Fixed plays D4 at Options > Velocity (100); Velocity + Aftertouch: D4 at 30 plays 30, at 120 plays 120 (the sensing's own path, cr_sense.c fed by emu_touch_feed)" ||
+    bad "touch velocity: '$(tk 9 1)' / '$(tk 9 2)' / '$(tk 9 3)'"
+echo "$(tk 26 1)" | grep -q ' context$' && [ "$(tk 26 1 | cut -d' ' -f1)" -gt 40 ] && [ "$(tk 26 1 | cut -d' ' -f1)" -lt 110 ] &&
+    ok "G5 (the top row, no converter): the keys' recent velocity, the context ($(tk 26 1))" || bad "the top row's velocity: '$(tk 26 1)'"
+[ "$(atmax)" -ge 65 ] && [ "$(atmax)" -le 85 ] && [ "$(grep -a '^touch: at ' "$L" | tail -1)" = "touch: at 0" ] &&
+    ok "a lean of 60 % on the held D4 after it settled: aftertouch up to $(atmax) (60 % of the span, smoothed), eased: back to 0" ||
+    bad "aftertouch: max $(atmax), last $(grep -a '^touch: at ' "$L" | tail -1)"
+[ "$(tk 9 5 | cut -d' ' -f1)" -ge 10 ] && [ "$(tk 9 5 | cut -d' ' -f1)" -le 22 ] &&
+    ok "Velocity Curve +3: the same press (30 on Velo's scale) reads $(tk 9 5 | cut -d' ' -f1)" || bad "Velocity Curve +3: '$(tk 9 5)'"
 run cr_expr_knob
 L="$OUT/cr_expr_knob.log"
 am() { grep -a '^param: part 0 MOD AMT3 ' "$L" | sed -n 's/^param: part 0 MOD AMT3 [0-9]* -> \([0-9]*\) .*/\1/p' | tr '\n' ' '; }
@@ -3019,7 +3033,7 @@ run cr_opt_keys --wav "$OUT/cr_opt_keys.wav"
 L="$OUT/cr_opt_keys.log"
 dl() { LC_ALL=C grep -a "^  $1" "$L" | sed -n "$2p"; }   # dl PREFIX N: the Nth dump's line that starts with PREFIX
 oe() { dl 'options:' "$1" | sed 's/^  options: //'; }
-[ "$(oe 1)" = "open 1 entry 2 of 29 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
+[ "$(oe 1)" = "open 1 entry 2 of 30 'Secret Chords' value 'Simple'" ] && dl 'cr: voices' 1 | grep -q 'notes-out 0 ' &&
     dl 'cr: voices' 2 | grep -q '^  cr: voices 1 pending 0 notes-out 3 chord DM sounding 1 notes 62 66 69' &&
     dl 'loopv:' 2 | grep -q 'stream-notes main 3 ' && ! has 'expect.*FAILED' "$L" &&
     ok "MAJ + D4 with the menu open: D major sounds (62 66 69), three notes out on MIDI" \
@@ -3047,21 +3061,22 @@ echo "$wc_" | grep -q ": 0 jumps > 0.5 FS, 0 silent holes mid-sound, 0 clicks" &
     ok "no jump, no silent hole, no click at either change (5.3 .. 8.3 s)" || bad "Output switched under a chord struck in the menu: $wc_"
 sh_() { dl 'settings:' "$1" | sed -n 's/.* now \([0-9A-F]*\) .*/\1/p'; }
 echo "$(oe 8)" | grep -q "'Reset Settings' value 'OCT+ again: reset'" && [ "$(oe 9)" = "$(oe 8)" ] && [ -n "$(sh_ 8)" ] && [ "$(sh_ 9)" = "$(sh_ 8)" ] &&
-    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 41)" = "open 1 entry 2 of 29 'Secret Chords' value 'Simple'" ] &&
+    echo "$(oe 10)" | grep -q "^open 0 " && [ "$(oe 42)" = "open 1 entry 2 of 30 'Secret Chords' value 'Simple'" ] &&
     ! grep -aq 'settings reset' "$L" &&
     ok "Reset Settings asked (OCT+ once): five keys neither confirm nor cancel it; OCT- leaves, nothing was reset (Secret Chords still Simple)" \
-    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 41)'"
-echo "$(oe 11)" | grep -q "^open 1 entry 27 of 29 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
+    || bad "Reset Settings and the keys: '$(oe 8)' / '$(oe 9)' / '$(oe 10)' / '$(oe 42)'"
+echo "$(oe 11)" | grep -q "^open 1 entry 28 of 30 'Calibrate'" && ! grep -aq '^calib:' "$L" && ok "Calibrate: no key starts it" \
     || bad "Calibrate and the keys: '$(oe 11)' $(grep -a -m1 '^calib:' "$L")"
 n=0; i=0
-while [ $i -le 28 ]; do
-    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 29 '" && n=$((n + 1))
+while [ $i -le 29 ]; do
+    echo "$(oe $((12 + i)))" | grep -q "^open 1 entry $i of 30 '" && n=$((n + 1))
     i=$((i + 1))
 done
-[ $n = 29 ] && echo "$(oe 40)" | grep -q "'Reset Settings'" && echo "$(oe 15)" | grep -q "entry 3 of 29 '6th with 7th' value 'In place'" &&
-    echo "$(oe 17)" | grep -q "entry 5 of 29 'Key Touch' value 'Fixed'" && echo "$(oe 19)" | grep -q "entry 7 of 29 'Aftertouch Sens' value 'Mid'" &&
-    ok "every entry by SELECT alone: 29 of 29, Play Style to Reset Settings (6th with 7th the fourth; Key Touch, Velocity Sens, Aftertouch Sens after Velocity)" \
-    || bad "the entries by SELECT: $n of 29"
+[ $n = 30 ] && echo "$(oe 41)" | grep -q "'Reset Settings'" && echo "$(oe 15)" | grep -q "entry 3 of 30 '6th with 7th' value 'In place'" &&
+    echo "$(oe 17)" | grep -q "entry 5 of 30 'Key Touch' value 'Fixed'" && echo "$(oe 19)" | grep -q "entry 7 of 30 'Velocity Curve' value '0'" &&
+    echo "$(oe 20)" | grep -q "entry 8 of 30 'Aftertouch Sens' value 'Mid'" &&
+    ok "every entry by SELECT alone: 30 of 30, Play Style to Reset Settings (6th with 7th the fourth; Key Touch, Velocity Sens, Velocity Curve, Aftertouch Sens after Velocity)" \
+    || bad "the entries by SELECT: $n of 30"
 grep -aq '^loop: loop recorded (state 2 layers 1 events 1 ' "$L" && ok "a take played with the menu open is recorded (armed on the view, one chord)" \
     || bad "the looper with the Options open: $(grep -a '^loop:' "$L" | tail -2 | tr '\n' ' ')"
 silent_end cr_opt_keys
@@ -3071,10 +3086,10 @@ run cr_usb_rate
 L="$OUT/cr_usb_rate.log"
 ur() { dl 'usb-rate:' "$1" | sed 's/^  usb-rate: //; s/ (.*pick_roots \([0-9]*\))/ \1/'; }
 ul() { dl 'screen reads:' "$1" | sed -n "s/.*label '\([^']*\)'.*/\1/p"; }
-[ "$(oe 1)" = "open 1 entry 23 of 29 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
+[ "$(oe 1)" = "open 1 entry 24 of 30 'USB Rate' value '44.1 kHz'" ] && [ "$(ur 1)" = "48k 0 0" ] && [ "$(ul 1)" = "48 kHz: not offered" ] &&
     ok "a new unit: USB Rate is the entry after USB Level, 44.1 kHz ('48 kHz: not offered'), the record's bit clear" \
     || bad "USB Rate on a new unit: '$(oe 1)' / $(ur 1) / '$(ul 1)'"
-[ "$(oe 2)" = "open 1 entry 23 of 29 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
+[ "$(oe 2)" = "open 1 entry 24 of 30 'USB Rate' value '44.1 + 48 kHz'" ] && [ "$(ur 2)" = "48k 1 4" ] &&
     [ "$(ul 2)" = "the computer picks the rate" ] && [ "$(oe 3)" = "$(oe 1)" ] && [ "$(ur 3)" = "48k 0 0" ] &&
     ok "KNOB 1 +1: 44.1 + 48 kHz ('the computer picks the rate'), bit 2 of the record's byte; -1: 44.1 kHz again" \
     || bad "USB Rate turned: '$(oe 2)' / $(ur 2) / '$(ul 2)' then '$(oe 3)' / $(ur 3)"
@@ -3092,8 +3107,8 @@ sn_() { LC_ALL=C grep -aq " name '$1' " "$L"; }                    # the name a 
     [ "$(cb 1)" = "0 0 0" ] && sn_ 'A||7 9' && sn_ 'A||9' && sn_ 'A|sus|m7 9' &&
     ok "a new unit names as the Orchid does: A + 7 + 9 'A7 9', A + 9 'A9', Asus + 7 + 9 'Asus m7 9' (the engine's and the screen's)" \
     || bad "Orchid names: '$(cn 1)' / '$(cn 2)' / '$(cn 3)' / $(cb 1)"
-[ "$(oe 4)" = "open 1 entry 18 of 29 'Chord Names' value 'Orchid'" ] && [ "$(ul 4)" = "A7 9 $(printf '\267') A9 $(printf '\267') Asus m7 9" ] &&
-    [ "$(oe 5)" = "open 1 entry 18 of 29 'Chord Names' value 'Standard'" ] && [ "$(ul 5)" = "A9 $(printf '\267') Aadd9 $(printf '\267') A9sus4" ] &&
+[ "$(oe 4)" = "open 1 entry 19 of 30 'Chord Names' value 'Orchid'" ] && [ "$(ul 4)" = "A7 9 $(printf '\267') A9 $(printf '\267') Asus m7 9" ] &&
+    [ "$(oe 5)" = "open 1 entry 19 of 30 'Chord Names' value 'Standard'" ] && [ "$(ul 5)" = "A9 $(printf '\267') Aadd9 $(printf '\267') A9sus4" ] &&
     [ "$(cb 5)" = "1 1 1" ] &&
     ok "Chord Names is the entry after Motion: Orchid; KNOB 1 +1: Standard (the engine told, bit 3 of the record's byte), the same three chords under it" \
     || bad "the Chord Names entry: '$(oe 4)' / '$(ul 4)' then '$(oe 5)' / '$(ul 5)' / $(cb 5)"
@@ -3101,7 +3116,7 @@ sn_() { LC_ALL=C grep -aq " name '$1' " "$L"; }                    # the name a 
     sn_ 'A||add9' && sn_ 'A||9sus4' &&
     ok "Standard: A + 7 + 9 'A9', A + 9 'Aadd9', Asus + 7 + 9 'A9sus4', each with the notes it had under Orchid" \
     || bad "Standard names: '$(cn 6)' / '$(cn 7)' / '$(cn 8)'"
-[ "$(oe 9)" = "open 1 entry 18 of 29 'Chord Names' value 'Orchid'" ] && [ "$(cb 9)" = "0 0 0" ] && [ "$(cn 10)" = "A9|1|69 73 76 83" ] &&
+[ "$(oe 9)" = "open 1 entry 19 of 30 'Chord Names' value 'Orchid'" ] && [ "$(cb 9)" = "0 0 0" ] && [ "$(cn 10)" = "A9|1|69 73 76 83" ] &&
     ok "KNOB 1 -1: Orchid again, A + 9 reads 'A9' again" || bad "back to Orchid: '$(oe 9)' / $(cb 9) / '$(cn 10)'"
 differ cr_chord_names_opt_orchid cr_chord_names_opt_standard "Chord Names: the two values' screens differ"
 differ cr_chord_names_orchid cr_chord_names_standard "A + 7 + 9: the Chord view differs under the two namings"
@@ -3128,8 +3143,8 @@ kl() { dl 'key leds:' "$1" | sed -n 's/^  key leds:\([0-9]* [0-9]*\) .*/\1/p'; }
 [ "$(cn 1)" = "A7 6|1|69 73 76 78 79" ] && [ "$(sx 1)" = "0 0 0" ] && sn_ 'A||7 6' &&
     ok "a new unit plays the 6th in place, as the Orchid does: A + 7 + 6 is A C# E F# G (69 73 76 78 79), named 'A7 6'" \
     || bad "In place: '$(cn 1)' / $(sx 1)"
-[ "$(oe 2)" = "open 1 entry 3 of 29 '6th with 7th' value 'In place'" ] && [ "$(ul 2)" = "6 + 7: the 6th under the 7th" ] &&
-    [ "$(oe 3)" = "open 1 entry 3 of 29 '6th with 7th' value 'Octave up'" ] && [ "$(ul 3)" = "6 + 7: the 6th on top, a 13th" ] && [ "$(sx 3)" = "1 1 1" ] &&
+[ "$(oe 2)" = "open 1 entry 3 of 30 '6th with 7th' value 'In place'" ] && [ "$(ul 2)" = "6 + 7: the 6th under the 7th" ] &&
+    [ "$(oe 3)" = "open 1 entry 3 of 30 '6th with 7th' value 'Octave up'" ] && [ "$(ul 3)" = "6 + 7: the 6th on top, a 13th" ] && [ "$(sx 3)" = "1 1 1" ] &&
     ok "6th with 7th is the entry after Secret Chords: In place; KNOB 1 +1: Octave up (the engine told, bit 4 of the record's byte), each with its line" \
     || bad "the 6th with 7th entry: '$(oe 2)' / '$(ul 2)' then '$(oe 3)' / '$(ul 3)' / $(sx 3)"
 [ "$(cn 4)" = "A7 6|1|69 73 76 78 79" ] && dl 'part 0:' 4 | grep -q 'voices 5,' && [ "$(dl 'parts busy' 5 | sed -n 's/.*parts busy \([0-9]*\).*/\1/p')" = 0 ] &&
@@ -3144,7 +3159,7 @@ kl() { dl 'key leds:' "$1" | sed -n 's/^  key leds:\([0-9]* [0-9]*\) .*/\1/p'; }
     || bad "the key LEDs: '$(kl 1)' / '$(kl 6)'"
 [ "$(cn 10)" = "A7 6|1|69 73 76 78 79" ] && [ "$(cn 11)" = "A7 6|1|69 73 76 79 90" ] &&
     ok "KNOB 1 -1 on the view: the voicing takes the top note, the 13th, down an octave; +1: back" || bad "the voicing: '$(cn 10)' / '$(cn 11)'"
-[ "$(oe 12)" = "open 1 entry 3 of 29 '6th with 7th' value 'In place'" ] && [ "$(sx 12)" = "0 0 0" ] && [ "$(cn 13)" = "A7 6|1|69 73 76 78 79" ] &&
+[ "$(oe 12)" = "open 1 entry 3 of 30 '6th with 7th' value 'In place'" ] && [ "$(sx 12)" = "0 0 0" ] && [ "$(cn 13)" = "A7 6|1|69 73 76 78 79" ] &&
     ok "KNOB 1 -1 in the Options: In place again, A + 7 + 6 as at first" || bad "back to In place: '$(oe 12)' / $(sx 12) / '$(cn 13)'"
 differ cr_sixth_opt_off cr_sixth_opt_on "6th with 7th: the two values' screens differ"
 differ cr_sixth_off cr_sixth_on "A + 7 + 6: the Chord view's notes differ under the two settings"
