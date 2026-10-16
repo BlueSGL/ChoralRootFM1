@@ -4519,3 +4519,8 @@ test_retired 18, test_pool 7, the layout test with the seven catalogs).
 unit runs this branch's 70bb639 (the package 520cd81c..., byte-identical to that session's rebuild) over the released
 0.22, `--unit 5BD75BE3`, a full backup first (`fm1-backups/fm1-backup-2026-10-15-before-grain.json`); after boot 128
 sounds present, `--debug` c1_state 1, c1_faults 0, c1_fallback 0. Not yet played by the owner.
+**And again** (the designer-handoff session, 2026-10-15: main 1ebaaf2 took 3y112 and 3y113): 3y112 .. 3y115 became
+3y114 .. 3y117, origin/main 1ebaaf2 (Options > Velocity Curve, the emulator's velocity) merged in (HISTORY.md the one
+conflict). `CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 86 s; test_cr 1049); XIP 562 772 B
+(98.1 %), RAM 79 044 (80.4 %), POOL 304 716 (88.6 %). The unit still runs 70bb639's image (the same firmware but for
+main's changes since).
