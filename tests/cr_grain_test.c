@@ -46,8 +46,6 @@
 static void fm1_irq_off(void) {}
 static void fm1_irq_on(void) {}
 #include "../firmware/src/eng_grain.c"
-static gp_part_t grain_pool[GRAIN_NPART];
-static gp_part_t *grain_part(uint32_t part) { return part < GRAIN_NPART ? &grain_pool[part] : 0; }
 #ifndef ENGI_FM6
 #define ENGI_FM6 12u
 #endif
@@ -249,7 +247,8 @@ static void t_time(void)
 static void drv_reset(void)
 {
     memset(trk, 0, sizeof trk);
-    memset(grain_pool, 0, sizeof grain_pool);
+    memset(gp_parts, 0, sizeof gp_parts);
+    song.g[G_BPM] = 120;
     memset(grain_patch, 0, sizeof grain_patch);
     memset(grain_mlast, 0, sizeof grain_mlast);
     trk[0].p[P_VOICE] = V_POLY;
@@ -290,6 +289,7 @@ static uint32_t drv_tick(track_t *t, int32_t *out, int32_t shape)
             continue;
         memset(&m, 0, sizeof m);
         m.amp0 = m.amp1 = 32767;
+        m.envq15 = 32767;
         m.pitch16 = v->pitch_cur;
         m.inc = pitch_inc((uint32_t)m.pitch16);
         m.shape = shape;
@@ -328,23 +328,43 @@ static void t_patch(void)
     uint32_t n, i, pg, c;
     drv_reset();
     for (n = 0; n < 500u; n++) {
-        for (i = 0; i < GQ_NP; i++)
-            p[i] = (int8_t)(grain_min(i) + (int32_t)(rnd() % (uint32_t)(grain_max(i) - grain_min(i) + 1)));
+        for (i = 0; i < GQ_NP; i++) {
+            grain_rng_t r = grain_range(i);
+            p[i] = (int8_t)(r.min + (int32_t)(rnd() % (uint32_t)(r.max - r.min + 1)));
+        }
         grain_pack(p, b);
         CHECK(b[0] == GRAIN_MAGIC && b[1] == GRAIN_VER, "blob head");
         CHECK(grain_unpack(b, q) && !memcmp(p, q, GQ_NP), "blob round trip %u", n);
         for (i = GQ_NP + 2u; i < GRAIN_BLOB; i++)
             CHECK(!b[i], "blob padding");
     }
-    b[0] = 0;
-    CHECK(!grain_unpack(b, q), "a bad magic");
-    grain_blob_set(t, b);
-    CHECK(!memcmp(grain_patch[0], GRAIN_DEF, GQ_NP), "a bad blob -> the init patch");
-    grain_blob_set(t, 0);
-    CHECK(!memcmp(grain_patch[0], GRAIN_DEF, GQ_NP), "no blob -> the init patch");
-    for (i = 0; i < 8u; i++)
-        CHECK(t->p[P_E0 + i] == GRAIN_DEF[GRAIN_MAC[i]] && t->p[P_E0 + i] == ENG_GRAIN.edit[i].def,
-              "macro %u out: %d (def %d / %d)", i, t->p[P_E0 + i], GRAIN_DEF[GRAIN_MAC[i]], ENG_GRAIN.edit[i].def);
+    {
+        int8_t init[GQ_NP];
+        uint8_t v1[GRAIN_BLOB_V1];
+        grain_init_patch(init);
+        b[0] = 0;
+        CHECK(!grain_unpack(b, q), "a bad magic");
+        grain_blob_set(t, b);
+        CHECK(!memcmp(grain_patch[0], init, GQ_NP), "a bad blob -> the init patch");
+        grain_blob_set(t, 0);
+        CHECK(!memcmp(grain_patch[0], init, GQ_NP), "no blob -> the init patch");
+        for (i = 0; i < 8u; i++)
+            CHECK(t->p[P_E0 + i] == init[GRAIN_MAC[i]] && t->p[P_E0 + i] == ENG_GRAIN.edit[i].def,
+                  "macro %u out: %d (def %d / %d)", i, t->p[P_E0 + i], init[GRAIN_MAC[i]], ENG_GRAIN.edit[i].def);
+        /* a version-1 blob (the first build on the unit, 3y117): its 18 values, the rest the defaults, SCAN halved */
+        memset(v1, 0, sizeof v1);
+        v1[0] = GRAIN_MAGIC;
+        v1[1] = 1;
+        for (i = 0; i < GQ_NP_V1; i++)
+            v1[2 + i] = (uint8_t)(i == GQ_PITCH ? -7 : i == GQ_SCAN ? 60 : 3 + i);
+        CHECK(grain_unpack(v1, q), "a version-1 blob unpacks");
+        CHECK(q[GQ_TYPE1] == 3 && q[GQ_TONE2] == 8 && q[GQ_PITCH] == -7 && q[GQ_SCAN] == 30 && q[GQ_RES] == 20 &&
+              q[GQ_FTYPE] == init[GQ_FTYPE] && q[GQ_KTRK] == 64 && q[GQ_LFO(1, GL_DEPTH)] == 127 && q[GQ_MOD(7, GM_AMT)] == 0,
+              "version 1: the 18 kept (SCAN 60 -> 30), the new values their defaults");
+        CHECK(grain_range(GQ_SCAN).min == -64 && grain_range(GQ_PITCH).min == -24 && grain_range(GQ_MOD(0, GM_AMT)).min == -64 &&
+              grain_range(GQ_MOD(0, GM_SRC)).max == GSR_N - 1 && grain_range(GQ_MOD(0, GM_DST)).max == GD_N - 1 &&
+              grain_range(GQ_LFO(0, GL_WAVE)).max == 4 && grain_range(GQ_LFO(0, GL_SYNC)).max == 1, "the ranges");
+    }
     /* the pages: every column a patch value in range or a track parameter; get / set round trip; set clamps */
     for (pg = 0; pg < GRAIN_NPAGES; pg++)
         for (c = 0; c < 4u; c++) {
@@ -363,9 +383,27 @@ static void t_patch(void)
                 CHECK(grain_get(t, pg, c) == d->min, "page %u col %u: track set clamps low", pg, c);
                 continue;
             }
-            CHECK(m < GQ_NP && d->min == grain_min(m) && d->max == grain_max(m) && d->def == GRAIN_DEF[m],
-                  "page %u col %u: range %d..%d def %d against the patch's %d..%d %d", pg, c, d->min, d->max, d->def,
-                  grain_min(m), grain_max(m), GRAIN_DEF[m]);
+            if (d->fmt == F_FIX2) {               /* an AMT in hundredths: tenths below 6, whole from 6 (the VA's rule) */
+                grain_set(t, pg, c, 0);
+                grain_set(t, pg, c, 10);
+                CHECK(grain_get(t, pg, c) == 10, "page %u col %u: AMT 0.10 (%d)", pg, c, grain_get(t, pg, c));
+                grain_set(t, pg, c, 6350);
+                CHECK(grain_get(t, pg, c) == 6300, "page %u col %u: AMT 63 (%d)", pg, c, grain_get(t, pg, c));
+                grain_set(t, pg, c, -6400);
+                CHECK(grain_get(t, pg, c) == -6400, "page %u col %u: AMT -64 (%d)", pg, c, grain_get(t, pg, c));
+                grain_set(t, pg, c, -250);
+                CHECK(grain_get(t, pg, c) == -250 && grain_mfine(grain_patch[0], (m - GQ_MOD0) / GM_N),
+                      "page %u col %u: AMT -2.5 in tenths (%d)", pg, c, grain_get(t, pg, c));
+                grain_set(t, pg, c, 0);
+                CHECK(grain_get(t, pg, c) == 0 && !grain_mfine(grain_patch[0], (m - GQ_MOD0) / GM_N), "page %u col %u: AMT 0", pg, c);
+                continue;
+            }
+            {
+                grain_rng_t r = grain_range(m);
+                CHECK(m < GQ_NP && d->min == r.min && d->max == r.max && d->def == r.def,
+                      "page %u col %u: range %d..%d def %d against the patch's %d..%d %d", pg, c, d->min, d->max, d->def,
+                      r.min, r.max, r.def);
+            }
             grain_set(t, pg, c, d->max + 50);
             CHECK(grain_get(t, pg, c) == d->max, "page %u col %u: set clamps", pg, c);
             grain_set(t, pg, c, d->min - 50);
@@ -373,8 +411,26 @@ static void t_patch(void)
             grain_set(t, pg, c, d->def);
             CHECK(grain_get(t, pg, c) == d->def, "page %u col %u: round trip", pg, c);
         }
-    CHECK(GRAIN_DEEP.section[0] == 0 && GRAIN_DEEP.section[1] == 4 && GRAIN_DEEP.section[2] == 5 &&
-          GRAIN_DEEP.section[3] == 6 && GRAIN_DEEP.section[4] == 0xFF, "the sections OSC FILTER ENV LFO");
+    CHECK(GRAIN_DEEP.section[0] == GPG_SRC1 && GRAIN_DEEP.section[1] == GPG_FILTER && GRAIN_DEEP.section[2] == GPG_ENV1 &&
+          GRAIN_DEEP.section[3] == GPG_LFO1 && GRAIN_DEEP.section[4] == GPG_MOD0 && GRAIN_DEEP.section[5] == 0xFF,
+          "the sections OSC FILTER ENV LFO MOD");
+    CHECK(GRAIN_DEEP.nscreens == 4u && GRAIN_SCREENS[0].band == ENG_B_WAVE && GRAIN_SCREENS[1].pg[0] == GPG_GRAIN &&
+          GRAIN_SCREENS[1].band == ENG_B_WAVE && GRAIN_SCREENS[2].sec == 2 && GRAIN_SCREENS[2].band == ENG_B_ENV &&
+          GRAIN_SCREENS[3].pg[0] == GPG_ENV2 && GRAIN_SCREENS[3].pg[1] == 0xFF,
+          "the plan: the two OSC screens under the wave band, ENV 1 and ENV 2 under the AHDSR");
+    /* LFO 1's RATE: synced, the VA's list as its descriptor and its range; the rescale both ways */
+    grain_set(t, GPG_LFO1, 0, 64);
+    grain_set(t, GPG_LFOSYN, 0, 1);
+    CHECK(grain_desc(t, GPG_LFO1, 0) == &VA_D_SRATE && grain_get(t, GPG_LFO1, 0) == 64 * (int32_t)VA_NSYNC / 128,
+          "SYNC on: the list, RATE at the same place (%d)", grain_get(t, GPG_LFO1, 0));
+    grain_set(t, GPG_LFO1, 0, 99);
+    CHECK(grain_get(t, GPG_LFO1, 0) == (int32_t)VA_NSYNC - 1, "a synced RATE stays on the list");
+    grain_set(t, GPG_LFOSYN, 0, 0);
+    CHECK(!grain_desc(t, GPG_LFO1, 0) && grain_get(t, GPG_LFO1, 0) == 41 * 128 / (int32_t)VA_NSYNC,
+          "SYNC off: the free scale, the list's last at 124 (%d)", grain_get(t, GPG_LFO1, 0));
+    CHECK(grain_mod_dst(t, GPG_GRAINP, 0) == GD_MORPH && grain_mod_dst(t, GPG_FILTER, 0) == GD_CUT &&
+          grain_mod_dst(t, GPG_LFO2, 2) == GD_DEP2 && grain_mod_dst(t, GPG_SRC1, 1) < 0 && grain_mod_dst(t, GPG_ENV1, 0) < 0,
+          "the quick mapping's destinations");
     /* the macros both ways: set writes P_E; a P_E change reaches the patch in block() */
     grain_set(t, 3, 0, 77);                      /* GRAIN+'s MORPH */
     CHECK(t->p[P_E4] == 77 && grain_patch[0][GQ_MORPH] == 77, "set -> P_E4 (MORPH)");
@@ -390,13 +446,20 @@ static void t_patch(void)
         for (i = 0; i < 8u; i++)
             CHECK(t->p[P_E0 + i] == GRAIN_PRESETS[n].e[i], "%s: macro %u", GRAIN_PRESETS[n].name, i);
         for (i = 0; i < GQ_NP; i++)
-            CHECK(grain_patch[0][i] >= grain_min(i) && grain_patch[0][i] <= grain_max(i), "%s: value %u out of range",
+            CHECK(grain_patch[0][i] >= grain_range(i).min && grain_patch[0][i] <= grain_range(i).max, "%s: value %u out of range",
                   GRAIN_PRESETS[n].name, i);
+        for (i = 0; i < 8u; i++) {                /* a slot's source and destination in range */
+            int32_t sr = grain_patch[0][GQ_MOD(i, GM_SRC)], d = grain_patch[0][GQ_MOD(i, GM_DST)];
+            CHECK(sr >= 0 && sr < (int32_t)GSR_N && d >= 0 && d < (int32_t)GD_N, "%s: slot %u", GRAIN_PRESETS[n].name, i);
+        }
     }
+    grain_blob_preset(t, 4);                      /* STRUM: ENV 2 -> MORPH */
+    CHECK(grain_patch[0][GQ_MOD(0, GM_SRC)] == GSR_ENV2 && grain_patch[0][GQ_MOD(0, GM_DST)] == GD_MORPH &&
+          grain_patch[0][GQ_MOD(0, GM_AMT)] == 63 && grain_patch[0][GQ_E2SUS] == 0, "STRUM's ENV 2 on MORPH");
     /* a part above the two: the defaults, nothing written */
-    CHECK(grain_get(&trk[2], 0, 0) == GRAIN_DEF[GQ_TYPE1], "part 2 reads the defaults");
+    CHECK(grain_get(&trk[2], 0, 0) == grain_range(GQ_TYPE1).def, "part 2 reads the defaults");
     grain_set(&trk[2], 0, 1, 5);
-    CHECK(grain_get(&trk[2], 0, 1) == GRAIN_DEF[GQ_TONE1], "part 2 is not written");
+    CHECK(grain_get(&trk[2], 0, 1) == grain_range(GQ_TONE1).def, "part 2 is not written");
     /* track_loaded: a preset's macros on the track bring its patch; INIT's macros the init patch; an old Felucca
      * record (pend, no blob) its grain knobs mapped */
     drv_reset();
@@ -404,7 +467,11 @@ static void t_patch(void)
     for (i = 0; i < 8u; i++)
         t->p[P_E0 + i] = GRAIN_PRESETS[3].e[i];
     grain_track_loaded(t);
-    CHECK(!memcmp(grain_patch[0], GRAIN_PP[3], GQ_NP), "track_loaded: the preset's patch");
+    {
+        int8_t pp[GQ_NP];
+        grain_preset_patch(3, pp);
+        CHECK(!memcmp(grain_patch[0], pp, GQ_NP), "track_loaded: the preset's patch");
+    }
     t->preset = 0;
     for (i = 0; i < 8u; i++)
         t->p[P_E0 + i] = ENG_GRAIN.edit[i].def;
@@ -456,7 +523,7 @@ static void t_engine(void)
             p[GQ_RAND] = EXT[e][4];
             p[GQ_PITCH] = EXT[e][5];
             p[GQ_MORPH] = 64;
-            p[GQ_SCAN] = 127;
+            p[GQ_SCAN] = (int8_t)(e & 1u ? 63 : -64);
             grain_macros_out(t);
             settle(200);
             for (i = 0; i < 6; i++)
@@ -567,6 +634,9 @@ static void t_engine(void)
     grain_patch[0][GQ_SCAN] = 0;
     grain_patch[0][GQ_CUT] = 127;
     grain_patch[0][GQ_RES] = 0;
+    grain_patch[0][GQ_FTYPE] = 0;
+    grain_patch[0][GQ_DRIVE] = 0;
+    grain_patch[0][GQ_KTRK] = 0;
     grain_macros_out(t);
     settle(200);
     for (i = 0; i < GS_N; i++)
@@ -714,6 +784,84 @@ static void t_scheduler(void)
     settle(400);
     CHECK(grs.renders - before <= 2u, "ten changes: %u renders", grs.renders - before);
     CHECK(grs.cur[1][1] == 100, "the last one held");
+    /* SCAN: forward moves POS up the buffer, reverse down, 0 holds; the matrix moves grain knobs, LFO 1 synced ticks */
+    {
+        int32_t s0, s1, s2;
+        gp_part_t *Q = grain_part(0);
+        drv_reset();
+        grain_blob_preset(t, 0);
+        settle(200);
+        grain_patch[0][GQ_SCAN] = 63;
+        drv_on(t, 0, 60);
+        drv_tick(t, out, 64 << 8);
+        s0 = (int32_t)(Q->scan >> 17);
+        for (n = 0; n < 20u; n++)
+            drv_tick(t, out, 64 << 8);
+        s1 = (int32_t)(Q->scan >> 17);
+        CHECK(s1 > s0, "SCAN 63 moves forward (%d -> %d)", s0, s1);
+        grain_patch[0][GQ_SCAN] = -64;
+        for (n = 0; n < 10u; n++)
+            drv_tick(t, out, 64 << 8);
+        s2 = (int32_t)(Q->scan >> 17);
+        CHECK(s2 < s1, "SCAN -64 moves back (%d -> %d)", s1, s2);
+        grain_patch[0][GQ_SCAN] = 0;
+        for (n = 0; n < 10u; n++)
+            drv_tick(t, out, 64 << 8);
+        CHECK((int32_t)(Q->scan >> 17) == s2, "SCAN 0 holds");
+        CHECK(grain_scan_inc(1) > 0 && grain_scan_inc(64) > grain_scan_inc(1) * 100 && grain_scan_inc(-1) == -grain_scan_inc(1),
+              "SCAN's rate: 1 slow (%d a block), 64 fast (%d), the sign the direction", grain_scan_inc(1), grain_scan_inc(64));
+        /* a round at SCAN 1 takes about 110 s, at 64 about half a second */
+        CHECK(4294967296.0 / grain_scan_inc(1) * CTL / FS > 90 && 4294967296.0 / grain_scan_inc(1) * CTL / FS < 130,
+              "a round at 1: %.0f s", 4294967296.0 / grain_scan_inc(1) * CTL / FS);
+        CHECK(4294967296.0 / grain_scan_inc(64) * CTL / FS < 0.6, "a round at 64: %.2f s", 4294967296.0 / grain_scan_inc(64) * CTL / FS);
+        /* the matrix: LFO 1 -> SIZE at a full amount: the grains' lengths spread beyond the knob's; ENV 1 -> CUT */
+        drv_reset();
+        grain_blob_preset(t, 0);
+        grain_patch[0][GQ_MOD(0, GM_SRC)] = GSR_LFO1;
+        grain_patch[0][GQ_MOD(0, GM_DST)] = GD_SIZE;
+        grain_patch[0][GQ_MOD(0, GM_AMT)] = 63;
+        grain_patch[0][GQ_LFO(0, GL_RATE)] = 100;
+        grain_patch[0][GQ_SIZE] = 64;
+        grain_patch[0][GQ_DENS] = 127;
+        settle(200);
+        drv_on(t, 0, 60);
+        {
+            uint32_t lmin = 0xFFFFFFFFu, lmax = 0, g2;
+            for (n = 0; n < 2u * FS / CTL; n++) {
+                drv_tick(t, out, 64 << 8);
+                for (g2 = 0; g2 < GP_NG; g2++)
+                    if (Q->g[g2].owner && Q->g[g2].wph == Q->g[g2].winc * CTL) {   /* a grain in its first block */
+                        uint32_t len = 0xFFFFFFFFu / Q->g[g2].winc;
+                        lmin = len < lmin ? len : lmin;
+                        lmax = len > lmax ? len : lmax;
+                    }
+            }
+            CHECK(lmin < 2000u && lmax > 8000u, "LFO 1 -> SIZE: grain lengths %u .. %u samples", lmin, lmax);
+        }
+        drv_reset();
+        grain_blob_preset(t, 0);
+        grain_patch[0][GQ_LFO(0, GL_SYNC)] = 1;
+        grain_patch[0][GQ_LFO(0, GL_RATE)] = 19;  /* 1/4 at 120 BPM: a cycle in 0.5 s */
+        settle(200);
+        {
+            uint32_t ph0 = Q->lph[0];
+            for (n = 0; n < (uint32_t)(0.5 * FS / CTL); n++)
+                drv_tick(t, out, 64 << 8);
+            CHECK((int32_t)(Q->lph[0] - ph0) > -(1 << 26) && (int32_t)(Q->lph[0] - ph0) < (1 << 26),
+                  "LFO 1 synced to 1/4 at 120 BPM: a whole cycle in 0.5 s (off by %d / 2^32)", (int32_t)(Q->lph[0] - ph0));
+        }
+        /* ENV 2 rises and falls with the gate */
+        drv_reset();
+        grain_blob_preset(t, 4);                  /* STRUM: ENV 2 ATK 0 DEC 50 SUS 0 */
+        settle(200);
+        drv_on(t, 0, 60);
+        for (n = 0; n < 8u; n++)
+            drv_tick(t, out, 64 << 8);
+        CHECK(t->v[0].s[5] == 3 && t->v[0].s[4] <= (1 << 24) && t->v[0].s[4] > (1 << 23), "ENV 2: the attack over (ATK 0: %d)", t->v[0].s[4]);
+        for (n = 0; n < FS / CTL; n++)
+            drv_tick(t, out, 64 << 8);
+        CHECK(t->v[0].s[4] < (1 << 20), "ENV 2 decays to SUS 0 (%d)", t->v[0].s[4]);
+    }
     /* a second part on GRAIN shares: its knobs render nothing */
     trk[1].eng_req = trk[1].engine = ENGI_GRAIN;
     grain_blob_preset(&trk[1], 5);

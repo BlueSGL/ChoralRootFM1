@@ -74,7 +74,7 @@ OPTIONAL = {"digital_render": 12, "digital_render_legacy": 333, "digital_render_
             "px_string_run": 264, "px_symp_run": 252,
             # .. and since 0.18 without the FX hold layer (choralroot.c FELUCCA_PERFORM 0): their budget lines until then
             "perf_begin": 34, "perf_mute": 19, "perf_pre": 27, "perf_block": 813, "perf_master": 31,
-            "sample_render": 126, "grain_render": 843, "grain_block": 28, "grain_tick": 99, "drum_render": 86, "dv_metal_run": 26,
+            "sample_render": 126, "grain_render": 1159, "grain_block": 139, "grain_tick": 99, "drum_render": 86, "dv_metal_run": 26,
             "dv_kick_run": 153, "dv_snare_run": 158, "dv_clap_run": 74, "dv_hat_run": 61, "dv_tom_run": 75,
             "dv_rim_run": 61, "dv_bell_run": 52, "dv_cym_run": 67, "dv_out": 35}
 TOL = 0.10                      # exact (no noise): small edits pass, a grown render loop does not

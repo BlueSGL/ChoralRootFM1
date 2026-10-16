@@ -1,9 +1,9 @@
 # GRAIN: a granular engine over material it makes itself (design, 2026-10-15)
 
-**Status: built through step 4 (2026-10-15, HISTORY 3y114 .. 3y117): the engine is in the firmware as engine 8
-(`firmware/src/eng_grain.c` over `grain_src.c`), with its pages, presets, blob, scheduler and the platform's wiring,
-tested on the host and in the emulator; not yet on the unit, not yet with the wave band (step 5), its presets not yet
-by ear (step 6).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
+**Status: built through step 5 (2026-10-15 / 16, HISTORY 3y114 .. 3y118): the engine is in the firmware as engine 8
+(`firmware/src/eng_grain.c` over `grain_src.c`), on the unit since 3y117's build, and since the owner's first listening
+(3y118, below: "The second phase") with its own matrix, two synced LFOs, ENV 2, the VA's filter, a bipolar SCAN and
+the wave band; its presets not yet by ear (step 6).** Branch `claude/grain-engine-f724f9` from main da1f8e2 (v0.22-beta3). The owner heard the sketches
 (`build/grain-sketch/`, below), kept the granular morph, and said go for steps 1 to 4. The build's size line: XIP
 559 652 B of 573 440 (97.6 %), RAM 79 028 (80.4 %), POOL 304 472 (88.5 %) over da1f8e2; merged on main 5e1e8a7
 (v0.22-beta4: the master filter and the step preview) XIP 561 540 B (97.9 %), POOL 304 712 (88.6 %); on main a11e0ca
@@ -32,6 +32,31 @@ POS, reversed and detuned by RAND, through a filter and the platform's envelope:
 costs about 11 .. 12 KB of flash (the core is 7.5 KB measured), 64 KB of POOL (the two buffers; a second part on GRAIN
 shares them), nothing of RAM to speak of, and at its worst about 600 .. 900 us of a 2902 us half for a full part, a
 quarter of a VA pad's.
+
+## The second phase (the owner, 2026-10-16, after the first build on the unit)
+
+"Grain engine has been tested, good start": the owner's list, and what was built for it (HISTORY 3y118; the patch
+is version 2, 64 bytes; a version-1 record (the first build's 20 bytes) loads with the new values at their defaults):
+
+| the owner | built |
+| --- | --- |
+| "Mod matrix needs to be able to select between envelope or LFO in each row" | GRAIN's own 8-slot matrix (`MOD 1 .. 8`: SRC DST AMT), SRC `OFF ENV1 ENV2 LFO1 LFO2 VEL KEY RAND MODW` (ENV 1 the platform's amplitude envelope, ENV 2 a modulation envelope of the engine's: ATK DEC SUS REL a voice; MODW CC 1) |
+| "Need to be able to target more parameters, right now they are hard locked" | DST `OFF MORPH POS SIZE DENS SPRD RAND PITCH SCAN CUT RES FTYPE DRIVE RATE1 RATE2 DEP1 DEP2 AMP`; at a full source and AMT 63: the 0 .. 127 knobs +-126, CUT +-63 steps, PITCH +-12 st, RATEn +-126 of the rate, AMP as the VA's; the grain knobs are read at each grain's start, the filter's and AMP at the block; SCAN and RATEn are the part's, from the latest note's voice (as the VA's PAN and RATE). The source knobs (TYPE TONE MOTION SEED) are not destinations: they render |
+| "Modulation amount should be the same as it is in the VA engine in that the amounts can be adjusted as decimals" | AMT exactly the VA's since 3y110: hundredths on the knob (`F_FIX2`), tenths below 6, whole numbers from 6, a per-slot fine flag in the patch (`GQ_MFINE0 / 1`), the same `va_amt_q` knob rule and `VA_AMX` render scale |
+| "The LFO needs to be able to be switched to sync with rates matching the VA engine" | two LFOs of the engine's (`LFO 1`, `LFO 2`: RATE WAVE DEPTH FADE; `LFO SYN`: SYNC1 SYNC2), the VA's waves (SIN TRI SAW SQR S&H), its free rates and, synced, its list (N_VA_SYNC: 8BARD .. 256T, 4 / 3 / 2 ms) with the same rescale when SYNC switches; FADE from the note, a voice; DEPn and RATEn as destinations |
+| "Need to be able to change scan between forward and reverse and be able to make it scan very slowly" | SCAN -64 .. +63 (`F_BIPCT`): the sign the direction, a ramp over the whole buffer (POS the start), a round in about 110 s at 1, halving every 8, 0.47 s at 64; 0 holds |
+| "The generated A/B waveforms and also the combined morphed one" | the wave band (`ENG_B_WAVE`, `cr_draw.c CR_W_WAVE`, the data from `eng_grain.c grain_wave`): on the SRC screen the active lane's buffer (A on SRC 1, B on SRC 2) in white; on the GRAIN screen both at once, A blue and B orange, each as bright as MORPH gives it (MORPH 0: A alone bright; 127: B); SPRD a dim green span round POS, POS a white line that moves with SCAN |
+| "animated grains moving across the waveform" | every grain sounding on the part is a bright vertical line of its source's colour at its place in the buffer, as strong as its window is open: they travel as they read (forward or reversed), appear and fade with DENS and SIZE; the band redraws every frame while the screen is open |
+| "Filter should use the same filter from VA engine" | the VA's SVF a voice (`va_fweights`, `va_svf`: FTYPE 0 .. 127 round LP BP HP NOTCH with the crossfade between, CUT RES, DRIVE's pre-filter tanh 1x .. 4x, KTRK round C4, the same knee), on the `FILTER` (CUT RES FTYPE DRIVE) and `FILTER+` (KTRK) pages under the filter band |
+
+Also: `ENV 1` and `ENV 2` are plan screens (so ENV 2 reads "ENV 2 · mod", not the title rules' "filter"); the window is
+sin² from the sine table, not a 514-byte table; `eng_grain.c` is included after `eng_va.c` and needs `FELUCCA_VA`
+(its filter, sync list and amount rule are the VA's); GRAIN's pool state is its own POOL array (the union is defined
+before). **Flash after it: XIP 569 620 B of 573 440 (99.3 %), 3.8 KB left**; RAM 80 132 (81.5 %), POOL 306 196
+(89.0 %). The matrix, the LFOs, ENV 2 and the filter cost about 7.5 KB of code. The size pass (tools/size_fns.py's
+minsize) over the whole of GRAIN gives back 80 bytes (measured: 569 540 with it): the audio code is -Os already. What
+would give flash back: a family of the generator (DRONE 1.1 KB, VOWEL 0.95, SWEEP 0.85 of code each), the second LFO or
+ENV 2 (a few hundred bytes each), or room found elsewhere in the image: the owner's call.
 
 ## 1. The source generator
 
@@ -175,11 +200,14 @@ macro back, as the VA):
 
 | page (the editor's title rules, docs/EDITOR.md section 4) | KNOB 1 | KNOB 2 | KNOB 3 | KNOB 4 | group / screen |
 | --- | --- | --- | --- | --- | --- |
-| `SRC 1`, `SRC 2` | TYPE (picker: PLUCK .. METAL) | TONE | MOTION | SEED | OSC screen 1: a **stack** of two lanes (a page titled with an instance number belongs to that instance), **the wave band** (below) over the active lane's buffer |
-| `GRAIN` | SIZE (10 .. 393 ms) | DENS (1 .. 98 /s) | POS (0 .. 100 %) | SPRD (0 .. 100 %) | OSC screen 2, lane A, the wave band over both buffers |
-| `GRAIN+` | **MORPH** (A .. B) | RAND (detune, reversed) | PITCH (-24 .. +24 st) | SCAN (off .. fast) | OSC screen 2, lane B |
-| `FILTER` | CUT | RES | – | – | FILT screen 1, the filter's curve (the title rules draw it for a CUT column) |
-| ENV, LFO, MOD, FX, MIX | the platform's | | | | as WHEEL's: the ADSR (`P_ATK ..`), the track LFO, the four routes and EXPR |
+| `SRC 1`, `SRC 2` | TYPE (picker: PLUCK .. METAL) | TONE | MOTION | SEED | OSC screen 1 (the plan): rows A and B under **the wave band**, the active row's buffer |
+| `GRAIN` | SIZE (10 .. 393 ms) | DENS (1 .. 98 /s) | POS (0 .. 100 %) | SPRD (0 .. 100 %) | OSC screen 2 (the plan), row A, the wave band over both buffers, morphed |
+| `GRAIN+` | **MORPH** (A .. B) | RAND (detune, reversed) | PITCH (-24 .. +24 st) | SCAN (-64 .. +63: reverse .. forward) | OSC screen 2, row B |
+| `FILTER`, `FILTER+` | CUT | RES | FTYPE (the VA's cycle) | DRIVE; row B: KTRK | FILT (the title rules): the VA's filter curve |
+| `ENV 1`, `ENV 2` | ATK | DEC | SUS | REL | ENV (the plan): the platform's amplitude envelope, then the engine's modulation envelope, each under the AHDSR ("ENV 1 · amp", "ENV 2 · mod") |
+| `LFO 1`, `LFO 2`, `LFO SYN` | RATE | WAVE | DEPTH | FADE; the SYN page SYNC1 SYNC2 | LFO (the title rules): a stack of the two, the SYNC stack |
+| `MOD 1 .. 8` | SRC | DST | AMT | – | MOD (the title rules): the matrix's stack of eight, then EXPR |
+| FX, MIX | the platform's | | | | |
 
 Four rows of four and a filter row: the owner's grammar (up to four cells a row, the knob colours, the active row
 highlighted, SELECT walking the lanes: SRC 1, SRC 2, GRAIN, GRAIN+). No matrix of its own ("not modulatable"); the
@@ -391,9 +419,10 @@ Open questions:
    `test_retired.sh` (its pre-cut build without GRAIN, as 0.17 was). Not done: a settings slot for GRAIN's remembered
    pool place (`cr_settings.c CRS_SLOT_ENG`: eleven slots, none for GRAIN, as none for P5: the part lands on its
    first preset after a power cycle).
-5. **The editor**: the SRC 1 / SRC 2 stack, GRAIN / GRAIN+ and FILTER pages on the unit's grammar, the wave band
-   (`cr_draw.c` `CR_W_WAVE`: the envelope, both buffers on the GRAIN screen, POS, SPRD, the live grains), the picker's
-   key. Tests: `tools/emu/scripts/cr_grain.txt`
+5. **Done (3y118). The editor**: the plan's SRC and GRAIN screens under the wave band (`cr_draw.c cr_wave_band`:
+   the envelopes, both buffers on the GRAIN screen coloured by MORPH, POS, SPRD, the grains as moving lines), ENV 1 /
+   ENV 2 under the AHDSR, the rest by the title rules; `tools/emu/scripts/cr_grain.txt` and its `test_cr.sh` section
+   (eleven screenshots); `design/layouts/grain.json` regenerated. Tests: `tools/emu/scripts/cr_grain.txt`
    (each knob, the band's redraw after a render, SELECT through the lanes), `tests/run_cr_draw.sh` golden,
    `tests/cr_layout_test.c` if a layout file is added (`design/layouts/grain.json`: the owner may lay the rows out in
    the layout tool as P5's).

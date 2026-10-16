@@ -300,6 +300,9 @@ static void p5_track_loaded(track_t *t);         /* eng_prophet_test.c: PROPHET'
 /* a sound load put a PTCH value in (a preset, a user preset, undo, an engine change): its patch. ChoralRoot: a user
  * slot's own patch and function settings (its blob), else the PTCH slot's with Dexed's function settings; a user slot
  * of before the blobs (Felucca's PTCH numbering, B1 = 8): its bank patch at today's B number (B1 = 24) */
+#if FELUCCA_GRAIN
+static void grain_track_loaded(const track_t *ct);   /* eng_grain.c (after eng_va.c) */
+#endif
 static void fm6_track_loaded(const track_t *ct)
 {
     track_t *t = (track_t *)ct;
@@ -318,7 +321,7 @@ static void fm6_track_loaded(const track_t *ct)
     p5_track_loaded(t);
 #endif
 #if FELUCCA_GRAIN
-    grain_track_loaded(t);
+    grain_track_loaded(t);                       /* (eng_grain.c, after the VA: declared below this function) */
 #endif
     fm6_user_pending = 0;
     if (tr >= NTRK || t->eng_req != ENGI_FM6)

@@ -6,6 +6,7 @@
 #error "SLICE plays the SAMPLE engine's sets: FELUCCA_SLICE needs FELUCCA_SAMPLE"
 #endif
 #include "dsp.c"
+#include "va_common.c"          /* the VA's and GRAIN's shared filter, LFO sync list and amount rule (every build) */
 #if FELUCCA_ANALOG
 #include "eng_analog.c"           /* ANALOG: two oscillators, a filter (retired on ChoralRoot: FELUCCA_ANALOG 0) */
 #endif
@@ -29,10 +30,7 @@ static inline int32_t pd_cos(uint32_t ph16) { return -sine_i(((ph16 & 0xFFFFu) <
 #include "eng_trio.c"
 #endif
 #include "eng_wheel.c"
-#if FELUCCA_GRAIN
-#include "eng_grain.c"          /* GRAIN: grains over material it renders itself (grain_src.c; docs/GRAIN.md); ChoralRoot
-                                 * 0.22: engine 8 again, Felucca's player over RAM, no SAMPLE needed */
-#endif
+/* (GRAIN, engine 8, is included after eng_va.c below: it uses the VA's filter and LFO sync) */
 #if FELUCCA_PHYS
 #include "eng_phys.c"           /* PHYS: DaisySP physical models (phys_dsp.c, MIT; retired on ChoralRoot since 0.18:
                                  * FELUCCA_PHYS 0) */
@@ -87,9 +85,6 @@ static union {
 #endif
     drw_part_t wheel;
     fm6_part_t fm6;
-#if FELUCCA_GRAIN
-    gp_part_t grain;             /* GRAIN's pool of 16 grains (eng_grain.c; its two buffers are grain_buf's) */
-#endif
 #if FELUCCA_CZ
     cz_part_t cz;                /* CZ-1's voices: six envelopes each, vibrato, noise */
 #endif
@@ -107,9 +102,6 @@ static drw_part_t *drw_of(const track_t *t)
     return part < ENG_STATE_NPART ? &eng_state[part].wheel : 0;
 }
 static fm6_part_t *fm6_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].fm6 : 0; }
-#if FELUCCA_GRAIN
-static gp_part_t *grain_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].grain : 0; }
-#endif
 #if FELUCCA_CZ
 static cz_part_t *cz_part(uint32_t part) { return part < ENG_STATE_NPART ? &eng_state[part].cz : 0; }
 /* CZ-1's envelope definitions of a part's tone (eng_cz.c cz_defs_t, 412 B a part): not in eng_state, where another
@@ -176,6 +168,11 @@ static uint32_t step_accents(const step_t *s) { (void)s; return 0; }
 #endif
 #if FELUCCA_VA
 #include "eng_va.c"             /* VA: ChoralRoot's four-oscillator virtual analog (deep pages, its own patch) */
+#endif
+#if FELUCCA_GRAIN
+#include "eng_grain.c"          /* GRAIN: grains over material it renders itself (grain_src.c; docs/GRAIN.md); ChoralRoot
+                                 * 0.22: engine 8 again, Felucca's player over RAM, no SAMPLE needed; the VA's filter,
+                                 * LFO sync list and fine amounts (eng_va.c before it) */
 #endif
 
 /* the editor protocol, user presets and projects store these indices: append, never reorder */

@@ -4524,3 +4524,53 @@ sounds present, `--debug` c1_state 1, c1_faults 0, c1_fallback 0. Not yet played
 conflict). `CR_VERSION=0.22 sh tests/run_all.sh`: ALL SUITES PASSED (22 suites, 86 s; test_cr 1049); XIP 562 772 B
 (98.1 %), RAM 79 044 (80.4 %), POOL 304 716 (88.6 %). The unit still runs 70bb639's image (the same firmware but for
 main's changes since).
+
+3y118. **GRAIN's second phase: its own matrix, two synced LFOs, ENV 2, the VA's filter, a bipolar SCAN and the wave
+band (the owner, 2026-10-16, after the first build on the unit: "Grain engine has been tested, good start, what I would
+like: Mod matrix needs to be able to select between envelope or LFO in each row; Need to be able to target more
+parameters, right now they are hard locked and not changable; Modulation amount should be the same as it is in the VA
+engine in that the amounts can be adjusted as decimals; The LFO needs to be able to be switched to sync with rates
+matching the VA engine; Need to be able to change scan between forward and reverse and be able to make it scan very
+slowly. I'd like the UI to be able to show: The generated A/B waveforms and also the combined morphed one; I'd also
+like to see animated grains moving across the waveform; Filter should use the same filter from VA engine"; branch
+claude/grain-engine-f724f9; docs/GRAIN.md "The second phase").** `eng_grain.c`: the patch version 2 (`GQ_NP` 61, the
+blob 64 bytes, `GRAIN_BLOB_V1` 20 loads with the new values at their defaults and SCAN halved): FTYPE DRIVE KTRK,
+ENV 2 (ATK DEC SUS REL, a voice: `s[4..5]`), two LFOs (RATE WAVE DEPTH FADE SYNC each; the VA's waves, free rates and
+sync list, `grain_lfo_inc`; FADE a voice from its note, `s[6]`), eight matrix slots (SRC `OFF ENV1 ENV2 LFO1 LFO2
+VEL KEY RAND MODW`, DST `OFF MORPH POS SIZE DENS SPRD RAND PITCH SCAN CUT RES FTYPE DRIVE RATE1 RATE2 DEP1 DEP2 AMP`,
+AMT whole or in tenths with the fine flags `GQ_MFINE0 / 1`, the VA's `va_amt_q` and `VA_AMX`), evaluated once a block
+a voice into the grain knobs the next grain reads (`gp_eff_t`), the filter's and AMP (ramped, `s[7]`); SCAN -64 ..
+63 (a ramp over the buffer, the sign its direction, a round in ~110 s at 1 .. 0.47 s at 64, `grain_scan_inc`); the
+filter the VA's (`va_fweights`, `va_svf`, DRIVE's tanh, KTRK round C4); the pages `SRC 1 SRC 2 GRAIN GRAIN+ FILTER
+FILTER+ ENV 1 ENV 2 LFO 1 LFO 2 LFO SYN MOD 1 .. 8` (sections 0 4 6 8 11), `grain_desc` (a synced RATE: the VA's
+list descriptor), `grain_mod_dst` (the quick mapping), a plan of four screens (SRC and GRAIN under the wave band,
+ENV 1 "amp" and ENV 2 "mod" under the AHDSR), the presets with a slot each (CLOUD PAD LFO 1 -> POS, SHIMMER LFO 1 ->
+MORPH, BREATH PAD LFO 1 -> CUT, STRUM ENV 2 -> MORPH, SWARM VEL -> DENS, ACID DUST ENV 1 -> CUT and DRIVE, GLITCH a
+high-pass at ~300 Hz and RAND -> PITCH), the Hann window as sin² from the sine table (the 514-byte table gone),
+GRAIN's pool state its own POOL array; `engines.c` includes it after `eng_va.c` (`FELUCCA_VA` required), `eng_fm6.c`
+declares its load hook ahead. **The wave band**: core.h `ENG_B_WAVE` and `cr_wave_t`, cr_screen.h `CR_W_WAVE` and
+the hook `cr_wave_src`, cr_edit.c's plan band (the active lane, the part, a count a frame so the band redraws while
+the grains move) and `cr_draw.c cr_wave_band` (the envelopes of the two buffers, 224 columns of min / max cached a
+render in `grain_wave`, A blue and B orange as bright as MORPH gives them, or the SRC lane's alone in white; SPRD a
+dim green span, POS a white line that SCAN moves; every grain a bright line of its source's colour at its place, as
+strong as its window is open). eng_va.c: `va_fweights`'s `<< 10` of a weight that may be -1 is `* 1024` (the same
+values; a shift of a negative is undefined, and cr_grain_test's sanitizer said so). `firmware/src/va_common.c` (new,
+guarded, included by engines.c after dsp.c and by both engines): what GRAIN shares with the VA, moved out of eng_va.c
+as it was (the filter's type weights and SVF step, the sync list and its increments, the amount rule, the names of the
+filter positions and LFO waves, va_xs), so a build without the VA (Felucca's host programs: ui_test, descdump) keeps
+GRAIN; `FELUCCA_GRAIN` stays 1 by default. `web/fm1layout.js`, `tools/layout/layout_web.c`, `tools/gen_layout.py`: the
+band "wave" (CR_W_WAVE, ENG_B_WAVE) by name. Tests: `tests/cr_grain_test.c`
+(the version-2 blob and a version-1 one, every page's range, the AMT rule in tenths and whole, SYNC's rescale both
+ways and the list descriptor, the mapping's destinations, the presets' slots, SCAN forward / reverse / held and its
+rates, LFO 1 -> SIZE spreading the grain lengths, LFO 1 synced to 1/4 at 120 BPM, ENV 2's attack and decay, the
+plan's four screens; 285 036 checks), `tools/emu/scripts/cr_grain.txt` and its `test_cr.sh` section (the picker, the
+pool, a chord, eleven screenshots: `build/emu/test/cr_grain_*.png`), regress's GRAIN goldens and budgets
+re-recorded (the presets' slots and the window), `tests/target_budget.py`'s grain defaults (grain_render 1159,
+grain_block 139: the matrix and the LFOs), the clients' `grain` kind 64 bytes (web/fm1sounds.js, tools/fm1_install.py,
+docs/SOUNDS.md), `design/layouts/grain.json` regenerated.
+**Checked**: `./build.sh` XIP 569 620 B of 573 440 (99.3 %: the second phase +7.4 KB; 3.8 KB left), RAM 80 132
+(81.5 %), POOL 306 196 (89.0 %); `CR_VERSION=0.22 sh tests/run_all.sh`: every suite (cr_tests with cr_grain_test
+285 036 checks and cr_va_test 231 895; run_tests with regress 317 renders, 0 changed, the target budget, the web
+tests' mock against the firmware; test_cr 1054 ok with the GRAIN section's eleven screenshots, test_persist 111,
+test_retired 18; the layout tool's test and its generator's). The size pass over the whole of GRAIN measured: 80 B
+(not taken). Not on the unit: the unit runs 70bb639 (the first build); the owner's word flashes this one.

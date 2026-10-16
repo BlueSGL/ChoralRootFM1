@@ -23,7 +23,7 @@ export const isPool = (objs) => POOL_IDS.some((id) => (objs instanceof Map ? obj
 // stand-in). 15: FM TONE (engine 15, eng_quad.c, code name QUAD; its patch kind stays "quad")
 export const ENGINE_NAMES = ["ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO", "WHEEL", "GRAIN", "PHYS",
   "DRUM", "NOISE", "FM6", "VA", "CZ-1", "FM TONE", "P5"];
-export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 96, p5: 138, grain: 20 };
+export const PATCH_SIZE = { va: 110, fm6: 128, cz: 144, quad: 96, p5: 138, grain: 64 };
 // a kind's record in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; version 4 since 2026-10-14: 96)
 const STORE_PATCH = { ...PATCH_SIZE, quad: 80 };
 const KIND_ENGINE = { va: 13, fm6: 12, cz: 14, quad: 15, p5: 16, grain: 8 };

@@ -2868,6 +2868,23 @@ LC_ALL=C grep -aq "select: part 1 engine FM6 pos 3" "$OUT/cr_select.log" && ok "
 
 # 0.18: a 0.17 unit's flash (a user sound on PHASE, the chord part parked on NOISE; then both parts on PHYS, a user
 # sound on it, the session) on today's build (test_retired.sh)
+# GRAIN (engine 8, eng_grain.c, docs/GRAIN.md): the seventh engine from the picker, its pool, a chord of grains, the
+# editor's screens (the wave band on SRC 1 / SRC 2 and GRAIN, the VA's filter band, ENV 1 / ENV 2 under the AHDSR, the
+# LFO and SYNC stacks, the matrix), the key up, silence
+echo "GRAIN: the engine, its screens (the wave band), a chord of grains"
+run cr_grain
+GL="$OUT/cr_grain.log"
+has '^engine: part 0 -> GRAIN' "$GL" && has 'part 0: GRAIN / CLOUD PAD' "$GL" && ok "EDIT held + SELECT +6: GRAIN (the seventh engine), 01 CLOUD PAD" ||
+    bad "not GRAIN from the picker: $(grep -m1 '^engine:' "$GL")"
+has 'part 0: GRAIN / SHIMMER' "$GL" && has '^expect sound .*: ok' "$GL" && ok "PRESETS +1: 02 SHIMMER; D4 held: a chord of grains sounds" ||
+    bad "SHIMMER / sound: $(grep -m1 'part 0: GRAIN' "$GL") / $(grep -m1 '^expect sound' "$GL")"
+for f in src1 src2 grain morph pos filter env1 env2 lfo lfosyn mod; do
+    [ -s "$OUT/cr_grain_$f.png" ] || bad "no screenshot cr_grain_$f.png"
+done
+[ -s "$OUT/cr_grain_mod.png" ] && ok "the editor's screens shot: SRC 1 and SRC 2 under the wave band, GRAIN / GRAIN+ (both buffers, MORPH, POS), the filter, ENV 1 / ENV 2, LFO, LFO SYN, MOD: $OUT/cr_grain_grain.png cr_grain_morph.png"
+[ "$(grep -c 'parts busy' "$GL")" -ge 3 ] && [ "$(last_busy "$GL")" = 0 ] && ok "cr_grain: every part silent 2 s after the release" ||
+    bad "cr_grain: $(last_busy "$GL") voices still sounding 2 s after the release"
+
 sh tools/emu/test_retired.sh >"$OUT/test_retired.log" 2>&1 || fail=1
 LC_ALL=C grep -a '^retired\|^  ok\|^  FAIL' "$OUT/test_retired.log"
 

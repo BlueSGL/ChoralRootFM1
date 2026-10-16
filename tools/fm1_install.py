@@ -1647,7 +1647,7 @@ ENGINE_NAMES = ("ANALOG", "DIGITAL", "PHASE", "LOFI", "SAMPLE", "VOICE", "TRIO",
 ENGINE_PATCH = {12: "fm6", 13: "va", 14: "cz", 15: "quad", 16: "p5", 8: "grain"}  # engine -> its patch kind (P5,
                                                                                   # GRAIN: the pool only)
 PATCH_KINDS = ("va", "fm6", "cz", "quad", "p5", "grain")
-PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 96, "p5": 138, "grain": 20}
+PATCH_SIZE = {"va": 110, "fm6": 128, "cz": 144, "quad": 96, "p5": 138, "grain": 64}
 # a kind's blob in the legacy stores (before the pool): FM TONE's 80 (versions 1..3; versions 4 and 5, 2026-10-14: 96
 # bytes, the hi-res values in hundredths; the FM-1 converts a version 4 on load). A version 1..3 blob is zero-padded to 96 (the firmware converts it on load)
 STORE_PATCH = dict(PATCH_SIZE, quad=80)
