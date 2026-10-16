@@ -252,7 +252,7 @@ A release is a tag `vX.Y`; GitHub Actions builds it and publishes the site.
 
    `.github/workflows/release.yml` builds the package on ubuntu (the JieLi toolchain runs natively there; it is
    fetched with `tools/get_toolchain.sh`, and the three SDK files with a sparse clone of the AC79 SDK; both are
-   cached), creates the GitHub release `vX.Y` (a pre-release for 0.x and for `X.Y-suffix`) and attaches
+   cached), creates the GitHub release `vX.Y` (a full release, 0.x too since 0.22; a pre-release for `X.Y-suffix`) and attaches
    `choralroot-X.Y.fwsc`, `choralroot-X.Y-app.bin`, `choralroot-X.Y-1core.fwsc`, `choralroot-X.Y-1core-app.bin`,
    `SHA256SUMS`, `LICENSE`, `LICENSING.md`, `ATTRIBUTION.txt` and `LICENSES.zip`. Run from the Actions tab (Run workflow, with a version) it only builds, and the package is
    a workflow artifact.

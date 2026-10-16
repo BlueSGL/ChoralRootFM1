@@ -190,7 +190,9 @@ jobs:
         with:
           tag_name: ${{ github.ref_name }}
           name: ChoralRoot ${{ needs.build.outputs.version }}
-          prerelease: ${{ startsWith(needs.build.outputs.version, '0.') || contains(needs.build.outputs.version, '-') }}
+          # a pre-release for X.Y-suffix only (a beta among them); vX.Y is a full release, 0.x too (0.21 and 0.22 are
+          # the stable releases the installer offers by default)
+          prerelease: ${{ contains(needs.build.outputs.version, '-') }}
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: assets/*
