@@ -6,7 +6,9 @@
  * (ST_SMK_REGIONS) and the tag sector are ever erased, ours is kept, the staging area, the calibration and the rest
  * are never touched. The family is FELUCCA_DATA_FAMILY (build.py: CHORAL). 0.24: the regions take in the favourites
  * and the sound pool's runs (0xB4000..0xBAFFF, 0xE6000..0xE9FFF, 0xEB000..0xF1FFF); USRFLASH's last sector 0xEA000,
- * the free tail's rest (0xF2000..0xF3FFF), the stock resources and key_mac stay as they are. */
+ * the free tail's rest (0xF2000..0xF3FFF), the stock resources and key_mac stay as they are. The stock firmware's
+ * mapping in USRFLASH: kept while intact, its marker sector 0xEA000 erased (only ever erased) before ChoralRoot's
+ * first write there and at boot over other data; 0.24-beta2-smk37's pool sector at 0xEA000 moved to 0xF1000. */
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,6 +19,7 @@
 #include "fm1_flash_map.h"
 #define FELUCCA_CZ 1
 #define FELUCCA_QUAD 1
+#define SP_TEST 1                                  /* storage.c's sound pool: the old sector 9's move (sp_old_move) */
 #ifndef FELUCCA_DATA_FAMILY
 #define FELUCCA_DATA_FAMILY "CHORAL"
 #endif
@@ -24,6 +27,7 @@
 static uint8_t nor[0x100000];
 static int bad_write;
 static int tag_erases, usr_before_tag;
+static int pool_progs, pool_last;                  /* programs into the pool's sector 15 (0xF1000), the last page's */
 static int in_regions(uint32_t s);
 static int st_read(uint32_t off, void *dst, uint32_t n) { memcpy(dst, nor + off, n); return 0; }
 static int st_erase(uint32_t off)
@@ -41,7 +45,10 @@ static int st_prog(uint32_t off, const void *src, uint32_t n)
 {
     const uint8_t *s = src;
     uint32_t i;
-    if (off != 0xAF000u)
+    if ((off & ~0xFFFu) == 0xF1000u && n <= 256u && !((off & 0xFFu) + n > 256u)) {
+        pool_progs++;
+        pool_last = (int)(off & 0xFFFu);
+    } else if (off != 0xAF000u)
         bad_write++;
     for (i = 0; i < n; i++)
         nor[off + i] &= s[i];
@@ -204,6 +211,51 @@ int main(void)
     tag_erases = 0;
     st_owner_check();
     check("no marker: nothing more erased than before", store_erased() && tag_erases == 0);
+    {   /* 0.24-beta2-smk37's pool sector 9 at 0xEA000 (FL_TAIL from there): moved to sector 15, 0xF1000 */
+        st_hdr_t h;
+        uint8_t old[0x1000];
+        uint32_t i;
+        fill();
+        memset(nor + 0xEA000, 0xFF, 0x1000);
+        memset(nor + 0xF1000, 0xFF, 0x1000);
+        for (i = 0; i < ST_PAYLOAD_MAX; i++)
+            nor[0xEA000 + ST_PAYLOAD_OFF + i] = (uint8_t)(i * 7u + 3u);
+        memset(&h, 0, sizeof h);
+        h.magic = ST_MAGIC; h.type = SP_TYPE; h.slot = 4; h.seq = 77; h.len = ST_PAYLOAD_MAX;
+        h.crc = st_crc32(nor + 0xEA000 + ST_PAYLOAD_OFF, ST_PAYLOAD_MAX); h.rsv[0] = SP_VER;
+        h.hcrc = st_crc32(&h, sizeof h - 4u);
+        memcpy(nor + 0xEA000, &h, sizeof h);
+        memcpy(old, nor + 0xEA000, sizeof old);
+        tag_erases = pool_progs = 0; pool_last = -1;
+        sp_old_done = 0; sp_scanned = 0;
+        sp_scan();
+        check("the old pool sector 9 at 0xEA000: copied to sector 15 (0xF1000), its record's page last, 0xEA000 erased",
+              !memcmp(nor + 0xF1000, old, sizeof old) && pool_progs == 16 && pool_last == 0 && tag_erases == 1 &&
+              all(0xEA000, 0xEB000, 0xFF) && sp_cur[4] == SP_NSEC - 1u && sp_top == 77u);
+        sp_scanned = 0;
+        sp_scan();
+        check("... once a power-on: the next scan reads nothing at 0xEA000 again", pool_progs == 16 && tag_erases == 1);
+        memcpy(nor + 0xEA000, old, sizeof old);    /* a cut after the copy, before the erase */
+        pool_progs = 0; tag_erases = 0;
+        sp_old_done = 0; sp_scanned = 0;
+        sp_scan();
+        check("... cut before its erase: the next power-on erases 0xEA000, programs nothing",
+              pool_progs == 0 && tag_erases == 1 && all(0xEA000, 0xEB000, 0xFF) && !memcmp(nor + 0xF1000, old, sizeof old));
+        memcpy(nor + 0xEA000, old, sizeof old);
+        memset(nor + 0xF1000, 0x00, 0x1000);       /* sector 15 written with something else: no move */
+        pool_progs = 0; tag_erases = 0;
+        sp_old_done = 0; sp_scanned = 0;
+        sp_scan();
+        check("... sector 15 not blank and not the copy: nothing written, nothing erased",
+              pool_progs == 0 && tag_erases == 0 && !memcmp(nor + 0xEA000, old, sizeof old));
+        stock();                                   /* the stock layout at 0xEA000 (its marker): no pool record */
+        memset(nor + 0xF1000, 0xFF, 0x1000);
+        pool_progs = 0; tag_erases = 0;
+        sp_old_done = 0; sp_scanned = 0;
+        sp_scan();
+        check("... the stock marker's sector (no pool record): left as it is", pool_progs == 0 && tag_erases == 0 &&
+              st_stock_tagged() && st_stock_intact());
+    }
     check("nothing written outside ChoralRoot's data sectors, the tag and the stock marker sector", bad_write == 0);
     printf("%s\n", bad ? "SMK OWNER TEST FAILED" : "smk owner test passed");
     return bad != 0;

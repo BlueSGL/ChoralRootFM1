@@ -588,6 +588,38 @@ static int sp_body(uint32_t s, uint32_t crc)   /* the payload's CRC is crc: 0 (s
     return c == crc ? 0 : -1;
 }
 
+#if BOARD_SMK37
+/* 0.24-beta2-smk37's FL_TAIL began at 0xEA000, the stock marker's sector: its pool sector 9 was there, its 10..15 are
+ * this build's 9..14 as they are (a pool sector carries no number). A valid pool commit record at 0xEA000 is moved to
+ * sector 15 (0xF1000, never written by that build) when that is blank: the pages copied, the record's page last, read
+ * back; then 0xEA000 is erased (FL_STOCKTAG, its one erase). A cut before the erase: the next scan finds the same
+ * copy at 0xF1000 and erases 0xEA000. Once a power-on (sp_scan). */
+static uint8_t sp_old_done;
+static void sp_old_move(void)
+{
+    st_hdr_t h;
+    uint32_t to = sp_addr(SP_NSEC - 1u), off, same = 1;
+    if (sp_old_done || ST_BLOCKED())
+        return;
+    sp_old_done = 1;
+    if (st_read(FL_STOCKTAG_LO, &h, sizeof h) || h.magic != ST_MAGIC || h.type != SP_TYPE || h.slot >= SP_NBANK ||
+        h.len != ST_PAYLOAD_MAX || h.rsv[0] != SP_VER || h.hcrc != st_crc32(&h, sizeof h - 4u))
+        return;
+    if (st_blank(to))
+        for (off = ST_SECTOR; off; ) {          /* the record's page (0) last */
+            off -= 256u;
+            if (st_read(FL_STOCKTAG_LO + off, st_buf, 256u) || st_prog(to + off, st_buf, 256u))
+                return;
+        }
+    for (off = 0; off < ST_SECTOR && same; off += 256u) {
+        if (st_read(FL_STOCKTAG_LO + off, st_buf, 256u) || st_read(to + off, st_buf + 256u, 256u))
+            return;
+        same = !memcmp(st_buf, st_buf + 256u, 256u);
+    }
+    if (same)
+        st_erase(FL_STOCKTAG_LO);
+}
+#endif
 /* the 16 commit records -> sp_cur, sp_top, sp_last (power-on; at most 16 header reads and one payload read per bank,
  * more only when a payload fails its CRC) */
 static __attribute__((unused)) void sp_scan(void)
@@ -595,6 +627,9 @@ static __attribute__((unused)) void sp_scan(void)
     st_hdr_t h;
     uint32_t seq[SP_NSEC], crc[SP_NSEC], s, b;
     uint8_t bank[SP_NSEC];
+#if BOARD_SMK37
+    sp_old_move();
+#endif
     sp_last = SP_NONE;
     sp_top = 0;
     sp_spare_ok = 0;
