@@ -19,6 +19,28 @@ the 5 kHz variant. The host tests (HISTORY 3y82): `tests/input_test.c`'s analog 
 `test_cr.sh`. The owner's readings: 689 note-ons in ten minutes,
 velocity 1 .. 127, quartiles 37 / 73 / 98. The sections below are the study as written before the build.
 
+**fm1-ctl, read 2026-10-15** (Charles Vestal's CTL-1, a MIDI controller firmware, at `de372e7`; the owner: "Charles
+has said that his repo fm1-ctl has the best velocity and aftertouch implementation"). It is the same sensing
+(`sense.c` is MONK-1's plus two settings, `hal/fm1_input.h` and `hal/fm1_adc.h` are MONK-1's byte for byte), tuned
+by playing on his unit on 2026-10-15; what differs from what ChoralRoot has, and what it would take:
+
+| what fm1-ctl does | ChoralRoot today | worth bringing in |
+|---|---|---|
+| the firm end at **530** (DRIVE 2's default floor of 450 sat under his firm presses, ~547, so his hardest hit topped out near 95), the light end 896, the curve 0.70 | floor 450, ceiling 896, curve 0.70 (`cr_sense.c SN_FLOOR`); the owner's unit reached 127 (689 notes: max 127, q3 98), so its firm presses sit lower than his | the floor as a setting, not a constant: units differ by ~120 counts at the firm end (Velo); a **Velocity Curve** -5 .. +5 that scales the map's exponent (x 2 at +5, / 2 at -5: `d_curve = 70 x 2^(0.2 c)`), which moves the MIDI velocity too (our Velocity Sens shapes the level after the map, not the number sent) |
+| **the top row through the PA10 probe**, its own ends 0 / 43 and exponent 2.40 (his 20 / 48 linear "gave only medium and hard"); tried on every key and dropped (a light press moves the probe 8 counts against the direct reading's ~200) | C#5 .. G5 play at the keys' recent velocity (the context) | yes, if the owner wants real velocity on the top seven roots: the third frame phase (the analog rows at 3.3 ms), PA6 driven for the probe tick, PA10 an input then; a compressor on firm presses, no aftertouch there (the design's 3.4, way 3) |
+| **Aftertouch Off / Poly / Channel**: poly pressure to each note of a chord key, the hardest-pressed key's as channel pressure while the arpeggiator runs | channel pressure on the Perform and Bass channels (the chord's notes are one finger's) | poly out as an option: a loop over the stream's sounding notes at the same moments (the design's 3.5); small |
+| **AT sens -5 .. +5** on the same law (`P_SPAN`, 0.5 + 0.09 s) | Aftertouch Sens Low / Mid / High (three points of the same law) | a finer setting; cosmetic |
+| the sampling runs only while Touch is on (`plat_sense`) | always (the pot and the battery use its slots) | no |
+| the **Touch page shows** the last note's velocity and the pressure now, as bars | nothing on the screen | a GEEK OUT line, or the hot cell on the EXPR screen; the design's 3.6 |
+| the **host emulator plays a key at a velocity**: `host/ctl_host.c land_for` inverts the map into the driven landing the sensing would read, and a lean into the pressure, so scripts say `key 0 down 30` and expect `last_vel` 24 .. 36 | the emulator has no analog model; `cr_sense_test.c` feeds curves by hand | yes: the same inverse in `tools/emu` gives scripts velocity and aftertouch (the design's 3.7) |
+| the manual's advice: "pressing near the bottom edge of a key plays softer than the middle, on every key: the most reliable way to play quietly"; the two zones; "a note plays about 5 ms after the key goes down" (ours: 8.8 ms after the touch sample, measured) | MANUAL.md has no Touch section yet | the manual's words, with our timing |
+
+Not in fm1-ctl either: Velo's per-key calibration (off there too), a probe that tells light presses, anything
+faster than WAIT 2. So "the best implementation" is the same method with his unit's tuning and two more controls;
+the owner's unit already reaches the full range with ours. The order, if wanted: the Velocity Curve setting (cheap,
+it also makes the floor tunable by feel), the emulator's velocity model (it makes the rest testable), the top row's
+probe, poly aftertouch out, the readout.
+
 The owner: "look into https://github.com/charlesvestal/fm1-monk: he added velocity and aftertouch to the FM-1, which
 would be super cool to bring in to ChoralRoot." This is the study of how fm1-monk does it and the design of the same
 thing on ChoralRoot. **Nothing is built**: no code, no test, no measurement on the unit (another session holds it
