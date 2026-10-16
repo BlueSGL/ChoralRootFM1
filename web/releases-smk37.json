@@ -1,0 +1,38 @@
+{
+  "about": "The SMK-37 test builds the SMK-37 test installer (webapp/smk37/, not linked from the site) offers, newest first. Each version lists its three models' packages (choralroot-X.Y-smk37[-elite|-mke][-1core].fwsc, tools/build.py BOARD=smk37 --release X.Y-smk37) with their sha256, from the release's SHA256SUMS: web/make_site.py refuses a package that does not match, and the page checks it again in the browser before any write. The FM-1's list is web/releases.json; this one never goes there. Adding a version: BUILDING.md, 'An SMK-37 test release'. tests/releases_test.py checks this file.",
+  "repo": "https://github.com/Quixotic7/ChoralRootFM1",
+  "releases": [
+    {
+      "version": "0.24-beta2-smk37",
+      "base": "0.24-beta2",
+      "date": "2026-10-16",
+      "tag": "v0.24-beta2-smk37",
+      "title": "ChoralRoot 0.24-beta2 on the SMK-37: the first community test build",
+      "bullets": [
+        "ChoralRoot 0.24-beta2 on the M-Vave SMK-37 Pro, SMK-37 Elite, MKE-P37 and Starrykey 37 Play: every engine (GRAIN among them), the looper, the sound pool, favourites and dual core.",
+        "The whole keybed plays roots with velocity; the chord types, the extensions and LOCK are on the pads, with the performance modes on the pads left over.",
+        "The faders set the effect sends, the wheels bend and add vibrato, K1 is the volume and K5..K8 are the four sound knobs.",
+        "genkigenki's port (the fm1-to-smk37 guide), brought onto 0.24-beta2."
+      ],
+      "notes": [
+        "Community-tested, not tested by the maintainer: please report what works and what does not on GitHub.",
+        "The first start clears the stock firmware's settings. A keyboard that ran genkigenki's earlier ChoralRoot build keeps its sounds.",
+        "Going back: M-VAVE's package for your model with M-UPGRADE. The calibration is never written."
+      ],
+      "packages": {
+        "pro": {
+          "sha256": "043c56f0f336cc071d6ea2e440543aefb7fc4f7bff96b05681f28f20cb660a12",
+          "sha256_1core": "000bc5ce4d4275681312c5cdad86560494d9db1872e4aaeb095ce9661f5a78d3"
+        },
+        "elite": {
+          "sha256": "ac2ff66a882dbc2873d4b858d6e2fe227619149a9ff834a0d86059a7a2d50ce6",
+          "sha256_1core": "e218593e9ecd9931a3081378ec61ad814ac7c509806b3c1f89d7931914e4ebb0"
+        },
+        "mke": {
+          "sha256": "830981c33e5ebefc2b6613e3946d5273b87f60be11fa0818a73c08903e80d342",
+          "sha256_1core": "994be9f44dc9e4df0d488e1b011c2824b5a0b22c4cb651e4885652d1237ed707"
+        }
+      }
+    }
+  ]
+}

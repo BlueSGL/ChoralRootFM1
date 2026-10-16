@@ -69,8 +69,10 @@ class FakeFM1:
     """a MIDI backend with one FM-1 on it"""
 
     def __init__(self, image, identity="FM-1_015", name="FM-1", unplug_after=None, after_write="FM-1_900",
-                 stall_after=None, bad_addr=None, bk=None, name_after="Felucca"):
+                 stall_after=None, bad_addr=None, bk=None, name_after="Felucca",
+                 loader="ota-FM-1_900"):
         self.image, self.unplug_after, self.after_write = image, unplug_after, after_write
+        self.loader = loader                      # the loader step 1 starts (an SMK-37's: "ota-SMK-37 Pro_900")
         self.bk = bk                              # bk(identity): the firmware's backup side (BackupSide) or None
         self.stall_after, self.bad_addr, self.name_after = stall_after, bad_addr, name_after
         self.served = self.bad = self.upgrades = 0
@@ -135,7 +137,7 @@ class FakeFM1:
             if self.stall_after and self.served >= self.stall_after:
                 return
             if addr == I.FINISH_CHECK:
-                threading.Timer(0.05, self.boot, ("ota-FM-1_900", "Felucca Update")).start()
+                threading.Timer(0.05, self.boot, (self.loader, "Felucca Update")).start()
             elif addr == I.FINISH_WRITE:
                 threading.Timer(0.05, self.boot, (self.after_write, self.name_after)).start()
             else:
@@ -283,6 +285,17 @@ GUARD_CASES = [
     ("FM-1_500", None, "refuse", "unknown"),
     ("FM-1_910", "SOMETHING 3.0", "refuse", "unknown"),
     ("ota-FM-1_920", None, "loader", "loader"),                 # update mode: the resume path
+    # the M-Vave SMK-37 (SMK37.md): the official firmware, ChoralRoot and the other ports on the SMK board layer;
+    # ChanceTheMaker's SMK firmwares (SMK-37_9NN) have their own updater
+    ("SMK-37 Pro_016", None, "allow", "stock"),
+    ("MKE-P37_016", None, "allow", "stock"),
+    ("SMK-37 Pro_920", "ChoralRoot 0.22", "allow", "choralroot"),
+    ("SMK-37 Pro_900", "FELUCCA v1.6", "allow", "smk"),
+    ("SMK-37 Elite_920", None, "allow", "smk"),
+    ("SMK-37 Pro_710", None, "allow", "smk"),
+    ("SMK-37_931", None, "refuse", "other"),
+    ("SMK-37 Pro_500", None, "refuse", "unknown"),
+    ("ota-SMK-37 Pro_900", None, "loader", "loader"),
 ]
 
 
@@ -321,6 +334,98 @@ def guard():
     side = BackupSide("FELUCCA SLOOP 2.2", I.FELUCCA_IDS)
     rc, out, err = cli(["--info"], FakeFM1(image, identity="FM-1_900", bk=lambda _i: side))
     ok(rc == 0 and "FELUCCA SLOOP 2.2" in out and "not installed over Sloop" in out, "--info: version and the verdict")
+
+
+def smk():
+    """the M-Vave SMK-37 (SMK37.md): one keyboard under several model names, never an FM-1; the rule on every path"""
+    raw = package("SMK-37 Pro_920")
+    image = I.logical_image(raw)
+    p = pkgfile("cr_smk.fwsc", raw)
+    side = BackupSide("FELUCCA v1.6", I.FELUCCA_IDS)
+    dev = FakeFM1(image, identity="SMK-37 Pro_900", name="Felucca", loader="ota-SMK-37 Pro_900",
+                  after_write="SMK-37 Pro_920", bk=lambda i: side if i == "SMK-37 Pro_900" else None)
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0 and "done: the FM-1 runs SMK-37 Pro_920" in out, "SMK: over another SMK port: installed")
+    dev = FakeFM1(image, identity="SMK-37 Elite_016", name="SMK-37 Elite", loader="ota-SMK-37 Pro_900",
+                  after_write="SMK-37 Pro_920")
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 0 and dev.bad == 0, "SMK: a Pro package on an SMK-37 Elite (the same keyboard): installed")
+    dev = FakeFM1(image, identity="FM-1_015")
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 6 and dev.upgrades == 0, "SMK: an SMK package on an FM-1 -> exit 6, nothing sent")
+    fm1 = pkgfile("cr_fm1.fwsc", package("FM-1_920"))
+    dev = FakeFM1(image, identity="SMK-37 Pro_016", name="SMK-37 Pro")
+    rc, out, err = cli([fm1, "--yes"], dev)
+    ok(rc == 6 and dev.upgrades == 0, "SMK: an FM-1 package on an SMK -> exit 6, nothing sent")
+    dev = FakeFM1(image, identity="ota-SMK-37 Pro_900", name="Felucca Update")
+    rc, out, err = cli([fm1, "--yes"], dev)
+    ok(rc == 6 and dev.upgrades == 0, "SMK: an SMK in update mode never gets an FM-1 package (the resume path)")
+    dev = FakeFM1(image, identity="FM-1_015", loader="ota-SMK-37 Pro_900", after_write="FM-1_920")
+    rc, out, err = cli([fm1, "--yes"], dev)
+    ok(rc == 6 and dev.upgrades == 1 and "nothing was written" in err,
+       "SMK: a loader of another keyboard after step 1 -> exit 6, nothing written")
+    dev = FakeFM1(image, identity="SMK-37_931", name="SMK-37")
+    rc, out, err = cli([p, "--yes", "--force"], dev)
+    ok(rc == 8 and dev.upgrades == 0 and "its own updater" in err, "SMK: over SMK-37_9NN (its own updater): refused, not with --force")
+    dev = FakeFM1(image, identity="ota-SMK-37 Pro_016", name="SMK-37 Pro")
+    rc, out, err = cli([p, "--yes"], dev)
+    ok(rc == 6 and dev.upgrades == 0 and "another firmware" in err,
+       "SMK: in the stock updater's update mode: never written (exit 6)")
+    ok(I.our_loader("ota-SMK-37 Elite_900") and not I.our_loader("ota-SMK-37 Pro_016") and not I.our_loader("ota-SMK-37_931"),
+       "our_loader: ours only")
+    ok(I.same_keyboard("SMK-37 Pro_920", "ota-MKE-P37_900") and not I.same_keyboard("FM-1_920", "SMK-37 Pro_920"),
+       "same_keyboard: the SMK models one keyboard, never the FM-1")
+
+
+def starrykey():
+    """a 21-character identity ("STARRYKEY-37 PLAY_016"): the device's and the package's (as web/fm1pkg.js)"""
+    def pkg(product, blocks, size=0x3000):
+        img = bytearray((i * 7) & 0xFF for i in range(size))
+        data = bytes(img[0x400:])
+        e = bytearray(0x50)
+        e[4:6] = I._crc16(data).to_bytes(2, "little")
+        e[8:16] = (0x400).to_bytes(4, "little") + len(data).to_bytes(4, "little")
+        e[0x40:0x49] = b"flash.bin"
+        lst = I._dec(bytes(e))
+        hdr = bytearray(0x40)
+        hdr[4:10] = size.to_bytes(4, "little") + (1).to_bytes(2, "little")
+        hdr[2:4] = I._crc16(lst).to_bytes(2, "little")
+        hdr[0:2] = I._crc16(bytes(hdr[2:0x40])).to_bytes(2, "little")
+        img[0:0x90] = I._dec(bytes(hdr)) + lst
+        raw = bytearray()
+        for i in range(blocks):
+            m = (ord(product[i]) + i + 1) & 0xFF if i < len(product) else 0x7D
+            raw += img[i * I.KEEP:(i + 1) * I.KEEP] + bytes([m])
+        return bytes(raw + img[blocks * I.KEEP:])
+
+    ident = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + b"STARRYKEY-37 PLAY_016" + bytes(7)) + b"\xF7")
+    ok(ident and ident.text == "STARRYKEY-37 PLAY_016" and ident.model == "STARRYKEY-37 PLAY" and ident.version == 16,
+       "device identity STARRYKEY-37 PLAY_016: all 21 characters")
+    ident = I.parse_identity(b"\xF0" + I.pack7(bytes([0, 0x59, 0x11, 0, 0, 0]) + b"FM-1_015\0xyz" + bytes(16)) + b"\xF7")
+    ok(ident and ident.text == "FM-1_015", "device identity: the text ends at the first NUL")
+    raw = pkg("STARRYKEY-37 PLAY_016", 36)
+    im = I.deinterleave(raw)
+    ok(I.identity_blocks(raw) == 21 and I.block_count(raw) == 36 and len(im) == len(raw) - 36 and I.files_ok(im)
+       and I.product_of(raw) == "STARRYKEY-37 PLAY_016", "36-block package with a 21-character identity: read in full")
+    raw = pkg("STARRYKEY-37 PLAY_015", 20)
+    ok(I.identity_blocks(raw) == 20 and I.product_of(raw) == "STARRYKEY-37 PLAY_01" and I.files_ok(I.deinterleave(raw)),
+       "20-block package: the identity stops at 20 characters (the stock V015 layout)")
+    raw = pkg("SMK-37 Pro_016", 36)
+    ok(I.identity_blocks(raw) == 20 and I.block_count(raw) == 36 and I.product_of(raw) == "SMK-37 Pro_016",
+       "36-block package with a short identity: unchanged")
+    raw = package("FM-1_920")
+    ok(I.deinterleave(raw) == I.logical_image(raw) and I.product_of(raw) == "FM-1_920", "an FM-1 package: as before")
+    if shutil.which("node"):                      # the page reads them as this tool does (web/fm1pkg.js)
+        js = ("import { logicalImage, productOf } from %r; import { readFileSync } from 'node:fs';"
+              "const p = readFileSync(process.argv[1]); process.stderr.write(productOf(p));"
+              "process.stdout.write(logicalImage(p));") % str(ROOT / "web/fm1pkg.js")
+        same = True
+        for name, raw in (("long", pkg("STARRYKEY-37 PLAY_016", 36)), ("short20", pkg("STARRYKEY-37 PLAY_015", 20)),
+                          ("smk36", pkg("SMK-37 Pro_016", 36))):
+            f = pkgfile(f"id-{name}.fwsc", raw)
+            r = subprocess.run(["node", "--input-type=module", "-e", js, f], capture_output=True, check=True)
+            same &= I.deinterleave(raw) == r.stdout and I.product_of(raw) == r.stderr.decode()
+        ok(same, "web/fm1pkg.js reads the 21-character identity and the 36-block layouts as this tool does")
 
 
 def against_js_guard():
@@ -446,6 +551,11 @@ def against_js():
     ok(I.logical_image(raw) == r.stdout and I.product_of(raw) == r.stderr.decode(),
        f"logical_image / product_of == fm1pkg.js ({clean.name}, {I.product_of(raw)})")
     ok(I.LOADER_MARK in raw, f"{clean.name} carries the Felucca loader marker")
+    for f in sorted((ROOT / "build").glob("choralroot-smk37*.fwsc")):   # (the SMK packages, when built: SMK37.md)
+        r = subprocess.run(["node", "--input-type=module", "-e", js, str(f)], capture_output=True, check=True)
+        raw = f.read_bytes()
+        ok(I.deinterleave(raw) == r.stdout and I.product_of(raw) == r.stderr.decode(),
+           f"logical image / identity == fm1pkg.js ({f.name}, {I.product_of(raw)})")
 
 
 def official():
@@ -2162,7 +2272,7 @@ def units():
 
 
 PHASES = [wire, exits, backups, screen, debug, uac, stub, stuck, midi_side, select, sounds, syx, bindings, favorites, installs,
-          errors, against_js, guard, against_js_guard, official, units]
+          errors, against_js, guard, smk, starrykey, against_js_guard, official, units]
 
 
 def run_phases():

@@ -11,6 +11,8 @@ and M-VAVE.
 **The manual:** [docs/MANUAL.md](docs/MANUAL.md) (the first five minutes, every button, knob and Options entry, the
 looper, the sound editor, MIDI and USB, updating and recovery, a quick-reference table).
 
+**M-Vave SMK-37:** a community test build of 0.24-beta2 (genkigenki's port; community-tested, not tested by the maintainer): see [SMK-37 instructions](SMK37.md).
+
 ## Install
 
 Try it in the browser first: <https://quixotic7.github.io/ChoralRootFM1/emu/> (the same firmware, with sound, no
