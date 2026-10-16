@@ -4060,3 +4060,38 @@ its path: the notes file, the first entry, run_all, main pushed before the tag, 
 with the local build's afterwards.
 `python3 tests/site_test.py` with every package in build/scratch/packages: site ALL OK (42). Then main pushed and
 v0.22-beta3 tagged on the same commit, the owner's word ("lets tag this as v0.22-beta3 and get it released").
+
+## 2026-10-15, after 0.22-beta3 (the loop editor's step preview)
+
+3y104. **The loop editor previews a step: with the loop stopped, the step the cursor lands on is heard (GitHub issue 8;
+branch claude/step-preview-b45313 from da1f8e2 = v0.22-beta3).** Apieceofbluesky (issue 8, 2026-10-13): the editor
+would be much improved if moving the cursor to a step played or previewed it. The owner, asked whether a button or an
+automatic preview: "all I want is step preview switching steps when playback is stopped. So turn preset knob in the
+step editor, if the step has notes, it plays." Built that way: no button, no setting. `cr_loop.c cr_loop_ed_preview`
+(new): the cursor's step's live events, both sides, each struck on a loop voice as the loop strikes them
+(`crl_play_ev` with a `pre` flag: the velocity by the Level, the step's voicing, its ratchet with its hits on the
+loop's clock, a bass-side note on the bass part, the notes' own length), its condition and chance not asked (a preview
+always sounds); the preview sounding is ended first, so an empty step is silence; nothing while the loop plays, outside
+the editor or with a capture open. Its voices carry a mark (`crl.pre`, a bit a loop voice): not a hit of the loop
+(`crl_hit` skips `played` and the "now playing" name for them; the loop's own stealing treats them as any voice, and
+`crl_offs` drops the mark when one ends on its own). It ends with the next cursor move, a key played by hand (the
+gesture hook sets `pre_end`, the next `cr_loop_tick` ends the voices: never inside the hook), REC's clear of the step
+(`pre_end` too), the editor's close, LOOP's start (`cr_loop_play`: the voices are the loop's from the start), a stop or
+a panic. Nothing is written (no event, no gesture: "only what you play goes in" holds), REC is not armed, the position
+does not move, the slot is not dirtied. `cr_out.c`: `LP_PREVIEW`, posted by `cr_ui.c cu_ledit_move` after the cursor's
+move (PRESETS and GLO + PRESETS alike), so the preview is the engine's as the keys are: the LEDs glow its notes and the
+Chord view names its chord as for a chord the loop plays; the UI's trace `loopedit: preview step N notes K
+stopped|playing`. `tools/emu/emu_fw.c`: the dump's `loop3:` line ends `pre N` (the preview's voices). Tests:
+`tests/cr_loop_test.c s_preview` (13 checks: Em's notes on a loop voice, nothing written / armed / moved / counted,
+the four-step length, an empty step's silence, a bass-side note on the bass stream, a condition and a chance ignored
+and a ratchet's two hits, the step's voicing, a key by hand, REC, the loop playing, the close, outside the editor);
+`tools/emu/scripts/cr_loop_preview.txt` with 13 checks in `test_cr.sh` (D Em G entered by steps; the preview on the
+move, not on opening; the long note; the empty step and the parts silent 3 s on; nothing while playing; a chord by
+hand ends it and goes into the step; REC; the close). Docs: LOOPER.md "Step preview" and the PRESETS row,
+LOOPER-MODES.md, MANUAL.md's PRESETS row and the controls table, releases/0.22.md "Merged after 0.22-beta3",
+tools/emu/README.md's dump line. Not on the unit: the designer-handoff session holds it; not pushed.
+**Checked**: `./build.sh` XIP 547 404 B of 573 440 (95.5 %, +384 B over da1f8e2's 547 020), RAM 78 652 (unchanged),
+POOL 238 936; `sh tests/run_cr_tests.sh` green (cr_loop_test 483 ok, +13; cr_engine_test 2738); `sh
+tools/emu/test_cr.sh` PASS (1031 ok, +13: every older loop-editor script as before, their PRESETS moves now sounding
+a step while stopped changed none of their checks); `sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 75 s). No
+screen changed (the draw goldens as they were). Not on the unit, not pushed: the owner's word first.

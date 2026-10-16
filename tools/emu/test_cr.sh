@@ -1446,6 +1446,42 @@ differ cr_le_tr_hot cr_le_tr "the Transpose cell: the turn's sum while hot, then
 [ "$(l4 26)" = "76/20 count 1" ] && [ "$(l4 27)" = "77/20 count 1" ] && [ "$(lf "$(p 27)" events)" = 9 ] &&
     ok "LOCK with MIN latched: a root alone into a step is that one chord (Em, Fm)" || bad "LOCK latched in the editor: '$(l4 26)' '$(l4 27)'"
 silent_end cr_loop_edplay
+# 0.22: the loop editor's step preview (GitHub issue 8; the owner, 2026-10-15): the cursor moved onto a step while the
+# loop is stopped plays the step once; an empty step is silence; while the loop plays nothing; a key played by hand,
+# REC's clear and closing the editor end it; nothing is written, armed, counted or moved
+run cr_loop_preview
+PV="$OUT/cr_loop_preview.log"
+v() { L cr_loop_preview "$1"; }
+l3v() { grep -a '^  loop3:' "$PV" | sed -n "$1p" | sed -n "s/.* $2 \(-*[0-9]*\).*/\1/p"; }
+l4v() { grep -a '^  loop4:' "$PV" | sed -n "$1p" | sed -n 's/.*step-events \{0,1\}\(.*\) hit.*/\1/p'; }
+pbv() { grep -a 'parts busy' "$PV" | sed -n "$1p" | sed -n 's/.*parts busy \([0-9]*\).*/\1/p'; }
+[ "$(lf "$(v 1)" events)" = 3 ] && [ "$(lf "$(v 1)" state)" = 1 ] && [ "$(l3v 2 cursor)" = 1 ] && [ "$(l3v 2 pre)" = 0 ] && [ "$(l3v 2 loopv)" = 0 ] &&
+    [ "$(lf "$(v 2)" len)" = 384 ] && [ "$(grep -a '^loopedit: preview' "$PV" | head -1)" = "loopedit: preview step 2 notes 1 stopped" ] &&
+    ok "D Em G entered by steps, the editor opened on them (16 steps), the cursor on step 1: nothing previewed on opening" || bad "the editor opened: $(v 2) / $(l3v 2 pre)"
+[ "$(l3v 3 cursor)" = 2 ] && [ "$(l3v 3 pre)" = 1 ] && [ "$(l3v 3 loopv)" = 1 ] && has '^loopedit: preview step 2 notes 1 stopped' "$PV" &&
+    [ "$(lf "$(v 3)" played)" = 0 ] && [ "$(lf "$(v 3)" state)" = 1 ] &&
+    ok "PRESETS onto step 2 (Em) with the loop stopped: the step sounds on a loop voice (pre 1), not counted as played, the loop still stopped" \
+    || bad "the preview: $(v 3) / $(grep -a '^  loop3:' "$PV" | sed -n 3p)"
+[ "$(l3v 4 cursor)" = 1 ] && [ "$(l3v 4 pre)" = 1 ] && [ "$(l3v 4 loopv)" = 1 ] &&
+    ok "back onto step 1 (D): heard, the Em's preview ended (one voice)" || bad "the second move: $(grep -a '^  loop3:' "$PV" | sed -n 4p)"
+[ "$(l3v 5 cursor)" = 2 ] && [ "$(l3v 5 pre)" = 1 ] && [ "$(l3v 5 loopv)" = 1 ] && [ "$(lf "$(v 5)" events)" = 3 ] && [ "$(lf "$(v 5)" cap)" = 0 ] &&
+    [ "$(lf "$(v 5)" ring)" = 0 ] && [ "$(lf "$(v 5)" played)" = 0 ] && [ "$(l2 "$PV" 5 dirty)" = "$(l2 "$PV" 4 dirty)" ] &&
+    ok "step 2's note made 8 steps long: its preview sounds on at 500 ms, the step's own length; nothing recorded (3 events), REC not armed, the position at 0" \
+    || bad "the long preview: $(v 5) / $(grep -a '^  loop3:' "$PV" | sed -n 5p)"
+[ "$(l3v 6 cursor)" = 4 ] && [ "$(l3v 6 pre)" = 0 ] && [ "$(l3v 6 loopv)" = 0 ] && has '^loopedit: preview step 4 notes 0 stopped' "$PV" && [ "$(pbv 7)" = 0 ] &&
+    ok "onto an empty step: the preview ends at once; 3 s on no part is busy (silence)" || bad "the empty step: $(grep -a '^  loop3:' "$PV" | sed -n 6p) / parts busy $(pbv 7)"
+[ "$(lf "$(v 8)" state)" = 2 ] && [ "$(l3v 8 cursor)" = 2 ] && [ "$(l3v 8 pre)" = 0 ] && has '^loopedit: preview step 2 notes 1 playing' "$PV" &&
+    ok "while the loop plays PRESETS moves the cursor onto a step with notes and previews nothing (the loop is heard)" || bad "playing: $(v 8) / $(grep -a '^  loop3:' "$PV" | sed -n 8p)"
+[ "$(lf "$(v 9)" state)" = 1 ] && [ "$(l3v 9 loopv)" = 0 ] && [ "$(l3v 9 pre)" = 0 ] && ok "stopped: no loop voice kept" || bad "stopped: $(v 9)"
+[ "$(l3v 10 cursor)" = 2 ] && [ "$(l3v 10 pre)" = 0 ] && [ "${pb10:=$(pbv 10)}" -ge 1 ] &&
+    ok "a chord played by hand over the preview ends it (pre 0; the key's own voice sounds: parts busy $pb10)" || bad "a key over the preview: $(grep -a '^  loop3:' "$PV" | sed -n 10p) / parts busy $(pbv 10)"
+[ "$(l4v 11)" = "69/30 count 1" ] && [ "$(lf "$(v 11)" events)" = 3 ] &&
+    ok "the chord played went into the step as ever (step 2: A, 69/30), the preview did not" || bad "the step after the key: $(l4v 11) / $(v 11)"
+[ "$(l3v 12 cursor)" = 1 ] && [ "$(l3v 12 pre)" = 0 ] && [ "$(lf "$(v 12)" events)" = 2 ] && has '^loopedit: clear step 1 (1 events)' "$PV" &&
+    ok "REC clears step 1 and ends its preview" || bad "REC over the preview: $(grep -a '^  loop3:' "$PV" | sed -n 12p) / $(v 12)"
+[ "$(l2 "$PV" 13 edit)" = 0 ] && [ "$(lf "$(v 13)" events)" = 2 ] && [ "$(lf "$(v 13)" cap)" = 0 ] && [ "$(lf "$(v 13)" state)" = 1 ] &&
+    ok "closed: the loop as edited by hand alone (2 events), no capture opened by any of it" || bad "closed: $(v 13)"
+silent_end cr_loop_preview
 # 0.18: "sometimes in the play menu turning the preset knob ends up changing the preset": LOOP held again past the hold
 # time closed the menu under the hand; fails on 722fe71 (dump 2: layer 0, slot 2, "sound: part 0 pos 2")
 run cr_loop_presetknob
