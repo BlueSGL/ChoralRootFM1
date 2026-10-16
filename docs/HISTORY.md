@@ -5329,3 +5329,19 @@ here) and starts pages.yml for web/releases.json's first entry, 0.24-beta3. page
 packages from its release (the FM-1's and the SMK's), so a pages run fails while either v0.24-beta3 or
 v0.24-beta3-smk37 has no release yet: push both tags; the run started by the later release succeeds, or run pages.yml
 by hand (version 0.24-beta3, ref main) once both releases exist.
+
+3y157. **0.24-beta3 on the unit (2026-10-16, evening; the rel-24b3 session).** The owner: "Merge in the safe mode flash
+data fix, then flash it, then tag v0.24-beta3 and get the emulator out" and "Flash is ok to do". Before: no other
+session on the unit (the linked sessions idle, no `fm1_install.py`, `uac_check.py` or `perf_unit.py` running; Ableton
+Live was open, not driving the unit), the Mac on AC power and kept awake (`caffeinate -dimsu`), the FM-1 on the Mac's
+USB (the tool cannot read its battery). `python3 tools/fm1_install.py --info`: one FM-1, `FM-1_920 [running] port:
+ChoralRoot FM-1 version: ChoralRoot 0.24`, unit ID 5BD75BE3 (main eb223df, 3y140). A full backup first:
+`fm1-backups/fm1-backup-2026-10-16-before-0.24-beta3.json` (in
+`/Volumes/Q7Media-2025/Projects/Github/ChoralRootFM1/fm1-backups/`, 69 561 B): settings, the legacy banks, user sounds
+001..128 in 13 groups, the favourites, the ten loop slots' objects (slot 1 recorded): the same 34 objects as 3y140's
+backup. Flashed the release package itself, `caffeinate -dimsu python3 tools/fm1_install.py
+build/release-0.24-beta3/choralroot-0.24-beta3.fwsc --unit 5BD75BE3 --yes` (sha256 cdb6a2b5...): "done: the FM-1 runs
+FM-1_920", "unit ID 5BD75BE3: the same FM-1 after the restart". After: `--info` `FM-1_920 [running] port: ChoralRoot FM-1
+version: ChoralRoot 0.24-beta3`, unit ID 5BD75BE3; `--sounds` all 128 slots read on ChoralRoot 0.24-beta3 (83 hold a
+sound), U033 DARK HAZE a GRAIN patch; `--debug` c1_state 1, c1_faults 0, c1_fallback 0, stale_halves 0. Not tagged, not
+pushed: the orchestrator pushes main and the tags v0.24-beta3 and v0.24-beta3-smk37.
