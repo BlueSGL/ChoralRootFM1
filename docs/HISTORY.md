@@ -4605,3 +4605,16 @@ Size: `XIP 532 620 -> 528 332 B` (92.9 -> 92.1 %); RAM and POOL unchanged. **Rej
 reverted): `CZ_RECIP` as two halves (x >= 1024 fits 16 bits less 32 768): XIP -1 632 B, but the ramped loops of
 `cz_native_line_mv` grew 4 .. 6 instructions a sample (7 340 -> 7 690 B; `cz_native_noise` 554 -> 612): about 50 us
 a half for 8 voices with their DCW moving, a cost in the ISR for 1.6 KB (docs/FLASH.md has the table).
+
+3y127. **The flash diet, 4: the fonts' unused extra glyphs (same day).** The S, M and CRB faces carried Felucca's
+Latin-1 extras beyond ASCII: (c) and the umlauts Ä Ö Ü ä ö ü (`tools/gen_aa_font.py EXTRAS`), for Felucca's about
+screen (`ui_menu.c`, not in ChoralRoot's unit). No string of the unit prints them (grep: the one non-ASCII literal is
+`cr_ui.c`'s "Solfège", CRB's own extra), a sound's name cannot hold them (`cr_name.c CN_SET`; the stores keep ASCII
+32..126), and the glyph audit (every glyph the 335 draw renders and the emulator's three script suites fetched, logged
+from `gfx.c glyph` and `cr_gfx.c cr_glyph_of` in a throwaway build: docs/FLASH.md) never saw one. They leave the three
+faces; the degree sign, the middle dot (both drawn), the ellipsis (`gfx.c text_fit`) and CRB's e grave stay. S 16 552
+-> 14 638 B, M 19 438 -> 17 197, CRB 16 348 -> 14 512 (their data, glyph tables and the kerning pairs that named a
+dropped glyph). **Pixel-exact**: the 335 pictures `tests/run_cr_draw.sh` renders compared byte for byte with the same
+tree's renders before the change (0 differ); `text_ref_test` 2754 strings, 0 pixels differ; `text_spacing_test` ok;
+`ui_test` all passed; `cr_draw_test`'s Solfège check no longer counts CRB's extras by hand (it asks `glyph_at`). Size:
+`XIP 528 332 -> 522 332 B` (92.1 -> 91.1 %); RAM and POOL unchanged.
