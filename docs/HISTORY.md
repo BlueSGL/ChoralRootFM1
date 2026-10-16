@@ -4061,6 +4061,145 @@ with the local build's afterwards.
 `python3 tests/site_test.py` with every package in build/scratch/packages: site ALL OK (42). Then main pushed and
 v0.22-beta3 tagged on the same commit, the owner's word ("lets tag this as v0.22-beta3 and get it released").
 
+## 2026-10-15 (the master filter: GitHub issue 16)
+
+3y103. **A low cut and a high cut on the master: the FX layer's Filter page (GitHub issue 16, etyrnal; 2026-10-15;
+branch claude/master-eq-433034 from da1f8e2 = v0.22-beta3, not merged, not flashed).** The request: "many of the
+patches contain a lot of harsh upper tones", a soft pad is hard to get, "a simple single knob lpf/hpf" to dial out
+what competes with the bass or takes from a singer. The owner's comment there: a final EQ or simple band-pass in the
+FX section, apart from the engines; before the FX chain or after it? **The design** (docs/FX.md "The master filter"):
+an eighth page of the FX layer, **Filter**, past Drive: Low cut (Off, 20 Hz .. 2 kHz), High cut (200 Hz .. 16 kHz,
+Off), Slope (6 / 12 dB an octave) and Filter (Off / On) on KNOB 1 .. 4, Off on a new unit; a cutoff turned switches
+the filter and FX on as a send turned does, KNOB 4 takes it out and back with the cutoffs kept, FX off takes it out
+with the effects. It runs on the stereo mix **after the effects and before the master** (`fx.c mix_block`:
+`xq_block` between `xf_block` and `out_master`): the reverb's and the delay's wash is tamed with the parts, and the
+limiter and the clip see what the filter leaves instead of limiting first; a cut per part (beside each part's
+drive) is the alternative named in the issue reply, not built (twice the cost, nothing on the wash). **The
+arithmetic** (`cr_fx.c xq_*`): a cut is one or two one-pole stages in a row, k in Q12, the low cut's stage x minus
+its low-pass, every product keeping its remainder (`xf_rs`; a 20 Hz cut's k is 15 of 4096: without it the stage
+stops 270 units short, an offset); the knob reads the pair's -3 dB corner (the poles at 1.554 x it at 12 dB); the
+mix into a cut held to +-3 x full scale (the limiter is 15 dB into its work there). **Off touches nothing**: the
+block returns before a read; the master is bit for bit what it was. A cut switched in or out fades over 16 blocks
+(11.6 ms, Options > Output's fade), a cutoff turned eases its k an eighth of itself a block (an octave in 6), the
+slope the same way (the second stage's k to 4096 = y = x, then skipped; a quarter-of-the-way ease, the first try,
+stepped the stage's slew by a third on a slope change: a 1.5 x step under a tone). The four parameters are `xfp[]`'s
+(`XP_FLOW .. XP_FON`, after `XP_NFX`: the delay's hash leaves them alone), the session's tags 31 .. 34
+(`CSS_FXP_XQ_*`), **written only off their defaults** (`CSS_FXG`'s `opt`): `css_fx_t`'s `par[]` grew from 24 entries
+to 28 into `rsv_fx` (20 -> 4 bytes; 108 -> 124; every other field where it was, `CSS_FX_VERSION` unchanged), so a
+unit that never touched the filter writes 23 entries and an older firmware reads its record as before, while one
+with more than 24 makes an older firmware take the FX block's defaults (SETTINGS.md). The picker: six items, the
+page's tag `CSS_FXE_FILTER` 7, `CU_FXPG_FILTER` beside `CU_FXPG_SENDS` (`cs.fx_sel` stays the effect last picked),
+`cu_fx_pgname` for the traces and the emulator's dump. **Cost on the unit** (the listing, `tools/fx_loops.py
+xq_cut`, at 205 a us): a 12 dB cut 22 .. 24 instructions a sample a side, 27 .. 30 us a half; both at 12 dB 57 us
+(the "under 40" asked for holds at 6 dB: 41; one cut, the issue's case, is 1 % of the half); Off ~40 instructions.
+XIP 548 732 B (95.7 %, +1712), RAM unchanged, POOL +240 B. **Tests**: `cr_fx_test.c t_filter` (Off bit-exact four
+ways and after a cut was in; 2 cuts x 3 corners x 2 slopes x 3 frequencies against the one-pole formula within
+0.3 dB; the extremes bounded and exactly 0 after silence; the sweep and the toggles under a tone, no step over the
+tone's by 3 %; the host's cost 132 / 1280 / 2560 a half), `tools/emu/scripts/cr_fx_filter.txt` (the page, the
+knobs, the tags, the WAV: a D major chord through the 200 Hz high cut, D4 58 %, F#4 42 %, A4 29 % of themselves for
+the formula's 53, 41, 33), `cr_settings_test.c` (the layout: `fx` at 68, `part` at 196, 126 bytes of reserve). Docs:
+FX.md (the section, the table's row, decisions 28 and 29), MANUAL.md section 8 (The Filter page, the table, a
+troubleshooting row), SETTINGS.md (the inventory, the tags' row, the block's size), INTEGRATION.md, releases/0.22.md
+("Merged after 0.22-beta3", with the going-back note), HANDOFF.md. No draw fixture: the page is the knob row's
+grammar with two text cells (as the LOCK layer's), its picture `build/emu/test/cr_fx_filter*.ppm`.
+**Checked**: `./build.sh` (the size line above); `sh tests/run_cr_tests.sh` green (cr_fx_test all ok, cr_settings
+252); `sh tools/emu/test_cr.sh` PASS (1028 ok); `sh tests/run_cr_draw.sh` green (313 goldens, 0 changed);
+`sh tools/emu/test_persist.sh` PASS (111); `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites,
+74 s). **On the unit** (the owner, 2026-10-15: "Please flash to the device"): this build (1bc909d, "ChoralRoot 0.22")
+over 0.22-beta3, `tools/fm1_install.py build/choralroot.fwsc --backup --yes`, the backup before it
+`fm1-backups/choralroot-backup-20261015-filter.json` (the settings, the 128 user sounds, the favourites, loop slot
+1); `--info` afterwards: "ChoralRoot 0.22". Not yet played by the owner.
+
+## 2026-10-15, after 0.22-beta3 (the loop editor's step preview)
+
+3y104. **The loop editor previews a step: with the loop stopped, the step the cursor lands on is heard (GitHub issue 8;
+branch claude/step-preview-b45313 from da1f8e2 = v0.22-beta3).** Apieceofbluesky (issue 8, 2026-10-13): the editor
+would be much improved if moving the cursor to a step played or previewed it. The owner, asked whether a button or an
+automatic preview: "all I want is step preview switching steps when playback is stopped. So turn preset knob in the
+step editor, if the step has notes, it plays." Built that way: no button, no setting. `cr_loop.c cr_loop_ed_preview`
+(new): the cursor's step's live events, both sides, each struck on a loop voice as the loop strikes them
+(`crl_play_ev` with a `pre` flag: the velocity by the Level, the step's voicing, its ratchet with its hits on the
+loop's clock, a bass-side note on the bass part, the notes' own length), its condition and chance not asked (a preview
+always sounds); the preview sounding is ended first, so an empty step is silence; nothing while the loop plays, outside
+the editor or with a capture open. Its voices carry a mark (`crl.pre`, a bit a loop voice): not a hit of the loop
+(`crl_hit` skips `played` and the "now playing" name for them; the loop's own stealing treats them as any voice, and
+`crl_offs` drops the mark when one ends on its own). It ends with the next cursor move, a key played by hand (the
+gesture hook sets `pre_end`, the next `cr_loop_tick` ends the voices: never inside the hook), REC's clear of the step
+(`pre_end` too), the editor's close, LOOP's start (`cr_loop_play`: the voices are the loop's from the start), a stop or
+a panic. Nothing is written (no event, no gesture: "only what you play goes in" holds), REC is not armed, the position
+does not move, the slot is not dirtied. `cr_out.c`: `LP_PREVIEW`, posted by `cr_ui.c cu_ledit_move` after the cursor's
+move (PRESETS and GLO + PRESETS alike), so the preview is the engine's as the keys are: the LEDs glow its notes and the
+Chord view names its chord as for a chord the loop plays; the UI's trace `loopedit: preview step N notes K
+stopped|playing`. `tools/emu/emu_fw.c`: the dump's `loop3:` line ends `pre N` (the preview's voices). Tests:
+`tests/cr_loop_test.c s_preview` (13 checks: Em's notes on a loop voice, nothing written / armed / moved / counted,
+the four-step length, an empty step's silence, a bass-side note on the bass stream, a condition and a chance ignored
+and a ratchet's two hits, the step's voicing, a key by hand, REC, the loop playing, the close, outside the editor);
+`tools/emu/scripts/cr_loop_preview.txt` with 13 checks in `test_cr.sh` (D Em G entered by steps; the preview on the
+move, not on opening; the long note; the empty step and the parts silent 3 s on; nothing while playing; a chord by
+hand ends it and goes into the step; REC; the close). Docs: LOOPER.md "Step preview" and the PRESETS row,
+LOOPER-MODES.md, MANUAL.md's PRESETS row and the controls table, releases/0.22.md "Merged after 0.22-beta3",
+tools/emu/README.md's dump line. Not on the unit: the designer-handoff session holds it; not pushed.
+**Checked**: `./build.sh` XIP 547 404 B of 573 440 (95.5 %, +384 B over da1f8e2's 547 020), RAM 78 652 (unchanged),
+POOL 238 936; `sh tests/run_cr_tests.sh` green (cr_loop_test 483 ok, +13; cr_engine_test 2738); `sh
+tools/emu/test_cr.sh` PASS (1031 ok, +13: every older loop-editor script as before, their PRESETS moves now sounding
+a step while stopped changed none of their checks); `sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 75 s). No
+screen changed (the draw goldens as they were). Not on the unit, not pushed: the owner's word first.
+**On the unit** (the owner, right after: "Is this on device can I try it? Please flash"): the unit runs this build
+(7398951, "ChoralRoot 0.22") over the 3dd4d6d Snap build, `tools/fm1_install.py build/choralroot.fwsc --backup`; the
+backup before it is `fm1-backups/choralroot-backup-20261015-steppreview.json` (the settings, the 128 user sounds, the
+favourites, loop slot 1). `--info` afterwards: "ChoralRoot 0.22". The owner, after trying it: "This checks out, merge
+it": merged to main (a fast-forward of the branch: origin/main was still da1f8e2).
+
+## 2026-10-15 (0.22-beta4: the master filter and the step preview, the release tree)
+
+3y105. **0.22-beta4's release tree: the notes, the card, the packages of this build (2026-10-15; branch rel-4 from
+fd90447 = origin/main, both 3y103 and 3y104 merged).** Prepared for the owner's word; not tagged, not pushed (the tag
+and the push follow the owner's confirmation). `docs/releases/0.22-beta4.md` (new): the opening (a fourth beta,
+opt-in like the three before; updating from beta3, beta2 or beta1 keeps everything, going back to one of them loses
+the Filter and, with it in use, the effects' settings, and on beta2 and beta1 Snap), **New since 0.22-beta3** (the
+FX layer's Filter page, GitHub issue 16, 3y103; the loop editor's step preview, GitHub issue 8, 3y104: from
+docs/releases/0.22.md "Merged after 0.22-beta3", checked against HISTORY, MANUAL.md section 8 and "The loop editor",
+FX.md "The master filter", LOOPER.md "Step preview" and `git log v0.22-beta3..HEAD`, which holds these two and their
+unit flashes alone), then 0.22-beta3's whole text with its "New since 0.22-beta2" section dropped and its two
+bullets (Snap; the Full keyboard's chords) in Playing and editing in place of the short one that pointed at it, one
+short bullet each for the Filter (Sounds and engines) and the step preview (Playing and editing), Installing for
+beta4 (from beta3, beta2 or beta1; **Going back to an earlier beta**: the Filter unknown there and, below, the record
+caveat; Snap's on beta2 and beta1), the single-core names, and a "The Filter" point in Going back to 0.21. **The
+record caveat** (cr_settings.h, SETTINGS.md): the session's FX block grew from 24 entries to 28 (`css_fx_t` 108 ->
+124 into `rsv_fx`, `CSS_FX_VERSION` unchanged), the filter's tags 31 .. 34 written only off their defaults; 0.21 and
+the three betas have `CSS_NFXP` 24 and take the FX block's defaults (the effects' settings, the chord part's sends)
+on a record with more than 24, so a unit whose Filter page had two or more values changed when SAVE was last held
+goes back with those at their defaults (one value changed, or none: as before); the notes say "turning a cutoff is
+enough" (a cutoff turned switches Filter On: two values). The session is written by SAVE held alone, so once the
+older firmware holds SAVE the Filter is Off on the return. The settings block, the loop record and the sound pool are
+as in beta3. `docs/releases/0.22-beta3.md`, `0.22-beta2.md`, `0.22-beta1.md` unchanged (published);
+`docs/releases/0.22.md` points at 0.22-beta4.md, its "Merged after 0.22-beta3" lines moved into the beta4 notes.
+`web/releases.json`: a first entry 0.22-beta4 (`"beta": true`, v0.22-beta4, 2026-10-15, "Beta 4: a Filter on
+everything, the loop editor's step preview"; 12 bullets: two "New since beta 3", beta3's two "New since beta 2"
+merged into one, its other ten with the knobs' and the VA's merged; five notes: the beta's disclaimer, from beta3,
+beta2 or beta1 with the Filter caveat, Snap's on beta2 and beta1, from 0.21, going back to 0.21), the beta3, beta2
+and beta1 entries kept below it; the installer's default stays 0.21. docs/HANDOFF.md: the state line. **Built**:
+`./build.sh --release 0.22-beta4` twice (the first folder moved aside), the same SHA256SUMS;
+`choralroot-0.22-beta4.fwsc` 28beab0dd7d0ba92..., `choralroot-0.22-beta4-1core.fwsc` 80d3b7583788ce6d...; the
+apps carry `ChoralRoot 0.22-beta4` and `ChoralRoot 0.22-beta4 1-core`; the stub version 3, sha256 baee55ed142fe1cc.
+Size: XIP 549 132 B of 573 440 (95.8 %), RAM 78 652 (80.0 %), POOL 239 176 (69.5 %), RAMTEXT 7 072, NOINIT 228; the
+single-core package XIP 546 236 (95.3 %), RAM 75 564 (76.9 %), POOL 239 048 (69.5 %).
+**Checked**: `CR_VERSION=0.22 sh tests/run_all.sh` ALL SUITES PASSED (22 suites, 88 s; test_cr 1041 ok,
+test_persist 111, test_retired 18, test_pool 7, run_tests all host tests, 313 goldens 0 changed, web_installer and
+the browser emulator's test PASS); `CR_PACKAGES_DIR=build/release-0.22-beta4 python3 tests/releases_test.py` ALL OK;
+the fourteen listed packages taken from a local folder (`.claude/worktrees/key-snap-a8626d/build/scratch/packages`,
+the three earlier betas' and 0.16 .. 0.21, each copied only with its listed sha256; nothing downloaded) beside
+beta4's two: releases_test ALL OK with every sha256 compared, `python3 tests/site_test.py` site ALL OK (42).
+`CR_VERSION=0.22-beta4 sh tools/emu/web/build_web.sh && node tools/emu/web/test_web_emu.mjs` PASS. **The Pages job
+simulated** for 0.22-beta4 (its steps, in a scratch folder): releases_test, `web/make_site.py
+build/release-0.22-beta4/choralroot-0.22-beta4.fwsc 0.22-beta4 SITE --packages PKGS --require-all`, the job's file
+checks, `firmware/SHA256SUMS` all OK. The landing page shows 0.21 (its version line, "New in 0.21", the download,
+the notes link) and mentions the beta once, the emulator's line: "It runs ChoralRoot 0.22-beta4, a beta (the
+installer's default is 0.21)"; `emu/version.txt` "ChoralRoot 0.22-beta4". The installer, headless Chromium
+(`?demo=idle`): with the opt-in off the chips are 0.20 .. 0.16, with it on 0.22-beta4, beta3, beta2, beta1, then
+0.20 .. 0.16, Install names 0.21 both ways; the notes link is `blob/main/docs/releases/0.22-beta4.md` (the
+installer's and `firmware/index.html`'s); beta4's two packages are on the site with the listed sha256s.
+
 3y106. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
 2026-10-15: "Could the grain synth have a way to generate its own samples from a couple knobs to quickly get a variety
 of interesting samples to work with?"; branch claude/grain-engine-f724f9 from da1f8e2 = v0.22-beta3). No firmware

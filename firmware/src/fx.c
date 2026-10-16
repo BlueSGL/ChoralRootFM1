@@ -1573,6 +1573,10 @@ static void mix_block(int32_t *out, uint32_t n)
 #else
     fx_buses(send_c, send_d, send_r, wet, n);
 #endif
+#if CR_FX
+    xq_block(mix_l, mix_r, n);                          /* (cr_fx.c: the master filter, 0.22: after the effects, before
+                                                         * the master; Off, the default: nothing read or written) */
+#endif
     CR_PROF(CRP_FX);
 #if FELUCCA_PERFORM
     if (perf) {

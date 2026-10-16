@@ -436,6 +436,41 @@ bsr() { grep -a '^  editor fx bass:' "$L" | sed -n "$1p" | sed -n 's/.* REV \([0
     || bad "the bass part's sends: $(cel 30 Reverb) $(bsr 30), $(cel 31 Reverb) $(bsr 31), $(cel 32 Reverb), $(cel 33 Reverb), popup '$(pop 34)' ($(bsr 34))"
 
 echo "FM TONE's Drive is its preset's and sounds with FX off; another engine's is the part's send (docs/FX.md \"FM TONE's Drive\")"
+echo "the master filter (0.22, GitHub issue 16; docs/FX.md \"The master filter\"): the FX layer's Filter page, the sound through it"
+run cr_fx_filter --wav "$OUT/cr_fx_filter.wav"
+L="$OUT/cr_fx_filter.log"
+has '^fx: filter' "$L" && has '^fx: cells Low cut High cut Slope Filter' "$L" &&
+    ok "FX held, SELECT +7: the Filter page, Low cut / High cut / Slope / Filter on KNOB 1..4: $OUT/cr_fx_filter.ppm" || bad "no Filter page"
+has '^fx: knob 2 Filter high cut 0' "$L" && differ cr_fx_filter cr_fx_filter_high "KNOB 2 to the end: the high cut in at 200 Hz (its cell hot), the Filter cell On by itself: $OUT/cr_fx_filter_high.ppm"
+has '^fx: knob 4 Filter filter 0' "$L" && differ cr_fx_filter_high cr_fx_filter_off "KNOB 4 -1: Filter Off, the cutoffs kept: $OUT/cr_fx_filter_off.ppm"
+has '^fx: knob 1 Filter low cut 72' "$L" && differ cr_fx_filter_off cr_fx_filter_low "KNOB 1 +12: the low cut in at 277 Hz, Filter On again: $OUT/cr_fx_filter_low.ppm"
+has '^fx: knob 3 Filter slope 0' "$L" && differ cr_fx_filter_low cr_fx_filter_slope "KNOB 3 -1: Slope 6 dB: $OUT/cr_fx_filter_slope.ppm"
+differ cr_fx_filter_slope cr_fx_filter_fxoff "FX tapped off: the Filter cell reads Off (the filter is out with the effects): $OUT/cr_fx_filter_fxoff.ppm"
+grep -a '^  session fx:' "$L" | tail -1 | grep -q ' 31=72 32=0 33=0 34=1' &&
+    ok "the session's FX block holds the four (tags 31 .. 34: low cut 72, high cut 0, slope 6 dB, on), written only off their defaults" \
+    || bad "the filter's tags: $(grep -a '^  session fx:' "$L" | tail -1 | sed 's/.* par //')"
+# the WAV: the D major chord (TINE EP: its three notes, little above them) held with the filter Off (0.4 s from 0.2 s
+# into the hold), then through the 200 Hz high cut at 12 dB: D4, F#4 and A4 (Goertzel over 0.4 s) as a part of
+# themselves without the filter: the formula's 53, 41 and 33 % (two poles at 311 Hz), falling with the pitch
+wv=$(python3 - "$OUT/cr_fx_filter.wav" <<'PY'
+import sys, wave, struct, math
+w = wave.open(sys.argv[1]); sr = w.getframerate(); ch = w.getnchannels()
+raw = w.readframes(w.getnframes()); x = struct.unpack('<%dh' % (len(raw) // 2), raw)
+def band(t0, t1, f):
+    a, b = int(t0 * sr), int(t1 * sr); k = 2 * math.cos(2 * math.pi * f / sr); s1 = s2 = 0.0
+    for i in range(a, b):
+        s = (x[i * ch] + x[i * ch + ch - 1]) / 2 + k * s1 - s2; s2 = s1; s1 = s
+    return math.sqrt(max(s1 * s1 + s2 * s2 - k * s1 * s2, 0)) / (b - a)
+print(*('%d' % (100 * band(4.58, 4.98, f) / max(band(1.74, 2.14, f), 1e-9)) for f in (293.66, 369.99, 440.0)), '%.0f' % band(1.74, 2.14, 369.99))
+PY
+)
+set -- $wv
+[ "${1:-100}" -ge 45 ] && [ "${1:-100}" -le 70 ] && [ "${2:-100}" -ge 30 ] && [ "${2:-100}" -le 55 ] && [ "${3:-100}" -ge 20 ] && [ "${3:-100}" -le 42 ] &&
+    [ "${3:-100}" -lt "${2:-100}" ] && [ "${2:-100}" -lt "${1:-100}" ] && [ "${4:-0}" -ge 200 ] &&
+    ok "the WAV: through the 200 Hz high cut the chord's D4 is ${1}% of itself without the filter, F#4 ${2}%, A4 ${3}% (the formula: 53, 41, 33)" \
+    || bad "the WAV: D4 ${1:-?}%, F#4 ${2:-?}%, A4 ${3:-?}% of the chord without the filter (F#4 there: ${4:-?})"
+silent_end cr_fx_filter
+
 run cr_quad_drive
 L="$OUT/cr_quad_drive.log"
 drv() { grep -a '^  drive:' "$L" | sed -n "$1p" | sed 's/^  drive: //'; }
@@ -1446,6 +1481,42 @@ differ cr_le_tr_hot cr_le_tr "the Transpose cell: the turn's sum while hot, then
 [ "$(l4 26)" = "76/20 count 1" ] && [ "$(l4 27)" = "77/20 count 1" ] && [ "$(lf "$(p 27)" events)" = 9 ] &&
     ok "LOCK with MIN latched: a root alone into a step is that one chord (Em, Fm)" || bad "LOCK latched in the editor: '$(l4 26)' '$(l4 27)'"
 silent_end cr_loop_edplay
+# 0.22: the loop editor's step preview (GitHub issue 8; the owner, 2026-10-15): the cursor moved onto a step while the
+# loop is stopped plays the step once; an empty step is silence; while the loop plays nothing; a key played by hand,
+# REC's clear and closing the editor end it; nothing is written, armed, counted or moved
+run cr_loop_preview
+PV="$OUT/cr_loop_preview.log"
+v() { L cr_loop_preview "$1"; }
+l3v() { grep -a '^  loop3:' "$PV" | sed -n "$1p" | sed -n "s/.* $2 \(-*[0-9]*\).*/\1/p"; }
+l4v() { grep -a '^  loop4:' "$PV" | sed -n "$1p" | sed -n 's/.*step-events \{0,1\}\(.*\) hit.*/\1/p'; }
+pbv() { grep -a 'parts busy' "$PV" | sed -n "$1p" | sed -n 's/.*parts busy \([0-9]*\).*/\1/p'; }
+[ "$(lf "$(v 1)" events)" = 3 ] && [ "$(lf "$(v 1)" state)" = 1 ] && [ "$(l3v 2 cursor)" = 1 ] && [ "$(l3v 2 pre)" = 0 ] && [ "$(l3v 2 loopv)" = 0 ] &&
+    [ "$(lf "$(v 2)" len)" = 384 ] && [ "$(grep -a '^loopedit: preview' "$PV" | head -1)" = "loopedit: preview step 2 notes 1 stopped" ] &&
+    ok "D Em G entered by steps, the editor opened on them (16 steps), the cursor on step 1: nothing previewed on opening" || bad "the editor opened: $(v 2) / $(l3v 2 pre)"
+[ "$(l3v 3 cursor)" = 2 ] && [ "$(l3v 3 pre)" = 1 ] && [ "$(l3v 3 loopv)" = 1 ] && has '^loopedit: preview step 2 notes 1 stopped' "$PV" &&
+    [ "$(lf "$(v 3)" played)" = 0 ] && [ "$(lf "$(v 3)" state)" = 1 ] &&
+    ok "PRESETS onto step 2 (Em) with the loop stopped: the step sounds on a loop voice (pre 1), not counted as played, the loop still stopped" \
+    || bad "the preview: $(v 3) / $(grep -a '^  loop3:' "$PV" | sed -n 3p)"
+[ "$(l3v 4 cursor)" = 1 ] && [ "$(l3v 4 pre)" = 1 ] && [ "$(l3v 4 loopv)" = 1 ] &&
+    ok "back onto step 1 (D): heard, the Em's preview ended (one voice)" || bad "the second move: $(grep -a '^  loop3:' "$PV" | sed -n 4p)"
+[ "$(l3v 5 cursor)" = 2 ] && [ "$(l3v 5 pre)" = 1 ] && [ "$(l3v 5 loopv)" = 1 ] && [ "$(lf "$(v 5)" events)" = 3 ] && [ "$(lf "$(v 5)" cap)" = 0 ] &&
+    [ "$(lf "$(v 5)" ring)" = 0 ] && [ "$(lf "$(v 5)" played)" = 0 ] && [ "$(l2 "$PV" 5 dirty)" = "$(l2 "$PV" 4 dirty)" ] &&
+    ok "step 2's note made 8 steps long: its preview sounds on at 500 ms, the step's own length; nothing recorded (3 events), REC not armed, the position at 0" \
+    || bad "the long preview: $(v 5) / $(grep -a '^  loop3:' "$PV" | sed -n 5p)"
+[ "$(l3v 6 cursor)" = 4 ] && [ "$(l3v 6 pre)" = 0 ] && [ "$(l3v 6 loopv)" = 0 ] && has '^loopedit: preview step 4 notes 0 stopped' "$PV" && [ "$(pbv 7)" = 0 ] &&
+    ok "onto an empty step: the preview ends at once; 3 s on no part is busy (silence)" || bad "the empty step: $(grep -a '^  loop3:' "$PV" | sed -n 6p) / parts busy $(pbv 7)"
+[ "$(lf "$(v 8)" state)" = 2 ] && [ "$(l3v 8 cursor)" = 2 ] && [ "$(l3v 8 pre)" = 0 ] && has '^loopedit: preview step 2 notes 1 playing' "$PV" &&
+    ok "while the loop plays PRESETS moves the cursor onto a step with notes and previews nothing (the loop is heard)" || bad "playing: $(v 8) / $(grep -a '^  loop3:' "$PV" | sed -n 8p)"
+[ "$(lf "$(v 9)" state)" = 1 ] && [ "$(l3v 9 loopv)" = 0 ] && [ "$(l3v 9 pre)" = 0 ] && ok "stopped: no loop voice kept" || bad "stopped: $(v 9)"
+[ "$(l3v 10 cursor)" = 2 ] && [ "$(l3v 10 pre)" = 0 ] && [ "${pb10:=$(pbv 10)}" -ge 1 ] &&
+    ok "a chord played by hand over the preview ends it (pre 0; the key's own voice sounds: parts busy $pb10)" || bad "a key over the preview: $(grep -a '^  loop3:' "$PV" | sed -n 10p) / parts busy $(pbv 10)"
+[ "$(l4v 11)" = "69/30 count 1" ] && [ "$(lf "$(v 11)" events)" = 3 ] &&
+    ok "the chord played went into the step as ever (step 2: A, 69/30), the preview did not" || bad "the step after the key: $(l4v 11) / $(v 11)"
+[ "$(l3v 12 cursor)" = 1 ] && [ "$(l3v 12 pre)" = 0 ] && [ "$(lf "$(v 12)" events)" = 2 ] && has '^loopedit: clear step 1 (1 events)' "$PV" &&
+    ok "REC clears step 1 and ends its preview" || bad "REC over the preview: $(grep -a '^  loop3:' "$PV" | sed -n 12p) / $(v 12)"
+[ "$(l2 "$PV" 13 edit)" = 0 ] && [ "$(lf "$(v 13)" events)" = 2 ] && [ "$(lf "$(v 13)" cap)" = 0 ] && [ "$(lf "$(v 13)" state)" = 1 ] &&
+    ok "closed: the loop as edited by hand alone (2 events), no capture opened by any of it" || bad "closed: $(v 13)"
+silent_end cr_loop_preview
 # 0.18: "sometimes in the play menu turning the preset knob ends up changing the preset": LOOP held again past the hold
 # time closed the menu under the hand; fails on 722fe71 (dump 2: layer 0, slot 2, "sound: part 0 pos 2")
 run cr_loop_presetknob

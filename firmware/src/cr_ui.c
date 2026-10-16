@@ -446,7 +446,8 @@ static const char *const CU_DIV[CR_DIV_COUNT] = {"2/1", "1/1", "1/2", "1/2T", "1
                                                  "1/16T", "1/32", "1/32T"};
 static const char *const CU_DIR[6] = {"up", "down", "up-down", "down-up", "as played", "random"};
 
-/* FX (docs/FX.md): four effects on seven pages (SELECT: Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive).
+/* FX (docs/FX.md): four effects on eight pages (SELECT: Sends, Reverb 1, Reverb 2, Chorus, Delay 1, Delay 2, Drive,
+ * Filter: the master filter of 0.22, cr_fx.c xq_block, whose four parameters are xfp[] too).
  * A PART has its sends (P_REV, P_CHOR, P_DLY) and its drive (P_DIST), no sound load touches them (but FM TONE's Drive,
  * which is the sound's: "FM TONE'S DRIVE IS ITS PRESET'S" below): the chord part's are
  * cs.fx_amt[] (cu_send / cu_send_set below: the ONE value the Sends page, the "Send" cell on KNOB 4 of an effect's
@@ -455,8 +456,9 @@ static const char *const CU_DIR[6] = {"up", "down", "up-down", "down-up", "as pl
  * part's its track's. The effects' own parameters are GLOBAL: the delay's and the reverb's are cr_fx.c's xfp[], the
  * chorus's song.g; the session keeps them (cr_settings.c CSS_FXG) and no sound load touches them */
 #define CU_NFX 4u                         /* the effects (cs.fx_sel, cs.fx_amt) */
-#define CU_NFXP 7u                        /* SELECT's pages */
+#define CU_NFXP 8u                        /* SELECT's pages */
 #define CU_FXPG_SENDS 2u                  /* cs.fx_page: the Sends page (0, 1: cs.fx_sel's first and second page) */
+#define CU_FXPG_FILTER 3u                 /* .. the Filter page (as Sends: cs.fx_sel stays the effect last picked) */
 /* a cell: an xfp id (cr_fx.c XP_*), FC_G + a song.g id, or one of these */
 enum { FC_NONE = -1, FC_SEND = -2, FC_TIME = -3, FC_SPREAD = -4, FC_G = 64,     /* TIME, SPREAD: by Sync, the free or
                                                                                  * the synced parameter */
@@ -472,7 +474,10 @@ static const struct { uint8_t fx, page, of; int8_t c[4]; const char *label[4]; }
     {1, 0, 1, {FC_G + G_CRATE, FC_G + G_CDEPTH, XP_CWIDTH, FC_SEND}, {"Rate", "Depth", "Width", "Send"}},
     {2, 0, 2, {FC_TIME, FC_SPREAD, XP_DFDBK, FC_SEND}, {"Time", "Spread", "Feedback", "Send"}},
     {2, 1, 2, {XP_DSYNC, XP_DMODE, XP_DTONE, XP_DWOW}, {"Sync", "Mode", "Tone", "Wow"}},
-    {3, 0, 1, {FC_NONE, FC_NONE, FC_NONE, FC_SEND}, {"", "", "", "Send"}}};
+    {3, 0, 1, {FC_NONE, FC_NONE, FC_NONE, FC_SEND}, {"", "", "", "Send"}},
+    /* the master filter (0.22, GitHub issue 16; cr_fx.c "The master filter"): the last page, as it is last in the
+     * chain. Filter on KNOB 4 is its On / Off; a cutoff turned switches it (and FX) on, as a send does */
+    {0, CU_FXPG_FILTER, 1, {XP_FLOW, XP_FHIGH, XP_FSLOPE, XP_FON}, {"Low cut", "High cut", "Slope", "Filter"}}};
 static const char *const CU_XDIV[XF_NDIV] = {"1/32", "1/16T", "1/32.", "1/16", "1/8T", "1/16.", "1/8", "1/4T", "1/8.",
                                              "1/4", "1/2T", "1/4.", "1/2"};      /* cr_fx.c XF_DIV's order */
 static const char *const CU_BASSMODE[4] = {"Chords Only", "Unison Bass", "Bass Single Notes", "Solo"};
@@ -725,7 +730,9 @@ static uint32_t cu_fx_pg(void)
     uint32_t i, first = 1;
     if (cs.fx_page == CU_FXPG_SENDS)
         return 0;
-    for (i = 1; i < CU_NFXP; i++)
+    if (cs.fx_page == CU_FXPG_FILTER)
+        return CU_NFXP - 1u;
+    for (i = 1; i + 1u < CU_NFXP; i++)
         if (CU_FXP[i].fx == cs.fx_sel % CU_NFX) {
             if (CU_FXP[i].page == cs.fx_page)
                 return i;
@@ -733,6 +740,10 @@ static uint32_t cu_fx_pg(void)
                 first = i;
         }
     return first;
+}
+static const char *cu_fx_pgname(void)             /* the page's name: the effect's, Sends, Filter (the traces, the dump) */
+{
+    return cs.fx_page == CU_FXPG_SENDS ? "Sends" : cs.fx_page == CU_FXPG_FILTER ? "Filter" : CU_FX[cs.fx_sel % CU_NFX].name;
 }
 /* a cell's parameter: the delay's Time and Spread are the synced or the free one (both kept: Sync changes which) */
 static int32_t cu_fx_id(int32_t c)
@@ -743,6 +754,17 @@ static void cu_fx_unit(char *out, uint32_t v, const char *unit, uint32_t n)   /*
 {
     cu_int(out, (int32_t)v, 0, n);
     cu_cat(out, unit, n);
+}
+static void cu_fx_hz(char *out, uint32_t hz, uint32_t n)   /* "130 Hz", "2.1 kHz", "16.6 kHz" */
+{
+    if (hz < 1000u) {
+        cu_fx_unit(out, hz, " Hz", n);
+        return;
+    }
+    cu_int(out, (int32_t)(hz / 1000u), 0, n);
+    cu_cat(out, ".", n);
+    cu_int(out + (hz >= 10000u ? 3u : 2u), (int32_t)(hz % 1000u / 100u), 0, n - 3u);
+    cu_cat(out, " kHz", n);
 }
 /* a parameter's value as the knob row shows it: its unit where it has one ("250 ms", "1/8.", "2.4 s", "130 Hz",
  * "0.80 Hz"), a name ("Stereo"), else the number 0..127 */
@@ -796,6 +818,20 @@ static void cu_fx_val(int32_t id, char *out, uint32_t n)
         break;
     case XP_RPRE: cu_fx_unit(out, xf_pre_ms((uint32_t)v), " ms", n); break;
     case XP_RLOW: cu_fx_unit(out, xf_lowcut_hz((uint32_t)v), " Hz", n); break;
+    case XP_FLOW:                                 /* the master filter's: Off at the bottom */
+        if (v <= 0)
+            cu_cpy(out, "Off", n);
+        else
+            cu_fx_hz(out, xq_low_hz((uint32_t)v), n);
+        break;
+    case XP_FHIGH:                                /* .. Off at the top */
+        if (v >= 127)
+            cu_cpy(out, "Off", n);
+        else
+            cu_fx_hz(out, xq_high_hz((uint32_t)v), n);
+        break;
+    case XP_FSLOPE: cu_cpy(out, v ? "12 dB" : "6 dB", n); break;
+    case XP_FON: cu_cpy(out, v && cs.fx_on ? "On" : "Off", n); break;   /* (FX off: the filter is out, as a send) */
     default: cu_int(out, v, 0, n); break;
     }
 }
@@ -830,6 +866,9 @@ static void cu_fx_glyph(int32_t c0, cr_cell_t *c)
     case XP_DMODE: c->glyph = CR_G_PING; break;   /* two straight paths, or one bouncing between the walls */
     case XP_DTONE: c->glyph = CR_G_MOON; break;
     case XP_DWOW: c->glyph = CR_G_LFO; c->pct = 20; c->pct2 = (uint8_t)q; break;
+    case XP_FLOW: c->glyph = CR_G_CUT; break;     /* the master filter: the low cut's corner, the high cut's moon
+                                                   * (full: open); Slope and Filter are text */
+    case XP_FHIGH: c->glyph = CR_G_MOON; break;
     case FC_G + G_CRATE: case FC_G + G_CDEPTH:    /* rate, depth (0..127) */
         c->glyph = CR_G_LFO;
         c->pct = (uint8_t)((uint32_t)song.g[G_CRATE] * 255u / 127u);
@@ -2288,6 +2327,14 @@ static void cu_ledit_move(int32_t s)               /* PRESETS: the cursor, a ste
     c = ((int32_t)cu_le.c0 + s) % n;
     cu.le_cell = (uint16_t)(c < 0 ? c + n : c);
     cu_le_sync();
+    /* the step preview (GitHub issue 8; the owner, 2026-10-15: "turn preset knob in the step editor, if the step has
+     * notes, it plays"): the step the cursor lands on is heard once while the loop is stopped, as the loop would
+     * play it, on the loop's voices (cr_loop_ed_preview, in the engine's thread as the keys are); a step without
+     * notes ends the one sounding; while the loop plays nothing is struck (the loop is heard). Nothing is written,
+     * REC is not armed, the position does not move */
+    cr_post(CRE_LOOP, LP_PREVIEW, 0, 0);
+    cu_trace("loopedit: preview step %u notes %u %s\n", (unsigned)cu_le.c0 + 1u, (unsigned)cu_le.cnt,
+             crl.state == CRL_PLAYING ? "playing" : "stopped");
 }
 static void cu_ledit_clear(void)                   /* REC: the step's notes go */
 {
@@ -3500,6 +3547,10 @@ static void cu_layer_pick(uint32_t l, int32_t i)   /* a white root / SELECT: the
                 cu_trace("fx: sends\n");
                 break;
             }
+            if (cs.fx_page == CU_FXPG_FILTER) {   /* (the Filter page: the same) */
+                cu_trace("fx: filter\n");
+                break;
+            }
             cs.fx_sel = CU_FXP[i].fx;
             cu_trace("fx: effect %s %u/%u\n", CU_FX[cs.fx_sel].name, (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[i].of);
         }
@@ -3734,9 +3785,19 @@ static void cu_layer_knob(uint32_t l, uint32_t knob, int32_t s)   /* KNOB 1..4 (
             s = -s;
         v = hi - lo > 20 ? cu_kval(*q, s, lo, hi, kn.snap) : *q + s;   /* (a value at the knob's speed / snapped; a
                                                    * division, a ratio, a switch: one a detent) */
-        *q = (int16_t)(v < lo ? lo : v > hi ? hi : v);
+        v = v < lo ? lo : v > hi ? hi : v;
+        if (((id == XP_FLOW || id == XP_FHIGH) && v != *q) || (id == XP_FON && v)) {   /* the master filter: a cutoff
+                                                   * turned, or Filter to On, switches the filter and FX on (as a
+                                                   * send turned switches FX on: the knob is heard) */
+            xfp[XP_FON] = 1;
+            if (!cs.fx_on) {
+                cs.fx_on = 1;
+                cu_fx_apply();
+            }
+        }
+        *q = (int16_t)v;
         cu_hot_set(L_FX, knob);
-        cu_trace("fx: knob %u %s %s %d\n", (unsigned)knob + 1u, CU_FX[cs.fx_sel].name, lb, (int)*q);
+        cu_trace("fx: knob %u %s %s %d\n", (unsigned)knob + 1u, cu_fx_pgname(), lb, (int)*q);
         break;
     }
     case L_BASS:
@@ -6110,7 +6171,7 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
 {
     static const char *const PERF_ITEMS[7] = {"Strum", "Strum 2 Octaves", "Slop", "Arpeggiate", "Arp 2 Octaves",
                                               "Pattern", "Harp"};
-    static const char *const FX_ITEMS[CU_NFX + 1u] = {"Sends", "Reverb", "Chorus", "Delay", "Drive"};
+    static const char *const FX_ITEMS[CU_NFX + 2u] = {"Sends", "Reverb", "Chorus", "Delay", "Drive", "Filter"};
     const char *eng[NENGINES];
     uint32_t k, n;
     switch (l) {
@@ -6160,7 +6221,8 @@ static void cu_layer_screen(cr_screen_t *s, uint32_t l)
     }
     case L_FX: {                                   /* the knob row: the effect over KNOB 1..4's cells */
         static char seen[48];                      /* (the trace: the row's labels when they change) */
-        cu_picker(s, FX_ITEMS, CU_NFX + 1u, cs.fx_page == CU_FXPG_SENDS ? 0u : cs.fx_sel % CU_NFX + 1u, CR_COL_GREEN,
+        cu_picker(s, FX_ITEMS, CU_NFX + 2u, cs.fx_page == CU_FXPG_SENDS ? 0u : cs.fx_page == CU_FXPG_FILTER ? CU_NFX + 1u
+                                            : cs.fx_sel % CU_NFX + 1u, CR_COL_GREEN,
                   cs.fx_on ? "fx \267 on" : "fx \267 off", "SELECT: effect \267 FX: on/off \267 OCT-: back");
         if (CU_FXP[cu_fx_pg()].of > 1u)            /* the page, quietly (as the KEY layer's): SELECT steps through both */
             cu_cat(s->label, cs.fx_page ? " \267 2/2" : " \267 1/2", sizeof s->label);

@@ -8,6 +8,36 @@
   },
   "releases": [
     {
+      "version": "0.22-beta4",
+      "beta": true,
+      "date": "2026-10-15",
+      "tag": "v0.22-beta4",
+      "sha256": "28beab0dd7d0ba92f272569e991f4cefe9612b8f7970e1f933721caf1a76f8c4",
+      "sha256_1core": "80d3b7583788ce6d474a98bedc14738e8b8f40898c65bc84daffd548865853ce",
+      "title": "Beta 4: a Filter on everything, the loop editor's step preview",
+      "bullets": [
+        "New since beta 3: a Filter on the whole sound (FX layer, its eighth page): a low cut and a high cut after the effects, 6 or 12 dB an octave, Off until you turn a cutoff; KNOB 4 takes it out and back to compare.",
+        "New since beta 3: the loop editor previews a step: with the loop stopped, turning PRESETS onto a step plays it as the loop would (its length, voicing and ratchet); an empty step is silence, and nothing is recorded.",
+        "Snap in Key Mode (KEY layer, page 2, KNOB 3): with Key plays Notes, a key outside the scale plays the nearest scale note or chord tone instead of staying silent; with Chords the Full keyboard plays the key's chords.",
+        "P5's sound editor is rows of up to four controls, drawn as the Prophet-5's own knobs, LED buttons and levers; a turn's first two clicks are always the finest step, EXPR amounts read -64 to +63, and LATCH turns Strum's or the arp's Hold off.",
+        "A new engine, P5: the Prophet-5 model of Melodee, with 115 of Sequential's factory programs and up to eight voices with Dual Core on.",
+        "128 sound slots shared by all engines (until now 32): your 32 sounds are copied over at the first start. P5 sounds can be saved too.",
+        "Favorites: mark any sound in the SAVE menu, give it a type (Both, Chord or Bass) and turn the filter on to step through your favorites only.",
+        "FM TONE in the Digitone's ranges and times (measured on a Digitone), with two decimals where the Digitone has them and all 57 LFO destinations; Digitone .dnsnd sounds import in the device manager.",
+        "The knobs accelerate (slow for fine steps, quick for big ones; hold OPT to snap to round values); the VA's filter envelope depth has two decimals and a synced LFO 42 rates; chord numerals in Key Mode; a cursor for naming a sound.",
+        "Dual Core is on for a new FM-1 and after Reset Settings, and turns itself off after a crash; a Single core package is offered under Advanced for FM-1s that have trouble with it.",
+        "Velocity and aftertouch from the FM-1's own keys (Options > Key Touch), and per sound an EXPR screen that sends velocity and aftertouch where you want.",
+        "The device manager has a P5 tab and restores or deletes sounds in bulk; several FM-1s on one computer each have a unit ID (Options > Version); the delay runs at half rate, the screen updates faster, and Geek Out 2 shows both cores at work."
+      ],
+      "notes": [
+        "A beta: it may have bugs, and the next stable release, 0.22, replaces it. Please report problems on GitHub.",
+        "Updating from 0.22-beta3, 0.22-beta2 or 0.22-beta1 keeps everything as it is. Going back to one of them loses the Filter; if you had changed it before holding SAVE, that beta starts with the effects' settings and the chord part's sends at their defaults.",
+        "Going back to 0.22-beta2 or 0.22-beta1 with Snap on reads Key Mode as off there, with Key plays and Keyboard at Chords, until you set them again.",
+        "Updating from 0.21 keeps your settings, sounds and loops. FM TONE sounds from before are converted to the new ranges (close, not always exact) and keep their time numbers, which now mean the Digitone's times: mostly longer.",
+        "Going back to 0.21 later finds its 32 sounds as they were when you updated; the sounds saved on the beta, P5 and the favorites are not there (they wait for your return); after a Filter you had changed and saved, its effects and the chord part's sends start at their defaults. The full notes have the rest."
+      ]
+    },
+    {
       "version": "0.22-beta3",
       "beta": true,
       "date": "2026-10-15",

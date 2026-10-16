@@ -426,16 +426,18 @@ void emu_fw_dump(void)
          * (quarters; 0: whole steps); the pass of the loop (mod 12); the steps that have a property; the loop voices
          * in use (sounding or a ratchet between two hits) */
         {
-            unsigned q, np = 0, nv = 0;
+            unsigned q, np = 0, nv = 0, npre = 0;
             for (q = 0; q < CRL_STEPS; q++)
                 np += crl.d.st[q][0] || crl.d.st[q][1];
             for (q = 0; q < (unsigned)CR_MAX_LOOPV; q++)
                 nv += crl.pv[q].used != 0;
-            printf("  loop3: epage %u cursor %u ratchet %d cond %d voicing %d chance %d frac %u pass %u props %u loopv %u\n",
+            for (q = 0; q < (unsigned)CR_MAX_LOOPV; q++)   /* the step preview's voices (0.22, issue 8) */
+                npre += (crl.pre >> q) & 1u;
+            printf("  loop3: epage %u cursor %u ratchet %d cond %d voicing %d chance %d frac %u pass %u props %u loopv %u pre %u\n",
                    (unsigned)cu.le_page + 1u, (unsigned)(crl.ed_t0 / CRL_STEP) + 1u,
                    crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_RATCH) : -1, crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_COND) : -1,
                    crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_VOIC) : -1, crl.ed ? cr_loop_ed_prop(&crl, CRL_SP_CHANCE) : -1,
-                   (unsigned)(crl.ed ? cr_loop_ed_nfrac(&crl) : 0u), (unsigned)crl.pass12, np, nv);
+                   (unsigned)(crl.ed ? cr_loop_ed_nfrac(&crl) : 0u), (unsigned)crl.pass12, np, nv, npre);
         }
         /* 0.18: the loop editor's cursor step: its events as root/qx (in the array's order: the last one names it);
          * the chord the loop struck last since it started (the editor's playing name; -: none) */
@@ -528,9 +530,8 @@ void emu_fw_dump(void)
                "latched %02X\n", (unsigned)css_saves, css_last_rc == 1 ? "current" : css_last_rc == 2 ? "migrated" :
                css_last_rc < 0 ? "not these settings'" : "none", (unsigned)cr_session_hash(&x), (unsigned)css_flash,
                (unsigned)(cr_session_hash(&x) != css_flash), (int)x.voicing, (int)x.octave, (unsigned)x.bass_on, (unsigned)x.lock, (unsigned)x.latched);
-        printf("  session fx: on %u sel %u (%s %u/%u) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel,
-               cs.fx_page == CU_FXPG_SENDS ? "Sends" : CU_FX[cs.fx_sel % CU_NFX].name,
-               cs.fx_page == CU_FXPG_SENDS ? 1u : (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[cu_fx_pg()].of);
+        printf("  session fx: on %u sel %u (%s %u/%u) amt", (unsigned)cs.fx_on, (unsigned)cs.fx_sel, cu_fx_pgname(),
+               cs.fx_page >= CU_FXPG_SENDS ? 1u : (unsigned)cs.fx_page + 1u, (unsigned)CU_FXP[cu_fx_pg()].of);
         for (k = 0; k < CU_NFX; k++)
             printf(" %u", (unsigned)cs.fx_amt[k]);
         printf(" sends");

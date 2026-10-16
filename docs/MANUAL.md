@@ -664,7 +664,8 @@ is back. Strum, Slop and Harp keep the chord view.
 
 ## 8. FX
 
-Four effects: **Reverb**, **Chorus**, **Delay** and **Drive**. The reverb and the delay are new in 0.18: a large,
+Four effects: **Reverb**, **Chorus**, **Delay** and **Drive**, and from 0.22 a **Filter** on everything, after them
+([The Filter page](#the-filter-page)). The reverb and the delay are new in 0.18: a large,
 slow reverb that goes from a hall to a wash that does not end, and a stereo delay with separate times left and
 right that can ping-pong. From 0.19 the chorus is stereo too: it comes back as two signals, one for each side,
 moved by the same sweep a quarter turn apart, so on headphones it spreads out instead of sitting in the middle. Its
@@ -692,7 +693,7 @@ On the panel:
 - **KNOB 4** is the chord part's send into the selected effect (turning it switches the effects on). The selected
   effect is the one whose page the FX layer showed last; the reverb until you pick another. The screen shows the
   send in per cent, 0 to 100.
-- Hold FX for the **FX layer**. SELECT steps through seven pages; the name of the page is big, an effect's page
+- Hold FX for the **FX layer**. SELECT steps through eight pages; the name of the page is big, an effect's page
   number is in the small line above it (`fx · on · 1/2`). KNOB 1 to KNOB 4 turn the four cells, a FX tap is still
   on / off, and the root keys play. OCT-, OCT+, HOME or holding FX again closes the layer.
 
@@ -705,6 +706,7 @@ On the panel:
 | Delay 1 | Time | Spread | Feedback | **Send** |
 | Delay 2 | Sync | Mode | Tone | Wow |
 | Drive | | | | **Send** (the amount of drive) |
+| Filter | Low cut | High cut | Slope | Filter (Off / On) |
 
 **Sends**, the first page, is the chord part's four sends side by side: its drive, and how much of it goes into the
 chorus, the delay and the reverb. They are the same four, in the same order and on the same knobs, as the FX group
@@ -722,6 +724,26 @@ effects on again. In the sound editor the FX group always shows the values that 
 The Sends page and the Send cells are the chord part's. The bass part's four sends are in the bass sound's editor, FX
 group (BASS held + EDIT, then the FX button); it plays into the same reverb and delay as the chords. A new FM-1 has a
 little reverb on the bass and nothing else.
+
+### The Filter page
+
+The last page, **Filter** (0.22), is a low cut and a high cut on the whole sound, chords, bass and the effects' tails
+together, placed after the effects and just before the output: a way to soften a bright patch, to take the low end
+out of the chords so the bass has the room, or to leave a band open for a voice. It is not part of any sound: like
+the effects it is set once for the instrument, every sound plays through it, and SAVE held keeps it.
+
+- **Low cut** (KNOB 1): `Off` at the bottom, then 20 Hz up to 2 kHz. What is below the corner goes.
+- **High cut** (KNOB 2): 200 Hz up to 16 kHz, then `Off` at the top. What is above the corner goes. Both in at once
+  is a band-pass.
+- **Slope** (KNOB 3): `6 dB` or `12 dB` an octave. 12 dB (where it starts) is the firmer cut; 6 dB is gentler, a
+  tone control, and costs the unit half as much.
+- **Filter** (KNOB 4): `Off` or `On`. Turning Low cut or High cut switches it On by itself (and FX on, if FX was
+  off), so you hear the knob at once; KNOB 4 takes it out and puts it back with the cutoffs as you left them, to
+  compare. With FX off the filter is off with the effects, and the cell reads `Off`.
+
+A new FM-1 has the filter Off with both cuts at their `Off` ends, and with it Off nothing in the sound changes.
+Turning a cutoff while a chord plays is smooth, and switching the filter or the slope fades over a hundredth of a
+second: no click.
 
 ### FM TONE's Drive
 
@@ -979,7 +1001,7 @@ What a step shows:
 
 | Control | In the loop editor |
 | --- | --- |
-| PRESETS | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it. **GLO held + PRESETS** jumps 8 steps a click. (PRESETS never changes the sound or the slot while the editor is open) |
+| PRESETS | the **step**: the cursor, a step a click, round and round. The screen shows `step 2/16` and the chord in it. **While the loop is stopped, the step you land on plays**, as the loop would play it (its length, its voicing, its ratchet), so you can hear your way along the pattern; an empty step is silence, and the next click ends what is sounding. While the loop plays you hear the loop, not the step. Nothing is recorded by this. **GLO held + PRESETS** jumps 8 steps a click. (PRESETS never changes the sound or the slot while the editor is open) |
 | SELECT | the **page**: `Step` and `Trig`. The page's name is at the top, the bottom line begins `1/2` or `2/2` |
 | ALGORITHM | the selected step's **Voicing**, on either page. **GLO held + ALGORITHM** jumps between `Follow` and `0`: from either one a click gives the other; from any other value a click clockwise gives `0`, the other way `Follow`. (On the main screen GLO + ALGORITHM is the bass sound's engine; in the editor it is this) |
 | the keys | play a chord or a note: it **replaces** what is in the selected step, and you hear it. Keys pressed together all go into the step. **Only what you play goes in**, also while the loop plays: never the loop's own notes. The step has the chord as soon as you let the keys go, with LATCH on too. The cursor stays on the step; turn PRESETS to move on |
@@ -1869,6 +1891,7 @@ More: [BOOT-SAFETY.md](BOOT-SAFETY.md), [INSTALL-COMPAT.md](INSTALL-COMPAT.md), 
 | The tempo moves by itself | MIDI Clock is In | Options > MIDI Clock |
 | My reverb or delay setting is back to what it was | it was not saved: since 0.18 the FM-1 comes back as last **saved** | set it again and hold SAVE (`saved`) |
 | The reverb does not stop | Decay is at `Inf`, or very long | turn Decay down (FX layer, Reverb 1, KNOB 3) |
+| Every sound is dull, or thin, whatever I load | the master filter is on (0.22) | FX layer, Filter: KNOB 4 to `Off`, or the cuts to `Off` |
 | The echoes are on one side, then the other | the delay's Mode is Ping-pong | FX layer, Delay 2, KNOB 2: Stereo |
 | The bass has reverb or echo | the bass part has sends of its own | BASS held + EDIT, the FX group; or FX off |
 | A sound I saved with lots of reverb loads dry (or the other way round) | sends are no longer loaded with a sound: they are the part's | set the sends once in the FX layer (its first page); they stay for every sound |
@@ -1914,7 +1937,7 @@ A held layer button opens its layer and it stays; holding the same button again 
 | SAVE | SAVE | the save menu: SELECT Overwrite / Save as new / Favorite / Favorites filter / Favorite type · KNOB 1 value · KNOB 2 filter · 3 type · 4 favorite · OCT+ saves · held 1 s: delete / reset | **the global save**: everything as it is now, and the loop (`saved`). With GLO, both held 1 s: revert (`reverted`) |
 | ARP | PERF | performance on / off (in its layer too) | PERF layer: SELECT mode · KNOB 1-4 its parameters |
 | SEQ | SEQ | the loop editor; in it: the PLAY menu; in the PLAY menu: leave. With GLO held: metronome on / off | its hold menu (metronome): SELECT time signature · KNOB 1 Click · a tap there: metronome on / off |
-| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · 2 Metronome · GLO: its keys play / loops · SEQ: leave · EDIT: the loop editor (PRESETS step, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · SEQ, EDIT or LOOP held: the PLAY menu · HOME: the view) |
+| PLAY | LOOP | play / stop the loop; ends a take | PLAY menu: PRESETS slot · ALGORITHM record mode · SELECT page · page 1: KNOB 1 Length · 2 Rate · 3 Quantize · 4 Count-in · page 2: KNOB 1 Level · 2 Metronome · GLO: its keys play / loops · SEQ: leave · EDIT: the loop editor (PRESETS step, heard while the loop is stopped, with GLO 8 steps · SELECT page · ALGORITHM the step's voicing · the keys replace it · REC clears it · OCT the octave · page 1: KNOB 1 Note len · 2 Steps, with GLO to 8 16 32 48 64 · 3 Chance · 4 Velocity · page 2: KNOB 1 Ratchet · 2 Condition · 3 Voicing · SEQ, EDIT or LOOP held: the PLAY menu · HOME: the view) |
 | REC | REC | record by the record mode; ends a take; cancels when armed. With GLO held: the next record mode | undo the last layer |
 | OCT- | octave down | roots down an octave (to -2). In layers, menus, dialogs: back / cancel (closes). In step entry: back a step | in the editor, + a knob: clear that parameter's modulation |
 | OCT+ | octave up | roots up an octave (to +2). In layers, menus, dialogs: confirm (keep, save, do it); where there is nothing to confirm it closes, as OCT-. In step entry: a rest | |
