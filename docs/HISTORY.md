@@ -4556,3 +4556,21 @@ context). Tests: `input_test.c`'s probe block (the phase every third frame, the 
 input and PA6 driven on the tick and both back at the take, the pressed state passed, the analog rows every third
 frame), `cr_sense_test.c`'s probe case (a touch reads ~20, a firm press 127, let go 0), `cr_settings_test` (mode 3
 kept). Not flashed; XIP 96.4 %.
+
+3y124. **The flash diet, 1: FM TONE's HARM tables halved in flash (2026-10-16; the owner: "Lets roll with the diet":
+GRAIN fills the slot to 99.3 % when merged, and the slot stays as it is).** The 27 HARM waves (`quad_tables.h
+QUAD_HARM`, 27 x 513 int16, 27.1 KB of XIP) are each a sum of sines, so every wave is exactly odd about half a cycle:
+f(512 - i) = -f(i) at every point, which `tests/quad_ref.py` now asserts and stores the first half of (27 x 257,
+13.5 KB). The whole cycles are built at power-on into POOL (`eng_quad.c quad_init`, `quad_harm` 27.7 KB; called from
+`eng_fm6.c fm6_init` beside `cz_init`, the power-on point the unit, the emulator and the layout tool share;
+`hostsim.c host_tracks_init`, `cr_quad_test.c` and `tools/digitone/quad_render.c` call it themselves), and the
+render reads them there: `quad_render` is byte for byte what it was (16 510 B in the listing) and reads SRAM where it
+read flash through the cache. **Bit-exact**: `cr_quad_test` 31 466 checks (a new one: every point of every whole cycle
+is its stored half mirrored), the 313 golden renders unchanged, 0 CPU entries over budget. **Rejected on the way**: a
+mirror in the read (`quad_hw` reading the second half reversed and negated a sample at a time, branchless, bit for
+bit the same values): XIP -12.1 KB without touching POOL, but `quad_render` grew 1.7 KB and the host count of the two
+HARM presets rose 26 % (GLASS PAD 1209 -> 1520, DRONE 1183 -> 1503 instructions a sample over the idle mix), a cost
+FM TONE's 8-note chords on the unit (70 .. 80 % of the half dry) have no room for while recording. Size: `XIP 552 860
+-> 539 132 B` (96.4 -> 94.0 %), `RAM 78 752` unchanged, `POOL 239 180 -> 266 884 B` (69.5 -> 77.6 %). `docs/QUAD.md`
+"HARM" and "CPU" say so. The budget tool's `quad_render` line (`tests/target_budget.txt` 67 230) reads 3 453 for
+main's build and this one alike: the file's figure is stale, not touched here.

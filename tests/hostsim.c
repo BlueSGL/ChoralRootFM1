@@ -93,6 +93,9 @@ static uint64_t now_ns(void)
 static void host_tracks_init(void)                /* as felucca_init: defaults, empty patterns */
 {
     uint32_t i, k;
+#if FELUCCA_QUAD
+    quad_init();                                  /* FM TONE's HARM tables in RAM (main.c felucca_init) */
+#endif
     for (i = 0; i < G_COUNT; i++)
         song.g[i] = GP[i].def;
     for (k = 0; k < NTRK; k++) {

@@ -1824,20 +1824,30 @@ static void t_harm(void)
     CHECK(HSAME(8, -64, 0, 26, (p[QP_ALEV] = 0, p[QP_BLEV] = 127, p[QP_BEND] = 127)), "HARM +26: B2 shaped");
     CHECK(HSAME(3, -64, 0, 20, (p[QP_ALEV] = 0)), "HARM +20: algo 3's X (C + B2) shaped");
 #undef HSAME
-    /* the tables: the fundamental first, each wave its own, a step between two is between them */
+    /* the tables (the first half of a cycle stored, quad_harm the whole, built by quad_init): the fundamental first,
+     * each wave its own, a step between two is between them, the stored ends are the odd symmetry's zeros */
     for (k = 1; k < QUAD_NHARM; k++) {
         double a1 = 0, d = 0;
         uint32_t i;
         for (i = 0; i < QUAD_HN; i++) {
-            a1 += QUAD_HARM[k][i] * sin(2.0 * M_PI * i / QUAD_HN);
-            d += fabs((double)QUAD_HARM[k][i] - QUAD_HARM[k - 1][i]);
+            a1 += quad_harm[k][i] * sin(2.0 * M_PI * i / QUAD_HN);
+            d += fabs((double)quad_harm[k][i] - quad_harm[k - 1][i]);
         }
-        CHECK(a1 > 0.3 * 32767 * QUAD_HN / 2 && d / QUAD_HN > 100.0 && QUAD_HARM[k][QUAD_HN] == QUAD_HARM[k][0],
+        CHECK(a1 > 0.3 * 32767 * QUAD_HN / 2 && d / QUAD_HN > 100.0 && QUAD_HARM[k][0] == 0 && QUAD_HARM[k][QUAD_HN / 2u] == 0,
               "HARM wave %u: fundamental %.2f, apart %.0f", k, a1 / (32767.0 * QUAD_HN / 2), d / QUAD_HN);
     }
+    {   /* quad_init: the whole cycle is the stored half, then the half reversed and negated, then the first point */
+        int bad = 0;
+        uint32_t i;
+        for (k = 0; k < QUAD_NHARM; k++)
+            for (i = 0; i <= QUAD_HN; i++)
+                if (quad_harm[k][i] != (i <= QUAD_HN / 2u ? QUAD_HARM[k][i] : -QUAD_HARM[k][QUAD_HN - i]))
+                    bad = 1;
+        CHECK(!bad, "HARM tables: quad_init builds every whole cycle from its stored half");
+    }
     {
-        int32_t x = quad_hw(QUAD_HARM[19], QUAD_HARM[20], 16384, 0x10000000u), a = quad_hw(QUAD_HARM[19], QUAD_HARM[19], 0, 0x10000000u),
-                b = quad_hw(QUAD_HARM[20], QUAD_HARM[20], 0, 0x10000000u);
+        int32_t x = quad_hw(quad_harm[19], quad_harm[20], 16384, 0x10000000u), a = quad_hw(quad_harm[19], quad_harm[19], 0, 0x10000000u),
+                b = quad_hw(quad_harm[20], quad_harm[20], 0, 0x10000000u);
         CHECK(abs(x - (a + b) / 2) <= 1, "HARM halfway: %d between %d and %d", x, a, b);
     }
 }
@@ -2420,6 +2430,7 @@ static void t_v5(void)
 
 int main(int argc, char **argv)
 {
+    quad_init();                                 /* (the HARM tables in RAM: main.c felucca_init's) */
     t_blob();
     t_v5();
     t_pages();
