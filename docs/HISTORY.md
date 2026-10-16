@@ -4574,3 +4574,19 @@ FM TONE's 8-note chords on the unit (70 .. 80 % of the half dry) have no room fo
 -> 539 132 B` (96.4 -> 94.0 %), `RAM 78 752` unchanged, `POOL 239 180 -> 266 884 B` (69.5 -> 77.6 %). `docs/QUAD.md`
 "HARM" and "CPU" say so. The budget tool's `quad_render` line (`tests/target_budget.txt` 67 230) reads 3 453 for
 main's build and this one alike: the file's figure is stale, not touched here.
+
+3y125. **The flash diet, 2: FM6's RAM tables no longer stored in flash (same day).** Three of Dexed's five RAM tables
+(`.data`: copied from the image at power-on, so each cost its bytes twice) are now made at power-on by
+`fm6_tables_init` (generated into `build/gen/felucca_tables.h` by `tools/gen_tables.py`, called first thing in
+`eng_fm6.c fm6_init`, `hostsim.c host_tracks_init` and `tests/sound_templates.c`): `FM6_SIN` (4100 B) by sin.cc's
+rotation, which is integer arithmetic (the Q30 vector turned 512 times, each product within 2^61: the generator asserts
+it), so the table is bit for bit the one the generator computed and `FM6_SIN_CHECK` is its checksum; `FM6_MKI_LOG`
+(4096) and `FM6_OPL_LOG` (1024) were each stored twice over (a quarter cycle and its mirror), so the stored quarters
+`FM6_MKI_LOG_H` / `FM6_OPL_LOG_H` (2048 / 512 B, flash) are mirrored into the whole. `FM6_MKI_EXP` and `FM6_OPL_EXP`
+(the exponent ROMs, float-derived or the chip's) stay as they were; `FM6_EXP2` / `FM6_FREQ` (flash, control-rate
+reads) stay. **Bit-exact**: `fm6_test` all checks ok (a new one: the checksum, the odd symmetry, the mirrors),
+`cr_fm6_test` 44, the 313 golden renders unchanged, 0 CPU entries over budget. `fm6_render`'s listing: the per-sample
+loops the same length to an instruction (1146 -> 1151 instructions in all, the register allocation moved; the
+budget tool's nesting heuristic now reads its outer structure differently, see 3y130). Size: `XIP 539 132 -> 532 620
+B` (94.0 -> 92.9 %), `.data 11 900 -> 2 668`, `.bss 66 852 -> 76 084`, `RAM 78 752` unchanged, POOL unchanged.
+`docs/FM6.md` "Memory" and `docs/FX.md`'s table say so.

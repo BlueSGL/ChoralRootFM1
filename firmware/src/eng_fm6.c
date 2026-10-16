@@ -340,6 +340,7 @@ static void fm6_init(void)
 {
     uint8_t v[FP_SIZE + 1u];
     uint32_t tr;
+    fm6_tables_init();                           /* the RAM tables (build/gen/felucca_tables.h: FM6_SIN by Dexed's rotation) */
     fm6_fn_reset();
 #if FELUCCA_CZ
     cz_init();                                   /* (CZ-1: every part the init tone) */
