@@ -4369,3 +4369,15 @@ map (`host/ctl_host.c land_for`). The comparison, line by line, in docs/VELOCITY
 The entry moved every Options entry from Aftertouch Sens on by one: the 20 walk scripts, `cr_opt_keys.txt` (30
 entries) and the runners' numbers, as 3y93 did. Next, if the owner wants them: the emulator's velocity model, the
 top row's probe, poly aftertouch out, the readout.
+
+3y113. **The emulator plays a key at a velocity and leans on it (2026-10-15; fm1-ctl's `host/ctl_host.c`, the
+second of its pieces brought in).** `cr_sense.c` is compiled into `tools/emu` (its scan hooks left out,
+`CR_SENSE_NO_HOOKS`; the scan's analog state a stub) and `emu_fw.c emu_touch_feed` feeds it every 2 ms from the
+script's keys, as the FM-1 would read them: a key held `down VEL` lands at the driven reading the map at Velocity
+Curve 0 gives that velocity (the map inverted over its table: the script's velocity is the press's strength on
+Velo's scale, so another Curve reads the same press differently), 300 pulled up, driven and pulled-up samples
+alternating as the key asks; `lean KEY PCT` presses it harder once its rest has settled, by PCT of the span, so
+`cu_touch_poll` reads that pressure; a key with no velocity lands at 100, a key let go reads 1023. `cr_ui.c` traces
+`touch: key K vel V sensed|context|fixed` as a key plays and `touch: at N` as the pressure changes. `cr_touch.txt`
+(`test_cr.sh`): Fixed plays 100, Velocity + Aftertouch plays 30 and 120 as given, G5 the context, a 60 % lean reads
+~73 and eases to 0, Velocity Curve +3 reads the same press as 15. tools/emu/README.md has the two commands.

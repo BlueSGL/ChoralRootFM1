@@ -153,6 +153,7 @@ static uint32_t cr_sense_take(uint32_t k)
     return sn_key[k].vel;
 }
 
+#ifndef CR_SENSE_NO_HOOKS                        /* (the emulator feeds cr_sense_sample itself: tools/emu/emu_fw.c) */
 /* the tick's hooks (hal/fm1_input.h): the key at (col, rowbit) */
 static void cr_sense_hook(uint32_t col, uint32_t rowbit, uint32_t v, uint32_t driven)
 {
@@ -170,6 +171,7 @@ static int cr_sense_led_ok_hook(uint32_t col, uint32_t rowbit)   /* the key is o
     int id = FM1_KEYMAP[rowbit][col];
     return cr_touch_mode == CR_TOUCH_FIXED || id < 14 || sn_key[id - 14].st == SN_OPEN;
 }
+#endif
 
 /* Aftertouch (MONK-1's ui.c pressure(), in integers): pressing harder than the key RESTS. A key goes on settling
  * after it lands, so each held key's rest follows its driven reading down for SN_P_SETTLE ms, then creeps after it,

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-only */
 /* The firmware side of the emulator: the firmware sources (emu_firmware.h) and the hooks of emu_hooks.h.
  * Everything Felucca-specific the emulator relies on is in this file's hook bodies. */
+#include <math.h>                                  /* (emu_touch_feed: a lean in octaves) */
 #include <os/lock.h>
 #include <pthread.h>
 #include <stdio.h>
@@ -183,6 +184,69 @@ void emu_fw_init(int demo)
     emu_hal.ready = 1;
 }
 
+/* The key sensing as the FM-1 would read it (cr_sense.c, fed here instead of by the scan's hooks; after fm1-ctl's
+ * host/ctl_host.c): a key the script holds at a velocity lands at the driven reading the map gives that velocity
+ * (the map inverted over its table), reads 300 pulled up (seated), and, once its rest has settled (SN_P_SETTLE and
+ * a little), deeper by the lean the script gives it, so cu_touch_poll reads that pressure; a key with no velocity
+ * given lands at 100; a key let go reads 1023 until the sensing has seen it open. The samples alternate driven and
+ * pulled up as the key asks (dnext), as the scan does, so the velocity is known at the second pulled-up sample. */
+#define EMU_TOUCH_PULL 300u
+static uint16_t emu_touch_land[32];
+static uint32_t emu_touch_t0[32];
+static uint16_t emu_land_for(uint32_t vel)        /* the smallest driven reading the map at Velocity Curve 0 reads as vel
+                                                   * (or the nearest): the script's velocity is the press's strength on
+                                                   * Velo's scale, so another Curve reads the same press differently */
+{
+    uint32_t d, best = SN_FLOOR, bd = 255;
+    uint8_t curve = cr_touch_curve;
+    if (vel >= 127u)
+        return (uint16_t)(SN_FLOOR - 1u);
+    cr_touch_curve = 3;
+    for (d = SN_FLOOR; d <= SN_CEIL; d++) {
+        uint32_t v = sn_velocity(d), e = v > vel ? v - vel : vel - v;
+        if (e < bd) {
+            bd = e;
+            best = d;
+        }
+        if (v <= vel)
+            break;
+    }
+    cr_touch_curve = curve;
+    return (uint16_t)best;
+}
+static void emu_touch_feed(uint32_t ms, uint32_t held)
+{
+    uint32_t k;
+    for (k = 0; k < 20u; k++) {                    /* the keys on the analog rows */
+        volatile sn_key_t *s = &sn_key[k];
+        if (!((held >> k) & 1u)) {
+            emu_touch_t0[k] = 0;
+            if (s->st != SN_OPEN) {
+                if (s->dnext)
+                    cr_sense_sample(k, 1023u, 1);
+                cr_sense_sample(k, 1023u, 0);
+            }
+            continue;
+        }
+        if (s->st == SN_OPEN)
+            emu_touch_land[k] = emu_land_for(emu_hal.key_vel[k] ? emu_hal.key_vel[k] : 100u);
+        if (s->dnext) {
+            uint32_t d = emu_touch_land[k];
+            if (s->st == SN_DOWN && !emu_touch_t0[k])
+                emu_touch_t0[k] = ms;
+            if (emu_touch_t0[k] && ms - emu_touch_t0[k] > SN_P_SETTLE + 20u && emu_hal.key_lean[k]) {
+                double span = (double)SN_P_SPAN[cr_touch_atsens > 2u ? 0u : cr_touch_atsens];
+                double lean = ((double)SN_P_DEAD + (double)emu_hal.key_lean[k] * span / 100.0) / 256.0;   /* octaves */
+                double r = (double)(d > SN_DBASE ? d - SN_DBASE : 1u) / pow(2.0, lean);
+                d = SN_DBASE + (uint32_t)(r > 2.0 ? r + 0.5 : 2.0);
+            }
+            cr_sense_sample(k, d, 1);
+        } else {
+            cr_sense_sample(k, EMU_TOUCH_PULL, 0);
+        }
+    }
+}
+
 /* the 1 ms timer: what fm1_timer5_irq / fm1_input_tick give the main loop */
 void emu_fw_tick(uint32_t ms)
 {
@@ -225,6 +289,8 @@ void emu_fw_tick(uint32_t ms)
         __atomic_fetch_or(&host_notes, down, __ATOMIC_SEQ_CST);
     fm1_in.buttons = in_btn;
     fm1_in.notes = in_key;
+    if ((ms & 1u) == 0u)                          /* the analog rows' samples, every 2 ms (the unit: 2.2) */
+        emu_touch_feed(ms, in_key);
     for (i = 0; i < EMU_NENC; i++) {
         int32_t s = __atomic_exchange_n(&emu_hal.enc[i], 0, __ATOMIC_SEQ_CST);
         if (s && !dead)

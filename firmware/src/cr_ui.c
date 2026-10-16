@@ -1349,6 +1349,7 @@ static void cu_touch_poll(void)
     if (v != sent) {
         sent = (uint8_t)v;
         cr_post(CRE_AT, 0, 0, (int32_t)v);
+        cu_trace("touch: at %u\n", (unsigned)v);
     }
 #endif
 }
@@ -4176,6 +4177,7 @@ static void cu_key_press(uint32_t k)
         n = n < 0 ? 0 : n > 127 ? 127 : n;
         cr_klat_post(CU_KEY_T0(k));                /* (78 PEAK: the key's way to the engine, timed) */
         cr_post(CRE_KEY, (uint32_t)n, cu_key_vel(k), 1);
+        cu_trace("touch: key %u vel %u%s\n", (unsigned)k, (unsigned)cu_key_vel(k), cs.touch ? cu_press_vel ? " sensed" : " context" : " fixed");
         cu.key_note[k] = (uint8_t)(n + 1);
     }
 }

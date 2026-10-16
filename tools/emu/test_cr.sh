@@ -915,6 +915,20 @@ has '^edit: group MOD screen 3 lane 2 part 0$' "$L" && has '^param: part 0 MOD D
 [ "$(grep -ac '^param: part 0 MOD AMT4 40 -> 39' "$L")" = 2 ] &&
     ok "EXPR on the VA (after its matrix) and FM TONE (after the platform routes): the AT slot's default amount 40 by Aftertouch Sens Mid, one detent one unit" ||
     bad "EXPR on the VA / FM TONE: $(grep -ac '^param: part 0 MOD AMT4' "$L") AMT4 lines"
+run cr_touch
+L="$OUT/cr_touch.log"
+tk() { grep -a "^touch: key $1 vel " "$L" | sed -n "$2p" | sed 's/^touch: key [0-9]* vel //'; }
+atmax() { grep -a '^touch: at ' "$L" | sed 's/touch: at //' | sort -n | tail -1; }
+[ "$(tk 9 1)" = "100 fixed" ] && [ "$(tk 9 2)" = "30 sensed" ] && [ "$(tk 9 3)" = "120 sensed" ] &&
+    ok "the keys' velocity in the emulator: Key Touch Fixed plays D4 at Options > Velocity (100); Velocity + Aftertouch: D4 at 30 plays 30, at 120 plays 120 (the sensing's own path, cr_sense.c fed by emu_touch_feed)" ||
+    bad "touch velocity: '$(tk 9 1)' / '$(tk 9 2)' / '$(tk 9 3)'"
+echo "$(tk 26 1)" | grep -q ' context$' && [ "$(tk 26 1 | cut -d' ' -f1)" -gt 40 ] && [ "$(tk 26 1 | cut -d' ' -f1)" -lt 110 ] &&
+    ok "G5 (the top row, no converter): the keys' recent velocity, the context ($(tk 26 1))" || bad "the top row's velocity: '$(tk 26 1)'"
+[ "$(atmax)" -ge 65 ] && [ "$(atmax)" -le 85 ] && [ "$(grep -a '^touch: at ' "$L" | tail -1)" = "touch: at 0" ] &&
+    ok "a lean of 60 % on the held D4 after it settled: aftertouch up to $(atmax) (60 % of the span, smoothed), eased: back to 0" ||
+    bad "aftertouch: max $(atmax), last $(grep -a '^touch: at ' "$L" | tail -1)"
+[ "$(tk 9 5 | cut -d' ' -f1)" -ge 10 ] && [ "$(tk 9 5 | cut -d' ' -f1)" -le 22 ] &&
+    ok "Velocity Curve +3: the same press (30 on Velo's scale) reads $(tk 9 5 | cut -d' ' -f1)" || bad "Velocity Curve +3: '$(tk 9 5)'"
 run cr_expr_knob
 L="$OUT/cr_expr_knob.log"
 am() { grep -a '^param: part 0 MOD AMT3 ' "$L" | sed -n 's/^param: part 0 MOD AMT3 [0-9]* -> \([0-9]*\) .*/\1/p' | tr '\n' ' '; }

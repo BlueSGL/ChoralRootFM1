@@ -234,15 +234,21 @@ static void hal_publish(void)
     emu_hal.keys = k;
     emu_hal.buttons = b;
 }
-static void hold_key(int k, int src, int down)
+static void hold_key_v(int k, int src, int down, int vel)   /* vel: the script's velocity for the sensing (0: none) */
 {
     if (k < 0 || k >= EMU_NKEY)
         return;
-    if (down && !key_src[k])
+    if (down && !key_src[k]) {
         __atomic_fetch_or(&emu_hal.keys_tap, 1u << k, __ATOMIC_SEQ_CST);
+        if (k < 32)
+            emu_hal.key_vel[k] = (uint8_t)(vel < 0 ? 0 : vel > 127 ? 127 : vel);
+    }
     key_src[k] = (uint8_t)(down ? key_src[k] | src : key_src[k] & ~src);
+    if (!key_src[k] && k < 32)
+        emu_hal.key_lean[k] = 0;
     hal_publish();
 }
+static void hold_key(int k, int src, int down) { hold_key_v(k, src, down, 0); }
 static void hold_btn(int b, int src, int down)
 {
     if (b < 0 || b >= EMU_NB)
@@ -879,6 +885,7 @@ static int probe_frames;                         /* script `probe N`: the next N
  * Also accepted (older scripts): press KEY [MS], tap, hold / down, release / up, turn KNOB N, and a leading
  * "<ms>" for an absolute time ("1200 down A"). Names: a computer key wins for key/press/hold, a panel control
  * for btn; "note:F3" names the note F3. */
+enum { OP_LEAN = 100 };                  /* a held key's lean (aftertouch), n = 0..100 % */
 enum { OP_DOWN, OP_UP, OP_TURN, OP_SHOT, OP_WINDOW, OP_DUMP, OP_REC, OP_QUIT, OP_MASTER, OP_EXPECT_LED, OP_EXPECT_SND, OP_MIDI, OP_PROBE,
        OP_PA2, OP_STRIKE, OP_KNOBS };
 typedef struct { uint32_t ms, seq; int op, kind, idx, n; const keymap_t *km; char name[96]; } sev_t;
@@ -1109,17 +1116,22 @@ static void load_script(const char *path)
                 mode = "down";
             else if (!strcmp(cmd, "release") || !strcmp(cmd, "up"))
                 mode = "up";
-            if (!strcmp(mode, "down")) {
-                sev_add(cur, OP_DOWN, km, kind, idx, 0, NULL);
+            if (!strcmp(mode, "down")) {          /* "down VEL": the key lands at that velocity (the sensing) */
+                sev_add(cur, OP_DOWN, km, kind, idx, arg3[0] ? atoi(arg3) : 0, NULL);
             } else if (!strcmp(mode, "up")) {
                 sev_add(cur, OP_UP, km, kind, idx, 0, NULL);
-            } else {                              /* a press of MS */
+            } else {                              /* a press of MS ("MS VEL": at that velocity) */
                 uint32_t d = parse_dur(mode, !strcmp(cmd, "tap") ? 60u : 100u);
-                sev_add(cur, OP_DOWN, km, kind, idx, 0, NULL);
+                sev_add(cur, OP_DOWN, km, kind, idx, arg3[0] ? atoi(arg3) : 0, NULL);
                 sev_add(cur + d, OP_UP, km, kind, idx, 0, NULL);
                 if (!t)
                     cur += d;
             }
+            continue;
+        }
+        if (!strcmp(cmd, "lean")) {               /* lean KEY PCT: a held note key pressed harder, 0..100 % of full */
+            if (!arg[0] || !resolve(arg, &km, &kind, &idx, 1) || kind != KM_KEY) { BAD("lean: a note key (F3 .. G5)"); continue; }
+            sev_add(cur, OP_LEAN, NULL, kind, idx, atoi(arg2), NULL);
             continue;
         }
         if (!strcmp(cmd, "knob") || !strcmp(cmd, "turn")) {
@@ -1191,12 +1203,18 @@ static void run_script(uint32_t ms)
     while (sev_i < sev_n && sev[sev_i].ms <= ms) {
         sev_t *e = &sev[sev_i++];
         switch (e->op) {
+        case OP_LEAN:
+            if (e->idx >= 0 && e->idx < 32)
+                emu_hal.key_lean[e->idx] = (uint8_t)(e->n < 0 ? 0 : e->n > 100 ? 100 : e->n);
+            break;
         case OP_DOWN:
         case OP_UP:
-            if (e->km)
+            if (e->km && e->km->kind == KM_KEY && e->op == OP_DOWN && e->n)
+                hold_key_v(e->km->idx, SRC_SCRIPT, 1, e->n);
+            else if (e->km)
                 key_action(e->km, e->op == OP_DOWN, SRC_SCRIPT);
             else if (e->kind == KM_KEY)
-                hold_key(e->idx, SRC_SCRIPT, e->op == OP_DOWN);
+                hold_key_v(e->idx, SRC_SCRIPT, e->op == OP_DOWN, e->n);
             else if (e->kind == KM_BTN)
                 hold_btn(e->idx, SRC_SCRIPT, e->op == OP_DOWN);
             else if (e->kind == KM_SELECT && e->op == OP_DOWN)

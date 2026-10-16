@@ -45,6 +45,11 @@ probe, poly aftertouch out, the readout.
 the map's exponent 0.7 x 2^(0.2 k) (seven tables, `cr_sense.c SN_CURVES`; x 1.5 at +3, / 1.5 at -3: higher, you play
 harder to reach 127; lower, softer playing reaches it), which moves the velocity the keys send, MIDI included,
 where Velocity Sens shapes the level after it. Stored in bits 5..7 of the block's `pick_roots` (docs/SETTINGS.md).
+**And the emulator's velocity model** (fm1-ctl's idea): `cr_sense.c` is compiled into `tools/emu` and fed by
+`emu_fw.c emu_touch_feed` from the script's keys: `btn D4 down 30` lands the key at the driven reading the map at
+Curve 0 gives 30 (the map inverted over its table), 300 pulled up, and `lean D4 60` presses it 60 % of the way to
+full aftertouch once its rest has settled; the UI's traces `touch: key K vel V sensed|context|fixed` and `touch: at
+N` are what `cr_touch.txt` checks in `test_cr.sh` (tools/emu/README.md).
 
 The owner: "look into https://github.com/charlesvestal/fm1-monk: he added velocity and aftertouch to the FM-1, which
 would be super cool to bring in to ChoralRoot." This is the study of how fm1-monk does it and the design of the same
