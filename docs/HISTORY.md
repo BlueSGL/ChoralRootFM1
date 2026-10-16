@@ -4593,3 +4593,8 @@ new buffer when it lands. docs/GRAIN.md's render paragraph and the band's row.
 **Checked**: `./build.sh` XIP 569 216 B (99.3 %), RAM 80 112, POOL 306 196; `CR_VERSION=0.22 sh tests/run_all.sh`:
 every suite but `releases` (a tag v0.23 on the remote that this branch's web/releases.json does not list yet: not
 GRAIN's; the next merge with main brings it), test_cr 1054 ok. Not on the unit: the owner's word flashes it.
+**On the unit** (the owner, 2026-10-16: "Yes, flash the fix build 359d59a on the unit with a backup first"; the
+designer-handoff session flashed): the unit runs 359d59a (the package 5f356e0d..., byte-identical to that session's
+rebuild), `--unit 5BD75BE3`, a full backup first (`fm1-backups/fm1-backup-2026-10-16-before-grain-fix.json`); after
+boot 128 sounds, c1_faults 0, c1_fallback 0. main is f54850e (v0.23) meanwhile: the branch merges it before any merge
+to main (the releases test's tag), after the flash diet lands (the owner's choice over a larger slot).
