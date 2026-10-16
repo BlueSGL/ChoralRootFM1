@@ -4060,3 +4060,28 @@ its path: the notes file, the first entry, run_all, main pushed before the tag, 
 with the local build's afterwards.
 `python3 tests/site_test.py` with every package in build/scratch/packages: site ALL OK (42). Then main pushed and
 v0.22-beta3 tagged on the same commit, the owner's word ("lets tag this as v0.22-beta3 and get it released").
+
+3y102. **GRAIN's design and sketches: a granular engine over material it renders itself from four knobs (the owner,
+2026-10-15: "Could the grain synth have a way to generate its own samples from a couple knobs to quickly get a variety
+of interesting samples to work with?"; branch claude/grain-engine-f724f9 from da1f8e2 = v0.22-beta3). No firmware
+code; nothing flashed; the owner decides after hearing the sketches.** `docs/GRAIN.md` (new): the source generator
+(TYPE TONE MOTION SEED render a 743 ms buffer at 22.05 kHz, 32 KB of POOL a part, deterministic, from dsp.c's blocks:
+eight families PLUCK DRONE BELL BREATH CHIRP SWEEP VOWEL METAL; the render in 1024-sample slices in main.c's idle loop,
+the grains on the old buffer until the swap, the other part's buffer the scratch), the player (Felucca's eng_grain.c
+pool, window, SIZE DENS POS SPRD RAND over RAM: no decoder, no index; 16 grains, 8 voices; RAND split into RAND and REV;
+SCAN; the SVF as CUT RES), the pages (SOURCE, GRAIN, GRAIN+, FILTER under the title rules; a wave band drawing the
+buffer, POS, SPRD and the live grains), the pool, slot 8, the 16-byte blob, the old records' mapping, the budgets
+(flash ~11 .. 12 KB: the core 7420 B measured on the device compiler, XIP to ~97.5 %; POOL +64 KB to 88.5 %; CPU ~600 /
+900 us a half for a full part at 205 instructions a microsecond, the lightest chord engine; the render burst 4 .. 40
+ms), seven risks, seven questions, seven steps with their tests. `tools/grain_sketch.c` (new): the generator (gs_*) and
+the player (gp_*) as the firmware would have them (int32, no float, dsp.c and felucca_tables.h), rendering
+`build/grain-sketch/`: 24 source WAVs (eight families x mid / dark-slow / bright-fast), 8 seed tours (SEED 0 .. 7 in a
+row), 72 granulated scenes (a C3 G3 C4 E4 chord, pad / glitch / frozen grains) and INDEX.md with the listening order.
+`tools/grain_cost.py` (new): the core compiled alone for pi32v2 at the firmware's -Os (Docker, as build.py), the
+functions' sizes and every loop's body from the listing (a grain's loop 26 instructions a sample plus 9 a fetch; the
+families 49 .. 327 a source sample).
+**Checked**: `./build.sh` on da1f8e2 for the baseline (XIP 547 020 B 95.4 %, RAM 78 652 80.0 %, POOL 238 936 69.4 %);
+the sketch compiles with `cc -O2` and renders the 104 files in 0.2 s; a numpy pass over the sources (DC under 1 % after
+the finish pass's high-pass, the fundamental at C4, the centroid and level moving with TONE and MOTION as the families
+say) and over the scenes (every one sounding through the hold and silent at the end); `python3 tools/grain_cost.py`
+(.text 7420 B, .rodata 4192 with the shared tables). Not run: the suites (no firmware changed). No device access.
