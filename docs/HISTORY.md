@@ -4432,3 +4432,18 @@ test_cr 1044 ok, test_persist 111, test_retired 18, test_pool 7). Not pushed.
 `tools/fm1_install.py build/choralroot.fwsc --backup ... --yes` over ChoralRoot 0.22); the backup before it is
 `fm1-backups/choralroot-backup-20261016-fmtone.json` (the settings, the 128 user sounds, the favourites, loop slot 1).
 `--info` afterwards: "ChoralRoot 0.22" (the version string is the tree's), the user sounds read back.
+
+3y121. **A sound saved on another build no longer blocks its bank (same branch, 2026-10-16).** The owner, on the unit
+just flashed with 3y120: "Loading digitone presets are being refused": the device manager, Place DIGIT-ONE, "The
+FM-1 refused the user sounds 031-040 (rc 2)". Not FM TONE's: the unit's backup taken before the flash
+(`fm1-backups/choralroot-backup-20261016-fmtone.json`) holds U33 DARK HAZE, a sound of engine 8 (GRAIN) with a 20-byte
+patch, saved while the unit ran the GRAIN branch's build (3y117). This build keeps no patch for engine 8, and
+`cr_backup.c crb_bank_ok` refused any bank whose used slot named a patch length that is not its engine's, so every PUT
+of bank 4 (user sounds 031 .. 040, object 53) was rc 2, whatever the manager placed there. **Fixed**: a slot whose patch
+is of an engine this build keeps none for is accepted and written as sent (within the slot's 188 bytes);
+`up_read_engine` never reads such a patch (the slot loads as its record says), and a build that has the engine finds
+it again. A wrong length for an engine that has a patch (FM TONE 81, VA 80), an engine past the list and a length past
+the slot are refused as before. **Test**: `cr_backup_test` d3 (U03 a GRAIN sound with 20 bytes: rc 0, read back as
+sent, no patch read; past the slot: rc 2), which fails on the tree before it. **Checked**: `./build.sh` XIP 551 516 B
+(96.2 %, +32), RAM and POOL unchanged, the stub baee55ed142fe1cc; `sh tests/run_cr_tests.sh` green;
+`sh tools/emu/test_persist.sh` PASS. Not on the unit yet.

@@ -566,7 +566,10 @@ static int crb_bank_fill(uint32_t j, uint8_t *slot)
 }
 /* each slot unused (its bytes not read: crb_bank_fill empties it) or a record whose patch header is one up_patch_get
  * takes: none, or an engine's with that engine's length (FM TONE: also an older slot's 80-byte version 1..3 blob,
- * which eng_quad.c converts; 3y78: 0.22-beta1 refused a bank holding one, the slots 0.21's FM TONE sounds migrated to) */
+ * which eng_quad.c converts; 3y78: 0.22-beta1 refused a bank holding one, the slots 0.21's FM TONE sounds migrated to),
+ * or a patch of an engine this build keeps none for, its bytes kept as sent (3y121: a GRAIN sound saved on the GRAIN
+ * branch's build, 20 bytes, made every PUT of its bank rc 2 on this one; up_read_engine never reads such a patch,
+ * the slot loads as its record says, and a build that has the engine finds its patch again) */
 static int crb_bank_ok(const uint8_t *raw)
 {
     uint32_t j, e, n;
@@ -580,7 +583,8 @@ static int crb_bank_ok(const uint8_t *raw)
             continue;
         e = s[UPP_HDR] - 1u;
         n = s[UPP_HDR + 1u];
-        if (e >= NENGINES || !n || (n != up_patch_len(e) && !(e == ENGI_QUAD && n == QUAD_BLOB_V3)))
+        if (e >= NENGINES || !n || n > UPP_MAX ||
+            (up_patch_len(e) && n != up_patch_len(e) && !(e == ENGI_QUAD && n == QUAD_BLOB_V3)))
             return 0;
     }
     return 1;
