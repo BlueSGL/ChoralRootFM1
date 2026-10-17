@@ -5898,7 +5898,14 @@ master 159, wait 175, t5 308, wall 3547, late 36, stale 0, shed 30 since power-o
 fm6 (TINE EP + DEEP SUB) block 2799 (96 %), part0 1764, part1 641, fx 529, wait 184, late 2, shed 11 in the run,
 averages 1669 / p0 1072 / fx 361. Against 2026-10-14 (docs/INTEGRATION.md "Measured on the unit": block 3121, part0
 2293) the fx stage fell (611 -> 484, 3y50) but part0 did not: the chord on core 0 alone is the overload, while core 1
-waits after its 375 us bass; and FM6 now sheds dry too. `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
+waits after its 375 us bass; and FM6 now sheds dry too. **Again on 13b0adb** (0.25.1 with MOD's black background, 3y185,
+flashed 09:08 UTC; this session, 09:13 .. 09:16 UTC, the same command, shed cumulative since the flash): dry va block
+3263, tick 344, part0 2385, part1 365, fx 482, wait 176, t5 264, late 32, shed +30, c0busy 3319 / c1busy 706; fm6 block
+2719, part0 1722, part1 596, wait 186, late 3, shed +10, c0busy 2729 / c1busy 938. Recording (`--record`): va block
+3384, part0 2509, part1 387, wait 221, t5 451, late 51, shed +50, c0busy 3527 / c1busy 717; fm6 block 2936, part0
+1870, part1 636, wait 228, late 12, shed +30, c0busy 3060 / c1busy 999. Then a backup,
+`fm1-backups/fm1-backup-2026-10-17-before-va-split.json` (69 593 B); the install of package A was refused by this
+session's permission rules, so A and B are not on the unit and the unit stays on 13b0adb. `engine_t.split` (core.h): a voice's weight in 10 us, P5 44 (`P5_VOICE_US` 440), the VA 28
 (`VA_VOICE_US` 280, the unit's row / 8), 0 for the rest; `fx.c mix_parts_split` splits the chord part when its engine
 has it (was `P5_IS(t0)`). The protocol is 3y46's, unchanged: core 0 prepares every voice before the ONE hand-over
 (`voice.c track_render_x`, the `p5x` list), `c1_part1_job` renders the bass part and then core 1's share, now through
@@ -5932,10 +5939,12 @@ for bit. `tools/perf_unit.py`: a third table, "cores" (78 PEAK's `pk_c0_busy_us`
 `pk_fx_join_us`, `pk_c1_idle_us`). **Checked**: `sh tests/run_all.sh` 23 suites, every one PASS but test_cr's new hang
 check on the first run (its `c1 gave up` is printed with EMU_STAGES only: set), then test_cr.sh alone 1092 ok, 0 FAIL;
 317 golden renders, 0 changed; 0 lint. **For the owner's unit** (not run): `build/scratch/va-split/` in this worktree,
-package A (the default build) sha256 d2f42420dd0b735b3a19808b3c9e7e65520b610199f5a52c62b84550394ed7b5 and B (`CR_RAM_VA=1`)
-3d13fb10307b0baae1fb1ff978e78bcda73297edf5ed644ded5ccf3b13f63ed2, 610 313 B each, with README.txt's plan: `perf_unit.py
-va fm6 --seconds 20` dry (done: the before above) and `--record` on 0.25 first, a backup, A, B (power-cycle and `--debug` once after each), back
-to the release. Expected (estimates, from the before: 2397 / 8 = 300 us a voice): part0 about 1300 .. 1500, part1 about 1450 ..
+packages rebuilt after origin/main 13b0adb was merged into the branch (run_all again: 23 suites PASS, test_cr
+1092 ok, 317 goldens unchanged): A (the default build) sha256 1d3edce19139f297ade7214f4291cb38d343c5fb0aab0007a895d757e1a95c81
+and B (`CR_RAM_VA=1`) 7145de4eb352f0f8a09855e7a138e2f4cd1f0125cae00427eaaf479597754d68, 610 313 B each, with README.txt's plan: `perf_unit.py
+va fm6 --seconds 20` dry and `--record` first (done on 13b0adb, above), a backup (done), A, B (power-cycle and
+`--debug` once after each), back to 13b0adb (`choralroot-13b0adb.fwsc`, sha256 77520d32...). Expected (estimates, from
+the 0.25 before: 2397 / 8 = 300 us a voice): part0 about 1300 .. 1500, part1 about 1450 ..
 1650 (the bass and four voices: core 1 the longer side), the block about 2450 .. 2650 instead of 3256 (84 .. 91 %), no
 shed dry; fm6 unchanged (the control: FM6 is not split yet, and its dry shed is the next step's case). Next: FM6's chord (a third
 `fm6_scr`, 384 B, for chord voices on core 1 beside an FM6 bass). No device.
