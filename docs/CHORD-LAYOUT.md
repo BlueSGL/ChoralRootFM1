@@ -1,7 +1,14 @@
 # Chord Layout: Classic and FM-1 (the design)
 
 Status: **built** (HISTORY 3y163: the firmware, the emulators, the manual; [The build](#the-build-history-3y163) says where
-it differs from the design below). The design: every question answered by the owner on 2026-10-16 (HISTORY 3y155, with the owner's answers to its open questions
+it differs from the design below), and **since 0.26 FM-1 is the default** (HISTORY 3y172; the owner, 2026-10-16: "It's
+been decided, the new FM-1 chord key layout is significantly better on this device than the classic, let's make it
+the default", then "Units from old should get put on the new chord key layout"): a unit with no settings record,
+Flash Data and Reset Settings start in FM-1, and every unit updated from 0.25 or older is moved to FM-1 once,
+whatever it had stored; after that the player's choice stands, Classic included. The move is marked in bit 1 of the
+settings block's `leds` byte, with no version ([SETTINGS.md "0.26: FM-1 the default"](SETTINGS.md#026-fm-1-the-default)
+has the reasons, the downgrade and the backups). The manual and the site now lead with FM-1, Classic being the
+option. Where the text below says "Classic, the default", it is the design of 0.24 / 0.25. The design: every question answered by the owner on 2026-10-16 (HISTORY 3y155, with the owner's answers to its open questions
 the same day: [the second round](#the-second-round-the-owners-answers-to-the-open-questions-2026-10-16)).
 No firmware implements it yet. The pictures
 are in [design/chord-layout-mockups.html](../design/chord-layout-mockups.html) (rendered:
@@ -186,7 +193,7 @@ block is on its pads, `CU_FN_KEYS` 0; the bits are kept as they are and read as 
 
 | Entry (the screen's name, the owner's 2nd round) | Values | Default | Place in the list | What it does |
 | --- | --- | --- | --- | --- |
-| **Chord Keys** (the Chord Layout) | Classic, FM-1 | Classic | after Secret Chords | which keys are the chord keys (above) |
+| **Chord Keys** (the Chord Layout) | Classic, FM-1 | Classic in 0.24 / 0.25; **FM-1 since 0.26** (an older record moved once) | after Secret Chords | which keys are the chord keys (above) |
 | **SUS Window** (the combine window) | 30 .. 80 ms, 5 ms a detent (11 values) | 30 ms (the owner, after playing; 50 in the design) | after Chord Keys, **listed only while Chord Keys is FM-1** (SELECT skips it in Classic; its value is kept) | [the combine window](#the-combine-window) |
 | **Full K Shorts** (Full keyboard shortcuts) | Off, On | Off | after Split Point | [F#5 and G5 on the Full keyboard](#the-full-keyboard-both-layouts) |
 | **MIDI Keys** | Off, ch 1 .. ch 16 (the channels of MIDI Perform and MIDI Bass skipped) | Off | after MIDI Raw Chord | notes 53 .. 79 on that channel press the FM-1's keys F3 .. G5 through the active layout ([MIDI in](#midi-in)) |

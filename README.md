@@ -107,9 +107,10 @@ version, betas included; [Releases](https://github.com/Quixotic7/ChoralRootFM1/r
 newest version, so it may be ahead of the stable release. What is in it; the [manual](docs/MANUAL.md) says how to play
 each part:
 
-- **Chords**: the chord block on the keybed (DIM MIN MAJ SUS on the black keys F#3 G#3 A#3 C#4, 6 m7 M7 9 on the
-  white keys F3 G3 A3 C4, B3 = LOCK), roots on D4..G5, voicing on KNOB 1, Key Mode, the Simple / Advanced / Free play
-  styles, secret chords, LATCH.
+- **Chords**: the chord block on the keybed (DIM MIN MAJ on the black keys F#3 G#3 A#3, SUS = G#3 + A#3 together,
+  6 m7 M7 9 on the white keys F3 G3 A3 B3, LOCK on the LFO button), roots on C4..G5, voicing on KNOB 1, Key Mode, the
+  Simple / Advanced / Free play styles, secret chords, LATCH (GLO + LFO). That is the FM-1 layout, the default since
+  0.26; Options > Chord Keys: Classic is the Orchid's (SUS on C#4, the 9 on C4, B3 = LOCK, roots D4..G5).
 - **Layers** that lock open on a hold (KEY, PERF, FX, BASS, SEQ for the metronome, LOOP), each a picker over a row of four knob
   cells; OCT- or HOME closes them.
 - **Bass** (four behaviours), **performance modes** (strum, slop, arpeggio, twelve patterns, harp), **FX** (reverb,

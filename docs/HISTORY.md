@@ -5764,3 +5764,72 @@ build/scratch/smk-packages --require-all` with the 24 real SMK packages: `webapp
 0.24-beta3-smk37.1, 0.24-beta3-smk37 and 0.24-beta2-smk37; no FM-1 page links it. Not pushed, not tagged (the
 orchestrator pushes main and tags v0.25, then v0.25-smk37: pages.yml fails while web/releases-smk37.json lists a
 release that does not exist yet). No device.
+
+## 2026-10-16 (FM-1 the default chord keys)
+
+3y172. **FM-1 is the default Chord Keys, and every unit is moved to it once (the owner, 2026-10-16: "It's been decided,
+the new FM-1 chord key layout is significantly better on this device than the classic, let's make it the default",
+then "Units from old should get put on the new chord key layout").** `cr_settings_defaults` sets `sticky` bit 1
+(`CRS_LAYOUT_FM1`): a unit with no record, Flash Data, SAFE MODE's defaults and Reset Settings start in FM-1.
+`cr_settings_import` moves every record no 0.26 firmware wrote (0.23 and older, 0.24 / 0.25 with Classic or FM-1) to
+FM-1, once, and marks it in **bit 1 of `leds`** (`CRS_KEYS_MOVED`; the defaults have it too); a marked record keeps
+its layout, so Classic chosen after the move stays, across power cycles and later updates. The move touches
+`sticky` bit 1 and the mark only (LATCH, Full K Shorts, the SUS Window, LEDs Stock kept) and leaves the import's
+result as it was (a 0.25 record is still current). **No version**, and why (docs/SETTINGS.md "0.26: FM-1 the
+default"): a v16 would make 0.26's first start, and 0.25 / 0.24 after a downgrade, read the block as migrated, and the
+session is then applied only when the settings object is byte for byte the one it was saved beside (`bind`): every
+unit with an Option changed after its last SAVE would lose its session (sounds, Bass, LOCK and its latch) at the
+update. The mark costs one bit; `leds` because an older firmware's `CRS_FIX(leds, 0, 1)` then reads LEDs Glow and
+nothing else (`sticky`'s bit 7 would cost LATCH and the three layout Options there). The byte is automatic: the
+mark goes with every save (`crs_capture` keeps the record's mark beside the UI's LEDs bit; `cs.leds` reads bit 0,
+`CRS_LEDS`). **Downgrade**: 0.25 / 0.24 show the layout the record holds (FM-1 after the move, Classic if chosen
+since), LEDs Glow; 0.23 and older read `sticky` out of their 0 .. 1 range: LATCH off, their Classic keys; nothing
+breaks, the session is applied as before. An older firmware's save drops the mark, so coming back moves that record
+again (an update from an older firmware). **Backups**: the restore goes through the import: an older backup lands
+on FM-1, a 0.26 one restores what it holds. **LOCK across the move**: the latch is the session's set of `cr_mod_t`,
+not of keys, so it is kept and shown on the FM-1 keys (a latched SUS on G#3 + A#3, the 9 on B3, LOCK's light on
+LFO); nothing is held at power-on, so nothing is released. **The SMK-37** (Chord Keys hidden): `BOARD_SMK37` neither
+sets the bit nor moves a record. **Tests**: `tests/cr_settings_test.c t_keys_default` (the defaults, no record,
+Reset Settings, 0.25 with Classic / with FM-1, 0.23, v1 .. v14, Classic after the move over two starts, idempotence,
+the mark automatic, out of range, the older firmwares' reading modelled from their ranges); `tests/cr_backup_test.c`
+(a fresh unit FM-1; a 0.25 backup with Classic, LATCH, 60 ms, Stock restores onto FM-1 with the rest kept; a 0.26
+backup with Classic restores Classic, still Classic after a power cycle); `tools/emu/test_persist.sh`, a new section:
+a fresh unit FM-1; `keys_old_set.txt` (Classic, LOCK on, SUS + 9 latched, SAVE held), the block rewritten as 0.25
+Classic, 0.25 FM-1 and 0.23 wrote it (`tools/emu/seed_keys.py`): each powers on FM-1, current, the session applied,
+LOCK on LFO with SUS + 9 lit on G#3 + A#3 and B3, D4 Dsus 9 (62 67 69 76), 0 writes; Classic chosen
+(`keys_classic_pick.txt`) is written by itself with the mark and the relaunch (`keys_classic_check.txt`) is Classic,
+LOCK on B3. The emulator's dump: `keys-record: fm1 N moved N saved-fm1 N saved-moved N`; the settings line prints
+LEDs' bit alone. **The scripts written for Classic**: a script line `keys classic` (`tools/emu/emu.c`, read at
+power-on by `emu_fw.c`: a unit with no settings record starts Classic, as one whose player chose it; a flash with a
+record keeps its own) at the top of the 53 scripts whose expectations are Classic's keys (B3 LOCK, C4 the 9, C#4
+SUS, LFO LATCH, the roots from D4) or Classic's Options list (SUS Window is listed in FM-1 only, so every entry after
+Chord Keys is one further down there): cr_arp_hold, cr_arp_view, cr_calib, cr_chord_names, cr_chord_names_check,
+cr_chord_names_set, cr_cz_brass, cr_dualcore, cr_dualcore_on, cr_dualcore_opt, cr_favs_arp_list, cr_fullkbd,
+cr_geek2, cr_glo_knobs, cr_key_leds, cr_key_scale, cr_lock, cr_lock_menu, cr_lock_type, cr_loop_edplay,
+cr_loop_free, cr_loop_glow, cr_loop_row, cr_loop_stepfaults, cr_midi_in, cr_midi_transport, cr_note_leds,
+cr_opt_keys, cr_output, cr_output_classic, cr_pa2, cr_perf_arp, cr_prophet, cr_prophet_crackle, cr_screen_off,
+cr_sixth, cr_sixth_check, cr_sixth_set, cr_strum_hold, cr_touch, cr_usb_rate, perf_a, persist_check, gsave_none,
+gsave_save, persist_hold_check, persist_hold_set, persist_lock_check, persist_lock_set, reset_do, reset_set,
+session_check, session_set, and test_cr.sh's generated LOCK scripts (`lp_run`). Moved to FM-1 instead: cr_version
+(Version is entry 31 of the FM-1 list), persist_1core_opt (Dual Core 29, Version 31), cr_arp_unit (its seeded record
+is an old one and is moved: LATCH is GLO held + LFO there), and reset_check stays FM-1 (Reset Settings gives what a
+fresh unit has: FM-1). No draw golden changed (317, 0 changed). The browser emulator starts on the FM-1 labels
+until the firmware's first frame, and its key legend leads with FM-1. Size: XIP 542 764 -> 542 828 B (+64), RAM
+80 544; `BOARD=smk37`: XIP 541 588 -> 541 620. **Checked**: `CR_VERSION=0.25 sh tests/run_all.sh` ALL SUITES
+PASSED (23 suites; test_cr 1086 ok, test_persist 119, cr_settings 296, cr_backup 235; 317 golden renders, 0 changed;
+0 lint), `BOARD=smk37 ./build.sh`, `./build.sh`. No device.
+
+3y173. **The manual, the site and the notes lead with the FM-1 chord keys (2026-10-16, with 3y172).** docs/MANUAL.md:
+the first five minutes (the roots from C4, the chord block's seven keys, LOCK on LFO, the 9 on B3), the keybed's table
+and drawing, the button table (LFO is LOCK; LATCH GLO held + LFO), the lights, Types and extensions (SUS = G#3 + A#3,
+the 9 on B3), LOCK (on LFO; its layer; the latch kept across a layout change or the update's move), Secret chords
+(the FM-1 keys beside the Classic ones), "The FM-1 chord keys" (now the default, the update's move) and a compact
+"The Classic chord keys" (a table of what moves), Key Mode's notes, LATCH, the Options table (Chord Keys: FM-1 the
+default), the troubleshooting and the quick reference. docs/CHORD-LAYOUT.md's status and its Options table.
+docs/SETTINGS.md: "0.26: FM-1 the default" (the mark, why no version, why `leds`, once, downgrade, backups, LOCK, the
+SMK-37), the table's rows. README's Chords line. The site (web/site/index.html): the Playing section's intro, its
+panel picture is `img/panel-main-fm1.png` (Classic's `panel-main.png` moves to a short "The Classic chord keys"),
+the keybed figure redrawn for FM-1 (roots C4 .. G5, a SUS pill over G#3 + A#3; wide and phone), the types and roots
+text, LOCK, the secret chords, the LFO row of the button table. docs/releases/0.26.md started with the player-facing
+note ("FM-1 is now the chord key layout: your FM-1 switches to it once when you update; Classic is in Options > Chord
+Keys"), what the switch keeps, LOCK, Classic, going back. Not released, not pushed. No device.
