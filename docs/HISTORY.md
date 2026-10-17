@@ -6070,4 +6070,27 @@ chord change, the patch sync). So the worst half about 250 .. 550 us lower: dry 
 recording about 2000 .. 2300 (69 .. 79 %). Headroom, not a fix: the recording row's spare goes from 12 % of the half to
 about 20 .. 30 %. **Package C** (B + this, the default `./build.sh`): `build/scratch/va-split/choralroot-C-fm6-split.fwsc`,
 610 313 B, sha256 213076576bff30681d6a971d74dfe84dd036b5a1c55bff4012c945758bad0d2b. **Checked**: `sh tests/run_all.sh` ALL
-SUITES PASSED (23; test_cr 1098 ok, 317 goldens unchanged, 0 lint), its build package C byte for byte. No device.
+SUITES PASSED (23; test_cr 1098 ok, 317 goldens unchanged, 0 lint), its build package C byte for byte.
+
+**On the unit, C against B (2026-10-17; the flash-025 session for the orchestrator):** a backup first
+(`fm1-backups/fm1-backup-2026-10-17-before-pkg-C.json`, 69 593 B), C's sha256 matched, then B flashed back for its
+second reading. `perf_unit.py va fm6 --seconds 20`, 8 notes + bass, us of 2902; late, stale and shed 0 in every row of
+both builds:
+
+| | block | part0 | part1 | wait | c0busy | c1busy |
+| --- | --- | --- | --- | --- | --- | --- |
+| fm6 dry, B | 2468 | 1524 | 249 | 161 | 2466 | 553 |
+| fm6 dry, C | **2012** | 1023 | 816 | 322 | 1920 | 1134 |
+| fm6 recording, B | 2565 | 1627 | 257 | 185 | 2638 | 568 |
+| fm6 recording, C | **2124** | 1138 | 836 | 324 | 2135 | 1152 |
+| va dry, B (two runs) | 2103 / 2146 | 1289 / 1286 | 1159 | 229 / 226 | 2040 / 2091 | 1454 / 1451 |
+| va dry, C (two runs) | 2164 / 2166 | 1304 / 1297 | 1160 / 1162 | 226 / 269 | 2085 / 2089 | 1448 / 1443 |
+| va recording, B / C | 2287 / 2198 | 1389 / 1401 | 1159 / 1160 | 243 / 229 | 2270 / 2241 | 1449 / 1447 |
+| va 6 notes, B / C | 2098 / 2110 | 1284 / 1294 | 1158 / 1160 | 233 / 238 | 2015 / 2035 | 1435 / 1438 |
+
+`--debug` after flashing C, after its runs, after flashing B back and at the end: c1_state 1, c1_faults 0,
+c1_fallback 0, pk_late 0, stale_halves 0. FM6's worst half 456 us lower dry (85 % -> 69 % of the half) and 441
+recording (88 % -> 73 %), inside the estimate's 250 .. 550; core 1 now carries 816 .. 836 of part work against core 0's
+1023 .. 1138, so the split's 4 + 4 leaves core 0 the longer side by about 200 .. 300 (its fm6_block, the ghosts: the 1.07 and
+200 us weights could move one voice more, not tried). The VA rows are B's within run-to-run noise (B's own dry varied
+43 us between two runs): the VA path is unchanged. C is on the unit as the candidate (the orchestrator).
